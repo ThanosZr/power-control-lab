@@ -77,6 +77,47 @@
     body.querySelector('[data-ex-copy]')?.addEventListener('click',async e=>{try{await navigator.clipboard.writeText(body.querySelector('[data-ex-script]').textContent);e.target.textContent='✓ Αντιγράφηκε';}catch{e.target.textContent='Επίλεξε και αντέγραψε';}});}}));
   tabs(el,list,'ex:'+tpl.id,state);}
  // ---------------------------------------------------------------- data template (pcl-template-1)
+ // ---------------------------------------------------------- prediction questions
+ // The student answers before seeing the solution. A number is right within the tolerance; a wrong
+ // number is matched against the template's typical mistakes, then against the steps that lead to
+ // the answer (also ×2, ÷2, opposite sign, one SI prefix off), so the feedback says where it diverges.
+ const PKEY='pcl2-progress',qMem={};
+ const progLoad=()=>{try{return JSON.parse(localStorage.getItem(PKEY))||{};}catch{return {};}};
+ const progSave=p=>{try{localStorage.setItem(PKEY,JSON.stringify(p));}catch{}};
+ function progMark(tpl,id,st){const p=progLoad();const t=p[tpl]=p[tpl]||{};if(t[id]==='ok'&&st!=='ok')return;t[id]=st;progSave(p);}
+ const near=(v,a,tol,abs)=>Math.abs(v-a)<=tol*Math.abs(a)+(abs||0)+1e-12*Math.max(1,Math.abs(a));
+ function qCard(tpl,q){const m=qMem[tpl+'/'+q.id]||{};const u=q.unit?` <em>${esc(q.unit)}</em>`:'';
+  const ctl=q.kind==='choice'?`<div class="qchoices">${q.choices.map((c,i)=>`<label><input type="radio" name="q_${esc(tpl)}_${esc(q.id)}" value="${i}" ${m.value===String(i)?'checked':''}> ${esc(c)}</label>`).join('')}</div>`
+   :`<div class="qrow"><input data-qin value="${esc(m.value||'')}" placeholder="π.χ. 20.8u, -911.6, 1.25e-5" inputmode="decimal" aria-label="Απάντηση">${u}</div>`;
+  return `<div class="qcard ${m.state||''}" data-q="${esc(q.id)}"><p class="qtext">${esc(q.text)}</p>${ctl}
+   <div class="qbtns"><button data-qcheck class="strong">Έλεγχος</button>${q.hint?'<button data-qhint>Υπόδειξη</button>':''}<button data-qshow>Δείξε μου τη λύση</button></div><div class="qfb">${m.fb||''}</div></div>`;}
+ function questionsHTML(b){const p=progLoad()[b.tpl]||{},n=b.items.length,ok=b.items.filter(q=>p[q.id]==='ok').length,sh=b.items.filter(q=>p[q.id]==='shown').length;
+  return `<div class="qprog"><b>Σωστές ${ok} από ${n}</b>${sh?` · είδες τη λύση σε ${sh}`:''}<button data-qreset title="Μηδένισε την πρόοδο αυτών των ερωτήσεων">↺ Από την αρχή</button></div>`+b.items.map(q=>qCard(b.tpl,q)).join('');}
+ function bindQuestions(body,blocks,ctx){for(const b of blocks){if(b.type!=='questions')continue;
+   const fmtA=(v,q)=>q.unit==='°'||q.unit===''?fmt(v,5)+(q.unit?' '+q.unit:''):eng(v,q.unit,4);
+   const simLine=q=>{if(!q.sim||!ctx.simValue)return '';const v=ctx.simValue(q.sim);return Number.isFinite(v)?`<p class="qsim">Στην προσομοίωση: <b>${fmtA(v,q)}</b>.</p>`:`<p class="qsim muted">Τρέξε την προσομοίωση για να το δεις και εκεί.</p>`;};
+   const solution=q=>`<div class="qsol">${q.kind==='choice'?`<p>Σωστή απάντηση: <b>${esc(q.choices[q.correct])}</b>. ${esc(q.why?.[q.correct]||'')}</p>`:`<p>Σωστή απάντηση: <b>${fmtA(q.answer,q)}</b>.</p>`}${q.solution?`<p>${esc(q.solution)}</p>`:''}${h.steps(q.steps)}${simLine(q)}</div>`;
+   for(const q of b.items){const card=body.querySelector(`.qcard[data-q="${CSS.escape(q.id)}"]`);if(!card)continue;const key=b.tpl+'/'+q.id,fb=card.querySelector('.qfb');
+    const set=(state,html)=>{card.classList.remove('ok','no','shown');if(state)card.classList.add(state);fb.innerHTML=html;qMem[key]={...(qMem[key]||{}),state,fb:html};
+     const pr=body.querySelector('.qprog b');if(pr){const p=progLoad()[b.tpl]||{};pr.textContent=`Σωστές ${b.items.filter(x=>p[x.id]==='ok').length} από ${b.items.length}`;}};
+    card.querySelector('[data-qcheck]').onclick=()=>{
+     if(q.kind==='choice'){const r=card.querySelector('input[type=radio]:checked');if(!r){set('','<p class="muted">Διάλεξε μία απάντηση.</p>');return;}const k=+r.value;qMem[key]={...(qMem[key]||{}),value:r.value};
+      if(k===q.correct){progMark(b.tpl,q.id,'ok');set('ok',`<p><b>✓ Σωστό.</b> ${esc(q.why?.[k]||'')}</p>${simLine(q)}`);}else{progMark(b.tpl,q.id,'tried');set('no',`<p><b>✗ Όχι.</b> ${esc(q.why?.[k]||'Ξαναδές την υπόδειξη.')}</p>`);}return;}
+     const raw=card.querySelector('[data-qin]').value;const v=P.parseEng(raw);qMem[key]={...(qMem[key]||{}),value:raw};
+     if(!Number.isFinite(v)){set('','<p class="muted">Γράψε έναν αριθμό, π.χ. 20.8u ή 2.08e-5 (μονάδες SI).</p>');return;}
+     if(near(v,q.answer,q.tol,q.abs_tol)){progMark(b.tpl,q.id,'ok');set('ok',`<p><b>✓ Σωστό:</b> ${fmtA(q.answer,q)}.</p>${q.solution?`<p class="muted">${esc(q.solution)}</p>`:''}${simLine(q)}`);return;}
+     progMark(b.tpl,q.id,'tried');
+     const mis=(q.mistakes||[]).find(m=>near(v,m.value,q.tol,q.abs_tol));
+     if(mis){set('no',`<p><b>✗ Όχι ακόμη.</b> ${esc(mis.text)}</p>`);return;}
+     const F=[[1,''],[-1,' με αντίθετο πρόσημο'],[2,' επί 2'],[.5,' διά 2'],[1e3,' επί 1000 (πρόθεμα;)'],[1e-3,' διά 1000 (πρόθεμα;)']];
+     for(const st of q.steps||[]){if(!Number.isFinite(st.value)||near(st.value,q.answer,q.tol,q.abs_tol))continue;for(const [f,txt] of F)if(near(v,f*st.value,q.tol,q.abs_tol)){set('no',`<p><b>✗ Όχι ακόμη.</b> Η τιμή σου είναι ίση με «${esc(st.title)}»${txt}. Συνέχισε από εκεί προς το ζητούμενο.</p>`);return;}}
+     const sgn=Math.sign(v)!==Math.sign(q.answer)&&q.answer!==0;const ratio=Math.abs(v/q.answer);
+     set('no',`<p><b>✗ Όχι ακόμη.</b> ${sgn?'Το πρόσημο διαφέρει: δες τη φορά αναφοράς. ':''}Η τιμή σου είναι ${Number.isFinite(ratio)?(ratio>1?fmt(ratio,3)+' φορές μεγαλύτερη':fmt(1/ratio,3)+' φορές μικρότερη')+' κατά μέτρο':'μακριά από τη σωστή'}.${q.hint?' Δες την υπόδειξη.':''}</p>`);};
+    card.querySelector('[data-qhint]')?.addEventListener('click',()=>{const was=fb.innerHTML;if(!was.includes('qhint'))fb.innerHTML=`<p class="qhint">💡 ${esc(q.hint)}</p>`+was;});
+    card.querySelector('[data-qshow]').onclick=()=>{progMark(b.tpl,q.id,'shown');set(card.classList.contains('ok')?'ok':'shown',solution(q));};
+    card.querySelector('[data-qin]')?.addEventListener('keydown',e=>{if(e.key==='Enter')card.querySelector('[data-qcheck]').click();});}
+   body.querySelector('[data-qreset]')?.addEventListener('click',()=>{const p=progLoad();delete p[b.tpl];progSave(p);for(const q of b.items)delete qMem[b.tpl+'/'+q.id];
+    const host=body.querySelector('.qprog')?.parentElement;if(host){host.innerHTML=questionsHTML(b);bindQuestions(host,[b],ctx);}});}}
  function renderTemplate(el,R,ctx){
   const srcBadge=n=>{const s=ctx.src?.[n]||'';return `<small class="tsrc ${s==='χειροκίνητα'?'man':s.startsWith('κύκλωμα')||s==='tutorial'?'bound':''}">${esc(s)}</small>`;};
   const inputs=`<details class="tinputs" ${state['tin:'+R.id]===false?'':'open'}><summary>Είσοδοι του template (${R.inputs.length})</summary><div class="tin-grid">${R.inputs.map(i=>`<label><span>${esc(i.label)}${i.unit?` <em>${esc(i.unit)}</em>`:''}</span><input data-tin="${esc(i.name)}" value="${esc(P.eng(i.value,'',6).replace(/\s/g,''))}" inputmode="decimal" ${i.editable===false?'disabled':''}>${srcBadge(i.name)}</label>`).join('')}</div>
@@ -88,11 +129,13 @@
    case 'table':return (b.title?`<h4>${esc(b.title)}</h4>`:'')+h.table(b.head.map(esc),b.rows.map(r=>r.map(esc)),true);
    case 'checks':return `<ul class="tchecks">${b.items.map(c=>`<li class="${c.ok?'ok':'no'}"><b>${c.ok?'✓':'✗'} ${esc(c.title)}</b> ${esc(c.text)}</li>`).join('')}</ul>`;
    case 'settings':return (b.title?`<h4>${esc(b.title)}</h4>`:'')+`<table class="plecs">${b.rows.map(([a,v])=>`<tr><th>${esc(a)}</th><td>${esc(v)}</td></tr>`).join('')}</table>`;
-   case 'script':return (b.title?`<h4>${esc(b.title)}</h4>`:'')+`<div class="copy-box"><pre data-ex-script>${esc(b.text)}</pre><button data-ex-copy>Αντιγραφή</button></div>`;}return '';};
+   case 'script':return (b.title?`<h4>${esc(b.title)}</h4>`:'')+`<div class="copy-box"><pre data-ex-script>${esc(b.text)}</pre><button data-ex-copy>Αντιγραφή</button></div>`;
+   case 'questions':return `<div class="qblock">${questionsHTML(b)}</div>`;}return '';};
   const head=`<div class="mhead"><b>${esc(R.title)}</b>${R.description?` · <span class="muted">${esc(R.description)}</span>`:''}</div>`;
   el.innerHTML=head+inputs+'<div class="tsecs"></div>';
   const list=R.sections.map(s=>({id:s.id,title:s.title,html:()=>s.blocks.map(block).join(''),
-   after:body=>body.querySelectorAll('[data-ex-copy]').forEach(b=>b.onclick=async e=>{try{await navigator.clipboard.writeText(b.parentElement.querySelector('[data-ex-script]').textContent);e.target.textContent='✓ Αντιγράφηκε';}catch{e.target.textContent='Επίλεξε και αντέγραψε';}})}));
+   after:body=>{body.querySelectorAll('[data-ex-copy]').forEach(b=>b.onclick=async e=>{try{await navigator.clipboard.writeText(b.parentElement.querySelector('[data-ex-script]').textContent);e.target.textContent='✓ Αντιγράφηκε';}catch{e.target.textContent='Επίλεξε και αντέγραψε';}});
+    bindQuestions(body,s.blocks,ctx);}}));
   if(list.length)tabs(el.querySelector('.tsecs'),list,'tpl:'+R.id,state);
   el.querySelector('.tinputs').ontoggle=e=>{state['tin:'+R.id]=e.target.open;};
   el.querySelectorAll('[data-tin]').forEach(inp=>inp.onchange=()=>{const v=P.parseEng(inp.value);if(!Number.isFinite(v)){inp.classList.add('bad');return;}ctx.onInput(inp.dataset.tin,v);});

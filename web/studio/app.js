@@ -402,6 +402,13 @@ function api(action,data){const run=async()=>{const r=await fetch('/api/'+action
 function paramsOf(id){const c=editor.comp(id);return c?{...P.defaults(c.type),...c.params}:null;}
 function avgOver(key,n=20){const s=S.sim;if(!s)return null;const i=s.chIndex.get(key);const p=s.per;if(i===undefined||!p.n)return null;n=Math.min(n,p.n);let a=0,mn=Infinity,mx=-Infinity,q=0;
  for(let k=1;k<=n;k++){const j=(p.head-k+p.cap)%p.cap,o=j*p.nch+i;a+=p.avg[o];q+=p.rms[o]**2;mn=Math.min(mn,p.min[o]);mx=Math.max(mx,p.max[o]);}return {avg:a/n,rms:Math.sqrt(q/n),min:mn,max:mx,pp:mx-mn};}
+// a simulated quantity for the prediction questions: {key, stat, periods, abs} on a channel, or samples of an S&H
+function simValue(spec){const s=S.sim;if(!s||!spec||S.error)return null;
+ if(spec.samples){const L=s.samples(spec.samples);if(!L)return null;const n=+spec.periods||0;if(n&&s.t<n*s.T-1e-12)return null;return n?L.t.filter(t=>t<n*s.T-1e-12).length:L.t.length;}
+ if(spec.last){const L=s.samples(spec.last);return L&&L.v.length?L.v[L.v.length-1]:null;}
+ if(spec.first){const L=s.samples(spec.first);return L&&L.t.length?L.t[0]:null;}
+ if(spec.key){const q=avgOver(spec.key,+spec.periods||5);if(!q||(s.periodsDone||0)<3)return null;let v=q[spec.stat||'avg'];if(spec.abs)v=Math.abs(v);return v;}
+ return null;}
 function lastPP(key){const p=S.sim?.lastPeriod(key);return p?p.max-p.min:NaN;}
 let theoryToken=0;
 async function runTheory(){
@@ -615,7 +622,7 @@ async function runTemplate(t,ch,box,src,token){const tpl=ch.template;S.tplOverri
  const {vals,src:from}=Exercises.resolveInputs(tpl,{meta:S.tutMeta,param:paramsOf,overrides:ov});
  src.textContent=`template δεδομένων «${tpl.id}» (${ch.src}) · ${Object.values(from).filter(x=>x!=='προεπιλογή').length} είσοδοι από κύκλωμα/tutorial`;
  const r=await api('template_solve',{template:tpl,values:vals});if(token!==mathToken)return;
- MathPanel.renderTemplate(box,r,{src:from,onInput:(n,v)=>{(S.tplOverrides[tpl.id]=S.tplOverrides[tpl.id]||{})[n]=v;runMath();},onReset:()=>{delete S.tplOverrides[tpl.id];runMath();},
+ MathPanel.renderTemplate(box,r,{src:from,simValue,onInput:(n,v)=>{(S.tplOverrides[tpl.id]=S.tplOverrides[tpl.id]||{})[n]=v;runMath();},onReset:()=>{delete S.tplOverrides[tpl.id];runMath();},
   onDownload:()=>download(tpl.id+'.template.json',JSON.stringify(tpl,null,1))});}
 async function runMath(){
  const t=tutorial(),box=$('#math'),src=$('#math-src'),token=++mathToken;

@@ -10,6 +10,11 @@ A template describes an exercise or a design procedure without code:
               for the operating region (e.g. storage above / below the bus)
     cases     a table that re-evaluates the steps for several input sets
     checks    acceptance conditions (relations) with a pass / fail text
+    questions prediction questions for the student: a number (answer = expression,
+              relative tolerance, typical mistakes as expressions with an explanation)
+              or a choice (answer = index expression, an explanation per choice), with a
+              hint, a solution text, the steps that lead to the answer and, optionally,
+              which simulated quantity to compare with
     sections  what to show and in which order: text, steps, tables, checks,
               key values, settings (e.g. PLECS) and copyable scripts
 
@@ -38,7 +43,7 @@ SAFE = {'Integer': sp.Integer, 'Float': sp.Float, 'Symbol': sp.Symbol, 'Rational
         'GreaterThan': sp.GreaterThan, 'Unequality': sp.Unequality, 'Equality': sp.Equality}
 NAME = re.compile(r'^[A-Za-z][A-Za-z0-9_]{0,31}$')
 TOKEN = re.compile(r'\s*(?:(\d+\.?\d*(?:[eE][-+]?\d+)?|\.\d+(?:[eE][-+]?\d+)?)|([A-Za-z][A-Za-z0-9_]*)|(\*\*|<=|>=|==|!=|[-+*/(),<>]))')
-LIMITS = {'inputs': 80, 'steps': 200, 'sections': 30, 'blocks': 200, 'cases': 60, 'expr': 500, 'text': 6000}
+LIMITS = {'inputs': 80, 'steps': 200, 'sections': 30, 'blocks': 200, 'cases': 60, 'expr': 500, 'text': 6000, 'questions': 60}
 PFX = [(1e9, 'G'), (1e6, 'M'), (1e3, 'k'), (1, ''), (1e-3, 'm'), (1e-6, 'μ'), (1e-9, 'n'), (1e-12, 'p')]
 
 
@@ -209,6 +214,37 @@ def _case_rows(tpl, base_values, table):
     return head, rows
 
 
+def _questions(tpl, ev, steps):
+    """Evaluated prediction questions (the client compares the student's answer)."""
+    out = {}
+    qs = tpl.get('questions', [])
+    if not isinstance(qs, list) or len(qs) > LIMITS['questions']:
+        raise InputError('Μη έγκυρο ή πολύ μεγάλο πεδίο «questions».')
+    for q in qs:
+        if not isinstance(q, dict) or not ev.truth(q.get('when')):
+            continue
+        qid = str(q.get('id', f'q{len(out) + 1}'))
+        kind = q.get('kind', 'number')
+        rec = {'id': qid, 'kind': kind, 'text': ev.fill(q.get('text', '')), 'hint': ev.fill(q.get('hint', '')),
+               'solution': ev.fill(q.get('solution', '')), 'unit': q.get('unit', ''),
+               'steps': [steps[i] for i in q.get('steps', []) if i in steps], 'sim': None}
+        sim = q.get('sim')
+        if isinstance(sim, dict):   # numbers in the comparison spec may be expressions (e.g. periods = N)
+            rec['sim'] = {k: (ev.num(ev.parse(v)) if k == 'periods' and isinstance(v, str) else v) for k, v in sim.items()}
+        if kind == 'choice':
+            choices = [ev.fill(c) for c in q.get('choices', [])]
+            k = int(round(ev.num(ev.parse(str(q.get('answer', '0'))))))
+            if not 0 <= k < len(choices):
+                raise InputError(f'Η ερώτηση {qid}: η σωστή επιλογή είναι εκτός λίστας.')
+            rec.update(choices=choices, correct=k, why=[ev.fill(w) for w in q.get('why', [])])
+        else:
+            rec.update(answer=ev.num(ev.parse(str(q['answer']))), tol=float(q.get('tol', 0.02)), abs_tol=float(q.get('abs_tol', 0)),
+                       mistakes=[{'value': ev.num(ev.parse(str(m['expr']))), 'text': ev.fill(m.get('text', ''))}
+                                 for m in q.get('mistakes', []) if ev.truth(m.get('when'))])
+        out[qid] = rec
+    return out
+
+
 def template_solve(data):
     """Action 'template_solve': {template, values} -> sections with evaluated blocks."""
     tpl = data.get('template') if isinstance(data, dict) else None
@@ -236,6 +272,7 @@ def template_solve(data):
         ok = ev.truth(c['expr'])
         checks.append({'title': ev.fill(c.get('title', c['expr'])), 'ok': ok,
                        'text': ev.fill(c.get('pass' if ok else 'fail', ''))})
+    questions = _questions(tpl, ev, steps)
     sections = []
     nblocks = 0
     for sec in tpl.get('sections', []):
@@ -265,6 +302,9 @@ def template_solve(data):
             elif kind == 'settings':
                 blocks.append({'type': 'settings', 'title': ev.fill(b.get('title', '')),
                                'rows': [[ev.fill(a), ev.fill(v)] for a, v in b.get('rows', [])]})
+            elif kind == 'questions':
+                ids = b.get('items') or list(questions)
+                blocks.append({'type': 'questions', 'tpl': tpl.get('id'), 'items': [questions[i] for i in ids if i in questions]})
             elif kind == 'script':
                 blocks.append({'type': 'script', 'title': ev.fill(b.get('title', '')), 'text': ev.fill(b.get('text', ''), dec='.')})
         sections.append({'id': sec.get('id') or f's{len(sections)}', 'title': ev.fill(sec.get('title', '')), 'blocks': blocks})

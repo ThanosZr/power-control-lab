@@ -72,6 +72,30 @@ class DataTemplates(unittest.TestCase):
         self.assertAlmostEqual(v['dt_ph'], 10e-6)                                 # N = 5: 10 μs phase step
         self.assertAlmostEqual(v['L_min'] / 20.8333e-6, 5 / 4, delta=1e-4)        # L_min grows with N
 
+    def test_prediction_questions(self):
+        tpl = load('pe2_sampling.template.json')
+        base = {'V_bus': 50, 'V_st': 100, 'P': 40e3, 'L': 5.6e-6, 'f_s': 20e3, 'N': 50, 'phi': 90}
+        qs = lambda r: {q['id']: q for s in r['sections'] for b in s['blocks'] if b['type'] == 'questions' for q in b['items']}
+        q = qs(template_solve({'template': tpl, 'values': {**base, 'saw': 1, 'n_ps': 1}}))
+        self.assertEqual(q['where']['correct'], 0)                               # sawtooth reset: the valley
+        self.assertAlmostEqual(q['value']['answer'], -800 - 223.2142857 / 2, places=4)
+        self.assertIn(-800, [round(m['value'], 6) for m in q['value']['mistakes']])   # "this is the mean" mistake
+        self.assertEqual(q['count']['answer'], 50)
+        self.assertEqual(q['count']['sim'], {'samples': 'SH1', 'periods': 50.0})     # expression evaluated
+        self.assertTrue(q['value']['steps'] and 'value' in q['value']['steps'][0])
+        q = qs(template_solve({'template': tpl, 'values': {**base, 'saw': 0, 'n_ps': 2}}))
+        self.assertEqual(q['where']['correct'], 1)
+        self.assertEqual(q['count']['answer'], 100)
+        self.assertEqual([round(m['value'], 3) for m in q['value']['mistakes']][:1], [-911.607])  # valley is the mistake now
+        q = qs(template_solve({'template': load('pe2_polyphase.template.json'),
+                               'values': {'V_bus': 50, 'V_st': 80, 'V_min': 60, 'V_max': 100, 'P': 40e3, 'N': 4, 'f_s': 20e3, 'L': 20.8334e-6}}))
+        self.assertAlmostEqual(q['lmin']['answer'], 20.8333e-6, delta=1e-10)
+        self.assertAlmostEqual(q['ripple']['answer'], 12.0, delta=1e-3)
+        self.assertAlmostEqual(q['cancel']['answer'], 200 / 3, places=6)
+        bad = {**tpl, 'questions': [{'id': 'x', 'kind': 'choice', 'choices': ['a'], 'answer': '3', 'text': ''}]}
+        with self.assertRaises(InputError):
+            template_solve({'template': bad, 'values': {}})
+
     def test_battery_below_uses_other_relations(self):
         r = template_solve({'template': load('pe2_battery.template.json'), 'values': {'V_st': 25, 'P': 40e3}})
         v = r['values']

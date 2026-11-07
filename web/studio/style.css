@@ -230,3 +230,11 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:6px}
 #lp-toggle+.nav-toggle{margin-left:6px}
 .live-panel .ctl-group{background:#f4faf7;border-color:#c9dcd4}.ctl-more>summary{font-size:11.5px;font-weight:600;cursor:pointer;margin:2px 0 6px;color:#41575a}
 .cr-table{width:100%;font-size:11.5px;margin:6px 0}.cr-table td,.cr-table th{padding:2px 4px;text-align:left}.cr-table select{width:100%;font-size:11.5px}
+/* prediction questions */
+.qprog{display:flex;align-items:center;gap:10px;margin:4px 0 10px;font-size:12.5px}.qprog button{margin-left:auto;font-size:11.5px;padding:3px 8px}
+.qcard{border:1px solid var(--line);border-left:4px solid #c9d6d1;border-radius:8px;padding:10px 12px;margin:0 0 10px;background:#fff}
+.qcard.ok{border-left-color:var(--accent);background:#f5fbf8}.qcard.no{border-left-color:var(--accent2);background:#fffaf2}.qcard.shown{border-left-color:#6b4fa0}
+.qtext{margin:0 0 8px;font-weight:600}.qrow{display:flex;align-items:center;gap:6px}.qrow input{width:220px}.qrow em{font-style:normal;color:var(--muted)}
+.qchoices{display:flex;flex-direction:column;gap:4px;margin-bottom:6px}.qchoices label{display:flex;gap:6px;align-items:baseline;font-size:13px}
+.qbtns{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}.qbtns button{font-size:12px;padding:4px 10px}
+.qfb p{margin:8px 0 0}.qhint{color:#8a6a2a}.qsim{color:#2f5fa0}.qsol{margin-top:6px}

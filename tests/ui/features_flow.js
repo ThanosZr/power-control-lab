@@ -56,6 +56,18 @@ const {chromium}=require('playwright');
  await p.click('#cr-block summary');const [dl]=await Promise.all([p.waitForEvent('download'),p.click('#csv')]);await p.setInputFiles('#cr-file',await dl.path());await p.waitForTimeout(400);
  await p.click('#cr-apply');await p.waitForTimeout(600);const cr=await p.$eval('#cr-out',e=>e.textContent);ok(/Σύγκριση με CSV/.test(cr)&&/i_Σ \(ζυγός\)/.test(cr),'CSV reference table');
  ok(await p.evaluate(()=>Object.keys(window.PCL.scope.refs?.data||{}).length>=4),'CSV overlay');
+ // prediction questions in the math panel (sampling exercise, sawtooth)
+ await p.evaluate(()=>window.PCL.loadTutorial('sampling',{case:'saw'}));await p.waitForTimeout(2000);
+ await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.sim.T*51);window.PCL.pause();});
+ await p.waitForSelector('#math .qcard[data-q="value"]',{timeout:15000});
+ await p.fill('#math .qcard[data-q="value"] [data-qin]','-800');await p.click('#math .qcard[data-q="value"] [data-qcheck]');
+ ok(/μέση τιμή/.test(await p.$eval('#math .qcard[data-q="value"] .qfb',e=>e.textContent)),'typical mistake feedback');
+ await p.fill('#math .qcard[data-q="value"] [data-qin]','-911.6');await p.click('#math .qcard[data-q="value"] [data-qcheck]');
+ const qv=await p.$eval('#math .qcard[data-q="value"] .qfb',e=>e.textContent);ok(/✓ Σωστό/.test(qv)&&/Στην προσομοίωση/.test(qv),'correct answer + simulation '+qv.slice(0,80));
+ ok(/Σωστές 1 από 6/.test(await p.$eval('#math .qprog',e=>e.textContent)),'progress');
+ await p.click('#math .qcard[data-q="count"] [data-qshow]');ok(/Στην προσομοίωση: 50/.test(await p.$eval('#math .qcard[data-q="count"] .qfb',e=>e.textContent)),'solution with simulated count');
+ await p.click('#math .qcard[data-q="where"] input[value="1"]');await p.click('#math .qcard[data-q="where"] [data-qcheck]');ok(/✗/.test(await p.$eval('#math .qcard[data-q="where"] .qfb',e=>e.textContent)),'choice feedback');
+ await p.click('#math [data-qreset]');ok(/Σωστές 0 από 6/.test(await p.$eval('#math .qprog',e=>e.textContent)),'progress reset');
  // open a /converter/ circuit in the studio
  await p.goto(U+'converter/');await p.waitForTimeout(800);await p.click('.topo-switch button[data-key="boost"]');
  await p.waitForFunction(()=>!state.dirty&&state.result?.config?.topology==='boost',null,{timeout:20000});
