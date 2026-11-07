@@ -67,6 +67,11 @@
      <div class="row-btns"><button id="bt-run" class="strong">▶ Υπολογισμός στον server</button><button id="bt-clear">Καθαρισμός</button></div>
      <div id="bt-status" class="bt-status"></div>
      <p class="muted small">Ίδιο κύκλωμα, ίδιοι ελεγκτές, ίδιες αρχικές συνθήκες. Λύνεται με το solve_ivp του SciPy, με τις μεταγωγές ως συμβάντα. Υπολογίζονται τα σήματα που υπάρχουν στο scope.</p></details>
+    <details class="side-block fold" id="cr-block"><summary>Σύγκριση με CSV (PLECS, μετρήσεις)</summary>
+     <div class="row-btns"><button id="cr-open" class="strong">Άνοιγμα CSV…</button><button id="cr-clear">Καθαρισμός</button></div><input id="cr-file" type="file" accept=".csv,.txt,text/csv" hidden>
+     <div class="grid2"><label>Μετατόπιση χρόνου (ms)<input id="cr-shift" value="0" inputmode="decimal"></label><label>Χρόνος στο CSV σε<select id="cr-tscale"><option value="1">s</option><option value="1e-3">ms</option><option value="1e-6">μs</option></select></label></div>
+     <div id="cr-map"></div><div id="cr-status" class="bt-status"></div>
+     <p class="muted small">Πρώτη στήλη ο χρόνος, μετά ένα σήμα ανά στήλη, με επικεφαλίδες (διαχωριστικό , ; ή tab). Από το PLECS: εξαγωγή των δεδομένων του Scope σε CSV. Κάθε στήλη αντιστοιχίζεται σε σήμα του scope (αυτόματα όταν τα ονόματα ταιριάζουν) και σχεδιάζεται διακεκομμένη, με πίνακα διαφορών.</p></details>
    </aside>
    <div class="scope-main">
     <div id="scope-nav" class="scope-nav" hidden>
@@ -77,7 +82,7 @@
     <div class="scope-wrap"><canvas id="scope-canvas" aria-label="Παλμογράφος"></canvas><button id="live-btn" class="live-btn" hidden>● Ζωντανά</button>
      <div id="live-panel" class="live-panel" role="region" aria-label="Ζωντανές παράμετροι"><div class="lp-head" title="Σύρε για μετακίνηση"><b>Ζωντανές παράμετροι</b><small>χωρίς παύση</small><button id="lp-hide" class="x" title="Κρύψε (P)">✕</button></div>
       <div id="live-controls"></div><div id="lp-log" class="lp-log"></div></div></div>
-    <div id="measure" class="measure"></div><div id="bt-out" class="bt-out"></div>
+    <div id="measure" class="measure"></div><div id="bt-out" class="bt-out"></div><div id="cr-out" class="bt-out"></div>
    </div>
   </div>
  </section>
@@ -93,7 +98,7 @@
    <div><div class="th-head"><h4>Θεωρία & σύγκριση με την προσομοίωση</h4><button id="theory-refresh" title="Επανυπολογισμός με τις τρέχουσες τιμές">↻</button></div><div id="theory" class="theory"></div></div>
   </div>
  </section>
- <footer>Power Converter Lab <b>2.5</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE.</footer>
+ <footer>Power Converter Lab <b>2.6</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE.</footer>
 </main>
 <div id="notice" class="notice" hidden></div>
 <div id="inspector" class="popup inspector" hidden></div>

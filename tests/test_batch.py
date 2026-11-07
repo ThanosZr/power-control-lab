@@ -85,6 +85,16 @@ class BatchSolver(unittest.TestCase):
         self.assertAlmostEqual(mean_window(r, 'I:L3', 9 * T, 10 * T), -200, delta=0.1)
         self.assertAlmostEqual(mean_window(r, 'I:VB', 9 * T, 10 * T), -800, delta=0.2)
 
+    def test_double_update_and_sharing(self):
+        r = self.run_case('sampling_double', 0.012, 'LSODA')                    # PI at T/2, two samples per period
+        self.assertAlmostEqual(r['samples']['SH1']['v'][-1], -400, delta=0.05)
+        t, d = np.array(r['t']), np.array(r['ch']['D:PWM1'])
+        ch = t[1:][(np.abs(np.diff(d)) > 1e-9) & (t[1:] > 0.002) & (t[1:] < 0.0025)]   # after the reference step
+        self.assertGreater(len(ch), 10)
+        self.assertAlmostEqual(float(np.min(np.diff(ch))), 25e-6, delta=1e-9)  # duty updates every T/2
+        r = self.run_case('share_dcr', 0.02, 'LSODA')
+        self.assertAlmostEqual(mean_window(r, 'I:L2', 0.0195, 0.02), -200 * 5 / 7.5, delta=0.3)
+
     def test_explicit_method_reports_stiffness(self):
         r = self.run_case('buck_dcm', 2e-3, 'RK45', wall=2)
         self.assertIn(r['status'], ('ok', 'timeout'))

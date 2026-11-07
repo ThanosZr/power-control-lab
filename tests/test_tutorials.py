@@ -119,6 +119,25 @@ class Tutorials(unittest.TestCase):
         self.assertAlmostEqual(o['poly_4_shift_mid_40000_keep']['legPP'][0], 22.5, delta=0.05)   # same L, double f: half
         self.assertAlmostEqual(o['poly_4_shift_mid_40000_design']['L'], 10.4167e-6, delta=1e-10)  # L·f constant
 
+    def test_current_sharing_and_double_update(self):
+        o = self.o
+        legs = o['share_open_dcr']['legs']                                       # open loop: I_k = (V_bus − (1 − D)V_st)/R_k
+        self.assertAlmostEqual(legs[1], -200 * 5 / 7.5, delta=0.3)
+        for k in (0, 2, 3):
+            self.assertAlmostEqual(legs[k], -200, delta=0.3)
+        for a in o['share_pi_dcr']['legs']:                                       # per-phase PI: equal sharing
+            self.assertAlmostEqual(a, -200, delta=0.3)
+        for a in o['share_open_L']['legs']:                                       # larger L: same mean, smaller ripple
+            self.assertAlmostEqual(a, -200, delta=0.3)
+        pp = o['share_open_L']['pp']
+        self.assertAlmostEqual(pp[1], pp[0] / 1.2, delta=0.01 * pp[0])
+        for a in o['share_pi_toggle']:                                            # live phase change, PI restores sharing
+            self.assertAlmostEqual(a, -200, delta=0.1)
+        s, d = o['smp_upd_single'], o['smp_upd_double']
+        self.assertAlmostEqual(s['end'], -400, delta=0.05)
+        self.assertAlmostEqual(d['end'], -400, delta=0.05)
+        self.assertLess(abs(d['at24'] + 400), abs(s['at24'] + 400))               # faster with two updates per period
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

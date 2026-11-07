@@ -53,6 +53,14 @@ class StudioSimulator(unittest.TestCase):
         self.assertAlmostEqual(p['meas'], p['hold'], delta=1e-9)
         self.assertAlmostEqual(p['hold'], p['lastSample'], delta=1e-9)
 
+    def test_double_update(self):
+        single, double = self.o['upd_single'], self.o['upd_double']
+        self.assertAlmostEqual(single[1][0], 10.75, delta=0.003)                 # new D waits for the next period
+        self.assertAlmostEqual(double[1][0], 10.8, delta=0.003)                  # (1 + 0.6)/2: off edge of the same period
+        self.assertAlmostEqual(single[0][0], 10.25, delta=0.003)                 # turn-on edge keeps the old D in both
+        self.assertAlmostEqual(double[0][0], 10.25, delta=0.003)
+        self.assertAlmostEqual(double[2][0], 11.2, delta=0.003)
+
     def test_bridge_rectifier_battery(self):
         vpk, E, R = 230 * math.sqrt(2), 200, 2
         a = math.asin(E / vpk)

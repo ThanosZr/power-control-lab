@@ -43,7 +43,7 @@ function loop(now){
  if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){pause();notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
  requestAnimationFrame(loop);
 }
-function draw(all){scope.draw();navRange();if(all||S.frame%3===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();}if(all||S.frame%8===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();}if(all){if(S.batch)renderBatch();if(S.theory&&!S.running)renderTheoryLive();}}
+function draw(all){scope.draw();navRange();if(all||S.frame%3===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();}if(all||S.frame%8===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();}if(all){if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running)renderTheoryLive();}}
 function navRange(){const el=$('#nav-range');if(!el||el.offsetParent===null||!S.sim)return;const [a,b]=scope.viewRange();el.textContent=`${eng(a,'s',4)} … ${eng(b,'s',4)} · ${fmt((b-a)/S.sim.T,3)} T${scope.cfg.frozen?' · σταθερή προβολή':' · ζωντανά'}`;}
 function updateClock(){const s=S.sim;if(!s)return;$('#clock').textContent='t = '+eng(s.t,'s',5);$('#periods').textContent=`${Math.floor(s.t/s.T+1e-9)} T · βήματα ${s.steps.toLocaleString('el-GR')}`;
  $('#cpu').hidden=!S.limited;$('#speed-note').textContent=S.speed==='max'?'όσο αντέχει ο υπολογιστής':`${eng(S.speed*s.T,'s',3)} ανά δευτερόλεπτο`;$('#step-note').textContent='Δt = '+eng(s.h,'s',3)+' · T = '+eng(s.T,'s',3);}
@@ -145,24 +145,52 @@ async function runBatch(){
   const st=r.stats;btStatus(`${r.status==='ok'?'✓':'⚠'} ${esc(method)}: ${st.points.toLocaleString('el-GR')} σημεία, ${st.segments.toLocaleString('el-GR')} τμήματα, ${st.diode_events.toLocaleString('el-GR')} μεταγωγές διόδων, ${st.nfev.toLocaleString('el-GR')} f, ${st.njev} J, ${st.nlu.toLocaleString('el-GR')} LU · ${fmt(st.wall_s,3)} s στον server (${fmt((performance.now()-w0)/1000,3)} s συνολικά)${r.message?'<br>'+esc(r.message):''}${req.skipped.length?'<br>Χωρίς αναφορά: '+req.skipped.map(esc).join(', '):''}`,r.status==='ok'?'':'err');}
  catch(e){btStatus('Σφάλμα: '+esc(e.message),'err');}
  finally{$('#bt-run').disabled=false;}}
-function clearBatch(){S.batch=null;scope.setRefs(null);$('#bt-out').innerHTML='';btStatus('');}
+function clearBatch(){S.batch=null;scope.setRefs(S.csvRef||null);$('#bt-out').innerHTML='';btStatus('');}
 // time-weighted mean of a piecewise-linear trace over exactly [a,b]
 function meanPL(t,y,a,b){let s=0,pt=null,pv=0;const at=x=>{let lo=0,hi=t.length-1;if(x<=t[0])return y[0];if(x>=t[hi])return y[hi];while(hi-lo>1){const m=(lo+hi)>>1;if(t[m]<=x)lo=m;else hi=m;}return t[hi]>t[lo]?y[lo]+(y[hi]-y[lo])*(x-t[lo])/(t[hi]-t[lo]):y[hi];};
  pt=a;pv=at(a);for(let i=0;i<t.length;i++){if(t[i]<=a)continue;if(t[i]>=b)break;s+=(t[i]-pt)*(pv+y[i])/2;pt=t[i];pv=y[i];}s+=(b-pt)*(pv+at(b))/2;return b>a?s/(b-a):NaN;}
 function ringTrace(ci){const r=S.sim.ring,st=(r.head-r.n+r.cap)%r.cap,t=new Float64Array(r.n),y=new Float64Array(r.n);for(let i=0;i<r.n;i++){const j=(st+i)%r.cap;t[i]=r.t[j];y[i]=ci===-2?0:r.d[j*r.nch+ci];}return {t,y};}
-function renderBatch(){const box=$('#bt-out');const B=S.batch;if(!B||!S.sim){box.innerHTML='';return;}const r=B.r,T=S.sim.T;
- const rows=[];let common=null;
- for(const ch of scope.channels()){const d=B.data[ch.key];if(!d)continue;const ci=scope.resolve(ch.key);if(ci===-1)continue;const js=ringTrace(ci);if(js.t.length<2)continue;
-  const a=Math.max(d.t[0],js.t[0]),b=Math.min(d.t[d.t.length-1],js.t[js.t.length-1]);if(!(b>a))continue;common=[a,b];
+// difference table between reference traces {key:{t,y}} (server solver or CSV) and the browser run
+function compareHTML(data,label,note){if(!S.sim)return '';const T=S.sim.T;const rows=[];let common=null;
+ for(const ch of scope.channels()){const d=data[ch.key];if(!d||d.t.length<2)continue;const ci=scope.resolve(ch.key);if(ci===-1)continue;const js=ringTrace(ci);if(js.t.length<2)continue;
+  const a=Math.max(d.t[0],js.t[0]),b=Math.min(d.t[d.t.length-1],js.t[js.t.length-1]);if(!(b>a))continue;common=common?[Math.min(common[0],a),Math.max(common[1],b)]:[a,b];
   const a1=Math.max(a,b-T);const mb=meanPL(d.t,d.y,a1,b),mj=meanPL(js.t,js.y,a1,b);
-  const diffs=[];let sq=0,n=0,scale=0;for(let i=0;i<d.t.length;i++){const t=d.t[i];if(t<a||t>b)continue;const e=scope.valueAt(ci,t)-d.y[i];diffs.push(Math.abs(e));sq+=e*e;n++;scale=Math.max(scale,Math.abs(d.y[i]));}
+  const diffs=[];let sq=0,n=0,scale=0;for(let i=0;i<d.t.length;i++){const t=d.t[i];if(t<a||t>b||!Number.isFinite(d.y[i]))continue;const e=scope.valueAt(ci,t)-d.y[i];if(!Number.isFinite(e))continue;diffs.push(Math.abs(e));sq+=e*e;n++;scale=Math.max(scale,Math.abs(d.y[i]));}
   diffs.sort((x,y)=>x-y);const p95=diffs.length?diffs[Math.floor(.95*(diffs.length-1))]:NaN,u=MeasureUnit(ch.key);
   const dp=Number.isFinite(mb)&&Math.abs(mb)>1e-12*Math.max(scale,1)?100*(mj-mb)/Math.abs(mb):NaN;
   rows.push(`<tr><td><i class="dot" style="background:${ch.color}"></i>${esc(ch.label)}</td><td>${eng(mb,u)}</td><td>${eng(mj,u)}</td><td class="${Math.abs(dp)<.1?'good':Math.abs(dp)<1?'':'warn-text'}">${Number.isFinite(dp)?fmt(dp,3)+' %':'—'}</td><td>${eng(Math.sqrt(sq/Math.max(n,1)),u)}</td><td>${eng(p95,u)}</td><td>${fmt(100*Math.sqrt(sq/Math.max(n,1))/Math.max(scale,1e-12),3)} %</td></tr>`);}
- box.innerHTML=rows.length?`<h4>Σύγκριση με ${esc(B.label)}</h4><div class="wrap"><table><thead><tr><th>Σήμα</th><th>⟨server⟩ τελ. T</th><th>⟨browser⟩ τελ. T</th><th>Διαφορά</th><th>RMS Δ</th><th>95 % |Δ|</th><th>RMS Δ / max</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
-  <p class="muted small">Κοινό διάστημα ${eng(common[0],'s')} … ${eng(common[1],'s')}. Ο browser λύνει με σταθερό βήμα Δt = ${eng(S.sim.h,'s')} (${esc($('#method').selectedOptions[0]?.textContent||'')}), ο server με μεταβλητό βήμα και έλεγχο σφάλματος. Κοντά στις μεταγωγές το |Δ| είναι μεγάλο αν οι δύο λύτες βρίσκουν την ακμή σε λίγο διαφορετική στιγμή· γι' αυτό δίνεται το RMS και το 95 %.${B.stale?' <b>Το κύκλωμα άλλαξε μετά τον υπολογισμό.</b>':''}</p>`
-  :`<p class="muted small">Δεν υπάρχει κοινό διάστημα με την προσομοίωση του browser: τρέξε την προσομοίωση έως ${eng(r.t_end,'s')} (⏩).</p>`;
- box.innerHTML+=sampleCompareHTML(r);}
+ return rows.length?`<h4>Σύγκριση με ${esc(label)}</h4><div class="wrap"><table><thead><tr><th>Σήμα</th><th>⟨αναφορά⟩ τελ. T</th><th>⟨browser⟩ τελ. T</th><th>Διαφορά</th><th>RMS Δ</th><th>95 % |Δ|</th><th>RMS Δ / max</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
+  <p class="muted small">Κοινό διάστημα ${eng(common[0],'s')} … ${eng(common[1],'s')}. ${note||''}</p>`:'';}
+function renderBatch(){const box=$('#bt-out');const B=S.batch;if(!B||!S.sim){box.innerHTML='';return;}const r=B.r;
+ const html=compareHTML(B.data,B.label,`Ο browser λύνει με σταθερό βήμα Δt = ${eng(S.sim.h,'s')} (${esc($('#method').selectedOptions[0]?.textContent||'')}), ο server με μεταβλητό βήμα και έλεγχο σφάλματος. Κοντά στις μεταγωγές το |Δ| είναι μεγάλο αν οι δύο λύτες βρίσκουν την ακμή σε λίγο διαφορετική στιγμή· γι' αυτό δίνεται το RMS και το 95 %.${B.stale?' <b>Το κύκλωμα άλλαξε μετά τον υπολογισμό.</b>':''}`);
+ box.innerHTML=(html||`<p class="muted small">Δεν υπάρχει κοινό διάστημα με την προσομοίωση του browser: τρέξε την προσομοίωση έως ${eng(r.t_end,'s')} (⏩).</p>`)+sampleCompareHTML(r);}
+// ------------------------------------------------------------------ CSV reference (PLECS, measurements, older runs)
+// first column time, one signal per column, optional header row; ',' ';' or tab separated
+function parseCSV(text){const lines=String(text).split(/\r?\n/).filter(l=>l.trim());if(lines.length<2)throw Error('Το αρχείο έχει λιγότερες από δύο γραμμές.');
+ const head=lines[0],sep=[';','\t',','].map(c=>[c,head.split(c).length]).sort((a,b)=>b[1]-a[1])[0][0];
+ const cells=l=>l.split(sep).map(x=>x.trim().replace(/^"(.*)"$/,'$1'));const comma=sep!==',';
+ const num=x=>{if(x==='')return NaN;const v=Number(comma?x.replace(',','.'):x);return v;};
+ const first=cells(lines[0]),hasHead=first.some(x=>x!==''&&!Number.isFinite(num(x)));
+ const names=hasHead?first.map(x=>x.replace(/\s*\[[^\]]*\]\s*$/,'')):first.map((_,i)=>i?'στήλη '+i:'time');
+ const body=lines.slice(hasHead?1:0).map(cells).filter(r=>Number.isFinite(num(r[0])));if(body.length<2)throw Error('Δεν βρέθηκαν αριθμητικές γραμμές.');
+ const nc=names.length,t=Float64Array.from(body,r=>num(r[0]));for(let i=1;i<t.length;i++)if(!(t[i]>=t[i-1]))throw Error(`Ο χρόνος δεν αυξάνει στη γραμμή ${i+1+(hasHead?1:0)}.`);
+ const cols=[];for(let c=1;c<nc;c++)cols.push(Float64Array.from(body,r=>num(r[c])));return {names:names.slice(1),t,cols};}
+const normName=x=>String(x||'').toLowerCase().replace(/\[[^\]]*\]/g,'').replace(/[^a-z0-9α-ωάέήίόύώϊϋΐΰ]+/g,'');
+function renderCsvMap(){const box=$('#cr-map'),C=S.csv;if(!C){box.innerHTML='';return;}const ch=scope.channels();
+ const auto=nm=>{const n=normName(nm);return ch.find(c=>normName(c.label)===n||normName(c.key)===n)?.key||'';};
+ box.innerHTML=`<table class="cr-table"><thead><tr><th>Στήλη CSV</th><th>Σήμα του scope</th></tr></thead><tbody>${C.names.map((nm,i)=>{const sel=C.map?.[i]??auto(nm);
+  return `<tr><td>${esc(nm)}</td><td><select data-crmap="${i}"><option value="">—</option>${ch.map(c=>`<option value="${esc(c.key)}" ${c.key===sel?'selected':''}>${esc(c.label)}</option>`).join('')}</select></td></tr>`;}).join('')}</tbody></table>
+  <div class="row-btns"><button id="cr-apply" class="strong">Εφαρμογή</button></div>`;
+ C.map=C.names.map((nm,i)=>C.map?.[i]??auto(nm));
+ $$('#cr-map [data-crmap]').forEach(el=>el.onchange=()=>{C.map[+el.dataset.crmap]=el.value;});$('#cr-apply').onclick=applyCsv;}
+function applyCsv(){const C=S.csv;if(!C)return;const sh=(P.parseEng($('#cr-shift').value)||0)*1e-3,sc=+$('#cr-tscale').value||1;const data={};let n=0;
+ C.map.forEach((key,i)=>{if(!key)return;data[key]={t:Float64Array.from(C.t,x=>x*sc+sh),y:C.cols[i]};n++;});
+ if(!n){$('#cr-status').innerHTML='Αντιστοίχισε τουλάχιστον μία στήλη σε σήμα του scope.';$('#cr-status').className='bt-status err';return;}
+ S.csvRef={label:'CSV · '+C.file,data};scope.setRefs(S.csvRef);renderCsv();
+ $('#cr-status').innerHTML=`✓ ${n} ${n===1?'σήμα':'σήματα'} από ${C.t.length.toLocaleString('el-GR')} γραμμές (${eng(C.t[0]*sc+sh,'s')} … ${eng(C.t[C.t.length-1]*sc+sh,'s')}).`;$('#cr-status').className='bt-status';}
+function renderCsv(){const box=$('#cr-out');if(!box)return;const R=S.csvRef;if(!R||!S.sim){box.innerHTML='';return;}
+ box.innerHTML=compareHTML(R.data,R.label,'Η αναφορά από το CSV σχεδιάζεται διακεκομμένη. Για σύγκριση με PLECS χρησιμοποίησε ίδιες παραμέτρους, αρχικές συνθήκες και πρόσημα ρευμάτων.')||'<p class="muted small">Δεν υπάρχει κοινό διάστημα με την προσομοίωση: τρέξε την προσομοίωση στο διάστημα του CSV.</p>';}
+function clearCsv(){S.csv=null;S.csvRef=null;scope.setRefs(S.batch&&$('#bt-show').checked?{label:S.batch.label,data:S.batch.data}:null);$('#cr-map').innerHTML='';$('#cr-out').innerHTML='';$('#cr-status').innerHTML='';}
 // Sample & Hold: the same sampling instants and values in both solvers (event-level check)
 function sampleCompareHTML(r){const out=[];for(const [id,sv] of Object.entries(r.samples||{})){const js=S.sim.samples(id);if(!js)continue;const tEnd=Math.min(r.t_end,S.sim.t)+1e-12;
   const a=sv.t.map((t,i)=>[t,sv.v[i]]).filter(x=>x[0]<=tEnd),b=js.t.map((t,i)=>[t,js.v[i]]).filter(x=>x[0]<=tEnd&&x[0]>=(js.t[0]??0));
@@ -205,8 +233,9 @@ function refreshControls(){
    <input type="range" min="0" max="360" step="1" value="${ph}" data-ph="${c.id}"><div class="ctl-btns">${[0,90,180,270].map(d=>`<button data-phset="${c.id}" data-val="${d}">${d}°</button>`).join('')}</div></div>`;};
  // several open-loop PWMs (e.g. interleaved legs): one D for all, and in-phase / shifted by k·T/N
  const fixedPw=pw.filter(c=>({...P.defaults('PWM'),...c.params}).mode==='fixed').sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
- let group='';if(fixedPw.length>=2){const p0={...P.defaults('PWM'),...fixedPw[0].params};
-  group=`<div class="ctl ctl-group"><label>Όλα τα PWM (${fixedPw.length}) · D <output data-dallout>${fmt(+p0.D,4)}</output></label><input type="range" min="0" max="1" step="0.0005" value="${+p0.D}" data-dall aria-label="Κοινό D">
+ const phasePw=pw.filter(c=>({...P.defaults('PWM'),...c.params}).mode!=='spwm').sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
+ let group='';if(phasePw.length>=2){const p0={...P.defaults('PWM'),...(fixedPw[0]||phasePw[0]).params};
+  group=`<div class="ctl ctl-group">${fixedPw.length>=2?`<label>Όλα τα PWM (${fixedPw.length}) · D <output data-dallout>${fmt(+p0.D,4)}</output></label><input type="range" min="0" max="1" step="0.0005" value="${+p0.D}" data-dall aria-label="Κοινό D">`:`<label>Όλα τα PWM (${phasePw.length}) · φάσεις</label>`}
    <div class="ctl-btns"><button data-ilv="common" title="Ίδια φάση σε όλα τα φέροντα">Συμφασικά</button><button data-ilv="shift" title="Το k-οστό φέρον καθυστερεί k·T/N">Μετατοπισμένα k·T/N</button></div><small>Η φάση κάθε φέροντος αλλάζει από την επόμενη περίοδό του.</small></div>`;}
  const per=pw.map(c=>{const p={...P.defaults('PWM'),...c.params};let h='';
   if(p.mode==='fixed'||p.mode==='pp')h=`<label>${esc(c.label||c.id)} · D <output data-dout="${c.id}">${fmt(+p.D,4)}</output></label><input type="range" min="0" max="1" step="0.0005" value="${+p.D}" data-d="${c.id}">
@@ -237,7 +266,7 @@ function refreshControls(){
  $$('#live-controls [data-ph]').forEach(r=>{r.oninput=()=>setPh(r.dataset.ph,+r.value,false);r.onchange=()=>setPh(r.dataset.ph,+r.value,true);});
  $$('#live-controls [data-phset]').forEach(b=>b.onclick=()=>setPh(b.dataset.phset,+b.dataset.val,true));
  const dall=box.querySelector('[data-dall]');if(dall){const f=commit=>{for(const c of fixedPw)setD(c.id,+dall.value,commit);box.querySelector('[data-dallout]').textContent=fmt(+dall.value,4);};dall.oninput=()=>f(false);dall.onchange=()=>f(true);}
- $$('#live-controls [data-ilv]').forEach(b=>b.onclick=()=>{const n=fixedPw.length;fixedPw.forEach((c,k)=>setPh(c.id,b.dataset.ilv==='shift'?+(360*k/n).toFixed(6):0,true));});
+ $$('#live-controls [data-ilv]').forEach(b=>b.onclick=()=>{const n=phasePw.length;phasePw.forEach((c,k)=>setPh(c.id,b.dataset.ilv==='shift'?+(360*k/n).toFixed(6):0,true));});
  $$('#live-controls [data-trig]').forEach(el=>el.onchange=()=>{const id=el.dataset.trig,c=editor.comp(id);if(!c)return;const from=c.params.trig;c.params.trig=el.value;S.sim?.setHold(id,{trig:el.value});editor.renderLabels();
   liveChange(id,'trig',el.value,`${c.label||id}: ${el.selectedOptions[0].textContent.split(' (')[0].split(' · ')[0]}`,from);saveLocal();if(S.theory)renderTheory();});
  renderLiveLog();updateLivePanel();
@@ -447,36 +476,45 @@ function samplingTheory(){const s=S.sim,W=paramsOf('PWM1'),Lp=paramsOf('L1'),Hp=
  if(log&&log.t.length){const N=log.t.length,first6=Math.max(0,N-8);
   html+=`<h4>Τελευταία δείγματα</h4><div class="wrap"><table class="cmp"><thead><tr><th>#</th><th>t_sample</th><th>τ/T</th><th>i_L(t_k)</th><th>⟨i_L⟩ περιόδου</th><th>δείγμα − ⟨i_L⟩</th></tr></thead><tbody>${log.t.slice(first6).map((t,j)=>{const i=first6+j,v=log.v[i],a=periodAvgAt('I:L1',t),q=((t/T-phase/360)%1+1)%1;
    return `<tr><td>${(S.sim.shById.get('SH1')?.n??N)-(N-1-i)}</td><td>${eng(t,'s',6)}</td><td>${fmt(Math.min(q,1-q)<1e-6?0:q,3)}</td><td>${eng(v,'A',5)}</td><td>${eng(a,'A',5)}</td><td>${Number.isFinite(a)?eng(v-a,'A',4):'—'}</td></tr>`;}).join('')}</tbody></table></div>`;}
- const k=s?.ctrlById.get('PWM1');if(k){const tk=k.tk,dt=k.dt||0,d=Math.min(1,Math.max(0,k.d)),[e0,e1]=saw?[0,d*T]:[(1-d)*T/2,(1+d)*T/2];const r=x=>`${eng(x,'s',6)} (τ = ${Math.abs(x-tk)<1e-6*T?'0':eng(x-tk,'s',4)})`;
+ const k=s?.ctrlById.get('PWM1');if(k){const tk=k.tk,dt=k.dt||0,d=Math.min(1,Math.max(0,k.dOn)),d2=Math.min(1,Math.max(0,k.dOff)),[e0,e1]=saw?[0,d*T]:[(1-d)*T/2,(1+d2)*T/2];const r=x=>`${eng(x,'s',6)} (τ = ${Math.abs(x-tk)<1e-6*T?'0':eng(x-tk,'s',4)})`;
   html+=`<h4>Χρονοδιάγραμμα της τρέχουσας περιόδου φέροντος</h4><ul class="eqs"><li>Αρχή περιόδου t_k = ${eng(tk,'s',6)}</li>${pos.map(u=>`<li>t_sample: ${r(tk+u*T)}</li>`).join('')}
-   <li>t_update: ${pi?`${r(tk)}, ο ελεγκτής διαβάζει το δείγμα που μόλις πάρθηκε και ορίζει το D της περιόδου (D = ${fmt(d,5)})`:'— (ανοιχτός βρόχος, σταθερό D)'}</li>
+   <li>t_update: ${pi?(W.upd==='double'&&!saw?`${r(tk)} για την ακμή ανάμματος (D = ${fmt(k.dOn,5)}) και ${r(tk+T/2)} για την ακμή σβησίματος (D = ${fmt(k.dOff,5)}). Ο PI τρέχει με T_s = T/2 και διαβάζει κάθε φορά το τελευταίο δείγμα`:`${r(tk)}, ο ελεγκτής διαβάζει το δείγμα που μόλις πάρθηκε και ορίζει το D της περιόδου (D = ${fmt(d,5)})`):W.upd==='double'&&!saw?`${r(tk)} και ${r(tk+T/2)} (πρόγραμμα D(t))`:'— (ανοιχτός βρόχος, σταθερό D)'}</li>
    <li>t_gate: S2 ON στο ${r(tk+e0+dt)}, S2 OFF στο ${r(tk+e1)}${dt>0?`, S1 ON στο ${r(tk+e1+dt)} (νεκρός χρόνος ${eng(dt,'s')})`:''}</li></ul>
    <p class="muted small">Στην ίδια στιγμή προηγείται το δείγμα, ακολουθεί η ενημέρωση του ελεγκτή και μετά η μεταγωγή. Το δείγμα είναι η τιμή του ρεύματος ακριβώς πριν από κάθε μεταγωγή της στιγμής εκείνης (t⁻).</p>`;}
  return html;}
 // N legs on a common clock: per-leg and summed ripple, cancellation points, window scan
 function polyTheory(){const s=S.sim,m=S.tutMeta||{};const legs=editor.doc.components.filter(c=>c.type==='L'&&/^L\d+$/.test(c.id)).sort((a,b)=>+a.id.slice(1)-+b.id.slice(1));
  const N=legs.length,W=paramsOf('PWM1'),VB=paramsOf('VB'),VS=paramsOf('VS');if(!N||!W||!VB||!VS)return '<p class="muted">Λείπουν τα VB, VS, L1…, PWM1….</p>';
- const fs=+W.fs,T=1/fs,L=+paramsOf('L1').L,vlo=s?s.now('V:VB'):+VB.V,vhi=s?s.now('V:VS'):+VS.V,D=1-vlo/vhi,P=Number.isFinite(m.P)?m.P:40e3,Ik=-P/(N*vlo),dI=vlo*D/(L*fs);
+ const fs=+W.fs,T=1/fs,L=+paramsOf('L1').L,vlo=s?s.now('V:VB'):+VB.V,vhi=s?s.now('V:VS'):+VS.V,D=1-vlo/vhi,Pw=Number.isFinite(m.P)?m.P:40e3,Ik=-Pw/(N*vlo);
+ // actual duty (open loop with R, or what the PI settles to) and the ON-interval voltage V_bus − R·I_k
+ const Dk=W.mode==='pi'?(s?s.now('D:PWM1'):D):+W.D,vOn=k=>vlo-(+paramsOf(legs[k].id).Rs||0)*Ik,dI=vOn(0)*Dk/(L*fs);
  const ph=legs.map((c,k)=>{const q=paramsOf('PWM'+(k+1));return q?((+q.phase||0)%360+360)%360:0;});
  const same=ph.every(x=>Math.abs(x-ph[0])<1e-6),sorted=[...ph].map(x=>((x-ph[0])%360+360)%360).sort((a,b)=>a-b),equal=!same&&sorted.every((x,k)=>Math.abs(x-360*k/N)<1e-6);
  const frac=x=>{const r=x-Math.round(x);return Math.abs(r)<1e-7?0:x-Math.floor(x);},rr=frac(N*D),shiftF=V=>{const d=1-vlo/V,r=frac(N*d);return V/L*T/N*r*(1-r);},commonF=V=>N*vlo*(1-vlo/V)/(L*fs);
  // the ideal summed waveform for the actual phases (any spacing)
- let mn=Infinity,mx=-Infinity;for(let j=0;j<4000;j++){const u=j/4000;let y=0;for(let k=0;k<N;k++)y+=rippleDev(u-ph[k]/360,D,W.carrier==='saw');mn=Math.min(mn,y);mx=Math.max(mx,y);}const dIsum=dI*(mx-mn);
+ const dIk=legs.map((c,k)=>vOn(k)*Dk/((+paramsOf(c.id).L||L)*fs));
+ let mn=Infinity,mx=-Infinity;for(let j=0;j<4000;j++){const u=j/4000;let y=0;for(let k=0;k<N;k++)y+=dIk[k]*rippleDev(u-ph[k]/360,D,W.carrier==='saw');mn=Math.min(mn,y);mx=Math.max(mx,y);}const dIsum=mx-mn;
+ // expected mean current of each leg: the PI reference, or with winding resistance (V_bus − (1 − D)·V_st)/R
+ const pi=W.mode==='pi',Rs=legs.map(c=>+paramsOf(c.id).Rs||0),expI=legs.map((c,i)=>{const q=paramsOf('PWM'+(i+1));if(q?.mode==='pi'){const r=P.parseSched(q.ref);return r?r[r.length-1][1]:NaN;}return Rs[i]>0?(vlo-(1-(+q.D))*vhi)/Rs[i]:Ik;});
+ const unequalL=dIk.some(x=>Math.abs(x/dIk[0]-1)>1e-6);
  const vmin=m.vmin??60,vmax=m.vmax??100,canc=[];for(let q=1;q<N;q++){const v=vlo/(1-q/N);if(v>=vmin-1e-9&&v<=vmax+1e-9)canc.push(v);}
  let worst={v:vmin,d:0};for(let j=0;j<=2000;j++){const V=vmin+(vmax-vmin)*j/2000,d=same?commonF(V):shiftF(V);if(d>worst.d)worst={v:V,d};}
  const k=m.k??.3,dImax=vlo*(1-vlo/vmax)/(L*fs),Lmin=vlo*(1-vlo/vmax)/(k*Math.abs(Ik)*fs);
  const mode=same?'συμφασική':equal?'μετατοπισμένη κατά T/N':'άνισες φάσεις';
  const eqs=[`${N} κλάδοι, ${mode} οδήγηση (φάσεις ${ph.map(x=>fmt(x,4)+'°').join(', ')} → καθυστερήσεις ${ph.map(x=>eng(x/360*T,'s',3)).join(', ')}).`,
-  `Ισομερής καταμερισμός: P_k = P/N = ${eng(P/N,'W')}, I_k = −P/(N·V_bus) = <b>${eng(Ik,'A')}</b> ανά κλάδο, ⟨i_Σ⟩ = N·I_k = <b>${eng(N*Ik,'A')}</b>.`,
-  `D = 1 − V_bus/V_st = 1 − ${fmt(vlo,4)}/${fmt(vhi,5)} = <b>${fmt(D,5)}</b>, Δi_k = V_bus·D/(L·f) = <b>${eng(dI,'A')}</b> (${fmt(100*dI/Math.abs(Ik),3)} % του |I_k|), κορυφή |I_k| + Δi_k/2 = <b>${eng(Math.abs(Ik)+dI/2,'A')}</b>.`,
+  `Ισομερής καταμερισμός: P_k = P/N = ${eng(Pw/N,'W')}, I_k = −P/(N·V_bus) = <b>${eng(Ik,'A')}</b> ανά κλάδο, ⟨i_Σ⟩ = N·I_k = <b>${eng(N*Ik,'A')}</b>.`,
+  pi?`Κάθε κλάδος έχει δικό του PI ρεύματος: μετρά το i_L του κλάδου στην αρχή της δικής του περιόδου (μέγιστο του τριγώνου, άρα μέση τιμή) και ακολουθεί την αναφορά του, ό,τι κι αν διαφέρει ανάμεσα στους κλάδους.`
+   :Rs.some(r=>r>0)?`Ανοιχτός βρόχος με αντίσταση πηνίων: σε μόνιμη κατάσταση V_bus − (1 − D)·V_st = R_k·I_k, άρα I_k = (V_bus − (1 − D)·V_st)/R_k. Ο κλάδος με τη μεγαλύτερη R παίρνει λιγότερο ρεύμα: ${legs.map((c,i)=>`${esc(c.label||c.id)} ${eng(expI[i],'A',4)}`).join(', ')}.`
+   :`Ανοιχτός βρόχος με ιδανικούς κλάδους: τα μέσα ρεύματα μένουν όσο ήταν στην αρχή, γιατί τίποτα δεν τα επαναφέρει. Μια αλλαγή φάσης ή duty αφήνει μόνιμη ανισοκατανομή.`,
+  `D₀ = 1 − V_bus/V_st = 1 − ${fmt(vlo,4)}/${fmt(vhi,5)} = <b>${fmt(D,5)}</b>${Math.abs(Dk-D)>1e-6?` (εδώ D = ${fmt(Dk,5)}, γιατί καλύπτει και την πτώση R·I)`:''}, Δi_k = (V_bus − R·I_k)·D/(L·f) = <b>${eng(dI,'A')}</b> (${fmt(100*dI/Math.abs(Ik),3)} % του |I_k|), κορυφή |I_k| + Δi_k/2 = <b>${eng(Math.abs(Ik)+dI/2,'A')}</b>.`,
   same?`Συμφασικά οι κλάδοι κυματώνουν μαζί: Δi_Σ = N·Δi_k = <b>${eng(N*dI,'A')}</b>, στη συχνότητα f = ${eng(fs,'Hz')}.`
-   :equal?`Μετατοπισμένα: r = N·D − ⌊N·D⌋ = ${fmt(rr,4)}, Δi_Σ = (V_st/L)·(T/N)·r(1 − r) = <b>${eng(shiftF(vhi),'A')}</b>. Σε κάθε υποπερίοδο T/N άγουν ⌊N·D⌋ ή ⌊N·D⌋ + 1 κάτω διακόπτες· η κυμάτωση που μένει έχει συχνότητα N·f = ${eng(N*fs,'Hz')}.${rr<1e-6||rr>1-1e-6?' <b>Εδώ N·D είναι ακέραιος: ιδανική ακύρωση.</b>':''}`
-   :`Με άνισες φάσεις ο κλειστός τύπος δεν ισχύει· η κυμάτωση του αθροίσματος υπολογίζεται από τις ιδανικές κυματομορφές των κλάδων: <b>${eng(dIsum,'A')}</b>.`,
+   :equal&&!unequalL?`Μετατοπισμένα: r = N·D − ⌊N·D⌋ = ${fmt(rr,4)}, Δi_Σ = (V_st/L)·(T/N)·r(1 − r) = <b>${eng(shiftF(vhi),'A')}</b>. Σε κάθε υποπερίοδο T/N άγουν ⌊N·D⌋ ή ⌊N·D⌋ + 1 κάτω διακόπτες· η κυμάτωση που μένει έχει συχνότητα N·f = ${eng(N*fs,'Hz')}.${rr<1e-6||rr>1-1e-6?' <b>Εδώ N·D είναι ακέραιος: ιδανική ακύρωση.</b>':''}`
+   :`${unequalL?'Με διαφορετικά L':'Με άνισες φάσεις'} ο κλειστός τύπος δεν ισχύει και η ακύρωση δεν είναι πλήρης· η κυμάτωση του αθροίσματος υπολογίζεται από τις ιδανικές κυματομορφές των κλάδων: <b>${eng(dIsum,'A')}</b>.`,
   `Παράθυρο ${fmt(vmin)}–${fmt(vmax)} V: ${canc.length?`ακυρώσεις (N·D ακέραιος) στα ${canc.map(v=>eng(v,'V',4)).join(', ')}`:'καμία ακύρωση μέσα στο παράθυρο'}. Μέγιστη κυμάτωση αθροίσματος ${eng(worst.d,'A')} στα ${eng(worst.v,'V',4)} (${same?'συμφασικά':'μετατοπισμένα'}).`,
   `Κριτήριο 30 %: Δi_k είναι μέγιστο στη μέγιστη V_st (${eng(dImax,'A')}), άρα L_min = V_bus·D_max/(0,3·|I_k|·f) = <b>${eng(Lmin,'H')}</b>· τώρα L = ${eng(L,'H')} → ${dImax<=k*Math.abs(Ik)*(1+1e-6)?'<span class="good">μέσα στο κριτήριο</span>':'<span class="warn-text">εκτός κριτηρίου</span>'}.`];
- const rows=[['⟨i_Σ⟩ (ζυγός)',N*Ik,avgOver('I:VB',5)?.avg,'A'],['Δi_k p-p (κλάδος 1)',dI,lastPP('I:L1'),'A'],['Δi_Σ p-p',dIsum,lastPP('I:VB'),'A'],['Κορυφή |i_L1|',Math.abs(Ik)+dI/2,(()=>{const q=s?.lastPeriod('I:L1');return q?Math.max(Math.abs(q.max),Math.abs(q.min)):NaN;})(),'A']];
- const tab=`<h4>Καταμερισμός ανά κλάδο (τελευταίες 5 T)</h4><div class="wrap"><table class="cmp"><thead><tr><th>Κλάδος</th><th>φ</th><th>⟨i_L⟩</th><th>Δi p-p</th><th>P_k</th></tr></thead><tbody>${legs.map((c,i)=>{const a=avgOver('I:'+c.id,5);
-   return `<tr><td>${esc(c.label||c.id)}</td><td>${fmt(ph[i],4)}°</td><td>${eng(a?.avg,'A',5)}</td><td>${eng(lastPP('I:'+c.id),'A',4)}</td><td>${eng(-(a?.avg??NaN)*vlo,'W',4)}</td></tr>`;}).join('')}</tbody></table></div>`;
+ const rows=[['⟨i_Σ⟩ (ζυγός)',expI.reduce((a,b)=>a+b,0),avgOver('I:VB',5)?.avg,'A'],['Δi_k p-p (κλάδος 1)',dI,lastPP('I:L1'),'A'],['Δi_Σ p-p',dIsum,lastPP('I:VB'),'A'],['Κορυφή |i_L1|',Math.abs(Ik)+dI/2,(()=>{const q=s?.lastPeriod('I:L1');return q?Math.max(Math.abs(q.max),Math.abs(q.min)):NaN;})(),'A']];
+ const tab=`<h4>Καταμερισμός ανά κλάδο (τελευταίες 5 T)</h4><div class="wrap"><table class="cmp"><thead><tr><th>Κλάδος</th><th>φ</th><th>L, R</th><th>⟨i_L⟩ αναμενόμενο</th><th>⟨i_L⟩</th><th>Δi p-p</th><th>P_k</th></tr></thead><tbody>${legs.map((c,i)=>{const a=avgOver('I:'+c.id,5),lp=paramsOf(c.id);
+   return `<tr><td>${esc(c.label||c.id)}</td><td>${fmt(ph[i],4)}°</td><td>${eng(+lp.L,'H',4)}${+lp.Rs>0?', '+eng(+lp.Rs,'Ω',3):''}</td><td>${eng(expI[i],'A',5)}</td><td>${eng(a?.avg,'A',5)}</td><td>${eng(lastPP('I:'+c.id),'A',4)}</td><td>${eng(-(a?.avg??NaN)*vlo,'W',4)}</td></tr>`;}).join('')}</tbody></table></div>`;
  const scan=`<h4>Κυμάτωση αθροίσματος σε όλο το παράθυρο (ιδανικό μοντέλο)</h4><div class="wrap"><table class="cmp"><thead><tr><th>V_st</th><th>D</th><th>N·D</th><th>Δi_k</th><th>Δi_Σ μετατοπισμένα</th><th>Δi_Σ συμφασικά</th></tr></thead><tbody>${[...new Map([vmin,(vmin+vmax)/2,vmax,...canc,worst.v].map(v=>[v.toPrecision(6),v])).values()].sort((a,b)=>a-b).map(V=>{const d=1-vlo/V;
    return `<tr><td>${eng(V,'V',4)}</td><td>${fmt(d,4)}</td><td>${fmt(N*d,4)}</td><td>${eng(vlo*d/(L*fs),'A',4)}</td><td>${eng(shiftF(V),'A',4)}</td><td>${eng(commonF(V),'A',4)}</td></tr>`;}).join('')}</tbody></table></div>`;
  return `<ul class="eqs">${eqs.map(e=>`<li>${e}</li>`).join('')}</ul>${cmpRows(rows)}${tab}${scan}`;}
@@ -669,7 +707,10 @@ function boot(){
  $('#add-signal').onchange=e=>{if(e.target.value)addProbe(e.target.value);e.target.value='';};
  const probeSel=pre=>{const ids=editor.selection().c.filter(id=>{const c=editor.comp(id);return c&&signalsFor(c).some(([p])=>p===pre);});if(!ids.length){notice('Επίλεξε πρώτα στοιχεία στο κύκλωμα (κλικ ή ορθογώνιο).','info');setTimeout(()=>notice(''),2500);return;}ids.forEach(id=>addProbe(pre+id));};
  $('#probe-i').onclick=()=>probeSel('I:');$('#probe-v').onclick=()=>probeSel('V:');
- $('#csv').onclick=exportCSV;$('#clear-cursors').onclick=()=>{scope.cfg.cursors=[];draw(true);};
+ $('#csv').onclick=exportCSV;
+ $('#cr-open').onclick=()=>$('#cr-file').click();$('#cr-clear').onclick=clearCsv;
+ $('#cr-file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const C=parseCSV(await f.text());C.file=f.name;S.csv=C;renderCsvMap();$('#cr-status').innerHTML=`${C.names.length} ${C.names.length===1?'στήλη':'στήλες'} σημάτων, ${C.t.length.toLocaleString('el-GR')} γραμμές. Διάλεξε σε ποιο σήμα αντιστοιχεί η καθεμία.`;$('#cr-status').className='bt-status';}
+  catch(err){$('#cr-status').innerHTML='Σφάλμα: '+esc(err.message);$('#cr-status').className='bt-status err';}e.target.value='';};$('#clear-cursors').onclick=()=>{scope.cfg.cursors=[];draw(true);};
  $('#fit').onclick=()=>editor.fit();$('#undo').onclick=()=>editor.undo();$('#redo').onclick=()=>editor.redo();$('#rot').onclick=()=>editor.rotateSel();$('#del').onclick=()=>editor.deleteSel();
  $('#tutorials').onclick=()=>gallery(true);$('#gallery-close').onclick=()=>gallery(false);
  $('#open-settings').onclick=openSettings;$('#settings-close').onclick=()=>$('#settings').hidden=true;

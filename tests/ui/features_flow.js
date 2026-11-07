@@ -2,7 +2,7 @@
 // templates in the math panel, new tutorials and "open in studio" from /converter/.
 // Usage: python run.py --no-browser --port 8775  then  node tests/ui/features_flow.js http://127.0.0.1:8775/
 const {chromium}=require('playwright');
-(async()=>{const U=process.argv[2]||'http://127.0.0.1:8775/';const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:1500,height:1100}});const p=await ctx.newPage();
+(async()=>{const U=process.argv[2]||'http://127.0.0.1:8775/';const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:1500,height:1100},acceptDownloads:true});const p=await ctx.newPage();
  const errs=[],fail=[];p.on('pageerror',e=>errs.push(String(e)));p.on('console',m=>{if(m.type()==='error')errs.push(m.text());});
  const ok=(c,msg)=>{if(!c)fail.push(msg);};
  await p.goto(U);await p.evaluate(()=>localStorage.clear());
@@ -52,6 +52,10 @@ const {chromium}=require('playwright');
  await p.click('[data-ilv="common"]');await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.sim.T*10);window.PCL.pause();});
  ok(await p.evaluate(()=>{const q=window.PCL.S.sim.lastPeriod('I:VB');return Math.abs(q.max-q.min-180)<0.5&&[1,2,3,4].every(k=>window.PCL.editor.comp('PWM'+k).params.phase===0);}),'live in-phase toggle');
  ok((await p.$$eval('#math-tpl option',o=>o.map(x=>x.value)))[0]==='pe2_polyphase','polyphase template first');
+ // CSV reference: export the scope, import it back, and compare (differences ~0)
+ await p.click('#cr-block summary');const [dl]=await Promise.all([p.waitForEvent('download'),p.click('#csv')]);await p.setInputFiles('#cr-file',await dl.path());await p.waitForTimeout(400);
+ await p.click('#cr-apply');await p.waitForTimeout(600);const cr=await p.$eval('#cr-out',e=>e.textContent);ok(/Σύγκριση με CSV/.test(cr)&&/i_Σ \(ζυγός\)/.test(cr),'CSV reference table');
+ ok(await p.evaluate(()=>Object.keys(window.PCL.scope.refs?.data||{}).length>=4),'CSV overlay');
  // open a /converter/ circuit in the studio
  await p.goto(U+'converter/');await p.waitForTimeout(800);await p.click('.topo-switch button[data-key="boost"]');
  await p.waitForFunction(()=>!state.dirty&&state.result?.config?.topology==='boost',null,{timeout:20000});

@@ -229,3 +229,4 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:6px}
 .nav-toggle.toggle.on{background:#fdf9f0;border-color:#ebdcbd;color:#8a6a2a}
 #lp-toggle+.nav-toggle{margin-left:6px}
 .live-panel .ctl-group{background:#f4faf7;border-color:#c9dcd4}.ctl-more>summary{font-size:11.5px;font-weight:600;cursor:pointer;margin:2px 0 6px;color:#41575a}
+.cr-table{width:100%;font-size:11.5px;margin:6px 0}.cr-table td,.cr-table th{padding:2px 4px;text-align:left}.cr-table select{width:100%;font-size:11.5px}

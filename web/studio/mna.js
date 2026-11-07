@@ -98,7 +98,7 @@
    else if(T==='CPL'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'CPL',a,b,P:num(p.P,1000),Vmin:Math.max(num(p.Vmin,5),1e-3),sched:P.parseSched(p.sched),v0:null});}
    else if(T==='PWM'){const fs=Math.max(num(p.fs,20e3),1e-3);ctrls.push({id:c.id,label:c.label||c.id,fs,T:1/fs,mode:p.mode||'fixed',D:num(p.D,.5),dsched:P.parseSched(p.dsched),carrier:p.carrier||'triangle',phase:num(p.phase,0)/360,
      sensor:p.sensor,qty:p.qty||'I',ref:P.parseSched(p.ref)||[[0,0]],Kp:num(p.Kp,0),Ki:num(p.Ki,0),ff:p.ff||'none',ffA:p.ffA,ffB:p.ffB,D0:num(p.D0,.5),dmin:num(p.dmin,.01),dmax:num(p.dmax,.99),
-     Kd:num(p.Kd,0),Tf:num(p.Tf,0),dt:Math.max(0,num(p.dt,0)),tkPrev:null,dPrev:null,m:num(p.m,.8),fref:num(p.fref,50),refphase:num(p.refphase,0)*Math.PI/180,d:num(p.D,.5),xi:0,k:null,tk:0,meas:0,refNow:0,ePrev:null,dF:0});info.ctrl=ctrls[ctrls.length-1];}
+     Kd:num(p.Kd,0),Tf:num(p.Tf,0),dt:Math.max(0,num(p.dt,0)),tkPrev:null,dPrev:null,dPrevOff:null,upd:p.upd==='double'?'double':'single',h:null,dOn:num(p.D,.5),dOff:num(p.D,.5),m:num(p.m,.8),fref:num(p.fref,50),refphase:num(p.refphase,0)*Math.PI/180,d:num(p.D,.5),xi:0,k:null,tk:0,meas:0,refNow:0,ePrev:null,dF:0});info.ctrl=ctrls[ctrls.length-1];}
    else if(T==='SH'){const sh={id:c.id,label:c.label||c.id,src:p.src,qty:p.qty==='V'?'V':'I',clock:p.clock,trig:['start','mid','both'].includes(p.trig)?p.trig:'start',h0:p.init==='nan'?NaN:num(p.h0,0),h:NaN,last:null,n:0,log:{t:[],v:[]}};sh.h=sh.h0;shs.push(sh);info.sh=sh;
     if(!(p.clock&&byId.get(p.clock)?.type==='PWM'))warnings.push(`${c.label||c.id}: διάλεξε μπλοκ PWM ως φέρον (αλλιώς δεν παίρνει δείγματα).`);
     if(!(p.src&&byId.get(p.src)))warnings.push(`${c.label||c.id}: διάλεξε το στοιχείο που μετρά.`);}
@@ -133,7 +133,7 @@
    if(old&&!fresh){ // carry states by key
     const st=new Map();for(const e of old.els)if(e.key)st.set(e.k+e.key,e);
     for(const e of net.els)if(e.key&&st.has(e.k+e.key)){const o=st.get(e.k+e.key);if(e.k==='L')e.i=o.i;if(e.k==='C'){e.v=o.v;e.i=o.i;}if(e.k==='D')e.on=o.on;}
-    const oc=new Map(old.ctrls.map(c=>[c.id,c]));for(const c of net.ctrls){const o=oc.get(c.id);if(o&&o.mode===c.mode&&o.T===c.T){c.xi=o.xi;c.d=o.d;c.k=o.k;c.tk=o.tk;c.tkPrev=o.tkPrev;c.dPrev=o.dPrev;c.meas=o.meas;c.refNow=o.refNow;c.ePrev=o.ePrev;c.dF=o.dF;}}
+    const oc=new Map(old.ctrls.map(c=>[c.id,c]));for(const c of net.ctrls){const o=oc.get(c.id);if(o&&o.mode===c.mode&&o.T===c.T){c.xi=o.xi;c.d=o.d;c.k=o.k;c.tk=o.tk;c.tkPrev=o.tkPrev;c.dPrev=o.dPrev;c.dPrevOff=o.dPrevOff;c.dOn=o.dOn;c.dOff=o.dOff;c.h=c.upd===o.upd?o.h:null;c.meas=o.meas;c.refNow=o.refNow;c.ePrev=o.ePrev;c.dF=o.dF;}}
     for(const e of net.els)if(e.k==='CPL'){const o=old.els.find(x=>x.k==='CPL'&&x.cid===e.cid);if(o)e.v0=o.v0;}
     const os=new Map(old.shs.map(q=>[q.id,q]));for(const q of net.shs){const o=os.get(q.id);if(o){q.h=o.h;q.last=q.trig===o.trig&&q.clock===o.clock?o.last:null;q.n=o.n;q.log=o.log;}}
    }
@@ -225,19 +225,21 @@
   now(key){const i=this.chIndex.get(key);if(i===undefined)return NaN;return this.vals[i];}
   // ------------------------------------------------------------ control
   // gate of one PWM output; with dead time an output turns on k.dt after its raw signal does
+  // dOn sets the turn-on edge of the period, dOff the turn-off edge (they differ only with a
+  // second duty update at the carrier minimum)
   gateOf(k,out,t){
-   if(!(k.dt>0))return this.rawGate(k,out,t,k.tk,k.d);
-   if(!this.rawGate(k,out,t,k.tk,k.d))return false;
-   const td=t-k.dt;if(k.mode==='spwm'||td>=k.tk-1e-15*k.T)return this.rawGate(k,out,td,k.tk,k.d);
-   return this.rawGate(k,out,td,k.tkPrev??k.tk-k.T,k.dPrev??k.d);
+   if(!(k.dt>0))return this.rawGate(k,out,t,k.tk,k.dOn,k.dOff);
+   if(!this.rawGate(k,out,t,k.tk,k.dOn,k.dOff))return false;
+   const td=t-k.dt;if(k.mode==='spwm'||td>=k.tk-1e-15*k.T)return this.rawGate(k,out,td,k.tk,k.dOn,k.dOff);
+   return this.rawGate(k,out,td,k.tkPrev??k.tk-k.T,k.dPrev??k.dOn,k.dPrevOff??k.dPrev??k.dOff);
   }
-  rawGate(k,out,t,tk,dd){
+  rawGate(k,out,t,tk,dd,dd2=dd){
    const T=k.T;
    if(k.mode==='spwm'){const ph=((t/T-k.phase)%1+1)%1;const car=ph<.5?1-4*ph:-3+4*ph;const ref=k.m*Math.sin(2*Math.PI*k.fref*t+k.refphase);
     const a=ref>car,b=-ref>car;return out==='a'?a:out==='na'?!a:out==='b'?b:!b;}
-   const tau=t-tk,d=Math.min(1,Math.max(0,dd));let a,b;
+   const tau=t-tk,d=Math.min(1,Math.max(0,dd)),d2=Math.min(1,Math.max(0,dd2));let a,b;
    if(k.mode==='pp'){const h=T/2;a=tau>=-1e-15&&tau<d*h*(1-1e-12);b=tau>=h*(1-1e-12)&&tau<h+d*h*(1-1e-12);}
-   else{const [e0,e1]=k.carrier==='saw'?[0,d*T]:[(1-d)*T/2,(1+d)*T/2];a=tau>=e0*(1-1e-12)-1e-18&&tau<e1*(1-1e-12);b=a;}
+   else{const [e0,e1]=k.carrier==='saw'?[0,d*T]:[(1-d)*T/2,(1+d2)*T/2];a=tau>=e0*(1-1e-12)-1e-18&&tau<e1*(1-1e-12);b=a;}
    return out==='a'?a:out==='na'?!a:out==='b'?b:!b;
   }
   // carrier value c(t): sawtooth τ/T (reset at the period start), symmetric triangle |1 − 2τ/T|
@@ -254,9 +256,9 @@
     if(q.log.t.length>60000){q.log.t.splice(0,10000);q.log.v.splice(0,10000);}any=true;}
    return any;}
   samples(id){return this.shById.get(id)?.log||null;}
-  ctrlEdges(k){const T=k.T,d=Math.min(1,Math.max(0,k.d));let E;
+  ctrlEdges(k){const T=k.T,d=Math.min(1,Math.max(0,k.dOn)),d2=Math.min(1,Math.max(0,k.dOff));let E;
    if(k.mode==='pp'){const h=T/2;E=[k.tk+d*h,k.tk+h,k.tk+h+d*h,k.tk+T];}
-   else{const [e0,e1]=k.carrier==='saw'?[0,d*T]:[(1-d)*T/2,(1+d)*T/2];E=[k.tk+e0,k.tk+e1,k.tk+T];}
+   else{const [e0,e1]=k.carrier==='saw'?[0,d*T]:[(1-d)*T/2,(1+d2)*T/2];E=[k.tk+e0,k.tk+e1,k.tk+T];}
    if(k.dt>0)E=E.concat([k.tk],E).map((e,i)=>i>=E.length?e+k.dt:e);
    return E;}
   // thyristor firing: pulse while frac(f·t + φ/2π − (α+shift)/360) < width/360
@@ -266,14 +268,17 @@
   setFiring(alpha){let n=0;for(const e of this.net.els)if(e.fire){e.fire.alpha=alpha;n++;}return n;}
   compV(cid){const c=this.net.compInfo.get(cid);if(!c||!c.pins)return NaN;return this.V(c.pins[0])-this.V(c.pins[1]);}
   compI(cid){const c=this.net.compInfo.get(cid);if(!c||!c.main)return NaN;if(c.type==='XFMR')return -c.main.n*this.x[c.main.row]+c.mag.i;if(c.type==='SW')return this.elCurrent(c.main)-(c.body?this.elCurrent(c.body):0);return this.elCurrent(c.main);}
+  // a second duty update at the carrier minimum (symmetric triangle only) changes the turn-off edge
+  dbl(k){return k.upd==='double'&&k.mode!=='spwm'&&k.mode!=='pp'&&k.carrier!=='saw';}
   sampleControllers(force){let changed=false;
    for(const k of this.net.ctrls){
-    const T=k.T,idx=Math.floor((this.t+1e-12*T)/T-k.phase);
-    if(!force&&k.k===idx)continue;changed=true;
-    const first=k.k===null;if(!first){k.tkPrev=k.tk;k.dPrev=k.d;}
-    k.k=idx;k.tk=(idx+k.phase)*T;
+    const T=k.T,idx=Math.floor((this.t+1e-12*T)/T-k.phase),dbl=this.dbl(k),half=dbl?Math.floor((this.t+1e-12*T)/(T/2)-2*k.phase):null;
+    if(!force&&k.k===idx&&(!dbl||k.h===half))continue;changed=true;
+    const period=force||k.k!==idx,first=k.k===null,Ts=dbl?T/2:T;
+    if(period){if(!first){k.tkPrev=k.tk;k.dPrev=k.dOn;k.dPrevOff=k.dOff;}k.k=idx;k.tk=(idx+k.phase)*T;}
+    k.h=half;
     if(k.mode==='fixed'||k.mode==='pp')k.d=schedAt(k.dsched,this.t,k.D);
-    else if(k.mode==='pi'){
+    else if(k.mode==='pi'){const T=Ts;
      k.refNow=schedAt(k.ref,this.t,k.ref[0][1]);const sh=this.shById.get(k.sensor);k.meas=sh?sh.h:k.qty==='V'?this.compV(k.sensor):this.compI(k.sensor);if(!Number.isFinite(k.meas))k.meas=0;
      let ff=0;if(k.ff==='ratio'){const a=this.compV(k.ffA),b=this.compV(k.ffB);ff=Math.abs(b)>1e-9?1-a/b:0;}else if(k.ff==='const')ff=k.D0;
      const e=k.refNow-k.meas;if(force&&!this.started){k.xi=0;k.ePrev=null;k.dF=0;}
@@ -281,7 +286,8 @@
      k.xi+=k.Ki*T*e;let d=ff+k.Kp*e+k.xi+der;
      if(d>k.dmax||d<k.dmin){k.xi-=k.Ki*T*e;d=Math.min(k.dmax,Math.max(k.dmin,ff+k.Kp*e+k.xi+der));}
      k.d=d;}
-    if(first||k.tkPrev===null){k.tkPrev=k.tk-T;k.dPrev=k.d;}
+    if(period){k.dOn=k.d;k.dOff=k.d;}else k.dOff=k.d;
+    if(first||k.tkPrev===null){k.tkPrev=k.tk-T;k.dPrev=k.dOn;k.dPrevOff=k.dOff;}
    }
    return changed;
   }
@@ -491,7 +497,7 @@
    return null;};
   const shx=new Map(net.shs.map((q,i)=>[q.id,i]));
   const shs=net.shs.map(q=>({id:q.id,rec:q.qty==='V'?V(ci(q.src)):I(ci(q.src)),clock:cix.get(q.clock)??null,trig:q.trig,h0:Number.isFinite(q.h0)?q.h0:null}));
-  const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase'])o[f]=k[f];
+  const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase','upd'])o[f]=k[f];
    const s=ci(k.sensor);o.sensorRec=k.mode==='pi'?(shx.has(k.sensor)?{sh:shx.get(k.sensor)}:k.qty==='V'?V(s):I(s)):null;o.ffARec=V(ci(k.ffA));o.ffBRec=V(ci(k.ffB));return o;});
   const channels={},skipped=[];for(const key of keys){const r=rec(key);if(r)channels[key]=r;else skipped.push(key);}
   return {net:{nNodes:net.nNodes,size:net.size,els,ctrls,shs},channels,skipped};

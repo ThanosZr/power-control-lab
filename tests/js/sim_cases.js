@@ -85,5 +85,8 @@ function shCirc(pwm,sh){const p=bidir({D:.5,...pwm},-800);p.components.push({id:
  out.sh_mid={h0:Number.isNaN(h0)?'nan':h0,first:L.t[0],n:L.t.length,dt:L.t[5]-L.t[4],at,v0:L.v[0]};}
 {const T=50e-6,pr=shCirc({mode:'pi',carrier:'saw',sensor:'SH1',qty:'I',ref:'-800',Kp:3e-4,Ki:0.4,ff:'ratio',ffA:'VB',ffB:'VS'},{trig:'start'});const s=new Sim(pr,{hDiv:500});s.run(10*T);
  const k=s.net.ctrls[0];out.sh_pi={meas:k.meas,hold:s.shById.get('SH1').h,lastSample:s.samples('SH1').v.at(-1),car:s.now('CAR:PWM1')};}
+// 14) double duty update: a D change before the carrier minimum moves the turn-off edge of the same period
+for(const upd of ['single','double']){const T=50e-6,s=new Sim(bidir({D:.5,carrier:'triangle',upd,dsched:`0:0.5, ${10.25*T}:0.6`},-800),{hDiv:500});const E=[];let g=s.now('G:PWM1');
+ while(s.t<12*T-1e-12){s.run(T/500);const g2=s.now('G:PWM1');if(g2!==g){E.push([s.t/T,g2]);g=g2;}}out['upd_'+upd]=E.filter(e=>e[0]>9.9);}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

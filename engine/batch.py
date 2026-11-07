@@ -57,7 +57,7 @@ def _f(v, d=0.0):
 
 class Ctrl:
     """PWM / PI / PID block, same rules as the browser (web/studio/mna.js)."""
-    FIELDS = ('id', 'mode', 'carrier', 'qty', 'ff')
+    FIELDS = ('id', 'mode', 'carrier', 'qty', 'ff', 'upd')
 
     def __init__(self, k):
         for f in self.FIELDS:
@@ -71,6 +71,9 @@ class Ctrl:
         self.ffA = k.get('ffARec')
         self.ffB = k.get('ffBRec')
         self.d = self.D
+        self.dOn = self.dOff = self.D      # duty of the turn-on / turn-off edge of the period
+        self.dPrevOff = None
+        self.h = None
         self.xi = 0.0
         self.k = None
         self.tk = 0.0
@@ -81,7 +84,10 @@ class Ctrl:
         self.ePrev = None
         self.dF = 0.0
 
-    def raw(self, out, t, tk, dd):
+    def dbl(self):
+        return self.upd == 'double' and self.mode not in ('spwm', 'pp') and self.carrier != 'saw'
+
+    def raw(self, out, t, tk, dd, dd2=None):
         T = self.T
         if self.mode == 'spwm':
             ph = ((t / T - self.phase) % 1 + 1) % 1
@@ -90,26 +96,28 @@ class Ctrl:
             a, b = ref > car, -ref > car
         else:
             tau, d = t - tk, min(1.0, max(0.0, dd))
+            d2 = d if dd2 is None else min(1.0, max(0.0, dd2))
             if self.mode == 'pp':
                 h = T / 2
                 a = -1e-15 <= tau < d * h * (1 - 1e-12)
                 b = h * (1 - 1e-12) <= tau < h + d * h * (1 - 1e-12)
             else:
-                e0, e1 = (0, d * T) if self.carrier == 'saw' else ((1 - d) * T / 2, (1 + d) * T / 2)
+                e0, e1 = (0, d * T) if self.carrier == 'saw' else ((1 - d) * T / 2, (1 + d2) * T / 2)
                 a = e0 * (1 - 1e-12) - 1e-18 <= tau < e1 * (1 - 1e-12)
                 b = a
         return a if out == 'a' else (not a) if out == 'na' else b if out == 'b' else (not b)
 
     def gate(self, out, t):
         if not self.dt > 0:
-            return self.raw(out, t, self.tk, self.d)
-        if not self.raw(out, t, self.tk, self.d):
+            return self.raw(out, t, self.tk, self.dOn, self.dOff)
+        if not self.raw(out, t, self.tk, self.dOn, self.dOff):
             return False
         td = t - self.dt
         if self.mode == 'spwm' or td >= self.tk - 1e-15 * self.T:
-            return self.raw(out, td, self.tk, self.d)
+            return self.raw(out, td, self.tk, self.dOn, self.dOff)
+        dp = self.dPrev if self.dPrev is not None else self.dOn
         return self.raw(out, td, self.tkPrev if self.tkPrev is not None else self.tk - self.T,
-                        self.dPrev if self.dPrev is not None else self.d)
+                        dp, self.dPrevOff if self.dPrevOff is not None else dp)
 
     def carrier_at(self, t):
         """Carrier value as in the browser: sawtooth τ/T, symmetric triangle |1 − 2τ/T|."""
@@ -123,12 +131,12 @@ class Ctrl:
         return u if self.carrier == 'saw' else abs(1 - 2 * u)
 
     def edges(self):
-        T, d = self.T, min(1.0, max(0.0, self.d))
+        T, d, d2 = self.T, min(1.0, max(0.0, self.dOn)), min(1.0, max(0.0, self.dOff))
         if self.mode == 'pp':
             h = T / 2
             E = [self.tk + d * h, self.tk + h, self.tk + h + d * h, self.tk + T]
         else:
-            e0, e1 = (0, d * T) if self.carrier == 'saw' else ((1 - d) * T / 2, (1 + d) * T / 2)
+            e0, e1 = (0, d * T) if self.carrier == 'saw' else ((1 - d) * T / 2, (1 + d2) * T / 2)
             E = [self.tk + e0, self.tk + e1, self.tk + T]
         if self.dt > 0:
             E = E + [self.tk + self.dt] + [e + self.dt for e in E]
@@ -459,7 +467,7 @@ class Circuit:
             idx = math.floor((t + 1e-12 * k.T) / k.T - k.phase)
             k.tk = (idx + k.phase) * k.T
             if k.mode in ('fixed', 'pp'):
-                k.d = sched_at(k.dsched, t, k.D)
+                k.d = k.dOn = k.dOff = sched_at(k.dsched, t, k.D)
 
     def sh_grid(self, q):
         if q['clock'] is None:
@@ -498,14 +506,20 @@ class Circuit:
         for k in self.ctrls:
             T = k.T
             idx = math.floor((t + 1e-12 * T) / T - k.phase)
-            if not force and k.k == idx:
+            dbl = k.dbl()
+            half = math.floor((t + 1e-12 * T) / (T / 2) - 2 * k.phase) if dbl else None
+            if not force and k.k == idx and (not dbl or k.h == half):
                 continue
             changed = True
+            period = force or k.k != idx
             first = k.k is None
-            if not first:
-                k.tkPrev, k.dPrev = k.tk, k.d
-            k.k = idx
-            k.tk = (idx + k.phase) * T
+            if period:
+                if not first:
+                    k.tkPrev, k.dPrev, k.dPrevOff = k.tk, k.dOn, k.dOff
+                k.k = idx
+                k.tk = (idx + k.phase) * T
+            k.h = half
+            T = T / 2 if dbl else T       # controller sampling period
             if k.mode in ('fixed', 'pp'):
                 k.d = sched_at(k.dsched, t, k.D)
             elif k.mode == 'pi':
@@ -534,8 +548,12 @@ class Circuit:
                     k.xi -= k.Ki * T * e
                     d = min(k.dmax, max(k.dmin, ff + k.Kp * e + k.xi + der))
                 k.d = d
+            if period:
+                k.dOn = k.dOff = k.d
+            else:
+                k.dOff = k.d
             if first or k.tkPrev is None:
-                k.tkPrev, k.dPrev = k.tk - T, k.d
+                k.tkPrev, k.dPrev, k.dPrevOff = k.tk - k.T, k.dOn, k.dOff
         return changed
 
     # ------------------------------------------------------------ events

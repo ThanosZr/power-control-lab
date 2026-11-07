@@ -227,16 +227,17 @@
    {k:'vst',label:'V_st',options:[['min','60 V'],['mid','80 V'],['max','100 V']],def:'max'},
    {k:'dir',label:'Ισχύς',options:[['dis','Εκφόρτιση +40 kW'],['chg','Φόρτιση −40 kW']],def:'dis'},
    {k:'ctrl',label:'Έλεγχος',options:[['fixed','Ανοιχτός βρόχος: D = D₀'],['pi','PI ρεύματος με το δείγμα · D_ff από τις μετρούμενες τάσεις']],def:'fixed'},
+   {k:'upd',label:'Ενημέρωση D',options:[['single','Μία φορά ανά T (στην αρχή)'],['double','Δύο φορές ανά T (και στο ελάχιστο του τριγώνου)']],def:'single'},
    {k:'sw',label:'Διακόπτες',options:[['ideal','Ιδανικοί'],['real','MOSFET 1 mΩ · δίοδος 0,8 V · t_d = 200 ns']],def:'ideal'}],
   desc:'Η διάταξη της Άσκησης 1 (ζυγός 50 V, αποθήκευση 60–100 V, L = 5,6 μH, 20 kHz) με ένα μπλοκ Sample & Hold στο ρεύμα του πηνίου. Το S&H παίρνει δείγματα σε σημεία του ίδιου φέροντος που οδηγεί τη φάση: στο reset του πριονωτού, στο μέγιστο του τριγώνου, ή και στα δύο ακρότατα του τριγώνου. Στο scope φαίνονται το πραγματικό i_L, τα δείγματα (κουκκίδες) και η κρατημένη τιμή ως βαθμίδες, μαζί με το φέρον, το D και το gate του S2.',
-  tasks:['Πριονωτό: το δείγμα στο reset πέφτει στην κοιλάδα του ρεύματος, Δi/2 κάτω από τη μέση τιμή. Στο τρίγωνο το δείγμα στο μέγιστο είναι η μέση τιμή.','Τρίγωνο με 2 δείγματα: 100 δείγματα σε 50 περιόδους, και τα δύο ίσα με τη μέση τιμή σε μόνιμη κατάσταση.','«Χωρίς μετατόπιση» στο πριονωτό: το i_L(0) = I_avg πέφτει στην κοιλάδα και όλη η κυματομορφή μετατοπίζεται κατά Δi/2.','Άλλαξε ζωντανά τη μετατόπιση του φέροντος (π.χ. 90°: το πρώτο reset έρχεται στα 12,5 μs) ή τον κανόνα δειγματοληψίας από τον πίνακα ζωντανών παραμέτρων.','«PI με το δείγμα»: ο ελεγκτής κρατά το δείγμα στην αναφορά. Με πριονωτό η μέση τιμή απέχει Δi/2 από την αναφορά, με τρίγωνο όχι. Στα 2 ms η αναφορά πέφτει στο μισό και στα 5 ms αλλάζει η V_st: το D_ff την ακολουθεί μέσω των μετρούμενων τάσεων.'],
+  tasks:['Πριονωτό: το δείγμα στο reset πέφτει στην κοιλάδα του ρεύματος, Δi/2 κάτω από τη μέση τιμή. Στο τρίγωνο το δείγμα στο μέγιστο είναι η μέση τιμή.','Τρίγωνο με 2 δείγματα: 100 δείγματα σε 50 περιόδους, και τα δύο ίσα με τη μέση τιμή σε μόνιμη κατάσταση.','«Χωρίς μετατόπιση» στο πριονωτό: το i_L(0) = I_avg πέφτει στην κοιλάδα και όλη η κυματομορφή μετατοπίζεται κατά Δi/2.','Άλλαξε ζωντανά τη μετατόπιση του φέροντος (π.χ. 90°: το πρώτο reset έρχεται στα 12,5 μs) ή τον κανόνα δειγματοληψίας από τον πίνακα ζωντανών παραμέτρων.','«PI με το δείγμα»: ο ελεγκτής κρατά το δείγμα στην αναφορά. Με πριονωτό η μέση τιμή απέχει Δi/2 από την αναφορά, με τρίγωνο όχι. Στα 2 ms η αναφορά πέφτει στο μισό και στα 5 ms αλλάζει η V_st: το D_ff την ακολουθεί μέσω των μετρούμενων τάσεων.','Τρίγωνο με 2 δείγματα και «Δύο φορές ανά T»: ο PI τρέχει με T_s = T/2 και η ακμή σβησίματος χρησιμοποιεί το δεύτερο δείγμα. Σύγκρινε το βήμα αναφοράς στα 2 ms με τη μία ενημέρωση.'],
   build(o){
    const vst=({min:60,mid:80,max:100})[o.vst]||100,vbus=50,P=o.dir==='chg'?-40e3:40e3,fs=20e3,L=5.6e-6,Tsw=1/fs;
    const D0=1-vbus/vst,I=-P/vbus,dI=vbus*D0/(L*fs),saw=o.case==='saw',carrier=saw?'saw':'triangle',trig=o.case==='tri2'?'both':'start';
    const ph=samplingPhase(carrier,D0,o.start),pi=o.ctrl==='pi',g=piGains(L,vst,fs),vst2=vst===80?100:80;
    const real=o.sw==='real',sw=real?{Ron:1e-3,body:true,Vfd:.8,Rd:1e-3}:{Ron:1e-7,body:true};
-   const pwm=pi?{fs,mode:'pi',carrier,phase:ph.deg,sensor:'SH1',qty:'I',ref:`0:${I.toFixed(3)}, 0.002:${(I/2).toFixed(3)}`,Kp:+g.kp.toPrecision(5),Ki:+g.ki.toPrecision(5),ff:'ratio',ffA:'VB',ffB:'VS',dmin:.01,dmax:.99}
-    :{fs,mode:'fixed',D:+D0.toFixed(6),carrier,phase:ph.deg};if(real)pwm.dt=200e-9;
+   const pwm=pi?{fs,mode:'pi',carrier,phase:ph.deg,upd:o.upd==='double'?'double':'single',sensor:'SH1',qty:'I',ref:`0:${I.toFixed(3)}, 0.002:${(I/2).toFixed(3)}`,Kp:+g.kp.toPrecision(5),Ki:+g.ki.toPrecision(5),ff:'ratio',ffA:'VB',ffB:'VS',dmin:.01,dmax:.99}
+    :{fs,mode:'fixed',D:+D0.toFixed(6),carrier,phase:ph.deg,upd:o.upd==='double'?'double':'single'};if(real)pwm.dt=200e-9;
    const comps=[C('VB','VDC',100,230,{V:vbus},{label:'V_bus'}),J('J1',100,300),gnd(100,330),C('L1','L',360,170,{L,i0:+I.toFixed(4)}),J('JM',430,170),
     C('S1','SW',430,100,{pwm:'PWM1',out:'na',...sw}),C('S2','SW',430,220,{pwm:'PWM1',out:'a',...sw}),J('J2',430,300),
     C('VS','VDC',540,190,{V:vst,sched:pi?`0:${vst}, 0.005:${vst2}`:''},{label:'V_st'}),C('PWM1','PWM',200,60,pwm),
@@ -245,7 +246,7 @@
     ['S1:d','VS:p',[[430,60],[540,60]]],['J2','VS:n',[[540,300]]]];
    const panes=pi?[[['I:L1','i_L'],['H:SH1','i_L,hold'],['REF:PWM1','I_ref']],[['D:PWM1','D']]]:[[['I:L1','i_L'],['H:SH1','i_L,hold']],[['CAR:PWM1','φέρον c(t)'],['D:PWM1','D'],['G:PWM1','g_S2']]];
    return project(comps,wires,{sim:{hDiv:500,speed:pi?300:20,stopT:pi?8e-3:0},scope:{panes,window:{unit:'T',n:pi?160:4}},
-    meta:{vbus,vst,vst2,P,D0,I,dI,L,fs,T:Tsw,carrier,trig,saw:saw?1:0,nps:trig==='both'?2:1,start:o.start,tau0:ph.tau,phaseDeg:ph.deg,tc:ph.frac*Tsw,pi,real,g}});}});
+    meta:{vbus,vst,vst2,P,D0,I,dI,L,fs,T:Tsw,carrier,trig,upd:o.upd,saw:saw?1:0,nps:trig==='both'?2:1,start:o.start,tau0:ph.tau,phaseDeg:ph.deg,tc:ph.frac*Tsw,pi,real,g}});}});
  // ------------------------------------------------------------------ polyphase (PE2, exercise 2)
  // Ideal periodic inductor current around its mean (units of Δi, −½ … ½), rising while S2 conducts,
  // at carrier position u = τ/T. Sawtooth: S2 ON for u ∈ [0, D); triangle: ON around u = ½.
@@ -261,24 +262,32 @@
    {k:'vst',label:'V_st',options:[['min','60 V'],['mid','80 V'],['max','100 V'],['cancel','Σημείο ακύρωσης (N·D ακέραιος)']],def:'mid'},
    {k:'fs',label:'f_PWM',options:[['20000','20 kHz'],['40000','40 kHz (δεύτερη συχνότητα)']],def:'20000'},
    {k:'L',label:'L ανά κλάδο',options:[['design','L_min για Δi_k ≤ 30 % |I_k| στην επιλεγμένη f'],['keep','Το L των 20 kHz']],def:'design'},
-   {k:'dir',label:'Ισχύς',options:[['dis','Εκφόρτιση +40 kW'],['chg','Φόρτιση −40 kW']],def:'dis'}],
+   {k:'dir',label:'Ισχύς',options:[['dis','Εκφόρτιση +40 kW'],['chg','Φόρτιση −40 kW']],def:'dis'},
+   {k:'ctrl',label:'Έλεγχος',options:[['open','Ανοιχτός βρόχος, κοινό D'],['pi','PI ρεύματος ανά φάση (αναφορά P/N ανά κλάδο)']],def:'open'},
+   {k:'mis',label:'Κλάδοι',options:[['none','Όμοιοι, ιδανικά πηνία'],['dcr','R πηνίων 5 mΩ, ο κλάδος 2 έχει 7,5 mΩ'],['L','R πηνίων 5 mΩ, ο κλάδος 2 έχει L + 20 %']],def:'none'}],
   desc:'N όμοιοι κλάδοι ημιγέφυρας ανάμεσα στον ζυγό 50 V και την αποθήκευση, ο καθένας με δικό του ασύζευκτο πηνίο, ίδιο duty και ίδια συχνότητα. Τα φέροντα έχουν κοινό ρολόι. Στη μετατοπισμένη οδήγηση ο κλάδος k καθυστερεί κατά k·T/N. Το ρεύμα του ζυγού είναι το άθροισμα των ρευμάτων των κλάδων. Κάθε κλάδος ξεκινά από την περιοδική του κυματομορφή στη δική του φάση, με κοινό μέσο ρεύμα P/(N·V_bus).',
-  tasks:['Σύγκρινε συμφασική και μετατοπισμένη οδήγηση: η κυμάτωση κάθε κλάδου είναι ίδια, η κυμάτωση του αθροίσματος όχι.','Μετατοπισμένα, η κυμάτωση του αθροίσματος έχει συχνότητα N·f. Στο «σημείο ακύρωσης» (N·D ακέραιος) μηδενίζεται θεωρητικά.','Στον πίνακα ζωντανών παραμέτρων: «Συμφασικά» ↔ «Μετατοπισμένα» ενώ τρέχει. Η αλλαγή φάσης αφήνει μόνιμη ανισοκατανομή: με ιδανικούς κλάδους και ίδιο duty τίποτα δεν τη διορθώνει. Γι\' αυτό στην πράξη κάθε φάση έχει δικό της βρόχο ρεύματος.','N = 4 → 5 με την ίδια ισχύ: το ρεύμα ανά κλάδο πέφτει, και το L_min ανεβαίνει ανάλογα με το N για το ίδιο σχετικό κριτήριο.','40 kHz με «το L των 20 kHz»: η κυμάτωση μισή. Με «L_min» το L μισό και η ίδια κυμάτωση (L·f σταθερό).'],
+  tasks:['Σύγκρινε συμφασική και μετατοπισμένη οδήγηση: η κυμάτωση κάθε κλάδου είναι ίδια, η κυμάτωση του αθροίσματος όχι.','Μετατοπισμένα, η κυμάτωση του αθροίσματος έχει συχνότητα N·f. Στο «σημείο ακύρωσης» (N·D ακέραιος) μηδενίζεται θεωρητικά.','Στον πίνακα ζωντανών παραμέτρων: «Συμφασικά» ↔ «Μετατοπισμένα» ενώ τρέχει. Η αλλαγή φάσης αφήνει μόνιμη ανισοκατανομή: με ιδανικούς κλάδους και ίδιο duty τίποτα δεν τη διορθώνει. Γι\' αυτό στην πράξη κάθε φάση έχει δικό της βρόχο ρεύματος.','N = 4 → 5 με την ίδια ισχύ: το ρεύμα ανά κλάδο πέφτει, και το L_min ανεβαίνει ανάλογα με το N για το ίδιο σχετικό κριτήριο.','40 kHz με «το L των 20 kHz»: η κυμάτωση μισή. Με «L_min» το L μισό και η ίδια κυμάτωση (L·f σταθερό).','«R 7,5 mΩ στον κλάδο 2» με ανοιχτό βρόχο: ο κλάδος 2 παίρνει λιγότερο ρεύμα (τα ρεύματα μοιράζονται αντίστροφα με τις αντιστάσεις). Με «PI ανά φάση» κάθε κλάδος κρατά P/N.','«PI ανά φάση» και «Συμφασικά» ↔ «Μετατοπισμένα» ζωντανά: η ανισοκατανομή μετά την αλλαγή φάσης διορθώνεται μόνη της.'],
   build(o){const N=Math.min(6,Math.max(1,+o.N||4)),vbus=50,P=o.dir==='chg'?-40e3:40e3,fs=+o.fs||20e3,Tsw=1/fs,shift=o.drive!=='common';
    const canc=polyCancel(vbus,N,60,100),pick=canc.find(v=>![60,80,100].some(x=>Math.abs(x-v)<1e-6))??canc[0]??100;
    const vst=+(o.vst==='cancel'?pick:({min:60,mid:80,max:100})[o.vst]||80).toPrecision(10);
    const d20=polyDesign({vbus,vmax:100,P,N,fs:20e3}),dd=polyDesign({vbus,vmax:100,P,N,fs}),Lx=o.L==='keep'?d20.L:dd.L,e=10**(Math.floor(Math.log10(Lx))-5),L=+(Math.ceil(Lx/e-1e-9)*e).toPrecision(6); // rounded up: stays inside the criterion
-   const D=1-vbus/vst,Ik=-P/(N*vbus),dI=vbus*D/(L*fs),phases=[...Array(N).keys()].map(k=>shift?+(360*k/N).toFixed(6):0);
+   const pi=o.ctrl==='pi',mis=o.mis||'none',Rs=mis==='none'?0:5e-3,Rk=k=>mis==='dcr'&&k===1?7.5e-3:Rs,Lk=k=>mis==='L'&&k===1?+(1.2*L).toPrecision(6):L;
+   // with winding resistance the open-loop duty must also cover R·I: V_bus − (1 − D)·V_st − R·I_k = 0
+   const D=1-(vbus-Rs*(-P/(N*vbus)))/vst,Ik=-P/(N*vbus),dI=vbus*D/(L*fs),phases=[...Array(N).keys()].map(k=>shift?+(360*k/N).toFixed(6):0);
    const y0=90,pitch=150,xb=300,xm=420,xv=560,comps=[C('VB','VDC',200,150,{V:vbus},{label:'V_bus'}),C('G0','GND',200,200,{},{label:'0 V'}),C('VS','VDC',640,150,{V:vst},{label:'V_st'}),C('GV','GND',640,200,{},{label:'0 V'})];
    const wires=[['VB:p','JB1',[[200,y0]],{name:'v_bus'}],['VB:n','G0:g'],['JV1','VS:p',[[640,y0]]],['VS:n','GV:g']];
-   for(let k=0;k<N;k++){const i=k+1,y=y0+pitch*k,sw={pwm:'PWM'+i,Ron:1e-7,body:true},u0=((-phases[k]/360)%1+1)%1,i0=Ik+dI*rippleDev(u0,D,false);
-    comps.push(J('JB'+i,xb,y),C('L'+i,'L',350,y,{L,i0:+i0.toFixed(4)}),J('JM'+i,xm,y),C('S1'+i,'SW',470,y,{...sw,out:'na'},{rot:1,label:'S1.'+i}),C('S2'+i,'SW',xm,y+60,{...sw,out:'a'},{label:'S2.'+i}),
-     C('GS'+i,'GND',xm,y+100,{},{label:''}),J('JV'+i,xv,y),C('PWM'+i,'PWM',50,290+60*k,{fs,D:+D.toFixed(8),carrier:'triangle',phase:phases[k]}));
+   const g=piGains(L,vst,fs);
+   for(let k=0;k<N;k++){const i=k+1,y=y0+pitch*k,sw={pwm:'PWM'+i,Ron:1e-7,body:true},u0=((-phases[k]/360)%1+1)%1,i0=Ik+vbus*D/(Lk(k)*fs)*rippleDev(u0,D,false);
+    const pwm=pi?{fs,mode:'pi',carrier:'triangle',phase:phases[k],sensor:'L'+i,qty:'I',ref:String(+Ik.toFixed(4)),Kp:+g.kp.toPrecision(5),Ki:+g.ki.toPrecision(5),ff:'ratio',ffA:'VB',ffB:'VS',dmin:.01,dmax:.99}
+     :{fs,D:+D.toFixed(8),carrier:'triangle',phase:phases[k]};
+    comps.push(J('JB'+i,xb,y),C('L'+i,'L',350,y,{L:Lk(k),i0:+i0.toFixed(4),Rs:Rk(k)}),J('JM'+i,xm,y),C('S1'+i,'SW',470,y,{...sw,out:'na'},{rot:1,label:'S1.'+i}),C('S2'+i,'SW',xm,y+60,{...sw,out:'a'},{label:'S2.'+i}),
+     C('GS'+i,'GND',xm,y+100,{},{label:''}),J('JV'+i,xv,y),C('PWM'+i,'PWM',50,290+60*k,pwm));
     wires.push(['JB'+i,'L'+i+':a'],['L'+i+':b','JM'+i],['JM'+i,'S1'+i+':s'],['S1'+i+':d','JV'+i],['JM'+i,'S2'+i+':d'],['S2'+i+':s','GS'+i+':g']);
     if(k<N-1)wires.push(['JB'+i,'JB'+(i+1)],['JV'+i,'JV'+(i+1)]);}
    const panes=[[...[...Array(N).keys()].map(k=>['I:L'+(k+1),'i_L'+(k+1)])],[['I:VB','i_Σ (ζυγός)']]];
-   return project(comps,wires,{sim:{hDiv:400,speed:20,stopT:0},scope:{panes,window:{unit:'T',n:3}},
-    meta:{N,vbus,vst,P,fs,T:Tsw,L,D,Ik,dI,shift,phases,canc,vmin:60,vmax:100,Lmin:dd.L,L20:d20.L,Ipk:dd.Ipk,k:.3}});}});
+   const slow=mis!=='none'||pi;
+   return project(comps,wires,{sim:{hDiv:slow?200:400,speed:slow?400:20,stopT:slow?.02:0},scope:{panes,window:slow?{unit:'T',n:400}:{unit:'T',n:3}},
+    meta:{N,vbus,vst,P,fs,T:Tsw,L,D,Ik,dI,shift,phases,canc,vmin:60,vmax:100,Lmin:dd.L,L20:d20.L,Ipk:dd.Ipk,k:.3,pi,mis,Rs,R2:Rk(1),L2:Lk(1)}});}});
  // ------------------------------------------------------------------ empty
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});

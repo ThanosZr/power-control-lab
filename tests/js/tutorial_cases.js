@@ -28,4 +28,9 @@ for(const kase of ['saw','tri1']){const pr=build('sampling',{case:kase,ctrl:'pi'
 for(const [N,drive,vst,fs,L] of [[4,'shift','mid','20000','design'],[4,'common','mid','20000','design'],[4,'shift','cancel','20000','design'],[4,'shift','max','20000','design'],[5,'shift','mid','20000','design'],[4,'shift','mid','40000','keep'],[4,'shift','mid','40000','design']]){
  const pr=build('polyphase',{N:String(N),drive,vst,fs,L});const m=pr.meta;const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});s.run(20*m.T);const legs=[...Array(N).keys()].map(k=>last(s,'I:L'+(k+1),5));const sm=last(s,'I:VB',5);
  out[`poly_${N}_${drive}_${vst}_${fs}_${L}`]={L:m.L,Lmin:m.Lmin,vst:m.vst,D:m.D,T:m.T,Ik:m.Ik,legAvg:legs.map(x=>x.avg),legPP:legs.map(x=>x.max-x.min),legPk:Math.max(...legs.map(x=>Math.max(Math.abs(x.max),Math.abs(x.min)))),sumAvg:sm.avg,sumPP:sm.max-sm.min,phases:m.phases};}
+// 2.6: current sharing (winding resistance, per-phase PI) and the double update in the sampling exercise
+for(const [ctrl,mis] of [['open','dcr'],['pi','dcr'],['open','L']]){const pr=build('polyphase',{ctrl,mis});const s=sim(pr,.02);out[`share_${ctrl}_${mis}`]={legs:[1,2,3,4].map(k=>last(s,'I:L'+k,5).avg),pp:[1,2].map(k=>{const q=last(s,'I:L'+k,1);return q.max-q.min;}),sum:last(s,'I:VB',5).avg};}
+{const pr=build('polyphase',{ctrl:'pi'});const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});s.run(.002);for(let k=1;k<=4;k++)s.setControl('PWM'+k,{phase:0});s.run(.006);out.share_pi_toggle=[1,2,3,4].map(k=>last(s,'I:L'+k,5).avg);}
+for(const upd of ['single','double']){const pr=build('sampling',{case:'tri2',ctrl:'pi',upd});const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});s.run(.0024);const a=s.samples('SH1').v.at(-1);s.run(.0096);
+ const p=s.per,i=s.chIndex.get('D:PWM1'),j=(p.head-1+p.cap)%p.cap;out['smp_upd_'+upd]={at24:a,end:s.samples('SH1').v.at(-1),dmin:p.min[j*p.nch+i],dmax:p.max[j*p.nch+i]};}
 out.ms=Date.now()-t0;console.log(JSON.stringify(out,null,1));
