@@ -24,4 +24,8 @@ for(const [id,o] of [['buck',{load:'10',start:'steady'}],['buck',{load:'50',star
 for(const kase of ['saw','tri1','tri2'])for(const start of ['midoff','midon','none']){const pr=build('sampling',{case:kase,start});const m=pr.meta;const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});s.run(50*m.T);
  const L=s.samples('SH1'),il=last(s,'I:L1',5);out[`smp_${kase}_${start}`]={n50:L.t.filter(t=>t<50*m.T-1e-12).length,first:L.t[0],last:L.v[L.v.length-1],lastT:L.t[L.t.length-1],avg:il.avg,pp:il.max-il.min,I:m.I,dI:m.dI,T:m.T,phase:m.phaseDeg};}
 for(const kase of ['saw','tri1']){const pr=build('sampling',{case:kase,ctrl:'pi'});const s=sim(pr,12e-3);const L=s.samples('SH1');out['smp_pi_'+kase]={sample:L.v[L.v.length-1],avg:last(s,'I:L1',5).avg,d:s.now('D:PWM1')};}
+// exercise 2: polyphase, N legs on a common clock (branch and summed ripple, sharing, cancellation)
+for(const [N,drive,vst,fs,L] of [[4,'shift','mid','20000','design'],[4,'common','mid','20000','design'],[4,'shift','cancel','20000','design'],[4,'shift','max','20000','design'],[5,'shift','mid','20000','design'],[4,'shift','mid','40000','keep'],[4,'shift','mid','40000','design']]){
+ const pr=build('polyphase',{N:String(N),drive,vst,fs,L});const m=pr.meta;const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});s.run(20*m.T);const legs=[...Array(N).keys()].map(k=>last(s,'I:L'+(k+1),5));const sm=last(s,'I:VB',5);
+ out[`poly_${N}_${drive}_${vst}_${fs}_${L}`]={L:m.L,Lmin:m.Lmin,vst:m.vst,D:m.D,T:m.T,Ik:m.Ik,legAvg:legs.map(x=>x.avg),legPP:legs.map(x=>x.max-x.min),legPk:Math.max(...legs.map(x=>Math.max(Math.abs(x.max),Math.abs(x.min)))),sumAvg:sm.avg,sumPP:sm.max-sm.min,phases:m.phases};}
 out.ms=Date.now()-t0;console.log(JSON.stringify(out,null,1));

@@ -76,6 +76,15 @@ class BatchSolver(unittest.TestCase):
         self.assertAlmostEqual(r['samples']['SH1']['v'][-1], -400, delta=0.05)
         self.assertAlmostEqual(mean_window(r, 'I:L1', 0.0115, 0.012), -400 + 50 * .375 / (5.6e-6 * 20e3) / 2, delta=0.5)
 
+    def test_polyphase_interleaved(self):
+        T = 50e-6
+        r = self.run_case('poly4', 10 * T, 'LSODA')
+        t, y = np.array(r['t']), np.array(r['ch']['I:VB'])
+        win = t >= 9 * T
+        self.assertAlmostEqual(float(y[win].max() - y[win].min()), 12.0, delta=0.05)   # summed ripple, 4 shifted legs
+        self.assertAlmostEqual(mean_window(r, 'I:L3', 9 * T, 10 * T), -200, delta=0.1)
+        self.assertAlmostEqual(mean_window(r, 'I:VB', 9 * T, 10 * T), -800, delta=0.2)
+
     def test_explicit_method_reports_stiffness(self):
         r = self.run_case('buck_dcm', 2e-3, 'RK45', wall=2)
         self.assertIn(r['status'], ('ok', 'timeout'))

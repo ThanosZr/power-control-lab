@@ -92,6 +92,33 @@ class Tutorials(unittest.TestCase):
         self.assertAlmostEqual(o['smp_pi_tri1']['avg'], -400, delta=0.3)
         self.assertAlmostEqual(o['smp_pi_saw']['d'], .375, delta=1e-4)          # feedforward from the measured voltages
 
+    def test_polyphase_exercise(self):
+        o = self.o
+        r = o['poly_4_shift_mid_20000_design']                                   # fixture: 50 V bus, 40 kW, 20 kHz, N = 4
+        self.assertAlmostEqual(r['Lmin'], 20.8333e-6, delta=1e-10)
+        self.assertGreaterEqual(r['L'], r['Lmin'])
+        self.assertEqual(r['phases'], [0, 90, 180, 270])                         # offsets 0, 12.5, 25, 37.5 μs
+        for a in r['legAvg']:
+            self.assertAlmostEqual(a, -200, delta=0.05)                          # equal sharing
+        self.assertAlmostEqual(r['sumAvg'], -800, delta=0.1)
+        frac = lambda x: x - math.floor(x + 1e-9)
+        for key in ('poly_4_shift_mid_20000_design', 'poly_5_shift_mid_20000_design', 'poly_4_shift_mid_40000_keep', 'poly_4_shift_mid_40000_design'):
+            r = o[key]
+            N = len(r['legAvg'])
+            dI = 50 * r['D'] / (r['L'] / r['T'])
+            rr = frac(N * r['D'])
+            self.assertAlmostEqual(r['legPP'][0], dI, delta=0.01 * dI, msg=key)
+            self.assertAlmostEqual(r['sumPP'], r['vst'] / r['L'] * r['T'] / N * rr * (1 - rr), delta=0.02, msg=key)
+        self.assertAlmostEqual(o['poly_4_shift_mid_20000_design']['sumPP'], 12.0, delta=0.01)
+        self.assertAlmostEqual(o['poly_4_common_mid_20000_design']['sumPP'], 4 * 45, delta=0.05)   # in phase: N·Δi_k
+        self.assertLess(o['poly_4_shift_cancel_20000_design']['sumPP'], 0.01)                     # 66.7 V: N·D = 1
+        self.assertAlmostEqual(o['poly_4_shift_cancel_20000_design']['vst'], 200 / 3, delta=1e-6)
+        r = o['poly_4_shift_max_20000_design']                                   # 100 V: N·D = 2, worst leg ripple
+        self.assertLess(r['sumPP'], 0.01)
+        self.assertAlmostEqual(r['legPk'], 230, delta=0.05)                      # |I_k| + Δi_k/2 = 230 A
+        self.assertAlmostEqual(o['poly_4_shift_mid_40000_keep']['legPP'][0], 22.5, delta=0.05)   # same L, double f: half
+        self.assertAlmostEqual(o['poly_4_shift_mid_40000_design']['L'], 10.4167e-6, delta=1e-10)  # L·f constant
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

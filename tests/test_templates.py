@@ -53,6 +53,25 @@ class DataTemplates(unittest.TestCase):
         self.assertAlmostEqual(v['phi_on'], 180)
         self.assertTrue(r['checks'][0]['ok'])
 
+    def test_polyphase_design(self):
+        tpl = load('pe2_polyphase.template.json')
+        base = {'V_bus': 50, 'V_st': 80, 'V_min': 60, 'V_max': 100, 'P': 40e3, 'f_s': 20e3}
+        r = template_solve({'template': tpl, 'values': {**base, 'N': 4, 'L': 20.8334e-6}})
+        v = r['values']
+        self.assertAlmostEqual(v['L_min'], 20.8333e-6, delta=1e-10)
+        self.assertAlmostEqual(v['I_pk'], 230)
+        self.assertAlmostEqual(v['dt_ph'], 12.5e-6)
+        self.assertAlmostEqual(v['dI_sh'], 12.0, delta=1e-3)
+        self.assertAlmostEqual(v['V_c1'], 200 / 3, places=6)                     # cancellations at 66.7 V and 100 V
+        self.assertAlmostEqual(v['V_c2'], 100, places=6)
+        self.assertLess(v['in_3'], 0)
+        self.assertTrue(r['checks'][0]['ok'])
+        kv = [b['rows'][0][0] for s in r['sections'] if s['id'] == 'cancel' for b in s['blocks'] if b['type'] == 'kv']
+        self.assertEqual(kv, ['N·D = 1', 'N·D = 2'])
+        v = template_solve({'template': tpl, 'values': {**base, 'N': 5, 'L': 26.05e-6}})['values']
+        self.assertAlmostEqual(v['dt_ph'], 10e-6)                                 # N = 5: 10 μs phase step
+        self.assertAlmostEqual(v['L_min'] / 20.8333e-6, 5 / 4, delta=1e-4)        # L_min grows with N
+
     def test_battery_below_uses_other_relations(self):
         r = template_solve({'template': load('pe2_battery.template.json'), 'values': {'V_st': 25, 'P': 40e3}})
         v = r['values']

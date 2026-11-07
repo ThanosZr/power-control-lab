@@ -246,8 +246,41 @@
    const panes=pi?[[['I:L1','i_L'],['H:SH1','i_L,hold'],['REF:PWM1','I_ref']],[['D:PWM1','D']]]:[[['I:L1','i_L'],['H:SH1','i_L,hold']],[['CAR:PWM1','φέρον c(t)'],['D:PWM1','D'],['G:PWM1','g_S2']]];
    return project(comps,wires,{sim:{hDiv:500,speed:pi?300:20,stopT:pi?8e-3:0},scope:{panes,window:{unit:'T',n:pi?160:4}},
     meta:{vbus,vst,vst2,P,D0,I,dI,L,fs,T:Tsw,carrier,trig,saw:saw?1:0,nps:trig==='both'?2:1,start:o.start,tau0:ph.tau,phaseDeg:ph.deg,tc:ph.frac*Tsw,pi,real,g}});}});
+ // ------------------------------------------------------------------ polyphase (PE2, exercise 2)
+ // Ideal periodic inductor current around its mean (units of Δi, −½ … ½), rising while S2 conducts,
+ // at carrier position u = τ/T. Sawtooth: S2 ON for u ∈ [0, D); triangle: ON around u = ½.
+ function rippleDev(u,D,saw){u=((u%1)+1)%1;D=Math.min(Math.max(D,1e-9),1-1e-9);
+  if(saw)return u<D?-.5+u/D:.5-(u-D)/(1-D);const a=(1-D)/2,b=(1+D)/2;if(u>=a&&u<b)return -.5+(u-a)/D;const v=((u-b)%1+1)%1;return .5-v/(1-D);}
+ // equal sharing and L per leg from Δi_k ≤ k·|I_k| over the window (Δi_k grows with D: worst at the highest V_st)
+ function polyDesign({vbus,vmax,P,N,fs,k=.3}){const Ik=Math.abs(P)/(N*vbus),Dmax=1-vbus/vmax;return {Ik,Dmax,L:vbus*Dmax/(k*Ik*fs),Ipk:Ik*(1+k/2)};}
+ // storage voltages where N·D is an integer: ideal cancellation of the summed ripple with shifted drive
+ function polyCancel(vbus,N,vmin,vmax){const out=[];for(let m=1;m<N;m++){const v=vbus/(1-m/N);if(v>=vmin-1e-9&&v<=vmax+1e-9)out.push(v);}return out;}
+ T.push({id:'polyphase',group:'Αμφίδρομος · μπαταρία (PE2)',title:'Άσκηση 2 · Πολυφασική σχεδίαση',theory:'formula',topology:'polyphase',
+  options:[{k:'N',label:'Κλάδοι N',options:[['2','2'],['3','3'],['4','4'],['5','5'],['6','6']],def:'4'},
+   {k:'drive',label:'Οδήγηση',options:[['shift','Μετατοπισμένη: Δt_k = k·T/N'],['common','Συμφασική (κοινή φάση)']],def:'shift'},
+   {k:'vst',label:'V_st',options:[['min','60 V'],['mid','80 V'],['max','100 V'],['cancel','Σημείο ακύρωσης (N·D ακέραιος)']],def:'mid'},
+   {k:'fs',label:'f_PWM',options:[['20000','20 kHz'],['40000','40 kHz (δεύτερη συχνότητα)']],def:'20000'},
+   {k:'L',label:'L ανά κλάδο',options:[['design','L_min για Δi_k ≤ 30 % |I_k| στην επιλεγμένη f'],['keep','Το L των 20 kHz']],def:'design'},
+   {k:'dir',label:'Ισχύς',options:[['dis','Εκφόρτιση +40 kW'],['chg','Φόρτιση −40 kW']],def:'dis'}],
+  desc:'N όμοιοι κλάδοι ημιγέφυρας ανάμεσα στον ζυγό 50 V και την αποθήκευση, ο καθένας με δικό του ασύζευκτο πηνίο, ίδιο duty και ίδια συχνότητα. Τα φέροντα έχουν κοινό ρολόι. Στη μετατοπισμένη οδήγηση ο κλάδος k καθυστερεί κατά k·T/N. Το ρεύμα του ζυγού είναι το άθροισμα των ρευμάτων των κλάδων. Κάθε κλάδος ξεκινά από την περιοδική του κυματομορφή στη δική του φάση, με κοινό μέσο ρεύμα P/(N·V_bus).',
+  tasks:['Σύγκρινε συμφασική και μετατοπισμένη οδήγηση: η κυμάτωση κάθε κλάδου είναι ίδια, η κυμάτωση του αθροίσματος όχι.','Μετατοπισμένα, η κυμάτωση του αθροίσματος έχει συχνότητα N·f. Στο «σημείο ακύρωσης» (N·D ακέραιος) μηδενίζεται θεωρητικά.','Στον πίνακα ζωντανών παραμέτρων: «Συμφασικά» ↔ «Μετατοπισμένα» ενώ τρέχει. Η αλλαγή φάσης αφήνει μόνιμη ανισοκατανομή: με ιδανικούς κλάδους και ίδιο duty τίποτα δεν τη διορθώνει. Γι\' αυτό στην πράξη κάθε φάση έχει δικό της βρόχο ρεύματος.','N = 4 → 5 με την ίδια ισχύ: το ρεύμα ανά κλάδο πέφτει, και το L_min ανεβαίνει ανάλογα με το N για το ίδιο σχετικό κριτήριο.','40 kHz με «το L των 20 kHz»: η κυμάτωση μισή. Με «L_min» το L μισό και η ίδια κυμάτωση (L·f σταθερό).'],
+  build(o){const N=Math.min(6,Math.max(1,+o.N||4)),vbus=50,P=o.dir==='chg'?-40e3:40e3,fs=+o.fs||20e3,Tsw=1/fs,shift=o.drive!=='common';
+   const canc=polyCancel(vbus,N,60,100),pick=canc.find(v=>![60,80,100].some(x=>Math.abs(x-v)<1e-6))??canc[0]??100;
+   const vst=+(o.vst==='cancel'?pick:({min:60,mid:80,max:100})[o.vst]||80).toPrecision(10);
+   const d20=polyDesign({vbus,vmax:100,P,N,fs:20e3}),dd=polyDesign({vbus,vmax:100,P,N,fs}),Lx=o.L==='keep'?d20.L:dd.L,e=10**(Math.floor(Math.log10(Lx))-5),L=+(Math.ceil(Lx/e-1e-9)*e).toPrecision(6); // rounded up: stays inside the criterion
+   const D=1-vbus/vst,Ik=-P/(N*vbus),dI=vbus*D/(L*fs),phases=[...Array(N).keys()].map(k=>shift?+(360*k/N).toFixed(6):0);
+   const y0=90,pitch=150,xb=300,xm=420,xv=560,comps=[C('VB','VDC',200,150,{V:vbus},{label:'V_bus'}),C('G0','GND',200,200,{},{label:'0 V'}),C('VS','VDC',640,150,{V:vst},{label:'V_st'}),C('GV','GND',640,200,{},{label:'0 V'})];
+   const wires=[['VB:p','JB1',[[200,y0]],{name:'v_bus'}],['VB:n','G0:g'],['JV1','VS:p',[[640,y0]]],['VS:n','GV:g']];
+   for(let k=0;k<N;k++){const i=k+1,y=y0+pitch*k,sw={pwm:'PWM'+i,Ron:1e-7,body:true},u0=((-phases[k]/360)%1+1)%1,i0=Ik+dI*rippleDev(u0,D,false);
+    comps.push(J('JB'+i,xb,y),C('L'+i,'L',350,y,{L,i0:+i0.toFixed(4)}),J('JM'+i,xm,y),C('S1'+i,'SW',470,y,{...sw,out:'na'},{rot:1,label:'S1.'+i}),C('S2'+i,'SW',xm,y+60,{...sw,out:'a'},{label:'S2.'+i}),
+     C('GS'+i,'GND',xm,y+100,{},{label:''}),J('JV'+i,xv,y),C('PWM'+i,'PWM',50,290+60*k,{fs,D:+D.toFixed(8),carrier:'triangle',phase:phases[k]}));
+    wires.push(['JB'+i,'L'+i+':a'],['L'+i+':b','JM'+i],['JM'+i,'S1'+i+':s'],['S1'+i+':d','JV'+i],['JM'+i,'S2'+i+':d'],['S2'+i+':s','GS'+i+':g']);
+    if(k<N-1)wires.push(['JB'+i,'JB'+(i+1)],['JV'+i,'JV'+(i+1)]);}
+   const panes=[[...[...Array(N).keys()].map(k=>['I:L'+(k+1),'i_L'+(k+1)])],[['I:VB','i_Σ (ζυγός)']]];
+   return project(comps,wires,{sim:{hDiv:400,speed:20,stopT:0},scope:{panes,window:{unit:'T',n:3}},
+    meta:{N,vbus,vst,P,fs,T:Tsw,L,D,Ik,dI,shift,phases,canc,vmin:60,vmax:100,Lmin:dd.L,L20:d20.L,Ipk:dd.Ipk,k:.3}});}});
  // ------------------------------------------------------------------ empty
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
- root.Tutorials={list:T,piGains,steadyStart,samplingPhase,get:id=>T.find(t=>t.id===id)};
+ root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};
 })(window);

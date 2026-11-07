@@ -11,6 +11,7 @@ const buckDcm=project([{id:'V1',type:'VDC',params:{V:24}},{id:'S1',type:'SW',par
 const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},['I:R1']],bridge3_scr:['bridge3',{dev:'30',load:'r'},['V:R1']],
  battery_pi:['battery',{ctrl:'pi'},['I:L1','D:PWM1']],deadtime:['battery',{sw:'real',ctrl:'pi'},['I:L1']],
  sampling_saw:['sampling',{case:'saw'},['I:L1','H:SH1','CAR:PWM1']],sampling_tri2:['sampling',{case:'tri2',start:'midon'},['I:L1','H:SH1']],
- sampling_pi:['sampling',{case:'saw',ctrl:'pi'},['I:L1','H:SH1','D:PWM1']]};
+ sampling_pi:['sampling',{case:'saw',ctrl:'pi'},['I:L1','H:SH1','D:PWM1']],
+ poly4:['polyphase',{N:'4',vst:'mid'},['I:L1','I:L3','I:VB']]};
 const out={};for(const [k,[id,o,keys]] of Object.entries(cases)){const r=MNA.exportForBatch(typeof id==='string'?build(id,o):id,keys);out[k]={net:r.net,channels:r.channels};}
 console.log(JSON.stringify(out));

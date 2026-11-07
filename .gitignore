@@ -10,3 +10,7 @@ env/
 Thumbs.db
 node_modules/
 *.zip
+# artifacts of the browser tests (tests/ui/*.js)
+/flow_*.png
+/saved.pcl.json
+/undefined/

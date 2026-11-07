@@ -203,12 +203,18 @@ function refreshControls(){
  const phase=(c,p)=>{if(p.mode==='spwm')return '';const ph=((+p.phase||0)%360+360)%360;
   return `<div class="ctl-sub"><label>φέρον ${p.carrier==='saw'&&p.mode!=='pp'?'πριονωτό':'τριγωνικό'} · φ <output data-phout="${c.id}">${fmt(ph,4)}° · ${eng(ph/360/(+p.fs||1),'s',3)}</output></label>
    <input type="range" min="0" max="360" step="1" value="${ph}" data-ph="${c.id}"><div class="ctl-btns">${[0,90,180,270].map(d=>`<button data-phset="${c.id}" data-val="${d}">${d}°</button>`).join('')}</div></div>`;};
- box.innerHTML=pw.map(c=>{const p={...P.defaults('PWM'),...c.params};let h='';
+ // several open-loop PWMs (e.g. interleaved legs): one D for all, and in-phase / shifted by k·T/N
+ const fixedPw=pw.filter(c=>({...P.defaults('PWM'),...c.params}).mode==='fixed').sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
+ let group='';if(fixedPw.length>=2){const p0={...P.defaults('PWM'),...fixedPw[0].params};
+  group=`<div class="ctl ctl-group"><label>Όλα τα PWM (${fixedPw.length}) · D <output data-dallout>${fmt(+p0.D,4)}</output></label><input type="range" min="0" max="1" step="0.0005" value="${+p0.D}" data-dall aria-label="Κοινό D">
+   <div class="ctl-btns"><button data-ilv="common" title="Ίδια φάση σε όλα τα φέροντα">Συμφασικά</button><button data-ilv="shift" title="Το k-οστό φέρον καθυστερεί k·T/N">Μετατοπισμένα k·T/N</button></div><small>Η φάση κάθε φέροντος αλλάζει από την επόμενη περίοδό του.</small></div>`;}
+ const per=pw.map(c=>{const p={...P.defaults('PWM'),...c.params};let h='';
   if(p.mode==='fixed'||p.mode==='pp')h=`<label>${esc(c.label||c.id)} · D <output data-dout="${c.id}">${fmt(+p.D,4)}</output></label><input type="range" min="0" max="1" step="0.0005" value="${+p.D}" data-d="${c.id}">
    <div class="ctl-btns"><button data-dd="${c.id}" data-step="-0.01">−0,01</button><button data-dd="${c.id}" data-step="-0.001">−0,001</button>${meta.D0!==undefined?`<button data-dset="${c.id}" data-val="${meta.D0}">D₀ = ${fmt(meta.D0,4)}</button>`:''}<button data-dd="${c.id}" data-step="0.001">+0,001</button><button data-dd="${c.id}" data-step="0.01">+0,01</button></div>${p.dsched?'<small>Υπάρχει πρόγραμμα D(t)· η χειροκίνητη αλλαγή το απενεργοποιεί.</small>':''}`;
   else if(p.mode==='pi')h=`<label>${esc(c.label||c.id)} · αναφορά ${+p.Kd?'PID':'PI'} <output data-dnow="${c.id}"></output></label><div class="ctl-row"><input data-ref="${c.id}" value="${esc(p.ref)}"><button data-refapply="${c.id}">Εφαρμογή</button></div><small>Σταθερή τιμή ή πρόγραμμα «t:τιμή». K_p = ${eng(+p.Kp)}, K_i = ${eng(+p.Ki)}${+p.Kd?`, K_d = ${eng(+p.Kd)}`:''}.${editor.comp(p.sensor)?.type==='SH'?` Μετρά το δείγμα του ${esc(editor.comp(p.sensor).label||p.sensor)}.`:''}</small>`;
   else if(p.mode==='spwm')h=`<label>${esc(c.label||c.id)} · m <output data-mout="${c.id}">${fmt(+p.m,3)}</output></label><input type="range" min="0" max="1.2" step="0.01" value="${+p.m}" data-m="${c.id}">`;
   return `<div class="ctl">${h}${phase(c,p)}</div>`;}).join('');
+ box.innerHTML=group+(pw.length>=3?`<details class="ctl-more"><summary>Ανά PWM (${pw.length})</summary>${per}</details>`:per);
  const trigOpts=P.PARTS.SH.params.find(d=>d.k==='trig').options;
  box.innerHTML+=editor.doc.components.filter(c=>c.type==='SH').map(c=>{const p={...P.defaults('SH'),...c.params};
   const short={start:'Αρχή περιόδου (reset ή μέγιστο) · 1/T',mid:'Μέσο περιόδου (ελάχιστο τριγώνου) · 1/T',both:'Και τα δύο ακρότατα · 2/T'};
@@ -230,6 +236,8 @@ function refreshControls(){
   editor.renderLabels();liveChange(id,'phase',deg,`${c.label||id}: φ → ${fmt(deg,4)}° (από την επόμενη περίοδο)`,from);if(commit){saveLocal();if(S.theory)renderTheory();}};
  $$('#live-controls [data-ph]').forEach(r=>{r.oninput=()=>setPh(r.dataset.ph,+r.value,false);r.onchange=()=>setPh(r.dataset.ph,+r.value,true);});
  $$('#live-controls [data-phset]').forEach(b=>b.onclick=()=>setPh(b.dataset.phset,+b.dataset.val,true));
+ const dall=box.querySelector('[data-dall]');if(dall){const f=commit=>{for(const c of fixedPw)setD(c.id,+dall.value,commit);box.querySelector('[data-dallout]').textContent=fmt(+dall.value,4);};dall.oninput=()=>f(false);dall.onchange=()=>f(true);}
+ $$('#live-controls [data-ilv]').forEach(b=>b.onclick=()=>{const n=fixedPw.length;fixedPw.forEach((c,k)=>setPh(c.id,b.dataset.ilv==='shift'?+(360*k/n).toFixed(6):0,true));});
  $$('#live-controls [data-trig]').forEach(el=>el.onchange=()=>{const id=el.dataset.trig,c=editor.comp(id);if(!c)return;const from=c.params.trig;c.params.trig=el.value;S.sim?.setHold(id,{trig:el.value});editor.renderLabels();
   liveChange(id,'trig',el.value,`${c.label||id}: ${el.selectedOptions[0].textContent.split(' (')[0].split(' · ')[0]}`,from);saveLocal();if(S.theory)renderTheory();});
  renderLiveLog();updateLivePanel();
@@ -445,8 +453,36 @@ function samplingTheory(){const s=S.sim,W=paramsOf('PWM1'),Lp=paramsOf('L1'),Hp=
    <li>t_gate: S2 ON στο ${r(tk+e0+dt)}, S2 OFF στο ${r(tk+e1)}${dt>0?`, S1 ON στο ${r(tk+e1+dt)} (νεκρός χρόνος ${eng(dt,'s')})`:''}</li></ul>
    <p class="muted small">Στην ίδια στιγμή προηγείται το δείγμα, ακολουθεί η ενημέρωση του ελεγκτή και μετά η μεταγωγή. Το δείγμα είναι η τιμή του ρεύματος ακριβώς πριν από κάθε μεταγωγή της στιγμής εκείνης (t⁻).</p>`;}
  return html;}
+// N legs on a common clock: per-leg and summed ripple, cancellation points, window scan
+function polyTheory(){const s=S.sim,m=S.tutMeta||{};const legs=editor.doc.components.filter(c=>c.type==='L'&&/^L\d+$/.test(c.id)).sort((a,b)=>+a.id.slice(1)-+b.id.slice(1));
+ const N=legs.length,W=paramsOf('PWM1'),VB=paramsOf('VB'),VS=paramsOf('VS');if(!N||!W||!VB||!VS)return '<p class="muted">Λείπουν τα VB, VS, L1…, PWM1….</p>';
+ const fs=+W.fs,T=1/fs,L=+paramsOf('L1').L,vlo=s?s.now('V:VB'):+VB.V,vhi=s?s.now('V:VS'):+VS.V,D=1-vlo/vhi,P=Number.isFinite(m.P)?m.P:40e3,Ik=-P/(N*vlo),dI=vlo*D/(L*fs);
+ const ph=legs.map((c,k)=>{const q=paramsOf('PWM'+(k+1));return q?((+q.phase||0)%360+360)%360:0;});
+ const same=ph.every(x=>Math.abs(x-ph[0])<1e-6),sorted=[...ph].map(x=>((x-ph[0])%360+360)%360).sort((a,b)=>a-b),equal=!same&&sorted.every((x,k)=>Math.abs(x-360*k/N)<1e-6);
+ const frac=x=>{const r=x-Math.round(x);return Math.abs(r)<1e-7?0:x-Math.floor(x);},rr=frac(N*D),shiftF=V=>{const d=1-vlo/V,r=frac(N*d);return V/L*T/N*r*(1-r);},commonF=V=>N*vlo*(1-vlo/V)/(L*fs);
+ // the ideal summed waveform for the actual phases (any spacing)
+ let mn=Infinity,mx=-Infinity;for(let j=0;j<4000;j++){const u=j/4000;let y=0;for(let k=0;k<N;k++)y+=rippleDev(u-ph[k]/360,D,W.carrier==='saw');mn=Math.min(mn,y);mx=Math.max(mx,y);}const dIsum=dI*(mx-mn);
+ const vmin=m.vmin??60,vmax=m.vmax??100,canc=[];for(let q=1;q<N;q++){const v=vlo/(1-q/N);if(v>=vmin-1e-9&&v<=vmax+1e-9)canc.push(v);}
+ let worst={v:vmin,d:0};for(let j=0;j<=2000;j++){const V=vmin+(vmax-vmin)*j/2000,d=same?commonF(V):shiftF(V);if(d>worst.d)worst={v:V,d};}
+ const k=m.k??.3,dImax=vlo*(1-vlo/vmax)/(L*fs),Lmin=vlo*(1-vlo/vmax)/(k*Math.abs(Ik)*fs);
+ const mode=same?'συμφασική':equal?'μετατοπισμένη κατά T/N':'άνισες φάσεις';
+ const eqs=[`${N} κλάδοι, ${mode} οδήγηση (φάσεις ${ph.map(x=>fmt(x,4)+'°').join(', ')} → καθυστερήσεις ${ph.map(x=>eng(x/360*T,'s',3)).join(', ')}).`,
+  `Ισομερής καταμερισμός: P_k = P/N = ${eng(P/N,'W')}, I_k = −P/(N·V_bus) = <b>${eng(Ik,'A')}</b> ανά κλάδο, ⟨i_Σ⟩ = N·I_k = <b>${eng(N*Ik,'A')}</b>.`,
+  `D = 1 − V_bus/V_st = 1 − ${fmt(vlo,4)}/${fmt(vhi,5)} = <b>${fmt(D,5)}</b>, Δi_k = V_bus·D/(L·f) = <b>${eng(dI,'A')}</b> (${fmt(100*dI/Math.abs(Ik),3)} % του |I_k|), κορυφή |I_k| + Δi_k/2 = <b>${eng(Math.abs(Ik)+dI/2,'A')}</b>.`,
+  same?`Συμφασικά οι κλάδοι κυματώνουν μαζί: Δi_Σ = N·Δi_k = <b>${eng(N*dI,'A')}</b>, στη συχνότητα f = ${eng(fs,'Hz')}.`
+   :equal?`Μετατοπισμένα: r = N·D − ⌊N·D⌋ = ${fmt(rr,4)}, Δi_Σ = (V_st/L)·(T/N)·r(1 − r) = <b>${eng(shiftF(vhi),'A')}</b>. Σε κάθε υποπερίοδο T/N άγουν ⌊N·D⌋ ή ⌊N·D⌋ + 1 κάτω διακόπτες· η κυμάτωση που μένει έχει συχνότητα N·f = ${eng(N*fs,'Hz')}.${rr<1e-6||rr>1-1e-6?' <b>Εδώ N·D είναι ακέραιος: ιδανική ακύρωση.</b>':''}`
+   :`Με άνισες φάσεις ο κλειστός τύπος δεν ισχύει· η κυμάτωση του αθροίσματος υπολογίζεται από τις ιδανικές κυματομορφές των κλάδων: <b>${eng(dIsum,'A')}</b>.`,
+  `Παράθυρο ${fmt(vmin)}–${fmt(vmax)} V: ${canc.length?`ακυρώσεις (N·D ακέραιος) στα ${canc.map(v=>eng(v,'V',4)).join(', ')}`:'καμία ακύρωση μέσα στο παράθυρο'}. Μέγιστη κυμάτωση αθροίσματος ${eng(worst.d,'A')} στα ${eng(worst.v,'V',4)} (${same?'συμφασικά':'μετατοπισμένα'}).`,
+  `Κριτήριο 30 %: Δi_k είναι μέγιστο στη μέγιστη V_st (${eng(dImax,'A')}), άρα L_min = V_bus·D_max/(0,3·|I_k|·f) = <b>${eng(Lmin,'H')}</b>· τώρα L = ${eng(L,'H')} → ${dImax<=k*Math.abs(Ik)*(1+1e-6)?'<span class="good">μέσα στο κριτήριο</span>':'<span class="warn-text">εκτός κριτηρίου</span>'}.`];
+ const rows=[['⟨i_Σ⟩ (ζυγός)',N*Ik,avgOver('I:VB',5)?.avg,'A'],['Δi_k p-p (κλάδος 1)',dI,lastPP('I:L1'),'A'],['Δi_Σ p-p',dIsum,lastPP('I:VB'),'A'],['Κορυφή |i_L1|',Math.abs(Ik)+dI/2,(()=>{const q=s?.lastPeriod('I:L1');return q?Math.max(Math.abs(q.max),Math.abs(q.min)):NaN;})(),'A']];
+ const tab=`<h4>Καταμερισμός ανά κλάδο (τελευταίες 5 T)</h4><div class="wrap"><table class="cmp"><thead><tr><th>Κλάδος</th><th>φ</th><th>⟨i_L⟩</th><th>Δi p-p</th><th>P_k</th></tr></thead><tbody>${legs.map((c,i)=>{const a=avgOver('I:'+c.id,5);
+   return `<tr><td>${esc(c.label||c.id)}</td><td>${fmt(ph[i],4)}°</td><td>${eng(a?.avg,'A',5)}</td><td>${eng(lastPP('I:'+c.id),'A',4)}</td><td>${eng(-(a?.avg??NaN)*vlo,'W',4)}</td></tr>`;}).join('')}</tbody></table></div>`;
+ const scan=`<h4>Κυμάτωση αθροίσματος σε όλο το παράθυρο (ιδανικό μοντέλο)</h4><div class="wrap"><table class="cmp"><thead><tr><th>V_st</th><th>D</th><th>N·D</th><th>Δi_k</th><th>Δi_Σ μετατοπισμένα</th><th>Δi_Σ συμφασικά</th></tr></thead><tbody>${[...new Map([vmin,(vmin+vmax)/2,vmax,...canc,worst.v].map(v=>[v.toPrecision(6),v])).values()].sort((a,b)=>a-b).map(V=>{const d=1-vlo/V;
+   return `<tr><td>${eng(V,'V',4)}</td><td>${fmt(d,4)}</td><td>${fmt(N*d,4)}</td><td>${eng(vlo*d/(L*fs),'A',4)}</td><td>${eng(shiftF(V),'A',4)}</td><td>${eng(commonF(V),'A',4)}</td></tr>`;}).join('')}</tbody></table></div>`;
+ return `<ul class="eqs">${eqs.map(e=>`<li>${e}</li>`).join('')}</ul>${cmpRows(rows)}${tab}${scan}`;}
 function formulaTheory(t){
  if(t.topology==='sampling')return samplingTheory();
+ if(t.topology==='polyphase')return polyTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const D=+W.D,Vin=+V.V,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
   eqs=[`V_o = ${t.topology==='cuk'?'−':''}V_in·D/(1−D) = <b>${eng(Vo,'V')}</b>`,`I_L1 = |I_o|·D/(1−D) = <b>${eng(IL1,'A')}</b>, |I_L2| = |I_o| = <b>${eng(Math.abs(Io),'A')}</b>`,`Δi_L1 = V_in·D·T/L1 = <b>${eng(Vin*D*Ts/L1,'A')}</b>, Δi_L2 = V_in·D·T/L2 = <b>${eng(Vin*D*Ts/L2,'A')}</b>`,`V_C1 = ${t.topology==='cuk'?'V_in + |V_o|':'V_in'} = <b>${eng(t.topology==='cuk'?Vin+Math.abs(Vo):Vin,'V')}</b>`];
@@ -667,5 +703,5 @@ function boot(){
 }
 function renderTheoryLive(){if(document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
-window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,addProbe,play,pause,reset};
+window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,addProbe,play,pause,reset,renderTheory};
 })();

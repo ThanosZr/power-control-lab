@@ -45,6 +45,13 @@ const {chromium}=require('playwright');
  await p.click('#lp-sched');await p.waitForTimeout(500);ok(/0:0\.5, 0\.0025:0\.51/.test(await p.evaluate(()=>window.PCL.editor.comp('PWM1').params.dsched)),'changes → D(t) program');
  await p.click('#lp-toggle');ok(await p.evaluate(()=>document.querySelector('#live-panel').hidden),'panel hides');await p.click('#lp-toggle');
  const mt=await p.$$eval('#math-tpl option',o=>o.map(x=>x.value));ok(mt[0]==='pe2_sampling','sampling template first '+mt);
+ // exercise 2: polyphase design, theory card and the group live control
+ await p.evaluate(()=>window.PCL.loadTutorial('polyphase',{N:'4',vst:'mid'}));await p.waitForTimeout(1500);
+ await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.sim.T*20);window.PCL.pause();window.PCL.renderTheory?.();});await p.waitForTimeout(1200);
+ const pt=await p.$eval('#theory',e=>e.textContent);ok(/Δi_Σ p-p12 A12 A/.test(pt),'polyphase summed ripple');ok(/ακυρώσεις \(N·D ακέραιος\) στα 66,67 V, 100 V/.test(pt),'cancellation points');
+ await p.click('[data-ilv="common"]');await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.sim.T*10);window.PCL.pause();});
+ ok(await p.evaluate(()=>{const q=window.PCL.S.sim.lastPeriod('I:VB');return Math.abs(q.max-q.min-180)<0.5&&[1,2,3,4].every(k=>window.PCL.editor.comp('PWM'+k).params.phase===0);}),'live in-phase toggle');
+ ok((await p.$$eval('#math-tpl option',o=>o.map(x=>x.value)))[0]==='pe2_polyphase','polyphase template first');
  // open a /converter/ circuit in the studio
  await p.goto(U+'converter/');await p.waitForTimeout(800);await p.click('.topo-switch button[data-key="boost"]');
  await p.waitForFunction(()=>!state.dirty&&state.result?.config?.topology==='boost',null,{timeout:20000});

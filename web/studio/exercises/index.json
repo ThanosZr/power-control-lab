@@ -3,6 +3,7 @@
  "templates": [
   "pe2_battery.template.json",
   "buck_design.template.json",
-  "pe2_sampling.template.json"
+  "pe2_sampling.template.json",
+  "pe2_polyphase.template.json"
  ]
 }
