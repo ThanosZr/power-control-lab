@@ -20,4 +20,8 @@ for(const ctrl of ['fixed','pi']){const pr=build('battery',{sw:'real',ctrl});con
 for(const [id,o] of [['buck',{load:'10',start:'steady'}],['buck',{load:'50',start:'steady'}],['boost',{load:'20',start:'steady'}],['boost',{load:'200',start:'steady'}]]){
  const pr=build(id,o);const v0=pr.components.find(c=>c.id==='C1').params.v0;const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});s.run(5*s.T);const a=last(s,'V:C1',5).avg;s.run(195*s.T);
  out[`start_${id}_${o.load}`]={v0,first:a,after:last(s,'V:C1',5).avg};}
+// exercise 2: sampling of the inductor current on the carrier (counts, positions, values, PI on the sample)
+for(const kase of ['saw','tri1','tri2'])for(const start of ['midoff','midon','none']){const pr=build('sampling',{case:kase,start});const m=pr.meta;const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});s.run(50*m.T);
+ const L=s.samples('SH1'),il=last(s,'I:L1',5);out[`smp_${kase}_${start}`]={n50:L.t.filter(t=>t<50*m.T-1e-12).length,first:L.t[0],last:L.v[L.v.length-1],lastT:L.t[L.t.length-1],avg:il.avg,pp:il.max-il.min,I:m.I,dI:m.dI,T:m.T,phase:m.phaseDeg};}
+for(const kase of ['saw','tri1']){const pr=build('sampling',{case:kase,ctrl:'pi'});const s=sim(pr,12e-3);const L=s.samples('SH1');out['smp_pi_'+kase]={sample:L.v[L.v.length-1],avg:last(s,'I:L1',5).avg,d:s.now('D:PWM1')};}
 out.ms=Date.now()-t0;console.log(JSON.stringify(out,null,1));

@@ -43,12 +43,12 @@
   // wire names label their net
   for(const w of project.wires||[])if(w.name){const n=pinNet.get(w.a.c+':'+w.a.p);if(n&&!n.name)n.name=w.name;}
   // pins that touch nothing else
-  const open=[];for(const c of comps){if(c.type==='JUNC'||c.type==='PWM')continue;for(const p of Object.keys(P.PARTS[c.type].pins)){const n=pinNet.get(c.id+':'+p);if(n&&n.keys.length===1&&c.type!=='GND')open.push(c.id+':'+p);}}
+  const open=[];for(const c of comps){if(c.type==='JUNC'||!Object.keys(P.PARTS[c.type].pins).length)continue;for(const p of Object.keys(P.PARTS[c.type].pins)){const n=pinNet.get(c.id+':'+p);if(n&&n.keys.length===1&&c.type!=='GND')open.push(c.id+':'+p);}}
   if(open.length)warnings.push('Ανοιχτοί ακροδέκτες: '+open.slice(0,6).join(', ')+(open.length>6?' …':'')+'.');
   let nNodes=nets.length;
   const node=(cid,pin)=>{const n=pinNet.get(cid+':'+pin);return n&&!n.ground?n.index:-1;};
   const internal=()=>nNodes++;
-  const els=[],ctrls=[],compInfo=new Map();
+  const els=[],ctrls=[],shs=[],compInfo=new Map();
   let nRows=0;const row=()=>nRows++;
   for(const c of comps){
    const p={...P.defaults(c.type),...(c.params||{})},T=c.type;
@@ -99,11 +99,14 @@
    else if(T==='PWM'){const fs=Math.max(num(p.fs,20e3),1e-3);ctrls.push({id:c.id,label:c.label||c.id,fs,T:1/fs,mode:p.mode||'fixed',D:num(p.D,.5),dsched:P.parseSched(p.dsched),carrier:p.carrier||'triangle',phase:num(p.phase,0)/360,
      sensor:p.sensor,qty:p.qty||'I',ref:P.parseSched(p.ref)||[[0,0]],Kp:num(p.Kp,0),Ki:num(p.Ki,0),ff:p.ff||'none',ffA:p.ffA,ffB:p.ffB,D0:num(p.D0,.5),dmin:num(p.dmin,.01),dmax:num(p.dmax,.99),
      Kd:num(p.Kd,0),Tf:num(p.Tf,0),dt:Math.max(0,num(p.dt,0)),tkPrev:null,dPrev:null,m:num(p.m,.8),fref:num(p.fref,50),refphase:num(p.refphase,0)*Math.PI/180,d:num(p.D,.5),xi:0,k:null,tk:0,meas:0,refNow:0,ePrev:null,dF:0});info.ctrl=ctrls[ctrls.length-1];}
+   else if(T==='SH'){const sh={id:c.id,label:c.label||c.id,src:p.src,qty:p.qty==='V'?'V':'I',clock:p.clock,trig:['start','mid','both'].includes(p.trig)?p.trig:'start',h0:p.init==='nan'?NaN:num(p.h0,0),h:NaN,last:null,n:0,log:{t:[],v:[]}};sh.h=sh.h0;shs.push(sh);info.sh=sh;
+    if(!(p.clock&&byId.get(p.clock)?.type==='PWM'))warnings.push(`${c.label||c.id}: διάλεξε μπλοκ PWM ως φέρον (αλλιώς δεν παίρνει δείγματα).`);
+    if(!(p.src&&byId.get(p.src)))warnings.push(`${c.label||c.id}: διάλεξε το στοιχείο που μετρά.`);}
   }
   for(const e of els)if(e.fire){const r=compInfo.get(e.fire.refsrc);const src=r?.type==='VAC'?r.main.src:r?.type==='VAC3'?r.phases[0].e.src:null;
    if(src){e.fire.f=Math.max(src.f,1e-6);e.fire.ph0=src.ph+(src.Vpk<0?Math.PI:0);}else if(e.fire.refsrc)warnings.push(`${compInfo.get(e.cid)?.label||e.cid}: η πηγή αναφοράς δεν βρέθηκε· χρησιμοποιείται ${e.fire.f} Hz από t = 0.`);}
   const rowBase=nNodes;for(const e of els)if(e.row!==undefined)e.row+=rowBase;
-  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,compInfo,warnings,node,byId};
+  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId};
  }
 
  // ---------------------------------------------------------------- dense LU
@@ -132,8 +135,9 @@
     for(const e of net.els)if(e.key&&st.has(e.k+e.key)){const o=st.get(e.k+e.key);if(e.k==='L')e.i=o.i;if(e.k==='C'){e.v=o.v;e.i=o.i;}if(e.k==='D')e.on=o.on;}
     const oc=new Map(old.ctrls.map(c=>[c.id,c]));for(const c of net.ctrls){const o=oc.get(c.id);if(o&&o.mode===c.mode&&o.T===c.T){c.xi=o.xi;c.d=o.d;c.k=o.k;c.tk=o.tk;c.tkPrev=o.tkPrev;c.dPrev=o.dPrev;c.meas=o.meas;c.refNow=o.refNow;c.ePrev=o.ePrev;c.dF=o.dF;}}
     for(const e of net.els)if(e.k==='CPL'){const o=old.els.find(x=>x.k==='CPL'&&x.cid===e.cid);if(o)e.v0=o.v0;}
+    const os=new Map(old.shs.map(q=>[q.id,q]));for(const q of net.shs){const o=os.get(q.id);if(o){q.h=o.h;q.last=q.trig===o.trig&&q.clock===o.clock?o.last:null;q.n=o.n;q.log=o.log;}}
    }
-   this.net=net;this.n=net.size;this.A=new Float64Array(this.n*this.n);this.piv=new Int32Array(this.n);this.b=new Float64Array(this.n);this.cache=new Map();
+   this.net=net;this.ctrlById=new Map(net.ctrls.map(k=>[k.id,k]));this.shById=new Map(net.shs.map(q=>[q.id,q]));this.n=net.size;this.A=new Float64Array(this.n*this.n);this.piv=new Int32Array(this.n);this.b=new Float64Array(this.n);this.cache=new Map();
    if(!this.x||this.x.length!==this.n||fresh)this.x=new Float64Array(this.n);
    this.hasCPL=net.els.some(e=>e.k==='CPL');this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.h=this.opts.h||this.T/this.opts.hDiv;
@@ -141,19 +145,26 @@
    this.keys=keys;this.chIndex=new Map(keys.map((k,i)=>[k,i]));
    if(!same)this.allocRecord();
    this.project=project;
-   if(fresh){this.t=0;this.beLeft=2;this.prevSig='';this.periodsDone=0;this.started=false;this.steps=0;for(const c of net.ctrls){c.k=null;c.xi=0;}this.initialSolve();this.sampleControllers(true);this.recordNow();}
+   if(fresh){this.t=0;this.beLeft=2;this.prevSig='';this.periodsDone=0;this.started=false;this.steps=0;this.changes=[];for(const c of net.ctrls){c.k=null;c.xi=0;}
+    // carrier phase and duty first (the initial switch states depend on them), then the
+    // consistent solution, the samples due at t = 0 and the controllers measuring it
+    this.sampleControllers(true);this.initialSolve();this.sampleHolds();this.sampleControllers(true);this.recordNow();}
    else{this.beLeft=2;this.sampleControllers(false);this.computeVals();}
    return net.warnings;
   }
   reset(project){this.load(project||this.project,true);}
   setMethod(m){this.method=['TR','BE','BDF2'].includes(m)?m:'TR';this.cache.clear();this.beLeft=Math.max(this.beLeft,1);}
   setControl(id,patch){const k=this.net.ctrls.find(c=>c.id===id);if(!k)return false;Object.assign(k,patch);return true;}
+  setHold(id,patch){const q=this.shById.get(id);if(!q)return false;if(patch.trig&&patch.trig!==q.trig)q.last=null;Object.assign(q,patch);return true;}
+  // a change made by the user while running: drawn on the scope and kept so it can be replayed
+  markChange(rec){(this.changes||(this.changes=[])).push({t:this.t,...rec});if(this.changes.length>500)this.changes.shift();}
   // ------------------------------------------------------------ channels
   channelKeys(){
    const k=[];for(const n of this.net.nets)k.push('N:'+n.canon);
    for(const c of this.net.compInfo.values()){
     if(['GND','JUNC'].includes(c.type))continue;
-    if(c.type==='PWM'){k.push('D:'+c.id,'G:'+c.id,'REF:'+c.id,'MEAS:'+c.id);continue;}
+    if(c.type==='PWM'){k.push('D:'+c.id,'G:'+c.id,'REF:'+c.id,'MEAS:'+c.id,'CAR:'+c.id);continue;}
+    if(c.type==='SH'){k.push('H:'+c.id);continue;}
     k.push('V:'+c.id,'I:'+c.id,'P:'+c.id);
     if(c.type==='XFMR')k.push('V2:'+c.id,'I2:'+c.id,'Im:'+c.id);
     if(c.type==='VAC3')k.push('Vb:'+c.id,'Vc:'+c.id,'Ib:'+c.id,'Ic:'+c.id,'Vab:'+c.id);
@@ -178,7 +189,8 @@
    for(const n of this.net.nets)out[j++]=x[n.index];
    for(const c of this.net.compInfo.values()){
     if(c.type==='GND'||c.type==='JUNC')continue;
-    if(c.type==='PWM'){const k=c.ctrl;out[j++]=k.d;out[j++]=this.gateOf(k,'a',this.t)?1:0;out[j++]=k.refNow;out[j++]=k.meas;continue;}
+    if(c.type==='PWM'){const k=c.ctrl;out[j++]=k.d;out[j++]=this.gateOf(k,'a',this.t)?1:0;out[j++]=k.refNow;out[j++]=k.meas;out[j++]=this.carrier(k,this.t);continue;}
+    if(c.type==='SH'){out[j++]=c.sh.h;continue;}
     if(c.type==='VAC3'){const vn=this.V(c.n),ph=c.phases.map(q=>({v:this.V(q.pin)-vn,i:-this.x[q.e.row]}));
      out[j++]=ph[0].v;out[j++]=ph[0].i;out[j++]=ph[0].v*ph[0].i+ph[1].v*ph[1].i+ph[2].v*ph[2].i;out[j++]=ph[1].v;out[j++]=ph[2].v;out[j++]=ph[1].i;out[j++]=ph[2].i;out[j++]=ph[0].v-ph[1].v;continue;}
     const v=this.V(c.pins[0])-this.V(c.pins[1]);let i;
@@ -228,6 +240,20 @@
    else{const [e0,e1]=k.carrier==='saw'?[0,d*T]:[(1-d)*T/2,(1+d)*T/2];a=tau>=e0*(1-1e-12)-1e-18&&tau<e1*(1-1e-12);b=a;}
    return out==='a'?a:out==='na'?!a:out==='b'?b:!b;
   }
+  // carrier value c(t): sawtooth τ/T (reset at the period start), symmetric triangle |1 − 2τ/T|
+  // (maximum at the period start, minimum in the middle); SPWM: the −1…1 triangle it compares against
+  carrier(k,t){const T=k.T;if(k.mode==='spwm'){const ph=((t/T-k.phase)%1+1)%1;return ph<.5?1-4*ph:-3+4*ph;}
+   const u=Math.min(1,Math.max(0,(t-k.tk)/T));if(k.mode==='pp')return (2*u)%1;return k.carrier==='saw'?u:Math.abs(1-2*u);}
+  // Sample & Hold triggers sit on the carrier of the clock PWM: b + n·Δ
+  shGrid(q){const k=this.ctrlById.get(q.clock);if(!k)return null;const T=k.T;return {b:k.phase*T+(q.trig==='mid'?T/2:0),d:q.trig==='both'?T/2:T};}
+  shNext(q){const g=this.shGrid(q);if(!g)return Infinity;const n=Math.floor((this.t-g.b)/g.d+1e-7)+1;return g.b+n*g.d;}
+  // take the samples due at the current instant (left value: the state before any switching at t)
+  sampleHolds(){let any=false;for(const q of this.net.shs){const g=this.shGrid(q);if(!g)continue;const u=(this.t-g.b)/g.d,n=Math.round(u);
+    if(Math.abs(u-n)>1e-7||q.last===n)continue;q.last=n;
+    let v=q.qty==='V'?this.compV(q.src):this.compI(q.src);if(!Number.isFinite(v))v=NaN;q.h=v;q.n++;q.log.t.push(this.t);q.log.v.push(v);
+    if(q.log.t.length>60000){q.log.t.splice(0,10000);q.log.v.splice(0,10000);}any=true;}
+   return any;}
+  samples(id){return this.shById.get(id)?.log||null;}
   ctrlEdges(k){const T=k.T,d=Math.min(1,Math.max(0,k.d));let E;
    if(k.mode==='pp'){const h=T/2;E=[k.tk+d*h,k.tk+h,k.tk+h+d*h,k.tk+T];}
    else{const [e0,e1]=k.carrier==='saw'?[0,d*T]:[(1-d)*T/2,(1+d)*T/2];E=[k.tk+e0,k.tk+e1,k.tk+T];}
@@ -240,15 +266,15 @@
   setFiring(alpha){let n=0;for(const e of this.net.els)if(e.fire){e.fire.alpha=alpha;n++;}return n;}
   compV(cid){const c=this.net.compInfo.get(cid);if(!c||!c.pins)return NaN;return this.V(c.pins[0])-this.V(c.pins[1]);}
   compI(cid){const c=this.net.compInfo.get(cid);if(!c||!c.main)return NaN;if(c.type==='XFMR')return -c.main.n*this.x[c.main.row]+c.mag.i;if(c.type==='SW')return this.elCurrent(c.main)-(c.body?this.elCurrent(c.body):0);return this.elCurrent(c.main);}
-  sampleControllers(force){
+  sampleControllers(force){let changed=false;
    for(const k of this.net.ctrls){
     const T=k.T,idx=Math.floor((this.t+1e-12*T)/T-k.phase);
-    if(!force&&k.k===idx)continue;
+    if(!force&&k.k===idx)continue;changed=true;
     const first=k.k===null;if(!first){k.tkPrev=k.tk;k.dPrev=k.d;}
     k.k=idx;k.tk=(idx+k.phase)*T;
     if(k.mode==='fixed'||k.mode==='pp')k.d=schedAt(k.dsched,this.t,k.D);
     else if(k.mode==='pi'){
-     k.refNow=schedAt(k.ref,this.t,k.ref[0][1]);k.meas=k.qty==='V'?this.compV(k.sensor):this.compI(k.sensor);if(!Number.isFinite(k.meas))k.meas=0;
+     k.refNow=schedAt(k.ref,this.t,k.ref[0][1]);const sh=this.shById.get(k.sensor);k.meas=sh?sh.h:k.qty==='V'?this.compV(k.sensor):this.compI(k.sensor);if(!Number.isFinite(k.meas))k.meas=0;
      let ff=0;if(k.ff==='ratio'){const a=this.compV(k.ffA),b=this.compV(k.ffB);ff=Math.abs(b)>1e-9?1-a/b:0;}else if(k.ff==='const')ff=k.D0;
      const e=k.refNow-k.meas;if(force&&!this.started){k.xi=0;k.ePrev=null;k.dF=0;}
      let der=0;if(k.Kd){const raw=k.ePrev===null?0:(e-k.ePrev)/T;k.dF=k.Tf>0?(k.Tf*k.dF+T*raw)/(k.Tf+T):raw;der=k.Kd*k.dF;}k.ePrev=e;
@@ -257,6 +283,7 @@
      k.d=d;}
     if(first||k.tkPrev===null){k.tkPrev=k.tk-T;k.dPrev=k.d;}
    }
+   return changed;
   }
   gateSig(t){let s='';for(const e of this.net.els){if(e.k!=='S'&&!e.gk)continue;let on=false;
     if(e.gate==='on')on=true;else if(e.gate==='pwm'){const k=this.net.ctrls.find(c=>c.id===e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
@@ -398,7 +425,10 @@
   edgePoint(t){this.edgeSolve(t);this.recordNow();}
   nextEvent(tMax){
    let t=tMax;const eps=this.h*1e-6;
-   for(const k of this.net.ctrls){if(k.mode==='spwm'){continue;}for(const e of this.ctrlEdges(k))if(e>this.t+eps&&e<t)t=e;}
+   for(const k of this.net.ctrls){if(k.mode==='spwm'){continue;}for(const e of this.ctrlEdges(k))if(e>this.t+eps&&e<t)t=e;
+    const tv=k.tk+k.T/2;if(k.mode!=='pp'&&k.carrier!=='saw'&&tv>this.t+eps&&tv<t)t=tv; // carrier minimum
+    const tn=(Math.floor((this.t+eps)/k.T-k.phase)+1+k.phase)*k.T;if(tn>this.t+eps&&tn<t)t=tn;} // next period start (after a live phase change)
+   for(const q of this.net.shs){const ts=this.shNext(q);if(ts>this.t+eps&&ts<t)t=ts;}
    const sch=(s)=>{if(s)for(const [ts] of s)if(ts>this.t+eps&&ts<t)t=ts;};
    for(const e of this.net.els){if(e.sched)sch(e.sched);if(e.k==='V'&&e.src.sched)sch(e.src.sched);}
    for(const k of this.net.ctrls){sch(k.dsched);if(k.mode==='pi')sch(k.ref);}
@@ -427,7 +457,9 @@
     const Tb=this.T,onB=Math.abs(this.t/Tb-Math.round(this.t/Tb))<1e-9;
     this.recordNow();
     if(onB&&this.t>0)this.closePeriod();
-    this.sampleControllers(false);
+    // order at one instant: samples (t_sample), then the controller update (t_update); a second
+    // point at the same t makes the held value, the carrier reset and the duty step vertical
+    const sm=this.sampleHolds(),cu=this.sampleControllers(false);if(sm||cu)this.recordNow();
     if((steps&255)===0&&performance.now()>deadline)break;
    }
    this.computeVals();
@@ -449,17 +481,20 @@
   const rec=key=>{const [pre,id,pin]=key.split(':');
    if(pre==='VN'){const n=net.pinNet.get(id+':'+pin);return n?{v:n.ground?[]:[[n.index,1]]}:null;}
    if(pre==='N'){const n=net.nets.find(x=>x.canon===key.slice(2));return n?{v:[[n.index,1]]}:null;}
-   if(['D','G','REF','MEAS'].includes(pre)){const k=cix.get(id);if(k===undefined)return null;return pre==='G'?{gate:[k,'a']}:{ctrl:[k,{D:'d',REF:'refNow',MEAS:'meas'}[pre]]};}
+   if(['D','G','REF','MEAS','CAR'].includes(pre)){const k=cix.get(id);if(k===undefined)return null;return pre==='G'?{gate:[k,'a']}:pre==='CAR'?{car:k}:{ctrl:[k,{D:'d',REF:'refNow',MEAS:'meas'}[pre]]};}
+   if(pre==='H'){const q=shx.get(id);return q===undefined?null:{sh:q};}
    const c=ci(id);if(!c)return null;
    if(c.type==='VAC3'){const ph=c.phases,pv=q=>vd(q.pin,c.n),pi=q=>({i:[[idx.get(q.e),1]]});
     return {V:pv(ph[0]),I:pi(ph[0]),P:{sum:ph.map(q=>({prod:[pv(q),pi(q)]}))},Vb:pv(ph[1]),Vc:pv(ph[2]),Ib:pi(ph[1]),Ic:pi(ph[2]),Vab:vd(ph[0].pin,ph[1].pin)}[pre]||null;}
    if(pre==='V')return V(c);if(pre==='I')return I(c);if(pre==='P'){const a=V(c),b=I(c);return a&&b?{prod:[a,b]}:null;}
    if(c.type==='XFMR'){if(pre==='V2')return vd(c.pins2[0],c.pins2[1]);if(pre==='I2')return {i:[[idx.get(c.main),c.opp?-1:1]]};if(pre==='Im')return {i:[[idx.get(c.mag),1]]};}
    return null;};
+  const shx=new Map(net.shs.map((q,i)=>[q.id,i]));
+  const shs=net.shs.map(q=>({id:q.id,rec:q.qty==='V'?V(ci(q.src)):I(ci(q.src)),clock:cix.get(q.clock)??null,trig:q.trig,h0:Number.isFinite(q.h0)?q.h0:null}));
   const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase'])o[f]=k[f];
-   const s=ci(k.sensor);o.sensorRec=k.mode==='pi'?(k.qty==='V'?V(s):I(s)):null;o.ffARec=V(ci(k.ffA));o.ffBRec=V(ci(k.ffB));return o;});
+   const s=ci(k.sensor);o.sensorRec=k.mode==='pi'?(shx.has(k.sensor)?{sh:shx.get(k.sensor)}:k.qty==='V'?V(s):I(s)):null;o.ffARec=V(ci(k.ffA));o.ffBRec=V(ci(k.ffB));return o;});
   const channels={},skipped=[];for(const key of keys){const r=rec(key);if(r)channels[key]=r;else skipped.push(key);}
-  return {net:{nNodes:net.nNodes,size:net.size,els,ctrls},channels,skipped};
+  return {net:{nNodes:net.nNodes,size:net.size,els,ctrls,shs},channels,skipped};
  }
  const api={Sim,buildNetlist,NetlistError,exportForBatch};
  root.MNA=api;if(typeof module!=='undefined')module.exports=api;

@@ -42,11 +42,11 @@
    <label>Βήμα Δt<select id="sim-step"><option value="50">T/50</option><option value="100">T/100</option><option value="200" selected>T/200</option><option value="500">T/500</option><option value="1000">T/1000</option><option value="2000">T/2000</option><option value="5000">T/5000</option></select><small id="step-note"></small></label>
    <label>Διάρκεια (ms)<span class="inl"><input id="stop" placeholder="∞" inputmode="decimal"><button id="toend" title="Υπολόγισε αμέσως έως τη διάρκεια">⏩</button></span><small>κενό = χωρίς όριο</small></label>
    <span id="cpu" class="cpu" hidden>⚠ όριο CPU: τρέχει πιο αργά από το ζητούμενο</span>
+   <button id="lp-toggle" class="nav-toggle toggle on" aria-pressed="true" aria-controls="live-panel" title="Δείξε/κρύψε τις ζωντανές παραμέτρους πάνω από το scope (πλήκτρο P)">🎛 Ζωντανές παράμετροι</button>
    <button id="nav-toggle" class="nav-toggle" aria-expanded="false" aria-controls="scope-nav" title="Δείξε/κρύψε τα κουμπιά πλοήγησης γραφημάτων">🔍 Πλοήγηση γραφημάτων</button>
   </div>
   <div class="scope-grid">
    <aside class="scope-side">
-    <div class="side-block"><h4>Χειρισμός</h4><div id="live-controls"></div></div>
     <div class="side-block"><h4>Σήματα</h4><select id="add-signal"></select><div class="row-btns sel-probe"><button id="probe-i" title="Ρεύμα των επιλεγμένων στοιχείων στο scope">⌁ I επιλεγμένων</button><button id="probe-v" title="Τάση των επιλεγμένων στοιχείων στο scope">⌁ V επιλεγμένων</button></div><div id="chan-list"></div></div>
     <div class="side-block"><h4>Προβολή</h4>
      <div class="grid2"><label>Παράθυρο<span class="inl"><input id="win-n" value="20" inputmode="decimal"><select id="win-unit"><option value="T">περίοδοι T</option><option value="s">δευτερόλεπτα</option></select></span></label>
@@ -74,7 +74,9 @@
      <span class="sep"></span><button data-nav="focus" class="strong" title="Εστίαση στις τελευταίες 3 περιόδους του παραθύρου: φαίνεται η κυματομορφή μεταγωγής">⊙ Εστίαση 3T</button><button data-nav="in" title="Zoom in ×2">＋</button><button data-nav="out" class="strong" title="Zoom out ×2">－ Zoom out</button><button data-nav="all" title="Όλη η προσομοίωση από t = 0">⤢ Όλη η διαδρομή</button>
      <span class="sep"></span><button data-nav="autoy" title="Αυτόματη κατακόρυφη κλίμακα σε όλα τα παράθυρα">↕ Αυτόματη κλίμακα</button><span id="nav-range" class="nav-range"></span>
     </div>
-    <div class="scope-wrap"><canvas id="scope-canvas" aria-label="Παλμογράφος"></canvas><button id="live-btn" class="live-btn" hidden>● Ζωντανά</button></div>
+    <div class="scope-wrap"><canvas id="scope-canvas" aria-label="Παλμογράφος"></canvas><button id="live-btn" class="live-btn" hidden>● Ζωντανά</button>
+     <div id="live-panel" class="live-panel" role="region" aria-label="Ζωντανές παράμετροι"><div class="lp-head" title="Σύρε για μετακίνηση"><b>Ζωντανές παράμετροι</b><small>χωρίς παύση</small><button id="lp-hide" class="x" title="Κρύψε (P)">✕</button></div>
+      <div id="live-controls"></div><div id="lp-log" class="lp-log"></div></div></div>
     <div id="measure" class="measure"></div><div id="bt-out" class="bt-out"></div>
    </div>
   </div>
@@ -91,7 +93,7 @@
    <div><div class="th-head"><h4>Θεωρία & σύγκριση με την προσομοίωση</h4><button id="theory-refresh" title="Επανυπολογισμός με τις τρέχουσες τιμές">↻</button></div><div id="theory" class="theory"></div></div>
   </div>
  </section>
- <footer>Power Converter Lab <b>2.3.3</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE.</footer>
+ <footer>Power Converter Lab <b>2.4</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE.</footer>
 </main>
 <div id="notice" class="notice" hidden></div>
 <div id="inspector" class="popup inspector" hidden></div>

@@ -36,6 +36,23 @@ class DataTemplates(unittest.TestCase):
         self.assertEqual(len(table['rows']), 6)
         self.assertEqual(table['rows'][0][0], 'A+')
 
+    def test_sampling_exercise(self):
+        tpl = load('pe2_sampling.template.json')
+        base = {'V_bus': 50, 'V_st': 100, 'P': 40e3, 'L': 5.6e-6, 'f_s': 20e3, 'N': 50}
+        v = template_solve({'template': tpl, 'values': {**base, 'saw': 1, 'n_ps': 1, 'phi': 90}})['values']
+        self.assertAlmostEqual(v['i_s'], -800 - 223.2142857 / 2, places=4)       # sawtooth reset: the valley
+        self.assertAlmostEqual(v['phi_off'], 90)                                 # i_L(0) = I_avg at mid-OFF: 90° delay
+        self.assertAlmostEqual(v['phi_on'], 270)
+        self.assertAlmostEqual(v['t_1'], 12.5e-6, delta=1e-12)
+        self.assertAlmostEqual(v['I_ctrl'], -800 + 223.2142857 / 2, places=4)    # PI on the sample shifts the mean
+        r = template_solve({'template': tpl, 'values': {**base, 'saw': 0, 'n_ps': 2, 'phi': 0}})
+        v = r['values']
+        self.assertAlmostEqual(v['i_s'], -800)
+        self.assertAlmostEqual(v['i_s2'], -800)
+        self.assertEqual(v['N_s'], 100)                                          # 50 periods, two samples each
+        self.assertAlmostEqual(v['phi_on'], 180)
+        self.assertTrue(r['checks'][0]['ok'])
+
     def test_battery_below_uses_other_relations(self):
         r = template_solve({'template': load('pe2_battery.template.json'), 'values': {'V_st': 25, 'P': 40e3}})
         v = r['values']

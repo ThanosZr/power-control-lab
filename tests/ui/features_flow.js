@@ -34,6 +34,17 @@ const {chromium}=require('playwright');
  for(const [id,o] of [['scr1',{alpha:'30'}],['bridge3',{dev:'60',load:'rl'}],['flyback',{lk:'clamp'}]]){await p.evaluate(([id,o])=>window.PCL.loadTutorial(id,o),[id,o]);await p.waitForTimeout(400);
   await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.sim.T*(S.sim.T>1e-3?4:300));window.PCL.pause();});await p.waitForTimeout(600);
   const t=await p.$eval('#theory',e=>e.innerText);ok(/Προσομοίωση/.test(t)&&!/Προσομοίωση\s*\n?\s*—/.test(t.split('Διαφορά')[1]?.slice(0,30)||''),'theory '+id);}
+ // exercise 2: sampling on the carrier, theory card, live parameters panel, changes → program
+ await p.evaluate(()=>window.PCL.loadTutorial('sampling',{case:'tri2'}));await p.waitForTimeout(1500);
+ await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.sim.T*50);window.PCL.pause();});await p.waitForTimeout(800);
+ const smp=await p.$eval('#theory',e=>e.textContent);ok(/Δείγματα έως t101101/.test(smp),'sampling counts in theory');ok(/Τελευταία δείγματα/.test(smp),'sample table');
+ ok(await p.evaluate(()=>!document.querySelector('#live-panel').hidden&&!!document.querySelector('#live-controls [data-trig="SH1"]')),'live panel with S&H');
+ await p.evaluate(()=>{const r=document.querySelector('[data-d="PWM1"]');r.value=0.51;r.dispatchEvent(new Event('input'));r.dispatchEvent(new Event('change'));});
+ await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.sim.T*4);window.PCL.pause();});
+ ok(await p.evaluate(()=>window.PCL.S.sim.changes.length===1&&!!document.querySelector('#lp-sched')),'change recorded');
+ await p.click('#lp-sched');await p.waitForTimeout(500);ok(/0:0\.5, 0\.0025:0\.51/.test(await p.evaluate(()=>window.PCL.editor.comp('PWM1').params.dsched)),'changes → D(t) program');
+ await p.click('#lp-toggle');ok(await p.evaluate(()=>document.querySelector('#live-panel').hidden),'panel hides');await p.click('#lp-toggle');
+ const mt=await p.$$eval('#math-tpl option',o=>o.map(x=>x.value));ok(mt[0]==='pe2_sampling','sampling template first '+mt);
  // open a /converter/ circuit in the studio
  await p.goto(U+'converter/');await p.waitForTimeout(800);await p.click('.topo-switch button[data-key="boost"]');
  await p.waitForFunction(()=>!state.dirty&&state.result?.config?.topology==='boost',null,{timeout:20000});

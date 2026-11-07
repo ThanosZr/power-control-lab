@@ -37,6 +37,22 @@ class StudioSimulator(unittest.TestCase):
     def test_flyback_ccm(self):
         self.assertAlmostEqual(self.o['flyback']['vo'], 24 * .5 * .4 / .6, delta=0.03)
 
+    def test_sample_and_hold(self):
+        r, T = self.o['sh_mid'], 50e-6
+        self.assertEqual(r['h0'], 'nan')                                          # invalid until the first trigger
+        self.assertAlmostEqual(r['first'], T / 2 + 0.1 * T, delta=1e-12)           # triangle minimum, 36° delay
+        self.assertEqual(r['n'], 20)
+        self.assertAlmostEqual(r['dt'], T, delta=1e-12)
+        self.assertEqual(len(r['at']), 2)                                         # two points at the first t_k: vertical step
+        old, new = r['at']
+        self.assertIsNone(old['h'])                                               # still invalid just before it
+        self.assertAlmostEqual(new['h'], new['i'], delta=1e-3)                    # the sample is i_L(t_k)
+        self.assertAlmostEqual(new['h'], r['v0'], delta=1e-3)
+        self.assertAlmostEqual(new['c'], 0, delta=1e-6)                           # carrier minimum at the trigger
+        p = self.o['sh_pi']                                                       # sample before update: PI reads the new sample
+        self.assertAlmostEqual(p['meas'], p['hold'], delta=1e-9)
+        self.assertAlmostEqual(p['hold'], p['lastSample'], delta=1e-9)
+
     def test_bridge_rectifier_battery(self):
         vpk, E, R = 230 * math.sqrt(2), 200, 2
         a = math.asin(E / vpk)

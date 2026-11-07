@@ -66,6 +66,7 @@
    const def=P.PARTS[type];if(!def)return null;this.remember();
    const id=this.newId(def.prefix);const c={id,type,x,y,rot:0,flip:false,label:id,params:{...P.defaults(type),...(params||{})}};
    if(type==='SW'&&!c.params.pwm){const pwm=this.doc.components.find(k=>k.type==='PWM');if(pwm)c.params.pwm=pwm.id;}
+   if(type==='SH'){const pwm=this.doc.components.find(k=>k.type==='PWM'),l=this.doc.components.find(k=>k.type==='L');if(pwm&&!c.params.clock)c.params.clock=pwm.id;if(l&&!c.params.src)c.params.src=l.id;}
    this.doc.components.push(c);this.render();this.select([id]);this.changed('struct');return c;}
   setParams(id,patch,{label}={}){const c=this.comp(id);if(!c)return;this.remember();Object.assign(c.params,patch);if(label!==undefined)c.label=label;this.renderPart(c);this.renderLabels();this.changed('param');}
   setWireProps(id,patch){const w=this.wire(id);if(!w)return;this.remember();Object.assign(w,patch);if(patch.name!==undefined&&!patch.name)delete w.name;this.renderWires();this.changed('param');}
@@ -96,7 +97,7 @@
    for(const c of this.clip.comps){const id=this.newId(P.PARTS[c.type].prefix);map.set(c.id,id);const k={...JSON.parse(JSON.stringify(c)),id,label:c.type==='JUNC'?id:id,x:c.x+dx,y:c.y+dy};this.doc.components.push(k);nc.push(id);}
    for(const w of this.clip.wires){const id=this.newId('w');const k={...JSON.parse(JSON.stringify(w)),id,a:{c:map.get(w.a.c),p:w.a.p},b:{c:map.get(w.b.c),p:w.b.p},pts:(w.pts||[]).map(p=>[p[0]+dx,p[1]+dy])};this.doc.wires.push(k);nw.push(id);}
    // controls inside the copy point to the copied PWM
-   for(const id of nc){const c=this.comp(id);if(c.params?.pwm&&map.has(c.params.pwm))c.params.pwm=map.get(c.params.pwm);if(c.params?.sensor&&map.has(c.params.sensor))c.params.sensor=map.get(c.params.sensor);}
+   for(const id of nc){const c=this.comp(id);if(c.params?.pwm&&map.has(c.params.pwm))c.params.pwm=map.get(c.params.pwm);for(const k of ['sensor','clock','src','ffA','ffB'])if(c.params?.[k]&&map.has(c.params[k]))c.params[k]=map.get(c.params[k]);}
    this.render();this.select(nc,nw);this.changed('struct');}
   // ---------------------------------------------------------- routing
   obstacles(skip=new Set()){const out=[];for(const c of this.doc.components){if(c.type==='JUNC'||skip.has(c.id))continue;const b=P.bbox(c);out.push([b[0]-2,b[1]-2,b[2]+2,b[3]+2]);}return out;}
@@ -158,10 +159,11 @@
   valueText(c){const p={...P.defaults(c.type),...c.params},e=P.eng;
    switch(c.type){case 'R':return p.sched?'R(t)':e(+p.R,'Ω');case 'L':return e(+p.L,'H');case 'C':return e(+p.C,'F');case 'VDC':return e(+p.V,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');case 'VAC':return e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'VAC3':return '3φ '+e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'SCR':return p.fire==='alpha'?'α '+(+p.alpha).toLocaleString('el-GR')+'°'+(+p.shift?' +'+(+p.shift).toLocaleString('el-GR')+'°':''):p.fire==='pwm'?'g · '+(p.pwm||'—'):'';
     case 'IDC':return e(+p.I,'A');case 'CPL':return p.sched?'P(t)':e(+p.P,'W');case 'XFMR':return '1 : '+(+p.n).toLocaleString('el-GR',{maximumFractionDigits:4});case 'SW':return (p.model==='igbt'?'IGBT · ':'')+(p.gate==='pwm'?({a:'g',na:'ḡ',b:'g₂',nb:'ḡ₂'}[p.out]||'g')+' · '+(p.pwm||'—'):p.gate==='on'?'ON':'OFF');
-    case 'PWM':return e(+p.fs,'Hz')+(+p.dt>0?' · t_d '+e(+p.dt,'s'):'')+' · '+(p.mode==='fixed'?'D = '+(+p.D).toLocaleString('el-GR'):p.mode==='pi'?'PI':p.mode==='spwm'?'SPWM m = '+p.m:'2 έξοδοι');default:return '';}}
+    case 'SH':return (p.qty==='V'?'v(':'i(')+(p.src||'—')+') · '+({start:'αρχή T',mid:'μέσο T',both:'2 ανά T'}[p.trig]||'');
+    case 'PWM':return e(+p.fs,'Hz')+(+p.phase&&p.mode!=='spwm'?' · φ '+(+p.phase).toLocaleString('el-GR',{maximumFractionDigits:2})+'°':'')+(+p.dt>0?' · t_d '+e(+p.dt,'s'):'')+' · '+(p.mode==='fixed'?'D = '+(+p.D).toLocaleString('el-GR'):p.mode==='pi'?'PI':p.mode==='spwm'?'SPWM m = '+p.m:'2 έξοδοι');default:return '';}}
   renderLabels(){
-   this.L.live.innerHTML=this.doc.components.filter(c=>c.type!=='JUNC'&&c.type!=='GND').map(c=>{const b=P.bbox(c);const pk=Object.keys(P.PARTS[c.type].pins);const q0=pk[0]&&this.pin(c,pk[0]),q1=pk[1]&&this.pin(c,pk[1]);const vert=c.type!=='PWM'&&c.type!=='XFMR'&&c.type!=='VAC3'&&q0&&q1&&q0[0]===q1[0];
-    const side=(vert||c.type==='PWM')&&c.lbl!=='below'&&c.lbl!=='above';const below=c.lbl==='below';const x=side?b[2]+8:(b[0]+b[2])/2,y=side?(b[1]+b[3])/2-(c.type==='PWM'?10:2):below?b[3]+40:b[1]-7;const anchor=side?'start':'middle';
+   this.L.live.innerHTML=this.doc.components.filter(c=>c.type!=='JUNC'&&c.type!=='GND').map(c=>{const b=P.bbox(c);const pk=Object.keys(P.PARTS[c.type].pins);const q0=pk[0]&&this.pin(c,pk[0]),q1=pk[1]&&this.pin(c,pk[1]);const blk=!pk.length;const vert=!blk&&c.type!=='XFMR'&&c.type!=='VAC3'&&q0&&q1&&q0[0]===q1[0];
+    const side=(vert||blk)&&c.lbl!=='below'&&c.lbl!=='above';const below=c.lbl==='below';const x=side?b[2]+8:(b[0]+b[2])/2,y=side?(b[1]+b[3])/2-(blk?10:2):below?b[3]+40:b[1]-7;const anchor=side?'start':'middle';
     return `<g class="lbls" data-l="${c.id}"><text class="lbl" x="${x}" y="${side?y:y-24}" text-anchor="${anchor}">${esc(c.label||c.id)}</text><text class="val" x="${x}" y="${side?y+13:y-12}" text-anchor="${anchor}">${esc(this.valueText(c))}</text><text class="lv" x="${x}" y="${side?y+26:y}" text-anchor="${anchor}"></text></g>`;}).join('');
    this.liveRefs=new Map();for(const g of this.L.live.querySelectorAll('[data-l]'))this.liveRefs.set(g.dataset.l,g.querySelector('.lv'));
   }

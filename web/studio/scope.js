@@ -6,7 +6,7 @@
 //  * hover readout, two pinned cursors (click / Shift+click), window statistics
 (function(root){
  const COLORS=['#147966','#c47a1c','#2f5fa0','#b03a5b','#6b4fa0','#3d8b3d','#1f8fa0','#8a5a2b'];
- const UNIT={V:'V',I:'A',P:'W',N:'V',VN:'V',V2:'V',I2:'A',Im:'A',Vb:'V',Vc:'V',Vab:'V',Ib:'A',Ic:'A',PSW:'W',D:'',G:'',REF:'',MEAS:''};
+ const UNIT={V:'V',I:'A',P:'W',N:'V',VN:'V',V2:'V',I2:'A',Im:'A',Vb:'V',Vc:'V',Vab:'V',Ib:'A',Ic:'A',PSW:'W',D:'',G:'',REF:'',MEAS:'',CAR:''};
  function niceStep(span,n){const raw=span/Math.max(1,n),p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;return (m<1.5?1:m<3.5?2:m<7.5?5:10)*p;}
  function fmtT(t,step,tmax){const m=Math.max(Math.abs(tmax??t),step);const [k,u]=m<1e-6?[1e9,'ns']:m<1e-3?[1e6,'μs']:m<1?[1e3,'ms']:[1,'s'];const d=Math.max(0,Math.ceil(-Math.log10(step*k)-1e-9));return (t*k).toLocaleString('el-GR',{minimumFractionDigits:d,maximumFractionDigits:d,useGrouping:false})+' '+u;}
  const eng=(v,u)=>root.Parts.eng(v,u,4);
@@ -43,7 +43,8 @@
   resize(){const r=this.cv.parentElement.getBoundingClientRect(),dpr=window.devicePixelRatio||1;this.W=Math.max(200,r.width);this.H=Math.max(160,r.height);
    this.cv.width=Math.round(this.W*dpr);this.cv.height=Math.round(this.H*dpr);this.cv.style.width=this.W+'px';this.cv.style.height=this.H+'px';this.ctx.setTransform(dpr,0,0,dpr,0,0);this.draw();}
   // ------------------------------------------------------------ channels
-  static unitOf(key,sim){const pre=key.split(':')[0];if(pre==='REF'||pre==='MEAS'){const k=sim?.net.ctrls.find(c=>c.id===key.split(':')[1]);return k?.qty==='V'?'V':'A';}return UNIT[pre]??'';}
+  static unitOf(key,sim){const pre=key.split(':')[0],id=key.split(':')[1];if(pre==='REF'||pre==='MEAS'){const k=sim?.net.ctrls.find(c=>c.id===id);const h=sim?.shById?.get(k?.sensor);return (h?h.qty:k?.qty)==='V'?'V':'A';}
+   if(pre==='H')return sim?.shById?.get(id)?.qty==='V'?'V':'A';return UNIT[pre]??'';}
   resolve(key){const s=this.sim;if(!s)return -1;if(key.startsWith('VN:')){const pin=key.slice(3),n=s.net.pinNet.get(pin);if(!n)return -1;if(n.ground)return -2;return s.chIndex.get('N:'+n.canon)??-1;}return s.chIndex.get(key)??-1;}
   channels(){return this.cfg.panes.flatMap((p,pi)=>p.ch.map(c=>({...c,pane:pi})));}
   addChannel(key,label,pane=null){if(this.channels().some(c=>c.key===key))return false;const used=new Set(this.channels().map(c=>c.color));const color=COLORS.find(c=>!used.has(c))||COLORS[this.channels().length%COLORS.length];
@@ -77,6 +78,9 @@
   cursorAt(e){if(!this.sim)return;const [a,b]=this.viewRange();const t=a+(e.offsetX-this.padL)/this.plotW()*(b-a);if(t<a||t>b)return;
    if(e.shiftKey&&this.cfg.cursors.length)this.cfg.cursors[1]=t;else this.cfg.cursors=e.shiftKey?[t]:(this.cfg.cursors.length===1?[this.cfg.cursors[0],t]:[t]);this.opt.onchange?.();this.draw();}
   plotW(){return this.W-this.padL-this.padR;}
+  drawSamples(ch,t0,t1,X,Y){const L=this.sim?.samples?.(ch.key.slice(2));if(!L||!L.t.length)return;const t=L.t;let lo=0,hi=t.length;while(lo<hi){const m=(lo+hi)>>1;if(t[m]<t0)lo=m+1;else hi=m;}
+   let n=0;for(let i=lo;i<t.length&&t[i]<=t1;i++)n++;if(!n||n>this.plotW()/2.5)return;const c=this.ctx;c.save();c.fillStyle=ch.color;c.strokeStyle='#fff';c.lineWidth=1.2;
+   for(let i=lo;i<t.length&&t[i]<=t1;i++){const v=L.v[i];if(!Number.isFinite(v))continue;c.beginPath();c.arc(X(t[i]),Y(v),3.4,0,7);c.fill();c.stroke();}c.restore();}
   // ------------------------------------------------------------ drawing
   draw(){
    const c=this.ctx,W=this.W||600,H=this.H||300;if(!c)return;c.clearRect(0,0,W,H);this.padL=64;this.padR=14;
@@ -124,9 +128,14 @@
       else{let col0=-1,mn=0,mx=0,first=0,last=0,st=false;const fl=()=>{if(col0<0)return;const x=this.padL+col0+.5;if(!st){c.moveTo(x,Y(first));st=true;}else c.lineTo(x,Y(first));c.lineTo(x,Y(mn));c.lineTo(x,Y(mx));c.lineTo(x,Y(last));};
        for(let i=0;i<m;i++){const cx=Math.floor(X(pts[2*i])-this.padL),v=pts[2*i+1];if(cx!==col0){fl();col0=cx;mn=mx=first=last=v;}else{if(v<mn)mn=v;if(v>mx)mx=v;last=v;}}fl();}
       c.stroke();c.restore();}
+     // Sample & Hold: a dot at every sampling instant (t_k, value at t_k)
+     if(d.ch.key.startsWith('H:'))this.drawSamples(d.ch,t0,t1,X,Y);
      // average line of the last complete period (dashed) when enabled
      if(this.cfg.avgLine){const st=this.stats(d.ch.key);if(st){c.setLineDash([5,4]);c.lineWidth=1;c.beginPath();c.moveTo(this.padL,Y(st.avg));c.lineTo(W-this.padR,Y(st.avg));c.stroke();c.setLineDash([]);}}
     }
+    // changes made while running (live parameters)
+    const chg=(s.changes||[]).filter(q=>q.t>=t0&&q.t<=t1);if(chg.length){c.strokeStyle='#6b4fa0';c.globalAlpha=.7;c.setLineDash([2,3]);for(const q of chg){const x=X(q.t);c.beginPath();c.moveTo(x,y0);c.lineTo(x,y1);c.stroke();}c.setLineDash([]);c.globalAlpha=1;
+     if(pi===0){c.fillStyle='#6b4fa0';c.font='600 10px Inter,system-ui,sans-serif';c.textAlign='left';c.textBaseline='bottom';for(const q of chg.slice(-12))c.fillText('◆ '+q.label.split(': ').pop(),X(q.t)+3,y1-3);}}
     // cursors
     for(const [i,tc] of this.cfg.cursors.entries()){if(tc<t0||tc>t1)continue;const x=X(tc);c.strokeStyle=i?'#b03a5b':'#2f5fa0';c.setLineDash([4,3]);c.beginPath();c.moveTo(x,y0);c.lineTo(x,y1);c.stroke();c.setLineDash([]);}
     c.restore();

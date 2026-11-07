@@ -76,5 +76,14 @@ function bridge3(alpha){const top=[['a',30],['b',150],['c',270]],bot=[['a',210],
  return project(comps,w);}
 {const s=new Sim(bridge3(null),{hDiv:3000});s.run(0.06);const st=periodStats(s,'V:R1',2);const s2=new Sim(bridge3(30),{hDiv:3000});s2.run(0.06);
  out.bridge3={vd:st.avg,vmin:st.min,vmax:st.max,vscr:periodStats(s2,'V:R1',2).avg,ia_rms:Math.sqrt((()=>{const p=s.per,i=s.chIndex.get('I:V1');const j=(p.head-1+p.cap)%p.cap;return p.rms[j*p.nch+i]**2;})())};}
+// 13) Sample & Hold on the carrier: instants, left value, vertical hold, NaN before the first trigger, PI reading the hold
+function shCirc(pwm,sh){const p=bidir({D:.5,...pwm},-800);p.components.push({id:'SH1',type:'SH',x:0,y:0,rot:0,params:{src:'L1',clock:'PWM1',...sh}});return p;}
+{const T=50e-6,s=new Sim(shCirc({carrier:'triangle',phase:36},{trig:'mid',init:'nan'}),{hDiv:500});const h0=s.now('H:SH1');s.run(20*T);const L=s.samples('SH1');
+ // ring buffer around the 5th sample: two points at t_k (old hold, new hold); the sample equals i_L there
+ const r=s.ring,nch=r.nch,iH=s.chIndex.get('H:SH1'),iL=s.chIndex.get('I:L1'),iC=s.chIndex.get('CAR:PWM1'),st=(r.head-r.n+r.cap)%r.cap,tk=L.t[0];const at=[];
+ for(let k=0;k<r.n;k++){const j=(st+k)%r.cap;if(Math.abs(r.t[j]-tk)<1e-12)at.push({h:r.d[j*nch+iH],i:r.d[j*nch+iL],c:r.d[j*nch+iC]});}
+ out.sh_mid={h0:Number.isNaN(h0)?'nan':h0,first:L.t[0],n:L.t.length,dt:L.t[5]-L.t[4],at,v0:L.v[0]};}
+{const T=50e-6,pr=shCirc({mode:'pi',carrier:'saw',sensor:'SH1',qty:'I',ref:'-800',Kp:3e-4,Ki:0.4,ff:'ratio',ffA:'VB',ffB:'VS'},{trig:'start'});const s=new Sim(pr,{hDiv:500});s.run(10*T);
+ const k=s.net.ctrls[0];out.sh_pi={meas:k.meas,hold:s.shById.get('SH1').h,lastSample:s.samples('SH1').v.at(-1),car:s.now('CAR:PWM1')};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

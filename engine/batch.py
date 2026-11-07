@@ -111,6 +111,17 @@ class Ctrl:
         return self.raw(out, td, self.tkPrev if self.tkPrev is not None else self.tk - self.T,
                         self.dPrev if self.dPrev is not None else self.d)
 
+    def carrier_at(self, t):
+        """Carrier value as in the browser: sawtooth τ/T, symmetric triangle |1 − 2τ/T|."""
+        T = self.T
+        if self.mode == 'spwm':
+            ph = ((t / T - self.phase) % 1 + 1) % 1
+            return 1 - 4 * ph if ph < .5 else -3 + 4 * ph
+        u = min(1.0, max(0.0, (t - self.tk) / T))
+        if self.mode == 'pp':
+            return (2 * u) % 1
+        return u if self.carrier == 'saw' else abs(1 - 2 * u)
+
     def edges(self):
         T, d = self.T, min(1.0, max(0.0, self.d))
         if self.mode == 'pp':
@@ -133,6 +144,14 @@ class Circuit:
             raise BatchError('Πολύ μεγάλο κύκλωμα για τον batch λύτη.')
         self.ctrls = [Ctrl(k) for k in net.get('ctrls', [])]
         self.cmap = {k.id: k for k in self.ctrls}
+        # Sample & Hold blocks: triggers on the carrier of their clock PWM
+        self.shs = []
+        for q in net.get('shs', []) or []:
+            ci = q.get('clock')
+            h0 = q.get('h0')
+            self.shs.append({'id': q.get('id'), 'rec': q.get('rec'), 'clock': ci if isinstance(ci, int) and 0 <= ci < len(self.ctrls) else None,
+                             'trig': q.get('trig') if q.get('trig') in ('start', 'mid', 'both') else 'start',
+                             'h': float(h0) if h0 is not None else math.nan, 'last': None, 't': [], 'v': []})
         E = self.els
         self.iL = [i for i, e in enumerate(E) if e['k'] == 'L']
         self.iC = [i for i, e in enumerate(E) if e['k'] == 'C']
@@ -403,6 +422,10 @@ class Circuit:
         if 'gate' in rec:
             ci, out = rec['gate']
             return 1.0 if self.ctrls[ci].gate(out, t) else 0.0
+        if 'sh' in rec:
+            return float(self.shs[rec['sh']]['h'])
+        if 'car' in rec:
+            return float(self.ctrls[rec['car']].carrier_at(t))
         return 0.0
 
     def current(self, i, t, x, z):
@@ -430,12 +453,54 @@ class Circuit:
             return (v - e['Vf']) / e['Ron'] if self.on[i] else v / e['Roff']
         return 0.0
 
+    def prime(self, t):
+        """Carrier phase and open-loop duty before the first consistent solution."""
+        for k in self.ctrls:
+            idx = math.floor((t + 1e-12 * k.T) / k.T - k.phase)
+            k.tk = (idx + k.phase) * k.T
+            if k.mode in ('fixed', 'pp'):
+                k.d = sched_at(k.dsched, t, k.D)
+
+    def sh_grid(self, q):
+        if q['clock'] is None:
+            return None
+        k = self.ctrls[q['clock']]
+        return (k.phase * k.T + (k.T / 2 if q['trig'] == 'mid' else 0.0), k.T / 2 if q['trig'] == 'both' else k.T)
+
+    def sh_next(self, q, t):
+        g = self.sh_grid(q)
+        if g is None:
+            return math.inf
+        b, d = g
+        return b + (math.floor((t - b) / d + 1e-7) + 1) * d
+
+    def sh_sample(self, t, x, z):
+        """Samples due at t (state at t, before any switching at that instant)."""
+        any_ = False
+        for q in self.shs:
+            g = self.sh_grid(q)
+            if g is None:
+                continue
+            u = (t - g[0]) / g[1]
+            n = round(u)
+            if abs(u - n) > 1e-7 or q['last'] == n:
+                continue
+            q['last'] = n
+            v = self.value(q['rec'], t, x, z)
+            q['h'] = v
+            q['t'].append(t)
+            q['v'].append(v)
+            any_ = True
+        return any_
+
     def sample(self, t, x, z, force=False):
+        changed = False
         for k in self.ctrls:
             T = k.T
             idx = math.floor((t + 1e-12 * T) / T - k.phase)
             if not force and k.k == idx:
                 continue
+            changed = True
             first = k.k is None
             if not first:
                 k.tkPrev, k.dPrev = k.tk, k.d
@@ -446,6 +511,8 @@ class Circuit:
             elif k.mode == 'pi':
                 k.refNow = sched_at(k.ref, t, k.ref[0][1])
                 k.meas = self.value(k.sensor, t, x, z)
+                if not math.isfinite(k.meas):
+                    k.meas = 0.0
                 ff = 0.0
                 if k.ff == 'ratio':
                     a, b = self.value(k.ffA, t, x, z), self.value(k.ffB, t, x, z)
@@ -469,6 +536,7 @@ class Circuit:
                 k.d = d
             if first or k.tkPrev is None:
                 k.tkPrev, k.dPrev = k.tk - T, k.d
+        return changed
 
     # ------------------------------------------------------------ events
     def next_event(self, t, tmax):
@@ -480,6 +548,13 @@ class Circuit:
             for e in k.edges():
                 if t + eps < e < tn:
                     tn = e
+            tv = k.tk + k.T / 2           # carrier minimum (triangle)
+            if k.mode != 'pp' and k.carrier != 'saw' and t + eps < tv < tn:
+                tn = tv
+        for q in self.shs:
+            ts = self.sh_next(q, t)
+            if t + eps < ts < tn:
+                tn = ts
 
         def sch(s):
             nonlocal tn
@@ -577,8 +652,10 @@ def simulate(data):
             Y[j].append(ckt.value(channels[k], t, x, z))
 
     t, x = 0.0, ckt.x0.copy()
+    ckt.prime(0.0)
     ckt.set_gates(0.0)
     tp, z = ckt.consistent(0.0, x, init=True)
+    ckt.sh_sample(0.0, x, z)
     ckt.sample(0.0, x, z, force=True)
     record(t, x, z)
     stuck = 0
@@ -661,13 +738,16 @@ def simulate(data):
         else:
             t = tn if abs(t_new - tn) < 1e-9 * ckt.base_T else t_new
             ckt.started = True
-            ckt.sample(t, x, zof(t_new, x))
+            zt = zof(t_new, x)
+            sampled = ckt.sh_sample(t, x, zt)   # t_sample before t_update, as in the browser
+            if ckt.sample(t, x, zt) or sampled:
+                record(t, x, zt)                # held value / duty step drawn vertically
     ckt.started = True
     wall_s = time.perf_counter() - start
     T = np.array(T)
     cols = [np.array(c) for c in Y]
     keep = _decimate(T, cols, max_points)
-    r6 = lambda a: [float(f'{v:.7g}') for v in a]
+    r6 = lambda a: [float(f'{v:.7g}') if math.isfinite(v) else None for v in a]
     return {
         'method': method, 'rtol': rtol, 'atol': atol, 'max_step': max_step, 'auto_step': auto_step,
         't_end': float(T[-1]) if len(T) else 0.0, 'requested_t_end': t_end, 'status': status, 'message': message,
@@ -675,6 +755,7 @@ def simulate(data):
                   'cap_rs': ckt.cap_rs, 'states': ckt.ns, 'unknowns': ckt.n},
         't': [float(f'{v:.12g}') for v in T[keep]],
         'ch': {k: r6(cols[j][keep]) for j, k in enumerate(keys)},
+        'samples': {q['id']: {'t': [float(f'{v:.12g}') for v in q['t']], 'v': r6(q['v'])} for q in ckt.shs},
     }
 
 

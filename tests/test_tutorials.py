@@ -66,6 +66,32 @@ class Tutorials(unittest.TestCase):
             self.assertAlmostEqual(r['first'], vo, delta=0.01 * vo, msg=key)            # and stays there
             self.assertAlmostEqual(r['after'], vo, delta=0.01 * vo, msg=key)
 
+    def test_sampling_exercise(self):
+        o = self.o
+        T, I, dI = o['smp_saw_midoff']['T'], -800, 50 * .5 / (5.6e-6 * 20e3)
+        for start in ('midoff', 'midon', 'none'):                                 # 50, 50 and 100 triggers in [0, 50T)
+            self.assertEqual(o[f'smp_saw_{start}']['n50'], 50)
+            self.assertEqual(o[f'smp_tri1_{start}']['n50'], 50)
+            self.assertEqual(o[f'smp_tri2_{start}']['n50'], 100)
+        self.assertAlmostEqual(o['smp_saw_midoff']['first'], T / 4, delta=1e-12)  # 90° delay: first reset at 12.5 μs
+        self.assertAlmostEqual(o['smp_saw_midon']['first'], .75 * T, delta=1e-12)
+        self.assertAlmostEqual(o['smp_tri1_midon']['first'], T / 2, delta=1e-12)
+        for start in ('midoff', 'midon'):                                         # i_L(0) = I_avg on the mid-point: mean stays I
+            r = o[f'smp_saw_{start}']
+            self.assertAlmostEqual(r['avg'], I, delta=0.2)
+            self.assertAlmostEqual(r['pp'], dI, delta=0.01)
+            self.assertAlmostEqual(r['last'], I - dI / 2, delta=0.2)               # sawtooth reset: the valley
+            for kase in ('tri1', 'tri2'):
+                self.assertAlmostEqual(o[f'smp_{kase}_{start}']['last'], I, delta=0.2)   # triangle extrema: the mean
+        r = o['smp_saw_none']                                                     # i_L(0) = I_avg at the valley: offset Δi/2
+        self.assertAlmostEqual(r['avg'], I + dI / 2, delta=0.2)
+        self.assertAlmostEqual(r['last'], I, delta=0.2)
+        dI2 = 50 * .375 / (5.6e-6 * 20e3)                                         # PI on the sample after V_st 100 → 80 V
+        self.assertAlmostEqual(o['smp_pi_saw']['sample'], -400, delta=0.05)
+        self.assertAlmostEqual(o['smp_pi_saw']['avg'], -400 + dI2 / 2, delta=0.3)
+        self.assertAlmostEqual(o['smp_pi_tri1']['avg'], -400, delta=0.3)
+        self.assertAlmostEqual(o['smp_pi_saw']['d'], .375, delta=1e-4)          # feedforward from the measured voltages
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -58,6 +58,24 @@ class BatchSolver(unittest.TestCase):
         r = self.run_case('deadtime', 0.01, 'LSODA')
         self.assertAlmostEqual(mean_window(r, 'I:L1', 0.0095, 0.01), 800, delta=3)
 
+    def test_sample_and_hold(self):
+        T, I, dI = 50e-6, -800, 50 * .5 / (5.6e-6 * 20e3)
+        r = self.run_case('sampling_saw', 50 * T, 'LSODA')
+        sm = r['samples']['SH1']
+        self.assertEqual(len([t for t in sm['t'] if t < 50 * T - 1e-12]), 50)
+        self.assertAlmostEqual(sm['t'][0], T / 4, delta=1e-12)                    # 90° delay: first reset at 12.5 μs
+        for k, t in enumerate(sm['t']):
+            self.assertAlmostEqual(t, T / 4 + k * T, delta=1e-12)
+        self.assertAlmostEqual(sm['v'][-1], I - dI / 2, delta=0.2)               # valley
+        self.assertAlmostEqual(r['ch']['H:SH1'][-1], sm['v'][-1], delta=1e-6)
+        r = self.run_case('sampling_tri2', 50 * T, 'LSODA')
+        sm = r['samples']['SH1']
+        self.assertEqual(len([t for t in sm['t'] if t < 50 * T - 1e-12]), 100)
+        self.assertAlmostEqual(sm['v'][-1], I, delta=0.2)
+        r = self.run_case('sampling_pi', 0.012, 'LSODA')                         # PI on the sample, as in the browser
+        self.assertAlmostEqual(r['samples']['SH1']['v'][-1], -400, delta=0.05)
+        self.assertAlmostEqual(mean_window(r, 'I:L1', 0.0115, 0.012), -400 + 50 * .375 / (5.6e-6 * 20e3) / 2, delta=0.5)
+
     def test_explicit_method_reports_stiffness(self):
         r = self.run_case('buck_dcm', 2e-3, 'RK45', wall=2)
         self.assertIn(r['status'], ('ok', 'timeout'))
