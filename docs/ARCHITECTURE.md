@@ -1,0 +1,101 @@
+# Αρχιτεκτονική και χάρτης υλοποίησης
+
+Οδηγός για όποιον αλλάζει τον κώδικα: τι κάνει κάθε κομμάτι, πώς ρέουν τα δεδομένα από τη διεπαφή ως τον λύτη, και **ποια αρχεία και συναρτήσεις αγγίζει κάθε είδος αλλαγής**. Στόχος είναι να διαβάζεις το ελάχιστο δυνατό.
+
+- Αριθμοί γραμμών για κάθε συνάρτηση, στοιχείο, tutorial και API: [CODEMAP.md](CODEMAP.md), που παράγεται με `python tools/codemap.py`.
+- Οδικός χάρτης: [ROADMAP.md](ROADMAP.md).
+
+## 1. Τα κομμάτια
+
+```
+Browser (web/)                                          Server (run.py → engine/)
+──────────────────────────────────────────────          ─────────────────────────────────────
+index.html  φορτώνει τα studio/*.js με τη σειρά:        run.py       HTTP, στατικά αρχεία, /api/<action>
+ parts.js      κατάλογος στοιχείων και μπλοκ             engine/batch.py      λύτης αναφοράς SciPy
+ mna.js        netlist + λύτης πραγματικού χρόνου        engine/templates.py  templates δεδομένων (SymPy)
+ editor.js     επεξεργαστής σχεδίου                      engine/studio_math.py, derivation.py
+ scope.js      παλμογράφος                                              συμβολική λύση (4 οικογένειες)
+ tutorials.js  τα tutorials (project JSON)               engine/bidir.py      άσκηση μπαταρίας PE2
+ templates.js  καταχωρητής templates                     engine/analysis, core, design, dynamics,
+ metrics.js    δείκτες απόκρισης                          boundary, models, problem, proof,
+ math.js       υπολογισμοί, ερωτήσεις                     workbench, curves   αναλυτικοί πάγκοι (/converter/)
+ app.js        κόλλα: κατάσταση, πίνακες, θεωρία
+ exercises/    *.template.json, pe2_battery.js
+```
+
+| Αρχείο | Ρόλος | Κύρια σημεία |
+|---|---|---|
+| `web/studio/parts.js` | Κατάλογος: ακροδέκτες (ηλεκτρικοί `pins`, σημάτων `spins`), παράμετροι, σύμβολο, ομάδα. Κοινός για editor και λύτη. | `PARTS`, `pinsOf`, `sigPins`, `pinKind`, `BLOCKS`, `parseSched`, `eng` |
+| `web/studio/mna.js` | Netlist και λύτης MNA: ηλεκτρικοί κόμβοι και κόμβοι σημάτων, στοιχεία, PWM, S&H, μπλοκ, σειρά υπολογισμού, βήματα, συμβάντα, καταγραφή. Εξαγωγή για τον server. | `buildNetlist`, `compileSignals`, `Sim.load`, `Sim.run`, `Sim.stepCore`, `Sim.evalBlocks`, `Sim.sampleControllers`, `Sim.nextEvent`, `Sim.channelKeys`/`computeVals`, `exportForBatch` |
+| `web/studio/editor.js` | Σχέδιο: μοντέλο `{components, wires}`, δρομολόγηση A*, σύρματα, κανόνες σύνδεσης, undo/redo, ετικέτες. | `Editor.render*`, `finishWire`, `setParams`, `dropDangling`, `netKinds`, `paste`, `valueText` |
+| `web/studio/scope.js` | Σχεδιάζει κανάλια από τα buffers του λύτη. Λωρίδες για λογικά σήματα. | `Scope.draw`, `unitOf`, `isLogic` |
+| `web/studio/app.js` | Κατάσταση `S`, δημιουργία λύτη, ζωντανές παράμετροι, inspector, θεωρία ανά tutorial, πάνελ μαθηματικών, server και CSV. | `buildSim`, `refreshControls`, `openInspector`, `liveOf`, `signalsFor`, `chanLabel`, `formulaTheory` και `*Theory`, `circuitForMath`, `runBatch`, `simValue` |
+| `web/studio/tutorials.js` | Κάθε tutorial: επιλογές → project (στοιχεία, σύρματα, scope, `meta`). | `T.push({id, options, build})`, βοηθοί `C`, `J`, `project`, `piGains` |
+| `web/studio/math.js` | Εμφάνιση αποτελεσμάτων των templates και των ερωτήσεων με πρόβλεψη. | `renderTemplate`, `questionsHTML`, `bindQuestions` |
+| `engine/batch.py` | Ο ίδιος κύκλος με το `mna.js`, με `solve_ivp`. Δίοδοι και συγκριτές ως συμβάντα. | `Circuit`, `Ctrl`, `eval_blocks`, `sample`, `next_event`, `simulate` |
+| `engine/templates.py` | Υπολογίζει ένα template: εισόδους, βήματα, ελέγχους, πίνακες, ερωτήσεις. | `template_solve`, `_questions` |
+| `run.py` | Server: στατικά αρχεία και `ACTIONS` (π.χ. `batch_sim`, `template_solve`, `studio_math`). | `ACTIONS` |
+
+## 2. Ροή δεδομένων
+
+1. **Σχέδιο → project.** Ο `Editor` κρατά `doc = {components, wires}`. Το `project()` στο `app.js` προσθέτει ρυθμίσεις λύτη και scope.
+2. **Project → netlist.** Το `MNA.buildNetlist(project)`:
+   - ενώνει ακροδέκτες με union-find (σύρματα, πεδία «Πηγή» `in_<pin>`, ετικέτες Goto/From),
+   - χωρίζει ηλεκτρικούς κόμβους και κόμβους σημάτων,
+   - φτιάχνει στοιχεία (`els`), PWM (`ctrls`), S&H (`shs`) και μπλοκ,
+   - με το `compileSignals` βγάζει τη σειρά υπολογισμού, βρίσκει τους αλγεβρικούς βρόχους και γράφει τις προειδοποιήσεις.
+3. **Λύτης.** Το `Sim.run(διάρκεια)` κάνει σε κάθε επανάληψη:
+   1. `nextEvent`: το επόμενο συμβάν (ακμές PWM, δείγματα, ρολόγια, προγράμματα).
+   2. `step` → `stepCore`: βήμα trapezoidal/BE με εντοπισμό μετάβασης διόδου ή συγκριτή μέσα στο βήμα.
+   3. Στην ίδια στιγμή, με αυτή τη σειρά: `evalBlocks('commit')` → `recordNow` → `sampleHolds` → `evalBlocks('sample')` → `sampleControllers` → `recordNow`.
+4. **Καταγραφή → scope και θεωρία.** Ring buffer ανά κανάλι και στατιστικά ανά περίοδο (`per`). Το `Scope` και οι κάρτες θεωρίας διαβάζουν από εκεί (`now`, `lastPeriod`, `avgOver`).
+5. **Server.**
+   - Το `exportForBatch` στέλνει το ίδιο netlist στο `/api/batch_sim` → `batch.simulate`. Τα αποτελέσματα επιστρέφουν ως διακεκομμένες καμπύλες στο scope.
+   - Τα templates πάνε στο `/api/template_solve`.
+   - Η συμβολική λύση πάει από το `circuitForMath` στο `/api/studio_math`.
+
+## 3. Πού αλλάζεις τι
+
+| Αλλαγή | Αρχεία και σημεία (με τη σειρά) | Tests |
+|---|---|---|
+| **Νέο ηλεκτρικό στοιχείο** | `parts.js` `PARTS` → `mna.js` `buildNetlist` (κλάδος του τύπου) → αν έχει νέα κανάλια `channelKeys`/`computeVals` → `app.js` `liveOf`, `signalsFor`, `chanLabel` → `editor.js` `valueText` → αν είναι νέο είδος στοιχείου (`k`), `batch.py` `Circuit` και `exportForBatch` | `tests/js/sim_cases.js` + `test_studio_sim.py`, `tests/js/batch_requests.js` + `test_batch.py` |
+| **Νέο μπλοκ σημάτων** | `parts.js` (`blk:true`, `spins`, παράμετροι, σύμβολο) → `mna.js` `buildNetlist` (παράμετροι μπλοκ) και `evalBlocks` (case) → αν εξαρτάται από τον χρόνο `nextEvent`, αν αλλάζει απότομα `compileSignals.zc` → `exportForBatch` (λίστα πεδίων) → `batch.py` `eval_blocks`, `block_events` → `app.js` `LOGIC_BLK`/`blkUnit` → `editor.js` `valueText` | ίδια με το προηγούμενο, και ισοδυναμία browser–SciPy |
+| **Νέος τρόπος σύνδεσης σημάτων** | `mna.js` `buildNetlist` (η ένωση με union-find) → `editor.js` `netKinds`, `renderPins` | `test_studio_sim.py` `test_connections_without_wire` |
+| **Νέο tutorial** | `tutorials.js` `T.push` → θεωρία στο `app.js` `formulaTheory` (dispatch με `topology`) → README | `tests/js/tutorial_cases.js` + `test_tutorials.py` |
+| **Template ή ερωτήσεις** | `web/studio/exercises/*.template.json` + `index.json`. Νέος τύπος block: `engine/templates.py` και `math.js` `renderTemplate` | `test_templates.py` |
+| **Κανάλι στο scope** | `mna.js` `channelKeys`/`computeVals` → `app.js` `chanLabel`/`signalsFor` → `scope.js` `UNIT`/`unitOf`. Για τον server: `exportForBatch` `rec` και `batch.py` `value` | `sim_cases.js`, `test_batch.py` |
+| **Ζωντανή παράμετρος** | `app.js` `refreshControls` → `Sim.setControl`/`setHold`/`setBlock` → `liveChange` (για να γίνει πρόγραμμα t:τιμή) | `features_flow.js` |
+| **Αλληλεπίδραση στο σχέδιο** | `editor.js` `down`/`move`/`up`, `finishWire`, `setParams` | `editor_interactions.js`, `blocks_flow.js` |
+| **API του server** | `run.py` `ACTIONS` → συνάρτηση στο `engine/` | `test_api.py` |
+| **Κείμενα διεπαφής** | `web/index.html`, `app.js` | UI flows |
+
+## 4. Κανόνες που δεν σπάνε
+
+- **Ίδια συμπεριφορά στον browser και στον server.** Κάθε αλλαγή στη σημασία στοιχείου, PWM ή μπλοκ γίνεται και στο `mna.js` και στο `batch.py`, με test σύγκρισης στο `test_batch.py`.
+- **Σειρά σε μία στιγμή:** δείγματα πριν από την ενημέρωση του ελεγκτή, και μετά οι μεταγωγές (§2.3). Τα δείγματα παίρνουν την τιμή πριν από τη στιγμή (t⁻).
+- **Κανένας ειδικός κώδικας για μία άσκηση στον λύτη.** Τα φαινόμενα βγαίνουν από τη σύνθεση στοιχείων.
+- **Τα παλιά projects ανοίγουν πάντα.** Οι συνδέσεις μέσω ID (διακόπτης → PWM, αισθητήρας → στοιχείο) συνεχίζουν να δουλεύουν.
+- **Σύρμα σήματος δεν ενώνεται ποτέ με ηλεκτρικό κόμβο** (`editor.js` `finishWire`, `mna.js` `buildNetlist`).
+- **Αλγεβρικός βρόχος = σφάλμα** με τα μπλοκ του βρόχου, ποτέ κρυφή καθυστέρηση.
+
+## 5. Tests
+
+| Τι | Πώς τρέχει | Τι καλύπτει |
+|---|---|---|
+| Python unittest | `python -m unittest discover -s tests` | αναλυτικούς engines, templates, server |
+| Λύτης browser μέσω Node | από τα `test_studio_sim.py`, `test_tutorials.py`, `test_batch.py`, που καλούν `tests/js/*.js` | `mna.js`, tutorials, ισοδυναμία με SciPy |
+| Περιβάλλον (Playwright) | με server στο 8765: `node tests/ui/<flow>.js http://127.0.0.1:8765/` από άλλον φάκελο | `studio_flow`, `editor_interactions`, `features_flow`, `blocks_flow` |
+| Χάρτης κώδικα | `python tools/codemap.py --check` | ότι το `CODEMAP.md` είναι ενημερωμένο |
+
+Ο CI (`.github/workflows/ci.yml`) τα τρέχει όλα σε κάθε push στα `main` και `lab-*` και σε κάθε pull request. Σε κάθε push φτιάχνει και το zip της έκδοσης ως artifact. Σε tag `v*` το ανεβάζει και ως release.
+
+## 6. Ροή εργασίας
+
+1. Νέο branch για κάθε έκδοση: `lab-<έκδοση>`. Το `main` αλλάζει μόνο με έγκριση.
+2. Πριν από την αλλαγή: εντοπισμός στο §3 και στο `CODEMAP.md`, και ανάγνωση μόνο αυτών των σημείων.
+3. Μετά την αλλαγή:
+   - tests, τα 4 UI flows,
+   - `python tools/codemap.py`,
+   - ενημέρωση README (πίνακας εκδόσεων) και ROADMAP (§0),
+   - έκδοση στο `engine/__init__.py` και στο footer του `web/index.html`.
+4. Zip: `git archive --format=zip --prefix=Power_Converter_Lab_<έκδοση>/ -o Power_Converter_Lab_<έκδοση>.zip lab-<έκδοση>`. Το φτιάχνει και ο CI.

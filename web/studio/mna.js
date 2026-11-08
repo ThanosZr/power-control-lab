@@ -31,6 +31,16 @@
   for(const c of comps)for(const p of Object.keys(P.pinsOf(c))){const k=c.id+':'+p;parent.set(k,k);kindOf.set(k,c.type==='JUNC'?'j':P.pinKind(c,p));}
   for(const w of project.wires||[]){const a=w.a.c+':'+w.a.p,b=w.b.c+':'+w.b.p;if(parent.has(a)&&parent.has(b))union(a,b);}
   const warnings=[];
+  // connections without a wire (3.0): an input that names its source in the parameters (in_<pin> = "block:output"),
+  // and Goto / From tags with the same name. Both join nets exactly like a wire.
+  {const bad=[];for(const c of comps)for(const [k,v] of Object.entries(c.params||{})){if(!k.startsWith('in_')||!v)continue;const a=c.id+':'+k.slice(3),b=String(v);
+    if(kindOf.get(a)==='in'&&kindOf.get(b)==='out')union(a,b);else if(kindOf.get(a)==='in')bad.push((c.label||c.id)+'.'+k.slice(3)+' ← '+b);}
+   if(bad.length)warnings.push('Πηγή σήματος που δεν υπάρχει (η είσοδος μένει ασύνδετη): '+bad.slice(0,4).join(', ')+'.');
+   const nm=c=>String(c.params?.name||'').trim(),go=new Map();
+   for(const c of comps)if(c.type==='TAGO'){const n=nm(c);if(!go.has(n))go.set(n,[]);go.get(n).push(c);}
+   const dup=[...go].filter(([,l])=>l.length>1).map(([n])=>n);if(dup.length)warnings.push('Δύο ετικέτες «προς» με το ίδιο όνομα: '+dup.join(', ')+'.');
+   const lost=[];for(const c of comps)if(c.type==='TAGI'){const g=go.get(nm(c));if(g)union(g[0].id+':u',c.id+':y');else lost.push(nm(c)||c.id);}
+   if(lost.length)warnings.push('Ετικέτα «από» χωρίς ετικέτα «προς»: '+[...new Set(lost)].join(', ')+'.');}
   const grounds=comps.filter(c=>c.type==='GND');
   for(let i=1;i<grounds.length;i++)union(grounds[0].id+':g',grounds[i].id+':g');
   let groundRoot=grounds.length?find(grounds[0].id+':g'):null;
@@ -224,7 +234,7 @@
   channelKeys(){
    const k=[];for(const n of this.net.nets)k.push('N:'+n.canon);
    for(const c of this.net.compInfo.values()){
-    if(['GND','JUNC'].includes(c.type))continue;
+    if(['GND','JUNC','TAGO','TAGI'].includes(c.type))continue;
     if(c.type==='PWM'){k.push('D:'+c.id,'G:'+c.id,'REF:'+c.id,'MEAS:'+c.id,'CAR:'+c.id);continue;}
     if(c.type==='SH'){k.push('H:'+c.id);continue;}
     if(P.BLOCKS.has(c.type)){k.push('Y:'+c.id);continue;}
@@ -252,7 +262,7 @@
    const out=this.vals;let j=0;const x=this.x;if(this.net.sig.blocks.length)this.evalBlocks('trial');
    for(const n of this.net.nets)out[j++]=x[n.index];
    for(const c of this.net.compInfo.values()){
-    if(c.type==='GND'||c.type==='JUNC')continue;
+    if(c.type==='GND'||c.type==='JUNC'||c.type==='TAGO'||c.type==='TAGI')continue;
     if(c.type==='PWM'){const k=c.ctrl;out[j++]=k.d;out[j++]=this.gateOf(k,'a',this.t)?1:0;out[j++]=k.refNow;out[j++]=k.meas;out[j++]=this.carrier(k,this.t);continue;}
     if(c.type==='SH'){out[j++]=c.sh.h;continue;}
     if(P.BLOCKS.has(c.type)){out[j++]=this.ybT[c.blk.i];continue;}

@@ -109,7 +109,8 @@
    for(const c of this.clip.comps){const id=this.newId(P.PARTS[c.type].prefix);map.set(c.id,id);const k={...JSON.parse(JSON.stringify(c)),id,label:c.type==='JUNC'?id:id,x:c.x+dx,y:c.y+dy};this.doc.components.push(k);nc.push(id);}
    for(const w of this.clip.wires){const id=this.newId('w');const k={...JSON.parse(JSON.stringify(w)),id,a:{c:map.get(w.a.c),p:w.a.p},b:{c:map.get(w.b.c),p:w.b.p},pts:(w.pts||[]).map(p=>[p[0]+dx,p[1]+dy])};this.doc.wires.push(k);nw.push(id);}
    // controls inside the copy point to the copied PWM
-   for(const id of nc){const c=this.comp(id);if(c.params?.pwm&&map.has(c.params.pwm))c.params.pwm=map.get(c.params.pwm);for(const k of ['sensor','clock','src','ffA','ffB'])if(c.params?.[k]&&map.has(c.params[k]))c.params[k]=map.get(c.params[k]);}
+   for(const id of nc){const c=this.comp(id);if(c.params?.pwm&&map.has(c.params.pwm))c.params.pwm=map.get(c.params.pwm);for(const k of ['sensor','clock','src','ffA','ffB'])if(c.params?.[k]&&map.has(c.params[k]))c.params[k]=map.get(c.params[k]);
+    for(const k of Object.keys(c.params||{}))if(k.startsWith('in_')&&c.params[k]){const [sc,sp]=String(c.params[k]).split(':');if(map.has(sc))c.params[k]=map.get(sc)+':'+sp;}}
    this.render();this.select(nc,nw);this.changed('struct');}
   // ---------------------------------------------------------- routing
   obstacles(skip=new Set()){const out=[];for(const c of this.doc.components){if(c.type==='JUNC'||skip.has(c.id))continue;const b=P.bbox(c);out.push([b[0]-2,b[1]-2,b[2]+2,b[3]+2]);}return out;}
@@ -179,7 +180,7 @@
     case 'CLK':return e(+p.f,'Hz')+' · '+(+p.duty).toLocaleString('el-GR');case 'RAMP':return e(+p.f,'Hz')+' · '+e(+p.lo)+'…'+e(+p.hi);
     case 'PWM':return e(+p.fs,'Hz')+(+p.phase&&p.mode!=='spwm'?' · φ '+(+p.phase).toLocaleString('el-GR',{maximumFractionDigits:2})+'°':'')+(+p.dt>0?' · t_d '+e(+p.dt,'s'):'')+' · '+(p.mode==='fixed'?'D = '+(+p.D).toLocaleString('el-GR'):p.mode==='pi'?'PI':p.mode==='spwm'?'SPWM m = '+p.m:p.mode==='ext'?'D από σήμα':'2 έξοδοι');default:return '';}}
   renderLabels(){
-   this.L.live.innerHTML=this.doc.components.filter(c=>c.type!=='JUNC'&&c.type!=='GND').map(c=>{const b=P.bbox(c);const pk=Object.keys(P.PARTS[c.type].pins);const q0=pk[0]&&this.pin(c,pk[0]),q1=pk[1]&&this.pin(c,pk[1]);const blk=!pk.length;const vert=!blk&&c.type!=='XFMR'&&c.type!=='VAC3'&&q0&&q1&&q0[0]===q1[0];
+   this.L.live.innerHTML=this.doc.components.filter(c=>!['JUNC','GND','TAGO','TAGI'].includes(c.type)).map(c=>{const b=P.bbox(c);const pk=Object.keys(P.PARTS[c.type].pins);const q0=pk[0]&&this.pin(c,pk[0]),q1=pk[1]&&this.pin(c,pk[1]);const blk=!pk.length;const vert=!blk&&c.type!=='XFMR'&&c.type!=='VAC3'&&q0&&q1&&q0[0]===q1[0];
     // signal blocks (3.0) keep their label above, the PWM / S&H blocks at the side as before
     const side=(vert||blk)&&!(blk&&P.BLOCKS.has(c.type))&&c.lbl!=='below'&&c.lbl!=='above';const below=c.lbl==='below';const x=side?b[2]+8:(b[0]+b[2])/2,y=side?(b[1]+b[3])/2-(blk?10:2):below?b[3]+40:b[1]-7;const anchor=side?'start':'middle';
     return `<g class="lbls" data-l="${c.id}"><text class="lbl" x="${x}" y="${side?y:y-24}" text-anchor="${anchor}">${esc(c.label||c.id)}</text><text class="val" x="${x}" y="${side?y+13:y-12}" text-anchor="${anchor}">${esc(this.valueText(c))}</text><text class="lv" x="${x}" y="${side?y+26:y}" text-anchor="${anchor}"></text></g>`;}).join('');
@@ -206,8 +207,13 @@
   midLabel(pts){let best=0,bi=1;for(let i=1;i<pts.length;i++){const l=Math.abs(pts[i][0]-pts[i-1][0])+Math.abs(pts[i][1]-pts[i-1][1]);if(l>best){best=l;bi=i;}}return [(pts[bi][0]+pts[bi-1][0])/2,(pts[bi][1]+pts[bi-1][1])/2];}
   renderPins(){let h='';const count=this.pinCount||new Map();
    for(const c of this.doc.components){for(const p of Object.keys(P.pinsOf(c))){const q=this.pin(c,p);const n=count.get(c.id+':'+p)||0;
-    const k=c.type==='JUNC'?'j':P.pinKind(c,p),sg=k==='in'||k==='out';
-    h+=`<circle class="pin${n?'':' open'}${c.type==='JUNC'?' jpin':''}${sg?' spin '+k:''}" data-pin="${c.id}:${p}" cx="${q[0]}" cy="${q[1]}" r="${c.type==='JUNC'?5:sg?3.4:4.2}"/>`;}}
+    const k=c.type==='JUNC'?'j':P.pinKind(c,p),src=k==='in'?c.params?.['in_'+p]:null,linked=!!src;
+    const sg=k==='in'||k==='out';
+    h+=`<circle class="pin${n||linked?'':' open'}${c.type==='JUNC'?' jpin':''}${sg?' spin '+k:''}${linked?' linked':''}" data-pin="${c.id}:${p}" cx="${q[0]}" cy="${q[1]}" r="${c.type==='JUNC'?5:sg?3.4:4.2}"/>`;
+    // an input that takes its signal from the parameters: a small tag "← block.output" outside the pin
+    if(linked){const [sc,sp]=String(src).split(':'),s0=this.comp(sc),d=P.pinDir(c,p),ok=!!(s0&&P.pinsOf(s0)[sp]);const t=(ok?'← '+(s0.label||sc)+'.'+sp:'← ? '+src);
+     const anchor=d[0]<0?'end':d[0]>0?'start':'middle',x=q[0]+d[0]*7,y=q[1]+(d[1]?d[1]*12:-5);
+     h+=`<text class="stag${ok?'':' bad'}" x="${x}" y="${y}" text-anchor="${anchor}">${esc(t)}</text>`;}}}
    this.L.pins.innerHTML=h;}
   renderSel(){for(const g of this.L.parts.querySelectorAll('.part'))g.classList.toggle('sel',this.sel.c.has(g.dataset.c));for(const g of this.L.wires.querySelectorAll('.wire'))g.classList.toggle('sel',this.sel.w.has(g.dataset.w));}
   // live values from the simulator

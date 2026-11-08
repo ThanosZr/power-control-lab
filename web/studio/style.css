@@ -249,3 +249,6 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:6px}
 .part .sym .btxt.big,.pal-item .sym .btxt.big{font-size:17px}
 .part .sym .bsm,.pal-item .sym .bsm{font:600 8.5px Inter,system-ui,sans-serif;fill:var(--sig-ink);stroke:none}
 .part.on .sym .sblk{fill:#fbe9cf;stroke:var(--accent2)}
+.stag{font:italic 600 9.5px Inter,system-ui,sans-serif;fill:var(--sig);pointer-events:none}.stag.bad{fill:var(--danger)}
+.pin.spin.linked{opacity:.95;fill:var(--sig-bg)}
+.ins-srcs{margin-top:8px;padding-top:6px;border-top:1px dashed var(--line)}.ins-srcs small{display:block;margin-bottom:4px}

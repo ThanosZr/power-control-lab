@@ -121,5 +121,18 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
 {const s=new Sim(project([{id:'R1',type:'RAMP',params:{f:1e3,lo:0,hi:10}},{id:'CK',type:'CLK',params:{f:4e3}},{id:'SH1',type:'SH',params:{in:'sig',clock:'CK',trig:'start'}},{id:'K1',type:'CONST',params:{v:'2'}},{id:'M1',type:'MUL'}],
   [['R1:y','SH1:u'],['SH1:y','M1:a'],['K1:y','M1:b']]));s.run(1.5e-3);const L=s.samples('SH1');const y0=s.now('Y:M1');s.setBlock('K1',{sched:[[0,3]]});
  out.blk_sh={n:L.t.length,t:L.t.slice(0,7),v:L.v.slice(0,7),y0,y1:s.now('Y:M1'),T:s.T};}
+// 20) connections without a wire: the source chosen in the parameters, or Goto/From tags, give the wired result
+{const mk=(how)=>{const comps=[{id:'V1',type:'VDC',params:{V:48}},{id:'S1',type:'SW',params:{pwm:'PWM1',body:false}},{id:'D1',type:'D'},{id:'L1',type:'L',params:{L:100e-6}},
+  {id:'C1',type:'C',params:{C:100e-6,v0:24}},{id:'R1',type:'R',params:{R:2.4}},{id:'G',type:'GND'},{id:'PWM1',type:'PWM',params:{fs:50e3,mode:'ext',carrier:'saw'}},
+  {id:'K1',type:'CONST',params:{v:'0:5, 0.002:10'}},{id:'M1',type:'MEAS',params:{src:'L1'}},{id:'SUM1',type:'SUM',params:{signs:'+-'}},{id:'PI1',type:'PIB',params:{Kp:.02,Ki:200,clock:'PWM1',ymin:0,ymax:.95}}];
+  const w=[['V1:p','S1:d'],['S1:s','D1:k'],['D1:a','G:g'],['S1:s','L1:a'],['L1:b','C1:p'],['C1:p','R1:a'],['R1:b','G:g'],['C1:n','G:g'],['V1:n','G:g'],['K1:y','SUM1:a'],['SUM1:y','PI1:u']];
+  if(how==='wire')w.push(['M1:y','SUM1:b'],['PI1:y','PWM1:d']);
+  else if(how==='param'){comps.find(c=>c.id==='SUM1').params.in_b='M1:y';comps.find(c=>c.id==='PWM1').params.in_d='PI1:y';}
+  else{comps.push({id:'TG1',type:'TAGO',params:{name:'d'}},{id:'TF1',type:'TAGI',params:{name:'d'}},{id:'TG2',type:'TAGO',params:{name:'iL'}},{id:'TF2',type:'TAGI',params:{name:'iL'}});w.push(['PI1:y','TG1:u'],['TF1:y','PWM1:d'],['M1:y','TG2:u'],['TF2:y','SUM1:b']);}
+  return project(comps,w);};
+ const r={};for(const how of ['wire','param','tag']){const s=new Sim(mk(how),{hDiv:200});s.run(4e-3);r[how]={d:s.now('D:PWM1'),il:s.now('I:L1'),warn:s.net.warnings,keys:s.keys.filter(k=>k.includes('TG')||k.includes('TF')).length};}
+ const bad=new Sim(project([{id:'K1',type:'CONST'},{id:'TF1',type:'TAGI',params:{name:'x'}},{id:'TG1',type:'TAGO',params:{name:'y'}},{id:'TG2',type:'TAGO',params:{name:'y'}},{id:'G1',type:'GAIN',params:{in_u:'K9:y'}},{id:'D1',type:'DISP'}],
+  [['K1:y','TG1:u'],['K1:y','TG2:u'],['TF1:y','D1:u']]));
+ out.nowire={...r,warnBad:bad.net.warnings};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

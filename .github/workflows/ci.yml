@@ -1,0 +1,85 @@
+# Tests on every push / pull request, the versioned zip as an artifact, and a release on tags v*.
+name: ci
+
+on:
+  push:
+    branches: [main, 'lab-*']
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  unit:
+    name: Python + λύτης browser (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: pip install -r requirements.txt
+      - name: Χάρτης κώδικα ενημερωμένος
+        run: python tools/codemap.py --check
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+
+  ui:
+    name: Περιβάλλον (Playwright)
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: pip install -r requirements.txt
+      - name: Playwright και Chromium
+        run: |
+          npm install --no-save playwright@1.48.2
+          npx playwright install --with-deps chromium
+      - name: Σενάρια στον browser
+        run: |
+          python run.py --no-browser --port 8765 > server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8765/api/health >/dev/null && break; sleep 1; done
+          mkdir -p ui-out && cd ui-out
+          for f in studio_flow editor_interactions features_flow blocks_flow; do
+            echo "== $f"; node ../tests/ui/$f.js http://127.0.0.1:8765/ .
+          done
+      - name: Εικόνες των σεναρίων
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: ui-out/*.png
+          if-no-files-found: ignore
+
+  package:
+    name: Zip της έκδοσης
+    runs-on: ubuntu-latest
+    needs: [unit, ui]
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Όνομα έκδοσης
+        id: v
+        run: |
+          ref="${GITHUB_REF_NAME}"; ver="${ref#lab-}"; ver="${ver#v}"
+          echo "name=Power_Converter_Lab_${ver//./_}" >> "$GITHUB_OUTPUT"
+      - run: git archive --format=zip --prefix=${{ steps.v.outputs.name }}/ -o ${{ steps.v.outputs.name }}.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.v.outputs.name }}
+          path: ${{ steps.v.outputs.name }}.zip
+      - name: Release (μόνο σε tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.v.outputs.name }}.zip

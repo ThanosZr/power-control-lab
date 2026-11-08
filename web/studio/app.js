@@ -49,7 +49,7 @@ function updateClock(){const s=S.sim;if(!s)return;$('#clock').textContent='t = '
  $('#cpu').hidden=!S.limited;$('#speed-note').textContent=S.speed==='max'?'όσο αντέχει ο υπολογιστής':`${eng(S.speed*s.T,'s',3)} ανά δευτερόλεπτο`;$('#step-note').textContent='Δt = '+eng(s.h,'s',3)+' · T = '+eng(s.T,'s',3);}
 
 // live values on the schematic
-function liveOf(c){const s=S.sim;if(!s||S.error)return null;if(c.type==='GND'||c.type==='JUNC')return null;
+function liveOf(c){const s=S.sim;if(!s||S.error)return null;if(['GND','JUNC','TAGO','TAGI'].includes(c.type))return null;
  const avg=S.running&&(S.speed==='max'||S.speed>=200);const val=k=>{if(avg){const p=s.lastPeriod(k);return p?p.avg:s.now(k);}return s.now(k);};
  if(c.type==='PWM'){const d=s.now('D:'+c.id);return {text:'D = '+fmt(d,4)};}
  if(c.type==='SH'){const q=s.shById.get(c.id);return {text:q?'h = '+eng(q.h,q.sig?'':q.qty==='V'?'V':'A',4):''};}
@@ -71,7 +71,7 @@ function chanLabel(key){const [pre,id,pin]=key.split(':');const c=editor.comp(id
  const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',GS:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold',Y:c?.type==='VM'?'v':c?.type==='AM'?'i':c?.type==='SR'?'Q':'y'}[pre]||pre)+'('+name+')';}
 function addProbe(key,label){if(!S.sim)return;const ok=scope.addChannel(key,label||chanLabel(key));renderChannels();if(!ok)flash('#chan-list');else{flash('#scope-card');}draw(true);}
 function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash');}
-function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC')return [];
+function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI')return [];
  if(P.BLOCKS.has(t))return [['Y:',t==='DISP'?'τιμή εισόδου':t==='VM'?'τάση (μέτρηση)':t==='AM'?'ρεύμα a → b (μέτρηση)':t==='SR'?'έξοδος Q':'έξοδος y']];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
  if(t==='SH')return [['H:','κρατημένη τιμή (δείγματα)']];
  const base=[['I:','ρεύμα'],['V:','τάση'],['P:',['VDC','VAC','IDC'].includes(t)?'ισχύς που δίνει':'ισχύς']];if(t==='SW'||t==='SCR')base.splice(1,0,['GS:','παλμός πύλης (1 = ON)']);if(t==='SW'&&(+c.params?.Eon>0||+c.params?.Eoff>0))base.push(['PSW:','απώλειες μεταγωγής (μέση ανά T)']);
@@ -310,13 +310,19 @@ function openInspector(id,x,y){
  const c=editor.comp(id);if(!c)return;const def=P.PARTS[c.type];const p={...P.defaults(c.type),...c.params};const ins=$('#inspector');
  const rows=def.params.filter(d=>!d.show||d.show(p)).map(d=>`<label class="frow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span>${fieldHTML(c,d,p)}${d.hint?`<small>${esc(d.hint)}</small>`:''}</label>`).join('');
  const sig=signalsFor(c).slice(0,4).map(([pre,n])=>`<button class="chip" data-probe="${pre}${c.id}">⌁ ${esc(n)}</button>`).join('');
+ // signal inputs: a source can be chosen here instead of drawing a wire (3.0)
+ const sigIns=Object.entries(P.sigPins(c)).filter(([,v])=>v.dir==='in').map(([k])=>k);
+ const outs=editor.doc.components.filter(k=>k.id!==c.id).flatMap(k=>Object.entries(P.sigPins(k)).filter(([,v])=>v.dir==='out').map(([pin])=>({v:k.id+':'+pin,t:`${k.label||k.id}.${pin}`+(k.type==='TAGI'?` (ετικέτα «${k.params?.name||''}»)`:'')}))).sort((a,b)=>a.t.localeCompare(b.t,undefined,{numeric:true}));
+ const wired=pin=>editor.doc.wires.some(w=>(w.a.c===c.id&&w.a.p===pin)||(w.b.c===c.id&&w.b.p===pin));
+ const srcRows=sigIns.map(pin=>{const v=c.params?.['in_'+pin]||'';return `<label class="frow"><span>Πηγή της εισόδου ${esc(pin)}</span><select data-src="${esc(pin)}"><option value="">${wired(pin)?'από σύρμα':'— (καμία)'}</option>${outs.map(o=>`<option value="${esc(o.v)}" ${o.v===v?'selected':''}>${esc(o.t)}</option>`).join('')}${v&&!outs.some(o=>o.v===v)?`<option value="${esc(v)}" selected>${esc(v)} (λείπει)</option>`:''}</select></label>`;}).join('');
  ins.innerHTML=`<div class="ins-head"><div><small>${esc(def.name)}</small><input class="ins-label" data-label value="${esc(c.label||c.id)}"></div><button class="x" data-close>✕</button></div>
-  <div class="ins-body">${rows||'<p class="muted small">Χωρίς παραμέτρους.</p>'}</div>${sig?`<div class="ins-probes">${sig}</div>`:''}
+  <div class="ins-body">${rows||(srcRows?'':'<p class="muted small">Χωρίς παραμέτρους.</p>')}${srcRows?`<div class="ins-srcs"><small class="muted">Σύνδεση χωρίς καλώδιο: διάλεξε από ποια έξοδο παίρνει σήμα κάθε είσοδος. Ισοδυναμεί με σύρμα.</small>${srcRows}</div>`:''}</div>${sig?`<div class="ins-probes">${sig}</div>`:''}
   <div class="ins-foot"><small>Οι αλλαγές εφαρμόζονται αμέσως, και ενώ τρέχει η προσομοίωση. Μονάδες SI με προθέματα: 5.6u, 100m, 20k.</small></div>`;
  placePopup(ins,x,y);
  const apply=el=>{const k=el.dataset.k;let v;if(el.type==='checkbox')v=el.checked;else if(el.dataset.num){v=P.parseEng(el.value);if(!Number.isFinite(v)){el.classList.add('bad');return;}el.classList.remove('bad');}else v=el.value;
   if(k==='dsched'||k==='sched'||k==='ref'||(k==='v'&&c.type==='CONST')){if(v&&!P.parseSched(v)){el.classList.add('bad');return;}el.classList.remove('bad');}
   editor.setParams(id,{[k]:v});const def2=def.params.find(d=>d.k===k);if(def2?.type==='select'||def2?.type==='bool'||k==='gate'||k==='ff'||k==='mode')openInspector(id,parseFloat(ins.style.left)-12,parseFloat(ins.style.top)-12);};
+ ins.querySelectorAll('[data-src]').forEach(el=>el.onchange=()=>{editor.setParams(id,{['in_'+el.dataset.src]:el.value||undefined});if(!el.value)delete editor.comp(id).params['in_'+el.dataset.src];editor.renderPins();openInspector(id,parseFloat(ins.style.left)-12,parseFloat(ins.style.top)-12);});
  ins.querySelectorAll('[data-k]').forEach(el=>{el.onchange=()=>apply(el);if(el.dataset.num)el.onkeydown=e=>{if(e.key==='Enter')apply(el);};});
  ins.querySelector('[data-label]').onchange=e=>{editor.setParams(id,{},{label:e.target.value||id});renderChannels();};
  ins.querySelector('[data-close]').onclick=closeInspector;
@@ -354,7 +360,7 @@ function openMenu(ev){
 
 // ------------------------------------------------------------------ hover readout on the schematic
 let hoverComp=null,hoverPos=[0,0];
-function updateHover(){const tip=$('#tip');if(!hoverComp||!S.sim){tip.hidden=true;return;}const c=editor.comp(hoverComp);if(!c||c.type==='JUNC'||c.type==='GND'){tip.hidden=true;return;}
+function updateHover(){const tip=$('#tip');if(!hoverComp||!S.sim){tip.hidden=true;return;}const c=editor.comp(hoverComp);if(!c||['JUNC','GND','TAGO','TAGI'].includes(c.type)){tip.hidden=true;return;}
  const s=S.sim;let html=`<b>${esc(c.label||c.id)}</b>`;
  if(c.type==='PWM')html+=`<div>D = ${fmt(s.now('D:'+c.id),5)} · φέρον c = ${fmt(s.now('CAR:'+c.id),4)}</div>${c.params.mode==='pi'?`<div>ref ${eng(s.now('REF:'+c.id))} · μέτρ. ${eng(s.now('MEAS:'+c.id))}</div>`:''}`;
  else if(P.BLOCKS.has(c.type)){const b=s.net.compInfo.get(c.id)?.blk;const u=blkUnit(c);html+=`<div>${c.type==='DISP'?'τιμή':'έξοδος'} ${eng(s.now('Y:'+c.id),u,5)}</div>`;

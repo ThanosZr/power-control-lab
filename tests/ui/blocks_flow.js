@@ -26,9 +26,22 @@ const {chromium}=require('playwright');
  ok(await drag('K1:y','S1:g'),'gate pin present');ok((await wires()).includes('K1:y-S1:g'),'gate wire');
  await p.evaluate(()=>window.PCL.editor.setParams('S1',{gate:'pwm'}));await p.waitForTimeout(300);
  ok(!(await wires()).some(w=>w.includes('S1:g'))&&!(await pinXY('S1:g')),'gate pin and its wire removed');
+ // connection without a wire: the source of an input chosen in the inspector
+ await p.evaluate(()=>{const e=window.PCL.editor;e.addPart('GAIN',200,440,{K:3});e.fit();});await p.waitForTimeout(300);
+ const gq=await p.evaluate(()=>{const r=document.querySelector('[data-c="GN1"] .hit').getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2];});
+ await p.mouse.dblclick(...gq);await p.waitForTimeout(300);await p.selectOption('#inspector [data-src="u"]','K1:y');await p.waitForTimeout(300);
+ ok(await p.evaluate(()=>window.PCL.editor.comp('GN1').params.in_u==='K1:y'),'source stored in the parameters');
+ ok(/← K1\.y/.test(await p.evaluate(()=>[...document.querySelectorAll('.stag')].map(t=>t.textContent).join(' '))),'source tag next to the input');
+ await p.evaluate(()=>{document.querySelector('#inspector').hidden=true;const S=window.PCL.S;S.sim.run(1e-4);window.PCL.pause();});
+ ok(await p.evaluate(()=>window.PCL.S.sim.now('Y:GN1'))===3,'gain reads its source');
+ // Goto / From tags with the same name
+ await p.evaluate(()=>{const e=window.PCL.editor;e.addPart('TAGO',520,440,{name:'k'});e.addPart('TAGI',360,520,{name:'k'});e.addPart('DISP',520,520);e.fit();});await p.waitForTimeout(300);
+ await drag('GN1:y','TG1:u');await drag('TF1:y','DSP2:u');await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(1e-4);window.PCL.pause();});
+ ok(await p.evaluate(()=>window.PCL.S.sim.now('Y:DSP2'))===3,'value through the tags: '+await p.evaluate(()=>window.PCL.S.sim.now('Y:DSP2')));
+ await p.screenshot({path:'blocks_tags.png'});
  // algebraic loop: reported with the blocks on the loop
  await p.evaluate(()=>{const e=window.PCL.editor;e.addPart('GAIN',520,200);e.addPart('SUM',440,120);e.fit();});await p.waitForTimeout(300);
- await drag('GN1:y','SUM1:a');await drag('SUM1:y','GN1:u');await p.waitForTimeout(400);
+ await drag('GN2:y','SUM1:a');await drag('SUM1:y','GN2:u');await p.waitForTimeout(400);
  ok(/Αλγεβρικός βρόχος/.test(await p.evaluate(()=>window.PCL.S.error||'')),'algebraic loop error: '+await p.evaluate(()=>window.PCL.S.error));
  await p.screenshot({path:'blocks_editor.png'});
  // tutorial: current loop from blocks (PWM with input d) and with z⁻¹

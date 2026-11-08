@@ -165,6 +165,13 @@
    params:[num('f','Συχνότητα','Hz',100e3),sel('shape','Μορφή',[['saw','Πριονωτή (από κάτω προς τα πάνω)'],['tri','Τριγωνική (μέγιστο στην αρχή)']],'saw'),
     num('lo','Ελάχιστη τιμή','',0,{signed:true,zero:true}),num('hi','Μέγιστη τιμή','',1,{signed:true,zero:true}),num('phase','Φάση','°',0,{signed:true,zero:true})],value:p=>p.f,unit:'Hz',
    draw:p=>sb(40,30)+(p.shape==='tri'?'<path class="thin" d="M-14,-7 L-7,7 L0,-7 L7,7 L14,-7"/>':'<path class="thin" d="M-14,7 L-2,-7 V7 L10,-7 V7"/>')+sl('M20,0 H30')},
+  // Goto / From: signals joined by name, without a wire (like PLECS / Simulink tags)
+  TAGO:{name:'Ετικέτα: προς (Goto)',prefix:'TG',group:'Σήματα',pins:{},spins:{u:I(-30,0)},box:[-20,-10,44,20],
+   params:[txt('name','Όνομα σήματος','g',{hint:'Ό,τι μπαίνει εδώ βγαίνει από κάθε ετικέτα «από» με το ίδιο όνομα, σε όλο το κύκλωμα.'})],value:()=>null,
+   draw:p=>'<path class="block sblk" d="M-20,-10 H12 L22,0 L12,10 H-20 Z"/>'+tx(xe(String(p.name||'').slice(0,7)),0,4,'bsm')+sl('M-30,0 H-20')},
+  TAGI:{name:'Ετικέτα: από (From)',prefix:'TF',group:'Σήματα',pins:{},spins:{y:O(30,0)},box:[-22,-10,44,20],
+   params:[txt('name','Όνομα σήματος','g',{hint:'Βγάζει το σήμα της ετικέτας «προς» με το ίδιο όνομα.'})],value:()=>null,
+   draw:p=>'<path class="block sblk" d="M-22,-10 L-12,0 L-22,10 H20 V-10 Z"/>'+tx(xe(String(p.name||'').slice(0,7)),1,4,'bsm')+sl('M20,0 H30')},
   DISP:{name:'Ένδειξη',prefix:'DSP',group:'Σήματα',pins:{},spins:{u:I(-40,0)},box:[-30,-13,60,26],blk:true,params:[num('dig','Σημαντικά ψηφία','',4)],value:()=>null,
    draw:()=>'<rect class="block sblk" x="-30" y="-13" width="60" height="26" rx="3"/><rect class="thin" x="-24" y="-8" width="48" height="16" rx="2"/>'+tx('—',0,4,'bsm')+sl('M-40,0 H-30')},
  };

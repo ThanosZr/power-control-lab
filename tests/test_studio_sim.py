@@ -81,6 +81,18 @@ class StudioSimulator(unittest.TestCase):
         self.assertAlmostEqual(sh['y0'], 10, delta=1e-12)
         self.assertAlmostEqual(sh['y1'], 15, delta=1e-12)                        # live change of a constant
 
+    def test_connections_without_wire(self):
+        r = self.o['nowire']                                                     # a source in the parameters, or Goto/From tags
+        for how in ('param', 'tag'):
+            self.assertEqual(r[how]['d'], r['wire']['d'])                        # exactly the wired circuit
+            self.assertEqual(r[how]['il'], r['wire']['il'])
+            self.assertEqual(r[how]['warn'], [])
+        self.assertEqual(r['tag']['keys'], 0)                                    # tags are not signals of their own
+        w = ' '.join(r['warnBad'])
+        self.assertIn('χωρίς ετικέτα «προς»: x', w)
+        self.assertIn('ίδιο όνομα: y', w)
+        self.assertIn('G1.u ← K9:y', w)
+
     def test_peak_current_mode(self):
         o, T = self.o, 1e-5
         m1, m2 = lambda D: (24 - 24 * D) / 50e-6, lambda D: 24 * D / 50e-6
