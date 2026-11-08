@@ -167,7 +167,10 @@
   render(){this.renderWires();this.L.parts.innerHTML=this.doc.components.map(c=>this.partSVG(c)).join('');this.renderLabels();this.renderPins();this.renderSel();this.applyView();this.updateLive();}
   partSVG(c){const def=P.PARTS[c.type];if(c.type==='JUNC')return `<g class="part junc" data-c="${c.id}"><circle class="hit" r="7" cx="${c.x}" cy="${c.y}"/></g>`;
    const [bx,by,bw,bh]=P.boxOf(c);const tf=`translate(${c.x},${c.y}) rotate(${90*(c.rot||0)}) scale(${c.flip?-1:1},1)`;
-   return `<g class="part t-${c.type}" data-c="${c.id}" transform="${tf}"><rect class="hit" x="${bx-4}" y="${by-4}" width="${bw+8}" height="${bh+8}" rx="5"/><g class="sym">${def.draw({...P.defaults(c.type),...c.params})}</g></g>`;}
+   // the title text of a rotated or mirrored symbol stays upright and readable (3.5): inverse of rotate·scale about its centre
+   let sym=def.draw({...P.defaults(c.type),...c.params});const r=c.rot||0,f=c.flip?-1:1;
+   if(r||c.flip)sym=sym.replace(/<text class="(btxt|bsm)" x="([-\d.]+)" y="([-\d.]+)"/g,(m,k,x,y)=>`${m} transform="translate(${x} ${+y-4}) scale(${f} 1) rotate(${-90*r}) translate(${-x} ${4-y})"`);
+   return `<g class="part t-${c.type}" data-c="${c.id}" transform="${tf}"><rect class="hit" x="${bx-4}" y="${by-4}" width="${bw+8}" height="${bh+8}" rx="5"/><g class="sym">${sym}</g></g>`;}
   renderPart(c){const el=this.L.parts.querySelector(`[data-c="${CSS.escape(c.id)}"]`);if(el)el.outerHTML=this.partSVG(c);this.renderSel();}
   valueText(c){const p={...P.defaults(c.type),...c.params},e=P.eng;
    switch(c.type){case 'R':return p.sched?'R(t)':e(+p.R,'Ω');case 'L':return e(+p.L,'H');case 'C':return e(+p.C,'F');case 'VDC':return p.ctl==='sig'?'V από σήμα':e(+p.V,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');case 'VAC':return e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'VAC3':return '3φ '+e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'SCR':return p.fire==='alpha'?'α '+(+p.alpha).toLocaleString('el-GR')+'°'+(+p.shift?' +'+(+p.shift).toLocaleString('el-GR')+'°':''):p.fire==='pwm'?'g · '+(p.pwm||'—'):'';
@@ -177,7 +180,10 @@
     case 'CONST':return String(p.v).includes(':')?String(p.v).slice(0,22):'';case 'GAIN':return 'K = '+e(+p.K);case 'SUM':return '';
     case 'SAT':return '['+e(+p.lo)+', '+e(+p.hi)+']';case 'CMP':return +p.hys>0?'h = '+e(+p.hys):'';case 'LOGIC':return ['nand','nor','xor'].includes(p.op)?p.op.toUpperCase():'';
     case 'PIB':return 'K_p '+e(+p.Kp)+' · K_i '+e(+p.Ki);case 'UD':return '';
-    case 'IM':return 'p = '+p.pp+' · L_M '+e(+p.LM,'H');case 'MOD3':return {spwm:'SPWM',svpwm:'SVPWM',square:'six-step'}[p.mode]||'';case 'FEST':return 'R̂_R '+e(+p.RR,'Ω');
+    case 'IM':return 'p = '+p.pp+' · L_M '+e(+p.LM,'H');case 'SM':return 'L_d '+e(+p.Ld,'H')+' · L_q '+e(+p.Lq,'H')+(+p.psim>0?' · ψ_m '+e(+p.psim,'V·s'):'');
+    case 'KL':{const m=P.klMatrix(p);return m.err?'⚠ πίνακας L':m.L.length+'×'+m.L.length+(String(p.Lmat||'').trim()?' · πίνακας L':' · k '+(+p.k).toLocaleString('el-GR'));}
+    case 'KG':{const m=P.parseMat(p.mat);return m?m.length+'×'+m.length+' '+(p.kind==='G'?'G':'R'):'⚠ πίνακας';}
+    case 'ILG':return (p.shape==='custom'?e(+p.T1,'s')+'/'+e(+p.T2,'s'):p.shape+' μs')+' · '+e(+p.Ipk,'A');case 'MOD3':return {spwm:'SPWM',svpwm:'SVPWM',square:'six-step'}[p.mode]||'';case 'FEST':return 'R̂_R '+e(+p.RR,'Ω');
     case 'EXPR':return String(p.expr||'').slice(0,28);case 'PY':return (p.pars?String(p.pars).slice(0,26):'Python');
     case 'INT':return p.wrap==='2pi'?'mod 2π':(+p.lo>-1e8||+p.hi<1e8)?'['+e(+p.lo)+', '+e(+p.hi)+']':'';case 'LPF':return 'f_c = '+e(+p.fc,'Hz');
     case 'CLARKE':case 'ICLARKE':return p.inv==='pow'?'ισχύς':'πλάτος';case 'PARK':case 'IPARK':return '';case 'PLL':return e(+p.f0,'Hz')+' · BW '+e(+p.bw,'Hz');
@@ -185,7 +191,7 @@
     case 'CLK':return e(+p.f,'Hz')+' · '+(+p.duty).toLocaleString('el-GR');case 'RAMP':return e(+p.f,'Hz')+' · '+e(+p.lo)+'…'+e(+p.hi);
     case 'PWM':return e(+p.fs,'Hz')+(+p.phase&&p.mode!=='spwm'?' · φ '+(+p.phase).toLocaleString('el-GR',{maximumFractionDigits:2})+'°':'')+(+p.dt>0?' · t_d '+e(+p.dt,'s'):'')+' · '+(p.mode==='fixed'?'D = '+(+p.D).toLocaleString('el-GR'):p.mode==='pi'?'PI':p.mode==='spwm'?'SPWM m = '+p.m:p.mode==='ext'?'D από σήμα':'2 έξοδοι');default:return '';}}
   renderLabels(){
-   this.L.live.innerHTML=this.doc.components.filter(c=>!['JUNC','GND','TAGO','TAGI'].includes(c.type)).map(c=>{const b=P.bbox(c);const pk=Object.keys(P.PARTS[c.type].pins);const q0=pk[0]&&this.pin(c,pk[0]),q1=pk[1]&&this.pin(c,pk[1]);const blk=!pk.length;const vert=!blk&&c.type!=='XFMR'&&c.type!=='VAC3'&&q0&&q1&&q0[0]===q1[0];
+   this.L.live.innerHTML=this.doc.components.filter(c=>!['JUNC','GND','TAGO','TAGI'].includes(c.type)).map(c=>{const b=P.bbox(c);const pk=Object.keys(P.elPins(c));const q0=pk[0]&&this.pin(c,pk[0]),q1=pk[1]&&this.pin(c,pk[1]);const blk=!pk.length;const vert=!blk&&c.type!=='XFMR'&&c.type!=='VAC3'&&q0&&q1&&q0[0]===q1[0];
     // signal blocks (3.0) keep their label above, the PWM / S&H blocks at the side as before
     const lb=c.lbl||P.PARTS[c.type].lbl;const side=(vert||blk)&&!(blk&&P.BLOCKS.has(c.type))&&lb!=='below'&&lb!=='above';const below=lb==='below',left=side&&lb==='left';const x=left?b[0]-8:side?b[2]+8:(b[0]+b[2])/2,y=side?(b[1]+b[3])/2-(blk?10:2):below?b[3]+40:b[1]-7;const anchor=left?'end':side?'start':'middle';
     return `<g class="lbls" data-l="${c.id}"><text class="lbl" x="${x}" y="${side?y:y-24}" text-anchor="${anchor}">${esc(c.label||c.id)}</text><text class="val" x="${x}" y="${side?y+13:y-12}" text-anchor="${anchor}">${esc(this.valueText(c))}</text><text class="lv" x="${x}" y="${side?y+26:y}" text-anchor="${anchor}"></text></g>`;}).join('');

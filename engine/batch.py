@@ -48,6 +48,18 @@ def sched_at(s, t, dflt):
     return v
 
 
+def wave_at(w, t):
+    """Lightning current (3.5): Heidler (I₀/η)·(t/τ₁)ⁿ/(1 + (t/τ₁)ⁿ)·e^(−t/τ₂), or double exponential (I₀/η)·(e^(−t/τ₂) − e^(−t/τ₁))."""
+    t = t - _f(w.get('t0'))
+    if t <= 0:
+        return 0.0
+    k = _f(w.get('I0')) / _f(w.get('eta'), 1)
+    if w.get('kind') == 'dexp':
+        return k * (math.exp(-t / w['tau2']) - math.exp(-t / w['tau1']))
+    x = (t / w['tau1']) ** _f(w.get('n'), 10)
+    return k * x / (1 + x) * math.exp(-t / w['tau2'])
+
+
 def _f(v, d=0.0):
     try:
         v = float(v)
@@ -264,9 +276,15 @@ class Circuit:
         self.iI = [i for i, e in enumerate(E) if e['k'] == 'I']
         self.iX = [i for i, e in enumerate(E) if e['k'] == 'X']
         self.iGY = [i for i, e in enumerate(E) if e['k'] == 'GY']      # machine gyrators (3.1)
+        # multiports (3.5): coupled inductors (flux element 'F', one current state per port) and conductance matrices ('MG');
+        # the flux element of a synchronous machine has machine states instead (below)
+        self.iF = [i for i, e in enumerate(E) if e['k'] == 'F' and e.get('sm') is None]
+        self.iMG = [i for i, e in enumerate(E) if e['k'] == 'MG']
+        self.cur = [(i, None) for i in self.iL] + [(i, q) for i in self.iF for q in range(int(E[i]['N']))]
+        self.nI = len(self.cur)
         self.n = size + len(self.iC)
         self.crow = {ci: size + j for j, ci in enumerate(self.iC)}
-        self.ns = len(self.iL) + len(self.iC)
+        self.ns = self.nI + len(self.iC)
         self.on = {i: False for i in self.iD + self.iS}
         self.gon = {i: False for i in self.iD if E[i].get('gk')}
         self.cap_rs = 0.0
@@ -278,18 +296,27 @@ class Circuit:
         n, ns = self.n, self.ns
         self.Bx = np.zeros((n, ns))
         self.Dm = np.zeros((ns, n))
-        for k, i in enumerate(self.iL):
+        for k, (i, q) in enumerate(self.cur):
             e = E[i]
-            if e['a'] >= 0:
-                self.Bx[e['a'], k] -= 1
-                self.Dm[k, e['a']] += 1 / e['L']
-            if e['b'] >= 0:
-                self.Bx[e['b'], k] += 1
-                self.Dm[k, e['b']] -= 1 / e['L']
+            a, b = (e['a'], e['b']) if q is None else e['ports'][q]
+            if a >= 0:
+                self.Bx[a, k] -= 1
+            if b >= 0:
+                self.Bx[b, k] += 1
+            if q is None:
+                row = [(a, b, 1 / e['L'])]
+            else:               # di_q/dt = Σ_j Γ_qj·v_j
+                N = int(e['N'])
+                row = [(e['ports'][j][0], e['ports'][j][1], e['Gam'][q * N + j]) for j in range(N)]
+            for aj, bj, g in row:
+                if aj >= 0:
+                    self.Dm[k, aj] += g
+                if bj >= 0:
+                    self.Dm[k, bj] -= g
         for j, i in enumerate(self.iC):
             r = self.crow[i]
-            self.Bx[r, len(self.iL) + j] = 1
-            self.Dm[len(self.iL) + j, r] = 1 / E[i]['C']
+            self.Bx[r, self.nI + j] = 1
+            self.Dm[self.nI + j, r] = 1 / E[i]['C']
         self.Bc = np.zeros((n, len(self.iP)))
         self.Cv = np.zeros((len(self.iP), n))
         for q, i in enumerate(self.iP):
@@ -300,7 +327,7 @@ class Circuit:
             if e['b'] >= 0:
                 self.Bc[e['b'], q] += 1
                 self.Cv[q, e['b']] -= 1
-        self.x0 = np.array([_f(E[i].get('i')) for i in self.iL] + [_f(E[i].get('v')) for i in self.iC])
+        self.x0 = np.array([_f(E[i].get('i')) if q is None else _f(E[i]['i'][q]) for i, q in self.cur] + [_f(E[i].get('v')) for i in self.iC])
         if ns == 0:     # purely resistive circuit (e.g. diode rectifier into R, E): a dummy
             self.ns = 1  # constant state lets the ODE solver march in time and find events
             self.Bx, self.Dm, self.x0 = np.zeros((n, 1)), np.zeros((1, n)), np.zeros(1)
@@ -314,14 +341,24 @@ class Circuit:
                 E[ph['V']]['im'] = (q, k)
             st = m.get('st') or {}
             self.x0 = np.concatenate([self.x0, [_f(st.get('pa')), _f(st.get('pb')), _f(st.get('w')), _f(st.get('th'))]])
-        if self.ims:
-            extra = 4 * len(self.ims)
+        # synchronous machines (3.5): ψ_α, ψ_β, ω, θ (electrical) appended; their port currents are sources computed from the states
+        self.sms = net.get('sms') or []
+        for q, m in enumerate(self.sms):
+            m['k0'] = self.nsn + 4 * len(self.ims) + 4 * q
+            F = E[m['F']]
+            m['ports'] = F['ports']
+            psi = F.get('psi') or [0.0, 0.0]
+            st = m.get('st') or {}
+            self.x0 = np.concatenate([self.x0, [(2 * _f(psi[0]) - _f(psi[1])) / 3, _f(psi[1]) / math.sqrt(3), _f(st.get('w')), _f(st.get('the'))]])
+        if self.ims or self.sms:
+            extra = 4 * (len(self.ims) + len(self.sms))
             self.Bx = np.hstack([self.Bx, np.zeros((n, extra))])
             self.Dm = np.vstack([self.Dm, np.zeros((extra, n))])
             self.ns = self.nsn + extra
         clk = next((b for b in self.blocks if b['type'] in ('CLK', 'RAMP')), None)
+        lg = [_f(E[i]['wave'].get('T1'), 1e-6) for i in self.iI if E[i].get('wave')]     # a lightning current: its front time (3.5)
         self.base_T = min([k.T for k in self.ctrls], default=None) or (1 / max(_f(clk.get('f'), 1e5), 1e-6) if clk else None) or next(
-            (1 / max(1e-6, _f(E[i]['src'].get('f'), 50)) for i in self.iV if E[i]['src'].get('kind') == 'ac'), 1e-3)
+            (1 / max(1e-6, _f(E[i]['src'].get('f'), 50)) for i in self.iV if E[i]['src'].get('kind') == 'ac'), None) or (min(lg) if lg else 1e-3)
         self._z = None
         self._yb = []
         self._yo = []
@@ -350,6 +387,33 @@ class Circuit:
         n = m.get('tl')
         tl = self.sig_in(n) if isinstance(n, int) and n >= 0 else sched_at(m.get('sched'), t, (m.get('sched') or [[0, 0]])[0][1])
         return [m['RR'] * al - g * pa - wr * pb, m['RR'] * be - g * pb + wr * pa, (te - tl - m['b'] * w) / m['J'], w], te
+
+    # ------------------------------------------------------------ synchronous machine (3.5)
+    @staticmethod
+    def sm_cur(m, x):
+        """α, β currents and d, q currents from ψ_αβ and θ: i_αβ = R(θ)·diag(1/L_d, 1/L_q)·R(θ)ᵀ·(ψ − ψ_m·(cos θ, sin θ))."""
+        k0 = m['k0']
+        pa, pb, th = x[k0], x[k0 + 1], x[k0 + 3]
+        c, s = math.cos(th), math.sin(th)
+        idq = ((c * pa + s * pb - m['psim']) / m['Ld'], (-s * pa + c * pb) / m['Lq'])
+        return c * idq[0] - s * idq[1], s * idq[0] + c * idq[1], idq[0], idq[1]
+
+    def sm_ports(self, m, x):
+        """Port currents (a → c, b → c): i_a = i_α, i_b = −i_α/2 + (√3/2)·i_β."""
+        ia, ib = self.sm_cur(m, x)[:2]
+        return ia, -ia / 2 + math.sqrt(3) / 2 * ib
+
+    def sm_deriv(self, m, t, x, z):
+        k0 = m['k0']
+        V = lambda nd: z[nd] if nd >= 0 else 0.0
+        (a1, b1), (a2, b2) = m['ports']
+        v1, v2 = V(a1) - V(b1), V(a2) - V(b2)
+        ia, ib, _, _ = self.sm_cur(m, x)
+        te = 1.5 * m['p'] * (x[k0] * ib - x[k0 + 1] * ia)
+        n = m.get('tl')
+        tl = self.sig_in(n) if isinstance(n, int) and n >= 0 else sched_at(m.get('sched'), t, (m.get('sched') or [[0, 0]])[0][1])
+        w = x[k0 + 2]
+        return [(2 * v1 - v2) / 3, v2 / math.sqrt(3), (te - tl - m['b'] * w) / m['J'], m['p'] * w], te
 
     def Vsrc(self, e, t, x=None):
         if 'im' in e:
@@ -426,6 +490,16 @@ class Circuit:
             if e['m'] >= 0:
                 A[r, e['m']] -= Y
                 A[e['m'], r] -= Y
+        for i in self.iMG:              # conductance matrix: i_k = Σ_j G_kj·v_j (3.5)
+            e = E[i]
+            N = int(e['N'])
+            for k in range(N):
+                for j in range(N):
+                    G = e['Gm'][k * N + j]
+                    for r, sr in ((e['ports'][k][0], 1), (e['ports'][k][1], -1)):
+                        for q, sq in ((e['ports'][j][0], 1), (e['ports'][j][1], -1)):
+                            if r >= 0 and q >= 0:
+                                A[r, q] += sr * sq * G
         for i in self.iX:
             e, r = E[i], E[i]['row']
             N = e['n']
@@ -457,10 +531,16 @@ class Circuit:
         E = self.els
         for i in self.iV:
             b[E[i]['row']] = self.Vsrc(E[i], t, x)
+        for m in self.sms:
+            for (a, bb), i in zip(m['ports'], self.sm_ports(m, x if x is not None else self.x0)):
+                if a >= 0:
+                    b[a] -= i
+                if bb >= 0:
+                    b[bb] += i
         for i in self.iI:
             e = E[i]
             n = e.get('sigIn')
-            I = self.sig_in(n) if isinstance(n, int) and n >= 0 else sched_at(e.get('sched'), t, _f(e.get('I')))
+            I = wave_at(e['wave'], t) if e.get('wave') else self.sig_in(n) if isinstance(n, int) and n >= 0 else sched_at(e.get('sched'), t, _f(e.get('I')))
             if e['a'] >= 0:
                 b[e['a']] += I
             if e['b'] >= 0:
@@ -533,7 +613,7 @@ class Circuit:
         return not gk or self.gon[i] or (init and gk == 'scr')
 
     def tolerances(self, x):
-        nl = len(self.iL)
+        nl = self.nI
         iscale = float(np.max(np.abs(x[:nl]))) if nl else 0.0
         vscale = float(np.max(np.abs(x[nl:self.nsn]))) if self.nsn > nl else 0.0
         return 1e-9 * (1 + iscale), 1e-7 * (1 + vscale)
@@ -570,7 +650,7 @@ class Circuit:
         if 'v' in rec:
             return float(sum(c * z[nd] for nd, c in rec['v'] if nd >= 0))
         if 'i' in rec:
-            return float(sum(c * self.current(i, t, x, z) for i, c in rec['i']))
+            return float(sum(it[1] * self.current(it[0], t, x, z, it[2] if len(it) > 2 else 0) for it in rec['i']))
         if 'prod' in rec:
             a, b = rec['prod']
             return self.value(a, t, x, z) * self.value(b, t, x, z)
@@ -597,12 +677,19 @@ class Circuit:
             return 1.0 if on else 0.0
         return 0.0
 
-    def current(self, i, t, x, z):
+    def current(self, i, t, x, z, port=0):
         e = self.els[i]
         k = e['k']
         V = lambda nd: z[nd] if nd is not None and nd >= 0 else 0.0
         if k == 'L':
-            return float(x[self.iL.index(i)])
+            return float(x[self.cur.index((i, None))])
+        if k == 'F':
+            if e.get('sm') is not None:
+                return float(self.sm_ports(self.sms[e['sm']], x)[port])
+            return float(x[self.cur.index((i, port))])
+        if k == 'MG':
+            N = int(e['N'])
+            return float(sum(e['Gm'][port * N + j] * (V(e['ports'][j][0]) - V(e['ports'][j][1])) for j in range(N)))
         if k == 'C':
             return float(z[self.crow[i]])
         if k == 'V':
@@ -610,6 +697,8 @@ class Circuit:
         if k in ('X', 'GY'):
             return float(z[e['row']])
         if k == 'I':
+            if e.get('wave'):
+                return wave_at(e['wave'], t)
             return sched_at(e.get('sched'), t, _f(e.get('I')))
         if k == 'CPL':
             return float(self.icpl[self.iP.index(i)])
@@ -832,6 +921,12 @@ class Circuit:
                     st['ys'] = b['_rt'](t, [rd(I.get(k)) for k in b['inNames']])
                     sampled = True
                 ys = {k: (st['ys'][i] if st.get('ys') else _f(b.get('y0'), 0)) for i, k in enumerate(b['outNames'])}
+            elif ty == 'SM':
+                m = self.sms[b['sm']]
+                k0 = m['k0']
+                _, _, i_d, i_q = self.sm_cur(m, x)
+                te = self.sm_deriv(m, t, x, z)[1]
+                ys = {'w': x[k0 + 2], 'te': te, 'th': x[k0 + 3] % P2, 'id': i_d, 'iq': i_q}
             elif ty == 'IM':
                 m = self.ims[b['im']]
                 k0 = m['k0']
@@ -1159,6 +1254,8 @@ def simulate(data):
             d = ckt.Dm @ zof(tt, yy) if ckt.iP else tp['M'] @ (ckt.Bx @ yy + ckt.bsrc(tt, yy) + tp['bd'])
             for m in ckt.ims:                  # machine states: ψ_R, ω, θ from the stator currents
                 d[m['k0']:m['k0'] + 4] = ckt.im_deriv(m, tt, yy)[0]
+            for m in ckt.sms:                  # synchronous machines: ψ_αβ from the port voltages, ω, θ
+                d[m['k0']:m['k0'] + 4] = ckt.sm_deriv(m, tt, yy, zof(tt, yy))[0]
             return d
         events, owners = [], []
         for i in ckt.iD:
@@ -1188,7 +1285,7 @@ def simulate(data):
             events.append(ev)
             owners.append(b)
         kw = dict(method=method, rtol=rtol, atol=atol, max_step=max_step, events=events or None)
-        if implicit and not ckt.iP and not ckt.ims:     # the machines make the system nonlinear: numerical Jacobian
+        if implicit and not ckt.iP and not ckt.ims and not ckt.sms:     # the machines make the system nonlinear: numerical Jacobian
             kw['jac'] = (lambda tt, yy, J=tp['J']: J) if method == 'LSODA' else tp['J']
         sol = solve_ivp(fun, (t, tn), x, **kw)
         stats['segments'] += 1

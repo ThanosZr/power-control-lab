@@ -99,6 +99,34 @@
     sel('pol','Πολικότητα',[['same','Τελείες p1 και s1'],['opp','Τελείες p1 και s2 (flyback)']],'same')],
    value:p=>p.n,unit:'',
    draw:p=>`<path d="M-30,-30 H-14 V-24 a6,6 0 0,1 0,12 a6,6 0 0,1 0,12 a6,6 0 0,1 0,12 a6,6 0 0,1 0,12 V30 H-30 M30,-30 H14 V-24 a6,6 0 0,0 0,12 a6,6 0 0,0 0,12 a6,6 0 0,0 0,12 a6,6 0 0,0 0,12 V30 H30"/><path class="thin" d="M-3,-26 V26 M3,-26 V26"/><circle class="dot" cx="-20" cy="-26" r="2.6"/><circle class="dot" cx="20" cy="${p.pol==='opp'?26:-26}" r="2.6"/>`},
+  // lightning current (3.5): Heidler or double exponential, IEC 62305-1 waveforms or fitted to a front/tail time
+  ILG:{name:'Κεραυνικό ρεύμα (Heidler)',prefix:'I',group:'Πηγές',pins:{p:[0,-40],n:[0,40]},box:[-17,-17,34,34],
+   params:[sel('shape','Κυματομορφή',[['10/350','10/350 μs: πρώτο θετικό πλήγμα (IEC 62305-1)'],['1/200','1/200 μs: πρώτο αρνητικό πλήγμα'],['0.25/100','0,25/100 μs: επόμενο αρνητικό πλήγμα'],['custom','Άλλη T1/T2 (προσαρμογή των τ₁, τ₂)']],'10/350',
+     {hint:'Heidler: i(t) = (I₀/η)·(t/τ₁)ⁿ/(1 + (t/τ₁)ⁿ)·e^(−t/τ₂). Οι τρεις τυπικές με τα τ₁, τ₂, η του IEC 62305-1 (n = 10). T1 = 1,25·(t₉₀ − t₁₀), T2 από την εικονική αρχή ως το 50 % στην ουρά.'}),
+    num('Ipk','Μέγιστο ρεύμα I₀ (βγαίνει από το p)','A',200e3,{signed:true}),
+    sel('model','Μοντέλο',[['heidler','Heidler'],['dexp','Διπλοεκθετικό: I₀/η·(e^(−t/τ₂) − e^(−t/τ₁))']],'heidler',{show:p=>p.shape==='custom'}),
+    num('T1','Χρόνος μετώπου T1','s',1.2e-6,{show:p=>p.shape==='custom'}),num('T2','Χρόνος ημίσεος T2','s',50e-6,{show:p=>p.shape==='custom'}),num('n','Εκθέτης n (Heidler)','',10,{show:p=>p.shape==='custom'&&p.model!=='dexp'}),
+    num('t0','Καθυστέρηση','s',0,{zero:true})],
+   value:p=>p.Ipk,unit:'A',
+   draw:()=>'<path d="M0,-40 V-16 M0,16 V40"/><circle r="16"/><path class="thin" d="M3,-11 L-4,1 L2,1 L-3,11 M-3,11 L-4,5 M-3,11 L1,7"/>'},
+  // multiport elements (3.5): N windings or ports, one above the other, a_k on the left and b_k on the right (dots at a_k)
+  KL:{name:'Συζευγμένα πηνία (N×N)',prefix:'K',group:'Μαγνητικά',pins:p=>portPins(nPorts(p)),box:p=>portBox(nPorts(p)),
+   params:[sel('nw','Τυλίγματα',[['2','2'],['3','3'],['4','4']],'2',{show:p=>!String(p.Lmat||'').trim()}),
+    num('L1','L₁','H',1e-3,{show:p=>!String(p.Lmat||'').trim()}),num('L2','L₂','H',1e-3,{show:p=>!String(p.Lmat||'').trim()}),
+    num('L3','L₃','H',1e-3,{show:p=>!String(p.Lmat||'').trim()&&+p.nw>=3}),num('L4','L₄','H',1e-3,{show:p=>!String(p.Lmat||'').trim()&&+p.nw>=4}),
+    num('k','Συντελεστής σύζευξης k (όλα τα ζεύγη)','',0.95,{show:p=>!String(p.Lmat||'').trim(),hint:'M_ij = k·√(L_i·L_j), με 0 ≤ k < 1. Αρνητικό k: αντίθετες τελείες.'}),
+    txt('kpairs','k ανά ζεύγος','',{show:p=>!String(p.Lmat||'').trim(),hint:'Προαιρετικά, π.χ. «12:0.98, 23:0.9». Τα ζεύγη που δεν γράφεις παίρνουν το κοινό k.'}),
+    txt('Lmat','Πίνακας αυτεπαγωγής (αντί για τα παραπάνω)','',{hint:'Γραμμές με «;», στοιχεία με «,», σε H, π.χ. «1m, 0.9m; 0.9m, 1m». Συμμετρικός και θετικά ορισμένος. Το πλήθος των γραμμών δίνει τα τυλίγματα.'}),
+    num('Rw','Αντίσταση κάθε τυλίγματος','Ω',0,{zero:true}),txt('i0','Αρχικά ρεύματα a → b','0',{hint:'Ένα ανά τύλιγμα, π.χ. «0, 0». Ένα μόνο = ίδιο σε όλα.'})],
+   value:p=>p.k,unit:'',
+   draw:p=>{const N=nPorts(p);let s='';for(let k=0;k<N;k++){const y=portY(N,k);s+=`<path d="M-30,${y} H-18 a3,4 0 0,1 6,0 a3,4 0 0,1 6,0 a3,4 0 0,1 6,0 a3,4 0 0,1 6,0 a3,4 0 0,1 6,0 a3,4 0 0,1 6,0 H30"/><circle class="dot" cx="-22" cy="${y-4}" r="2.2"/>`;}
+    return s+`<path class="thin" d="M-18,${portY(N,0)-8} H18 M-18,${portY(N,N-1)+5} H18"/>`;}},
+  KG:{name:'Πολυθυρική αντίσταση / αγωγιμότητα',prefix:'Y',group:'Παθητικά',pins:p=>portPins(nPorts(p)),box:p=>portBox(nPorts(p)),
+   params:[sel('kind','Πίνακας',[['R','Αντιστάσεων R (Ω): v = R·i'],['G','Αγωγιμοτήτων G (S): i = G·v']],'R',{hint:'Ρεύμα κάθε θύρας από το a_k προς το b_k μέσα στο στοιχείο. Π.χ. αμοιβαίες αντιστάσεις ηλεκτροδίων γείωσης (μέθοδος μέσου δυναμικού).'}),
+    txt('mat','Πίνακας','10, 2; 2, 10',{hint:'Γραμμές με «;», στοιχεία με «,». Συμμετρικός και θετικά ορισμένος.'})],
+   value:()=>null,
+   draw:p=>{const N=nPorts(p);let s='';for(let k=0;k<N;k++){const y=portY(N,k);s+=`<path d="M-30,${y} H-14 M14,${y} H30"/>`;}const y0=portY(N,0)-7,h=portY(N,N-1)-portY(N,0)+14;
+    return s+`<rect x="-14" y="${y0}" width="28" height="${h}" rx="2"/>`+tx(p.kind==='G'?'[G]':'[R]',0,(portY(N,0)+portY(N,N-1))/2+4,'bsm');}},
   CPL:{name:'Φορτίο σταθερής ισχύος',prefix:'P',group:'Φορτία',pins:{p:[0,-30],n:[0,30]},box:[-12,-17,24,34],
    params:[num('P','Ισχύς','W',1000,{signed:true}),num('Vmin','Τάση κάτω από την οποία γίνεται ωμικό','V',5),txt('sched','P(t)','',{hint:SCHED})],
    value:p=>p.P,unit:'W',
@@ -214,6 +242,17 @@
    value:p=>p.pp,unit:'',
    draw:p=>'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25"/><circle r="22"/>'+tx('IM',0,4,'btxt')+sl('M22,-20 H40 M25,-10 H40 M25,0 H40 M25,10 H40 M22,20 H40')+(p.load==='sig'?sl('M0,22 V40'):'')
     +tx('ω',30,-23,'pinl')+tx('τ',30,-13,'pinl')+tx('ψ',30,-3,'pinl')+tx('θf',30,7,'pinl')+tx('θr',30,17,'pinl')},
+  // synchronous machine (3.5): d, q inductances and magnet flux; ψ_m = 0 is the synchronous reluctance machine (SynRM)
+  SM:{name:'Σύγχρονη μηχανή (SynRM / PMSM)',prefix:'M',group:'Μηχανές',pins:{a:[-40,-20],b:[-40,0],c:[-40,20]},box:[-25,-25,50,50],lbl:'above',
+   spins:p=>{const o={w:O(40,-20),te:O(40,-10),th:O(40,0),id:O(40,10),iq:O(40,20)};if(p.load==='sig')o.tl=I(0,40);return o;},
+   params:[num('Rs','Αντίσταση στάτη R_s','Ω',2),num('Ld','Αυτεπαγωγή άξονα d L_d','H',0.15,{hint:'SynRM: d είναι ο άξονας της ελάχιστης μαγνητικής αντίστασης (L_d > L_q). PMSM: d είναι ο άξονας του μαγνήτη (στην IPMSM L_q > L_d, στην SPMSM L_d = L_q).'}),
+    num('Lq','Αυτεπαγωγή άξονα q L_q','H',0.03),num('psim','Ροή μαγνήτη ψ_m','V·s',0,{zero:true,hint:'0 = μηχανή μαγνητικής αντίστασης (SynRM). Ροπή τ_e = (3/2)·p·(ψ_m·i_q + (L_d − L_q)·i_d·i_q).'}),
+    num('pp','Ζεύγη πόλων p','',2),num('J','Ροπή αδράνειας J','kg·m²',0.02),num('bm','Τριβή b','N·m·s',0.002,{zero:true}),
+    sel('load','Ροπή φορτίου',[['sched','Τιμή ή πρόγραμμα'],['sig','Από σήμα (ακροδέκτης tl)']],'sched'),txt('TL','τ_L(t)','0',{hint:'Σταθερή τιμή ή «t:τιμή» σε N·m.',show:p=>p.load!=='sig'}),
+    num('w0','Αρχική μηχανική ταχύτητα','rad/s',0,{signed:true,zero:true}),num('th0','Αρχική γωνία δρομέα θ (ηλεκτρική, ως προς τη φάση a)','°',0,{signed:true,zero:true})],
+   value:p=>p.pp,unit:'',
+   draw:p=>'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25"/><circle r="22"/>'+tx(+p.psim>0?'PM':'SynRM',0,4,+p.psim>0?'btxt':'bsm')+sl('M22,-20 H40 M25,-10 H40 M25,0 H40 M25,10 H40 M22,20 H40')+(p.load==='sig'?sl('M0,22 V40'):'')
+    +tx('ω',30,-23,'pinl')+tx('τ',30,-13,'pinl')+tx('θ',30,-3,'pinl')+tx('d',30,7,'pinl')+tx('q',30,17,'pinl')},
   MOD3:{name:'Διαμορφωτής τριφασικός',prefix:'MD',group:'Έλεγχος',pins:{},spins:{va:I(-30,-20),vb:I(-30,-10),vc:I(-30,0),vdc:I(-30,20),da:O(30,-10),db:O(30,0),dc:O(30,10)},box:[-20,-25,40,50],blk:true,
    params:[sel('mode','Διαμόρφωση',[['spwm','SPWM: d = ½ + v/V_dc'],['svpwm','SVPWM: έγχυση μηδενικής ακολουθίας −(max + min)/2'],['square','Τετραγωνική (six-step): d = 1 όταν v > 0']],'svpwm',{hint:'Τα d πάνε στα PWM με «D από σήμα» και τριγωνικό φέρον, ένα ανά σκέλος. Γραμμική περιοχή: πλάτος φάσης ≤ V_dc/2 (SPWM), ≤ V_dc/√3 (SVPWM).'})],value:()=>null,
    draw:p=>sb(40,50)+tx(p.mode==='square'?'6-step':p.mode==='spwm'?'SPWM':'SVM',0,4,'bsm')+sl('M-30,-20 H-20 M-30,-10 H-20 M-30,0 H-20 M-30,20 H-20 M20,-10 H30 M20,0 H30 M20,10 H30')},
@@ -254,9 +293,65 @@
  };
  const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Μηχανές','Φορτία','Έλεγχος','Σήματα','Κώδικας','Βασικά'];
  function defaults(type){const o={};for(const p of PARTS[type].params)o[p.k]=p.def;return o;}
- // electrical + signal pins of one placed part
+ // electrical + signal pins of one placed part; the electrical pins of a multiport depend on its parameters (3.5)
+ function elPins(c){const d=PARTS[c.type];if(!d)return {};return typeof d.pins==='function'?d.pins({...defaults(c.type),...(c.params||{})}):d.pins;}
  function sigPins(c){const d=PARTS[c.type];if(!d||!d.spins)return {};return typeof d.spins==='function'?d.spins({...defaults(c.type),...(c.params||{})}):d.spins;}
- function pinsOf(c){const d=PARTS[c.type];if(!d)return {};if(!d.spins)return d.pins;const o={...d.pins};for(const [k,v] of Object.entries(sigPins(c)))o[k]=v.at;return o;}
+ function pinsOf(c){const d=PARTS[c.type];if(!d)return {};const o={...elPins(c)};if(!d.spins)return o;for(const [k,v] of Object.entries(sigPins(c)))o[k]=v.at;return o;}
+ // ---------------------------------------------------------------- multiports (3.5)
+ // "a, b; c, d": rows with ';', entries with ',' or spaces (engineering prefixes allowed); null if not a square matrix of numbers
+ function parseMat(s){s=String(s??'').trim();if(!s)return null;const rows=s.split(/[;\n]+/).map(r=>r.trim()).filter(Boolean).map(r=>r.split(/[,\s]+/).filter(Boolean).map(parseEng));
+  const N=rows.length;if(!N||rows.some(r=>r.length!==N||r.some(v=>!Number.isFinite(v))))return null;return rows;}
+ function nPorts(p){const m=parseMat(p.Lmat??p.mat);if(m)return Math.min(8,m.length);return Math.max(2,Math.min(4,Math.round(+p.nw)||2));}
+ function portY(N,k){return -10*(N-1)+20*k;}
+ function portPins(N){const o={};for(let k=0;k<N;k++){o['a'+(k+1)]=[-30,portY(N,k)];o['b'+(k+1)]=[30,portY(N,k)];}return o;}
+ function portBox(N){return [-24,portY(N,0)-10,48,20*N];}
+ // Cholesky: true if the symmetric matrix m (rows) is positive definite
+ function posDef(m){const N=m.length,L=m.map(()=>new Array(N).fill(0));for(let i=0;i<N;i++)for(let j=0;j<=i;j++){let s=m[i][j];for(let k=0;k<j;k++)s-=L[i][k]*L[j][k];
+   if(i===j){if(!(s>0))return false;L[i][i]=Math.sqrt(s);}else L[i][j]=s/L[j][j];}return true;}
+ function symmetric(m){const s=Math.max(...m.flat().map(Math.abs))||1;return m.every((r,i)=>r.every((v,j)=>Math.abs(v-m[j][i])<=1e-9*s));}
+ function matInv(m){const N=m.length,a=m.map((r,i)=>[...r,...m.map((_,j)=>i===j?1:0)]);
+  for(let c=0;c<N;c++){let p=c;for(let r=c+1;r<N;r++)if(Math.abs(a[r][c])>Math.abs(a[p][c]))p=r;[a[c],a[p]]=[a[p],a[c]];const d=a[c][c];if(!d)return null;
+   for(let j=0;j<2*N;j++)a[c][j]/=d;for(let r=0;r<N;r++)if(r!==c){const f=a[r][c];if(f)for(let j=0;j<2*N;j++)a[r][j]-=f*a[c][j];}}
+  return a.map(r=>r.slice(N));}
+ // inductance matrix of the coupled inductors: {L: rows} or {err}
+ function klMatrix(p){let L=parseMat(p.Lmat);
+  if(!L&&String(p.Lmat||'').trim())return {err:'Ο πίνακας αυτεπαγωγής πρέπει να είναι τετραγωνικός, με αριθμούς (γραμμές με «;», στοιχεία με «,»).'};
+  if(!L){const N=nPorts(p),Ls=[p.L1,p.L2,p.L3,p.L4].slice(0,N).map(parseEng),k0=parseEng(p.k),kp={};
+   for(const q of String(p.kpairs||'').split(',').map(s=>s.trim()).filter(Boolean)){const m=q.match(/^(\d)(\d)\s*:\s*(.+)$/);if(!m)return {err:`k ανά ζεύγος: δεν καταλαβαίνω το «${q}» (γράψε π.χ. 12:0.98).`};kp[m[1]+m[2]]=kp[m[2]+m[1]]=parseEng(m[3]);}
+   if(Ls.some(v=>!(v>0)))return {err:'Οι αυτεπαγωγές πρέπει να είναι θετικές.'};
+   L=Ls.map((Li,i)=>Ls.map((Lj,j)=>i===j?Li:(kp[(i+1)+''+(j+1)]??k0)*Math.sqrt(Li*Lj)));}
+  if(L.length>8)return {err:'Έως 8 τυλίγματα.'};
+  if(!symmetric(L))return {err:'Ο πίνακας αυτεπαγωγής πρέπει να είναι συμμετρικός (M_ij = M_ji).'};
+  if(!posDef(L))return {err:'Ο πίνακας αυτεπαγωγής δεν είναι θετικά ορισμένος: |k| < 1 σε κάθε ζεύγος (και συμβατά k σε 3 ή περισσότερα τυλίγματα).'};
+  return {L};}
+ // conductance matrix of the multiport resistance: {G: rows} or {err}
+ function kgMatrix(p){const m=parseMat(p.mat);if(!m)return {err:'Ο πίνακας πρέπει να είναι τετραγωνικός, με αριθμούς (γραμμές με «;»).'};
+  if(!symmetric(m))return {err:'Ο πίνακας πρέπει να είναι συμμετρικός.'};if(!posDef(m))return {err:'Ο πίνακας πρέπει να είναι θετικά ορισμένος (π.χ. διαγώνια στοιχεία μεγαλύτερα από τα αμοιβαία).'};
+  return {G:p.kind==='G'?m:matInv(m)};}
+ // ---------------------------------------------------------------- lightning current (3.5)
+ // IEC 62305-1 Annex B: η, τ₁, τ₂ for n = 10
+ const HEIDLER={'10/350':{eta:.93,tau1:19e-6,tau2:485e-6,n:10,T1:10e-6,T2:350e-6},'1/200':{eta:.986,tau1:1.82e-6,tau2:285e-6,n:10,T1:1e-6,T2:200e-6},'0.25/100':{eta:.993,tau1:.454e-6,tau2:143e-6,n:10,T1:.25e-6,T2:100e-6}};
+ function waveShape(w,t){if(!(t>0))return 0;if(w.kind==='dexp')return Math.exp(-t/w.tau2)-Math.exp(-t/w.tau1);const x=Math.pow(t/w.tau1,w.n);return x/(1+x)*Math.exp(-t/w.tau2);}
+ function waveAt(w,t){return w.I0/w.eta*waveShape(w,t-w.t0);}
+ // peak, front time T1 = 1.25·(t90 − t10) and time to half value T2 (from the virtual origin t10 − 0.1·T1) of a shape
+ function waveMeasure(w){const f=t=>waveShape(w,t),a=Math.min(w.tau1,w.tau2)*1e-3,b=Math.max(w.tau1,w.tau2)*30,N=3000;let tp=a,fp=0;
+  for(let k=0;k<=N;k++){const t=a*Math.pow(b/a,k/N),v=f(t);if(v>fp){fp=v;tp=t;}}
+  let lo=tp*Math.pow(b/a,-1/N),hi=tp*Math.pow(b/a,1/N);for(let k=0;k<80;k++){const m1=lo+(hi-lo)*.382,m2=lo+(hi-lo)*.618;if(f(m1)<f(m2))lo=m1;else hi=m2;}tp=(lo+hi)/2;fp=f(tp);
+  const cross=(lev,x0,x1)=>{const g=t=>f(t)-lev*fp,s0=Math.sign(g(x0));for(let k=0;k<100;k++){const m=(x0+x1)/2;if(Math.sign(g(m))===s0)x0=m;else x1=m;}return (x0+x1)/2;};
+  const t10=cross(.1,a,tp),t90=cross(.9,t10,tp),t50=cross(.5,tp,b),T1=1.25*(t90-t10);return {peak:fp,tp,t10,t90,t50,T1,T2:t50-(t10-.1*T1)};}
+ // τ₁, τ₂ for a front time T1 and time to half value T2: Newton on (ln τ₁, ln τ₂) with a numerical Jacobian
+ function waveFit(kind,T1,T2,n=10){const mk=(x)=>({kind,n,tau1:Math.exp(x[0]),tau2:Math.exp(x[1])});
+  const res=x=>{const m=waveMeasure(mk(x));return [Math.log(m.T1/T1),Math.log(m.T2/T2)];};
+  let x=kind==='dexp'?[Math.log(T1/2.9),Math.log(T2*1.38)]:[Math.log(T1*1.9),Math.log(T2*1.39)],r=res(x);
+  for(let it=0;it<40&&Math.hypot(...r)>1e-9;it++){const d=1e-6,J=[0,1].map(j=>{const y=[...x];y[j]+=d;const q=res(y);return [(q[0]-r[0])/d,(q[1]-r[1])/d];});
+   const det=J[0][0]*J[1][1]-J[1][0]*J[0][1];if(!det)break;let dx=[-(r[0]*J[1][1]-r[1]*J[1][0])/det,-(J[0][0]*r[1]-J[0][1]*r[0])/det];const s=Math.max(1,Math.hypot(...dx));dx=dx.map(v=>v/s);
+   let lam=1,y,q;for(let k=0;k<20;k++){y=[x[0]+lam*dx[0],x[1]+lam*dx[1]];q=res(y);if(Math.hypot(...q)<Math.hypot(...r))break;lam/=2;}x=y;r=q;}
+  const w=mk(x),m=waveMeasure(w);return {...w,eta:m.peak,fitT1:m.T1,fitT2:m.T2,ok:Math.hypot(...r)<1e-4};}
+ // the waveform of a lightning-current part: {kind, n, tau1, tau2, eta, I0, t0, T1, T2}
+ function lightningWave(p){const I0=parseEng(p.Ipk)||0,t0=Math.max(0,parseEng(p.t0)||0),pre=HEIDLER[p.shape];
+  if(pre)return {kind:'heidler',...pre,I0,t0};
+  const T1=Math.max(parseEng(p.T1)||1.2e-6,1e-12),T2=Math.max(parseEng(p.T2)||50e-6,1.5*T1),kind=p.model==='dexp'?'dexp':'heidler',n=Math.max(1,Math.min(30,parseEng(p.n)||10));
+  const f=waveFit(kind,T1,T2,n);return {kind,n,tau1:f.tau1,tau2:f.tau2,eta:f.eta,I0,t0,T1,T2,fitOk:f.ok};}
  function pinKind(c,pin){const s=sigPins(c)[pin];return s?s.dir:'el';}
  // rotation (0..3 quarter turns) and mirror applied to a local point
  function xf(c,[x,y]){if(c.flip)x=-x;for(let i=0;i<(c.rot||0);i++)[x,y]=[-y,x];return [c.x+x,c.y+y];}
@@ -291,6 +386,7 @@
   const out=[];for(const part of s.split(/[;,]\s*(?=[-+.\d])/)){const [a,b]=part.split(':');const t=parseEng(a),v=parseEng(b);if(!Number.isFinite(t)||!Number.isFinite(v))return null;out.push([t,v]);}
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
- const api={PARTS,GROUPS,BLOCKS,defaults,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank};
+ const api={PARTS,GROUPS,BLOCKS,defaults,elPins,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
+  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

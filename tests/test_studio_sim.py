@@ -183,6 +183,106 @@ class StudioSimulator(unittest.TestCase):
             self.assertAlmostEqual(a, .5 + (v + o) / 600, places=12)
         self.assertEqual(r['square'], [1, 0, 0])
 
+    def test_coupled_inductors_and_conductance_matrix(self):
+        # 3.5: three windings, M_ij = k_ij·√(L_i·L_j) with k₁₃ = 0.7 and the others 0.9, R_w = 0.1 Ω: L·di/dt = v − R·i (exact ODE)
+        import numpy as np
+        from scipy.integrate import solve_ivp
+        r = self.o['mport']
+        self.assertEqual(r['warn'], [])
+        Ls = (1e-3, 4e-3, 2e-3)
+        k = {(0, 1): .9, (1, 2): .9, (0, 2): .7}
+        L = np.array([[Ls[i] if i == j else k[min(i, j), max(i, j)] * math.sqrt(Ls[i] * Ls[j]) for j in range(3)] for i in range(3)])
+        Li, Rl = np.linalg.inv(L), np.diag([1.1, 5.1, 2.1])
+        sol = solve_ivp(lambda t, i: Li @ (np.array([10.0, 0, 0]) - Rl @ i), (0, .005), [.5, 0, 0], rtol=1e-11, atol=1e-13, dense_output=True)
+        for t, i1, i2, i3, v2 in r['at']:
+            i = sol.sol(t)
+            for got, ref in ((i1, i[0]), (i2, i[1]), (i3, i[2]), (v2, -5 * i[1])):
+                self.assertAlmostEqual(got, ref, delta=1e-4 * (1 + abs(ref)), msg=t)
+        for got, ref in zip(r['kg'], np.linalg.solve([[10, 2], [2, 5]], [10, 4])):     # v = R·i
+            self.assertAlmostEqual(got, ref, places=9)
+        self.assertIn('θετικά ορισμένος', r['k1'])                                     # k = 1: singular inductance matrix
+        self.assertIsNone(r['k099'])
+
+    def test_synchronous_machine(self):
+        # 3.5: against the αβ model integrated here: dψ/dt = v − R_s·i, i = R(θ)·diag(1/L_d, 1/L_q)·R(θ)ᵀ·(ψ − ψ_m·e^{jθ}),
+        # τ = (3/2)·p·(ψ_α·i_β − ψ_β·i_α), J·dω/dt = τ − τ_L − b·ω, dθ/dt = p·ω. Terminals a = 30 V, b = c = 0 V: v_αβ = (20, 0).
+        import numpy as np
+        from scipy.integrate import solve_ivp
+        r = self.o['sm']
+
+        def ode(par, ts):
+            Rs, Ld, Lq, pm, p, J, b = (par.get(k, d) for k, d in (('Rs', 2), ('Ld', .15), ('Lq', .03), ('psim', 0), ('pp', 2), ('J', .02), ('bm', .002)))
+            th0 = math.radians(par.get('th0', 0))
+            tl = (lambda t: 2.0 if t >= .05 else 0.0) if par.get('TL') else (lambda t: 0.0)
+
+            def cur(y):
+                c, s = math.cos(y[3]), math.sin(y[3])
+                i_d, i_q = (c * y[0] + s * y[1] - pm) / Ld, (-s * y[0] + c * y[1]) / Lq
+                return c * i_d - s * i_q, s * i_d + c * i_q, i_d, i_q
+
+            def f(t, y):
+                ia, ib, _, _ = cur(y)
+                te = 1.5 * p * (y[0] * ib - y[1] * ia)
+                return [20 - Rs * ia, -Rs * ib, (te - tl(t) - b * y[2]) / J, p * y[2]]
+            y0 = [pm * math.cos(th0), pm * math.sin(th0), par.get('w0', 0), th0]
+            out, t0 = [], 0.0
+            for t in ts:
+                for seg in ([t0, .05], [.05, t]) if t0 < .05 < t and par.get('TL') else ([t0, t],):
+                    y0 = solve_ivp(f, seg, y0, rtol=1e-11, atol=1e-12, method='LSODA').y[:, -1]
+                t0 = t
+                ia, ib, i_d, i_q = cur(y0)
+                out.append((y0[2], y0[3] % (2 * math.pi), ia, i_d, i_q, 1.5 * p * (y0[0] * ib - y0[1] * ia)))
+            return out
+        for name, par in (('align', r['syn']), ('pmRun', r['pm'])):
+            rows = r[name]
+            for row, ref in zip(rows, ode(par, [q[0] for q in rows])):
+                t, w, th, ia, i_d, i_q, te = row
+                self.assertAlmostEqual(w, ref[0], delta=5e-4 * (1 + abs(ref[0])), msg=f'{name} ω at {t}')
+                dth = (th - ref[1] + math.pi) % (2 * math.pi) - math.pi
+                self.assertAlmostEqual(dth, 0, delta=1e-4, msg=f'{name} θ at {t}')
+                for got, want in zip((ia, i_d, i_q, te), ref[2:]):
+                    self.assertAlmostEqual(got, want, delta=1e-4 * (1 + abs(want)), msg=f'{name} at {t}')
+        # the rotor of the SynRM ends with its d axis (minimum reluctance) on the current vector (phase a): θ = 0, i_q = 0, τ = 0
+        t, w, th, ia, i_d, i_q, te = r['align'][-1]
+        self.assertAlmostEqual(min(th, 2 * math.pi - th), 0, delta=1e-6)
+        self.assertAlmostEqual(ia, 10, delta=1e-6)                 # 30 V / (R_s + R_s/2)
+        self.assertAlmostEqual(i_q, 0, delta=1e-6)
+        # constant speed on a three-phase source (200 V peak, 50 Hz, phase 20°): steady state of the dq equations
+        # v_d = R·i_d − ω·L_q·i_q, v_q = R·i_q + ω·(L_d·i_d + ψ_m), with the voltage vector at ωt + 20° − 90° and the rotor at ωt + θ₀
+        w = 2 * math.pi * 50
+        for name, Ld, Lq, pm, th0 in (('ssSyn', .15, .03, 0, -10), ('ssPm', .03, .05, .5, -30)):
+            q = r[name]
+            ang = math.radians(20 - 90 - th0)
+            i_d, i_q = np.linalg.solve([[2, -w * Lq], [w * Ld, 2]], [200 * math.cos(ang), 200 * math.sin(ang) - w * pm])
+            self.assertAlmostEqual(q['id'], i_d, delta=1e-3 * math.hypot(i_d, i_q), msg=name)
+            self.assertAlmostEqual(q['iq'], i_q, delta=1e-3 * math.hypot(i_d, i_q), msg=name)
+            self.assertAlmostEqual(q['te'], 1.5 * 2 * (pm * i_q + (Ld - Lq) * i_d * i_q), delta=2e-3 * abs(q['te']), msg=name)
+            self.assertAlmostEqual(q['irms'], math.hypot(i_d, i_q) / math.sqrt(2), delta=2e-3 * math.hypot(i_d, i_q), msg=name)
+
+    def test_lightning_current(self):
+        # 3.5: Heidler with the IEC 62305-1 parameters: peak I₀, front time T1 and time to half value T2 as named;
+        # 10/350 μs at 200 kA (LPL I): charge 100 C and specific energy 10 MJ/Ω (IEC 62305-1, Table 3)
+        r = self.o['lightning']
+        for shape, I0, T1, T2 in (('10/350', 200e3, 10e-6, 350e-6), ('1/200', 100e3, 1e-6, 200e-6), ('0.25/100', 50e3, .25e-6, 100e-6)):
+            q = r[shape]
+            self.assertEqual(q['warn'], [])
+            self.assertAlmostEqual(q['peak'], I0, delta=.005 * I0, msg=shape)
+            self.assertAlmostEqual(q['T1'], T1, delta=.02 * T1, msg=shape)
+            self.assertAlmostEqual(q['T2'], T2, delta=.02 * T2, msg=shape)
+        self.assertAlmostEqual(r['10/350']['Q'], 100, delta=3)
+        self.assertAlmostEqual(r['10/350']['W'] / 1e6, 10, delta=.5)
+        # fitting τ₁, τ₂ to a waveform: close to the published values (IEC: τ₁ = 19 μs, τ₂ = 485 μs for T2 ≈ 357 μs), exact T1/T2
+        f = r['fit']
+        self.assertTrue(f['ok'])
+        self.assertAlmostEqual(f['fitT1'], 10e-6, delta=1e-12)
+        self.assertAlmostEqual(f['fitT2'], 350e-6, delta=1e-10)
+        self.assertAlmostEqual(f['tau1'], 19e-6, delta=.5e-6)
+        self.assertAlmostEqual(f['eta'], .93, delta=.002)
+        d = r['fitDexp']                                          # 1.2/50 μs double exponential: τ₁ ≈ 0.4 μs, τ₂ ≈ 68 μs
+        self.assertTrue(d['ok'])
+        self.assertAlmostEqual(d['tau2'], 68e-6, delta=1e-6)
+        self.assertIn('T2/T1', r['bad'])                         # 8/20 is too short a tail for the double exponential
+
     def test_peak_current_mode(self):
         o, T = self.o, 1e-5
         m1, m2 = lambda D: (24 - 24 * D) / 50e-6, lambda D: 24 * D / 50e-6

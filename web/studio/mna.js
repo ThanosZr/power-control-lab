@@ -18,6 +18,18 @@
  const GMIN=1e-9;
  const schedAt=(s,t,dflt)=>{if(!s)return dflt;let v=s[0][1];if(t<s[0][0])return dflt;for(const [ts,val] of s){if(ts<=t+1e-15)v=val;else break;}return v;};
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
+ // "1, 2, 3" → N numbers (one value = the same for all)
+ const numList=(s,N,d=0)=>{const a=String(s??'').split(/[,;\s]+/).filter(Boolean).map(v=>num(v,d));return Array.from({length:N},(_,k)=>a.length===1?a[0]:a[k]??d);};
+ // synchronous machine (3.5): two ports a→c and b→c (no star point), with currents i_a, i_b. Port fluxes ψ_p = Kv·ψ_αβ,
+ // Kv = [[3/2, √3/2], [0, √3]]; i_α = i_a, i_β = (i_a + 2·i_b)/√3. With Γ_αβ(θ) = R(θ)·diag(1/L_d, 1/L_q)·R(θ)ᵀ and the magnet
+ // flux ψ₀ = ψ_m·(cos θ, sin θ): i_p = Γ_p·(ψ_p − Kv·ψ₀), Γ_p = Ki⁻¹·Γ_αβ·Kv⁻¹ (symmetric, = ⅔·Ki⁻¹·Γ_αβ·Ki⁻ᵀ)
+ const SQ3=Math.sqrt(3);
+ function smPort(m,th){const c=Math.cos(th),s=Math.sin(th),gd=1/m.Ld,gq=1/m.Lq,g00=c*c*gd+s*s*gq,g01=c*s*(gd-gq),g11=s*s*gd+c*c*gq;
+  const a10=-g00/2+SQ3/2*g01,a11=-g01/2+SQ3/2*g11,pa=m.psim*c,pb=m.psim*s;
+  return {G:[g00*2/3,-g00/3+g01/SQ3,a10*2/3,-a10/3+a11/SQ3],p0:[1.5*pa+SQ3/2*pb,SQ3*pb]};}
+ // α, β flux and current, torque and d, q currents of a machine from its port fluxes and currents
+ function smOut(m,psi,i,th){const pa=(2*psi[0]-psi[1])/3,pb=psi[1]/SQ3,ia=i[0],ib=(i[0]+2*i[1])/SQ3,c=Math.cos(th),s=Math.sin(th);
+  return {te:1.5*m.p*(pa*ib-pb*ia),id:c*ia+s*ib,iq:-s*ia+c*ib,pa,pb};}
 
  class NetlistError extends Error{}
 
@@ -62,7 +74,7 @@
   // wire names label their net
   for(const w of project.wires||[])if(w.name){const n=pinNet.get(w.a.c+':'+w.a.p);if(n&&!n.name)n.name=w.name;}
   // pins that touch nothing else
-  const open=[];for(const c of comps){if(c.type==='JUNC'||!Object.keys(P.PARTS[c.type].pins).length)continue;for(const p of Object.keys(P.PARTS[c.type].pins)){const n=pinNet.get(c.id+':'+p);if(n&&n.keys.length===1&&c.type!=='GND')open.push(c.id+':'+p);}}
+  const open=[];for(const c of comps){if(c.type==='JUNC'||!Object.keys(P.elPins(c)).length)continue;for(const p of Object.keys(P.elPins(c))){const n=pinNet.get(c.id+':'+p);if(n&&n.keys.length===1&&c.type!=='GND')open.push(c.id+':'+p);}}
   if(open.length)warnings.push('Ανοιχτοί ακροδέκτες: '+open.slice(0,6).join(', ')+(open.length>6?' …':'')+'.');
   let nNodes=nets.length;
   const node=(cid,pin)=>{const n=pinNet.get(cid+':'+pin);return n&&!n.ground?n.index:-1;};
@@ -88,6 +100,17 @@
     const v=T==='VDC'?{kind:'dc',V:num(p.V,12),sched:P.parseSched(p.sched)}:{kind:'ac',Vpk:num(p.Vpk,325),f:num(p.f,50),ph:num(p.phase,0)*Math.PI/180,off:num(p.off,0)};
     info.main=add({k:'V',a:srcTop,b,row:row(),src:v,sigIn:T==='VDC'&&p.ctl==='sig'?sn(c.id,'u'):undefined});}
    else if(T==='IDC'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'I',a,b,I:num(p.I,1),sched:P.parseSched(p.sched),sigIn:p.ctl==='sig'?sn(c.id,'u'):undefined});}
+   else if(T==='ILG'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];const w=P.lightningWave(p);
+    if(!(w.eta>1e-6&&w.tau1>0&&w.tau2>0))throw new NetlistError(`${c.label||c.id}: δεν βρέθηκαν τ₁, τ₂ για T1 = ${P.eng(w.T1,'s')}, T2 = ${P.eng(w.T2,'s')} (το διπλοεκθετικό θέλει T2/T1 πάνω από περίπου 3).`);
+    if(w.fitOk===false)warnings.push(`${c.label||c.id}: η προσαρμογή στα T1/T2 δεν συνέκλινε πλήρως.`);
+    info.wave=w;info.main=add({k:'I',a,b,I:0,wave:w});}
+   else if(T==='KL'||T==='KG'){ // multiports (3.5): coupled inductors (flux element 'F') or a conductance matrix ('MG'), port k from a_k to b_k
+    const N=P.nPorts(p),ports=[];for(let k=1;k<=N;k++)ports.push([node(c.id,'a'+k),node(c.id,'b'+k)]);info.pins=ports[0];info.ports=ports;
+    if(T==='KL'){const r=P.klMatrix(p);if(r.err)throw new NetlistError(`${c.label||c.id}: ${r.err}`);const L=r.L,Gam=P.matInv(L),i0=numList(p.i0,N,0),Rw=num(p.Rw,0);
+     const pr=ports.map(([a,b])=>{if(!(Rw>0))return [a,b];const m=internal();add({k:'G',a,b:m,R:Rw});return [m,b];});
+     const psi=Float64Array.from(L.map(row=>row.reduce((s,v,j)=>s+v*i0[j],0)));
+     info.main=add({k:'F',ports:pr,N,Lm:L.flat(),Gam:Gam.flat(),Gnow:Gam.flat(),psi,psi1:psi.slice(),i:Float64Array.from(i0),key:c.id});}
+    else{const r=P.kgMatrix(p);if(r.err)throw new NetlistError(`${c.label||c.id}: ${r.err}`);info.main=add({k:'MG',ports,N,Gm:r.G.flat()});}}
    else if(T==='CPE'){const a=node(c.id,'a'),bb=node(c.id,'b');info.pins=[a,bb];const n0=internal();info.main=add({k:'V',a,b:n0,row:row(),src:{kind:'dc',V:0}}); // 0 V: the current a → b
     const bk=P.cpeBank({...P.defaults('CPE'),...p});bk.br.forEach((q,k)=>{const n=internal();add({k:'G',a:n0,b:n,R:q.R});add({k:'C',a:n,b:bb,C:q.C,v:0,i:0,key:c.id+'#'+k});});
     add({k:'G',a:n0,b:bb,R:1/bk.G0});add({k:'C',a:n0,b:bb,C:bk.Cinf,v:0,i:0,key:c.id+'#inf'});}
@@ -133,6 +156,15 @@
     info.im={ph,RR:num(p.RR,2),LM:Math.max(num(p.LM,.3),1e-9),p:Math.max(1,Math.round(num(p.pp,2))),J:Math.max(num(p.J,.02),1e-9),b:Math.max(num(p.bm,0),0),sched:p.load==='sig'?null:sched,
      st:{pa:0,pb:0,w:num(p.w0,0),th:0,te:0,ia:0,ib:0}};
     info.blk=mkBlock(c,p,'IM',{im:info.im,ft:false});info.im.tl=info.blk.ins.tl??-1;}
+   else if(T==='SM'){ // synchronous machine (3.5): R_s per phase, then the flux element of the two ports a→c, b→c whose Γ(θ) and ψ₀(θ)
+    // follow the rotor (new factorization each step); ω and θ advance after each committed step from the torque
+    const n1=['a','b','c'].map(k=>series(node(c.id,k),-1,num(p.Rs,2)));
+    const m={p:Math.max(1,Math.round(num(p.pp,2))),Ld:Math.max(num(p.Ld,.15),1e-9),Lq:Math.max(num(p.Lq,.03),1e-9),psim:num(p.psim,0),J:Math.max(num(p.J,.02),1e-9),b:Math.max(num(p.bm,0),0),
+     sched:p.load==='sig'?null:(P.parseSched(p.TL)||[[0,0]]),st:{w:num(p.w0,0),the:num(p.th0,0)*Math.PI/180,te:0,id:0,iq:0}};
+    const q=smPort(m,m.st.the),psi=Float64Array.from(q.p0);
+    info.main=add({k:'F',ports:[[n1[0],n1[2]],[n1[1],n1[2]]],N:2,sm:m,Gnow:q.G,p0:q.p0,psi,psi1:psi.slice(),i:new Float64Array(2),key:c.id});
+    m.F=info.main;info.pins=[node(c.id,'a'),node(c.id,'b')];info.sm=m;
+    info.blk=mkBlock(c,p,'SM',{sm:m,ft:false});m.tl=info.blk.ins.tl??-1;}
    else if(T==='DCM'){ // armature R_a + L_a + gyrator (E = ψ·ω, τ_e = ψ·i_a); mechanics as a circuit: node ω, C = J, G = b, current source τ_L
     const a=node(c.id,'a'),bb=node(c.id,'b');info.pins=[a,bb];const psi=num(p.psi,1),J=Math.max(num(p.J,.02),1e-9),bm=Math.max(num(p.bm,0),0);
     const n1=num(p.Ra,0)>0?internal():a;if(n1!==a)add({k:'G',a,b:n1,R:num(p.Ra,.5),role:'Ra'});
@@ -210,6 +242,9 @@
  function cmpF(b,s,pv,nv){const g=pv-nv,tol=1e-9*(Math.abs(pv)+Math.abs(nv))+1e-12,h=Math.max(b.hys,4*tol)/2;return s?g+h-tol:g-h+tol;}
 
  // ---------------------------------------------------------------- dense LU
+ // multiport conductance: port current i_k (a_k → b_k inside the element) = Σ_j c·G_kj·(v(a_j) − v(b_j))
+ function stampM(A,n,ports,N,G,c){const ad=(r,q,v)=>{if(r>=0&&q>=0)A[r*n+q]+=v;};
+  for(let k=0;k<N;k++)for(let j=0;j<N;j++){const g=c*G[k*N+j];if(!g)continue;const [ak,bk]=ports[k],[aj,bj]=ports[j];ad(ak,aj,g);ad(ak,bj,-g);ad(bk,aj,-g);ad(bk,bj,g);}}
  function luFactor(A,n,piv){
   for(let k=0;k<n;k++){let p=k,max=Math.abs(A[k*n+k]);for(let i=k+1;i<n;i++){const v=Math.abs(A[i*n+k]);if(v>max){max=v;p=i;}}
    if(max<1e-300)throw new NetlistError('Ιδιόμορφο σύστημα: βρόχος ιδανικών πηγών τάσης ή κόμβος χωρίς διαδρομή. Πρόσθεσε μικρή αντίσταση ή γείωση.');
@@ -226,17 +261,20 @@
  class Sim{
   constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
   // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
-  basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>b.type==='CLK'||b.type==='RAMP');if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);return 1e-3;}
+  basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>b.type==='CLK'||b.type==='RAMP');if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
+   const lg=[...this.net.compInfo.values()].filter(c=>c.wave);if(lg.length)return Math.min(...lg.map(c=>c.wave.T1));return 1e-3;}
   setStep(hDiv,h){this.opts.hDiv=hDiv||this.opts.hDiv;this.opts.h=h||null;this.h=this.opts.h||this.T/this.opts.hDiv;}
   load(project,fresh){
    const old=this.net;const net=buildNetlist(project);
    if(old&&!fresh){ // carry states by key
     const st=new Map();for(const e of old.els)if(e.key)st.set(e.k+e.key,e);
-    for(const e of net.els)if(e.key&&st.has(e.k+e.key)){const o=st.get(e.k+e.key);if(e.k==='L')e.i=o.i;if(e.k==='C'){e.v=o.v;e.i=o.i;}if(e.k==='D')e.on=o.on;}
+    for(const e of net.els)if(e.key&&st.has(e.k+e.key)){const o=st.get(e.k+e.key);if(e.k==='L')e.i=o.i;if(e.k==='C'){e.v=o.v;e.i=o.i;}if(e.k==='D')e.on=o.on;
+     if(e.k==='F'&&o.N===e.N&&!e.sm===!o.sm){e.i.set(o.i);if(e.sm){e.psi.set(o.psi);e.psi1.set(o.psi1);}else{for(let k=0;k<e.N;k++){let s=0;for(let j=0;j<e.N;j++)s+=e.Lm[k*e.N+j]*e.i[j];e.psi[k]=s;}e.psi1.set(e.psi);}}}
     const oc=new Map(old.ctrls.map(c=>[c.id,c]));for(const c of net.ctrls){const o=oc.get(c.id);if(o&&o.mode===c.mode&&o.T===c.T){c.xi=o.xi;c.d=o.d;c.k=o.k;c.tk=o.tk;c.tkPrev=o.tkPrev;c.dPrev=o.dPrev;c.dPrevOff=o.dPrevOff;c.dOn=o.dOn;c.dOff=o.dOff;c.h=c.upd===o.upd?o.h:null;c.meas=o.meas;c.refNow=o.refNow;c.ePrev=o.ePrev;c.dF=o.dF;}}
     for(const e of net.els)if(e.k==='CPL'){const o=old.els.find(x=>x.k==='CPL'&&x.cid===e.cid);if(o)e.v0=o.v0;}
     const os=new Map(old.shs.map(q=>[q.id,q]));for(const q of net.shs){const o=os.get(q.id);if(o){q.h=o.h;q.last=q.trig===o.trig&&q.clock===o.clock?o.last:null;q.n=o.n;q.log=o.log;}}
     for(const [id,c] of net.compInfo)if(c.im){const o=old.compInfo.get(id);if(o?.im)c.im.st={...o.im.st};} // the machine keeps its flux and speed
+    for(const [id,c] of net.compInfo)if(c.sm){const o=old.compInfo.get(id);if(o?.sm)c.sm.st={...o.sm.st};}
     const ob=new Map(old.sig.blocks.map(b=>[b.id,b]));for(const b of net.sig.blocks){const o=ob.get(b.id);if(o&&o.type===b.type&&b.type!=='SH'){b.st={...b.st,...o.st};if(b.clock!==o.clock||b.trig!==o.trig)b.st.last=null;}}
    }
    this.net=net;const nb=net.sig.blocks.length;this.sv=new Float64Array(net.sig.n);this.svT=new Float64Array(net.sig.n);this.yb=new Float64Array(nb);this.ybT=new Float64Array(nb);
@@ -244,6 +282,7 @@
    if(!this.x||this.x.length!==this.n||fresh)this.x=new Float64Array(this.n);
    this.pyBlocks(old&&!fresh?old:null);
    this.ims=[...net.compInfo.values()].filter(c=>c.im).map(c=>c.im);for(const m of this.ims)this.imSources(m);
+   this.sms=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm);this.hasTV=this.sms.length>0;for(const m of this.sms)this.smOutputs(m);
    this.hasCPL=net.els.some(e=>e.k==='CPL');this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.h=this.opts.h||this.T/this.opts.hDiv;
    const keys=this.channelKeys();const same=!fresh&&this.keys&&keys.join('|')===this.keys.join('|');
@@ -266,6 +305,10 @@
    s.pa=(a11*r1-a12*r2)/det;s.pb=(a11*r2+a12*r1)/det;s.ia=al;s.ib=be;
    s.te=1.5*m.p*(s.pa*be-s.pb*al);const tl=m.tl>=0?(this.sv?this.sv[m.tl]:0):schedAt(m.sched,this.t+h,m.sched[0][1]);
    s.w+=h*(s.te-tl-m.b*s.w)/m.J;s.th+=h*s.w;this.imSources(m);}
+  // synchronous machine: θ advanced with the ω used to predict Γ(θ) over the step, then torque and ω (leapfrog: the stored ω is half a step
+  // ahead of θ, so the output ω_o = ω − (h/2)·dω/dt is the speed at the end of the step)
+  smStep(m,h){const s=m.st;s.the+=h*m.p*s.w;this.smOutputs(m);const tl=m.tl>=0?(this.sv?this.sv[m.tl]:0):schedAt(m.sched,this.t+h,m.sched[0][1]),a=(s.te-tl-m.b*s.w)/m.J;s.w+=h*a;s.wo=s.w-h/2*a;}
+  smOutputs(m){const o=smOut(m,m.F.psi,m.F.i,m.st.the);m.st.te=o.te;m.st.id=o.id;m.st.iq=o.iq;}
   imSources(m){const s=m.st,wr=m.p*s.w,g=m.RR/m.LM,ea=-g*s.pa-wr*s.pb,eb=-g*s.pb+wr*s.pa,Q=Math.sqrt(3)/2;m.ph[0].V.imE=ea;m.ph[1].V.imE=-ea/2+Q*eb;m.ph[2].V.imE=-ea/2-Q*eb;}
   pyBlocks(old){const bs=this.net.sig.blocks.filter(b=>b.type==='PY');const prev=new Map((old?.sig.blocks||[]).filter(b=>b.type==='PY'&&b.rt).map(b=>[b.id,b]));
    if(bs.length){const R=root.PyRT;if(!R||!R.ready){const e=new NetlistError('Το κύκλωμα έχει μπλοκ Python: φορτώνεται η Python (Pyodide)…');e.needPython=true;throw e;}
@@ -289,6 +332,7 @@
     if(P.BLOCKS.has(c.type)){k.push('Y:'+c.id,...c.blk.outList.slice(1).map(q=>'Y:'+c.id+':'+q));continue;}
     k.push('V:'+c.id,'I:'+c.id,'P:'+c.id);
     if(c.type==='XFMR')k.push('V2:'+c.id,'I2:'+c.id,'Im:'+c.id);
+    if(c.ports)for(let q=2;q<=c.ports.length;q++)k.push('V'+q+':'+c.id,'I'+q+':'+c.id);
     if(c.type==='VAC3')k.push('Vb:'+c.id,'Vc:'+c.id,'Ib:'+c.id,'Ic:'+c.id,'Vab:'+c.id);
     if(c.loss)k.push('PSW:'+c.id);
     if(c.type==='SW'||c.type==='SCR')k.push('GS:'+c.id);
@@ -306,7 +350,9 @@
   V(i){return i<0?0:this.x[i];}
   elCurrent(e){const v=this.V(e.a)-this.V(e.b);
    switch(e.k){case 'G':return v/e.Rnow;case 'L':return e.i;case 'C':return e.i;case 'V':return -this.x[e.row];case 'I':return e.Inow;
-    case 'S':return v*(e.on?1/e.Ron:1/e.Roff);case 'GY':return this.x[e.row];case 'D':return e.on?(v-e.Vf)/e.Ron:v/e.Roff;case 'CPL':return e.g*v+e.J;}return 0;}
+    case 'S':return v*(e.on?1/e.Ron:1/e.Roff);case 'GY':return this.x[e.row];case 'D':return e.on?(v-e.Vf)/e.Ron:v/e.Roff;case 'CPL':return e.g*v+e.J;case 'F':return e.i[0];case 'MG':return this.portI(e,0);}return 0;}
+  // current of port k of a multiport
+  portI(e,k){if(e.k==='F')return e.i[k];let s=0;for(let j=0;j<e.N;j++)s+=e.Gm[k*e.N+j]*(this.V(e.ports[j][0])-this.V(e.ports[j][1]));return s;}
   // values of all channels at the current solution
   computeVals(){
    const out=this.vals;let j=0;const x=this.x;if(this.net.sig.blocks.length)this.evalBlocks('trial');
@@ -325,6 +371,7 @@
     const src=c.type==='VDC'||c.type==='VAC'||c.type==='IDC';
     out[j++]=v;out[j++]=i;out[j++]=src?v*i:v*i;
     if(c.type==='XFMR'){const v2=this.V(c.pins2[0])-this.V(c.pins2[1]);const is=this.x[c.main.row]*(c.opp?-1:1);out[j++]=v2;out[j++]=is;out[j++]=c.mag.i;}
+    if(c.ports)for(let q=1;q<c.ports.length;q++){out[j++]=this.V(c.ports[q][0])-this.V(c.ports[q][1]);out[j++]=this.portI(c.main,q);}
     if(c.loss)out[j++]=c.loss.P;
     if(c.type==='SW'||c.type==='SCR'){const e=c.main;out[j++]=(e.k==='S'?e.on:e.gon)?1:0;} // the gate pulse this switch receives (after dead time)
     if(c.blk){out[j++]=this.ybT[c.blk.i];const yo=this.yoT[c.blk.i];for(let q=1;q<yo.length;q++)out[j++]=yo[q];}
@@ -470,6 +517,7 @@
       const a=rd(I.a),bb=rd(I.b),c=rd(I.c),al=(2*a-bb-c)/3,be=(bb-c)/Q3,cs=Math.cos(th),sn=Math.sin(th),vd=al*cs+be*sn,vq=-al*sn+be*cs,amp=Math.hypot(al,be);
       const e=amp>1e-9?vq/amp:0,xi=st.xi+b.Ki*dt*e,w=b.w0+b.Kp*e+xi;if(!trial){st.th=th;st.xi=xi;st.w=w;st.t=this.t;}ys={th,w,amp:vd};break;}
      case 'DCM':ys={w:this.V(b.m),te:b.psi*this.x[b.gy.row]};break;
+     case 'SM':{const s=b.sm.st,P2=2*Math.PI;ys={w:s.wo??s.w,te:s.te,th:s.the-P2*Math.floor(s.the/P2),id:s.id,iq:s.iq};break;}
      case 'IM':{const s=b.im.st,P2=2*Math.PI,f=Math.atan2(s.pb,s.pa),r=b.im.p*s.th;ys={w:s.w,te:s.te,psi:Math.hypot(s.pa,s.pb),thf:f-P2*Math.floor(f/P2),thr:r-P2*Math.floor(r/P2)};break;}
      case 'CLK':{const u=b.f*t-b.ph,fr=u-Math.floor(u+1e-11);y=fr<b.duty-1e-11?1:0;break;}
      case 'RAMP':{const u=b.f*t-b.ph,fr=Math.max(0,u-Math.floor(u+1e-11));y=b.lo+(b.hi-b.lo)*(b.shape==='tri'?Math.abs(1-2*fr):fr);break;}
@@ -492,10 +540,11 @@
   zcFrac(){this.evalBlocks('trial',false,true);let th=null;
    for(const b of this.net.sig.zc){const s=b.st.s,f0=b.st.f0,f1=b.f1;if(!(s?f1<0:f1>0))continue;const d=f0-f1;const q=Math.min(1,Math.max(0,d!==0?f0/d:0));if(th===null||q<th)th=q;}
    return th;}
-  saveState(){const el=[];for(const e of this.net.els){if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);}
-   return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el};}
+  saveState(){const el=[];for(const e of this.net.els){if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);}
+   return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el,ms:[...(this.ims||[]),...(this.sms||[])].map(m=>[m,{...m.st}])};}
   restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
-   for(const r of S.el){const e=r[0];if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}}
+   for(const r of S.el){const e=r[0];if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
+   for(const [m,st] of S.ms||[]){m.st={...st};if(m.ph)this.imSources(m);}}
   gateSig(t){let s='';for(const e of this.net.els){if(e.k!=='S'&&!e.gk)continue;let on=false;
     if(e.gate==='on')on=true;else if(e.gate==='sig')on=(e.gIn>=0?this.sv[e.gIn]:0)>=.5;else if(e.gate==='pwm'){const k=this.net.ctrls.find(c=>c.id===e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
     if(e.k==='S')e.on=on;else{e.gon=on;if(e.gk==='igbt'&&!on)e.on=false;}s+=on?'1':'0';}return s;}
@@ -503,7 +552,8 @@
   values(t){ // time-dependent element values at time t
    for(const e of this.net.els){
     if(e.k==='G')e.Rnow=Math.max(schedAt(e.sched,t,e.R),1e-9);
-    else if(e.k==='I')e.Inow=e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):schedAt(e.sched,t,e.I);
+    else if(e.k==='I')e.Inow=e.wave?P.waveAt(e.wave,t):e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):schedAt(e.sched,t,e.I);
+    else if(e.k==='F'&&e.sm){const m=e.sm,q=smPort(m,m.st.the+(t-this.t)*m.p*m.st.w);e.Gnow=q.G;e.p0=q.p0;}
     else if(e.k==='V'&&e.imE!==undefined)e.Vnow=e.imE;
     else if(e.k==='V'){const s=e.src;e.Vnow=e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):s.kind==='dc'?schedAt(s.sched,t,s.V):s.off+s.Vpk*Math.sin(2*Math.PI*s.f*t+s.ph);}
     else if(e.k==='CPL')e.Pnow=schedAt(e.sched,t,e.P);
@@ -522,6 +572,8 @@
      case 'S':g(e.a,e.b,e.on?1/e.Ron:1/e.Roff);break;
      case 'D':g(e.a,e.b,e.on?1/e.Ron:1/e.Roff);break;
      case 'CPL':g(e.a,e.b,e.g);break;
+     case 'F':{const c=mode==='BDF2'?h/this.bdf.a0:tr?h/2:h,N=e.N,G=e.Gnow;e.cc=c;stampM(A,n,e.ports,N,G,c);break;} // flux multiport: i = c·Γ·v + J
+     case 'MG':stampM(A,n,e.ports,e.N,e.Gm,1);break;
      case 'V':{const r=e.row;if(e.a>=0){A[e.a*n+r]+=1;A[r*n+e.a]+=1;}if(e.b>=0){A[e.b*n+r]-=1;A[r*n+e.b]-=1;}break;}
      case 'GY':{const r=e.row,Y=e.psi;if(e.a>=0){A[e.a*n+r]+=1;A[r*n+e.a]+=1;}if(e.b>=0){A[e.b*n+r]-=1;A[r*n+e.b]-=1;}if(e.m>=0){A[r*n+e.m]-=Y;A[e.m*n+r]-=Y;}break;} // gyrator: v_ab = ψ·ω, τ = ψ·i into node ω
      case 'X':{const r=e.row,N=e.n;if(e.s1>=0){A[e.s1*n+r]+=1;A[r*n+e.s1]+=1;}if(e.s2>=0){A[e.s2*n+r]-=1;A[r*n+e.s2]-=1;}
@@ -538,6 +590,9 @@
      case 'C':{if(mode==='BDF2'){const B=this.bdf;e.g=e.C*B.a0/h;e.J=e.C*(B.a1*e.v+B.a2*e.v1)/h;}else{const v=e.v;e.g=tr?2*e.C/h:e.C/h;e.J=tr?-(e.g*v+e.i):-e.g*v;}J(e.a,e.b,e.J);break;}
      case 'D':if(e.on)J(e.a,e.b,-e.Vf/e.Ron);break;
      case 'CPL':J(e.a,e.b,e.J);break;
+     case 'F':{const N=e.N,G=e.Gnow,B=this.bdf,c=mode==='BDF2'?h/B.a0:tr?h/2:h,base=e.base||(e.base=new Float64Array(N)),Jv=e.Jv||(e.Jv=new Float64Array(N));e.cc=c;
+      for(let k=0;k<N;k++){const [a,bb]=e.ports[k];base[k]=mode==='BDF2'?-(B.a1*e.psi[k]+B.a2*e.psi1[k])/B.a0:tr?e.psi[k]+c*(this.V(a)-this.V(bb)):e.psi[k];}
+      for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=G[k*N+j]*(base[j]-(e.p0?e.p0[j]:0));Jv[k]=s;J(e.ports[k][0],e.ports[k][1],s);}break;}
      case 'I':J(e.a,e.b,-e.Inow);break;
      case 'V':b[e.row]=e.Vnow;break;
     }
@@ -547,7 +602,7 @@
    if(Math.abs(v)<e.Vmin){e.g=P/(e.Vmin*e.Vmin);e.J=0;}else{e.g=-P/(v*v);e.J=2*P/v;}}}
   solveOnce(h,mode){
    let key=null;
-   if(!this.hasCPL){key=mode+(h/this.h).toPrecision(10)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of this.net.els)if(e.k==='S'||e.k==='D')key+=e.on?'1':'0';
+   if(!this.hasCPL&&!this.hasTV){key=mode+(h/this.h).toPrecision(10)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of this.net.els)if(e.k==='S'||e.k==='D')key+=e.on?'1':'0';
     for(const e of this.net.els)if(e.k==='G'&&e.sched)key+='|'+e.Rnow;}
    let f=key&&this.cache.get(key);
    if(!f){this.assemble(h,mode);luFactor(this.A,this.n,this.piv);f={A:this.A.slice(),piv:this.piv.slice()};if(key){if(this.cache.size>256)this.cache.clear();this.cache.set(key,f);}}
@@ -577,8 +632,11 @@
     else if(e.k==='C'){const v=this.V(e.a)-this.V(e.b);e.v1=e.v;e.i=e.g*v+e.J;e.v=v;}
     else if(e.k==='D'){const v=this.V(e.a)-this.V(e.b);e.vPrev=v;e.iPrev=e.on?(v-e.Vf)/e.Ron:v/e.Roff;}
     else if(e.k==='CPL'){const v=this.V(e.a)-this.V(e.b);e.v0=v;if(Math.abs(v)<e.Vmin){e.g=e.Pnow/(e.Vmin*e.Vmin);e.J=0;}else{e.g=e.Pnow/(v*v);e.J=0;}}
+    else if(e.k==='F'){const N=e.N,G=e.Gnow;e.psi1.set(e.psi);for(let k=0;k<N;k++){const [a,bb]=e.ports[k];e.psi[k]=e.base[k]+e.cc*(this.V(a)-this.V(bb));}
+     for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=G[k*N+j]*(e.psi[j]-(e.p0?e.p0[j]:0));e.i[k]=s;}}
    }
    if(this.ims)for(const m of this.ims)this.imStep(m,h);
+   if(this.sms)for(const m of this.sms)this.smStep(m,h);
    this.t+=h;this.steps++;this.hLast=h;
   }
   // consistent initial solution at t=0: inductors act as current sources (i0),
@@ -707,12 +765,16 @@
  // channel, for the reference run on the server (engine/batch.py).
  function exportForBatch(project,keys){
   const net=buildNetlist(project),idx=new Map(net.els.map((e,i)=>[e,i]));
-  const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn'];
-  const els=net.els.map(e=>{const o={};for(const k of F)if(e[k]!==undefined&&e[k]!==null)o[k]=e[k];return o;});
+  const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm'];
+  // synchronous machines (3.5): parameters and initial states; the server integrates ψ_α, ψ_β, ω, θ
+  const smList=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm),smx=new Map(smList.map((m,i)=>[m,i]));
+  const els=net.els.map(e=>{const o={};for(const k of F)if(e[k]!==undefined&&e[k]!==null)o[k]=e[k];if(e.k==='F'){o.i=Array.from(e.i);o.psi=Array.from(e.psi);if(e.sm){o.sm=smx.get(e.sm);delete o.Gam;}}return o;});
+  const sms=smList.map(m=>({F:idx.get(m.F),p:m.p,Ld:m.Ld,Lq:m.Lq,psim:m.psim,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{w:m.st.w,the:m.st.the}}));
   const ci=id=>net.compInfo.get(id),cix=new Map(net.ctrls.map((k,i)=>[k.id,i]));
   const vd=(a,b)=>({v:[[a,1],[b,-1]].filter(q=>q[0]>=0)});
   const V=c=>c&&c.pins?vd(c.pins[0],c.pins[1]):null;
   const I=c=>{if(!c||!c.main)return null;if(c.type==='XFMR')return {i:[[idx.get(c.main),-c.main.n],[idx.get(c.mag),1]]};if(c.type==='SW')return {i:[[idx.get(c.main),1],...(c.body?[[idx.get(c.body),-1]]:[])]};return {i:[[idx.get(c.main),1]]};};
+  const portRec=(c,pre)=>{const m=pre.match(/^([VI])(\d)$/);if(!m||!c.ports)return null;const q=+m[2]-1;if(q<1||q>=c.ports.length)return null;return m[1]==='V'?vd(c.ports[q][0],c.ports[q][1]):{i:[[idx.get(c.main),1,q]]};};
   const rec=key=>{const [pre,id,pin]=key.split(':');
    if(pre==='VN'){const n=net.pinNet.get(id+':'+pin);return n?{v:n.ground?[]:[[n.index,1]]}:null;}
    if(pre==='N'){const n=net.nets.find(x=>x.canon===key.slice(2));return n?{v:[[n.index,1]]}:null;}
@@ -725,6 +787,7 @@
     return {V:pv(ph[0]),I:pi(ph[0]),P:{sum:ph.map(q=>({prod:[pv(q),pi(q)]}))},Vb:pv(ph[1]),Vc:pv(ph[2]),Ib:pi(ph[1]),Ic:pi(ph[2]),Vab:vd(ph[0].pin,ph[1].pin)}[pre]||null;}
    if(pre==='V')return V(c);if(pre==='I')return I(c);if(pre==='P'){const a=V(c),b=I(c);return a&&b?{prod:[a,b]}:null;}
    if(c.type==='XFMR'){if(pre==='V2')return vd(c.pins2[0],c.pins2[1]);if(pre==='I2')return {i:[[idx.get(c.main),c.opp?-1:1]]};if(pre==='Im')return {i:[[idx.get(c.mag),1]]};}
+   if(c.ports)return portRec(c,pre);
    return null;};
   const shx=new Map(net.shs.map((q,i)=>[q.id,i]));
   const clkOf=id=>{const b=net.sig.blocks.find(x=>x.type==='CLK'&&x.id===id);return b?{f:b.f,ph:b.ph}:null;};
@@ -738,13 +801,14 @@
    for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
    if(b.type==='DCM')o.recs={w:{v:[[b.m,1]]},te:{i:[[idx.get(b.gy),b.psi]]}};
    if(b.type==='IM')o.im=imx.get(b.im);
+   if(b.type==='SM')o.sm=smx.get(b.sm);
    if(b.type==='PIB'||b.type==='UD'||b.type==='PY'){o.clock=cix.get(b.clock)??null;o.clk=clkOf(b.clock);}
    if(b.type==='VM')o.rec=vd(b.np,b.nn);else if(b.type==='AM')o.rec={i:[[idx.get(b.el),-1]]};else if(b.type==='MEAS'){const c=ci(b.src);o.rec=(b.qty==='V'?V(c):I(c))||null;}
    if(b.type==='SH'){o.sh=shx.get(b.id);o.sig=!!b.sig;}return o;});
   const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase','upd','dIn'])o[f]=k[f];
    const s=ci(k.sensor);o.sensorRec=k.mode==='pi'?(shx.has(k.sensor)?{sh:shx.get(k.sensor)}:k.qty==='V'?V(s):I(s)):null;o.ffARec=V(ci(k.ffA));o.ffBRec=V(ci(k.ffB));return o;});
   const channels={},skipped=[];for(const key of keys){const r=rec(key);if(r)channels[key]=r;else skipped.push(key);}
-  return {net:{nNodes:net.nNodes,size:net.size,els,ctrls,shs,sig:{n:net.sig.n,blocks},ims},channels,skipped};
+  return {net:{nNodes:net.nNodes,size:net.size,els,ctrls,shs,sig:{n:net.sig.n,blocks},ims,sms},channels,skipped};
  }
  // one point of a parameter sweep (bifurcation diagram): set comp.param = value, run `transient` base periods and
  // return the per-period statistic (min, max, avg, end = value at the period boundary) of channel `key` over the next `record` periods

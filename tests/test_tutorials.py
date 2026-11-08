@@ -199,6 +199,85 @@ class Tutorials(unittest.TestCase):
         self.assertAlmostEqual(o['imfoc_230_1']['psi'], .9 * 157 / 230, delta=.005)     # field weakening
         self.assertGreater(o['imfoc_100_0.5']['psi'], 1.2)                              # R̂_R too small: over-fluxed
 
+    def test_synchronous_reluctance_drive(self):
+        # 3.5: alignment: the d axis (minimum reluctance) ends on the current vector, at 0° or 180°; dq control: steady state of
+        # τ = K·i_d·i_q with K = (3/2)·p·(L_d − L_q), the currents of each current angle, and the dq voltages
+        o = self.o
+        for th0, dl in (('60', 0), ('120', math.pi), ('89', 0)):
+            r = o['syn_al_' + th0]
+            self.assertEqual(r['warn'], [])
+            self.assertAlmostEqual(abs(r['dl']), dl, delta=1e-3, msg=th0)
+            self.assertAlmostEqual(abs(r['id']), 10, delta=.1, msg=th0)       # I = v_α/R_s (less by R_on)
+            self.assertAlmostEqual(r['iq'], 0, delta=1e-3, msg=th0)
+            self.assertAlmostEqual(r['w'], 0, delta=1e-3, msg=th0)
+        Ld, Lq, R, p = .15, .03, 2, 2
+        K, te = 1.5 * p * (Ld - Lq), 8 + .002 * 100
+        cur = {}
+        for st, g in (('mtpa', 45), ('g30', 30), ('g60', 60), ('idc', None)):
+            r = o['syn_' + st]
+            self.assertEqual(r['warn'], [])
+            self.assertAlmostEqual(r['w'], 100, delta=.05, msg=st)
+            self.assertAlmostEqual(r['te'], te, delta=.02, msg=st)
+            if g:
+                i = math.sqrt(2 * te / (K * math.sin(math.radians(2 * g))))
+                i_d, i_q = i * math.cos(math.radians(g)), i * math.sin(math.radians(g))
+            else:
+                i_d, i_q = 4, te / (K * 4)
+            for got, want in ((r['id'], i_d), (r['iq'], i_q), (r['idm'], i_d), (r['iqm'], i_q)):
+                self.assertAlmostEqual(got, want, delta=.01 * want, msg=st)
+            we = p * 100
+            vd, vq = R * i_d - we * Lq * i_q, R * i_q + we * Ld * i_d
+            self.assertAlmostEqual(math.hypot(r['ud'], r['uq']), math.hypot(vd, vq), delta=.01 * math.hypot(vd, vq), msg=st)
+            # the command leads by ω_e·T/2: computed with θ at the start of the period, applied on average at its middle
+            self.assertAlmostEqual(math.atan2(r['uq'], r['ud']) - math.atan2(vq, vd), we * 2e-4 / 2, delta=.004, msg=st)
+            cur[st] = math.hypot(r['id'], r['iq'])
+        self.assertLess(cur['mtpa'], min(cur['g30'], cur['g60'], cur['idc']))          # MTPA: least current for the torque
+
+    def test_permanent_magnet_drive(self):
+        # 3.5: IPMSM with MTPA (negative i_d, less current than i_d = 0) and SPMSM (MTPA is i_d = 0)
+        o = self.o
+        te, p, pm = 8 + .002 * 100, 2, .3
+
+        def mtpa(i, Ld, Lq):
+            d = (pm - math.sqrt(pm ** 2 + 8 * (Lq - Ld) ** 2 * i ** 2)) / (4 * (Lq - Ld))
+            return d, math.sqrt(i * i - d * d)
+        lo, hi = 0.0, 50.0
+        for _ in range(100):
+            mid = (lo + hi) / 2
+            d, q = mtpa(mid, .04, .1)
+            lo, hi = (mid, hi) if 1.5 * p * (pm * q + (.04 - .1) * d * q) < te else (lo, mid)
+        cases = (('pm_ipm_mtpa', mtpa(lo, .04, .1)), ('pm_ipm_id0', (0, te / (1.5 * p * pm))), ('pm_spm_mtpa', (0, te / (1.5 * p * pm))))
+        for k, (i_d, i_q) in cases:
+            r = o[k]
+            self.assertEqual(r['warn'], [])
+            self.assertAlmostEqual(r['w'], 100, delta=.05, msg=k)
+            self.assertAlmostEqual(r['te'], te, delta=.02, msg=k)
+            self.assertAlmostEqual(r['id'], i_d, delta=.01 * math.hypot(i_d, i_q), msg=k)
+            self.assertAlmostEqual(r['iq'], i_q, delta=.01 * math.hypot(i_d, i_q), msg=k)
+        self.assertLess(o['pm_ipm_mtpa']['id'], -3)
+        self.assertLess(math.hypot(o['pm_ipm_mtpa']['id'], o['pm_ipm_mtpa']['iq']), .75 * o['pm_ipm_id0']['iq'])
+
+    def test_lightning_current(self):
+        # 3.5: Heidler (IEC 62305-1) and a fitted double exponential into L = 10 μH and R = 10 Ω: peak current, charge,
+        # and the peak of v = R·i + L·di/dt against the waveform evaluated here (engine.batch.wave_at)
+        import numpy as np
+        from engine.batch import wave_at
+        for shape, I0, Q in (('10/350', 200e3, 100), ('1/200', 100e3, None), ('0.25/100', 50e3, None), ('custom', 10e3, None)):
+            r = self.o['lg_' + shape]
+            self.assertEqual(r['warn'], [], msg=shape)
+            self.assertEqual(r['points'], r['steps'] + 1, msg=shape)        # the whole run is in the history
+            self.assertAlmostEqual(r['ip'], I0, delta=.005 * I0, msg=shape)
+            w = r['wave']
+            t = np.linspace(0, r['meta']['dur'], 400001)
+            i = np.array([wave_at(w, x) for x in t])
+            v = 10 * i[1:] + 10e-6 * np.diff(i) / np.diff(t)
+            self.assertAlmostEqual(r['vp'], float(v.max()), delta=.01 * float(v.max()), msg=shape)
+            if Q:
+                self.assertAlmostEqual(r['Q'], Q, delta=.03 * Q)
+        m = self.o['lg_custom']['meas']                                     # fitted 1.2/50 μs
+        self.assertAlmostEqual(m['T1'], 1.2e-6, delta=1e-12)
+        self.assertAlmostEqual(m['T2'], 50e-6, delta=1e-10)
+
     def test_dc_drive(self):
         o = self.o
         for k in ('dc_speed_active', 'dc_speed_imc', 'dc_current_active', 'dc_open_active'):

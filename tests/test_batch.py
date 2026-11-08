@@ -122,7 +122,9 @@ class BatchSolver(unittest.TestCase):
 
     def test_machine_and_control_blocks_parity(self):
         # 3.1: DC machine (gyrator + mechanical circuit), PLL / Clarke / Park, integrator, low-pass, PI with back-calculation
-        for name, tol in (('dcm', 2e-3), ('pll', 1e-3), ('cont', 2e-3), ('eis_cell', 5e-3), ('im_dol', 3e-3)):   # eis_cell (3.3.1): CPE bank, sources from signals; t held over T/200 in the server
+        # eis_cell (3.3.1): CPE bank, sources from signals; t held over T/200 in the server. 3.5: multiports, synchronous machine, lightning current
+        for name, tol in (('dcm', 2e-3), ('pll', 1e-3), ('cont', 2e-3), ('eis_cell', 5e-3), ('im_dol', 3e-3),
+                          ('mp_kl', 5e-5), ('mp_kg', 1e-5), ('sm_align', 2e-4), ('sm_pm', 3e-4), ('mp_lg', 1e-4)):
             req = self.req[name]
             keys = list(req['channels'].keys()) if isinstance(req['channels'], dict) else [c['key'] for c in req['channels']]
             r = self.run_case(name, req['at'][-1][0], 'LSODA', rtol=1e-9, atol=1e-11)

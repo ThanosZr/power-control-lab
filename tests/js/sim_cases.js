@@ -193,5 +193,30 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
  const d=m=>[md.now('Y:'+m),md.now('Y:'+m+':db'),md.now('Y:'+m+':dc')];
  let dth=s.now('Y:FE')-s.now('Y:M1:thf');dth-=2*Math.PI*Math.round(dth/(2*Math.PI));
  out.im={w:s.now('Y:M1'),te:s.now('Y:M1:te'),psi:s.now('Y:M1:psi'),irms:per.rms,warn:s.net.warnings,spwm:d('M1'),svpwm:d('M2'),square:d('M3'),psiEst:s.now('Y:FE:psi'),dth};}
+// 3.5: coupled inductors (3 windings, pair coupling, winding resistance, initial current): trajectories at given instants,
+//      compared in Python with the exact ODE; conductance matrix: algebraic
+{const pr=project([{id:'V1',type:'VDC',params:{V:10}},{id:'R1',type:'R',params:{R:1}},{id:'K1',type:'KL',params:{nw:'3',L1:'1m',L2:'4m',L3:'2m',k:.9,kpairs:'13:0.7',Rw:.1,i0:'0.5, 0, 0'}},{id:'R2',type:'R',params:{R:5}},{id:'R3',type:'R',params:{R:2}},{id:'G',type:'GND'}],
+  [['V1:p','R1:a'],['R1:b','K1:a1'],['K1:b1','G:g'],['V1:n','G:g'],['K1:a2','R2:a'],['R2:b','G:g'],['K1:b2','G:g'],['K1:a3','R3:a'],['R3:b','G:g'],['K1:b3','G:g']]);
+ const s=new Sim(pr,{h:1e-6}),at=[];for(const t of [.0005,.002,.005]){s.run(t-s.t);at.push([t,s.now('I:K1'),s.now('I2:K1'),s.now('I3:K1'),s.now('V2:K1')]);}
+ const g=new Sim(project([{id:'V1',type:'VDC',params:{V:10}},{id:'V2',type:'VDC',params:{V:4}},{id:'Y1',type:'KG',params:{kind:'R',mat:'10, 2; 2, 5'}},{id:'G',type:'GND'}],[['V1:p','Y1:a1'],['V2:p','Y1:a2'],['Y1:b1','G:g'],['Y1:b2','G:g'],['V1:n','G:g'],['V2:n','G:g']]),{h:1e-5});g.run(1e-4);
+ const bad=k=>{try{new Sim(project([{id:'K1',type:'KL',params:{k}},{id:'G',type:'GND'}],[['K1:b1','G:g'],['K1:b2','G:g'],['K1:a1','G:g'],['K1:a2','G:g']]));return null;}catch(e){return e.message;}};
+ out.mport={at,warn:s.net.warnings,kg:[g.now('I:Y1'),g.now('I2:Y1')],k1:bad(1),k099:bad(.99)};}
+// 3.5: synchronous machine. (a) DC into phase a (b, c to 0 V): the rotor turns to the minimum reluctance (d on the current vector);
+//      trajectories for the ODE check in Python, SynRM and PM. (b) Constant speed (J huge) on a three-phase source: steady state of the dq equations
+{const run=(par,ts,h)=>{const s=new Sim(project([{id:'V1',type:'VDC',params:{V:30}},{id:'M1',type:'SM',params:par},{id:'G',type:'GND'}],[['V1:p','M1:a'],['M1:b','G:g'],['M1:c','G:g'],['V1:n','G:g']]),{h});
+  return ts.map(t=>{s.run(t-s.t);return [t,s.now('Y:M1'),s.now('Y:M1:th'),s.now('I:M1'),s.now('Y:M1:id'),s.now('Y:M1:iq'),s.now('Y:M1:te')];});};
+ const syn={Rs:2,Ld:.15,Lq:.03,psim:0,pp:2,J:.02,bm:.002,th0:60},pm={Rs:2,Ld:.03,Lq:.05,psim:.5,pp:2,J:.02,bm:.002,th0:100,w0:5,TL:'0:0, 0.05:2'};
+ const al=run(syn,[.02,.1,.3,3],1e-5);
+ const ss=par=>{const s=new Sim(project([{id:'V3',type:'VAC3',params:{Vpk:200,f:50,phase:20}},{id:'G',type:'GND'},{id:'M1',type:'SM',params:par}],[['V3:n','G:g'],['V3:a','M1:a'],['V3:b','M1:b'],['V3:c','M1:c']]),{h:2e-5});
+  s.run(1);return {id:s.now('Y:M1:id'),iq:s.now('Y:M1:iq'),te:s.now('Y:M1:te'),w:s.now('Y:M1'),th:s.now('Y:M1:th'),t:s.t,irms:s.lastPeriod('I:M1').rms};};
+ out.sm={syn,pm,align:al,pmRun:run(pm,[.02,.1,.2],1e-5),ssSyn:ss({Rs:2,Ld:.15,Lq:.03,pp:2,J:1e6,w0:157.07963267948966,th0:-10}),ssPm:ss({Rs:2,Ld:.03,Lq:.05,psim:.5,pp:2,J:1e6,w0:157.07963267948966,th0:-30})};}
+// 3.5: lightning current (Heidler, IEC 62305-1) into 1 Ω: peak, front and tail times, charge and specific energy from the simulation
+{const lg={},mk=p=>new Sim(project([{id:'I1',type:'ILG',params:p},{id:'R1',type:'R',params:{R:1}},{id:'G',type:'GND'}],[['I1:p','R1:a'],['R1:b','G:g'],['I1:n','G:g']]),{hDiv:200});
+ for(const [shape,I0,dur] of [['10/350',200e3,5e-3],['1/200',100e3,3e-3],['0.25/100',50e3,1.5e-3]]){const s=mk({shape,Ipk:I0}),ts=[0],ys=[0];let Q=0,W=0,tp=0,yp=0;
+  while(s.t<dur-1e-15){s.run(Math.min(s.h,dur-s.t));const y=s.now('I:R1'),y0=ys[ys.length-1],h=s.t-ts[ts.length-1];Q+=h*(y+y0)/2;W+=h*(y*y+y*y0+y0*y0)/3;ts.push(s.t);ys.push(y);if(y>yp){yp=y;tp=s.t;}}
+  const cross=(lev,rise)=>{for(let k=1;k<ys.length;k++){const a=ys[k-1],b=ys[k];if(rise?(ts[k]<=tp&&a<lev*yp&&b>=lev*yp):(ts[k]>tp&&a>lev*yp&&b<=lev*yp))return ts[k-1]+(lev*yp-a)/(b-a)*(ts[k]-ts[k-1]);}return NaN;};
+  const t10=cross(.1,true),t90=cross(.9,true),t50=cross(.5,false),T1=1.25*(t90-t10);lg[shape]={peak:yp,T1,T2:t50-(t10-.1*T1),Q,W,T:s.T,h:s.h,warn:s.net.warnings};}
+ let bad=null;try{mk({shape:'custom',model:'dexp',T1:8e-6,T2:20e-6});}catch(e){bad=e.message;}
+ out.lightning={...lg,fit:Parts.waveFit('heidler',10e-6,350e-6,10),fitDexp:Parts.waveFit('dexp',1.2e-6,50e-6),bad};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

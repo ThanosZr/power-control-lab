@@ -57,6 +57,16 @@ for(const src of ['vs','rl']){const pr=build('cell_eis',{src,f:'200'});const r=M
 for(const mod of ['svpwm','spwm']){const pr=build('im_vf',{mod});const s=sim(pr,pr.sim.stopT);out['imvf_'+mod]={w:s.now('Y:M1'),psi:s.now('Y:M1:psi'),te:last(s,'Y:M1:te',100).avg,warn:s.net.warnings};}
 for(const [wref,rr] of [['100','1'],['100','0.5'],['230','1']]){const pr=build('im_foc',{wref,rr});const s=sim(pr,pr.sim.stopT);const avg=k=>last(s,k,100).avg;let d=s.now('Y:M1:thf')-s.now('Y:FE');d-=2*Math.PI*Math.round(d/(2*Math.PI));
  out[`imfoc_${wref}_${rr}`]={w:s.now('Y:M1'),psi:s.now('Y:M1:psi'),psiEst:s.now('Y:FE:psi'),id:avg('Y:PK'),iq:avg('Y:PK:q'),te:avg('Y:M1:te'),dth:d,warn:s.net.warnings,meta:pr.meta};}
+// 3.5: SynRM, alignment from three initial angles and dq control with four current angles
+for(const th0 of ['60','120','89']){const pr=build('synrm',{mode:'align',th0});const s=sim(pr,pr.sim.stopT);out['syn_al_'+th0]={dl:s.now('Y:DL'),id:s.now('Y:M1:id'),iq:s.now('Y:M1:iq'),te:s.now('Y:M1:te'),w:s.now('Y:M1'),warn:s.net.warnings,meta:pr.meta};}
+for(const strat of ['mtpa','g30','g60','idc']){const pr=build('synrm',{mode:'foc',strat});const s=sim(pr,pr.sim.stopT);const avg=k=>last(s,k,100).avg;
+ out['syn_'+strat]={w:s.now('Y:M1'),id:avg('Y:PK'),iq:avg('Y:PK:q'),idm:avg('Y:M1:id'),iqm:avg('Y:M1:iq'),te:avg('Y:M1:te'),ud:avg('Y:EXUD'),uq:avg('Y:EXUQ'),warn:s.net.warnings,meta:pr.meta};}
+for(const [mach,strat] of [['ipm','mtpa'],['ipm','id0'],['spm','mtpa']]){const pr=build('pmsm',{mach,strat});const s=sim(pr,pr.sim.stopT);const avg=k=>last(s,k,100).avg;
+ out[`pm_${mach}_${strat}`]={w:s.now('Y:M1'),id:avg('Y:PK'),iq:avg('Y:PK:q'),te:avg('Y:M1:te'),warn:s.net.warnings,meta:pr.meta};}
+for(const shape of ['10/350','1/200','0.25/100','custom']){const pr=build('lightning',{shape});const s=sim(pr,pr.sim.stopT);const r=s.ring,iI=s.chIndex.get('I:I1'),iV=s.chIndex.get('V:I1');
+ let ip=0,vp=0,n=0;for(let q=0;q<r.n;q++){const j=(r.head-r.n+q+r.cap)%r.cap;ip=Math.max(ip,r.d[j*r.nch+iI]);vp=Math.max(vp,r.d[j*r.nch+iV]);n++;}
+ const p=s.per;let Q=0;for(let k=0;k<p.n;k++){const j=(p.head-p.n+k+p.cap)%p.cap;Q+=p.avg[j*p.nch+iI]*s.T;}const w=s.net.compInfo.get('I1').wave;
+ out['lg_'+shape]={ip,vp,Q,points:n,steps:s.steps,wave:w,meas:Parts.waveMeasure(w),warn:s.net.warnings,meta:pr.meta};}
 // 3.3: PI in Python (Pyodide in Node, when the pyodide package is installed) against the PI block; feedforward from an expression
 (async()=>{let PyRT=null;try{PyRT=require(W+'/pyrt.js');await PyRT.load();}catch(e){out.py_skipped=String(e.message||e).slice(0,120);}
  for(const [ctrl,ff] of [['pib','none'],['pib','expr'],...(PyRT?.ready?[['python','none'],['python','expr']]:[])]){const pr=build('code_loop',{ctrl,ff});const s=sim(pr,.004);const p=s.per,i=s.chIndex.get('Y:AM1'),d=s.chIndex.get('D:PWM1');

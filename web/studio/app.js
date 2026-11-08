@@ -59,6 +59,8 @@ function liveOf(c){const s=S.sim;if(!s||S.error)return null;if(['GND','JUNC','TA
  if(c.type==='SH'){const q=s.shById.get(c.id);return {text:q?'h = '+eng(q.h,q.sig?'':q.qty==='V'?'V':'A',4):''};}
  if(c.type==='PY'){const os=outsOf(c);return {text:os.map((o,k)=>o+' = '+eng(s.now('Y:'+c.id+(k?':'+o:'')),'',4)).join(' · ')};}
  if(c.type==='IM')return {i:s.now('I:'+c.id),text:'ω '+eng(val('Y:'+c.id),'rad/s',4)+' · τ '+eng(val('Y:'+c.id+':te'),'N·m',3)+' · |ψ| '+eng(s.now('Y:'+c.id+':psi'),'V·s',3)};
+ if(c.type==='SM')return {i:s.now('I:'+c.id),text:'ω '+eng(val('Y:'+c.id),'rad/s',4)+' · τ '+eng(val('Y:'+c.id+':te'),'N·m',3)+' · i_d '+eng(val('Y:'+c.id+':id'),'A',3)+' · i_q '+eng(val('Y:'+c.id+':iq'),'A',3)};
+ if(c.type==='KL'||c.type==='KG'){const n=s.net.compInfo.get(c.id)?.ports?.length||0;return {i:s.now('I:'+c.id),text:Array.from({length:n},(_,k)=>(avg?'⌀ ':'')+'i'+'₁₂₃₄₅₆₇₈'[k]+' '+eng(val((k?'I'+(k+1):'I')+':'+c.id),'A',3)).join(' · ')};}
  if(c.type==='DCM')return {i:s.now('I:'+c.id),text:'ω '+eng(val('Y:'+c.id),'rad/s',4)+' · '+(avg?'⌀ ':'')+eng(val('I:'+c.id),'A',3)};
  if(OUT_SYM[c.type]&&c.type!=='SR'){const os=outsOf(c);return {text:os.map((o,k)=>OUT_SYM[c.type][o]+' '+eng(s.now('Y:'+c.id+(k?':'+o:'')),blkUnit(c,o),3)).join(' · ')};}
  if(P.BLOCKS.has(c.type)){const y=s.now('Y:'+c.id);if(LOGIC_BLK.has(c.type))return {on:y>=.5,text:(c.type==='SR'?'Q = ':'y = ')+(y>=.5?'1':'0')};
@@ -73,24 +75,26 @@ function liveOf(c){const s=S.sim;if(!s||S.error)return null;if(['GND','JUNC','TA
 // signal blocks (3.0): output unit, and which outputs are 0/1
 const LOGIC_BLK=new Set(['CMP','SR','CLK','LOGIC']);
 function blkUnit(c,pin){if(!c)return '';const t=c.type;if(t==='VM')return 'V';if(t==='AM')return 'A';if(t==='MEAS')return c.params?.qty==='V'?'V':'A';
- if(t==='DCM')return pin==='te'?'N·m':'rad/s';if(t==='IM')return pin==='te'?'N·m':pin==='psi'?'V·s':pin==='w'||!pin?'rad/s':'rad';if(t==='FEST')return pin==='psi'?'V·s':pin==='w1'?'rad/s':'rad';if(t==='PLL')return pin==='amp'?'':pin==='w'?'rad/s':'rad';if(t==='INT'&&c.params?.wrap==='2pi')return 'rad';return '';}
+ if(t==='DCM')return pin==='te'?'N·m':'rad/s';if(t==='IM')return pin==='te'?'N·m':pin==='psi'?'V·s':pin==='w'||!pin?'rad/s':'rad';if(t==='SM')return pin==='te'?'N·m':pin==='th'?'rad':pin==='id'||pin==='iq'?'A':'rad/s';if(t==='FEST')return pin==='psi'?'V·s':pin==='w1'?'rad/s':'rad';if(t==='PLL')return pin==='amp'?'':pin==='w'?'rad/s':'rad';if(t==='INT'&&c.params?.wrap==='2pi')return 'rad';return '';}
 // symbols of the outputs of multi-output blocks (first output = channel Y:id, the others Y:id:pin)
-const OUT_SYM={IM:{w:'ω',te:'τ_e',psi:'|ψ_R|',thf:'θ_f',thr:'θ_r'},FEST:{th:'θ̂',psi:'|ψ̂|',w1:'ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ω',te:'τ_e'},PLL:{th:'θ',w:'ω',amp:'V̂_d'},CLARKE:{al:'α',be:'β'},IPARK:{al:'α',be:'β'},PARK:{d:'d',q:'q'},ICLARKE:{a:'a',b:'b',c:'c'},SR:{q:'Q',nq:'Q̄'}};
-const OUT_TXT={IM:{w:'ταχύτητα ω',te:'ροπή τ_e',psi:'ροή δρομέα |ψ_R|',thf:'γωνία ροής θ_f',thr:'γωνία δρομέα θ_r'},FEST:{th:'γωνία θ̂',psi:'ροή |ψ̂|',w1:'συχνότητα ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ταχύτητα ω',te:'ροπή τ_e'},PLL:{th:'γωνία θ',w:'συχνότητα ω',amp:'πλάτος (v_d)'},CLARKE:{al:'συνιστώσα α',be:'συνιστώσα β'},IPARK:{al:'συνιστώσα α',be:'συνιστώσα β'},PARK:{d:'συνιστώσα d',q:'συνιστώσα q'},ICLARKE:{a:'φάση a',b:'φάση b',c:'φάση c'},SR:{q:'έξοδος Q',nq:'έξοδος Q̄'}};
+const OUT_SYM={IM:{w:'ω',te:'τ_e',psi:'|ψ_R|',thf:'θ_f',thr:'θ_r'},SM:{w:'ω',te:'τ_e',th:'θ',id:'i_d',iq:'i_q'},FEST:{th:'θ̂',psi:'|ψ̂|',w1:'ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ω',te:'τ_e'},PLL:{th:'θ',w:'ω',amp:'V̂_d'},CLARKE:{al:'α',be:'β'},IPARK:{al:'α',be:'β'},PARK:{d:'d',q:'q'},ICLARKE:{a:'a',b:'b',c:'c'},SR:{q:'Q',nq:'Q̄'}};
+const OUT_TXT={IM:{w:'ταχύτητα ω',te:'ροπή τ_e',psi:'ροή δρομέα |ψ_R|',thf:'γωνία ροής θ_f',thr:'γωνία δρομέα θ_r'},SM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'ηλεκτρική γωνία δρομέα θ',id:'ρεύμα i_d',iq:'ρεύμα i_q'},FEST:{th:'γωνία θ̂',psi:'ροή |ψ̂|',w1:'συχνότητα ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ταχύτητα ω',te:'ροπή τ_e'},PLL:{th:'γωνία θ',w:'συχνότητα ω',amp:'πλάτος (v_d)'},CLARKE:{al:'συνιστώσα α',be:'συνιστώσα β'},IPARK:{al:'συνιστώσα α',be:'συνιστώσα β'},PARK:{d:'συνιστώσα d',q:'συνιστώσα q'},ICLARKE:{a:'φάση a',b:'φάση b',c:'φάση c'},SR:{q:'έξοδος Q',nq:'έξοδος Q̄'}};
 function outsOf(c){return Object.entries(P.sigPins(c)).filter(([,d])=>d.dir==='out').map(([k])=>k);}
 // ------------------------------------------------------------------ channels
 function chanLabel(key){const [pre,id,pin]=key.split(':');const c=editor.comp(id);const name=c?.label||id;
  if(pre==='VN'){const w=editor.doc.wires.find(w=>w.name&&((w.a.c===id&&w.a.p===pin)||(w.b.c===id&&w.b.p===pin)));return w?w.name:'v('+(c?.type==='JUNC'?'κόμβος '+id:name+'.'+pin)+')';}
  if(pre==='Y'&&c?.type==='PY')return (pin||outsOf(c)[0]||'y')+'('+name+')';
  if(pre==='Y'&&c&&OUT_SYM[c.type]){const o=pin||outsOf(c)[0];return (OUT_SYM[c.type][o]||o)+'('+name+')';}
+ const pm=pre.match(/^([IV])([1-9])$/);if(pm)return (pm[1]==='I'?'i':'v')+'₀₁₂₃₄₅₆₇₈₉'[+pm[2]]+'('+name+')';if((pre==='I'||pre==='V')&&(c?.type==='KL'||c?.type==='KG'))return (pre==='I'?'i₁':'v₁')+'('+name+')';
  const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',GS:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold',Y:c?.type==='VM'?'v':c?.type==='AM'?'i':c?.type==='SR'?'Q':'y'}[pre]||pre)+'('+name+')';}
 function addProbe(key,label){if(!S.sim)return;const ok=scope.addChannel(key,label||chanLabel(key));renderChannels();if(!ok)flash('#chan-list');else{flash('#scope-card');}draw(true);}
 function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash');}
 function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI')return [];
  if(t==='PY')return outsOf(c).map((o,k)=>['Y:','έξοδος '+o,k?':'+o:'']);
- if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:t==='IM'?[...m,['I:','ρεύμα φάσης a'],['V:','πολική τάση v_ab']]:m;}
+ if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:t==='IM'||t==='SM'?[...m,['I:','ρεύμα φάσης a'],['V:','πολική τάση v_ab']]:m;}
  if(P.BLOCKS.has(t))return [['Y:',t==='DISP'?'τιμή εισόδου':t==='VM'?'τάση (μέτρηση)':t==='AM'?'ρεύμα a → b (μέτρηση)':t==='SR'?'έξοδος Q':'έξοδος y']];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
  if(t==='SH')return [['H:','κρατημένη τιμή (δείγματα)']];
+ if(t==='KL'||t==='KG'){const n=P.nPorts({...P.defaults(t),...c.params}),w=t==='KL'?'τυλίγματος':'θύρας';return Array.from({length:n},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα ${w} ${k+1} (a → b)`],[(k?'V'+(k+1):'V')+':',`τάση ${w} ${k+1}`]]).flat();}
  const base=[['I:','ρεύμα'],['V:','τάση'],['P:',['VDC','VAC','IDC'].includes(t)?'ισχύς που δίνει':'ισχύς']];if(t==='SW'||t==='SCR')base.splice(1,0,['GS:','παλμός πύλης (1 = ON)']);if(t==='SW'&&(+c.params?.Eon>0||+c.params?.Eoff>0))base.push(['PSW:','απώλειες μεταγωγής (μέση ανά T)']);
  if(t==='VAC3')return [['I:','ρεύμα φάσης a'],['Ib:','ρεύμα φάσης b'],['Ic:','ρεύμα φάσης c'],['V:','τάση v_an'],['Vb:','τάση v_bn'],['Vc:','τάση v_cn'],['Vab:','πολική τάση v_ab'],['P:','ισχύς που δίνει (3φ)']];if(t==='XFMR')return [['I:','ρεύμα πρωτεύοντος'],['V:','τάση πρωτεύοντος'],['I2:','ρεύμα δευτερεύοντος'],['V2:','τάση δευτερεύοντος'],['Im:','ρεύμα μαγνήτισης'],['P:','ισχύς']];return base;}
 function renderChannels(){
@@ -794,6 +798,75 @@ function focTheory(){const s=S.sim,m=S.tutMeta||{},M=imPar();if(!s||!M)return ''
  if(s.t<m.tTL+.5)return h+'<p class="muted small">Τρέξε ως το τέλος (1,5 s) για τη σύγκριση στη μόνιμη κατάσταση μετά το φορτίο.</p>';
  h+=cmpRows([['ταχύτητα ω_m',m.wref,w,'rad/s'],['i_d (πλαίσιο εκτιμητή)',idr,id,'A'],['i_q (πλαίσιο εκτιμητή)',k===1?iqr:NaN,iq,'A'],['|ψ_R| πραγματική, από τα μετρημένα i_d, i_q',psP,s.now('Y:M1:psi'),'V·s'],['σφάλμα γωνίας θ_f − θ̂ (°)',dP,dM,''],['ροπή τ_e',te,avgOver('Y:M1:te',n)?.avg,'N·m']]);
  return h+`<p class="small muted">Με k ≠ 1 ο βρόχος ταχύτητας αυξάνει ή μειώνει το i_q ώσπου να βγει η ροπή του φορτίου, αλλά με λάθος ροή: με k < 1 υπερμαγνήτιση, με k > 1 υπομαγνήτιση (εδώ χωρίς κορεσμό). Οι τιμές της μηχανής είναι τυπικές.</p>`+evalOrderHTML();}
+// 3.5: synchronous reluctance machine. τ_e = K·i_d·i_q with K = (3/2)·p·(L_d − L_q); a current |i| at angle γ from d gives
+// τ = K·|i|²·sin(2γ)/2, so the most torque per ampere at γ = 45° (MTPA, without saturation). Steady state at ω_e = p·ω:
+// v_d = R·i_d − ω_e·L_q·i_q, v_q = R·i_q + ω_e·L_d·i_d, cos φ = (v_d·i_d + v_q·i_q)/(|v|·|i|) ≤ (ξ − 1)/(ξ + 1), ξ = L_d/L_q.
+// Alignment: a current I on the α axis gives τ(δ) = −(3/4)·p·(L_d − L_q)·I²·sin 2δ (δ: electrical angle of d from α)
+function synTheory(){const s=S.sim,m=S.tutMeta||{},M=paramsOf('M1');if(!s||!M||M.Ld===undefined)return '';
+ const R=+M.Rs,Ld=+M.Ld,Lq=+M.Lq,p=Math.round(+M.pp),J=+M.J,b=+M.bm,K=1.5*p*(Ld-Lq),xi=Ld/Lq,pfMax=(xi-1)/(xi+1),T=s.T,deg=180/Math.PI;
+ if(m.mode==='align'){const I=m.Va/R,tmax=.75*p*(Ld-Lq)*I*I,Kth=1.5*p*p*(Ld-Lq)*I*I,fn=Math.sqrt(Kth/J)/(2*Math.PI),th0=+m.th0,dF=Math.abs(((th0%360)+360)%360-180)<90?180:0;
+  let h=`<div class="tm"><span class="badge">ευθυγράμμιση</span> σταθερό διάνυσμα v_α = ${eng(m.Va,'V')}, θ₀ = ${fmt(th0,3)}°</div><ul class="eqs">
+   <li>Ρεύμα στον άξονα α: I = v_α/R_s = <b>${eng(I,'A')}</b> (φάση a: I, φάσεις b, c: −I/2). Με τον άξονα d του δρομέα σε γωνία δ: i_d = I·cos δ, i_q = −I·sin δ</li>
+   <li>Ροπή μαγνητικής αντίστασης τ_e = (3/2)·p·(L_d − L_q)·i_d·i_q = <b>−(3/4)·p·(L_d − L_q)·I²·sin 2δ</b>, μέγιστη ${eng(tmax,'N·m')} στις 45°. Περίοδος 180° ηλεκτρικές: ο δρομέας δεν έχει «βόρειο» και «νότιο»</li>
+   <li>Ισορροπίες: δ = 0° και 180° ευσταθείς (ο άξονας d, ελάχιστη μαγνητική αντίσταση, πάνω στο ρεύμα), δ = ±90° ασταθείς (ο άξονας q). Από θ₀ = ${fmt(th0,3)}° ο δρομέας πηγαίνει στις <b>${dF}°</b></li>
+   <li>Μικρές ταλαντώσεις με σταθερό ρεύμα: K_θ = (3/2)·p²·(L_d − L_q)·I² = ${eng(Kth,'N·m/rad')}, f_n = √(K_θ/J)/2π = <b>${eng(fn,'Hz')}</b>. Εδώ η τάση είναι σταθερή, όχι το ρεύμα: όταν ο δρομέας κινείται αλλάζει η ροή του στάτη και τα ρεύματα που επάγονται φρενάρουν την ταλάντωση (ηλεκτρική απόσβεση)</li></ul>`;
+  if(s.t<.8)return h+'<p class="muted small">Τρέξε ως το τέλος (1,2 s) για τη σύγκριση στη θέση ισορροπίας.</p>';
+  const w=perSamples('Y:M1','avg',Math.round(.8/T));let up=[];for(let k=1;k<w.length;k++)if(w[k-1]<0&&w[k]>=0)up.push(k);const fm=up.length>=2?1/((up[1]-up[0])*T):NaN;
+  const d=s.now('Y:DL')*deg,dd=dF===180?Math.abs(d):d;
+  h+=cmpRows([['γωνία ισορροπίας |δ| (°)',dF,dd,''],['i_d = I·cos δ',dF===180?-I:I,s.now('Y:M1:id'),'A'],['i_q',0,s.now('Y:M1:iq'),'A'],['ροπή τ_e',0,s.now('Y:M1:te'),'N·m'],['συχνότητα ταλάντωσης (πρώτη περίοδος)',fn,fm,'Hz']]);
+  return h+`<p class="small muted">Το I στην προσομοίωση είναι λίγο μικρότερο από v_α/R_s λόγω του R_on των διακοπτών. Η πρώτη ταλάντωση είναι μεγάλη (μη γραμμικό εκκρεμές με sin 2δ) και αποσβένεται ηλεκτρικά, γι' αυτό η συχνότητά της διαφέρει από το f_n των μικρών ταλαντώσεων.</p>`;}
+ const g=m.g,te=m.TL+b*m.wref,we=p*m.wref;let id,iq;if(g){const i=Math.sqrt(2*te/(K*Math.sin(2*g/deg)));id=i*Math.cos(g/deg);iq=i*Math.sin(g/deg);}else{id=m.Id0;iq=te/(K*m.Id0);}
+ const imtpa=Math.sqrt(2*te/K),vd=R*id-we*Lq*iq,vq=R*iq+we*Ld*id,vm=Math.hypot(vd,vq),im=Math.hypot(id,iq),pf=(vd*id+vq*iq)/(vm*im),gpf=Math.atan(Math.sqrt(xi))*deg,Vlim=+paramsOf('V1').V/Math.sqrt(3);
+ let h=`<div class="tm"><span class="badge">έλεγχος dq</span> ${g?'γ = '+g+'°'+(g===45?' (MTPA)':''):'σταθερό i_d = '+eng(m.Id0,'A')} · ω_ref = ${eng(m.wref,'rad/s')}, τ_L = ${eng(m.TL,'N·m')} από ${eng(m.tTL,'s')}</div><ul class="eqs">
+  <li>Ροπή τ_e = K·i_d·i_q, K = (3/2)·p·(L_d − L_q) = <b>${eng(K,'N·m/A²',4)}</b>. Με |i| σε γωνία γ από τον d: τ_e = K·|i|²·sin(2γ)/2, άρα <b>MTPA στις 45°</b>: |i| = √(2τ/K)</li>
+  <li>Αναφορές από τη ροπή τ* του βρόχου ταχύτητας: ${g?`|i| = √(2|τ*|/(K·sin 2γ)), i_d = |i|·cos γ, i_q = sign(τ*)·|i|·sin γ`:`i_d = ${eng(m.Id0,'A')}, i_q = τ*/(K·i_d) (η ροπή γραμμική ως προς i_q)`}</li>
+  <li>Μόνιμη κατάσταση: τ_e = τ_L + b·ω = ${eng(te,'N·m')}, i_d = <b>${eng(id,'A')}</b>, i_q = <b>${eng(iq,'A')}</b>, |i| = <b>${eng(im,'A')}</b> (με MTPA ${eng(imtpa,'A')}, ${fmt(100*(im/imtpa-1),3)} % περισσότερο)</li>
+  <li>Τάσεις στα ω_e = p·ω = ${eng(we,'rad/s')}: v_d = R·i_d − ω_e·L_q·i_q = ${eng(vd,'V')}, v_q = R·i_q + ω_e·L_d·i_d = ${eng(vq,'V')}, |v| = ${eng(vm,'V')} (όριο SVPWM ${eng(Vlim,'V')})</li>
+  <li>Συντελεστής ισχύος cos φ = (v_d·i_d + v_q·i_q)/(|v|·|i|) = <b>${fmt(pf,3)}</b>. Το μέγιστο, χωρίς R_s, είναι (ξ − 1)/(ξ + 1) = ${fmt(pfMax,3)} με ξ = L_d/L_q = ${fmt(xi,3)}, στη γωνία γ = atan √ξ = ${fmt(gpf,3)}°: γι' αυτό η SynRM θέλει μεγάλο λόγο ξ</li>
+  <li>Κέρδη: ρεύματος K_p = α_c·L_d = ${eng(m.kpd)} (d), α_c·L_q = ${eng(m.kpq)} (q), K_i = α_c·R_s = ${eng(m.kic)} (α_c = 2π·200 Hz), με αποσύζευξη −ω_e·L_q·i_q και +ω_e·L_d·i_d. Ταχύτητας K_p = α_s·J = ${eng(m.kps)}, K_i = α_s²·J/4 = ${eng(m.kis)} (α_s = 2π·8 Hz), έξοδος τ* ως ±${eng(m.taumax,'N·m')}</li></ul>`;
+ if(s.t<m.tTL+.4)return h+'<p class="muted small">Τρέξε ως το τέλος (1 s) για τη σύγκριση στη μόνιμη κατάσταση με φορτίο.</p>';
+ const n=Math.round(.02/T),a=k=>avgOver(k,n)?.avg,ud=a('Y:EXUD'),uq=a('Y:EXUQ'),sid=a('Y:PK'),siq=a('Y:PK:q');
+ const lead=we*T/2,dang=Math.atan2(uq,ud)-Math.atan2(vq,vd),spf2=Math.cos(Math.atan2(uq,ud)-lead-Math.atan2(siq,sid));
+ h+=cmpRows([['ταχύτητα ω_m',m.wref,s.now('Y:M1'),'rad/s'],['i_d',id,sid,'A'],['i_q',iq,siq,'A'],['|i|',im,Math.hypot(sid,siq),'A'],['ροπή τ_e',te,a('Y:M1:te'),'N·m'],['|u| (εντολή)',vm,Math.hypot(ud,uq),'V'],
+  ['προπορεία της εντολής ω_e·T/2 (°)',lead*deg,dang*deg,''],['cos φ',pf,spf2,'']]);
+ return h+`<p class="small muted">Η σύγκριση είναι με μέσες τιμές στα τελευταία 20 ms. Οι τάσεις της προσομοίωσης είναι οι εντολές προς τον διαμορφωτή. Υπολογίζονται με τη γωνία στην αρχή της περιόδου, αλλά εφαρμόζονται κατά μέσο όρο στο μέσο της, όταν ο δρομέας έχει στραφεί κατά ω_e·T/2: γι' αυτό η εντολή προπορεύεται τόσο από τη θεωρία (το cos φ υπολογίζεται χωρίς αυτή την προπορεία). Χωρίς κορεσμό: στην πραγματική SynRM η L_d πέφτει με το ρεύμα και η γωνία MTPA ανεβαίνει πάνω από 45°. Οι τιμές της μηχανής είναι τυπικές.</p>`+evalOrderHTML();}
+// 3.5: permanent-magnet synchronous machine. τ_e = (3/2)·p·(ψ_m·i_q + (L_d − L_q)·i_d·i_q); MTPA for a current amplitude i_s:
+// i_d = (ψ_m − √(ψ_m² + 8·(L_q − L_d)²·i_s²))/(4·(L_q − L_d)) (from dτ/dγ = 0), i_q = √(i_s² − i_d²); i_d = 0 when L_d = L_q
+function pmTheory(){const s=S.sim,m=S.tutMeta||{},M=paramsOf('M1');if(!s||!M||M.Ld===undefined)return '';
+ const R=+M.Rs,Ld=+M.Ld,Lq=+M.Lq,pm=+M.psim,p=Math.round(+M.pp),b=+M.bm,dL=Lq-Ld,T=s.T,deg=180/Math.PI,te=m.TL+b*m.wref,we=p*m.wref,Vlim=+paramsOf('V1').V/Math.sqrt(3);
+ const mtpa=i=>{if(Math.abs(dL)<1e-12)return [0,i];const d=(pm-Math.sqrt(pm*pm+8*dL*dL*i*i))/(4*dL);return [d,Math.sqrt(Math.max(i*i-d*d,0))];},tq=([d,q])=>1.5*p*(pm*q+(Ld-Lq)*d*q);
+ let lo=0,hi=100;for(let k=0;k<100;k++){const mid=(lo+hi)/2;if(tq(mtpa(mid))<te)lo=mid;else hi=mid;}const [dM,qM]=mtpa((lo+hi)/2),q0=te/(1.5*p*pm);
+ const [id,iq]=m.strat==='mtpa'?[dM,qM]:[0,q0],vd=R*id-we*Lq*iq,vq=R*iq+we*(Ld*id+pm),vm=Math.hypot(vd,vq),im=Math.hypot(id,iq),pf=(vd*id+vq*iq)/(vm*im);
+ let h=`<div class="tm"><span class="badge">${Math.abs(dL)<1e-12?'SPMSM':'IPMSM'}</span> ${m.strat==='mtpa'?'MTPA':'i_d = 0'} · ω_ref = ${eng(m.wref,'rad/s')}, τ_L = ${eng(m.TL,'N·m')} από ${eng(m.tTL,'s')}</div><ul class="eqs">
+  <li>Ροπή τ_e = (3/2)·p·(ψ_m·i_q + (L_d − L_q)·i_d·i_q): όρος μαγνήτη και όρος μαγνητικής αντίστασης. L_q − L_d = ${eng(dL,'H')}${dL>0?': αρνητικό i_d προσθέτει ροπή':': χωρίς ροπή μαγνητικής αντίστασης'}</li>
+  <li>MTPA (από dτ/dγ = 0 για σταθερό |i|): i_d = (ψ_m − √(ψ_m² + 8·(L_q − L_d)²·i_s²))/(4·(L_q − L_d)), i_q = √(i_s² − i_d²)</li>
+  <li>Μόνιμη κατάσταση με τ_e = τ_L + b·ω = ${eng(te,'N·m')}: MTPA i_d = <b>${eng(dM,'A')}</b>, i_q = <b>${eng(qM,'A')}</b>, |i| = <b>${eng(Math.hypot(dM,qM),'A')}</b>· με i_d = 0, i_q = τ/((3/2)·p·ψ_m) = <b>${eng(q0,'A')}</b></li>
+  <li>Τάσεις στα ω_e = ${eng(we,'rad/s')}: v_d = R·i_d − ω_e·L_q·i_q = ${eng(vd,'V')}, v_q = R·i_q + ω_e·(L_d·i_d + ψ_m) = ${eng(vq,'V')}, |v| = ${eng(vm,'V')} (όριο ${eng(Vlim,'V')}), cos φ = <b>${fmt(pf,3)}</b></li>
+  <li>Κέρδη ρεύματος όπως στη SynRM (α_c = 2π·200 Hz, αποσύζευξη με +ω_e·ψ_m στο u_q). Ταχύτητας K_p = α_s·J/k_t = ${eng(m.kps)}, K_i = ${eng(m.kis)} με k_t = (3/2)·p·ψ_m = ${eng(m.kt,'N·m/A',3)}, έξοδος i_s ως ±${eng(m.Imax,'A')}</li></ul>`;
+ if(s.t<m.tTL+.4)return h+'<p class="muted small">Τρέξε ως το τέλος (1 s) για τη σύγκριση στη μόνιμη κατάσταση με φορτίο.</p>';
+ const n=Math.round(.02/T),a=k=>avgOver(k,n)?.avg,ud=a('Y:EXUD'),uq=a('Y:EXUQ'),sid=a('Y:PK'),siq=a('Y:PK:q'),lead=we*T/2;
+ h+=cmpRows([['ταχύτητα ω_m',m.wref,s.now('Y:M1'),'rad/s'],['i_d',id,sid,'A'],['i_q',iq,siq,'A'],['|i|',im,Math.hypot(sid,siq),'A'],['ροπή τ_e',te,a('Y:M1:te'),'N·m'],['|u| (εντολή)',vm,Math.hypot(ud,uq),'V'],
+  ['cos φ',pf,Math.cos(Math.atan2(uq,ud)-lead-Math.atan2(siq,sid)),'']]);
+ return h+`<p class="small muted">Μέσες τιμές στα τελευταία 20 ms. Το cos φ της προσομοίωσης αφαιρεί την προπορεία ω_e·T/2 της εντολής τάσης (όπως στη SynRM). Οι τιμές της μηχανής είναι τυπικές.</p>`+evalOrderHTML();}
+// 3.5: lightning current. From the waveform: peak, T1 = 1.25·(t90 − t10), T2 (virtual origin → 50 %), charge ∫i dt, specific energy ∫i² dt,
+// steepest front di/dt and the peak of v = R·i + L·di/dt; from the simulation: the same on the recorded points and the per-period statistics
+function lgTheory(){const s=S.sim,m=S.tutMeta||{},c=s?.net.compInfo.get('I1'),w=c?.wave,Rp=paramsOf('R1'),Lp=paramsOf('L1');if(!s||!w||!Rp||!Lp)return '';
+ const R=+Rp.R,L=+Lp.L,me=P.waveMeasure(w),pk=Math.abs(w.I0),N=40000,t1=(m.dur||5*w.tau2)-w.t0;let Q=0,W=0,dmax=0,vmax=0,tp=0,y0=0;
+ for(let k=1;k<=N;k++){const tt=w.t0+t1*Math.pow(k/N,3),ta=w.t0+t1*Math.pow((k-1)/N,3),y=P.waveAt(w,tt),h=tt-ta,d=(y-y0)/h;Q+=h*(y+y0)/2;W+=h*(y*y+y*y0+y0*y0)/3;
+  if(Math.abs(d)>Math.abs(dmax))dmax=d;const v=R*(y+y0)/2+L*d;if(Math.abs(v)>Math.abs(vmax)){vmax=v;tp=tt;}y0=y;}
+ let h=`<div class="tm"><span class="badge">${w.kind==='dexp'?'διπλοεκθετικό':'Heidler'}</span> I₀ = ${eng(w.I0,'A')} · τ₁ = ${eng(w.tau1,'s',4)}, τ₂ = ${eng(w.tau2,'s',4)}, η = ${fmt(w.eta,4)}${w.kind==='dexp'?'':', n = '+w.n}</div><ul class="eqs">
+  <li>${w.kind==='dexp'?'i(t) = (I₀/η)·(e^(−t/τ₂) − e^(−t/τ₁))':'i(t) = (I₀/η)·(t/τ₁)ⁿ/(1 + (t/τ₁)ⁿ)·e^(−t/τ₂)'}, με η τέτοιο ώστε το μέγιστο να είναι I₀${m.shape==='custom'?'. Τα τ₁, τ₂ βρέθηκαν με Newton ώστε T1 = '+eng(w.T1,'s')+' και T2 = '+eng(w.T2,'s'):'. Τα τ₁, τ₂, η είναι του IEC 62305-1, Παράρτημα Β'}</li>
+  <li>Χρόνος μετώπου T1 = 1,25·(t₉₀ − t₁₀) = <b>${eng(me.T1,'s',4)}</b>, χρόνος ημίσεος T2 = <b>${eng(me.T2,'s',4)}</b> (από την εικονική αρχή t₁₀ − 0,1·T1 ως το 50 % στην ουρά)</li>
+  <li>Ως t = ${eng(t1+w.t0,'s')}: φορτίο Q = ∫i dt = <b>${eng(Q,'C',4)}</b>, ειδική ενέργεια W/R = ∫i² dt = <b>${eng(W,'J/Ω',4)}</b>${m.shape==='10/350'?' (IEC 62305-1, LPL I: 100 C και 10 MJ/Ω)':''}</li>
+  <li>Μέγιστη κλίση di/dt = <b>${eng(dmax,'A/s',3)}</b>. Τάση v = R·i + L·di/dt με R = ${eng(R,'Ω')}, L = ${eng(L,'H')}: μέγιστη <b>${eng(vmax,'V',4)}</b> στο ${eng(tp,'s',3)}, ενώ μόνο το R·I₀ = ${eng(R*pk,'V')}</li></ul>`;
+ if(s.t<m.dur*.98)return h+'<p class="muted small">Τρέξε ως το τέλος για τη σύγκριση.</p>';
+ const raw=rawSeries('I:I1'),rv=rawSeries('V:I1');if(!raw||!rv)return h;const ts=raw.t,ys=raw.y;let yp=0,ip=0;for(let k=0;k<ys.length;k++)if(Math.abs(ys[k])>Math.abs(yp)){yp=ys[k];ip=k;}
+ const cr=(lev,rise)=>{for(let k=1;k<ys.length;k++){const a=Math.abs(ys[k-1]),b=Math.abs(ys[k]),L0=lev*Math.abs(yp);if(rise?(k<=ip&&a<L0&&b>=L0):(k>ip&&a>L0&&b<=L0))return ts[k-1]+(L0-a)/(b-a)*(ts[k]-ts[k-1]);}return NaN;};
+ const t10=cr(.1,true),t90=cr(.9,true),t50=cr(.5,false),T1=1.25*(t90-t10),T2=t50-(t10-.1*T1);
+ const p=s.per,iI=s.chIndex.get('I:I1');let sq=0,sw=0;for(let k=0;k<p.n;k++){const j=(p.head-p.n+k+p.cap)%p.cap;sq+=p.avg[j*p.nch+iI]*s.T;sw+=p.rms[j*p.nch+iI]**2*s.T;}
+ let vm=0;for(const v of rv.y)if(Math.abs(v)>Math.abs(vm))vm=v;
+ h+=cmpRows([['μέγιστο ρεύμα',w.I0,yp,'A'],['T1',me.T1,T1,'s'],['T2',me.T2,T2,'s'],['φορτίο Q',Q,sq,'C'],['W/R',W,sw,'J/Ω'],['μέγιστη τάση',vmax,vm,'V']]);
+ return h+`<p class="small muted">Από τα σημεία της προσομοίωσης (βήμα ${eng(s.h,'s')}). Q και W/R από τις στατιστικές ανά περίοδο (T = T1 της κυματομορφής), όσο το ιστορικό τις χωράει.</p>`;}
 // 3.2: period doubling of the current-mode boost with an R–C load (Deane & Hamill): period from the samples at the clock
 function chaosTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('IC'))return '';const x=perSamples('Y:AM1','end',200),q=Metrics.periodicity(x.slice(-100));
  if(x.length<20)return '<p class="muted small">Τρέξε την προσομοίωση μερικές δεκάδες περιόδους για να φανεί η περίοδος της λειτουργίας.</p>';
@@ -848,6 +921,9 @@ function formulaTheory(t){
  if(t.topology==='cell_eis')return eisTheory();
  if(t.topology==='im_vf')return vfTheory();
  if(t.topology==='im_foc')return focTheory();
+ if(t.topology==='synrm')return synTheory();
+ if(t.topology==='pmsm')return pmTheory();
+ if(t.topology==='lightning')return lgTheory();
  if(t.topology==='polyphase')return polyTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const D=+W.D,Vin=+V.V,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);

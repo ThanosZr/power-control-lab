@@ -380,8 +380,10 @@
     J('JT'+q,x,110),J('JM'+q,x,200),J('JB'+q,x,290),C('AM'+q,'AM',x+50,330,{},{rot:1,label:'i_'+q}),C('TG'+q,'TAGO',x+100,330,{name:'i_'+q}),C(P,'PWM',x,40,{fs,mode:'ext',carrier:'triangle'},{label:'PWM '+q,lbl:'above'}),C('TD'+q,'TAGI',x-80,40,{name:'d_'+q}));
    wires.push(['S'+(2*k+1)+':d','JT'+q],['S'+(2*k+1)+':s','JM'+q],['JM'+q,'S'+(2*k+2)+':d'],['S'+(2*k+2)+':s','JB'+q],['JM'+q,'AM'+q+':a',[[x+50,200]]],['AM'+q+':y','TG'+q+':u'],['TD'+q+':y',P+':d']);});
   wires.push(['JTL','JTa'],['JTa','JTb'],['JTb','JTc'],['JBL','JBa'],['JBa','JBb'],['JBb','JBc']);
-  comps.push(C('M1','IM',470,470,{TL:o.TL,w0:0},{flip:true,rot:3,label:'M (επαγωγής)',lbl:'left'}),C('TGw','TAGO',560,560,{name:'ω'}),C('TGf','TAGO',560,600,{name:'θ_f'}));
-  wires.push(['AMa:b','M1:a',[[350,400],[450,400]]],['AMb:b','M1:b'],['AMc:b','M1:c',[[590,400],[490,400]]],['M1:w','TGw:u',[[450,560]]],['M1:thf','TGf:u',[[480,600]]]);
+  if(o.sm){comps.push(C('M1','SM',470,470,{...o.sm,TL:o.TL},{flip:true,rot:3,label:o.label||'M (σύγχρονη)',lbl:'left'}),C('TGw','TAGO',560,620,{name:'ω'}),C('TGf','TAGO',560,580,{name:'θ'}));
+   wires.push(['AMa:b','M1:a',[[350,400],[450,400]]],['AMb:b','M1:b'],['AMc:b','M1:c',[[590,400],[490,400]]],['M1:w','TGw:u',[[450,620]]],['M1:th','TGf:u',[[470,580]]]);}
+  else{comps.push(C('M1','IM',470,470,{TL:o.TL,w0:0},{flip:true,rot:3,label:'M (επαγωγής)',lbl:'left'}),C('TGw','TAGO',560,560,{name:'ω'}),C('TGf','TAGO',560,600,{name:'θ_f'}));
+   wires.push(['AMa:b','M1:a',[[350,400],[450,400]]],['AMb:b','M1:b'],['AMc:b','M1:c',[[590,400],[490,400]]],['M1:w','TGw:u',[[450,560]]],['M1:thf','TGf:u',[[480,600]]]);}
   return {comps,wires,Vdc,fs};}
  const IMP={Rs:3,RR:2,Ls:.025,LM:.3,p:2,J:.02,b:.002};
  T.push({id:'im_vf',group:'Ηλεκτρική κίνηση (3.4)',title:'Μηχανή επαγωγής: V/f και διαμόρφωση SPWM, SVPWM, τετραγωνική',theory:'formula',topology:'im_vf',
@@ -426,6 +428,79 @@
    const ws=wires.map(w=>w[0]==='TFth2x'?['TFth3:y','PK:th']:w);comps.push(C('TFth3','TAGI',64,-288,{name:'θ̂'}));
    return project(comps,ws,{sim:{hDiv:40,speed:20,stopT:1.5},scope:{panes:[[['Y:M1','ω_m'],['Y:KW','ω_ref']],[['Y:PK','i_d'],['Y:PK:q','i_q']],[['Y:M1:psi','|ψ_R| (πραγματική)'],['Y:FE:psi','|ψ̂_R|']],[['Y:M1:te','τ_e']]],window:{unit:'s',n:1.5}},
     meta:{...IMP,Vdc:600,fs:5e3,psin,wb,wref,k,kpc,kic,kps,kis,Imax,ac,as,TL:10,tTL:.6}});}});
+ // ------------------------------------------------------------------ 3.5: synchronous reluctance machine (Θάνος, 8/11): the rotor turns to the minimum reluctance
+ const r4=v=>+v.toPrecision(4);
+ // dq current control of a synchronous machine on the power stage of invIM: Clarke + Park with the rotor angle θ of the machine, speed PI
+ // (output cfg.in: torque or current amplitude), references i_d,ref and i_q,ref from expressions, PI per axis with decoupling
+ // u_d = PI_d − ω_e·L_q·i_q, u_q = PI_q + ω_e·L_d·i_d, inverse Park and Clarke, SVPWM. Speed step at 0.05 s.
+ function smFoc(pw,M,cfg){const {comps,wires}=pw,ac=2*Math.PI*200,wref=100,kpd=r4(ac*M.Ld),kpq=r4(ac*M.Lq),kic=r4(ac*M.Rs),u=cfg.in;
+  comps.push(C('TFa','TAGI',-260,-350,{name:'i_a'}),C('TFb','TAGI',-260,-325,{name:'i_b'}),C('TFc','TAGI',-260,-300,{name:'i_c'}),C('CL','CLARKE',-138,-325,{},{label:'abc → αβ'}),
+   C('TFth','TAGI',-100,-270,{name:'θ'}),C('PK','PARK',-4,-315,{},{label:'αβ → dq'}),C('TGid','TAGO',100,-325,{name:'i_d'}),C('TGiq','TAGO',100,-305,{name:'i_q'}),
+   C('KW','CONST',-260,-180,{v:`0:0, 0.05:${wref}`},{label:'ω_ref'}),C('TFw','TAGI',-260,-140,{name:'ω'}),C('SW1','SUM',-170,-170,{signs:'+-'},{label:'e_ω'}),
+   C('PIS','PIB',-80,-170,{Kp:cfg.kps,Ki:cfg.kis,clock:'PWMA',trig:'start',y0:0,ymin:-cfg.ymax,ymax:cfg.ymax},{label:cfg.label}),
+   C('EXD','EXPR',50,-200,cfg.exd,{label:'i_d,ref'}),C('EXQ','EXPR',50,-100,cfg.exq,{label:'i_q,ref'}),
+   C('TFid','TAGI',115,-180,{name:'i_d'}),C('TFiq','TAGI',115,-80,{name:'i_q'}),C('SD','SUM',180,-190,{signs:'+-'},{label:'e_d'}),C('SQ','SUM',180,-90,{signs:'+-'},{label:'e_q'}),
+   C('PID','PIB',260,-190,{Kp:kpd,Ki:kic,clock:'PWMA',trig:'start',y0:0,ymin:-350,ymax:350},{label:'PI i_d'}),C('PIQ','PIB',260,-90,{Kp:kpq,Ki:kic,clock:'PWMA',trig:'start',y0:0,ymin:-350,ymax:350},{label:'PI i_q'}),
+   C('TFw2','TAGI',305,-170,{name:'ω'}),C('TFiq2','TAGI',305,-150,{name:'i_q'}),C('TFw3','TAGI',305,-70,{name:'ω'}),C('TFid2','TAGI',305,-50,{name:'i_d'}),
+   C('EXUD','EXPR',390,-170,{expr:'v - p*w*Lq*iq',ins:'v, w, iq',pars:`p = ${M.p}, Lq = ${M.Lq}`},{label:'u_d'}),
+   C('EXUQ','EXPR',390,-70,{expr:M.psim>0?'v + p*w*(Ld*id + psim)':'v + p*w*Ld*id',ins:'v, w, id',pars:`p = ${M.p}, Ld = ${M.Ld}`+(M.psim>0?`, psim = ${M.psim}`:'')},{label:'u_q'}),
+   C('TFth2','TAGI',450,-30,{name:'θ'}),C('IPK','IPARK',510,-150,{},{label:'dq → αβ'}),C('ICL','ICLARKE',620,-150,{},{label:'αβ → abc'}),C('KDC','CONST',620,-60,{v:'600'},{label:'V_dc'}),
+   C('MD','MOD3',730,-140,{mode:'svpwm'},{label:'SVPWM'}),C('TGda','TAGO',830,-165,{name:'d_a'}),C('TGdb','TAGO',830,-140,{name:'d_b'}),C('TGdc','TAGO',830,-115,{name:'d_c'}));
+  wires.push(['TFa:y','CL:a'],['TFb:y','CL:b'],['TFc:y','CL:c'],['CL:al','PK:al'],['CL:be','PK:be'],['TFth:y','PK:th'],['PK:d','TGid:u'],['PK:q','TGiq:u'],
+   ['KW:y','SW1:a'],['TFw:y','SW1:b'],['SW1:y','PIS:u'],...(String(cfg.exd.ins).trim()?[['PIS:y','EXD:'+u]]:[]),['PIS:y','EXQ:'+u],['EXD:y','SD:a'],['TFid:y','SD:b'],['EXQ:y','SQ:a'],['TFiq:y','SQ:b'],
+   ['SD:y','PID:u'],['SQ:y','PIQ:u'],['PID:y','EXUD:v'],['TFw2:y','EXUD:w'],['TFiq2:y','EXUD:iq'],['PIQ:y','EXUQ:v'],['TFw3:y','EXUQ:w'],['TFid2:y','EXUQ:id'],
+   ['EXUD:y','IPK:d'],['EXUQ:y','IPK:q'],['TFth2:y','IPK:th'],['IPK:al','ICL:al'],['IPK:be','ICL:be'],['ICL:a','MD:va'],['ICL:b','MD:vb'],['ICL:c','MD:vc'],['KDC:y','MD:vdc'],['MD:da','TGda:u'],['MD:db','TGdb:u'],['MD:dc','TGdc:u']);
+  return {wref,TL:8,tTL:.5,ac,kpd,kpq,kic,kps:cfg.kps,kis:cfg.kis};}
+ const SYN={Rs:2,Ld:.15,Lq:.03,psim:0,p:2,J:.02,b:.002};
+ T.push({id:'synrm',group:'Ηλεκτρική κίνηση (3.5)',title:'Σύγχρονη μηχανή μαγνητικής αντίστασης (SynRM): ευθυγράμμιση, έλεγχος dq, MTPA',theory:'formula',topology:'synrm',
+  options:[{k:'mode',label:'Πείραμα',options:[['foc','Έλεγχος ταχύτητας και ρεύματος dq'],['align','Ευθυγράμμιση: σταθερό διάνυσμα ρεύματος']],def:'foc'},
+   {k:'strat',label:'Γωνία ρεύματος (έλεγχος dq)',options:[['mtpa','MTPA: γ = 45° (ελάχιστο ρεύμα ανά ροπή)'],['g30','γ = 30°'],['g60','γ = 60°'],['idc','Σταθερό i_d = 4 A (σταθερή «ροή»)']],def:'mtpa'},
+   {k:'th0',label:'Αρχική γωνία δρομέα (ευθυγράμμιση)',options:[['60','θ₀ = 60°'],['120','θ₀ = 120°'],['89','θ₀ = 89° (σχεδόν στον άξονα q)']],def:'60'}],
+  desc:'Η SynRM δεν έχει μαγνήτες ούτε τύλιγμα στον δρομέα. Ο δρομέας έχει άξονα εύκολης μαγνήτισης d (L_d μεγάλη) και δύσκολης q (L_q μικρή), και η ροπή είναι μόνο ροπή μαγνητικής αντίστασης: τ_e = (3/2)·p·(L_d − L_q)·i_d·i_q. Ο δρομέας στρέφεται ώστε ο άξονας d να πέσει πάνω στο διάνυσμα του ρεύματος, δηλαδή εκεί όπου η μαγνητική αντίσταση στη ροή είναι ελάχιστη. Τριφασικός αντιστροφέας 600 V, 5 kHz, SVPWM, μηχανή 4 πόλων με L_d = 0,15 H, L_q = 0,03 H (τυπικές τιμές). Η γωνία του δρομέα έρχεται από τη μηχανή (κωδικοποιητής).',
+  tasks:['Ευθυγράμμιση: ο αντιστροφέας δίνει σταθερό διάνυσμα τάσης στον άξονα α, άρα ρεύμα 10 A στη φάση a. Ο δρομέας ξεκινά στις 60° και ταλαντεύεται γύρω από τη γωνία 0: εκεί ο άξονας d βλέπει το ρεύμα. Η ροπή είναι ανάλογη του −sin 2δ.','Με θ₀ = 120° ο δρομέας πηγαίνει στις 180°, όχι στο 0. Και οι δύο φορές του άξονα d είναι ελάχιστη μαγνητική αντίσταση, γι\'αυτό η ροπή έχει περίοδο 180° ηλεκτρικές. Με θ₀ = 89° η ροπή ξεκινά σχεδόν μηδενική: ο άξονας q είναι ασταθής θέση ισορροπίας.','Έλεγχος dq: ο βρόχος ταχύτητας δίνει ροπή αναφοράς τ*, και από αυτή βγαίνουν i_d,ref και i_q,ref για τη γωνία γ που διαλέγεις. Με φορτίο 8 N·m στα 0,5 s δες στην κάρτα θεωρίας το ρεύμα που χρειάζεται κάθε γωνία: το MTPA (45°) θέλει το λιγότερο.','Οι PI ρεύματος έχουν αποσύζευξη: u_d = PI_d − ω_e·L_q·i_q και u_q = PI_q + ω_e·L_d·i_d. Ο συντελεστής ισχύος της SynRM είναι μικρός. Η κάρτα θεωρίας δίνει το cos φ και το όριο (ξ − 1)/(ξ + 1) για ξ = L_d/L_q.'],
+  build(o){const M=SYN,align=o.mode==='align',th0=align?+o.th0:0,pw=invIM({TL:align?'0':'0:0, 0.5:8',sm:{Rs:M.Rs,Ld:M.Ld,Lq:M.Lq,psim:0,pp:M.p,J:M.J,bm:M.b,th0},label:'M (SynRM)'}),{comps,wires}=pw;
+   const sim={hDiv:40,speed:20,stopT:align?1.2:1};
+   if(align){const Va=20;
+    comps.push(C('KA','CONST',520,-160,{v:String(Va)},{label:'v_α'}),C('KB','CONST',520,-110,{v:'0'},{label:'v_β = 0'}),C('ICL','ICLARKE',620,-150,{},{label:'αβ → abc'}),C('KDC','CONST',620,-60,{v:'600'},{label:'V_dc'}),
+     C('MD','MOD3',730,-140,{mode:'svpwm'},{label:'SVPWM'}),C('TGda','TAGO',830,-165,{name:'d_a'}),C('TGdb','TAGO',830,-140,{name:'d_b'}),C('TGdc','TAGO',830,-115,{name:'d_c'}),
+     C('TFth','TAGI',300,-240,{name:'θ'}),C('DL','EXPR',420,-240,{expr:'mod(th + pi, 2*pi) - pi',ins:'th',pars:''},{label:'δ ∈ (−π, π]'}));
+    wires.push(['KA:y','ICL:al'],['KB:y','ICL:be'],['ICL:a','MD:va'],['ICL:b','MD:vb'],['ICL:c','MD:vc'],['KDC:y','MD:vdc'],['MD:da','TGda:u'],['MD:db','TGdb:u'],['MD:dc','TGdc:u'],['TFth:y','DL:th']);
+    return project(comps,wires,{sim,scope:{panes:[[['Y:DL','δ (γωνία δρομέα)']],[['Y:M1:te','τ_e']],[['Y:M1:id','i_d'],['Y:M1:iq','i_q']],[['Y:M1','ω_m']]],window:{unit:'s',n:1.2}},
+     meta:{...M,Vdc:600,fs:5e3,mode:'align',Va,th0}});}
+   const st=o.strat,g={mtpa:45,g30:30,g60:60}[st],K=1.5*M.p*(M.Ld-M.Lq),Id0=4,as=2*Math.PI*8,taumax=15;
+   const pars=g?`K = ${r4(K)}, s2 = ${r4(Math.sin(2*g*Math.PI/180))}, cg = ${r4(Math.cos(g*Math.PI/180))}, sg = ${r4(Math.sin(g*Math.PI/180))}`:`K = ${r4(K)}, Id0 = ${Id0}`;
+   // τ = K·i_d·i_q = K·|i|²·sin(2γ)/2 → |i| = √(2|τ|/(K·sin 2γ))
+   const exd=g?{expr:'cg*sqrt(2*abs(tau)/(K*s2))',ins:'tau',pars}:{expr:'Id0',ins:'',pars},exq=g?{expr:'sign(tau)*sg*sqrt(2*abs(tau)/(K*s2))',ins:'tau',pars}:{expr:'tau/(K*Id0)',ins:'tau',pars};
+   const c=smFoc(pw,M,{exd,exq,in:'tau',kps:r4(as*M.J),kis:r4(as*as*M.J/4),ymax:taumax,label:'PI ταχύτητας → τ*'});
+   return project(comps,wires,{sim,scope:{panes:[[['Y:M1','ω_m'],['Y:KW','ω_ref']],[['Y:PK','i_d'],['Y:PK:q','i_q'],['Y:EXD','i_d,ref'],['Y:EXQ','i_q,ref']],[['Y:M1:te','τ_e'],['Y:PIS','τ*']],[['Y:AMa','i_a']]],window:{unit:'s',n:1}},
+    meta:{...M,Vdc:600,fs:5e3,mode:'foc',strat:st,g,K,Id0,...c,as,taumax}});}});
+ // permanent-magnet synchronous machine: the same model with ψ_m > 0 (d on the magnet). The speed PI gives the current amplitude i_s;
+ // MTPA: i_d = (ψ_m − √(ψ_m² + 8·(L_q − L_d)²·i_s²))/(4·(L_q − L_d)), i_q = sign(i_s)·√(i_s² − i_d²); for L_d = L_q (SPMSM) i_d = 0
+ const PMS={ipm:{Rs:2,Ld:.04,Lq:.1,psim:.3,p:2,J:.02,b:.002},spm:{Rs:2,Ld:.06,Lq:.06,psim:.3,p:2,J:.02,b:.002}};
+ T.push({id:'pmsm',group:'Ηλεκτρική κίνηση (3.5)',title:'Σύγχρονη μηχανή μόνιμων μαγνητών (PMSM / IPMSM): i_d = 0 και MTPA',theory:'formula',topology:'pmsm',
+  options:[{k:'mach',label:'Μηχανή',options:[['ipm','IPMSM: L_d = 0,04 H, L_q = 0,1 H, ψ_m = 0,3 V·s'],['spm','SPMSM: L_d = L_q = 0,06 H, ψ_m = 0,3 V·s']],def:'ipm'},
+   {k:'strat',label:'Ρεύματα αναφοράς',options:[['mtpa','MTPA'],['id0','i_d = 0']],def:'mtpa'}],
+  desc:'Το ίδιο μοντέλο σύγχρονης μηχανής με τη SynRM, με μαγνήτη ψ_m στον άξονα d. Η ροπή έχει δύο όρους: τ_e = (3/2)·p·(ψ_m·i_q + (L_d − L_q)·i_d·i_q). Στην IPMSM L_q > L_d, άρα αρνητικό i_d δίνει επιπλέον ροπή μαγνητικής αντίστασης. Στην SPMSM L_d = L_q και μένει μόνο ο όρος του μαγνήτη. Ο βρόχος ταχύτητας δίνει το πλάτος ρεύματος i_s, και το MTPA το μοιράζει σε i_d και i_q. Ίδιος αντιστροφέας και ίδιοι PI ρεύματος με αποσύζευξη (u_q με +ω_e·ψ_m) όπως στη SynRM.',
+  tasks:['IPMSM με MTPA και φορτίο 8 N·m: το i_d βγαίνει αρνητικό. Σύγκρινε στην κάρτα θεωρίας το ρεύμα με το i_d = 0: για την ίδια ροπή το MTPA θέλει λιγότερο.','SPMSM: τα δύο ταυτίζονται, γιατί χωρίς διαφορά L_d − L_q το i_d δεν δίνει ροπή.','Δες την τάση: με i_d = 0 η πτώση ω_e·L_q·i_q στον άξονα d είναι μεγάλη. Το αρνητικό i_d του MTPA μειώνει και τη ροή του άξονα d, ψ_d = L_d·i_d + ψ_m.'],
+  build(o){const M=PMS[o.mach]||PMS.ipm,st=o.strat==='id0'||M.Ld===M.Lq?'id0':'mtpa',pw=invIM({TL:'0:0, 0.5:8',sm:{Rs:M.Rs,Ld:M.Ld,Lq:M.Lq,psim:M.psim,pp:M.p,J:M.J,bm:M.b,th0:0},label:o.mach==='spm'?'M (SPMSM)':'M (IPMSM)'}),{comps,wires}=pw;
+   const kt=1.5*M.p*M.psim,as=2*Math.PI*8,Imax=15,dL=M.Lq-M.Ld;
+   const exd=st==='mtpa'?{expr:'(psim - sqrt(psim^2 + 8*dL^2*i^2))/(4*dL)',ins:'i',pars:`psim = ${M.psim}, dL = ${r4(dL)}`}:{expr:'0',ins:'',pars:''};
+   const exq=st==='mtpa'?{expr:'sign(i)*sqrt(max(i^2 - ((psim - sqrt(psim^2 + 8*dL^2*i^2))/(4*dL))^2, 0))',ins:'i',pars:`psim = ${M.psim}, dL = ${r4(dL)}`}:{expr:'i',ins:'i',pars:''};
+   const c=smFoc(pw,M,{exd,exq,in:'i',kps:r4(as*M.J/kt),kis:r4(as*as*M.J/kt/4),ymax:Imax,label:'PI ταχύτητας → i_s'});
+   return project(comps,wires,{sim:{hDiv:40,speed:20,stopT:1},scope:{panes:[[['Y:M1','ω_m'],['Y:KW','ω_ref']],[['Y:PK','i_d'],['Y:PK:q','i_q'],['Y:EXD','i_d,ref'],['Y:EXQ','i_q,ref']],[['Y:M1:te','τ_e']],[['Y:AMa','i_a']]],window:{unit:'s',n:1}},
+    meta:{...M,Vdc:600,fs:5e3,mach:o.mach,strat:st,kt,Imax,as,...c}});}});
+ // ------------------------------------------------------------------ 3.5: lightning current (Heidler, IEC 62305-1) into a down conductor and an earth resistance
+ T.push({id:'lightning',group:'Κεραυνικά (3.5)',title:'Κεραυνικό ρεύμα Heidler: 10/350, 1/200, 0,25/100 μs',theory:'formula',topology:'lightning',
+  options:[{k:'shape',label:'Κυματομορφή',options:[['10/350','10/350 μs, 200 kA (πρώτο θετικό, LPL I)'],['1/200','1/200 μs, 100 kA (πρώτο αρνητικό)'],['0.25/100','0,25/100 μs, 50 kA (επόμενο αρνητικό)'],['custom','1,2/50 μs διπλοεκθετικό, 10 kA (προσαρμογή τ₁, τ₂)']],def:'10/350'}],
+  desc:'Πηγή ρεύματος Heidler i(t) = (I₀/η)·(t/τ₁)ⁿ/(1 + (t/τ₁)ⁿ)·e^(−t/τ₂) με τα τ₁, τ₂, η του IEC 62305-1 (n = 10), σε αγωγό καθόδου 10 m (L = 10 μH) και αντίσταση γείωσης 10 Ω. Η τάση στην κορυφή του αγωγού είναι v = R·i + L·di/dt: στο μέτωπο κυριαρχεί ο όρος L·di/dt. Η τέταρτη επιλογή δείχνει την προσαρμογή των τ₁, τ₂ σε άλλο χρόνο μετώπου/ημίσεος. Τα πλέγματα γείωσης με αμοιβαία σύζευξη (διπλωματική ) έρχονται αργότερα.',
+  tasks:['Τρέξε: η κάρτα θεωρίας συγκρίνει μέγιστο, T1 και T2 με τις τιμές της κυματομορφής, και το φορτίο Q = ∫i dt και την ειδική ενέργεια W/R = ∫i² dt με τον IEC 62305-1 (10/350 στα 200 kA: 100 C, 10 MJ/Ω).','Σύγκρινε τη μέγιστη τάση στις τρεις κυματομορφές: το 0,25/100 έχει το μικρότερο ρεύμα αλλά τη μεγαλύτερη κλίση di/dt, άρα τη μεγαλύτερη επαγωγική τάση.','Στις ρυθμίσεις της πηγής διάλεξε «Άλλη T1/T2»: τα τ₁, τ₂ προσαρμόζονται ώστε η κυματομορφή να έχει ακριβώς αυτούς τους χρόνους.'],
+  build(o){// [I₀, duration (tail down to below 1 %), speed, step T1/hDiv]
+   const sh={'10/350':[200e3,3e-3,100,100],'1/200':[100e3,1.5e-3,500,100],'0.25/100':[50e3,8e-4,2000,50],custom:[10e3,4e-4,100,100]}[o.shape]||[200e3,3e-3,100,100],R=10,L=10e-6;
+   const ip=o.shape==='custom'?{shape:'custom',model:'dexp',T1:1.2e-6,T2:50e-6,Ipk:sh[0]}:{shape:o.shape,Ipk:sh[0]};
+   const comps=[C('I1','ILG',100,200,ip,{label:'i κεραυνού'}),C('L1','L',200,120,{L},{label:'αγωγός καθόδου'}),C('R1','R',300,200,{R},{rot:1,label:'R_γείωσης'}),gnd(200,320),J('J1',100,120)];
+   const wires=[['I1:p','J1'],['J1','L1:a'],['L1:b','R1:a',[[300,120]]],['R1:b','G1:g',[[300,300],[200,300]]],['I1:n','G1:g',[[100,300],[200,300]]]];
+   return project(comps,wires,{sim:{hDiv:sh[3],speed:sh[2],stopT:sh[1]},scope:{panes:[[['I:I1','i(t)']],[['V:I1','v = R·i + L·di/dt'],['V:R1','R·i']]],window:{unit:'s',n:sh[1]}},
+    meta:{shape:o.shape,I0:sh[0],R,L,dur:sh[1]}});}});
  // ------------------------------------------------------------------ 3.0: peak current-mode, subharmonic oscillation
  T.push({id:'peak_cm',group:'Μπλοκ σημάτων (3.0)',title:'Peak current-mode και υποαρμονική',theory:'formula',topology:'peak_cm',
   options:[{k:'mode',label:'Έλεγχος',options:[['peak','Peak: ρολόι → ON, κορυφή → OFF'],['valley','Valley: ρολόι → OFF, κοιλάδα → ON']],def:'peak'},
