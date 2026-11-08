@@ -43,7 +43,7 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Playwright και Chromium
         run: |
-          npm install --no-save playwright@1.48.2
+          npm install --no-save playwright@1.63.0
           npx playwright install --with-deps chromium
       - name: Σενάρια στον browser
         run: |
