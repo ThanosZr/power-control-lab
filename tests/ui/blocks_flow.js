@@ -106,4 +106,21 @@ const {chromium}=require('playwright');
  await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.sim.T*80);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(500);
  th=await p.$eval('#theory',e=>e.textContent);ok(/λ = \(m_a − m₁\)\/\(m₂ \+ m_a\) = -0,6667/.test(th)&&/σταθερό: ίδιο duty/.test(th),'valley theory');
  ok(await p.evaluate(()=>!!document.querySelector('#bf-map path.map')),'ideal map drawn');
+ // 3.3: PI in Python (Pyodide, local copy) and feedforward from an expression block
+ await p.evaluate(()=>window.PCL.loadTutorial('code_loop',{ctrl:'python',ff:'expr'}));
+ await p.waitForFunction(()=>window.PyRT?.ready&&window.PCL.S.sim&&!window.PCL.S.error&&window.PCL.S.sim.net.sig.blocks.some(b=>b.type==='PY'),null,{timeout:90000});
+ await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.stopT-S.sim.t);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(500);
+ th=await p.$eval('#theory',e=>e.textContent);ok(/201 κλήσεις/.test(th),'python calls');ok(/κοιλάδα i_L10 A10 A/.test(th),'valley at the reference (python)');ok(/κοιλάδα στα 0,5 ms \(αρχική αναφορά\)5 A(5 A|4,99\d A)/.test(th),'feedforward start');
+ const dpy=await p.evaluate(()=>window.PCL.S.sim.now('D:PWM1'));
+ // a syntax error is reported with its line; fixing it runs again
+ const code0=await p.evaluate(()=>window.PCL.editor.comp('PI1').params.code);
+ await p.evaluate(c=>window.PCL.editor.setParams('PI1',{code:c.replace('def step(t, u, s, p):','def step(t, u, s, p)')}),code0);await p.waitForTimeout(500);
+ ok(/γραμμή \d+: SyntaxError/.test(await p.evaluate(()=>window.PCL.S.error||'')),'python syntax error: '+await p.evaluate(()=>window.PCL.S.error));
+ await p.evaluate(c=>window.PCL.editor.setParams('PI1',{code:c}),code0);await p.waitForTimeout(500);ok(!(await p.evaluate(()=>window.PCL.S.error)),'fixed code runs');
+ await p.evaluate(()=>window.PCL.loadTutorial('code_loop',{ctrl:'pib',ff:'expr'}));await p.waitForTimeout(800);await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.stopT-S.sim.t);window.PCL.pause();});
+ ok(Math.abs(await p.evaluate(()=>window.PCL.S.sim.now('D:PWM1'))-dpy)<1e-12,'python = PI block');
+ const q=await p.evaluate(()=>{window.PCL.loadTutorial('code_loop',{ctrl:'python',ff:'none'});return true;});await p.waitForFunction(()=>window.PCL.S.sim?.net.sig.blocks.some(b=>b.type==='PY')&&!window.PCL.S.error,null,{timeout:30000});
+ await p.$eval('[data-c="PI1"] .hit',e=>e.scrollIntoView({block:'center'}));await p.waitForTimeout(200);
+ const pq=await p.evaluate(()=>{const r=document.querySelector('[data-c="PI1"] .hit').getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2];});await p.mouse.dblclick(...pq);await p.waitForTimeout(400);
+ ok(await p.evaluate(()=>!!document.querySelector('#inspector textarea.code')),'code editor in the inspector');await p.screenshot({path:'code_loop.png'});
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

@@ -143,6 +143,69 @@ class Ctrl:
         return E
 
 
+_FUN = {'sin': math.sin, 'cos': math.cos, 'tan': math.tan, 'asin': math.asin, 'acos': math.acos, 'atan': math.atan, 'atan2': math.atan2,
+        'sinh': math.sinh, 'cosh': math.cosh, 'tanh': math.tanh, 'exp': math.exp, 'log': math.log, 'log10': math.log10, 'sqrt': math.sqrt,
+        'abs': abs, 'min': min, 'max': max, 'pow': math.pow, 'floor': math.floor, 'ceil': math.ceil, 'round': lambda x: math.floor(x + .5),
+        'sign': lambda x: (x > 0) - (x < 0), 'hypot': math.hypot, 'clamp': lambda x, a, b: min(max(x, a), b), 'mod': lambda a, b: a - b * math.floor(a / b)}
+
+
+def eval_ast(n, v, t):
+    """Evaluate the tree of an expression block (built by web/studio/expr.js), with the browser's semantics."""
+    k = n[0]
+    if k == 'num':
+        return n[1]
+    if k == 'var':
+        return v[n[1]]
+    if k == 't':
+        return t
+    if k == 'un':
+        a = eval_ast(n[2], v, t)
+        return -a if n[1] == '-' else (0.0 if a else 1.0)
+    if k == 'if':
+        return eval_ast(n[2], v, t) if eval_ast(n[1], v, t) else eval_ast(n[3], v, t)
+    if k == 'call':
+        return float(_FUN[n[1]](*[eval_ast(a, v, t) for a in n[2]]))
+    op, a, b = n[1], eval_ast(n[2], v, t), eval_ast(n[3], v, t)
+    if op == '+': return a + b
+    if op == '-': return a - b
+    if op == '*': return a * b
+    if op == '/': return a / b if b else (math.copysign(math.inf, a) if a else math.nan)
+    if op == '%': return a - b * math.floor(a / b)
+    if op == '^': return math.pow(a, b)
+    return float({'<': a < b, '>': a > b, '<=': a <= b, '>=': a >= b, '==': a == b, '!=': a != b, '&&': bool(a and b), '||': bool(a or b)}[op])
+
+
+def make_python_block(code, ins, outs, pars, Ts, label):
+    """Same contract as web/studio/pyrt.js: step(t, u, s, p) with init(p); returns the list of outputs."""
+    g = {'math': math, '__name__': 'pcl_block'}
+    try:
+        exec(compile(code, '<μπλοκ>', 'exec'), g)
+    except SyntaxError as e:
+        raise BatchError(f'{label}: γραμμή {e.lineno}: SyntaxError: {e.msg}')
+    step = g.get('step')
+    if not callable(step):
+        raise BatchError(f'{label}: ο κώδικας πρέπει να ορίζει συνάρτηση step(t, u, s, p)')
+    p = {**pars, 'Ts': Ts}
+    init = g.get('init')
+    box = [(init(p) if callable(init) else {}) or {}]
+
+    def call(t, uvals):
+        try:
+            r = step(t, dict(zip(ins, uvals)), box[0], p)
+        except Exception as e:
+            import traceback
+            ln = [f.lineno for f in traceback.extract_tb(e.__traceback__) if f.filename == '<μπλοκ>']
+            raise BatchError(f'{label} (t = {t:.6g} s): ' + (f'γραμμή {ln[-1]}: ' if ln else '') + f'{type(e).__name__}: {e}')
+        if isinstance(r, tuple) and len(r) == 2 and isinstance(r[1], dict):
+            r, box[0] = r
+        if isinstance(r, dict):
+            return [float(r.get(k, 0.0)) for k in outs]
+        if isinstance(r, (list, tuple)):
+            return [float(x) for x in r][:len(outs)] + [0.0] * max(0, len(outs) - len(r))
+        return [float(r)] + [0.0] * (len(outs) - 1)
+    return call
+
+
 class Circuit:
     def __init__(self, net):
         self.els = net['els']
@@ -699,6 +762,22 @@ class Circuit:
                         st['kt'] = min(1.0, b['Ki'] * Ts / b['Kp']) if b['Kp'] > 0 else 1.0
                         pend.append(b)
                 y = st['y']
+            elif ty == 'EXPR':
+                v = [rd(I.get(k)) for k in b['inNames']] + list(b.get('parVals') or [])
+                try:
+                    y = eval_ast(b['ast'], v, tt)
+                except (ValueError, ZeroDivisionError, OverflowError):
+                    y = 0.0
+                if not math.isfinite(y):
+                    y = 0.0
+            elif ty == 'PY':
+                if mode == 'sample' and self.blk_due(b, t, force):
+                    if '_rt' not in b:
+                        g = self.sh_grid(b)
+                        b['_rt'] = make_python_block(b['code'], b['inNames'], b['outNames'], b.get('pars') or {}, g[1] if g else 0.0, b['id'])
+                    st['ys'] = b['_rt'](t, [rd(I.get(k)) for k in b['inNames']])
+                    sampled = True
+                ys = {k: (st['ys'][i] if st.get('ys') else _f(b.get('y0'), 0)) for i, k in enumerate(b['outNames'])}
             elif ty == 'UD':
                 if disc and self.blk_due(b, t, force):
                     st['y'] = b['y0'] if force else st['mem']
@@ -825,7 +904,7 @@ class Circuit:
                 for ts, _ in b['sched'] or []:
                     if t + eps < ts < tn:
                         tn = ts
-            elif ty in ('PIB', 'UD'):
+            elif ty in ('PIB', 'UD', 'PY'):
                 ts = self.sh_next(b, t)
                 if t + eps < ts < tn:
                     tn = ts
@@ -914,6 +993,10 @@ def simulate(data):
     """Action 'batch_sim'. Input: {net, channels, t_end, method, rtol, atol, max_step, max_points}."""
     if not isinstance(data, dict) or not isinstance(data.get('net'), dict):
         raise BatchError('Λείπει το κύκλωμα.')
+    blocks = (data['net'].get('sig') or {}).get('blocks') or []
+    if any(isinstance(b, dict) and b.get('type') == 'PY' for b in blocks) and not data.get('_local'):
+        # user code runs only on a server that the user runs for himself
+        raise BatchError('Τα μπλοκ Python εκτελούνται στον server μόνο όταν τρέχει τοπικά (python run.py, διεύθυνση 127.0.0.1).')
     method = data.get('method', 'Radau')
     if method not in METHODS:
         raise BatchError('Άγνωστη μέθοδος: ' + str(method))

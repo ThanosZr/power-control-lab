@@ -163,5 +163,11 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
   [['VP:n','G:g'],['VN:p','G:g'],['VP:p','S1:d'],['S1:s','S2:d'],['S2:s','VN:n'],['S1:s','R1:a'],['R1:b','G:g']]);
  const s=new Sim(pr,{hDiv:2000});s.run(.06);const r=s.ring,i=s.chIndex.get('I:R1'),t=[],y=[];const st=(r.head-r.n+r.cap)%r.cap;for(let q=0;q<r.n;q++){const j=(st+q)%r.cap;t.push(r.t[j]);y.push(r.d[j*r.nch+i]);}
  const h=M.harmonics({t,y,f1:50,periods:2,H:98});out.harm={A1:h.A1,A3:h.A[3],A2:h.A[2],dc:h.dc,rms:h.rms,thd:h.thd,thdAll:h.thdAll,H:h.H};}
+// 25) expression block (3.3): parser and evaluation, also inside a circuit; errors become warnings
+{const E=require(W+'/expr.js');const v=[3,4];const cases=['a*b + 1','hypot(a, b)','a^2 + b**2','-a^2','2^3^2','a > b ? a : b','clamp(a*b, 0, 10)','mod(-7, 3)','(a < b) + (a == 3) + !(b != 4)','atan2(b, a)','min(a, b, 1)','round(2.5) + floor(-0.5) + sign(-a)','10 % 4','exp(log(a)) + sqrt(b)','pi*e*0 + t'];
+ const r={};for(const c of cases)r[c]=E.compile(E.parse(c,['a','b']))(v,0.5);const errs=[];for(const c of ['a +','foo(a)','a b','sin(a, b)','x + 1','(a']){try{E.parse(c,['a','b']);errs.push(null);}catch(e){errs.push(e.message);}}
+ const pr=project([{id:'V1',type:'VDC',params:{V:10}},{id:'R1',type:'R',params:{R:5}},{id:'G',type:'GND'},{id:'VM1',type:'VM'},{id:'AM1',type:'AM'},{id:'EX1',type:'EXPR',params:{expr:'v*i*k',ins:'v, i',pars:'k = 2'}},{id:'EX2',type:'EXPR',params:{expr:'v +',ins:'v'}}],
+  [['V1:p','AM1:a'],['AM1:b','R1:a'],['R1:b','G:g'],['V1:n','G:g'],['VM1:p','V1:p'],['VM1:n','G:g'],['VM1:y','EX1:v'],['AM1:y','EX1:i'],['VM1:y','EX2:v']]);
+ const s=new Sim(pr,{h:1e-6});s.run(1e-5);out.expr={vals:r,errs,p:s.now('Y:EX1'),bad:s.now('Y:EX2'),warn:s.net.warnings};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

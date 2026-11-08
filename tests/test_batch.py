@@ -142,6 +142,21 @@ class BatchSolver(unittest.TestCase):
             self.assertAlmostEqual(float(y[w].max()), q['max'], delta=1e-3)
             self.assertAlmostEqual(float(y[w].min()), q['min'], delta=1e-3)
 
+    def test_code_blocks_parity(self):
+        # 3.3: the Python block runs natively on the server, the expression tree is evaluated by eval_ast;
+        # the browser reference is the same circuit with the PI block (identical operations)
+        js = self.req['code_py']['js']
+        T = js['T']
+        r = self.run_case('code_py', round(js['pk'][-1]['t'] / T) * T, 'LSODA', rtol=1e-8, atol=1e-10, _local=True)
+        self.assertEqual(r['status'], 'ok')
+        t, y = np.array(r['t']), np.array(r['ch']['Y:AM1'])
+        for q in js['pk']:
+            w = (t >= q['t'] - T - 1e-12) & (t <= q['t'] + 1e-12)
+            self.assertAlmostEqual(float(y[w].max()), q['max'], delta=1e-4)
+            self.assertAlmostEqual(float(y[w].min()), q['min'], delta=1e-4)
+        with self.assertRaises(BatchError):                                        # not from another machine
+            self.run_case('code_py', 1e-4, 'LSODA')
+
     def test_explicit_method_reports_stiffness(self):
         r = self.run_case('buck_dcm', 2e-3, 'RK45', wall=2)
         self.assertIn(r['status'], ('ok', 'timeout'))

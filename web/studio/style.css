@@ -255,3 +255,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:6px}
 .stag{font:italic 600 9.5px Inter,system-ui,sans-serif;fill:var(--sig);pointer-events:none}.stag.bad{fill:var(--danger)}
 .pin.spin.linked{opacity:.95;fill:var(--sig-bg)}
 .ins-srcs{margin-top:8px;padding-top:6px;border-top:1px dashed var(--line)}.ins-srcs small{display:block;margin-bottom:4px}
+
+/* code blocks (3.3) */
+#inspector textarea.code{width:100%;min-width:420px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.4;border:1px solid var(--line);border-radius:6px;padding:6px;tab-size:4;white-space:pre}
+.part .pinl{font-size:7px;fill:var(--muted)}

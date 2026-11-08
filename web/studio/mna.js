@@ -14,6 +14,7 @@
 //   recent history.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
+ const Ex=root.Expr||(typeof require!=='undefined'?require('./expr.js'):null);
  const GMIN=1e-9;
  const schedAt=(s,t,dflt)=>{if(!s)return dflt;let v=s[0][1];if(t<s[0][0])return dflt;for(const [ts,val] of s){if(ts<=t+1e-15)v=val;else break;}return v;};
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -145,6 +146,10 @@
     else if(T==='SAT'){b.lo=num(p.lo,0);b.hi=num(p.hi,1);}
     else if(T==='CMP'){b.hys=Math.max(0,num(p.hys,0));st.s=0;st.f0=0;}
     else if(T==='LOGIC')b.op=p.op||'or';
+    else if(T==='EXPR'){const ins=Ex.names(p.ins),pars=Ex.params(p.pars);b.inNames=ins;b.parVals=Object.values(pars);b.expr=String(p.expr??'');
+     try{b.ast=Ex.parse(b.expr,[...ins,...Object.keys(pars)]);}catch(e){warnings.push(`${b.label}: ${e.message} Η έξοδος είναι 0.`);b.ast=['num',0];}b.fn=Ex.compile(b.ast);}
+    else if(T==='PY'){b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';b.y0=num(p.y0,0);st.last=null;st.ys=null;b.inNames=Ex.names(p.ins,6,false);
+     b.outNames=Ex.names(p.outs,6,false).filter(k=>!b.inNames.includes(k));b.pars=Ex.params(p.pars);b.code=String(p.code??'');if(!b.outNames.length)warnings.push(`${b.label}: δεν έχει εξόδους.`);}
     else if(T==='PIB'||T==='UD'){b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';b.y0=num(p.y0,0);st.last=null;st.y=b.y0;
      if(T==='PIB'){b.Kp=num(p.Kp,0);b.Ki=num(p.Ki,0);b.track=p.aw==='track';b.ymin=b.track?-Infinity:num(p.ymin,0);b.ymax=b.track?Infinity:num(p.ymax,1);st.xi=0;}else st.mem=b.y0;
      if(!(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type)))warnings.push(`${b.label}: διάλεξε μπλοκ PWM ή Ρολόι (αλλιώς η έξοδος μένει ${b.y0}).`);}
@@ -223,6 +228,7 @@
    this.net=net;const nb=net.sig.blocks.length;this.sv=new Float64Array(net.sig.n);this.svT=new Float64Array(net.sig.n);this.yb=new Float64Array(nb);this.ybT=new Float64Array(nb);
    this.yo=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.yoT=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.ctrlById=new Map(net.ctrls.map(k=>[k.id,k]));this.clkById=new Map(net.sig.blocks.filter(b=>b.type==='CLK').map(b=>[b.id,b]));this.shById=new Map(net.shs.map(q=>[q.id,q]));this.n=net.size;this.A=new Float64Array(this.n*this.n);this.piv=new Int32Array(this.n);this.b=new Float64Array(this.n);this.cache=new Map();
    if(!this.x||this.x.length!==this.n||fresh)this.x=new Float64Array(this.n);
+   this.pyBlocks(old&&!fresh?old:null);
    this.hasCPL=net.els.some(e=>e.k==='CPL');this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.h=this.opts.h||this.T/this.opts.hDiv;
    const keys=this.channelKeys();const same=!fresh&&this.keys&&keys.join('|')===this.keys.join('|');
@@ -238,6 +244,12 @@
    return net.warnings;
   }
   reset(project){this.load(project||this.project,true);}
+  pyBlocks(old){const bs=this.net.sig.blocks.filter(b=>b.type==='PY');const prev=new Map((old?.sig.blocks||[]).filter(b=>b.type==='PY'&&b.rt).map(b=>[b.id,b]));
+   if(bs.length){const R=root.PyRT;if(!R||!R.ready){const e=new NetlistError('Το κύκλωμα έχει μπλοκ Python: φορτώνεται η Python (Pyodide)…');e.needPython=true;throw e;}
+    for(const b of bs){const g=this.shGrid(b),Ts=g?g.d:0;if(!g)this.net.warnings.push(`${b.label}: χωρίς ρολόι δεν καλείται ποτέ (διάλεξε PWM ή μπλοκ Ρολόι).`);
+     b.sig=JSON.stringify([b.code,b.inNames,b.outNames,b.pars,Ts]);const o=prev.get(b.id);
+     if(o&&o.sig===b.sig){b.rt=o.rt;prev.delete(b.id);}else{try{b.rt=R.make(b.code,{ins:b.inNames,outs:b.outNames,pars:b.pars,Ts,label:b.label});}catch(e){throw new NetlistError(e.message);}if(o){b.st.ys=null;b.st.last=null;}}}}
+   for(const o of prev.values())o.rt?.destroy?.();}
   setMethod(m){this.method=['TR','BE','BDF2'].includes(m)?m:'TR';this.cache.clear();this.beLeft=Math.max(this.beLeft,1);}
   setControl(id,patch){const k=this.net.ctrls.find(c=>c.id===id);if(!k)return false;Object.assign(k,patch);return true;}
   setBlock(id,patch){const b=this.net.sig.blocks.find(q=>q.id===id);if(!b)return false;Object.assign(b,patch);this.evalBlocks('commit');this.computeVals();return true;}
@@ -412,6 +424,10 @@
        st.xi+=b.Ki*Ts*e;let q=b.y0+b.Kp*e+st.xi;if(q>b.ymax||q<b.ymin){st.xi-=b.Ki*Ts*e;q=Math.min(b.ymax,Math.max(b.ymin,b.y0+b.Kp*e+st.xi));}st.y=q;sampled=true;if(b.track){st.kt=b.Kp>0?Math.min(1,b.Ki*Ts/b.Kp):1;pend.push(b);}}
       y=st.y;break;}
      case 'UD':if(disc&&this.blkDue(b,force)){st.y=force?b.y0:st.mem;pend.push(b);sampled=true;}y=st.y;break;
+     case 'EXPR':{const v=b.inNames.map(k=>rd(I[k]));for(const c of b.parVals)v.push(c);y=b.fn(v,t);if(!Number.isFinite(y))y=0;break;}
+     // Python: called once per sample instant (not in the 'init' pass, whose inputs come before the first solution)
+     case 'PY':{if(mode==='sample'&&b.rt&&this.blkDue(b,force)){st.ys=b.rt.step(this.t,b.inNames.map(k=>rd(I[k])));sampled=true;}
+      ys={};b.outNames.forEach((k,i)=>{const v=st.ys?st.ys[i]:b.y0;ys[k]=Number.isFinite(v)?v:0;});break;}
      case 'SR':{const S=rd(I.s)>=.5,Rr=rd(I.r)>=.5;let q=st.q;if(S&&!st.sp)q=1;if(Rr)q=0;if(!trial){st.q=q;st.sp=S;}ys={q,nq:1-q};break;}
      // continuous states: input held since the previous evaluation (the solver steps are short), state written after the pass
      case 'INT':{const dt=Math.max(0,this.t-st.t);let v=Math.min(b.hi,Math.max(b.lo,st.s+dt*st.u));if(b.wrap)v-=2*Math.PI*Math.floor(v/(2*Math.PI));y=v;if(!trial)cont.push([b,v]);break;}
@@ -617,7 +633,7 @@
      if(b.type==='CLK'&&b.duty>0&&b.duty<1)c.push(nx(Math.floor(u-b.duty+1e-9)+1,b.duty));if(b.type==='RAMP'&&b.shape==='tri')c.push(nx(Math.floor(u-.5+1e-9)+1,.5));
      for(const te of c)if(te>this.t+eps&&te<t)t=te;}
     else if(b.type==='CONST')sch(b.sched);
-    else if(b.type==='PIB'||b.type==='UD'){const ts=this.shNext(b);if(ts>this.t+eps&&ts<t)t=ts;}
+    else if(b.type==='PIB'||b.type==='UD'||b.type==='PY'){const ts=this.shNext(b);if(ts>this.t+eps&&ts<t)t=ts;}
    }
    // base-period boundary for statistics
    const Tb=this.T,kb=Math.floor((this.t+eps)/Tb)+1,tb=kb*Tb;if(tb>this.t+eps&&tb<t)t=tb;
@@ -684,9 +700,9 @@
   // signal blocks in evaluation order, with their initial state and recipes for the measured quantities
   const bix=new Map(net.sig.order.map((b,i)=>[b,i]));
   const blocks=net.sig.order.map(b=>{const o={id:b.id,type:b.type,ins:b.ins,outs:b.outs,st:JSON.parse(JSON.stringify(b.st))};
-   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
+   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
    if(b.type==='DCM')o.recs={w:{v:[[b.m,1]]},te:{i:[[idx.get(b.gy),b.psi]]}};
-   if(b.type==='PIB'||b.type==='UD'){o.clock=cix.get(b.clock)??null;o.clk=clkOf(b.clock);}
+   if(b.type==='PIB'||b.type==='UD'||b.type==='PY'){o.clock=cix.get(b.clock)??null;o.clk=clkOf(b.clock);}
    if(b.type==='VM')o.rec=vd(b.np,b.nn);else if(b.type==='AM')o.rec={i:[[idx.get(b.el),-1]]};else if(b.type==='MEAS'){const c=ci(b.src);o.rec=(b.qty==='V'?V(c):I(c))||null;}
    if(b.type==='SH'){o.sh=shx.get(b.id);o.sig=!!b.sig;}return o;});
   const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase','upd','dIn'])o[f]=k[f];

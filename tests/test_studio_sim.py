@@ -138,6 +138,21 @@ class StudioSimulator(unittest.TestCase):
         odd = sum(1 / h ** 2 for h in range(3, r['H'] + 1, 2))
         self.assertAlmostEqual(r['thd'], 100 * math.sqrt(odd), delta=.05)                        # up to h = 49
 
+    def test_expression_block(self):
+        r = self.o['expr']
+        v = r['vals']
+        exp = {'a*b + 1': 13, 'hypot(a, b)': 5, 'a^2 + b**2': 25, '-a^2': -9, '2^3^2': 512, 'a > b ? a : b': 4, 'clamp(a*b, 0, 10)': 10,
+               'mod(-7, 3)': 2, '(a < b) + (a == 3) + !(b != 4)': 3, 'atan2(b, a)': math.atan2(4, 3), 'min(a, b, 1)': 1,
+               'round(2.5) + floor(-0.5) + sign(-a)': 1, '10 % 4': 2, 'exp(log(a)) + sqrt(b)': 5, 'pi*e*0 + t': .5}
+        for k, x in exp.items():
+            self.assertAlmostEqual(v[k], x, places=12, msg=k)
+        self.assertTrue(all(r['errs']))                                          # every bad expression is rejected with a message
+        self.assertIn('Άγνωστη συνάρτηση «foo»', r['errs'][1])
+        self.assertIn('Άγνωστο όνομα «x»', r['errs'][4])
+        self.assertAlmostEqual(r['p'], 10 * 2 * 2, delta=1e-5)                   # v·i·k = 10 V · 2 A · 2
+        self.assertEqual(r['bad'], 0)
+        self.assertTrue(any('EX2' in w for w in r['warn']))
+
     def test_peak_current_mode(self):
         o, T = self.o, 1e-5
         m1, m2 = lambda D: (24 - 24 * D) / 50e-6, lambda D: 24 * D / 50e-6

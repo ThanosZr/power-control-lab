@@ -14,6 +14,14 @@
  const sb=(w,h)=>`<rect class="block sblk" x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx="4"/>`;
  const tx=(t,x=0,y=4,cls='btxt')=>`<text class="${cls}" x="${x}" y="${y}" text-anchor="middle">${t}</text>`;
  const sl=d=>`<path class="sigl" d="${d}"/>`;
+ const Ex=root.Expr||(typeof require!=='undefined'?require('./expr.js'):null);
+ // code blocks (3.3): inputs on the left and outputs on the right, named by the user, 20 apart on the grid
+ const codeIO=(ins,outs)=>{const o={};ins.forEach((k,i)=>o[k]=I(-40,-10*(ins.length-1)+20*i));outs.filter(k=>!(k in o)).forEach((k,i,a)=>o[k]=O(40,-10*(a.length-1)+20*i));return o;};
+ const codeH=(ins,outs)=>Math.max(15,10*Math.max(ins.length,outs.length));
+ const pyIns=p=>Ex.names(p.ins,6,false),pyOuts=p=>Ex.names(p.outs,6,false).filter(k=>!pyIns(p).includes(k));
+ const codeDraw=(ins,outs,label)=>{const h=codeH(ins,outs);return sb(60,2*h)+tx(label,0,4,'btxt')+sl([...ins.map((k,i)=>`M-40,${-10*(ins.length-1)+20*i} H-30`),...outs.map((k,i)=>`M30,${-10*(outs.length-1)+20*i} H40`)].join(' '))
+  +ins.map((k,i)=>tx(k,-27,-10*(ins.length-1)+20*i-3,'pinl')).join('')+outs.map((k,i)=>tx(k,27,-10*(outs.length-1)+20*i-3,'pinl')).join('');};
+ const PY_DEFAULT='# Καλείται σε κάθε δείγμα του ρολογιού.\n# u: είσοδοι, s: κατάσταση, p: παράμετροι (και p["Ts"] = περίοδος δειγματοληψίας).\ndef init(p):\n    return {"xi": 0.0}\n\ndef step(t, u, s, p):\n    e = u["e"]\n    s["xi"] += p["Ki"] * p["Ts"] * e\n    return {"y": p["Kp"] * e + s["xi"]}\n';
  const CLOCK=(extra={})=>ref('clock','Ρολόι (PWM ή μπλοκ Ρολόι)',['PWM','CLK'],{hint:'Ενημέρωση σε σημεία του φέροντος του PWM (ή στην ανερχόμενη ακμή του μπλοκ Ρολόι), όπως στο Sample & Hold.',...extra});
  const TRIG=sel('trig','Πότε ενημερώνεται',[['start','Αρχή περιόδου του φέροντος (1 ανά T)'],['mid','Μέσο περιόδου (1 ανά T)'],['both','Και τα δύο (2 ανά T)']],'start');
  const SCHED='Πρόγραμμα: ζεύγη «t:τιμή» χωρισμένα με κόμμα, π.χ. 0:60000, 0.005:30000. Κενό = σταθερή τιμή.';
@@ -178,6 +186,15 @@
     num('lo','Ελάχιστη τιμή','',0,{signed:true,zero:true}),num('hi','Μέγιστη τιμή','',1,{signed:true,zero:true}),num('phase','Φάση','°',0,{signed:true,zero:true})],value:p=>p.f,unit:'Hz',
    draw:p=>sb(40,30)+(p.shape==='tri'?'<path class="thin" d="M-14,-7 L-7,7 L0,-7 L7,7 L14,-7"/>':'<path class="thin" d="M-14,7 L-2,-7 V7 L10,-7 V7"/>')+sl('M20,0 H30')},
   // ---------------------------------------------------------------- continuous blocks and frame transformations (3.1)
+  EXPR:{name:'Έκφραση',prefix:'EX',group:'Κώδικας',pins:{},spins:p=>codeIO(Ex.names(p.ins),['y']),box:p=>{const h=codeH(Ex.names(p.ins),['y']);return [-30,-h,60,2*h];},blk:true,
+   params:[txt('expr','y =','u1*u2',{hint:'Πράξεις + − * / ^ %, συγκρίσεις (δίνουν 1 ή 0), && || !, c ? a : b, και sin cos tan asin acos atan atan2 sinh cosh tanh exp log log10 sqrt abs min max pow floor ceil round sign hypot clamp mod. Ονόματα: οι είσοδοι, οι σταθερές, t, pi, e.'}),
+    txt('ins','Είσοδοι','u1, u2',{hint:'Ονόματα χωρισμένα με κόμμα, έως 6.'}),txt('pars','Σταθερές','',{hint:'π.χ. a = 2, b = 0.5'})],value:()=>null,
+   draw:p=>codeDraw(Ex.names(p.ins),['y'],'f(u)')},
+  PY:{name:'Μπλοκ Python',prefix:'PY',group:'Κώδικας',pins:{},spins:p=>codeIO(pyIns(p),pyOuts(p)),box:p=>{const h=codeH(pyIns(p),pyOuts(p));return [-30,-h,60,2*h];},blk:true,
+   params:[{k:'code',label:'Κώδικας Python',type:'code',def:PY_DEFAULT,hint:'Ορίζει step(t, u, s, p) και προαιρετικά init(p). Επιστρέφει dict {έξοδος: τιμή}, λίστα ή αριθμό. Τρέχει στα δείγματα του ρολογιού και η έξοδος μένει σταθερή ως το επόμενο (όπως σε μικροελεγκτή). Διαθέσιμο το math.'},
+    txt('ins','Είσοδοι','e',{hint:'Ονόματα χωρισμένα με κόμμα, έως 6.'}),txt('outs','Έξοδοι','y',{hint:'Ονόματα χωρισμένα με κόμμα, έως 6.'}),
+    txt('pars','Παράμετροι p','Kp = 0.1, Ki = 100',{hint:'Αριθμοί που φτάνουν στον κώδικα ως p["όνομα"].'}),CLOCK(),TRIG,num('y0','Αρχική τιμή εξόδων','',0,{signed:true,zero:true})],value:()=>null,
+   draw:p=>codeDraw(pyIns(p),pyOuts(p),'Py')},
   INT:{name:'Ολοκληρωτής',prefix:'INT',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
    params:[num('y0','Αρχική τιμή','',0,{signed:true,zero:true}),num('lo','Κάτω όριο','',-1e9,{signed:true}),num('hi','Άνω όριο','',1e9,{signed:true}),
     sel('wrap','Αναδίπλωση',[['none','Καμία'],['2pi','Γωνία: 0 … 2π']],'none',{hint:'Με «Γωνία» η έξοδος μένει στο [0, 2π), π.χ. θ = ∫ω dt.'})],value:()=>null,
@@ -209,7 +226,7 @@
   DISP:{name:'Ένδειξη',prefix:'DSP',group:'Σήματα',pins:{},spins:{u:I(-40,0)},box:[-30,-13,60,26],blk:true,params:[num('dig','Σημαντικά ψηφία','',4)],value:()=>null,
    draw:()=>'<rect class="block sblk" x="-30" y="-13" width="60" height="26" rx="3"/><rect class="thin" x="-24" y="-8" width="48" height="16" rx="2"/>'+tx('—',0,4,'bsm')+sl('M-40,0 H-30')},
  };
- const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Μηχανές','Φορτία','Έλεγχος','Σήματα','Βασικά'];
+ const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Μηχανές','Φορτία','Έλεγχος','Σήματα','Κώδικας','Βασικά'];
  function defaults(type){const o={};for(const p of PARTS[type].params)o[p.k]=p.def;return o;}
  // electrical + signal pins of one placed part
  function sigPins(c){const d=PARTS[c.type];if(!d||!d.spins)return {};return typeof d.spins==='function'?d.spins({...defaults(c.type),...(c.params||{})}):d.spins;}
@@ -222,7 +239,8 @@
  function pinDir(c,pin){const [x,y]=pinsOf(c)[pin]||[1,0];let d=Math.abs(x)>=Math.abs(y)?[Math.sign(x)||1,0]:[0,Math.sign(y)||1];
   if(c.type==='GND')d=[0,-1];if(c.type==='JUNC')d=[0,0];
   const o=xf({x:0,y:0,rot:c.rot,flip:c.flip},d);return o;}
- function bbox(c){const [bx,by,bw,bh]=PARTS[c.type].box;const pts=[[bx,by],[bx+bw,by],[bx,by+bh],[bx+bw,by+bh]].map(p=>xf(c,p));
+ function boxOf(c){const b=PARTS[c.type].box;return typeof b==='function'?b({...defaults(c.type),...(c.params||{})}):b;}
+ function bbox(c){const [bx,by,bw,bh]=boxOf(c);const pts=[[bx,by],[bx+bw,by],[bx,by+bh],[bx+bw,by+bh]].map(p=>xf(c,p));
   const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
  // engineering notation
  const PRE=[[1e9,'G'],[1e6,'M'],[1e3,'k'],[1,''],[1e-3,'m'],[1e-6,'μ'],[1e-9,'n'],[1e-12,'p']];
@@ -238,6 +256,6 @@
   const out=[];for(const part of s.split(/[;,]\s*(?=[-+.\d])/)){const [a,b]=part.split(':');const t=parseEng(a),v=parseEng(b);if(!Number.isFinite(t)||!Number.isFinite(v))return null;out.push([t,v]);}
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
- const api={PARTS,GROUPS,BLOCKS,defaults,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,eng,parseEng,parseSched};
+ const api={PARTS,GROUPS,BLOCKS,defaults,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

@@ -50,4 +50,9 @@ for(const [mode,design] of [['speed','active'],['speed','imc'],['current','activ
 for(const [mode,D,ramp] of [['valley','0.4','none'],['valley','0.6','none'],['valley','0.4','half'],['peak','0.4','none'],['peak','0.6','none'],['peak','0.6','half']]){const pr=build('peak_cm',{mode,D,ramp});
  const r=MNA.sweepPoint(pr,{...pr.meta.sweep,value:pr.meta.Vo});const q=M.periodicity(r.y);out[`sub_${mode}_${D}_${ramp}`]={period:q.period,distinct:q.distinct,meta:pr.meta,warn:r.warnings};}
 {const pr=build('pcm_chaos',{});out.chaos={};for(const ic of [1.5,2,2.5,2.65,3]){const r=MNA.sweepPoint(pr,{...pr.meta.sweep,value:ic});const q=M.periodicity(r.y);out.chaos[ic]={period:q.period,distinct:q.distinct,warn:r.warnings};}}
-out.ms=Date.now()-t0;console.log(JSON.stringify(out,null,1));
+// 3.3: PI in Python (Pyodide in Node, when the pyodide package is installed) against the PI block; feedforward from an expression
+(async()=>{let PyRT=null;try{PyRT=require(W+'/pyrt.js');await PyRT.load();}catch(e){out.py_skipped=String(e.message||e).slice(0,120);}
+ for(const [ctrl,ff] of [['pib','none'],['pib','expr'],...(PyRT?.ready?[['python','none'],['python','expr']]:[])]){const pr=build('code_loop',{ctrl,ff});const s=sim(pr,.004);const p=s.per,i=s.chIndex.get('Y:AM1'),d=s.chIndex.get('D:PWM1');
+  const at=t=>{let j=-1;for(let k=0;k<p.n;k++){const q=(p.head-p.n+k+p.cap)%p.cap;if(p.t[q]>=t-1e-12){j=q;break;}}return j<0?null:{min:p.min[j*p.nch+i],d:p.end[j*p.nch+d]};};
+  const b=s.net.sig.blocks.find(x=>x.id==='PI1');out[`code_${ctrl}_${ff}`]={valley:last(s,'Y:AM1',5).min,avg:last(s,'Y:AM1',5).avg,d:s.now('D:PWM1'),early:at(5e-4),step:at(2.4e-3),calls:b.type==='PY'?b.st.last+1:null,warn:s.net.warnings};}
+ out.ms=Date.now()-t0;console.log(JSON.stringify(out,null,1));})();

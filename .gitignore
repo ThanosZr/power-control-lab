@@ -14,3 +14,7 @@ node_modules/
 /flow_*.png
 /saved.pcl.json
 /undefined/
+
+# local copy of Pyodide (python tools/get_pyodide.py)
+web/vendor/
+node_modules/

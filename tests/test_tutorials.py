@@ -127,6 +127,24 @@ class Tutorials(unittest.TestCase):
         for k in c:
             self.assertEqual(c[k]['warn'], [])
 
+    def test_code_blocks(self):
+        o = self.o
+        for ff in ('none', 'expr'):
+            r = o[f'code_pib_{ff}']
+            self.assertEqual(r['warn'], [])
+            self.assertAlmostEqual(r['valley'], 10, delta=2e-3)                  # the PI holds the sampled valley at i_ref
+        self.assertLess(o['code_pib_none']['early']['min'], 1)                  # without feedforward the current collapses at the start
+        self.assertAlmostEqual(o['code_pib_expr']['early']['min'], 5, delta=.01)  # with d = u + v_o/v_in it stays at the reference
+        if 'py_skipped' in o:
+            self.skipTest('pyodide (npm) not installed: ' + o['py_skipped'])
+        for ff in ('none', 'expr'):                                              # Python code ≡ PI block (same operations, last-bit rounding)
+            a, b = o[f'code_python_{ff}'], o[f'code_pib_{ff}']
+            self.assertEqual(a['warn'], [])
+            self.assertAlmostEqual(a['d'], b['d'], delta=1e-12)
+            self.assertAlmostEqual(a['valley'], b['valley'], delta=1e-9)
+            self.assertAlmostEqual(a['step']['min'], b['step']['min'], delta=1e-9)
+            self.assertEqual(a['calls'], 201)                                    # once per period from t = 0 to 4 ms at 50 kHz
+
     def test_dc_drive(self):
         o = self.o
         for k in ('dc_speed_active', 'dc_speed_imc', 'dc_current_active', 'dc_open_active'):

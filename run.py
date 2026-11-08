@@ -3,6 +3,7 @@
 import argparse
 import json
 import mimetypes
+mimetypes.add_type('application/wasm','.wasm')   # Pyodide (Python block) compiles its WebAssembly while it downloads
 import os
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -56,7 +57,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length',str(len(body)))
         self.send_header('Cache-Control','no-store')
         self.send_header('X-Content-Type-Options','nosniff')
-        self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'")
+        self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'none'")
         self.end_headers()
         self.wfile.write(body)
 
@@ -92,6 +93,9 @@ class Handler(BaseHTTPRequestHandler):
             data=json.loads(self.rfile.read(size))
             if not isinstance(data,dict):
                 raise InputError('Απαιτείται αντικείμενο JSON.')
+            data.pop('_local',None)
+            if action=='batch_sim' and self.client_address[0] in ('127.0.0.1','::1'):
+                data['_local']=True        # Python blocks of the request may run here (the user's own machine)
             # at most two analyses at a time; the others wait their turn (a slow machine queues, it does not fail)
             if not SLOTS.acquire(timeout=60):
                 self.send(429,{'error':'Εκτελούνται ήδη δύο αναλύσεις για πάνω από ένα λεπτό. Δοκίμασε ξανά σε λίγο.'}); return

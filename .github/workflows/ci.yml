@@ -23,6 +23,8 @@ jobs:
         with:
           node-version: '22'
       - run: pip install -r requirements.txt
+      - name: Python στον browser (Pyodide) για το μπλοκ Python
+        run: npm install --no-save pyodide@0.26.4
       - name: Χάρτης κώδικα ενημερωμένος
         run: python tools/codemap.py --check
       - name: Tests
@@ -41,9 +43,10 @@ jobs:
         with:
           node-version: '22'
       - run: pip install -r requirements.txt
-      - name: Playwright και Chromium
+      - name: Playwright, Chromium και τοπικό Pyodide
         run: |
-          npm install --no-save playwright@1.63.0
+          npm install --no-save playwright@1.63.0 pyodide@0.26.4
+          python tools/get_pyodide.py
           npx playwright install --with-deps chromium
       - name: Σενάρια στον browser
         run: |

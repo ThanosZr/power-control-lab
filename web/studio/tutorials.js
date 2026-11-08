@@ -316,6 +316,32 @@
    const panes=!blk?[[['I:L1','i_L'],['REF:PWM1','i_ref']],[['D:PWM1','D']]]
     :[[['Y:AM1','i_L (αμπερόμετρο)'],['Y:K1','i_ref']],cmp?[['Y:'+(z1?'UD1':'PI1'),'d'],['Y:RMP1','φέρον']]:[['D:PWM1','D']]];
    return project(comps,wires,{sim:{hDiv:200,speed:300,stopT:4e-3},scope:{panes,window:{unit:'T',n:100}},meta:{Vin,Vo,L,fs,kp,ki,fc:g.fc,i0:5,i1:10,t1:.002,blk,cmp,z1}});}});
+ // ------------------------------------------------------------------ 3.3: code blocks (Python, expression)
+ const PY_PI='# PI με όρια: ίδιοι κανόνες με το μπλοκ «PI διακριτός» (κράτηση του ολοκληρωτή στον κορεσμό).\n# Καλείται στην αρχή κάθε περιόδου του PWM. p["Ts"] είναι η περίοδος δειγματοληψίας.\ndef init(p):\n    return {"xi": 0.0}\n\ndef step(t, u, s, p):\n    e = u["e"]\n    s["xi"] += p["Ki"] * p["Ts"] * e\n    y = p["Kp"] * e + s["xi"]\n    if y > p["ymax"] or y < p["ymin"]:\n        s["xi"] -= p["Ki"] * p["Ts"] * e\n        y = min(p["ymax"], max(p["ymin"], p["Kp"] * e + s["xi"]))\n    return {"u": y}\n';
+ T.push({id:'code_loop',group:'Μπλοκ κώδικα (3.3)',title:'PI σε Python και feedforward με έκφραση',theory:'formula',topology:'code_loop',
+  options:[{k:'ctrl',label:'Ελεγκτής',options:[['python','PI σε μπλοκ Python'],['pib','PI διακριτός (μπλοκ, για σύγκριση)']],def:'python'},
+   {k:'ff',label:'Feedforward',options:[['none','Χωρίς'],['expr','d = u + v_o/v_in (μπλοκ έκφρασης)']],def:'none'}],
+  desc:'Ο ίδιος buck 48 V → μπαταρία 24 V με το «Βρόχος ρεύματος από μπλοκ», αλλά ο PI είναι κώδικας Python: ο κώδικας τρέχει σε κάθε δείγμα του PWM, όπως σε μικροελεγκτή, και η έξοδός του μένει σταθερή ως το επόμενο. Με feedforward, ένα μπλοκ έκφρασης υπολογίζει d = u + v_o/v_in από δύο βολτόμετρα, οπότε ο PI διορθώνει μόνο το υπόλοιπο. Η Python τρέχει στον browser με το Pyodide και στον server με την κανονική Python.',
+  tasks:['Τρέξε έως το τέλος (⏩). Με «PI διακριτός» βγαίνει ακριβώς το ίδιο D: ο κώδικας Python κάνει τις ίδιες πράξεις.','Άνοιξε τον κώδικα (διπλό κλικ στο μπλοκ Py) και άλλαξε κάτι, π.χ. το όριο ή τον τύπο του ολοκληρωτή. Η αλλαγή εφαρμόζεται αμέσως.','Διάλεξε feedforward: το ρεύμα μένει στα 5 A από την αρχή (χωρίς feedforward πέφτει στο 0 ώσπου ο ολοκληρωτής να φτάσει το D = 0,5) και ο PI διορθώνει μόνο το υπόλοιπο.','Γράψε δικό σου κώδικα: π.χ. PI με μεταβλητά κέρδη, ή έλεγχο κατάστασης με if.'],
+  build(o){const Vin=48,Vo=24,L=100e-6,fs=50e3,g=piGains(L,Vin,fs),ref='0:5, 0.002:10',py=o.ctrl!=='pib',ff=o.ff==='expr';
+   const kp=+g.kp.toPrecision(4),ki=+g.ki.toPrecision(4),lo=ff?-.5:0,hi=ff?.5:.95;
+   const comps=[C('V1','VDC',100,210,{V:Vin},{label:'V_in'}),gnd(100,300),C('S1','SW',200,150,{pwm:'PWM1',out:'a',body:false},{rot:3,flip:true}),J('J1',270,150),C('D1','D',270,200,{},{rot:3}),
+     C('L1','L',330,150,{L,i0:5}),C('AM1','AM',400,150,{},{label:'A_L',lbl:'below'}),C('VO','VDC',490,210,{V:Vo},{label:'V_o'}),J('J3',100,270),J('J4',270,270),
+     C('K1','CONST',250,60,{v:ref},{label:'i_ref'}),C('SUM1','SUM',330,70,{signs:'+-'},{label:'e'}),
+     py?C('PI1','PY',440,70,{code:PY_PI,ins:'e',outs:'u',pars:`Kp = ${kp}, Ki = ${ki}, ymin = ${lo}, ymax = ${hi}`,clock:'PWM1',trig:'start',y0:0},{label:'PI (Python)'})
+       :C('PI1','PIB',440,70,{Kp:kp,Ki:ki,clock:'PWM1',trig:'start',y0:0,ymin:lo,ymax:hi},{label:'PI'}),
+     C('PWM1','PWM',ff?720:600,70,{fs,mode:'ext',carrier:'saw'})];
+   const wires=[['V1:p','S1:d',[[100,150]]],['S1:s','J1'],['J1','L1:a'],['J1','D1:k'],['L1:b','AM1:a'],['AM1:b','VO:p',[[490,150]],{name:'v_o'}],
+     ['V1:n','J3'],['J3','G1:g'],['J3','J4'],['J4','D1:a'],['J4','VO:n',[[490,270]]],
+     ['K1:y','SUM1:a'],['AM1:y','SUM1:b',[[400,100],[290,100],[290,80]]],['SUM1:y','PI1:'+(py?'e':'u')]];
+   const u=py?'PI1:u':'PI1:y';
+   if(ff){comps.push(C('VMI','VM',40,210,{},{label:'v_in'}),C('VMO','VM',560,210,{},{label:'v_o'}),C('TGi','TAGO',40,140,{name:'v_in'}),C('TGo','TAGO',600,160,{name:'v_o'}),
+     C('TFi','TAGI',500,10,{name:'v_in'}),C('TFo','TAGI',500,-30,{name:'v_o'}),C('EX1','EXPR',600,50,{expr:'clamp(u + vo/vin, 0, 0.95)',ins:'u, vo, vin'},{label:'d = u + v_o/v_in'}));
+    wires.push(['VMI:p','V1:p',[[40,150],[100,150]]],['VMI:n','V1:n',[[40,270],[100,270]]],['VMO:p','VO:p',[[560,150]]],['VMO:n','VO:n',[[560,270]]],['VMI:y','TGi:u'],['VMO:y','TGo:u'],
+     [u,'EX1:u',[[520,70],[520,30]]],['TFo:y','EX1:vo',[[540,-30],[540,50]]],['TFi:y','EX1:vin',[[530,10],[530,70]]],['EX1:y','PWM1:d']);}
+   else wires.push([u,'PWM1:d']);
+   return project(comps,wires,{sim:{hDiv:200,speed:300,stopT:4e-3},scope:{panes:[[['Y:AM1','i_L'],['Y:K1','i_ref']],[['D:PWM1','D'],['Y:PI1','u (PI)']]],window:{unit:'T',n:100}},
+    meta:{Vin,Vo,L,fs,kp,ki,fc:g.fc,i0:5,i1:10,t1:.002,py,ff}});}});
  // ------------------------------------------------------------------ 3.0: peak current-mode, subharmonic oscillation
  T.push({id:'peak_cm',group:'Μπλοκ σημάτων (3.0)',title:'Peak current-mode και υποαρμονική',theory:'formula',topology:'peak_cm',
   options:[{k:'mode',label:'Έλεγχος',options:[['peak','Peak: ρολόι → ON, κορυφή → OFF'],['valley','Valley: ρολόι → OFF, κοιλάδα → ON']],def:'peak'},

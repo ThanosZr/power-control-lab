@@ -24,7 +24,11 @@ function buildSim(fresh){
   if(!S.sim||fresh){S.sim=new MNA.Sim(doc,{hDiv:+$('#sim-step').value,method:$('#method').value});}
   else S.sim.load(doc,false);
   S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);notice('');
- }catch(e){S.error=e.message;pause();notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');}
+ }catch(e){S.error=e.message;pause();
+  if(e.needPython){notice(esc(e.message),'info'); // code blocks (3.3): load Pyodide once, then build again
+   PyRT.load().then(()=>{buildSim(true);draw(true);if(!S.error)notice(`Η Python (Pyodide ${esc(PyRT.py?.version||'')}) είναι έτοιμη (${PyRT.source?.startsWith('http')?'από το CDN':'τοπικό αντίγραφο'}).`,'info');setTimeout(()=>notice(''),3000);})
+    .catch(err=>notice('Δεν φορτώθηκε η Python (Pyodide): '+esc(err.message)+'. Χρειάζεται σύνδεση στο internet ή τοπικό αντίγραφο: <code>python tools/get_pyodide.py</code>.','error'));}
+  else notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');}
  refreshControls();renderChannels();updateClock();
 }
 function play(){if(!S.sim||S.error)return;if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;requestAnimationFrame(loop);}
@@ -53,6 +57,7 @@ function liveOf(c){const s=S.sim;if(!s||S.error)return null;if(['GND','JUNC','TA
  const avg=S.running&&(S.speed==='max'||S.speed>=200);const val=k=>{if(avg){const p=s.lastPeriod(k);return p?p.avg:s.now(k);}return s.now(k);};
  if(c.type==='PWM'){const d=s.now('D:'+c.id);return {text:'D = '+fmt(d,4)};}
  if(c.type==='SH'){const q=s.shById.get(c.id);return {text:q?'h = '+eng(q.h,q.sig?'':q.qty==='V'?'V':'A',4):''};}
+ if(c.type==='PY'){const os=outsOf(c);return {text:os.map((o,k)=>o+' = '+eng(s.now('Y:'+c.id+(k?':'+o:'')),'',4)).join(' · ')};}
  if(c.type==='DCM')return {i:s.now('I:'+c.id),text:'ω '+eng(val('Y:'+c.id),'rad/s',4)+' · '+(avg?'⌀ ':'')+eng(val('I:'+c.id),'A',3)};
  if(OUT_SYM[c.type]&&c.type!=='SR'){const os=outsOf(c);return {text:os.map((o,k)=>OUT_SYM[c.type][o]+' '+eng(s.now('Y:'+c.id+(k?':'+o:'')),blkUnit(c,o),3)).join(' · ')};}
  if(P.BLOCKS.has(c.type)){const y=s.now('Y:'+c.id);if(LOGIC_BLK.has(c.type))return {on:y>=.5,text:(c.type==='SR'?'Q = ':'y = ')+(y>=.5?'1':'0')};
@@ -75,11 +80,13 @@ function outsOf(c){return Object.entries(P.sigPins(c)).filter(([,d])=>d.dir==='o
 // ------------------------------------------------------------------ channels
 function chanLabel(key){const [pre,id,pin]=key.split(':');const c=editor.comp(id);const name=c?.label||id;
  if(pre==='VN'){const w=editor.doc.wires.find(w=>w.name&&((w.a.c===id&&w.a.p===pin)||(w.b.c===id&&w.b.p===pin)));return w?w.name:'v('+(c?.type==='JUNC'?'κόμβος '+id:name+'.'+pin)+')';}
+ if(pre==='Y'&&c?.type==='PY')return (pin||outsOf(c)[0]||'y')+'('+name+')';
  if(pre==='Y'&&c&&OUT_SYM[c.type]){const o=pin||outsOf(c)[0];return (OUT_SYM[c.type][o]||o)+'('+name+')';}
  const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',GS:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold',Y:c?.type==='VM'?'v':c?.type==='AM'?'i':c?.type==='SR'?'Q':'y'}[pre]||pre)+'('+name+')';}
 function addProbe(key,label){if(!S.sim)return;const ok=scope.addChannel(key,label||chanLabel(key));renderChannels();if(!ok)flash('#chan-list');else{flash('#scope-card');}draw(true);}
 function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash');}
 function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI')return [];
+ if(t==='PY')return outsOf(c).map((o,k)=>['Y:','έξοδος '+o,k?':'+o:'']);
  if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:m;}
  if(P.BLOCKS.has(t))return [['Y:',t==='DISP'?'τιμή εισόδου':t==='VM'?'τάση (μέτρηση)':t==='AM'?'ρεύμα a → b (μέτρηση)':t==='SR'?'έξοδος Q':'έξοδος y']];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
  if(t==='SH')return [['H:','κρατημένη τιμή (δείγματα)']];
@@ -178,7 +185,7 @@ function pcmMapFn(m){if(!paramsOf('V1')||!paramsOf('VO')||!paramsOf('L1'))return
  const z=v=>Math.max(0,v); // the diode stops the current at zero
  return vl?x=>{const t=(x-ic)/(m2+ma);return t>=T?z(x-m2*T):t<=0?x+m1*T:ic+ma*t+m1*(T-t);}   // valley: OFF from the clock until i_L = i_c + ramp
   :x=>{const t=(ic-x)/(m1+ma);return t>=T?x+m1*T:t<=0?z(x-m2*T):z(ic-ma*t-m2*(T-t));};}    // peak: ON from the clock until i_L + ramp = i_c
-function renderPoincare(){const box=$('#bf-map');if(!box||!S.sim||!$('#bf-block').open)return;
+function renderPoincare(){const box=$('#bf-map');if(!box||!S.sim||!$('#bf-block').open)return;if(!BF.run)renderBifurcationForm();
  const sig=$('#bf-sig'),chans=scope.channels(),keep=sig.value;sig.innerHTML=chans.map(c=>`<option value="${esc(c.key)}">${esc(c.label)}</option>`).join('')||'<option value="">— πρόσθεσε σήμα στο scope —</option>';
  if(chans.some(c=>c.key===keep))sig.value=keep;else if(S.tutMeta?.poincare&&chans.some(c=>c.key===S.tutMeta.poincare.key))sig.value=S.tutMeta.poincare.key;
  const key=sig.value;if(!key){box.innerHTML='';return;}const x=perSamples(key,$('#bf-stat').value,300);if(x.length<8){box.innerHTML='<p class="muted small">Τρέξε την προσομοίωση μερικές περιόδους.</p>';return;}
@@ -392,6 +399,7 @@ function fieldHTML(c,def,p){const v=p[def.k]??def.def;const id='f_'+def.k;
  if(def.type==='bool')return `<input type="checkbox" id="${id}" data-k="${def.k}" ${v?'checked':''}>`;
  if(def.type==='ref'){const opts=editor.doc.components.filter(k=>def.kinds.includes(k.type)&&k.id!==c.id);return `<select id="${id}" data-k="${def.k}"><option value="">—</option>${opts.map(k=>`<option value="${k.id}" ${v===k.id?'selected':''}>${esc(k.label||k.id)} (${esc(P.PARTS[k.type].name)})</option>`).join('')}</select>`;}
  if(def.type==='text')return `<input id="${id}" data-k="${def.k}" value="${esc(v)}" placeholder="${esc(def.ph||'')}">`;
+ if(def.type==='code')return `<textarea id="${id}" data-k="${def.k}" class="code" rows="14" spellcheck="false">${esc(v)}</textarea>`;
  return `<input id="${id}" data-k="${def.k}" data-num="1" value="${esc(typeof v==='number'?P.eng(v,'',6).replace(/\s/g,''):v)}" inputmode="decimal">`;}
 function openInspector(id,x,y){
  const c=editor.comp(id);if(!c)return;const def=P.PARTS[c.type];const p={...P.defaults(c.type),...c.params};const ins=$('#inspector');
@@ -408,7 +416,7 @@ function openInspector(id,x,y){
  placePopup(ins,x,y);
  const apply=el=>{const k=el.dataset.k;let v;if(el.type==='checkbox')v=el.checked;else if(el.dataset.num){v=P.parseEng(el.value);if(!Number.isFinite(v)){el.classList.add('bad');return;}el.classList.remove('bad');}else v=el.value;
   if(k==='dsched'||k==='sched'||k==='ref'||(k==='v'&&c.type==='CONST')){if(v&&!P.parseSched(v)){el.classList.add('bad');return;}el.classList.remove('bad');}
-  editor.setParams(id,{[k]:v});const def2=def.params.find(d=>d.k===k);if(def2?.type==='select'||def2?.type==='bool'||k==='gate'||k==='ff'||k==='mode')openInspector(id,parseFloat(ins.style.left)-12,parseFloat(ins.style.top)-12);};
+  editor.setParams(id,{[k]:v});const def2=def.params.find(d=>d.k===k);if(def2?.type==='select'||def2?.type==='bool'||k==='gate'||k==='ff'||k==='mode'||k==='ins'||k==='outs')openInspector(id,parseFloat(ins.style.left)-12,parseFloat(ins.style.top)-12);};
  ins.querySelectorAll('[data-src]').forEach(el=>el.onchange=()=>{editor.setParams(id,{['in_'+el.dataset.src]:el.value||undefined});if(!el.value)delete editor.comp(id).params['in_'+el.dataset.src];editor.renderPins();openInspector(id,parseFloat(ins.style.left)-12,parseFloat(ins.style.top)-12);});
  ins.querySelectorAll('[data-k]').forEach(el=>{el.onchange=()=>apply(el);if(el.dataset.num)el.onkeydown=e=>{if(e.key==='Enter')apply(el);};});
  ins.querySelector('[data-label]').onchange=e=>{editor.setParams(id,{},{label:e.target.value||id});renderChannels();};
@@ -693,6 +701,16 @@ function pcmTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!paramsOf('V1')
   <tr><td>duty</td>${ds.map(d=>`<td>${fmt(d,3)}</td>`).join('')}</tr><tr><td>κορυφή i_L</td>${pk.map(q=>`<td>${fmt(q.max,4)}</td>`).join('')}</tr></tbody></table></div>`;
  h+=`<p class="small muted">Η στιγμή που αλλάζει ο συγκριτής εντοπίζεται μέσα στο βήμα του λύτη. Ο λύτης δεν έχει ειδικό κώδικα για current-mode: είναι γενικά μπλοκ (ρολόι, latch, συγκριτής, άθροισμα${vl?', λογικές πύλες':''}). Ο λύτης SciPy στον server δίνει τις ίδιες κορυφές στη σταθερή περιοχή. Στην υποαρμονική συμφωνεί για δεκάδες περιόδους και μετά δίνει την ίδια συμπεριφορά αλλά όχι την ίδια ακολουθία: εκεί κάθε μικρή αριθμητική διαφορά μεγαλώνει κατά |λ| σε κάθε περίοδο.</p>`;
  return h+evalOrderHTML();}
+// 3.3: the PI as Python code (and feedforward from an expression block): same rules as the PI block, so the same duty
+function codeTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('AM1'))return '';const T=1/m.fs,Vin=+paramsOf('V1').V,Vo=+paramsOf('VO').V,D=Vo/Vin,dI=(Vin-Vo)*D*T/+paramsOf('L1').L;
+ const i=s.now('Y:K1'),ia=avgOver('Y:AM1',5),dsim=avgOver('D:PWM1',5)?.avg,b=s.net.sig.blocks.find(x=>x.id==='PI1'),calls=b?.type==='PY'&&b.st.last!=null?b.st.last+1:NaN;
+ const early=lastPeriods('Y:AM1',20000).find(q=>q.t>=5e-4-1e-12);
+ let h=`<div class="tm"><span class="badge">${m.py?'PI σε Python':'PI διακριτός (μπλοκ)'}</span>${m.ff?' · feedforward d = u + v_o/v_in':''}</div><ul class="eqs">
+  <li>${m.py?`Ο κώδικας εκτελείται στην αρχή κάθε περιόδου του PWM: ${Number.isFinite(calls)?`<b>${calls}</b> κλήσεις ως τώρα (t·f_s + 1)`:'μία κλήση ανά T'}. Η έξοδος u μένει σταθερή ως την επόμενη κλήση, όπως σε μικροελεγκτή. Python ${esc(PyRT.py?.version?'μέσω Pyodide '+PyRT.py.version:'')}`:'Το μπλοκ «PI διακριτός» κάνει τις ίδιες πράξεις με τον κώδικα Python του tutorial, άρα δίνει ακριβώς το ίδιο D.'}</li>
+  <li>K_p = <b>${eng(m.kp)}</b>, K_i = <b>${eng(m.ki)}</b>, D = V_o/V_in = <b>${fmt(D,4)}</b>, Δi = <b>${eng(dI,'A')}</b>. Ο PI μετρά την κοιλάδα (αρχή περιόδου πριονωτού), άρα κοιλάδα = i_ref</li>
+  <li>${m.ff?'Feedforward: το μπλοκ έκφρασης δίνει d = u + v_o/v_in από τα βολτόμετρα. Το D είναι σωστό από την πρώτη περίοδο και ο PI διορθώνει μόνο τις απώλειες και τα μεταβατικά (u ≈ 0 στη μόνιμη κατάσταση).':'Χωρίς feedforward ο ολοκληρωτής πρέπει να φτάσει μόνος του το D = V_o/V_in. Στην εκκίνηση το D είναι 0 και το ρεύμα πέφτει, ώσπου ο ολοκληρωτής να ανέβει.'}</li></ul>`;
+ h+=cmpRows([['κοιλάδα i_L',i,ia?.min,'A'],['⟨i_L⟩ (τελευταίες 5 T)',i+dI/2,ia?.avg,'A'],['D',D,dsim,''],...(m.ff?[['κοιλάδα στα 0,5 ms (αρχική αναφορά)',m.i0,early?.min,'A']]:[])]);
+ return h+evalOrderHTML();}
 // 3.2: period doubling of the current-mode boost with an R–C load (Deane & Hamill): period from the samples at the clock
 function chaosTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('IC'))return '';const x=perSamples('Y:AM1','end',200),q=Metrics.periodicity(x.slice(-100));
  if(x.length<20)return '<p class="muted small">Τρέξε την προσομοίωση μερικές δεκάδες περιόδους για να φανεί η περίοδος της λειτουργίας.</p>';
@@ -743,6 +761,7 @@ function formulaTheory(t){
  if(t.topology==='blocks_loop')return blocksTheory();
  if(t.topology==='peak_cm')return pcmTheory();
  if(t.topology==='pcm_chaos')return chaosTheory();
+ if(t.topology==='code_loop')return codeTheory();
  if(t.topology==='polyphase')return polyTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const D=+W.D,Vin=+V.V,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
