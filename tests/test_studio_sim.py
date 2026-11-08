@@ -277,6 +277,38 @@ class StudioSimulator(unittest.TestCase):
         self.assertAlmostEqual(q['iq'], i_q, delta=1e-3 * math.hypot(i_d, i_q))
         self.assertAlmostEqual(q['te'], 1.5 * 2 * (f(i_d) - .03 * i_d) * i_q, delta=2e-3 * abs(q['te']))
 
+    def test_unconnected_and_floating_parts(self):
+        # 3.7: a part with no connection and a current source in an open circuit leave the solution (same result as without them),
+        # wires that join no part make no node; 'error' stops with the list. An isolated secondary keeps its voltages with every
+        # reference: 'auto' puts its mean at 0 V, 'ref' one node at 0 V. Probes: voltage to ground and a current clamp.
+        o = self.o['solve37']
+        for m in ('warn', 'ignore'):
+            r = o['r'][m]
+            self.assertLess(r['dI'], 1e-7, msg=m)               # the open branch R8 only adds G_min to ground
+            self.assertLess(r['dV'], 1e-9, msg=m)
+            self.assertEqual(r['nodes'], r['clean'] + 1)        # the open end of R8; R9, I9 and the free wire make none
+            self.assertEqual(r['diag']['skipped'], [{'id': 'R9', 'why': 'unconn'}, {'id': 'I9', 'why': 'openI'}])
+            self.assertEqual(r['diag']['open'], ['R8:b'])
+            self.assertEqual(r['diag']['freeNets'], 1)
+            self.assertEqual(sorted(r['diag']['freeEnds']), ['J1', 'J2', 'J3'])
+            self.assertFalse(r['hasI9'])
+            self.assertLess(abs(r['vR8']), 1e-6)                # no 1e9 V anywhere
+        self.assertEqual(len(o['r']['warn']['warn']), 3)
+        self.assertEqual(o['r']['ignore']['warn'], [])
+        self.assertIn('ασύνδετα στοιχεία: R9', o['err'])
+        self.assertIn('πηγή ρεύματος σε ανοιχτό κύκλωμα: I9', o['err'])
+        i = o['isl']
+        for k in ('auto', 'ref'):
+            self.assertAlmostEqual(i[k]['vR2'], 5, delta=1e-6)       # 10 V across 5 + 5 Ω at the peak
+            self.assertAlmostEqual(i[k]['vm'], 10, delta=1e-6)
+            self.assertAlmostEqual(i[k]['ip'], 1, delta=1e-6)        # the clamp reads the current of the wire
+            self.assertEqual(i[k]['islands'][0]['n'], 4)
+        self.assertAlmostEqual(i['auto']['vp'], -1.25, delta=1e-6)   # mean of the four nodes at 0 V
+        self.assertAlmostEqual(i['ref']['vp'], -5, delta=1e-6)       # IP1.a at 0 V
+        self.assertEqual(i['ref']['islands'][0]['ref'], 'IP1:a')
+        self.assertAlmostEqual(i['leak']['vp'], -1.25, delta=5e-3)   # 1 kΩ to ground from every node: still around a mean of 0
+        self.assertIn('χωρίς αγώγιμη σύνδεση με τη γείωση', i['err'])
+
     def test_switched_reluctance_machine(self):
         # 3.6: against the exact model integrated here: ψ(θ, i) = L_u·i + (ψ_a(i) − L_u·i)·(1 − cos θ)/2 with the aligned curve
         # ψ_a(i) = L_sat·i + ψ_k·(1 − e^(−(L_a − L_sat)·i/ψ_k)), i from ψ by Newton, torque N_r·∂W′/∂θ from the analytic co-energy

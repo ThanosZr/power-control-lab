@@ -180,6 +180,11 @@
    draw:()=>'<path d="M0,-30 V-14 M0,14 V30"/><circle r="14"/>'+tx('V')+sl('M14,0 H30')},
   AM:{name:'Αμπερόμετρο (σε σειρά)',prefix:'AM',group:'Σήματα',pins:{a:[-30,0],b:[30,0]},spins:{y:O(0,-30)},box:[-13,-13,26,26],params:[],value:()=>null,blk:true,unit:'A',
    draw:()=>'<path d="M-30,0 H-12 M12,0 H30"/><circle r="12"/>'+tx('A')+sl('M0,-12 V-30')+'<path class="thin" d="M17,5 H25 M22,2 L25,5 L22,8"/>'},
+  // probes (3.7): clip onto a wire. VP: node voltage to ground through one pin; IP: a current clamp, a 0 V meter in series that keeps the wire's look
+  VP:{name:'Probe τάσης (ως προς τη γη)',prefix:'VP',group:'Σήματα',pins:{p:[0,20]},spins:{y:O(30,-10)},box:[-11,-21,22,30],params:[],value:()=>null,blk:true,unit:'V',
+   draw:()=>'<path d="M0,20 V-1"/><path class="probe" d="M0,-1 L-9,-10 L0,-19 L9,-10 Z"/>'+tx('V',0,-6,'bsm')+sl('M9,-10 H30')},
+  IP:{name:'Probe ρεύματος (τσιμπίδα)',prefix:'IP',group:'Σήματα',pins:{a:[-20,0],b:[20,0]},spins:{y:O(0,-30)},box:[-12,-14,24,26],params:[],value:()=>null,blk:true,unit:'A',
+   draw:()=>'<path d="M-20,0 H20"/><path class="probe" d="M-4,-10 A10,10 0 1,0 4,-10"/><path class="thin" d="M-6,15 H5 M2,12 L5,15 L2,18"/>'+sl('M0,-10 V-30')},
   MEAS:{name:'Μέτρηση στοιχείου',prefix:'M',group:'Σήματα',pins:{},spins:{y:O(40,0)},box:[-30,-13,60,26],blk:true,
    params:[ref('src','Στοιχείο',['L','R','C','VDC','CPL','SW','D','SCR','XFMR','IDC','VAC','VAC3']),sel('qty','Μέγεθος',[['I','Ρεύμα'],['V','Τάση']],'I')],value:()=>null,
    draw:p=>sb(60,26)+tx(`${p.qty==='V'?'v':'i'}(${xe(p.src||'?')})`)+sl('M30,0 H40')},

@@ -159,6 +159,44 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:6px}
 .card{}.cards .card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:10px 12px;border-radius:10px;background:#fbfcfb}
 .cards .card span{font-size:11.5px;color:var(--muted);line-height:1.45}.cards .card.cur{border-color:var(--accent);background:#eef7f4}
 #settings section{margin-bottom:6px}#settings .frow{margin-bottom:6px}
+/* 3.7: free ends, snapping, parts left out of the solution, probes */
+.jfree{fill:#fff;stroke:var(--wire);stroke-width:1.6;vector-effect:non-scaling-stroke;pointer-events:none}
+.snapring{fill:#c9ecdf88;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke;pointer-events:none}
+.schem.wiretool{cursor:crosshair}
+.part.skipped{opacity:.38}.part.skipped .sym *{stroke-dasharray:4 3}
+.pin.bad{opacity:1;stroke:var(--danger);fill:#fde8ee}
+.part .sym .probe{fill:#fff4e5;stroke:var(--accent2)}.pal-item .sym .probe{fill:#fff4e5;stroke:var(--accent2)}
+.tool-toggle.on{background:#eef7f4;border-color:#9fd0c3;color:var(--accent)}
+.toolbar>button{white-space:nowrap;flex-shrink:0}.toolbar .hint{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 3.7: parameters panel (collapsible) with sections (accordion) */
+.work{position:relative}
+.props{width:300px;flex-shrink:0;border-left:1px solid var(--line);background:#fbfcfb;display:flex;min-height:0}
+.props.collapsed{width:30px}
+.props-tab{display:none;writing-mode:vertical-rl;transform:rotate(180deg);border:0;border-radius:0;background:transparent;color:var(--muted);padding:12px 6px;font-size:11px;letter-spacing:.04em;width:30px}
+.props.collapsed .props-tab{display:block}.props.collapsed .props-body{display:none}
+.props-body{flex:1;overflow:auto;padding:10px 10px 16px;min-width:0}
+.props-head{display:flex;align-items:flex-start;gap:6px;margin-bottom:8px}.props-head>div{flex:1;min-width:0}
+.props-head small{display:block;color:var(--muted);font-size:10.5px;margin-bottom:2px}.props-head input{font-weight:600;width:100%}
+.props-head .x{padding:3px 7px}
+details.psec{border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:7px}
+details.psec>summary{cursor:pointer;padding:7px 9px;font-weight:600;font-size:12px;list-style:none;display:flex;align-items:center;gap:6px}
+details.psec>summary::-webkit-details-marker{display:none}
+details.psec>summary::before{content:'▸';color:var(--muted);transition:transform .15s}details.psec[open]>summary::before{transform:rotate(90deg)}
+details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;font-size:11px}details.psec>summary .cnt.bad{color:var(--danger)}
+.psec-body{padding:0 9px 9px}
+.prow{display:flex;flex-direction:column;gap:3px;margin:7px 0;font-size:11.5px}
+.prow>span{color:var(--ink)}.prow>span em{color:var(--muted);font-style:normal;font-size:10.5px}
+.prow .pin-in{display:flex;gap:4px}.prow .pin-in>input,.prow .pin-in>select,.prow .pin-in>textarea{flex:1;min-width:0}
+.prow .pin-in>input[type=checkbox]{flex:0}
+.prow input.bad{border-color:var(--danger);background:#fff3f5}.prow small{color:var(--muted);font-size:10.5px}
+.pinbtn{padding:2px 6px;opacity:.4;filter:grayscale(1)}.pinbtn.on{opacity:1;filter:none;border-color:#ebdcbd;background:#fdf9f0}
+.diag-list{margin:0;padding:0;list-style:none}.diag-list li{padding:5px 0;border-bottom:1px dashed var(--line);font-size:11.5px;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
+.diag-list li:last-child{border-bottom:0}.diag-list button{padding:1px 7px;font-size:11px}
+.ok-line{color:#1f7a3a;font-size:11.5px}.props .chips{display:flex;flex-wrap:wrap;gap:4px}
+.kbd-list{margin:0;padding-left:16px;font-size:11px;color:var(--muted)}.kbd-list li{margin:2px 0}
+.ctl-pin .ctl-row button{padding:2px 7px}
+@media (max-width:1100px){.props{width:250px}}
+@media (max-width:700px){.props{position:absolute;right:0;top:0;bottom:0;z-index:6;box-shadow:-6px 0 14px #0000001a}.props.collapsed{box-shadow:none}}
 @media (max-width:1100px){.scope-grid{grid-template-columns:1fr}.scope-side{border-right:none;border-bottom:1px solid var(--line);max-height:none}.tut-grid{grid-template-columns:1fr}.hint{display:none}.palette{width:140px}}
 @media (max-width:700px){.top{flex-wrap:wrap}.top-actions{margin-left:0;flex-wrap:wrap}main{padding:10px}.palette{display:none}}
 

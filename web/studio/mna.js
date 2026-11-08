@@ -69,13 +69,33 @@
   if(mixed.length)warnings.push('Σύρμα σήματος σε ηλεκτρικό κόμβο (η σύνδεση αγνοείται): '+mixed.slice(0,4).join(', ')+'.');
   sgroups.sort((a,b)=>a[0]<b[0]?-1:1);const sigNets=sgroups.map((keys,index)=>({keys,canon:keys[0],index})),sigPin=new Map();for(const n of sigNets)for(const k of n.keys)sigPin.set(k,n.index);
   const sn=(cid,pin)=>{const v=sigPin.get(cid+':'+pin);return v===undefined?-1:v;};
+  // 3.7: what is left unconnected, with the options of the project (doc.solve): parts with no connection and current sources
+  // in an open circuit leave the solution, wires that join no part make no node. Modes: 'ignore' (silent), 'warn', 'error'.
+  const SO=project.solve||{},unconn=['ignore','warn','error'].includes(SO.unconn)?SO.unconn:'warn',island=['auto','ref','error'].includes(SO.island)?SO.island:'auto',rleak=Math.max(0,num(SO.rleak,0));
+  const isJ=k=>kindOf.get(k)==='j',cidOf=k=>k.slice(0,k.lastIndexOf(':')),elp=c=>Object.keys(P.elPins(c));
+  const netOf=new Map();for(const n of nets)for(const k of n.keys)netOf.set(k,n);if(gnd)for(const k of gnd.keys)netOf.set(k,gnd);
+  const skip=new Map();
+  for(const c of comps){if(c.type==='JUNC'||c.type==='GND')continue;const ps=elp(c);if(!ps.length)continue;
+   if(ps.every(pn=>{const n=netOf.get(c.id+':'+pn);return !n||(!n.ground&&n.keys.every(k=>isJ(k)||cidOf(k)===c.id));}))skip.set(c.id,'unconn');}
+  {// dead branches: a two-pin part on a node that nothing else conducts (meters draw no current), repeated inwards
+   const METER=new Set(['VM','VP']),cond=c=>!skip.has(c.id)&&!METER.has(c.type)&&c.type!=='JUNC'&&c.type!=='GND',deg=new Map(),dead=new Set();
+   for(const c of comps)if(cond(c))for(const pn of elp(c)){const n=netOf.get(c.id+':'+pn);if(n&&!n.ground)deg.set(n,(deg.get(n)||0)+1);}
+   for(let again=true;again;){again=false;for(const c of comps){if(!cond(c)||dead.has(c.id))continue;const ps=elp(c);if(ps.length!==2)continue;const ns=ps.map(pn=>netOf.get(c.id+':'+pn));
+    if(ns.some(n=>n&&!n.ground&&deg.get(n)===1)){dead.add(c.id);for(const n of ns)if(n&&!n.ground)deg.set(n,deg.get(n)-1);again=true;}}}
+   for(const id of dead){const c=byId.get(id),q={...P.defaults(c.type),...(c.params||{})};if(c.type==='IDC'||c.type==='ILG'||(c.type==='L'&&num(q.i0,0)!==0))skip.set(id,'openI');}}
+  const freeNets=[];for(let i=nets.length-1;i>=0;i--){const n=nets[i];if(!n.keys.some(k=>!isJ(k)&&!skip.has(cidOf(k)))){if(n.keys.every(isJ))freeNets.push(n.keys.map(cidOf));nets.splice(i,1);}}
+  const wcount=new Map();for(const w of project.wires||[])for(const e of [w.a,w.b])wcount.set(e.c,(wcount.get(e.c)||0)+1);
+  const freeEnds=comps.filter(c=>c.type==='JUNC'&&wcount.get(c.id)===1).map(c=>c.id);
   nets.sort((a,b)=>a.canon<b.canon?-1:1);nets.forEach((n,i)=>n.index=i);
   const pinNet=new Map();for(const n of nets)for(const k of n.keys)pinNet.set(k,n);if(gnd)for(const k of gnd.keys)pinNet.set(k,gnd);
   // wire names label their net
   for(const w of project.wires||[])if(w.name){const n=pinNet.get(w.a.c+':'+w.a.p);if(n&&!n.name)n.name=w.name;}
   // pins that touch nothing else
-  const open=[];for(const c of comps){if(c.type==='JUNC'||!Object.keys(P.elPins(c)).length)continue;for(const p of Object.keys(P.elPins(c))){const n=pinNet.get(c.id+':'+p);if(n&&n.keys.length===1&&c.type!=='GND')open.push(c.id+':'+p);}}
-  if(open.length)warnings.push('Ανοιχτοί ακροδέκτες: '+open.slice(0,6).join(', ')+(open.length>6?' …':'')+'.');
+  const open=[];for(const c of comps){if(c.type==='JUNC'||skip.has(c.id)||!Object.keys(P.elPins(c)).length)continue;for(const p of Object.keys(P.elPins(c))){const n=pinNet.get(c.id+':'+p);if(n&&n.keys.filter(k=>!isJ(k)).length===1&&c.type!=='GND')open.push(c.id+':'+p);}}
+  const lbl=id=>byId.get(id)?.label||id,unc=[...skip].filter(([,r])=>r==='unconn').map(([id])=>lbl(id)),oi=[...skip].filter(([,r])=>r==='openI').map(([id])=>lbl(id)),cut=(l,n=6)=>l.slice(0,n).join(', ')+(l.length>n?` και ${l.length-n} ακόμη`:'');
+  if(unconn==='error'&&(unc.length||oi.length||open.length))throw new NetlistError([unc.length?'ασύνδετα στοιχεία: '+cut(unc):'',oi.length?'πηγή ρεύματος σε ανοιχτό κύκλωμα: '+cut(oi):'',open.length?'ανοιχτοί ακροδέκτες: '+cut(open):''].filter(Boolean).join('· ')+'. Σύνδεσέ τα ή άλλαξε την επιλογή «Ασύνδετα» στο πάνελ παραμέτρων.');
+  if(unconn==='warn'){if(unc.length)warnings.push('Ασύνδετα στοιχεία, εκτός επίλυσης: '+cut(unc)+'.');if(oi.length)warnings.push('Πηγή ρεύματος σε ανοιχτό κύκλωμα, εκτός επίλυσης: '+cut(oi)+'.');
+   if(open.length)warnings.push('Ανοιχτοί ακροδέκτες: '+cut(open)+'.');}
   let nNodes=nets.length;
   const node=(cid,pin)=>{const n=pinNet.get(cid+':'+pin);return n&&!n.ground?n.index:-1;};
   const internal=()=>nNodes++;
@@ -85,6 +105,7 @@
    const b={i:blocks.length,id:c.id,type:T,label:c.label||c.id,ins,outs,outList:Object.keys(outs),st:{},ft:!['UD','INT','LPF'].includes(T),...extra};blocks.push(b);return b;};
   let nRows=0;const row=()=>nRows++;
   for(const c of comps){
+   if(skip.has(c.id))continue;
    const p={...P.defaults(c.type),...(c.params||{})},T=c.type;
    const info={id:c.id,type:T,label:c.label||c.id,pins:[],els:[]};compInfo.set(c.id,info);
    const add=e=>{e.cid=c.id;els.push(e);info.els.push(e);return e;};
@@ -186,9 +207,9 @@
     info.blk=mkBlock(c,p,'SH',{sh,sig,ft:sig});
     if(!(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type)))warnings.push(`${c.label||c.id}: διάλεξε μπλοκ PWM ή Ρολόι ως φέρον (αλλιώς δεν παίρνει δείγματα).`);
     if(!sig&&!(p.src&&byId.get(p.src)))warnings.push(`${c.label||c.id}: διάλεξε το στοιχείο που μετρά.`);}
-   else if(P.BLOCKS.has(T)){const b=mkBlock(c,p,T);info.blk=b;const st=b.st;
-    if(T==='VM'){b.np=node(c.id,'p');b.nn=node(c.id,'n');info.pins=[b.np,b.nn];}
-    else if(T==='AM'){const a=node(c.id,'a'),bb=node(c.id,'b');info.pins=[a,bb];b.el=info.main=add({k:'V',a,b:bb,row:row(),src:{kind:'dc',V:0}});}
+   else if(P.BLOCKS.has(T)){const b=mkBlock(c,p,T==='VP'?'VM':T==='IP'?'AM':T);info.blk=b;const st=b.st; // the probes (3.7) are a voltmeter to ground and an ammeter
+    if(T==='VM'||T==='VP'){b.np=node(c.id,'p');b.nn=T==='VP'?-1:node(c.id,'n');info.pins=[b.np,b.nn];}
+    else if(T==='AM'||T==='IP'){const a=node(c.id,'a'),bb=node(c.id,'b');info.pins=[a,bb];b.el=info.main=add({k:'V',a,b:bb,row:row(),src:{kind:'dc',V:0}});}
     else if(T==='MEAS'){b.src=p.src;b.qty=p.qty==='V'?'V':'I';if(!(p.src&&byId.get(p.src)))warnings.push(`${b.label}: διάλεξε το στοιχείο που μετρά.`);}
     else if(T==='CONST'){b.sched=P.parseSched(p.v);if(!b.sched){warnings.push(`${b.label}: μη έγκυρη τιμή «${p.v}», χρησιμοποιείται 0.`);b.sched=[[0,0]];}}
     else if(T==='GAIN')b.K=num(p.K,1);
@@ -216,9 +237,21 @@
   }
   for(const e of els)if(e.fire){const r=compInfo.get(e.fire.refsrc);const src=r?.type==='VAC'?r.main.src:r?.type==='VAC3'?r.phases[0].e.src:null;
    if(src){e.fire.f=Math.max(src.f,1e-6);e.fire.ph0=src.ph+(src.Vpk<0?Math.PI:0);}else if(e.fire.refsrc)warnings.push(`${compInfo.get(e.cid)?.label||e.cid}: η πηγή αναφοράς δεν βρέθηκε· χρησιμοποιείται ${e.fire.f} Hz από t = 0.`);}
+  // 3.7: parts with no conductive path to ground (e.g. a secondary without ground). 'auto': every node keeps G_min (or the
+  // chosen leakage) to ground, so the part settles around a mean of 0 V; 'ref': one of its nodes at 0 V (1 Ω); 'error': stop.
+  // Capacitors count as a path (their charge fixes the potential); ideal current sources do not.
+  const islands=[];
+  {const N=nNodes,par=Int32Array.from({length:N+1},(_,i)=>i),f=x=>{while(par[x]!==x){par[x]=par[par[x]];x=par[x];}return x;},u=(a,b)=>{const ra=f(a<0?N:a),rb=f(b<0?N:b);if(ra!==rb)par[ra]=rb;};
+   for(const e of els){if(e.k==='I')continue;if(e.k==='X'){u(e.p1,e.p2);u(e.s1,e.s2);continue;}if(e.ports){for(const [a,b] of e.ports)u(a,b);continue;}if(e.a!==undefined&&e.b!==undefined)u(e.a,e.b);}
+   const g=f(N),grp=new Map();for(let i=0;i<N;i++){const r=f(i);if(r===g)continue;if(!grp.has(r))grp.set(r,[]);grp.get(r).push(i);}
+   for(const nodes of grp.values())islands.push({nodes,pins:nodes.filter(i=>i<nets.length).map(i=>nets[i].canon),ref:island});
+   if(islands.length&&island==='error')throw new NetlistError('Τμήμα του κυκλώματος χωρίς αγώγιμη σύνδεση με τη γείωση: '+islands.map(q=>cut(q.pins,3)||'εσωτερικοί κόμβοι').join(' · ')+'. Βάλε γείωση ή άλλαξε την επιλογή «Αιωρούμενα τμήματα».');
+   for(const q of islands){if(island==='ref'){const r=q.nodes.find(i=>i<nets.length)??q.nodes[0];q.refPin=r<nets.length?nets[r].canon:null;els.push({k:'G',a:r,b:-1,R:1,cid:'#island',role:'ref'});}
+    else if(rleak>0)for(const i of q.nodes)els.push({k:'G',a:i,b:-1,R:rleak,cid:'#island',role:'leak'});}}
+  const diag={unconn,island,rleak,skipped:[...skip].map(([id,why])=>({id,why})),open,freeEnds,freeNets,islands};
   const rowBase=nNodes;for(const e of els)if(e.row!==undefined)e.row+=rowBase;
   const sig=compileSignals(blocks,sigNets,ctrls,els,compInfo,warnings);
-  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId,sig,sigPin};
+  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId,sig,sigPin,diag};
  }
 
  // ---------------------------------------------------------------- signal graph (3.0)

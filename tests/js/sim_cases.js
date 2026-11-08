@@ -226,5 +226,21 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
  const err=par=>{try{new Sim(mk(par));return null;}catch(e){return e.message;}};
  const g=Parts.srmMag({...Parts.defaults('SRM'),mag:'table'});
  out.srm={at,warn:s.net.warnings,tblErr:g.err||null,tblM:g.M,badCount:err({mag:'table',tbl:'0, 10, 20; 0: 0, 0.08; 180: 0, 0.3, 0.5'}),badMono:err({mag:'table',tbl:'0, 10, 20; 0: 0, 0.08, 0.07; 90: 0, 0.2, 0.3; 180: 0, 0.3, 0.5'}),badL:err({La:.005})};}
+// 3.7) unconnected parts, open current sources, free wires and floating parts, with the options of the project; probes
+{const base=[{id:'V1',type:'VDC',params:{V:12}},{id:'L1',type:'L',params:{L:1e-3}},{id:'R1',type:'R',params:{R:10}},{id:'C1',type:'C',params:{C:10e-6}},{id:'G',type:'GND'}],
+  bw=[['V1:p','L1:a'],['L1:b','R1:a'],['R1:b','G:g'],['L1:b','C1:p'],['C1:n','G:g'],['V1:n','G:g']];
+ const run=(comps,wires,solve)=>{const s=new Sim({...project(comps,wires),solve},{h:1e-6});s.run(2e-3);return s;};
+ const clean=run(base,bw),extra=[{id:'R9',type:'R'},{id:'I9',type:'IDC',params:{I:2}},{id:'R8',type:'R'},{id:'J1',type:'JUNC'},{id:'J2',type:'JUNC'},{id:'J3',type:'JUNC'}],
+  xw=[['I9:n','G:g'],['R8:a','L1:b'],['J1:j','J2:j'],['R1:a','J3:j']];
+ const r={};for(const m of ['warn','ignore']){const s=run([...base,...extra],[...bw,...xw],{unconn:m});
+  r[m]={dI:Math.abs(s.now('I:L1')-clean.now('I:L1')),dV:Math.abs(s.now('V:C1')-clean.now('V:C1')),nodes:s.net.nNodes,clean:clean.net.nNodes,warn:s.net.warnings,diag:{skipped:s.net.diag.skipped,open:s.net.diag.open,freeNets:s.net.diag.freeNets.length,freeEnds:s.net.diag.freeEnds},
+   hasI9:s.chIndex.has('V:I9'),vR8:s.now('V:R8')};}
+ let err=null;try{run([...base,...extra],[...bw,...xw],{unconn:'error'});}catch(e){err=e.message;}
+ // isolated secondary: same voltages inside it with every reference, different to ground
+ const isl=solve=>{const s=run([{id:'V1',type:'VAC',params:{Vpk:10,f:125}},{id:'X1',type:'XFMR',params:{n:1}},{id:'R2',type:'R',params:{R:5}},{id:'R3',type:'R',params:{R:5}},{id:'IP1',type:'IP'},{id:'VP1',type:'VP'},{id:'VM1',type:'VM'},{id:'G',type:'GND'}],
+   [['V1:n','G:g'],['V1:p','X1:p1'],['X1:p2','G:g'],['X1:s1','IP1:a'],['IP1:b','R2:a'],['R2:b','R3:a'],['R3:b','X1:s2'],['VP1:p','R2:b'],['VM1:p','R2:a'],['VM1:n','R3:b']],solve);
+   return {vR2:s.now('V:R2'),vm:s.now('Y:VM1'),ip:s.now('Y:IP1'),iR2:s.now('I:R2'),vp:s.now('Y:VP1'),islands:s.net.diag.islands.map(q=>({n:q.nodes.length,ref:q.refPin||null}))};};
+ const ia=isl({}),ir=isl({island:'ref'}),il=isl({island:'auto',rleak:1e3});let ie=null;try{isl({island:'error'});}catch(e){ie=e.message;}
+ out.solve37={r,err,isl:{auto:ia,ref:ir,leak:il,err:ie}};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

@@ -3,7 +3,9 @@
 //  left-drag on empty canvas  -> rectangle selection (never pans, never selects text)
 //  left-drag on a part        -> moves the selection; attached wires stay orthogonal
 //  left-drag on a wire segment-> moves that segment perpendicular to itself
-//  press on a pin             -> draws a wire (A* orthogonal route around symbols)
+//  press on a pin             -> draws a wire (A* orthogonal route around symbols); released in empty space it keeps a free end (3.7)
+//  W (wire tool)              -> click anywhere to start, click for corners, double click / Enter to stop at a free end (3.7)
+//  a part dropped or moved onto a wire connects there; a two-pin part along a wire goes in series (3.7, Shift: no connection)
 //  middle-drag / Space+drag   -> pan; wheel -> zoom (all remappable in settings)
 (function(root){
  const P=root.Parts;const NS='http://www.w3.org/2000/svg';const G=10;
@@ -25,7 +27,7 @@
   constructor(holder,opt={}){
    this.holder=holder;this.opt=opt;this.doc={components:[],wires:[]};this.sel={c:new Set(),w:new Set()};
    this.undoStack=[];this.redoStack=[];this.view={cx:400,cy:250,k:1};this.mode=null;this.live=null;this.space=false;
-   this.settings=Object.assign({leftDrag:'select',middleDrag:'pan',rightButton:'menu',wheel:'zoom',dblclick:'edit',marquee:'direction',grid:true,gridStyle:'dots',wireWidth:2.2,corner:'round',showLive:true,showArrows:true,autoRoute:false},opt.settings||{});
+   this.settings=Object.assign({leftDrag:'select',middleDrag:'pan',rightButton:'menu',wheel:'zoom',dblclick:'edit',marquee:'direction',grid:true,gridStyle:'dots',wireWidth:2.2,corner:'round',showLive:true,showArrows:true,autoRoute:false,freeEnds:true,autoConnect:true,snapPx:12},opt.settings||{});
    const svg=this.svg=document.createElementNS(NS,'svg');svg.setAttribute('class','schem');svg.setAttribute('tabindex','0');
    svg.setAttribute('aria-label','Κύκλωμα. Διπλό κλικ σε στοιχείο για ρυθμίσεις, δεξί κλικ για scope.');
    svg.innerHTML=`<defs><pattern id="gdots" width="${G}" height="${G}" patternUnits="userSpaceOnUse"><circle cx="0" cy="0" r=".75" class="gdot"/></pattern>
@@ -41,7 +43,7 @@
    svg.addEventListener('keydown',e=>this.key(e));svg.addEventListener('keyup',e=>{if(e.code==='Space'){this.space=false;svg.classList.remove('grab');}});
    svg.addEventListener('pointerleave',()=>{this.hover=null;this.L.over.querySelector('.ghost')?.remove();});
    holder.addEventListener('dragover',e=>{if(e.dataTransfer.types.includes('application/x-pcl-part')){e.preventDefault();}});
-   holder.addEventListener('drop',e=>{const t=e.dataTransfer.getData('application/x-pcl-part');if(!t)return;e.preventDefault();const p=this.world(e);this.addPart(t,snap(p[0]),snap(p[1]));});
+   holder.addEventListener('drop',e=>{const t=e.dataTransfer.getData('application/x-pcl-part');if(!t)return;e.preventDefault();const p=this.world(e);const c=this.addPart(t,snap(p[0]),snap(p[1]));if(c&&!e.shiftKey&&this.autoConnect([c.id]))this.changed('struct');});
    this.ro=new ResizeObserver(()=>{if(!this.userView)this.fit();else this.applyView();});this.ro.observe(holder);
   }
   // ---------------------------------------------------------- model
@@ -57,6 +59,7 @@
   redo(){if(!this.redoStack.length)return;this.undoStack.push(this.snapshot());this.doc=JSON.parse(this.redoStack.pop());this.cleanSel();this.render();this.changed('struct');}
   cleanSel(){for(const id of [...this.sel.c])if(!this.comp(id))this.sel.c.delete(id);for(const id of [...this.sel.w])if(!this.wire(id))this.sel.w.delete(id);}
   load(doc,{keepView=false}={}){this.doc={components:(doc.components||[]).map(c=>({rot:0,flip:false,params:{},...c,params:{...(c.params||{})}})),wires:(doc.wires||[]).map(w=>({...w,pts:(w.pts||[]).map(p=>[...p])}))};
+   if(doc.solve)this.doc.solve={...doc.solve}; // options of the solution (3.7): unconnected parts, floating parts
    this.dropDangling();
    for(const w of this.doc.wires)if(!w.pts.length&&!w.fixed){const full=this.wirePts(w);if(!orth(full))this.route(w);}
    this.sel.c.clear();this.sel.w.clear();this.undoStack=[];this.redoStack=[];this.render();if(!keepView){this.userView=false;this.fit();}}
@@ -81,6 +84,66 @@
    for(const w of this.doc.wires){const a=w.a.c+':'+w.a.p,b=w.b.c+':'+w.b.p;if(par.has(a)&&par.has(b))par.set(find(a),find(b));}
    const sig=new Set(),el=new Set();for(const [k,v] of kind){const r=find(k);if(v==='in'||v==='out')sig.add(r);else if(v==='el')el.add(r);}
    return {of:k=>par.has(k)?(sig.has(find(k))?'sig':el.has(find(k))?'el':'j'):null,kind};}
+  // options of the solution (3.7), saved with the circuit
+  setSolve(patch){this.remember();const s={...(this.doc.solve||{}),...patch};for(const k of Object.keys(s))if(s[k]===''||s[k]===undefined||s[k]===null)delete s[k];this.doc.solve=s;if(!Object.keys(s).length)delete this.doc.solve;this.changed('param');}
+  // which parts the solver left out, which pins are open (3.7): drawn on the schematic
+  setDiag(d){this.diag=d||null;this.renderDiag();}
+  renderDiag(){const d=this.diag,sk=new Set((d?.skipped||[]).map(x=>x.id));for(const g of this.L.parts.querySelectorAll('.part'))g.classList.toggle('skipped',sk.has(g.dataset.c));
+   const op=new Set(d?.open||[]);for(const el of this.L.pins.querySelectorAll('.pin'))el.classList.toggle('bad',op.has(el.dataset.pin));}
+  kindsOk(a,b){const NK=this.netKinds(),ka=NK.of(a),kb=NK.of(b);return !((ka==='sig'&&kb==='el')||(ka==='el'&&kb==='sig'));}
+  wiresAt(id,p){return this.doc.wires.filter(w=>(w.a.c===id&&(p===undefined||w.a.p===p))||(w.b.c===id&&(p===undefined||w.b.p===p)));}
+  // a wire whose polyline passes through the grid point q (not at its ends)
+  wireAt(q,ex=new Set()){for(const w of this.doc.wires){if(ex.has(w.id))continue;const pts=this.wirePts(w);if(pts.some(x=>!x)||same(pts[0],q)||same(pts[pts.length-1],q))continue;
+    for(let i=1;i<pts.length;i++){const [ax,ay]=pts[i-1],[bx,by]=pts[i];if((ax===bx&&q[0]===ax&&q[1]>=Math.min(ay,by)&&q[1]<=Math.max(ay,by))||(ay===by&&q[1]===ay&&q[0]>=Math.min(ax,bx)&&q[0]<=Math.max(ax,bx)))return w;}}return null;}
+  // the pin or wire point within snapPx screen pixels of p (pins first)
+  nearTarget(p,exclude,exW=new Set()){const r=(this.settings.snapPx||12)/(this.view.k||1);let best=null;
+   for(const c of this.doc.components)for(const pn of Object.keys(P.pinsOf(c))){const key=c.id+':'+pn;if(key===exclude)continue;const q=this.pin(c,pn);const d=Math.hypot(q[0]-p[0],q[1]-p[1]);if(d<=r&&(!best||d<best.d))best={d,pin:key,q};}
+   if(best)return best;
+   for(const w of this.doc.wires){if(exW.has(w.id))continue;const pts=this.wirePts(w);if(pts.some(x=>!x))continue;for(let i=1;i<pts.length;i++){const [ax,ay]=pts[i-1],[bx,by]=pts[i];let q;
+     if(ay===by)q=[snap(Math.min(Math.max(p[0],Math.min(ax,bx)),Math.max(ax,bx))),ay];else if(ax===bx)q=[ax,snap(Math.min(Math.max(p[1],Math.min(ay,by)),Math.max(ay,by)))];else continue;
+     const d=Math.hypot(q[0]-p[0],q[1]-p[1]);if(d<=r&&(!best||d<best.d))best={d,w:w.id,q};}}
+   return best;}
+  // a junction dropped on a pin, another junction or a wire merges into it (3.7)
+  mergeJunction(jid,moving=new Set()){const j=this.comp(jid);if(!j||j.type!=='JUNC')return false;const at=[j.x,j.y],mine=this.wiresAt(jid);if(!mine.length)return false;let target=null;
+   for(const c of this.doc.components){if(c.id===jid||moving.has(c.id))continue;for(const pn of Object.keys(P.pinsOf(c))){if(same(this.pin(c,pn),at)){target={c:c.id,p:pn};break;}}if(target)break;}
+   if(target&&!this.kindsOk(jid+':j',target.c+':'+target.p))return false;
+   if(!target){const w=this.wireAt(at,new Set(mine.map(w=>w.id)));if(w&&this.kindsOk(jid+':j',w.a.c+':'+w.a.p)){const k=this.splitWire(w.id,at,true);if(k)target={c:k,p:'j'};}}
+   if(!target)return false;
+   for(const w of mine){if(w.a.c===jid)w.a={c:target.c,p:target.p};if(w.b.c===jid)w.b={c:target.c,p:target.p};}
+   this.doc.wires=this.doc.wires.filter(w=>!(w.a.c===w.b.c&&w.a.p===w.b.p));this.doc.components=this.doc.components.filter(c=>c.id!==jid);this.sel.c.delete(jid);this.tidyJunctions();return true;}
+  // pins of placed or moved parts that land on a pin, a free end or a wire connect there; a two-pin part along a wire goes in series
+  autoConnect(ids){if(!this.settings.autoConnect)return false;let changed=false;const set=new Set(ids);
+   for(const id of ids){const c=this.comp(id);if(!c||c.type==='JUNC')continue;
+    const free=Object.keys(P.pinsOf(c)).filter(pn=>!this.wiresAt(id,pn).length&&!(P.pinKind(c,pn)==='in'&&c.params?.['in_'+pn]));
+    const el=Object.keys(P.elPins(c));
+    if(el.length===2&&free.includes(el[0])&&free.includes(el[1])){const qa=this.pin(c,el[0]),qb=this.pin(c,el[1]),w=this.wireAt(qa);
+     if(w&&w===this.wireAt(qb)&&!set.has(w.a.c)&&!set.has(w.b.c)&&this.kindsOk(id+':'+el[0],w.a.c+':'+w.a.p)&&this.insertSeries(w,c,el)){changed=true;continue;}}
+    for(const pn of free){const q=this.pin(c,pn);let done=false;
+     for(const k of this.doc.components){if(set.has(k.id))continue;for(const kp of Object.keys(P.pinsOf(k))){if(!same(this.pin(k,kp),q)||!this.kindsOk(id+':'+pn,k.id+':'+kp))continue;
+       if(k.type==='JUNC'){for(const w of this.doc.wires){if(w.a.c===k.id)w.a={c:id,p:pn};if(w.b.c===k.id)w.b={c:id,p:pn};}this.doc.components=this.doc.components.filter(x=>x!==k);}
+       else this.doc.wires.push({id:this.newId('w'),a:{c:id,p:pn},b:{c:k.id,p:kp},pts:[]});
+       done=true;break;}if(done)break;}
+     if(done){changed=true;continue;}
+     const w=this.wireAt(q);if(w&&w.a.c!==id&&w.b.c!==id&&this.kindsOk(id+':'+pn,w.a.c+':'+w.a.p)){const j=this.splitWire(w.id,q,true);
+      if(j){for(const x of this.doc.wires){if(x.a.c===j)x.a={c:id,p:pn};if(x.b.c===j)x.b={c:id,p:pn};}this.doc.components=this.doc.components.filter(x=>x.id!==j);changed=true;}}}}
+   if(changed){this.doc.wires=this.doc.wires.filter(w=>!(w.a.c===w.b.c&&w.a.p===w.b.p));this.tidyJunctions();this.render();}
+   return changed;}
+  // cut wire w where the two pins of c lie on the same segment; the piece under the part goes
+  insertSeries(w,c,[pa,pb]){const pts=this.wirePts(w),qa=this.pin(c,pa),qb=this.pin(c,pb);let total=0;for(let i=1;i<pts.length;i++)total+=Math.abs(pts[i][0]-pts[i-1][0])+Math.abs(pts[i][1]-pts[i-1][1]);
+   const pos=q=>{let L=0;for(let i=1;i<pts.length;i++){const [ax,ay]=pts[i-1],[bx,by]=pts[i];if((ax===bx&&q[0]===ax&&q[1]>=Math.min(ay,by)&&q[1]<=Math.max(ay,by))||(ay===by&&q[1]===ay&&q[0]>=Math.min(ax,bx)&&q[0]<=Math.max(ax,bx)))return {i,s:L+Math.abs(q[0]-ax)+Math.abs(q[1]-ay)};L+=Math.abs(bx-ax)+Math.abs(by-ay);}return null;};
+   let A=pos(qa),B=pos(qb),first=pa,second=pb,q1=qa,q2=qb;if(!A||!B||A.i!==B.i)return false;if(B.s<A.s){[A,B]=[B,A];[first,second]=[second,first];[q1,q2]=[q2,q1];}
+   if(A.s<=0||B.s>=total)return false;
+   const w1={...w,id:w.id,b:{c:c.id,p:first},pts:[]},w2={...w,id:this.newId('w'),a:{c:c.id,p:second},pts:[]};delete w2.name;
+   this.setWirePts(w1,[...pts.slice(0,A.i),q1]);this.setWirePts(w2,[q2,...pts.slice(B.i)]);this.doc.wires=this.doc.wires.filter(x=>x!==w);this.doc.wires.push(w1,w2);return true;}
+  setWireTool(on){this.wireTool=!!on;this.svg.classList.toggle('wiretool',this.wireTool);if(!on)this.cancelWire();this.opt.ontool?.(this.wireTool);}
+  startFreeWire(q){this.remember();const j=this.newJunction([snap(q[0]),snap(q[1])]);this.render();this.wiring={from:{c:j,p:'j'},via:[],click:true,made:j};this.svg.classList.add('wiring');this.svg.focus({preventScroll:true});}
+  newJunction(q){const j={id:this.newId('J'),type:'JUNC',x:q[0],y:q[1],rot:0,flip:false,label:'',params:{}};this.doc.components.push(j);return j.id;}
+  // stop the wire being drawn at a free end: at the given point or at the last corner
+  finishFree(at){const wi=this.wiring;if(!wi)return;const via=wi.via.slice();const end=at?[snap(at[0]),snap(at[1])]:via.pop();
+   while(via.length&&end&&same(via[via.length-1],end))via.pop();const from=this.pin(wi.from.c,wi.from.p);
+   if(!end||same(end,from)){this.cancelWire();if(wi.made){this.tidyJunctions();this.render();}return;}
+   const t=this.nearTarget(end,wi.from.c+':'+wi.from.p,new Set(this.wiresAt(wi.from.c).map(w=>w.id)));if(t){wi.via=via;this.finishWire(t.q,t.pin?{pin:t.pin}:{w:t.w});return;}
+   const j=this.newJunction(end);wi.via=via;this.finishWire(end,{pin:j+':j'});}
   setWireProps(id,patch){const w=this.wire(id);if(!w)return;this.remember();Object.assign(w,patch);if(patch.name!==undefined&&!patch.name)delete w.name;this.renderWires();this.changed('param');}
   deleteSel(){
    if(!this.sel.c.size&&!this.sel.w.size)return;this.remember();
@@ -164,7 +227,7 @@
    const k=Math.min(1.9,Math.max(.25,Math.min((r.width||800)/(b[2]-b[0]+2*margin),(r.height||450)/(b[3]-b[1]+2*margin))));this.view={cx:(b[0]+b[2])/2,cy:(b[1]+b[3])/2,k};this.applyView();}
   extent(){const xs=[],ys=[];for(const c of this.doc.components){const b=P.bbox(c);xs.push(b[0],b[2]+(c.type==='JUNC'||c.type==='GND'?0:85));ys.push(b[1]-30,b[3]+14);for(const p of Object.keys(P.pinsOf(c))){const q=this.pin(c,p);xs.push(q[0]);ys.push(q[1]);}}
    for(const w of this.doc.wires)for(const p of w.pts||[]){xs.push(p[0]);ys.push(p[1]);}if(!xs.length)return null;return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
-  render(){this.renderWires();this.L.parts.innerHTML=this.doc.components.map(c=>this.partSVG(c)).join('');this.renderLabels();this.renderPins();this.renderSel();this.applyView();this.updateLive();}
+  render(){this.renderWires();this.L.parts.innerHTML=this.doc.components.map(c=>this.partSVG(c)).join('');this.renderLabels();this.renderPins();this.renderSel();this.applyView();this.updateLive();this.renderDiag();}
   partSVG(c){const def=P.PARTS[c.type];if(c.type==='JUNC')return `<g class="part junc" data-c="${c.id}"><circle class="hit" r="7" cx="${c.x}" cy="${c.y}"/></g>`;
    const [bx,by,bw,bh]=P.boxOf(c);const tf=`translate(${c.x},${c.y}) rotate(${90*(c.rot||0)}) scale(${c.flip?-1:1},1)`;
    // the title text of a rotated or mirrored symbol stays upright and readable (3.5): inverse of rotate·scale about its centre
@@ -176,7 +239,7 @@
    switch(c.type){case 'R':return p.sched?'R(t)':e(+p.R,'Ω');case 'L':return e(+p.L,'H');case 'C':return e(+p.C,'F');case 'VDC':return p.ctl==='sig'?'V από σήμα':e(+p.V,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');case 'VAC':return e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'VAC3':return '3φ '+e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'SCR':return p.fire==='alpha'?'α '+(+p.alpha).toLocaleString('el-GR')+'°'+(+p.shift?' +'+(+p.shift).toLocaleString('el-GR')+'°':''):p.fire==='pwm'?'g · '+(p.pwm||'—'):'';
     case 'IDC':return p.ctl==='sig'?'I από σήμα':e(+p.I,'A');case 'CPE':return p.kind==='cpe'?'Q '+e(+p.Q)+' · α '+(+p.alpha).toLocaleString('el-GR'):'σ '+e(+p.sigma,'Ω/√s');case 'CPL':return p.sched?'P(t)':e(+p.P,'W');case 'XFMR':return '1 : '+(+p.n).toLocaleString('el-GR',{maximumFractionDigits:4});case 'SW':return (p.model==='igbt'?'IGBT · ':'')+(p.gate==='sig'?'g από σήμα':p.gate==='pwm'?({a:'g',na:'ḡ',b:'g₂',nb:'ḡ₂'}[p.out]||'g')+' · '+(p.pwm||'—'):p.gate==='on'?'ON':'OFF');
     case 'SH':return (p.in==='sig'?'u':(p.qty==='V'?'v(':'i(')+(p.src||'—')+')')+' · '+({start:'αρχή T',mid:'μέσο T',both:'2 ανά T'}[p.trig]||'');
-    case 'MEAS':case 'VM':case 'AM':case 'SR':case 'DISP':return '';
+    case 'MEAS':case 'VM':case 'AM':case 'VP':case 'IP':case 'SR':case 'DISP':return '';
     case 'CONST':return String(p.v).includes(':')?String(p.v).slice(0,22):'';case 'GAIN':return 'K = '+e(+p.K);case 'SUM':return '';
     case 'SAT':return '['+e(+p.lo)+', '+e(+p.hi)+']';case 'CMP':return +p.hys>0?'h = '+e(+p.hys):'';case 'LOGIC':return ['nand','nor','xor'].includes(p.op)?p.op.toUpperCase():'';
     case 'PIB':return 'K_p '+e(+p.Kp)+' · K_i '+e(+p.Ki);case 'UD':return '';
@@ -207,7 +270,7 @@
     for(let i=1;i<pts.length;i++)h+=`<path class="whit" data-w="${w.id}" data-seg="${i-1}" d="M${pts[i-1][0]},${pts[i-1][1]} L${pts[i][0]},${pts[i][1]}"/>`;
     if(w.name){const m=this.midLabel(pts);h+=`<text class="wname" x="${m[0]}" y="${m[1]-6}" text-anchor="middle">${esc(w.name)}</text>`;}
     h+='</g>';}
-   for(const c of this.doc.components){if(c.type==='JUNC'){const n=count.get(c.id+':j')||0;if(n>=3||n===1)dots+=`<circle class="jdot${NK.of(c.id+':j')==='sig'?' sig':''}" cx="${c.x}" cy="${c.y}" r="${NK.of(c.id+':j')==='sig'?2.8:3.6}"/>`;continue;}
+   for(const c of this.doc.components){if(c.type==='JUNC'){const n=count.get(c.id+':j')||0;if(n>=3)dots+=`<circle class="jdot${NK.of(c.id+':j')==='sig'?' sig':''}" cx="${c.x}" cy="${c.y}" r="${NK.of(c.id+':j')==='sig'?2.8:3.6}"/>`;else if(n===1)dots+=`<circle class="jfree" cx="${c.x}" cy="${c.y}" r="3.6"/>`;continue;}
     for(const p of Object.keys(P.pinsOf(c))){if((count.get(c.id+':'+p)||0)>=2){const q=this.pin(c,p),sg=NK.of(c.id+':'+p)==='sig';dots+=`<circle class="jdot${sg?' sig':''}" cx="${q[0]}" cy="${q[1]}" r="${sg?2.8:3.6}"/>`;}}}
    this.L.wires.innerHTML=h;this.L.dots.innerHTML=dots;this.pinCount=count;
   }
@@ -255,14 +318,21 @@
    this.svg.focus({preventScroll:true});e.preventDefault();const p=this.world(e),h=this.hitOf(e);
    this.press={x:e.clientX,y:e.clientY,p,h,button:e.button,shift:e.shiftKey||e.ctrlKey||e.metaKey,alt:e.altKey,moved:false,id:e.pointerId};
    const pan=(e.button===1&&this.settings.middleDrag==='pan')||(e.button===0&&(this.space||this.settings.leftDrag==='pan'&&!h.c&&!h.w&&!h.pin))||(e.button===2&&this.settings.rightButton==='pan');
-   if(this.placing&&e.button===0){this.finishPlace(p);this.press=null;return;}
+   if(this.placing&&e.button===0){this.finishPlace(p,e.shiftKey);this.press=null;return;}
    if(this.wiring&&e.button===0){this.wireClick(p,h);this.press=null;return;}
    if(this.wiring&&e.button===2){this.cancelWire();this.press=null;return;}
+   // wire tool (3.7): start on a pin, on a wire, or anywhere (a free end)
+   if(this.wireTool&&e.button===0&&!pan){this.press=null;
+    const t=h.pin?{pin:h.pin}:h.w&&!h.c?{w:h.w,q:p}:this.nearTarget(p);
+    if(!t&&h.c)return;this.remember();
+    if(t?.pin){this.startWire(t.pin,true);return;}
+    const j=t?.w?this.splitWire(t.w,t.q,true):(()=>{const id=this.newJunction([snap(p[0]),snap(p[1])]);this.render();return id;})();
+    if(j){this.wiring={from:{c:j,p:'j'},via:[],click:true,made:j};this.svg.classList.add('wiring');}return;}
    if(pan){this.userView=true;this.press.kind='pan';this.press.view={...this.view};this.svg.setPointerCapture(e.pointerId);this.svg.classList.add('panning');return;}
    if(e.button===2){this.press.kind='menu';return;}
    if(e.button!==0)return;
    if(h.pin){const [pc]=h.pin.split(':');const pcomp=this.comp(pc);
-    if(pcomp?.type==='JUNC'){if(this.press.shift){this.press.h.c=pc;this.press.kind='toggle';return;}if(this.sel.c.has(pc)||e.altKey){if(!this.sel.c.has(pc))this.select([pc],[]);this.press.h.c=pc;this.press.kind='move';this.svg.setPointerCapture(e.pointerId);return;}this.press.kind='wire';this.press.junc=pc;this.svg.setPointerCapture(e.pointerId);return;}
+    if(pcomp?.type==='JUNC'){if(this.press.shift){this.press.h.c=pc;this.press.kind='toggle';return;}if(this.sel.c.has(pc)||e.altKey||this.wiresAt(pc).length===1){if(!this.sel.c.has(pc))this.select([pc],[]);this.press.h.c=pc;this.press.kind='move';this.svg.setPointerCapture(e.pointerId);return;}this.press.kind='wire';this.press.junc=pc;this.svg.setPointerCapture(e.pointerId);return;}
     this.press.kind='wire';this.svg.setPointerCapture(e.pointerId);return;}
    if(h.c){const id=h.c;if(this.press.shift){this.press.kind='toggle';return;}
     if(!this.sel.c.has(id)){this.select([id],[]);this.press.fresh=true;}this.press.kind='move';this.svg.setPointerCapture(e.pointerId);return;}
@@ -291,7 +361,7 @@
    if(pr.kind==='menu'){this.menu(e,h);return;}
    if(pr.kind==='toggle'){if(h.c||pr.h.c){const id=pr.h.c;this.sel.c.has(id)?this.sel.c.delete(id):this.sel.c.add(id);}else if(pr.h.w){const id=pr.h.w;this.sel.w.has(id)?this.sel.w.delete(id):this.sel.w.add(id);}this.renderSel();this.opt.onselect?.(this.selection());return;}
    if(pr.kind==='marquee'){this.L.over.querySelector('.marquee')?.remove();if(!pr.moved){if(!pr.shift)this.select([],[]);return;}this.marqueeSelect(pr.p,p,pr.shift);return;}
-   if(pr.kind==='move'){if(pr.moved){this.endDrag();}else if(!pr.fresh&&(this.sel.c.size>1||this.sel.w.size)){this.select([pr.h.c],[]);}return;}
+   if(pr.kind==='move'){if(pr.moved){this.endDrag(true,!e.shiftKey);}else if(!pr.fresh&&(this.sel.c.size>1||this.sel.w.size)){this.select([pr.h.c],[]);}return;}
    if(pr.kind==='seg'){if(pr.moved)this.endDrag();return;}
    if(pr.kind==='wire'||pr.kind==='wirefromwire'){
     if(!pr.moved){if(pr.junc){this.select([pr.junc],[]);return;}if(pr.kind==='wire'){this.remember();this.startWire(pr.h.pin,true);}return;}
@@ -300,7 +370,7 @@
   cancelDrag(){this.press=null;this.svg.classList.remove('panning');this.L.over.querySelector('.marquee')?.remove();}
   hoverPin(e){const pin=e.target.dataset?.pin;this.svg.classList.toggle('over-pin',!!pin);const id=e.target.closest?.('[data-c]')?.dataset.c||(pin&&pin.split(':')[0])||null;
    if(id!==this.hotPart){this.hotPart=id;for(const el of this.L.pins.querySelectorAll('.pin.hot'))el.classList.remove('hot');if(id)for(const el of this.L.pins.querySelectorAll(`[data-pin^="${CSS.escape(id)}:"]`))el.classList.add('hot');}}
-  dbl(e){const h=this.hitAt(e);if(h.c&&this.comp(h.c)?.type!=='JUNC'){this.opt.onedit?.({kind:'comp',id:h.c,x:e.clientX,y:e.clientY,dbl:true});}else if(h.w)this.opt.onedit?.({kind:'wire',id:h.w,x:e.clientX,y:e.clientY,dbl:true});}
+  dbl(e){if(this.wiring){this.finishFree();return;}const h=this.hitAt(e);if(h.c&&this.comp(h.c)?.type!=='JUNC'){this.opt.onedit?.({kind:'comp',id:h.c,x:e.clientX,y:e.clientY,dbl:true});}else if(h.w)this.opt.onedit?.({kind:'wire',id:h.w,x:e.clientX,y:e.clientY,dbl:true});}
   menu(e,h){if(h.c&&!this.sel.c.has(h.c))this.select([h.c],[]);else if(!h.c&&h.w&&!this.sel.w.has(h.w))this.select([],[h.w]);
    this.opt.oncontext?.({kind:h.c?'comp':h.w?'wire':'empty',id:h.c||h.w,pin:h.pin,x:e.clientX,y:e.clientY,world:this.world(e)});}
   wheel(e){e.preventDefault();this.userView=true;const zoom=this.settings.wheel==='zoom'?!e.shiftKey:(e.ctrlKey||e.metaKey);
@@ -312,7 +382,10 @@
    const k=e.key.toLowerCase(),ctrl=e.ctrlKey||e.metaKey;
    if(e.target!==this.svg)return;
    if(e.code==='Space'){this.space=true;this.svg.classList.add('grab');e.preventDefault();return;}
-   if(k==='escape'){if(this.wiring)this.cancelWire();else if(this.placing)this.cancelPlace();else this.select([],[]);return;}
+   if(k==='escape'){if(this.wiring){const m=this.wiring.made;this.cancelWire();if(m){this.tidyJunctions();this.render();}}else if(this.placing)this.cancelPlace();else if(this.wireTool)this.setWireTool(false);else this.select([],[]);return;}
+   if(this.wiring&&k==='backspace'){e.preventDefault();this.wiring.via.pop();this.previewWire(this.hover||this.pin(this.wiring.from.c,this.wiring.from.p),null);return;}
+   if(this.wiring&&k==='enter'){e.preventDefault();this.finishFree(this.hover);return;}
+   if(!ctrl&&k==='w'){this.setWireTool(!this.wireTool);return;}
    if(k==='delete'||k==='backspace'){e.preventDefault();this.deleteSel();return;}
    if(ctrl&&k==='z'&&!e.shiftKey){e.preventDefault();this.undo();return;}
    if(ctrl&&(k==='y'||(k==='z'&&e.shiftKey))){e.preventDefault();this.redo();return;}
@@ -324,7 +397,7 @@
    if(!ctrl&&k==='m'){this.mirrorSel();return;}
    if(!ctrl&&k==='f'){this.fit();return;}
    const arrows={arrowleft:[-G,0],arrowright:[G,0],arrowup:[0,-G],arrowdown:[0,G]};
-   if(arrows[k]&&this.sel.c.size){e.preventDefault();this.beginDrag({kind:'move'});this.dragMove(...arrows[k]);this.endDrag(false);}
+   if(arrows[k]&&this.sel.c.size){e.preventDefault();this.beginDrag({kind:'move'});this.dragMove(...arrows[k]);this.endDrag(false,false);}
   }
   // ---------------------------------------------------------- drag: parts
   beginDrag(pr){
@@ -344,9 +417,12 @@
    for(const id of d.start.keys()){const c=this.comp(id);const g=this.L.parts.querySelector(`[data-c="${CSS.escape(id)}"]`);if(g&&c.type!=='JUNC')g.setAttribute('transform',`translate(${c.x},${c.y}) rotate(${90*(c.rot||0)}) scale(${c.flip?-1:1},1)`);else if(g)g.querySelector('circle').setAttribute('cx',c.x),g.querySelector('circle').setAttribute('cy',c.y);}
    this.renderWires();this.renderPins();this.renderLabels();this.renderSel();this.updateLive();
   }
-  endDrag(notify=true){
-   if(this.drag&&this.settings.autoRoute)for(const o of this.drag.wires)if(!o.both)this.route(o.w);
-   this.drag=null;this.render();if(notify!==false)this.changed('geom');else this.changed('geom');}
+  endDrag(notify=true,auto=true){
+   const d=this.drag;if(d&&this.settings.autoRoute)for(const o of d.wires)if(!o.both)this.route(o.w);
+   let struct=false;
+   if(d&&auto){const ids=[...d.start.keys()],mv=new Set(ids);for(const id of ids)if(this.comp(id)?.type==='JUNC'&&this.mergeJunction(id,mv))struct=true;
+    if(this.autoConnect(ids.filter(id=>this.comp(id)&&this.comp(id).type!=='JUNC')))struct=true;}
+   this.drag=null;this.render();this.changed(struct?'struct':'geom');void notify;}
   // ---------------------------------------------------------- drag: wire segment
   dragSeg(p){
    const s=this.press.seg;const base=s.pts.map(q=>[...q]);let k=s.k;const n=base.length;
@@ -375,18 +451,22 @@
   beginPlace(type){this.cancelWire();this.placing={type,rot:0};this.svg.classList.add('placing');this.svg.focus({preventScroll:true});if(this.hover)this.ghost(this.hover);}
   ghost(p){let g=this.L.over.querySelector('.ghost');if(!g){g=document.createElementNS(NS,'g');g.setAttribute('class','ghost');this.L.over.appendChild(g);}
    const c={type:this.placing.type,x:snap(p[0]),y:snap(p[1]),rot:this.placing.rot,flip:false,params:P.defaults(this.placing.type)};g.innerHTML=this.partSVG({...c,id:'ghost'});}
-  finishPlace(p){const t=this.placing;const c=this.addPart(t.type,snap(p[0]),snap(p[1]));if(c&&t.rot){c.rot=t.rot;this.render();}if(!this.keepPlacing)this.cancelPlace();}
+  finishPlace(p,shift){const t=this.placing;const c=this.addPart(t.type,snap(p[0]),snap(p[1]));if(c&&t.rot){c.rot=t.rot;this.render();}if(c&&!shift&&this.autoConnect([c.id]))this.changed('struct');if(!this.keepPlacing)this.cancelPlace();}
   cancelPlace(){this.placing=null;this.svg.classList.remove('placing');this.L.over.querySelector('.ghost')?.remove();}
   // ---------------------------------------------------------- wiring
   startWire(pin,click){const [c,p]=pin.split(':');this.wiring={from:{c,p},via:[],click};this.svg.classList.add('wiring');}
   startWireFrom(pr){if(pr.kind==='wire')this.startWire(pr.h.pin,false);else{const j=this.splitWire(pr.h.w,pr.p,true);if(j){this.wiring={from:{c:j,p:'j'},via:[],click:false,made:j};this.svg.classList.add('wiring');}}}
   previewWire(p,h){if(!this.wiring)return;let g=this.L.over.querySelector('.wprev');if(!g){g=document.createElementNS(NS,'path');g.setAttribute('class','wprev');this.L.over.appendChild(g);}
    const from=this.pin(this.wiring.from.c,this.wiring.from.p);const fc=this.comp(this.wiring.from.c);const da=P.pinDir(fc,this.wiring.from.p);
-   let end=[snap(p[0]),snap(p[1])];if(h?.pin){const [c,pp]=h.pin.split(':');end=this.pin(c,pp);}
+   let end=[snap(p[0]),snap(p[1])],ring=null;const fk=this.wiring.from.c+':'+this.wiring.from.p,exW=new Set(this.wiresAt(this.wiring.from.c).map(w=>w.id));
+   if(!h?.pin){const t=this.nearTarget(p,fk,exW);if(t?.pin)h={pin:t.pin};else if(t?.w){ring=t.q;end=t.q;}}
+   if(h?.pin){const [c,pp]=h.pin.split(':');end=this.pin(c,pp);}
+   {let r=this.L.over.querySelector('.snapring');if(ring){if(!r){r=document.createElementNS(NS,'circle');r.setAttribute('class','snapring');r.setAttribute('r','5');this.L.over.appendChild(r);}r.setAttribute('cx',ring[0]);r.setAttribute('cy',ring[1]);}else r?.remove();}
    const pts=[from,...this.wiring.via];const last=pts[pts.length-1];const seg=this.simpleRoute(last,pts.length===1?da:null,end);
    g.setAttribute('d','M'+[...pts,...seg.slice(1)].map(q=>q.join(',')).join(' L'));
    this.svg.querySelectorAll('.pin.target').forEach(x=>x.classList.remove('target'));if(h?.pin)this.svg.querySelector(`[data-pin="${CSS.escape(h.pin)}"]`)?.classList.add('target');}
   wireClick(p,h){ // click-to-connect mode
+   if(!h.pin&&!(h.w&&!h.c)){const t=this.nearTarget(p,this.wiring.from.c+':'+this.wiring.from.p,new Set(this.wiresAt(this.wiring.from.c).map(w=>w.id)));if(t?.pin)h={pin:t.pin};else if(t?.w){h={w:t.w};p=t.q;}}
    if(h.pin&&h.pin!==this.wiring.from.c+':'+this.wiring.from.p){this.finishWire(p,h);return;}
    if(h.w&&!h.c){this.finishWire(p,h);return;}
    this.wiring.via.push(this.wiring.via.length?this.orthoNext(this.wiring.via[this.wiring.via.length-1],[snap(p[0]),snap(p[1])]):[snap(p[0]),snap(p[1])]);
@@ -394,8 +474,11 @@
   orthoNext(a,b){return Math.abs(b[0]-a[0])>Math.abs(b[1]-a[1])?[b[0],a[1]]:[a[0],b[1]];}
   finishWire(p,h){
    const wi=this.wiring;if(!wi)return;let to=null;
+   if(!h.pin&&!(h.w&&!h.c)){const t=this.nearTarget(p,wi.from.c+':'+wi.from.p,new Set(this.wiresAt(wi.from.c).map(w=>w.id)));if(t?.pin)h={pin:t.pin};else if(t?.w){h={w:t.w};p=t.q;}}
    if(h.pin){const [c,pp]=h.pin.split(':');if(!(c===wi.from.c&&pp===wi.from.p))to={c,p:pp};}
    else if(h.w&&!h.c){const j=this.splitWire(h.w,p,true);if(j)to={c:j,p:'j'};}
+   // released in empty space (3.7): the wire keeps a free end there, to connect later
+   if(!to&&this.settings.freeEnds&&!wi.click){const q=[snap(p[0]),snap(p[1])],a=this.pin(wi.from.c,wi.from.p);if(a&&Math.abs(q[0]-a[0])+Math.abs(q[1]-a[1])>=2*G)to={c:this.newJunction(q),p:'j'};}
    if(!to){this.cancelWire();if(wi.made){this.tidyJunctions();this.render();}return;}
    {const NK=this.netKinds(),ka=NK.of(wi.from.c+':'+wi.from.p),kb=NK.of(to.c+':'+to.p);
     if((ka==='sig'&&kb==='el')||(ka==='el'&&kb==='sig')){this.cancelWire();if(wi.made||to.c.startsWith('J')){this.tidyJunctions();this.render();}this.opt.onwarn?.('Ένα σύρμα σήματος δεν ενώνεται με ηλεκτρικό κόμβο. Για να μετρήσεις, βάλε βολτόμετρο, αμπερόμετρο ή «Μέτρηση στοιχείου».');return;}}
@@ -405,7 +488,7 @@
     let pts=[...first];for(let i=1;i<wi.via.length;i++)pts.push(...this.simpleRoute(wi.via[i-1],null,wi.via[i]).slice(1));pts.push(...this.simpleRoute(wi.via[wi.via.length-1],null,b).slice(1));this.setWirePts(w,pts);}
    this.doc.wires.push(w);if(!wi.via.length)this.route(w);
    this.cancelWire();this.render();this.select([],[w.id]);this.changed('struct');}
-  cancelWire(){this.wiring=null;this.svg.classList.remove('wiring');this.L.over.querySelector('.wprev')?.remove();this.svg.querySelectorAll('.pin.target').forEach(x=>x.classList.remove('target'));}
+  cancelWire(){this.wiring=null;this.svg.classList.remove('wiring');this.L.over.querySelector('.wprev')?.remove();this.L.over.querySelector('.snapring')?.remove();this.svg.querySelectorAll('.pin.target').forEach(x=>x.classList.remove('target'));}
   // split a wire at the grid point closest to p; returns the junction id
   splitWire(wid,p,noRemember){
    const w=this.wire(wid);if(!w)return null;const pts=this.wirePts(w);let best=null;

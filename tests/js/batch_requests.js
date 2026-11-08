@@ -31,6 +31,9 @@ const smDc=par=>project([{id:'V1',type:'VDC',params:{V:30}},{id:'M1',type:'SM',p
 const mpLg=project([{id:'I1',type:'ILG',params:{shape:'1/200',Ipk:100e3}},{id:'R1',type:'R',params:{R:10}},{id:'L1',type:'L',params:{L:3e-6}},{id:'G',type:'GND'}],[['I1:p','R1:a'],['R1:b','L1:a'],['L1:b','G:g'],['I1:n','G:g']]);
 // 3.6: switched reluctance machine, phase 1 on 20 V, magnetization from the parameters and from the default table
 const srmDc=par=>project([{id:'V1',type:'VDC',params:{V:20}},{id:'M1',type:'SRM',params:par},{id:'G',type:'GND'}],[['V1:p','M1:a1'],['M1:b1','G:g'],['V1:n','G:g'],['M1:a2','M1:b2'],['M1:a3','M1:b3'],['M1:a4','M1:b4']]);
+// 3.7: a secondary without ground (island) with a reference node or a leakage, probes on it, an unconnected part and an open current source left out
+const isl=solve=>({...project([{id:'V1',type:'VAC',params:{Vpk:10,f:50}},{id:'X1',type:'XFMR',params:{n:2}},{id:'IP1',type:'IP'},{id:'R2',type:'R',params:{R:5}},{id:'R3',type:'R',params:{R:15}},{id:'VP1',type:'VP'},
+  {id:'R9',type:'R'},{id:'I9',type:'IDC',params:{I:1}},{id:'G',type:'GND'}],[['V1:n','G:g'],['V1:p','X1:p1'],['X1:p2','G:g'],['X1:s1','IP1:a'],['IP1:b','R2:a'],['R2:b','R3:a'],['R3:b','X1:s2'],['VP1:p','R2:b'],['I9:n','G:g']]),solve});
 const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},['I:R1']],bridge3_scr:['bridge3',{dev:'30',load:'r'},['V:R1']],
  battery_pi:['battery',{ctrl:'pi'},['I:L1','D:PWM1']],deadtime:['battery',{sw:'real',ctrl:'pi'},['I:L1']],
  sampling_saw:['sampling',{case:'saw'},['I:L1','H:SH1','CAR:PWM1']],sampling_tri2:['sampling',{case:'tri2',start:'midon'},['I:L1','H:SH1']],
@@ -48,12 +51,13 @@ const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},[
  mp_kl:[mpKl,null,['I:K1','I2:K1','V2:K1','I3:K1']],mp_kg:[mpKg,null,['I:Y1','I2:Y1','V2:Y1']],
  sm_align:[smDc({th0:60}),null,['Y:M1','Y:M1:te','Y:M1:th','I:M1','Y:M1:id']],sm_pm:[smDc({Ld:.03,Lq:.05,psim:.5,th0:100,w0:5,TL:'0:0, 0.05:2'}),null,['Y:M1','Y:M1:te','Y:M1:iq','I:M1']],
  mp_lg:[mpLg,null,['I:I1','V:I1','I:L1']],
+ isl_ref:[isl({island:'ref',unconn:'ignore'}),null,['Y:VP1','Y:IP1','V:R2']],isl_leak:[isl({island:'auto',rleak:1e6}),null,['Y:VP1','Y:IP1','V:R3']],
  sm_sat:[smDc({th0:60,sat:'d',Ldsat:.04,psikd:.5}),null,['Y:M1','Y:M1:te','Y:M1:id','I:M1']],
  srm_m:[srmDc({th0:30}),null,['Y:M1','Y:M1:te','Y:M1:th','I:M1','PSI1:M1','Y:M1:i1']],srm_t:[srmDc({th0:30,mag:'table'}),null,['Y:M1','Y:M1:te','I:M1','PSI1:M1']]};
 // browser results for the 3.0 cases: per-period peaks of the last periods, to compare solver against solver
 const jsRun={dc_cur:['Y:AM1',.012],pcm_half:['Y:AM1',1e-3],pcm_sub:['Y:AM1',4e-4],blk_cmp_z1:['Y:AM1',4e-3],blk_pwm:['Y:AM1',4e-3]};   // pcm_sub: before chaos separates the two solvers
 // browser values at given instants (3.1)
-const jsAt={dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05],eis_cell:[.004,.011,.02],im_dol:[.05,.1,.3,.6],mp_kl:[5e-4,2e-3,5e-3],mp_kg:[1e-4,1e-3],sm_align:[.02,.1,.3],sm_pm:[.02,.1,.2],mp_lg:[4e-6,50e-6,200e-6],sm_sat:[.02,.1,.3],srm_m:[.005,.02,.06],srm_t:[.005,.02,.06]};
+const jsAt={dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05],eis_cell:[.004,.011,.02],im_dol:[.05,.1,.3,.6],mp_kl:[5e-4,2e-3,5e-3],mp_kg:[1e-4,1e-3],sm_align:[.02,.1,.3],sm_pm:[.02,.1,.2],mp_lg:[4e-6,50e-6,200e-6],sm_sat:[.02,.1,.3],isl_ref:[.005,.012,.02],isl_leak:[.005,.012,.02],srm_m:[.005,.02,.06],srm_t:[.005,.02,.06]};
 const out={};for(const [k,[id,o,keys]] of Object.entries(cases)){
  if(k==='code_py'){const pr=build('code_loop',{ctrl:'python',ff:'expr'});const r=MNA.exportForBatch(pr,keys);out[k]={net:r.net,channels:r.channels};
   const s=new MNA.Sim(build('code_loop',{ctrl:'pib',ff:'expr'}),{hDiv:1000});s.run(.003);const p=s.per,i=s.chIndex.get('Y:AM1'),pk=[];for(let q=8;q>=1;q--){const j=(p.head-q+p.cap)%p.cap;pk.push({max:p.max[j*p.nch+i],min:p.min[j*p.nch+i],t:p.t[j]});}

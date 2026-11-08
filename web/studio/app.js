@@ -23,13 +23,13 @@ function buildSim(fresh){
  try{
   if(!S.sim||fresh){S.sim=new MNA.Sim(doc,{hDiv:+$('#sim-step').value,method:$('#method').value});}
   else S.sim.load(doc,false);
-  S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);notice('');
+  S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);notice('');editor.setDiag(S.sim.net.diag);
  }catch(e){S.error=e.message;pause();
   if(e.needPython){notice(esc(e.message),'info'); // code blocks (3.3): load Pyodide once, then build again
    PyRT.load().then(()=>{buildSim(true);draw(true);if(!S.error)notice(`Η Python (Pyodide ${esc(PyRT.py?.version||'')}) είναι έτοιμη (${PyRT.source?.startsWith('http')?'από το CDN':'τοπικό αντίγραφο'}).`,'info');setTimeout(()=>notice(''),3000);})
     .catch(err=>notice('Δεν φορτώθηκε η Python (Pyodide): '+esc(err.message)+'. Χρειάζεται σύνδεση στο internet ή τοπικό αντίγραφο: <code>python tools/get_pyodide.py</code>.','error'));}
-  else notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');}
- refreshControls();renderChannels();updateClock();
+  else notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');editor.setDiag(null);}
+ refreshControls();renderChannels();updateClock();renderProps();
 }
 function play(){if(!S.sim||S.error)return;if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;requestAnimationFrame(loop);}
 function pause(){S.running=false;scope.running=false;$('#play')?.classList.remove('running');if($('#play'))$('#play').innerHTML='▶ Προσομοίωση';draw(true);}
@@ -65,7 +65,7 @@ function liveOf(c){const s=S.sim;if(!s||S.error)return null;if(['GND','JUNC','TA
  if(c.type==='DCM')return {i:s.now('I:'+c.id),text:'ω '+eng(val('Y:'+c.id),'rad/s',4)+' · '+(avg?'⌀ ':'')+eng(val('I:'+c.id),'A',3)};
  if(OUT_SYM[c.type]&&c.type!=='SR'){const os=outsOf(c);return {text:os.map((o,k)=>OUT_SYM[c.type][o]+' '+eng(s.now('Y:'+c.id+(k?':'+o:'')),blkUnit(c,o),3)).join(' · ')};}
  if(P.BLOCKS.has(c.type)){const y=s.now('Y:'+c.id);if(LOGIC_BLK.has(c.type))return {on:y>=.5,text:(c.type==='SR'?'Q = ':'y = ')+(y>=.5?'1':'0')};
-  const u=blkUnit(c);return {text:(c.type==='DISP'?'':c.type==='VM'?'v = ':c.type==='AM'?'i = ':'y = ')+eng(y,u,+(c.params?.dig)||4)};}
+  const u=blkUnit(c);return {text:(c.type==='DISP'?'':c.type==='VM'||c.type==='VP'?'v = ':c.type==='AM'||c.type==='IP'?'i = ':'y = ')+eng(y,u,+(c.params?.dig)||4)};}
  const i=val('I:'+c.id),v=val('V:'+c.id);let on;
  if(c.type==='SW'){const e=s.net.compInfo.get(c.id)?.main;on=!!e?.on;}if(c.type==='D'||c.type==='SCR'){const e=s.net.compInfo.get(c.id)?.main;on=!!e?.on;}
  const pre=avg?'⌀ ':'';let text='';const scale=S.iScale||1;const z=x=>Math.abs(x)<2e-4*scale?0:x;
@@ -75,7 +75,7 @@ function liveOf(c){const s=S.sim;if(!s||S.error)return null;if(['GND','JUNC','TA
 
 // signal blocks (3.0): output unit, and which outputs are 0/1
 const LOGIC_BLK=new Set(['CMP','SR','CLK','LOGIC']);
-function blkUnit(c,pin){if(!c)return '';const t=c.type;if(t==='VM')return 'V';if(t==='AM')return 'A';if(t==='MEAS')return c.params?.qty==='V'?'V':'A';
+function blkUnit(c,pin){if(!c)return '';const t=c.type;if(t==='VM'||t==='VP')return 'V';if(t==='AM'||t==='IP')return 'A';if(t==='MEAS')return c.params?.qty==='V'?'V':'A';
  if(t==='DCM')return pin==='te'?'N·m':'rad/s';if(t==='IM')return pin==='te'?'N·m':pin==='psi'?'V·s':pin==='w'||!pin?'rad/s':'rad';if(t==='SM')return pin==='te'?'N·m':pin==='th'?'rad':pin==='id'||pin==='iq'?'A':'rad/s';if(t==='SRM')return pin==='te'?'N·m':pin==='th'?'rad':/^i\d$/.test(pin||'')?'A':'rad/s';if(t==='FEST')return pin==='psi'?'V·s':pin==='w1'?'rad/s':'rad';if(t==='PLL')return pin==='amp'?'':pin==='w'?'rad/s':'rad';if(t==='INT'&&c.params?.wrap==='2pi')return 'rad';return '';}
 // symbols of the outputs of multi-output blocks (first output = channel Y:id, the others Y:id:pin)
 const OUT_SYM={IM:{w:'ω',te:'τ_e',psi:'|ψ_R|',thf:'θ_f',thr:'θ_r'},SM:{w:'ω',te:'τ_e',th:'θ',id:'i_d',iq:'i_q'},SRM:{w:'ω',te:'τ_e',th:'θ_e',i1:'i₁',i2:'i₂',i3:'i₃',i4:'i₄'},FEST:{th:'θ̂',psi:'|ψ̂|',w1:'ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ω',te:'τ_e'},PLL:{th:'θ',w:'ω',amp:'V̂_d'},CLARKE:{al:'α',be:'β'},IPARK:{al:'α',be:'β'},PARK:{d:'d',q:'q'},ICLARKE:{a:'a',b:'b',c:'c'},SR:{q:'Q',nq:'Q̄'}};
@@ -94,7 +94,7 @@ function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void
 function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI')return [];
  if(t==='PY')return outsOf(c).map((o,k)=>['Y:','έξοδος '+o,k?':'+o:'']);
  if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:t==='IM'||t==='SM'?[...m,['I:','ρεύμα φάσης a'],['V:','πολική τάση v_ab']]:t==='SRM'?[...m,...Array.from({length:P.srmGeo({...P.defaults(t),...c.params})[0]},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα φάσης ${k+1}`],[(k?'V'+(k+1):'V')+':',`τάση φάσης ${k+1}`],['PSI'+(k+1)+':',`ροή φάσης ${k+1} ψ`]]).flat()]:m;}
- if(P.BLOCKS.has(t))return [['Y:',t==='DISP'?'τιμή εισόδου':t==='VM'?'τάση (μέτρηση)':t==='AM'?'ρεύμα a → b (μέτρηση)':t==='SR'?'έξοδος Q':'έξοδος y']];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
+ if(P.BLOCKS.has(t))return [['Y:',t==='DISP'?'τιμή εισόδου':t==='VM'?'τάση (μέτρηση)':t==='VP'?'τάση ως προς τη γη':t==='AM'?'ρεύμα a → b (μέτρηση)':t==='IP'?'ρεύμα a → b (τσιμπίδα)':t==='SR'?'έξοδος Q':'έξοδος y']];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
  if(t==='SH')return [['H:','κρατημένη τιμή (δείγματα)']];
  if(t==='KL'||t==='KG'){const n=P.nPorts({...P.defaults(t),...c.params}),w=t==='KL'?'τυλίγματος':'θύρας';return Array.from({length:n},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα ${w} ${k+1} (a → b)`],[(k?'V'+(k+1):'V')+':',`τάση ${w} ${k+1}`]]).flat();}
  const base=[['I:','ρεύμα'],['V:','τάση'],['P:',['VDC','VAC','IDC'].includes(t)?'ισχύς που δίνει':'ισχύς']];if(t==='SW'||t==='SCR')base.splice(1,0,['GS:','παλμός πύλης (1 = ON)']);if(t==='SW'&&(+c.params?.Eon>0||+c.params?.Eoff>0))base.push(['PSW:','απώλειες μεταγωγής (μέση ανά T)']);
@@ -405,7 +405,12 @@ function refreshControls(){
   return `<div class="ctl"><label>${esc(c.label||c.id)} · σταθερά <output data-kout="${c.id}"></output></label><div class="ctl-row"><input data-kv="${c.id}" value="${esc(p.v)}"><button data-kapply="${c.id}">Εφαρμογή</button></div></div>`;}).join('');
  const scr=editor.doc.components.filter(c=>c.type==='SCR'&&(c.params?.fire||'alpha')==='alpha');
  if(scr.length){const a=+(scr[0].params?.alpha??30);box.innerHTML+=`<div class="ctl"><label>Θυρίστορ (${scr.length}) · α <output data-aout>${fmt(a,4)}°</output></label><input type="range" min="0" max="180" step="0.5" value="${a}" data-alpha><small>Ίδια γωνία έναυσης σε όλα· η μετατόπιση του καθενός μένει.</small></div>`;}
- if(!box.innerHTML)box.innerHTML='<div class="muted small">Χωρίς μπλοκ PWM, Sample & Hold ή θυρίστορ.</div>';
+ // parameters pinned with 📌 in the parameters panel (3.7): a slider a decade each way around a base value, and the exact value
+ const pinned=editor.doc.components.filter(c=>Array.isArray(c.live)&&c.live.length);
+ box.innerHTML+=pinned.map(c=>c.live.map(k=>{const d=P.PARTS[c.type]?.params.find(x=>x.k===k);if(!d||d.type!=='num')return '';const v=numOf(c.params[k]??d.def),m=pinMap(c,k),key=c.id+'|'+k;
+  return `<div class="ctl ctl-pin"><label>${esc(c.label||c.id)} · ${esc(d.label)} <output data-pout="${esc(key)}">${eng(v,d.unit||'',4)}</output></label><input type="range" min="0" max="${PSL}" step="1" value="${pinX(m,v)}" data-pr="${esc(key)}" aria-label="${esc((c.label||c.id)+' '+d.label)}">
+   <div class="ctl-row"><input data-pv="${esc(key)}" value="${esc(P.eng(v,'',6).replace(/\s/g,''))}" inputmode="decimal" aria-label="τιμή"><button data-pc="${esc(key)}" title="Ο ρυθμιστής γύρω από την τρέχουσα τιμή (×0,1 … ×10)">⟲</button><button data-pu="${esc(key)}" title="Αφαίρεση από τις ζωντανές παράμετροι">✕</button></div></div>`;}).join('')).join('');
+ if(!box.innerHTML)box.innerHTML='<div class="muted small">Χωρίς μπλοκ PWM, Sample & Hold ή θυρίστορ. Με 📌 στο πάνελ παραμέτρων μπαίνει εδώ οποιαδήποτε αριθμητική παράμετρος.</div>';
  const al=box.querySelector('[data-alpha]');if(al){const setA=(commit)=>{const a=+al.value,from=scr[0].params?.alpha;for(const c of scr)c.params.alpha=a;S.sim?.setFiring(a);box.querySelector('[data-aout]').textContent=fmt(a,4)+'°';editor.renderLabels();liveChange('SCR','alpha',a,`α → ${fmt(a,4)}°`,String(from));if(commit){saveLocal();if(S.theory)renderTheory();}};al.oninput=()=>setA(false);al.onchange=()=>setA(true);}
  const setD=(id,d,commit)=>{d=Math.min(1,Math.max(0,d));const c=editor.comp(id);if(!c)return;const from=c.params.dsched||String(c.params.D??P.defaults('PWM').D);c.params.D=+d.toFixed(6);if(c.params.dsched){c.params.dsched='';S.sim?.setControl(id,{dsched:null});}S.sim?.setControl(id,{D:c.params.D});
   const o=box.querySelector(`[data-dout="${id}"]`);if(o)o.textContent=fmt(d,4);const r=box.querySelector(`[data-d="${id}"]`);if(r&&commit)r.value=d;editor.renderLabels();editor.updateLive();liveChange(id,'D',c.params.D,`${c.label||id}: D → ${fmt(c.params.D,4)}`,from);if(commit)saveLocal();};
@@ -430,8 +435,26 @@ function refreshControls(){
  $$('#live-controls [data-ilv]').forEach(b=>b.onclick=()=>{const n=phasePw.length;phasePw.forEach((c,k)=>setPh(c.id,b.dataset.ilv==='shift'?+(360*k/n).toFixed(6):0,true));});
  $$('#live-controls [data-trig]').forEach(el=>el.onchange=()=>{const id=el.dataset.trig,c=editor.comp(id);if(!c)return;const from=c.params.trig;c.params.trig=el.value;S.sim?.setHold(id,{trig:el.value});editor.renderLabels();
   liveChange(id,'trig',el.value,`${c.label||id}: ${el.selectedOptions[0].textContent.split(' (')[0].split(' · ')[0]}`,from);saveLocal();if(S.theory)renderTheory();});
+ const pinNow=(key,v,commit)=>{const [id,k]=key.split('|');const c=editor.comp(id);const d=P.PARTS[c?.type]?.params.find(x=>x.k===k);if(!c||!d||!Number.isFinite(v))return;
+  const nv=+v.toPrecision(6);if(commit&&!S.pinDrag&&numOf(c.params[k]??d.def)===nv)return; // the same value again (e.g. change on blur after Enter)
+  const from=String(c.params[k]??d.def);if(!S.pinDrag){editor.remember();S.pinDrag=true;}c.params[k]=nv;liveApply();editor.renderPart(c);editor.renderLabels();
+  const o=box.querySelector(`[data-pout="${CSS.escape(key)}"]`);if(o)o.textContent=eng(c.params[k],d.unit||'',4);const t=box.querySelector(`[data-pv="${CSS.escape(key)}"]`);if(t&&document.activeElement!==t)t.value=P.eng(c.params[k],'',6).replace(/\s/g,'');
+  liveChange(id,k,c.params[k],`${c.label||id}: ${d.label} → ${eng(c.params[k],d.unit||'',4)}`,from);
+  if(commit){S.pinDrag=false;saveLocal();renderProps();if(S.theory)renderTheory();scheduleMath();}};
+ // while dragging, one reload per frame
+ const pinSet=(key,v,commit)=>{if(commit){cancelAnimationFrame(S.pinRaf||0);S.pinRaf=0;pinNow(key,v,true);return;}S.pinPend=[key,v];if(!S.pinRaf)S.pinRaf=requestAnimationFrame(()=>{S.pinRaf=0;const q=S.pinPend;S.pinPend=null;if(q)pinNow(q[0],q[1],false);});};
+ $$('#live-controls [data-pr]').forEach(r=>{const key=r.dataset.pr,[id,k]=key.split('|');const val=()=>pinV(pinMap(editor.comp(id),k),+r.value);r.oninput=()=>pinSet(key,val(),false);r.onchange=()=>pinSet(key,val(),true);});
+ $$('#live-controls [data-pv]').forEach(inp=>{const go=()=>{const v=P.parseEng(inp.value);if(!Number.isFinite(v)){inp.classList.add('bad');return;}inp.classList.remove('bad');pinSet(inp.dataset.pv,v,true);
+   const [id,k]=inp.dataset.pv.split('|'),r=box.querySelector(`[data-pr="${CSS.escape(inp.dataset.pv)}"]`);if(r)r.value=pinX(pinMap(editor.comp(id),k),v);};inp.onchange=go;inp.onkeydown=e=>{if(e.key==='Enter')go();};});
+ $$('#live-controls [data-pc]').forEach(b=>b.onclick=()=>{const [id,k]=b.dataset.pc.split('|');const c=editor.comp(id);if(!c)return;c.liveBase={...(c.liveBase||{}),[k]:numOf(c.params[k])};saveLocal();refreshControls();});
+ $$('#live-controls [data-pu]').forEach(b=>b.onclick=()=>{const [id,k]=b.dataset.pu.split('|');togglePin(id,k);});
  renderLiveLog();updateLivePanel();
 }
+// slider of a pinned parameter: logarithmic over [b/10, 10·b] for a positive base b, else linear around it
+const PSL=1000;
+function pinMap(c,k){const d=P.PARTS[c.type]?.params.find(x=>x.k===k);const b=c.liveBase?.[k]??numOf(c.params[k]??d?.def);return b>0?{log:true,lo:b/10,hi:b*10}:{log:false,lo:b-Math.max(1,Math.abs(b)),hi:b+Math.max(1,Math.abs(b))};}
+function pinX(m,v){const x=m.log?PSL*Math.log(Math.max(v,m.lo*1e-6)/m.lo)/Math.log(m.hi/m.lo):PSL*(v-m.lo)/(m.hi-m.lo);return Math.round(Math.min(PSL,Math.max(0,x)));}
+function pinV(m,x){return m.log?m.lo*Math.pow(m.hi/m.lo,x/PSL):m.lo+(m.hi-m.lo)*x/PSL;}
 
 // ------------------------------------------------------------------ inspector
 function closeInspector(){$('#inspector').hidden=true;$('#inspector').innerHTML='';}
@@ -480,6 +503,102 @@ function openWireInspector(id,x,y){const w=editor.wire(id);if(!w)return;const in
  ins.querySelector('[data-wroute]').onclick=()=>{editor.remember();editor.route(editor.wire(id));editor.render();};
  ins.querySelector('[data-close]').onclick=closeInspector;}
 
+// ------------------------------------------------------------------ parameters panel (3.7): collapsible, sections as an accordion
+const numOf=v=>typeof v==='number'?v:P.parseEng(v);
+let PS={};try{PS=JSON.parse(localStorage.getItem('pcl2-props-sec'))||{};}catch{}
+const INIT_K=new Set(['i0','v0','w0','th0','ia0','im0','psi0','y0','q0','h0','init']),MECH_K=new Set(['J','bm','load','TL']),
+ LOSS_K=new Set(['esr','Rs','Ls','Ron','Roff','Vf','Vce0','Vfd','Rd','Eon','Eoff','Vref','Iref','R1','R2','Llk1','Llk2','Rw','body','uni']),
+ CTL_K=new Set(['sensor','qty','ref','Kp','Ki','Kd','Tf','ff','ffA','ffB','D0','dmin','dmax','upd']);
+const PSEC=[['main','Κύριες'],['ctl','Βρόχος ελέγχου'],['loss','Απώλειες και παρασιτικά'],['mech','Μηχανικό μέρος και φορτίο'],['init','Αρχικές συνθήκες']];
+function psec(key,title,body,{def=false,cnt='',bad=false}={}){const open=PS[key]??def;
+ return `<details class="psec" data-sec="${key}" ${open?'open':''}><summary>${esc(title)}${cnt!==''?`<span class="cnt${bad?' bad':''}">${esc(String(cnt))}</span>`:''}</summary><div class="psec-body">${body}</div></details>`;}
+function propsOpen(){return !$('#props').classList.contains('collapsed');}
+function setProps(open){const el=$('#props');if(!el)return;el.classList.toggle('collapsed',!open);const b=$('#props-btn');b.classList.toggle('on',open);b.setAttribute('aria-pressed',String(open));$('#props-tab').setAttribute('aria-expanded',String(open));
+ try{localStorage.setItem('pcl2-props',open?'1':'0');}catch{}if(open)renderProps();}
+function focusComp(id){const c=editor.comp(id);if(!c)return;editor.select([id],[]);editor.userView=true;editor.view.cx=c.x;editor.view.cy=c.y;editor.applyView();}
+function togglePin(id,k){const c=editor.comp(id);if(!c)return;editor.remember();const L=new Set(c.live||[]);
+ if(L.has(k)){L.delete(k);if(c.liveBase)delete c.liveBase[k];}else{L.add(k);const d=P.PARTS[c.type].params.find(x=>x.k===k);const v=numOf(c.params[k]??d?.def);c.liveBase={...(c.liveBase||{}),[k]:Number.isFinite(v)?v:0};}
+ if(L.size)c.live=[...L];else{delete c.live;delete c.liveBase;}saveLocal();refreshControls();renderProps();if(L.has(k))setLivePanel(true);}
+function renderProps(){const box=$('#props-body');if(!box||!propsOpen())return;
+ box.querySelectorAll('details.psec').forEach(d=>{PS[d.dataset.sec]=d.open;}); // the toggle event may not have fired yet
+ const sel=editor.selection(),act=document.activeElement,fk=box.contains(act)?act.dataset.k:null;let h;
+ const one=sel.c.length===1&&!sel.w.length?editor.comp(sel.c[0]):null;
+ if(one&&one.type!=='JUNC')h=propsComp(one);else if(one)h=propsJunc(one);else if(sel.w.length===1&&!sel.c.length)h=propsWire(editor.wire(sel.w[0]));
+ else if(sel.c.length+sel.w.length>1)h=propsMulti(sel);else h=propsCircuit();
+ box.innerHTML=h;
+ box.querySelectorAll('details.psec').forEach(d=>d.ontoggle=()=>{PS[d.dataset.sec]=d.open;try{localStorage.setItem('pcl2-props-sec',JSON.stringify(PS));}catch{}});
+ bindProps(box,one);if(fk)box.querySelector(`[data-k="${CSS.escape(fk)}"]`)?.focus();}
+function propsComp(c){const def=P.PARTS[c.type],p={...P.defaults(c.type),...c.params},live=new Set(c.live||[]),machine=['IM','SM','SRM','DCM'].includes(c.type);
+ const secOf=d=>c.type==='PWM'&&CTL_K.has(d.k)?'ctl':INIT_K.has(d.k)?'init':MECH_K.has(d.k)?'mech':!machine&&LOSS_K.has(d.k)?'loss':'main';
+ const groups=new Map();for(const d of def.params){if(d.show&&!d.show(p))continue;const g=secOf(d);if(!groups.has(g))groups.set(g,[]);groups.get(g).push(d);}
+ const row=d=>`<div class="prow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span><span class="pin-in">${fieldHTML(c,d,p).replace(` id="f_${d.k}"`,'')}${d.type==='num'?`<button class="pinbtn${live.has(d.k)?' on':''}" data-pin-k="${d.k}" aria-pressed="${live.has(d.k)}" title="${live.has(d.k)?'Αφαίρεση από τις ζωντανές παράμετροι':'📌 Στις ζωντανές παράμετροι, με ρυθμιστή'}">📌</button>`:''}</span>${d.hint?`<small>${esc(d.hint)}</small>`:''}</div>`;
+ let h=`<div class="props-head"><div><small>${esc(def.name)}</small><input data-plabel value="${esc(c.label||c.id)}" aria-label="Όνομα στοιχείου"></div><button class="x" data-pclose title="Αποεπιλογή (Esc)">✕</button></div>`;
+ for(const [g,title] of PSEC){const L=groups.get(g);if(L?.length)h+=psec('p-'+g,title,L.map(row).join(''),{def:g==='main',cnt:L.length});}
+ if(!def.params.length)h+='<p class="muted small">Χωρίς παραμέτρους.</p>';
+ const sigIns=Object.entries(P.sigPins(c)).filter(([,v])=>v.dir==='in').map(([k])=>k);
+ if(sigIns.length){const outs=editor.doc.components.filter(k=>k.id!==c.id).flatMap(k=>Object.entries(P.sigPins(k)).filter(([,v])=>v.dir==='out').map(([pin])=>({v:k.id+':'+pin,t:`${k.label||k.id}.${pin}`}))).sort((a,b)=>a.t.localeCompare(b.t,undefined,{numeric:true}));
+  const wired=pin=>editor.wiresAt(c.id,pin).length>0;
+  h+=psec('p-src','Συνδέσεις σημάτων',sigIns.map(pin=>{const v=c.params?.['in_'+pin]||'';return `<div class="prow"><span>Είσοδος ${esc(pin)}</span><span class="pin-in"><select data-src="${esc(pin)}"><option value="">${wired(pin)?'από σύρμα':'— (καμία)'}</option>${outs.map(o=>`<option value="${esc(o.v)}" ${o.v===v?'selected':''}>${esc(o.t)}</option>`).join('')}</select></span></div>`;}).join('')+'<small class="muted">Σύνδεση χωρίς καλώδιο: ισοδυναμεί με σύρμα.</small>',{cnt:sigIns.length});}
+ const sig=signalsFor(c);if(sig.length)h+=psec('p-scope','Scope',`<div class="chips">${sig.map(([pre,n,f])=>`<button class="chip" data-probe="${pre}${c.id}${f||''}">⌁ ${esc(n)}</button>`).join('')}</div>`,{def:true});
+ const skip=S.sim?.net?.diag?.skipped.find(x=>x.id===c.id);if(skip)h+=`<p class="small bad">Εκτός επίλυσης: ${skip.why==='openI'?'πηγή ρεύματος σε ανοιχτό κύκλωμα':'χωρίς σύνδεση'}.</p>`;
+ h+=`<p class="muted small">Οι αλλαγές εφαρμόζονται αμέσως, και ενώ τρέχει η προσομοίωση. Με 📌 μια παράμετρος μπαίνει με ρυθμιστή στις ζωντανές παράμετροι.</p>`;
+ return h;}
+function propsJunc(j){const n=editor.wiresAt(j.id).length;return `<div class="props-head"><div><small>Κόμβος</small><b>${esc(j.id)}</b></div><button class="x" data-pclose>✕</button></div>
+ <p class="muted small">${n===1?'Ελεύθερο άκρο: σύρε το πάνω σε ακροδέκτη ή σύρμα για να συνδεθεί, ή συνέχισε το σύρμα με το εργαλείο W.':n+' σύρματα ενώνονται εδώ.'}</p><div class="chips"><button class="chip" data-probe="VN:${esc(j.id)}:j">⌁ Τάση κόμβου</button></div>`;}
+function propsWire(w){if(!w)return '';return `<div class="props-head"><div><small>Σύρμα</small><input data-wname value="${esc(w.name||'')}" placeholder="όνομα κόμβου, π.χ. v_o" aria-label="Όνομα κόμβου"></div><button class="x" data-pclose>✕</button></div>
+ ${psec('w-look','Εμφάνιση',`<div class="prow"><span>Χρώμα</span><div class="swatches">${WIRE_COLORS.map(c=>`<button data-wc="${c}" class="${(w.color||'')===c?'on':''}" style="background:${c||'var(--wire)'}" title="${c||'προεπιλογή'}"></button>`).join('')}</div></div>
+  <div class="prow"><span>Πάχος</span><span class="pin-in"><select data-ww>${['',1.5,2.2,3,4].map(v=>`<option value="${v}" ${String(w.width||'')===String(v)?'selected':''}>${v||'προεπιλογή'}</option>`).join('')}</select></span></div>`,{def:true})}
+ <div class="chips"><button class="chip" data-probe="VN:${esc(w.a.c)}:${esc(w.a.p)}">⌁ Τάση κόμβου</button><button class="chip" data-wroute>↯ Αυτόματη δρομολόγηση</button></div>
+ <p class="muted small">Για ρεύμα στο σύρμα: άφησε πάνω του ένα probe ρεύματος (μπαίνει σε σειρά). Για τάση: ένα probe τάσης ή βολτόμετρο.</p>`;}
+function propsMulti(sel){return `<div class="props-head"><div><small>Επιλογή</small><b>${sel.c.length} στοιχεία · ${sel.w.length} σύρματα</b></div><button class="x" data-pclose>✕</button></div>
+ <ul class="diag-list">${sel.c.map(id=>editor.comp(id)).filter(c=>c&&c.type!=='JUNC').map(c=>`<li><button data-focus="${esc(c.id)}">${esc(c.label||c.id)}</button><span class="muted">${esc(P.PARTS[c.type].name)}</span></li>`).join('')}</ul>`;}
+function propsCircuit(){const d=S.sim?.net?.diag,doc=editor.doc,so=doc.solve||{},nC=doc.components.filter(c=>c.type!=='JUNC').length,lb=id=>esc(editor.comp(id)?.label||id);
+ let h=`<div class="props-head"><div><small>Κύκλωμα</small><b>${esc(tutorial().title||'Κύκλωμα')}</b></div></div><p class="muted small">${nC} στοιχεία · ${doc.wires.length} σύρματα${S.sim&&!S.error?' · '+S.sim.net.nNodes+' κόμβοι':''}. Διάλεξε στοιχείο ή σύρμα για τις παράμετρές του.</p>`;
+ const it=[];if(S.error)it.push(`<li class="bad">⚠ ${esc(S.error)}</li>`);
+ if(d){for(const x of d.skipped)it.push(`<li><button data-focus="${esc(x.id)}">${lb(x.id)}</button>${x.why==='openI'?'πηγή ρεύματος σε ανοιχτό κύκλωμα':'χωρίς σύνδεση'}, εκτός επίλυσης</li>`);
+  if(d.open.length)it.push(`<li>Ανοιχτοί ακροδέκτες: ${d.open.slice(0,8).map(k=>{const i=k.lastIndexOf(':');return `<button data-focus="${esc(k.slice(0,i))}">${lb(k.slice(0,i))}.${esc(k.slice(i+1))}</button>`;}).join(' ')}${d.open.length>8?' …':''}</li>`);
+  if(d.freeEnds.length)it.push(`<li>Ελεύθερα άκρα: ${d.freeEnds.slice(0,8).map(j=>`<button data-focus="${esc(j)}" title="${esc(j)}">○</button>`).join('')}<span class="muted">δεν αλλάζουν τη λύση</span></li>`);
+  if(d.freeNets.length)it.push(`<li>${d.freeNets.length} ${d.freeNets.length===1?'σύρμα':'σύρματα'} χωρίς στοιχείο, εκτός επίλυσης</li>`);
+  for(const q of d.islands){const k=q.pins[0],cid=k?k.slice(0,k.lastIndexOf(':')):null;
+   it.push(`<li>Αιωρούμενο τμήμα${cid?` <button data-focus="${esc(cid)}">${lb(cid)}…</button>`:''}: ${q.ref==='ref'?'ο κόμβος '+esc(q.refPin||'')+' στα 0 V':'μέση τάση 0 V ως προς τη γη, μέσω '+(d.rleak>0?eng(d.rleak,'Ω'):'G_min = 1 nS')}</li>`);}}
+ h+=psec('c-conn','Συνδέσεις',it.length?`<ul class="diag-list">${it.join('')}</ul>`:'<p class="ok-line">✓ Όλα συνδέονται, χωρίς αιωρούμενα τμήματα.</p>',{def:true,cnt:it.length||'✓',bad:it.length>0});
+ const opt=(k,list,v)=>`<select data-solve="${k}">${list.map(([a,n])=>`<option value="${a}" ${v===a?'selected':''}>${esc(n)}</option>`).join('')}</select>`;
+ h+=psec('c-solve','Επίλυση: ασύνδετα και αιωρούμενα',`<div class="prow"><span>Ασύνδετα στοιχεία, ανοιχτοί ακροδέκτες</span><span class="pin-in">${opt('unconn',[['warn','Εκτός επίλυσης, με προειδοποίηση'],['ignore','Εκτός επίλυσης, σιωπηλά'],['error','Σφάλμα: η προσομοίωση δεν τρέχει']],so.unconn||'warn')}</span>
+  <small>Στοιχείο χωρίς καμία σύνδεση και πηγή ρεύματος σε ανοιχτό κύκλωμα βγαίνουν από τη λύση. Κλαδί με ανοιχτό άκρο μένει, με μηδενικό ρεύμα. Σύρματα χωρίς στοιχείο δεν κάνουν κόμβο.</small></div>
+  <div class="prow"><span>Αιωρούμενα τμήματα (χωρίς αγώγιμη σύνδεση με τη γη)</span><span class="pin-in">${opt('island',[['auto','Αυτόματα: μέση τάση 0 V'],['ref','Ένας κόμβος του στα 0 V'],['error','Σφάλμα: η προσομοίωση δεν τρέχει']],so.island||'auto')}</span>
+  <small>Π.χ. δευτερεύον μετασχηματιστή χωρίς γείωση. Οι τάσεις μέσα στο τμήμα δεν αλλάζουν, μόνο ως προς τη γη.</small></div>
+  <div class="prow"><span>R διαρροής προς τη γη <em>Ω</em></span><span class="pin-in"><input data-solve="rleak" value="${so.rleak?esc(P.eng(+so.rleak,'',4).replace(/\s/g,'')):''}" placeholder="κενό: G_min = 1 nS" inputmode="decimal"></span><small>Για «Αυτόματα»: σε κάθε κόμβο του αιωρούμενου τμήματος.</small></div>
+  <small class="muted">Αποθηκεύονται με το κύκλωμα και ισχύουν και στον λύτη του server.</small>`,{cnt:(so.unconn||so.island||so.rleak)?'αλλαγμένες':''});
+ const chk=(k,t)=>`<label class="frow check"><input type="checkbox" data-eset="${k}" ${editor.settings[k]?'checked':''}><span>${t}</span></label>`;
+ h+=psec('c-draw','Σχεδίαση συρμάτων',`${chk('freeEnds','Ελεύθερα άκρα: σύρμα που αφήνεις στο κενό κρατά ελεύθερο άκρο')}${chk('autoConnect','Στοιχείο που αφήνεις πάνω σε σύρμα ή ακροδέκτη συνδέεται (Shift: χωρίς σύνδεση)')}
+  <ul class="kbd-list"><li><b>W</b>: εργαλείο σύρματος. Κλικ οπουδήποτε για αρχή, κλικ για γωνίες, διπλό κλικ ή Enter για ελεύθερο άκρο, Backspace για μία γωνία πίσω, Esc για έξοδο.</li>
+  <li>Σύρε ένα ελεύθερο άκρο πάνω σε ακροδέκτη ή σύρμα: συνδέεται.</li><li>Στοιχείο δύο ακροδεκτών (R, L, αμπερόμετρο, probe ρεύματος) πάνω σε σύρμα, στον άξονά του: μπαίνει σε σειρά.</li>
+  <li>Probe τάσης ή βολτόμετρο: ο ακροδέκτης κουμπώνει πάνω στο σύρμα.</li><li>Alt ή Ctrl + σύρσιμο από σύρμα: διακλάδωση.</li></ul>`);
+ const pins=doc.components.filter(c=>c.live?.length);
+ if(pins.length)h+=psec('c-live','Ζωντανές παράμετροι (📌)',`<ul class="diag-list">${pins.map(c=>`<li><button data-focus="${esc(c.id)}">${esc(c.label||c.id)}</button>${c.live.map(k=>esc(P.PARTS[c.type].params.find(d=>d.k===k)?.label||k)).join(', ')}</li>`).join('')}</ul>`,{cnt:pins.reduce((s,c)=>s+c.live.length,0)});
+ return h;}
+function bindProps(box,c){
+ box.querySelector('[data-pclose]')?.addEventListener('click',()=>editor.select([],[]));
+ box.querySelectorAll('[data-probe]').forEach(b=>b.onclick=()=>addProbe(b.dataset.probe));
+ box.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>focusComp(b.dataset.focus));
+ box.querySelectorAll('[data-solve]').forEach(el=>el.onchange=()=>{const k=el.dataset.solve;let v=el.value;if(k==='rleak'){v=v.trim()?P.parseEng(v):'';if(v!==''&&!(v>0)){el.classList.add('bad');return;}}editor.setSolve({[k]:v});});
+ box.querySelectorAll('[data-eset]').forEach(el=>el.onchange=()=>{editor.settings[el.dataset.eset]=el.checked;saveSettings();});
+ if(c&&c.type!=='JUNC'){const id=c.id;
+  box.querySelector('[data-plabel]')?.addEventListener('change',e=>{editor.setParams(id,{},{label:e.target.value||id});renderChannels();});
+  box.querySelectorAll('[data-pin-k]').forEach(b=>b.onclick=()=>togglePin(id,b.dataset.pinK));
+  box.querySelectorAll('[data-src]').forEach(el=>el.onchange=()=>{editor.setParams(id,{['in_'+el.dataset.src]:el.value||undefined});if(!el.value)delete editor.comp(id).params['in_'+el.dataset.src];editor.renderPins();});
+  box.querySelectorAll('[data-k]').forEach(el=>{const go=()=>{const k=el.dataset.k;let v;if(el.type==='checkbox')v=el.checked;else if(el.dataset.num){v=P.parseEng(el.value);if(!Number.isFinite(v)){el.classList.add('bad');return;}el.classList.remove('bad');}else v=el.value;
+    if(k==='dsched'||k==='sched'||k==='ref'||(k==='v'&&c.type==='CONST')){if(v&&!P.parseSched(v)){el.classList.add('bad');return;}el.classList.remove('bad');}
+    const cur=editor.comp(id)?.params[k];if(cur===v||(el.dataset.num&&numOf(cur)===v))return;editor.setParams(id,{[k]:v});};
+   el.onchange=go;if(el.dataset.num)el.onkeydown=e=>{if(e.key==='Enter')go();};});}
+ const w=editor.selection().w.length===1?editor.wire(editor.selection().w[0]):null;
+ if(w){const id=w.id;box.querySelector('[data-wname]')?.addEventListener('change',e=>{editor.setWireProps(id,{name:e.target.value.trim()});renderChannels();});
+  box.querySelectorAll('[data-wc]').forEach(b=>b.onclick=()=>{editor.setWireProps(id,{color:b.dataset.wc||undefined});renderProps();});
+  box.querySelector('[data-ww]')?.addEventListener('change',e=>editor.setWireProps(id,{width:e.target.value?+e.target.value:undefined}));
+  box.querySelector('[data-wroute]')?.addEventListener('click',()=>{editor.remember();editor.route(editor.wire(id));editor.render();});}}
+// a parameter changed from the live panel: reload the netlist with the state carried over, without rebuilding the panels
+function liveApply(){if(!S.sim)return;try{S.sim.load(editor.export(),false);S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);editor.setDiag(S.sim.net.diag);}catch(e){S.error=e.message;pause();notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');}}
+
 // ------------------------------------------------------------------ context menu
 function closeMenu(){$('#ctx').hidden=true;}
 function openMenu(ev){
@@ -491,7 +610,8 @@ function openMenu(ev){
   items.push({t:'Διαγραφή',k:'Del',f:()=>editor.deleteSel(),cls:'danger'});}
  else if(ev.kind==='wire'){const w=editor.wire(ev.id);if(!w)return;items.push({t:'⌁ Scope: τάση κόμβου',f:()=>addProbe('VN:'+w.a.c+':'+w.a.p,w.name||undefined)},'-',{t:'Όνομα / χρώμα…',k:'διπλό κλικ',f:()=>openWireInspector(w.id,ev.x,ev.y)},{t:'Αυτόματη δρομολόγηση',f:()=>{editor.remember();editor.route(w);editor.render();}},{t:'Διαγραφή',k:'Del',f:()=>editor.deleteSel(),cls:'danger'});}
  else items.push({t:'Επικόλληση',k:'Ctrl+V',f:()=>editor.paste(),dis:!editor.clip},{t:'Επιλογή όλων',k:'Ctrl+A',f:()=>editor.select(editor.doc.components.map(c=>c.id),editor.doc.wires.map(w=>w.id))},{t:'Προσαρμογή προβολής',k:'F',f:()=>editor.fit()},'-',
-  ...['R','L','C','D','SW','VDC'].map(t=>({t:'+ '+P.PARTS[t].name,f:()=>{const c=editor.addPart(t,Math.round(ev.world[0]/10)*10,Math.round(ev.world[1]/10)*10);void c;}})));
+  ...['R','L','C','D','SW','VDC'].map(t=>({t:'+ '+P.PARTS[t].name,f:()=>{const c=editor.addPart(t,Math.round(ev.world[0]/10)*10,Math.round(ev.world[1]/10)*10);void c;}})),'-',
+  {t:'╱ Σύρμα από εδώ',k:'W',f:()=>{editor.setWireTool(true);editor.startFreeWire(ev.world);}},{t:'Επιλογές επίλυσης (ασύνδετα, αιωρούμενα)…',f:()=>{editor.select([],[]);PS['c-solve']=true;setProps(true);}});
  m.innerHTML=items.map((it,i)=>it==='-'?'<hr>':`<button data-i="${i}" class="${it.cls||''}" ${it.dis?'disabled':''}><span>${esc(it.t)}</span>${it.k?`<kbd>${esc(it.k)}</kbd>`:''}</button>`).join('');
  m.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{closeMenu();items[+b.dataset.i].f();});placePopup(m,ev.x-12,ev.y-12);}
 
@@ -1016,12 +1136,13 @@ const V1MAP={VDC:['source','Πηγή εισόδου',{p:'p',n:'n'}],SW:['switch'
  C:['capacitor','Πυκνωτής εξόδου',{p:'p',n:'n'}],R:['resistor','Φορτίο',{a:'a',b:'b'}],XFMR:['transformer','Μετασχηματιστής (L_m στο πρωτεύον)',null]};
 function circuitForMath(){
  const doc=editor.doc;if(!S.sim||S.error)return {error:'Το κύκλωμα δεν προσομοιώνεται· διόρθωσε πρώτα τη συνδεσμολογία.'};
- const open=(S.sim.net.warnings||[]).find(w=>w.startsWith('Ανοιχτοί ακροδέκτες'));if(open)return {error:'Η συμβολική λύση θέλει κλειστό κύκλωμα. '+open};
+ {const d=S.sim.net.diag,lb=id=>editor.comp(id)?.label||id;const bad=[...(d?.skipped||[]).map(x=>lb(x.id)),...(d?.open||[])]; // 3.7: also parts left out of the solution, whatever the option
+  if(bad.length)return {error:'Η συμβολική λύση θέλει κλειστό κύκλωμα. Ασύνδετα ή ανοιχτά: '+bad.slice(0,6).join(', ')+(bad.length>6?' και άλλα':'')+'.'};}
  const par=new Map(),find=k=>{while(par.get(k)!==k){par.set(k,par.get(par.get(k)));k=par.get(k);}return k;};
  for(const c of doc.components)for(const pn of Object.keys(P.pinsOf(c)))par.set(c.id+':'+pn,c.id+':'+pn);
  for(const w of doc.wires){const a=w.a.c+':'+w.a.p,b=w.b.c+':'+w.b.p;if(par.has(a)&&par.has(b))par.set(find(a),find(b));}
  const net={pinNet:{get:k=>par.has(k)?{canon:find(k)}:null}};
- const used=doc.components.filter(c=>V1MAP[c.type]),extra=doc.components.filter(c=>!V1MAP[c.type]&&!['GND','JUNC','PWM','SH','TAGO','TAGI'].includes(c.type)&&!(P.BLOCKS.has(c.type)&&c.type!=='AM'));
+ const used=doc.components.filter(c=>V1MAP[c.type]),extra=doc.components.filter(c=>!V1MAP[c.type]&&!['GND','JUNC','PWM','SH','TAGO','TAGI'].includes(c.type)&&!(P.BLOCKS.has(c.type)&&c.type!=='AM'&&c.type!=='IP'));
  const why='Η πλήρης συμβολική λύση καλύπτει buck, boost, αντιστρέφοντα buck–boost και flyback με ένα στοιχείο ανά ρόλο.';
  if(!used.length)return {error:'Πρόσθεσε στοιχεία ισχύος (πηγή, διακόπτη, πηνίο…) για να βγει η συμβολική λύση.'};
  if(extra.length)return {error:why+' Αυτό το κύκλωμα έχει και: '+extra.map(c=>`${P.PARTS[c.type].name} ${c.label||c.id}`).join(', ')+'.'};
@@ -1105,16 +1226,19 @@ function openSettings(){const s=editor.settings,m=$('#settings');m.hidden=false;
   <p class="muted small">Space + σύρσιμο μετακινεί πάντα τον καμβά. Το κείμενο του σχεδίου δεν επιλέγεται ποτέ.</p></section>
   <section><h3>Πλέγμα & σύρματα</h3>${chk('grid','Εμφάνιση πλέγματος')}${sel('gridStyle','Μορφή πλέγματος',[['dots','Κουκκίδες'],['lines','Γραμμές']])}
   ${sel('wireWidth','Πάχος συρμάτων',[[1.6,'Λεπτό'],[2.2,'Κανονικό'],[3,'Χοντρό']])}${sel('corner','Γωνίες συρμάτων',[['round','Στρογγυλεμένες'],['sharp','Ορθές']])}
+  ${chk('freeEnds','Ελεύθερα άκρα: σύρμα που αφήνεις στο κενό κρατά ελεύθερο άκρο (αλλιώς ακυρώνεται)')}${chk('autoConnect','Στοιχείο που αφήνεις πάνω σε σύρμα ή ακροδέκτη συνδέεται, ή μπαίνει σε σειρά (Shift: χωρίς σύνδεση)')}
+  ${sel('snapPx','Κούμπωμα σε ακροδέκτη ή σύρμα σε απόσταση',[[6,'6 px'],[12,'12 px'],[20,'20 px']])}
   ${chk('autoRoute','Αυτόματη δρομολόγηση A* όταν αφήνεις στοιχείο (αλλιώς κρατά τη δική σου διαδρομή)')}</section>
   <section><h3>Ζωντανές ενδείξεις</h3>${chk('showLive','Τιμές πάνω στο κύκλωμα')}${chk('showArrows','Βέλη φοράς ρεύματος')}</section>`;
- $$('#settings [data-set]').forEach(el=>el.onchange=()=>{const k=el.dataset.set;let v=el.type==='checkbox'?el.checked:el.value;if(k==='wireWidth')v=+v;editor.settings[k]=v;saveSettings();editor.render();});}
+ $$('#settings [data-set]').forEach(el=>el.onchange=()=>{const k=el.dataset.set;let v=el.type==='checkbox'?el.checked:el.value;if(k==='wireWidth'||k==='snapPx')v=+v;editor.settings[k]=v;saveSettings();editor.render();renderProps();});}
 
 // ------------------------------------------------------------------ boot
 function boot(){
  const saved=loadSettings();
  editor=new Editor($('#canvas'),{settings:saved,
   onchange:kind=>{if(kind==='struct'||kind==='param'){if(S.batch)S.batch.stale=true;buildSim(false);if(S.theory)setTimeout(()=>{if(tutorial().theory==='v1'||tutorial().theory==='formula')runTheory();},50);scheduleMath();}saveLocal();if(kind==='struct')renderChannels();},
-  onselect:sel=>{$('#selinfo').textContent=sel.c.length+sel.w.length?`${sel.c.length} στοιχεία · ${sel.w.length} σύρματα επιλεγμένα`:'';},
+  onselect:sel=>{$('#selinfo').textContent=sel.c.length+sel.w.length?`${sel.c.length} στοιχεία · ${sel.w.length} σύρματα επιλεγμένα`:'';renderProps();},
+  ontool:on=>{const b=$('#wire-tool');b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));},
   onedit:ev=>{if(ev.kind==='comp'){const sg=editor.settings.dblclick==='scope'?signalsFor(editor.comp(ev.id)):[];if(sg.length)addProbe(sg[0][0]+ev.id+(sg[0][2]||''));else openInspector(ev.id,ev.x,ev.y);}else openWireInspector(ev.id,ev.x,ev.y);},
   oncontext:openMenu,onwarn:t=>{notice(t,'error');setTimeout(()=>notice(''),5000);}});
  editor.setLive(liveOf);
@@ -1169,8 +1293,14 @@ function boot(){
  $('#open').onclick=()=>$('#file').click();
  $('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const pr=JSON.parse(await f.text());if(!Array.isArray(pr.components))throw Error('Δεν είναι αρχείο κυκλώματος.');S.tut=pr.tutorial||{id:'empty',options:{}};S.tutMeta=null;S.tutRef=pr.tutRef||tutorialRef(S.tut);applyProject(pr);renderTutorial();runTheory();}catch(err){notice('Άνοιγμα: '+esc(err.message),'error');}e.target.value='';};
  $('#pal-search').oninput=renderPalette;$('#pal-toggle').onclick=()=>document.body.classList.toggle('pal-hidden');
+ // parameters panel (3.7) and wire tool
+ {let open=innerWidth>700;try{const v=localStorage.getItem('pcl2-props');if(v)open=v==='1';}catch{}setProps(open);
+  $('#props-btn').onclick=()=>setProps(!propsOpen());$('#props-tab').onclick=()=>setProps(true);}
+ $('#wire-tool').onclick=()=>{editor.setWireTool(!editor.wireTool);editor.svg.focus({preventScroll:true});};
  document.addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))closeMenu();if(!e.target.closest('#inspector')&&!e.target.closest('.schem')&&!e.target.closest('#ctx'))closeInspector();});
- document.addEventListener('keydown',e=>{const tg=e.target;if((e.key==='p'||e.key==='P')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!(tg&&(tg.isContentEditable||/^(INPUT|SELECT|TEXTAREA)$/.test(tg.tagName)))){setLivePanel($('#live-panel').hidden);return;}
+ document.addEventListener('keydown',e=>{const tg=e.target,typing=tg&&(tg.isContentEditable||/^(INPUT|SELECT|TEXTAREA)$/.test(tg.tagName)),plain=!e.ctrlKey&&!e.metaKey&&!e.altKey;
+  if((e.key==='p'||e.key==='P')&&plain&&!typing){setLivePanel($('#live-panel').hidden);return;}
+  if((e.key==='i'||e.key==='I')&&plain&&!typing){setProps(!propsOpen());return;}
   if(e.key==='Escape'){closeMenu();closeInspector();gallery(false);$('#settings').hidden=true;}
   if(e.target===document.body&&e.code==='Space'){e.preventDefault();S.running?pause():play();}});
  // resizable canvas

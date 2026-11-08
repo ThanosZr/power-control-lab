@@ -21,13 +21,15 @@
  <section class="card bench" aria-label="Κύκλωμα">
   <div class="toolbar">
    <button id="pal-toggle" title="Βιβλιοθήκη στοιχείων">▤ Βιβλιοθήκη</button><span class="sep"></span>
-   <button id="undo" title="Αναίρεση (Ctrl+Z)">↶</button><button id="redo" title="Επανάληψη (Ctrl+Y)">↷</button><button id="rot" title="Περιστροφή (R)">⟳</button><button id="del" title="Διαγραφή (Del)">🗑</button><button id="fit" title="Προσαρμογή προβολής (F)">⤢</button>
+   <button id="undo" title="Αναίρεση (Ctrl+Z)">↶</button><button id="redo" title="Επανάληψη (Ctrl+Y)">↷</button><button id="rot" title="Περιστροφή (R)">⟳</button><button id="del" title="Διαγραφή (Del)">🗑</button><button id="fit" title="Προσαρμογή προβολής (F)">⤢</button><span class="sep"></span><button id="wire-tool" class="tool-toggle" aria-pressed="false" title="Εργαλείο σύρματος (W): κλικ οπουδήποτε για αρχή, κλικ για γωνίες, διπλό κλικ ή Enter για ελεύθερο άκρο, Esc για έξοδο">╱ Σύρμα</button>
    <span id="selinfo" class="selinfo"></span>
-   <span class="hint">σύρσιμο σε κενό: επιλογή πολλών · σύρσιμο ακροδέκτη: σύρμα · μεσαίο κλικ / Space: μετακίνηση · δεξί κλικ: scope</span>
+   <span class="hint">σύρσιμο σε κενό: επιλογή πολλών · σύρσιμο ακροδέκτη: σύρμα · W: σύρμα από οπουδήποτε · μεσαίο κλικ / Space: μετακίνηση · δεξί κλικ: scope</span>
+   <button id="props-btn" class="tool-toggle on" aria-pressed="true" aria-controls="props" title="Πάνελ παραμέτρων (πλήκτρο I)">☰ Παράμετροι</button>
   </div>
   <div class="work">
    <aside class="palette"><input id="pal-search" placeholder="Αναζήτηση στοιχείου…"><div id="palette-list"></div></aside>
    <div id="canvas" class="canvas"></div>
+   <aside id="props" class="props" aria-label="Παράμετροι"><button id="props-tab" class="props-tab" aria-expanded="true" title="Άνοιγμα του πάνελ παραμέτρων (I)">◂ Παράμετροι</button><div id="props-body" class="props-body"></div></aside>
   </div>
   <div id="grip" class="grip" title="Σύρε για αλλαγή ύψους"></div>
   <div id="netwarn" class="netwarn" hidden></div>
@@ -119,7 +121,7 @@
    <div><div class="th-head"><h4>Θεωρία & σύγκριση με την προσομοίωση</h4><button id="theory-refresh" title="Επανυπολογισμός με τις τρέχουσες τιμές">↻</button></div><div id="theory" class="theory"></div></div>
   </div>
  </section>
- <footer>Power Converter Lab <b>3.6</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
+ <footer>Power Converter Lab <b>3.7</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
 </main>
 <div id="notice" class="notice" hidden></div>
 <div id="inspector" class="popup inspector" hidden></div>

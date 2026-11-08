@@ -80,7 +80,9 @@ index.html  φορτώνει τα studio/*.js με τη σειρά:        run.p
 | **Template ή ερωτήσεις** | `web/studio/exercises/*.template.json` + `index.json`. Νέος τύπος block: `engine/templates.py` και `math.js` `renderTemplate` | `test_templates.py` |
 | **Κανάλι στο scope** | `mna.js` `channelKeys`/`computeVals` → `app.js` `chanLabel`/`signalsFor` → `scope.js` `UNIT`/`unitOf`. Για τον server: `exportForBatch` `rec` και `batch.py` `value` | `sim_cases.js`, `test_batch.py` |
 | **Ζωντανή παράμετρος** | `app.js` `refreshControls` → `Sim.setControl`/`setHold`/`setBlock` → `liveChange` (για να γίνει πρόγραμμα t:τιμή) | `features_flow.js` |
-| **Αλληλεπίδραση στο σχέδιο** | `editor.js` `down`/`move`/`up`, `finishWire`, `setParams` | `editor_interactions.js`, `blocks_flow.js` |
+| **Αλληλεπίδραση στο σχέδιο** | `editor.js` `down`/`move`/`up`, `finishWire`, `setParams`. Από την 3.7: εργαλείο σύρματος (`wireTool`, `finishFree`), κούμπωμα (`nearTarget`), ελεύθερα άκρα (κόμβος `JUNC` με ένα σύρμα, `mergeJunction`), σύνδεση στοιχείων που πέφτουν σε σύρμα (`autoConnect`, `insertSeries`) | `editor_interactions.js`, `blocks_flow.js`, `wiring_flow.js` |
+| **Ασύνδετα και αιωρούμενα (3.7)** | `mna.js` `buildNetlist`: επιλογές `project.solve` (`unconn`, `island`, `rleak`), σύνολο `skip`, κλάδεμα νεκρών κλαδιών, κόμβοι χωρίς στοιχείο, νησιά με union-find, `net.diag` → `editor.setDiag`, `app.js` `propsCircuit` | `sim_cases.js` (`solve37`), `test_batch.py` (`isl_*`), `wiring_flow.js` |
+| **Πάνελ παραμέτρων και 📌 (3.7)** | `app.js` `renderProps` (`propsComp`, `propsWire`, `propsCircuit`, ενότητες με `psec`), `togglePin` (`c.live`, `c.liveBase`), ρυθμιστές στο `refreshControls`, `liveApply` (φόρτωση με καταστάσεις χωρίς ανανέωση πάνελ) | `wiring_flow.js` |
 | **API του server** | `run.py` `ACTIONS` → συνάρτηση στο `engine/` | `test_api.py` |
 | **Κείμενα διεπαφής** | `web/index.html`, `app.js` | UI flows |
 
@@ -90,7 +92,8 @@ index.html  φορτώνει τα studio/*.js με τη σειρά:        run.p
 - **Σειρά σε μία στιγμή:** δείγματα πριν από την ενημέρωση του ελεγκτή, και μετά οι μεταγωγές (§2.3). Τα δείγματα παίρνουν την τιμή πριν από τη στιγμή (t⁻).
 - **Κανένας ειδικός κώδικας για μία άσκηση στον λύτη.** Τα φαινόμενα βγαίνουν από τη σύνθεση στοιχείων.
 - **Τα παλιά projects ανοίγουν πάντα.** Οι συνδέσεις μέσω ID (διακόπτης → PWM, αισθητήρας → στοιχείο) συνεχίζουν να δουλεύουν.
-- **Σύρμα σήματος δεν ενώνεται ποτέ με ηλεκτρικό κόμβο** (`editor.js` `finishWire`, `mna.js` `buildNetlist`).
+- **Σύρμα σήματος δεν ενώνεται ποτέ με ηλεκτρικό κόμβο** (`editor.js` `finishWire`, `kindsOk`, `mna.js` `buildNetlist`).
+- **Ό,τι μένει εκτός λύσης φαίνεται** (3.7): στο `net.diag`, στο σχέδιο και στο πάνελ παραμέτρων. Ο λύτης SciPy παίρνει το ίδιο netlist από το `exportForBatch`, οπότε και τις ίδιες επιλογές.
 - **Αλγεβρικός βρόχος = σφάλμα** με τα μπλοκ του βρόχου, ποτέ κρυφή καθυστέρηση.
 
 ## 5. Tests
