@@ -143,7 +143,7 @@ class StudioSimulator(unittest.TestCase):
         v = r['vals']
         exp = {'a*b + 1': 13, 'hypot(a, b)': 5, 'a^2 + b**2': 25, '-a^2': -9, '2^3^2': 512, 'a > b ? a : b': 4, 'clamp(a*b, 0, 10)': 10,
                'mod(-7, 3)': 2, '(a < b) + (a == 3) + !(b != 4)': 3, 'atan2(b, a)': math.atan2(4, 3), 'min(a, b, 1)': 1,
-               'round(2.5) + floor(-0.5) + sign(-a)': 1, '10 % 4': 2, 'exp(log(a)) + sqrt(b)': 5, 'pi*e*0 + t': .5}
+               'round(2.5) + floor(-0.5) + sign(-a)': 1, '10 % 4': 2, 'exp(log(a)) + sqrt(b)': 5, 'pi*e*0 + t': .5, 'lut(a, 0, 0, 10, 100)': 30, 'lut(b, 0, 1, 2, 3, 5, 3.5)': 3 + .5 * 2 / 3}
         for k, x in exp.items():
             self.assertAlmostEqual(v[k], x, places=12, msg=k)
         self.assertTrue(all(r['errs']))                                          # every bad expression is rejected with a message
@@ -152,6 +152,16 @@ class StudioSimulator(unittest.TestCase):
         self.assertAlmostEqual(r['p'], 10 * 2 * 2, delta=1e-5)                   # v·i·k = 10 V · 2 A · 2
         self.assertEqual(r['bad'], 0)
         self.assertTrue(any('EX2' in w for w in r['warn']))
+
+    def test_eis_cpe_and_controlled_sources(self):
+        r = self.o['eis']
+        for w in r['bank']:                  # the R–C bank follows 1/(Q·(jω)^α) within about 1 % in its band
+            self.assertLess(w, .015)
+        for q in r['z']:                     # Z = V₁/I₁ against the model (with the bank the solver uses), drift removed
+            self.assertAlmostEqual(q['re'], q['tre'], delta=.005 * abs(q['tre']), msg=q['f'])
+            self.assertAlmostEqual(q['im'], q['tim'], delta=.01 * abs(q['tim']) + 2e-5, msg=q['f'])
+            self.assertAlmostEqual(q['Idc'], 1, delta=1e-3)                    # current source from the expression
+            self.assertGreater(q['Vdc'], 3.7)                                  # OCV from a signal (3.7 V) plus the drops
 
     def test_peak_current_mode(self):
         o, T = self.o, 1e-5

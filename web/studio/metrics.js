@@ -75,6 +75,15 @@
   const tol=o.tol??Math.max(1e-6*Math.max(Math.abs(lo),Math.abs(hi),1e-12),1e-3*(hi-lo)),cover=o.cover||Math.min(n,4*maxP);
   for(let p=1;p<=maxP&&2*p<=n;p++){let ok=true;for(let k=n-cover+p;k<n&&ok;k++)if(k-p>=0&&Math.abs(x[k]-x[k-p])>tol)ok=false;if(ok){const d=x.slice(n-p).slice().sort((a,b)=>a-b);return {period:p,distinct:d,tol};}}
   return {period:0,distinct:[],tol,range:[lo,hi]};}
- const api={responseMetrics,scheduleEvents,harmonics,periodicity};
+ // impedance at f from the voltage and current samples of eisPoint: Z = V₁/I₁ (phasors of the fundamental)
+ // a slow drift (e.g. the DC current through a Warburg element) is removed first: the line through the values at the
+ // two ends of the window, which are the same point of the sinusoid, so the sinusoid itself is not touched
+ function detrend(t,y,ta,tb){const at=x=>{let k=0;while(k<t.length-2&&t[k+1]<x)k++;const d=t[k+1]-t[k];return d>0?y[k]+(y[k+1]-y[k])*(x-t[k])/d:y[k];};const ya=at(ta),yb=at(tb),sl=(yb-ya)/(tb-ta);return y.map((v,k)=>v-sl*(t[k]-ta));}
+ function impedance(r){const o={f1:r.f,periods:r.periods,H:r.periods,tEnd:r.tEnd},ta=r.tEnd-r.periods/r.f;if(!(ta>=r.t[0]))return {ok:false,why:'Λίγο ιστορικό για αυτή τη συχνότητα.'};
+  const hv=harmonics({t:r.t,y:detrend(r.t,r.v,ta,r.tEnd),...o}),hi=harmonics({t:r.t,y:detrend(r.t,r.i,ta,r.tEnd),...o});if(!hv.ok)return hv;if(!hi.ok)return hi;
+  // y ≈ A·cos(ωτ − φ): phasor A·e^(−jφ)
+  const av=hv.A[1],ai=hi.A[1],pv=-hv.ph[1]*Math.PI/180,pi=-hi.ph[1]*Math.PI/180,m=av/ai,ph=pv-pi;
+  return {ok:ai>0,f:r.f,mag:m,phase:Math.atan2(Math.sin(ph),Math.cos(ph))*180/Math.PI,re:m*Math.cos(ph),im:m*Math.sin(ph),V:av,I:ai,Vdc:hv.dc,Idc:hi.dc};}
+ const api={responseMetrics,scheduleEvents,harmonics,periodicity,impedance};
  root.Metrics=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

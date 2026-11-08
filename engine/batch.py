@@ -17,6 +17,7 @@ same circuit. Here the circuit is a switched linear system:
 The result is a reference waveform with controlled local error (rtol/atol) to
 compare against the browser solver.
 """
+import json
 import math
 import time
 
@@ -146,7 +147,19 @@ class Ctrl:
 _FUN = {'sin': math.sin, 'cos': math.cos, 'tan': math.tan, 'asin': math.asin, 'acos': math.acos, 'atan': math.atan, 'atan2': math.atan2,
         'sinh': math.sinh, 'cosh': math.cosh, 'tanh': math.tanh, 'exp': math.exp, 'log': math.log, 'log10': math.log10, 'sqrt': math.sqrt,
         'abs': abs, 'min': min, 'max': max, 'pow': math.pow, 'floor': math.floor, 'ceil': math.ceil, 'round': lambda x: math.floor(x + .5),
-        'sign': lambda x: (x > 0) - (x < 0), 'hypot': math.hypot, 'clamp': lambda x, a, b: min(max(x, a), b), 'mod': lambda a, b: a - b * math.floor(a / b)}
+        'sign': lambda x: (x > 0) - (x < 0), 'hypot': math.hypot, 'clamp': lambda x, a, b: min(max(x, a), b), 'mod': lambda a, b: a - b * math.floor(a / b),
+        'lut': lambda x, *p: _lut(x, p)}
+
+
+def _lut(x, p):
+    n = len(p) // 2
+    if x <= p[0]:
+        return p[1]
+    for k in range(1, n):
+        if x <= p[2 * k]:
+            x0, y0, x1, y1 = p[2 * k - 2], p[2 * k - 1], p[2 * k], p[2 * k + 1]
+            return y0 + (y1 - y0) * (x - x0) / (x1 - x0) if x1 > x0 else y1
+    return p[2 * n - 1]
 
 
 def eval_ast(n, v, t):
@@ -234,7 +247,8 @@ class Circuit:
             b['clock'] = ci if isinstance(ci, int) and 0 <= ci < len(self.ctrls) else None
             self.blocks.append(b)
         self.zc = [b for b in self.blocks if b['type'] == 'CMP']
-        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL') for b in self.blocks)
+        # continuous in time: integrators, filters, the PLL, and expressions of t (e.g. I_dc + I_ac·sin(2πft))
+        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
         self.sv = [0.0] * self.nsig
         self.yb = [0.0] * len(self.blocks)
         self.yo = [[0.0] * len(b.get('outList') or []) for b in self.blocks]
@@ -303,6 +317,9 @@ class Circuit:
         return max(sched_at(e.get('sched'), t, e['R']), 1e-9)
 
     def Vsrc(self, e, t):
+        n = e.get('sigIn')
+        if isinstance(n, int) and n >= 0:     # a voltage source controlled by a signal (e.g. OCV(SOC))
+            return self.sig_in(n)
         s = e['src']
         if s.get('kind') == 'dc':
             return sched_at(s.get('sched'), t, _f(s.get('V')))

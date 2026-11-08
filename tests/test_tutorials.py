@@ -145,6 +145,23 @@ class Tutorials(unittest.TestCase):
             self.assertAlmostEqual(a['step']['min'], b['step']['min'], delta=1e-9)
             self.assertEqual(a['calls'], 201)                                    # once per period from t = 0 to 4 ms at 50 kHz
 
+    def test_cell_eis(self):
+        o = self.o
+        for src in ('vs', 'rl'):
+            r, m = o['eis_' + src], o['eis_' + src]['meta']
+            self.assertEqual(r['warn'], [])
+            w = 2 * math.pi * 200
+            d = 1 + (w * m['R1'] * m['C1']) ** 2
+            zw = m['sig'] / math.sqrt(w)                                         # Warburg σ(1 − j)/√ω
+            re, im = m['R0'] + m['R1'] / d + zw, -w * m['R1'] ** 2 * m['C1'] / d - zw
+            self.assertAlmostEqual(r['re'], re, delta=.01 * re)                  # through the converter, ripple and all
+            self.assertAlmostEqual(r['im'], im, delta=.02 * abs(im))
+            self.assertAlmostEqual(r['soc'], .5, delta=1e-3)
+            self.assertAlmostEqual(r['ocv'], 3.7, delta=2e-3)                   # OCV(SOC) from the table at SOC = 0.5
+        self.assertLess(o['eis_rl']['Idc'], 0)                                  # discharge
+        p = abs(o['eis_rl']['Idc']) * 3.55                                      # the R_L takes the power: v_Ci ≈ √(P·R_L)
+        self.assertAlmostEqual(o['eis_rl']['vci'], math.sqrt(p * 20), delta=1.5)
+
     def test_dc_drive(self):
         o = self.o
         for k in ('dc_speed_active', 'dc_speed_imc', 'dc_current_active', 'dc_open_active'):

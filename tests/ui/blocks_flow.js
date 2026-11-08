@@ -123,4 +123,12 @@ const {chromium}=require('playwright');
  await p.$eval('[data-c="PI1"] .hit',e=>e.scrollIntoView({block:'center'}));await p.waitForTimeout(200);
  const pq=await p.evaluate(()=>{const r=document.querySelector('[data-c="PI1"] .hit').getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2];});await p.mouse.dblclick(...pq);await p.waitForTimeout(400);
  ok(await p.evaluate(()=>!!document.querySelector('#inspector textarea.code')),'code editor in the inspector');await p.screenshot({path:'code_loop.png'});
+ // 3.3.1: battery cell test (EIS) with the converter: Z at f in the theory card, and a two-point sweep
+ await p.evaluate(()=>window.PCL.loadTutorial('cell_eis',{}));await p.waitForTimeout(800);
+ await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.stopT-S.sim.t);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(500);
+ th=await p.$eval('#theory',e=>e.textContent);ok(/Re Z39,17 mΩ39,1\d mΩ/.test(th),'cell Z at 200 Hz');
+ await p.click('#eis-block summary');await p.waitForTimeout(400);ok(await p.$eval('#eis-par',e=>e.value)==='KF.v','EIS frequency parameter from the tutorial');
+ await p.fill('#eis-from','200');await p.fill('#eis-to','1000');await p.fill('#eis-ppd','1');await p.click('#eis-run');
+ await p.waitForFunction(()=>!window.PCL.EIS.run&&window.PCL.EIS.pts.length===2,null,{timeout:120000});
+ const eo=await p.$eval('#eis-out',e=>e.textContent);ok(/1 kHz31,3\d mΩ/.test(eo)&&/Nyquist|Re Z/.test(eo),'EIS sweep table: '+eo.slice(-160));await p.screenshot({path:'cell_eis.png'});
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

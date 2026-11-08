@@ -47,7 +47,7 @@ function loop(now){
  if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){pause();notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
  requestAnimationFrame(loop);
 }
-function draw(all){scope.draw();navRange();if(all||S.frame%3===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();}if(all||S.frame%8===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();}if(all){if(!S.running&&!S.switching){renderFFT();renderPoincare();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
+function draw(all){scope.draw();navRange();if(all||S.frame%3===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();}if(all||S.frame%8===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();}if(all){if(!S.running&&!S.switching){renderFFT();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
 function navRange(){const el=$('#nav-range');if(!el||el.offsetParent===null||!S.sim)return;const [a,b]=scope.viewRange();el.textContent=`${eng(a,'s',4)} … ${eng(b,'s',4)} · ${fmt((b-a)/S.sim.T,3)} T${scope.cfg.frozen?' · σταθερή προβολή':' · ζωντανά'}`;}
 function updateClock(){const s=S.sim;if(!s)return;$('#clock').textContent='t = '+eng(s.t,'s',5);$('#periods').textContent=`${Math.floor(s.t/s.T+1e-9)} T · βήματα ${s.steps.toLocaleString('el-GR')}`;
  $('#cpu').hidden=!S.limited;$('#speed-note').textContent=S.speed==='max'?'όσο αντέχει ο υπολογιστής':`${eng(S.speed*s.T,'s',3)} ανά δευτερόλεπτο`;$('#step-note').textContent='Δt = '+eng(s.h,'s',3)+' · T = '+eng(s.T,'s',3);}
@@ -169,10 +169,45 @@ function renderFFT(){const box=$('#ff-out');if(!box||!S.sim||!$('#ff-block').ope
  const ticks=[0,.5,1].map(f=>`<text x="${pl-3}" y="${Hh-pb-(Hh-pb-6)*f+3}" text-anchor="end">${fmt(ns*f,2)}%</text>`).join('')+[1,...[5,10,20,50,100,200,500].filter(h=>h<=n)].filter((h,i,a)=>a.length<7||h!==a[1]).map(h=>`<text x="${pl+(h-.5)*bw}" y="${Hh-3}" text-anchor="${h===n?'end':'middle'}">${h}</text>`).join('');
  box.innerHTML=`<p class="muted small">f₁ = ${eng(f1,'Hz')} (${Number.isFinite(fv)&&fv>0?'χειροκίνητα':esc(fsrc)}) · ${r.periods} ${r.periods>1?'περίοδοι':'περίοδος'}, ${eng(r.window[0],'s')} … ${eng(r.window[1],'s')} · ${r.n} σημεία</p>
   <svg class="ffchart" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Αρμονικές σε % της θεμελιώδους">${bars}<line x1="${pl}" y1="${Hh-pb}" x2="${W-2}" y2="${Hh-pb}"/>${ticks}</svg>
-  <table class="kv"><tbody><tr><td>DC</td><td>${eng(r.dc,u)}</td></tr><tr><td>Θεμελιώδης: πλάτος / RMS</td><td>${eng(A1,u)} / ${eng(r.rms1,u)}</td></tr><tr><td>RMS (όλο το σήμα)</td><td>${eng(r.rms,u)}</td></tr>
+  <table class="kv"><tbody><tr><td>DC</td><td>${eng(r.dc,u)}</td></tr><tr><td>Θεμελιώδης: πλάτος / RMS</td><td>${eng(A1,u)} / ${eng(r.rms1,u)}</td></tr><tr><td>Φάση θεμελιώδους (cos, από την αρχή του παραθύρου)</td><td>${fmt(-r.ph[1],4)}°</td></tr><tr><td>RMS (όλο το σήμα)</td><td>${eng(r.rms,u)}</td></tr>
   <tr><td>THD (h = 2 … ${r.H})</td><td><b>${fmt(r.thd,4)} %</b></td></tr><tr><td>THD (όλο το φάσμα, από την RMS)</td><td>${fmt(r.thdAll,4)} %</td></tr></tbody></table>
-  ${top.length?`<table class="kv ff-top"><tbody><tr><td>h</td><td>f</td><td>πλάτος</td><td>% A₁</td></tr>${top.map(h=>`<tr><td>${h}</td><td>${eng(h*f1,'Hz')}</td><td>${eng(r.A[h],u)}</td><td>${fmt(rel(h),3)}</td></tr>`).join('')}</tbody></table>`:''}
+  ${top.length?`<table class="kv ff-top"><tbody><tr><td>h</td><td>f</td><td>πλάτος</td><td>% A₁</td><td>φάση</td></tr>${top.map(h=>`<tr><td>${h}</td><td>${eng(h*f1,'Hz')}</td><td>${eng(r.A[h],u)}</td><td>${fmt(rel(h),3)}</td><td>${fmt(-r.ph[h],3)}°</td></tr>`).join('')}</tbody></table>`:''}
   <p class="muted small">Σειρά Fourier πάνω σε ακέραιες περιόδους της f₁, με ακριβή ολοκλήρωση ανάμεσα στα σημεία του λύτη (όχι επαναδειγματοληψία). THD = √(Σ A_h²)/A₁ για h ≥ 2. Η δεύτερη τιμή περιέχει και ό,τι δεν είναι αρμονική της f₁ (π.χ. υποαρμονικές, συνιστώσες μεταγωγής πάνω από το h).</p>`;}
+// ------------------------------------------------------------------ impedance spectroscopy (3.3.1): Z(f) = V₁/I₁ at each frequency of the perturbation
+const EIS={run:false,pts:[]};
+// model impedance of the cell of the tutorial: R₀ + R₁‖C₁ + Warburg (exact, and with the R–C bank the solver uses)
+function cellZ(f,bank){const w=2*Math.PI*f,R0=+paramsOf('R0')?.R,R1=+paramsOf('R1')?.R,C1=+paramsOf('C1')?.C,W=paramsOf('W1');if(![R0,R1,C1].every(Number.isFinite))return null;
+ const d=1+(w*R1*C1)**2,zw=W?(bank?P.cpeZbank:P.cpeZ)({...P.defaults('CPE'),...W},w):[0,0];return [R0+R1/d+zw[0],-w*R1*R1*C1/d+zw[1]];}
+function renderEISForm(){const vs=$('#eis-v'),is=$('#eis-i'),par=$('#eis-par');if(!vs)return;const chans=scope.channels(),m=S.tutMeta?.eis;
+ const opt=(sel,list,pref)=>{const keep=sel.value;sel.innerHTML=list.map(([k,n])=>`<option value="${esc(k)}">${esc(n)}</option>`).join('');if(list.some(x=>x[0]===keep))sel.value=keep;else if(pref&&list.some(x=>x[0]===pref))sel.value=pref;};
+ const all=[...new Set([...chans.map(c=>c.key),...(S.sim?S.sim.keys.filter(k=>k.startsWith('Y:')):[])])].map(k=>[k,chans.find(c=>c.key===k)?.label||chanLabel(k)]);
+ opt(vs,all,m?.vKey);opt(is,all,m?.iKey);const ps=bfParams().map(([k,n])=>[k,n]);const pk=par.value;opt(par,ps,m?m.comp+'.'+m.param:'');
+ if(m&&!$('#eis-from').value){$('#eis-from').value=m.from;$('#eis-to').value=m.to;$('#eis-ppd').value=m.ppd;$('#eis-settle').value=m.settle;$('#eis-per').value=m.periods;}}
+async function runEIS(){if(EIS.run||!S.sim||S.error)return;const [comp,param]=String($('#eis-par').value).split('.'),vKey=$('#eis-v').value,iKey=$('#eis-i').value,out=$('#eis-out');
+ const a=P.parseEng($('#eis-from').value),b=P.parseEng($('#eis-to').value),ppd=Math.max(1,Math.min(20,+$('#eis-ppd').value|0)),settle=Math.max(0,+$('#eis-settle').value||3),per=Math.max(1,+$('#eis-per').value|0||2);
+ if(!comp||!vKey||!iKey||!(a>0)||!(b>a)){out.innerHTML='<p class="muted small">Διάλεξε τάση, ρεύμα, την παράμετρο της συχνότητας και εύρος.</p>';return;}
+ const n=Math.max(2,Math.round(Math.log10(b/a)*ppd)+1),fs=[...Array(n).keys()].map(k=>a*Math.pow(b/a,k/(n-1))).reverse(),base=project();
+ EIS.run=true;EIS.pts=[];EIS.meta={vKey,iKey,cell:S.tut?.id==='cell_eis'};$('#eis-run').disabled=true;$('#eis-stop').disabled=false;const t0=performance.now();
+ try{for(const f of fs){if(!EIS.run)break;const r=MNA.eisPoint(base,{comp,param,f:+f.toPrecision(6),vKey:simKey(vKey),iKey:simKey(iKey),settle,periods:per,minSettle:S.tutMeta?.eis?.minSettle||0,hDiv:+$('#sim-step').value||50,method:$('#method').value});
+   const z=Metrics.impedance(r);if(z.ok)EIS.pts.push(z);drawEIS(`${EIS.pts.length}/${n} · ${fmt((performance.now()-t0)/1e3,3)} s`);await new Promise(res=>setTimeout(res,0));}}
+ catch(e){out.insertAdjacentHTML('beforeend',`<p class="warn-text small">${esc(e.message)}</p>`);}finally{EIS.run=false;$('#eis-run').disabled=false;$('#eis-stop').disabled=true;drawEIS(`${EIS.pts.length} συχνότητες · ${fmt((performance.now()-t0)/1e3,3)} s`);}}
+function drawEIS(status){const out=$('#eis-out');if(!out||!EIS.pts.length)return;const pts=[...EIS.pts].sort((p,q)=>p.f-q.f),W=260,H=190,Pp=svgPlot(W,H,[34,6,6,22]),mo=EIS.meta.cell;
+ const th=mo?pts.map(p=>({f:p.f,z:cellZ(p.f,false)})).filter(q=>q.z):[];const fine=mo?[...Array(60).keys()].map(k=>{const f=pts[0].f*Math.pow(pts[pts.length-1].f/pts[0].f,k/59);return cellZ(f,false);}).filter(Boolean):[];
+ // Nyquist: −Im(Z) up, same scale on both axes
+ const re=[...pts.map(p=>p.re),...fine.map(z=>z[0])],im=[...pts.map(p=>-p.im),...fine.map(z=>-z[1])];let x0=Math.min(...re),x1=Math.max(...re),y0=Math.min(0,...im),y1=Math.max(...im);const span=Math.max(x1-x0,y1-y0)*1.1||1;x0-=span*.05;x1=x0+span;y1=y0+span*(H-28)/(W-40);
+ const ny=`<svg class="bfchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Διάγραμμα Nyquist"><rect x="34" y="6" width="${W-40}" height="${H-28}" class="frame"/>${fine.length?`<path class="map" d="M${fine.map(z=>`${Pp.X(z[0],x0,x1).toFixed(1)},${Pp.Y(-z[1],y0,y1).toFixed(1)}`).join(' L')}"/>`:''}
+  ${pts.map(p=>`<circle cx="${Pp.X(p.re,x0,x1).toFixed(1)}" cy="${Pp.Y(-p.im,y0,y1).toFixed(1)}" r="2.2"><title>${eng(p.f,'Hz')}: ${eng(p.re,'Ω')} − j${eng(-p.im,'Ω')}</title></circle>`).join('')}
+  <text x="${(W+34)/2}" y="${H-1}" text-anchor="middle">Re Z (${eng(x0,'Ω',3)} … ${eng(x1,'Ω',3)})</text><text x="8" y="${H/2}" transform="rotate(-90 8 ${H/2})" text-anchor="middle">−Im Z</text></svg>`;
+ // Bode: |Z| and phase against log f
+ const lf=pts.map(p=>Math.log10(p.f)),la=Math.min(...lf),lb=Math.max(...lf)+1e-9,mags=pts.map(p=>p.mag),ma=Math.min(...mags),mb=Math.max(...mags),phs=pts.map(p=>p.phase),pa=Math.min(...phs,0),pb=Math.max(...phs,0);
+ const bo=`<svg class="bfchart" viewBox="0 0 ${W} 120" role="img" aria-label="Διάγραμμα Bode"><rect x="34" y="6" width="${W-40}" height="92" class="frame"/>
+  <path class="map" d="M${pts.map((p,k)=>`${(34+(W-40)*(lf[k]-la)/(lb-la)).toFixed(1)},${(98-88*(p.mag-ma)/((mb-ma)||1)).toFixed(1)}`).join(' L')}"/>
+  <path class="cob" d="M${pts.map((p,k)=>`${(34+(W-40)*(lf[k]-la)/(lb-la)).toFixed(1)},${(98-88*(p.phase-pa)/((pb-pa)||1)).toFixed(1)}`).join(' L')}"/>
+  <text x="30" y="12" text-anchor="end">${eng(mb,'Ω',3)}</text><text x="30" y="98" text-anchor="end">${eng(ma,'Ω',3)}</text><text x="${(W+34)/2}" y="116" text-anchor="middle">${eng(pts[0].f,'Hz')} … ${eng(pts[pts.length-1].f,'Hz')} (log) · |Z| κόκκινο, φάση πράσινο (${fmt(pa,3)}° … ${fmt(pb,3)}°)</text></svg>`;
+ const rows=pts.map(p=>{const z=th.find(q=>q.f===p.f)?.z;const e=z?100*Math.hypot(p.re-z[0],p.im-z[1])/Math.hypot(z[0],z[1]):NaN;return `<tr><td>${eng(p.f,'Hz',3)}</td><td>${eng(p.mag,'Ω',4)}</td><td>${fmt(p.phase,3)}°</td>${mo?`<td>${z?eng(Math.hypot(...z),'Ω',4):''}</td><td>${Number.isFinite(e)?fmt(e,2)+' %':''}</td>`:''}</tr>`;}).join('');
+ out.innerHTML=ny+bo+`<p class="muted small">${esc(status)} · Z = V₁/I₁ στη θεμελιώδη, από μέσες τιμές ανά περίοδο μεταγωγής, με αφαίρεση γραμμικής ολίσθησης${mo?' · καμπύλη: θεωρητικό Z του μοντέλου της κυψέλης':''}</p>
+  <table class="kv ff-top"><tbody><tr><td>f</td><td>|Z|</td><td>φάση</td>${mo?'<td>|Z| θεωρία</td><td>διαφορά</td>':''}</tr>${rows}</tbody></table>`;}
+
 // ------------------------------------------------------------------ Poincaré map and bifurcation diagram (3.2)
 // one sample per period of a channel: the value at the period boundary (e.g. the current at the clock) or min/max/mean
 function perSamples(key,stat,n=400){const s=S.sim;const k=simKey(key);const i=k===null?undefined:s?.chIndex.get(k);if(i===undefined)return [];const p=s.per,a=p[stat]||p.end,out=[];
@@ -711,6 +746,20 @@ function codeTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('
   <li>${m.ff?'Feedforward: το μπλοκ έκφρασης δίνει d = u + v_o/v_in από τα βολτόμετρα. Το D είναι σωστό από την πρώτη περίοδο και ο PI διορθώνει μόνο τις απώλειες και τα μεταβατικά (u ≈ 0 στη μόνιμη κατάσταση).':'Χωρίς feedforward ο ολοκληρωτής πρέπει να φτάσει μόνος του το D = V_o/V_in. Στην εκκίνηση το D είναι 0 και το ρεύμα πέφτει, ώσπου ο ολοκληρωτής να ανέβει.'}</li></ul>`;
  h+=cmpRows([['κοιλάδα i_L',i,ia?.min,'A'],['⟨i_L⟩ (τελευταίες 5 T)',i+dI/2,ia?.avg,'A'],['D',D,dsim,''],...(m.ff?[['κοιλάδα στα 0,5 ms (αρχική αναφορά)',m.i0,early?.min,'A']]:[])]);
  return h+evalOrderHTML();}
+// 3.3.1: battery cell test: Z at the perturbation frequency from the Fourier series of v_cell and i_cell (last 2 periods of f)
+function eisTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('KF'))return '';const f=+editor.comp('KF').params.v,T=s.T,P=2;
+ if(s.t<P/f+.02)return '<p class="muted small">Τρέξε την προσομοίωση τουλάχιστον '+eng(P/f+.02,'s')+' για να μετρηθεί η εμπέδηση.</p>';
+ const ser=k=>lastPeriods(k,Math.min(20000,Math.ceil(P/f/T)+3)).map(q=>({t:q.t-T/2,y:q.avg})),sv=ser('Y:VM1'),si=ser('Y:AM1');
+ const z=Metrics.impedance({f,periods:P,tEnd:sv[sv.length-1].t,t:sv.map(q=>q.t),v:sv.map(q=>q.y),i:si.map(q=>q.y)}),zt=cellZ(f,false),zb=cellZ(f,true);if(!z.ok||!zt)return '';
+ const R0=+paramsOf('R0').R,R1=+paramsOf('R1').R,C1=+paramsOf('C1').C,W=paramsOf('W1'),Lf=+paramsOf('LF').L,Co=+paramsOf('CO').C,soc=s.now('Y:SOC'),ocv=s.now('Y:EXO'),vci=avgOver('V:CI',20)?.avg,Vs=+paramsOf('V1').V;
+ let h=`<div class="tm"><span class="badge">${m.rl?'εκφόρτιση στην R_L':'φόρτιση από V_S'}</span> f = ${eng(f,'Hz')} · I_dc = ${eng(m.Idc,'A')} · I_ac = ${eng(m.Iac,'A')}</div><ul class="eqs">
+  <li>Μοντέλο κυψέλης: Z(jω) = R₀ + R₁/(1 + jωR₁C₁) + Z_W, με Z_W = σ(1 − j)/√ω. Ημικύκλιο με κορυφή στο f = 1/(2πR₁C₁) = <b>${eng(1/(2*Math.PI*R1*C1),'Hz')}</b>, Warburg στις 45° στις χαμηλές συχνότητες</li>
+  <li>Στο ${eng(f,'Hz')}: Z = <b>${eng(zt[0],'Ω',4)} − j${eng(-zt[1],'Ω',4)}</b>, |Z| = ${eng(Math.hypot(...zt),'Ω',4)}, φάση ${fmt(Math.atan2(zt[1],zt[0])*180/Math.PI,3)}°. Το Warburg στον λύτη είναι ${(+W.N||16)} κλάδοι R–C: ${eng(zb[0],'Ω',4)} − j${eng(-zb[1],'Ω',4)}</li>
+  <li>Μέτρηση: σειρά Fourier της τάσης και του ρεύματος της κυψέλης στις 2 τελευταίες περιόδους της f, Z = V₁/I₁. Η μέση τιμή ανά περίοδο μεταγωγής αφαιρεί την κυμάτωση και δεν αλλάζει τον λόγο</li>
+  <li>OCV(SOC) από πίνακα: SOC = ${fmt(soc,5)}, OCV = ${eng(ocv,'V',4)}. Το SOC αλλάζει κατά I_dc·t/(3600·Q) = ${fmt(m.Idc*s.t/(3600*m.Qah)*100,3)} % σε ${eng(s.t,'s')}</li>
+  <li>Φίλτρο L_f–C_o: συντονισμός στο ${eng(1/(2*Math.PI*Math.sqrt(Lf*Co)),'Hz')}, πολύ πάνω από τη διαταραχή. D ≈ v_cell/V_dc = ${fmt(s.now('Y:VM1')/(vci||Vs),3)}${m.rl?`. Στην εκφόρτιση η τάση του C_i ισορροπεί στο √(P·R_L) ≈ ${eng(Math.sqrt(Math.abs(m.Idc)*Math.abs(ocv)*m.RL),'V')} (μετρημένο ${eng(vci,'V')})`:''}</li></ul>`;
+ h+=cmpRows([['Re Z',zt[0],z.re,'Ω'],['−Im Z',-zt[1],-z.im,'Ω'],['|Z|',Math.hypot(...zt),z.mag,'Ω'],['πλάτος I₁ (αναφορά I_ac)',m.Iac,z.I,'A'],['μέσο ρεύμα (ο PI κρατά το I_dc στο δείγμα της αρχής κάθε περιόδου, όχι στη μέση τιμή)',NaN,z.Idc,'A']]);
+ return h+`<p class="small muted">Η σάρωση συχνότητας με διάγραμμα Nyquist και Bode είναι στο «Εμπέδηση (EIS)» πλάι στο scope. Το πλάτος του ρεύματος δεν είναι ακριβώς I_ac στις υψηλές συχνότητες (περιορισμένο εύρος ζώνης του βρόχου), αλλά το Z μετρά τον λόγο της τάσης προς το πραγματικό ρεύμα.</p>`+evalOrderHTML();}
 // 3.2: period doubling of the current-mode boost with an R–C load (Deane & Hamill): period from the samples at the clock
 function chaosTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('IC'))return '';const x=perSamples('Y:AM1','end',200),q=Metrics.periodicity(x.slice(-100));
  if(x.length<20)return '<p class="muted small">Τρέξε την προσομοίωση μερικές δεκάδες περιόδους για να φανεί η περίοδος της λειτουργίας.</p>';
@@ -762,6 +811,7 @@ function formulaTheory(t){
  if(t.topology==='peak_cm')return pcmTheory();
  if(t.topology==='pcm_chaos')return chaosTheory();
  if(t.topology==='code_loop')return codeTheory();
+ if(t.topology==='cell_eis')return eisTheory();
  if(t.topology==='polyphase')return polyTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const D=+W.D,Vin=+V.V,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
@@ -932,6 +982,7 @@ function boot(){
  $('#avgline').onchange=e=>{scope.cfg.avgLine=e.target.checked;draw(true);};
  ['#rm-sig','#rm-ev','#rm-ref','#rm-band','#rm-val','#rm-t'].forEach(q=>$(q).onchange=renderMetricsPanel);$('#rm-block').ontoggle=renderMetricsPanel;
  ['#ff-sig','#ff-f1','#ff-p','#ff-h'].forEach(q=>$(q).onchange=renderFFT);$('#ff-block').ontoggle=renderFFT;
+ $('#eis-block').ontoggle=renderEISForm;$('#eis-run').onclick=runEIS;$('#eis-stop').onclick=()=>{EIS.run=false;};
  ['#bf-sig','#bf-stat'].forEach(q=>$(q).onchange=renderPoincare);$('#bf-block').ontoggle=()=>{renderBifurcationForm();renderPoincare();};$('#bf-run').onclick=runBifurcation;$('#bf-stop').onclick=()=>{BF.run=false;};
  $('#bt-run').onclick=runBatch;$('#bt-clear').onclick=clearBatch;$('#bt-show').onchange=e=>{scope.setRefs(e.target.checked&&S.batch?{label:S.batch.label,data:S.batch.data}:null);};
  $('#bt-block').ontoggle=()=>{if($('#bt-block').open&&!$('#bt-tend').value&&S.sim)$('#bt-tend').placeholder=S.sim.t>0?String(+(S.sim.t*1e3).toPrecision(5)):S.stopT?String(+(S.stopT*1e3).toPrecision(5)):'ms';};
@@ -988,5 +1039,5 @@ function boot(){
 }
 function renderTheoryLive(){if(document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
-window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;}};
+window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;}};
 })();

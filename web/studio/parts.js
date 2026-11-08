@@ -30,6 +30,12 @@
    params:[num('R','Αντίσταση','Ω',10),txt('sched','R(t)','',{hint:SCHED})],
    value:p=>p.R,unit:'Ω',
    draw:()=>'<path d="M-30,0 H-20 l2.5,-7 5,14 5,-14 5,14 5,-14 5,14 5,-14 5,14 2.5,-7 H30"/>'},
+  CPE:{name:'CPE / Warburg',prefix:'W',group:'Παθητικά',pins:{a:[-30,0],b:[30,0]},box:[-22,-10,44,20],
+   params:[sel('kind','Είδος',[['warburg','Warburg: Z = σ(1 − j)/√ω'],['cpe','CPE: Z = 1/(Q·(jω)^α)']],'warburg'),
+    num('sigma','Συντελεστής Warburg σ','Ω/√s',0.05,{show:p=>p.kind!=='cpe'}),num('Q','Q','F·s^(α−1)',1,{show:p=>p.kind==='cpe'}),num('alpha','Εκθέτης α (0 < α < 1)','',0.8,{show:p=>p.kind==='cpe'}),
+    num('fmin','Ισχύει από','Hz',1),num('fmax','έως','Hz',10e3),num('N','Κλάδοι R–C','',16,{hint:'Το στοιχείο φτιάχνεται από N σειριακούς κλάδους R–C σε παράλληλη σύνδεση (και δύο για τις ουρές). Ακρίβεια περίπου 1 % στη ζώνη f_min … f_max.'})],
+   value:p=>p.kind==='cpe'?p.Q:p.sigma,unit:'',
+   draw:p=>'<path d="M-30,0 H-22 M22,0 H30"/><rect class="block" x="-22" y="-10" width="44" height="20" rx="2"/>'+tx(p.kind==='cpe'?'CPE':'W',0,4,'btxt')},
   L:{name:'Πηνίο',prefix:'L',group:'Παθητικά',pins:{a:[-30,0],b:[30,0]},box:[-24,-9,48,11],
    params:[num('L','Αυτεπαγωγή','H',100e-6),num('i0','Αρχικό ρεύμα a→b','A',0,{signed:true,hint:'i_L(0): ρεύμα από τον ακροδέκτη a προς τον b.'}),num('Rs','Αντίσταση τυλίγματος','Ω',0,{zero:true})],
    value:p=>p.L,unit:'H',
@@ -39,9 +45,11 @@
    value:p=>p.C,unit:'F',
    draw:()=>'<path d="M0,-30 V-5 M-15,-5 H15 M-15,5 H15 M0,5 V30"/><path class="thin" d="M8,-14 h6 M11,-17 v6"/>'},
   VDC:{name:'Πηγή DC / μπαταρία',prefix:'V',group:'Πηγές',pins:{p:[0,-40],n:[0,40]},box:[-17,-17,34,34],
-   params:[num('V','Τάση','V',12,{signed:true}),num('Rs','Εσωτερική αντίσταση','Ω',0,{zero:true}),bool('uni','Μονόδρομη (δίοδος σε σειρά)',false),txt('sched','V(t)','',{hint:SCHED})],
+   spins:p=>p.ctl==='sig'?{u:I(-30,0)}:{},
+   params:[sel('ctl','Τιμή',[['val','Σταθερή ή πρόγραμμα'],['sig','Από σήμα (ακροδέκτης u)']],'val',{hint:'«Από σήμα»: πηγή ελεγχόμενη από σήμα, π.χ. OCV(SOC) μιας κυψέλης από μπλοκ έκφρασης. Η τιμή διαβάζεται σε κάθε βήμα.'}),
+    num('V','Τάση','V',12,{signed:true,show:p=>p.ctl!=='sig'}),num('Rs','Εσωτερική αντίσταση','Ω',0,{zero:true}),bool('uni','Μονόδρομη (δίοδος σε σειρά)',false),txt('sched','V(t)','',{hint:SCHED,show:p=>p.ctl!=='sig'})],
    value:p=>p.V,unit:'V',
-   draw:p=>p.uni?'<path d="M0,-40 V-34 M0,-24 V-16 M0,16 V40"/><path class="fill" d="M-5,-24 L5,-24 L0,-33 Z"/><path d="M-6,-34 H6"/><circle r="16"/><path class="thin" d="M-4,-7 h8 M0,-11 v8 M-4,8 h8"/>':'<path d="M0,-40 V-16 M0,16 V40"/><circle r="16"/><path class="thin" d="M-4,-7 h8 M0,-11 v8 M-4,8 h8"/>'},
+   draw:p=>(p.ctl==='sig'?sl('M-30,0 H-17'):'')+(p.uni?'<path d="M0,-40 V-34 M0,-24 V-16 M0,16 V40"/><path class="fill" d="M-5,-24 L5,-24 L0,-33 Z"/><path d="M-6,-34 H6"/><circle r="16"/><path class="thin" d="M-4,-7 h8 M0,-11 v8 M-4,8 h8"/>':'<path d="M0,-40 V-16 M0,16 V40"/><circle r="16"/><path class="thin" d="M-4,-7 h8 M0,-11 v8 M-4,8 h8"/>')},
   VAC:{name:'Πηγή AC',prefix:'V',group:'Πηγές',pins:{p:[0,-40],n:[0,40]},box:[-17,-17,34,34],
    params:[num('Vpk','Πλάτος','V',325),num('f','Συχνότητα','Hz',50),num('phase','Φάση','°',0,{signed:true,zero:true}),num('off','DC offset','V',0,{signed:true,zero:true}),num('Rs','Εσωτερική αντίσταση','Ω',0,{zero:true}),num('Ls','Εσωτερική αυτεπαγωγή','H',0,{zero:true})],
    value:p=>p.Vpk,unit:'V',
@@ -52,9 +60,11 @@
    value:p=>p.Vpk,unit:'V',
    draw:()=>'<rect class="block" x="-20" y="-30" width="40" height="60" rx="6"/><path d="M20,-20 H40 M20,0 H40 M20,20 H40 M0,30 V40"/><path class="thin" d="M-11,-20 c2,-7 5,-7 7,0 c2,7 5,7 7,0 M-11,0 c2,-7 5,-7 7,0 c2,7 5,7 7,0 M-11,20 c2,-7 5,-7 7,0 c2,7 5,7 7,0"/>'},
   IDC:{name:'Πηγή ρεύματος',prefix:'I',group:'Πηγές',pins:{p:[0,-40],n:[0,40]},box:[-17,-17,34,34],
-   params:[num('I','Ρεύμα (βγαίνει από το p)','A',1,{signed:true}),txt('sched','I(t)','',{hint:SCHED})],
+   spins:p=>p.ctl==='sig'?{u:I(-30,0)}:{},
+   params:[sel('ctl','Τιμή',[['val','Σταθερή ή πρόγραμμα'],['sig','Από σήμα (ακροδέκτης u)']],'val',{hint:'«Από σήμα»: π.χ. ρεύμα διέγερσης I_dc + I_ac·sin(2πft) από μπλοκ έκφρασης, ή κεραυνικό ρεύμα Heidler.'}),
+    num('I','Ρεύμα (βγαίνει από το p)','A',1,{signed:true,show:p=>p.ctl!=='sig'}),txt('sched','I(t)','',{hint:SCHED,show:p=>p.ctl!=='sig'})],
    value:p=>p.I,unit:'A',
-   draw:()=>'<path d="M0,-40 V-16 M0,16 V40"/><circle r="16"/><path class="thin" d="M0,10 V-9 M-5,-3 L0,-10 L5,-3"/>'},
+   draw:p=>(p.ctl==='sig'?sl('M-30,0 H-17'):'')+'<path d="M0,-40 V-16 M0,16 V40"/><circle r="16"/><path class="thin" d="M0,10 V-9 M-5,-3 L0,-10 L5,-3"/>'},
   SW:{name:'Διακόπτης (MOSFET / IGBT)',prefix:'S',group:'Ημιαγωγοί',pins:{d:[0,-30],s:[0,30]},box:[-16,-17,43,34],
    spins:p=>p.gate==='sig'?{g:I(-20,0)}:{},
    params:[sel('gate','Οδήγηση',[['pwm','Από PWM'],['sig','Από σήμα (ακροδέκτης g)'],['on','Πάντα ON'],['off','Πάντα OFF']],'pwm'),ref('pwm','Μπλοκ PWM',['PWM'],{show:p=>p.gate==='pwm'}),
@@ -187,7 +197,7 @@
    draw:p=>sb(40,30)+(p.shape==='tri'?'<path class="thin" d="M-14,-7 L-7,7 L0,-7 L7,7 L14,-7"/>':'<path class="thin" d="M-14,7 L-2,-7 V7 L10,-7 V7"/>')+sl('M20,0 H30')},
   // ---------------------------------------------------------------- continuous blocks and frame transformations (3.1)
   EXPR:{name:'Έκφραση',prefix:'EX',group:'Κώδικας',pins:{},spins:p=>codeIO(Ex.names(p.ins),['y']),box:p=>{const h=codeH(Ex.names(p.ins),['y']);return [-30,-h,60,2*h];},blk:true,
-   params:[txt('expr','y =','u1*u2',{hint:'Πράξεις + − * / ^ %, συγκρίσεις (δίνουν 1 ή 0), && || !, c ? a : b, και sin cos tan asin acos atan atan2 sinh cosh tanh exp log log10 sqrt abs min max pow floor ceil round sign hypot clamp mod. Ονόματα: οι είσοδοι, οι σταθερές, t, pi, e.'}),
+   params:[txt('expr','y =','u1*u2',{hint:'Πράξεις + − * / ^ %, συγκρίσεις (δίνουν 1 ή 0), && || !, c ? a : b, και sin cos tan asin acos atan atan2 sinh cosh tanh exp log log10 sqrt abs min max pow floor ceil round sign hypot clamp mod, και lut(x, x1, y1, x2, y2, …) για πίνακα τιμών. Ονόματα: οι είσοδοι, οι σταθερές, t, pi, e.'}),
     txt('ins','Είσοδοι','u1, u2',{hint:'Ονόματα χωρισμένα με κόμμα, έως 6.'}),txt('pars','Σταθερές','',{hint:'π.χ. a = 2, b = 0.5'})],value:()=>null,
    draw:p=>codeDraw(Ex.names(p.ins),['y'],'f(u)')},
   PY:{name:'Μπλοκ Python',prefix:'PY',group:'Κώδικας',pins:{},spins:p=>codeIO(pyIns(p),pyOuts(p)),box:p=>{const h=codeH(pyIns(p),pyOuts(p));return [-30,-h,60,2*h];},blk:true,
@@ -239,6 +249,15 @@
  function pinDir(c,pin){const [x,y]=pinsOf(c)[pin]||[1,0];let d=Math.abs(x)>=Math.abs(y)?[Math.sign(x)||1,0]:[0,Math.sign(y)||1];
   if(c.type==='GND')d=[0,-1];if(c.type==='JUNC')d=[0,0];
   const o=xf({x:0,y:0,rot:c.rot,flip:c.flip},d);return o;}
+ // CPE admittance Q·s^α = Q·sin(απ)/π ∫ x^α · s/(s + x) d(ln x): log-spaced x_k → branches g_k·s/(s + x_k) (series R–C),
+ // plus a conductance for x < x_min and a capacitance for x > x_max; band extended ×10 on each side
+ function cpeParams(p){const a=p.kind==='cpe'?Math.min(.99,Math.max(.01,+p.alpha)):.5,Q=p.kind==='cpe'?+p.Q:1/(Math.SQRT2*Math.max(+p.sigma,1e-12));return {a,Q};}
+ function cpeBank(p){const {a,Q}=cpeParams(p),N=Math.max(4,Math.min(40,Math.round(+p.N||16))),x0=2*Math.PI*Math.max(+p.fmin,1e-6)/10,x1=2*Math.PI*Math.max(+p.fmax,+p.fmin*10)*10,D=Math.log(x1/x0)/(N-1),K=Q*Math.sin(a*Math.PI)/Math.PI,br=[];
+  for(let k=0;k<N;k++){const x=x0*Math.exp(k*D),g=K*Math.pow(x,a)*(k===0||k===N-1?D/2:D);br.push({R:1/g,C:g/x});}
+  return {br,G0:K*Math.pow(x0,a)/a,Cinf:K*Math.pow(x1,a-1)/(1-a),a,Q};}
+ // exact impedance and the impedance of the bank, at ω (rad/s): [re, im]
+ function cpeZ(p,w){const {a,Q}=cpeParams(p),m=1/(Q*Math.pow(w,a)),ph=-a*Math.PI/2;return [m*Math.cos(ph),m*Math.sin(ph)];}
+ function cpeZbank(p,w){const b=cpeBank(p);let yr=b.G0,yi=w*b.Cinf;for(const {R,C} of b.br){const d=1+(w*R*C)**2;yr+=w*w*R*C*C/d;yi+=w*C/d;}const m=yr*yr+yi*yi;return [yr/m,-yi/m];}
  function boxOf(c){const b=PARTS[c.type].box;return typeof b==='function'?b({...defaults(c.type),...(c.params||{})}):b;}
  function bbox(c){const [bx,by,bw,bh]=boxOf(c);const pts=[[bx,by],[bx+bw,by],[bx,by+bh],[bx+bw,by+bh]].map(p=>xf(c,p));
   const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
@@ -256,6 +275,6 @@
   const out=[];for(const part of s.split(/[;,]\s*(?=[-+.\d])/)){const [a,b]=part.split(':');const t=parseEng(a),v=parseEng(b);if(!Number.isFinite(t)||!Number.isFinite(v))return null;out.push([t,v]);}
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
- const api={PARTS,GROUPS,BLOCKS,defaults,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched};
+ const api={PARTS,GROUPS,BLOCKS,defaults,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

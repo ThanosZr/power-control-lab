@@ -50,6 +50,9 @@ for(const [mode,design] of [['speed','active'],['speed','imc'],['current','activ
 for(const [mode,D,ramp] of [['valley','0.4','none'],['valley','0.6','none'],['valley','0.4','half'],['peak','0.4','none'],['peak','0.6','none'],['peak','0.6','half']]){const pr=build('peak_cm',{mode,D,ramp});
  const r=MNA.sweepPoint(pr,{...pr.meta.sweep,value:pr.meta.Vo});const q=M.periodicity(r.y);out[`sub_${mode}_${D}_${ramp}`]={period:q.period,distinct:q.distinct,meta:pr.meta,warn:r.warnings};}
 {const pr=build('pcm_chaos',{});out.chaos={};for(const ic of [1.5,2,2.5,2.65,3]){const r=MNA.sweepPoint(pr,{...pr.meta.sweep,value:ic});const q=M.periodicity(r.y);out.chaos[ic]={period:q.period,distinct:q.distinct,warn:r.warnings};}}
+// 3.3.1: battery cell test with the converter, Z at the perturbation frequency (charge from V_S, discharge into R_L)
+for(const src of ['vs','rl']){const pr=build('cell_eis',{src,f:'200'});const r=MNA.eisPoint(pr,{...pr.meta.eis,f:200});const z=M.impedance(r);const s=sim(pr,.1);
+ out['eis_'+src]={re:z.re,im:z.im,I1:z.I,Idc:z.Idc,vci:last(s,'V:CI',20).avg,ocv:s.now('Y:EXO'),soc:s.now('Y:SOC'),warn:s.net.warnings,meta:pr.meta};}
 // 3.3: PI in Python (Pyodide in Node, when the pyodide package is installed) against the PI block; feedforward from an expression
 (async()=>{let PyRT=null;try{PyRT=require(W+'/pyrt.js');await PyRT.load();}catch(e){out.py_skipped=String(e.message||e).slice(0,120);}
  for(const [ctrl,ff] of [['pib','none'],['pib','expr'],...(PyRT?.ready?[['python','none'],['python','expr']]:[])]){const pr=build('code_loop',{ctrl,ff});const s=sim(pr,.004);const p=s.per,i=s.chIndex.get('Y:AM1'),d=s.chIndex.get('D:PWM1');

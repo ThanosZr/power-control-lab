@@ -5,10 +5,12 @@
 //   Expr.compile(tree)     → f(vals, t)
 // Grammar: c ? a : b, ||, &&, comparisons (1/0), + −, * / %, unary − ! +, ^ or ** (right-assoc), calls, ( ).
 (function(root){
+ // lut(x, x1, y1, x2, y2, …): piecewise linear table, constant outside (e.g. OCV(SOC))
+ function lut(x,...p){const n=p.length>>1;if(x<=p[0])return p[1];for(let k=1;k<n;k++)if(x<=p[2*k]){const x0=p[2*k-2],y0=p[2*k-1],x1=p[2*k],y1=p[2*k+1];return x1>x0?y0+(y1-y0)*(x-x0)/(x1-x0):y1;}return p[2*n-1];}
  const FUN={sin:Math.sin,cos:Math.cos,tan:Math.tan,asin:Math.asin,acos:Math.acos,atan:Math.atan,atan2:Math.atan2,sinh:Math.sinh,cosh:Math.cosh,tanh:Math.tanh,
   exp:Math.exp,log:Math.log,log10:Math.log10,sqrt:Math.sqrt,abs:Math.abs,min:Math.min,max:Math.max,pow:Math.pow,floor:Math.floor,ceil:Math.ceil,round:x=>Math.floor(x+.5),
-  sign:Math.sign,hypot:Math.hypot,clamp:(x,a,b)=>Math.min(Math.max(x,a),b),mod:(a,b)=>a-b*Math.floor(a/b)};
- const ARITY={atan2:2,pow:2,clamp:3,mod:2,min:-2,max:-2,hypot:-2};   // −n: at least n arguments
+  sign:Math.sign,hypot:Math.hypot,clamp:(x,a,b)=>Math.min(Math.max(x,a),b),mod:(a,b)=>a-b*Math.floor(a/b),lut};
+ const ARITY={atan2:2,pow:2,clamp:3,mod:2,min:-2,max:-2,hypot:-2,lut:-5};   // −n: at least n arguments
  const CONST={pi:Math.PI,e:Math.E};
  class ExprError extends Error{}
  function tokens(src){const out=[],re=/\s*(?:(\d+\.?\d*(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)|([A-Za-z_]\w*)|(\*\*|<=|>=|==|!=|&&|\|\||[-+*/%^()<>!?:,]))/y;let m,i=0;

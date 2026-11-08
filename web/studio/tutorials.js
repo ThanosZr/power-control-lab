@@ -342,6 +342,37 @@
    else wires.push([u,'PWM1:d']);
    return project(comps,wires,{sim:{hDiv:200,speed:300,stopT:4e-3},scope:{panes:[[['Y:AM1','i_L'],['Y:K1','i_ref']],[['D:PWM1','D'],['Y:PI1','u (PI)']]],window:{unit:'T',n:100}},
     meta:{Vin,Vo,L,fs,kp,ki,fc:g.fc,i0:5,i1:10,t1:.002,py,ff}});}});
+ // ------------------------------------------------------------------ 3.3.1: battery cell test with a converter (EIS)
+ T.push({id:'cell_eis',group:'Μπαταρίες και EIS (3.3.1)',title:'Δοκιμή κυψέλης: EIS με μετατροπέα',theory:'formula',topology:'cell_eis',
+  options:[{k:'src',label:'Λειτουργία',options:[['vs','Φόρτιση από V_S (I_dc = +2 A)'],['rl','Εκφόρτιση στην R_L (S(N/C) ανοίγει, S(N/O) κλείνει)']],def:'vs'},
+   {k:'f',label:'Συχνότητα διαταραχής',options:[['10','10 Hz'],['50','50 Hz'],['200','200 Hz'],['1000','1 kHz']],def:'200'}],
+  desc:'Δοκιμή κυψέλης με ημιγέφυρα (Q1, Q2) και φίλτρο L, C_o, L_f. Η αναφορά ρεύματος είναι I_ref = I_dc + I_ac·sin(2πft), από μπλοκ έκφρασης, και ο PI ρυθμίζει το ρεύμα της κυψέλης. Η κυψέλη είναι OCV(SOC) με R_0, R_1‖C_1 και στοιχείο Warburg. Το SOC ολοκληρώνεται από το ρεύμα και το OCV βγαίνει από πίνακα τιμών (lut) σε πηγή ελεγχόμενη από σήμα. Στην εκφόρτιση η πηγή V_S αποσυνδέεται (S(N/C)) και η ενέργεια πάει στην R_L (S(N/O)). Τιμές τυπικές για κυψέλη ιόντων λιθίου 2,5 Ah.',
+  tasks:['Τρέξε 0,1 s. Η κάρτα θεωρίας δίνει την εμπέδηση Z = V₁/I₁ στη συχνότητα της διαταραχής, από τη σειρά Fourier της τάσης και του ρεύματος της κυψέλης, και τη συγκρίνει με το μοντέλο.','Άνοιξε «Εμπέδηση (EIS)» πλάι στο scope και τρέξε τη σάρωση 10 Hz – 1 kHz: διάγραμμα Nyquist και Bode μαζί με το θεωρητικό Z(s). Το ημικύκλιο είναι το R_1‖C_1, η ευθεία στις 45° το Warburg.','Διάλεξε «Εκφόρτιση»: η V_S αποσυνδέεται στα 5 ms, η R_L παίρνει την ισχύ και η τάση του C_i ισορροπεί εκεί που P_R = P_κυψέλης. Η εμπέδηση δεν αλλάζει.','Στο πάνελ «Αρμονικές» φαίνεται και η φάση κάθε αρμονικής.'],
+  build(o){const Vs=12,fs=20e3,L=47e-6,Lf=4.7e-6,Co=100e-6,Ci=1e-3,RL=20,R0=.03,R1=.02,C1=.05,sig=.05,Qah=2.5,soc0=.5,rl=o.src==='rl',Idc=rl?-2:2,Iac=.5,f=+o.f;
+   const lut='lut(soc, 0, 3.0, 0.1, 3.45, 0.3, 3.6, 0.5, 3.7, 0.7, 3.85, 0.9, 4.05, 1, 4.2)',ocv0=3.7,g=piGains(L+Lf,Vs,fs),kp=+g.kp.toPrecision(4),ki=+g.ki.toPrecision(4);
+   const comps=[C('V1','VDC',100,240,{V:Vs},{label:'V_S'}),C('SNC','SW',100,155,{gate:'sig',body:false},{label:'S(N/C)'}),C('SNO','SW',230,155,{gate:'sig',body:false},{label:'S(N/O)'}),
+    C('RL','R',230,240,{R:RL},{rot:1,label:'R_L'}),C('CI','C',310,225,{C:Ci,v0:Vs},{label:'C_i'}),C('Q1','SW',390,160,{pwm:'PWM1',out:'a',body:true,Ron:5e-3}),C('Q2','SW',390,260,{pwm:'PWM1',out:'na',body:true,Ron:5e-3}),
+    C('L1','L',460,210,{L,i0:Idc},{label:'L'}),C('CO','C',520,265,{C:Co,v0:+(ocv0+Idc*(R0+R1)).toFixed(4)},{label:'C_o'}),C('LF','L',580,210,{L:Lf,i0:Idc},{label:'L_f'}),
+    C('AM1','AM',650,210,{},{label:'I_cell',lbl:'below'}),C('VM1','VM',700,270,{},{label:'v_cell'}),C('R0','R',750,210,{R:R0},{label:'R_0'}),C('R1','R',840,180,{R:R1},{label:'R_1'}),C('C1','C',840,240,{C:C1,v0:+(Idc*R1).toFixed(5)},{rot:1,label:'C_1',lbl:'below'}),
+    C('W1','CPE',930,210,{kind:'warburg',sigma:sig,fmin:1,fmax:10e3,N:16},{label:'Warburg'}),C('OCV','VDC',1030,270,{ctl:'sig',V:ocv0},{flip:true,label:'OCV(SOC)',lbl:'left'}),
+    J('JT1',100,120),J('JT2',230,120),J('JT3',310,120),J('JM',390,210),J('J2',520,210),J('J4',800,210),J('J5',890,210),
+    J('JB1',100,330),J('JB2',230,330),J('JB3',310,330),J('JB4',390,330),J('JB5',520,330),J('JB6',700,330),gnd(100,370),
+    C('KNC','CONST',30,155,{v:rl?'0:1, 0.005:0':'1'},{label:'S(N/C)'}),C('KNO','CONST',160,70,{v:rl?'0:0, 0.005:1':'0'},{label:'S(N/O)'}),
+    C('KF','CONST',380,-120,{v:String(f)},{label:'f'}),C('EXI','EXPR',480,-120,{expr:'Idc + Iac*sin(2*pi*f*t)',ins:'f',pars:`Idc = ${Idc}, Iac = ${Iac}`},{label:'I_ref'}),
+    C('SUM1','SUM',580,-110,{signs:'+-'},{label:'e'}),C('PI1','PIB',680,-110,{Kp:kp,Ki:ki,clock:'PWM1',trig:'start',y0:+(ocv0/Vs).toFixed(4),ymin:0,ymax:.98},{label:'PI'}),C('PWM1','PWM',800,-110,{fs,mode:'ext',carrier:'saw'}),
+    C('TGi','TAGO',700,170,{name:'i_cell'}),C('TFi','TAGI',520,-60,{name:'i_cell'}),C('TFi2','TAGI',760,60,{name:'i_cell'}),
+    C('GQ','GAIN',850,60,{K:+(1/(3600*Qah)).toPrecision(6)},{label:'1/(3600·Q)'}),C('SOC','INT',940,60,{y0:soc0,lo:0,hi:1},{label:'SOC'}),C('EXO','EXPR',1040,60,{expr:lut,ins:'soc'},{label:'OCV(SOC)'})];
+   const wires=[['SNC:d','JT1'],['SNC:s','V1:p'],['V1:n','JB1'],['SNO:d','JT2'],['SNO:s','RL:a'],['RL:b','JB2'],['CI:p','JT3'],['CI:n','JB3'],['Q1:d','JT4x'],
+    ['JT1','JT2'],['JT2','JT3'],['Q1:s','JM'],['JM','Q2:d'],['Q2:s','JB4'],['JM','L1:a'],['L1:b','J2'],['J2','CO:p'],['CO:n','JB5'],['J2','LF:a'],['LF:b','AM1:a'],
+    ['AM1:b','R0:a'],['VM1:p','AM1:b',[[700,210]]],['VM1:n','JB6'],['R0:b','J4'],['J4','R1:a',[[800,180]]],['J4','C1:n',[[800,240]]],['R1:b','J5',[[890,180]]],['C1:p','J5',[[890,240]]],['J5','W1:a'],
+    ['W1:b','OCV:p',[[1030,210]]],['OCV:n','JB7x'],['JB1','JB2'],['JB2','JB3'],['JB3','JB4'],['JB4','JB5'],['JB5','JB6'],['JB1','G1:g'],
+    ['KNC:y','SNC:g'],['KNO:y','SNO:g',[[200,70],[200,155]]],['AM1:y','TGi:u',[[650,170]]],
+    ['KF:y','EXI:f'],['EXI:y','SUM1:a',[[530,-120]]],['TFi:y','SUM1:b',[[550,-60],[550,-100]]],['SUM1:y','PI1:u'],['PI1:y','PWM1:d'],
+    ['TFi2:y','GQ:u'],['GQ:y','SOC:u'],['SOC:y','EXO:soc'],['EXO:y','OCV:u',[[1030,60],[1080,270]]]];
+   // top rail to Q1 and bottom rail to the cell
+   const ws=wires.map(w=>w[1]==='JT4x'?['Q1:d','JT3',[[390,120]]]:w[1]==='JB7x'?['OCV:n','JB6',[[1030,330]]]:w);
+   return project(comps,ws,{sim:{hDiv:50,speed:30,stopT:.1},scope:{panes:[[['Y:AM1','i_cell'],['Y:EXI','I_ref']],[['Y:VM1','v_cell']],[['V:CI','v_Ci']]],window:{unit:'s',n:.02}},
+    meta:{Vs,fs,L,Lf,Co,Ci,RL,R0,R1,C1,sig,Qah,soc0,Idc,Iac,f,rl,kp,ki,eis:{comp:'KF',param:'v',vKey:'Y:VM1',iKey:'Y:AM1',from:10,to:1000,ppd:3,settle:3,periods:2,minSettle:.02}}});}});
  // ------------------------------------------------------------------ 3.0: peak current-mode, subharmonic oscillation
  T.push({id:'peak_cm',group:'Μπλοκ σημάτων (3.0)',title:'Peak current-mode και υποαρμονική',theory:'formula',topology:'peak_cm',
   options:[{k:'mode',label:'Έλεγχος',options:[['peak','Peak: ρολόι → ON, κορυφή → OFF'],['valley','Valley: ρολόι → OFF, κοιλάδα → ON']],def:'peak'},

@@ -17,6 +17,10 @@ const pll=project([{id:'V3',type:'VAC3',params:{Vpk:100,f:50,phase:30}},{id:'G',
 const cont=project([{id:'K1',type:'CONST',params:{v:2}},{id:'I1',type:'INT',params:{y0:1}},{id:'K3',type:'CONST',params:{v:'0:0, 0.001:1'}},{id:'F1',type:'LPF',params:{fc:100}},
   {id:'CK',type:'CLK',params:{f:1000}},{id:'K4',type:'CONST',params:{v:1}},{id:'P1',type:'PIB',params:{Kp:1,Ki:100,clock:'CK',aw:'track'}},{id:'S1',type:'SAT',params:{lo:-2,hi:2}},{id:'D1',type:'SUM',params:{signs:'+-'}}],
   [['K1:y','I1:u'],['K3:y','F1:u'],['K4:y','P1:u'],['P1:y','S1:u'],['S1:y','D1:a'],['P1:y','D1:b'],['D1:y','P1:tr']]);
+// 3.3.1: cell model (R₀, R₁‖C₁, Warburg as R–C bank, OCV from a signal) driven by a current source from an expression
+const eisCell=project([{id:'I1',type:'IDC',params:{ctl:'sig'}},{id:'EX1',type:'EXPR',params:{expr:'1 + 0.5*sin(2*pi*200*t)',ins:'x'}},{id:'R0',type:'R',params:{R:.03}},{id:'R1',type:'R',params:{R:.02}},{id:'C1',type:'C',params:{C:.05}},
+  {id:'W1',type:'CPE',params:{kind:'warburg',sigma:.05,fmin:1,fmax:1e4,N:16}},{id:'OCV',type:'VDC',params:{ctl:'sig'}},{id:'K37',type:'CONST',params:{v:3.7}},{id:'G',type:'GND'},{id:'VM1',type:'VM'},{id:'AM1',type:'AM'}],
+  [['EX1:y','I1:u'],['I1:n','G:g'],['I1:p','AM1:a'],['AM1:b','R0:a'],['R0:b','R1:a'],['R0:b','C1:p'],['R1:b','C1:n'],['R1:b','W1:a'],['W1:b','OCV:p'],['OCV:n','G:g'],['K37:y','OCV:u'],['VM1:p','AM1:b'],['VM1:n','G:g']]);
 const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},['I:R1']],bridge3_scr:['bridge3',{dev:'30',load:'r'},['V:R1']],
  battery_pi:['battery',{ctrl:'pi'},['I:L1','D:PWM1']],deadtime:['battery',{sw:'real',ctrl:'pi'},['I:L1']],
  sampling_saw:['sampling',{case:'saw'},['I:L1','H:SH1','CAR:PWM1']],sampling_tri2:['sampling',{case:'tri2',start:'midon'},['I:L1','H:SH1']],
@@ -28,11 +32,12 @@ const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},[
  blk_cmp_z1:['blocks_loop',{mod:'cmp',delay:'z1'},['Y:AM1','Y:UD1','GS:S1']],blk_pwm:['blocks_loop',{},['Y:AM1','D:PWM1','Y:PI1']],
  dcm:[dcm,null,['Y:M1','Y:M1:te','I:M1']],pll:[pll,null,['Y:PL:w','Y:PK','Y:PK:q']],cont:[cont,null,['Y:I1','Y:F1','Y:P1','Y:S1']],
  dc_cur:['dc_drive',{mode:'current'},['Y:AM1','D:PWM1','Y:M1']],
- code_py:['code_loop',{ctrl:'python',ff:'expr'},['Y:AM1','D:PWM1','Y:PI1','Y:EX1']]};
+ code_py:['code_loop',{ctrl:'python',ff:'expr'},['Y:AM1','D:PWM1','Y:PI1','Y:EX1']],
+ eis_cell:[eisCell,null,['Y:VM1','Y:AM1']]};
 // browser results for the 3.0 cases: per-period peaks of the last periods, to compare solver against solver
 const jsRun={dc_cur:['Y:AM1',.012],pcm_half:['Y:AM1',1e-3],pcm_sub:['Y:AM1',4e-4],blk_cmp_z1:['Y:AM1',4e-3],blk_pwm:['Y:AM1',4e-3]};   // pcm_sub: before chaos separates the two solvers
 // browser values at given instants (3.1)
-const jsAt={dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05]};
+const jsAt={dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05],eis_cell:[.004,.011,.02]};
 const out={};for(const [k,[id,o,keys]] of Object.entries(cases)){
  if(k==='code_py'){const pr=build('code_loop',{ctrl:'python',ff:'expr'});const r=MNA.exportForBatch(pr,keys);out[k]={net:r.net,channels:r.channels};
   const s=new MNA.Sim(build('code_loop',{ctrl:'pib',ff:'expr'}),{hDiv:1000});s.run(.003);const p=s.per,i=s.chIndex.get('Y:AM1'),pk=[];for(let q=8;q>=1;q--){const j=(p.head-q+p.cap)%p.cap;pk.push({max:p.max[j*p.nch+i],min:p.min[j*p.nch+i],t:p.t[j]});}

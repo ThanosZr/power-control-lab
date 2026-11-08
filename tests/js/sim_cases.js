@@ -164,10 +164,22 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
  const s=new Sim(pr,{hDiv:2000});s.run(.06);const r=s.ring,i=s.chIndex.get('I:R1'),t=[],y=[];const st=(r.head-r.n+r.cap)%r.cap;for(let q=0;q<r.n;q++){const j=(st+q)%r.cap;t.push(r.t[j]);y.push(r.d[j*r.nch+i]);}
  const h=M.harmonics({t,y,f1:50,periods:2,H:98});out.harm={A1:h.A1,A3:h.A[3],A2:h.A[2],dc:h.dc,rms:h.rms,thd:h.thd,thdAll:h.thdAll,H:h.H};}
 // 25) expression block (3.3): parser and evaluation, also inside a circuit; errors become warnings
-{const E=require(W+'/expr.js');const v=[3,4];const cases=['a*b + 1','hypot(a, b)','a^2 + b**2','-a^2','2^3^2','a > b ? a : b','clamp(a*b, 0, 10)','mod(-7, 3)','(a < b) + (a == 3) + !(b != 4)','atan2(b, a)','min(a, b, 1)','round(2.5) + floor(-0.5) + sign(-a)','10 % 4','exp(log(a)) + sqrt(b)','pi*e*0 + t'];
+{const E=require(W+'/expr.js');const v=[3,4];const cases=['a*b + 1','hypot(a, b)','a^2 + b**2','-a^2','2^3^2','a > b ? a : b','clamp(a*b, 0, 10)','mod(-7, 3)','(a < b) + (a == 3) + !(b != 4)','atan2(b, a)','min(a, b, 1)','round(2.5) + floor(-0.5) + sign(-a)','10 % 4','exp(log(a)) + sqrt(b)','pi*e*0 + t','lut(a, 0, 0, 10, 100)','lut(b, 0, 1, 2, 3, 5, 3.5)'];
  const r={};for(const c of cases)r[c]=E.compile(E.parse(c,['a','b']))(v,0.5);const errs=[];for(const c of ['a +','foo(a)','a b','sin(a, b)','x + 1','(a']){try{E.parse(c,['a','b']);errs.push(null);}catch(e){errs.push(e.message);}}
  const pr=project([{id:'V1',type:'VDC',params:{V:10}},{id:'R1',type:'R',params:{R:5}},{id:'G',type:'GND'},{id:'VM1',type:'VM'},{id:'AM1',type:'AM'},{id:'EX1',type:'EXPR',params:{expr:'v*i*k',ins:'v, i',pars:'k = 2'}},{id:'EX2',type:'EXPR',params:{expr:'v +',ins:'v'}}],
   [['V1:p','AM1:a'],['AM1:b','R1:a'],['R1:b','G:g'],['V1:n','G:g'],['VM1:p','V1:p'],['VM1:n','G:g'],['VM1:y','EX1:v'],['AM1:y','EX1:i'],['VM1:y','EX2:v']]);
  const s=new Sim(pr,{h:1e-6});s.run(1e-5);out.expr={vals:r,errs,p:s.now('Y:EX1'),bad:s.now('Y:EX2'),warn:s.net.warnings};}
+// 26) EIS (3.3.1): Warburg / CPE as an R–C bank against the exact impedance; a cell model driven by an ideal current
+//     source from an expression (I_dc + I_ac·sin), Z = V₁/I₁ from eisPoint + Metrics.impedance; OCV from a signal
+{const M=require(W+'/metrics.js'),P=global.Parts;const bank=[];for(const p of [{kind:'warburg',sigma:.05,fmin:1,fmax:1e4,N:16},{kind:'cpe',Q:2,alpha:.8,fmin:10,fmax:1e5,N:16},{kind:'cpe',Q:.5,alpha:.3,fmin:1,fmax:1e3,N:20}]){let w=0;
+  for(let f=p.fmin;f<=p.fmax;f*=1.25){const a=P.cpeZbank(p,2*Math.PI*f),b=P.cpeZ(p,2*Math.PI*f);w=Math.max(w,Math.hypot(a[0]-b[0],a[1]-b[1])/Math.hypot(...b));}bank.push(w);}
+ const W1={kind:'warburg',sigma:.05,fmin:1,fmax:10e3,N:16};
+ const pr=project([{id:'I1',type:'IDC',params:{ctl:'sig'}},{id:'KF',type:'CONST',params:{v:100}},{id:'EX1',type:'EXPR',params:{expr:'1 + 0.5*sin(2*pi*f*t)',ins:'f'}},
+  {id:'R0',type:'R',params:{R:.03}},{id:'R1',type:'R',params:{R:.02}},{id:'C1',type:'C',params:{C:.05}},{id:'W1',type:'CPE',params:W1},{id:'OCV',type:'VDC',params:{ctl:'sig'}},{id:'K37',type:'CONST',params:{v:3.7}},
+  {id:'G',type:'GND'},{id:'VM1',type:'VM'},{id:'AM1',type:'AM'},{id:'CLK1',type:'CLK',params:{f:20e3}}],
+  [['KF:y','EX1:f'],['EX1:y','I1:u'],['I1:n','G:g'],['I1:p','AM1:a'],['AM1:b','R0:a'],['R0:b','R1:a'],['R0:b','C1:p'],['R1:b','C1:n'],['R1:b','W1:a'],['W1:b','OCV:p'],['OCV:n','G:g'],['K37:y','OCV:u'],['VM1:p','AM1:b'],['VM1:n','G:g']]);
+ const z=[];for(const f of [10,100,1000]){const r=MNA.eisPoint(pr,{comp:'KF',param:'v',f,vKey:'Y:VM1',iKey:'Y:AM1',settle:3,periods:2,hDiv:20,minSettle:.02});const q=M.impedance(r);
+  const w=2*Math.PI*f,d=1+(w*.02*.05)**2,zw=P.cpeZbank(W1,w);z.push({f,re:q.re,im:q.im,tre:.03+.02/d+zw[0],tim:-w*.02*.02*.05/d+zw[1],Vdc:q.Vdc,Idc:q.Idc});}
+ out.eis={bank,z};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

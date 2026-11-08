@@ -86,8 +86,11 @@
     if(T==='VAC'&&num(p.Ls,0)>0){const m=internal();add({k:'L',a:m,b:top,L:num(p.Ls,0),i:0,key:c.id+'#Ls'});top=m;}
     const s=series(top,top,0);let srcTop=top;if(num(p.Rs,0)>0){const m=internal();add({k:'G',a:m,b:top,R:num(p.Rs,0)});srcTop=m;}
     const v=T==='VDC'?{kind:'dc',V:num(p.V,12),sched:P.parseSched(p.sched)}:{kind:'ac',Vpk:num(p.Vpk,325),f:num(p.f,50),ph:num(p.phase,0)*Math.PI/180,off:num(p.off,0)};
-    info.main=add({k:'V',a:srcTop,b,row:row(),src:v});}
-   else if(T==='IDC'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'I',a,b,I:num(p.I,1),sched:P.parseSched(p.sched)});}
+    info.main=add({k:'V',a:srcTop,b,row:row(),src:v,sigIn:T==='VDC'&&p.ctl==='sig'?sn(c.id,'u'):undefined});}
+   else if(T==='IDC'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'I',a,b,I:num(p.I,1),sched:P.parseSched(p.sched),sigIn:p.ctl==='sig'?sn(c.id,'u'):undefined});}
+   else if(T==='CPE'){const a=node(c.id,'a'),bb=node(c.id,'b');info.pins=[a,bb];const n0=internal();info.main=add({k:'V',a,b:n0,row:row(),src:{kind:'dc',V:0}}); // 0 V: the current a → b
+    const bk=P.cpeBank({...P.defaults('CPE'),...p});bk.br.forEach((q,k)=>{const n=internal();add({k:'G',a:n0,b:n,R:q.R});add({k:'C',a:n,b:bb,C:q.C,v:0,i:0,key:c.id+'#'+k});});
+    add({k:'G',a:n0,b:bb,R:1/bk.G0});add({k:'C',a:n0,b:bb,C:bk.Cinf,v:0,i:0,key:c.id+'#inf'});}
    else if(T==='SW'){const a=node(c.id,'d'),b=node(c.id,'s');info.pins=[a,b];const Ron=Math.max(num(p.Ron,1e-3),1e-7),Roff=Math.max(num(p.Roff,1e6),1),g={gate:p.gate||'pwm',pwm:p.pwm,out:p.out||'a'};
     // IGBT: a gated diode (forward only, V_ce0 + R_on); MOSFET: a resistive switch
     if(p.model==='igbt')info.main=add({k:'D',a,b,Ron,Roff,Vf:Math.max(0,num(p.Vce0,0)),on:false,key:c.id+'#q',gk:'igbt',gon:false,...g});
@@ -474,7 +477,7 @@
    for(const e of this.net.els){
     if(e.k==='G')e.Rnow=Math.max(schedAt(e.sched,t,e.R),1e-9);
     else if(e.k==='I')e.Inow=e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):schedAt(e.sched,t,e.I);
-    else if(e.k==='V'){const s=e.src;e.Vnow=s.kind==='dc'?schedAt(s.sched,t,s.V):s.off+s.Vpk*Math.sin(2*Math.PI*s.f*t+s.ph);}
+    else if(e.k==='V'){const s=e.src;e.Vnow=e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):s.kind==='dc'?schedAt(s.sched,t,s.V):s.off+s.Vpk*Math.sin(2*Math.PI*s.f*t+s.ph);}
     else if(e.k==='CPL')e.Pnow=schedAt(e.sched,t,e.P);
    }
   }
@@ -717,6 +720,16 @@
   const s=new Sim(pr,{hDiv:o.hDiv||100,method:o.method}),rec=Math.max(1,o.record|0||50);s.run((o.transient??200)*s.T);s.run(rec*s.T);
   const p=s.per,i=s.chIndex.get(o.key);if(i===undefined)throw new NetlistError(`Δεν υπάρχει το κανάλι ${o.key}.`);const st=o.stat==='max'?p.max:o.stat==='avg'?p.avg:o.stat==='end'?p.end:p.min,y=[];
   for(let k=Math.min(rec,p.n);k>=1;k--){const j=(p.head-k+p.cap)%p.cap;y.push(st[j*p.nch+i]);}return {value:o.value,y,T:s.T,warnings:s.net.warnings};}
- const api={Sim,buildNetlist,NetlistError,exportForBatch,sweepPoint};
+ // one frequency of an impedance sweep (EIS): set comp.param = f, run `settle` + `periods` periods of f, and return the
+ // per-period means of the voltage and current channels over the last `periods` periods of f. The same averaging
+ // filter acts on both, so their ratio at f is exact (for f below half the base frequency) and the ripple drops out.
+ function eisPoint(project,o){const pr=JSON.parse(JSON.stringify(project)),c=pr.components.find(x=>x.id===o.comp);if(!c)throw new NetlistError(`Δεν υπάρχει στοιχείο ${o.comp}.`);
+  c.params={...(c.params||{}),[o.param]:typeof c.params?.[o.param]==='string'?String(o.f):o.f};
+  const s=new Sim(pr,{hDiv:o.hDiv||50,method:o.method}),Tf=1/o.f,P=Math.max(1,o.periods|0||2);s.run(Math.max((o.settle??3)*Tf,o.minSettle||0));s.run(P*Tf);
+  if(P*Tf>s.per.cap*s.T)throw new NetlistError(`Η συχνότητα ${o.f} Hz θέλει ιστορικό ${P} περιόδων, πάνω από ${s.per.cap} περιόδους βάσης: διάλεξε μεγαλύτερη συχνότητα ή λιγότερες περιόδους.`);
+  const p=s.per,iv=s.chIndex.get(o.vKey),ii=s.chIndex.get(o.iKey);if(iv===undefined||ii===undefined)throw new NetlistError('Δεν υπάρχουν τα κανάλια τάσης/ρεύματος.');
+  const n=Math.min(p.n,Math.ceil(P*Tf/s.T)+2),t=[],v=[],i=[];for(let k=n;k>=1;k--){const j=(p.head-k+p.cap)%p.cap;t.push(p.t[j]-s.T/2);v.push(p.avg[j*p.nch+iv]);i.push(p.avg[j*p.nch+ii]);}
+  return {f:o.f,t,v,i,T:s.T,tEnd:s.t-s.T/2,periods:P,warnings:s.net.warnings};}
+ const api={Sim,buildNetlist,NetlistError,exportForBatch,sweepPoint,eisPoint};
  root.MNA=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
