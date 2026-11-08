@@ -48,7 +48,8 @@
   // ------------------------------------------------------------ channels
   static unitOf(key,sim){const pre=key.split(':')[0],id=key.split(':')[1];if(pre==='REF'||pre==='MEAS'){const k=sim?.net.ctrls.find(c=>c.id===id);const h=sim?.shById?.get(k?.sensor);return (h?h.qty:k?.qty)==='V'?'V':'A';}
    if(pre==='H'){const q=sim?.shById?.get(id);return q?.sig?'':q?.qty==='V'?'V':'A';}
-   if(pre==='Y'){const b=sim?.net.compInfo.get(id)?.blk;return b?.type==='VM'?'V':b?.type==='AM'?'A':b?.type==='MEAS'?(b.qty==='V'?'V':'A'):'';}return UNIT[pre]??'';}
+   if(pre==='Y'){const b=sim?.net.compInfo.get(id)?.blk,pin=key.split(':')[2],t=b?.type;if(t==='DCM')return pin==='te'?'N·m':'rad/s';if(t==='PLL')return pin==='w'?'rad/s':pin==='amp'?'':'rad';if(t==='INT'&&b.wrap)return 'rad';
+    return t==='VM'?'V':t==='AM'?'A':t==='MEAS'?(b.qty==='V'?'V':'A'):'';}return UNIT[pre]??'';}
   resolve(key){const s=this.sim;if(!s)return -1;if(key.startsWith('VN:')){const pin=key.slice(3),n=s.net.pinNet.get(pin);if(!n)return -1;if(n.ground)return -2;return s.chIndex.get('N:'+n.canon)??-1;}return s.chIndex.get(key)??-1;}
   channels(){return this.cfg.panes.flatMap((p,pi)=>p.ch.map(c=>({...c,pane:pi})));}
   addChannel(key,label,pane=null){if(this.channels().some(c=>c.key===key))return false;const used=new Set(this.channels().map(c=>c.color));const color=COLORS.find(c=>!used.has(c))||COLORS[this.channels().length%COLORS.length];

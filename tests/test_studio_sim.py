@@ -93,6 +93,51 @@ class StudioSimulator(unittest.TestCase):
         self.assertIn('ίδιο όνομα: y', w)
         self.assertIn('G1.u ← K9:y', w)
 
+    def test_dc_machine(self):
+        r = self.o['dcm']                    # armature + gyrator + mechanical circuit against the two ODEs
+        self.assertEqual(r['warn_false'], [])
+        self.assertEqual(r['warn_true'], [])
+        for kind in ('sched', 'sig'):
+            for (t, w, i, te), (_, w0, i0) in zip(r[kind], r['pts']):
+                tol = 6e-3 if abs(t - .31) < 1e-9 else 1e-5 * max(1, abs(w0))   # a load step costs at most half a step
+                self.assertAlmostEqual(w, w0, delta=tol, msg=f'{kind} ω at {t}')
+                self.assertAlmostEqual(i, i0, delta=max(tol, 1e-5 * abs(i0)), msg=f'{kind} i at {t}')
+                self.assertAlmostEqual(te, i, delta=1e-9)                      # τ_e = ψ·i with ψ = 1
+        w_ss = (100 - .5 * 20) / (1 + .5 * .002)                                # ω = (V·ψ − R_a·τ_L)/(ψ² + R_a·b)
+        self.assertAlmostEqual(r['sched'][-1][1], w_ss, delta=.01)
+
+    def test_pll_clarke_park(self):
+        r = self.o['pll']                    # locks from 45 Hz; d on the voltage vector: v_a = V̂·sin(ωt + φ) gives θ = ωt + φ − 90°
+        self.assertEqual(r['warn'], [])
+        self.assertAlmostEqual(r['w'], 2 * math.pi * 50, delta=1e-6)
+        self.assertAlmostEqual(r['d'], 100, delta=1e-6)
+        self.assertAlmostEqual(r['q'], 0, delta=1e-6)
+        self.assertAlmostEqual(r['amp'], 100, delta=1e-6)
+        self.assertAlmostEqual(r['dth'], -math.pi / 2, delta=1e-6)
+        for e in r['back']:                  # inverse Park and inverse Clarke give back the phase voltages
+            self.assertAlmostEqual(e, 0, delta=1e-9)
+
+    def test_continuous_blocks_and_back_calculation(self):
+        r = self.o['cont']
+        self.assertEqual(r['warn'], [])
+        self.assertAlmostEqual(r['i1'], 1 + 2 * r['t'], delta=1e-9)            # ∫2 dt from 1
+        self.assertAlmostEqual(r['i2'], 100 * r['t'] % (2 * math.pi), delta=1e-9)
+        self.assertAlmostEqual(r['f1'], 1 - math.exp(-2 * math.pi * 100 * (r['t'] - .001)), delta=1e-9)
+        self.assertEqual(r['sat'], 2)
+        self.assertAlmostEqual(r['pi_track'], 3, delta=1e-6)                   # held at K_p·e + u_sat, does not wind up
+        self.assertGreater(r['pi_clamp'], 20)                                  # without back-calculation it winds up
+        self.assertLess(r['order'].index('P1'), r['order'].index('D1'))        # tr is read after the pass: no algebraic loop
+
+    def test_harmonics_of_square_wave(self):
+        r = self.o['harm']                   # ±5 A square wave: A_h = 4·5/(π·h) for odd h, THD = √(π²/8 − 1)
+        self.assertAlmostEqual(r['A1'], 20 / math.pi, delta=2e-3)
+        self.assertAlmostEqual(r['A3'], 20 / (3 * math.pi), delta=2e-3)
+        self.assertAlmostEqual(r['A2'], 0, delta=2e-3)
+        self.assertAlmostEqual(r['rms'], 5, delta=2e-3)
+        self.assertAlmostEqual(r['thdAll'], 100 * math.sqrt(math.pi ** 2 / 8 - 1), delta=.05)    # 48.34 %
+        odd = sum(1 / h ** 2 for h in range(3, r['H'] + 1, 2))
+        self.assertAlmostEqual(r['thd'], 100 * math.sqrt(odd), delta=.05)                        # up to h = 49
+
     def test_peak_current_mode(self):
         o, T = self.o, 1e-5
         m1, m2 = lambda D: (24 - 24 * D) / 50e-6, lambda D: 24 * D / 50e-6

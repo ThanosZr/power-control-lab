@@ -1,4 +1,4 @@
-// Browser check of the 3.0 signal blocks: drawing signal wires, the signal/electrical rule, pins that
+// Browser check of the 3.0 signal blocks and the 3.1 drive / harmonics: drawing signal wires, the signal/electrical rule, pins that
 // follow parameters, algebraic loops, the two 3.0 tutorials, their theory cards and the questions.
 // Usage: python run.py --no-browser --port 8765  then  node tests/ui/blocks_flow.js http://127.0.0.1:8765/
 const {chromium}=require('playwright');
@@ -76,4 +76,19 @@ const {chromium}=require('playwright');
  ok(dv!==null&&dv<1e-3,'server peak = browser peak '+dv);
  // prediction questions of the template
  await p.waitForTimeout(1500);ok((await p.$$eval('#math-tpl option',o=>o.map(x=>x.value)))[0]==='pcm_slope','pcm template first');
+ // 3.1: DC drive tutorial (cascaded loops with back-calculation), the theory card against the simulation
+ for(const [o,re] of [[{mode:'speed',design:'active'},/ω τώρα150 rad\/s150 rad\/s/],[{mode:'open'},/μέγιστο ⟨i_a⟩ στην εκκίνηση98,49 A98,4\d A/]]){
+  await p.evaluate(o=>window.PCL.loadTutorial('dc_drive',o),o);await p.waitForTimeout(800);
+  await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.stopT-S.sim.t);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(600);
+  const th=await p.$eval('#theory',e=>e.textContent);ok(re.test(th),'dc drive theory '+JSON.stringify(o));}
+ ok(/ω 1\d\d(,\d+)? rad\/s/.test(await p.evaluate(()=>document.querySelector('[data-l="M1"] .lv')?.textContent||'')),'machine live text');
+ await p.screenshot({path:'dc_drive.png'});
+ // 3.1: harmonics and THD of a scope signal (single-phase SPWM inverter)
+ await p.evaluate(()=>window.PCL.loadTutorial('inverter',{}));await p.waitForTimeout(800);
+ await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(.06);window.PCL.pause();});
+ await p.click('#ff-block summary');await p.waitForTimeout(300);await p.selectOption('#ff-sig','I:L1');await p.selectOption('#ff-h','500');await p.waitForTimeout(600);
+ const ff=await p.$eval('#ff-out',e=>e.textContent);ok(/αναφορά SPWM/.test(ff)&&/THD \(h = 2 … 500\)/.test(ff),'harmonics panel: '+ff.slice(0,120));
+ const a1=await p.evaluate(()=>{const th=document.querySelector('#theory').textContent.match(/Î₁ = V̂₁\/\|Z\| = ([\d,]+) A/);return th?+th[1].replace(',','.'):NaN;});
+ const a1s=+(ff.match(/πλάτος \/ RMS([\d,]+) A/)||[])[1]?.replace(',','.');ok(Math.abs(a1s-a1)<.02*a1,'fundamental = theory '+a1s+' '+a1);
+ ok(await p.$$eval('.ffchart rect',r=>r.length)===500,'500 bars');
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

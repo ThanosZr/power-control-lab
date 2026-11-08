@@ -134,5 +134,34 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
  const bad=new Sim(project([{id:'K1',type:'CONST'},{id:'TF1',type:'TAGI',params:{name:'x'}},{id:'TG1',type:'TAGO',params:{name:'y'}},{id:'TG2',type:'TAGO',params:{name:'y'}},{id:'G1',type:'GAIN',params:{in_u:'K9:y'}},{id:'D1',type:'DISP'}],
   [['K1:y','TG1:u'],['K1:y','TG2:u'],['TF1:y','D1:u']]));
  out.nowire={...r,warnBad:bad.net.warnings};}
+// 21) DC machine (3.1) on 100 V with a load step: the gyrator + mechanical circuit against the two ODEs (RK4, small step);
+//     the same machine with the load torque from a signal block
+{const ode=(tEnd,TL)=>{const Ra=.5,La=10e-3,psi=1,J=.02,b=.002,V=100,h=1e-6;let i=0,w=0,t=0;const f=(t,i,w)=>[(V-Ra*i-psi*w)/La,(psi*i-b*w-(t>=TL[0]?TL[1]:0))/J];
+  while(t<tEnd-1e-12){const k1=f(t,i,w),k2=f(t+h/2,i+h/2*k1[0],w+h/2*k1[1]),k3=f(t+h/2,i+h/2*k2[0],w+h/2*k2[1]),k4=f(t+h,i+h*k3[0],w+h*k3[1]);i+=h/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]);w+=h/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1]);t+=h;}return [w,i];};
+ const mk=sig=>project([{id:'V1',type:'VDC',params:{V:100}},{id:'M1',type:'DCM',params:sig?{load:'sig'}:{TL:'0:0, 0.3:20'}},{id:'G',type:'GND'},...(sig?[{id:'K1',type:'CONST',params:{v:'0:0, 0.3:20'}}]:[])],
+  [['V1:p','M1:a'],['M1:b','G:g'],['V1:n','G:g'],...(sig?[['K1:y','M1:tl']]:[])]);
+ const r={pts:[]};for(const sig of [false,true]){const s=new Sim(mk(sig),{h:10e-6});const row=[];for(const t of [.005,.02,.05,.2,.31,.5]){s.run(t-s.t);row.push([t,s.now('Y:M1'),s.now('I:M1'),s.now('Y:M1:te')]);}r[sig?'sig':'sched']=row;r['warn_'+sig]=s.net.warnings;}
+ for(const t of [.005,.02,.05,.2,.31,.5])r.pts.push([t,...ode(t,[.3,20])]);out.dcm=r;}
+// 22) three-phase PLL (3.1): locks to 50 Hz from 45 Hz; Park with its angle gives d = V̂, q = 0
+{const ab=project([{id:'V3',type:'VAC3',params:{Vpk:100,f:50,phase:30}},{id:'G',type:'GND'},{id:'RA',type:'R',params:{R:10}},{id:'RB',type:'R',params:{R:10}},{id:'RC',type:'R',params:{R:10}},
+  {id:'VA',type:'VM'},{id:'VB',type:'VM'},{id:'VC',type:'VM'},{id:'PL',type:'PLL',params:{f0:45,bw:20}},{id:'CL',type:'CLARKE'},{id:'PK',type:'PARK'},{id:'IP',type:'IPARK'},{id:'IC',type:'ICLARKE'}],
+  [['V3:n','G:g'],['V3:a','RA:a'],['V3:b','RB:a'],['V3:c','RC:a'],['RA:b','G:g'],['RB:b','G:g'],['RC:b','G:g'],['VA:p','V3:a'],['VB:p','V3:b'],['VC:p','V3:c'],['VA:n','G:g'],['VB:n','G:g'],['VC:n','G:g'],
+   ['VA:y','PL:a'],['VB:y','PL:b'],['VC:y','PL:c'],['VA:y','CL:a'],['VB:y','CL:b'],['VC:y','CL:c'],['CL:al','PK:al'],['CL:be','PK:be'],['PL:th','PK:th'],
+   ['PK:d','IP:d'],['PK:q','IP:q'],['PL:th','IP:th'],['IP:al','IC:al'],['IP:be','IC:be']]);
+ const s=new Sim(ab,{h:20e-6});s.run(.4);const th=(2*Math.PI*50*s.t+Math.PI/6)%(2*Math.PI);let dth=s.now('Y:PL')-th;dth-=2*Math.PI*Math.round(dth/(2*Math.PI));
+ out.pll={w:s.now('Y:PL:w'),d:s.now('Y:PK'),q:s.now('Y:PK:q'),amp:s.now('Y:PL:amp'),dth,back:['','b','c'].map((k,j)=>s.now('Y:IC'+(k?':'+k:''))-s.now('Y:V'+'ABC'[j])),warn:s.net.warnings};}
+// 23) continuous blocks (integrator, low-pass) and the back-calculation input of the PI block
+{const pr=project([{id:'K1',type:'CONST',params:{v:2}},{id:'I1',type:'INT',params:{y0:1}},{id:'K2',type:'CONST',params:{v:100}},{id:'I2',type:'INT',params:{wrap:'2pi'}},
+  {id:'K3',type:'CONST',params:{v:'0:0, 0.001:1'}},{id:'F1',type:'LPF',params:{fc:100}},{id:'CK',type:'CLK',params:{f:1000}},{id:'K4',type:'CONST',params:{v:1}},
+  {id:'P1',type:'PIB',params:{Kp:1,Ki:100,clock:'CK',aw:'track'}},{id:'S1',type:'SAT',params:{lo:-2,hi:2}},{id:'D1',type:'SUM',params:{signs:'+-'}},{id:'P2',type:'PIB',params:{Kp:1,Ki:100,clock:'CK',ymin:-1e9,ymax:1e9}}],
+  [['K1:y','I1:u'],['K2:y','I2:u'],['K3:y','F1:u'],['K4:y','P1:u'],['P1:y','S1:u'],['S1:y','D1:a'],['P1:y','D1:b'],['D1:y','P1:tr'],['K4:y','P2:u']]);
+ const s=new Sim(pr,{h:10e-6});s.run(.003);const a={i1:s.now('Y:I1'),i2:s.now('Y:I2'),f1:s.now('Y:F1'),t:s.t};s.run(.2-s.t);
+ out.cont={...a,pi_track:s.now('Y:P1'),sat:s.now('Y:S1'),pi_clamp:s.now('Y:P2'),warn:s.net.warnings,order:s.net.sig.order.map(b=>b.id)};}
+// 24) harmonics (3.1): half-bridge with split ±50 V supply switched at 50 Hz on R = 10 Ω → square-wave current ±5 A
+{const M=require(W+'/metrics.js');const pr=project([{id:'VP',type:'VDC',params:{V:50}},{id:'VN',type:'VDC',params:{V:50}},{id:'S1',type:'SW',params:{pwm:'PWM1',out:'a',body:false}},{id:'S2',type:'SW',params:{pwm:'PWM1',out:'na',body:false}},
+  {id:'R1',type:'R',params:{R:10}},{id:'G',type:'GND'},{id:'PWM1',type:'PWM',params:{fs:50,D:.5,carrier:'saw'}}],
+  [['VP:n','G:g'],['VN:p','G:g'],['VP:p','S1:d'],['S1:s','S2:d'],['S2:s','VN:n'],['S1:s','R1:a'],['R1:b','G:g']]);
+ const s=new Sim(pr,{hDiv:2000});s.run(.06);const r=s.ring,i=s.chIndex.get('I:R1'),t=[],y=[];const st=(r.head-r.n+r.cap)%r.cap;for(let q=0;q<r.n;q++){const j=(st+q)%r.cap;t.push(r.t[j]);y.push(r.d[j*r.nch+i]);}
+ const h=M.harmonics({t,y,f1:50,periods:2,H:98});out.harm={A1:h.A1,A3:h.A[3],A2:h.A[2],dc:h.dc,rms:h.rms,thd:h.thd,thdAll:h.thdAll,H:h.H};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

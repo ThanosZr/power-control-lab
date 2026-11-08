@@ -108,6 +108,36 @@ class Tutorials(unittest.TestCase):
         os1 = (o['bl_blocks_pwm_z1']['vpk'] - 10) / 5
         self.assertGreater(os1, os0 + .05)                                       # z⁻¹: less phase margin, more overshoot
 
+    def test_dc_drive(self):
+        o = self.o
+        for k in ('dc_speed_active', 'dc_speed_imc', 'dc_current_active', 'dc_open_active'):
+            self.assertEqual(o[k]['warn'], [], msg=k)
+        a, m = o['dc_speed_active'], o['dc_speed_active']['meta']
+        J, b, psi, TL = m['J'], m['bm'], m['psi'], m['TL']
+        self.assertAlmostEqual(a['w_at'][1], 150, delta=.05)                     # back-calculation: no wind-up after the 30 A limit
+        self.assertLess(a['w_max_pre'], 150.3)
+        self.assertAlmostEqual(a['w_at'][0], (.1 - .02) * psi * m['Imax'] / J, delta=3)   # accelerating at ψ·I_max/J
+        dpk = TL / (J * m['as'] * math.e)                                        # active damping: drop τ_L/(J·α_s·e)
+        self.assertAlmostEqual(150 - a['w_min_post'], dpk, delta=.15 * dpk)
+        self.assertAlmostEqual(a['w_end'], 150, delta=.02)
+        self.assertAlmostEqual(a['i_end'], (b * 150 + TL) / psi, delta=.02)      # i = (b·ω + τ_L)/ψ
+        self.assertAlmostEqual(a['d_end'], (m['Ra'] * 10.3 + psi * 150) / m['Vdc'], delta=1e-3)
+        c = o['dc_speed_imc']                                                    # IMC: K_i = α_s·b, drop ≈ τ_L/(J·α_s), recovery with J/b = 10 s
+        self.assertAlmostEqual(150 - c['w_min_post'], TL / (J * m['as']), delta=.3)
+        self.assertLess(c['w_end'], 147)
+        r = o['dc_current_active']
+        self.assertAlmostEqual(r['i_at30'], 10, delta=.05)
+        self.assertAlmostEqual(r['i_end'], -5, delta=.05)
+        self.assertAlmostEqual(r['rise'], math.log(9) / m['ac'], delta=.2 * math.log(9) / m['ac'])   # i/i_ref = α_c/(s + α_c)
+        q = o['dc_open_active']                                                  # starting current of the open loop
+        Ra, La, U = m['Ra'], m['La'], .5 * m['Vdc']
+        sg, wn = Ra / (2 * La), psi / math.sqrt(La * J)
+        wd = math.sqrt(wn * wn - sg * sg)
+        tp = math.atan2(wd, sg) / wd
+        ipk = U / (La * wd) * math.exp(-sg * tp) * math.sin(wd * tp)
+        self.assertAlmostEqual(q['i_max'], ipk, delta=.02 * ipk)
+        self.assertAlmostEqual(q['w_end'], (U * psi - Ra * TL) / (psi ** 2 + Ra * b), delta=.2)
+
     def test_peak_current_mode(self):
         o = self.o
         self.assertTrue(all(abs(p - 5) < 1e-6 for p in o['pcm_0.4_none']['pk']))

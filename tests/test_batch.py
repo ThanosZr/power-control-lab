@@ -120,6 +120,28 @@ class BatchSolver(unittest.TestCase):
             if name.startswith('pcm'):
                 self.assertGreater(r['stats']['cmp_events'], 20)                 # resets found as roots, not on a grid
 
+    def test_machine_and_control_blocks_parity(self):
+        # 3.1: DC machine (gyrator + mechanical circuit), PLL / Clarke / Park, integrator, low-pass, PI with back-calculation
+        for name, tol in (('dcm', 2e-3), ('pll', 1e-3), ('cont', 2e-3)):
+            req = self.req[name]
+            keys = list(req['channels'].keys()) if isinstance(req['channels'], dict) else [c['key'] for c in req['channels']]
+            r = self.run_case(name, req['at'][-1][0], 'LSODA', rtol=1e-9, atol=1e-11)
+            self.assertEqual(r['status'], 'ok', msg=name)
+            t = np.array(r['t'])
+            for row in req['at']:
+                for k, v in zip(keys, row[1:]):
+                    y = float(np.interp(row[0], t, np.array(r['ch'][k])))
+                    self.assertAlmostEqual(y, v, delta=tol * max(1, abs(v)), msg=f'{name} {k} at {row[0]}')
+        js = self.req['dc_cur']['js']           # the drive: PWM with input d, saturation, tags, PI with tracking, machine
+        T = js['T']
+        r = self.run_case('dc_cur', round(js['pk'][-1]['t'] / T) * T, 'LSODA', rtol=1e-8, atol=1e-10)
+        self.assertEqual(r['status'], 'ok')
+        t, y = np.array(r['t']), np.array(r['ch']['Y:AM1'])
+        for q in js['pk']:
+            w = (t >= q['t'] - T - 1e-12) & (t <= q['t'] + 1e-12)
+            self.assertAlmostEqual(float(y[w].max()), q['max'], delta=1e-3)
+            self.assertAlmostEqual(float(y[w].min()), q['min'], delta=1e-3)
+
     def test_explicit_method_reports_stiffness(self):
         r = self.run_case('buck_dcm', 2e-3, 'RK45', wall=2)
         self.assertIn(r['status'], ('ok', 'timeout'))

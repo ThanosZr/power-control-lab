@@ -31,6 +31,7 @@ index.html  φορτώνει τα studio/*.js με τη σειρά:        run.p
 | `web/studio/scope.js` | Σχεδιάζει κανάλια από τα buffers του λύτη. Λωρίδες για λογικά σήματα. | `Scope.draw`, `unitOf`, `isLogic` |
 | `web/studio/app.js` | Κατάσταση `S`, δημιουργία λύτη, ζωντανές παράμετροι, inspector, θεωρία ανά tutorial, πάνελ μαθηματικών, server και CSV. | `buildSim`, `refreshControls`, `openInspector`, `liveOf`, `signalsFor`, `chanLabel`, `formulaTheory` και `*Theory`, `circuitForMath`, `runBatch`, `simValue` |
 | `web/studio/tutorials.js` | Κάθε tutorial: επιλογές → project (στοιχεία, σύρματα, scope, `meta`). | `T.push({id, options, build})`, βοηθοί `C`, `J`, `project`, `piGains` |
+| `web/studio/metrics.js` | Δείκτες από δεδομένα, χωρίς DOM (τρέχει και στο Node): απόκριση σε βήμα, προγράμματα, σειρά Fourier και THD. | `responseMetrics`, `scheduleEvents`, `harmonics` |
 | `web/studio/math.js` | Εμφάνιση αποτελεσμάτων των templates και των ερωτήσεων με πρόβλεψη. | `renderTemplate`, `questionsHTML`, `bindQuestions` |
 | `engine/batch.py` | Ο ίδιος κύκλος με το `mna.js`, με `solve_ivp`. Δίοδοι και συγκριτές ως συμβάντα. | `Circuit`, `Ctrl`, `eval_blocks`, `sample`, `next_event`, `simulate` |
 | `engine/templates.py` | Υπολογίζει ένα template: εισόδους, βήματα, ελέγχους, πίνακες, ερωτήσεις. | `template_solve`, `_questions` |
@@ -48,7 +49,10 @@ index.html  φορτώνει τα studio/*.js με τη σειρά:        run.p
    1. `nextEvent`: το επόμενο συμβάν (ακμές PWM, δείγματα, ρολόγια, προγράμματα).
    2. `step` → `stepCore`: βήμα trapezoidal/BE με εντοπισμό μετάβασης διόδου ή συγκριτή μέσα στο βήμα.
    3. Στην ίδια στιγμή, με αυτή τη σειρά: `evalBlocks('commit')` → `recordNow` → `sampleHolds` → `evalBlocks('sample')` → `sampleControllers` → `recordNow`.
-4. **Καταγραφή → scope και θεωρία.** Ring buffer ανά κανάλι και στατιστικά ανά περίοδο (`per`). Το `Scope` και οι κάρτες θεωρίας διαβάζουν από εκεί (`now`, `lastPeriod`, `avgOver`).
+   4. Μέσα στο `evalBlocks`, μετά το πέρασμα: οι z⁻¹ κρατούν την είσοδό τους και οι PI με back-calculation διαβάζουν το `tr` (λίστα `pend`). Τα συνεχή μπλοκ (ολοκληρωτής, βαθυπερατό, PLL) γράφουν την κατάστασή τους (λίστα `cont`), με την είσοδο κρατημένη από την προηγούμενη αποτίμηση. Ο server κόβει τα διαστήματα στο T/200 όταν υπάρχουν τέτοια μπλοκ.
+   5. Μπλοκ με πολλές εξόδους (`b.outList`): η πρώτη έξοδος είναι το κανάλι `Y:id`, οι άλλες `Y:id:pin`.
+4. **Καταγραφή → scope και θεωρία.** Ring buffer ανά κανάλι (`ring`) και στατιστικά ανά περίοδο (`per`). Το `Scope` και οι κάρτες θεωρίας διαβάζουν από εκεί (`now`, `lastPeriod`, `avgOver`). Οι αρμονικές (`app.js` `renderFFT`) παίρνουν τα σημεία του `ring` (`rawSeries`) και καλούν το `Metrics.harmonics`.
+   - **Μηχανές (3.1).** Το μηχανικό μέρος είναι κύκλωμα στον ίδιο λύτη: στοιχείο `GY` (γυρατής, μία γραμμή στο MNA) ανάμεσα στο τύμπανο και σε κόμβο του οποίου η τάση είναι το ω, πυκνωτής J, αγωγιμότητα b, πηγή ρεύματος τ_L (με `sigIn` όταν έρχεται από σήμα). Ένα μπλοκ τύπου `DCM` (`ft:false`) δίνει τις εξόδους ω και τ_e.
 5. **Server.**
    - Το `exportForBatch` στέλνει το ίδιο netlist στο `/api/batch_sim` → `batch.simulate`. Τα αποτελέσματα επιστρέφουν ως διακεκομμένες καμπύλες στο scope.
    - Τα templates πάνε στο `/api/template_solve`.
@@ -61,6 +65,8 @@ index.html  φορτώνει τα studio/*.js με τη σειρά:        run.p
 | **Νέο ηλεκτρικό στοιχείο** | `parts.js` `PARTS` → `mna.js` `buildNetlist` (κλάδος του τύπου) → αν έχει νέα κανάλια `channelKeys`/`computeVals` → `app.js` `liveOf`, `signalsFor`, `chanLabel` → `editor.js` `valueText` → αν είναι νέο είδος στοιχείου (`k`), `batch.py` `Circuit` και `exportForBatch` | `tests/js/sim_cases.js` + `test_studio_sim.py`, `tests/js/batch_requests.js` + `test_batch.py` |
 | **Νέο μπλοκ σημάτων** | `parts.js` (`blk:true`, `spins`, παράμετροι, σύμβολο) → `mna.js` `buildNetlist` (παράμετροι μπλοκ) και `evalBlocks` (case) → αν εξαρτάται από τον χρόνο `nextEvent`, αν αλλάζει απότομα `compileSignals.zc` → `exportForBatch` (λίστα πεδίων) → `batch.py` `eval_blocks`, `block_events` → `app.js` `LOGIC_BLK`/`blkUnit` → `editor.js` `valueText` | ίδια με το προηγούμενο, και ισοδυναμία browser–SciPy |
 | **Νέος τρόπος σύνδεσης σημάτων** | `mna.js` `buildNetlist` (η ένωση με union-find) → `editor.js` `netKinds`, `renderPins` | `test_studio_sim.py` `test_connections_without_wire` |
+| **Νέα μηχανή ή ηλεκτρομηχανικό στοιχείο** | `parts.js` (ομάδα «Μηχανές», `pins` και `spins`) → `mna.js` `buildNetlist` (ηλεκτρικό μέρος, μηχανικό κύκλωμα, `mkBlock` για τις εξόδους) → `evalBlocks` (case) → `exportForBatch` (`F`, `rec`) → `batch.py` (`iGY` ή νέο είδος, `eval_blocks`) → `app.js` `OUT_SYM`/`OUT_TXT`/`blkUnit`/`liveOf` → `scope.js` `unitOf` → `editor.js` `valueText` | `sim_cases.js` (σύγκριση με τις ΔΕ), `test_batch.py` |
+| **Ανάλυση σήματος (π.χ. αρμονικές)** | `metrics.js` (συνάρτηση χωρίς DOM) → `app.js` (πάνελ, όπως `renderFFT`) → `index.html` (`side-block`) | test στο Node, `blocks_flow.js` |
 | **Νέο tutorial** | `tutorials.js` `T.push` → θεωρία στο `app.js` `formulaTheory` (dispatch με `topology`) → README | `tests/js/tutorial_cases.js` + `test_tutorials.py` |
 | **Template ή ερωτήσεις** | `web/studio/exercises/*.template.json` + `index.json`. Νέος τύπος block: `engine/templates.py` και `math.js` `renderTemplate` | `test_templates.py` |
 | **Κανάλι στο scope** | `mna.js` `channelKeys`/`computeVals` → `app.js` `chanLabel`/`signalsFor` → `scope.js` `UNIT`/`unitOf`. Για τον server: `exportForBatch` `rec` και `batch.py` `value` | `sim_cases.js`, `test_batch.py` |

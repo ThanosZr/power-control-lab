@@ -43,6 +43,33 @@
    if(c.type==='PWM'){if(p.mode==='pi')add(p.ref,'αναφορά');else add(p.dsched,'D');}
    else if(p.sched)add(p.sched,c.type==='R'?'R':c.type==='CPL'?'P':c.type==='IDC'?'I':'V');}
   ev.sort((a,b)=>a.t-b.t);return ev;}
- const api={responseMetrics,scheduleEvents};
+ // Fourier series of a sampled signal over an integer number of fundamental periods, ending at tEnd.
+ // The samples are joined by straight lines (as on the scope) and each segment is integrated exactly, so uneven
+ // solver steps and jumps (two samples at the same instant) are handled without resampling.
+ //   harmonics({t, y, f1, periods, H, tEnd}) → {ok, dc, A[h], ph[h] (deg, cos), rms, thd (h = 2…H, % of A₁), thdAll (from the RMS)}
+ function harmonics(o){
+  const t=o.t,y=o.y,n=t.length,f1=+o.f1,P=Math.max(1,Math.round(o.periods||1)),H=Math.max(1,Math.min(1000,Math.round(o.H||50)));
+  if(!(f1>0)||n<3)return {ok:false,why:'Χρειάζονται δείγματα και θεμελιώδης συχνότητα f₁ > 0.'};
+  const tb=Math.min(o.tEnd??t[n-1],t[n-1]),Tw=P/f1,ta=tb-Tw;
+  if(ta<t[0]-1e-12)return {ok:false,why:`Χρειάζεται ιστορικό ${P} περιόδων της f₁ (${(Tw*1e3).toPrecision(4)} ms): τρέξε την προσομοίωση περισσότερο ή μεγάλωσε το ιστορικό.`};
+  // the window [ta, tb] as a list of points, with linear interpolation at the two ends
+  const at=(i,x)=>t[i+1]>t[i]?y[i]+(y[i+1]-y[i])*(x-t[i])/(t[i+1]-t[i]):y[i+1];
+  let i0=0;while(i0<n-1&&t[i0+1]<=ta)i0++;
+  const T=[0],Y=[at(i0,ta)];for(let i=i0+1;i<n&&t[i]<tb;i++){T.push(t[i]-ta);Y.push(y[i]);}
+  let i1=0;while(i1<n-2&&t[i1+1]<tb)i1++;T.push(Tw);Y.push(t[n-1]<=tb?y[n-1]:at(i1,tb));
+  let s0=0,s2=0;for(let k=1;k<T.length;k++){const h=T[k]-T[k-1];if(h<=0)continue;const a=Y[k-1],b=Y[k];s0+=h*(a+b)/2;s2+=h*(a*a+a*b+b*b)/3;}
+  const dc=s0/Tw,rms=Math.sqrt(Math.max(s2/Tw,0)),A=new Float64Array(H+1),ph=new Float64Array(H+1);A[0]=Math.abs(dc);
+  for(let h=1;h<=H;h++){const w=2*Math.PI*h*f1/P;let re=0,im=0;let c0=1,n0=0;
+   // ∫ y·e^{jωτ} over a segment = (y₁E₁ − y₀E₀)/(jω) + s·(E₁ − E₀)/ω², s = slope
+   for(let k=1;k<T.length;k++){const d=T[k]-T[k-1],c1=Math.cos(w*T[k]),n1=Math.sin(w*T[k]);if(d>0){const a=Y[k-1],b=Y[k],sl=(b-a)/d;
+     const ur=b*c1-a*c0,ui=b*n1-a*n0;re+=ui/w+sl*(c1-c0)/(w*w);im+=-ur/w+sl*(n1-n0)/(w*w);}c0=c1;n0=n1;}
+   const ak=2*re/Tw,bk=2*im/Tw;A[h]=Math.hypot(ak,bk);ph[h]=Math.atan2(bk,ak)*180/Math.PI;}
+  // with P periods in the window the harmonics of f₁ are the bins h = P, 2P, …; the others are sub/inter-harmonics
+  const H1=Math.floor(H/P),Ah=new Float64Array(H1+1),Ph=new Float64Array(H1+1);Ah[0]=A[0];for(let k=1;k<=H1;k++){Ah[k]=A[k*P];Ph[k]=ph[k*P];}
+  let s=0;for(let k=2;k<=H1;k++)s+=Ah[k]*Ah[k];const A1=Ah[1]||0;
+  const rest=Math.max(rms*rms-dc*dc-A1*A1/2,0);
+  return {ok:true,f1,periods:P,H:H1,dc,A:Ah,ph:Ph,bins:A,rms,A1,rms1:A1/Math.SQRT2,thd:A1>0?100*Math.sqrt(s/2)/(A1/Math.SQRT2):NaN,thdAll:A1>0?100*Math.sqrt(rest)/(A1/Math.SQRT2):NaN,window:[ta,tb],n:T.length};
+ }
+ const api={responseMetrics,scheduleEvents,harmonics};
  root.Metrics=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

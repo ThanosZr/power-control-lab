@@ -39,4 +39,11 @@ for(const [ctrl,mod,delay] of [['builtin','pwm','none'],['blocks','pwm','none'],
  const after=rows.filter(r=>r.t>.002+2e-5&&r.t<.0028);out[`bl_${ctrl}_${mod}_${delay}`]={valley:last(s,key,5).min,avg:last(s,key,5).avg,d:mod==='cmp'?last(s,'GS:S1',5).avg:last(s,'D:PWM1',5).avg,vpk:Math.max(...after.map(r=>r.mn)),warn:s.net.warnings,err:null};}
 for(const [D,ramp] of [['0.4','none'],['0.6','none'],['0.6','half'],['0.7','full']]){const pr=build('peak_cm',{D,ramp});const s=sim(pr,2e-3);const pk=[],dd=[];const p=s.per,i=s.chIndex.get('Y:AM1'),g=s.chIndex.get('GS:S1');
  for(let k=6;k>=1;k--){const j=(p.head-k+p.cap)%p.cap;pk.push(p.max[j*p.nch+i]);dd.push(p.avg[j*p.nch+g]);}out[`pcm_${D}_${ramp}`]={pk,dd,meta:pr.meta,warn:s.net.warnings};}
+// 3.1: DC machine drive (speed loop with active damping or IMC, current loop, open loop)
+for(const [mode,design] of [['speed','active'],['speed','imc'],['current','active'],['open','active']]){const pr=build('dc_drive',{mode,design});const s=sim(pr,pr.sim.stopT);const T=1/pr.meta.fs;
+ const w=per(s,'Y:M1'),i=per(s,'Y:AM1'),r=a=>{const p=s.per,k=s.chIndex.get('Y:M1');const v=[];for(let q=0;q<p.n;q++){const j=(p.head-p.n+q+p.cap)%p.cap;v.push({t:p.t[j],mn:p.min[j*p.nch+k],mx:p.max[j*p.nch+k]});}return v;};const wr=r();
+ const rm=mode==='current'?M.responseMetrics({t:i.t,y:i.y,tStep:.005,tEnd:.03,ref:t=>t<.005?0:10}):null;
+ out[`dc_${mode}_${design}`]={meta:pr.meta,warn:s.net.warnings,w_end:s.now('Y:M1'),i_end:last(s,'Y:AM1',5).avg,d_end:last(s,'D:PWM1',5).avg,
+  w_max_pre:Math.max(...wr.filter(q=>q.t<.25).map(q=>q.mx)),w_min_post:Math.min(...wr.filter(q=>q.t>.25+T).map(q=>q.mn)),w_at:[.1,.2].map(t=>w.y[w.t.findIndex(x=>x>=t)]),
+  i_max:Math.max(...i.y),i_at30:i.y[i.t.findIndex(x=>x>=.03-1e-9)],rise:rm?.rise,os:rm?.overshoot};}
 out.ms=Date.now()-t0;console.log(JSON.stringify(out,null,1));

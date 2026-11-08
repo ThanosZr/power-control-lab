@@ -118,6 +118,16 @@
     num('refphase','Φάση αναφοράς','°',0,{signed:true,zero:true,show:p=>p.mode==='spwm'})],
    value:p=>p.fs,unit:'Hz',
    draw:p=>'<rect class="block" x="-34" y="-20" width="68" height="40" rx="6"/><path class="thin" d="M-24,8 L-14,-8 L-4,8 L6,-8 L16,8 L24,-4"/><path class="thin accent" d="M-26,-2 H26"/>'+(p.mode==='ext'?sl('M-40,0 H-34'):'')},
+  // ---------------------------------------------------------------- machines (3.1)
+  DCM:{name:'Μηχανή ΣΡ (ανεξάρτητη διέγερση)',prefix:'M',group:'Μηχανές',pins:{a:[0,-40],b:[0,40]},box:[-20,-20,40,40],lbl:'left',
+   spins:p=>p.load==='sig'?{w:O(40,-10),te:O(40,10),tl:I(-40,0)}:{w:O(40,-10),te:O(40,10)},
+   params:[num('Ra','Αντίσταση τυμπάνου R_a','Ω',0.5),num('La','Αυτεπαγωγή τυμπάνου L_a','H',10e-3),num('psi','Ροή ψ (σταθερά k)','V·s/rad',1,{hint:'Αντι-ΗΕΔ E = ψ·ω, ροπή τ_e = ψ·i_a.'}),
+    num('J','Ροπή αδράνειας J','kg·m²',0.02),num('bm','Τριβή b','N·m·s',0.002,{zero:true}),
+    sel('load','Ροπή φορτίου',[['sched','Τιμή ή πρόγραμμα'],['sig','Από σήμα (ακροδέκτης tl)']],'sched'),
+    txt('TL','τ_L(t)','0',{hint:'Σταθερή τιμή ή «t:τιμή» σε N·m, π.χ. 0:0, 0.25:10.',show:p=>p.load!=='sig'}),
+    num('w0','Αρχική ταχύτητα','rad/s',0,{signed:true,zero:true}),num('ia0','Αρχικό ρεύμα','A',0,{signed:true,zero:true})],
+   value:p=>p.psi,unit:'V·s',
+   draw:p=>'<path d="M0,-40 V-18 M0,18 V40"/><circle r="18"/>'+tx('M',0,1,'btxt')+'<path class="thin" d="M-6,7 H6 M-6,10 H6"/>'+sl('M18,-10 H40 M18,10 H40')+(p.load==='sig'?sl('M-40,0 H-18'):'')},
   // ---------------------------------------------------------------- signal blocks (3.0)
   VM:{name:'Βολτόμετρο',prefix:'VM',group:'Σήματα',pins:{p:[0,-30],n:[0,30]},spins:{y:O(30,0)},box:[-15,-15,30,30],params:[],value:()=>null,blk:true,unit:'V',
    draw:()=>'<path d="M0,-30 V-14 M0,14 V30"/><circle r="14"/>'+tx('V')+sl('M14,0 H30')},
@@ -148,10 +158,12 @@
   LOGIC:{name:'Λογική πύλη',prefix:'LG',group:'Σήματα',pins:{},spins:p=>p.op==='not'?{a:I(-30,0),y:O(30,0)}:{a:I(-30,-10),b:I(-30,10),y:O(30,0)},box:[-20,-20,40,40],blk:true,
    params:[sel('op','Πράξη',[['and','AND'],['or','OR'],['xor','XOR'],['not','NOT'],['nand','NAND'],['nor','NOR']],'or',{hint:'Είσοδος ≥ 0,5 = 1. Έξοδος 0 ή 1.'})],value:()=>null,
    draw:p=>sb(40,40)+tx({and:'&',or:'≥1',xor:'=1',not:'1',nand:'&',nor:'≥1'}[p.op]||'≥1',0,5)+(['not','nand','nor'].includes(p.op)?'<circle class="thin" cx="23" cy="0" r="3"/>':'')+sl(p.op==='not'?'M-30,0 H-20 M26,0 H30':'M-30,-10 H-20 M-30,10 H-20 M'+(['nand','nor'].includes(p.op)?26:20)+',0 H30')},
-  PIB:{name:'PI διακριτός',prefix:'PI',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
+  PIB:{name:'PI διακριτός',prefix:'PI',group:'Σήματα',pins:{},spins:p=>p.aw==='track'?{u:I(-30,0),tr:I(0,30),y:O(30,0)}:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
    params:[num('Kp','K_p','',1e-3,{zero:true,signed:true}),num('Ki','K_i','1/s',1,{zero:true,signed:true}),CLOCK(),TRIG,
-    num('y0','Σταθερός όρος (feedforward)','',0,{signed:true,zero:true}),num('ymin','Κάτω όριο εξόδου','',0,{signed:true,zero:true}),num('ymax','Άνω όριο εξόδου','',1,{signed:true,zero:true})],value:()=>null,
-   draw:()=>sb(40,30)+tx('PI',0,5)+sl('M-30,0 H-20 M20,0 H30')},
+    num('y0','Σταθερός όρος (feedforward)','',0,{signed:true,zero:true}),
+    sel('aw','Anti-windup',[['clamp','Όρια στην έξοδο του PI'],['track','Back-calculation: είσοδος tr = u_sat − u']],'clamp',{hint:'Back-calculation: dx_i/dt = K_i·(e + tr/K_p), με tr = κορεσμένη έξοδος − έξοδος πριν από τον κορεσμό (σταθερά παρακολούθησης T_t = K_p/K_i). Χρήσιμο όταν ο κορεσμός γίνεται πιο κάτω, μετά από feedforward ή ενεργή απόσβεση. Η είσοδος tr διαβάζεται μετά τον υπολογισμό, άρα δεν κάνει αλγεβρικό βρόχο.'}),
+    num('ymin','Κάτω όριο εξόδου','',0,{signed:true,zero:true,show:p=>p.aw!=='track'}),num('ymax','Άνω όριο εξόδου','',1,{signed:true,zero:true,show:p=>p.aw!=='track'})],value:()=>null,
+   draw:p=>sb(40,30)+tx('PI',0,5)+sl('M-30,0 H-20 M20,0 H30')+(p.aw==='track'?sl('M0,15 V30'):'')},
   UD:{name:'Καθυστέρηση z⁻¹',prefix:'Z',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
    params:[CLOCK(),TRIG,num('y0','Αρχική έξοδος','',0,{signed:true,zero:true})],value:()=>null,
    draw:()=>sb(40,30)+tx('z⁻¹',0,5)+sl('M-30,0 H-20 M20,0 H30')},
@@ -165,6 +177,28 @@
    params:[num('f','Συχνότητα','Hz',100e3),sel('shape','Μορφή',[['saw','Πριονωτή (από κάτω προς τα πάνω)'],['tri','Τριγωνική (μέγιστο στην αρχή)']],'saw'),
     num('lo','Ελάχιστη τιμή','',0,{signed:true,zero:true}),num('hi','Μέγιστη τιμή','',1,{signed:true,zero:true}),num('phase','Φάση','°',0,{signed:true,zero:true})],value:p=>p.f,unit:'Hz',
    draw:p=>sb(40,30)+(p.shape==='tri'?'<path class="thin" d="M-14,-7 L-7,7 L0,-7 L7,7 L14,-7"/>':'<path class="thin" d="M-14,7 L-2,-7 V7 L10,-7 V7"/>')+sl('M20,0 H30')},
+  // ---------------------------------------------------------------- continuous blocks and frame transformations (3.1)
+  INT:{name:'Ολοκληρωτής',prefix:'INT',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
+   params:[num('y0','Αρχική τιμή','',0,{signed:true,zero:true}),num('lo','Κάτω όριο','',-1e9,{signed:true}),num('hi','Άνω όριο','',1e9,{signed:true}),
+    sel('wrap','Αναδίπλωση',[['none','Καμία'],['2pi','Γωνία: 0 … 2π']],'none',{hint:'Με «Γωνία» η έξοδος μένει στο [0, 2π), π.χ. θ = ∫ω dt.'})],value:()=>null,
+   draw:()=>sb(40,30)+tx('∫',0,6,'btxt big')+sl('M-30,0 H-20 M20,0 H30')},
+  LPF:{name:'Βαθυπερατό 1ης τάξης',prefix:'LPF',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
+   params:[num('fc','Συχνότητα αποκοπής','Hz',1000),num('y0','Αρχική τιμή','',0,{signed:true,zero:true})],value:p=>p.fc,unit:'Hz',
+   draw:()=>sb(40,30)+'<path class="thin" d="M-13,-5 H0 Q6,-5 12,8"/>'+sl('M-30,0 H-20 M20,0 H30')},
+  CLARKE:{name:'Clarke abc → αβ',prefix:'CL',group:'Σήματα',pins:{},spins:{a:I(-30,-10),b:I(-30,0),c:I(-30,10),al:O(30,-10),be:O(30,10)},box:[-20,-20,40,40],blk:true,
+   params:[sel('inv','Κλίμακα',[['amp','Διατήρηση πλάτους (α = a)'],['pow','Διατήρηση ισχύος']],'amp')],value:()=>null,
+   draw:()=>sb(40,40)+tx('abc',-6,-8,'bsm')+tx('αβ',8,14,'bsm')+'<path class="thin" d="M-12,12 L12,-12"/>'+sl('M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20 M20,-10 H30 M20,10 H30')},
+  ICLARKE:{name:'Clarke αβ → abc',prefix:'ICL',group:'Σήματα',pins:{},spins:{al:I(-30,-10),be:I(-30,10),a:O(30,-10),b:O(30,0),c:O(30,10)},box:[-20,-20,40,40],blk:true,
+   params:[sel('inv','Κλίμακα',[['amp','Διατήρηση πλάτους'],['pow','Διατήρηση ισχύος']],'amp')],value:()=>null,
+   draw:()=>sb(40,40)+tx('αβ',-7,-8,'bsm')+tx('abc',6,14,'bsm')+'<path class="thin" d="M-12,12 L12,-12"/>'+sl('M-30,-10 H-20 M-30,10 H-20 M20,-10 H30 M20,0 H30 M20,10 H30')},
+  PARK:{name:'Park αβ → dq',prefix:'PK',group:'Σήματα',pins:{},spins:{al:I(-30,-10),be:I(-30,0),th:I(-30,10),d:O(30,-10),q:O(30,10)},box:[-20,-20,40,40],blk:true,params:[],value:()=>null,
+   draw:()=>sb(40,40)+tx('αβ',-7,-8,'bsm')+tx('dq',8,14,'bsm')+tx('θ',-13,13,'bsm')+'<path class="thin" d="M-12,12 L12,-12"/>'+sl('M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20 M20,-10 H30 M20,10 H30')},
+  IPARK:{name:'Park dq → αβ',prefix:'IPK',group:'Σήματα',pins:{},spins:{d:I(-30,-10),q:I(-30,0),th:I(-30,10),al:O(30,-10),be:O(30,10)},box:[-20,-20,40,40],blk:true,params:[],value:()=>null,
+   draw:()=>sb(40,40)+tx('dq',-7,-8,'bsm')+tx('αβ',8,14,'bsm')+tx('θ',-13,13,'bsm')+'<path class="thin" d="M-12,12 L12,-12"/>'+sl('M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20 M20,-10 H30 M20,10 H30')},
+  PLL:{name:'PLL (τριφασικό)',prefix:'PLL',group:'Σήματα',pins:{},spins:{a:I(-30,-10),b:I(-30,0),c:I(-30,10),th:O(30,-10),w:O(30,0),amp:O(30,10)},box:[-20,-20,40,40],blk:true,
+   params:[num('f0','Ονομαστική συχνότητα','Hz',50),num('bw','Εύρος ζώνης','Hz',20,{hint:'ω_n = 2π·εύρος, ζ = 0,707: K_p = 2ζω_n, K_i = ω_n². Το σφάλμα είναι κανονικοποιημένο με το πλάτος, άρα τα κέρδη δεν εξαρτώνται από την τάση. Το θ φέρνει τον άξονα d πάνω στο διάνυσμα της τάσης: με v_a = V̂·sin(ωt + φ), όπως οι πηγές, θ = ωt + φ − 90°, v_d = V̂, v_q = 0.'}),
+    num('th0','Αρχική γωνία','°',0,{signed:true,zero:true})],value:p=>p.f0,unit:'Hz',
+   draw:()=>sb(40,40)+tx('PLL',0,4,'bsm')+tx('θ',12,-7,'bsm')+tx('ω',12,3,'bsm')+sl('M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20 M20,-10 H30 M20,0 H30 M20,10 H30')},
   // Goto / From: signals joined by name, without a wire (like PLECS / Simulink tags)
   TAGO:{name:'Ετικέτα: προς (Goto)',prefix:'TG',group:'Σήματα',pins:{},spins:{u:I(-30,0)},box:[-20,-10,44,20],
    params:[txt('name','Όνομα σήματος','g',{hint:'Ό,τι μπαίνει εδώ βγαίνει από κάθε ετικέτα «από» με το ίδιο όνομα, σε όλο το κύκλωμα.'})],value:()=>null,
@@ -175,7 +209,7 @@
   DISP:{name:'Ένδειξη',prefix:'DSP',group:'Σήματα',pins:{},spins:{u:I(-40,0)},box:[-30,-13,60,26],blk:true,params:[num('dig','Σημαντικά ψηφία','',4)],value:()=>null,
    draw:()=>'<rect class="block sblk" x="-30" y="-13" width="60" height="26" rx="3"/><rect class="thin" x="-24" y="-8" width="48" height="16" rx="2"/>'+tx('—',0,4,'bsm')+sl('M-40,0 H-30')},
  };
- const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Φορτία','Έλεγχος','Σήματα','Βασικά'];
+ const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Μηχανές','Φορτία','Έλεγχος','Σήματα','Βασικά'];
  function defaults(type){const o={};for(const p of PARTS[type].params)o[p.k]=p.def;return o;}
  // electrical + signal pins of one placed part
  function sigPins(c){const d=PARTS[c.type];if(!d||!d.spins)return {};return typeof d.spins==='function'?d.spins({...defaults(c.type),...(c.params||{})}):d.spins;}

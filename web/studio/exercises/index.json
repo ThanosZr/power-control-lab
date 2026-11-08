@@ -5,6 +5,7 @@
   "buck_design.template.json",
   "pe2_sampling.template.json",
   "pe2_polyphase.template.json",
-  "pcm_slope.template.json"
+  "pcm_slope.template.json",
+  "dc_drive.template.json"
  ]
 }

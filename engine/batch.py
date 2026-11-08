@@ -171,8 +171,10 @@ class Circuit:
             b['clock'] = ci if isinstance(ci, int) and 0 <= ci < len(self.ctrls) else None
             self.blocks.append(b)
         self.zc = [b for b in self.blocks if b['type'] == 'CMP']
+        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL') for b in self.blocks)
         self.sv = [0.0] * self.nsig
         self.yb = [0.0] * len(self.blocks)
+        self.yo = [[0.0] * len(b.get('outList') or []) for b in self.blocks]
         E = self.els
         self.iL = [i for i, e in enumerate(E) if e['k'] == 'L']
         self.iC = [i for i, e in enumerate(E) if e['k'] == 'C']
@@ -184,6 +186,7 @@ class Circuit:
         self.iV = [i for i, e in enumerate(E) if e['k'] == 'V']
         self.iI = [i for i, e in enumerate(E) if e['k'] == 'I']
         self.iX = [i for i, e in enumerate(E) if e['k'] == 'X']
+        self.iGY = [i for i, e in enumerate(E) if e['k'] == 'GY']      # machine gyrators (3.1)
         self.n = size + len(self.iC)
         self.crow = {ci: size + j for j, ci in enumerate(self.iC)}
         self.ns = len(self.iL) + len(self.iC)
@@ -229,6 +232,7 @@ class Circuit:
             (1 / max(1e-6, _f(E[i]['src'].get('f'), 50)) for i in self.iV if E[i]['src'].get('kind') == 'ac'), 1e-3)
         self._z = None
         self._yb = []
+        self._yo = []
         self.started = False
 
     # ------------------------------------------------------------ sources
@@ -296,6 +300,15 @@ class Circuit:
             r = self.crow[i]
             vrow(E[i]['a'], E[i]['b'], r)
             A[r, r] -= self.cap_rs
+        for i in self.iGY:              # gyrator: v_ab = ψ·ω (node m), torque ψ·i into node m
+            e, r, Y = E[i], E[i]['row'], E[i]['psi']
+            for node, s in ((e['a'], 1), (e['b'], -1)):
+                if node >= 0:
+                    A[node, r] += s
+                    A[r, node] += s
+            if e['m'] >= 0:
+                A[r, e['m']] -= Y
+                A[e['m'], r] -= Y
         for i in self.iX:
             e, r = E[i], E[i]['row']
             N = e['n']
@@ -304,10 +317,13 @@ class Circuit:
                     A[node, r] += s
                     A[r, node] += s
         try:
-            cond = np.linalg.cond(A)
-            if not math.isfinite(cond) or cond > 1e17:
-                raise np.linalg.LinAlgError
-            Ainv = np.linalg.inv(A)
+            if A.shape[0] == 0:         # only signal blocks, no electrical circuit
+                Ainv = np.zeros((0, 0))
+            else:
+                cond = np.linalg.cond(A)
+                if not math.isfinite(cond) or cond > 1e17:
+                    raise np.linalg.LinAlgError
+                Ainv = np.linalg.inv(A)
         except np.linalg.LinAlgError:
             if self.cap_rs == 0 and self.iC:
                 # a capacitor directly across an ideal voltage source: give the
@@ -326,7 +342,8 @@ class Circuit:
             b[E[i]['row']] = self.Vsrc(E[i], t)
         for i in self.iI:
             e = E[i]
-            I = sched_at(e.get('sched'), t, _f(e.get('I')))
+            n = e.get('sigIn')
+            I = self.sig_in(n) if isinstance(n, int) and n >= 0 else sched_at(e.get('sched'), t, _f(e.get('I')))
             if e['a'] >= 0:
                 b[e['a']] += I
             if e['b'] >= 0:
@@ -453,7 +470,10 @@ class Circuit:
         if 'car' in rec:
             return float(self.ctrls[rec['car']].carrier_at(t))
         if 'blk' in rec:                # signal block output, from the last pass at this point
-            return float(self._yb[rec['blk']]) if rec['blk'] < len(self._yb) else 0.0
+            j = rec['blk']
+            if rec.get('out'):
+                return float(self._yo[j][rec['out']]) if j < len(self._yo) else 0.0
+            return float(self._yb[j]) if j < len(self._yb) else 0.0
         if 'sw' in rec:                 # gate pulse of one switch (after dead time)
             i = rec['sw']
             on = self.on.get(i, False) if self.els[i]['k'] == 'S' else self.gon.get(i, False)
@@ -470,7 +490,7 @@ class Circuit:
             return float(z[self.crow[i]])
         if k == 'V':
             return float(-z[e['row']])
-        if k == 'X':
+        if k in ('X', 'GY'):
             return float(z[e['row']])
         if k == 'I':
             return sched_at(e.get('sched'), t, _f(e.get('I')))
@@ -613,19 +633,22 @@ class Circuit:
         b['st']['last'] = n
         return True
 
-    def eval_blocks(self, t, x, z, mode, force=False, left=False, flip=()):
-        """Same pass as Sim.evalBlocks in the browser. Returns (block outputs, discrete update happened)."""
+    def eval_blocks(self, t, x, z, mode, force=False, left=False, flip=(), outs=False):
+        """Same pass as Sim.evalBlocks in the browser. Returns (block outputs, discrete update happened);
+        with outs=True the first item is (main outputs, all outputs per block)."""
         if not self.blocks:
-            return [], False
+            return ([], []) if outs else [], False
         trial, disc = mode == 'trial', mode in ('sample', 'init')
         sv = [0.0] * self.nsig
         yb = [0.0] * len(self.blocks)
+        yo = [[0.0] * len(b.get('outList') or []) for b in self.blocks]
+        cont, Q3, P2 = [], math.sqrt(3), 2 * math.pi
         tt = t - 1e-8 * self.base_T if left else t
         rd = lambda n: sv[n] if isinstance(n, int) and n >= 0 else 0.0
         sampled, pend = False, []
         for j, b in enumerate(self.blocks):
             st, I, ty = b['st'], b['ins'], b['type']
-            y, y2 = 0.0, None
+            y, ys = 0.0, None
             if ty in ('VM', 'AM', 'MEAS'):
                 y = self.value(b.get('rec'), t, x, z)
                 if not math.isfinite(y):
@@ -672,6 +695,9 @@ class Circuit:
                         q = min(b['ymax'], max(b['ymin'], b['y0'] + b['Kp'] * e + st['xi']))
                     st['y'] = q
                     sampled = True
+                    if b.get('track'):
+                        st['kt'] = min(1.0, b['Ki'] * Ts / b['Kp']) if b['Kp'] > 0 else 1.0
+                        pend.append(b)
                 y = st['y']
             elif ty == 'UD':
                 if disc and self.blk_due(b, t, force):
@@ -688,7 +714,49 @@ class Circuit:
                     q = 0
                 if not trial:
                     st['q'], st['sp'] = q, S
-                y, y2 = float(q), float(1 - q)
+                ys = {'q': float(q), 'nq': float(1 - q)}
+            elif ty == 'INT':
+                dt = max(0.0, t - st['t'])
+                v = min(b['hi'], max(b['lo'], st['s'] + dt * st['u']))
+                if b.get('wrap'):
+                    v -= P2 * math.floor(v / P2)
+                y = v
+                if not trial:
+                    cont.append((b, v))
+            elif ty == 'LPF':
+                dt = max(0.0, t - st['t'])
+                y = st['u'] + (st['s'] - st['u']) * math.exp(-dt / b['tau'])
+                if not trial:
+                    cont.append((b, y))
+            elif ty == 'CLARKE':
+                a, bb, c = rd(I.get('a')), rd(I.get('b')), rd(I.get('c'))
+                k = math.sqrt(1.5) if b.get('pw') else 1.0
+                ys = {'al': k * (2 * a - bb - c) / 3, 'be': k * (bb - c) / Q3}
+            elif ty == 'ICLARKE':
+                k = math.sqrt(2 / 3) if b.get('pw') else 1.0
+                al, be = k * rd(I.get('al')), k * rd(I.get('be'))
+                ys = {'a': al, 'b': -al / 2 + Q3 / 2 * be, 'c': -al / 2 - Q3 / 2 * be}
+            elif ty == 'PARK':
+                al, be, th = rd(I.get('al')), rd(I.get('be')), rd(I.get('th'))
+                ys = {'d': al * math.cos(th) + be * math.sin(th), 'q': -al * math.sin(th) + be * math.cos(th)}
+            elif ty == 'IPARK':
+                d, q, th = rd(I.get('d')), rd(I.get('q')), rd(I.get('th'))
+                ys = {'al': d * math.cos(th) - q * math.sin(th), 'be': d * math.sin(th) + q * math.cos(th)}
+            elif ty == 'PLL':
+                dt = max(0.0, t - st['t'])
+                th = st['th'] + dt * st['w']
+                th -= P2 * math.floor(th / P2)
+                a, bb, c = rd(I.get('a')), rd(I.get('b')), rd(I.get('c'))
+                al, be = (2 * a - bb - c) / 3, (bb - c) / Q3
+                vd, vq, amp = al * math.cos(th) + be * math.sin(th), -al * math.sin(th) + be * math.cos(th), math.hypot(al, be)
+                e = vq / amp if amp > 1e-9 else 0.0
+                xi = st['xi'] + b['Ki'] * dt * e
+                w = b['w0'] + b['Kp'] * e + xi
+                if not trial:
+                    st['th'], st['xi'], st['w'], st['t'] = th, xi, w, t
+                ys = {'th': th, 'w': w, 'amp': vd}
+            elif ty == 'DCM':
+                ys = {k: self.value(r, t, x, z) for k, r in (b.get('recs') or {}).items()}
             elif ty == 'CLK':
                 u = b['f'] * tt - b['ph']
                 y = 1.0 if u - math.floor(u + 1e-11) < b['duty'] - 1e-11 else 0.0
@@ -717,20 +785,27 @@ class Circuit:
                                     q['v'][-1] = v
                                 q['last'] = n
                 y = q['h']
+            ol, o = b.get('outList') or [], b['outs']
+            if ol:
+                if ys is None:
+                    ys = {ol[0]: y}
+                y = ys.get(ol[0], 0.0)
             yb[j] = y
-            o = b['outs']
-            if ty == 'SR':
-                if o.get('q', -1) >= 0:
-                    sv[o['q']] = y
-                if o.get('nq', -1) >= 0:
-                    sv[o['nq']] = y2
-            elif o.get('y', -1) >= 0:
-                sv[o['y']] = y
-        for b in pend:
-            b['st']['mem'] = rd(b['ins'].get('u'))
+            for k, name in enumerate(ol):
+                v = ys.get(name, 0.0)
+                yo[j][k] = v
+                if o.get(name, -1) >= 0:
+                    sv[o[name]] = v
+        for b in pend:                  # z⁻¹ stores its input; PI back-calculation: dx_i/dt = K_i·(e + tr/K_p)
+            if b['type'] == 'PIB':
+                b['st']['xi'] += b['st']['kt'] * rd(b['ins'].get('tr'))
+            else:
+                b['st']['mem'] = rd(b['ins'].get('u'))
+        for b, v in cont:
+            b['st']['s'], b['st']['u'], b['st']['t'] = v, rd(b['ins'].get('u')), t
         if not trial:
-            self.sv, self.yb = sv, yb
-        return yb, sampled
+            self.sv, self.yb, self.yo = sv, yb, yo
+        return ((yb, yo) if outs else yb), sampled
 
     def block_events(self, t, tn, eps):
         for b in self.blocks:
@@ -793,6 +868,8 @@ class Circuit:
                     if t + eps < te < tn:
                         tn = te
         tn = self.block_events(t, tn, eps)
+        if self.has_cont:               # continuous blocks are integrated at segment ends, as the browser does at its steps
+            tn = min(tn, t + self.base_T / 200)
         sp = [k for k in self.ctrls if k.mode == 'spwm']
         if sp:
             outs = ('a', 'na', 'b', 'nb') if any(k.dt > 0 for k in sp) else ('a', 'b')
@@ -869,7 +946,7 @@ def simulate(data):
 
     def record(t, x, z):
         if has_blk:
-            ckt._yb = ckt.eval_blocks(t, x, z, 'trial')[0]
+            ckt._yb, ckt._yo = ckt.eval_blocks(t, x, z, 'trial', outs=True)[0]
         T.append(t)
         for j, k in enumerate(keys):
             Y[j].append(ckt.value(channels[k], t, x, z))

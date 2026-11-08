@@ -1,5 +1,6 @@
 """Solution templates as data (engine/templates.py, web/studio/exercises/*.template.json)."""
 import json
+import math
 import unittest
 from pathlib import Path
 
@@ -91,6 +92,27 @@ class DataTemplates(unittest.TestCase):
         q = qs(template_solve({'template': tpl, 'values': {**base, 'V_o': 9.6, 'A_r': 0}}))      # D = 0.4
         self.assertEqual(q['stable']['correct'], 0)
         self.assertEqual(q['mamin']['answer'], 0)
+
+    def test_dc_drive_template(self):
+        tpl = load('dc_drive.template.json')
+        qs = lambda r: {q['id']: q for s in r['sections'] for b in s['blocks'] if b['type'] == 'questions' for q in b['items']}
+        ac = 2 * math.pi * 200
+        r = template_solve({'template': tpl, 'values': {'act': 1}})              # active resistance and active damping
+        v, q = r['values'], qs(r)
+        self.assertAlmostEqual(v['K_pc'], ac * .01, places=9)
+        self.assertAlmostEqual(v['R_act'], ac * .01 - .5, places=9)
+        self.assertAlmostEqual(q['kic']['answer'], ac ** 2 * .01, places=6)
+        self.assertIn(round(ac * .5, 6), [round(m['value'], 6) for m in q['kic']['mistakes']])   # the IMC gain is the mistake
+        self.assertAlmostEqual(q['iss']['answer'], 10.3, places=9)
+        self.assertAlmostEqual(q['dss']['answer'], (.5 * 10.3 + 150) / 220, places=9)
+        self.assertAlmostEqual(q['tacc']['answer'], .1, places=9)
+        self.assertAlmostEqual(q['dw']['answer'], 10 / (.02 * ac / 10 * math.e), places=9)
+        self.assertEqual(q['sep']['correct'], 0)
+        self.assertTrue(all(c['ok'] for c in r['checks']))
+        q = qs(template_solve({'template': tpl, 'values': {'act': 0}}))          # IMC
+        self.assertAlmostEqual(q['kic']['answer'], ac * .5, places=9)
+        self.assertAlmostEqual(q['dw']['answer'], 10 / (.02 * ac / 10), places=9)
+        self.assertGreater(q['ist']['answer'], 95)                                # open-loop start: about 98 A
 
     def test_prediction_questions(self):
         tpl = load('pe2_sampling.template.json')

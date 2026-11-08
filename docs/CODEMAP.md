@@ -7,19 +7,19 @@
 
 | Αρχείο | Γραμμές |
 |---|---:|
-| `web/studio/app.js` | 826 |
-| `web/studio/editor.js` | 412 |
+| `web/studio/app.js` | 900 |
+| `web/studio/editor.js` | 415 |
 | `web/studio/math.js` | 144 |
-| `web/studio/metrics.js` | 48 |
-| `web/studio/mna.js` | 665 |
-| `web/studio/parts.js` | 209 |
-| `web/studio/scope.js` | 164 |
+| `web/studio/metrics.js` | 75 |
+| `web/studio/mna.js` | 699 |
+| `web/studio/parts.js` | 243 |
+| `web/studio/scope.js` | 165 |
 | `web/studio/templates.js` | 32 |
-| `web/studio/tutorials.js` | 339 |
+| `web/studio/tutorials.js` | 382 |
 | `run.py` | 134 |
 | `engine/__init__.py` | 1 |
 | `engine/analysis.py` | 307 |
-| `engine/batch.py` | 1010 |
+| `engine/batch.py` | 1087 |
 | `engine/bidir.py` | 564 |
 | `engine/boundary.py` | 97 |
 | `engine/circuit.py` | 75 |
@@ -36,7 +36,7 @@
 | `engine/workbench.py` | 129 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_batch.py` | 137 |
+| `tests/test_batch.py` | 159 |
 | `tests/test_bidir_engine.py` | 103 |
 | `tests/test_bidir_sim.py` | 70 |
 | `tests/test_boundary.py` | 50 |
@@ -44,13 +44,13 @@
 | `tests/test_engine.py` | 276 |
 | `tests/test_live_sim.py` | 149 |
 | `tests/test_studio_math.py` | 50 |
-| `tests/test_studio_sim.py` | 199 |
-| `tests/test_templates.py` | 146 |
-| `tests/test_tutorials.py` | 171 |
-| `tests/js/batch_requests.js` | 24 |
-| `tests/js/sim_cases.js` | 138 |
-| `tests/js/tutorial_cases.js` | 42 |
-| `tests/ui/blocks_flow.js` | 79 |
+| `tests/test_studio_sim.py` | 244 |
+| `tests/test_templates.py` | 168 |
+| `tests/test_tutorials.py` | 201 |
+| `tests/js/batch_requests.js` | 38 |
+| `tests/js/sim_cases.js` | 167 |
+| `tests/js/tutorial_cases.js` | 49 |
+| `tests/ui/blocks_flow.js` | 94 |
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/features_flow.js` | 84 |
 | `tests/ui/studio_flow.js` | 39 |
@@ -75,25 +75,33 @@
 | 97 | `GND` | Γείωση |
 | 99 | `JUNC` | Κόμβος |
 | 100 | `PWM` | PWM / έλεγχος |
-| 122 | `VM` | Βολτόμετρο |
-| 124 | `AM` | Αμπερόμετρο (σε σειρά) |
-| 126 | `MEAS` | Μέτρηση στοιχείου |
-| 129 | `CONST` | Σταθερά / πρόγραμμα |
-| 132 | `GAIN` | Κέρδος |
-| 134 | `SUM` | Άθροισμα |
-| 137 | `MUL` | Γινόμενο |
-| 139 | `DIV` | Διαίρεση a/b |
-| 142 | `SAT` | Κορεσμός |
-| 145 | `CMP` | Συγκριτής |
-| 148 | `LOGIC` | Λογική πύλη |
-| 151 | `PIB` | PI διακριτός |
-| 155 | `UD` | Καθυστέρηση z⁻¹ |
-| 158 | `SR` | SR latch |
-| 161 | `CLK` | Ρολόι (τετραγωνικό) |
-| 164 | `RAMP` | Φέρον / ράμπα |
-| 169 | `TAGO` | Ετικέτα: προς (Goto) |
-| 172 | `TAGI` | Ετικέτα: από (From) |
-| 175 | `DISP` | Ένδειξη |
+| 122 | `DCM` | Μηχανή ΣΡ (ανεξάρτητη διέγερση) |
+| 132 | `VM` | Βολτόμετρο |
+| 134 | `AM` | Αμπερόμετρο (σε σειρά) |
+| 136 | `MEAS` | Μέτρηση στοιχείου |
+| 139 | `CONST` | Σταθερά / πρόγραμμα |
+| 142 | `GAIN` | Κέρδος |
+| 144 | `SUM` | Άθροισμα |
+| 147 | `MUL` | Γινόμενο |
+| 149 | `DIV` | Διαίρεση a/b |
+| 152 | `SAT` | Κορεσμός |
+| 155 | `CMP` | Συγκριτής |
+| 158 | `LOGIC` | Λογική πύλη |
+| 161 | `PIB` | PI διακριτός |
+| 167 | `UD` | Καθυστέρηση z⁻¹ |
+| 170 | `SR` | SR latch |
+| 173 | `CLK` | Ρολόι (τετραγωνικό) |
+| 176 | `RAMP` | Φέρον / ράμπα |
+| 181 | `INT` | Ολοκληρωτής |
+| 185 | `LPF` | Βαθυπερατό 1ης τάξης |
+| 188 | `CLARKE` | Clarke abc → αβ |
+| 191 | `ICLARKE` | Clarke αβ → abc |
+| 194 | `PARK` | Park αβ → dq |
+| 196 | `IPARK` | Park dq → αβ |
+| 198 | `PLL` | PLL (τριφασικό) |
+| 203 | `TAGO` | Ετικέτα: προς (Goto) |
+| 206 | `TAGI` | Ετικέτα: από (From) |
+| 209 | `DISP` | Ένδειξη |
 
 ## Tutorials (`web/studio/tutorials.js`)
 
@@ -116,7 +124,8 @@
 | 259 | `polyphase` | Αμφίδρομος · μπαταρία (PE2) | Άσκηση 2 · Πολυφασική σχεδίαση |
 | 293 | `blocks_loop` | Μπλοκ σημάτων (3.0) | Βρόχος ρεύματος από μπλοκ |
 | 320 | `peak_cm` | Μπλοκ σημάτων (3.0) | Peak current-mode και υποαρμονική |
-| 336 | `empty` | Νέο | Κενό κύκλωμα |
+| 337 | `dc_drive` | Ηλεκτρική κίνηση (3.1) | Μηχανή ΣΡ: βρόχοι ρεύματος και ταχύτητας |
+| 379 | `empty` | Νέο | Κενό κύκλωμα |
 
 ## API του server (`run.py`, `/api/<action>`)
 
@@ -124,7 +133,7 @@
 
 ## Templates δεδομένων (`web/studio/exercises/`)
 
-`buck_design.template.json`, `pcm_slope.template.json`, `pe2_battery.template.json`, `pe2_polyphase.template.json`, `pe2_sampling.template.json`
+`buck_design.template.json`, `dc_drive.template.json`, `pcm_slope.template.json`, `pe2_battery.template.json`, `pe2_polyphase.template.json`, `pe2_sampling.template.json`
 
 ## Συναρτήσεις ανά αρχείο
 
@@ -152,117 +161,125 @@
 | 47 | function | `navRange` |
 | 48 | function | `updateClock` |
 | 52 | function | `liveOf` |
-| 67 | function | `blkUnit` |
-| 69 | function | `chanLabel` |
-| 72 | function | `addProbe` |
-| 73 | function | `flash` |
-| 74 | function | `signalsFor` |
-| 79 | function | `renderChannels` |
-| 95 | function | `renderMeasure` |
-| 104 | function | `MeasureUnit` |
-| 107 | function | `simKey` |
-| 108 | function | `perSeries` |
-| 109 | function | `refFor` |
-| 110 | const fn | `sched` |
-| 114 | function | `metricsFor` |
-| 118 | function | `metricsRows` |
-| 123 | function | `eventMetricsHTML` |
-| 125 | function | `renderMetricsPanel` |
-| 136 | function | `btStatus` |
-| 137 | function | `parseStep` |
-| 138 | function | `runBatch` |
-| 154 | function | `clearBatch` |
-| 156 | function | `meanPL` |
-| 158 | function | `ringTrace` |
-| 160 | function | `compareHTML` |
-| 170 | function | `renderBatch` |
-| 175 | function | `parseCSV` |
-| 177 | const fn | `cells` |
-| 178 | const fn | `num` |
-| 184 | const fn | `normName` |
-| 185 | function | `renderCsvMap` |
-| 186 | const fn | `auto` |
-| 192 | function | `applyCsv` |
-| 197 | function | `renderCsv` |
-| 199 | function | `clearCsv` |
-| 201 | function | `sampleCompareHTML` |
-| 214 | function | `liveChange` |
-| 216 | function | `renderLiveLog` |
-| 222 | function | `changesToSchedule` |
-| 224 | const fn | `f` |
-| 229 | function | `updateLivePanel` |
-| 234 | function | `setLivePanel` |
-| 237 | function | `switchesOf` |
-| 240 | function | `addPulses` |
-| 242 | function | `pulseKeys` |
-| 243 | function | `refreshControls` |
-| 245 | const fn | `phase` |
-| 274 | const fn | `setD` |
-| 285 | const fn | `setPh` |
-| 301 | function | `closeInspector` |
-| 302 | function | `placePopup` |
-| 303 | function | `fieldHTML` |
-| 309 | function | `openInspector` |
-| 316 | const fn | `wired` |
-| 322 | const fn | `apply` |
-| 332 | function | `openWireInspector` |
-| 347 | function | `closeMenu` |
-| 348 | function | `openMenu` |
-| 363 | function | `updateHover` |
-| 374 | function | `renderPalette` |
-| 381 | function | `tutorial` |
-| 384 | function | `circuitSig` |
-| 394 | function | `tutorialRef` |
-| 395 | function | `theoryValidity` |
-| 401 | function | `staleBanner` |
-| 404 | function | `bindRestore` |
-| 405 | function | `loadTutorial` |
-| 409 | function | `applyProject` |
-| 418 | function | `renderTutorial` |
-| 428 | function | `gallery` |
-| 434 | function | `api` |
-| 435 | function | `paramsOf` |
-| 436 | function | `avgOver` |
-| 439 | function | `simValue` |
-| 445 | function | `lastPP` |
-| 447 | function | `runTheory` |
-| 459 | function | `cmpRows` |
-| 460 | function | `stepsHTML` |
-| 461 | function | `renderTheory` |
-| 491 | function | `rippleDev` |
-| 493 | function | `periodAvgAt` |
-| 495 | function | `samplingTheory` |
-| 504 | const fn | `lastAt` |
-| 526 | function | `polyTheory` |
-| 533 | const fn | `frac` |
-| 562 | function | `lastPeriods` |
-| 563 | function | `evalOrderHTML` |
-| 566 | function | `blocksTheory` |
-| 581 | function | `pcmTheory` |
-| 597 | function | `formulaTheory` |
-| 647 | function | `nodeAvg` |
-| 653 | function | `circuitForMath` |
-| 684 | function | `scheduleMath` |
-| 685 | function | `batteryKey` |
-| 687 | function | `mathChoices` |
-| 688 | const fn | `prim` |
-| 690 | function | `renderMathChoices` |
-| 692 | function | `runTemplate` |
-| 698 | function | `runMath` |
-| 719 | function | `saveLocal` |
-| 720 | function | `download` |
-| 721 | function | `exportCSV` |
-| 727 | function | `syncScopeInputs` |
-| 728 | function | `setSpeed` |
-| 731 | function | `openSettings` |
-| 732 | const fn | `sel` |
-| 733 | const fn | `chk` |
-| 749 | function | `boot` |
-| 778 | const fn | `mv` |
-| 779 | const fn | `up` |
-| 780 | const fn | `navOpen` |
-| 786 | const fn | `probeSel` |
-| 823 | function | `renderTheoryLive` |
+| 69 | function | `blkUnit` |
+| 74 | function | `outsOf` |
+| 76 | function | `chanLabel` |
+| 80 | function | `addProbe` |
+| 81 | function | `flash` |
+| 82 | function | `signalsFor` |
+| 88 | function | `renderChannels` |
+| 104 | function | `renderMeasure` |
+| 113 | function | `MeasureUnit` |
+| 116 | function | `simKey` |
+| 117 | function | `perSeries` |
+| 118 | function | `refFor` |
+| 119 | const fn | `sched` |
+| 123 | function | `metricsFor` |
+| 127 | function | `metricsRows` |
+| 132 | function | `eventMetricsHTML` |
+| 134 | function | `renderMetricsPanel` |
+| 145 | function | `rawSeries` |
+| 148 | function | `autoF1` |
+| 150 | function | `renderFFT` |
+| 169 | function | `niceTop` |
+| 172 | function | `btStatus` |
+| 173 | function | `parseStep` |
+| 174 | function | `runBatch` |
+| 190 | function | `clearBatch` |
+| 192 | function | `meanPL` |
+| 194 | function | `ringTrace` |
+| 196 | function | `compareHTML` |
+| 206 | function | `renderBatch` |
+| 211 | function | `parseCSV` |
+| 213 | const fn | `cells` |
+| 214 | const fn | `num` |
+| 220 | const fn | `normName` |
+| 221 | function | `renderCsvMap` |
+| 222 | const fn | `auto` |
+| 228 | function | `applyCsv` |
+| 233 | function | `renderCsv` |
+| 235 | function | `clearCsv` |
+| 237 | function | `sampleCompareHTML` |
+| 250 | function | `liveChange` |
+| 252 | function | `renderLiveLog` |
+| 258 | function | `changesToSchedule` |
+| 260 | const fn | `f` |
+| 265 | function | `updateLivePanel` |
+| 270 | function | `setLivePanel` |
+| 273 | function | `switchesOf` |
+| 276 | function | `addPulses` |
+| 278 | function | `pulseKeys` |
+| 279 | function | `refreshControls` |
+| 281 | const fn | `phase` |
+| 310 | const fn | `setD` |
+| 321 | const fn | `setPh` |
+| 337 | function | `closeInspector` |
+| 338 | function | `placePopup` |
+| 339 | function | `fieldHTML` |
+| 345 | function | `openInspector` |
+| 352 | const fn | `wired` |
+| 358 | const fn | `apply` |
+| 368 | function | `openWireInspector` |
+| 383 | function | `closeMenu` |
+| 384 | function | `openMenu` |
+| 399 | function | `updateHover` |
+| 413 | function | `renderPalette` |
+| 420 | function | `tutorial` |
+| 423 | function | `circuitSig` |
+| 433 | function | `tutorialRef` |
+| 434 | function | `theoryValidity` |
+| 440 | function | `staleBanner` |
+| 443 | function | `bindRestore` |
+| 444 | function | `loadTutorial` |
+| 448 | function | `applyProject` |
+| 457 | function | `renderTutorial` |
+| 467 | function | `gallery` |
+| 473 | function | `api` |
+| 474 | function | `paramsOf` |
+| 475 | function | `avgOver` |
+| 478 | function | `simValue` |
+| 484 | function | `lastPP` |
+| 486 | function | `runTheory` |
+| 498 | function | `cmpRows` |
+| 499 | function | `stepsHTML` |
+| 500 | function | `renderTheory` |
+| 530 | function | `rippleDev` |
+| 532 | function | `periodAvgAt` |
+| 534 | function | `samplingTheory` |
+| 543 | const fn | `lastAt` |
+| 565 | function | `polyTheory` |
+| 572 | const fn | `frac` |
+| 601 | function | `lastPeriods` |
+| 602 | function | `evalOrderHTML` |
+| 605 | function | `blocksTheory` |
+| 620 | function | `pcmTheory` |
+| 638 | function | `dcDriveTheory` |
+| 639 | const fn | `per` |
+| 640 | const fn | `cross` |
+| 669 | function | `formulaTheory` |
+| 720 | function | `nodeAvg` |
+| 726 | function | `circuitForMath` |
+| 757 | function | `scheduleMath` |
+| 758 | function | `batteryKey` |
+| 760 | function | `mathChoices` |
+| 761 | const fn | `prim` |
+| 763 | function | `renderMathChoices` |
+| 765 | function | `runTemplate` |
+| 771 | function | `runMath` |
+| 792 | function | `saveLocal` |
+| 793 | function | `download` |
+| 794 | function | `exportCSV` |
+| 800 | function | `syncScopeInputs` |
+| 801 | function | `setSpeed` |
+| 804 | function | `openSettings` |
+| 805 | const fn | `sel` |
+| 806 | const fn | `chk` |
+| 822 | function | `boot` |
+| 852 | const fn | `mv` |
+| 853 | const fn | `up` |
+| 854 | const fn | `navOpen` |
+| 860 | const fn | `probeSel` |
+| 897 | function | `renderTheoryLive` |
 
 ### `web/studio/editor.js`
 
@@ -320,48 +337,48 @@
 | 168 | method | `partSVG` |
 | 171 | method | `renderPart` |
 | 172 | method | `valueText` |
-| 182 | method | `renderLabels` |
-| 189 | method | `renderWires` |
-| 203 | method | `pathD` |
-| 207 | method | `midLabel` |
-| 208 | method | `renderPins` |
-| 218 | method | `renderSel` |
-| 220 | method | `setLive` |
-| 221 | method | `updateLive` |
-| 228 | method | `drawArrows` |
-| 238 | method | `world` |
-| 240 | method | `hitAt` |
-| 241 | method | `hitOf` |
-| 243 | method | `down` |
-| 262 | method | `move` |
-| 275 | method | `up` |
-| 289 | method | `cancelDrag` |
-| 290 | method | `hoverPin` |
-| 292 | method | `dbl` |
-| 293 | method | `menu` |
-| 295 | method | `wheel` |
-| 300 | method | `key` |
-| 319 | method | `beginDrag` |
-| 326 | method | `dragMove` |
-| 336 | method | `endDrag` |
-| 340 | method | `dragSeg` |
-| 343 | const fn | `stub` |
-| 352 | method | `drawMarquee` |
-| 355 | method | `marqueeSelect` |
-| 358 | const fn | `inside` |
-| 364 | method | `beginPlace` |
-| 365 | method | `ghost` |
-| 367 | method | `finishPlace` |
-| 368 | method | `cancelPlace` |
-| 370 | method | `startWire` |
-| 371 | method | `startWireFrom` |
-| 372 | method | `previewWire` |
-| 378 | method | `wireClick` |
-| 383 | method | `orthoNext` |
-| 384 | method | `finishWire` |
-| 397 | method | `cancelWire` |
-| 399 | method | `splitWire` |
-| 409 | method | `wireNetPin` |
+| 185 | method | `renderLabels` |
+| 192 | method | `renderWires` |
+| 206 | method | `pathD` |
+| 210 | method | `midLabel` |
+| 211 | method | `renderPins` |
+| 221 | method | `renderSel` |
+| 223 | method | `setLive` |
+| 224 | method | `updateLive` |
+| 231 | method | `drawArrows` |
+| 241 | method | `world` |
+| 243 | method | `hitAt` |
+| 244 | method | `hitOf` |
+| 246 | method | `down` |
+| 265 | method | `move` |
+| 278 | method | `up` |
+| 292 | method | `cancelDrag` |
+| 293 | method | `hoverPin` |
+| 295 | method | `dbl` |
+| 296 | method | `menu` |
+| 298 | method | `wheel` |
+| 303 | method | `key` |
+| 322 | method | `beginDrag` |
+| 329 | method | `dragMove` |
+| 339 | method | `endDrag` |
+| 343 | method | `dragSeg` |
+| 346 | const fn | `stub` |
+| 355 | method | `drawMarquee` |
+| 358 | method | `marqueeSelect` |
+| 361 | const fn | `inside` |
+| 367 | method | `beginPlace` |
+| 368 | method | `ghost` |
+| 370 | method | `finishPlace` |
+| 371 | method | `cancelPlace` |
+| 373 | method | `startWire` |
+| 374 | method | `startWireFrom` |
+| 375 | method | `previewWire` |
+| 381 | method | `wireClick` |
+| 386 | method | `orthoNext` |
+| 387 | method | `finishWire` |
+| 400 | method | `cancelWire` |
+| 402 | method | `splitWire` |
+| 412 | method | `wireNetPin` |
 
 ### `web/studio/math.js`
 
@@ -403,6 +420,8 @@
 | 13 | function | `responseMetrics` |
 | 40 | function | `scheduleEvents` |
 | 42 | const fn | `add` |
+| 50 | function | `harmonics` |
+| 56 | const fn | `at` |
 
 ### `web/studio/mna.js`
 
@@ -420,80 +439,80 @@
 | 71 | const fn | `mkBlock` |
 | 77 | const fn | `add` |
 | 78 | const fn | `series` |
-| 157 | function | `compileSignals` |
-| 179 | function | `cmpF` |
-| 182 | function | `luFactor` |
-| 188 | function | `luSolve` |
-| 195 | class | `Sim` |
-| 196 | method | `constructor` |
-| 198 | method | `basePeriod` |
-| 199 | method | `setStep` |
-| 200 | method | `load` |
-| 226 | method | `reset` |
-| 227 | method | `setMethod` |
-| 228 | method | `setControl` |
-| 229 | method | `setBlock` |
-| 230 | method | `setHold` |
-| 232 | method | `markChange` |
-| 234 | method | `channelKeys` |
-| 249 | method | `allocRecord` |
-| 256 | method | `V` |
-| 257 | method | `elCurrent` |
-| 261 | method | `computeVals` |
-| 283 | method | `recordNow` |
-| 291 | method | `closePeriod` |
-| 300 | method | `lastPeriod` |
-| 301 | method | `now` |
-| 306 | method | `gateOf` |
-| 312 | method | `rawGate` |
-| 323 | method | `carrier` |
-| 326 | method | `shGrid` |
-| 327 | method | `shNext` |
-| 329 | method | `sampleHolds` |
-| 334 | method | `samples` |
-| 335 | method | `ctrlEdges` |
-| 341 | method | `scrU` |
-| 342 | method | `scrGate` |
-| 343 | method | `scrEdges` |
-| 344 | method | `setFiring` |
-| 345 | method | `compV` |
-| 346 | method | `compI` |
-| 348 | method | `dbl` |
-| 349 | method | `sampleControllers` |
-| 377 | method | `evalBlocks` |
-| 412 | method | `blkDue` |
-| 414 | method | `zcFrac` |
-| 417 | method | `saveState` |
-| 419 | method | `restoreState` |
-| 421 | method | `gateSig` |
-| 425 | method | `values` |
-| 433 | method | `assemble` |
-| 435 | const fn | `g` |
-| 452 | method | `rhs` |
-| 454 | const fn | `J` |
-| 466 | method | `cplLinearize` |
-| 468 | method | `solveOnce` |
-| 476 | method | `solve` |
-| 486 | method | `check` |
-| 493 | method | `commit` |
-| 505 | method | `initialSolve` |
-| 516 | method | `step` |
-| 518 | const fn | `gs` |
-| 524 | method | `stepCore` |
-| 567 | method | `edgeSolve` |
-| 570 | method | `edgePoint` |
-| 571 | method | `nextEvent` |
-| 577 | const fn | `sch` |
-| 593 | method | `spwmCut` |
-| 596 | const fn | `sig` |
-| 601 | method | `run` |
-| 627 | function | `exportForBatch` |
-| 631 | const fn | `ci` |
-| 632 | const fn | `vd` |
-| 633 | const fn | `V` |
-| 634 | const fn | `I` |
-| 635 | const fn | `rec` |
-| 649 | const fn | `clkOf` |
+| 170 | function | `compileSignals` |
+| 192 | function | `cmpF` |
+| 195 | function | `luFactor` |
+| 201 | function | `luSolve` |
+| 208 | class | `Sim` |
+| 209 | method | `constructor` |
+| 211 | method | `basePeriod` |
+| 212 | method | `setStep` |
+| 213 | method | `load` |
+| 240 | method | `reset` |
+| 241 | method | `setMethod` |
+| 242 | method | `setControl` |
+| 243 | method | `setBlock` |
+| 244 | method | `setHold` |
+| 246 | method | `markChange` |
+| 248 | method | `channelKeys` |
+| 264 | method | `allocRecord` |
+| 271 | method | `V` |
+| 272 | method | `elCurrent` |
+| 276 | method | `computeVals` |
+| 299 | method | `recordNow` |
+| 307 | method | `closePeriod` |
+| 316 | method | `lastPeriod` |
+| 317 | method | `now` |
+| 322 | method | `gateOf` |
+| 328 | method | `rawGate` |
+| 339 | method | `carrier` |
+| 342 | method | `shGrid` |
+| 343 | method | `shNext` |
+| 345 | method | `sampleHolds` |
+| 350 | method | `samples` |
+| 351 | method | `ctrlEdges` |
+| 357 | method | `scrU` |
+| 358 | method | `scrGate` |
+| 359 | method | `scrEdges` |
+| 360 | method | `setFiring` |
+| 361 | method | `compV` |
+| 362 | method | `compI` |
+| 364 | method | `dbl` |
+| 365 | method | `sampleControllers` |
+| 393 | method | `evalBlocks` |
+| 444 | method | `blkDue` |
+| 446 | method | `zcFrac` |
+| 449 | method | `saveState` |
+| 451 | method | `restoreState` |
+| 453 | method | `gateSig` |
+| 457 | method | `values` |
+| 465 | method | `assemble` |
+| 467 | const fn | `g` |
+| 485 | method | `rhs` |
+| 487 | const fn | `J` |
+| 499 | method | `cplLinearize` |
+| 501 | method | `solveOnce` |
+| 509 | method | `solve` |
+| 519 | method | `check` |
+| 526 | method | `commit` |
+| 538 | method | `initialSolve` |
+| 549 | method | `step` |
+| 551 | const fn | `gs` |
+| 557 | method | `stepCore` |
+| 600 | method | `edgeSolve` |
+| 603 | method | `edgePoint` |
+| 604 | method | `nextEvent` |
+| 610 | const fn | `sch` |
+| 626 | method | `spwmCut` |
+| 629 | const fn | `sig` |
+| 634 | method | `run` |
+| 660 | function | `exportForBatch` |
+| 664 | const fn | `ci` |
+| 665 | const fn | `vd` |
+| 666 | const fn | `V` |
+| 667 | const fn | `I` |
+| 668 | const fn | `rec` |
+| 682 | const fn | `clkOf` |
 
 ### `web/studio/parts.js`
 
@@ -510,17 +529,17 @@
 | 15 | const fn | `tx` |
 | 16 | const fn | `sl` |
 | 17 | const fn | `CLOCK` |
-| 179 | function | `defaults` |
-| 181 | function | `sigPins` |
-| 182 | function | `pinsOf` |
-| 183 | function | `pinKind` |
-| 185 | function | `xf` |
-| 186 | function | `pinPos` |
-| 188 | function | `pinDir` |
-| 191 | function | `bbox` |
-| 195 | function | `eng` |
-| 199 | function | `parseEng` |
-| 202 | function | `parseSched` |
+| 213 | function | `defaults` |
+| 215 | function | `sigPins` |
+| 216 | function | `pinsOf` |
+| 217 | function | `pinKind` |
+| 219 | function | `xf` |
+| 220 | function | `pinPos` |
+| 222 | function | `pinDir` |
+| 225 | function | `bbox` |
+| 229 | function | `eng` |
+| 233 | function | `parseEng` |
+| 236 | function | `parseSched` |
 
 ### `web/studio/scope.js`
 
@@ -539,28 +558,28 @@
 | 35 | const fn | `clamp` |
 | 46 | method | `resize` |
 | 49 | method | `unitOf` |
-| 52 | method | `resolve` |
-| 53 | method | `channels` |
-| 54 | method | `addChannel` |
-| 57 | method | `removeChannel` |
-| 58 | method | `moveChannel` |
-| 60 | method | `windowSec` |
-| 61 | method | `viewRange` |
-| 63 | method | `ringIndex` |
-| 64 | method | `ringStart` |
-| 66 | method | `eachRaw` |
-| 68 | method | `eachPeriod` |
-| 69 | method | `valueAt` |
-| 72 | method | `stats` |
-| 77 | method | `usePeriods` |
-| 79 | method | `panTo` |
-| 80 | method | `zoomAt` |
-| 82 | method | `cursorAt` |
-| 84 | method | `plotW` |
-| 85 | method | `drawSamples` |
-| 89 | method | `draw` |
-| 112 | const fn | `Y` |
-| 129 | const fn | `flush` |
+| 53 | method | `resolve` |
+| 54 | method | `channels` |
+| 55 | method | `addChannel` |
+| 58 | method | `removeChannel` |
+| 59 | method | `moveChannel` |
+| 61 | method | `windowSec` |
+| 62 | method | `viewRange` |
+| 64 | method | `ringIndex` |
+| 65 | method | `ringStart` |
+| 67 | method | `eachRaw` |
+| 69 | method | `eachPeriod` |
+| 70 | method | `valueAt` |
+| 73 | method | `stats` |
+| 78 | method | `usePeriods` |
+| 80 | method | `panTo` |
+| 81 | method | `zoomAt` |
+| 83 | method | `cursorAt` |
+| 85 | method | `plotW` |
+| 86 | method | `drawSamples` |
+| 90 | method | `draw` |
+| 113 | const fn | `Y` |
+| 130 | const fn | `flush` |
 
 ### `web/studio/templates.js`
 
@@ -602,7 +621,8 @@ _(χωρίς συναρτήσεις)_
 | 270 | method | `build` |
 | 299 | method | `build` |
 | 325 | method | `build` |
-| 337 | method | `build` |
+| 342 | method | `build` |
+| 380 | method | `build` |
 
 ### `run.py`
 
@@ -648,36 +668,36 @@ _(χωρίς συναρτήσεις)_
 | 133 | method | `Ctrl.edges` |
 | 146 | class | `Circuit` |
 | 147 | method | `Circuit.__init__` |
-| 235 | method | `Circuit.R` |
-| 238 | method | `Circuit.Vsrc` |
-| 244 | method | `Circuit.topo` |
-| 254 | method | `Circuit.build` |
-| 322 | method | `Circuit.bsrc` |
-| 336 | method | `Circuit.solve_z` |
-| 361 | method | `Circuit.scr_u` |
-| 365 | method | `Circuit.scr_gate` |
-| 369 | method | `Circuit.scr_edges` |
-| 376 | method | `Circuit.gate_state` |
-| 389 | method | `Circuit.set_gates` |
-| 397 | method | `Circuit.may_turn_on` |
-| 401 | method | `Circuit.tolerances` |
-| 407 | method | `Circuit.consistent` |
-| 433 | method | `Circuit.value` |
-| 463 | method | `Circuit.current` |
-| 488 | method | `Circuit.prime` |
-| 498 | method | `Circuit.sig_in` |
-| 502 | method | `Circuit.sh_grid` |
-| 514 | method | `Circuit.sh_next` |
-| 521 | method | `Circuit.sh_sample` |
-| 540 | method | `Circuit.sample` |
-| 599 | method | `Circuit.cmp_f` |
-| 605 | method | `Circuit.blk_due` |
-| 616 | method | `Circuit.eval_blocks` |
-| 735 | method | `Circuit.block_events` |
-| 760 | method | `Circuit.next_event` |
-| 819 | function | `_decimate` |
-| 836 | function | `simulate` |
-| 1004 | function | `batch_sim` |
+| 239 | method | `Circuit.R` |
+| 242 | method | `Circuit.Vsrc` |
+| 248 | method | `Circuit.topo` |
+| 258 | method | `Circuit.build` |
+| 338 | method | `Circuit.bsrc` |
+| 353 | method | `Circuit.solve_z` |
+| 378 | method | `Circuit.scr_u` |
+| 382 | method | `Circuit.scr_gate` |
+| 386 | method | `Circuit.scr_edges` |
+| 393 | method | `Circuit.gate_state` |
+| 406 | method | `Circuit.set_gates` |
+| 414 | method | `Circuit.may_turn_on` |
+| 418 | method | `Circuit.tolerances` |
+| 424 | method | `Circuit.consistent` |
+| 450 | method | `Circuit.value` |
+| 483 | method | `Circuit.current` |
+| 508 | method | `Circuit.prime` |
+| 518 | method | `Circuit.sig_in` |
+| 522 | method | `Circuit.sh_grid` |
+| 534 | method | `Circuit.sh_next` |
+| 541 | method | `Circuit.sh_sample` |
+| 560 | method | `Circuit.sample` |
+| 619 | method | `Circuit.cmp_f` |
+| 625 | method | `Circuit.blk_due` |
+| 636 | method | `Circuit.eval_blocks` |
+| 810 | method | `Circuit.block_events` |
+| 835 | method | `Circuit.next_event` |
+| 896 | function | `_decimate` |
+| 913 | function | `simulate` |
+| 1081 | function | `batch_sim` |
 
 ### `engine/bidir.py`
 

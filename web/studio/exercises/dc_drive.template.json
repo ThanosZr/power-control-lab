@@ -1,0 +1,582 @@
+{
+ "schema": "pcl-template-1",
+ "id": "dc_drive",
+ "tutorial": "dc_drive",
+ "primary": true,
+ "title": "Μηχανή ΣΡ: σχεδίαση βρόχων ρεύματος και ταχύτητας",
+ "description": "Κέρδη των δύο PI από τα εύρη ζώνης (με ή χωρίς ενεργούς όρους), μόνιμη κατάσταση με φορτίο, χρόνος επιτάχυνσης στο όριο ρεύματος και πτώση της ταχύτητας στο βήμα φορτίου. Οι τιμές έρχονται από το κύκλωμα και τις επιλογές του tutorial (τυπικές τιμές μηχανής, όχι της διπλωματικής).",
+ "inputs": [
+  {
+   "name": "V_dc",
+   "label": "Τάση DC",
+   "unit": "V",
+   "value": 220,
+   "from": "comp.V1.V"
+  },
+  {
+   "name": "R_a",
+   "label": "Αντίσταση τυμπάνου",
+   "unit": "Ω",
+   "value": 0.5,
+   "from": "comp.M1.Ra"
+  },
+  {
+   "name": "L_a",
+   "label": "Αυτεπαγωγή τυμπάνου",
+   "unit": "H",
+   "value": 0.01,
+   "from": "comp.M1.La"
+  },
+  {
+   "name": "psi",
+   "label": "Ροή ψ",
+   "unit": "V·s/rad",
+   "value": 1,
+   "from": "comp.M1.psi"
+  },
+  {
+   "name": "J",
+   "label": "Ροπή αδράνειας",
+   "unit": "kg·m²",
+   "value": 0.02,
+   "from": "comp.M1.J"
+  },
+  {
+   "name": "b",
+   "label": "Τριβή",
+   "unit": "N·m·s",
+   "value": 0.002,
+   "from": "comp.M1.bm"
+  },
+  {
+   "name": "f_c",
+   "label": "Εύρος ζώνης βρόχου ρεύματος",
+   "unit": "Hz",
+   "value": 200,
+   "from": "meta.fc"
+  },
+  {
+   "name": "act",
+   "label": "Ενεργοί όροι (1 = ναι, 0 = IMC)",
+   "unit": "",
+   "value": 1,
+   "from": "meta.act"
+  },
+  {
+   "name": "w_ref",
+   "label": "Αναφορά ταχύτητας",
+   "unit": "rad/s",
+   "value": 150,
+   "from": "meta.wref"
+  },
+  {
+   "name": "T_L",
+   "label": "Ροπή φορτίου",
+   "unit": "N·m",
+   "value": 10,
+   "from": "meta.TL"
+  },
+  {
+   "name": "I_max",
+   "label": "Όριο ρεύματος",
+   "unit": "A",
+   "value": 30,
+   "from": "meta.Imax"
+  }
+ ],
+ "steps": [
+  {
+   "id": "a_c",
+   "symbol": "alpha_c",
+   "title": "Εύρος ζώνης βρόχου ρεύματος",
+   "explain": "",
+   "expr": "2*pi*f_c",
+   "unit": "rad/s"
+  },
+  {
+   "id": "K_pc",
+   "symbol": "K_pc",
+   "title": "K_p ρεύματος",
+   "explain": "Με feedforward της αντι-ΗΕΔ το σύστημα είναι 1/(sL_a + R_a). Το K_p = α_c·L_a δίνει i/i_ref = α_c/(s + α_c).",
+   "expr": "a_c*L_a",
+   "unit": "Ω"
+  },
+  {
+   "id": "R_act",
+   "symbol": "R_a_act",
+   "title": "Ενεργή αντίσταση",
+   "explain": "Με u* = … − R_a,ενεργ·i η «συνολική» αντίσταση γίνεται R_a + R_a,ενεργ = α_c·L_a, άρα και οι διαταραχές σβήνουν με α_c.",
+   "expr": "act*(a_c*L_a - R_a)",
+   "unit": "Ω"
+  },
+  {
+   "id": "K_ic",
+   "symbol": "K_ic",
+   "title": "K_i ρεύματος",
+   "explain": "Με ενεργή αντίσταση K_i = α_c²·L_a. Χωρίς (IMC) K_i = α_c·R_a: το μηδενικό του PI ακυρώνει τον πόλο R_a/L_a.",
+   "expr": "act*a_c**2*L_a + (1 - act)*a_c*R_a",
+   "unit": "Ω/s"
+  },
+  {
+   "id": "t_r",
+   "symbol": "t_r",
+   "title": "Χρόνος ανόδου 10–90 % του ρεύματος",
+   "explain": "",
+   "expr": "log(9)/a_c",
+   "unit": "s"
+  },
+  {
+   "id": "a_s",
+   "symbol": "alpha_s",
+   "title": "Εύρος ζώνης βρόχου ταχύτητας",
+   "explain": "Δέκα φορές πιο αργός από τον βρόχο ρεύματος.",
+   "expr": "a_c/10",
+   "unit": "rad/s"
+  },
+  {
+   "id": "K_ps",
+   "symbol": "K_ps",
+   "title": "K_p ταχύτητας",
+   "explain": "",
+   "expr": "a_s*J",
+   "unit": "N·m·s"
+  },
+  {
+   "id": "b_act",
+   "symbol": "b_act",
+   "title": "Ενεργή απόσβεση",
+   "explain": "",
+   "expr": "act*(a_s*J - b)",
+   "unit": "N·m·s"
+  },
+  {
+   "id": "K_is",
+   "symbol": "K_is",
+   "title": "K_i ταχύτητας",
+   "explain": "",
+   "expr": "act*a_s**2*J + (1 - act)*a_s*b",
+   "unit": "N·m"
+  },
+  {
+   "id": "i_ss",
+   "symbol": "i_ss",
+   "title": "Ρεύμα μόνιμης κατάστασης",
+   "explain": "J·dω/dt = 0: ψ·i = b·ω + τ_L.",
+   "expr": "(b*w_ref + T_L)/psi",
+   "unit": "A"
+  },
+  {
+   "id": "u_ss",
+   "symbol": "u_ss",
+   "title": "Τάση τυμπάνου",
+   "explain": "",
+   "expr": "R_a*i_ss + psi*w_ref",
+   "unit": "V"
+  },
+  {
+   "id": "D_ss",
+   "symbol": "D_ss",
+   "title": "Duty",
+   "explain": "Η ημιγέφυρα δίνει μέση τάση D·V_dc.",
+   "expr": "u_ss/V_dc",
+   "unit": ""
+  },
+  {
+   "id": "t_acc",
+   "symbol": "t_acc",
+   "title": "Χρόνος επιτάχυνσης στο όριο",
+   "explain": "Με τ_e = ψ·I_max και μικρή τριβή: dω/dt ≈ ψ·I_max/J.",
+   "expr": "J*w_ref/(psi*I_max)",
+   "unit": "s"
+  },
+  {
+   "id": "dw",
+   "symbol": "Delta_omega",
+   "title": "Μέγιστη πτώση ταχύτητας στο βήμα φορτίου",
+   "explain": "Ενεργή απόσβεση: ω = ω_ref − (τ_L/J)·t·e^(−α_s t), μέγιστο τ_L/(J·α_s·e). IMC: περίπου τ_L/(J·α_s), με επαναφορά σε J/b.",
+   "expr": "act*T_L/(J*a_s*exp(1)) + (1 - act)*T_L/(J*a_s)",
+   "unit": "rad/s"
+  },
+  {
+   "id": "tau_rec",
+   "symbol": "tau_rec",
+   "title": "Σταθερά επαναφοράς με IMC",
+   "explain": "",
+   "expr": "J/b",
+   "unit": "s"
+  },
+  {
+   "id": "sg",
+   "symbol": "sigma",
+   "title": "Απόσβεση στον ανοιχτό βρόχο",
+   "explain": "",
+   "expr": "R_a/(2*L_a)",
+   "unit": "1/s"
+  },
+  {
+   "id": "w_n",
+   "symbol": "omega_n",
+   "title": "Φυσική συχνότητα",
+   "explain": "",
+   "expr": "psi/sqrt(L_a*J)",
+   "unit": "rad/s"
+  },
+  {
+   "id": "w_d",
+   "symbol": "omega_d",
+   "title": "Συχνότητα ταλάντωσης",
+   "explain": "",
+   "expr": "sqrt(Max(w_n**2 - sg**2, 0))",
+   "unit": "rad/s"
+  },
+  {
+   "id": "t_p",
+   "symbol": "t_p",
+   "title": "Στιγμή μέγιστου ρεύματος εκκίνησης",
+   "explain": "",
+   "expr": "atan2(w_d, sg)/w_d",
+   "unit": "s"
+  },
+  {
+   "id": "I_st",
+   "symbol": "I_st",
+   "title": "Μέγιστο ρεύμα εκκίνησης με D = 0,5",
+   "explain": "i(t) = U/(L_a ω_d)·e^(−σt)·sin(ω_d t) από την ηρεμία με σταθερή τάση U.",
+   "expr": "V_dc/2/(L_a*w_d)*exp(-sg*t_p)*sin(w_d*t_p)",
+   "unit": "A"
+  }
+ ],
+ "checks": [
+  {
+   "title": "Διαχωρισμός των βρόχων",
+   "expr": "a_s <= a_c/10 + 1e-9",
+   "pass": "α_s = {a_s|rad/s} ≤ α_c/10: ο βρόχος ταχύτητας βλέπει τον βρόχο ρεύματος σχεδόν ως i_a = i_ref.",
+   "fail": "α_s = {a_s|rad/s} > α_c/10: ο εσωτερικός βρόχος δεν είναι αρκετά γρήγορος."
+  },
+  {
+   "title": "Ρεύμα μέσα στο όριο",
+   "expr": "i_ss < I_max",
+   "pass": "i = {i_ss|A} < I_max = {I_max|A}.",
+   "fail": "i = {i_ss|A} ≥ I_max: η μηχανή δεν κρατά αυτό το φορτίο."
+  },
+  {
+   "title": "Αρκετή τάση",
+   "expr": "D_ss < 1",
+   "pass": "D = {D_ss:.4g} < 1.",
+   "fail": "D = {D_ss:.4g} ≥ 1: δεν φτάνει η V_dc για αυτή την ταχύτητα."
+  }
+ ],
+ "tables": {},
+ "sections": [
+  {
+   "id": "quiz",
+   "title": "Ερωτήσεις",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "Απάντησε πρώτα και μετά πάτα «Έλεγχος». Οι απαντήσεις ακολουθούν την επιλογή «Σχεδίαση κερδών» του tutorial."
+    },
+    {
+     "type": "questions"
+    }
+   ]
+  },
+  {
+   "id": "cur",
+   "title": "Βρόχος ρεύματος",
+   "blocks": [
+    {
+     "type": "kv",
+     "rows": [
+      [
+       "α_c",
+       "{a_c|rad/s}"
+      ],
+      [
+       "K_p",
+       "{K_pc:.5g}"
+      ],
+      [
+       "R_a,ενεργ",
+       "{R_act|Ω}"
+      ],
+      [
+       "K_i",
+       "{K_ic:.5g}"
+      ]
+     ]
+    },
+    {
+     "type": "steps",
+     "steps": [
+      "a_c",
+      "K_pc",
+      "R_act",
+      "K_ic",
+      "t_r"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "spd",
+   "title": "Βρόχος ταχύτητας",
+   "blocks": [
+    {
+     "type": "kv",
+     "rows": [
+      [
+       "α_s",
+       "{a_s|rad/s}"
+      ],
+      [
+       "K_p",
+       "{K_ps:.5g}"
+      ],
+      [
+       "b_a",
+       "{b_act:.5g}"
+      ],
+      [
+       "K_i",
+       "{K_is:.5g}"
+      ]
+     ]
+    },
+    {
+     "type": "steps",
+     "steps": [
+      "a_s",
+      "K_ps",
+      "b_act",
+      "K_is"
+     ]
+    },
+    {
+     "type": "checks"
+    }
+   ]
+  },
+  {
+   "id": "ss",
+   "title": "Μόνιμη κατάσταση και μεταβατικά",
+   "blocks": [
+    {
+     "type": "steps",
+     "steps": [
+      "i_ss",
+      "u_ss",
+      "D_ss",
+      "t_acc",
+      "dw",
+      "tau_rec"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "open",
+   "title": "Ανοιχτός βρόχος",
+   "blocks": [
+    {
+     "type": "steps",
+     "steps": [
+      "sg",
+      "w_n",
+      "w_d",
+      "t_p",
+      "I_st"
+     ]
+    }
+   ]
+  }
+ ],
+ "questions": [
+  {
+   "id": "kpc",
+   "kind": "number",
+   "unit": "Ω",
+   "text": "Πόσο είναι το K_p του PI ρεύματος για εύρος ζώνης f_c = {f_c|Hz};",
+   "answer": "K_pc",
+   "tol": 0.01,
+   "mistakes": [
+    {
+     "expr": "f_c*L_a",
+     "text": "Το εύρος ζώνης μπαίνει σε rad/s: α_c = 2π·f_c."
+    },
+    {
+     "expr": "a_c*R_a",
+     "text": "Αυτό είναι το K_i του IMC. Το K_p είναι α_c·L_a."
+    }
+   ],
+   "steps": [
+    "a_c",
+    "K_pc"
+   ],
+   "hint": "Με feedforward του Ê το σύστημα είναι 1/(sL_a + R_a). Ποιο K_p δίνει κλειστό βρόχο α_c/(s + α_c);",
+   "solution": "K_p = α_c·L_a."
+  },
+  {
+   "id": "kic",
+   "kind": "number",
+   "unit": "Ω/s",
+   "text": "Και το K_i του PI ρεύματος (με την επιλεγμένη σχεδίαση);",
+   "answer": "K_ic",
+   "tol": 0.01,
+   "mistakes": [
+    {
+     "expr": "a_c*R_a",
+     "when": "act > 0.5",
+     "text": "Αυτό είναι το K_i του IMC. Με ενεργή αντίσταση η «συνολική» αντίσταση είναι α_c·L_a, άρα K_i = α_c²·L_a."
+    },
+    {
+     "expr": "a_c**2*L_a",
+     "when": "act < 0.5",
+     "text": "Αυτό είναι με ενεργή αντίσταση. Στο IMC K_i = α_c·R_a."
+    }
+   ],
+   "steps": [
+    "a_c",
+    "R_act",
+    "K_ic"
+   ],
+   "hint": "Το μηδενικό K_i/K_p του PI ακυρώνει τον πόλο (R_a + R_a,ενεργ)/L_a.",
+   "solution": "K_i = α_c·(R_a + R_a,ενεργ)."
+  },
+  {
+   "id": "iss",
+   "kind": "number",
+   "unit": "A",
+   "text": "Στη μόνιμη κατάσταση με ω = {w_ref|rad/s} και τ_L = {T_L|N·m}, πόσο είναι το ρεύμα του τυμπάνου;",
+   "answer": "i_ss",
+   "tol": 0.005,
+   "mistakes": [
+    {
+     "expr": "T_L/psi",
+     "text": "Ξέχασες την τριβή: ψ·i = b·ω + τ_L."
+    }
+   ],
+   "steps": [
+    "i_ss"
+   ],
+   "sim": {
+    "key": "Y:AM1",
+    "stat": "avg",
+    "periods": 5
+   },
+   "hint": "Στη μόνιμη κατάσταση dω/dt = 0.",
+   "solution": "i = (b·ω + τ_L)/ψ."
+  },
+  {
+   "id": "dss",
+   "kind": "number",
+   "unit": "",
+   "text": "Και το duty του PWM στη μόνιμη κατάσταση (ω = ω_ref);",
+   "answer": "D_ss",
+   "tol": 0.005,
+   "mistakes": [
+    {
+     "expr": "psi*w_ref/V_dc",
+     "text": "Ξέχασες την πτώση R_a·i: u = R_a·i + ψ·ω."
+    }
+   ],
+   "steps": [
+    "i_ss",
+    "u_ss",
+    "D_ss"
+   ],
+   "sim": {
+    "key": "D:PWM1",
+    "stat": "avg",
+    "periods": 5
+   },
+   "hint": "u = R_a·i + ψ·ω, και η ημιγέφυρα δίνει D·V_dc.",
+   "solution": "D = (R_a·i + ψ·ω)/V_dc. Με IMC, στα 0,4 s η ταχύτητα δεν έχει επανέλθει στο ω_ref (σταθερά J/b), γι' αυτό η προσομοίωση δίνει μικρότερο D."
+  },
+  {
+   "id": "tacc",
+   "kind": "number",
+   "unit": "s",
+   "text": "Περίπου πόσο διαρκεί η επιτάχυνση από 0 σε {w_ref|rad/s} με το ρεύμα στο όριο I_max = {I_max|A};",
+   "answer": "t_acc",
+   "tol": 0.03,
+   "mistakes": [
+    {
+     "expr": "J*w_ref/(psi*i_ss)",
+     "text": "Στην επιτάχυνση το ρεύμα είναι στο όριο I_max, όχι στην τιμή της μόνιμης κατάστασης."
+    }
+   ],
+   "steps": [
+    "t_acc"
+   ],
+   "hint": "J·dω/dt = ψ·I_max − b·ω − τ_L, με b·ω μικρό και τ_L = 0 στην επιτάχυνση.",
+   "solution": "t ≈ J·ω_ref/(ψ·I_max)."
+  },
+  {
+   "id": "sep",
+   "kind": "choice",
+   "text": "Γιατί επιλέγουμε α_s ≤ α_c/10;",
+   "choices": [
+    "Για να βλέπει ο βρόχος ταχύτητας τον βρόχο ρεύματος σχεδόν ως i_a = i_ref (διαχωρισμός χρονικών κλιμάκων)",
+    "Γιατί η μηχανική σταθερά χρόνου J/b είναι δέκα φορές μεγαλύτερη από την ηλεκτρική",
+    "Για να μην κορέννυται ποτέ ο βρόχος ρεύματος"
+   ],
+   "answer": "0",
+   "why": [
+    "Ο σχεδιασμός του εξωτερικού βρόχου υποθέτει ιδανικό εσωτερικό βρόχο. Αυτό ισχύει όταν ο εσωτερικός είναι πολύ πιο γρήγορος.",
+    "Το J/b δεν μπαίνει σε αυτή την επιλογή (εδώ J/b = 10 s, πολύ μεγαλύτερο).",
+    "Ο κορεσμός εξαρτάται από το βήμα αναφοράς και το I_max, και τον χειρίζεται το anti-windup."
+   ],
+   "hint": "Τι υποθέσαμε για τον βρόχο ρεύματος όταν σχεδιάσαμε τον βρόχο ταχύτητας;"
+  },
+  {
+   "id": "dw",
+   "kind": "number",
+   "unit": "rad/s",
+   "text": "Πόσο πέφτει το πολύ η ταχύτητα στο βήμα φορτίου τ_L = {T_L|N·m} (με την επιλεγμένη σχεδίαση);",
+   "answer": "dw",
+   "tol": 0.05,
+   "mistakes": [
+    {
+     "expr": "T_L/(J*a_s)",
+     "when": "act > 0.5",
+     "text": "Αυτό ισχύει για IMC. Με ενεργή απόσβεση ο κλειστός βρόχος είναι J(s + α_s)², άρα ω = ω_ref − (τ_L/J)·t·e^(−α_s t), με μέγιστο τ_L/(J·α_s·e)."
+    },
+    {
+     "expr": "T_L/(J*a_s*exp(1))",
+     "when": "act < 0.5",
+     "text": "Αυτό ισχύει με ενεργή απόσβεση. Στο IMC ο ολοκληρωτής είναι σχεδόν μηδενικός και η πτώση είναι περίπου τ_L/(J·α_s)."
+    }
+   ],
+   "steps": [
+    "a_s",
+    "dw"
+   ],
+   "hint": "Γράψε την ω(s)/τ_L(s) του κλειστού βρόχου με i_a = i_ref.",
+   "solution": "Ενεργή απόσβεση: τ_L/(J·α_s·e). IMC: περίπου τ_L/(J·α_s)."
+  },
+  {
+   "id": "ist",
+   "kind": "number",
+   "unit": "A",
+   "text": "Στον ανοιχτό βρόχο με D = 0,5 από την ηρεμία, πόσο είναι το μέγιστο ρεύμα εκκίνησης;",
+   "answer": "I_st",
+   "tol": 0.03,
+   "mistakes": [
+    {
+     "expr": "V_dc/2/R_a",
+     "text": "Αυτό θα ήταν χωρίς L_a και χωρίς αντι-ΗΕΔ. Η L_a και η ψ·ω το περιορίζουν."
+    }
+   ],
+   "steps": [
+    "sg",
+    "w_n",
+    "w_d",
+    "t_p",
+    "I_st"
+   ],
+   "hint": "i_a/U = (1/L_a)·s/(s² + (R_a/L_a)s + ψ²/(L_a J)).",
+   "solution": "I = U/(L_a ω_d)·e^(−σ t_p)·sin(ω_d t_p), t_p = atan(ω_d/σ)/ω_d."
+  }
+ ]
+}

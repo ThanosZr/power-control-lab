@@ -333,6 +333,49 @@
     ['CMP1:y','SR1:r'],['CLK1:y','SR1:s',[[570,-30],[570,40]]],['SR1:q','TG1:u'],['TF1:y','S1:g',[[200,100]]]];
    return project(comps,wires,{sim:{hDiv:500,speed:20,stopT:0},scope:{panes:[[['Y:AM1','i_L'],['Y:SUM1','i_L + ράμπα'],['Y:IC','i_c']],[['Y:SR1','Q → S1'],['Y:CLK1','ρολόι'],['Y:CMP1','reset']]],window:{unit:'T',n:6}},
     meta:{Vin,Vo,L,fs,T,D,ic,m1:(Vin-Vo)/L,m2,ma,hi,ramp:o.ramp}});}});
+ // ------------------------------------------------------------------ 3.1: DC machine drive (the first chapter of the thesis)
+ T.push({id:'dc_drive',group:'Ηλεκτρική κίνηση (3.1)',title:'Μηχανή ΣΡ: βρόχοι ρεύματος και ταχύτητας',theory:'formula',topology:'dc_drive',
+  options:[{k:'mode',label:'Έλεγχος',options:[['speed','Ταχύτητα σε σειρά με ρεύμα'],['current','Μόνο βρόχος ρεύματος'],['open','Ανοιχτός βρόχος (D = 0,5)']],def:'speed'},
+   {k:'design',label:'Σχεδίαση κερδών',options:[['active','Με ενεργό αντίσταση και ενεργή απόσβεση'],['imc','IMC χωρίς ενεργούς όρους']],def:'active'}],
+  desc:'Μηχανή ΣΡ ανεξάρτητης διέγερσης από ημιγέφυρα 220 V, 5 kHz, με τριγωνικό φέρον. Το ρεύμα μετριέται με αμπερόμετρο σε σειρά στην αρχή κάθε περιόδου, δηλαδή στο μέσο του OFF, άρα είναι η μέση τιμή (Άσκηση 2). Ο βρόχος ρεύματος δίνει τάση με PI, feedforward της αντι-ΗΕΔ Ê = ψ̂·ω και, προαιρετικά, ενεργό αντίσταση. Ο βρόχος ταχύτητας δίνει ροπή με PI και ενεργή απόσβεση, και από εκεί το i_ref = τ_ref/ψ̂. Οι τιμές της μηχανής είναι τυπικές, όχι της διπλωματικής.',
+  tasks:['Ταχύτητα: βήμα αναφοράς 0 → 150 rad/s στα 20 ms, βήμα φορτίου 10 N·m στα 250 ms. Δες στην κάρτα θεωρίας τα κέρδη και τη σύγκριση με τη μόνιμη κατάσταση.','Στην επιτάχυνση το i_ref φτάνει το όριο των 30 A: ο βρόχος ταχύτητας κορέννυται. Το back-calculation (είσοδος tr του PI = τ_sat − τ*) κρατά τον ολοκληρωτή εκεί που πρέπει, άρα η ταχύτητα φτάνει τα 150 rad/s χωρίς υπερύψωση.','Σύγκρινε «Με ενεργούς όρους» και «IMC»: με IMC η ταχύτητα πέφτει περίπου 4 rad/s στο βήμα φορτίου και επανέρχεται με σταθερά χρόνου J/b = 10 s, γιατί ο ολοκληρωτής K_i = α_s·b είναι σχεδόν μηδενικός.','Ανοιχτός βρόχος: η εκκίνηση με D = 0,5 δίνει μεγάλο ρεύμα εκκίνησης. Γι\'αυτό χρειάζεται ο βρόχος ρεύματος.','Άλλαξε εν κινήσει την αναφορά (σταθερά ω_ref ή i_ref) από τις ζωντανές παραμέτρους.'],
+  build(o){const Vdc=220,Ra=.5,La=10e-3,psi=1,Jm=.02,bm=.002,fs=5e3,ac=2*Math.PI*200,as=ac/10,act=o.design!=='imc',Imax=30;
+   const kpc=+(ac*La).toPrecision(5),kic=+(act?ac*ac*La:ac*Ra).toPrecision(5),Rac=act?+(ac*La-Ra).toPrecision(5):0;
+   const kps=+(as*Jm).toPrecision(5),kis=+(act?as*as*Jm:as*bm).toPrecision(5),bac=act?+(as*Jm-bm).toPrecision(5):0;
+   const TL=o.mode==='current'?'0':'0:0, 0.25:10';
+   // power stage: half-bridge, series ammeter, machine; ω and i_a leave through tags
+   const comps=[C('V1','VDC',100,290,{V:Vdc},{label:'V_dc'}),gnd(100,440),J('J3',100,410),J('J4',260,410),J('JM',260,300),
+    C('S1','SW',260,250,{pwm:'PWM1',out:'a',body:true,Ron:1e-3}),C('S2','SW',260,340,{pwm:'PWM1',out:'na',body:true,Ron:1e-3}),
+    C('AM1','AM',400,300,{},{label:'A_a',lbl:'below'}),C('M1','DCM',580,340,{Ra,La,psi,J:Jm,bm,TL,w0:0,ia0:0},{label:'M'}),
+    C('TGi','TAGO',440,270,{name:'i_a'}),C('TGw','TAGO',660,330,{name:'ω'})];
+   const wires=[['V1:p','S1:d',[[100,220]]],['S1:s','JM'],['JM','S2:d'],['JM','AM1:a'],['AM1:b','M1:a'],['V1:n','J3'],['J3','G1:g'],['J3','J4'],['S2:s','J4'],['J4','M1:b',[[580,410]]],
+    ['AM1:y','TGi:u'],['M1:w','TGw:u']];
+   let panes,stopT;
+   if(o.mode==='open'){comps.push(C('PWM1','PWM',670,-20,{fs,D:.5,carrier:'triangle'}));panes=[[['Y:AM1','i_a']],[['Y:M1','ω']],[['Y:M1:te','τ_e']]];stopT=.4;}
+   else{
+    // current loop: u* = PI(i_ref − i) + ψ̂·ω − R_a·i, saturated to 0 … V_dc, d = u_sat/V_dc; back-calculation tr = u_sat − u*
+    comps.push(C('TFi1','TAGI',110,20,{name:'i_a'}),C('SUMi','SUM',200,-20,{signs:'+-'},{label:'e_i'}),C('PIc','PIB',290,-20,{Kp:kpc,Ki:kic,clock:'PWM1',trig:'start',y0:0,aw:'track'},{label:'PI ρεύματος'}),
+     C('TFtc','TAGI',240,40,{name:'tr_i'}),C('SUMu','SUM',380,-20,{signs:'++-'},{label:'u*'}),C('TFw3','TAGI',210,115,{name:'ω'}),C('GPe','GAIN',300,115,{K:psi},{label:'Ê = ψ̂·ω'}),
+     C('TFi2','TAGI',210,185,{name:'i_a'}),C('GRa','GAIN',300,185,{K:Rac},{label:'R_a'}),C('SATu','SAT',470,-20,{lo:0,hi:Vdc},{label:'0 … V_dc'}),
+     C('GV','GAIN',560,-20,{K:+(1/Vdc).toPrecision(6)},{label:'1/V_dc'}),C('PWM1','PWM',670,-20,{fs,mode:'ext',carrier:'triangle'}),
+     C('SUMtc','SUM',590,65,{signs:'+-'},{label:'u_sat − u*'}),C('TGtc','TAGO',660,65,{name:'tr_i'}));
+    wires.push(['TFi1:y','SUMi:b',[[160,20],[160,-10]]],['SUMi:y','PIc:u'],['TFtc:y','PIc:tr',[[290,40]]],['PIc:y','SUMu:a',[[330,-20],[330,-30]]],
+     ['TFw3:y','GPe:u'],['GPe:y','SUMu:b',[[340,115],[340,-10]]],['TFi2:y','GRa:u'],['GRa:y','SUMu:c',[[380,185]]],['SUMu:y','SATu:u'],['SATu:y','GV:u'],['GV:y','PWM1:d'],
+     ['SATu:y','SUMtc:a',[[515,-20],[515,55]]],['SUMu:y','SUMtc:b',[[420,-20],[420,90],[550,90],[550,75]]],['SUMtc:y','TGtc:u']);
+    if(o.mode==='current'){comps.push(C('KI','CONST',110,-30,{v:'0:0, 0.005:10, 0.03:-5'},{label:'i_ref'}));wires.push(['KI:y','SUMi:a']);
+     panes=[[['Y:AM1','i_a'],['Y:KI','i_ref']],[['Y:M1','ω']],[['D:PWM1','D']]];stopT=.06;}
+    else{ // speed loop: τ* = PI(ω_ref − ω) − b_a·ω, saturated to ±ψ̂·I_max, i_ref = τ_sat/ψ̂; back-calculation tr = τ_sat − τ*
+     comps.push(C('TFir','TAGI',110,-30,{name:'i_ref'}),C('KW','CONST',110,-210,{v:'0:0, 0.02:150'},{label:'ω_ref'}),C('TFw1','TAGI',110,-160,{name:'ω'}),
+      C('SUMw','SUM',200,-200,{signs:'+-'},{label:'e_ω'}),C('PIs','PIB',290,-200,{Kp:kps,Ki:kis,clock:'PWM1',trig:'start',y0:0,aw:'track'},{label:'PI ταχύτητας'}),
+      C('TFts','TAGI',240,-140,{name:'tr_ω'}),C('SUMt','SUM',380,-200,{signs:'+-'},{label:'τ*'}),C('TFw2','TAGI',210,-100,{name:'ω'}),C('GBa','GAIN',310,-100,{K:bac},{label:'b_a'}),
+      C('SATt','SAT',470,-200,{lo:-Imax*psi,hi:Imax*psi},{label:'±ψ̂·I_max'}),C('GPsi','GAIN',560,-200,{K:+(1/psi).toPrecision(6)},{label:'1/ψ̂'}),C('TGir','TAGO',650,-200,{name:'i_ref'}),
+      C('SUMts','SUM',590,-130,{signs:'+-'},{label:'τ_sat − τ*'}),C('TGts','TAGO',660,-130,{name:'tr_ω'}));
+     wires.push(['TFir:y','SUMi:a'],['KW:y','SUMw:a',[[150,-210]]],['TFw1:y','SUMw:b',[[160,-160],[160,-190]]],['SUMw:y','PIs:u'],['TFts:y','PIs:tr',[[290,-140]]],
+      ['PIs:y','SUMt:a',[[330,-200],[330,-210]]],['TFw2:y','GBa:u'],['GBa:y','SUMt:b',[[340,-100],[340,-190]]],['SUMt:y','SATt:u'],['SATt:y','GPsi:u'],['GPsi:y','TGir:u'],
+      ['SATt:y','SUMts:a',[[515,-200],[515,-140]]],['SUMt:y','SUMts:b',[[420,-200],[420,-105],[550,-105],[550,-120]]],['SUMts:y','TGts:u']);
+     panes=[[['Y:M1','ω'],['Y:KW','ω_ref']],[['Y:AM1','i_a'],['Y:GPsi','i_ref']],[['D:PWM1','D']]];stopT=.4;}}
+   return project(comps,wires,{sim:{hDiv:100,speed:300,stopT},scope:{panes,window:{unit:'T',n:Math.round(stopT*fs)}},
+    meta:{Vdc,Ra,La,psi,J:Jm,bm,fs,fc:200,ac,as,act:act?1:0,Imax,kpc,kic,Rac,kps,kis,bac,mode:o.mode,wref:150,TL:10,tTL:.25,tw:.02}});}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
  root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};
