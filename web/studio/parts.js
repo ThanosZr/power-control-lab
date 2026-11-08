@@ -8,6 +8,14 @@
  const txt=(k,label,def,extra={})=>({k,label,type:'text',def,...extra});
  const ref=(k,label,kinds,extra={})=>({k,label,type:'ref',kinds,def:'',...extra});
  const bool=(k,label,def,extra={})=>({k,label,type:'bool',def,...extra});
+ // signal pins (3.0): {at, dir}; a part's signal pins may depend on its parameters
+ const I=(x,y)=>({at:[x,y],dir:'in'}),O=(x,y)=>({at:[x,y],dir:'out'});
+ const xe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const sb=(w,h)=>`<rect class="block sblk" x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx="4"/>`;
+ const tx=(t,x=0,y=4,cls='btxt')=>`<text class="${cls}" x="${x}" y="${y}" text-anchor="middle">${t}</text>`;
+ const sl=d=>`<path class="sigl" d="${d}"/>`;
+ const CLOCK=(extra={})=>ref('clock','Ρολόι (PWM ή μπλοκ Ρολόι)',['PWM','CLK'],{hint:'Ενημέρωση σε σημεία του φέροντος του PWM (ή στην ανερχόμενη ακμή του μπλοκ Ρολόι), όπως στο Sample & Hold.',...extra});
+ const TRIG=sel('trig','Πότε ενημερώνεται',[['start','Αρχή περιόδου του φέροντος (1 ανά T)'],['mid','Μέσο περιόδου (1 ανά T)'],['both','Και τα δύο (2 ανά T)']],'start');
  const SCHED='Πρόγραμμα: ζεύγη «t:τιμή» χωρισμένα με κόμμα, π.χ. 0:60000, 0.005:30000. Κενό = σταθερή τιμή.';
  const PARTS={
   R:{name:'Αντίσταση',prefix:'R',group:'Παθητικά',pins:{a:[-30,0],b:[30,0]},box:[-22,-8,44,16],
@@ -40,7 +48,8 @@
    value:p=>p.I,unit:'A',
    draw:()=>'<path d="M0,-40 V-16 M0,16 V40"/><circle r="16"/><path class="thin" d="M0,10 V-9 M-5,-3 L0,-10 L5,-3"/>'},
   SW:{name:'Διακόπτης (MOSFET / IGBT)',prefix:'S',group:'Ημιαγωγοί',pins:{d:[0,-30],s:[0,30]},box:[-16,-17,43,34],
-   params:[sel('gate','Οδήγηση',[['pwm','Από PWM'],['on','Πάντα ON'],['off','Πάντα OFF']],'pwm'),ref('pwm','Μπλοκ PWM',['PWM'],{show:p=>p.gate==='pwm'}),
+   spins:p=>p.gate==='sig'?{g:I(-20,0)}:{},
+   params:[sel('gate','Οδήγηση',[['pwm','Από PWM'],['sig','Από σήμα (ακροδέκτης g)'],['on','Πάντα ON'],['off','Πάντα OFF']],'pwm'),ref('pwm','Μπλοκ PWM',['PWM'],{show:p=>p.gate==='pwm'}),
     sel('out','Έξοδος PWM',[['a','g (κύρια)'],['na','ḡ (συμπληρωματική)'],['b','g₂ (2ο σκέλος)'],['nb','ḡ₂']],'a',{show:p=>p.gate==='pwm'}),
     sel('model','Μοντέλο',[['mos','MOSFET: R_on, άγει και ανάστροφα'],['igbt','IGBT: V_ce0 + R_on, μόνο ορθή φορά']],'mos'),
     num('Ron','R_on','Ω',1e-3),num('Vce0','V_ce0 (κατώφλι αγωγής)','V',1,{zero:true,show:p=>p.model==='igbt'}),num('Roff','R_off','Ω',1e6),
@@ -48,7 +57,7 @@
     num('Eon','E_on (ενέργεια ανοίγματος)','J',0,{zero:true,hint:'Μετρημένη στις V_ref, I_ref. Κλιμακώνεται με |v|·|i| τη στιγμή της μεταγωγής. 0 = χωρίς απώλειες μεταγωγής.'}),num('Eoff','E_off (ενέργεια σβέσης)','J',0,{zero:true}),
     num('Vref','V_ref','V',600,{show:p=>+p.Eon>0||+p.Eoff>0}),num('Iref','I_ref','A',100,{show:p=>+p.Eon>0||+p.Eoff>0})],
    value:()=>null,
-   draw:p=>{const d=p.body?(p.model==='igbt'?'<path class="thin" d="M0,-20 H20 V-5 M0,20 H20 V5 M15,5 H25 M15,-4 H25 L20,5 Z"/>':'<path class="thin" d="M8,-12 H20 V-5 M8,12 H20 V5 M15,5 H25 M15,-4 H25 L20,5 Z"/>'):'';
+   draw:p=>{const gs=p.gate==='sig'?sl('M-14,0 H-20'):'';const d=gs+(p.body?(p.model==='igbt'?'<path class="thin" d="M0,-20 H20 V-5 M0,20 H20 V5 M15,5 H25 M15,-4 H25 L20,5 Z"/>':'<path class="thin" d="M8,-12 H20 V-5 M8,12 H20 V5 M15,5 H25 M15,-4 H25 L20,5 Z"/>'):'');
     return p.model==='igbt'?`<path d="M0,-30 V-14 L8,-8 M8,8 L0,14 V30 M8,-13 V13 M2,-12 V12 M2,0 H-14"/><path class="fill" d="M1.2,14.6 l1.6,-6.2 l4.4,4.4 z"/>${d}`
      :`<path d="M0,-30 V-12 H8 M0,30 V12 H8 M8,-17 V-7 M8,-3 V3 M8,7 V17 M2,-15 V15 M2,0 H-14"/><path class="fill" d="M8,12 l-6,-3.5 v7 z"/>${d}`;}},
   D:{name:'Δίοδος',prefix:'D',group:'Ημιαγωγοί',pins:{a:[-30,0],k:[30,0]},box:[-10,-11,20,22],
@@ -77,23 +86,25 @@
    value:p=>p.P,unit:'W',
    draw:()=>'<path d="M0,-30 V-16 M0,16 V30"/><rect x="-11" y="-16" width="22" height="32" rx="2"/><path class="thin" d="M-4,6 V-6 h5 a3.5,3.5 0 0,1 0,7 h-5"/>'},
   SH:{name:'Sample & Hold',prefix:'SH',group:'Έλεγχος',pins:{},box:[-30,-18,60,36],
-   params:[ref('src','Μετρούμενο στοιχείο',['L','R','C','VDC','CPL','SW','D','SCR','XFMR','IDC','VAC','VAC3']),sel('qty','Μέγεθος',[['I','Ρεύμα'],['V','Τάση']],'I'),
-    ref('clock','Φέρον (μπλοκ PWM)',['PWM'],{hint:'Τα δείγματα παίρνονται σε σημεία του φέροντος αυτού του PWM, άρα ακολουθούν τη συχνότητα και τη μετατόπισή του.'}),
+   spins:p=>p.in==='sig'?{u:I(-40,0),y:O(40,0)}:{y:O(40,0)},
+   params:[sel('in','Είσοδος',[['elem','Μέτρηση στοιχείου'],['sig','Σήμα (ακροδέκτης u)']],'elem',{hint:'Η κρατημένη τιμή βγαίνει πάντα στον ακροδέκτη y, για μπλοκ σημάτων.'}),
+    ref('src','Μετρούμενο στοιχείο',['L','R','C','VDC','CPL','SW','D','SCR','XFMR','IDC','VAC','VAC3'],{show:p=>p.in!=='sig'}),sel('qty','Μέγεθος',[['I','Ρεύμα'],['V','Τάση']],'I',{show:p=>p.in!=='sig'}),
+    ref('clock','Φέρον (PWM ή μπλοκ Ρολόι)',['PWM','CLK'],{hint:'Τα δείγματα παίρνονται σε σημεία του φέροντος αυτού του PWM, άρα ακολουθούν τη συχνότητα και τη μετατόπισή του.'}),
     sel('trig','Πότε παίρνει δείγμα',[['start','Αρχή περιόδου: reset πριονωτού ή μέγιστο τριγώνου (1 ανά T)'],['mid','Μέσο περιόδου: ελάχιστο τριγώνου (1 ανά T)'],['both','Και στα δύο ακρότατα (2 ανά T)']],'start'),
     sel('init','Πριν από το πρώτο δείγμα',[['value','Δηλωμένη αρχική τιμή'],['nan','Μη έγκυρη τιμή (κενό)']],'value'),num('h0','Αρχική τιμή','',0,{signed:true,zero:true,show:p=>p.init!=='nan'})],
    value:()=>null,
-   draw:()=>'<rect class="block" x="-30" y="-18" width="60" height="36" rx="6"/><path class="thin" d="M-22,9 H-11 V1 H0 V-7 H11 V3 H22"/><path class="thin accent" d="M-11,-13 V13 M0,-13 V13 M11,-13 V13" stroke-dasharray="2 3"/>'},
+   draw:p=>'<rect class="block" x="-30" y="-18" width="60" height="36" rx="6"/><path class="thin" d="M-22,9 H-11 V1 H0 V-7 H11 V3 H22"/><path class="thin accent" d="M-11,-13 V13 M0,-13 V13 M11,-13 V13" stroke-dasharray="2 3"/>'+sl('M30,0 H40')+(p.in==='sig'?sl('M-40,0 H-30'):'')},
   GND:{name:'Γείωση',prefix:'G',group:'Βασικά',pins:{g:[0,0]},box:[-11,2,22,16],params:[],value:()=>null,
    draw:()=>'<path d="M0,0 V8 M-11,8 H11 M-7,13 H7 M-3,18 H3"/>'},
   JUNC:{name:'Κόμβος',prefix:'J',group:'Βασικά',pins:{j:[0,0]},box:[-4,-4,8,8],params:[],hidden:true,value:()=>null,draw:()=>''},
-  PWM:{name:'PWM / έλεγχος',prefix:'PWM',group:'Έλεγχος',pins:{},box:[-34,-20,68,40],
+  PWM:{name:'PWM / έλεγχος',prefix:'PWM',group:'Έλεγχος',pins:{},box:[-34,-20,68,40],spins:p=>p.mode==='ext'?{d:I(-40,0)}:{},
    params:[num('fs','Συχνότητα','Hz',20e3),
-    sel('mode','Τρόπος',[['fixed','Σταθερό D (ανοικτός βρόχος)'],['pi','Βρόχος PI / PID'],['spwm','Ημιτονοειδές SPWM'],['pp','Δύο εξόδων (full-bridge)']],'fixed'),
+    sel('mode','Τρόπος',[['fixed','Σταθερό D (ανοικτός βρόχος)'],['pi','Βρόχος PI / PID'],['spwm','Ημιτονοειδές SPWM'],['pp','Δύο εξόδων (full-bridge)'],['ext','D από σήμα (ακροδέκτης d)']],'fixed',{hint:'Με «D από σήμα» το duty διαβάζεται από τον ακροδέκτη d στα σημεία ενημέρωσης (αρχή περιόδου, και στο μέσο με διπλή ενημέρωση).'}),
     num('D','Duty D','',0.5,{zero:true,show:p=>p.mode==='fixed'||p.mode==='pp'}),
     txt('dsched','D(t)','',{hint:SCHED+' Για παλμό ΔD: 0:0.5, 0.001:0.55, 0.0028:0.5',show:p=>p.mode==='fixed'}),
     sel('carrier','Φορέας',[['triangle','Τριγωνικός (συμμετρικός)'],['saw','Πριονωτός (ON πρώτα)']],'triangle',{show:p=>p.mode!=='spwm'&&p.mode!=='pp'}),
     num('phase','Μετατόπιση φορέα','°',0,{signed:true,zero:true}),
-    sel('upd','Ενημέρωση του D',[['single','Μία φορά ανά περίοδο (στην αρχή)'],['double','Δύο φορές: και στο ελάχιστο του τριγώνου']],'single',{show:p=>(p.mode==='fixed'||p.mode==='pi')&&p.carrier!=='saw',hint:'Με δύο ενημερώσεις η ακμή ανάμματος χρησιμοποιεί το D της αρχής της περιόδου και η ακμή σβησίματος το D του μέσου. Ο PI τρέχει με T_s = T/2.'}),
+    sel('upd','Ενημέρωση του D',[['single','Μία φορά ανά περίοδο (στην αρχή)'],['double','Δύο φορές: και στο ελάχιστο του τριγώνου']],'single',{show:p=>(p.mode==='fixed'||p.mode==='pi'||p.mode==='ext')&&p.carrier!=='saw',hint:'Με δύο ενημερώσεις η ακμή ανάμματος χρησιμοποιεί το D της αρχής της περιόδου και η ακμή σβησίματος το D του μέσου. Ο PI τρέχει με T_s = T/2.'}),
     num('dt','Νεκρός χρόνος','s',0,{zero:true,hint:'Καθυστερεί το άνοιγμα κάθε εξόδου (g, ḡ, g₂, ḡ₂). Στο διάστημα αυτό το ρεύμα περνά από τις διόδους.'}),
     ref('sensor','Μετρούμενο στοιχείο',['L','R','C','VDC','CPL','SW','D','SCR','XFMR','IDC','VAC','VAC3','SH'],{show:p=>p.mode==='pi',hint:'Με μπλοκ Sample & Hold ο ελεγκτής διαβάζει την κρατημένη τιμή του, δηλαδή το τελευταίο δείγμα.'}),
     sel('qty','Μέγεθος',[['I','Ρεύμα'],['V','Τάση']],'I',{show:p=>p.mode==='pi'}),
@@ -106,15 +117,68 @@
     num('m','Δείκτης διαμόρφωσης m','',0.8,{show:p=>p.mode==='spwm'}),num('fref','Συχνότητα αναφοράς','Hz',50,{show:p=>p.mode==='spwm'}),
     num('refphase','Φάση αναφοράς','°',0,{signed:true,zero:true,show:p=>p.mode==='spwm'})],
    value:p=>p.fs,unit:'Hz',
-   draw:()=>'<rect class="block" x="-34" y="-20" width="68" height="40" rx="6"/><path class="thin" d="M-24,8 L-14,-8 L-4,8 L6,-8 L16,8 L24,-4"/><path class="thin accent" d="M-26,-2 H26"/>'},
+   draw:p=>'<rect class="block" x="-34" y="-20" width="68" height="40" rx="6"/><path class="thin" d="M-24,8 L-14,-8 L-4,8 L6,-8 L16,8 L24,-4"/><path class="thin accent" d="M-26,-2 H26"/>'+(p.mode==='ext'?sl('M-40,0 H-34'):'')},
+  // ---------------------------------------------------------------- signal blocks (3.0)
+  VM:{name:'Βολτόμετρο',prefix:'VM',group:'Σήματα',pins:{p:[0,-30],n:[0,30]},spins:{y:O(30,0)},box:[-15,-15,30,30],params:[],value:()=>null,blk:true,unit:'V',
+   draw:()=>'<path d="M0,-30 V-14 M0,14 V30"/><circle r="14"/>'+tx('V')+sl('M14,0 H30')},
+  AM:{name:'Αμπερόμετρο (σε σειρά)',prefix:'AM',group:'Σήματα',pins:{a:[-30,0],b:[30,0]},spins:{y:O(0,-30)},box:[-13,-13,26,26],params:[],value:()=>null,blk:true,unit:'A',
+   draw:()=>'<path d="M-30,0 H-12 M12,0 H30"/><circle r="12"/>'+tx('A')+sl('M0,-12 V-30')+'<path class="thin" d="M17,5 H25 M22,2 L25,5 L22,8"/>'},
+  MEAS:{name:'Μέτρηση στοιχείου',prefix:'M',group:'Σήματα',pins:{},spins:{y:O(40,0)},box:[-30,-13,60,26],blk:true,
+   params:[ref('src','Στοιχείο',['L','R','C','VDC','CPL','SW','D','SCR','XFMR','IDC','VAC','VAC3']),sel('qty','Μέγεθος',[['I','Ρεύμα'],['V','Τάση']],'I')],value:()=>null,
+   draw:p=>sb(60,26)+tx(`${p.qty==='V'?'v':'i'}(${xe(p.src||'?')})`)+sl('M30,0 H40')},
+  CONST:{name:'Σταθερά / πρόγραμμα',prefix:'K',group:'Σήματα',pins:{},spins:{y:O(30,0)},box:[-20,-12,40,24],blk:true,
+   params:[txt('v','Τιμή ή πρόγραμμα','1',{hint:'Σταθερή τιμή ή «t:τιμή», π.χ. 0:5, 0.002:10. Αλλάζει και εν κινήσει από τις ζωντανές παραμέτρους.'})],value:()=>null,
+   draw:p=>sb(40,24)+tx(String(p.v).includes(':')?'c(t)':xe(String(p.v).slice(0,6)))+sl('M20,0 H30')},
+  GAIN:{name:'Κέρδος',prefix:'GN',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,params:[num('K','Κέρδος K','',1,{signed:true,zero:true})],value:()=>null,
+   draw:()=>'<path class="block sblk" d="M-20,-15 L20,0 L-20,15 Z"/>'+tx('K',-7)+sl('M-30,0 H-20 M20,0 H30')},
+  SUM:{name:'Άθροισμα',prefix:'SUM',group:'Σήματα',pins:{},spins:p=>{const o={a:I(-30,-10),b:I(-30,10),y:O(30,0)};if(String(p.signs||'').length>=3)o.c=I(0,30);return o;},box:[-15,-15,30,30],blk:true,
+   params:[txt('signs','Πρόσημα εισόδων (a, b, c)','+-',{hint:'π.χ. «+-» για a − b, «++-» για a + b − c (τρίτη είσοδος από κάτω).'})],value:()=>null,
+   draw:p=>{const g=String(p.signs||'+-');return '<circle class="block sblk" r="15"/>'+tx('Σ',0,5)+tx(g[0]==='-'?'−':'+',-20,-14,'bsm')+tx(g[1]==='-'?'−':'+',-20,22,'bsm')+(g.length>=3?tx(g[2]==='-'?'−':'+',8,26,'bsm')+sl('M0,15 V30'):'')+sl('M-30,-10 H-11 M-30,10 H-11 M15,0 H30');}},
+  MUL:{name:'Γινόμενο',prefix:'MUL',group:'Σήματα',pins:{},spins:{a:I(-30,-10),b:I(-30,10),y:O(30,0)},box:[-20,-20,40,40],blk:true,params:[],value:()=>null,
+   draw:()=>sb(40,40)+tx('×',0,6,'btxt big')+sl('M-30,-10 H-20 M-30,10 H-20 M20,0 H30')},
+  DIV:{name:'Διαίρεση a/b',prefix:'DIV',group:'Σήματα',pins:{},spins:{a:I(-30,-10),b:I(-30,10),y:O(30,0)},box:[-20,-20,40,40],blk:true,
+   params:[num('eps','Προστασία |b| <','',1e-9,{zero:true,hint:'Όταν |b| είναι μικρότερο, η έξοδος κρατά την προηγούμενη τιμή.'})],value:()=>null,
+   draw:()=>sb(40,40)+tx('÷',0,6,'btxt big')+tx('a',-13,-7,'bsm')+tx('b',-13,14,'bsm')+sl('M-30,-10 H-20 M-30,10 H-20 M20,0 H30')},
+  SAT:{name:'Κορεσμός',prefix:'SAT',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
+   params:[num('lo','Κάτω όριο','',0,{signed:true,zero:true}),num('hi','Άνω όριο','',1,{signed:true,zero:true})],value:()=>null,
+   draw:()=>sb(40,30)+'<path class="thin" d="M-13,8 H-5 L5,-8 H13"/>'+sl('M-30,0 H-20 M20,0 H30')},
+  CMP:{name:'Συγκριτής',prefix:'CMP',group:'Σήματα',pins:{},spins:{p:I(-30,-10),n:I(-30,10),y:O(30,0)},box:[-20,-20,40,40],blk:true,
+   params:[num('hys','Υστέρηση','',0,{zero:true,hint:'Έξοδος 1 όταν (+) − (−) > h/2, 0 όταν < −h/2. Η στιγμή της διέλευσης εντοπίζεται μέσα στο βήμα του λύτη.'})],value:()=>null,
+   draw:()=>'<path class="block sblk" d="M-20,-20 L20,0 L-20,20 Z"/>'+tx('+',-13,-6,'bsm')+tx('−',-13,15,'bsm')+sl('M-30,-10 H-20 M-30,10 H-20 M20,0 H30')},
+  LOGIC:{name:'Λογική πύλη',prefix:'LG',group:'Σήματα',pins:{},spins:p=>p.op==='not'?{a:I(-30,0),y:O(30,0)}:{a:I(-30,-10),b:I(-30,10),y:O(30,0)},box:[-20,-20,40,40],blk:true,
+   params:[sel('op','Πράξη',[['and','AND'],['or','OR'],['xor','XOR'],['not','NOT'],['nand','NAND'],['nor','NOR']],'or',{hint:'Είσοδος ≥ 0,5 = 1. Έξοδος 0 ή 1.'})],value:()=>null,
+   draw:p=>sb(40,40)+tx({and:'&',or:'≥1',xor:'=1',not:'1',nand:'&',nor:'≥1'}[p.op]||'≥1',0,5)+(['not','nand','nor'].includes(p.op)?'<circle class="thin" cx="23" cy="0" r="3"/>':'')+sl(p.op==='not'?'M-30,0 H-20 M26,0 H30':'M-30,-10 H-20 M-30,10 H-20 M'+(['nand','nor'].includes(p.op)?26:20)+',0 H30')},
+  PIB:{name:'PI διακριτός',prefix:'PI',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
+   params:[num('Kp','K_p','',1e-3,{zero:true,signed:true}),num('Ki','K_i','1/s',1,{zero:true,signed:true}),CLOCK(),TRIG,
+    num('y0','Σταθερός όρος (feedforward)','',0,{signed:true,zero:true}),num('ymin','Κάτω όριο εξόδου','',0,{signed:true,zero:true}),num('ymax','Άνω όριο εξόδου','',1,{signed:true,zero:true})],value:()=>null,
+   draw:()=>sb(40,30)+tx('PI',0,5)+sl('M-30,0 H-20 M20,0 H30')},
+  UD:{name:'Καθυστέρηση z⁻¹',prefix:'Z',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
+   params:[CLOCK(),TRIG,num('y0','Αρχική έξοδος','',0,{signed:true,zero:true})],value:()=>null,
+   draw:()=>sb(40,30)+tx('z⁻¹',0,5)+sl('M-30,0 H-20 M20,0 H30')},
+  SR:{name:'SR latch',prefix:'SR',group:'Σήματα',pins:{},spins:{s:I(-30,-10),r:I(-30,10),q:O(30,-10),nq:O(30,10)},box:[-20,-20,40,40],blk:true,
+   params:[sel('q0','Αρχική κατάσταση',[['0','Q = 0'],['1','Q = 1']],'0')],value:()=>null,
+   draw:()=>sb(40,40)+tx('S',-12,-6,'bsm')+tx('R',-12,14,'bsm')+tx('Q',12,-6,'bsm')+tx('Q̄',12,14,'bsm')+'<path class="thin" d="M-20,-15 L-15,-10 L-20,-5"/>'+sl('M-30,-10 H-20 M-30,10 H-20 M20,-10 H30 M20,10 H30')},
+  CLK:{name:'Ρολόι (τετραγωνικό)',prefix:'CLK',group:'Σήματα',pins:{},spins:{y:O(30,0)},box:[-20,-15,40,30],blk:true,
+   params:[num('f','Συχνότητα','Hz',100e3),num('duty','Ποσοστό σε 1','',0.5,{zero:true}),num('phase','Φάση','°',0,{signed:true,zero:true})],value:p=>p.f,unit:'Hz',
+   draw:()=>sb(40,30)+'<path class="thin" d="M-14,7 V-7 H-6 V7 H2 V-7 H10 V7 H14"/>'+sl('M20,0 H30')},
+  RAMP:{name:'Φέρον / ράμπα',prefix:'RMP',group:'Σήματα',pins:{},spins:{y:O(30,0)},box:[-20,-15,40,30],blk:true,
+   params:[num('f','Συχνότητα','Hz',100e3),sel('shape','Μορφή',[['saw','Πριονωτή (από κάτω προς τα πάνω)'],['tri','Τριγωνική (μέγιστο στην αρχή)']],'saw'),
+    num('lo','Ελάχιστη τιμή','',0,{signed:true,zero:true}),num('hi','Μέγιστη τιμή','',1,{signed:true,zero:true}),num('phase','Φάση','°',0,{signed:true,zero:true})],value:p=>p.f,unit:'Hz',
+   draw:p=>sb(40,30)+(p.shape==='tri'?'<path class="thin" d="M-14,-7 L-7,7 L0,-7 L7,7 L14,-7"/>':'<path class="thin" d="M-14,7 L-2,-7 V7 L10,-7 V7"/>')+sl('M20,0 H30')},
+  DISP:{name:'Ένδειξη',prefix:'DSP',group:'Σήματα',pins:{},spins:{u:I(-40,0)},box:[-30,-13,60,26],blk:true,params:[num('dig','Σημαντικά ψηφία','',4)],value:()=>null,
+   draw:()=>'<rect class="block sblk" x="-30" y="-13" width="60" height="26" rx="3"/><rect class="thin" x="-24" y="-8" width="48" height="16" rx="2"/>'+tx('—',0,4,'bsm')+sl('M-40,0 H-30')},
  };
- const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Φορτία','Έλεγχος','Βασικά'];
+ const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Φορτία','Έλεγχος','Σήματα','Βασικά'];
  function defaults(type){const o={};for(const p of PARTS[type].params)o[p.k]=p.def;return o;}
+ // electrical + signal pins of one placed part
+ function sigPins(c){const d=PARTS[c.type];if(!d||!d.spins)return {};return typeof d.spins==='function'?d.spins({...defaults(c.type),...(c.params||{})}):d.spins;}
+ function pinsOf(c){const d=PARTS[c.type];if(!d)return {};if(!d.spins)return d.pins;const o={...d.pins};for(const [k,v] of Object.entries(sigPins(c)))o[k]=v.at;return o;}
+ function pinKind(c,pin){const s=sigPins(c)[pin];return s?s.dir:'el';}
  // rotation (0..3 quarter turns) and mirror applied to a local point
  function xf(c,[x,y]){if(c.flip)x=-x;for(let i=0;i<(c.rot||0);i++)[x,y]=[-y,x];return [c.x+x,c.y+y];}
- function pinPos(c,pin){return xf(c,PARTS[c.type].pins[pin]);}
+ function pinPos(c,pin){const q=pinsOf(c)[pin];return q?xf(c,q):null;}
  // outward direction of a pin (unit vector), for wire escape
- function pinDir(c,pin){const [x,y]=PARTS[c.type].pins[pin];let d=Math.abs(x)>=Math.abs(y)?[Math.sign(x)||1,0]:[0,Math.sign(y)||1];
+ function pinDir(c,pin){const [x,y]=pinsOf(c)[pin]||[1,0];let d=Math.abs(x)>=Math.abs(y)?[Math.sign(x)||1,0]:[0,Math.sign(y)||1];
   if(c.type==='GND')d=[0,-1];if(c.type==='JUNC')d=[0,0];
   const o=xf({x:0,y:0,rot:c.rot,flip:c.flip},d);return o;}
  function bbox(c){const [bx,by,bw,bh]=PARTS[c.type].box;const pts=[[bx,by],[bx+bw,by],[bx,by+bh],[bx+bw,by+bh]].map(p=>xf(c,p));
@@ -132,6 +196,7 @@
   if(!s.includes(':')){const v=parseEng(s);return Number.isFinite(v)?[[0,v]]:null;}
   const out=[];for(const part of s.split(/[;,]\s*(?=[-+.\d])/)){const [a,b]=part.split(':');const t=parseEng(a),v=parseEng(b);if(!Number.isFinite(t)||!Number.isFinite(v))return null;out.push([t,v]);}
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
- const api={PARTS,GROUPS,defaults,xf,pinPos,pinDir,bbox,eng,parseEng,parseSched};
+ const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
+ const api={PARTS,GROUPS,BLOCKS,defaults,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,eng,parseEng,parseSched};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

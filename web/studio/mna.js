@@ -26,7 +26,9 @@
   const byId=new Map(comps.map(c=>[c.id,c]));
   const parent=new Map(),find=k=>{let r=k;while(parent.get(r)!==r)r=parent.get(r);let x=k;while(parent.get(x)!==r){const n=parent.get(x);parent.set(x,r);x=n;}return r;};
   const union=(a,b)=>{const ra=find(a),rb=find(b);if(ra!==rb)parent.set(ra,rb);};
-  for(const c of comps)for(const p of Object.keys(P.PARTS[c.type].pins))parent.set(c.id+':'+p,c.id+':'+p);
+  // pin kinds: 'el' electrical, 'in'/'out' signal (3.0), 'j' junction (takes the kind of what it joins)
+  const kindOf=new Map();
+  for(const c of comps)for(const p of Object.keys(P.pinsOf(c))){const k=c.id+':'+p;parent.set(k,k);kindOf.set(k,c.type==='JUNC'?'j':P.pinKind(c,p));}
   for(const w of project.wires||[]){const a=w.a.c+':'+w.a.p,b=w.b.c+':'+w.b.p;if(parent.has(a)&&parent.has(b))union(a,b);}
   const warnings=[];
   const grounds=comps.filter(c=>c.type==='GND');
@@ -34,10 +36,16 @@
   let groundRoot=grounds.length?find(grounds[0].id+':g'):null;
   if(!groundRoot){const s=comps.find(c=>['VDC','VAC','IDC','VAC3'].includes(c.type));
    if(s){groundRoot=find(s.id+':n');warnings.push('Δεν υπάρχει γείωση: ως 0 V λαμβάνεται ο αρνητικός ακροδέκτης της '+(s.label||s.id)+'.');}}
-  // group pins into nets; canonical key = smallest pin key (stable)
+  // group pins into nets; canonical key = smallest pin key (stable). Signal pins form their own
+  // nets and never join an electrical node.
   const groups=new Map();for(const k of parent.keys()){const r=find(k);if(!groups.has(r))groups.set(r,[]);groups.get(r).push(k);}
-  const nets=[];let gnd=null;
-  for(const [r,keys] of groups){keys.sort();const net={root:r,keys,canon:keys[0],index:-1,name:null};if(r===groundRoot){gnd=net;net.ground=true;}else nets.push(net);}
+  const nets=[],sgroups=[],mixed=[];let gnd=null;
+  for(const [r,all] of groups){all.sort();const sk=all.filter(k=>kindOf.get(k)==='in'||kindOf.get(k)==='out');let keys=all;
+   if(sk.length){const ek=all.filter(k=>kindOf.get(k)==='el');sgroups.push(all.filter(k=>kindOf.get(k)!=='el'));if(!ek.length)continue;mixed.push(sk[0]+' ↔ '+ek[0]);keys=ek;}
+   const net={root:r,keys,canon:keys[0],index:-1,name:null};if(r===groundRoot){gnd=net;net.ground=true;}else nets.push(net);}
+  if(mixed.length)warnings.push('Σύρμα σήματος σε ηλεκτρικό κόμβο (η σύνδεση αγνοείται): '+mixed.slice(0,4).join(', ')+'.');
+  sgroups.sort((a,b)=>a[0]<b[0]?-1:1);const sigNets=sgroups.map((keys,index)=>({keys,canon:keys[0],index})),sigPin=new Map();for(const n of sigNets)for(const k of n.keys)sigPin.set(k,n.index);
+  const sn=(cid,pin)=>{const v=sigPin.get(cid+':'+pin);return v===undefined?-1:v;};
   nets.sort((a,b)=>a.canon<b.canon?-1:1);nets.forEach((n,i)=>n.index=i);
   const pinNet=new Map();for(const n of nets)for(const k of n.keys)pinNet.set(k,n);if(gnd)for(const k of gnd.keys)pinNet.set(k,gnd);
   // wire names label their net
@@ -48,7 +56,10 @@
   let nNodes=nets.length;
   const node=(cid,pin)=>{const n=pinNet.get(cid+':'+pin);return n&&!n.ground?n.index:-1;};
   const internal=()=>nNodes++;
-  const els=[],ctrls=[],shs=[],compInfo=new Map();
+  const els=[],ctrls=[],shs=[],blocks=[],compInfo=new Map();
+  // a signal block: inputs/outputs -> signal net index (−1 = not connected)
+  const mkBlock=(c,p,T,extra={})=>{const ins={},outs={};for(const [k,v] of Object.entries(P.sigPins(c)))(v.dir==='in'?ins:outs)[k]=sn(c.id,k);
+   const b={i:blocks.length,id:c.id,type:T,label:c.label||c.id,ins,outs,st:{},ft:T!=='UD',...extra};blocks.push(b);return b;};
   let nRows=0;const row=()=>nRows++;
   for(const c of comps){
    const p={...P.defaults(c.type),...(c.params||{})},T=c.type;
@@ -72,6 +83,7 @@
     else info.main=add({k:'S',a,b,Ron,Roff,on:false,...g});
     if(p.body){const Rd=num(p.Rd,0)>0?Math.max(num(p.Rd,0),1e-7):Ron;info.body=add({k:'D',a:b,b:a,Ron:Rd,Roff,Vf:Math.max(0,num(p.Vfd,0)),on:false,key:c.id+'#b'});}
     const Eon=Math.max(0,num(p.Eon,0)),Eoff=Math.max(0,num(p.Eoff,0));if(Eon>0||Eoff>0)info.loss={Eon,Eoff,Vref:Math.max(num(p.Vref,600),1e-9),Iref:Math.max(num(p.Iref,100),1e-12),E:0,P:0,Etot:0,n:0};
+    if(p.gate==='sig'){info.main.gIn=sn(c.id,'g');info.gIn=info.main.gIn;}
     if(p.gate==='pwm'&&!(p.pwm&&byId.get(p.pwm)?.type==='PWM'))warnings.push(`${c.label||c.id}: διάλεξε μπλοκ PWM στις ρυθμίσεις (αλλιώς μένει OFF).`);}
    else if(T==='D'){const a=node(c.id,'a'),b=node(c.id,'k');info.pins=[a,b];info.main=add({k:'D',a,b,Ron:Math.max(num(p.Ron,1e-3),1e-7),Roff:Math.max(num(p.Roff,1e6),1),Vf:num(p.Vf,0),on:false,key:c.id});}
    else if(T==='SCR'){const a=node(c.id,'a'),b=node(c.id,'k');info.pins=[a,b];const fire=p.fire||'alpha';
@@ -98,16 +110,63 @@
    else if(T==='CPL'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'CPL',a,b,P:num(p.P,1000),Vmin:Math.max(num(p.Vmin,5),1e-3),sched:P.parseSched(p.sched),v0:null});}
    else if(T==='PWM'){const fs=Math.max(num(p.fs,20e3),1e-3);ctrls.push({id:c.id,label:c.label||c.id,fs,T:1/fs,mode:p.mode||'fixed',D:num(p.D,.5),dsched:P.parseSched(p.dsched),carrier:p.carrier||'triangle',phase:num(p.phase,0)/360,
      sensor:p.sensor,qty:p.qty||'I',ref:P.parseSched(p.ref)||[[0,0]],Kp:num(p.Kp,0),Ki:num(p.Ki,0),ff:p.ff||'none',ffA:p.ffA,ffB:p.ffB,D0:num(p.D0,.5),dmin:num(p.dmin,.01),dmax:num(p.dmax,.99),
-     Kd:num(p.Kd,0),Tf:num(p.Tf,0),dt:Math.max(0,num(p.dt,0)),tkPrev:null,dPrev:null,dPrevOff:null,upd:p.upd==='double'?'double':'single',h:null,dOn:num(p.D,.5),dOff:num(p.D,.5),m:num(p.m,.8),fref:num(p.fref,50),refphase:num(p.refphase,0)*Math.PI/180,d:num(p.D,.5),xi:0,k:null,tk:0,meas:0,refNow:0,ePrev:null,dF:0});info.ctrl=ctrls[ctrls.length-1];}
-   else if(T==='SH'){const sh={id:c.id,label:c.label||c.id,src:p.src,qty:p.qty==='V'?'V':'I',clock:p.clock,trig:['start','mid','both'].includes(p.trig)?p.trig:'start',h0:p.init==='nan'?NaN:num(p.h0,0),h:NaN,last:null,n:0,log:{t:[],v:[]}};sh.h=sh.h0;shs.push(sh);info.sh=sh;
-    if(!(p.clock&&byId.get(p.clock)?.type==='PWM'))warnings.push(`${c.label||c.id}: διάλεξε μπλοκ PWM ως φέρον (αλλιώς δεν παίρνει δείγματα).`);
-    if(!(p.src&&byId.get(p.src)))warnings.push(`${c.label||c.id}: διάλεξε το στοιχείο που μετρά.`);}
+     Kd:num(p.Kd,0),Tf:num(p.Tf,0),dt:Math.max(0,num(p.dt,0)),dIn:p.mode==='ext'?sn(c.id,'d'):-1,tkPrev:null,dPrev:null,dPrevOff:null,upd:p.upd==='double'?'double':'single',h:null,dOn:num(p.D,.5),dOff:num(p.D,.5),m:num(p.m,.8),fref:num(p.fref,50),refphase:num(p.refphase,0)*Math.PI/180,d:num(p.D,.5),xi:0,k:null,tk:0,meas:0,refNow:0,ePrev:null,dF:0});info.ctrl=ctrls[ctrls.length-1];}
+   else if(T==='SH'){const sig=p.in==='sig',sh={id:c.id,label:c.label||c.id,src:sig?null:p.src,sig,qty:p.qty==='V'?'V':'I',clock:p.clock,trig:['start','mid','both'].includes(p.trig)?p.trig:'start',h0:p.init==='nan'?NaN:num(p.h0,0),h:NaN,last:null,n:0,log:{t:[],v:[]}};sh.h=sh.h0;shs.push(sh);info.sh=sh;
+    info.blk=mkBlock(c,p,'SH',{sh,sig,ft:sig});
+    if(!(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type)))warnings.push(`${c.label||c.id}: διάλεξε μπλοκ PWM ή Ρολόι ως φέρον (αλλιώς δεν παίρνει δείγματα).`);
+    if(!sig&&!(p.src&&byId.get(p.src)))warnings.push(`${c.label||c.id}: διάλεξε το στοιχείο που μετρά.`);}
+   else if(P.BLOCKS.has(T)){const b=mkBlock(c,p,T);info.blk=b;const st=b.st;
+    if(T==='VM'){b.np=node(c.id,'p');b.nn=node(c.id,'n');info.pins=[b.np,b.nn];}
+    else if(T==='AM'){const a=node(c.id,'a'),bb=node(c.id,'b');info.pins=[a,bb];b.el=info.main=add({k:'V',a,b:bb,row:row(),src:{kind:'dc',V:0}});}
+    else if(T==='MEAS'){b.src=p.src;b.qty=p.qty==='V'?'V':'I';if(!(p.src&&byId.get(p.src)))warnings.push(`${b.label}: διάλεξε το στοιχείο που μετρά.`);}
+    else if(T==='CONST'){b.sched=P.parseSched(p.v);if(!b.sched){warnings.push(`${b.label}: μη έγκυρη τιμή «${p.v}», χρησιμοποιείται 0.`);b.sched=[[0,0]];}}
+    else if(T==='GAIN')b.K=num(p.K,1);
+    else if(T==='SUM'){const g=String(p.signs||'+-');b.sg=[0,1,2].map(i=>g[i]==='-'?-1:1);}
+    else if(T==='DIV'){b.eps=Math.max(0,num(p.eps,1e-9));st.y=0;}
+    else if(T==='SAT'){b.lo=num(p.lo,0);b.hi=num(p.hi,1);}
+    else if(T==='CMP'){b.hys=Math.max(0,num(p.hys,0));st.s=0;st.f0=0;}
+    else if(T==='LOGIC')b.op=p.op||'or';
+    else if(T==='PIB'||T==='UD'){b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';b.y0=num(p.y0,0);st.last=null;st.y=b.y0;
+     if(T==='PIB'){b.Kp=num(p.Kp,0);b.Ki=num(p.Ki,0);b.ymin=num(p.ymin,0);b.ymax=num(p.ymax,1);st.xi=0;}else st.mem=b.y0;
+     if(!(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type)))warnings.push(`${b.label}: διάλεξε μπλοκ PWM ή Ρολόι (αλλιώς η έξοδος μένει ${b.y0}).`);}
+    else if(T==='SR'){st.q=p.q0==='1'?1:0;st.sp=0;}
+    else if(T==='CLK'||T==='RAMP'){b.f=Math.max(num(p.f,1e5),1e-6);b.ph=num(p.phase,0)/360;if(T==='CLK')b.duty=Math.min(1,Math.max(0,num(p.duty,.5)));else{b.shape=p.shape==='tri'?'tri':'saw';b.lo=num(p.lo,0);b.hi=num(p.hi,1);}}
+   }
   }
   for(const e of els)if(e.fire){const r=compInfo.get(e.fire.refsrc);const src=r?.type==='VAC'?r.main.src:r?.type==='VAC3'?r.phases[0].e.src:null;
    if(src){e.fire.f=Math.max(src.f,1e-6);e.fire.ph0=src.ph+(src.Vpk<0?Math.PI:0);}else if(e.fire.refsrc)warnings.push(`${compInfo.get(e.cid)?.label||e.cid}: η πηγή αναφοράς δεν βρέθηκε· χρησιμοποιείται ${e.fire.f} Hz από t = 0.`);}
   const rowBase=nNodes;for(const e of els)if(e.row!==undefined)e.row+=rowBase;
-  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId};
+  const sig=compileSignals(blocks,sigNets,ctrls,els,compInfo,warnings);
+  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId,sig,sigPin};
  }
+
+ // ---------------------------------------------------------------- signal graph (3.0)
+ // Drivers of each signal net, inputs without a source, and the evaluation order: a block comes
+ // after the blocks it reads directly (z⁻¹ has no direct feedthrough, so it breaks loops). A cycle of
+ // direct-feedthrough blocks is an algebraic loop and is reported, never solved with a hidden delay.
+ function compileSignals(blocks,sigNets,ctrls,els,compInfo,warnings){
+  const drv=new Map(),dup=[];
+  for(const b of blocks)for(const n of Object.values(b.outs))if(n>=0){if(drv.has(n))dup.push(drv.get(n).label+' / '+b.label);else drv.set(n,b);}
+  if(dup.length)warnings.push('Δύο έξοδοι στο ίδιο σύρμα σήματος: '+dup.slice(0,4).join(', ')+'.');
+  const loose=[];const chk=(n,name)=>{if(n<0||!drv.has(n))loose.push(name);};
+  for(const b of blocks)for(const [k,n] of Object.entries(b.ins))chk(n,b.label+'.'+k);
+  for(const k of ctrls)if(k.mode==='ext')chk(k.dIn,k.label+'.d');
+  for(const e of els)if(e.gate==='sig'){const c=compInfo.get(e.cid);chk(e.gIn,(c?.label||e.cid)+'.g');}
+  if(loose.length)warnings.push('Είσοδοι σήματος χωρίς πηγή (διαβάζονται ως 0): '+loose.slice(0,6).join(', ')+(loose.length>6?' …':'')+'.');
+  const deps=blocks.map(b=>b.ft?[...new Set(Object.values(b.ins).filter(n=>n>=0&&drv.has(n)).map(n=>drv.get(n)))]:[]);
+  const indeg=blocks.map((b,i)=>deps[i].length),users=blocks.map(()=>[]);deps.forEach((d,i)=>d.forEach(p=>users[p.i].push(blocks[i])));
+  const ready=blocks.filter((b,i)=>!indeg[i]),order=[];
+  while(ready.length){ready.sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));const b=ready.shift();order.push(b);for(const u of users[b.i])if(--indeg[u.i]===0)ready.push(u);}
+  if(order.length<blocks.length){const left=new Set(blocks.filter(b=>!order.includes(b)));
+   // walk back along dependencies inside the remaining set until a block repeats
+   let b=[...left][0];const path=[];while(!path.includes(b)){path.push(b);b=deps[b.i].find(p=>left.has(p));}
+   const cyc=path.slice(path.indexOf(b)).reverse();
+   throw new NetlistError('Αλγεβρικός βρόχος στα μπλοκ σημάτων: '+cyc.concat(cyc[0]).map(q=>q.label).join(' → ')+'. Βάλε μια «Καθυστέρηση z⁻¹» (ή Sample & Hold) μέσα στον βρόχο.');}
+  return {nets:sigNets,n:sigNets.length,blocks,order,zc:blocks.filter(b=>b.type==='CMP'),drv};
+ }
+ // comparator crossing function: > 0 means "switch to 1" when the output is 0, < 0 "switch to 0" when it is 1.
+ // A tiny built-in band (≈1e-9 relative) keeps the two thresholds apart when the hysteresis is zero.
+ function cmpF(b,s,pv,nv){const g=pv-nv,tol=1e-9*(Math.abs(pv)+Math.abs(nv))+1e-12,h=Math.max(b.hys,4*tol)/2;return s?g+h-tol:g-h+tol;}
 
  // ---------------------------------------------------------------- dense LU
  function luFactor(A,n,piv){
@@ -125,8 +184,8 @@
  // ---------------------------------------------------------------- simulator
  class Sim{
   constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
-  // base period: first PWM, else first AC source, else 1 ms
-  basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);return 1e-3;}
+  // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
+  basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>b.type==='CLK'||b.type==='RAMP');if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);return 1e-3;}
   setStep(hDiv,h){this.opts.hDiv=hDiv||this.opts.hDiv;this.opts.h=h||null;this.h=this.opts.h||this.T/this.opts.hDiv;}
   load(project,fresh){
    const old=this.net;const net=buildNetlist(project);
@@ -136,8 +195,9 @@
     const oc=new Map(old.ctrls.map(c=>[c.id,c]));for(const c of net.ctrls){const o=oc.get(c.id);if(o&&o.mode===c.mode&&o.T===c.T){c.xi=o.xi;c.d=o.d;c.k=o.k;c.tk=o.tk;c.tkPrev=o.tkPrev;c.dPrev=o.dPrev;c.dPrevOff=o.dPrevOff;c.dOn=o.dOn;c.dOff=o.dOff;c.h=c.upd===o.upd?o.h:null;c.meas=o.meas;c.refNow=o.refNow;c.ePrev=o.ePrev;c.dF=o.dF;}}
     for(const e of net.els)if(e.k==='CPL'){const o=old.els.find(x=>x.k==='CPL'&&x.cid===e.cid);if(o)e.v0=o.v0;}
     const os=new Map(old.shs.map(q=>[q.id,q]));for(const q of net.shs){const o=os.get(q.id);if(o){q.h=o.h;q.last=q.trig===o.trig&&q.clock===o.clock?o.last:null;q.n=o.n;q.log=o.log;}}
+    const ob=new Map(old.sig.blocks.map(b=>[b.id,b]));for(const b of net.sig.blocks){const o=ob.get(b.id);if(o&&o.type===b.type&&b.type!=='SH'){b.st={...b.st,...o.st};if(b.clock!==o.clock||b.trig!==o.trig)b.st.last=null;}}
    }
-   this.net=net;this.ctrlById=new Map(net.ctrls.map(k=>[k.id,k]));this.shById=new Map(net.shs.map(q=>[q.id,q]));this.n=net.size;this.A=new Float64Array(this.n*this.n);this.piv=new Int32Array(this.n);this.b=new Float64Array(this.n);this.cache=new Map();
+   this.net=net;const nb=net.sig.blocks.length;this.sv=new Float64Array(net.sig.n);this.svT=new Float64Array(net.sig.n);this.yb=new Float64Array(nb);this.ybT=new Float64Array(nb);this.ctrlById=new Map(net.ctrls.map(k=>[k.id,k]));this.clkById=new Map(net.sig.blocks.filter(b=>b.type==='CLK').map(b=>[b.id,b]));this.shById=new Map(net.shs.map(q=>[q.id,q]));this.n=net.size;this.A=new Float64Array(this.n*this.n);this.piv=new Int32Array(this.n);this.b=new Float64Array(this.n);this.cache=new Map();
    if(!this.x||this.x.length!==this.n||fresh)this.x=new Float64Array(this.n);
    this.hasCPL=net.els.some(e=>e.k==='CPL');this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.h=this.opts.h||this.T/this.opts.hDiv;
@@ -148,13 +208,15 @@
    if(fresh){this.t=0;this.beLeft=2;this.prevSig='';this.periodsDone=0;this.started=false;this.steps=0;this.changes=[];for(const c of net.ctrls){c.k=null;c.xi=0;}
     // carrier phase and duty first (the initial switch states depend on them), then the
     // consistent solution, the samples due at t = 0 and the controllers measuring it
-    this.sampleControllers(true);this.initialSolve();this.sampleHolds();this.sampleControllers(true);this.recordNow();}
-   else{this.beLeft=2;this.sampleControllers(false);this.computeVals();}
+    // signal blocks first too: a PWM with its duty on a signal pin needs it before the first solution
+    this.evalBlocks('init',true);this.sampleControllers(true);this.initialSolve();this.sampleHolds();this.evalBlocks('sample',true);this.sampleControllers(true);this.recordNow();}
+   else{this.beLeft=2;this.evalBlocks('commit');this.sampleControllers(false);this.computeVals();}
    return net.warnings;
   }
   reset(project){this.load(project||this.project,true);}
   setMethod(m){this.method=['TR','BE','BDF2'].includes(m)?m:'TR';this.cache.clear();this.beLeft=Math.max(this.beLeft,1);}
   setControl(id,patch){const k=this.net.ctrls.find(c=>c.id===id);if(!k)return false;Object.assign(k,patch);return true;}
+  setBlock(id,patch){const b=this.net.sig.blocks.find(q=>q.id===id);if(!b)return false;Object.assign(b,patch);this.evalBlocks('commit');this.computeVals();return true;}
   setHold(id,patch){const q=this.shById.get(id);if(!q)return false;if(patch.trig&&patch.trig!==q.trig)q.last=null;Object.assign(q,patch);return true;}
   // a change made by the user while running: drawn on the scope and kept so it can be replayed
   markChange(rec){(this.changes||(this.changes=[])).push({t:this.t,...rec});if(this.changes.length>500)this.changes.shift();}
@@ -165,6 +227,7 @@
     if(['GND','JUNC'].includes(c.type))continue;
     if(c.type==='PWM'){k.push('D:'+c.id,'G:'+c.id,'REF:'+c.id,'MEAS:'+c.id,'CAR:'+c.id);continue;}
     if(c.type==='SH'){k.push('H:'+c.id);continue;}
+    if(P.BLOCKS.has(c.type)){k.push('Y:'+c.id);continue;}
     k.push('V:'+c.id,'I:'+c.id,'P:'+c.id);
     if(c.type==='XFMR')k.push('V2:'+c.id,'I2:'+c.id,'Im:'+c.id);
     if(c.type==='VAC3')k.push('Vb:'+c.id,'Vc:'+c.id,'Ib:'+c.id,'Ic:'+c.id,'Vab:'+c.id);
@@ -186,12 +249,13 @@
     case 'S':return v*(e.on?1/e.Ron:1/e.Roff);case 'D':return e.on?(v-e.Vf)/e.Ron:v/e.Roff;case 'CPL':return e.g*v+e.J;}return 0;}
   // values of all channels at the current solution
   computeVals(){
-   const out=this.vals;let j=0;const x=this.x;
+   const out=this.vals;let j=0;const x=this.x;if(this.net.sig.blocks.length)this.evalBlocks('trial');
    for(const n of this.net.nets)out[j++]=x[n.index];
    for(const c of this.net.compInfo.values()){
     if(c.type==='GND'||c.type==='JUNC')continue;
     if(c.type==='PWM'){const k=c.ctrl;out[j++]=k.d;out[j++]=this.gateOf(k,'a',this.t)?1:0;out[j++]=k.refNow;out[j++]=k.meas;out[j++]=this.carrier(k,this.t);continue;}
     if(c.type==='SH'){out[j++]=c.sh.h;continue;}
+    if(P.BLOCKS.has(c.type)){out[j++]=this.ybT[c.blk.i];continue;}
     if(c.type==='VAC3'){const vn=this.V(c.n),ph=c.phases.map(q=>({v:this.V(q.pin)-vn,i:-this.x[q.e.row]}));
      out[j++]=ph[0].v;out[j++]=ph[0].i;out[j++]=ph[0].v*ph[0].i+ph[1].v*ph[1].i+ph[2].v*ph[2].i;out[j++]=ph[1].v;out[j++]=ph[2].v;out[j++]=ph[1].i;out[j++]=ph[2].i;out[j++]=ph[0].v-ph[1].v;continue;}
     const v=this.V(c.pins[0])-this.V(c.pins[1]);let i;
@@ -249,10 +313,10 @@
   carrier(k,t){const T=k.T;if(k.mode==='spwm'){const ph=((t/T-k.phase)%1+1)%1;return ph<.5?1-4*ph:-3+4*ph;}
    const u=Math.min(1,Math.max(0,(t-k.tk)/T));if(k.mode==='pp')return (2*u)%1;return k.carrier==='saw'?u:Math.abs(1-2*u);}
   // Sample & Hold triggers sit on the carrier of the clock PWM: b + n·Δ
-  shGrid(q){const k=this.ctrlById.get(q.clock);if(!k)return null;const T=k.T;return {b:k.phase*T+(q.trig==='mid'?T/2:0),d:q.trig==='both'?T/2:T};}
+  shGrid(q){const k=this.ctrlById.get(q.clock);let T,b0;if(k){T=k.T;b0=k.phase*T;}else{const c=this.clkById.get(q.clock);if(!c)return null;T=1/c.f;b0=c.ph*T;}return {b:b0+(q.trig==='mid'?T/2:0),d:q.trig==='both'?T/2:T};}
   shNext(q){const g=this.shGrid(q);if(!g)return Infinity;const n=Math.floor((this.t-g.b)/g.d+1e-7)+1;return g.b+n*g.d;}
   // take the samples due at the current instant (left value: the state before any switching at t)
-  sampleHolds(){let any=false;for(const q of this.net.shs){const g=this.shGrid(q);if(!g)continue;const u=(this.t-g.b)/g.d,n=Math.round(u);
+  sampleHolds(){let any=false;for(const q of this.net.shs){if(q.sig)continue;const g=this.shGrid(q);if(!g)continue;const u=(this.t-g.b)/g.d,n=Math.round(u);
     if(Math.abs(u-n)>1e-7||q.last===n)continue;q.last=n;
     let v=q.qty==='V'?this.compV(q.src):this.compI(q.src);if(!Number.isFinite(v))v=NaN;q.h=v;q.n++;q.log.t.push(this.t);q.log.v.push(v);
     if(q.log.t.length>60000){q.log.t.splice(0,10000);q.log.v.splice(0,10000);}any=true;}
@@ -280,6 +344,7 @@
     if(period){if(!first){k.tkPrev=k.tk;k.dPrev=k.dOn;k.dPrevOff=k.dOff;}k.k=idx;k.tk=(idx+k.phase)*T;}
     k.h=half;
     if(k.mode==='fixed'||k.mode==='pp')k.d=schedAt(k.dsched,this.t,k.D);
+    else if(k.mode==='ext'){const v=k.dIn>=0?this.sv[k.dIn]:0;k.d=Number.isFinite(v)?v:0;}
     else if(k.mode==='pi'){const T=Ts;
      k.refNow=schedAt(k.ref,this.t,k.ref[0][1]);const sh=this.shById.get(k.sensor);k.meas=sh?sh.h:k.qty==='V'?this.compV(k.sensor):this.compI(k.sensor);if(!Number.isFinite(k.meas))k.meas=0;
      let ff=0;if(k.ff==='ratio'){const a=this.compV(k.ffA),b=this.compV(k.ffB);ff=Math.abs(b)>1e-9?1-a/b:0;}else if(k.ff==='const')ff=k.D0;
@@ -293,8 +358,58 @@
    }
    return changed;
   }
+  // ------------------------------------------------------------ signal blocks (3.0)
+  // One pass in dependency order. mode: 'trial' (scratch arrays, no state change), 'commit' (continuous
+  // blocks; comparator, latch and divider states are updated), 'sample' (also the discrete blocks due at
+  // this instant: PI, z⁻¹, Sample & Hold with a signal input), 'init' (before the first consistent solution,
+  // nothing is logged). left: time sources take their value just before t (used when looking for a
+  // comparator crossing that ends exactly at a ramp reset). Returns true if a discrete block updated.
+  evalBlocks(mode,force=false,left=false){
+   const G=this.net.sig;if(!G.blocks.length)return false;const trial=mode==='trial',disc=mode==='sample'||mode==='init';
+   const sv=trial?this.svT:this.sv,yb=trial?this.ybT:this.yb;sv.fill(0);const t=left?this.t-1e-6*this.h:this.t;const rd=n=>n>=0&&n!==undefined?sv[n]:0;let sampled=false;const pend=[];
+   for(const b of G.order){const st=b.st,I=b.ins;let y=0,y2=null;
+    switch(b.type){
+     case 'VM':y=this.V(b.np)-this.V(b.nn);break;
+     case 'AM':y=this.x[b.el.row];break;                       // current a → b through the meter
+     case 'MEAS':y=b.qty==='V'?this.compV(b.src):this.compI(b.src);if(!Number.isFinite(y))y=0;break;
+     case 'CONST':y=schedAt(b.sched,t,b.sched[0][1]);break;
+     case 'GAIN':y=b.K*rd(I.u);break;
+     case 'SUM':y=b.sg[0]*rd(I.a)+b.sg[1]*rd(I.b)+(I.c!==undefined?b.sg[2]*rd(I.c):0);break;
+     case 'MUL':y=rd(I.a)*rd(I.b);break;
+     case 'DIV':{const d=rd(I.b);y=Math.abs(d)>b.eps?rd(I.a)/d:st.y;if(!trial)st.y=y;break;}
+     case 'SAT':y=Math.min(b.hi,Math.max(b.lo,rd(I.u)));break;
+     case 'CMP':{const pv=rd(I.p),nv=rd(I.n),f=cmpF(b,st.s,pv,nv);const s2=st.s?(f<0?0:1):(f>0?1:0);
+      if(trial)b.f1=f;else{st.s=s2;st.f0=cmpF(b,s2,pv,nv);}y=s2;break;}
+     case 'LOGIC':{const a=rd(I.a)>=.5,c=rd(I.b)>=.5;y={and:a&&c,or:a||c,xor:a!==c,not:!a,nand:!(a&&c),nor:!(a||c)}[b.op]?1:0;break;}
+     case 'PIB':{if(disc&&this.blkDue(b,force)){const Ts=this.shGrid(b).d,e=rd(I.u);if(force&&!this.started)st.xi=0;
+       st.xi+=b.Ki*Ts*e;let q=b.y0+b.Kp*e+st.xi;if(q>b.ymax||q<b.ymin){st.xi-=b.Ki*Ts*e;q=Math.min(b.ymax,Math.max(b.ymin,b.y0+b.Kp*e+st.xi));}st.y=q;sampled=true;}
+      y=st.y;break;}
+     case 'UD':if(disc&&this.blkDue(b,force)){st.y=force?b.y0:st.mem;pend.push(b);sampled=true;}y=st.y;break;
+     case 'SR':{const S=rd(I.s)>=.5,Rr=rd(I.r)>=.5;let q=st.q;if(S&&!st.sp)q=1;if(Rr)q=0;if(!trial){st.q=q;st.sp=S;}y=q;y2=1-q;break;}
+     case 'CLK':{const u=b.f*t-b.ph,fr=u-Math.floor(u+1e-11);y=fr<b.duty-1e-11?1:0;break;}
+     case 'RAMP':{const u=b.f*t-b.ph,fr=Math.max(0,u-Math.floor(u+1e-11));y=b.lo+(b.hi-b.lo)*(b.shape==='tri'?Math.abs(1-2*fr):fr);break;}
+     case 'DISP':y=rd(I.u);break;
+     case 'SH':{const q=b.sh;if(b.sig&&disc){const g=this.shGrid(q);if(g){const u=(this.t-g.b)/g.d,n=Math.round(u);
+       if(Math.abs(u-n)<=1e-7&&(force||q.last!==n)){const v=rd(I.u);q.h=v;sampled=true;if(mode==='sample'){if(q.last!==n){q.n++;q.log.t.push(this.t);q.log.v.push(v);}else{q.log.v[q.log.v.length-1]=v;}q.last=n;}}}}
+      y=q.h;break;}
+    }
+    yb[b.i]=y;const o=b.outs;if(b.type==='SR'){if(o.q>=0)sv[o.q]=y;if(o.nq>=0)sv[o.nq]=y2;}else if(o.y>=0)sv[o.y]=y;
+   }
+   for(const b of pend)b.st.mem=rd(b.ins.u);
+   return sampled;
+  }
+  // a discrete block (PI, z⁻¹) is due when t sits on the grid of its clock carrier, once per grid point
+  blkDue(b,force){const g=this.shGrid(b);if(!g)return false;const u=(this.t-g.b)/g.d,n=Math.round(u);if(Math.abs(u-n)>1e-7)return false;if(!force&&b.st.last===n)return false;b.st.last=n;return true;}
+  // comparator roots inside a step: fraction of the step where the first output change happens (or null)
+  zcFrac(){this.evalBlocks('trial',false,true);let th=null;
+   for(const b of this.net.sig.zc){const s=b.st.s,f0=b.st.f0,f1=b.f1;if(!(s?f1<0:f1>0))continue;const d=f0-f1;const q=Math.min(1,Math.max(0,d!==0?f0/d:0));if(th===null||q<th)th=q;}
+   return th;}
+  saveState(){const el=[];for(const e of this.net.els){if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);}
+   return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el};}
+  restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
+   for(const r of S.el){const e=r[0];if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}}
   gateSig(t){let s='';for(const e of this.net.els){if(e.k!=='S'&&!e.gk)continue;let on=false;
-    if(e.gate==='on')on=true;else if(e.gate==='pwm'){const k=this.net.ctrls.find(c=>c.id===e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
+    if(e.gate==='on')on=true;else if(e.gate==='sig')on=(e.gIn>=0?this.sv[e.gIn]:0)>=.5;else if(e.gate==='pwm'){const k=this.net.ctrls.find(c=>c.id===e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
     if(e.k==='S')e.on=on;else{e.gon=on;if(e.gk==='igbt'&&!on)e.on=false;}s+=on?'1':'0';}return s;}
   // ------------------------------------------------------------ assembly
   values(t){ // time-dependent element values at time t
@@ -405,7 +520,19 @@
    if(mode==='BDF2'){const w=this.hLast?h/this.hLast:0;if(!(w>.2&&w<5))mode='BE';else this.bdf={w,a0:(1+2*w)/(1+w),a1:-(1+w),a2:w*w/(1+w)};}
    this.values(t0+h);
    let sol=this.solve(h,mode),bad=this.check(sol);
-   if(!bad.length){this.commit(sol,h,mode);this.beLeft--;return h;}
+   if(!bad.length){
+    if(!this.net.sig.zc.length){this.commit(sol,h,mode);this.beLeft--;return h;}
+    // a comparator changes inside the step: cut the step at the crossing (secant on the comparator
+    // input, exact for the piecewise-linear currents of switched converters), like a diode transition
+    const snap=this.saveState();this.commit(sol,h,mode);const th=this.zcFrac();
+    if(th===null){this.beLeft--;return h;}
+    const hh=Math.max(th*h*(1+1e-7)+1e-9*this.h,Math.min(h,this.h*1e-4));
+    if(hh>=h*(1-1e-9)){this.beLeft--;return h;}
+    this.restoreState(snap);let m=mode;
+    if(m==='BDF2'){const w=hh/this.hLast;if(w>.2)this.bdf={w,a0:(1+2*w)/(1+w),a1:-(1+w),a2:w*w/(1+w)};else m='BE';}
+    this.values(t0+hh);const s2=this.solve(hh,m);
+    if(!this.check(s2).length){this.commit(s2,hh,m);this.beLeft--;return hh;}
+    this.restoreState(snap);this.values(t0+h);sol=this.solve(h,mode);this.commit(sol,h,mode);this.beLeft--;return h;}
    // locate the transition inside the step: current zero-crossings always
    // (diode currents are continuous), voltage crossings only in a smooth regime
    const cands=bad.filter(b=>b.e.on||smooth);
@@ -430,7 +557,7 @@
   edgeSolve(t){const hs=this.h*1e-4;this.values(t);let sol=null;
    for(let it=0;it<30;it++){sol=this.solve(hs,'BE');const bad=this.check(sol);if(!bad.length)break;for(const b of bad)b.e.on=!b.e.on;}
    this.x=sol;}
-  edgePoint(t){this.edgeSolve(t);this.recordNow();}
+  edgePoint(t){this.edgeSolve(t);this.evalBlocks('commit');this.recordNow();}
   nextEvent(tMax){
    let t=tMax;const eps=this.h*1e-6;
    for(const k of this.net.ctrls){if(k.mode==='spwm'){continue;}for(const e of this.ctrlEdges(k))if(e>this.t+eps&&e<t)t=e;
@@ -441,6 +568,14 @@
    for(const e of this.net.els){if(e.sched)sch(e.sched);if(e.k==='V'&&e.src.sched)sch(e.src.sched);}
    for(const k of this.net.ctrls){sch(k.dsched);if(k.mode==='pi')sch(k.ref);}
    for(const e of this.net.els)if(e.fire)for(const te of this.scrEdges(e))if(te>this.t+eps&&te<t)t=te;
+   // signal blocks: clock edges, ramp resets / extremes, programs, discrete updates
+   for(const b of this.net.sig.blocks){
+    if(b.type==='CLK'||b.type==='RAMP'){const u=b.f*this.t-b.ph,nx=(k,o=0)=>(k+o+b.ph)/b.f,c=[nx(Math.floor(u+1e-9)+1)];
+     if(b.type==='CLK'&&b.duty>0&&b.duty<1)c.push(nx(Math.floor(u-b.duty+1e-9)+1,b.duty));if(b.type==='RAMP'&&b.shape==='tri')c.push(nx(Math.floor(u-.5+1e-9)+1,.5));
+     for(const te of c)if(te>this.t+eps&&te<t)t=te;}
+    else if(b.type==='CONST')sch(b.sched);
+    else if(b.type==='PIB'||b.type==='UD'){const ts=this.shNext(b);if(ts>this.t+eps&&ts<t)t=ts;}
+   }
    // base-period boundary for statistics
    const Tb=this.T,kb=Math.floor((this.t+eps)/Tb)+1,tb=kb*Tb;if(tb>this.t+eps&&tb<t)t=tb;
    return t;
@@ -462,12 +597,13 @@
     // land exactly on event times
     if(Math.abs(this.t-tn)<eps)this.t=tn;
     this.started=true;
+    this.evalBlocks('commit');
     const Tb=this.T,onB=Math.abs(this.t/Tb-Math.round(this.t/Tb))<1e-9;
     this.recordNow();
     if(onB&&this.t>0)this.closePeriod();
     // order at one instant: samples (t_sample), then the controller update (t_update); a second
     // point at the same t makes the held value, the carrier reset and the duty step vertical
-    const sm=this.sampleHolds(),cu=this.sampleControllers(false);if(sm||cu)this.recordNow();
+    const sm=this.sampleHolds(),sb=this.evalBlocks('sample'),cu=this.sampleControllers(false);if(sm||sb||cu)this.recordNow();
     if((steps&255)===0&&performance.now()>deadline)break;
    }
    this.computeVals();
@@ -480,7 +616,7 @@
  // channel, for the reference run on the server (engine/batch.py).
  function exportForBatch(project,keys){
   const net=buildNetlist(project),idx=new Map(net.els.map((e,i)=>[e,i]));
-  const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid'];
+  const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn'];
   const els=net.els.map(e=>{const o={};for(const k of F)if(e[k]!==undefined&&e[k]!==null)o[k]=e[k];return o;});
   const ci=id=>net.compInfo.get(id),cix=new Map(net.ctrls.map((k,i)=>[k.id,i]));
   const vd=(a,b)=>({v:[[a,1],[b,-1]].filter(q=>q[0]>=0)});
@@ -491,6 +627,7 @@
    if(pre==='N'){const n=net.nets.find(x=>x.canon===key.slice(2));return n?{v:[[n.index,1]]}:null;}
    if(['D','G','REF','MEAS','CAR'].includes(pre)){const k=cix.get(id);if(k===undefined)return null;return pre==='G'?{gate:[k,'a']}:pre==='CAR'?{car:k}:{ctrl:[k,{D:'d',REF:'refNow',MEAS:'meas'}[pre]]};}
    if(pre==='H'){const q=shx.get(id);return q===undefined?null:{sh:q};}
+   if(pre==='Y'){const c=ci(id);return c&&c.blk?{blk:bix.get(c.blk)}:null;}
    if(pre==='GS'){const c=ci(id);return c&&c.main&&(c.type==='SW'||c.type==='SCR')?{sw:idx.get(c.main)}:null;}
    const c=ci(id);if(!c)return null;
    if(c.type==='VAC3'){const ph=c.phases,pv=q=>vd(q.pin,c.n),pi=q=>({i:[[idx.get(q.e),1]]});
@@ -499,11 +636,19 @@
    if(c.type==='XFMR'){if(pre==='V2')return vd(c.pins2[0],c.pins2[1]);if(pre==='I2')return {i:[[idx.get(c.main),c.opp?-1:1]]};if(pre==='Im')return {i:[[idx.get(c.mag),1]]};}
    return null;};
   const shx=new Map(net.shs.map((q,i)=>[q.id,i]));
-  const shs=net.shs.map(q=>({id:q.id,rec:q.qty==='V'?V(ci(q.src)):I(ci(q.src)),clock:cix.get(q.clock)??null,trig:q.trig,h0:Number.isFinite(q.h0)?q.h0:null}));
-  const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase','upd'])o[f]=k[f];
+  const clkOf=id=>{const b=net.sig.blocks.find(x=>x.type==='CLK'&&x.id===id);return b?{f:b.f,ph:b.ph}:null;};
+  const shs=net.shs.map(q=>({id:q.id,sig:!!q.sig,rec:q.sig?null:q.qty==='V'?V(ci(q.src)):I(ci(q.src)),clock:cix.get(q.clock)??null,clk:clkOf(q.clock),trig:q.trig,h0:Number.isFinite(q.h0)?q.h0:null}));
+  // signal blocks in evaluation order, with their initial state and recipes for the measured quantities
+  const bix=new Map(net.sig.order.map((b,i)=>[b,i]));
+  const blocks=net.sig.order.map(b=>{const o={id:b.id,type:b.type,ins:b.ins,outs:b.outs,st:JSON.parse(JSON.stringify(b.st))};
+   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig'])if(b[f]!==undefined)o[f]=b[f];
+   if(b.type==='PIB'||b.type==='UD'){o.clock=cix.get(b.clock)??null;o.clk=clkOf(b.clock);}
+   if(b.type==='VM')o.rec=vd(b.np,b.nn);else if(b.type==='AM')o.rec={i:[[idx.get(b.el),-1]]};else if(b.type==='MEAS'){const c=ci(b.src);o.rec=(b.qty==='V'?V(c):I(c))||null;}
+   if(b.type==='SH'){o.sh=shx.get(b.id);o.sig=!!b.sig;}return o;});
+  const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase','upd','dIn'])o[f]=k[f];
    const s=ci(k.sensor);o.sensorRec=k.mode==='pi'?(shx.has(k.sensor)?{sh:shx.get(k.sensor)}:k.qty==='V'?V(s):I(s)):null;o.ffARec=V(ci(k.ffA));o.ffBRec=V(ci(k.ffB));return o;});
   const channels={},skipped=[];for(const key of keys){const r=rec(key);if(r)channels[key]=r;else skipped.push(key);}
-  return {net:{nNodes:net.nNodes,size:net.size,els,ctrls,shs},channels,skipped};
+  return {net:{nNodes:net.nNodes,size:net.size,els,ctrls,shs,sig:{n:net.sig.n,blocks}},channels,skipped};
  }
  const api={Sim,buildNetlist,NetlistError,exportForBatch};
  root.MNA=api;if(typeof module!=='undefined')module.exports=api;

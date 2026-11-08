@@ -57,7 +57,7 @@ def _f(v, d=0.0):
 
 class Ctrl:
     """PWM / PI / PID block, same rules as the browser (web/studio/mna.js)."""
-    FIELDS = ('id', 'mode', 'carrier', 'qty', 'ff', 'upd')
+    FIELDS = ('id', 'mode', 'carrier', 'qty', 'ff', 'upd', 'dIn')
 
     def __init__(self, k):
         for f in self.FIELDS:
@@ -157,9 +157,22 @@ class Circuit:
         for q in net.get('shs', []) or []:
             ci = q.get('clock')
             h0 = q.get('h0')
-            self.shs.append({'id': q.get('id'), 'rec': q.get('rec'), 'clock': ci if isinstance(ci, int) and 0 <= ci < len(self.ctrls) else None,
+            self.shs.append({'id': q.get('id'), 'rec': q.get('rec'), 'sig': bool(q.get('sig')), 'clk': q.get('clk'), 'clock': ci if isinstance(ci, int) and 0 <= ci < len(self.ctrls) else None,
                              'trig': q.get('trig') if q.get('trig') in ('start', 'mid', 'both') else 'start',
                              'h': float(h0) if h0 is not None else math.nan, 'last': None, 't': [], 'v': []})
+        # signal blocks (3.0), already in evaluation order
+        sig = net.get('sig') or {}
+        self.nsig = int(sig.get('n') or 0)
+        self.blocks = []
+        for b in sig.get('blocks') or []:
+            b = dict(b)
+            b['st'] = dict(b.get('st') or {})
+            ci = b.get('clock')
+            b['clock'] = ci if isinstance(ci, int) and 0 <= ci < len(self.ctrls) else None
+            self.blocks.append(b)
+        self.zc = [b for b in self.blocks if b['type'] == 'CMP']
+        self.sv = [0.0] * self.nsig
+        self.yb = [0.0] * len(self.blocks)
         E = self.els
         self.iL = [i for i, e in enumerate(E) if e['k'] == 'L']
         self.iC = [i for i, e in enumerate(E) if e['k'] == 'C']
@@ -211,9 +224,11 @@ class Circuit:
         if ns == 0:     # purely resistive circuit (e.g. diode rectifier into R, E): a dummy
             self.ns = 1  # constant state lets the ODE solver march in time and find events
             self.Bx, self.Dm, self.x0 = np.zeros((n, 1)), np.zeros((1, n)), np.zeros(1)
-        self.base_T = min([k.T for k in self.ctrls], default=None) or next(
+        clk = next((b for b in self.blocks if b['type'] in ('CLK', 'RAMP')), None)
+        self.base_T = min([k.T for k in self.ctrls], default=None) or (1 / max(_f(clk.get('f'), 1e5), 1e-6) if clk else None) or next(
             (1 / max(1e-6, _f(E[i]['src'].get('f'), 50)) for i in self.iV if E[i]['src'].get('kind') == 'ac'), 1e-3)
         self._z = None
+        self._yb = []
         self.started = False
 
     # ------------------------------------------------------------ sources
@@ -366,6 +381,9 @@ class Circuit:
             return bool(k and k.gate(e.get('out') or 'a', t))
         if e.get('gate') == 'alpha':
             return self.scr_gate(e, t)
+        if e.get('gate') == 'sig':
+            n = e.get('gIn', -1)
+            return (self.sv[n] if isinstance(n, int) and n >= 0 else 0.0) >= .5
         return False
 
     def set_gates(self, t):
@@ -434,6 +452,8 @@ class Circuit:
             return float(self.shs[rec['sh']]['h'])
         if 'car' in rec:
             return float(self.ctrls[rec['car']].carrier_at(t))
+        if 'blk' in rec:                # signal block output, from the last pass at this point
+            return float(self._yb[rec['blk']]) if rec['blk'] < len(self._yb) else 0.0
         if 'sw' in rec:                 # gate pulse of one switch (after dead time)
             i = rec['sw']
             on = self.on.get(i, False) if self.els[i]['k'] == 'S' else self.gon.get(i, False)
@@ -472,12 +492,24 @@ class Circuit:
             k.tk = (idx + k.phase) * k.T
             if k.mode in ('fixed', 'pp'):
                 k.d = k.dOn = k.dOff = sched_at(k.dsched, t, k.D)
+            elif k.mode == 'ext':
+                k.d = k.dOn = k.dOff = self.sig_in(k.dIn)
+
+    def sig_in(self, n):
+        v = self.sv[n] if isinstance(n, int) and 0 <= n < self.nsig else 0.0
+        return v if math.isfinite(v) else 0.0
 
     def sh_grid(self, q):
-        if q['clock'] is None:
+        clk = q.get('clk')
+        if clk:                         # a clock block: its rising edges
+            T = 1 / max(_f(clk.get('f'), 1e5), 1e-6)
+            b0 = _f(clk.get('ph')) * T
+        elif q.get('clock') is None:
             return None
-        k = self.ctrls[q['clock']]
-        return (k.phase * k.T + (k.T / 2 if q['trig'] == 'mid' else 0.0), k.T / 2 if q['trig'] == 'both' else k.T)
+        else:
+            k = self.ctrls[q['clock']]
+            T, b0 = k.T, k.phase * k.T
+        return (b0 + (T / 2 if q['trig'] == 'mid' else 0.0), T / 2 if q['trig'] == 'both' else T)
 
     def sh_next(self, q, t):
         g = self.sh_grid(q)
@@ -491,7 +523,7 @@ class Circuit:
         any_ = False
         for q in self.shs:
             g = self.sh_grid(q)
-            if g is None:
+            if g is None or q['sig']:
                 continue
             u = (t - g[0]) / g[1]
             n = round(u)
@@ -526,6 +558,8 @@ class Circuit:
             T = T / 2 if dbl else T       # controller sampling period
             if k.mode in ('fixed', 'pp'):
                 k.d = sched_at(k.dsched, t, k.D)
+            elif k.mode == 'ext':
+                k.d = self.sig_in(k.dIn)
             elif k.mode == 'pi':
                 k.refNow = sched_at(k.ref, t, k.ref[0][1])
                 k.meas = self.value(k.sensor, t, x, z)
@@ -559,6 +593,168 @@ class Circuit:
             if first or k.tkPrev is None:
                 k.tkPrev, k.dPrev, k.dPrevOff = k.tk - k.T, k.dOn, k.dOff
         return changed
+
+    # ------------------------------------------------------------ signal blocks (3.0)
+    @staticmethod
+    def cmp_f(b, s, pv, nv):
+        g = pv - nv
+        tol = 1e-9 * (abs(pv) + abs(nv)) + 1e-12
+        h = max(_f(b.get('hys')), 4 * tol) / 2
+        return g + h - tol if s else g - h + tol
+
+    def blk_due(self, b, t, force):
+        g = self.sh_grid(b)
+        if g is None:
+            return False
+        u = (t - g[0]) / g[1]
+        n = round(u)
+        if abs(u - n) > 1e-7 or (not force and b['st'].get('last') == n):
+            return False
+        b['st']['last'] = n
+        return True
+
+    def eval_blocks(self, t, x, z, mode, force=False, left=False, flip=()):
+        """Same pass as Sim.evalBlocks in the browser. Returns (block outputs, discrete update happened)."""
+        if not self.blocks:
+            return [], False
+        trial, disc = mode == 'trial', mode in ('sample', 'init')
+        sv = [0.0] * self.nsig
+        yb = [0.0] * len(self.blocks)
+        tt = t - 1e-8 * self.base_T if left else t
+        rd = lambda n: sv[n] if isinstance(n, int) and n >= 0 else 0.0
+        sampled, pend = False, []
+        for j, b in enumerate(self.blocks):
+            st, I, ty = b['st'], b['ins'], b['type']
+            y, y2 = 0.0, None
+            if ty in ('VM', 'AM', 'MEAS'):
+                y = self.value(b.get('rec'), t, x, z)
+                if not math.isfinite(y):
+                    y = 0.0
+            elif ty == 'CONST':
+                y = sched_at(b['sched'], tt, b['sched'][0][1])
+            elif ty == 'GAIN':
+                y = _f(b.get('K'), 1) * rd(I.get('u'))
+            elif ty == 'SUM':
+                sg = b['sg']
+                y = sg[0] * rd(I.get('a')) + sg[1] * rd(I.get('b')) + (sg[2] * rd(I['c']) if 'c' in I else 0.0)
+            elif ty == 'MUL':
+                y = rd(I.get('a')) * rd(I.get('b'))
+            elif ty == 'DIV':
+                d = rd(I.get('b'))
+                y = rd(I.get('a')) / d if abs(d) > _f(b.get('eps')) else st.get('y', 0.0)
+                if not trial:
+                    st['y'] = y
+            elif ty == 'SAT':
+                y = min(_f(b.get('hi'), 1), max(_f(b.get('lo')), rd(I.get('u'))))
+            elif ty == 'CMP':
+                if b['id'] in flip:        # root located by the ODE solver: the output changes here
+                    st['s'] = 1 - st['s']
+                pv, nv = rd(I.get('p')), rd(I.get('n'))
+                f = self.cmp_f(b, st['s'], pv, nv)
+                s2 = (0 if f < 0 else 1) if st['s'] else (1 if f > 0 else 0)
+                if trial:
+                    b['f1'] = f
+                else:
+                    st['s'], st['f0'] = s2, self.cmp_f(b, s2, pv, nv)
+                y = float(s2)
+            elif ty == 'LOGIC':
+                a, c = rd(I.get('a')) >= .5, rd(I.get('b')) >= .5
+                y = 1.0 if {'and': a and c, 'or': a or c, 'xor': a != c, 'not': not a, 'nand': not (a and c), 'nor': not (a or c)}[b.get('op', 'or')] else 0.0
+            elif ty == 'PIB':
+                if disc and self.blk_due(b, t, force):
+                    Ts, e = self.sh_grid(b)[1], rd(I.get('u'))
+                    if force and not self.started:
+                        st['xi'] = 0.0
+                    st['xi'] += b['Ki'] * Ts * e
+                    q = b['y0'] + b['Kp'] * e + st['xi']
+                    if q > b['ymax'] or q < b['ymin']:
+                        st['xi'] -= b['Ki'] * Ts * e
+                        q = min(b['ymax'], max(b['ymin'], b['y0'] + b['Kp'] * e + st['xi']))
+                    st['y'] = q
+                    sampled = True
+                y = st['y']
+            elif ty == 'UD':
+                if disc and self.blk_due(b, t, force):
+                    st['y'] = b['y0'] if force else st['mem']
+                    pend.append(b)
+                    sampled = True
+                y = st['y']
+            elif ty == 'SR':
+                S, Rr = rd(I.get('s')) >= .5, rd(I.get('r')) >= .5
+                q = st['q']
+                if S and not st['sp']:
+                    q = 1
+                if Rr:
+                    q = 0
+                if not trial:
+                    st['q'], st['sp'] = q, S
+                y, y2 = float(q), float(1 - q)
+            elif ty == 'CLK':
+                u = b['f'] * tt - b['ph']
+                y = 1.0 if u - math.floor(u + 1e-11) < b['duty'] - 1e-11 else 0.0
+            elif ty == 'RAMP':
+                u = b['f'] * tt - b['ph']
+                fr = max(0.0, u - math.floor(u + 1e-11))
+                y = b['lo'] + (b['hi'] - b['lo']) * (abs(1 - 2 * fr) if b.get('shape') == 'tri' else fr)
+            elif ty == 'DISP':
+                y = rd(I.get('u'))
+            elif ty == 'SH':
+                q = self.shs[b['sh']]
+                if b.get('sig') and disc:
+                    g = self.sh_grid(q)
+                    if g is not None:
+                        u = (t - g[0]) / g[1]
+                        n = round(u)
+                        if abs(u - n) <= 1e-7 and (force or q['last'] != n):
+                            v = rd(I.get('u'))
+                            q['h'] = v
+                            sampled = True
+                            if mode == 'sample':
+                                if q['last'] != n:
+                                    q['t'].append(t)
+                                    q['v'].append(v)
+                                elif q['v']:
+                                    q['v'][-1] = v
+                                q['last'] = n
+                y = q['h']
+            yb[j] = y
+            o = b['outs']
+            if ty == 'SR':
+                if o.get('q', -1) >= 0:
+                    sv[o['q']] = y
+                if o.get('nq', -1) >= 0:
+                    sv[o['nq']] = y2
+            elif o.get('y', -1) >= 0:
+                sv[o['y']] = y
+        for b in pend:
+            b['st']['mem'] = rd(b['ins'].get('u'))
+        if not trial:
+            self.sv, self.yb = sv, yb
+        return yb, sampled
+
+    def block_events(self, t, tn, eps):
+        for b in self.blocks:
+            ty = b['type']
+            if ty in ('CLK', 'RAMP'):
+                u = b['f'] * t - b['ph']
+                nx = lambda k, o=0.0, b=b: (k + o + b['ph']) / b['f']
+                c = [nx(math.floor(u + 1e-9) + 1)]
+                if ty == 'CLK' and 0 < b['duty'] < 1:
+                    c.append(nx(math.floor(u - b['duty'] + 1e-9) + 1, b['duty']))
+                if ty == 'RAMP' and b.get('shape') == 'tri':
+                    c.append(nx(math.floor(u - .5 + 1e-9) + 1, .5))
+                for te in c:
+                    if t + eps < te < tn:
+                        tn = te
+            elif ty == 'CONST':
+                for ts, _ in b['sched'] or []:
+                    if t + eps < ts < tn:
+                        tn = ts
+            elif ty in ('PIB', 'UD'):
+                ts = self.sh_next(b, t)
+                if t + eps < ts < tn:
+                    tn = ts
+        return tn
 
     # ------------------------------------------------------------ events
     def next_event(self, t, tmax):
@@ -596,6 +792,7 @@ class Circuit:
                 for te in self.scr_edges(e, t):
                     if t + eps < te < tn:
                         tn = te
+        tn = self.block_events(t, tn, eps)
         sp = [k for k in self.ctrls if k.mode == 'spwm']
         if sp:
             outs = ('a', 'na', 'b', 'nb') if any(k.dt > 0 for k in sp) else ('a', 'b')
@@ -664,20 +861,26 @@ def simulate(data):
         raise BatchError(f'Πάνω από {LIMITS["periods"]} περίοδοι: μείωσε τη διάρκεια.')
     keys = list(channels)
     T, Y = [], [[] for _ in keys]
-    stats = {'segments': 0, 'diode_events': 0, 'nfev': 0, 'njev': 0, 'nlu': 0, 'steps': 0}
+    stats = {'segments': 0, 'diode_events': 0, 'cmp_events': 0, 'nfev': 0, 'njev': 0, 'nlu': 0, 'steps': 0}
     start = time.perf_counter()
     status, message = 'ok', ''
 
+    has_blk = any('blk' in (channels[k] or {}) for k in keys)
+
     def record(t, x, z):
+        if has_blk:
+            ckt._yb = ckt.eval_blocks(t, x, z, 'trial')[0]
         T.append(t)
         for j, k in enumerate(keys):
             Y[j].append(ckt.value(channels[k], t, x, z))
 
     t, x = 0.0, ckt.x0.copy()
+    ckt.eval_blocks(0.0, x, np.zeros(ckt.n), 'init', force=True)   # node voltages 0, states at their initial values
     ckt.prime(0.0)
     ckt.set_gates(0.0)
     tp, z = ckt.consistent(0.0, x, init=True)
     ckt.sh_sample(0.0, x, z)
+    ckt.eval_blocks(0.0, x, z, 'sample', force=True)
     ckt.sample(0.0, x, z, force=True)
     record(t, x, z)
     stuck = 0
@@ -695,6 +898,7 @@ def simulate(data):
         ckt.set_gates((t + tn) / 2)
         tp, z = ckt.consistent(t, x)
         if (tuple(ckt.on.values()), tuple(ckt.gon.values())) != before:
+            ckt.eval_blocks(t, x, z, 'commit')
             record(t, x, z)            # the point right after switching: vertical edges
         itol, vtol = ckt.tolerances(x)
         cache = {}
@@ -729,6 +933,14 @@ def simulate(data):
             ev.terminal = True
             events.append(ev)
             owners.append(i)
+        for b in ckt.zc:                # comparator outputs: roots of the crossing function
+            def ev(tt, yy, b=b):
+                ckt.eval_blocks(tt, yy, zof(tt, yy), 'trial', left=True)
+                return b['f1']
+            ev.direction = -1 if b['st']['s'] else 1
+            ev.terminal = True
+            events.append(ev)
+            owners.append(b)
         kw = dict(method=method, rtol=rtol, atol=atol, max_step=max_step, events=events or None)
         if implicit and not ckt.iP:
             kw['jac'] = (lambda tt, yy, J=tp['J']: J) if method == 'LSODA' else tp['J']
@@ -747,21 +959,29 @@ def simulate(data):
         x = sol.y[:, -1].copy()
         if sol.status == 1:
             te = min(float(ts[0]) for ts in sol.t_events if len(ts))
+            flip = set()
             for q, ts in enumerate(sol.t_events):
                 if len(ts) and abs(float(ts[0]) - te) <= 1e-12 * ckt.base_T + 1e-18:
-                    ckt.on[owners[q]] = not ckt.on[owners[q]]
-                    stats['diode_events'] += 1
+                    if isinstance(owners[q], dict):
+                        flip.add(owners[q]['id'])
+                        stats['cmp_events'] += 1
+                    else:
+                        ckt.on[owners[q]] = not ckt.on[owners[q]]
+                        stats['diode_events'] += 1
             stuck = stuck + 1 if te - t < 1e-12 * ckt.base_T else 0
             if stuck > 60:
                 raise BatchError(f'Συνεχείς μεταγωγές χωρίς πρόοδο στο t = {te:.6g} s (chattering).')
             t = te
             tp, z = ckt.consistent(t, x)
+            ckt.eval_blocks(t, x, z, 'commit', flip=flip)
             record(t, x, z)
         else:
             t = tn if abs(t_new - tn) < 1e-9 * ckt.base_T else t_new
             ckt.started = True
             zt = zof(t_new, x)
+            ckt.eval_blocks(t, x, zt, 'commit')
             sampled = ckt.sh_sample(t, x, zt)   # t_sample before t_update, as in the browser
+            sampled = ckt.eval_blocks(t, x, zt, 'sample')[1] or sampled
             if ckt.sample(t, x, zt) or sampled:
                 record(t, x, zt)                # held value / duty step drawn vertically
     ckt.started = True

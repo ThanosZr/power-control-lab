@@ -30,7 +30,8 @@
    svg.setAttribute('aria-label','Κύκλωμα. Διπλό κλικ σε στοιχείο για ρυθμίσεις, δεξί κλικ για scope.');
    svg.innerHTML=`<defs><pattern id="gdots" width="${G}" height="${G}" patternUnits="userSpaceOnUse"><circle cx="0" cy="0" r=".75" class="gdot"/></pattern>
     <pattern id="glines" width="${G*5}" height="${G*5}" patternUnits="userSpaceOnUse"><path d="M${G*5},0 H0 V${G*5}" class="gline"/></pattern>
-    <marker id="flowArr" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="flowhead"/></marker></defs>
+    <marker id="flowArr" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="flowhead"/></marker>
+    <marker id="sigArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L10,5 L0,9 z" class="sighead"/></marker></defs>
     <g class="viewport"><rect class="gridbg" x="-50000" y="-50000" width="100000" height="100000"/><g class="wires"></g><g class="parts"></g><g class="dots"></g><g class="pins"></g><g class="livel"></g><g class="over"></g></g>`;
    holder.replaceChildren(svg);
    this.vp=svg.querySelector('.viewport');this.L={wires:svg.querySelector('.wires'),parts:svg.querySelector('.parts'),dots:svg.querySelector('.dots'),pins:svg.querySelector('.pins'),live:svg.querySelector('.livel'),over:svg.querySelector('.over')};
@@ -56,6 +57,7 @@
   redo(){if(!this.redoStack.length)return;this.undoStack.push(this.snapshot());this.doc=JSON.parse(this.redoStack.pop());this.cleanSel();this.render();this.changed('struct');}
   cleanSel(){for(const id of [...this.sel.c])if(!this.comp(id))this.sel.c.delete(id);for(const id of [...this.sel.w])if(!this.wire(id))this.sel.w.delete(id);}
   load(doc,{keepView=false}={}){this.doc={components:(doc.components||[]).map(c=>({rot:0,flip:false,params:{},...c,params:{...(c.params||{})}})),wires:(doc.wires||[]).map(w=>({...w,pts:(w.pts||[]).map(p=>[...p])}))};
+   this.dropDangling();
    for(const w of this.doc.wires)if(!w.pts.length&&!w.fixed){const full=this.wirePts(w);if(!orth(full))this.route(w);}
    this.sel.c.clear();this.sel.w.clear();this.undoStack=[];this.redoStack=[];this.render();if(!keepView){this.userView=false;this.fit();}}
   export(){return JSON.parse(this.snapshot());}
@@ -68,7 +70,17 @@
    if(type==='SW'&&!c.params.pwm){const pwm=this.doc.components.find(k=>k.type==='PWM');if(pwm)c.params.pwm=pwm.id;}
    if(type==='SH'){const pwm=this.doc.components.find(k=>k.type==='PWM'),l=this.doc.components.find(k=>k.type==='L');if(pwm&&!c.params.clock)c.params.clock=pwm.id;if(l&&!c.params.src)c.params.src=l.id;}
    this.doc.components.push(c);this.render();this.select([id]);this.changed('struct');return c;}
-  setParams(id,patch,{label}={}){const c=this.comp(id);if(!c)return;this.remember();Object.assign(c.params,patch);if(label!==undefined)c.label=label;this.renderPart(c);this.renderLabels();this.changed('param');}
+  setParams(id,patch,{label}={}){const c=this.comp(id);if(!c)return;this.remember();Object.assign(c.params,patch);if(label!==undefined)c.label=label;
+   // a parameter can remove a signal pin (e.g. gate back to PWM): its wires go with it
+   if(this.dropDangling()){this.tidyJunctions();this.render();this.changed('struct');return;}
+   this.renderPart(c);this.renderLabels();this.renderPins();this.renderWires();this.changed('param');}
+  dropDangling(){const ok=e=>{const c=this.comp(e.c);return !!(c&&P.pinsOf(c)[e.p]);};const n=this.doc.wires.length;this.doc.wires=this.doc.wires.filter(w=>ok(w.a)&&ok(w.b));return this.doc.wires.length!==n;}
+  // kind of every pin's net: 'sig' when the net holds a signal pin (3.0), else 'el'
+  netKinds(){const par=new Map(),find=k=>{while(par.get(k)!==k){par.set(k,par.get(par.get(k)));k=par.get(k);}return k;};const kind=new Map();
+   for(const c of this.doc.components)for(const p of Object.keys(P.pinsOf(c))){const k=c.id+':'+p;par.set(k,k);kind.set(k,c.type==='JUNC'?'j':P.pinKind(c,p));}
+   for(const w of this.doc.wires){const a=w.a.c+':'+w.a.p,b=w.b.c+':'+w.b.p;if(par.has(a)&&par.has(b))par.set(find(a),find(b));}
+   const sig=new Set(),el=new Set();for(const [k,v] of kind){const r=find(k);if(v==='in'||v==='out')sig.add(r);else if(v==='el')el.add(r);}
+   return {of:k=>par.has(k)?(sig.has(find(k))?'sig':el.has(find(k))?'el':'j'):null,kind};}
   setWireProps(id,patch){const w=this.wire(id);if(!w)return;this.remember();Object.assign(w,patch);if(patch.name!==undefined&&!patch.name)delete w.name;this.renderWires();this.changed('param');}
   deleteSel(){
    if(!this.sel.c.size&&!this.sel.w.size)return;this.remember();
@@ -149,7 +161,7 @@
    this.svg.classList.toggle('zoomed-out',k<.7);}
   fit(margin=50){const b=this.extent();if(!b){this.view={cx:400,cy:250,k:1};this.applyView();return;}const r=this.holder.getBoundingClientRect();
    const k=Math.min(1.9,Math.max(.25,Math.min((r.width||800)/(b[2]-b[0]+2*margin),(r.height||450)/(b[3]-b[1]+2*margin))));this.view={cx:(b[0]+b[2])/2,cy:(b[1]+b[3])/2,k};this.applyView();}
-  extent(){const xs=[],ys=[];for(const c of this.doc.components){const b=P.bbox(c);xs.push(b[0],b[2]+(c.type==='JUNC'||c.type==='GND'?0:85));ys.push(b[1]-30,b[3]+14);for(const p of Object.keys(P.PARTS[c.type].pins)){const q=this.pin(c,p);xs.push(q[0]);ys.push(q[1]);}}
+  extent(){const xs=[],ys=[];for(const c of this.doc.components){const b=P.bbox(c);xs.push(b[0],b[2]+(c.type==='JUNC'||c.type==='GND'?0:85));ys.push(b[1]-30,b[3]+14);for(const p of Object.keys(P.pinsOf(c))){const q=this.pin(c,p);xs.push(q[0]);ys.push(q[1]);}}
    for(const w of this.doc.wires)for(const p of w.pts||[]){xs.push(p[0]);ys.push(p[1]);}if(!xs.length)return null;return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
   render(){this.renderWires();this.L.parts.innerHTML=this.doc.components.map(c=>this.partSVG(c)).join('');this.renderLabels();this.renderPins();this.renderSel();this.applyView();this.updateLive();}
   partSVG(c){const def=P.PARTS[c.type];if(c.type==='JUNC')return `<g class="part junc" data-c="${c.id}"><circle class="hit" r="7" cx="${c.x}" cy="${c.y}"/></g>`;
@@ -158,25 +170,33 @@
   renderPart(c){const el=this.L.parts.querySelector(`[data-c="${CSS.escape(c.id)}"]`);if(el)el.outerHTML=this.partSVG(c);this.renderSel();}
   valueText(c){const p={...P.defaults(c.type),...c.params},e=P.eng;
    switch(c.type){case 'R':return p.sched?'R(t)':e(+p.R,'Ω');case 'L':return e(+p.L,'H');case 'C':return e(+p.C,'F');case 'VDC':return e(+p.V,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');case 'VAC':return e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'VAC3':return '3φ '+e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'SCR':return p.fire==='alpha'?'α '+(+p.alpha).toLocaleString('el-GR')+'°'+(+p.shift?' +'+(+p.shift).toLocaleString('el-GR')+'°':''):p.fire==='pwm'?'g · '+(p.pwm||'—'):'';
-    case 'IDC':return e(+p.I,'A');case 'CPL':return p.sched?'P(t)':e(+p.P,'W');case 'XFMR':return '1 : '+(+p.n).toLocaleString('el-GR',{maximumFractionDigits:4});case 'SW':return (p.model==='igbt'?'IGBT · ':'')+(p.gate==='pwm'?({a:'g',na:'ḡ',b:'g₂',nb:'ḡ₂'}[p.out]||'g')+' · '+(p.pwm||'—'):p.gate==='on'?'ON':'OFF');
-    case 'SH':return (p.qty==='V'?'v(':'i(')+(p.src||'—')+') · '+({start:'αρχή T',mid:'μέσο T',both:'2 ανά T'}[p.trig]||'');
-    case 'PWM':return e(+p.fs,'Hz')+(+p.phase&&p.mode!=='spwm'?' · φ '+(+p.phase).toLocaleString('el-GR',{maximumFractionDigits:2})+'°':'')+(+p.dt>0?' · t_d '+e(+p.dt,'s'):'')+' · '+(p.mode==='fixed'?'D = '+(+p.D).toLocaleString('el-GR'):p.mode==='pi'?'PI':p.mode==='spwm'?'SPWM m = '+p.m:'2 έξοδοι');default:return '';}}
+    case 'IDC':return e(+p.I,'A');case 'CPL':return p.sched?'P(t)':e(+p.P,'W');case 'XFMR':return '1 : '+(+p.n).toLocaleString('el-GR',{maximumFractionDigits:4});case 'SW':return (p.model==='igbt'?'IGBT · ':'')+(p.gate==='sig'?'g από σήμα':p.gate==='pwm'?({a:'g',na:'ḡ',b:'g₂',nb:'ḡ₂'}[p.out]||'g')+' · '+(p.pwm||'—'):p.gate==='on'?'ON':'OFF');
+    case 'SH':return (p.in==='sig'?'u':(p.qty==='V'?'v(':'i(')+(p.src||'—')+')')+' · '+({start:'αρχή T',mid:'μέσο T',both:'2 ανά T'}[p.trig]||'');
+    case 'MEAS':case 'VM':case 'AM':case 'SR':case 'DISP':return '';
+    case 'CONST':return String(p.v).includes(':')?String(p.v).slice(0,22):'';case 'GAIN':return 'K = '+e(+p.K);case 'SUM':return '';
+    case 'SAT':return '['+e(+p.lo)+', '+e(+p.hi)+']';case 'CMP':return +p.hys>0?'h = '+e(+p.hys):'';case 'LOGIC':return ['nand','nor','xor'].includes(p.op)?p.op.toUpperCase():'';
+    case 'PIB':return 'K_p '+e(+p.Kp)+' · K_i '+e(+p.Ki);case 'UD':return '';
+    case 'CLK':return e(+p.f,'Hz')+' · '+(+p.duty).toLocaleString('el-GR');case 'RAMP':return e(+p.f,'Hz')+' · '+e(+p.lo)+'…'+e(+p.hi);
+    case 'PWM':return e(+p.fs,'Hz')+(+p.phase&&p.mode!=='spwm'?' · φ '+(+p.phase).toLocaleString('el-GR',{maximumFractionDigits:2})+'°':'')+(+p.dt>0?' · t_d '+e(+p.dt,'s'):'')+' · '+(p.mode==='fixed'?'D = '+(+p.D).toLocaleString('el-GR'):p.mode==='pi'?'PI':p.mode==='spwm'?'SPWM m = '+p.m:p.mode==='ext'?'D από σήμα':'2 έξοδοι');default:return '';}}
   renderLabels(){
    this.L.live.innerHTML=this.doc.components.filter(c=>c.type!=='JUNC'&&c.type!=='GND').map(c=>{const b=P.bbox(c);const pk=Object.keys(P.PARTS[c.type].pins);const q0=pk[0]&&this.pin(c,pk[0]),q1=pk[1]&&this.pin(c,pk[1]);const blk=!pk.length;const vert=!blk&&c.type!=='XFMR'&&c.type!=='VAC3'&&q0&&q1&&q0[0]===q1[0];
-    const side=(vert||blk)&&c.lbl!=='below'&&c.lbl!=='above';const below=c.lbl==='below';const x=side?b[2]+8:(b[0]+b[2])/2,y=side?(b[1]+b[3])/2-(blk?10:2):below?b[3]+40:b[1]-7;const anchor=side?'start':'middle';
+    // signal blocks (3.0) keep their label above, the PWM / S&H blocks at the side as before
+    const side=(vert||blk)&&!(blk&&P.BLOCKS.has(c.type))&&c.lbl!=='below'&&c.lbl!=='above';const below=c.lbl==='below';const x=side?b[2]+8:(b[0]+b[2])/2,y=side?(b[1]+b[3])/2-(blk?10:2):below?b[3]+40:b[1]-7;const anchor=side?'start':'middle';
     return `<g class="lbls" data-l="${c.id}"><text class="lbl" x="${x}" y="${side?y:y-24}" text-anchor="${anchor}">${esc(c.label||c.id)}</text><text class="val" x="${x}" y="${side?y+13:y-12}" text-anchor="${anchor}">${esc(this.valueText(c))}</text><text class="lv" x="${x}" y="${side?y+26:y}" text-anchor="${anchor}"></text></g>`;}).join('');
    this.liveRefs=new Map();for(const g of this.L.live.querySelectorAll('[data-l]'))this.liveRefs.set(g.dataset.l,g.querySelector('.lv'));
   }
   renderWires(){
    const W=this.settings.wireWidth;const count=new Map();for(const w of this.doc.wires)for(const e of [w.a,w.b]){const k=e.c+':'+e.p;count.set(k,(count.get(k)||0)+1);}
-   let h='',dots='';
-   for(const w of this.doc.wires){const pts=this.wirePts(w);if(pts.some(p=>!p))continue;const d=this.pathD(pts);
-    h+=`<g class="wire${this.sel.w.has(w.id)?' sel':''}" data-w="${w.id}"><path class="wl" d="${d}" style="${w.color?`stroke:${w.color};`:''}${w.width?`stroke-width:${w.width}px`:`stroke-width:${W}px`}"/>`;
+   let h='',dots='';const NK=this.netKinds();this.nk=NK;
+   for(const w of this.doc.wires){const pts=this.wirePts(w);if(pts.some(p=>!p))continue;const sig=NK.of(w.a.c+':'+w.a.p)==='sig';
+    // signal wires: thinner, own colour, arrow where they enter an input
+    const ina=sig&&NK.kind.get(w.a.c+':'+w.a.p)==='in',inb=sig&&NK.kind.get(w.b.c+':'+w.b.p)==='in';const d=this.pathD(ina&&!inb?pts.slice().reverse():pts);
+    h+=`<g class="wire${sig?' sig':''}${this.sel.w.has(w.id)?' sel':''}" data-w="${w.id}"><path class="wl" d="${d}"${(ina||inb)?' marker-end="url(#sigArr)"':''} style="${w.color?`stroke:${w.color};`:''}${w.width?`stroke-width:${w.width}px`:sig?`stroke-width:${Math.max(1.2,W*.62)}px`:`stroke-width:${W}px`}"/>`;
     for(let i=1;i<pts.length;i++)h+=`<path class="whit" data-w="${w.id}" data-seg="${i-1}" d="M${pts[i-1][0]},${pts[i-1][1]} L${pts[i][0]},${pts[i][1]}"/>`;
     if(w.name){const m=this.midLabel(pts);h+=`<text class="wname" x="${m[0]}" y="${m[1]-6}" text-anchor="middle">${esc(w.name)}</text>`;}
     h+='</g>';}
-   for(const c of this.doc.components){if(c.type==='JUNC'){const n=count.get(c.id+':j')||0;if(n>=3||n===1)dots+=`<circle class="jdot" cx="${c.x}" cy="${c.y}" r="3.6"/>`;continue;}
-    for(const p of Object.keys(P.PARTS[c.type].pins)){if((count.get(c.id+':'+p)||0)>=2){const q=this.pin(c,p);dots+=`<circle class="jdot" cx="${q[0]}" cy="${q[1]}" r="3.6"/>`;}}}
+   for(const c of this.doc.components){if(c.type==='JUNC'){const n=count.get(c.id+':j')||0;if(n>=3||n===1)dots+=`<circle class="jdot${NK.of(c.id+':j')==='sig'?' sig':''}" cx="${c.x}" cy="${c.y}" r="${NK.of(c.id+':j')==='sig'?2.8:3.6}"/>`;continue;}
+    for(const p of Object.keys(P.pinsOf(c))){if((count.get(c.id+':'+p)||0)>=2){const q=this.pin(c,p),sg=NK.of(c.id+':'+p)==='sig';dots+=`<circle class="jdot${sg?' sig':''}" cx="${q[0]}" cy="${q[1]}" r="${sg?2.8:3.6}"/>`;}}}
    this.L.wires.innerHTML=h;this.L.dots.innerHTML=dots;this.pinCount=count;
   }
   pathD(pts){if(this.settings.corner!=='round'||pts.length<3)return 'M'+pts.map(p=>p.join(',')).join(' L');
@@ -185,8 +205,9 @@
    const l=pts[pts.length-1];return d+` L${l[0]},${l[1]}`;}
   midLabel(pts){let best=0,bi=1;for(let i=1;i<pts.length;i++){const l=Math.abs(pts[i][0]-pts[i-1][0])+Math.abs(pts[i][1]-pts[i-1][1]);if(l>best){best=l;bi=i;}}return [(pts[bi][0]+pts[bi-1][0])/2,(pts[bi][1]+pts[bi-1][1])/2];}
   renderPins(){let h='';const count=this.pinCount||new Map();
-   for(const c of this.doc.components){for(const p of Object.keys(P.PARTS[c.type].pins)){const q=this.pin(c,p);const n=count.get(c.id+':'+p)||0;
-    h+=`<circle class="pin${n?'':' open'}${c.type==='JUNC'?' jpin':''}" data-pin="${c.id}:${p}" cx="${q[0]}" cy="${q[1]}" r="${c.type==='JUNC'?5:4.2}"/>`;}}
+   for(const c of this.doc.components){for(const p of Object.keys(P.pinsOf(c))){const q=this.pin(c,p);const n=count.get(c.id+':'+p)||0;
+    const k=c.type==='JUNC'?'j':P.pinKind(c,p),sg=k==='in'||k==='out';
+    h+=`<circle class="pin${n?'':' open'}${c.type==='JUNC'?' jpin':''}${sg?' spin '+k:''}" data-pin="${c.id}:${p}" cx="${q[0]}" cy="${q[1]}" r="${c.type==='JUNC'?5:sg?3.4:4.2}"/>`;}}
    this.L.pins.innerHTML=h;}
   renderSel(){for(const g of this.L.parts.querySelectorAll('.part'))g.classList.toggle('sel',this.sel.c.has(g.dataset.c));for(const g of this.L.wires.querySelectorAll('.wire'))g.classList.toggle('sel',this.sel.w.has(g.dataset.w));}
   // live values from the simulator
@@ -194,11 +215,13 @@
   updateLive(){if(!this.live||!this.liveRefs)return;
    for(const c of this.doc.components){const v=this.live(c);const g=this.L.parts.querySelector(`[data-c="${CSS.escape(c.id)}"]`);if(!g)continue;
     g.classList.toggle('on',!!v?.on);g.classList.toggle('off',v?.on===false);
-    const t=this.liveRefs.get(c.id);if(t)t.textContent=this.settings.showLive&&v?.text?v.text:'';}
+    const t=this.liveRefs.get(c.id);
+    if(c.type==='DISP'){const d=g.querySelector('.sym .bsm');if(d)d.textContent=v?.text||'—';if(t)t.textContent='';continue;} // the display shows its value inside
+    if(t)t.textContent=this.settings.showLive&&v?.text?v.text:'';}
    this.drawArrows();}
   drawArrows(){let h='';const types=['L','R','C','VDC','VAC','D','SW','CPL','IDC'];let big=0;const vals=new Map();if(this.settings.showArrows&&this.live)for(const c of this.doc.components)if(types.includes(c.type)){const v=this.live(c);vals.set(c.id,v);if(v&&Number.isFinite(v.i))big=Math.max(big,Math.abs(v.i));}
    if(this.settings.showArrows&&this.live)for(const c of this.doc.components){if(!types.includes(c.type))continue;const v=vals.get(c.id);if(!v||!Number.isFinite(v.i)||Math.abs(v.i)<Math.max(1e-9,2e-3*big))continue;
-    const pins=Object.keys(P.PARTS[c.type].pins);let a=this.pin(c,pins[0]),b=this.pin(c,pins[1]);
+    const pins=Object.keys(P.pinsOf(c));let a=this.pin(c,pins[0]),b=this.pin(c,pins[1]);
     // current a->b for passives; sources report current out of p (flowing p->external): inside the source n->p
     let dir=Math.sign(v.i);if(['VDC','VAC','IDC'].includes(c.type))dir=-dir;if(dir<0)[a,b]=[b,a];
     const bb=P.bbox(c),horiz=Math.abs(a[1]-b[1])<1,off=horiz?[0,(bb[3]-c.y)+12]:[(c.x-bb[0])+12,0];
@@ -357,6 +380,8 @@
    if(h.pin){const [c,pp]=h.pin.split(':');if(!(c===wi.from.c&&pp===wi.from.p))to={c,p:pp};}
    else if(h.w&&!h.c){const j=this.splitWire(h.w,p,true);if(j)to={c:j,p:'j'};}
    if(!to){this.cancelWire();if(wi.made){this.tidyJunctions();this.render();}return;}
+   {const NK=this.netKinds(),ka=NK.of(wi.from.c+':'+wi.from.p),kb=NK.of(to.c+':'+to.p);
+    if((ka==='sig'&&kb==='el')||(ka==='el'&&kb==='sig')){this.cancelWire();if(wi.made||to.c.startsWith('J')){this.tidyJunctions();this.render();}this.opt.onwarn?.('Ένα σύρμα σήματος δεν ενώνεται με ηλεκτρικό κόμβο. Για να μετρήσεις, βάλε βολτόμετρο, αμπερόμετρο ή «Μέτρηση στοιχείου».');return;}}
    if(this.doc.wires.some(w=>(w.a.c===wi.from.c&&w.a.p===wi.from.p&&w.b.c===to.c&&w.b.p===to.p)||(w.b.c===wi.from.c&&w.b.p===wi.from.p&&w.a.c===to.c&&w.a.p===to.p))){this.cancelWire();return;}
    const w={id:this.newId('w'),a:wi.from,b:to,pts:[]};
    if(wi.via.length){const a=this.pin(w.a.c,w.a.p),b=this.pin(w.b.c,w.b.p);const fc=this.comp(w.a.c);const first=this.simpleRoute(a,P.pinDir(fc,w.a.p),wi.via[0]);

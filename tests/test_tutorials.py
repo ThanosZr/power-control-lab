@@ -92,6 +92,34 @@ class Tutorials(unittest.TestCase):
         self.assertAlmostEqual(o['smp_pi_tri1']['avg'], -400, delta=0.3)
         self.assertAlmostEqual(o['smp_pi_saw']['d'], .375, delta=1e-4)          # feedforward from the measured voltages
 
+    def test_blocks_loop(self):
+        o = self.o
+        ref = o['bl_builtin_pwm_none']
+        for key in ('bl_blocks_pwm_none', 'bl_blocks_cmp_none', 'bl_blocks_pwm_z1', 'bl_blocks_cmp_z1'):
+            r = o[key]
+            self.assertEqual(r['warn'], [])
+            self.assertAlmostEqual(r['valley'], 10, delta=2e-3)                  # the PI holds the sampled valley
+            self.assertAlmostEqual(r['avg'], 10 + 1.2, delta=2e-3)               # mean = i_ref + Δi/2, Δi = 2.4 A
+        for key in ('bl_blocks_pwm_none', 'bl_blocks_cmp_none'):                 # blocks ≡ built-in PI; comparator ≡ PWM
+            self.assertAlmostEqual(o[key]['valley'], ref['valley'], delta=1e-6)
+            self.assertAlmostEqual(o[key]['vpk'], ref['vpk'], delta=1e-6)
+        self.assertAlmostEqual(o['bl_blocks_cmp_z1']['vpk'], o['bl_blocks_pwm_z1']['vpk'], delta=1e-6)
+        os0 = (ref['vpk'] - 10) / 5
+        os1 = (o['bl_blocks_pwm_z1']['vpk'] - 10) / 5
+        self.assertGreater(os1, os0 + .05)                                       # z⁻¹: less phase margin, more overshoot
+
+    def test_peak_current_mode(self):
+        o = self.o
+        self.assertTrue(all(abs(p - 5) < 1e-6 for p in o['pcm_0.4_none']['pk']))
+        self.assertGreater(max(o['pcm_0.6_none']['dd']) - min(o['pcm_0.6_none']['dd']), .3)
+        for key in ('pcm_0.6_half', 'pcm_0.7_full'):
+            r = o[key]
+            m = r['meta']
+            self.assertEqual(r['warn'], [])
+            pk = m['ic'] - m['ma'] * m['D'] * m['T']
+            for p in r['pk']:
+                self.assertAlmostEqual(p, pk, delta=5e-4)                         # ideal theory; R_on drops raise D by ~2e-4
+
     def test_polyphase_exercise(self):
         o = self.o
         r = o['poly_4_shift_mid_20000_design']                                   # fixture: 50 V bus, 40 kW, 20 kHz, N = 4

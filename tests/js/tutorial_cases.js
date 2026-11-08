@@ -33,4 +33,10 @@ for(const [ctrl,mis] of [['open','dcr'],['pi','dcr'],['open','L']]){const pr=bui
 {const pr=build('polyphase',{ctrl:'pi'});const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});s.run(.002);for(let k=1;k<=4;k++)s.setControl('PWM'+k,{phase:0});s.run(.006);out.share_pi_toggle=[1,2,3,4].map(k=>last(s,'I:L'+k,5).avg);}
 for(const upd of ['single','double']){const pr=build('sampling',{case:'tri2',ctrl:'pi',upd});const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});s.run(.0024);const a=s.samples('SH1').v.at(-1);s.run(.0096);
  const p=s.per,i=s.chIndex.get('D:PWM1'),j=(p.head-1+p.cap)%p.cap;out['smp_upd_'+upd]={at24:a,end:s.samples('SH1').v.at(-1),dmin:p.min[j*p.nch+i],dmax:p.max[j*p.nch+i]};}
+// 3.0: current loop from blocks (built-in PI, PWM with input d, carrier + comparator, z⁻¹) and peak current-mode
+for(const [ctrl,mod,delay] of [['builtin','pwm','none'],['blocks','pwm','none'],['blocks','cmp','none'],['blocks','pwm','z1'],['blocks','cmp','z1']]){const pr=build('blocks_loop',{ctrl,mod,delay});const s=sim(pr,.004);
+ const key=ctrl==='builtin'?'I:L1':'Y:AM1',p=s.per,i=s.chIndex.get(key);const rows=[];for(let k=0;k<p.n;k++){const j=(p.head-p.n+k+p.cap)%p.cap;rows.push({t:p.t[j],mn:p.min[j*p.nch+i]});}
+ const after=rows.filter(r=>r.t>.002+2e-5&&r.t<.0028);out[`bl_${ctrl}_${mod}_${delay}`]={valley:last(s,key,5).min,avg:last(s,key,5).avg,d:mod==='cmp'?last(s,'GS:S1',5).avg:last(s,'D:PWM1',5).avg,vpk:Math.max(...after.map(r=>r.mn)),warn:s.net.warnings,err:null};}
+for(const [D,ramp] of [['0.4','none'],['0.6','none'],['0.6','half'],['0.7','full']]){const pr=build('peak_cm',{D,ramp});const s=sim(pr,2e-3);const pk=[],dd=[];const p=s.per,i=s.chIndex.get('Y:AM1'),g=s.chIndex.get('GS:S1');
+ for(let k=6;k>=1;k--){const j=(p.head-k+p.cap)%p.cap;pk.push(p.max[j*p.nch+i]);dd.push(p.avg[j*p.nch+g]);}out[`pcm_${D}_${ramp}`]={pk,dd,meta:pr.meta,warn:s.net.warnings};}
 out.ms=Date.now()-t0;console.log(JSON.stringify(out,null,1));

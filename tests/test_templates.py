@@ -72,6 +72,26 @@ class DataTemplates(unittest.TestCase):
         self.assertAlmostEqual(v['dt_ph'], 10e-6)                                 # N = 5: 10 μs phase step
         self.assertAlmostEqual(v['L_min'] / 20.8333e-6, 5 / 4, delta=1e-4)        # L_min grows with N
 
+    def test_peak_current_mode_template(self):
+        tpl = load('pcm_slope.template.json')
+        qs = lambda r: {q['id']: q for s in r['sections'] for b in s['blocks'] if b['type'] == 'questions' for q in b['items']}
+        base = {'V_in': 24, 'L': 50e-6, 'f_s': 100e3, 'i_c': 5}
+        r = template_solve({'template': tpl, 'values': {**base, 'V_o': 14.4, 'A_r': 0}})   # D = 0.6, no ramp
+        q = qs(r)
+        self.assertAlmostEqual(q['lam']['answer'], -1.5, places=9)               # −D/(1 − D)
+        self.assertEqual(q['stable']['correct'], 1)                              # subharmonic
+        self.assertAlmostEqual(q['mamin']['answer'], (288e3 - 192e3) / 2, places=6)
+        self.assertIn(144e3, [round(m['value'], 6) for m in q['mamin']['mistakes']])   # m₂/2: enough for every D
+        self.assertAlmostEqual(q['ipk']['answer'], 5, places=9)
+        q = qs(template_solve({'template': tpl, 'values': {**base, 'V_o': 14.4, 'A_r': 1.44}}))   # m_a = m₂/2
+        self.assertAlmostEqual(q['lam']['answer'], -144 / 336, places=9)
+        self.assertEqual(q['stable']['correct'], 0)
+        self.assertAlmostEqual(q['ipk']['answer'], 5 - 144e3 * .6 * 1e-5, places=9)
+        self.assertEqual(q['ipk']['sim'], {'key': 'Y:AM1', 'stat': 'max', 'periods': 3})
+        q = qs(template_solve({'template': tpl, 'values': {**base, 'V_o': 9.6, 'A_r': 0}}))      # D = 0.4
+        self.assertEqual(q['stable']['correct'], 0)
+        self.assertEqual(q['mamin']['answer'], 0)
+
     def test_prediction_questions(self):
         tpl = load('pe2_sampling.template.json')
         base = {'V_bus': 50, 'V_st': 100, 'P': 40e3, 'L': 5.6e-6, 'f_s': 20e3, 'N': 50, 'phi': 90}

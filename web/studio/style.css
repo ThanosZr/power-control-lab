@@ -239,3 +239,13 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:6px}
 .qchoices{display:flex;flex-direction:column;gap:4px;margin-bottom:6px}.qchoices label{display:flex;gap:6px;align-items:baseline;font-size:13px}
 .qbtns{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}.qbtns button{font-size:12px;padding:4px 10px}
 .qfb p{margin:8px 0 0}.qhint{color:#8a6a2a}.qsim{color:#2f5fa0}.qsol{margin-top:6px}
+/* signal wires and blocks (3.0) */
+:root{--sig:#5b4fb0;--sig-bg:#f3f1fb;--sig-ink:#3b3486}
+.wire.sig .wl{stroke:var(--sig)}.jdot.sig{fill:var(--sig)}.sighead{fill:var(--sig)}
+.pin.spin{stroke:var(--sig);opacity:.8}.pin.spin.out{fill:var(--sig)}.pin.spin.in{fill:#fff}.pin.spin.open{stroke:var(--sig);opacity:.95}
+.part .sym .sigl,.pal-item .sym .sigl{stroke:var(--sig);stroke-width:1.6}
+.part .sym .sblk,.pal-item .sym .sblk{fill:var(--sig-bg);stroke:#8f86c9}
+.part .sym .btxt,.pal-item .sym .btxt{font:600 11px Inter,system-ui,sans-serif;fill:var(--sig-ink);stroke:none}
+.part .sym .btxt.big,.pal-item .sym .btxt.big{font-size:17px}
+.part .sym .bsm,.pal-item .sym .bsm{font:600 8.5px Inter,system-ui,sans-serif;fill:var(--sig-ink);stroke:none}
+.part.on .sym .sblk{fill:#fbe9cf;stroke:var(--accent2)}

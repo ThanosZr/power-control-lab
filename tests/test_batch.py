@@ -105,6 +105,21 @@ class BatchSolver(unittest.TestCase):
         on2 = float(np.sum(np.diff(tw) * (gw[1:] + gw[:-1]) / 2)) / T
         self.assertAlmostEqual(on2, D - 200e-9 / T, delta=1e-6)                  # D·T − t_d, as in the browser
 
+    def test_signal_blocks_parity(self):
+        # 3.0: blocks, comparator roots (events of the ODE solver) and the latch give the browser's waveforms
+        for name, tol in (('pcm_half', 1e-5), ('pcm_sub', 1e-4), ('blk_cmp_z1', 1e-4), ('blk_pwm', 1e-4)):
+            js = self.req[name]['js']
+            T = js['T']
+            r = self.run_case(name, round(js['pk'][-1]['t'] / T) * T, 'LSODA', rtol=1e-8, atol=1e-10)
+            self.assertEqual(r['status'], 'ok')
+            t, y = np.array(r['t']), np.array(r['ch']['Y:AM1'])
+            for q in js['pk']:
+                w = (t >= q['t'] - T - 1e-12) & (t <= q['t'] + 1e-12)
+                self.assertAlmostEqual(float(y[w].max()), q['max'], delta=tol, msg=name)
+                self.assertAlmostEqual(float(y[w].min()), q['min'], delta=tol, msg=name)
+            if name.startswith('pcm'):
+                self.assertGreater(r['stats']['cmp_events'], 20)                 # resets found as roots, not on a grid
+
     def test_explicit_method_reports_stiffness(self):
         r = self.run_case('buck_dcm', 2e-3, 'RK45', wall=2)
         self.assertIn(r['status'], ('ok', 'timeout'))

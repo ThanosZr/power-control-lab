@@ -93,5 +93,33 @@ for(const upd of ['single','double']){const T=50e-6,s=new Sim(bidir({D:.5,carrie
  let both=0,on1=0,on2=0,pt=null,p1=0,p2=0;const vert=[];for(let k=0;k<r.n;k++){const j=(st+k)%r.cap,t=r.t[j],g1=r.d[j*nch+i1],g2=r.d[j*nch+i2];if(g1&&g2)both++;
   if(pt!==null&&pt>=9*T-1e-12&&t<=10*T+1e-12){const h=t-pt;on1+=h*p1;on2+=h*p2;}if(pt!==null&&t===pt&&g2!==p2)vert.push(t/T);pt=t;p1=g1;p2=g2;}
  out.pulses={both,on1:on1/T,on2:on2/T,vert:vert.slice(-4),keys:['GS:S1','GS:S2'].every(k=>s.chIndex.has(k))};}
+// 16) signal blocks (3.0): a PI built from blocks gives exactly the duty of the built-in PI
+{const base=[{id:'V1',type:'VDC',params:{V:48}},{id:'S1',type:'SW',params:{pwm:'PWM1',body:false}},{id:'D1',type:'D'},{id:'L1',type:'L',params:{L:100e-6}},
+  {id:'C1',type:'C',params:{C:100e-6,v0:24}},{id:'R1',type:'R',params:{R:2.4}},{id:'G',type:'GND'}];
+ const wires=[['V1:p','S1:d'],['S1:s','D1:k'],['D1:a','G:g'],['S1:s','L1:a'],['L1:b','C1:p'],['C1:p','R1:a'],['R1:b','G:g'],['C1:n','G:g'],['V1:n','G:g']],ref='0:5, 0.002:10';
+ const bi=project([...base,{id:'PWM1',type:'PWM',params:{fs:50e3,mode:'pi',sensor:'L1',qty:'I',ref,Kp:.02,Ki:200,ff:'none',dmin:0,dmax:.95,carrier:'saw'}}],wires);
+ const bl=project([...base,{id:'PWM1',type:'PWM',params:{fs:50e3,mode:'ext',carrier:'saw'}},{id:'K1',type:'CONST',params:{v:ref}},{id:'M1',type:'MEAS',params:{src:'L1'}},
+  {id:'SUM1',type:'SUM',params:{signs:'+-'}},{id:'PI1',type:'PIB',params:{Kp:.02,Ki:200,clock:'PWM1',ymin:0,ymax:.95}}],[...wires,['K1:y','SUM1:a'],['M1:y','SUM1:b'],['SUM1:y','PI1:u'],['PI1:y','PWM1:d']]);
+ const a=new Sim(bi,{hDiv:200}),b=new Sim(bl,{hDiv:200});let md=0;for(let k=0;k<200;k++){a.run(20e-6);b.run(20e-6);md=Math.max(md,Math.abs(a.now('D:PWM1')-b.now('D:PWM1')));}
+ out.blk_pi={maxdiff:md,il:[a.now('I:L1'),b.now('I:L1')],warn:b.net.warnings,order:b.net.sig.order.map(x=>x.id)};}
+// 17) algebraic loop is reported; a z⁻¹ in the loop breaks it; signal ↔ electrical wire is ignored with a warning
+{const loop=(ud)=>project([{id:'K1',type:'CONST',params:{v:'1'}},{id:'SUM1',type:'SUM',params:{signs:'++'}},{id:'G1',type:'GAIN',params:{K:.5}},{id:'PWM1',type:'PWM',params:{fs:1e4}},
+  ...(ud?[{id:'Z1',type:'UD',params:{clock:'PWM1'}}]:[])],[['K1:y','SUM1:a'],['SUM1:y','G1:u'],...(ud?[['G1:y','Z1:u'],['Z1:y','SUM1:b']]:[['G1:y','SUM1:b']])]);
+ let err=null;try{new Sim(loop(false));}catch(e){err=e.message;}
+ const s=new Sim(loop(true));s.run(20e-4);
+ const mix=new Sim(project([{id:'V1',type:'VDC',params:{V:5}},{id:'R1',type:'R'},{id:'G',type:'GND'},{id:'K1',type:'CONST'},{id:'D1',type:'DISP'}],[['V1:p','R1:a'],['R1:b','G:g'],['V1:n','G:g'],['K1:y','R1:a'],['D1:u','G:g']]));
+ out.blk_loop={err,y:s.now('Y:SUM1'),warnMix:mix.net.warnings,vR:mix.now('V:R1')};}
+// 18) peak current-mode from generic blocks: comparator root inside the step
+function pcm(D,ramp,hDiv=500){const Vo=24*D,hi=ramp*Vo/50e-6*1e-5;return new Sim(project([{id:'V1',type:'VDC',params:{V:24}},{id:'S1',type:'SW',params:{gate:'sig',body:false}},{id:'D1',type:'D'},{id:'L1',type:'L',params:{L:50e-6}},
+  {id:'VO',type:'VDC',params:{V:Vo}},{id:'G',type:'GND'},{id:'CLK1',type:'CLK',params:{f:1e5}},{id:'SR1',type:'SR'},{id:'AM1',type:'AM'},{id:'IC',type:'CONST',params:{v:'5'}},
+  {id:'RMP',type:'RAMP',params:{f:1e5,hi}},{id:'SUM1',type:'SUM',params:{signs:'++'}},{id:'CMP1',type:'CMP'}],
+  [['V1:p','S1:d'],['S1:s','D1:k'],['D1:a','G:g'],['S1:s','AM1:a'],['AM1:b','L1:a'],['L1:b','VO:p'],['VO:n','G:g'],['V1:n','G:g'],
+   ['CLK1:y','SR1:s'],['RMP:y','SUM1:a'],['AM1:y','SUM1:b'],['SUM1:y','CMP1:p'],['IC:y','CMP1:n'],['CMP1:y','SR1:r'],['SR1:q','S1:g']]),{hDiv});}
+for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]]){const s=pcm(D,r,h);s.run(3e-3);const p=s.per,i=s.chIndex.get('I:L1'),g=s.chIndex.get('GS:S1');const pk=[],dd=[];
+ for(let k=8;k>=1;k--){const j=(p.head-k+p.cap)%p.cap;pk.push(p.max[j*p.nch+i]);dd.push(p.avg[j*p.nch+g]);}out[`pcm_${D}_${r}_${h}`]={pk,dd,T:s.T,steps:s.steps};}
+// 19) Sample & Hold with a signal input, clock block as the sampling clock, live change of a constant
+{const s=new Sim(project([{id:'R1',type:'RAMP',params:{f:1e3,lo:0,hi:10}},{id:'CK',type:'CLK',params:{f:4e3}},{id:'SH1',type:'SH',params:{in:'sig',clock:'CK',trig:'start'}},{id:'K1',type:'CONST',params:{v:'2'}},{id:'M1',type:'MUL'}],
+  [['R1:y','SH1:u'],['SH1:y','M1:a'],['K1:y','M1:b']]));s.run(1.5e-3);const L=s.samples('SH1');const y0=s.now('Y:M1');s.setBlock('K1',{sched:[[0,3]]});
+ out.blk_sh={n:L.t.length,t:L.t.slice(0,7),v:L.v.slice(0,7),y0,y1:s.now('Y:M1'),T:s.T};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

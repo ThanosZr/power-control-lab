@@ -61,6 +61,43 @@ class StudioSimulator(unittest.TestCase):
         self.assertAlmostEqual(p['on1'], 0.7 - 0.02, delta=1e-6)
         self.assertTrue(p['vert'])                                               # edges drawn vertically (two points at t_e)
 
+    def test_signal_blocks(self):
+        b = self.o['blk_pi']                                                     # PI from blocks ≡ built-in PI, step by step
+        self.assertEqual(b['maxdiff'], 0)
+        self.assertEqual(b['il'][0], b['il'][1])
+        self.assertEqual(b['warn'], [])
+        self.assertEqual(b['order'], ['K1', 'M1', 'SUM1', 'PI1'])                # evaluation order follows the wires
+        L = self.o['blk_loop']
+        self.assertIn('Αλγεβρικός βρόχος', L['err'])                            # reported, not solved with a hidden delay
+        self.assertIn('G1 → SUM1 → G1', L['err'])
+        self.assertAlmostEqual(L['y'], 2, delta=1e-5)                            # y = 1 + y/2 through z⁻¹ → 2
+        self.assertTrue(any('ηλεκτρικό κόμβο' in w for w in L['warnMix']))
+        self.assertTrue(any('D1.u' in w for w in L['warnMix']))
+        self.assertAlmostEqual(L['vR'], 5, delta=1e-6)                           # the ignored signal wire does not load the circuit
+        sh = self.o['blk_sh']                                                    # S&H on a signal, clocked by a clock block
+        self.assertEqual(sh['n'], 7)
+        for tk, v in zip(sh['t'], sh['v']):
+            self.assertAlmostEqual(v, 10 * ((tk / 1e-3) % 1 if abs((tk / 1e-3) % 1 - 1) > 1e-9 else 0), delta=1e-9)
+        self.assertAlmostEqual(sh['y0'], 10, delta=1e-12)
+        self.assertAlmostEqual(sh['y1'], 15, delta=1e-12)                        # live change of a constant
+
+    def test_peak_current_mode(self):
+        o, T = self.o, 1e-5
+        m1, m2 = lambda D: (24 - 24 * D) / 50e-6, lambda D: 24 * D / 50e-6
+        r = o['pcm_0.4_0_500']                                                   # D < 0.5: stable without a ramp
+        self.assertTrue(all(abs(p - 5) < 1e-6 for p in r['pk']))
+        self.assertLess(max(r['dd']) - min(r['dd']), 1e-6)
+        for h in (500, 2000):                                                    # D = 0.6: subharmonic, at any step size
+            r = o[f'pcm_0.6_0_{h}']
+            self.assertGreater(max(r['dd']) - min(r['dd']), 0.3)
+        for ramp in (.5, 1):                                                     # ramp m₂/2 and m₂: stable, Î = i_c − m_a·D·T
+            r = o[f'pcm_0.6_{ramp}_500']
+            pk = 5 - ramp * m2(.6) * .6 * T
+            for p in r['pk']:
+                self.assertAlmostEqual(p, pk, delta=5e-4)                         # ideal theory; R_on drops raise D by ~2e-4
+            self.assertLess(max(r['dd']) - min(r['dd']), 1e-6)
+            self.assertAlmostEqual(r['dd'][-1], .6, delta=5e-4)                  # 0.6 plus the conduction drops
+
     def test_double_update(self):
         single, double = self.o['upd_single'], self.o['upd_double']
         self.assertAlmostEqual(single[1][0], 10.75, delta=0.003)                 # new D waits for the next period

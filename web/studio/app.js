@@ -52,7 +52,9 @@ function updateClock(){const s=S.sim;if(!s)return;$('#clock').textContent='t = '
 function liveOf(c){const s=S.sim;if(!s||S.error)return null;if(c.type==='GND'||c.type==='JUNC')return null;
  const avg=S.running&&(S.speed==='max'||S.speed>=200);const val=k=>{if(avg){const p=s.lastPeriod(k);return p?p.avg:s.now(k);}return s.now(k);};
  if(c.type==='PWM'){const d=s.now('D:'+c.id);return {text:'D = '+fmt(d,4)};}
- if(c.type==='SH'){const q=s.shById.get(c.id);return {text:q?'h = '+eng(q.h,q.qty==='V'?'V':'A',4):''};}
+ if(c.type==='SH'){const q=s.shById.get(c.id);return {text:q?'h = '+eng(q.h,q.sig?'':q.qty==='V'?'V':'A',4):''};}
+ if(P.BLOCKS.has(c.type)){const y=s.now('Y:'+c.id);if(LOGIC_BLK.has(c.type))return {on:y>=.5,text:(c.type==='SR'?'Q = ':'y = ')+(y>=.5?'1':'0')};
+  const u=blkUnit(c);return {text:(c.type==='DISP'?'':c.type==='VM'?'v = ':c.type==='AM'?'i = ':'y = ')+eng(y,u,+(c.params?.dig)||4)};}
  const i=val('I:'+c.id),v=val('V:'+c.id);let on;
  if(c.type==='SW'){const e=s.net.compInfo.get(c.id)?.main;on=!!e?.on;}if(c.type==='D'||c.type==='SCR'){const e=s.net.compInfo.get(c.id)?.main;on=!!e?.on;}
  const pre=avg?'⌀ ':'';let text='';const scale=S.iScale||1;const z=x=>Math.abs(x)<2e-4*scale?0:x;
@@ -60,13 +62,17 @@ function liveOf(c){const s=S.sim;if(!s||S.error)return null;if(c.type==='GND'||c
  if(['L','VDC','VAC','VAC3','SW','D','SCR','R'].includes(c.type)&&Number.isFinite(i))S.iScaleNext=Math.max(S.iScaleNext||0,Math.abs(i));
  return {on,i:avg?i:s.now('I:'+c.id),text};}
 
+// signal blocks (3.0): output unit, and which outputs are 0/1
+const LOGIC_BLK=new Set(['CMP','SR','CLK','LOGIC']);
+function blkUnit(c){if(!c)return '';if(c.type==='VM')return 'V';if(c.type==='AM')return 'A';if(c.type==='MEAS')return c.params?.qty==='V'?'V':'A';return '';}
 // ------------------------------------------------------------------ channels
 function chanLabel(key){const [pre,id,pin]=key.split(':');const c=editor.comp(id);const name=c?.label||id;
  if(pre==='VN'){const w=editor.doc.wires.find(w=>w.name&&((w.a.c===id&&w.a.p===pin)||(w.b.c===id&&w.b.p===pin)));return w?w.name:'v('+(c?.type==='JUNC'?'κόμβος '+id:name+'.'+pin)+')';}
- const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',GS:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold'}[pre]||pre)+'('+name+')';}
+ const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',GS:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold',Y:c?.type==='VM'?'v':c?.type==='AM'?'i':c?.type==='SR'?'Q':'y'}[pre]||pre)+'('+name+')';}
 function addProbe(key,label){if(!S.sim)return;const ok=scope.addChannel(key,label||chanLabel(key));renderChannels();if(!ok)flash('#chan-list');else{flash('#scope-card');}draw(true);}
 function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash');}
-function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC')return [];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
+function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC')return [];
+ if(P.BLOCKS.has(t))return [['Y:',t==='DISP'?'τιμή εισόδου':t==='VM'?'τάση (μέτρηση)':t==='AM'?'ρεύμα a → b (μέτρηση)':t==='SR'?'έξοδος Q':'έξοδος y']];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
  if(t==='SH')return [['H:','κρατημένη τιμή (δείγματα)']];
  const base=[['I:','ρεύμα'],['V:','τάση'],['P:',['VDC','VAC','IDC'].includes(t)?'ισχύς που δίνει':'ισχύς']];if(t==='SW'||t==='SCR')base.splice(1,0,['GS:','παλμός πύλης (1 = ON)']);if(t==='SW'&&(+c.params?.Eon>0||+c.params?.Eoff>0))base.push(['PSW:','απώλειες μεταγωγής (μέση ανά T)']);
  if(t==='VAC3')return [['I:','ρεύμα φάσης a'],['Ib:','ρεύμα φάσης b'],['Ic:','ρεύμα φάσης c'],['V:','τάση v_an'],['Vb:','τάση v_bn'],['Vc:','τάση v_cn'],['Vab:','πολική τάση v_ab'],['P:','ισχύς που δίνει (3φ)']];if(t==='XFMR')return [['I:','ρεύμα πρωτεύοντος'],['V:','τάση πρωτεύοντος'],['I2:','ρεύμα δευτερεύοντος'],['V2:','τάση δευτερεύοντος'],['Im:','ρεύμα μαγνήτισης'],['P:','ισχύς']];return base;}
@@ -209,20 +215,21 @@ function liveChange(id,k,v,label,from){const s=S.sim;if(!s||!(s.t>0))return;cons
  if(last&&last.id===id&&last.k===k&&s.t-last.t<=s.T*1.0001){last.v=v;last.label=label;}else s.markChange({id,k,v,label,from});renderLiveLog();if(!S.running)draw(true);}
 function renderLiveLog(){const box=$('#lp-log');if(!box)return;const L=S.sim?.changes||[];
  if(!L.length){box.innerHTML='<small class="muted">Οι αλλαγές που κάνεις όσο τρέχει η προσομοίωση σημειώνονται στο scope.</small>';return;}
- const rep=L.some(c=>c.k==='D'||c.k==='ref');
+ const rep=L.some(c=>c.k==='D'||c.k==='ref'||c.k==='v');
  box.innerHTML=`<div class="lp-log-head"><b>${L.length} ${L.length===1?'αλλαγή':'αλλαγές'}</b>${rep?'<button id="lp-sched" title="Οι αλλαγές του D και της αναφοράς γίνονται πρόγραμμα t:τιμή: με ⟲ ξαναπαίζεται η ίδια προσομοίωση">→ πρόγραμμα t:τιμή</button>':''}</div>
   <ol>${L.slice(-5).map(c=>`<li><span>${eng(c.t,'s',4)}</span> ${esc(c.label)}</li>`).join('')}</ol>`;
  $('#lp-sched')?.addEventListener('click',changesToSchedule);}
-function changesToSchedule(){const L=(S.sim?.changes||[]).filter(c=>c.k==='D'||c.k==='ref');if(!L.length)return;const by=new Map();
+function changesToSchedule(){const L=(S.sim?.changes||[]).filter(c=>c.k==='D'||c.k==='ref'||c.k==='v');if(!L.length)return;const by=new Map();
  for(const c of L){const key=c.id+'|'+c.k;if(!by.has(key))by.set(key,[]);by.get(key).push(c);}
  const f=v=>+(+v).toPrecision(8);
  for(const [key,list] of by){const [id,k]=key.split('|');const comp=editor.comp(id);if(!comp)continue;const base=(P.parseSched(list[0].from)||[]).filter(([t])=>t<list[0].t-1e-15);
   const prog=[...base,...list.map(c=>[c.t,c.v])].map(([t,v])=>`${+t.toPrecision(9)}:${f(v)}`).join(', ');
-  editor.setParams(id,k==='D'?{dsched:prog,D:f((base.length?base:[[0,list[0].v]])[0][1])}:{ref:prog});}
+  editor.setParams(id,k==='D'?{dsched:prog,D:f((base.length?base:[[0,list[0].v]])[0][1])}:k==='v'?{v:prog}:{ref:prog});}
  notice('Οι αλλαγές έγιναν πρόγραμμα t:τιμή στο '+[...by.keys()].map(k=>esc(k.split('|')[0])).join(', ')+'. Πάτα ⟲ για να ξαναπαίξει η ίδια προσομοίωση.','info');}
 function updateLivePanel(){const s=S.sim;if(!s||$('#live-panel')?.hidden)return;
  for(const el of $$('#live-controls [data-shout]')){const q=s.shById.get(el.dataset.shout);if(!q){el.textContent='';continue;}const u=q.qty==='V'?'V':'A',lt=q.log.t[q.log.t.length-1];
   el.innerHTML=`h = <b>${eng(q.h,u,5)}</b> · ${q.n} δείγματα${Number.isFinite(lt)?` · τελευταίο ${eng(lt,'s',5)}`:''}`;}
+ for(const el of $$('#live-controls [data-kout]')){const v=s.now('Y:'+el.dataset.kout);el.textContent=Number.isFinite(v)?eng(v,'',5):'';}
  for(const el of $$('#live-controls [data-dnow]')){const v=s.now('D:'+el.dataset.dnow);el.textContent=Number.isFinite(v)?'D = '+fmt(v,5):'';}}
 function setLivePanel(show){const pnl=$('#live-panel'),btn=$('#lp-toggle');if(!pnl)return;pnl.hidden=!show;btn?.classList.toggle('on',show);btn?.setAttribute('aria-pressed',String(show));
  try{localStorage.setItem('pcl2-live-panel',show?'1':'0');}catch{}if(show)updateLivePanel();}
@@ -248,6 +255,7 @@ function refreshControls(){
   if(p.mode==='fixed'||p.mode==='pp')h=`<label>${esc(c.label||c.id)} · D <output data-dout="${c.id}">${fmt(+p.D,4)}</output></label><input type="range" min="0" max="1" step="0.0005" value="${+p.D}" data-d="${c.id}">
    <div class="ctl-btns"><button data-dd="${c.id}" data-step="-0.01">−0,01</button><button data-dd="${c.id}" data-step="-0.001">−0,001</button>${meta.D0!==undefined?`<button data-dset="${c.id}" data-val="${meta.D0}">D₀ = ${fmt(meta.D0,4)}</button>`:''}<button data-dd="${c.id}" data-step="0.001">+0,001</button><button data-dd="${c.id}" data-step="0.01">+0,01</button></div>${p.dsched?'<small>Υπάρχει πρόγραμμα D(t)· η χειροκίνητη αλλαγή το απενεργοποιεί.</small>':''}`;
   else if(p.mode==='pi')h=`<label>${esc(c.label||c.id)} · αναφορά ${+p.Kd?'PID':'PI'} <output data-dnow="${c.id}"></output></label><div class="ctl-row"><input data-ref="${c.id}" value="${esc(p.ref)}"><button data-refapply="${c.id}">Εφαρμογή</button></div><small>Σταθερή τιμή ή πρόγραμμα «t:τιμή». K_p = ${eng(+p.Kp)}, K_i = ${eng(+p.Ki)}${+p.Kd?`, K_d = ${eng(+p.Kd)}`:''}.${editor.comp(p.sensor)?.type==='SH'?` Μετρά το δείγμα του ${esc(editor.comp(p.sensor).label||p.sensor)}.`:''}</small>`;
+  else if(p.mode==='ext')h=`<label>${esc(c.label||c.id)} · D από σήμα <output data-dnow="${c.id}"></output></label><small>Το duty έρχεται από τον ακροδέκτη d${p.upd==='double'&&p.carrier!=='saw'?' (δύο ενημερώσεις ανά T)':''}.</small>`;
   else if(p.mode==='spwm')h=`<label>${esc(c.label||c.id)} · m <output data-mout="${c.id}">${fmt(+p.m,3)}</output></label><input type="range" min="0" max="1.2" step="0.01" value="${+p.m}" data-m="${c.id}">`;
   const sw=switchesOf(c.id);const probe=`<div class="ctl-btns ctl-probe"><button data-probe-d="${c.id}" title="Το duty D στο scope">⌁ D</button><button data-pulse="${c.id}" title="${sw.length?'Ο παλμός πύλης κάθε διακόπτη: '+esc(sw.map(x=>x.label||x.id).join(', ')):'Ο παλμός g του PWM'}">⌁ παλμ${sw.length>1?'οί':'ός'} ${esc(sw.length?sw.map(x=>x.label||x.id).join(', '):'g')}</button></div>`;
   return `<div class="ctl">${h}${probe}${phase(c,p)}</div>`;}).join('');
@@ -256,6 +264,9 @@ function refreshControls(){
  box.innerHTML+=editor.doc.components.filter(c=>c.type==='SH').map(c=>{const p={...P.defaults('SH'),...c.params};
   const short={start:'Αρχή περιόδου (reset ή μέγιστο) · 1/T',mid:'Μέσο περιόδου (ελάχιστο τριγώνου) · 1/T',both:'Και τα δύο ακρότατα · 2/T'};
   return `<div class="ctl ctl-sh"><label>${esc(c.label||c.id)} · Sample & Hold</label><select data-trig="${c.id}" aria-label="Πότε παίρνει δείγμα">${trigOpts.map(([k,n])=>`<option value="${k}" title="${esc(n)}" ${p.trig===k?'selected':''}>${esc(short[k]||n)}</option>`).join('')}</select><div class="lp-read" data-shout="${c.id}"></div></div>`;}).join('');
+ // constants / programs of signal blocks: changed live, like the reference of the built-in PI
+ box.innerHTML+=editor.doc.components.filter(c=>c.type==='CONST').sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})).map(c=>{const p={...P.defaults('CONST'),...c.params};
+  return `<div class="ctl"><label>${esc(c.label||c.id)} · σταθερά <output data-kout="${c.id}"></output></label><div class="ctl-row"><input data-kv="${c.id}" value="${esc(p.v)}"><button data-kapply="${c.id}">Εφαρμογή</button></div></div>`;}).join('');
  const scr=editor.doc.components.filter(c=>c.type==='SCR'&&(c.params?.fire||'alpha')==='alpha');
  if(scr.length){const a=+(scr[0].params?.alpha??30);box.innerHTML+=`<div class="ctl"><label>Θυρίστορ (${scr.length}) · α <output data-aout>${fmt(a,4)}°</output></label><input type="range" min="0" max="180" step="0.5" value="${a}" data-alpha><small>Ίδια γωνία έναυσης σε όλα· η μετατόπιση του καθενός μένει.</small></div>`;}
  if(!box.innerHTML)box.innerHTML='<div class="muted small">Χωρίς μπλοκ PWM, Sample & Hold ή θυρίστορ.</div>';
@@ -266,6 +277,9 @@ function refreshControls(){
  $$('#live-controls [data-dd]').forEach(b=>b.onclick=()=>{const c=editor.comp(b.dataset.dd);setD(b.dataset.dd,(+c.params.D||0)+(+b.dataset.step),true);});
  $$('#live-controls [data-dset]').forEach(b=>b.onclick=()=>setD(b.dataset.dset,+b.dataset.val,true));
  $$('#live-controls [data-m]').forEach(r=>r.oninput=()=>{const c=editor.comp(r.dataset.m);const from=String(c.params.m);c.params.m=+r.value;S.sim?.setControl(r.dataset.m,{m:+r.value});box.querySelector(`[data-mout="${r.dataset.m}"]`).textContent=fmt(+r.value,3);liveChange(r.dataset.m,'m',+r.value,`${c.label||c.id}: m → ${fmt(+r.value,3)}`,from);});
+ $$('#live-controls [data-kapply]').forEach(b=>{const id=b.dataset.kapply,inp=box.querySelector(`[data-kv="${id}"]`);const go=()=>{const v=inp.value.trim(),sch=P.parseSched(v);if(!sch){inp.classList.add('bad');return;}inp.classList.remove('bad');
+   const c=editor.comp(id),from=c.params.v;c.params.v=v;S.sim?.setBlock(id,{sched:sch});editor.renderPart(c);editor.renderLabels();if(!v.includes(':'))liveChange(id,'v',sch[0][1],`${c.label||id} → ${eng(sch[0][1])}`,from);saveLocal();if(S.theory)renderTheory();};
+  b.onclick=go;inp.onkeydown=e=>{if(e.key==='Enter')go();};});
  $$('#live-controls [data-refapply]').forEach(b=>b.onclick=()=>{const id=b.dataset.refapply,v=box.querySelector(`[data-ref="${id}"]`).value,sch=P.parseSched(v);if(!sch){notice('Μη έγκυρη αναφορά.','error');return;}
   const c=editor.comp(id),from=c.params.ref;c.params.ref=v;S.sim?.setControl(id,{ref:sch});if(!v.includes(':'))liveChange(id,'ref',sch[0][1],`${c.label||id}: αναφορά → ${eng(sch[0][1])}`,from);saveLocal();});
  const setPh=(id,deg,commit)=>{const c=editor.comp(id);if(!c)return;deg=((deg%360)+360)%360;const from=String(c.params.phase??0);c.params.phase=deg;S.sim?.setControl(id,{phase:deg/360});
@@ -301,7 +315,7 @@ function openInspector(id,x,y){
   <div class="ins-foot"><small>Οι αλλαγές εφαρμόζονται αμέσως, και ενώ τρέχει η προσομοίωση. Μονάδες SI με προθέματα: 5.6u, 100m, 20k.</small></div>`;
  placePopup(ins,x,y);
  const apply=el=>{const k=el.dataset.k;let v;if(el.type==='checkbox')v=el.checked;else if(el.dataset.num){v=P.parseEng(el.value);if(!Number.isFinite(v)){el.classList.add('bad');return;}el.classList.remove('bad');}else v=el.value;
-  if(k==='dsched'||k==='sched'||k==='ref'){if(v&&!P.parseSched(v)){el.classList.add('bad');return;}el.classList.remove('bad');}
+  if(k==='dsched'||k==='sched'||k==='ref'||(k==='v'&&c.type==='CONST')){if(v&&!P.parseSched(v)){el.classList.add('bad');return;}el.classList.remove('bad');}
   editor.setParams(id,{[k]:v});const def2=def.params.find(d=>d.k===k);if(def2?.type==='select'||def2?.type==='bool'||k==='gate'||k==='ff'||k==='mode')openInspector(id,parseFloat(ins.style.left)-12,parseFloat(ins.style.top)-12);};
  ins.querySelectorAll('[data-k]').forEach(el=>{el.onchange=()=>apply(el);if(el.dataset.num)el.onkeydown=e=>{if(e.key==='Enter')apply(el);};});
  ins.querySelector('[data-label]').onchange=e=>{editor.setParams(id,{},{label:e.target.value||id});renderChannels();};
@@ -343,7 +357,9 @@ let hoverComp=null,hoverPos=[0,0];
 function updateHover(){const tip=$('#tip');if(!hoverComp||!S.sim){tip.hidden=true;return;}const c=editor.comp(hoverComp);if(!c||c.type==='JUNC'||c.type==='GND'){tip.hidden=true;return;}
  const s=S.sim;let html=`<b>${esc(c.label||c.id)}</b>`;
  if(c.type==='PWM')html+=`<div>D = ${fmt(s.now('D:'+c.id),5)} · φέρον c = ${fmt(s.now('CAR:'+c.id),4)}</div>${c.params.mode==='pi'?`<div>ref ${eng(s.now('REF:'+c.id))} · μέτρ. ${eng(s.now('MEAS:'+c.id))}</div>`:''}`;
- else if(c.type==='SH'){const q=s.shById.get(c.id),u=q?.qty==='V'?'V':'A';html+=q?`<div>κρατημένη τιμή ${eng(q.h,u)}</div><div>${q.n} δείγματα${q.log.t.length?` · τελευταίο στο ${eng(q.log.t[q.log.t.length-1],'s',5)}`:''}</div>`:'';}
+ else if(P.BLOCKS.has(c.type)){const b=s.net.compInfo.get(c.id)?.blk;const u=blkUnit(c);html+=`<div>${c.type==='DISP'?'τιμή':'έξοδος'} ${eng(s.now('Y:'+c.id),u,5)}</div>`;
+  if(b){const ins=Object.entries(b.ins).map(([k,n])=>`${k} = ${n>=0?eng(s.sv[n],'',4):'—'}`);if(ins.length)html+=`<div class="muted">${ins.join(' · ')}</div>`;}}
+ else if(c.type==='SH'){const q=s.shById.get(c.id),u=q?.sig?'':q?.qty==='V'?'V':'A';html+=q?`<div>κρατημένη τιμή ${eng(q.h,u)}</div><div>${q.n} δείγματα${q.log.t.length?` · τελευταίο στο ${eng(q.log.t[q.log.t.length-1],'s',5)}`:''}</div>`:'';}
  else{const lp=k=>s.lastPeriod(k);const rows=[['v','V:'+c.id,'V'],['i','I:'+c.id,'A'],['p','P:'+c.id,'W']];if(c.type==='SW'||c.type==='SCR')rows.unshift(['g','GS:'+c.id,'']);if(c.type==='XFMR')rows.push(['i_m','Im:'+c.id,'A'],['i₂','I2:'+c.id,'A']);
   html+='<table>'+rows.map(([n,k,u])=>`<tr><td>${n}</td><td>${eng(s.now(k),u)}</td><td class="muted">⌀ ${eng(lp(k)?.avg,u)}</td></tr>`).join('')+'</table>';}
  tip.innerHTML=html;tip.hidden=false;tip.style.left=(hoverPos[0]+16)+'px';tip.style.top=(hoverPos[1]+16)+'px';}
@@ -362,7 +378,7 @@ function tutorial(){return Tutorials.get(S.tut.id)||Tutorials.list[0];}
 function circuitSig(doc){
  const comps=(doc.components||[]).filter(c=>P.PARTS[c.type]),type=new Map(comps.map(c=>[c.id,c.type]));
  const par=new Map(),find=k=>{while(par.get(k)!==k){par.set(k,par.get(par.get(k)));k=par.get(k);}return k;};
- for(const c of comps)for(const p of Object.keys(P.PARTS[c.type].pins))par.set(c.id+':'+p,c.id+':'+p);
+ for(const c of comps)for(const p of Object.keys(P.pinsOf(c)))par.set(c.id+':'+p,c.id+':'+p);
  for(const w of doc.wires||[]){const a=w.a.c+':'+w.a.p,b=w.b.c+':'+w.b.p;if(par.has(a)&&par.has(b))par.set(find(a),find(b));}
  const g=comps.filter(c=>c.type==='GND');for(let i=1;i<g.length;i++)par.set(find(g[i].id+':g'),find(g[0].id+':g'));
  const groups=new Map();for(const k of par.keys()){const r=find(k);if(!groups.has(r))groups.set(r,[]);const t=type.get(k.split(':')[0]);if(t==='GND')groups.get(r).push('⏚');else if(t!=='JUNC')groups.get(r).push(k);}
@@ -536,8 +552,46 @@ function polyTheory(){const s=S.sim,m=S.tutMeta||{};const legs=editor.doc.compon
  const scan=`<h4>Κυμάτωση αθροίσματος σε όλο το παράθυρο (ιδανικό μοντέλο)</h4><div class="wrap"><table class="cmp"><thead><tr><th>V_st</th><th>D</th><th>N·D</th><th>Δi_k</th><th>Δi_Σ μετατοπισμένα</th><th>Δi_Σ συμφασικά</th></tr></thead><tbody>${[...new Map([vmin,(vmin+vmax)/2,vmax,...canc,worst.v].map(v=>[v.toPrecision(6),v])).values()].sort((a,b)=>a-b).map(V=>{const d=1-vlo/V;
    return `<tr><td>${eng(V,'V',4)}</td><td>${fmt(d,4)}</td><td>${fmt(N*d,4)}</td><td>${eng(vlo*d/(L*fs),'A',4)}</td><td>${eng(shiftF(V),'A',4)}</td><td>${eng(commonF(V),'A',4)}</td></tr>`;}).join('')}</tbody></table></div>`;
  return `<ul class="eqs">${eqs.map(e=>`<li>${e}</li>`).join('')}</ul>${cmpRows(rows)}${tab}${scan}`;}
+// last n complete periods of one channel: [{avg,min,max}], oldest first
+function lastPeriods(key,n){const s=S.sim,i=s?.chIndex.get(key),p=s?.per;if(i===undefined||!p?.n)return [];const out=[];for(let k=Math.min(n,p.n);k>=1;k--){const j=(p.head-k+p.cap)%p.cap,o=j*p.nch+i;out.push({t:p.t[j],avg:p.avg[o],min:p.min[o],max:p.max[o]});}return out;}
+function evalOrderHTML(){const o=S.sim?.net.sig.order||[];if(!o.length)return '';return `<p class="small">Σειρά υπολογισμού των μπλοκ σε κάθε στιγμή: <b>${o.map(b=>esc(b.label)).join(' → ')}</b>. Κάθε μπλοκ υπολογίζεται μετά από όσα διαβάζει άμεσα. Η z⁻¹ δεν διαβάζει άμεσα την είσοδό της, γι' αυτό σπάει τους βρόχους. Ένας κλειστός βρόχος χωρίς τέτοιο μπλοκ (αλγεβρικός βρόχος) αναφέρεται ως σφάλμα.</p>`;}
+// 3.0: current loop built from blocks. The PI reads i_L at the period start (sawtooth: the valley), so it holds
+// the valley at the reference and the mean is i_ref + Δi/2
+function blocksTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('AM1')||!paramsOf('VO'))return '';const T=1/m.fs,key=m.blk?'Y:AM1':'I:L1';
+ const iref=m.blk?s.now('Y:K1'):s.now('REF:PWM1'),i=Number.isFinite(iref)?iref:m.i1,Vin=+paramsOf('V1').V,Vo=+paramsOf('VO').V,D=Vo/Vin,dI=(Vin-Vo)*D*T/+paramsOf('L1').L;
+ const ia=avgOver(key,5),dsim=m.cmp?avgOver('GS:S1',5)?.avg:avgOver('D:PWM1',5)?.avg;
+ const after=lastPeriods(key,20000).filter(q=>q.t>m.t1+T&&q.t<m.t1+40*T);const vk=after.length?Math.max(...after.map(q=>q.min)):NaN;const os=after.length>=20?100*(vk-m.i1)/(m.i1-m.i0):NaN;
+ const pmLoss=360*m.fc/m.fs;
+ let h=`<div class="tm"><span class="badge">${m.blk?'PI από μπλοκ':'ενσωματωμένος PI'}</span>${m.blk?(m.cmp?'φέρον + συγκριτής':'PWM με είσοδο d'):''}${m.z1?' · z⁻¹':''}</div>`;
+ h+=`<ul class="eqs"><li>K_p = <b>${eng(m.kp)}</b>, K_i = <b>${eng(m.ki)}</b>: f_c = f_s/20 = ${eng(m.fc,'Hz')}, περιθώριο φάσης 60° μαζί με την καθυστέρηση ZOH${m.z1?`. Η z⁻¹ αφαιρεί άλλες ω_c·T·180°/π = <b>${fmt(pmLoss,3)}°</b>, άρα μένουν περίπου ${fmt(60-pmLoss,3)}°`:''}</li>
+  <li>D = V_o/V_in = <b>${fmt(D,4)}</b>, Δi = (V_in − V_o)·D·T/L = <b>${eng(dI,'A')}</b></li>
+  <li>Ο PI μετρά στην αρχή της περιόδου. Με πριονωτό φέρον εκεί είναι η <b>κοιλάδα</b> του i_L (όπως στην Άσκηση 2), άρα κοιλάδα = i_ref και ⟨i_L⟩ = i_ref + Δi/2</li>
+  ${Number.isFinite(os)?`<li>Υπερύψωση της κοιλάδας μετά το βήμα ${eng(m.i0,'A')} → ${eng(m.i1,'A')}: <b>${fmt(Math.max(0,os),3)} %</b>${os<=.05?' (καμία)':''}</li>`:''}</ul>`;
+ h+=cmpRows([['κοιλάδα i_L',i,ia?.min,'A'],['⟨i_L⟩ (τελευταίες 5 T)',i+dI/2,ia?.avg,'A'],['D',D,dsim,'']]);
+ h+=evalOrderHTML();
+ if(m.blk)h+=`<p class="small muted">Ο PI από μπλοκ ακολουθεί τους κανόνες του ενσωματωμένου (ίδιο δείγμα, ίδιο anti-windup), γι' αυτό με «PWM με είσοδο d» δίνει ακριβώς το ίδιο D. ${m.cmp?'Με φέρον και συγκριτή ο λύτης εντοπίζει τη στιγμή που το φέρον περνά το d μέσα στο βήμα του, όπως τις μεταβάσεις των διόδων.':''}</p>`;
+ return h;}
+// 3.0: peak current-mode. A valley error Δi is multiplied every period by λ = (m_a − m₂)/(m₁ + m_a)
+function pcmTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!paramsOf('V1')||!paramsOf('VO')||!paramsOf('L1'))return '';const T=m.T,R=paramsOf('RMP1'),ic0=s.now('Y:IC'),ic=Number.isFinite(ic0)?ic0:m.ic;
+ const Vin=+paramsOf('V1').V,Vo=+paramsOf('VO').V,L=+paramsOf('L1').L,D=Vo/Vin,m1=(Vin-Vo)/L,m2=Vo/L,ma=R?(+R.hi-+R.lo)*(+R.f):0,lam=(ma-m2)/(m1+ma),stable=Math.abs(lam)<1,mamin=Math.max(0,(m2-m1)/2);
+ const Ipk=ic-ma*D*T,Iv=Ipk-m2*(1-D)*T;
+ const pk=lastPeriods('Y:AM1',8),dd=lastPeriods('GS:S1',8);const ds=dd.map(q=>q.avg);const spread=ds.length?Math.max(...ds)-Math.min(...ds):NaN;
+ const alt=ds.length>=6&&ds.slice(2).every((d,k)=>Math.abs(d-ds[k])<2e-3)&&spread>2e-3;
+ const verdict=!ds.length?'':spread<2e-3?'σταθερό: ίδιο duty σε κάθε περίοδο (1T)':alt?'υποαρμονική: το duty εναλλάσσεται κάθε περίοδο (2T)':'υποαρμονική / χαοτική: το duty αλλάζει από περίοδο σε περίοδο';
+ let h=`<div class="tm"><span class="badge ${stable?'ccm':'dcm'}">${stable?'|λ| < 1: σταθερό':'|λ| ≥ 1: ασταθές'}</span> D = ${fmt(D,3)} · m_a = ${m.ramp==='none'?'0':m.ramp==='half'?'m₂/2':'m₂'}</div>`;
+ h+=`<ul class="eqs"><li>Κλίσεις: m₁ = (V_in − V_o)/L = <b>${eng(m1,'A/s')}</b> (ON), m₂ = V_o/L = <b>${eng(m2,'A/s')}</b> (OFF), ράμπα m_a = <b>${eng(ma,'A/s')}</b></li>
+  <li>Μια διαταραχή Δi της κοιλάδας γίνεται λ·Δi στην επόμενη περίοδο: λ = (m_a − m₂)/(m₁ + m_a) = <b>${fmt(lam,4)}</b></li>
+  <li>Χωρίς ράμπα λ = −D/(1 − D): ασταθές για D > 0,5. Για αυτό το D σταθερό όταν m_a > (m₂ − m₁)/2 = <b>${eng(mamin,'A/s')}</b>, για κάθε D αρκεί m_a ≥ m₂/2. Με m_a = m₂ ισχύει λ = 0 και η διαταραχή σβήνει σε έναν κύκλο</li>
+  <li>Στη μόνιμη κατάσταση: Î = i_c − m_a·D·T = <b>${eng(Ipk,'A')}</b>, κοιλάδα Î − m₂(1 − D)T = <b>${eng(Iv,'A')}</b></li></ul>`;
+ h+=cmpRows([['κορυφή Î (τελευταία T)',stable?Ipk:NaN,pk.length?pk[pk.length-1].max:NaN,'A'],['κοιλάδα (τελευταία T)',stable?Iv:NaN,pk.length?pk[pk.length-1].min:NaN,'A'],['⟨i_L⟩',stable?(Ipk+Iv)/2:NaN,pk.length?pk[pk.length-1].avg:NaN,'A'],['duty',stable?D:NaN,ds.length?ds[ds.length-1]:NaN,'']]);
+ if(ds.length)h+=`<h4>Τελευταίες ${ds.length} περίοδοι</h4><p class="small">${esc(verdict)}</p><div class="wrap"><table class="cmp"><thead><tr><th>περίοδος</th>${ds.map((d,k)=>`<th>${k-ds.length+1||'τελ.'}</th>`).join('')}</tr></thead><tbody>
+  <tr><td>duty</td>${ds.map(d=>`<td>${fmt(d,3)}</td>`).join('')}</tr><tr><td>κορυφή i_L</td>${pk.map(q=>`<td>${fmt(q.max,4)}</td>`).join('')}</tr></tbody></table></div>`;
+ h+=`<p class="small muted">Η στιγμή του reset (ρεύμα + ράμπα = i_c) εντοπίζεται μέσα στο βήμα του λύτη. Ο λύτης δεν έχει ειδικό κώδικα για peak current-mode: είναι γενικά μπλοκ (ρολόι, latch, συγκριτής, άθροισμα). Ο λύτης SciPy στον server δίνει τις ίδιες κορυφές στη σταθερή περιοχή. Στην υποαρμονική συμφωνεί για δεκάδες περιόδους και μετά δίνει την ίδια συμπεριφορά αλλά όχι την ίδια ακολουθία: εκεί κάθε μικρή αριθμητική διαφορά μεγαλώνει κατά |λ| σε κάθε περίοδο.</p>`;
+ return h+evalOrderHTML();}
 function formulaTheory(t){
  if(t.topology==='sampling')return samplingTheory();
+ if(t.topology==='blocks_loop')return blocksTheory();
+ if(t.topology==='peak_cm')return pcmTheory();
  if(t.topology==='polyphase')return polyTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const D=+W.D,Vin=+V.V,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
@@ -594,10 +648,10 @@ function circuitForMath(){
  const doc=editor.doc;if(!S.sim||S.error)return {error:'Το κύκλωμα δεν προσομοιώνεται· διόρθωσε πρώτα τη συνδεσμολογία.'};
  const open=(S.sim.net.warnings||[]).find(w=>w.startsWith('Ανοιχτοί ακροδέκτες'));if(open)return {error:'Η συμβολική λύση θέλει κλειστό κύκλωμα. '+open};
  const par=new Map(),find=k=>{while(par.get(k)!==k){par.set(k,par.get(par.get(k)));k=par.get(k);}return k;};
- for(const c of doc.components)for(const pn of Object.keys(P.PARTS[c.type].pins))par.set(c.id+':'+pn,c.id+':'+pn);
+ for(const c of doc.components)for(const pn of Object.keys(P.pinsOf(c)))par.set(c.id+':'+pn,c.id+':'+pn);
  for(const w of doc.wires){const a=w.a.c+':'+w.a.p,b=w.b.c+':'+w.b.p;if(par.has(a)&&par.has(b))par.set(find(a),find(b));}
  const net={pinNet:{get:k=>par.has(k)?{canon:find(k)}:null}};
- const used=doc.components.filter(c=>V1MAP[c.type]),extra=doc.components.filter(c=>!V1MAP[c.type]&&!['GND','JUNC','PWM','SH'].includes(c.type));
+ const used=doc.components.filter(c=>V1MAP[c.type]),extra=doc.components.filter(c=>!V1MAP[c.type]&&!['GND','JUNC','PWM','SH'].includes(c.type)&&!(P.BLOCKS.has(c.type)&&c.type!=='AM'));
  const why='Η πλήρης συμβολική λύση καλύπτει buck, boost, αντιστρέφοντα buck–boost και flyback με ένα στοιχείο ανά ρόλο.';
  if(!used.length)return {error:'Πρόσθεσε στοιχεία ισχύος (πηγή, διακόπτη, πηνίο…) για να βγει η συμβολική λύση.'};
  if(extra.length)return {error:why+' Αυτό το κύκλωμα έχει και: '+extra.map(c=>`${P.PARTS[c.type].name} ${c.label||c.id}`).join(', ')+'.'};
@@ -692,7 +746,7 @@ function boot(){
   onchange:kind=>{if(kind==='struct'||kind==='param'){if(S.batch)S.batch.stale=true;buildSim(false);if(S.theory)setTimeout(()=>{if(tutorial().theory==='v1'||tutorial().theory==='formula')runTheory();},50);scheduleMath();}saveLocal();if(kind==='struct')renderChannels();},
   onselect:sel=>{$('#selinfo').textContent=sel.c.length+sel.w.length?`${sel.c.length} στοιχεία · ${sel.w.length} σύρματα επιλεγμένα`:'';},
   onedit:ev=>{if(ev.kind==='comp'){if(editor.settings.dblclick==='scope'&&signalsFor(editor.comp(ev.id)).length)addProbe('I:'+ev.id);else openInspector(ev.id,ev.x,ev.y);}else openWireInspector(ev.id,ev.x,ev.y);},
-  oncontext:openMenu});
+  oncontext:openMenu,onwarn:t=>{notice(t,'error');setTimeout(()=>notice(''),5000);}});
  editor.setLive(liveOf);
  scope=new Scope($('#scope-canvas'),{onfreeze:()=>{$('#live-btn').hidden=false;},onchange:()=>{renderMeasure();},onhover:()=>{}});
  editor.svg.addEventListener('pointermove',e=>{const el=e.target.closest?.('[data-c]');hoverComp=el?.dataset.c||null;hoverPos=[e.clientX,e.clientY];updateHover();});

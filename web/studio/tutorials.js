@@ -289,6 +289,47 @@
    return project(comps,wires,{sim:{hDiv:slow?200:400,speed:slow?400:20,stopT:slow?.02:0},scope:{panes,window:slow?{unit:'T',n:400}:{unit:'T',n:3}},
     meta:{N,vbus,vst,P,fs,T:Tsw,L,D,Ik,dI,shift,phases,canc,vmin:60,vmax:100,Lmin:dd.L,L20:d20.L,Ipk:dd.Ipk,k:.3,pi,mis,Rs,R2:Rk(1),L2:Lk(1)}});}});
  // ------------------------------------------------------------------ empty
+ // ------------------------------------------------------------------ 3.0: current loop from signal blocks
+ T.push({id:'blocks_loop',group:'Μπλοκ σημάτων (3.0)',title:'Βρόχος ρεύματος από μπλοκ',theory:'formula',topology:'blocks_loop',
+  options:[{k:'ctrl',label:'Ελεγκτής',options:[['blocks','PI από μπλοκ (σύρματα σημάτων)'],['builtin','Ενσωματωμένος PI του PWM (σύγκριση)']],def:'blocks'},
+   {k:'mod',label:'Διαμορφωτής',options:[['pwm','Μπλοκ PWM με είσοδο d'],['cmp','Φέρον + συγκριτής → πύλη του S1']],def:'pwm'},
+   {k:'delay',label:'Καθυστέρηση υπολογισμού',options:[['none','Καμία: το D ισχύει από το ίδιο δείγμα'],['z1','z⁻¹: το D ισχύει μία περίοδο αργότερα']],def:'none'}],
+  desc:'Buck 48 V προς μπαταρία 24 V, L = 100 μH, f_s = 50 kHz. Το ρεύμα του πηνίου μετριέται με αμπερόμετρο σε σειρά. Η αναφορά (σταθερά), το σφάλμα (άθροισμα), ο PI και το duty είναι μπλοκ ενωμένα με σύρματα σημάτων. Το duty φτάνει στον διακόπτη είτε από το μπλοκ PWM (είσοδος d) είτε από φέρον και συγκριτή, που είναι ακριβώς ό,τι κάνει το PWM μέσα του. Βήμα αναφοράς 5 → 10 A στα 2 ms.',
+  tasks:['Τρέξε έως το τέλος (⏩). Το i_L ακολουθεί την αναφορά. Δες στην κάρτα θεωρίας τη σειρά με την οποία υπολογίζονται τα μπλοκ.','Διάλεξε «Ενσωματωμένος PI»: ίδια καμπύλη, γιατί ο PI από μπλοκ ενημερώνεται με τους ίδιους κανόνες.','Διάλεξε «Φέρον + συγκριτής»: ίδια συμπεριφορά. Ο συγκριτής σβήνει τον S1 μέσα στο βήμα του λύτη, στη στιγμή που το φέρον περνά το d.','Πρόσθεσε z⁻¹: το περιθώριο φάσης πέφτει κατά ω_c·T (≈ 18°) και εμφανίζεται υπερύψωση μετά το βήμα.','Άλλαξε την αναφορά εν κινήσει από τις ζωντανές παραμέτρους (σταθερά i_ref).'],
+  build(o){const Vin=48,Vo=24,L=100e-6,fs=50e3,g=piGains(L,Vin,fs),ref='0:5, 0.002:10',blk=o.ctrl!=='builtin',cmp=blk&&o.mod==='cmp',z1=blk&&o.delay==='z1';
+   const kp=+g.kp.toPrecision(4),ki=+g.ki.toPrecision(4),clock=cmp?'CLK1':'PWM1';
+   const comps=[C('V1','VDC',100,210,{V:Vin},{label:'V_in'}),gnd(100,300),C('S1','SW',200,150,cmp?{gate:'sig',body:false}:{pwm:'PWM1',out:'a',body:false},{rot:3,flip:true}),J('J1',270,150),C('D1','D',270,200,{},{rot:3}),
+     C('L1','L',330,150,{L,i0:5}),C('AM1','AM',400,150,{},{label:'A_L',lbl:'below'}),C('VO','VDC',490,210,{V:Vo},{label:'V_o'}),
+     J('J3',100,270),J('J4',270,270)];
+   const wires=[['V1:p','S1:d',[[100,150]]],['S1:s','J1'],['J1','L1:a'],['J1','D1:k'],['L1:b','AM1:a'],['AM1:b','VO:p',[[490,150]],{name:'v_o'}],
+     ['V1:n','J3'],['J3','G1:g'],['J3','J4'],['J4','D1:a'],['J4','VO:n',[[490,270]]]];
+   if(!blk)comps.push(C('PWM1','PWM',200,60,{fs,mode:'pi',carrier:'saw',sensor:'L1',qty:'I',ref,Kp:kp,Ki:ki,ff:'none',dmin:0,dmax:.95}));
+   else{comps.push(C('K1','CONST',250,60,{v:ref},{label:'i_ref'}),C('SUM1','SUM',330,70,{signs:'+-'},{label:'e'}),C('PI1','PIB',430,70,{Kp:kp,Ki:ki,clock,trig:'start',y0:0,ymin:0,ymax:.95},{label:'PI'}));
+    wires.push(['K1:y','SUM1:a'],['AM1:y','SUM1:b',[[400,100],[290,100],[290,80]]],['SUM1:y','PI1:u']);
+    let d='PI1:y';if(z1){comps.push(C('UD1','UD',510,70,{clock,trig:'start',y0:0},{label:'z⁻¹'}));wires.push(['PI1:y','UD1:u']);d='UD1:y';}
+    const xd=z1?540:460;
+    if(!cmp){comps.push(C('PWM1','PWM',xd+140,70,{fs,mode:'ext',carrier:'saw'}));wires.push([d,'PWM1:d']);}
+    else{comps.push(C('CLK1','CLK',120,50,{f:fs,duty:.5},{label:'ρολόι PI'}),C('RMP1','RAMP',xd+60,10,{f:fs,shape:'saw',lo:0,hi:1},{label:'φέρον'}),C('CMP1','CMP',xd+140,70,{},{label:'σύγκριση'}));
+     wires.push([d,'CMP1:p'],['RMP1:y','CMP1:n'],['CMP1:y','S1:g',[[xd+180,70],[xd+180,-40],[200,-40]]]);}}
+   const panes=!blk?[[['I:L1','i_L'],['REF:PWM1','i_ref']],[['D:PWM1','D']]]
+    :[[['Y:AM1','i_L (αμπερόμετρο)'],['Y:K1','i_ref']],cmp?[['Y:'+(z1?'UD1':'PI1'),'d'],['Y:RMP1','φέρον']]:[['D:PWM1','D']]];
+   return project(comps,wires,{sim:{hDiv:200,speed:300,stopT:4e-3},scope:{panes,window:{unit:'T',n:100}},meta:{Vin,Vo,L,fs,kp,ki,fc:g.fc,i0:5,i1:10,t1:.002,blk,cmp,z1}});}});
+ // ------------------------------------------------------------------ 3.0: peak current-mode, subharmonic oscillation
+ T.push({id:'peak_cm',group:'Μπλοκ σημάτων (3.0)',title:'Peak current-mode και υποαρμονική',theory:'formula',topology:'peak_cm',
+  options:[{k:'D',label:'Duty (V_o = D·V_in)',options:[['0.4','D = 0,4'],['0.6','D = 0,6'],['0.7','D = 0,7']],def:'0.6'},
+   {k:'ramp',label:'Αντιστάθμιση κλίσης',options:[['none','Χωρίς ράμπα'],['half','m_a = m₂/2'],['full','m_a = m₂ (ένας κύκλος)']],def:'none'}],
+  desc:'Buck 24 V προς μπαταρία V_o, L = 50 μH, f_s = 100 kHz. Δεν υπάρχει μπλοκ PWM: το ρολόι κάνει SET στο latch στην αρχή κάθε περιόδου και ανάβει τον S1. Ο συγκριτής κάνει RESET όταν το ρεύμα του πηνίου, συν τη ράμπα αντιστάθμισης, φτάσει την εντολή i_c. Η στιγμή του RESET εντοπίζεται μέσα στο βήμα του λύτη, χωρίς ειδικό κώδικα για peak current-mode.',
+  tasks:['Με D = 0,4 και χωρίς ράμπα: σταθερή κορυφή στο i_c από περίοδο σε περίοδο.','Με D = 0,6 χωρίς ράμπα: οι κορυφές και οι κοιλάδες εναλλάσσονται (υποαρμονική). Η κάρτα θεωρίας δίνει λ = (m_a − m₂)/(m₁ + m_a).','Πρόσθεσε ράμπα m₂/2: η ταλάντωση σβήνει. Με m_a = m₂ σβήνει σε έναν κύκλο.','Άλλαξε εν κινήσει την εντολή i_c από τις ζωντανές παραμέτρους.','Άσκηση: πρόσθεσε μέγιστο duty με μπλοκ από τη βιβλιοθήκη (π.χ. ρολόι με ποσοστό 0,9, NOT και OR στο reset).'],
+  build(o){const Vin=24,L=50e-6,fs=100e3,T=1/fs,D=+o.D,Vo=+(D*Vin).toFixed(6),ic=5,m2=Vo/L,ma={none:0,half:.5,full:1}[o.ramp]*m2,hi=+(ma*T).toPrecision(6);
+   const comps=[C('V1','VDC',100,210,{V:Vin},{label:'V_in'}),gnd(100,300),C('S1','SW',200,150,{gate:'sig',body:false},{rot:3,flip:true}),J('J1',270,150),C('D1','D',270,200,{},{rot:3}),
+    C('AM1','AM',370,150,{},{label:'A_L',lbl:'below'}),C('L1','L',480,150,{L,i0:0}),C('VO','VDC',580,210,{V:Vo},{label:'V_o'}),J('J3',100,270),J('J4',270,270),
+    C('RMP1','RAMP',290,20,{f:fs,shape:'saw',lo:0,hi},{label:'ράμπα m_a'}),C('SUM1','SUM',400,40,{signs:'++'},{label:'i_L + ράμπα'}),C('IC','CONST',430,100,{v:String(ic)},{label:'i_c'}),
+    C('CMP1','CMP',510,60,{},{label:'reset'}),C('CLK1','CLK',510,-30,{f:fs,duty:.5},{label:'ρολόι (set)'}),C('SR1','SR',620,50,{},{label:'latch'})];
+   const wires=[['V1:p','S1:d',[[100,150]]],['S1:s','J1'],['J1','AM1:a'],['J1','D1:k'],['AM1:b','L1:a'],['L1:b','VO:p',[[580,150]]],['V1:n','J3'],['J3','G1:g'],['J3','J4'],['J4','D1:a'],['J4','VO:n',[[580,270]]],
+    ['RMP1:y','SUM1:a',[[350,20],[350,30]]],['AM1:y','SUM1:b'],['SUM1:y','CMP1:p',[[460,40],[460,50]]],['IC:y','CMP1:n',[[470,100],[470,70]]],
+    ['CMP1:y','SR1:r'],['CLK1:y','SR1:s',[[570,-30],[570,40]]],['SR1:q','S1:g',[[670,40],[670,-110],[200,-110]]]];
+   return project(comps,wires,{sim:{hDiv:500,speed:20,stopT:0},scope:{panes:[[['Y:AM1','i_L'],['Y:SUM1','i_L + ράμπα'],['Y:IC','i_c']],[['Y:SR1','Q → S1'],['Y:CLK1','ρολόι'],['Y:CMP1','reset']]],window:{unit:'T',n:6}},
+    meta:{Vin,Vo,L,fs,T,D,ic,m1:(Vin-Vo)/L,m2,ma,hi,ramp:o.ramp}});}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
  root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};

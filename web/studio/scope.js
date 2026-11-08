@@ -8,7 +8,8 @@
  const COLORS=['#147966','#c47a1c','#2f5fa0','#b03a5b','#6b4fa0','#3d8b3d','#1f8fa0','#8a5a2b'];
  const UNIT={V:'V',I:'A',P:'W',N:'V',VN:'V',V2:'V',I2:'A',Im:'A',Vb:'V',Vc:'V',Vab:'V',Ib:'A',Ic:'A',PSW:'W',D:'',G:'',GS:'',REF:'',MEAS:'',CAR:''};
  // on/off signals: a pane holding only these draws each one in its own lane
- const LOGIC=new Set(['G','GS']);const isLogic=key=>LOGIC.has(key.split(':')[0]);
+ const LOGIC=new Set(['G','GS']),LOGIC_BLK=new Set(['CMP','SR','CLK','LOGIC']);
+ const isLogic=(key,sim)=>{const [pre,id]=key.split(':');if(LOGIC.has(pre))return true;if(pre!=='Y')return false;const c=(sim||root.PCL?.S?.sim)?.net.compInfo.get(id);return !!(c&&LOGIC_BLK.has(c.type));};
  function niceStep(span,n){const raw=span/Math.max(1,n),p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;return (m<1.5?1:m<3.5?2:m<7.5?5:10)*p;}
  function fmtT(t,step,tmax){const m=Math.max(Math.abs(tmax??t),step);const [k,u]=m<1e-6?[1e9,'ns']:m<1e-3?[1e6,'μs']:m<1?[1e3,'ms']:[1,'s'];const d=Math.max(0,Math.ceil(-Math.log10(step*k)-1e-9));return (t*k).toLocaleString('el-GR',{minimumFractionDigits:d,maximumFractionDigits:d,useGrouping:false})+' '+u;}
  const eng=(v,u)=>root.Parts.eng(v,u,4);
@@ -46,7 +47,8 @@
    this.cv.width=Math.round(this.W*dpr);this.cv.height=Math.round(this.H*dpr);this.cv.style.width=this.W+'px';this.cv.style.height=this.H+'px';this.ctx.setTransform(dpr,0,0,dpr,0,0);this.draw();}
   // ------------------------------------------------------------ channels
   static unitOf(key,sim){const pre=key.split(':')[0],id=key.split(':')[1];if(pre==='REF'||pre==='MEAS'){const k=sim?.net.ctrls.find(c=>c.id===id);const h=sim?.shById?.get(k?.sensor);return (h?h.qty:k?.qty)==='V'?'V':'A';}
-   if(pre==='H')return sim?.shById?.get(id)?.qty==='V'?'V':'A';return UNIT[pre]??'';}
+   if(pre==='H'){const q=sim?.shById?.get(id);return q?.sig?'':q?.qty==='V'?'V':'A';}
+   if(pre==='Y'){const b=sim?.net.compInfo.get(id)?.blk;return b?.type==='VM'?'V':b?.type==='AM'?'A':b?.type==='MEAS'?(b.qty==='V'?'V':'A'):'';}return UNIT[pre]??'';}
   resolve(key){const s=this.sim;if(!s)return -1;if(key.startsWith('VN:')){const pin=key.slice(3),n=s.net.pinNet.get(pin);if(!n)return -1;if(n.ground)return -2;return s.chIndex.get('N:'+n.canon)??-1;}return s.chIndex.get(key)??-1;}
   channels(){return this.cfg.panes.flatMap((p,pi)=>p.ch.map(c=>({...c,pane:pi})));}
   addChannel(key,label,pane=null){if(this.channels().some(c=>c.key===key))return false;const used=new Set(this.channels().map(c=>c.color));const color=COLORS.find(c=>!used.has(c))||COLORS[this.channels().length%COLORS.length];
@@ -97,7 +99,7 @@
    panes.forEach((pane,pi)=>{
     const y0=top+pi*(ph+gap),y1=y0+ph;const chans=pane.ch.filter(ch=>ch.on);
     // gate pulses only: one lane per signal (0 at the bottom of the lane, 1 at 80 % of it)
-    const lanes=chans.length>=2&&chans.every(ch=>isLogic(ch.key)),nL=chans.length,tfs=chans.map((ch,k)=>lanes?(v=>v*.8+(nL-1-k)*1.2):(v=>v));
+    const lanes=chans.length>=2&&chans.every(ch=>isLogic(ch.key,s)),nL=chans.length,tfs=chans.map((ch,k)=>lanes?(v=>v*.8+(nL-1-k)*1.2):(v=>v));
     // y range
     let lo=Infinity,hi=-Infinity;const data=[];
     chans.forEach((ch,k)=>{const ci=this.resolve(ch.key),f=tfs[k];if(ci===-1){data.push(null);return;}
