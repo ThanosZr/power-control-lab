@@ -309,6 +309,37 @@ class StudioSimulator(unittest.TestCase):
         self.assertAlmostEqual(i['leak']['vp'], -1.25, delta=5e-3)   # 1 kΩ to ground from every node: still around a mean of 0
         self.assertIn('χωρίς αγώγιμη σύνδεση με τη γείωση', i['err'])
 
+    def test_transmission_line_and_impulse_voltage(self):
+        # 3.8: Bergeron line against the lattice written out here: E = 1 V behind 200 Ω, Z = 400 Ω, R_L = 1200 Ω, so the first wave
+        # is 2/3 V, Γ_s = −1/3, Γ_L = 1/2; the end voltages after each arrival and the final 1200/1400 V
+        o = self.o['tl38']
+        Z, gs, gl, a0 = 400, -1 / 3, .5, 2 / 3
+        t = [.5, 1.5, 3.5, 5.5, 7.5]
+        vB = {1.5: a0 * (1 + gl), 3.5: a0 * (1 + gl) * (1 + gs * gl), 5.5: a0 * (1 + gl) * (1 + gs * gl + (gs * gl) ** 2)}
+        vA = {.5: a0, 3.5: a0 * (1 + gl * (1 + gs)), 5.5: a0 * (1 + gl * (1 + gs) + gl * gl * gs * (1 + gs))}
+        for k, row in zip(t + [40], o['v']):
+            if k in vB:
+                self.assertAlmostEqual(row[1], vB[k], delta=1e-6, msg=k)
+                self.assertAlmostEqual(-row[3], row[1] / 1200, delta=1e-8, msg=k)    # the end current is v/R into the load
+            if k in vA:
+                self.assertAlmostEqual(row[0], vA[k], delta=1e-6, msg=k)
+        self.assertAlmostEqual(o['v'][0][1], 0, delta=1e-12)                            # nothing at the end before τ
+        self.assertAlmostEqual(o['v'][-1][1], 1200 / 1400, delta=1e-6)
+        self.assertAlmostEqual(o['hClamp'], 1e-6, delta=1e-15)                          # step ≤ τ even with T = 20 ms
+        # impulse voltage: the coefficients of the Voltage Impulse GUI test (LI) and the IEC 60060-1 times
+        li, si = o['imp']['1.2/50'], o['imp']['250/2500']
+        self.assertAlmostEqual(li['alpha'], 1.46591e4, delta=5e-4 * 1.46591e4)
+        self.assertAlmostEqual(li['beta'], 2.46893e6, delta=5e-4 * 2.46893e6)
+        self.assertAlmostEqual(li['K'], 1.0372522, delta=1e-6)
+        self.assertAlmostEqual(li['T1'], 1.2e-6, delta=1e-12)
+        self.assertAlmostEqual(li['T2'], 50e-6, delta=1e-10)
+        self.assertAlmostEqual(si['T1'], 250e-6, delta=1e-9)                            # time to peak
+        self.assertAlmostEqual(si['T2'], 2500e-6, delta=1e-8)
+        m = o['li']                                                                     # measured on the simulated voltage, negative polarity
+        self.assertAlmostEqual(m['peak'], -100e3, delta=1)
+        self.assertAlmostEqual(m['T1'], 1.2e-6, delta=1e-9)
+        self.assertAlmostEqual(m['T2'], 50e-6, delta=1e-8)
+
     def test_switched_reluctance_machine(self):
         # 3.6: against the exact model integrated here: ψ(θ, i) = L_u·i + (ψ_a(i) − L_u·i)·(1 − cos θ)/2 with the aligned curve
         # ψ_a(i) = L_sat·i + ψ_k·(1 − e^(−(L_a − L_sat)·i/ψ_k)), i from ψ by Newton, torque N_r·∂W′/∂θ from the analytic co-energy

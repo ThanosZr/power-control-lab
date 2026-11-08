@@ -285,6 +285,42 @@ class Tutorials(unittest.TestCase):
         self.assertLess(o['pm_ipm_mtpa']['id'], -3)
         self.assertLess(math.hypot(o['pm_ipm_mtpa']['id'], o['pm_ipm_mtpa']['iq']), .75 * o['pm_ipm_id0']['iq'])
 
+    def test_traveling_waves(self):
+        # 3.8: the Bergeron line against the method of characteristics (Parts.bewley) over the whole run, and against the
+        # reflection coefficients written out here: Γ = (R − Z)/(R + Z), first wave E·Z/(R_s + Z)
+        for k, r in self.o.items():
+            if not k.startswith('tw_'):
+                continue
+            E, Z = r['E'], r['Z']
+            self.assertEqual(r['warn'], [], msg=k)
+            self.assertLess(r['eA'], 2e-5 * E, msg=k)
+            self.assertLess(r['eB'], 2e-5 * E, msg=k)
+            self.assertLess(r['eI'], 5e-5 * E / Z, msg=k)
+        o, U, Z = self.o, 100e3, 400
+        for v, w in zip(o['tw_open']['vB'], (2 * U, 0, 2 * U)):          # open end: 2u at τ, back to 0 at 3τ, period 4τ
+            self.assertAlmostEqual(v, w, delta=1e-5 * U)
+        for v, w in zip(o['tw_short']['iB'], (2 * U / Z, 4 * U / Z, 6 * U / Z)):   # short: current up by 2u/Z at every return
+            self.assertAlmostEqual(v, w, delta=1e-5 * U / Z)
+        self.assertAlmostEqual(o['tw_match']['vB'][2], U, delta=1e-5 * U)
+        self.assertAlmostEqual(o['tw_r3z_rs']['vB'][0], .75 * U, delta=1e-5 * U)    # u/2 · (1 + 0.5), no returns with R_s = Z
+        for v, w in zip(o['tw_rz3']['vB'], (.5 * U, .75 * U, .875 * U)):           # Γ_L = −0.5, Γ_s = −1
+            self.assertAlmostEqual(v, w, delta=1e-5 * U)
+        # exercise 15.4.9: overhead line 8 pF/m (semi-infinite: 2u behind Z_e), cable 40 pF/m with ε_r = 4, 165 m, transformer 60 Ω
+        Ze, Zu, R = 1 / (3e8 * 8e-12), 1 / (1.5e8 * 40e-12), 60
+        a0, gs, gl = 2 * Zu / (Ze + Zu), (Ze - Zu) / (Ze + Zu), (R - Zu) / (R + Zu)
+        self.assertAlmostEqual(a0, .5714, delta=1e-4)                       # δ_A of the book (0.57)
+        self.assertAlmostEqual(gs, .4286, delta=1e-4)                       # α_A (0.43)
+        self.assertAlmostEqual(gl, -.4706, delta=1e-4)                      # α_B before the arrester (−0.47)
+        b = o['tw_book3']
+        vB1, vB2 = a0 * (1 + gl), a0 * (1 + gl) * (1 + gl * gs)
+        vA1, vA2 = a0 * (1 + gl * (1 + gs)), a0 * (1 + gl * (1 + gs) + gl * gl * gs * (1 + gs))
+        for v, w in zip(b['vB'], (vB1, vB2, 0)):                            # 0.30u, 0.24u, then 0 with the arrester (3 μs)
+            self.assertAlmostEqual(v / U, w, delta=1e-4)
+        for v, w in zip(b['vA'][:3], (a0, vA1, vA2)):                       # 0.57u, 0.19u, 0.26u (the book has 0.36u)
+            self.assertAlmostEqual(v / U, w, delta=1e-4)
+        self.assertAlmostEqual(o['tw_book2']['vB'][1] / U, 0, delta=1e-4)   # arrester 2 μs after the arrival: B at 0 before the second wave
+        self.assertAlmostEqual(o['tw_booknone']['vB'][1] / U, vB2, delta=1e-4)
+
     def test_lightning_current(self):
         # 3.5: Heidler (IEC 62305-1) and a fitted double exponential into L = 10 μH and R = 10 Ω: peak current, charge,
         # and the peak of v = R·i + L·di/dt against the waveform evaluated here (engine.batch.wave_at)

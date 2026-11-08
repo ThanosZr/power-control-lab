@@ -388,6 +388,7 @@ class Circuit:
             self.ns = self.nsn + extra
         clk = next((b for b in self.blocks if b['type'] in ('CLK', 'RAMP')), None)
         lg = [_f(E[i]['wave'].get('T1'), 1e-6) for i in self.iI if E[i].get('wave')]     # a lightning current: its front time (3.5)
+        lg += [_f(E[i]['src']['w'].get('T1'), 1e-6) for i in self.iV if E[i]['src'].get('kind') == 'wave']   # an impulse voltage (3.8)
         self.base_T = min([k.T for k in self.ctrls], default=None) or (1 / max(_f(clk.get('f'), 1e5), 1e-6) if clk else None) or next(
             (1 / max(1e-6, _f(E[i]['src'].get('f'), 50)) for i in self.iV if E[i]['src'].get('kind') == 'ac'), None) or (min(lg) if lg else 1e-3)
         self._z = None
@@ -502,6 +503,8 @@ class Circuit:
         s = e['src']
         if s.get('kind') == 'dc':
             return sched_at(s.get('sched'), t, _f(s.get('V')))
+        if s.get('kind') == 'wave':          # impulse voltage (3.8): the same double exponential as the lightning current
+            return wave_at(s['w'], t)
         return _f(s.get('off')) + _f(s.get('Vpk')) * math.sin(2 * math.pi * _f(s.get('f')) * t + _f(s.get('ph')))
 
     def topo(self, t):

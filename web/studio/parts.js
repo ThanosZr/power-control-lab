@@ -111,6 +111,24 @@
    value:p=>p.Ipk,unit:'A',
    draw:()=>'<path d="M0,-40 V-16 M0,16 V40"/><circle r="16"/><path class="thin" d="M3,-11 L-4,1 L2,1 L-3,11 M-3,11 L-4,5 M-3,11 L1,7"/>'},
   // multiport elements (3.5): N windings or ports, one above the other, a_k on the left and b_k on the right (dots at a_k)
+  // impulse voltage (3.8): double exponential v = (V₀/η)·(e^(−t/τ₂) − e^(−t/τ₁)), IEC 60060-1 times
+  VIMP:{name:'Κρουστική τάση (1,2/50, 250/2500)',prefix:'V',group:'Πηγές',pins:{p:[0,-40],n:[0,40]},box:[-17,-17,34,34],
+   params:[sel('shape','Κυματομορφή',[['1.2/50','1,2/50 μs: κεραυνική (LI)'],['250/2500','250/2500 μs: χειρισμών (SI, χρόνος κορυφής)'],['custom','Άλλη (προσαρμογή των τ₁, τ₂)']],'1.2/50',
+     {hint:'v(t) = (V₀/η)·(e^(−t/τ₂) − e^(−t/τ₁)), κορυφή V₀. IEC 60060-1: T1 = 1,67·(t₉₀ − t₃₀), T2 από την εικονική αρχή t₃₀ − 0,3·T1 ως το 50 % στην ουρά. Για 250/2500: χρόνος κορυφής T_p και T2 από το t = 0.'}),
+    num('Vpk','Μέγιστη τάση V₀','V',100e3,{signed:true}),
+    sel('basis','Ορισμός χρόνων',[['iec','T1 (30–90 %) και T2 από την εικονική αρχή'],['tp','T_p (χρόνος κορυφής) και T2 από το t = 0']],'iec',{show:p=>p.shape==='custom'}),
+    num('T1','Χρόνος μετώπου T1 ή T_p','s',1.2e-6,{show:p=>p.shape==='custom'}),num('T2','Χρόνος ημίσεος T2','s',50e-6,{show:p=>p.shape==='custom'}),
+    num('Rs','Εσωτερική αντίσταση','Ω',0,{zero:true,hint:'Π.χ. Z της γραμμής: «προσπίπτον κύμα πίσω από Z».'}),num('t0','Καθυστέρηση','s',0,{zero:true})],
+   value:p=>p.Vpk,unit:'V',
+   draw:()=>'<path d="M0,-40 V-16 M0,16 V40"/><circle r="16"/><path class="thin" d="M-8,7 L-5,-8 C-2,-8 0,4 9,6"/><path class="thin" d="M-5,-12 H5"/>'},
+  // transmission line (3.8): lossless, Bergeron / Dommel. At each end i = v/Z + I_h, I_h(t) = −(v/Z + i) of the other end at t − τ
+  TL:{name:'Γραμμή μεταφοράς (οδεύοντα κύματα)',prefix:'TL',group:'Παθητικά',pins:{a1:[-60,-20],b1:[-60,20],a2:[60,-20],b2:[60,20]},box:[-45,-26,90,52],
+   params:[sel('spec','Δεδομένα',[['zt','Z και χρόνος διάδοσης τ'],['zl','Z, μήκος και ταχύτητα'],['lc','L′, C′ ανά μέτρο και μήκος']],'zt',{hint:'Γραμμή χωρίς απώλειες. Ο ένας αγωγός από a1 σε a2, ο άλλος (ή η γη) από b1 σε b2. Το βήμα του λύτη μένει ≤ τ.'}),
+    num('Z','Κυματική αντίσταση Z','Ω',400,{show:p=>p.spec!=='lc'}),num('tau','Χρόνος διάδοσης τ','s',10e-6,{show:p=>p.spec==='zt'}),
+    num('len','Μήκος','m',3000,{show:p=>p.spec!=='zt'}),num('vel','Ταχύτητα διάδοσης','m/s',3e8,{show:p=>p.spec==='zl',hint:'Εναέρια γραμμή περίπου 3·10⁸ m/s, καλώδιο c/√ε_r.'}),
+    num('Lp','Αυτεπαγωγή ανά μέτρο L′','H/m',1.333e-6,{show:p=>p.spec==='lc'}),num('Cp','Χωρητικότητα ανά μέτρο C′','F/m',8.333e-12,{show:p=>p.spec==='lc'})],
+   value:p=>p.Z,unit:'Ω',
+   draw:()=>'<path d="M-60,-20 H-34 M34,-20 H60"/><path class="thin" d="M-60,20 H-34 M34,20 H60"/><rect class="block" x="-34" y="-26" width="68" height="52" rx="5"/><path class="thin" d="M-26,-20 H26"/><path class="thin" stroke-dasharray="3 3" d="M-26,20 H26"/>'+tx('Z, τ',0,4,'bsm')},
   KL:{name:'Συζευγμένα πηνία (N×N)',prefix:'K',group:'Μαγνητικά',pins:p=>portPins(nPorts(p)),box:p=>portBox(nPorts(p)),
    params:[sel('nw','Τυλίγματα',[['2','2'],['3','3'],['4','4']],'2',{show:p=>!String(p.Lmat||'').trim()}),
     num('L1','L₁','H',1e-3,{show:p=>!String(p.Lmat||'').trim()}),num('L2','L₂','H',1e-3,{show:p=>!String(p.Lmat||'').trim()}),
@@ -410,19 +428,47 @@
  function waveShape(w,t){if(!(t>0))return 0;if(w.kind==='dexp')return Math.exp(-t/w.tau2)-Math.exp(-t/w.tau1);const x=Math.pow(t/w.tau1,w.n);return x/(1+x)*Math.exp(-t/w.tau2);}
  function waveAt(w,t){return w.I0/w.eta*waveShape(w,t-w.t0);}
  // peak, front time T1 = 1.25·(t90 − t10) and time to half value T2 (from the virtual origin t10 − 0.1·T1) of a shape
- function waveMeasure(w){const f=t=>waveShape(w,t),a=Math.min(w.tau1,w.tau2)*1e-3,b=Math.max(w.tau1,w.tau2)*30,N=3000;let tp=a,fp=0;
+ // basis 'iec' (impulse voltage, IEC 60060-1): T1 = (t90 − t30)/0.6, virtual origin t30 − 0.3·T1; basis 'tp': time to peak and T2 from t = 0
+ function waveMeasure(w,basis){const f=t=>waveShape(w,t),a=Math.min(w.tau1,w.tau2)*1e-3,b=Math.max(w.tau1,w.tau2)*30,N=3000;let tp=a,fp=0;
   for(let k=0;k<=N;k++){const t=a*Math.pow(b/a,k/N),v=f(t);if(v>fp){fp=v;tp=t;}}
   let lo=tp*Math.pow(b/a,-1/N),hi=tp*Math.pow(b/a,1/N);for(let k=0;k<80;k++){const m1=lo+(hi-lo)*.382,m2=lo+(hi-lo)*.618;if(f(m1)<f(m2))lo=m1;else hi=m2;}tp=(lo+hi)/2;fp=f(tp);
   const cross=(lev,x0,x1)=>{const g=t=>f(t)-lev*fp,s0=Math.sign(g(x0));for(let k=0;k<100;k++){const m=(x0+x1)/2;if(Math.sign(g(m))===s0)x0=m;else x1=m;}return (x0+x1)/2;};
-  const t10=cross(.1,a,tp),t90=cross(.9,t10,tp),t50=cross(.5,tp,b),T1=1.25*(t90-t10);return {peak:fp,tp,t10,t90,t50,T1,T2:t50-(t10-.1*T1)};}
+  const t10=cross(.1,a,tp),t90=cross(.9,t10,tp),t50=cross(.5,tp,b);
+  if(basis==='iec'){const t30=cross(.3,a,tp),T1=(t90-t30)/.6;return {peak:fp,tp,t30,t90,t50,T1,T2:t50-(t30-.3*T1)};}
+  if(basis==='tp')return {peak:fp,tp,t50,T1:tp,T2:t50};
+  const T1=1.25*(t90-t10);return {peak:fp,tp,t10,t90,t50,T1,T2:t50-(t10-.1*T1)};}
  // τ₁, τ₂ for a front time T1 and time to half value T2: Newton on (ln τ₁, ln τ₂) with a numerical Jacobian
- function waveFit(kind,T1,T2,n=10){const mk=(x)=>({kind,n,tau1:Math.exp(x[0]),tau2:Math.exp(x[1])});
-  const res=x=>{const m=waveMeasure(mk(x));return [Math.log(m.T1/T1),Math.log(m.T2/T2)];};
-  let x=kind==='dexp'?[Math.log(T1/2.9),Math.log(T2*1.38)]:[Math.log(T1*1.9),Math.log(T2*1.39)],r=res(x);
+ function waveFit(kind,T1,T2,n=10,basis){const mk=(x)=>({kind,n,tau1:Math.exp(x[0]),tau2:Math.exp(x[1])});
+  const res=x=>{const m=waveMeasure(mk(x),basis);return [Math.log(m.T1/T1),Math.log(m.T2/T2)];};
+  let x=basis==='tp'?[Math.log(T1/4),Math.log(T2*1.3)]:basis==='iec'?[Math.log(T1/2.47),Math.log(T2*1.44)]:kind==='dexp'?[Math.log(T1/2.9),Math.log(T2*1.38)]:[Math.log(T1*1.9),Math.log(T2*1.39)],r=res(x);
   for(let it=0;it<40&&Math.hypot(...r)>1e-9;it++){const d=1e-6,J=[0,1].map(j=>{const y=[...x];y[j]+=d;const q=res(y);return [(q[0]-r[0])/d,(q[1]-r[1])/d];});
    const det=J[0][0]*J[1][1]-J[1][0]*J[0][1];if(!det)break;let dx=[-(r[0]*J[1][1]-r[1]*J[1][0])/det,-(J[0][0]*r[1]-J[0][1]*r[0])/det];const s=Math.max(1,Math.hypot(...dx));dx=dx.map(v=>v/s);
    let lam=1,y,q;for(let k=0;k<20;k++){y=[x[0]+lam*dx[0],x[1]+lam*dx[1]];q=res(y);if(Math.hypot(...q)<Math.hypot(...r))break;lam/=2;}x=y;r=q;}
-  const w=mk(x),m=waveMeasure(w);return {...w,eta:m.peak,fitT1:m.T1,fitT2:m.T2,ok:Math.hypot(...r)<1e-4};}
+  const w=mk(x),m=waveMeasure(w,basis);return {...w,eta:m.peak,fitT1:m.T1,fitT2:m.T2,ok:Math.hypot(...r)<1e-4};}
+ // impulse voltage (3.8): fitted on the definitions of IEC 60060-1
+ const VIMP_STD={'1.2/50':{T1:1.2e-6,T2:50e-6,basis:'iec'},'250/2500':{T1:250e-6,T2:2500e-6,basis:'tp'}};
+ const vimpCache=new Map();
+ function impulseWave(p){const V0=parseEng(p.Vpk)||0,t0=Math.max(0,parseEng(p.t0)||0),pre=VIMP_STD[p.shape];
+  const T1=pre?pre.T1:Math.max(parseEng(p.T1)||1.2e-6,1e-12),T2=pre?pre.T2:Math.max(parseEng(p.T2)||50e-6,1.5*T1),basis=pre?pre.basis:(p.basis==='tp'?'tp':'iec'),key=[T1,T2,basis].join('|');
+  let f=vimpCache.get(key);if(!f){f=waveFit('dexp',T1,T2,10,basis);vimpCache.set(key,f);}
+  return {kind:'dexp',n:10,tau1:f.tau1,tau2:f.tau2,eta:f.eta,I0:V0,t0,T1,T2,basis,fitOk:f.ok};}
+ // traveling waves by the method of characteristics (3.8), independent of the MNA solver: a source E(t) behind R_s drives a
+ // lossless line (Z, τ) ending in a resistance with reflection coefficient Γ_L(t). Forward wave at A: a = E·Z/(R_s + Z) + Γ_s·b,
+ // at B it arrives as f(t) = a(t − τ) and returns r = Γ_L(t)·f; at A it arrives as b(t) = r(t − τ). v_A = a + b, v_B = f + r.
+ function bewley({E,Rs,Z,tau,gL,tEnd,M=200}){const dt=tau/M,N=Math.ceil(tEnd/dt)+1,gs=(Rs-Z)/(Rs+Z),k=Z/(Rs+Z);
+  const a=new Float64Array(N),f=new Float64Array(N),r=new Float64Array(N),b=new Float64Array(N),t=new Float64Array(N),vA=new Float64Array(N),vB=new Float64Array(N);
+  for(let i=0;i<N;i++){const ti=i*dt;t[i]=ti;f[i]=i>=M?a[i-M]:0;r[i]=gL(ti)*f[i];b[i]=i>=M?r[i-M]:0;a[i]=k*E(ti)+gs*b[i];vA[i]=a[i]+b[i];vB[i]=f[i]+r[i];}
+  const at=(arr,tq)=>{const x=tq/dt,i=Math.floor(x);if(i<0)return 0;if(i>=N-1)return arr[N-1];return arr[i]+(arr[i+1]-arr[i])*(x-i);};
+  // the waves of a lattice (Bewley) diagram: every jump of a (forward, from A) or of r (backward, from B)
+  const waves=[];for(let i=0;i<N;i++){const da=a[i]-(i?a[i-1]:0),dr=r[i]-(i?r[i-1]:0);if(Math.abs(da)>1e-12)waves.push({t:t[i],dir:1,amp:da});if(Math.abs(dr)>1e-12)waves.push({t:t[i],dir:-1,amp:dr});}
+  const iA=a.map((x,i)=>(x-b[i])/Z),iB=f.map((x,i)=>(x-r[i])/Z); // into the line at A, out of the line into the load at B
+  return {t,vA,vB,iA,iB,gs,k,dt,vAt:tq=>at(vA,tq),vBt:tq=>at(vB,tq),iAt:tq=>at(iA,tq),iBt:tq=>at(iB,tq),waves};}
+ // transmission line (3.8): Z and τ from the chosen data
+ function tlParams(p){const num=v=>parseEng(v);let Z,tau;
+  if(p.spec==='lc'){const L=num(p.Lp),C=num(p.Cp),l=num(p.len);if(!(L>0&&C>0&&l>0))return {err:'L′, C′ και μήκος πρέπει να είναι θετικά.'};Z=Math.sqrt(L/C);tau=l*Math.sqrt(L*C);}
+  else if(p.spec==='zl'){Z=num(p.Z);const l=num(p.len),v=num(p.vel);if(!(l>0&&v>0))return {err:'Μήκος και ταχύτητα πρέπει να είναι θετικά.'};tau=l/v;}
+  else{Z=num(p.Z);tau=num(p.tau);}
+  if(!(Z>0))return {err:'Η κυματική αντίσταση πρέπει να είναι θετική.'};if(!(tau>0))return {err:'Ο χρόνος διάδοσης πρέπει να είναι θετικός.'};return {Z,tau};}
  // the waveform of a lightning-current part: {kind, n, tau1, tau2, eta, I0, t0, T1, T2}
  function lightningWave(p){const I0=parseEng(p.Ipk)||0,t0=Math.max(0,parseEng(p.t0)||0),pre=HEIDLER[p.shape];
   if(pre)return {kind:'heidler',...pre,I0,t0};
@@ -463,7 +509,7 @@
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
  const api={PARTS,GROUPS,BLOCKS,defaults,elPins,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
-  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,
+  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,tlParams,bewley,
   srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

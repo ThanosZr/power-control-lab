@@ -242,5 +242,17 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
    return {vR2:s.now('V:R2'),vm:s.now('Y:VM1'),ip:s.now('Y:IP1'),iR2:s.now('I:R2'),vp:s.now('Y:VP1'),islands:s.net.diag.islands.map(q=>({n:q.nodes.length,ref:q.refPin||null}))};};
  const ia=isl({}),ir=isl({island:'ref'}),il=isl({island:'auto',rleak:1e3});let ie=null;try{isl({island:'error'});}catch(e){ie=e.message;}
  out.solve37={r,err,isl:{auto:ia,ref:ir,leak:il,err:ie}};}
+// 3.8) Bergeron line: source 1 V behind 200 Ω, Z = 400 Ω, τ = 10 μs, 1200 Ω at the end (Γ_s = −1/3, Γ_L = 0.5); the step stays ≤ τ;
+// impulse voltage source fitted on IEC 60060-1 against the coefficients of the Voltage Impulse GUI (LI: α = 14659.1087, β = 2468926.653, K = 1.0372522)
+{const mk=(tau,hDiv)=>{const s=new Sim(project([{id:'V1',type:'VDC',params:{V:1}},{id:'RS',type:'R',params:{R:200}},{id:'T1',type:'TL',params:{Z:400,tau}},{id:'RL',type:'R',params:{R:1200}},{id:'G',type:'GND'}],
+   [['V1:p','RS:a'],['RS:b','T1:a1'],['T1:b1','G:g'],['T1:a2','RL:a'],['RL:b','G:g'],['T1:b2','G:g'],['V1:n','G:g']]),{hDiv});return s;};
+ const s=mk(10e-6,200),v=[];for(const k of [.5,1.5,3.5,5.5,7.5,40]){s.run(k*10e-6-s.t);v.push([s.now('V:T1'),s.now('V2:T1'),s.now('I:T1'),s.now('I2:T1')]);}
+ const c=new Sim(project([{id:'V1',type:'VAC',params:{Vpk:1,f:50}},{id:'T1',type:'TL',params:{Z:400,tau:1e-6}},{id:'RL',type:'R',params:{R:400}},{id:'G',type:'GND'}],[['V1:p','T1:a1'],['T1:b1','G:g'],['T1:a2','RL:a'],['RL:b','G:g'],['T1:b2','G:g'],['V1:n','G:g']]),{hDiv:200});
+ const imp={};for(const sh of ['1.2/50','250/2500']){const w=Parts.impulseWave({...Parts.defaults('VIMP'),shape:sh});const m=Parts.waveMeasure(w,w.basis);imp[sh]={alpha:1/w.tau2,beta:1/w.tau1,K:1/w.eta,T1:m.T1,T2:m.T2};}
+ const vs=new Sim(project([{id:'V1',type:'VIMP',params:{Vpk:-100e3}},{id:'R1',type:'R',params:{R:1e3}},{id:'G',type:'GND'}],[['V1:p','R1:a'],['R1:b','G:g'],['V1:n','G:g']]),{hDiv:200});
+ const tt=[],yy=[];for(let k=0;k<20000;k++){vs.run(5e-9);tt.push(vs.t);yy.push(-vs.now('V:R1'));}
+ let ip=0;for(let k=1;k<yy.length;k++)if(yy[k]>yy[ip])ip=k;const cr=(f,up)=>{if(up){for(let k=1;k<=ip;k++)if(yy[k]>=f*yy[ip])return tt[k-1]+(f*yy[ip]-yy[k-1])/(yy[k]-yy[k-1])*5e-9;}else for(let k=ip;k<yy.length;k++)if(yy[k]<=f*yy[ip])return tt[k-1]+(f*yy[ip]-yy[k-1])/(yy[k]-yy[k-1])*5e-9;return NaN;};
+ const t30=cr(.3,true),t90=cr(.9,true),T1=(t90-t30)/.6,T2=cr(.5,false)-(t30-.3*T1);
+ out.tl38={v,hClamp:c.h,TC:c.T,imp,li:{peak:-yy[ip],T1,T2}};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

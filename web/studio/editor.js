@@ -246,6 +246,8 @@
     case 'IM':return 'p = '+p.pp+' · L_M '+e(+p.LM,'H');case 'SRM':return (p.mag==='table'?'ψ(θ, i) από πίνακα':'L_u '+e(+p.Lu,'H')+' · L_a '+e(+p.La,'H'))+(p.load==='sig'?' · τ_L σήμα':'');case 'SM':return 'L_d '+e(+p.Ld,'H')+(p.sat==='d'?' (κορεσμός)':'')+' · L_q '+e(+p.Lq,'H')+(+p.psim>0?' · ψ_m '+e(+p.psim,'V·s'):'');
     case 'KL':{const m=P.klMatrix(p);return m.err?'⚠ πίνακας L':m.L.length+'×'+m.L.length+(String(p.Lmat||'').trim()?' · πίνακας L':' · k '+(+p.k).toLocaleString('el-GR'));}
     case 'KG':{const m=P.parseMat(p.mat);return m?m.length+'×'+m.length+' '+(p.kind==='G'?'G':'R'):'⚠ πίνακας';}
+    case 'VIMP':return (p.shape==='custom'?e(+p.T1,'s')+'/'+e(+p.T2,'s'):p.shape+' μs')+' · '+e(+p.Vpk,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');
+    case 'TL':{const g=P.tlParams(p);return g.err?'⚠ '+g.err:'Z '+e(g.Z,'Ω')+' · τ '+e(g.tau,'s');}
     case 'ILG':return (p.shape==='custom'?e(+p.T1,'s')+'/'+e(+p.T2,'s'):p.shape+' μs')+' · '+e(+p.Ipk,'A');case 'MOD3':return {spwm:'SPWM',svpwm:'SVPWM',square:'six-step'}[p.mode]||'';case 'FEST':return 'R̂_R '+e(+p.RR,'Ω');
     case 'EXPR':return String(p.expr||'').slice(0,28);case 'PY':return (p.pars?String(p.pars).slice(0,26):'Python');
     case 'INT':return p.wrap==='2pi'?'mod 2π':(+p.lo>-1e8||+p.hi<1e8)?'['+e(+p.lo)+', '+e(+p.hi)+']':'';case 'LPF':return 'f_c = '+e(+p.fc,'Hz');

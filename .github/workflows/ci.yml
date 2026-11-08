@@ -29,6 +29,8 @@ jobs:
         run: python tools/codemap.py --check
       - name: Tests
         run: python -m unittest discover -s tests -v
+      - name: Αναφορά επαλήθευσης (τιμές μέσα στις ανοχές)
+        run: python tools/verify.py --check
 
   ui:
     name: Περιβάλλον (Playwright)

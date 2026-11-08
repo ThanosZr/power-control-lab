@@ -126,7 +126,7 @@ class BatchSolver(unittest.TestCase):
         # 3.7: an isolated secondary with a reference node or a leakage, voltage and current probes, parts left out of the solution
         for name, tol in (('dcm', 2e-3), ('pll', 1e-3), ('cont', 2e-3), ('eis_cell', 5e-3), ('im_dol', 3e-3),
                           ('mp_kl', 5e-5), ('mp_kg', 1e-5), ('sm_align', 2e-4), ('sm_pm', 3e-4), ('mp_lg', 1e-4),
-                          ('srm_m', 3e-4), ('srm_t', 3e-4), ('sm_sat', 3e-4), ('isl_ref', 1e-4), ('isl_leak', 1e-4)):
+                          ('srm_m', 3e-4), ('srm_t', 3e-4), ('sm_sat', 3e-4), ('isl_ref', 1e-4), ('isl_leak', 1e-4), ('vimp', 1e-4)):
             req = self.req[name]
             keys = list(req['channels'].keys()) if isinstance(req['channels'], dict) else [c['key'] for c in req['channels']]
             r = self.run_case(name, req['at'][-1][0], 'LSODA', rtol=1e-9, atol=1e-11)

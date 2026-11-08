@@ -75,4 +75,13 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
  await p.selectOption('#props-body [data-solve="unconn"]','ignore');await p.waitForTimeout(200);
  const ig=await p.evaluate(()=>({e:PCL.S.error,w:PCL.S.sim.net.warnings,solve:PCL.editor.doc.solve}));ok(!ig.e&&!ig.w.length&&ig.solve.unconn==='ignore','ignore mode: silent, saved with the circuit');
  await p.screenshot({path:OUT+'/w4_options.png'});
+ // 7) 3.8: traveling waves on a Bergeron line: run to the end, the theory card draws the lattice and agrees with the simulation
+ for(const o of [{case:'line',term:'open'},{case:'book',arr:'3'}]){
+  await p.evaluate(o=>window.PCL.loadTutorial('twave',o),o);await p.waitForTimeout(500);
+  await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.stopT-S.sim.t);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(400);
+  const th=await p.evaluate(()=>({svg:!!document.querySelector('#theory svg.lattice'),lines:document.querySelectorAll('#theory svg.lattice line.fw, #theory svg.lattice line.bw').length,
+   bad:[...document.querySelectorAll('#theory table.cmp td.bad')].length,good:[...document.querySelectorAll('#theory table.cmp td.good')].length,text:document.querySelector('#theory').textContent}));
+  ok(th.svg&&th.lines>=4,`${o.case}: Bewley lattice drawn (${th.lines} waves)`);ok(th.good>=4&&th.bad===0,`${o.case}: theory = simulation in the card (${th.good} rows)`);
+  if(o.case==='book')ok(/15\.4\.9/.test(th.text)&&/0,3u/.test(th.text),'book exercise compared with its table');
+  await p.screenshot({path:OUT+'/w5_twave_'+o.case+'.png'});}
  console.log('ERR',JSON.stringify(errs.slice(0,5)));console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})().catch(e=>{console.error('FAILED',e);process.exit(1);});

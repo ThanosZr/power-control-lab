@@ -72,6 +72,19 @@ for(const shape of ['10/350','1/200','0.25/100','custom']){const pr=build('light
  let ip=0,vp=0,n=0;for(let q=0;q<r.n;q++){const j=(r.head-r.n+q+r.cap)%r.cap;ip=Math.max(ip,r.d[j*r.nch+iI]);vp=Math.max(vp,r.d[j*r.nch+iV]);n++;}
  const p=s.per;let Q=0;for(let k=0;k<p.n;k++){const j=(p.head-p.n+k+p.cap)%p.cap;Q+=p.avg[j*p.nch+iI]*s.T;}const w=s.net.compInfo.get('I1').wave;
  out['lg_'+shape]={ip,vp,Q,points:n,steps:s.steps,wave:w,meas:Parts.waveMeasure(w),warn:s.net.warnings,meta:pr.meta};}
+// 3.8: traveling waves on a Bergeron line against the method of characteristics (Parts.bewley, independent of the solver)
+for(const [nm,o] of [['open',{term:'open'}],['short',{term:'short'}],['match',{term:'match'}],['r3z_rs',{term:'r3z',rs:'z'}],['rz3',{term:'rz3'}],['open_li',{term:'open',src:'li'}],
+  ['book3',{case:'book',arr:'3'}],['book2',{case:'book',arr:'2'}],['booknone',{case:'book',arr:'none'}],['book_li',{case:'book',arr:'3',src:'li'}]]){
+ const pr=build('twave',o),m=pr.meta,s=sim(pr,m.dur),r=s.ring,iA=s.chIndex.get('V:T1'),iB=s.chIndex.get('V2:T1'),iI=s.chIndex.get('I2:T1');const g=R=>R===Infinity?1:(R-m.Z)/(R+m.Z);
+ const gL=t=>g(m.ta!==null&&t>=m.ta?(m.RL===Infinity?1e-3:m.RL*1e-3/(m.RL+1e-3)):m.RL),w=o.src==='li'?s.net.compInfo.get('V1').wave:null;
+ const bw=Parts.bewley({E:w?(t=>Parts.waveAt(w,t)):(()=>m.E),Rs:m.Rs,Z:m.Z,tau:m.tau,gL,tEnd:m.dur,M:400});
+ const T=[],A=[],B=[],I=[];for(let q=0;q<r.n;q++){const j=(r.head-r.n+q+r.cap)%r.cap;T.push(r.t[j]);A.push(r.d[j*r.nch+iA]);B.push(r.d[j*r.nch+iB]);I.push(r.d[j*r.nch+iI]);}
+ const at=(Y,tq)=>{let k=1;while(k<T.length&&T[k]<tq)k++;if(k>=T.length)return Y[T.length-1];const f=(tq-T[k-1])/((T[k]-T[k-1])||1);return Y[k-1]+(Y[k]-Y[k-1])*f;};
+ // steps: at the middle of every interval between arrivals; impulses: everywhere
+ const near=tq=>m.ta!==null&&[0,1,2,3,4,5].some(k=>Math.abs(tq-m.ta-k*m.tau)<.05*m.tau); // the arrester jump: not between two recorded samples
+ const ts=[];if(w){for(let k=1;k<400;k++)if(!near(m.dur*k/400))ts.push(m.dur*k/400);}else for(let k=0;(k+.5)*m.tau<m.dur;k++)ts.push((k+.5)*m.tau);if(m.ta!==null&&!w)ts.push(m.ta+.25*m.tau);
+ let eA=0,eB=0,eI=0;for(const tq of ts){eA=Math.max(eA,Math.abs(at(A,tq)-bw.vAt(tq)));eB=Math.max(eB,Math.abs(at(B,tq)-bw.vBt(tq)));eI=Math.max(eI,Math.abs(-at(I,tq)-bw.iBt(tq)));}
+ out['tw_'+nm]={eA,eB,eI,E:m.E,Z:m.Z,tau:m.tau,h:s.h,n:ts.length,warn:s.net.warnings,vB:[1.5,3.5,5.5].map(k=>at(B,k*m.tau)),vA:[.5,2.5,4.5,6.5].map(k=>at(A,k*m.tau)),iB:[1.5,3.5,5.5].map(k=>-at(I,k*m.tau)),meta:m};}
 // 3.6: SRM 8/6 with three conduction windows: steady state, the ψ–i loop of phase 1 over the last electrical period, mean torque
 for(const ang of ['30-150','0-120','60-180']){const pr=build('srm',{ang,band:'1'});const s=sim(pr,pr.sim.stopT);const r=s.ring,ix=k=>s.chIndex.get(k),w=s.now('Y:M1'),Te=2*Math.PI/(6*w);
  let W=0,ta=0,prev=null;for(let q=0;q<r.n;q++){const j=(r.head-r.n+q+r.cap)%r.cap,t=r.t[j];if(t<s.t-Te)continue;const i=r.d[j*r.nch+ix('I:M1')],p=r.d[j*r.nch+ix('PSI1:M1')],te=r.d[j*r.nch+ix('Y:M1:te')];

@@ -61,6 +61,7 @@ function liveOf(c){const s=S.sim;if(!s||S.error)return null;if(['GND','JUNC','TA
  if(c.type==='IM')return {i:s.now('I:'+c.id),text:'ω '+eng(val('Y:'+c.id),'rad/s',4)+' · τ '+eng(val('Y:'+c.id+':te'),'N·m',3)+' · |ψ| '+eng(s.now('Y:'+c.id+':psi'),'V·s',3)};
  if(c.type==='SRM'){const n=s.net.compInfo.get(c.id)?.srm?.N||0;return {i:s.now('I:'+c.id),text:'ω '+eng(val('Y:'+c.id),'rad/s',4)+' · τ '+eng(val('Y:'+c.id+':te'),'N·m',3)+' · '+Array.from({length:n},(_,k)=>'i'+'₁₂₃₄'[k]+' '+eng(val((k?'I'+(k+1):'I')+':'+c.id),'A',3)).join(' · ')};}
  if(c.type==='SM')return {i:s.now('I:'+c.id),text:'ω '+eng(val('Y:'+c.id),'rad/s',4)+' · τ '+eng(val('Y:'+c.id+':te'),'N·m',3)+' · i_d '+eng(val('Y:'+c.id+':id'),'A',3)+' · i_q '+eng(val('Y:'+c.id+':iq'),'A',3)};
+ if(c.type==='TL')return {i:s.now('I:'+c.id),text:'v₁ '+eng(val('V:'+c.id),'V',3)+' · v₂ '+eng(val('V2:'+c.id),'V',3)};
  if(c.type==='KL'||c.type==='KG'){const n=s.net.compInfo.get(c.id)?.ports?.length||0;return {i:s.now('I:'+c.id),text:Array.from({length:n},(_,k)=>(avg?'⌀ ':'')+'i'+'₁₂₃₄₅₆₇₈'[k]+' '+eng(val((k?'I'+(k+1):'I')+':'+c.id),'A',3)).join(' · ')};}
  if(c.type==='DCM')return {i:s.now('I:'+c.id),text:'ω '+eng(val('Y:'+c.id),'rad/s',4)+' · '+(avg?'⌀ ':'')+eng(val('I:'+c.id),'A',3)};
  if(OUT_SYM[c.type]&&c.type!=='SR'){const os=outsOf(c);return {text:os.map((o,k)=>OUT_SYM[c.type][o]+' '+eng(s.now('Y:'+c.id+(k?':'+o:'')),blkUnit(c,o),3)).join(' · ')};}
@@ -87,7 +88,7 @@ function chanLabel(key){const [pre,id,pin]=key.split(':');const c=editor.comp(id
  if(pre==='Y'&&c?.type==='PY')return (pin||outsOf(c)[0]||'y')+'('+name+')';
  if(pre==='Y'&&c&&OUT_SYM[c.type]){const o=pin||outsOf(c)[0];return (OUT_SYM[c.type][o]||o)+'('+name+')';}
  if(/^PSI\d$/.test(pre))return 'ψ'+'₀₁₂₃₄₅₆₇₈₉'[+pre[3]]+'('+name+')';
- const pm=pre.match(/^([IV])([1-9])$/);if(pm)return (pm[1]==='I'?'i':'v')+'₀₁₂₃₄₅₆₇₈₉'[+pm[2]]+'('+name+')';if((pre==='I'||pre==='V')&&(c?.type==='KL'||c?.type==='KG'||c?.type==='SRM'))return (pre==='I'?'i₁':'v₁')+'('+name+')';
+ const pm=pre.match(/^([IV])([1-9])$/);if(pm)return (pm[1]==='I'?'i':'v')+'₀₁₂₃₄₅₆₇₈₉'[+pm[2]]+'('+name+')';if((pre==='I'||pre==='V')&&(c?.type==='KL'||c?.type==='KG'||c?.type==='SRM'||c?.type==='TL'))return (pre==='I'?'i₁':'v₁')+'('+name+')';
  const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',GS:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold',Y:c?.type==='VM'?'v':c?.type==='AM'?'i':c?.type==='SR'?'Q':'y'}[pre]||pre)+'('+name+')';}
 function addProbe(key,label){if(!S.sim)return;const ok=scope.addChannel(key,label||chanLabel(key));renderChannels();if(!ok)flash('#chan-list');else{flash('#scope-card');}draw(true);}
 function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash');}
@@ -96,6 +97,7 @@ function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC'||t==='TAGO'||t===
  if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:t==='IM'||t==='SM'?[...m,['I:','ρεύμα φάσης a'],['V:','πολική τάση v_ab']]:t==='SRM'?[...m,...Array.from({length:P.srmGeo({...P.defaults(t),...c.params})[0]},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα φάσης ${k+1}`],[(k?'V'+(k+1):'V')+':',`τάση φάσης ${k+1}`],['PSI'+(k+1)+':',`ροή φάσης ${k+1} ψ`]]).flat()]:m;}
  if(P.BLOCKS.has(t))return [['Y:',t==='DISP'?'τιμή εισόδου':t==='VM'?'τάση (μέτρηση)':t==='VP'?'τάση ως προς τη γη':t==='AM'?'ρεύμα a → b (μέτρηση)':t==='IP'?'ρεύμα a → b (τσιμπίδα)':t==='SR'?'έξοδος Q':'έξοδος y']];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
  if(t==='SH')return [['H:','κρατημένη τιμή (δείγματα)']];
+ if(t==='TL')return [['V:','τάση στην αρχή (a1 − b1)'],['V2:','τάση στο τέλος (a2 − b2)'],['I:','ρεύμα που μπαίνει στην αρχή'],['I2:','ρεύμα που μπαίνει στο τέλος']];
  if(t==='KL'||t==='KG'){const n=P.nPorts({...P.defaults(t),...c.params}),w=t==='KL'?'τυλίγματος':'θύρας';return Array.from({length:n},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα ${w} ${k+1} (a → b)`],[(k?'V'+(k+1):'V')+':',`τάση ${w} ${k+1}`]]).flat();}
  const base=[['I:','ρεύμα'],['V:','τάση'],['P:',['VDC','VAC','IDC'].includes(t)?'ισχύς που δίνει':'ισχύς']];if(t==='SW'||t==='SCR')base.splice(1,0,['GS:','παλμός πύλης (1 = ON)']);if(t==='SW'&&(+c.params?.Eon>0||+c.params?.Eoff>0))base.push(['PSW:','απώλειες μεταγωγής (μέση ανά T)']);
  if(t==='VAC3')return [['I:','ρεύμα φάσης a'],['Ib:','ρεύμα φάσης b'],['Ic:','ρεύμα φάσης c'],['V:','τάση v_an'],['Vb:','τάση v_bn'],['Vc:','τάση v_cn'],['Vab:','πολική τάση v_ab'],['P:','ισχύς που δίνει (3φ)']];if(t==='XFMR')return [['I:','ρεύμα πρωτεύοντος'],['V:','τάση πρωτεύοντος'],['I2:','ρεύμα δευτερεύοντος'],['V2:','τάση δευτερεύοντος'],['Im:','ρεύμα μαγνήτισης'],['P:','ισχύς']];return base;}
@@ -1068,6 +1070,47 @@ function dcDriveTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.com
  const ith=(b*wth+tl)/psi,uth=Ra*ith+psi*wth;
  if(wait)return h+wait;h+=cmpRows([['μέγιστη ω πριν από το φορτίο',m.wref,wmax,'rad/s'],...(s.t>m.tTL?[['ελάχιστη ω μετά το βήμα φορτίου',m.wref-dpk,wmin,'rad/s']]:[]),['ω τώρα',wth,wNow,'rad/s'],['⟨i_a⟩ (τελευταίες 5 T)',ith,iA,'A'],['D',uth/Vdc,dA,'']]);
  return h+`<p class="small muted">Οι θεωρητικές τιμές θεωρούν ιδανικό βρόχο ρεύματος (i_a = i_ref) και ακριβή feedforward. Οι παράμετροι της μηχανής είναι τυπικές τιμές, όχι της διπλωματικής.</p>`+evalOrderHTML();}
+// traveling waves (3.8): the same problem by the method of characteristics (P.bewley), a lattice diagram, theory vs simulation
+function twModel(){const s=S.sim,m=S.tutMeta||{},c=s?.net.compInfo.get('T1');if(!s||!c?.line||!m.dur)return null;const Z=c.line.Z,tau=c.line.tau;
+ const RLp=paramsOf('RL'),RAp=paramsOf('RA'),book=m.case==='book';
+ const RL=!book&&m.term==='short'?0:RLp?+RLp.R:Infinity,ta=book&&RAp?m.ta:null,par=(a,b)=>a===Infinity?b:a*b/(a+b);
+ const g=R=>R===Infinity?1:(R-Z)/(R+Z),gL=t=>g(ta!==null&&t>=ta?par(RL,1e-3):RL);
+ const w=m.src==='li'?s.net.compInfo.get('V1')?.wave:null,E=m.E,Ef=w?(t=>P.waveAt(w,t)):(()=>E);
+ return {s,m,Z,tau,Rs:m.Rs,E,RL,ta,gL,w,book,bw:P.bewley({E:Ef,Rs:m.Rs,Z,tau,gL,tEnd:m.dur,M:w?400:200}),step:P.bewley({E:()=>E,Rs:m.Rs,Z,tau,gL,tEnd:Math.min(m.dur,9*tau),M:100})};}
+function twLattice(q){const W=380,H=290,xa=70,xb=W-70,tmax=Math.min(q.m.dur,8*q.tau),y=t=>24+t/tmax*(H-44),z=1e-4*Math.abs(q.E),kv=v=>Math.abs(v)<z?'0':fmt(v/1e3,3);
+ let h=`<svg class="lattice" viewBox="0 0 ${W} ${H}" role="img" aria-label="Διάγραμμα Bewley"><line x1="${xa}" y1="18" x2="${xa}" y2="${H-14}" class="ax"/><line x1="${xb}" y1="18" x2="${xb}" y2="${H-14}" class="ax"/>
+  <text x="${xa}" y="12" text-anchor="middle" class="lb">A</text><text x="${xb}" y="12" text-anchor="middle" class="lb">B</text>`;
+ for(let k=0;k*q.tau<=tmax+1e-15;k++)h+=`<text x="${(xa+xb)/2}" y="${y(k*q.tau)+3}" text-anchor="middle" class="tk">${k}τ</text>`;
+ let n=0;for(const wv of q.step.waves){if(wv.t>tmax-1e-15||n>=14)break;n++;const t0=wv.t,t1=Math.min(t0+q.tau,tmax),x0=wv.dir>0?xa:xb,x1=wv.dir>0?xb:xa,fr=(t1-t0)/q.tau,xe=x0+(x1-x0)*fr;
+  h+=`<line x1="${x0}" y1="${y(t0)}" x2="${xe}" y2="${y(t1)}" class="${wv.dir>0?'fw':'bw'}"/>`+(Math.abs(wv.amp)>.005*Math.abs(q.E)&&fr>.5?`<text x="${x0+(x1-x0)*(wv.dir>0?.3:.7)}" y="${y(t0+.3*q.tau)-3}" text-anchor="middle" class="am">${kv(wv.amp)}</text>`:'');}
+ // end voltages after each change, at the sides
+ const marks=(vt,x,anchor)=>{let out='',last=null;for(let k=0;k*q.tau<=tmax;k++){const v=vt((k+.5)*q.tau);if(last===null||Math.abs(v-last)>z){out+=`<text x="${x}" y="${y((k+.5)*q.tau)+3}" text-anchor="${anchor}" class="vv">${kv(v)}</text>`;last=v;}}return out;};
+ h+=marks(q.step.vAt,xa-6,'end')+marks(q.step.vBt,xb+6,'start');if(q.ta!==null&&q.ta<tmax)h+=`<line x1="${xb-10}" y1="${y(q.ta)}" x2="${xb+10}" y2="${y(q.ta)}" class="arr"/>`;
+ return h+'</svg>';}
+function twTheory(){const q=twModel();if(!q)return '';const {s,m,Z,tau,Rs,E}=q,gs=(Rs-Z)/(Rs+Z),gl=q.gL(0),u=m.U,kv=(v,d=4)=>eng(v,'V',d);
+ let h=`<div class="tm"><span class="badge">Bergeron</span> Z = ${eng(Z,'Ω',4)} · τ = ${eng(tau,'s',4)} · R_s = ${Rs?eng(Rs,'Ω',4):'0'} · ${q.RL===Infinity?'ανοιχτό άκρο':'R_L = '+eng(q.RL,'Ω',4)}${q.ta!==null?' · αλεξικέραυνο στο '+eng(q.ta,'s',3):''}</div><ul class="eqs">
+  <li>Στη γραμμή ταξιδεύουν κύματα τάσης με ρεύμα i = ±v/Z. Στο άκρο με R: Γ = (R − Z)/(R + Z), διάθλαση δ = 1 + Γ.</li>
+  <li>Γ_s = (R_s − Z)/(R_s + Z) = <b>${fmt(gs,4)}</b> · Γ_L = <b>${fmt(gl,4)}</b>${q.ta!==null?' (μετά το αλεξικέραυνο ≈ −1)':''} · πρώτο κύμα v⁺ = E·Z/(R_s + Z) = <b>${kv(E*Z/(Rs+Z))}</b>${q.book?` (E = 2u: η εναέρια γραμμή είναι ημιάπειρη, δ_A = 2Z_υ/(Z_ε + Z_υ) = ${fmt(2*Z/(Rs+Z),3)}, α_A = (Z_ε − Z_υ)/(Z_ε + Z_υ) = ${fmt(-gs,3)})`:''}</li>
+  <li>Μέθοδος των χαρακτηριστικών, ανεξάρτητη από τον λύτη: a(t) = v⁺(t) + Γ_s·r(t − 2τ…), στο B f(t) = a(t − τ), r = Γ_L(t)·f, v_A = a + b, v_B = f + r.</li></ul>`;
+ h+=`<div class="lat-wrap">${twLattice(q)}<p class="muted small">Διάγραμμα Bewley για βηματικό κύμα ${kv(E)}: κάθε γραμμή είναι ένα κύμα (kV), στα πλάγια οι τάσεις των άκρων μετά από κάθε άφιξη.${q.ta!==null?' Η κόκκινη γραμμή στο B είναι η στιγμή που ανάβει το αλεξικέραυνο: από εκεί ξεκινά νέο κύμα.':''}${q.w?' Η κρουστική 1,2/50 ακολουθεί το ίδιο διάγραμμα με τη μορφή της κυματομορφής.':''}</p></div>`;
+ if(s.t<m.dur*.98)return h+'<p class="muted small">Τρέξε ως το τέλος για τη σύγκριση με την προσομοίωση.</p>';
+ const sa=rawSeries('V:T1'),sb=rawSeries('V2:T1');if(!sa||!sb)return h;
+ const at=(r,tq)=>{const t=r.t;let k=1;while(k<t.length&&t[k]<tq)k++;if(k>=t.length)return r.y[t.length-1];const f=(tq-t[k-1])/((t[k]-t[k-1])||1);return r.y[k-1]+(r.y[k]-r.y[k-1])*f;};
+ const rows=[];
+ if(!q.w){for(let j=0;j<4&&(2*j+1.5)*tau<m.dur;j++){const tq=(2*j+1.5)*tau;rows.push([`v_B στο ${fmt(2*j+1.5,3)}τ`,q.bw.vBt(tq),at(sb,tq),'V']);}
+  for(let j=0;j<4&&(2*j+.5)*tau<m.dur;j++){const tq=(2*j+.5)*tau;rows.push([`v_A στο ${fmt(2*j+.5,3)}τ`,q.bw.vAt(tq),at(sa,tq),'V']);}
+  if(q.ta!==null&&q.ta+.5*tau<m.dur)rows.push([`v_B μετά το αλεξικέραυνο (${eng(q.ta+.25*tau,'s',3)})`,q.bw.vBt(q.ta+.25*tau),at(sb,q.ta+.25*tau),'V']);}
+ else{const pk=(arr,tt)=>{let mx=0,tm=0;for(let k=0;k<arr.length;k++)if(Math.abs(arr[k])>Math.abs(mx)){mx=arr[k];tm=tt[k];}return [mx,tm];};
+  const [tb,ttb]=pk(q.bw.vB,q.bw.t),[sbm,stb]=pk(sb.y,sb.t),[tam]=pk(q.bw.vA,q.bw.t),[sam]=pk(sa.y,sa.t);
+  rows.push(['κορυφή v_B',tb,sbm,'V'],['χρόνος κορυφής v_B',ttb,stb,'s'],['κορυφή v_A',tam,sam,'V']);for(const tq of [tau+2e-6,tau+20e-6,3*tau+5e-6])if(tq<m.dur)rows.push([`v_B στο ${eng(tq,'s',3)}`,q.bw.vBt(tq),at(sb,tq),'V']);}
+ h+=cmpRows(rows);
+ if(q.book&&!q.w){const U=x=>(Math.abs(x)<1e-4*u?'0':fmt(x/u,3))+'u',bt=tq=>q.bw.vBt(tq),atA=tq=>q.bw.vAt(tq);
+  h+=`<h4>Σύγκριση με τη λύση του βιβλίου (15.4.9)</h4><table class="cmp"><thead><tr><th>Σημείο, στιγμή (βιβλίο)</th><th>Βιβλίο</th><th>Εδώ (ακριβής)</th></tr></thead><tbody>
+   <tr><td>B, 0</td><td>0,3u</td><td>${U(bt(1.5*tau))}</td></tr><tr><td>B, 2τ</td><td>0,24u</td><td>${U(bt(3.5*tau))}</td></tr><tr><td>B, 4τ</td><td>0</td><td>${U(bt(5.5*tau))}</td></tr>
+   <tr><td>A, −τ</td><td>0,57u</td><td>${U(atA(.5*tau))}</td></tr><tr><td>A, τ</td><td>0,19u</td><td>${U(atA(2.5*tau))}</td></tr><tr><td>A, 3τ</td><td>0,36u</td><td>${U(atA(4.5*tau))}</td></tr><tr><td>A, 5τ</td><td>0,29u</td><td>${U(atA(6.5*tau))}</td></tr></tbody></table>
+   <p class="muted small">Στο βιβλίο το κύμα φτάνει στο B τη στιγμή 0, εδώ τη στιγμή τ = ${eng(tau,'s',3)} (οι στιγμές του βιβλίου είναι μετατοπισμένες κατά τ). Με το αλεξικέραυνο στα 3 μs της εκφώνησης συμπίπτουν οι δύο πρώτες τιμές σε κάθε άκρο. Οι επόμενες διαφέρουν, γιατί η λύση του βιβλίου:</p>
+   <ul class="eqs"><li>υπολογίζει το B στο 2τ με α_B = −0,47, ενώ το A στο 3τ με το ίδιο κύμα ανακλασμένο με −1,</li><li>δεν περιλαμβάνει το κύμα που ξεκινά από το B τη στιγμή που ανάβει το αλεξικέραυνο.</li></ul>`;}
+ return h;}
 function formulaTheory(t){
  if(t.topology==='sampling')return samplingTheory();
  if(t.topology==='dc_drive')return dcDriveTheory();
@@ -1081,6 +1124,7 @@ function formulaTheory(t){
  if(t.topology==='synrm')return synTheory();
  if(t.topology==='pmsm')return pmTheory();
  if(t.topology==='lightning')return lgTheory();
+ if(t.topology==='twave')return twTheory();
  if(t.topology==='srm')return srmTheory();
  if(t.topology==='polyphase')return polyTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];

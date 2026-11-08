@@ -91,7 +91,7 @@
   // wire names label their net
   for(const w of project.wires||[])if(w.name){const n=pinNet.get(w.a.c+':'+w.a.p);if(n&&!n.name)n.name=w.name;}
   // pins that touch nothing else
-  const open=[];for(const c of comps){if(c.type==='JUNC'||skip.has(c.id)||!Object.keys(P.elPins(c)).length)continue;for(const p of Object.keys(P.elPins(c))){const n=pinNet.get(c.id+':'+p);if(n&&n.keys.filter(k=>!isJ(k)).length===1&&c.type!=='GND')open.push(c.id+':'+p);}}
+  const open=[];for(const c of comps){if(c.type==='JUNC'||c.type==='TL'||skip.has(c.id)||!Object.keys(P.elPins(c)).length)continue;for(const p of Object.keys(P.elPins(c))){const n=pinNet.get(c.id+':'+p);if(n&&n.keys.filter(k=>!isJ(k)).length===1&&c.type!=='GND')open.push(c.id+':'+p);}}
   const lbl=id=>byId.get(id)?.label||id,unc=[...skip].filter(([,r])=>r==='unconn').map(([id])=>lbl(id)),oi=[...skip].filter(([,r])=>r==='openI').map(([id])=>lbl(id)),cut=(l,n=6)=>l.slice(0,n).join(', ')+(l.length>n?` και ${l.length-n} ακόμη`:'');
   if(unconn==='error'&&(unc.length||oi.length||open.length))throw new NetlistError([unc.length?'ασύνδετα στοιχεία: '+cut(unc):'',oi.length?'πηγή ρεύματος σε ανοιχτό κύκλωμα: '+cut(oi):'',open.length?'ανοιχτοί ακροδέκτες: '+cut(open):''].filter(Boolean).join('· ')+'. Σύνδεσέ τα ή άλλαξε την επιλογή «Ασύνδετα» στο πάνελ παραμέτρων.');
   if(unconn==='warn'){if(unc.length)warnings.push('Ασύνδετα στοιχεία, εκτός επίλυσης: '+cut(unc)+'.');if(oi.length)warnings.push('Πηγή ρεύματος σε ανοιχτό κύκλωμα, εκτός επίλυσης: '+cut(oi)+'.');
@@ -120,6 +120,14 @@
     const s=series(top,top,0);let srcTop=top;if(num(p.Rs,0)>0){const m=internal();add({k:'G',a:m,b:top,R:num(p.Rs,0)});srcTop=m;}
     const v=T==='VDC'?{kind:'dc',V:num(p.V,12),sched:P.parseSched(p.sched)}:{kind:'ac',Vpk:num(p.Vpk,325),f:num(p.f,50),ph:num(p.phase,0)*Math.PI/180,off:num(p.off,0)};
     info.main=add({k:'V',a:srcTop,b,row:row(),src:v,sigIn:T==='VDC'&&p.ctl==='sig'?sn(c.id,'u'):undefined});}
+   else if(T==='VIMP'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];const w=P.impulseWave(p);
+    if(!(w.eta>1e-6&&w.tau1>0&&w.tau2>0))throw new NetlistError(`${c.label||c.id}: δεν βρέθηκαν τ₁, τ₂ για T1 = ${P.eng(w.T1,'s')}, T2 = ${P.eng(w.T2,'s')}.`);
+    if(w.fitOk===false)warnings.push(`${c.label||c.id}: η προσαρμογή στα T1/T2 δεν συνέκλινε πλήρως.`);
+    let top=a;if(num(p.Rs,0)>0){const m=internal();add({k:'G',a:m,b:top,R:num(p.Rs,0)});top=m;}
+    info.wave=w;info.main=add({k:'V',a:top,b,row:row(),src:{kind:'wave',w}});}
+   else if(T==='TL'){const g=P.tlParams(p);if(g.err)throw new NetlistError(`${c.label||c.id}: ${g.err}`);
+    const a1=node(c.id,'a1'),b1=node(c.id,'b1'),a2=node(c.id,'a2'),b2=node(c.id,'b2');info.pins=[a1,b1];info.ports=[[a1,b1],[a2,b2]];info.line=g;
+    info.main=add({k:'TL',a:a1,b:b1,a1,b1,a2,b2,Z:g.Z,tau:g.tau,key:c.id,Ih:[0,0],iE:new Float64Array(2),H:{t:[],v1:[],i1:[],v2:[],i2:[],s:0}});}
    else if(T==='IDC'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'I',a,b,I:num(p.I,1),sched:P.parseSched(p.sched),sigIn:p.ctl==='sig'?sn(c.id,'u'):undefined});}
    else if(T==='ILG'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];const w=P.lightningWave(p);
     if(!(w.eta>1e-6&&w.tau1>0&&w.tau2>0))throw new NetlistError(`${c.label||c.id}: δεν βρέθηκαν τ₁, τ₂ για T1 = ${P.eng(w.T1,'s')}, T2 = ${P.eng(w.T2,'s')} (το διπλοεκθετικό θέλει T2/T1 πάνω από περίπου 3).`);
@@ -242,7 +250,7 @@
   // Capacitors count as a path (their charge fixes the potential); ideal current sources do not.
   const islands=[];
   {const N=nNodes,par=Int32Array.from({length:N+1},(_,i)=>i),f=x=>{while(par[x]!==x){par[x]=par[par[x]];x=par[x];}return x;},u=(a,b)=>{const ra=f(a<0?N:a),rb=f(b<0?N:b);if(ra!==rb)par[ra]=rb;};
-   for(const e of els){if(e.k==='I')continue;if(e.k==='X'){u(e.p1,e.p2);u(e.s1,e.s2);continue;}if(e.ports){for(const [a,b] of e.ports)u(a,b);continue;}if(e.a!==undefined&&e.b!==undefined)u(e.a,e.b);}
+   for(const e of els){if(e.k==='I')continue;if(e.k==='X'){u(e.p1,e.p2);u(e.s1,e.s2);continue;}if(e.k==='TL'){u(e.a1,e.a2);u(e.b1,e.b2);continue;}if(e.ports){for(const [a,b] of e.ports)u(a,b);continue;}if(e.a!==undefined&&e.b!==undefined)u(e.a,e.b);}
    const g=f(N),grp=new Map();for(let i=0;i<N;i++){const r=f(i);if(r===g)continue;if(!grp.has(r))grp.set(r,[]);grp.get(r).push(i);}
    for(const nodes of grp.values())islands.push({nodes,pins:nodes.filter(i=>i<nets.length).map(i=>nets[i].canon),ref:island});
    if(islands.length&&island==='error')throw new NetlistError('Τμήμα του κυκλώματος χωρίς αγώγιμη σύνδεση με τη γείωση: '+islands.map(q=>cut(q.pins,3)||'εσωτερικοί κόμβοι').join(' · ')+'. Βάλε γείωση ή άλλαξε την επιλογή «Αιωρούμενα τμήματα».');
@@ -303,8 +311,10 @@
   constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
   // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
   basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>b.type==='CLK'||b.type==='RAMP');if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
-   const lg=[...this.net.compInfo.values()].filter(c=>c.wave);if(lg.length)return Math.min(...lg.map(c=>c.wave.T1));return 1e-3;}
-  setStep(hDiv,h){this.opts.hDiv=hDiv||this.opts.hDiv;this.opts.h=h||null;this.h=this.opts.h||this.T/this.opts.hDiv;}
+   const lg=[...this.net.compInfo.values()].filter(c=>c.wave||c.line);if(lg.length)return Math.min(...lg.map(c=>c.wave?c.wave.T1:c.line.tau));return 1e-3;}
+  // the step never exceeds the shortest line delay (the history at t − τ must be known)
+  tlMaxStep(){let m=Infinity;for(const e of this.net.els)if(e.k==='TL')m=Math.min(m,e.tau);return m;}
+  setStep(hDiv,h){this.opts.hDiv=hDiv||this.opts.hDiv;this.opts.h=h||null;this.h=Math.min(this.opts.h||this.T/this.opts.hDiv,this.tlMaxStep());}
   load(project,fresh){
    const old=this.net;const net=buildNetlist(project);
    if(old&&!fresh){ // carry states by key
@@ -313,6 +323,7 @@
      if(e.k==='F'&&o.N===e.N&&!e.sm===!o.sm&&!e.srm===!o.srm){e.i.set(o.i);if(e.sm||e.srm){e.psi.set(o.psi);e.psi1.set(o.psi1);}else{for(let k=0;k<e.N;k++){let s=0;for(let j=0;j<e.N;j++)s+=e.Lm[k*e.N+j]*e.i[j];e.psi[k]=s;}e.psi1.set(e.psi);}}}
     const oc=new Map(old.ctrls.map(c=>[c.id,c]));for(const c of net.ctrls){const o=oc.get(c.id);if(o&&o.mode===c.mode&&o.T===c.T){c.xi=o.xi;c.d=o.d;c.k=o.k;c.tk=o.tk;c.tkPrev=o.tkPrev;c.dPrev=o.dPrev;c.dPrevOff=o.dPrevOff;c.dOn=o.dOn;c.dOff=o.dOff;c.h=c.upd===o.upd?o.h:null;c.meas=o.meas;c.refNow=o.refNow;c.ePrev=o.ePrev;c.dF=o.dF;}}
     for(const e of net.els)if(e.k==='CPL'){const o=old.els.find(x=>x.k==='CPL'&&x.cid===e.cid);if(o)e.v0=o.v0;}
+    for(const e of net.els)if(e.k==='TL'){const o=old.els.find(x=>x.k==='TL'&&x.key===e.key);if(o){e.H=o.H;e.iE.set(o.iE);}} // the waves on a line keep travelling
     const os=new Map(old.shs.map(q=>[q.id,q]));for(const q of net.shs){const o=os.get(q.id);if(o){q.h=o.h;q.last=q.trig===o.trig&&q.clock===o.clock?o.last:null;q.n=o.n;q.log=o.log;}}
     for(const [id,c] of net.compInfo)if(c.im){const o=old.compInfo.get(id);if(o?.im)c.im.st={...o.im.st};} // the machine keeps its flux and speed
     for(const [id,c] of net.compInfo)if(c.sm){const o=old.compInfo.get(id);if(o?.sm)c.sm.st={...o.sm.st};}
@@ -327,7 +338,7 @@
    this.sms=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm);for(const m of this.sms)this.smOutputs(m);
    this.srms=[...net.compInfo.values()].filter(c=>c.srm).map(c=>c.srm);for(const m of this.srms)this.srmOutputs(m);this.hasTV=this.sms.length+this.srms.length>0;
    this.hasCPL=net.els.some(e=>e.k==='CPL');this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
-   if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.h=this.opts.h||this.T/this.opts.hDiv;
+   if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.h=Math.min(this.opts.h||this.T/this.opts.hDiv,this.tlMaxStep());
    const keys=this.channelKeys();const same=!fresh&&this.keys&&keys.join('|')===this.keys.join('|');
    this.keys=keys;this.chIndex=new Map(keys.map((k,i)=>[k,i]));
    if(!same)this.allocRecord();
@@ -397,9 +408,9 @@
   V(i){return i<0?0:this.x[i];}
   elCurrent(e){const v=this.V(e.a)-this.V(e.b);
    switch(e.k){case 'G':return v/e.Rnow;case 'L':return e.i;case 'C':return e.i;case 'V':return -this.x[e.row];case 'I':return e.Inow;
-    case 'S':return v*(e.on?1/e.Ron:1/e.Roff);case 'GY':return this.x[e.row];case 'D':return e.on?(v-e.Vf)/e.Ron:v/e.Roff;case 'CPL':return e.g*v+e.J;case 'F':return e.i[0];case 'MG':return this.portI(e,0);}return 0;}
+    case 'S':return v*(e.on?1/e.Ron:1/e.Roff);case 'GY':return this.x[e.row];case 'D':return e.on?(v-e.Vf)/e.Ron:v/e.Roff;case 'CPL':return e.g*v+e.J;case 'F':return e.i[0];case 'MG':return this.portI(e,0);case 'TL':return e.iE[0];}return 0;}
   // current of port k of a multiport
-  portI(e,k){if(e.k==='F')return e.i[k];let s=0;for(let j=0;j<e.N;j++)s+=e.Gm[k*e.N+j]*(this.V(e.ports[j][0])-this.V(e.ports[j][1]));return s;}
+  portI(e,k){if(e.k==='F')return e.i[k];if(e.k==='TL')return e.iE[k];let s=0;for(let j=0;j<e.N;j++)s+=e.Gm[k*e.N+j]*(this.V(e.ports[j][0])-this.V(e.ports[j][1]));return s;}
   // values of all channels at the current solution
   computeVals(){
    const out=this.vals;let j=0;const x=this.x;if(this.net.sig.blocks.length)this.evalBlocks('trial');
@@ -589,10 +600,10 @@
   zcFrac(){this.evalBlocks('trial',false,true);let th=null;
    for(const b of this.net.sig.zc){const s=b.st.s,f0=b.st.f0,f1=b.f1;if(!(s?f1<0:f1>0))continue;const d=f0-f1;const q=Math.min(1,Math.max(0,d!==0?f0/d:0));if(th===null||q<th)th=q;}
    return th;}
-  saveState(){const el=[];for(const e of this.net.els){if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);}
+  saveState(){const el=[];for(const e of this.net.els){if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice()]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);}
    return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el,ms:[...(this.ims||[]),...(this.sms||[]),...(this.srms||[])].map(m=>[m,{...m.st}])};}
   restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
-   for(const r of S.el){const e=r[0];if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
+   for(const r of S.el){const e=r[0];if(e.k==='TL'){const H=e.H,n=r[1];for(const k of ['t','v1','i1','v2','i2'])H[k].length=n;e.iE.set(r[2]);}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
    for(const [m,st] of S.ms||[]){m.st={...st};if(m.ph)this.imSources(m);}}
   gateSig(t){let s='';for(const e of this.net.els){if(e.k!=='S'&&!e.gk)continue;let on=false;
     if(e.gate==='on')on=true;else if(e.gate==='sig')on=(e.gIn>=0?this.sv[e.gIn]:0)>=.5;else if(e.gate==='pwm'){const k=this.net.ctrls.find(c=>c.id===e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
@@ -609,7 +620,8 @@
      e.Gnow=q.G;e.p0=q.p0;}
     else if(e.k==='F'&&e.srm){const m=e.srm,th=m.st.the+(t-this.t)*m.Nr*m.st.w;for(let k=0;k<m.N;k++){const q=P.srmCur(m.g,th-2*Math.PI*k/m.N,e.psi[k]);e.Gnow[k*m.N+k]=q.g;e.p0[k]=e.psi[k]-q.i/q.g;}}
     else if(e.k==='V'&&e.imE!==undefined)e.Vnow=e.imE;
-    else if(e.k==='V'){const s=e.src;e.Vnow=e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):s.kind==='dc'?schedAt(s.sched,t,s.V):s.off+s.Vpk*Math.sin(2*Math.PI*s.f*t+s.ph);}
+    else if(e.k==='V'){const s=e.src;e.Vnow=e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):s.kind==='dc'?schedAt(s.sched,t,s.V):s.kind==='wave'?P.waveAt(s.w,t):s.off+s.Vpk*Math.sin(2*Math.PI*s.f*t+s.ph);}
+    else if(e.k==='TL'){const q=this.tlHist(e,t-e.tau);e.Ih[0]=-(q[2]/e.Z+q[3]);e.Ih[1]=-(q[0]/e.Z+q[1]);}
     else if(e.k==='CPL')e.Pnow=schedAt(e.sched,t,e.P);
    }
   }
@@ -628,6 +640,7 @@
      case 'CPL':g(e.a,e.b,e.g);break;
      case 'F':{const c=mode==='BDF2'?h/this.bdf.a0:tr?h/2:h,N=e.N,G=e.Gnow;e.cc=c;stampM(A,n,e.ports,N,G,c);break;} // flux multiport: i = c·Γ·v + J
      case 'MG':stampM(A,n,e.ports,e.N,e.Gm,1);break;
+     case 'TL':g(e.a1,e.b1,1/e.Z);g(e.a2,e.b2,1/e.Z);break;
      case 'V':{const r=e.row;if(e.a>=0){A[e.a*n+r]+=1;A[r*n+e.a]+=1;}if(e.b>=0){A[e.b*n+r]-=1;A[r*n+e.b]-=1;}break;}
      case 'GY':{const r=e.row,Y=e.psi;if(e.a>=0){A[e.a*n+r]+=1;A[r*n+e.a]+=1;}if(e.b>=0){A[e.b*n+r]-=1;A[r*n+e.b]-=1;}if(e.m>=0){A[r*n+e.m]-=Y;A[e.m*n+r]-=Y;}break;} // gyrator: v_ab = ψ·ω, τ = ψ·i into node ω
      case 'X':{const r=e.row,N=e.n;if(e.s1>=0){A[e.s1*n+r]+=1;A[r*n+e.s1]+=1;}if(e.s2>=0){A[e.s2*n+r]-=1;A[r*n+e.s2]-=1;}
@@ -648,6 +661,7 @@
       for(let k=0;k<N;k++){const [a,bb]=e.ports[k];base[k]=mode==='BDF2'?-(B.a1*e.psi[k]+B.a2*e.psi1[k])/B.a0:tr?e.psi[k]+c*(this.V(a)-this.V(bb)):e.psi[k];}
       for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=G[k*N+j]*(base[j]-(e.p0?e.p0[j]:0));Jv[k]=s;J(e.ports[k][0],e.ports[k][1],s);}break;}
      case 'I':J(e.a,e.b,-e.Inow);break;
+     case 'TL':J(e.a1,e.b1,e.Ih[0]);J(e.a2,e.b2,e.Ih[1]);break;
      case 'V':b[e.row]=e.Vnow;break;
     }
    }
@@ -688,6 +702,7 @@
     else if(e.k==='CPL'){const v=this.V(e.a)-this.V(e.b);e.v0=v;if(Math.abs(v)<e.Vmin){e.g=e.Pnow/(e.Vmin*e.Vmin);e.J=0;}else{e.g=e.Pnow/(v*v);e.J=0;}}
     else if(e.k==='F'){const N=e.N,G=e.Gnow;e.psi1.set(e.psi);for(let k=0;k<N;k++){const [a,bb]=e.ports[k];e.psi[k]=e.base[k]+e.cc*(this.V(a)-this.V(bb));}
      for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=G[k*N+j]*(e.psi[j]-(e.p0?e.p0[j]:0));e.i[k]=s;}}
+    else if(e.k==='TL')this.tlRecord(e,this.t+h);
    }
    if(this.ims)for(const m of this.ims)this.imStep(m,h);
    if(this.sms)for(const m of this.sms)this.smStep(m,h);
@@ -701,9 +716,18 @@
    for(const e of this.net.els)if(e.k==='C')e.i=0;
    for(let it=0;it<40;it++){sol=this.solve(hs,'BE');const bad=this.check(sol,true);if(!bad.length)break;for(const b of bad)b.e.on=!b.e.on;}
    this.x=sol;
-   for(const e of this.net.els){const v=this.V(e.a)-this.V(e.b);if(e.k==='D'){e.vPrev=v;e.iPrev=e.on?(v-e.Vf)/e.Ron:v/e.Roff;}if(e.k==='CPL')e.v0=v;}
+   for(const e of this.net.els){const v=this.V(e.a)-this.V(e.b);if(e.k==='D'){e.vPrev=v;e.iPrev=e.on?(v-e.Vf)/e.Ron:v/e.Roff;}if(e.k==='CPL')e.v0=v;if(e.k==='TL'&&!e.H.t.length)this.tlRecord(e,0);}
    this.computeVals();
   }
+  // line (3.8): end voltages and currents after a step, kept as long as they are needed (τ back)
+  tlRecord(e,t){const H=e.H,v1=this.V(e.a1)-this.V(e.b1),v2=this.V(e.a2)-this.V(e.b2);e.iE[0]=v1/e.Z+e.Ih[0];e.iE[1]=v2/e.Z+e.Ih[1];
+   H.t.push(t);H.v1.push(v1);H.i1.push(e.iE[0]);H.v2.push(v2);H.i2.push(e.iE[1]);
+   while(H.s+2<H.t.length&&H.t[H.s+1]<t-1.5*e.tau)H.s++;if(H.s>4096){for(const k of ['t','v1','i1','v2','i2'])H[k].splice(0,H.s);H.s=0;}}
+  // [v1, i1, v2, i2] at time tq by linear interpolation; zero before t = 0 (the line starts de-energized)
+  tlHist(e,tq){const H=e.H,n=H.t.length;if(tq<0||!n)return [0,0,0,0];let j=n-1;
+   if(tq>=H.t[j])return [H.v1[j],H.i1[j],H.v2[j],H.i2[j]];let lo=H.s,hi=j;if(tq<=H.t[lo])return [H.v1[lo],H.i1[lo],H.v2[lo],H.i2[lo]];
+   while(hi-lo>1){const m=(lo+hi)>>1;if(H.t[m]<=tq)lo=m;else hi=m;}const f=(tq-H.t[lo])/((H.t[hi]-H.t[lo])||1),L=a=>a[lo]+(a[hi]-a[lo])*f;
+   return [L(H.v1),L(H.i1),L(H.v2),L(H.i2)];}
   // one step of at most h; returns the time actually advanced. Switching energy
   // E_on·|v_before|·|i_after|/(V_ref·I_ref) and E_off·|v_after|·|i_before|/(V_ref·I_ref)
   // is booked when a gate changes.
@@ -820,6 +844,7 @@
  // channel, for the reference run on the server (engine/batch.py).
  function exportForBatch(project,keys){
   const net=buildNetlist(project),idx=new Map(net.els.map((e,i)=>[e,i]));
+  if(net.els.some(e=>e.k==='TL'))throw new NetlistError('Η γραμμή μεταφοράς (Bergeron) δεν υπάρχει ακόμη στον λύτη του server. Η επαλήθευσή της γίνεται με τις αναλυτικές λύσεις (διάγραμμα Bewley).');
   const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm'];
   // synchronous machines (3.5): parameters and initial states; the server integrates ψ_α, ψ_β, ω, θ
   const smList=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm),smx=new Map(smList.map((m,i)=>[m,i]));

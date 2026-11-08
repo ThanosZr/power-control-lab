@@ -159,6 +159,10 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:6px}
 .card{}.cards .card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:10px 12px;border-radius:10px;background:#fbfcfb}
 .cards .card span{font-size:11.5px;color:var(--muted);line-height:1.45}.cards .card.cur{border-color:var(--accent);background:#eef7f4}
 #settings section{margin-bottom:6px}#settings .frow{margin-bottom:6px}
+/* 3.8: lattice (Bewley) diagram */
+.lat-wrap{margin:8px 0}.lattice{width:100%;max-width:420px;display:block;background:#fbfcfb;border:1px solid var(--line);border-radius:8px}
+.lattice .ax{stroke:var(--wire);stroke-width:2}.lattice .fw{stroke:var(--accent);stroke-width:1.6}.lattice .bw{stroke:var(--accent2);stroke-width:1.6}.lattice .arr{stroke:var(--danger);stroke-width:2.5}
+.lattice text{font-size:9.5px;fill:var(--muted);font-family:ui-monospace,Menlo,Consolas,monospace}.lattice .lb{font-size:12px;font-weight:700;fill:var(--ink)}.lattice .am{fill:var(--ink)}.lattice .vv{fill:var(--accent);font-weight:600}
 /* 3.7: free ends, snapping, parts left out of the solution, probes */
 .jfree{fill:#fff;stroke:var(--wire);stroke-width:1.6;vector-effect:non-scaling-stroke;pointer-events:none}
 .snapring{fill:#c9ecdf88;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke;pointer-events:none}
