@@ -321,6 +321,30 @@ class Tutorials(unittest.TestCase):
         self.assertAlmostEqual(o['tw_book2']['vB'][1] / U, 0, delta=1e-4)   # arrester 2 μs after the arrival: B at 0 before the second wave
         self.assertAlmostEqual(o['tw_booknone']['vB'][1] / U, vB2, delta=1e-4)
 
+    def test_surge_arrester_distance(self):
+        # 3.9: exercise 15.5.3: U_A = U_res + 2·S·d/c (at most 2·U_res), with U_res of the characteristic at the final current
+        # (2u − U_res)/Z; without an arrester the open end doubles the wave
+        o, U, Z, c = self.o, 1.2e6, 400, 3e8
+        def ures(alpha):
+            u = 692e3
+            for _ in range(100):
+                u = 692e3 * ((2 * U - u) / Z / 20e3) ** (1 / alpha)
+            return u
+        for k, d, S in (('ideal', 217.5, 40e9), ('d100', 100, 40e9), ('d400', 400, 40e9), ('s1000', 217.5, 1000e9)):
+            r = o['ar_' + k]
+            self.assertEqual(r['warn'], [], msg=k)
+            self.assertEqual(r['points'], r['steps'] + 1, msg=k)
+            u = ures(2000)
+            UA = min(u + 2 * S * d / c, 2 * u)
+            self.assertAlmostEqual(r['vA'], UA, delta=.01 * UA, msg=k)
+            self.assertAlmostEqual(r['iEnd'], (2 * U - u) / Z, delta=.01 * (2 * U - u) / Z, msg=k)   # mean over the last 4τ (the line B–A rings)
+        self.assertAlmostEqual(o['ar_ideal']['vA'], 750e3, delta=.01 * 750e3)        # the 217.5 m of the exercise give the BIL
+        dv = o['ar_d400']['vA'] - o['ar_ideal']['vA']
+        self.assertAlmostEqual(dv, 2 * 40e9 * (400 - 217.5) / c, delta=.03 * dv)       # 2·S·Δd/c
+        z = o['ar_zno']
+        self.assertLess(z['vA'], ures(30) + 2 * 40e9 * 217.5 / c)                    # a soft knee clamps earlier
+        self.assertAlmostEqual(o['ar_none']['vA'], 2 * U, delta=1e-4 * U)
+
     def test_lightning_current(self):
         # 3.5: Heidler (IEC 62305-1) and a fitted double exponential into L = 10 μH and R = 10 Ω: peak current, charge,
         # and the peak of v = R·i + L·di/dt against the waveform evaluated here (engine.batch.wave_at)

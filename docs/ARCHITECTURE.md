@@ -4,6 +4,7 @@
 
 - Αριθμοί γραμμών για κάθε συνάρτηση, στοιχείο, tutorial και API: [CODEMAP.md](CODEMAP.md), που παράγεται με `python tools/codemap.py`.
 - Οδικός χάρτης: [ROADMAP.md](ROADMAP.md).
+- Εξισώσεις και παραδοχές του λύτη και των μοντέλων: [THEORY.md](THEORY.md). Επαλήθευση: [VERIFICATION.md](VERIFICATION.md).
 
 ## 1. Τα κομμάτια
 
@@ -82,6 +83,7 @@ index.html  φορτώνει τα studio/*.js με τη σειρά:        run.p
 | **Ζωντανή παράμετρος** | `app.js` `refreshControls` → `Sim.setControl`/`setHold`/`setBlock` → `liveChange` (για να γίνει πρόγραμμα t:τιμή) | `features_flow.js` |
 | **Αλληλεπίδραση στο σχέδιο** | `editor.js` `down`/`move`/`up`, `finishWire`, `setParams`. Από την 3.7: εργαλείο σύρματος (`wireTool`, `finishFree`), κούμπωμα (`nearTarget`), ελεύθερα άκρα (κόμβος `JUNC` με ένα σύρμα, `mergeJunction`), σύνδεση στοιχείων που πέφτουν σε σύρμα (`autoConnect`, `insertSeries`) | `editor_interactions.js`, `blocks_flow.js`, `wiring_flow.js` |
 | **Στοιχείο με καθυστέρηση (γραμμή Bergeron, 3.8)** | `parts.js` (`TL`, `tlParams`) → `mna.js` `buildNetlist` (στοιχείο `TL`, `info.line`), `values` (πηγές ιστορικού από `tlHist` στο t − τ), `assemble`/`rhs` (1/Z και I_h σε κάθε άκρο), `commit` → `tlRecord`, `saveState`/`restoreState` (μήκος ιστορικού), `tlMaxStep` (βήμα ≤ τ), μεταφορά στο `load`. Αναλυτική λύση: `Parts.bewley` | `sim_cases.js` (`tl38`), `tutorial_cases.js` (`tw_*`) |
+| **Μη γραμμικό στοιχείο (αλεξικέραυνο, 3.9)** | `parts.js` (`MOV`, `movChar`: i(v), di/dv, v(i)) → `mna.js` `buildNetlist` (στοιχείο `NL`), `solve` (επανάληψη Newton με `nlLinearize` και περιορισμό τάσης), `assemble`/`rhs` (g, J), `elCurrent`, `saveState`. Νέα μη γραμμικά: ίδιο μοτίβο (γραμμικοποίηση γύρω από `v0`) | `sim_cases.js` (`mov39`), `tutorial_cases.js` (`ar_*`) |
 | **Αναφορά επαλήθευσης (3.8)** | `tools/verify.py` `checks` (αναμενόμενη τιμή από την αναφορά, στην Python) → `docs/VERIFICATION.md`. Νέο μοντέλο: μία γραμμή εκεί, με αναφορά που δεν είναι ο ίδιος ο λύτης | `python tools/verify.py --check` στον CI |
 | **Ασύνδετα και αιωρούμενα (3.7)** | `mna.js` `buildNetlist`: επιλογές `project.solve` (`unconn`, `island`, `rleak`), σύνολο `skip`, κλάδεμα νεκρών κλαδιών, κόμβοι χωρίς στοιχείο, νησιά με union-find, `net.diag` → `editor.setDiag`, `app.js` `propsCircuit` | `sim_cases.js` (`solve37`), `test_batch.py` (`isl_*`), `wiring_flow.js` |
 | **Πάνελ παραμέτρων και 📌 (3.7)** | `app.js` `renderProps` (`propsComp`, `propsWire`, `propsCircuit`, ενότητες με `psec`), `togglePin` (`c.live`, `c.liveBase`), ρυθμιστές στο `refreshControls`, `liveApply` (φόρτωση με καταστάσεις χωρίς ανανέωση πάνελ) | `wiring_flow.js` |
@@ -95,7 +97,7 @@ index.html  φορτώνει τα studio/*.js με τη σειρά:        run.p
 - **Κανένας ειδικός κώδικας για μία άσκηση στον λύτη.** Τα φαινόμενα βγαίνουν από τη σύνθεση στοιχείων.
 - **Τα παλιά projects ανοίγουν πάντα.** Οι συνδέσεις μέσω ID (διακόπτης → PWM, αισθητήρας → στοιχείο) συνεχίζουν να δουλεύουν.
 - **Σύρμα σήματος δεν ενώνεται ποτέ με ηλεκτρικό κόμβο** (`editor.js` `finishWire`, `kindsOk`, `mna.js` `buildNetlist`).
-- **Εξαίρεση στην ισοδυναμία browser–server:** η γραμμή Bergeron (3.8). Το `exportForBatch` τη σταματά με μήνυμα, και η επαλήθευσή της γίνεται με τη μέθοδο των χαρακτηριστικών (`Parts.bewley`) και με κλειστούς τύπους.
+- **Εξαίρεση στην ισοδυναμία browser–server:** η γραμμή Bergeron (3.8) και το αλεξικέραυνο (3.9). Το `exportForBatch` τη σταματά με μήνυμα, και η επαλήθευσή της γίνεται με τη μέθοδο των χαρακτηριστικών (`Parts.bewley`) και με κλειστούς τύπους.
 - **Κάθε νέο μοντέλο μπαίνει και στην αναφορά επαλήθευσης** (`tools/verify.py`), με αναμενόμενη τιμή από ανεξάρτητη αναφορά.
 - **Ό,τι μένει εκτός λύσης φαίνεται** (3.7): στο `net.diag`, στο σχέδιο και στο πάνελ παραμέτρων. Ο λύτης SciPy παίρνει το ίδιο netlist από το `exportForBatch`, οπότε και τις ίδιες επιλογές.
 - **Αλγεβρικός βρόχος = σφάλμα** με τα μπλοκ του βρόχου, ποτέ κρυφή καθυστέρηση.

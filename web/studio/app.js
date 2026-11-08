@@ -97,6 +97,7 @@ function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC'||t==='TAGO'||t===
  if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:t==='IM'||t==='SM'?[...m,['I:','ρεύμα φάσης a'],['V:','πολική τάση v_ab']]:t==='SRM'?[...m,...Array.from({length:P.srmGeo({...P.defaults(t),...c.params})[0]},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα φάσης ${k+1}`],[(k?'V'+(k+1):'V')+':',`τάση φάσης ${k+1}`],['PSI'+(k+1)+':',`ροή φάσης ${k+1} ψ`]]).flat()]:m;}
  if(P.BLOCKS.has(t))return [['Y:',t==='DISP'?'τιμή εισόδου':t==='VM'?'τάση (μέτρηση)':t==='VP'?'τάση ως προς τη γη':t==='AM'?'ρεύμα a → b (μέτρηση)':t==='IP'?'ρεύμα a → b (τσιμπίδα)':t==='SR'?'έξοδος Q':'έξοδος y']];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
  if(t==='SH')return [['H:','κρατημένη τιμή (δείγματα)']];
+ if(t==='MOV')return [['I:','ρεύμα αλεξικέραυνου'],['V:','τάση αλεξικέραυνου'],['P:','ισχύς']];
  if(t==='TL')return [['V:','τάση στην αρχή (a1 − b1)'],['V2:','τάση στο τέλος (a2 − b2)'],['I:','ρεύμα που μπαίνει στην αρχή'],['I2:','ρεύμα που μπαίνει στο τέλος']];
  if(t==='KL'||t==='KG'){const n=P.nPorts({...P.defaults(t),...c.params}),w=t==='KL'?'τυλίγματος':'θύρας';return Array.from({length:n},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα ${w} ${k+1} (a → b)`],[(k?'V'+(k+1):'V')+':',`τάση ${w} ${k+1}`]]).flat();}
  const base=[['I:','ρεύμα'],['V:','τάση'],['P:',['VDC','VAC','IDC'].includes(t)?'ισχύς που δίνει':'ισχύς']];if(t==='SW'||t==='SCR')base.splice(1,0,['GS:','παλμός πύλης (1 = ON)']);if(t==='SW'&&(+c.params?.Eon>0||+c.params?.Eoff>0))base.push(['PSW:','απώλειες μεταγωγής (μέση ανά T)']);
@@ -1111,6 +1112,25 @@ function twTheory(){const q=twModel();if(!q)return '';const {s,m,Z,tau,Rs,E}=q,g
    <p class="muted small">Στο βιβλίο το κύμα φτάνει στο B τη στιγμή 0, εδώ τη στιγμή τ = ${eng(tau,'s',3)} (οι στιγμές του βιβλίου είναι μετατοπισμένες κατά τ). Με το αλεξικέραυνο στα 3 μs της εκφώνησης συμπίπτουν οι δύο πρώτες τιμές σε κάθε άκρο. Οι επόμενες διαφέρουν, γιατί η λύση του βιβλίου:</p>
    <ul class="eqs"><li>υπολογίζει το B στο 2τ με α_B = −0,47, ενώ το A στο 3τ με το ίδιο κύμα ανακλασμένο με −1,</li><li>δεν περιλαμβάνει το κύμα που ξεκινά από το B τη στιγμή που ανάβει το αλεξικέραυνο.</li></ul>`;}
  return h;}
+// surge arrester (3.9): U_A = U_res + 2·S·d/c while that stays below 2·U_res (exercise 15.5.3), against the simulation
+function arTheory(){const s=S.sim,m=S.tutMeta||{},c=s?.net.compInfo.get('T1');if(!s||!c?.line||!m.dur)return '';const tau=c.line.tau,Z=c.line.Z,mov=s.net.compInfo.get('M1')?.main;
+ const sa=rawSeries('V2:T1'),sb=rawSeries('V:T1'),si=mov?rawSeries('I:M1'):null,mx=r=>r?r.y.reduce((a,v)=>Math.max(a,v),-Infinity):NaN;
+ const done=s.t>=m.dur*.98,vA=done?mx(sa):NaN,vB=done?mx(sb):NaN;
+ let iEnd=NaN;if(done&&si){let a=0,w=0;for(let k=1;k<si.t.length;k++)if(si.t[k]>s.t-4*tau){const d=si.t[k]-si.t[k-1];a+=d*(si.y[k]+si.y[k-1])/2;w+=d;}iEnd=w>0?a/w:NaN;} // mean over the last 4τ: the line B–A rings
+ // residual voltage: of the characteristic at the final current (E − U_res)/Z, found by fixed point
+ let Ur=m.Ures;if(mov){for(let k=0;k<50;k++)Ur=mov.ch.inv((2*m.U-Ur)/Z);}
+ const UA=mov?Math.min(Ur+2*m.S*tau,2*Ur):2*m.U,dmax=mov?(m.BIL-Ur)*m.c/(2*m.S):0;
+ let h=`<div class="tm"><span class="badge">αλεξικέραυνο</span> S = ${eng(m.S*1e-6,'V/μs',3)} · d = ${eng(m.d,'m',4)} · τ = d/c = ${eng(tau,'s',4)} · Z = ${eng(Z,'Ω')} · BIL ${eng(m.BIL,'V')}</div><ul class="eqs">
+  <li>Το κύμα ράμπας έρχεται από ημιάπειρη γραμμή: πηγή 2u πίσω από Z. Χωρίς αλεξικέραυνο, στο ανοιχτό άκρο A (Μ/Σ) γίνεται 2u.</li>
+  ${mov?`<li>Παραμένουσα τάση στο τελικό ρεύμα (2u − U_res)/Z = ${eng((2*m.U-Ur)/Z,'A',4)}: U_res = <b>${eng(Ur,'V',4)}</b> (χαρακτηριστική του αλεξικέραυνου)</li>
+  <li>Όταν το B κλειδώνει στο U_res, το A ανεβαίνει ακόμη για 2τ: U_A = U_res + 2·S·d/c = <b>${eng(Ur+2*m.S*tau,'V',4)}</b>${Ur+2*m.S*tau>2*Ur?`, όμως όχι πάνω από 2·U_res = <b>${eng(2*Ur,'V',4)}</b>: το αλεξικέραυνο άγει πριν επιστρέψει η ανάκλαση από το A`:''}</li>
+  <li>Απόσταση προστασίας για BIL ${eng(m.BIL,'V')}: d_max = (BIL − U_res)·c/(2S) = <b>${eng(dmax,'m',4)}</b>${m.mov==='ideal'&&m.S===40e9?' (άσκηση 15.5.3: 217,5 m με U_res = 692 kV)':''}</li>`:''}</ul>`;
+ if(!done)return h+'<p class="muted small">Τρέξε ως το τέλος για τη σύγκριση.</p>';
+ const rows=[['μέγιστη τάση στον Μ/Σ (A)',UA,vA,'V']];if(mov)rows.push(['μέγιστη τάση στο αλεξικέραυνο (B)',Ur,vB,'V'],['ρεύμα αλεξικέραυνου (μέση τιμή στα τελευταία 4τ)',(2*m.U-Ur)/Z,iEnd,'A']);
+ h+=cmpRows(rows)+`<p class="${vA<m.BIL?'good':'bad'}">${vA<m.BIL?'✓ Κάτω από τη στάθμη μόνωσης':'✗ Πάνω από τη στάθμη μόνωσης'} (${eng(vA,'V',4)} έναντι BIL ${eng(m.BIL,'V')}).</p>`;
+ if(m.mov!=='ideal'&&mov)h+=`<p class="muted small">Με μαλακή χαρακτηριστική το B αρχίζει να κλειδώνει πριν από το U_res, οπότε το A μένει λίγο κάτω από τον τύπο, που υποθέτει ιδανικό αλεξικέραυνο.</p>`;
+ if(m.S===40e9)h+=`<p class="muted small">Η άσκηση 15.5.3 δίνει την κλίση σε kA/μs και την παραμένουσα τάση ως ενδεικνυόμενη τιμή, αλλά στη λύση τις χρησιμοποιεί ως κλίση τάσης σε kV/μs και ως κορυφή. Εδώ είναι κλίση τάσης και κορυφές.</p>`;
+ return h;}
 function formulaTheory(t){
  if(t.topology==='sampling')return samplingTheory();
  if(t.topology==='dc_drive')return dcDriveTheory();
@@ -1125,6 +1145,7 @@ function formulaTheory(t){
  if(t.topology==='pmsm')return pmTheory();
  if(t.topology==='lightning')return lgTheory();
  if(t.topology==='twave')return twTheory();
+ if(t.topology==='arrester')return arTheory();
  if(t.topology==='srm')return srmTheory();
  if(t.topology==='polyphase')return polyTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];

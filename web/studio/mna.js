@@ -128,6 +128,7 @@
    else if(T==='TL'){const g=P.tlParams(p);if(g.err)throw new NetlistError(`${c.label||c.id}: ${g.err}`);
     const a1=node(c.id,'a1'),b1=node(c.id,'b1'),a2=node(c.id,'a2'),b2=node(c.id,'b2');info.pins=[a1,b1];info.ports=[[a1,b1],[a2,b2]];info.line=g;
     info.main=add({k:'TL',a:a1,b:b1,a1,b1,a2,b2,Z:g.Z,tau:g.tau,key:c.id,Ih:[0,0],iE:new Float64Array(2),H:{t:[],v1:[],i1:[],v2:[],i2:[],s:0}});}
+   else if(T==='MOV'){const a=node(c.id,'a'),b=node(c.id,'b'),ch=P.movChar(p);if(ch.err)throw new NetlistError(`${c.label||c.id}: ${ch.err}`);info.pins=[a,b];info.main=add({k:'NL',a,b,ch,v0:0,g:0,J:0});}
    else if(T==='IDC'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'I',a,b,I:num(p.I,1),sched:P.parseSched(p.sched),sigIn:p.ctl==='sig'?sn(c.id,'u'):undefined});}
    else if(T==='ILG'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];const w=P.lightningWave(p);
     if(!(w.eta>1e-6&&w.tau1>0&&w.tau2>0))throw new NetlistError(`${c.label||c.id}: δεν βρέθηκαν τ₁, τ₂ για T1 = ${P.eng(w.T1,'s')}, T2 = ${P.eng(w.T2,'s')} (το διπλοεκθετικό θέλει T2/T1 πάνω από περίπου 3).`);
@@ -337,7 +338,8 @@
    this.ims=[...net.compInfo.values()].filter(c=>c.im).map(c=>c.im);for(const m of this.ims)this.imSources(m);
    this.sms=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm);for(const m of this.sms)this.smOutputs(m);
    this.srms=[...net.compInfo.values()].filter(c=>c.srm).map(c=>c.srm);for(const m of this.srms)this.srmOutputs(m);this.hasTV=this.sms.length+this.srms.length>0;
-   this.hasCPL=net.els.some(e=>e.k==='CPL');this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
+   this.hasCPL=net.els.some(e=>e.k==='CPL');this.hasNL=net.els.some(e=>e.k==='NL');
+   if(old&&!fresh)for(const e of net.els)if(e.k==='NL'){const o=old.els.find(x=>x.k==='NL'&&x.cid===e.cid);if(o)e.v0=o.v0;}this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.h=Math.min(this.opts.h||this.T/this.opts.hDiv,this.tlMaxStep());
    const keys=this.channelKeys();const same=!fresh&&this.keys&&keys.join('|')===this.keys.join('|');
    this.keys=keys;this.chIndex=new Map(keys.map((k,i)=>[k,i]));
@@ -408,7 +410,7 @@
   V(i){return i<0?0:this.x[i];}
   elCurrent(e){const v=this.V(e.a)-this.V(e.b);
    switch(e.k){case 'G':return v/e.Rnow;case 'L':return e.i;case 'C':return e.i;case 'V':return -this.x[e.row];case 'I':return e.Inow;
-    case 'S':return v*(e.on?1/e.Ron:1/e.Roff);case 'GY':return this.x[e.row];case 'D':return e.on?(v-e.Vf)/e.Ron:v/e.Roff;case 'CPL':return e.g*v+e.J;case 'F':return e.i[0];case 'MG':return this.portI(e,0);case 'TL':return e.iE[0];}return 0;}
+    case 'S':return v*(e.on?1/e.Ron:1/e.Roff);case 'GY':return this.x[e.row];case 'D':return e.on?(v-e.Vf)/e.Ron:v/e.Roff;case 'CPL':return e.g*v+e.J;case 'F':return e.i[0];case 'MG':return this.portI(e,0);case 'TL':return e.iE[0];case 'NL':return e.ch.cur(v).i;}return 0;}
   // current of port k of a multiport
   portI(e,k){if(e.k==='F')return e.i[k];if(e.k==='TL')return e.iE[k];let s=0;for(let j=0;j<e.N;j++)s+=e.Gm[k*e.N+j]*(this.V(e.ports[j][0])-this.V(e.ports[j][1]));return s;}
   // values of all channels at the current solution
@@ -600,10 +602,10 @@
   zcFrac(){this.evalBlocks('trial',false,true);let th=null;
    for(const b of this.net.sig.zc){const s=b.st.s,f0=b.st.f0,f1=b.f1;if(!(s?f1<0:f1>0))continue;const d=f0-f1;const q=Math.min(1,Math.max(0,d!==0?f0/d:0));if(th===null||q<th)th=q;}
    return th;}
-  saveState(){const el=[];for(const e of this.net.els){if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice()]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);}
+  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice()]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);}
    return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el,ms:[...(this.ims||[]),...(this.sms||[]),...(this.srms||[])].map(m=>[m,{...m.st}])};}
   restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
-   for(const r of S.el){const e=r[0];if(e.k==='TL'){const H=e.H,n=r[1];for(const k of ['t','v1','i1','v2','i2'])H[k].length=n;e.iE.set(r[2]);}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
+   for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];}else if(e.k==='TL'){const H=e.H,n=r[1];for(const k of ['t','v1','i1','v2','i2'])H[k].length=n;e.iE.set(r[2]);}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
    for(const [m,st] of S.ms||[]){m.st={...st};if(m.ph)this.imSources(m);}}
   gateSig(t){let s='';for(const e of this.net.els){if(e.k!=='S'&&!e.gk)continue;let on=false;
     if(e.gate==='on')on=true;else if(e.gate==='sig')on=(e.gIn>=0?this.sv[e.gIn]:0)>=.5;else if(e.gate==='pwm'){const k=this.net.ctrls.find(c=>c.id===e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
@@ -641,6 +643,7 @@
      case 'F':{const c=mode==='BDF2'?h/this.bdf.a0:tr?h/2:h,N=e.N,G=e.Gnow;e.cc=c;stampM(A,n,e.ports,N,G,c);break;} // flux multiport: i = c·Γ·v + J
      case 'MG':stampM(A,n,e.ports,e.N,e.Gm,1);break;
      case 'TL':g(e.a1,e.b1,1/e.Z);g(e.a2,e.b2,1/e.Z);break;
+     case 'NL':g(e.a,e.b,e.g);break;
      case 'V':{const r=e.row;if(e.a>=0){A[e.a*n+r]+=1;A[r*n+e.a]+=1;}if(e.b>=0){A[e.b*n+r]-=1;A[r*n+e.b]-=1;}break;}
      case 'GY':{const r=e.row,Y=e.psi;if(e.a>=0){A[e.a*n+r]+=1;A[r*n+e.a]+=1;}if(e.b>=0){A[e.b*n+r]-=1;A[r*n+e.b]-=1;}if(e.m>=0){A[r*n+e.m]-=Y;A[e.m*n+r]-=Y;}break;} // gyrator: v_ab = ψ·ω, τ = ψ·i into node ω
      case 'X':{const r=e.row,N=e.n;if(e.s1>=0){A[e.s1*n+r]+=1;A[r*n+e.s1]+=1;}if(e.s2>=0){A[e.s2*n+r]-=1;A[r*n+e.s2]-=1;}
@@ -662,6 +665,7 @@
       for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=G[k*N+j]*(base[j]-(e.p0?e.p0[j]:0));Jv[k]=s;J(e.ports[k][0],e.ports[k][1],s);}break;}
      case 'I':J(e.a,e.b,-e.Inow);break;
      case 'TL':J(e.a1,e.b1,e.Ih[0]);J(e.a2,e.b2,e.Ih[1]);break;
+     case 'NL':J(e.a,e.b,e.J);break;
      case 'V':b[e.row]=e.Vnow;break;
     }
    }
@@ -670,20 +674,25 @@
    if(Math.abs(v)<e.Vmin){e.g=P/(e.Vmin*e.Vmin);e.J=0;}else{e.g=-P/(v*v);e.J=2*P/v;}}}
   solveOnce(h,mode){
    let key=null;
-   if(!this.hasCPL&&!this.hasTV){key=mode+(h/this.h).toPrecision(10)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of this.net.els)if(e.k==='S'||e.k==='D')key+=e.on?'1':'0';
+   if(!this.hasCPL&&!this.hasTV&&!this.hasNL){key=mode+(h/this.h).toPrecision(10)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of this.net.els)if(e.k==='S'||e.k==='D')key+=e.on?'1':'0';
     for(const e of this.net.els)if(e.k==='G'&&e.sched)key+='|'+e.Rnow;}
    let f=key&&this.cache.get(key);
    if(!f){this.assemble(h,mode);luFactor(this.A,this.n,this.piv);f={A:this.A.slice(),piv:this.piv.slice()};if(key){if(this.cache.size>256)this.cache.clear();this.cache.set(key,f);}}
    this.rhs(h,mode);const sol=this.b.slice();luSolve(f.A,this.n,f.piv,sol);return sol;
   }
   solve(h,mode){
-   if(!this.hasCPL)return this.solveOnce(h,mode);
+   if(!this.hasCPL&&!this.hasNL)return this.solveOnce(h,mode);
    for(const e of this.net.els)if(e.k==='CPL')e.v0=this.V(e.a)-this.V(e.b);
-   let sol;for(let it=0;it<12;it++){this.cplLinearize();sol=this.solveOnce(h,mode);
-    let conv=true;for(const e of this.net.els)if(e.k==='CPL'){const va=e.a>=0?sol[e.a]:0,vb=e.b>=0?sol[e.b]:0,v=va-vb;if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v)))conv=false;e.v0=v;}
+   const n=this.hasNL?80:12;let sol;for(let it=0;it<n;it++){this.cplLinearize();this.nlLinearize();sol=this.solveOnce(h,mode);
+    let conv=true;const V=i=>i<0?0:sol[i];
+    for(const e of this.net.els){if(e.k==='CPL'){const v=V(e.a)-V(e.b);if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v)))conv=false;e.v0=v;}
+     // arrester: Newton with the voltage limited on the steep part (the voltage that gives the linearized current on the true curve)
+     else if(e.k==='NL'){let v=V(e.a)-V(e.b);if(Math.abs(v)>Math.abs(e.v0)){const it2=e.g*v+e.J,vi=e.ch.inv(it2);if(Math.sign(it2)===Math.sign(v)&&Math.abs(vi)<Math.abs(v))v=vi;}
+      if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v)))conv=false;e.v0=v;}}
     if(conv)break;}
    return sol;
   }
+  nlLinearize(){for(const e of this.net.els)if(e.k==='NL'){const q=e.ch.cur(e.v0);e.g=q.g+1e-12;e.J=q.i-e.g*e.v0;}}
   // diode consistency of a trial solution; returns [{e, frac}] (frac: where the transition occurred inside the step)
   // init: at t = 0 a thyristor may already be latched (it carries the initial inductor current)
   check(sol,init){
@@ -845,6 +854,7 @@
  function exportForBatch(project,keys){
   const net=buildNetlist(project),idx=new Map(net.els.map((e,i)=>[e,i]));
   if(net.els.some(e=>e.k==='TL'))throw new NetlistError('Η γραμμή μεταφοράς (Bergeron) δεν υπάρχει ακόμη στον λύτη του server. Η επαλήθευσή της γίνεται με τις αναλυτικές λύσεις (διάγραμμα Bewley).');
+  if(net.els.some(e=>e.k==='NL'))throw new NetlistError('Το αλεξικέραυνο (MOV) δεν υπάρχει ακόμη στον λύτη του server. Η επαλήθευσή του γίνεται με τη μη γραμμική εξίσωση του κυκλώματος.');
   const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm'];
   // synchronous machines (3.5): parameters and initial states; the server integrates ψ_α, ψ_β, ω, θ
   const smList=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm),smx=new Map(smList.map((m,i)=>[m,i]));

@@ -84,4 +84,10 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
   ok(th.svg&&th.lines>=4,`${o.case}: Bewley lattice drawn (${th.lines} waves)`);ok(th.good>=4&&th.bad===0,`${o.case}: theory = simulation in the card (${th.good} rows)`);
   if(o.case==='book')ok(/15\.4\.9/.test(th.text)&&/0,3u/.test(th.text),'book exercise compared with its table');
   await p.screenshot({path:OUT+'/w5_twave_'+o.case+'.png'});}
+ // 8) 3.9: surge arrester and its protective distance: the card compares U_res + 2·S·d/c with the simulation and checks the BIL
+ await p.evaluate(()=>window.PCL.loadTutorial('arrester',{}));await p.waitForTimeout(500);
+ await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.stopT-S.sim.t);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(400);
+ const ar=await p.evaluate(()=>({good:[...document.querySelectorAll('#theory table.cmp td.good')].length,text:document.querySelector('#theory').textContent}));
+ ok(ar.good>=3&&/d_max/.test(ar.text)&&/Κάτω από τη στάθμη μόνωσης/.test(ar.text),'arrester card: theory = simulation, BIL respected ('+ar.good+' rows)');
+ await p.screenshot({path:OUT+'/w6_arrester.png'});
  console.log('ERR',JSON.stringify(errs.slice(0,5)));console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})().catch(e=>{console.error('FAILED',e);process.exit(1);});

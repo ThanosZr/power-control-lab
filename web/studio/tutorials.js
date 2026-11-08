@@ -559,6 +559,20 @@
    const stopT=book?8e-6:li?80e-6:100e-6,hDiv=book?(li?120:220):li?120:400;
    return project(comps,wires,{sim:{hDiv,speed:li||book?20:5,stopT,method:'TR'},scope:{panes:[[['V:T1','v_A (αρχή)'],['V2:T1','v_B (τέλος)']],[['I:T1','i_A'],['I2:T1','i_B (μπαίνει στο τέλος)']]],window:{unit:'s',n:stopT}},
     meta:{case:o.case,src:o.src,term:o.term,E,U,Rs,Z,tau,RL,ta,dur:stopT}});}});
+ // ------------------------------------------------------------------ 3.9: surge arrester and its protective distance (exercise 15.5.3)
+ T.push({id:'arrester',group:'Υψηλές τάσεις (3.9)',title:'Αλεξικέραυνο: παραμένουσα τάση και απόσταση προστασίας',theory:'formula',topology:'arrester',
+  options:[{k:'d',label:'Απόσταση αλεξικέραυνου – Μ/Σ',options:[['100','100 m'],['217.5','217,5 m (όριο της άσκησης 15.5.3)'],['400','400 m']],def:'217.5'},
+   {k:'S',label:'Κλίση μετώπου του κύματος',options:[['40','40 kV/μs (άσκηση 15.5.3)'],['500','500 kV/μs'],['1000','1000 kV/μs']],def:'40'},
+   {k:'mov',label:'Αλεξικέραυνο',options:[['ideal','Σχεδόν ιδανικό: 692 kV (α = 2000)'],['zno','ZnO: 692 kV στα 20 kA, α = 30'],['table','Απαγωγός 420 kV του βιβλίου (πίνακας)'],['none','Χωρίς αλεξικέραυνο']],def:'ideal'}],
+  desc:'Κύμα ράμπας κλίσης S έρχεται από ημιάπειρη γραμμή (Z = 400 Ω), άρα είναι πηγή 2u πίσω από Z. Στο σημείο B είναι το αλεξικέραυνο, και ο Μ/Σ (ανοιχτό άκρο) είναι στο A, σε απόσταση d πάνω σε γραμμή Bergeron. Όσο το αλεξικέραυνο δεν άγει, το κύμα διπλασιάζεται στο A. Όταν άγει, κρατά το B στην παραμένουσα τάση U_res, αλλά το A ανεβαίνει ακόμη για 2τ: U_A ≈ U_res + 2·S·d/c (άσκηση 15.5.3 του βιβλίου «Υψηλές Τάσεις»). Το αλεξικέραυνο είναι μη γραμμική αντίσταση i = I_ref·(v/U_ref)^α ή πίνακας, και ο λύτης βρίσκει την τάση του με Newton σε κάθε βήμα.',
+  tasks:['Με 217,5 m και 40 kV/μs: η μέγιστη τάση στον Μ/Σ φτάνει περίπου τα 750 kV (BIL) της άσκησης.','Διπλασίασε την απόσταση: η τάση στον Μ/Σ ανεβαίνει κατά 2·S·Δd/c.','Κλίση 1000 kV/μs: η απόσταση προστασίας πέφτει σε λίγα μέτρα. Γι’ αυτό τα αλεξικέραυνα μπαίνουν στους ακροδέκτες του Μ/Σ.','ZnO με α = 30: η παραμένουσα τάση εξαρτάται από το ρεύμα. Σύγκρινε το U_res της κάρτας με τα 692 kV.','Χωρίς αλεξικέραυνο: το κύμα διπλασιάζεται στο ανοιχτό άκρο.'],
+  build(o){const Z=400,c=3e8,d=+o.d,S=(+o.S)*1e9,U=1.2e6,tau=d/c,mv={ideal:{model:'pow',Uref:692e3,Iref:20e3,alpha:2000},zno:{model:'pow',Uref:692e3,Iref:20e3,alpha:30},table:{model:'table',tbl:'1e-3: 379k, 1e3: 700k, 10e3: 823k'}}[o.mov];
+   const comps=[C('V1','VIMP',100,200,{shape:'ramp',Vpk:2*U,S:2*S,Rs:Z},{label:'2u πίσω από Z'}),C('T1','TL',360,180,{spec:'zl',Z,len:d,vel:c},{label:'γραμμή B → A'}),gnd(300,300)];
+   const wires=[['V1:n','G1:g',[[100,280],[300,280]]],['V1:p','T1:a1',[[100,160]]],['T1:b1','G1:g',[[300,280]]],['T1:b2','G1:g',[[420,280],[300,280]]]];
+   if(mv){comps.push(C('M1','MOV',220,220,mv,{label:'αλεξικέραυνο B'}));wires.push(['M1:a','T1:a1',[[220,160]]],['M1:b','G1:g',[[220,280]]]);}
+   const stopT=Math.max(U/S*1.3,8*tau)+4*tau;
+   return project(comps,wires,{sim:{hDiv:100,speed:20,stopT,method:'TR'},scope:{panes:[[['V2:T1','v_A (Μ/Σ)'],['V:T1','v_B (αλεξικέραυνο)']],mv?[['I:M1','i αλεξικέραυνου']]:[['I:T1','i_B']]],window:{unit:'s',n:stopT}},
+    meta:{d,S,U,Z,c,tau,mov:o.mov,BIL:750e3,Ures:692e3,dur:stopT}});}});
  // ------------------------------------------------------------------ 3.0: peak current-mode, subharmonic oscillation
  T.push({id:'peak_cm',group:'Μπλοκ σημάτων (3.0)',title:'Peak current-mode και υποαρμονική',theory:'formula',topology:'peak_cm',
   options:[{k:'mode',label:'Έλεγχος',options:[['peak','Peak: ρολόι → ON, κορυφή → OFF'],['valley','Valley: ρολόι → OFF, κοιλάδα → ON']],def:'peak'},

@@ -254,5 +254,11 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
  let ip=0;for(let k=1;k<yy.length;k++)if(yy[k]>yy[ip])ip=k;const cr=(f,up)=>{if(up){for(let k=1;k<=ip;k++)if(yy[k]>=f*yy[ip])return tt[k-1]+(f*yy[ip]-yy[k-1])/(yy[k]-yy[k-1])*5e-9;}else for(let k=ip;k<yy.length;k++)if(yy[k]<=f*yy[ip])return tt[k-1]+(f*yy[ip]-yy[k-1])/(yy[k]-yy[k-1])*5e-9;return NaN;};
  const t30=cr(.3,true),t90=cr(.9,true),T1=(t90-t30)/.6,T2=cr(.5,false)-(t30-.3*T1);
  out.tl38={v,hClamp:c.h,TC:c.T,imp,li:{peak:-yy[ip],T1,T2}};}
+// 3.9) surge arrester: 1 MV behind 400 Ω (power law and table), and a ramp through it
+{const dc=mp=>{const s=new Sim(project([{id:'V1',type:'VDC',params:{V:1e6}},{id:'R1',type:'R',params:{R:400}},{id:'M1',type:'MOV',params:mp},{id:'G',type:'GND'}],[['V1:p','R1:a'],['R1:b','M1:a'],['M1:b','G:g'],['V1:n','G:g']]),{h:1e-6});s.run(1e-5);return {v:s.now('V:M1'),i:s.now('I:M1'),warn:s.net.warnings};};
+ const neg=new Sim(project([{id:'V1',type:'VDC',params:{V:-1e6}},{id:'R1',type:'R',params:{R:400}},{id:'M1',type:'MOV'},{id:'G',type:'GND'}],[['V1:p','R1:a'],['R1:b','M1:a'],['M1:b','G:g'],['V1:n','G:g']]),{h:1e-6});neg.run(1e-5);
+ const r=new Sim(project([{id:'V1',type:'VIMP',params:{shape:'ramp',Vpk:2e6,S:80e9,Rs:400}},{id:'M1',type:'MOV',params:{alpha:30}},{id:'G',type:'GND'}],[['V1:p','M1:a'],['M1:b','G:g'],['V1:n','G:g']]),{h:2e-9});
+ const ramp=[];for(const t of [5e-6,10e-6,20e-6,40e-6]){r.run(t-r.t);ramp.push([t,r.now('V:M1'),r.now('I:M1'),r.now('V:V1')]);}
+ out.mov39={pow:dc({}),a30:dc({alpha:30}),tbl:dc({model:'table',tbl:'1e-3: 379k, 1e3: 700k, 10e3: 823k'}),neg:neg.now('V:M1'),ramp,bad:(()=>{try{new Sim(project([{id:'M1',type:'MOV',params:{model:'table',tbl:'1: 500k'}},{id:'G',type:'GND'}],[['M1:b','G:g']]));return null;}catch(e){return e.message;}})()};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

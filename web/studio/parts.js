@@ -113,11 +113,12 @@
   // multiport elements (3.5): N windings or ports, one above the other, a_k on the left and b_k on the right (dots at a_k)
   // impulse voltage (3.8): double exponential v = (V₀/η)·(e^(−t/τ₂) − e^(−t/τ₁)), IEC 60060-1 times
   VIMP:{name:'Κρουστική τάση (1,2/50, 250/2500)',prefix:'V',group:'Πηγές',pins:{p:[0,-40],n:[0,40]},box:[-17,-17,34,34],
-   params:[sel('shape','Κυματομορφή',[['1.2/50','1,2/50 μs: κεραυνική (LI)'],['250/2500','250/2500 μs: χειρισμών (SI, χρόνος κορυφής)'],['custom','Άλλη (προσαρμογή των τ₁, τ₂)']],'1.2/50',
+   params:[sel('shape','Κυματομορφή',[['1.2/50','1,2/50 μs: κεραυνική (LI)'],['250/2500','250/2500 μs: χειρισμών (SI, χρόνος κορυφής)'],['custom','Άλλη (προσαρμογή των τ₁, τ₂)'],['ramp','Ράμπα με κλίση S ως τη V₀']],'1.2/50',
      {hint:'v(t) = (V₀/η)·(e^(−t/τ₂) − e^(−t/τ₁)), κορυφή V₀. IEC 60060-1: T1 = 1,67·(t₉₀ − t₃₀), T2 από την εικονική αρχή t₃₀ − 0,3·T1 ως το 50 % στην ουρά. Για 250/2500: χρόνος κορυφής T_p και T2 από το t = 0.'}),
     num('Vpk','Μέγιστη τάση V₀','V',100e3,{signed:true}),
     sel('basis','Ορισμός χρόνων',[['iec','T1 (30–90 %) και T2 από την εικονική αρχή'],['tp','T_p (χρόνος κορυφής) και T2 από το t = 0']],'iec',{show:p=>p.shape==='custom'}),
     num('T1','Χρόνος μετώπου T1 ή T_p','s',1.2e-6,{show:p=>p.shape==='custom'}),num('T2','Χρόνος ημίσεος T2','s',50e-6,{show:p=>p.shape==='custom'}),
+    num('S','Κλίση μετώπου S','V/s',1e12,{show:p=>p.shape==='ramp'}),
     num('Rs','Εσωτερική αντίσταση','Ω',0,{zero:true,hint:'Π.χ. Z της γραμμής: «προσπίπτον κύμα πίσω από Z».'}),num('t0','Καθυστέρηση','s',0,{zero:true})],
    value:p=>p.Vpk,unit:'V',
    draw:()=>'<path d="M0,-40 V-16 M0,16 V40"/><circle r="16"/><path class="thin" d="M-8,7 L-5,-8 C-2,-8 0,4 9,6"/><path class="thin" d="M-5,-12 H5"/>'},
@@ -146,6 +147,13 @@
    value:()=>null,
    draw:p=>{const N=nPorts(p);let s='';for(let k=0;k<N;k++){const y=portY(N,k);s+=`<path d="M-30,${y} H-14 M14,${y} H30"/>`;}const y0=portY(N,0)-7,h=portY(N,N-1)-portY(N,0)+14;
     return s+`<rect x="-14" y="${y0}" width="28" height="${h}" rx="2"/>`+tx(p.kind==='G'?'[G]':'[R]',0,(portY(N,0)+portY(N,N-1))/2+4,'bsm');}},
+  // metal-oxide surge arrester (3.9): i = I_ref·(|v|/U_ref)^α·sign v, or log-log interpolation of a table of (current, voltage)
+  MOV:{name:'Αλεξικέραυνο (MOV, μη γραμμική αντίσταση)',prefix:'MOV',group:'Παθητικά',pins:{a:[0,-40],b:[0,40]},box:[-12,-22,24,44],
+   params:[sel('model','Χαρακτηριστική',[['pow','i = I_ref·(v/U_ref)^α'],['table','Πίνακας ρεύματος–τάσης']],'pow',{hint:'Συμμετρική ως προς την πολικότητα. Ο λύτης βρίσκει την τάση με Newton σε κάθε βήμα.'}),
+    num('Uref','Παραμένουσα τάση U_ref','V',692e3,{show:p=>p.model!=='table'}),num('Iref','στο ρεύμα I_ref','A',20e3,{show:p=>p.model!=='table'}),num('alpha','Εκθέτης α','',30,{show:p=>p.model!=='table',hint:'ZnO: 20–50, SiC: 2–6.'}),
+    txt('tbl','Σημεία «ρεύμα: τάση»','1e-3: 379k, 1e3: 700k, 10e3: 823k',{show:p=>p.model==='table',hint:'Π.χ. ο απαγωγός 420 kV του βιβλίου: √2·U_c = 379 kV στο 1 mA, 823 kV στα 10 kA.'})],
+   value:p=>p.Uref,unit:'V',
+   draw:()=>'<path d="M0,-40 V-22 M0,22 V40"/><rect x="-9" y="-22" width="18" height="44" rx="2"/><path class="thin" d="M-15,14 L-6,14 L6,-14 L15,-14"/>'},
   CPL:{name:'Φορτίο σταθερής ισχύος',prefix:'P',group:'Φορτία',pins:{p:[0,-30],n:[0,30]},box:[-12,-17,24,34],
    params:[num('P','Ισχύς','W',1000,{signed:true}),num('Vmin','Τάση κάτω από την οποία γίνεται ωμικό','V',5),txt('sched','P(t)','',{hint:SCHED})],
    value:p=>p.P,unit:'W',
@@ -425,7 +433,7 @@
  // ---------------------------------------------------------------- lightning current (3.5)
  // IEC 62305-1 Annex B: η, τ₁, τ₂ for n = 10
  const HEIDLER={'10/350':{eta:.93,tau1:19e-6,tau2:485e-6,n:10,T1:10e-6,T2:350e-6},'1/200':{eta:.986,tau1:1.82e-6,tau2:285e-6,n:10,T1:1e-6,T2:200e-6},'0.25/100':{eta:.993,tau1:.454e-6,tau2:143e-6,n:10,T1:.25e-6,T2:100e-6}};
- function waveShape(w,t){if(!(t>0))return 0;if(w.kind==='dexp')return Math.exp(-t/w.tau2)-Math.exp(-t/w.tau1);const x=Math.pow(t/w.tau1,w.n);return x/(1+x)*Math.exp(-t/w.tau2);}
+ function waveShape(w,t){if(!(t>0))return 0;if(w.kind==='ramp')return Math.min(1,t/w.tr);if(w.kind==='dexp')return Math.exp(-t/w.tau2)-Math.exp(-t/w.tau1);const x=Math.pow(t/w.tau1,w.n);return x/(1+x)*Math.exp(-t/w.tau2);}
  function waveAt(w,t){return w.I0/w.eta*waveShape(w,t-w.t0);}
  // peak, front time T1 = 1.25·(t90 − t10) and time to half value T2 (from the virtual origin t10 − 0.1·T1) of a shape
  // basis 'iec' (impulse voltage, IEC 60060-1): T1 = (t90 − t30)/0.6, virtual origin t30 − 0.3·T1; basis 'tp': time to peak and T2 from t = 0
@@ -449,6 +457,7 @@
  const VIMP_STD={'1.2/50':{T1:1.2e-6,T2:50e-6,basis:'iec'},'250/2500':{T1:250e-6,T2:2500e-6,basis:'tp'}};
  const vimpCache=new Map();
  function impulseWave(p){const V0=parseEng(p.Vpk)||0,t0=Math.max(0,parseEng(p.t0)||0),pre=VIMP_STD[p.shape];
+  if(p.shape==='ramp'){const S=Math.abs(parseEng(p.S))||1e12,tr=Math.abs(V0)/S||1e-9;return {kind:'ramp',tr,S,eta:1,I0:V0,t0,T1:tr,T2:Infinity,tau1:tr,tau2:tr,fitOk:true};}
   const T1=pre?pre.T1:Math.max(parseEng(p.T1)||1.2e-6,1e-12),T2=pre?pre.T2:Math.max(parseEng(p.T2)||50e-6,1.5*T1),basis=pre?pre.basis:(p.basis==='tp'?'tp':'iec'),key=[T1,T2,basis].join('|');
   let f=vimpCache.get(key);if(!f){f=waveFit('dexp',T1,T2,10,basis);vimpCache.set(key,f);}
   return {kind:'dexp',n:10,tau1:f.tau1,tau2:f.tau2,eta:f.eta,I0:V0,t0,T1,T2,basis,fitOk:f.ok};}
@@ -463,6 +472,16 @@
   const waves=[];for(let i=0;i<N;i++){const da=a[i]-(i?a[i-1]:0),dr=r[i]-(i?r[i-1]:0);if(Math.abs(da)>1e-12)waves.push({t:t[i],dir:1,amp:da});if(Math.abs(dr)>1e-12)waves.push({t:t[i],dir:-1,amp:dr});}
   const iA=a.map((x,i)=>(x-b[i])/Z),iB=f.map((x,i)=>(x-r[i])/Z); // into the line at A, out of the line into the load at B
   return {t,vA,vB,iA,iB,gs,k,dt,vAt:tq=>at(vA,tq),vBt:tq=>at(vB,tq),iAt:tq=>at(iA,tq),iBt:tq=>at(iB,tq),waves};}
+ // surge arrester (3.9): current and slope of i(v), and the inverse v(i), from the power law or a table (log-log segments)
+ function movChar(p){const pts=[];
+  if(p.model==='table'){for(const q of String(p.tbl||'').split(/[;,]/)){const m=q.split(':');if(m.length!==2)continue;const I=parseEng(m[0]),V=parseEng(m[1]);if(I>0&&V>0)pts.push([I,V]);}
+   pts.sort((a,b)=>a[0]-b[0]);if(pts.length<2)return {err:'Ο πίνακας θέλει τουλάχιστον δύο σημεία «ρεύμα: τάση».'};for(let k=1;k<pts.length;k++)if(!(pts[k][1]>pts[k-1][1]))return {err:'Η τάση πρέπει να αυξάνει με το ρεύμα.'};}
+  else{const U=parseEng(p.Uref),I=parseEng(p.Iref),a=parseEng(p.alpha);if(!(U>0&&I>0&&a>=1))return {err:'U_ref, I_ref > 0 και α ≥ 1.'};pts.push([I,U],[I*10,U*Math.pow(10,1/a)]);}
+  const seg=pts.slice(1).map((q,k)=>({I:pts[k][0],V:pts[k][1],a:Math.log(q[0]/pts[k][0])/Math.log(q[1]/pts[k][1])}));
+  const pick=v=>{let k=0;while(k<seg.length-1&&v>=pts[k+1][1])k++;return seg[k];};
+  const cur=v=>{const x=Math.abs(v);if(!(x>0))return {i:0,g:0};const s=pick(x),i=s.I*Math.pow(x/s.V,s.a);return {i:Math.sign(v)*i,g:s.a*i/x};};
+  const inv=i=>{const y=Math.abs(i);if(!(y>0))return 0;let k=0;while(k<seg.length-1&&y>=pts[k+1][0])k++;const s=seg[k];return Math.sign(i)*s.V*Math.pow(y/s.I,1/s.a);};
+  return {pts,seg,cur,inv};}
  // transmission line (3.8): Z and τ from the chosen data
  function tlParams(p){const num=v=>parseEng(v);let Z,tau;
   if(p.spec==='lc'){const L=num(p.Lp),C=num(p.Cp),l=num(p.len);if(!(L>0&&C>0&&l>0))return {err:'L′, C′ και μήκος πρέπει να είναι θετικά.'};Z=Math.sqrt(L/C);tau=l*Math.sqrt(L*C);}
@@ -509,7 +528,7 @@
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
  const api={PARTS,GROUPS,BLOCKS,defaults,elPins,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
-  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,tlParams,bewley,
+  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,tlParams,bewley,movChar,
   srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

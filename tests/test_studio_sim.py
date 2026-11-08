@@ -340,6 +340,32 @@ class StudioSimulator(unittest.TestCase):
         self.assertAlmostEqual(m['T1'], 1.2e-6, delta=1e-9)
         self.assertAlmostEqual(m['T2'], 50e-6, delta=1e-8)
 
+    def test_surge_arrester(self):
+        # 3.9: the nonlinear circuit solved here by bisection: 1 MV = 400·i + v with i = I_ref·(v/U_ref)^α, and the table read
+        # as straight lines in log-log; the arrester is symmetric; a ramp source behind Z
+        o = self.o['mov39']
+        def solve(f):
+            lo, hi = 0.0, 1e6
+            for _ in range(200):
+                v = (lo + hi) / 2
+                lo, hi = (v, hi) if 1e6 - 400 * f(v) - v > 0 else (lo, v)
+            return v
+        v = solve(lambda v: 20e3 * (v / 692e3) ** 30)
+        self.assertAlmostEqual(o['a30']['v'], v, delta=1e-6 * v)
+        self.assertAlmostEqual(o['a30']['i'], 20e3 * (v / 692e3) ** 30, delta=1e-6 * o['a30']['i'])
+        pts = [(1e-3, 379e3), (1e3, 700e3), (10e3, 823e3)]
+        def table(v):
+            k = 0 if v < pts[1][1] else 1
+            (i0, v0), (i1, v1) = pts[k], pts[k + 1]
+            return i0 * (v / v0) ** (math.log(i1 / i0) / math.log(v1 / v0))
+        v = solve(table)
+        self.assertAlmostEqual(o['tbl']['v'], v, delta=1e-6 * v)
+        self.assertAlmostEqual(o['neg'], -o['pow']['v'], delta=1e-6 * o['pow']['v'])
+        for t, vm, im, vs in o['ramp']:                       # ramp 2 MV at 80 kV/μs behind 400 Ω: KVL, and the terminal voltage is the arrester's
+            self.assertAlmostEqual(vm + 400 * im, min(80e9 * t, 2e6), delta=1)
+            self.assertAlmostEqual(vs, vm, delta=1e-6)
+        self.assertIn('δύο σημεία', o['bad'])
+
     def test_switched_reluctance_machine(self):
         # 3.6: against the exact model integrated here: ψ(θ, i) = L_u·i + (ψ_a(i) − L_u·i)·(1 − cos θ)/2 with the aligned curve
         # ψ_a(i) = L_sat·i + ψ_k·(1 − e^(−(L_a − L_sat)·i/ψ_k)), i from ψ by Newton, torque N_r·∂W′/∂θ from the analytic co-energy

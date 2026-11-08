@@ -85,6 +85,14 @@ for(const [nm,o] of [['open',{term:'open'}],['short',{term:'short'}],['match',{t
  const ts=[];if(w){for(let k=1;k<400;k++)if(!near(m.dur*k/400))ts.push(m.dur*k/400);}else for(let k=0;(k+.5)*m.tau<m.dur;k++)ts.push((k+.5)*m.tau);if(m.ta!==null&&!w)ts.push(m.ta+.25*m.tau);
  let eA=0,eB=0,eI=0;for(const tq of ts){eA=Math.max(eA,Math.abs(at(A,tq)-bw.vAt(tq)));eB=Math.max(eB,Math.abs(at(B,tq)-bw.vBt(tq)));eI=Math.max(eI,Math.abs(-at(I,tq)-bw.iBt(tq)));}
  out['tw_'+nm]={eA,eB,eI,E:m.E,Z:m.Z,tau:m.tau,h:s.h,n:ts.length,warn:s.net.warnings,vB:[1.5,3.5,5.5].map(k=>at(B,k*m.tau)),vA:[.5,2.5,4.5,6.5].map(k=>at(A,k*m.tau)),iB:[1.5,3.5,5.5].map(k=>-at(I,k*m.tau)),meta:m};}
+// 3.9: surge arrester and its protective distance: the maxima over every recorded sample
+for(const [nm,o] of [['ideal',{}],['d100',{d:'100'}],['d400',{d:'400'}],['s1000',{S:'1000'}],['zno',{mov:'zno'}],['table',{mov:'table'}],['none',{mov:'none'}]]){
+ const pr=build('arrester',o),m=pr.meta,s=sim(pr,m.dur),r=s.ring,ia=s.chIndex.get('V2:T1'),ib=s.chIndex.get('V:T1'),ii=s.chIndex.get('I:M1');let vA=-Infinity,vB=-Infinity,iEnd=null;
+ let si=0,st=0,tp=null,ip=null; // the line B–A rings with period 4τ: the arrester current averaged over the last 4τ
+ for(let q=0;q<r.n;q++){const j=(r.head-r.n+q+r.cap)%r.cap,t=r.t[j];vA=Math.max(vA,r.d[j*r.nch+ia]);vB=Math.max(vB,r.d[j*r.nch+ib]);
+  if(ii!==undefined){const i=r.d[j*r.nch+ii];if(tp!==null&&t>m.dur-4*m.tau){si+=(t-tp)*(i+ip)/2;st+=t-tp;}tp=t;ip=i;}}
+ if(ii!==undefined)iEnd=si/st;
+ out['ar_'+nm]={vA,vB,iEnd,points:r.n,steps:s.steps,warn:s.net.warnings,meta:m};}
 // 3.6: SRM 8/6 with three conduction windows: steady state, the ψ–i loop of phase 1 over the last electrical period, mean torque
 for(const ang of ['30-150','0-120','60-180']){const pr=build('srm',{ang,band:'1'});const s=sim(pr,pr.sim.stopT);const r=s.ring,ix=k=>s.chIndex.get(k),w=s.now('Y:M1'),Te=2*Math.PI/(6*w);
  let W=0,ta=0,prev=null;for(let q=0;q<r.n;q++){const j=(r.head-r.n+q+r.cap)%r.cap,t=r.t[j];if(t<s.t-Te)continue;const i=r.d[j*r.nch+ix('I:M1')],p=r.d[j*r.nch+ix('PSI1:M1')],te=r.d[j*r.nch+ix('Y:M1:te')];

@@ -54,6 +54,8 @@ def wave_at(w, t):
     if t <= 0:
         return 0.0
     k = _f(w.get('I0')) / _f(w.get('eta'), 1)
+    if w.get('kind') == 'ramp':           # a ramp up to the peak (3.9)
+        return k * min(1.0, t / w['tr'])
     if w.get('kind') == 'dexp':
         return k * (math.exp(-t / w['tau2']) - math.exp(-t / w['tau1']))
     x = (t / w['tau1']) ** _f(w.get('n'), 10)
