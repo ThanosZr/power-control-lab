@@ -16,7 +16,7 @@
 | `web/studio/scope.js` | 164 |
 | `web/studio/templates.js` | 32 |
 | `web/studio/tutorials.js` | 339 |
-| `run.py` | 133 |
+| `run.py` | 134 |
 | `engine/__init__.py` | 1 |
 | `engine/analysis.py` | 307 |
 | `engine/batch.py` | 1010 |
@@ -612,7 +612,7 @@ _(χωρίς συναρτήσεις)_
 | 51 | method | `Handler.send` |
 | 63 | method | `Handler.do_GET` |
 | 82 | method | `Handler.do_POST` |
-| 109 | function | `main` |
+| 110 | function | `main` |
 
 ### `engine/__init__.py`
 

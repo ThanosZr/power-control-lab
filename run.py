@@ -92,8 +92,9 @@ class Handler(BaseHTTPRequestHandler):
             data=json.loads(self.rfile.read(size))
             if not isinstance(data,dict):
                 raise InputError('Απαιτείται αντικείμενο JSON.')
-            if not SLOTS.acquire(blocking=False):
-                self.send(429,{'error':'Εκτελούνται ήδη δύο αναλύσεις. Περιμένετε να ολοκληρωθούν.'}); return
+            # at most two analyses at a time; the others wait their turn (a slow machine queues, it does not fail)
+            if not SLOTS.acquire(timeout=60):
+                self.send(429,{'error':'Εκτελούνται ήδη δύο αναλύσεις για πάνω από ένα λεπτό. Δοκίμασε ξανά σε λίγο.'}); return
             try:
                 result=ACTIONS[action](data)
             finally:
