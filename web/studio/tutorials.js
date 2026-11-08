@@ -244,7 +244,7 @@
     C('SH1','SH',90,105,{src:'L1',qty:'I',clock:'PWM1',trig,init:'value',h0:+I.toFixed(4)},{label:'S&H'})];
    const wires=[['VB:p','L1:a',[[100,170]],{name:'v_bus'}],['VB:n','J1'],['J1','G1:g'],['J1','J2'],['L1:b','JM'],['S1:s','JM'],['JM','S2:d'],['J2','S2:s'],
     ['S1:d','VS:p',[[430,60],[540,60]]],['J2','VS:n',[[540,300]]]];
-   const panes=pi?[[['I:L1','i_L'],['H:SH1','i_L,hold'],['REF:PWM1','I_ref']],[['D:PWM1','D']]]:[[['I:L1','i_L'],['H:SH1','i_L,hold']],[['CAR:PWM1','φέρον c(t)'],['D:PWM1','D'],['G:PWM1','g_S2']]];
+   const panes=pi?[[['I:L1','i_L'],['H:SH1','i_L,hold'],['REF:PWM1','I_ref']],[['D:PWM1','D']]]:[[['I:L1','i_L'],['H:SH1','i_L,hold']],[['CAR:PWM1','φέρον c(t)'],['D:PWM1','D'],['G:PWM1','g_S2']],[['GS:S2','g_S2'],['GS:S1','g_S1']]];
    return project(comps,wires,{sim:{hDiv:500,speed:pi?300:20,stopT:pi?8e-3:0},scope:{panes,window:{unit:'T',n:pi?160:4}},
     meta:{vbus,vst,vst2,P,D0,I,dI,L,fs,T:Tsw,carrier,trig,upd:o.upd,saw:saw?1:0,nps:trig==='both'?2:1,start:o.start,tau0:ph.tau,phaseDeg:ph.deg,tc:ph.frac*Tsw,pi,real,g}});}});
  // ------------------------------------------------------------------ polyphase (PE2, exercise 2)
@@ -284,7 +284,7 @@
      C('GS'+i,'GND',xm,y+100,{},{label:''}),J('JV'+i,xv,y),C('PWM'+i,'PWM',50,290+60*k,pwm));
     wires.push(['JB'+i,'L'+i+':a'],['L'+i+':b','JM'+i],['JM'+i,'S1'+i+':s'],['S1'+i+':d','JV'+i],['JM'+i,'S2'+i+':d'],['S2'+i+':s','GS'+i+':g']);
     if(k<N-1)wires.push(['JB'+i,'JB'+(i+1)],['JV'+i,'JV'+(i+1)]);}
-   const panes=[[...[...Array(N).keys()].map(k=>['I:L'+(k+1),'i_L'+(k+1)])],[['I:VB','i_Σ (ζυγός)']]];
+   const panes=[[...[...Array(N).keys()].map(k=>['I:L'+(k+1),'i_L'+(k+1)])],[['I:VB','i_Σ (ζυγός)']],[...[...Array(N).keys()].map(k=>['GS:S2'+(k+1),'g_S2.'+(k+1)])]];
    const slow=mis!=='none'||pi;
    return project(comps,wires,{sim:{hDiv:slow?200:400,speed:slow?400:20,stopT:slow?.02:0},scope:{panes,window:slow?{unit:'T',n:400}:{unit:'T',n:3}},
     meta:{N,vbus,vst,P,fs,T:Tsw,L,D,Ik,dI,shift,phases,canc,vmin:60,vmax:100,Lmin:dd.L,L20:d20.L,Ipk:dd.Ipk,k:.3,pi,mis,Rs,R2:Rk(1),L2:Lk(1)}});}});

@@ -95,6 +95,16 @@ class BatchSolver(unittest.TestCase):
         r = self.run_case('share_dcr', 0.02, 'LSODA')
         self.assertAlmostEqual(mean_window(r, 'I:L2', 0.0195, 0.02), -200 * 5 / 7.5, delta=0.3)
 
+    def test_gate_pulses(self):
+        r = self.run_case('pulses', 0.0005, 'LSODA')                             # 200 ns dead time, T = 50 μs
+        t, g1, g2 = np.array(r['t']), np.array(r['ch']['GS:S1']), np.array(r['ch']['GS:S2'])
+        self.assertFalse(np.any((g1 > .5) & (g2 > .5)))                          # never both ON
+        D, T = r['ch']['D:PWM1'][-1], 50e-6
+        w = (t >= 0.0005 - T - 1e-12)
+        tw, gw = t[w], g2[w]
+        on2 = float(np.sum(np.diff(tw) * (gw[1:] + gw[:-1]) / 2)) / T
+        self.assertAlmostEqual(on2, D - 200e-9 / T, delta=1e-6)                  # D·T − t_d, as in the browser
+
     def test_explicit_method_reports_stiffness(self):
         r = self.run_case('buck_dcm', 2e-3, 'RK45', wall=2)
         self.assertIn(r['status'], ('ok', 'timeout'))

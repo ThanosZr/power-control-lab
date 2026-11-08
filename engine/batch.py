@@ -434,6 +434,10 @@ class Circuit:
             return float(self.shs[rec['sh']]['h'])
         if 'car' in rec:
             return float(self.ctrls[rec['car']].carrier_at(t))
+        if 'sw' in rec:                 # gate pulse of one switch (after dead time)
+            i = rec['sw']
+            on = self.on.get(i, False) if self.els[i]['k'] == 'S' else self.gon.get(i, False)
+            return 1.0 if on else 0.0
         return 0.0
 
     def current(self, i, t, x, z):

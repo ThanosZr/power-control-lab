@@ -88,5 +88,10 @@ function shCirc(pwm,sh){const p=bidir({D:.5,...pwm},-800);p.components.push({id:
 // 14) double duty update: a D change before the carrier minimum moves the turn-off edge of the same period
 for(const upd of ['single','double']){const T=50e-6,s=new Sim(bidir({D:.5,carrier:'triangle',upd,dsched:`0:0.5, ${10.25*T}:0.6`},-800),{hDiv:500});const E=[];let g=s.now('G:PWM1');
  while(s.t<12*T-1e-12){s.run(T/500);const g2=s.now('G:PWM1');if(g2!==g){E.push([s.t/T,g2]);g=g2;}}out['upd_'+upd]=E.filter(e=>e[0]>9.9);}
+// 15) gate pulse of each switch (after dead time): never both ON, ON time D·T − t_d and (1 − D)·T − t_d
+{const T=50e-6,s=new Sim(bidir({D:.3,carrier:'saw',dt:1e-6},-800),{hDiv:500});s.run(10*T);const r=s.ring,nch=r.nch,st=(r.head-r.n+r.cap)%r.cap,i1=s.chIndex.get('GS:S1'),i2=s.chIndex.get('GS:S2');
+ let both=0,on1=0,on2=0,pt=null,p1=0,p2=0;const vert=[];for(let k=0;k<r.n;k++){const j=(st+k)%r.cap,t=r.t[j],g1=r.d[j*nch+i1],g2=r.d[j*nch+i2];if(g1&&g2)both++;
+  if(pt!==null&&pt>=9*T-1e-12&&t<=10*T+1e-12){const h=t-pt;on1+=h*p1;on2+=h*p2;}if(pt!==null&&t===pt&&g2!==p2)vert.push(t/T);pt=t;p1=g1;p2=g2;}
+ out.pulses={both,on1:on1/T,on2:on2/T,vert:vert.slice(-4),keys:['GS:S1','GS:S2'].every(k=>s.chIndex.has(k))};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

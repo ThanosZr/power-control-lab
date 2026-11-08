@@ -53,6 +53,14 @@ class StudioSimulator(unittest.TestCase):
         self.assertAlmostEqual(p['meas'], p['hold'], delta=1e-9)
         self.assertAlmostEqual(p['hold'], p['lastSample'], delta=1e-9)
 
+    def test_gate_pulses(self):
+        p = self.o['pulses']                                                     # GS:<switch> = gate after dead time
+        self.assertTrue(p['keys'])
+        self.assertEqual(p['both'], 0)                                           # complementary outputs never overlap
+        self.assertAlmostEqual(p['on2'], 0.3 - 0.02, delta=1e-6)                 # D·T − t_d, t_d = T/50
+        self.assertAlmostEqual(p['on1'], 0.7 - 0.02, delta=1e-6)
+        self.assertTrue(p['vert'])                                               # edges drawn vertically (two points at t_e)
+
     def test_double_update(self):
         single, double = self.o['upd_single'], self.o['upd_double']
         self.assertAlmostEqual(single[1][0], 10.75, delta=0.003)                 # new D waits for the next period

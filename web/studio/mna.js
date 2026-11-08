@@ -169,6 +169,7 @@
     if(c.type==='XFMR')k.push('V2:'+c.id,'I2:'+c.id,'Im:'+c.id);
     if(c.type==='VAC3')k.push('Vb:'+c.id,'Vc:'+c.id,'Ib:'+c.id,'Ic:'+c.id,'Vab:'+c.id);
     if(c.loss)k.push('PSW:'+c.id);
+    if(c.type==='SW'||c.type==='SCR')k.push('GS:'+c.id);
    }
    return k;
   }
@@ -201,6 +202,7 @@
     out[j++]=v;out[j++]=i;out[j++]=src?v*i:v*i;
     if(c.type==='XFMR'){const v2=this.V(c.pins2[0])-this.V(c.pins2[1]);const is=this.x[c.main.row]*(c.opp?-1:1);out[j++]=v2;out[j++]=is;out[j++]=c.mag.i;}
     if(c.loss)out[j++]=c.loss.P;
+    if(c.type==='SW'||c.type==='SCR'){const e=c.main;out[j++]=(e.k==='S'?e.on:e.gon)?1:0;} // the gate pulse this switch receives (after dead time)
    }
    return out;
   }
@@ -489,6 +491,7 @@
    if(pre==='N'){const n=net.nets.find(x=>x.canon===key.slice(2));return n?{v:[[n.index,1]]}:null;}
    if(['D','G','REF','MEAS','CAR'].includes(pre)){const k=cix.get(id);if(k===undefined)return null;return pre==='G'?{gate:[k,'a']}:pre==='CAR'?{car:k}:{ctrl:[k,{D:'d',REF:'refNow',MEAS:'meas'}[pre]]};}
    if(pre==='H'){const q=shx.get(id);return q===undefined?null:{sh:q};}
+   if(pre==='GS'){const c=ci(id);return c&&c.main&&(c.type==='SW'||c.type==='SCR')?{sw:idx.get(c.main)}:null;}
    const c=ci(id);if(!c)return null;
    if(c.type==='VAC3'){const ph=c.phases,pv=q=>vd(q.pin,c.n),pi=q=>({i:[[idx.get(q.e),1]]});
     return {V:pv(ph[0]),I:pi(ph[0]),P:{sum:ph.map(q=>({prod:[pv(q),pi(q)]}))},Vb:pv(ph[1]),Vc:pv(ph[2]),Ib:pi(ph[1]),Ic:pi(ph[2]),Vab:vd(ph[0].pin,ph[1].pin)}[pre]||null;}

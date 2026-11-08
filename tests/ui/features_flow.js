@@ -52,6 +52,12 @@ const {chromium}=require('playwright');
  await p.click('[data-ilv="common"]');await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.sim.T*10);window.PCL.pause();});
  ok(await p.evaluate(()=>{const q=window.PCL.S.sim.lastPeriod('I:VB');return Math.abs(q.max-q.min-180)<0.5&&[1,2,3,4].every(k=>window.PCL.editor.comp('PWM'+k).params.phase===0);}),'live in-phase toggle');
  ok((await p.$$eval('#math-tpl option',o=>o.map(x=>x.value)))[0]==='pe2_polyphase','polyphase template first');
+ // gate pulses: a lane per leg in the default scope, and the "all pulses" button rebuilds it
+ const lanes=()=>p.evaluate(()=>window.PCL.scope.cfg.panes.filter(q=>q.ch.length&&q.ch.every(c=>c.key.startsWith('GS:'))).map(q=>q.ch.map(c=>c.key).join(',')));
+ ok((await lanes()).join()==='GS:S21,GS:S22,GS:S23,GS:S24','pulse lanes by default');
+ await p.evaluate(()=>{for(const k of [1,2,3,4])window.PCL.scope.removeChannel('GS:S2'+k);});ok(!(await lanes()).length,'lanes removed');
+ await p.click('[data-ilv="shift"]');await p.click('[data-pulse-all]');await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.sim.T*3);window.PCL.pause();window.PCL.scope.cfg.window={unit:'T',n:2};window.PCL.scope.draw();});
+ ok((await lanes()).join()==='GS:S21,GS:S22,GS:S23,GS:S24','pulse button → lanes');await p.waitForTimeout(300);await (await p.$('#scope-card')).screenshot({path:'pulse_lanes.png'});
  // CSV reference: export the scope, import it back, and compare (differences ~0)
  await p.click('#cr-block summary');const [dl]=await Promise.all([p.waitForEvent('download'),p.click('#csv')]);await p.setInputFiles('#cr-file',await dl.path());await p.waitForTimeout(400);
  await p.click('#cr-apply');await p.waitForTimeout(600);const cr=await p.$eval('#cr-out',e=>e.textContent);ok(/Σύγκριση με CSV/.test(cr)&&/i_Σ \(ζυγός\)/.test(cr),'CSV reference table');

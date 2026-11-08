@@ -6,7 +6,9 @@
 //  * hover readout, two pinned cursors (click / Shift+click), window statistics
 (function(root){
  const COLORS=['#147966','#c47a1c','#2f5fa0','#b03a5b','#6b4fa0','#3d8b3d','#1f8fa0','#8a5a2b'];
- const UNIT={V:'V',I:'A',P:'W',N:'V',VN:'V',V2:'V',I2:'A',Im:'A',Vb:'V',Vc:'V',Vab:'V',Ib:'A',Ic:'A',PSW:'W',D:'',G:'',REF:'',MEAS:'',CAR:''};
+ const UNIT={V:'V',I:'A',P:'W',N:'V',VN:'V',V2:'V',I2:'A',Im:'A',Vb:'V',Vc:'V',Vab:'V',Ib:'A',Ic:'A',PSW:'W',D:'',G:'',GS:'',REF:'',MEAS:'',CAR:''};
+ // on/off signals: a pane holding only these draws each one in its own lane
+ const LOGIC=new Set(['G','GS']);const isLogic=key=>LOGIC.has(key.split(':')[0]);
  function niceStep(span,n){const raw=span/Math.max(1,n),p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;return (m<1.5?1:m<3.5?2:m<7.5?5:10)*p;}
  function fmtT(t,step,tmax){const m=Math.max(Math.abs(tmax??t),step);const [k,u]=m<1e-6?[1e9,'ns']:m<1e-3?[1e6,'μs']:m<1?[1e3,'ms']:[1,'s'];const d=Math.max(0,Math.ceil(-Math.log10(step*k)-1e-9));return (t*k).toLocaleString('el-GR',{minimumFractionDigits:d,maximumFractionDigits:d,useGrouping:false})+' '+u;}
  const eng=(v,u)=>root.Parts.eng(v,u,4);
@@ -94,23 +96,25 @@
    this.layout=[];
    panes.forEach((pane,pi)=>{
     const y0=top+pi*(ph+gap),y1=y0+ph;const chans=pane.ch.filter(ch=>ch.on);
+    // gate pulses only: one lane per signal (0 at the bottom of the lane, 1 at 80 % of it)
+    const lanes=chans.length>=2&&chans.every(ch=>isLogic(ch.key)),nL=chans.length,tfs=chans.map((ch,k)=>lanes?(v=>v*.8+(nL-1-k)*1.2):(v=>v));
     // y range
     let lo=Infinity,hi=-Infinity;const data=[];
-    for(const ch of chans){const ci=this.resolve(ch.key);if(ci===-1){data.push(null);continue;}
-     const cols=new Map();
-     if(periods){const pts=[];this.eachPeriod(ci,t0,t1,(t,a,mn,mx)=>{pts.push([t,a,mn,mx]);lo=Math.min(lo,mn);hi=Math.max(hi,mx);});data.push({ch,pts,kind:'per'});}
-     else{const arr=[];this.eachRaw(ci,t0,t1,(t,v)=>{arr.push(t,v);if(t>=t0&&t<=t1){if(v<lo)lo=v;if(v>hi)hi=v;}});data.push({ch,arr,kind:'raw'});}
-     void cols;}
-    for(const ch of chans)this.refRange(ch.key,t0,t1,(t,v)=>{if(t>=t0&&t<=t1){if(v<lo)lo=v;if(v>hi)hi=v;}});
-    if(pane.y&&pane.y.auto===false&&Number.isFinite(pane.y.min)&&Number.isFinite(pane.y.max)&&pane.y.max>pane.y.min){lo=pane.y.min;hi=pane.y.max;}
+    chans.forEach((ch,k)=>{const ci=this.resolve(ch.key),f=tfs[k];if(ci===-1){data.push(null);return;}
+     if(periods){const pts=[];this.eachPeriod(ci,t0,t1,(t,a,mn,mx)=>{pts.push([t,f(a),f(mn),f(mx)]);lo=Math.min(lo,f(mn));hi=Math.max(hi,f(mx));});data.push({ch,pts,kind:'per',f});}
+     else{const arr=[];this.eachRaw(ci,t0,t1,(t,v)=>{v=f(v);arr.push(t,v);if(t>=t0&&t<=t1){if(v<lo)lo=v;if(v>hi)hi=v;}});data.push({ch,arr,kind:'raw',f});}});
+    chans.forEach((ch,k)=>this.refRange(ch.key,t0,t1,(t,v)=>{v=tfs[k](v);if(t>=t0&&t<=t1){if(v<lo)lo=v;if(v>hi)hi=v;}}));
+    if(lanes){lo=-.25;hi=(nL-1)*1.2+1.4;}
+    else if(pane.y&&pane.y.auto===false&&Number.isFinite(pane.y.min)&&Number.isFinite(pane.y.max)&&pane.y.max>pane.y.min){lo=pane.y.min;hi=pane.y.max;}
     else{if(!Number.isFinite(lo)){lo=-1;hi=1;}if(pane.zero){lo=Math.min(lo,0);hi=Math.max(hi,0);}const pad=(hi-lo)*.08||Math.max(Math.abs(hi)*.05,1e-6);lo-=pad;hi+=pad;}
-    const Y=v=>y1-(v-lo)/(hi-lo)*(y1-y0);this.layout.push({y0,y1,lo,hi,Y,chans});
+    const Y=v=>y1-(v-lo)/(hi-lo)*(y1-y0);this.layout.push({y0,y1,lo,hi,Y,chans,tfs});
     // grid
     c.strokeStyle=grid;c.lineWidth=1;c.fillStyle=ink;c.font='10.5px ui-monospace,Menlo,Consolas,monospace';c.textAlign='right';c.textBaseline='middle';
     const ys=niceStep(hi-lo,Math.max(2,Math.floor(ph/34)));const unit=chans.length?Scope.unitOf(chans[0].key,s):'';
-    for(let v=Math.ceil(lo/ys)*ys;v<=hi;v+=ys){const y=Y(v);c.beginPath();c.moveTo(this.padL,y);c.lineTo(W-this.padR,y);c.stroke();c.fillText(eng(Math.abs(v)<ys*1e-6?0:v,unit),this.padL-6,y);}
+    if(lanes)chans.forEach((ch,k)=>{for(const v of [0,1]){const y=Y(tfs[k](v));c.beginPath();c.moveTo(this.padL,y);c.lineTo(W-this.padR,y);c.stroke();c.fillStyle=v?ch.color:ink;c.fillText(v?'1':'0',this.padL-6,y);}c.fillStyle=ink;});
+    else for(let v=Math.ceil(lo/ys)*ys;v<=hi;v+=ys){const y=Y(v);c.beginPath();c.moveTo(this.padL,y);c.lineTo(W-this.padR,y);c.stroke();c.fillText(eng(Math.abs(v)<ys*1e-6?0:v,unit),this.padL-6,y);}
     for(let t=Math.ceil(t0/xs)*xs;t<=t1;t+=xs){const x=X(t);c.beginPath();c.moveTo(x,y0);c.lineTo(x,y1);c.stroke();}
-    if(lo<0&&hi>0){c.strokeStyle='#b8c7c1';c.beginPath();c.moveTo(this.padL,Y(0));c.lineTo(W-this.padR,Y(0));c.stroke();}
+    if(lo<0&&hi>0&&!lanes){c.strokeStyle='#b8c7c1';c.beginPath();c.moveTo(this.padL,Y(0));c.lineTo(W-this.padR,Y(0));c.stroke();}
     c.strokeStyle='#c9d6d1';c.strokeRect(this.padL+.5,y0+.5,pw-1,ph-1);
     // traces
     c.save();c.beginPath();c.rect(this.padL,y0,pw,ph);c.clip();
@@ -123,7 +127,7 @@
       const flush=()=>{if(col0<0)return;const x=this.padL+col0+.5;if(!started){c.moveTo(x,Y(first));started=true;}else c.lineTo(x,Y(first));c.lineTo(x,Y(mn));c.lineTo(x,Y(mx));c.lineTo(x,Y(last));};
       for(let i=0;i<n;i++){const cx=Math.floor(X(arr[2*i])-this.padL),v=arr[2*i+1];if(cx!==col0){flush();col0=cx;mn=mx=first=last=v;}else{if(v<mn)mn=v;if(v>mx)mx=v;last=v;}}flush();c.stroke();}
      // reference trace (server solver), dashed in the same colour
-     if(this.refs?.data?.[d.ch.key]){const pts=[];this.refRange(d.ch.key,t0,t1,(t,v)=>pts.push(t,v));const m=pts.length/2;c.save();c.setLineDash([6,4]);c.lineWidth=1.4;c.strokeStyle='#18353a';c.globalAlpha=.75;c.beginPath();
+     if(this.refs?.data?.[d.ch.key]){const pts=[];this.refRange(d.ch.key,t0,t1,(t,v)=>pts.push(t,d.f(v)));const m=pts.length/2;c.save();c.setLineDash([6,4]);c.lineWidth=1.4;c.strokeStyle='#18353a';c.globalAlpha=.75;c.beginPath();
       if(m<=pw*2){for(let i=0;i<m;i++){const x=X(pts[2*i]),y=Y(pts[2*i+1]);i?c.lineTo(x,y):c.moveTo(x,y);}}
       else{let col0=-1,mn=0,mx=0,first=0,last=0,st=false;const fl=()=>{if(col0<0)return;const x=this.padL+col0+.5;if(!st){c.moveTo(x,Y(first));st=true;}else c.lineTo(x,Y(first));c.lineTo(x,Y(mn));c.lineTo(x,Y(mx));c.lineTo(x,Y(last));};
        for(let i=0;i<m;i++){const cx=Math.floor(X(pts[2*i])-this.padL),v=pts[2*i+1];if(cx!==col0){fl();col0=cx;mn=mx=first=last=v;}else{if(v<mn)mn=v;if(v>mx)mx=v;last=v;}}fl();}
@@ -131,7 +135,7 @@
      // Sample & Hold: a dot at every sampling instant (t_k, value at t_k)
      if(d.ch.key.startsWith('H:'))this.drawSamples(d.ch,t0,t1,X,Y);
      // average line of the last complete period (dashed) when enabled
-     if(this.cfg.avgLine){const st=this.stats(d.ch.key);if(st){c.setLineDash([5,4]);c.lineWidth=1;c.beginPath();c.moveTo(this.padL,Y(st.avg));c.lineTo(W-this.padR,Y(st.avg));c.stroke();c.setLineDash([]);}}
+     if(this.cfg.avgLine){const st=this.stats(d.ch.key);if(st){c.setLineDash([5,4]);c.lineWidth=1;c.beginPath();c.moveTo(this.padL,Y(d.f(st.avg)));c.lineTo(W-this.padR,Y(d.f(st.avg)));c.stroke();c.setLineDash([]);}}
     }
     // changes made while running (live parameters)
     const chg=(s.changes||[]).filter(q=>q.t>=t0&&q.t<=t1);if(chg.length){c.strokeStyle='#6b4fa0';c.globalAlpha=.7;c.setLineDash([2,3]);for(const q of chg){const x=X(q.t);c.beginPath();c.moveTo(x,y0);c.lineTo(x,y1);c.stroke();}c.setLineDash([]);c.globalAlpha=1;
@@ -150,9 +154,9 @@
    if(this.refs){c.textBaseline='top';c.font='600 10.5px Inter,system-ui,sans-serif';const lbl='- - -  '+this.refs.label,w=c.measureText(lbl).width;c.fillStyle='#ffffffd9';c.fillRect(W-this.padR-w-10,top+3,w+8,15);c.fillStyle='#18353a';c.fillText(lbl,W-this.padR-6,top+5);}
    // hover readout
    if(this.hoverX!==null&&this.hoverX>this.padL&&this.hoverX<W-this.padR){const t=t0+(this.hoverX-this.padL)/pw*span;c.strokeStyle='#7b8e8899';c.beginPath();c.moveTo(this.hoverX+.5,top);c.lineTo(this.hoverX+.5,H-bottom);c.stroke();
-    const rows=[];for(const L of this.layout)for(const ch of L.chans){const ci=this.resolve(ch.key);if(ci===-1)continue;const v=periods?NaN:this.valueAt(ci,t);rows.push([ch,v]);if(Number.isFinite(v)){c.fillStyle=ch.color;c.beginPath();c.arc(this.hoverX,L.Y(v),3,0,7);c.fill();}}
+    const rows=[];for(const L of this.layout)L.chans.forEach((ch,k)=>{const ci=this.resolve(ch.key);if(ci===-1)return;const v=periods?NaN:this.valueAt(ci,t);rows.push([ch,v]);if(Number.isFinite(v)){c.fillStyle=ch.color;c.beginPath();c.arc(this.hoverX,L.Y(L.tfs[k](v)),3,0,7);c.fill();}});
     this.opt.onhover?.({t,rows});}
   }
  }
- Scope.COLORS=COLORS;root.Scope=Scope;
+ Scope.COLORS=COLORS;Scope.isLogic=isLogic;root.Scope=Scope;
 })(window);

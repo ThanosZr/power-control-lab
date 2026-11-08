@@ -63,12 +63,12 @@ function liveOf(c){const s=S.sim;if(!s||S.error)return null;if(c.type==='GND'||c
 // ------------------------------------------------------------------ channels
 function chanLabel(key){const [pre,id,pin]=key.split(':');const c=editor.comp(id);const name=c?.label||id;
  if(pre==='VN'){const w=editor.doc.wires.find(w=>w.name&&((w.a.c===id&&w.a.p===pin)||(w.b.c===id&&w.b.p===pin)));return w?w.name:'v('+(c?.type==='JUNC'?'κόμβος '+id:name+'.'+pin)+')';}
- const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold'}[pre]||pre)+'('+name+')';}
+ const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',GS:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold'}[pre]||pre)+'('+name+')';}
 function addProbe(key,label){if(!S.sim)return;const ok=scope.addChannel(key,label||chanLabel(key));renderChannels();if(!ok)flash('#chan-list');else{flash('#scope-card');}draw(true);}
 function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash');}
 function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC')return [];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
  if(t==='SH')return [['H:','κρατημένη τιμή (δείγματα)']];
- const base=[['I:','ρεύμα'],['V:','τάση'],['P:',['VDC','VAC','IDC'].includes(t)?'ισχύς που δίνει':'ισχύς']];if(t==='SW'&&(+c.params?.Eon>0||+c.params?.Eoff>0))base.push(['PSW:','απώλειες μεταγωγής (μέση ανά T)']);
+ const base=[['I:','ρεύμα'],['V:','τάση'],['P:',['VDC','VAC','IDC'].includes(t)?'ισχύς που δίνει':'ισχύς']];if(t==='SW'||t==='SCR')base.splice(1,0,['GS:','παλμός πύλης (1 = ON)']);if(t==='SW'&&(+c.params?.Eon>0||+c.params?.Eoff>0))base.push(['PSW:','απώλειες μεταγωγής (μέση ανά T)']);
  if(t==='VAC3')return [['I:','ρεύμα φάσης a'],['Ib:','ρεύμα φάσης b'],['Ic:','ρεύμα φάσης c'],['V:','τάση v_an'],['Vb:','τάση v_bn'],['Vc:','τάση v_cn'],['Vab:','πολική τάση v_ab'],['P:','ισχύς που δίνει (3φ)']];if(t==='XFMR')return [['I:','ρεύμα πρωτεύοντος'],['V:','τάση πρωτεύοντος'],['I2:','ρεύμα δευτερεύοντος'],['V2:','τάση δευτερεύοντος'],['Im:','ρεύμα μαγνήτισης'],['P:','ισχύς']];return base;}
 function renderChannels(){
  const sel=$('#add-signal');const opts=['<option value="">+ Σήμα στο scope…</option>'];
@@ -226,6 +226,13 @@ function updateLivePanel(){const s=S.sim;if(!s||$('#live-panel')?.hidden)return;
  for(const el of $$('#live-controls [data-dnow]')){const v=s.now('D:'+el.dataset.dnow);el.textContent=Number.isFinite(v)?'D = '+fmt(v,5):'';}}
 function setLivePanel(show){const pnl=$('#live-panel'),btn=$('#lp-toggle');if(!pnl)return;pnl.hidden=!show;btn?.classList.toggle('on',show);btn?.setAttribute('aria-pressed',String(show));
  try{localStorage.setItem('pcl2-live-panel',show?'1':'0');}catch{}if(show)updateLivePanel();}
+// switches driven by one PWM block, the main output (g) first
+function switchesOf(pwmId){const o={a:0,na:1,b:2,nb:3};return editor.doc.components.filter(c=>(c.type==='SW'&&(c.params?.gate||'pwm')==='pwm'||c.type==='SCR'&&c.params?.fire==='pwm')&&c.params?.pwm===pwmId)
+ .sort((x,y)=>(o[x.params.out||'a']??0)-(o[y.params.out||'a']??0)||x.id.localeCompare(y.id,undefined,{numeric:true}));}
+// gate pulses to the scope, in a pane of their own (drawn as stacked lanes)
+function addPulses(keys){if(!S.sim||!keys.length)return;const panes=scope.cfg.panes;let pi=panes.findIndex(p=>p.ch.length&&p.ch.every(ch=>Scope.isLogic(ch.key)));
+ if(pi<0)pi=panes.length===1&&!panes[0].ch.length?0:Math.min(panes.length,3);let any=false;for(const k of keys)any=scope.addChannel(k,chanLabel(k),pi)||any;renderChannels();flash(any?'#scope-card':'#chan-list');draw(true);}
+function pulseKeys(pwmId){const sw=switchesOf(pwmId);return sw.length?sw.map(c=>'GS:'+c.id):['G:'+pwmId];}
 function refreshControls(){
  const box=$('#live-controls');if(!box)return;const pw=editor.doc.components.filter(c=>c.type==='PWM');const meta=S.tutMeta||{};
  const phase=(c,p)=>{if(p.mode==='spwm')return '';const ph=((+p.phase||0)%360+360)%360;
@@ -236,13 +243,14 @@ function refreshControls(){
  const phasePw=pw.filter(c=>({...P.defaults('PWM'),...c.params}).mode!=='spwm').sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
  let group='';if(phasePw.length>=2){const p0={...P.defaults('PWM'),...(fixedPw[0]||phasePw[0]).params};
   group=`<div class="ctl ctl-group">${fixedPw.length>=2?`<label>Όλα τα PWM (${fixedPw.length}) · D <output data-dallout>${fmt(+p0.D,4)}</output></label><input type="range" min="0" max="1" step="0.0005" value="${+p0.D}" data-dall aria-label="Κοινό D">`:`<label>Όλα τα PWM (${phasePw.length}) · φάσεις</label>`}
-   <div class="ctl-btns"><button data-ilv="common" title="Ίδια φάση σε όλα τα φέροντα">Συμφασικά</button><button data-ilv="shift" title="Το k-οστό φέρον καθυστερεί k·T/N">Μετατοπισμένα k·T/N</button></div><small>Η φάση κάθε φέροντος αλλάζει από την επόμενη περίοδό του.</small></div>`;}
+   <div class="ctl-btns"><button data-ilv="common" title="Ίδια φάση σε όλα τα φέροντα">Συμφασικά</button><button data-ilv="shift" title="Το k-οστό φέρον καθυστερεί k·T/N">Μετατοπισμένα k·T/N</button></div><small>Η φάση κάθε φέροντος αλλάζει από την επόμενη περίοδό του.</small><div class="ctl-btns ctl-probe"><button data-pulse-all title="Ένας παλμός ανά PWM (η κύρια έξοδος g), ο καθένας στη δική του λωρίδα">⌁ παλμοί όλων (${phasePw.length})</button></div></div>`;}
  const per=pw.map(c=>{const p={...P.defaults('PWM'),...c.params};let h='';
   if(p.mode==='fixed'||p.mode==='pp')h=`<label>${esc(c.label||c.id)} · D <output data-dout="${c.id}">${fmt(+p.D,4)}</output></label><input type="range" min="0" max="1" step="0.0005" value="${+p.D}" data-d="${c.id}">
    <div class="ctl-btns"><button data-dd="${c.id}" data-step="-0.01">−0,01</button><button data-dd="${c.id}" data-step="-0.001">−0,001</button>${meta.D0!==undefined?`<button data-dset="${c.id}" data-val="${meta.D0}">D₀ = ${fmt(meta.D0,4)}</button>`:''}<button data-dd="${c.id}" data-step="0.001">+0,001</button><button data-dd="${c.id}" data-step="0.01">+0,01</button></div>${p.dsched?'<small>Υπάρχει πρόγραμμα D(t)· η χειροκίνητη αλλαγή το απενεργοποιεί.</small>':''}`;
   else if(p.mode==='pi')h=`<label>${esc(c.label||c.id)} · αναφορά ${+p.Kd?'PID':'PI'} <output data-dnow="${c.id}"></output></label><div class="ctl-row"><input data-ref="${c.id}" value="${esc(p.ref)}"><button data-refapply="${c.id}">Εφαρμογή</button></div><small>Σταθερή τιμή ή πρόγραμμα «t:τιμή». K_p = ${eng(+p.Kp)}, K_i = ${eng(+p.Ki)}${+p.Kd?`, K_d = ${eng(+p.Kd)}`:''}.${editor.comp(p.sensor)?.type==='SH'?` Μετρά το δείγμα του ${esc(editor.comp(p.sensor).label||p.sensor)}.`:''}</small>`;
   else if(p.mode==='spwm')h=`<label>${esc(c.label||c.id)} · m <output data-mout="${c.id}">${fmt(+p.m,3)}</output></label><input type="range" min="0" max="1.2" step="0.01" value="${+p.m}" data-m="${c.id}">`;
-  return `<div class="ctl">${h}${phase(c,p)}</div>`;}).join('');
+  const sw=switchesOf(c.id);const probe=`<div class="ctl-btns ctl-probe"><button data-probe-d="${c.id}" title="Το duty D στο scope">⌁ D</button><button data-pulse="${c.id}" title="${sw.length?'Ο παλμός πύλης κάθε διακόπτη: '+esc(sw.map(x=>x.label||x.id).join(', ')):'Ο παλμός g του PWM'}">⌁ παλμ${sw.length>1?'οί':'ός'} ${esc(sw.length?sw.map(x=>x.label||x.id).join(', '):'g')}</button></div>`;
+  return `<div class="ctl">${h}${probe}${phase(c,p)}</div>`;}).join('');
  box.innerHTML=group+(pw.length>=3?`<details class="ctl-more"><summary>Ανά PWM (${pw.length})</summary>${per}</details>`:per);
  const trigOpts=P.PARTS.SH.params.find(d=>d.k==='trig').options;
  box.innerHTML+=editor.doc.components.filter(c=>c.type==='SH').map(c=>{const p={...P.defaults('SH'),...c.params};
@@ -266,6 +274,9 @@ function refreshControls(){
  $$('#live-controls [data-ph]').forEach(r=>{r.oninput=()=>setPh(r.dataset.ph,+r.value,false);r.onchange=()=>setPh(r.dataset.ph,+r.value,true);});
  $$('#live-controls [data-phset]').forEach(b=>b.onclick=()=>setPh(b.dataset.phset,+b.dataset.val,true));
  const dall=box.querySelector('[data-dall]');if(dall){const f=commit=>{for(const c of fixedPw)setD(c.id,+dall.value,commit);box.querySelector('[data-dallout]').textContent=fmt(+dall.value,4);};dall.oninput=()=>f(false);dall.onchange=()=>f(true);}
+ $$('#live-controls [data-probe-d]').forEach(b=>b.onclick=()=>addProbe('D:'+b.dataset.probeD));
+ $$('#live-controls [data-pulse]').forEach(b=>b.onclick=()=>addPulses(pulseKeys(b.dataset.pulse)));
+ box.querySelector('[data-pulse-all]')?.addEventListener('click',()=>addPulses(phasePw.map(c=>pulseKeys(c.id)[0])));
  $$('#live-controls [data-ilv]').forEach(b=>b.onclick=()=>{const n=phasePw.length;phasePw.forEach((c,k)=>setPh(c.id,b.dataset.ilv==='shift'?+(360*k/n).toFixed(6):0,true));});
  $$('#live-controls [data-trig]').forEach(el=>el.onchange=()=>{const id=el.dataset.trig,c=editor.comp(id);if(!c)return;const from=c.params.trig;c.params.trig=el.value;S.sim?.setHold(id,{trig:el.value});editor.renderLabels();
   liveChange(id,'trig',el.value,`${c.label||id}: ${el.selectedOptions[0].textContent.split(' (')[0].split(' · ')[0]}`,from);saveLocal();if(S.theory)renderTheory();});
@@ -284,7 +295,7 @@ function fieldHTML(c,def,p){const v=p[def.k]??def.def;const id='f_'+def.k;
 function openInspector(id,x,y){
  const c=editor.comp(id);if(!c)return;const def=P.PARTS[c.type];const p={...P.defaults(c.type),...c.params};const ins=$('#inspector');
  const rows=def.params.filter(d=>!d.show||d.show(p)).map(d=>`<label class="frow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span>${fieldHTML(c,d,p)}${d.hint?`<small>${esc(d.hint)}</small>`:''}</label>`).join('');
- const sig=signalsFor(c).slice(0,3).map(([pre,n])=>`<button class="chip" data-probe="${pre}${c.id}">⌁ ${esc(n)}</button>`).join('');
+ const sig=signalsFor(c).slice(0,4).map(([pre,n])=>`<button class="chip" data-probe="${pre}${c.id}">⌁ ${esc(n)}</button>`).join('');
  ins.innerHTML=`<div class="ins-head"><div><small>${esc(def.name)}</small><input class="ins-label" data-label value="${esc(c.label||c.id)}"></div><button class="x" data-close>✕</button></div>
   <div class="ins-body">${rows||'<p class="muted small">Χωρίς παραμέτρους.</p>'}</div>${sig?`<div class="ins-probes">${sig}</div>`:''}
   <div class="ins-foot"><small>Οι αλλαγές εφαρμόζονται αμέσως, και ενώ τρέχει η προσομοίωση. Μονάδες SI με προθέματα: 5.6u, 100m, 20k.</small></div>`;
@@ -333,7 +344,7 @@ function updateHover(){const tip=$('#tip');if(!hoverComp||!S.sim){tip.hidden=tru
  const s=S.sim;let html=`<b>${esc(c.label||c.id)}</b>`;
  if(c.type==='PWM')html+=`<div>D = ${fmt(s.now('D:'+c.id),5)} · φέρον c = ${fmt(s.now('CAR:'+c.id),4)}</div>${c.params.mode==='pi'?`<div>ref ${eng(s.now('REF:'+c.id))} · μέτρ. ${eng(s.now('MEAS:'+c.id))}</div>`:''}`;
  else if(c.type==='SH'){const q=s.shById.get(c.id),u=q?.qty==='V'?'V':'A';html+=q?`<div>κρατημένη τιμή ${eng(q.h,u)}</div><div>${q.n} δείγματα${q.log.t.length?` · τελευταίο στο ${eng(q.log.t[q.log.t.length-1],'s',5)}`:''}</div>`:'';}
- else{const lp=k=>s.lastPeriod(k);const rows=[['v','V:'+c.id,'V'],['i','I:'+c.id,'A'],['p','P:'+c.id,'W']];if(c.type==='XFMR')rows.push(['i_m','Im:'+c.id,'A'],['i₂','I2:'+c.id,'A']);
+ else{const lp=k=>s.lastPeriod(k);const rows=[['v','V:'+c.id,'V'],['i','I:'+c.id,'A'],['p','P:'+c.id,'W']];if(c.type==='SW'||c.type==='SCR')rows.unshift(['g','GS:'+c.id,'']);if(c.type==='XFMR')rows.push(['i_m','Im:'+c.id,'A'],['i₂','I2:'+c.id,'A']);
   html+='<table>'+rows.map(([n,k,u])=>`<tr><td>${n}</td><td>${eng(s.now(k),u)}</td><td class="muted">⌀ ${eng(lp(k)?.avg,u)}</td></tr>`).join('')+'</table>';}
  tip.innerHTML=html;tip.hidden=false;tip.style.left=(hoverPos[0]+16)+'px';tip.style.top=(hoverPos[1]+16)+'px';}
 
