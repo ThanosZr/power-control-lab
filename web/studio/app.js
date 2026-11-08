@@ -43,7 +43,7 @@ function loop(now){
  if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){pause();notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
  requestAnimationFrame(loop);
 }
-function draw(all){scope.draw();navRange();if(all||S.frame%3===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();}if(all||S.frame%8===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();}if(all){if(!S.running)renderFFT();if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
+function draw(all){scope.draw();navRange();if(all||S.frame%3===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();}if(all||S.frame%8===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();}if(all){if(!S.running&&!S.switching){renderFFT();renderPoincare();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
 function navRange(){const el=$('#nav-range');if(!el||el.offsetParent===null||!S.sim)return;const [a,b]=scope.viewRange();el.textContent=`${eng(a,'s',4)} … ${eng(b,'s',4)} · ${fmt((b-a)/S.sim.T,3)} T${scope.cfg.frozen?' · σταθερή προβολή':' · ζωντανά'}`;}
 function updateClock(){const s=S.sim;if(!s)return;$('#clock').textContent='t = '+eng(s.t,'s',5);$('#periods').textContent=`${Math.floor(s.t/s.T+1e-9)} T · βήματα ${s.steps.toLocaleString('el-GR')}`;
  $('#cpu').hidden=!S.limited;$('#speed-note').textContent=S.speed==='max'?'όσο αντέχει ο υπολογιστής':`${eng(S.speed*s.T,'s',3)} ανά δευτερόλεπτο`;$('#step-note').textContent='Δt = '+eng(s.h,'s',3)+' · T = '+eng(s.T,'s',3);}
@@ -166,6 +166,57 @@ function renderFFT(){const box=$('#ff-out');if(!box||!S.sim||!$('#ff-block').ope
   <tr><td>THD (h = 2 … ${r.H})</td><td><b>${fmt(r.thd,4)} %</b></td></tr><tr><td>THD (όλο το φάσμα, από την RMS)</td><td>${fmt(r.thdAll,4)} %</td></tr></tbody></table>
   ${top.length?`<table class="kv ff-top"><tbody><tr><td>h</td><td>f</td><td>πλάτος</td><td>% A₁</td></tr>${top.map(h=>`<tr><td>${h}</td><td>${eng(h*f1,'Hz')}</td><td>${eng(r.A[h],u)}</td><td>${fmt(rel(h),3)}</td></tr>`).join('')}</tbody></table>`:''}
   <p class="muted small">Σειρά Fourier πάνω σε ακέραιες περιόδους της f₁, με ακριβή ολοκλήρωση ανάμεσα στα σημεία του λύτη (όχι επαναδειγματοληψία). THD = √(Σ A_h²)/A₁ για h ≥ 2. Η δεύτερη τιμή περιέχει και ό,τι δεν είναι αρμονική της f₁ (π.χ. υποαρμονικές, συνιστώσες μεταγωγής πάνω από το h).</p>`;}
+// ------------------------------------------------------------------ Poincaré map and bifurcation diagram (3.2)
+// one sample per period of a channel: the value at the period boundary (e.g. the current at the clock) or min/max/mean
+function perSamples(key,stat,n=400){const s=S.sim;const k=simKey(key);const i=k===null?undefined:s?.chIndex.get(k);if(i===undefined)return [];const p=s.per,a=p[stat]||p.end,out=[];
+ for(let q=Math.min(n,p.n);q>=1;q--){const j=(p.head-q+p.cap)%p.cap;out.push(a[j*p.nch+i]);}return out;}
+function periodText(q){return Number.isNaN(q.period)?'λίγες περίοδοι':q.period===0?'χωρίς περίοδο ≤ 16T (χαοτική ή ακόμη μεταβατική)':q.period+'T'+(q.period>1?' (υποαρμονική)':'');}
+const svgPlot=(W,H,pad)=>{const [l,r,t,b]=pad;return {X:(v,lo,hi)=>l+(W-l-r)*(v-lo)/(hi-lo||1),Y:(v,lo,hi)=>H-b-(H-t-b)*(v-lo)/(hi-lo||1)};};
+// ideal return map of the current-mode buck with a battery: two straight branches (reset inside the period, or none)
+function pcmMapFn(m){if(!paramsOf('V1')||!paramsOf('VO')||!paramsOf('L1'))return null;const vl=m.mode==='valley',ic=+(editor.comp('IC')?.params.v??m.ic),Vin=+paramsOf('V1').V,Vo=+paramsOf('VO').V,L=+paramsOf('L1').L,R=paramsOf('RMP1'),T=m.T;
+ const m1=(Vin-Vo)/L,m2=Vo/L,ma=R?(+R.hi-+R.lo)/T:0;
+ const z=v=>Math.max(0,v); // the diode stops the current at zero
+ return vl?x=>{const t=(x-ic)/(m2+ma);return t>=T?z(x-m2*T):t<=0?x+m1*T:ic+ma*t+m1*(T-t);}   // valley: OFF from the clock until i_L = i_c + ramp
+  :x=>{const t=(ic-x)/(m1+ma);return t>=T?x+m1*T:t<=0?z(x-m2*T):z(ic-ma*t-m2*(T-t));};}    // peak: ON from the clock until i_L + ramp = i_c
+function renderPoincare(){const box=$('#bf-map');if(!box||!S.sim||!$('#bf-block').open)return;
+ const sig=$('#bf-sig'),chans=scope.channels(),keep=sig.value;sig.innerHTML=chans.map(c=>`<option value="${esc(c.key)}">${esc(c.label)}</option>`).join('')||'<option value="">— πρόσθεσε σήμα στο scope —</option>';
+ if(chans.some(c=>c.key===keep))sig.value=keep;else if(S.tutMeta?.poincare&&chans.some(c=>c.key===S.tutMeta.poincare.key))sig.value=S.tutMeta.poincare.key;
+ const key=sig.value;if(!key){box.innerHTML='';return;}const x=perSamples(key,$('#bf-stat').value,300);if(x.length<8){box.innerHTML='<p class="muted small">Τρέξε την προσομοίωση μερικές περιόδους.</p>';return;}
+ const q=Metrics.periodicity(x.slice(-100)),u=MeasureUnit(key),W=260,H=200,P=svgPlot(W,H,[34,6,6,22]);let lo=Math.min(...x),hi=Math.max(...x);const pd=(hi-lo)*.08||Math.abs(hi)*.02||1;lo-=pd;hi+=pd;
+ const fn=S.tutMeta?.map==='pcm'&&S.tut?.id==='peak_cm'&&key==='Y:AM1'&&$('#bf-stat').value==='end'?pcmMapFn(S.tutMeta):null;
+ const pts=x.slice(1).map((v,k)=>`<circle cx="${P.X(x[k],lo,hi).toFixed(1)}" cy="${P.Y(v,lo,hi).toFixed(1)}" r="1.6"/>`).join('');
+ const cob=x.slice(-17);let cw=`M${P.X(cob[0],lo,hi).toFixed(1)},${P.Y(cob[0],lo,hi).toFixed(1)}`;for(let k=1;k<cob.length;k++)cw+=` V${P.Y(cob[k],lo,hi).toFixed(1)} H${P.X(cob[k],lo,hi).toFixed(1)}`;
+ let curve='';if(fn){const n=120;curve='M'+[...Array(n+1).keys()].map(k=>{const v=lo+(hi-lo)*k/n;return `${P.X(v,lo,hi).toFixed(1)},${P.Y(fn(v),lo,hi).toFixed(1)}`;}).join(' L');}
+ const tk=[lo+pd,hi-pd].map(v=>`<text x="${P.X(v,lo,hi)}" y="${H-8}" text-anchor="middle">${fmt(v,3)}</text><text x="30" y="${P.Y(v,lo,hi)+3}" text-anchor="end">${fmt(v,3)}</text>`).join('');
+ box.innerHTML=`<svg class="bfchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Χάρτης Poincaré"><rect x="34" y="6" width="${W-40}" height="${H-28}" class="frame"/>
+  <line class="diag" x1="${P.X(lo,lo,hi)}" y1="${P.Y(lo,lo,hi)}" x2="${P.X(hi,lo,hi)}" y2="${P.Y(hi,lo,hi)}"/>${curve?`<path class="map" d="${curve}"/>`:''}<path class="cob" d="${cw}"/>${pts}${tk}
+  <text x="${(W+34)/2}" y="${H-1}" text-anchor="middle">x[n]</text><text x="8" y="${H/2}" transform="rotate(-90 8 ${H/2})" text-anchor="middle">x[n+1]</text></svg>
+  <p class="small">Περίοδος: <b>${esc(periodText(q))}</b>${q.period>0?` · τιμές ${q.distinct.map(v=>eng(v,u,4)).join(', ')}`:''}</p>
+  <p class="muted small">Κάθε σημείο: το δείγμα μιας περιόδου (οριζόντια) και της επόμενης (κάθετα). Σταθερό σημείο πάνω στη διαγώνιο = λειτουργία 1T. Η σκάλα (cobweb) δείχνει τις τελευταίες 16 περιόδους.${fn?' Η καμπύλη είναι ο ιδανικός χάρτης: η κλίση του στο σταθερό σημείο είναι το λ.':''}</p>`;}
+const BF={run:false,pts:[]};
+function bfParams(){const out=[];for(const c of editor.doc.components){const d=P.PARTS[c.type];if(!d?.params)continue;const p={...P.defaults(c.type),...c.params};
+  for(const sp of d.params){if(sp.show&&!sp.show(p))continue;const v=+p[sp.k];if((sp.type==='num'||(c.type==='CONST'&&sp.k==='v'))&&Number.isFinite(v))out.push([c.id+'.'+sp.k,`${c.label||c.id}: ${sp.label}${sp.unit?' ('+sp.unit+')':''}`,v]);}}return out;}
+function renderBifurcationForm(){const sel=$('#bf-par');if(!sel)return;const ps=bfParams(),keep=sel.value,sw=S.tutMeta?.sweep;
+ sel.innerHTML=ps.map(([k,n])=>`<option value="${esc(k)}">${esc(n)}</option>`).join('');const pref=sw?sw.comp+'.'+sw.param:'';
+ if(ps.some(p=>p[0]===keep))sel.value=keep;else if(ps.some(p=>p[0]===pref)){sel.value=pref;$('#bf-from').value=sw.from;$('#bf-to').value=sw.to;$('#bf-n').value=sw.n;$('#bf-tr').value=sw.transient;$('#bf-rec').value=sw.record;if(sw.stat)$('#bf-stat').value=sw.stat;}
+ else if(ps.length&&!$('#bf-from').value){const v=ps[0][2];$('#bf-from').value=+(v*.5).toPrecision(4);$('#bf-to').value=+(v*1.5).toPrecision(4);}}
+async function runBifurcation(){if(BF.run||!S.sim||S.error)return;const [comp,param]=String($('#bf-par').value).split('.');const key=$('#bf-sig').value,stat=$('#bf-stat').value;
+ const a=P.parseEng($('#bf-from').value),b=P.parseEng($('#bf-to').value),n=Math.max(2,Math.min(400,+$('#bf-n').value|0)),tr=Math.max(0,+$('#bf-tr').value|0),rec=Math.max(4,Math.min(400,+$('#bf-rec').value|0));
+ const out=$('#bf-out');if(!comp||!key||!Number.isFinite(a)||!Number.isFinite(b)){out.innerHTML='<p class="muted small">Διάλεξε σήμα, παράμετρο και εύρος.</p>';return;}
+ const base=project();BF.run=true;BF.pts=[];BF.meta={comp,param,key,stat,a,b,label:$('#bf-par').selectedOptions[0]?.textContent||param,u:MeasureUnit(key)};$('#bf-run').disabled=true;$('#bf-stop').disabled=false;const t0=performance.now();
+ try{for(let k=0;k<n&&BF.run;k++){const v=a+(b-a)*k/(n-1);const r=MNA.sweepPoint(base,{comp,param,value:+v.toPrecision(10),key,stat,transient:tr,record:rec,hDiv:+$('#sim-step').value||100,method:$('#method').value});
+   BF.pts.push({v,y:r.y,q:Metrics.periodicity(r.y)});if(k%2===1||k===n-1){drawBifurcation(`${k+1}/${n} · ${fmt((performance.now()-t0)/1e3,3)} s`);await new Promise(res=>setTimeout(res,0));}}}
+ catch(e){out.innerHTML=`<p class="warn-text small">${esc(e.message)}</p>`;}finally{BF.run=false;$('#bf-run').disabled=false;$('#bf-stop').disabled=true;drawBifurcation(`${BF.pts.length} σημεία · ${fmt((performance.now()-t0)/1e3,3)} s`);}}
+function drawBifurcation(status){const out=$('#bf-out'),m=BF.meta;if(!out||!m||!BF.pts.length)return;const W=260,H=200,P=svgPlot(W,H,[34,6,6,22]);
+ const ys=BF.pts.flatMap(p=>p.y);let lo=Math.min(...ys),hi=Math.max(...ys);const pd=(hi-lo)*.05||1;lo-=pd;hi+=pd;
+ const dots=BF.pts.map(p=>p.y.map(y=>`<circle cx="${P.X(p.v,m.a,m.b).toFixed(1)}" cy="${P.Y(y,lo,hi).toFixed(1)}" r="1"/>`).join('')).join('');
+ // first value of each new period (1T → 2T → 4T …) along the sweep
+ const ch=[];for(let k=1;k<BF.pts.length;k++){const p0=BF.pts[k-1].q.period,p1=BF.pts[k].q.period;if(p1!==p0&&p1!==0||p1===0&&p0>0)ch.push([BF.pts[k].v,p1]);}
+ const tk=[m.a,m.b].map(v=>`<text x="${P.X(v,m.a,m.b)}" y="${H-8}" text-anchor="middle">${fmt(v,3)}</text>`).join('')+[lo+pd,hi-pd].map(v=>`<text x="30" y="${P.Y(v,lo,hi)+3}" text-anchor="end">${fmt(v,3)}</text>`).join('');
+ out.innerHTML=`<svg class="bfchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Διάγραμμα διακλάδωσης"><rect x="34" y="6" width="${W-40}" height="${H-28}" class="frame"/>${dots}${tk}<text x="${(W+34)/2}" y="${H-1}" text-anchor="middle">${esc(m.label)}</text></svg>
+  <p class="muted small">${esc(status)} · ${BF.pts[0].y.length} δείγματα ανά τιμή μετά από μεταβατικό</p>
+  ${ch.length?`<table class="kv"><tbody>${ch.map(([v,p])=>`<tr><td>από ${fmt(v,4)}</td><td>${p===0?'χωρίς περίοδο (χάος ή αργό μεταβατικό)':p+'T'}</td></tr>`).join('')}</tbody></table>`:''}`;}
+
 function niceTop(v){const e=Math.pow(10,Math.floor(Math.log10(v))),m=v/e;return (m<=1?1:m<=2?2:m<=5?5:10)*e;}
 
 // ------------------------------------------------------------------ server reference solver (SciPy)
@@ -617,21 +668,41 @@ function blocksTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp
  if(m.blk)h+=`<p class="small muted">Ο PI από μπλοκ ακολουθεί τους κανόνες του ενσωματωμένου (ίδιο δείγμα, ίδιο anti-windup), γι' αυτό με «PWM με είσοδο d» δίνει ακριβώς το ίδιο D. ${m.cmp?'Με φέρον και συγκριτή ο λύτης εντοπίζει τη στιγμή που το φέρον περνά το d μέσα στο βήμα του, όπως τις μεταβάσεις των διόδων.':''}</p>`;
  return h;}
 // 3.0: peak current-mode. A valley error Δi is multiplied every period by λ = (m_a − m₂)/(m₁ + m_a)
-function pcmTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!paramsOf('V1')||!paramsOf('VO')||!paramsOf('L1'))return '';const T=m.T,R=paramsOf('RMP1'),ic0=s.now('Y:IC'),ic=Number.isFinite(ic0)?ic0:m.ic;
- const Vin=+paramsOf('V1').V,Vo=+paramsOf('VO').V,L=+paramsOf('L1').L,D=Vo/Vin,m1=(Vin-Vo)/L,m2=Vo/L,ma=R?(+R.hi-+R.lo)*(+R.f):0,lam=(ma-m2)/(m1+ma),stable=Math.abs(lam)<1,mamin=Math.max(0,(m2-m1)/2);
- const Ipk=ic-ma*D*T,Iv=Ipk-m2*(1-D)*T;
+function pcmTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!paramsOf('V1')||!paramsOf('VO')||!paramsOf('L1'))return '';const T=m.T,R=paramsOf('RMP1'),ic0=s.now('Y:IC'),ic=Number.isFinite(ic0)?ic0:m.ic,vl=m.mode==='valley';
+ const Vin=+paramsOf('V1').V,Vo=+paramsOf('VO').V,L=+paramsOf('L1').L,D=Vo/Vin,m1=(Vin-Vo)/L,m2=Vo/L,ma=R?(+R.hi-+R.lo)*(+R.f):0;
+ // a perturbation of the sample at the clock is multiplied by λ every period
+ const lam=vl?(ma-m1)/(m2+ma):(ma-m2)/(m1+ma),stable=Math.abs(lam)<1,mamin=vl?Math.max(0,(m1-m2)/2):Math.max(0,(m2-m1)/2);
+ const Ipk=vl?ic+ma*(1-D)*T+m1*D*T:ic-ma*D*T,Iv=vl?ic+ma*(1-D)*T:Ipk-m2*(1-D)*T;
  const pk=lastPeriods('Y:AM1',8),dd=lastPeriods('GS:S1',8);const ds=dd.map(q=>q.avg);const spread=ds.length?Math.max(...ds)-Math.min(...ds):NaN;
  const alt=ds.length>=6&&ds.slice(2).every((d,k)=>Math.abs(d-ds[k])<2e-3)&&spread>2e-3;
  const verdict=!ds.length?'':spread<2e-3?'σταθερό: ίδιο duty σε κάθε περίοδο (1T)':alt?'υποαρμονική: το duty εναλλάσσεται κάθε περίοδο (2T)':'υποαρμονική / χαοτική: το duty αλλάζει από περίοδο σε περίοδο';
- let h=`<div class="tm"><span class="badge ${stable?'ccm':'dcm'}">${stable?'|λ| < 1: σταθερό':'|λ| ≥ 1: ασταθές'}</span> D = ${fmt(D,3)} · m_a = ${m.ramp==='none'?'0':m.ramp==='half'?'m₂/2':'m₂'}</div>`;
- h+=`<ul class="eqs"><li>Κλίσεις: m₁ = (V_in − V_o)/L = <b>${eng(m1,'A/s')}</b> (ON), m₂ = V_o/L = <b>${eng(m2,'A/s')}</b> (OFF), ράμπα m_a = <b>${eng(ma,'A/s')}</b></li>
-  <li>Μια διαταραχή Δi της κοιλάδας γίνεται λ·Δi στην επόμενη περίοδο: λ = (m_a − m₂)/(m₁ + m_a) = <b>${fmt(lam,4)}</b></li>
+ const mc=1+ma/m1,Qp=1/(Math.PI*(mc*(1-D)-.5));
+ let h=`<div class="tm"><span class="badge ${stable?'ccm':'dcm'}">${stable?'|λ| < 1: σταθερό':'|λ| ≥ 1: ασταθές'}</span> ${vl?'valley · ':''}D = ${fmt(D,3)} · m_a = ${m.ramp==='none'?'0':m.ramp==='half'?(vl?'m₁/2':'m₂/2'):(vl?'m₁':'m₂')}</div>`;
+ h+=`<ul class="eqs"><li>Κλίσεις: m₁ = (V_in − V_o)/L = <b>${eng(m1,'A/s')}</b> (ON), m₂ = V_o/L = <b>${eng(m2,'A/s')}</b> (OFF), ράμπα m_a = <b>${eng(ma,'A/s')}</b></li>`;
+ if(vl)h+=`<li>Valley: το ρολόι σβήνει τον S1 και ο συγκριτής τον ανάβει όταν i_L = i_c + m_a·t. Μια διαταραχή Δi της κορυφής γίνεται λ·Δi στην επόμενη περίοδο: λ = (m_a − m₁)/(m₂ + m_a) = <b>${fmt(lam,4)}</b></li>
+  <li>Χωρίς ράμπα λ = −(1 − D)/D: ασταθές για D < 0,5, ο «καθρέφτης» του peak. Για αυτό το D σταθερό όταν m_a > (m₁ − m₂)/2 = <b>${eng(mamin,'A/s')}</b>, για κάθε D αρκεί m_a ≥ m₁/2</li>
+  <li>Στη μόνιμη κατάσταση: κοιλάδα i_c + m_a·(1 − D)T = <b>${eng(Iv,'A')}</b>, κορυφή (στο ρολόι) κοιλάδα + m₁·D·T = <b>${eng(Ipk,'A')}</b></li>`;
+ else h+=`<li>Μια διαταραχή Δi της κοιλάδας γίνεται λ·Δi στην επόμενη περίοδο: λ = (m_a − m₂)/(m₁ + m_a) = <b>${fmt(lam,4)}</b></li>
   <li>Χωρίς ράμπα λ = −D/(1 − D): ασταθές για D > 0,5. Για αυτό το D σταθερό όταν m_a > (m₂ − m₁)/2 = <b>${eng(mamin,'A/s')}</b>, για κάθε D αρκεί m_a ≥ m₂/2. Με m_a = m₂ ισχύει λ = 0 και η διαταραχή σβήνει σε έναν κύκλο</li>
-  <li>Στη μόνιμη κατάσταση: Î = i_c − m_a·D·T = <b>${eng(Ipk,'A')}</b>, κοιλάδα Î − m₂(1 − D)T = <b>${eng(Iv,'A')}</b></li></ul>`;
- h+=cmpRows([['κορυφή Î (τελευταία T)',stable?Ipk:NaN,pk.length?pk[pk.length-1].max:NaN,'A'],['κοιλάδα (τελευταία T)',stable?Iv:NaN,pk.length?pk[pk.length-1].min:NaN,'A'],['⟨i_L⟩',stable?(Ipk+Iv)/2:NaN,pk.length?pk[pk.length-1].avg:NaN,'A'],['duty',stable?D:NaN,ds.length?ds[ds.length-1]:NaN,'']]);
+  <li>Στη μόνιμη κατάσταση: Î = i_c − m_a·D·T = <b>${eng(Ipk,'A')}</b>, κοιλάδα Î − m₂(1 − D)T = <b>${eng(Iv,'A')}</b></li>
+  <li>Στο μοντέλο μικρού σήματος (Ridley) η ίδια αστάθεια είναι ένα ζεύγος πόλων στο f_s/2 με Q = 1/(π(m_c(1 − D) − 0,5)), m_c = 1 + m_a/m₁: Q = <b>${Number.isFinite(Qp)&&Qp>0?fmt(Qp,3):'αρνητικό (ασταθές)'}</b>${Qp>2?' (μεγάλη συντονισμένη κορυφή, κοντά στο όριο)':''}</li>`;
+ h+=`<li>Ο χάρτης «δείγμα στο ρολόι → επόμενο δείγμα» έχει δύο ευθύγραμμα κομμάτια: με κλίση λ όταν ο συγκριτής αλλάζει μέσα στην περίοδο, και με κλίση 1 όταν δεν αλλάζει (ολόκληρη περίοδος ON ή OFF). Με σταθερή τάση εξόδου (μπαταρία) αυτό δεν δίνει τη διαδοχή 2T → 4T: μόλις |λ| > 1 η λειτουργία γίνεται χαοτική. Δες τον χάρτη και το διάγραμμα στο «Διακλαδώσεις και Poincaré».</li></ul>`;
+ h+=cmpRows(vl?[['κορυφή (στο ρολόι, τελευταία T)',stable?Ipk:NaN,pk.length?pk[pk.length-1].max:NaN,'A'],['κοιλάδα (τελευταία T)',stable?Iv:NaN,pk.length?pk[pk.length-1].min:NaN,'A'],['duty',stable?D:NaN,ds.length?ds[ds.length-1]:NaN,'']]
+  :[['κορυφή Î (τελευταία T)',stable?Ipk:NaN,pk.length?pk[pk.length-1].max:NaN,'A'],['κοιλάδα (τελευταία T)',stable?Iv:NaN,pk.length?pk[pk.length-1].min:NaN,'A'],['⟨i_L⟩',stable?(Ipk+Iv)/2:NaN,pk.length?pk[pk.length-1].avg:NaN,'A'],['duty',stable?D:NaN,ds.length?ds[ds.length-1]:NaN,'']]);
  if(ds.length)h+=`<h4>Τελευταίες ${ds.length} περίοδοι</h4><p class="small">${esc(verdict)}</p><div class="wrap"><table class="cmp"><thead><tr><th>περίοδος</th>${ds.map((d,k)=>`<th>${k-ds.length+1||'τελ.'}</th>`).join('')}</tr></thead><tbody>
   <tr><td>duty</td>${ds.map(d=>`<td>${fmt(d,3)}</td>`).join('')}</tr><tr><td>κορυφή i_L</td>${pk.map(q=>`<td>${fmt(q.max,4)}</td>`).join('')}</tr></tbody></table></div>`;
- h+=`<p class="small muted">Η στιγμή του reset (ρεύμα + ράμπα = i_c) εντοπίζεται μέσα στο βήμα του λύτη. Ο λύτης δεν έχει ειδικό κώδικα για peak current-mode: είναι γενικά μπλοκ (ρολόι, latch, συγκριτής, άθροισμα). Ο λύτης SciPy στον server δίνει τις ίδιες κορυφές στη σταθερή περιοχή. Στην υποαρμονική συμφωνεί για δεκάδες περιόδους και μετά δίνει την ίδια συμπεριφορά αλλά όχι την ίδια ακολουθία: εκεί κάθε μικρή αριθμητική διαφορά μεγαλώνει κατά |λ| σε κάθε περίοδο.</p>`;
+ h+=`<p class="small muted">Η στιγμή που αλλάζει ο συγκριτής εντοπίζεται μέσα στο βήμα του λύτη. Ο λύτης δεν έχει ειδικό κώδικα για current-mode: είναι γενικά μπλοκ (ρολόι, latch, συγκριτής, άθροισμα${vl?', λογικές πύλες':''}). Ο λύτης SciPy στον server δίνει τις ίδιες κορυφές στη σταθερή περιοχή. Στην υποαρμονική συμφωνεί για δεκάδες περιόδους και μετά δίνει την ίδια συμπεριφορά αλλά όχι την ίδια ακολουθία: εκεί κάθε μικρή αριθμητική διαφορά μεγαλώνει κατά |λ| σε κάθε περίοδο.</p>`;
+ return h+evalOrderHTML();}
+// 3.2: period doubling of the current-mode boost with an R–C load (Deane & Hamill): period from the samples at the clock
+function chaosTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('IC'))return '';const x=perSamples('Y:AM1','end',200),q=Metrics.periodicity(x.slice(-100));
+ if(x.length<20)return '<p class="muted small">Τρέξε την προσομοίωση μερικές δεκάδες περιόδους για να φανεί η περίοδος της λειτουργίας.</p>';
+ const Vin=+paramsOf('V1').V,L=+paramsOf('L1').L,C=+paramsOf('C1').C,R=+paramsOf('R1').R,T=m.T,vo=avgOver('V:C1',20)?.avg,d=avgOver('Y:SR1',20)?.avg,m1=Vin/L,m2=Number.isFinite(vo)?(vo-Vin)/L:NaN;
+ let h=`<div class="tm"><span class="badge ${q.period===1?'ccm':'dcm'}">${esc(periodText(q))}</span> i_c = ${eng(s.now('Y:IC'),'A')}</div><ul class="eqs">
+  <li>Peak current-mode χωρίς ράμπα: το δείγμα του ρεύματος στο ρολόι (η κοιλάδα) ${q.period===1?'είναι ίδιο σε κάθε περίοδο':q.period>1?`επαναλαμβάνεται κάθε ${q.period} περιόδους: ${q.distinct.map(v=>eng(v,'A',4)).join(', ')}`:'δεν επαναλαμβάνεται: χαοτική λειτουργία (ή πολύ αργό μεταβατικό)'}</li>
+  <li>Μέση τάση εξόδου ${eng(vo,'V')}, μέσο duty ${fmt(d,3)}. Κλίσεις m₁ = V_in/L = <b>${eng(m1,'A/s')}</b>, m₂ = (V_o − V_in)/L = <b>${eng(m2,'A/s')}</b></li>
+  <li>Αν η τάση εξόδου ήταν σταθερή, ο χάρτης θα ήταν μονοδιάστατος με λ = −m₂/m₁ = <b>${fmt(-m2/m1,3)}</b>, ασταθής για D > 0,5. Εδώ RC = ${eng(R*C,'s')} = ${fmt(R*C/T,3)}·T: η τάση αλλάζει αισθητά μέσα σε λίγες περιόδους, ο χάρτης είναι δισδιάστατος (i_L, v_o) και ο πρώτος διπλασιασμός έρχεται νωρίτερα, γύρω στο D ≈ 0,4</li>
+  <li>Με τις τιμές του tutorial, καθώς μεγαλώνει το i_c: 1T → 2T (περίπου 1,65 A) → 4T (2,37 A) → 8T (2,62 A) → χάος (2,70 A). Τα διαστήματα μικραίνουν, όπως στη διαδοχή του Feigenbaum. Επειδή ο χάρτης είναι κατά τμήματα ομαλός, ο λόγος των διαστημάτων δεν είναι ακριβώς 4,67</li></ul>`;
+ h+=`<p class="small muted">Το διάγραμμα διακλάδωσης βγαίνει από το «Διακλαδώσεις και Poincaré» πλάι στο scope (σάρωση του i_c). Οι τιμές είναι του γνωστού παραδείγματος των Deane & Hamill (V_in = 10 V, L = 1 mH, C = 12 μF, R = 20 Ω, T = 100 μs).</p>`;
  return h+evalOrderHTML();}
 // 3.1: DC machine drive. Ideal loops (exact feedforward, no delay): i/i_ref = α_c/(s + α_c); with active damping a load
 // step gives ω = −(τ_L/J)·t·e^(−α_s t), with IMC ω = −τ_L/((Js + b)(s + α_s)), which recovers with J/b
@@ -671,6 +742,7 @@ function formulaTheory(t){
  if(t.topology==='dc_drive')return dcDriveTheory();
  if(t.topology==='blocks_loop')return blocksTheory();
  if(t.topology==='peak_cm')return pcmTheory();
+ if(t.topology==='pcm_chaos')return chaosTheory();
  if(t.topology==='polyphase')return polyTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const D=+W.D,Vin=+V.V,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
@@ -841,6 +913,7 @@ function boot(){
  $('#avgline').onchange=e=>{scope.cfg.avgLine=e.target.checked;draw(true);};
  ['#rm-sig','#rm-ev','#rm-ref','#rm-band','#rm-val','#rm-t'].forEach(q=>$(q).onchange=renderMetricsPanel);$('#rm-block').ontoggle=renderMetricsPanel;
  ['#ff-sig','#ff-f1','#ff-p','#ff-h'].forEach(q=>$(q).onchange=renderFFT);$('#ff-block').ontoggle=renderFFT;
+ ['#bf-sig','#bf-stat'].forEach(q=>$(q).onchange=renderPoincare);$('#bf-block').ontoggle=()=>{renderBifurcationForm();renderPoincare();};$('#bf-run').onclick=runBifurcation;$('#bf-stop').onclick=()=>{BF.run=false;};
  $('#bt-run').onclick=runBatch;$('#bt-clear').onclick=clearBatch;$('#bt-show').onchange=e=>{scope.setRefs(e.target.checked&&S.batch?{label:S.batch.label,data:S.batch.data}:null);};
  $('#bt-block').ontoggle=()=>{if($('#bt-block').open&&!$('#bt-tend').value&&S.sim)$('#bt-tend').placeholder=S.sim.t>0?String(+(S.sim.t*1e3).toPrecision(5)):S.stopT?String(+(S.stopT*1e3).toPrecision(5)):'ms';};
  $('#live-btn').onclick=()=>{scope.cfg.frozen=null;$('#live-btn').hidden=true;draw(true);};
@@ -896,5 +969,5 @@ function boot(){
 }
 function renderTheoryLive(){if(document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
-window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,addProbe,play,pause,reset,renderTheory,renderFFT};
+window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;}};
 })();

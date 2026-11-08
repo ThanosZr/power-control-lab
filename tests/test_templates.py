@@ -89,6 +89,12 @@ class DataTemplates(unittest.TestCase):
         self.assertEqual(q['stable']['correct'], 0)
         self.assertAlmostEqual(q['ipk']['answer'], 5 - 144e3 * .6 * 1e-5, places=9)
         self.assertEqual(q['ipk']['sim'], {'key': 'Y:AM1', 'stat': 'max', 'periods': 3})
+        self.assertAlmostEqual(q['qp']['answer'], 1 / (math.pi * (1.75 * .4 - .5)), places=9)    # Ridley: m_c = 1 + m_a/m₁
+        q = qs(template_solve({'template': tpl, 'values': {**base, 'V_o': 9.6, 'A_r': 0, 'valley': 1}}))   # valley, D = 0.4
+        self.assertAlmostEqual(q['lam']['answer'], -1.5, places=9)               # −(1 − D)/D
+        self.assertEqual(q['stable']['correct'], 1)
+        self.assertIn(round(-192 / 288, 6), [round(m['value'], 6) for m in q['lam']['mistakes']])   # the peak formula is the mistake
+        self.assertEqual(q['vrange']['correct'], 0)
         q = qs(template_solve({'template': tpl, 'values': {**base, 'V_o': 9.6, 'A_r': 0}}))      # D = 0.4
         self.assertEqual(q['stable']['correct'], 0)
         self.assertEqual(q['mamin']['answer'], 0)

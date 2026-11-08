@@ -203,6 +203,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:6px}
 .side-block.fold>summary::-webkit-details-marker{display:none}
 .side-block.fold>summary::before{content:'▸';color:var(--muted);width:10px}.side-block.fold[open]>summary::before{content:'▾'}
 .side-block.fold[open]>summary{margin-bottom:8px}
+.bfchart{width:100%;height:auto;margin:6px 0;display:block}.bfchart circle{fill:var(--sig,#5b4fb0)}.bfchart .frame{fill:none;stroke:var(--line)}.bfchart .diag{stroke:#b9c6c0;stroke-dasharray:3 3}.bfchart .map{fill:none;stroke:#c2410c;stroke-width:1.2}.bfchart .cob{fill:none;stroke:#0f766e;stroke-width:.8;opacity:.7}.bfchart text{font-size:8px;fill:var(--muted)}
 .ffchart{width:100%;height:auto;margin:6px 0;display:block}.ffchart rect.hb{fill:var(--sig,#5b4fb0)}.ffchart rect.f1{fill:#cfd8d4}.ffchart line{stroke:var(--line);stroke-width:1}.ffchart text{font-size:8px;fill:var(--muted)}
 .rm-out table.ff-top td{text-align:right}.rm-out table.ff-top tr:first-child td{color:var(--muted);font-size:10px}
 .rm-out table.kv,.bt-out table{width:100%;border-collapse:collapse;font-size:11px}

@@ -264,7 +264,7 @@
   allocRecord(){
    const nch=this.keys.length,cap=this.opts.cap||Math.max(20000,Math.min(200000,Math.floor(24e6/(4*nch+8))));
    this.ring={t:new Float64Array(cap),d:new Float32Array(cap*nch),g:new Uint8Array(cap),nch,cap,head:0,n:0};
-   const pc=20000;this.per={t:new Float64Array(pc),avg:new Float32Array(pc*nch),min:new Float32Array(pc*nch),max:new Float32Array(pc*nch),rms:new Float32Array(pc*nch),nch,cap:pc,head:0,n:0};
+   const pc=20000;this.per={t:new Float64Array(pc),avg:new Float32Array(pc*nch),min:new Float32Array(pc*nch),max:new Float32Array(pc*nch),rms:new Float32Array(pc*nch),end:new Float32Array(pc*nch),nch,cap:pc,head:0,n:0};
    this.acc={t0:this.t,dur:0,s:new Float64Array(nch),q:new Float64Array(nch),mn:new Float64Array(nch).fill(Infinity),mx:new Float64Array(nch).fill(-Infinity)};
    this.vals=new Float64Array(nch);this.prevVals=null;
   }
@@ -306,7 +306,7 @@
   }
   closePeriod(){
    const a=this.acc,p=this.per,nch=p.nch;if(a.dur<=0)return;const j=p.head,off=j*nch;p.t[j]=this.t;
-   for(let i=0;i<nch;i++){p.avg[off+i]=a.s[i]/a.dur;p.rms[off+i]=Math.sqrt(Math.max(0,a.q[i]/a.dur));p.min[off+i]=a.mn[i];p.max[off+i]=a.mx[i];}
+   for(let i=0;i<nch;i++){p.avg[off+i]=a.s[i]/a.dur;p.rms[off+i]=Math.sqrt(Math.max(0,a.q[i]/a.dur));p.min[off+i]=a.mn[i];p.max[off+i]=a.mx[i];p.end[off+i]=this.prevVals?this.prevVals[i]:NaN;} // end: the value at the period boundary (e.g. the current at the clock)
    p.head=(j+1)%p.cap;p.n=Math.min(p.n+1,p.cap);
    for(const c of this.lossList){c.loss.P=c.loss.E/a.dur;c.loss.E=0;}
    a.dur=0;a.s.fill(0);a.q.fill(0);a.mn.fill(Infinity);a.mx.fill(-Infinity);
@@ -694,6 +694,13 @@
   const channels={},skipped=[];for(const key of keys){const r=rec(key);if(r)channels[key]=r;else skipped.push(key);}
   return {net:{nNodes:net.nNodes,size:net.size,els,ctrls,shs,sig:{n:net.sig.n,blocks}},channels,skipped};
  }
- const api={Sim,buildNetlist,NetlistError,exportForBatch};
+ // one point of a parameter sweep (bifurcation diagram): set comp.param = value, run `transient` base periods and
+ // return the per-period statistic (min, max, avg, end = value at the period boundary) of channel `key` over the next `record` periods
+ function sweepPoint(project,o){const pr=JSON.parse(JSON.stringify(project)),c=pr.components.find(x=>x.id===o.comp);if(!c)throw new NetlistError(`Δεν υπάρχει στοιχείο ${o.comp}.`);
+  c.params={...(c.params||{}),[o.param]:typeof c.params?.[o.param]==='string'?String(o.value):o.value};
+  const s=new Sim(pr,{hDiv:o.hDiv||100,method:o.method}),rec=Math.max(1,o.record|0||50);s.run((o.transient??200)*s.T);s.run(rec*s.T);
+  const p=s.per,i=s.chIndex.get(o.key);if(i===undefined)throw new NetlistError(`Δεν υπάρχει το κανάλι ${o.key}.`);const st=o.stat==='max'?p.max:o.stat==='avg'?p.avg:o.stat==='end'?p.end:p.min,y=[];
+  for(let k=Math.min(rec,p.n);k>=1;k--){const j=(p.head-k+p.cap)%p.cap;y.push(st[j*p.nch+i]);}return {value:o.value,y,T:s.T,warnings:s.net.warnings};}
+ const api={Sim,buildNetlist,NetlistError,exportForBatch,sweepPoint};
  root.MNA=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

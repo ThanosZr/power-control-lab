@@ -7,15 +7,15 @@
 
 | Αρχείο | Γραμμές |
 |---|---:|
-| `web/studio/app.js` | 900 |
+| `web/studio/app.js` | 973 |
 | `web/studio/editor.js` | 415 |
 | `web/studio/math.js` | 144 |
-| `web/studio/metrics.js` | 75 |
-| `web/studio/mna.js` | 699 |
+| `web/studio/metrics.js` | 80 |
+| `web/studio/mna.js` | 706 |
 | `web/studio/parts.js` | 243 |
 | `web/studio/scope.js` | 165 |
 | `web/studio/templates.js` | 32 |
-| `web/studio/tutorials.js` | 382 |
+| `web/studio/tutorials.js` | 401 |
 | `run.py` | 134 |
 | `engine/__init__.py` | 1 |
 | `engine/analysis.py` | 307 |
@@ -45,12 +45,12 @@
 | `tests/test_live_sim.py` | 149 |
 | `tests/test_studio_math.py` | 50 |
 | `tests/test_studio_sim.py` | 244 |
-| `tests/test_templates.py` | 168 |
-| `tests/test_tutorials.py` | 201 |
+| `tests/test_templates.py` | 174 |
+| `tests/test_tutorials.py` | 220 |
 | `tests/js/batch_requests.js` | 38 |
 | `tests/js/sim_cases.js` | 167 |
-| `tests/js/tutorial_cases.js` | 49 |
-| `tests/ui/blocks_flow.js` | 94 |
+| `tests/js/tutorial_cases.js` | 53 |
+| `tests/ui/blocks_flow.js` | 109 |
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/features_flow.js` | 84 |
 | `tests/ui/studio_flow.js` | 39 |
@@ -124,8 +124,9 @@
 | 259 | `polyphase` | Αμφίδρομος · μπαταρία (PE2) | Άσκηση 2 · Πολυφασική σχεδίαση |
 | 293 | `blocks_loop` | Μπλοκ σημάτων (3.0) | Βρόχος ρεύματος από μπλοκ |
 | 320 | `peak_cm` | Μπλοκ σημάτων (3.0) | Peak current-mode και υποαρμονική |
-| 337 | `dc_drive` | Ηλεκτρική κίνηση (3.1) | Μηχανή ΣΡ: βρόχοι ρεύματος και ταχύτητας |
-| 379 | `empty` | Νέο | Κενό κύκλωμα |
+| 342 | `pcm_chaos` | Μπλοκ σημάτων (3.0) | Διακλαδώσεις και χάος στο peak current-mode (boost) |
+| 356 | `dc_drive` | Ηλεκτρική κίνηση (3.1) | Μηχανή ΣΡ: βρόχοι ρεύματος και ταχύτητας |
+| 398 | `empty` | Νέο | Κενό κύκλωμα |
 
 ## API του server (`run.py`, `/api/<action>`)
 
@@ -181,105 +182,116 @@
 | 145 | function | `rawSeries` |
 | 148 | function | `autoF1` |
 | 150 | function | `renderFFT` |
-| 169 | function | `niceTop` |
-| 172 | function | `btStatus` |
-| 173 | function | `parseStep` |
-| 174 | function | `runBatch` |
-| 190 | function | `clearBatch` |
-| 192 | function | `meanPL` |
-| 194 | function | `ringTrace` |
-| 196 | function | `compareHTML` |
-| 206 | function | `renderBatch` |
-| 211 | function | `parseCSV` |
-| 213 | const fn | `cells` |
-| 214 | const fn | `num` |
-| 220 | const fn | `normName` |
-| 221 | function | `renderCsvMap` |
-| 222 | const fn | `auto` |
-| 228 | function | `applyCsv` |
-| 233 | function | `renderCsv` |
-| 235 | function | `clearCsv` |
-| 237 | function | `sampleCompareHTML` |
-| 250 | function | `liveChange` |
-| 252 | function | `renderLiveLog` |
-| 258 | function | `changesToSchedule` |
-| 260 | const fn | `f` |
-| 265 | function | `updateLivePanel` |
-| 270 | function | `setLivePanel` |
-| 273 | function | `switchesOf` |
-| 276 | function | `addPulses` |
-| 278 | function | `pulseKeys` |
-| 279 | function | `refreshControls` |
-| 281 | const fn | `phase` |
-| 310 | const fn | `setD` |
-| 321 | const fn | `setPh` |
-| 337 | function | `closeInspector` |
-| 338 | function | `placePopup` |
-| 339 | function | `fieldHTML` |
-| 345 | function | `openInspector` |
-| 352 | const fn | `wired` |
-| 358 | const fn | `apply` |
-| 368 | function | `openWireInspector` |
-| 383 | function | `closeMenu` |
-| 384 | function | `openMenu` |
-| 399 | function | `updateHover` |
-| 413 | function | `renderPalette` |
-| 420 | function | `tutorial` |
-| 423 | function | `circuitSig` |
-| 433 | function | `tutorialRef` |
-| 434 | function | `theoryValidity` |
-| 440 | function | `staleBanner` |
-| 443 | function | `bindRestore` |
-| 444 | function | `loadTutorial` |
-| 448 | function | `applyProject` |
-| 457 | function | `renderTutorial` |
-| 467 | function | `gallery` |
-| 473 | function | `api` |
-| 474 | function | `paramsOf` |
-| 475 | function | `avgOver` |
-| 478 | function | `simValue` |
-| 484 | function | `lastPP` |
-| 486 | function | `runTheory` |
-| 498 | function | `cmpRows` |
-| 499 | function | `stepsHTML` |
-| 500 | function | `renderTheory` |
-| 530 | function | `rippleDev` |
-| 532 | function | `periodAvgAt` |
-| 534 | function | `samplingTheory` |
-| 543 | const fn | `lastAt` |
-| 565 | function | `polyTheory` |
-| 572 | const fn | `frac` |
-| 601 | function | `lastPeriods` |
-| 602 | function | `evalOrderHTML` |
-| 605 | function | `blocksTheory` |
-| 620 | function | `pcmTheory` |
-| 638 | function | `dcDriveTheory` |
-| 639 | const fn | `per` |
-| 640 | const fn | `cross` |
-| 669 | function | `formulaTheory` |
-| 720 | function | `nodeAvg` |
-| 726 | function | `circuitForMath` |
-| 757 | function | `scheduleMath` |
-| 758 | function | `batteryKey` |
-| 760 | function | `mathChoices` |
-| 761 | const fn | `prim` |
-| 763 | function | `renderMathChoices` |
-| 765 | function | `runTemplate` |
-| 771 | function | `runMath` |
-| 792 | function | `saveLocal` |
-| 793 | function | `download` |
-| 794 | function | `exportCSV` |
-| 800 | function | `syncScopeInputs` |
-| 801 | function | `setSpeed` |
-| 804 | function | `openSettings` |
-| 805 | const fn | `sel` |
-| 806 | const fn | `chk` |
-| 822 | function | `boot` |
-| 852 | const fn | `mv` |
-| 853 | const fn | `up` |
-| 854 | const fn | `navOpen` |
-| 860 | const fn | `probeSel` |
-| 897 | function | `renderTheoryLive` |
+| 171 | function | `perSamples` |
+| 173 | function | `periodText` |
+| 174 | const fn | `svgPlot` |
+| 176 | function | `pcmMapFn` |
+| 178 | const fn | `z` |
+| 181 | function | `renderPoincare` |
+| 197 | function | `bfParams` |
+| 199 | function | `renderBifurcationForm` |
+| 203 | function | `runBifurcation` |
+| 210 | function | `drawBifurcation` |
+| 220 | function | `niceTop` |
+| 223 | function | `btStatus` |
+| 224 | function | `parseStep` |
+| 225 | function | `runBatch` |
+| 241 | function | `clearBatch` |
+| 243 | function | `meanPL` |
+| 245 | function | `ringTrace` |
+| 247 | function | `compareHTML` |
+| 257 | function | `renderBatch` |
+| 262 | function | `parseCSV` |
+| 264 | const fn | `cells` |
+| 265 | const fn | `num` |
+| 271 | const fn | `normName` |
+| 272 | function | `renderCsvMap` |
+| 273 | const fn | `auto` |
+| 279 | function | `applyCsv` |
+| 284 | function | `renderCsv` |
+| 286 | function | `clearCsv` |
+| 288 | function | `sampleCompareHTML` |
+| 301 | function | `liveChange` |
+| 303 | function | `renderLiveLog` |
+| 309 | function | `changesToSchedule` |
+| 311 | const fn | `f` |
+| 316 | function | `updateLivePanel` |
+| 321 | function | `setLivePanel` |
+| 324 | function | `switchesOf` |
+| 327 | function | `addPulses` |
+| 329 | function | `pulseKeys` |
+| 330 | function | `refreshControls` |
+| 332 | const fn | `phase` |
+| 361 | const fn | `setD` |
+| 372 | const fn | `setPh` |
+| 388 | function | `closeInspector` |
+| 389 | function | `placePopup` |
+| 390 | function | `fieldHTML` |
+| 396 | function | `openInspector` |
+| 403 | const fn | `wired` |
+| 409 | const fn | `apply` |
+| 419 | function | `openWireInspector` |
+| 434 | function | `closeMenu` |
+| 435 | function | `openMenu` |
+| 450 | function | `updateHover` |
+| 464 | function | `renderPalette` |
+| 471 | function | `tutorial` |
+| 474 | function | `circuitSig` |
+| 484 | function | `tutorialRef` |
+| 485 | function | `theoryValidity` |
+| 491 | function | `staleBanner` |
+| 494 | function | `bindRestore` |
+| 495 | function | `loadTutorial` |
+| 499 | function | `applyProject` |
+| 508 | function | `renderTutorial` |
+| 518 | function | `gallery` |
+| 524 | function | `api` |
+| 525 | function | `paramsOf` |
+| 526 | function | `avgOver` |
+| 529 | function | `simValue` |
+| 535 | function | `lastPP` |
+| 537 | function | `runTheory` |
+| 549 | function | `cmpRows` |
+| 550 | function | `stepsHTML` |
+| 551 | function | `renderTheory` |
+| 581 | function | `rippleDev` |
+| 583 | function | `periodAvgAt` |
+| 585 | function | `samplingTheory` |
+| 594 | const fn | `lastAt` |
+| 616 | function | `polyTheory` |
+| 623 | const fn | `frac` |
+| 652 | function | `lastPeriods` |
+| 653 | function | `evalOrderHTML` |
+| 656 | function | `blocksTheory` |
+| 671 | function | `pcmTheory` |
+| 697 | function | `chaosTheory` |
+| 709 | function | `dcDriveTheory` |
+| 710 | const fn | `per` |
+| 711 | const fn | `cross` |
+| 740 | function | `formulaTheory` |
+| 792 | function | `nodeAvg` |
+| 798 | function | `circuitForMath` |
+| 829 | function | `scheduleMath` |
+| 830 | function | `batteryKey` |
+| 832 | function | `mathChoices` |
+| 833 | const fn | `prim` |
+| 835 | function | `renderMathChoices` |
+| 837 | function | `runTemplate` |
+| 843 | function | `runMath` |
+| 864 | function | `saveLocal` |
+| 865 | function | `download` |
+| 866 | function | `exportCSV` |
+| 872 | function | `syncScopeInputs` |
+| 873 | function | `setSpeed` |
+| 876 | function | `openSettings` |
+| 877 | const fn | `sel` |
+| 878 | const fn | `chk` |
+| 894 | function | `boot` |
+| 925 | const fn | `mv` |
+| 926 | const fn | `up` |
+| 927 | const fn | `navOpen` |
+| 933 | const fn | `probeSel` |
+| 970 | function | `renderTheoryLive` |
 
 ### `web/studio/editor.js`
 
@@ -422,6 +434,7 @@
 | 42 | const fn | `add` |
 | 50 | function | `harmonics` |
 | 56 | const fn | `at` |
+| 74 | function | `periodicity` |
 
 ### `web/studio/mna.js`
 
@@ -513,6 +526,7 @@
 | 667 | const fn | `I` |
 | 668 | const fn | `rec` |
 | 682 | const fn | `clkOf` |
+| 699 | function | `sweepPoint` |
 
 ### `web/studio/parts.js`
 
@@ -620,9 +634,10 @@ _(χωρίς συναρτήσεις)_
 | 258 | function | `polyCancel` |
 | 270 | method | `build` |
 | 299 | method | `build` |
-| 325 | method | `build` |
-| 342 | method | `build` |
-| 380 | method | `build` |
+| 326 | method | `build` |
+| 346 | method | `build` |
+| 361 | method | `build` |
+| 399 | method | `build` |
 
 ### `run.py`
 

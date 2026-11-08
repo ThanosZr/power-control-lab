@@ -108,6 +108,25 @@ class Tutorials(unittest.TestCase):
         os1 = (o['bl_blocks_pwm_z1']['vpk'] - 10) / 5
         self.assertGreater(os1, os0 + .05)                                       # z⁻¹: less phase margin, more overshoot
 
+    def test_subharmonics_peak_valley_and_period_doubling(self):
+        o = self.o
+        per = lambda k: o[k]['period']
+        self.assertEqual(per('sub_peak_0.4_none'), 1)                           # peak: unstable above D = 0.5
+        self.assertNotEqual(per('sub_peak_0.6_none'), 1)
+        self.assertEqual(per('sub_peak_0.6_half'), 1)
+        self.assertNotEqual(per('sub_valley_0.4_none'), 1)                      # valley: the mirror image, unstable below D = 0.5
+        self.assertEqual(per('sub_valley_0.6_none'), 1)
+        self.assertEqual(per('sub_valley_0.4_half'), 1)
+        for k in ('sub_valley_0.6_none', 'sub_valley_0.4_half'):                # peak at the clock = i_c + m_a(1 − D)T + m₁·D·T
+            m = o[k]['meta']
+            self.assertAlmostEqual(o[k]['distinct'][0], m['ic'] + m['ma'] * (1 - m['D']) * m['T'] + m['m1'] * m['D'] * m['T'], delta=5e-3)
+        m = o['sub_peak_0.6_half']['meta']
+        self.assertAlmostEqual(o['sub_peak_0.6_half']['distinct'][0], m['ic'] - m['ma'] * m['D'] * m['T'] - m['m2'] * (1 - m['D']) * m['T'], delta=5e-3)
+        c = o['chaos']                                                           # boost with R–C load: 1T → 2T → 4T → 8T → chaos
+        self.assertEqual([c[k]['period'] for k in ('1.5', '2', '2.5', '2.65', '3')], [1, 2, 4, 8, 0])
+        for k in c:
+            self.assertEqual(c[k]['warn'], [])
+
     def test_dc_drive(self):
         o = self.o
         for k in ('dc_speed_active', 'dc_speed_imc', 'dc_current_active', 'dc_open_active'):

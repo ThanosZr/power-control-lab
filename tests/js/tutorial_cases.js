@@ -46,4 +46,8 @@ for(const [mode,design] of [['speed','active'],['speed','imc'],['current','activ
  out[`dc_${mode}_${design}`]={meta:pr.meta,warn:s.net.warnings,w_end:s.now('Y:M1'),i_end:last(s,'Y:AM1',5).avg,d_end:last(s,'D:PWM1',5).avg,
   w_max_pre:Math.max(...wr.filter(q=>q.t<.25).map(q=>q.mx)),w_min_post:Math.min(...wr.filter(q=>q.t>.25+T).map(q=>q.mn)),w_at:[.1,.2].map(t=>w.y[w.t.findIndex(x=>x>=t)]),
   i_max:Math.max(...i.y),i_at30:i.y[i.t.findIndex(x=>x>=.03-1e-9)],rise:rm?.rise,os:rm?.overshoot};}
+// 3.2: subharmonics — valley mode, clock samples, period doubling of the boost with R–C load (sweep points as in the panel)
+for(const [mode,D,ramp] of [['valley','0.4','none'],['valley','0.6','none'],['valley','0.4','half'],['peak','0.4','none'],['peak','0.6','none'],['peak','0.6','half']]){const pr=build('peak_cm',{mode,D,ramp});
+ const r=MNA.sweepPoint(pr,{...pr.meta.sweep,value:pr.meta.Vo});const q=M.periodicity(r.y);out[`sub_${mode}_${D}_${ramp}`]={period:q.period,distinct:q.distinct,meta:pr.meta,warn:r.warnings};}
+{const pr=build('pcm_chaos',{});out.chaos={};for(const ic of [1.5,2,2.5,2.65,3]){const r=MNA.sweepPoint(pr,{...pr.meta.sweep,value:ic});const q=M.periodicity(r.y);out.chaos[ic]={period:q.period,distinct:q.distinct,warn:r.warnings};}}
 out.ms=Date.now()-t0;console.log(JSON.stringify(out,null,1));

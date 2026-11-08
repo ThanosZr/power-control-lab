@@ -65,6 +65,15 @@
       <label>Περίοδοι της f₁<select id="ff-p"><option>1</option><option>2</option><option>5</option><option>10</option></select></label>
       <label>Έως αρμονική<select id="ff-h"><option>20</option><option selected>50</option><option>100</option><option>200</option><option>500</option></select></label></div>
      <div id="ff-out" class="rm-out"></div></details>
+    <details class="side-block fold" id="bf-block"><summary>Διακλαδώσεις και Poincaré</summary>
+     <div class="grid2"><label>Σήμα<select id="bf-sig"></select></label><label>Δείγμα ανά περίοδο<select id="bf-stat"><option value="end">στο τέλος της περιόδου</option><option value="min">ελάχιστο</option><option value="max">μέγιστο</option><option value="avg">μέση τιμή</option></select></label></div>
+     <div id="bf-map" class="rm-out"></div>
+     <p class="small"><b>Διάγραμμα διακλάδωσης</b></p>
+     <div class="grid2"><label>Παράμετρος<select id="bf-par"></select></label><label>Σημεία<input id="bf-n" inputmode="numeric" value="40"></label>
+      <label>Από<input id="bf-from" inputmode="decimal"></label><label>Έως<input id="bf-to" inputmode="decimal"></label>
+      <label>Μεταβατικό (T)<input id="bf-tr" inputmode="numeric" value="200"></label><label>Καταγραφή (T)<input id="bf-rec" inputmode="numeric" value="50"></label></div>
+     <div class="row-btns"><button id="bf-run">Σάρωση</button><button id="bf-stop" disabled>Διακοπή</button></div>
+     <div id="bf-out" class="rm-out"></div></details>
     <details class="side-block fold" id="bt-block"><summary>Σύγκριση με solver του server</summary>
      <div class="grid2"><label>Μέθοδος<select id="bt-method"><option value="Radau">Radau IIA (5ης τάξης, άκαμπτα)</option><option value="BDF">BDF (μεταβλητής τάξης)</option><option value="LSODA">LSODA (αυτόματη εναλλαγή)</option><option value="RK45">RK45 Dormand–Prince</option><option value="RK23">RK23 Bogacki–Shampine</option><option value="DOP853">DOP853 (8ης τάξης)</option></select></label>
       <label>Έως (ms)<input id="bt-tend" inputmode="decimal" placeholder="ms"></label><label>rtol<input id="bt-rtol" value="1e-6"></label><label>atol<input id="bt-atol" value="1e-9"></label>
@@ -103,7 +112,7 @@
    <div><div class="th-head"><h4>Θεωρία & σύγκριση με την προσομοίωση</h4><button id="theory-refresh" title="Επανυπολογισμός με τις τρέχουσες τιμές">↻</button></div><div id="theory" class="theory"></div></div>
   </div>
  </section>
- <footer>Power Converter Lab <b>3.1</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
+ <footer>Power Converter Lab <b>3.2</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
 </main>
 <div id="notice" class="notice" hidden></div>
 <div id="inspector" class="popup inspector" hidden></div>

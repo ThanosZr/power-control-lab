@@ -70,6 +70,11 @@
   const rest=Math.max(rms*rms-dc*dc-A1*A1/2,0);
   return {ok:true,f1,periods:P,H:H1,dc,A:Ah,ph:Ph,bins:A,rms,A1,rms1:A1/Math.SQRT2,thd:A1>0?100*Math.sqrt(s/2)/(A1/Math.SQRT2):NaN,thdAll:A1>0?100*Math.sqrt(rest)/(A1/Math.SQRT2):NaN,window:[ta,tb],n:T.length};
  }
- const api={responseMetrics,scheduleEvents,harmonics};
+ // period of a sequence of per-period samples (1 = period-1, 2 = period-2, …), 0 when no period ≤ maxP repeats within tol
+ function periodicity(x,o={}){const n=x.length,maxP=o.maxP||16;if(n<4)return {period:NaN,distinct:[]};let lo=Infinity,hi=-Infinity;for(const v of x){lo=Math.min(lo,v);hi=Math.max(hi,v);}
+  const tol=o.tol??Math.max(1e-6*Math.max(Math.abs(lo),Math.abs(hi),1e-12),1e-3*(hi-lo)),cover=o.cover||Math.min(n,4*maxP);
+  for(let p=1;p<=maxP&&2*p<=n;p++){let ok=true;for(let k=n-cover+p;k<n&&ok;k++)if(k-p>=0&&Math.abs(x[k]-x[k-p])>tol)ok=false;if(ok){const d=x.slice(n-p).slice().sort((a,b)=>a-b);return {period:p,distinct:d,tol};}}
+  return {period:0,distinct:[],tol,range:[lo,hi]};}
+ const api={responseMetrics,scheduleEvents,harmonics,periodicity};
  root.Metrics=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
