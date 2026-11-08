@@ -455,11 +455,12 @@
  T.push({id:'synrm',group:'Ηλεκτρική κίνηση (3.5)',title:'Σύγχρονη μηχανή μαγνητικής αντίστασης (SynRM): ευθυγράμμιση, έλεγχος dq, MTPA',theory:'formula',topology:'synrm',
   options:[{k:'mode',label:'Πείραμα',options:[['foc','Έλεγχος ταχύτητας και ρεύματος dq'],['align','Ευθυγράμμιση: σταθερό διάνυσμα ρεύματος']],def:'foc'},
    {k:'strat',label:'Γωνία ρεύματος (έλεγχος dq)',options:[['mtpa','MTPA: γ = 45° (ελάχιστο ρεύμα ανά ροπή)'],['g30','γ = 30°'],['g60','γ = 60°'],['idc','Σταθερό i_d = 4 A (σταθερή «ροή»)']],def:'mtpa'},
-   {k:'th0',label:'Αρχική γωνία δρομέα (ευθυγράμμιση)',options:[['60','θ₀ = 60°'],['120','θ₀ = 120°'],['89','θ₀ = 89° (σχεδόν στον άξονα q)']],def:'60'}],
+   {k:'th0',label:'Αρχική γωνία δρομέα (ευθυγράμμιση)',options:[['60','θ₀ = 60°'],['120','θ₀ = 120°'],['89','θ₀ = 89° (σχεδόν στον άξονα q)']],def:'60'},
+   {k:'sat',label:'Κορεσμός L_d',options:[['none','Χωρίς (γραμμική μηχανή)'],['d','Με κορεσμό: L_d → 0,04 H, γόνατο 0,5 V·s (3.6)']],def:'none'}],
   desc:'Η SynRM δεν έχει μαγνήτες ούτε τύλιγμα στον δρομέα. Ο δρομέας έχει άξονα εύκολης μαγνήτισης d (L_d μεγάλη) και δύσκολης q (L_q μικρή), και η ροπή είναι μόνο ροπή μαγνητικής αντίστασης: τ_e = (3/2)·p·(L_d − L_q)·i_d·i_q. Ο δρομέας στρέφεται ώστε ο άξονας d να πέσει πάνω στο διάνυσμα του ρεύματος, δηλαδή εκεί όπου η μαγνητική αντίσταση στη ροή είναι ελάχιστη. Τριφασικός αντιστροφέας 600 V, 5 kHz, SVPWM, μηχανή 4 πόλων με L_d = 0,15 H, L_q = 0,03 H (τυπικές τιμές). Η γωνία του δρομέα έρχεται από τη μηχανή (κωδικοποιητής).',
-  tasks:['Ευθυγράμμιση: ο αντιστροφέας δίνει σταθερό διάνυσμα τάσης στον άξονα α, άρα ρεύμα 10 A στη φάση a. Ο δρομέας ξεκινά στις 60° και ταλαντεύεται γύρω από τη γωνία 0: εκεί ο άξονας d βλέπει το ρεύμα. Η ροπή είναι ανάλογη του −sin 2δ.','Με θ₀ = 120° ο δρομέας πηγαίνει στις 180°, όχι στο 0. Και οι δύο φορές του άξονα d είναι ελάχιστη μαγνητική αντίσταση, γι\'αυτό η ροπή έχει περίοδο 180° ηλεκτρικές. Με θ₀ = 89° η ροπή ξεκινά σχεδόν μηδενική: ο άξονας q είναι ασταθής θέση ισορροπίας.','Έλεγχος dq: ο βρόχος ταχύτητας δίνει ροπή αναφοράς τ*, και από αυτή βγαίνουν i_d,ref και i_q,ref για τη γωνία γ που διαλέγεις. Με φορτίο 8 N·m στα 0,5 s δες στην κάρτα θεωρίας το ρεύμα που χρειάζεται κάθε γωνία: το MTPA (45°) θέλει το λιγότερο.','Οι PI ρεύματος έχουν αποσύζευξη: u_d = PI_d − ω_e·L_q·i_q και u_q = PI_q + ω_e·L_d·i_d. Ο συντελεστής ισχύος της SynRM είναι μικρός. Η κάρτα θεωρίας δίνει το cos φ και το όριο (ξ − 1)/(ξ + 1) για ξ = L_d/L_q.'],
-  build(o){const M=SYN,align=o.mode==='align',th0=align?+o.th0:0,pw=invIM({TL:align?'0':'0:0, 0.5:8',sm:{Rs:M.Rs,Ld:M.Ld,Lq:M.Lq,psim:0,pp:M.p,J:M.J,bm:M.b,th0},label:'M (SynRM)'}),{comps,wires}=pw;
-   const sim={hDiv:40,speed:20,stopT:align?1.2:1};
+  tasks:['Ευθυγράμμιση: ο αντιστροφέας δίνει σταθερό διάνυσμα τάσης στον άξονα α, άρα ρεύμα 10 A στη φάση a. Ο δρομέας ξεκινά στις 60° και ταλαντεύεται γύρω από τη γωνία 0: εκεί ο άξονας d βλέπει το ρεύμα. Η ροπή είναι ανάλογη του −sin 2δ.','Με θ₀ = 120° ο δρομέας πηγαίνει στις 180°, όχι στο 0. Και οι δύο φορές του άξονα d είναι ελάχιστη μαγνητική αντίσταση, γι\'αυτό η ροπή έχει περίοδο 180° ηλεκτρικές. Με θ₀ = 89° η ροπή ξεκινά σχεδόν μηδενική: ο άξονας q είναι ασταθής θέση ισορροπίας.','Έλεγχος dq: ο βρόχος ταχύτητας δίνει ροπή αναφοράς τ*, και από αυτή βγαίνουν i_d,ref και i_q,ref για τη γωνία γ που διαλέγεις. Με φορτίο 8 N·m στα 0,5 s δες στην κάρτα θεωρίας το ρεύμα που χρειάζεται κάθε γωνία: το MTPA (45°) θέλει το λιγότερο.','Με κορεσμό της L_d η γωνία MTPA ανεβαίνει πάνω από τις 45°: σύγκρινε στην κάρτα θεωρίας το ρεύμα στις 45° και στις 60°.','Οι PI ρεύματος έχουν αποσύζευξη: u_d = PI_d − ω_e·L_q·i_q και u_q = PI_q + ω_e·L_d·i_d. Ο συντελεστής ισχύος της SynRM είναι μικρός. Η κάρτα θεωρίας δίνει το cos φ και το όριο (ξ − 1)/(ξ + 1) για ξ = L_d/L_q.'],
+  build(o){const M=SYN,align=o.mode==='align',th0=align?+o.th0:0,pw=invIM({TL:align?'0':'0:0, 0.5:8',sm:{Rs:M.Rs,Ld:M.Ld,Lq:M.Lq,psim:0,pp:M.p,J:M.J,bm:M.b,th0,...(o.sat==='d'?{sat:'d',Ldsat:.04,psikd:.5}:{})},label:'M (SynRM)'}),{comps,wires}=pw;
+   const sim={hDiv:40,speed:20,stopT:align||o.sat==='d'?1.2:1};
    if(align){const Va=20;
     comps.push(C('KA','CONST',520,-160,{v:String(Va)},{label:'v_α'}),C('KB','CONST',520,-110,{v:'0'},{label:'v_β = 0'}),C('ICL','ICLARKE',620,-150,{},{label:'αβ → abc'}),C('KDC','CONST',620,-60,{v:'600'},{label:'V_dc'}),
      C('MD','MOD3',730,-140,{mode:'svpwm'},{label:'SVPWM'}),C('TGda','TAGO',830,-165,{name:'d_a'}),C('TGdb','TAGO',830,-140,{name:'d_b'}),C('TGdc','TAGO',830,-115,{name:'d_c'}),
@@ -467,7 +468,7 @@
     wires.push(['KA:y','ICL:al'],['KB:y','ICL:be'],['ICL:a','MD:va'],['ICL:b','MD:vb'],['ICL:c','MD:vc'],['KDC:y','MD:vdc'],['MD:da','TGda:u'],['MD:db','TGdb:u'],['MD:dc','TGdc:u'],['TFth:y','DL:th']);
     return project(comps,wires,{sim,scope:{panes:[[['Y:DL','δ (γωνία δρομέα)']],[['Y:M1:te','τ_e']],[['Y:M1:id','i_d'],['Y:M1:iq','i_q']],[['Y:M1','ω_m']]],window:{unit:'s',n:1.2}},
      meta:{...M,Vdc:600,fs:5e3,mode:'align',Va,th0}});}
-   const st=o.strat,g={mtpa:45,g30:30,g60:60}[st],K=1.5*M.p*(M.Ld-M.Lq),Id0=4,as=2*Math.PI*8,taumax=15;
+   const st=o.strat,g={mtpa:45,g30:30,g60:60}[st],K=1.5*M.p*(M.Ld-M.Lq),Id0=4,as=2*Math.PI*8,taumax=o.sat==='d'?25:15; // with saturation the linear K underestimates: τ* above the load torque
    const pars=g?`K = ${r4(K)}, s2 = ${r4(Math.sin(2*g*Math.PI/180))}, cg = ${r4(Math.cos(g*Math.PI/180))}, sg = ${r4(Math.sin(g*Math.PI/180))}`:`K = ${r4(K)}, Id0 = ${Id0}`;
    // τ = K·i_d·i_q = K·|i|²·sin(2γ)/2 → |i| = √(2|τ|/(K·sin 2γ))
    const exd=g?{expr:'cg*sqrt(2*abs(tau)/(K*s2))',ins:'tau',pars}:{expr:'Id0',ins:'',pars},exq=g?{expr:'sign(tau)*sg*sqrt(2*abs(tau)/(K*s2))',ins:'tau',pars}:{expr:'tau/(K*Id0)',ins:'tau',pars};
@@ -489,6 +490,40 @@
    const c=smFoc(pw,M,{exd,exq,in:'i',kps:r4(as*M.J/kt),kis:r4(as*as*M.J/kt/4),ymax:Imax,label:'PI ταχύτητας → i_s'});
    return project(comps,wires,{sim:{hDiv:40,speed:20,stopT:1},scope:{panes:[[['Y:M1','ω_m'],['Y:KW','ω_ref']],[['Y:PK','i_d'],['Y:PK:q','i_q'],['Y:EXD','i_d,ref'],['Y:EXQ','i_q,ref']],[['Y:M1:te','τ_e']],[['Y:AMa','i_a']]],window:{unit:'s',n:1}},
     meta:{...M,Vdc:600,fs:5e3,mach:o.mach,strat:st,kt,Imax,as,...c}});}});
+ // ------------------------------------------------------------------ 3.6: switched reluctance machine 8/6, asymmetric half-bridge per phase
+ // phase k: S_top from +V_dc to A, D from 0 V to A, D from B to +V_dc, S_bottom from B to 0 V; the winding A → B. Hysteresis current control
+ // (comparator i_ref − i_k with band ΔI) inside the window θ_on ≤ θ_e,k < θ_off, θ_e,k = θ_e − (k − 1)·2π/N; speed PI → i_ref
+ const SRMP={Rs:.5,Lu:.008,La:.06,Lsat:.008,psik:.35,J:.01,b:.001,N:4,Nr:6};
+ T.push({id:'srm',group:'Ηλεκτρική κίνηση (3.6)',title:'Μηχανή μαγνητικής αντίστασης με διακόπτες (SRM 8/6): γωνίες, υστέρηση, βρόχος ψ–i',theory:'formula',topology:'srm',
+  options:[{k:'ang',label:'Γωνίες αγωγής (ηλεκτρικές)',options:[['30-150','θ_on = 30°, θ_off = 150°'],['0-120','θ_on = 0°, θ_off = 120° (νωρίς)'],['60-180','θ_on = 60°, θ_off = 180° (αργά)']],def:'30-150'},
+   {k:'band',label:'Ζώνη υστέρησης ΔI',options:[['1','1 A'],['3','3 A']],def:'1'}],
+  desc:'SRM 8/6 (4 φάσεις, 6 πόλοι δρομέα) με κορεσμό: L_u = 8 mH, L_a = 60 mH, γόνατο ψ_k = 0,35 V·s (τυπικές τιμές). Κάθε φάση έχει ασύμμετρη γέφυρα από 300 V: όταν άγουν και οι δύο διακόπτες η φάση παίρνει +V_dc, όταν σβήνουν το ρεύμα επιστρέφει από τις διόδους με −V_dc. Ο έλεγχος ρεύματος είναι με υστέρηση, μόνο μέσα στο παράθυρο θ_on … θ_off της κάθε φάσης (0° = μη ευθυγραμμισμένη, 180° = ευθυγραμμισμένη). Ο βρόχος ταχύτητας δίνει το i_ref. Η ροπή βγαίνει από τη συνενέργεια W′ = ∫ψ di.',
+  tasks:['Τρέξε ως το τέλος (0,8 s). Η μηχανή ανεβαίνει με ράμπα στα 100 rad/s και στα 0,35 s παίρνει φορτίο 3 N·m. Δες τις τέσσερις φάσεις να άγουν η μία μετά την άλλη, κάθε 90° ηλεκτρικές (15° μηχανικές).','Οι πύλες S1…S8 παίρνουν το σήμα τους χωρίς καλώδιο από τα μπλοκ g_1…g_4 (πεδίο «Πηγή» της εισόδου g). Η κάρτα θεωρίας σχεδιάζει τις καμπύλες ψ(i) στη μη ευθυγραμμισμένη και στην ευθυγραμμισμένη θέση και τον βρόχο ψ–i της φάσης 1. Το εμβαδόν του βρόχου είναι η ενέργεια ανά παλμό, και N·N_r·W/(2π) είναι η μέση ροπή.','Αργό σβήσιμο (θ_off = 180°): το ρεύμα δεν προλαβαίνει να μηδενιστεί πριν την ευθυγράμμιση και δίνει αρνητική ροπή. Χρειάζεται μεγαλύτερο i_ref για την ίδια ροπή. Νωρίς: λιγότερη ροπή ανά αμπέρ, αλλά καθαρός βρόχος.','Η κυμάτωση της ροπής φαίνεται στο τ_e: η SRM δίνει ροπή σε παλμούς, γι\'αυτό έχει θόρυβο και ταλαντώσεις.'],
+  build(o){const [on,off]=o.ang.split('-').map(Number),band=+o.band,Vdc=300,M=SRMP,N=M.N,X=k=>230+160*k,r4=v=>+v.toPrecision(4),comps=[],wires=[];
+   comps.push(C('V1','VDC',100,200,{V:Vdc},{label:'V_dc'}),gnd(100,380),J('JTL',100,60),J('JBL',100,330));wires.push(['V1:p','JTL'],['V1:n','JBL'],['JBL','G1:g']);
+   // gates without a wire: the input g of both switches of phase q names the output of its window block (in_g = "WINq:y")
+   for(let k=0;k<N;k++){const x=X(k),q=k+1,u='S'+(2*k+1),l='S'+(2*k+2),gs={gate:'sig',body:false,Ron:.01,in_g:'WIN'+q+':y'};
+    comps.push(C(u,'SW',x-40,140,gs,{label:u,lbl:'above'}),C('DU'+q,'D',x+40,140,{},{rot:3,label:'D'+(2*k+1),lbl:'above'}),C(l,'SW',x+40,260,gs,{label:l,lbl:'below'}),C('DL'+q,'D',x-40,260,{},{rot:3,label:'D'+(2*k+2),lbl:'below'}),
+     J('JTa'+q,x-40,60),J('JTb'+q,x+40,60),J('JBa'+q,x-40,330),J('JBb'+q,x+40,330),J('JA'+q,x-40,200),J('JB'+q,x+40,200));
+    wires.push([u+':d','JTa'+q],[u+':s','JA'+q],['JA'+q,'DL'+q+':k'],['DL'+q+':a','JBa'+q],['DU'+q+':k','JTb'+q],['DU'+q+':a','JB'+q],['JB'+q,l+':d'],[l+':s','JBb'+q],['JTa'+q,'JTb'+q],['JBa'+q,'JBb'+q],
+     ['JA'+q,'M1:a'+q,[[x-10,200]]],['JB'+q,'M1:b'+q,[[x+10,200]]]);
+    if(k)wires.push(['JTb'+k,'JTa'+q],['JBb'+k,'JBa'+q]);}
+   wires.push(['JTL','JTa1'],['JBL','JBa1']);
+   comps.push(C('M1','SRM',470,480,{Rs:M.Rs,Lu:M.Lu,La:M.La,Lsat:M.Lsat,psik:M.psik,J:M.J,bm:M.b,TL:'0:0, 0.35:3',th0:30},{label:'M (SRM 8/6)',lbl:'left'}));
+   const xs=X(0);comps.push(C('TGw','TAGO',xs+100,600,{name:'ω'}),C('TGth','TAGO',xs+120,560,{name:'θ'}));wires.push(['M1:w','TGw:u',[[xs+40,600]]],['M1:th','TGth:u',[[xs+80,560]]]);
+   for(let k=0;k<N;k++){const q=k+1;comps.push(C('TGi'+q,'TAGO',X(k)+30,640,{name:'i_'+q}));wires.push(['M1:i'+q,'TGi'+q+':u',[[X(k),640]]]);}
+   // control: clock for the speed PI, speed loop, and per phase comparator (hysteresis) × angle window
+   // speed PI on a torque constant of about 0.5 N·m/A near 6–10 A (the SRM torque grows with i², the loop is tuned at the operating point)
+   const Imax=20,as=2*Math.PI*6,K=.5,kps=r4(as*M.J/K),kis=r4(as*as*M.J/K/4),rad=d=>r4(d*Math.PI/180);
+   comps.push(C('CLK1','CLK',-260,-540,{f:10e3},{label:'ρολόι 10 kHz'}),C('KW','EXPR',-260,-480,{expr:'min(wr, a*t)',ins:'',pars:'wr = 100, a = 400'},{label:'ω_ref (ράμπα 400 rad/s²)'}),C('TFw','TAGI',-260,-440,{name:'ω'}),C('SW1','SUM',-170,-470,{signs:'+-'},{label:'e_ω'}),
+    C('PIS','PIB',-80,-470,{Kp:kps,Ki:kis,clock:'CLK1',trig:'start',y0:0,ymin:0,ymax:Imax},{label:'PI ταχύτητας → i_ref'}),C('TGir','TAGO',30,-470,{name:'i_ref'}));
+   wires.push(['KW:y','SW1:a'],['TFw:y','SW1:b'],['SW1:y','PIS:u'],['PIS:y','TGir:u']);
+   for(let k=0;k<N;k++){const q=k+1,y=-380+100*k;
+    comps.push(C('TFr'+q,'TAGI',-280,y-10,{name:'i_ref'}),C('TFi'+q,'TAGI',-280,y+10,{name:'i_'+q}),C('CMP'+q,'CMP',-190,y,{hys:band},{label:'υστέρηση '+q}),
+     C('TFt'+q,'TAGI',-130,y+20,{name:'θ'}),C('WIN'+q,'EXPR',-40,y+10,{expr:'c*(mod(th - d, 2*pi) >= on)*(mod(th - d, 2*pi) < off)',ins:'c, th',pars:`d = ${rad(90*k)}, on = ${rad(on)}, off = ${rad(off)}`},{label:'g_'+q}));
+    wires.push(['TFr'+q+':y','CMP'+q+':p'],['TFi'+q+':y','CMP'+q+':n'],['CMP'+q+':y','WIN'+q+':c'],['TFt'+q+':y','WIN'+q+':th']);}
+   return project(comps,wires,{sim:{hDiv:20,speed:2000,stopT:.8},scope:{panes:[[['Y:M1','ω_m'],['Y:KW','ω_ref']],[['I:M1','i₁'],['I2:M1','i₂'],['I3:M1','i₃'],['I4:M1','i₄']],[['Y:M1:te','τ_e']],[['PSI1:M1','ψ₁']]],window:{unit:'s',n:.05}},
+    meta:{...M,Vdc,on,off,band,Imax,kps,kis,as,K,TL:3,tTL:.35,wref:100}});}});
  // ------------------------------------------------------------------ 3.5: lightning current (Heidler, IEC 62305-1) into a down conductor and an earth resistance
  T.push({id:'lightning',group:'Κεραυνικά (3.5)',title:'Κεραυνικό ρεύμα Heidler: 10/350, 1/200, 0,25/100 μs',theory:'formula',topology:'lightning',
   options:[{k:'shape',label:'Κυματομορφή',options:[['10/350','10/350 μs, 200 kA (πρώτο θετικό, LPL I)'],['1/200','1/200 μs, 100 kA (πρώτο αρνητικό)'],['0.25/100','0,25/100 μs, 50 kA (επόμενο αρνητικό)'],['custom','1,2/50 μs διπλοεκθετικό, 10 kA (προσαρμογή τ₁, τ₂)']],def:'10/350'}],

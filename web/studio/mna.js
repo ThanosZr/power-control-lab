@@ -159,12 +159,20 @@
    else if(T==='SM'){ // synchronous machine (3.5): R_s per phase, then the flux element of the two ports a→c, b→c whose Γ(θ) and ψ₀(θ)
     // follow the rotor (new factorization each step); ω and θ advance after each committed step from the torque
     const n1=['a','b','c'].map(k=>series(node(c.id,k),-1,num(p.Rs,2)));
-    const m={p:Math.max(1,Math.round(num(p.pp,2))),Ld:Math.max(num(p.Ld,.15),1e-9),Lq:Math.max(num(p.Lq,.03),1e-9),psim:num(p.psim,0),J:Math.max(num(p.J,.02),1e-9),b:Math.max(num(p.bm,0),0),
+    const m={p:Math.max(1,Math.round(num(p.pp,2))),Ld:Math.max(num(p.Ld,.15),1e-9),Lq:Math.max(num(p.Lq,.03),1e-9),psim:num(p.psim,0),
+     sat:p.sat==='d'?{Ld:Math.max(num(p.Ld,.15),1e-9),Ldsat:Math.min(Math.max(num(p.Ldsat,.04),1e-9),Math.max(num(p.Ld,.15),1e-9)),psik:Math.max(num(p.psikd,.5),1e-9)}:null,J:Math.max(num(p.J,.02),1e-9),b:Math.max(num(p.bm,0),0),
      sched:p.load==='sig'?null:(P.parseSched(p.TL)||[[0,0]]),st:{w:num(p.w0,0),the:num(p.th0,0)*Math.PI/180,te:0,id:0,iq:0}};
     const q=smPort(m,m.st.the),psi=Float64Array.from(q.p0);
     info.main=add({k:'F',ports:[[n1[0],n1[2]],[n1[1],n1[2]]],N:2,sm:m,Gnow:q.G,p0:q.p0,psi,psi1:psi.slice(),i:new Float64Array(2),key:c.id});
     m.F=info.main;info.pins=[node(c.id,'a'),node(c.id,'b')];info.sm=m;
     info.blk=mkBlock(c,p,'SM',{sm:m,ft:false});m.tl=info.blk.ins.tl??-1;}
+   else if(T==='SRM'){ // switched reluctance machine (3.6): R per phase, then a flux element with one port per phase; its Γ and ψ₀ are the
+    // linearization of i(θ, ψ) at the flux of the previous step (values), and ω, θ advance after each committed step (srmStep)
+    const g=P.srmMag(p);if(g.err)throw new NetlistError(`${c.label||c.id}: ${g.err}`);const N=g.N,ports=[],pr=[];
+    for(let k=1;k<=N;k++){const a=node(c.id,'a'+k),b=node(c.id,'b'+k);ports.push([a,b]);pr.push([series(a,-1,num(p.Rs,.5)),b]);}
+    const m={g,N,Nr:g.Nr,J:Math.max(num(p.J,.01),1e-9),b:Math.max(num(p.bm,0),0),sched:p.load==='sig'?null:(P.parseSched(p.TL)||[[0,0]]),st:{w:num(p.w0,0),the:num(p.th0,30)*Math.PI/180,te:0}};
+    info.main=add({k:'F',ports:pr,N,srm:m,Gnow:new Float64Array(N*N),p0:new Float64Array(N),psi:new Float64Array(N),psi1:new Float64Array(N),i:new Float64Array(N),key:c.id});
+    m.F=info.main;info.pins=ports[0];info.ports=ports;info.srm=m;info.blk=mkBlock(c,p,'SRM',{srm:m,ft:false});m.tl=info.blk.ins.tl??-1;}
    else if(T==='DCM'){ // armature R_a + L_a + gyrator (E = ψ·ω, τ_e = ψ·i_a); mechanics as a circuit: node ω, C = J, G = b, current source τ_L
     const a=node(c.id,'a'),bb=node(c.id,'b');info.pins=[a,bb];const psi=num(p.psi,1),J=Math.max(num(p.J,.02),1e-9),bm=Math.max(num(p.bm,0),0);
     const n1=num(p.Ra,0)>0?internal():a;if(n1!==a)add({k:'G',a,b:n1,R:num(p.Ra,.5),role:'Ra'});
@@ -269,12 +277,13 @@
    if(old&&!fresh){ // carry states by key
     const st=new Map();for(const e of old.els)if(e.key)st.set(e.k+e.key,e);
     for(const e of net.els)if(e.key&&st.has(e.k+e.key)){const o=st.get(e.k+e.key);if(e.k==='L')e.i=o.i;if(e.k==='C'){e.v=o.v;e.i=o.i;}if(e.k==='D')e.on=o.on;
-     if(e.k==='F'&&o.N===e.N&&!e.sm===!o.sm){e.i.set(o.i);if(e.sm){e.psi.set(o.psi);e.psi1.set(o.psi1);}else{for(let k=0;k<e.N;k++){let s=0;for(let j=0;j<e.N;j++)s+=e.Lm[k*e.N+j]*e.i[j];e.psi[k]=s;}e.psi1.set(e.psi);}}}
+     if(e.k==='F'&&o.N===e.N&&!e.sm===!o.sm&&!e.srm===!o.srm){e.i.set(o.i);if(e.sm||e.srm){e.psi.set(o.psi);e.psi1.set(o.psi1);}else{for(let k=0;k<e.N;k++){let s=0;for(let j=0;j<e.N;j++)s+=e.Lm[k*e.N+j]*e.i[j];e.psi[k]=s;}e.psi1.set(e.psi);}}}
     const oc=new Map(old.ctrls.map(c=>[c.id,c]));for(const c of net.ctrls){const o=oc.get(c.id);if(o&&o.mode===c.mode&&o.T===c.T){c.xi=o.xi;c.d=o.d;c.k=o.k;c.tk=o.tk;c.tkPrev=o.tkPrev;c.dPrev=o.dPrev;c.dPrevOff=o.dPrevOff;c.dOn=o.dOn;c.dOff=o.dOff;c.h=c.upd===o.upd?o.h:null;c.meas=o.meas;c.refNow=o.refNow;c.ePrev=o.ePrev;c.dF=o.dF;}}
     for(const e of net.els)if(e.k==='CPL'){const o=old.els.find(x=>x.k==='CPL'&&x.cid===e.cid);if(o)e.v0=o.v0;}
     const os=new Map(old.shs.map(q=>[q.id,q]));for(const q of net.shs){const o=os.get(q.id);if(o){q.h=o.h;q.last=q.trig===o.trig&&q.clock===o.clock?o.last:null;q.n=o.n;q.log=o.log;}}
     for(const [id,c] of net.compInfo)if(c.im){const o=old.compInfo.get(id);if(o?.im)c.im.st={...o.im.st};} // the machine keeps its flux and speed
     for(const [id,c] of net.compInfo)if(c.sm){const o=old.compInfo.get(id);if(o?.sm)c.sm.st={...o.sm.st};}
+    for(const [id,c] of net.compInfo)if(c.srm){const o=old.compInfo.get(id);if(o?.srm&&o.srm.N===c.srm.N)c.srm.st={...o.srm.st};}
     const ob=new Map(old.sig.blocks.map(b=>[b.id,b]));for(const b of net.sig.blocks){const o=ob.get(b.id);if(o&&o.type===b.type&&b.type!=='SH'){b.st={...b.st,...o.st};if(b.clock!==o.clock||b.trig!==o.trig)b.st.last=null;}}
    }
    this.net=net;const nb=net.sig.blocks.length;this.sv=new Float64Array(net.sig.n);this.svT=new Float64Array(net.sig.n);this.yb=new Float64Array(nb);this.ybT=new Float64Array(nb);
@@ -282,7 +291,8 @@
    if(!this.x||this.x.length!==this.n||fresh)this.x=new Float64Array(this.n);
    this.pyBlocks(old&&!fresh?old:null);
    this.ims=[...net.compInfo.values()].filter(c=>c.im).map(c=>c.im);for(const m of this.ims)this.imSources(m);
-   this.sms=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm);this.hasTV=this.sms.length>0;for(const m of this.sms)this.smOutputs(m);
+   this.sms=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm);for(const m of this.sms)this.smOutputs(m);
+   this.srms=[...net.compInfo.values()].filter(c=>c.srm).map(c=>c.srm);for(const m of this.srms)this.srmOutputs(m);this.hasTV=this.sms.length+this.srms.length>0;
    this.hasCPL=net.els.some(e=>e.k==='CPL');this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.h=this.opts.h||this.T/this.opts.hDiv;
    const keys=this.channelKeys();const same=!fresh&&this.keys&&keys.join('|')===this.keys.join('|');
@@ -308,6 +318,9 @@
   // synchronous machine: θ advanced with the ω used to predict Γ(θ) over the step, then torque and ω (leapfrog: the stored ω is half a step
   // ahead of θ, so the output ω_o = ω − (h/2)·dω/dt is the speed at the end of the step)
   smStep(m,h){const s=m.st;s.the+=h*m.p*s.w;this.smOutputs(m);const tl=m.tl>=0?(this.sv?this.sv[m.tl]:0):schedAt(m.sched,this.t+h,m.sched[0][1]),a=(s.te-tl-m.b*s.w)/m.J;s.w+=h*a;s.wo=s.w-h/2*a;}
+  // switched reluctance machine: as the synchronous machine, with the torque summed over the phases from the co-energy
+  srmStep(m,h){const s=m.st;s.the+=h*m.Nr*s.w;this.srmOutputs(m);const tl=m.tl>=0?(this.sv?this.sv[m.tl]:0):schedAt(m.sched,this.t+h,m.sched[0][1]),a=(s.te-tl-m.b*s.w)/m.J;s.w+=h*a;s.wo=s.w-h/2*a;}
+  srmOutputs(m){let te=0;for(let k=0;k<m.N;k++)te+=P.srmTorque(m.g,m.st.the-2*Math.PI*k/m.N,m.F.i[k]);m.st.te=te;}
   smOutputs(m){const o=smOut(m,m.F.psi,m.F.i,m.st.the);m.st.te=o.te;m.st.id=o.id;m.st.iq=o.iq;}
   imSources(m){const s=m.st,wr=m.p*s.w,g=m.RR/m.LM,ea=-g*s.pa-wr*s.pb,eb=-g*s.pb+wr*s.pa,Q=Math.sqrt(3)/2;m.ph[0].V.imE=ea;m.ph[1].V.imE=-ea/2+Q*eb;m.ph[2].V.imE=-ea/2-Q*eb;}
   pyBlocks(old){const bs=this.net.sig.blocks.filter(b=>b.type==='PY');const prev=new Map((old?.sig.blocks||[]).filter(b=>b.type==='PY'&&b.rt).map(b=>[b.id,b]));
@@ -333,6 +346,7 @@
     k.push('V:'+c.id,'I:'+c.id,'P:'+c.id);
     if(c.type==='XFMR')k.push('V2:'+c.id,'I2:'+c.id,'Im:'+c.id);
     if(c.ports)for(let q=2;q<=c.ports.length;q++)k.push('V'+q+':'+c.id,'I'+q+':'+c.id);
+    if(c.srm)for(let q=1;q<=c.srm.N;q++)k.push('PSI'+q+':'+c.id);
     if(c.type==='VAC3')k.push('Vb:'+c.id,'Vc:'+c.id,'Ib:'+c.id,'Ic:'+c.id,'Vab:'+c.id);
     if(c.loss)k.push('PSW:'+c.id);
     if(c.type==='SW'||c.type==='SCR')k.push('GS:'+c.id);
@@ -372,6 +386,7 @@
     out[j++]=v;out[j++]=i;out[j++]=src?v*i:v*i;
     if(c.type==='XFMR'){const v2=this.V(c.pins2[0])-this.V(c.pins2[1]);const is=this.x[c.main.row]*(c.opp?-1:1);out[j++]=v2;out[j++]=is;out[j++]=c.mag.i;}
     if(c.ports)for(let q=1;q<c.ports.length;q++){out[j++]=this.V(c.ports[q][0])-this.V(c.ports[q][1]);out[j++]=this.portI(c.main,q);}
+    if(c.srm)for(let q=0;q<c.srm.N;q++)out[j++]=c.main.psi[q];
     if(c.loss)out[j++]=c.loss.P;
     if(c.type==='SW'||c.type==='SCR'){const e=c.main;out[j++]=(e.k==='S'?e.on:e.gon)?1:0;} // the gate pulse this switch receives (after dead time)
     if(c.blk){out[j++]=this.ybT[c.blk.i];const yo=this.yoT[c.blk.i];for(let q=1;q<yo.length;q++)out[j++]=yo[q];}
@@ -517,6 +532,7 @@
       const a=rd(I.a),bb=rd(I.b),c=rd(I.c),al=(2*a-bb-c)/3,be=(bb-c)/Q3,cs=Math.cos(th),sn=Math.sin(th),vd=al*cs+be*sn,vq=-al*sn+be*cs,amp=Math.hypot(al,be);
       const e=amp>1e-9?vq/amp:0,xi=st.xi+b.Ki*dt*e,w=b.w0+b.Kp*e+xi;if(!trial){st.th=th;st.xi=xi;st.w=w;st.t=this.t;}ys={th,w,amp:vd};break;}
      case 'DCM':ys={w:this.V(b.m),te:b.psi*this.x[b.gy.row]};break;
+     case 'SRM':{const s=b.srm.st,P2=2*Math.PI;ys={w:s.wo??s.w,te:s.te,th:s.the-P2*Math.floor(s.the/P2)};for(let k=0;k<b.srm.N;k++)ys['i'+(k+1)]=b.srm.F.i[k];break;}
      case 'SM':{const s=b.sm.st,P2=2*Math.PI;ys={w:s.wo??s.w,te:s.te,th:s.the-P2*Math.floor(s.the/P2),id:s.id,iq:s.iq};break;}
      case 'IM':{const s=b.im.st,P2=2*Math.PI,f=Math.atan2(s.pb,s.pa),r=b.im.p*s.th;ys={w:s.w,te:s.te,psi:Math.hypot(s.pa,s.pb),thf:f-P2*Math.floor(f/P2),thr:r-P2*Math.floor(r/P2)};break;}
      case 'CLK':{const u=b.f*t-b.ph,fr=u-Math.floor(u+1e-11);y=fr<b.duty-1e-11?1:0;break;}
@@ -541,7 +557,7 @@
    for(const b of this.net.sig.zc){const s=b.st.s,f0=b.st.f0,f1=b.f1;if(!(s?f1<0:f1>0))continue;const d=f0-f1;const q=Math.min(1,Math.max(0,d!==0?f0/d:0));if(th===null||q<th)th=q;}
    return th;}
   saveState(){const el=[];for(const e of this.net.els){if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);}
-   return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el,ms:[...(this.ims||[]),...(this.sms||[])].map(m=>[m,{...m.st}])};}
+   return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el,ms:[...(this.ims||[]),...(this.sms||[]),...(this.srms||[])].map(m=>[m,{...m.st}])};}
   restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
    for(const r of S.el){const e=r[0];if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
    for(const [m,st] of S.ms||[]){m.st={...st};if(m.ph)this.imSources(m);}}
@@ -553,7 +569,12 @@
    for(const e of this.net.els){
     if(e.k==='G')e.Rnow=Math.max(schedAt(e.sched,t,e.R),1e-9);
     else if(e.k==='I')e.Inow=e.wave?P.waveAt(e.wave,t):e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):schedAt(e.sched,t,e.I);
-    else if(e.k==='F'&&e.sm){const m=e.sm,q=smPort(m,m.st.the+(t-this.t)*m.p*m.st.w);e.Gnow=q.G;e.p0=q.p0;}
+    else if(e.k==='F'&&e.sm){const m=e.sm,th=m.st.the+(t-this.t)*m.p*m.st.w;let q;
+     if(m.sat){ // saturated d axis: linearize i_d(ψ_d) at the flux of the previous step, i_d ≈ (ψ_d − ψ₀)/L_inc, at the predicted angle
+      const pa=(2*e.psi[0]-e.psi[1])/3,pb=e.psi[1]/SQ3,pd=Math.cos(th)*pa+Math.sin(th)*pb,id=P.satDinv(m.sat,pd-m.psim),Li=P.satD(m.sat,id).L;
+      q=smPort({Ld:Li,Lq:m.Lq,psim:pd-id*Li},th);}else q=smPort(m,th);
+     e.Gnow=q.G;e.p0=q.p0;}
+    else if(e.k==='F'&&e.srm){const m=e.srm,th=m.st.the+(t-this.t)*m.Nr*m.st.w;for(let k=0;k<m.N;k++){const q=P.srmCur(m.g,th-2*Math.PI*k/m.N,e.psi[k]);e.Gnow[k*m.N+k]=q.g;e.p0[k]=e.psi[k]-q.i/q.g;}}
     else if(e.k==='V'&&e.imE!==undefined)e.Vnow=e.imE;
     else if(e.k==='V'){const s=e.src;e.Vnow=e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):s.kind==='dc'?schedAt(s.sched,t,s.V):s.off+s.Vpk*Math.sin(2*Math.PI*s.f*t+s.ph);}
     else if(e.k==='CPL')e.Pnow=schedAt(e.sched,t,e.P);
@@ -637,6 +658,7 @@
    }
    if(this.ims)for(const m of this.ims)this.imStep(m,h);
    if(this.sms)for(const m of this.sms)this.smStep(m,h);
+   if(this.srms)for(const m of this.srms)this.srmStep(m,h);
    this.t+=h;this.steps++;this.hLast=h;
   }
   // consistent initial solution at t=0: inductors act as current sources (i0),
@@ -768,8 +790,10 @@
   const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm'];
   // synchronous machines (3.5): parameters and initial states; the server integrates ψ_α, ψ_β, ω, θ
   const smList=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm),smx=new Map(smList.map((m,i)=>[m,i]));
-  const els=net.els.map(e=>{const o={};for(const k of F)if(e[k]!==undefined&&e[k]!==null)o[k]=e[k];if(e.k==='F'){o.i=Array.from(e.i);o.psi=Array.from(e.psi);if(e.sm){o.sm=smx.get(e.sm);delete o.Gam;}}return o;});
-  const sms=smList.map(m=>({F:idx.get(m.F),p:m.p,Ld:m.Ld,Lq:m.Lq,psim:m.psim,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{w:m.st.w,the:m.st.the}}));
+  const srmList=[...net.compInfo.values()].filter(c=>c.srm).map(c=>c.srm),srmx=new Map(srmList.map((m,i)=>[m,i]));
+  const els=net.els.map(e=>{const o={};for(const k of F)if(e[k]!==undefined&&e[k]!==null)o[k]=e[k];if(e.k==='F'){o.i=Array.from(e.i);o.psi=Array.from(e.psi);if(e.sm){o.sm=smx.get(e.sm);delete o.Gam;}if(e.srm){o.srm=srmx.get(e.srm);delete o.Gam;}}return o;});
+  const srms=srmList.map(m=>({F:idx.get(m.F),N:m.N,Nr:m.Nr,I:m.g.I,C:m.g.C,M:m.g.M,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{w:m.st.w,the:m.st.the}}));
+  const sms=smList.map(m=>({F:idx.get(m.F),p:m.p,Ld:m.Ld,Lq:m.Lq,psim:m.psim,sat:m.sat,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{w:m.st.w,the:m.st.the}}));
   const ci=id=>net.compInfo.get(id),cix=new Map(net.ctrls.map((k,i)=>[k.id,i]));
   const vd=(a,b)=>({v:[[a,1],[b,-1]].filter(q=>q[0]>=0)});
   const V=c=>c&&c.pins?vd(c.pins[0],c.pins[1]):null;
@@ -787,6 +811,7 @@
     return {V:pv(ph[0]),I:pi(ph[0]),P:{sum:ph.map(q=>({prod:[pv(q),pi(q)]}))},Vb:pv(ph[1]),Vc:pv(ph[2]),Ib:pi(ph[1]),Ic:pi(ph[2]),Vab:vd(ph[0].pin,ph[1].pin)}[pre]||null;}
    if(pre==='V')return V(c);if(pre==='I')return I(c);if(pre==='P'){const a=V(c),b=I(c);return a&&b?{prod:[a,b]}:null;}
    if(c.type==='XFMR'){if(pre==='V2')return vd(c.pins2[0],c.pins2[1]);if(pre==='I2')return {i:[[idx.get(c.main),c.opp?-1:1]]};if(pre==='Im')return {i:[[idx.get(c.mag),1]]};}
+   if(c.srm&&/^PSI\d$/.test(pre)){const q=+pre.slice(3)-1;return q<c.srm.N?{srm:[srmx.get(c.srm),q]}:null;}
    if(c.ports)return portRec(c,pre);
    return null;};
   const shx=new Map(net.shs.map((q,i)=>[q.id,i]));
@@ -802,13 +827,14 @@
    if(b.type==='DCM')o.recs={w:{v:[[b.m,1]]},te:{i:[[idx.get(b.gy),b.psi]]}};
    if(b.type==='IM')o.im=imx.get(b.im);
    if(b.type==='SM')o.sm=smx.get(b.sm);
+   if(b.type==='SRM')o.srm=srmx.get(b.srm);
    if(b.type==='PIB'||b.type==='UD'||b.type==='PY'){o.clock=cix.get(b.clock)??null;o.clk=clkOf(b.clock);}
    if(b.type==='VM')o.rec=vd(b.np,b.nn);else if(b.type==='AM')o.rec={i:[[idx.get(b.el),-1]]};else if(b.type==='MEAS'){const c=ci(b.src);o.rec=(b.qty==='V'?V(c):I(c))||null;}
    if(b.type==='SH'){o.sh=shx.get(b.id);o.sig=!!b.sig;}return o;});
   const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase','upd','dIn'])o[f]=k[f];
    const s=ci(k.sensor);o.sensorRec=k.mode==='pi'?(shx.has(k.sensor)?{sh:shx.get(k.sensor)}:k.qty==='V'?V(s):I(s)):null;o.ffARec=V(ci(k.ffA));o.ffBRec=V(ci(k.ffB));return o;});
   const channels={},skipped=[];for(const key of keys){const r=rec(key);if(r)channels[key]=r;else skipped.push(key);}
-  return {net:{nNodes:net.nNodes,size:net.size,els,ctrls,shs,sig:{n:net.sig.n,blocks},ims,sms},channels,skipped};
+  return {net:{nNodes:net.nNodes,size:net.size,els,ctrls,shs,sig:{n:net.sig.n,blocks},ims,sms,srms},channels,skipped};
  }
  // one point of a parameter sweep (bifurcation diagram): set comp.param = value, run `transient` base periods and
  // return the per-period statistic (min, max, avg, end = value at the period boundary) of channel `key` over the next `record` periods

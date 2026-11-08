@@ -215,9 +215,19 @@ class StudioSimulator(unittest.TestCase):
             th0 = math.radians(par.get('th0', 0))
             tl = (lambda t: 2.0 if t >= .05 else 0.0) if par.get('TL') else (lambda t: 0.0)
 
+            sat = par.get('sat') == 'd' and {'Ld': Ld, 'Ldsat': par['Ldsat'], 'psik': par['psikd']}
+
+            def fd_inv(p):                     # saturated d axis, written here again: ψ = L_dsat·i + ψ_k·(1 − e^(−(L_d − L_dsat)|i|/ψ_k))
+                a, i = abs(p), abs(p) / Ld
+                for _ in range(60):
+                    e = math.exp(-(Ld - sat['Ldsat']) * i / sat['psik'])
+                    i -= (sat['Ldsat'] * i + sat['psik'] * (1 - e) - a) / (sat['Ldsat'] + (Ld - sat['Ldsat']) * e)
+                return math.copysign(i, p)
+
             def cur(y):
                 c, s = math.cos(y[3]), math.sin(y[3])
-                i_d, i_q = (c * y[0] + s * y[1] - pm) / Ld, (-s * y[0] + c * y[1]) / Lq
+                pd = c * y[0] + s * y[1] - pm
+                i_d, i_q = (fd_inv(pd) if sat else pd / Ld), (-s * y[0] + c * y[1]) / Lq
                 return c * i_d - s * i_q, s * i_d + c * i_q, i_d, i_q
 
             def f(t, y):
@@ -233,7 +243,7 @@ class StudioSimulator(unittest.TestCase):
                 ia, ib, i_d, i_q = cur(y0)
                 out.append((y0[2], y0[3] % (2 * math.pi), ia, i_d, i_q, 1.5 * p * (y0[0] * ib - y0[1] * ia)))
             return out
-        for name, par in (('align', r['syn']), ('pmRun', r['pm'])):
+        for name, par in (('align', r['syn']), ('pmRun', r['pm']), ('satRun', r['sat'])):
             rows = r[name]
             for row, ref in zip(rows, ode(par, [q[0] for q in rows])):
                 t, w, th, ia, i_d, i_q, te = row
@@ -258,6 +268,50 @@ class StudioSimulator(unittest.TestCase):
             self.assertAlmostEqual(q['iq'], i_q, delta=1e-3 * math.hypot(i_d, i_q), msg=name)
             self.assertAlmostEqual(q['te'], 1.5 * 2 * (pm * i_q + (Ld - Lq) * i_d * i_q), delta=2e-3 * abs(q['te']), msg=name)
             self.assertAlmostEqual(q['irms'], math.hypot(i_d, i_q) / math.sqrt(2), delta=2e-3 * math.hypot(i_d, i_q), msg=name)
+        # saturated d axis at constant speed: v_d = R·i_d − ω·L_q·i_q, v_q = R·i_q + ω·f(i_d), solved here with Newton
+        from scipy.optimize import fsolve
+        q, ang = r['ssSat'], math.radians(20 - 90 + 10)
+        f = lambda i: .04 * i + .5 * (1 - math.exp(-.11 * abs(i) / .5)) * math.copysign(1, i)
+        i_d, i_q = fsolve(lambda x: [2 * x[0] - w * .03 * x[1] - 200 * math.cos(ang), 2 * x[1] + w * f(x[0]) - 200 * math.sin(ang)], [1, 1], xtol=1e-13)
+        self.assertAlmostEqual(q['id'], i_d, delta=1e-3 * math.hypot(i_d, i_q))
+        self.assertAlmostEqual(q['iq'], i_q, delta=1e-3 * math.hypot(i_d, i_q))
+        self.assertAlmostEqual(q['te'], 1.5 * 2 * (f(i_d) - .03 * i_d) * i_q, delta=2e-3 * abs(q['te']))
+
+    def test_switched_reluctance_machine(self):
+        # 3.6: against the exact model integrated here: ψ(θ, i) = L_u·i + (ψ_a(i) − L_u·i)·(1 − cos θ)/2 with the aligned curve
+        # ψ_a(i) = L_sat·i + ψ_k·(1 − e^(−(L_a − L_sat)·i/ψ_k)), i from ψ by Newton, torque N_r·∂W′/∂θ from the analytic co-energy
+        from scipy.integrate import solve_ivp
+        r = self.o['srm']
+        self.assertEqual(r['warn'], [])
+        Lu, La, Ls, pk, R, Nr, J, b = .008, .06, .008, .35, .5, 6, .01, .001
+        dL = La - Ls
+        pa = lambda i: Ls * i + pk * (1 - math.exp(-dL * i / pk))
+        dpa = lambda i: Ls + dL * math.exp(-dL * i / pk)
+        psi = lambda th, i: Lu * i + (pa(i) - Lu * i) * (1 - math.cos(th)) / 2
+
+        def cur(th, p):
+            i = p / Lu
+            for _ in range(60):
+                i -= (psi(th, i) - p) / (Lu + (dpa(i) - Lu) * (1 - math.cos(th)) / 2)
+            return i
+        wa = lambda i: Ls * i * i / 2 + pk * (i - pk / dL * (1 - math.exp(-dL * i / pk)))
+        tq = lambda th, i: Nr * math.sin(th) / 2 * (wa(i) - Lu * i * i / 2)
+        sol = solve_ivp(lambda t, y: [20 - R * cur(y[2], y[0]), (tq(y[2], cur(y[2], y[0])) - b * y[1]) / J, Nr * y[1]], (0, .15),
+                        [0, 0, math.radians(30)], rtol=1e-10, atol=1e-12, dense_output=True, method='LSODA')
+        for t, w, th, i1, p1, te, i2, i1s in r['at']:
+            y = sol.sol(t)
+            self.assertAlmostEqual(w, y[1], delta=.005 * abs(y[1]) + .01, msg=t)
+            self.assertAlmostEqual((th - y[2] + math.pi) % (2 * math.pi) - math.pi, 0, delta=3e-3, msg=t)
+            self.assertAlmostEqual(i1, cur(y[2], y[0]), delta=.002 * abs(i1), msg=t)
+            self.assertAlmostEqual(p1, y[0], delta=5e-4 * y[0], msg=t)
+            self.assertAlmostEqual(te, tq(y[2], cur(y[2], y[0])), delta=.005 * abs(te) + .01, msg=t)
+            self.assertEqual(i2, 0)                     # shorted phase without flux: no current
+            self.assertEqual(i1s, i1)                   # the current output of the machine
+        self.assertIsNone(r['tblErr'])                  # the default table (from the model) fits, with the cosine series up to m = 4
+        self.assertEqual(r['tblM'], 4)
+        self.assertIn('2 τιμές', r['badCount'].replace('3 τιμές', '2 τιμές'))
+        self.assertIn('δεν αυξάνει', r['badMono'])
+        self.assertIn('L_u < L_a', r['badL'])
 
     def test_lightning_current(self):
         # 3.5: Heidler with the IEC 62305-1 parameters: peak I₀, front time T1 and time to half value T2 as named;

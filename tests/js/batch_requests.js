@@ -29,6 +29,8 @@ const mpKl=project([{id:'V1',type:'VDC',params:{V:10}},{id:'R1',type:'R',params:
 const mpKg=project([{id:'V1',type:'VDC',params:{V:10}},{id:'V2',type:'VDC',params:{V:4}},{id:'Y1',type:'KG',params:{kind:'R',mat:'10, 2; 2, 5'}},{id:'C1',type:'C',params:{C:100e-6}},{id:'G',type:'GND'}],[['V1:p','Y1:a1'],['V2:p','Y1:a2'],['Y1:b1','G:g'],['Y1:b2','C1:p'],['C1:n','G:g'],['V1:n','G:g'],['V2:n','G:g']]);
 const smDc=par=>project([{id:'V1',type:'VDC',params:{V:30}},{id:'M1',type:'SM',params:par},{id:'G',type:'GND'}],[['V1:p','M1:a'],['M1:b','G:g'],['M1:c','G:g'],['V1:n','G:g']]);
 const mpLg=project([{id:'I1',type:'ILG',params:{shape:'1/200',Ipk:100e3}},{id:'R1',type:'R',params:{R:10}},{id:'L1',type:'L',params:{L:3e-6}},{id:'G',type:'GND'}],[['I1:p','R1:a'],['R1:b','L1:a'],['L1:b','G:g'],['I1:n','G:g']]);
+// 3.6: switched reluctance machine, phase 1 on 20 V, magnetization from the parameters and from the default table
+const srmDc=par=>project([{id:'V1',type:'VDC',params:{V:20}},{id:'M1',type:'SRM',params:par},{id:'G',type:'GND'}],[['V1:p','M1:a1'],['M1:b1','G:g'],['V1:n','G:g'],['M1:a2','M1:b2'],['M1:a3','M1:b3'],['M1:a4','M1:b4']]);
 const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},['I:R1']],bridge3_scr:['bridge3',{dev:'30',load:'r'},['V:R1']],
  battery_pi:['battery',{ctrl:'pi'},['I:L1','D:PWM1']],deadtime:['battery',{sw:'real',ctrl:'pi'},['I:L1']],
  sampling_saw:['sampling',{case:'saw'},['I:L1','H:SH1','CAR:PWM1']],sampling_tri2:['sampling',{case:'tri2',start:'midon'},['I:L1','H:SH1']],
@@ -45,11 +47,13 @@ const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},[
  im_dol:[imDol,null,['Y:M1','Y:M1:te','I:M1']],
  mp_kl:[mpKl,null,['I:K1','I2:K1','V2:K1','I3:K1']],mp_kg:[mpKg,null,['I:Y1','I2:Y1','V2:Y1']],
  sm_align:[smDc({th0:60}),null,['Y:M1','Y:M1:te','Y:M1:th','I:M1','Y:M1:id']],sm_pm:[smDc({Ld:.03,Lq:.05,psim:.5,th0:100,w0:5,TL:'0:0, 0.05:2'}),null,['Y:M1','Y:M1:te','Y:M1:iq','I:M1']],
- mp_lg:[mpLg,null,['I:I1','V:I1','I:L1']]};
+ mp_lg:[mpLg,null,['I:I1','V:I1','I:L1']],
+ sm_sat:[smDc({th0:60,sat:'d',Ldsat:.04,psikd:.5}),null,['Y:M1','Y:M1:te','Y:M1:id','I:M1']],
+ srm_m:[srmDc({th0:30}),null,['Y:M1','Y:M1:te','Y:M1:th','I:M1','PSI1:M1','Y:M1:i1']],srm_t:[srmDc({th0:30,mag:'table'}),null,['Y:M1','Y:M1:te','I:M1','PSI1:M1']]};
 // browser results for the 3.0 cases: per-period peaks of the last periods, to compare solver against solver
 const jsRun={dc_cur:['Y:AM1',.012],pcm_half:['Y:AM1',1e-3],pcm_sub:['Y:AM1',4e-4],blk_cmp_z1:['Y:AM1',4e-3],blk_pwm:['Y:AM1',4e-3]};   // pcm_sub: before chaos separates the two solvers
 // browser values at given instants (3.1)
-const jsAt={dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05],eis_cell:[.004,.011,.02],im_dol:[.05,.1,.3,.6],mp_kl:[5e-4,2e-3,5e-3],mp_kg:[1e-4,1e-3],sm_align:[.02,.1,.3],sm_pm:[.02,.1,.2],mp_lg:[4e-6,50e-6,200e-6]};
+const jsAt={dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05],eis_cell:[.004,.011,.02],im_dol:[.05,.1,.3,.6],mp_kl:[5e-4,2e-3,5e-3],mp_kg:[1e-4,1e-3],sm_align:[.02,.1,.3],sm_pm:[.02,.1,.2],mp_lg:[4e-6,50e-6,200e-6],sm_sat:[.02,.1,.3],srm_m:[.005,.02,.06],srm_t:[.005,.02,.06]};
 const out={};for(const [k,[id,o,keys]] of Object.entries(cases)){
  if(k==='code_py'){const pr=build('code_loop',{ctrl:'python',ff:'expr'});const r=MNA.exportForBatch(pr,keys);out[k]={net:r.net,channels:r.channels};
   const s=new MNA.Sim(build('code_loop',{ctrl:'pib',ff:'expr'}),{hDiv:1000});s.run(.003);const p=s.per,i=s.chIndex.get('Y:AM1'),pk=[];for(let q=8;q>=1;q--){const j=(p.head-q+p.cap)%p.cap;pk.push({max:p.max[j*p.nch+i],min:p.min[j*p.nch+i],t:p.t[j]});}

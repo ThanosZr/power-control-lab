@@ -25,6 +25,7 @@
  const CLOCK=(extra={})=>ref('clock','Ρολόι (PWM ή μπλοκ Ρολόι)',['PWM','CLK'],{hint:'Ενημέρωση σε σημεία του φέροντος του PWM (ή στην ανερχόμενη ακμή του μπλοκ Ρολόι), όπως στο Sample & Hold.',...extra});
  const TRIG=sel('trig','Πότε ενημερώνεται',[['start','Αρχή περιόδου του φέροντος (1 ανά T)'],['mid','Μέσο περιόδου (1 ανά T)'],['both','Και τα δύο (2 ανά T)']],'start');
  const SCHED='Πρόγραμμα: ζεύγη «t:τιμή» χωρισμένα με κόμμα, π.χ. 0:60000, 0.005:30000. Κενό = σταθερή τιμή.';
+ const SRM_TBL=srmTableText({Lu:.008,La:.06,Lsat:.008,psik:.35});
  const PARTS={
   R:{name:'Αντίσταση',prefix:'R',group:'Παθητικά',pins:{a:[-30,0],b:[30,0]},box:[-22,-8,44,16],
    params:[num('R','Αντίσταση','Ω',10),txt('sched','R(t)','',{hint:SCHED})],
@@ -246,13 +247,35 @@
   SM:{name:'Σύγχρονη μηχανή (SynRM / PMSM)',prefix:'M',group:'Μηχανές',pins:{a:[-40,-20],b:[-40,0],c:[-40,20]},box:[-25,-25,50,50],lbl:'above',
    spins:p=>{const o={w:O(40,-20),te:O(40,-10),th:O(40,0),id:O(40,10),iq:O(40,20)};if(p.load==='sig')o.tl=I(0,40);return o;},
    params:[num('Rs','Αντίσταση στάτη R_s','Ω',2),num('Ld','Αυτεπαγωγή άξονα d L_d','H',0.15,{hint:'SynRM: d είναι ο άξονας της ελάχιστης μαγνητικής αντίστασης (L_d > L_q). PMSM: d είναι ο άξονας του μαγνήτη (στην IPMSM L_q > L_d, στην SPMSM L_d = L_q).'}),
-    num('Lq','Αυτεπαγωγή άξονα q L_q','H',0.03),num('psim','Ροή μαγνήτη ψ_m','V·s',0,{zero:true,hint:'0 = μηχανή μαγνητικής αντίστασης (SynRM). Ροπή τ_e = (3/2)·p·(ψ_m·i_q + (L_d − L_q)·i_d·i_q).'}),
+    num('Lq','Αυτεπαγωγή άξονα q L_q','H',0.03),
+    sel('sat','Κορεσμός στον άξονα d',[['none','Όχι: ψ_d = L_d·i_d + ψ_m'],['d','Ναι: ψ_d(i_d) με γόνατο']],'none',{hint:'ψ_d = L_dsat·i_d + ψ_k·(1 − e^(−(L_d − L_dsat)·|i_d|/ψ_k))·sign(i_d) + ψ_m: κλίση L_d γύρω από το 0 και L_dsat σε κορεσμό. Ο άξονας q μένει γραμμικός.'}),
+    num('Ldsat','L_d σε κορεσμό (κλίση)','H',0.04,{show:p=>p.sat==='d'}),num('psikd','ψ_k: γόνατο κορεσμού d','V·s',0.5,{show:p=>p.sat==='d'}),
+    num('psim','Ροή μαγνήτη ψ_m','V·s',0,{zero:true,hint:'0 = μηχανή μαγνητικής αντίστασης (SynRM). Ροπή τ_e = (3/2)·p·(ψ_m·i_q + (L_d − L_q)·i_d·i_q).'}),
     num('pp','Ζεύγη πόλων p','',2),num('J','Ροπή αδράνειας J','kg·m²',0.02),num('bm','Τριβή b','N·m·s',0.002,{zero:true}),
     sel('load','Ροπή φορτίου',[['sched','Τιμή ή πρόγραμμα'],['sig','Από σήμα (ακροδέκτης tl)']],'sched'),txt('TL','τ_L(t)','0',{hint:'Σταθερή τιμή ή «t:τιμή» σε N·m.',show:p=>p.load!=='sig'}),
     num('w0','Αρχική μηχανική ταχύτητα','rad/s',0,{signed:true,zero:true}),num('th0','Αρχική γωνία δρομέα θ (ηλεκτρική, ως προς τη φάση a)','°',0,{signed:true,zero:true})],
    value:p=>p.pp,unit:'',
    draw:p=>'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25"/><circle r="22"/>'+tx(+p.psim>0?'PM':'SynRM',0,4,+p.psim>0?'btxt':'bsm')+sl('M22,-20 H40 M25,-10 H40 M25,0 H40 M25,10 H40 M22,20 H40')+(p.load==='sig'?sl('M0,22 V40'):'')
     +tx('ω',30,-23,'pinl')+tx('τ',30,-13,'pinl')+tx('θ',30,-3,'pinl')+tx('d',30,7,'pinl')+tx('q',30,17,'pinl')},
+  // switched reluctance machine (3.6): one winding per phase, pins on top (phase k: a_k, b_k 20 apart, phases 160 apart, under the columns
+  // of an asymmetric bridge); ψ(θ, i) from parameters or a table, torque from the co-energy
+  SRM:{name:'Μηχανή μαγνητικής αντίστασης με διακόπτες (SRM)',prefix:'M',group:'Μηχανές',pins:p=>srmPins(srmGeo(p)[0]),box:p=>{const N=srmGeo(p)[0];return [-80*(N-1)-40,-30,160*(N-1)+80,60];},lbl:'left',
+   spins:p=>srmSpins(p),
+   params:[sel('geo','Δομή N_s/N_r',[['8/6','8/6: 4 φάσεις, N_r = 6'],['6/4','6/4: 3 φάσεις, N_r = 4'],['12/8','12/8: 3 φάσεις, N_r = 8']],'8/6',{hint:'Γωνία φάσης θ_e = N_r·θ − (k − 1)·2π/N: 0 όταν ο πόλος του δρομέα είναι μη ευθυγραμμισμένος με τη φάση k, π όταν είναι ευθυγραμμισμένος.'}),
+    num('Rs','Αντίσταση φάσης R','Ω',0.5),
+    sel('mag','Μαγνήτιση ψ(θ, i)',[['model','Από L_u, L_a, L_sat, ψ_k'],['table','Από πίνακα (μετρήσεις ή FEM)']],'model',{hint:'Ροπή από τη συνενέργεια: τ = ∂/∂θ ∫₀ⁱ ψ(θ, i′) di′ για κάθε φάση. Χωρίς αμοιβαία σύζευξη ανάμεσα στις φάσεις.'}),
+    num('Lu','L_u: μη ευθυγραμμισμένη θέση','H',0.008,{show:p=>p.mag!=='table'}),num('La','L_a: ευθυγραμμισμένη, χωρίς κορεσμό','H',0.06,{show:p=>p.mag!=='table'}),
+    num('Lsat','L_sat: ευθυγραμμισμένη, σε κορεσμό (κλίση)','H',0.008,{show:p=>p.mag!=='table'}),num('psik','ψ_k: γόνατο κορεσμού','V·s',0.35,{show:p=>p.mag!=='table',hint:'Ευθυγραμμισμένη: ψ_a(i) = L_sat·i + ψ_k·(1 − e^(−(L_a − L_sat)·i/ψ_k)). Ενδιάμεσα: ψ = L_u·i + (ψ_a(i) − L_u·i)·(1 − cos θ_e)/2.'}),
+    num('Imax','Πλέγμα ρεύματος ως','A',40,{show:p=>p.mag!=='table'}),
+    txt('tbl','Πίνακας ψ (V·s)',SRM_TBL,{show:p=>p.mag==='table',hint:'Πρώτη γραμμή: ρεύματα (A) από 0. Μετά μία γραμμή ανά γωνία: «θ_e: ψ, ψ, …» σε ηλεκτρικές μοίρες, 0 = μη ευθυγραμμισμένη, 180 = ευθυγραμμισμένη. Γραμμές με «;». Γίνεται προσαρμογή σειράς συνημιτόνων στη γωνία και γραμμική παρεμβολή στο ρεύμα.'}),
+    num('J','Ροπή αδράνειας J','kg·m²',0.01),num('bm','Τριβή b','N·m·s',0.001,{zero:true}),
+    sel('load','Ροπή φορτίου',[['sched','Τιμή ή πρόγραμμα'],['sig','Από σήμα (ακροδέκτης tl)']],'sched'),txt('TL','τ_L(t)','0',{hint:'Σταθερή τιμή ή «t:τιμή» σε N·m.',show:p=>p.load!=='sig'}),
+    num('w0','Αρχική μηχανική ταχύτητα','rad/s',0,{signed:true,zero:true}),num('th0','Αρχική γωνία θ_e της φάσης 1','°',30,{signed:true,zero:true})],
+   value:p=>p.geo,unit:'',
+   draw:p=>{const [N]=srmGeo(p),W=80*(N-1)+40;let s=`<rect x="${-W}" y="-26" width="${2*W}" height="52" rx="8"/>`;
+    for(let k=0;k<N;k++){const X=-80*(N-1)+160*k;s+=`<path d="M${X-10},-30 V-16 a5,5 0 0,0 10,0 a5,5 0 0,0 10,0 V-30"/>`+tx(String(k+1),X,8,'pinl');}
+    const sp=srmSpins(p);return s+tx('SRM '+(p.geo||'8/6'),0,-6,'bsm')+sl(Object.values(sp).map(q=>`M${q.at[0]},26 V40`).join(' '))
+     +Object.entries(sp).map(([k,q])=>tx({w:'ω',te:'τ',th:'θ',tl:'τ_L'}[k]||'i'+k.slice(1),q.at[0],20,'pinl')).join('');}},
   MOD3:{name:'Διαμορφωτής τριφασικός',prefix:'MD',group:'Έλεγχος',pins:{},spins:{va:I(-30,-20),vb:I(-30,-10),vc:I(-30,0),vdc:I(-30,20),da:O(30,-10),db:O(30,0),dc:O(30,10)},box:[-20,-25,40,50],blk:true,
    params:[sel('mode','Διαμόρφωση',[['spwm','SPWM: d = ½ + v/V_dc'],['svpwm','SVPWM: έγχυση μηδενικής ακολουθίας −(max + min)/2'],['square','Τετραγωνική (six-step): d = 1 όταν v > 0']],'svpwm',{hint:'Τα d πάνε στα PWM με «D από σήμα» και τριγωνικό φέρον, ένα ανά σκέλος. Γραμμική περιοχή: πλάτος φάσης ≤ V_dc/2 (SPWM), ≤ V_dc/√3 (SVPWM).'})],value:()=>null,
    draw:p=>sb(40,50)+tx(p.mode==='square'?'6-step':p.mode==='spwm'?'SPWM':'SVM',0,4,'bsm')+sl('M-30,-20 H-20 M-30,-10 H-20 M-30,0 H-20 M-30,20 H-20 M20,-10 H30 M20,0 H30 M20,10 H30')},
@@ -328,6 +351,54 @@
  function kgMatrix(p){const m=parseMat(p.mat);if(!m)return {err:'Ο πίνακας πρέπει να είναι τετραγωνικός, με αριθμούς (γραμμές με «;»).'};
   if(!symmetric(m))return {err:'Ο πίνακας πρέπει να είναι συμμετρικός.'};if(!posDef(m))return {err:'Ο πίνακας πρέπει να είναι θετικά ορισμένος (π.χ. διαγώνια στοιχεία μεγαλύτερα από τα αμοιβαία).'};
   return {G:p.kind==='G'?m:matInv(m)};}
+ // ---------------------------------------------------------------- switched reluctance machine (3.6)
+ // ψ(θ, i) = Σ_m c_m(i)·cos(m·θ) (θ: electrical angle of the phase, 0 unaligned, π aligned), c_m linear in i between the grid currents.
+ // Then ψ is piecewise linear in i (exact inverse i(ψ), positive incremental inductance), the co-energy W′ = ∫ψ di is piecewise quadratic
+ // and the torque N_r·∂W′/∂θ follows exactly from the same representation (energy-consistent).
+ const SRM_GEOS={'8/6':[4,6],'6/4':[3,4],'12/8':[3,8]};
+ function srmGeo(p){return SRM_GEOS[p.geo]||SRM_GEOS['8/6'];}
+ // signal pins on the bottom edge: the phase currents under their phases, then ω, τ_e, θ_e (and τ_L in)
+ function srmSpins(p){const [N]=srmGeo(p),X=k=>-80*(N-1)+160*k,o={w:O(X(0)+40,40),te:O(X(0)+60,40),th:O(X(0)+80,40)}; // ω first: it is the channel Y:id
+  for(let k=0;k<N;k++)o['i'+(k+1)]=O(X(k),40);if(p.load==='sig')o.tl=I(X(N-1)+40,40);return o;}
+ function srmPins(N){const o={};for(let k=0;k<N;k++){const X=-80*(N-1)+160*k;o['a'+(k+1)]=[X-10,-30];o['b'+(k+1)]=[X+10,-30];}return o;}
+ // saturated d axis of the synchronous machine (3.6): f(i) = L_dsat·i + ψ_k·(1 − e^(−(L_d − L_dsat)·|i|/ψ_k))·sign(i), and its inverse (Newton)
+ function satD(q,i){const a=Math.abs(i),dL=q.Ld-q.Ldsat,e=Math.exp(-dL*a/q.psik);return {psi:Math.sign(i)*(q.Ldsat*a+q.psik*(1-e)),L:q.Ldsat+dL*e};}
+ function satDinv(q,psi){const a=Math.abs(psi);let i=a/q.Ld;for(let k=0;k<50;k++){const f=satD(q,i),di=(f.psi-a)/f.L;i-=di;if(Math.abs(di)<1e-13*(1+i))break;}return Math.sign(psi)*i;}
+ function srmAlignedPsi(q,i){const dL=q.La-q.Lsat;return dL>0&&q.psik>0?q.Lsat*i+q.psik*(1-Math.exp(-dL*i/q.psik)):q.La*i;}
+ function srmModelPsi(q,th,i){return q.Lu*i+(srmAlignedPsi(q,i)-q.Lu*i)*(1-Math.cos(th))/2;}
+ function srmTableText(q,cur=[0,5,10,15,20,25,30,35,40],ang=[0,30,60,90,120,150,180]){const r=x=>+x.toPrecision(4);
+  return [cur.join(', '),...ang.map(a=>a+': '+cur.map(i=>r(srmModelPsi(q,a*Math.PI/180,i))).join(', '))].join('; ');}
+ // {N, Nr, I: grid currents, C: [c_0 … c_M] per grid current, M} or {err}
+ function srmMag(p){const [N,Nr]=srmGeo(p);const num=v=>parseEng(v);
+  if(p.mag!=='table'){const q={Lu:num(p.Lu),La:num(p.La),Lsat:num(p.Lsat),psik:num(p.psik)},Imax=num(p.Imax)>0?num(p.Imax):40,K=80;
+   if(!(q.Lu>0&&q.La>q.Lu))return {err:'Χρειάζεται 0 < L_u < L_a.'};if(!(q.Lsat>0)||!(q.psik>0))return {err:'Τα L_sat και ψ_k πρέπει να είναι θετικά.'};
+   const I=[],C=[];for(let k=0;k<=K;k++){const i=Imax*k/K,d=srmAlignedPsi(q,i)-q.Lu*i;I.push(i);C.push([q.Lu*i+d/2,-d/2]);}
+   return chkMag({N,Nr,I,C,M:1});}
+  const rows=String(p.tbl||'').split(/[;\n]+/).map(r=>r.trim()).filter(Boolean);if(rows.length<3)return {err:'Ο πίνακας θέλει τη γραμμή των ρευμάτων και τουλάχιστον δύο γωνίες.'};
+  let I=rows[0].split(/[,\s]+/).filter(Boolean).map(parseEng);if(I.some(v=>!Number.isFinite(v)))return {err:'Η πρώτη γραμμή πρέπει να έχει τα ρεύματα (A).'};
+  const ang=[],Y=[];for(const r of rows.slice(1)){const m=r.match(/^([^:]+):(.*)$/);if(!m)return {err:`Γραμμή «${r}»: γράψε «θ_e: ψ, ψ, …».`};
+   const a=parseEng(m[1]),v=m[2].split(/[,\s]+/).filter(Boolean).map(parseEng);if(!Number.isFinite(a)||v.length!==I.length||v.some(x=>!Number.isFinite(x)))return {err:`Γραμμή «${r}»: χρειάζονται ${I.length} τιμές ψ.`};ang.push(a*Math.PI/180);Y.push(v);}
+  if(I[0]!==0){I=[0,...I];Y.forEach((v,j)=>Y[j]=[0,...v]);}
+  for(let k=1;k<I.length;k++)if(!(I[k]>I[k-1]))return {err:'Τα ρεύματα πρέπει να αυξάνουν.'};
+  // least squares in θ for each current: ψ(θ_j) ≈ Σ c_m cos(m θ_j)
+  const M=Math.min(4,ang.length-1),A=ang.map(t=>Array.from({length:M+1},(_,m)=>Math.cos(m*t)));
+  const AtA=Array.from({length:M+1},(_,r)=>Array.from({length:M+1},(_,c)=>A.reduce((s,row)=>s+row[r]*row[c],0))),inv=matInv(AtA);if(!inv)return {err:'Οι γωνίες του πίνακα δεν αρκούν (διαφορετικές τιμές από 0 έως 180).'};
+  const C=I.map((_,k)=>{const b=Array.from({length:M+1},(_,r)=>A.reduce((s,row,j)=>s+row[r]*Y[j][k],0));return inv.map(row=>row.reduce((s,v,c)=>s+v*b[c],0));});
+  C[0]=C[0].map(()=>0);return chkMag({N,Nr,I,C,M});}
+ function chkMag(g){for(let d=0;d<=180;d+=3){const A=srmA(g,d*Math.PI/180).A;for(let k=1;k<A.length;k++)if(!(A[k]>A[k-1]))return {err:`Η ψ δεν αυξάνει με το ρεύμα στις ${d}° (ανάμεσα σε ${g.I[k-1]} και ${g.I[k]} A).`};}return g;}
+ // ψ at the grid currents and its θ-derivative, at electrical angle th
+ function srmA(g,th){const K=g.I.length,cs=[],sn=[];for(let m=0;m<=g.M;m++){cs.push(Math.cos(m*th));sn.push(Math.sin(m*th));}
+  const A=new Float64Array(K),D=new Float64Array(K);for(let k=0;k<K;k++){const c=g.C[k];let a=0,d=0;for(let m=0;m<=g.M;m++){a+=c[m]*cs[m];d-=m*c[m]*sn[m];}A[k]=a;D[k]=d;}return {A,D};}
+ // segment of |x| in the increasing list L (last segment extrapolates)
+ function seg(L,x){let k=0;while(k<L.length-2&&x>=L[k+1])k++;return k;}
+ function srmPsi(g,th,i){const {A}=srmA(g,th),a=Math.abs(i),k=seg(g.I,a),B=(A[k+1]-A[k])/(g.I[k+1]-g.I[k]);return Math.sign(i)*(A[k]+B*(a-g.I[k]));}
+ // current and incremental inverse inductance di/dψ for a flux ψ
+ function srmCur(g,th,psi){const {A}=srmA(g,th),a=Math.abs(psi);let k=0;while(k<A.length-2&&a>=A[k+1])k++;const B=(A[k+1]-A[k])/(g.I[k+1]-g.I[k]);return {i:Math.sign(psi)*(g.I[k]+(a-A[k])/B),g:1/B};}
+ // torque of one phase: N_r·∂W′/∂θ_e at constant current
+ function srmTorque(g,th,i){const {A,D}=srmA(g,th),a=Math.abs(i),k=seg(g.I,a);let w=0;for(let j=0;j<k;j++)w+=(D[j]+D[j+1])/2*(g.I[j+1]-g.I[j]);const x=a-g.I[k],h=g.I[k+1]-g.I[k];
+  return g.Nr*(w+D[k]*x+(D[k+1]-D[k])/h*x*x/2);}
+ // co-energy W′(θ, i) = ∫₀ⁱ ψ di′
+ function srmCoenergy(g,th,i){const {A}=srmA(g,th),a=Math.abs(i),k=seg(g.I,a);let w=0;for(let j=0;j<k;j++)w+=(A[j]+A[j+1])/2*(g.I[j+1]-g.I[j]);const x=a-g.I[k],h=g.I[k+1]-g.I[k];return w+A[k]*x+(A[k+1]-A[k])/h*x*x/2;}
  // ---------------------------------------------------------------- lightning current (3.5)
  // IEC 62305-1 Annex B: η, τ₁, τ₂ for n = 10
  const HEIDLER={'10/350':{eta:.93,tau1:19e-6,tau2:485e-6,n:10,T1:10e-6,T2:350e-6},'1/200':{eta:.986,tau1:1.82e-6,tau2:285e-6,n:10,T1:1e-6,T2:200e-6},'0.25/100':{eta:.993,tau1:.454e-6,tau2:143e-6,n:10,T1:.25e-6,T2:100e-6}};
@@ -387,6 +458,7 @@
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
  const api={PARTS,GROUPS,BLOCKS,defaults,elPins,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
-  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave};
+  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,
+  srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

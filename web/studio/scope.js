@@ -7,6 +7,8 @@
 (function(root){
  const COLORS=['#147966','#c47a1c','#2f5fa0','#b03a5b','#6b4fa0','#3d8b3d','#1f8fa0','#8a5a2b'];
  const UNIT={V:'V',I:'A',P:'W',N:'V',VN:'V',V2:'V',I2:'A',Im:'A',Vb:'V',Vc:'V',Vab:'V',Ib:'A',Ic:'A',PSW:'W',D:'',G:'',GS:'',REF:'',MEAS:'',CAR:''};
+ // ports of multiports and machine phases (3.5–3.6): V3…V8, I3…I8, fluxes PSI1…PSI8
+ for(let k=1;k<=8;k++){if(k>2){UNIT['V'+k]='V';UNIT['I'+k]='A';}UNIT['PSI'+k]='V·s';}
  // on/off signals: a pane holding only these draws each one in its own lane
  const LOGIC=new Set(['G','GS']),LOGIC_BLK=new Set(['CMP','SR','CLK','LOGIC']);
  const isLogic=(key,sim)=>{const [pre,id]=key.split(':');if(LOGIC.has(pre))return true;if(pre!=='Y')return false;const c=(sim||root.PCL?.S?.sim)?.net.compInfo.get(id);return !!(c&&LOGIC_BLK.has(c.type));};
@@ -48,7 +50,7 @@
   // ------------------------------------------------------------ channels
   static unitOf(key,sim){const pre=key.split(':')[0],id=key.split(':')[1];if(pre==='REF'||pre==='MEAS'){const k=sim?.net.ctrls.find(c=>c.id===id);const h=sim?.shById?.get(k?.sensor);return (h?h.qty:k?.qty)==='V'?'V':'A';}
    if(pre==='H'){const q=sim?.shById?.get(id);return q?.sig?'':q?.qty==='V'?'V':'A';}
-   if(pre==='Y'){const b=sim?.net.compInfo.get(id)?.blk,pin=key.split(':')[2],t=b?.type;if(t==='DCM')return pin==='te'?'N·m':'rad/s';if(t==='IM')return pin==='te'?'N·m':pin==='psi'?'V·s':!pin||pin==='w'?'rad/s':'rad';if(t==='SM')return pin==='te'?'N·m':pin==='th'?'rad':pin==='id'||pin==='iq'?'A':'rad/s';if(t==='FEST')return pin==='psi'?'V·s':pin==='w1'?'rad/s':'rad';if(t==='PLL')return pin==='w'?'rad/s':pin==='amp'?'':'rad';if(t==='INT'&&b.wrap)return 'rad';
+   if(pre==='Y'){const b=sim?.net.compInfo.get(id)?.blk,pin=key.split(':')[2],t=b?.type;if(t==='DCM')return pin==='te'?'N·m':'rad/s';if(t==='IM')return pin==='te'?'N·m':pin==='psi'?'V·s':!pin||pin==='w'?'rad/s':'rad';if(t==='SM')return pin==='te'?'N·m':pin==='th'?'rad':pin==='id'||pin==='iq'?'A':'rad/s';if(t==='SRM')return pin==='te'?'N·m':pin==='th'?'rad':/^i\d$/.test(pin||'')?'A':'rad/s';if(t==='FEST')return pin==='psi'?'V·s':pin==='w1'?'rad/s':'rad';if(t==='PLL')return pin==='w'?'rad/s':pin==='amp'?'':'rad';if(t==='INT'&&b.wrap)return 'rad';
     return t==='VM'?'V':t==='AM'?'A':t==='MEAS'?(b.qty==='V'?'V':'A'):'';}return UNIT[pre]??'';}
   resolve(key){const s=this.sim;if(!s)return -1;if(key.startsWith('VN:')){const pin=key.slice(3),n=s.net.pinNet.get(pin);if(!n)return -1;if(n.ground)return -2;return s.chIndex.get('N:'+n.canon)??-1;}return s.chIndex.get(key)??-1;}
   channels(){return this.cfg.panes.flatMap((p,pi)=>p.ch.map(c=>({...c,pane:pi})));}

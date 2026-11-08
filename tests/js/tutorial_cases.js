@@ -62,6 +62,8 @@ for(const th0 of ['60','120','89']){const pr=build('synrm',{mode:'align',th0});c
  const p=s.per,i=s.chIndex.get('Y:M1'),w=[];for(let k=0;k<p.n;k++){const j=(p.head-p.n+k+p.cap)%p.cap;w.push(p.avg[j*p.nch+i]);}const cr=[];for(let k=1;k<w.length;k++)if(Math.sign(w[k])!==Math.sign(w[k-1])&&Math.abs(w[k]-w[k-1])>1e-6)cr.push(k*s.T);
  const hp=cr.slice(2,8).map((t,k,a)=>k?t-a[k-1]:null).filter(x=>x);
  out['syn_al_'+th0]={dl:s.now('Y:DL'),id:s.now('Y:M1:id'),iq:s.now('Y:M1:iq'),te:s.now('Y:M1:te'),w:s.now('Y:M1'),fosc:hp.length?1/(2*hp.reduce((x,y)=>x+y,0)/hp.length):null,warn:s.net.warnings,meta:pr.meta};}
+for(const strat of ['mtpa','g60']){const pr=build('synrm',{mode:'foc',strat,sat:'d'});const s=sim(pr,pr.sim.stopT);const avg=k=>last(s,k,100).avg;
+ out['synsat_'+strat]={w:s.now('Y:M1'),id:avg('Y:PK'),iq:avg('Y:PK:q'),te:avg('Y:M1:te'),warn:s.net.warnings};}
 for(const strat of ['mtpa','g30','g60','idc']){const pr=build('synrm',{mode:'foc',strat});const s=sim(pr,pr.sim.stopT);const avg=k=>last(s,k,100).avg;
  out['syn_'+strat]={w:s.now('Y:M1'),id:avg('Y:PK'),iq:avg('Y:PK:q'),idm:avg('Y:M1:id'),iqm:avg('Y:M1:iq'),te:avg('Y:M1:te'),ud:avg('Y:EXUD'),uq:avg('Y:EXUQ'),warn:s.net.warnings,meta:pr.meta};}
 for(const [mach,strat] of [['ipm','mtpa'],['ipm','id0'],['spm','mtpa']]){const pr=build('pmsm',{mach,strat});const s=sim(pr,pr.sim.stopT);const avg=k=>last(s,k,100).avg;
@@ -70,6 +72,11 @@ for(const shape of ['10/350','1/200','0.25/100','custom']){const pr=build('light
  let ip=0,vp=0,n=0;for(let q=0;q<r.n;q++){const j=(r.head-r.n+q+r.cap)%r.cap;ip=Math.max(ip,r.d[j*r.nch+iI]);vp=Math.max(vp,r.d[j*r.nch+iV]);n++;}
  const p=s.per;let Q=0;for(let k=0;k<p.n;k++){const j=(p.head-p.n+k+p.cap)%p.cap;Q+=p.avg[j*p.nch+iI]*s.T;}const w=s.net.compInfo.get('I1').wave;
  out['lg_'+shape]={ip,vp,Q,points:n,steps:s.steps,wave:w,meas:Parts.waveMeasure(w),warn:s.net.warnings,meta:pr.meta};}
+// 3.6: SRM 8/6 with three conduction windows: steady state, the ψ–i loop of phase 1 over the last electrical period, mean torque
+for(const ang of ['30-150','0-120','60-180']){const pr=build('srm',{ang,band:'1'});const s=sim(pr,pr.sim.stopT);const r=s.ring,ix=k=>s.chIndex.get(k),w=s.now('Y:M1'),Te=2*Math.PI/(6*w);
+ let W=0,ta=0,prev=null;for(let q=0;q<r.n;q++){const j=(r.head-r.n+q+r.cap)%r.cap,t=r.t[j];if(t<s.t-Te)continue;const i=r.d[j*r.nch+ix('I:M1')],p=r.d[j*r.nch+ix('PSI1:M1')],te=r.d[j*r.nch+ix('Y:M1:te')];
+  if(prev){W+=(i+prev.i)/2*(p-prev.p);ta+=(t-prev.t)*(te+prev.te)/2;}prev={t,i,p,te};}
+ out['srm_'+ang]={w,W,te:ta/Te,iref:s.now('Y:PIS'),Te,warn:s.net.warnings,meta:pr.meta};}
 // 3.3: PI in Python (Pyodide in Node, when the pyodide package is installed) against the PI block; feedforward from an expression
 (async()=>{let PyRT=null;try{PyRT=require(W+'/pyrt.js');await PyRT.load();}catch(e){out.py_skipped=String(e.message||e).slice(0,120);}
  for(const [ctrl,ff] of [['pib','none'],['pib','expr'],...(PyRT?.ready?[['python','none'],['python','expr']]:[])]){const pr=build('code_loop',{ctrl,ff});const s=sim(pr,.004);const p=s.per,i=s.chIndex.get('Y:AM1'),d=s.chIndex.get('D:PWM1');

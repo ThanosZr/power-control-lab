@@ -240,6 +240,26 @@ class Tutorials(unittest.TestCase):
             self.assertAlmostEqual(math.atan2(r['uq'], r['ud']) - math.atan2(vq, vd), we * 2e-4 / 2, delta=.004, msg=st)
             cur[st] = math.hypot(r['id'], r['iq'])
         self.assertLess(cur['mtpa'], min(cur['g30'], cur['g60'], cur['idc']))          # MTPA: least current for the torque
+        # saturated d axis (3.6): ψ_d = 0.04·i_d + 0.5·(1 − e^(−0.11·i_d/0.5)), τ = 3·(ψ_d − L_q·i_d)·i_q; the currents of each angle
+        # for the torque of the load, and the MTPA angle above 45°
+        fd = lambda i: .04 * i + .5 * (1 - math.exp(-.11 * i / .5))
+
+        def need(g, t):
+            lo, hi = 0.0, 100.0
+            for _ in range(80):
+                m = (lo + hi) / 2
+                lo, hi = (m, hi) if 3 * (fd(m * math.cos(g)) - .03 * m * math.cos(g)) * m * math.sin(g) < t else (lo, m)
+            return lo
+        for st, g in (('mtpa', 45), ('g60', 60)):
+            r = o['synsat_' + st]
+            self.assertEqual(r['warn'], [])
+            self.assertAlmostEqual(r['w'], 100, delta=.05, msg=st)
+            self.assertAlmostEqual(r['te'], 8 + .002 * r['w'], delta=.03, msg=st)
+            i = need(math.radians(g), r['te'])
+            self.assertAlmostEqual(r['id'], i * math.cos(math.radians(g)), delta=.01 * i, msg=st)
+            self.assertAlmostEqual(r['iq'], i * math.sin(math.radians(g)), delta=.01 * i, msg=st)
+        gm = min(range(300, 850), key=lambda k: need(math.radians(k / 10), 8.2)) / 10
+        self.assertGreater(gm, 50)
 
     def test_permanent_magnet_drive(self):
         # 3.5: IPMSM with MTPA (negative i_d, less current than i_d = 0) and SPMSM (MTPA is i_d = 0)
@@ -285,6 +305,18 @@ class Tutorials(unittest.TestCase):
         m = self.o['lg_custom']['meas']                                     # fitted 1.2/50 μs
         self.assertAlmostEqual(m['T1'], 1.2e-6, delta=1e-12)
         self.assertAlmostEqual(m['T2'], 50e-6, delta=1e-10)
+
+    def test_switched_reluctance_drive(self):
+        # 3.6: SRM 8/6 at 100 rad/s with 3 N·m: the mean torque equals τ_L + b·ω and the energy of the ψ–i loop of phase 1,
+        # N·N_r·∮ i dψ/(2π) (energy balance of the solver); a late turn-off (negative torque after alignment) needs more current
+        o = self.o
+        for ang in ('30-150', '0-120', '60-180'):
+            r = o['srm_' + ang]
+            self.assertEqual(r['warn'], [], msg=ang)
+            self.assertAlmostEqual(r['w'], 100, delta=.5, msg=ang)
+            self.assertAlmostEqual(r['te'], 3 + .001 * r['w'], delta=.03, msg=ang)
+            self.assertAlmostEqual(4 * 6 * r['W'] / (2 * math.pi), r['te'], delta=.005 * r['te'], msg=ang)
+        self.assertGreater(o['srm_60-180']['iref'], 1.1 * o['srm_30-150']['iref'])
 
     def test_dc_drive(self):
         o = self.o

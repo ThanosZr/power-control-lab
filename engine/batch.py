@@ -60,6 +60,25 @@ def wave_at(w, t):
     return k * x / (1 + x) * math.exp(-t / w['tau2'])
 
 
+def sat_d(q, i):
+    """Saturated d axis (3.6): f(i) = L_dsat·i + ψ_k·(1 − e^(−(L_d − L_dsat)·|i|/ψ_k))·sign(i) and the incremental inductance."""
+    a, dL = abs(i), q['Ld'] - q['Ldsat']
+    e = math.exp(-dL * a / q['psik'])
+    return math.copysign(q['Ldsat'] * a + q['psik'] * (1 - e), i), q['Ldsat'] + dL * e
+
+
+def sat_d_inv(q, psi):
+    a = abs(psi)
+    i = a / q['Ld']
+    for _ in range(50):
+        f, L = sat_d(q, i)
+        di = (f - a) / L
+        i -= di
+        if abs(di) < 1e-13 * (1 + i):
+            break
+    return math.copysign(i, psi)
+
+
 def _f(v, d=0.0):
     try:
         v = float(v)
@@ -278,7 +297,7 @@ class Circuit:
         self.iGY = [i for i, e in enumerate(E) if e['k'] == 'GY']      # machine gyrators (3.1)
         # multiports (3.5): coupled inductors (flux element 'F', one current state per port) and conductance matrices ('MG');
         # the flux element of a synchronous machine has machine states instead (below)
-        self.iF = [i for i, e in enumerate(E) if e['k'] == 'F' and e.get('sm') is None]
+        self.iF = [i for i, e in enumerate(E) if e['k'] == 'F' and e.get('sm') is None and e.get('srm') is None]
         self.iMG = [i for i, e in enumerate(E) if e['k'] == 'MG']
         self.cur = [(i, None) for i in self.iL] + [(i, q) for i in self.iF for q in range(int(E[i]['N']))]
         self.nI = len(self.cur)
@@ -350,8 +369,20 @@ class Circuit:
             psi = F.get('psi') or [0.0, 0.0]
             st = m.get('st') or {}
             self.x0 = np.concatenate([self.x0, [(2 * _f(psi[0]) - _f(psi[1])) / 3, _f(psi[1]) / math.sqrt(3), _f(st.get('w')), _f(st.get('the'))]])
-        if self.ims or self.sms:
-            extra = 4 * (len(self.ims) + len(self.sms))
+        # switched reluctance machines (3.6): ψ of each phase, ω, θ (electrical, phase 1); phase currents i(θ, ψ) as current sources
+        self.srms = net.get('srms') or []
+        k0 = self.nsn + 4 * (len(self.ims) + len(self.sms))
+        for m in self.srms:
+            m['k0'] = k0
+            F = E[m['F']]
+            m['ports'] = F['ports']
+            m['I'] = np.array(m['I'], dtype=float)
+            m['C'] = np.array(m['C'], dtype=float)
+            st = m.get('st') or {}
+            self.x0 = np.concatenate([self.x0, [_f(v) for v in (F.get('psi') or [0.0] * m['N'])], [_f(st.get('w')), _f(st.get('the'))]])
+            k0 += m['N'] + 2
+        if self.ims or self.sms or self.srms:
+            extra = 4 * (len(self.ims) + len(self.sms)) + sum(m['N'] + 2 for m in self.srms)
             self.Bx = np.hstack([self.Bx, np.zeros((n, extra))])
             self.Dm = np.vstack([self.Dm, np.zeros((extra, n))])
             self.ns = self.nsn + extra
@@ -395,7 +426,11 @@ class Circuit:
         k0 = m['k0']
         pa, pb, th = x[k0], x[k0 + 1], x[k0 + 3]
         c, s = math.cos(th), math.sin(th)
-        idq = ((c * pa + s * pb - m['psim']) / m['Ld'], (-s * pa + c * pb) / m['Lq'])
+        q = m.get('sat')
+        if q:                           # saturated d axis (3.6): i_d from ψ_d − ψ_m = f(i_d) by Newton
+            idq = (sat_d_inv(q, c * pa + s * pb - m['psim']), (-s * pa + c * pb) / m['Lq'])
+        else:
+            idq = ((c * pa + s * pb - m['psim']) / m['Ld'], (-s * pa + c * pb) / m['Lq'])
         return c * idq[0] - s * idq[1], s * idq[0] + c * idq[1], idq[0], idq[1]
 
     def sm_ports(self, m, x):
@@ -414,6 +449,49 @@ class Circuit:
         tl = self.sig_in(n) if isinstance(n, int) and n >= 0 else sched_at(m.get('sched'), t, (m.get('sched') or [[0, 0]])[0][1])
         w = x[k0 + 2]
         return [(2 * v1 - v2) / 3, v2 / math.sqrt(3), (te - tl - m['b'] * w) / m['J'], m['p'] * w], te
+
+    # ------------------------------------------------------------ switched reluctance machine (3.6)
+    # ψ(θ, i) = Σ_m c_m(i)·cos(m·θ), c_m linear in i between the grid currents (same representation as Parts.srmMag in the browser)
+    @staticmethod
+    def srm_A(m, th):
+        mm = np.arange(m['M'] + 1)
+        return m['C'] @ np.cos(mm * th), -(m['C'] @ (mm * np.sin(mm * th)))
+
+    @staticmethod
+    def _seg(L, a):
+        k = int(np.searchsorted(L, a, side='right')) - 1
+        return min(max(k, 0), len(L) - 2)
+
+    def srm_cur(self, m, th, psi):
+        A = self.srm_A(m, th)[0]
+        a = abs(psi)
+        k = self._seg(A, a)
+        I = m['I']
+        return math.copysign(I[k] + (a - A[k]) * (I[k + 1] - I[k]) / (A[k + 1] - A[k]), psi) if psi else 0.0
+
+    def srm_torque(self, m, th, i):
+        D = self.srm_A(m, th)[1]
+        I = m['I']
+        a = abs(i)
+        k = self._seg(I, a)
+        w = float(np.sum((D[:k] + D[1:k + 1]) / 2 * np.diff(I[:k + 1])))
+        x, h = a - I[k], I[k + 1] - I[k]
+        return m['Nr'] * (w + D[k] * x + (D[k + 1] - D[k]) / h * x * x / 2)
+
+    def srm_currents(self, m, x):
+        k0, N = m['k0'], m['N']
+        th = x[k0 + N + 1]
+        return [self.srm_cur(m, th - 2 * math.pi * k / N, x[k0 + k]) for k in range(N)]
+
+    def srm_deriv(self, m, t, x, z):
+        k0, N = m['k0'], m['N']
+        V = lambda nd: z[nd] if nd >= 0 else 0.0
+        th, w = x[k0 + N + 1], x[k0 + N]
+        cur = self.srm_currents(m, x)
+        te = sum(self.srm_torque(m, th - 2 * math.pi * k / N, cur[k]) for k in range(N))
+        n = m.get('tl')
+        tl = self.sig_in(n) if isinstance(n, int) and n >= 0 else sched_at(m.get('sched'), t, (m.get('sched') or [[0, 0]])[0][1])
+        return [V(a) - V(b) for a, b in m['ports']] + [(te - tl - m['b'] * w) / m['J'], m['Nr'] * w], te
 
     def Vsrc(self, e, t, x=None):
         if 'im' in e:
@@ -531,6 +609,12 @@ class Circuit:
         E = self.els
         for i in self.iV:
             b[E[i]['row']] = self.Vsrc(E[i], t, x)
+        for m in self.srms:
+            for (a, bb), i in zip(m['ports'], self.srm_currents(m, x if x is not None else self.x0)):
+                if a >= 0:
+                    b[a] -= i
+                if bb >= 0:
+                    b[bb] += i
         for m in self.sms:
             for (a, bb), i in zip(m['ports'], self.sm_ports(m, x if x is not None else self.x0)):
                 if a >= 0:
@@ -664,6 +748,9 @@ class Circuit:
             return 1.0 if self.ctrls[ci].gate(out, t) else 0.0
         if 'sh' in rec:
             return float(self.shs[rec['sh']]['h'])
+        if 'srm' in rec:                # flux of one phase of a switched reluctance machine
+            q, k = rec['srm']
+            return float(x[self.srms[q]['k0'] + k])
         if 'car' in rec:
             return float(self.ctrls[rec['car']].carrier_at(t))
         if 'blk' in rec:                # signal block output, from the last pass at this point
@@ -684,6 +771,8 @@ class Circuit:
         if k == 'L':
             return float(x[self.cur.index((i, None))])
         if k == 'F':
+            if e.get('srm') is not None:
+                return float(self.srm_currents(self.srms[e['srm']], x)[port])
             if e.get('sm') is not None:
                 return float(self.sm_ports(self.sms[e['sm']], x)[port])
             return float(x[self.cur.index((i, port))])
@@ -921,6 +1010,11 @@ class Circuit:
                     st['ys'] = b['_rt'](t, [rd(I.get(k)) for k in b['inNames']])
                     sampled = True
                 ys = {k: (st['ys'][i] if st.get('ys') else _f(b.get('y0'), 0)) for i, k in enumerate(b['outNames'])}
+            elif ty == 'SRM':
+                m = self.srms[b['srm']]
+                k0, N = m['k0'], m['N']
+                ys = {'w': x[k0 + N], 'te': self.srm_deriv(m, t, x, z)[1], 'th': x[k0 + N + 1] % P2}
+                ys.update({f'i{k + 1}': c for k, c in enumerate(self.srm_currents(m, x))})
             elif ty == 'SM':
                 m = self.sms[b['sm']]
                 k0 = m['k0']
@@ -1256,6 +1350,8 @@ def simulate(data):
                 d[m['k0']:m['k0'] + 4] = ckt.im_deriv(m, tt, yy)[0]
             for m in ckt.sms:                  # synchronous machines: ψ_αβ from the port voltages, ω, θ
                 d[m['k0']:m['k0'] + 4] = ckt.sm_deriv(m, tt, yy, zof(tt, yy))[0]
+            for m in ckt.srms:                 # switched reluctance machines: ψ of each phase, ω, θ
+                d[m['k0']:m['k0'] + m['N'] + 2] = ckt.srm_deriv(m, tt, yy, zof(tt, yy))[0]
             return d
         events, owners = [], []
         for i in ckt.iD:
@@ -1285,7 +1381,7 @@ def simulate(data):
             events.append(ev)
             owners.append(b)
         kw = dict(method=method, rtol=rtol, atol=atol, max_step=max_step, events=events or None)
-        if implicit and not ckt.iP and not ckt.ims and not ckt.sms:     # the machines make the system nonlinear: numerical Jacobian
+        if implicit and not ckt.iP and not ckt.ims and not ckt.sms and not ckt.srms:     # the machines make the system nonlinear: numerical Jacobian
             kw['jac'] = (lambda tt, yy, J=tp['J']: J) if method == 'LSODA' else tp['J']
         sol = solve_ivp(fun, (t, tn), x, **kw)
         stats['segments'] += 1

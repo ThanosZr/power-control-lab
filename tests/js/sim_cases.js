@@ -209,7 +209,8 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
  const al=run(syn,[.02,.1,.3,3],1e-5);
  const ss=par=>{const s=new Sim(project([{id:'V3',type:'VAC3',params:{Vpk:200,f:50,phase:20}},{id:'G',type:'GND'},{id:'M1',type:'SM',params:par}],[['V3:n','G:g'],['V3:a','M1:a'],['V3:b','M1:b'],['V3:c','M1:c']]),{h:2e-5});
   s.run(1);return {id:s.now('Y:M1:id'),iq:s.now('Y:M1:iq'),te:s.now('Y:M1:te'),w:s.now('Y:M1'),th:s.now('Y:M1:th'),t:s.t,irms:s.lastPeriod('I:M1').rms};};
- out.sm={syn,pm,align:al,pmRun:run(pm,[.02,.1,.2],1e-5),ssSyn:ss({Rs:2,Ld:.15,Lq:.03,pp:2,J:1e6,w0:157.07963267948966,th0:-10}),ssPm:ss({Rs:2,Ld:.03,Lq:.05,psim:.5,pp:2,J:1e6,w0:157.07963267948966,th0:-30})};}
+ const sat={...syn,sat:'d',Ldsat:.04,psikd:.5};
+ out.sm={syn,pm,sat,align:al,satRun:run(sat,[.02,.1,.3],1e-5),ssSat:ss({Rs:2,Ld:.15,Lq:.03,sat:'d',Ldsat:.04,psikd:.5,pp:2,J:1e6,w0:157.07963267948966,th0:-10}),pmRun:run(pm,[.02,.1,.2],1e-5),ssSyn:ss({Rs:2,Ld:.15,Lq:.03,pp:2,J:1e6,w0:157.07963267948966,th0:-10}),ssPm:ss({Rs:2,Ld:.03,Lq:.05,psim:.5,pp:2,J:1e6,w0:157.07963267948966,th0:-30})};}
 // 3.5: lightning current (Heidler, IEC 62305-1) into 1 Ω: peak, front and tail times, charge and specific energy from the simulation
 {const lg={},mk=p=>new Sim(project([{id:'I1',type:'ILG',params:p},{id:'R1',type:'R',params:{R:1}},{id:'G',type:'GND'}],[['I1:p','R1:a'],['R1:b','G:g'],['I1:n','G:g']]),{hDiv:200});
  for(const [shape,I0,dur] of [['10/350',200e3,5e-3],['1/200',100e3,3e-3],['0.25/100',50e3,1.5e-3]]){const s=mk({shape,Ipk:I0}),ts=[0],ys=[0];let Q=0,W=0,tp=0,yp=0;
@@ -218,5 +219,12 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
   const t10=cross(.1,true),t90=cross(.9,true),t50=cross(.5,false),T1=1.25*(t90-t10);lg[shape]={peak:yp,T1,T2:t50-(t10-.1*T1),Q,W,T:s.T,h:s.h,warn:s.net.warnings};}
  let bad=null;try{mk({shape:'custom',model:'dexp',T1:8e-6,T2:20e-6});}catch(e){bad=e.message;}
  out.lightning={...lg,fit:Parts.waveFit('heidler',10e-6,350e-6,10),fitDexp:Parts.waveFit('dexp',1.2e-6,50e-6),bad};}
+// 3.6: switched reluctance machine 8/6, phase 1 on 20 V (phases 2–4 shorted), rotor from θ_e = 30° pulled to alignment; trajectories for
+//      the exact ODE in Python (analytic magnetization), and the checks of a table given by the user
+{const mk=par=>project([{id:'V1',type:'VDC',params:{V:20}},{id:'M1',type:'SRM',params:par},{id:'G',type:'GND'}],[['V1:p','M1:a1'],['M1:b1','G:g'],['V1:n','G:g'],['M1:a2','M1:b2'],['M1:a3','M1:b3'],['M1:a4','M1:b4']]);
+ const s=new Sim(mk({th0:30}),{h:2e-6}),at=[];for(const t of [.005,.02,.06,.15]){s.run(t-s.t);at.push([t,s.now('Y:M1'),s.now('Y:M1:th'),s.now('I:M1'),s.now('PSI1:M1'),s.now('Y:M1:te'),s.now('I2:M1'),s.now('Y:M1:i1')]);}
+ const err=par=>{try{new Sim(mk(par));return null;}catch(e){return e.message;}};
+ const g=Parts.srmMag({...Parts.defaults('SRM'),mag:'table'});
+ out.srm={at,warn:s.net.warnings,tblErr:g.err||null,tblM:g.M,badCount:err({mag:'table',tbl:'0, 10, 20; 0: 0, 0.08; 180: 0, 0.3, 0.5'}),badMono:err({mag:'table',tbl:'0, 10, 20; 0: 0, 0.08, 0.07; 90: 0, 0.2, 0.3; 180: 0, 0.3, 0.5'}),badL:err({La:.005})};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));
