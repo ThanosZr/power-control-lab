@@ -163,6 +163,26 @@ class StudioSimulator(unittest.TestCase):
             self.assertAlmostEqual(q['Idc'], 1, delta=1e-3)                    # current source from the expression
             self.assertGreater(q['Vdc'], 3.7)                                  # OCV from a signal (3.7 V) plus the drops
 
+    def test_induction_machine(self):
+        r = self.o['im']
+        self.assertEqual(r['warn'], [])
+        # inverse-Γ at the measured slip: Z = R_s + jω₁L_σ + (jω₁L_M ‖ R_R/s)
+        w1, ws = 2 * math.pi * 50, 2 * math.pi * 50 / 2
+        s = (ws - r['w']) / ws
+        zm, zr = complex(0, w1 * .3), complex(2 / s, 0)
+        zp = zm * zr / (zm + zr)
+        i = 326.6 / abs(complex(3, w1 * .025) + zp)
+        self.assertAlmostEqual(r['te'], 1.5 * i * i * zp.real / ws, delta=.01)          # air-gap power / ω_sync
+        self.assertAlmostEqual(r['te'], 10 + .002 * r['w'], delta=.01)                    # = τ_L + b·ω in steady state
+        self.assertAlmostEqual(r['psi'], i * abs(zp) / w1, delta=1e-3)
+        self.assertAlmostEqual(r['psiEst'], r['psi'], delta=1e-3)                         # exact parameters: estimate = machine
+        self.assertAlmostEqual(r['dth'], 0, delta=2e-3)
+        self.assertEqual(r['spwm'], [.5 + 250 / 600, .5 - 50 / 600, .5 - 200 / 600])
+        o = -(250 - 200) / 2                                                             # −(max + min)/2
+        for a, v in zip(r['svpwm'], (250, -50, -200)):
+            self.assertAlmostEqual(a, .5 + (v + o) / 600, places=12)
+        self.assertEqual(r['square'], [1, 0, 0])
+
     def test_peak_current_mode(self):
         o, T = self.o, 1e-5
         m1, m2 = lambda D: (24 - 24 * D) / 50e-6, lambda D: 24 * D / 50e-6

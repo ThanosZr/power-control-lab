@@ -131,4 +131,10 @@ const {chromium}=require('playwright');
  await p.fill('#eis-from','200');await p.fill('#eis-to','1000');await p.fill('#eis-ppd','1');await p.click('#eis-run');
  await p.waitForFunction(()=>!window.PCL.EIS.run&&window.PCL.EIS.pts.length===2,null,{timeout:120000});
  const eo=await p.$eval('#eis-out',e=>e.textContent);ok(/1 kHz31,3\d mΩ/.test(eo)&&/Nyquist|Re Z/.test(eo),'EIS sweep table: '+eo.slice(-160));await p.screenshot({path:'cell_eis.png'});
+ // 3.4: induction machine with V/f and SVPWM: steady state against the equivalent circuit
+ await p.evaluate(()=>window.PCL.loadTutorial('im_vf',{mod:'svpwm'}));await p.waitForTimeout(800);
+ ok(await p.$eval('#sim-step',e=>e.value)==='40','step of the tutorial kept (T/40)');
+ await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.stopT-S.sim.t);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(500);
+ th=await p.$eval('#theory',e=>e.textContent);ok(/ταχύτητα ω_m153,1 rad\/s153,1 rad\/s/.test(th),'V/f speed = equivalent circuit');ok(/ρεύμα φάσης \(RMS, 4 περίοδοι\)\d,\d+ A\d,\d+ A/.test(th),'phase current RMS');
+ ok(/ω 15\d/.test(await p.evaluate(()=>document.querySelector('[data-l="M1"] .lv')?.textContent||'')),'machine live text');await p.screenshot({path:'im_vf.png'});
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

@@ -181,5 +181,17 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
  const z=[];for(const f of [10,100,1000]){const r=MNA.eisPoint(pr,{comp:'KF',param:'v',f,vKey:'Y:VM1',iKey:'Y:AM1',settle:3,periods:2,hDiv:20,minSettle:.02});const q=M.impedance(r);
   const w=2*Math.PI*f,d=1+(w*.02*.05)**2,zw=P.cpeZbank(W1,w);z.push({f,re:q.re,im:q.im,tre:.03+.02/d+zw[0],tim:-w*.02*.02*.05/d+zw[1],Vdc:q.Vdc,Idc:q.Idc});}
  out.eis={bank,z};}
+// 27) induction machine (3.4): direct-on-line start, steady state against the inverse-Γ equivalent circuit; three-phase
+//     modulator (SPWM, SVPWM, six-step); rotor-flux estimator (current model) against the machine's own flux
+{const pr=project([{id:'V3',type:'VAC3',params:{Vpk:326.6,f:50}},{id:'G',type:'GND'},{id:'M1',type:'IM',params:{TL:'0:0, 0.6:10'}},{id:'CL',type:'CLARKE'},{id:'AMa',type:'AM'},{id:'AMb',type:'AM'},{id:'AMc',type:'AM'},
+  {id:'GP',type:'GAIN',params:{K:2}},{id:'FE',type:'FEST',params:{RR:2,LM:.3}}],
+  [['V3:n','G:g'],['V3:a','AMa:a'],['AMa:b','M1:a'],['V3:b','AMb:a'],['AMb:b','M1:b'],['V3:c','AMc:a'],['AMc:b','M1:c'],['AMa:y','CL:a'],['AMb:y','CL:b'],['AMc:y','CL:c'],['CL:al','FE:al'],['CL:be','FE:be'],['M1:w','GP:u'],['GP:y','FE:wr']]);
+ const s=new Sim(pr,{h:10e-6});s.run(1.2);const per=s.lastPeriod('Y:AMa');
+ const md=new Sim(project([{id:'KA',type:'CONST',params:{v:250}},{id:'KB',type:'CONST',params:{v:-50}},{id:'KC',type:'CONST',params:{v:-200}},{id:'KD',type:'CONST',params:{v:600}},
+  {id:'M1',type:'MOD3',params:{mode:'spwm'}},{id:'M2',type:'MOD3',params:{mode:'svpwm'}},{id:'M3',type:'MOD3',params:{mode:'square'}}],
+  ['M1','M2','M3'].flatMap(m=>[['KA:y',m+':va'],['KB:y',m+':vb'],['KC:y',m+':vc'],['KD:y',m+':vdc']])),{h:1e-5});md.run(1e-4);
+ const d=m=>[md.now('Y:'+m),md.now('Y:'+m+':db'),md.now('Y:'+m+':dc')];
+ let dth=s.now('Y:FE')-s.now('Y:M1:thf');dth-=2*Math.PI*Math.round(dth/(2*Math.PI));
+ out.im={w:s.now('Y:M1'),te:s.now('Y:M1:te'),psi:s.now('Y:M1:psi'),irms:per.rms,warn:s.net.warnings,spwm:d('M1'),svpwm:d('M2'),square:d('M3'),psiEst:s.now('Y:FE:psi'),dth};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

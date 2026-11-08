@@ -53,6 +53,10 @@ for(const [mode,D,ramp] of [['valley','0.4','none'],['valley','0.6','none'],['va
 // 3.3.1: battery cell test with the converter, Z at the perturbation frequency (charge from V_S, discharge into R_L)
 for(const src of ['vs','rl']){const pr=build('cell_eis',{src,f:'200'});const r=MNA.eisPoint(pr,{...pr.meta.eis,f:200});const z=M.impedance(r);const s=sim(pr,.1);
  out['eis_'+src]={re:z.re,im:z.im,I1:z.I,Idc:z.Idc,vci:last(s,'V:CI',20).avg,ocv:s.now('Y:EXO'),soc:s.now('Y:SOC'),warn:s.net.warnings,meta:pr.meta};}
+// 3.4: induction machine, V/f with three modulations and field orientation (exact R̂_R, R̂_R = 0.5·R_R, field weakening)
+for(const mod of ['svpwm','spwm']){const pr=build('im_vf',{mod});const s=sim(pr,pr.sim.stopT);out['imvf_'+mod]={w:s.now('Y:M1'),psi:s.now('Y:M1:psi'),te:last(s,'Y:M1:te',100).avg,warn:s.net.warnings};}
+for(const [wref,rr] of [['100','1'],['100','0.5'],['230','1']]){const pr=build('im_foc',{wref,rr});const s=sim(pr,pr.sim.stopT);const avg=k=>last(s,k,100).avg;let d=s.now('Y:M1:thf')-s.now('Y:FE');d-=2*Math.PI*Math.round(d/(2*Math.PI));
+ out[`imfoc_${wref}_${rr}`]={w:s.now('Y:M1'),psi:s.now('Y:M1:psi'),psiEst:s.now('Y:FE:psi'),id:avg('Y:PK'),iq:avg('Y:PK:q'),te:avg('Y:M1:te'),dth:d,warn:s.net.warnings,meta:pr.meta};}
 // 3.3: PI in Python (Pyodide in Node, when the pyodide package is installed) against the PI block; feedforward from an expression
 (async()=>{let PyRT=null;try{PyRT=require(W+'/pyrt.js');await PyRT.load();}catch(e){out.py_skipped=String(e.message||e).slice(0,120);}
  for(const [ctrl,ff] of [['pib','none'],['pib','expr'],...(PyRT?.ready?[['python','none'],['python','expr']]:[])]){const pr=build('code_loop',{ctrl,ff});const s=sim(pr,.004);const p=s.per,i=s.chIndex.get('Y:AM1'),d=s.chIndex.get('D:PWM1');

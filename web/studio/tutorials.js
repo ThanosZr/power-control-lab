@@ -373,6 +373,59 @@
    const ws=wires.map(w=>w[1]==='JT4x'?['Q1:d','JT3',[[390,120]]]:w[1]==='JB7x'?['OCV:n','JB6',[[1030,330]]]:w);
    return project(comps,ws,{sim:{hDiv:50,speed:30,stopT:.1},scope:{panes:[[['Y:AM1','i_cell'],['Y:EXI','I_ref']],[['Y:VM1','v_cell']],[['V:CI','v_Ci']]],window:{unit:'s',n:.02}},
     meta:{Vs,fs,L,Lf,Co,Ci,RL,R0,R1,C1,sig,Qah,soc0,Idc,Iac,f,rl,kp,ki,eis:{comp:'KF',param:'v',vKey:'Y:VM1',iKey:'Y:AM1',from:10,to:1000,ppd:3,settle:3,periods:2,minSettle:.02}}});}});
+ // ------------------------------------------------------------------ 3.4: three-phase inverter and induction machine (second part of the thesis)
+ // power stage shared by the two tutorials: V_dc, three legs (S1–S6, triangle carriers in phase), ammeters, machine (pins on top)
+ function invIM(o){const Vdc=600,fs=5e3,X=[300,420,540],ph=['a','b','c'],comps=[C('V1','VDC',120,200,{V:Vdc},{label:'V_dc'}),gnd(120,330),J('JTL',120,110),J('JBL',120,290)],wires=[['V1:p','JTL'],['V1:n','JBL'],['JBL','G1:g']];
+  X.forEach((x,k)=>{const P='PWM'+ph[k].toUpperCase(),q=ph[k];comps.push(C('S'+(2*k+1),'SW',x,160,{pwm:P,out:'a',body:true,Ron:.01},{label:'S'+(2*k+1)}),C('S'+(2*k+2),'SW',x,240,{pwm:P,out:'na',body:true,Ron:.01},{label:'S'+(2*k+2)}),
+    J('JT'+q,x,110),J('JM'+q,x,200),J('JB'+q,x,290),C('AM'+q,'AM',x+50,330,{},{rot:1,label:'i_'+q}),C('TG'+q,'TAGO',x+100,330,{name:'i_'+q}),C(P,'PWM',x,40,{fs,mode:'ext',carrier:'triangle'},{label:'PWM '+q,lbl:'above'}),C('TD'+q,'TAGI',x-80,40,{name:'d_'+q}));
+   wires.push(['S'+(2*k+1)+':d','JT'+q],['S'+(2*k+1)+':s','JM'+q],['JM'+q,'S'+(2*k+2)+':d'],['S'+(2*k+2)+':s','JB'+q],['JM'+q,'AM'+q+':a',[[x+50,200]]],['AM'+q+':y','TG'+q+':u'],['TD'+q+':y',P+':d']);});
+  wires.push(['JTL','JTa'],['JTa','JTb'],['JTb','JTc'],['JBL','JBa'],['JBa','JBb'],['JBb','JBc']);
+  comps.push(C('M1','IM',470,470,{TL:o.TL,w0:0},{flip:true,rot:3,label:'M (επαγωγής)',lbl:'left'}),C('TGw','TAGO',560,560,{name:'ω'}),C('TGf','TAGO',560,600,{name:'θ_f'}));
+  wires.push(['AMa:b','M1:a',[[350,400],[450,400]]],['AMb:b','M1:b'],['AMc:b','M1:c',[[590,400],[490,400]]],['M1:w','TGw:u',[[450,560]]],['M1:thf','TGf:u',[[480,600]]]);
+  return {comps,wires,Vdc,fs};}
+ const IMP={Rs:3,RR:2,Ls:.025,LM:.3,p:2,J:.02,b:.002};
+ T.push({id:'im_vf',group:'Ηλεκτρική κίνηση (3.4)',title:'Μηχανή επαγωγής: V/f και διαμόρφωση SPWM, SVPWM, τετραγωνική',theory:'formula',topology:'im_vf',
+  options:[{k:'mod',label:'Διαμόρφωση',options:[['svpwm','SVPWM'],['spwm','SPWM'],['square','Τετραγωνική (six-step)']],def:'svpwm'}],
+  desc:'Τριφασικός αντιστροφέας 600 V, 5 kHz, που τροφοδοτεί μηχανή επαγωγής 4 πόλων (μοντέλο ανάστροφο-Γ, τυπικές τιμές περίπου 2 kW). Ανοιχτός βρόχος V/f: η συχνότητα ανεβαίνει με ράμπα 100 Hz/s ως τα 50 Hz και η τάση ακολουθεί V = V_b + (V_n − V_b)·f/f_n. Η γωνία θ = ∫2πf dt και το πλάτος δίνουν τις τάσεις αναφοράς (αντίστροφος Park και Clarke), και ο τριφασικός διαμορφωτής τις κάνει duty για τα τρία σκέλη. Ροπή φορτίου 10 N·m στα 0,7 s.',
+  tasks:['Τρέξε έως το τέλος. Η μηχανή επιταχύνει ακολουθώντας τη συχνότητα, με ολίσθηση που μεγαλώνει με το φορτίο. Η κάρτα θεωρίας συγκρίνει ταχύτητα, ρεύμα και ροπή με το ισοδύναμο κύκλωμα στη μόνιμη κατάσταση.','SPWM: στα 50 Hz η αναφορά 326,6 V ξεπερνά το V_dc/2 = 300 V (υπερδιαμόρφωση), το πλάτος κόβεται και εμφανίζονται χαμηλές αρμονικές. SVPWM: ως V_dc/√3 = 346 V, χωράει.','Τετραγωνική: το πλάτος δεν ρυθμίζεται (4/π·V_dc/2 = 382 V), άρα δεν γίνεται V/f. Εδώ η μηχανή ξεκινά απευθείας στα 50 Hz, με μεγάλο ρεύμα εκκίνησης.','Στο πάνελ «Αρμονικές» διάλεξε το i_a: σύγκρινε το THD των τριών διαμορφώσεων.'],
+  build(o){const sq=o.mod==='square',pw=invIM({TL:'0:0, 0.7:10'}),{comps,wires}=pw,Vn=326.6,fn=50,Vb=10;
+   comps.push(C('EXF','EXPR',-120,-160,{expr:sq?'fn':'min(fn, rate*t)',ins:'',pars:`fn = ${fn}, rate = 100`},{label:'f(t)'}),C('GW','GAIN',-20,-160,{K:+(2*Math.PI).toPrecision(8)},{label:'2π'}),C('TH','INT',80,-160,{wrap:'2pi'},{label:'θ'}),
+    C('EXV','EXPR',-20,-100,{expr:'Vb + (Vn - Vb)*f/fn',ins:'f',pars:`Vb = ${Vb}, Vn = ${Vn}, fn = ${fn}`},{label:'V(f)'}),C('KQ','CONST',80,-60,{v:'0'},{label:'0'}),
+    C('IPK','IPARK',180,-120,{},{label:'dq → αβ'}),C('ICL','ICLARKE',280,-120,{},{label:'αβ → abc'}),C('KDC','CONST',280,-40,{v:'600'},{label:'V_dc'}),
+    C('MD','MOD3',390,-110,{mode:o.mod},{label:'διαμορφωτής'}),C('TGda','TAGO',470,-130,{name:'d_a'}),C('TGdb','TAGO',470,-110,{name:'d_b'}),C('TGdc','TAGO',470,-90,{name:'d_c'}));
+   wires.push(['EXF:y','GW:u'],['GW:y','TH:u'],['EXF:y','EXV:f',[[-60,-160],[-60,-100]]],['EXV:y','IPK:d',[[130,-100],[130,-130]]],['KQ:y','IPK:q',[[140,-60],[140,-120]]],['TH:y','IPK:th',[[150,-160],[150,-110]]],
+    ['IPK:al','ICL:al'],['IPK:be','ICL:be'],['ICL:a','MD:va',[[340,-130]]],['ICL:b','MD:vb',[[345,-120]]],['ICL:c','MD:vc',[[350,-110]]],['KDC:y','MD:vdc',[[340,-40],[340,-90]]],['MD:da','TGda:u'],['MD:db','TGdb:u'],['MD:dc','TGdc:u']);
+   return project(comps,wires,{sim:{hDiv:40,speed:20,stopT:.9},scope:{panes:[[['Y:M1','ω_m']],[['Y:AMa','i_a'],['Y:AMb','i_b']],[['Y:M1:te','τ_e']]],window:{unit:'s',n:.9}},
+    meta:{...IMP,Vdc:600,fs:5e3,Vn,fn,Vb,mod:o.mod,TL:10,tTL:.7}});}});
+ T.push({id:'im_foc',group:'Ηλεκτρική κίνηση (3.4)',title:'Μηχανή επαγωγής: διανυσματικός έλεγχος, εξασθένιση πεδίου, R̂_R',theory:'formula',topology:'im_foc',
+  options:[{k:'wref',label:'Ταχύτητα αναφοράς',options:[['100','100 rad/s (περιοχή σταθερής ροής)'],['230','230 rad/s (εξασθένιση πεδίου)']],def:'100'},
+   {k:'rr',label:'R̂_R στον εκτιμητή',options:[['1','R̂_R = R_R'],['0.5','R̂_R = 0,5·R_R'],['1.5','R̂_R = 1,5·R_R']],def:'1'}],
+  desc:'Διανυσματικός έλεγχος με προσανατολισμό στη ροή του δρομέα. Τα ρεύματα των φάσεων περνούν από Clarke, ο εκτιμητής ροής (μοντέλο ρεύματος) δίνει τη γωνία θ̂, και με Park γίνονται i_d, i_q. Δύο PI ρεύματος δίνουν u_d, u_q, που επιστρέφουν με αντίστροφο Park και Clarke στον διαμορφωτή SVPWM. Ο βρόχος ταχύτητας δίνει το i_q,ref και η ροή το i_d,ref = ψ_ref/L̂_M. Με εξασθένιση πεδίου, ψ_ref = ψ_n·min(1, ω_b/|ω|). Το μπλοκ της μηχανής δίνει και την πραγματική γωνία της ροής θ_f, για σύγκριση με την εκτίμηση.',
+  tasks:['Τρέξε: η ροή χτίζεται τα πρώτα 0,2 s, μετά βήμα ταχύτητας και βήμα φορτίου 10 N·m στα 0,6 s. Η κάρτα θεωρίας δίνει i_d, i_q, ολίσθηση και ροπή στη μόνιμη κατάσταση.','Εξασθένιση πεδίου (230 rad/s): πάνω από τα 157 rad/s η ροή μειώνεται ώστε η τάση να χωράει στο V_dc/√3.','R̂_R λάθος: ο εκτιμητής υπολογίζει λάθος ολίσθηση και η γωνία θ̂ απομακρύνεται από την πραγματική θ_f. Η ροή και η ροπή ανά αμπέρ αλλάζουν. Δες το σφάλμα γωνίας στην κάρτα θεωρίας.'],
+  build(o){const wref=+o.wref,k=+o.rr,pw=invIM({TL:'0:0, 0.6:10'}),{comps,wires}=pw,psin=.9,wb=157,{Ls,Rs,RR,LM,p,J}=IMP,ac=2*Math.PI*300,as=2*Math.PI*8,kt=1.5*p*psin;
+   const kpc=+(ac*Ls).toPrecision(4),kic=+(ac*(Rs+RR)).toPrecision(4),kps=+(as*J/kt).toPrecision(4),kis=+(as*as*J/kt/4).toPrecision(4),Imax=15;
+   comps.push(C('TFa','TAGI',-260,-350,{name:'i_a'}),C('TFb','TAGI',-260,-325,{name:'i_b'}),C('TFc','TAGI',-260,-300,{name:'i_c'}),C('CL','CLARKE',-138,-325,{},{label:'abc → αβ'}),
+    C('TFw','TAGI',-260,-250,{name:'ω'}),C('GP','GAIN',-138,-250,{K:p},{label:'ω_r = p·ω'}),C('FE','FEST',-4,-312,{RR:+(k*RR).toPrecision(4),LM},{label:'εκτιμητής ροής'}),
+    C('PK','PARK',145,-338,{},{label:'αβ → dq'}),
+    C('KW','CONST',-260,-150,{v:`0:0, 0.2:${wref}`},{label:'ω_ref'}),C('TFw2','TAGI',-260,-100,{name:'ω'}),C('SW1','SUM',-138,-138,{signs:'+-'},{label:'e_ω'}),
+    C('PIS','PIB',-4,-138,{Kp:kps,Ki:kis,clock:'PWMA',trig:'start',y0:0,ymin:-Imax,ymax:Imax},{label:'PI ταχύτητας'}),
+    C('TFw3','TAGI',-260,-38,{name:'ω'}),C('EXP','EXPR',-138,-38,{expr:'psin*min(1, wb/max(abs(w), 1))',ins:'w',pars:`psin = ${psin}, wb = ${wb}`},{label:'ψ_ref'}),C('GL','GAIN',-4,-38,{K:+(1/LM).toPrecision(6)},{label:'1/L̂_M'}),
+    C('SD','SUM',145,-75,{signs:'+-'},{label:'e_d'}),C('SQ','SUM',145,-162,{signs:'+-'},{label:'e_q'}),
+    C('PID','PIB',280,-75,{Kp:kpc,Ki:kic,clock:'PWMA',trig:'start',y0:0,ymin:-350,ymax:350},{label:'PI i_d'}),C('PIQ','PIB',280,-162,{Kp:kpc,Ki:kic,clock:'PWMA',trig:'start',y0:0,ymin:-350,ymax:350},{label:'PI i_q'}),
+    C('TFth','TAGI',280,-250,{name:'θ̂'}),C('IPK','IPARK',428,-138,{},{label:'dq → αβ'}),C('ICL','ICLARKE',564,-138,{},{label:'αβ → abc'}),C('KDC','CONST',564,-38,{v:'600'},{label:'V_dc'}),
+    C('MD','MOD3',712,-125,{mode:'svpwm'},{label:'SVPWM'}),C('TGda','TAGO',820,-150,{name:'d_a'}),C('TGdb','TAGO',820,-125,{name:'d_b'}),C('TGdc','TAGO',820,-100,{name:'d_c'}),
+    C('TGth','TAGO',145,-250,{name:'θ̂'}),C('TGid','TAGO',280,-350,{name:'i_d'}),C('TGiq','TAGO',280,-312,{name:'i_q'}),C('TFid','TAGI',10,-88,{name:'i_d'}),C('TFiq','TAGI',10,-188,{name:'i_q'}));
+   wires.push(['TFa:y','CL:a'],['TFb:y','CL:b'],['TFc:y','CL:c'],['TFw:y','GP:u'],['CL:al','FE:al'],['CL:be','FE:be'],['GP:y','FE:wr',[[-71,-250],[-71,-300]]],['FE:th','TGth:u',[[64,-325],[64,-250]]],
+    ['CL:al','PK:al',[[-84,-338],[-84,-375],[91,-375],[91,-350]]],['CL:be','PK:be',[[-78,-312],[-78,-381],[98,-381],[98,-338]]],['TFth2x','PK:th'],
+    ['PK:d','TGid:u',[[213,-350]]],['PK:q','TGiq:u',[[219,-325],[219,-312]]],
+    ['KW:y','SW1:a'],['TFw2:y','SW1:b',[[-192,-100],[-192,-125]]],['SW1:y','PIS:u'],['PIS:y','SQ:a',[[91,-138],[91,-175]]],['TFiq:y','SQ:b',[[91,-188],[91,-150]]],
+    ['TFw3:y','EXP:w'],['EXP:y','GL:u'],['GL:y','SD:a',[[78,-38],[78,-88]]],['TFid:y','SD:b',[[78,-88],[78,-62]]],
+    ['SD:y','PID:u'],['SQ:y','PIQ:u'],['PID:y','IPK:d',[[361,-75],[361,-150]]],['PIQ:y','IPK:q',[[368,-162],[368,-138]]],['TFth:y','IPK:th',[[374,-250],[374,-125]]],
+    ['IPK:al','ICL:al'],['IPK:be','ICL:be'],['ICL:a','MD:va',[[645,-150]]],['ICL:b','MD:vb',[[651,-138]]],['ICL:c','MD:vc',[[658,-125]]],['KDC:y','MD:vdc',[[645,-38],[645,-100]]],['MD:da','TGda:u'],['MD:db','TGdb:u'],['MD:dc','TGdc:u']);
+   // θ̂ to Park through a second "from" tag
+   const ws=wires.map(w=>w[0]==='TFth2x'?['TFth3:y','PK:th']:w);comps.push(C('TFth3','TAGI',64,-288,{name:'θ̂'}));
+   return project(comps,ws,{sim:{hDiv:40,speed:20,stopT:1.5},scope:{panes:[[['Y:M1','ω_m'],['Y:KW','ω_ref']],[['Y:PK','i_d'],['Y:PK:q','i_q']],[['Y:M1:psi','|ψ_R| (πραγματική)'],['Y:FE:psi','|ψ̂_R|']],[['Y:M1:te','τ_e']]],window:{unit:'s',n:1.5}},
+    meta:{...IMP,Vdc:600,fs:5e3,psin,wb,wref,k,kpc,kic,kps,kis,Imax,ac,as,TL:10,tTL:.6}});}});
  // ------------------------------------------------------------------ 3.0: peak current-mode, subharmonic oscillation
  T.push({id:'peak_cm',group:'Μπλοκ σημάτων (3.0)',title:'Peak current-mode και υποαρμονική',theory:'formula',topology:'peak_cm',
   options:[{k:'mode',label:'Έλεγχος',options:[['peak','Peak: ρολόι → ON, κορυφή → OFF'],['valley','Valley: ρολόι → OFF, κοιλάδα → ON']],def:'peak'},

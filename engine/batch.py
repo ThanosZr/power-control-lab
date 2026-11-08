@@ -248,7 +248,7 @@ class Circuit:
             self.blocks.append(b)
         self.zc = [b for b in self.blocks if b['type'] == 'CMP']
         # continuous in time: integrators, filters, the PLL, and expressions of t (e.g. I_dc + I_ac·sin(2πft))
-        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
+        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL', 'FEST') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
         self.sv = [0.0] * self.nsig
         self.yb = [0.0] * len(self.blocks)
         self.yo = [[0.0] * len(b.get('outList') or []) for b in self.blocks]
@@ -304,6 +304,21 @@ class Circuit:
         if ns == 0:     # purely resistive circuit (e.g. diode rectifier into R, E): a dummy
             self.ns = 1  # constant state lets the ODE solver march in time and find events
             self.Bx, self.Dm, self.x0 = np.zeros((n, 1)), np.zeros((1, n)), np.zeros(1)
+        # induction machines (3.4): ψ_Rα, ψ_Rβ, ω, θ appended to the states; their stator sources e = −(R_R/L_M − jω_r)ψ_R
+        self.ims = net.get('ims') or []
+        self.nsn = self.ns
+        for q, m in enumerate(self.ims):
+            m['kL'] = [self.iL.index(ph['L']) for ph in m['ph']]
+            m['k0'] = self.nsn + 4 * q
+            for k, ph in enumerate(m['ph']):
+                E[ph['V']]['im'] = (q, k)
+            st = m.get('st') or {}
+            self.x0 = np.concatenate([self.x0, [_f(st.get('pa')), _f(st.get('pb')), _f(st.get('w')), _f(st.get('th'))]])
+        if self.ims:
+            extra = 4 * len(self.ims)
+            self.Bx = np.hstack([self.Bx, np.zeros((n, extra))])
+            self.Dm = np.vstack([self.Dm, np.zeros((extra, n))])
+            self.ns = self.nsn + extra
         clk = next((b for b in self.blocks if b['type'] in ('CLK', 'RAMP')), None)
         self.base_T = min([k.T for k in self.ctrls], default=None) or (1 / max(_f(clk.get('f'), 1e5), 1e-6) if clk else None) or next(
             (1 / max(1e-6, _f(E[i]['src'].get('f'), 50)) for i in self.iV if E[i]['src'].get('kind') == 'ac'), 1e-3)
@@ -316,7 +331,29 @@ class Circuit:
     def R(self, e, t):
         return max(sched_at(e.get('sched'), t, e['R']), 1e-9)
 
-    def Vsrc(self, e, t):
+    def im_e(self, m, x):
+        """Stator sources of a machine (a, b, c) from its states."""
+        k0 = m['k0']
+        pa, pb, w = x[k0], x[k0 + 1], x[k0 + 2]
+        g, wr = m['RR'] / m['LM'], m['p'] * w
+        ea, eb = -g * pa - wr * pb, -g * pb + wr * pa
+        q = math.sqrt(3) / 2
+        return ea, -ea / 2 + q * eb, -ea / 2 - q * eb
+
+    def im_deriv(self, m, t, x):
+        k0, kL = m['k0'], m['kL']
+        ia, ib, ic = x[kL[0]], x[kL[1]], x[kL[2]]
+        al, be = (2 * ia - ib - ic) / 3, (ib - ic) / math.sqrt(3)
+        pa, pb, w = x[k0], x[k0 + 1], x[k0 + 2]
+        g, wr = m['RR'] / m['LM'], m['p'] * w
+        te = 1.5 * m['p'] * (pa * be - pb * al)
+        n = m.get('tl')
+        tl = self.sig_in(n) if isinstance(n, int) and n >= 0 else sched_at(m.get('sched'), t, (m.get('sched') or [[0, 0]])[0][1])
+        return [m['RR'] * al - g * pa - wr * pb, m['RR'] * be - g * pb + wr * pa, (te - tl - m['b'] * w) / m['J'], w], te
+
+    def Vsrc(self, e, t, x=None):
+        if 'im' in e:
+            return self.im_e(self.ims[e['im'][0]], x if x is not None else self.x0)[e['im'][1]]
         n = e.get('sigIn')
         if isinstance(n, int) and n >= 0:     # a voltage source controlled by a signal (e.g. OCV(SOC))
             return self.sig_in(n)
@@ -415,11 +452,11 @@ class Circuit:
         M = self.Dm @ Ainv
         return {'Ainv': Ainv, 'M': M, 'J': M @ self.Bx, 'bd': bd, 'Z1': Ainv @ self.Bc if self.iP else None}
 
-    def bsrc(self, t):
+    def bsrc(self, t, x=None):
         b = np.zeros(self.n)
         E = self.els
         for i in self.iV:
-            b[E[i]['row']] = self.Vsrc(E[i], t)
+            b[E[i]['row']] = self.Vsrc(E[i], t, x)
         for i in self.iI:
             e = E[i]
             n = e.get('sigIn')
@@ -431,7 +468,7 @@ class Circuit:
         return b
 
     def solve_z(self, t, x, tp):
-        b = self.Bx @ x + self.bsrc(t) + tp['bd']
+        b = self.Bx @ x + self.bsrc(t, x) + tp['bd']
         z0 = tp['Ainv'] @ b
         if not self.iP:
             return z0
@@ -498,7 +535,7 @@ class Circuit:
     def tolerances(self, x):
         nl = len(self.iL)
         iscale = float(np.max(np.abs(x[:nl]))) if nl else 0.0
-        vscale = float(np.max(np.abs(x[nl:]))) if len(x) > nl else 0.0
+        vscale = float(np.max(np.abs(x[nl:self.nsn]))) if self.nsn > nl else 0.0
         return 1e-9 * (1 + iscale), 1e-7 * (1 + vscale)
 
     def consistent(self, t, x, init=False):
@@ -795,6 +832,12 @@ class Circuit:
                     st['ys'] = b['_rt'](t, [rd(I.get(k)) for k in b['inNames']])
                     sampled = True
                 ys = {k: (st['ys'][i] if st.get('ys') else _f(b.get('y0'), 0)) for i, k in enumerate(b['outNames'])}
+            elif ty == 'IM':
+                m = self.ims[b['im']]
+                k0 = m['k0']
+                te = self.im_deriv(m, t, x)[1]
+                f, r = math.atan2(x[k0 + 1], x[k0]), m['p'] * x[k0 + 3]
+                ys = {'w': x[k0 + 2], 'te': te, 'psi': math.hypot(x[k0], x[k0 + 1]), 'thf': f % P2, 'thr': r % P2}
             elif ty == 'UD':
                 if disc and self.blk_due(b, t, force):
                     st['y'] = b['y0'] if force else st['mem']
@@ -853,6 +896,26 @@ class Circuit:
                 ys = {'th': th, 'w': w, 'amp': vd}
             elif ty == 'DCM':
                 ys = {k: self.value(r, t, x, z) for k, r in (b.get('recs') or {}).items()}
+            elif ty == 'MOD3':
+                v = [rd(I.get('va')), rd(I.get('vb')), rd(I.get('vc'))]
+                dc = max(abs(rd(I.get('vdc'))), 1e-9)
+                o = -(max(v) + min(v)) / 2 if b.get('mode') == 'svpwm' else 0.0
+                d = [(1.0 if q > 0 else 0.0) if b.get('mode') == 'square' else min(1.0, max(0.0, .5 + (q + o) / dc)) for q in v]
+                ys = {'da': d[0], 'db': d[1], 'dc': d[2]}
+            elif ty == 'FEST':          # current model of the rotor flux, as the browser (trapezoidal, inputs held)
+                dt = max(0.0, t - st['t'])
+                ia0, ib0, w0 = st['u']
+                g, k = b['RR'] / b['LM'], dt / 2
+                a11, a12 = 1 + k * g, k * w0
+                r1 = (1 - k * g) * st['pa'] - k * w0 * st['pb'] + dt * b['RR'] * ia0
+                r2 = (1 - k * g) * st['pb'] + k * w0 * st['pa'] + dt * b['RR'] * ib0
+                det = a11 * a11 + a12 * a12
+                pa, pb = (a11 * r1 - a12 * r2) / det, (a11 * r2 + a12 * r1) / det
+                ps, th = math.hypot(pa, pb), math.atan2(pb, pa)
+                iq = -rd(I.get('al')) * math.sin(th) + rd(I.get('be')) * math.cos(th)
+                if not trial:
+                    cont.append((b, (pa, pb)))
+                ys = {'th': th % P2, 'psi': ps, 'w1': rd(I.get('wr')) + (b['RR'] * iq / ps if ps > 1e-6 else 0.0)}
             elif ty == 'CLK':
                 u = b['f'] * tt - b['ph']
                 y = 1.0 if u - math.floor(u + 1e-11) < b['duty'] - 1e-11 else 0.0
@@ -898,7 +961,12 @@ class Circuit:
             else:
                 b['st']['mem'] = rd(b['ins'].get('u'))
         for b, v in cont:
-            b['st']['s'], b['st']['u'], b['st']['t'] = v, rd(b['ins'].get('u')), t
+            if b['type'] == 'FEST':
+                b['st']['pa'], b['st']['pb'] = v
+                b['st']['u'] = [rd(b['ins'].get('al')), rd(b['ins'].get('be')), rd(b['ins'].get('wr'))]
+                b['st']['t'] = t
+            else:
+                b['st']['s'], b['st']['u'], b['st']['t'] = v, rd(b['ins'].get('u')), t
         if not trial:
             self.sv, self.yb, self.yo = sv, yb, yo
         return ((yb, yo) if outs else yb), sampled
@@ -1088,9 +1156,10 @@ def simulate(data):
             return cache['z']
 
         def fun(tt, yy, tp=tp):
-            if ckt.iP:
-                return ckt.Dm @ zof(tt, yy)
-            return tp['M'] @ (ckt.Bx @ yy + ckt.bsrc(tt) + tp['bd'])
+            d = ckt.Dm @ zof(tt, yy) if ckt.iP else tp['M'] @ (ckt.Bx @ yy + ckt.bsrc(tt, yy) + tp['bd'])
+            for m in ckt.ims:                  # machine states: ψ_R, ω, θ from the stator currents
+                d[m['k0']:m['k0'] + 4] = ckt.im_deriv(m, tt, yy)[0]
+            return d
         events, owners = [], []
         for i in ckt.iD:
             e = ckt.els[i]
@@ -1119,7 +1188,7 @@ def simulate(data):
             events.append(ev)
             owners.append(b)
         kw = dict(method=method, rtol=rtol, atol=atol, max_step=max_step, events=events or None)
-        if implicit and not ckt.iP:
+        if implicit and not ckt.iP and not ckt.ims:     # the machines make the system nonlinear: numerical Jacobian
             kw['jac'] = (lambda tt, yy, J=tp['J']: J) if method == 'LSODA' else tp['J']
         sol = solve_ivp(fun, (t, tn), x, **kw)
         stats['segments'] += 1

@@ -177,6 +177,7 @@
     case 'CONST':return String(p.v).includes(':')?String(p.v).slice(0,22):'';case 'GAIN':return 'K = '+e(+p.K);case 'SUM':return '';
     case 'SAT':return '['+e(+p.lo)+', '+e(+p.hi)+']';case 'CMP':return +p.hys>0?'h = '+e(+p.hys):'';case 'LOGIC':return ['nand','nor','xor'].includes(p.op)?p.op.toUpperCase():'';
     case 'PIB':return 'K_p '+e(+p.Kp)+' · K_i '+e(+p.Ki);case 'UD':return '';
+    case 'IM':return 'p = '+p.pp+' · L_M '+e(+p.LM,'H');case 'MOD3':return {spwm:'SPWM',svpwm:'SVPWM',square:'six-step'}[p.mode]||'';case 'FEST':return 'R̂_R '+e(+p.RR,'Ω');
     case 'EXPR':return String(p.expr||'').slice(0,28);case 'PY':return (p.pars?String(p.pars).slice(0,26):'Python');
     case 'INT':return p.wrap==='2pi'?'mod 2π':(+p.lo>-1e8||+p.hi<1e8)?'['+e(+p.lo)+', '+e(+p.hi)+']':'';case 'LPF':return 'f_c = '+e(+p.fc,'Hz');
     case 'CLARKE':case 'ICLARKE':return p.inv==='pow'?'ισχύς':'πλάτος';case 'PARK':case 'IPARK':return '';case 'PLL':return e(+p.f0,'Hz')+' · BW '+e(+p.bw,'Hz');

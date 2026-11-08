@@ -162,6 +162,43 @@ class Tutorials(unittest.TestCase):
         p = abs(o['eis_rl']['Idc']) * 3.55                                      # the R_L takes the power: v_Ci ≈ √(P·R_L)
         self.assertAlmostEqual(o['eis_rl']['vci'], math.sqrt(p * 20), delta=1.5)
 
+    def test_induction_machine_drives(self):
+        o = self.o
+        w1, ws = 2 * math.pi * 50, math.pi * 50
+
+        def steady(V1, TL=10.0):               # inverse-Γ, slip from τ_e(s) = τ_L + b·ω
+            def te(s):
+                zm, zr = complex(0, w1 * .3), complex(2 / s, 0)
+                zp = zm * zr / (zm + zr)
+                i = V1 / abs(complex(3, w1 * .025) + zp)
+                return 1.5 * i * i * zp.real / ws, i * abs(zp) / w1
+            a, b = 1e-6, .3
+            for _ in range(80):
+                m = (a + b) / 2
+                if te(m)[0] - (TL + .002 * (1 - m) * ws) > 0:
+                    b = m
+                else:
+                    a = m
+            return (1 - a) * ws, te(a)[1]
+        w, psi = steady(326.6)                  # SVPWM: the full 326.6 V fits under V_dc/√3
+        self.assertAlmostEqual(o['imvf_svpwm']['w'], w, delta=.05)
+        self.assertAlmostEqual(o['imvf_svpwm']['psi'], psi, delta=2e-3)
+        m = 326.6 / 300                         # SPWM: over-modulated, clipped sine
+        w, psi = steady(300 * 2 / math.pi * (m * math.asin(1 / m) + math.sqrt(1 - 1 / m ** 2)))
+        self.assertAlmostEqual(o['imvf_spwm']['w'], w, delta=.08)
+        self.assertAlmostEqual(o['imvf_spwm']['psi'], psi, delta=3e-3)
+        for k in ('imfoc_100_1', 'imfoc_100_0.5', 'imfoc_230_1'):
+            r = o[k]
+            self.assertEqual(r['warn'], [])
+            self.assertAlmostEqual(r['w'], r['meta']['wref'], delta=.3)
+            self.assertAlmostEqual(r['te'], 10 + .002 * r['w'], delta=.1)
+            kk, i_d, i_q = r['meta']['k'], r['id'], r['iq']             # detuned current model: |ψ_R| and the angle error
+            self.assertAlmostEqual(r['psi'], .3 * math.hypot(i_d, i_q) / math.sqrt(1 + (kk * i_q / i_d) ** 2), delta=.01 * r['psi'])
+            self.assertAlmostEqual(r['dth'], math.atan2(i_q, i_d) - math.atan2(kk * i_q, i_d), delta=.01)
+        self.assertAlmostEqual(o['imfoc_100_1']['psi'], .9, delta=.005)
+        self.assertAlmostEqual(o['imfoc_230_1']['psi'], .9 * 157 / 230, delta=.005)     # field weakening
+        self.assertGreater(o['imfoc_100_0.5']['psi'], 1.2)                              # R̂_R too small: over-fluxed
+
     def test_dc_drive(self):
         o = self.o
         for k in ('dc_speed_active', 'dc_speed_imc', 'dc_current_active', 'dc_open_active'):

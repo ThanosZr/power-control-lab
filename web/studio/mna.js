@@ -125,6 +125,14 @@
    else if(T==='PWM'){const fs=Math.max(num(p.fs,20e3),1e-3);ctrls.push({id:c.id,label:c.label||c.id,fs,T:1/fs,mode:p.mode||'fixed',D:num(p.D,.5),dsched:P.parseSched(p.dsched),carrier:p.carrier||'triangle',phase:num(p.phase,0)/360,
      sensor:p.sensor,qty:p.qty||'I',ref:P.parseSched(p.ref)||[[0,0]],Kp:num(p.Kp,0),Ki:num(p.Ki,0),ff:p.ff||'none',ffA:p.ffA,ffB:p.ffB,D0:num(p.D0,.5),dmin:num(p.dmin,.01),dmax:num(p.dmax,.99),
      Kd:num(p.Kd,0),Tf:num(p.Tf,0),dt:Math.max(0,num(p.dt,0)),dIn:p.mode==='ext'?sn(c.id,'d'):-1,tkPrev:null,dPrev:null,dPrevOff:null,upd:p.upd==='double'?'double':'single',h:null,dOn:num(p.D,.5),dOff:num(p.D,.5),m:num(p.m,.8),fref:num(p.fref,50),refphase:num(p.refphase,0)*Math.PI/180,d:num(p.D,.5),xi:0,k:null,tk:0,meas:0,refNow:0,ePrev:null,dF:0});info.ctrl=ctrls[ctrls.length-1];}
+   else if(T==='IM'){ // induction machine, inverse-Γ, stator frame: each phase R_s + R_R, L_σ and the source e = −(R_R/L_M − jω_r)ψ_R (Y, floating star);
+    // ψ_R, ω and θ are states of the machine, advanced after each committed step from the stator currents
+    const N=internal(),ph=[];for(const k of ['a','b','c']){const t=node(c.id,k),n1=internal(),n2=internal();add({k:'G',a:t,b:n1,R:num(p.Rs,3)+num(p.RR,2),role:'R'});
+     const L=add({k:'L',a:n1,b:n2,L:Math.max(num(p.Lsig,.025),1e-9),i:0,key:c.id+'#L'+k});const V=add({k:'V',a:n2,b:N,row:row(),src:{kind:'dc',V:0}});ph.push({L,V});}
+    info.pins=[node(c.id,'a'),node(c.id,'b')];info.main=ph[0].L;const sched=P.parseSched(p.TL)||[[0,0]];
+    info.im={ph,RR:num(p.RR,2),LM:Math.max(num(p.LM,.3),1e-9),p:Math.max(1,Math.round(num(p.pp,2))),J:Math.max(num(p.J,.02),1e-9),b:Math.max(num(p.bm,0),0),sched:p.load==='sig'?null:sched,
+     st:{pa:0,pb:0,w:num(p.w0,0),th:0,te:0,ia:0,ib:0}};
+    info.blk=mkBlock(c,p,'IM',{im:info.im,ft:false});info.im.tl=info.blk.ins.tl??-1;}
    else if(T==='DCM'){ // armature R_a + L_a + gyrator (E = ψ·ω, τ_e = ψ·i_a); mechanics as a circuit: node ω, C = J, G = b, current source τ_L
     const a=node(c.id,'a'),bb=node(c.id,'b');info.pins=[a,bb];const psi=num(p.psi,1),J=Math.max(num(p.J,.02),1e-9),bm=Math.max(num(p.bm,0),0);
     const n1=num(p.Ra,0)>0?internal():a;if(n1!==a)add({k:'G',a,b:n1,R:num(p.Ra,.5),role:'Ra'});
@@ -149,6 +157,8 @@
     else if(T==='SAT'){b.lo=num(p.lo,0);b.hi=num(p.hi,1);}
     else if(T==='CMP'){b.hys=Math.max(0,num(p.hys,0));st.s=0;st.f0=0;}
     else if(T==='LOGIC')b.op=p.op||'or';
+    else if(T==='MOD3'){b.mode=['spwm','svpwm','square'].includes(p.mode)?p.mode:'svpwm';}
+    else if(T==='FEST'){b.RR=num(p.RR,2);b.LM=Math.max(num(p.LM,.3),1e-9);st.pa=num(p.psi0,0);st.pb=0;st.t=0;st.u=[0,0,0];}
     else if(T==='EXPR'){const ins=Ex.names(p.ins),pars=Ex.params(p.pars);b.inNames=ins;b.parVals=Object.values(pars);b.expr=String(p.expr??'');
      try{b.ast=Ex.parse(b.expr,[...ins,...Object.keys(pars)]);}catch(e){warnings.push(`${b.label}: ${e.message} Η έξοδος είναι 0.`);b.ast=['num',0];}b.fn=Ex.compile(b.ast);}
     else if(T==='PY'){b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';b.y0=num(p.y0,0);st.last=null;st.ys=null;b.inNames=Ex.names(p.ins,6,false);
@@ -226,12 +236,14 @@
     const oc=new Map(old.ctrls.map(c=>[c.id,c]));for(const c of net.ctrls){const o=oc.get(c.id);if(o&&o.mode===c.mode&&o.T===c.T){c.xi=o.xi;c.d=o.d;c.k=o.k;c.tk=o.tk;c.tkPrev=o.tkPrev;c.dPrev=o.dPrev;c.dPrevOff=o.dPrevOff;c.dOn=o.dOn;c.dOff=o.dOff;c.h=c.upd===o.upd?o.h:null;c.meas=o.meas;c.refNow=o.refNow;c.ePrev=o.ePrev;c.dF=o.dF;}}
     for(const e of net.els)if(e.k==='CPL'){const o=old.els.find(x=>x.k==='CPL'&&x.cid===e.cid);if(o)e.v0=o.v0;}
     const os=new Map(old.shs.map(q=>[q.id,q]));for(const q of net.shs){const o=os.get(q.id);if(o){q.h=o.h;q.last=q.trig===o.trig&&q.clock===o.clock?o.last:null;q.n=o.n;q.log=o.log;}}
+    for(const [id,c] of net.compInfo)if(c.im){const o=old.compInfo.get(id);if(o?.im)c.im.st={...o.im.st};} // the machine keeps its flux and speed
     const ob=new Map(old.sig.blocks.map(b=>[b.id,b]));for(const b of net.sig.blocks){const o=ob.get(b.id);if(o&&o.type===b.type&&b.type!=='SH'){b.st={...b.st,...o.st};if(b.clock!==o.clock||b.trig!==o.trig)b.st.last=null;}}
    }
    this.net=net;const nb=net.sig.blocks.length;this.sv=new Float64Array(net.sig.n);this.svT=new Float64Array(net.sig.n);this.yb=new Float64Array(nb);this.ybT=new Float64Array(nb);
    this.yo=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.yoT=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.ctrlById=new Map(net.ctrls.map(k=>[k.id,k]));this.clkById=new Map(net.sig.blocks.filter(b=>b.type==='CLK').map(b=>[b.id,b]));this.shById=new Map(net.shs.map(q=>[q.id,q]));this.n=net.size;this.A=new Float64Array(this.n*this.n);this.piv=new Int32Array(this.n);this.b=new Float64Array(this.n);this.cache=new Map();
    if(!this.x||this.x.length!==this.n||fresh)this.x=new Float64Array(this.n);
    this.pyBlocks(old&&!fresh?old:null);
+   this.ims=[...net.compInfo.values()].filter(c=>c.im).map(c=>c.im);for(const m of this.ims)this.imSources(m);
    this.hasCPL=net.els.some(e=>e.k==='CPL');this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.h=this.opts.h||this.T/this.opts.hDiv;
    const keys=this.channelKeys();const same=!fresh&&this.keys&&keys.join('|')===this.keys.join('|');
@@ -247,6 +259,14 @@
    return net.warnings;
   }
   reset(project){this.load(project||this.project,true);}
+  // induction machine: ψ_R by the trapezoidal rule with ω held over the step (ψ enters linearly), then the mechanics;
+  // the sources e = −(R_R/L_M − jω_r)ψ_R are set for the next step (one step behind: h ≪ L_M/R_R and h·ω_r ≪ 1)
+  imStep(m,h){const s=m.st,ia=m.ph[0].L.i,ib=m.ph[1].L.i,ic=m.ph[2].L.i,al=(2*ia-ib-ic)/3,be=(ib-ic)/Math.sqrt(3);
+   const wr=m.p*s.w,g=m.RR/m.LM,k=h/2,a11=1+k*g,a12=k*wr,r1=(1-k*g)*s.pa-k*wr*s.pb+k*m.RR*(s.ia+al),r2=(1-k*g)*s.pb+k*wr*s.pa+k*m.RR*(s.ib+be),det=a11*a11+a12*a12;
+   s.pa=(a11*r1-a12*r2)/det;s.pb=(a11*r2+a12*r1)/det;s.ia=al;s.ib=be;
+   s.te=1.5*m.p*(s.pa*be-s.pb*al);const tl=m.tl>=0?(this.sv?this.sv[m.tl]:0):schedAt(m.sched,this.t+h,m.sched[0][1]);
+   s.w+=h*(s.te-tl-m.b*s.w)/m.J;s.th+=h*s.w;this.imSources(m);}
+  imSources(m){const s=m.st,wr=m.p*s.w,g=m.RR/m.LM,ea=-g*s.pa-wr*s.pb,eb=-g*s.pb+wr*s.pa,Q=Math.sqrt(3)/2;m.ph[0].V.imE=ea;m.ph[1].V.imE=-ea/2+Q*eb;m.ph[2].V.imE=-ea/2-Q*eb;}
   pyBlocks(old){const bs=this.net.sig.blocks.filter(b=>b.type==='PY');const prev=new Map((old?.sig.blocks||[]).filter(b=>b.type==='PY'&&b.rt).map(b=>[b.id,b]));
    if(bs.length){const R=root.PyRT;if(!R||!R.ready){const e=new NetlistError('Το κύκλωμα έχει μπλοκ Python: φορτώνεται η Python (Pyodide)…');e.needPython=true;throw e;}
     for(const b of bs){const g=this.shGrid(b),Ts=g?g.d:0;if(!g)this.net.warnings.push(`${b.label}: χωρίς ρολόι δεν καλείται ποτέ (διάλεξε PWM ή μπλοκ Ρολόι).`);
@@ -427,6 +447,12 @@
        st.xi+=b.Ki*Ts*e;let q=b.y0+b.Kp*e+st.xi;if(q>b.ymax||q<b.ymin){st.xi-=b.Ki*Ts*e;q=Math.min(b.ymax,Math.max(b.ymin,b.y0+b.Kp*e+st.xi));}st.y=q;sampled=true;if(b.track){st.kt=b.Kp>0?Math.min(1,b.Ki*Ts/b.Kp):1;pend.push(b);}}
       y=st.y;break;}
      case 'UD':if(disc&&this.blkDue(b,force)){st.y=force?b.y0:st.mem;pend.push(b);sampled=true;}y=st.y;break;
+     case 'MOD3':{const v=[rd(I.va),rd(I.vb),rd(I.vc)],dc=Math.max(Math.abs(rd(I.vdc)),1e-9);let o=0;if(b.mode==='svpwm')o=-(Math.max(...v)+Math.min(...v))/2;
+      const d=v.map(x=>b.mode==='square'?(x>0?1:0):Math.min(1,Math.max(0,.5+(x+o)/dc)));ys={da:d[0],db:d[1],dc:d[2]};break;}
+     // current model of the rotor flux in stator coordinates (continuous; inputs held since the previous evaluation, as INT and PLL)
+     case 'FEST':{const dt=Math.max(0,this.t-st.t),[ia0,ib0,w0]=st.u,g=b.RR/b.LM,k=dt/2,a11=1+k*g,a12=k*w0,r1=(1-k*g)*st.pa-k*w0*st.pb+dt*b.RR*ia0,r2=(1-k*g)*st.pb+k*w0*st.pa+dt*b.RR*ib0,det=a11*a11+a12*a12;
+      const pa=(a11*r1-a12*r2)/det,pb=(a11*r2+a12*r1)/det,ps=Math.hypot(pa,pb),th=Math.atan2(pb,pa),P2=2*Math.PI,ial=rd(I.al),ibe=rd(I.be),iq=-ial*Math.sin(th)+ibe*Math.cos(th);
+      if(!trial)cont.push([b,[pa,pb]]);ys={th:th-P2*Math.floor(th/P2),psi:ps,w1:rd(I.wr)+(ps>1e-6?b.RR*iq/ps:0)};break;}
      case 'EXPR':{const v=b.inNames.map(k=>rd(I[k]));for(const c of b.parVals)v.push(c);y=b.fn(v,t);if(!Number.isFinite(y))y=0;break;}
      // Python: called once per sample instant (not in the 'init' pass, whose inputs come before the first solution)
      case 'PY':{if(mode==='sample'&&b.rt&&this.blkDue(b,force)){st.ys=b.rt.step(this.t,b.inNames.map(k=>rd(I[k])));sampled=true;}
@@ -444,6 +470,7 @@
       const a=rd(I.a),bb=rd(I.b),c=rd(I.c),al=(2*a-bb-c)/3,be=(bb-c)/Q3,cs=Math.cos(th),sn=Math.sin(th),vd=al*cs+be*sn,vq=-al*sn+be*cs,amp=Math.hypot(al,be);
       const e=amp>1e-9?vq/amp:0,xi=st.xi+b.Ki*dt*e,w=b.w0+b.Kp*e+xi;if(!trial){st.th=th;st.xi=xi;st.w=w;st.t=this.t;}ys={th,w,amp:vd};break;}
      case 'DCM':ys={w:this.V(b.m),te:b.psi*this.x[b.gy.row]};break;
+     case 'IM':{const s=b.im.st,P2=2*Math.PI,f=Math.atan2(s.pb,s.pa),r=b.im.p*s.th;ys={w:s.w,te:s.te,psi:Math.hypot(s.pa,s.pb),thf:f-P2*Math.floor(f/P2),thr:r-P2*Math.floor(r/P2)};break;}
      case 'CLK':{const u=b.f*t-b.ph,fr=u-Math.floor(u+1e-11);y=fr<b.duty-1e-11?1:0;break;}
      case 'RAMP':{const u=b.f*t-b.ph,fr=Math.max(0,u-Math.floor(u+1e-11));y=b.lo+(b.hi-b.lo)*(b.shape==='tri'?Math.abs(1-2*fr):fr);break;}
      case 'DISP':y=rd(I.u);break;
@@ -456,7 +483,7 @@
     yb[b.i]=y;for(let k=0;k<ol.length;k++){const v=ys[ol[k]]??0;yo[k]=v;const n=b.outs[ol[k]];if(n>=0)sv[n]=v;}
    }
    for(const b of pend){if(b.type==='PIB')b.st.xi+=b.st.kt*rd(b.ins.tr);else b.st.mem=rd(b.ins.u);} // back-calculation: dx_i/dt = K_i·(e + tr/K_p), tracking time T_t = K_p/K_i
-   for(const [b,v] of cont){b.st.s=v;b.st.u=rd(b.ins.u);b.st.t=this.t;}
+   for(const [b,v] of cont){if(b.type==='FEST'){b.st.pa=v[0];b.st.pb=v[1];b.st.u=[rd(b.ins.al),rd(b.ins.be),rd(b.ins.wr)];}else{b.st.s=v;b.st.u=rd(b.ins.u);}b.st.t=this.t;}
    return sampled;
   }
   // a discrete block (PI, z⁻¹) is due when t sits on the grid of its clock carrier, once per grid point
@@ -477,6 +504,7 @@
    for(const e of this.net.els){
     if(e.k==='G')e.Rnow=Math.max(schedAt(e.sched,t,e.R),1e-9);
     else if(e.k==='I')e.Inow=e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):schedAt(e.sched,t,e.I);
+    else if(e.k==='V'&&e.imE!==undefined)e.Vnow=e.imE;
     else if(e.k==='V'){const s=e.src;e.Vnow=e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):s.kind==='dc'?schedAt(s.sched,t,s.V):s.off+s.Vpk*Math.sin(2*Math.PI*s.f*t+s.ph);}
     else if(e.k==='CPL')e.Pnow=schedAt(e.sched,t,e.P);
    }
@@ -550,6 +578,7 @@
     else if(e.k==='D'){const v=this.V(e.a)-this.V(e.b);e.vPrev=v;e.iPrev=e.on?(v-e.Vf)/e.Ron:v/e.Roff;}
     else if(e.k==='CPL'){const v=this.V(e.a)-this.V(e.b);e.v0=v;if(Math.abs(v)<e.Vmin){e.g=e.Pnow/(e.Vmin*e.Vmin);e.J=0;}else{e.g=e.Pnow/(v*v);e.J=0;}}
    }
+   if(this.ims)for(const m of this.ims)this.imStep(m,h);
    this.t+=h;this.steps++;this.hLast=h;
   }
   // consistent initial solution at t=0: inductors act as current sources (i0),
@@ -701,17 +730,21 @@
   const clkOf=id=>{const b=net.sig.blocks.find(x=>x.type==='CLK'&&x.id===id);return b?{f:b.f,ph:b.ph}:null;};
   const shs=net.shs.map(q=>({id:q.id,sig:!!q.sig,rec:q.sig?null:q.qty==='V'?V(ci(q.src)):I(ci(q.src)),clock:cix.get(q.clock)??null,clk:clkOf(q.clock),trig:q.trig,h0:Number.isFinite(q.h0)?q.h0:null}));
   // signal blocks in evaluation order, with their initial state and recipes for the measured quantities
+  // induction machines: their elements, parameters and initial states (the server integrates ψ_R, ω, θ as ODE states)
+  const imList=[...net.compInfo.values()].filter(c=>c.im).map(c=>c.im),imx=new Map(imList.map((m,i)=>[m,i]));
+  const ims=imList.map(m=>({ph:m.ph.map(q=>({L:idx.get(q.L),V:idx.get(q.V)})),RR:m.RR,LM:m.LM,p:m.p,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{...m.st}}));
   const bix=new Map(net.sig.order.map((b,i)=>[b,i]));
   const blocks=net.sig.order.map(b=>{const o={id:b.id,type:b.type,ins:b.ins,outs:b.outs,st:JSON.parse(JSON.stringify(b.st))};
-   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
+   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
    if(b.type==='DCM')o.recs={w:{v:[[b.m,1]]},te:{i:[[idx.get(b.gy),b.psi]]}};
+   if(b.type==='IM')o.im=imx.get(b.im);
    if(b.type==='PIB'||b.type==='UD'||b.type==='PY'){o.clock=cix.get(b.clock)??null;o.clk=clkOf(b.clock);}
    if(b.type==='VM')o.rec=vd(b.np,b.nn);else if(b.type==='AM')o.rec={i:[[idx.get(b.el),-1]]};else if(b.type==='MEAS'){const c=ci(b.src);o.rec=(b.qty==='V'?V(c):I(c))||null;}
    if(b.type==='SH'){o.sh=shx.get(b.id);o.sig=!!b.sig;}return o;});
   const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase','upd','dIn'])o[f]=k[f];
    const s=ci(k.sensor);o.sensorRec=k.mode==='pi'?(shx.has(k.sensor)?{sh:shx.get(k.sensor)}:k.qty==='V'?V(s):I(s)):null;o.ffARec=V(ci(k.ffA));o.ffBRec=V(ci(k.ffB));return o;});
   const channels={},skipped=[];for(const key of keys){const r=rec(key);if(r)channels[key]=r;else skipped.push(key);}
-  return {net:{nNodes:net.nNodes,size:net.size,els,ctrls,shs,sig:{n:net.sig.n,blocks}},channels,skipped};
+  return {net:{nNodes:net.nNodes,size:net.size,els,ctrls,shs,sig:{n:net.sig.n,blocks},ims},channels,skipped};
  }
  // one point of a parameter sweep (bifurcation diagram): set comp.param = value, run `transient` base periods and
  // return the per-period statistic (min, max, avg, end = value at the period boundary) of channel `key` over the next `record` periods
