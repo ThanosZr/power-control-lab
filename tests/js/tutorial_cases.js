@@ -58,7 +58,10 @@ for(const mod of ['svpwm','spwm']){const pr=build('im_vf',{mod});const s=sim(pr,
 for(const [wref,rr] of [['100','1'],['100','0.5'],['230','1']]){const pr=build('im_foc',{wref,rr});const s=sim(pr,pr.sim.stopT);const avg=k=>last(s,k,100).avg;let d=s.now('Y:M1:thf')-s.now('Y:FE');d-=2*Math.PI*Math.round(d/(2*Math.PI));
  out[`imfoc_${wref}_${rr}`]={w:s.now('Y:M1'),psi:s.now('Y:M1:psi'),psiEst:s.now('Y:FE:psi'),id:avg('Y:PK'),iq:avg('Y:PK:q'),te:avg('Y:M1:te'),dth:d,warn:s.net.warnings,meta:pr.meta};}
 // 3.5: SynRM, alignment from three initial angles and dq control with four current angles
-for(const th0 of ['60','120','89']){const pr=build('synrm',{mode:'align',th0});const s=sim(pr,pr.sim.stopT);out['syn_al_'+th0]={dl:s.now('Y:DL'),id:s.now('Y:M1:id'),iq:s.now('Y:M1:iq'),te:s.now('Y:M1:te'),w:s.now('Y:M1'),warn:s.net.warnings,meta:pr.meta};}
+for(const th0 of ['60','120','89']){const pr=build('synrm',{mode:'align',th0});const s=sim(pr,pr.sim.stopT);
+ const p=s.per,i=s.chIndex.get('Y:M1'),w=[];for(let k=0;k<p.n;k++){const j=(p.head-p.n+k+p.cap)%p.cap;w.push(p.avg[j*p.nch+i]);}const cr=[];for(let k=1;k<w.length;k++)if(Math.sign(w[k])!==Math.sign(w[k-1])&&Math.abs(w[k]-w[k-1])>1e-6)cr.push(k*s.T);
+ const hp=cr.slice(2,8).map((t,k,a)=>k?t-a[k-1]:null).filter(x=>x);
+ out['syn_al_'+th0]={dl:s.now('Y:DL'),id:s.now('Y:M1:id'),iq:s.now('Y:M1:iq'),te:s.now('Y:M1:te'),w:s.now('Y:M1'),fosc:hp.length?1/(2*hp.reduce((x,y)=>x+y,0)/hp.length):null,warn:s.net.warnings,meta:pr.meta};}
 for(const strat of ['mtpa','g30','g60','idc']){const pr=build('synrm',{mode:'foc',strat});const s=sim(pr,pr.sim.stopT);const avg=k=>last(s,k,100).avg;
  out['syn_'+strat]={w:s.now('Y:M1'),id:avg('Y:PK'),iq:avg('Y:PK:q'),idm:avg('Y:M1:id'),iqm:avg('Y:M1:iq'),te:avg('Y:M1:te'),ud:avg('Y:EXUD'),uq:avg('Y:EXUQ'),warn:s.net.warnings,meta:pr.meta};}
 for(const [mach,strat] of [['ipm','mtpa'],['ipm','id0'],['spm','mtpa']]){const pr=build('pmsm',{mach,strat});const s=sim(pr,pr.sim.stopT);const avg=k=>last(s,k,100).avg;

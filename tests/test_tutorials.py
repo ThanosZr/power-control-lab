@@ -210,6 +210,14 @@ class Tutorials(unittest.TestCase):
             self.assertAlmostEqual(abs(r['id']), 10, delta=.1, msg=th0)       # I = v_α/R_s (less by R_on)
             self.assertAlmostEqual(r['iq'], 0, delta=1e-3, msg=th0)
             self.assertAlmostEqual(r['w'], 0, delta=1e-3, msg=th0)
+        # small oscillations about δ = 0: between constant current (K = (3/2)·p²·(L_d − L_q)·I²) and constant stator flux
+        # (K = (3/2)·p²·(1/L_q − 1/L_d)·(L_d·I)², L_d/L_q times stiffer), closer to the latter since L_d/R_s = 75 ms
+        f_i = math.sqrt(1.5 * 4 * .12 * 100 / .02) / (2 * math.pi)
+        f_psi = math.sqrt(1.5 * 4 * (1 / .03 - 1 / .15) * 1.5 ** 2 / .02) / (2 * math.pi)
+        f = o['syn_al_60']['fosc']
+        self.assertLess(f_i, f)
+        self.assertLess(f, f_psi)
+        self.assertGreater(f, (f_i + f_psi) / 2)
         Ld, Lq, R, p = .15, .03, 2, 2
         K, te = 1.5 * p * (Ld - Lq), 8 + .002 * 100
         cur = {}

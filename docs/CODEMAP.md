@@ -7,7 +7,7 @@
 
 | Αρχείο | Γραμμές |
 |---|---:|
-| `web/studio/app.js` | 1155 |
+| `web/studio/app.js` | 1159 |
 | `web/studio/editor.js` | 423 |
 | `web/studio/expr.js` | 56 |
 | `web/studio/math.js` | 144 |
@@ -48,10 +48,10 @@
 | `tests/test_studio_math.py` | 50 |
 | `tests/test_studio_sim.py` | 389 |
 | `tests/test_templates.py` | 174 |
-| `tests/test_tutorials.py` | 371 |
+| `tests/test_tutorials.py` | 379 |
 | `tests/js/batch_requests.js` | 59 |
 | `tests/js/sim_cases.js` | 222 |
-| `tests/js/tutorial_cases.js` | 75 |
+| `tests/js/tutorial_cases.js` | 78 |
 | `tests/ui/blocks_flow.js` | 140 |
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/features_flow.js` | 84 |
@@ -297,38 +297,38 @@
 | 775 | function | `vfTheory` |
 | 788 | function | `focTheory` |
 | 805 | function | `synTheory` |
-| 835 | function | `pmTheory` |
-| 837 | const fn | `mtpa` |
-| 853 | function | `lgTheory` |
-| 864 | const fn | `cr` |
-| 871 | function | `chaosTheory` |
-| 883 | function | `dcDriveTheory` |
-| 884 | const fn | `per` |
-| 885 | const fn | `cross` |
-| 914 | function | `formulaTheory` |
-| 973 | function | `nodeAvg` |
-| 979 | function | `circuitForMath` |
-| 1010 | function | `scheduleMath` |
-| 1011 | function | `batteryKey` |
-| 1013 | function | `mathChoices` |
-| 1014 | const fn | `prim` |
-| 1016 | function | `renderMathChoices` |
-| 1018 | function | `runTemplate` |
-| 1024 | function | `runMath` |
-| 1045 | function | `saveLocal` |
-| 1046 | function | `download` |
-| 1047 | function | `exportCSV` |
-| 1053 | function | `syncScopeInputs` |
-| 1054 | function | `setSpeed` |
-| 1057 | function | `openSettings` |
-| 1058 | const fn | `sel` |
-| 1059 | const fn | `chk` |
-| 1075 | function | `boot` |
-| 1107 | const fn | `mv` |
-| 1108 | const fn | `up` |
-| 1109 | const fn | `navOpen` |
-| 1115 | const fn | `probeSel` |
-| 1152 | function | `renderTheoryLive` |
+| 839 | function | `pmTheory` |
+| 841 | const fn | `mtpa` |
+| 857 | function | `lgTheory` |
+| 868 | const fn | `cr` |
+| 875 | function | `chaosTheory` |
+| 887 | function | `dcDriveTheory` |
+| 888 | const fn | `per` |
+| 889 | const fn | `cross` |
+| 918 | function | `formulaTheory` |
+| 977 | function | `nodeAvg` |
+| 983 | function | `circuitForMath` |
+| 1014 | function | `scheduleMath` |
+| 1015 | function | `batteryKey` |
+| 1017 | function | `mathChoices` |
+| 1018 | const fn | `prim` |
+| 1020 | function | `renderMathChoices` |
+| 1022 | function | `runTemplate` |
+| 1028 | function | `runMath` |
+| 1049 | function | `saveLocal` |
+| 1050 | function | `download` |
+| 1051 | function | `exportCSV` |
+| 1057 | function | `syncScopeInputs` |
+| 1058 | function | `setSpeed` |
+| 1061 | function | `openSettings` |
+| 1062 | const fn | `sel` |
+| 1063 | const fn | `chk` |
+| 1079 | function | `boot` |
+| 1111 | const fn | `mv` |
+| 1112 | const fn | `up` |
+| 1113 | const fn | `navOpen` |
+| 1119 | const fn | `probeSel` |
+| 1156 | function | `renderTheoryLive` |
 
 ### `web/studio/editor.js`
 

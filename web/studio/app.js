@@ -804,17 +804,21 @@ function focTheory(){const s=S.sim,m=S.tutMeta||{},M=imPar();if(!s||!M)return ''
 // Alignment: a current I on the α axis gives τ(δ) = −(3/4)·p·(L_d − L_q)·I²·sin 2δ (δ: electrical angle of d from α)
 function synTheory(){const s=S.sim,m=S.tutMeta||{},M=paramsOf('M1');if(!s||!M||M.Ld===undefined)return '';
  const R=+M.Rs,Ld=+M.Ld,Lq=+M.Lq,p=Math.round(+M.pp),J=+M.J,b=+M.bm,K=1.5*p*(Ld-Lq),xi=Ld/Lq,pfMax=(xi-1)/(xi+1),T=s.T,deg=180/Math.PI;
- if(m.mode==='align'){const I=m.Va/R,tmax=.75*p*(Ld-Lq)*I*I,Kth=1.5*p*p*(Ld-Lq)*I*I,fn=Math.sqrt(Kth/J)/(2*Math.PI),th0=+m.th0,dF=Math.abs(((th0%360)+360)%360-180)<90?180:0;
+ if(m.mode==='align'){const I=m.Va/R,tmax=.75*p*(Ld-Lq)*I*I,Kth=1.5*p*p*(Ld-Lq)*I*I,fn=Math.sqrt(Kth/J)/(2*Math.PI),psi=Ld*I,Kps=1.5*p*p*(1/Lq-1/Ld)*psi*psi,fps=Math.sqrt(Kps/J)/(2*Math.PI),th0=+m.th0,dF=Math.abs(((th0%360)+360)%360-180)<90?180:0;
   let h=`<div class="tm"><span class="badge">ευθυγράμμιση</span> σταθερό διάνυσμα v_α = ${eng(m.Va,'V')}, θ₀ = ${fmt(th0,3)}°</div><ul class="eqs">
    <li>Ρεύμα στον άξονα α: I = v_α/R_s = <b>${eng(I,'A')}</b> (φάση a: I, φάσεις b, c: −I/2). Με τον άξονα d του δρομέα σε γωνία δ: i_d = I·cos δ, i_q = −I·sin δ</li>
    <li>Ροπή μαγνητικής αντίστασης τ_e = (3/2)·p·(L_d − L_q)·i_d·i_q = <b>−(3/4)·p·(L_d − L_q)·I²·sin 2δ</b>, μέγιστη ${eng(tmax,'N·m')} στις 45°. Περίοδος 180° ηλεκτρικές: ο δρομέας δεν έχει «βόρειο» και «νότιο»</li>
    <li>Ισορροπίες: δ = 0° και 180° ευσταθείς (ο άξονας d, ελάχιστη μαγνητική αντίσταση, πάνω στο ρεύμα), δ = ±90° ασταθείς (ο άξονας q). Από θ₀ = ${fmt(th0,3)}° ο δρομέας πηγαίνει στις <b>${dF}°</b></li>
-   <li>Μικρές ταλαντώσεις με σταθερό ρεύμα: K_θ = (3/2)·p²·(L_d − L_q)·I² = ${eng(Kth,'N·m/rad')}, f_n = √(K_θ/J)/2π = <b>${eng(fn,'Hz')}</b>. Εδώ η τάση είναι σταθερή, όχι το ρεύμα: όταν ο δρομέας κινείται αλλάζει η ροή του στάτη και τα ρεύματα που επάγονται φρενάρουν την ταλάντωση (ηλεκτρική απόσβεση)</li></ul>`;
+   <li>Μικρές ταλαντώσεις γύρω από το δ = 0 με <b>σταθερό ρεύμα</b> (τροφοδοσία ρεύματος): K_θ = (3/2)·p²·(L_d − L_q)·I² = ${eng(Kth,'N·m/rad')}, f = √(K_θ/J)/2π = <b>${eng(fn,'Hz')}</b></li>
+   <li>Με <b>σταθερή ροή στάτη</b> ψ = L_d·I = ${eng(psi,'V·s')} (η ροή δεν προλαβαίνει να αλλάξει, L_d/R_s = ${eng(Ld/R,'s')}): τ = −(3/4)·p·(1/L_q − 1/L_d)·ψ²·sin 2δ, K_ψ = (3/2)·p²·(1/L_q − 1/L_d)·ψ² = ${eng(Kps,'N·m/rad')} = (L_d/L_q)·K_θ, f = <b>${eng(fps,'Hz')}</b></li>
+   <li>Εδώ η τάση είναι σταθερή: η ταλάντωση είναι ανάμεσα στις δύο, πιο κοντά στη σταθερή ροή, και τα ρεύματα που επάγονται όταν αλλάζει η ροή τη φρενάρουν (ηλεκτρική απόσβεση)</li></ul>`;
   if(s.t<.8)return h+'<p class="muted small">Τρέξε ως το τέλος (1,2 s) για τη σύγκριση στη θέση ισορροπίας.</p>';
-  const w=perSamples('Y:M1','avg',Math.round(.8/T));let up=[];for(let k=1;k<w.length;k++)if(w[k-1]<0&&w[k]>=0)up.push(k);const fm=up.length>=2?1/((up[1]-up[0])*T):NaN;
+  // zero crossings of ω from the start; the frequency from the half periods after the first two (smaller swing)
+  const w=perSamples('Y:M1','avg',Math.round(s.t/T)),cr=[];for(let k=1;k<w.length;k++)if(Math.sign(w[k])!==Math.sign(w[k-1])&&Math.abs(w[k]-w[k-1])>1e-6)cr.push(k*T);
+  const hp=cr.slice(2,8).map((t,k,a)=>k?t-a[k-1]:null).filter(x=>x),fm=hp.length?1/(2*hp.reduce((x,y)=>x+y,0)/hp.length):NaN;
   const d=s.now('Y:DL')*deg,dd=dF===180?Math.abs(d):d;
-  h+=cmpRows([['γωνία ισορροπίας |δ| (°)',dF,dd,''],['i_d = I·cos δ',dF===180?-I:I,s.now('Y:M1:id'),'A'],['i_q',0,s.now('Y:M1:iq'),'A'],['ροπή τ_e',0,s.now('Y:M1:te'),'N·m'],['συχνότητα ταλάντωσης (πρώτη περίοδος)',fn,fm,'Hz']]);
-  return h+`<p class="small muted">Το I στην προσομοίωση είναι λίγο μικρότερο από v_α/R_s λόγω του R_on των διακοπτών. Η πρώτη ταλάντωση είναι μεγάλη (μη γραμμικό εκκρεμές με sin 2δ) και αποσβένεται ηλεκτρικά, γι' αυτό η συχνότητά της διαφέρει από το f_n των μικρών ταλαντώσεων.</p>`;}
+  h+=cmpRows([['γωνία ισορροπίας |δ| (°)',dF,dd,''],['i_d = I·cos δ',dF===180?-I:I,s.now('Y:M1:id'),'A'],['i_q',0,s.now('Y:M1:iq'),'A'],['ροπή τ_e',0,s.now('Y:M1:te'),'N·m'],['συχνότητα ταλάντωσης (θεωρία: σταθερή ροή)',fps,fm,'Hz']]);
+  return h+`<p class="small muted">Το I στην προσομοίωση είναι λίγο μικρότερο από v_α/R_s λόγω του R_on των διακοπτών. Η συχνότητα μετριέται από τις διελεύσεις του ω από το μηδέν, μετά τις δύο πρώτες (μεγάλη αρχική απόκλιση, μη γραμμικό εκκρεμές με sin 2δ). Βγαίνει ανάμεσα στα ${eng(fn,'Hz')} (σταθερό ρεύμα) και ${eng(fps,'Hz')} (σταθερή ροή): η ροή του στάτη αλλάζει λίγο μέσα σε μια περίοδο.</p>`;}
  const g=m.g,te=m.TL+b*m.wref,we=p*m.wref;let id,iq;if(g){const i=Math.sqrt(2*te/(K*Math.sin(2*g/deg)));id=i*Math.cos(g/deg);iq=i*Math.sin(g/deg);}else{id=m.Id0;iq=te/(K*m.Id0);}
  const imtpa=Math.sqrt(2*te/K),vd=R*id-we*Lq*iq,vq=R*iq+we*Ld*id,vm=Math.hypot(vd,vq),im=Math.hypot(id,iq),pf=(vd*id+vq*iq)/(vm*im),gpf=Math.atan(Math.sqrt(xi))*deg,Vlim=+paramsOf('V1').V/Math.sqrt(3);
  let h=`<div class="tm"><span class="badge">έλεγχος dq</span> ${g?'γ = '+g+'°'+(g===45?' (MTPA)':''):'σταθερό i_d = '+eng(m.Id0,'A')} · ω_ref = ${eng(m.wref,'rad/s')}, τ_L = ${eng(m.TL,'N·m')} από ${eng(m.tTL,'s')}</div><ul class="eqs">
