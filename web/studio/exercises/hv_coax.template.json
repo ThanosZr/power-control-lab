@@ -1,0 +1,176 @@
+{
+ "schema": "pcl-template-1",
+ "id": "hv_coax",
+ "tutorial": [
+  "twave",
+  "arrester",
+  "marx",
+  "chop",
+  "hv153",
+  "lossline",
+  "voltime",
+  "lightning"
+ ],
+ "title": "Υψηλές τάσεις · ομοαξονικοί κύλινδροι και ομόκεντρες σφαίρες",
+ "description": "Μέγιστο πεδίο, συντελεστής χρησιμοποίησης η = E_μέσο/E_max (Schwaiger) και τάση διάσπασης για εσωτερική ακτίνα r και εξωτερική R. Στους κυλίνδρους το E_max γίνεται ελάχιστο στο r = R/e (βέλτιστη ακτίνα αγωγού καλωδίου), στις σφαίρες στο r = R/2.",
+ "inputs": [
+  {
+   "name": "U",
+   "label": "Τάση",
+   "unit": "V",
+   "value": 100000.0,
+   "symbol": "U"
+  },
+  {
+   "name": "r",
+   "label": "Εσωτερική ακτίνα",
+   "unit": "m",
+   "value": 0.01,
+   "symbol": "r"
+  },
+  {
+   "name": "R",
+   "label": "Εξωτερική ακτίνα",
+   "unit": "m",
+   "value": 0.03,
+   "symbol": "R"
+  },
+  {
+   "name": "E_b",
+   "label": "Διηλεκτρική αντοχή",
+   "unit": "V/m",
+   "value": 20000000.0,
+   "symbol": "E_b"
+  }
+ ],
+ "steps": [
+  {
+   "id": "E_c",
+   "title": "Μέγιστο πεδίο, κύλινδροι (στο r)",
+   "explain": "E(x) = U/(x·ln(R/r)).",
+   "expr": "U/(r*log(R/r))",
+   "unit": "V/m",
+   "symbol": "E_max,κ"
+  },
+  {
+   "id": "eta_c",
+   "title": "Συντελεστής χρησιμοποίησης, κύλινδροι",
+   "explain": "η = (U/(R − r))/E_max.",
+   "expr": "r*log(R/r)/(R - r)",
+   "unit": "",
+   "symbol": "η_κ"
+  },
+  {
+   "id": "U_bc",
+   "title": "Τάση διάσπασης, κύλινδροι",
+   "explain": "Όταν E_max = E_b.",
+   "expr": "E_b*r*log(R/r)",
+   "unit": "V",
+   "symbol": "U_b,κ"
+  },
+  {
+   "id": "r_oc",
+   "title": "Βέλτιστη εσωτερική ακτίνα, κύλινδροι",
+   "explain": "d(r·ln(R/r))/dr = 0.",
+   "expr": "R/exp(1)",
+   "unit": "m",
+   "symbol": "r_opt,κ"
+  },
+  {
+   "id": "U_oc",
+   "title": "Μέγιστη τάση με τη βέλτιστη ακτίνα",
+   "explain": "",
+   "expr": "E_b*R/exp(1)",
+   "unit": "V",
+   "symbol": "U_opt,κ"
+  },
+  {
+   "id": "E_s",
+   "title": "Μέγιστο πεδίο, σφαίρες (στο r)",
+   "explain": "E(x) = U·rR/((R − r)·x²).",
+   "expr": "U*R/(r*(R - r))",
+   "unit": "V/m",
+   "symbol": "E_max,σ"
+  },
+  {
+   "id": "eta_s",
+   "title": "Συντελεστής χρησιμοποίησης, σφαίρες",
+   "explain": "",
+   "expr": "r/R",
+   "unit": "",
+   "symbol": "η_σ"
+  },
+  {
+   "id": "U_bs",
+   "title": "Τάση διάσπασης, σφαίρες",
+   "explain": "",
+   "expr": "E_b*r*(R - r)/R",
+   "unit": "V",
+   "symbol": "U_b,σ"
+  },
+  {
+   "id": "U_os",
+   "title": "Μέγιστη τάση, σφαίρες με r = R/2",
+   "explain": "",
+   "expr": "E_b*R/4",
+   "unit": "V",
+   "symbol": "U_opt,σ"
+  }
+ ],
+ "checks": [
+  {
+   "title": "Κύλινδροι",
+   "expr": "E_c <= E_b",
+   "pass": "E_max = {E_c|V/m} ≤ E_b.",
+   "fail": "E_max = {E_c|V/m} > E_b = {E_b|V/m}."
+  },
+  {
+   "title": "Σφαίρες",
+   "expr": "E_s <= E_b",
+   "pass": "E_max = {E_s|V/m} ≤ E_b.",
+   "fail": "E_max = {E_s|V/m} > E_b = {E_b|V/m}."
+  }
+ ],
+ "sections": [
+  {
+   "id": "cyl",
+   "title": "Ομοαξονικοί κύλινδροι",
+   "blocks": [
+    {
+     "type": "steps",
+     "steps": [
+      "E_c",
+      "eta_c",
+      "U_bc",
+      "r_oc",
+      "U_oc"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sph",
+   "title": "Ομόκεντρες σφαίρες",
+   "blocks": [
+    {
+     "type": "steps",
+     "steps": [
+      "E_s",
+      "eta_s",
+      "U_bs",
+      "U_os"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "chk",
+   "title": "Έλεγχος",
+   "blocks": [
+    {
+     "type": "checks"
+    }
+   ]
+  }
+ ]
+}

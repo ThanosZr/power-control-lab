@@ -437,6 +437,112 @@ class Tutorials(unittest.TestCase):
         self.assertLess(-self.o['ch_r50']['vmin'], .3 * 925e3)                          # 50 Ω keeps the undershoot under 30 % (IEC 60076-3)
         self.assertGreater(-self.o['ch_r0']['vmin'], .3 * 925e3)
 
+    def test_book_impulse_exercises(self):
+        # 3.11: the book's 15.3.x generators with their own values. The simulation follows the exact two-exponential wave computed here
+        # (the book's formulas are approximations); the book's conclusions are checked where they hold and where they do not
+        for ex in ('1531', '1532a', '1532c', '1533', '1535', '1536', '1536c', '1537'):
+            r = self.o['hv_' + ex]
+            m = r['meta']
+            self.assertEqual(r['warn'], [], msg=ex)
+            a1, a2, f = self._generator(m['R1'], m['R2'], m['C1'], m['C2'], m['pos'])
+            pk, T1, T2 = self._wave_params(f, 3 * m['dur'], 'iec') if ex != '1536' else self._wave_params(f, 200e-9, 'iec')[:2] + (None,)
+            if ex == '1536':
+                T2 = self._wave_params(f, 3 * m['dur'], 'iec')[2]
+            U = m['U']
+            tol = 2e-4 if m['marx'] else 1e-4                                       # Marx: R₃ = 10 MΩ and the arc resistance
+            self.assertAlmostEqual(r['pk'], pk * U, delta=tol * pk * U, msg=ex)
+            self.assertAlmostEqual(r['T1'], T1, delta=(1e-2 if ex == '1536' else 1e-3) * T1, msg=ex)
+            self.assertAlmostEqual(r['T2'], T2, delta=1e-3 * T2, msg=ex)
+            if m['div']:
+                kd = (m['div'][0] + m['div'][1]) / m['div'][0]
+                self.assertAlmostEqual(r['lv'], pk * U / kd, delta=1e-3 * pk * U / kd, msg=ex)
+            if m['marx']:
+                self.assertEqual(r['fired'], m['marx'])
+            if 'Vp' in m['book'] and ex != '1535':
+                self.assertLess(r['pk'], m['book']['Vp'], msg=ex)                  # η = C_κ/(C_κ + C_φ) overestimates the peak
+        o = self.o
+        self.assertAlmostEqual(o['hv_1531']['pk'], 283.48e3, delta=50)
+        self.assertGreater(o['hv_1532c']['T2'], 60e-6)                             # the book's verdict holds: T2 out of 40–60 μs
+        self.assertGreater(o['hv_1533']['lv'], 600)                                # no 600 V oscilloscope suffices (1001 V, book 1069 V)
+        self.assertLess(o['hv_1535']['pk'], 175e3)                                 # 66.5 kV is not enough for 175 kV
+        self.assertLess(o['hv_1536']['T1'], 20e-9)                                 # the book's 45 Ω: front 100× too short
+        self.assertAlmostEqual(o['hv_1536c']['T1'], 1.2e-6, delta=2e-9)            # the corrected 4.46 kΩ
+        self.assertAlmostEqual(o['hv_1537']['pk'], 258.46e3, delta=60)
+
+    @staticmethod
+    def _heaviside(aT, tT):
+        """Step response v/V₀ at x of a semi-infinite line with series R′ (no G′): e^(−aT) + aT·∫_T^t e^(−as)·I₁(a√(s² − T²))/√(s² − T²) ds."""
+        from scipy import integrate, special
+        if tT < 1:
+            return 0.0
+        g = lambda u: math.exp(aT * (math.sinh(u) - math.cosh(u))) * special.i1e(aT * math.sinh(u))   # s = T·cosh u, scaled Bessel
+        I, _ = integrate.quad(g, 0, math.acosh(tT), epsabs=1e-13, epsrel=1e-11, limit=200)
+        return math.exp(-aT) + aT * I
+
+    def test_lossy_line(self):
+        # 3.11: lumped losses R/4N, R/2N in N sections against the distributed line (Heaviside's solution): the front jump of the model is
+        # (1 + R/(4NZ))^(−2N) → e^(−R/(2Z)), the error falls about as 1/N; without losses exactly 2V
+        err = {}
+        for k in ('open4', 'open1', 'open16', 'semi4', 'r0', 'r5'):
+            r = self.o['ll_' + k]
+            m = r['meta']
+            self.assertEqual(r['warn'], [], msg=k)
+            G = 2 if m['end'] == 'open' else 1
+            aT, x = m['R'] / (2 * m['Z']), m['R'] / (4 * m['N'] * m['Z'])
+            e = max(abs(v / (G * m['V']) - self._heaviside(aT, f)) for f, v in r['at'])
+            err[k] = e
+            self.assertLess(e, 0.08 * x + 1e-6, msg=k)                          # about 0.034·R/(4NZ)
+            if m['end'] == 'open':
+                self.assertAlmostEqual(r['at'][0][1], G * m['V'] * (1 + x) ** (-2 * m['N']), delta=2e-4 * m['V'], msg=k)
+        self.assertLess(err['r0'], 1e-6)
+        self.assertLess(err['open16'], err['open4'] / 2.5)
+        self.assertLess(err['open4'], err['open1'] / 2.5)
+        # impulse at the far end: Duhamel with the exact step response (5 ns grid)
+        import numpy as np
+        for k in ('li4', 'li0'):
+            r = self.o['ll_' + k]
+            m = r['meta']
+            aT, d, n = m['R'] / (2 * m['Z']), 5e-9, 4000
+            al, be = 14659.1, 2468927.0                                            # 1.2/50 (3.8, IEC 60060-1)
+            K = 1 / max(math.exp(-al * t) - math.exp(-be * t) for t in np.linspace(1e-7, 5e-6, 20001))
+            th = np.arange(n) * d
+            g = np.array([2 * self._heaviside(aT, 1 + q / m['tau']) for q in th])
+            du = m['V'] * K * (be * np.exp(-be * th) - al * np.exp(-al * th))
+            v = np.convolve(g, du)[:n] * d - 0.5 * d * (g[0] * du + g * du[0])     # trapezoid ends
+            self.assertAlmostEqual(r['imp']['pk'], v.max(), delta=2e-3 * v.max(), msg=k)
+        self.assertAlmostEqual(self.o['ll_li0']['imp']['pk'], 2e5, delta=20)
+        self.assertLess(self.o['ll_li4']['imp']['pk'], 0.94 * 2e5)
+
+    def test_volt_time_curve(self):
+        # 3.11: the disruptive-effect gap. Ramps: t_d = U₀/S + ((k+1)·D/S^k)^(1/(k+1)) in closed form. Impulses: the criterion integrated
+        # here on the analytic 1.2/50 wave (fine grid); no breakdown when the integral never reaches D
+        import numpy as np
+        al, be = 14659.1, 2468927.0
+        K = 1 / max(math.exp(-al * t) - math.exp(-be * t) for t in np.linspace(1e-7, 5e-6, 20001))
+        for k in ('r1', 'r500', 'r5000', 'k0', 'k2', 'li16', 'li25k0', 'li11k1', 'li11k2'):
+            r = self.o['vt_' + k]
+            m = r['meta']
+            self.assertEqual(r['warn'], [], msg=k)
+            U0, kk, D = m['U0'], m['k'], m['D']
+            if m['src'] == 'ramp':
+                td = U0 / m['S'] + ((kk + 1) * D / m['S'] ** kk) ** (1 / (kk + 1))
+                self.assertTrue(r['on'], msg=k)
+                self.assertAlmostEqual(r['tOn'], td, delta=1e-7 * td, msg=k)        # 50 Ω source and GMIN: the gap sees 5·10⁻⁸ less
+                continue
+            t = np.linspace(0, m['dur'], 2000001)
+            u = m['Vpk'] * K * (np.exp(-al * t) - np.exp(-be * t))
+            f = np.where(u > U0, np.maximum(u - U0, 0) ** kk, 0.0)
+            F = np.concatenate([[0], np.cumsum((f[1:] + f[:-1]) / 2 * np.diff(t))])
+            j = int(np.argmax(F >= D)) if F[-1] >= D else -1
+            self.assertEqual(r['on'], j > 0, msg=k)
+            if j > 0:
+                td = t[j - 1] + (D - F[j - 1]) / (F[j] - F[j - 1]) * (t[j] - t[j - 1])
+                self.assertAlmostEqual(r['tOn'], td, delta=2e-4 * td, msg=k)
+        o = self.o
+        self.assertAlmostEqual(o['vt_r1']['tOn'], 0.2e-6, delta=2e-14)             # all three criteria give 200 kV at 1000 kV/μs
+        self.assertGreater(o['vt_r5000']['tOn'] * 5e12, o['vt_r500']['tOn'] * 5e11)   # steeper: higher breakdown voltage
+        self.assertFalse(o['vt_li11k2']['on'])
+
     def test_lightning_current(self):
         # 3.5: Heidler (IEC 62305-1) and a fitted double exponential into L = 10 μH and R = 10 Ω: peak current, charge,
         # and the peak of v = R·i + L·di/dt against the waveform evaluated here (engine.batch.wave_at)

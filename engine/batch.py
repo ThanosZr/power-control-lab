@@ -339,12 +339,19 @@ class Circuit:
             gp['trig'] = _f(gp.get('trig'), math.inf) if gp.get('trig') is not None else math.inf
             gp['Ub'] = _f(gp.get('Ub'), math.inf)
             gp['Iext'] = _f(gp.get('Iext'), 0)
+            if gp.get('de'):            # volt–time curve (3.11): D = ∫ (|v| − U₀)^k dt over |v| > U₀, closes at D
+                gp['de'] = {q: _f(gp['de'].get(q)) for q in ('U0', 'k', 'D')}
             E[i]['trig_done'] = False
         self.just_off = {}
-        self.iT = [i for i, e in enumerate(E) if e['k'] == 'TL']       # lossless lines (3.8)
+        self.iT = [i for i, e in enumerate(E) if e['k'] == 'TL']       # lines (3.8), with lumped losses in N sections (3.11)
         for i in self.iT:
-            E[i]['H'] = {'t': [], 'v1': [], 'i1': [], 'v2': [], 'i2': []}
-        self.tau_min = min((E[i]['tau'] for i in self.iT), default=math.inf)
+            e = E[i]
+            N = int(e.get('N') or 1)
+            r = _f(e.get('Rl'), 0) / (4 * N)
+            e['N'], e['ts'], e['Ze'] = N, e['tau'] / N, e['Z'] + r
+            e['hh'] = (e['Z'] - r) / e['Ze']
+            e['H'] = {'t': [], 'c': [[] for _ in range(3 * N + 1)]}
+        self.tau_min = min((E[i]['ts'] for i in self.iT), default=math.inf)
         self.iN = [i for i, e in enumerate(E) if e['k'] == 'NL']       # surge arresters (3.9)
         for i in self.iN:
             E[i]['pts'] = [(float(a), float(b)) for a, b in E[i]['pts']]
@@ -451,6 +458,16 @@ class Circuit:
             self.Bx = np.hstack([self.Bx, np.zeros((n, extra))])
             self.Dm = np.vstack([self.Dm, np.zeros((extra, n))])
             self.ns = self.nsn + extra
+        # spark gaps on a volt–time curve (3.11): their disruptive effect is one more state, integrated with the circuit
+        self.iDE = [i for i in self.iSG if E[i]['gap'].get('de')]
+        if self.iDE:
+            for q, i in enumerate(self.iDE):
+                E[i]['kD'] = self.ns + q
+            m = len(self.iDE)
+            self.Bx = np.hstack([self.Bx, np.zeros((n, m))])
+            self.Dm = np.vstack([self.Dm, np.zeros((m, n))])
+            self.x0 = np.concatenate([self.x0, np.zeros(m)])
+            self.ns += m
         clk = next((b for b in self.blocks if b['type'] in ('CLK', 'RAMP')), None)
         lg = [_f(E[i]['wave'].get('T1'), 1e-6) for i in self.iI if E[i].get('wave')]     # a lightning current: its front time (3.5)
         lg += [_f(E[i]['src']['w'].get('T1'), 1e-6) for i in self.iV if E[i]['src'].get('kind') == 'wave']   # an impulse voltage (3.8)
@@ -628,8 +645,8 @@ class Circuit:
             g(e['a'], e['b'], 1 / e['Ron'] if self.on[i] else 1 / e['Roff'])
         for i in self.iT:
             e = E[i]
-            g(e['a1'], e['b1'], 1 / e['Z'])
-            g(e['a2'], e['b2'], 1 / e['Z'])
+            g(e['a1'], e['b1'], 1 / e['Ze'])
+            g(e['a2'], e['b2'], 1 / e['Ze'])
         for i in self.iV:
             vrow(E[i]['a'], E[i]['b'], E[i]['row'])
         for i in self.iC:
@@ -784,39 +801,50 @@ class Circuit:
 
     # ------------------------------------------------------------ lines (3.8)
     def tl_hist(self, e, tq):
-        """[v1, i1, v2, i2] at tq by linear interpolation of the recorded history; zero before t = 0 (de-energized line)."""
+        """All history columns at tq by linear interpolation; zero before t = 0 (de-energized line).
+        Column j <= N: voltage of junction j (0 = start, N = end); N+1+j: current into section j at its start; 2N+1+j: at its end."""
         H = e['H']
-        T = H['t']
+        T, C = H['t'], H['c']
         if tq < 0 or not T:
-            return 0.0, 0.0, 0.0, 0.0
+            return [0.0] * len(C)
         j = bisect.bisect_right(T, tq)
         if j >= len(T):
-            return H['v1'][-1], H['i1'][-1], H['v2'][-1], H['i2'][-1]
+            return [c[-1] for c in C]
         if j == 0:
-            return H['v1'][0], H['i1'][0], H['v2'][0], H['i2'][0]
+            return [c[0] for c in C]
         t0, t1 = T[j - 1], T[j]
         f = (tq - t0) / (t1 - t0) if t1 > t0 else 1.0
-        return tuple(H[k][j - 1] + (H[k][j] - H[k][j - 1]) * f for k in ('v1', 'i1', 'v2', 'i2'))
+        return [c[j - 1] + (c[j] - c[j - 1]) * f for c in C]
+
+    @staticmethod
+    def tl_sec(e, q, j):
+        """History sources (start, end) of section j from the columns at t − τ/N (Dommel, lumped R/4, R/2, R/4)."""
+        N, Ze, h = e['N'], e['Ze'], e['hh']
+        AL = q[j] / Ze + h * q[N + 1 + j]
+        AR = q[j + 1] / Ze + h * q[2 * N + 1 + j]
+        return -(1 + h) / 2 * AR - (1 - h) / 2 * AL, -(1 + h) / 2 * AL - (1 - h) / 2 * AR
 
     def tl_ih(self, e, t):
-        v1, i1, v2, i2 = self.tl_hist(e, t - e['tau'])
-        Z = e['Z']
-        return -(v2 / Z + i2), -(v1 / Z + i1)
+        q = self.tl_hist(e, t - e['ts'])
+        return self.tl_sec(e, q, 0)[0], self.tl_sec(e, q, e['N'] - 1)[1]
 
     def tl_record(self, t, z):
         for i in self.iT:
             e = self.els[i]
-            V = lambda nd: z[nd] if nd >= 0 else 0.0
-            v1, v2 = V(e['a1']) - V(e['b1']), V(e['a2']) - V(e['b2'])
-            h1, h2 = self.tl_ih(e, t)
             H = e['H']
             if H['t'] and t < H['t'][-1]:
                 continue
+            V = lambda nd: z[nd] if nd >= 0 else 0.0
+            N, Ze, C = e['N'], e['Ze'], H['c']
+            q = self.tl_hist(e, t - e['ts'])
+            S = [self.tl_sec(e, q, j) for j in range(N)]
+            v = [V(e['a1']) - V(e['b1'])] + [-Ze * (S[k - 1][1] + S[k][0]) / 2 for k in range(1, N)] + [V(e['a2']) - V(e['b2'])]
             H['t'].append(t)
-            H['v1'].append(v1)
-            H['i1'].append(v1 / e['Z'] + h1)
-            H['v2'].append(v2)
-            H['i2'].append(v2 / e['Z'] + h2)
+            for k in range(N + 1):
+                C[k].append(v[k])
+            for j in range(N):
+                C[N + 1 + j].append(v[j] / Ze + S[j][0])
+                C[2 * N + 1 + j].append(v[j + 1] / Ze + S[j][1])
 
     # ------------------------------------------------------------ gates and states
     def scr_u(self, e, t):
@@ -888,8 +916,8 @@ class Circuit:
                 if not e['trig_done'] and t >= gp['trig'] - 1e-9 * self.base_T:
                     bad.append((math.inf, i))
                     continue
-                if abs(t - self.just_off.get(i, -math.inf)) <= 1e-12 * self.base_T:
-                    continue            # just opened at a current zero: the residual current through R_off is not a breakdown
+                if gp.get('de') or abs(t - self.just_off.get(i, -math.inf)) <= 1e-12 * self.base_T:
+                    continue            # volt–time gap: closes by its event. Or just opened at a current zero: the residual current through R_off is not a breakdown
                 v = (z[e['a']] if e['a'] >= 0 else 0) - (z[e['b']] if e['b'] >= 0 else 0)
                 if abs(v) > gp['Ub'] * (1 + 1e-9):
                     bad.append((abs(v) - gp['Ub'], i))
@@ -974,7 +1002,7 @@ class Circuit:
             return float(self.inl[self.iN.index(i)])
         if k == 'TL':
             e2 = (e['a1'], e['b1']) if port == 0 else (e['a2'], e['b2'])
-            return (V(e2[0]) - V(e2[1])) / e['Z'] + self.tl_ih(e, t)[port]
+            return (V(e2[0]) - V(e2[1])) / e['Ze'] + self.tl_ih(e, t)[port]
         v = V(e.get('a')) - V(e.get('b'))
         if k == 'G':
             return v / self.R(e, t)
@@ -1546,6 +1574,15 @@ def simulate(data):
                 d[m['k0']:m['k0'] + 4] = ckt.sm_deriv(m, tt, yy, zof(tt, yy))[0]
             for m in ckt.srms:                 # switched reluctance machines: ψ of each phase, ω, θ
                 d[m['k0']:m['k0'] + m['N'] + 2] = ckt.srm_deriv(m, tt, yy, zof(tt, yy))[0]
+            for i in ckt.iDE:                  # volt–time gaps: dD/dt = (|v| − U₀)^k above U₀, while open
+                e = ckt.els[i]
+                q = e['gap']['de']
+                if ckt.on[i]:
+                    d[e['kD']] = 0.0
+                else:
+                    zz = zof(tt, yy)
+                    u = abs((zz[e['a']] if e['a'] >= 0 else 0) - (zz[e['b']] if e['b'] >= 0 else 0)) - q['U0']
+                    d[e['kD']] = u ** q['k'] if u > 0 else 0.0
             return d
         events, owners = [], []
         for i in ckt.iD:
@@ -1579,6 +1616,17 @@ def simulate(data):
                 def ev(tt, yy, vab=vab, sg=sg, lim=lim, e=e):
                     return sg * vab(tt, yy) / e['Ron'] - lim
                 ev.direction = -1
+            elif gp.get('de'):          # volt–time curve: closes when D reaches its constant; D restarts when |v| falls below U₀
+                q, kD = gp['de'], e['kD']
+                def ev(tt, yy, q=q, kD=kD):
+                    return yy[kD] - q['D']
+                ev.direction = 1
+                def ev0(tt, yy, vab=vab, q=q):
+                    return abs(vab(tt, yy)) - q['U0']
+                ev0.direction = -1
+                ev0.terminal = True
+                events.append(ev0)
+                owners.append(('de', i))
             else:
                 def ev(tt, yy, vab=vab, gp=gp):
                     return abs(vab(tt, yy)) - gp['Ub']
@@ -1595,7 +1643,7 @@ def simulate(data):
             events.append(ev)
             owners.append(b)
         kw = dict(method=method, rtol=rtol, atol=atol, max_step=max_step, events=events or None)
-        if implicit and not ckt.iP and not ckt.iN and not ckt.ims and not ckt.sms and not ckt.srms:     # the machines make the system nonlinear: numerical Jacobian
+        if implicit and not ckt.iP and not ckt.iN and not ckt.ims and not ckt.sms and not ckt.srms and not ckt.iDE:     # the machines make the system nonlinear: numerical Jacobian
             kw['jac'] = (lambda tt, yy, J=tp['J']: J) if method == 'LSODA' else tp['J']
         sol = solve_ivp(fun, (t, tn), x, **kw)
         stats['segments'] += 1
@@ -1620,6 +1668,8 @@ def simulate(data):
                     if isinstance(owners[q], dict):
                         flip.add(owners[q]['id'])
                         stats['cmp_events'] += 1
+                    elif isinstance(owners[q], tuple):  # a volt–time gap below U₀ again: its effect restarts
+                        x[ckt.els[owners[q][1]]['kD']] = 0.0
                     else:
                         ckt.on[owners[q]] = not ckt.on[owners[q]]
                         if owners[q] in ckt.iSG and not ckt.on[owners[q]]:
@@ -1629,6 +1679,9 @@ def simulate(data):
             if stuck > 60:
                 raise BatchError(f'Συνεχείς μεταγωγές χωρίς πρόοδο στο t = {te:.6g} s (chattering).')
             t = te
+            for i in ckt.iDE:                   # a gap that conducts starts from zero effect when it opens again
+                if ckt.on[i]:
+                    x[ckt.els[i]['kD']] = 0.0
             tp, z = ckt.consistent(t, x)
             ckt.eval_blocks(t, x, z, 'commit', flip=flip)
             ckt.tl_record(t, z)

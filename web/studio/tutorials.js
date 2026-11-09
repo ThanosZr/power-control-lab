@@ -584,22 +584,27 @@
   tasks:['Δες στο δεύτερο scope τα ρεύματα των σπινθηριστών: ανάβουν όλοι μαζί με τον G1, γιατί κάθε διάκενο βλέπει υπέρταση μόλις ανάψει το προηγούμενο.','Η κάρτα θεωρίας συγκρίνει κορυφή, T1, T2 και βαθμό απόδοσης με τη σχεδίαση (σχέσεις 3.28–3.32).','R₂ στην έξοδο: ο βαθμός απόδοσης πέφτει, γιατί οι R₁ και R₂ κάνουν διαιρέτη τάσης. Με 2 βαθμίδες (μεγάλο C₁/C₂) το κύκλωμα αυτό δεν δίνει καθόλου 1,2/50: η κάρτα δείχνει τι δίνει.','250/2500 μs: ίδια γεννήτρια, πολύ μεγαλύτερες R₁ και R₂.','Ανέβασε την τάση διάσπασης ενός διακένου πάνω από n·V₀: η γεννήτρια ανάβει μέχρι εκεί και η έξοδος μένει χαμηλή.'],
   build(o){const P=root.Parts,n=+o.n,V0=100e3,Ck=.1e-6,C2=1.2e-9,R3=o.wave==='si'?50e6:1e6,Ub=1.1*V0,sh=o.wave==='si'?'250/2500':'1.2/50',w=P.impulseWave({shape:sh,Vpk:1}),
     dz=pos=>P.impulseDesign({C1:Ck/n,C2,a1:1/w.tau2,a2:1/w.tau1,pos});let d=dz(o.r2);const feas=!d.err;if(!feas)d=dz('gen'); // type α has no solution for large C₁/C₂: keep the type-β values
-   const R1=+d.R1.toPrecision(4),R2=+d.R2.toPrecision(4),tf=+(w.T1/10).toPrecision(3);
-   const H=90,y0=110+n*H,Y=k=>y0-k*H,xl=100,xg=180,xc=260,xr=370,xo=540,top=Y(n),comps=[gnd(xr,y0+50)],wires=[['JR0','G1:g']];
-   const rr=o.r2==='gen'?+(R2/n).toPrecision(4):R3;
-   for(let k=0;k<=n;k++){if(k<n)comps.push(J('JL'+k,xl,Y(k)));comps.push(J('JR'+k,xr,Y(k)));}
-   for(let k=1;k<=n;k++){const yb=Y(k-1);
-    comps.push(C('SG'+k,'SG',xg,yb,{Ub,Rarc:.1,ext:'zero',...(k===1?{trig:String(tf)}:{})},{label:'G'+k,lbl:'below'}),C('CK'+k,'C',xc,yb-45,{C:Ck,v0:V0},{label:'C_κ'+k}),
-     C('RR'+k,'R',xr,yb-45,{R:rr},{rot:1,label:o.r2==='gen'?'r₂':'R₃'}));
-    wires.push(['JL'+(k-1),'SG'+k+':a'],['SG'+k+':b','JR'+(k-1)],['CK'+k+':n','SG'+k+':a',[[xg-30,yb-15]]],['CK'+k+':p','JR'+k,[[xc,yb-90]]],['RR'+k+':b','JR'+(k-1)],['RR'+k+':a','JR'+k]);
-    if(k<n){comps.push(C('RL'+k,'R',xl,yb-45,{R:R3},{rot:1,label:'R₃',lbl:'left'}));wires.push(['RL'+k+':b','JL'+(k-1)],['RL'+k+':a','JL'+k]);}}
-   comps.push(C('R1','R',(xr+xo)/2,top,{R:R1},{label:'R₁'}),J('OUT',xo,top),C('C2','C',xo,y0-45,{C:C2},{label:'C₂ (φορτίο)'}));
-   wires.push(['JR'+n,'R1:a'],['R1:b','OUT'],['OUT','C2:p'],['C2:n','G1:g',[[xo,y0+50]]]);
-   if(o.r2==='load'){comps.push(C('RT','R',xo+80,y0-45,{R:R2},{rot:1,label:'R₂'}));wires.push(['RT:a','OUT',[[xo+80,top]]],['RT:b','G1:g',[[xo+80,y0+50]]]);}
+   const R1=+d.R1.toPrecision(4),R2=+d.R2.toPrecision(4),tf=+(w.T1/10).toPrecision(3),rr=o.r2==='gen'?+(R2/n).toPrecision(4):R3;
+   const {comps,wires}=marxCircuit({n,V0,Ck,C2,R1,R2,rr,R3,Ub,tf,pos:o.r2});
    const stopT=o.wave==='si'?3*w.T2:2.4*w.T2;
    return project(comps,wires,{solve:{tbase:w.T1},sim:{hDiv:o.wave==='si'?200:100,speed:20,stopT,method:'TR'},
     scope:{panes:[[['V:C2','v_out (C₂)']],Array.from({length:n},(_,k)=>['I:SG'+(k+1),'i G'+(k+1)])],window:{unit:'s',n:stopT}},
     meta:{n,V0,Ck,C1:Ck/n,C2,R1,R2,R3,rr,Ub,tf,pos:o.r2,feas,shape:sh,basis:w.basis,T1:w.T1,T2:w.T2,a1:1/w.tau2,a2:1/w.tau1,dur:stopT}});}});
+
+ // Marx generator circuit (3.10; the book's 15.3.7 in 3.11): n stages C_κ charged to V₀ through R₃, gaps G1…Gn (G1 triggered at t_f),
+ // the tail resistance in every stage (r₂, type β) or at the output (R₂, type α), front resistor R₁, load C₂
+ function marxCircuit({n,V0,Ck,C2,R1,R2,rr,R3,Ub,tf,pos,lab={}}){
+  const H=90,y0=110+n*H,Y=k=>y0-k*H,xl=100,xg=180,xc=260,xr=370,xo=540,top=Y(n),comps=[gnd(xr,y0+50)],wires=[['JR0','G1:g']];
+  for(let k=0;k<=n;k++){if(k<n)comps.push(J('JL'+k,xl,Y(k)));comps.push(J('JR'+k,xr,Y(k)));}
+  for(let k=1;k<=n;k++){const yb=Y(k-1);
+   comps.push(C('SG'+k,'SG',xg,yb,{Ub,Rarc:.1,ext:'zero',...(k===1?{trig:String(tf)}:{})},{label:'G'+k,lbl:'below'}),C('CK'+k,'C',xc,yb-45,{C:Ck,v0:V0},{label:(lab.Ck||'C_κ')+k}),
+    C('RR'+k,'R',xr,yb-45,{R:rr},{rot:1,label:pos==='gen'?lab.rr||'r₂':'R₃'}));
+   wires.push(['JL'+(k-1),'SG'+k+':a'],['SG'+k+':b','JR'+(k-1)],['CK'+k+':n','SG'+k+':a',[[xg-30,yb-15]]],['CK'+k+':p','JR'+k,[[xc,yb-90]]],['RR'+k+':b','JR'+(k-1)],['RR'+k+':a','JR'+k]);
+   if(k<n){comps.push(C('RL'+k,'R',xl,yb-45,{R:R3},{rot:1,label:'R₃',lbl:'left'}));wires.push(['RL'+k+':b','JL'+(k-1)],['RL'+k+':a','JL'+k]);}}
+  comps.push(C('R1','R',(xr+xo)/2,top,{R:R1},{label:lab.R1||'R₁'}),J('OUT',xo,top),C('C2','C',xo,y0-45,{C:C2},{label:lab.C2||'C₂ (φορτίο)'}));
+  wires.push(['JR'+n,'R1:a'],['R1:b','OUT'],['OUT','C2:p'],['C2:n','G1:g',[[xo,y0+50]]]);
+  if(pos==='load'){comps.push(C('RT','R',xo+80,y0-45,{R:R2},{rot:1,label:'R₂'}));wires.push(['RT:a','OUT',[[xo+80,top]]],['RT:b','G1:g',[[xo+80,y0+50]]]);}
+  return {comps,wires};}
  // ------------------------------------------------------------------ 3.10: chopped impulse (IEC 60076-3): chopping gap with a loop L and damping R
  T.push({id:'chop',group:'Υψηλές τάσεις (3.10)',title:'Αποκομμένη κρουστική τάση: σπινθηριστής αποκοπής',theory:'formula',topology:'chop',
   options:[{k:'chop',label:'Αποκοπή',options:[['tail','Στην ουρά: έναυση 3 μs μετά τη γεννήτρια'],['front','Στο μέτωπο: διάσπαση στα 800 kV'],['none','Χωρίς αποκοπή (πλήρες κύμα)']],def:'tail'},
@@ -620,6 +625,74 @@
    return project(comps,wires,{solve:{tbase:w.T1},sim:{hDiv:o.chop==='none'?400:1000,speed:5,stopT,method:'TR'},
     scope:{panes:[[['V:C2','v (δοκίμιο)']],o.chop!=='none'?[['I:SG2','i αποκοπής']]:[['I:R1','i R₁']]],window:{unit:'s',n:stopT}},
     meta:{V,C1,C2,R1,R2,Rc,Lc,Rarc:.1,tf,tc,Uc,chop:o.chop,T1:w.T1,a1:1/w.tau2,a2:1/w.tau1,dur:stopT}});}});
+ // ------------------------------------------------------------------ 3.11: the book's impulse-generator exercises 15.3.x as benchmarks
+ // (the book's approximate formulas ↔ the exact two-exponential solution ↔ the simulation). Loads in parallel at the output; a divider is C_H in series with C_L.
+ const HV153={
+  '1531':{t:'15.3.1: κύκλωμα β, C_κ = 25 nF, φορτίο 0,65 nF + καταμεριστής 50 pF, 300 kV',pos:'gen',Ck:25e-9,U:300e3,R1:569.88,R2:2735.4,load:[['CF',.65e-9,'C_φ'],['CD',50e-12,'καταμεριστής']],
+   book:{eta:.97,Vp:291e3,T1:1.148e-6,T2:51.32e-6,tp:2.076e-6,W:1125}},
+  '1532a':{t:'15.3.2α: κύκλωμα β, 15 nF / 1,5 nF, 230 kV',pos:'gen',Ck:15e-9,U:230e3,R1:297,R2:4151,load:[['CF',1.5e-9,'C_φ']],book:{eta:.909,Vp:209.7e3,T1:1.2e-6,T2:50e-6}},
+  '1532c':{t:'15.3.2γ: ίδια γεννήτρια, καλώδιο 10 m (5 nF) και καταμεριστής 1/99 nF',pos:'gen',Ck:15e-9,U:230e3,R1:297,R2:4151,load:[['CF',1.5e-9,'C_φ'],['CC',5e-9,'καλώδιο']],div:[1e-9,99e-9],
+   book:{T1:4.39e-6,T2:68.15e-6},lim:{T1:[.5e-6,5e-6],T2:[40e-6,60e-6]}},
+  '1533':{t:'15.3.3: κύκλωμα α, 6,5 nF / 1 nF, καταμεριστής 0,1/9,9 nF, 125 kV',pos:'load',Ck:6.5e-9,U:125e3,R1:500,R2:10e3,load:[['CF',1e-9,'C_φ']],div:[.1e-9,9.9e-9],
+   book:{eta:6.5/7.599,Vp:106.9e3,T1:1.23e-6,T2:57.5e-6,Vlv:1069},scopes:600},
+  '1535':{t:'15.3.5: δοκίμιο 0,254 nF (το μέγιστο του βιβλίου), U_DC = 2√2 · 66,5 kV',pos:'gen',Ck:10e-9,U:2*Math.SQRT2*66.5e3,R1:750,R2:6.5e3,load:[['CF',.3e-9,'C_φ'],['CX',.254e-9,'δοκίμιο']],div:[.2e-9,100e-9],
+   book:{Cx:.254e-9,T1:1.56e-6,T2:51e-6,Vp:175e3,Uac:66.5e3},lim:{T1:[.84e-6,1.56e-6],T2:[40e-6,60e-6]}},
+  '1536':{t:'15.3.6: 1 nF / 0,1 nF, R_ε = 62 kΩ, R_μ = 45 Ω όπως στο βιβλίο',pos:'gen',Ck:1e-9,U:110e3,R1:45,R2:62e3,load:[['CF',.1e-9,'C_φ']],book:{eta:1/1.1,Vp:100e3,T1:1.21e-6,T2:49.73e-6,R1:44.59}},
+  '1536c':{t:'15.3.6: με τη διορθωμένη R_μ = 4,46 kΩ',pos:'gen',Ck:1e-9,U:110e3,R1:4459.5,R2:62e3,load:[['CF',.1e-9,'C_φ']],book:{eta:1/1.1,Vp:100e3,T1:1.21e-6,T2:49.73e-6,R1:44.59}},
+  '1537':{t:'15.3.7: Marx 3 βαθμίδων, 3 × 100 kV, C_φ = 500 pF',marx:3,pos:'gen',Ck:12e-9,U:100e3,R1:912,R2:15220.7,load:[['C2',500e-12,'C_φ']],book:{eta:.889,Vp:267e3,R1:912,R2:15220.7,T1:1.2e-6,T2:50e-6}}};
+ T.push({id:'hv153',group:'Υψηλές τάσεις (3.11)',title:'Ασκήσεις 15.3: γεννήτριες κρουστικών τάσεων (βιβλίο, ακριβής λύση, προσομοίωση)',theory:'formula',topology:'hv153',
+  options:[{k:'ex',label:'Άσκηση',options:Object.entries(HV153).map(([k,v])=>[k,v.t]),def:'1531'}],
+  desc:'Οι λυμένες ασκήσεις 15.3.1–15.3.7 του βιβλίου «Υψηλές Τάσεις» με τα στοιχεία τους. Ο πυκνωτής κρούσης C_κ είναι φορτισμένος στην τάση της άσκησης και ο σπινθηριστής ανάβει με εντολή. Κύκλωμα β: η R_ε παράλληλα στο C_κ (μετά το διάκενο). Κύκλωμα α: η R_ε παράλληλα στο φορτίο. Η κάρτα θεωρίας βάζει δίπλα δίπλα τρεις τιμές για κάθε μέγεθος: των προσεγγιστικών τύπων του βιβλίου (T1 ≈ 2,96·R_μ·C_κC_φ/(C_κ + C_φ), T2 ≈ 0,73·R_ε·(C_κ + C_φ), η ≈ C_κ/(C_κ + C_φ)), της ακριβούς λύσης με τις ρίζες α₁, α₂ (σχέσεις 3.21–3.32) και της προσομοίωσης.',
+  tasks:['15.3.1: το βιβλίο δίνει 291 kV με η = C_κ/(C_κ + C_φ). Η ακριβής κορυφή είναι χαμηλότερη, γιατί η R_ε εκφορτίζει το C_κ όσο φορτίζεται το C_φ.','15.3.2γ: με το καλώδιο το T2 βγαίνει εκτός ορίων και με την ακριβή λύση: το συμπέρασμα του βιβλίου ισχύει, τα νούμερα όχι.','15.3.3: δες στο δεύτερο scope την τάση του βραχίονα χαμηλής τάσης. Ισχύει το συμπέρασμα ότι κανένας παλμογράφος ως 600 V δεν αρκεί;','15.3.5: με τα 66,5 kV του βιβλίου η κορυφή δεν φτάνει τα 175 kV. Η κάρτα δίνει την τάση που χρειάζεται και το μέγιστο δοκίμιο από την ακριβή λύση.','15.3.6: με τα 45 Ω του βιβλίου το μέτωπο βγαίνει εκατό φορές μικρότερο από 1,2 μs. Δες τη διορθωμένη R_μ.','15.3.7: Marx 3 βαθμίδων. Ανάβουν και τα τρία διάκενα; Πόσο απέχει η κορυφή από τα 267 kV του βιβλίου;'],
+  build(o){const P=root.Parts,x=HV153[o.ex]||HV153['1531'],ser=(a,b)=>a*b/(a+b),Cd=x.div?ser(x.div[0],x.div[1]):0,Cl=x.load.reduce((s,q)=>s+q[1],0)+Cd;
+   const n=x.marx||1,C1=x.Ck/n,U=n*x.U,g=P.impulseRoots({R1:x.R1,R2:x.R2,C1,C2:Cl,pos:x.pos}),wm=P.waveMeasure({kind:'dexp',n:1,tau1:1/g.a2,tau2:1/g.a1,eta:1,I0:1,t0:0},'iec');
+   const tf=+(wm.T1/20).toPrecision(3),fast=wm.T2/wm.T1>400,stopT=(fast?1.25:2.4)*wm.T2+tf;let comps,wires,out;
+   if(x.marx){({comps,wires}=marxCircuit({n,V0:x.U,Ck:x.Ck,C2:x.load[0][1],R1:x.R1,R2:x.R2,rr:+(x.R2/n).toPrecision(5),R3:10e6,Ub:1.1*x.U,tf,pos:'gen',lab:{Ck:'C′_κ',rr:'R′_ε',R1:'R_μ = 3·R′_μ',C2:'C_φ'}}));out='C2';}
+   else{const yb=300,gx=300;comps=[C('CK','C',100,210,{C:x.Ck,v0:x.U},{label:'C_κ'}),C('SG1','SG',170,130,{Ub:10*x.U,trig:String(tf),Rarc:1e-3,ext:'never'},{label:'σπινθηριστής'}),J('J1',240,130),
+     C('RM','R',320,130,{R:x.R1},{label:'R_μ'}),J('OUT',400,130),gnd(gx,yb+20)];
+    wires=[['CK:p','SG1:a',[[100,130]]],['SG1:b','J1'],['J1','RM:a'],['RM:b','OUT'],['CK:n','G1:g',[[100,yb],[gx,yb]]]];let xk=400;
+    const down=(id,a)=>wires.push([id+':n','G1:g',[[a,yb],[gx,yb]]]);
+    if(x.pos==='gen'){comps.push(C('RE','R',240,210,{R:x.R2},{rot:1,label:'R_ε'}));wires.push(['J1','RE:a'],['RE:b','G1:g',[[240,yb],[gx,yb]]]);}
+    else{comps.push(C('RE','R',xk,210,{R:x.R2},{rot:1,label:'R_ε'}));wires.push(['OUT','RE:a'],['RE:b','G1:g',[[xk,yb],[gx,yb]]]);xk+=80;}
+    for(const [id,c,lb] of x.load){comps.push(C(id,'C',xk,210,{C:c},{label:lb}));wires.push(['OUT',id+':p',[[xk,130]]]);down(id,xk);xk+=80;}
+    if(x.div){comps.push(C('CH','C',xk,175,{C:x.div[0]},{label:'C_H'}),C('CL','C',xk,245,{C:x.div[1]},{label:'C_L'}));wires.push(['OUT','CH:p',[[xk,130]]],['CH:n','CL:p'],['CL:n','G1:g',[[xk,yb],[gx,yb]]]);}
+    out=x.load[0][0];}
+   const lv=x.div?[['V:CL','v βραχίονα ΧΤ (C_L)']]:x.marx?Array.from({length:n},(_,k)=>['I:SG'+(k+1),'i G'+(k+1)]):[['I:'+(x.pos==='gen'?'RE':'RM'),x.pos==='gen'?'i R_ε':'i R_μ']];
+   return project(comps,wires,{solve:{tbase:wm.T1},sim:{hDiv:fast?20:100,speed:20,stopT,method:'TR'},scope:{panes:[[['V:'+out,'v (φορτίο)']],lv],window:{unit:'s',n:stopT}},
+    meta:{ex:o.ex,t:x.t,pos:x.pos,marx:x.marx||0,Ck:x.Ck,C1,U0:x.U,U,R1:x.R1,R2:x.R2,C2:Cl,Cd,div:x.div||null,loads:x.load.map(q=>[q[2],q[1]]),book:x.book,lim:x.lim||null,scopes:x.scopes||0,out,tf,dur:stopT}});}});
+ // ------------------------------------------------------------------ 3.11: lossy line: attenuation and distortion of a travelling wave (book §7.7)
+ T.push({id:'lossline',group:'Υψηλές τάσεις (3.11)',title:'Γραμμή με απώλειες: απόσβεση και παραμόρφωση οδεύοντος κύματος',theory:'formula',topology:'lossline',
+  options:[{k:'Rp',label:'Αντίσταση R′ της γραμμής',options:[['0','0 (χωρίς απώλειες)'],['0.5','0,5 Ω/km'],['2','2 Ω/km'],['5','5 Ω/km']],def:'2'},
+   {k:'nsec',label:'Τμήματα του μοντέλου',options:[['1','1 (R/4, R/2, R/4)'],['4','4'],['16','16']],def:'4'},
+   {k:'src',label:'Κυματομορφή',options:[['step','Βηματική 100 kV'],['li','Κρουστική 1,2/50 μs, 100 kV']],def:'step'},
+   {k:'end',label:'Άκρο',options:[['open','Ανοιχτό άκρο'],['semi','Συνέχεια σε μακριά γραμμή (χωρίς ανάκλαση ως το 7τ)']],def:'open'}],
+  desc:'Εναέρια γραμμή 30 km (Z = 400 Ω, v = 3·10⁸ m/s, τ = 100 μs) από ιδανική πηγή. Οι απώλειες σειράς R = R′·ℓ μπαίνουν συγκεντρωμένες σε N τμήματα, R/(4N) στα άκρα και R/(2N) στη μέση κάθε τμήματος (μοντέλο Dommel του EMTP). Το μέτωπο του κύματος σβήνει ως e^(−R′x/(2Z)), δηλαδή u(x) = u(0)·e^(−x/λ) με λ = 2Z/R′ (σχέση 7.88 του βιβλίου), και πίσω του μένει μια ουρά που ανεβαίνει αργά: η παραμόρφωση της §7.7. Η κάρτα θεωρίας λύνει την κατανεμημένη γραμμή RLC ακριβώς (λύση του Heaviside με συνάρτηση Bessel I₁) και συγκρίνει.',
+  tasks:['Βηματική, ανοιχτό άκρο: στο τ η τάση πηδά στο 2·e^(−R/(2Z))·100 kV και μετά ανεβαίνει αργά. Χωρίς απώλειες πηδά στα 200 kV και μένει εκεί ως το 3τ.','Άλλαξε τα τμήματα από 1 σε 16: το σφάλμα απέναντι στην κατανεμημένη γραμμή πέφτει περίπου ανάλογα με 1/N.','Κρουστική 1,2/50: η κορυφή στο τέλος πέφτει και το μέτωπο πλαταίνει. Η κάρτα δίνει την ακριβή κορυφή από τη συνέλιξη με τη βηματική απόκριση.','Συνέχεια σε μακριά γραμμή: βλέπεις μόνο το κύμα που οδεύει, χωρίς ανάκλαση από το άκρο.'],
+  build(o){const Z=400,len=30e3,vel=3e8,tau=len/vel,V=100e3,Rp=(+o.Rp)/1e3,N=+o.nsec,li=o.src==='li',semi=o.end==='semi';
+   const comps=[li?C('V1','VIMP',100,200,{shape:'1.2/50',Vpk:V},{label:'u(t)'}):C('V1','VDC',100,200,{V},{label:'u'}),
+    C('T1','TL',300,180,{spec:'zl',Z,len,vel,Rp,nsec:N},{label:'γραμμή 30 km'}),gnd(300,300)];
+   const wires=[['V1:p','T1:a1',[[100,160]]],['V1:n','G1:g',[[100,280],[300,280]]],['T1:b1','G1:g',[[240,280],[300,280]]],['T1:b2','G1:g',[[360,280],[300,280]]]];
+   if(semi){comps.push(C('T2','TL',520,180,{spec:'zl',Z,len:3*len,vel,Rp,nsec:3*N},{label:'συνέχεια 90 km'}));wires.push(['T1:a2','T2:a1'],['T2:b1','G1:g',[[460,280],[300,280]]],['T2:b2','G1:g',[[580,280],[300,280]]]);}
+   const stopT=semi?6*tau:li?4*tau:8*tau;
+   // the time base is the shortest of the source front (1,2 μs) and τ: h = 50 ns for the impulse, 0,25 μs for the step
+   return project(comps,wires,{solve:{tbase:tau},sim:{hDiv:li?24:400,speed:20,stopT,method:'TR'},scope:{panes:[[['V:T1','v (αρχή)'],['V2:T1','v (τέλος 30 km)']],[['I:T1','i (αρχή)']]],window:{unit:'s',n:stopT}},
+    meta:{Z,len,vel,tau,V,Rp,R:Rp*len,N,src:o.src,end:o.end,dur:stopT}});}});
+ // ------------------------------------------------------------------ 3.11: volt–time curve of a gap (disruptive effect)
+ T.push({id:'voltime',group:'Υψηλές τάσεις (3.11)',title:'Καμπύλη τάσης–χρόνου διακένου (κριτήριο ενέργειας διάσπασης)',theory:'formula',topology:'voltime',
+  options:[{k:'src',label:'Τάση',options:[['ramp','Ράμπα (σταθερή κλίση)'],['li','Κρουστική 1,2/50 μs']],def:'ramp'},
+   {k:'S',label:'Κλίση (ράμπα)',options:[['500','500 kV/μs'],['1000','1000 kV/μs'],['2000','2000 kV/μs'],['5000','5000 kV/μs']],def:'1000'},
+   {k:'amp',label:'Κορυφή (κρουστική)',options:[['1.1','1,1 · U₀'],['1.3','1,3 · U₀'],['1.6','1,6 · U₀'],['2.5','2,5 · U₀']],def:'1.6'},
+   {k:'k',label:'Εκθέτης k',options:[['0','0: σταθερή καθυστέρηση'],['1','1: ίσες επιφάνειες (Kind)'],['2','2']],def:'1'}],
+  desc:'Διάκενο με τάση έναρξης U₀ = 100 kV σε πηγή με εσωτερική αντίσταση 50 Ω. Δεν διασπάται στο U₀: διασπάται όταν το ολοκλήρωμα D = ∫ (|u| − U₀)^k dt, από τη στιγμή που η τάση περνά το U₀, φτάσει μια σταθερά του διακένου (κριτήριο ενέργειας διάσπασης, disruptive effect). Με k = 0 είναι σταθερή καθυστέρηση, με k = 1 ο νόμος ίσων επιφανειών του Kind. Οι σταθερές D εδώ είναι ενδεικτικές, διαλεγμένες ώστε και τα τρία κριτήρια να δίνουν 200 kV σε ράμπα 1000 kV/μs. Όσο πιο απότομη η τάση, τόσο πιο ψηλά διασπάται: αυτή είναι η καμπύλη τάσης–χρόνου. Η κάρτα θεωρίας τη σχεδιάζει από το ίδιο κριτήριο και βάζει πάνω της το σημείο της προσομοίωσης.',
+  tasks:['Ράμπα: η κάρτα δίνει τον κλειστό τύπο t_d = U₀/S + ((k+1)·D/S^k)^(1/(k+1)) και την τάση διάσπασης S·t_d. Πέρασε από 500 σε 5000 kV/μs.','Κρουστική 2,5 · U₀: διάσπαση στο μέτωπο, πολύ πάνω από το U₀. Με 1,1 · U₀ η διάσπαση γίνεται στην ουρά, ή καθόλου.','Σύγκρινε τα k = 0, 1, 2: στην ίδια ράμπα δίνουν την ίδια τάση, σε άλλες κλίσεις όχι.'],
+  build(o){const U0=100e3,k=+o.k,Dk=[.1e-6,5e-3,1e-21*1e24/3][k],ramp=o.src==='ramp',S=(+o.S)*1e9,amp=+o.amp;
+   const comps=[ramp?C('V1','VIMP',100,200,{shape:'ramp',Vpk:3e6,S},{label:'ράμπα'}):C('V1','VIMP',100,200,{shape:'1.2/50',Vpk:amp*U0},{label:'1,2/50'}),
+    C('RS','R',200,160,{R:50},{label:'50 Ω'}),C('SG1','SG',300,200,{vt:'de',U0,kde:k,Dde:Dk,Rarc:1,ext:'never'},{rot:1,label:'διάκενο',lbl:'right'}),gnd(200,300)];
+   const wires=[['V1:p','RS:a',[[100,160]]],['RS:b','SG1:a',[[300,160]]],['SG1:b','G1:g',[[300,280],[200,280]]],['V1:n','G1:g',[[100,280],[200,280]]]];
+   // the time base is the front of the source (V_pk/S for the ramp, 1,2 μs for the impulse); about 3000 steps per run
+   const stopT=ramp?Math.max(3*(U0/S),.4e-6):(amp<1.25?60e-6:12e-6),Tb=ramp?3e6/S:1.2e-6;
+   return project(comps,wires,{sim:{hDiv:Math.round(Tb*3000/stopT),speed:5,stopT,method:'TR'},scope:{panes:[[['V:V1','u πηγής'],['V:SG1','u διακένου']],[['I:SG1','i διακένου']]],window:{unit:'s',n:stopT}},
+    meta:{U0,k,D:Dk,src:o.src,S,amp,Vpk:amp*U0,Rs:50,dur:stopT}});}});
  // ------------------------------------------------------------------ 3.0: peak current-mode, subharmonic oscillation
  T.push({id:'peak_cm',group:'Μπλοκ σημάτων (3.0)',title:'Peak current-mode και υποαρμονική',theory:'formula',topology:'peak_cm',
   options:[{k:'mode',label:'Έλεγχος',options:[['peak','Peak: ρολόι → ON, κορυφή → OFF'],['valley','Valley: ρολόι → OFF, κοιλάδα → ON']],def:'peak'},

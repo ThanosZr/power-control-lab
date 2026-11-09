@@ -1177,6 +1177,81 @@ function chopTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.V)return '';const 
  const gi=rawSeries('I:SG2'),j=gi?gi.y.findIndex(x=>Math.abs(x)>1):-1,tcS=j>0?gi.t[j-1]:NaN,ok=-mn/q.vc<=.3; // the chop: the last sample before the gap carries current
  h+=cmpRows([['στιγμή αποκοπής t_c',q.tc,tcS,'s'],['μέγιστη τάση (το C₂ φορτίζεται λίγο ακόμη μετά την αποκοπή)',q.vmax,m.chop==='front'?mx:NaN,'V'],['ελάχιστη τάση μετά την αποκοπή',q.vmin,mn,'V']].filter(r=>Number.isFinite(r[2])));
  return h+`<p class="${ok?'good':'bad'}">${ok?'✓':'✗'} Υπερύψωση ${fmt(-100*mn/q.vc,3)} % της τάσης αποκοπής (IEC 60076-3: έως 30 %).</p><p class="muted small">Η θεωρία αγνοεί την αντίσταση τόξου του G1 (${eng(.1,'Ω')}).</p>`;}
+// 3.11: a table with three columns for each quantity: the book's value (or its approximate formula), the exact solution and the simulation
+function cmp3(rows){const pc=(a,b)=>{if(!(Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(b)>1e-30))return '';let d=100*(a/b-1);if(Math.abs(d)<1e-9)d=0;return `<td class="${Math.abs(d)<2?'good':Math.abs(d)<10?'':'warn-text'}">${fmt(d,3)} %</td>`;};
+ return `<table class="cmp"><thead><tr><th>Μέγεθος</th><th>Βιβλίο</th><th>Ακριβής λύση</th><th>Προσομοίωση</th><th>βιβλίο ↔ ακριβής</th><th>προσομ. ↔ ακριβής</th></tr></thead><tbody>${rows.map(([n,bk,ex,sm,u])=>
+  `<tr><td>${n}</td><td>${Number.isFinite(bk)?eng(bk,u,4):'—'}</td><td>${eng(ex,u,4)}</td><td>${Number.isFinite(sm)?eng(sm,u,4):'—'}</td>${pc(bk,ex)||'<td></td>'}${pc(sm,ex)||'<td></td>'}</tr>`).join('')}</tbody></table>`;}
+// the exact two-exponential wave of a single-stage equivalent (book 3.21–3.32): roots, efficiency, T1 and T2 (IEC 60060-1)
+function hvExact(R1,R2,C1,C2,pos){const g=P.impulseRoots({R1,R2,C1,C2,pos}),w=P.waveMeasure({kind:'dexp',n:1,tau1:1/g.a2,tau2:1/g.a1,eta:1,I0:1,t0:0},'iec');return {...g,T1:w.T1,T2:w.T2};}
+function hv153Theory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.ex)return '';const b=m.book||{},gen=m.pos==='gen',C1=m.C1,C2=m.C2,U=m.U,ex=hvExact(m.R1,m.R2,C1,C2,m.pos);
+ const ser=C1*C2/(C1+C2),par=m.R1*m.R2/(m.R1+m.R2),ap={eta:C1/(C1+C2),T1:2.96*(gen?m.R1:par)*ser,T2:.73*(gen?m.R2:m.R1+m.R2)*(C1+C2)};
+ const done=s.t>=m.dur*.98,v=done?rawSeries('V:'+m.out):null,q=v?impulseMeasure(v.t,v.y,m.tf,'iec'):null,kd=m.div?(m.div[0]+m.div[1])/m.div[0]:0;
+ let h=`<div class="tm"><span class="badge">${esc(m.ex.replace(/^(\d\d)(\d)(\d)/,'$1.$2.$3'))}</span> ${esc(m.t)}</div><ul class="eqs">
+  <li>${m.marx?`Marx ${m.marx} βαθμίδων: σε σειρά C_κ = C′_κ/${m.marx} = <b>${eng(C1,'F',4)}</b> στα ${m.marx}·${eng(m.U0,'V')} = <b>${eng(U,'V')}</b>, R_μ = ${eng(m.R1,'Ω',4)}, R_ε = ${eng(m.R2,'Ω',4)}`:`C_κ = ${eng(C1,'F',4)} στα <b>${eng(U,'V',4)}</b>, R_μ = ${eng(m.R1,'Ω',5)}, R_ε = ${eng(m.R2,'Ω',5)}, κύκλωμα ${gen?'β (R_ε παράλληλα στο C_κ)':'α (R_ε παράλληλα στο φορτίο)'}`}</li>
+  <li>Φορτίο C_φ,ολ = ${m.loads.map(q=>esc(q[0])+' '+eng(q[1],'F',4)).join(' + ')}${m.div?` + καταμεριστής C_H·C_L/(C_H + C_L) = ${eng(m.Cd,'F',4)}`:''} = <b>${eng(C2,'F',4)}</b></li>
+  <li>Τύποι του βιβλίου: η ≈ C_κ/(C_κ + C_φ) = ${fmt(ap.eta,4)}, T1 ≈ 2,96·${gen?'R_μ':'(R_μ∥R_ε)'}·C_κC_φ/(C_κ + C_φ) = ${eng(ap.T1,'s',4)}, T2 ≈ 0,73·${gen?'R_ε':'(R_ε + R_μ)'}·(C_κ + C_φ) = ${eng(ap.T2,'s',4)}</li>
+  <li>Ακριβής λύση: α₁ = ${fmt(ex.a1,5)} s⁻¹, α₂ = ${fmt(ex.a2,5)} s⁻¹, κορυφή στο t₁ = ${eng(ex.t1,'s',4)}, η = <b>${fmt(ex.eta,4)}</b>. Η διαφορά από τους τύπους: η R_ε εκφορτίζει το C_κ όσο φορτίζεται το C_φ, και ${gen?'η R_μ':'η R_ε'} δεν είναι αμελητέα</li></ul>`;
+ if(!done)return h+'<p class="muted small">Τρέξε ως το τέλος για τη σύγκριση με την προσομοίωση.</p>';
+ const rows=[['κορυφή V_p',b.Vp??ap.eta*U,ex.eta*U,q.pk,'V'],['βαθμός απόδοσης η',100*(b.eta??ap.eta),100*ex.eta,100*q.pk/U,'%'],['T1 (IEC 60060-1)',b.T1??ap.T1,ex.T1,q.T1,'s'],['T2 (IEC 60060-1)',b.T2??ap.T2,ex.T2,q.T2,'s']];
+ if(b.tp)rows.push(['χρόνος κορυφής',b.tp,ex.t1,q.tp-m.tf,'s']);
+ if(m.div){const lv=rawSeries('V:CL'),vl=lv?Math.max(...lv.y):NaN;rows.push(['τάση βραχίονα ΧΤ (λόγος '+fmt(kd,4)+')',b.Vlv??NaN,ex.eta*U/kd,vl,'V']);}
+ if(b.W)rows.push(['ενέργεια ½·C_κ·U²',b.W,.5*C1*U*U,NaN,'J']);
+ h+=cmp3(rows);const notes=[];
+ if(m.lim){const ok=(x,[a,c])=>x>=a&&x<=c,o1=ok(ex.T1,m.lim.T1),o2=ok(ex.T2,m.lim.T2);
+  notes.push(`<p class="${o1&&o2?'good':'bad'}">Όρια της δοκιμής: T1 ${eng(m.lim.T1[0],'s')}–${eng(m.lim.T1[1],'s')} ${o1?'✓':'✗'}, T2 ${eng(m.lim.T2[0],'s')}–${eng(m.lim.T2[1],'s')} ${o2?'✓':'✗'}. ${o1&&o2?'Η δοκιμή είναι έγκυρη.':'Η δοκιμή δεν είναι έγκυρη.'}</p>`);}
+ if(m.ex==='1533'){const vl=ex.eta*U/kd;notes.push(`<p class="${vl>600?'bad':'good'}">Βραχίονας ΧΤ: ${eng(vl,'V',4)} (ακριβής). ${vl>600?'Κανένας παλμογράφος ως 600 V δεν αρκεί: το συμπέρασμα του βιβλίου ισχύει, με 1001 V αντί για 1069 V.':'Αρκεί παλμογράφος '+Math.ceil(vl/100)*100+' V.'}</p>`);}
+ if(m.ex==='1535'){const T1x=Cx=>hvExact(m.R1,m.R2,C1,C2-.254e-9+Cx,'gen').T1;let lo=0,hi=5e-9;for(let k=0;k<60;k++){const x=(lo+hi)/2;if(T1x(x)<1.56e-6)lo=x;else hi=x;}
+  const Uac=175e3/(ex.eta*2*Math.SQRT2);notes.push(`<p>Μέγιστο δοκίμιο για T1 ≤ 1,56 μs: <b>${eng(lo,'F',4)}</b> με την ακριβή λύση (βιβλίο ${eng(b.Cx,'F',3)}).</p>
+   <p class="${q.pk>=175e3?'good':'bad'}">Κορυφή με U_ac = 66,5 kV: ${eng(q.pk,'V',4)} ${q.pk>=175e3?'≥':'<'} 175 kV. Για 175 kV χρειάζεται U_ac = <b>${eng(Uac,'V',4)}</b> (βιβλίο 66,5 kV, με η = C_κ/(C_κ + C_φ)).</p>`);}
+ if(m.ex.startsWith('1536')){const R1c=1.2e-6/(2.96*ser);notes.push(`<p class="${m.ex==='1536'?'bad':'good'}">Το βιβλίο γράφει R_μ = 44,59 Ω. Από τον ίδιο τύπο R_μ = T1/(2,96·C_κC_φ/(C_κ + C_φ)) = <b>${eng(R1c,'Ω',4)}</b>: λάθος ×100. ${m.ex==='1536'?'Με 45 Ω το μέτωπο βγαίνει '+eng(ex.T1,'s',3)+' αντί για 1,2 μs.':'Με τη σωστή τιμή βγαίνει 1,2/50.'}</p>`);}
+ if(m.marx){let fired=0;for(let k=1;k<=m.marx;k++){const g=rawSeries('I:SG'+k);if(g&&g.y.some(x=>Math.abs(x)>1e-3*U/m.R1))fired++;}
+  notes.push(`<p class="${fired===m.marx?'good':'bad'}">${fired===m.marx?'✓ Άναψαν και τα '+m.marx+' διάκενα.':'✗ Άναψαν '+fired+' από τα '+m.marx+' διάκενα.'} Η R_μ μπήκε ενιαία (3·R′_μ = ${eng(m.R1,'Ω',4)}), οι R′_ε = ${eng(m.R2/m.marx,'Ω',4)} σε κάθε βαθμίδα.</p>`);}
+ return h+notes.join('')+'<p class="muted small">Οι τύποι του βιβλίου είναι προσεγγίσεις για C_κ ≫ C_φ και R_ε ≫ R_μ. Η ακριβής λύση είναι ανεξάρτητη από τον λύτη.</p>';}
+// 3.11: lossy line. The exact step response of a semi-infinite line with series R′ only (Heaviside): v/V₀ = e^(−aT) + aT·∫₀^U e^(−aT·cosh u)·I₁(aT·sinh u) du,
+// a = R′/(2L′), T = x/v, U = arccosh(t/T) (s = T·cosh u removes the singularity of the textbook form)
+function besI1e(x){const ax=Math.abs(x);let r;if(ax<3.75){const y=(x/3.75)**2;r=ax*(.5+y*(.87890594+y*(.51498869+y*(.15084934+y*(.02658733+y*(.00301532+y*.00032411))))))*Math.exp(-ax);}
+ else{const y=3.75/ax;r=(.39894228+y*(-.03988024+y*(-.00362018+y*(.00163801+y*(-.01031555+y*(.02282967+y*(-.02895312+y*(.01787654-y*.00420059))))))))/Math.sqrt(ax);}return x<0?-r:r;}
+function heaviside(aT,tT){if(tT<1)return 0;const U=Math.acosh(tT),n=200,hh=U/n;let s=0;
+ for(let k=0;k<=n;k++){const u=k*hh,x=aT*Math.sinh(u),f=besI1e(x)*Math.exp(x-aT*Math.cosh(u));s+=f*(k===0||k===n?1:k%2?4:2);}return Math.exp(-aT)+aT*s*hh/3;}
+function lossTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.tau)return '';const T=m.tau,aT=m.R/(2*m.Z),open=m.end==='open',G=open?2:1,x=m.R/(4*m.N*m.Z);
+ const lam=m.Rp>0?2*m.Z/m.Rp:Infinity,done=s.t>=m.dur*.98;
+ let h=`<div class="tm"><span class="badge">γραμμή RLC</span> Z = ${eng(m.Z,'Ω')} · ℓ = ${eng(m.len,'m')} · τ = ${eng(T,'s')} · R′ = ${eng(m.Rp*1e3,'Ω/km')} · R = ${eng(m.R,'Ω')} · N = ${m.N}</div><ul class="eqs">
+  <li>Απόσβεση του μετώπου: e^(−R′ℓ/(2Z)) = e^(−ℓ/λ) = <b>${fmt(Math.exp(-aT),5)}</b>, λ = 2Z/R′ = ${Number.isFinite(lam)?eng(lam,'m'):'∞'} (σχέση 7.88)</li>
+  <li>Μοντέλο με ${m.N} τμήματα: το μέτωπο περνά ${2*m.N} αντιστάσεις R/(2N) (οι ακριανές R/(4N)) και σβήνει ως (1 + R/(4NZ))^(−2N) = <b>${fmt((1+x)**(-2*m.N),5)}</b>. Για N → ∞ δίνει το e^(−R/(2Z))</li>
+  <li>Πίσω από το μέτωπο: v(x,t)/V₀ = e^(−aT) + aT·∫ e^(−as)·I₁(a√(s² − T²))/√(s² − T²) ds, a = R′/(2L′) = ${fmt(aT/T,4)} s⁻¹ (λύση του Heaviside για γραμμή με R′, χωρίς G′)</li>
+  ${open?'<li>Ανοιχτό άκρο με ιδανική πηγή: v_τέλος = 2·v(ℓ, t) από το τ ως το 3τ, όταν φτάνει το κύμα που ανακλάστηκε στην πηγή</li>':'<li>Συνέχεια σε γραμμή ίδιας R′: στον κόμβο η τάση είναι η v(ℓ, t) της ημιάπειρης γραμμής ως το 7τ</li>'}</ul>`;
+ if(!done)return h+'<p class="muted small">Τρέξε ως το τέλος για τη σύγκριση.</p>';
+ const v=rawSeries('V2:T1'),at=tq=>{const i=v.t.findIndex(x=>x>=tq);return i>0?v.y[i-1]+(v.y[i]-v.y[i-1])*(tq-v.t[i-1])/(v.t[i]-v.t[i-1]):NaN;};
+ if(m.src==='step'){const fs=open?[1.005,1.5,1.99,2.9]:[1.005,2,4,5.9];
+  h+=cmpRows(fs.map(f=>[`v στο ${fmt(f,4)}·τ`,G*m.V*heaviside(aT,f),at(f*T),'V']));
+  return h+`<p class="muted small">Το μοντέλο με συγκεντρωμένες αντιστάσεις συγκλίνει στην κατανεμημένη γραμμή περίπου ως 1/N: με R/(4NZ) = ${fmt(x,3)} το σφάλμα στο μέτωπο είναι περίπου ${fmt(100*Math.abs((1+x)**(-2*m.N)/Math.exp(-aT)-1),2)} %. Η R′ εδώ είναι σταθερή: το επιδερμικό φαινόμενο και το corona, που πλαταίνουν το μέτωπο στις πραγματικές γραμμές, δεν μοντελοποιούνται.</p>`;}
+ // impulse: Duhamel with the exact step response g(θ) = G·v(ℓ, τ + θ)/V₀ and du/dt of the source at the grid points (trapezoid, 5 ns)
+ const w=s.net.compInfo.get('V1')?.wave,n=4000,d=5e-9,gr=new Float64Array(n),du=new Float64Array(n);for(let k=0;k<n;k++){gr[k]=G*heaviside(aT,1+k*d/T);const e1=d*1e-4;du[k]=(P.waveAt(w,k*d+e1)-P.waveAt(w,Math.max(0,k*d-e1)))/(k?2*e1:e1);}   // du/dt at the grid points (one-sided at 0⁺)
+ const ve=new Float64Array(n);for(let i=0;i<n;i++){let a=0;for(let j=0;j<=i;j++)a+=gr[i-j]*du[j]*(j===0||j===i?.5:1);ve[i]=a*d;}
+ const te=Array.from({length:n},(_,k)=>T+k*d),qe=impulseMeasure(te,Array.from(ve),T,'iec'),i0=v.t.findIndex(x=>x>=T-1e-9),qs=impulseMeasure(v.t.slice(i0),v.y.slice(i0),T,'iec');
+ h+=cmpRows([['κορυφή στο τέλος',qe.pk,qs.pk,'V'],['T1 στο τέλος (από την άφιξη)',qe.T1,qs.T1,'s'],['χωρίς απώλειες: '+(open?'2·':'')+'V_p',G*m.V,G*m.V,'V']]);
+ return h+`<p class="muted small">Ακριβής λύση: συνέλιξη της βηματικής απόκρισης της κατανεμημένης γραμμής με το du/dt της πηγής. Με σταθερή R′ το μέτωπο σχεδόν δεν αλλάζει σχήμα: μικραίνει κατά e^(−R/(2Z)) και η ουρά μακραίνει λίγο.</p>`;}
+// 3.11: volt–time curve from the disruptive-effect criterion D = ∫ (|u| − U₀)^k dt, integrated here on a fine grid of the analytic source (independent of the solver)
+function vtBreak(u,U0,k,D,tEnd,n=20000){const h=tEnd/n;let a=0,f0=0;for(let i=1;i<=n;i++){const t=i*h,x=Math.abs(u(t))-U0,f=x>0?x**k:0;if(x<=0){a=0;f0=0;continue;}const da=(f0+f)/2*h;if(a+da>=D){const th=(D-a)/da;return t-h+th*h;}a+=da;f0=f;}return NaN;}
+function vtTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.U0)return '';const e=s.net.compInfo.get('SG1')?.main,k=m.k,U0=m.U0,D=m.D,ramp=m.src==='ramp',w=s.net.compInfo.get('V1')?.wave;
+ const Du=k===0?'s':k===1?'V·s':'V^'+k+'·s',tbR=S2=>U0/S2+((k+1)*D/S2**k)**(1/(k+1));
+ let h=`<div class="tm"><span class="badge">τάση–χρόνος</span> U₀ = ${eng(U0,'V')} · k = ${k} · D = ${fmt(D,4)} ${Du} · ${ramp?'ράμπα '+eng(m.S*1e-6,'V/μs'):'κρουστική 1,2/50, '+eng(m.Vpk,'V')}</div><ul class="eqs">
+  <li>Κριτήριο: διάσπαση όταν ∫ (|u| − U₀)^k dt, από τη στιγμή που η τάση ξεπερνά το U₀, φτάσει το D. ${k===0?'Με k = 0 είναι σταθερή καθυστέρηση D μετά το U₀.':k===1?'Με k = 1 είναι ο νόμος ίσων επιφανειών του Kind: το εμβαδόν πάνω από το U₀.':'Με k > 1 βαραίνει περισσότερο η υπέρταση πάνω από το U₀.'}</li>
+  ${ramp?`<li>Ράμπα u = S·t: t_d = U₀/S + ((k+1)·D/S^k)^(1/(k+1)) = <b>${eng(tbR(m.S),'s',5)}</b>, τάση διάσπασης S·t_d = <b>${eng(m.S*tbR(m.S),'V',5)}</b></li>`:'<li>Κρουστική: το ολοκλήρωμα υπολογίζεται αριθμητικά πάνω στην αναλυτική κυματομορφή της πηγής</li>'}</ul>`;
+ const tEnd=ramp?20*U0/m.S:60e-6,u=ramp?(t=>m.S*t):(t=>P.waveAt(w,t)),tbE=ramp?tbR(m.S):vtBreak(u,U0,k,D,tEnd);
+ // the curve: ramps of 50…50 000 kV/μs, or impulses of 1,02…5 × U₀ (voltage at breakdown on the front, the peak on the tail)
+ const pts=[];if(ramp){for(let q=0;q<=40;q++){const S2=5e10*Math.pow(1e3,q/40),t=tbR(S2);pts.push([t,S2*t]);}}
+ else{const wm=P.waveMeasure({kind:'dexp',n:1,tau1:w.tau1,tau2:w.tau2,eta:1,I0:1,t0:0},'tp');for(let q=0;q<=40;q++){const A=U0*(1.02+3.98*q/40),f=t=>A/m.Vpk*P.waveAt(w,t),t=vtBreak(f,U0,k,D,60e-6,6000);if(Number.isFinite(t))pts.push([t,t<wm.tp?f(t):A]);}}
+ const done=s.t>=m.dur*.98,tOn=e?.on?e.tOn:NaN,uOn=Number.isFinite(tOn)?u(tOn):NaN;
+ if(pts.length>1){const W=560,H=200,x0=Math.log10(Math.min(...pts.map(p=>p[0]))),x1=Math.log10(Math.max(...pts.map(p=>p[0]))),y1=Math.max(...pts.map(p=>p[1]))*1.05,y0=.9*U0,X=t=>34+(W-40)*(Math.log10(t)-x0)/((x1-x0)||1),Y=v=>6+(H-28)*(1-(v-y0)/(y1-y0));
+  const cur='M'+pts.map(p=>`${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' L'),u0=`<line class="diag" x1="34" x2="${W-6}" y1="${Y(U0).toFixed(1)}" y2="${Y(U0).toFixed(1)}"/>`;
+  const dot=Number.isFinite(tOn)?`<circle cx="${X(tOn).toFixed(1)}" cy="${Y(ramp||tOn<P.waveMeasure({kind:'dexp',n:1,tau1:w.tau1,tau2:w.tau2,eta:1,I0:1,t0:0},'tp').tp?uOn:m.Vpk).toFixed(1)}" r="3"/>`:'';
+  const tk=[x0,x1].map((lx,i)=>`<text x="${X(10**lx)}" y="${H-8}" text-anchor="${i?'end':'start'}">${eng(10**lx,'s',2)}</text>`).join('')+`<text x="30" y="${Y(U0)+3}" text-anchor="end">U₀</text><text x="30" y="${Y(y1/1.05)+3}" text-anchor="end">${eng(y1/1.05,'V',2)}</text>`;
+  h+=`<svg class="bfchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Καμπύλη τάσης–χρόνου"><rect x="34" y="6" width="${W-40}" height="${H-28}" class="frame"/>${u0}<path class="map" d="${cur}"/>${dot}${tk}<text x="${(W+34)/2}" y="${H-1}" text-anchor="middle">χρόνος ως τη διάσπαση (λογαριθμικά)</text></svg>
+   <p class="muted small">Η καμπύλη: ${ramp?'ράμπες από 50 ως 50 000 kV/μs':'κρουστικές 1,2/50 από 1,02 ως 5 × U₀: η τάση τη στιγμή της διάσπασης στο μέτωπο, η κορυφή στην ουρά'}. Η κουκκίδα είναι η προσομοίωση.</p>`;}
+ if(!done)return h+'<p class="muted small">Τρέξε ως το τέλος για τη σύγκριση.</p>';
+ if(!Number.isFinite(tOn))return h+`<p class="${Number.isFinite(tbE)?'bad':'good'}">Το διάκενο δεν διασπάστηκε.${Number.isFinite(tbE)?' Το κριτήριο δίνει διάσπαση στο '+eng(tbE,'s',4)+'.':' Ούτε το κριτήριο δίνει διάσπαση: η τάση δεν μένει αρκετά πάνω από το U₀.'}</p>`;
+ return h+cmpRows([['χρόνος ως τη διάσπαση t_d',tbE,tOn,'s'],['τάση τη στιγμή της διάσπασης',u(tbE),uOn,'V']]);}
 function formulaTheory(t){
  if(t.topology==='sampling')return samplingTheory();
  if(t.topology==='dc_drive')return dcDriveTheory();
@@ -1194,6 +1269,9 @@ function formulaTheory(t){
  if(t.topology==='arrester')return arTheory();
  if(t.topology==='marx')return marxTheory();
  if(t.topology==='chop')return chopTheory();
+ if(t.topology==='hv153')return hv153Theory();
+ if(t.topology==='lossline')return lossTheory();
+ if(t.topology==='voltime')return vtTheory();
  if(t.topology==='srm')return srmTheory();
  if(t.topology==='polyphase')return polyTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];

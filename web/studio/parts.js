@@ -127,9 +127,12 @@
    params:[sel('spec','Δεδομένα',[['zt','Z και χρόνος διάδοσης τ'],['zl','Z, μήκος και ταχύτητα'],['lc','L′, C′ ανά μέτρο και μήκος']],'zt',{hint:'Γραμμή χωρίς απώλειες. Ο ένας αγωγός από a1 σε a2, ο άλλος (ή η γη) από b1 σε b2. Το βήμα του λύτη μένει ≤ τ.'}),
     num('Z','Κυματική αντίσταση Z','Ω',400,{show:p=>p.spec!=='lc'}),num('tau','Χρόνος διάδοσης τ','s',10e-6,{show:p=>p.spec==='zt'}),
     num('len','Μήκος','m',3000,{show:p=>p.spec!=='zt'}),num('vel','Ταχύτητα διάδοσης','m/s',3e8,{show:p=>p.spec==='zl',hint:'Εναέρια γραμμή περίπου 3·10⁸ m/s, καλώδιο c/√ε_r.'}),
-    num('Lp','Αυτεπαγωγή ανά μέτρο L′','H/m',1.333e-6,{show:p=>p.spec==='lc'}),num('Cp','Χωρητικότητα ανά μέτρο C′','F/m',8.333e-12,{show:p=>p.spec==='lc'})],
+    num('Lp','Αυτεπαγωγή ανά μέτρο L′','H/m',1.333e-6,{show:p=>p.spec==='lc'}),num('Cp','Χωρητικότητα ανά μέτρο C′','F/m',8.333e-12,{show:p=>p.spec==='lc'}),
+    num('Rt','Αντίσταση σειράς όλης της γραμμής R','Ω',0,{show:p=>p.spec==='zt',hint:'Απώλειες (3.11): η R μπαίνει συγκεντρωμένη, R/4 στα άκρα και R/2 στη μέση κάθε τμήματος (Dommel). Το μέτωπο σβήνει περίπου ως e^(−R/(2Z)). 0 = χωρίς απώλειες.'}),
+    num('Rp','Αντίσταση σειράς ανά μέτρο R′','Ω/m',0,{show:p=>p.spec!=='zt',hint:'Απώλειες (3.11): R = R′·μήκος, συγκεντρωμένη R/4 στα άκρα και R/2 στη μέση κάθε τμήματος (Dommel). Το μέτωπο σβήνει περίπου ως e^(−R′x/(2Z)). 0 = χωρίς απώλειες.'}),
+    num('nsec','Τμήματα για τις απώλειες','',1,{show:p=>parseEng(p.spec==='zt'?p.Rt:p.Rp)>0,hint:'Η γραμμή χωρίζεται σε N ίσα τμήματα, το καθένα με R/N. Με R/(4N) ≪ Z το μοντέλο πλησιάζει την κατανεμημένη γραμμή. Το βήμα του λύτη μένει ≤ τ/N.'})],
    value:p=>p.Z,unit:'Ω',
-   draw:()=>'<path d="M-60,-20 H-34 M34,-20 H60"/><path class="thin" d="M-60,20 H-34 M34,20 H60"/><rect class="block" x="-34" y="-26" width="68" height="52" rx="5"/><path class="thin" d="M-26,-20 H26"/><path class="thin" stroke-dasharray="3 3" d="M-26,20 H26"/>'+tx('Z, τ',0,4,'bsm')},
+   draw:p=>'<path d="M-60,-20 H-34 M34,-20 H60"/><path class="thin" d="M-60,20 H-34 M34,20 H60"/><rect class="block" x="-34" y="-26" width="68" height="52" rx="5"/><path class="thin" d="M-26,-20 H26"/><path class="thin" stroke-dasharray="3 3" d="M-26,20 H26"/>'+tx(parseEng(p?.spec==='zt'?p?.Rt:p?.Rp)>0?'Z, τ, R':'Z, τ',0,4,'bsm')},
   KL:{name:'Συζευγμένα πηνία (N×N)',prefix:'K',group:'Μαγνητικά',pins:p=>portPins(nPorts(p)),box:p=>portBox(nPorts(p)),
    params:[sel('nw','Τυλίγματα',[['2','2'],['3','3'],['4','4']],'2',{show:p=>!String(p.Lmat||'').trim()}),
     num('L1','L₁','H',1e-3,{show:p=>!String(p.Lmat||'').trim()}),num('L2','L₂','H',1e-3,{show:p=>!String(p.Lmat||'').trim()}),
@@ -157,13 +160,17 @@
   // spark gap (3.10): closes when |v| reaches the breakdown voltage U_b, or at a trigger time (trigatron); conducts
   // through the arc resistance; opens at a current zero, below I_ext, or never. Off: R_off.
   SG:{name:'Σπινθηριστής (διάκενο)',prefix:'SG',group:'Παθητικά',pins:{a:[-30,0],b:[30,0]},box:[-14,-11,28,22],
-   params:[num('Ub','Τάση διάσπασης U_b','V',100e3,{hint:'Κλείνει όταν |v| ≥ U_b, με οποιαδήποτε πολικότητα. Χωρίς καθυστέρηση διάσπασης.'}),
+   params:[sel('vt','Διάσπαση',[['inst','Ακαριαία στο U_b'],['de','Με καμπύλη τάσης–χρόνου (U₀, k, D)']],'inst',{hint:'Καμπύλη τάσης–χρόνου (3.11): κλείνει όταν ∫ (|v| − U₀)^k dt, πάνω από το U₀, φτάσει το D (disruptive effect). k = 0: σταθερή καθυστέρηση D δευτερόλεπτα πάνω από το U₀. k = 1: νόμος ίσων επιφανειών (Kind).'}),
+    num('Ub','Τάση διάσπασης U_b','V',100e3,{show:p=>p.vt!=='de',hint:'Κλείνει όταν |v| ≥ U_b, με οποιαδήποτε πολικότητα. Χωρίς καθυστέρηση διάσπασης.'}),
+    num('U0','Τάση έναρξης U₀','V',80e3,{show:p=>p.vt==='de',hint:'Κάτω από το U₀ δεν διασπάται ποτέ (η στατική τάση διάσπασης). Όταν η τάση πέσει κάτω από το U₀, το ολοκλήρωμα μηδενίζεται.'}),
+    num('kde','Εκθέτης k','',1,{show:p=>p.vt==='de'}),
+    num('Dde','Σταθερά D','V^k·s',5e-3,{show:p=>p.vt==='de',hint:'Σε V^k·s: με k = 1 σε V·s (5·10⁻³ V·s = 5 kV·μs), με k = 0 σε s. Με ράμπα S διασπάται στο U₀ + ((k+1)·D·S^k)^(1/(k+1)).'}),
     txt('trig','Έναυση (trigatron) τη στιγμή','',{hint:'Π.χ. «2u». Κλείνει τότε όποια κι αν είναι η τάση, μία φορά. Κενό: μόνο με την τάση διάσπασης.'}),
     num('Rarc','Αντίσταση τόξου','Ω',.1),
     sel('ext','Σβήνει',[['zero','Στον μηδενισμό του ρεύματος'],['iext','Όταν |i| < I_ext'],['never','Ποτέ (μένει κλειστός)']],'zero',{hint:'Μετά τη σβέση ξανακλείνει αν η τάση ξεπεράσει πάλι το U_b.'}),
     num('Iext','Ρεύμα σβέσης I_ext','A',1,{show:p=>p.ext==='iext'}),
     num('Roff','R_off (ανοιχτός)','Ω',1e10)],
-   value:p=>p.Ub,unit:'V',
+   value:p=>p.vt==='de'?p.U0:p.Ub,unit:'V',
    draw:p=>'<path d="M-30,0 H-11 M11,0 H30"/><circle cx="-6.5" cy="0" r="4.5"/><circle cx="6.5" cy="0" r="4.5"/>'+(String(p.trig||'').trim()?'<path class="thin" d="M0,10 V4 M-3,7 L0,4 L3,7"/>':'')},
   CPL:{name:'Φορτίο σταθερής ισχύος',prefix:'P',group:'Φορτία',pins:{p:[0,-30],n:[0,30]},box:[-12,-17,24,34],
    params:[num('P','Ισχύς','W',1000,{signed:true}),num('Vmin','Τάση κάτω από την οποία γίνεται ωμικό','V',5),txt('sched','P(t)','',{hint:SCHED})],
@@ -507,7 +514,9 @@
   if(p.spec==='lc'){const L=num(p.Lp),C=num(p.Cp),l=num(p.len);if(!(L>0&&C>0&&l>0))return {err:'L′, C′ και μήκος πρέπει να είναι θετικά.'};Z=Math.sqrt(L/C);tau=l*Math.sqrt(L*C);}
   else if(p.spec==='zl'){Z=num(p.Z);const l=num(p.len),v=num(p.vel);if(!(l>0&&v>0))return {err:'Μήκος και ταχύτητα πρέπει να είναι θετικά.'};tau=l/v;}
   else{Z=num(p.Z);tau=num(p.tau);}
-  if(!(Z>0))return {err:'Η κυματική αντίσταση πρέπει να είναι θετική.'};if(!(tau>0))return {err:'Ο χρόνος διάδοσης πρέπει να είναι θετικός.'};return {Z,tau};}
+  if(!(Z>0))return {err:'Η κυματική αντίσταση πρέπει να είναι θετική.'};if(!(tau>0))return {err:'Ο χρόνος διάδοσης πρέπει να είναι θετικός.'};
+  const R=p.spec==='zt'?(num(p.Rt)||0):(num(p.Rp)||0)*num(p.len);if(!(R>=0))return {err:'Η αντίσταση σειράς δεν μπορεί να είναι αρνητική.'};
+  const N=R>0?Math.round(num(p.nsec)||1):1;if(!(N>=1&&N<=1000))return {err:'Τα τμήματα πρέπει να είναι από 1 ως 1000.'};return {Z,tau,R,N};}
  // the waveform of a lightning-current part: {kind, n, tau1, tau2, eta, I0, t0, T1, T2}
  function lightningWave(p){const I0=parseEng(p.Ipk)||0,t0=Math.max(0,parseEng(p.t0)||0),pre=HEIDLER[p.shape];
   if(pre)return {kind:'heidler',...pre,I0,t0};

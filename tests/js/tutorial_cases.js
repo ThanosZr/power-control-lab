@@ -120,4 +120,14 @@ for(const [nm,o] of [['tail',{}],['r0',{Rc:'0'}],['r50',{Rc:'50'}],['front',{cho
  // the chop instant: the last sample before the chopping gap carries current
  let tc=null;if(m.chop!=='none'){const g=ringSeries(s,'I:SG2'),j=g.y.findIndex(x=>Math.abs(x)>1);if(j>0)tc=g.t[j-1];}
  out['ch_'+nm]={vmax:v.y[k],tmax:v.t[k],vmin:mn,tc,steps:s.steps,warn:s.net.warnings,meta:m};}
+// 3.11: the book's exercises 15.3.x (output and low-voltage arm), the lossy line at fixed instants and its far-end impulse, the gap's volt–time point
+for(const ex of ['1531','1532a','1532c','1533','1535','1536','1536c','1537']){const pr=build('hv153',{ex}),m=pr.meta,s=sim(pr,m.dur),v=ringSeries(s,'V:'+m.out);
+ let fired=0;if(m.marx)for(let k=1;k<=m.marx;k++){if(ringSeries(s,'I:SG'+k).y.some(x=>Math.abs(x)>1))fired++;}
+ out['hv_'+ex]={...impulse(v,m.tf,'iec'),lv:m.div?Math.max(...ringSeries(s,'V:CL').y):null,fired,steps:s.steps,warn:s.net.warnings,meta:m};}
+for(const [nm,o] of [['open4',{}],['open1',{nsec:'1'}],['open16',{nsec:'16'}],['semi4',{end:'semi'}],['r0',{Rp:'0'}],['r5',{Rp:'5',nsec:'16'}],['li4',{src:'li'}],['li0',{src:'li',Rp:'0'}]]){
+ const pr=build('lossline',o),m=pr.meta,s=sim(pr,m.dur),v=ringSeries(s,'V2:T1'),at=tq=>{const i=v.t.findIndex(x=>x>=tq);return v.y[i-1]+(v.y[i]-v.y[i-1])*(tq-v.t[i-1])/(v.t[i]-v.t[i-1]);};
+ const fs=m.end==='open'?[1.005,1.5,1.99,2.9]:[1.005,2,4,5.9],i0=v.t.findIndex(x=>x>=m.tau-1e-9);
+ out['ll_'+nm]={at:fs.map(f=>[f,at(f*m.tau)]),imp:m.src==='li'?impulse({t:v.t.slice(i0),y:v.y.slice(i0)},m.tau,'iec'):null,warn:s.net.warnings,meta:m};}
+for(const [nm,o] of [['r1',{}],['r500',{S:'500'}],['r5000',{S:'5000'}],['k0',{k:'0',S:'500'}],['k2',{k:'2',S:'5000'}],['li16',{src:'li'}],['li25k0',{src:'li',amp:'2.5',k:'0'}],['li11k1',{src:'li',amp:'1.1'}],['li11k2',{src:'li',amp:'1.1',k:'2'}]]){
+ const pr=build('voltime',o),m=pr.meta,s=sim(pr,m.dur),e=s.net.compInfo.get('SG1').main;out['vt_'+nm]={on:e.on,tOn:e.on?e.tOn:null,vmax:Math.max(...ringSeries(s,'V:SG1').y),warn:s.net.warnings,meta:m};}
 out.ms=Date.now()-t0;console.log(JSON.stringify(out,null,1));})();

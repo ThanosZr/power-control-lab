@@ -369,6 +369,38 @@ class StudioSimulator(unittest.TestCase):
         self.assertAlmostEqual(r['i'], r['v'] / 100.1, delta=1e-6 * r['i'])
         self.assertIn('διάσπασης', o['bad'])
 
+    def test_lossy_line(self):
+        # 3.11: the lossy line (R in N sections, Dommel) is exactly the cascade of lossless halves with R/(4N), R/(2N), R/(4N) it stands
+        # for, settles to the DC divider, and converges to the distributed line (Heaviside's step response, computed here) about as 1/N
+        from scipy import integrate, special
+        o = self.o['tl311']
+        for c, l in (('c1', 'l1'), ('c4', 'l4')):
+            for a, b in zip(o[c], o[l]):
+                self.assertAlmostEqual(a, b, delta=1e-5)                           # GMIN at the cascade's inner nodes
+        self.assertAlmostEqual(o['l4'][-1], o['dc'], delta=1e-5)
+        self.assertTrue(o['steps'])
+        self.assertIn('αρνητική', o['bad'])
+        def heav(aT, tT):
+            g = lambda u: math.exp(aT * (math.sinh(u) - math.cosh(u))) * special.i1e(aT * math.sinh(u))
+            return math.exp(-aT) + aT * integrate.quad(g, 0, math.acosh(tT), epsabs=1e-13, epsrel=1e-11, limit=200)[0] if tT >= 1 else 0.0
+        for R, runs in (('R100', o['semi']['R100']), ('R400', o['semi']['R400'])):
+            aT = float(R[1:]) / 800
+            err = [max(abs(v - heav(aT, t / 10e-6)) for t, v in run) for run in runs]
+            for e, N in zip(err, (1, 4, 16)):
+                self.assertLess(e, 0.6 * float(R[1:]) / (4 * N * 400), msg=R)
+            self.assertLess(err[2], err[1] / 3, msg=R)
+            self.assertLess(err[1], err[0] / 3, msg=R)
+
+    def test_volt_time_gap(self):
+        # 3.11: disruptive effect D = ∫ (|v| − U₀)^k dt. On a ramp S·t the gap closes at t_d = U₀/S + ((k+1)·D/S^k)^(1/(k+1)),
+        # also when t_d falls on a step boundary (k = 0 and S = 10¹² for k = 1)
+        o = self.o['vt311']
+        for r in o['ramps']:
+            k, S, D = r['k'], r['S'], r['D']
+            td = 80e3 / S + ((k + 1) * D / S ** k) ** (1 / (k + 1))
+            self.assertAlmostEqual(r['tOn'], td, delta=2e-9 * td, msg=str(r))
+        self.assertIn('D', o['bad'])
+
     def test_surge_arrester(self):
         # 3.9: the nonlinear circuit solved here by bisection: 1 MV = 400·i + v with i = I_ref·(v/U_ref)^α, and the table read
         # as straight lines in log-log; the arrester is symmetric; a ramp source behind Z

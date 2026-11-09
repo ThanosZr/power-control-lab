@@ -101,4 +101,18 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
  const ch=await p.evaluate(()=>({good:[...document.querySelectorAll('#theory table.cmp td.good')].length,text:document.querySelector('#theory').textContent}));
  ok(ch.good>=2&&/IEC 60076-3: έως 30 %/.test(ch.text)&&/✓ Υπερύψωση/.test(ch.text),'chop card: undershoot under 30 % with 50 Ω ('+ch.good+' rows)');
  await p.screenshot({path:OUT+'/w8_chop.png'});
+ // 10) 3.11: the book's 15.3.5 (book, exact, simulation; 66.5 kV is not enough), the lossy line against Heaviside's solution,
+ // the gap's volt–time point on its curve, and the impulse-design template in the math panel of a high-voltage tutorial
+ const card=async(id,o)=>{await p.evaluate(([id,o])=>window.PCL.loadTutorial(id,o),[id,o]);await p.waitForTimeout(500);
+  await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.stopT-S.sim.t);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(400);
+  return p.evaluate(()=>({good:[...document.querySelectorAll('#theory table.cmp td.good')].length,text:document.querySelector('#theory').textContent,svg:!!document.querySelector('#theory svg.bfchart')}));};
+ const hv=await card('hv153',{ex:'1535'});
+ ok(hv.good>=6&&/Ακριβής λύση/.test(hv.text)&&/χρειάζεται U_ac/.test(hv.text)&&/Μέγιστο δοκίμιο/.test(hv.text),'15.3.5 card: three columns, required U_ac, largest test object ('+hv.good+' good)');
+ await p.screenshot({path:OUT+'/w9_hv153.png'});
+ const ll=await card('lossline',{});ok(ll.good>=4&&/Heaviside/.test(ll.text),'lossy line card: simulation = distributed line ('+ll.good+' good)');
+ const vt=await card('voltime',{});ok(vt.good>=2&&vt.svg&&/t_d = U₀\/S/.test(vt.text),'volt–time card: curve and breakdown point ('+vt.good+' good)');
+ await p.screenshot({path:OUT+'/w10_voltime.png'});
+ await p.evaluate(()=>window.PCL.loadTutorial('hv153',{ex:'1532a'}));await p.waitForTimeout(2500);
+ const mt=await p.$$eval('#math-tpl option',o=>o.map(x=>x.value));ok(mt[0]==='hv_impulse_design'&&mt.includes('hv_two_layer')&&mt.includes('hv_risk'),'HV templates in the math panel '+mt.slice(0,4));
+ const kv=await p.$eval('#math .kv',e=>e.innerText).catch(()=>'');ok(/297[,.]2/.test(kv)&&/4[,.]13/.test(kv),'impulse design from the tutorial: exact R_μ, R_ε ('+kv.replace(/\s+/g,' ').slice(0,90)+')');
  console.log('ERR',JSON.stringify(errs.slice(0,5)));console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})().catch(e=>{console.error('FAILED',e);process.exit(1);});

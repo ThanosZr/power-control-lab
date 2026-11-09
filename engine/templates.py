@@ -35,7 +35,8 @@ SCHEMA = 'pcl-template-1'
 FUNCS = {'sqrt': sp.sqrt, 'sin': sp.sin, 'cos': sp.cos, 'tan': sp.tan, 'asin': sp.asin, 'acos': sp.acos,
          'atan': sp.atan, 'atan2': sp.atan2, 'exp': sp.exp, 'log': sp.log, 'log10': lambda x: sp.log(x, 10),
          'abs': sp.Abs, 'Abs': sp.Abs, 'min': sp.Min, 'max': sp.Max, 'Min': sp.Min, 'Max': sp.Max,
-         'floor': sp.floor, 'ceiling': sp.ceiling, 'sign': sp.sign, 'pi': sp.pi}
+         'floor': sp.floor, 'ceiling': sp.ceiling, 'sign': sp.sign, 'pi': sp.pi,
+         'erf': sp.erf, 'erfc': sp.erfc}             # erf, erfc: normal distributions (3.11, insulation coordination)
 # what the parser's generated code may call (with evaluate=False it builds Add/Mul/Pow/relations)
 SAFE = {'Integer': sp.Integer, 'Float': sp.Float, 'Symbol': sp.Symbol, 'Rational': sp.Rational, 'Add': sp.Add, 'Mul': sp.Mul,
         'Pow': sp.Pow, 'Lt': sp.Lt, 'Le': sp.Le, 'Gt': sp.Gt, 'Ge': sp.Ge, 'Eq': sp.Eq, 'Ne': sp.Ne,

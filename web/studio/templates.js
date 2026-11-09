@@ -18,7 +18,7 @@
   this.data=this.data.filter(x=>x.id!==t.id);this.data.push(t);return t;};
  // every solution source for a tutorial: code templates, data templates, user templates
  reg.allFor=function(tid){return [...this.list.filter(t=>t.tutorial===tid).map(t=>({kind:'code',id:t.id,title:t.title,src:'exercises/'+t.id+'.js',code:t})),
-  ...this.data.filter(t=>t.tutorial===tid||t.any)];};
+  ...this.data.filter(t=>(Array.isArray(t.tutorial)?t.tutorial.includes(tid):t.tutorial===tid)||t.any)];};   // a template may serve several tutorials (3.11)
  reg.load=async function(base='studio/exercises/'){const out=[];try{const idx=await (await fetch(base+'index.json')).json();
   for(const f of idx.templates||[]){try{const t=await (await fetch(base+f)).json();out.push(this.registerData(t,'exercises/'+f));}catch(e){console.warn('template',f,e.message);}}}catch(e){console.warn('templates index',e.message);}return out;};
  // values for the inputs: user override > circuit/tutorial binding > template default

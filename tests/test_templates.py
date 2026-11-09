@@ -161,6 +161,50 @@ class DataTemplates(unittest.TestCase):
         self.assertAlmostEqual(dcm['M'], 2 / (1 + (1 + 4 * K / .25) ** .5))
         self.assertNotIn('dV_o', dcm)                                           # CCM-only steps are skipped
 
+    def test_high_voltage_calculators(self):
+        # 3.11: the high-voltage pack. Impulse design: the book's formulas give 15.3.2α (297 Ω, 4151 Ω); the exact R_μ, R_ε reproduce
+        # the roots α₁, α₂ of 1.2/50 (checked here from the quadratic), and η is the exact (3.32), lower than C_κ/(C_κ + C_φ)
+        r = template_solve({'template': load('hv_impulse_design.template.json'), 'values': {'C_k': 15e-9, 'C_f': 1.5e-9, 'U_DC': 230e3}})
+        v = r['values']
+        self.assertAlmostEqual(v['R_mb'], 297.3, delta=.05)
+        self.assertAlmostEqual(v['R_eb'], 4151.1, delta=.1)
+        R1, R2, C1, C2 = v['R_m'], v['R_e'], 15e-9, 1.5e-9
+        a = 1 / (R1 * C1) + 1 / (R1 * C2) + 1 / (R2 * C1)
+        b = 1 / (R1 * R2 * C1 * C2)
+        q = math.sqrt(a * a / 4 - b)
+        self.assertAlmostEqual(a / 2 - q, 14659.1, delta=1e-6)
+        self.assertAlmostEqual(a / 2 + q, 2468927.0, delta=1e-3)
+        a1, a2 = a / 2 - q, a / 2 + q
+        t1 = math.log(a2 / a1) / (a2 - a1)
+        self.assertAlmostEqual(v['eta'], (math.exp(-a1 * t1) - math.exp(-a2 * t1)) / (R1 * C2 * (a2 - a1)), places=12)
+        self.assertLess(v['eta'], v['eta_b'])
+        self.assertTrue(all(c['ok'] for c in r['checks']))
+        no = template_solve({'template': load('hv_impulse_design.template.json'), 'values': {'C_k': 1e-9, 'C_f': 50e-9}})
+        self.assertFalse(no['checks'][0]['ok'])                                   # C_φ > (a²/(4b) − 1)·C_κ ≈ 41.6·C_κ: no type-β 1.2/50
+        # two layers: exercise 15.5.11 (36.1 and 5.55 kV/cm); with 21 kV/cm the air breaks down, against the book's «επαρκεί»
+        r = template_solve({'template': load('hv_two_layer.template.json'), 'values': {}})
+        self.assertAlmostEqual(r['values']['E_1c'], 36.11, delta=.01)
+        self.assertAlmostEqual(r['values']['E_2c'], 5.556, delta=.001)
+        self.assertEqual([c['ok'] for c in r['checks']], [False, True])
+        # coaxial cylinders: E_max·r·ln(R/r) = U, the optimum r = R/e minimises E_max; spheres: E_max = U·R/(r(R − r)), optimum R/2
+        t = load('hv_coax.template.json')
+        E = lambda r: template_solve({'template': t, 'values': {'r': r}})['values']['E_c']
+        v = template_solve({'template': t, 'values': {}})['values']
+        self.assertAlmostEqual(E(v['r_oc']), math.e * 100e3 / .03, delta=1e-6)
+        self.assertLess(E(v['r_oc']), min(E(v['r_oc'] * .9), E(v['r_oc'] * 1.1)))
+        self.assertAlmostEqual(v['eta_c'], .01 * math.log(3) / .02, places=12)
+        # lightning: exercise 15.5.7 (594 kV) and the rolling-sphere radii of IEC 62305 (20, 30, 45, 60 m for 2.9, 5.4, 10.1, 15.7 kA)
+        t = load('hv_downconductor.template.json')
+        self.assertAlmostEqual(template_solve({'template': t, 'values': {}})['values']['U_t'], 594e3, delta=1e-6)
+        for I, rs in ((2.9e3, 20), (5.4e3, 30), (10.1e3, 45), (15.7e3, 60)):
+            self.assertAlmostEqual(template_solve({'template': t, 'values': {'I': I}})['values']['r_s'], rs, delta=.5)
+        # risk of failure: R = ∫ f(U)·P(U) dU integrated here numerically against the closed form with erfc
+        from scipy import integrate, stats
+        r = template_solve({'template': load('hv_risk.template.json'), 'values': {}})['values']
+        num = integrate.quad(lambda u: stats.norm.pdf(u, 700e3, 70e3) * stats.norm.cdf(u, 1100e3, 66e3), 0, 2e6, points=[1e6], epsabs=1e-14)[0]
+        self.assertAlmostEqual(r['Risk'], num, delta=1e-9)
+        self.assertAlmostEqual(r['gam'], (1100e3 - 1.282 * 66e3) / (700e3 + 2.054 * 70e3), places=12)
+
     def test_expressions_are_restricted(self):
         base = {'schema': 'pcl-template-1', 'id': 'x', 'inputs': [{'name': 'a', 'value': 1}], 'sections': [{'blocks': []}]}
         for bad in ("__import__('os')", 'a.real', "a+'1'", 'b+1', 'a[0]', 'lambda: 1'):

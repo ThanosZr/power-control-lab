@@ -287,5 +287,39 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
  const mv=project([{id:'V1',type:'VDC',params:{V:1e6}},{id:'R1',type:'R',params:{R:400}},{id:'M1',type:'MOV',params:{alpha:30}},{id:'G',type:'GND'}],[['V1:p','R1:a'],['R1:b','M1:a'],['M1:b','G:g'],['V1:n','G:g']]);mv.solve={tbase:1e-6};
  const ex=(pr,keys)=>{const r=MNA.exportForBatch(pr,keys);return {net:r.net,channels:r.channels};};
  out.hv310={marx:{pk,T1,T2,meta:mm},chop:{vmin,meta:cm},req:{tl:ex(tl,['V:T1','V2:T1']),sg:ex(sg,['V:C1','I:SG1']),mov:ex(mv,['V:M1'])}};}
+// 3.11: lossy line. One element with R in N sections against the explicit cascade it stands for (lossless halves τ/(2N) with R/(4N),
+// R/(2N), R/(4N)), and an ideal step into a semi-infinite line (line + 3× longer line) for the distributed solution in Python
+{const Z=400,tau=10e-6,R=300,h=tau/8/50,ts=[5e-6,10.5e-6,15e-6,25e-6,40e-6,60e-6,100e-6,120e-6];
+ const run=(pr,key)=>{pr.solve={tbase:1e-6};const s=new Sim(pr,{h});return ts.map(t=>{s.run(t-s.t);return s.now(key);});};
+ const casc=N=>{const c=[{id:'V1',type:'VDC',params:{V:1}},{id:'RS',type:'R',params:{R:100}},{id:'RL',type:'R',params:{R:1000}},{id:'G',type:'GND'}],w=[['V1:p','RS:a'],['V1:n','G:g'],['RL:b','G:g']];let prev='RS:b';const r=R/N;
+  for(let j=0;j<N;j++){c.push({id:'Ra'+j,type:'R',params:{R:r/4}},{id:'TA'+j,type:'TL',params:{Z,tau:tau/N/2}},{id:'Rm'+j,type:'R',params:{R:r/2}},{id:'TB'+j,type:'TL',params:{Z,tau:tau/N/2}},{id:'Rb'+j,type:'R',params:{R:r/4}});
+   w.push([prev,'Ra'+j+':a'],['Ra'+j+':b','TA'+j+':a1'],['TA'+j+':b1','G:g'],['TA'+j+':a2','Rm'+j+':a'],['TA'+j+':b2','G:g'],['Rm'+j+':b','TB'+j+':a1'],['TB'+j+':b1','G:g'],['TB'+j+':a2','Rb'+j+':a'],['TB'+j+':b2','G:g']);prev='Rb'+j+':b';}
+  w.push([prev,'RL:a']);return project(c,w);};
+ const lossy=N=>project([{id:'V1',type:'VDC',params:{V:1}},{id:'RS',type:'R',params:{R:100}},{id:'T1',type:'TL',params:{Z,tau,Rt:R,nsec:N}},{id:'RL',type:'R',params:{R:1000}},{id:'G',type:'GND'}],
+  [['V1:p','RS:a'],['RS:b','T1:a1'],['T1:b1','G:g'],['T1:a2','RL:a'],['RL:b','G:g'],['T1:b2','G:g'],['V1:n','G:g']]);
+ const semi=(Rt,N)=>{const pr=project([{id:'V1',type:'VDC',params:{V:1}},{id:'T1',type:'TL',params:{Z,tau,Rt,nsec:N}},{id:'T2',type:'TL',params:{Z,tau:3*tau,Rt:3*Rt,nsec:3*N}},{id:'G',type:'GND'}],
+  [['V1:p','T1:a1'],['T1:b1','G:g'],['T1:a2','T2:a1'],['T1:b2','G:g'],['T2:b1','G:g'],['T2:b2','G:g'],['V1:n','G:g']]);pr.solve={tbase:1e-6};const s=new Sim(pr,{h:tau/N/20});
+  return [10.01e-6,11e-6,15e-6,20e-6,40e-6,69e-6].map(t=>{s.run(t-s.t);return [t,s.now('V2:T1')];});};
+ const l4=new Sim(lossy(4));
+ out.tl311={c1:run(casc(1),'V:RL'),l1:run(lossy(1),'V:RL'),c4:run(casc(4),'V:RL'),l4:run(lossy(4),'V:RL'),dc:1000/1400,semi:{R100:[1,4,16].map(N=>semi(100,N)),R400:[1,4,16].map(N=>semi(400,N))},
+  steps:l4.h<=tau/4,bad:(()=>{try{new Sim(project([{id:'T',type:'TL',params:{Z:400,tau:1e-5,Rt:-1}},{id:'G',type:'GND'}],[['T:b1','G:g']]));return null;}catch(e){return e.message;}})()};}
+// 3.11: spark gap on a volt–time curve: ramps through 1 Ω (closed form for every k), the breakdown instant recorded by the solver
+{const vt=(k,S,D)=>{const pr=project([{id:'V1',type:'VIMP',params:{shape:'ramp',Vpk:2e6,S}},{id:'R1',type:'R',params:{R:1}},{id:'SG1',type:'SG',params:{vt:'de',U0:80e3,kde:k,Dde:D,Rarc:.1,ext:'never'}},{id:'G',type:'GND'}],
+  [['V1:p','R1:a'],['R1:b','SG1:a'],['SG1:b','G:g'],['V1:n','G:g']]);pr.solve={tbase:1e-6};const s=new Sim(pr,{h:2e-9}),e=s.net.compInfo.get('SG1').main;while(s.t<3e-6&&!e.on)s.run(3e-6-s.t,1);return {k,S,D,tOn:e.on?e.tOn:null};};
+ out.vt311={ramps:[[0,1e11,.2e-6],[0,1e12,.2e-6],[1,1e11,5e-3],[1,1e12,5e-3],[1,5e12,5e-3],[2,1e12,500],[2,5e12,500],[1,3.7e11,5e-3]].map(a=>vt(...a)),
+  bad:(()=>{try{new Sim(project([{id:'S',type:'SG',params:{vt:'de',U0:1e3,kde:1,Dde:0}},{id:'G',type:'GND'}],[['S:b','G:g']]));return null;}catch(e){return e.message;}})()};}
+// 3.11: the book's 15.3.1 and 15.3.7 as the tutorial builds them, and requests for the SciPy solver (lossy line, volt–time gap)
+{const TT=globalThis.Tutorials,bt=(id,o={})=>{const t=TT.get(id),q={};for(const op of t.options)q[op.k]=o[op.k]??op.def;return t.build(q);};
+ const ser=(s,key)=>{const r=s.ring,i=s.chIndex.get(key),t=[],y=[];for(let q=0;q<r.n;q++){const j=(r.head-r.n+q+r.cap)%r.cap;t.push(r.t[j]);y.push(r.d[j*r.nch+i]);}return {t,y};};
+ const imp=({t,y},t0)=>{let k=0;for(let i=1;i<y.length;i++)if(y[i]>y[k])k=i;const x=.5*(y[k-1]-y[k+1])/(y[k-1]-2*y[k]+y[k+1]),pk=y[k]-.25*(y[k-1]-y[k+1])*x;
+  const cr=(lv,i0,i1)=>{for(let i=i0;i<i1;i++){const a=y[i],b=y[i+1];if((a-lv)*(b-lv)<=0&&a!==b)return t[i]+(lv-a)/(b-a)*(t[i+1]-t[i]);}return NaN;};
+  const t30=cr(.3*pk,0,k),t90=cr(.9*pk,0,k),T1=(t90-t30)/.6;return {pk,T1,T2:cr(.5*pk,k,y.length-1)-(t30-.3*T1)};};
+ const ex=id=>{const pr=bt('hv153',{ex:id}),m=pr.meta,s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv,method:'TR'});s.run(m.dur);return {...imp(ser(s,'V:'+m.out),m.tf),lv:m.div?Math.max(...ser(s,'V:CL').y):null,meta:m};};
+ const rq=(pr,keys)=>{const r=MNA.exportForBatch(pr,keys);return {net:r.net,channels:r.channels};};
+ const semi=project([{id:'V1',type:'VDC',params:{V:1}},{id:'T1',type:'TL',params:{Z:400,tau:10e-6,Rt:100,nsec:4}},{id:'T2',type:'TL',params:{Z:400,tau:30e-6,Rt:300,nsec:12}},{id:'G',type:'GND'}],
+  [['V1:p','T1:a1'],['T1:b1','G:g'],['T1:a2','T2:a1'],['T1:b2','G:g'],['T2:b1','G:g'],['T2:b2','G:g'],['V1:n','G:g']]);semi.solve={tbase:1e-6};
+ const vt=project([{id:'V1',type:'VIMP',params:{shape:'ramp',Vpk:2e6,S:3.7e11}},{id:'R1',type:'R',params:{R:1}},{id:'SG1',type:'SG',params:{vt:'de',U0:80e3,kde:1,Dde:5e-3,Rarc:.1,ext:'never'}},{id:'G',type:'GND'}],
+  [['V1:p','R1:a'],['R1:b','SG1:a'],['SG1:b','G:g'],['V1:n','G:g']]);vt.solve={tbase:1e-6};
+ out.hv311={e1531:ex('1531'),e1533:ex('1533'),e1537:ex('1537'),req:{semi:rq(semi,['V2:T1']),vt:rq(vt,['V:SG1','I:SG1'])}};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));
