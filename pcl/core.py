@@ -13,6 +13,10 @@ different: it runs inside the simulation, at the controller's samples.
 
 * 'browser': the same web/studio/*.js as the app (pcl/runner.js), so the results are the app's.
 * 'scipy': the same netlist (MNA.exportForBatch) solved by engine.batch.simulate.
+
+The same module runs in the app's "Σενάρια" panel (3.14, Pyodide in a worker): there `_backend` answers the requests
+in the worker itself, `pcl.current()` is the circuit on the screen, `pcl.show()` puts a table or a chart in the panel,
+and the files the script writes become downloads. MATLAB and Octave call `job()` through `python -m pcl job` (matlab/).
 """
 import copy
 import csv
@@ -25,8 +29,10 @@ import math
 import os
 import re
 import shutil
+import struct
 import subprocess
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+import sys
+import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -62,7 +68,18 @@ def parse_value(v):
     return s
 
 
+IN_BROWSER = sys.platform == 'emscripten'      # Pyodide in the app's worker
+_backend = None          # the app's worker answers the solver's requests itself (3.14)
+_show_hook = None        # and shows tables and charts in the panel
+_progress_hook = None
+_default = None          # the project of the module-level functions pcl.set/run/sweep
+
+
 def _node(q, timeout=None):
+    if _backend is not None:
+        return _backend(q)
+    if IN_BROWSER:
+        raise PclError('Ο λύτης του browser δεν είναι διαθέσιμος εδώ.')
     if shutil.which('node') is None:
         raise PclError('Χρειάζεται το Node.js για τον λύτη του browser (https://nodejs.org). Αλλιώς solver="scipy".')
     r = subprocess.run(['node', str(RUNNER)], input=json.dumps(q), capture_output=True, text=True, timeout=timeout, cwd=str(ROOT))
@@ -88,6 +105,166 @@ def load(path):
     if not isinstance(data, dict) or not isinstance(data.get('components'), list):
         raise PclError(f'{p}: δεν είναι project του Power Converter Lab (λείπουν τα components).')
     return Project(data, name=p.stem)
+
+
+# module-level functions on one project (in the app: the circuit on the screen), as in the ROADMAP:
+#   pcl.set('L1.L', 47e-6); r = pcl.run(t_end=5e-3); sw = pcl.sweep({...}, measure={...})
+def use(project):
+    """Makes `project` (a Project, a path or 'tutorial:<id>') the one of pcl.set/get/run/sweep. Returns it."""
+    global _default
+    _default = project if isinstance(project, Project) else _open(project)
+    return _default
+
+
+def current():
+    """The project of the module-level functions; in the app, a copy of the circuit on the screen."""
+    if _default is None:
+        raise PclError('Δεν υπάρχει τρέχον κύκλωμα: pcl.use(pcl.load(...)) ή pcl.use("tutorial:buck").')
+    return _default
+
+
+def set(key, value):          # noqa: A001 - the API of the ROADMAP
+    return current().set(key, value)
+
+
+def get(key):
+    return current().get(key)
+
+
+def run(**kw):
+    return current().run(**kw)
+
+
+def sweep(grid=None, **kw):
+    return current().sweep(grid, **kw)
+
+
+def params():
+    return current().params()
+
+
+class Plot(dict):
+    """y(x) for pcl.show: {'x': [...], 'series': {name: [...]}, 'xlabel', 'ylabel'}."""
+
+
+def plot(x, ys, title=None, xlabel='', ylabel=''):
+    """A chart of one or more series against x: plot(L, {'προσομοίωση': dI, 'θεωρία': th}, xlabel='L (H)').
+    In the app's panel a chart; here matplotlib if it is installed, else a table."""
+    if not isinstance(ys, dict):
+        ys = {ylabel or 'y': ys}
+    return show(Plot(x=[float(v) for v in x], series={k: [None if v is None else float(v) for v in y] for k, y in ys.items()},
+                     xlabel=xlabel, ylabel=ylabel), title)
+
+
+def show(obj, title=None):
+    """A table or chart in the app's panel; here a text table (or a matplotlib chart for pcl.plot)."""
+    if _show_hook is not None:
+        return _show_hook(obj, title)
+    if isinstance(obj, Plot):
+        try:
+            import matplotlib.pyplot as plt
+            plt.figure()
+            for k, y in obj['series'].items():
+                plt.plot(obj['x'], y, 'o-', label=k)
+            plt.xlabel(obj['xlabel'])
+            plt.ylabel(obj['ylabel'])
+            if title:
+                plt.title(title)
+            plt.legend()
+            plt.grid(True)
+            plt.show()
+        except ImportError:
+            names = list(obj['series'])
+            print('\t'.join([obj['xlabel'] or 'x'] + names))
+            for i, xv in enumerate(obj['x']):
+                print('\t'.join([f'{xv:.6g}'] + [f'{obj["series"][n][i]:.6g}' for n in names]))
+        return obj
+    if isinstance(obj, SweepResult):
+        cols = obj.params + obj.names
+        print('\t'.join(cols))
+        for r in obj.rows:
+            print('\t'.join(f'{r[c]:.6g}' if isinstance(r.get(c), (int, float)) else str(r.get(c, '')) for c in cols))
+    elif isinstance(obj, Result):
+        print(repr(obj))
+        for k, v in obj.measured.items():
+            print(f'{k} = {v:.6g}')
+    else:
+        print(obj)
+    return obj
+
+
+def _open(src):
+    """A Project from a Project, a project object (dict), 'tutorial:<id>[?k=v&…]' or a path."""
+    if isinstance(src, Project):
+        return src.copy()
+    if isinstance(src, dict):
+        if isinstance(src.get('tutorial'), dict) and 'components' not in src:
+            return tutorial(src['tutorial']['id'], **(src['tutorial'].get('options') or {}))
+        return Project(src, name=src.get('name') or 'project')
+    s = str(src)
+    if s.startswith('tutorial:'):
+        tid, _, q = s[9:].partition('?')
+        opts = dict(x.split('=', 1) for x in q.split('&') if '=' in x)
+        return tutorial(tid, **opts)
+    return load(s)
+
+
+def _pairs(x, key='key', val='value'):
+    """{k: v}, [[k, v], …] or [{key: k, value: v}, …] (what jsonencode makes from MATLAB) → [(k, v), …]."""
+    if not x:
+        return []
+    if isinstance(x, dict):
+        if key in x:
+            x = [x]
+        else:
+            return list(x.items())
+    out = []
+    for it in x:
+        if isinstance(it, dict):
+            out.append((it[key], it.get(val, it.get('values'))))
+        else:
+            out.append((it[0], it[1]))
+    return out
+
+
+def _clean(x):
+    """NaN and ±Inf → None (null), so the JSON is strict (browsers, MATLAB's jsondecode)."""
+    if isinstance(x, float) and (x != x or x in (float('inf'), float('-inf'))):
+        return None
+    if isinstance(x, dict):
+        return {k: _clean(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_clean(v) for v in x]
+    return x
+
+
+def job(spec, allow_paths=True):
+    """One request as data (the CLI's `job`, the server's scenario_run/scenario_sweep, MATLAB/Octave):
+    {project | tutorial, set, run: {...} | sweep: {grid, points, mode, measure, t_end, …}} → a JSON-able dict."""
+    if not isinstance(spec, dict):
+        raise PclError('Το αίτημα πρέπει να είναι αντικείμενο JSON.')
+    src = spec.get('project')
+    if src is None and spec.get('tutorial'):
+        t = spec['tutorial']
+        src = {'tutorial': t if isinstance(t, dict) else {'id': t}}
+    if src is None:
+        raise PclError('Λείπει το project (αντικείμενο, αρχείο ή "tutorial:<id>").')
+    if isinstance(src, str) and not src.startswith('tutorial:') and not allow_paths:
+        raise PclError('Εδώ το project δίνεται ως αντικείμενο JSON ή "tutorial:<id>", όχι ως διαδρομή αρχείου.')
+    p = _open(src)
+    for k, v in _pairs(spec.get('set')):
+        p.set(k, v)
+    if 'sweep' in spec:
+        o = dict(spec['sweep'] or {})
+        grid = _pairs(o.pop('grid', None), 'key', 'values')
+        grid = {k: (v if isinstance(v, (list, tuple)) else _as_list(v) if isinstance(v, str) else [v]) for k, v in grid} or None
+        sw = p.sweep(grid=grid, **{k: v for k, v in o.items() if k in ('points', 't_end', 'measure', 'workers', 'solver', 'mode', 'hdiv', 'method', 'step', 'rtol', 'hmax', 'channels', 'scipy_method', 'timeout')})
+        return _clean({'kind': 'sweep', 'meta': sw.meta, 'params': sw.params, 'measure': sw.names, 'vars': [_matname(c) for c in sw.params + sw.names], 'rows': sw.rows})
+    o = dict(spec.get('run') or {})
+    if 'from' in o:
+        o['t_from'] = o.pop('from')
+    r = p.run(**{k: v for k, v in o.items() if k in ('t_end', 'solver', 'channels', 'hdiv', 'method', 'step', 'rtol', 'hmax', 't_from', 'max_points', 'measure', 'timeout', 'scipy_method', 'waveforms')})
+    return _clean(r.as_dict())
 
 
 class Project:
@@ -139,6 +316,10 @@ class Project:
         keep = {k: self.data.get(k) for k in ('components', 'wires', 'solve')}
         return hashlib.sha256(json.dumps(keep, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
 
+    def params(self):
+        """{id: {'type': …, <parameter>: value, …}} of every element: the names pcl.set takes."""
+        return {c['id']: {'type': c.get('type'), **(c.get('params') or {})} for c in self.data['components'] if c.get('type') not in ('JUNC', 'GND')}
+
     def channels(self):
         """Every channel the project has (V:<id>, I:<id>, N:<node>, Y:<block>, …) and the base period T."""
         return _node({'action': 'channels', 'project': self.data})
@@ -171,7 +352,7 @@ class Project:
             hd, mt, st = self._settings(hdiv, method, step, rtol, hmax)
             out = _node({'action': 'run', 'project': self.data, 't_end': t_end, 'channels': keys, 'hdiv': hd, 'method': mt,
                          'step': st, 'from': t_from, 'max_points': max_points, 'measure': meas, 'waveforms': bool(waveforms)}, timeout=timeout)
-            meta = {**out['meta'], 'solver': 'browser (web/studio/mna.js, Node)'}
+            meta = {**out['meta'], 'solver': 'browser (web/studio/mna.js' + (')' if IN_BROWSER else ', Node)')}
             return Result(out.get('t') or [], out['keys'], out.get('ch') or {}, meta, self, out.get('measure') or {}, out.get('diag') or [])
         if solver == 'scipy':
             return self._run_scipy(t_end, keys, scipy_method, rtol, hmax, max_points, meas, t_from)
@@ -228,19 +409,30 @@ class Project:
             jobs.append((q.data, pt))
         kw = dict(run_kw, t_end=t_end, solver=solver, measure=measure)
         n = len(jobs)
-        workers = max(1, min(int(workers or os.cpu_count() or 1), n))
-        Pool = ThreadPoolExecutor if solver == 'browser' else ProcessPoolExecutor   # the browser solver is a Node process already
+        if not n:
+            raise PclError('Η σάρωση δεν έχει σημεία.')
+        workers = 1 if IN_BROWSER else max(1, min(int(workers or os.cpu_count() or 1), n))
+        progress = progress or _progress_hook
         rows = [None] * n
-        with Pool(max_workers=workers) as ex:
-            futs = {ex.submit(_sweep_point, d, kw): i for i, (d, _) in enumerate(jobs)}
-            done = 0
-            for f in futs:
-                i = futs[f]
-                m, err = f.result()
-                rows[i] = {**{k: v for k, v in jobs[i][1].items()}, **m, **({'error': err} if err else {})}
-                done += 1
+        if workers == 1:                # in the app's worker (no threads in Pyodide), or asked for
+            for i, (d, pt) in enumerate(jobs):
+                m, err = _sweep_point(d, kw)
+                rows[i] = {**pt, **m, **({'error': err} if err else {})}
                 if progress:
-                    progress(done, n)
+                    progress(i + 1, n)
+        else:
+            from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor    # here, not at the top: Pyodide has no multiprocessing
+            Pool = ThreadPoolExecutor if solver == 'browser' else ProcessPoolExecutor   # the browser solver is a Node process already
+            with Pool(max_workers=workers) as ex:
+                futs = {ex.submit(_sweep_point, d, kw): i for i, (d, _) in enumerate(jobs)}
+                done = 0
+                for f in futs:
+                    i = futs[f]
+                    m, err = f.result()
+                    rows[i] = {**{k: v for k, v in jobs[i][1].items()}, **m, **({'error': err} if err else {})}
+                    done += 1
+                    if progress:
+                        progress(done, n)
         meta = {'pcl': version(), 'project': self.name, 'hash': self.hash(), 'solver': solver, 'points': n,
                 'measure': {m['name']: [m['key'], m['stat'], m.get('periods', 1)] for m in meas}, 'run': {k: v for k, v in kw.items() if k != 'measure'},
                 'date': datetime.datetime.now().isoformat(timespec='seconds')}
@@ -266,7 +458,12 @@ def _as_list(v):
 
 
 def _spec(spec):
-    """(key, stat[, periods | time]) or 'V:C1:avg:10', 'N:C1:p:max:5', 'I:L1:at:2m'."""
+    """(key, stat[, periods | time]), 'V:C1:avg:10', 'N:C1:p:max:5', 'I:L1:at:2m', or {key, stat, periods | at}."""
+    if isinstance(spec, dict):
+        arg = spec.get('at', spec.get('periods', spec.get('arg')))
+        if arg in ([], '', None):         # MATLAB's jsonencode writes an empty field as []
+            arg = None
+        return [spec['key'], spec.get('stat', 'avg')] + ([arg] if arg is not None else [])
     if isinstance(spec, str):
         tok = spec.split(':')
         i = max((j for j, x in enumerate(tok) if x in STATS), default=-1)
@@ -280,7 +477,9 @@ def _measures(measure):
     out = []
     if not measure:
         return out
-    items = measure.items() if isinstance(measure, dict) else ((None, m) for m in measure)
+    if isinstance(measure, dict) and 'key' in measure:
+        measure = [measure]
+    items = measure.items() if isinstance(measure, dict) else ((m.get('name') if isinstance(m, dict) else None, m) for m in measure)
     for name, spec in items:
         spec = _spec(spec)
         key, stat = spec[0], (spec[1] if len(spec) > 1 else 'avg')
@@ -332,42 +531,63 @@ class Result:
         return f'<pcl.Result {len(self.t)} σημεία × {len(self.keys)} κανάλια, {self.meta.get("solver")}>'
 
     def measure(self, key, stat='avg', periods=1, at=None, f1=None):
-        """Over the last `periods` base periods T: avg, rms, min, max, pp (trapezoidal in time); end; at (a time); thd (%)."""
-        import numpy as np
-        t = np.asarray(self.t, dtype=float)
-        y = np.asarray(self.ch[key], dtype=float)
+        """Over the last `periods` base periods T: avg, rms, min, max, pp (trapezoidal in time); end; at (a time); thd (%).
+        Pure Python (no numpy), so it is the same in the app's panel."""
+        t = [float(v) for v in self.t]
+        y = [float('nan') if v is None else float(v) for v in self.ch[key]]
+        if not t:
+            return float('nan')
+
+        def interp(x):
+            if x <= t[0]:
+                return y[0]
+            if x >= t[-1]:
+                return y[-1]
+            lo, hi = 0, len(t) - 1
+            while hi - lo > 1:
+                m = (lo + hi) // 2
+                if t[m] <= x:
+                    lo = m
+                else:
+                    hi = m
+            return y[lo] + (y[hi] - y[lo]) * (x - t[lo]) / (t[hi] - t[lo]) if t[hi] > t[lo] else y[hi]
         if stat == 'end':
-            return float(y[-1])
+            return y[-1]
         if stat == 'at':
-            return float(np.interp(float(at), t, y))
+            return interp(float(at))
         T = self.meta.get('T') or (t[-1] - t[0])
         ta = max(t[0], t[-1] - periods * T)
-        tt = np.concatenate(([ta], t[t > ta]))
-        yy = np.concatenate(([np.interp(ta, t, y)], y[t > ta]))
+        tt = [ta] + [v for v in t if v > ta]
+        yy = [interp(ta)] + [y[i] for i, v in enumerate(t) if v > ta]
         d = tt[-1] - tt[0]
         if stat == 'thd':
             f = f1 or 1 / T
-            n = max(64, 2 ** int(math.ceil(math.log2(len(tt) * 2))))
             P = max(1, round(d * f))
-            tu = np.linspace(tt[-1] - P / f, tt[-1], n, endpoint=False)
-            yu = np.interp(tu, tt, yy)
-            A = np.abs(np.fft.rfft(yu)) * 2 / n
-            h1 = A[P]
-            hs = A[2 * P:min(len(A), 51 * P):P]
-            return float(100 * math.sqrt(float((hs ** 2).sum())) / h1) if h1 > 0 else float('nan')
+            n = 4096
+            w0 = tt[-1] - P / f
+            yu = [interp(w0 + (P / f) * i / n) for i in range(n)]
+
+            def amp(h):
+                c = sum(v * math.cos(2 * math.pi * h * i / n) for i, v in enumerate(yu))
+                q = sum(v * math.sin(2 * math.pi * h * i / n) for i, v in enumerate(yu))
+                return 2 * math.hypot(c, q) / n
+            a1 = amp(P)
+            return 100 * math.sqrt(sum(amp(h * P) ** 2 for h in range(2, 51) if h * P < n // 2)) / a1 if a1 > 0 else float('nan')
         if not d > 0:
-            return float(yy[-1])
-        if stat == 'avg':
-            return float(np.trapezoid(yy, tt) / d) if hasattr(np, 'trapezoid') else float(np.trapz(yy, tt) / d)
-        if stat == 'rms':
-            h = np.diff(tt)
-            return float(math.sqrt(max(0.0, float((h * (yy[:-1] ** 2 + yy[:-1] * yy[1:] + yy[1:] ** 2) / 3).sum() / d))))
+            return yy[-1]
+        if stat in ('avg', 'rms'):
+            s0 = s2 = 0.0
+            for i in range(1, len(tt)):
+                h, a, b = tt[i] - tt[i - 1], yy[i - 1], yy[i]
+                s0 += h * (a + b) / 2
+                s2 += h * (a * a + a * b + b * b) / 3
+            return s0 / d if stat == 'avg' else math.sqrt(max(0.0, s2 / d))
         if stat == 'min':
-            return float(yy.min())
+            return min(yy)
         if stat == 'max':
-            return float(yy.max())
+            return max(yy)
         if stat == 'pp':
-            return float(yy.max() - yy.min())
+            return max(yy) - min(yy)
         raise PclError(f'Άγνωστη μέτρηση «{stat}».')
 
     def frame(self):
@@ -396,28 +616,33 @@ class Result:
                 w.writerow([fmt(t)] + [fmt(self.ch[k][i]) for k in self.keys])
         return path
 
+    def _vars(self):
+        names, seen = [], {'t'}
+        for k in self.keys:
+            n = _matname(k)
+            while n in seen:
+                n += '_'
+            seen.add(n)
+            names.append(n)
+        return names
+
+    def as_dict(self):
+        return {'kind': 'run', 'meta': self.meta, 'keys': self.keys, 'vars': self._vars(), 'units': {k: _unit(k) for k in self.keys},
+                't': self.t, 'ch': self.ch, 'measure': self.measured, 'diag': self.diag}
+
     def to_json(self, path):
-        Path(path).write_text(json.dumps({'meta': self.meta, 'keys': self.keys, 'units': {k: _unit(k) for k in self.keys}, 't': self.t,
-                                          'ch': self.ch, 'measure': self.measured, 'diag': self.diag}, ensure_ascii=False), encoding='utf-8')
+        Path(path).write_text(json.dumps(self.as_dict(), ensure_ascii=False), encoding='utf-8')
         return path
 
     def to_mat(self, path):
-        """MATLAB .mat: t and one variable per channel (V:C1 → V_C1), names{} with the original keys, units{}, meta (JSON text)."""
-        import numpy as np
-        from scipy.io import savemat
-        d = {'t': np.asarray(self.t, dtype=float).reshape(-1, 1)}
-        names = []
-        for k in self.keys:
-            n = _matname(k)
-            while n in d:
-                n += '_'
-            d[n] = np.asarray(self.ch[k], dtype=float).reshape(-1, 1)
-            names.append(n)
-        d['names'] = np.array(self.keys, dtype=object).reshape(-1, 1)
-        d['vars'] = np.array(names, dtype=object).reshape(-1, 1)
-        d['units'] = np.array([_unit(k) for k in self.keys], dtype=object).reshape(-1, 1)
-        d['meta'] = json.dumps(self.meta, ensure_ascii=False)
-        savemat(path, d, do_compression=True)
+        """MATLAB .mat (level 5, compressed): t and one variable per channel (V:C1 → V_C1), names{} with the original keys,
+        vars{}, units{}, meta (JSON text). Written here, without SciPy, so it works in the app's panel too."""
+        items = [('t', [float(v) for v in self.t])]
+        for k, n in zip(self.keys, self._vars()):
+            items.append((n, [float('nan') if v is None else float(v) for v in self.ch[k]]))
+        items += [('names', list(self.keys)), ('vars', self._vars()), ('units', [_unit(k) for k in self.keys]),
+                  ('meta', json.dumps(self.meta, ensure_ascii=True))]
+        _savemat(path, items)
         return path
 
     def save(self, path, **kw):
@@ -464,17 +689,61 @@ class SweepResult:
         return path
 
     def to_mat(self, path):
-        import numpy as np
-        from scipy.io import savemat
-        d = {}
-        for c in self.params + self.names:
-            v = self.column(c)
-            d[_matname(c)] = np.array([np.nan if x is None or isinstance(x, str) else x for x in v], dtype=float).reshape(-1, 1)
-        d['columns'] = np.array(self.params + self.names, dtype=object).reshape(-1, 1)
-        d['meta'] = json.dumps(self.meta, ensure_ascii=False)
-        savemat(path, d, do_compression=True)
+        cols = self.params + self.names
+        items = [(_matname(c), [float('nan') if x is None or isinstance(x, str) else float(x) for x in self.column(c)]) for c in cols]
+        items += [('columns', cols), ('meta', json.dumps(self.meta, ensure_ascii=True))]
+        _savemat(path, items)
         return path
 
     def save(self, path, **kw):
         ext = Path(path).suffix.lower()
         return {'.csv': self.to_csv, '.json': self.to_json, '.mat': self.to_mat}.get(ext, self.to_csv)(path, **kw)
+
+
+# ----------------------------------------------------------------- MATLAB level-5 .mat, without SciPy
+# A column of doubles (n×1), a text (1×m char, ASCII) or a list of texts (k×1 cell). Each variable is zlib-compressed
+# (miCOMPRESSED), as MATLAB writes them; MATLAB, Octave and scipy.io.loadmat read it.
+_MI_INT8, _MI_INT32, _MI_UINT32, _MI_DOUBLE, _MI_MATRIX, _MI_COMPRESSED, _MI_UTF8 = 1, 5, 6, 9, 14, 15, 16
+_MX_CELL, _MX_CHAR, _MX_DOUBLE = 1, 4, 6
+
+
+def _el(kind, payload):
+    pad = (-len(payload)) % 8
+    return struct.pack('<II', kind, len(payload)) + payload + b'\0' * pad
+
+
+def _matrix(name, cls, dims, data):
+    head = _el(_MI_UINT32, struct.pack('<II', cls, 0)) + _el(_MI_INT32, struct.pack(f'<{len(dims)}i', *dims)) + _el(_MI_INT8, name.encode('ascii'))
+    return _el(_MI_MATRIX, head + data)
+
+
+def _ascii(text):
+    """MATLAB counts UTF-16 units and Octave UTF-8 bytes, so a text in the .mat is plain ASCII: N·m → N*m, μ → u,
+    anything else as \\uXXXX (the meta is JSON with ensure_ascii, so it decodes back exactly)."""
+    t = str(text).replace('·', '*').replace('μ', 'u').replace('µ', 'u')
+    return t.encode('ascii', 'backslashreplace').decode('ascii')
+
+
+def _mat_char(name, text):
+    b = _ascii(text).encode('ascii')
+    return _matrix(name, _MX_CHAR, (1, len(b)) if b else (0, 0), _el(_MI_UTF8, b))
+
+
+def _mat_value(name, v):
+    if isinstance(v, str):
+        return _mat_char(name, v)
+    if v and all(isinstance(x, str) for x in v):
+        return _matrix(name, _MX_CELL, (len(v), 1), b''.join(_mat_char('', x) for x in v))
+    vals = [float(x) for x in v]
+    return _matrix(name, _MX_DOUBLE, (len(vals), 1), _el(_MI_DOUBLE, struct.pack(f'<{len(vals)}d', *vals)))
+
+
+def _savemat(path, items):
+    head = f'MATLAB 5.0 MAT-file, Platform: pcl, Created on: {datetime.datetime.now():%a %b %d %H:%M:%S %Y}'.encode('ascii')[:116]
+    out = [head.ljust(116, b' ') + b'\0' * 8 + struct.pack('<H', 0x0100) + b'IM']
+    for name, v in items:
+        if not re.fullmatch(r'[A-Za-z]\w{0,62}', name):
+            raise PclError(f'Μη έγκυρο όνομα μεταβλητής MATLAB: {name}')
+        z = zlib.compress(_mat_value(name, v))
+        out.append(struct.pack('<II', _MI_COMPRESSED, len(z)) + z)      # compressed elements are not padded
+    Path(path).write_bytes(b''.join(out))

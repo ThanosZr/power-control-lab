@@ -45,8 +45,10 @@ def __pcl_make(__src, __ins, __outs, __p):
      for(const u of urls){try{await new Promise((ok,bad)=>{if(window.loadPyodide)return ok();const s=document.createElement('script');s.src=u+'pyodide.js';s.onload=ok;s.onerror=()=>bad(new Error('δεν βρέθηκε '+u));document.head.appendChild(s);});
        this.py=await window.loadPyodide({indexURL:u});this.source=u;break;}catch(e){last=e;}}
      if(!this.py)throw last||new Error('Το Pyodide δεν φορτώθηκε.');}
-    this.py.runPython(WRAP);this.makeFn=this.py.globals.get('__pcl_make');this.ready=true;return this;})().catch(e=>{this.error=e;this.loading=null;throw e;});
+    return this.attach(this.py,this.source);})().catch(e=>{this.error=e;this.loading=null;throw e;});
    return this.loading;},
+  // a Pyodide loaded elsewhere (the "Σενάρια" worker, 3.14): the blocks of its circuits use the same Python
+  attach(py,source){this.py=py;this.source=source||this.source;this.py.runPython(WRAP);this.makeFn=this.py.globals.get('__pcl_make');this.ready=true;this.loading=this.loading||Promise.resolve(this);return this;},
   make(src,o){if(!this.ready)throw new Error('Η Python δεν έχει φορτωθεί.');let call;
    try{call=this.makeFn(String(src||''),o.ins,o.outs,this.py.toPy({...o.pars,Ts:o.Ts}));}catch(e){throw new Error(`${o.label}: ${pyMessage(e)}`);}
    return {step:(t,u)=>{let r;try{r=call(t,u);}catch(e){throw new Error(`${o.label} (t = ${t.toPrecision(6)} s): ${pyMessage(e)}`);}const a=r.toJs();r.destroy();return a;},

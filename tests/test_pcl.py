@@ -110,6 +110,50 @@ class Scenarios(unittest.TestCase):
         r = simulate({'net': exp['net'], 'channels': exp['channels'], 't_end': 1e-5, 'method': 'Radau', 'max_step': 1e-6})
         self.assertFalse([x for x in r['diag'] if x['sev'] != 'info'])
 
+    def test_module_level_api_and_job(self):
+        # 3.14: pcl.use/set/run on one project (the app's panel uses the circuit on the screen), and job() as MATLAB sends it
+        pcl.use('tutorial:buck?start=steady')
+        pcl.set('L1.L', '100u')
+        a = pcl.run(t_end='2m', channels=['I:L1'], measure={'dI': ('I:L1', 'pp', 10)})
+        self.assertEqual(pcl.get('L1.L'), 1e-4)
+        self.assertIn('L1', pcl.params())
+        j = pcl.job({'project': 'tutorial:buck?start=steady', 'set': [{'key': 'L1.L', 'value': '100u'}],
+                     'run': {'t_end': '2m', 'channels': ['I:L1'], 'measure': [{'name': 'dI', 'key': 'I:L1', 'stat': 'pp', 'arg': 10}], 'waveforms': False}})
+        self.assertEqual(j['kind'], 'run')
+        self.assertEqual(j['measure']['dI'], a.measured['dI'])
+        sw = pcl.job({'tutorial': {'id': 'buck', 'options': {'start': 'steady'}},
+                      'sweep': {'grid': [{'key': 'L1.L', 'values': [5e-5, 1e-4]}], 't_end': '2m', 'workers': 1,
+                                'measure': {'name': 'dI', 'key': 'I:L1', 'stat': 'pp', 'arg': []}}})
+        self.assertEqual(sw['kind'], 'sweep')
+        self.assertEqual(sw['vars'], ['L1_L', 'dI'])
+        self.assertEqual([r['L1.L'] for r in sw['rows']], [5e-5, 1e-4])
+        with self.assertRaises(pcl.PclError):
+            pcl.job({'project': str(ROOT / 'examples' / 'x.json'), 'run': {'t_end': 1e-3}}, allow_paths=False)
+
+    def test_server_scenarios_local_only(self):
+        import run as server
+        req = {'project': 'tutorial:buck?start=steady', 'run': {'t_end': '1m', 'channels': ['V:C1'], 'measure': {'Vo': ['V:C1', 'avg', 10]}, 'waveforms': False}}
+        from engine.analysis import InputError
+        with self.assertRaises(InputError):
+            server.ACTIONS['scenario_run'](dict(req))                               # not from 127.0.0.1
+        r = server.ACTIONS['scenario_run']({**req, '_local': True})
+        self.assertAlmostEqual(r['measure']['Vo'], 12, delta=0.1)
+        json.dumps(r, allow_nan=False)                                              # strict JSON for browsers and MATLAB
+        big = {'project': 'tutorial:buck', 'sweep': {'grid': {'R1.R': list(range(1, 30)), 'L1.L': list(range(1, 20))}, 'measure': {'v': ['V:C1', 'avg']}, 't_end': 1e-4}}
+        with self.assertRaises(InputError):
+            server.ACTIONS['scenario_sweep']({**big, '_local': True})               # 551 points > 400
+
+    def test_chunked_runs_same_numbers(self):
+        # the panel and the server run in chunks of whole periods (progress, time limit): the same numbers as one run
+        js = ("const W='%s/web/studio';global.window=globalThis;global.Parts=require(W+'/parts.js');global.StepCheck=require(W+'/stepcheck.js');"
+              "global.MNA=require(W+'/mna.js');require(W+'/tutorials.js');global.Metrics=require(W+'/metrics.js');const S=require(W+'/scenario.js');"
+              "const out=[];for(const [id,te,st] of [['buck',1.03e-3],['marx',1e-4,'var']]){const pr=S.handle({action:'tutorial',id});if(st)pr.solve={step:st};"
+              "const q={action:'run',project:pr,t_end:te};const a=S.handle(q),b=S.handle(q,{tick:()=>{}});const k=a.keys[0];"
+              "out.push(a.t.length===b.t.length&&a.t.every((x,i)=>x===b.t[i]&&a.ch[k][i]===b.ch[k][i]));}console.log(JSON.stringify(out));") % ROOT.as_posix()
+        r = subprocess.run(['node', '-e', js], capture_output=True, text=True, timeout=300)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout), [True, True])
+
     def test_exports(self):
         r = self.buck.run(t_end=2e-4, channels=['V:C1', 'I:L1'])
         p = self.tmp / 'out.csv'

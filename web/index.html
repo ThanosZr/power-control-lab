@@ -120,6 +120,34 @@
   </details>
  </section>
 
+ <section id="scen-card" class="card scen-card" aria-label="Σενάρια από κώδικα">
+  <details id="scen" class="scen">
+   <summary><h2>Σενάρια (Python)</h2><small class="muted">αλλαγή παραμέτρων, προσομοιώσεις, σαρώσεις και CSV/JSON/.mat πάνω στο τρέχον κύκλωμα, με το ίδιο API με τη γραμμή εντολών</small><span id="scen-state" class="scen-state"></span></summary>
+   <div class="scen-grid">
+    <div class="scen-left">
+     <div class="scen-bar"><select id="scen-ex" title="Έτοιμα σενάρια"><option value="">Παραδείγματα…</option><option value="ripple">Σάρωση L στον buck με τη θεωρία</option><option value="run">Το τρέχον κύκλωμα: κυματομορφές και μέσες τιμές</option><option value="param">Σάρωση μιας παραμέτρου του τρέχοντος κυκλώματος</option><option value="step">Σταθερό και μεταβλητό βήμα</option></select>
+      <button id="scen-run" class="primary" title="Εκτέλεση (Ctrl+Enter)">▶ Εκτέλεση</button><button id="scen-stop" disabled title="Σταματά την Python (ξαναφορτώνεται την επόμενη φορά)">■ Διακοπή</button><span id="scen-prog" class="scen-prog"></span></div>
+     <textarea id="scen-code" spellcheck="false" wrap="off" aria-label="Κώδικας Python του σεναρίου"></textarea>
+     <details class="scen-help"><summary>API</summary><pre>p = pcl.current()             # αντίγραφο του κυκλώματος της οθόνης (και ως p)
+pcl.set('L1.L', '47u')        # &lt;id&gt;.&lt;παράμετρος&gt;, όπως στις ζωντανές παραμέτρους
+p.params(), p.channels()      # στοιχεία και παράμετροι, κανάλια και περίοδος T
+r = pcl.run(t_end='5m', channels=['V:C1', 'I:L1'], step='var')
+r.measure('I:L1', 'pp', 10)   # avg rms min max pp end at thd
+sw = pcl.sweep({'L1.L': ['22u', '47u']}, t_end='5m', measure={'dI': ('I:L1', 'pp', 10)})
+pcl.show(r | sw | dict | [dict]), pcl.plot(x, {'όνομα': y}, xlabel='…')
+r.save('αποτελέσματα.csv')    # ή .json, .mat: εμφανίζεται στα «Αρχεία» για λήψη
+pcl.tutorial('buck', start='steady')   # το project ενός tutorial</pre></details>
+    </div>
+    <div class="scen-right">
+     <div class="scen-tabs" role="tablist"><button data-stab="out" class="on" role="tab">Έξοδος</button><button data-stab="table" role="tab">Πίνακας</button><button data-stab="chart" role="tab">Γράφημα</button><button data-stab="files" role="tab">Αρχεία <span id="scen-nfiles"></span></button></div>
+     <pre id="scen-out" class="scen-pane" data-spane="out"></pre>
+     <div id="scen-table" class="scen-pane" data-spane="table" hidden></div>
+     <div id="scen-chart" class="scen-pane" data-spane="chart" hidden></div>
+     <div id="scen-files" class="scen-pane" data-spane="files" hidden></div>
+    </div>
+   </div>
+  </details>
+ </section>
  <section id="math-card" class="card math-card" aria-label="Υπολογισμοί και μαθηματικά">
   <div class="math-top"><h2>Υπολογισμοί & μαθηματικά</h2><span id="math-src" class="math-src"></span><select id="math-tpl" title="Από πού βγαίνει η λύση" hidden></select><button id="math-open" title="Άνοιγμα template λύσης (JSON, schema pcl-template-1)">Template…</button><button id="math-refresh" title="Επανυπολογισμός με τις τρέχουσες τιμές του κυκλώματος">↻ Επανυπολογισμός</button><input id="tpl-file" type="file" accept=".json" hidden></div>
   <div id="math" class="math-panel"><p class="muted">Υπολογισμός…</p></div>
@@ -131,7 +159,7 @@
    <div><div class="th-head"><h4>Θεωρία & σύγκριση με την προσομοίωση</h4><button id="theory-refresh" title="Επανυπολογισμός με τις τρέχουσες τιμές">↻</button></div><div id="theory" class="theory"></div></div>
   </div>
  </section>
- <footer>Power Converter Lab <b>3.13</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
+ <footer>Power Converter Lab <b>3.14</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
 </main>
 <div id="notice" class="notice" hidden></div>
 <div id="inspector" class="popup inspector" hidden></div>

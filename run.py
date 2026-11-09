@@ -28,8 +28,10 @@ from engine.bidir import solve as bidir_solve
 from engine.studio_math import studio_math
 from engine.batch import batch_sim
 from engine.templates import template_solve
+from pcl.core import job as pcl_job, PclError, _pairs
 
 ROOT=Path(__file__).resolve().parent/'web'
+PCL=Path(__file__).resolve().parent/'pcl'       # the pcl package, also for the app's "Σενάρια" panel (3.14)
 SLOTS=BoundedSemaphore(2)
 ACTIONS={'analyze':steady,'inverse':inverse,'linearize':linearize,
          'switching':switching,'envelope':envelope,'design':size_components,
@@ -46,6 +48,37 @@ ACTIONS['studio_math']=studio_math
 ACTIONS['batch_sim']=batch_sim
 # solution templates as data (pcl-template-1)
 ACTIONS['template_solve']=template_solve
+
+
+# scripted scenarios (3.14, ROADMAP §30): the pcl package's job() for MATLAB/Octave (webwrite) and other tools,
+# only on the server the user runs for himself, with a time limit per run and at most 400 points per sweep
+def scenario(kind):
+    def act(data):
+        if not data.pop('_local',None):
+            raise InputError('Τα σενάρια τρέχουν μόνο στον server που ξεκινάς εσύ (python run.py, διεύθυνση 127.0.0.1).')
+        if kind=='sweep':
+            o=data.get('sweep')
+            if not isinstance(o,dict):
+                raise InputError('Λείπει το sweep: {grid, measure, t_end}.')
+            n=len(o['points']) if isinstance(o.get('points'),list) else 1
+            for _,v in _pairs(o.get('grid'),'key','values'):
+                n*=len(v) if isinstance(v,list) else 1
+            if n>400:
+                raise InputError(f'Πάνω από 400 σημεία ({n}): μίκρυνε τη σάρωση ή τρέξε την από τη γραμμή εντολών.')
+            o['timeout']=min(float(o.get('timeout') or 120),120)
+            o['workers']=min(int(o.get('workers') or 2),2)
+        else:
+            o=data.setdefault('run',{})
+            if not isinstance(o,dict):
+                raise InputError('Το run πρέπει να είναι αντικείμενο.')
+            o['timeout']=min(float(o.get('timeout') or 120),120)
+        try:
+            return pcl_job(data,allow_paths=False)
+        except PclError as e:
+            raise InputError(str(e)) from e
+    return act
+ACTIONS['scenario_run']=scenario('run')
+ACTIONS['scenario_sweep']=scenario('sweep')
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -67,6 +100,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send(200,{'ok':True,'version':__version__,'engine':'Python + SymPy + SciPy · browser MNA'})
         elif path=='/api/catalog':
             self.send(200,{'models':public_catalog()})
+        elif path.startswith('/pcl/'):          # the pcl package's sources for the "Σενάρια" panel (3.14)
+            name=path[5:]
+            if name not in ('__init__.py','core.py') or not (PCL/name).is_file():
+                self.send(404,{'error':'Δεν βρέθηκε.'}); return
+            self.send(200,(PCL/name).read_bytes(),'text/x-python; charset=utf-8')
         else:
             relative=path.lstrip('/')
             if relative=='' or relative.endswith('/'):
@@ -94,7 +132,7 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(data,dict):
                 raise InputError('Απαιτείται αντικείμενο JSON.')
             data.pop('_local',None)
-            if action=='batch_sim' and self.client_address[0] in ('127.0.0.1','::1'):
+            if action in ('batch_sim','scenario_run','scenario_sweep') and self.client_address[0] in ('127.0.0.1','::1'):
                 data['_local']=True        # Python blocks of the request may run here (the user's own machine)
             # at most two analyses at a time; the others wait their turn (a slow machine queues, it does not fail)
             if not SLOTS.acquire(timeout=60):

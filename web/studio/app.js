@@ -17,7 +17,7 @@ function notice(text,kind='info'){const n=$('#notice');if(!text){n.hidden=true;r
 function warnings(list){const w=$('#netwarn');w.innerHTML=(list||[]).map(t=>`<span>⚠ ${esc(t)}</span>`).join('');w.hidden=!(list&&list.length);}
 
 // ------------------------------------------------------------------ simulation
-function project(){return {...editor.export(),tutRef:S.tutRef||null,sim:{hDiv:+$('#sim-step').value,speed:S.speed,stopT:S.stopT,method:$('#method').value},scope:{cfg:scope.cfg},tutorial:S.tut};}
+function project(){return {...editor.export(),tutRef:S.tutRef||null,sim:{hDiv:+$('#sim-step').value,speed:S.speed,stopT:S.stopT,method:$('#method').value},scope:{cfg:scope.cfg},tutorial:S.tut,...(S.scenCode?{scenario:S.scenCode}:{})};}
 function buildSim(fresh){
  const doc=editor.export();
  try{
@@ -637,6 +637,121 @@ let stepCheckTimer=0;
 // the step check after every build or change (modes at the present switch states), debounced
 function scheduleStepCheck(){clearTimeout(stepCheckTimer);stepCheckTimer=setTimeout(()=>{if(S.sim&&!S.error)try{S.sim.stepCheck();}catch(e){}renderDiag();},250);renderDiag();}
 function syncStepMode(){const m=$('#step-mode');if(m)m.value=editor.doc.solve?.step==='var'?'var':'fixed';}
+// ------------------------------------------------------------------ scenarios (3.14, ROADMAP §30)
+// Python in a worker (scenario_worker.js): the pcl package with the app's solver, on a copy of the circuit on the screen
+const SCEN={worker:null,busy:false,ready:false,files:[],t0:0};
+const SCEN_EX={
+ ripple:`# Κυμάτωση του ρεύματος στον buck για διάφορα L, απέναντι στη θεωρία ΔI = V_o(1 − D)/(L·f_s)
+b = pcl.tutorial('buck', start='steady')
+sw = b.sweep({'L1.L': ['33u', '47u', '68u', '100u', '150u', '220u']}, t_end='8m',
+             measure={'Vo': ('V:C1', 'avg', 10), 'dI': ('I:L1', 'pp', 10)})
+L = sw.column('L1.L')
+theory = [r['Vo'] * (1 - 0.5) / (r['L1.L'] * 100e3) for r in sw.rows]
+pcl.show(sw, 'Σάρωση του L')
+pcl.plot([x * 1e6 for x in L], {'προσομοίωση': sw.column('dI'), 'θεωρία': theory}, 'Κυμάτωση ρεύματος πηνίου', xlabel='L (μH)', ylabel='Δi_L (A)')
+sw.save('κυμάτωση.csv')
+`,
+ run:`# Το κύκλωμα της οθόνης: 20 περίοδοι T, κυματομορφές και μέσες τιμές στις τελευταίες 5
+info = p.channels()
+keys = [k for k in info['keys'] if k[:2] in ('V:', 'I:')][:6]
+r = p.run(t_end=20 * info['T'], channels=keys)
+print(r, 'βήματα:', r.meta['steps'])
+pcl.show({k: r.measure(k, 'avg', 5) for k in keys}, 'Μέσες τιμές (5 T)')
+pcl.show(r, 'Κυματομορφές')
+r.save('κυματομορφές.mat')
+`,
+ param:`# Σάρωση μιας παραμέτρου του τρέχοντος κυκλώματος: εδώ η πρώτη αντίσταση
+for cid, q in p.params().items():
+    print(cid, q)
+R = next(cid for cid, q in p.params().items() if q['type'] == 'R')
+info = p.channels()
+out = [k for k in info['keys'] if k.startswith('V:')][0]
+sw = p.sweep({R + '.R': [1, 2, 5, 10, 20, 50]}, t_end=20 * info['T'],
+             measure={'μέση ' + out: (out, 'avg', 5), 'p-p ' + out: (out, 'pp', 5)})
+pcl.show(sw, 'Σάρωση της ' + R)
+`,
+ step:`# Σταθερό και μεταβλητό βήμα στο τρέχον κύκλωμα: βήματα, χρόνος και μια μέτρηση
+info = p.channels()
+k = [x for x in info['keys'] if x.startswith('V:')][0]
+rows = []
+for step in ('fixed', 'var'):
+    r = p.run(t_end=10 * info['T'], channels=[k], step=step)
+    rows.append({'βήμα': step, 'βήματα': r.meta['steps'], 'απορρίψεις': r.meta.get('rejected', 0),
+                 'χρόνος (s)': r.meta['wall_s'], 'μέση ' + k: r.measure(k, 'avg', 5)})
+pcl.show(rows, 'Σταθερό και μεταβλητό βήμα')
+`};
+const SCEN_COLORS=['#147966','#c47a1c','#2f7fd0','#b03a5b','#6b4fbb','#3b8b3b','#8a6d1d','#555'];
+function scenSetCode(code,foreign){S.scenCode=code;const t=$('#scen-code');if(t&&t.value!==code)t.value=code;if(foreign)S.scenForeign=true;}
+function scenState(t,kind){const e=$('#scen-state');e.textContent=t||'';e.className='scen-state'+(kind?' '+kind:'');}
+function scenTab(k){document.querySelectorAll('[data-stab]').forEach(b=>b.classList.toggle('on',b.dataset.stab===k));document.querySelectorAll('[data-spane]').forEach(p=>p.hidden=p.dataset.spane!==k);}
+function scenOut(text,cls){const o=$('#scen-out'),sp=document.createElement('span');if(cls)sp.className=cls;sp.textContent=text.endsWith('\n')?text:text+'\n';o.appendChild(sp);o.scrollTop=o.scrollHeight;}
+function scenWorker(){if(SCEN.worker)return SCEN.worker;const w=new Worker('studio/scenario_worker.js');w.onmessage=e=>scenMsg(e.data);
+ w.onerror=e=>{scenOut('Σφάλμα του worker: '+(e.message||e),'e');scenDone(false);};SCEN.worker=w;return w;}
+function scenRun(){if(SCEN.busy)return;const code=$('#scen-code').value;if(!code.trim())return;
+ // code that came with a file runs only after the user has seen it (ROADMAP §10, §30)
+ if(S.scenForeign&&!confirm('Ο κώδικας του σεναρίου ήρθε μαζί με το αρχείο που άνοιξες. Διάβασέ τον πριν τον εκτελέσεις: τρέχει στον browser σου.\n\nΕκτέλεση;'))return;
+ S.scenForeign=false;S.scenCode=code;saveLocal();SCEN.busy=true;SCEN.t0=performance.now();
+ $('#scen-out').innerHTML='';$('#scen-table').innerHTML='';$('#scen-chart').innerHTML='';SCEN.files.forEach(f=>URL.revokeObjectURL(f.url));SCEN.files=[];renderScenFiles();scenTab('out');
+ $('#scen-run').disabled=true;$('#scen-stop').disabled=false;$('#scen-prog').textContent='';
+ scenState(SCEN.ready?'τρέχει…':'φορτώνεται η Python (Pyodide)…','busy');
+ scenWorker().postMessage({type:'run',code,project:project(),name:tutorial().title||'κύκλωμα'});}
+function scenStop(){if(SCEN.worker){SCEN.worker.terminate();SCEN.worker=null;SCEN.ready=false;}scenOut('Διακόπηκε. Η Python ξαναφορτώνεται στην επόμενη εκτέλεση.','e');scenDone(false);}
+function scenDone(ok,wall){SCEN.busy=false;$('#scen-run').disabled=false;$('#scen-stop').disabled=true;$('#scen-prog').textContent='';
+ scenState(ok?`✓ σε ${(wall??(performance.now()-SCEN.t0)/1000).toFixed(1)} s`:'σταμάτησε με σφάλμα',ok?'':'bad');}
+function scenMsg(m){switch(m.type){
+ case 'ready':SCEN.ready=true;scenState('τρέχει… (Python '+m.version+')','busy');break;
+ case 'out':scenOut(m.text);break;
+ case 'err':scenOut(m.text,'e');break;
+ case 'tick':$('#scen-prog').textContent=`${Math.round(100*m.f)} %`;break;
+ case 'progress':$('#scen-prog').textContent=`σημείο ${m.i}/${m.n}`;break;
+ case 'show':scenShow(m.data);break;
+ case 'file':{const blob=new Blob([m.bytes]);SCEN.files.push({name:m.name,size:m.bytes.byteLength,blob,url:URL.createObjectURL(blob)});renderScenFiles();break;}
+ case 'error':scenOut(m.text,'e');scenTab('out');break;
+ case 'done':scenDone(m.ok,m.wall);break;}}
+function renderScenFiles(){$('#scen-nfiles').textContent=SCEN.files.length?`(${SCEN.files.length})`:'';
+ $('#scen-files').innerHTML=SCEN.files.length?SCEN.files.map(f=>`<div class="scen-file"><a href="${f.url}" download="${esc(f.name)}">⬇ ${esc(f.name)}</a><small>${(f.size/1024).toFixed(1)} kB</small></div>`).join(''):
+  '<p class="muted small">Ό,τι γράφει το σενάριο εμφανίζεται εδώ για λήψη, π.χ. <code>r.save(\'αποτελέσματα.csv\')</code>, <code>.json</code> ή <code>.mat</code> (MATLAB).</p>';}
+const scenNum=v=>v===null||v===undefined?'':typeof v==='number'?(Math.abs(v)>=1e4||(Math.abs(v)<1e-3&&v!==0)?v.toPrecision(5):String(+v.toPrecision(6))).replace('.',','):esc(String(v));
+function scenTable(cols,rows,title){return `<table class="scen-tbl">${title?`<caption>${esc(title)}</caption>`:''}<thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(v=>`<td>${scenNum(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;}
+function scenShow(d){
+ if(d.type==='text'){scenOut(d.text);return;}
+ if(d.type==='table'){$('#scen-table').insertAdjacentHTML('beforeend',scenTable(d.cols,d.rows,d.title));scenTab('table');return;}
+ if(d.type==='sweep'){const cols=[...d.params,...d.names];$('#scen-table').insertAdjacentHTML('beforeend',scenTable(cols,d.rows.map(r=>cols.map(c=>r[c])),d.title));
+  scenTab('chart');const x=d.rows.map(r=>r[d.params[0]]);for(const n of d.names)scenPlot({title:(d.title?d.title+': ':'')+n,xlabel:d.params[0],series:[{name:n,x,y:d.rows.map(r=>r[n])}],marks:true});
+  scenTab('chart');return;}
+ if(d.type==='xy'){scenTab('chart');scenPlot({title:d.title,xlabel:d.xlabel,ylabel:d.ylabel,series:Object.entries(d.series).map(([name,y])=>({name,x:d.x,y})),marks:true});scenTab('chart');return;}
+ if(d.type==='run'){const m=d.measure||{};if(Object.keys(m).length)$('#scen-table').insertAdjacentHTML('beforeend',scenTable(['μέτρηση','τιμή'],Object.entries(m),d.title));
+  // one chart per unit, so volts and amperes do not share an axis
+  scenTab('chart');const by={};d.keys.forEach((k,i)=>{(by[d.units[i]||'']??=[]).push(k);});
+  for(const [u,ks] of Object.entries(by))scenPlot({title:(d.title||'')+(u?` [${u}]`:''),xlabel:'t (s)',series:ks.map(k=>({name:k,x:d.t,y:d.ch[k]}))});scenTab('chart');}}
+function scenTicks(a,b,n=5){const sp=b-a||Math.abs(a)||1,st0=sp/n,mag=10**Math.floor(Math.log10(st0)),st=[1,2,2.5,5,10].map(x=>x*mag).find(x=>x>=st0*0.999);const out=[];for(let v=Math.ceil(a/st)*st;v<=b+st*1e-9;v+=st)out.push(+v.toPrecision(12));return out;}
+function scenPlot(o){const box=document.createElement('div');box.className='scen-plot';box.innerHTML=(o.title?`<h5>${esc(o.title)}</h5>`:'')+'<canvas></canvas><div class="scen-leg"></div>';$('#scen-chart').appendChild(box);
+ const cv=box.querySelector('canvas'),dpr=window.devicePixelRatio||1,W=Math.max(320,box.clientWidth||$('#scen-chart').clientWidth-24||600),H=220;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';
+ const g=cv.getContext('2d');g.scale(dpr,dpr);g.font='11px system-ui,sans-serif';
+ // at most 2000 points per series on screen (first and last kept, then the extremes of each bucket)
+ const thin=(x,y)=>{const n=x.length;if(n<=2000)return [x,y];const B=500,X=[],Y=[];for(let k=0;k<B;k++){const a=Math.floor(k*n/B),b=Math.floor((k+1)*n/B);let mi=a,ma=a;for(let i=a;i<b;i++){if(y[i]<y[mi])mi=i;if(y[i]>y[ma])ma=i;}for(const i of mi<ma?[a,mi,ma]:[a,ma,mi]){X.push(x[i]);Y.push(y[i]);}}X.push(x[n-1]);Y.push(y[n-1]);return [X,Y];};
+ const S2=o.series.map(s=>{const [x,y]=thin(s.x,s.y);return {...s,x,y};});let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+ for(const s of S2)for(let i=0;i<s.x.length;i++){const xv=s.x[i],yv=s.y[i];if(!Number.isFinite(xv)||!Number.isFinite(yv))continue;x0=Math.min(x0,xv);x1=Math.max(x1,xv);y0=Math.min(y0,yv);y1=Math.max(y1,yv);}
+ if(!Number.isFinite(x0)){g.fillText('χωρίς τιμές',10,20);return;}if(y1===y0){y0-=Math.abs(y0)*.05||1;y1+=Math.abs(y1)*.05||1;}const pad=(y1-y0)*.06;y0-=pad;y1+=pad;if(x1===x0){x0-=1;x1+=1;}
+ const L=64,R=12,T=8,B=30,px=x=>L+(x-x0)/(x1-x0)*(W-L-R),py=y=>T+(y1-y)/(y1-y0)*(H-T-B);
+ g.strokeStyle='#dbe5e0';g.fillStyle='#6b807a';g.lineWidth=1;
+ // enough digits for the tick step (12,00 and 12,01 must not both read 12)
+ const dig=(a,b,ts)=>Math.min(9,Math.max(3,Math.ceil(Math.log10(Math.max(Math.abs(a),Math.abs(b))/((ts[1]-ts[0])||1)))+1));
+ const ty=scenTicks(y0,y1),tx=scenTicks(x0,x1,6),dy=dig(y0,y1,ty),dx=dig(x0,x1,tx);
+ for(const v of ty){const yy=Math.round(py(v))+.5;g.beginPath();g.moveTo(L,yy);g.lineTo(W-R,yy);g.stroke();g.textAlign='right';g.fillText(P.eng(v,'',dy),L-6,yy+4);}
+ for(const v of tx){const xx=Math.round(px(v))+.5;g.beginPath();g.moveTo(xx,T);g.lineTo(xx,H-B);g.stroke();g.textAlign='center';g.fillText(P.eng(v,'',dx),xx,H-B+14);}
+ g.textAlign='right';g.fillText(o.xlabel||'',W-R,H-4);if(o.ylabel){g.save();g.translate(11,T+(H-T-B)/2);g.rotate(-Math.PI/2);g.textAlign='center';g.fillText(o.ylabel,0,0);g.restore();}
+ S2.forEach((s,k)=>{const c=SCEN_COLORS[k%SCEN_COLORS.length];g.strokeStyle=c;g.fillStyle=c;g.lineWidth=1.6;g.beginPath();let on=false;
+  for(let i=0;i<s.x.length;i++){const xv=s.x[i],yv=s.y[i];if(!Number.isFinite(xv)||!Number.isFinite(yv)){on=false;continue;}const X=px(xv),Y=py(yv);if(on)g.lineTo(X,Y);else g.moveTo(X,Y);on=true;}g.stroke();
+  if(o.marks&&s.x.length<=60)for(let i=0;i<s.x.length;i++)if(Number.isFinite(s.y[i])){g.beginPath();g.arc(px(s.x[i]),py(s.y[i]),2.6,0,7);g.fill();}});
+ box.querySelector('.scen-leg').innerHTML=S2.map((s,k)=>`<span><i style="background:${SCEN_COLORS[k%SCEN_COLORS.length]}"></i>${esc(s.name)}</span>`).join('');}
+function initScenarios(){const t=$('#scen-code');if(!t)return;t.value=S.scenCode||SCEN_EX.ripple;
+ t.addEventListener('input',()=>{S.scenCode=t.value;clearTimeout(SCEN.save);SCEN.save=setTimeout(saveLocal,600);});
+ t.addEventListener('keydown',e=>{if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();t.setRangeText('    ',t.selectionStart,t.selectionEnd,'end');}else if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();scenRun();}e.stopPropagation();});
+ $('#scen-ex').onchange=e=>{const k=e.target.value;if(!k)return;if(t.value.trim()&&t.value!==SCEN_EX[k]&&!Object.values(SCEN_EX).includes(t.value)&&!confirm('Να αντικατασταθεί ο κώδικας με το παράδειγμα;')){e.target.value='';return;}t.value=SCEN_EX[k];S.scenCode=t.value;S.scenForeign=false;e.target.value='';saveLocal();};
+ $('#scen-run').onclick=scenRun;$('#scen-stop').onclick=scenStop;document.querySelectorAll('[data-stab]').forEach(b=>b.onclick=()=>scenTab(b.dataset.stab));
+ try{if(localStorage.getItem('pcl-scen-open')==='1')$('#scen').open=true;}catch(e){}$('#scen').addEventListener('toggle',()=>{try{localStorage.setItem('pcl-scen-open',$('#scen').open?'1':'0');}catch(e){}});
+ renderScenFiles();}
 function liveApply(){if(!S.sim)return;try{S.sim.load(editor.export(),false);S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);editor.setDiag(S.sim.net.diag);}catch(e){S.error=e.message;pause();notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');}scheduleStepCheck();}
 
 // ------------------------------------------------------------------ context menu
@@ -713,6 +828,7 @@ function applyProject(pr,keepView){
  if(pr.scope?.cfg){scope.cfg=pr.scope.cfg;scope.cfg.frozen=null;}
  else{scope.cfg={panes:[{ch:[]}],window:pr.scope?.window||{unit:'T',n:20},trigger:'roll',display:'auto',frozen:null,cursors:[]};
   (pr.scope?.panes||[]).forEach((pane,pi)=>pane.forEach(([key,label])=>scope.addChannel(key,label,pi)));}
+ if(typeof pr.scenario==='string')scenSetCode(pr.scenario);
  syncScopeInputs();renderChannels();refreshControls();closeInspector();saveLocal();draw(true);
 }
 function renderTutorial(){
@@ -1556,7 +1672,7 @@ function boot(){
  $('#new').onclick=()=>loadTutorial('empty');
  $('#save').onclick=()=>download((tutorial().id||'circuit')+'.pcl.json',JSON.stringify(project(),null,1));
  $('#open').onclick=()=>$('#file').click();
- $('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const pr=JSON.parse(await f.text());if(!Array.isArray(pr.components))throw Error('Δεν είναι αρχείο κυκλώματος.');S.tut=pr.tutorial||{id:'empty',options:{}};S.tutMeta=null;S.tutRef=pr.tutRef||tutorialRef(S.tut);applyProject(pr);renderTutorial();runTheory();}catch(err){notice('Άνοιγμα: '+esc(err.message),'error');}e.target.value='';};
+ $('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const pr=JSON.parse(await f.text());if(!Array.isArray(pr.components))throw Error('Δεν είναι αρχείο κυκλώματος.');S.tut=pr.tutorial||{id:'empty',options:{}};S.tutMeta=null;S.tutRef=pr.tutRef||tutorialRef(S.tut);applyProject(pr);if(typeof pr.scenario==='string')S.scenForeign=true;renderTutorial();runTheory();}catch(err){notice('Άνοιγμα: '+esc(err.message),'error');}e.target.value='';};
  $('#pal-search').oninput=renderPalette;$('#pal-toggle').onclick=()=>document.body.classList.toggle('pal-hidden');
  // parameters panel (3.7) and wire tool
  {let open=innerWidth>700;try{const v=localStorage.getItem('pcl2-props');if(v)open=v==='1';}catch{}setProps(open);
@@ -1572,6 +1688,7 @@ function boot(){
  const grip=$('#grip');grip.onpointerdown=e=>{e.preventDefault();grip.setPointerCapture(e.pointerId);const h0=$('.work').getBoundingClientRect().height,y0=e.clientY;grip.onpointermove=ev=>{$('.work').style.height=Math.max(240,Math.min(1000,h0+ev.clientY-y0))+'px';};grip.onpointerup=()=>{grip.onpointermove=null;};};
  renderPalette();
  // restore last state or start with a tutorial
+ initScenarios();
  let st=null;try{st=JSON.parse(localStorage.getItem('pcl2-state'));}catch{}
  const qs=new URLSearchParams(location.search),want=qs.get('tutorial');let imp=null;
  if(qs.get('import')){try{imp=JSON.parse(localStorage.getItem('pcl2-import'));localStorage.removeItem('pcl2-import');}catch{}history.replaceState(null,'',location.pathname);}
@@ -1584,5 +1701,5 @@ function boot(){
 }
 function renderTheoryLive(){if(document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
-window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;}};
+window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun};
 })();

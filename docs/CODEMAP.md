@@ -7,20 +7,22 @@
 
 | Αρχείο | Γραμμές |
 |---|---:|
-| `web/studio/app.js` | 1588 |
+| `web/studio/app.js` | 1705 |
 | `web/studio/editor.js` | 514 |
 | `web/studio/expr.js` | 56 |
 | `web/studio/math.js` | 144 |
 | `web/studio/metrics.js` | 89 |
 | `web/studio/mna.js` | 1077 |
 | `web/studio/parts.js` | 563 |
-| `web/studio/pyrt.js` | 55 |
+| `web/studio/pyrt.js` | 57 |
+| `web/studio/scenario.js` | 82 |
+| `web/studio/scenario_worker.js` | 88 |
 | `web/studio/scope.js` | 167 |
 | `web/studio/stepcheck.js` | 163 |
 | `web/studio/templates.js` | 32 |
 | `web/studio/tutorials.js` | 810 |
-| `pcl/runner.js` | 72 |
-| `run.py` | 138 |
+| `pcl/runner.js` | 15 |
+| `run.py` | 176 |
 | `engine/__init__.py` | 1 |
 | `engine/analysis.py` | 307 |
 | `engine/batch.py` | 1775 |
@@ -38,9 +40,9 @@
 | `engine/studio_math.py` | 81 |
 | `engine/templates.py` | 317 |
 | `engine/workbench.py` | 129 |
-| `pcl/__init__.py` | 4 |
-| `pcl/__main__.py` | 136 |
-| `pcl/core.py` | 480 |
+| `pcl/__init__.py` | 6 |
+| `pcl/__main__.py` | 156 |
+| `pcl/core.py` | 749 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
 | `tests/test_batch.py` | 188 |
@@ -50,7 +52,8 @@
 | `tests/test_derivation.py` | 93 |
 | `tests/test_engine.py` | 276 |
 | `tests/test_live_sim.py` | 149 |
-| `tests/test_pcl.py` | 163 |
+| `tests/test_matlab.py` | 68 |
+| `tests/test_pcl.py` | 207 |
 | `tests/test_step.py` | 79 |
 | `tests/test_studio_math.py` | 50 |
 | `tests/test_studio_sim.py` | 593 |
@@ -63,6 +66,7 @@
 | `tests/ui/blocks_flow.js` | 140 |
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/features_flow.js` | 84 |
+| `tests/ui/scenario_flow.js` | 46 |
 | `tests/ui/step_flow.js` | 41 |
 | `tests/ui/studio_flow.js` | 39 |
 | `tests/ui/wiring_flow.js` | 128 |
@@ -176,7 +180,7 @@
 
 ## API του server (`run.py`, `/api/<action>`)
 
-`analyze`, `batch_sim`, `bidir`, `boundary`, `capacitance`, `curves`, `derivation`, `design`, `envelope`, `inverse`, `linearize`, `model_proof`, `problem`, `solve`, `studio_math`, `sweep`, `switching`, `template_solve`, `validate_circuit`
+`analyze`, `batch_sim`, `bidir`, `boundary`, `capacitance`, `curves`, `derivation`, `design`, `envelope`, `inverse`, `linearize`, `model_proof`, `problem`, `scenario_run`, `scenario_sweep`, `solve`, `studio_math`, `sweep`, `switching`, `template_solve`, `validate_circuit`
 
 ## Templates δεδομένων (`web/studio/exercises/`)
 
@@ -312,110 +316,128 @@
 | 635 | function | `flashComp` |
 | 638 | function | `scheduleStepCheck` |
 | 639 | function | `syncStepMode` |
-| 640 | function | `liveApply` |
-| 643 | function | `closeMenu` |
-| 644 | function | `openMenu` |
-| 660 | function | `updateHover` |
-| 674 | function | `renderPalette` |
-| 681 | function | `tutorial` |
-| 684 | function | `circuitSig` |
-| 694 | function | `tutorialRef` |
-| 695 | function | `theoryValidity` |
-| 701 | function | `staleBanner` |
-| 704 | function | `bindRestore` |
-| 705 | function | `loadTutorial` |
-| 709 | function | `applyProject` |
-| 718 | function | `renderTutorial` |
-| 728 | function | `gallery` |
-| 734 | function | `api` |
-| 735 | function | `paramsOf` |
-| 736 | function | `avgOver` |
-| 739 | function | `simValue` |
-| 745 | function | `lastPP` |
-| 747 | function | `runTheory` |
-| 759 | function | `cmpRows` |
-| 760 | function | `stepsHTML` |
-| 761 | function | `renderTheory` |
-| 791 | function | `rippleDev` |
-| 793 | function | `periodAvgAt` |
-| 795 | function | `samplingTheory` |
-| 804 | const fn | `lastAt` |
-| 826 | function | `polyTheory` |
-| 833 | const fn | `frac` |
-| 862 | function | `lastPeriods` |
-| 863 | function | `evalOrderHTML` |
-| 866 | function | `blocksTheory` |
-| 881 | function | `pcmTheory` |
-| 907 | function | `codeTheory` |
-| 917 | function | `eisTheory` |
-| 919 | const fn | `ser` |
-| 932 | function | `imSteady` |
-| 935 | function | `imPar` |
-| 936 | function | `phaseRms` |
-| 937 | function | `vfTheory` |
-| 950 | function | `focTheory` |
-| 967 | function | `synTheory` |
-| 986 | const fn | `need` |
-| 1006 | function | `pmTheory` |
-| 1008 | const fn | `mtpa` |
-| 1024 | function | `srmTheory` |
-| 1039 | const fn | `curve` |
-| 1050 | function | `lgTheory` |
-| 1061 | const fn | `cr` |
-| 1068 | function | `chaosTheory` |
-| 1080 | function | `dcDriveTheory` |
-| 1081 | const fn | `per` |
-| 1082 | const fn | `cross` |
-| 1112 | function | `twModel` |
-| 1115 | const fn | `g` |
-| 1118 | function | `twLattice` |
-| 1125 | const fn | `marks` |
-| 1128 | function | `twTheory` |
-| 1136 | const fn | `at` |
-| 1153 | function | `arTheory` |
-| 1173 | function | `impulseMeasure` |
-| 1175 | const fn | `cross` |
-| 1178 | function | `marxTheory` |
-| 1196 | function | `chopModel` |
-| 1199 | const fn | `f` |
-| 1202 | function | `chopTheory` |
-| 1216 | function | `cmp3` |
-| 1220 | function | `hvExact` |
-| 1221 | function | `hv153Theory` |
-| 1247 | function | `besI1e` |
-| 1249 | function | `heaviside` |
-| 1251 | function | `lossTheory` |
-| 1270 | function | `vtBreak` |
-| 1271 | function | `vtTheory` |
-| 1291 | function | `hvdivTheory` |
-| 1293 | const fn | `r` |
-| 1305 | function | `scheringTheory` |
-| 1306 | const fn | `inv` |
-| 1315 | const fn | `sr` |
-| 1321 | function | `formulaTheory` |
-| 1390 | function | `nodeAvg` |
-| 1396 | function | `circuitForMath` |
-| 1428 | function | `scheduleMath` |
-| 1429 | function | `batteryKey` |
-| 1431 | function | `mathChoices` |
-| 1432 | const fn | `prim` |
-| 1434 | function | `renderMathChoices` |
-| 1436 | function | `runTemplate` |
-| 1442 | function | `runMath` |
-| 1463 | function | `saveLocal` |
-| 1464 | function | `download` |
-| 1465 | function | `exportCSV` |
-| 1471 | function | `syncScopeInputs` |
-| 1472 | function | `setSpeed` |
-| 1475 | function | `openSettings` |
-| 1476 | const fn | `sel` |
-| 1477 | const fn | `chk` |
-| 1495 | function | `boot` |
-| 1534 | const fn | `mv` |
-| 1535 | const fn | `up` |
-| 1536 | const fn | `navOpen` |
-| 1542 | const fn | `probeSel` |
-| 1585 | function | `renderTheoryLive` |
+| 684 | function | `scenSetCode` |
+| 685 | function | `scenState` |
+| 686 | function | `scenTab` |
+| 687 | function | `scenOut` |
+| 688 | function | `scenWorker` |
+| 690 | function | `scenRun` |
+| 698 | function | `scenStop` |
+| 699 | function | `scenDone` |
+| 701 | function | `scenMsg` |
+| 711 | function | `renderScenFiles` |
+| 714 | const fn | `scenNum` |
+| 715 | function | `scenTable` |
+| 716 | function | `scenShow` |
+| 727 | function | `scenTicks` |
+| 728 | function | `scenPlot` |
+| 732 | const fn | `thin` |
+| 739 | const fn | `dig` |
+| 748 | function | `initScenarios` |
+| 755 | function | `liveApply` |
+| 758 | function | `closeMenu` |
+| 759 | function | `openMenu` |
+| 775 | function | `updateHover` |
+| 789 | function | `renderPalette` |
+| 796 | function | `tutorial` |
+| 799 | function | `circuitSig` |
+| 809 | function | `tutorialRef` |
+| 810 | function | `theoryValidity` |
+| 816 | function | `staleBanner` |
+| 819 | function | `bindRestore` |
+| 820 | function | `loadTutorial` |
+| 824 | function | `applyProject` |
+| 834 | function | `renderTutorial` |
+| 844 | function | `gallery` |
+| 850 | function | `api` |
+| 851 | function | `paramsOf` |
+| 852 | function | `avgOver` |
+| 855 | function | `simValue` |
+| 861 | function | `lastPP` |
+| 863 | function | `runTheory` |
+| 875 | function | `cmpRows` |
+| 876 | function | `stepsHTML` |
+| 877 | function | `renderTheory` |
+| 907 | function | `rippleDev` |
+| 909 | function | `periodAvgAt` |
+| 911 | function | `samplingTheory` |
+| 920 | const fn | `lastAt` |
+| 942 | function | `polyTheory` |
+| 949 | const fn | `frac` |
+| 978 | function | `lastPeriods` |
+| 979 | function | `evalOrderHTML` |
+| 982 | function | `blocksTheory` |
+| 997 | function | `pcmTheory` |
+| 1023 | function | `codeTheory` |
+| 1033 | function | `eisTheory` |
+| 1035 | const fn | `ser` |
+| 1048 | function | `imSteady` |
+| 1051 | function | `imPar` |
+| 1052 | function | `phaseRms` |
+| 1053 | function | `vfTheory` |
+| 1066 | function | `focTheory` |
+| 1083 | function | `synTheory` |
+| 1102 | const fn | `need` |
+| 1122 | function | `pmTheory` |
+| 1124 | const fn | `mtpa` |
+| 1140 | function | `srmTheory` |
+| 1155 | const fn | `curve` |
+| 1166 | function | `lgTheory` |
+| 1177 | const fn | `cr` |
+| 1184 | function | `chaosTheory` |
+| 1196 | function | `dcDriveTheory` |
+| 1197 | const fn | `per` |
+| 1198 | const fn | `cross` |
+| 1228 | function | `twModel` |
+| 1231 | const fn | `g` |
+| 1234 | function | `twLattice` |
+| 1241 | const fn | `marks` |
+| 1244 | function | `twTheory` |
+| 1252 | const fn | `at` |
+| 1269 | function | `arTheory` |
+| 1289 | function | `impulseMeasure` |
+| 1291 | const fn | `cross` |
+| 1294 | function | `marxTheory` |
+| 1312 | function | `chopModel` |
+| 1315 | const fn | `f` |
+| 1318 | function | `chopTheory` |
+| 1332 | function | `cmp3` |
+| 1336 | function | `hvExact` |
+| 1337 | function | `hv153Theory` |
+| 1363 | function | `besI1e` |
+| 1365 | function | `heaviside` |
+| 1367 | function | `lossTheory` |
+| 1386 | function | `vtBreak` |
+| 1387 | function | `vtTheory` |
+| 1407 | function | `hvdivTheory` |
+| 1409 | const fn | `r` |
+| 1421 | function | `scheringTheory` |
+| 1422 | const fn | `inv` |
+| 1431 | const fn | `sr` |
+| 1437 | function | `formulaTheory` |
+| 1506 | function | `nodeAvg` |
+| 1512 | function | `circuitForMath` |
+| 1544 | function | `scheduleMath` |
+| 1545 | function | `batteryKey` |
+| 1547 | function | `mathChoices` |
+| 1548 | const fn | `prim` |
+| 1550 | function | `renderMathChoices` |
+| 1552 | function | `runTemplate` |
+| 1558 | function | `runMath` |
+| 1579 | function | `saveLocal` |
+| 1580 | function | `download` |
+| 1581 | function | `exportCSV` |
+| 1587 | function | `syncScopeInputs` |
+| 1588 | function | `setSpeed` |
+| 1591 | function | `openSettings` |
+| 1592 | const fn | `sel` |
+| 1593 | const fn | `chk` |
+| 1611 | function | `boot` |
+| 1650 | const fn | `mv` |
+| 1651 | const fn | `up` |
+| 1652 | const fn | `navOpen` |
+| 1658 | const fn | `probeSel` |
+| 1702 | function | `renderTheoryLive` |
 
 ### `web/studio/editor.js`
 
@@ -814,7 +836,31 @@
 |---:|---|---|
 | 38 | function | `pyMessage` |
 | 41 | method | `load` |
-| 50 | method | `make` |
+| 51 | method | `attach` |
+| 52 | method | `make` |
+
+### `web/studio/scenario.js`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 14 | const fn | `tut` |
+| 17 | function | `defaultKeys` |
+| 22 | function | `measure` |
+| 34 | function | `decimate` |
+| 39 | function | `run` |
+| 47 | const fn | `push` |
+| 66 | function | `tutorial` |
+| 68 | function | `tutorials` |
+| 70 | function | `handle` |
+| 78 | const fn | `json` |
+
+### `web/studio/scenario_worker.js`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 11 | const fn | `post` |
+| 60 | function | `boot` |
+| 78 | function | `listFiles` |
 
 ### `web/studio/scope.js`
 
@@ -942,24 +988,18 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 15 | function | `loadPy` |
-| 16 | function | `makeSim` |
-| 19 | function | `defaultKeys` |
-| 24 | function | `measure` |
-| 36 | function | `decimate` |
-| 41 | function | `run` |
-| 48 | const fn | `push` |
-| 62 | function | `main` |
+| 10 | function | `main` |
 
 ### `run.py`
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 51 | class | `Handler` |
-| 52 | method | `Handler.send` |
-| 64 | method | `Handler.do_GET` |
-| 83 | method | `Handler.do_POST` |
-| 114 | function | `main` |
+| 55 | function | `scenario` |
+| 84 | class | `Handler` |
+| 85 | method | `Handler.send` |
+| 97 | method | `Handler.do_GET` |
+| 121 | method | `Handler.do_POST` |
+| 152 | function | `main` |
 
 ### `engine/__init__.py`
 
@@ -1208,58 +1248,82 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 18 | function | `_project` |
-| 26 | function | `_kv` |
-| 36 | function | `main` |
+| 19 | function | `_dumps` |
+| 24 | function | `_project` |
+| 32 | function | `_kv` |
+| 42 | function | `main` |
 
 ### `pcl/core.py`
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 39 | class | `PclError` |
-| 43 | function | `version` |
-| 51 | function | `parse_value` |
-| 65 | function | `_node` |
-| 74 | function | `tutorials` |
-| 79 | function | `tutorial` |
-| 84 | function | `load` |
-| 93 | class | `Project` |
-| 96 | method | `Project.__init__` |
-| 102 | method | `Project.comp` |
-| 109 | method | `Project.get` |
-| 115 | method | `Project.set` |
-| 130 | method | `Project.copy` |
-| 135 | method | `Project.save` |
-| 138 | method | `Project.hash` |
-| 142 | method | `Project.channels` |
-| 147 | method | `Project._settings` |
-| 158 | method | `Project.run` |
-| 180 | method | `Project._run_scipy` |
-| 209 | method | `Project.sweep` |
-| 250 | function | `_sweep_point` |
-| 258 | function | `_as_list` |
-| 268 | function | `_spec` |
-| 279 | function | `_measures` |
-| 300 | function | `_base_T` |
-| 307 | function | `_unit` |
-| 311 | function | `_matname` |
-| 316 | class | `Result` |
-| 319 | method | `Result.__init__` |
-| 328 | method | `Result.__getitem__` |
-| 331 | method | `Result.__repr__` |
-| 334 | method | `Result.measure` |
-| 373 | method | `Result.frame` |
-| 382 | method | `Result._meta_lines` |
-| 386 | method | `Result.to_csv` |
-| 399 | method | `Result.to_json` |
-| 404 | method | `Result.to_mat` |
-| 423 | method | `Result.save` |
-| 428 | class | `SweepResult` |
-| 431 | method | `SweepResult.__init__` |
-| 437 | method | `SweepResult.__repr__` |
-| 440 | method | `SweepResult.column` |
-| 443 | method | `SweepResult.frame` |
-| 450 | method | `SweepResult.to_csv` |
-| 462 | method | `SweepResult.to_json` |
-| 466 | method | `SweepResult.to_mat` |
-| 478 | method | `SweepResult.save` |
+| 45 | class | `PclError` |
+| 49 | function | `version` |
+| 57 | function | `parse_value` |
+| 78 | function | `_node` |
+| 91 | function | `tutorials` |
+| 96 | function | `tutorial` |
+| 101 | function | `load` |
+| 112 | function | `use` |
+| 119 | function | `current` |
+| 126 | function | `set` |
+| 130 | function | `get` |
+| 134 | function | `run` |
+| 138 | function | `sweep` |
+| 142 | function | `params` |
+| 146 | class | `Plot` |
+| 150 | function | `plot` |
+| 159 | function | `show` |
+| 196 | function | `_open` |
+| 212 | function | `_pairs` |
+| 230 | function | `_clean` |
+| 241 | function | `job` |
+| 270 | class | `Project` |
+| 273 | method | `Project.__init__` |
+| 279 | method | `Project.comp` |
+| 286 | method | `Project.get` |
+| 292 | method | `Project.set` |
+| 307 | method | `Project.copy` |
+| 312 | method | `Project.save` |
+| 315 | method | `Project.hash` |
+| 319 | method | `Project.params` |
+| 323 | method | `Project.channels` |
+| 328 | method | `Project._settings` |
+| 339 | method | `Project.run` |
+| 361 | method | `Project._run_scipy` |
+| 390 | method | `Project.sweep` |
+| 442 | function | `_sweep_point` |
+| 450 | function | `_as_list` |
+| 460 | function | `_spec` |
+| 476 | function | `_measures` |
+| 499 | function | `_base_T` |
+| 506 | function | `_unit` |
+| 510 | function | `_matname` |
+| 515 | class | `Result` |
+| 518 | method | `Result.__init__` |
+| 527 | method | `Result.__getitem__` |
+| 530 | method | `Result.__repr__` |
+| 533 | method | `Result.measure` |
+| 593 | method | `Result.frame` |
+| 602 | method | `Result._meta_lines` |
+| 606 | method | `Result.to_csv` |
+| 619 | method | `Result._vars` |
+| 629 | method | `Result.as_dict` |
+| 633 | method | `Result.to_json` |
+| 637 | method | `Result.to_mat` |
+| 648 | method | `Result.save` |
+| 653 | class | `SweepResult` |
+| 656 | method | `SweepResult.__init__` |
+| 662 | method | `SweepResult.__repr__` |
+| 665 | method | `SweepResult.column` |
+| 668 | method | `SweepResult.frame` |
+| 675 | method | `SweepResult.to_csv` |
+| 687 | method | `SweepResult.to_json` |
+| 691 | method | `SweepResult.to_mat` |
+| 698 | method | `SweepResult.save` |
+| 710 | function | `_el` |
+| 715 | function | `_matrix` |
+| 720 | function | `_ascii` |
+| 727 | function | `_mat_char` |
+| 732 | function | `_mat_value` |
+| 741 | function | `_savemat` |

@@ -22,9 +22,12 @@ index.html  φορτώνει τα studio/*.js με τη σειρά:        run.p
  math.js       υπολογισμοί, ερωτήσεις                     workbench, curves   αναλυτικοί πάγκοι (/converter/)
  app.js        κόλλα: κατάσταση, πίνακες, θεωρία
  stepcheck.js  έλεγχος βήματος (3.13)
+ scenario.js   αιτήματα σεναρίων (3.14, κοινό με το pcl/runner.js)
+ scenario_worker.js  πάνελ «Σενάρια»: Pyodide + pcl/core.py σε Worker
  exercises/    *.template.json, pe2_battery.js
 
-Python από έξω (pcl/, 3.13): core.py (Project, Result, sweep) → runner.js (mna.js στο Node) ή engine/batch.py
+Python από έξω (pcl/, 3.13): core.py (Project, Result, sweep, job) → runner.js → scenario.js (mna.js στο Node) ή engine/batch.py
+MATLAB/Octave (matlab/, 3.14): pcl_run, pcl_sweep → python -m pcl job (ή /api/scenario_run, _sweep)
 ```
 
 | Αρχείο | Ρόλος | Κύρια σημεία |
@@ -41,7 +44,9 @@ Python από έξω (pcl/, 3.13): core.py (Project, Result, sweep) → runner.j
 | `web/studio/math.js` | Εμφάνιση αποτελεσμάτων των templates και των ερωτήσεων με πρόβλεψη. | `renderTemplate`, `questionsHTML`, `bindQuestions` |
 | `web/studio/stepcheck.js` | Έλεγχος βήματος (3.13): ιδιοτιμές του χάρτη BE των καταστάσεων, παρασιτικές των διακοπτών, πηγές, γραμμές, μηνύματα. Χωρίς DOM. | `eig`, `eigvecAbs`, `modes`, `check` |
 | `engine/batch.py` | Ο ίδιος κύκλος με το `mna.js`, με `solve_ivp`. Δίοδοι και συγκριτές ως συμβάντα. Μηνύματα για την κονσόλα (3.13). | `Circuit`, `Ctrl`, `eval_blocks`, `sample`, `next_event`, `simulate`, `_diagnose` |
-| `pcl/` | Σενάρια από κώδικα (3.13): `core.py` (Project: `set`, `run`, `sweep`· Result: `measure`, `to_csv`/`to_json`/`to_mat`), `runner.js` (το `mna.js` στο Node: run, export, tutorial), `__main__.py` (γραμμή εντολών). | `load`, `tutorial`, `Project.run`, `Project.sweep` |
+| `pcl/` | Σενάρια από κώδικα (3.13–3.14): `core.py` (Project: `set`, `run`, `sweep`· Result: `measure`, `to_csv`/`to_json`/`to_mat` (`_savemat`)· `job`, `use`, `show`, `plot`, hooks για το πάνελ), `runner.js` (Node, πάνω στο `web/studio/scenario.js`), `__main__.py` (γραμμή εντολών, και `job`). | `load`, `tutorial`, `Project.run`, `Project.sweep`, `job` |
+| `web/studio/scenario.js` | Αιτήματα σεναρίων (3.14): run (με μετρήσεις, αραίωση, κομμάτια ακέραιων περιόδων), export, tutorial(s), channels. Χωρίς DOM: Node και Worker. | `handle`, `run`, `measure`, `decimate` |
+| `matlab/` | MATLAB/Octave (3.14): `pcl_run`, `pcl_sweep`, `pcl_read`, `pcl_config`. | |
 | `engine/templates.py` | Υπολογίζει ένα template: εισόδους, βήματα, ελέγχους, πίνακες, ερωτήσεις. | `template_solve`, `_questions` |
 | `run.py` | Server: στατικά αρχεία και `ACTIONS` (π.χ. `batch_sim`, `template_solve`, `studio_math`). | `ACTIONS` |
 
@@ -95,6 +100,8 @@ Python από έξω (pcl/, 3.13): core.py (Project, Result, sweep) → runner.j
 | **Πάνελ παραμέτρων και 📌 (3.7)** | `app.js` `renderProps` (`propsComp`, `propsWire`, `propsCircuit`, ενότητες με `psec`), `togglePin` (`c.live`, `c.liveBase`), ρυθμιστές στο `refreshControls`, `liveApply` (φόρτωση με καταστάσεις χωρίς ανανέωση πάνελ) | `wiring_flow.js` |
 | **Βήμα του λύτη (3.13)** | `mna.js`: `buildNetlist` (`step` από `project.solve`), `Sim.varSetup`/`hGrid`/`modeCap` (όρια, πλέγμα, 2τ για τον τραπεζοειδή), `stIndex`/`stVec` (καταστάσεις: νέο είδος κατάστασης μπαίνει εκεί και στο `stKind`), `lteErr`, `varCheck` (μετά από κάθε βήμα στο `run`), `gateSigPeek` και `endFlip` (μικρό βήμα μετά από μεταγωγή), σημαίες `lastSmooth`/`lastDisc` στο `stepCore`, `evStat` στο `nextEvent` | `tests/js/step_cases.js` + `test_step.py` |
 | **Μήνυμα στην κονσόλα διαγνωστικών (3.13)** | Πριν από το τρέξιμο: `stepcheck.js` `check` (πεδία `sev`, `grp`, `id`, `key`, `msg`, `fix`). Κατά το τρέξιμο: `Sim.note(key, {...})` (ίδια πεδία, μετρά επαναλήψεις, `up` για αναβάθμιση σε προειδοποίηση). Server: `batch.py` `_diagnose` ή `diag` στο αποτέλεσμα. Εμφάνιση: `app.js` `diagItems`, `renderDiag` | `step_cases.js`, `step_flow.js`, `test_pcl.py` (server) |
+| **Πάνελ «Σενάρια» (3.14)** | `index.html` (`#scen-card`) → `app.js` (`SCEN`, `scenRun`, `scenMsg`, `scenShow`, `scenPlot`, `SCEN_EX` για τα παραδείγματα) → `scenario_worker.js` (Pyodide, `GLUE`: `_backend`, `_show_hook`, `_run_user`) → `scenario.js` `handle`. Νέος τύπος εμφάνισης: `pcl.core` (π.χ. `Plot`), `_show_hook` στο `GLUE`, `scenShow` | `scenario_flow.js` |
+| **MATLAB/Octave (3.14)** | `matlab/pcl_run.m`, `pcl_sweep.m` → `pcl_spec`, `pcl_measures` → `pcl_job` (CLI ή server) → `pcl_result` (struct από το JSON) | `test_matlab.py` (Octave) |
 | **Σενάρια από κώδικα (3.13)** | `pcl/core.py` (`Project`, `_measures`, `Result`, `SweepResult`) → `pcl/runner.js` (ενέργειες `run`, `export`, `tutorial`, `tutorials`, `channels`· μετρήσεις στο `measure`) → `pcl/__main__.py` (γραμμή εντολών). Νέα μέτρηση: `STATS`, `runner.js` `measure` και `Result.measure` | `test_pcl.py` |
 | **API του server** | `run.py` `ACTIONS` → συνάρτηση στο `engine/` | `test_api.py` |
 | **Κείμενα διεπαφής** | `web/index.html`, `app.js` | UI flows |

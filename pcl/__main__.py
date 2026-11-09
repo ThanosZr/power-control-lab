@@ -6,13 +6,19 @@
   python -m pcl run buck.json --set L1.L=47u --t-end 5m --channels V:C1,I:L1 --out out.csv
   python -m pcl run buck.json --t-end 5m --step var --rtol 1e-5 --out out.mat
   python -m pcl run buck.json --t-end 5m --solver scipy --method Radau --out out.json
-  python -m pcl sweep buck.json --grid L1.L=22u,47u,100u --grid R1.R=5:20:4 --measure V:C1:avg:10 --measure I:L1:pp:10 --t-end 5m --out sweep.csv
+  python -m pcl sweep buck.json --grid L1.L=22u,47u,100u --grid R1.R=5:20:4 --measure Vo=V:C1:avg:10 --measure I:L1:pp:10 --t-end 5m --out sweep.csv
+  python -m pcl job request.json --out result.json      (MATLAB/Octave, 3.14: the request as JSON, see pcl/core.py job)
 """
 import argparse
 import json
 import sys
 
-from .core import PclError, load, parse_value, tutorial, tutorials
+from .core import PclError, _clean, job, load, parse_value, tutorial, tutorials
+
+
+def _dumps(o):
+    """JSON with null for NaN/Inf (MATLAB's jsondecode and the browser read it)."""
+    return json.dumps(_clean(o), ensure_ascii=False)
 
 
 def _project(src):
@@ -42,6 +48,9 @@ def main(argv=None):
     a.add_argument('id')
     a.add_argument('--opt', action='append', help='επιλογή του tutorial, π.χ. load=R')
     a.add_argument('--out', required=True)
+    a = sub.add_parser('job', help='ένα αίτημα σε JSON (run ή sweep), όπως το στέλνουν το MATLAB και το Octave')
+    a.add_argument('spec', help='αρχείο JSON: {project | tutorial, set, run | sweep}')
+    a.add_argument('--out', help='αποτέλεσμα σε JSON (αλλιώς στην έξοδο)')
     a = sub.add_parser('channels', help='τα κανάλια ενός project')
     a.add_argument('project', help='αρχείο JSON ή tutorial:<id>')
     for name, hlp in (('run', 'μία προσομοίωση'), ('sweep', 'σάρωση παραμέτρων με μετρήσεις')):
@@ -57,7 +66,7 @@ def main(argv=None):
         a.add_argument('--hmax', help='μέγιστο βήμα: T/N με N (browser) ή σε s (scipy)')
         a.add_argument('--channels', help='κανάλια με κόμμα, π.χ. V:C1,I:L1')
         a.add_argument('--from', dest='t_from', default='0', help='γράφει από αυτή τη στιγμή και μετά')
-        a.add_argument('--measure', action='append', help='<κανάλι>:<avg|rms|min|max|pp|end|thd>[:περίοδοι] ή <κανάλι>:at:<t>')
+        a.add_argument('--measure', action='append', help='[όνομα=]<κανάλι>:<avg|rms|min|max|pp|end|thd>[:περίοδοι] ή <κανάλι>:at:<t>')
         a.add_argument('--sep', default=',', help='διαχωριστικό CSV (; για ελληνικό Excel)')
         a.add_argument('--decimal', default='.', help='δεκαδικό CSV (, για ελληνικό Excel)')
         a.add_argument('--out', help='.csv, .json ή .mat')
@@ -79,6 +88,17 @@ def main(argv=None):
             p.save(args.out)
             print(f'{args.out}: {len(p.data["components"])} στοιχεία')
             return 0
+        if args.cmd == 'job':
+            with open(args.spec, encoding='utf-8') as f:
+                spec = json.load(f)
+            out = _dumps(job(spec))
+            if args.out:
+                with open(args.out, 'w', encoding='utf-8') as f:
+                    f.write(out)
+                print(args.out)
+            else:
+                print(out)
+            return 0
         if args.cmd == 'channels':
             r = _project(args.project).channels()
             print(f"T = {r['T']:.6g} s")
@@ -95,7 +115,7 @@ def main(argv=None):
             kw['hmax'] = parse_value(args.hmax) if args.hmax else None
         elif args.hmax:
             kw['hmax'] = float(args.hmax)
-        meas = {m: m for m in args.measure} if args.measure else None
+        meas = {(m.split('=', 1)[0] if '=' in m else m): (m.split('=', 1)[1] if '=' in m else m) for m in args.measure} if args.measure else None
         t_end = parse_value(args.t_end) if args.t_end else None
         if args.cmd == 'run':
             r = p.run(t_end=t_end, measure=meas, **kw)
