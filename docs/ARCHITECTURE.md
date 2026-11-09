@@ -21,7 +21,10 @@ index.html  φορτώνει τα studio/*.js με τη σειρά:        run.p
  metrics.js    δείκτες απόκρισης                          boundary, models, problem, proof,
  math.js       υπολογισμοί, ερωτήσεις                     workbench, curves   αναλυτικοί πάγκοι (/converter/)
  app.js        κόλλα: κατάσταση, πίνακες, θεωρία
+ stepcheck.js  έλεγχος βήματος (3.13)
  exercises/    *.template.json, pe2_battery.js
+
+Python από έξω (pcl/, 3.13): core.py (Project, Result, sweep) → runner.js (mna.js στο Node) ή engine/batch.py
 ```
 
 | Αρχείο | Ρόλος | Κύρια σημεία |
@@ -36,7 +39,9 @@ index.html  φορτώνει τα studio/*.js με τη σειρά:        run.p
 | `web/studio/pyrt.js` | Python για το μπλοκ Python: φόρτωση Pyodide (τοπικό αντίγραφο ή CDN, ή το πακέτο npm στο Node), `make` → `step(t, u)`. | `PyRT.load`, `PyRT.make` |
 | `web/studio/metrics.js` | Δείκτες από δεδομένα, χωρίς DOM (τρέχει και στο Node): απόκριση σε βήμα, προγράμματα, σειρά Fourier και THD. | `responseMetrics`, `scheduleEvents`, `harmonics` |
 | `web/studio/math.js` | Εμφάνιση αποτελεσμάτων των templates και των ερωτήσεων με πρόβλεψη. | `renderTemplate`, `questionsHTML`, `bindQuestions` |
-| `engine/batch.py` | Ο ίδιος κύκλος με το `mna.js`, με `solve_ivp`. Δίοδοι και συγκριτές ως συμβάντα. | `Circuit`, `Ctrl`, `eval_blocks`, `sample`, `next_event`, `simulate` |
+| `web/studio/stepcheck.js` | Έλεγχος βήματος (3.13): ιδιοτιμές του χάρτη BE των καταστάσεων, παρασιτικές των διακοπτών, πηγές, γραμμές, μηνύματα. Χωρίς DOM. | `eig`, `eigvecAbs`, `modes`, `check` |
+| `engine/batch.py` | Ο ίδιος κύκλος με το `mna.js`, με `solve_ivp`. Δίοδοι και συγκριτές ως συμβάντα. Μηνύματα για την κονσόλα (3.13). | `Circuit`, `Ctrl`, `eval_blocks`, `sample`, `next_event`, `simulate`, `_diagnose` |
+| `pcl/` | Σενάρια από κώδικα (3.13): `core.py` (Project: `set`, `run`, `sweep`· Result: `measure`, `to_csv`/`to_json`/`to_mat`), `runner.js` (το `mna.js` στο Node: run, export, tutorial), `__main__.py` (γραμμή εντολών). | `load`, `tutorial`, `Project.run`, `Project.sweep` |
 | `engine/templates.py` | Υπολογίζει ένα template: εισόδους, βήματα, ελέγχους, πίνακες, ερωτήσεις. | `template_solve`, `_questions` |
 | `run.py` | Server: στατικά αρχεία και `ACTIONS` (π.χ. `batch_sim`, `template_solve`, `studio_math`). | `ACTIONS` |
 
@@ -88,6 +93,9 @@ index.html  φορτώνει τα studio/*.js με τη σειρά:        run.p
 | **Αναφορά επαλήθευσης (3.8)** | `tools/verify.py` `checks` (αναμενόμενη τιμή από την αναφορά, στην Python) → `docs/VERIFICATION.md`. Νέο μοντέλο: μία γραμμή εκεί, με αναφορά που δεν είναι ο ίδιος ο λύτης | `python tools/verify.py --check` στον CI |
 | **Ασύνδετα και αιωρούμενα (3.7)** | `mna.js` `buildNetlist`: επιλογές `project.solve` (`unconn`, `island`, `rleak`), σύνολο `skip`, κλάδεμα νεκρών κλαδιών, κόμβοι χωρίς στοιχείο, νησιά με union-find, `net.diag` → `editor.setDiag`, `app.js` `propsCircuit` | `sim_cases.js` (`solve37`), `test_batch.py` (`isl_*`), `wiring_flow.js` |
 | **Πάνελ παραμέτρων και 📌 (3.7)** | `app.js` `renderProps` (`propsComp`, `propsWire`, `propsCircuit`, ενότητες με `psec`), `togglePin` (`c.live`, `c.liveBase`), ρυθμιστές στο `refreshControls`, `liveApply` (φόρτωση με καταστάσεις χωρίς ανανέωση πάνελ) | `wiring_flow.js` |
+| **Βήμα του λύτη (3.13)** | `mna.js`: `buildNetlist` (`step` από `project.solve`), `Sim.varSetup`/`hGrid`/`modeCap` (όρια, πλέγμα, 2τ για τον τραπεζοειδή), `stIndex`/`stVec` (καταστάσεις: νέο είδος κατάστασης μπαίνει εκεί και στο `stKind`), `lteErr`, `varCheck` (μετά από κάθε βήμα στο `run`), `gateSigPeek` και `endFlip` (μικρό βήμα μετά από μεταγωγή), σημαίες `lastSmooth`/`lastDisc` στο `stepCore`, `evStat` στο `nextEvent` | `tests/js/step_cases.js` + `test_step.py` |
+| **Μήνυμα στην κονσόλα διαγνωστικών (3.13)** | Πριν από το τρέξιμο: `stepcheck.js` `check` (πεδία `sev`, `grp`, `id`, `key`, `msg`, `fix`). Κατά το τρέξιμο: `Sim.note(key, {...})` (ίδια πεδία, μετρά επαναλήψεις, `up` για αναβάθμιση σε προειδοποίηση). Server: `batch.py` `_diagnose` ή `diag` στο αποτέλεσμα. Εμφάνιση: `app.js` `diagItems`, `renderDiag` | `step_cases.js`, `step_flow.js`, `test_pcl.py` (server) |
+| **Σενάρια από κώδικα (3.13)** | `pcl/core.py` (`Project`, `_measures`, `Result`, `SweepResult`) → `pcl/runner.js` (ενέργειες `run`, `export`, `tutorial`, `tutorials`, `channels`· μετρήσεις στο `measure`) → `pcl/__main__.py` (γραμμή εντολών). Νέα μέτρηση: `STATS`, `runner.js` `measure` και `Result.measure` | `test_pcl.py` |
 | **API του server** | `run.py` `ACTIONS` → συνάρτηση στο `engine/` | `test_api.py` |
 | **Κείμενα διεπαφής** | `web/index.html`, `app.js` | UI flows |
 

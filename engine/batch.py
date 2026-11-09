@@ -1481,6 +1481,57 @@ def _decimate(t, cols, limit):
     return np.array(sorted(keep))
 
 
+def _diagnose(ckt, tp, method, max_step):
+    """Messages for the diagnostics console (3.13), in the browser's format {sev, grp, id, msg, fix}:
+    the fastest modes of the circuit at t = 0 (eigenvalues of the state Jacobian) against the method."""
+    out = []
+    J = tp.get('J') if isinstance(tp, dict) else None
+    if J is None or not hasattr(J, 'shape') or not J.shape[0] or J.shape[0] > 400:
+        return out
+    try:
+        lam, vec = np.linalg.eig(J)
+    except np.linalg.LinAlgError:
+        return out
+    E = ckt.els
+
+    def owner(k):
+        if k < ckt.nI:
+            return E[ckt.cur[k][0]].get('cid')
+        j = k - ckt.nI
+        return E[ckt.iC[j]].get('cid') if j < len(ckt.iC) else None
+    a = np.abs(lam)
+    if not len(a) or not np.isfinite(a).any():
+        return out
+    k = int(np.nanargmax(a))
+    lmax = float(a[k])
+    if not lmax > 0:
+        return out
+    w = np.abs(vec[:, k])
+    ids = []
+    for q in np.argsort(-w):
+        if w[q] < 0.3 * w.max() or len(ids) >= 3:
+            break
+        cid = owner(int(q))
+        if cid and cid not in ids:
+            ids.append(cid)
+    tau = 1 / lmax
+    from engine.templates import eng
+
+    def _g(x, d=3):
+        return f'{x:.{d}g}'.replace('.', ',')
+    if method not in IMPLICIT and lmax * max_step > 3:
+        out.append({'sev': 'warn', 'grp': 'server', 'id': ids[0] if ids else None, 'key': 'srv:explicit',
+                    'msg': f'Ο {method} είναι ρητή μέθοδος και το κύκλωμα έχει σταθερά χρόνου {eng(tau, "s", 3)}'
+                           + (f' ({", ".join(ids)})' if ids else '') + f': το βήμα του θα πέσει κάτω από {eng(2.8 * tau, "s", 3)} για να μείνει ευσταθής.',
+                    'fix': 'Διάλεξε Radau, BDF ή LSODA (πεπλεγμένες): το βήμα τους ορίζεται από την ακρίβεια, όχι από την ευστάθεια.'})
+    elif lmax * max_step > 1e4:
+        out.append({'sev': 'info', 'grp': 'server', 'id': ids[0] if ids else None, 'key': 'srv:stiff',
+                    'msg': f'Άκαμπτο κύκλωμα: σταθερά χρόνου {eng(tau, "s", 3)}' + (f' ({", ".join(ids)})' if ids else '')
+                           + f', {_g(lmax * max_step)} φορές μικρότερη από το μέγιστο βήμα. Ο {method} τη χειρίζεται.',
+                    'fix': 'Αν ο LSODA αποτύχει ή αργεί, Radau.'})
+    return out
+
+
 def simulate(data):
     """Action 'batch_sim'. Input: {net, channels, t_end, method, rtol, atol, max_step, max_points}."""
     if not isinstance(data, dict) or not isinstance(data.get('net'), dict):
@@ -1540,6 +1591,7 @@ def simulate(data):
     record(t, x, z)
     stuck = 0
     implicit = method in IMPLICIT
+    diag = _diagnose(ckt, tp, method, max_step)
     while t < t_end * (1 - 1e-12):
         if time.perf_counter() - start > wall:
             status, message = 'timeout', f'Σταμάτησε στο t = {t:.6g} s (όριο {wall:.0f} s). ' + (
@@ -1652,7 +1704,8 @@ def simulate(data):
         stats['nlu'] += int(sol.nlu)
         stats['steps'] += max(0, len(sol.t) - 1)
         if sol.status == -1:
-            raise BatchError(f'Ο {method} απέτυχε στο t = {t:.6g} s: {sol.message}')
+            raise BatchError(f'Ο {method} απέτυχε στο t = {t:.6g} s: {sol.message}' + (
+                ' Δοκίμασε Radau (πεπλεγμένη, για άκαμπτα κυκλώματα).' if method != 'Radau' else ' Δοκίμασε μικρότερο μέγιστο βήμα ή χαλαρότερα rtol/atol.'))
         for j in range(1, len(sol.t)):
             yy = sol.y[:, j]
             zj = zof(float(sol.t[j]), yy)
@@ -1709,6 +1762,7 @@ def simulate(data):
         't': [float(f'{v:.12g}') for v in T[keep]],
         'ch': {k: r6(cols[j][keep]) for j, k in enumerate(keys)},
         'samples': {q['id']: {'t': [float(f'{v:.12g}') for v in q['t']], 'v': r6(q['v'])} for q in ckt.shs},
+        'diag': diag + ([{'sev': 'warn', 'grp': 'server', 'id': None, 'key': 'srv:' + status, 'msg': message, 'fix': ''}] if status != 'ok' else []),
     }
 
 

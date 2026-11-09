@@ -29,7 +29,7 @@ function buildSim(fresh){
    PyRT.load().then(()=>{buildSim(true);draw(true);if(!S.error)notice(`Η Python (Pyodide ${esc(PyRT.py?.version||'')}) είναι έτοιμη (${PyRT.source?.startsWith('http')?'από το CDN':'τοπικό αντίγραφο'}).`,'info');setTimeout(()=>notice(''),3000);})
     .catch(err=>notice('Δεν φορτώθηκε η Python (Pyodide): '+esc(err.message)+'. Χρειάζεται σύνδεση στο internet ή τοπικό αντίγραφο: <code>python tools/get_pyodide.py</code>.','error'));}
   else notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');editor.setDiag(null);}
- refreshControls();renderChannels();updateClock();renderProps();
+ refreshControls();renderChannels();updateClock();renderProps();syncStepMode();scheduleStepCheck();
 }
 function play(){if(!S.sim||S.error)return;if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;requestAnimationFrame(loop);}
 function pause(){S.running=false;scope.running=false;$('#play')?.classList.remove('running');if($('#play'))$('#play').innerHTML='▶ Προσομοίωση';draw(true);}
@@ -47,10 +47,10 @@ function loop(now){
  if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){pause();notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
  requestAnimationFrame(loop);
 }
-function draw(all){scope.draw();navRange();if(all||S.frame%3===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();}if(all||S.frame%8===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();}if(all){if(!S.running&&!S.switching){renderFFT();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
+function draw(all){scope.draw();navRange();if(all||S.frame%3===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();}if(all||S.frame%8===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();if(S.sim&&S.sim.dgVer!==S.diagSeen)renderDiag();}if(all){if(!S.running&&!S.switching){renderFFT();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
 function navRange(){const el=$('#nav-range');if(!el||el.offsetParent===null||!S.sim)return;const [a,b]=scope.viewRange();el.textContent=`${eng(a,'s',4)} … ${eng(b,'s',4)} · ${fmt((b-a)/S.sim.T,3)} T${scope.cfg.frozen?' · σταθερή προβολή':' · ζωντανά'}`;}
 function updateClock(){const s=S.sim;if(!s)return;$('#clock').textContent='t = '+eng(s.t,'s',5);$('#periods').textContent=`${Math.floor(s.t/s.T+1e-9)} T · βήματα ${s.steps.toLocaleString('el-GR')}`;
- $('#cpu').hidden=!S.limited;$('#speed-note').textContent=S.speed==='max'?'όσο αντέχει ο υπολογιστής':`${eng(S.speed*s.T,'s',3)} ανά δευτερόλεπτο`;$('#step-note').textContent='Δt = '+eng(s.h,'s',3)+' · T = '+eng(s.T,'s',3);}
+ $('#cpu').hidden=!S.limited;$('#speed-note').textContent=S.speed==='max'?'όσο αντέχει ο υπολογιστής':`${eng(S.speed*s.T,'s',3)} ανά δευτερόλεπτο`;$('#step-note').textContent=s.var?`Δt = ${eng(s.hv,'s',3)} μεταβλητό (${eng(s.hMin,'s',2)} … ${eng(s.hCap||s.hMax,'s',2)}) · απορρίψεις ${s.nRej}`:'Δt = '+eng(s.h,'s',3)+' · T = '+eng(s.T,'s',3);}
 
 // live values on the schematic
 function liveOf(c){const s=S.sim;if(!s||S.error)return null;if(['GND','JUNC','TAGO','TAGI'].includes(c.type))return null;
@@ -286,10 +286,10 @@ async function runBatch(){
  $('#bt-run').disabled=true;btStatus(`Ο ${esc(method)} τρέχει στον server έως ${eng(tEnd,'s')}…`);const w0=performance.now();
  try{const r=await api('batch_sim',{net:req.net,channels:req.channels,t_end:tEnd,method,rtol:Number.isFinite(rtol)?rtol:1e-6,atol:Number.isFinite(atol)?atol:1e-9,max_step:hmax||0,max_points:30000});
   const data={};for(const k of Object.keys(r.ch))data[k]={t:Float64Array.from(r.t),y:Float64Array.from(r.ch[k],v=>v===null?NaN:v)};
-  S.batch={r,data,skipped:req.skipped,label:`${method} (server, rtol ${eng(r.rtol)})`,stale:false};
+  S.batch={r,data,skipped:req.skipped,label:`${method} (server, rtol ${eng(r.rtol)})`,stale:false};S.batchDiag=(r.diag||[]).map(d=>({...d,src:'server'}));renderDiag();
   scope.setRefs($('#bt-show').checked?{label:S.batch.label,data}:null);renderBatch();
   const st=r.stats;btStatus(`${r.status==='ok'?'✓':'⚠'} ${esc(method)}: ${st.points.toLocaleString('el-GR')} σημεία, ${st.segments.toLocaleString('el-GR')} τμήματα, ${st.diode_events.toLocaleString('el-GR')} μεταγωγές διόδων, ${st.nfev.toLocaleString('el-GR')} f, ${st.njev} J, ${st.nlu.toLocaleString('el-GR')} LU · ${fmt(st.wall_s,3)} s στον server (${fmt((performance.now()-w0)/1000,3)} s συνολικά)${r.message?'<br>'+esc(r.message):''}${req.skipped.length?'<br>Χωρίς αναφορά: '+req.skipped.map(esc).join(', '):''}`,r.status==='ok'?'':'err');}
- catch(e){btStatus('Σφάλμα: '+esc(e.message),'err');}
+ catch(e){btStatus('Σφάλμα: '+esc(e.message),'err');S.batchDiag=[{sev:'error',grp:'server',src:'server',id:null,msg:e.message,fix:''}];renderDiag();openDiag();}
  finally{$('#bt-run').disabled=false;}}
 function clearBatch(){S.batch=null;scope.setRefs(S.csvRef||null);$('#bt-out').innerHTML='';btStatus('');}
 // time-weighted mean of a piecewise-linear trace over exactly [a,b]
@@ -308,7 +308,7 @@ function compareHTML(data,label,note){if(!S.sim)return '';const T=S.sim.T;const 
  return rows.length?`<h4>Σύγκριση με ${esc(label)}</h4><div class="wrap"><table><thead><tr><th>Σήμα</th><th>⟨αναφορά⟩ τελ. T</th><th>⟨browser⟩ τελ. T</th><th>Διαφορά</th><th>RMS Δ</th><th>95 % |Δ|</th><th>RMS Δ / max</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
   <p class="muted small">Κοινό διάστημα ${eng(common[0],'s')} … ${eng(common[1],'s')}. ${note||''}</p>`:'';}
 function renderBatch(){const box=$('#bt-out');const B=S.batch;if(!B||!S.sim){box.innerHTML='';return;}const r=B.r;
- const html=compareHTML(B.data,B.label,`Ο browser λύνει με σταθερό βήμα Δt = ${eng(S.sim.h,'s')} (${esc($('#method').selectedOptions[0]?.textContent||'')}), ο server με μεταβλητό βήμα και έλεγχο σφάλματος. Κοντά στις μεταγωγές το |Δ| είναι μεγάλο αν οι δύο λύτες βρίσκουν την ακμή σε λίγο διαφορετική στιγμή· γι' αυτό δίνεται το RMS και το 95 %.${B.stale?' <b>Το κύκλωμα άλλαξε μετά τον υπολογισμό.</b>':''}`);
+ const html=compareHTML(B.data,B.label,`Ο browser λύνει με ${S.sim.var?`μεταβλητό βήμα (ανοχή ${S.sim.rtol}, ${eng(S.sim.hMin,'s')} … ${eng(S.sim.hCap||S.sim.hMax,'s')})`:`σταθερό βήμα Δt = ${eng(S.sim.h,'s')}`} (${esc($('#method').selectedOptions[0]?.textContent||'')}), ο server με μεταβλητό βήμα και έλεγχο σφάλματος. Κοντά στις μεταγωγές το |Δ| είναι μεγάλο αν οι δύο λύτες βρίσκουν την ακμή σε λίγο διαφορετική στιγμή· γι' αυτό δίνεται το RMS και το 95 %.${B.stale?' <b>Το κύκλωμα άλλαξε μετά τον υπολογισμό.</b>':''}`);
  box.innerHTML=(html||`<p class="muted small">Δεν υπάρχει κοινό διάστημα με την προσομοίωση του browser: τρέξε την προσομοίωση έως ${eng(r.t_end,'s')} (⏩).</p>`)+sampleCompareHTML(r);}
 // ------------------------------------------------------------------ CSV reference (PLECS, measurements, older runs)
 // first column time, one signal per column, optional header row; ',' ';' or tab separated
@@ -574,6 +574,12 @@ function propsCircuit(){const d=S.sim?.net?.diag,doc=editor.doc,so=doc.solve||{}
   <div class="prow"><span>R διαρροής προς τη γη <em>Ω</em></span><span class="pin-in"><input data-solve="rleak" value="${so.rleak?esc(P.eng(+so.rleak,'',4).replace(/\s/g,'')):''}" placeholder="κενό: G_min = 1 nS" inputmode="decimal"></span><small>Για «Αυτόματα»: σε κάθε κόμβο του αιωρούμενου τμήματος.</small></div>
   <div class="prow"><span>Βάση χρόνου T <em>s</em></span><span class="pin-in"><input data-solve="tbase" value="${so.tbase?esc(P.eng(+so.tbase,'',4).replace(/\s/g,'')):''}" placeholder="κενό: 1 ms" inputmode="decimal"></span><small>Όταν καμία πηγή δεν ορίζει χρόνο (π.χ. γεννήτρια Marx με φορτισμένους πυκνωτές). Το βήμα είναι T/N από την επιλογή «Βήμα».</small></div>
   <small class="muted">Αποθηκεύονται με το κύκλωμα και ισχύουν και στον λύτη του server.</small>`,{cnt:(so.unconn||so.island||so.rleak||so.tbase)?'αλλαγμένες':''});
+ const sv=k=>so[k]===undefined?'':String(so[k]);
+ h+=psec('c-step','Βήμα του λύτη',`<div class="prow"><span>Βήμα</span><span class="pin-in">${opt('step',[['','Σταθερό T/N (επιλογή «Βήμα Δt»)'],['var','Μεταβλητό, με έλεγχο σφάλματος']],sv('step'))}</span>
+  <small>Μεταβλητό: σε κάθε βήμα εκτιμάται το τοπικό σφάλμα των καταστάσεων (ρεύματα πηνίων, τάσεις πυκνωτών, ροές) από διαιρεμένες διαφορές· αν περνά την ανοχή, το βήμα ξαναγίνεται μικρότερο, αλλιώς μεγαλώνει. Οι μεταγωγές και τα συμβάντα βρίσκονται όπως και με το σταθερό. Το T/N της επιλογής «Βήμα Δt» είναι το αρχικό βήμα, και το ελάχιστο είναι T/N·10⁻³.</small></div>
+  <div class="prow"><span>Ανοχή (σχετικό σφάλμα ανά βήμα)</span><span class="pin-in">${opt('rtol',[['0.001','10⁻³'],['0.0001','10⁻⁴'],['','10⁻⁵ (προεπιλογή)'],['0.000001','10⁻⁶']],sv('rtol'))}</span><small>Ως προς το μέγιστο |x| κάθε κατάστασης. Σε ταλάντωση με μικρή απόσβεση το συνολικό σφάλμα μεγαλώνει με τον αριθμό των περιόδων.</small></div>
+  <div class="prow"><span>Μέγιστο βήμα</span><span class="pin-in">${opt('hmax',[['5','T/5'],['10','T/10'],['20','T/20'],['','T/50 (προεπιλογή)'],['100','T/100'],['200','T/200']],sv('hmax'))}</span><small>Μικρότερο μέγιστο βήμα δίνει πυκνότερα σημεία στο scope. Με τον τραπεζοειδή το βήμα δεν ξεπερνά και το 2τ της ταχύτερης σταθεράς χρόνου του κυκλώματος (όχι των R_on/R_off), αλλιώς ταλαντώνεται εκεί.</small></div>
+  <div class="prow"><button data-stepcheck>↻ Έλεγχος βήματος</button><small>Σταθερές χρόνου και ταλαντώσεις του κυκλώματος με τις τωρινές καταστάσεις των διακοπτών, πηγές και γραμμές, απέναντι στο βήμα. Τα μηνύματα είναι στην κονσόλα διαγνωστικών κάτω από το scope.</small></div>`,{cnt:so.step==='var'?'μεταβλητό':'σταθερό'});
  const chk=(k,t)=>`<label class="frow check"><input type="checkbox" data-eset="${k}" ${editor.settings[k]?'checked':''}><span>${t}</span></label>`;
  h+=psec('c-draw','Σχεδίαση συρμάτων',`${chk('freeEnds','Ελεύθερα άκρα: σύρμα που αφήνεις στο κενό κρατά ελεύθερο άκρο')}${chk('autoConnect','Στοιχείο που αφήνεις πάνω σε σύρμα ή ακροδέκτη συνδέεται (Shift: χωρίς σύνδεση)')}
   <ul class="kbd-list"><li><b>W</b>: εργαλείο σύρματος. Κλικ οπουδήποτε για αρχή, κλικ για γωνίες, διπλό κλικ ή Enter για ελεύθερο άκρο, Backspace για μία γωνία πίσω, Esc για έξοδο.</li>
@@ -586,7 +592,8 @@ function bindProps(box,c){
  box.querySelector('[data-pclose]')?.addEventListener('click',()=>editor.select([],[]));
  box.querySelectorAll('[data-probe]').forEach(b=>b.onclick=()=>addProbe(b.dataset.probe));
  box.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>focusComp(b.dataset.focus));
- box.querySelectorAll('[data-solve]').forEach(el=>el.onchange=()=>{const k=el.dataset.solve;let v=el.value;if(k==='rleak'||k==='tbase'){v=v.trim()?P.parseEng(v):'';if(v!==''&&!(v>0)){el.classList.add('bad');return;}}editor.setSolve({[k]:v});});
+ box.querySelectorAll('[data-solve]').forEach(el=>el.onchange=()=>{const k=el.dataset.solve;let v=el.value;if(k==='rleak'||k==='tbase'){v=v.trim()?P.parseEng(v):'';if(v!==''&&!(v>0)){el.classList.add('bad');return;}}if((k==='rtol'||k==='hmax')&&v!=='')v=+v;editor.setSolve({[k]:v});});
+ box.querySelectorAll('[data-stepcheck]').forEach(b=>b.onclick=()=>{if(S.sim&&!S.error)S.sim.stepCheck();renderDiag();openDiag();});
  box.querySelectorAll('[data-eset]').forEach(el=>el.onchange=()=>{editor.settings[el.dataset.eset]=el.checked;saveSettings();});
  if(c&&c.type!=='JUNC'){const id=c.id;
   box.querySelector('[data-plabel]')?.addEventListener('change',e=>{editor.setParams(id,{},{label:e.target.value||id});renderChannels();});
@@ -602,7 +609,35 @@ function bindProps(box,c){
   box.querySelector('[data-ww]')?.addEventListener('change',e=>editor.setWireProps(id,{width:e.target.value?+e.target.value:undefined}));
   box.querySelector('[data-wroute]')?.addEventListener('click',()=>{editor.remember();editor.route(editor.wire(id));editor.render();});}}
 // a parameter changed from the live panel: reload the netlist with the state carried over, without rebuilding the panels
-function liveApply(){if(!S.sim)return;try{S.sim.load(editor.export(),false);S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);editor.setDiag(S.sim.net.diag);}catch(e){S.error=e.message;pause();notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');}}
+// ------------------------------------------------------------------ diagnostics console (3.13, ROADMAP §40)
+const DSEV={error:['Σφάλματα','⛔'],warn:['Προειδοποιήσεις','⚠'],info:['Πληροφορίες','ℹ']},DGRP={step:'βήμα',net:'συνδέσεις',nl:'μη γραμμικά',sim:'λύτης',server:'server'};
+// everything the user should know about the run: netlist warnings, step checks, solver messages, the server's
+function diagItems(){const out=[],lb=id=>editor.comp(id)?.label||id;
+ if(S.error)out.push({sev:'error',grp:'sim',src:'browser',msg:S.error,fix:'Το κύκλωμα δεν λύνεται όπως είναι: δες το μήνυμα και τα στοιχεία που αναφέρει.'});
+ const sim=S.sim&&!S.error?S.sim:null;
+ if(sim){for(const w of sim.net.warnings||[])out.push({sev:'warn',grp:'net',src:'browser',msg:w,fix:''});
+  for(const q of sim.net.diag?.islands||[]){const k=q.pins[0],cid=k?k.slice(0,k.lastIndexOf(':')):null;out.push({sev:'info',grp:'net',src:'browser',id:cid,msg:`Αιωρούμενο τμήμα${cid?' ('+lb(cid)+'…)':''}: ${q.ref==='ref'?'ένας κόμβος του στα 0 V':'μέση τάση 0 V ως προς τη γη'}.`,fix:'Οι τάσεις μέσα στο τμήμα δεν αλλάζουν. Η επιλογή είναι στις ρυθμίσεις του κυκλώματος.'});}
+  for(const r of sim.diagnostics())out.push(r);}
+ for(const r of S.batchDiag||[])out.push(r);
+ return out;}
+function renderDiag(){const box=$('#diag-list');if(!box)return;S.diagSeen=S.sim?.dgVer;const all=diagItems(),lb=id=>editor.comp(id)?.label||id,cnt={error:0,warn:0,info:0};
+ for(const r of all)cnt[r.sev]++;
+ $('#diag-counts').innerHTML=['error','warn','info'].map(k=>`<span class="dc ${k}${cnt[k]?'':' zero'}" title="${DSEV[k][0]}">${DSEV[k][1]} ${cnt[k]}</span>`).join('');
+ const dg=$('#diag');dg.classList.toggle('has-error',cnt.error>0);dg.classList.toggle('has-warn',!cnt.error&&cnt.warn>0);
+ if(!all.length){box.innerHTML='<p class="ok-line">✓ Κανένα μήνυμα: το βήμα αρκεί για τις σταθερές χρόνου, τις πηγές και τις γραμμές του κυκλώματος.</p>';return;}
+ const on=new Set([...document.querySelectorAll('[data-dsev]')].filter(x=>x.checked).map(x=>x.dataset.dsev)),src=$('#diag-src').value,q=$('#diag-q').value.trim().toLowerCase();
+ const vis=all.filter(r=>on.has(r.sev)&&(!src||r.src===src)&&(!q||`${r.msg} ${r.fix||''} ${r.id?lb(r.id):''} ${DGRP[r.grp]||''}`.toLowerCase().includes(q)));
+ let h='';for(const k of ['error','warn','info']){const L=vis.filter(r=>r.sev===k);if(!L.length)continue;
+  h+=`<details class="dg ${k}" open><summary>${DSEV[k][1]} ${DSEV[k][0]} <span class="muted">${L.length}</span></summary><ul>`+L.map(r=>`<li class="dg-item ${k}"><div class="dg-msg">${esc(r.msg)}</div><div class="dg-meta"><span class="tag">${esc(DGRP[r.grp]||r.grp||'')}</span>${r.id&&editor.comp(r.id)?`<button data-dfocus="${esc(r.id)}" title="Δείξε το στοιχείο στο σχέδιο">◎ ${esc(lb(r.id))}</button>`:''}${Number.isFinite(r.t)&&r.t>0?`<span>t = ${eng(r.t,'s',4)}</span>`:r.pre?'<span>πριν από το τρέξιμο</span>':''}${r.n>1?`<span>×${r.n.toLocaleString('el-GR')}</span>`:''}<span class="muted">${r.src==='server'?'server (SciPy)':'browser'}</span></div>${r.fix?`<div class="dg-fix">→ ${esc(r.fix)}</div>`:''}</li>`).join('')+'</ul></details>';}
+ box.innerHTML=h||'<p class="muted">Τα φίλτρα κρύβουν όλα τα μηνύματα.</p>';
+ box.querySelectorAll('[data-dfocus]').forEach(b=>b.onclick=()=>flashComp(b.dataset.dfocus));}
+function openDiag(){const d=$('#diag');if(d&&!d.open){d.open=true;try{localStorage.setItem('pcl-diag-open','1');}catch(e){}}}
+function flashComp(id){focusComp(id);const g=document.querySelector(`#canvas .part[data-c="${CSS.escape(id)}"]`);if(!g)return;g.classList.remove('diag-hi');void g.getBoundingClientRect();g.classList.add('diag-hi');setTimeout(()=>g.classList.remove('diag-hi'),1800);}
+let stepCheckTimer=0;
+// the step check after every build or change (modes at the present switch states), debounced
+function scheduleStepCheck(){clearTimeout(stepCheckTimer);stepCheckTimer=setTimeout(()=>{if(S.sim&&!S.error)try{S.sim.stepCheck();}catch(e){}renderDiag();},250);renderDiag();}
+function syncStepMode(){const m=$('#step-mode');if(m)m.value=editor.doc.solve?.step==='var'?'var':'fixed';}
+function liveApply(){if(!S.sim)return;try{S.sim.load(editor.export(),false);S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);editor.setDiag(S.sim.net.diag);}catch(e){S.error=e.message;pause();notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');}scheduleStepCheck();}
 
 // ------------------------------------------------------------------ context menu
 function closeMenu(){$('#ctx').hidden=true;}
@@ -1472,7 +1507,13 @@ function boot(){
  // toolbar
  $('#play').onclick=()=>S.running?pause():play();$('#reset').onclick=reset;$('#step1').onclick=()=>stepT(1);$('#step10').onclick=()=>stepT(10);$('#toend').onclick=runToEnd;
  $('#speed').onchange=e=>setSpeed(e.target.value);
- $('#sim-step').onchange=()=>{if(S.sim){S.sim.setStep(+$('#sim-step').value);S.sim.cache.clear();updateClock();}};
+ $('#step-mode').onchange=e=>{editor.setSolve({step:e.target.value==='var'?'var':''});};
+ document.querySelectorAll('[data-dsev]').forEach(x=>x.onchange=renderDiag);$('#diag-src').onchange=renderDiag;$('#diag-q').oninput=renderDiag;
+ $('#diag-check').onclick=()=>{if(S.sim&&!S.error)S.sim.stepCheck();renderDiag();};
+ $('#diag-clear').onclick=()=>{if(S.sim){S.sim.dg=new Map();S.sim.dgVer=(S.sim.dgVer||0)+1;}S.batchDiag=[];renderDiag();};
+ try{if(localStorage.getItem('pcl-diag-open')==='1')$('#diag').open=true;}catch(e){}
+ $('#diag').addEventListener('toggle',()=>{try{localStorage.setItem('pcl-diag-open',$('#diag').open?'1':'0');}catch(e){}});
+ $('#sim-step').onchange=()=>{if(S.sim){S.sim.setStep(+$('#sim-step').value);S.sim.cache.clear();updateClock();scheduleStepCheck();}};
  $('#stop').onchange=e=>{const v=P.parseEng(e.target.value);S.stopT=Number.isFinite(v)&&v>0?v*1e-3:0;saveLocal();};
  $('#win-n').onchange=e=>{const v=P.parseEng(e.target.value);if(v>0){scope.cfg.window.n=v;scope.cfg.frozen=null;draw(true);}};
  $('#win-unit').onchange=e=>{scope.cfg.window.unit=e.target.value;scope.cfg.frozen=null;draw(true);};
@@ -1496,7 +1537,7 @@ function boot(){
  $('#nav-toggle').onclick=()=>navOpen($('#scope-nav').hidden);try{navOpen(localStorage.getItem('pcl2-nav')!=='0');}catch{navOpen(true);}
  $$('#scope-nav [data-nav]').forEach(b=>b.onclick=()=>{scope.nav(b.dataset.nav);$('#live-btn').hidden=!scope.cfg.frozen;$('#nav-follow').classList.toggle('on',scope.cfg.follow!==false);syncScopeInputs();renderChannels();draw(true);});
  const METHOD_NOTE={TR:'2ης τάξης, χωρίς απόσβεση',BDF2:'2ης τάξης, απόσβεση στις υψηλές συχνότητες',BE:'1ης τάξης, ισχυρή απόσβεση'};
- $('#method').onchange=e=>{S.sim?.setMethod(e.target.value);$('#method-note').textContent=METHOD_NOTE[e.target.value];saveLocal();};
+ $('#method').onchange=e=>{S.sim?.setMethod(e.target.value);scheduleStepCheck();$('#method-note').textContent=METHOD_NOTE[e.target.value];saveLocal();};
  $('#add-signal').onchange=e=>{if(e.target.value)addProbe(e.target.value);e.target.value='';};
  const probeSel=pre=>{const ids=editor.selection().c.filter(id=>{const c=editor.comp(id);return c&&signalsFor(c).some(([p,,f])=>p===pre&&!f);});if(!ids.length){notice('Επίλεξε πρώτα στοιχεία στο κύκλωμα (κλικ ή ορθογώνιο).','info');setTimeout(()=>notice(''),2500);return;}ids.forEach(id=>addProbe(pre+id));};
  $('#probe-i').onclick=()=>probeSel('I:');$('#probe-v').onclick=()=>probeSel('V:');

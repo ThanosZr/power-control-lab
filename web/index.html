@@ -5,7 +5,7 @@
  <title>Power Converter Lab 2</title>
  <meta name="description" content="Εκπαιδευτικό εργαστήριο ηλεκτρονικών ισχύος: σχεδίαση κυκλώματος, προσομοίωση σε πραγματικό χρόνο, scopes και θεωρία για όλους τους βασικούς μετατροπείς.">
  <link rel="stylesheet" href="studio/style.css">
- <script src="studio/expr.js" defer></script><script src="studio/parts.js" defer></script><script src="studio/pyrt.js" defer></script><script src="studio/mna.js" defer></script><script src="studio/editor.js" defer></script>
+ <script src="studio/expr.js" defer></script><script src="studio/parts.js" defer></script><script src="studio/pyrt.js" defer></script><script src="studio/stepcheck.js" defer></script><script src="studio/mna.js" defer></script><script src="studio/editor.js" defer></script>
  <script src="studio/scope.js" defer></script><script src="studio/tutorials.js" defer></script><script src="studio/exercises/pe2_battery.js" defer></script><script src="studio/templates.js" defer></script><script src="studio/metrics.js" defer></script><script src="studio/math.js" defer></script><script src="studio/app.js" defer></script>
 </head>
 <body>
@@ -41,7 +41,7 @@
    <div class="clock"><b id="clock">t = 0</b><small id="periods"></small></div>
    <label>Ταχύτητα<select id="speed"><option value="1">1 T/s</option><option value="5">5 T/s</option><option value="20">20 T/s</option><option value="100" selected>100 T/s</option><option value="500">500 T/s</option><option value="2000">2000 T/s</option><option value="10000">10000 T/s</option><option value="max">Μέγιστη</option></select><small id="speed-note"></small></label>
    <label>Μέθοδος<select id="method" title="Μέθοδος ολοκλήρωσης του λύτη"><option value="TR" selected>Τραπεζοειδής</option><option value="BDF2">Gear / BDF2</option><option value="BE">Backward Euler</option></select><small id="method-note">2ης τάξης, χωρίς απόσβεση</small></label>
-   <label>Βήμα Δt<select id="sim-step"><option value="50">T/50</option><option value="100">T/100</option><option value="200" selected>T/200</option><option value="500">T/500</option><option value="1000">T/1000</option><option value="2000">T/2000</option><option value="5000">T/5000</option></select><small id="step-note"></small></label>
+   <label>Βήμα Δt<span class="inl"><select id="sim-step" title="Σταθερό βήμα T/N· με μεταβλητό βήμα είναι το αρχικό βήμα"><option value="50">T/50</option><option value="100">T/100</option><option value="200" selected>T/200</option><option value="500">T/500</option><option value="1000">T/1000</option><option value="2000">T/2000</option><option value="5000">T/5000</option></select><select id="step-mode" title="Σταθερό T/N ή μεταβλητό με έλεγχο σφάλματος (ρυθμίσεις στο πάνελ του κυκλώματος)"><option value="fixed">σταθερό</option><option value="var">μεταβλητό</option></select></span><small id="step-note"></small></label>
    <label>Διάρκεια (ms)<span class="inl"><input id="stop" placeholder="∞" inputmode="decimal"><button id="toend" title="Υπολόγισε αμέσως έως τη διάρκεια">⏩</button></span><small>κενό = χωρίς όριο</small></label>
    <span id="cpu" class="cpu" hidden>⚠ όριο CPU: τρέχει πιο αργά από το ζητούμενο</span>
    <button id="lp-toggle" class="nav-toggle toggle on" aria-pressed="true" aria-controls="live-panel" title="Δείξε/κρύψε τις ζωντανές παραμέτρους πάνω από το scope (πλήκτρο P)">🎛 Ζωντανές παράμετροι</button>
@@ -108,6 +108,16 @@
     <div id="measure" class="measure"></div><div id="bt-out" class="bt-out"></div><div id="cr-out" class="bt-out"></div>
    </div>
   </div>
+  <details id="diag" class="diag-console">
+   <summary><b>Κονσόλα διαγνωστικών</b><span id="diag-counts" class="diag-counts"></span><small class="muted">βήμα του λύτη, συνδέσεις, μη γραμμικά, server</small></summary>
+   <div class="diag-bar">
+    <label class="chk"><input type="checkbox" data-dsev="error" checked> Σφάλματα</label><label class="chk"><input type="checkbox" data-dsev="warn" checked> Προειδοποιήσεις</label><label class="chk"><input type="checkbox" data-dsev="info" checked> Πληροφορίες</label>
+    <select id="diag-src" title="Από πού έρχεται το μήνυμα"><option value="">Browser και server</option><option value="browser">Browser</option><option value="server">Server (SciPy)</option></select>
+    <input id="diag-q" placeholder="Φίλτρο: στοιχείο ή λέξη…" aria-label="Φίλτρο μηνυμάτων">
+    <button id="diag-check" title="Ξανά ο έλεγχος του βήματος, με τις τωρινές καταστάσεις των διακοπτών">↻ Έλεγχος βήματος</button><button id="diag-clear" title="Σβήνει τα μηνύματα της εκτέλεσης (όχι του ελέγχου)">Καθαρισμός</button>
+   </div>
+   <div id="diag-list" class="dgc-list"></div>
+  </details>
  </section>
 
  <section id="math-card" class="card math-card" aria-label="Υπολογισμοί και μαθηματικά">
@@ -121,7 +131,7 @@
    <div><div class="th-head"><h4>Θεωρία & σύγκριση με την προσομοίωση</h4><button id="theory-refresh" title="Επανυπολογισμός με τις τρέχουσες τιμές">↻</button></div><div id="theory" class="theory"></div></div>
   </div>
  </section>
- <footer>Power Converter Lab <b>3.12</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
+ <footer>Power Converter Lab <b>3.13</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
 </main>
 <div id="notice" class="notice" hidden></div>
 <div id="inspector" class="popup inspector" hidden></div>

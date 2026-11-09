@@ -14,7 +14,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'docs' / 'CODEMAP.md'
 JS_DIR = ROOT / 'web' / 'studio'
-PY_FILES = ['run.py', *sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'engine').glob('*.py'))]
+PY_FILES = ['run.py', *sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'engine').glob('*.py')),
+            *sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'pcl').glob('*.py'))]     # pcl (3.13): scripted scenarios
 SKIP = {'if', 'for', 'while', 'switch', 'catch', 'return', 'function', 'else', 'do', 'try', 'with', 'new', 'typeof'}
 
 FUNC = re.compile(r'function\s+([A-Za-z_$][\w$]*)\s*\(')
@@ -76,7 +77,7 @@ def build():
     # overview
     parts.append('## Αρχεία\n')
     parts.append('| Αρχείο | Γραμμές |\n|---|---:|')
-    js = sorted(JS_DIR.glob('*.js'))
+    js = sorted(JS_DIR.glob('*.js')) + [ROOT / 'pcl' / 'runner.js']
     for p in js:
         parts.append(f'| `{p.relative_to(ROOT).as_posix()}` | {lines(p)} |')
     for f in PY_FILES:

@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT))
 from engine import __version__  # noqa: E402
 
 CASES = ROOT / 'tests' / 'js' / 'sim_cases.js'
+STEP_CASES = ROOT / 'tests' / 'js' / 'step_cases.js'     # 3.13: variable step and step checks
 OUT = ROOT / 'docs' / 'VERIFICATION.md'
 
 
@@ -26,7 +27,12 @@ def run_cases():
     r = subprocess.run(['node', str(CASES)], capture_output=True, text=True, timeout=900)
     if r.returncode:
         raise SystemExit(r.stderr)
-    return json.loads(r.stdout)
+    o = json.loads(r.stdout)
+    r = subprocess.run(['node', str(STEP_CASES)], capture_output=True, text=True, timeout=900)
+    if r.returncode:
+        raise SystemExit(r.stderr)
+    o['step'] = json.loads(r.stdout)
+    return o
 
 
 def checks(o):
@@ -230,6 +236,22 @@ def checks(o):
     v = template_solve({'template': ld('hv_successive.template.json'), 'values': {}})['values']
     x = np.repeat(np.arange(101, 110) * 1e3, [1, 2, 3, 4, 4, 3, 1, 1, 1])
     add('Στατιστική διάσπασης', '15.5.29: τυπική απόκλιση (βιβλίο 23,04 kV)', 'numpy std(ddof=1)', float(x.std(ddof=1)), v['s_d'], 1e-3, 'V')
+    # 3.13: variable step with error control (ROADMAP §40), and the step check's time constants and frequencies
+    st = o['step']
+    R, L, C = .5, 10e-6, 1e-6
+    a = R / (2 * L)
+    wd = math.sqrt(1 / (L * C) - a * a)
+    add('Βήμα του λύτη', 'μεταβλητό, RLC 5 περίοδοι: μέγιστο |v_C − ακριβής|, 535 βήματα αντί για 2000', 'v_C = V₀e^(−αt)(cos ω_d t + (α/ω_d)·sin ω_d t)', 0, st['rlc']['var']['err'], .02, 'V')
+    C1, C2, R1, R2, V0 = 50e-9, 1e-9, 400, 2600, 1e5
+    aa, bb = R1 * R2 * C1 * C2, R1 * C1 + R2 * C1 + R2 * C2
+    s1, s2 = (-bb + math.sqrt(bb * bb - 4 * aa)) / (2 * aa), (-bb - math.sqrt(bb * bb - 4 * aa)) / (2 * aa)
+    tp = math.log(s2 / s1) / (s1 - s2)
+    vpk = V0 / (R1 * C2) * (math.exp(s1 * tp) - math.exp(s2 * tp)) / (s1 - s2)
+    add('Βήμα του λύτη', f'μεταβλητό, γεννήτρια κρουστικών μίας βαθμίδας: κορυφή ({st["impulse"]["var"]["steps"]} βήματα αντί για 5000)', 'v₂ = V₀/(R₁C₂)·(e^{s₁t} − e^{s₂t})/(s₁ − s₂)', vpk, st['impulse']['var']['pk'], 1e-3 * vpk, 'V')
+    add('Βήμα του λύτη', 'έλεγχος βήματος: συχνότητα της ιδιομορφής RLC', 'f = √(1/(LC) − α²)/2π', wd / (2 * math.pi), st['rlc']['mode_f'], 1e-6 * wd, 'Hz')
+    tau = 1 * 1e6 / (1 + 1e6) * 1e-6
+    rc = [d for d in st['check']['rc_coarse'] if d['tau']][0]['tau']
+    add('Βήμα του λύτη', 'έλεγχος βήματος: σταθερά χρόνου RC', 'τ = (R₁ ∥ R₂)·C', tau, rc, 1e-6 * tau, 's')
     return rows
 
 
@@ -238,7 +260,9 @@ TESTS = [
     ('tests/test_tutorials.py', 'tutorials όπως ανοίγουν στην εφαρμογή', 'θεωρία των καρτών, ισοδύναμα κυκλώματα, MTPA, ισοζύγιο ενέργειας SRM, μέθοδος των χαρακτηριστικών, ασκήσεις 15.3.1–15.3.7, 15.4.9 και 15.5.3 και γεννήτρια Marx (σχέσεις 3.21–3.44) του βιβλίου «Υψηλές Τάσεις», αποκομμένη κρουστική (IEC 60076-3), λύση Heaviside της γραμμής με απώλειες, κριτήριο ενέργειας διάσπασης'),
     ('tests/test_batch.py', 'λύτης SciPy (solve_ivp) στο ίδιο netlist', 'δεύτερος, ανεξάρτητος λύτης: ίδιες κυματομορφές σε 1e-4 … 1e-7, και για γραμμές (και με απώλειες), αλεξικέραυνα, σπινθηριστές (και με καμπύλη τάσης–χρόνου) και τα tutorials υψηλών τάσεων'),
     ('tests/test_templates.py, test_engine.py', 'συμβολική λύση και templates', 'λύσεις των ασκήσεων (PE2, Άσκηση 2) με SymPy'),
-    ('tests/ui/*.js', 'περιβάλλον (Playwright)', 'σχέδιο, scopes, πάνελ, εργαλείο σύρματος, ζωντανές παράμετροι'),
+    ('tests/test_step.py', 'βήμα του λύτη (3.13)', 'μεταβλητό βήμα απέναντι σε κλειστούς τύπους (RLC, γεννήτρια κρουστικών) και σε λεπτό σταθερό βήμα (flyback, Marx), σταθερές χρόνου και συχνότητες του ελέγχου βήματος, ταλάντωση δύο βημάτων'),
+    ('tests/test_pcl.py', 'σενάρια από κώδικα, πακέτο pcl (3.13)', 'κυμάτωση ΔI = V_o(1 − D)/(L·f_s) σε σάρωση, ίδια αριθμοί με τον λύτη της εφαρμογής, SciPy, CSV/JSON/.mat, γραμμή εντολών'),
+    ('tests/ui/*.js', 'περιβάλλον (Playwright)', 'σχέδιο, scopes, πάνελ, εργαλείο σύρματος, ζωντανές παράμετροι, κονσόλα διαγνωστικών'),
 ]
 
 LIMITS = [
@@ -247,6 +271,7 @@ LIMITS = [
     'Δεν υπάρχει ακόμη κορεσμός πυρήνα μετασχηματιστή (ROADMAP §31).',
     'Οι μηχανές έχουν τυπικές τιμές όπου λείπουν δεδομένα (π.χ. διπλωματική ). Ελέγχονται απέναντι σε ανεξάρτητες ΔΕ, όχι σε μετρήσεις.',
     'Ο λύτης είναι πυκνός και τρέχει σε ένα thread (ROADMAP §32).',
+    'Μεταβλητό βήμα (3.13): ο έλεγχος σφάλματος είναι ανά βήμα (σχετικό τοπικό σφάλμα των καταστάσεων). Σε ταλάντωση με μικρή απόσβεση το συνολικό σφάλμα μεγαλώνει με τις περιόδους, και οι κορυφές μεγεθών που δεν είναι καταστάσεις (π.χ. ρεύμα πυκνωτή) δειγματοληπτούνται πιο αραιά. Σε μετατροπείς με πυκνό PWM το σταθερό βήμα είναι συνήθως ταχύτερο. Τα tutorials και οι τιμές αυτής της αναφοράς, εκτός από τις γραμμές «Βήμα του λύτη», είναι με σταθερό βήμα.',
 ]
 
 
@@ -287,7 +312,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 163 tests (Python και Node) και 5 σενάρια περιβάλλοντος. Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 180 tests (Python και Node) και 6 σενάρια περιβάλλοντος. Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',

@@ -15,6 +15,7 @@
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
  const Ex=root.Expr||(typeof require!=='undefined'?require('./expr.js'):null);
+ const SC=root.StepCheck||(typeof require!=='undefined'?require('./stepcheck.js'):null);
  const GMIN=1e-9;
  const schedAt=(s,t,dflt)=>{if(!s)return dflt;let v=s[0][1];if(t<s[0][0])return dflt;for(const [ts,val] of s){if(ts<=t+1e-15)v=val;else break;}return v;};
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -277,10 +278,12 @@
    for(const q of islands){if(island==='ref'){const r=q.nodes.find(i=>i<nets.length)??q.nodes[0];q.refPin=r<nets.length?nets[r].canon:null;els.push({k:'G',a:r,b:-1,R:1,cid:'#island',role:'ref'});}
     else if(rleak>0)for(const i of q.nodes)els.push({k:'G',a:i,b:-1,R:rleak,cid:'#island',role:'leak'});}}
   const tbase=num(SO.tbase,0)>0?num(SO.tbase,0):0; // time base when no source sets one (3.10), e.g. a Marx generator with charged capacitors
+  // step (3.13): fixed T/N, or variable with error control (relative tolerance, largest step T/hmax)
+  const step={mode:SO.step==='var'?'var':'fixed',rtol:Math.min(1e-2,Math.max(1e-7,num(SO.rtol,1e-5))),hmax:Math.max(1,num(SO.hmax,50))};
   const diag={unconn,island,rleak,skipped:[...skip].map(([id,why])=>({id,why})),open,freeEnds,freeNets,islands};
   const rowBase=nNodes;for(const e of els)if(e.row!==undefined)e.row+=rowBase;
   const sig=compileSignals(blocks,sigNets,ctrls,els,compInfo,warnings);
-  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId,sig,sigPin,diag,tbase};
+  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId,sig,sigPin,diag,tbase,step};
  }
 
  // ---------------------------------------------------------------- signal graph (3.0)
@@ -329,13 +332,97 @@
 
  // ---------------------------------------------------------------- simulator
  class Sim{
-  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
+  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,step:opts.step||null};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
   // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
   basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>b.type==='CLK'||b.type==='RAMP');if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
    const lg=[...this.net.compInfo.values()].filter(c=>c.wave||c.line);if(lg.length)return Math.min(...lg.map(c=>c.wave?c.wave.T1:c.line.tau));return this.net.tbase||1e-3;}
   // the step never exceeds the shortest line delay (the history at t − τ must be known)
   tlMaxStep(){let m=Infinity;for(const e of this.net.els)if(e.k==='TL')m=Math.min(m,e.ts);return m;}
-  setStep(hDiv,h){this.opts.hDiv=hDiv||this.opts.hDiv;this.opts.h=h||null;this.h=Math.min(this.opts.h||this.T/this.opts.hDiv,this.tlMaxStep());}
+  setStep(hDiv,h){this.opts.hDiv=hDiv||this.opts.hDiv;this.opts.h=h||null;this.hUser=this.opts.h||this.T/this.opts.hDiv;this.h=Math.min(this.hUser,this.tlMaxStep());this.hv=null;this.varSetup();this.lteH=null;this.capDirty=true;}
+  // ------------------------------------------------------------ variable step (3.13, ROADMAP §40)
+  // the reactive states (L currents, C voltages, fluxes of the multiports): the local error, the two-step ringing check and the mode analysis use them
+  stIndex(){const S=[];for(const e of this.net.els){if(e.k==='L')S.push({e,k:'L'});else if(e.k==='C')S.push({e,k:'C'});else if(e.k==='F')for(let j=0;j<e.N;j++)S.push({e,k:'F',j});}
+   // the end currents of the lines take part in the local error too (their history is a state of the line), not in the mode analysis
+   // and so do the states of the machines kept outside the circuit (rotor flux of the induction machine, speeds)
+   const A=[...S];for(const e of this.net.els)if(e.k==='TL'){A.push({e,k:'T',j:0});A.push({e,k:'T',j:1});}
+   for(const c of this.net.compInfo.values()){const e={cid:c.id};if(c.im){A.push({e,m:c.im,k:'M',f:'pa'},{e,m:c.im,k:'M',f:'pb'},{e,m:c.im,k:'W'});}else if(c.sm||c.srm)A.push({e,m:c.sm||c.srm,k:'W'});}
+   this.stEls=S;this.stAll=A;const n=A.length;this.stKind=Uint8Array.from(A,q=>q.k==='C'?0:q.k==='F'||q.k==='M'?2:q.k==='W'?3:1);
+   if(!this.lteSc||this.lteSc.length!==n){this.lteSc=new Float64Array(n);this.ringD=new Float64Array(n);this.ringN=new Uint16Array(n);this.lteH=null;this.rx=null;}
+   // reference magnitudes per kind, the floor of the tolerance (a state that starts from 0 is not held to 10⁻⁴ of nothing):
+   // V from the sources and the initial capacitor voltages, I from the current sources, the initial currents and V/R (median R), ψ = V·T
+   let Vr=0,Ir=0;const Rs=[];for(const e of this.net.els){if(e.k==='V'&&e.src){const q=e.src;Vr=Math.max(Vr,Math.abs(q.V||0),Math.abs(q.Vpk||0)+Math.abs(q.off||0));}
+    else if(e.k==='C')Vr=Math.max(Vr,Math.abs(e.v));else if(e.k==='L')Ir=Math.max(Ir,Math.abs(e.i));else if(e.k==='I')Ir=Math.max(Ir,Math.abs(e.I||0));else if(e.k==='G'&&e.R>0&&!e.role)Rs.push(e.R);}
+   for(const c of this.net.compInfo.values())if(c.wave)try{const w=c.wave,t1=w.T1||0;Vr=Math.max(Vr,Math.abs(P.waveAt(w,t1)),Math.abs(P.waveAt(w,3*t1)));}catch(e){}
+   Rs.sort((a,b)=>a-b);const Rm=Rs.length?Rs[Rs.length>>1]:1;Vr=Vr||1;Ir=Math.max(Ir,Vr/Rm);this.stRef=[Vr,Ir,Vr*(this.T||1e-3),10];this.capDirty=true;}
+  stVec(){const S=this.stAll,x=new Float64Array(S.length);for(let i=0;i<S.length;i++){const q=S[i],e=q.e;x[i]=q.k==='L'?e.i:q.k==='C'?e.v:q.k==='T'?e.iE[q.j]:q.k==='M'?q.m.st[q.f]:q.k==='W'?q.m.st.w:e.psi[q.j];}return x;}
+  stepCfg(){return {...this.net.step,...(this.opts.step||{})};}
+  varSetup(){const c=this.stepCfg();this.var=c.mode==='var';this.rtol=c.rtol;const tl=this.tlMaxStep();
+   this.hMax=Math.min(Math.max(this.T/c.hmax,this.h),tl);this.hMin=Math.min(this.hMax,Math.max(this.h*1e-3,this.T*1e-10));
+   if(!(this.hv>0))this.hv=this.h;this.hv=Math.min(this.hMax,Math.max(this.hMin,this.hv));}
+  setStepMode(patch){this.opts.step={...(this.opts.step||{}),...patch};this.hv=null;this.capDirty=true;this.varSetup();if(this.var)this.hv=this.hGrid(Math.max(this.hMin,this.h/64));this.lteH=null;}
+  // variable steps on the grid h·2^(k/4), so the factorizations are reused
+  hGrid(h){const k=Math.floor(4*Math.log2(h/this.h)+1e-9);return Math.min(this.hMax,this.hCap||Infinity,Math.max(this.hMin,this.h*Math.pow(2,k/4)));}
+  // with the trapezoidal rule no step is longer than 2τ of a real mode of the circuit (not of the switch models), or the mode rings (μ < 0)
+  // instead of decaying; found once per load at the largest step (stepcheck.js), up to 120 states
+  modeCap(){this.capDirty=false;this.hCap=null;if(!SC||!this.var||this.method!=='TR'||!this.stEls.length||this.stEls.length>120)return;let c=Infinity;
+   try{const md=SC.modes(this,this.hMax);if(md)for(const q of md.list){if(q.parasitic||!(q.abs>0)||Math.abs(q.im)>.1*Math.abs(q.re))continue;const tau=1/q.abs;if(tau>=this.hMin/2)c=Math.min(c,2*tau);}}catch(e){}
+   if(Number.isFinite(c)){this.hCap=Math.max(this.hMin,c);this.hv=Math.min(this.hv,this.hCap);}}
+  lteReset(){this.lteH={t:[this.t],x:[this.stVec()]};}
+  ltePush(){if(!this.lteH)return this.lteReset();const H=this.lteH;H.t.push(this.t);H.x.push(this.stVec());if(H.t.length>3){H.t.shift();H.x.shift();}}
+  // local truncation error of the step just taken, from divided differences over the last points:
+  // TR h³|x‴|/12, BDF2 (2/9)h³|x‴|, BE h²|x″|/2, against rtol·(|x|max + 10⁻³·(the largest state of the same kind + its reference)).
+  // Error per step: in a lightly damped oscillation the global error grows with the number of periods.
+  lteErr(h,mode){const H=this.lteH;if(!H)return null;const m=H.t.length;if(m<2||(mode!=='BE'&&m<3))return null;
+   const x3=this.stVec(),t3=this.t,n=x3.length,sc=this.lteSc,K=this.stKind,kmax=[0,0,0,0];
+   for(let i=0;i<n;i++){const a=Math.abs(x3[i]);if(a>sc[i])sc[i]=a;if(sc[i]>kmax[K[i]])kmax[K[i]]=sc[i];}
+   let err=0,arg=-1;const rt=this.rtol,ref=this.stRef,t2=H.t[m-1],t1=H.t[m-2],t0=m>=3?H.t[m-3]:0,X2=H.x[m-1],X1=H.x[m-2],X0=m>=3?H.x[m-3]:null;
+   for(let i=0;i<n;i++){const d23=(x3[i]-X2[i])/(t3-t2),d12=(X2[i]-X1[i])/(t2-t1),dd123=(d23-d12)/(t3-t1);let lte;
+    if(mode==='BE')lte=h*h*Math.abs(dd123);
+    else{const d01=(X1[i]-X0[i])/(t1-t0),dd012=(d12-d01)/(t2-t0),ddd=(dd123-dd012)/(t3-t0);lte=(mode==='BDF2'?4/3:.5)*h*h*h*Math.abs(ddd);}
+    const r=lte/(rt*(sc[i]+1e-3*(kmax[K[i]]+ref[K[i]]))+1e-300);if(r>err){err=r;arg=i;}}
+   return {err,arg,q:mode==='BE'?2:3};}
+  // after a step of the variable-step solver: accept (and pick the next step), or restore and retry smaller (returns true)
+  varCheck(h,snap,be,evEnd){
+   if(this.lastSmooth&&!this.lastDisc){const r=this.lteErr(h,this.lastMode);
+    if(r){
+     if(r.err>1&&h>this.hMin*(1+1e-9)&&this.nRejRow<40){this.restoreState(snap);this.beLeft=be;this.nRej++;this.nRejRow++;
+      this.hv=this.hGrid(Math.max(this.hMin,h*Math.max(.2,.9*Math.pow(r.err,-1/r.q))));return true;}
+     if(r.err>1){const q=this.stAll[r.arg],id=q?.e.cid||null,lb=id?(this.net.compInfo.get(id)?.label||id):'';
+      this.note('minstep:'+id,{sev:'info',up:50,grp:'step',id,msg:`Το μεταβλητό βήμα έφτασε στο ελάχιστο (${P.eng(this.hMin,'s',3)}) χωρίς να πιάσει την ανοχή ${this.rtol}${lb?' ('+lb+')':''}.`,
+       fix:'Μικρότερο βήμα T/N (το ελάχιστο είναι T/N·10⁻³) ή χαλαρότερη ανοχή. Συχνά σημαίνει ασυνέχεια που δεν είναι συμβάν, π.χ. σήμα που αλλάζει απότομα.'});}
+     const p=h*Math.min(4,.9*Math.pow(Math.max(r.err,1e-12),-1/r.q));
+     this.hv=this.hGrid(p<this.hv?p:h>=.5*this.hv?Math.min(p,2*this.hv):this.hv);}}
+   this.nRejRow=0;
+   // a switching or an event: the history restarts there (the solution is smooth only piecewise); after a switching the next step starts smaller
+   if(this.lastDisc||evEnd){this.lteReset();}else this.ltePush();
+   return false;}
+  // ------------------------------------------------------------ diagnostics (3.13)
+  note(key,rec){const d=this.dg||(this.dg=new Map());const o=d.get(key);if(o){o.n++;o.tLast=this.t;if(o.up&&o.n>=o.up&&o.sev==='info'){o.sev='warn';this.dgVer++;}return o;}
+   const r={key,src:'browser',t:this.t,n:1,...rec};d.set(key,r);this.dgVer=(this.dgVer||0)+1;return r;}
+  // checks before the run: modes against the step, sources, lines (stepcheck.js); kept until the next check
+  stepCheck(){this.dgPre=SC?SC.check(this).map(r=>({src:'browser',pre:true,t:null,n:1,...r})):[];this.dgVer=(this.dgVer||0)+1;return this.dgPre;}
+  diagnostics(){return [...(this.dgPre||[]),...(this.dg?this.dg.values():[])];}
+  // trapezoidal two-step ringing: the change of a state alternates in sign, step after step, around a slower trend
+  ringCheck(){const x=this.stVec(),n=x.length,X=this.rx;this.rx=x;if(!n||!X||X.length!==n)return;
+   const D=this.ringD,N=this.ringN,sc=this.lteSc,ns=this.stEls.length;
+   for(let i=0;i<ns;i++){const a=Math.abs(x[i]);if(a>sc[i])sc[i]=a;const d=x[i]-X[i],dp=D[i];D[i]=d;
+    if(dp*d<0&&Math.abs(d+dp)<.5*(Math.abs(d)+Math.abs(dp))&&Math.abs(d-dp)>2e-3*sc[i]){if(++N[i]===8){const id=this.stEls[i].e.cid,lb=this.net.compInfo.get(id)?.label||id;
+      this.note('ring:'+id,{sev:'warn',grp:'step',id,msg:`Ταλάντωση δύο βημάτων του τραπεζοειδούς στο ${lb} (t = ${P.eng(this.t,'s',4)}): η τιμή πηγαίνει πάνω-κάτω σε κάθε βήμα.`,
+       fix:'Το βήμα είναι πολύ μεγαλύτερο από μια σταθερά χρόνου του κυκλώματος. Μικρότερο βήμα, μεταβλητό βήμα, ή Gear/BDF2 που την αποσβένει.'});}}
+    else N[i]=0;}}
+  // backward-Euler map of the reactive states over h with the sources off, at the present switch states
+  // (step checks): column k = the states after one step from state k = 1 and all others 0
+  stateMap(h){const S=this.stEls;if(!S||!S.length)return null;const ns=S.length,n=this.n;
+   this.values(this.t);if(this.hasCPL||this.hasNL){this.cplLinearize();this.nlLinearize();}
+   this.assemble(h,'BE');const A=this.A.slice(),piv=new Int32Array(n);luFactor(A,n,piv);
+   const M=new Float64Array(ns*ns),b=new Float64Array(n),J=(a,c,j)=>{if(a>=0)b[a]-=j;if(c>=0)b[c]+=j;};
+   for(let k=0;k<ns;k++){b.fill(0);const sk=S[k],e=sk.e;
+    if(sk.k==='L')J(e.a,e.b,1);else if(sk.k==='C')J(e.a,e.b,-e.C/h);else{const N=e.N,G=e.Gnow;for(let q=0;q<N;q++)J(e.ports[q][0],e.ports[q][1],G[q*N+sk.j]);}
+    luSolve(A,n,piv,b);const V=i=>i<0?0:b[i];
+    for(let i=0;i<ns;i++){const q=S[i],f=q.e;let y;
+     if(q.k==='L')y=h/f.L*(V(f.a)-V(f.b))+(i===k?1:0);else if(q.k==='C')y=V(f.a)-V(f.b);else{const pp=f.ports[q.j];y=(i===k?1:0)+h*(V(pp[0])-V(pp[1]));}
+     M[i*ns+k]=y;}}
+   return {m:M,n:ns};}
   load(project,fresh){
    const old=this.net;const net=buildNetlist(project);
    if(old&&!fresh){ // carry states by key
@@ -360,7 +447,9 @@
    this.srms=[...net.compInfo.values()].filter(c=>c.srm).map(c=>c.srm);for(const m of this.srms)this.srmOutputs(m);this.hasTV=this.sms.length+this.srms.length>0;
    this.hasCPL=net.els.some(e=>e.k==='CPL');this.hasNL=net.els.some(e=>e.k==='NL');
    if(old&&!fresh)for(const e of net.els)if(e.k==='NL'){const o=old.els.find(x=>x.k==='NL'&&x.cid===e.cid);if(o)e.v0=o.v0;}this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
-   if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.h=Math.min(this.opts.h||this.T/this.opts.hDiv,this.tlMaxStep());
+   if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.hUser=this.opts.h||this.T/this.opts.hDiv;this.h=Math.min(this.hUser,this.tlMaxStep());
+   if(fresh){this.hv=null;this.dg=new Map();this.dgPre=[];this.nRej=0;this.nRejRow=0;this.nTiny=0;}this.stIndex();this.varSetup();this.lteH=null;this.rx=null;
+   if(fresh&&this.var)this.hv=this.hGrid(Math.max(this.hMin,this.h/64)); // the first steps (backward Euler, no history yet) start small and grow ×2 per step
    const keys=this.channelKeys();const same=!fresh&&this.keys&&keys.join('|')===this.keys.join('|');
    this.keys=keys;this.chIndex=new Map(keys.map((k,i)=>[k,i]));
    if(!same)this.allocRecord();
@@ -395,7 +484,7 @@
      b.sig=JSON.stringify([b.code,b.inNames,b.outNames,b.pars,Ts]);const o=prev.get(b.id);
      if(o&&o.sig===b.sig){b.rt=o.rt;prev.delete(b.id);}else{try{b.rt=R.make(b.code,{ins:b.inNames,outs:b.outNames,pars:b.pars,Ts,label:b.label});}catch(e){throw new NetlistError(e.message);}if(o){b.st.ys=null;b.st.last=null;}}}}
    for(const o of prev.values())o.rt?.destroy?.();}
-  setMethod(m){this.method=['TR','BE','BDF2'].includes(m)?m:'TR';this.cache.clear();this.beLeft=Math.max(this.beLeft,1);}
+  setMethod(m){this.method=['TR','BE','BDF2'].includes(m)?m:'TR';this.cache.clear();this.beLeft=Math.max(this.beLeft,1);this.capDirty=true;}
   setControl(id,patch){const k=this.net.ctrls.find(c=>c.id===id);if(!k)return false;Object.assign(k,patch);return true;}
   setBlock(id,patch){const b=this.net.sig.blocks.find(q=>q.id===id);if(!b)return false;Object.assign(b,patch);this.evalBlocks('commit');this.computeVals();return true;}
   setHold(id,patch){const q=this.shById.get(id);if(!q)return false;if(patch.trig&&patch.trig!==q.trig)q.last=null;Object.assign(q,patch);return true;}
@@ -627,6 +716,10 @@
   restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
    for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];}else if(e.k==='TL'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];e.trigDone=r[3];e.Dacc=r[4];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
    for(const [m,st] of S.ms||[]){m.st={...st};if(m.ph)this.imSources(m);}}
+  // the gate signature at t without changing the switches (the variable step looks ahead: a switching starts the next step small)
+  gateSigPeek(t){let s='';for(const e of this.net.els){if(e.k!=='S'&&!e.gk)continue;let on=false;
+    if(e.gate==='on')on=true;else if(e.gate==='sig')on=(e.gIn>=0?this.sv[e.gIn]:0)>=.5;else if(e.gate==='pwm'){const k=this.ctrlById.get(e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
+    s+=on?'1':'0';}return s;}
   gateSig(t){let s='';for(const e of this.net.els){if(e.k!=='S'&&!e.gk)continue;let on=false;
     if(e.gate==='on')on=true;else if(e.gate==='sig')on=(e.gIn>=0?this.sv[e.gIn]:0)>=.5;else if(e.gate==='pwm'){const k=this.net.ctrls.find(c=>c.id===e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
     if(e.k==='S')e.on=on;else{e.gon=on;if(e.gk==='igbt'&&!on)e.on=false;}s+=on?'1':'0';}return s;}
@@ -704,13 +797,15 @@
   solve(h,mode){
    if(!this.hasCPL&&!this.hasNL)return this.solveOnce(h,mode);
    for(const e of this.net.els)if(e.k==='CPL')e.v0=this.V(e.a)-this.V(e.b);
-   const n=this.hasNL?80:12;let sol;for(let it=0;it<n;it++){this.cplLinearize();this.nlLinearize();sol=this.solveOnce(h,mode);
-    let conv=true;const V=i=>i<0?0:sol[i];
-    for(const e of this.net.els){if(e.k==='CPL'){const v=V(e.a)-V(e.b);if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v)))conv=false;e.v0=v;}
+   const n=this.hasNL?80:12;let sol,bad=null;for(let it=0;it<n;it++){this.cplLinearize();this.nlLinearize();sol=this.solveOnce(h,mode);
+    let conv=true;bad=null;const V=i=>i<0?0:sol[i];
+    for(const e of this.net.els){if(e.k==='CPL'){const v=V(e.a)-V(e.b);if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v))){conv=false;bad=e;}e.v0=v;}
      // arrester: Newton with the voltage limited on the steep part (the voltage that gives the linearized current on the true curve)
      else if(e.k==='NL'){let v=V(e.a)-V(e.b);if(Math.abs(v)>Math.abs(e.v0)){const it2=e.g*v+e.J,vi=e.ch.inv(it2);if(Math.sign(it2)===Math.sign(v)&&Math.abs(vi)<Math.abs(v))v=vi;}
-      if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v)))conv=false;e.v0=v;}}
-    if(conv)break;}
+      if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v))){conv=false;bad=e;}e.v0=v;}}
+    if(conv){bad=null;break;}}
+   if(bad&&this.note){const id=bad.cid,lb=this.net.compInfo.get(id)?.label||id; // 3.13: shown in the diagnostics console
+    this.note('newton:'+id,{sev:'warn',grp:'nl',id,msg:`Η επανάληψη Newton στο ${lb} δεν συνέκλινε σε ${n} επαναλήψεις (t = ${P.eng(this.t,'s',4)}).`,fix:bad.k==='NL'?'Μικρότερο βήμα στο μέτωπο, ή πίνακας V–I με λιγότερο απότομη κλίση.':'Η σταθερή ισχύς κοντά στο V_min αλλάζει απότομα: μικρότερο βήμα ή μεγαλύτερο V_min.'});}
    return sol;
   }
   nlLinearize(){for(const e of this.net.els)if(e.k==='NL'){const q=e.ch.cur(e.v0);e.g=q.g+1e-12;e.J=q.i-e.g*e.v0;}}
@@ -789,6 +884,8 @@
   stepCore(h){
    const t0=this.t,mid=t0+h/2;let edged=false;
    const sig=this.gateSig(mid),gateChange=sig!==this.prevSig;if(gateChange)this.beLeft=2;
+   // for the variable step and the ringing check (3.13): smooth step, method, switching at its start or end
+   this.lastSmooth=false;this.lastMode=null;this.lastFlip=this.lastDisc=gateChange;this.endFlip=false;
    // record the post-switching point at the same instant, so edges are vertical and averages exact
    if(gateChange&&this.steps>0){this.edgePoint(t0);edged=true;}
    const smooth=!gateChange&&this.beLeft<=0;let mode=this.beLeft>0?'BE':this.method;this.prevSig=sig;
@@ -796,16 +893,17 @@
    this.values(t0+h);
    let sol=this.solve(h,mode),bad=this.check(sol);
    if(!bad.length){
-    if(!this.net.sig.zc.length){this.commit(sol,h,mode);this.beLeft--;return h;}
+    if(!this.net.sig.zc.length){this.commit(sol,h,mode);this.beLeft--;this.lastSmooth=!gateChange;this.lastMode=mode;return h;}
     // a comparator changes inside the step: cut the step at the crossing (secant on the comparator
     // input, exact for the piecewise-linear currents of switched converters), like a diode transition
     const snap=this.saveState();this.commit(sol,h,mode);const th=this.zcFrac();
-    if(th===null){this.beLeft--;return h;}
+    if(th===null){this.beLeft--;this.lastSmooth=!gateChange;this.lastMode=mode;return h;}
     const hh=Math.max(th*h*(1+1e-7)+1e-9*this.h,Math.min(h,this.h*1e-4));
-    if(hh>=h*(1-1e-9)){this.beLeft--;return h;}
+    if(hh>=h*(1-1e-9)){this.beLeft--;this.lastSmooth=!gateChange;this.lastMode=mode;return h;}
     this.restoreState(snap);let m=mode;
     if(m==='BDF2'){const w=hh/this.hLast;if(w>.2)this.bdf={w,a0:(1+2*w)/(1+w),a1:-(1+w),a2:w*w/(1+w)};else m='BE';}
     this.values(t0+hh);const s2=this.solve(hh,m);
+    this.lastDisc=this.lastFlip=this.endFlip=true; // the comparator changes at the end of the step
     if(!this.check(s2).length){this.commit(s2,hh,m);this.beLeft--;return hh;}
     this.restoreState(snap);this.values(t0+h);sol=this.solve(h,mode);this.commit(sol,h,mode);this.beLeft--;return h;}
    // locate the transition inside the step: current zero-crossings always
@@ -823,14 +921,14 @@
         return Math.abs(Math.abs(v)-g.Ub)<=.02*Math.abs(g.Ub-Math.abs(e.vPrev??0))+1e-9*g.Ub;}
        if(e.on){const i=(v-e.Vf)/e.Ron,i0=Math.abs(e.iPrev||0);return Math.abs(i)<=.02*i0+1e-9;}
        const v0=Math.abs((e.vPrev??0)-e.Vf);return Math.abs(v-e.Vf)<=.02*v0+1e-6;})&&this.check(s2).every(b=>flip.some(f=>f.e===b.e));
-     if(ok){this.commit(s2,hh,mode);this.recordNow();for(const b of flip){b.e.on=!b.e.on;if(b.e.gap){if(b.e.on)b.e.tOn=this.t;else b.e.tOff=this.t;}}this.beLeft=2;this.edgeSolve(this.t);return hh;}
+     if(ok){this.lastDisc=this.lastFlip=this.endFlip=true;this.commit(s2,hh,mode);this.recordNow();for(const b of flip){b.e.on=!b.e.on;if(b.e.gap){if(b.e.on)b.e.tOn=this.t;else b.e.tOff=this.t;}}this.beLeft=2;this.edgeSolve(this.t);return hh;}
      this.values(t0+h);
     }
    }
    // transition at the start of the step: iterate the states with backward Euler
    if(!edged){this.edgePoint(t0);this.values(t0+h);sol=this.solve(h,'BE');bad=this.check(sol);}
    for(let it=0;it<30&&bad.length;it++){for(const b of bad){b.e.on=!b.e.on;if(b.e.gap&&b.e.on)b.e.tOn=t0;}sol=this.solve(h,'BE');bad=this.check(sol);}
-   this.commit(sol,h,'BE');this.beLeft=2;return h;
+   this.lastDisc=this.lastFlip=this.endFlip=true;this.commit(sol,h,'BE');this.beLeft=2;return h;
   }
   // algebraic solution right after a switching instant: inductor currents and
   // capacitor voltages held, switch/diode states made consistent
@@ -858,7 +956,8 @@
     else if(b.type==='PIB'||b.type==='UD'||b.type==='PY'){const ts=this.shNext(b);if(ts>this.t+eps&&ts<t)t=ts;}
    }
    // base-period boundary for statistics
-   const Tb=this.T,kb=Math.floor((this.t+eps)/Tb)+1,tb=kb*Tb;if(tb>this.t+eps&&tb<t)t=tb;
+   const Tb=this.T,kb=Math.floor((this.t+eps)/Tb)+1,tb=kb*Tb,tO=t;if(tb>this.t+eps&&tb<t)t=tb;
+   this.evStat=t<tO; // only the statistics boundary: not a discontinuity for the variable step
    return t;
   }
   spwmCut(h){ // shorten h to the first SPWM crossing in (t, t+h]
@@ -870,11 +969,21 @@
    return Math.max(hi,this.h*1e-6);
   }
   run(duration,maxSteps=Infinity,deadline=Infinity){
-   const tEnd=this.t+duration;let steps=0;const eps=this.h*1e-7;
+   const tEnd=this.t+duration;let steps=0;const eps=this.h*1e-7;if(this.var&&this.capDirty)this.modeCap();
    while(this.t<tEnd-eps&&steps<maxSteps){
-    const tn=this.nextEvent(tEnd);let h=Math.min(this.h,tn-this.t);if(tn-this.t-h<this.h*1e-3)h=tn-this.t;
+    const tn=this.nextEvent(tEnd),stat=this.evStat;let hs=this.var?this.hv:this.h;
+    // variable step: right after a switching (a gate that changes now, or a diode/comparator/gap at the end of the last step) the next steps are
+    // backward Euler, first order and without an error estimate on the first one: they start at 1/8 and grow ×2 per step
+    if(this.var&&(this.endFlipPrev||this.gateSigPeek(this.t+Math.min(hs,tn-this.t)/2)!==this.prevSig)){hs=this.hGrid(Math.max(this.hMin,this.hv/8));this.hv=hs;}
+    let h=Math.min(hs,tn-this.t);if(tn-this.t-h<this.h*1e-3)h=tn-this.t;
     h=this.spwmCut(h);
-    this.step(h);steps++;
+    let snap=null,be=0;if(this.var){snap=this.saveState();be=this.beLeft;}
+    const hst=this.step(h);
+    // variable step (3.13): a step whose local error is above the tolerance is taken again, smaller
+    if(this.var){if(this.varCheck(hst,snap,be,!stat&&Math.abs(this.t-tn)<eps))continue;this.endFlipPrev=this.endFlip;}
+    steps++;
+    if(hst<this.h*1e-6&&++this.nTiny===2000)this.note('tiny',{sev:'warn',grp:'step',id:null,msg:`Πολλά βήματα κάτω από 10⁻⁶·Δt (συμβάντα πολύ κοντά το ένα στο άλλο, από t = ${P.eng(this.t,'s',4)}).`,fix:'Συνήθως διακόπτης ή συγκριτής που αλλάζει κατάσταση συνεχώς (chattering): έλεγξε την υστέρηση ή τον νεκρό χρόνο.'});
+    if(this.method==='TR'&&this.lastSmooth&&!this.lastDisc&&this.stEls.length<=4000)this.ringCheck();else if(this.lastDisc)this.rx=null;
     // land exactly on event times
     if(Math.abs(this.t-tn)<eps)this.t=tn;
     this.started=true;
