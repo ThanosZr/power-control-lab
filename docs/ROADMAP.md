@@ -1184,6 +1184,8 @@ def step(t, u, s, p):     # u: είσοδοι, s: κατάσταση
 
 Μακροπρόθεσμος στόχος. Πρότυπο είναι το Control Workbench EV/DC v0.17, ένα ξεχωριστό project.
 
+**Υλικό αναφοράς** (branch `ref-materials`, εκτός CI και zip, SHA-256 στο README του branch): `reference/ai_control/control_workbench_evdc_v0_17.zip`.
+
 **Τι έχει το workbench:**
 - Συμβόλαια:
   - Plant: δυναμική, μετρήσεις, όρια,
@@ -1841,6 +1843,8 @@ def step(t, u, s, p):     # u: είσοδοι, s: κατάσταση
 
 ## 35. Κώδικας Python ή MATLAB που προσδιορίζει παραμέτρους στοιχείων
 
+**Υλικό αναφοράς** (branch `ref-materials`, εκτός CI και zip, SHA-256 στο README του branch): `reference/high_voltage/Lightning_Impulse_Manager_v1.2.0.zip` και `reference/high_voltage/Voltage_Impulse_GUI_v1.1.zip`.
+
 Ζήτημα του Θάνου (8/11/2026), με δύο δικά του εργαλεία MATLAB ως παράδειγμα:
 - **Lightning Impulse Manager 1.2.0:** ρεύμα Heidler i = (I_m/η)·(t/τ₁)ⁿ/(1 + (t/τ₁)ⁿ)·e^(−t/τ₂),
 - **Voltage Impulse GUI 1.1:** διπλοεκθετική κρουστική τάση v = V_p·K·(e^(−αt) − e^(−βt)).
@@ -1918,6 +1922,8 @@ def step(t, u, s, p):     # u: είσοδοι, s: κατάσταση
 - MATLAB Engine, Runtime και Octave (2 και 3): μία ακόμη, με δοκιμή στον υπολογιστή του Θάνου, γιατί εδώ δεν υπάρχει MATLAB.
 
 ## 36. Γραφικές από CSV με Python ή MATLAB: έτοιμα πρότυπα εμφάνισης, 2Δ και 3Δ
+
+**Υλικό αναφοράς** (branch `ref-materials`, εκτός CI και zip, SHA-256 στο README του branch): `reference/plotting/plot_with_mapping_gui_v4.m`, και το `label_mapping.csv` μέσα στο `reference/high_voltage/Lightning_Impulse_Manager_v1.2.0.zip`.
 
 Ζήτημα του Θάνου (8/11/2026). Παράδειγμα το δικό του `plot_with_mapping_gui_v4.m`. Θέλουμε κάτι ανάλογο αλλά πολύ πιο προχωρημένο: αποτελέσματα προσομοιώσεων σε CSV διαβάζονται εύκολα από Python ή MATLAB και γίνονται γραφικές με έτοιμες ρυθμίσεις για τα πάντα (γραμματοσειρές, ετικέτες, μονάδες, γραμμές, 3Δ).
 
@@ -2046,6 +2052,8 @@ def step(t, u, s, p):     # u: είσοδοι, s: κατάσταση
 - 15.5.29: s = 2,04 kV, όχι 23,04 kV.
 
 ## 38. Έλεγχος με AI από βρόχο σε σύνθετο, και οπτικοποιήσεις που κουμπώνουν
+
+**Υλικό αναφοράς** (branch `ref-materials`, εκτός CI και zip, SHA-256 στο README του branch): `reference/ai_control/control_workbench_evdc_v0_17.zip` (τα `core/nn.py`, STEPS και `layers()`/`draw_signals()` που αναφέρονται παρακάτω είναι εκεί).
 
 Ερώτηση του Θάνου (9/11/2026), με το Control Workbench EV/DC v0.17 ως πρότυπο (§19). Αποφάσεις του Θάνου:
 - η σειρά ξεκινά **μετά τα σενάρια από κώδικα** (§30), που χρειάζεται η εκπαίδευση,
