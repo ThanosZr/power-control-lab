@@ -115,4 +115,14 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
  await p.evaluate(()=>window.PCL.loadTutorial('hv153',{ex:'1532a'}));await p.waitForTimeout(2500);
  const mt=await p.$$eval('#math-tpl option',o=>o.map(x=>x.value));ok(mt[0]==='hv_impulse_design'&&mt.includes('hv_two_layer')&&mt.includes('hv_risk'),'HV templates in the math panel '+mt.slice(0,4));
  const kv=await p.$eval('#math .kv',e=>e.innerText).catch(()=>'');ok(/297[,.]2/.test(kv)&&/4[,.]13/.test(kv),'impulse design from the tutorial: exact R_μ, R_ε ('+kv.replace(/\s+/g,' ').slice(0,90)+')');
+ // 11) 3.12: dividers (15.1.3: the voltmeter reads 50 kV) and the Schering bridge (balanced with the corrected R₃, R₄; not with the book's)
+ const dv=await card('hvdiv',{ex:'1513'});ok(dv.good>=3&&/ηλεκτροστατικό βολτόμετρο/.test(dv.text)&&/δείχνει 50 kV/.test(dv.text),'divider card 15.1.3 ('+dv.good+' good)');
+ const sf=await card('schering',{set:'fix'});ok(sf.good>=1&&/✓ Η γέφυρα ισορροπεί/.test(sf.text),'Schering card: balanced');
+ const sb=await card('schering',{set:'book'});ok(/✗ Η γέφυρα δεν ισορροπεί/.test(sb.text)&&/δέκα φορές μικρότερο/.test(sb.text),'Schering card: the book values do not balance');
+ await p.screenshot({path:OUT+'/w11_schering.png'});
+ // 12) 3.12: Esc drops the part being placed wherever the focus is (palette search, a panel), and on the canvas
+ for(const where of ['#pal-search','body','canvas']){await p.click('.pal-item[data-part="R"]');await p.mouse.move(500,330);
+  if(where==='#pal-search')await p.focus('#pal-search');else if(where==='body')await p.evaluate(()=>document.activeElement?.blur());
+  await p.keyboard.press('Escape');await p.waitForTimeout(150);
+  const st=await p.evaluate(()=>({placing:!!window.PCL.editor.placing,ghost:!!document.querySelector('#canvas .ghost')}));ok(!st.placing&&!st.ghost,'Esc cancels placing (focus: '+where+')');}
  console.log('ERR',JSON.stringify(errs.slice(0,5)));console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})().catch(e=>{console.error('FAILED',e);process.exit(1);});

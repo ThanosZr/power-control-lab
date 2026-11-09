@@ -7,8 +7,8 @@
 
 | Αρχείο | Γραμμές |
 |---|---:|
-| `web/studio/app.js` | 1514 |
-| `web/studio/editor.js` | 510 |
+| `web/studio/app.js` | 1547 |
+| `web/studio/editor.js` | 514 |
 | `web/studio/expr.js` | 56 |
 | `web/studio/math.js` | 144 |
 | `web/studio/metrics.js` | 89 |
@@ -17,7 +17,7 @@
 | `web/studio/pyrt.js` | 55 |
 | `web/studio/scope.js` | 167 |
 | `web/studio/templates.js` | 32 |
-| `web/studio/tutorials.js` | 778 |
+| `web/studio/tutorials.js` | 810 |
 | `run.py` | 138 |
 | `engine/__init__.py` | 1 |
 | `engine/analysis.py` | 307 |
@@ -38,7 +38,7 @@
 | `engine/workbench.py` | 129 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_batch.py` | 186 |
+| `tests/test_batch.py` | 188 |
 | `tests/test_bidir_engine.py` | 103 |
 | `tests/test_bidir_sim.py` | 70 |
 | `tests/test_boundary.py` | 50 |
@@ -47,16 +47,16 @@
 | `tests/test_live_sim.py` | 149 |
 | `tests/test_studio_math.py` | 50 |
 | `tests/test_studio_sim.py` | 593 |
-| `tests/test_templates.py` | 218 |
-| `tests/test_tutorials.py` | 669 |
-| `tests/js/batch_requests.js` | 83 |
-| `tests/js/sim_cases.js` | 325 |
-| `tests/js/tutorial_cases.js` | 133 |
+| `tests/test_templates.py` | 237 |
+| `tests/test_tutorials.py` | 703 |
+| `tests/js/batch_requests.js` | 84 |
+| `tests/js/sim_cases.js` | 330 |
+| `tests/js/tutorial_cases.js` | 137 |
 | `tests/ui/blocks_flow.js` | 140 |
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/features_flow.js` | 84 |
 | `tests/ui/studio_flow.js` | 39 |
-| `tests/ui/wiring_flow.js` | 118 |
+| `tests/ui/wiring_flow.js` | 128 |
 
 ## Στοιχεία και μπλοκ (`web/studio/parts.js`, `PARTS`)
 
@@ -158,10 +158,12 @@
 | 643 | `hv153` | Υψηλές τάσεις (3.11) | Ασκήσεις 15.3: γεννήτριες κρουστικών τάσεων (βιβλίο, ακριβής λύση, προσομοίωση) |
 | 664 | `lossline` | Υψηλές τάσεις (3.11) | Γραμμή με απώλειες: απόσβεση και παραμόρφωση οδεύοντος κύματος |
 | 681 | `voltime` | Υψηλές τάσεις (3.11) | Καμπύλη τάσης–χρόνου διακένου (κριτήριο ενέργειας διάσπασης) |
-| 697 | `peak_cm` | Μπλοκ σημάτων (3.0) | Peak current-mode και υποαρμονική |
-| 719 | `pcm_chaos` | Μπλοκ σημάτων (3.0) | Διακλαδώσεις και χάος στο peak current-mode (boost) |
-| 733 | `dc_drive` | Ηλεκτρική κίνηση (3.1) | Μηχανή ΣΡ: βρόχοι ρεύματος και ταχύτητας |
-| 775 | `empty` | Νέο | Κενό κύκλωμα |
+| 697 | `hvdiv` | Υψηλές τάσεις (3.12) | Μέτρηση εναλλασσόμενης υψηλής τάσης: καταμεριστές (ασκήσεις 15.1.3, 15.1.5) |
+| 714 | `schering` | Υψηλές τάσεις (3.12) | Γέφυρα Schering: χωρητικότητα και συντελεστής απωλειών (άσκηση 15.5.12) |
+| 729 | `peak_cm` | Μπλοκ σημάτων (3.0) | Peak current-mode και υποαρμονική |
+| 751 | `pcm_chaos` | Μπλοκ σημάτων (3.0) | Διακλαδώσεις και χάος στο peak current-mode (boost) |
+| 765 | `dc_drive` | Ηλεκτρική κίνηση (3.1) | Μηχανή ΣΡ: βρόχοι ρεύματος και ταχύτητας |
+| 807 | `empty` | Νέο | Κενό κύκλωμα |
 
 ## API του server (`run.py`, `/api/<action>`)
 
@@ -169,7 +171,7 @@
 
 ## Templates δεδομένων (`web/studio/exercises/`)
 
-`buck_design.template.json`, `dc_drive.template.json`, `hv_coax.template.json`, `hv_downconductor.template.json`, `hv_impulse_design.template.json`, `hv_risk.template.json`, `hv_two_layer.template.json`, `pcm_slope.template.json`, `pe2_battery.template.json`, `pe2_polyphase.template.json`, `pe2_sampling.template.json`
+`buck_design.template.json`, `dc_drive.template.json`, `hv_coax.template.json`, `hv_downconductor.template.json`, `hv_impulse_design.template.json`, `hv_multilevel.template.json`, `hv_risk.template.json`, `hv_successive.template.json`, `hv_two_layer.template.json`, `pcm_slope.template.json`, `pe2_battery.template.json`, `pe2_polyphase.template.json`, `pe2_sampling.template.json`
 
 ## Συναρτήσεις ανά αρχείο
 
@@ -369,30 +371,35 @@
 | 1216 | function | `lossTheory` |
 | 1235 | function | `vtBreak` |
 | 1236 | function | `vtTheory` |
-| 1255 | function | `formulaTheory` |
-| 1322 | function | `nodeAvg` |
-| 1328 | function | `circuitForMath` |
-| 1360 | function | `scheduleMath` |
-| 1361 | function | `batteryKey` |
-| 1363 | function | `mathChoices` |
-| 1364 | const fn | `prim` |
-| 1366 | function | `renderMathChoices` |
-| 1368 | function | `runTemplate` |
-| 1374 | function | `runMath` |
-| 1395 | function | `saveLocal` |
-| 1396 | function | `download` |
-| 1397 | function | `exportCSV` |
-| 1403 | function | `syncScopeInputs` |
-| 1404 | function | `setSpeed` |
-| 1407 | function | `openSettings` |
-| 1408 | const fn | `sel` |
-| 1409 | const fn | `chk` |
-| 1427 | function | `boot` |
-| 1460 | const fn | `mv` |
-| 1461 | const fn | `up` |
-| 1462 | const fn | `navOpen` |
-| 1468 | const fn | `probeSel` |
-| 1511 | function | `renderTheoryLive` |
+| 1256 | function | `hvdivTheory` |
+| 1258 | const fn | `r` |
+| 1270 | function | `scheringTheory` |
+| 1271 | const fn | `inv` |
+| 1280 | const fn | `sr` |
+| 1286 | function | `formulaTheory` |
+| 1355 | function | `nodeAvg` |
+| 1361 | function | `circuitForMath` |
+| 1393 | function | `scheduleMath` |
+| 1394 | function | `batteryKey` |
+| 1396 | function | `mathChoices` |
+| 1397 | const fn | `prim` |
+| 1399 | function | `renderMathChoices` |
+| 1401 | function | `runTemplate` |
+| 1407 | function | `runMath` |
+| 1428 | function | `saveLocal` |
+| 1429 | function | `download` |
+| 1430 | function | `exportCSV` |
+| 1436 | function | `syncScopeInputs` |
+| 1437 | function | `setSpeed` |
+| 1440 | function | `openSettings` |
+| 1441 | const fn | `sel` |
+| 1442 | const fn | `chk` |
+| 1460 | function | `boot` |
+| 1493 | const fn | `mv` |
+| 1494 | const fn | `up` |
+| 1495 | const fn | `navOpen` |
+| 1501 | const fn | `probeSel` |
+| 1544 | function | `renderTheoryLive` |
 
 ### `web/studio/editor.js`
 
@@ -491,19 +498,20 @@
 | 443 | method | `drawMarquee` |
 | 446 | method | `marqueeSelect` |
 | 449 | const fn | `inside` |
-| 455 | method | `beginPlace` |
-| 456 | method | `ghost` |
-| 458 | method | `finishPlace` |
-| 459 | method | `cancelPlace` |
-| 461 | method | `startWire` |
-| 462 | method | `startWireFrom` |
-| 463 | method | `previewWire` |
-| 472 | method | `wireClick` |
-| 478 | method | `orthoNext` |
-| 479 | method | `finishWire` |
-| 495 | method | `cancelWire` |
-| 497 | method | `splitWire` |
-| 507 | method | `wireNetPin` |
+| 456 | method | `escape` |
+| 459 | method | `beginPlace` |
+| 460 | method | `ghost` |
+| 462 | method | `finishPlace` |
+| 463 | method | `cancelPlace` |
+| 465 | method | `startWire` |
+| 466 | method | `startWireFrom` |
+| 467 | method | `previewWire` |
+| 476 | method | `wireClick` |
+| 482 | method | `orthoNext` |
+| 483 | method | `finishWire` |
+| 499 | method | `cancelWire` |
+| 501 | method | `splitWire` |
+| 511 | method | `wireNetPin` |
 
 ### `web/studio/expr.js`
 
@@ -874,10 +882,12 @@ _(χωρίς συναρτήσεις)_
 | 654 | const fn | `down` |
 | 671 | method | `build` |
 | 688 | method | `build` |
-| 703 | method | `build` |
-| 723 | method | `build` |
-| 738 | method | `build` |
-| 776 | method | `build` |
+| 701 | method | `build` |
+| 718 | method | `build` |
+| 735 | method | `build` |
+| 755 | method | `build` |
+| 770 | method | `build` |
+| 808 | method | `build` |
 
 ### `run.py`
 

@@ -1,0 +1,187 @@
+{
+ "schema": "pcl-template-1",
+ "id": "hv_successive",
+ "tutorial": [
+  "twave",
+  "arrester",
+  "marx",
+  "chop",
+  "hv153",
+  "lossline",
+  "voltime",
+  "lightning",
+  "hvdiv",
+  "schering"
+ ],
+ "title": "Υψηλές τάσεις · στατιστική διάσπασης: διαδοχικές εκκενώσεις και up-and-down",
+ "description": "Εννέα κλάσεις τάσης U₁, U₁ + ΔU, … με m_i τάσεις διάσπασης (δοκιμή διαδοχικών εκκενώσεων) ή m_i εφαρμογές (up-and-down). U_d50 = ū = Σ m_i·u_i/n και s = √(Σ m_i·(u_i − ū)²/(n − 1)). Προεπιλογή: άσκηση 15.5.29 του βιβλίου.",
+ "inputs": [
+  {
+   "name": "U_1",
+   "label": "Πρώτη κλάση τάσης",
+   "unit": "V",
+   "value": 101000.0,
+   "symbol": "U_1"
+  },
+  {
+   "name": "dU",
+   "label": "Πλάτος κλάσης",
+   "unit": "V",
+   "value": 1000.0,
+   "symbol": "ΔU"
+  },
+  {
+   "name": "m_1",
+   "label": "Πλήθος στην κλάση 1",
+   "unit": "",
+   "value": 1,
+   "symbol": "m_1"
+  },
+  {
+   "name": "m_2",
+   "label": "Πλήθος στην κλάση 2",
+   "unit": "",
+   "value": 2,
+   "symbol": "m_2"
+  },
+  {
+   "name": "m_3",
+   "label": "Πλήθος στην κλάση 3",
+   "unit": "",
+   "value": 3,
+   "symbol": "m_3"
+  },
+  {
+   "name": "m_4",
+   "label": "Πλήθος στην κλάση 4",
+   "unit": "",
+   "value": 4,
+   "symbol": "m_4"
+  },
+  {
+   "name": "m_5",
+   "label": "Πλήθος στην κλάση 5",
+   "unit": "",
+   "value": 4,
+   "symbol": "m_5"
+  },
+  {
+   "name": "m_6",
+   "label": "Πλήθος στην κλάση 6",
+   "unit": "",
+   "value": 3,
+   "symbol": "m_6"
+  },
+  {
+   "name": "m_7",
+   "label": "Πλήθος στην κλάση 7",
+   "unit": "",
+   "value": 1,
+   "symbol": "m_7"
+  },
+  {
+   "name": "m_8",
+   "label": "Πλήθος στην κλάση 8",
+   "unit": "",
+   "value": 1,
+   "symbol": "m_8"
+  },
+  {
+   "name": "m_9",
+   "label": "Πλήθος στην κλάση 9",
+   "unit": "",
+   "value": 1,
+   "symbol": "m_9"
+  }
+ ],
+ "steps": [
+  {
+   "id": "N_t",
+   "title": "Πλήθος δοκιμών",
+   "explain": "",
+   "expr": "(m_1 + m_2 + m_3 + m_4 + m_5 + m_6 + m_7 + m_8 + m_9)",
+   "unit": "",
+   "symbol": "n"
+  },
+  {
+   "id": "a_m",
+   "title": "Μέση θέση σε κλάσεις",
+   "explain": "Σ m_i·i/n, με i = 0 … 8.",
+   "expr": "(m_1*0 + m_2*1 + m_3*2 + m_4*3 + m_5*4 + m_6*5 + m_7*6 + m_8*7 + m_9*8)/N_t",
+   "unit": "",
+   "symbol": "ī"
+  },
+  {
+   "id": "U_m",
+   "title": "Μέση τιμή = U_d50",
+   "explain": "",
+   "expr": "U_1 + a_m*dU",
+   "unit": "V",
+   "symbol": "ū"
+  },
+  {
+   "id": "s_d",
+   "title": "Τυπική απόκλιση",
+   "explain": "s = √(Σ m_i·(u_i − ū)²/(n − 1)).",
+   "expr": "dU*sqrt((m_1*(0 - a_m)**2 + m_2*(1 - a_m)**2 + m_3*(2 - a_m)**2 + m_4*(3 - a_m)**2 + m_5*(4 - a_m)**2 + m_6*(5 - a_m)**2 + m_7*(6 - a_m)**2 + m_8*(7 - a_m)**2 + m_9*(8 - a_m)**2)/(N_t - 1))",
+   "unit": "V",
+   "symbol": "s"
+  },
+  {
+   "id": "U_10",
+   "title": "Τάση 10 % (κανονική κατανομή)",
+   "explain": "",
+   "expr": "U_m - 1.2816*s_d",
+   "unit": "V",
+   "symbol": "U_10"
+  },
+  {
+   "id": "U_90",
+   "title": "Τάση 90 %",
+   "explain": "",
+   "expr": "U_m + 1.2816*s_d",
+   "unit": "V",
+   "symbol": "U_90"
+  }
+ ],
+ "sections": [
+  {
+   "id": "res",
+   "title": "Αποτελέσματα",
+   "blocks": [
+    {
+     "type": "kv",
+     "rows": [
+      [
+       "U_d50 = ū",
+       "{U_m|V}"
+      ],
+      [
+       "s",
+       "{s_d|V}"
+      ],
+      [
+       "U₁₀, U₉₀",
+       "{U_10|V}, {U_90|V}"
+      ]
+     ]
+    },
+    {
+     "type": "text",
+     "text": "Στην 15.5.29 το βιβλίο βρίσκει ū = 104,6 kV, όπως εδώ, αλλά s = 23,04 kV. Από τα ίδια δεδομένα s = {s_d|V}."
+    },
+    {
+     "type": "steps",
+     "steps": [
+      "N_t",
+      "a_m",
+      "U_m",
+      "s_d",
+      "U_10",
+      "U_90"
+     ]
+    }
+   ]
+  }
+ ]
+}

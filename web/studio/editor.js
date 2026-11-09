@@ -386,7 +386,7 @@
    const k=e.key.toLowerCase(),ctrl=e.ctrlKey||e.metaKey;
    if(e.target!==this.svg)return;
    if(e.code==='Space'){this.space=true;this.svg.classList.add('grab');e.preventDefault();return;}
-   if(k==='escape'){if(this.wiring){const m=this.wiring.made;this.cancelWire();if(m){this.tidyJunctions();this.render();}}else if(this.placing)this.cancelPlace();else if(this.wireTool)this.setWireTool(false);else this.select([],[]);return;}
+   if(k==='escape'){this.escape(true);return;}
    if(this.wiring&&k==='backspace'){e.preventDefault();this.wiring.via.pop();this.previewWire(this.hover||this.pin(this.wiring.from.c,this.wiring.from.p),null);return;}
    if(this.wiring&&k==='enter'){e.preventDefault();this.finishFree(this.hover);return;}
    if(!ctrl&&k==='w'){this.setWireTool(!this.wireTool);return;}
@@ -451,6 +451,10 @@
    const ws=this.doc.wires.filter(w=>{const pts=this.wirePts(w);const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);const bb=[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];
     if(crossing)return pts.some((p,i)=>i&&!(Math.max(p[0],pts[i-1][0])<x0||Math.min(p[0],pts[i-1][0])>x1||Math.max(p[1],pts[i-1][1])<y0||Math.min(p[1],pts[i-1][1])>y1));return inside(bb);}).map(w=>w.id);
    this.select(cs,ws,add);}
+  // Esc: leave the current mode (wire, part to place, wire tool); on the canvas also clear the selection. The page calls it too (3.12),
+  // so Esc works wherever the focus is (palette search, panels, scope)
+  escape(deselect){if(this.wiring){const m=this.wiring.made;this.cancelWire();if(m){this.tidyJunctions();this.render();}return true;}
+   if(this.placing){this.cancelPlace();return true;}if(this.wireTool){this.setWireTool(false);return true;}if(deselect)this.select([],[]);return false;}
   // ---------------------------------------------------------- placing
   beginPlace(type){this.cancelWire();this.placing={type,rot:0};this.svg.classList.add('placing');this.svg.focus({preventScroll:true});if(this.hover)this.ghost(this.hover);}
   ghost(p){let g=this.L.over.querySelector('.ghost');if(!g){g=document.createElementNS(NS,'g');g.setAttribute('class','ghost');this.L.over.appendChild(g);}

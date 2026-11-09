@@ -693,6 +693,38 @@
    const stopT=ramp?Math.max(3*(U0/S),.4e-6):(amp<1.25?60e-6:12e-6),Tb=ramp?3e6/S:1.2e-6;
    return project(comps,wires,{sim:{hDiv:Math.round(Tb*3000/stopT),speed:5,stopT,method:'TR'},scope:{panes:[[['V:V1','u πηγής'],['V:SG1','u διακένου']],[['I:SG1','i διακένου']]],window:{unit:'s',n:stopT}},
     meta:{U0,k,D:Dk,src:o.src,S,amp,Vpk:amp*U0,Rs:50,dur:stopT}});}});
+ // ------------------------------------------------------------------ 3.12: measuring AC high voltage with dividers (book 15.1.3, 15.1.5)
+ T.push({id:'hvdiv',group:'Υψηλές τάσεις (3.12)',title:'Μέτρηση εναλλασσόμενης υψηλής τάσης: καταμεριστές (ασκήσεις 15.1.3, 15.1.5)',theory:'formula',topology:'hvdiv',
+  options:[{k:'ex',label:'Άσκηση',options:[['1513','15.1.3: 50 kV, χωρητικός 0,1/19,9 nF, ωμικός 10 kΩ / R_L, ηλεκτροστατικό βολτόμετρο'],['1515','15.1.5: 834,39 kV κορυφή, χωρητικός 0,1/99,9 nF, καλώδιο 10 m, παλμογράφος 2 MΩ ∥ 30 pF']],def:'1513'}],
+  desc:'Η υψηλή τάση του μετασχηματιστή δοκιμών (εδώ η πηγή, στη συχνότητα του δικτύου) μετριέται με καταμεριστές. Χωρητικός: λόγος (C_H + C_L,ολ)/C_H, όπου στο C_L,ολ μετρούν και το καλώδιο και ο παλμογράφος. Ωμικός: (R_H + R_L)/R_L. Το ηλεκτροστατικό βολτόμετρο δείχνει την ενδεικνυόμενη (rms) τιμή. Στην 15.1.5 το καλώδιο μπαίνει ως χωρητικότητα ℓ/(v·Z), όπως στο βιβλίο (στα 50 Hz ο χρόνος διάδοσης των 53 ns είναι αμελητέος), μαζί με τα 30 pF του παλμογράφου, πίσω από την αντίσταση του καλωδίου. Το ηλεκτροστατικό βολτόμετρο μπαίνει ως πολύ μεγάλη αντίσταση: μετρά μόνο την τάση. Η πηγή έχει 1 Ω εσωτερική αντίσταση και οι λόγοι μετριούνται ως προς την τάση στους ακροδέκτες της. Η κάρτα θεωρίας λύνει τους καταμεριστές με φασιθέτες και ελέγχει τις απαντήσεις του βιβλίου.',
+  tasks:['15.1.3: η κάρτα δίνει 250 V στον χωρητικό, 9,1 V στον ωμικό με R_L = 1,82 Ω, και 50 kV στο ηλεκτροστατικό βολτόμετρο (το βιβλίο γράφει 100 kV).','15.1.5: τα 585,7 V ξεπερνούν τα 500 V του παλμογράφου. Πόσο πρέπει να γίνει το C_L για να χωρά η μέτρηση;','Άλλαξε το C_H: ο λόγος αλλάζει ανάλογα, αλλά το φορτίο του καταμεριστή στην πηγή μένει σχεδόν ίδιο.'],
+  build(o){const b15=o.ex==='1515',f=50,Vpk=b15?834.39e3:50e3*Math.SQRT2,yb=300,gx=260;
+   const comps=[C('V1','VAC',100,210,{Vpk,f,Rs:1},{label:b15?'834,39 kV κορυφή':'50 kV rms'}),J('HV',100,130),gnd(gx,yb+20)];   // 1 Ω inside the source: no loop of an ideal source with capacitors
+   const wires=[['V1:p','HV'],['V1:n','G1:g',[[100,yb],[gx,yb]]]],dn=(id,x)=>wires.push([id+':n','G1:g',[[x,yb],[gx,yb]]]);
+   comps.push(C('CH','C',200,175,{C:.1e-9},{label:'C_H'}),C('CL','C',200,245,{C:b15?99.9e-9:19.9e-9},{label:'C_L'}));wires.push(['HV','CH:p',[[200,130]]],['CH:n','CL:p']);dn('CL',200);
+   // the cable as its capacitance ℓ/(v·Z) together with the oscilloscope input (as in the book), behind the cable's 0,1 Ω: no loop of capacitors alone
+   if(b15){const Ccab=+(10/(3e8/Math.sqrt(2.5)*75)).toPrecision(4);comps.push(C('RC','R',290,210,{R:.1},{label:'καλώδιο 10 m'}),J('SC',370,210),C('CK','C',370,250,{C:Ccab+30e-12},{label:'C_καλ + C_παλμ'}),C('RS','R',450,250,{R:2e6},{rot:1,label:'παλμογράφος 2 MΩ'}));
+    wires.push(['CL:p','RC:a',[[200,210]]],['RC:b','SC'],['SC','CK:p'],['SC','RS:a',[[450,210]]]);dn('CK',370);wires.push(['RS:b','G1:g',[[450,yb],[gx,yb]]]);}
+   else{comps.push(C('RH','R',320,175,{R:10e3},{rot:1,label:'R_H'}),C('RL','R',320,245,{R:1.82},{rot:1,label:'R_L'}),C('ES','R',420,210,{R:1e12},{rot:1,label:'ηλεκτροστατικό βολτόμετρο'}));
+    wires.push(['HV','RH:a',[[320,130]]],['RH:b','RL:a'],['RL:b','G1:g',[[320,yb],[gx,yb]]],['HV','ES:a',[[420,130]]],['ES:b','G1:g',[[420,yb],[gx,yb]]]);}
+   const stopT=6/f;
+   return project(comps,wires,{sim:{hDiv:200,speed:2,stopT,method:'TR'},scope:{panes:[[['V:V1','v (υψηλή)']],b15?[['V:CK','v παλμογράφου']]:[['V:CL','v χωρητικού (Ch2)'],['V:RL','v ωμικού (Ch1)']]],window:{unit:'s',n:stopT}},
+    meta:{ex:o.ex,Vpk,f,CH:.1e-9,CL:b15?99.9e-9:19.9e-9,Ccab:b15?+(10/(3e8/Math.sqrt(2.5)*75)).toPrecision(4):0,Rs:b15?2e6:0,Cs:b15?30e-12:0,RH:b15?0:10e3,RL:b15?0:1.82,dur:stopT}});}});
+ // ------------------------------------------------------------------ 3.12: Schering bridge (book 15.5.12)
+ T.push({id:'schering',group:'Υψηλές τάσεις (3.12)',title:'Γέφυρα Schering: χωρητικότητα και συντελεστής απωλειών (άσκηση 15.5.12)',theory:'formula',topology:'schering',
+  options:[{k:'set',label:'Ρυθμίσεις της γέφυρας',options:[['fix','R₃, R₄ από τη συνθήκη ισορροπίας (σωστές)'],['book','R₃ = 14,86 Ω, R₄ = 212,29 Ω (λύση του βιβλίου)'],['r4','R₄ 10 % μεγαλύτερη (εκτός ισορροπίας)']],def:'fix'}],
+  desc:'Δοκίμιο C_x = 2 nF με συντελεστή απωλειών tan δ = 10⁻² (σειριακό ισοδύναμο R_x–C_x), πρότυπος πυκνωτής C₂ = 140 pF, πυκνωτής χαμηλής τάσης C₄ = 15 nF, τάση 10 kV στα 50 Hz. Κάτω από το C_x η R₃, κάτω από το C₂ η R₄ παράλληλα στο C₄. Ο ανιχνευτής (10 MΩ) είναι ανάμεσα στους δύο κόμβους χαμηλής τάσης. Ισορροπία: Z_x·Z₄ = Z₂·Z₃, δηλαδή C_x = C₂·R₄/R₃, R_x = R₃·C₄/C₂ και tan δ = ω·R₄·C₄. Η κάρτα θεωρίας λύνει τη γέφυρα με φασιθέτες και συγκρίνει την τάση του ανιχνευτή.',
+  tasks:['Με τις σωστές τιμές ο ανιχνευτής δείχνει σχεδόν μηδέν. Από τις R₃, R₄, C₄ η κάρτα βγάζει πάλι C_x = 2 nF και tan δ = 10⁻².','Λύση του βιβλίου: R_x = 1,59 kΩ αντί για 15,9 kΩ (λάθος ×10), και οι R₃, R₄ δεν ικανοποιούν τις σχέσεις ισορροπίας. Δες τι δείχνει ο ανιχνευτής.','R₄ 10 % μεγαλύτερη: πόση τάση εμφανίζεται στον ανιχνευτή, και ποια τιμή C_x θα διάβαζες αν τη θεωρούσες ισορροπημένη;'],
+  build(o){const f=50,w=2*Math.PI*f,Cx=2e-9,td=1e-2,C2=140e-12,C4=15e-9,Rx=td/(w*Cx),R4f=td/(w*C4),R3f=C2*R4f/Cx;
+   const R3=o.set==='book'?14.86:+R3f.toPrecision(6),R4=o.set==='book'?212.29:+(R4f*(o.set==='r4'?1.1:1)).toPrecision(6),V=10e3,yb=320,gx=300;
+   const comps=[C('V1','VAC',80,220,{Vpk:V*Math.SQRT2,f,Rs:1},{label:'10 kV rms'}),J('HV',80,90),C('RX','R',200,115,{R:+Rx.toPrecision(6)},{rot:1,label:'R_x'}),C('CX','C',200,180,{C:Cx},{label:'C_x (δοκίμιο)'}),J('A',200,220),
+    C('C2','C',400,150,{C:C2},{label:'C₂ (πρότυπος)'}),J('B',400,220),C('R3','R',200,270,{R:R3},{rot:1,label:'R₃'}),C('R4','R',380,270,{R:R4},{rot:1,label:'R₄'}),C('C4','C',440,270,{C:C4},{label:'C₄'}),
+    C('RD','R',300,220,{R:10e6},{label:'ανιχνευτής'}),gnd(gx,yb+20)];
+   const wires=[['V1:p','HV'],['HV','RX:a',[[200,90]]],['RX:b','CX:p'],['CX:n','A'],['HV','C2:p',[[400,90]]],['C2:n','B'],['A','RD:a'],['RD:b','B'],['A','R3:a'],['B','R4:a',[[380,220]]],['B','C4:p',[[440,220]]],
+    ['R3:b','G1:g',[[200,yb],[gx,yb]]],['R4:b','G1:g',[[380,yb],[gx,yb]]],['C4:n','G1:g',[[440,yb],[gx,yb]]],['V1:n','G1:g',[[80,yb],[gx,yb]]]];
+   const stopT=8/f;
+   return project(comps,wires,{sim:{hDiv:400,speed:2,stopT,method:'TR'},scope:{panes:[[['V:V1','v (υψηλή)']],[['V:RD','v ανιχνευτή'],['V:R3','v_A'],['V:R4','v_B']]],window:{unit:'s',n:stopT}},
+    meta:{set:o.set,f,V,Cx,td,Rx:+Rx.toPrecision(6),C2,C4,R3,R4,RD:10e6,R3f,R4f,dur:stopT}});}});
  // ------------------------------------------------------------------ 3.0: peak current-mode, subharmonic oscillation
  T.push({id:'peak_cm',group:'Μπλοκ σημάτων (3.0)',title:'Peak current-mode και υποαρμονική',theory:'formula',topology:'peak_cm',
   options:[{k:'mode',label:'Έλεγχος',options:[['peak','Peak: ρολόι → ON, κορυφή → OFF'],['valley','Valley: ρολόι → OFF, κοιλάδα → ON']],def:'peak'},

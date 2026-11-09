@@ -205,6 +205,31 @@ def checks(o):
     tb = next(T[i] for i in range(1, len(T)) if abs(y[i]) < .5 * abs(y[i - 1]))
     td = 80e3 / 3.7e11 + math.sqrt(2 * 5e-3 / 3.7e11)
     add('Λύτης SciPy', 'σπινθηριστής με καμπύλη τάσης–χρόνου, ράμπα 370 kV/μs, k = 1', 't_d = U₀/S + √(2D/S)', td, tb, 2e-9 * td, 's')
+    # 3.12: the divider of 15.1.5 and the Schering bridge of 15.5.12 by phasors computed here; the book's breakdown statistics
+    # (15.5.28, 15.5.29) by the templates against numpy/scipy
+    w = 2 * math.pi * 50
+    q = o['hv312']
+    m = q['div']['meta']
+    ZH, ZL = 1 / (1j * w * m['CH']), 1 / (1j * w * (m['CL'] + m['Ccab'] + m['Cs']) + 1 / m['Rs'])
+    V = 834.39e3 / math.sqrt(2)
+    add('Μετρήσεις ΥΤ', '15.1.5: τάση στον παλμογράφο (βιβλίο 585,71 V)', 'φασιθέτες: |Z_L/(Z_H + Z_L)|·U', V * abs(ZL / (ZH + ZL)), V * q['div']['r']['V:CL'], .2, 'V')
+    for key, lab in (('fix', 'ισορροπημένη: ανιχνευτής / κόμβος A'), ('r4', 'R₄ +10 %: τάση ανιχνευτή (10 kV)')):
+        m = q[key]['meta']
+        Yx, Y2, Y3, Y4, YD = 1 / (m['Rx'] + 1 / (1j * w * m['Cx'])), 1j * w * m['C2'], 1 / m['R3'], 1 / m['R4'] + 1j * w * m['C4'], 1 / m['RD']
+        VA, VB = np.linalg.solve(np.array([[Yx + Y3 + YD, -YD], [-YD, Y2 + Y4 + YD]]), np.array([Yx, Y2]))
+        if key == 'fix':
+            add('Μετρήσεις ΥΤ', f'15.5.12 Schering, {lab}', 'φασιθέτες, R₃ = C₂·R₄/C_x, R₄ = tan δ/(ω·C₄). Υπόλοιπο από το βήμα ≈ (ω·Δt)²/12 = 2·10⁻⁵', abs(VA - VB) / abs(VA), q[key]['r']['V:RD'] / q[key]['r']['V:R3'], 5e-5, '')
+        else:
+            add('Μετρήσεις ΥΤ', f'15.5.12 Schering, {lab}', 'φασιθέτες των δύο κόμβων με τον ανιχνευτή', 1e4 * abs(VA - VB), 1e4 * q[key]['r']['V:RD'], 1e-4, 'V')
+    from engine.templates import template_solve
+    from scipy import stats
+    ld = lambda f: json.loads((ROOT / 'web' / 'studio' / 'exercises' / f).read_text(encoding='utf-8'))
+    v = template_solve({'template': ld('hv_multilevel.template.json'), 'values': {}})['values']
+    bb, aa = np.polyfit(np.arange(102, 110) * 1e3, stats.norm.ppf(np.array([1, 2, 4, 8, 10, 14, 16, 18]) / 20), 1)
+    add('Στατιστική διάσπασης', '15.5.28: U₅₀ με δοκιμή πολλαπλών επιπέδων (βιβλίο 106 kV από το διάγραμμα)', 'προσαρμογή probit με numpy/scipy', -aa / bb, v['U_50'], 1e-3, 'V')
+    v = template_solve({'template': ld('hv_successive.template.json'), 'values': {}})['values']
+    x = np.repeat(np.arange(101, 110) * 1e3, [1, 2, 3, 4, 4, 3, 1, 1, 1])
+    add('Στατιστική διάσπασης', '15.5.29: τυπική απόκλιση (βιβλίο 23,04 kV)', 'numpy std(ddof=1)', float(x.std(ddof=1)), v['s_d'], 1e-3, 'V')
     return rows
 
 
@@ -262,7 +287,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 161 tests (Python και Node) και 5 σενάρια περιβάλλοντος. Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 163 tests (Python και Node) και 5 σενάρια περιβάλλοντος. Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',

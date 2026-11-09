@@ -1252,6 +1252,37 @@ function vtTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.U0)return '';const e
  if(!done)return h+'<p class="muted small">Τρέξε ως το τέλος για τη σύγκριση.</p>';
  if(!Number.isFinite(tOn))return h+`<p class="${Number.isFinite(tbE)?'bad':'good'}">Το διάκενο δεν διασπάστηκε.${Number.isFinite(tbE)?' Το κριτήριο δίνει διάσπαση στο '+eng(tbE,'s',4)+'.':' Ούτε το κριτήριο δίνει διάσπαση: η τάση δεν μένει αρκετά πάνω από το U₀.'}</p>`;
  return h+cmpRows([['χρόνος ως τη διάσπαση t_d',tbE,tOn,'s'],['τάση τη στιγμή της διάσπασης',u(tbE),uOn,'V']]);}
+// 3.12: AC dividers (book 15.1.3, 15.1.5) by phasors; the simulated ratio is low-voltage rms over high-voltage rms (last two periods)
+function hvdivTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.ex)return '';const w=2*Math.PI*m.f,V=m.Vpk/Math.SQRT2,b15=m.ex==='1515',done=s.t>=m.dur*.98,T=s.T;
+ const ZH=[0,-1/(w*m.CH)],YL=[b15?1/m.Rs:0,w*(m.CL+m.Ccab+m.Cs)],ZL=cx.div([1,0],YL),kC=cx.abs(cx.add(ZH,ZL))/cx.abs(ZL),kb=(m.CH+m.CL+m.Ccab+m.Cs)/m.CH;
+ const r=k=>done?phaseRms(k,T,2)/phaseRms('V:V1',T,2):NaN;
+ let h=`<div class="tm"><span class="badge">${b15?'15.1.5':'15.1.3'}</span> U = ${eng(V,'V',5)} rms (${eng(m.Vpk,'V',5)} κορυφή), ${eng(m.f,'Hz')}</div><ul class="eqs">
+  <li>Χωρητικός: κ_C = (C_H + C_L${b15?' + C_καλ + C_παλμ':''})/C_H = <b>${fmt(kb,6)}</b>${b15?`, C_καλ = ℓ/(v·Z) = ${eng(m.Ccab,'F',4)}, και η R = 2 MΩ του παλμογράφου παράλληλα: ακριβής |Z_H + Z_L|/|Z_L| = ${fmt(kC,6)}`:''}</li>
+  ${b15?'':`<li>Ωμικός: κ_R = (R_H + R_L)/R_L = <b>${fmt((m.RH+m.RL)/m.RL,6)}</b>. Για 9,1 V στο Ch1: R_L = R_H/(U/9,1 − 1) = ${eng(m.RH/(V/9.1-1),'Ω',4)}</li><li>Το ηλεκτροστατικό βολτόμετρο είναι παράλληλα στην υψηλή τάση και δείχνει την ενδεικνυόμενη τιμή της: <b>${eng(V,'V',4)}</b></li>`}</ul>`;
+ if(!done)return h+'<p class="muted small">Τρέξε ως το τέλος για τη σύγκριση.</p>';
+ const rows=[['τάση στον παλμογράφο'+(b15?'':' (χωρητικός, Ch2)'),b15?834.39e3/Math.SQRT2/kb:V/200,V/kC,V*r('V:CL'),'V']];
+ if(!b15){rows.push(['τάση στον ωμικό (Ch1)',9.1,V*m.RL/(m.RH+m.RL),V*r('V:RL'),'V'],['ηλεκτροστατικό βολτόμετρο',100e3,V,V*r('V:ES'),'V']);}
+ h+=cmp3(rows);
+ if(b15){const vl=V/kC,need=m.CH*(V/500-1)-m.Ccab-m.Cs;h+=`<p class="${vl>500?'bad':'good'}">${eng(vl,'V',4)} ${vl>500?'>':'≤'} 500 V του παλμογράφου: ${vl>500?'η διάταξη δεν είναι κατάλληλη (όπως λέει και το βιβλίο). Χρειάζεται C_L ≥ '+eng(need,'F',4)+'.':'η διάταξη αρκεί.'}</p>`;}
+ else h+='<p class="bad">Το βιβλίο γράφει 100 kV για το ηλεκτροστατικό βολτόμετρο. Το βολτόμετρο είναι παράλληλα στα 50 kV και δείχνει 50 kV.</p>';
+ return h+'<p class="muted small">Η προσομοίωση δίνεται ως λόγος rms χαμηλής προς rms υψηλής τάσης στις δύο τελευταίες περιόδους, επί την ενδεικνυόμενη τιμή της πηγής.</p>';}
+// 3.12: Schering bridge by phasors (nodes A under C_x, B under C₂, detector R_D between them) and the readings the balance relations give
+function scheringTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.C2)return '';const w=2*Math.PI*m.f,V=[m.V,0],done=s.t>=m.dur*.98,T=s.T;
+ const inv=z=>cx.div([1,0],z),Yx=inv([m.Rx,-1/(w*m.Cx)]),Y2=[0,w*m.C2],Y3=[1/m.R3,0],Y4=[1/m.R4,w*m.C4],YD=[1/m.RD,0];
+ const a11=cx.add(cx.add(Yx,Y3),YD),a22=cx.add(cx.add(Y2,Y4),YD),b1=cx.mul(Yx,V),b2=cx.mul(Y2,V),det=cx.add(cx.mul(a11,a22),cx.mul(YD,YD).map(x=>-x));
+ const VA=cx.div(cx.add(cx.mul(b1,a22),cx.mul(YD,b2)),det),VB=cx.div(cx.add(cx.mul(a11,b2),cx.mul(YD,b1)),det),VD=cx.add(VA,VB.map(x=>-x));
+ const Cr=m.C2*m.R4/m.R3,tr=w*m.R4*m.C4,Rr=m.R3*m.C4/m.C2;
+ let h=`<div class="tm"><span class="badge">Schering</span> C_x = ${eng(m.Cx,'F')}, tan δ = ${fmt(m.td,3)} (R_x = ${eng(m.Rx,'Ω',4)}) · C₂ = ${eng(m.C2,'F')} · C₄ = ${eng(m.C4,'F')} · R₃ = ${eng(m.R3,'Ω',5)} · R₄ = ${eng(m.R4,'Ω',5)}</div><ul class="eqs">
+  <li>Ισορροπία Z_x·Z₄ = Z₂·Z₃: C_x = C₂·R₄/R₃, R_x = R₃·C₄/C₂, tan δ = ω·R₄·C₄ = ω·R_x·C_x</li>
+  <li>Για το δοκίμιο: R_x = tan δ/(ω·C_x) = <b>${eng(m.td/(w*m.Cx),'Ω',4)}</b> (το βιβλίο γράφει 1,59 kΩ), R₄ = tan δ/(ω·C₄) = <b>${eng(m.R4f,'Ω',5)}</b>, R₃ = C₂·R₄/C_x = <b>${eng(m.R3f,'Ω',5)}</b></li>
+  <li>Με τις ρυθμίσεις της γέφυρας οι σχέσεις ισορροπίας διαβάζουν C_x = <b>${eng(Cr,'F',4)}</b>, tan δ = <b>${fmt(tr,4)}</b>, R_x = ${eng(Rr,'Ω',4)}</li></ul>`;
+ if(!done)return h+'<p class="muted small">Τρέξε ως το τέλος για τη σύγκριση.</p>';
+ const sr=k=>phaseRms(k,T,2)/phaseRms('V:V1',T,2)*m.V;
+ h+=cmpRows([['τάση κόμβου A (στην R₃)',cx.abs(VA),sr('V:R3'),'V'],['τάση ανιχνευτή',cx.abs(VD),sr('V:RD'),'V']]);
+ const bal=cx.abs(VD)<1e-4*cx.abs(VA);
+ h+=`<p class="${bal?'good':'bad'}">${bal?'✓ Η γέφυρα ισορροπεί: ο ανιχνευτής δείχνει '+fmt(100*cx.abs(VD)/cx.abs(VA),2)+' % της τάσης του κόμβου A.':'✗ Η γέφυρα δεν ισορροπεί: ο ανιχνευτής δείχνει '+fmt(100*cx.abs(VD)/cx.abs(VA),3)+' % της τάσης του κόμβου A.'}</p>`;
+ if(m.set==='book')h+=`<p class="bad">Με τις τιμές του βιβλίου ο λόγος R₄/R₃ δίνει σωστά C_x = 2 nF, αλλά tan δ = ω·R₄·C₄ = ${fmt(tr,3)}: δέκα φορές μικρότερο. Το λάθος είναι η R_x = 1,59 kΩ αντί για 15,9 kΩ, που περνά στις R₃, R₄.</p>`;
+ return h;}
 function formulaTheory(t){
  if(t.topology==='sampling')return samplingTheory();
  if(t.topology==='dc_drive')return dcDriveTheory();
@@ -1272,6 +1303,8 @@ function formulaTheory(t){
  if(t.topology==='hv153')return hv153Theory();
  if(t.topology==='lossline')return lossTheory();
  if(t.topology==='voltime')return vtTheory();
+ if(t.topology==='hvdiv')return hvdivTheory();
+ if(t.topology==='schering')return scheringTheory();
  if(t.topology==='srm')return srmTheory();
  if(t.topology==='polyphase')return polyTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
@@ -1492,7 +1525,7 @@ function boot(){
  document.addEventListener('keydown',e=>{const tg=e.target,typing=tg&&(tg.isContentEditable||/^(INPUT|SELECT|TEXTAREA)$/.test(tg.tagName)),plain=!e.ctrlKey&&!e.metaKey&&!e.altKey;
   if((e.key==='p'||e.key==='P')&&plain&&!typing){setLivePanel($('#live-panel').hidden);return;}
   if((e.key==='i'||e.key==='I')&&plain&&!typing){setProps(!propsOpen());return;}
-  if(e.key==='Escape'){closeMenu();closeInspector();gallery(false);$('#settings').hidden=true;}
+  if(e.key==='Escape'){closeMenu();closeInspector();gallery(false);$('#settings').hidden=true;if(e.target!==editor.svg&&editor.escape(false))editor.svg.focus({preventScroll:true});}   // Esc always drops the part being placed
   if(e.target===document.body&&e.code==='Space'){e.preventDefault();S.running?pause():play();}});
  // resizable canvas
  const grip=$('#grip');grip.onpointerdown=e=>{e.preventDefault();grip.setPointerCapture(e.pointerId);const h0=$('.work').getBoundingClientRect().height,y0=e.clientY;grip.onpointermove=ev=>{$('.work').style.height=Math.max(240,Math.min(1000,h0+ev.clientY-y0))+'px';};grip.onpointerup=()=>{grip.onpointermove=null;};};

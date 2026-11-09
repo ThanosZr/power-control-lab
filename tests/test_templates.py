@@ -205,6 +205,25 @@ class DataTemplates(unittest.TestCase):
         self.assertAlmostEqual(r['Risk'], num, delta=1e-9)
         self.assertAlmostEqual(r['gam'], (1100e3 - 1.282 * 66e3) / (700e3 + 2.054 * 70e3), places=12)
 
+    def test_breakdown_statistics(self):
+        # 3.12: multiple-level test 15.5.28 (probit fit, against scipy and numpy here; the book reads 106 kV from its plot) and
+        # successive discharges 15.5.29 (mean 104.6 kV as the book; s = 2.04 kV, the book writes 23.04 kV)
+        import numpy as np
+        from scipy import stats
+        v = template_solve({'template': load('hv_multilevel.template.json'), 'values': {}})['values']
+        U = np.arange(102, 110) * 1e3
+        b, a = np.polyfit(U, stats.norm.ppf(np.array([1, 2, 4, 8, 10, 14, 16, 18]) / 20), 1)
+        self.assertAlmostEqual(v['U_50'], -a / b, delta=1e-6)
+        self.assertAlmostEqual(v['sig'], 1 / b, delta=1e-6)
+        self.assertAlmostEqual(v['U_50'], 106e3, delta=150)
+        v = template_solve({'template': load('hv_multilevel.template.json'), 'values': {'k_1': 0, 'k_8': 20}})['values']
+        self.assertTrue(math.isfinite(v['U_50']))                                       # 0 and n are clipped, not infinite
+        v = template_solve({'template': load('hv_successive.template.json'), 'values': {}})['values']
+        x = np.repeat(np.arange(101, 110) * 1e3, [1, 2, 3, 4, 4, 3, 1, 1, 1])
+        self.assertAlmostEqual(v['U_m'], 104.6e3, delta=1e-6)
+        self.assertAlmostEqual(v['s_d'], x.std(ddof=1), delta=1e-6)
+        self.assertLess(v['s_d'], 2.1e3)
+
     def test_expressions_are_restricted(self):
         base = {'schema': 'pcl-template-1', 'id': 'x', 'inputs': [{'name': 'a', 'value': 1}], 'sections': [{'blocks': []}]}
         for bad in ("__import__('os')", 'a.real', "a+'1'", 'b+1', 'a[0]', 'lambda: 1'):

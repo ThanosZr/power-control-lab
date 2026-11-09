@@ -543,6 +543,40 @@ class Tutorials(unittest.TestCase):
         self.assertGreater(o['vt_r5000']['tOn'] * 5e12, o['vt_r500']['tOn'] * 5e11)   # steeper: higher breakdown voltage
         self.assertFalse(o['vt_li11k2']['on'])
 
+    def test_dividers_and_schering_bridge(self):
+        # 3.12: the dividers of 15.1.3 and 15.1.5 and the Schering bridge of 15.5.12, by phasors computed here. The book's answers:
+        # 250 V, 9.1 V with R_L = 1.82 Ω, 585.7 V > 500 V hold; the electrostatic voltmeter reads 50 kV, not 100 kV; R_x = 15.9 kΩ, not 1.59 kΩ
+        w = 2 * math.pi * 50
+        o = self.o
+        r = o['div_1513']
+        self.assertEqual(r['warn'], [])
+        self.assertAlmostEqual(r['r']['V:CL'], .1 / 20, delta=2e-4 * .1 / 20)
+        self.assertAlmostEqual(r['r']['V:RL'], 1.82 / 10001.82, delta=2e-4 * 1.82 / 10001.82)
+        self.assertAlmostEqual(r['r']['V:ES'], 1, delta=1e-6)                          # the voltmeter sees the full 50 kV
+        self.assertAlmostEqual(50e3 * r['r']['V:CL'], 250, delta=.1)
+        self.assertAlmostEqual(50e3 * r['r']['V:RL'], 9.1, delta=.01)
+        m = o['div_1515']['meta']
+        ZH = 1 / (1j * w * m['CH'])
+        ZL = 1 / (1j * w * (m['CL'] + m['Ccab'] + m['Cs']) + 1 / m['Rs'])
+        k = abs(ZL / (ZH + ZL))
+        self.assertAlmostEqual(o['div_1515']['r']['V:CL'], k, delta=3e-4 * k)
+        self.assertAlmostEqual(m['Ccab'], 702.7e-12, delta=.1e-12)
+        self.assertGreater(834.39e3 / math.sqrt(2) * k, 500)                            # not suitable, as the book says
+        for key in ('sch_fix', 'sch_book', 'sch_r4'):
+            r = o[key]
+            m = r['meta']
+            self.assertEqual(r['warn'], [], msg=key)
+            Yx, Y2, Y3, Y4, YD = 1 / (m['Rx'] + 1 / (1j * w * m['Cx'])), 1j * w * m['C2'], 1 / m['R3'], 1 / m['R4'] + 1j * w * m['C4'], 1 / m['RD']
+            import numpy as np
+            A = np.array([[Yx + Y3 + YD, -YD], [-YD, Y2 + Y4 + YD]])
+            VA, VB = np.linalg.solve(A, np.array([Yx, Y2]))                              # per volt of the source
+            self.assertAlmostEqual(r['r']['V:R3'], abs(VA), delta=1e-3 * abs(VA), msg=key)
+            self.assertAlmostEqual(r['r']['V:RD'], abs(VA - VB), delta=1e-3 * abs(VA - VB) + 2e-9, msg=key)
+        self.assertAlmostEqual(o['sch_fix']['meta']['Rx'], 1e-2 / (w * 2e-9), delta=1)   # 15.9 kΩ
+        self.assertLess(o['sch_fix']['r']['V:RD'], 1e-4 * o['sch_fix']['r']['V:R3'])     # balanced (R₃, R₄ rounded to 6 digits)
+        self.assertGreater(o['sch_book']['r']['V:RD'], 5e-3 * o['sch_book']['r']['V:R3'])  # the book's R₃, R₄: tan δ reads 10⁻³
+        self.assertAlmostEqual(w * 212.29 * 15e-9, 1e-3, delta=1e-6)
+
     def test_lightning_current(self):
         # 3.5: Heidler (IEC 62305-1) and a fitted double exponential into L = 10 μH and R = 10 Ω: peak current, charge,
         # and the peak of v = R·i + L·di/dt against the waveform evaluated here (engine.batch.wave_at)

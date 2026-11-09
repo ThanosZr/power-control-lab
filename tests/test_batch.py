@@ -128,16 +128,18 @@ class BatchSolver(unittest.TestCase):
         # steps), the traveling-wave and arrester tutorials, the Marx generator; chop: the browser closes the gap from the start of its step
         # 3.11: lossy lines in sections, gaps on a volt–time curve (the disruptive effect as one more state), the book's generators 15.3.3 and 15.3.7
         # (15.3.3: the load and the divider form a loop of capacitors, which the server solves with 1 μΩ in series; the low-voltage arm
-        # then differs by 4·10⁻⁵)
+        # then differs by 4·10⁻⁵). 3.12: the divider of 15.1.5 with Radau (time constants of 0.1 ns at 50 Hz); the Schering bridge stays
+        # out (Radau needs minutes there), its browser results are checked against phasors in test_tutorials
         for name, tol in (('dcm', 2e-3), ('pll', 1e-3), ('cont', 2e-3), ('eis_cell', 5e-3), ('im_dol', 3e-3),
                           ('mp_kl', 5e-5), ('mp_kg', 1e-5), ('sm_align', 2e-4), ('sm_pm', 3e-4), ('mp_lg', 1e-4),
                           ('srm_m', 3e-4), ('srm_t', 3e-4), ('sm_sat', 3e-4), ('isl_ref', 1e-4), ('isl_leak', 1e-4), ('vimp', 1e-4),
                           ('sg_ring', 1e-5), ('sg_trig', 1e-5), ('sg_iext', 1e-5), ('mov_ramp', 1e-4), ('tw_r3z', 1e-5), ('tw_li', 1e-5),
                           ('tw_book', 1e-5), ('arr_ideal', 1e-5), ('arr_zno', 1e-5), ('marx', 1e-5), ('chop', 2e-3),
-                          ('ll_step', 1e-5), ('ll_li', 5e-4), ('vt_ramp', 1e-5), ('vt_li', 1e-4), ('hv1533', 1e-4), ('hv1537', 3e-5)):
+                          ('ll_step', 1e-5), ('ll_li', 5e-4), ('vt_ramp', 1e-5), ('vt_li', 1e-4), ('hv1533', 1e-4), ('hv1537', 3e-5),
+                          ('div1515', 1e-4)):
             req = self.req[name]
             keys = list(req['channels'].keys()) if isinstance(req['channels'], dict) else [c['key'] for c in req['channels']]
-            r = self.run_case(name, req['at'][-1][0], 'LSODA', rtol=1e-9, atol=1e-11)
+            r = self.run_case(name, req['at'][-1][0], 'Radau' if name == 'div1515' else 'LSODA', rtol=1e-9, atol=1e-11)   # div1515: ns arms at 50 Hz, LSODA fails
             self.assertEqual(r['status'], 'ok', msg=name)
             t = np.array(r['t'])
             for row in req['at']:

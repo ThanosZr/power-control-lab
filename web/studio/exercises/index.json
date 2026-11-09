@@ -11,6 +11,8 @@
   "hv_two_layer.template.json",
   "hv_coax.template.json",
   "hv_downconductor.template.json",
-  "hv_risk.template.json"
+  "hv_risk.template.json",
+  "hv_multilevel.template.json",
+  "hv_successive.template.json"
  ]
 }

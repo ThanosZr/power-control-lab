@@ -130,4 +130,8 @@ for(const [nm,o] of [['open4',{}],['open1',{nsec:'1'}],['open16',{nsec:'16'}],['
  out['ll_'+nm]={at:fs.map(f=>[f,at(f*m.tau)]),imp:m.src==='li'?impulse({t:v.t.slice(i0),y:v.y.slice(i0)},m.tau,'iec'):null,warn:s.net.warnings,meta:m};}
 for(const [nm,o] of [['r1',{}],['r500',{S:'500'}],['r5000',{S:'5000'}],['k0',{k:'0',S:'500'}],['k2',{k:'2',S:'5000'}],['li16',{src:'li'}],['li25k0',{src:'li',amp:'2.5',k:'0'}],['li11k1',{src:'li',amp:'1.1'}],['li11k2',{src:'li',amp:'1.1',k:'2'}]]){
  const pr=build('voltime',o),m=pr.meta,s=sim(pr,m.dur),e=s.net.compInfo.get('SG1').main;out['vt_'+nm]={on:e.on,tOn:e.on?e.tOn:null,vmax:Math.max(...ringSeries(s,'V:SG1').y),warn:s.net.warnings,meta:m};}
+// 3.12: AC dividers and the Schering bridge: rms of the last two periods as ratios to the high voltage
+{const rr=(s,key)=>{const p=s.per,i=s.chIndex.get(key),j0=s.chIndex.get('V:V1');let q=0,q0=0;for(let k=1;k<=2;k++){const j=(p.head-k+p.cap)%p.cap;q+=p.rms[j*p.nch+i]**2;q0+=p.rms[j*p.nch+j0]**2;}return Math.sqrt(q/q0);};
+ for(const [nm,id,o,keys] of [['div_1513','hvdiv',{ex:'1513'},['V:CL','V:RL','V:ES']],['div_1515','hvdiv',{ex:'1515'},['V:CL']],['sch_fix','schering',{set:'fix'},['V:R3','V:RD']],['sch_book','schering',{set:'book'},['V:R3','V:RD']],['sch_r4','schering',{set:'r4'},['V:R3','V:RD']]]){
+  const pr=build(id,o),m=pr.meta,s=sim(pr,m.dur);out[nm]={r:Object.fromEntries(keys.map(k=>[k,rr(s,k)])),warn:s.net.warnings,meta:m};}}
 out.ms=Date.now()-t0;console.log(JSON.stringify(out,null,1));})();

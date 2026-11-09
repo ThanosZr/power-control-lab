@@ -321,5 +321,10 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
  const vt=project([{id:'V1',type:'VIMP',params:{shape:'ramp',Vpk:2e6,S:3.7e11}},{id:'R1',type:'R',params:{R:1}},{id:'SG1',type:'SG',params:{vt:'de',U0:80e3,kde:1,Dde:5e-3,Rarc:.1,ext:'never'}},{id:'G',type:'GND'}],
   [['V1:p','R1:a'],['R1:b','SG1:a'],['SG1:b','G:g'],['V1:n','G:g']]);vt.solve={tbase:1e-6};
  out.hv311={e1531:ex('1531'),e1533:ex('1533'),e1537:ex('1537'),req:{semi:rq(semi,['V2:T1']),vt:rq(vt,['V:SG1','I:SG1'])}};}
+// 3.12: the divider of 15.1.5 and the Schering bridge of 15.5.12 as the tutorials build them (rms ratios over the last two periods)
+{const TT=globalThis.Tutorials,bt=(id,o={})=>{const t=TT.get(id),q={};for(const op of t.options)q[op.k]=o[op.k]??op.def;return t.build(q);};
+ const run=(id,o,keys)=>{const pr=bt(id,o),m=pr.meta,s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv,method:'TR'});s.run(m.dur);const p=s.per,j0=s.chIndex.get('V:V1'),r={};
+  for(const k of keys){const i=s.chIndex.get(k);let q=0,q0=0;for(let n=1;n<=2;n++){const j=(p.head-n+p.cap)%p.cap;q+=p.rms[j*p.nch+i]**2;q0+=p.rms[j*p.nch+j0]**2;}r[k]=Math.sqrt(q/q0);}return {r,meta:m};};
+ out.hv312={div:run('hvdiv',{ex:'1515'},['V:CL']),fix:run('schering',{set:'fix'},['V:R3','V:RD']),r4:run('schering',{set:'r4'},['V:R3','V:RD'])};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));
