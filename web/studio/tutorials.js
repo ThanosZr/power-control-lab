@@ -573,6 +573,53 @@
    const stopT=Math.max(U/S*1.3,8*tau)+4*tau;
    return project(comps,wires,{sim:{hDiv:100,speed:20,stopT,method:'TR'},scope:{panes:[[['V2:T1','v_A (Μ/Σ)'],['V:T1','v_B (αλεξικέραυνο)']],mv?[['I:M1','i αλεξικέραυνου']]:[['I:T1','i_B']]],window:{unit:'s',n:stopT}},
     meta:{d,S,U,Z,c,tau,mov:o.mov,BIL:750e3,Ures:692e3,dur:stopT}});}});
+ // ------------------------------------------------------------------ 3.10: Marx generator (book «Υψηλές Τάσεις» 3.4.3, fig. 3.19)
+ // ladder: left column ℓ₀…ℓₙ₋₁ (charging resistors R₃), right column ρ₀ = 0 V … ρₙ (r₂ or R₃). C_κk from ℓₖ₋₁ (−) to ρₖ (+),
+ // gap Gk from ℓₖ₋₁ to ρₖ₋₁. Before firing ρ = 0 V and ℓ = −V₀; after all gaps fire the capacitors are in series.
+ T.push({id:'marx',group:'Υψηλές τάσεις (3.10)',title:'Γεννήτρια Marx: πολυβάθμια κρουστική γεννήτρια με σπινθηριστές',theory:'formula',topology:'marx',
+  options:[{k:'n',label:'Βαθμίδες',options:[['2','2 βαθμίδες'],['4','4 βαθμίδες (σχήμα 3.19)'],['6','6 βαθμίδες']],def:'4'},
+   {k:'wave',label:'Κυματομορφή σχεδίασης',options:[['li','1,2/50 μs (κεραυνική)'],['si','250/2500 μs (χειρισμών)']],def:'li'},
+   {k:'r2',label:'Αντίσταση ουράς R₂',options:[['gen','r₂ σε κάθε βαθμίδα: R₂ = n·r₂ παράλληλα στο C₁'],['load','Στην έξοδο: R₂ παράλληλα στο C₂']],def:'gen'}],
+  desc:'n πυκνωτές C_κ = 0,1 μF φορτισμένοι παράλληλα στα V₀ = 100 kV. Ο σπινθηριστής G1 ανάβει με εντολή (trigatron). Η τάση στα επόμενα διάκενα ανεβαίνει πάνω από την τάση διάσπασης U_b = 110 kV και ανάβουν διαδοχικά, οπότε οι πυκνωτές εκφορτίζονται σε σειρά: C₁ = C_κ/n φορτισμένος στα n·V₀. Η αντίσταση μετώπου R₁ και η αντίσταση ουράς R₂ υπολογίζονται από τις ρίζες α₁, α₂ της κυματομορφής και τα C₁, C₂ (σχέσεις 3.21–3.29 του βιβλίου «Υψηλές Τάσεις»). Οι σπινθηριστές είναι στοιχεία του λύτη που κλείνουν όταν |v| ≥ U_b, χωρίς ειδικό κώδικα για τη γεννήτρια.',
+  tasks:['Δες στο δεύτερο scope τα ρεύματα των σπινθηριστών: ανάβουν όλοι μαζί με τον G1, γιατί κάθε διάκενο βλέπει υπέρταση μόλις ανάψει το προηγούμενο.','Η κάρτα θεωρίας συγκρίνει κορυφή, T1, T2 και βαθμό απόδοσης με τη σχεδίαση (σχέσεις 3.28–3.32).','R₂ στην έξοδο: ο βαθμός απόδοσης πέφτει, γιατί οι R₁ και R₂ κάνουν διαιρέτη τάσης. Με 2 βαθμίδες (μεγάλο C₁/C₂) το κύκλωμα αυτό δεν δίνει καθόλου 1,2/50: η κάρτα δείχνει τι δίνει.','250/2500 μs: ίδια γεννήτρια, πολύ μεγαλύτερες R₁ και R₂.','Ανέβασε την τάση διάσπασης ενός διακένου πάνω από n·V₀: η γεννήτρια ανάβει μέχρι εκεί και η έξοδος μένει χαμηλή.'],
+  build(o){const P=root.Parts,n=+o.n,V0=100e3,Ck=.1e-6,C2=1.2e-9,R3=o.wave==='si'?50e6:1e6,Ub=1.1*V0,sh=o.wave==='si'?'250/2500':'1.2/50',w=P.impulseWave({shape:sh,Vpk:1}),
+    dz=pos=>P.impulseDesign({C1:Ck/n,C2,a1:1/w.tau2,a2:1/w.tau1,pos});let d=dz(o.r2);const feas=!d.err;if(!feas)d=dz('gen'); // type α has no solution for large C₁/C₂: keep the type-β values
+   const R1=+d.R1.toPrecision(4),R2=+d.R2.toPrecision(4),tf=+(w.T1/10).toPrecision(3);
+   const H=90,y0=110+n*H,Y=k=>y0-k*H,xl=100,xg=180,xc=260,xr=370,xo=540,top=Y(n),comps=[gnd(xr,y0+50)],wires=[['JR0','G1:g']];
+   const rr=o.r2==='gen'?+(R2/n).toPrecision(4):R3;
+   for(let k=0;k<=n;k++){if(k<n)comps.push(J('JL'+k,xl,Y(k)));comps.push(J('JR'+k,xr,Y(k)));}
+   for(let k=1;k<=n;k++){const yb=Y(k-1);
+    comps.push(C('SG'+k,'SG',xg,yb,{Ub,Rarc:.1,ext:'zero',...(k===1?{trig:String(tf)}:{})},{label:'G'+k,lbl:'below'}),C('CK'+k,'C',xc,yb-45,{C:Ck,v0:V0},{label:'C_κ'+k}),
+     C('RR'+k,'R',xr,yb-45,{R:rr},{rot:1,label:o.r2==='gen'?'r₂':'R₃'}));
+    wires.push(['JL'+(k-1),'SG'+k+':a'],['SG'+k+':b','JR'+(k-1)],['CK'+k+':n','SG'+k+':a',[[xg-30,yb-15]]],['CK'+k+':p','JR'+k,[[xc,yb-90]]],['RR'+k+':b','JR'+(k-1)],['RR'+k+':a','JR'+k]);
+    if(k<n){comps.push(C('RL'+k,'R',xl,yb-45,{R:R3},{rot:1,label:'R₃',lbl:'left'}));wires.push(['RL'+k+':b','JL'+(k-1)],['RL'+k+':a','JL'+k]);}}
+   comps.push(C('R1','R',(xr+xo)/2,top,{R:R1},{label:'R₁'}),J('OUT',xo,top),C('C2','C',xo,y0-45,{C:C2},{label:'C₂ (φορτίο)'}));
+   wires.push(['JR'+n,'R1:a'],['R1:b','OUT'],['OUT','C2:p'],['C2:n','G1:g',[[xo,y0+50]]]);
+   if(o.r2==='load'){comps.push(C('RT','R',xo+80,y0-45,{R:R2},{rot:1,label:'R₂'}));wires.push(['RT:a','OUT',[[xo+80,top]]],['RT:b','G1:g',[[xo+80,y0+50]]]);}
+   const stopT=o.wave==='si'?3*w.T2:2.4*w.T2;
+   return project(comps,wires,{solve:{tbase:w.T1},sim:{hDiv:o.wave==='si'?200:100,speed:20,stopT,method:'TR'},
+    scope:{panes:[[['V:C2','v_out (C₂)']],Array.from({length:n},(_,k)=>['I:SG'+(k+1),'i G'+(k+1)])],window:{unit:'s',n:stopT}},
+    meta:{n,V0,Ck,C1:Ck/n,C2,R1,R2,R3,rr,Ub,tf,pos:o.r2,feas,shape:sh,basis:w.basis,T1:w.T1,T2:w.T2,a1:1/w.tau2,a2:1/w.tau1,dur:stopT}});}});
+ // ------------------------------------------------------------------ 3.10: chopped impulse (IEC 60076-3): chopping gap with a loop L and damping R
+ T.push({id:'chop',group:'Υψηλές τάσεις (3.10)',title:'Αποκομμένη κρουστική τάση: σπινθηριστής αποκοπής',theory:'formula',topology:'chop',
+  options:[{k:'chop',label:'Αποκοπή',options:[['tail','Στην ουρά: έναυση 3 μs μετά τη γεννήτρια'],['front','Στο μέτωπο: διάσπαση στα 800 kV'],['none','Χωρίς αποκοπή (πλήρες κύμα)']],def:'tail'},
+   {k:'Rc',label:'Αντίσταση απόσβεσης στον βρόχο αποκοπής',options:[['0','0 Ω'],['20','20 Ω'],['50','50 Ω']],def:'20'},
+   {k:'Lc',label:'Επαγωγή του βρόχου αποκοπής',options:[['1','1 μH'],['5','5 μH'],['20','20 μH']],def:'5'}],
+  desc:'Κρουστική γεννήτρια μιας βαθμίδας (ισοδύναμη της Marx με 4 βαθμίδες): C₁ = 25 nF στο 1 MV, σπινθηριστής G1 με εντολή, R₁ και R₂ για 1,2/50 μs, αντικείμενο δοκιμής C₂ = 1,2 nF. Παράλληλα στο C₂ είναι ο σπινθηριστής αποκοπής, σε σειρά με την επαγωγή L_c του βρόχου και την αντίσταση απόσβεσης R_c. Όταν ανάψει, το C₂ εκφορτίζεται ταλαντευτικά: η τάση περνά στην αντίθετη πολικότητα (υπερύψωση). Στις δοκιμές μετασχηματιστών (IEC 60076-3) η αποκοπή γίνεται στην ουρά λίγα μs μετά την αρχή (συνήθως 3–6 μs) και η υπερύψωση αντίθετης πολικότητας περιορίζεται στο 30 % της τάσης αποκοπής.',
+  tasks:['Με R_c = 0 Ω η τάση πέφτει από την κορυφή σε αρνητική τιμή κοντά στην αντίθετη κορυφή. Η κάρτα δίνει την υπερύψωση από τη λύση του κυκλώματος RLC.','Με 50 Ω η υπερύψωση πέφτει κάτω από 30 %. Βρες την αντίσταση που χρειάζεται για κάθε L_c.','Αποκοπή στο μέτωπο: ο σπινθηριστής διασπάται όταν η τάση φτάσει τα 800 kV, πριν από την κορυφή.','Μεγάλη L_c: η αποκοπή γίνεται πιο αργή και η ταλάντωση έχει μικρότερη συχνότητα f = ω_d/2π.'],
+  build(o){const P=root.Parts,V=1e6,C1=25e-9,C2=1.2e-9,Rc=+o.Rc,Lc=(+o.Lc)*1e-6,w=P.impulseWave({shape:'1.2/50',Vpk:1}),d=P.impulseDesign({C1,C2,a1:1/w.tau2,a2:1/w.tau1,pos:'gen'}),
+    R1=+d.R1.toPrecision(4),R2=+d.R2.toPrecision(4),tf=.1e-6,tc=tf+3e-6,Uc=800e3;
+   // R₂ after the gap (book fig. 3.15β): the gap carries the discharge current of C₁, which never reverses
+   const comps=[C('C1','C',100,200,{C:C1,v0:V},{label:'C₁ (n·V₀)'}),C('SG1','SG',170,120,{Ub:2*V,trig:String(tf),Rarc:.1},{label:'G1'}),J('J1',240,120),C('RT','R',240,200,{R:R2},{rot:1,label:'R₂'}),
+    C('R1','R',320,120,{R:R1},{label:'R₁'}),J('OUT',400,120),C('C2','C',400,200,{C:C2},{label:'C₂ (δοκίμιο)'}),gnd(300,300)];
+   const wires=[['C1:p','SG1:a',[[100,120]]],['SG1:b','J1'],['J1','RT:a'],['J1','R1:a'],['R1:b','OUT'],['OUT','C2:p'],['C1:n','G1:g',[[100,280],[300,280]]],['RT:b','G1:g',[[240,280],[300,280]]],['C2:n','G1:g',[[400,280],[300,280]]]];
+   if(o.chop!=='none'){comps.push(C('LC','L',490,120,{L:Lc},{label:'L_c'}),C('RC','R',560,170,{R:Math.max(Rc,1e-6)},{rot:1,label:'R_c'}),
+     C('SG2','SG',560,240,{Ub:o.chop==='front'?Uc:2*V,...(o.chop==='tail'?{trig:String(tc)}:{}),Rarc:.1,ext:'never'},{rot:1,label:'G αποκοπής',lbl:'right'}));
+    wires.push(['OUT','LC:a'],['LC:b','RC:a',[[560,120]]],['RC:b','SG2:a'],['SG2:b','G1:g',[[560,280],[300,280]]]);}
+   const stopT=o.chop==='none'?100e-6:12e-6;
+   return project(comps,wires,{solve:{tbase:w.T1},sim:{hDiv:o.chop==='none'?400:1000,speed:5,stopT,method:'TR'},
+    scope:{panes:[[['V:C2','v (δοκίμιο)']],o.chop!=='none'?[['I:SG2','i αποκοπής']]:[['I:R1','i R₁']]],window:{unit:'s',n:stopT}},
+    meta:{V,C1,C2,R1,R2,Rc,Lc,Rarc:.1,tf,tc,Uc,chop:o.chop,T1:w.T1,a1:1/w.tau2,a2:1/w.tau1,dur:stopT}});}});
  // ------------------------------------------------------------------ 3.0: peak current-mode, subharmonic oscillation
  T.push({id:'peak_cm',group:'Μπλοκ σημάτων (3.0)',title:'Peak current-mode και υποαρμονική',theory:'formula',topology:'peak_cm',
   options:[{k:'mode',label:'Έλεγχος',options:[['peak','Peak: ρολόι → ON, κορυφή → OFF'],['valley','Valley: ρολόι → OFF, κοιλάδα → ON']],def:'peak'},

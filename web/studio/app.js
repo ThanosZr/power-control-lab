@@ -98,6 +98,7 @@ function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC'||t==='TAGO'||t===
  if(P.BLOCKS.has(t))return [['Y:',t==='DISP'?'τιμή εισόδου':t==='VM'?'τάση (μέτρηση)':t==='VP'?'τάση ως προς τη γη':t==='AM'?'ρεύμα a → b (μέτρηση)':t==='IP'?'ρεύμα a → b (τσιμπίδα)':t==='SR'?'έξοδος Q':'έξοδος y']];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
  if(t==='SH')return [['H:','κρατημένη τιμή (δείγματα)']];
  if(t==='MOV')return [['I:','ρεύμα αλεξικέραυνου'],['V:','τάση αλεξικέραυνου'],['P:','ισχύς']];
+ if(t==='SG')return [['I:','ρεύμα σπινθηριστή'],['V:','τάση στο διάκενο'],['P:','ισχύς στο τόξο']];
  if(t==='TL')return [['V:','τάση στην αρχή (a1 − b1)'],['V2:','τάση στο τέλος (a2 − b2)'],['I:','ρεύμα που μπαίνει στην αρχή'],['I2:','ρεύμα που μπαίνει στο τέλος']];
  if(t==='KL'||t==='KG'){const n=P.nPorts({...P.defaults(t),...c.params}),w=t==='KL'?'τυλίγματος':'θύρας';return Array.from({length:n},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα ${w} ${k+1} (a → b)`],[(k?'V'+(k+1):'V')+':',`τάση ${w} ${k+1}`]]).flat();}
  const base=[['I:','ρεύμα'],['V:','τάση'],['P:',['VDC','VAC','IDC'].includes(t)?'ισχύς που δίνει':'ισχύς']];if(t==='SW'||t==='SCR')base.splice(1,0,['GS:','παλμός πύλης (1 = ON)']);if(t==='SW'&&(+c.params?.Eon>0||+c.params?.Eoff>0))base.push(['PSW:','απώλειες μεταγωγής (μέση ανά T)']);
@@ -571,7 +572,8 @@ function propsCircuit(){const d=S.sim?.net?.diag,doc=editor.doc,so=doc.solve||{}
   <div class="prow"><span>Αιωρούμενα τμήματα (χωρίς αγώγιμη σύνδεση με τη γη)</span><span class="pin-in">${opt('island',[['auto','Αυτόματα: μέση τάση 0 V'],['ref','Ένας κόμβος του στα 0 V'],['error','Σφάλμα: η προσομοίωση δεν τρέχει']],so.island||'auto')}</span>
   <small>Π.χ. δευτερεύον μετασχηματιστή χωρίς γείωση. Οι τάσεις μέσα στο τμήμα δεν αλλάζουν, μόνο ως προς τη γη.</small></div>
   <div class="prow"><span>R διαρροής προς τη γη <em>Ω</em></span><span class="pin-in"><input data-solve="rleak" value="${so.rleak?esc(P.eng(+so.rleak,'',4).replace(/\s/g,'')):''}" placeholder="κενό: G_min = 1 nS" inputmode="decimal"></span><small>Για «Αυτόματα»: σε κάθε κόμβο του αιωρούμενου τμήματος.</small></div>
-  <small class="muted">Αποθηκεύονται με το κύκλωμα και ισχύουν και στον λύτη του server.</small>`,{cnt:(so.unconn||so.island||so.rleak)?'αλλαγμένες':''});
+  <div class="prow"><span>Βάση χρόνου T <em>s</em></span><span class="pin-in"><input data-solve="tbase" value="${so.tbase?esc(P.eng(+so.tbase,'',4).replace(/\s/g,'')):''}" placeholder="κενό: 1 ms" inputmode="decimal"></span><small>Όταν καμία πηγή δεν ορίζει χρόνο (π.χ. γεννήτρια Marx με φορτισμένους πυκνωτές). Το βήμα είναι T/N από την επιλογή «Βήμα».</small></div>
+  <small class="muted">Αποθηκεύονται με το κύκλωμα και ισχύουν και στον λύτη του server.</small>`,{cnt:(so.unconn||so.island||so.rleak||so.tbase)?'αλλαγμένες':''});
  const chk=(k,t)=>`<label class="frow check"><input type="checkbox" data-eset="${k}" ${editor.settings[k]?'checked':''}><span>${t}</span></label>`;
  h+=psec('c-draw','Σχεδίαση συρμάτων',`${chk('freeEnds','Ελεύθερα άκρα: σύρμα που αφήνεις στο κενό κρατά ελεύθερο άκρο')}${chk('autoConnect','Στοιχείο που αφήνεις πάνω σε σύρμα ή ακροδέκτη συνδέεται (Shift: χωρίς σύνδεση)')}
   <ul class="kbd-list"><li><b>W</b>: εργαλείο σύρματος. Κλικ οπουδήποτε για αρχή, κλικ για γωνίες, διπλό κλικ ή Enter για ελεύθερο άκρο, Backspace για μία γωνία πίσω, Esc για έξοδο.</li>
@@ -584,7 +586,7 @@ function bindProps(box,c){
  box.querySelector('[data-pclose]')?.addEventListener('click',()=>editor.select([],[]));
  box.querySelectorAll('[data-probe]').forEach(b=>b.onclick=()=>addProbe(b.dataset.probe));
  box.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>focusComp(b.dataset.focus));
- box.querySelectorAll('[data-solve]').forEach(el=>el.onchange=()=>{const k=el.dataset.solve;let v=el.value;if(k==='rleak'){v=v.trim()?P.parseEng(v):'';if(v!==''&&!(v>0)){el.classList.add('bad');return;}}editor.setSolve({[k]:v});});
+ box.querySelectorAll('[data-solve]').forEach(el=>el.onchange=()=>{const k=el.dataset.solve;let v=el.value;if(k==='rleak'||k==='tbase'){v=v.trim()?P.parseEng(v):'';if(v!==''&&!(v>0)){el.classList.add('bad');return;}}editor.setSolve({[k]:v});});
  box.querySelectorAll('[data-eset]').forEach(el=>el.onchange=()=>{editor.settings[el.dataset.eset]=el.checked;saveSettings();});
  if(c&&c.type!=='JUNC'){const id=c.id;
   box.querySelector('[data-plabel]')?.addEventListener('change',e=>{editor.setParams(id,{},{label:e.target.value||id});renderChannels();});
@@ -1131,6 +1133,50 @@ function arTheory(){const s=S.sim,m=S.tutMeta||{},c=s?.net.compInfo.get('T1');if
  if(m.mov!=='ideal'&&mov)h+=`<p class="muted small">Με μαλακή χαρακτηριστική το B αρχίζει να κλειδώνει πριν από το U_res, οπότε το A μένει λίγο κάτω από τον τύπο, που υποθέτει ιδανικό αλεξικέραυνο.</p>`;
  if(m.S===40e9)h+=`<p class="muted small">Η άσκηση 15.5.3 δίνει την κλίση σε kA/μs και την παραμένουσα τάση ως ενδεικνυόμενη τιμή, αλλά στη λύση τις χρησιμοποιεί ως κλίση τάσης σε kV/μs και ως κορυφή. Εδώ είναι κλίση τάσης και κορυφές.</p>`;
  return h;}
+// impulse parameters of a sampled wave (3.10): peak with parabolic interpolation; 'iec': T1 = (t₉₀ − t₃₀)/0,6 and T2 from the
+// virtual origin t₃₀ − 0,3·T1 (IEC 60060-1); 'tp': time to peak and to half value from the true origin t0
+function impulseMeasure(t,y,t0,basis){let k=0;for(let i=1;i<y.length;i++)if(y[i]>y[k])k=i;let tp=t[k],pk=y[k];
+ if(k>0&&k<y.length-1){const a=y[k-1],b=y[k],c=y[k+1],h1=t[k]-t[k-1],h2=t[k+1]-t[k],d=a*h2-b*(h1+h2)+c*h1;if(Math.abs(h1-h2)<1e-9*h1&&d<0){const x=.5*(a-c)/(a-2*b+c);tp=t[k]+x*h1;pk=b-.25*(a-c)*x;}}
+ const cross=(lv,i0,i1,dir)=>{for(let i=i0;dir>0?i<i1:i>i1;i+=dir){const a=y[i],b=y[i+dir];if((a-lv)*(b-lv)<=0&&a!==b)return t[i]+(lv-a)/(b-a)*(t[i+dir]-t[i]);}return NaN;};
+ const t30=cross(.3*pk,0,k,1),t90=cross(.9*pk,0,k,1),t50=cross(.5*pk,k,y.length-1,1);
+ if(basis==='tp')return {pk,tp,T1:tp-t0,T2:t50-t0};const T1=(t90-t30)/.6;return {pk,tp,T1,T2:t50-(t30-.3*T1)};}
+function marxTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.n)return '';const P2=P.impulseRoots({R1:m.R1,R2:m.R2,C1:m.C1,C2:m.C2,pos:m.pos}),
+  wm=P.waveMeasure({kind:'dexp',n:1,tau1:1/P2.a2,tau2:1/P2.a1,eta:1,I0:1,t0:0},m.basis),nV=m.n*m.V0,iec=m.basis!=='tp',T1n=iec?'T1 (IEC: 1,67·(t₉₀ − t₃₀))':'T_p (χρόνος κορυφής)',T2n=iec?'T2 (ημίσεως τιμής, από την εικονική αρχή)':'T2 (ημίσεως τιμής, από την αρχή)';
+ const done=s.t>=m.dur*.98,v=done?rawSeries('V:C2'):null,q=v?impulseMeasure(v.t,v.y,m.tf,m.basis):null;
+ let fired=0;if(done)for(let k=1;k<=m.n;k++){const g=rawSeries('I:SG'+k);if(g&&g.y.some(x=>Math.abs(x)>1e-3*nV/m.R1))fired++;}
+ let h=`<div class="tm"><span class="badge">Marx</span> n = ${m.n} · V₀ = ${eng(m.V0,'V')} · C_κ = ${eng(m.Ck,'F')} · C₂ = ${eng(m.C2,'F')} · U_b = ${eng(m.Ub,'V')} · ${m.shape} μs</div><ul class="eqs">
+  <li>Σε σειρά: C₁ = C_κ/n = <b>${eng(m.C1,'F',4)}</b> φορτισμένος στα n·V₀ = <b>${eng(nV,'V')}</b>, ενέργεια W = ½·C₁·(n·V₀)² = ${eng(.5*m.C1*nV*nV,'J',4)} (σχέσεις 3.42–3.44)</li>
+  <li>R₁ = ${eng(m.R1,'Ω',4)} (μετώπου), R₂ = ${eng(m.R2,'Ω',4)} (ουράς)${m.pos==='gen'?` = n·r₂, r₂ = ${eng(m.rr,'Ω',4)}`:''}, R₃ = ${eng(m.R3,'Ω')} (φόρτισης, R₃ ≫ r₂)</li>
+  <li>${m.pos==='gen'?'R₂ παράλληλα στο C₁ (τύπος β, 3.25)':'R₂ παράλληλα στο C₂ (τύπος α, 3.22)'}: α₁ = <b>${fmt(P2.a1,5)} s⁻¹</b>, α₂ = <b>${fmt(P2.a2,5)} s⁻¹</b> (ρίζες της s² + a·s + b = 0, 3.29)</li>
+  <li>v(t) = n·V₀/(R₁C₂)·(e^(−α₁t) − e^(−α₂t))/(α₂ − α₁) (3.28), κορυφή στο t₁ = ln(α₂/α₁)/(α₂ − α₁) = ${eng(P2.t1,'s',4)} (3.31)</li>
+  <li>Βαθμός απόδοσης η = V_p/(n·V₀) = <b>${fmt(P2.eta,4)}</b> (3.32). Προσέγγιση C₁/(C₁ + C₂) = ${fmt(m.C1/(m.C1+m.C2),4)} (3.33)</li></ul>`;
+ if(!m.feas)h+=`<p class="warn-text">Με R₂ στην έξοδο και C₁/C₂ = ${fmt(m.C1/m.C2,3)} δεν υπάρχουν R₁, R₂ που να δίνουν ${m.shape} μs. Εδώ μπήκαν οι τιμές της σχεδίασης με R₂ στη γεννήτρια, και η κάρτα δείχνει τι κυματομορφή δίνουν.</p>`;
+ if(!done)return h+'<p class="muted small">Τρέξε ως το τέλος για τη σύγκριση.</p>';
+ h+=cmpRows([['κορυφή V_p',P2.eta*nV,q.pk,'V'],[T1n,wm.T1,q.T1,'s'],[T2n,wm.T2,q.T2,'s'],['βαθμός απόδοσης η',100*P2.eta,100*q.pk/nV,'%']]);
+ h+=`<p class="${fired===m.n?'good':'bad'}">${fired===m.n?'✓ Άναψαν και οι '+m.n+' σπινθηριστές.':'✗ Άναψαν '+fired+' από τους '+m.n+' σπινθηριστές: η γεννήτρια δεν εκφορτίστηκε πλήρως.'}</p>`;
+ return h+`<p class="muted small">Η θεωρία αγνοεί τις R₃ και την αντίσταση τόξου των διακένων (${eng(.1,'Ω')} το καθένα).</p>`;}
+// chopped impulse: the chopping time and voltage from the generator wave (3.28). After the chop the circuit is linear with three
+// states (C₁ with R₂, R₁, C₂, the loop L_c–R with R = R_c + R_arc), integrated here with RK4 from v₁(t_c), v₂(t_c), i = 0. For insight,
+// with C₁ held: u'' + 2α·u' + ω₀²·u = 0, 2α = 1/(R₁C₂) + R/L_c, ω₀² = (1 + R/R₁)/(L_c·C₂), about v∞ = V₁·R/(R₁ + R)
+function chopModel(m){const g=P.impulseRoots({R1:m.R1,R2:m.R2,C1:m.C1,C2:m.C2,pos:'gen'}),K=m.V/(m.R1*m.C2*(g.a2-g.a1)),v2=t=>K*(Math.exp(-g.a1*t)-Math.exp(-g.a2*t)),dv2=t=>K*(g.a2*Math.exp(-g.a2*t)-g.a1*Math.exp(-g.a1*t));
+ let tc=m.tc-m.tf,vc;if(m.chop==='front'){let lo=0,hi=g.t1;for(let k=0;k<200;k++){const x=(lo+hi)/2;if(v2(x)<m.Uc)lo=x;else hi=x;}tc=(lo+hi)/2;vc=m.Uc;}else vc=v2(tc);
+ const V1=v2(tc)+m.R1*m.C2*dv2(tc),R=m.Rc+m.Rarc,vinf=V1*R/(m.R1+R),al=(1/(m.R1*m.C2)+R/m.Lc)/2,w0=Math.sqrt((1+R/m.R1)/(m.Lc*m.C2)),wd=Math.sqrt(Math.max(w0*w0-al*al,0));
+ const f=([a,b,i])=>[(-a/m.R2-(a-b)/m.R1)/m.C1,((a-b)/m.R1-i)/m.C2,(b-R*i)/m.Lc],T=1.5*2*Math.PI/w0,N=6000,h=T/N;let x=[V1,vc,0],vmin=vc,vmax=vc;
+ for(let k=0;k<N;k++){const k1=f(x),k2=f(x.map((q,j)=>q+h/2*k1[j])),k3=f(x.map((q,j)=>q+h/2*k2[j])),k4=f(x.map((q,j)=>q+h*k3[j]));x=x.map((q,j)=>q+h/6*(k1[j]+2*k2[j]+2*k3[j]+k4[j]));vmin=Math.min(vmin,x[1]);vmax=Math.max(vmax,x[1]);}
+ return {g,tc:tc+m.tf,vc,V1,R,vinf,al,w0,wd,vmin,vmax,full:g.eta*m.V};}
+function chopTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.V)return '';const q=chopModel(m),done=s.t>=m.dur*.98,v=done?rawSeries('V:C2'):null;
+ let h=`<div class="tm"><span class="badge">αποκοπή</span> C₁ = ${eng(m.C1,'F')} στο ${eng(m.V,'V')} · R₁ = ${eng(m.R1,'Ω',4)} · R₂ = ${eng(m.R2,'Ω',4)} · C₂ = ${eng(m.C2,'F')} · L_c = ${eng(m.Lc,'H')} · R_c = ${eng(m.Rc,'Ω')}</div><ul class="eqs">
+  <li>Πλήρες κύμα 1,2/50: κορυφή η·V = <b>${eng(q.full,'V',4)}</b> (σχέσεις 3.28–3.32)</li>`;
+ if(m.chop==='none'){if(!done)return h+'</ul><p class="muted small">Τρέξε ως το τέλος για τη σύγκριση.</p>';let mx=-Infinity;for(const y of v.y)mx=Math.max(mx,y);return h+'</ul>'+cmpRows([['κορυφή',q.full,mx,'V']]);}
+ h+=`<li>Αποκοπή ${m.chop==='front'?'στο μέτωπο, όταν v = U_b':'στην ουρά, με εντολή'}: t_c = <b>${eng(q.tc,'s',4)}</b> (από την έναυση της γεννήτριας: ${eng(q.tc-m.tf,'s',4)}), v_c = <b>${eng(q.vc,'V',4)}</b></li>
+  <li>Μετά την αποκοπή: L_c, R = R_c + R_τόξου = ${eng(q.R,'Ω',3)} και C₂, με απόσβεση και από την R₁: α = ½·(1/(R₁C₂) + R/L_c) = ${fmt(q.al,4)} s⁻¹, ω₀ = ${fmt(q.w0,4)} rad/s, f = ω_d/2π = ${eng(q.wd/2/Math.PI,'Hz',4)}</li>
+  <li>Η τάση ταλαντώνεται γύρω από v_∞ = V₁·R/(R₁ + R) = ${eng(q.vinf,'V',3)} (V₁ = ${eng(q.V1,'V',4)} η τάση του C₁ στο t_c). Ελάχιστη τάση από τη λύση του γραμμικού κυκλώματος (C₁–R₂, R₁, C₂, L_c–R): <b>${eng(q.vmin,'V',4)}</b>, υπερύψωση αντίθετης πολικότητας <b>${fmt(-100*q.vmin/q.vc,3)} %</b> της v_c</li>
+  <li>Κρίσιμη απόσβεση του βρόχου (χωρίς R₁): R = 2·√(L_c/C₂) = ${eng(2*Math.sqrt(m.Lc/m.C2),'Ω',3)}</li></ul>`;
+ if(!done)return h+'<p class="muted small">Τρέξε ως το τέλος για τη σύγκριση.</p>';
+ let mx=-Infinity,tm=0,mn=Infinity;for(let i=0;i<v.y.length;i++){if(v.y[i]>mx){mx=v.y[i];tm=v.t[i];}if(v.t[i]>q.tc)mn=Math.min(mn,v.y[i]);}
+ const gi=rawSeries('I:SG2'),j=gi?gi.y.findIndex(x=>Math.abs(x)>1):-1,tcS=j>0?gi.t[j-1]:NaN,ok=-mn/q.vc<=.3; // the chop: the last sample before the gap carries current
+ h+=cmpRows([['στιγμή αποκοπής t_c',q.tc,tcS,'s'],['μέγιστη τάση (το C₂ φορτίζεται λίγο ακόμη μετά την αποκοπή)',q.vmax,m.chop==='front'?mx:NaN,'V'],['ελάχιστη τάση μετά την αποκοπή',q.vmin,mn,'V']].filter(r=>Number.isFinite(r[2])));
+ return h+`<p class="${ok?'good':'bad'}">${ok?'✓':'✗'} Υπερύψωση ${fmt(-100*mn/q.vc,3)} % της τάσης αποκοπής (IEC 60076-3: έως 30 %).</p><p class="muted small">Η θεωρία αγνοεί την αντίσταση τόξου του G1 (${eng(.1,'Ω')}).</p>`;}
 function formulaTheory(t){
  if(t.topology==='sampling')return samplingTheory();
  if(t.topology==='dc_drive')return dcDriveTheory();
@@ -1146,6 +1192,8 @@ function formulaTheory(t){
  if(t.topology==='lightning')return lgTheory();
  if(t.topology==='twave')return twTheory();
  if(t.topology==='arrester')return arTheory();
+ if(t.topology==='marx')return marxTheory();
+ if(t.topology==='chop')return chopTheory();
  if(t.topology==='srm')return srmTheory();
  if(t.topology==='polyphase')return polyTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];

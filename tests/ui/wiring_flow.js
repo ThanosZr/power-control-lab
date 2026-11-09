@@ -90,4 +90,15 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
  const ar=await p.evaluate(()=>({good:[...document.querySelectorAll('#theory table.cmp td.good')].length,text:document.querySelector('#theory').textContent}));
  ok(ar.good>=3&&/d_max/.test(ar.text)&&/Κάτω από τη στάθμη μόνωσης/.test(ar.text),'arrester card: theory = simulation, BIL respected ('+ar.good+' rows)');
  await p.screenshot({path:OUT+'/w6_arrester.png'});
+ // 9) 3.10: Marx generator (all gaps fire, peak/T1/T2/η against eq. 3.28–3.32) and chopped impulse (undershoot from the RLC solution)
+ await p.evaluate(()=>window.PCL.loadTutorial('marx',{}));await p.waitForTimeout(500);
+ await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.stopT-S.sim.t);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(400);
+ const mx=await p.evaluate(()=>({good:[...document.querySelectorAll('#theory table.cmp td.good')].length,text:document.querySelector('#theory').textContent,sg:document.querySelectorAll('#canvas g.comp[data-id^="SG"]').length}));
+ ok(mx.good>=4&&/Άναψαν και οι 4 σπινθηριστές/.test(mx.text),'Marx card: 4 gaps fired, theory = simulation ('+mx.good+' rows)');
+ await p.screenshot({path:OUT+'/w7_marx.png'});
+ await p.evaluate(()=>window.PCL.loadTutorial('chop',{Rc:'50'}));await p.waitForTimeout(500);
+ await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.stopT-S.sim.t);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(400);
+ const ch=await p.evaluate(()=>({good:[...document.querySelectorAll('#theory table.cmp td.good')].length,text:document.querySelector('#theory').textContent}));
+ ok(ch.good>=2&&/IEC 60076-3: έως 30 %/.test(ch.text)&&/✓ Υπερύψωση/.test(ch.text),'chop card: undershoot under 30 % with 50 Ω ('+ch.good+' rows)');
+ await p.screenshot({path:OUT+'/w8_chop.png'});
  console.log('ERR',JSON.stringify(errs.slice(0,5)));console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})().catch(e=>{console.error('FAILED',e);process.exit(1);});

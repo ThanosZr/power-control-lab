@@ -124,9 +124,13 @@ class BatchSolver(unittest.TestCase):
         # 3.1: DC machine (gyrator + mechanical circuit), PLL / Clarke / Park, integrator, low-pass, PI with back-calculation
         # eis_cell (3.3.1): CPE bank, sources from signals; t held over T/200 in the server. 3.5: multiports, synchronous machine, lightning current
         # 3.7: an isolated secondary with a reference node or a leakage, voltage and current probes, parts left out of the solution
+        # 3.10: spark gaps (ringing with restrike, trigger, I_ext), arresters (Newton on the injections), Bergeron lines (method of
+        # steps), the traveling-wave and arrester tutorials, the Marx generator; chop: the browser closes the gap from the start of its step
         for name, tol in (('dcm', 2e-3), ('pll', 1e-3), ('cont', 2e-3), ('eis_cell', 5e-3), ('im_dol', 3e-3),
                           ('mp_kl', 5e-5), ('mp_kg', 1e-5), ('sm_align', 2e-4), ('sm_pm', 3e-4), ('mp_lg', 1e-4),
-                          ('srm_m', 3e-4), ('srm_t', 3e-4), ('sm_sat', 3e-4), ('isl_ref', 1e-4), ('isl_leak', 1e-4), ('vimp', 1e-4)):
+                          ('srm_m', 3e-4), ('srm_t', 3e-4), ('sm_sat', 3e-4), ('isl_ref', 1e-4), ('isl_leak', 1e-4), ('vimp', 1e-4),
+                          ('sg_ring', 1e-5), ('sg_trig', 1e-5), ('sg_iext', 1e-5), ('mov_ramp', 1e-4), ('tw_r3z', 1e-5), ('tw_li', 1e-5),
+                          ('tw_book', 1e-5), ('arr_ideal', 1e-5), ('arr_zno', 1e-5), ('marx', 1e-5), ('chop', 2e-3)):
             req = self.req[name]
             keys = list(req['channels'].keys()) if isinstance(req['channels'], dict) else [c['key'] for c in req['channels']]
             r = self.run_case(name, req['at'][-1][0], 'LSODA', rtol=1e-9, atol=1e-11)

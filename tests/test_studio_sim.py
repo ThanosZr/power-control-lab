@@ -340,6 +340,35 @@ class StudioSimulator(unittest.TestCase):
         self.assertAlmostEqual(m['T1'], 1.2e-6, delta=1e-9)
         self.assertAlmostEqual(m['T2'], 50e-6, delta=1e-8)
 
+    def test_spark_gap(self):
+        # 3.10: a capacitor (1 μF, 10 kV) rings through the gap with L = 10 μH and R = 0.4 + 0.1 Ω (arc). Series RLC from rest:
+        # i = V₀/(ω_d·L)·e^(−αt)·sin ω_d t, v_C = V₀·e^(−αt)·(cos ω_d t + α/ω_d·sin ω_d t); the first current zero is at π/ω_d
+        o = self.o['sg310']
+        R, L, C, V0 = 0.5, 10e-6, 1e-6, 1e4
+        al = R / (2 * L)
+        wd = math.sqrt(1 / (L * C) - al * al)
+        half, k = math.pi / wd, math.exp(-al * math.pi / wd)
+        tr = o['ring']['tr']                                   # U_b = 8 kV: opens at the first zero and stays open (|v| < U_b)
+        self.assertEqual([x[1] for x in tr], [1, 0])
+        self.assertAlmostEqual(tr[1][0], half, delta=1e-4 * half)
+        self.assertAlmostEqual(o['ring']['end'], -V0 * k, delta=2e-4 * V0)
+        tr = o['restrike']['tr']                               # U_b = 7 kV: restrikes once, opens again after the second half cycle
+        self.assertEqual([x[1] for x in tr], [1, 0, 1, 0])
+        self.assertAlmostEqual(o['restrike']['end'], V0 * k * k, delta=2e-4 * V0)
+        tr = o['trig']['tr']                                   # trigger at 5 μs with U_b above V₀
+        self.assertTrue(5e-6 < tr[0][0] <= 5e-6 + 2.01e-8)     # closed from the start of the step at 5 μs (seen at its end)
+        self.assertAlmostEqual(tr[1][0], 5e-6 + half, delta=1e-4 * half)
+        self.assertAlmostEqual(o['trig']['end'], -V0 * k, delta=2e-4 * V0)
+        tau, I0 = 10.1 * C, V0 / 10.1                          # R–C through the gap, opens at |i| = 100 A: t = τ·ln(I₀/100), v = 100·10.1 V
+        tr = o['iext']['tr']
+        self.assertAlmostEqual(tr[1][0], tau * math.log(I0 / 100), delta=1e-3 * tau)
+        self.assertAlmostEqual(o['iext']['end'], 1010, delta=0.1)
+        r = o['ramp']                                          # ramp 1 kV/μs behind 100 Ω, U_b = 5 kV: closes at 5 μs (within one step), never opens
+        self.assertEqual([x[1] for x in r['tr']], [1])
+        self.assertLessEqual(abs(r['tr'][0][0] - 5e-6), 0.11e-6)
+        self.assertAlmostEqual(r['i'], r['v'] / 100.1, delta=1e-6 * r['i'])
+        self.assertIn('διάσπασης', o['bad'])
+
     def test_surge_arrester(self):
         # 3.9: the nonlinear circuit solved here by bisection: 1 MV = 400·i + v with i = I_ref·(v/U_ref)^α, and the table read
         # as straight lines in log-log; the arrester is symmetric; a ramp source behind Z

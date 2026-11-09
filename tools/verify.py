@@ -93,20 +93,90 @@ def checks(o):
     add('Επίλυση', 'δευτερεύον χωρίς γείωση: τάση στο R₂', 'n·V_m·R₂/(R₂ + R₃)', 5.0, i['auto']['vR2'], 1e-6, 'V')
     add('Επίλυση', '«αυτόματα»: τάση κόμβου ως προς τη γη', 'μέση τάση του τμήματος 0 V', -1.25, i['auto']['vp'], 1e-6, 'V')
     add('Επίλυση', 'ασύνδετο R και πηγή ρεύματος σε ανοιχτό', 'ίδιο ρεύμα πηνίου με το κύκλωμα χωρίς αυτά', 0.0, o['solve37']['r']['warn']['dI'], 1e-7, 'A')
+    # spark gap (3.10): 1 μF at 10 kV rings through the gap with 10 μH and 0.5 Ω (series RLC from rest)
+    g = o['sg310']
+    R, L, C, V0 = .5, 10e-6, 1e-6, 1e4
+    al = R / (2 * L)
+    wd = math.sqrt(1 / (L * C) - al * al)
+    k = math.exp(-al * math.pi / wd)
+    add('Σπινθηριστής', 'σβέση στον πρώτο μηδενισμό του ρεύματος', 'σειριακό RLC: t = π/ω_d', math.pi / wd, g['ring']['tr'][1][0], 2e-9, 's')
+    add('Σπινθηριστής', 'τάση πυκνωτή μετά τη σβέση', 'v = −V₀·e^(−απ/ω_d)', -V0 * k, g['ring']['end'], 2.0, 'V')
+    add('Σπινθηριστής', 'επανέναυση (U_b = 7 kV): τελική τάση', '+V₀·e^(−2απ/ω_d)', V0 * k * k, g['restrike']['end'], 2.0, 'V')
+    add('Σπινθηριστής', 'σβέση στο I_ext = 100 A (R–C): χρόνος', 't = τ·ln(I₀/I_ext), τ = (R + R_τόξου)·C', 10.1e-6 * math.log(1e4 / 10.1 / 100), g['iext']['tr'][1][0], 10e-9, 's')
+    # Marx generator (3.10): the equivalent circuit of the book, eq. 3.21–3.32, and IEC 60060-1 on the analytic wave, computed here
+    h = o['hv310']
+    m = h['marx']['meta']
+    a = 1 / (m['R1'] * m['C1']) + 1 / (m['R1'] * m['C2']) + 1 / (m['R2'] * m['C1'])
+    b = 1 / (m['R1'] * m['R2'] * m['C1'] * m['C2'])
+    q = math.sqrt(a * a / 4 - b)
+    a1, a2 = a / 2 - q, a / 2 + q
+    f = lambda t: (math.exp(-a1 * t) - math.exp(-a2 * t)) / (m['R1'] * m['C2'] * (a2 - a1))
+    t1 = math.log(a2 / a1) / (a2 - a1)
+    eta = f(t1)
+    def cross(lv, lo, hi, up):
+        for _ in range(200):
+            x = (lo + hi) / 2
+            lo, hi = (x, hi) if (f(x) < lv) == up else (lo, x)
+        return (lo + hi) / 2
+    t30, t90 = cross(.3 * eta, 0, t1, True), cross(.9 * eta, 0, t1, True)
+    T1 = (t90 - t30) / .6
+    T2 = cross(.5 * eta, t1, 1, False) - (t30 - .3 * T1)
+    nV = m['n'] * m['V0']
+    add('Γεννήτρια Marx', '4 βαθμίδες × 100 kV: κορυφή', '«Υψηλές Τάσεις» (3.28), (3.32): V_p = η·n·V₀', eta * nV, h['marx']['pk'], 1e-3 * eta * nV, 'V')
+    add('Γεννήτρια Marx', 'T1', 'IEC 60060-1 στην αναλυτική κυματομορφή', T1, h['marx']['T1'], 4e-9, 's')
+    add('Γεννήτρια Marx', 'T2', 'IEC 60060-1 στην αναλυτική κυματομορφή', T2, h['marx']['T2'], 1e-7, 's')
+    # chopped impulse: after the chop the circuit is linear with three states (C₁ with R₂, R₁, C₂, the loop L_c with R = R_c + R_arc),
+    # solved here with the matrix exponential from the generator wave at t_c
+    import numpy as np
+    from scipy.linalg import expm
+    m = h['chop']['meta']
+    a = 1 / (m['R1'] * m['C1']) + 1 / (m['R1'] * m['C2']) + 1 / (m['R2'] * m['C1'])
+    b = 1 / (m['R1'] * m['R2'] * m['C1'] * m['C2'])
+    q = math.sqrt(a * a / 4 - b)
+    a1, a2 = a / 2 - q, a / 2 + q
+    K = m['V'] / (m['R1'] * m['C2'] * (a2 - a1))
+    tc = m['tc'] - m['tf']
+    vc = K * (math.exp(-a1 * tc) - math.exp(-a2 * tc))
+    V1 = vc + m['R1'] * m['C2'] * K * (a2 * math.exp(-a2 * tc) - a1 * math.exp(-a1 * tc))
+    Rl, R1, R2, C1, C2, Lc = m['Rc'] + m['Rarc'], m['R1'], m['R2'], m['C1'], m['C2'], m['Lc']
+    A = np.array([[-1 / (R2 * C1) - 1 / (R1 * C1), 1 / (R1 * C1), 0], [1 / (R1 * C2), -1 / (R1 * C2), -1 / C2], [0, 1 / Lc, -Rl / Lc]])
+    E = expm(A * (1.5 * 2 * math.pi * math.sqrt(Lc * C2) / 3000))
+    x = np.array([V1, vc, 0.0])
+    vmin = vc
+    for _ in range(3000):
+        x = E @ x
+        vmin = min(vmin, float(x[1]))
+    add('Αποκομμένη κρουστική', 'ελάχιστη τάση μετά την αποκοπή (R_c = 20 Ω, L_c = 5 μH)', 'γραμμικό κύκλωμα C₁–R₂, R₁, C₂, L_c–R (εκθετικό πίνακα)', vmin, h['chop']['vmin'], 1.5e-3 * vc, 'V')
+    # the same circuits in the second solver (engine/batch.py, SciPy solve_ivp), against the same closed forms
+    from engine.batch import simulate
+    at = lambda r, key, t: float(np.interp(t, np.array(r['t']), np.array(r['ch'][key], dtype=float)))
+    rq = h['req']
+    r = simulate({**rq['tl'], 't_end': 400e-6, 'method': 'Radau', 'rtol': 1e-9, 'atol': 1e-12})
+    a0, gs, gl = 2 / 3, -1 / 3, .5
+    add('Λύτης SciPy', 'γραμμή Bergeron: v_B στο 3,5τ', '+ v⁺·Γ_s·Γ_L·(1 + Γ_L)', a0 * (1 + gl) * (1 + gs * gl), at(r, 'V2:T1', 35e-6), 1e-6, 'V')
+    add('Λύτης SciPy', 'γραμμή Bergeron: τελική τιμή', 'E·R_L/(R_s + R_L)', 1200 / 1400, at(r, 'V2:T1', 400e-6), 1e-6, 'V')
+    R, L, C, V0 = .5, 10e-6, 1e-6, 1e4
+    al = R / (2 * L)
+    wd = math.sqrt(1 / (L * C) - al * al)
+    r = simulate({**rq['sg'], 't_end': 30e-6, 'method': 'Radau', 'rtol': 1e-9, 'atol': 1e-9})
+    add('Λύτης SciPy', 'σπινθηριστής: τάση πυκνωτή μετά τη σβέση', 'v = −V₀·e^(−απ/ω_d)', -V0 * math.exp(-al * math.pi / wd), at(r, 'V:C1', 30e-6), 1.0, 'V')
+    r = simulate({**rq['mov'], 't_end': 1e-6, 'method': 'Radau', 'rtol': 1e-9, 'atol': 1e-9})
+    add('Λύτης SciPy', 'αλεξικέραυνο ZnO α = 30, 1 MV πίσω από 400 Ω', 'i = I_ref·(v/U_ref)^α, λύση με διχοτόμηση', bis(lambda v: 20e3 * (v / 692e3) ** 30), at(r, 'V:M1', 1e-6), 1.0, 'V')
     return rows
 
 
 TESTS = [
     ('tests/test_studio_sim.py', 'λύτης του browser', 'κλειστοί τύποι DC-DC και ανορθωτών, ανεξάρτητες ΔΕ (μηχανές ΣΡ, επαγωγής, σύγχρονη, SRM, συζευγμένα πηνία), IEC 62305-1, IEC 60060-1, πλέγμα Bewley, δειγματοληψία, μπλοκ σημάτων'),
-    ('tests/test_tutorials.py', 'tutorials όπως ανοίγουν στην εφαρμογή', 'θεωρία των καρτών, ισοδύναμα κυκλώματα, MTPA, ισοζύγιο ενέργειας SRM, μέθοδος των χαρακτηριστικών, ασκήσεις 15.4.9 και 15.5.3 του βιβλίου «Υψηλές Τάσεις»'),
-    ('tests/test_batch.py', 'λύτης SciPy (solve_ivp) στο ίδιο netlist', 'δεύτερος, ανεξάρτητος λύτης: ίδιες κυματομορφές σε 1e-4 … 1e-5'),
+    ('tests/test_tutorials.py', 'tutorials όπως ανοίγουν στην εφαρμογή', 'θεωρία των καρτών, ισοδύναμα κυκλώματα, MTPA, ισοζύγιο ενέργειας SRM, μέθοδος των χαρακτηριστικών, ασκήσεις 15.4.9 και 15.5.3 και γεννήτρια Marx (σχέσεις 3.21–3.44) του βιβλίου «Υψηλές Τάσεις», αποκομμένη κρουστική (IEC 60076-3)'),
+    ('tests/test_batch.py', 'λύτης SciPy (solve_ivp) στο ίδιο netlist', 'δεύτερος, ανεξάρτητος λύτης: ίδιες κυματομορφές σε 1e-4 … 1e-7, και για γραμμές, αλεξικέραυνα, σπινθηριστές και τα tutorials υψηλών τάσεων (3.10)'),
     ('tests/test_templates.py, test_engine.py', 'συμβολική λύση και templates', 'λύσεις των ασκήσεων (PE2, Άσκηση 2) με SymPy'),
     ('tests/ui/*.js', 'περιβάλλον (Playwright)', 'σχέδιο, scopes, πάνελ, εργαλείο σύρματος, ζωντανές παράμετροι'),
 ]
 
 LIMITS = [
-    'Η γραμμή μεταφοράς είναι χωρίς απώλειες, και δεν υπάρχει ακόμη στον λύτη SciPy. Επαληθεύεται με τη μέθοδο των χαρακτηριστικών και με κλειστούς τύπους.',
-    'Δεν υπάρχουν ακόμη σπινθηριστής, κορεσμός πυρήνα μετασχηματιστή, γραμμές με απώλειες ή εξαρτώμενες από τη συχνότητα (ROADMAP §26, §31, §37). Το αλεξικέραυνο (MOV) και η γραμμή δεν υπάρχουν ακόμη στον λύτη SciPy.',
+    'Η γραμμή μεταφοράς είναι χωρίς απώλειες. Επαληθεύεται με τη μέθοδο των χαρακτηριστικών, με κλειστούς τύπους και με τον λύτη SciPy.',
+    'Ο σπινθηριστής διασπάται ακαριαία στο U_b, χωρίς καμπύλη τάσης–χρόνου, και δεν έχει χωρητικότητα. Η γεννήτρια Marx ανάβει χωρίς παρασιτικές χωρητικότητες.',
+    'Δεν υπάρχουν ακόμη κορεσμός πυρήνα μετασχηματιστή, γραμμές με απώλειες ή εξαρτώμενες από τη συχνότητα (ROADMAP §26, §31, §37).',
     'Οι μηχανές έχουν τυπικές τιμές όπου λείπουν δεδομένα (π.χ. διπλωματική ). Ελέγχονται απέναντι σε ανεξάρτητες ΔΕ, όχι σε μετρήσεις.',
     'Ο λύτης είναι πυκνός και τρέχει σε ένα thread (ROADMAP §32).',
 ]
@@ -136,7 +206,7 @@ def report(rows):
         '**Πώς διαβάζεται:**',
         '- Η «Αναφορά» είναι ανεξάρτητη από τον λύτη: κλειστός τύπος, πρότυπο, πρόβλημα βιβλίου ή εργαλείο τρίτου.',
         '- Η «Αναμενόμενη» τιμή υπολογίζεται στο `tools/verify.py` από αυτήν, όχι από τον κώδικα του λύτη.',
-        '- Η «Προσομοίωση» είναι ο λύτης του browser (`web/studio/mna.js`), τρεγμένος στο Node.',
+        '- Η «Προσομοίωση» είναι ο λύτης του browser (`web/studio/mna.js`), τρεγμένος στο Node. Στην περιοχή «Λύτης SciPy» είναι ο δεύτερος λύτης (`engine/batch.py`, solve_ivp) στο ίδιο netlist.',
         '',
         f'**Αποτέλεσμα:** {sum(abs(s - e) <= tol for _, _, _, e, s, tol, _ in rows)} από {len(rows)} μέσα στην ανοχή.' + ('' if ok else ' **Υπάρχουν τιμές εκτός ανοχής.**'),
         '',
@@ -149,7 +219,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 152 tests (Python και Node) και 5 σενάρια περιβάλλοντος. Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 155 tests (Python και Node) και 5 σενάρια περιβάλλοντος. Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',

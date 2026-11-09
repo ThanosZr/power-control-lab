@@ -154,6 +154,17 @@
     txt('tbl','Σημεία «ρεύμα: τάση»','1e-3: 379k, 1e3: 700k, 10e3: 823k',{show:p=>p.model==='table',hint:'Π.χ. ο απαγωγός 420 kV του βιβλίου: √2·U_c = 379 kV στο 1 mA, 823 kV στα 10 kA.'})],
    value:p=>p.Uref,unit:'V',
    draw:()=>'<path d="M0,-40 V-22 M0,22 V40"/><rect x="-9" y="-22" width="18" height="44" rx="2"/><path class="thin" d="M-15,14 L-6,14 L6,-14 L15,-14"/>'},
+  // spark gap (3.10): closes when |v| reaches the breakdown voltage U_b, or at a trigger time (trigatron); conducts
+  // through the arc resistance; opens at a current zero, below I_ext, or never. Off: R_off.
+  SG:{name:'Σπινθηριστής (διάκενο)',prefix:'SG',group:'Παθητικά',pins:{a:[-30,0],b:[30,0]},box:[-14,-11,28,22],
+   params:[num('Ub','Τάση διάσπασης U_b','V',100e3,{hint:'Κλείνει όταν |v| ≥ U_b, με οποιαδήποτε πολικότητα. Χωρίς καθυστέρηση διάσπασης.'}),
+    txt('trig','Έναυση (trigatron) τη στιγμή','',{hint:'Π.χ. «2u». Κλείνει τότε όποια κι αν είναι η τάση, μία φορά. Κενό: μόνο με την τάση διάσπασης.'}),
+    num('Rarc','Αντίσταση τόξου','Ω',.1),
+    sel('ext','Σβήνει',[['zero','Στον μηδενισμό του ρεύματος'],['iext','Όταν |i| < I_ext'],['never','Ποτέ (μένει κλειστός)']],'zero',{hint:'Μετά τη σβέση ξανακλείνει αν η τάση ξεπεράσει πάλι το U_b.'}),
+    num('Iext','Ρεύμα σβέσης I_ext','A',1,{show:p=>p.ext==='iext'}),
+    num('Roff','R_off (ανοιχτός)','Ω',1e10)],
+   value:p=>p.Ub,unit:'V',
+   draw:p=>'<path d="M-30,0 H-11 M11,0 H30"/><circle cx="-6.5" cy="0" r="4.5"/><circle cx="6.5" cy="0" r="4.5"/>'+(String(p.trig||'').trim()?'<path class="thin" d="M0,10 V4 M-3,7 L0,4 L3,7"/>':'')},
   CPL:{name:'Φορτίο σταθερής ισχύος',prefix:'P',group:'Φορτία',pins:{p:[0,-30],n:[0,30]},box:[-12,-17,24,34],
    params:[num('P','Ισχύς','W',1000,{signed:true}),num('Vmin','Τάση κάτω από την οποία γίνεται ωμικό','V',5),txt('sched','P(t)','',{hint:SCHED})],
    value:p=>p.P,unit:'W',
@@ -482,6 +493,15 @@
   const cur=v=>{const x=Math.abs(v);if(!(x>0))return {i:0,g:0};const s=pick(x),i=s.I*Math.pow(x/s.V,s.a);return {i:Math.sign(v)*i,g:s.a*i/x};};
   const inv=i=>{const y=Math.abs(i);if(!(y>0))return 0;let k=0;while(k<seg.length-1&&y>=pts[k+1][0])k++;const s=seg[k];return Math.sign(i)*s.V*Math.pow(y/s.I,1/s.a);};
   return {pts,seg,cur,inv};}
+ // impulse generator design (3.10, book eq. 3.21–3.33): R₁ (front) and R₂ (tail) from C₁, C₂ and the roots α₁ < α₂ of the wave.
+ // pos 'gen': R₂ across C₁ (type β), 'load': R₂ across C₂ (type α). Both give V(t) = V₀/(R₁C₂)·(e^(−α₁t) − e^(−α₂t))/(α₂ − α₁).
+ function impulseDesign({C1,C2,a1,a2,pos}){const a=a1+a2,b=a1*a2,A=1/C1+1/C2,B=b*(pos==='load'?C1:C2),D=a*a-4*A*B;
+  if(!(C1>0&&C2>0&&a2>a1&&a1>0)||!(D>=0))return {err:'Δεν υπάρχουν R₁, R₂ για αυτά τα C₁, C₂ και την κυματομορφή.'};
+  const x=(a+Math.sqrt(D))/(2*A),R1=1/x,R2=x/(b*C1*C2),t1=Math.log(a2/a1)/(a2-a1),eta=(Math.exp(-a1*t1)-Math.exp(-a2*t1))/(R1*C2*(a2-a1));
+  return {R1,R2,t1,eta,v:(V0,t)=>t>0?V0/(R1*C2*(a2-a1))*(Math.exp(-a1*t)-Math.exp(-a2*t)):0};}
+ // the reverse: the roots α₁, α₂ of a given generator (book eq. 3.22, 3.25, 3.29), its peak time t₁ and efficiency η = V_p/V₀ (3.31, 3.32)
+ function impulseRoots({R1,R2,C1,C2,pos}){const a=1/(R1*C1)+1/(R1*C2)+1/(R2*(pos==='load'?C2:C1)),b=1/(R1*R2*C1*C2),q=Math.sqrt(a*a/4-b),a1=a/2-q,a2=a/2+q,
+  t1=Math.log(a2/a1)/(a2-a1),eta=(Math.exp(-a1*t1)-Math.exp(-a2*t1))/(R1*C2*(a2-a1));return {a1,a2,t1,eta,v:(V0,t)=>t>0?V0/(R1*C2*(a2-a1))*(Math.exp(-a1*t)-Math.exp(-a2*t)):0};}
  // transmission line (3.8): Z and τ from the chosen data
  function tlParams(p){const num=v=>parseEng(v);let Z,tau;
   if(p.spec==='lc'){const L=num(p.Lp),C=num(p.Cp),l=num(p.len);if(!(L>0&&C>0&&l>0))return {err:'L′, C′ και μήκος πρέπει να είναι θετικά.'};Z=Math.sqrt(L/C);tau=l*Math.sqrt(L*C);}
@@ -528,7 +548,7 @@
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
  const api={PARTS,GROUPS,BLOCKS,defaults,elPins,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
-  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,tlParams,bewley,movChar,
+  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,bewley,movChar,
   srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

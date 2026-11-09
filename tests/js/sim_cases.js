@@ -260,5 +260,32 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
  const r=new Sim(project([{id:'V1',type:'VIMP',params:{shape:'ramp',Vpk:2e6,S:80e9,Rs:400}},{id:'M1',type:'MOV',params:{alpha:30}},{id:'G',type:'GND'}],[['V1:p','M1:a'],['M1:b','G:g'],['V1:n','G:g']]),{h:2e-9});
  const ramp=[];for(const t of [5e-6,10e-6,20e-6,40e-6]){r.run(t-r.t);ramp.push([t,r.now('V:M1'),r.now('I:M1'),r.now('V:V1')]);}
  out.mov39={pow:dc({}),a30:dc({alpha:30}),tbl:dc({model:'table',tbl:'1e-3: 379k, 1e3: 700k, 10e3: 823k'}),neg:neg.now('V:M1'),ramp,bad:(()=>{try{new Sim(project([{id:'M1',type:'MOV',params:{model:'table',tbl:'1: 500k'}},{id:'G',type:'GND'}],[['M1:b','G:g']]));return null;}catch(e){return e.message;}})()};}
+// 3.10: spark gap. A charged capacitor rings through the gap with L and R; the gap opens at the current zero, restrikes if |v| > U_b
+{const watch=(s,id,dur,key)=>{const e=s.net.compInfo.get(id).main,tr=[];let on=e.on;if(on)tr.push([0,1,s.now(key)]);while(s.t<dur*(1-1e-12)){s.run(dur-s.t,1);if(e.on!==on){on=e.on;tr.push([s.t,on?1:0,s.now(key)]);}}return {tr,end:s.now(key)};};
+ const rlc=gp=>new Sim(project([{id:'C1',type:'C',params:{C:1e-6,v0:1e4}},{id:'L1',type:'L',params:{L:10e-6}},{id:'R1',type:'R',params:{R:.4}},{id:'SG1',type:'SG',params:{Rarc:.1,...gp}},{id:'G',type:'GND'}],
+  [['C1:p','SG1:a'],['SG1:b','L1:a'],['L1:b','R1:a'],['R1:b','G:g'],['C1:n','G:g']]),{h:2e-8});
+ const rc=new Sim(project([{id:'C1',type:'C',params:{C:1e-6,v0:1e4}},{id:'R1',type:'R',params:{R:10}},{id:'SG1',type:'SG',params:{Ub:5e3,Rarc:.1,ext:'iext',Iext:100}},{id:'G',type:'GND'}],
+  [['C1:p','SG1:a'],['SG1:b','R1:a'],['R1:b','G:g'],['C1:n','G:g']]),{h:2e-7});
+ const rmp=new Sim(project([{id:'V1',type:'VIMP',params:{shape:'ramp',Vpk:2e4,S:1e9}},{id:'R1',type:'R',params:{R:100}},{id:'SG1',type:'SG',params:{Ub:5e3,Rarc:.1,ext:'never'}},{id:'G',type:'GND'}],
+  [['V1:p','R1:a'],['R1:b','SG1:a'],['SG1:b','G:g'],['V1:n','G:g']]),{h:1e-7});
+ out.sg310={ring:watch(rlc({Ub:8e3}),'SG1',30e-6,'V:C1'),restrike:watch(rlc({Ub:7e3}),'SG1',40e-6,'V:C1'),trig:watch(rlc({Ub:2e4,trig:'5u'}),'SG1',30e-6,'V:C1'),
+  iext:watch(rc,'SG1',100e-6,'V:C1'),ramp:{...watch(rmp,'SG1',8e-6,'V:SG1'),i:rmp.now('I:SG1'),v:rmp.now('V:V1')},
+  bad:(()=>{try{new Sim(project([{id:'S',type:'SG',params:{Ub:0}},{id:'G',type:'GND'}],[['S:b','G:g']]));return null;}catch(e){return e.message;}})()};}
+// 3.10: Marx generator and chopped impulse as the tutorials build them, and requests for the SciPy solver (line, gap, arrester)
+// that tools/verify.py runs against the same closed forms
+{global.window=globalThis;require(W+'/tutorials.js');const TT=globalThis.Tutorials,bt=(id,o={})=>{const t=TT.get(id),q={};for(const op of t.options)q[op.k]=o[op.k]??op.def;return t.build(q);};
+ const ser=(s,key)=>{const r=s.ring,i=s.chIndex.get(key),t=[],y=[];for(let q=0;q<r.n;q++){const j=(r.head-r.n+q+r.cap)%r.cap;t.push(r.t[j]);y.push(r.d[j*r.nch+i]);}return {t,y};};
+ const mp=bt('marx'),mm=mp.meta,ms=new MNA.Sim(mp,{hDiv:mp.sim.hDiv,method:'TR'});ms.run(mm.dur);const v=ser(ms,'V:C2');let k=0;for(let i=1;i<v.y.length;i++)if(v.y[i]>v.y[k])k=i;
+ const x=.5*(v.y[k-1]-v.y[k+1])/(v.y[k-1]-2*v.y[k]+v.y[k+1]),pk=v.y[k]-.25*(v.y[k-1]-v.y[k+1])*x;
+ const cr=(lv,i0,i1)=>{for(let i=i0;i<i1;i++){const a=v.y[i],b=v.y[i+1];if((a-lv)*(b-lv)<=0&&a!==b)return v.t[i]+(lv-a)/(b-a)*(v.t[i+1]-v.t[i]);}return NaN;};
+ const t30=cr(.3*pk,0,k),t90=cr(.9*pk,0,k),T1=(t90-t30)/.6,T2=cr(.5*pk,k,v.y.length-1)-(t30-.3*T1);
+ const cp=bt('chop'),cm=cp.meta,cs=new MNA.Sim(cp,{hDiv:cp.sim.hDiv,method:'TR'});cs.run(cm.dur);const c=ser(cs,'V:C2');let vmin=Infinity;for(let i=0;i<c.y.length;i++)if(c.t[i]>cm.tc)vmin=Math.min(vmin,c.y[i]);
+ const tl=project([{id:'V1',type:'VDC',params:{V:1}},{id:'RS',type:'R',params:{R:200}},{id:'T1',type:'TL',params:{Z:400,tau:10e-6}},{id:'RL',type:'R',params:{R:1200}},{id:'G',type:'GND'}],
+   [['V1:p','RS:a'],['RS:b','T1:a1'],['T1:b1','G:g'],['T1:a2','RL:a'],['RL:b','G:g'],['T1:b2','G:g'],['V1:n','G:g']]);
+ const sg=project([{id:'C1',type:'C',params:{C:1e-6,v0:1e4}},{id:'L1',type:'L',params:{L:10e-6}},{id:'R1',type:'R',params:{R:.4}},{id:'SG1',type:'SG',params:{Rarc:.1,Ub:8e3}},{id:'G',type:'GND'}],
+   [['C1:p','SG1:a'],['SG1:b','L1:a'],['L1:b','R1:a'],['R1:b','G:g'],['C1:n','G:g']]);sg.solve={tbase:1e-6};
+ const mv=project([{id:'V1',type:'VDC',params:{V:1e6}},{id:'R1',type:'R',params:{R:400}},{id:'M1',type:'MOV',params:{alpha:30}},{id:'G',type:'GND'}],[['V1:p','R1:a'],['R1:b','M1:a'],['M1:b','G:g'],['V1:n','G:g']]);mv.solve={tbase:1e-6};
+ const ex=(pr,keys)=>{const r=MNA.exportForBatch(pr,keys);return {net:r.net,channels:r.channels};};
+ out.hv310={marx:{pk,T1,T2,meta:mm},chop:{vmin,meta:cm},req:{tl:ex(tl,['V:T1','V2:T1']),sg:ex(sg,['V:C1','I:SG1']),mov:ex(mv,['V:M1'])}};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

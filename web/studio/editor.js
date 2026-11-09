@@ -247,6 +247,7 @@
     case 'KL':{const m=P.klMatrix(p);return m.err?'⚠ πίνακας L':m.L.length+'×'+m.L.length+(String(p.Lmat||'').trim()?' · πίνακας L':' · k '+(+p.k).toLocaleString('el-GR'));}
     case 'KG':{const m=P.parseMat(p.mat);return m?m.length+'×'+m.length+' '+(p.kind==='G'?'G':'R'):'⚠ πίνακας';}
     case 'VIMP':return (p.shape==='ramp'?'ράμπα '+e(+p.S*1e-6,'V/μs'):p.shape==='custom'?e(+p.T1,'s')+'/'+e(+p.T2,'s'):p.shape+' μs')+' · '+e(+p.Vpk,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');
+    case 'SG':return e(+p.Ub,'V')+(String(p.trig??'').trim()?' · έναυση '+e(P.parseEng(p.trig),'s'):'');
     case 'MOV':return p.model==='table'?'πίνακας i–v':e(+p.Uref,'V')+' @ '+e(+p.Iref,'A')+' · α '+(+p.alpha).toLocaleString('el-GR');
     case 'TL':{const g=P.tlParams(p);return g.err?'⚠ '+g.err:'Z '+e(g.Z,'Ω')+' · τ '+e(g.tau,'s');}
     case 'ILG':return (p.shape==='custom'?e(+p.T1,'s')+'/'+e(+p.T2,'s'):p.shape+' μs')+' · '+e(+p.Ipk,'A');case 'MOD3':return {spwm:'SPWM',svpwm:'SVPWM',square:'six-step'}[p.mode]||'';case 'FEST':return 'R̂_R '+e(+p.RR,'Ω');

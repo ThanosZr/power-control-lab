@@ -103,4 +103,21 @@ for(const ang of ['30-150','0-120','60-180']){const pr=build('srm',{ang,band:'1'
  for(const [ctrl,ff] of [['pib','none'],['pib','expr'],...(PyRT?.ready?[['python','none'],['python','expr']]:[])]){const pr=build('code_loop',{ctrl,ff});const s=sim(pr,.004);const p=s.per,i=s.chIndex.get('Y:AM1'),d=s.chIndex.get('D:PWM1');
   const at=t=>{let j=-1;for(let k=0;k<p.n;k++){const q=(p.head-p.n+k+p.cap)%p.cap;if(p.t[q]>=t-1e-12){j=q;break;}}return j<0?null:{min:p.min[j*p.nch+i],d:p.end[j*p.nch+d]};};
   const b=s.net.sig.blocks.find(x=>x.id==='PI1');out[`code_${ctrl}_${ff}`]={valley:last(s,'Y:AM1',5).min,avg:last(s,'Y:AM1',5).avg,d:s.now('D:PWM1'),early:at(5e-4),step:at(2.4e-3),calls:b.type==='PY'?b.st.last+1:null,warn:s.net.warnings};}
- out.ms=Date.now()-t0;console.log(JSON.stringify(out,null,1));})();
+ // 3.10: Marx generator and chopped impulse. Impulse parameters of the sampled output: peak (parabola through the top three samples),
+// IEC T1 = (t90 − t30)/0.6 with T2 from the virtual origin, or time to peak / half value from the true origin ('tp')
+function ringSeries(s,key){const r=s.ring,i=s.chIndex.get(key),t=[],y=[];for(let q=0;q<r.n;q++){const j=(r.head-r.n+q+r.cap)%r.cap;t.push(r.t[j]);y.push(r.d[j*r.nch+i]);}return {t,y};}
+function impulse({t,y},t0,basis){let k=0;for(let i=1;i<y.length;i++)if(y[i]>y[k])k=i;let tp=t[k],pk=y[k];
+ if(k>0&&k<y.length-1&&Math.abs((t[k]-t[k-1])-(t[k+1]-t[k]))<1e-9*(t[k]-t[k-1])){const a=y[k-1],b=y[k],c=y[k+1],x=.5*(a-c)/(a-2*b+c);tp=t[k]+x*(t[k]-t[k-1]);pk=b-.25*(a-c)*x;}
+ const cross=(lv,i0,i1)=>{for(let i=i0;i<i1;i++){const a=y[i],b=y[i+1];if((a-lv)*(b-lv)<=0&&a!==b)return t[i]+(lv-a)/(b-a)*(t[i+1]-t[i]);}return NaN;};
+ const t30=cross(.3*pk,0,k),t90=cross(.9*pk,0,k),t50=cross(.5*pk,k,y.length-1);if(basis==='tp')return {pk,T1:tp-t0,T2:t50-t0};const T1=(t90-t30)/.6;return {pk,T1,T2:t50-(t30-.3*T1)};}
+for(const [nm,o] of [['n4',{}],['n2',{n:'2'}],['n6',{n:'6'}],['load4',{r2:'load'}],['load2',{r2:'load',n:'2'}],['si',{wave:'si'}]]){
+ const pr=build('marx',o),m=pr.meta,s=sim(pr,m.dur),v=ringSeries(s,'V:C2');let fired=0,tOn=[];
+ for(let k=1;k<=m.n;k++){const g=ringSeries(s,'I:SG'+k);const j=g.y.findIndex(x=>Math.abs(x)>1);if(j>=0){fired++;tOn.push(g.t[j]);}}
+ out['mx_'+nm]={...impulse(v,m.tf,m.basis),fired,tOn,steps:s.steps,points:s.ring.n,warn:s.net.warnings,meta:m};}
+for(const [nm,o] of [['tail',{}],['r0',{Rc:'0'}],['r50',{Rc:'50'}],['front',{chop:'front'}],['l1',{Lc:'1'}],['l20',{Lc:'20'}],['none',{chop:'none'}]]){
+ const pr=build('chop',o),m=pr.meta,s=sim(pr,m.dur),v=ringSeries(s,'V:C2');let k=0;for(let i=1;i<v.y.length;i++)if(v.y[i]>v.y[k])k=i;
+ let mn=Infinity;for(let i=k;i<v.y.length;i++)mn=Math.min(mn,v.y[i]);
+ // the chop instant: the last sample before the chopping gap carries current
+ let tc=null;if(m.chop!=='none'){const g=ringSeries(s,'I:SG2'),j=g.y.findIndex(x=>Math.abs(x)>1);if(j>0)tc=g.t[j-1];}
+ out['ch_'+nm]={vmax:v.y[k],tmax:v.t[k],vmin:mn,tc,steps:s.steps,warn:s.net.warnings,meta:m};}
+out.ms=Date.now()-t0;console.log(JSON.stringify(out,null,1));})();

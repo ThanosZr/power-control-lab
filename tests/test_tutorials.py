@@ -345,6 +345,98 @@ class Tutorials(unittest.TestCase):
         self.assertLess(z['vA'], ures(30) + 2 * 40e9 * 217.5 / c)                    # a soft knee clamps earlier
         self.assertAlmostEqual(o['ar_none']['vA'], 2 * U, delta=1e-4 * U)
 
+    @staticmethod
+    def _generator(R1, R2, C1, C2, pos):
+        """Impulse generator (book «Υψηλές Τάσεις» eq. 3.21–3.29), computed here: the roots α₁ < α₂ and v(t)/V₀."""
+        a = 1 / (R1 * C1) + 1 / (R1 * C2) + 1 / (R2 * (C2 if pos == 'load' else C1))
+        b = 1 / (R1 * R2 * C1 * C2)
+        q = math.sqrt(a * a / 4 - b)
+        a1, a2 = a / 2 - q, a / 2 + q
+        return a1, a2, lambda t: (math.exp(-a1 * t) - math.exp(-a2 * t)) / (R1 * C2 * (a2 - a1))
+
+    @staticmethod
+    def _wave_params(f, t_end, basis):
+        """Peak, T1, T2 of a wave f(t) by dense sampling here: IEC 60060-1 (T1 = (t90 − t30)/0.6, virtual origin) or 'tp'."""
+        import numpy as np
+        t = np.linspace(0, t_end, 400001)
+        y = np.array([f(x) for x in t])
+        k = int(np.argmax(y))
+        pk = y[k]
+        def cross(lv, i0, i1):
+            j = i0 + int(np.argmax((y[i0:i1] - lv) * np.sign(i1 - i0 or 1) >= 0)) if i1 > i0 else i0
+            return t[j - 1] + (lv - y[j - 1]) / (y[j] - y[j - 1]) * (t[j] - t[j - 1])
+        t30, t90 = cross(.3 * pk, 0, k), cross(.9 * pk, 0, k)
+        j = k + int(np.argmax(y[k:] <= .5 * pk))
+        t50 = t[j - 1] + (.5 * pk - y[j - 1]) / (y[j] - y[j - 1]) * (t[j] - t[j - 1])
+        if basis == 'tp':
+            return pk, t[k], t50
+        T1 = (t90 - t30) / .6
+        return pk, T1, t50 - (t30 - .3 * T1)
+
+    def test_marx_generator(self):
+        # 3.10: all gaps fire with G1; the output is the double exponential of the equivalent circuit (C₁ = C_κ/n at n·V₀, R₁, R₂, C₂):
+        # peak η·n·V₀, T1 and T2 of that wave; the designed 1.2/50 (or 250/2500) when type α has a solution
+        for k in ('n4', 'n2', 'n6', 'load4', 'load2', 'si'):
+            r = self.o['mx_' + k]
+            m = r['meta']
+            self.assertEqual(r['warn'], [], msg=k)
+            self.assertEqual(r['fired'], m['n'], msg=k)
+            self.assertTrue(all(abs(t - m['tf']) < 1e-12 for t in r['tOn']), msg=k)
+            a1, a2, f = self._generator(m['R1'], m['R2'], m['C1'], m['C2'], m['pos'])
+            pk, T1, T2 = self._wave_params(f, 3 * m['T2'] if m['feas'] else 6 * m['T2'], m['basis'])
+            nV = m['n'] * m['V0']
+            self.assertAlmostEqual(r['pk'], pk * nV, delta=1e-3 * pk * nV, msg=k)     # R₃ ≫ r₂ and the arc resistance are not in the formula
+            self.assertAlmostEqual(r['T1'], T1, delta=3e-3 * T1, msg=k)
+            self.assertAlmostEqual(r['T2'], T2, delta=2e-3 * T2, msg=k)
+            if m['feas']:
+                self.assertAlmostEqual(T1, m['T1'], delta=2e-3 * m['T1'], msg=k)
+                self.assertAlmostEqual(T2, m['T2'], delta=2e-3 * m['T2'], msg=k)
+        self.assertFalse(self.o['mx_load2']['meta']['feas'])
+        self.assertGreater(self.o['mx_n4']['pk'], self.o['mx_load4']['pk'])           # type β is more efficient (book 3.4.2)
+
+    def test_chopped_impulse(self):
+        # 3.10: chop time and voltage from the generator wave; after the chop the circuit is linear with three states (C₁ with R₂, R₁,
+        # C₂, the loop L_c with R = R_c + R_arc), solved here with the matrix exponential from v₁(t_c), v₂(t_c) and zero loop current
+        import numpy as np
+        from scipy.linalg import expm
+        for k in ('tail', 'r0', 'r50', 'front', 'l1', 'l20', 'none'):
+            r = self.o['ch_' + k]
+            m = r['meta']
+            self.assertEqual(r['warn'], [], msg=k)
+            a1, a2, f = self._generator(m['R1'], m['R2'], m['C1'], m['C2'], 'gen')
+            V, R1, R2, C1, C2 = m['V'], m['R1'], m['R2'], m['C1'], m['C2']
+            v2 = lambda t: V * f(t)
+            dv2 = lambda t: V * (a2 * math.exp(-a2 * t) - a1 * math.exp(-a1 * t)) / (R1 * C2 * (a2 - a1))
+            if m['chop'] == 'none':
+                t1 = math.log(a2 / a1) / (a2 - a1)
+                self.assertAlmostEqual(r['vmax'], v2(t1), delta=1e-4 * v2(t1), msg=k)
+                continue
+            if m['chop'] == 'front':
+                lo, hi = 0.0, math.log(a2 / a1) / (a2 - a1)
+                for _ in range(200):
+                    x = (lo + hi) / 2
+                    lo, hi = (x, hi) if v2(x) < m['Uc'] else (lo, x)
+                tc, vc = lo, m['Uc']
+            else:
+                tc = m['tc'] - m['tf']
+                vc = v2(tc)
+            self.assertLessEqual(abs(r['tc'] - (tc + m['tf'])), 2.1 * m['T1'] / 1000, msg=k)   # within the step (T1/1000)
+            R, Lc = m['Rc'] + m['Rarc'], m['Lc']
+            A = np.array([[-1 / (R2 * C1) - 1 / (R1 * C1), 1 / (R1 * C1), 0], [1 / (R1 * C2), -1 / (R1 * C2), -1 / C2], [0, 1 / Lc, -R / Lc]])
+            dt = 1.5 * 2 * math.pi * math.sqrt(Lc * C2) / 3000
+            E = expm(A * dt)
+            x = np.array([v2(tc) + R1 * C2 * dv2(tc), vc, 0.0])
+            vmin = vmax = vc
+            for _ in range(3000):
+                x = E @ x
+                vmin, vmax = min(vmin, x[1]), max(vmax, x[1])
+            self.assertAlmostEqual(r['vmin'], vmin, delta=1.5e-3 * vc, msg=k)
+            if m['chop'] == 'front':                                 # C₂ still charges through R₁ until the loop current builds up
+                self.assertGreater(vmax, vc)
+                self.assertAlmostEqual(r['vmax'], vmax, delta=3e-4 * vc, msg=k)    # a 2.6 ns rise over two backward-Euler steps after closing
+        self.assertLess(-self.o['ch_r50']['vmin'], .3 * 925e3)                          # 50 Ω keeps the undershoot under 30 % (IEC 60076-3)
+        self.assertGreater(-self.o['ch_r0']['vmin'], .3 * 925e3)
+
     def test_lightning_current(self):
         # 3.5: Heidler (IEC 62305-1) and a fitted double exponential into L = 10 μH and R = 10 Ω: peak current, charge,
         # and the peak of v = R·i + L·di/dt against the waveform evaluated here (engine.batch.wave_at)

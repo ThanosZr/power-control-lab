@@ -35,6 +35,13 @@ const srmDc=par=>project([{id:'V1',type:'VDC',params:{V:20}},{id:'M1',type:'SRM'
 const isl=solve=>({...project([{id:'V1',type:'VAC',params:{Vpk:10,f:50}},{id:'X1',type:'XFMR',params:{n:2}},{id:'IP1',type:'IP'},{id:'R2',type:'R',params:{R:5}},{id:'R3',type:'R',params:{R:15}},{id:'VP1',type:'VP'},
   {id:'R9',type:'R'},{id:'I9',type:'IDC',params:{I:1}},{id:'G',type:'GND'}],[['V1:n','G:g'],['V1:p','X1:p1'],['X1:p2','G:g'],['X1:s1','IP1:a'],['IP1:b','R2:a'],['R2:b','R3:a'],['R3:b','X1:s2'],['VP1:p','R2:b'],['I9:n','G:g']]),solve});
 // 3.8: impulse voltage 1.2/50 behind 50 Ω into 1 nF ∥ 1 kΩ
+// 3.10: spark gaps (ringing with restrike, trigger, I_ext), arrester on a ramp, lines and the high-voltage tutorials
+const sgRlc=gp=>Object.assign(project([{id:'C1',type:'C',params:{C:1e-6,v0:1e4}},{id:'L1',type:'L',params:{L:10e-6}},{id:'R1',type:'R',params:{R:.4}},{id:'SG1',type:'SG',params:{Rarc:.1,...gp}},{id:'G',type:'GND'}],
+  [['C1:p','SG1:a'],['SG1:b','L1:a'],['L1:b','R1:a'],['R1:b','G:g'],['C1:n','G:g']]),{solve:{tbase:1e-6}});   // time base: the browser step is T/1000
+const sgRc=Object.assign(project([{id:'C1',type:'C',params:{C:1e-6,v0:1e4}},{id:'R1',type:'R',params:{R:10}},{id:'SG1',type:'SG',params:{Ub:5e3,Rarc:.1,ext:'iext',Iext:100}},{id:'G',type:'GND'}],
+  [['C1:p','SG1:a'],['SG1:b','R1:a'],['R1:b','G:g'],['C1:n','G:g']]),{solve:{tbase:1e-6}});
+const movRamp=project([{id:'V1',type:'VIMP',params:{shape:'ramp',Vpk:2e6,S:80e9}},{id:'R1',type:'R',params:{R:400}},{id:'M1',type:'MOV',params:{alpha:30}},{id:'C1',type:'C',params:{C:1e-9}},{id:'G',type:'GND'}],
+  [['V1:p','R1:a'],['R1:b','M1:a'],['M1:a','C1:p'],['M1:b','G:g'],['C1:n','G:g'],['V1:n','G:g']]);
 const vimp=project([{id:'V1',type:'VIMP',params:{Vpk:100e3,Rs:50}},{id:'C1',type:'C',params:{C:1e-9}},{id:'R1',type:'R',params:{R:1e3}},{id:'G',type:'GND'}],[['V1:p','C1:p'],['C1:p','R1:a'],['C1:n','G:g'],['R1:b','G:g'],['V1:n','G:g']]);
 const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},['I:R1']],bridge3_scr:['bridge3',{dev:'30',load:'r'},['V:R1']],
  battery_pi:['battery',{ctrl:'pi'},['I:L1','D:PWM1']],deadtime:['battery',{sw:'real',ctrl:'pi'},['I:L1']],
@@ -54,17 +61,21 @@ const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},[
  sm_align:[smDc({th0:60}),null,['Y:M1','Y:M1:te','Y:M1:th','I:M1','Y:M1:id']],sm_pm:[smDc({Ld:.03,Lq:.05,psim:.5,th0:100,w0:5,TL:'0:0, 0.05:2'}),null,['Y:M1','Y:M1:te','Y:M1:iq','I:M1']],
  mp_lg:[mpLg,null,['I:I1','V:I1','I:L1']],
  vimp:[vimp,null,['V:C1','I:V1']],
+ sg_ring:[sgRlc({Ub:7e3}),null,['V:C1','I:SG1']],sg_trig:[sgRlc({Ub:2e4,trig:'5u'}),null,['V:C1','I:SG1']],sg_iext:[sgRc,null,['V:C1','I:SG1']],
+ mov_ramp:[movRamp,null,['V:M1','I:M1']],tw_r3z:['twave',{term:'r3z',rs:'z'},['V:T1','V2:T1','I2:T1']],tw_li:['twave',{src:'li'},['V:T1','V2:T1','I:T1']],
+ tw_book:['twave',{case:'book'},['V:T1','V2:T1','I2:T1']],arr_ideal:['arrester',{},['V:T1','V2:T1','I:M1']],arr_zno:['arrester',{mov:'zno',d:'400'},['V:T1','V2:T1','I:M1']],
+ marx:['marx',{},['V:C2','I:SG1','I:SG4']],chop:['chop',{},['V:C2','I:SG2']],
  isl_ref:[isl({island:'ref',unconn:'ignore'}),null,['Y:VP1','Y:IP1','V:R2']],isl_leak:[isl({island:'auto',rleak:1e6}),null,['Y:VP1','Y:IP1','V:R3']],
  sm_sat:[smDc({th0:60,sat:'d',Ldsat:.04,psikd:.5}),null,['Y:M1','Y:M1:te','Y:M1:id','I:M1']],
  srm_m:[srmDc({th0:30}),null,['Y:M1','Y:M1:te','Y:M1:th','I:M1','PSI1:M1','Y:M1:i1']],srm_t:[srmDc({th0:30,mag:'table'}),null,['Y:M1','Y:M1:te','I:M1','PSI1:M1']]};
 // browser results for the 3.0 cases: per-period peaks of the last periods, to compare solver against solver
 const jsRun={dc_cur:['Y:AM1',.012],pcm_half:['Y:AM1',1e-3],pcm_sub:['Y:AM1',4e-4],blk_cmp_z1:['Y:AM1',4e-3],blk_pwm:['Y:AM1',4e-3]};   // pcm_sub: before chaos separates the two solvers
 // browser values at given instants (3.1)
-const jsAt={dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05],eis_cell:[.004,.011,.02],im_dol:[.05,.1,.3,.6],mp_kl:[5e-4,2e-3,5e-3],mp_kg:[1e-4,1e-3],sm_align:[.02,.1,.3],sm_pm:[.02,.1,.2],mp_lg:[4e-6,50e-6,200e-6],sm_sat:[.02,.1,.3],isl_ref:[.005,.012,.02],vimp:[1e-6,3e-6,2e-5,6e-5],isl_leak:[.005,.012,.02],srm_m:[.005,.02,.06],srm_t:[.005,.02,.06]};
+const jsAt={dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05],eis_cell:[.004,.011,.02],im_dol:[.05,.1,.3,.6],mp_kl:[5e-4,2e-3,5e-3],mp_kg:[1e-4,1e-3],sm_align:[.02,.1,.3],sm_pm:[.02,.1,.2],mp_lg:[4e-6,50e-6,200e-6],sm_sat:[.02,.1,.3],isl_ref:[.005,.012,.02],vimp:[1e-6,3e-6,2e-5,6e-5],sg_ring:[5e-6,15e-6,25e-6,40e-6],sg_trig:[4e-6,10e-6,20e-6],sg_iext:[10e-6,30e-6,60e-6],mov_ramp:[5e-6,10e-6,20e-6,40e-6],tw_r3z:[5e-6,15e-6,25e-6,35e-6,95e-6],tw_li:[3e-6,12e-6,25e-6,65e-6],tw_book:[1.5e-6,3e-6,5e-6,7e-6],arr_ideal:[8e-6,15e-6,30e-6],arr_zno:[8e-6,15e-6,30e-6],marx:[1e-6,2.2e-6,20e-6,80e-6],chop:[2e-6,3.3e-6,4e-6,8e-6],isl_leak:[.005,.012,.02],srm_m:[.005,.02,.06],srm_t:[.005,.02,.06]};
 const out={};for(const [k,[id,o,keys]] of Object.entries(cases)){
  if(k==='code_py'){const pr=build('code_loop',{ctrl:'python',ff:'expr'});const r=MNA.exportForBatch(pr,keys);out[k]={net:r.net,channels:r.channels};
   const s=new MNA.Sim(build('code_loop',{ctrl:'pib',ff:'expr'}),{hDiv:1000});s.run(.003);const p=s.per,i=s.chIndex.get('Y:AM1'),pk=[];for(let q=8;q>=1;q--){const j=(p.head-q+p.cap)%p.cap;pk.push({max:p.max[j*p.nch+i],min:p.min[j*p.nch+i],t:p.t[j]});}
   out[k].js={T:s.T,pk,end:s.now('D:PWM1')};continue;}const pr=typeof id==='string'?build(id,o):id;const r=MNA.exportForBatch(pr,keys);out[k]={net:r.net,channels:r.channels};
  if(jsRun[k]){const [key,dur]=jsRun[k];const s=new MNA.Sim(pr,{hDiv:1000});s.run(dur);const p=s.per,i=s.chIndex.get(key),pk=[];for(let q=8;q>=1;q--){const j=(p.head-q+p.cap)%p.cap;pk.push({max:p.max[j*p.nch+i],min:p.min[j*p.nch+i],t:p.t[j]});}out[k].js={T:s.T,pk,end:s.now(key)};}}
-for(const [k,ts] of Object.entries(jsAt)){const [id,o,keys]=cases[k];const s=new MNA.Sim(id,{hDiv:k==='im_dol'?4000:k==='mp_lg'?200:k.startsWith('sm_')?100:1000});out[k].at=ts.map(t=>{s.run(t-s.t);return [t,...keys.map(q=>s.now(q))];});}
+for(const [k,ts] of Object.entries(jsAt)){const [id,o,keys]=cases[k];const s=new MNA.Sim(typeof id==='string'?build(id,o):id,{hDiv:k==='im_dol'?4000:k==='mp_lg'?200:k.startsWith('sm_')?100:1000});out[k].at=ts.map(t=>{s.run(t-s.t);return [t,...keys.map(q=>s.now(q))];});}
 console.log(JSON.stringify(out));
