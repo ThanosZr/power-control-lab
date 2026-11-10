@@ -68,14 +68,22 @@ const bus=project([C('V1','VAC3',{Vpk:100,f:50,conn:'bus'}),C('B1','EBUS'),...RL
  const s=new MNA.Sim(p,{});s.run(1e-4);
  R.wiring={y:['Y:K1[2]','Y:GN[1]','Y:GN[3]','Y:D1','Y:S1','Y:D3','Y:D4'].map(k=>s.now(k)),vec:s.net.vec,needs:BUS.needs(p),w:BUS.widths(p),warnings:s.net.warnings};
  R.wiring.w={gn:R.wiring.w.wire(p.wires[1]),bs:R.wiring.w.wire(p.wires[4]),m2:R.wiring.w.wire(p.wires[11]),d6:R.wiring.w.wire(p.wires[12]),errors:R.wiring.w.errors};
- // named wires: two stubs called «top» are one node (electrical); the same names without link stay apart
- const nl=link=>project([C('V1','VDC',{V:10}),C('G1','GND'),C('R1','R',{R:10}),C('J1','JUNC'),C('J2','JUNC'),C('VM','VM')],
-  [['V1:n','G1:g'],['V1:p','J1',{name:'top',link}],['J2','R1:a',{name:'top',link}],['R1:b','G1:g'],['VM:p','R1:a'],['VM:n','G1:g']]);
- const r1=new MNA.Sim(nl(true),{});r1.run(1e-4);const r0=new MNA.Sim(nl(false),{solve:{unconn:'ignore'}});r0.run(1e-4);
- // and on a signal: a constant into a display through two named stubs
- const ns=project([C('K','CONST',{v:'4'}),C('J1','JUNC'),C('J2','JUNC'),C('D','DISP')],[['K:y','J1',{name:'s',link:true}],['J2','D:u',{name:'s',link:true}]]);
+ // wire names (version 3): two stubs called «top» are one node (electrical); in an older file (no version) the same names
+ // are labels and stay apart
+ const nl=version=>project([C('V1','VDC',{V:10}),C('G1','GND'),C('R1','R',{R:10}),C('J1','JUNC'),C('J2','JUNC'),C('VM','VM')],
+  [['V1:n','G1:g'],['V1:p','J1',{name:'top'}],['J2','R1:a',{name:'top'}],['R1:b','G1:g'],['VM:p','R1:a'],['VM:n','G1:g']],version?{version}:{});
+ const r1=new MNA.Sim(nl(3),{});r1.run(1e-4);const r0=new MNA.Sim(nl(0),{solve:{unconn:'ignore'}});r0.run(1e-4);
+ // and on a signal: a constant into a display through two stubs called «s»; the same name on an electrical wire stays apart
+ const ns=project([C('K','CONST',{v:'4'}),C('J1','JUNC'),C('J2','JUNC'),C('D','DISP'),C('V2','VDC',{V:3}),C('R2','R',{R:1}),C('G2','GND')],
+  [['K:y','J1',{name:'s'}],['J2','D:u',{name:'s'}],['V2:p','R2:a',{name:'s'}],['R2:b','G2:g'],['V2:n','G2:g']],{version:3});
  const r2=new MNA.Sim(ns,{});r2.run(1e-4);
- R.named={vm:r1.now('Y:VM'),i:r1.now('I:R1'),apart:r0.now('I:R1'),signal:r2.now('Y:D')};}
+ // an older file where «v» labels two different nodes: migrateNames gives the second «v·2», the circuit and the numbers stay
+ const old=project([C('V1','VDC',{V:10}),C('R1','R',{R:10}),C('V2','VDC',{V:4}),C('R2','R',{R:2}),C('G1','GND')],
+  [['V1:p','R1:a',{name:'v'}],['R1:b','G1:g'],['V1:n','G1:g'],['V2:p','R2:a',{name:'v'}],['R2:b','G1:g'],['V2:n','G1:g']]);
+ const mig=BUS.migrateNames(old),ro=new MNA.Sim(old,{}),rm=new MNA.Sim(mig.project,{});ro.run(1e-4);rm.run(1e-4);
+ R.named={vm:r1.now('Y:VM'),i:r1.now('I:R1'),apart:r0.now('I:R1'),signal:r2.now('Y:D'),elec:r2.now('I:R2'),warnings:r2.net.warnings,
+  migrate:{renamed:mig.renamed,version:mig.project.version,names:mig.project.wires.map(w=>w.name).filter(Boolean),old:[ro.now('I:R1'),ro.now('I:R2')],now:[rm.now('I:R1'),rm.now('I:R2')],
+   joined:err(()=>new MNA.Sim({...old,version:3},{}).run(1e-4)),again:BUS.migrateNames(mig.project).renamed.length}};}
 
 // 4. widths that do not fit: messages, never a hidden conversion
 {const e=(comps,conns)=>err(()=>new MNA.Sim(project(comps,conns),{}));

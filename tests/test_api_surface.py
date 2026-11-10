@@ -33,7 +33,8 @@ class ApiSurface(unittest.TestCase):
         # the project file: a part's parameters and every pin it can have (3.18: the bus pin of the three-phase source)
         self.assertIn('conn', self.now['project']['part:VAC3']['params'])
         self.assertEqual(set(self.now['project']['part:VAC3']['pins']), {'a', 'b', 'c', 'n', 'abc'})
-        self.assertIn('link', self.now['project']['file.wire']['params'])
+        self.assertIn('name', self.now['project']['file.wire']['params'])
+        self.assertIn('version', self.now['project']['file']['params'])
 
     def test_a_removal_or_a_lost_parameter_breaks(self):
         old = json.loads(json.dumps(api_surface.merged({'groups': {}, 'removed': []}, self.now, '3.18')))

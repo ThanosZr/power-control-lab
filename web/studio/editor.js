@@ -62,6 +62,7 @@
   redo(){if(!this.redoStack.length)return;this.undoStack.push(this.snapshot());this.doc=JSON.parse(this.redoStack.pop());this.cleanSel();this.render();this.changed('struct');}
   cleanSel(){for(const id of [...this.sel.c])if(!this.comp(id))this.sel.c.delete(id);for(const id of [...this.sel.w])if(!this.wire(id))this.sel.w.delete(id);}
   load(doc,{keepView=false}={}){this.doc={components:(doc.components||[]).map(c=>({rot:0,flip:false,params:{},...c,params:{...(c.params||{})}})),wires:(doc.wires||[]).map(w=>({...w,pts:(w.pts||[]).map(p=>[...p])}))};
+   if(doc.version!==undefined)this.doc.version=doc.version; // 3.18: from version 3 wire names join (Bus.namesJoin)
    if(doc.solve)this.doc.solve={...doc.solve}; // options of the solution (3.7): unconnected parts, floating parts
    if(doc.subcircuits)this.doc.subcircuits=JSON.parse(JSON.stringify(doc.subcircuits)); // definitions of subcircuits (3.17)
    this.dropDangling();
@@ -92,7 +93,7 @@
    for(const c of this.doc.components)for(const p of Object.keys(P.pinsOf(c))){const k=c.id+':'+p;par.set(k,k);kind.set(k,c.type==='JUNC'?'j':P.pinKind(c,p));}
    for(const w of this.doc.wires){const a=w.a.c+':'+w.a.p,b=w.b.c+':'+w.b.p;if(par.has(a)&&par.has(b))par.set(find(a),find(b));}
    const sig=new Set(),el=new Set();for(const [k,v] of kind){const r=find(k);if(v==='in'||v==='out')sig.add(r);else if(v==='el')el.add(r);}
-   return {of:k=>par.has(k)?(sig.has(find(k))?'sig':el.has(find(k))?'el':'j'):null,kind};}
+   return {of:k=>par.has(k)?(sig.has(find(k))?'sig':el.has(find(k))?'el':'j'):null,kind,root:k=>par.has(k)?find(k):null};}
   // options of the solution (3.7), saved with the circuit
   setSolve(patch){this.remember();const s={...(this.doc.solve||{}),...patch};for(const k of Object.keys(s))if(s[k]===''||s[k]===undefined||s[k]===null)delete s[k];this.doc.solve=s;if(!Object.keys(s).length)delete this.doc.solve;this.changed('param');}
   // which parts the solver left out, which pins are open (3.7): drawn on the schematic
@@ -153,7 +154,7 @@
    if(!end||same(end,from)){this.cancelWire();if(wi.made){this.tidyJunctions();this.render();}return;}
    const t=this.nearTarget(end,wi.from.c+':'+wi.from.p,new Set(this.wiresAt(wi.from.c).map(w=>w.id)));if(t){wi.via=via;this.finishWire(t.q,t.pin?{pin:t.pin}:{w:t.w});return;}
    const j=this.newJunction(end);wi.via=via;this.finishWire(end,{pin:j+':j'});}
-  setWireProps(id,patch){const w=this.wire(id);if(!w)return;this.remember();Object.assign(w,patch);if(patch.name!==undefined&&!patch.name)delete w.name;if('link' in patch&&!patch.link)delete w.link;this.renderWires();this.changed('param');}
+  setWireProps(id,patch){const w=this.wire(id);if(!w)return;this.remember();Object.assign(w,patch);if(patch.name!==undefined&&!patch.name)delete w.name;this.renderWires();this.changed('param');}
   deleteSel(){
    if(!this.sel.c.size&&!this.sel.w.size)return;this.remember();
    const dc=new Set(this.sel.c);this.doc.components=this.doc.components.filter(c=>!dc.has(c.id));
@@ -279,6 +280,9 @@
    let h='',dots='';const NK=this.netKinds();this.nk=NK;
    // buses (3.18): the width of every wire, inferred from what it joins (Bus.widths never throws)
    let BW=null;try{BW=root.Bus?root.Bus.widths(this.doc):null;}catch(e){BW=null;}this.bw=BW;
+   // a name on wires of different drawn nets joins them (version ≥ 3): those names get ⇄
+   const joined=new Set();if((+this.doc.version||0)>=3){const m=new Map();for(const w of this.doc.wires){if(!w.name)continue;const k=w.a.c+':'+w.a.p,key=w.name+'|'+NK.of(k);if(!m.has(key))m.set(key,new Set());m.get(key).add(NK.root(k));}
+    for(const [key,r] of m)if(r.size>1)joined.add(key.slice(0,key.lastIndexOf('|')));}
    for(const w of this.doc.wires){const pts=this.wirePts(w);if(pts.some(p=>!p))continue;const sig=NK.of(w.a.c+':'+w.a.p)==='sig',nb=BW?BW.wire(w):1;
     // signal wires: thinner, own colour, arrow where they enter an input
     const ina=sig&&NK.kind.get(w.a.c+':'+w.a.p)==='in',inb=sig&&NK.kind.get(w.b.c+':'+w.b.p)==='in';const d=this.pathD(ina&&!inb?pts.slice().reverse():pts);
@@ -287,7 +291,7 @@
     // a bus: a slash with its width at the middle of the longest segment
     if(nb>1){const m=this.midLabel(pts),hz=this.segDir(pts);h+=`<path class="bslash" d="M${m[0]-4},${m[1]+5} L${m[0]+4},${m[1]-5}"/><text class="bwidth" x="${m[0]+(hz?6:7)}" y="${m[1]+(hz?13:4)}">${nb}</text>`;}
     for(let i=1;i<pts.length;i++)h+=`<path class="whit" data-w="${w.id}" data-seg="${i-1}" d="M${pts[i-1][0]},${pts[i-1][1]} L${pts[i][0]},${pts[i][1]}"/>`;
-    if(w.name){const m=this.midLabel(pts);h+=`<text class="wname${w.link?' link':''}" x="${m[0]}" y="${m[1]-6}" text-anchor="middle">${w.link?'⇄ ':''}${esc(w.name)}</text>`;}
+    if(w.name){const m=this.midLabel(pts),jn=joined.has(w.name);h+=`<text class="wname${jn?' link':''}" x="${m[0]}" y="${m[1]-6}" text-anchor="middle">${jn?'⇄ ':''}${esc(w.name)}</text>`;}
     h+='</g>';}
    for(const c of this.doc.components){if(c.type==='JUNC'){const n=count.get(c.id+':j')||0;if(n>=3)dots+=`<circle class="jdot${NK.of(c.id+':j')==='sig'?' sig':''}" cx="${c.x}" cy="${c.y}" r="${NK.of(c.id+':j')==='sig'?2.8:3.6}"/>`;else if(n===1)dots+=`<circle class="jfree" cx="${c.x}" cy="${c.y}" r="3.6"/>`;continue;}
     for(const p of Object.keys(P.pinsOf(c))){if((count.get(c.id+':'+p)||0)>=2){const q=this.pin(c,p),sg=NK.of(c.id+':'+p)==='sig';dots+=`<circle class="jdot${sg?' sig':''}" cx="${q[0]}" cy="${q[1]}" r="${sg?2.8:3.6}"/>`;}}}

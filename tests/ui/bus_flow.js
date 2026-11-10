@@ -1,8 +1,9 @@
 // Buses and vectors in the studio (3.18, ROADMAP §3): the tutorial drawn with buses (thick wires with their width, bus
 // pins, the dq loop on the theory), a vector block's channels and live values, a part switched to its bus pin, an
-// electrical bus, named wires that join, a width that does not fit, Ctrl+G across a bus. Needs Node + Playwright.
+// electrical bus, wire names that join (and an older file that opens the same), a width that does not fit, Ctrl+G across
+// a bus. Needs Node + Playwright.
 // Usage: python run.py --no-browser --port 8765  then  node tests/ui/bus_flow.js http://127.0.0.1:8765/ <out-dir>
-const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
+const {chromium}=require('playwright');const fs=require('fs');const OUT=process.argv[3]||'.';
 (async()=>{const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:1500,height:1000}});const p=await ctx.newPage();const errs=[];
  p.on('pageerror',e=>errs.push(String(e.stack||e)));p.on('console',m=>{if(m.type()==='error')errs.push(m.text());});
  const base=process.argv[2];await p.goto(base);await p.evaluate(()=>localStorage.clear());await p.goto(base+'?tutorial=bus_dq');await p.waitForTimeout(1200);
@@ -39,12 +40,12 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
  await p.waitForTimeout(300);
  R.scratch.run=await p.evaluate(id=>{PCL.reset();PCL.S.sim.run(0.04);const p=PCL.S.sim.lastPeriod('I:'+id);return {err:PCL.S.error,amp:p?(p.max-p.min)/2:null};},R.scratch.R1);
  R.scratch.bus=await p.evaluate(()=>document.querySelectorAll('.wire.bus').length);
- // named wires: the star point split in two, joined by two stubs named «N» (wire panel: name and «joins»)
+ // wire names: the star point split in two, joined by naming two of its wires «N» (wire panel)
  R.named=await p.evaluate(()=>{const E=PCL.editor,ws=E.doc.wires.filter(w=>w.b.c.startsWith('J')&&w.a.c.startsWith('R'));const J2=E.addPart('JUNC',420,260);
   ws[2].b={c:J2.id,p:'j'};E.render();E.changed('struct');PCL.reset();PCL.S.sim.run(0.02);const apart=PCL.S.sim.net.warnings.length;return {apart,w1:ws[0].id,w3:ws[2].id};});
  for(const id of [R.named.w1,R.named.w3]){await p.evaluate(id=>{PCL.editor.select([],[id]);},id);await p.waitForTimeout(150);
-  await p.fill('#props-body [data-wname]','N');await p.press('#props-body [data-wname]','Enter');await p.check('#props-body [data-wlink]');await p.waitForTimeout(150);}
- R.named.link=await p.evaluate(()=>PCL.editor.doc.wires.filter(w=>w.link&&w.name==='N').length);
+  await p.fill('#props-body [data-wname]','N');await p.press('#props-body [data-wname]','Enter');await p.waitForTimeout(150);}
+ R.named.link=await p.evaluate(()=>PCL.editor.doc.wires.filter(w=>w.name==='N').length);R.named.version=await p.evaluate(()=>PCL.editor.doc.version);
  R.named.mark=await p.evaluate(()=>document.querySelectorAll('.wname.link').length);
  R.named.run=await p.evaluate(id=>{PCL.reset();PCL.S.sim.run(0.04);const q=PCL.S.sim.lastPeriod('I:'+id);return {warn:PCL.S.sim.net.warnings.length,amp:q?(q.max-q.min)/2:null};},R.scratch.R1);
  // a bus into a scalar input: an error with the two pins, no hidden conversion
@@ -57,6 +58,14 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
  R.group=await p.evaluate(()=>{const E=PCL.editor,x=E.doc.components.find(c=>c.type==='SUB');return {ports:(x?.params.$ports||[]).map(q=>q.name+':'+(q.w||1)),buspin:document.querySelectorAll('.pin.buspin').length,err:PCL.S.error};});
  R.group.run=await p.evaluate(()=>{PCL.reset();PCL.S.sim.run(0.04);const k=[...PCL.S.sim.chIndex.keys()].find(k=>/^I:X\d+\/R/.test(k));const q=PCL.S.sim.lastPeriod(k);return {k,amp:q?(q.max-q.min)/2:null};});
  await p.screenshot({path:OUT+'/bus_scratch.png'});
+ // 7. an older file (no version) where «v» labels two different nodes: it opens the same, the second becomes «v·2»
+ const oldFile=OUT+'/bus_old.pcl.json';fs.writeFileSync(oldFile,JSON.stringify({components:[{id:'V1',type:'VDC',x:100,y:200,params:{V:10}},{id:'R1',type:'R',x:200,y:160,params:{R:10}},
+  {id:'V2',type:'VDC',x:300,y:200,params:{V:4}},{id:'R2',type:'R',x:400,y:160,params:{R:2}},{id:'G1',type:'GND',x:250,y:300,params:{}}],
+  wires:[{id:'w1',a:{c:'V1',p:'p'},b:{c:'R1',p:'a'},pts:[],name:'v'},{id:'w2',a:{c:'R1',p:'b'},b:{c:'G1',p:'g'},pts:[]},{id:'w3',a:{c:'V1',p:'n'},b:{c:'G1',p:'g'},pts:[]},
+   {id:'w4',a:{c:'V2',p:'p'},b:{c:'R2',p:'a'},pts:[],name:'v'},{id:'w5',a:{c:'R2',p:'b'},b:{c:'G1',p:'g'},pts:[]},{id:'w6',a:{c:'V2',p:'n'},b:{c:'G1',p:'g'},pts:[]}]}));
+ const [fc]=await Promise.all([p.waitForEvent('filechooser'),p.click('#open')]);await fc.setFiles(oldFile);await p.waitForTimeout(700);
+ R.old=await p.evaluate(()=>{PCL.reset();PCL.S.sim.run(1e-4);return {version:PCL.editor.doc.version,names:PCL.editor.doc.wires.map(w=>w.name).filter(Boolean).sort(),
+  notice:document.querySelector('#notice')?.innerText||'',i:[PCL.S.sim.now('I:R1'),PCL.S.sim.now('I:R2')],err:PCL.S.error};});
  console.log(JSON.stringify(R,null,1));console.log('ERR',JSON.stringify(errs.slice(0,5)));
  const near=(a,b,tol)=>Math.abs(a-b)<=tol;
  const ok=R.draw.bus>=8&&R.draw.widths.join()==='2,3'&&R.draw.pins>=6&&!R.draw.stale
@@ -64,7 +73,8 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
   &&R.liveRef.same&&near(R.liveRef.id,6,.1)
   &&R.inside.pfx==='XL/'&&R.inside.bus.split(',').includes('3')
   &&R.scratch.before-R.scratch.after===3&&R.scratch.pins==='abc,n'&&!R.scratch.run.err&&near(R.scratch.run.amp,100/10,.01)&&R.scratch.bus>=1
-  &&R.named.link===2&&R.named.mark===2&&near(R.named.run.amp,10,.01)
+  &&R.named.link===2&&R.named.mark===2&&R.named.version===3&&near(R.named.run.amp,10,.01)
+  &&R.old.version===3&&R.old.names.join()==='v,v·2'&&/v·2/.test(R.old.notice)&&!R.old.err&&near(R.old.i[0],1,1e-9)&&near(R.old.i[1],2,1e-9)
   &&/πλάτος 2/.test(R.mismatch.err)&&/πλάτος 2/.test(R.mismatch.notice)
   &&R.group.ports.includes('e1:3')&&R.group.buspin>=2&&!R.group.err&&near(R.group.run.amp,10,.01)&&!errs.length;
  console.log(ok?'PASS':'FAIL');await b.close();process.exit(ok?0:1);})().catch(e=>{console.error('FAILED',e);process.exit(1);});

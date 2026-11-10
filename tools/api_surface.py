@@ -13,7 +13,7 @@ Seven surfaces, read from the code itself (never typed by hand):
   scenario  the requests of web/studio/scenario.js (Node, Worker, pcl/runner.js),
   project   the project file: part types, their parameters and their pins (a saved circuit names them).
 
-Rule (proposal for 4.0, docs/API.md): from 4.0 nothing of the stable surface is removed or renamed and no parameter is
+Rule (approved 10/11/2026, docs/API.md): from 4.0 nothing of the stable surface is removed or renamed and no parameter is
 taken away within 4.x; what will go is marked deprecated, keeps working and goes in 5.0. Before 4.0 the surface is
 provisional: a removal needs --allow-removal with a reason, and it is listed in docs/API.md.
 """
@@ -186,7 +186,7 @@ process.stdout.write(JSON.stringify(out));"""
     # the fields of the file itself (docs/ARCHITECTURE.md §2): new fields are optional, an old file always opens
     out['file'] = {'params': ['version', 'components', 'wires', 'subcircuits', 'solve', 'sim', 'scope', 'meta', 'tutorial']}
     out['file.component'] = {'params': ['id', 'type', 'x', 'y', 'rot', 'flip', 'label', 'params', 'live', 'liveBase']}
-    out['file.wire'] = {'params': ['id', 'a', 'b', 'pts', 'name', 'link', 'color', 'width']}
+    out['file.wire'] = {'params': ['id', 'a', 'b', 'pts', 'name', 'color', 'width']}
     out['file.subcircuit'] = {'params': ['title', 'desc', 'version', 'components', 'wires', 'params']}
     return out
 
@@ -238,7 +238,7 @@ def report(snap):
         f'Έκδοση {snap["version"]}: **προσωρινό**. Γίνεται σταθερό από την {snap["stable_from"]}. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα '
         f'({n} σημεία σε {len(snap["groups"])} επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).',
         '',
-        '## Κανόνας για αλλαγές που σπάνε (πρόταση για την 4.0)',
+        '## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)',
         '',
         '- **Τι είναι δημόσιο:** ό,τι είναι σε αυτόν τον κατάλογο: το πακέτο `pcl`, η γραμμή εντολών, οι ενέργειες του server, οι μέθοδοι των πρόσθετων και της σύνδεσης, '
         'οι συναρτήσεις MATLAB/Octave, τα αιτήματα σεναρίων και η μορφή του αρχείου project (τύποι στοιχείων, παράμετροι, ακροδέκτες). Ό,τι ξεκινά με `_` και ό,τι δεν είναι εδώ είναι εσωτερικό.',
@@ -246,7 +246,8 @@ def report(snap):
         'Καμία αφαίρεση, μετονομασία ή αλλαγή σημασίας.',
         '- **Αφαίρεση σε δύο βήματα:** ό,τι πρόκειται να φύγει γίνεται «παρωχημένο» σε μια 4.x (με μήνυμα και την εναλλακτική), δουλεύει ως το τέλος της 4.x και φεύγει στην 5.0.',
         '- **Αρχεία project:** ένα παλιό αρχείο ανοίγει πάντα (ARCHITECTURE §4). Νέα πεδία είναι προαιρετικά. Όταν χρειάζεται μετατροπή, αυξάνεται το `version` του αρχείου '
-        'και η μετατροπή γίνεται στο άνοιγμα, με test.',
+        'και η μετατροπή γίνεται στο άνοιγμα, με test. Το `version` 3 (3.18): τα σύρματα με το ίδιο όνομα είναι ένας κόμβος· ένα παλιότερο αρχείο ανοίγει ίδιο '
+        '(`Bus.migrateNames`: όπου ένα όνομα ήταν ετικέτα σε δύο κόμβους, το δεύτερο γίνεται «όνομα·2»).',
         f'- **Ο έλεγχος:** το `python tools/api_surface.py` σταματά όταν κάτι λείπει ή έχασε όρισμα. Πριν από την {snap["stable_from"]} περνά μόνο με '
         '`--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 η αφαίρεση σημείου της ίδιας κύριας έκδοσης δεν περνά.',
         '',

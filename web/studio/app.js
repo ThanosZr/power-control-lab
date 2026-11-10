@@ -527,18 +527,17 @@ function openInspector(id,x,y){
 }
 const WIRE_COLORS=['','#147966','#c47a1c','#2f5fa0','#b03a5b','#6b4fa0','#203a3f'];
 // a named wire can join every wire with the same name (3.18, like Goto/From, for electrical nodes too); a bus has no single node voltage
-const WLINK_HINT='Όλα τα σύρματα με αυτό το όνομα και αυτή την επιλογή είναι ένας κόμβος, χωρίς καλώδιο ανάμεσα (μέσα σε υποκύκλωμα, μόνο στο ίδιο instance).';
+const WLINK_HINT='Σύρματα με το ίδιο όνομα είναι ένας κόμβος, χωρίς καλώδιο ανάμεσα: ηλεκτρικό με ηλεκτρικό, σήμα με σήμα (μέσα σε υποκύκλωμα, μόνο στο ίδιο instance). ⇄ = ενώνει σύρματα που δεν συνδέονται αλλιώς.';
 const wireWidth=w=>{try{return window.Bus?Bus.widths(editor.doc).wire(w):1;}catch(e){return 1;}};
 function openWireInspector(id,x,y){const w=editor.wire(id);if(!w)return;const ins=$('#inspector'),bw=wireWidth(w);
  ins.innerHTML=`<div class="ins-head"><div><small>${bw>1?'Δίαυλος '+bw:'Σύνδεση'}</small><b>${esc(w.name||'χωρίς όνομα')}</b></div><button class="x" data-close>✕</button></div><div class="ins-body">
-  <label class="frow"><span>Όνομα κόμβου</span><input data-wname value="${esc(w.name||'')}" placeholder="π.χ. v_o"></label>
-  <label class="frow" title="${esc(WLINK_HINT)}"><span>Ενώνει με το ίδιο όνομα</span><input type="checkbox" data-wlink ${w.link?'checked':''}></label>
+  <label class="frow" title="${esc(WLINK_HINT)}"><span>Όνομα κόμβου</span><input data-wname value="${esc(w.name||'')}" placeholder="π.χ. v_o"></label>
+  <p class="muted small">${esc(WLINK_HINT)}</p>
   <div class="frow"><span>Χρώμα</span><div class="swatches">${WIRE_COLORS.map(c=>`<button data-wc="${c}" class="${(w.color||'')===c?'on':''}" style="background:${c||'var(--wire)'}" title="${c||'προεπιλογή'}"></button>`).join('')}</div></div>
   <label class="frow"><span>Πάχος</span><select data-ww>${['',1.5,2.2,3,4].map(v=>`<option value="${v}" ${String(w.width||'')===String(v)?'selected':''}>${v||'προεπιλογή'}</option>`).join('')}</select></label>
   <div class="ins-probes">${bw>1?'':'<button class="chip" data-wprobe>⌁ Τάση κόμβου</button>'}<button class="chip" data-wroute>↯ Αυτόματη δρομολόγηση</button></div></div>`;
  placePopup(ins,x,y);
  ins.querySelector('[data-wname]').onchange=e=>{editor.setWireProps(id,{name:e.target.value.trim()});renderChannels();};
- ins.querySelector('[data-wlink]').onchange=e=>editor.setWireProps(id,{link:e.target.checked||undefined});
  ins.querySelectorAll('[data-wc]').forEach(b=>b.onclick=()=>{editor.setWireProps(id,{color:b.dataset.wc||undefined});openWireInspector(id,x,y);});
  ins.querySelector('[data-ww]').onchange=e=>editor.setWireProps(id,{width:e.target.value?+e.target.value:undefined});
  if(bw===1)ins.querySelector('[data-wprobe]').onclick=()=>addProbe('VN:'+w.a.c+':'+w.a.p,w.name?w.name:undefined);
@@ -593,7 +592,7 @@ function propsJunc(j){const n=editor.wiresAt(j.id).length;return `<div class="pr
 function propsWire(w){if(!w)return '';const bw=wireWidth(w);return `<div class="props-head"><div><small>${bw>1?'Δίαυλος '+bw:'Σύρμα'}</small><input data-wname value="${esc(w.name||'')}" placeholder="όνομα κόμβου, π.χ. v_o" aria-label="Όνομα κόμβου"></div><button class="x" data-pclose>✕</button></div>
  ${psec('w-look','Εμφάνιση',`<div class="prow"><span>Χρώμα</span><div class="swatches">${WIRE_COLORS.map(c=>`<button data-wc="${c}" class="${(w.color||'')===c?'on':''}" style="background:${c||'var(--wire)'}" title="${c||'προεπιλογή'}"></button>`).join('')}</div></div>
   <div class="prow"><span>Πάχος</span><span class="pin-in"><select data-ww>${['',1.5,2.2,3,4].map(v=>`<option value="${v}" ${String(w.width||'')===String(v)?'selected':''}>${v||'προεπιλογή'}</option>`).join('')}</select></span></div>`,{def:true})}
- <div class="prow" title="${esc(WLINK_HINT)}"><span>Ενώνει με το ίδιο όνομα</span><span class="pin-in"><input type="checkbox" data-wlink ${w.link?'checked':''}></span><small>${esc(WLINK_HINT)}</small></div>
+ <p class="muted small">${esc(WLINK_HINT)}</p>
  <div class="chips">${bw>1?'':`<button class="chip" data-probe="VN:${esc(w.a.c)}:${esc(w.a.p)}">⌁ Τάση κόμβου</button>`}<button class="chip" data-wroute>↯ Αυτόματη δρομολόγηση</button></div>
  <p class="muted small">${bw>1?`Δίαυλος με ${bw} ${P.pinKind(editor.comp(w.a.c)||{},w.a.p)==='el'?'αγωγούς':'σήματα'}: για να δεις ένα, χώρισέ τον με δίαυλο αγωγών ή Demux, ή βάλε στο scope τα στοιχεία που συνδέει.`:'Για ρεύμα στο σύρμα: άφησε πάνω του ένα probe ρεύματος (μπαίνει σε σειρά). Για τάση: ένα probe τάσης ή βολτόμετρο.'}</p>`;}
 function propsMulti(sel){return `<div class="props-head"><div><small>Επιλογή</small><b>${sel.c.length} στοιχεία · ${sel.w.length} σύρματα</b></div><button class="x" data-pclose>✕</button></div>
@@ -654,7 +653,6 @@ function bindProps(box,c){
  if(w){const id=w.id;box.querySelector('[data-wname]')?.addEventListener('change',e=>{editor.setWireProps(id,{name:e.target.value.trim()});renderChannels();});
   box.querySelectorAll('[data-wc]').forEach(b=>b.onclick=()=>{editor.setWireProps(id,{color:b.dataset.wc||undefined});renderProps();});
   box.querySelector('[data-ww]')?.addEventListener('change',e=>editor.setWireProps(id,{width:e.target.value?+e.target.value:undefined}));
-  box.querySelector('[data-wlink]')?.addEventListener('change',e=>editor.setWireProps(id,{link:e.target.checked||undefined}));
   box.querySelector('[data-wroute]')?.addEventListener('click',()=>{editor.remember();editor.route(editor.wire(id));editor.render();});}}
 // a parameter changed from the live panel: reload the netlist with the state carried over, without rebuilding the panels
 // ------------------------------------------------------------------ diagnostics console (3.13, ROADMAP §40)
@@ -956,13 +954,13 @@ function enterSub(name,inst){const d=defsOf()[name];if(!d){notice(`Δεν υπά
  closeInspector();closeMenu();
  if(atTop()){S.top=editor.export();S.topUndo={u:editor.undoStack.slice(),r:editor.redoStack.slice(),before:editor.snapshot(),view:{...editor.view},user:editor.userView};}else commitView();
  S.nav.push({name,inst});S.pfx=inst?inst+'/':null;
- editor.load({components:S.top.subcircuits[name].components||[],wires:S.top.subcircuits[name].wires||[]});
+ editor.load({components:S.top.subcircuits[name].components||[],wires:S.top.subcircuits[name].wires||[],version:S.top.version});
  if(S.sim)editor.setDiag(viewDiag(S.sim.net.diag));renderCrumbs();renderPalette();refreshControls();renderProps();editor.svg.focus({preventScroll:true});}
 function leaveSub(level=0){if(atTop())return;commitView();while(S.nav.length>level)S.nav.pop();SubC.sync(S.top);
  if(atTop()){const top=S.top,u=S.topUndo;S.top=null;S.pfx='';editor.load(top,{keepView:true});
   if(u){editor.undoStack=u.u;editor.redoStack=u.r;if(editor.snapshot()!==u.before){editor.undoStack.push(u.before);editor.redoStack=[];}editor.view=u.view;editor.userView=u.user;editor.applyView();}
   S.topUndo=null;}
- else{const cur=S.nav[S.nav.length-1];S.pfx=cur.inst?cur.inst+'/':null;const d=S.top.subcircuits[cur.name];editor.load({components:d.components||[],wires:d.wires||[]});}
+ else{const cur=S.nav[S.nav.length-1];S.pfx=cur.inst?cur.inst+'/':null;const d=S.top.subcircuits[cur.name];editor.load({components:d.components||[],wires:d.wires||[],version:S.top.version});}
  renderCrumbs();renderPalette();buildSim(false);renderChannels();if(atTop()&&S.theory)runTheory();}
 function renderCrumbs(){let b=$('#crumbs');if(!b){b=document.createElement('nav');b.id='crumbs';b.className='crumbs';b.setAttribute('aria-label','Επίπεδα υποκυκλωμάτων');$('#canvas').appendChild(b);}
  if(atTop()){b.hidden=true;b.innerHTML='';return;}b.hidden=false;const defs=defsOf();
@@ -1071,8 +1069,12 @@ function loadTutorial(id,options={},keepView=false){
  const t=Tutorials.get(id);if(!t)return;const opts={};for(const o of t.options)opts[o.k]=options[o.k]??o.def;S.tut={id,options:opts};
  const pr=t.build(opts);if(pr.subcircuits)SubC.sync(pr);S.tutMeta=pr.meta||null;S.tutRef=circuitSig(pr);S.switching=true;try{applyProject(pr,keepView);}finally{S.switching=false;}renderTutorial();runTheory();runMath();
 }
+// an older file (no version or < 3) opens the same: wire names that would now join different nets get ·2, ·3 (3.18)
+function migrateFile(pr){if(!window.Bus||Bus.namesJoin(pr))return pr;const m=Bus.migrateNames(pr);
+ if(m.renamed.length)setTimeout(()=>notice('Αρχείο παλιότερης έκδοσης: από την 3.18 τα σύρματα με το ίδιο όνομα είναι ένας κόμβος. Για να μείνει ίδιο το κύκλωμα, άλλαξαν ονόματα: '+m.renamed.map(r=>esc((r.where?r.where+': ':'')+r.to.join(', '))).join(' · ')+'.','info'),0);
+ return m.project;}
 function applyProject(pr,keepView){
- pause();if(S.nav.length){S.nav=[];S.top=null;S.pfx='';}if(pr.subcircuits)SubC.sync(pr);editor.load(pr,{keepView});renderCrumbs();renderPalette();if(S.batch)clearBatch();
+ pr=migrateFile(pr);pause();if(S.nav.length){S.nav=[];S.top=null;S.pfx='';}if(pr.subcircuits)SubC.sync(pr);editor.load(pr,{keepView});renderCrumbs();renderPalette();if(S.batch)clearBatch();
  const sim=pr.sim||{};if(sim.hDiv){const ss=$('#sim-step'),v=String(sim.hDiv);if(![...ss.options].some(o=>o.value===v))ss.add(new Option('T/'+v,v));ss.value=v;}if(sim.method){$('#method').value=sim.method;$('#method-note').textContent={TR:'2ης τάξης, χωρίς απόσβεση',BDF2:'2ης τάξης, απόσβεση στις υψηλές συχνότητες',BE:'1ης τάξης, ισχυρή απόσβεση'}[sim.method]||'';}setSpeed(sim.speed??100);S.stopT=sim.stopT||0;$('#stop').value=S.stopT?String(+(S.stopT*1e3).toPrecision(6)):'';
  buildSim(true);
  if(pr.scope?.cfg){scope.cfg=pr.scope.cfg;scope.cfg.frozen=null;}

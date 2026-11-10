@@ -66,9 +66,18 @@ class Buses(unittest.TestCase):
         self.assertEqual(w['w'], {'gn': 3, 'bs': 2, 'm2': 4, 'd6': 1, 'errors': []})
         self.assertFalse(w['warnings'])
 
-    def test_named_wires_join(self):
+    def test_wire_names_join(self):
+        # version 3: one name = one node (electrical with electrical, signal with signal); an older file: only a label
         n = self.R['named']
-        self.assertEqual((n['vm'], n['i'], n['apart'], n['signal']), (10, 1, 0, 4))
+        self.assertEqual((n['vm'], n['i'], n['apart'], n['signal'], n['elec']), (10, 1, 0, 4, 3))
+        self.assertFalse(n['warnings'])
+        # an older file opens the same: «v» on two nodes becomes «v», «v·2»; joined as they are, the two sources would short
+        m = n['migrate']
+        self.assertEqual(m['renamed'], [{'where': None, 'name': 'v', 'to': ['v', 'v·2']}])
+        self.assertEqual((m['version'], sorted(m['names'])), (3, ['v', 'v·2']))
+        self.assertEqual(m['now'], m['old'])
+        self.assertIsNotNone(m['joined'])
+        self.assertEqual(m['again'], 0)
 
     def test_widths_that_do_not_fit(self):
         e = self.R['errors']

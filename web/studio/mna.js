@@ -100,8 +100,10 @@
   const kindOf=new Map();
   for(const c of comps)for(const p of Object.keys(P.pinsOf(c))){const k=c.id+':'+p;parent.set(k,k);kindOf.set(k,c.type==='JUNC'?'j':P.pinKind(c,p));}
   for(const w of project.wires||[]){const a=w.a.c+':'+w.a.p,b=w.b.c+':'+w.b.p;if(parent.has(a)&&parent.has(b))union(a,b);}
-  // named wires that join (3.18): every wire with link and the same name is one net, electrical or signal
-  {const named=new Map();for(const w of project.wires||[]){if(!w.link||!w.name)continue;const a=w.a.c+':'+w.a.p;if(!parent.has(a))continue;const n=String(w.name);if(named.has(n))union(named.get(n),a);else named.set(n,a);}}
+  // wire names (3.18, project version ≥ 3): wires with the same name are one net, electrical with electrical, signal with
+  // signal (Bus.namesJoin). In an older file a name is only a label.
+  if((+project.version||0)>=3){const rk=new Map();for(const k of parent.keys()){const r=find(k),v=kindOf.get(k),o=rk.get(r);if(v==='in'||v==='out')rk.set(r,'sig');else if(v==='el'&&o!=='sig')rk.set(r,'el');else if(!o)rk.set(r,'j');}
+   const named=new Map();for(const w of project.wires||[]){if(!w.name)continue;const a=w.a.c+':'+w.a.p;if(!parent.has(a))continue;const n=String(w.name)+'|'+(rk.get(find(a))||'j');if(named.has(n))union(named.get(n),a);else named.set(n,a);}}
   const warnings=[...subWarn];
   // connections without a wire (3.0): an input that names its source in the parameters (in_<pin> = "block:output"),
   // and Goto / From tags with the same name. Both join nets exactly like a wire.

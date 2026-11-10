@@ -1673,7 +1673,6 @@
      "b",
      "pts",
      "name",
-     "link",
      "color",
      "width"
     ],
@@ -2668,5 +2667,13 @@
    }
   }
  },
- "removed": []
+ "removed": [
+  {
+   "group": "project",
+   "key": "file.wire",
+   "what": "χωρίς link",
+   "version": "3.18",
+   "reason": "3.18: τα σύρματα με το ίδιο όνομα ενώνουν πάντα (version 3), το πεδίο link δεν χρειάζεται"
+  }
+ ]
 }

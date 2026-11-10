@@ -19,8 +19,10 @@
 // Everything else has width 1; a junction, a tag (Goto / From) and a port of width 1 take the width of what they join.
 // Two widths on one net are an error with the pins that disagree.
 //
-// Named wires (w.link, 3.18): every wire with the same name joins one net, like Goto / From and for electrical nodes
-// too. buildNetlist joins them on scalar nets; here they join bus nets element by element.
+// Wire names (3.18, project version ≥ 3): wires with the same name are one net, electrical with electrical and signal
+// with signal, like Goto / From and for electrical nodes too (inside a subcircuit, within the instance). buildNetlist
+// joins them on scalar nets; here they join bus nets element by element. In an older file (no version or < 3) a name
+// is only a label: it joins nothing, and migrateNames() renames what would join different nets, so it opens the same.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
  class BusError extends Error{}
@@ -64,9 +66,35 @@
    if(par.has(a)&&par.has(b)&&kind(a)==='in'&&kind(b)==='out'){union(a,b);links.push({a,b});}}
   const nm=c=>String(c.params?.name||'').trim(),go=new Map();for(const c of comps)if(c.type==='TAGO'&&!go.has(nm(c)))go.set(nm(c),c);
   for(const c of comps)if(c.type==='TAGI'){const g=go.get(nm(c));if(g){union(g.id+':u',c.id+':y');links.push({a:g.id+':u',b:c.id+':y'});}}
-  const named=new Map();for(const w of project.wires||[]){if(!w.link||!w.name)continue;const a=w.a.c+':'+w.a.p;if(!par.has(a))continue;const n=String(w.name);
-   if(named.has(n)){union(named.get(n),a);links.push({a:named.get(n),b:a});}else named.set(n,a);}
+  if(namesJoin(project)){const kindOfNet=netKind(par,find,kind),named=new Map();
+   for(const w of project.wires||[]){if(!w.name)continue;const a=w.a.c+':'+w.a.p;if(!par.has(a))continue;const n=String(w.name)+'|'+kindOfNet(a);
+    if(named.has(n)){union(named.get(n),a);links.push({a:named.get(n),b:a});}else named.set(n,a);}}
   return {comps,byId,par,find,links,cidOf,pinOf};}
+ // names join from version 3 of the project file (3.18); the kind of a net before the names: 'sig' (a signal pin), 'el', 'j'
+ function namesJoin(project){return (+project?.version||0)>=3;}
+ function netKind(par,find,kind){const k=new Map();for(const key of par.keys()){const r=find(key),v=kind(key),o=k.get(r);
+   if(v==='in'||v==='out')k.set(r,'sig');else if(v==='el'&&o!=='sig')k.set(r,'el');else if(!o)k.set(r,'j');}
+  return key=>k.get(find(key))||'j';}
+
+ // an older file (no version or < 3) opens the same in version 3: a name on wires of different nets of the same kind (a
+ // label then, a join now) becomes name, name·2, … per net. Definitions of subcircuits each on their own (names are local
+ // to an instance). Returns {project (version 3), renamed: [{where, name, to: [...]}]}.
+ function migrateNames(project){
+  const pr=JSON.parse(JSON.stringify(project||{})),renamed=[];
+  if(namesJoin(pr))return {project:pr,renamed};
+  const fix=(doc,where)=>{const comps=(doc.components||[]).filter(c=>P.PARTS[c.type]),byId=new Map(comps.map(c=>[c.id,c]));
+   const par=new Map(),find=k=>{let r=k;while(par.get(r)!==r)r=par.get(r);while(par.get(k)!==r){const n=par.get(k);par.set(k,r);k=n;}return r;};
+   for(const c of comps)for(const p of Object.keys(P.pinsOf(c)))par.set(c.id+':'+p,c.id+':'+p);
+   for(const w of doc.wires||[]){const a=w.a.c+':'+w.a.p,b=w.b.c+':'+w.b.p;if(par.has(a)&&par.has(b)){const ra=find(a),rb=find(b);if(ra!==rb)par.set(ra,rb);}}
+   const kind=k=>{const i=k.lastIndexOf(':'),c=byId.get(k.slice(0,i));return !c?null:c.type==='JUNC'?'j':P.pinKind(c,k.slice(i+1));},nk=netKind(par,find,kind);
+   const by=new Map(),taken=new Set((doc.wires||[]).filter(w=>w.name).map(w=>String(w.name)));
+   for(const w of doc.wires||[]){if(!w.name)continue;const a=w.a.c+':'+w.a.p;if(!par.has(a))continue;const key=String(w.name)+'|'+nk(a),r=find(a);
+    if(!by.has(key))by.set(key,new Map());const m=by.get(key);if(!m.has(r))m.set(r,[]);m.get(r).push(w);}
+   for(const [key,nets] of by){if(nets.size<2)continue;const name=key.slice(0,key.lastIndexOf('|')),to=[name];let i=1;
+    for(const ws of [...nets.values()].slice(1)){let n;do n=name+'·'+(++i);while(taken.has(n));taken.add(n);to.push(n);for(const w of ws)w.name=n;}
+    renamed.push({where,name,to});}};
+  fix(pr,null);for(const [n,d] of Object.entries(pr.subcircuits||{}))fix(d,n);
+  pr.version=3;return {project:pr,renamed};}
 
  // the width of every net: fixed widths first, then what follows from Mux, Demux and the element-wise blocks; a net that
  // nothing decides (only junctions, tags or free pins) is one signal
@@ -164,6 +192,6 @@
    rk.forEach((x,i)=>{const at=x.lastIndexOf(':');wires.push({id:jid+'w'+(i+1),a:{c:jid,p:'j'},b:{c:x.slice(0,at),p:x.slice(at+1)},pts:[]});});}
   return {project:{...project,components:out,wires},warnings:[],vec};}
 
- const api={WIRING,ELEMENTWISE,COND,needs,members,widths,expand,constWidth,selIdx,BusError};
+ const api={WIRING,ELEMENTWISE,COND,needs,members,widths,expand,constWidth,selIdx,namesJoin,migrateNames,BusError};
  root.Bus=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
