@@ -834,6 +834,49 @@
     scope:{panes:[[['V:C1','v_o']],[['I:X1/L1','i σκέλους 1'],['I:X2/L1','i σκέλους 2']],[['Y:AM1','i_o (άθροισμα)']]],window:{unit:'T',n:4}},
     meta:{N,shift,D,Vin,fs,L,C:Cc,R,Vo,Il}});
    return pr;}});
+ // ------------------------------------------------------------------ 3.18: buses and vectors (ROADMAP §3)
+ // A grid-side converter (average model) behind a three-phase R–L line, with a current loop in dq. Every three-phase
+ // connection is one bus wire; the PI works on the dq vector: one sum, one gain, one integrator for both axes.
+ // Plant in dq (θ = ωt − 90°, d on the grid voltage): L·di_d/dt = v_d − e_d − R·i_d + ωL·i_q, L·di_q/dt = v_q − e_q − R·i_q − ωL·i_d.
+ // v* = PI(e) + e_dq + ωL·(−i_q, i_d) with K_p = ω_c·L, K_i = ω_c·R: i_dq/i*_dq = ω_c/(s + ω_c) on each axis.
+ T.push({id:'bus_dq',group:'Δίαυλοι (3.18)',title:'Βρόχος ρεύματος dq με διαύλους: τριφασικός μετατροπέας προς δίκτυο',theory:'formula',topology:'bus_dq',
+  options:[{k:'wc',label:'Εύρος ζώνης f_c',options:[['200','200 Hz'],['100','100 Hz'],['400','400 Hz']],def:'200'},
+   {k:'dec',label:'Αποσύζευξη ωL',options:[['on','Με αποσύζευξη'],['off','Χωρίς']],def:'on'},
+   {k:'iq',label:'Βήμα i_q* στα 25 ms',options:[['5','5 A'],['-5','−5 A'],['0','0 A']],def:'5'}],
+  desc:'Ένας τριφασικός μετατροπέας (μέσο μοντέλο: τρεις πηγές ελεγχόμενες από σήμα) δίνει ρεύμα στο δίκτυο μέσα από γραμμή R–L. Κάθε τριφασική σύνδεση είναι ένα σύρμα-δίαυλος: η πηγή του δικτύου, οι θύρες «abc» των δύο υποκυκλωμάτων, τα ρεύματα i και η τάση v*. Ο ελεγκτής δουλεύει πάνω στο διάνυσμα dq: ένα άθροισμα, ένα κέρδος K_p, ένα K_i και ένας ολοκληρωτής για τους δύο άξονες μαζί (το καθένα γίνεται δύο μπλοκ, ένα ανά στοιχείο). Η επιλογή «2, 1» αντιστρέφει το dq σε qd για την αποσύζευξη ωL.',
+  tasks:['Δες τα παχιά σύρματα: το νούμερο πάνω τους είναι το πλάτος του διαύλου (3 για abc, 2 για dq).','Στο scope, το i_d ακολουθεί το βήμα στα 10 ms με σταθερά χρόνου 1/ω_c, και το i_q στα 25 ms χωρίς να πειράξει το i_d. Δοκίμασε «Χωρίς αποσύζευξη»: τώρα το ένα ρεύμα σπρώχνει το άλλο.','Διπλό κλικ στη «γραμμή»: μέσα, ένας δίαυλος αγωγών χωρίζει τη θύρα abc σε τρεις φάσεις, και ένα Mux μαζεύει τα τρία ρεύματα στον δίαυλο i.','Βάλε στο scope το «v_a» του αντιστροφέα: το πλάτος του είναι |e + (R + jωL)·i| από τη θεωρία.'],
+  build(o){const E=325,R=.5,L=5e-3,f=50,w=2*Math.PI*f,fc=+o.wc||200,wc=2*Math.PI*fc,Kp=wc*L,Ki=wc*R,id=10,iq=+o.iq||0,dec=o.dec!=='off',t1=.01,t2=.025,r=x=>+x.toPrecision(10);
+   const ws=l=>l.map((x,i)=>({id:'w'+(i+1),a:pin(x[0]),b:pin(x[1]),pts:x[2]||[]}));
+   const inv={title:'Αντιστροφέας (μέση τιμή)',desc:'Τρεις πηγές ελεγχόμενες από τον δίαυλο v*, με κοινό ουδέτερο στη γη',version:'1',params:[],
+    components:[C('Pv','SIN',-140,80,{name:'v',side:'auto',width:'3'},{label:'v*'}),C('DX','DEMUX',-80,80,{n:3}),
+     C('Va','VDC',20,0,{ctl:'sig',V:0},{label:'v_a'}),C('Vb','VDC',20,120,{ctl:'sig',V:0},{label:'v_b'}),C('Vc','VDC',20,240,{ctl:'sig',V:0},{label:'v_c'}),
+     C('B1','EBUS',140,80,{n:3}),C('Pabc','PORT',220,80,{name:'abc',side:'auto',width:'3'},{label:'abc'}),C('G1','GND',20,320,{},{label:'0 V'})],
+    wires:ws([['Pv:y','DX:u'],['DX:y1','Va:u'],['DX:y2','Vb:u'],['DX:y3','Vc:u'],['Va:p','B1:a'],['Vb:p','B1:b'],['Vc:p','B1:c'],['B1:bus','Pabc:p'],['Va:n','G1:g'],['Vb:n','G1:g'],['Vc:n','G1:g']])};
+   const line={title:'Γραμμή R–L τριφασική',desc:'R και L ανά φάση, αμπερόμετρα και δίαυλος ρευμάτων i (από τον αντιστροφέα προς το δίκτυο)',version:'1',
+    params:[{k:'R',label:'R ανά φάση',unit:'Ω',type:'num',def:R,bind:[['Ra','R'],['Rb','R'],['Rc','R']]},{k:'L',label:'L ανά φάση',unit:'H',type:'num',def:L,bind:[['La','L'],['Lb','L'],['Lc','L']]}],
+    components:[C('Pa','PORT',-190,40,{name:'a',side:'auto',width:'3'},{rot:2,label:'a'}),C('BA','EBUS',-120,40,{n:3},{flip:true}),
+     C('Aa','AM',-40,0,{},{label:'A_a'}),C('Ab','AM',-40,80,{},{label:'A_b'}),C('Ac','AM',-40,160,{},{label:'A_c'}),
+     C('Ra','R',60,0,{R}),C('Rb','R',60,80,{R}),C('Rc','R',60,160,{R}),C('La','L',150,0,{L}),C('Lb','L',150,80,{L}),C('Lc','L',150,160,{L}),
+     C('BB','EBUS',240,40,{n:3}),C('Pb','PORT',300,40,{name:'b',side:'auto',width:'3'},{label:'b'}),
+     C('MX','MUX',60,-100,{n:3}),C('Pi','SOUT',140,-100,{name:'i',side:'b',width:'3'},{label:'i'})],
+    wires:ws([['Pa:p','BA:bus'],['BA:a','Aa:a'],['BA:b','Ab:a'],['BA:c','Ac:a'],['Aa:b','Ra:a'],['Ab:b','Rb:a'],['Ac:b','Rc:a'],['Ra:b','La:a'],['Rb:b','Lb:a'],['Rc:b','Lc:a'],
+     ['La:b','BB:a'],['Lb:b','BB:b'],['Lc:b','BB:c'],['BB:bus','Pb:p'],['Aa:y','MX:u1'],['Ab:y','MX:u2'],['Ac:y','MX:u3'],['MX:y','Pi:u']])};
+   const comps=[C('TV','TAGI',60,160,{name:'v*'}),C('XI','SUB',200,160,{def:'inv'},{label:'αντιστροφέας'}),C('XL','SUB',440,160,{def:'line'},{label:'γραμμή'}),
+    C('E','VAC3',680,160,{Vpk:E,f,phase:0,conn:'bus'},{flip:true,label:'δίκτυο'}),gnd(680,240),
+    C('CL','CLARKE',560,320,{conn:'bus'},{label:'abc → αβ'}),C('TT1','TAGI',560,370,{name:'θ'}),C('PK','PARK',660,340,{conn:'bus'},{label:'αβ → dq'}),C('TO1','TAGO',760,340,{name:'i_dq'}),
+    C('TH','RAMP',60,620,{f,shape:'saw',lo:0,hi:r(2*Math.PI),phase:90},{label:'θ = ωt − 90°'}),C('TO2','TAGO',140,620,{name:'θ'}),
+    C('IR','CONST',60,440,{v:`0:0, ${t1}:${id}; 0:0, ${t2}:${iq}`},{label:'i*_dq'}),C('TI1','TAGI',60,480,{name:'i_dq'}),C('SE','SUM',160,450,{signs:'+-'},{label:'e'}),
+    C('KP','GAIN',260,420,{K:r(Kp)},{label:'K_p'}),C('KI','GAIN',260,480,{K:r(Ki)},{label:'K_i'}),C('II','INT',340,480,{},{label:'∫'}),C('SP','SUM',420,440,{signs:'++'},{label:'PI'}),
+    C('TI2','TAGI',260,560,{name:'i_dq'}),C('SW','BSEL',340,560,{idx:'2, 1'},{label:'(i_q, i_d)'}),C('KD','GAIN',420,560,{K:dec?`${r(-w*L)}; ${r(w*L)}`:'0'},{label:'ωL'}),
+    C('EF','CONST',440,640,{v:`${E}; 0`},{label:'e_dq'}),C('SV','SUM',520,470,{signs:'+++'},{label:'v*_dq'}),
+    C('IPK','IPARK',620,480,{conn:'bus'},{label:'dq → αβ'}),C('TT2','TAGI',560,520,{name:'θ'}),C('ICL','ICLARKE',720,480,{conn:'bus'},{label:'αβ → abc'}),C('TO3','TAGO',820,480,{name:'v*'})];
+   const wires=[['TV:y','XI:v'],['XI:abc','XL:a'],['XL:b','E:abc'],['E:n','G1:g'],['XL:i','CL:abc'],['CL:ab','PK:ab'],['TT1:y','PK:th'],['PK:dq','TO1:u'],['TH:y','TO2:u'],
+    ['IR:y','SE:a'],['TI1:y','SE:b'],['SE:y','KP:u'],['SE:y','KI:u'],['KI:y','II:u'],['KP:y','SP:a'],['II:y','SP:b'],['SP:y','SV:a'],['TI2:y','SW:u'],['SW:y','KD:u'],['KD:y','SV:b'],['EF:y','SV:c'],
+    ['SV:y','IPK:dq'],['TT2:y','IPK:th'],['IPK:ab','ICL:ab'],['ICL:abc','TO3:u']];
+   const pr=project(comps,wires,{subcircuits:{inv,line},sim:{hDiv:4000,speed:2,stopT:.04},
+    scope:{panes:[[['Y:PK','i_d'],['Y:PK:q','i_q']],[['I:XL/La','i_a'],['I:XL/Lb','i_b'],['I:XL/Lc','i_c']],[['V:XI/Va','v_a (αντιστροφέας)'],['V:E','e_a (δίκτυο)']]],window:{unit:'T',n:2}},
+    meta:{E,R,L,f,fc,wc,Kp,Ki,id,iq,dec,t1,t2,dur:.04}});
+   return pr;}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
  root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};

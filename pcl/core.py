@@ -450,10 +450,13 @@ class Project:
 
     def set(self, key, value):
         """'<id>.<parameter>' (e.g. 'L1.L', 'PWM1.fs', 'V1.sched'), or 'solve.<k>' / 'sim.<k>' for the solver
-        (solve.step = 'var', solve.rtol, solve.hmax; sim.hDiv, sim.method). Values: numbers, '47u', or programs 't:value'."""
+        (solve.step = 'var', solve.rtol, solve.hmax; sim.hDiv, sim.method). Values: numbers, '47u', or programs 't:value'.
+        A list gives one value per element of a block on a bus (3.18): p.set('KD.K', [-1.57, 1.57]) = 'KD.K' = '-1.57; 1.57'."""
         head, dot, prm = key.partition('.')
         if not dot or not prm:
             raise PclError(f'«{key}»: γράψε <id>.<παράμετρος>, π.χ. L1.L')
+        if isinstance(value, (list, tuple)):
+            value = '; '.join(repr(float(x)) if isinstance(x, (int, float)) else str(x) for x in value)
         v = parse_value(value)
         if head in ('solve', 'sim'):
             self.data.setdefault(head, {})[prm] = v

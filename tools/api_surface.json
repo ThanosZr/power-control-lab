@@ -1,0 +1,2672 @@
+{
+ "version": "3.18",
+ "stable_from": "4.0",
+ "groups": {
+  "pcl": {
+   "pcl.BifurcationResult": {
+    "params": [
+     "values",
+     "y",
+     "period",
+     "meta"
+    ],
+    "since": "3.18"
+   },
+   "pcl.BifurcationResult.changes": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.BifurcationResult.frame": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.BifurcationResult.plot": {
+    "params": [
+     "title"
+    ],
+    "since": "3.18"
+   },
+   "pcl.BifurcationResult.rows": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.BifurcationResult.save": {
+    "params": [
+     "path",
+     "**kw"
+    ],
+    "since": "3.18"
+   },
+   "pcl.BifurcationResult.to_csv": {
+    "params": [
+     "path",
+     "sep",
+     "decimal",
+     "meta"
+    ],
+    "since": "3.18"
+   },
+   "pcl.BifurcationResult.to_hdf5": {
+    "params": [
+     "path"
+    ],
+    "since": "3.18"
+   },
+   "pcl.BifurcationResult.to_json": {
+    "params": [
+     "path"
+    ],
+    "since": "3.18"
+   },
+   "pcl.BifurcationResult.to_mat": {
+    "params": [
+     "path"
+    ],
+    "since": "3.18"
+   },
+   "pcl.BifurcationResult.to_parquet": {
+    "params": [
+     "path",
+     "compression"
+    ],
+    "since": "3.18"
+   },
+   "pcl.PclError": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.Plot": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.Project": {
+    "params": [
+     "data",
+     "name"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Project.bifurcation": {
+    "params": [
+     "param",
+     "values",
+     "start",
+     "stop",
+     "n",
+     "channel",
+     "stat",
+     "transient",
+     "record",
+     "hdiv",
+     "method",
+     "workers",
+     "progress"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Project.channels": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.Project.comp": {
+    "params": [
+     "cid"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Project.copy": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.Project.get": {
+    "params": [
+     "key"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Project.hash": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.Project.params": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.Project.run": {
+    "params": [
+     "t_end",
+     "solver",
+     "channels",
+     "hdiv",
+     "method",
+     "step",
+     "rtol",
+     "hmax",
+     "t_from",
+     "max_points",
+     "measure",
+     "timeout",
+     "scipy_method",
+     "waveforms",
+     "save_state",
+     "resume"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Project.save": {
+    "params": [
+     "path"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Project.set": {
+    "params": [
+     "key",
+     "value"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Project.stream": {
+    "params": [
+     "t_end",
+     "chunk",
+     "channels",
+     "hdiv",
+     "method",
+     "step",
+     "rtol",
+     "hmax",
+     "t_from",
+     "max_points",
+     "measure",
+     "state",
+     "resume",
+     "to",
+     "timeout",
+     "waveforms",
+     "set"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Project.sweep": {
+    "params": [
+     "grid",
+     "points",
+     "t_end",
+     "measure",
+     "workers",
+     "solver",
+     "mode",
+     "progress",
+     "to",
+     "resume",
+     "**run_kw"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Result": {
+    "params": [
+     "t",
+     "keys",
+     "ch",
+     "meta",
+     "project",
+     "measured",
+     "diag"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Result.as_dict": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.Result.frame": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.Result.measure": {
+    "params": [
+     "key",
+     "stat",
+     "periods",
+     "at",
+     "f1"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Result.save": {
+    "params": [
+     "path",
+     "**kw"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Result.to_csv": {
+    "params": [
+     "path",
+     "sep",
+     "decimal",
+     "meta"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Result.to_hdf5": {
+    "params": [
+     "path"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Result.to_json": {
+    "params": [
+     "path"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Result.to_mat": {
+    "params": [
+     "path"
+    ],
+    "since": "3.18"
+   },
+   "pcl.Result.to_parquet": {
+    "params": [
+     "path",
+     "compression"
+    ],
+    "since": "3.18"
+   },
+   "pcl.SweepResult": {
+    "params": [
+     "rows",
+     "params",
+     "names",
+     "meta"
+    ],
+    "since": "3.18"
+   },
+   "pcl.SweepResult.column": {
+    "params": [
+     "name"
+    ],
+    "since": "3.18"
+   },
+   "pcl.SweepResult.frame": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.SweepResult.save": {
+    "params": [
+     "path",
+     "**kw"
+    ],
+    "since": "3.18"
+   },
+   "pcl.SweepResult.to_csv": {
+    "params": [
+     "path",
+     "sep",
+     "decimal",
+     "meta"
+    ],
+    "since": "3.18"
+   },
+   "pcl.SweepResult.to_hdf5": {
+    "params": [
+     "path"
+    ],
+    "since": "3.18"
+   },
+   "pcl.SweepResult.to_json": {
+    "params": [
+     "path"
+    ],
+    "since": "3.18"
+   },
+   "pcl.SweepResult.to_mat": {
+    "params": [
+     "path"
+    ],
+    "since": "3.18"
+   },
+   "pcl.SweepResult.to_parquet": {
+    "params": [
+     "path",
+     "compression"
+    ],
+    "since": "3.18"
+   },
+   "pcl.bifurcation": {
+    "params": [
+     "param",
+     "values",
+     "**kw"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.InverseTrainer": {
+    "params": [
+     "project",
+     "loops",
+     "actuator",
+     "loop",
+     "clock",
+     "t_excite",
+     "hold",
+     "dither",
+     "seed",
+     "hidden_emu",
+     "hidden_ctrl",
+     "lr_emu",
+     "lr_ctrl",
+     "epochs_emu",
+     "epochs_ctrl",
+     "alpha",
+     "max_step",
+     "lr_emu_online",
+     "lr_ctrl_online",
+     "run"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.InverseTrainer.controller": {
+    "params": [
+     "epochs"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.InverseTrainer.ctrl_spec": {
+    "params": [
+     "learn"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.InverseTrainer.emulator": {
+    "params": [
+     "epochs"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.InverseTrainer.excite": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.control.InverseTrainer.nets": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.control.InverseTrainer.online": {
+    "params": [
+     "learn"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.InverseTrainer.run_all": {
+    "params": [
+     "progress"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.InverseTrainer.status": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.control.InverseTrainer.to_dict": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.control.RLTrainer": {
+    "params": [
+     "project",
+     "loops",
+     "actuator",
+     "loop",
+     "clock",
+     "t_end",
+     "base",
+     "hidden",
+     "sigma",
+     "lr",
+     "population",
+     "seed",
+     "w_overshoot",
+     "w_ise",
+     "nnmax",
+     "variants",
+     "run",
+     "workers"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.RLTrainer.ctrl_spec": {
+    "params": [
+     "flat"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.RLTrainer.iterate": {
+    "params": [
+     "n",
+     "progress"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.RLTrainer.project": {
+    "params": [
+     "flat"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.RLTrainer.to_dict": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.control.compare": {
+    "params": [
+     "project",
+     "loops",
+     "actuator",
+     "variants",
+     "t_end",
+     "clock",
+     "run",
+     "workers",
+     "loop"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.compose": {
+    "params": [
+     "project",
+     "loops",
+     "actuator",
+     "clock",
+     "prefix",
+     "replace"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.inv_nn_code": {
+    "params": [
+     "nets"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.metrics": {
+    "params": [
+     "t",
+     "r",
+     "y",
+     "t_from"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.rl_code": {
+    "params": [
+     "theta"
+    ],
+    "since": "3.18"
+   },
+   "pcl.control.rl_theta0": {
+    "params": [
+     "n_state",
+     "hidden",
+     "seed",
+     "scale"
+    ],
+    "since": "3.18"
+   },
+   "pcl.current": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.formats.write_hdf5": {
+    "params": [
+     "path",
+     "columns",
+     "meta",
+     "matrices"
+    ],
+    "since": "3.18"
+   },
+   "pcl.formats.write_parquet": {
+    "params": [
+     "path",
+     "columns",
+     "meta",
+     "compression",
+     "created_by"
+    ],
+    "since": "3.18"
+   },
+   "pcl.get": {
+    "params": [
+     "key"
+    ],
+    "since": "3.18"
+   },
+   "pcl.impulse.check_voltage": {
+    "params": [
+     "alpha",
+     "beta",
+     "K",
+     "Vp",
+     "profile",
+     "X",
+     "Y",
+     "method",
+     "Vpeak"
+    ],
+    "since": "3.18"
+   },
+   "pcl.impulse.dexp": {
+    "params": [
+     "t",
+     "alpha",
+     "beta"
+    ],
+    "since": "3.18"
+   },
+   "pcl.impulse.fit_heidler": {
+    "params": [
+     "T1",
+     "T2",
+     "Im",
+     "n",
+     "H",
+     "H_value"
+    ],
+    "since": "3.18"
+   },
+   "pcl.impulse.fit_profile": {
+    "params": [
+     "code",
+     "Vp"
+    ],
+    "since": "3.18"
+   },
+   "pcl.impulse.fit_voltage": {
+    "params": [
+     "X",
+     "Y",
+     "Vp",
+     "method",
+     "profile"
+    ],
+    "since": "3.18"
+   },
+   "pcl.impulse.heidler": {
+    "params": [
+     "t",
+     "tau1",
+     "tau2",
+     "n"
+    ],
+    "since": "3.18"
+   },
+   "pcl.impulse.lightning_times": {
+    "params": [
+     "m"
+    ],
+    "since": "3.18"
+   },
+   "pcl.impulse.read_heidler_csv": {
+    "params": [
+     "path_or_text"
+    ],
+    "since": "3.18"
+   },
+   "pcl.impulse.read_voltage_csv": {
+    "params": [
+     "path_or_text"
+    ],
+    "since": "3.18"
+   },
+   "pcl.impulse.times": {
+    "params": [
+     "f",
+     "t_lo",
+     "t_hi"
+    ],
+    "since": "3.18"
+   },
+   "pcl.impulse.voltage_measure": {
+    "params": [
+     "alpha",
+     "beta"
+    ],
+    "since": "3.18"
+   },
+   "pcl.impulse.voltage_times": {
+    "params": [
+     "m"
+    ],
+    "since": "3.18"
+   },
+   "pcl.job": {
+    "params": [
+     "spec",
+     "allow_paths"
+    ],
+    "since": "3.18"
+   },
+   "pcl.link.App": {
+    "params": [
+     "url",
+     "token",
+     "timeout",
+     "client"
+    ],
+    "since": "3.18"
+   },
+   "pcl.link.App.call": {
+    "params": [
+     "method",
+     "timeout",
+     "**args"
+    ],
+    "since": "3.18"
+   },
+   "pcl.link.App.channels": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.link.App.get": {
+    "params": [
+     "key"
+    ],
+    "since": "3.18"
+   },
+   "pcl.link.App.info": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.link.App.load": {
+    "params": [
+     "project"
+    ],
+    "since": "3.18"
+   },
+   "pcl.link.App.notify": {
+    "params": [
+     "msg",
+     "sev",
+     "fix"
+    ],
+    "since": "3.18"
+   },
+   "pcl.link.App.params": {
+    "params": [
+     "cid"
+    ],
+    "since": "3.18"
+   },
+   "pcl.link.App.project": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.link.App.python": {
+    "params": [
+     "code",
+     "**inputs"
+    ],
+    "since": "3.18"
+   },
+   "pcl.link.App.run": {
+    "params": [
+     "t_end",
+     "channels",
+     "measure",
+     "**kw"
+    ],
+    "since": "3.18"
+   },
+   "pcl.link.App.scope": {
+    "params": [
+     "keys"
+    ],
+    "since": "3.18"
+   },
+   "pcl.link.App.selection": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.link.App.set": {
+    "params": [
+     "key",
+     "value",
+     "source"
+    ],
+    "since": "3.18"
+   },
+   "pcl.link.App.set_many": {
+    "params": [
+     "values",
+     "source"
+    ],
+    "since": "3.18"
+   },
+   "pcl.link.App.show": {
+    "params": [
+     "obj",
+     "title"
+    ],
+    "since": "3.18"
+   },
+   "pcl.link.connect": {
+    "params": [
+     "url",
+     "token",
+     "timeout",
+     "client"
+    ],
+    "since": "3.18"
+   },
+   "pcl.load": {
+    "params": [
+     "path"
+    ],
+    "since": "3.18"
+   },
+   "pcl.params": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.parse_value": {
+    "params": [
+     "v"
+    ],
+    "since": "3.18"
+   },
+   "pcl.plot": {
+    "params": [
+     "x",
+     "ys",
+     "title",
+     "xlabel",
+     "ylabel"
+    ],
+    "since": "3.18"
+   },
+   "pcl.plotting.default_mapping": {
+    "params": [
+     "table"
+    ],
+    "since": "3.18"
+   },
+   "pcl.plotting.extremes": {
+    "params": [
+     "table",
+     "mapping",
+     "file"
+    ],
+    "since": "3.18"
+   },
+   "pcl.plotting.figure": {
+    "params": [
+     "spec"
+    ],
+    "since": "3.18"
+   },
+   "pcl.plotting.groups": {
+    "params": [
+     "sigs"
+    ],
+    "since": "3.18"
+   },
+   "pcl.plotting.preset": {
+    "params": [
+     "name_or_path",
+     "**override"
+    ],
+    "since": "3.18"
+   },
+   "pcl.plotting.presets": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.plotting.read_mapping": {
+    "params": [
+     "path_or_rows"
+    ],
+    "since": "3.18"
+   },
+   "pcl.plotting.read_table": {
+    "params": [
+     "path_or_text"
+    ],
+    "since": "3.18"
+   },
+   "pcl.plotting.signals": {
+    "params": [
+     "table",
+     "mapping"
+    ],
+    "since": "3.18"
+   },
+   "pcl.plotting.table_text": {
+    "params": [
+     "rows",
+     "fmt"
+    ],
+    "since": "3.18"
+   },
+   "pcl.plotting.time_axis": {
+    "params": [
+     "t",
+     "spec"
+    ],
+    "since": "3.18"
+   },
+   "pcl.plotting.write_mapping": {
+    "params": [
+     "path",
+     "rows"
+    ],
+    "since": "3.18"
+   },
+   "pcl.run": {
+    "params": [
+     "**kw"
+    ],
+    "since": "3.18"
+   },
+   "pcl.set": {
+    "params": [
+     "key",
+     "value"
+    ],
+    "since": "3.18"
+   },
+   "pcl.show": {
+    "params": [
+     "obj",
+     "title"
+    ],
+    "since": "3.18"
+   },
+   "pcl.sweep": {
+    "params": [
+     "grid",
+     "**kw"
+    ],
+    "since": "3.18"
+   },
+   "pcl.tutorial": {
+    "params": [
+     "tid",
+     "**options"
+    ],
+    "since": "3.18"
+   },
+   "pcl.tutorials": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.use": {
+    "params": [
+     "project"
+    ],
+    "since": "3.18"
+   },
+   "pcl.version": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant": {
+    "params": [
+     "params"
+    ],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant.clone": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant.close": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant.deriv": {
+    "params": [
+     "x",
+     "u"
+    ],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant.initial_state": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant.measured": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant.measured_scale": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant.output": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant.params_dict": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant.reset_state": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant.step": {
+    "params": [
+     "u",
+     "dt"
+    ],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant.u_range": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant.viz_state": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.workbench.CircuitPlant.y_range": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl.workbench.launch": {
+    "params": [
+     "workbench",
+     "project",
+     "input",
+     "measure",
+     "state",
+     "u_range",
+     "y_range",
+     "state_scale",
+     "name",
+     "solver",
+     "settle",
+     "headless",
+     "dt",
+     "steps",
+     "n",
+     "app"
+    ],
+    "since": "3.18"
+   },
+   "pcl.workbench.plant_class": {
+    "params": [
+     "project",
+     "input",
+     "measure",
+     "state",
+     "u_range",
+     "y_range",
+     "state_scale",
+     "name",
+     "pid",
+     "settle",
+     "solver",
+     "params",
+     "input_name",
+     "output_name"
+    ],
+    "since": "3.18"
+   },
+   "pcl.workbench.prepare": {
+    "params": [
+     "project",
+     "input",
+     "measure",
+     "state"
+    ],
+    "since": "3.18"
+   },
+   "pcl.workbench.register": {
+    "params": [
+     "workbench"
+    ],
+    "since": "3.18"
+   },
+   "pcl.workbench.run_scheme": {
+    "params": [
+     "plant",
+     "scheme_cls",
+     "reference",
+     "dt",
+     "params"
+    ],
+    "since": "3.18"
+   }
+  },
+  "cli": {
+   "python -m pcl bifurcation": {
+    "params": [
+     "<project>",
+     "<param>",
+     "--values",
+     "--channel",
+     "--stat",
+     "--transient",
+     "--record",
+     "--set",
+     "--workers",
+     "--out"
+    ],
+    "since": "3.18"
+   },
+   "python -m pcl channels": {
+    "params": [
+     "<project>"
+    ],
+    "since": "3.18"
+   },
+   "python -m pcl job": {
+    "params": [
+     "<spec>",
+     "--out"
+    ],
+    "since": "3.18"
+   },
+   "python -m pcl link": {
+    "params": [
+     "<request>",
+     "--out"
+    ],
+    "since": "3.18"
+   },
+   "python -m pcl plot": {
+    "params": [
+     "<spec>",
+     "--preset",
+     "--mapping",
+     "--kind",
+     "--signal",
+     "--table",
+     "--out"
+    ],
+    "since": "3.18"
+   },
+   "python -m pcl run": {
+    "params": [
+     "<project>",
+     "--set",
+     "--t-end",
+     "--solver",
+     "--hdiv",
+     "--method",
+     "--step",
+     "--rtol",
+     "--hmax",
+     "--channels",
+     "--from",
+     "--measure",
+     "--sep",
+     "--decimal",
+     "--out",
+     "--chunk",
+     "--state",
+     "--resume"
+    ],
+    "since": "3.18"
+   },
+   "python -m pcl sweep": {
+    "params": [
+     "<project>",
+     "--set",
+     "--t-end",
+     "--solver",
+     "--hdiv",
+     "--method",
+     "--step",
+     "--rtol",
+     "--hmax",
+     "--channels",
+     "--from",
+     "--measure",
+     "--sep",
+     "--decimal",
+     "--out",
+     "--resume",
+     "--grid",
+     "--zip",
+     "--workers"
+    ],
+    "since": "3.18"
+   },
+   "python -m pcl tutorial": {
+    "params": [
+     "<id>",
+     "--opt",
+     "--out"
+    ],
+    "since": "3.18"
+   },
+   "python -m pcl tutorials": {
+    "params": [],
+    "since": "3.18"
+   },
+   "python -m pcl workbench": {
+    "params": [
+     "--path",
+     "<project>",
+     "--link",
+     "--set",
+     "--input",
+     "--measure",
+     "--state",
+     "--state-scale",
+     "--u",
+     "--y",
+     "--hdiv",
+     "--settle",
+     "--headless",
+     "--dt"
+    ],
+    "since": "3.18"
+   }
+  },
+  "server": {
+   "/api/addon_activate": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/addon_install": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/addon_remove": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/addons": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/analyze": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/batch_sim": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/bidir": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/boundary": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/capacitance": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/catalog": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/curves": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/derivation": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/design": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/envelope": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/health": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/inverse": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/linearize": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/link/call": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/link/deny": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/link/knock": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/link/next": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/link/reply": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/link/token": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/model_proof": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/presets": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/problem": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/scenario_run": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/scenario_sweep": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/solve": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/studio_math": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/sweep": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/switching": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/template_solve": {
+    "params": [],
+    "since": "3.18"
+   },
+   "/api/validate_circuit": {
+    "params": [],
+    "since": "3.18"
+   }
+  },
+  "link": {
+   "M.batch": {
+    "params": [],
+    "perm": "run",
+    "since": "3.18"
+   },
+   "M.bifurcation": {
+    "params": [],
+    "perm": "run",
+    "since": "3.18"
+   },
+   "M.channels": {
+    "params": [],
+    "perm": "project.read",
+    "since": "3.18"
+   },
+   "M.download": {
+    "params": [],
+    "perm": "files",
+    "since": "3.18"
+   },
+   "M.get": {
+    "params": [],
+    "perm": "project.read",
+    "since": "3.18"
+   },
+   "M.info": {
+    "params": [],
+    "perm": "",
+    "since": "3.18"
+   },
+   "M.notify": {
+    "params": [],
+    "perm": "show",
+    "since": "3.18"
+   },
+   "M.params": {
+    "params": [],
+    "perm": "project.read",
+    "since": "3.18"
+   },
+   "M.presets": {
+    "params": [],
+    "perm": "",
+    "since": "3.18"
+   },
+   "M.project.get": {
+    "params": [],
+    "perm": "project.read",
+    "since": "3.18"
+   },
+   "M.project.load": {
+    "params": [],
+    "perm": "project.write",
+    "since": "3.18"
+   },
+   "M.python": {
+    "params": [],
+    "perm": "python",
+    "since": "3.18"
+   },
+   "M.run": {
+    "params": [],
+    "perm": "run",
+    "since": "3.18"
+   },
+   "M.scope": {
+    "params": [],
+    "perm": "project.read",
+    "since": "3.18"
+   },
+   "M.selection": {
+    "params": [],
+    "perm": "project.read",
+    "since": "3.18"
+   },
+   "M.set": {
+    "params": [],
+    "perm": "project.write",
+    "since": "3.18"
+   },
+   "M.set_many": {
+    "params": [],
+    "perm": "project.write",
+    "since": "3.18"
+   },
+   "M.show": {
+    "params": [],
+    "perm": "show",
+    "since": "3.18"
+   },
+   "M.values": {
+    "params": [],
+    "perm": "project.read",
+    "since": "3.18"
+   }
+  },
+  "matlab": {
+   "PclApp.PclApp": {
+    "params": [
+     "client"
+    ],
+    "since": "3.18"
+   },
+   "PclApp.call": {
+    "params": [
+     "method",
+     "args"
+    ],
+    "since": "3.18"
+   },
+   "PclApp.channels": {
+    "params": [],
+    "since": "3.18"
+   },
+   "PclApp.info": {
+    "params": [],
+    "since": "3.18"
+   },
+   "PclApp.load": {
+    "params": [
+     "project"
+    ],
+    "since": "3.18"
+   },
+   "PclApp.notify": {
+    "params": [
+     "msg",
+     "sev"
+    ],
+    "since": "3.18"
+   },
+   "PclApp.param": {
+    "params": [
+     "key"
+    ],
+    "since": "3.18"
+   },
+   "PclApp.params": {
+    "params": [
+     "id"
+    ],
+    "since": "3.18"
+   },
+   "PclApp.project": {
+    "params": [],
+    "since": "3.18"
+   },
+   "PclApp.python": {
+    "params": [
+     "code",
+     "inputs"
+    ],
+    "since": "3.18"
+   },
+   "PclApp.run": {
+    "params": [
+     "varargin"
+    ],
+    "since": "3.18"
+   },
+   "PclApp.scope": {
+    "params": [
+     "keys"
+    ],
+    "since": "3.18"
+   },
+   "PclApp.selection": {
+    "params": [],
+    "since": "3.18"
+   },
+   "PclApp.setMany": {
+    "params": [
+     "keys",
+     "values"
+    ],
+    "since": "3.18"
+   },
+   "PclApp.setParam": {
+    "params": [
+     "key",
+     "value"
+    ],
+    "since": "3.18"
+   },
+   "PclApp.show": {
+    "params": [
+     "what",
+     "title"
+    ],
+    "since": "3.18"
+   },
+   "PclApp.values": {
+    "params": [
+     "keys"
+    ],
+    "since": "3.18"
+   },
+   "pcl_bifurcation": {
+    "params": [
+     "project",
+     "param",
+     "values",
+     "opts"
+    ],
+    "since": "3.18"
+   },
+   "pcl_config": {
+    "params": [],
+    "since": "3.18"
+   },
+   "pcl_job": {
+    "params": [
+     "spec",
+     "server"
+    ],
+    "since": "3.18"
+   },
+   "pcl_link": {
+    "params": [
+     "method",
+     "args",
+     "client"
+    ],
+    "since": "3.18"
+   },
+   "pcl_measures": {
+    "params": [
+     "m"
+    ],
+    "since": "3.18"
+   },
+   "pcl_read": {
+    "params": [
+     "file"
+    ],
+    "since": "3.18"
+   },
+   "pcl_result": {
+    "params": [
+     "j"
+    ],
+    "since": "3.18"
+   },
+   "pcl_run": {
+    "params": [
+     "project",
+     "params",
+     "opts"
+    ],
+    "since": "3.18"
+   },
+   "pcl_spec": {
+    "params": [
+     "project",
+     "params"
+    ],
+    "since": "3.18"
+   },
+   "pcl_style": {
+    "params": [
+     "fig",
+     "name",
+     "out"
+    ],
+    "since": "3.18"
+   },
+   "pcl_sweep": {
+    "params": [
+     "project",
+     "grid",
+     "opts"
+    ],
+    "since": "3.18"
+   }
+  },
+  "scenario": {
+   "action:advance": {
+    "params": [],
+    "since": "3.18"
+   },
+   "action:bifurcation": {
+    "params": [],
+    "since": "3.18"
+   },
+   "action:channels": {
+    "params": [],
+    "since": "3.18"
+   },
+   "action:close": {
+    "params": [],
+    "since": "3.18"
+   },
+   "action:export": {
+    "params": [],
+    "since": "3.18"
+   },
+   "action:open": {
+    "params": [],
+    "since": "3.18"
+   },
+   "action:run": {
+    "params": [],
+    "since": "3.18"
+   },
+   "action:state": {
+    "params": [],
+    "since": "3.18"
+   },
+   "action:tutorial": {
+    "params": [],
+    "since": "3.18"
+   },
+   "action:tutorials": {
+    "params": [],
+    "since": "3.18"
+   }
+  },
+  "project": {
+   "file": {
+    "params": [
+     "version",
+     "components",
+     "wires",
+     "subcircuits",
+     "solve",
+     "sim",
+     "scope",
+     "meta",
+     "tutorial"
+    ],
+    "since": "3.18"
+   },
+   "file.component": {
+    "params": [
+     "id",
+     "type",
+     "x",
+     "y",
+     "rot",
+     "flip",
+     "label",
+     "params",
+     "live",
+     "liveBase"
+    ],
+    "since": "3.18"
+   },
+   "file.subcircuit": {
+    "params": [
+     "title",
+     "desc",
+     "version",
+     "components",
+     "wires",
+     "params"
+    ],
+    "since": "3.18"
+   },
+   "file.wire": {
+    "params": [
+     "id",
+     "a",
+     "b",
+     "pts",
+     "name",
+     "link",
+     "color",
+     "width"
+    ],
+    "since": "3.18"
+   },
+   "part:AM": {
+    "params": [],
+    "pins": [
+     "a",
+     "b",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:BSEL": {
+    "params": [
+     "idx"
+    ],
+    "pins": [
+     "u",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:C": {
+    "params": [
+     "C",
+     "v0",
+     "esr"
+    ],
+    "pins": [
+     "n",
+     "p"
+    ],
+    "since": "3.18"
+   },
+   "part:CLARKE": {
+    "params": [
+     "inv",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "ab",
+     "abc",
+     "al",
+     "b",
+     "be",
+     "c"
+    ],
+    "since": "3.18"
+   },
+   "part:CLK": {
+    "params": [
+     "f",
+     "duty",
+     "phase"
+    ],
+    "pins": [
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:CMP": {
+    "params": [
+     "hys"
+    ],
+    "pins": [
+     "n",
+     "p",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:CONST": {
+    "params": [
+     "v"
+    ],
+    "pins": [
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:CPE": {
+    "params": [
+     "kind",
+     "sigma",
+     "Q",
+     "alpha",
+     "fmin",
+     "fmax",
+     "N"
+    ],
+    "pins": [
+     "a",
+     "b"
+    ],
+    "since": "3.18"
+   },
+   "part:CPL": {
+    "params": [
+     "P",
+     "Vmin",
+     "sched"
+    ],
+    "pins": [
+     "n",
+     "p"
+    ],
+    "since": "3.18"
+   },
+   "part:D": {
+    "params": [
+     "Ron",
+     "Vf",
+     "Roff"
+    ],
+    "pins": [
+     "a",
+     "k"
+    ],
+    "since": "3.18"
+   },
+   "part:DCM": {
+    "params": [
+     "Ra",
+     "La",
+     "psi",
+     "J",
+     "bm",
+     "load",
+     "TL",
+     "w0",
+     "ia0"
+    ],
+    "pins": [
+     "a",
+     "b",
+     "te",
+     "tl",
+     "w"
+    ],
+    "since": "3.18"
+   },
+   "part:DEMUX": {
+    "params": [
+     "n"
+    ],
+    "pins": [
+     "u",
+     "y1",
+     "y2",
+     "y3"
+    ],
+    "since": "3.18"
+   },
+   "part:DISP": {
+    "params": [
+     "dig"
+    ],
+    "pins": [
+     "u"
+    ],
+    "since": "3.18"
+   },
+   "part:DIV": {
+    "params": [
+     "eps"
+    ],
+    "pins": [
+     "a",
+     "b",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:EBUS": {
+    "params": [
+     "n"
+    ],
+    "pins": [
+     "a",
+     "b",
+     "bus",
+     "c"
+    ],
+    "since": "3.18"
+   },
+   "part:EXPR": {
+    "params": [
+     "expr",
+     "ins",
+     "pars"
+    ],
+    "pins": [
+     "u1",
+     "u2",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:FEST": {
+    "params": [
+     "mode",
+     "RR",
+     "LM",
+     "psi0"
+    ],
+    "pins": [
+     "al",
+     "be",
+     "psi",
+     "th",
+     "w1",
+     "wr"
+    ],
+    "since": "3.18"
+   },
+   "part:GAIN": {
+    "params": [
+     "K"
+    ],
+    "pins": [
+     "u",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:GND": {
+    "params": [],
+    "pins": [
+     "g"
+    ],
+    "since": "3.18"
+   },
+   "part:ICLARKE": {
+    "params": [
+     "inv",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "ab",
+     "abc",
+     "al",
+     "b",
+     "be",
+     "c"
+    ],
+    "since": "3.18"
+   },
+   "part:IDC": {
+    "params": [
+     "ctl",
+     "I",
+     "sched"
+    ],
+    "pins": [
+     "n",
+     "p",
+     "u"
+    ],
+    "since": "3.18"
+   },
+   "part:ILG": {
+    "params": [
+     "shape",
+     "Ipk",
+     "model",
+     "tau1",
+     "tau2",
+     "eta",
+     "T1",
+     "T2",
+     "n",
+     "t0"
+    ],
+    "pins": [
+     "n",
+     "p"
+    ],
+    "since": "3.18"
+   },
+   "part:IM": {
+    "params": [
+     "Rs",
+     "RR",
+     "Lsig",
+     "LM",
+     "pp",
+     "J",
+     "bm",
+     "load",
+     "TL",
+     "w0",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "abc",
+     "b",
+     "c",
+     "psi",
+     "te",
+     "thf",
+     "thr",
+     "tl",
+     "w"
+    ],
+    "since": "3.18"
+   },
+   "part:INT": {
+    "params": [
+     "y0",
+     "lo",
+     "hi",
+     "wrap"
+    ],
+    "pins": [
+     "u",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:IP": {
+    "params": [],
+    "pins": [
+     "a",
+     "b",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:IPARK": {
+    "params": [
+     "conn"
+    ],
+    "pins": [
+     "ab",
+     "al",
+     "be",
+     "d",
+     "dq",
+     "q",
+     "th"
+    ],
+    "since": "3.18"
+   },
+   "part:JUNC": {
+    "params": [],
+    "pins": [
+     "j"
+    ],
+    "since": "3.18"
+   },
+   "part:KG": {
+    "params": [
+     "kind",
+     "mat"
+    ],
+    "pins": [
+     "a1",
+     "a2",
+     "b1",
+     "b2"
+    ],
+    "since": "3.18"
+   },
+   "part:KL": {
+    "params": [
+     "nw",
+     "L1",
+     "L2",
+     "L3",
+     "L4",
+     "k",
+     "kpairs",
+     "Lmat",
+     "Rw",
+     "i0"
+    ],
+    "pins": [
+     "a1",
+     "a2",
+     "a3",
+     "a4",
+     "b1",
+     "b2",
+     "b3",
+     "b4"
+    ],
+    "since": "3.18"
+   },
+   "part:L": {
+    "params": [
+     "L",
+     "i0",
+     "Rs"
+    ],
+    "pins": [
+     "a",
+     "b"
+    ],
+    "since": "3.18"
+   },
+   "part:LOGIC": {
+    "params": [
+     "op"
+    ],
+    "pins": [
+     "a",
+     "b",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:LPF": {
+    "params": [
+     "fc",
+     "y0"
+    ],
+    "pins": [
+     "u",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:MEAS": {
+    "params": [
+     "src",
+     "qty"
+    ],
+    "pins": [
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:MOD3": {
+    "params": [
+     "mode",
+     "conn"
+    ],
+    "pins": [
+     "d",
+     "da",
+     "db",
+     "dc",
+     "v",
+     "va",
+     "vb",
+     "vc",
+     "vdc"
+    ],
+    "since": "3.18"
+   },
+   "part:MOV": {
+    "params": [
+     "model",
+     "Uref",
+     "Iref",
+     "alpha",
+     "tbl"
+    ],
+    "pins": [
+     "a",
+     "b"
+    ],
+    "since": "3.18"
+   },
+   "part:MUL": {
+    "params": [],
+    "pins": [
+     "a",
+     "b",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:MUX": {
+    "params": [
+     "n"
+    ],
+    "pins": [
+     "u1",
+     "u2",
+     "u3",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:PARK": {
+    "params": [
+     "conn"
+    ],
+    "pins": [
+     "ab",
+     "al",
+     "be",
+     "d",
+     "dq",
+     "q",
+     "th"
+    ],
+    "since": "3.18"
+   },
+   "part:PIB": {
+    "params": [
+     "Kp",
+     "Ki",
+     "clock",
+     "trig",
+     "y0",
+     "aw",
+     "ymin",
+     "ymax"
+    ],
+    "pins": [
+     "tr",
+     "u",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:PLL": {
+    "params": [
+     "f0",
+     "bw",
+     "th0",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "abc",
+     "amp",
+     "b",
+     "c",
+     "th",
+     "w"
+    ],
+    "since": "3.18"
+   },
+   "part:PORT": {
+    "params": [
+     "name",
+     "side",
+     "width"
+    ],
+    "pins": [
+     "p"
+    ],
+    "since": "3.18"
+   },
+   "part:PWM": {
+    "params": [
+     "fs",
+     "mode",
+     "D",
+     "dsched",
+     "carrier",
+     "phase",
+     "upd",
+     "dt",
+     "sensor",
+     "qty",
+     "ref",
+     "Kp",
+     "Ki",
+     "Kd",
+     "Tf",
+     "ff",
+     "ffA",
+     "ffB",
+     "D0",
+     "dmin",
+     "dmax",
+     "m",
+     "fref",
+     "refphase"
+    ],
+    "pins": [
+     "d"
+    ],
+    "since": "3.18"
+   },
+   "part:PY": {
+    "params": [
+     "code",
+     "ins",
+     "outs",
+     "pars",
+     "clock",
+     "trig",
+     "y0"
+    ],
+    "pins": [
+     "e",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:R": {
+    "params": [
+     "R",
+     "sched"
+    ],
+    "pins": [
+     "a",
+     "b"
+    ],
+    "since": "3.18"
+   },
+   "part:RAMP": {
+    "params": [
+     "f",
+     "shape",
+     "lo",
+     "hi",
+     "phase"
+    ],
+    "pins": [
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:SAT": {
+    "params": [
+     "lo",
+     "hi"
+    ],
+    "pins": [
+     "u",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:SCR": {
+    "params": [
+     "fire",
+     "refsrc",
+     "alpha",
+     "shift",
+     "pw",
+     "fref",
+     "pwm",
+     "out",
+     "Ron",
+     "Vf",
+     "Roff"
+    ],
+    "pins": [
+     "a",
+     "k"
+    ],
+    "since": "3.18"
+   },
+   "part:SG": {
+    "params": [
+     "vt",
+     "Ub",
+     "U0",
+     "kde",
+     "Dde",
+     "trig",
+     "Rarc",
+     "ext",
+     "Iext",
+     "Roff"
+    ],
+    "pins": [
+     "a",
+     "b"
+    ],
+    "since": "3.18"
+   },
+   "part:SH": {
+    "params": [
+     "in",
+     "src",
+     "qty",
+     "clock",
+     "trig",
+     "init",
+     "h0"
+    ],
+    "pins": [
+     "u",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:SIN": {
+    "params": [
+     "name",
+     "side",
+     "width"
+    ],
+    "pins": [
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:SM": {
+    "params": [
+     "Rs",
+     "Ld",
+     "Lq",
+     "sat",
+     "Ldsat",
+     "psikd",
+     "psim",
+     "pp",
+     "J",
+     "bm",
+     "load",
+     "TL",
+     "w0",
+     "th0",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "abc",
+     "b",
+     "c",
+     "id",
+     "iq",
+     "te",
+     "th",
+     "tl",
+     "w"
+    ],
+    "since": "3.18"
+   },
+   "part:SOUT": {
+    "params": [
+     "name",
+     "side",
+     "width"
+    ],
+    "pins": [
+     "u"
+    ],
+    "since": "3.18"
+   },
+   "part:SR": {
+    "params": [
+     "q0"
+    ],
+    "pins": [
+     "nq",
+     "q",
+     "r",
+     "s"
+    ],
+    "since": "3.18"
+   },
+   "part:SRM": {
+    "params": [
+     "geo",
+     "Rs",
+     "mag",
+     "Lu",
+     "La",
+     "Lsat",
+     "psik",
+     "Imax",
+     "tbl",
+     "J",
+     "bm",
+     "load",
+     "TL",
+     "w0",
+     "th0"
+    ],
+    "pins": [
+     "a1",
+     "a2",
+     "a3",
+     "a4",
+     "b1",
+     "b2",
+     "b3",
+     "b4",
+     "i1",
+     "i2",
+     "i3",
+     "i4",
+     "te",
+     "th",
+     "tl",
+     "w"
+    ],
+    "since": "3.18"
+   },
+   "part:SUB": {
+    "params": [
+     "def"
+    ],
+    "pins": [],
+    "since": "3.18"
+   },
+   "part:SUM": {
+    "params": [
+     "signs"
+    ],
+    "pins": [
+     "a",
+     "b",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:SW": {
+    "params": [
+     "gate",
+     "pwm",
+     "out",
+     "model",
+     "Ron",
+     "Vce0",
+     "Roff",
+     "body",
+     "Vfd",
+     "Rd",
+     "Eon",
+     "Eoff",
+     "Vref",
+     "Iref"
+    ],
+    "pins": [
+     "d",
+     "g",
+     "s"
+    ],
+    "since": "3.18"
+   },
+   "part:TAGI": {
+    "params": [
+     "name"
+    ],
+    "pins": [
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:TAGO": {
+    "params": [
+     "name"
+    ],
+    "pins": [
+     "u"
+    ],
+    "since": "3.18"
+   },
+   "part:TL": {
+    "params": [
+     "spec",
+     "Z",
+     "tau",
+     "len",
+     "vel",
+     "Lp",
+     "Cp",
+     "Rt",
+     "Rp",
+     "nsec"
+    ],
+    "pins": [
+     "a1",
+     "a2",
+     "b1",
+     "b2"
+    ],
+    "since": "3.18"
+   },
+   "part:UD": {
+    "params": [
+     "clock",
+     "trig",
+     "y0"
+    ],
+    "pins": [
+     "u",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:VAC": {
+    "params": [
+     "Vpk",
+     "f",
+     "phase",
+     "off",
+     "Rs",
+     "Ls"
+    ],
+    "pins": [
+     "n",
+     "p"
+    ],
+    "since": "3.18"
+   },
+   "part:VAC3": {
+    "params": [
+     "Vpk",
+     "f",
+     "phase",
+     "seq",
+     "Rs",
+     "Ls",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "abc",
+     "b",
+     "c",
+     "n"
+    ],
+    "since": "3.18"
+   },
+   "part:VDC": {
+    "params": [
+     "ctl",
+     "V",
+     "Rs",
+     "uni",
+     "sched"
+    ],
+    "pins": [
+     "n",
+     "p",
+     "u"
+    ],
+    "since": "3.18"
+   },
+   "part:VIMP": {
+    "params": [
+     "shape",
+     "Vpk",
+     "basis",
+     "T1",
+     "T2",
+     "S",
+     "alpha",
+     "beta",
+     "K",
+     "Rs",
+     "t0"
+    ],
+    "pins": [
+     "n",
+     "p"
+    ],
+    "since": "3.18"
+   },
+   "part:VM": {
+    "params": [],
+    "pins": [
+     "n",
+     "p",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:VP": {
+    "params": [],
+    "pins": [
+     "p",
+     "y"
+    ],
+    "since": "3.18"
+   },
+   "part:XFMR": {
+    "params": [
+     "n",
+     "Lm",
+     "im0",
+     "Llk1",
+     "Llk2",
+     "R1",
+     "R2",
+     "pol"
+    ],
+    "pins": [
+     "p1",
+     "p2",
+     "s1",
+     "s2"
+    ],
+    "since": "3.18"
+   }
+  }
+ },
+ "removed": []
+}

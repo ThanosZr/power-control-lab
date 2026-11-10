@@ -17,6 +17,7 @@
  const Ex=root.Expr||(typeof require!=='undefined'?require('./expr.js'):null);
  const SC=root.StepCheck||(typeof require!=='undefined'?require('./stepcheck.js'):null);
  const SUBC=root.SubCircuit||(typeof require!=='undefined'?require('./subcircuit.js'):null);
+ const BUS=root.Bus||(typeof require!=='undefined'?require('./bus.js'):null);
  const GMIN=1e-9;
  // program t:value at t; left = the value just before t (the end of a step that lands on a jump, 3.15)
  const schedAt=(s,t,dflt,left)=>{if(!s)return dflt;let v=s[0][1];const tl=left?t-1e-15-4e-16*Math.abs(t):0;if(left?s[0][0]>=tl:t<s[0][0])return dflt;for(const [ts,val] of s){if(left?ts<tl:ts<=t+1e-15)v=val;else break;}return v;};
@@ -89,6 +90,8 @@
  function buildNetlist(project){
   // subcircuits (3.17, §9): the solver sees one flat circuit (instance parts as X1/<id>, ports as junctions)
   let subWarn=[];if(SUBC&&SUBC.needs(project)){try{const f=SUBC.flatten(project);project=f.project;subWarn=f.warnings;}catch(e){throw e instanceof SUBC.SubcircuitError?new NetlistError(e.message):e;}}
+  // buses and vectors (3.18, §3): the solver sees scalar wires only (element-wise blocks on a bus as <id>[k])
+  let vec={};if(BUS&&BUS.needs(project)){try{const b=BUS.expand(project);project=b.project;subWarn.push(...b.warnings);vec=b.vec;}catch(e){throw e instanceof BUS.BusError?new NetlistError(e.message):e;}}
   const comps=(project.components||[]).filter(c=>P.PARTS[c.type]&&c.type!=='SUB');
   const byId=new Map(comps.map(c=>[c.id,c]));
   const parent=new Map(),find=k=>{let r=k;while(parent.get(r)!==r)r=parent.get(r);let x=k;while(parent.get(x)!==r){const n=parent.get(x);parent.set(x,r);x=n;}return r;};
@@ -97,6 +100,8 @@
   const kindOf=new Map();
   for(const c of comps)for(const p of Object.keys(P.pinsOf(c))){const k=c.id+':'+p;parent.set(k,k);kindOf.set(k,c.type==='JUNC'?'j':P.pinKind(c,p));}
   for(const w of project.wires||[]){const a=w.a.c+':'+w.a.p,b=w.b.c+':'+w.b.p;if(parent.has(a)&&parent.has(b))union(a,b);}
+  // named wires that join (3.18): every wire with link and the same name is one net, electrical or signal
+  {const named=new Map();for(const w of project.wires||[]){if(!w.link||!w.name)continue;const a=w.a.c+':'+w.a.p;if(!parent.has(a))continue;const n=String(w.name);if(named.has(n))union(named.get(n),a);else named.set(n,a);}}
   const warnings=[...subWarn];
   // connections without a wire (3.0): an input that names its source in the parameters (in_<pin> = "block:output"),
   // and Goto / From tags with the same name. Both join nets exactly like a wire.
@@ -323,7 +328,7 @@
   const diag={unconn,island,rleak,skipped:[...skip].map(([id,why])=>({id,why})),open,freeEnds,freeNets,islands};
   const rowBase=nNodes;for(const e of els)if(e.row!==undefined)e.row+=rowBase;
   const sig=compileSignals(blocks,sigNets,ctrls,els,compInfo,warnings);
-  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId,sig,sigPin,diag,tbase,step};
+  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId,sig,sigPin,diag,tbase,step,vec};
  }
 
  // ---------------------------------------------------------------- signal graph (3.0)
@@ -559,7 +564,9 @@
    for(const o of prev.values())o.rt?.destroy?.();}
   setMethod(m){this.method=['TR','BE','BDF2'].includes(m)?m:'TR';this.cache.clear();this.beLeft=Math.max(this.beLeft,1);this.capDirty=true;}
   setControl(id,patch){const k=this.net.ctrls.find(c=>c.id===id);if(!k)return false;Object.assign(k,patch);return true;}
-  setBlock(id,patch){const b=this.net.sig.blocks.find(q=>q.id===id);if(!b)return false;Object.assign(b,patch);if('sched' in patch)this.jsc=null;this.evalBlocks('commit');this.computeVals();return true;}
+  // a block on a bus (3.18) is one block per element, <id>[k]: a live change reaches every element
+  setBlock(id,patch){const n=this.net.vec?.[id],bs=n?this.net.sig.blocks.filter(q=>q.id.startsWith(id+'[')):this.net.sig.blocks.filter(q=>q.id===id);if(!bs.length)return false;
+   for(const b of bs)Object.assign(b,patch);if('sched' in patch)this.jsc=null;this.evalBlocks('commit');this.computeVals();return true;}
   setHold(id,patch){const q=this.shById.get(id);if(!q)return false;if(patch.trig&&patch.trig!==q.trig)q.last=null;Object.assign(q,patch);return true;}
   // a change made by the user while running: drawn on the scope and kept so it can be replayed
   markChange(rec){(this.changes||(this.changes=[])).push({t:this.t,...rec});if(this.changes.length>500)this.changes.shift();}

@@ -14,6 +14,13 @@
  const sb=(w,h)=>`<rect class="block sblk" x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx="4"/>`;
  const tx=(t,x=0,y=4,cls='btxt')=>`<text class="${cls}" x="${x}" y="${y}" text-anchor="middle">${t}</text>`;
  const sl=d=>`<path class="sigl" d="${d}"/>`;
+ // buses (3.18): thick leads, electrical (bl) and signal (sbl); CONN = separate pins or one bus pin
+ const bl=d=>`<path class="busl" d="${d}"/>`,sbl=d=>`<path class="sigl busl" d="${d}"/>`;
+ const CONN=what=>sel('conn','Ακροδέκτες',[['sep','Χωριστοί'],['bus',`Δίαυλος ${what} (ένας ακροδέκτης)`]],'sep',{hint:'Δίαυλος (3.18): ένα σύρμα μεταφέρει όλες τις φάσεις ή συνιστώσες, στη σειρά που γράφεται. Το ίδιο κύκλωμα με χωριστά σύρματα δίνει τα ίδια αποτελέσματα.'});
+ const isBus=p=>p.conn==='bus';
+ const WIDTH=sel('width','Πλάτος (δίαυλος)',[['1','1: ένα σήμα ή ό,τι συνδεθεί'],['2','2 (π.χ. αβ, dq)'],['3','3 (π.χ. abc)'],['4','4'],['5','5'],['6','6']],'1',{hint:'Πλάτος > 1: ο ακροδέκτης του συμβόλου είναι δίαυλος με τόσα σήματα ή αγωγούς (3.18). Με 1 περνά ό,τι συνδεθεί, και δίαυλος.'});
+ const nIO=p=>Math.max(2,Math.min(8,Math.round(+p.n)||3)),nEL=p=>Math.max(2,Math.min(6,Math.round(+p.n)||3));
+ const ioY=(n,k)=>-10*(n-1)+20*k;
  const Ex=root.Expr||(typeof require!=='undefined'?require('./expr.js'):null);
  // code blocks (3.3): inputs on the left and outputs on the right, named by the user, 20 apart on the grid
  const codeIO=(ins,outs)=>{const o={};ins.forEach((k,i)=>o[k]=I(-40,-10*(ins.length-1)+20*i));outs.filter(k=>!(k in o)).forEach((k,i,a)=>o[k]=O(40,-10*(a.length-1)+20*i));return o;};
@@ -32,7 +39,7 @@
   const L=Array.isArray(ports)?ports:[],by=s=>L.filter(p=>p.side===s),l=by('l'),r=by('r'),t=by('t'),b=by('b');
   const len=a=>Math.max(0,...a.map(p=>Math.min(5,String(p.name).length)));
   const H=10*Math.max(l.length,r.length,1)+20,W=Math.max(40,10*Math.max(t.length,b.length)+20,10*Math.ceil((2.6*(len(l)+len(r))+24)/10));
-  const pins={},spins={},pos=[],at=(p,x,y)=>{if(p.kind==='el')pins[p.name]=[x,y];else spins[p.name]={at:[x,y],dir:p.kind};pos.push({...p,x,y});};
+  const pins={},spins={},pos=[],at=(p,x,y)=>{if(p.kind==='el')pins[p.name]=[x,y];else spins[p.name]={at:[x,y],dir:p.kind,...(+p.w>1?{w:+p.w}:{})};pos.push({...p,x,y});};
   l.forEach((p,i)=>at(p,-W-10,-10*(l.length-1)+20*i));r.forEach((p,i)=>at(p,W+10,-10*(r.length-1)+20*i));
   t.forEach((p,i)=>at(p,-10*(t.length-1)+20*i,-H-10));b.forEach((p,i)=>at(p,-10*(b.length-1)+20*i,H+10));
   return {W,H,pins,spins,pos};}
@@ -40,7 +47,7 @@
   let s=`<rect class="block sub" x="${-W}" y="${-H}" width="${2*W}" height="${2*H}" rx="3"/><rect class="thin" x="${-W+3}" y="${-H+3}" width="${2*W-6}" height="${2*H-6}" rx="2"/>`;
   s+='<rect class="thin" x="-7" y="-6" width="10" height="8" rx="1"/><rect class="thin" x="-3" y="-2" width="10" height="8" rx="1"/>';
   for(const q of pos){const lead=q.x<-W?`M${q.x},${q.y} H${-W}`:q.x>W?`M${q.x},${q.y} H${W}`:q.y<-H?`M${q.x},${q.y} V${-H}`:`M${q.x},${q.y} V${H}`;
-   s+=q.kind==='el'?`<path d="${lead}"/>`:sl(lead);
+   s+=+q.w>1?(q.kind==='el'?bl(lead):sbl(lead)):q.kind==='el'?`<path d="${lead}"/>`:sl(lead);
    const [lx,ly,anc]=q.x<-W?[-W+6,q.y+3,'start']:q.x>W?[W-6,q.y+3,'end']:q.y<-H?[q.x,-H+12,'middle']:[q.x,H-6,'middle'];
    s+=`<text class="pinl" x="${lx}" y="${ly}" text-anchor="${anc}">${xe(q.name.slice(0,5))}</text>`;}
   return s;}
@@ -73,11 +80,12 @@
    params:[num('Vpk','Πλάτος','V',325),num('f','Συχνότητα','Hz',50),num('phase','Φάση','°',0,{signed:true,zero:true}),num('off','DC offset','V',0,{signed:true,zero:true}),num('Rs','Εσωτερική αντίσταση','Ω',0,{zero:true}),num('Ls','Εσωτερική αυτεπαγωγή','H',0,{zero:true})],
    value:p=>p.Vpk,unit:'V',
    draw:()=>'<path d="M0,-40 V-16 M0,16 V40"/><circle r="16"/><path class="thin" d="M-9,0 c3,-10 6,-10 9,0 c3,10 6,10 9,0"/>'},
-  VAC3:{name:'Τριφασική πηγή (Y)',prefix:'V',group:'Πηγές',pins:{a:[40,-20],b:[40,0],c:[40,20],n:[0,40]},box:[-20,-30,40,60],
+  VAC3:{name:'Τριφασική πηγή (Y)',prefix:'V',group:'Πηγές',pins:p=>isBus(p)?{abc:[40,0],n:[0,40]}:{a:[40,-20],b:[40,0],c:[40,20],n:[0,40]},box:[-20,-30,40,60],
+   bus:p=>isBus(p)?{abc:['a','b','c']}:{},
    params:[num('Vpk','Πλάτος φασικής τάσης','V',325),num('f','Συχνότητα','Hz',50),num('phase','Φάση της a','°',0,{signed:true,zero:true}),
-    sel('seq','Διαδοχή φάσεων',[['abc','a → b → c'],['acb','a → c → b']],'abc'),num('Rs','Αντίσταση ανά φάση','Ω',0,{zero:true}),num('Ls','Αυτεπαγωγή ανά φάση','H',0,{zero:true})],
+    sel('seq','Διαδοχή φάσεων',[['abc','a → b → c'],['acb','a → c → b']],'abc'),num('Rs','Αντίσταση ανά φάση','Ω',0,{zero:true}),num('Ls','Αυτεπαγωγή ανά φάση','H',0,{zero:true}),CONN('abc')],
    value:p=>p.Vpk,unit:'V',
-   draw:()=>'<rect class="block" x="-20" y="-30" width="40" height="60" rx="6"/><path d="M20,-20 H40 M20,0 H40 M20,20 H40 M0,30 V40"/><path class="thin" d="M-11,-20 c2,-7 5,-7 7,0 c2,7 5,7 7,0 M-11,0 c2,-7 5,-7 7,0 c2,7 5,7 7,0 M-11,20 c2,-7 5,-7 7,0 c2,7 5,7 7,0"/>'},
+   draw:p=>'<rect class="block" x="-20" y="-30" width="40" height="60" rx="6"/>'+(isBus(p)?bl('M20,0 H40')+'<path d="M0,30 V40"/>':'<path d="M20,-20 H40 M20,0 H40 M20,20 H40 M0,30 V40"/>')+'<path class="thin" d="M-11,-20 c2,-7 5,-7 7,0 c2,7 5,7 7,0 M-11,0 c2,-7 5,-7 7,0 c2,7 5,7 7,0 M-11,20 c2,-7 5,-7 7,0 c2,7 5,7 7,0"/>'},
   IDC:{name:'Πηγή ρεύματος',prefix:'I',group:'Πηγές',pins:{p:[0,-40],n:[0,40]},box:[-17,-17,34,34],
    spins:p=>p.ctl==='sig'?{u:I(-30,0)}:{},
    params:[sel('ctl','Τιμή',[['val','Σταθερή ή πρόγραμμα'],['sig','Από σήμα (ακροδέκτης u)']],'val',{hint:'«Από σήμα»: π.χ. ρεύμα διέγερσης I_dc + I_ac·sin(2πft) από μπλοκ έκφρασης, ή κεραυνικό ρεύμα Heidler.'}),
@@ -305,17 +313,17 @@
     txt('ins','Είσοδοι','e',{hint:'Ονόματα χωρισμένα με κόμμα, έως 6.'}),txt('outs','Έξοδοι','y',{hint:'Ονόματα χωρισμένα με κόμμα, έως 6.'}),
     txt('pars','Παράμετροι p','Kp = 0.1, Ki = 100',{hint:'Αριθμοί που φτάνουν στον κώδικα ως p["όνομα"].'}),CLOCK(),TRIG,num('y0','Αρχική τιμή εξόδων','',0,{signed:true,zero:true})],value:()=>null,
    draw:p=>codeDraw(pyIns(p),pyOuts(p),'Py')},
-  IM:{name:'Μηχανή επαγωγής (ανάστροφο-Γ)',prefix:'M',group:'Μηχανές',pins:{a:[-40,-20],b:[-40,0],c:[-40,20]},box:[-25,-25,50,50],lbl:'above',
+  IM:{name:'Μηχανή επαγωγής (ανάστροφο-Γ)',prefix:'M',group:'Μηχανές',pins:p=>isBus(p)?{abc:[-40,0]}:{a:[-40,-20],b:[-40,0],c:[-40,20]},bus:p=>isBus(p)?{abc:['a','b','c']}:{},box:[-25,-25,50,50],lbl:'above',
    spins:p=>p.load==='sig'?{w:O(40,-20),te:O(40,-10),psi:O(40,0),thf:O(40,10),thr:O(40,20),tl:I(0,40)}:{w:O(40,-20),te:O(40,-10),psi:O(40,0),thf:O(40,10),thr:O(40,20)},
    params:[num('Rs','Αντίσταση στάτη R_s','Ω',3),num('RR','Αντίσταση δρομέα R_R','Ω',2,{hint:'Ανάστροφο-Γ: R_R, L_M και L_σ αντί για R_r, L_m, L_ls, L_lr (γ = L_m/L_r).'}),num('Lsig','Αυτεπαγωγή σκέδασης L_σ','H',0.025),
     num('LM','Αυτεπαγωγή μαγνήτισης L_M','H',0.3),num('pp','Ζεύγη πόλων p','',2),num('J','Ροπή αδράνειας J','kg·m²',0.02),num('bm','Τριβή b','N·m·s',0.002,{zero:true}),
     sel('load','Ροπή φορτίου',[['sched','Τιμή ή πρόγραμμα'],['sig','Από σήμα (ακροδέκτης tl)']],'sched'),txt('TL','τ_L(t)','0',{hint:'Σταθερή τιμή ή «t:τιμή» σε N·m.',show:p=>p.load!=='sig'}),
-    num('w0','Αρχική μηχανική ταχύτητα','rad/s',0,{signed:true,zero:true})],
+    num('w0','Αρχική μηχανική ταχύτητα','rad/s',0,{signed:true,zero:true}),CONN('abc')],
    value:p=>p.pp,unit:'',
-   draw:p=>'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25"/><circle r="22"/>'+tx('IM',0,4,'btxt')+sl('M22,-20 H40 M25,-10 H40 M25,0 H40 M25,10 H40 M22,20 H40')+(p.load==='sig'?sl('M0,22 V40'):'')
+   draw:p=>(isBus(p)?bl('M-40,0 H-22'):'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25"/>')+'<circle r="22"/>'+tx('IM',0,4,'btxt')+sl('M22,-20 H40 M25,-10 H40 M25,0 H40 M25,10 H40 M22,20 H40')+(p.load==='sig'?sl('M0,22 V40'):'')
     +tx('ω',30,-23,'pinl')+tx('τ',30,-13,'pinl')+tx('ψ',30,-3,'pinl')+tx('θf',30,7,'pinl')+tx('θr',30,17,'pinl')},
   // synchronous machine (3.5): d, q inductances and magnet flux; ψ_m = 0 is the synchronous reluctance machine (SynRM)
-  SM:{name:'Σύγχρονη μηχανή (SynRM / PMSM)',prefix:'M',group:'Μηχανές',pins:{a:[-40,-20],b:[-40,0],c:[-40,20]},box:[-25,-25,50,50],lbl:'above',
+  SM:{name:'Σύγχρονη μηχανή (SynRM / PMSM)',prefix:'M',group:'Μηχανές',pins:p=>isBus(p)?{abc:[-40,0]}:{a:[-40,-20],b:[-40,0],c:[-40,20]},bus:p=>isBus(p)?{abc:['a','b','c']}:{},box:[-25,-25,50,50],lbl:'above',
    spins:p=>{const o={w:O(40,-20),te:O(40,-10),th:O(40,0),id:O(40,10),iq:O(40,20)};if(p.load==='sig')o.tl=I(0,40);return o;},
    params:[num('Rs','Αντίσταση στάτη R_s','Ω',2),num('Ld','Αυτεπαγωγή άξονα d L_d','H',0.15,{hint:'SynRM: d είναι ο άξονας της ελάχιστης μαγνητικής αντίστασης (L_d > L_q). PMSM: d είναι ο άξονας του μαγνήτη (στην IPMSM L_q > L_d, στην SPMSM L_d = L_q).'}),
     num('Lq','Αυτεπαγωγή άξονα q L_q','H',0.03),
@@ -324,9 +332,9 @@
     num('psim','Ροή μαγνήτη ψ_m','V·s',0,{zero:true,hint:'0 = μηχανή μαγνητικής αντίστασης (SynRM). Ροπή τ_e = (3/2)·p·(ψ_m·i_q + (L_d − L_q)·i_d·i_q).'}),
     num('pp','Ζεύγη πόλων p','',2),num('J','Ροπή αδράνειας J','kg·m²',0.02),num('bm','Τριβή b','N·m·s',0.002,{zero:true}),
     sel('load','Ροπή φορτίου',[['sched','Τιμή ή πρόγραμμα'],['sig','Από σήμα (ακροδέκτης tl)']],'sched'),txt('TL','τ_L(t)','0',{hint:'Σταθερή τιμή ή «t:τιμή» σε N·m.',show:p=>p.load!=='sig'}),
-    num('w0','Αρχική μηχανική ταχύτητα','rad/s',0,{signed:true,zero:true}),num('th0','Αρχική γωνία δρομέα θ (ηλεκτρική, ως προς τη φάση a)','°',0,{signed:true,zero:true})],
+    num('w0','Αρχική μηχανική ταχύτητα','rad/s',0,{signed:true,zero:true}),num('th0','Αρχική γωνία δρομέα θ (ηλεκτρική, ως προς τη φάση a)','°',0,{signed:true,zero:true}),CONN('abc')],
    value:p=>p.pp,unit:'',
-   draw:p=>'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25"/><circle r="22"/>'+tx(+p.psim>0?'PM':'SynRM',0,4,+p.psim>0?'btxt':'bsm')+sl('M22,-20 H40 M25,-10 H40 M25,0 H40 M25,10 H40 M22,20 H40')+(p.load==='sig'?sl('M0,22 V40'):'')
+   draw:p=>(isBus(p)?bl('M-40,0 H-22'):'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25"/>')+'<circle r="22"/>'+tx(+p.psim>0?'PM':'SynRM',0,4,+p.psim>0?'btxt':'bsm')+sl('M22,-20 H40 M25,-10 H40 M25,0 H40 M25,10 H40 M22,20 H40')+(p.load==='sig'?sl('M0,22 V40'):'')
     +tx('ω',30,-23,'pinl')+tx('τ',30,-13,'pinl')+tx('θ',30,-3,'pinl')+tx('d',30,7,'pinl')+tx('q',30,17,'pinl')},
   // switched reluctance machine (3.6): one winding per phase, pins on top (phase k: a_k, b_k 20 apart, phases 160 apart, under the columns
   // of an asymmetric bridge); ψ(θ, i) from parameters or a table, torque from the co-energy
@@ -347,9 +355,10 @@
     for(let k=0;k<N;k++){const X=-80*(N-1)+160*k;s+=`<path d="M${X-10},-30 V-16 a5,5 0 0,0 10,0 a5,5 0 0,0 10,0 V-30"/>`+tx(String(k+1),X,8,'pinl');}
     const sp=srmSpins(p);return s+tx('SRM '+(p.geo||'8/6'),0,-6,'bsm')+sl(Object.values(sp).map(q=>`M${q.at[0]},26 V40`).join(' '))
      +Object.entries(sp).map(([k,q])=>tx({w:'ω',te:'τ',th:'θ',tl:'τ_L'}[k]||'i'+k.slice(1),q.at[0],20,'pinl')).join('');}},
-  MOD3:{name:'Διαμορφωτής τριφασικός',prefix:'MD',group:'Έλεγχος',pins:{},spins:{va:I(-30,-20),vb:I(-30,-10),vc:I(-30,0),vdc:I(-30,20),da:O(30,-10),db:O(30,0),dc:O(30,10)},box:[-20,-25,40,50],blk:true,
-   params:[sel('mode','Διαμόρφωση',[['spwm','SPWM: d = ½ + v/V_dc'],['svpwm','SVPWM: έγχυση μηδενικής ακολουθίας −(max + min)/2'],['square','Τετραγωνική (six-step): d = 1 όταν v > 0']],'svpwm',{hint:'Τα d πάνε στα PWM με «D από σήμα» και τριγωνικό φέρον, ένα ανά σκέλος. Γραμμική περιοχή: πλάτος φάσης ≤ V_dc/2 (SPWM), ≤ V_dc/√3 (SVPWM).'})],value:()=>null,
-   draw:p=>sb(40,50)+tx(p.mode==='square'?'6-step':p.mode==='spwm'?'SPWM':'SVM',0,4,'bsm')+sl('M-30,-20 H-20 M-30,-10 H-20 M-30,0 H-20 M-30,20 H-20 M20,-10 H30 M20,0 H30 M20,10 H30')},
+  MOD3:{name:'Διαμορφωτής τριφασικός',prefix:'MD',group:'Έλεγχος',pins:{},spins:p=>isBus(p)?{v:I(-30,-10),vdc:I(-30,20),d:O(30,0)}:{va:I(-30,-20),vb:I(-30,-10),vc:I(-30,0),vdc:I(-30,20),da:O(30,-10),db:O(30,0),dc:O(30,10)},
+   bus:p=>isBus(p)?{v:['va','vb','vc'],d:['da','db','dc']}:{},box:[-20,-25,40,50],blk:true,
+   params:[sel('mode','Διαμόρφωση',[['spwm','SPWM: d = ½ + v/V_dc'],['svpwm','SVPWM: έγχυση μηδενικής ακολουθίας −(max + min)/2'],['square','Τετραγωνική (six-step): d = 1 όταν v > 0']],'svpwm',{hint:'Τα d πάνε στα PWM με «D από σήμα» και τριγωνικό φέρον, ένα ανά σκέλος. Γραμμική περιοχή: πλάτος φάσης ≤ V_dc/2 (SPWM), ≤ V_dc/√3 (SVPWM).'}),CONN('v_abc → d_abc')],value:()=>null,
+   draw:p=>sb(40,50)+tx(p.mode==='square'?'6-step':p.mode==='spwm'?'SPWM':'SVM',0,4,'bsm')+(isBus(p)?sbl('M-30,-10 H-20 M20,0 H30')+sl('M-30,20 H-20'):sl('M-30,-20 H-20 M-30,-10 H-20 M-30,0 H-20 M-30,20 H-20 M20,-10 H30 M20,0 H30 M20,10 H30'))},
   FEST:{name:'Εκτιμητής ροής δρομέα',prefix:'FE',group:'Έλεγχος',pins:{},spins:{al:I(-30,-10),be:I(-30,0),wr:I(-30,10),th:O(30,-10),psi:O(30,0),w1:O(30,10)},box:[-20,-20,40,40],blk:true,
    params:[sel('mode','Μοντέλο',[['cm','Μοντέλο ρεύματος (σταθερό πλαίσιο στάτη)']],'cm',{hint:'dψ̂/dt = R̂_R·i_s − (R̂_R/L̂_M − jω_r)ψ̂. Είσοδοι: i_α, i_β (Clarke) και ω_r ηλεκτρική (p·ω). Έξοδοι: γωνία θ̂, μέτρο ψ̂, ω̂₁ = ω_r + R̂_R·i_q/ψ̂.'}),
     num('RR','R̂_R','Ω',2),num('LM','L̂_M','H',0.3),num('psi0','Αρχική ροή (άξονας α)','V·s',0,{zero:true})],value:()=>null,
@@ -361,20 +370,25 @@
   LPF:{name:'Βαθυπερατό 1ης τάξης',prefix:'LPF',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
    params:[num('fc','Συχνότητα αποκοπής','Hz',1000),num('y0','Αρχική τιμή','',0,{signed:true,zero:true})],value:p=>p.fc,unit:'Hz',
    draw:()=>sb(40,30)+'<path class="thin" d="M-13,-5 H0 Q6,-5 12,8"/>'+sl('M-30,0 H-20 M20,0 H30')},
-  CLARKE:{name:'Clarke abc → αβ',prefix:'CL',group:'Σήματα',pins:{},spins:{a:I(-30,-10),b:I(-30,0),c:I(-30,10),al:O(30,-10),be:O(30,10)},box:[-20,-20,40,40],blk:true,
-   params:[sel('inv','Κλίμακα',[['amp','Διατήρηση πλάτους (α = a)'],['pow','Διατήρηση ισχύος']],'amp')],value:()=>null,
-   draw:()=>sb(40,40)+tx('abc',-6,-8,'bsm')+tx('αβ',8,14,'bsm')+'<path class="thin" d="M-12,12 L12,-12"/>'+sl('M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20 M20,-10 H30 M20,10 H30')},
-  ICLARKE:{name:'Clarke αβ → abc',prefix:'ICL',group:'Σήματα',pins:{},spins:{al:I(-30,-10),be:I(-30,10),a:O(30,-10),b:O(30,0),c:O(30,10)},box:[-20,-20,40,40],blk:true,
-   params:[sel('inv','Κλίμακα',[['amp','Διατήρηση πλάτους'],['pow','Διατήρηση ισχύος']],'amp')],value:()=>null,
-   draw:()=>sb(40,40)+tx('αβ',-7,-8,'bsm')+tx('abc',6,14,'bsm')+'<path class="thin" d="M-12,12 L12,-12"/>'+sl('M-30,-10 H-20 M-30,10 H-20 M20,-10 H30 M20,0 H30 M20,10 H30')},
-  PARK:{name:'Park αβ → dq',prefix:'PK',group:'Σήματα',pins:{},spins:{al:I(-30,-10),be:I(-30,0),th:I(-30,10),d:O(30,-10),q:O(30,10)},box:[-20,-20,40,40],blk:true,params:[],value:()=>null,
-   draw:()=>sb(40,40)+tx('αβ',-7,-8,'bsm')+tx('dq',8,14,'bsm')+tx('θ',-13,13,'bsm')+'<path class="thin" d="M-12,12 L12,-12"/>'+sl('M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20 M20,-10 H30 M20,10 H30')},
-  IPARK:{name:'Park dq → αβ',prefix:'IPK',group:'Σήματα',pins:{},spins:{d:I(-30,-10),q:I(-30,0),th:I(-30,10),al:O(30,-10),be:O(30,10)},box:[-20,-20,40,40],blk:true,params:[],value:()=>null,
-   draw:()=>sb(40,40)+tx('dq',-7,-8,'bsm')+tx('αβ',8,14,'bsm')+tx('θ',-13,13,'bsm')+'<path class="thin" d="M-12,12 L12,-12"/>'+sl('M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20 M20,-10 H30 M20,10 H30')},
-  PLL:{name:'PLL (τριφασικό)',prefix:'PLL',group:'Σήματα',pins:{},spins:{a:I(-30,-10),b:I(-30,0),c:I(-30,10),th:O(30,-10),w:O(30,0),amp:O(30,10)},box:[-20,-20,40,40],blk:true,
+  CLARKE:{name:'Clarke abc → αβ',prefix:'CL',group:'Σήματα',pins:{},spins:p=>isBus(p)?{abc:I(-30,0),ab:O(30,0)}:{a:I(-30,-10),b:I(-30,0),c:I(-30,10),al:O(30,-10),be:O(30,10)},box:[-20,-20,40,40],blk:true,
+   bus:p=>isBus(p)?{abc:['a','b','c'],ab:['al','be']}:{},
+   params:[sel('inv','Κλίμακα',[['amp','Διατήρηση πλάτους (α = a)'],['pow','Διατήρηση ισχύος']],'amp'),CONN('abc → αβ')],value:()=>null,
+   draw:p=>sb(40,40)+tx('abc',-6,-8,'bsm')+tx('αβ',8,14,'bsm')+'<path class="thin" d="M-12,12 L12,-12"/>'+(isBus(p)?sbl('M-30,0 H-20 M20,0 H30'):sl('M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20 M20,-10 H30 M20,10 H30'))},
+  ICLARKE:{name:'Clarke αβ → abc',prefix:'ICL',group:'Σήματα',pins:{},spins:p=>isBus(p)?{ab:I(-30,0),abc:O(30,0)}:{al:I(-30,-10),be:I(-30,10),a:O(30,-10),b:O(30,0),c:O(30,10)},box:[-20,-20,40,40],blk:true,
+   bus:p=>isBus(p)?{ab:['al','be'],abc:['a','b','c']}:{},
+   params:[sel('inv','Κλίμακα',[['amp','Διατήρηση πλάτους'],['pow','Διατήρηση ισχύος']],'amp'),CONN('αβ → abc')],value:()=>null,
+   draw:p=>sb(40,40)+tx('αβ',-7,-8,'bsm')+tx('abc',6,14,'bsm')+'<path class="thin" d="M-12,12 L12,-12"/>'+(isBus(p)?sbl('M-30,0 H-20 M20,0 H30'):sl('M-30,-10 H-20 M-30,10 H-20 M20,-10 H30 M20,0 H30 M20,10 H30'))},
+  PARK:{name:'Park αβ → dq',prefix:'PK',group:'Σήματα',pins:{},spins:p=>isBus(p)?{ab:I(-30,-10),th:I(-30,10),dq:O(30,0)}:{al:I(-30,-10),be:I(-30,0),th:I(-30,10),d:O(30,-10),q:O(30,10)},box:[-20,-20,40,40],blk:true,
+   bus:p=>isBus(p)?{ab:['al','be'],dq:['d','q']}:{},params:[CONN('αβ → dq')],value:()=>null,
+   draw:p=>sb(40,40)+tx('αβ',-7,-8,'bsm')+tx('dq',8,14,'bsm')+tx('θ',-13,13,'bsm')+'<path class="thin" d="M-12,12 L12,-12"/>'+(isBus(p)?sbl('M-30,-10 H-20 M20,0 H30')+sl('M-30,10 H-20'):sl('M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20 M20,-10 H30 M20,10 H30'))},
+  IPARK:{name:'Park dq → αβ',prefix:'IPK',group:'Σήματα',pins:{},spins:p=>isBus(p)?{dq:I(-30,-10),th:I(-30,10),ab:O(30,0)}:{d:I(-30,-10),q:I(-30,0),th:I(-30,10),al:O(30,-10),be:O(30,10)},box:[-20,-20,40,40],blk:true,
+   bus:p=>isBus(p)?{dq:['d','q'],ab:['al','be']}:{},params:[CONN('dq → αβ')],value:()=>null,
+   draw:p=>sb(40,40)+tx('dq',-7,-8,'bsm')+tx('αβ',8,14,'bsm')+tx('θ',-13,13,'bsm')+'<path class="thin" d="M-12,12 L12,-12"/>'+(isBus(p)?sbl('M-30,-10 H-20 M20,0 H30')+sl('M-30,10 H-20'):sl('M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20 M20,-10 H30 M20,10 H30'))},
+  PLL:{name:'PLL (τριφασικό)',prefix:'PLL',group:'Σήματα',pins:{},spins:p=>isBus(p)?{abc:I(-30,0),th:O(30,-10),w:O(30,0),amp:O(30,10)}:{a:I(-30,-10),b:I(-30,0),c:I(-30,10),th:O(30,-10),w:O(30,0),amp:O(30,10)},box:[-20,-20,40,40],blk:true,
+   bus:p=>isBus(p)?{abc:['a','b','c']}:{},
    params:[num('f0','Ονομαστική συχνότητα','Hz',50),num('bw','Εύρος ζώνης','Hz',20,{hint:'ω_n = 2π·εύρος, ζ = 0,707: K_p = 2ζω_n, K_i = ω_n². Το σφάλμα είναι κανονικοποιημένο με το πλάτος, άρα τα κέρδη δεν εξαρτώνται από την τάση. Το θ φέρνει τον άξονα d πάνω στο διάνυσμα της τάσης: με v_a = V̂·sin(ωt + φ), όπως οι πηγές, θ = ωt + φ − 90°, v_d = V̂, v_q = 0.'}),
-    num('th0','Αρχική γωνία','°',0,{signed:true,zero:true})],value:p=>p.f0,unit:'Hz',
-   draw:()=>sb(40,40)+tx('PLL',0,4,'bsm')+tx('θ',12,-7,'bsm')+tx('ω',12,3,'bsm')+sl('M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20 M20,-10 H30 M20,0 H30 M20,10 H30')},
+    num('th0','Αρχική γωνία','°',0,{signed:true,zero:true}),CONN('abc')],value:p=>p.f0,unit:'Hz',
+   draw:p=>sb(40,40)+tx('PLL',0,4,'bsm')+tx('θ',12,-7,'bsm')+tx('ω',12,3,'bsm')+(isBus(p)?sbl('M-30,0 H-20')+sl('M20,-10 H30 M20,0 H30 M20,10 H30'):sl('M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20 M20,-10 H30 M20,0 H30 M20,10 H30'))},
   // Goto / From: signals joined by name, without a wire (like PLECS / Simulink tags)
   TAGO:{name:'Ετικέτα: προς (Goto)',prefix:'TG',group:'Σήματα',pins:{},spins:{u:I(-30,0)},box:[-20,-10,44,20],
    params:[txt('name','Όνομα σήματος','g',{hint:'Ό,τι μπαίνει εδώ βγαίνει από κάθε ετικέτα «από» με το ίδιο όνομα, σε όλο το κύκλωμα.'})],value:()=>null,
@@ -390,16 +404,32 @@
    box:p=>{const L=subLayout(p.$ports);return [-L.W,-L.H,2*L.W,2*L.H];},params:[txt('def','Ορισμός','')],value:p=>p.$title||p.def||'—',
    draw:p=>subDraw(p)},
   PORT:{name:'Θύρα (ηλεκτρική)',prefix:'P',group:'Υποκυκλώματα',pins:{p:[-30,0]},box:[-20,-10,42,20],
-   params:[txt('name','Όνομα ακροδέκτη','e1',{hint:'Το όνομα του ακροδέκτη στο σύμβολο του υποκυκλώματος. Χωρίς κενά, «:», «.» και «/».'}),portSide],value:()=>null,
-   draw:p=>'<path d="M-30,0 H-20"/><path class="block" d="M-20,-9 H10 L20,0 L10,9 H-20 Z"/>'+tx(xe(String(p.name||'').slice(0,6)),-2,4,'bsm')},
+   params:[txt('name','Όνομα ακροδέκτη','e1',{hint:'Το όνομα του ακροδέκτη στο σύμβολο του υποκυκλώματος. Χωρίς κενά, «:», «.» και «/».'}),portSide,WIDTH],value:()=>null,
+   draw:p=>(+p.width>1?bl('M-30,0 H-20'):'<path d="M-30,0 H-20"/>')+'<path class="block" d="M-20,-9 H10 L20,0 L10,9 H-20 Z"/>'+tx(xe(String(p.name||'').slice(0,6)),-2,4,'bsm')},
   SIN:{name:'Θύρα εισόδου σήματος',prefix:'IN',group:'Υποκυκλώματα',pins:{},spins:{y:O(30,0)},box:[-22,-10,42,20],
-   params:[txt('name','Όνομα εισόδου','u1',{hint:'Το σήμα που μπαίνει στο υποκύκλωμα από αυτόν τον ακροδέκτη του συμβόλου.'}),portSide],value:()=>null,
-   draw:p=>'<path class="block sblk" d="M-22,-9 L-12,0 L-22,9 H20 V-9 Z"/>'+tx(xe(String(p.name||'').slice(0,6)),1,4,'bsm')+sl('M20,0 H30')},
+   params:[txt('name','Όνομα εισόδου','u1',{hint:'Το σήμα που μπαίνει στο υποκύκλωμα από αυτόν τον ακροδέκτη του συμβόλου.'}),portSide,WIDTH],value:()=>null,
+   draw:p=>'<path class="block sblk" d="M-22,-9 L-12,0 L-22,9 H20 V-9 Z"/>'+tx(xe(String(p.name||'').slice(0,6)),1,4,'bsm')+(+p.width>1?sbl:sl)('M20,0 H30')},
   SOUT:{name:'Θύρα εξόδου σήματος',prefix:'OUT',group:'Υποκυκλώματα',pins:{},spins:{u:I(-30,0)},box:[-20,-10,42,20],
-   params:[txt('name','Όνομα εξόδου','y1',{hint:'Το σήμα που βγαίνει από το υποκύκλωμα σε αυτόν τον ακροδέκτη του συμβόλου.'}),portSide],value:()=>null,
-   draw:p=>'<path class="block sblk" d="M-20,-9 H10 L20,0 L10,9 H-20 Z"/>'+tx(xe(String(p.name||'').slice(0,6)),-2,4,'bsm')+sl('M-30,0 H-20')},
+   params:[txt('name','Όνομα εξόδου','y1',{hint:'Το σήμα που βγαίνει από το υποκύκλωμα σε αυτόν τον ακροδέκτη του συμβόλου.'}),portSide,WIDTH],value:()=>null,
+   draw:p=>'<path class="block sblk" d="M-20,-9 H10 L20,0 L10,9 H-20 Z"/>'+tx(xe(String(p.name||'').slice(0,6)),-2,4,'bsm')+(+p.width>1?sbl:sl)('M-30,0 H-20')},
+  // buses (3.18, ROADMAP §3): wiring only, Bus.expand takes them out before the solver
+  MUX:{name:'Mux (σήματα → δίαυλος)',prefix:'MX',group:'Δίαυλοι',pins:{},spins:p=>{const n=nIO(p),o={};for(let k=0;k<n;k++)o['u'+(k+1)]=I(-20,ioY(n,k));o.y=O(20,0);return o;},
+   box:p=>{const n=nIO(p);return [-8,-10*n-2,16,20*n+4];},
+   params:[num('n','Είσοδοι','',3,{hint:'2 έως 8. Η έξοδος είναι δίαυλος με τις εισόδους στη σειρά, από πάνω προς τα κάτω. Μια είσοδος που είναι δίαυλος δίνει όλα της τα σήματα.'})],value:p=>nIO(p),unit:'',
+   draw:p=>{const n=nIO(p);return `<rect class="block sblk" x="-4" y="${-10*n}" width="8" height="${20*n}" rx="2"/>`+sl(Array.from({length:n},(_,k)=>`M-20,${ioY(n,k)} H-4`).join(' '))+sbl('M4,0 H20');}},
+  DEMUX:{name:'Demux (δίαυλος → σήματα)',prefix:'DX',group:'Δίαυλοι',pins:{},spins:p=>{const n=nIO(p),o={u:I(-20,0)};for(let k=0;k<n;k++)o['y'+(k+1)]=O(20,ioY(n,k));return o;},
+   box:p=>{const n=nIO(p);return [-8,-10*n-2,16,20*n+4];},
+   params:[num('n','Έξοδοι','',3,{hint:'2 έως 8. Ο δίαυλος χωρίζεται σε n ίσα μέρη, στη σειρά: με δίαυλο 6 και n = 3 κάθε έξοδος είναι δίαυλος 2.'})],value:p=>nIO(p),unit:'',
+   draw:p=>{const n=nIO(p);return `<rect class="block sblk" x="-4" y="${-10*n}" width="8" height="${20*n}" rx="2"/>`+sbl('M-20,0 H-4')+sl(Array.from({length:n},(_,k)=>`M4,${ioY(n,k)} H20`).join(' '));}},
+  BSEL:{name:'Επιλογή από δίαυλο',prefix:'BS',group:'Δίαυλοι',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-12,40,24],
+   params:[txt('idx','Στοιχεία (από 1)','1, 2',{hint:'Ποια στοιχεία του διαύλου βγαίνουν, με τη σειρά, π.χ. «2, 1» αντιστρέφει δύο σήματα (dq → qd), «3» δίνει μόνο το τρίτο. Ένα στοιχείο μπορεί να επαναληφθεί.'})],value:()=>null,
+   draw:p=>sb(40,24)+tx('['+xe(String(p.idx||'').replace(/\s+/g,'').slice(0,7))+']',0,4,'bsm')+sbl('M-30,0 H-20')+(String(p.idx||'').split(/[,;\s]+/).filter(Boolean).length>1?sbl:sl)('M20,0 H30')},
+  EBUS:{name:'Δίαυλος αγωγών (π.χ. τριφασικός)',prefix:'B',group:'Δίαυλοι',pins:p=>{const n=nEL(p),o={};for(let k=0;k<n;k++)o['abcdef'[k]]=[-20,ioY(n,k)];o.bus=[20,0];return o;},
+   box:p=>{const n=nEL(p);return [-8,-10*n-2,16,20*n+4];},
+   params:[num('n','Αγωγοί','',3,{hint:'2 έως 6, ακροδέκτες a, b, c, … Ο ακροδέκτης «bus» είναι ένας ηλεκτρικός δίαυλος με τους αγωγούς στη σειρά: δύο δίαυλοι ενώνονται αγωγό προς αγωγό (a με a, b με b, …), όπως οι ακροδέκτες «abc» των τριφασικών στοιχείων.'})],value:p=>nEL(p),unit:'',
+   draw:p=>{const n=nEL(p);return `<rect class="block busbar" x="-4" y="${-10*n}" width="8" height="${20*n}" rx="2"/>`+`<path d="${Array.from({length:n},(_,k)=>`M-20,${ioY(n,k)} H-4`).join(' ')}"/>`+bl('M4,0 H20')+Array.from({length:n},(_,k)=>tx('abcdef'[k],-13,ioY(n,k)-3,'bsm')).join('');}},
  };
- const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Μηχανές','Φορτία','Έλεγχος','Σήματα','Κώδικας','Υποκυκλώματα','Βασικά'];
+ const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Μηχανές','Φορτία','Έλεγχος','Σήματα','Δίαυλοι','Κώδικας','Υποκυκλώματα','Βασικά'];
  function defaults(type){const o={};for(const p of PARTS[type].params)o[p.k]=p.def;return o;}
  // electrical + signal pins of one placed part; the electrical pins of a multiport depend on its parameters (3.5)
  function elPins(c){const d=PARTS[c.type];if(!d)return {};return typeof d.pins==='function'?d.pins({...defaults(c.type),...(c.params||{})}):d.pins;}
@@ -569,6 +599,9 @@
   const T1=Math.max(parseEng(p.T1)||1.2e-6,1e-12),T2=Math.max(parseEng(p.T2)||50e-6,1.5*T1),kind=p.model==='dexp'?'dexp':'heidler',n=Math.max(1,Math.min(30,parseEng(p.n)||10));
   const f=waveFit(kind,T1,T2,n);return {kind,n,tau1:f.tau1,tau2:f.tau2,eta:f.eta,I0,t0,T1,T2,fitOk:f.ok};}
  function pinKind(c,pin){const s=sigPins(c)[pin];return s?s.dir:'el';}
+ // the declared width of a pin (3.18): a bus pin of a part, a port of a subcircuit; 1 otherwise (Bus.widths infers the rest)
+ function pinWidth(c,pin){const d=PARTS[c?.type];if(!d)return 1;if(c.type==='SUB'){const q=(c.params?.$ports||[]).find(x=>x.name===pin);return q&&+q.w>1?+q.w:1;}
+  if(typeof d.bus==='function'){const m=d.bus({...defaults(c.type),...(c.params||{})})||{};if(m[pin])return m[pin].length;}return 1;}
  // rotation (0..3 quarter turns) and mirror applied to a local point
  function xf(c,[x,y]){if(c.flip)x=-x;for(let i=0;i<(c.rot||0);i++)[x,y]=[-y,x];return [c.x+x,c.y+y];}
  function pinPos(c,pin){const q=pinsOf(c)[pin];return q?xf(c,q):null;}
@@ -602,7 +635,7 @@
   const out=[];for(const part of s.split(/[;,]\s*(?=[-+.\d])/)){const [a,b]=part.split(':');const t=parseEng(a),v=parseEng(b);if(!Number.isFinite(t)||!Number.isFinite(v))return null;out.push([t,v]);}
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
- const api={PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
+ const api={PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
   parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,bewley,movChar,
   srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;

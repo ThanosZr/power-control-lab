@@ -331,5 +331,15 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
  const one=o=>{const pr=bt('sub_legs',o),m=pr.meta,s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv,method:'TR'});s.run(4e-3);const lp=k=>{const q=s.lastPeriod(k);return {pp:q.max-q.min,avg:q.avg};};
   return {meta:m,vo:lp('V:C1').avg,leg:lp('I:X1/L1').pp,sum:lp('Y:AM1').pp,legs:Array.from({length:m.N},(_,j)=>lp(`I:X${j+1}/L1`).avg)};};
  out.sub_legs={n3:one({N:'3',drive:'shift',D:'0.5'}),n2:one({N:'2',drive:'shift',D:'0.5'}),n4:one({N:'4',drive:'shift',D:'0.3'})};}
+// 3.18: buses, the dq current loop of the bus_dq tutorial (vector PI on the dq bus, three-phase buses, average model)
+{const TT=globalThis.Tutorials,bt=(id,o={})=>{const t=TT.get(id),q={};for(const op of t.options)q[op.k]=o[op.k]??op.def;return t.build(q);};
+ const one=o=>{const pr=bt('bus_dq',o),m=pr.meta,s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv,method:'TR'}),h=m.dur/8000,t=[],id=[],iq=[];
+  while(s.t<m.dur-1e-12){s.run(h);t.push(s.t);id.push(s.now('Y:PK'));iq.push(s.now('Y:PK:q'));}
+  // the 63.2 % time of the i_d step, interpolated between samples
+  const k=id.findIndex((x,i)=>t[i]>m.t1&&x>=.632*m.id),tau=t[k-1]+(t[k]-t[k-1])*(.632*m.id-id[k-1])/(id[k]-id[k-1])-m.t1;
+  // the amplitudes over a whole period after the i_q step (40–60 ms), not across it
+  const after=id.filter((_,i)=>t[i]>m.t2);s.run(.02);const last=s.lastPeriod('I:XL/La'),va=s.lastPeriod('V:XI/Va');
+  return {meta:m,tau,id:id[id.length-1],iq:iq[iq.length-1],dev:Math.max(...after.map(x=>Math.abs(x-m.id))),ia:(last.max-last.min)/2,va:(va.max-va.min)/2,steps:s.steps};};
+ out.bus_dq={on:one({}),off:one({dec:'off'})};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

@@ -153,7 +153,7 @@
    if(!end||same(end,from)){this.cancelWire();if(wi.made){this.tidyJunctions();this.render();}return;}
    const t=this.nearTarget(end,wi.from.c+':'+wi.from.p,new Set(this.wiresAt(wi.from.c).map(w=>w.id)));if(t){wi.via=via;this.finishWire(t.q,t.pin?{pin:t.pin}:{w:t.w});return;}
    const j=this.newJunction(end);wi.via=via;this.finishWire(end,{pin:j+':j'});}
-  setWireProps(id,patch){const w=this.wire(id);if(!w)return;this.remember();Object.assign(w,patch);if(patch.name!==undefined&&!patch.name)delete w.name;this.renderWires();this.changed('param');}
+  setWireProps(id,patch){const w=this.wire(id);if(!w)return;this.remember();Object.assign(w,patch);if(patch.name!==undefined&&!patch.name)delete w.name;if('link' in patch&&!patch.link)delete w.link;this.renderWires();this.changed('param');}
   deleteSel(){
    if(!this.sel.c.size&&!this.sel.w.size)return;this.remember();
    const dc=new Set(this.sel.c);this.doc.components=this.doc.components.filter(c=>!dc.has(c.id));
@@ -250,7 +250,7 @@
     case 'SH':return (p.in==='sig'?'u':(p.qty==='V'?'v(':'i(')+(p.src||'—')+')')+' · '+({start:'αρχή T',mid:'μέσο T',both:'2 ανά T'}[p.trig]||'');
     case 'MEAS':case 'VM':case 'AM':case 'VP':case 'IP':case 'SR':case 'DISP':return '';
     case 'SUB':return String(p.$title||p.def||''); // subcircuit (3.17): the title of its definition
-    case 'CONST':return String(p.v).includes(':')?String(p.v).slice(0,22):'';case 'GAIN':return 'K = '+e(+p.K);case 'SUM':return '';
+    case 'CONST':return String(p.v).includes(':')?String(p.v).slice(0,22):'';case 'GAIN':return 'K = '+(String(p.K).includes(';')?String(p.K).split(';').map(x=>e(+x.trim())).join('; '):e(+p.K));case 'SUM':return '';
     case 'SAT':return '['+e(+p.lo)+', '+e(+p.hi)+']';case 'CMP':return +p.hys>0?'h = '+e(+p.hys):'';case 'LOGIC':return ['nand','nor','xor'].includes(p.op)?p.op.toUpperCase():'';
     case 'PIB':return 'K_p '+e(+p.Kp)+' · K_i '+e(+p.Ki);case 'UD':return '';
     case 'IM':return 'p = '+p.pp+' · L_M '+e(+p.LM,'H');case 'SRM':return (p.mag==='table'?'ψ(θ, i) από πίνακα':'L_u '+e(+p.Lu,'H')+' · L_a '+e(+p.La,'H'))+(p.load==='sig'?' · τ_L σήμα':'');case 'SM':return 'L_d '+e(+p.Ld,'H')+(p.sat==='d'?' (κορεσμός)':'')+' · L_q '+e(+p.Lq,'H')+(+p.psim>0?' · ψ_m '+e(+p.psim,'V·s'):'');
@@ -277,12 +277,17 @@
   renderWires(){
    const W=this.settings.wireWidth;const count=new Map();for(const w of this.doc.wires)for(const e of [w.a,w.b]){const k=e.c+':'+e.p;count.set(k,(count.get(k)||0)+1);}
    let h='',dots='';const NK=this.netKinds();this.nk=NK;
-   for(const w of this.doc.wires){const pts=this.wirePts(w);if(pts.some(p=>!p))continue;const sig=NK.of(w.a.c+':'+w.a.p)==='sig';
+   // buses (3.18): the width of every wire, inferred from what it joins (Bus.widths never throws)
+   let BW=null;try{BW=root.Bus?root.Bus.widths(this.doc):null;}catch(e){BW=null;}this.bw=BW;
+   for(const w of this.doc.wires){const pts=this.wirePts(w);if(pts.some(p=>!p))continue;const sig=NK.of(w.a.c+':'+w.a.p)==='sig',nb=BW?BW.wire(w):1;
     // signal wires: thinner, own colour, arrow where they enter an input
     const ina=sig&&NK.kind.get(w.a.c+':'+w.a.p)==='in',inb=sig&&NK.kind.get(w.b.c+':'+w.b.p)==='in';const d=this.pathD(ina&&!inb?pts.slice().reverse():pts);
-    h+=`<g class="wire${sig?' sig':''}${this.sel.w.has(w.id)?' sel':''}" data-w="${w.id}"><path class="wl" d="${d}"${(ina||inb)?' marker-end="url(#sigArr)"':''} style="${w.color?`stroke:${w.color};`:''}${w.width?`stroke-width:${w.width}px`:sig?`stroke-width:${Math.max(1.2,W*.62)}px`:`stroke-width:${W}px`}"/>`;
+    const sw=w.width?w.width:sig?Math.max(1.2,W*.62):W;
+    h+=`<g class="wire${sig?' sig':''}${nb>1?' bus':''}${this.sel.w.has(w.id)?' sel':''}" data-w="${w.id}"><path class="wl" d="${d}"${(ina||inb)?' marker-end="url(#sigArr)"':''} style="${w.color?`stroke:${w.color};`:''}stroke-width:${nb>1?Math.max(3,sw*2.2):sw}px"/>`;
+    // a bus: a slash with its width at the middle of the longest segment
+    if(nb>1){const m=this.midLabel(pts),hz=this.segDir(pts);h+=`<path class="bslash" d="M${m[0]-4},${m[1]+5} L${m[0]+4},${m[1]-5}"/><text class="bwidth" x="${m[0]+(hz?6:7)}" y="${m[1]+(hz?13:4)}">${nb}</text>`;}
     for(let i=1;i<pts.length;i++)h+=`<path class="whit" data-w="${w.id}" data-seg="${i-1}" d="M${pts[i-1][0]},${pts[i-1][1]} L${pts[i][0]},${pts[i][1]}"/>`;
-    if(w.name){const m=this.midLabel(pts);h+=`<text class="wname" x="${m[0]}" y="${m[1]-6}" text-anchor="middle">${esc(w.name)}</text>`;}
+    if(w.name){const m=this.midLabel(pts);h+=`<text class="wname${w.link?' link':''}" x="${m[0]}" y="${m[1]-6}" text-anchor="middle">${w.link?'⇄ ':''}${esc(w.name)}</text>`;}
     h+='</g>';}
    for(const c of this.doc.components){if(c.type==='JUNC'){const n=count.get(c.id+':j')||0;if(n>=3)dots+=`<circle class="jdot${NK.of(c.id+':j')==='sig'?' sig':''}" cx="${c.x}" cy="${c.y}" r="${NK.of(c.id+':j')==='sig'?2.8:3.6}"/>`;else if(n===1)dots+=`<circle class="jfree" cx="${c.x}" cy="${c.y}" r="3.6"/>`;continue;}
     for(const p of Object.keys(P.pinsOf(c))){if((count.get(c.id+':'+p)||0)>=2){const q=this.pin(c,p),sg=NK.of(c.id+':'+p)==='sig';dots+=`<circle class="jdot${sg?' sig':''}" cx="${q[0]}" cy="${q[1]}" r="${sg?2.8:3.6}"/>`;}}}
@@ -292,12 +297,14 @@
    let d=`M${pts[0][0]},${pts[0][1]}`;for(let i=1;i<pts.length-1;i++){const [ax,ay]=pts[i-1],[bx,by]=pts[i],[cx,cy]=pts[i+1];const r=Math.min(5,Math.hypot(bx-ax,by-ay)/2,Math.hypot(cx-bx,cy-by)/2);
     const ux=Math.sign(bx-ax),uy=Math.sign(by-ay),vx=Math.sign(cx-bx),vy=Math.sign(cy-by);d+=` L${bx-ux*r},${by-uy*r} Q${bx},${by} ${bx+vx*r},${by+vy*r}`;}
    const l=pts[pts.length-1];return d+` L${l[0]},${l[1]}`;}
+  // is the longest segment horizontal (where the bus width goes)
+  segDir(pts){let best=0,hz=true;for(let i=1;i<pts.length;i++){const dx=Math.abs(pts[i][0]-pts[i-1][0]),dy=Math.abs(pts[i][1]-pts[i-1][1]);if(dx+dy>best){best=dx+dy;hz=dx>=dy;}}return hz;}
   midLabel(pts){let best=0,bi=1;for(let i=1;i<pts.length;i++){const l=Math.abs(pts[i][0]-pts[i-1][0])+Math.abs(pts[i][1]-pts[i-1][1]);if(l>best){best=l;bi=i;}}return [(pts[bi][0]+pts[bi-1][0])/2,(pts[bi][1]+pts[bi-1][1])/2];}
   renderPins(){let h='';const count=this.pinCount||new Map();
    for(const c of this.doc.components){for(const p of Object.keys(P.pinsOf(c))){const q=this.pin(c,p);const n=count.get(c.id+':'+p)||0;
     const k=c.type==='JUNC'?'j':P.pinKind(c,p),src=k==='in'?c.params?.['in_'+p]:null,linked=!!src;
-    const sg=k==='in'||k==='out';
-    h+=`<circle class="pin${n||linked?'':' open'}${c.type==='JUNC'?' jpin':''}${sg?' spin '+k:''}${linked?' linked':''}" data-pin="${c.id}:${p}" cx="${q[0]}" cy="${q[1]}" r="${c.type==='JUNC'?5:sg?3.4:4.2}"/>`;
+    const sg=k==='in'||k==='out',bus=c.type!=='JUNC'&&this.bw?.any&&this.bw.pin(c.id+':'+p)>1;
+    h+=`<circle class="pin${n||linked?'':' open'}${c.type==='JUNC'?' jpin':''}${sg?' spin '+k:''}${linked?' linked':''}${bus?' buspin':''}" data-pin="${c.id}:${p}" cx="${q[0]}" cy="${q[1]}" r="${c.type==='JUNC'?5:bus?5:sg?3.4:4.2}"/>`;
     // an input that takes its signal from the parameters: a small tag "← block.output" outside the pin
     if(linked){const [sc,sp]=String(src).split(':'),s0=this.comp(sc),d=P.pinDir(c,p),ok=!!(s0&&P.pinsOf(s0)[sp]);const t=(ok?'← '+(s0.label||sc)+'.'+sp:'← ? '+src);
      const anchor=d[0]<0?'end':d[0]>0?'start':'middle',x=q[0]+d[0]*7,y=q[1]+(d[1]?d[1]*12:-5);

@@ -37,10 +37,11 @@
    let side=String(c.params?.side||'auto');
    if(!SIDES.includes(side)){const [dx,dy]=P.xf({x:0,y:0,rot:c.rot||0,flip:!!c.flip},PORT_OUT[c.type]);
     side=Math.abs(dx)>=Math.abs(dy)?(dx<0?'l':'r'):(dy<0?'t':'b');}
-   out.push({id:c.id,name,kind:PORT_KIND[c.type],side,x:c.x||0,y:c.y||0});}
+   const w=Math.round(+c.params?.width||1);
+   out.push({id:c.id,name,kind:PORT_KIND[c.type],side,x:c.x||0,y:c.y||0,...(w>1?{w}:{})});}
   const key=p=>p.side==='l'||p.side==='r'?p.y:p.x;
   out.sort((a,b)=>SIDES.indexOf(a.side)-SIDES.indexOf(b.side)||key(a)-key(b)||(a.id<b.id?-1:1));
-  return out.map(({id,name,kind,side})=>({id,name,kind,side}));}
+  return out.map(({id,name,kind,side,w})=>({id,name,kind,side,...(w?{w}:{})}));}
 
  // symbol of an instance (parts.js draws it)
  const layout=ports=>P.subLayout(ports);
@@ -90,7 +91,8 @@
     walk(innerParts(d,c,warn,lbl),d.wires||[],{pfx:full+'/',lbl:lbl+'/',parent:me,stack:[...me.stack,name],inst:c});}
    for(const c of list){if(c.type==='SUB')continue;const id=me.pfx+c.id,label=me.lbl+(c.label||c.id);
     if(isPort(c)){if(!me.inst)warn(`${label}: θύρα υποκυκλώματος έξω από υποκύκλωμα (ενώνει μόνο τα σύρματά της).`);
-     comps.push({id,type:'JUNC',x:c.x||0,y:c.y||0,rot:0,flip:false,label,params:{}});continue;}
+     // a port with a width (3.18): the junction keeps it, so Bus.expand checks it like the pin of the symbol
+     const pw=Math.round(+c.params?.width||1);comps.push({id,type:'JUNC',x:c.x||0,y:c.y||0,rot:0,flip:false,label,params:pw>1?{$w:pw}:{}});continue;}
     const q={...c,id,label,params:{...(c.params||{})}},d=P.PARTS[c.type];
     if(me.pfx){for(const pd of d?.params||[])if(pd.type==='ref'&&q.params[pd.k])q.params[pd.k]=resolve(q.params[pd.k]);
      if(c.type==='TAGO'||c.type==='TAGI')q.params.name=tagName(q.params.name,me.pfx);}
@@ -168,6 +170,7 @@
   const groups=new Map();for(const w of cross){const [ie,oe]=sel.has(w.a.c)?[w.a,w.b]:[w.b,w.a];const k=ie.c+':'+ie.p;const r=par.has(k)?find(k):k;
    if(!groups.has(r))groups.set(r,{ie,list:[]});groups.get(r).list.push({w,ie,oe});}
   const name=opt.name&&!pr.subcircuits?.[opt.name]?opt.name:newDefName(pr);
+  const BUS=root.Bus||(typeof require!=='undefined'?require('./bus.js'):null),bw=BUS?BUS.widths(pr):null;
   const taken=new Set(inner.map(c=>c.id).concat(intW.map(w=>w.id))),names=new Set(),defComps=clone(inner),defWires=clone(intW);
   const instPins=[];
   for(const [r,g] of groups){
@@ -181,7 +184,8 @@
    const ip=P.pinPos(byId.get(g.ie.c),g.ie.p)||[0,0],op=P.pinPos(byId.get(g.list[0].oe.c),g.list[0].oe.p)||[ip[0]+1,ip[1]];
    const dx=op[0]-ip[0],dy=op[1]-ip[1],d=Math.abs(dx)>=Math.abs(dy)?[Math.sign(dx)||1,0]:[0,Math.sign(dy)||1];
    const ROT=type==='SIN'?{'1,0':2,'-1,0':0,'0,-1':1,'0,1':3}:{'1,0':0,'-1,0':2,'0,-1':3,'0,1':1};
-   const port={id:pid,type,x:snap(ip[0]+d[0]*60),y:snap(ip[1]+d[1]*60),rot:ROT[d.join(',')],flip:false,label:pn,params:{name:pn,side:'auto'}};
+   const pw=bw?bw.pin(g.ie.c+':'+g.ie.p):1;
+   const port={id:pid,type,x:snap(ip[0]+d[0]*60),y:snap(ip[1]+d[1]*60),rot:ROT[d.join(',')],flip:false,label:pn,params:{name:pn,side:'auto',...(pw>1?{width:String(pw)}:{})}};
    defComps.push(port);defWires.push({id:uniq(taken,'w'),a:{c:g.ie.c,p:g.ie.p},b:{c:pid,p:PORT_PIN[type]},pts:[]});
    instPins.push({pn,list:g.list});}
   // the instance at the centre of the selection
@@ -211,7 +215,7 @@
   const ox=snap(inst.x-(bb[0]+bb[2])/2),oy=snap(inst.y-(bb[1]+bb[3])/2);
   const loc=v=>{const s=String(v),h=s.split('/')[0];return map.has(h)?map.get(h)+s.slice(h.length):s;};
   const ports=new Map(portsOf(def).map(p=>[p.name,map.get(p.id)])),tagP=(inst.label||inst.id)+'_';
-  const nc=parts.map(c=>{const id=map.get(c.id);if(isPort(c))return {id,type:'JUNC',x:c.x+ox,y:c.y+oy,rot:0,flip:false,label:id,params:{}};
+  const nc=parts.map(c=>{const id=map.get(c.id);if(isPort(c))return {id,type:'JUNC',x:c.x+ox,y:c.y+oy,rot:0,flip:false,label:id,params:{}}; // a bus port becomes a junction that follows its wires
    const q={...clone(c),id,label:id,x:c.x+ox,y:c.y+oy};delete q.live;delete q.liveBase;
    for(const pd of P.PARTS[c.type]?.params||[])if(pd.type==='ref'&&q.params[pd.k])q.params[pd.k]=loc(q.params[pd.k]);
    for(const [k,v] of Object.entries(q.params))if(k.startsWith('in_')&&typeof v==='string'&&v.includes(':')){const i=v.lastIndexOf(':');q.params[k]=loc(v.slice(0,i))+':'+v.slice(i+1);}
