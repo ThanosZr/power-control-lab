@@ -28,10 +28,8 @@
   A.ctx.editor.setParams(id,{[p]:val});if(src){c.from={...(c.from||{}),[p]:src};}return c.params[p];}
  function query(a){const q={...a,project:a.project||A.ctx.project()};delete q.method;return q;}
  function poolOf(){return A.pool||(A.pool=new root.Pool.SimPool());}
- // a circuit with a Python block runs here, in the page (the pool's workers have no Python): Python is loaded the first time
- async function onPage(q){try{return root.Scenario.handle(q);}catch(e){if(!e.needPython||!root.PyRT)throw e;await root.PyRT.load();return root.Scenario.handle(q);}}
- async function solve(q){if(root.Pool.hasPython(q.project))return onPage(q);
-  const [o]=await poolOf().map([q]);return o;}
+ // in the pool, Python blocks too (3.16: each worker loads Python when it needs it), so the page does not freeze
+ async function solve(q){const [o]=await poolOf().map([q]);return o;}
  function scopeData(a){const s=A.ctx.sim();if(!s)throw new Error('Δεν υπάρχει προσομοίωση.');const r=s.ring;
   const want=a.keys&&a.keys.length?a.keys:A.ctx.scopeKeys().filter(k=>s.chIndex.has(k));const idx=want.map(k=>{const i=s.chIndex.get(k);if(i===undefined)throw new Error(`Άγνωστο κανάλι ${k}`);return i;});
   const t=[],y=want.map(()=>[]);for(let j=0;j<r.n;j++){t.push(r.t[j]);idx.forEach((i,m)=>y[m].push(r.d[j*r.nch+i]));}
@@ -51,8 +49,7 @@
   values:a=>{const s=A.ctx.sim();if(!s)return {t:null,values:{}};const v={};for(const k of a.keys||[])if(s.chIndex.has(k))v[k]=s.now(k);return {t:s.t,values:v};},
   scope:a=>scopeData(a),
   run:async a=>solve({...query(a),action:'run'}),
-  batch:async a=>{const qs=(a.queries||[]).map(q=>({...query(q),action:q.action||'run'}));if(qs.some(q=>root.Pool.hasPython(q.project))){const out=[];for(const q of qs){try{out.push({out:await onPage(q)});}catch(e){out.push({error:String(e.message||e)});}}return out;}
-   return poolOf().map(qs,null,true);},
+  batch:async a=>{const qs=(a.queries||[]).map(q=>({...query(q),action:q.action||'run'}));return poolOf().map(qs,null,true);}, // 3.16: Python blocks too, in the workers
   bifurcation:async a=>{const q=query(a),vals=(a.values||[]).map(Number);const outs=await poolOf().map(vals.map(v=>({...q,action:'bifurcation',values:[v]})));return {points:outs.map(o=>o.points[0])};},
   python:async a=>A.ctx.python(String(a.code||''),a.inputs||{},a.files||{}),
   show:a=>{A.ctx.show(a.obj||a);return true;},

@@ -6,3 +6,9 @@
 #diagram text{font:11px system-ui,sans-serif;fill:var(--fg)}#diagram .val{fill:var(--acc);font-weight:600}
 #diagram rect{fill:none;stroke:var(--fg);stroke-width:1}#diagram .ai rect{stroke:var(--acc);stroke-width:2}
 #diagram path{fill:none;stroke:var(--mut);stroke-width:1.2;marker-end:url(#arr)}
+#train h4{margin:12px 0 4px}
+.steps{margin:6px 0;padding-left:20px}.steps li{display:grid;grid-template-columns:minmax(150px,1fr) 120px 2fr;gap:8px;align-items:center;margin:3px 0}
+.bar{height:8px;border:1px solid var(--line);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--acc)}
+.curve svg{width:100%;max-width:420px;height:auto}.curve text{font:11px system-ui,sans-serif;fill:var(--mut)}
+.curve polyline{fill:none;stroke:var(--acc);stroke-width:1.5}.curve polyline.c1{stroke:var(--bad)}
+@media (max-width:480px){.steps li{grid-template-columns:1fr}}

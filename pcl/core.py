@@ -10,6 +10,9 @@ different: it runs inside the simulation, at the controller's samples.
     r.to_csv('out.csv'); r.to_mat('out.mat'); df = r.frame()
     sw = p.sweep({'L1.L': [22e-6, 47e-6, 100e-6]}, t_end=5e-3, measure={'dI': ('I:L1', 'pp', 10)})
     sw.to_csv('sweep.csv')
+    for ch in p.stream(t_end=0.5, chunk=0.05, state='run.state', to='run.csv'):   # 3.16: chunk by chunk, state on disk
+        print(ch.meta['t1'], ch.measured)
+    r = p.run(t_end=1.0, resume='run.state')       # continues from where it stopped (the same numbers as one long run)
 
 * 'browser': the same web/studio/*.js as the app (pcl/runner.js), so the results are the app's.
 * 'scipy': the same netlist (MNA.exportForBatch) solved by engine.batch.simulate.
@@ -89,6 +92,77 @@ def _node(q, timeout=None):
     return json.loads(r.stdout)
 
 
+class _Session:
+    """A solver kept open between requests (3.16, ROADMAP §41.1): in the app's worker the requests go to `_backend`,
+    here to one Node process (pcl/runner.js --session), one JSON line per request and per answer."""
+
+    def __init__(self, timeout=None):
+        self.proc = None
+        self.timeout = timeout
+        if _backend is not None:
+            return
+        if IN_BROWSER:
+            raise PclError('Ο λύτης του browser δεν είναι διαθέσιμος εδώ.')
+        if shutil.which('node') is None:
+            raise PclError('Χρειάζεται το Node.js για τον λύτη του browser (https://nodejs.org).')
+        import tempfile
+        self.err = tempfile.TemporaryFile(mode='w+', encoding='utf-8')
+        self.proc = subprocess.Popen(['node', str(RUNNER), '--session'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.err,
+                                     text=True, encoding='utf-8', cwd=str(ROOT), bufsize=1)
+
+    def __call__(self, q):
+        if self.proc is None:
+            return _backend(q)
+        try:
+            self.proc.stdin.write(json.dumps(q) + '\n')
+            self.proc.stdin.flush()
+            line = self.proc.stdout.readline()
+        except (BrokenPipeError, OSError):
+            line = ''
+        if not line:
+            self.err.seek(0)
+            raise PclError(self.err.read().strip()[-2000:] or 'Ο λύτης του browser σταμάτησε.')
+        r = json.loads(line)
+        if 'error' in r:
+            raise PclError(r['error'])
+        return r['ok']
+
+    def close(self):
+        if self.proc is not None:
+            try:
+                self.proc.stdin.close()
+                self.proc.wait(timeout=10)
+            except Exception:       # noqa: BLE001
+                self.proc.kill()
+                self.proc.wait()
+            self.proc.stdout.close()
+            self.err.close()
+        self.proc = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+
+STATE_FORMAT = 'pcl-run-state'
+
+
+def read_state(path):
+    """A run state saved by stream(state=…) or run(save_state=…): {project, t, T, channels, sim, …}."""
+    d = path if isinstance(path, dict) else json.loads(Path(path).read_text(encoding='utf-8'))
+    if not isinstance(d, dict) or d.get('format') != STATE_FORMAT or 'sim' not in d:
+        raise PclError(f'{path}: δεν είναι αποθηκευμένη κατάσταση προσομοίωσης του Power Converter Lab.')
+    return d
+
+
+def _write_atomic(path, text):
+    tmp = f'{path}.tmp'
+    Path(tmp).write_text(text, encoding='utf-8')
+    os.replace(tmp, path)
+
+
 def tutorials():
     """The tutorials and their options: [{id, title, group, options: [{k, label, def, choices}]}]."""
     return _node({'action': 'tutorials'})
@@ -103,6 +177,8 @@ def load(path):
     """A project saved from the app (Αρχείο → Αποθήκευση) or written by pcl."""
     p = Path(path)
     data = json.loads(p.read_text(encoding='utf-8'))
+    if isinstance(data, dict) and data.get('format') == STATE_FORMAT:      # 3.16: the project of a saved run
+        return Project(data['project'], name=data.get('name') or p.stem)
     if not isinstance(data, dict) or not isinstance(data.get('components'), list):
         raise PclError(f'{p}: δεν είναι project του Power Converter Lab (λείπουν τα components).')
     return Project(data, name=p.stem)
@@ -261,7 +337,7 @@ def _clean(x):
 
 def job(spec, allow_paths=True):
     """One request as data (the CLI's `job`, the server's scenario_run/scenario_sweep, MATLAB/Octave):
-    {project | tutorial, set, run: {...} | sweep: {grid, points, mode, measure, t_end, …}
+    {project | tutorial, set, run: {..., save_state, resume} | sweep: {grid, points, mode, measure, t_end, …, to, resume}
      | bifurcation: {param, values | start, stop, n, channel, stat, transient, record}} → a JSON-able dict."""
     if not isinstance(spec, dict):
         raise PclError('Το αίτημα πρέπει να είναι αντικείμενο JSON.')
@@ -273,6 +349,8 @@ def job(spec, allow_paths=True):
         raise PclError('Λείπει το project (αντικείμενο, αρχείο ή "tutorial:<id>").')
     if isinstance(src, str) and not src.startswith('tutorial:') and not allow_paths:
         raise PclError('Εδώ το project δίνεται ως αντικείμενο JSON ή "tutorial:<id>", όχι ως διαδρομή αρχείου.')
+    if not allow_paths and any(k in (spec.get(w) or {}) for w in ('run', 'sweep') for k in ('save_state', 'resume', 'to')):
+        raise PclError('Εδώ δεν γράφονται ούτε διαβάζονται αρχεία κατάστασης (save_state, resume, to): από τη γραμμή εντολών ή την Python.')
     p = _open(src)
     for k, v in _pairs(spec.get('set')):
         p.set(k, v)
@@ -280,7 +358,8 @@ def job(spec, allow_paths=True):
         o = dict(spec['sweep'] or {})
         grid = _pairs(o.pop('grid', None), 'key', 'values')
         grid = {k: (v if isinstance(v, (list, tuple)) else _as_list(v) if isinstance(v, str) else [v]) for k, v in grid} or None
-        sw = p.sweep(grid=grid, **{k: v for k, v in o.items() if k in ('points', 't_end', 'measure', 'workers', 'solver', 'mode', 'hdiv', 'method', 'step', 'rtol', 'hmax', 'channels', 'scipy_method', 'timeout')})
+        sw = p.sweep(grid=grid, **{k: v for k, v in o.items() if k in ('points', 't_end', 'measure', 'workers', 'solver', 'mode', 'hdiv', 'method', 'step', 'rtol', 'hmax', 'channels', 'scipy_method', 'timeout')
+                                   or (allow_paths and k in ('to', 'resume'))})
         return _clean({'kind': 'sweep', 'meta': sw.meta, 'params': sw.params, 'measure': sw.names, 'vars': [_matname(c) for c in sw.params + sw.names], 'rows': sw.rows})
     if 'bifurcation' in spec:          # 3.15
         o = dict(spec['bifurcation'] or {})
@@ -290,7 +369,8 @@ def job(spec, allow_paths=True):
     o = dict(spec.get('run') or {})
     if 'from' in o:
         o['t_from'] = o.pop('from')
-    r = p.run(**{k: v for k, v in o.items() if k in ('t_end', 'solver', 'channels', 'hdiv', 'method', 'step', 'rtol', 'hmax', 't_from', 'max_points', 'measure', 'timeout', 'scipy_method', 'waveforms')})
+    r = p.run(**{k: v for k, v in o.items() if k in ('t_end', 'solver', 'channels', 'hdiv', 'method', 'step', 'rtol', 'hmax', 't_from', 'max_points', 'measure', 'timeout', 'scipy_method', 'waveforms')
+                 or (allow_paths and k in ('save_state', 'resume'))})
     return _clean(r.as_dict())
 
 
@@ -364,10 +444,19 @@ class Project:
         return int(hdiv or sim.get('hDiv') or 200), method or sim.get('method') or 'TR', st
 
     def run(self, t_end=None, solver='browser', channels=None, hdiv=None, method=None, step=None, rtol=None, hmax=None,
-            t_from=0.0, max_points=200000, measure=None, timeout=None, scipy_method='Radau', waveforms=True):
+            t_from=0.0, max_points=200000, measure=None, timeout=None, scipy_method='Radau', waveforms=True, save_state=None, resume=None):
         """One simulation. t_end: duration in s (default the tutorial's stopT). channels: keys as in the app's scope
         (default the project's scope, else V and I of every element). step='var' for the variable step (§40).
-        solver='scipy' runs engine.batch.simulate on the same netlist (method scipy_method, rtol, max step hmax in s)."""
+        solver='scipy' runs engine.batch.simulate on the same netlist (method scipy_method, rtol, max step hmax in s).
+        3.16: save_state='file' keeps the end state; resume='file' continues from a saved state up to the time t_end
+        (the end time, not a duration), with the same numbers as one run. Browser solver only."""
+        if save_state is not None or resume is not None:
+            if solver != 'browser':
+                raise PclError('Η αποθήκευση και η συνέχεια της κατάστασης γίνονται με τον λύτη του browser (solver="browser").')
+            res = list(self.stream(t_end, chunk='all', channels=channels, hdiv=hdiv, method=method, step=step, rtol=rtol, hmax=hmax,
+                                   t_from=t_from, max_points=max_points, measure=measure, state=save_state, resume=resume, timeout=timeout,
+                                   waveforms=waveforms))
+            return res[-1]
         t_end = float(parse_value(t_end if t_end is not None else (self.data.get('sim') or {}).get('stopT') or 0))
         if not t_end > 0:
             raise PclError('Δώσε διάρκεια t_end > 0 (σε s, π.χ. 5e-3 ή "5m").')
@@ -383,6 +472,87 @@ class Project:
         if solver == 'scipy':
             return self._run_scipy(t_end, keys, scipy_method, rtol, hmax, max_points, meas, t_from)
         raise PclError(f'Άγνωστος λύτης «{solver}»: browser ή scipy.')
+
+    def stream(self, t_end=None, chunk=None, channels=None, hdiv=None, method=None, step=None, rtol=None, hmax=None, t_from=0.0,
+               max_points=200000, measure=None, state=None, resume=None, to=None, timeout=None, waveforms=True, set=None):  # noqa: A002
+        """Results in chunks (3.16, ROADMAP §41.1): a generator of Results, one per chunk of whole base periods, each one as
+        soon as it is solved. The solver stays open between chunks, so the numbers are those of one run(t_end).
+          chunk     seconds per chunk (rounded to whole base periods T), default a tenth of the run; 'all' = one chunk
+          state     a file that holds the state after every chunk: if the run stops, resume=… continues from there
+          resume    a state file (or read_state()) to continue from; t_end is then the end time. If this project differs
+                    from the saved one (a parameter changed), the states pass over as with a change while running
+          to        a CSV file that gets the rows of every chunk as it comes (appended when resuming)
+          set       {'<id>': value} (a «Σταθερά» block) or {'<id>.<param>': value}, applied before the first chunk
+        Each Result has meta t0, t1 (the chunk), chunk (its number); the last one also the solver's messages (diag)."""
+        meas = _measures(measure)
+        saved = read_state(resume) if resume is not None else None
+        t_end = float(parse_value(t_end if t_end is not None else (self.data.get('sim') or {}).get('stopT') or 0))
+        if not t_end > 0:
+            raise PclError('Δώσε t_end > 0 (σε s, π.χ. 5e-3 ή "5m").')
+        if to is not None and Path(to).suffix.lower() != '.csv':
+            raise PclError('Τα κομμάτια γράφονται σε CSV (to="….csv"). Για άλλη μορφή: r.save(…) σε κάθε κομμάτι.')
+        sess = _Session(timeout)
+        try:
+            if saved:
+                o = sess({'action': 'open', 'project': self.data, 'saved': saved['project'], 'state': saved['sim'],
+                          'channels': list(channels) if channels else saved.get('channels'), 'measure': meas})
+            else:
+                hd, mt, st = self._settings(hdiv, method, step, rtol, hmax)
+                o = sess({'action': 'open', 'project': self.data, 'channels': list(channels) if channels else None,
+                          'hdiv': hd, 'method': mt, 'step': st, 'measure': meas})
+            sid, keys, T, t = o['sid'], o['keys'], float(o['T']), float(o['t'])
+            if not t_end > t * (1 + 1e-12):
+                raise PclError(f'Η προσομοίωση είναι ήδη στο t = {t:.6g} s: το t_end είναι ο χρόνος τέλους, δώσε μεγαλύτερο.')
+            if chunk == 'all':
+                per = None
+            else:
+                per = max(1, round(float(parse_value(chunk)) / T)) if chunk else max(1, math.ceil((t_end - t) / T / 10))
+            fmt = (lambda v: '' if v is None or (isinstance(v, float) and math.isnan(v)) else repr(float(v)))
+            new_file = to is not None and not (saved and Path(to).is_file())
+            if new_file:
+                with open(to, 'w', encoding='utf-8', newline='') as f:
+                    f.write(f'# pcl: {json.dumps(version())}\n# project: {json.dumps(self.name, ensure_ascii=False)}\n# hash: {json.dumps(self.hash())}\n# T: {T!r}\n')
+                    csv.writer(f).writerow(['t [s]'] + [f'{k} [{_unit(k)}]' if _unit(k) else k for k in keys])
+            k_chunk, first = 0, True
+            while t < t_end * (1 - 1e-12):
+                if per is None:
+                    te = t_end
+                else:
+                    k = round(t / T)
+                    te = min(t_end, (k + per) * T)
+                    if not te > t * (1 + 1e-12):
+                        te = min(t_end, (k + per + 1) * T)
+                q = {'action': 'advance', 'sid': sid, 't_end': te, 'from': t_from, 'max_points': max_points, 'measure': meas,
+                     'waveforms': bool(waveforms) or to is not None}
+                if first and set:
+                    q['set'] = {k2: parse_value(v) for k2, v in dict(set).items()}
+                first = False
+                out = sess(q)
+                t = float(out['t1'])
+                last = t >= t_end * (1 - 1e-12)
+                if state is not None:
+                    snap = sess({'action': 'state', 'sid': sid})
+                    _write_atomic(state, json.dumps({'format': STATE_FORMAT, 'version': 1, 'pcl': version(), 'name': self.name, 'hash': self.hash(),
+                                                     'date': datetime.datetime.now().isoformat(timespec='seconds'), 't': t, 'T': T,
+                                                     'channels': keys, 'project': self.data, 'sim': snap}, ensure_ascii=False))
+                tt = out.get('t') or []
+                if to is not None:
+                    with open(to, 'a', encoding='utf-8', newline='') as f:
+                        w = csv.writer(f)
+                        for i, tv in enumerate(tt):
+                            w.writerow([fmt(tv)] + [fmt(out['ch'][kk][i]) for kk in keys])
+                diag = []
+                meta = {**out['meta'], 'solver': 'browser (web/studio/mna.js' + (')' if IN_BROWSER else ', Node)'), 'chunk': k_chunk,
+                        't0': out['t0'], 't1': t, 't_end': t, 'T': T, 'resumed_from': saved['t'] if saved else None}
+                if last:
+                    fin = sess({'action': 'close', 'sid': sid})
+                    diag = fin['diag']
+                    meta.update({'warnings': fin['warnings'], 'steps_total': fin['steps']})
+                res = Result(tt if waveforms else [], keys, (out.get('ch') or {}) if waveforms else {}, meta, self, out.get('measure') or {}, diag)
+                k_chunk += 1
+                yield res
+        finally:
+            sess.close()
 
     def _result(self, out):
         meta = {**out['meta'], 'solver': 'browser (web/studio/mna.js' + (')' if IN_BROWSER else ', Node)')}
@@ -429,10 +599,13 @@ class Project:
             res.measured[m['name']] = res.measure(m['key'], m['stat'], m.get('periods', 1), at=m.get('at'), f1=m.get('f1'))
         return res
 
-    def sweep(self, grid=None, points=None, t_end=None, measure=None, workers=None, solver='browser', mode='grid', progress=None, **run_kw):
+    def sweep(self, grid=None, points=None, t_end=None, measure=None, workers=None, solver='browser', mode='grid', progress=None,
+              to=None, resume=False, **run_kw):
         """A run per point: grid={'L1.L': [...], 'R1.R': [...]} (every combination, or mode='zip' side by side),
         or points=[{'L1.L': 22e-6, 'R1.R': 5}, …]. measure={'name': (key, stat, periods)} with stat in
-        avg, rms, min, max, pp (over the last periods base periods), end, ('at', t), thd. In parallel on `workers`."""
+        avg, rms, min, max, pp (over the last periods base periods), end, ('at', t), thd. In parallel on `workers`.
+        3.16: to='file' writes every point as soon as it is done (CSV; for .parquet/.h5/.mat/.json a <file>.part.csv
+        meanwhile, and the file at the end); resume=True skips the points already in it (a sweep that stopped)."""
         meas = _measures(measure)
         if not meas:
             raise PclError('Η σάρωση θέλει μετρήσεις: measure={"Vo": ("V:C1", "avg", 10)}.')
@@ -455,34 +628,50 @@ class Project:
             raise PclError('Η σάρωση δεν έχει σημεία.')
         progress = progress or _progress_hook
         rows = [None] * n
+        names = [m['name'] for m in meas]
+        out = _SweepFile(to, list(points[0]), names, n, resume) if to is not None else None
+        if out is not None:
+            for i, r in out.done.items():
+                rows[i] = {**jobs[i][1], **{k: v for k, v in r.items() if k not in jobs[i][1]}}
+        todo = [i for i in range(n) if rows[i] is None]
+        n_done = n - len(todo)
+
+        def finish(row_i, row):
+            nonlocal n_done
+            rows[row_i] = row
+            n_done += 1
+            if out is not None:
+                out.add(row_i, row)
+            if progress:
+                progress(n_done, n)
+
+        def result(nw):
+            sw = SweepResult(rows, list(points[0]) if points else [], names, self._sweep_meta(n, solver, meas, kw, nw))
+            if out is not None:
+                out.close(sw)
+            return sw
         # in the app's panel (3.15): all the points at once to the page's pool of solvers, when the page allows it
-        if IN_BROWSER and solver == 'browser' and workers != 1 and n > 1 and _batch_hook is not None:
-            res = _batch_hook([Project(d)._query(**kw) for d, _ in jobs])
+        if IN_BROWSER and solver == 'browser' and workers != 1 and len(todo) > 1 and _batch_hook is not None:
+            res = _batch_hook([Project(jobs[i][0])._query(**kw) for i in todo])
             if res is not None:
-                for i, (o, (_, pt)) in enumerate(zip(res['outs'], jobs)):
-                    rows[i] = {**pt, **(o.get('out') or {}).get('measure', {}), **({'error': o['error']} if o.get('error') else {})}
-                return SweepResult(rows, list(points[0]), [m['name'] for m in meas], self._sweep_meta(n, solver, meas, kw, res['workers']))
-        workers = 1 if IN_BROWSER else max(1, min(int(workers or os.cpu_count() or 1), n))
+                for i, o in zip(todo, res['outs']):
+                    finish(i, {**jobs[i][1], **(o.get('out') or {}).get('measure', {}), **({'error': o['error']} if o.get('error') else {})})
+                return result(res['workers'])
+        workers = 1 if IN_BROWSER else max(1, min(int(workers or os.cpu_count() or 1), max(1, len(todo))))
         if workers == 1:                # in the app's worker (no threads in Pyodide), or asked for
-            for i, (d, pt) in enumerate(jobs):
-                m, err = _sweep_point(d, kw)
-                rows[i] = {**pt, **m, **({'error': err} if err else {})}
-                if progress:
-                    progress(i + 1, n)
+            for i in todo:
+                m, err = _sweep_point(jobs[i][0], kw)
+                finish(i, {**jobs[i][1], **m, **({'error': err} if err else {})})
         else:
-            from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor    # here, not at the top: Pyodide has no multiprocessing
+            from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed    # here: Pyodide has no multiprocessing
             Pool = ThreadPoolExecutor if solver == 'browser' else ProcessPoolExecutor   # the browser solver is a Node process already
             with Pool(max_workers=workers) as ex:
-                futs = {ex.submit(_sweep_point, d, kw): i for i, (d, _) in enumerate(jobs)}
-                done = 0
-                for f in futs:
+                futs = {ex.submit(_sweep_point, jobs[i][0], kw): i for i in todo}
+                for f in as_completed(futs):          # each point to the file as soon as it is done (3.16)
                     i = futs[f]
                     m, err = f.result()
-                    rows[i] = {**{k: v for k, v in jobs[i][1].items()}, **m, **({'error': err} if err else {})}
-                    done += 1
-                    if progress:
-                        progress(done, n)
-        return SweepResult(rows, list(points[0]) if points else [], [m['name'] for m in meas], self._sweep_meta(n, solver, meas, kw, workers))
+                    finish(i, {**jobs[i][1], **m, **({'error': err} if err else {})})
+        return result(workers)
 
     def _sweep_meta(self, n, solver, meas, kw, workers):
         return {'pcl': version(), 'project': self.name, 'hash': self.hash(), 'solver': solver, 'points': n, 'workers': workers,
@@ -544,6 +733,66 @@ class Project:
                 'transient': int(transient), 'record': int(record), 'T': pts[0]['T'], 'workers': mode,
                 'date': datetime.datetime.now().isoformat(timespec='seconds')}
         return BifurcationResult([p['value'] for p in pts], [p['y'] for p in pts], [p['period'] for p in pts], meta)
+
+
+class _SweepFile:
+    """The points of a sweep written as they finish (3.16, ROADMAP §41.1): a CSV with the point's number 'point' first,
+    in the order they finish, so a stopped sweep continues with resume=True. At the end the file is written in the
+    usual form (in the order of the points); for another format there is a <file>.part.csv meanwhile."""
+
+    def __init__(self, path, params, names, n, resume):
+        self.path = str(path)
+        self.csv = self.path if Path(self.path).suffix.lower() == '.csv' else self.path + '.part.csv'
+        self.cols = ['point'] + list(params) + list(names) + ['error']
+        self.done = {}
+        if resume and Path(self.csv).is_file():
+            self.done = self._read(self.csv, params, names, n)
+        with open(self.csv, 'w', encoding='utf-8', newline='') as f:     # again, with the points already done (clean, and in our columns)
+            w = csv.writer(f)
+            w.writerow(self.cols)
+            for i, r in sorted(self.done.items()):
+                w.writerow(self._line(i, r))
+
+    @staticmethod
+    def _val(v):
+        if v == '':
+            return None
+        try:
+            return float(v)
+        except ValueError:
+            return v
+
+    def _read(self, path, params, names, n):
+        with open(path, encoding='utf-8', newline='') as f:
+            lines = [ln for ln in f if not ln.startswith('#')]
+        rd = list(csv.reader(lines))
+        if not rd:
+            return {}
+        head, body = rd[0], rd[1:]
+        out = {}
+        for k, row in enumerate(body):
+            d = dict(zip(head, row))
+            i = int(float(d['point'])) if d.get('point') not in (None, '') else k     # the final form has no 'point': the points in order
+            if not 0 <= i < n or any(c not in d for c in names):
+                continue
+            r = {c: self._val(d[c]) for c in list(params) + list(names) if c in d}
+            if d.get('error'):
+                continue                       # a point that failed is tried again
+            out[i] = r
+        return out
+
+    def _line(self, i, r):
+        fmt = (lambda v: '' if v is None else format(float(v), '.17g') if isinstance(v, (int, float)) else str(v))
+        return [str(i)] + [fmt(r.get(c)) for c in self.cols[1:]]
+
+    def add(self, i, r):
+        with open(self.csv, 'a', encoding='utf-8', newline='') as f:
+            csv.writer(f).writerow(self._line(i, r))
+
+    def close(self, sw):
+        sw.save(self.path)
+        if self.csv != self.path and Path(self.csv).is_file():
+            os.remove(self.csv)
 
 
 def _sweep_point(data, kw):

@@ -6,11 +6,15 @@
   python -m pcl run buck.json --set L1.L=47u --t-end 5m --channels V:C1,I:L1 --out out.csv
   python -m pcl run buck.json --t-end 5m --step var --rtol 1e-5 --out out.mat
   python -m pcl run buck.json --t-end 5m --solver scipy --method Radau --out out.json
+  python -m pcl run buck.json --t-end 0.5 --chunk 50m --state run.state --out run.csv      (3.16: chunk by chunk, state on disk)
+  python -m pcl run buck.json --t-end 1 --resume run.state --out more.csv                  (continues from where it stopped)
   python -m pcl sweep buck.json --grid L1.L=22u,47u,100u --grid R1.R=5:20:4 --measure Vo=V:C1:avg:10 --measure I:L1:pp:10 --t-end 5m --out sweep.csv
   python -m pcl sweep tutorial:buck --grid L1.L=22u:220u:10 --measure I:L1:pp:10 --t-end 5m --out sweep.parquet
   python -m pcl plot out.csv --preset ieee --mapping label_mapping.csv --table maxima.tex --out fig.pdf
   python -m pcl bifurcation tutorial:pcm_chaos IC.v --values 1.4:3:33 --channel Y:AM1 --stat end --transient 300 --record 64 --out bif.mat
   python -m pcl job request.json --out result.json      (MATLAB/Octave, 3.14: the request as JSON, see pcl/core.py job)
+  python -m pcl workbench --path ../control_workbench --link --input PWM1:d --measure M1:w --state AM1:y --u 0 1 --y 0 220
+                                                        (3.16: the Control Workbench with the app's circuit as its plant)
 """
 import argparse
 import json
@@ -74,7 +78,12 @@ def main(argv=None):
         a.add_argument('--sep', default=',', help='διαχωριστικό CSV (; για ελληνικό Excel)')
         a.add_argument('--decimal', default='.', help='δεκαδικό CSV (, για ελληνικό Excel)')
         a.add_argument('--out', help='.csv, .json, .mat, .parquet ή .h5')
+        if name == 'run':
+            a.add_argument('--chunk', help='3.16: σε κομμάτια των τόσων s (ακέραιες περίοδοι), κάθε κομμάτι στο --out (CSV) μόλις βγει')
+            a.add_argument('--state', help='3.16: αρχείο με την κατάσταση μετά από κάθε κομμάτι (για --resume)')
+            a.add_argument('--resume', help='3.16: συνέχεια από αποθηκευμένη κατάσταση· το --t-end είναι τότε ο χρόνος τέλους')
         if name == 'sweep':
+            a.add_argument('--resume', action='store_true', help='3.16: παραλείπει τα σημεία που υπάρχουν ήδη στο --out (σάρωση που σταμάτησε)')
             a.add_argument('--grid', action='append', required=True, help='<id>.<παράμετρος>=τιμή1,τιμή2,… ή από:έως:πλήθος')
             a.add_argument('--zip', action='store_true', help='οι λίστες πάνε μαζί (σημείο i με σημείο i), όχι όλοι οι συνδυασμοί')
             a.add_argument('--workers', type=int, help='παράλληλες προσομοιώσεις')
@@ -97,6 +106,21 @@ def main(argv=None):
     a.add_argument('--signal', help='το σήμα του waterfall')
     a.add_argument('--table', help='πίνακας ακροτάτων (.csv ή .tex)')
     a.add_argument('--out', help='.pdf, .svg, .eps ή .png')
+    a = sub.add_parser('workbench', help='3.16: το Control Workbench με φυτό ένα κύκλωμα (της εφαρμογής μέσω σύνδεσης, αρχείο ή tutorial)')
+    a.add_argument('--path', required=True, help='ο φάκελος του Control Workbench')
+    a.add_argument('project', nargs='?', help='αρχείο JSON ή tutorial:<id>[?…] (αλλιώς --link)')
+    a.add_argument('--link', action='store_true', help='το κύκλωμα της ανοιχτής εφαρμογής (pcl.link), και ο πίνακας πίσω σε αυτήν')
+    a.add_argument('--set', action='append', help='<id>.<παράμετρος>=<τιμή>')
+    a.add_argument('--input', required=True, help='η είσοδος u: μπλοκ «Σταθερά» (π.χ. AC1R) ή <id>:<ακροδέκτης> (π.χ. PWM1:d)')
+    a.add_argument('--measure', required=True, help='η έξοδος y, π.χ. M1:w')
+    a.add_argument('--state', action='append', help='μετρήσεις κατάστασης, π.χ. AM1:y')
+    a.add_argument('--state-scale', type=float, action='append', help='κλίμακα κάθε μέτρησης κατάστασης')
+    a.add_argument('--u', nargs=2, required=True, metavar=('MIN', 'MAX'))
+    a.add_argument('--y', nargs=2, required=True, metavar=('MIN', 'MAX'))
+    a.add_argument('--hdiv', type=int, default=50, help='βήμα T/N του λύτη')
+    a.add_argument('--settle', default='0', help='s πριν από το πρώτο βήμα (μόνιμη κατάσταση)')
+    a.add_argument('--headless', help='χωρίς GUI: σχήματα του workbench με κόμμα, π.χ. iaic,pid, σε κλιμακωτή αναφορά')
+    a.add_argument('--dt', type=float, default=0.01, help='δείγμα του workbench (s)')
     a = sub.add_parser('link', help='μία κλήση στην ανοιχτή εφαρμογή (3.15): αρχείο JSON {method, args, client} → JSON (για το Octave)')
     a.add_argument('request')
     a.add_argument('--out', required=True)
@@ -110,6 +134,28 @@ def main(argv=None):
         except PclError as e:
             out = {'error': str(e)}
         Path(args.out).write_text(json.dumps(_clean(out), ensure_ascii=False), encoding='utf-8')
+        return 0
+    if args.cmd == 'workbench':
+        from . import workbench as wb
+        try:
+            app = None
+            if args.link:
+                from . import link
+                app = link.connect(client='Control Workbench (pcl.workbench)')
+                p = app.project()
+            elif args.project:
+                p = _project(args.project)
+            else:
+                raise PclError('Δώσε project (αρχείο ή tutorial:<id>) ή --link.')
+            for k, v in _kv(args.set).items():
+                p.set(k, v)
+            rows = wb.launch(args.path, p, args.input, args.measure, args.state or (), args.u, args.y, args.state_scale, solver={'hdiv': args.hdiv},
+                             settle=args.settle, headless=args.headless.split(',') if args.headless else None, dt=args.dt, app=app)
+        except PclError as e:
+            print(f'pcl: {e}', file=sys.stderr)
+            return 2
+        for r in rows or []:
+            print(json.dumps(r, ensure_ascii=False))
         return 0
     if args.cmd == 'plot':
         from . import plotting
@@ -177,6 +223,29 @@ def main(argv=None):
             kw['hmax'] = float(args.hmax)
         meas = {(m.split('=', 1)[0] if '=' in m else m): (m.split('=', 1)[1] if '=' in m else m) for m in args.measure} if args.measure else None
         t_end = parse_value(args.t_end) if args.t_end else None
+        if args.cmd == 'run' and (args.chunk or args.state or args.resume):      # 3.16: chunks, saved state, continuation
+            if args.solver != 'browser':
+                raise PclError('Κομμάτια και κατάσταση: μόνο με τον λύτη του browser.')
+            kw.pop('solver')
+            csv_out = args.out if args.out and args.out.lower().endswith('.csv') else None
+            parts = []
+            for c in p.stream(t_end=t_end, chunk=args.chunk or 'all', measure=meas, state=args.state, resume=args.resume, to=csv_out, **kw):
+                print(f"t = {c.meta['t1']:.6g} s" + ''.join(f', {k} = {v:.6g}' for k, v in c.measured.items()), file=sys.stderr)
+                parts.append(c)
+            last = parts[-1]
+            for d in last.diag:
+                if d['sev'] in ('error', 'warn'):
+                    print(f"[{d['sev']}] {d['msg']}" + (f" → {d['fix']}" if d.get('fix') else ''), file=sys.stderr)
+            if args.out and not csv_out:
+                from .core import Result
+                r = Result([x for c in parts for x in c.t], last.keys, {k: [x for c in parts for x in c.ch[k]] for k in last.keys},
+                           {k: v for k, v in last.meta.items() if k not in ('chunk', 't0')}, p, last.measured, last.diag)
+                r.save(args.out)
+            if args.out:
+                print(args.out)
+            if args.state:
+                print(args.state)
+            return 0
         if args.cmd == 'run':
             r = p.run(t_end=t_end, measure=meas, **kw)
             for k, v in r.measured.items():
@@ -196,8 +265,12 @@ def main(argv=None):
             grid[k.strip()] = v
         if not meas:
             raise PclError('Η σάρωση θέλει τουλάχιστον μία --measure.')
+        if args.resume and not args.out:
+            raise PclError('Το --resume θέλει το --out της σάρωσης που σταμάτησε.')
+        csv_kw = {'sep': args.sep, 'decimal': args.decimal} if args.out and args.out.lower().endswith('.csv') else {}
         sw = p.sweep(grid=grid, t_end=t_end, measure=meas, workers=args.workers, mode='zip' if args.zip else 'grid',
-                     progress=lambda i, n: print(f'\r{i}/{n}', end='', file=sys.stderr), **kw)
+                     progress=lambda i, n: print(f'\r{i}/{n}', end='', file=sys.stderr),
+                     to=args.out if args.out and (not csv_kw or (args.sep == ',' and args.decimal == '.')) else None, resume=args.resume, **kw)
         print(file=sys.stderr)
         cols = sw.params + sw.names
         print('\t'.join(cols))

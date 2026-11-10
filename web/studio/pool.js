@@ -2,7 +2,7 @@
 // Parallel sweeps in the browser (3.15, ROADMAP §30 and §21): a pool of solver workers (sim_worker.js), one request
 // each at a time. The app's bifurcation diagram uses it, and the "Σενάρια" panel's sweeps through the page
 // (scenario_worker.js blocks on a SharedArrayBuffer until the pool answers, when the page is cross-origin isolated).
-// A circuit with a Python block is not sent here (the workers have no Python): the callers run those in order.
+// 3.16: circuits with Python blocks too: each worker loads Python the first time it needs it (sim_worker.js).
 (function(root){
  // as many workers as cores, up to 8 (the page and the panel's worker wait meanwhile)
  const SIZE=()=>Math.max(1,Math.min(8,(root.navigator&&navigator.hardwareConcurrency)||2));

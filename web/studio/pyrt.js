@@ -5,6 +5,7 @@
 //   def init(p):          -> dict with the initial state (optional)
 //   def step(t, u, s, p): -> outputs as dict {name: value}, list, number, or (outputs, s)
 // u: inputs by name, s: state (persists between calls), p: parameters of the block plus Ts (sample period).
+// getState/setState (3.16): the state s as text, for a saved run that continues later (MNA snapshot).
 (function(root){
  const VERSION='0.26.4';
  const WRAP=`
@@ -32,6 +33,21 @@ def __pcl_make(__src, __ins, __outs, __p):
         if isinstance(r, (list, tuple)):
             return [float(x) for x in r][:len(names_out)] + [0.0] * max(0, len(names_out) - len(r))
         return [float(r)] + [0.0] * (len(names_out) - 1)
+    # 3.16: the state s for a saved run (MNA snapshot): pickle (exact), else JSON
+    def getstate():
+        import base64, json, pickle
+        try:
+            return json.dumps({"pickle": base64.b64encode(pickle.dumps(box[0])).decode("ascii")})
+        except Exception:
+            try:
+                return json.dumps({"json": box[0]})
+            except Exception as e:
+                raise ValueError("η κατάσταση s του μπλοκ δεν αποθηκεύεται (" + str(e) + ")")
+    def setstate(txt):
+        import base64, json, pickle
+        d = json.loads(txt)
+        box[0] = pickle.loads(base64.b64decode(d["pickle"])) if "pickle" in d else d["json"]
+    call.getstate, call.setstate = getstate, setstate
     return call
 `;
  // the last line of a Python traceback, with the line of the user's code when there is one
@@ -52,6 +68,8 @@ def __pcl_make(__src, __ins, __outs, __p):
   make(src,o){if(!this.ready)throw new Error('Η Python δεν έχει φορτωθεί.');let call;
    try{call=this.makeFn(String(src||''),o.ins,o.outs,this.py.toPy({...o.pars,Ts:o.Ts}));}catch(e){throw new Error(`${o.label}: ${pyMessage(e)}`);}
    return {step:(t,u)=>{let r;try{r=call(t,u);}catch(e){throw new Error(`${o.label} (t = ${t.toPrecision(6)} s): ${pyMessage(e)}`);}const a=r.toJs();r.destroy();return a;},
+    getState:()=>{try{return call.getstate();}catch(e){throw new Error(`${o.label}: ${pyMessage(e)}`);}},
+    setState:txt=>{try{call.setstate(txt);}catch(e){throw new Error(`${o.label}: ${pyMessage(e)}`);}},
     destroy:()=>{try{call.destroy();}catch(e){}}};}};
  root.PyRT=PyRT;if(typeof module!=='undefined')module.exports=PyRT;
 })(typeof window!=='undefined'?window:globalThis);

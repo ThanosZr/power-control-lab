@@ -261,7 +261,7 @@ async function runBifurcation(){if(BF.run||!S.sim||S.error)return;const [comp,pa
  const base=project();BF.run=true;BF.pts=[];BF.meta={comp,param,key,stat,a,b,label:$('#bf-par').selectedOptions[0]?.textContent||param,u:MeasureUnit(key)};$('#bf-run').disabled=true;$('#bf-stop').disabled=false;const t0=performance.now();
  const spec={comp,param,key,stat,transient:tr,record:rec,hDiv:+$('#sim-step').value||100,method:$('#method').value};
  const vals=Array.from({length:n},(_,k)=>a+(b-a)*k/(n-1)),add=(v,r)=>BF.pts.push({v,y:r.y,q:Metrics.periodicity(r.y)});
- const par=window.Pool&&window.Worker&&!Pool.hasPython(base)&&n>2;let lastDraw=0;BF.par=par?(BF.pool||(BF.pool=new Pool.SimPool())).n:1;
+ const par=window.Pool&&window.Worker&&n>2;let lastDraw=0;BF.par=par?(BF.pool||(BF.pool=new Pool.SimPool())).n:1;
  try{
   if(par){const got=new Array(n);
    await BF.pool.map(vals.map(v=>({action:'bifurcation',project:base,...spec,hdiv:spec.hDiv,values:[v]})),(i,o)=>{got[i]=o.points[0];

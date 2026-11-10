@@ -44,7 +44,7 @@ MATLAB/Octave (matlab/, 3.14): pcl_run, pcl_sweep → python -m pcl job (ή /api
 | `web/studio/math.js` | Εμφάνιση αποτελεσμάτων των templates και των ερωτήσεων με πρόβλεψη. | `renderTemplate`, `questionsHTML`, `bindQuestions` |
 | `web/studio/stepcheck.js` | Έλεγχος βήματος (3.13): ιδιοτιμές του χάρτη BE των καταστάσεων, παρασιτικές των διακοπτών, πηγές, γραμμές, μηνύματα. Χωρίς DOM. | `eig`, `eigvecAbs`, `modes`, `check` |
 | `engine/batch.py` | Ο ίδιος κύκλος με το `mna.js`, με `solve_ivp`. Δίοδοι και συγκριτές ως συμβάντα. Μηνύματα για την κονσόλα (3.13). | `Circuit`, `Ctrl`, `eval_blocks`, `sample`, `next_event`, `simulate`, `_diagnose` |
-| `pcl/` | Σενάρια από κώδικα (3.13–3.14): `core.py` (Project: `set`, `run`, `sweep`· Result: `measure`, `to_csv`/`to_json`/`to_mat` (`_savemat`)· `job`, `use`, `show`, `plot`, hooks για το πάνελ), `runner.js` (Node, πάνω στο `web/studio/scenario.js`), `__main__.py` (γραμμή εντολών, και `job`). | `load`, `tutorial`, `Project.run`, `Project.sweep`, `job` |
+| `pcl/` | Σενάρια από κώδικα (3.13–3.16): `core.py` (Project: `set`, `run`, `stream`, `sweep`· Result: `measure`, `to_csv`/`to_json`/`to_mat` (`_savemat`)· `job`, `use`, `show`, `plot`, hooks για το πάνελ, `_Session`), `runner.js` (Node, πάνω στο `web/studio/scenario.js`, και `--session`), `__main__.py` (γραμμή εντολών, και `job`), `control.py` (σύνθεση ελέγχου, AI), `workbench.py` (φυτό για το Control Workbench). | `load`, `tutorial`, `Project.run`, `Project.stream`, `Project.sweep`, `job` |
 | `web/studio/scenario.js` | Αιτήματα σεναρίων (3.14): run (με μετρήσεις, αραίωση, κομμάτια ακέραιων περιόδων), export, tutorial(s), channels. Χωρίς DOM: Node και Worker. | `handle`, `run`, `measure`, `decimate` |
 | `matlab/` | MATLAB/Octave (3.14): `pcl_run`, `pcl_sweep`, `pcl_read`, `pcl_config`. | |
 | `engine/templates.py` | Υπολογίζει ένα template: εισόδους, βήματα, ελέγχους, πίνακες, ερωτήσεις. | `template_solve`, `_questions` |
@@ -114,6 +114,11 @@ MATLAB/Octave (matlab/, 3.14): pcl_run, pcl_sweep → python -m pcl job (ή /api
 | **Εργαλείο παραμέτρων στοιχείου (3.15, π.χ. κρουστικές)** | υπολογισμός σε `pcl/<module>.py` (καθαρή Python, χωρίς numpy, για να τρέχει και στο Pyodide) → μορφή «από παραμέτρους» στο στοιχείο (`parts.js`: `shape:'direct'`, `directWave`) → πρόσθετο με `targets` | `test_addons.py` `Impulse` |
 | **Σύνθεση ελέγχου και νέος τύπος ελεγκτή (3.15)** | `pcl/control.py` (`TYPES`, κώδικας μπλοκ όπως `PY_PI_NN`, `compose`, `metrics`) → λίστα αρχείων του `scenario_worker.js` (`control.py`) → πρόσθετο `web/addons/control-composer/ui.js` (`TYPES`, `draw`, `diagram`, `compare`). Νέα οπτικοποίηση: συνάρτηση σαν το `diagram` πάνω στο `PCL.values` | `test_control.py`, `addons_flow.js` |
 | **Γραφικές για δημοσίευση (3.15)** | `pcl/plotting.py` (`read_table`, `read_mapping`, `figure`, `extremes`), πρότυπα `pcl/presets/*.json` (και `run.py` `/api/presets`) → `matlab/pcl_style.m` → πρόσθετο `web/addons/publication-plot/ui.js` | `test_plotting.py`, `addons_flow.js` |
+| **Αποθηκευμένη κατάσταση και συνέχεια (3.16)** | `mna.js` `snapEncode`/`snapRestore` (περπάτημα στα δεδομένα του λύτη, χωρίς `project`, `cache`, `ring`, `per`), `Sim.snapshot`/`restoreSnapshot`, `resume` (με άλλο project: `load` χωρίς `fresh`). Νέο είδος κατάστασης δεν θέλει αλλαγή εδώ, αρκεί να είναι δεδομένα (όχι συνάρτηση) σε αντικείμενο του λύτη· ένα αντικείμενο με `getState`/`setState` (μπλοκ Python: `pyrt.js`) κρατά μόνο του την κατάστασή του | `tests/js/snapshot_cases.js` + `test_stream.py` |
+| **Συνεδρίες λύτη και αποτελέσματα σε κομμάτια (3.16)** | `scenario.js` `open`/`advance`/`state`/`close`, `setLive` → `pcl/runner.js --session` → `pcl/core.py` `_Session`, `Project.stream`, `run(save_state, resume)`, `read_state`, `_SweepFile` (`sweep(to, resume)`) → `__main__.py` (`--chunk`, `--state`, `--resume`) → `matlab/pcl_run.m` | `test_stream.py`, `scenario_flow.js` |
+| **Python στους workers του pool (3.16)** | `sim_worker.js` `python()` (Pyodide στον worker, μία φορά) → οι καλούντες στέλνουν και κυκλώματα με μπλοκ Python: `addons.js` `solve`/`batch`, `app.js` `runBifurcation`, `scenario_worker.js` `batch` | `scenario_flow.js`, `addons_flow.js` |
+| **Ελεγκτής AI σε βρόχο και εκπαίδευση (3.16)** | `pcl/control.py`: `MLP_SRC` (δίκτυα σε καθαρή Python, κοινά για εκπαίδευση και μπλοκ), πρότυπα κώδικα `PY_INV_NN`/`PY_RL` (`inv_nn_code`, `rl_code`), `compose` (`Ts`, `state`, `dither`, `TYPES`), `InverseTrainer` (φάσεις, `to_dict`), `RLTrainer` (`iterate`), `_Runner` (pool ή διεργασίες Node), `compare` → πρόσθετο `control-composer/ui.js` (`TYPES`, `train`, `run`, `variants`) | `test_control.py`, `addons_flow.js` |
+| **Το Control Workbench με φυτό ένα κύκλωμα (3.16)** | `pcl/workbench.py` (`prepare`, `CircuitPlant`, `plant_class`, `register`, `run_scheme`, `launch`) → `__main__.py` `workbench` | `test_workbench.py` |
 | **API του server** | `run.py` `ACTIONS` → συνάρτηση στο `engine/` | `test_api.py` |
 | **Κείμενα διεπαφής** | `web/index.html`, `app.js` | UI flows |
 
@@ -146,7 +151,7 @@ MATLAB/Octave (matlab/, 3.14): pcl_run, pcl_sweep → python -m pcl job (ή /api
 1. Νέο branch για κάθε έκδοση: `lab-<έκδοση>`. Το `main` αλλάζει μόνο με έγκριση.
 2. Πριν από την αλλαγή: εντοπισμός στο §3 και στο `CODEMAP.md`, και ανάγνωση μόνο αυτών των σημείων.
 3. Μετά την αλλαγή:
-   - tests, τα 4 UI flows,
+   - tests, τα 8 UI flows,
    - `python tools/codemap.py`,
    - ενημέρωση README (πίνακας εκδόσεων) και ROADMAP (§0),
    - έκδοση στο `engine/__init__.py` και στο footer του `web/index.html`.

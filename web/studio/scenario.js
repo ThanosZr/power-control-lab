@@ -8,6 +8,10 @@
 //   {action:'channels', project}               the channels the project has
 //   {action:'bifurcation', project, comp, param, values, key, stat, transient, record, hdiv, method}   (3.15)
 //                                              per value the samples of the last `record` periods and their period, as the app's diagram
+// Sessions (3.16, ROADMAP §41.1): a solver that stays open between requests, for results in chunks and runs that continue later
+//   {action:'open', project, channels, hdiv, method, step, check, state, saved}  → {sid, keys, T, t}  (state: MNA snapshot of `saved`)
+//   {action:'advance', sid, t_end, from, max_points, waveforms, measure, set}    → the points of (t, t_end]: {t, ch, t0, t1, measure, meta}
+//   {action:'state', sid} → the snapshot (Sim.snapshot)       {action:'close', sid} → {diag, warnings, steps}
 // handle(q) is synchronous. A circuit with a Python block throws an error with needPython until Python is loaded.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
@@ -65,6 +69,46 @@
    out.t=keep?keep.map(i=>t[i]):t;out.ch={};keys.forEach((k,j)=>{out.ch[k]=keep?keep.map(i=>Y[j][i]):Y[j];});out.meta.returned=out.t.length;}
   return out;}
 
+ // ------------------------------------------------------------------ sessions (3.16)
+ // set: {'<id>': value} for a «Σταθερά / πρόγραμμα» block (the value from now on, as the app's live change), or
+ // {'<id>.<param>': value} for any parameter (the circuit is loaded again with its states, as a change while running)
+ const sessions=new Map();let sidNext=1;
+ function open(q){const pr=q.project;if(!pr||!Array.isArray(pr.components))throw new Error('Λείπει το project (components, wires).');
+  let s;const s0=pr.sim||{};
+  if(q.state){s=MNA.resume(q.saved||pr,q.state,pr);}
+  else{const opts={hDiv:+q.hdiv||+s0.hDiv||200,method:q.method||s0.method||'TR'};if(q.step)opts.step=q.step;s=new MNA.Sim(pr,opts);if(q.check!==false)s.stepCheck();}
+  const keys=q.channels&&q.channels.length?[...q.channels]:defaultKeys(s,pr);
+  for(const m of q.measure||[])if(m.key&&!keys.includes(m.key))keys.push(m.key);
+  const S={sim:s,project:JSON.parse(JSON.stringify(pr)),keys,idx:null,t:[],Y:null,fresh:!q.state,from:0};
+  const index=()=>{S.idx=keys.map(k=>{const i=s.chIndex.get(k);if(i===undefined)throw new Error(`Άγνωστο κανάλι «${k}». Μερικά διαθέσιμα: ${s.keys.slice(0,24).join(', ')}${s.keys.length>24?' …':''}`);return i;});};
+  index();S.index=index;
+  const rec=s.recordNow.bind(s);s.recordNow=function(){rec();S.push();};
+  S.push=()=>{if(!S.Y||s.t<S.from-1e-15)return;const v=s.vals;S.t.push(s.t);for(let j=0;j<S.idx.length;j++)S.Y[j].push(v[S.idx[j]]);};
+  if(sessions.size>=32)sessions.delete(sessions.keys().next().value);  // the oldest one, if a caller forgot to close
+  const sid=String(sidNext++);sessions.set(sid,S);
+  return {sid,keys,T:s.T,t:s.t,method:s.method,step:s.var?'var':'fixed',warnings:s.net.warnings};}
+ function session(q){const S=sessions.get(String(q.sid));if(!S)throw new Error('Η συνεδρία του λύτη έκλεισε ή δεν υπάρχει ('+q.sid+').');return S;}
+ function setLive(S,set){const s=S.sim;let reload=false;
+  for(const [k,v] of Object.entries(set||{})){const [id,prm]=String(k).split('.');const c=S.project.components.find(x=>x.id===id);if(!c)throw new Error(`Δεν υπάρχει στοιχείο «${id}».`);
+   if(!prm){if(c.type!=='CONST')throw new Error(`«${id}»: χωρίς παράμετρο αλλάζει μόνο μπλοκ «Σταθερά / πρόγραμμα» (γράψε ${id}.<παράμετρος>).`);
+    const x=+v;c.params={...(c.params||{}),v:String(v)};s.setBlock(id,{sched:[[0,x]]});}
+   else{c.params={...(c.params||{}),[prm]:v};reload=true;}}
+  if(reload){s.load(JSON.parse(JSON.stringify(S.project)),false);S.index();}}
+ function advance(q,hooks={}){const S=session(q),s=S.sim,te=+q.t_end;if(!(te>s.t*(1+1e-12)))throw new Error(`Το τέλος ${te} s πρέπει να είναι μετά το ${s.t} s.`);
+  if(q.set)setLive(S,q.set);
+  S.from=+q.from||0;S.t=[];S.Y=S.keys.map(()=>[]);const t0=s.t,w0=Date.now(),st0=s.steps;
+  if(S.fresh){S.fresh=false;S.push();} // t = 0 (recorded by the constructor)
+  if(hooks.tick){const m=Math.max(1,Math.ceil((te-t0)/50/s.T));
+   while(s.t<te*(1-1e-12)){const k=Math.round(s.t/s.T),e=Math.min(te,(k+m)*s.T);s.run(e-s.t);hooks.tick((s.t-t0)/(te-t0));}}
+  else s.run(te-s.t);
+  const t=S.t,Y=S.Y;S.Y=null;
+  const meas={};for(const m of q.measure||[]){const j=S.keys.indexOf(m.key);if(j<0)throw new Error(`Η μέτρηση «${m.name||m.key}» θέλει το κανάλι ${m.key}.`);meas[m.name||`${m.key}:${m.stat}`]=measure(t,Y[j],m,s.T);}
+  const out={keys:S.keys,t0,t1:s.t,measure:meas,meta:{T:s.T,steps:s.steps-st0,points:t.length,wall_s:(Date.now()-w0)/1000}};
+  if(q.waveforms!==false){const keep=decimate(t,Y,+q.max_points||200000);out.t=keep?keep.map(i=>t[i]):t;out.ch={};S.keys.forEach((k,j)=>{out.ch[k]=keep?keep.map(i=>Y[j][i]):Y[j];});out.meta.returned=out.t.length;}
+  return out;}
+ function closeSession(q){const S=session(q),s=S.sim;sessions.delete(String(q.sid));
+  return {t:s.t,steps:s.steps,rejected:s.nRej||0,warnings:s.net.warnings,diag:s.diagnostics().map(d=>({sev:d.sev,grp:d.grp,id:d.id||null,t:d.t,n:d.n,msg:d.msg,fix:d.fix||''}))};}
+
  function tutorial(q){const T=tut();if(!T)throw new Error('Τα tutorials δεν έχουν φορτωθεί.');const t=T.get(q.id);if(!t)throw new Error(`Άγνωστο tutorial «${q.id}». Υπάρχουν: ${T.list.map(x=>x.id).join(', ')}`);
   const o={};for(const op of t.options){const v=(q.options||{})[op.k];o[op.k]=v===undefined?op.def:String(v);}const out=t.build(o);out.tutorial={id:q.id,options:o};return out;}
  function tutorials(){const T=tut();return T?T.list.map(t=>({id:t.id,title:t.title,group:t.group,options:t.options.map(o=>({k:o.k,label:o.label,def:o.def,choices:(o.options||[]).map(c=>Array.isArray(c)?c[0]:c)}))})):[];}
@@ -76,6 +120,10 @@
   if(q.action==='tutorial')return tutorial(q);
   if(q.action==='tutorials')return tutorials();
   if(q.action==='bifurcation')return bifurcation(q,hooks);
+  if(q.action==='open')return open(q);
+  if(q.action==='advance')return advance(q,hooks);
+  if(q.action==='state')return session(q).sim.snapshot();
+  if(q.action==='close')return closeSession(q);
   throw new Error('Άγνωστη ενέργεια: '+q.action);}
 
  // the bifurcation diagram as a sweep (3.15): one value = MNA.sweepPoint (transient, then one sample per base period:
@@ -91,6 +139,6 @@
  // JSON without NaN/Infinity (null), as Python's json reads it
  const json=o=>JSON.stringify(o,(k,v)=>typeof v==='number'&&!Number.isFinite(v)?null:v);
 
- const api={handle,run,measure,decimate,defaultKeys,json,bifPoint,bifSpec};
+ const api={handle,run,measure,decimate,defaultKeys,json,bifPoint,bifSpec,sessions};
  root.Scenario=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:typeof self!=='undefined'?self:globalThis);

@@ -68,12 +68,35 @@ const ROOT=path.resolve(__dirname,'../..');
  await fc.selectOption('.loop[data-i="0"] [data-c="type"]','pi_nn');await fc.click('#apply');
  await fc.waitForFunction(()=>/Μπήκαν|err/.test(document.querySelector('#msg').textContent+document.querySelector('#msg').className),null,{timeout:120000});
  const cs=await p.evaluate(async()=>{await PyRT.load();const s=PCL.S.sim;s.run(0.06);return {pwm:PCL.editor.comp('PWM1').params.in_d,w:s.now('Y:M1'),ids:PCL.editor.doc.components.filter(c=>c.id.startsWith('AC')).length};});
- ok(cs.pwm==='AC2G:y'&&cs.ids===6&&cs.w>50,`σύνθεση: 6 μπλοκ, το PWM από τον βρόχο ρεύματος, ω = ${cs.w.toFixed(1)} rad/s στα 60 ms`);
+ ok(cs.pwm==='AC2G:y'&&cs.ids===7&&cs.w>50,`σύνθεση: 7 μπλοκ (με το ρολόι 1 ms του βρόχου ω), το PWM από τον βρόχο ρεύματος, ω = ${cs.w.toFixed(1)} rad/s στα 60 ms`);
  await p.waitForTimeout(900);ok(/u = \d/.test(await fc.$eval('#diagram',e=>e.textContent)),'διάγραμμα βρόχου με ζωντανές τιμές');
  await fc.fill('#tend','0.1');await fc.click('#compare');
  await fc.waitForFunction(()=>document.querySelectorAll('#out tbody tr').length>=3||/err/.test(document.querySelector('#msg').className),null,{timeout:300000});
  const rows=await fc.$$eval('#out tbody tr',x=>x.map(r=>[...r.cells].map(c=>c.textContent)));
  ok(rows.length===3&&rows[0][1]===rows[1][1],'σύγκριση: ο PI και το PI + NN χωρίς μάθηση δίνουν το ίδιο IAE ('+rows.map(r=>r[1]).join(' / ')+')');
  await p.screenshot({path:path.join(OUT,'addons_control.png')});
+ // 3.16: the inverse ANN with emulator, trained in phases (excite → emulator → controller → online), then compared on the pool
+ await fc.selectOption('.loop[data-i="0"] [data-c="type"]','inv_nn');await fc.waitForSelector('[data-train="ω"]');
+ await fc.fill('[data-train="ω"] [data-o="t_excite"]','0.3');await fc.fill('[data-train="ω"] [data-o="epochs_emu"]','6');await fc.fill('[data-train="ω"] [data-o="epochs_ctrl"]','6');
+ for(const o of ['t_excite','epochs_emu','epochs_ctrl'])await fc.$eval(`[data-train="ω"] [data-o="${o}"]`,e=>e.dispatchEvent(new Event('change')));
+ await fc.click('[data-train="ω"] [data-go]');
+ await fc.waitForFunction(()=>/έτοιμη/.test(document.querySelector('#msg').textContent)||/err/.test(document.querySelector('#msg').className),null,{timeout:400000});
+ const st=await fc.$$eval('[data-train="ω"] .steps li',x=>x.map(li=>li.querySelector('.bar i').style.width+' '+li.lastElementChild.textContent));
+ ok(st.length===4&&st.every(x=>x.startsWith('100%')),'αντίστροφο NN: οι 4 φάσεις με πρόοδο ('+st.map(x=>x.slice(0,60)).join(' | ')+')');
+ ok(await fc.$eval('[data-train="ω"] .curve svg',e=>e.querySelectorAll('polyline').length)===2,'καμπύλες MSE εξομοιωτή και ελεγκτή');
+ await fc.click('#compare');
+ await fc.waitForFunction(()=>/αντίστροφο NN, online/.test(document.querySelector('#out').textContent)||/err/.test(document.querySelector('#msg').className),null,{timeout:400000});
+ const r2=await fc.$$eval('#out tbody tr',x=>x.map(r=>[...r.cells].map(c=>c.textContent)));
+ ok(r2.length===3&&r2.every(r=>/^\d/.test(r[1])),'σύγκριση PI ↔ αντίστροφο NN χωρίς και με online μάθηση, στο pool ('+r2.map(r=>r[0]+': '+r[1]).join(' / ')+')');
+ // RL: one iteration of the policy search (2 + 1 episodes on the pool), then the comparison
+ await fc.selectOption('.loop[data-i="0"] [data-c="type"]','rl');await fc.waitForSelector('[data-train="ω"] [data-o="iters"]');
+ for(const [o,v] of [['iters','1'],['population','2'],['t_end','0.1']]){await fc.fill(`[data-train="ω"] [data-o="${o}"]`,v);await fc.$eval(`[data-train="ω"] [data-o="${o}"]`,e=>e.dispatchEvent(new Event('change')));}
+ await fc.click('[data-train="ω"] [data-go]');
+ await fc.waitForFunction(()=>/έτοιμη/.test(document.querySelector('#msg').textContent)&&/RL/.test(document.querySelector('#train').textContent)||/err/.test(document.querySelector('#msg').className),null,{timeout:400000});
+ ok(/επανάληψη 1\/1/.test(await fc.$eval('#train',e=>e.textContent)),'RL: επεισόδιο αναφοράς και μία επανάληψη της αναζήτησης');
+ await fc.click('#compare');
+ await fc.waitForFunction(()=>/RL \(ω\)/.test(document.querySelector('#out').textContent)||/err/.test(document.querySelector('#msg').className),null,{timeout:400000});
+ ok((await fc.$$eval('#out tbody tr',x=>x.length))===2,'σύγκριση PI ↔ RL');
+ await p.screenshot({path:path.join(OUT,'addons_control_ai.png')});
  ok(errs.length===0,'χωρίς σφάλματα JavaScript '+errs.join(' | '));
  await b.close();})().catch(e=>{console.error(e);process.exit(1);});

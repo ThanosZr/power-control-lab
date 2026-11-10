@@ -26,6 +26,42 @@
  // Kv = [[3/2, √3/2], [0, √3]]; i_α = i_a, i_β = (i_a + 2·i_b)/√3. With Γ_αβ(θ) = R(θ)·diag(1/L_d, 1/L_q)·R(θ)ᵀ and the magnet
  // flux ψ₀ = ψ_m·(cos θ, sin θ): i_p = Γ_p·(ψ_p − Kv·ψ₀), Γ_p = Ki⁻¹·Γ_αβ·Kv⁻¹ (symmetric, = ⅔·Ki⁻¹·Γ_αβ·Ki⁻ᵀ)
  const SQ3=Math.sqrt(3);
+ // the whole state of a run as JSON (3.16, ROADMAP §41.1): a walk over the solver's objects that keeps the data and
+ // leaves out the functions; restoring walks a new solver of the same project (same structure) and writes the data back,
+ // so the run continues with the same numbers. Objects met twice are kept once ($ref); typed arrays as base64 of their
+ // bytes (exact); NaN, ±Infinity and −0 by name; an object with getState/setState (a Python block) keeps its own state.
+ // Left out: the project (rebuilt), the LU cache (rebuilt the same) and the scope's buffers (ring, per).
+ const SNAP_SKIP=new Set(['project','cache','ring','per']);
+ const SNAP_TA={Float64Array,Float32Array,Int32Array,Uint32Array,Int16Array,Uint16Array,Int8Array,Uint8Array,Uint8ClampedArray};
+ function b64of(ta){const u=new Uint8Array(ta.buffer,ta.byteOffset,ta.byteLength);if(typeof Buffer!=='undefined')return Buffer.from(u).toString('base64');
+  let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s);}
+ function fromB64(s,T){let u;if(typeof Buffer!=='undefined'){const b=Buffer.from(s,'base64');u=new Uint8Array(b.length);u.set(b);}
+  else{const bin=atob(s);u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);}
+  return new T(u.buffer,0,u.length/T.BYTES_PER_ELEMENT);}
+ function snapEncode(root0){const ids=new Map();let next=0;
+  const num=v=>Number.isFinite(v)?(Object.is(v,-0)?{$n:'-0'}:v):{$n:String(v)};
+  function enc(v,top){if(v===undefined)return {$u:1};if(v===null||typeof v==='boolean'||typeof v==='string')return v;if(typeof v==='number')return num(v);
+   if(typeof v!=='object')return undefined; // functions, symbols
+   if(ids.has(v))return {$ref:ids.get(v)};const id=next++;ids.set(v,id);
+   if(ArrayBuffer.isView(v)){if(!SNAP_TA[v.constructor.name])throw new NetlistError('Η κατάσταση έχει πίνακα '+v.constructor.name+' που δεν αποθηκεύεται.');return {$id:id,$ta:v.constructor.name,d:b64of(v)};}
+   if(typeof v.getState==='function'&&typeof v.setState==='function')return {$id:id,$state:v.getState()};
+   if(Array.isArray(v)){const a=new Array(v.length);for(let i=0;i<v.length;i++){const e=enc(v[i]);a[i]=e===undefined?{$f:1}:e;}return {$id:id,$a:a};}
+   if(v instanceof Map){const m=[];for(const [k,x] of v){const ek=enc(k),ex=enc(x);if(ek!==undefined&&ex!==undefined)m.push([ek,ex]);}return {$id:id,$map:m};}
+   if(v instanceof Set){const m=[];for(const x of v){const e=enc(x);if(e!==undefined)m.push(e);}return {$id:id,$set:m};}
+   const o={};for(const k of Object.keys(v)){if(top&&SNAP_SKIP.has(k))continue;const e=enc(v[k]);if(e!==undefined)o[k]=e;}return {$id:id,$o:o};}
+  return enc(root0,true);}
+ function snapRestore(root0,snap){const refs=new Map();
+  function dec(s,live,top){if(s===null||typeof s!=='object')return s;
+   if('$u' in s)return undefined;if('$n' in s)return s.$n==='-0'?-0:Number(s.$n);if('$f' in s)return live;
+   if('$ref' in s){if(!refs.has(s.$ref))throw new NetlistError('Χαλασμένη κατάσταση (αναφορά '+s.$ref+').');return refs.get(s.$ref);}
+   if('$ta' in s){const T=SNAP_TA[s.$ta];if(!T)throw new NetlistError('Χαλασμένη κατάσταση ('+s.$ta+').');const src=fromB64(s.d,T);const out=live instanceof T&&live.length===src.length?live:new T(src.length);out.set(src);refs.set(s.$id,out);return out;}
+   if('$state' in s){if(!live||typeof live.setState!=='function')throw new NetlistError('Η κατάσταση έχει μπλοκ κώδικα που δεν υπάρχει πια στο κύκλωμα.');live.setState(s.$state);refs.set(s.$id,live);return live;}
+   if('$a' in s){const out=Array.isArray(live)?live:[];refs.set(s.$id,out);const prev=out.slice();out.length=s.$a.length;for(let i=0;i<s.$a.length;i++)out[i]=dec(s.$a[i],prev[i]);return out;}
+   if('$map' in s){const out=live instanceof Map?live:new Map();refs.set(s.$id,out);const old=new Map(out);out.clear();for(const [ek,ex] of s.$map){const k=dec(ek,undefined);out.set(k,dec(ex,old.get(k)));}return out;}
+   if('$set' in s){const out=live instanceof Set?live:new Set();refs.set(s.$id,out);out.clear();for(const e of s.$set)out.add(dec(e,undefined));return out;}
+   const out=live&&typeof live==='object'&&!Array.isArray(live)&&!ArrayBuffer.isView(live)&&!(live instanceof Map)&&!(live instanceof Set)?live:{};refs.set(s.$id,out);
+   for(const k of Object.keys(s.$o)){if(top&&SNAP_SKIP.has(k))continue;out[k]=dec(s.$o[k],out[k]);}return out;}
+  dec(snap,root0,true);}
  function smPort(m,th){const c=Math.cos(th),s=Math.sin(th),gd=1/m.Ld,gq=1/m.Lq,g00=c*c*gd+s*s*gq,g01=c*s*(gd-gq),g11=s*s*gd+c*c*gq;
   const a10=-g00/2+SQ3/2*g01,a11=-g01/2+SQ3/2*g11,pa=m.psim*c,pb=m.psim*s;
   return {G:[g00*2/3,-g00/3+g01/SQ3,a10*2/3,-a10/3+a11/SQ3],p0:[1.5*pa+SQ3/2*pb,SQ3*pb]};}
@@ -750,6 +786,9 @@
   restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
    for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];}else if(e.k==='TL'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];e.trigDone=r[3];e.Dacc=r[4];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
    for(const [m,st] of S.ms||[]){m.st={...st};if(m.ph)this.imSources(m);}}
+  // the whole state for a later continuation (3.16): {format, version, t, opts, method, state}. JSON-able, so it goes to a file
+  snapshot(){return {format:'pcl-state',version:1,t:this.t,opts:{...this.opts},method:this.method,state:snapEncode(this)};}
+  restoreSnapshot(S){if(!S||S.format!=='pcl-state'||!S.state)throw new NetlistError('Δεν είναι αποθηκευμένη κατάσταση του Power Converter Lab.');snapRestore(this,S.state);this.cache.clear();return this;}
   // the gate signature at t without changing the switches (the variable step looks ahead: a switching starts the next step small)
   gateSigPeek(t){let s='';for(const e of this.net.els){if(e.k!=='S'&&!e.gk)continue;let on=false;
     if(e.gate==='on')on=true;else if(e.gate==='sig')on=(e.gIn>=0?this.sv[e.gIn]:0)>=.5;else if(e.gate==='pwm'){const k=this.ctrlById.get(e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
@@ -832,7 +871,7 @@
    if(Math.abs(v)<e.Vmin){e.g=P/(e.Vmin*e.Vmin);e.J=0;}else{e.g=-P/(v*v);e.J=2*P/v;}}}
   solveOnce(h,mode){
    let key=null;
-   if(!this.hasCPL&&!this.hasTV&&!this.hasNL){key=mode+(h/this.h).toPrecision(10)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of this.net.els)if(e.k==='S'||e.k==='D')key+=e.on?'1':'0';
+   if(!this.hasCPL&&!this.hasTV&&!this.hasNL){key=mode+(h/this.h).toPrecision(17)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of this.net.els)if(e.k==='S'||e.k==='D')key+=e.on?'1':'0';
     for(const e of this.net.els)if(e.k==='G'&&e.sched)key+='|'+e.Rnow;}
    let f=key&&this.cache.get(key);
    if(!f){this.assemble(h,mode);luFactor(this.A,this.n,this.piv);f={A:this.A.slice(),piv:this.piv.slice()};if(key){if(this.cache.size>256)this.cache.clear();this.cache.set(key,f);}}
@@ -1124,6 +1163,10 @@
   const p=s.per,iv=s.chIndex.get(o.vKey),ii=s.chIndex.get(o.iKey);if(iv===undefined||ii===undefined)throw new NetlistError('Δεν υπάρχουν τα κανάλια τάσης/ρεύματος.');
   const n=Math.min(p.n,Math.ceil(P*Tf/s.T)+2),t=[],v=[],i=[];for(let k=n;k>=1;k--){const j=(p.head-k+p.cap)%p.cap;t.push(p.t[j]-s.T/2);v.push(p.avg[j*p.nch+iv]);i.push(p.avg[j*p.nch+ii]);}
   return {f:o.f,t,v,i,T:s.T,tEnd:s.t-s.T/2,periods:P,warnings:s.net.warnings};}
- const api={Sim,buildNetlist,NetlistError,exportForBatch,sweepPoint,eisPoint};
+ // continue from a saved state (3.16, §41.1): a new solver of the saved project at the saved state. With another project
+ // (a parameter changed), the states pass over by key as with a change while running (load without fresh).
+ function resume(saved,state,project){const s=new Sim(saved,{...state.opts});s.method=state.method||s.method;s.restoreSnapshot(state);
+  if(project&&JSON.stringify(project)!==JSON.stringify(saved))s.load(project,false);return s;}
+ const api={Sim,buildNetlist,NetlistError,exportForBatch,sweepPoint,eisPoint,resume};
  root.MNA=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

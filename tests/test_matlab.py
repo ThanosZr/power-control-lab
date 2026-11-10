@@ -31,7 +31,23 @@ class Octave(unittest.TestCase):
         self.assertEqual(o['L'], 47e-6)
         import pcl                                           # the same numbers as the Python package
         r = pcl.tutorial('buck', start='steady').set('L1.L', 47e-6).run(t_end=1e-3, channels=['V:C1', 'I:L1'])
-        self.assertEqual(o['last'], r['V:C1'][-1])
+        self.assertAlmostEqual(o['last'], r['V:C1'][-1], delta=1e-13 * abs(r['V:C1'][-1]))   # Octave's jsondecode can miss the last bit
+
+    def test_run_saves_and_resumes(self):
+        # 3.16: save_state, then resume to a later end time; the same numbers as one run of the Python package
+        d = Path(tempfile.mkdtemp())
+        try:
+            o = octave(f"cd('{d.as_posix()}'); a = pcl_run('tutorial:buck', {{}}, struct('t_end', 1e-3, 'channels', {{{{'V:C1'}}}}, 'save_state', 'run.state')); "
+                       "b = pcl_run('tutorial:buck', {}, struct('t_end', 2e-3, 'resume', 'run.state')); "
+                       "printf('JSON %s\\n', jsonencode(struct('na', numel(a.t), 'nb', numel(b.t), 'last', b.V_C1(end), 't0', b.t(1))));")
+            self.assertTrue((d / 'run.state').is_file())
+            import pcl
+            r = pcl.tutorial('buck').run(t_end=2e-3, channels=['V:C1'])
+            self.assertEqual(o['na'] + o['nb'], len(r.t))
+            self.assertAlmostEqual(o['last'], r['V:C1'][-1], delta=1e-13 * abs(r['V:C1'][-1]))
+            self.assertGreater(o['t0'], 1e-3)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
 
     def test_sweep_ripple(self):
         o = octave("r = pcl_sweep('tutorial:buck?start=steady', {'L1.L', [50e-6 100e-6 200e-6]}, "

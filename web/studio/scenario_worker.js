@@ -93,7 +93,7 @@ async function boot(){
 
 // a batch of requests for the page's pool: this worker waits on a SharedArrayBuffer (state 0 → 1 answer, 2 bigger buffer)
 function batch(s){if(!self.crossOriginIsolated||typeof SharedArrayBuffer==='undefined'||typeof Atomics==='undefined')return '';
- const qs=JSON.parse(s);if(qs.some(q=>q.project&&(q.project.components||[]).some(c=>c.type==='PY')))return ''; // the pool has no Python
+ const qs=JSON.parse(s); // 3.16: Python blocks too (each worker of the pool loads Python when it needs it)
  let sab=new SharedArrayBuffer(8+(4<<20)),h=new Int32Array(sab,0,2);post({type:'batch',qs,sab});
  for(;;){Atomics.wait(h,0,0);const st=Atomics.load(h,0);
   if(st===2){sab=new SharedArrayBuffer(8+h[1]);h=new Int32Array(sab,0,2);post({type:'batch-fetch',sab});continue;}

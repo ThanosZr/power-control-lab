@@ -57,5 +57,14 @@ const {chromium}=require('playwright');const fs=require('fs');const path=require
  await p.evaluate(()=>PCL.loadTutorial('pcm_chaos'));await p.waitForTimeout(400);await p.evaluate(()=>{document.querySelector('#bf-block').open=true;});await p.waitForTimeout(400);
  const bf=await p.evaluate(async()=>{await PCL.runBifurcation();return {n:PCL.BF.pts.length,par:PCL.BF.par,per:PCL.BF.pts.map(x=>x.q.period).join('')};});
  ok(bf.n===65&&bf.par>=1&&/^1+2+4+8+0+$/.test(bf.per.replace(/(.)0+(?=.)/g,'$1')),'διάγραμμα της εφαρμογής μέσω pool: '+bf.per+' με '+bf.par+' workers');
+ // 3.16: results in chunks and a run that continues from a saved state, in the panel; a sweep of a circuit with a Python
+ // block goes to the pool too (each worker loads Python), with the same numbers as in order
+ await setCode("p = pcl.tutorial('buck')\nT = p.channels()['T']\nn = 0\nfor c in p.stream(t_end=20 * T, chunk=5 * T, channels=['V:C1'], state='s.json'):\n    n += 1\n"+
+  "r = p.run(t_end=30 * T, resume='s.json', channels=['V:C1'])\nf = p.run(t_end=30 * T, channels=['V:C1'])\nprint('κομμάτια', n, 'ίδια', r['V:C1'] == f['V:C1'][-len(r.t):])\n"+
+  "q = pcl.tutorial('code_loop', ctrl='python')\nm = {'i': ('Y:AM1', 'avg', 5)}\nsw = q.sweep({'L1.L': ['100u', '150u', '220u']}, t_end='2m', measure=m)\nsq = q.sweep({'L1.L': ['100u', '150u', '220u']}, t_end='2m', measure=m, workers=1)\n"+
+  "print('python στο pool', sw.meta['workers'], [x.get('error') for x in sw.rows], [x['i'] for x in sw.rows] == [x['i'] for x in sq.rows])\n");
+ await p.click('#scen-run');await done();const o16=await p.$eval('#scen-out',e=>e.textContent);
+ ok(/κομμάτια 4 ίδια True/.test(o16),'p.stream σε 4 κομμάτια, συνέχεια από την κατάσταση με ίδιους αριθμούς '+o16.slice(0,160));
+ ok(/python στο pool [1-9] \[None, None, None\] True/.test(o16),'σάρωση κυκλώματος με μπλοκ Python στο pool, ίδια με τη σειριακή');
  ok(errs.length===0,'χωρίς σφάλματα JavaScript '+errs.join(' | '));
  await b.close();})();

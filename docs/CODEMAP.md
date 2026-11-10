@@ -8,24 +8,24 @@
 | Αρχείο | Γραμμές |
 |---|---:|
 | `web/studio/addon_client.js` | 30 |
-| `web/studio/addons.js` | 111 |
+| `web/studio/addons.js` | 108 |
 | `web/studio/app.js` | 1785 |
 | `web/studio/editor.js` | 514 |
 | `web/studio/expr.js` | 56 |
 | `web/studio/math.js` | 144 |
 | `web/studio/metrics.js` | 89 |
-| `web/studio/mna.js` | 1129 |
+| `web/studio/mna.js` | 1172 |
 | `web/studio/parts.js` | 577 |
 | `web/studio/pool.js` | 29 |
-| `web/studio/pyrt.js` | 57 |
-| `web/studio/scenario.js` | 96 |
+| `web/studio/pyrt.js` | 75 |
+| `web/studio/scenario.js` | 144 |
 | `web/studio/scenario_worker.js` | 122 |
 | `web/studio/scope.js` | 167 |
-| `web/studio/sim_worker.js` | 9 |
+| `web/studio/sim_worker.js` | 17 |
 | `web/studio/stepcheck.js` | 167 |
 | `web/studio/templates.js` | 32 |
 | `web/studio/tutorials.js` | 810 |
-| `pcl/runner.js` | 15 |
+| `pcl/runner.js` | 27 |
 | `run.py` | 275 |
 | `engine/__init__.py` | 1 |
 | `engine/addons.py` | 322 |
@@ -46,13 +46,14 @@
 | `engine/templates.py` | 317 |
 | `engine/workbench.py` | 129 |
 | `pcl/__init__.py` | 14 |
-| `pcl/__main__.py` | 216 |
-| `pcl/control.py` | 196 |
-| `pcl/core.py` | 970 |
+| `pcl/__main__.py` | 289 |
+| `pcl/control.py` | 893 |
+| `pcl/core.py` | 1219 |
 | `pcl/formats.py` | 222 |
 | `pcl/impulse.py` | 254 |
 | `pcl/link.py` | 131 |
 | `pcl/plotting.py` | 340 |
+| `pcl/workbench.py` | 295 |
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
@@ -60,27 +61,30 @@
 | `tests/test_bidir_engine.py` | 103 |
 | `tests/test_bidir_sim.py` | 70 |
 | `tests/test_boundary.py` | 50 |
-| `tests/test_control.py` | 98 |
+| `tests/test_control.py` | 213 |
 | `tests/test_derivation.py` | 93 |
 | `tests/test_engine.py` | 276 |
 | `tests/test_live_sim.py` | 149 |
-| `tests/test_matlab.py` | 134 |
+| `tests/test_matlab.py` | 150 |
 | `tests/test_pcl.py` | 288 |
 | `tests/test_plotting.py` | 113 |
 | `tests/test_step.py` | 109 |
+| `tests/test_stream.py` | 132 |
 | `tests/test_studio_math.py` | 50 |
 | `tests/test_studio_sim.py` | 593 |
 | `tests/test_templates.py` | 237 |
 | `tests/test_tutorials.py` | 703 |
+| `tests/test_workbench.py` | 78 |
 | `tests/js/batch_requests.js` | 84 |
 | `tests/js/sim_cases.js` | 330 |
+| `tests/js/snapshot_cases.js` | 19 |
 | `tests/js/step_cases.js` | 89 |
 | `tests/js/tutorial_cases.js` | 137 |
-| `tests/ui/addons_flow.js` | 79 |
+| `tests/ui/addons_flow.js` | 102 |
 | `tests/ui/blocks_flow.js` | 140 |
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/features_flow.js` | 84 |
-| `tests/ui/scenario_flow.js` | 61 |
+| `tests/ui/scenario_flow.js` | 70 |
 | `tests/ui/step_flow.js` | 41 |
 | `tests/ui/studio_flow.js` | 39 |
 | `tests/ui/wiring_flow.js` | 128 |
@@ -219,10 +223,9 @@
 | 27 | function | `setOne` |
 | 29 | function | `query` |
 | 30 | function | `poolOf` |
-| 32 | function | `onPage` |
-| 33 | function | `solve` |
-| 35 | function | `scopeData` |
-| 69 | function | `onMessage` |
+| 32 | function | `solve` |
+| 33 | function | `scopeData` |
+| 66 | function | `onMessage` |
 
 ### `web/studio/app.js`
 
@@ -667,140 +670,150 @@
 | 21 | const fn | `schedAt` |
 | 22 | const fn | `num` |
 | 24 | const fn | `numList` |
-| 29 | function | `smPort` |
-| 33 | function | `smOut` |
-| 36 | class | `NetlistError` |
-| 41 | function | `dePiece` |
-| 43 | const fn | `F` |
-| 44 | function | `deInt` |
-| 46 | function | `deFrac` |
-| 49 | function | `tlElement` |
-| 52 | function | `buildNetlist` |
-| 56 | const fn | `union` |
-| 67 | const fn | `nm` |
-| 86 | const fn | `sn` |
-| 90 | const fn | `isJ` |
-| 110 | const fn | `lbl` |
-| 115 | const fn | `node` |
-| 116 | const fn | `internal` |
-| 119 | const fn | `mkBlock` |
-| 126 | const fn | `add` |
-| 127 | const fn | `series` |
-| 294 | function | `compileSignals` |
-| 316 | function | `cmpF` |
-| 320 | function | `stampM` |
-| 322 | function | `luFactor` |
-| 328 | function | `luSolve` |
-| 335 | class | `Sim` |
-| 336 | method | `constructor` |
-| 338 | method | `basePeriod` |
-| 341 | method | `tlMaxStep` |
-| 342 | method | `setStep` |
-| 345 | method | `stIndex` |
-| 358 | method | `stVec` |
-| 359 | method | `stepCfg` |
-| 360 | method | `varSetup` |
-| 363 | method | `setStepMode` |
-| 365 | method | `hGrid` |
-| 369 | method | `modeCap` |
-| 373 | method | `swEls` |
-| 374 | method | `topoKey` |
-| 375 | method | `topoInfo` |
-| 384 | method | `topoCheck` |
-| 401 | method | `lteReset` |
-| 402 | method | `ltePush` |
-| 406 | method | `lteErr` |
-| 416 | method | `varCheck` |
-| 431 | method | `note` |
-| 434 | method | `stepCheck` |
-| 435 | method | `diagnostics` |
-| 438 | method | `ringCheck` |
-| 447 | method | `stateMap` |
-| 449 | method | `stateMap0` |
-| 460 | method | `load` |
-| 499 | method | `reset` |
-| 502 | method | `imStep` |
-| 509 | method | `smStep` |
-| 511 | method | `srmStep` |
-| 512 | method | `srmOutputs` |
-| 513 | method | `smOutputs` |
-| 514 | method | `imSources` |
-| 515 | method | `pyBlocks` |
-| 521 | method | `setMethod` |
-| 522 | method | `setControl` |
-| 523 | method | `setBlock` |
-| 524 | method | `setHold` |
-| 526 | method | `markChange` |
-| 528 | method | `channelKeys` |
-| 546 | method | `allocRecord` |
-| 553 | method | `V` |
-| 554 | method | `elCurrent` |
-| 558 | method | `portI` |
-| 560 | method | `computeVals` |
-| 585 | method | `recordNow` |
-| 593 | method | `closePeriod` |
-| 602 | method | `lastPeriod` |
-| 603 | method | `now` |
-| 608 | method | `gateOf` |
-| 614 | method | `rawGate` |
-| 625 | method | `carrier` |
-| 628 | method | `shGrid` |
-| 629 | method | `shNext` |
-| 631 | method | `sampleHolds` |
-| 636 | method | `samples` |
-| 637 | method | `ctrlEdges` |
-| 643 | method | `scrU` |
-| 644 | method | `scrGate` |
-| 645 | method | `scrEdges` |
-| 646 | method | `setFiring` |
-| 647 | method | `compV` |
-| 648 | method | `compI` |
-| 650 | method | `dbl` |
-| 651 | method | `sampleControllers` |
-| 679 | method | `evalBlocks` |
-| 743 | method | `blkDue` |
-| 745 | method | `zcFrac` |
-| 748 | method | `saveState` |
-| 750 | method | `restoreState` |
-| 754 | method | `gateSigPeek` |
-| 757 | method | `gateSig` |
-| 762 | method | `jumpScheds` |
-| 768 | method | `jumpAt` |
-| 769 | method | `values` |
-| 788 | method | `assemble` |
-| 790 | const fn | `g` |
-| 812 | method | `rhs` |
-| 814 | const fn | `J` |
-| 831 | method | `cplLinearize` |
-| 833 | method | `solveOnce` |
-| 841 | method | `solve` |
-| 855 | method | `nlLinearize` |
-| 858 | method | `check` |
-| 874 | method | `commit` |
-| 893 | method | `initialSolve` |
-| 903 | method | `tlSources` |
-| 907 | method | `tlRecord` |
-| 913 | method | `tlHist` |
-| 920 | method | `step` |
-| 922 | const fn | `gs` |
-| 928 | method | `stepCore` |
-| 982 | method | `edgeSolve` |
-| 985 | method | `edgePoint` |
-| 986 | method | `nextEvent` |
-| 992 | const fn | `sch` |
-| 1012 | method | `spwmCut` |
-| 1015 | const fn | `sig` |
-| 1020 | method | `run` |
-| 1059 | function | `exportForBatch` |
-| 1068 | const fn | `ci` |
-| 1069 | const fn | `vd` |
-| 1070 | const fn | `V` |
-| 1071 | const fn | `I` |
-| 1072 | const fn | `portRec` |
-| 1073 | const fn | `rec` |
-| 1089 | const fn | `clkOf` |
-| 1112 | function | `sweepPoint` |
-| 1120 | function | `eisPoint` |
+| 36 | function | `b64of` |
+| 38 | function | `fromB64` |
+| 41 | function | `snapEncode` |
+| 42 | const fn | `num` |
+| 43 | function | `enc` |
+| 53 | function | `snapRestore` |
+| 54 | function | `dec` |
+| 65 | function | `smPort` |
+| 69 | function | `smOut` |
+| 72 | class | `NetlistError` |
+| 77 | function | `dePiece` |
+| 79 | const fn | `F` |
+| 80 | function | `deInt` |
+| 82 | function | `deFrac` |
+| 85 | function | `tlElement` |
+| 88 | function | `buildNetlist` |
+| 92 | const fn | `union` |
+| 103 | const fn | `nm` |
+| 122 | const fn | `sn` |
+| 126 | const fn | `isJ` |
+| 146 | const fn | `lbl` |
+| 151 | const fn | `node` |
+| 152 | const fn | `internal` |
+| 155 | const fn | `mkBlock` |
+| 162 | const fn | `add` |
+| 163 | const fn | `series` |
+| 330 | function | `compileSignals` |
+| 352 | function | `cmpF` |
+| 356 | function | `stampM` |
+| 358 | function | `luFactor` |
+| 364 | function | `luSolve` |
+| 371 | class | `Sim` |
+| 372 | method | `constructor` |
+| 374 | method | `basePeriod` |
+| 377 | method | `tlMaxStep` |
+| 378 | method | `setStep` |
+| 381 | method | `stIndex` |
+| 394 | method | `stVec` |
+| 395 | method | `stepCfg` |
+| 396 | method | `varSetup` |
+| 399 | method | `setStepMode` |
+| 401 | method | `hGrid` |
+| 405 | method | `modeCap` |
+| 409 | method | `swEls` |
+| 410 | method | `topoKey` |
+| 411 | method | `topoInfo` |
+| 420 | method | `topoCheck` |
+| 437 | method | `lteReset` |
+| 438 | method | `ltePush` |
+| 442 | method | `lteErr` |
+| 452 | method | `varCheck` |
+| 467 | method | `note` |
+| 470 | method | `stepCheck` |
+| 471 | method | `diagnostics` |
+| 474 | method | `ringCheck` |
+| 483 | method | `stateMap` |
+| 485 | method | `stateMap0` |
+| 496 | method | `load` |
+| 535 | method | `reset` |
+| 538 | method | `imStep` |
+| 545 | method | `smStep` |
+| 547 | method | `srmStep` |
+| 548 | method | `srmOutputs` |
+| 549 | method | `smOutputs` |
+| 550 | method | `imSources` |
+| 551 | method | `pyBlocks` |
+| 557 | method | `setMethod` |
+| 558 | method | `setControl` |
+| 559 | method | `setBlock` |
+| 560 | method | `setHold` |
+| 562 | method | `markChange` |
+| 564 | method | `channelKeys` |
+| 582 | method | `allocRecord` |
+| 589 | method | `V` |
+| 590 | method | `elCurrent` |
+| 594 | method | `portI` |
+| 596 | method | `computeVals` |
+| 621 | method | `recordNow` |
+| 629 | method | `closePeriod` |
+| 638 | method | `lastPeriod` |
+| 639 | method | `now` |
+| 644 | method | `gateOf` |
+| 650 | method | `rawGate` |
+| 661 | method | `carrier` |
+| 664 | method | `shGrid` |
+| 665 | method | `shNext` |
+| 667 | method | `sampleHolds` |
+| 672 | method | `samples` |
+| 673 | method | `ctrlEdges` |
+| 679 | method | `scrU` |
+| 680 | method | `scrGate` |
+| 681 | method | `scrEdges` |
+| 682 | method | `setFiring` |
+| 683 | method | `compV` |
+| 684 | method | `compI` |
+| 686 | method | `dbl` |
+| 687 | method | `sampleControllers` |
+| 715 | method | `evalBlocks` |
+| 779 | method | `blkDue` |
+| 781 | method | `zcFrac` |
+| 784 | method | `saveState` |
+| 786 | method | `restoreState` |
+| 790 | method | `snapshot` |
+| 791 | method | `restoreSnapshot` |
+| 793 | method | `gateSigPeek` |
+| 796 | method | `gateSig` |
+| 801 | method | `jumpScheds` |
+| 807 | method | `jumpAt` |
+| 808 | method | `values` |
+| 827 | method | `assemble` |
+| 829 | const fn | `g` |
+| 851 | method | `rhs` |
+| 853 | const fn | `J` |
+| 870 | method | `cplLinearize` |
+| 872 | method | `solveOnce` |
+| 880 | method | `solve` |
+| 894 | method | `nlLinearize` |
+| 897 | method | `check` |
+| 913 | method | `commit` |
+| 932 | method | `initialSolve` |
+| 942 | method | `tlSources` |
+| 946 | method | `tlRecord` |
+| 952 | method | `tlHist` |
+| 959 | method | `step` |
+| 961 | const fn | `gs` |
+| 967 | method | `stepCore` |
+| 1021 | method | `edgeSolve` |
+| 1024 | method | `edgePoint` |
+| 1025 | method | `nextEvent` |
+| 1031 | const fn | `sch` |
+| 1051 | method | `spwmCut` |
+| 1054 | const fn | `sig` |
+| 1059 | method | `run` |
+| 1098 | function | `exportForBatch` |
+| 1107 | const fn | `ci` |
+| 1108 | const fn | `vd` |
+| 1109 | const fn | `V` |
+| 1110 | const fn | `I` |
+| 1111 | const fn | `portRec` |
+| 1112 | const fn | `rec` |
+| 1128 | const fn | `clkOf` |
+| 1151 | function | `sweepPoint` |
+| 1159 | function | `eisPoint` |
+| 1168 | function | `resume` |
 
 ### `web/studio/parts.js`
 
@@ -902,28 +915,34 @@
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 38 | function | `pyMessage` |
-| 41 | method | `load` |
-| 51 | method | `attach` |
-| 52 | method | `make` |
+| 54 | function | `pyMessage` |
+| 57 | method | `load` |
+| 67 | method | `attach` |
+| 68 | method | `make` |
 
 ### `web/studio/scenario.js`
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 16 | const fn | `tut` |
-| 19 | function | `defaultKeys` |
-| 24 | function | `measure` |
-| 36 | function | `decimate` |
-| 41 | function | `run` |
-| 49 | const fn | `push` |
-| 68 | function | `tutorial` |
-| 70 | function | `tutorials` |
-| 72 | function | `handle` |
-| 83 | function | `bifPoint` |
-| 84 | function | `bifSpec` |
-| 88 | function | `bifurcation` |
-| 92 | const fn | `json` |
+| 20 | const fn | `tut` |
+| 23 | function | `defaultKeys` |
+| 28 | function | `measure` |
+| 40 | function | `decimate` |
+| 45 | function | `run` |
+| 53 | const fn | `push` |
+| 76 | function | `open` |
+| 83 | const fn | `index` |
+| 90 | function | `session` |
+| 91 | function | `setLive` |
+| 97 | function | `advance` |
+| 109 | function | `closeSession` |
+| 112 | function | `tutorial` |
+| 114 | function | `tutorials` |
+| 116 | function | `handle` |
+| 131 | function | `bifPoint` |
+| 132 | function | `bifSpec` |
+| 136 | function | `bifurcation` |
+| 140 | const fn | `json` |
 
 ### `web/studio/scenario_worker.js`
 
@@ -977,7 +996,9 @@
 
 ### `web/studio/sim_worker.js`
 
-_(χωρίς συναρτήσεις)_
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 10 | function | `python` |
 
 ### `web/studio/stepcheck.js`
 
@@ -1065,7 +1086,9 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 10 | function | `main` |
+| 10 | function | `answer` |
+| 14 | function | `main` |
+| 20 | function | `serve` |
 
 ### `run.py`
 
@@ -1358,119 +1381,173 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 23 | function | `_dumps` |
-| 28 | function | `_project` |
-| 36 | function | `_kv` |
-| 46 | function | `main` |
+| 27 | function | `_dumps` |
+| 32 | function | `_project` |
+| 40 | function | `_kv` |
+| 50 | function | `main` |
 
 ### `pcl/control.py`
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 77 | function | `_num` |
-| 86 | function | `_bbox` |
-| 92 | function | `compose` |
-| 182 | function | `metrics` |
+| 238 | function | `inv_nn_code` |
+| 243 | function | `rl_code` |
+| 252 | function | `_num` |
+| 261 | function | `_bbox` |
+| 267 | function | `compose` |
+| 400 | function | `metrics` |
+| 418 | function | `rl_theta0` |
+| 424 | function | `_project_data` |
+| 428 | function | `_chan` |
+| 437 | class | `_Runner` |
+| 441 | method | `_Runner.__init__` |
+| 449 | method | `_Runner._one` |
+| 460 | method | `_Runner.map` |
+| 481 | method | `_Runner.close` |
+| 487 | function | `_query` |
+| 497 | function | `_samples` |
+| 513 | function | `_program` |
+| 522 | function | `_ref_range` |
+| 538 | class | `InverseTrainer` |
+| 556 | method | `InverseTrainer.__init__` |
+| 578 | method | `InverseTrainer.to_dict` |
+| 584 | method | `InverseTrainer.from_dict` |
+| 594 | method | `InverseTrainer.status` |
+| 598 | method | `InverseTrainer.excite` |
+| 649 | method | `InverseTrainer._xy` |
+| 654 | method | `InverseTrainer.emulator` |
+| 670 | method | `InverseTrainer.controller` |
+| 686 | method | `InverseTrainer.nets` |
+| 689 | method | `InverseTrainer.ctrl_spec` |
+| 696 | method | `InverseTrainer.online` |
+| 708 | method | `InverseTrainer.run_all` |
+| 721 | class | `RLTrainer` |
+| 729 | method | `RLTrainer.__init__` |
+| 748 | method | `RLTrainer.to_dict` |
+| 753 | method | `RLTrainer.from_dict` |
+| 759 | method | `RLTrainer.ctrl_spec` |
+| 766 | method | `RLTrainer.project` |
+| 774 | method | `RLTrainer._queries` |
+| 790 | method | `RLTrainer._scores` |
+| 806 | method | `RLTrainer._J` |
+| 814 | method | `RLTrainer.iterate` |
+| 861 | function | `compare` |
 
 ### `pcl/core.py`
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 45 | class | `PclError` |
-| 49 | function | `version` |
-| 57 | function | `parse_value` |
-| 79 | function | `_node` |
-| 92 | function | `tutorials` |
-| 97 | function | `tutorial` |
-| 102 | function | `load` |
-| 113 | function | `use` |
-| 120 | function | `current` |
-| 127 | function | `set` |
-| 131 | function | `get` |
-| 135 | function | `run` |
-| 139 | function | `sweep` |
-| 143 | function | `params` |
-| 147 | function | `bifurcation` |
-| 151 | class | `Plot` |
-| 155 | function | `plot` |
-| 164 | function | `show` |
-| 217 | function | `_open` |
-| 233 | function | `_pairs` |
-| 251 | function | `_clean` |
-| 262 | function | `job` |
-| 297 | class | `Project` |
-| 300 | method | `Project.__init__` |
-| 306 | method | `Project.comp` |
-| 313 | method | `Project.get` |
-| 319 | method | `Project.set` |
-| 334 | method | `Project.copy` |
-| 339 | method | `Project.save` |
-| 342 | method | `Project.hash` |
-| 346 | method | `Project.params` |
-| 350 | method | `Project.channels` |
-| 355 | method | `Project._settings` |
-| 366 | method | `Project.run` |
-| 387 | method | `Project._result` |
-| 391 | method | `Project._query` |
-| 403 | method | `Project._run_scipy` |
-| 432 | method | `Project.sweep` |
-| 487 | method | `Project._sweep_meta` |
-| 492 | method | `Project.bifurcation` |
-| 549 | function | `_sweep_point` |
-| 557 | function | `_as_list` |
-| 567 | function | `_spec` |
-| 583 | function | `_measures` |
-| 606 | function | `_base_T` |
-| 613 | function | `_unit` |
-| 617 | function | `_matname` |
-| 622 | class | `Result` |
-| 625 | method | `Result.__init__` |
-| 634 | method | `Result.__getitem__` |
-| 637 | method | `Result.__repr__` |
-| 640 | method | `Result.measure` |
-| 700 | method | `Result.frame` |
-| 709 | method | `Result._meta_lines` |
-| 713 | method | `Result.to_csv` |
-| 726 | method | `Result._vars` |
-| 736 | method | `Result.as_dict` |
-| 740 | method | `Result.to_json` |
-| 744 | method | `Result.to_mat` |
-| 755 | method | `Result.to_parquet` |
-| 763 | method | `Result.to_hdf5` |
-| 769 | method | `Result.save` |
-| 773 | function | `_save` |
-| 780 | class | `SweepResult` |
-| 783 | method | `SweepResult.__init__` |
-| 789 | method | `SweepResult.__repr__` |
-| 792 | method | `SweepResult.column` |
-| 795 | method | `SweepResult.frame` |
-| 802 | method | `SweepResult.to_csv` |
-| 814 | method | `SweepResult.to_json` |
-| 818 | method | `SweepResult.to_mat` |
-| 825 | method | `SweepResult._columns` |
-| 829 | method | `SweepResult.to_parquet` |
-| 835 | method | `SweepResult.to_hdf5` |
-| 840 | method | `SweepResult.save` |
-| 844 | class | `BifurcationResult` |
-| 848 | method | `BifurcationResult.__init__` |
-| 855 | method | `BifurcationResult.__repr__` |
-| 858 | method | `BifurcationResult.changes` |
-| 867 | method | `BifurcationResult.rows` |
-| 871 | method | `BifurcationResult._columns` |
-| 875 | method | `BifurcationResult.frame` |
-| 882 | method | `BifurcationResult.plot` |
-| 885 | method | `BifurcationResult.to_csv` |
-| 896 | method | `BifurcationResult.to_json` |
-| 900 | method | `BifurcationResult.to_mat` |
-| 906 | method | `BifurcationResult.to_parquet` |
-| 911 | method | `BifurcationResult.to_hdf5` |
-| 916 | method | `BifurcationResult.save` |
-| 927 | function | `_el` |
-| 932 | function | `_matrix` |
-| 937 | function | `_ascii` |
-| 944 | function | `_mat_char` |
-| 949 | function | `_mat_value` |
-| 962 | function | `_savemat` |
+| 48 | class | `PclError` |
+| 52 | function | `version` |
+| 60 | function | `parse_value` |
+| 82 | function | `_node` |
+| 95 | class | `_Session` |
+| 99 | method | `_Session.__init__` |
+| 113 | method | `_Session.__call__` |
+| 130 | method | `_Session.close` |
+| 142 | method | `_Session.__enter__` |
+| 145 | method | `_Session.__exit__` |
+| 152 | function | `read_state` |
+| 160 | function | `_write_atomic` |
+| 166 | function | `tutorials` |
+| 171 | function | `tutorial` |
+| 176 | function | `load` |
+| 189 | function | `use` |
+| 196 | function | `current` |
+| 203 | function | `set` |
+| 207 | function | `get` |
+| 211 | function | `run` |
+| 215 | function | `sweep` |
+| 219 | function | `params` |
+| 223 | function | `bifurcation` |
+| 227 | class | `Plot` |
+| 231 | function | `plot` |
+| 240 | function | `show` |
+| 293 | function | `_open` |
+| 309 | function | `_pairs` |
+| 327 | function | `_clean` |
+| 338 | function | `job` |
+| 377 | class | `Project` |
+| 380 | method | `Project.__init__` |
+| 386 | method | `Project.comp` |
+| 393 | method | `Project.get` |
+| 399 | method | `Project.set` |
+| 414 | method | `Project.copy` |
+| 419 | method | `Project.save` |
+| 422 | method | `Project.hash` |
+| 426 | method | `Project.params` |
+| 430 | method | `Project.channels` |
+| 435 | method | `Project._settings` |
+| 446 | method | `Project.run` |
+| 476 | method | `Project.stream` |
+| 557 | method | `Project._result` |
+| 561 | method | `Project._query` |
+| 573 | method | `Project._run_scipy` |
+| 602 | method | `Project.sweep` |
+| 676 | method | `Project._sweep_meta` |
+| 681 | method | `Project.bifurcation` |
+| 738 | class | `_SweepFile` |
+| 743 | method | `_SweepFile.__init__` |
+| 757 | method | `_SweepFile._val` |
+| 765 | method | `_SweepFile._read` |
+| 784 | method | `_SweepFile._line` |
+| 788 | method | `_SweepFile.add` |
+| 792 | method | `_SweepFile.close` |
+| 798 | function | `_sweep_point` |
+| 806 | function | `_as_list` |
+| 816 | function | `_spec` |
+| 832 | function | `_measures` |
+| 855 | function | `_base_T` |
+| 862 | function | `_unit` |
+| 866 | function | `_matname` |
+| 871 | class | `Result` |
+| 874 | method | `Result.__init__` |
+| 883 | method | `Result.__getitem__` |
+| 886 | method | `Result.__repr__` |
+| 889 | method | `Result.measure` |
+| 949 | method | `Result.frame` |
+| 958 | method | `Result._meta_lines` |
+| 962 | method | `Result.to_csv` |
+| 975 | method | `Result._vars` |
+| 985 | method | `Result.as_dict` |
+| 989 | method | `Result.to_json` |
+| 993 | method | `Result.to_mat` |
+| 1004 | method | `Result.to_parquet` |
+| 1012 | method | `Result.to_hdf5` |
+| 1018 | method | `Result.save` |
+| 1022 | function | `_save` |
+| 1029 | class | `SweepResult` |
+| 1032 | method | `SweepResult.__init__` |
+| 1038 | method | `SweepResult.__repr__` |
+| 1041 | method | `SweepResult.column` |
+| 1044 | method | `SweepResult.frame` |
+| 1051 | method | `SweepResult.to_csv` |
+| 1063 | method | `SweepResult.to_json` |
+| 1067 | method | `SweepResult.to_mat` |
+| 1074 | method | `SweepResult._columns` |
+| 1078 | method | `SweepResult.to_parquet` |
+| 1084 | method | `SweepResult.to_hdf5` |
+| 1089 | method | `SweepResult.save` |
+| 1093 | class | `BifurcationResult` |
+| 1097 | method | `BifurcationResult.__init__` |
+| 1104 | method | `BifurcationResult.__repr__` |
+| 1107 | method | `BifurcationResult.changes` |
+| 1116 | method | `BifurcationResult.rows` |
+| 1120 | method | `BifurcationResult._columns` |
+| 1124 | method | `BifurcationResult.frame` |
+| 1131 | method | `BifurcationResult.plot` |
+| 1134 | method | `BifurcationResult.to_csv` |
+| 1145 | method | `BifurcationResult.to_json` |
+| 1149 | method | `BifurcationResult.to_mat` |
+| 1155 | method | `BifurcationResult.to_parquet` |
+| 1160 | method | `BifurcationResult.to_hdf5` |
+| 1165 | method | `BifurcationResult.save` |
+| 1176 | function | `_el` |
+| 1181 | function | `_matrix` |
+| 1186 | function | `_ascii` |
+| 1193 | function | `_mat_char` |
+| 1198 | function | `_mat_value` |
+| 1211 | function | `_savemat` |
 
 ### `pcl/formats.py`
 
@@ -1561,3 +1638,33 @@ _(χωρίς συναρτήσεις)_
 | 232 | function | `_mpl` |
 | 251 | function | `_style` |
 | 256 | function | `figure` |
+
+### `pcl/workbench.py`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 27 | function | `_chan` |
+| 37 | function | `prepare` |
+| 67 | class | `CircuitPlant` |
+| 86 | method | `CircuitPlant.__init__` |
+| 104 | method | `CircuitPlant._open` |
+| 124 | method | `CircuitPlant._read` |
+| 133 | method | `CircuitPlant._advance` |
+| 141 | method | `CircuitPlant.close` |
+| 150 | method | `CircuitPlant.__del__` |
+| 157 | method | `CircuitPlant.step` |
+| 167 | method | `CircuitPlant.output` |
+| 172 | method | `CircuitPlant.measured` |
+| 182 | method | `CircuitPlant.measured_scale` |
+| 191 | method | `CircuitPlant.u_range` |
+| 194 | method | `CircuitPlant.y_range` |
+| 197 | method | `CircuitPlant.reset_state` |
+| 210 | method | `CircuitPlant.clone` |
+| 213 | method | `CircuitPlant.viz_state` |
+| 222 | method | `CircuitPlant.params_dict` |
+| 226 | method | `CircuitPlant.initial_state` |
+| 229 | method | `CircuitPlant.deriv` |
+| 233 | function | `plant_class` |
+| 247 | function | `register` |
+| 261 | function | `run_scheme` |
+| 270 | function | `launch` |

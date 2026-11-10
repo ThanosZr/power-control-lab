@@ -9,7 +9,11 @@ function r = pcl_run(project, params, opts)
 %   opts     t_end (s or '5m'), channels (cellstr, keys as in the app's scope), solver ('browser' | 'scipy'),
 %            step ('fixed' | 'var'), rtol, hmax, hdiv, method, from, max_points,
 %            measure ({name, key, stat, arg; ...} with stat avg|rms|min|max|pp|end|at|thd),
-%            server (e.g. 'http://127.0.0.1:8765': the local server instead of the command line, MATLAB only)
+%            server (e.g. 'http://127.0.0.1:8765': the local server instead of the command line, MATLAB only),
+%            save_state (a file that keeps the end state, 3.16), resume (a saved state to continue from: t_end is then
+%            the end time; the same numbers as one long run)
+%   r = pcl_run('buck.json', {}, struct('t_end', 0.1, 'save_state', 'run.state'));
+%   r2 = pcl_run('buck.json', {}, struct('t_end', 0.2, 'resume', 'run.state'));   % from 0.1 s to 0.2 s
 %   r        t (column), one field per channel (V:C1 -> V_C1), keys, vars, units, measure (struct), meta, diag,
 %            and in MATLAB r.table (t and the channels as columns)
 %
@@ -21,6 +25,15 @@ server = '';
 if isfield(opts, 'server'), server = opts.server; opts = rmfield(opts, 'server'); end
 if isfield(opts, 'measure'), opts.measure = pcl_measures(opts.measure); end
 if isfield(opts, 'channels') && ischar(opts.channels), opts.channels = {opts.channels}; end
+for f = {'save_state', 'resume'}                 % full paths: the command line runs from the lab's folder
+  if isfield(opts, f{1}) && ~isempty(opts.(f{1})) && ~pcl_isabs(opts.(f{1}))
+    opts.(f{1}) = fullfile(pwd, opts.(f{1}));
+  end
+end
 spec.run = opts;
 r = pcl_result(pcl_job(spec, server));
+end
+
+function a = pcl_isabs(p)
+a = ~isempty(p) && (p(1) == '/' || p(1) == '\' || (numel(p) > 1 && p(2) == ':'));
 end
