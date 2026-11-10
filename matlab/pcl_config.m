@@ -1,5 +1,5 @@
 function c = pcl_config()
-%PCL_CONFIG  Where the Power Converter Lab is and which Python runs its pcl package (ROADMAP §30, 3.14).
+%PCL_CONFIG  Where the Power & Control Lab is and which Python runs its pcl package (ROADMAP §30, 3.14).
 %   The environment variable PCL_PYTHON overrides the Python executable, e.g. the Anaconda environment:
 %       setenv('PCL_PYTHON', 'C:\Users\me\anaconda3\envs\pcl\python.exe')
 %   The browser's solver also needs Node.js (https://nodejs.org) on the PATH.

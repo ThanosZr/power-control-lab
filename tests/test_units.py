@@ -60,5 +60,19 @@ class Units(unittest.TestCase):
         self.assertEqual(s['net'], 'A')                  # buildNetlist keeps the inferred types (net.units)
 
 
+    def test_unit_algebra(self):
+        # 4.0 (question 1 of 3.19): the product and the division multiply units; units are compared by their powers
+        a = self.R['alg']
+        self.assertEqual((a['va'], a['tw'], a['vv'], a['va2']), ('W', 'W', '1', 'Ω'))
+        self.assertEqual((a['pu'], a['vhz'], a['unk'], a['fmt']), ('pu²', 'V/s', None, 'V/(A·s)'))
+        self.assertEqual((a['wb'], a['w'], a['va3']), (True, True, False))
+        c = a['circ']
+        self.assertEqual((c['p'], c['d'], c['vr'], c['vo'], c['tw']), ('W', '1', 'V', '1', 'W'))
+        self.assertEqual(c['s'], 'W')                    # τ·ω + v·i: the same unit, no warning
+        self.assertEqual(c['errors'], [])
+        self.assertEqual(len(c['warnings']), 1)          # only W into the V input of the controlled source
+        self.assertIn('VS.u: περιμένει V, έρχεται W', c['warnings'][0])
+
+
 if __name__ == '__main__':
     unittest.main()

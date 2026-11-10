@@ -6,7 +6,7 @@ from pathlib import Path
 from run import ACTIONS
 from engine.analysis import InputError
 
-parser=argparse.ArgumentParser(description='Power Converter Lab batch solver')
+parser=argparse.ArgumentParser(description='Power & Control Lab batch solver')
 parser.add_argument('action',choices=sorted(ACTIONS))
 parser.add_argument('request',type=Path,help='JSON request, or pcl-project-1 file for analyze')
 parser.add_argument('--output',type=Path)

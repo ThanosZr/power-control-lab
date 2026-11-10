@@ -1,5 +1,5 @@
 'use strict';
-// Power Converter Lab 1.0 front end.
+// Power & Control Lab: front end of the analytical benches (1.0, /converter/).
 // Parameters live on the circuit: double-click a part to edit it. Every change
 // recalculates automatically. The live simulation (sim.js) integrates the
 // switched equations in the browser; analysis comes from the Python engine.
@@ -761,7 +761,7 @@ function exportReport(){
  const a=state.result,m=a.metrics;
  const fields=Object.entries(a.config).map(([k,v])=>[esc(k),esc(v)]);
  const e=sim.engine,L=e?.last;
- const body=`<h1>Power Converter Lab · ${esc(catalog.find(x=>x.key===a.config.topology)?.name||a.config.topology)}</h1><p>Έκδοση ${esc(health.version)} · ${esc(a.mode)} · δεδομένα σε SI.</p>${table(fields,'ΔΕΔΟΜΕΝΑ')}
+ const body=`<h1>Power &amp; Control Lab · ${esc(catalog.find(x=>x.key===a.config.topology)?.name||a.config.topology)}</h1><p>Έκδοση ${esc(health.version)} · ${esc(a.mode)} · δεδομένα σε SI.</p>${table(fields,'ΔΕΔΟΜΕΝΑ')}
   <h2>Αποτελέσματα</h2>${table(Object.entries(m).map(([k,v])=>[esc(k),eng(v)]))}<h2>Παραδοχές</h2><ul>${a.assumptions.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul>
   <h2>Ρεύματα και κυμάτωση</h2>${state.derivation?(state.derivation.current_steps.concat(state.rippleSpec.task==='current'?state.derivation.ripple_steps.slice(0,3):state.derivation.ripple_steps)).map(detailedStep).join(''):a.steps.map(detailedStep).join('')}
   ${state.problem?'<h2>'+esc(state.problem.title)+'</h2><p>'+esc(state.problem.explanation)+'</p>'+state.problem.steps.map(s=>'<h3>'+esc(s.title)+'</h3><p>'+esc(s.explanation)+'</p>'+mathView(s.math)).join(''):''}
@@ -770,7 +770,7 @@ function exportReport(){
   ${state.boundary&&!$('#boundary-result')?.classList.contains('stale-result')?'<h2>Αντίστροφη σχεδίαση BCM</h2><p>'+esc(state.boundary.explanation)+'</p>'+state.boundary.steps.map(detailedStep).join(''):''}
   ${L?`<h2>Προσομοίωση στον χρόνο (browser)</h2><p>t = ${si(e.t,'s',5)} · Δt = ${si(e.h,'s',4)} · τελευταία περίοδος: ⟨|vo|⟩ = ${fmt(L.vavg,6)} V, ΔVo,pp = ${fmt((L.vmax-L.vmin)*1000,5)} mV, iL ${fmt(L.imin,5)} → ${fmt(L.imax,5)} A.</p>`:''}
   ${state.simulation?'<h2>Ανεξάρτητη ODE (SciPy)</h2><p>Μέσο Vo='+fmt(state.simulation.average_vo)+' V · περιοδική σύγκλιση: '+(state.simulation.settled?'ναι':'όχι')+'.</p>':''}`;
- download('Power_Converter_Lab_solution.html','<!doctype html><html lang="el"><meta charset="utf-8"><title>Power Converter Lab · Λύση</title><style>body{font:15px Segoe UI,Arial;max-width:950px;margin:40px auto;padding:20px;color:#18353a}h1,h2{color:#147966}p,li{line-height:1.8}table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}.math{background:#f5f8f2;padding:20px;overflow-x:auto}h2{margin-top:35px}</style>'+body+'</html>','text/html');
+ download('Power_Control_Lab_solution.html','<!doctype html><html lang="el"><meta charset="utf-8"><title>Power &amp; Control Lab · Λύση</title><style>body{font:15px Segoe UI,Arial;max-width:950px;margin:40px auto;padding:20px;color:#18353a}h1,h2{color:#147966}p,li{line-height:1.8}table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}.math{background:#f5f8f2;padding:20px;overflow-x:auto}h2{margin-top:35px}</style>'+body+'</html>','text/html');
 }
 
 function initSimulationUI(){
@@ -810,11 +810,11 @@ async function boot(){
   $$('.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
   $$('[data-interval]').forEach(b=>b.onclick=()=>{state.interval=b.dataset.interval;$$('[data-interval]').forEach(x=>x.classList.toggle('active',x===b));if(sim.running&&slowMotion())return;editor.setInterval(state.interval);});
   $('#to-studio').onclick=openInStudio;
-  $('#save-project').onclick=()=>download('Power_Converter_Lab_project.json',JSON.stringify({schema:'pcl-project-1',version:h.version,config:getConfig(),simulation:{speed:$('#sim-speed').value,step:$('#sim-step').value,step_ns:$('#sim-step-custom').value,start:$('#sim-start').value,window:$('#sim-window').value}},null,2));
+  $('#save-project').onclick=()=>download('Power_Control_Lab_project.json',JSON.stringify({schema:'pcl-project-1',version:h.version,config:getConfig(),simulation:{speed:$('#sim-speed').value,step:$('#sim-step').value,step_ns:$('#sim-step-custom').value,start:$('#sim-start').value,window:$('#sim-window').value}},null,2));
   $('#load-project').onclick=()=>$('#file-input').click();
   $('#file-input').onchange=async e=>{try{
    const file=e.target.files[0];if(!file)return;if(file.size>100000)throw Error('Το αρχείο έργου είναι πολύ μεγάλο.');
-   const data=JSON.parse(await file.text());if(data.schema!=='pcl-project-1'||!catalog.some(m=>m.key===data.config?.topology))throw Error('Μη έγκυρο αρχείο Power Converter Lab.');
+   const data=JSON.parse(await file.text());if(data.schema!=='pcl-project-1'||!catalog.some(m=>m.key===data.config?.topology))throw Error('Μη έγκυρο αρχείο του Power & Control Lab.');
    const s=data.simulation||{};for(const [k,id] of [['speed','#sim-speed'],['step','#sim-step'],['start','#sim-start'],['window','#sim-window']])if(s[k]&&[...$(id).options].some(o=>o.value===s[k]))$(id).value=s[k];if(s.step_ns)$('#sim-step-custom').value=s.step_ns;$('#sim-step-custom-field').hidden=$('#sim-step').value!=='custom';
    closeInspector();setValues({...data.config,circuit:data.circuit||data.config.circuit},true,true);if(await calculate()){simReset();await showTab('workspace');}
   }catch(err){notice(err.message,true);}finally{e.target.value='';}};

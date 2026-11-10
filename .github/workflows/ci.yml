@@ -101,7 +101,7 @@ jobs:
         id: v
         run: |
           ref="${GITHUB_REF_NAME}"; ver="${ref#lab-}"; ver="${ver#v}"
-          echo "name=Power_Converter_Lab_${ver//./_}" >> "$GITHUB_OUTPUT"
+          echo "name=Power_Control_Lab_${ver//./_}" >> "$GITHUB_OUTPUT"
       - run: git archive --format=zip --prefix=${{ steps.v.outputs.name }}/ -o ${{ steps.v.outputs.name }}.zip HEAD
       - uses: actions/upload-artifact@v4
         with:

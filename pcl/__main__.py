@@ -48,7 +48,7 @@ def _kv(items):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog='python -m pcl', description='Power Converter Lab: σενάρια από κώδικα (αλλαγή παραμέτρων, προσομοίωση, εξαγωγή).',
+    ap = argparse.ArgumentParser(prog='python -m pcl', description='Power & Control Lab: σενάρια από κώδικα (αλλαγή παραμέτρων, προσομοίωση, εξαγωγή).',
                                  formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
     sub = ap.add_subparsers(dest='cmd', required=True)
     sub.add_parser('tutorials', help='τα tutorials και οι επιλογές τους')

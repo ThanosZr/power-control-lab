@@ -153,7 +153,7 @@ def read_state(path):
     """A run state saved by stream(state=…) or run(save_state=…): {project, t, T, channels, sim, …}."""
     d = path if isinstance(path, dict) else json.loads(Path(path).read_text(encoding='utf-8'))
     if not isinstance(d, dict) or d.get('format') != STATE_FORMAT or 'sim' not in d:
-        raise PclError(f'{path}: δεν είναι αποθηκευμένη κατάσταση προσομοίωσης του Power Converter Lab.')
+        raise PclError(f'{path}: δεν είναι αποθηκευμένη κατάσταση προσομοίωσης του Power & Control Lab.')
     return d
 
 
@@ -180,7 +180,7 @@ def load(path):
     if isinstance(data, dict) and data.get('format') == STATE_FORMAT:      # 3.16: the project of a saved run
         return Project(data['project'], name=data.get('name') or p.stem)
     if not isinstance(data, dict) or not isinstance(data.get('components'), list):
-        raise PclError(f'{p}: δεν είναι project του Power Converter Lab (λείπουν τα components).')
+        raise PclError(f'{p}: δεν είναι project του Power & Control Lab (λείπουν τα components).')
     return Project(data, name=p.stem)
 
 

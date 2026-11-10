@@ -67,5 +67,40 @@ class ApiSurface(unittest.TestCase):
         self.assertIn('unit', self.now['project']['part:CONST']['params'])
         self.assertIn('frame', self.now['project']['part:MUX']['params'])
 
+    def test_the_rule_is_active_from_4_0(self):
+        # 4.0: STABLE_FROM is active. A removal within 4.x does not pass, not even with --allow-removal; in 5.0 only what
+        # was deprecated in 4.x may go; experimental points change freely; up to 4.0 a reason was enough
+        snap = lambda v, deps=None: {**json.loads(json.dumps(api_surface.merged({'groups': {}, 'removed': []}, self.now, v))), 'deprecated': deps or {}}
+        gone = [('pcl', 'pcl.Project.run', 'λείπει')]
+        exp = [('pcl', 'pcl.control.InverseTrainer', 'λείπει')]
+        V = api_surface.verdict
+        self.assertIsNotNone(V(snap('3.19'), gone, '4.0'))                       # no reason
+        self.assertIsNone(V(snap('3.19'), gone, '4.0', 'λόγος'))                 # provisional until 4.0
+        self.assertIn('4.x', V(snap('4.0'), gone, '4.1', 'λόγος'))              # within 4.x: never
+        self.assertIn('DEPRECATED', V(snap('4.0'), gone, '4.1', 'λόγος'))
+        self.assertIsNotNone(V(snap('4.3'), gone, '5.0', 'λόγος'))               # 5.0: not deprecated, stays
+        dep = {'pcl': {'pcl.Project.run': {'since': '4.2', 'instead': 'pcl.Project.go'}}}
+        self.assertIsNone(V(snap('4.3', dep), gone, '5.0', 'λόγος'))             # 5.0: deprecated in 4.x, goes
+        self.assertIsNotNone(V(snap('4.3', dep), gone, '5.0'))                   # still with a reason
+        self.assertIsNone(V(snap('4.0'), exp, '4.1'))                            # experimental: no rule
+        self.assertIsNotNone(V(snap('4.0'), exp + gone, '4.1', 'λόγος'))        # mixed: the stable one counts
+        self.assertIsNone(V(snap('4.0'), [], '4.1'))
+        # the report says stable, lists the deprecated points and marks them in the tables
+        r = api_surface.report(snap('4.0'))
+        self.assertIn('**σταθερό** από την 4.0', r)
+        self.assertIn('Κανένα στην 4.0', r)
+        self.assertIn('**προσωρινό**', api_surface.report(snap('3.19')))
+        r = api_surface.report(snap('4.2', dep))
+        self.assertIn('| pcl | `pcl.Project.run` | 4.2 | pcl.Project.go |', r)
+        self.assertIn('· παρωχ. 4.2', r)
+        # a deprecated point must still be in the code
+        old = api_surface.DEPRECATED
+        try:
+            api_surface.DEPRECATED = {'pcl': {'pcl.nothing': ('4.1', '—'), 'pcl.Project.run': ('4.1', '—')}}
+            self.assertEqual(api_surface.stale_deprecations(self.now), [('pcl', 'pcl.nothing')])
+        finally:
+            api_surface.DEPRECATED = old
+        self.assertEqual(api_surface.STABLE_FROM, '4.0')
+
 if __name__ == '__main__':
     unittest.main()

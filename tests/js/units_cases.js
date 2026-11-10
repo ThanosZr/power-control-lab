@@ -37,4 +37,16 @@ const wrong=(solve)=>pr([...V3(),C('MX','MUX',{n:3}),C('CL','CLARKE',{conn:'bus'
 {const p=pr([C('V1','VDC',{V:30}),C('M1','SM'),C('G','GND'),C('I1','INT'),C('GN','GAIN',{K:-1,unit:'='}),C('F','F2',{f0:100})],[['V1:p','M1:a'],['M1:b','G:g'],['M1:c','G:g'],['V1:n','G:g'],['M1:w','I1:u'],['M1:iq','GN:u'],['GN:y','F:u']]);
  const r=U.infer(p);R.scope={int:U.txt(r.out('I1')),gn:U.txt(r.out('GN')),f:U.txt(r.out('F')),te:U.txt(r.out('M1','te'))};
  const net=MNA.buildNetlist(p);R.scope.net=!!net.units&&net.units.out('F').u;}
+// 4.0 (question 1 of 3.19): product and division multiply units; units compare by their powers; a gain «·Ω» or «/V»
+{R.alg={va:U.mulU('V','A'),tw:U.mulU('N·m','rad/s'),vv:U.mulU('V','V',-1),va2:U.mulU('V','A',-1),pu:U.mulU('pu','pu'),vhz:U.mulU('V','Hz'),
+  unk:U.mulU(null,'V'),wb:U.eqU('Wb','V·s'),w:U.eqU('V·A','W'),va3:U.eqU('V','A'),fmt:U.fmtU(U.dims('V/(A·s)'))};
+ // P = v·i into nothing, D = v_ref/V_dc into the PWM (no warning), τ·ω, a gain «·Ω» of a current, W into the V input of a source (a warning)
+ const p=pr([C('V1','VDC',{V:30}),C('R1','R',{R:5}),C('G','GND'),C('VM','VM'),C('AM','AM'),C('KR','CONST',{v:15,unit:'V'}),
+   C('P','MUL'),C('D','DIV'),C('PW','PWM',{fs:20e3}),C('KO','CONST',{v:2,unit:'Ω'}),C('VR','GAIN',{K:5,unit:'·Ω'}),C('VO','GAIN',{K:0.1,unit:'/V'}),
+   C('VS','VDC',{ctl:'sig'}),C('R2','R',{R:1}),C('M1','DCM'),C('TW','MUL'),C('S1','SUM',{signs:'+-'})],
+  [['V1:p','AM:a'],['AM:b','R1:a'],['R1:b','G:g'],['V1:n','G:g'],['VM:p','V1:p'],['VM:n','G:g'],['VM:y','P:a'],['AM:y','P:b'],
+   ['KR:y','D:a'],['VM:y','D:b'],['D:y','PW:d'],['AM:y','VR:u'],['VM:y','VO:u'],['P:y','VS:u'],['VS:p','R2:a'],['R2:b','G:g'],['VS:n','G:g'],
+   ['V1:p','M1:a'],['M1:b','G:g'],['M1:te','TW:a'],['M1:w','TW:b'],['TW:y','S1:a'],['P:y','S1:b']]);
+ const r=U.infer(p),o=id=>U.txt(r.out(id));
+ R.alg.circ={p:o('P'),d:o('D'),vr:o('VR'),vo:o('VO'),tw:o('TW'),s:o('S1'),errors:r.errors,warnings:r.warnings};}
 process.stdout.write(JSON.stringify(R));

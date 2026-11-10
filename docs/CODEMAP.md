@@ -27,7 +27,7 @@
 | `web/studio/subcircuit.js` | 273 |
 | `web/studio/templates.js` | 32 |
 | `web/studio/tutorials.js` | 884 |
-| `web/studio/units.js` | 121 |
+| `web/studio/units.js` | 154 |
 | `pcl/runner.js` | 27 |
 | `run.py` | 275 |
 | `engine/__init__.py` | 1 |
@@ -60,7 +60,7 @@
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_api_surface.py` | 71 |
+| `tests/test_api_surface.py` | 106 |
 | `tests/test_batch.py` | 208 |
 | `tests/test_bidir_engine.py` | 103 |
 | `tests/test_bidir_sim.py` | 70 |
@@ -81,7 +81,7 @@
 | `tests/test_subcircuit.py` | 149 |
 | `tests/test_templates.py` | 237 |
 | `tests/test_tutorials.py` | 703 |
-| `tests/test_units.py` | 64 |
+| `tests/test_units.py` | 78 |
 | `tests/test_workbench.py` | 78 |
 | `tests/js/batch_requests.js` | 94 |
 | `tests/js/bus_cases.js` | 127 |
@@ -91,7 +91,7 @@
 | `tests/js/step_cases.js` | 89 |
 | `tests/js/subcircuit_cases.js` | 87 |
 | `tests/js/tutorial_cases.js` | 137 |
-| `tests/js/units_cases.js` | 40 |
+| `tests/js/units_cases.js` | 52 |
 | `tests/ui/addons_flow.js` | 102 |
 | `tests/ui/blocks_flow.js` | 140 |
 | `tests/ui/bus_flow.js` | 80 |
@@ -1264,24 +1264,35 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 30 | const fn | `T` |
-| 32 | const fn | `qOf` |
-| 33 | const fn | `isBus` |
-| 34 | const fn | `txt` |
-| 36 | const fn | `agree` |
-| 37 | const fn | `intU` |
-| 38 | const fn | `unitParam` |
-| 40 | function | `outType` |
-| 41 | const fn | `pass` |
-| 42 | const fn | `sepU` |
-| 70 | function | `expect` |
-| 84 | function | `infer` |
-| 89 | const fn | `kind` |
-| 90 | const fn | `lab` |
-| 94 | const fn | `same` |
-| 112 | const fn | `out` |
-| 116 | class | `UnitError` |
-| 117 | function | `check` |
+| 36 | const fn | `T` |
+| 38 | const fn | `qOf` |
+| 39 | const fn | `isBus` |
+| 40 | const fn | `txt` |
+| 42 | const fn | `agree` |
+| 43 | const fn | `intU` |
+| 44 | const fn | `unitParam` |
+| 51 | const fn | `clean` |
+| 52 | const fn | `addP` |
+| 54 | function | `dims` |
+| 56 | const fn | `term` |
+| 58 | const fn | `parts` |
+| 60 | const fn | `sameD` |
+| 62 | const fn | `eqU` |
+| 63 | function | `fmtU` |
+| 65 | const fn | `w` |
+| 68 | const fn | `mulU` |
+| 70 | const fn | `agreeU` |
+| 72 | function | `outType` |
+| 73 | const fn | `pass` |
+| 74 | const fn | `sepU` |
+| 103 | function | `expect` |
+| 117 | function | `infer` |
+| 122 | const fn | `kind` |
+| 123 | const fn | `lab` |
+| 127 | const fn | `same` |
+| 145 | const fn | `out` |
+| 149 | class | `UnitError` |
+| 150 | function | `check` |
 
 ### `pcl/runner.js`
 

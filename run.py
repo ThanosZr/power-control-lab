@@ -248,7 +248,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    parser=argparse.ArgumentParser(description='Power Converter Lab 2')
+    parser=argparse.ArgumentParser(description='Power & Control Lab')
     parser.add_argument('--port',type=int,default=int(os.environ.get('PORT',8765)))
     parser.add_argument('--host',default='127.0.0.1')
     parser.add_argument('--no-browser',action='store_true')
@@ -258,7 +258,7 @@ def main():
     except OSError as exc:
         raise SystemExit(f'Cannot start server: {exc}. Try --port 8766.')
     url=f'http://127.0.0.1:{server.server_port}'
-    print(f'Power Converter Lab {__version__} · {url}',flush=True)
+    print(f'Power & Control Lab {__version__} · {url}',flush=True)
     print('Stop: Ctrl+C. Keep this terminal open.',flush=True)
     LINK.write_file(url)            # 3.15: for pcl.link (Python) and pcl_link (MATLAB) on this computer
     if not args.no_browser:

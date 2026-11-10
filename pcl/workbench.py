@@ -2,7 +2,7 @@
 
 The workbench's schemes (PID, indirect adaptive inverse, multi-objective, harmonic injection) touch a plant only through
 its contract: step(u, dt) → y, output(), measured(), measured_scale(), u_range(), y_range(), reset_state(), clone(),
-viz_state(), name, p. CircuitPlant answers that contract with a circuit of Power Converter Lab: u goes into a signal of
+viz_state(), name, p. CircuitPlant answers that contract with a circuit of Power & Control Lab: u goes into a signal of
 the circuit (a «Σταθερά» block, or a signal input that gets one), the circuit runs dt with the app's solver (the same
 web/studio/*.js, in a Node process kept open), and y and the state are the circuit's measurements. So the same schemes
 control a switched converter with its ripple, dead time and saturation, not the workbench's averaged model.
@@ -68,7 +68,7 @@ class CircuitPlant:
     """A workbench Plant made of a circuit (use plant_class to fix the circuit and its signals)."""
 
     id = 'pcl_circuit'
-    name = 'Κύκλωμα του Power Converter Lab'
+    name = 'Κύκλωμα του Power & Control Lab'
     input_name, input_unit, output_name, output_unit = 'u', '', 'y', ''
     PARAMS = {}
     substeps = 1

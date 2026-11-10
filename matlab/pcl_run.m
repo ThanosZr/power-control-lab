@@ -1,5 +1,5 @@
 function r = pcl_run(project, params, opts)
-%PCL_RUN  One simulation of a Power Converter Lab circuit from MATLAB or Octave (ROADMAP §30, 3.14).
+%PCL_RUN  One simulation of a Power & Control Lab circuit from MATLAB or Octave (ROADMAP §30, 3.14).
 %   r = pcl_run('buck.json', {'L1.L', 47e-6}, struct('t_end', 5e-3, 'channels', {{'V:C1', 'I:L1'}}))
 %   r = pcl_run('tutorial:buck?start=steady', {}, struct('t_end', '5m', 'step', 'var'))
 %   plot(r.t, r.I_L1)

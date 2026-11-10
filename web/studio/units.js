@@ -10,8 +10,12 @@
 // Where a type comes from: meters and machines declare it, Clarke/Park and the PLL change the frame and keep the unit,
 // element-wise blocks that do not change dimensions (saturation, filters, z⁻¹, rate limiter, …) pass it on, the
 // integrator multiplies the unit by s (rad/s → rad), a sum keeps what its inputs agree on, a gain has the unit of its
-// parameter «Μονάδα εξόδου» ('=' = the unit of the input), the Mux has the frame of its parameter or of its inputs.
-// Everything else (product, division, PI, code blocks, logic) has no unit: an unknown matches anything.
+// parameter «Μονάδα εξόδου» ('=' = the unit of the input, '·Ω' or '/V' = the unit of the input times or over a unit),
+// the Mux has the frame of its parameter or of its inputs. The product and the division (4.0, question 1 of 3.19)
+// multiply and divide units (V·A = W, τ·ω = W, V/V = 1) when both inputs have one, and have no frame. Everything else
+// (PI, code blocks, logic) has no unit: an unknown matches anything.
+// Units are compared by their powers, not as strings (Wb = V·s, V·A = W): a unit is a product of powers of the atoms V,
+// A, s and rad, and of any other word written on a constant or a gain (pu, m, …) as an atom of its own.
 //
 // The checks (project.solve.units: 'warn' default, 'strict', 'off'):
 //  - a frame into an input of another frame (dq into Clarke, αβ into the d, q inputs of inverse Park): an error, the
@@ -21,6 +25,8 @@
 //    an error with 'strict'.
 // How it grows (4.x, additions only): new units and frames are new strings, new parts declare theirs in OUT/EXPECT;
 // a part with nothing declared stays «unknown», so an older file never gets a new error from a part it already had.
+// From 4.0 a block that has no unit today (PI, code blocks) gets one only through a new parameter whose default keeps
+// it «unknown» (e.g. a «Μονάδα εξόδου» on the PI).
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
  const B=root.Bus||(typeof require!=='undefined'?require('./bus.js'):null);
@@ -36,15 +42,42 @@
  const agree=xs=>{let v=null;for(const x of xs){if(!x)continue;if(v===null)v=x;else if(v!==x)return null;}return v;};
  const intU=u=>!u?null:u==='rad/s'?'rad':u==='1'?'s':u.endsWith('/s')?u.slice(0,-2):u+'·s';
  const unitParam=v=>{const s=String(v??'').trim();return s||null;};
+ // ---- unit algebra (4.0): a unit as powers of atoms {V:1, A:1}, named units for display, product and quotient
+ const NAMED={'1':{},V:{V:1},A:{A:1},W:{V:1,A:1},'Ω':{V:1,A:-1},S:{V:-1,A:1},rad:{rad:1},'rad/s':{rad:1,s:-1},'N·m':{V:1,A:1,s:1,rad:-1},
+  'V·s':{V:1,s:1},s:{s:1},Hz:{s:-1},J:{V:1,A:1,s:1},H:{V:1,A:-1,s:1},F:{V:-1,A:1,s:1},C:{A:1,s:1}};
+ const ALIAS={Wb:'V·s',Ohm:'Ω',ohm:'Ω','Nm':'N·m','N*m':'N·m','':'1','-':'1'};
+ const SUP={'²':2,'³':3,'⁻¹':-1,'⁻²':-2,'⁻³':-3},SUPW={2:'²',3:'³'};
+ const ORDER=['V','A','rad','s'];
+ const clean=m=>{const o={};for(const [k,v] of Object.entries(m))if(v)o[k]=v;return o;};
+ const addP=(m,k,e)=>{m[k]=(m[k]||0)+e;};
+ // the powers of a unit written as text (null for none); a word that is not a known unit is an atom of its own
+ function dims(u){if(u==null)return null;let s=String(u).trim();s=ALIAS[s]??s;if(NAMED[s])return {...NAMED[s]};
+  const m={};const [num,...den]=s.split('/');
+  const term=(t,sg)=>{t=t.trim();if(!t||t==='1')return;let e=1;const x=t.match(/^(.*?)(\^(-?\d+)|[²³]|⁻[¹²³])$/);
+   if(x){t=x[1];e=x[3]!=null?+x[3]:SUP[x[2]];}const a=ALIAS[t]??t;const d=NAMED[a]&&a!=='1'?NAMED[a]:{[a]:1};for(const [k,v] of Object.entries(d))addP(m,k,sg*e*v);};
+  const parts=(x,sg)=>{x=x.replace(/^\(|\)$/g,'');for(const t of x.split(/[·*⋅]/))term(t,sg);};
+  parts(num,1);for(const d of den)parts(d,-1);return clean(m);}
+ const sameD=(a,b)=>{const ka=Object.keys(a),kb=Object.keys(b);return ka.length===kb.length&&ka.every(k=>a[k]===b[k]);};
+ // the same unit (as powers): Wb = V·s, V·A = W
+ const eqU=(a,b)=>a===b||(a!=null&&b!=null&&sameD(dims(a),dims(b)));
+ function fmtU(m){for(const [n,d] of Object.entries(NAMED))if(sameD(m,d))return n;
+  const ks=Object.keys(m).sort((x,y)=>(ORDER.indexOf(x)+1||99)-(ORDER.indexOf(y)+1||99)||x.localeCompare(y));
+  const w=(k,e)=>k+(e===1?'':SUPW[e]||'^'+e);const pos=ks.filter(k=>m[k]>0).map(k=>w(k,m[k])),neg=ks.filter(k=>m[k]<0).map(k=>w(k,-m[k]));
+  return (pos.join('·')||'1')+(neg.length?'/'+(neg.length>1?'('+neg.join('·')+')':neg[0]):'');}
+ // a·b (sg = 1) or a/b (sg = -1); unknown when either is unknown
+ const mulU=(a,b,sg=1)=>{if(a==null||b==null)return null;const m=dims(a);for(const [k,v] of Object.entries(dims(b)))addP(m,k,sg*v);return fmtU(clean(m));};
+ // what all known units agree on, as powers (the first one written)
+ const agreeU=xs=>{let v=null;for(const x of xs){if(!x)continue;if(v===null)v=x;else if(!eqU(v,x))return null;}return v;};
  // the type of output `pin` of part c, given the type at each of its inputs (inp(pin) → type)
  function outType(c,pin,inp){const t=c.type,p=qOf(c);
-  const pass=k=>inp(k),comb=ks=>{const ts=ks.map(inp);return T(agree(ts.map(x=>x.u)),agree(ts.map(x=>x.f)),agree(ts.map(x=>x.c)));};
-  const sepU=ks=>agree(ks.map(k=>inp(k).u));
+  const pass=k=>inp(k),comb=ks=>{const ts=ks.map(inp);return T(agreeU(ts.map(x=>x.u)),agree(ts.map(x=>x.f)),agree(ts.map(x=>x.c)));};
+  const sepU=ks=>agreeU(ks.map(k=>inp(k).u));
   switch(t){
    case 'VM':case 'VP':return T('V');case 'AM':case 'IP':return T('A');case 'MEAS':return T(p.qty==='V'?'V':'A');
    case 'SH':return p.in==='sig'?pass('u'):T(p.qty==='V'?'V':'A');
    case 'CONST':return T(unitParam(p.unit));
-   case 'GAIN':{const i=inp('u'),s=unitParam(p.unit);return T(s==='='?i.u:s,i.f,i.c);}
+   case 'GAIN':{const i=inp('u'),s=unitParam(p.unit);return T(s==='='?i.u:s&&/^[·*⋅]/.test(s)?mulU(i.u,s.slice(1)):s&&s[0]==='/'?mulU(i.u,s.slice(1),-1):s,i.f,i.c);}
+   case 'MUL':return T(mulU(inp('a').u,inp('b').u));case 'DIV':return T(mulU(inp('a').u,inp('b').u,-1));
    case 'SUM':return comb(String(p.signs||'+-').length>=3?['a','b','c']:['a','b']);
    case 'SAT':case 'LPF':case 'F2':case 'RLIM':case 'UD':case 'RT':return pass('u');
    case 'INT':{const i=inp('u');return T(p.wrap==='2pi'?'rad':intU(i.u),i.f,i.c);}
@@ -58,7 +91,7 @@
    case 'MOD3':return isBus(p)?T('1','abc'):T('1','abc',{da:'a',db:'b',dc:'c'}[pin]);
    case 'DCM':case 'IM':case 'SM':case 'SRM':
     return pin==='te'?T('N·m'):pin==='w'?T('rad/s'):['th','thf','thr'].includes(pin)?T('rad'):pin==='psi'?T('V·s'):pin==='id'||pin==='iq'?T('A','dq',pin.slice(1)):/^i\d$/.test(pin)?T('A'):NONE;
-   case 'MUX':{const n=Math.max(2,Math.min(8,Math.round(+p.n)||3)),ins=Array.from({length:n},(_,i)=>inp('u'+(i+1))),u=agree(ins.map(x=>x.u));
+   case 'MUX':{const n=Math.max(2,Math.min(8,Math.round(+p.n)||3)),ins=Array.from({length:n},(_,i)=>inp('u'+(i+1))),u=agreeU(ins.map(x=>x.u));
     const fr=p.frame||'auto';if(FR[fr])return T(u,fr);if(fr==='none')return T(u);
     for(const [f,cs] of Object.entries(FR))if(cs.length===n&&ins.every((x,i)=>x.f===f&&x.c===cs[i]))return T(u,f);
     const fv=agree(ins.map(x=>x.c?null:x.f));return T(u,ins.every(x=>x.f&&!x.c)?fv:null);}
@@ -104,10 +137,10 @@
      const e=expect(c,pn),g=netT(k);if(!e||seen.has(k))continue;seen.add(k);
      if(e.f&&g.f&&e.f!==g.f)errors.push(`${lab(k)}: είσοδος ${FRN[e.f]}, αλλά έρχεται ${FRN[g.f]} από ${lab(d)}. Βάλε τον μετασχηματισμό που λείπει (Clarke, Park ή τους αντίστροφους) ή διόρθωσε τη σύνδεση.`);
      else if(e.c&&g.c&&e.f===g.f&&e.c!==g.c)warnings.push(`${lab(k)}: περιμένει τη συνιστώσα ${CN[e.c]}, έρχεται η ${CN[g.c]} από ${lab(d)}.`);
-     if(e.u&&g.u&&e.u!==g.u)uWarn(`${lab(k)}: περιμένει ${e.u}, έρχεται ${g.u} από ${lab(d)}.`);}
+     if(e.u&&g.u&&!eqU(e.u,g.u))uWarn(`${lab(k)}: περιμένει ${e.u}, έρχεται ${g.u} από ${lab(d)}.`);}
     // inputs that are added or compared must agree
     if(c.type==='SUM'||c.type==='CMP'){const ks=c.type==='CMP'?['p','n']:String(qOf(c).signs||'+-').length>=3?['a','b','c']:['a','b'];
-     const us=ks.map(x=>[x,netT(c.id+':'+x).u]).filter(x=>x[1]);if(us.length>1&&us.some(x=>x[1]!==us[0][1]))
+     const us=ks.map(x=>[x,netT(c.id+':'+x).u]).filter(x=>x[1]);if(us.length>1&&us.some(x=>!eqU(x[1],us[0][1])))
       uWarn(`${c.label||c.id}: ${c.type==='SUM'?'άθροισμα':'σύγκριση'} με διαφορετικές μονάδες (${us.map(([x,u])=>x+': '+u).join(', ')}).`);}}}
   const out=(id,pin)=>{const c=byId.get(id);if(!c)return null;const os=Object.entries(P.sigPins(c)).filter(([,v])=>v.dir==='out').map(([k])=>k);const pn=pin||os[0];if(!pn)return null;return netT(id+':'+pn);};
   return {type:netT,out,errors,warnings,mode,txt};}
@@ -116,6 +149,6 @@
  class UnitError extends Error{}
  function check(project){const r=infer(project);if(r.errors.length)throw new UnitError(r.errors.slice(0,4).join(' ')+(r.errors.length>4?` (και ${r.errors.length-4} ακόμη)`:''));return r;}
 
- const api={FR,FRN,CN,T,outType,expect,infer,check,txt,UnitError};
+ const api={FR,FRN,CN,T,outType,expect,infer,check,txt,UnitError,dims,eqU,mulU,fmtU};
  root.Units=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

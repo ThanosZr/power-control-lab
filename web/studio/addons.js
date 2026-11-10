@@ -35,7 +35,7 @@
   const t=[],y=want.map(()=>[]);for(let j=0;j<r.n;j++){t.push(r.t[j]);idx.forEach((i,m)=>y[m].push(r.d[j*r.nch+i]));}
   const ch={};want.forEach((k,m)=>{ch[k]=y[m];});return {keys:want,t,ch,T:s.T,now:s.t};}
  const M={
-  info:a=>({app:'Power Converter Lab',version:A.ctx.version(),title:A.ctx.title(),tutorial:A.ctx.tutorial(),selection:A.ctx.selection(),
+  info:a=>({app:'Power & Control Lab',version:A.ctx.version(),api:parseInt(A.ctx.version(),10)||null,title:A.ctx.title(),tutorial:A.ctx.tutorial(),selection:A.ctx.selection(),
    T:A.ctx.sim()?.T??null,t:A.ctx.sim()?.t??null,isolated:!!root.crossOriginIsolated,workers:root.Pool?root.Pool.SIZE():1}),
   'project.get':()=>clone(A.ctx.project()),
   'project.load':a=>{if(!a.project||!Array.isArray(a.project.components))throw new Error('Λείπει το project (components, wires).');A.ctx.applyProject(clone(a.project));return {ok:true,components:a.project.components.length};},

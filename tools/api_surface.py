@@ -13,9 +13,11 @@ Seven surfaces, read from the code itself (never typed by hand):
   scenario  the requests of web/studio/scenario.js (Node, Worker, pcl/runner.js),
   project   the project file: part types, their parameters and their pins (a saved circuit names them).
 
-Rule (approved 10/11/2026, docs/API.md): from 4.0 nothing of the stable surface is removed or renamed and no parameter is
-taken away within 4.x; what will go is marked deprecated, keeps working and goes in 5.0. Before 4.0 the surface is
-provisional: a removal needs --allow-removal with a reason, and it is listed in docs/API.md.
+Rule (approved 10/11/2026, docs/API.md, active from 4.0): nothing of the stable surface is removed or renamed and no
+parameter is taken away within 4.x, not even with --allow-removal; what will go is listed in DEPRECATED below in a 4.x,
+keeps working and goes in 5.0, where only what was deprecated may go (with --allow-removal). Before 4.0 the surface was
+provisional: a removal needed --allow-removal with a reason, and it is listed in docs/API.md. Experimental points are
+listed but stay out of the rule.
 """
 import argparse
 import inspect
@@ -36,10 +38,17 @@ STABLE_FROM = '4.0'           # the major version from which the surface is stab
 # Workbench (§19) still change; they are listed but marked experimental, and a change there needs no --allow-removal.
 # When they settle they become stable, which is an addition. Prefixes of keys per surface.
 EXPERIMENTAL = {'pcl': ('pcl.control.', 'pcl.workbench.'), 'cli': ('workbench',)}
+# 4.0: the first of the two steps of a removal. {surface: {key: (version, what instead)}}: the point keeps working (with a
+# message where it runs) to the end of its major version and may go in the next one. A point that is gone leaves this list.
+DEPRECATED = {}
 
 
 def experimental(g, k):
     return any(k.startswith(p) for p in EXPERIMENTAL.get(g, ()))
+
+
+def deprecated(g, k, deps=None):
+    return (DEPRECATED if deps is None else deps).get(g, {}).get(k)
 GROUPS = {
     'pcl': 'Πακέτο Python `pcl`',
     'cli': 'Γραμμή εντολών `python -m pcl`',
@@ -237,17 +246,52 @@ def merged(old, new, version, removal_reason=None, broken=()):
     removed = list(old.get('removed', []))
     for g, k, why in broken:
         removed.append({'group': g, 'key': k, 'what': why, 'version': version, 'reason': removal_reason or ''})
+    deps = {g: {k: {'since': v[0], 'instead': v[1]} for k, v in d.items()} for g, d in DEPRECATED.items() if d}
     return {'version': version, 'stable_from': STABLE_FROM, 'experimental': {g: list(v) for g, v in EXPERIMENTAL.items()},
-            'groups': groups, 'removed': removed}
+            'deprecated': deps, 'groups': groups, 'removed': removed}
+
+
+def verdict(old, broken, version, reason=None):
+    """None when the removals in `broken` may be written, else why not (the rule of docs/API.md).
+
+    old: the committed snapshot (its version and its deprecated points), version: the version being written."""
+    real = [b for b in broken if not experimental(b[0], b[1])]
+    if not real:
+        return None                                     # experimental points change freely (listed in the removals)
+    lst = '\n'.join(f'  {g}: {k} ({w})' for g, k, w in real)
+    if not reason:
+        return f'Αλλαγή που σπάει το API:\n{lst}\nΑν είναι σκόπιμη: python tools/api_surface.py --allow-removal "λόγος".'
+    was = old.get('version', '0')
+    if vkey(was) < vkey(STABLE_FROM):
+        return None                                     # the surface was still provisional (up to the change to STABLE_FROM)
+    major, before = vkey(version)[0], vkey(was)[0]
+    if major <= before:
+        return (f'Μέσα στην {before}.x δεν αφαιρείται τίποτα, ούτε με --allow-removal:\n{lst}\n'
+                f'Βάλ\' το στο DEPRECATED του tools/api_surface.py (δουλεύει ως το τέλος της {before}.x) και αφαίρεσέ το στην {before + 1}.0.')
+    deps = old.get('deprecated', {})
+    left = [b for b in real if b[1] not in deps.get(b[0], {})]
+    if left:
+        return ('Στην ' + version + ' φεύγει μόνο ό,τι ήταν παρωχημένο στην ' + f'{before}.x:\n' +
+                '\n'.join(f'  {g}: {k} ({w})' for g, k, w in left) + '\nΣημείωσέ το παρωχημένο σε μια ' + f'{major}.x και αφαίρεσέ το στην {major + 1}.0.')
+    return None
+
+
+def stale_deprecations(new):
+    """Deprecated points that are no longer in the code: a deprecated point keeps working until it goes."""
+    return [(g, k) for g, d in DEPRECATED.items() for k in d if k not in new.get(g, {})]
 
 
 # ------------------------------------------------------------------------------------------------------------- report
 def report(snap):
     n = sum(len(v) for v in snap['groups'].values())
+    stable = vkey(snap['version']) >= vkey(snap['stable_from'])
+    state = (f'**σταθερό** από την {snap["stable_from"]}: ο κανόνας παρακάτω ισχύει' if stable else
+             f'**προσωρινό**. Γίνεται σταθερό από την {snap["stable_from"]}')
+    deps = snap.get('deprecated', {})
     out = [
         '# Δημόσιο API',
         '',
-        f'Έκδοση {snap["version"]}: **προσωρινό**. Γίνεται σταθερό από την {snap["stable_from"]}. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα '
+        f'Έκδοση {snap["version"]}: {state}. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα '
         f'({n} σημεία σε {len(snap["groups"])} επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).',
         '',
         '## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)',
@@ -256,12 +300,14 @@ def report(snap):
         'οι συναρτήσεις MATLAB/Octave, τα αιτήματα σεναρίων και η μορφή του αρχείου project (τύποι στοιχείων, παράμετροι, ακροδέκτες). Ό,τι ξεκινά με `_` και ό,τι δεν είναι εδώ είναι εσωτερικό.',
         '- **Μέσα σε μία κύρια έκδοση (4.x) μόνο προσθήκες:** νέες μέθοδοι, νέα προαιρετικά ορίσματα, νέα στοιχεία και νέες παράμετροι με προεπιλογή που κρατά την παλιά συμπεριφορά. '
         'Καμία αφαίρεση, μετονομασία ή αλλαγή σημασίας.',
-        '- **Αφαίρεση σε δύο βήματα:** ό,τι πρόκειται να φύγει γίνεται «παρωχημένο» σε μια 4.x (με μήνυμα και την εναλλακτική), δουλεύει ως το τέλος της 4.x και φεύγει στην 5.0.',
+        '- **Αφαίρεση σε δύο βήματα:** ό,τι πρόκειται να φύγει γίνεται «παρωχημένο» σε μια 4.x (στη λίστα `DEPRECATED` του `tools/api_surface.py`, με την εναλλακτική, '
+        'και με μήνυμα όπου τρέχει), δουλεύει ως το τέλος της 4.x και φεύγει στην 5.0. Στην 5.0 φεύγει μόνο ό,τι ήταν παρωχημένο.',
         '- **Αρχεία project:** ένα παλιό αρχείο ανοίγει πάντα (ARCHITECTURE §4). Νέα πεδία είναι προαιρετικά. Όταν χρειάζεται μετατροπή, αυξάνεται το `version` του αρχείου '
         'και η μετατροπή γίνεται στο άνοιγμα, με test. Το `version` 3 (3.18): τα σύρματα με το ίδιο όνομα είναι ένας κόμβος· ένα παλιότερο αρχείο ανοίγει ίδιο '
         '(`Bus.migrateNames`: όπου ένα όνομα ήταν ετικέτα σε δύο κόμβους, το δεύτερο γίνεται «όνομα·2»).',
-        f'- **Ο έλεγχος:** το `python tools/api_surface.py` σταματά όταν κάτι λείπει ή έχασε όρισμα. Πριν από την {snap["stable_from"]} περνά μόνο με '
-        '`--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 η αφαίρεση σημείου της ίδιας κύριας έκδοσης δεν περνά.',
+        f'- **Ο έλεγχος:** το `python tools/api_surface.py` σταματά όταν κάτι λείπει ή έχασε όρισμα. Ως την {snap["stable_from"]} περνούσε με '
+        '`--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 μέσα στην ίδια κύρια έκδοση δεν περνά ούτε με `--allow-removal`· '
+        'στην επόμενη κύρια περνά μόνο για ό,τι ήταν παρωχημένο. Ένα παρωχημένο σημείο πρέπει να υπάρχει ακόμη στον κώδικα.',
         '',
         '- **Πειραματικά (3.19):** ' + ', '.join(f'`{p}…`' for v in EXPERIMENTAL.values() for p in v) + ' (έλεγχος με AI §38, Control Workbench §19). '
         'Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). '
@@ -269,13 +315,24 @@ def report(snap):
         '',
         'Στους πίνακες, «Από» είναι η έκδοση της πρώτης καταγραφής: η 3.18 για ό,τι υπήρχε ήδη.',
         '',
-        '## Σημεία επέκτασης (3.19): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα',
+        '## Παρωχημένα',
+        '',
+    ]
+    if any(deps.values()):
+        out += ['| Επιφάνεια | Σημείο | Από | Αντί γι\' αυτό |', '|---|---|---|---|']
+        out += [f'| {g} | `{k}` | {v["since"]} | {v["instead"]} |' for g, d in deps.items() for k, v in d.items()]
+    else:
+        out += [f'Κανένα στην {snap["version"]}.']
+    out += [
+        '',
+        '## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα',
         '',
         '| Τι | Σήμερα | Επέκταση με προσθήκες |',
         '|---|---|---|',
-        '| Μονάδες και τύποι θυρών (`units.js`, `project.solve.units`) | V, A, rad, rad/s, N·m, V·s, 1· πλαίσια abc, αβ, dq· `warn`, `strict`, `off` | '
+        '| Μονάδες και τύποι θυρών (`units.js`, `project.solve.units`) | V, A, rad, rad/s, N·m, V·s, 1 και ό,τι γράφει ο χρήστης· σύγκριση με δυνάμεις (Wb = V·s)· '
+        'γινόμενο και διαίρεση πολλαπλασιάζουν μονάδες, κέρδος «·Ω»/«/V» (4.0)· πλαίσια abc, αβ, dq· `warn`, `strict`, `off` | '
         'νέες μονάδες και πλαίσια είναι νέες λέξεις· κάθε νέο στοιχείο δηλώνει τις δικές του θύρες· ένα στοιχείο χωρίς δήλωση μένει «χωρίς τύπο», '
-        'άρα ένα παλιό αρχείο δεν παίρνει νέο σφάλμα από στοιχείο που ήδη είχε |',
+        'άρα ένα παλιό αρχείο δεν παίρνει νέο σφάλμα από στοιχείο που ήδη είχε· μονάδα σε PI ή μπλοκ κώδικα μόνο με νέα παράμετρο που εξ ορισμού είναι κενή |',
         '| Πρόγραμμα αλλαγών παραμέτρων (`project.program`) | `{t, id, k, v, rate}` στα στοιχεία του κυρίως κυκλώματος (και στις δημόσιες παραμέτρους υποκυκλωμάτων) | '
         'νέα προαιρετικά πεδία (π.χ. διαδρομή `X1/L1`, σχήμα ράμπας)· ένα πεδίο που δεν αναγνωρίζεται αγνοείται |',
         '| Αρχείο συμβάντων (`Sim.events`, `Result.events`, `events` στον server) | είδη switch, diode, scr, gap, cmp, latch, edge, sample, duty, jump, live, program | '
@@ -303,7 +360,8 @@ def report(snap):
             out += [f'| `{k[2:]}` | {e.get("perm") or "—"} | {e["since"]} |' for k, e in entries.items()]
         else:
             out += ['| Σημείο | Ορίσματα | Από |', '|---|---|---|']
-            out += [f'| `{k}` | {", ".join(f"`{p}`" for p in e["params"]) or "—"} | {e["since"]}{" · πειρ." if experimental(g, k) else ""} |' for k, e in entries.items()]
+            out += [f'| `{k}` | {", ".join(f"`{p}`" for p in e["params"]) or "—"} | {e["since"]}{" · πειρ." if experimental(g, k) else ""}'
+                    f'{" · παρωχ. " + deps[g][k]["since"] if k in deps.get(g, {}) else ""} |' for k, e in entries.items()]
         out += ['']
     return '\n'.join(out)
 
@@ -316,6 +374,10 @@ def main(argv=None):
     old = json.loads(SNAP.read_text(encoding='utf-8')) if SNAP.exists() else {'groups': {}, 'removed': []}
     new = current()
     added, broken = compare(old, new)
+    stale = stale_deprecations(new)
+    if stale:
+        print('Παρωχημένα που δεν υπάρχουν πια στον κώδικα (βγάλ\' τα από το DEPRECATED): ' + ', '.join(f'{g} {k}' for g, k in stale))
+        return 1
     if a.check:
         snap = merged(old, new, old.get('version', __version__))
         bad = []
@@ -332,19 +394,12 @@ def main(argv=None):
             return 1
         print(f'API: {sum(len(v) for v in new.values())} σημεία, ενημερωμένο.')
         return 0
-    exp_only = broken and all(experimental(g, k) for g, k, _ in broken)
-    if broken and exp_only and not a.allow_removal:
+    if broken and not a.allow_removal and all(experimental(g, k) for g, k, _ in broken):
         a.allow_removal = 'πειραματικό σημείο'
-    if broken and not exp_only:
-        if not a.allow_removal:
-            print('Αλλαγή που σπάει το API:\n' + '\n'.join(f'  {g}: {k} ({w})' for g, k, w in broken) +
-                  '\nΑν είναι σκόπιμη: python tools/api_surface.py --allow-removal "λόγος".')
-            return 1
-        if vkey(__version__) >= vkey(STABLE_FROM):
-            same = [b for b in broken if not experimental(b[0], b[1]) and vkey(old['groups'][b[0]][b[1]]['since'])[0] == vkey(__version__)[0] or vkey(old.get('version', '0'))[0] == vkey(__version__)[0]]
-            if same:
-                print('Μέσα στην ίδια κύρια έκδοση δεν αφαιρείται τίποτα: σημείωσέ το παρωχημένο και αφαίρεσέ το στην επόμενη κύρια έκδοση.')
-                return 1
+    why = verdict(old, broken, __version__, a.allow_removal)
+    if why:
+        print(why)
+        return 1
     snap = merged(old, new, __version__, a.allow_removal, broken)
     SNAP.write_text(json.dumps(snap, ensure_ascii=False, indent=1, sort_keys=False) + '\n', encoding='utf-8')
     OUT.write_text(report(snap), encoding='utf-8')

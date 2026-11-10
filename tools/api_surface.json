@@ -1,5 +1,5 @@
 {
- "version": "3.19",
+ "version": "4.0",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -10,6 +10,7 @@
    "workbench"
   ]
  },
+ "deprecated": {},
  "groups": {
   "pcl": {
    "pcl.BifurcationResult": {

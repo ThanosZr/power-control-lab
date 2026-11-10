@@ -1,4 +1,4 @@
-% Power Converter Lab from MATLAB or Octave (ROADMAP §30, 3.14): the inductor ripple of the buck against L,
+% Power & Control Lab from MATLAB or Octave (ROADMAP §30, 3.14): the inductor ripple of the buck against L,
 % with the theory ΔI = V_o(1 − D)/(L·f_s). Run it from this folder (or addpath it).
 L = [33 47 68 100 150 220] * 1e-6;
 r = pcl_sweep('tutorial:buck?start=steady', {'L1.L', L}, ...
