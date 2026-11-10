@@ -89,7 +89,9 @@
   return {sid,keys,T:s.T,t:s.t,method:s.method,step:s.var?'var':'fixed',warnings:s.net.warnings};}
  function session(q){const S=sessions.get(String(q.sid));if(!S)throw new Error('Η συνεδρία του λύτη έκλεισε ή δεν υπάρχει ('+q.sid+').');return S;}
  function setLive(S,set){const s=S.sim;let reload=false;
-  for(const [k,v] of Object.entries(set||{})){const [id,prm]=String(k).split('.');const c=S.project.components.find(x=>x.id===id);if(!c)throw new Error(`Δεν υπάρχει στοιχείο «${id}».`);
+  for(const [k,v] of Object.entries(set||{})){const [id,prm]=String(k).split('.');
+   if(id.includes('/')){if(!prm)throw new Error(`«${id}»: γράψε ${id}.<παράμετρος>.`);MNA.setPath(S.project,id,prm,v);reload=true;continue;} // inside a subcircuit (3.17)
+   const c=S.project.components.find(x=>x.id===id);if(!c)throw new Error(`Δεν υπάρχει στοιχείο «${id}».`);
    if(!prm){if(c.type!=='CONST')throw new Error(`«${id}»: χωρίς παράμετρο αλλάζει μόνο μπλοκ «Σταθερά / πρόγραμμα» (γράψε ${id}.<παράμετρος>).`);
     const x=+v;c.params={...(c.params||{}),v:String(v)};s.setBlock(id,{sched:[[0,x]]});}
    else{c.params={...(c.params||{}),[prm]:v};reload=true;}}

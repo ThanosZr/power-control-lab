@@ -16,6 +16,7 @@
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
  const Ex=root.Expr||(typeof require!=='undefined'?require('./expr.js'):null);
  const SC=root.StepCheck||(typeof require!=='undefined'?require('./stepcheck.js'):null);
+ const SUBC=root.SubCircuit||(typeof require!=='undefined'?require('./subcircuit.js'):null);
  const GMIN=1e-9;
  // program t:value at t; left = the value just before t (the end of a step that lands on a jump, 3.15)
  const schedAt=(s,t,dflt,left)=>{if(!s)return dflt;let v=s[0][1];const tl=left?t-1e-15-4e-16*Math.abs(t):0;if(left?s[0][0]>=tl:t<s[0][0])return dflt;for(const [ts,val] of s){if(left?ts<tl:ts<=t+1e-15)v=val;else break;}return v;};
@@ -86,7 +87,9 @@
   return {k:'TL',...o,Z:g.Z,tau:g.tau,N,Rl:R,ts:g.tau/N,Ze,hh:(g.Z-r)/Ze,Ih:[0,0],IhS:new Float64Array(2*N),q:new Float64Array(3*N+1),iE:new Float64Array(2),
    H:{t:[],c:Array.from({length:3*N+1},()=>[]),s:0,cut:0}};}
  function buildNetlist(project){
-  const comps=(project.components||[]).filter(c=>P.PARTS[c.type]);
+  // subcircuits (3.17, §9): the solver sees one flat circuit (instance parts as X1/<id>, ports as junctions)
+  let subWarn=[];if(SUBC&&SUBC.needs(project)){try{const f=SUBC.flatten(project);project=f.project;subWarn=f.warnings;}catch(e){throw e instanceof SUBC.SubcircuitError?new NetlistError(e.message):e;}}
+  const comps=(project.components||[]).filter(c=>P.PARTS[c.type]&&c.type!=='SUB');
   const byId=new Map(comps.map(c=>[c.id,c]));
   const parent=new Map(),find=k=>{let r=k;while(parent.get(r)!==r)r=parent.get(r);let x=k;while(parent.get(x)!==r){const n=parent.get(x);parent.set(x,r);x=n;}return r;};
   const union=(a,b)=>{const ra=find(a),rb=find(b);if(ra!==rb)parent.set(ra,rb);};
@@ -94,7 +97,7 @@
   const kindOf=new Map();
   for(const c of comps)for(const p of Object.keys(P.pinsOf(c))){const k=c.id+':'+p;parent.set(k,k);kindOf.set(k,c.type==='JUNC'?'j':P.pinKind(c,p));}
   for(const w of project.wires||[]){const a=w.a.c+':'+w.a.p,b=w.b.c+':'+w.b.p;if(parent.has(a)&&parent.has(b))union(a,b);}
-  const warnings=[];
+  const warnings=[...subWarn];
   // connections without a wire (3.0): an input that names its source in the parameters (in_<pin> = "block:output"),
   // and Goto / From tags with the same name. Both join nets exactly like a wire.
   {const bad=[];for(const c of comps)for(const [k,v] of Object.entries(c.params||{})){if(!k.startsWith('in_')||!v)continue;const a=c.id+':'+k.slice(3),b=String(v);
@@ -1148,16 +1151,18 @@
  }
  // one point of a parameter sweep (bifurcation diagram): set comp.param = value, run `transient` base periods and
  // return the per-period statistic (min, max, avg, end = value at the period boundary) of channel `key` over the next `record` periods
- function sweepPoint(project,o){const pr=JSON.parse(JSON.stringify(project)),c=pr.components.find(x=>x.id===o.comp);if(!c)throw new NetlistError(`Δεν υπάρχει στοιχείο ${o.comp}.`);
-  c.params={...(c.params||{}),[o.param]:typeof c.params?.[o.param]==='string'?String(o.value):o.value};
+ function sweepPoint(project,o){const pr=JSON.parse(JSON.stringify(project));setPath(pr,o.comp,o.param,o.value);
   const s=new Sim(pr,{hDiv:o.hDiv||100,method:o.method}),rec=Math.max(1,o.record|0||50);s.run((o.transient??200)*s.T);s.run(rec*s.T);
   const p=s.per,i=s.chIndex.get(o.key);if(i===undefined)throw new NetlistError(`Δεν υπάρχει το κανάλι ${o.key}.`);const st=o.stat==='max'?p.max:o.stat==='avg'?p.avg:o.stat==='end'?p.end:p.min,y=[];
   for(let k=Math.min(rec,p.n);k>=1;k--){const j=(p.head-k+p.cap)%p.cap;y.push(st[j*p.nch+i]);}return {value:o.value,y,T:s.T,warnings:s.net.warnings};}
+ // a parameter of a part, also inside a subcircuit instance (X1/L1, 3.17); a string stays a string
+ function setPath(pr,id,k,v){if(!String(id).includes('/')){const c=pr.components.find(x=>x.id===id);if(!c)throw new NetlistError(`Δεν υπάρχει στοιχείο ${id}.`);
+   c.params={...(c.params||{}),[k]:typeof c.params?.[k]==='string'?String(v):v};return;}
+  try{const cur=SUBC.paramOf(pr,id,k);SUBC.setParam(pr,id,k,typeof cur==='string'?String(v):v);}catch(e){throw new NetlistError(e.message);}}
  // one frequency of an impedance sweep (EIS): set comp.param = f, run `settle` + `periods` periods of f, and return the
  // per-period means of the voltage and current channels over the last `periods` periods of f. The same averaging
  // filter acts on both, so their ratio at f is exact (for f below half the base frequency) and the ripple drops out.
- function eisPoint(project,o){const pr=JSON.parse(JSON.stringify(project)),c=pr.components.find(x=>x.id===o.comp);if(!c)throw new NetlistError(`Δεν υπάρχει στοιχείο ${o.comp}.`);
-  c.params={...(c.params||{}),[o.param]:typeof c.params?.[o.param]==='string'?String(o.f):o.f};
+ function eisPoint(project,o){const pr=JSON.parse(JSON.stringify(project));setPath(pr,o.comp,o.param,o.f);
   const s=new Sim(pr,{hDiv:o.hDiv||50,method:o.method}),Tf=1/o.f,P=Math.max(1,o.periods|0||2);s.run(Math.max((o.settle??3)*Tf,o.minSettle||0));s.run(P*Tf);
   if(P*Tf>s.per.cap*s.T)throw new NetlistError(`Η συχνότητα ${o.f} Hz θέλει ιστορικό ${P} περιόδων, πάνω από ${s.per.cap} περιόδους βάσης: διάλεξε μεγαλύτερη συχνότητα ή λιγότερες περιόδους.`);
   const p=s.per,iv=s.chIndex.get(o.vKey),ii=s.chIndex.get(o.iKey);if(iv===undefined||ii===undefined)throw new NetlistError('Δεν υπάρχουν τα κανάλια τάσης/ρεύματος.');
@@ -1167,6 +1172,6 @@
  // (a parameter changed), the states pass over by key as with a change while running (load without fresh).
  function resume(saved,state,project){const s=new Sim(saved,{...state.opts});s.method=state.method||s.method;s.restoreSnapshot(state);
   if(project&&JSON.stringify(project)!==JSON.stringify(saved))s.load(project,false);return s;}
- const api={Sim,buildNetlist,NetlistError,exportForBatch,sweepPoint,eisPoint,resume};
+ const api={Sim,buildNetlist,NetlistError,exportForBatch,sweepPoint,eisPoint,resume,setPath};
  root.MNA=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

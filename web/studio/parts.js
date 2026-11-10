@@ -26,6 +26,24 @@
  const TRIG=sel('trig','Πότε ενημερώνεται',[['start','Αρχή περιόδου του φέροντος (1 ανά T)'],['mid','Μέσο περιόδου (1 ανά T)'],['both','Και τα δύο (2 ανά T)']],'start');
  const SCHED='Πρόγραμμα: ζεύγη «t:τιμή» χωρισμένα με κόμμα, π.χ. 0:60000, 0.005:30000. Κενό = σταθερή τιμή.';
  const SRM_TBL=srmTableText({Lu:.008,La:.06,Lsat:.008,psik:.35});
+ // subcircuit symbol (3.17): ports on four sides, 20 apart, ordered as drawn inside (SubCircuit.portsOf)
+ const portSide=sel('side','Πλευρά στο σύμβολο',[['auto','προς τα πού κοιτά η θύρα'],['l','αριστερά'],['r','δεξιά'],['t','πάνω'],['b','κάτω']],'auto');
+ function subLayout(ports){
+  const L=Array.isArray(ports)?ports:[],by=s=>L.filter(p=>p.side===s),l=by('l'),r=by('r'),t=by('t'),b=by('b');
+  const len=a=>Math.max(0,...a.map(p=>Math.min(5,String(p.name).length)));
+  const H=10*Math.max(l.length,r.length,1)+20,W=Math.max(40,10*Math.max(t.length,b.length)+20,10*Math.ceil((2.6*(len(l)+len(r))+24)/10));
+  const pins={},spins={},pos=[],at=(p,x,y)=>{if(p.kind==='el')pins[p.name]=[x,y];else spins[p.name]={at:[x,y],dir:p.kind};pos.push({...p,x,y});};
+  l.forEach((p,i)=>at(p,-W-10,-10*(l.length-1)+20*i));r.forEach((p,i)=>at(p,W+10,-10*(r.length-1)+20*i));
+  t.forEach((p,i)=>at(p,-10*(t.length-1)+20*i,-H-10));b.forEach((p,i)=>at(p,-10*(b.length-1)+20*i,H+10));
+  return {W,H,pins,spins,pos};}
+ function subDraw(p){const {W,H,pos}=subLayout(p.$ports);
+  let s=`<rect class="block sub" x="${-W}" y="${-H}" width="${2*W}" height="${2*H}" rx="3"/><rect class="thin" x="${-W+3}" y="${-H+3}" width="${2*W-6}" height="${2*H-6}" rx="2"/>`;
+  s+='<rect class="thin" x="-7" y="-6" width="10" height="8" rx="1"/><rect class="thin" x="-3" y="-2" width="10" height="8" rx="1"/>';
+  for(const q of pos){const lead=q.x<-W?`M${q.x},${q.y} H${-W}`:q.x>W?`M${q.x},${q.y} H${W}`:q.y<-H?`M${q.x},${q.y} V${-H}`:`M${q.x},${q.y} V${H}`;
+   s+=q.kind==='el'?`<path d="${lead}"/>`:sl(lead);
+   const [lx,ly,anc]=q.x<-W?[-W+6,q.y+3,'start']:q.x>W?[W-6,q.y+3,'end']:q.y<-H?[q.x,-H+12,'middle']:[q.x,H-6,'middle'];
+   s+=`<text class="pinl" x="${lx}" y="${ly}" text-anchor="${anc}">${xe(q.name.slice(0,5))}</text>`;}
+  return s;}
  const PARTS={
   R:{name:'Αντίσταση',prefix:'R',group:'Παθητικά',pins:{a:[-30,0],b:[30,0]},box:[-22,-8,44,16],
    params:[num('R','Αντίσταση','Ω',10),txt('sched','R(t)','',{hint:SCHED})],
@@ -366,8 +384,22 @@
    draw:p=>'<path class="block sblk" d="M-22,-10 L-12,0 L-22,10 H20 V-10 Z"/>'+tx(xe(String(p.name||'').slice(0,7)),1,4,'bsm')+sl('M20,0 H30')},
   DISP:{name:'Ένδειξη',prefix:'DSP',group:'Σήματα',pins:{},spins:{u:I(-40,0)},box:[-30,-13,60,26],blk:true,params:[num('dig','Σημαντικά ψηφία','',4)],value:()=>null,
    draw:()=>'<rect class="block sblk" x="-30" y="-13" width="60" height="26" rx="3"/><rect class="thin" x="-24" y="-8" width="48" height="16" rx="2"/>'+tx('—',0,4,'bsm')+sl('M-40,0 H-30')},
+  // subcircuits (3.17, ROADMAP §9): an instance draws the ports of its definition ($ports, copied by SubCircuit.sync);
+  // inside a definition the ports are parts. The solvers never see these: SubCircuit.flatten replaces them.
+  SUB:{name:'Υποκύκλωμα',prefix:'X',group:'Υποκυκλώματα',hidden:true,pins:p=>subLayout(p.$ports).pins,spins:p=>subLayout(p.$ports).spins,
+   box:p=>{const L=subLayout(p.$ports);return [-L.W,-L.H,2*L.W,2*L.H];},params:[txt('def','Ορισμός','')],value:p=>p.$title||p.def||'—',
+   draw:p=>subDraw(p)},
+  PORT:{name:'Θύρα (ηλεκτρική)',prefix:'P',group:'Υποκυκλώματα',pins:{p:[-30,0]},box:[-20,-10,42,20],
+   params:[txt('name','Όνομα ακροδέκτη','e1',{hint:'Το όνομα του ακροδέκτη στο σύμβολο του υποκυκλώματος. Χωρίς κενά, «:», «.» και «/».'}),portSide],value:()=>null,
+   draw:p=>'<path d="M-30,0 H-20"/><path class="block" d="M-20,-9 H10 L20,0 L10,9 H-20 Z"/>'+tx(xe(String(p.name||'').slice(0,6)),-2,4,'bsm')},
+  SIN:{name:'Θύρα εισόδου σήματος',prefix:'IN',group:'Υποκυκλώματα',pins:{},spins:{y:O(30,0)},box:[-22,-10,42,20],
+   params:[txt('name','Όνομα εισόδου','u1',{hint:'Το σήμα που μπαίνει στο υποκύκλωμα από αυτόν τον ακροδέκτη του συμβόλου.'}),portSide],value:()=>null,
+   draw:p=>'<path class="block sblk" d="M-22,-9 L-12,0 L-22,9 H20 V-9 Z"/>'+tx(xe(String(p.name||'').slice(0,6)),1,4,'bsm')+sl('M20,0 H30')},
+  SOUT:{name:'Θύρα εξόδου σήματος',prefix:'OUT',group:'Υποκυκλώματα',pins:{},spins:{u:I(-30,0)},box:[-20,-10,42,20],
+   params:[txt('name','Όνομα εξόδου','y1',{hint:'Το σήμα που βγαίνει από το υποκύκλωμα σε αυτόν τον ακροδέκτη του συμβόλου.'}),portSide],value:()=>null,
+   draw:p=>'<path class="block sblk" d="M-20,-9 H10 L20,0 L10,9 H-20 Z"/>'+tx(xe(String(p.name||'').slice(0,6)),-2,4,'bsm')+sl('M-30,0 H-20')},
  };
- const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Μηχανές','Φορτία','Έλεγχος','Σήματα','Κώδικας','Βασικά'];
+ const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Μηχανές','Φορτία','Έλεγχος','Σήματα','Κώδικας','Υποκυκλώματα','Βασικά'];
  function defaults(type){const o={};for(const p of PARTS[type].params)o[p.k]=p.def;return o;}
  // electrical + signal pins of one placed part; the electrical pins of a multiport depend on its parameters (3.5)
  function elPins(c){const d=PARTS[c.type];if(!d)return {};return typeof d.pins==='function'?d.pins({...defaults(c.type),...(c.params||{})}):d.pins;}
@@ -570,7 +602,7 @@
   const out=[];for(const part of s.split(/[;,]\s*(?=[-+.\d])/)){const [a,b]=part.split(':');const t=parseEng(a),v=parseEng(b);if(!Number.isFinite(t)||!Number.isFinite(v))return null;out.push([t,v]);}
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
- const api={PARTS,GROUPS,BLOCKS,defaults,elPins,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
+ const api={PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
   parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,bewley,movChar,
   srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;

@@ -27,7 +27,7 @@ class HTTP(unittest.TestCase):
             return json.load(r)
 
     def test_assets(self):
-        for path in ('/', '/studio/app.js', '/studio/mna.js', '/studio/editor.js', '/studio/scope.js', '/studio/tutorials.js',
+        for path in ('/', '/studio/app.js', '/studio/mna.js', '/studio/subcircuit.js', '/studio/editor.js', '/studio/scope.js', '/studio/tutorials.js',
                      '/studio/parts.js', '/studio/style.css', '/converter/', '/converter/app.js', '/bidirectional/',
                      '/bidirectional/sim.js', '/api/health', '/api/catalog', '/studio/metrics.js', '/studio/templates.js',
                      '/studio/exercises/index.json', '/studio/exercises/pe2_battery.template.json'):

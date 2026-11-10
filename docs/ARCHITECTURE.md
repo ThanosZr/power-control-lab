@@ -22,6 +22,7 @@ index.html  φορτώνει τα studio/*.js με τη σειρά:        run.p
  math.js       υπολογισμοί, ερωτήσεις                     workbench, curves   αναλυτικοί πάγκοι (/converter/)
  app.js        κόλλα: κατάσταση, πίνακες, θεωρία
  stepcheck.js  έλεγχος βήματος (3.13)
+ subcircuit.js υποκυκλώματα (3.17): ορισμοί, flatten, δημιουργία/ανάπτυξη
  scenario.js   αιτήματα σεναρίων (3.14, κοινό με το pcl/runner.js)
  scenario_worker.js  πάνελ «Σενάρια»: Pyodide + pcl/core.py σε Worker
  exercises/    *.template.json, pe2_battery.js
@@ -34,6 +35,7 @@ MATLAB/Octave (matlab/, 3.14): pcl_run, pcl_sweep → python -m pcl job (ή /api
 |---|---|---|
 | `web/studio/parts.js` | Κατάλογος: ακροδέκτες (ηλεκτρικοί `pins`, σημάτων `spins`), παράμετροι, σύμβολο, ομάδα. Κοινός για editor και λύτη. | `PARTS`, `pinsOf`, `sigPins`, `pinKind`, `BLOCKS`, `parseSched`, `eng` |
 | `web/studio/mna.js` | Netlist και λύτης MNA: ηλεκτρικοί κόμβοι και κόμβοι σημάτων, στοιχεία, PWM, S&H, μπλοκ, σειρά υπολογισμού, βήματα, συμβάντα, καταγραφή. Εξαγωγή για τον server. | `buildNetlist`, `compileSignals`, `Sim.load`, `Sim.run`, `Sim.stepCore`, `Sim.evalBlocks`, `Sim.sampleControllers`, `Sim.nextEvent`, `Sim.channelKeys`/`computeVals`, `exportForBatch` |
+| `web/studio/subcircuit.js` | Υποκυκλώματα (3.17, ROADMAP §9), χωρίς DOM: ορισμοί στο `project.subcircuits`, θύρες, το «ισοπεδωμένο» κύκλωμα για τους λύτες, τιμές με διαδρομή, δημιουργία από επιλογή, ανάπτυξη. | `flatten`, `portsOf`, `innerParts`, `setParam`, `paramOf`, `sync`, `create`, `expand`, `makeUnique`, `closure` |
 | `web/studio/editor.js` | Σχέδιο: μοντέλο `{components, wires}`, δρομολόγηση A*, σύρματα, κανόνες σύνδεσης, undo/redo, ετικέτες. | `Editor.render*`, `finishWire`, `setParams`, `dropDangling`, `netKinds`, `paste`, `valueText` |
 | `web/studio/scope.js` | Σχεδιάζει κανάλια από τα buffers του λύτη. Λωρίδες για λογικά σήματα. | `Scope.draw`, `unitOf`, `isLogic` |
 | `web/studio/app.js` | Κατάσταση `S`, δημιουργία λύτη, ζωντανές παράμετροι, inspector, θεωρία ανά tutorial, πάνελ μαθηματικών, server και CSV. | `buildSim`, `refreshControls`, `openInspector`, `liveOf`, `signalsFor`, `chanLabel`, `formulaTheory` και `*Theory`, `circuitForMath`, `runBatch`, `simValue` |
@@ -54,6 +56,7 @@ MATLAB/Octave (matlab/, 3.14): pcl_run, pcl_sweep → python -m pcl job (ή /api
 
 1. **Σχέδιο → project.** Ο `Editor` κρατά `doc = {components, wires}`. Το `project()` στο `app.js` προσθέτει ρυθμίσεις λύτη και scope.
 2. **Project → netlist.** Το `MNA.buildNetlist(project)`:
+   - πρώτα, αν υπάρχουν υποκυκλώματα (3.17), τα «ισοπεδώνει» με το `SubCircuit.flatten`: τα στοιχεία του instance X1 γίνονται `X1/<id>`, οι θύρες κόμβοι `JUNC`. Ό,τι ακολουθεί δεν ξέρει για υποκυκλώματα,
    - ενώνει ακροδέκτες με union-find (σύρματα, πεδία «Πηγή» `in_<pin>`, ετικέτες Goto/From),
    - χωρίζει ηλεκτρικούς κόμβους και κόμβους σημάτων,
    - φτιάχνει στοιχεία (`els`), PWM (`ctrls`), S&H (`shs`) και μπλοκ,
@@ -119,6 +122,8 @@ MATLAB/Octave (matlab/, 3.14): pcl_run, pcl_sweep → python -m pcl job (ή /api
 | **Python στους workers του pool (3.16)** | `sim_worker.js` `python()` (Pyodide στον worker, μία φορά) → οι καλούντες στέλνουν και κυκλώματα με μπλοκ Python: `addons.js` `solve`/`batch`, `app.js` `runBifurcation`, `scenario_worker.js` `batch` | `scenario_flow.js`, `addons_flow.js` |
 | **Ελεγκτής AI σε βρόχο και εκπαίδευση (3.16)** | `pcl/control.py`: `MLP_SRC` (δίκτυα σε καθαρή Python, κοινά για εκπαίδευση και μπλοκ), πρότυπα κώδικα `PY_INV_NN`/`PY_RL` (`inv_nn_code`, `rl_code`), `compose` (`Ts`, `state`, `dither`, `TYPES`), `InverseTrainer` (φάσεις, `to_dict`), `RLTrainer` (`iterate`), `_Runner` (pool ή διεργασίες Node), `compare` → πρόσθετο `control-composer/ui.js` (`TYPES`, `train`, `run`, `variants`) | `test_control.py`, `addons_flow.js` |
 | **Το Control Workbench με φυτό ένα κύκλωμα (3.16)** | `pcl/workbench.py` (`prepare`, `CircuitPlant`, `plant_class`, `register`, `run_scheme`, `launch`) → `__main__.py` `workbench` | `test_workbench.py` |
+| **Υποκυκλώματα (3.17)** | Δεδομένα και λύτες: `subcircuit.js` (`flatten`: ids, ετικέτες, αναφορές `type:'ref'` και `in_`, Goto/From, θύρες· `innerParts`: δημόσιες και τιμές του instance) → `mna.js` `buildNetlist` (καλεί το `flatten`), `setPath`. Σύμβολο: `parts.js` `SUB`, `PORT`, `SIN`, `SOUT`, `subLayout`, `subDraw`. Εφαρμογή: `app.js` ενότητα «subcircuits» (`fullDoc`, `enterSub`/`leaveSub`, `groupSel`, `expandSub`, `propsSub`, `propsDef`, `togglePublic`, `renderCrumbs`, `viewDiag`, `allComps`, `compAt`), `editor.js` `replaceDoc`, `beginPlace(type, params)`, `opt.ongroup`/`canPlace`/`subParams`. `pcl`: `core.py` `_inner_parts`, `_sub_parts` | `test_subcircuit.py` (`subcircuit_cases.js`), `subcircuit_flow.js` |
+| **Νέα παράμετρος που δείχνει σε άλλο στοιχείο** | στο `parts.js` πάντα με `ref(...)` (`type:'ref'`): μόνο έτσι το `flatten` τη μεταφράζει μέσα σε υποκύκλωμα και το `create` την κάνει διαδρομή | `test_subcircuit.py` |
 | **API του server** | `run.py` `ACTIONS` → συνάρτηση στο `engine/` | `test_api.py` |
 | **Κείμενα διεπαφής** | `web/index.html`, `app.js` | UI flows |
 
@@ -133,6 +138,8 @@ MATLAB/Octave (matlab/, 3.14): pcl_run, pcl_sweep → python -m pcl job (ή /api
 - **Κάθε νέο μοντέλο μπαίνει και στην αναφορά επαλήθευσης** (`tools/verify.py`), με αναμενόμενη τιμή από ανεξάρτητη αναφορά.
 - **Ό,τι μένει εκτός λύσης φαίνεται** (3.7): στο `net.diag`, στο σχέδιο και στο πάνελ παραμέτρων. Ο λύτης SciPy παίρνει το ίδιο netlist από το `exportForBatch`, οπότε και τις ίδιες επιλογές.
 - **Αλγεβρικός βρόχος = σφάλμα** με τα μπλοκ του βρόχου, ποτέ κρυφή καθυστέρηση.
+- **Οι λύτες βλέπουν μόνο ισοπεδωμένο κύκλωμα** (3.17): κανένα `SUB` δεν φτάνει στο `buildNetlist` μετά το `flatten`, κανένας κώδικας λύτη δεν ξέρει για υποκυκλώματα. Ό,τι δείχνει σε άλλο στοιχείο είναι `type:'ref'` ή `in_<pin>`.
+- **Στον editor ένα επίπεδο κάθε φορά** (3.17): οι λειτουργίες της προσομοίωσης (`buildSim`, `project`, `liveApply`, server) παίρνουν πάντα το `fullDoc()`, όχι το `editor.export()`.
 
 ## 5. Tests
 
@@ -140,7 +147,7 @@ MATLAB/Octave (matlab/, 3.14): pcl_run, pcl_sweep → python -m pcl job (ή /api
 |---|---|---|
 | Python unittest | `python -m unittest discover -s tests` | αναλυτικούς engines, templates, server |
 | Λύτης browser μέσω Node | από τα `test_studio_sim.py`, `test_tutorials.py`, `test_batch.py`, που καλούν `tests/js/*.js` | `mna.js`, tutorials, ισοδυναμία με SciPy |
-| Περιβάλλον (Playwright) | με server στο 8765: `node tests/ui/<flow>.js http://127.0.0.1:8765/` από άλλον φάκελο | `studio_flow`, `editor_interactions`, `features_flow`, `blocks_flow`, `wiring_flow` |
+| Περιβάλλον (Playwright) | με server στο 8765: `node tests/ui/<flow>.js http://127.0.0.1:8765/` από άλλον φάκελο | `studio_flow`, `editor_interactions`, `features_flow`, `blocks_flow`, `wiring_flow`, `step_flow`, `scenario_flow`, `addons_flow`, `subcircuit_flow` |
 | Χάρτης κώδικα | `python tools/codemap.py --check` | ότι το `CODEMAP.md` είναι ενημερωμένο |
 | Αναφορά επαλήθευσης | `python tools/verify.py` (γράφει) ή `--check` (ελέγχει) | ότι κάθε τιμή του `VERIFICATION.md` είναι μέσα στην ανοχή της |
 
@@ -151,7 +158,7 @@ MATLAB/Octave (matlab/, 3.14): pcl_run, pcl_sweep → python -m pcl job (ή /api
 1. Νέο branch για κάθε έκδοση: `lab-<έκδοση>`. Το `main` αλλάζει μόνο με έγκριση.
 2. Πριν από την αλλαγή: εντοπισμός στο §3 και στο `CODEMAP.md`, και ανάγνωση μόνο αυτών των σημείων.
 3. Μετά την αλλαγή:
-   - tests, τα 8 UI flows,
+   - tests, τα 9 UI flows,
    - `python tools/codemap.py`,
    - ενημέρωση README (πίνακας εκδόσεων) και ROADMAP (§0),
    - έκδοση στο `engine/__init__.py` και στο footer του `web/index.html`.

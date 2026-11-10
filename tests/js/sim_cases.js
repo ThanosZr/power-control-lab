@@ -326,5 +326,10 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
  const run=(id,o,keys)=>{const pr=bt(id,o),m=pr.meta,s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv,method:'TR'});s.run(m.dur);const p=s.per,j0=s.chIndex.get('V:V1'),r={};
   for(const k of keys){const i=s.chIndex.get(k);let q=0,q0=0;for(let n=1;n<=2;n++){const j=(p.head-n+p.cap)%p.cap;q+=p.rms[j*p.nch+i]**2;q0+=p.rms[j*p.nch+j0]**2;}r[k]=Math.sqrt(q/q0);}return {r,meta:m};};
  out.hv312={div:run('hvdiv',{ex:'1515'},['V:CL']),fix:run('schering',{set:'fix'},['V:R3','V:RD']),r4:run('schering',{set:'r4'},['V:R3','V:RD'])};}
+// 3.17: N instances of one buck leg (subcircuit), interleaved: leg ripple, ripple of the sum, sharing
+{const TT=globalThis.Tutorials,bt=(id,o={})=>{const t=TT.get(id),q={};for(const op of t.options)q[op.k]=o[op.k]??op.def;return t.build(q);};
+ const one=o=>{const pr=bt('sub_legs',o),m=pr.meta,s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv,method:'TR'});s.run(4e-3);const lp=k=>{const q=s.lastPeriod(k);return {pp:q.max-q.min,avg:q.avg};};
+  return {meta:m,vo:lp('V:C1').avg,leg:lp('I:X1/L1').pp,sum:lp('Y:AM1').pp,legs:Array.from({length:m.N},(_,j)=>lp(`I:X${j+1}/L1`).avg)};};
+ out.sub_legs={n3:one({N:'3',drive:'shift',D:'0.5'}),n2:one({N:'2',drive:'shift',D:'0.5'}),n4:one({N:'4',drive:'shift',D:'0.3'})};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

@@ -374,6 +374,56 @@ def job(spec, allow_paths=True):
     return _clean(r.as_dict())
 
 
+def _inner_parts(defn, inst):
+    """The parts of a subcircuit definition with the values of one instance: public parameters (bound to inner
+    parameters), then the values of this instance only ('L1.L'; 'X2/L1.L' passes down to the nested X2).
+    The same rules as innerParts in web/studio/subcircuit.js."""
+    parts = [{**c, 'params': dict(c.get('params') or {})} for c in defn.get('components') or []]
+    by_id = {c['id']: c for c in parts}
+    ip = inst.get('params') or {}
+
+    def put(cid, k, v):
+        if cid in by_id:
+            by_id[cid]['params'][k] = v
+    for pp in defn.get('params') or []:
+        v = ip.get(pp['k'])
+        if v is None or v == '':
+            v = pp.get('def')
+        if v is None or v == '':
+            continue
+        for cid, k in pp.get('bind') or []:
+            put(cid, k, v)
+    for key, v in ip.items():
+        if key.startswith('$') or key == 'def' or '.' not in key:
+            continue
+        dot, sl = key.index('.'), key.find('/')
+        if 0 < sl < dot:
+            put(key[:sl], key[sl + 1:], v)
+        else:
+            put(key[:dot], key[dot + 1:], v)
+    return parts
+
+
+def _sub_parts(data, path):
+    """A part inside subcircuit instances by path ('X1/L1', 'X1/X2/L1'): (part, its parameters for that instance)."""
+    names = path.split('/')
+    defs = data.get('subcircuits') or {}
+    comps = data.get('components') or []
+    c = None
+    for i, n in enumerate(names):
+        c = next((k for k in comps if k.get('id') == n), None)
+        if c is None:
+            raise PclError(f'Δεν υπάρχει «{"/".join(names[:i + 1])}».')
+        if i < len(names) - 1:
+            if c.get('type') != 'SUB':
+                raise PclError(f'«{"/".join(names[:i + 1])}» δεν είναι υποκύκλωμα.')
+            d = defs.get((c.get('params') or {}).get('def'))
+            if d is None:
+                raise PclError(f'Δεν υπάρχει ο ορισμός του «{"/".join(names[:i + 1])}».')
+            comps = _inner_parts(d, c)
+    return c, c.get('params') or {}
+
+
 class Project:
     """A circuit as the app saves it: components, wires, solver settings (solve, sim), scope."""
 
@@ -394,6 +444,8 @@ class Project:
         head, _, prm = key.partition('.')
         if head in ('solve', 'sim'):
             return (self.data.get(head) or {}).get(prm)
+        if '/' in head:
+            return _sub_parts(self.data, head)[1].get(prm)
         return (self.comp(head).get('params') or {}).get(prm)
 
     def set(self, key, value):
@@ -405,6 +457,12 @@ class Project:
         v = parse_value(value)
         if head in ('solve', 'sim'):
             self.data.setdefault(head, {})[prm] = v
+        elif '/' in head:
+            # inside a subcircuit instance (3.17): a value of this instance only, kept on the top instance as
+            # '<inner path>.<parameter>' (the same as web/studio/subcircuit.js setParam)
+            _sub_parts(self.data, head)
+            top, rest = head.split('/', 1)
+            self.comp(top).setdefault('params', {})[rest + '.' + prm] = v
         else:
             c = self.comp(head)
             c.setdefault('params', {})[prm] = v
@@ -420,7 +478,7 @@ class Project:
         Path(path).write_text(json.dumps(self.data, ensure_ascii=False, indent=1), encoding='utf-8')
 
     def hash(self):
-        keep = {k: self.data.get(k) for k in ('components', 'wires', 'solve')}
+        keep = {k: self.data.get(k) for k in ('components', 'wires', 'solve', 'subcircuits')}
         return hashlib.sha256(json.dumps(keep, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
 
     def params(self):

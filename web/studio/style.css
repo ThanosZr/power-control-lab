@@ -301,6 +301,7 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 /* code blocks (3.3) */
 #inspector textarea.code{width:100%;min-width:420px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.4;border:1px solid var(--line);border-radius:6px;padding:6px;tab-size:4;white-space:pre}
 .part .pinl{font-size:7px;fill:var(--muted)}
+.part .sym .pinl,.pal-item .sym .pinl{font:600 8px Inter,system-ui,sans-serif;fill:var(--ink);stroke:none}
 /* diagnostics console (3.13) */
 .diag-console{border-top:1px solid var(--line);background:#fbfcfb}
 .diag-console>summary{display:flex;align-items:center;gap:10px;padding:6px 12px;cursor:pointer;font-size:12px;list-style:none;user-select:none}
@@ -365,3 +366,15 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .from-tool{font-size:11px;color:var(--accent,#147966)}
 .addons-in{padding:0 16px 14px}
 .knock-toast{position:fixed;top:16px;right:16px;z-index:80;max-width:360px;background:var(--card);border:2px solid var(--accent);border-radius:10px;padding:10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.2);font-size:13px}.knock-toast p{margin:4px 0 8px}.knock-toast div{display:flex;gap:8px}
+/* subcircuits (3.17): the levels above the schematic, the symbol of an instance, public parameters */
+.crumbs{position:absolute;left:8px;top:8px;right:8px;z-index:3;display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:5px 8px;border:1px solid #b9d8cd;border-radius:8px;background:rgba(240,248,245,.96);font-size:12px;pointer-events:auto}
+.crumbs button{padding:2px 8px;font-size:12px;border-color:transparent;background:transparent;color:var(--accent)}
+.crumbs button:hover{border-color:#9fd0c3;background:#fff}
+.crumbs button[aria-current]{color:var(--ink);font-weight:600}
+.crumbs button:last-child{margin-left:auto;border-color:#9fd0c3;background:#fff;font-weight:600}
+.crumbs .crumb-note{color:var(--muted);font-size:11px;margin-left:6px}
+.part .sym .block.sub{fill:#eef4fb;stroke:#6f8fb5}
+.pal-item .sym .block.sub{fill:#eef4fb}
+.pal-import{color:var(--accent);font-weight:600}
+.pinbtn.pubbtn{font-weight:700;color:var(--muted)}.pinbtn.pubbtn.on{color:var(--accent);border-color:#9fd0c3;background:#e7f3ef}
+.props .pp-k{width:84px;font-size:11px;padding:1px 4px}

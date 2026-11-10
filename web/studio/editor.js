@@ -43,7 +43,10 @@
    svg.addEventListener('keydown',e=>this.key(e));svg.addEventListener('keyup',e=>{if(e.code==='Space'){this.space=false;svg.classList.remove('grab');}});
    svg.addEventListener('pointerleave',()=>{this.hover=null;this.L.over.querySelector('.ghost')?.remove();});
    holder.addEventListener('dragover',e=>{if(e.dataTransfer.types.includes('application/x-pcl-part')){e.preventDefault();}});
-   holder.addEventListener('drop',e=>{const t=e.dataTransfer.getData('application/x-pcl-part');if(!t)return;e.preventDefault();const p=this.world(e);const c=this.addPart(t,snap(p[0]),snap(p[1]));if(c&&!e.shiftKey&&this.autoConnect([c.id]))this.changed('struct');});
+   holder.addEventListener('drop',e=>{let t=e.dataTransfer.getData('application/x-pcl-part');if(!t)return;e.preventDefault();const p=this.world(e);
+    // 'SUB:<name>' = an instance of a subcircuit definition (3.17)
+    let prm;if(t.startsWith('SUB:')){const q={type:'SUB',params:this.opt.subParams?.(t.slice(4))};if(!q.params||(this.opt.canPlace&&!this.opt.canPlace(q)))return;t='SUB';prm=q.params;}
+    const c=this.addPart(t,snap(p[0]),snap(p[1]),prm);if(c&&!e.shiftKey&&this.autoConnect([c.id]))this.changed('struct');});
    this.ro=new ResizeObserver(()=>{if(!this.userView)this.fit();else this.applyView();});this.ro.observe(holder);
   }
   // ---------------------------------------------------------- model
@@ -60,10 +63,16 @@
   cleanSel(){for(const id of [...this.sel.c])if(!this.comp(id))this.sel.c.delete(id);for(const id of [...this.sel.w])if(!this.wire(id))this.sel.w.delete(id);}
   load(doc,{keepView=false}={}){this.doc={components:(doc.components||[]).map(c=>({rot:0,flip:false,params:{},...c,params:{...(c.params||{})}})),wires:(doc.wires||[]).map(w=>({...w,pts:(w.pts||[]).map(p=>[...p])}))};
    if(doc.solve)this.doc.solve={...doc.solve}; // options of the solution (3.7): unconnected parts, floating parts
+   if(doc.subcircuits)this.doc.subcircuits=JSON.parse(JSON.stringify(doc.subcircuits)); // definitions of subcircuits (3.17)
    this.dropDangling();
    for(const w of this.doc.wires)if(!w.pts.length&&!w.fixed){const full=this.wirePts(w);if(!orth(full))this.route(w);}
    this.sel.c.clear();this.sel.w.clear();this.undoStack=[];this.redoStack=[];this.render();if(!keepView){this.userView=false;this.fit();}}
   export(){return JSON.parse(this.snapshot());}
+  // the whole document in one undoable step (3.17: subcircuit from a selection, expand): new wires are routed
+  replaceDoc(doc,sel=[]){this.remember();const keep=new Map(this.doc.wires.map(w=>[w.id,w]));
+   this.doc={...doc,components:doc.components.map(c=>({rot:0,flip:false,...c,params:{...(c.params||{})}})),wires:doc.wires.map(w=>({...w,pts:(w.pts||[]).map(p=>[...p])}))};
+   this.dropDangling();for(const w of this.doc.wires){const o=keep.get(w.id);if(!w.pts.length&&!w.fixed&&!(o&&o.a.c===w.a.c&&o.b.c===w.b.c)){const full=this.wirePts(w);if(!orth(full))this.route(w);}}
+   this.sel.c.clear();this.sel.w.clear();for(const id of sel)if(this.comp(id))this.sel.c.add(id);this.render();this.changed('struct');}
   changed(kind){this.opt.onchange?.(kind);this.opt.onselect?.(this.selection());}
   selection(){return {c:[...this.sel.c],w:[...this.sel.w]};}
   select(cids=[],wids=[],add=false){if(!add){this.sel.c.clear();this.sel.w.clear();}cids.forEach(i=>this.sel.c.add(i));wids.forEach(i=>this.sel.w.add(i));this.renderSel();this.opt.onselect?.(this.selection());}
@@ -240,6 +249,7 @@
     case 'IDC':return p.ctl==='sig'?'I από σήμα':e(+p.I,'A');case 'CPE':return p.kind==='cpe'?'Q '+e(+p.Q)+' · α '+(+p.alpha).toLocaleString('el-GR'):'σ '+e(+p.sigma,'Ω/√s');case 'CPL':return p.sched?'P(t)':e(+p.P,'W');case 'XFMR':return '1 : '+(+p.n).toLocaleString('el-GR',{maximumFractionDigits:4});case 'SW':return (p.model==='igbt'?'IGBT · ':'')+(p.gate==='sig'?'g από σήμα':p.gate==='pwm'?({a:'g',na:'ḡ',b:'g₂',nb:'ḡ₂'}[p.out]||'g')+' · '+(p.pwm||'—'):p.gate==='on'?'ON':'OFF');
     case 'SH':return (p.in==='sig'?'u':(p.qty==='V'?'v(':'i(')+(p.src||'—')+')')+' · '+({start:'αρχή T',mid:'μέσο T',both:'2 ανά T'}[p.trig]||'');
     case 'MEAS':case 'VM':case 'AM':case 'VP':case 'IP':case 'SR':case 'DISP':return '';
+    case 'SUB':return String(p.$title||p.def||''); // subcircuit (3.17): the title of its definition
     case 'CONST':return String(p.v).includes(':')?String(p.v).slice(0,22):'';case 'GAIN':return 'K = '+e(+p.K);case 'SUM':return '';
     case 'SAT':return '['+e(+p.lo)+', '+e(+p.hi)+']';case 'CMP':return +p.hys>0?'h = '+e(+p.hys):'';case 'LOGIC':return ['nand','nor','xor'].includes(p.op)?p.op.toUpperCase():'';
     case 'PIB':return 'K_p '+e(+p.Kp)+' · K_i '+e(+p.Ki);case 'UD':return '';
@@ -258,7 +268,7 @@
     case 'CLK':return e(+p.f,'Hz')+' · '+(+p.duty).toLocaleString('el-GR');case 'RAMP':return e(+p.f,'Hz')+' · '+e(+p.lo)+'…'+e(+p.hi);
     case 'PWM':return e(+p.fs,'Hz')+(+p.phase&&p.mode!=='spwm'?' · φ '+(+p.phase).toLocaleString('el-GR',{maximumFractionDigits:2})+'°':'')+(+p.dt>0?' · t_d '+e(+p.dt,'s'):'')+' · '+(p.mode==='fixed'?'D = '+(+p.D).toLocaleString('el-GR'):p.mode==='pi'?'PI':p.mode==='spwm'?'SPWM m = '+p.m:p.mode==='ext'?'D από σήμα':'2 έξοδοι');default:return '';}}
   renderLabels(){
-   this.L.live.innerHTML=this.doc.components.filter(c=>!['JUNC','GND','TAGO','TAGI'].includes(c.type)).map(c=>{const b=P.bbox(c);const pk=Object.keys(P.elPins(c));const q0=pk[0]&&this.pin(c,pk[0]),q1=pk[1]&&this.pin(c,pk[1]);const blk=!pk.length;const vert=!blk&&c.type!=='XFMR'&&c.type!=='VAC3'&&q0&&q1&&q0[0]===q1[0];
+   this.L.live.innerHTML=this.doc.components.filter(c=>!['JUNC','GND','TAGO','TAGI','PORT','SIN','SOUT'].includes(c.type)).map(c=>{const b=P.bbox(c);const pk=Object.keys(P.elPins(c));const q0=pk[0]&&this.pin(c,pk[0]),q1=pk[1]&&this.pin(c,pk[1]);const blk=!pk.length;const vert=!blk&&c.type!=='XFMR'&&c.type!=='VAC3'&&q0&&q1&&q0[0]===q1[0];
     // signal blocks (3.0) keep their label above, the PWM / S&H blocks at the side as before
     const lb=c.lbl||P.PARTS[c.type].lbl;const side=(vert||blk)&&!(blk&&P.BLOCKS.has(c.type))&&lb!=='below'&&lb!=='above';const below=lb==='below',left=side&&lb==='left';const x=left?b[0]-8:side?b[2]+8:(b[0]+b[2])/2,y=side?(b[1]+b[3])/2-(blk?10:2):below?b[3]+40:b[1]-7;const anchor=left?'end':side?'start':'middle';
     return `<g class="lbls" data-l="${c.id}"><text class="lbl" x="${x}" y="${side?y:y-24}" text-anchor="${anchor}">${esc(c.label||c.id)}</text><text class="val" x="${x}" y="${side?y+13:y-12}" text-anchor="${anchor}">${esc(this.valueText(c))}</text><text class="lv" x="${x}" y="${side?y+26:y}" text-anchor="${anchor}"></text></g>`;}).join('');
@@ -397,6 +407,7 @@
    if(ctrl&&k==='c'){this.copySel();return;}
    if(ctrl&&k==='v'){e.preventDefault();this.paste();return;}
    if(ctrl&&k==='d'){e.preventDefault();this.copySel();this.paste(20,20);return;}
+   if(ctrl&&k==='g'){e.preventDefault();this.opt.ongroup?.(e.shiftKey);return;}
    if(!ctrl&&k==='r'){if(this.placing){this.placing.rot=(this.placing.rot+1)%4;this.ghost(this.hover||[0,0]);}else this.rotateSel(e.shiftKey?-1:1);return;}
    if(!ctrl&&k==='m'){this.mirrorSel();return;}
    if(!ctrl&&k==='f'){this.fit();return;}
@@ -456,10 +467,10 @@
   escape(deselect){if(this.wiring){const m=this.wiring.made;this.cancelWire();if(m){this.tidyJunctions();this.render();}return true;}
    if(this.placing){this.cancelPlace();return true;}if(this.wireTool){this.setWireTool(false);return true;}if(deselect)this.select([],[]);return false;}
   // ---------------------------------------------------------- placing
-  beginPlace(type){this.cancelWire();this.placing={type,rot:0};this.svg.classList.add('placing');this.svg.focus({preventScroll:true});if(this.hover)this.ghost(this.hover);}
+  beginPlace(type,params){this.cancelWire();this.placing={type,rot:0,params};this.svg.classList.add('placing');this.svg.focus({preventScroll:true});if(this.hover)this.ghost(this.hover);}
   ghost(p){let g=this.L.over.querySelector('.ghost');if(!g){g=document.createElementNS(NS,'g');g.setAttribute('class','ghost');this.L.over.appendChild(g);}
-   const c={type:this.placing.type,x:snap(p[0]),y:snap(p[1]),rot:this.placing.rot,flip:false,params:P.defaults(this.placing.type)};g.innerHTML=this.partSVG({...c,id:'ghost'});}
-  finishPlace(p,shift){const t=this.placing;const c=this.addPart(t.type,snap(p[0]),snap(p[1]));if(c&&t.rot){c.rot=t.rot;this.render();}if(c&&!shift&&this.autoConnect([c.id]))this.changed('struct');if(!this.keepPlacing)this.cancelPlace();}
+   const c={type:this.placing.type,x:snap(p[0]),y:snap(p[1]),rot:this.placing.rot,flip:false,params:{...P.defaults(this.placing.type),...(this.placing.params||{})}};g.innerHTML=this.partSVG({...c,id:'ghost'});}
+  finishPlace(p,shift){const t=this.placing;if(this.opt.canPlace&&!this.opt.canPlace(t)){this.cancelPlace();return;}const c=this.addPart(t.type,snap(p[0]),snap(p[1]),t.params&&JSON.parse(JSON.stringify(t.params)));if(c&&t.rot){c.rot=t.rot;this.render();}if(c&&!shift&&this.autoConnect([c.id]))this.changed('struct');if(!this.keepPlacing)this.cancelPlace();}
   cancelPlace(){this.placing=null;this.svg.classList.remove('placing');this.L.over.querySelector('.ghost')?.remove();}
   // ---------------------------------------------------------- wiring
   startWire(pin,click){const [c,p]=pin.split(':');this.wiring={from:{c,p},via:[],click};this.svg.classList.add('wiring');}

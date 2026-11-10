@@ -804,6 +804,36 @@
      panes=[[['Y:M1','ω'],['Y:KW','ω_ref']],[['Y:AM1','i_a'],['Y:GPsi','i_ref']],[['D:PWM1','D']]];stopT=.4;}}
    return project(comps,wires,{sim:{hDiv:100,speed:300,stopT},scope:{panes,window:{unit:'T',n:Math.round(stopT*fs)}},
     meta:{Vdc,Ra,La,psi,J:Jm,bm,fs,fc:200,ac,as,act:act?1:0,Imax,kpc,kic,Rac,kps,kis,bac,mode:o.mode,wref:150,TL:10,tTL:.25,tw:.02}});}});
+ // ------------------------------------------------------------------ 3.17: subcircuits (ROADMAP §9)
+ // one leg (PWM, switch, diode, inductor) as a definition; N instances with their own phase, interleaved on one output
+ T.push({id:'sub_legs',group:'Υποκυκλώματα (3.17)',title:'Πολυφασικός buck από ένα υποκύκλωμα σκέλους',theory:'formula',topology:'sub_legs',
+  options:[{k:'N',label:'Σκέλη N',options:[['2','2'],['3','3'],['4','4']],def:'3'},
+   {k:'drive',label:'Οδήγηση',options:[['shift','Μετατοπισμένη: φάση k·360°/N ανά instance'],['common','Συμφασική (ίδια φάση)']],def:'shift'},
+   {k:'D',label:'D',options:[['0.5','0,5'],['0.3','0,3'],['0.75','0,75']],def:'0.5'}],
+  desc:'Ένα σκέλος buck (PWM, διακόπτης, δίοδος, πηνίο) είναι ένας ορισμός υποκυκλώματος με δύο θύρες, «in» και «out». Τα N instances του κάθονται παράλληλα ανάμεσα στην πηγή και τον πυκνωτή εξόδου. Κάθε instance έχει τις δικές του δημόσιες παραμέτρους (φάση, D, L, f_s) και τη δική του κατάσταση, ενώ τα στοιχεία και τα σύρματα είναι κοινά: μια αλλαγή μέσα σε ένα instance (διπλό κλικ) αλλάζει όλα τα σκέλη μαζί.',
+  tasks:['Διπλό κλικ σε ένα σκέλος: ανοίγει ο ορισμός, με τις ζωντανές τιμές αυτού του instance. Βγες με «⌂ Κύκλωμα» ή «↑ Έξοδος».','Διάλεξε ένα σκέλος και άλλαξε τη φάση του στο πάνελ παραμέτρων: αλλάζει μόνο αυτό. Με όλες τις φάσεις ίσες η κυμάτωση του αθροίσματος γίνεται N φορές η κυμάτωση ενός σκέλους.','Με N·D ακέραιο (π.χ. N = 2, D = 0,5) η κυμάτωση του αθροίσματος μηδενίζεται: δες το σήμα του αμπερομέτρου A_o.','Διάλεξε τα στοιχεία ενός σκέλους μέσα στον ορισμό και πάτα ⤴ σε μια παράμετρο: γίνεται δημόσια. Ctrl+Shift+G σε ένα instance το κάνει πάλι ανοιχτό κύκλωμα.'],
+  build(o){const N=Math.min(4,Math.max(2,+o.N||3)),shift=o.drive!=='common',D=+o.D||.5,Vin=48,fs=50e3,L=100e-6,Cc=47e-6,R=2,Vo=D*Vin,Il=Vo/R/N;
+   const leg={title:'Σκέλος buck',desc:'PWM, διακόπτης, δίοδος και πηνίο, από «in» προς «out»',version:'1',
+    components:[C('Pin','PORT',-120,0,{name:'in',side:'auto'},{rot:2,label:'in'}),C('S1','SW',-40,0,{pwm:'PWM1',out:'a',body:false},{rot:3,flip:true}),J('J1',20,0),
+     C('D1','D',20,50,{},{rot:3}),gnd(20,110),C('L1','L',80,0,{L,i0:Il}),C('Pout','PORT',170,0,{name:'out',side:'auto'},{label:'out'}),C('PWM1','PWM',-40,-80,{fs,D,phase:0,carrier:'saw'})],
+    wires:[['Pin:p','S1:d'],['S1:s','J1'],['J1','L1:a'],['J1','D1:k'],['D1:a','G1:g'],['L1:b','Pout:p']].map((w,i)=>({id:'w'+(i+1),a:pin(w[0]),b:pin(w[1]),pts:[]})),
+    params:[{k:'phase',label:'Φάση φέροντος',unit:'°',type:'num',def:0,bind:[['PWM1','phase']]},{k:'D',label:'D',unit:'',type:'num',def:D,bind:[['PWM1','D']]},
+     {k:'L',label:'L σκέλους',unit:'H',type:'num',def:L,bind:[['L1','L']]},{k:'fs',label:'f_s',unit:'Hz',type:'num',def:fs,bind:[['PWM1','fs']]},
+     {k:'i0',label:'i_L(0)',unit:'A',type:'num',def:Il,bind:[['L1','i0']]}]};
+   // each instance starts on its own periodic current (as the polyphase exercise): the mean plus the ripple at its carrier position
+   const dI=Vin*D*(1-D)/(L*fs),i0=ph=>+(Il+dI*rippleDev(((-ph/360)%1+1)%1,D,true)).toPrecision(8);
+   const y=k=>60+130*k,yb=y(N-1)+90,comps=[C('V1','VDC',60,y(0)+60,{V:Vin},{label:'V_in'}),gnd(60,yb+40)],wires=[['V1:n','JG0']];
+   comps.push(J('JG0',60,yb));
+   for(let k=0;k<N;k++){const ph=shift?+(360*k/N).toFixed(6):0;comps.push(C('X'+(k+1),'SUB',260,y(k),{def:'leg',phase:ph,i0:i0(ph)},{label:'σκέλος '+(k+1)}),J('JA'+k,160,y(k)),J('JB'+k,360,y(k)));
+    wires.push(['JA'+k,'X'+(k+1)+':in'],['X'+(k+1)+':out','JB'+k]);if(k){wires.push(['JA'+(k-1),'JA'+k],['JB'+(k-1),'JB'+k]);}}
+   wires.push(['V1:p','JA0',[[60,y(0)]]]);
+   comps.push(C('AM1','AM',430,y(0),{},{label:'A_o',lbl:'below'}),C('C1','C',520,y(0)+60,{C:Cc,v0:Vo}),C('R1','R',600,y(0)+60,{R},{rot:1}),J('JO',520,y(0)),J('JG1',520,yb),J('JG2',600,yb));
+   wires.push(['JB0','AM1:a'],['AM1:b','JO'],['JO','C1:p'],['JO','R1:a',[[600,y(0)]]],['C1:n','JG1',[[520,yb]]],['R1:b','JG2'],['JG0','JG1'],['JG1','JG2'],['JG0','G1:g']);
+   for(const c of comps)if(c.id==='G1'){c.x=60;c.y=yb+40;}
+   const pr=project(comps,wires,{subcircuits:{leg},sim:{hDiv:200,speed:100,stopT:4e-3},
+    scope:{panes:[[['V:C1','v_o']],[['I:X1/L1','i σκέλους 1'],['I:X2/L1','i σκέλους 2']],[['Y:AM1','i_o (άθροισμα)']]],window:{unit:'T',n:4}},
+    meta:{N,shift,D,Vin,fs,L,C:Cc,R,Vo,Il}});
+   return pr;}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
  root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};

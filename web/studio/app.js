@@ -1,10 +1,11 @@
 'use strict';
 (function(){
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const P=window.Parts,eng=(v,u,d=4)=>P.eng(v,u,d);
+const P=window.Parts,SubC=window.SubCircuit,eng=(v,u,d=4)=>P.eng(v,u,d);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=(v,d=4)=>Number.isFinite(v)?Number(v.toPrecision(d)).toLocaleString('el-GR',{maximumFractionDigits:8}):'—';
-const S={tut:{id:'buck',options:{}},sim:null,running:false,frame:0,speed:100,stopT:0,error:null,last:0,limited:false};
+const S={tut:{id:'buck',options:{}},sim:null,running:false,frame:0,speed:100,stopT:0,error:null,last:0,limited:false,
+ nav:[],top:null,pfx:''}; // subcircuits (3.17): the levels open in the editor, the top document while inside, the path of the open instance
 let editor,scope;
 
 // ------------------------------------------------------------------ settings
@@ -17,13 +18,13 @@ function notice(text,kind='info'){const n=$('#notice');if(!text){n.hidden=true;r
 function warnings(list){const w=$('#netwarn');w.innerHTML=(list||[]).map(t=>`<span>⚠ ${esc(t)}</span>`).join('');w.hidden=!(list&&list.length);}
 
 // ------------------------------------------------------------------ simulation
-function project(){return {...editor.export(),tutRef:S.tutRef||null,sim:{hDiv:+$('#sim-step').value,speed:S.speed,stopT:S.stopT,method:$('#method').value},scope:{cfg:scope.cfg},tutorial:S.tut,...(S.scenCode?{scenario:S.scenCode}:{})};}
+function project(){return {...fullDoc(),tutRef:S.tutRef||null,sim:{hDiv:+$('#sim-step').value,speed:S.speed,stopT:S.stopT,method:$('#method').value},scope:{cfg:scope.cfg},tutorial:S.tut,...(S.scenCode?{scenario:S.scenCode}:{})};}
 function buildSim(fresh){
- const doc=editor.export();
+ const doc=fullDoc();
  try{
   if(!S.sim||fresh){S.sim=new MNA.Sim(doc,{hDiv:+$('#sim-step').value,method:$('#method').value});}
   else S.sim.load(doc,false);
-  S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);notice('');editor.setDiag(S.sim.net.diag);
+  S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);notice('');editor.setDiag(viewDiag(S.sim.net.diag));
  }catch(e){S.error=e.message;pause();
   if(e.needPython){notice(esc(e.message),'info'); // code blocks (3.3): load Pyodide once, then build again
    PyRT.load().then(()=>{buildSim(true);draw(true);if(!S.error)notice(`Η Python (Pyodide ${esc(PyRT.py?.version||'')}) είναι έτοιμη (${PyRT.source?.startsWith('http')?'από το CDN':'τοπικό αντίγραφο'}).`,'info');setTimeout(()=>notice(''),3000);})
@@ -53,7 +54,8 @@ function updateClock(){const s=S.sim;if(!s)return;$('#clock').textContent='t = '
  $('#cpu').hidden=!S.limited;$('#speed-note').textContent=S.speed==='max'?'όσο αντέχει ο υπολογιστής':`${eng(S.speed*s.T,'s',3)} ανά δευτερόλεπτο`;$('#step-note').textContent=s.var?`Δt = ${eng(s.hv,'s',3)} μεταβλητό (${eng(s.hMin,'s',2)} … ${eng(s.hCap||s.hMax,'s',2)}) · απορρίψεις ${s.nRej}`:'Δt = '+eng(s.h,'s',3)+' · T = '+eng(s.T,'s',3);}
 
 // live values on the schematic
-function liveOf(c){const s=S.sim;if(!s||S.error)return null;if(['GND','JUNC','TAGO','TAGI'].includes(c.type))return null;
+function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;if(['GND','JUNC','TAGO','TAGI','SUB','PORT','SIN','SOUT'].includes(c0.type))return null;
+ const c=S.pfx?{...c0,id:S.pfx+c0.id}:c0;
  const avg=S.running&&(S.speed==='max'||S.speed>=200);const val=k=>{if(avg){const p=s.lastPeriod(k);return p?p.avg:s.now(k);}return s.now(k);};
  if(c.type==='PWM'){const d=s.now('D:'+c.id);return {text:'D = '+fmt(d,4)};}
  if(c.type==='SH'){const q=s.shById.get(c.id);return {text:q?'h = '+eng(q.h,q.sig?'':q.qty==='V'?'V':'A',4):''};}
@@ -83,8 +85,8 @@ const OUT_SYM={IM:{w:'ω',te:'τ_e',psi:'|ψ_R|',thf:'θ_f',thr:'θ_r'},SM:{w:'�
 const OUT_TXT={IM:{w:'ταχύτητα ω',te:'ροπή τ_e',psi:'ροή δρομέα |ψ_R|',thf:'γωνία ροής θ_f',thr:'γωνία δρομέα θ_r'},SM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'ηλεκτρική γωνία δρομέα θ',id:'ρεύμα i_d',iq:'ρεύμα i_q'},SRM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'γωνία θ_e της φάσης 1',i1:'ρεύμα φάσης 1 (αισθητήρας)',i2:'ρεύμα φάσης 2 (αισθητήρας)',i3:'ρεύμα φάσης 3 (αισθητήρας)',i4:'ρεύμα φάσης 4 (αισθητήρας)'},FEST:{th:'γωνία θ̂',psi:'ροή |ψ̂|',w1:'συχνότητα ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ταχύτητα ω',te:'ροπή τ_e'},PLL:{th:'γωνία θ',w:'συχνότητα ω',amp:'πλάτος (v_d)'},CLARKE:{al:'συνιστώσα α',be:'συνιστώσα β'},IPARK:{al:'συνιστώσα α',be:'συνιστώσα β'},PARK:{d:'συνιστώσα d',q:'συνιστώσα q'},ICLARKE:{a:'φάση a',b:'φάση b',c:'φάση c'},SR:{q:'έξοδος Q',nq:'έξοδος Q̄'}};
 function outsOf(c){return Object.entries(P.sigPins(c)).filter(([,d])=>d.dir==='out').map(([k])=>k);}
 // ------------------------------------------------------------------ channels
-function chanLabel(key){const [pre,id,pin]=key.split(':');const c=editor.comp(id);const name=c?.label||id;
- if(pre==='VN'){const w=editor.doc.wires.find(w=>w.name&&((w.a.c===id&&w.a.p===pin)||(w.b.c===id&&w.b.p===pin)));return w?w.name:'v('+(c?.type==='JUNC'?'κόμβος '+id:name+'.'+pin)+')';}
+function chanLabel(key){const [pre,id,pin]=key.split(':');const c=compAt(id);const name=c?.label||id;
+ if(pre==='VN'){const w=(id.includes('/')?[]:topDoc().wires||[]).find(w=>w.name&&((w.a.c===id&&w.a.p===pin)||(w.b.c===id&&w.b.p===pin)));return w?w.name:'v('+(c?.type==='JUNC'?'κόμβος '+id:name+'.'+pin)+')';}
  if(pre==='Y'&&c?.type==='PY')return (pin||outsOf(c)[0]||'y')+'('+name+')';
  if(pre==='Y'&&c&&OUT_SYM[c.type]){const o=pin||outsOf(c)[0];return (OUT_SYM[c.type][o]||o)+'('+name+')';}
  if(/^PSI\d$/.test(pre))return 'ψ'+'₀₁₂₃₄₅₆₇₈₉'[+pre[3]]+'('+name+')';
@@ -92,7 +94,7 @@ function chanLabel(key){const [pre,id,pin]=key.split(':');const c=editor.comp(id
  const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',GS:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold',Y:c?.type==='VM'?'v':c?.type==='AM'?'i':c?.type==='SR'?'Q':'y'}[pre]||pre)+'('+name+')';}
 function addProbe(key,label){if(!S.sim)return;const ok=scope.addChannel(key,label||chanLabel(key));renderChannels();if(!ok)flash('#chan-list');else{flash('#scope-card');}draw(true);}
 function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash');}
-function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI')return [];
+function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI'||t==='SUB'||SubC.PORT_KIND[t])return [];
  if(t==='PY')return outsOf(c).map((o,k)=>['Y:','έξοδος '+o,k?':'+o:'']);
  if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:t==='IM'||t==='SM'?[...m,['I:','ρεύμα φάσης a'],['V:','πολική τάση v_ab']]:t==='SRM'?[...m,...Array.from({length:P.srmGeo({...P.defaults(t),...c.params})[0]},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα φάσης ${k+1}`],[(k?'V'+(k+1):'V')+':',`τάση φάσης ${k+1}`],['PSI'+(k+1)+':',`ροή φάσης ${k+1} ψ`]]).flat()]:m;}
  if(P.BLOCKS.has(t))return [['Y:',t==='DISP'?'τιμή εισόδου':t==='VM'?'τάση (μέτρηση)':t==='VP'?'τάση ως προς τη γη':t==='AM'?'ρεύμα a → b (μέτρηση)':t==='IP'?'ρεύμα a → b (τσιμπίδα)':t==='SR'?'έξοδος Q':'έξοδος y']];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
@@ -105,8 +107,8 @@ function signalsFor(c){const t=c.type;if(t==='GND'||t==='JUNC'||t==='TAGO'||t===
  if(t==='VAC3')return [['I:','ρεύμα φάσης a'],['Ib:','ρεύμα φάσης b'],['Ic:','ρεύμα φάσης c'],['V:','τάση v_an'],['Vb:','τάση v_bn'],['Vc:','τάση v_cn'],['Vab:','πολική τάση v_ab'],['P:','ισχύς που δίνει (3φ)']];if(t==='XFMR')return [['I:','ρεύμα πρωτεύοντος'],['V:','τάση πρωτεύοντος'],['I2:','ρεύμα δευτερεύοντος'],['V2:','τάση δευτερεύοντος'],['Im:','ρεύμα μαγνήτισης'],['P:','ισχύς']];return base;}
 function renderChannels(){
  const sel=$('#add-signal');const opts=['<option value="">+ Σήμα στο scope…</option>'];
- for(const c of editor.doc.components){const sg=signalsFor(c);if(!sg.length)continue;opts.push(`<optgroup label="${esc(c.label||c.id)} · ${esc(P.PARTS[c.type].name)}">`+sg.map(([p,n,f])=>`<option value="${p}${c.id}${f||''}">${esc(n)} ${esc(c.label||c.id)}</option>`).join('')+'</optgroup>');}
- const nodes=editor.doc.wires.filter(w=>w.name).map(w=>`<option value="VN:${w.a.c}:${w.a.p}">τάση κόμβου ${esc(w.name)}</option>`);if(nodes.length)opts.push('<optgroup label="Κόμβοι με όνομα">'+nodes.join('')+'</optgroup>');
+ for(const {c,id,label} of allComps()){const sg=signalsFor(c);if(!sg.length)continue;opts.push(`<optgroup label="${esc(label)} · ${esc(P.PARTS[c.type].name)}">`+sg.map(([p,n,f])=>`<option value="${p}${id}${f||''}">${esc(n)} ${esc(label)}</option>`).join('')+'</optgroup>');}
+ const nodes=(topDoc().wires||[]).filter(w=>w.name).map(w=>`<option value="VN:${w.a.c}:${w.a.p}">τάση κόμβου ${esc(w.name)}</option>`);if(nodes.length)opts.push('<optgroup label="Κόμβοι με όνομα">'+nodes.join('')+'</optgroup>');
  sel.innerHTML=opts.join('');
  const panes=scope.cfg.panes;
  $('#chan-list').innerHTML=panes.map((p,pi)=>`<div class="pane-row"><div class="pane-head"><b>Παράθυρο ${pi+1}</b><label class="mini"><input type="checkbox" data-pauto="${pi}" ${p.y?.auto===false?'':'checked'}> auto</label>${p.y?.auto===false?`<input class="ymin" data-pmin="${pi}" value="${p.y.min??''}" placeholder="min"><input class="ymax" data-pmax="${pi}" value="${p.y.max??''}" placeholder="max">`:''}<label class="mini"><input type="checkbox" data-pzero="${pi}" ${p.zero?'checked':''}> 0</label></div>
@@ -291,7 +293,7 @@ async function runBatch(){
  const tv=P.parseEng($('#bt-tend').value),tEnd=Number.isFinite(tv)&&tv>0?tv*1e-3:(S.sim.t>0?S.sim.t:S.stopT);
  if(!(tEnd>0)){btStatus('Δώσε διάρκεια ή τρέξε πρώτα την προσομοίωση: η σύγκριση γίνεται στο ίδιο διάστημα.','err');return;}
  const hmax=parseStep($('#bt-hmax').value);if(Number.isNaN(hmax)){btStatus('Μέγιστο βήμα: τιμή σε s (π.χ. 1u) ή «T/100».','err');return;}
- let req;try{req=MNA.exportForBatch(editor.export(),keys);}catch(e){btStatus(esc(e.message),'err');return;}
+ let req;try{req=MNA.exportForBatch(fullDoc(),keys);}catch(e){btStatus(esc(e.message),'err');return;}
  const method=$('#bt-method').value,rtol=P.parseEng($('#bt-rtol').value),atol=P.parseEng($('#bt-atol').value);
  $('#bt-run').disabled=true;btStatus(`Ο ${esc(method)} τρέχει στον server έως ${eng(tEnd,'s')}…`);const w0=performance.now();
  try{const r=await api('batch_sim',{net:req.net,channels:req.channels,t_end:tEnd,method,rtol:Number.isFinite(rtol)?rtol:1e-6,atol:Number.isFinite(atol)?atol:1e-9,max_step:hmax||0,max_points:30000});
@@ -391,7 +393,8 @@ function addPulses(keys){if(!S.sim||!keys.length)return;const panes=scope.cfg.pa
  if(pi<0)pi=panes.length===1&&!panes[0].ch.length?0:Math.min(panes.length,3);let any=false;for(const k of keys)any=scope.addChannel(k,chanLabel(k),pi)||any;renderChannels();flash(any?'#scope-card':'#chan-list');draw(true);}
 function pulseKeys(pwmId){const sw=switchesOf(pwmId);return sw.length?sw.map(c=>'GS:'+c.id):['G:'+pwmId];}
 function refreshControls(){
- const box=$('#live-controls');if(!box)return;const pw=editor.doc.components.filter(c=>c.type==='PWM');const meta=S.tutMeta||{};
+ const box=$('#live-controls');if(!box)return;
+ if(!atTop()){box.innerHTML='<div class="muted small">Μέσα σε υποκύκλωμα. Οι ζωντανές παράμετροι του κυκλώματος φαίνονται όταν βγεις (↑ στη γραμμή πάνω από το σχέδιο).</div>';renderLiveLog();updateLivePanel();return;}const pw=editor.doc.components.filter(c=>c.type==='PWM');const meta=S.tutMeta||{};
  const phase=(c,p)=>{if(p.mode==='spwm')return '';const ph=((+p.phase||0)%360+360)%360;
   return `<div class="ctl-sub"><label>φέρον ${p.carrier==='saw'&&p.mode!=='pp'?'πριονωτό':'τριγωνικό'} · φ <output data-phout="${c.id}">${fmt(ph,4)}° · ${eng(ph/360/(+p.fs||1),'s',3)}</output></label>
    <input type="range" min="0" max="360" step="1" value="${ph}" data-ph="${c.id}"><div class="ctl-btns">${[0,90,180,270].map(d=>`<button data-phset="${c.id}" data-val="${d}">${d}°</button>`).join('')}</div></div>`;};
@@ -421,7 +424,7 @@ function refreshControls(){
  if(scr.length){const a=+(scr[0].params?.alpha??30);box.innerHTML+=`<div class="ctl"><label>Θυρίστορ (${scr.length}) · α <output data-aout>${fmt(a,4)}°</output></label><input type="range" min="0" max="180" step="0.5" value="${a}" data-alpha><small>Ίδια γωνία έναυσης σε όλα· η μετατόπιση του καθενός μένει.</small></div>`;}
  // parameters pinned with 📌 in the parameters panel (3.7): a slider a decade each way around a base value, and the exact value
  const pinned=editor.doc.components.filter(c=>Array.isArray(c.live)&&c.live.length);
- box.innerHTML+=pinned.map(c=>c.live.map(k=>{const d=P.PARTS[c.type]?.params.find(x=>x.k===k);if(!d||d.type!=='num')return '';const v=numOf(c.params[k]??d.def),m=pinMap(c,k),key=c.id+'|'+k;
+ box.innerHTML+=pinned.map(c=>c.live.map(k=>{const d=partDef(c)?.params.find(x=>x.k===k);if(!d||d.type!=='num')return '';const v=numOf(c.params[k]??d.def),m=pinMap(c,k),key=c.id+'|'+k;
   return `<div class="ctl ctl-pin"><label>${esc(c.label||c.id)} · ${esc(d.label)} <output data-pout="${esc(key)}">${eng(v,d.unit||'',4)}</output></label><input type="range" min="0" max="${PSL}" step="1" value="${pinX(m,v)}" data-pr="${esc(key)}" aria-label="${esc((c.label||c.id)+' '+d.label)}">
    <div class="ctl-row"><input data-pv="${esc(key)}" value="${esc(P.eng(v,'',6).replace(/\s/g,''))}" inputmode="decimal" aria-label="τιμή"><button data-pc="${esc(key)}" title="Ο ρυθμιστής γύρω από την τρέχουσα τιμή (×0,1 … ×10)">⟲</button><button data-pu="${esc(key)}" title="Αφαίρεση από τις ζωντανές παράμετροι">✕</button></div></div>`;}).join('')).join('');
  if(!box.innerHTML)box.innerHTML='<div class="muted small">Χωρίς μπλοκ PWM, Sample & Hold ή θυρίστορ. Με 📌 στο πάνελ παραμέτρων μπαίνει εδώ οποιαδήποτε αριθμητική παράμετρος.</div>';
@@ -449,7 +452,7 @@ function refreshControls(){
  $$('#live-controls [data-ilv]').forEach(b=>b.onclick=()=>{const n=phasePw.length;phasePw.forEach((c,k)=>setPh(c.id,b.dataset.ilv==='shift'?+(360*k/n).toFixed(6):0,true));});
  $$('#live-controls [data-trig]').forEach(el=>el.onchange=()=>{const id=el.dataset.trig,c=editor.comp(id);if(!c)return;const from=c.params.trig;c.params.trig=el.value;S.sim?.setHold(id,{trig:el.value});editor.renderLabels();
   liveChange(id,'trig',el.value,`${c.label||id}: ${el.selectedOptions[0].textContent.split(' (')[0].split(' · ')[0]}`,from);saveLocal();if(S.theory)renderTheory();});
- const pinNow=(key,v,commit)=>{const [id,k]=key.split('|');const c=editor.comp(id);const d=P.PARTS[c?.type]?.params.find(x=>x.k===k);if(!c||!d||!Number.isFinite(v))return;
+ const pinNow=(key,v,commit)=>{const [id,k]=key.split('|');const c=editor.comp(id);const d=c&&partDef(c)?.params.find(x=>x.k===k);if(!c||!d||!Number.isFinite(v))return;
   const nv=+v.toPrecision(6);if(commit&&!S.pinDrag&&numOf(c.params[k]??d.def)===nv)return; // the same value again (e.g. change on blur after Enter)
   const from=String(c.params[k]??d.def);if(!S.pinDrag){editor.remember();S.pinDrag=true;}c.params[k]=nv;liveApply();editor.renderPart(c);editor.renderLabels();
   const o=box.querySelector(`[data-pout="${CSS.escape(key)}"]`);if(o)o.textContent=eng(c.params[k],d.unit||'',4);const t=box.querySelector(`[data-pv="${CSS.escape(key)}"]`);if(t&&document.activeElement!==t)t.value=P.eng(c.params[k],'',6).replace(/\s/g,'');
@@ -466,7 +469,7 @@ function refreshControls(){
 }
 // slider of a pinned parameter: logarithmic over [b/10, 10·b] for a positive base b, else linear around it
 const PSL=1000;
-function pinMap(c,k){const d=P.PARTS[c.type]?.params.find(x=>x.k===k);const b=c.liveBase?.[k]??numOf(c.params[k]??d?.def);return b>0?{log:true,lo:b/10,hi:b*10}:{log:false,lo:b-Math.max(1,Math.abs(b)),hi:b+Math.max(1,Math.abs(b))};}
+function pinMap(c,k){const d=partDef(c)?.params.find(x=>x.k===k);const b=c.liveBase?.[k]??numOf(c.params[k]??d?.def);return b>0?{log:true,lo:b/10,hi:b*10}:{log:false,lo:b-Math.max(1,Math.abs(b)),hi:b+Math.max(1,Math.abs(b))};}
 function pinX(m,v){const x=m.log?PSL*Math.log(Math.max(v,m.lo*1e-6)/m.lo)/Math.log(m.hi/m.lo):PSL*(v-m.lo)/(m.hi-m.lo);return Math.round(Math.min(PSL,Math.max(0,x)));}
 function pinV(m,x){return m.log?m.lo*Math.pow(m.hi/m.lo,x/PSL):m.lo+(m.hi-m.lo)*x/PSL;}
 
@@ -476,14 +479,17 @@ function placePopup(el,x,y){el.hidden=false;const r=el.getBoundingClientRect();c
 function fieldHTML(c,def,p){const v=p[def.k]??def.def;const id='f_'+def.k;
  if(def.type==='select')return `<select id="${id}" data-k="${def.k}">${def.options.map(([k,n])=>`<option value="${k}" ${String(v)===k?'selected':''}>${esc(n)}</option>`).join('')}</select>`;
  if(def.type==='bool')return `<input type="checkbox" id="${id}" data-k="${def.k}" ${v?'checked':''}>`;
- if(def.type==='ref'){const opts=editor.doc.components.filter(k=>def.kinds.includes(k.type)&&k.id!==c.id);return `<select id="${id}" data-k="${def.k}"><option value="">—</option>${opts.map(k=>`<option value="${k.id}" ${v===k.id?'selected':''}>${esc(k.label||k.id)} (${esc(P.PARTS[k.type].name)})</option>`).join('')}</select>`;}
+ if(def.type==='ref'){const opts=editor.doc.components.filter(k=>def.kinds.includes(k.type)&&k.id!==c.id);
+  // a reference that is not on this level: outside the open subcircuit (looked up outwards), or a path into an instance (3.17)
+  const far=v&&!opts.some(k=>k.id===v)?`<option value="${esc(v)}" selected>${esc(v)} (${String(v).includes('/')?'μέσα σε υποκύκλωμα':atTop()?'δεν υπάρχει':'έξω από το υποκύκλωμα'})</option>`:'';
+  return `<select id="${id}" data-k="${def.k}"><option value="">—</option>${opts.map(k=>`<option value="${k.id}" ${v===k.id?'selected':''}>${esc(k.label||k.id)} (${esc(P.PARTS[k.type].name)})</option>`).join('')}${far}</select>`;}
  if(def.type==='text')return `<input id="${id}" data-k="${def.k}" value="${esc(v)}" placeholder="${esc(def.ph||'')}">`;
  if(def.type==='code')return `<textarea id="${id}" data-k="${def.k}" class="code" rows="14" spellcheck="false">${esc(v)}</textarea>`;
  return `<input id="${id}" data-k="${def.k}" data-num="1" value="${esc(typeof v==='number'?P.eng(v,'',6).replace(/\s/g,''):v)}" inputmode="decimal">`;}
 function openInspector(id,x,y){
- const c=editor.comp(id);if(!c)return;const def=P.PARTS[c.type];const p={...P.defaults(c.type),...c.params};const ins=$('#inspector');
+ const c=editor.comp(id);if(!c)return;const def=partDef(c);const p={...pdefaults(c),...c.params};const ins=$('#inspector');
  const rows=def.params.filter(d=>!d.show||d.show(p)).map(d=>`<label class="frow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span>${fieldHTML(c,d,p)}${d.hint?`<small>${esc(d.hint)}</small>`:''}</label>`).join('');
- const sig=signalsFor(c).slice(0,4).map(([pre,n,f])=>`<button class="chip" data-probe="${pre}${c.id}${f||''}">⌁ ${esc(n)}</button>`).join('');
+ const sig=(S.pfx===null?[]:signalsFor(c)).slice(0,4).map(([pre,n,f])=>`<button class="chip" data-probe="${pre}${pid(c.id)}${f||''}">⌁ ${esc(n)}</button>`).join('');
  // signal inputs: a source can be chosen here instead of drawing a wire (3.0)
  const sigIns=Object.entries(P.sigPins(c)).filter(([,v])=>v.dir==='in').map(([k])=>k);
  const outs=editor.doc.components.filter(k=>k.id!==c.id).flatMap(k=>Object.entries(P.sigPins(k)).filter(([,v])=>v.dir==='out').map(([pin])=>({v:k.id+':'+pin,t:`${k.label||k.id}.${pin}`+(k.type==='TAGI'?` (ετικέτα «${k.params?.name||''}»)`:'')}))).sort((a,b)=>a.t.localeCompare(b.t,undefined,{numeric:true}));
@@ -531,29 +537,29 @@ function setProps(open){const el=$('#props');if(!el)return;el.classList.toggle('
  try{localStorage.setItem('pcl2-props',open?'1':'0');}catch{}if(open)renderProps();}
 function focusComp(id){const c=editor.comp(id);if(!c)return;editor.select([id],[]);editor.userView=true;editor.view.cx=c.x;editor.view.cy=c.y;editor.applyView();}
 function togglePin(id,k){const c=editor.comp(id);if(!c)return;editor.remember();const L=new Set(c.live||[]);
- if(L.has(k)){L.delete(k);if(c.liveBase)delete c.liveBase[k];}else{L.add(k);const d=P.PARTS[c.type].params.find(x=>x.k===k);const v=numOf(c.params[k]??d?.def);c.liveBase={...(c.liveBase||{}),[k]:Number.isFinite(v)?v:0};}
+ if(L.has(k)){L.delete(k);if(c.liveBase)delete c.liveBase[k];}else{L.add(k);const d=partDef(c).params.find(x=>x.k===k);const v=numOf(c.params[k]??d?.def);c.liveBase={...(c.liveBase||{}),[k]:Number.isFinite(v)?v:0};}
  if(L.size)c.live=[...L];else{delete c.live;delete c.liveBase;}saveLocal();refreshControls();renderProps();if(L.has(k))setLivePanel(true);}
 function renderProps(){const box=$('#props-body');if(!box||!propsOpen())return;
  box.querySelectorAll('details.psec').forEach(d=>{PS[d.dataset.sec]=d.open;}); // the toggle event may not have fired yet
  const sel=editor.selection(),act=document.activeElement,fk=box.contains(act)?act.dataset.k:null;let h;if(window.Addons&&Addons.frames.size)Addons.emit('selection',sel.c);
  const one=sel.c.length===1&&!sel.w.length?editor.comp(sel.c[0]):null;
  if(one&&one.type!=='JUNC')h=propsComp(one);else if(one)h=propsJunc(one);else if(sel.w.length===1&&!sel.c.length)h=propsWire(editor.wire(sel.w[0]));
- else if(sel.c.length+sel.w.length>1)h=propsMulti(sel);else h=propsCircuit();
+ else if(sel.c.length+sel.w.length>1)h=propsMulti(sel);else h=atTop()?propsCircuit():propsDef();
  box.innerHTML=h;
  box.querySelectorAll('details.psec').forEach(d=>d.ontoggle=()=>{PS[d.dataset.sec]=d.open;try{localStorage.setItem('pcl2-props-sec',JSON.stringify(PS));}catch{}});
  bindProps(box,one);if(fk)box.querySelector(`[data-k="${CSS.escape(fk)}"]`)?.focus();}
-function propsComp(c){const def=P.PARTS[c.type],p={...P.defaults(c.type),...c.params},live=new Set(c.live||[]),machine=['IM','SM','SRM','DCM'].includes(c.type);
+function propsComp(c){const def=partDef(c),p={...pdefaults(c),...c.params},live=new Set(c.live||[]),machine=['IM','SM','SRM','DCM'].includes(c.type),inDef=!atTop(),pub=inDef?publicOf(c.id):new Map();
  const secOf=d=>c.type==='PWM'&&CTL_K.has(d.k)?'ctl':INIT_K.has(d.k)?'init':MECH_K.has(d.k)?'mech':!machine&&LOSS_K.has(d.k)?'loss':'main';
  const groups=new Map();for(const d of def.params){if(d.show&&!d.show(p))continue;const g=secOf(d);if(!groups.has(g))groups.set(g,[]);groups.get(g).push(d);}
- const row=d=>`<div class="prow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span><span class="pin-in">${fieldHTML(c,d,p).replace(` id="f_${d.k}"`,'')}${d.type==='num'?`<button class="pinbtn${live.has(d.k)?' on':''}" data-pin-k="${d.k}" aria-pressed="${live.has(d.k)}" title="${live.has(d.k)?'Αφαίρεση από τις ζωντανές παράμετροι':'📌 Στις ζωντανές παράμετροι, με ρυθμιστή'}">📌</button>`:''}</span>${d.hint?`<small>${esc(d.hint)}</small>`:''}</div>`;
+ const row=d=>`<div class="prow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span><span class="pin-in">${fieldHTML(c,d,p).replace(` id="f_${d.k}"`,'')}${inDef?(['num','text','select','bool'].includes(d.type)?`<button class="pinbtn pubbtn${pub.has(d.k)?' on':''}" data-pub-k="${d.k}" aria-pressed="${pub.has(d.k)}" title="${pub.has(d.k)?'Δημόσια παράμετρος «'+esc(pub.get(d.k))+'» του υποκυκλώματος: κλικ για να μείνει εσωτερική':'Δημόσια παράμετρος του υποκυκλώματος: αλλάζει χωριστά σε κάθε instance'}">⤴</button>`:''):d.type==='num'?`<button class="pinbtn${live.has(d.k)?' on':''}" data-pin-k="${d.k}" aria-pressed="${live.has(d.k)}" title="${live.has(d.k)?'Αφαίρεση από τις ζωντανές παράμετροι':'📌 Στις ζωντανές παράμετροι, με ρυθμιστή'}">📌</button>`:''}</span>${d.hint?`<small>${esc(d.hint)}</small>`:''}</div>`;
  let h=`<div class="props-head"><div><small>${esc(def.name)}</small><input data-plabel value="${esc(c.label||c.id)}" aria-label="Όνομα στοιχείου"></div><button class="x" data-pclose title="Αποεπιλογή (Esc)">✕</button></div>`;
  for(const [g,title] of PSEC){const L=groups.get(g);if(L?.length)h+=psec('p-'+g,title,L.map(row).join(''),{def:g==='main',cnt:L.length});}
- if(!def.params.length)h+='<p class="muted small">Χωρίς παραμέτρους.</p>';
+ if(c.type==='SUB')h+=propsSub(c);else if(!def.params.length)h+='<p class="muted small">Χωρίς παραμέτρους.</p>';
  const sigIns=Object.entries(P.sigPins(c)).filter(([,v])=>v.dir==='in').map(([k])=>k);
  if(sigIns.length){const outs=editor.doc.components.filter(k=>k.id!==c.id).flatMap(k=>Object.entries(P.sigPins(k)).filter(([,v])=>v.dir==='out').map(([pin])=>({v:k.id+':'+pin,t:`${k.label||k.id}.${pin}`}))).sort((a,b)=>a.t.localeCompare(b.t,undefined,{numeric:true}));
   const wired=pin=>editor.wiresAt(c.id,pin).length>0;
   h+=psec('p-src','Συνδέσεις σημάτων',sigIns.map(pin=>{const v=c.params?.['in_'+pin]||'';return `<div class="prow"><span>Είσοδος ${esc(pin)}</span><span class="pin-in"><select data-src="${esc(pin)}"><option value="">${wired(pin)?'από σύρμα':'— (καμία)'}</option>${outs.map(o=>`<option value="${esc(o.v)}" ${o.v===v?'selected':''}>${esc(o.t)}</option>`).join('')}</select></span></div>`;}).join('')+'<small class="muted">Σύνδεση χωρίς καλώδιο: ισοδυναμεί με σύρμα.</small>',{cnt:sigIns.length});}
- const sig=signalsFor(c);if(sig.length)h+=psec('p-scope','Scope',`<div class="chips">${sig.map(([pre,n,f])=>`<button class="chip" data-probe="${pre}${c.id}${f||''}">⌁ ${esc(n)}</button>`).join('')}</div>`,{def:true});
+ const sig=S.pfx===null?[]:signalsFor(c);if(sig.length)h+=psec('p-scope','Scope',`<div class="chips">${sig.map(([pre,n,f])=>`<button class="chip" data-probe="${pre}${pid(c.id)}${f||''}">⌁ ${esc(n)}</button>`).join('')}</div>`,{def:true});
  const skip=S.sim?.net?.diag?.skipped.find(x=>x.id===c.id);if(skip)h+=`<p class="small bad">Εκτός επίλυσης: ${skip.why==='openI'?'πηγή ρεύματος σε ανοιχτό κύκλωμα':'χωρίς σύνδεση'}.</p>`;
  const tools=window.Addons?Addons.forType(c.type):[];
  if(tools.length||c.from)h+=psec('p-tools','Παράμετροι από κώδικα',(c.from?`<p class="from-tool">Από εργαλείο: ${Object.entries(c.from).map(([k,v])=>`${esc(k)} (${esc(v.tool||'')})`).join(', ')}</p>`:'')+
@@ -568,6 +574,7 @@ function propsWire(w){if(!w)return '';return `<div class="props-head"><div><smal
  <div class="chips"><button class="chip" data-probe="VN:${esc(w.a.c)}:${esc(w.a.p)}">⌁ Τάση κόμβου</button><button class="chip" data-wroute>↯ Αυτόματη δρομολόγηση</button></div>
  <p class="muted small">Για ρεύμα στο σύρμα: άφησε πάνω του ένα probe ρεύματος (μπαίνει σε σειρά). Για τάση: ένα probe τάσης ή βολτόμετρο.</p>`;}
 function propsMulti(sel){return `<div class="props-head"><div><small>Επιλογή</small><b>${sel.c.length} στοιχεία · ${sel.w.length} σύρματα</b></div><button class="x" data-pclose>✕</button></div>
+ ${sel.c.length?'<div class="chips"><button class="chip" data-group title="Τα επιλεγμένα στοιχεία γίνονται ένα υποκύκλωμα. Τα σύρματα που βγαίνουν από την επιλογή γίνονται θύρες.">▣ Υποκύκλωμα από την επιλογή (Ctrl+G)</button></div>':''}
  <ul class="diag-list">${sel.c.map(id=>editor.comp(id)).filter(c=>c&&c.type!=='JUNC').map(c=>`<li><button data-focus="${esc(c.id)}">${esc(c.label||c.id)}</button><span class="muted">${esc(P.PARTS[c.type].name)}</span></li>`).join('')}</ul>`;}
 function propsCircuit(){const d=S.sim?.net?.diag,doc=editor.doc,so=doc.solve||{},nC=doc.components.filter(c=>c.type!=='JUNC').length,lb=id=>esc(editor.comp(id)?.label||id);
  let h=`<div class="props-head"><div><small>Κύκλωμα</small><b>${esc(tutorial().title||'Κύκλωμα')}</b></div></div><p class="muted small">${nC} στοιχεία · ${doc.wires.length} σύρματα${S.sim&&!S.error?' · '+S.sim.net.nNodes+' κόμβοι':''}. Διάλεξε στοιχείο ή σύρμα για τις παράμετρές του.</p>`;
@@ -606,12 +613,16 @@ function bindProps(box,c){
  box.querySelectorAll('[data-probe]').forEach(b=>b.onclick=()=>addProbe(b.dataset.probe));
  box.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>Addons.open(b.dataset.tool,{target:c.id}));
  box.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>focusComp(b.dataset.focus));
+ box.querySelector('[data-group]')?.addEventListener('click',()=>groupSel());
  box.querySelectorAll('[data-solve]').forEach(el=>el.onchange=()=>{const k=el.dataset.solve;let v=el.value;if(k==='rleak'||k==='tbase'){v=v.trim()?P.parseEng(v):'';if(v!==''&&!(v>0)){el.classList.add('bad');return;}}if((k==='rtol'||k==='hmax')&&v!=='')v=+v;editor.setSolve({[k]:v});});
  box.querySelectorAll('[data-stepcheck]').forEach(b=>b.onclick=()=>{if(S.sim&&!S.error)S.sim.stepCheck();renderDiag();openDiag();});
  box.querySelectorAll('[data-eset]').forEach(el=>el.onchange=()=>{editor.settings[el.dataset.eset]=el.checked;saveSettings();});
+ if(!c&&!atTop())bindDef(box);
  if(c&&c.type!=='JUNC'){const id=c.id;
   box.querySelector('[data-plabel]')?.addEventListener('change',e=>{editor.setParams(id,{},{label:e.target.value||id});renderChannels();});
   box.querySelectorAll('[data-pin-k]').forEach(b=>b.onclick=()=>togglePin(id,b.dataset.pinK));
+  box.querySelectorAll('[data-pub-k]').forEach(b=>b.onclick=()=>togglePublic(id,b.dataset.pubK));
+  bindSub(box,c);
   box.querySelectorAll('[data-src]').forEach(el=>el.onchange=()=>{editor.setParams(id,{['in_'+el.dataset.src]:el.value||undefined});if(!el.value)delete editor.comp(id).params['in_'+el.dataset.src];editor.renderPins();});
   box.querySelectorAll('[data-k]').forEach(el=>{const go=()=>{const k=el.dataset.k;let v;if(el.type==='checkbox')v=el.checked;else if(el.dataset.num){v=P.parseEng(el.value);if(!Number.isFinite(v)){el.classList.add('bad');return;}el.classList.remove('bad');}else v=el.value;
     if(k==='dsched'||k==='sched'||k==='ref'||(k==='v'&&c.type==='CONST')){if(v&&!P.parseSched(v)){el.classList.add('bad');return;}el.classList.remove('bad');}
@@ -832,18 +843,20 @@ function initScenarios(){const t=$('#scen-code');if(!t)return;t.value=S.scenCode
  $('#scen-run').onclick=scenRun;$('#scen-stop').onclick=scenStop;document.querySelectorAll('[data-stab]').forEach(b=>b.onclick=()=>scenTab(b.dataset.stab));
  try{if(localStorage.getItem('pcl-scen-open')==='1')$('#scen').open=true;}catch(e){}$('#scen').addEventListener('toggle',()=>{try{localStorage.setItem('pcl-scen-open',$('#scen').open?'1':'0');}catch(e){}});
  renderScenFiles();}
-function liveApply(){if(!S.sim)return;try{S.sim.load(editor.export(),false);S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);editor.setDiag(S.sim.net.diag);}catch(e){S.error=e.message;pause();notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');}scheduleStepCheck();}
+function liveApply(){if(!S.sim)return;try{S.sim.load(fullDoc(),false);S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);editor.setDiag(viewDiag(S.sim.net.diag));}catch(e){S.error=e.message;pause();notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');}scheduleStepCheck();}
 
 // ------------------------------------------------------------------ context menu
 function closeMenu(){$('#ctx').hidden=true;}
 function openMenu(ev){
  const m=$('#ctx');let items=[];
  if(ev.kind==='comp'){const c=editor.comp(ev.id);if(!c)return;
-  if(c.type!=='JUNC')items.push(...signalsFor(c).map(([pre,n,f])=>({t:'⌁ Scope: '+n,f:()=>addProbe(pre+c.id+(f||''))})));
-  if(c.type==='JUNC')items.push({t:'⌁ Scope: τάση κόμβου',f:()=>addProbe('VN:'+c.id+':j')});
+  if(c.type!=='JUNC'&&S.pfx!==null)items.push(...signalsFor(c).map(([pre,n,f])=>({t:'⌁ Scope: '+n,f:()=>addProbe(pre+pid(c.id)+(f||''))})));
+  if(c.type==='JUNC'&&S.pfx!==null)items.push({t:'⌁ Scope: τάση κόμβου',f:()=>addProbe('VN:'+pid(c.id)+':j')});
+  if(c.type==='SUB')items.push(...subMenu(c));
+  {const n=editor.selection().c.filter(id=>editor.comp(id)?.type!=='JUNC').length;if(n&&editor.selection().c.includes(c.id))items.push({t:'▣ Υποκύκλωμα από την επιλογή'+(n>1?` (${n})`:''),k:'Ctrl+G',f:()=>groupSel()});}
   if(c.type!=='JUNC')items.push('-',{t:'Ρυθμίσεις…',k:'διπλό κλικ',f:()=>openInspector(c.id,ev.x,ev.y)},{t:'Περιστροφή',k:'R',f:()=>editor.rotateSel()},{t:'Καθρέφτης',k:'M',f:()=>editor.mirrorSel()},{t:'Διπλότυπο',k:'Ctrl+D',f:()=>{editor.copySel();editor.paste(20,20);}});
   items.push({t:'Διαγραφή',k:'Del',f:()=>editor.deleteSel(),cls:'danger'});}
- else if(ev.kind==='wire'){const w=editor.wire(ev.id);if(!w)return;items.push({t:'⌁ Scope: τάση κόμβου',f:()=>addProbe('VN:'+w.a.c+':'+w.a.p,w.name||undefined)},'-',{t:'Όνομα / χρώμα…',k:'διπλό κλικ',f:()=>openWireInspector(w.id,ev.x,ev.y)},{t:'Αυτόματη δρομολόγηση',f:()=>{editor.remember();editor.route(w);editor.render();}},{t:'Διαγραφή',k:'Del',f:()=>editor.deleteSel(),cls:'danger'});}
+ else if(ev.kind==='wire'){const w=editor.wire(ev.id);if(!w)return;if(S.pfx!==null)items.push({t:'⌁ Scope: τάση κόμβου',f:()=>addProbe('VN:'+pid(w.a.c)+':'+w.a.p,w.name||undefined)},'-');items.push({t:'Όνομα / χρώμα…',k:'διπλό κλικ',f:()=>openWireInspector(w.id,ev.x,ev.y)},{t:'Αυτόματη δρομολόγηση',f:()=>{editor.remember();editor.route(w);editor.render();}},{t:'Διαγραφή',k:'Del',f:()=>editor.deleteSel(),cls:'danger'});}
  else items.push({t:'Επικόλληση',k:'Ctrl+V',f:()=>editor.paste(),dis:!editor.clip},{t:'Επιλογή όλων',k:'Ctrl+A',f:()=>editor.select(editor.doc.components.map(c=>c.id),editor.doc.wires.map(w=>w.id))},{t:'Προσαρμογή προβολής',k:'F',f:()=>editor.fit()},'-',
   ...['R','L','C','D','SW','VDC'].map(t=>({t:'+ '+P.PARTS[t].name,f:()=>{const c=editor.addPart(t,Math.round(ev.world[0]/10)*10,Math.round(ev.world[1]/10)*10);void c;}})),'-',
   {t:'╱ Σύρμα από εδώ',k:'W',f:()=>{editor.setWireTool(true);editor.startFreeWire(ev.world);}},{t:'Επιλογές επίλυσης (ασύνδετα, αιωρούμενα)…',f:()=>{editor.select([],[]);PS['c-solve']=true;setProps(true);}});
@@ -852,7 +865,7 @@ function openMenu(ev){
 
 // ------------------------------------------------------------------ hover readout on the schematic
 let hoverComp=null,hoverPos=[0,0];
-function updateHover(){const tip=$('#tip');if(!hoverComp||!S.sim){tip.hidden=true;return;}const c=editor.comp(hoverComp);if(!c||['JUNC','GND','TAGO','TAGI'].includes(c.type)){tip.hidden=true;return;}
+function updateHover(){const tip=$('#tip');if(!hoverComp||!S.sim||S.pfx===null){tip.hidden=true;return;}const c0=editor.comp(hoverComp),c=c0&&{...c0,id:pid(c0.id)};if(!c||['JUNC','GND','TAGO','TAGI','SUB','PORT','SIN','SOUT'].includes(c.type)){tip.hidden=true;return;}
  const s=S.sim;let html=`<b>${esc(c.label||c.id)}</b>`;
  if(c.type==='PWM')html+=`<div>D = ${fmt(s.now('D:'+c.id),5)} · φέρον c = ${fmt(s.now('CAR:'+c.id),4)}</div>${c.params.mode==='pi'?`<div>ref ${eng(s.now('REF:'+c.id))} · μέτρ. ${eng(s.now('MEAS:'+c.id))}</div>`:''}`;
  else if(c.type==='DCM'){const rows=[['ω','Y:'+c.id,'rad/s'],['τ_e','Y:'+c.id+':te','N·m'],['i_a','I:'+c.id,'A'],['v_a','V:'+c.id,'V']];
@@ -865,12 +878,146 @@ function updateHover(){const tip=$('#tip');if(!hoverComp||!S.sim){tip.hidden=tru
   html+='<table>'+rows.map(([n,k,u])=>`<tr><td>${n}</td><td>${eng(s.now(k),u)}</td><td class="muted">⌀ ${eng(lp(k)?.avg,u)}</td></tr>`).join('')+'</table>';}
  tip.innerHTML=html;tip.hidden=false;tip.style.left=(hoverPos[0]+16)+'px';tip.style.top=(hoverPos[1]+16)+'px';}
 
+// ------------------------------------------------------------------ subcircuits (3.17, ROADMAP §9)
+// The editor shows one level: the circuit, or a definition opened from an instance (S.nav). The simulation always runs on
+// the whole project (fullDoc), so inside instance X1 the live values are those of X1 (S.pfx = 'X1/'). A definition
+// opened from the library (no instance) has no live values (S.pfx = null). Leaving writes the definition back and
+// copies its ports to the instances (SubCircuit.sync); the whole visit is one step of undo in the circuit.
+const atTop=()=>!S.nav.length;
+function topDoc(){return atTop()?editor.doc:S.top;}
+function defsOf(){return topDoc().subcircuits||{};}
+const pid=id=>(S.pfx||'')+id;
+function fullDoc(){if(atTop())return editor.export();const top=JSON.parse(JSON.stringify(S.top)),cur=S.nav[S.nav.length-1],e=editor.export();
+ top.subcircuits[cur.name]={...top.subcircuits[cur.name],components:e.components,wires:e.wires};return top;}
+function commitView(){if(atTop())return;const cur=S.nav[S.nav.length-1],e=editor.export(),d=S.top.subcircuits[cur.name];if(!d)return;d.components=e.components;d.wires=e.wires;}
+// the diagnostics of the flat circuit, for the level in the editor (X1/R1 → X1 in the circuit, → R1 inside X1)
+function viewDiag(d){if(!d)return d;const pf=S.pfx;if(pf===null)return null;
+ const rel=id=>{const r=pf?(id.startsWith(pf)?id.slice(pf.length):null):id;return r;};
+ return {...d,skipped:d.skipped.map(x=>({...x,id:rel(x.id)?.split('/')[0]})).filter(x=>x.id),open:d.open.map(k=>{const i=k.lastIndexOf(':'),r=rel(k.slice(0,i));return r&&!r.includes('/')?r+k.slice(i):null;}).filter(Boolean)};}
+// a part by path (X1/L1), with the label of the path and the values of that instance
+function compAt(path){const parts=String(path).split('/'),defs=defsOf();let list=topDoc().components||[],c=null;const lbl=[];
+ for(let i=0;i<parts.length;i++){c=list.find(k=>k.id===parts[i]);if(!c)return null;lbl.push(c.label||c.id);
+  if(i<parts.length-1){const d=c.type==='SUB'&&defs[c.params?.def];if(!d)return null;list=SubC.innerParts(d,c);}}
+ return {...c,label:lbl.join('/')};}
+// every part of the circuit, inside instances too: [{c, id (path), label}]
+function allComps(){const doc=atTop()?editor.doc:fullDoc(),defs=doc.subcircuits||{},out=[];
+ const walk=(list,pfx,lp,depth)=>{for(const c of list){if(c.type==='SUB'){const d=defs[c.params?.def];if(d&&depth<8)walk(SubC.innerParts(d,c),pfx+c.id+'/',lp+(c.label||c.id)+'/',depth+1);continue;}
+  out.push({c,id:pfx+c.id,label:lp+(c.label||c.id)});}};
+ walk(doc.components||[],'','',0);return out;}
+// parameters of a part for the forms: an instance has the public parameters of its definition
+function partDef(c){if(c?.type!=='SUB')return P.PARTS[c?.type];const d=defsOf()[c.params?.def];
+ return {name:'Υποκύκλωμα «'+(d?.title||c.params?.def||'?')+'»',params:(d?.params||[]).map(pp=>({k:pp.k,label:pp.label||pp.k,unit:pp.unit||'',type:pp.type||'num',options:pp.options,def:pp.def,hint:pp.hint}))};}
+function pdefaults(c){if(c.type!=='SUB')return P.defaults(c.type);const o={def:''};for(const d of partDef(c).params)o[d.k]=d.def;return o;}
+function subParams(name){const d=defsOf()[name];if(!d)return null;return {def:name,$ports:SubC.portsOf(d),$title:String(d.title||name)};}
+// a definition cannot contain itself, directly or through another
+function placeOk(t){if(t.type!=='SUB'||atTop())return true;const cur=S.nav[S.nav.length-1].name,cl=SubC.closure({subcircuits:defsOf()},t.params?.def);
+ if(t.params?.def===cur||cl[cur]){notice(`Το υποκύκλωμα «${esc(t.params?.def)}» δεν μπαίνει μέσα στο «${esc(cur)}»: θα περιείχε τον εαυτό του.`,'error');setTimeout(()=>notice(''),4000);return false;}return true;}
+function renameChannels(f){for(const pn of scope.cfg.panes)for(const ch of pn.ch){const [pre,...rest]=ch.key.split(':');const id=rest[0],n=f(id);if(n&&n!==id){rest[0]=n;ch.key=[pre,...rest].join(':');ch.label=chanLabel(ch.key);}}renderChannels();}
+// the open level as a document with the definitions (inside a definition: its parts + the project's definitions)
+function levelDoc(){const e=editor.export();return atTop()?e:{...e,subcircuits:JSON.parse(JSON.stringify(S.top.subcircuits||{}))};}
+function applyLevel(pr,sel){if(atTop()){editor.replaceDoc(pr,sel);return;}const {subcircuits,...rest}=pr;S.top.subcircuits=subcircuits;delete rest.solve;editor.replaceDoc(rest,sel);}
+function groupSel(){const sel=editor.selection().c;
+ if(!sel.length){notice('Διάλεξε πρώτα τα στοιχεία του υποκυκλώματος (κλικ ή ορθογώνιο), και μετά Ctrl+G.','info');setTimeout(()=>notice(''),3000);return;}
+ let r;try{r=SubC.create(levelDoc(),sel);}catch(e){notice(esc(e.message),'error');return;}
+ applyLevel(r.project,[r.id]);const pf=S.pfx||'';if(S.pfx!==null)renameChannels(id=>{const h=id.startsWith(pf)?id.slice(pf.length):null;if(h===null)return id;const head=h.split('/')[0];return r.moved.has(head)?pf+r.id+'/'+h:id;});
+ renderPalette();notice(`Νέο υποκύκλωμα ${esc(r.id)} (ορισμός «${esc(r.name)}», ${r.project.subcircuits[r.name].components.filter(c=>SubC.PORT_KIND[c.type]).length} θύρες). Διπλό κλικ για να το ανοίξεις.`,'info');setTimeout(()=>notice(''),5000);}
+function expandSub(id){let r;try{r=SubC.expand(levelDoc(),id);}catch(e){notice(esc(e.message),'error');return;}
+ applyLevel(r.project,[...r.ids.values()]);const pf=pid(id)+'/';if(S.pfx!==null)renameChannels(k=>{if(!k.startsWith(pf))return k;const rest=k.slice(pf.length),h=rest.split('/')[0];return r.ids.has(h)?(S.pfx||'')+r.ids.get(h)+rest.slice(h.length):k;});
+ notice(`Το ${esc(id)} έγινε ανοιχτό κύκλωμα (${r.ids.size} στοιχεία). Ο ορισμός μένει στη βιβλιοθήκη του project.`,'info');setTimeout(()=>notice(''),4000);}
+function uniqueSub(id){let r;try{r=SubC.makeUnique(levelDoc(),id);}catch(e){notice(esc(e.message),'error');return;}applyLevel(r.project,[id]);renderPalette();renderProps();}
+function subMenu(c){const name=c.params?.def,inner=S.pfx===null?[]:allComps().filter(x=>x.id.startsWith(pid(c.id)+'/'));
+ return ['-',{t:'⧉ Άνοιγμα του υποκυκλώματος',k:'διπλό κλικ',f:()=>enterSub(name,S.pfx===null?null:pid(c.id))},{t:'Ανάπτυξη σε ανοιχτό κύκλωμα',k:'Ctrl+Shift+G',f:()=>expandSub(c.id)},
+  {t:'Δικός του ορισμός (αντίγραφο)',f:()=>uniqueSub(c.id)},...inner.slice(0,6).flatMap(x=>signalsFor(x.c).slice(0,1).map(([pre,n,f])=>({t:`⌁ Scope: ${n} ${x.label}`,f:()=>addProbe(pre+x.id+(f||''))})))];}
+// open a definition (inst = path of the instance, or null for the definition only)
+function enterSub(name,inst){const d=defsOf()[name];if(!d){notice(`Δεν υπάρχει ο ορισμός «${esc(name)}».`,'error');return;}
+ closeInspector();closeMenu();
+ if(atTop()){S.top=editor.export();S.topUndo={u:editor.undoStack.slice(),r:editor.redoStack.slice(),before:editor.snapshot(),view:{...editor.view},user:editor.userView};}else commitView();
+ S.nav.push({name,inst});S.pfx=inst?inst+'/':null;
+ editor.load({components:S.top.subcircuits[name].components||[],wires:S.top.subcircuits[name].wires||[]});
+ if(S.sim)editor.setDiag(viewDiag(S.sim.net.diag));renderCrumbs();renderPalette();refreshControls();renderProps();editor.svg.focus({preventScroll:true});}
+function leaveSub(level=0){if(atTop())return;commitView();while(S.nav.length>level)S.nav.pop();SubC.sync(S.top);
+ if(atTop()){const top=S.top,u=S.topUndo;S.top=null;S.pfx='';editor.load(top,{keepView:true});
+  if(u){editor.undoStack=u.u;editor.redoStack=u.r;if(editor.snapshot()!==u.before){editor.undoStack.push(u.before);editor.redoStack=[];}editor.view=u.view;editor.userView=u.user;editor.applyView();}
+  S.topUndo=null;}
+ else{const cur=S.nav[S.nav.length-1];S.pfx=cur.inst?cur.inst+'/':null;const d=S.top.subcircuits[cur.name];editor.load({components:d.components||[],wires:d.wires||[]});}
+ renderCrumbs();renderPalette();buildSim(false);renderChannels();if(atTop()&&S.theory)runTheory();}
+function renderCrumbs(){let b=$('#crumbs');if(!b){b=document.createElement('nav');b.id='crumbs';b.className='crumbs';b.setAttribute('aria-label','Επίπεδα υποκυκλωμάτων');$('#canvas').appendChild(b);}
+ if(atTop()){b.hidden=true;b.innerHTML='';return;}b.hidden=false;const defs=defsOf();
+ const cur=S.nav[S.nav.length-1],n=SubC.instances({...S.top,subcircuits:defs},cur.name).length;
+ b.innerHTML=`<button data-lvl="0" title="Πίσω στο κύκλωμα">⌂ Κύκλωμα</button>`+S.nav.map((x,i)=>`<span>›</span><button data-lvl="${i+1}" ${i===S.nav.length-1?'aria-current="true"':''}>${esc(x.inst?x.inst.split('/').pop():'ορισμός')} · ${esc(defs[x.name]?.title||x.name)}</button>`).join('')+
+  `<span class="crumb-note">${n>1?`κοινός ορισμός: οι αλλαγές εδώ ισχύουν και στα ${n} instances`:'αλλαγές στον ορισμό του υποκυκλώματος'}${S.pfx===null?' · χωρίς ζωντανές τιμές (ανοιχτό από τη βιβλιοθήκη)':''}</span><button data-lvl="${S.nav.length-1}" title="Ένα επίπεδο πάνω">↑ Έξοδος</button>`;
+ b.querySelectorAll('[data-lvl]').forEach(x=>x.onclick=()=>{const l=+x.dataset.lvl;if(l<S.nav.length)leaveSub(l);});}
+// the public parameters of a definition: which inner (part, parameter) each one sets
+function curDef(){return atTop()?null:S.top.subcircuits[S.nav[S.nav.length-1].name];}
+function publicOf(cid){const d=curDef(),m=new Map();for(const pp of d?.params||[])for(const [c,k] of pp.bind||[])if(c===cid)m.set(k,pp.k);return m;}
+function togglePublic(cid,k){const d=curDef();if(!d)return;const c=editor.comp(cid),pd=P.PARTS[c?.type]?.params.find(x=>x.k===k);if(!c||!pd)return;d.params=d.params||[];
+ const has=d.params.find(pp=>(pp.bind||[]).some(([a,b])=>a===cid&&b===k));
+ if(has){has.bind=has.bind.filter(([a,b])=>!(a===cid&&b===k));if(!has.bind.length)d.params=d.params.filter(pp=>pp!==has);}
+ else{const same=d.params.find(pp=>pp.k===k&&(pp.type||'num')===pd.type);
+  if(same)same.bind.push([cid,k]);
+  else{let key=k;const used=new Set(d.params.map(pp=>pp.k));if(used.has(key)||!SubC.okName(key))key=cid+'_'+k;
+   d.params.push({k:key,label:`${pd.label} (${c.label||cid})`,unit:pd.unit||'',type:pd.type,...(pd.options?{options:pd.options}:{}),def:c.params[k]??pd.def,bind:[[cid,k]]});}}
+ buildSim(false);saveLocal();renderProps();}
+function propsSub(c){const d=defsOf()[c.params?.def],own=Object.entries(c.params||{}).filter(([k])=>k.includes('.')&&!k.startsWith('$'));
+ const n=SubC.instances({...topDoc(),subcircuits:defsOf()},c.params?.def).length;
+ let h=psec('p-sub','Υποκύκλωμα',`<div class="prow"><span>Ορισμός</span><span class="pin-in"><select data-subdef>${Object.entries(defsOf()).map(([k,v])=>`<option value="${esc(k)}" ${k===c.params?.def?'selected':''}>${esc(v.title||k)}</option>`).join('')}${d?'':`<option selected>${esc(c.params?.def||'—')} (λείπει)</option>`}</select></span></div>
+  ${d?`<p class="small muted">${esc(d.desc||'')}${d.desc?' · ':''}έκδοση ${esc(d.version||'1')} · ${(d.components||[]).filter(k=>SubC.PORT_KIND[k.type]).length} θύρες · ${n} instance${n>1?'s':''} στο project</p>`:'<p class="small bad">Ο ορισμός λείπει από το project: το υποκύκλωμα μένει εκτός επίλυσης.</p>'}
+  <div class="chips"><button class="chip" data-subopen>⧉ Άνοιγμα</button><button class="chip" data-subexp title="Ctrl+Shift+G">Ανάπτυξη</button>${n>1?'<button class="chip" data-subuniq title="Αντίγραφο του ορισμού μόνο για αυτό το instance">Δικός του ορισμός</button>':''}</div>`,{def:true});
+ if(d&&!(d.params||[]).length)h+='<p class="muted small">Χωρίς δημόσιες παραμέτρους. Μέσα στο υποκύκλωμα, το ⤴ δίπλα σε μια παράμετρο την κάνει δημόσια.</p>';
+ if(own.length)h+=psec('p-subown','Τιμές μόνο για αυτό το instance',own.map(([k,v])=>`<div class="prow"><span>${esc(k)}</span><span class="pin-in"><input data-subown="${esc(k)}" value="${esc(v)}"><button class="pinbtn" data-subdel="${esc(k)}" title="Αφαίρεση (ισχύει η τιμή του ορισμού)">✕</button></span></div>`).join('')+'<small class="muted">Από σενάριο ή <code>p.set("X1/L1.L", …)</code>. Υπερισχύουν των δημόσιων παραμέτρων.</small>',{cnt:own.length});
+ return h;}
+function bindSub(box,c){if(c?.type!=='SUB')return;const id=c.id;
+ box.querySelector('[data-subopen]')?.addEventListener('click',()=>enterSub(c.params.def,S.pfx===null?null:pid(id)));
+ box.querySelector('[data-subexp]')?.addEventListener('click',()=>expandSub(id));
+ box.querySelector('[data-subuniq]')?.addEventListener('click',()=>uniqueSub(id));
+ box.querySelector('[data-subdef]')?.addEventListener('change',e=>{const q=subParams(e.target.value);if(q&&placeOk({type:'SUB',params:q}))editor.setParams(id,q);renderProps();});
+ box.querySelectorAll('[data-subown]').forEach(el=>el.onchange=()=>{const v=el.value.trim(),x=P.parseEng(v);editor.setParams(id,{[el.dataset.subown]:v!==''&&Number.isFinite(x)&&/^[-+0-9.eE]+$/.test(v)?x:v});});
+ box.querySelectorAll('[data-subdel]').forEach(b=>b.onclick=()=>{editor.remember();delete editor.comp(id).params[b.dataset.subdel];editor.changed('param');renderProps();});}
+// nothing selected inside a definition: the definition itself
+function propsDef(){const name=S.nav[S.nav.length-1].name,d=curDef(),ports=SubC.portsOf({components:editor.doc.components}),n=SubC.instances({...S.top,subcircuits:S.top.subcircuits},name).length;
+ const KIND={el:'ηλεκτρική',in:'είσοδος σήματος',out:'έξοδος σήματος'},SIDE={l:'αριστερά',r:'δεξιά',t:'πάνω',b:'κάτω'};
+ let h=`<div class="props-head"><div><small>Ορισμός υποκυκλώματος «${esc(name)}»</small><input data-dk="title" value="${esc(d.title||name)}" aria-label="Τίτλος"></div><button class="x" data-subup title="Έξοδος από το υποκύκλωμα">↑</button></div>`;
+ h+=psec('d-main','Ορισμός',`<div class="prow"><span>Περιγραφή</span><span class="pin-in"><input data-dk="desc" value="${esc(d.desc||'')}"></span></div><div class="prow"><span>Έκδοση</span><span class="pin-in"><input data-dk="version" value="${esc(d.version||'1')}"></span></div>
+  <p class="small muted">${n} instance${n===1?'':'s'} στο project. Οι αλλαγές στα στοιχεία και στα σύρματα ισχύουν σε όλα.</p>`,{def:true});
+ h+=psec('d-ports','Θύρες (ακροδέκτες του συμβόλου)',ports.length?`<ul class="diag-list">${ports.map(p=>`<li><button data-focus="${esc(p.id)}">${esc(p.name)}</button><span class="muted">${KIND[p.kind]} · ${SIDE[p.side]}</span></li>`).join('')}</ul>`:'<p class="small muted">Καμία θύρα. Βάλε θύρες από την ομάδα «Υποκυκλώματα» της παλέτας: ηλεκτρική, είσοδος ή έξοδος σήματος.</p>',{def:true,cnt:ports.length});
+ const pp=d.params||[];
+ h+=psec('d-pub','Δημόσιες παράμετροι',(pp.length?pp.map((q,i)=>`<div class="prow"><span><input data-pp="${i}" data-pf="label" value="${esc(q.label||q.k)}" aria-label="Ετικέτα"> <em>${esc(q.unit||'')}</em></span><span class="pin-in"><input data-pp="${i}" data-pf="def" value="${esc(q.def??'')}" aria-label="Προεπιλογή" title="Προεπιλογή"><button class="pinbtn" data-ppdel="${i}" title="Αφαίρεση">✕</button></span>
+   <small>όνομα <input class="pp-k" data-pp="${i}" data-pf="k" value="${esc(q.k)}" aria-label="Όνομα"> → ${(q.bind||[]).map(([c,k])=>esc(c+'.'+k)).join(', ')||'—'}</small></div>`).join(''):'<p class="small muted">Καμία. Διάλεξε ένα στοιχείο και πάτα ⤴ δίπλα σε μια παράμετρό του: γίνεται δημόσια και αλλάζει χωριστά σε κάθε instance. Ίδιο όνομα σε δύο στοιχεία = μία κοινή παράμετρος.</p>'),{def:true,cnt:pp.length});
+ h+=`<div class="chips"><button class="chip" data-subup>↑ Έξοδος</button><button class="chip" data-subexport title="Ο ορισμός (και όσοι χρησιμοποιεί) σε αρχείο, για άλλο project">⇩ Εξαγωγή ορισμού</button></div>`;
+ return h;}
+function bindDef(box){const d=curDef();if(!d)return;const name=S.nav[S.nav.length-1].name,redo=()=>{buildSim(false);saveLocal();renderCrumbs();renderProps();};
+ box.querySelectorAll('[data-subup]').forEach(b=>b.onclick=()=>leaveSub(S.nav.length-1));
+ box.querySelector('[data-subexport]')?.addEventListener('click',()=>exportDef(name));
+ box.querySelectorAll('[data-dk]').forEach(el=>el.onchange=()=>{d[el.dataset.dk]=el.value;redo();renderPalette();});
+ box.querySelectorAll('[data-pp]').forEach(el=>el.onchange=()=>{const q=d.params[+el.dataset.pp],f=el.dataset.pf;let v=el.value.trim();
+  if(f==='k'){if(!SubC.okName(v)||d.params.some(x=>x!==q&&x.k===v)){el.classList.add('bad');return;}
+   // the instances keep their values under the new name
+   for(const {comp} of SubC.instances({...S.top,subcircuits:S.top.subcircuits},name))if(comp.params&&q.k in comp.params){comp.params[v]=comp.params[q.k];delete comp.params[q.k];}}
+  if(f==='def'&&(q.type||'num')==='num'){const x=P.parseEng(v);if(!Number.isFinite(x)){el.classList.add('bad');return;}v=x;}
+  q[f]=v;redo();});
+ box.querySelectorAll('[data-ppdel]').forEach(b=>b.onclick=()=>{d.params.splice(+b.dataset.ppdel,1);redo();});}
+// a definition as a file, with the definitions it uses (.pclsub.json), and back
+function exportDef(name){const all={...topDoc(),subcircuits:defsOf()};if(!atTop()){const e=editor.export();all.subcircuits={...all.subcircuits,[S.nav[S.nav.length-1].name]:{...curDef(),components:e.components,wires:e.wires}};}
+ download(name+'.pclsub.json',JSON.stringify({pcl:'subcircuit',version:1,name,subcircuits:SubC.closure(all,name)},null,1));}
+function importDefs(text){const q=JSON.parse(text);if(q?.pcl!=='subcircuit'||!q.subcircuits)throw new Error('Δεν είναι αρχείο υποκυκλώματος (.pclsub.json).');
+ const defs=atTop()?(editor.doc.subcircuits=editor.doc.subcircuits||{}):(S.top.subcircuits=S.top.subcircuits||{}),ren=new Map();if(atTop())editor.remember();
+ for(const k of Object.keys(q.subcircuits)){let n=k;for(let i=2;defs[n];i++)n=k+'_'+i;ren.set(k,n);}
+ for(const [k,d] of Object.entries(q.subcircuits)){for(const c of d.components||[])if(c.type==='SUB'&&ren.has(c.params?.def))c.params.def=ren.get(c.params.def);defs[ren.get(k)]=d;}
+ renderPalette();saveLocal();return ren.get(q.name)||[...ren.values()][0];}
+
 // ------------------------------------------------------------------ palette
 function renderPalette(){const q=($('#pal-search').value||'').toLowerCase();
- $('#palette-list').innerHTML=P.GROUPS.map(g=>{const items=Object.entries(P.PARTS).filter(([k,d])=>d.group===g&&!d.hidden&&(!q||d.name.toLowerCase().includes(q)||k.toLowerCase().includes(q)));if(!items.length)return '';
-  return `<div class="pal-group"><small>${esc(g)}</small>${items.map(([k,d])=>`<button class="pal-item" draggable="true" data-part="${k}" title="${esc(d.name)} · κλικ και μετά κλικ στον καμβά, ή σύρσιμο"><svg viewBox="-42 -42 84 84"><g class="sym">${d.draw(P.defaults(k))}</g></svg><span>${esc(d.name)}</span></button>`).join('')}</div>`;}).join('');
- $$('.pal-item').forEach(b=>{b.onclick=()=>{editor.beginPlace(b.dataset.part);notice('Κλικ στον καμβά για τοποθέτηση · R περιστροφή · Esc ακύρωση','info');setTimeout(()=>notice(''),3500);};
-  b.ondragstart=e=>{e.dataTransfer.setData('application/x-pcl-part',b.dataset.part);e.dataTransfer.effectAllowed='copy';};});}
+ // subcircuits of the project (3.17): one item per definition, plus import of a definition file
+ const defs=Object.entries(defsOf()).filter(([k,d])=>!q||String(d.title||k).toLowerCase().includes(q)||k.toLowerCase().includes(q)||'υποκύκλωμα'.includes(q));
+ const subItems=defs.map(([k,d])=>{const pr=subParams(k),L=P.subLayout(pr.$ports),sc=Math.min(1,84/(2*L.W+30),84/(2*L.H+30));
+  return `<button class="pal-item" draggable="true" data-part="SUB:${esc(k)}" title="Υποκύκλωμα «${esc(d.title||k)}» · κλικ και μετά κλικ στον καμβά, ή σύρσιμο"><svg viewBox="-42 -42 84 84"><g class="sym" transform="scale(${sc})">${P.PARTS.SUB.draw(pr)}</g></svg><span>${esc(d.title||k)}</span></button>`;}).join('');
+ $('#palette-list').innerHTML=P.GROUPS.map(g=>{const items=Object.entries(P.PARTS).filter(([k,d])=>d.group===g&&!d.hidden&&(!q||d.name.toLowerCase().includes(q)||k.toLowerCase().includes(q)));
+  const extra=g==='Υποκυκλώματα'?subItems+(q?'':`<button class="pal-item pal-import" data-subimport title="Ορισμός υποκυκλώματος από αρχείο .pclsub.json"><span>⇧ Εισαγωγή ορισμού…</span></button>`):'';if(!items.length&&!extra)return '';
+  return `<div class="pal-group"><small>${esc(g)}</small>${items.map(([k,d])=>`<button class="pal-item" draggable="true" data-part="${k}" title="${esc(d.name)} · κλικ και μετά κλικ στον καμβά, ή σύρσιμο"><svg viewBox="-42 -42 84 84"><g class="sym">${d.draw(P.defaults(k))}</g></svg><span>${esc(d.name)}</span></button>`).join('')}${extra}</div>`;}).join('');
+ $$('.pal-item[data-part]').forEach(b=>{b.onclick=()=>{const t=b.dataset.part;if(t.startsWith('SUB:')){const pr=subParams(t.slice(4));if(!pr||!placeOk({type:'SUB',params:pr}))return;editor.beginPlace('SUB',pr);}else editor.beginPlace(t);notice('Κλικ στον καμβά για τοποθέτηση · R περιστροφή · Esc ακύρωση','info');setTimeout(()=>notice(''),3500);};
+  b.ondragstart=e=>{e.dataTransfer.setData('application/x-pcl-part',b.dataset.part);e.dataTransfer.effectAllowed='copy';};});
+ $('[data-subimport]')?.addEventListener('click',()=>{const f=document.createElement('input');f.type='file';f.accept='.json,application/json';f.onchange=async()=>{const x=f.files[0];if(!x)return;
+  try{const n=importDefs(await x.text());notice(`Ο ορισμός «${esc(n)}» μπήκε στη βιβλιοθήκη του project (παλέτα, ομάδα «Υποκυκλώματα»).`,'info');setTimeout(()=>notice(''),4000);}catch(err){notice('Εισαγωγή: '+esc(err.message),'error');}};f.click();});}
 
 // ------------------------------------------------------------------ tutorials
 function tutorial(){return Tutorials.get(S.tut.id)||Tutorials.list[0];}
@@ -902,7 +1049,7 @@ function loadTutorial(id,options={},keepView=false){
  const pr=t.build(opts);S.tutMeta=pr.meta||null;S.tutRef=circuitSig(pr);S.switching=true;try{applyProject(pr,keepView);}finally{S.switching=false;}renderTutorial();runTheory();runMath();
 }
 function applyProject(pr,keepView){
- pause();editor.load(pr,{keepView});if(S.batch)clearBatch();
+ pause();if(S.nav.length){S.nav=[];S.top=null;S.pfx='';}if(pr.subcircuits)SubC.sync(pr);editor.load(pr,{keepView});renderCrumbs();renderPalette();if(S.batch)clearBatch();
  const sim=pr.sim||{};if(sim.hDiv){const ss=$('#sim-step'),v=String(sim.hDiv);if(![...ss.options].some(o=>o.value===v))ss.add(new Option('T/'+v,v));ss.value=v;}if(sim.method){$('#method').value=sim.method;$('#method-note').textContent={TR:'2ης τάξης, χωρίς απόσβεση',BDF2:'2ης τάξης, απόσβεση στις υψηλές συχνότητες',BE:'1ης τάξης, ισχυρή απόσβεση'}[sim.method]||'';}setSpeed(sim.speed??100);S.stopT=sim.stopT||0;$('#stop').value=S.stopT?String(+(S.stopT*1e3).toPrecision(6)):'';
  buildSim(true);
  if(pr.scope?.cfg){scope.cfg=pr.scope.cfg;scope.cfg.frozen=null;}
@@ -941,6 +1088,7 @@ function simValue(spec){const s=S.sim;if(!s||!spec||S.error)return null;
 function lastPP(key){const p=S.sim?.lastPeriod(key);return p?p.max-p.min:NaN;}
 let theoryToken=0;
 async function runTheory(){
+ if(!atTop())return; // inside a subcircuit the parts of the tutorial are not in the editor (3.17)
  const t=tutorial(),box=$('#theory'),token=++theoryToken;box.innerHTML='<p class="muted">Υπολογισμός…</p>';
  try{
   if(t.theory==='v1'){const V=paramsOf('V1'),L=paramsOf(t.topology==='flyback'?'T1':'L1'),Cc=paramsOf('C1'),R=paramsOf('R1'),W=paramsOf('PWM1');
@@ -956,6 +1104,7 @@ function cmpRows(rows){return `<table class="cmp"><thead><tr><th>Μέγεθος<
 function stepsHTML(steps){return (steps||[]).map(s=>`<details class="step"><summary>${esc(s.title)}</summary><p>${esc(s.explanation||'')}</p>${s.math?`<div class="math">${s.math.mathml||''}</div>`:''}${s.numeric?`<div class="math num">${s.numeric.mathml||''}</div>`:''}${s.result?`<div class="math res">${s.result.mathml||''}</div>`:''}</details>`).join('');}
 function renderTheory(){
  const th=S.theory,box=$('#theory');if(!th){return;}const t=tutorial();let html='';const valid=theoryValidity(t);
+ try{ // a circuit that is no longer the tutorial's may lack its parts (e.g. moved into a subcircuit): only the banner then
  if(th.kind==='v1'){const r=th.r,m=r.metrics,c=r.config;const neg=t.topology==='buck_boost';
   const vo=avgOver('V:C1'),il=avgOver(t.topology==='flyback'?'Im:T1':'I:L1');
   html+=`<div class="tm"><span class="badge">${esc(r.mode)}</span> V_o = ${eng(c.vo*(neg?-1:1),'V')} · I_o = ${eng(m.Iout,'A')} · D = ${fmt(m.duty,4)} · L_crit = ${eng(m.Lcrit,'H')}</div>`;
@@ -980,6 +1129,7 @@ function renderTheory(){
   html+=`<p class="small">Παράθυρο ${r.config.vst_min}–${r.config.vst_max} V · L_min = ${eng(r.q4.L_min,'H')} · Δi_max = ${eng(r.q4.ripple_max.dI,'A')} @ ${fmt(r.q4.ripple_max.vst)} V · μέση ισχύς φορτίου ${fmt(r.q2.load_avg_kW)} kW.</p>`;
   html+=`<h4>Δοκιμές ερωτήματος 5</h4><div class="wrap"><table class="cmp"><thead><tr><th></th><th>V_st</th><th>P</th><th>Λειτ.</th><th>D</th><th>I_L</th><th>Δi</th><th>i_L(0) συμμ.</th></tr></thead><tbody>${r.q5.tests.map(x=>`<tr><td>${esc(x.id)}</td><td>${fmt(x.vst)}</td><td>${fmt(x.p_bus/1e3)} kW</td><td>${esc(x.mode)}</td><td>${fmt(x.D,4)}</td><td>${fmt(x.IL)}</td><td>${fmt(x.dI)}</td><td>${fmt(x.iL0_symmetric)}</td></tr>`).join('')}</tbody></table></div>`;}
  else if(th.kind==='formula')html+=formulaTheory(t);
+ }catch(e){if(valid.ok)throw e;html='';}
  box.innerHTML=valid.ok?(valid.note?`<p class="th-note">${esc(valid.note)}</p>`:'')+html:staleBanner(valid)+`<div class="th-stale">${html}</div>`;bindRestore(box);
 }
 // ideal periodic inductor current, rising while S2 conducts: deviation from the mean at carrier
@@ -1059,6 +1209,17 @@ function lastPeriods(key,n){const s=S.sim,i=s?.chIndex.get(key),p=s?.per;if(i===
 function evalOrderHTML(){const o=S.sim?.net.sig.order||[];if(!o.length)return '';return `<p class="small">Σειρά υπολογισμού των μπλοκ σε κάθε στιγμή: <b>${o.map(b=>esc(b.label)).join(' → ')}</b>. Κάθε μπλοκ υπολογίζεται μετά από όσα διαβάζει άμεσα. Η z⁻¹ δεν διαβάζει άμεσα την είσοδό της, γι' αυτό σπάει τους βρόχους. Ένας κλειστός βρόχος χωρίς τέτοιο μπλοκ (αλγεβρικός βρόχος) αναφέρεται ως σφάλμα.</p>`;}
 // 3.0: current loop built from blocks. The PI reads i_L at the period start (sawtooth: the valley), so it holds
 // the valley at the reference and the mean is i_ref + Δi/2
+// 3.17: N instances of one buck leg (subcircuit), interleaved. Per leg Δi = V_in·D(1 − D)/(L·f_s); the sum with phases
+// k·360°/N: Δi_Σ = V_in·(N·D − m)(m + 1 − N·D)/(N·L·f_s), m = ⌊N·D⌋ (zero when N·D is an integer); in phase: N·Δi.
+function subLegsTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.N)return '';const {N,D,Vin,L,fs,R,shift}=m,Vo=D*Vin,dI=Vin*D*(1-D)/(L*fs),k=Math.floor(N*D+1e-9);
+ const dS=shift?Vin*(N*D-k)*(k+1-N*D)/(N*L*fs):N*dI,vo=avgOver('V:C1'),io=avgOver('Y:AM1',5);
+ const legs=Array.from({length:N},(_,j)=>avgOver(`I:X${j+1}/L1`,5)?.avg);
+ return `<ul class="eqs"><li>V_o = D·V_in = <b>${eng(Vo,'V')}</b>, I_o = V_o/R = <b>${eng(Vo/R,'A')}</b>, ανά σκέλος <b>${eng(Vo/R/N,'A')}</b></li>
+  <li>Κυμάτωση σκέλους Δi = V_in·D(1 − D)/(L·f_s) = <b>${eng(dI,'A')}</b></li>
+  <li>${shift?`Άθροισμα με φάσεις k·360°/N: Δi_Σ = V_in·(N·D − m)(m + 1 − N·D)/(N·L·f_s), m = ⌊N·D⌋ = ${k}: <b>${eng(dS,'A')}</b>${Math.abs(N*D-Math.round(N*D))<1e-9?' (N·D ακέραιος: ακύρωση)':''}`:`Συμφασικά τα σκέλη αθροίζονται: Δi_Σ = N·Δi = <b>${eng(dS,'A')}</b>`}</li>
+  <li>Μέσο ρεύμα ανά σκέλος (προσομοίωση): ${legs.map((x,j)=>`σκέλος ${j+1} ${eng(x,'A')}`).join(' · ')}</li></ul>`+
+  cmpRows([['V_o (μέση)',Vo,vo?.avg,'V'],['Δi σκέλους 1 p-p',dI,lastPP('I:X1/L1'),'A'],['Δi_Σ p-p (A_o)',dS,lastPP('Y:AM1'),'A'],['⟨i_o⟩',Vo/R,io?.avg,'A']])+
+  `<p class="muted small">Κάθε σκέλος είναι instance του ίδιου ορισμού «${esc(defsOf().leg?.title||'leg')}»: ίδια στοιχεία, δική του φάση και αρχική τιμή (δημόσιες παράμετροι), δική του κατάσταση.</p>`;}
 function blocksTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('AM1')||!paramsOf('VO'))return '';const T=1/m.fs,key=m.blk?'Y:AM1':'I:L1';
  const iref=m.blk?s.now('Y:K1'):s.now('REF:PWM1'),i=Number.isFinite(iref)?iref:m.i1,Vin=+paramsOf('V1').V,Vo=+paramsOf('VO').V,D=Vo/Vin,dI=(Vin-Vo)*D*T/+paramsOf('L1').L;
  const ia=avgOver(key,5),dsim=m.cmp?avgOver('GS:S1',5)?.avg:avgOver('D:PWM1',5)?.avg;
@@ -1538,6 +1699,7 @@ function formulaTheory(t){
  if(t.topology==='schering')return scheringTheory();
  if(t.topology==='srm')return srmTheory();
  if(t.topology==='polyphase')return polyTheory();
+ if(t.topology==='sub_legs')return subLegsTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const D=+W.D,Vin=+V.V,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
   eqs=[`V_o = ${t.topology==='cuk'?'−':''}V_in·D/(1−D) = <b>${eng(Vo,'V')}</b>`,`I_L1 = |I_o|·D/(1−D) = <b>${eng(IL1,'A')}</b>, |I_L2| = |I_o| = <b>${eng(Math.abs(Io),'A')}</b>`,`Δi_L1 = V_in·D·T/L1 = <b>${eng(Vin*D*Ts/L1,'A')}</b>, Δi_L2 = V_in·D·T/L2 = <b>${eng(Vin*D*Ts/L2,'A')}</b>`,`V_C1 = ${t.topology==='cuk'?'V_in + |V_o|':'V_in'} = <b>${eng(t.topology==='cuk'?Vin+Math.abs(Vo):Vin,'V')}</b>`];
@@ -1636,6 +1798,7 @@ async function runTemplate(t,ch,box,src,token){const tpl=ch.template;S.tplOverri
  MathPanel.renderTemplate(box,r,{src:from,simValue,onInput:(n,v)=>{(S.tplOverrides[tpl.id]=S.tplOverrides[tpl.id]||{})[n]=v;runMath();},onReset:()=>{delete S.tplOverrides[tpl.id];runMath();},
   onDownload:()=>download(tpl.id+'.template.json',JSON.stringify(tpl,null,1))});}
 async function runMath(){
+ if(!atTop())return;
  const t=tutorial(),box=$('#math'),src=$('#math-src'),token=++mathToken;
  try{
   const ch=renderMathChoices(t);
@@ -1694,7 +1857,9 @@ function boot(){
   onchange:kind=>{if(kind==='struct'||kind==='param'){if(S.batch)S.batch.stale=true;buildSim(false);if(S.theory)setTimeout(()=>{if(tutorial().theory==='v1'||tutorial().theory==='formula')runTheory();},50);scheduleMath();}saveLocal();if(kind==='struct')renderChannels();},
   onselect:sel=>{$('#selinfo').textContent=sel.c.length+sel.w.length?`${sel.c.length} στοιχεία · ${sel.w.length} σύρματα επιλεγμένα`:'';renderProps();},
   ontool:on=>{const b=$('#wire-tool');b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));},
-  onedit:ev=>{if(ev.kind==='comp'){const sg=editor.settings.dblclick==='scope'?signalsFor(editor.comp(ev.id)):[];if(sg.length)addProbe(sg[0][0]+ev.id+(sg[0][2]||''));else openInspector(ev.id,ev.x,ev.y);}else openWireInspector(ev.id,ev.x,ev.y);},
+  onedit:ev=>{if(ev.kind==='comp'){const c=editor.comp(ev.id);if(c?.type==='SUB'){enterSub(c.params.def,S.pfx===null?null:pid(c.id));return;}const sg=editor.settings.dblclick==='scope'&&S.pfx!==null?signalsFor(c):[];if(sg.length)addProbe(sg[0][0]+pid(ev.id)+(sg[0][2]||''));else openInspector(ev.id,ev.x,ev.y);}else openWireInspector(ev.id,ev.x,ev.y);},
+  ongroup:shift=>{if(shift){const id=editor.selection().c.find(i=>editor.comp(i)?.type==='SUB');if(id)expandSub(id);else{notice('Διάλεξε ένα υποκύκλωμα για ανάπτυξη (Ctrl+Shift+G).','info');setTimeout(()=>notice(''),2500);}}else groupSel();},
+  canPlace:placeOk,subParams:name=>subParams(name),
   oncontext:openMenu,onwarn:t=>{notice(t,'error');setTimeout(()=>notice(''),5000);}});
  editor.setLive(liveOf);
  scope=new Scope($('#scope-canvas'),{onfreeze:()=>{$('#live-btn').hidden=false;},onchange:()=>{renderMeasure();},onhover:()=>{}});
@@ -1735,7 +1900,7 @@ function boot(){
  const METHOD_NOTE={TR:'2ης τάξης, χωρίς απόσβεση',BDF2:'2ης τάξης, απόσβεση στις υψηλές συχνότητες',BE:'1ης τάξης, ισχυρή απόσβεση'};
  $('#method').onchange=e=>{S.sim?.setMethod(e.target.value);scheduleStepCheck();$('#method-note').textContent=METHOD_NOTE[e.target.value];saveLocal();};
  $('#add-signal').onchange=e=>{if(e.target.value)addProbe(e.target.value);e.target.value='';};
- const probeSel=pre=>{const ids=editor.selection().c.filter(id=>{const c=editor.comp(id);return c&&signalsFor(c).some(([p,,f])=>p===pre&&!f);});if(!ids.length){notice('Επίλεξε πρώτα στοιχεία στο κύκλωμα (κλικ ή ορθογώνιο).','info');setTimeout(()=>notice(''),2500);return;}ids.forEach(id=>addProbe(pre+id));};
+ const probeSel=pre=>{const ids=editor.selection().c.filter(id=>{const c=editor.comp(id);return c&&signalsFor(c).some(([p,,f])=>p===pre&&!f);});if(!ids.length){notice('Επίλεξε πρώτα στοιχεία στο κύκλωμα (κλικ ή ορθογώνιο).','info');setTimeout(()=>notice(''),2500);return;}ids.forEach(id=>addProbe(pre+pid(id)));};
  $('#probe-i').onclick=()=>probeSel('I:');$('#probe-v').onclick=()=>probeSel('V:');
  $('#csv').onclick=exportCSV;
  $('#cr-open').onclick=()=>$('#cr-file').click();$('#cr-clear').onclick=clearCsv;
@@ -1779,7 +1944,7 @@ function boot(){
  fetch('/api/health').then(r=>r.json()).then(h=>{$('#engine').textContent='Engine '+h.version;$('#engine').classList.add('ok');}).catch(()=>{$('#engine').textContent='Χωρίς server: μόνο προσομοίωση';});
  setInterval(()=>{if(S.theory&&(S.running||S.frame))renderTheoryLive();},1000);
 }
-function renderTheoryLive(){if(document.querySelector('#theory details[open]'))return;renderTheory();}
+function renderTheoryLive(){if(!atTop()||document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
 window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun};
 })();
