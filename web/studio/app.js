@@ -757,21 +757,28 @@ function addonDock(a){const box=document.createElement('section');box.className=
  $('#addon-docks').appendChild(box);box.querySelector('[data-dx]').onclick=()=>Addons.close(a.id);box.querySelector('[data-dmin]').onclick=()=>box.classList.toggle('min');box.querySelector('[data-dwide]').onclick=()=>box.classList.toggle('wide');
  return {body:box.querySelector('.addon-body'),show:()=>box.classList.remove('min'),remove:()=>box.remove()};}
 function renderAddons(){const L=$('#addons-list');if(!L||!window.Addons)return;const A=Addons;
- L.innerHTML=A.list.length?A.list.map(a=>`<div class="addon-item"><div><b>${esc(a.name)}</b> <small class="muted">${esc(a.version||'')}${a.builtin?' · ενσωματωμένο':' · του χρήστη'}</small>${a.error?`<p class="bad">${esc(a.error)}</p>`:`<p class="muted">${esc(a.description||'')}</p>`}</div>
-  <div class="acts">${a.error?'':`<button data-aopen="${esc(a.id)}">Άνοιγμα</button>`}${a.builtin?'':`<button data-arm="${esc(a.id)}" title="Αφαίρεση">🗑</button>`}</div></div>`).join(''):`<p class="muted small">${A.err?'Τα πρόσθετα θέλουν τον server της εφαρμογής (python run.py): '+esc(A.err):'Κανένα πρόσθετο.'}</p>`;
+ const vsel=a=>a.builtin||!(a.versions||[]).length?`<small class="muted">${esc(a.version||'')} · ενσωματωμένο</small>`:
+  `<select data-aver="${esc(a.id)}" title="Η έκδοση που ανοίγει">${a.versions.map(v=>`<option ${v===a.active?'selected':''}>${esc(v)}</option>`).join('')}</select> <small class="muted">του χρήστη</small>`;
+ L.innerHTML=A.list.length?A.list.map(a=>`<div class="addon-item"><div><b>${esc(a.name)}</b> ${vsel(a)}${a.error?`<p class="bad">${esc(a.error)}</p>`:`<p class="muted">${esc(a.description||'')}</p>`}</div>
+  <div class="acts">${a.error?'':`<button data-aopen="${esc(a.id)}">Άνοιγμα</button>`}${a.builtin?'':`<button data-arm="${esc(a.id)}" data-arv="${esc(a.active||'')}" title="Αφαίρεση αυτής της έκδοσης">🗑</button>`}</div></div>`).join(''):`<p class="muted small">${A.err?'Τα πρόσθετα θέλουν τον server της εφαρμογής (python run.py): '+esc(A.err):'Κανένα πρόσθετο.'}</p>`;
+ L.querySelectorAll('[data-aver]').forEach(x=>x.onchange=()=>Addons.activate(x.dataset.aver,x.value).catch(e=>alert(e.message)));
  L.querySelectorAll('[data-aopen]').forEach(b=>b.onclick=()=>Addons.open(b.dataset.aopen,{target:editor.selection().c[0]||''}));
- L.querySelectorAll('[data-arm]').forEach(b=>b.onclick=async()=>{if(!confirm('Αφαίρεση του πρόσθετου '+b.dataset.arm+';'))return;try{await Addons.remove(b.dataset.arm);}catch(e){alert(e.message);}});
+ L.querySelectorAll('[data-arm]').forEach(b=>b.onclick=async()=>{if(!confirm(`Αφαίρεση της έκδοσης ${b.dataset.arv} του πρόσθετου ${b.dataset.arm};`))return;try{await Addons.remove(b.dataset.arm,b.dataset.arv);}catch(e){alert(e.message);}});
  $('#addons-dir').textContent=A.userDir?'φάκελος χρήστη: '+A.userDir:'';
  const k=A.link;$('#link-box').innerHTML=`<label><input type="checkbox" id="link-on" ${k.on?'checked':''}> <b>Σύνδεση με εξωτερικά προγράμματα</b></label>
   <p class="muted small">Προγράμματα Python ή MATLAB σε αυτόν τον υπολογιστή διαβάζουν και αλλάζουν το κύκλωμα της οθόνης, τρέχουν προσομοιώσεις και στέλνουν πίνακες ή γραφήματα εδώ: <code>pcl.link.connect()</code>, <code>pcl_link('info')</code>. Το token είναι στο <code>~/.pcl/link.json</code>.</p>
   ${k.on?`<p class="small">${k.err?`<span class="bad">${esc(k.err)}</span>`:'● ενεργή'}${k.n?` · ${k.n} κλήσεις, τελευταία ${esc(k.last.method)} (${esc(k.last.t)})${k.last.ok?'':' με σφάλμα'}`:''}</p>`:''}`;
  $('#link-on').onchange=e=>Addons.linkOn(e.target.checked);
 }
+// a program on this computer asks to connect while the link is closed: accept (the link opens) or refuse (3.15)
+function knockToast(k,answer){const t=document.createElement('div');t.className='knock-toast';t.setAttribute('role','alertdialog');
+ t.innerHTML=`<b>Αίτημα σύνδεσης</b><p>Το «${esc(k.client)}» σε αυτόν τον υπολογιστή ζητά να διαβάσει και να αλλάξει το κύκλωμα και να τρέξει προσομοιώσεις.</p><div><button class="primary" data-k="1">Αποδοχή</button><button data-k="0">Απόρριψη</button></div>`;
+ document.body.appendChild(t);const done=ok=>{t.remove();answer(ok);};t.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>done(b.dataset.k==='1'));setTimeout(()=>{if(t.isConnected)done(false);},55000);}
 function initAddons(){if(!window.Addons||!$('#addons-card'))return;
  Addons.init({editor,project,applyProject:pr=>{applyProject(pr);},sim:()=>S.error?null:S.sim,scopeKeys:()=>(scope.cfg?.panes||[]).flatMap(p=>(p.ch||p.channels||[]).map(c=>typeof c==='string'?c:c.key)),
   selection:()=>editor.selection().c,version:()=>($('footer b')?.textContent||''),title:()=>tutorial().title||'',tutorial:()=>S.tut?.id||null,
   python:(code,inputs,files)=>scenEval(code,inputs,files),show:d=>{$('#scen').open=true;scenShow(typeof d==='object'&&d&&d.type?d:{type:'text',text:typeof d==='string'?d:JSON.stringify(d,null,1)});},
-  notify:r=>{(S.addonDiag||(S.addonDiag=[])).push({grp:'sim',...r});if(S.addonDiag.length>200)S.addonDiag.shift();renderDiag();},dock:addonDock,changed:renderAddons});
+  notify:r=>{(S.addonDiag||(S.addonDiag=[])).push({grp:'sim',...r});if(S.addonDiag.length>200)S.addonDiag.shift();renderDiag();},dock:addonDock,changed:renderAddons,knock:knockToast});
  $('#addon-file').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const a=await Addons.install(f);alert(`Εγκαταστάθηκε: ${a.name} ${a.version}`);}catch(x){alert('Δεν εγκαταστάθηκε: '+x.message);}};
  $('#addons-refresh').onclick=()=>Addons.refresh();}
 function scenBatchWrite(sab,bytes){if(!sab||!bytes)return;const h=new Int32Array(sab,0,2),cap=sab.byteLength-8;
@@ -1133,7 +1140,7 @@ function vfTheory(){const s=S.sim,m=S.tutMeta||{},M=imPar();if(!s||!M)return '';
   <li>Μόνιμη κατάσταση με τ_L = ${eng(load?m.TL:0,'N·m')}: ολίσθηση <b>${fmt(ss.sl*100,4)} %</b>, ω = ${eng(ss.w,'rad/s')}, |ψ_R| = ${eng(ss.psi,'V·s',4)}, I_rms = ${eng(ss.I/Math.SQRT2,'A')}</li></ul>`;
  if(s.t<.6)return h+'<p class="muted small">Τρέξε ως το τέλος για τη σύγκριση στη μόνιμη κατάσταση.</p>';
  h+=cmpRows([['ταχύτητα ω_m',ss.w,s.now('Y:M1'),'rad/s'],['|ψ_R|',ss.psi,s.now('Y:M1:psi'),'V·s'],['ρεύμα φάσης (RMS, 4 περίοδοι)',ss.I/Math.SQRT2,irms,'A'],['ροπή τ_e',(load?m.TL:0)+M.b*ss.w,avgOver('Y:M1:te',nT)?.avg,'N·m']]);
- return h+`<p class="small muted">Η θεωρία κρατά μόνο τη θεμελιώδη. Με SPWM σε υπερδιαμόρφωση και με τετραγωνική οι αρμονικές (5η, 7η…) δίνουν επιπλέον ρεύμα και κυμάτωση ροπής: δες το i_a στο «Αρμονικές». Οι τιμές της μηχανής είναι τυπικές, όχι της διπλωματικής.</p>`;}
+ return h+`<p class="small muted">Η θεωρία κρατά μόνο τη θεμελιώδη. Με SPWM σε υπερδιαμόρφωση και με τετραγωνική οι αρμονικές (5η, 7η…) δίνουν επιπλέον ρεύμα και κυμάτωση ροπής: δες το i_a στο «Αρμονικές». Οι τιμές της μηχανής είναι τυπικές.</p>`;}
 // 3.4: field orientation with the current model. With R̂_R = k·R_R, in steady state the true rotor flux is
 // ψ_R = L_M·(i_d + j·i_q)/(1 + j·k·i_q/i_d) in the estimated frame: |ψ_R| = L_M|i|/√(1 + (k·i_q/i_d)²), angle δ = atan(i_q/i_d) − atan(k·i_q/i_d)
 function focTheory(){const s=S.sim,m=S.tutMeta||{},M=imPar();if(!s||!M)return '';const T=s.T,n=Math.round(.02/T),id=avgOver('Y:PK',n)?.avg,iq=avgOver('Y:PK:q',n)?.avg,k=m.k,w=s.now('Y:M1');
@@ -1296,7 +1303,7 @@ function dcDriveTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.com
   <li>Μόνιμη κατάσταση: ω = ω_ref, i_a = (b·ω + τ_L)/ψ, u = R_a·i_a + ψ·ω, D = u/V_dc</li></ul>`;
  const ith=(b*wth+tl)/psi,uth=Ra*ith+psi*wth;
  if(wait)return h+wait;h+=cmpRows([['μέγιστη ω πριν από το φορτίο',m.wref,wmax,'rad/s'],...(s.t>m.tTL?[['ελάχιστη ω μετά το βήμα φορτίου',m.wref-dpk,wmin,'rad/s']]:[]),['ω τώρα',wth,wNow,'rad/s'],['⟨i_a⟩ (τελευταίες 5 T)',ith,iA,'A'],['D',uth/Vdc,dA,'']]);
- return h+`<p class="small muted">Οι θεωρητικές τιμές θεωρούν ιδανικό βρόχο ρεύματος (i_a = i_ref) και ακριβή feedforward. Οι παράμετροι της μηχανής είναι τυπικές τιμές, όχι της διπλωματικής.</p>`+evalOrderHTML();}
+ return h+`<p class="small muted">Οι θεωρητικές τιμές θεωρούν ιδανικό βρόχο ρεύματος (i_a = i_ref) και ακριβή feedforward. Οι παράμετροι της μηχανής είναι τυπικές τιμές.</p>`+evalOrderHTML();}
 // traveling waves (3.8): the same problem by the method of characteristics (P.bewley), a lattice diagram, theory vs simulation
 function twModel(){const s=S.sim,m=S.tutMeta||{},c=s?.net.compInfo.get('T1');if(!s||!c?.line||!m.dur)return null;const Z=c.line.Z,tau=c.line.tau;
  const RLp=paramsOf('RL'),RAp=paramsOf('RA'),book=m.case==='book';

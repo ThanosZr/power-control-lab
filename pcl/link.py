@@ -26,20 +26,21 @@ def _home():
 
 
 class App:
-    def __init__(self, url, token, timeout=120):
+    def __init__(self, url, token, timeout=120, client='Python (pcl.link)'):
         self.url = url.rstrip('/')
         self.token = token
         self.timeout = timeout
+        self.client = client          # the name the app shows when it asks «Αποδοχή / Απόρριψη»
 
     def __repr__(self):
         return f'<pcl.link.App {self.url}>'
 
     def call(self, method, timeout=None, **args):
         t = float(timeout or self.timeout)
-        body = json.dumps({'token': self.token, 'method': method, 'args': _clean(args), 'timeout': t}).encode('utf-8')
+        body = json.dumps({'token': self.token, 'method': method, 'args': _clean(args), 'timeout': t, 'client': self.client}).encode('utf-8')
         req = urllib.request.Request(self.url + '/api/link/call', data=body, headers={'Content-Type': 'application/json'})
         try:
-            with urllib.request.urlopen(req, timeout=t + 10) as r:
+            with urllib.request.urlopen(req, timeout=t + 75) as r:     # + the wait for «Αποδοχή» when the link is closed
                 out = json.loads(r.read())
         except urllib.error.HTTPError as e:
             try:
@@ -119,7 +120,7 @@ class App:
         return self.call('notify', msg=msg, sev=sev, fix=fix, src='link')
 
 
-def connect(url=None, token=None, timeout=120):
+def connect(url=None, token=None, timeout=120, client='Python (pcl.link)'):
     """The app of ~/.pcl/link.json (or the given url and token)."""
     if url is None or token is None:
         f = _home() / 'link.json'
@@ -127,4 +128,4 @@ def connect(url=None, token=None, timeout=120):
             raise PclError(f'Δεν βρέθηκε το {f}: ξεκίνα την εφαρμογή με python run.py.')
         d = json.loads(f.read_text(encoding='utf-8'))
         url, token = url or d['url'], token or d['token']
-    return App(url, token, timeout)
+    return App(url, token, timeout, client)

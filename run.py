@@ -120,6 +120,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send(200,{'presets':out}); return
         if path=='/api/link/token':
             self.send(200,{'token':LINK.token,'connected':LINK.connected()}); return
+        if path=='/api/link/knock':        # 3.15: a program asks while the link is closed (the page shows Αποδοχή / Απόρριψη)
+            k=LINK.knock_next(25.0,self.alive)
+            if k is None:
+                self.send_response(204);self.send_header('Content-Length','0');self.send_header('Cache-Control','no-store');self.end_headers()
+            else:
+                self.send(200,k)
+            return
         if path=='/api/link/next':
             if not LINK.ok(query.get('token',[''])[0]):
                 self.send(403,{'error':'Λάθος token.'}); return
@@ -140,12 +147,17 @@ class Handler(BaseHTTPRequestHandler):
                 self.send(200,ADDONS.install(data)); return
             if action=='addon_remove':
                 self.send(200,ADDONS.remove(data)); return
+            if action=='addon_activate':
+                self.send(200,ADDONS.activate(data)); return
+            if action=='link/deny':
+                LINK.deny(data.get('id') or 0); self.send(200,{'ok':True}); return
             if not LINK.ok(data.get('token')):
                 self.send(403,{'error':'Λάθος token (δες το ~/.pcl/link.json).'}); return
             if action=='link/reply':
                 LINK.reply(data.get('id'),{k:data[k] for k in ('result','error') if k in data}); self.send(200,{'ok':True}); return
             if action=='link/call':
-                a=LINK.call(data.get('method'),data.get('args') or {},data.get('timeout') or 120)
+                t=float(data.get('timeout') or 120)
+                a=LINK.call(data.get('method'),data.get('args') or {},t,client=data.get('client') or self.headers.get('User-Agent',''),knock_wait=min(60.0,t))
                 self.send(400 if 'error' in a else 200,a); return
             self.send(404,{'error':'Άγνωστη ενέργεια.'})
         except TimeoutError as e:
@@ -202,7 +214,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         action=urlsplit(self.path).path.removeprefix('/api/')
-        if action in ('addon_install','addon_remove','link/call','link/reply'):
+        if action in ('addon_install','addon_remove','addon_activate','link/call','link/reply','link/deny'):
             if self.headers.get_content_type()!='application/json':
                 self.send(415,{'error':'Απαιτείται application/json.'}); return
             self.addon_post(action); return

@@ -364,3 +364,4 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 @media (prefers-color-scheme:dark){.addon-frame{background:#141a19}}
 .from-tool{font-size:11px;color:var(--accent,#147966)}
 .addons-in{padding:0 16px 14px}
+.knock-toast{position:fixed;top:16px;right:16px;z-index:80;max-width:360px;background:var(--card);border:2px solid var(--accent);border-radius:10px;padding:10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.2);font-size:13px}.knock-toast p{margin:4px 0 8px}.knock-toast div{display:flex;gap:8px}

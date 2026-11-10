@@ -97,7 +97,20 @@ def main(argv=None):
     a.add_argument('--signal', help='το σήμα του waterfall')
     a.add_argument('--table', help='πίνακας ακροτάτων (.csv ή .tex)')
     a.add_argument('--out', help='.pdf, .svg, .eps ή .png')
+    a = sub.add_parser('link', help='μία κλήση στην ανοιχτή εφαρμογή (3.15): αρχείο JSON {method, args, client} → JSON (για το Octave)')
+    a.add_argument('request')
+    a.add_argument('--out', required=True)
     args = ap.parse_args(argv)
+    if args.cmd == 'link':
+        from . import link
+        q = json.loads(Path(args.request).read_text(encoding='utf-8'))
+        try:
+            app = link.connect(client=q.get('client') or 'Octave (pcl_link)')
+            out = {'result': app.call(q['method'], **(q.get('args') or {}))}
+        except PclError as e:
+            out = {'error': str(e)}
+        Path(args.out).write_text(json.dumps(_clean(out), ensure_ascii=False), encoding='utf-8')
+        return 0
     if args.cmd == 'plot':
         from . import plotting
         try:

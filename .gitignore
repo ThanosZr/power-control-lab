@@ -18,3 +18,4 @@ node_modules/
 # local copy of Pyodide (python tools/get_pyodide.py)
 web/vendor/
 node_modules/
+/addons/

@@ -35,11 +35,15 @@ const ROOT=path.resolve(__dirname,'../..');
  await p.screenshot({path:path.join(OUT,'addons_impulse.png')});
  // 2) the link: a Python program on this computer
  await p.evaluate(()=>PCL.loadTutorial('buck'));await p.waitForTimeout(400);
- await p.evaluate(()=>{document.querySelector('#addons-block').open=true;});await p.check('#link-on');await p.waitForTimeout(1500);
+ // the link closed: the first call knocks, the app asks, Αποδοχή opens the link and the call goes on (on demand)
+ await p.evaluate(()=>{document.querySelector('#addons-block').open=true;});ok(!(await p.isChecked('#link-on')),'η σύνδεση είναι κλειστή εξ ορισμού');
  const py=["import pcl","app = pcl.link.connect()","print('tut', app.info()['tutorial'])","app.set('R1.R', 20)",
   "r = app.run(t_end=2e-3, measure={'Vo': ('V:C1', 'avg', 10)})","print('Vo', round(r.measured['Vo'], 3))",
   "print('py', app.python('result = x * 2', x=21))","app.show({'από': 'Python', 'Vo': r.measured['Vo']}, 'σύνδεση')","app.notify('μήνυμα από την Python')"].join('\n');
- const ch=spawn('python3',['-c',py],{cwd:ROOT});let txt='';ch.stdout.on('data',d=>txt+=d);ch.stderr.on('data',d=>txt+=d);const code=await new Promise(r=>ch.on('close',r));
+ const ch=spawn('python3',['-c',py],{cwd:ROOT});let txt='';ch.stdout.on('data',d=>txt+=d);ch.stderr.on('data',d=>txt+=d);const closed=new Promise(r=>ch.on('close',r));
+ await p.waitForSelector('.knock-toast',{timeout:30000});ok(/Python/.test(await p.$eval('.knock-toast',e=>e.textContent)),'αίτημα σύνδεσης με το όνομα του προγράμματος');
+ await p.click('.knock-toast [data-k="1"]');const code=await closed;
+ ok(await p.isChecked('#link-on'),'με «Αποδοχή» η σύνδεση άνοιξε');
  ok(code===0&&/tut buck/.test(txt)&&/py 42/.test(txt),'Python → εφαρμογή: info, python '+txt.trim().replace(/\n/g,' | '));
  const vo=+((txt.match(/Vo ([\d.]+)/)||[])[1]);ok(vo>11.5&&vo<12.5,'Python → εφαρμογή: run με τον λύτη της εφαρμογής, Vo = '+vo);
  ok(await p.evaluate(()=>+PCL.editor.comp('R1').params.R)===20,'η αλλαγή R1.R = 20 φαίνεται στο κύκλωμα');

@@ -121,10 +121,19 @@ class Addons(unittest.TestCase):
         a = A.install({'zip': _zip({'my-tool/pcl-addon.json': json.dumps(man), 'my-tool/index.html': '<p>x</p>', 'my-tool/ui.js': ''})})
         self.assertEqual(a['id'], 'my-tool')
         self.assertEqual(a['permissions'], ['project.read'])          # unknown permissions are dropped
-        self.assertTrue((A.USER / 'my-tool' / 'ui.js').is_file())
-        self.assertIsNotNone(A.user_file('my-tool/index.html'))
-        self.assertIsNone(A.user_file('my-tool/../../etc/passwd'))
+        self.assertTrue((A.USER / 'my-tool' / '0.1' / 'ui.js').is_file())          # one folder per version
+        self.assertIsNotNone(A.user_file('my-tool/0.1/index.html'))
+        self.assertIsNone(A.user_file('my-tool/0.1/../../../etc/passwd'))
         self.assertIn('my-tool', [x['id'] for x in A.listing()])
+        z2 = _zip({'my-tool/pcl-addon.json': json.dumps({**man, 'version': '0.2'}), 'my-tool/index.html': '<p>2</p>'})
+        with self.assertRaises(A.AddonError):                          # the same version again: only with replace
+            A.install({'zip': _zip({'my-tool/pcl-addon.json': json.dumps(man), 'my-tool/index.html': ''})})
+        b = A.install({'zip': z2})
+        self.assertEqual((b['versions'], b['active'], b['base']), (['0.1', '0.2'], '0.2', '/addons/my-tool/0.2/'))
+        A.activate({'id': 'my-tool', 'version': '0.1'})
+        self.assertEqual([x for x in A.listing() if x['id'] == 'my-tool'][0]['active'], '0.1')
+        self.assertEqual(A.remove({'id': 'my-tool', 'version': '0.1'})['versions'], ['0.2'])
+        self.assertEqual(A.active('my-tool'), '0.2')
         A.remove({'id': 'my-tool'})
         self.assertNotIn('my-tool', [x['id'] for x in A.listing()])
         for bad in ({'pcl-addon.json': json.dumps({**man, 'id': 'Bad Id'}), 'index.html': ''},
@@ -137,8 +146,8 @@ class Addons(unittest.TestCase):
 
     def test_link(self):
         L = A.Link()
-        with self.assertRaises(A.AddonError):                          # no page asks for calls
-            L.call('info', {})
+        with self.assertRaises(A.AddonError):                          # no page asks for calls and nobody accepts
+            L.call('info', {}, knock_wait=0.2)
         got = []
 
         def page():                                                   # what the page does: take a call, answer it
@@ -153,6 +162,33 @@ class Addons(unittest.TestCase):
         self.assertEqual(out['result'], {'echo': {'key': 'R1.R', 'value': 5}, 'm': 'set'})
         # a page that closed while it waited does not take the next call
         self.assertIsNone(L.next(0.2, alive=lambda: False))
+        # on demand: with the link closed a call knocks; refused, it fails at once; accepted (the page connects), it goes on
+        L2 = A.Link()
+        err = []
+
+        def caller():
+            try:
+                err.append(L2.call('info', {}, timeout=5, client='MATLAB', knock_wait=5))
+            except A.AddonError as e:
+                err.append(str(e))
+        t = threading.Thread(target=caller)
+        t.start()
+        k = L2.knock_next(3)
+        self.assertEqual(k['client'], 'MATLAB')
+        L2.deny(k['id'])
+        t.join(5)
+        self.assertIn('απέρριψε', err[0])
+        err.clear()
+        t = threading.Thread(target=caller)
+        t.start()
+        self.assertIsNotNone(L2.knock_next(3))
+
+        def page2():
+            c = L2.next(3)
+            L2.reply(c['id'], {'result': 'ok'})
+        threading.Thread(target=page2).start()
+        t.join(6)
+        self.assertEqual(err, [{'result': 'ok'}])
         with self.assertRaises(A.AddonError):
             L.call('rm -rf', {})
 
@@ -195,9 +231,9 @@ class Server(unittest.TestCase):
         self.assertEqual(j['token'], self.LINK.token)
         s, j = self.req('/api/link/call', {'token': 'wrong', 'method': 'info'})
         self.assertEqual(s, 403)
-        s, j = self.req('/api/link/call', {'token': self.LINK.token, 'method': 'info'})   # no page: an explanation, not a hang
+        s, j = self.req('/api/link/call', {'token': self.LINK.token, 'method': 'info', 'timeout': 1})   # no page: it knocks, then explains
         self.assertEqual(s, 400)
-        self.assertIn('Σύνδεση', j['error'])
+        self.assertIn('Αποδοχή', j['error'])
         # a page answers through the server
         tok = self.LINK.token
 

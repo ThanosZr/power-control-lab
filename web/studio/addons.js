@@ -16,7 +16,7 @@
  const clone=o=>JSON.parse(JSON.stringify(o));
  const num=v=>{const x=typeof v==='number'?v:root.Parts.parseEng(v);return Number.isFinite(x)?x:v;};
 
- A.init=function(ctx){A.ctx=ctx;root.addEventListener('message',onMessage);A.refresh();try{if(localStorage.getItem('pcl-link')==='1')A.linkOn(true);}catch(e){}};
+ A.init=function(ctx){A.ctx=ctx;root.addEventListener('message',onMessage);A.refresh();try{if(localStorage.getItem('pcl-link')==='1')A.linkOn(true);}catch(e){}A.knockLoop();};
  A.refresh=async function(){try{const r=await fetch('api/addons');if(!r.ok)throw new Error((await r.json()).error||r.status);const j=await r.json();A.list=j.addons;A.userDir=j.user_dir;}
   catch(e){A.list=[];A.err=String(e.message||e);}if(A.ctx&&A.ctx.changed)A.ctx.changed();return A.list;};
  A.forType=type=>A.list.filter(a=>!a.error&&(a.targets||[]).some(t=>t.type===type));
@@ -85,9 +85,18 @@
  A.emit=function(ev,data){for(const f of A.frames.values())try{f.el.contentWindow?.postMessage({pclEvent:ev,data},'*');}catch(e){}};
  A.install=async function(file){const buf=new Uint8Array(await file.arrayBuffer());let bin='';for(let i=0;i<buf.length;i+=0x8000)bin+=String.fromCharCode(...buf.subarray(i,i+0x8000));
   const r=await fetch('api/addon_install',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:file.name,zip:btoa(bin)})});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);await A.refresh();return j;};
- A.remove=async function(id){const r=await fetch('api/addon_remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});const j=await r.json();if(!r.ok)throw new Error(j.error);A.close(id);await A.refresh();return j;};
+ const post=async(u,b)=>{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j;};
+ // {id} every version, {id, version} only that one; activate: the version that opens (3.15: add-ons per version)
+ A.remove=async function(id,version){const j=await post('api/addon_remove',{id,version});A.close(id);await A.refresh();return j;};
+ A.activate=async function(id,version){const j=await post('api/addon_activate',{id,version});A.close(id);await A.refresh();return j;};
 
  // -------------------------------------------------------------- the link
+ // on demand (Thanos 10/11): with the link closed, a program that calls «knocks»: the page shows Αποδοχή / Απόρριψη;
+ // with the link open it enters. The page always waits for knocks (a long poll that costs nothing while nobody knocks).
+ A.knockLoop=async function(){if(A.knocking)return;A.knocking=true;
+  for(;;){try{const r=await fetch('api/link/knock',{cache:'no-store'});if(r.status===204)continue;if(!r.ok){await new Promise(z=>setTimeout(z,15000));continue;}
+    const k=await r.json();if(A.link.on)continue;A.ctx.knock(k,async ok=>{if(ok){await A.linkOn(true);}else await post('api/link/deny',{id:k.id}).catch(()=>{});});}
+   catch(e){await new Promise(z=>setTimeout(z,15000));}}};
  A.linkOn=async function(on){A.link.on=!!on;try{localStorage.setItem('pcl-link',on?'1':'0');}catch(e){}if(A.ctx.changed)A.ctx.changed();if(!on||A.link.loop)return;
   A.link.loop=true;try{while(A.link.on){try{if(!A.link.token){const r=await fetch('api/link/token');if(!r.ok)throw new Error((await r.json()).error||r.status);A.link.token=(await r.json()).token;}
      const r=await fetch('api/link/next?token='+encodeURIComponent(A.link.token),{cache:'no-store'});

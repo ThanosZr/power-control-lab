@@ -8,8 +8,8 @@
 | Αρχείο | Γραμμές |
 |---|---:|
 | `web/studio/addon_client.js` | 30 |
-| `web/studio/addons.js` | 102 |
-| `web/studio/app.js` | 1778 |
+| `web/studio/addons.js` | 111 |
+| `web/studio/app.js` | 1785 |
 | `web/studio/editor.js` | 514 |
 | `web/studio/expr.js` | 56 |
 | `web/studio/math.js` | 144 |
@@ -26,9 +26,9 @@
 | `web/studio/templates.js` | 32 |
 | `web/studio/tutorials.js` | 810 |
 | `pcl/runner.js` | 15 |
-| `run.py` | 263 |
+| `run.py` | 275 |
 | `engine/__init__.py` | 1 |
-| `engine/addons.py` | 212 |
+| `engine/addons.py` | 322 |
 | `engine/analysis.py` | 307 |
 | `engine/batch.py` | 1775 |
 | `engine/bidir.py` | 564 |
@@ -46,14 +46,14 @@
 | `engine/templates.py` | 317 |
 | `engine/workbench.py` | 129 |
 | `pcl/__init__.py` | 14 |
-| `pcl/__main__.py` | 203 |
+| `pcl/__main__.py` | 216 |
 | `pcl/control.py` | 196 |
 | `pcl/core.py` | 970 |
 | `pcl/formats.py` | 222 |
 | `pcl/impulse.py` | 254 |
-| `pcl/link.py` | 130 |
+| `pcl/link.py` | 131 |
 | `pcl/plotting.py` | 340 |
-| `tests/test_addons.py` | 222 |
+| `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
 | `tests/test_batch.py` | 188 |
@@ -64,7 +64,7 @@
 | `tests/test_derivation.py` | 93 |
 | `tests/test_engine.py` | 276 |
 | `tests/test_live_sim.py` | 149 |
-| `tests/test_matlab.py` | 79 |
+| `tests/test_matlab.py` | 134 |
 | `tests/test_pcl.py` | 288 |
 | `tests/test_plotting.py` | 113 |
 | `tests/test_step.py` | 109 |
@@ -76,7 +76,7 @@
 | `tests/js/sim_cases.js` | 330 |
 | `tests/js/step_cases.js` | 89 |
 | `tests/js/tutorial_cases.js` | 137 |
-| `tests/ui/addons_flow.js` | 75 |
+| `tests/ui/addons_flow.js` | 79 |
 | `tests/ui/blocks_flow.js` | 140 |
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/features_flow.js` | 84 |
@@ -366,121 +366,123 @@
 | 753 | function | `scenEval` |
 | 756 | function | `addonDock` |
 | 759 | function | `renderAddons` |
-| 770 | function | `initAddons` |
-| 777 | function | `scenBatchWrite` |
-| 780 | function | `renderScenFiles` |
-| 783 | const fn | `scenNum` |
-| 784 | function | `scenTable` |
-| 785 | function | `scenShow` |
-| 798 | function | `scenTicks` |
-| 799 | function | `scenPlot` |
-| 803 | const fn | `thin` |
-| 810 | const fn | `dig` |
-| 821 | function | `initScenarios` |
-| 828 | function | `liveApply` |
-| 831 | function | `closeMenu` |
-| 832 | function | `openMenu` |
-| 848 | function | `updateHover` |
-| 862 | function | `renderPalette` |
-| 869 | function | `tutorial` |
-| 872 | function | `circuitSig` |
-| 882 | function | `tutorialRef` |
-| 883 | function | `theoryValidity` |
-| 889 | function | `staleBanner` |
-| 892 | function | `bindRestore` |
-| 893 | function | `loadTutorial` |
-| 897 | function | `applyProject` |
-| 907 | function | `renderTutorial` |
-| 917 | function | `gallery` |
-| 923 | function | `api` |
-| 924 | function | `paramsOf` |
-| 925 | function | `avgOver` |
-| 928 | function | `simValue` |
-| 934 | function | `lastPP` |
-| 936 | function | `runTheory` |
-| 948 | function | `cmpRows` |
-| 949 | function | `stepsHTML` |
-| 950 | function | `renderTheory` |
-| 980 | function | `rippleDev` |
-| 982 | function | `periodAvgAt` |
-| 984 | function | `samplingTheory` |
-| 993 | const fn | `lastAt` |
-| 1015 | function | `polyTheory` |
-| 1022 | const fn | `frac` |
-| 1051 | function | `lastPeriods` |
-| 1052 | function | `evalOrderHTML` |
-| 1055 | function | `blocksTheory` |
-| 1070 | function | `pcmTheory` |
-| 1096 | function | `codeTheory` |
-| 1106 | function | `eisTheory` |
-| 1108 | const fn | `ser` |
-| 1121 | function | `imSteady` |
-| 1124 | function | `imPar` |
-| 1125 | function | `phaseRms` |
-| 1126 | function | `vfTheory` |
-| 1139 | function | `focTheory` |
-| 1156 | function | `synTheory` |
-| 1175 | const fn | `need` |
-| 1195 | function | `pmTheory` |
-| 1197 | const fn | `mtpa` |
-| 1213 | function | `srmTheory` |
-| 1228 | const fn | `curve` |
-| 1239 | function | `lgTheory` |
-| 1250 | const fn | `cr` |
-| 1257 | function | `chaosTheory` |
-| 1269 | function | `dcDriveTheory` |
-| 1270 | const fn | `per` |
-| 1271 | const fn | `cross` |
-| 1301 | function | `twModel` |
-| 1304 | const fn | `g` |
-| 1307 | function | `twLattice` |
-| 1314 | const fn | `marks` |
-| 1317 | function | `twTheory` |
-| 1325 | const fn | `at` |
-| 1342 | function | `arTheory` |
-| 1362 | function | `impulseMeasure` |
-| 1364 | const fn | `cross` |
-| 1367 | function | `marxTheory` |
-| 1385 | function | `chopModel` |
-| 1388 | const fn | `f` |
-| 1391 | function | `chopTheory` |
-| 1405 | function | `cmp3` |
-| 1409 | function | `hvExact` |
-| 1410 | function | `hv153Theory` |
-| 1436 | function | `besI1e` |
-| 1438 | function | `heaviside` |
-| 1440 | function | `lossTheory` |
-| 1459 | function | `vtBreak` |
-| 1460 | function | `vtTheory` |
-| 1480 | function | `hvdivTheory` |
-| 1482 | const fn | `r` |
-| 1494 | function | `scheringTheory` |
-| 1495 | const fn | `inv` |
-| 1504 | const fn | `sr` |
-| 1510 | function | `formulaTheory` |
-| 1579 | function | `nodeAvg` |
-| 1585 | function | `circuitForMath` |
-| 1617 | function | `scheduleMath` |
-| 1618 | function | `batteryKey` |
-| 1620 | function | `mathChoices` |
-| 1621 | const fn | `prim` |
-| 1623 | function | `renderMathChoices` |
-| 1625 | function | `runTemplate` |
-| 1631 | function | `runMath` |
-| 1652 | function | `saveLocal` |
-| 1653 | function | `download` |
-| 1654 | function | `exportCSV` |
-| 1660 | function | `syncScopeInputs` |
-| 1661 | function | `setSpeed` |
-| 1664 | function | `openSettings` |
-| 1665 | const fn | `sel` |
-| 1666 | const fn | `chk` |
-| 1684 | function | `boot` |
-| 1723 | const fn | `mv` |
-| 1724 | const fn | `up` |
-| 1725 | const fn | `navOpen` |
-| 1731 | const fn | `probeSel` |
-| 1775 | function | `renderTheoryLive` |
+| 760 | const fn | `vsel` |
+| 774 | function | `knockToast` |
+| 777 | function | `initAddons` |
+| 784 | function | `scenBatchWrite` |
+| 787 | function | `renderScenFiles` |
+| 790 | const fn | `scenNum` |
+| 791 | function | `scenTable` |
+| 792 | function | `scenShow` |
+| 805 | function | `scenTicks` |
+| 806 | function | `scenPlot` |
+| 810 | const fn | `thin` |
+| 817 | const fn | `dig` |
+| 828 | function | `initScenarios` |
+| 835 | function | `liveApply` |
+| 838 | function | `closeMenu` |
+| 839 | function | `openMenu` |
+| 855 | function | `updateHover` |
+| 869 | function | `renderPalette` |
+| 876 | function | `tutorial` |
+| 879 | function | `circuitSig` |
+| 889 | function | `tutorialRef` |
+| 890 | function | `theoryValidity` |
+| 896 | function | `staleBanner` |
+| 899 | function | `bindRestore` |
+| 900 | function | `loadTutorial` |
+| 904 | function | `applyProject` |
+| 914 | function | `renderTutorial` |
+| 924 | function | `gallery` |
+| 930 | function | `api` |
+| 931 | function | `paramsOf` |
+| 932 | function | `avgOver` |
+| 935 | function | `simValue` |
+| 941 | function | `lastPP` |
+| 943 | function | `runTheory` |
+| 955 | function | `cmpRows` |
+| 956 | function | `stepsHTML` |
+| 957 | function | `renderTheory` |
+| 987 | function | `rippleDev` |
+| 989 | function | `periodAvgAt` |
+| 991 | function | `samplingTheory` |
+| 1000 | const fn | `lastAt` |
+| 1022 | function | `polyTheory` |
+| 1029 | const fn | `frac` |
+| 1058 | function | `lastPeriods` |
+| 1059 | function | `evalOrderHTML` |
+| 1062 | function | `blocksTheory` |
+| 1077 | function | `pcmTheory` |
+| 1103 | function | `codeTheory` |
+| 1113 | function | `eisTheory` |
+| 1115 | const fn | `ser` |
+| 1128 | function | `imSteady` |
+| 1131 | function | `imPar` |
+| 1132 | function | `phaseRms` |
+| 1133 | function | `vfTheory` |
+| 1146 | function | `focTheory` |
+| 1163 | function | `synTheory` |
+| 1182 | const fn | `need` |
+| 1202 | function | `pmTheory` |
+| 1204 | const fn | `mtpa` |
+| 1220 | function | `srmTheory` |
+| 1235 | const fn | `curve` |
+| 1246 | function | `lgTheory` |
+| 1257 | const fn | `cr` |
+| 1264 | function | `chaosTheory` |
+| 1276 | function | `dcDriveTheory` |
+| 1277 | const fn | `per` |
+| 1278 | const fn | `cross` |
+| 1308 | function | `twModel` |
+| 1311 | const fn | `g` |
+| 1314 | function | `twLattice` |
+| 1321 | const fn | `marks` |
+| 1324 | function | `twTheory` |
+| 1332 | const fn | `at` |
+| 1349 | function | `arTheory` |
+| 1369 | function | `impulseMeasure` |
+| 1371 | const fn | `cross` |
+| 1374 | function | `marxTheory` |
+| 1392 | function | `chopModel` |
+| 1395 | const fn | `f` |
+| 1398 | function | `chopTheory` |
+| 1412 | function | `cmp3` |
+| 1416 | function | `hvExact` |
+| 1417 | function | `hv153Theory` |
+| 1443 | function | `besI1e` |
+| 1445 | function | `heaviside` |
+| 1447 | function | `lossTheory` |
+| 1466 | function | `vtBreak` |
+| 1467 | function | `vtTheory` |
+| 1487 | function | `hvdivTheory` |
+| 1489 | const fn | `r` |
+| 1501 | function | `scheringTheory` |
+| 1502 | const fn | `inv` |
+| 1511 | const fn | `sr` |
+| 1517 | function | `formulaTheory` |
+| 1586 | function | `nodeAvg` |
+| 1592 | function | `circuitForMath` |
+| 1624 | function | `scheduleMath` |
+| 1625 | function | `batteryKey` |
+| 1627 | function | `mathChoices` |
+| 1628 | const fn | `prim` |
+| 1630 | function | `renderMathChoices` |
+| 1632 | function | `runTemplate` |
+| 1638 | function | `runMath` |
+| 1659 | function | `saveLocal` |
+| 1660 | function | `download` |
+| 1661 | function | `exportCSV` |
+| 1667 | function | `syncScopeInputs` |
+| 1668 | function | `setSpeed` |
+| 1671 | function | `openSettings` |
+| 1672 | const fn | `sel` |
+| 1673 | const fn | `chk` |
+| 1691 | function | `boot` |
+| 1730 | const fn | `mv` |
+| 1731 | const fn | `up` |
+| 1732 | const fn | `navOpen` |
+| 1738 | const fn | `probeSel` |
+| 1782 | function | `renderTheoryLive` |
 
 ### `web/studio/editor.js`
 
@@ -1075,11 +1077,11 @@ _(χωρίς συναρτήσεις)_
 | 92 | method | `Handler.alive` |
 | 102 | method | `Handler.body` |
 | 111 | method | `Handler.addon_get` |
-| 134 | method | `Handler.addon_post` |
-| 156 | method | `Handler.send` |
-| 172 | method | `Handler.do_GET` |
-| 203 | method | `Handler.do_POST` |
-| 238 | function | `main` |
+| 141 | method | `Handler.addon_post` |
+| 168 | method | `Handler.send` |
+| 184 | method | `Handler.do_GET` |
+| 215 | method | `Handler.do_POST` |
+| 250 | function | `main` |
 
 ### `engine/__init__.py`
 
@@ -1089,20 +1091,27 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 33 | class | `AddonError` |
-| 37 | function | `_manifest` |
-| 57 | function | `listing` |
-| 78 | function | `user_file` |
-| 88 | function | `install` |
-| 133 | function | `remove` |
-| 142 | class | `Link` |
-| 145 | method | `Link.__init__` |
-| 153 | method | `Link.write_file` |
-| 167 | method | `Link.ok` |
-| 170 | method | `Link.connected` |
-| 173 | method | `Link.call` |
-| 192 | method | `Link.next` |
-| 209 | method | `Link.reply` |
+| 36 | class | `AddonError` |
+| 40 | function | `_manifest` |
+| 60 | function | `_vkey` |
+| 65 | function | `versions` |
+| 72 | function | `active` |
+| 79 | function | `listing` |
+| 110 | function | `user_file` |
+| 120 | function | `activate` |
+| 128 | function | `install` |
+| 180 | function | `remove` |
+| 197 | class | `Link` |
+| 200 | method | `Link.__init__` |
+| 211 | method | `Link.write_file` |
+| 226 | method | `Link.ok` |
+| 229 | method | `Link.connected` |
+| 234 | method | `Link.call` |
+| 255 | method | `Link.knock` |
+| 274 | method | `Link.knock_next` |
+| 290 | method | `Link.deny` |
+| 297 | method | `Link.next` |
+| 319 | method | `Link.reply` |
 
 ### `engine/analysis.py`
 
@@ -1515,23 +1524,23 @@ _(χωρίς συναρτήσεις)_
 | 24 | function | `_home` |
 | 28 | class | `App` |
 | 29 | method | `App.__init__` |
-| 34 | method | `App.__repr__` |
-| 37 | method | `App.call` |
-| 57 | method | `App.info` |
-| 60 | method | `App.project` |
-| 63 | method | `App.load` |
-| 66 | method | `App.params` |
-| 69 | method | `App.get` |
-| 72 | method | `App.set` |
-| 75 | method | `App.set_many` |
-| 78 | method | `App.selection` |
-| 81 | method | `App.channels` |
-| 84 | method | `App.scope` |
-| 89 | method | `App.run` |
-| 95 | method | `App.python` |
-| 100 | method | `App.show` |
-| 118 | method | `App.notify` |
-| 122 | function | `connect` |
+| 35 | method | `App.__repr__` |
+| 38 | method | `App.call` |
+| 58 | method | `App.info` |
+| 61 | method | `App.project` |
+| 64 | method | `App.load` |
+| 67 | method | `App.params` |
+| 70 | method | `App.get` |
+| 73 | method | `App.set` |
+| 76 | method | `App.set_many` |
+| 79 | method | `App.selection` |
+| 82 | method | `App.channels` |
+| 85 | method | `App.scope` |
+| 90 | method | `App.run` |
+| 96 | method | `App.python` |
+| 101 | method | `App.show` |
+| 119 | method | `App.notify` |
+| 123 | function | `connect` |
 
 ### `pcl/plotting.py`
 

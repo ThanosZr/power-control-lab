@@ -52,6 +52,61 @@ class Octave(unittest.TestCase):
         for a, x in zip(o['y'], b.y[0]):                    # Octave's jsonencode writes 15–16 digits
             self.assertAlmostEqual(a, x, delta=1e-14 * abs(x))
 
+    def test_link_to_the_app(self):
+        # 3.15: MATLAB/Octave see the app through the link (PclApp over pcl_link): a server here, and a page that answers
+        # as the app does (the real page is tested in tests/ui/addons_flow.js)
+        import os
+        import threading
+        from http.server import ThreadingHTTPServer
+        from run import Handler, LINK
+        srv = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        home = Path(tempfile.mkdtemp(prefix='pcl-link-'))
+        old = os.environ.get('PCL_HOME')
+        os.environ['PCL_HOME'] = str(home)
+        LINK.write_file(f'http://127.0.0.1:{srv.server_port}')
+        params, seen, stop = {'R1.R': 10}, [], threading.Event()
+
+        def page():
+            while not stop.is_set():
+                c = LINK.next(0.5)
+                if not c:
+                    continue
+                m, a = c['method'], c['args']
+                seen.append((m, a))
+                if m == 'info':
+                    res = {'tutorial': 'buck', 'T': 1e-5}
+                elif m == 'get':
+                    res = params[a['key']]
+                elif m == 'set':
+                    params[a['key']] = a['value']
+                    res = {'key': a['key'], 'value': a['value']}
+                elif m == 'run':
+                    res = {'keys': ['V:C1'], 't': [0, 1e-3, 2e-3], 'ch': {'V:C1': [0, 6, 12]}, 'measure': {m2['name']: 12.0 for m2 in a.get('measure', [])}, 'meta': {'steps': 3}}
+                else:
+                    res = True
+                LINK.reply(c['id'], {'result': res})
+        th = threading.Thread(target=page, daemon=True)
+        th.start()
+        try:
+            o = octave("app = PclApp('Octave test'); i = app.info(); app.setParam('R1.R', 20); v = app.param('R1.R'); "
+                       "r = app.run('t_end', 2e-3, 'channels', {'V:C1'}, 'measure', {'Vo', 'V:C1', 'avg', 10}); "
+                       "printf('JSON %s\\n', jsonencode(struct('tut', i.tutorial, 'v', v, 'n', numel(r.t), 'last', r.V_C1(end), 'vo', r.measure.Vo)));")
+        finally:
+            stop.set()
+            th.join(2)
+            srv.shutdown()
+            srv.server_close()
+            if old is None:
+                os.environ.pop('PCL_HOME', None)
+            else:
+                os.environ['PCL_HOME'] = old
+            shutil.rmtree(home, ignore_errors=True)
+        self.assertEqual(o, {'tut': 'buck', 'v': 20, 'n': 3, 'last': 12, 'vo': 12})
+        run = [a for m, a in seen if m == 'run'][0]
+        self.assertEqual(run['measure'], [{'name': 'Vo', 'key': 'V:C1', 'stat': 'avg', 'periods': 10}])
+        self.assertEqual(run['channels'], ['V:C1'])
+
     def test_read_csv_json_mat(self):
         import pcl
         d = Path(tempfile.mkdtemp(prefix='pcl-oct-'))

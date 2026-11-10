@@ -23,7 +23,10 @@ from pathlib import Path
 
 BUILTIN = Path(__file__).resolve().parent.parent / 'web' / 'addons'
 HOME = Path(os.environ.get('PCL_HOME') or (Path.home() / '.pcl'))
-USER = HOME / 'addons'
+# the user's add-ons, one folder per version: <app>/addons/<id>/<version>/ (outside git and the zip of the app, so the
+# repository carries no large files; PCL_ADDONS moves it). The active version is the newest, or the one in <id>/active.
+USER = Path(os.environ.get('PCL_ADDONS') or (Path(__file__).resolve().parent.parent / 'addons'))
+VER_RE = re.compile(r'[0-9A-Za-z][0-9A-Za-z.\-]{0,31}')
 ID_RE = re.compile(r'[a-z0-9][a-z0-9\-]{1,39}')
 MAX_ZIP = 20 << 20
 KINDS = {'panel', 'params', 'plot'}
@@ -54,35 +57,72 @@ def _manifest(folder):
             'python': [str(x) for x in (m.get('python') or []) if isinstance(x, str) and x.endswith('.py') and '..' not in x and '/' not in x]}
 
 
+def _vkey(v):
+    """Version order: numbers as numbers (1.10 after 1.9), then the rest as text."""
+    return [(0, int(x), '') if x.isdigit() else (1, 0, x) for x in re.split(r'[.\-]', v)]
+
+
+def versions(aid):
+    d = USER / aid
+    if not d.is_dir():
+        return []
+    return sorted((v.name for v in d.iterdir() if v.is_dir() and (v / 'pcl-addon.json').is_file()), key=_vkey)
+
+
+def active(aid):
+    vs = versions(aid)
+    f = USER / aid / 'active'
+    want = f.read_text(encoding='utf-8').strip() if f.is_file() else ''
+    return want if want in vs else (vs[-1] if vs else None)
+
+
 def listing():
-    """The built-in and the user's add-ons (a user add-on with the id of a built-in one is skipped)."""
-    out, seen = [], set()
-    for base, builtin in ((BUILTIN, True), (USER, False)):
-        if not base.is_dir():
-            continue
-        for d in sorted(base.iterdir()):
+    """The built-in add-ons (web/addons/<id>/) and the user's (addons/<id>/<version>/: the active version, and all of them)."""
+    out = []
+    if BUILTIN.is_dir():
+        for d in sorted(BUILTIN.iterdir()):
             if not (d / 'pcl-addon.json').is_file():
                 continue
             try:
                 m = _manifest(d)
             except (AddonError, ValueError, OSError) as e:
-                out.append({'id': d.name, 'name': d.name, 'error': str(e), 'builtin': builtin})
+                out.append({'id': d.name, 'name': d.name, 'error': str(e), 'builtin': True})
                 continue
-            if m['id'] in seen or m['id'] != d.name:
+            if m['id'] == d.name:
+                out.append({**m, 'builtin': True, 'base': f'/addons/{m["id"]}/', 'versions': [m['version']], 'active': m['version']})
+    seen = {a['id'] for a in out}
+    if USER.is_dir():
+        for d in sorted(USER.iterdir()):
+            if not d.is_dir() or not ID_RE.fullmatch(d.name) or d.name in seen:
                 continue
-            seen.add(m['id'])
-            out.append({**m, 'builtin': builtin, 'base': f'/addons/{m["id"]}/'})
+            v = active(d.name)
+            if not v:
+                continue
+            try:
+                m = _manifest(d / v)
+            except (AddonError, ValueError, OSError) as e:
+                out.append({'id': d.name, 'name': d.name, 'error': str(e), 'builtin': False, 'versions': versions(d.name), 'active': v})
+                continue
+            out.append({**m, 'version': v, 'builtin': False, 'base': f'/addons/{d.name}/{v}/', 'versions': versions(d.name), 'active': v})
     return out
 
 
 def user_file(rel):
-    """A file of a user add-on, for /addons/<id>/<path> (the built-in ones are served from web/ itself)."""
-    parts = rel.split('/', 1)
-    if len(parts) != 2 or not ID_RE.fullmatch(parts[0]):
+    """A file of a user add-on, for /addons/<id>/<version>/<path> (the built-in ones are served from web/ itself)."""
+    parts = rel.split('/', 2)
+    if len(parts) != 3 or not ID_RE.fullmatch(parts[0]) or not VER_RE.fullmatch(parts[1]):
         return None
-    base = (USER / parts[0]).resolve()
-    f = (base / (parts[1] or 'index.html')).resolve()
+    base = (USER / parts[0] / parts[1]).resolve()
+    f = (base / (parts[2] or 'index.html')).resolve()
     return f if f.is_relative_to(base) and f.is_file() else None
+
+
+def activate(data):
+    aid, v = str(data.get('id') or ''), str(data.get('version') or '')
+    if not ID_RE.fullmatch(aid) or v not in versions(aid):
+        raise AddonError('Δεν υπάρχει αυτή η έκδοση του πρόσθετου.')
+    (USER / aid / 'active').write_text(v, encoding='utf-8')
+    return {'ok': True, 'id': aid, 'active': v}
 
 
 def install(data):
@@ -105,7 +145,8 @@ def install(data):
     total = sum(z.getinfo(n).file_size for n in names)
     if total > 4 * MAX_ZIP or len(names) > 2000:
         raise AddonError('Πολύ μεγάλο πρόσθετο.')
-    tmp = HOME / ('.install-' + secrets.token_hex(4))
+    USER.mkdir(parents=True, exist_ok=True)
+    tmp = USER / ('.install-' + secrets.token_hex(4))
     try:
         for n in names:
             if not n.startswith(prefix):
@@ -119,23 +160,37 @@ def install(data):
         m = _manifest(tmp)
         if (BUILTIN / m['id']).is_dir():
             raise AddonError(f'Το id «{m["id"]}» ανήκει σε ενσωματωμένο πρόσθετο.')
-        USER.mkdir(parents=True, exist_ok=True)
-        dest = USER / m['id']
+        v = m['version'] or '0'
+        if not VER_RE.fullmatch(v):
+            raise AddonError('Η έκδοση (version) του πρόσθετου: γράμματα, ψηφία, «.» και «-», π.χ. 1.2.0.')
+        dest = USER / m['id'] / v
         if dest.exists():
+            if not data.get('replace'):
+                raise AddonError(f'Η έκδοση {v} του «{m["id"]}» υπάρχει ήδη. Ανέβασε νέα έκδοση (version στο pcl-addon.json) ή αντικατάστησέ την.')
             shutil.rmtree(dest)
+        dest.parent.mkdir(parents=True, exist_ok=True)
         tmp.rename(dest)
-        return {**m, 'builtin': False, 'base': f'/addons/{m["id"]}/'}
+        (USER / m['id'] / 'active').write_text(v, encoding='utf-8')     # the new version becomes the active one
+        return {**m, 'version': v, 'builtin': False, 'base': f'/addons/{m["id"]}/{v}/', 'versions': versions(m['id']), 'active': v}
     finally:
         if tmp.exists():
             shutil.rmtree(tmp, ignore_errors=True)
 
 
 def remove(data):
-    aid = str(data.get('id') or '')
+    """{id} removes every version, {id, version} only that one."""
+    aid, v = str(data.get('id') or ''), data.get('version')
     if not ID_RE.fullmatch(aid) or not (USER / aid).is_dir():
         raise AddonError('Δεν υπάρχει τέτοιο πρόσθετο του χρήστη.')
-    shutil.rmtree(USER / aid)
-    return {'ok': True, 'id': aid}
+    if v:
+        if str(v) not in versions(aid):
+            raise AddonError('Δεν υπάρχει αυτή η έκδοση.')
+        shutil.rmtree(USER / aid / str(v))
+        if not versions(aid):
+            shutil.rmtree(USER / aid)
+    else:
+        shutil.rmtree(USER / aid)
+    return {'ok': True, 'id': aid, 'versions': versions(aid)}
 
 
 # ---------------------------------------------------------------- the link
@@ -149,12 +204,16 @@ class Link:
         self.answers = {}        # id → answer
         self.seq = 0
         self.seen = 0.0          # the last time the page asked for calls
+        self.waiting = 0         # pages waiting for calls right now
+        self.knocks = {}         # a program asks while the link is closed: id → {client, t, state: new | shown | denied}
+        self.kseq = 0
 
     def write_file(self, url):
         """~/.pcl/link.json with the address and the token, readable only by this user (pcl.link and pcl_link.m read it)."""
+        home = Path(os.environ.get('PCL_HOME') or HOME)      # read now: a test or a second server may move it
         try:
-            HOME.mkdir(parents=True, exist_ok=True)
-            f = HOME / 'link.json'
+            home.mkdir(parents=True, exist_ok=True)
+            f = home / 'link.json'
             f.write_text(json.dumps({'url': url, 'token': self.token, 'pid': os.getpid()}), encoding='utf-8')
             try:
                 os.chmod(f, 0o600)
@@ -168,13 +227,17 @@ class Link:
         return isinstance(token, str) and secrets.compare_digest(token, self.token)
 
     def connected(self):
-        return time.time() - self.seen < 40
+        # a page waits for calls now (its long poll), or asked a moment ago (between two polls). A closed page drops out
+        # within a second (alive), so a program does not wait for a page that is gone
+        return self.waiting > 0 or time.time() - self.seen < 3
 
-    def call(self, method, args, timeout=120.0):
+    def call(self, method, args, timeout=120.0, client='', knock_wait=60.0):
+        """A call of a program. With the link closed it knocks: the page shows «Αποδοχή / Απόρριψη», and the call waits
+        up to knock_wait s for the answer (on demand, Thanos 10/11)."""
         if not isinstance(method, str) or not re.fullmatch(r'[a-z][a-z_.]{1,40}', method):
             raise AddonError('Άγνωστη μέθοδος.')
         if not self.connected():
-            raise AddonError('Η εφαρμογή δεν είναι ανοιχτή ή η σύνδεση με εξωτερικά προγράμματα είναι κλειστή (κουμπί «Σύνδεση» στο πάνελ «Πρόσθετα»).')
+            self.knock(client, knock_wait)
         with self.cv:
             self.seq += 1
             cid = self.seq
@@ -189,22 +252,69 @@ class Link:
                 self.cv.wait(left)
             return self.answers.pop(cid)
 
-    def next(self, wait=25.0, alive=None):
-        """The next call for the page, or None after `wait` s. `alive()` tells whether the page that asks is still there:
-        a page closed while it waited must not take a call (it would be lost), so the wait goes in short slices."""
-        self.seen = time.time()
+    def knock(self, client, wait):
+        with self.cv:
+            self.kseq += 1
+            kid = self.kseq
+            self.knocks[kid] = {'id': kid, 'client': str(client or 'πρόγραμμα')[:80], 't': time.time(), 'state': 'new'}
+            self.cv.notify_all()
+            end = time.time() + max(0.0, float(wait))
+            try:
+                while not self.connected():
+                    if self.knocks[kid]['state'] == 'denied':
+                        raise AddonError('Η εφαρμογή απέρριψε τη σύνδεση.')
+                    left = end - time.time()
+                    if left <= 0:
+                        raise AddonError('Η σύνδεση με εξωτερικά προγράμματα είναι κλειστή και κανείς δεν την αποδέχτηκε: άνοιξε την εφαρμογή '
+                                         '(python run.py) και πάτησε «Αποδοχή» στο μήνυμα, ή άνοιξε τη σύνδεση στο πάνελ «Πρόσθετα και σύνδεση».')
+                    self.cv.wait(min(left, 0.5))
+            finally:
+                self.knocks.pop(kid, None)
+
+    def knock_next(self, wait=25.0, alive=None):
+        """For the page, also with the link closed: the next program that knocks, or None."""
         with self.cv:
             end = time.time() + wait
             while True:
                 if alive is not None and not alive():
                     return None
-                if self.calls:
-                    return self.calls.pop(0)
+                k = next((k for k in self.knocks.values() if k['state'] == 'new'), None)
+                if k:
+                    k['state'] = 'shown'
+                    return {x: k[x] for x in ('id', 'client')}
                 left = end - time.time()
                 if left <= 0:
                     return None
                 self.cv.wait(min(left, 1.0))
-                self.seen = time.time()
+
+    def deny(self, kid):
+        with self.cv:
+            k = self.knocks.get(int(kid))
+            if k:
+                k['state'] = 'denied'
+            self.cv.notify_all()
+
+    def next(self, wait=25.0, alive=None):
+        """The next call for the page, or None after `wait` s. `alive()` tells whether the page that asks is still there:
+        a page closed while it waited must not take a call (it would be lost), so the wait goes in short slices."""
+        self.seen = time.time()
+        with self.cv:
+            self.waiting += 1
+            self.cv.notify_all()            # a knocking call waits for the page to be connected
+            try:
+                end = time.time() + wait
+                while True:
+                    if alive is not None and not alive():
+                        return None
+                    if self.calls:
+                        return self.calls.pop(0)
+                    left = end - time.time()
+                    if left <= 0:
+                        return None
+                    self.cv.wait(min(left, 1.0))
+                    self.seen = time.time()
+            finally:
+                self.waiting -= 1
 
     def reply(self, cid, answer):
         with self.cv:
