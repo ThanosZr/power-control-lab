@@ -6,6 +6,8 @@
 //   {action:'tutorial', id, options}           the project a tutorial builds
 //   {action:'tutorials'}                       the list of tutorials and their options
 //   {action:'channels', project}               the channels the project has
+//   {action:'bifurcation', project, comp, param, values, key, stat, transient, record, hdiv, method}   (3.15)
+//                                              per value the samples of the last `record` periods and their period, as the app's diagram
 // handle(q) is synchronous. A circuit with a Python block throws an error with needPython until Python is loaded.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
@@ -73,10 +75,22 @@
   if(q.action==='channels'){const s=new MNA.Sim(q.project,{hDiv:50});return {keys:s.keys,T:s.T};}
   if(q.action==='tutorial')return tutorial(q);
   if(q.action==='tutorials')return tutorials();
+  if(q.action==='bifurcation')return bifurcation(q,hooks);
   throw new Error('Άγνωστη ενέργεια: '+q.action);}
+
+ // the bifurcation diagram as a sweep (3.15): one value = MNA.sweepPoint (transient, then one sample per base period:
+ // min, max, avg or end) and the period of the samples (Metrics.periodicity). The app's diagram, pcl and the pool call the same.
+ function bifPoint(pr,o){const r=MNA.sweepPoint(pr,o),q=Metrics.periodicity(r.y);return {value:o.value,y:r.y,period:q.period,T:r.T,warnings:r.warnings};}
+ function bifSpec(q){const pr=q.project;if(!pr||!Array.isArray(pr.components))throw new Error('Λείπει το project (components, wires).');
+  let comp=q.comp,param=q.param;if(!param&&typeof comp==='string'&&comp.includes('.'))[comp,param]=comp.split('.');
+  if(!comp||!param)throw new Error('Η διακλάδωση θέλει παράμετρο <id>.<παράμετρος>, π.χ. R1.R.');if(!q.key)throw new Error('Η διακλάδωση θέλει κανάλι (key), π.χ. I:L1.');
+  const s0=pr.sim||{};return {comp,param,key:q.key,stat:q.stat||'min',transient:q.transient??200,record:q.record??50,hDiv:+q.hdiv||+s0.hDiv||100,method:q.method||s0.method||'TR'};}
+ function bifurcation(q,hooks={}){const o=bifSpec(q),vals=(q.values||[]).map(Number),w0=Date.now(),pts=[];if(!vals.length)throw new Error('Η διακλάδωση δεν έχει τιμές.');
+  for(let k=0;k<vals.length;k++){pts.push(bifPoint(q.project,{...o,value:+vals[k].toPrecision(10)}));if(hooks.tick)hooks.tick((k+1)/vals.length);}
+  return {points:pts,meta:{...o,T:pts[0].T,n:pts.length,wall_s:(Date.now()-w0)/1000}};}
  // JSON without NaN/Infinity (null), as Python's json reads it
  const json=o=>JSON.stringify(o,(k,v)=>typeof v==='number'&&!Number.isFinite(v)?null:v);
 
- const api={handle,run,measure,decimate,defaultKeys,json};
+ const api={handle,run,measure,decimate,defaultKeys,json,bifPoint,bifSpec};
  root.Scenario=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:typeof self!=='undefined'?self:globalThis);

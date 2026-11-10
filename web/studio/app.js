@@ -253,13 +253,23 @@ function renderBifurcationForm(){const sel=$('#bf-par');if(!sel)return;const ps=
  sel.innerHTML=ps.map(([k,n])=>`<option value="${esc(k)}">${esc(n)}</option>`).join('');const pref=sw?sw.comp+'.'+sw.param:'';
  if(ps.some(p=>p[0]===keep))sel.value=keep;else if(ps.some(p=>p[0]===pref)){sel.value=pref;$('#bf-from').value=sw.from;$('#bf-to').value=sw.to;$('#bf-n').value=sw.n;$('#bf-tr').value=sw.transient;$('#bf-rec').value=sw.record;if(sw.stat)$('#bf-stat').value=sw.stat;}
  else if(ps.length&&!$('#bf-from').value){const v=ps[0][2];$('#bf-from').value=+(v*.5).toPrecision(4);$('#bf-to').value=+(v*1.5).toPrecision(4);}}
+// 3.15: one value = Scenario.bifPoint, the same as pcl's bifurcation (ROADMAP §30); in parallel on the pool of solver workers,
+// or in order when the circuit has a Python block or workers are not available
 async function runBifurcation(){if(BF.run||!S.sim||S.error)return;const [comp,param]=String($('#bf-par').value).split('.');const key=$('#bf-sig').value,stat=$('#bf-stat').value;
  const a=P.parseEng($('#bf-from').value),b=P.parseEng($('#bf-to').value),n=Math.max(2,Math.min(400,+$('#bf-n').value|0)),tr=Math.max(0,+$('#bf-tr').value|0),rec=Math.max(4,Math.min(400,+$('#bf-rec').value|0));
  const out=$('#bf-out');if(!comp||!key||!Number.isFinite(a)||!Number.isFinite(b)){out.innerHTML='<p class="muted small">Διάλεξε σήμα, παράμετρο και εύρος.</p>';return;}
  const base=project();BF.run=true;BF.pts=[];BF.meta={comp,param,key,stat,a,b,label:$('#bf-par').selectedOptions[0]?.textContent||param,u:MeasureUnit(key)};$('#bf-run').disabled=true;$('#bf-stop').disabled=false;const t0=performance.now();
- try{for(let k=0;k<n&&BF.run;k++){const v=a+(b-a)*k/(n-1);const r=MNA.sweepPoint(base,{comp,param,value:+v.toPrecision(10),key,stat,transient:tr,record:rec,hDiv:+$('#sim-step').value||100,method:$('#method').value});
-   BF.pts.push({v,y:r.y,q:Metrics.periodicity(r.y)});if(k%2===1||k===n-1){drawBifurcation(`${k+1}/${n} · ${fmt((performance.now()-t0)/1e3,3)} s`);await new Promise(res=>setTimeout(res,0));}}}
- catch(e){out.innerHTML=`<p class="warn-text small">${esc(e.message)}</p>`;}finally{BF.run=false;$('#bf-run').disabled=false;$('#bf-stop').disabled=true;drawBifurcation(`${BF.pts.length} σημεία · ${fmt((performance.now()-t0)/1e3,3)} s`);}}
+ const spec={comp,param,key,stat,transient:tr,record:rec,hDiv:+$('#sim-step').value||100,method:$('#method').value};
+ const vals=Array.from({length:n},(_,k)=>a+(b-a)*k/(n-1)),add=(v,r)=>BF.pts.push({v,y:r.y,q:Metrics.periodicity(r.y)});
+ const par=window.Pool&&window.Worker&&!Pool.hasPython(base)&&n>2;let lastDraw=0;BF.par=par?(BF.pool||(BF.pool=new Pool.SimPool())).n:1;
+ try{
+  if(par){const got=new Array(n);
+   await BF.pool.map(vals.map(v=>({action:'bifurcation',project:base,...spec,hdiv:spec.hDiv,values:[v]})),(i,o)=>{got[i]=o.points[0];
+     BF.pts=[];got.forEach((r,k)=>{if(r)add(vals[k],r);});const now=performance.now();if(now-lastDraw>150){lastDraw=now;drawBifurcation(`${BF.pts.length}/${n} · ${fmt((now-t0)/1e3,3)} s · ${BF.par} workers`);}});}
+  else for(let k=0;k<n&&BF.run;k++){const v=vals[k];add(v,Scenario.bifPoint(base,{...spec,value:+v.toPrecision(10)}));if(k%2===1||k===n-1){drawBifurcation(`${k+1}/${n} · ${fmt((performance.now()-t0)/1e3,3)} s`);await new Promise(res=>setTimeout(res,0));}}}
+ catch(e){if(BF.run)out.innerHTML=`<p class="warn-text small">${esc(e.message)}</p>`;}
+ finally{BF.run=false;$('#bf-run').disabled=false;$('#bf-stop').disabled=true;drawBifurcation(`${BF.pts.length} σημεία · ${fmt((performance.now()-t0)/1e3,3)} s${BF.par>1?` · ${BF.par} workers`:''}`);}}
+function stopBifurcation(){BF.run=false;if(BF.pool)BF.pool.stop();}
 function drawBifurcation(status){const out=$('#bf-out'),m=BF.meta;if(!out||!m||!BF.pts.length)return;const W=260,H=200,P=svgPlot(W,H,[34,6,6,22]);
  const ys=BF.pts.flatMap(p=>p.y);let lo=Math.min(...ys),hi=Math.max(...ys);const pd=(hi-lo)*.05||1;lo-=pd;hi+=pd;
  const dots=BF.pts.map(p=>p.y.map(y=>`<circle cx="${P.X(p.v,m.a,m.b).toFixed(1)}" cy="${P.Y(y,lo,hi).toFixed(1)}" r="1"/>`).join('')).join('');
@@ -679,6 +689,23 @@ for step in ('fixed', 'var'):
     rows.append({'βήμα': step, 'βήματα': r.meta['steps'], 'απορρίψεις': r.meta.get('rejected', 0),
                  'χρόνος (s)': r.meta['wall_s'], 'μέση ' + k: r.measure(k, 'avg', 5)})
 pcl.show(rows, 'Σταθερό και μεταβλητό βήμα')
+`,
+ bif:`# Διάγραμμα διακλάδωσης ως σάρωση (3.15): peak current-mode με ρεύμα αναφοράς i_c, ένα δείγμα του ρεύματος ανά περίοδο
+# μετά από 300 περιόδους μεταβατικό. Ίδιοι αριθμοί με το πάνελ «Διάγραμμα διακλάδωσης», παράλληλα σε όσους workers επιτρέπει ο browser.
+c = pcl.tutorial('pcm_chaos')
+b = c.bifurcation('IC.v', start=1.4, stop=3, n=33, channel='Y:AM1', stat='end', transient=300, record=64)
+pcl.show(b, 'i_L στην αρχή κάθε περιόδου')
+pcl.show([{'από i_c': v, 'περίοδος': f'{q}T' if q else 'χωρίς (χάος)'} for v, q in b.changes()], 'Διπλασιασμοί περιόδου')
+print(b.meta['workers'], 'workers')
+b.save('διακλάδωση.parquet'); b.save('διακλάδωση.mat')
+`,
+ big:`# Μεγάλη σάρωση σε πλέγμα, παράλληλα, και αποθήκευση σε Parquet (pandas, Polars, MATLAB parquetread)
+b = pcl.tutorial('buck', start='steady')
+sw = b.sweep({'L1.L': '22u:220u:8', 'C1.C': ['10u', '47u', '100u']}, t_end='6m',
+             measure={'Vo': ('V:C1', 'avg', 10), 'dV': ('V:C1', 'pp', 10), 'dI': ('I:L1', 'pp', 10)})
+print(sw, sw.meta['workers'], 'workers')
+pcl.show(sw, 'L × C')
+sw.save('σάρωση.parquet'); sw.save('σάρωση.csv')
 `};
 const SCEN_COLORS=['#147966','#c47a1c','#2f7fd0','#b03a5b','#6b4fbb','#3b8b3b','#8a6d1d','#555'];
 function scenSetCode(code,foreign){S.scenCode=code;const t=$('#scen-code');if(t&&t.value!==code)t.value=code;if(foreign)S.scenForeign=true;}
@@ -695,7 +722,7 @@ function scenRun(){if(SCEN.busy)return;const code=$('#scen-code').value;if(!code
  $('#scen-run').disabled=true;$('#scen-stop').disabled=false;$('#scen-prog').textContent='';
  scenState(SCEN.ready?'τρέχει…':'φορτώνεται η Python (Pyodide)…','busy');
  scenWorker().postMessage({type:'run',code,project:project(),name:tutorial().title||'κύκλωμα'});}
-function scenStop(){if(SCEN.worker){SCEN.worker.terminate();SCEN.worker=null;SCEN.ready=false;}scenOut('Διακόπηκε. Η Python ξαναφορτώνεται στην επόμενη εκτέλεση.','e');scenDone(false);}
+function scenStop(){if(SCEN.pool)SCEN.pool.stop();if(SCEN.worker){SCEN.worker.terminate();SCEN.worker=null;SCEN.ready=false;}scenOut('Διακόπηκε. Η Python ξαναφορτώνεται στην επόμενη εκτέλεση.','e');scenDone(false);}
 function scenDone(ok,wall){SCEN.busy=false;$('#scen-run').disabled=false;$('#scen-stop').disabled=true;$('#scen-prog').textContent='';
  scenState(ok?`✓ σε ${(wall??(performance.now()-SCEN.t0)/1000).toFixed(1)} s`:'σταμάτησε με σφάλμα',ok?'':'bad');}
 function scenMsg(m){switch(m.type){
@@ -707,7 +734,18 @@ function scenMsg(m){switch(m.type){
  case 'show':scenShow(m.data);break;
  case 'file':{const blob=new Blob([m.bytes]);SCEN.files.push({name:m.name,size:m.bytes.byteLength,blob,url:URL.createObjectURL(blob)});renderScenFiles();break;}
  case 'error':scenOut(m.text,'e');scenTab('out');break;
- case 'done':scenDone(m.ok,m.wall);break;}}
+ case 'done':scenDone(m.ok,m.wall);break;
+ case 'batch':scenBatch(m);break;
+ case 'batch-fetch':scenBatchWrite(m.sab,SCEN.batchOut);SCEN.batchOut=null;break;}}
+// 3.15: a sweep of the panel in parallel. The worker sent its requests and waits (Atomics.wait) on its SharedArrayBuffer;
+// the pool answers them, and the JSON of the answers goes back in the buffer (a bigger buffer when it does not fit)
+async function scenBatch(m){const pool=SCEN.pool||(SCEN.pool=new Pool.SimPool()),t0=performance.now();let outs;
+ try{outs=await pool.map(m.qs,(i,r,done,n)=>{$('#scen-prog').textContent=`σημείο ${done}/${n} · ${pool.n} workers`;},true);}
+ catch(e){outs=m.qs.map(()=>({error:String(e&&e.message||e)}));}
+ scenBatchWrite(m.sab,new TextEncoder().encode(Scenario.json({workers:pool.n,wall_s:(performance.now()-t0)/1000,outs})));}
+function scenBatchWrite(sab,bytes){if(!sab||!bytes)return;const h=new Int32Array(sab,0,2),cap=sab.byteLength-8;
+ if(bytes.length>cap){SCEN.batchOut=bytes;h[1]=bytes.length;Atomics.store(h,0,2);Atomics.notify(h,0);return;}
+ new Uint8Array(sab,8,bytes.length).set(bytes);h[1]=bytes.length;Atomics.store(h,0,1);Atomics.notify(h,0);}
 function renderScenFiles(){$('#scen-nfiles').textContent=SCEN.files.length?`(${SCEN.files.length})`:'';
  $('#scen-files').innerHTML=SCEN.files.length?SCEN.files.map(f=>`<div class="scen-file"><a href="${f.url}" download="${esc(f.name)}">⬇ ${esc(f.name)}</a><small>${(f.size/1024).toFixed(1)} kB</small></div>`).join(''):
   '<p class="muted small">Ό,τι γράφει το σενάριο εμφανίζεται εδώ για λήψη, π.χ. <code>r.save(\'αποτελέσματα.csv\')</code>, <code>.json</code> ή <code>.mat</code> (MATLAB).</p>';}
@@ -719,6 +757,8 @@ function scenShow(d){
  if(d.type==='sweep'){const cols=[...d.params,...d.names];$('#scen-table').insertAdjacentHTML('beforeend',scenTable(cols,d.rows.map(r=>cols.map(c=>r[c])),d.title));
   scenTab('chart');const x=d.rows.map(r=>r[d.params[0]]);for(const n of d.names)scenPlot({title:(d.title?d.title+': ':'')+n,xlabel:d.params[0],series:[{name:n,x,y:d.rows.map(r=>r[n])}],marks:true});
   scenTab('chart');return;}
+ if(d.type==='bifurcation'){scenTab('chart');const x=[],y=[];d.values.forEach((v,i)=>{for(const q of d.y[i]){x.push(v);y.push(q);}});
+  scenPlot({title:d.title,xlabel:d.xlabel,ylabel:d.ylabel,series:[{name:d.ylabel||'y',x,y}],dots:true});scenTab('chart');return;}
  if(d.type==='xy'){scenTab('chart');scenPlot({title:d.title,xlabel:d.xlabel,ylabel:d.ylabel,series:Object.entries(d.series).map(([name,y])=>({name,x:d.x,y})),marks:true});scenTab('chart');return;}
  if(d.type==='run'){const m=d.measure||{};if(Object.keys(m).length)$('#scen-table').insertAdjacentHTML('beforeend',scenTable(['μέτρηση','τιμή'],Object.entries(m),d.title));
   // one chart per unit, so volts and amperes do not share an axis
@@ -730,7 +770,7 @@ function scenPlot(o){const box=document.createElement('div');box.className='scen
  const g=cv.getContext('2d');g.scale(dpr,dpr);g.font='11px system-ui,sans-serif';
  // at most 2000 points per series on screen (first and last kept, then the extremes of each bucket)
  const thin=(x,y)=>{const n=x.length;if(n<=2000)return [x,y];const B=500,X=[],Y=[];for(let k=0;k<B;k++){const a=Math.floor(k*n/B),b=Math.floor((k+1)*n/B);let mi=a,ma=a;for(let i=a;i<b;i++){if(y[i]<y[mi])mi=i;if(y[i]>y[ma])ma=i;}for(const i of mi<ma?[a,mi,ma]:[a,ma,mi]){X.push(x[i]);Y.push(y[i]);}}X.push(x[n-1]);Y.push(y[n-1]);return [X,Y];};
- const S2=o.series.map(s=>{const [x,y]=thin(s.x,s.y);return {...s,x,y};});let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+ const S2=o.series.map(s=>{const [x,y]=o.dots?[s.x,s.y]:thin(s.x,s.y);return {...s,x,y};});let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
  for(const s of S2)for(let i=0;i<s.x.length;i++){const xv=s.x[i],yv=s.y[i];if(!Number.isFinite(xv)||!Number.isFinite(yv))continue;x0=Math.min(x0,xv);x1=Math.max(x1,xv);y0=Math.min(y0,yv);y1=Math.max(y1,yv);}
  if(!Number.isFinite(x0)){g.fillText('χωρίς τιμές',10,20);return;}if(y1===y0){y0-=Math.abs(y0)*.05||1;y1+=Math.abs(y1)*.05||1;}const pad=(y1-y0)*.06;y0-=pad;y1+=pad;if(x1===x0){x0-=1;x1+=1;}
  const L=64,R=12,T=8,B=30,px=x=>L+(x-x0)/(x1-x0)*(W-L-R),py=y=>T+(y1-y)/(y1-y0)*(H-T-B);
@@ -741,7 +781,9 @@ function scenPlot(o){const box=document.createElement('div');box.className='scen
  for(const v of ty){const yy=Math.round(py(v))+.5;g.beginPath();g.moveTo(L,yy);g.lineTo(W-R,yy);g.stroke();g.textAlign='right';g.fillText(P.eng(v,'',dy),L-6,yy+4);}
  for(const v of tx){const xx=Math.round(px(v))+.5;g.beginPath();g.moveTo(xx,T);g.lineTo(xx,H-B);g.stroke();g.textAlign='center';g.fillText(P.eng(v,'',dx),xx,H-B+14);}
  g.textAlign='right';g.fillText(o.xlabel||'',W-R,H-4);if(o.ylabel){g.save();g.translate(11,T+(H-T-B)/2);g.rotate(-Math.PI/2);g.textAlign='center';g.fillText(o.ylabel,0,0);g.restore();}
- S2.forEach((s,k)=>{const c=SCEN_COLORS[k%SCEN_COLORS.length];g.strokeStyle=c;g.fillStyle=c;g.lineWidth=1.6;g.beginPath();let on=false;
+ S2.forEach((s,k)=>{const c=SCEN_COLORS[k%SCEN_COLORS.length];g.strokeStyle=c;g.fillStyle=c;g.lineWidth=1.6;
+  if(o.dots){for(let i=0;i<s.x.length;i++)if(Number.isFinite(s.x[i])&&Number.isFinite(s.y[i]))g.fillRect(px(s.x[i])-1,py(s.y[i])-1,2,2);return;}
+  g.beginPath();let on=false;
   for(let i=0;i<s.x.length;i++){const xv=s.x[i],yv=s.y[i];if(!Number.isFinite(xv)||!Number.isFinite(yv)){on=false;continue;}const X=px(xv),Y=py(yv);if(on)g.lineTo(X,Y);else g.moveTo(X,Y);on=true;}g.stroke();
   if(o.marks&&s.x.length<=60)for(let i=0;i<s.x.length;i++)if(Number.isFinite(s.y[i])){g.beginPath();g.arc(px(s.x[i]),py(s.y[i]),2.6,0,7);g.fill();}});
  box.querySelector('.scen-leg').innerHTML=S2.map((s,k)=>`<span><i style="background:${SCEN_COLORS[k%SCEN_COLORS.length]}"></i>${esc(s.name)}</span>`).join('');}
@@ -1638,7 +1680,7 @@ function boot(){
  ['#rm-sig','#rm-ev','#rm-ref','#rm-band','#rm-val','#rm-t'].forEach(q=>$(q).onchange=renderMetricsPanel);$('#rm-block').ontoggle=renderMetricsPanel;
  ['#ff-sig','#ff-f1','#ff-p','#ff-h'].forEach(q=>$(q).onchange=renderFFT);$('#ff-block').ontoggle=renderFFT;
  $('#eis-block').ontoggle=renderEISForm;$('#eis-run').onclick=runEIS;$('#eis-stop').onclick=()=>{EIS.run=false;};
- ['#bf-sig','#bf-stat'].forEach(q=>$(q).onchange=renderPoincare);$('#bf-block').ontoggle=()=>{renderBifurcationForm();renderPoincare();};$('#bf-run').onclick=runBifurcation;$('#bf-stop').onclick=()=>{BF.run=false;};
+ ['#bf-sig','#bf-stat'].forEach(q=>$(q).onchange=renderPoincare);$('#bf-block').ontoggle=()=>{renderBifurcationForm();renderPoincare();};$('#bf-run').onclick=runBifurcation;$('#bf-stop').onclick=stopBifurcation;
  $('#bt-run').onclick=runBatch;$('#bt-clear').onclick=clearBatch;$('#bt-show').onchange=e=>{scope.setRefs(e.target.checked&&S.batch?{label:S.batch.label,data:S.batch.data}:null);};
  $('#bt-block').ontoggle=()=>{if($('#bt-block').open&&!$('#bt-tend').value&&S.sim)$('#bt-tend').placeholder=S.sim.t>0?String(+(S.sim.t*1e3).toPrecision(5)):S.stopT?String(+(S.stopT*1e3).toPrecision(5)):'ms';};
  $('#live-btn').onclick=()=>{scope.cfg.frozen=null;$('#live-btn').hidden=true;draw(true);};

@@ -202,6 +202,87 @@ class Scenarios(unittest.TestCase):
         self.assertEqual(bad.returncode, 2)
         self.assertIn('Δεν υπάρχει στοιχείο', bad.stderr)
 
+    def test_parquet_and_hdf5(self):
+        # 3.15: Parquet written by pcl itself (no pyarrow needed to write); read back with pyarrow/pandas when they are installed
+        r = self.buck.run(t_end=2e-4, channels=['V:C1', 'I:L1'])
+        sw = self.buck.sweep({'R1.R': [5, 10]}, t_end=1e-3, measure={'Vo': ('V:C1', 'avg', 5)}, workers=1)
+        for comp in ('gzip', None):
+            pq = self.tmp / f'out_{comp}.parquet'
+            r.to_parquet(pq, compression=comp)
+            self.assertEqual(pq.read_bytes()[:4], b'PAR1')
+            self.assertEqual(pq.read_bytes()[-4:], b'PAR1')
+        try:
+            import pandas as pd
+            import pyarrow.parquet as papq
+        except ImportError:
+            self.skipTest('pandas/pyarrow δεν υπάρχουν: το Parquet γράφτηκε, δεν ελέγχθηκε η ανάγνωση')
+        for comp in ('gzip', None):
+            df = pd.read_parquet(self.tmp / f'out_{comp}.parquet')
+            self.assertEqual(list(df.columns), ['t', 'V:C1', 'I:L1'])
+            self.assertEqual(len(df), len(r.t))
+            self.assertEqual(df['V:C1'].tolist(), [float(v) for v in r['V:C1']])      # bit for bit
+        meta = json.loads(papq.read_schema(self.tmp / 'out_gzip.parquet').metadata[b'pcl'])
+        self.assertEqual(meta['project'], 'buck')
+        self.assertEqual(meta['units']['I:L1'], 'A')
+        sw.save(self.tmp / 'sw.parquet')
+        d = pd.read_parquet(self.tmp / 'sw.parquet')
+        self.assertEqual(list(d.columns), ['R1.R', 'Vo'])
+        self.assertEqual(d['Vo'].tolist(), sw.column('Vo'))
+        # many columns (the list header of the footer in its long form), texts with nulls, NaN
+        from pcl.formats import write_parquet
+        cols = [(f'c{i}', [float(i), float('nan'), None]) for i in range(20)] + [('κείμενο', ['α', None, '0:1, 1m:2'])]
+        write_parquet(self.tmp / 'many.parquet', cols, meta={'x': 1})
+        d = pd.read_parquet(self.tmp / 'many.parquet')
+        self.assertEqual(d.shape, (3, 21))
+        self.assertTrue(pd.isna(d['c3'][1]) and pd.isna(d['c3'][2]))
+        self.assertEqual(d['κείμενο'][2], '0:1, 1m:2')
+        self.assertTrue(pd.isna(d['κείμενο'][1]))
+        try:
+            import h5py
+        except ImportError:
+            return
+        r.to_hdf5(self.tmp / 'out.h5')
+        with h5py.File(self.tmp / 'out.h5') as f:
+            self.assertEqual(json.loads(f.attrs['columns']), ['t', 'V:C1', 'I:L1'])
+            self.assertEqual(f['I:L1'][-1], r['I:L1'][-1])
+            self.assertEqual(json.loads(f.attrs['meta'])['project'], 'buck')
+
+    def test_bifurcation_is_a_sweep(self):
+        # 3.15: the bifurcation diagram through pcl gives the app's numbers (the same MNA.sweepPoint), in order and in parallel:
+        # peak current-mode, period doubling 1T → 2T → 4T → 8T → no period (as tests/js/tutorial_cases.js 'chaos')
+        c = pcl.tutorial('pcm_chaos')
+        kw = dict(channel='Y:AM1', stat='end', transient=300, record=64)
+        b1 = c.bifurcation('IC.v', [1.5, 2, 2.5, 2.65, 3], workers=1, **kw)
+        b2 = c.bifurcation('IC.v', [1.5, 2, 2.5, 2.65, 3], workers=2, **kw)
+        self.assertEqual(b1.period, [1, 2, 4, 8, 0])
+        self.assertEqual(b1.y, b2.y)
+        self.assertEqual(b1.changes(), [(2.0, 2), (2.5, 4), (2.65, 8), (3.0, 0)])
+        app = pcl.core._node({'action': 'bifurcation', 'project': c.data, 'comp': 'IC', 'param': 'v', 'key': 'Y:AM1', 'stat': 'end',
+                              'transient': 300, 'record': 64, 'values': [2.5]})
+        self.assertEqual(app['points'][0]['y'], b1.y[2])
+        # start/stop/n gives the app's values a + (b − a)·k/(n − 1)
+        b3 = c.bifurcation('IC.v', start=1.4, stop=3, n=3, transient=20, record=8, channel='Y:AM1', stat='end', workers=1)
+        self.assertEqual(b3.values, [1.4, 2.2, 3.0])
+        from scipy.io import loadmat
+        b1.to_mat(self.tmp / 'bif.mat')
+        m = loadmat(self.tmp / 'bif.mat')
+        self.assertEqual(m['Y'].shape, (5, 64))
+        self.assertEqual(m['Y'][3].tolist(), b1.y[3])
+        self.assertEqual(m['period'][:, 0].tolist(), [1, 2, 4, 8, 0])
+        j = pcl.job({'tutorial': 'pcm_chaos', 'bifurcation': {'param': 'IC.v', 'values': [2.5], 'channel': 'Y:AM1', 'stat': 'end', 'transient': 300, 'record': 64}})
+        self.assertEqual(j['kind'], 'bifurcation')
+        self.assertEqual(j['period'], [4])
+        with self.assertRaises(pcl.PclError):
+            c.bifurcation('IC', [1, 2], channel='Y:AM1')
+
+    def test_bifurcation_command_line(self):
+        out = self.tmp / 'bif.parquet'
+        run = subprocess.run([sys.executable, '-m', 'pcl', 'bifurcation', 'tutorial:pcm_chaos', 'IC.v', '--values', '1.5,2.5', '--channel', 'Y:AM1',
+                              '--stat', 'end', '--transient', '300', '--record', '64', '--out', str(out)], capture_output=True, text=True, cwd=str(ROOT), timeout=300)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn('από 2.5: 4T', run.stdout)
+        self.assertEqual(out.read_bytes()[:4], b'PAR1')
+
 
 if __name__ == '__main__':
     unittest.main()

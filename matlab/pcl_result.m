@@ -3,6 +3,16 @@ function r = pcl_result(j)
 r = struct();
 r.kind = j.kind;
 r.meta = j.meta;
+if strcmp(j.kind, 'bifurcation')          % 3.15: values (n×1), Y (n×record), period (n×1)
+  r.param = j.param;
+  r.values = col_(j.values);
+  Y = j.y;
+  if iscell(Y), Y = cell2mat(cellfun(@(x) col_(x)', Y(:), 'UniformOutput', false)); end
+  r.Y = double(Y);
+  r.period = col_(j.period);
+  r.changes = j.changes;
+  return
+end
 if strcmp(j.kind, 'run')
   r.t = j.t(:);
   keys = cellstr_(j.keys);

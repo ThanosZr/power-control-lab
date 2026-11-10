@@ -48,11 +48,39 @@ const out={};
  const sch=build('schering',{});const ss=new MNA.Sim(sch,{hDiv:sch.sim.hDiv}).stepCheck();
  out.check={rc_coarse:pick(a),rc_fine:pick(b),rc_alg:pick(c),buck:pick(buck),schering:pick(ss)};}
 
-// 6) run-time messages: a programmed jump of the source with τ ≪ h (the trapezoidal rule rings), and none in a clean run
-{const mk=sched=>project([{id:'V1',type:'VDC',params:{V:0,sched}},{id:'R1',type:'R',params:{R:1}},{id:'C1',type:'C',params:{C:1e-8}},{id:'R2',type:'R',params:{R:1e6}},{id:'G',type:'GND'}],
-  [['V1:p','R1:a'],['R1:b','C1:p'],['C1:p','R2:a'],['R2:b','G:g'],['C1:n','G:g'],['V1:n','G:g']],{tbase:1e-3});
- const s=new MNA.Sim(mk('0:0, 1m:10'),{hDiv:200});s.run(3e-3);const s2=new MNA.Sim(mk('0:0, 1m:10'),{hDiv:200,method:'BDF2'});s2.run(3e-3);
+// 6) programmed jumps (3.15): the step that ends on the jump sees the value before it, the jump gets the post-jump point at the same
+//    instant and backward-Euler steps after it, so the trapezoidal rule no longer rings on a stiff RC (τ = 10 ns, h = 5 μs). The same
+//    with the variable step (τ = 1 μs), a resistance program and a constant block driving the source, against the closed form.
+//    A clock signal driving the source is not a program: the trapezoidal rule still rings there and the console says so (BDF2 damps it).
+{const rc=(src,C=1e-8,extra=[],econ=[])=>project([src,{id:'R1',type:'R',params:{R:1}},{id:'C1',type:'C',params:{C}},{id:'R2',type:'R',params:{R:1e6}},{id:'G',type:'GND'},...extra],
+  [['V1:p','R1:a'],['R1:b','C1:p'],['C1:p','R2:a'],['R2:b','G:g'],['C1:n','G:g'],['V1:n','G:g'],...econ],{tbase:1e-3});
+ const par=(a,b)=>a*b/(a+b),tj=1e-3;
+ // largest deviation from the closed form before and after the jump (after: from 2 steps on), and the points recorded at the jump
+ const jump=(pr,opts,f0,f1)=>{const s=new MNA.Sim(pr,{hDiv:200,...opts});s.run(3e-3);const r=s.ring,i=s.chIndex.get('V:C1');let before=0,after=0,nAt=0;
+   for(let j=0;j<r.n;j++){const t=r.t[j],v=r.d[j*r.nch+i];if(t<tj-1e-12)before=Math.max(before,Math.abs(v-f0(t)));else if(Math.abs(t-tj)<1e-12)nAt++;else if(t>tj+2*s.h)after=Math.max(after,Math.abs(v-f1(t)));}
+   return {before,after,nAt,diag:s.diagnostics().filter(d=>!d.pre).map(d=>d.key),steps:s.steps};};
+ const vsrc={id:'V1',type:'VDC',params:{V:0,sched:'0:0, 1m:10'}},V=10*1e6/(1e6+1),zero=()=>0;
+ const charge=(V,tau,v0=0)=>t=>V+(v0-V)*Math.exp(-(t-tj)/tau);
+ const pR=rc({id:'V1',type:'VDC',params:{V:10}});pR.components[1].params={R:1e6,sched:'0:1e6, 1m:1'};
+ const tR0=par(1e6,1e6)*1e-8,v0=5*(1-Math.exp(-tj/tR0));
+ out.jump={tr:jump(rc(vsrc),{},zero,charge(V,par(1,1e6)*1e-8)),
+  var:jump(rc(vsrc,1e-6),{step:{mode:'var'}},zero,charge(V,par(1,1e6)*1e-6)),
+  res:jump(pR,{},t=>5*(1-Math.exp(-t/tR0)),charge(V,par(1,1e6)*1e-8,v0)),
+  blk:jump(rc({id:'V1',type:'VDC',params:{ctl:'sig'}},1e-8,[{id:'K1',type:'CONST',params:{v:'0:0, 1m:10'}}],[['K1:y','V1:u']]),{},zero,charge(V,par(1,1e6)*1e-8))};
+ const clk=rc({id:'V1',type:'VDC',params:{ctl:'sig'}},1e-8,[{id:'CK',type:'CLK',params:{f:500,duty:.5}}],[['CK:y','V1:u']]);
+ const s=new MNA.Sim(clk,{hDiv:200});s.run(3e-3);const s2=new MNA.Sim(clk,{hDiv:200,method:'BDF2'});s2.run(3e-3);
  const rt=x=>x.diagnostics().filter(d=>!d.pre).map(d=>({key:d.key,sev:d.sev,id:d.id,t:d.t}));out.runtime={tr:rt(s),bdf2:rt(s2)};}
+
+// 6b) the step check of every topology met during the run (3.15): a switch connects a small RC (τ ≈ 10 ns) only while it conducts. The check
+//     before the run (switch off) does not see it; the run reports it once, at the first switching, with the conducting elements, and the
+//     variable step with the trapezoidal rule takes the 2τ cap of each topology (not the cap of the topology at the start)
+{const mk=step=>project([{id:'V1',type:'VDC',params:{V:10}},{id:'R0',type:'R',params:{R:100}},{id:'C0',type:'C',params:{C:1e-6}},
+   {id:'S1',type:'SW',params:{gate:'sig'}},{id:'RS',type:'R',params:{R:1}},{id:'CS',type:'C',params:{C:1e-8}},{id:'CK',type:'CLK',params:{f:1000,duty:.5,phase:180}},{id:'G',type:'GND'}],
+  [['V1:p','R0:a'],['R0:b','C0:p'],['C0:n','G:g'],['V1:n','G:g'],['R0:b','S1:d'],['S1:s','RS:a'],['RS:b','CS:p'],['CS:n','G:g'],['CK:y','S1:g']],{tbase:1e-3,...(step||{})});
+ const s=new MNA.Sim(mk(),{hDiv:200});s.stepCheck();const g0=s.gateSigPeek(0);s.run(3e-3);
+ const v=new MNA.Sim(mk({step:'var'}),{hDiv:200});v.run(3e-3);const caps=[...v.topo.values()].map(r=>r.cap);
+ out.topo={gate0:g0,pre:s.dgPre.map(d=>d.key),run:s.diagnostics().filter(d=>!d.pre).map(d=>({key:d.key,sev:d.sev,n:d.n,t:d.t,ids:d.ids,msg:d.msg})),ntopo:s.topo.size,
+  var:{caps,steps:v.steps,vC0:v.now('V:C0'),fixed:s.now('V:C0')}};}
 
 // 7) the variable step leaves the fixed one untouched: the same buck run twice gives the same numbers, and switching
 //    the mode on a running simulation carries on from the same state

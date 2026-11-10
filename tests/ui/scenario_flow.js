@@ -42,5 +42,20 @@ const {chromium}=require('playwright');const fs=require('fs');const path=require
  p.once('dialog',d=>{asked++;d.accept();});await p.click('#scen-run');await done();
  ok(asked===2&&/από αρχείο/.test(await p.$eval('#scen-out',e=>e.textContent)),'μετά την επιβεβαίωση τρέχει');
  fs.unlinkSync(f);
+ // 3.15: the page is cross-origin isolated (the server's headers), so the panel's sweeps go to the page's pool of solvers;
+ // the bifurcation diagram as a sweep, Parquet and .mat downloads; the app's own diagram through the same pool, the same periods
+ ok(await p.evaluate(()=>self.crossOriginIsolated),'η σελίδα είναι cross-origin isolated (SharedArrayBuffer)');
+ await setCode("c = pcl.tutorial('pcm_chaos')\nb = c.bifurcation('IC.v', [1.5, 2, 2.5, 2.65, 3], channel='Y:AM1', stat='end', transient=300, record=64)\n"+
+  "print('περίοδοι', b.period, 'workers', b.meta['workers'])\npcl.show(b, 'διακλάδωση')\nb.save('δ.parquet')\nb.save('δ.mat')\n"+
+  "sw = pcl.tutorial('buck', start='steady').sweep({'R1.R': [5, 10, 20]}, t_end='2m', measure={'Vo': ('V:C1', 'avg', 5)})\nprint('σάρωση', sw.meta['workers'], len(sw.rows))\n");
+ await p.click('#scen-run');await done();const o15=await p.$eval('#scen-out',e=>e.textContent);
+ ok(/περίοδοι \[1, 2, 4, 8, 0\]/.test(o15),'διακλάδωση: 1T → 2T → 4T → 8T → χάος '+o15.slice(0,200));
+ ok(/workers [1-9]/.test(o15)&&/σάρωση [1-9] 3/.test(o15),'διακλάδωση και σάρωση στο pool');
+ ok(await p.$$eval('.scen-file a',x=>x.map(a=>a.getAttribute('download')).join(','))==='δ.parquet,δ.mat','λήψη .parquet και .mat');
+ const pq=await p.evaluate(async()=>{const f=PCL.SCEN.files[0];const b=new Uint8Array(await f.blob.arrayBuffer());return String.fromCharCode(...b.slice(0,4))+String.fromCharCode(...b.slice(-4));});
+ ok(pq==='PAR1PAR1','αρχείο Parquet');
+ await p.evaluate(()=>PCL.loadTutorial('pcm_chaos'));await p.waitForTimeout(400);await p.evaluate(()=>{document.querySelector('#bf-block').open=true;});await p.waitForTimeout(400);
+ const bf=await p.evaluate(async()=>{await PCL.runBifurcation();return {n:PCL.BF.pts.length,par:PCL.BF.par,per:PCL.BF.pts.map(x=>x.q.period).join('')};});
+ ok(bf.n===65&&bf.par>=1&&/^1+2+4+8+0+$/.test(bf.per.replace(/(.)0+(?=.)/g,'$1')),'διάγραμμα της εφαρμογής μέσω pool: '+bf.per+' με '+bf.par+' workers');
  ok(errs.length===0,'χωρίς σφάλματα JavaScript '+errs.join(' | '));
  await b.close();})();

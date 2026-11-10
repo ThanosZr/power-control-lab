@@ -24,9 +24,16 @@ def _backend(q):
 _c._backend = _backend
 _c._progress_hook = lambda i, n: _h.progress(i, n)
 
+def _batch(qs):
+    s = _h.batch(json.dumps(qs))
+    return json.loads(s) if s else None
+_c._batch_hook = _batch
+
 def _show_hook(obj, title=None):
     if isinstance(obj, _c.Plot):
         d = {'type': 'xy', **obj}
+    elif isinstance(obj, _c.BifurcationResult):
+        d = {'type': 'bifurcation', 'values': obj.values, 'y': obj.y, 'period': obj.period, 'xlabel': obj.param, 'ylabel': obj.meta.get('key', '')}
     elif isinstance(obj, _c.SweepResult):
         d = {'type': 'sweep', 'params': obj.params, 'names': obj.names, 'rows': obj.rows}
     elif isinstance(obj, _c.Result):
@@ -64,15 +71,25 @@ async function boot(){
   if(!py)throw new Error('Δεν φορτώθηκε η Python (Pyodide): '+(last&&last.message||last)+'. Χρειάζεται το τοπικό αντίγραφο (python tools/get_pyodide.py) ή σύνδεση στο internet.');
   PyRT.attach(py,py._base); // the Python blocks of the circuits use the same interpreter
   py.FS.mkdirTree('/pcl_pkg/pcl');
-  for(const f of ['__init__.py','core.py']){const r=await fetch('../pcl/'+f);if(!r.ok)throw new Error('Δεν βρέθηκε το pcl/'+f+': τα σενάρια θέλουν τον server της εφαρμογής (python run.py).');py.FS.writeFile('/pcl_pkg/pcl/'+f,await r.text());}
+  for(const f of ['__init__.py','core.py','formats.py']){const r=await fetch('../pcl/'+f);if(!r.ok)throw new Error('Δεν βρέθηκε το pcl/'+f+': τα σενάρια θέλουν τον server της εφαρμογής (python run.py).');py.FS.writeFile('/pcl_pkg/pcl/'+f,await r.text());}
   py.runPython("import sys; sys.path.insert(0, '/pcl_pkg')");
   py.registerJsModule('pcl_host',{
    call:s=>{lastTick=0;return Scenario.json(Scenario.handle(JSON.parse(s),{tick:f=>{const n=Date.now();if(n-lastTick>200){lastTick=n;post({type:'tick',f});}}}));},
    progress:(i,n)=>post({type:'progress',i,n}),
+   // 3.15: requests in parallel on the page's pool of solvers, '' when the page is not cross-origin isolated (then in order)
+   batch:s=>batch(s),
    show:s=>post({type:'show',data:JSON.parse(s)})});
   py.setStdout({batched:s=>post({type:'out',text:s})});py.setStderr({batched:s=>post({type:'err',text:s})});
   py.runPython(GLUE);post({type:'ready',version:py.version});return py;})();
  try{py=await booting;return py;}catch(e){booting=null;throw e;}}
+
+// a batch of requests for the page's pool: this worker waits on a SharedArrayBuffer (state 0 → 1 answer, 2 bigger buffer)
+function batch(s){if(!self.crossOriginIsolated||typeof SharedArrayBuffer==='undefined'||typeof Atomics==='undefined')return '';
+ const qs=JSON.parse(s);if(qs.some(q=>q.project&&(q.project.components||[]).some(c=>c.type==='PY')))return ''; // the pool has no Python
+ let sab=new SharedArrayBuffer(8+(4<<20)),h=new Int32Array(sab,0,2);post({type:'batch',qs,sab});
+ for(;;){Atomics.wait(h,0,0);const st=Atomics.load(h,0);
+  if(st===2){sab=new SharedArrayBuffer(8+h[1]);h=new Int32Array(sab,0,2);post({type:'batch-fetch',sab});continue;}
+  const n=h[1],b=new Uint8Array(n);b.set(new Uint8Array(sab,8,n));return new TextDecoder().decode(b);}}
 
 // the files the script wrote in its folder become downloads
 function listFiles(dir){const out=[];for(const n of py.FS.readdir(dir)){if(n==='.'||n==='..')continue;const p=dir+'/'+n,st=py.FS.stat(p);if(py.FS.isDir(st.mode))out.push(...listFiles(p));else out.push(p);}return out;}

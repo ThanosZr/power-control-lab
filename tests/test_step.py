@@ -64,10 +64,40 @@ class SolverStep(unittest.TestCase):
         self.assertFalse([d for d in c['schering'] if d['sev'] != 'info'])
 
     def test_runtime_messages(self):
+        # a clock signal driving the source is not a program: the trapezoidal rule rings there and the console says so
         r = self.o['runtime']
         self.assertEqual([(d['key'], d['sev']) for d in r['tr']], [('ring:C1', 'warn')])
         self.assertGreater(r['tr'][0]['t'], 1e-3)
         self.assertEqual(r['bdf2'], [])                              # Gear/BDF2 damps the fast mode
+
+    def test_programmed_jumps(self):
+        # 3.15: the step that ends on the jump sees the value before it, then the post-jump point at the same instant and
+        # backward-Euler steps: against the closed form of the RC, no ringing, with the fixed and the variable step
+        j = self.o['jump']
+        for k in ('tr', 'var', 'res', 'blk'):
+            with self.subTest(k):
+                self.assertLess(j[k]['before'], 1e-4)                # 10 V scale: 10 ppm
+                self.assertLess(j[k]['after'], 1e-4)
+                self.assertEqual(j[k]['nAt'], 2)                     # before and after the jump, at the same t
+                self.assertNotIn('ring:C1', j[k]['diag'])
+        self.assertEqual(j['tr']['before'], 0)                      # the source is 0 V until 1 ms, the step that ends there too
+        self.assertLess(j['var']['steps'], 3000)
+
+    def test_topology_checks(self):
+        # 3.15: a mode that exists only while the switch conducts: not in the check before the run (switch off at t = 0),
+        # reported once by the run at the switching instant, with the conducting switch; the variable step caps each topology
+        t = self.o['topo']
+        self.assertEqual(t['gate0'], '0')
+        self.assertFalse([k for k in t['pre'] if k.startswith('mode:')])
+        m = [d for d in t['run'] if d['key'] == 'topo:mode:r:CS']
+        self.assertEqual(len(m), 1)
+        self.assertEqual(m[0]['sev'], 'warn')
+        self.assertAlmostEqual(m[0]['t'], 5e-4, delta=1e-12)
+        self.assertIn('άγουν: S1', m[0]['msg'])
+        self.assertEqual(t['ntopo'], 2)
+        caps = sorted(c for c in t['var']['caps'] if c)
+        self.assertAlmostEqual(caps[0], 2 * 1.01 * 1e-8, delta=0.05 * 2e-8)      # 2(R_s + R_on)C_s
+        self.assertAlmostEqual(t['var']['vC0'], t['var']['fixed'], delta=1e-6)
 
     def test_mode_switch_keeps_state(self):
         r = self.o['mode_switch']

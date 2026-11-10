@@ -6,7 +6,7 @@
  <meta name="description" content="Εκπαιδευτικό εργαστήριο ηλεκτρονικών ισχύος: σχεδίαση κυκλώματος, προσομοίωση σε πραγματικό χρόνο, scopes και θεωρία για όλους τους βασικούς μετατροπείς.">
  <link rel="stylesheet" href="studio/style.css">
  <script src="studio/expr.js" defer></script><script src="studio/parts.js" defer></script><script src="studio/pyrt.js" defer></script><script src="studio/stepcheck.js" defer></script><script src="studio/mna.js" defer></script><script src="studio/editor.js" defer></script>
- <script src="studio/scope.js" defer></script><script src="studio/tutorials.js" defer></script><script src="studio/exercises/pe2_battery.js" defer></script><script src="studio/templates.js" defer></script><script src="studio/metrics.js" defer></script><script src="studio/math.js" defer></script><script src="studio/app.js" defer></script>
+ <script src="studio/scope.js" defer></script><script src="studio/tutorials.js" defer></script><script src="studio/exercises/pe2_battery.js" defer></script><script src="studio/templates.js" defer></script><script src="studio/metrics.js" defer></script><script src="studio/scenario.js" defer></script><script src="studio/pool.js" defer></script><script src="studio/math.js" defer></script><script src="studio/app.js" defer></script>
 </head>
 <body>
 <header class="top">
@@ -125,7 +125,7 @@
    <summary><h2>Σενάρια (Python)</h2><small class="muted">αλλαγή παραμέτρων, προσομοιώσεις, σαρώσεις και CSV/JSON/.mat πάνω στο τρέχον κύκλωμα, με το ίδιο API με τη γραμμή εντολών</small><span id="scen-state" class="scen-state"></span></summary>
    <div class="scen-grid">
     <div class="scen-left">
-     <div class="scen-bar"><select id="scen-ex" title="Έτοιμα σενάρια"><option value="">Παραδείγματα…</option><option value="ripple">Σάρωση L στον buck με τη θεωρία</option><option value="run">Το τρέχον κύκλωμα: κυματομορφές και μέσες τιμές</option><option value="param">Σάρωση μιας παραμέτρου του τρέχοντος κυκλώματος</option><option value="step">Σταθερό και μεταβλητό βήμα</option></select>
+     <div class="scen-bar"><select id="scen-ex" title="Έτοιμα σενάρια"><option value="">Παραδείγματα…</option><option value="ripple">Σάρωση L στον buck με τη θεωρία</option><option value="run">Το τρέχον κύκλωμα: κυματομορφές και μέσες τιμές</option><option value="param">Σάρωση μιας παραμέτρου του τρέχοντος κυκλώματος</option><option value="step">Σταθερό και μεταβλητό βήμα</option><option value="bif">Διάγραμμα διακλάδωσης ως σάρωση</option><option value="big">Μεγάλη σάρωση σε Parquet</option></select>
       <button id="scen-run" class="primary" title="Εκτέλεση (Ctrl+Enter)">▶ Εκτέλεση</button><button id="scen-stop" disabled title="Σταματά την Python (ξαναφορτώνεται την επόμενη φορά)">■ Διακοπή</button><span id="scen-prog" class="scen-prog"></span></div>
      <textarea id="scen-code" spellcheck="false" wrap="off" aria-label="Κώδικας Python του σεναρίου"></textarea>
      <details class="scen-help"><summary>API</summary><pre>p = pcl.current()             # αντίγραφο του κυκλώματος της οθόνης (και ως p)

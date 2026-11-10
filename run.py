@@ -90,6 +90,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length',str(len(body)))
         self.send_header('Cache-Control','no-store')
         self.send_header('X-Content-Type-Options','nosniff')
+        # cross-origin isolation (3.15): the panel's worker waits on a SharedArrayBuffer for the parallel sweeps of the page's pool.
+        # credentialless, so the CDN copy of Pyodide still loads; a browser without it runs the sweeps in order
+        self.send_header('Cross-Origin-Opener-Policy','same-origin')
+        self.send_header('Cross-Origin-Embedder-Policy','credentialless')
         self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'none'")
         self.end_headers()
         self.wfile.write(body)
@@ -100,9 +104,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send(200,{'ok':True,'version':__version__,'engine':'Python + SymPy + SciPy · browser MNA'})
         elif path=='/api/catalog':
             self.send(200,{'models':public_catalog()})
-        elif path.startswith('/pcl/'):          # the pcl package's sources for the "Σενάρια" panel (3.14)
+        elif path.startswith('/pcl/'):          # the pcl package's sources for the "Σενάρια" panel (3.14; formats.py 3.15)
             name=path[5:]
-            if name not in ('__init__.py','core.py') or not (PCL/name).is_file():
+            if name not in ('__init__.py','core.py','formats.py') or not (PCL/name).is_file():
                 self.send(404,{'error':'Δεν βρέθηκε.'}); return
             self.send(200,(PCL/name).read_bytes(),'text/x-python; charset=utf-8')
         else:

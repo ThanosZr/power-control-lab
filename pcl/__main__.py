@@ -7,6 +7,8 @@
   python -m pcl run buck.json --t-end 5m --step var --rtol 1e-5 --out out.mat
   python -m pcl run buck.json --t-end 5m --solver scipy --method Radau --out out.json
   python -m pcl sweep buck.json --grid L1.L=22u,47u,100u --grid R1.R=5:20:4 --measure Vo=V:C1:avg:10 --measure I:L1:pp:10 --t-end 5m --out sweep.csv
+  python -m pcl sweep tutorial:buck --grid L1.L=22u:220u:10 --measure I:L1:pp:10 --t-end 5m --out sweep.parquet
+  python -m pcl bifurcation tutorial:pcm_chaos IC.v --values 1.4:3:33 --channel Y:AM1 --stat end --transient 300 --record 64 --out bif.mat
   python -m pcl job request.json --out result.json      (MATLAB/Octave, 3.14: the request as JSON, see pcl/core.py job)
 """
 import argparse
@@ -48,7 +50,7 @@ def main(argv=None):
     a.add_argument('id')
     a.add_argument('--opt', action='append', help='επιλογή του tutorial, π.χ. load=R')
     a.add_argument('--out', required=True)
-    a = sub.add_parser('job', help='ένα αίτημα σε JSON (run ή sweep), όπως το στέλνουν το MATLAB και το Octave')
+    a = sub.add_parser('job', help='ένα αίτημα σε JSON (run, sweep ή bifurcation), όπως το στέλνουν το MATLAB και το Octave')
     a.add_argument('spec', help='αρχείο JSON: {project | tutorial, set, run | sweep}')
     a.add_argument('--out', help='αποτέλεσμα σε JSON (αλλιώς στην έξοδο)')
     a = sub.add_parser('channels', help='τα κανάλια ενός project')
@@ -69,11 +71,22 @@ def main(argv=None):
         a.add_argument('--measure', action='append', help='[όνομα=]<κανάλι>:<avg|rms|min|max|pp|end|thd>[:περίοδοι] ή <κανάλι>:at:<t>')
         a.add_argument('--sep', default=',', help='διαχωριστικό CSV (; για ελληνικό Excel)')
         a.add_argument('--decimal', default='.', help='δεκαδικό CSV (, για ελληνικό Excel)')
-        a.add_argument('--out', help='.csv, .json ή .mat')
+        a.add_argument('--out', help='.csv, .json, .mat, .parquet ή .h5')
         if name == 'sweep':
             a.add_argument('--grid', action='append', required=True, help='<id>.<παράμετρος>=τιμή1,τιμή2,… ή από:έως:πλήθος')
             a.add_argument('--zip', action='store_true', help='οι λίστες πάνε μαζί (σημείο i με σημείο i), όχι όλοι οι συνδυασμοί')
             a.add_argument('--workers', type=int, help='παράλληλες προσομοιώσεις')
+    a = sub.add_parser('bifurcation', help='διάγραμμα διακλάδωσης: ένα δείγμα ανά περίοδο για κάθε τιμή της παραμέτρου (3.15)')
+    a.add_argument('project', help='αρχείο JSON ή tutorial:<id>[?επιλογή=τιμή&…]')
+    a.add_argument('param', help='<id>.<παράμετρος>, π.χ. IC.v')
+    a.add_argument('--values', required=True, help='τιμή1,τιμή2,… ή από:έως:πλήθος')
+    a.add_argument('--channel', required=True, help='κανάλι, π.χ. Y:AM1 ή I:L1')
+    a.add_argument('--stat', default='min', choices=('min', 'max', 'avg', 'end'))
+    a.add_argument('--transient', type=int, default=200, help='περίοδοι μεταβατικού')
+    a.add_argument('--record', type=int, default=50, help='περίοδοι με δείγμα')
+    a.add_argument('--set', action='append', help='<id>.<παράμετρος>=<τιμή>')
+    a.add_argument('--workers', type=int, help='παράλληλες διεργασίες Node')
+    a.add_argument('--out', help='.csv, .json, .mat, .parquet ή .h5')
     args = ap.parse_args(argv)
     try:
         if args.cmd == 'tutorials':
@@ -107,6 +120,16 @@ def main(argv=None):
         p = _project(args.project)
         for k, v in _kv(args.set).items():
             p.set(k, v)
+        if args.cmd == 'bifurcation':
+            b = p.bifurcation(args.param, args.values, channel=args.channel, stat=args.stat, transient=args.transient, record=args.record,
+                              workers=args.workers, progress=lambda i, n: print(f'\r{i}/{n}', end='', file=sys.stderr))
+            print(file=sys.stderr)
+            for v, q in b.changes():
+                print(f'από {v:.6g}: ' + (f'{q}T' if q else 'χωρίς περίοδο (χάος ή αργό μεταβατικό)'))
+            if args.out:
+                b.save(args.out)
+                print(args.out)
+            return 0
         kw = dict(solver=args.solver, hdiv=args.hdiv, method=args.method if args.solver == 'browser' else None, step=args.step,
                   rtol=parse_value(args.rtol) if args.rtol else None, t_from=float(parse_value(args.t_from)),
                   channels=args.channels.split(',') if args.channels else None)

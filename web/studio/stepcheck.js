@@ -104,11 +104,14 @@
   const ord=[...w.keys()].sort((a,b)=>w[b]-w[a]);for(const i of ord){if(w[i]<.3*mx||ids.length>=3)break;const id=S[i].e.cid;if(id&&!ids.includes(id))ids.push(id);}
   return ids;}
 
- function check(sim){
+ // opt.modesOnly (3.15): only the natural modes, for a topology met during the run (opt.md its modes, opt.cap its 2τ cap)
+ function check(sim,opt={}){
   const out=[],lab=id=>{const c=sim.net.compInfo.get(id);return c?c.label:id;};
-  if(sim.var&&sim.capDirty)sim.modeCap();
-  const varStep=!!sim.var,hRef=varStep?Math.min(sim.hMax,sim.hCap||Infinity):sim.h,T=sim.T;
-  const stepTxt=varStep?`μέγιστο βήμα ${eng(hRef,'s')}${sim.hCap&&sim.hCap<sim.hMax?' (2τ της ταχύτερης σταθεράς χρόνου, για τον τραπεζοειδή)':''}`:`βήμα ${eng(hRef,'s')} (T/${Math.round(T/sim.h)})`;
+  if(!opt.modesOnly&&sim.var&&sim.capDirty)sim.modeCap();
+  const cap=opt.modesOnly?opt.cap:sim.hCap;
+  const varStep=!!sim.var,hRef=varStep?Math.min(sim.hMax,cap||Infinity):sim.h,T=sim.T;
+  const stepTxt=varStep?`μέγιστο βήμα ${eng(hRef,'s')}${cap&&cap<sim.hMax?' (2τ της ταχύτερης σταθεράς χρόνου, για τον τραπεζοειδή)':''}`:`βήμα ${eng(hRef,'s')} (T/${Math.round(T/sim.h)})`;
+  if(!opt.modesOnly){
   // lines: the step never exceeds τ/N of the shortest line section
   const tl=sim.tlMaxStep();
   if(Number.isFinite(tl)&&tl<sim.hUser*(1-1e-9)){const e=sim.net.els.filter(x=>x.k==='TL').sort((a,b)=>a.ts-b.ts)[0];
@@ -121,10 +124,11 @@
    if(c.wave&&c.wave.T1>0){const n=c.wave.T1/hRef;
     if(n<20)out.push({sev:n<5?'warn':'info',grp:'step',id:c.id,key:'w:'+c.id,msg:`Το μέτωπο της ${c.label} (T1 = ${eng(c.wave.T1,'s')}) έχει μόνο ${fx(n)} βήματα με ${stepTxt}.`,fix:`Βήμα ≤ ${eng(c.wave.T1/20,'s')}, ή μεταβλητό βήμα.`});}}
   for(const k of sim.net.ctrls){const n=k.T/hRef;if(n<20)out.push({sev:n<4?'warn':'info',grp:'step',id:k.id,key:'pwm:'+k.id,msg:`Το PWM ${lab(k.id)} (${eng(1/k.T,'Hz')}) έχει μόνο ${fx(n)} βήματα ανά περίοδο μεταγωγής.`,fix:'Οι ακμές βρίσκονται ακριβώς (συμβάντα)· η κυμάτωση μέσα στην περίοδο θέλει μικρότερο βήμα.'});}
+  }
   // natural modes
   if(!sim.stEls||!sim.stEls.length)return out;
   if(sim.stEls.length>200){out.push({sev:'info',grp:'step',id:null,key:'big',msg:`${sim.stEls.length} καταστάσεις: η ανάλυση των σταθερών χρόνου παραλείπεται (όριο 200).`,fix:'Οι έλεγχοι κατά την προσομοίωση (ταλάντωση δύο βημάτων, μεταβλητό βήμα) ισχύουν κανονικά.'});return out;}
-  let md;try{md=modes(sim,hRef);}catch(e){out.push({sev:'info',grp:'step',id:null,key:'eig',msg:'Η ανάλυση των σταθερών χρόνου δεν ολοκληρώθηκε: '+e.message,fix:''});return out;}
+  let md=opt.md;if(!md)try{md=modes(sim,hRef);}catch(e){out.push({sev:'info',grp:'step',id:null,key:'eig',msg:'Η ανάλυση των σταθερών χρόνου δεν ολοκληρώθηκε: '+e.message,fix:''});return out;}
   if(!md)return out;
   const fast=md.list.filter(q=>q.abs*hRef>.25&&Number.isFinite(q.abs)).sort((a,b)=>b.abs-a.abs);
   const seen=new Set(),alg=[];let par=0,parMin=Infinity;

@@ -41,6 +41,17 @@ class Octave(unittest.TestCase):
             th = vo * 0.5 / (L * 100e3)
             self.assertAlmostEqual(di, th, delta=0.03 * th)
 
+    def test_bifurcation(self):
+        # 3.15: the diagram through Octave, the same numbers as the Python package (and the app)
+        o = octave("r = pcl_bifurcation('tutorial:pcm_chaos', 'IC.v', [1.5 2.5], struct('channel', 'Y:AM1', 'stat', 'end', 'transient', 300, 'record', 64)); "
+                   "printf('JSON %s\\n', jsonencode(struct('p', r.period, 'sz', size(r.Y), 'y', r.Y(2, :))));")
+        self.assertEqual(o['p'], [1, 4])
+        self.assertEqual(o['sz'], [2, 64])
+        import pcl
+        b = pcl.tutorial('pcm_chaos').bifurcation('IC.v', [2.5], channel='Y:AM1', stat='end', transient=300, record=64, workers=1)
+        for a, x in zip(o['y'], b.y[0]):                    # Octave's jsonencode writes 15–16 digits
+            self.assertAlmostEqual(a, x, delta=1e-14 * abs(x))
+
     def test_read_csv_json_mat(self):
         import pcl
         d = Path(tempfile.mkdtemp(prefix='pcl-oct-'))

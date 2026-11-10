@@ -249,17 +249,22 @@ r.to_csv('out.csv'); r.to_mat('out.mat'); r.measure('I:L1', 'pp', 10)
 sw = p.sweep({'L1.L': ['22u', '47u', '100u'], 'R1.R': '5:20:4'}, t_end='5m',
              measure={'Vo': ('V:C1', 'avg', 10), 'dI': ('I:L1', 'pp', 10)}, workers=4)
 sw.to_csv('sweep.csv', sep=';', decimal=',')   # για ελληνικό Excel
+sw.save('sweep.parquet')                       # 3.15: Parquet (pandas, Polars, MATLAB parquetread), ή .h5 με h5py
+b = pcl.tutorial('pcm_chaos').bifurcation('IC.v', start=1.4, stop=3, n=33, channel='Y:AM1', stat='end', transient=300, record=64)
+b.period, b.changes()                          # 3.15: η διακλάδωση ως σάρωση, ίδιοι αριθμοί με το πάνελ της εφαρμογής
 ```
 
 ```bash
 python -m pcl tutorials
 python -m pcl run tutorial:buck?start=steady --set L1.L=47u --t-end 5m --channels V:C1,I:L1 --out out.csv
 python -m pcl sweep buck.json --grid L1.L=22u,47u,100u --measure Vo=V:C1:avg:10 --measure I:L1:pp:10 --t-end 5m --out sweep.csv
+python -m pcl bifurcation tutorial:pcm_chaos IC.v --values 1.4:3:33 --channel Y:AM1 --stat end --transient 300 --record 64 --out bif.mat
 python -m pcl job request.json --out result.json      # ένα αίτημα σε JSON (όπως το στέλνει το MATLAB)
 ```
 
 - Μετρήσεις: avg, rms, min, max, pp στις τελευταίες N περιόδους T, end, at (σε στιγμή), thd.
-- Αρχεία: CSV με μονάδες στην κεφαλίδα και μεταδεδομένα σε γραμμές `#` (έκδοση, project, hash, αλλαγές, λύτης, βήμα), JSON, MATLAB `.mat` (`t`, `V_C1`, …, `names`, `units`, `meta`).
+- Αρχεία: CSV με μονάδες στην κεφαλίδα και μεταδεδομένα σε γραμμές `#` (έκδοση, project, hash, αλλαγές, λύτης, βήμα), JSON, MATLAB `.mat` (`t`, `V_C1`, …, `names`, `units`, `meta`), Parquet (χωρίς pyarrow) και HDF5 (με h5py), από την 3.15.
+- Στο πάνελ «Σενάρια» οι σαρώσεις και οι διακλαδώσεις τρέχουν παράλληλα σε όσους πυρήνες έχει ο υπολογιστής (3.15), όταν η εφαρμογή ανοίγει από τον server της (`python run.py`).
 - Χρειάζεται Node.js για τον λύτη `browser`. Ο `scipy` χρειάζεται μόνο το Node για να βγάλει το netlist.
 
 ## Μετρήσεις υψηλής τάσης, στατιστική διάσπασης (3.12)

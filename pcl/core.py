@@ -72,6 +72,7 @@ IN_BROWSER = sys.platform == 'emscripten'      # Pyodide in the app's worker
 _backend = None          # the app's worker answers the solver's requests itself (3.14)
 _show_hook = None        # and shows tables and charts in the panel
 _progress_hook = None
+_batch_hook = None       # 3.15: requests in parallel on the page's pool of solvers (None: not available, in order)
 _default = None          # the project of the module-level functions pcl.set/run/sweep
 
 
@@ -143,6 +144,10 @@ def params():
     return current().params()
 
 
+def bifurcation(param, values=None, **kw):
+    return current().bifurcation(param, values, **kw)
+
+
 class Plot(dict):
     """y(x) for pcl.show: {'x': [...], 'series': {name: [...]}, 'xlabel', 'ylabel'}."""
 
@@ -178,6 +183,22 @@ def show(obj, title=None):
             print('\t'.join([obj['xlabel'] or 'x'] + names))
             for i, xv in enumerate(obj['x']):
                 print('\t'.join([f'{xv:.6g}'] + [f'{obj["series"][n][i]:.6g}' for n in names]))
+        return obj
+    if isinstance(obj, BifurcationResult):
+        try:
+            import matplotlib.pyplot as plt
+            plt.figure()
+            for v, ys in zip(obj.values, obj.y):
+                plt.plot([v] * len(ys), ys, 'k.', markersize=2)
+            plt.xlabel(obj.param)
+            plt.ylabel(f'{obj.meta.get("key", "")} ({obj.meta.get("stat", "")})')
+            if title:
+                plt.title(title)
+            plt.grid(True)
+            plt.show()
+        except ImportError:
+            for v, p in obj.changes():
+                print(f'από {v:.6g}: ' + (f'{p}T' if p else 'χωρίς περίοδο'))
         return obj
     if isinstance(obj, SweepResult):
         cols = obj.params + obj.names
@@ -240,7 +261,8 @@ def _clean(x):
 
 def job(spec, allow_paths=True):
     """One request as data (the CLI's `job`, the server's scenario_run/scenario_sweep, MATLAB/Octave):
-    {project | tutorial, set, run: {...} | sweep: {grid, points, mode, measure, t_end, …}} → a JSON-able dict."""
+    {project | tutorial, set, run: {...} | sweep: {grid, points, mode, measure, t_end, …}
+     | bifurcation: {param, values | start, stop, n, channel, stat, transient, record}} → a JSON-able dict."""
     if not isinstance(spec, dict):
         raise PclError('Το αίτημα πρέπει να είναι αντικείμενο JSON.')
     src = spec.get('project')
@@ -260,6 +282,11 @@ def job(spec, allow_paths=True):
         grid = {k: (v if isinstance(v, (list, tuple)) else _as_list(v) if isinstance(v, str) else [v]) for k, v in grid} or None
         sw = p.sweep(grid=grid, **{k: v for k, v in o.items() if k in ('points', 't_end', 'measure', 'workers', 'solver', 'mode', 'hdiv', 'method', 'step', 'rtol', 'hmax', 'channels', 'scipy_method', 'timeout')})
         return _clean({'kind': 'sweep', 'meta': sw.meta, 'params': sw.params, 'measure': sw.names, 'vars': [_matname(c) for c in sw.params + sw.names], 'rows': sw.rows})
+    if 'bifurcation' in spec:          # 3.15
+        o = dict(spec['bifurcation'] or {})
+        b = p.bifurcation(o.pop('param', None), **{k: v for k, v in o.items() if k in ('values', 'start', 'stop', 'n', 'channel', 'stat', 'transient', 'record', 'hdiv', 'method', 'workers')})
+        return _clean({'kind': 'bifurcation', 'meta': b.meta, 'param': b.param, 'values': b.values, 'y': b.y, 'period': b.period,
+                       'changes': [{'value': v, 'period': q} for v, q in b.changes()]})
     o = dict(spec.get('run') or {})
     if 'from' in o:
         o['t_from'] = o.pop('from')
@@ -352,11 +379,26 @@ class Project:
             hd, mt, st = self._settings(hdiv, method, step, rtol, hmax)
             out = _node({'action': 'run', 'project': self.data, 't_end': t_end, 'channels': keys, 'hdiv': hd, 'method': mt,
                          'step': st, 'from': t_from, 'max_points': max_points, 'measure': meas, 'waveforms': bool(waveforms)}, timeout=timeout)
-            meta = {**out['meta'], 'solver': 'browser (web/studio/mna.js' + (')' if IN_BROWSER else ', Node)')}
-            return Result(out.get('t') or [], out['keys'], out.get('ch') or {}, meta, self, out.get('measure') or {}, out.get('diag') or [])
+            return self._result(out)
         if solver == 'scipy':
             return self._run_scipy(t_end, keys, scipy_method, rtol, hmax, max_points, meas, t_from)
         raise PclError(f'Άγνωστος λύτης «{solver}»: browser ή scipy.')
+
+    def _result(self, out):
+        meta = {**out['meta'], 'solver': 'browser (web/studio/mna.js' + (')' if IN_BROWSER else ', Node)')}
+        return Result(out.get('t') or [], out['keys'], out.get('ch') or {}, meta, self, out.get('measure') or {}, out.get('diag') or [])
+
+    def _query(self, t_end=None, channels=None, hdiv=None, method=None, step=None, rtol=None, hmax=None, t_from=0.0, max_points=200000,
+               measure=None, **_):
+        """The request of run() for the browser's solver, without running it (a sweep sends many at once to the pool, 3.15)."""
+        t_end = float(parse_value(t_end if t_end is not None else (self.data.get('sim') or {}).get('stopT') or 0))
+        if not t_end > 0:
+            raise PclError('Δώσε διάρκεια t_end > 0 (σε s, π.χ. 5e-3 ή "5m").')
+        meas = _measures(measure)
+        keys = list(channels) if channels else ([m['key'] for m in meas] if meas else None)
+        hd, mt, st = self._settings(hdiv, method, step, rtol, hmax)
+        return {'action': 'run', 'project': self.data, 't_end': t_end, 'channels': keys, 'hdiv': hd, 'method': mt, 'step': st,
+                'from': t_from, 'max_points': max_points, 'measure': meas, 'waveforms': False, 'check': False}
 
     def _run_scipy(self, t_end, keys, method, rtol, hmax, max_points, meas, t_from):
         import numpy as np
@@ -411,9 +453,16 @@ class Project:
         n = len(jobs)
         if not n:
             raise PclError('Η σάρωση δεν έχει σημεία.')
-        workers = 1 if IN_BROWSER else max(1, min(int(workers or os.cpu_count() or 1), n))
         progress = progress or _progress_hook
         rows = [None] * n
+        # in the app's panel (3.15): all the points at once to the page's pool of solvers, when the page allows it
+        if IN_BROWSER and solver == 'browser' and workers != 1 and n > 1 and _batch_hook is not None:
+            res = _batch_hook([Project(d)._query(**kw) for d, _ in jobs])
+            if res is not None:
+                for i, (o, (_, pt)) in enumerate(zip(res['outs'], jobs)):
+                    rows[i] = {**pt, **(o.get('out') or {}).get('measure', {}), **({'error': o['error']} if o.get('error') else {})}
+                return SweepResult(rows, list(points[0]), [m['name'] for m in meas], self._sweep_meta(n, solver, meas, kw, res['workers']))
+        workers = 1 if IN_BROWSER else max(1, min(int(workers or os.cpu_count() or 1), n))
         if workers == 1:                # in the app's worker (no threads in Pyodide), or asked for
             for i, (d, pt) in enumerate(jobs):
                 m, err = _sweep_point(d, kw)
@@ -433,10 +482,68 @@ class Project:
                     done += 1
                     if progress:
                         progress(done, n)
-        meta = {'pcl': version(), 'project': self.name, 'hash': self.hash(), 'solver': solver, 'points': n,
+        return SweepResult(rows, list(points[0]) if points else [], [m['name'] for m in meas], self._sweep_meta(n, solver, meas, kw, workers))
+
+    def _sweep_meta(self, n, solver, meas, kw, workers):
+        return {'pcl': version(), 'project': self.name, 'hash': self.hash(), 'solver': solver, 'points': n, 'workers': workers,
                 'measure': {m['name']: [m['key'], m['stat'], m.get('periods', 1)] for m in meas}, 'run': {k: v for k, v in kw.items() if k != 'measure'},
                 'date': datetime.datetime.now().isoformat(timespec='seconds')}
-        return SweepResult(rows, list(points[0]) if points else [], [m['name'] for m in meas], meta)
+
+    def bifurcation(self, param, values=None, start=None, stop=None, n=50, channel=None, stat='min', transient=200, record=50,
+                    hdiv=None, method=None, workers=None, progress=None):
+        """The bifurcation diagram as a sweep (3.15): for each value of param ('R1.R') a run of `transient` base periods,
+        then one sample of `channel` per period over `record` periods (stat: min, max, avg or end), and the period of the
+        samples (1, 2, 4, … or 0 for none: chaos or a slow transient). values=[…], or start, stop and n evenly spaced
+        (the same values as the app's diagram). The same solver call as the app (MNA.sweepPoint), so the same numbers."""
+        comp, _, par = str(param).partition('.')
+        if not par:
+            raise PclError('Η παράμετρος γράφεται <id>.<παράμετρος>, π.χ. R1.R.')
+        self.comp(comp)
+        if not channel:
+            raise PclError('Δώσε κανάλι: channel="I:L1" (όπως στο scope).')
+        if stat not in ('min', 'max', 'avg', 'end'):
+            raise PclError('stat: min, max, avg ή end.')
+        if values is None:
+            if start is None or stop is None:
+                raise PclError('Δώσε values=[...] ή start, stop (και n).')
+            a, b, n = float(parse_value(start)), float(parse_value(stop)), max(2, int(n))
+            values = [a + (b - a) * k / (n - 1) for k in range(n)]
+        values = [float(parse_value(v)) for v in (values if isinstance(values, (list, tuple)) else values.tolist() if hasattr(values, 'tolist') else _as_list(values))]
+        if not values:
+            raise PclError('Η διακλάδωση δεν έχει τιμές.')
+        base = {'action': 'bifurcation', 'project': self.data, 'comp': comp, 'param': par, 'key': channel, 'stat': stat,
+                'transient': int(transient), 'record': int(record), 'hdiv': hdiv, 'method': method}
+        progress = progress or _progress_hook
+        pts, mode = [None] * len(values), 1
+        # in the app's panel: all the values at once to the page's pool of solvers (3.15)
+        if IN_BROWSER and workers != 1 and len(values) > 2 and _batch_hook is not None:
+            res = _batch_hook([{**base, 'values': [v]} for v in values])
+            if res is not None:
+                for i, o in enumerate(res['outs']):
+                    if o.get('error'):
+                        raise PclError(o['error'])
+                    pts[i] = o['out']['points'][0]
+                mode = res['workers']
+        if not pts[-1]:
+            nw = 1 if IN_BROWSER else max(1, min(int(workers or os.cpu_count() or 1), len(values)))
+            chunks = [list(range(len(values)))[k::nw] for k in range(nw)]
+            if nw == 1:                # one value per request, for the progress
+                for i, v in enumerate(values):
+                    pts[i] = _node({**base, 'values': [v]})['points'][0]
+                    if progress:
+                        progress(i + 1, len(values))
+            else:                      # a Node process per worker, with its share of the values
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=nw) as ex:
+                    futs = [ex.submit(_node, {**base, 'values': [values[i] for i in ch]}) for ch in chunks]
+                    for ch, f in zip(chunks, futs):
+                        for i, p in zip(ch, f.result()['points']):
+                            pts[i] = p
+            mode = nw
+        meta = {'pcl': version(), 'project': self.name, 'hash': self.hash(), 'param': param, 'key': channel, 'stat': stat,
+                'transient': int(transient), 'record': int(record), 'T': pts[0]['T'], 'workers': mode,
+                'date': datetime.datetime.now().isoformat(timespec='seconds')}
+        return BifurcationResult([p['value'] for p in pts], [p['y'] for p in pts], [p['period'] for p in pts], meta)
 
 
 def _sweep_point(data, kw):
@@ -645,9 +752,29 @@ class Result:
         _savemat(path, items)
         return path
 
+    def to_parquet(self, path, compression='gzip'):
+        """Parquet (3.15): t and one column per channel with its key as the name, the meta as JSON in the file's metadata.
+        Written here, without pyarrow: pandas.read_parquet, Polars, DuckDB and MATLAB parquetread read it."""
+        from .formats import write_parquet
+        cols = [('t', self.t)] + [(k, self.ch[k]) for k in self.keys]
+        write_parquet(path, cols, meta={**self.meta, 'units': {k: _unit(k) for k in self.keys}, 'measure': self.measured}, compression=compression, created_by='pcl ' + version())
+        return path
+
+    def to_hdf5(self, path):
+        """HDF5 (3.15, needs h5py): a dataset per channel (named by its key), attributes meta and columns."""
+        from .formats import write_hdf5
+        write_hdf5(path, [('t', self.t)] + [(k, self.ch[k]) for k in self.keys], meta={**self.meta, 'units': {k: _unit(k) for k in self.keys}, 'measure': self.measured})
+        return path
+
     def save(self, path, **kw):
-        ext = Path(path).suffix.lower()
-        return {'.csv': self.to_csv, '.json': self.to_json, '.mat': self.to_mat}.get(ext, self.to_csv)(path, **kw)
+        return _save(self, path, **kw)
+
+
+def _save(res, path, **kw):
+    ext = Path(path).suffix.lower()
+    f = {'.csv': res.to_csv, '.json': res.to_json, '.mat': res.to_mat, '.parquet': res.to_parquet, '.pq': res.to_parquet,
+         '.h5': res.to_hdf5, '.hdf5': res.to_hdf5}.get(ext, res.to_csv)
+    return f(path, **kw)
 
 
 class SweepResult:
@@ -695,9 +822,99 @@ class SweepResult:
         _savemat(path, items)
         return path
 
+    def _columns(self):
+        cols = self.params + self.names + (['error'] if any('error' in r for r in self.rows) else [])
+        return [(c, self.column(c)) for c in cols]
+
+    def to_parquet(self, path, compression='gzip'):
+        """Parquet (3.15): one row per point, the parameters, the measurements and the errors (if any)."""
+        from .formats import write_parquet
+        write_parquet(path, self._columns(), meta=self.meta, compression=compression, created_by='pcl ' + version())
+        return path
+
+    def to_hdf5(self, path):
+        from .formats import write_hdf5
+        write_hdf5(path, self._columns(), meta=self.meta)
+        return path
+
     def save(self, path, **kw):
-        ext = Path(path).suffix.lower()
-        return {'.csv': self.to_csv, '.json': self.to_json, '.mat': self.to_mat}.get(ext, self.to_csv)(path, **kw)
+        return _save(self, path, **kw)
+
+
+class BifurcationResult:
+    """The bifurcation diagram (3.15): values[i], the samples y[i] (one per base period) and their period[i]
+    (1, 2, 4, …; 0 = none found: chaos or a slow transient)."""
+
+    def __init__(self, values, y, period, meta):
+        self.values = [float(v) for v in values]
+        self.y = [[None if v is None else float(v) for v in r] for r in y]
+        self.period = [None if p is None else int(p) for p in period]
+        self.meta = meta
+        self.param = meta.get('param', 'value')
+
+    def __repr__(self):
+        return f'<pcl.BifurcationResult {len(self.values)} τιμές του {self.param}, {self.meta.get("record")} δείγματα η καθεμία>'
+
+    def changes(self):
+        """The first value of each new period along the sweep, as the app's table: [(value, period)]."""
+        out = []
+        for k in range(1, len(self.values)):
+            p0, p1 = self.period[k - 1], self.period[k]
+            if (p1 != p0 and p1 != 0) or (p1 == 0 and (p0 or 0) > 0):
+                out.append((self.values[k], p1))
+        return out
+
+    def rows(self):
+        """Long form: one row per sample (value, k, y, period)."""
+        return [{self.param: v, 'k': k, 'y': y, 'period': p} for v, ys, p in zip(self.values, self.y, self.period) for k, y in enumerate(ys)]
+
+    def _columns(self):
+        r = self.rows()
+        return [(c, [x[c] for x in r]) for c in (self.param, 'k', 'y', 'period')]
+
+    def frame(self):
+        try:
+            import pandas as pd
+            return pd.DataFrame(self.rows())
+        except ImportError:
+            return dict(self._columns())
+
+    def plot(self, title=None):
+        return show(self, title)
+
+    def to_csv(self, path, sep=',', decimal='.', meta=True):
+        fmt = (lambda v: '' if v is None else format(float(v), '.12g').replace('.', decimal))
+        with open(path, 'w', encoding='utf-8', newline='') as f:
+            if meta:
+                f.write('\n'.join(f'# {k}: {json.dumps(v, ensure_ascii=False)}' for k, v in self.meta.items()) + '\n')
+            w = csv.writer(f, delimiter=sep)
+            w.writerow([self.param, 'k', self.meta.get('key', 'y') + f' ({self.meta.get("stat", "")})', 'period'])
+            for r in self.rows():
+                w.writerow([fmt(r[self.param]), r['k'], fmt(r['y']), r['period']])
+        return path
+
+    def to_json(self, path):
+        Path(path).write_text(json.dumps({'meta': self.meta, 'values': self.values, 'y': self.y, 'period': self.period}, ensure_ascii=False), encoding='utf-8')
+        return path
+
+    def to_mat(self, path):
+        """values (n×1), Y (n×record, one row per value), period (n×1), meta (JSON)."""
+        _savemat(path, [('values', self.values), ('Y', self.y), ('period', [float('nan') if p is None else p for p in self.period]),
+                        ('meta', json.dumps(self.meta, ensure_ascii=True))])
+        return path
+
+    def to_parquet(self, path, compression='gzip'):
+        from .formats import write_parquet
+        write_parquet(path, self._columns(), meta=self.meta, compression=compression, created_by='pcl ' + version())
+        return path
+
+    def to_hdf5(self, path):
+        from .formats import write_hdf5
+        write_hdf5(path, [('values', self.values), ('period', self.period)], meta=self.meta, matrices={'Y': self.y})
+        return path
+
+    def save(self, path, **kw):
+        return _save(self, path, **kw)
 
 
 # ----------------------------------------------------------------- MATLAB level-5 .mat, without SciPy
@@ -732,6 +949,10 @@ def _mat_char(name, text):
 def _mat_value(name, v):
     if isinstance(v, str):
         return _mat_char(name, v)
+    if v and all(isinstance(x, (list, tuple)) for x in v):          # a matrix, one list per row (column-major in the file)
+        m = max(len(r) for r in v)
+        vals = [float('nan') if j >= len(r) or r[j] is None else float(r[j]) for j in range(m) for r in v]
+        return _matrix(name, _MX_DOUBLE, (len(v), m), _el(_MI_DOUBLE, struct.pack(f'<{len(vals)}d', *vals)))
     if v and all(isinstance(x, str) for x in v):
         return _matrix(name, _MX_CELL, (len(v), 1), b''.join(_mat_char('', x) for x in v))
     vals = [float(x) for x in v]

@@ -17,7 +17,8 @@
  const Ex=root.Expr||(typeof require!=='undefined'?require('./expr.js'):null);
  const SC=root.StepCheck||(typeof require!=='undefined'?require('./stepcheck.js'):null);
  const GMIN=1e-9;
- const schedAt=(s,t,dflt)=>{if(!s)return dflt;let v=s[0][1];if(t<s[0][0])return dflt;for(const [ts,val] of s){if(ts<=t+1e-15)v=val;else break;}return v;};
+ // program t:value at t; left = the value just before t (the end of a step that lands on a jump, 3.15)
+ const schedAt=(s,t,dflt,left)=>{if(!s)return dflt;let v=s[0][1];const tl=left?t-1e-15-4e-16*Math.abs(t):0;if(left?s[0][0]>=tl:t<s[0][0])return dflt;for(const [ts,val] of s){if(left?ts<tl:ts<=t+1e-15)v=val;else break;}return v;};
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
  // "1, 2, 3" → N numbers (one value = the same for all)
  const numList=(s,N,d=0)=>{const a=String(s??'').split(/[,;\s]+/).filter(Boolean).map(v=>num(v,d));return Array.from({length:N},(_,k)=>a.length===1?a[0]:a[k]??d);};
@@ -364,9 +365,39 @@
   hGrid(h){const k=Math.floor(4*Math.log2(h/this.h)+1e-9);return Math.min(this.hMax,this.hCap||Infinity,Math.max(this.hMin,this.h*Math.pow(2,k/4)));}
   // with the trapezoidal rule no step is longer than 2τ of a real mode of the circuit (not of the switch models), or the mode rings (μ < 0)
   // instead of decaying; found once per load at the largest step (stepcheck.js), up to 120 states
-  modeCap(){this.capDirty=false;this.hCap=null;if(!SC||!this.var||this.method!=='TR'||!this.stEls.length||this.stEls.length>120)return;let c=Infinity;
-   try{const md=SC.modes(this,this.hMax);if(md)for(const q of md.list){if(q.parasitic||!(q.abs>0)||Math.abs(q.im)>.1*Math.abs(q.re))continue;const tau=1/q.abs;if(tau>=this.hMin/2)c=Math.min(c,2*tau);}}catch(e){}
-   if(Number.isFinite(c)){this.hCap=Math.max(this.hMin,c);this.hv=Math.min(this.hv,this.hCap);}}
+  // from 3.15 once per topology (the conducting switches and diodes): topoInfo keeps the modes and the cap of each one
+  modeCap(){this.capDirty=false;this.hCap=null;this.topo=new Map();this.topoSig=null;if(!SC||!this.var||this.method!=='TR'||!this.stEls.length||this.stEls.length>120)return;
+   const r=this.topoInfo();if(r?.cap){this.hCap=r.cap;this.hv=Math.min(this.hv,this.hCap);}}
+  // ------------------------------------------------------------ topologies (3.15)
+  // the conducting switches and diodes as a string; the modes of each topology once (up to 48 topologies, 120 states)
+  swEls(){return this.swl||(this.swl=this.net.els.filter(e=>e.k==='S'||e.k==='D'));}
+  topoKey(){let k='';for(const e of this.swEls())k+=e.on?'1':'0';return k;}
+  topoInfo(){const key=this.topoKey();let r=this.topo.get(key);if(r)return r;if(this.topo.size>=48)return null;
+   r={key,md:null,cap:null,noted:false};this.topo.set(key,r);
+   const h=this.var?this.hMax:this.h;
+   try{r.md=SC.modes(this,h);}catch(e){r.err=e.message;return r;}
+   if(r.md&&this.var&&this.method==='TR'){let c=Infinity;for(const q of r.md.list){if(q.parasitic||!(q.abs>0)||Math.abs(q.im)>.1*Math.abs(q.re))continue;const tau=1/q.abs;if(tau>=this.hMin/2)c=Math.min(c,2*tau);}
+    if(Number.isFinite(c))r.cap=Math.max(this.hMin,c);}
+   return r;}
+  // after a switching: the step check of the new topology (its messages once, those not in the check before the run),
+  // and with the variable step and the trapezoidal rule the 2τ cap of that topology
+  topoCheck(){if(!SC||!this.stEls||!this.stEls.length||this.stEls.length>120||!this.swEls().length){this.topoSig='';return;}
+   const key=this.topoKey();if(key===this.topoSig)return;const first=this.topoSig===null;this.topoSig=key;
+   if(this.topo.size>=48&&!this.topo.has(key)){this.note('topo:many',{sev:'info',grp:'step',id:null,msg:'Πάνω από 48 τοπολογίες (συνδυασμοί διακοπτών και διόδων που άγουν): ο έλεγχος του βήματος σταματά στις πρώτες 48.',fix:'Οι έλεγχοι κατά την προσομοίωση (ταλάντωση δύο βημάτων, μεταβλητό βήμα) ισχύουν κανονικά.'});return;}
+   const r=this.topoInfo();if(!r)return;
+   if(this.var&&this.method==='TR'){this.hCap=r.cap||null;if(r.cap)this.hv=Math.min(this.hv,r.cap);}
+   if(r.noted||!r.md)return;r.noted=true;
+   // the switching instant: the start of the step for a gate, its end for a diode, a comparator or a gap
+   const tsw=first?this.t:this.endFlip?this.t:this.t-(this.hLast||0);
+   const on=this.swEls().filter(e=>e.on).map(e=>this.net.compInfo.get(e.cid)?.label||e.cid).filter((x,i,a)=>x&&a.indexOf(x)===i);
+   const onTxt=on.length?on.slice(0,5).join(', ')+(on.length>5?' …':''):'κανένας διακόπτης ή δίοδος';
+   const where=`${first?'Στην αρχή':'Μετά από μεταγωγή'} (t = ${P.eng(tsw,'s',4)}, άγουν: ${onTxt})`;
+   let msgs=[];try{msgs=SC.check(this,{modesOnly:true,md:r.md,cap:r.cap});}catch(e){}
+   for(const m of msgs){const {key:k0,...rest}=m;this.note('topo:'+k0,{...rest,base:k0,topo:key,t:tsw,msg:`${where}: ${rest.msg}`});}
+   // the 2τ cap of the trapezoidal rule in this topology, when it is far below the largest step
+   if(this.var&&this.method==='TR'&&r.cap&&r.cap<this.hMax/100)
+    this.note('topo:cap:'+key,{sev:'info',grp:'step',id:null,t:tsw,msg:`Όσο άγουν ${onTxt}, το μεταβλητό βήμα με τον τραπεζοειδή περιορίζεται στο 2τ = ${P.eng(r.cap,'s',3)} (μέγιστο ${P.eng(this.hMax,'s',3)}).`,
+     fix:'Αν η γρήγορη σταθερά χρόνου δεν σε ενδιαφέρει, Gear/BDF2 δεν έχει αυτό το όριο και την αποσβένει· αλλιώς σταθερό βήμα με Backward Euler μετά από κάθε μεταγωγή.'});}
   lteReset(){this.lteH={t:[this.t],x:[this.stVec()]};}
   ltePush(){if(!this.lteH)return this.lteReset();const H=this.lteH;H.t.push(this.t);H.x.push(this.stVec());if(H.t.length>3){H.t.shift();H.x.shift();}}
   // local truncation error of the step just taken, from divided differences over the last points:
@@ -401,7 +432,8 @@
    const r={key,src:'browser',t:this.t,n:1,...rec};d.set(key,r);this.dgVer=(this.dgVer||0)+1;return r;}
   // checks before the run: modes against the step, sources, lines (stepcheck.js); kept until the next check
   stepCheck(){this.dgPre=SC?SC.check(this).map(r=>({src:'browser',pre:true,t:null,n:1,...r})):[];this.dgVer=(this.dgVer||0)+1;return this.dgPre;}
-  diagnostics(){return [...(this.dgPre||[]),...(this.dg?this.dg.values():[])];}
+  diagnostics(){const pre=this.dgPre||[],keys=new Set(pre.map(r=>r.key));
+   return [...pre,...(this.dg?[...this.dg.values()].filter(r=>!(r.base&&keys.has(r.base))):[])];}
   // trapezoidal two-step ringing: the change of a state alternates in sign, step after step, around a slower trend
   ringCheck(){const x=this.stVec(),n=x.length,X=this.rx;this.rx=x;if(!n||!X||X.length!==n)return;
    const D=this.ringD,N=this.ringN,sc=this.lteSc,ns=this.stEls.length;
@@ -413,6 +445,8 @@
   // backward-Euler map of the reactive states over h with the sources off, at the present switch states
   // (step checks): column k = the states after one step from state k = 1 and all others 0
   stateMap(h){const S=this.stEls;if(!S||!S.length)return null;const ns=S.length,n=this.n;
+   const keep=this.net.els.filter(e=>e.k==='F').map(e=>[e,e.cc]);try{return this.stateMap0(h,S,ns,n);}finally{for(const [e,c] of keep)e.cc=c;}}
+  stateMap0(h,S,ns,n){
    this.values(this.t);if(this.hasCPL||this.hasNL){this.cplLinearize();this.nlLinearize();}
    this.assemble(h,'BE');const A=this.A.slice(),piv=new Int32Array(n);luFactor(A,n,piv);
    const M=new Float64Array(ns*ns),b=new Float64Array(n),J=(a,c,j)=>{if(a>=0)b[a]-=j;if(c>=0)b[c]+=j;};
@@ -438,7 +472,7 @@
     for(const [id,c] of net.compInfo)if(c.srm){const o=old.compInfo.get(id);if(o?.srm&&o.srm.N===c.srm.N)c.srm.st={...o.srm.st};}
     const ob=new Map(old.sig.blocks.map(b=>[b.id,b]));for(const b of net.sig.blocks){const o=ob.get(b.id);if(o&&o.type===b.type&&b.type!=='SH'){b.st={...b.st,...o.st};if(b.clock!==o.clock||b.trig!==o.trig)b.st.last=null;}}
    }
-   this.net=net;const nb=net.sig.blocks.length;this.sv=new Float64Array(net.sig.n);this.svT=new Float64Array(net.sig.n);this.yb=new Float64Array(nb);this.ybT=new Float64Array(nb);
+   this.net=net;this.jsc=null;this.swl=null;this.topo=new Map();this.topoSig=null;this.jumpNow=false;this.leftAt=null;const nb=net.sig.blocks.length;this.sv=new Float64Array(net.sig.n);this.svT=new Float64Array(net.sig.n);this.yb=new Float64Array(nb);this.ybT=new Float64Array(nb);
    this.yo=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.yoT=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.ctrlById=new Map(net.ctrls.map(k=>[k.id,k]));this.clkById=new Map(net.sig.blocks.filter(b=>b.type==='CLK').map(b=>[b.id,b]));this.shById=new Map(net.shs.map(q=>[q.id,q]));this.n=net.size;this.A=new Float64Array(this.n*this.n);this.piv=new Int32Array(this.n);this.b=new Float64Array(this.n);this.cache=new Map();
    if(!this.x||this.x.length!==this.n||fresh)this.x=new Float64Array(this.n);
    this.pyBlocks(old&&!fresh?old:null);
@@ -486,7 +520,7 @@
    for(const o of prev.values())o.rt?.destroy?.();}
   setMethod(m){this.method=['TR','BE','BDF2'].includes(m)?m:'TR';this.cache.clear();this.beLeft=Math.max(this.beLeft,1);this.capDirty=true;}
   setControl(id,patch){const k=this.net.ctrls.find(c=>c.id===id);if(!k)return false;Object.assign(k,patch);return true;}
-  setBlock(id,patch){const b=this.net.sig.blocks.find(q=>q.id===id);if(!b)return false;Object.assign(b,patch);this.evalBlocks('commit');this.computeVals();return true;}
+  setBlock(id,patch){const b=this.net.sig.blocks.find(q=>q.id===id);if(!b)return false;Object.assign(b,patch);if('sched' in patch)this.jsc=null;this.evalBlocks('commit');this.computeVals();return true;}
   setHold(id,patch){const q=this.shById.get(id);if(!q)return false;if(patch.trig&&patch.trig!==q.trig)q.last=null;Object.assign(q,patch);return true;}
   // a change made by the user while running: drawn on the scope and kept so it can be replayed
   markChange(rec){(this.changes||(this.changes=[])).push({t:this.t,...rec});if(this.changes.length>500)this.changes.shift();}
@@ -724,11 +758,21 @@
     if(e.gate==='on')on=true;else if(e.gate==='sig')on=(e.gIn>=0?this.sv[e.gIn]:0)>=.5;else if(e.gate==='pwm'){const k=this.net.ctrls.find(c=>c.id===e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
     if(e.k==='S')e.on=on;else{e.gon=on;if(e.gk==='igbt'&&!on)e.on=false;}s+=on?'1':'0';}return s;}
   // ------------------------------------------------------------ assembly
+  // programs t:value of sources, resistances, constant-power loads and constant blocks: the times, and whether a value jumps at t (3.15)
+  jumpScheds(){if(this.jsc)return this.jsc;const L=[];
+   for(const e of this.net.els){if(!e.sched&&!(e.k==='V'&&e.src?.sched))continue;
+    if(e.k==='G')L.push([e.sched,e.R]);else if(e.k==='CPL')L.push([e.sched,e.P]);else if(e.k==='I'&&!e.wave&&!(e.sigIn>=0))L.push([e.sched,e.I]);
+    else if(e.k==='V'&&e.imE===undefined&&!(e.sigIn>=0)&&e.src.kind==='dc')L.push([e.src.sched,e.src.V]);}
+   for(const b of this.net.sig.blocks)if(b.type==='CONST'&&b.sched)L.push([b.sched,b.sched[0][1]]);
+   return this.jsc=L;}
+  jumpAt(t){for(const [s,d] of this.jumpScheds()){const a=schedAt(s,t,d,true),b=schedAt(s,t,d);if(a!==b&&!(Number.isNaN(a)&&Number.isNaN(b)))return true;}return false;}
   values(t){ // time-dependent element values at time t
    this.tChk=t; // the time of the trial solution (spark-gap triggers in check)
+   // a step that ends on a programmed jump sees the value before it (3.15): the jump belongs to the next step
+   const L=this.leftAt!=null&&Math.abs(t-this.leftAt)<=this.h*1e-7;
    for(const e of this.net.els){
-    if(e.k==='G')e.Rnow=Math.max(schedAt(e.sched,t,e.R),1e-9);
-    else if(e.k==='I')e.Inow=e.wave?P.waveAt(e.wave,t):e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):schedAt(e.sched,t,e.I);
+    if(e.k==='G')e.Rnow=Math.max(schedAt(e.sched,t,e.R,L),1e-9);
+    else if(e.k==='I')e.Inow=e.wave?P.waveAt(e.wave,t):e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):schedAt(e.sched,t,e.I,L);
     else if(e.k==='F'&&e.sm){const m=e.sm,th=m.st.the+(t-this.t)*m.p*m.st.w;let q;
      if(m.sat){ // saturated d axis: linearize i_d(ψ_d) at the flux of the previous step, i_d ≈ (ψ_d − ψ₀)/L_inc, at the predicted angle
       const pa=(2*e.psi[0]-e.psi[1])/3,pb=e.psi[1]/SQ3,pd=Math.cos(th)*pa+Math.sin(th)*pb,id=P.satDinv(m.sat,pd-m.psim),Li=P.satD(m.sat,id).L;
@@ -736,9 +780,9 @@
      e.Gnow=q.G;e.p0=q.p0;}
     else if(e.k==='F'&&e.srm){const m=e.srm,th=m.st.the+(t-this.t)*m.Nr*m.st.w;for(let k=0;k<m.N;k++){const q=P.srmCur(m.g,th-2*Math.PI*k/m.N,e.psi[k]);e.Gnow[k*m.N+k]=q.g;e.p0[k]=e.psi[k]-q.i/q.g;}}
     else if(e.k==='V'&&e.imE!==undefined)e.Vnow=e.imE;
-    else if(e.k==='V'){const s=e.src;e.Vnow=e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):s.kind==='dc'?schedAt(s.sched,t,s.V):s.kind==='wave'?P.waveAt(s.w,t):s.off+s.Vpk*Math.sin(2*Math.PI*s.f*t+s.ph);}
+    else if(e.k==='V'){const s=e.src;e.Vnow=e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):s.kind==='dc'?schedAt(s.sched,t,s.V,L):s.kind==='wave'?P.waveAt(s.w,t):s.off+s.Vpk*Math.sin(2*Math.PI*s.f*t+s.ph);}
     else if(e.k==='TL')this.tlSources(e,t);
-    else if(e.k==='CPL')e.Pnow=schedAt(e.sched,t,e.P);
+    else if(e.k==='CPL')e.Pnow=schedAt(e.sched,t,e.P,L);
    }
   }
   assemble(h,mode){
@@ -883,23 +927,26 @@
   }
   stepCore(h){
    const t0=this.t,mid=t0+h/2;let edged=false;
-   const sig=this.gateSig(mid),gateChange=sig!==this.prevSig;if(gateChange)this.beLeft=2;
+   const sig=this.gateSig(mid),gateChange=sig!==this.prevSig;
+   // a programmed jump at t0 (3.15) is a discontinuity like a gate change: the post-jump point at the same instant,
+   // then backward Euler (the trapezoidal rule would ring around the jump in a stiff circuit)
+   const jump=this.jumpNow,disc=gateChange||jump;this.jumpNow=false;if(disc)this.beLeft=2;
    // for the variable step and the ringing check (3.13): smooth step, method, switching at its start or end
-   this.lastSmooth=false;this.lastMode=null;this.lastFlip=this.lastDisc=gateChange;this.endFlip=false;
+   this.lastSmooth=false;this.lastMode=null;this.lastFlip=this.lastDisc=disc;this.endFlip=false;
    // record the post-switching point at the same instant, so edges are vertical and averages exact
-   if(gateChange&&this.steps>0){this.edgePoint(t0);edged=true;}
-   const smooth=!gateChange&&this.beLeft<=0;let mode=this.beLeft>0?'BE':this.method;this.prevSig=sig;
+   if(disc&&this.steps>0){this.edgePoint(t0);edged=true;}
+   const smooth=!disc&&this.beLeft<=0;let mode=this.beLeft>0?'BE':this.method;this.prevSig=sig;
    if(mode==='BDF2'){const w=this.hLast?h/this.hLast:0;if(!(w>.2&&w<5))mode='BE';else this.bdf={w,a0:(1+2*w)/(1+w),a1:-(1+w),a2:w*w/(1+w)};}
    this.values(t0+h);
    let sol=this.solve(h,mode),bad=this.check(sol);
    if(!bad.length){
-    if(!this.net.sig.zc.length){this.commit(sol,h,mode);this.beLeft--;this.lastSmooth=!gateChange;this.lastMode=mode;return h;}
+    if(!this.net.sig.zc.length){this.commit(sol,h,mode);this.beLeft--;this.lastSmooth=!disc;this.lastMode=mode;return h;}
     // a comparator changes inside the step: cut the step at the crossing (secant on the comparator
     // input, exact for the piecewise-linear currents of switched converters), like a diode transition
     const snap=this.saveState();this.commit(sol,h,mode);const th=this.zcFrac();
-    if(th===null){this.beLeft--;this.lastSmooth=!gateChange;this.lastMode=mode;return h;}
+    if(th===null){this.beLeft--;this.lastSmooth=!disc;this.lastMode=mode;return h;}
     const hh=Math.max(th*h*(1+1e-7)+1e-9*this.h,Math.min(h,this.h*1e-4));
-    if(hh>=h*(1-1e-9)){this.beLeft--;this.lastSmooth=!gateChange;this.lastMode=mode;return h;}
+    if(hh>=h*(1-1e-9)){this.beLeft--;this.lastSmooth=!disc;this.lastMode=mode;return h;}
     this.restoreState(snap);let m=mode;
     if(m==='BDF2'){const w=hh/this.hLast;if(w>.2)this.bdf={w,a0:(1+2*w)/(1+w),a1:-(1+w),a2:w*w/(1+w)};else m='BE';}
     this.values(t0+hh);const s2=this.solve(hh,m);
@@ -958,6 +1005,8 @@
    // base-period boundary for statistics
    const Tb=this.T,kb=Math.floor((this.t+eps)/Tb)+1,tb=kb*Tb,tO=t;if(tb>this.t+eps&&tb<t)t=tb;
    this.evStat=t<tO; // only the statistics boundary: not a discontinuity for the variable step
+   // a programmed jump of a source, a resistance or a constant block at t: the step ends on its left value (3.15)
+   this.evJump=false;if(!this.evStat)out:for(const [sc] of this.jumpScheds())for(const [ts] of sc)if(Math.abs(ts-t)<=eps){this.evJump=true;break out;}
    return t;
   }
   spwmCut(h){ // shorten h to the first SPWM crossing in (t, t+h]
@@ -974,18 +1023,21 @@
     const tn=this.nextEvent(tEnd),stat=this.evStat;let hs=this.var?this.hv:this.h;
     // variable step: right after a switching (a gate that changes now, or a diode/comparator/gap at the end of the last step) the next steps are
     // backward Euler, first order and without an error estimate on the first one: they start at 1/8 and grow ×2 per step
-    if(this.var&&(this.endFlipPrev||this.gateSigPeek(this.t+Math.min(hs,tn-this.t)/2)!==this.prevSig)){hs=this.hGrid(Math.max(this.hMin,this.hv/8));this.hv=hs;}
+    if(this.var&&(this.endFlipPrev||this.jumpNow||this.gateSigPeek(this.t+Math.min(hs,tn-this.t)/2)!==this.prevSig)){hs=this.hGrid(Math.max(this.hMin,this.hv/8));this.hv=hs;}
     let h=Math.min(hs,tn-this.t);if(tn-this.t-h<this.h*1e-3)h=tn-this.t;
     h=this.spwmCut(h);
-    let snap=null,be=0;if(this.var){snap=this.saveState();be=this.beLeft;}
+    let snap=null,be=0,jn=this.jumpNow;if(this.var){snap=this.saveState();be=this.beLeft;}
+    this.leftAt=this.evJump?tn:null;
     const hst=this.step(h);
     // variable step (3.13): a step whose local error is above the tolerance is taken again, smaller
-    if(this.var){if(this.varCheck(hst,snap,be,!stat&&Math.abs(this.t-tn)<eps))continue;this.endFlipPrev=this.endFlip;}
+    if(this.var){if(this.varCheck(hst,snap,be,!stat&&Math.abs(this.t-tn)<eps)){this.jumpNow=jn;continue;}this.endFlipPrev=this.endFlip;}
     steps++;
     if(hst<this.h*1e-6&&++this.nTiny===2000)this.note('tiny',{sev:'warn',grp:'step',id:null,msg:`Πολλά βήματα κάτω από 10⁻⁶·Δt (συμβάντα πολύ κοντά το ένα στο άλλο, από t = ${P.eng(this.t,'s',4)}).`,fix:'Συνήθως διακόπτης ή συγκριτής που αλλάζει κατάσταση συνεχώς (chattering): έλεγξε την υστέρηση ή τον νεκρό χρόνο.'});
     if(this.method==='TR'&&this.lastSmooth&&!this.lastDisc&&this.stEls.length<=4000)this.ringCheck();else if(this.lastDisc)this.rx=null;
-    // land exactly on event times
-    if(Math.abs(this.t-tn)<eps)this.t=tn;
+    // land exactly on event times; a programmed jump there makes the next step start like a switching (3.15)
+    if(Math.abs(this.t-tn)<eps){this.t=tn;if(this.evJump&&this.jumpAt(tn))this.jumpNow=true;}
+    this.leftAt=null;
+    if(this.lastDisc||this.topoSig===null)this.topoCheck();
     this.started=true;
     this.evalBlocks('commit');
     const Tb=this.T,onB=Math.abs(this.t/Tb-Math.round(this.t/Tb))<1e-9;
