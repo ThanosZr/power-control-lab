@@ -23,6 +23,8 @@ jobs:
         with:
           node-version: '22'
       - run: pip install -r requirements.txt
+      - name: Προαιρετικά πακέτα (έλεγχος Parquet, HDF5 και γραφικών, 3.15)
+        run: pip install pyarrow h5py matplotlib
       - name: Python στον browser (Pyodide) για το μπλοκ Python
         run: npm install --no-save pyodide@0.26.4
       - name: Χάρτης κώδικα ενημερωμένος
@@ -75,7 +77,7 @@ jobs:
           python run.py --no-browser --port 8765 > server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8765/api/health >/dev/null && break; sleep 1; done
           mkdir -p ui-out && cd ui-out
-          for f in studio_flow editor_interactions features_flow blocks_flow wiring_flow step_flow scenario_flow; do
+          for f in studio_flow editor_interactions features_flow blocks_flow wiring_flow step_flow scenario_flow addons_flow; do
             echo "== $f"; node ../tests/ui/$f.js http://127.0.0.1:8765/ .
           done
       - name: Εικόνες των σεναρίων

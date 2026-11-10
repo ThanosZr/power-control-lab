@@ -348,3 +348,19 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .scen-plot{margin:0 0 12px}.scen-plot h5{margin:0 0 4px;font-size:12px}.scen-plot canvas{width:100%;height:220px;display:block}
 .scen-leg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--muted);margin-top:2px}.scen-leg i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:4px;vertical-align:middle}
 .scen-file{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:12.5px}.scen-file small{color:var(--muted)}
+
+/* 3.15: add-ons and the link */
+.addons-list{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.addon-item{display:flex;gap:8px;align-items:flex-start;justify-content:space-between;border:1px solid var(--line,#dbe5e0);border-radius:8px;padding:6px 8px}
+.addon-item p{margin:2px 0 0;font-size:12px}.addon-item .acts{display:flex;gap:4px;flex-shrink:0}
+.addons-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.btnlike{cursor:pointer;border:1px solid var(--line,#dbe5e0);border-radius:6px;padding:3px 8px;font-size:13px}
+.link-box{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line,#dbe5e0);font-size:13px}.link-box code{font-size:12px}
+.addon-docks{position:fixed;right:12px;bottom:12px;display:flex;flex-direction:column;gap:8px;z-index:60;pointer-events:none}
+.addon-dock{pointer-events:auto;width:min(520px,calc(100vw - 24px));height:min(640px,70vh);background:var(--card,#fff);border:1px solid var(--line,#dbe5e0);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden}
+.addon-dock.min{height:auto}.addon-dock.min .addon-body{display:none}.addon-dock.wide{width:min(900px,calc(100vw - 24px));height:min(820px,86vh)}
+.addon-dock header{display:flex;align-items:center;gap:6px;padding:4px 8px;border-bottom:1px solid var(--line,#dbe5e0);font-size:13px}.addon-dock header b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.addon-dock header button{border:none;background:transparent;cursor:pointer;font-size:14px;padding:2px 4px}
+.addon-body{flex:1;display:flex}.addon-frame{flex:1;border:0;width:100%;height:100%;background:#fff}
+@media (prefers-color-scheme:dark){.addon-frame{background:#141a19}}
+.from-tool{font-size:11px;color:var(--accent,#147966)}
+.addons-in{padding:0 16px 14px}

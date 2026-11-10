@@ -1,0 +1,5 @@
+{"name": "lab", "title": "Αναφορά εργαστηρίου (A4, 10 pt)", "width_cm": 16.0, "height_cm": 9.0, "dpi": 200,
+ "font": "DejaVu Sans", "font_fallback": ["Arial", "sans-serif"], "size": {"base": 10, "title": 11, "label": 10, "tick": 9, "legend": 9},
+ "interpreter": "tex", "linewidth": 1.2, "markersize": 4, "grid": true, "grid_alpha": 0.4, "box": true, "legend": "best",
+ "colors": ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#000000", "#F0E442"],
+ "linestyles": ["-", "--", "-.", ":"], "formats": ["png", "pdf", "svg"]}

@@ -1,0 +1,5 @@
+{"name": "ieee", "title": "Άρθρο IEEE (μία στήλη)", "width_cm": 8.8, "height_cm": 6.0, "dpi": 600,
+ "font": "Times New Roman", "font_fallback": ["Times", "Nimbus Roman", "DejaVu Serif", "serif"], "size": {"base": 8, "title": 8, "label": 8, "tick": 7, "legend": 7},
+ "interpreter": "tex", "linewidth": 0.9, "markersize": 3, "grid": true, "grid_alpha": 0.35, "box": true, "legend": "best",
+ "colors": ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#000000", "#F0E442"],
+ "linestyles": ["-", "--", "-.", ":"], "formats": ["pdf", "svg", "eps", "png"]}

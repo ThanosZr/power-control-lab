@@ -1,0 +1,5 @@
+{"name": "thesis", "title": "Διπλωματική (A4, 11 pt)", "width_cm": 15.0, "height_cm": 8.5, "dpi": 300,
+ "font": "DejaVu Serif", "font_fallback": ["Times New Roman", "serif"], "size": {"base": 11, "title": 11, "label": 11, "tick": 10, "legend": 10},
+ "interpreter": "tex", "linewidth": 1.2, "markersize": 4, "grid": true, "grid_alpha": 0.3, "box": true, "legend": "best",
+ "colors": ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#000000", "#F0E442"],
+ "linestyles": ["-", "--", "-.", ":"], "formats": ["pdf", "svg", "png"]}

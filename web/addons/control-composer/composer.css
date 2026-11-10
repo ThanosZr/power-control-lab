@@ -1,0 +1,8 @@
+.loop{border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin:6px 0}
+.loop .head{display:flex;gap:6px;align-items:center}.loop .head b{flex:1}
+.loop .grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
+.loop input[type=number]{width:100%}
+#diagram svg{width:100%;height:auto;margin-top:8px}
+#diagram text{font:11px system-ui,sans-serif;fill:var(--fg)}#diagram .val{fill:var(--acc);font-weight:600}
+#diagram rect{fill:none;stroke:var(--fg);stroke-width:1}#diagram .ai rect{stroke:var(--acc);stroke-width:2}
+#diagram path{fill:none;stroke:var(--mut);stroke-width:1.2;marker-end:url(#arr)}

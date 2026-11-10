@@ -256,6 +256,21 @@ def checks(o):
     jp = st['jump']
     add('Βήμα του λύτη', 'άλμα πηγής από πρόγραμμα (0 → 10 V στο 1 ms), RC με τ = 10 ns, h = 5 μs: μέγιστο |v_C − ακριβής| μετά το άλμα', 'v_C = V(1 − e^{−(t − t_j)/τ})', 0, jp['tr']['after'], 1e-4, 'V')
     add('Βήμα του λύτη', 'άλμα αντίστασης από πρόγραμμα (1 MΩ → 1 Ω): μέγιστο |v_C − ακριβής| πριν και μετά', 'δύο φορτίσεις RC με συνέχεια της v_C', 0, max(jp['res']['before'], jp['res']['after']), 1e-4, 'V')
+    # 3.15: the impulse tools in Python against the MATLAB tools' own results (their CSV rows, branch ref-materials)
+    import sys as _s
+    _s.path.insert(0, str(ROOT))
+    from pcl import impulse as IMP
+    h = IMP.fit_heidler(1e-6, 200e-6, -100000, 10, 'auto')
+    add('Εργαλεία παραμέτρων', 'Heidler 1/200 (AutoH): τ₁', 'Lightning Impulse Manager 1.2.0, ls_params (MATLAB, δείγματα 1 ns)', 1.83192713504729e-6, h['tau1'], 1e-5 * 1.832e-6, 's')
+    add('Εργαλεία παραμέτρων', 'Heidler 1/200 (AutoH): τ₂', 'Lightning Impulse Manager 1.2.0', 284.843991112265e-6, h['tau2'], 1e-5 * 284.8e-6, 's')
+    add('Εργαλεία παραμέτρων', 'Heidler 1/200 (AutoH): η', 'Lightning Impulse Manager 1.2.0', 0.986296525678929, h['eta'], 1e-6, '')
+    v = IMP.fit_profile('IEC2025_LI', 100e3)
+    add('Εργαλεία παραμέτρων', 'LI 1,2/50 (IEC 60060-1): α', 'Voltage Impulse GUI 1.1, voltage_impulse_params (MATLAB)', 14659.1086811327, v['alpha'], 1e-6 * 14659, '1/s')
+    add('Εργαλεία παραμέτρων', 'LI 1,2/50: β', 'Voltage Impulse GUI 1.1', 2468926.6530487, v['beta'], 1e-6 * 2.469e6, '1/s')
+    add('Εργαλεία παραμέτρων', 'LI 1,2/50: K', 'Voltage Impulse GUI 1.1', 1.03725220061775, v['K'], 1e-8, '')
+    si = IMP.fit_profile('IEC2010_SI_LEGACY', 30e3)
+    add('Εργαλεία παραμέτρων', 'SI 250/2500 (Tp/T2): α', 'Voltage Impulse GUI 1.1', 316.955654538579, si['alpha'], 1e-6 * 317, '1/s')
+    add('Εργαλεία παραμέτρων', 'SI 250/2500 (Tp/T2): β', 'Voltage Impulse GUI 1.1', 16004.3786899236, si['beta'], 1e-6 * 16004, '1/s')
     tp = [d for d in st['topo']['run'] if d['key'] == 'topo:mode:r:CS']
     add('Βήμα του λύτη', 'έλεγχος ανά τοπολογία: στιγμή της πρώτης αγωγής του διακόπτη (ρολόι 1 kHz, φάση 180°)', 't = T/2', 5e-4, tp[0]['t'] if tp else float('nan'), 1e-9, 's')
     return rows
@@ -267,6 +282,9 @@ TESTS = [
     ('tests/test_batch.py', 'λύτης SciPy (solve_ivp) στο ίδιο netlist', 'δεύτερος, ανεξάρτητος λύτης: ίδιες κυματομορφές σε 1e-4 … 1e-7, και για γραμμές (και με απώλειες), αλεξικέραυνα, σπινθηριστές (και με καμπύλη τάσης–χρόνου) και τα tutorials υψηλών τάσεων'),
     ('tests/test_templates.py, test_engine.py', 'συμβολική λύση και templates', 'λύσεις των ασκήσεων (PE2, Άσκηση 2) με SymPy'),
     ('tests/test_step.py', 'βήμα του λύτη (3.13, 3.15)', 'μεταβλητό βήμα απέναντι σε κλειστούς τύπους (RLC, γεννήτρια κρουστικών) και σε λεπτό σταθερό βήμα (flyback, Marx), σταθερές χρόνου και συχνότητες του ελέγχου βήματος, ταλάντωση δύο βημάτων'),
+    ('tests/test_addons.py', 'πρόσθετα, σύνδεση, εργαλεία κρουστικών (3.15)', 'τα CSV των Lightning Impulse Manager 1.2.0 και Voltage Impulse GUI 1.1 (MATLAB), IEC 62305-1 10/350, ασφάλεια (Host, token, διαδρομές zip)'),
+    ('tests/test_control.py', 'σύνθεση ελέγχου, PI και PI + NN (3.15)', 'ο καταρράκτης ακολουθεί την αναφορά με φορτίο, χωρίς μάθηση το PI + NN είναι ο PI bit προς bit, το δίκτυο μαθαίνει το ρεύμα φορτίου (T_L + bω)/ψ, IAE/ISE σε κλειστή μορφή'),
+    ('tests/test_plotting.py', 'γραφικές για δημοσίευση (3.15)', 'το label_mapping.csv του Lightning Impulse Manager όπως είναι, IEEE 8,8 cm = 249,45 pt, ίδιο αρχείο σε κάθε τρέξιμο, RMS ημιτόνου'),
     ('tests/test_pcl.py', 'σενάρια από κώδικα, πακέτο pcl (3.13)', 'κυμάτωση ΔI = V_o(1 − D)/(L·f_s) σε σάρωση, ίδια αριθμοί με τον λύτη της εφαρμογής, SciPy, CSV/JSON/.mat, γραμμή εντολών'),
     ('tests/test_matlab.py', 'MATLAB/Octave (3.14)', 'pcl_run, pcl_sweep, pcl_read στο Octave: ίδιοι αριθμοί με την Python, κυμάτωση ΔI = V_o(1 − D)/(L·f_s), CSV/JSON/.mat'),
     ('tests/ui/*.js', 'περιβάλλον (Playwright)', 'σχέδιο, scopes, πάνελ, εργαλείο σύρματος, ζωντανές παράμετροι, κονσόλα διαγνωστικών, πάνελ «Σενάρια» (κυμάτωση στο 3 % της θεωρίας, μπλοκ Python ίδιο με το μπλοκ PI)'),
@@ -319,7 +337,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 187 tests (Python και Node) και 7 σενάρια περιβάλλοντος. Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 210 tests (Python και Node) και 8 σενάρια περιβάλλοντος. Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',

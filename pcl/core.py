@@ -628,8 +628,8 @@ class Result:
         self.ch = ch
         self.measured = dict(measured or {})
         self.diag = list(diag or [])
-        self.meta = {'pcl': version(), 'project': project.name, 'hash': project.hash(), 'changes': dict(project.changes),
-                     'date': datetime.datetime.now().isoformat(timespec='seconds'), **meta}
+        pm = {'project': project.name, 'hash': project.hash(), 'changes': dict(project.changes)} if project is not None else {}
+        self.meta = {'pcl': version(), **pm, 'date': datetime.datetime.now().isoformat(timespec='seconds'), **meta}
 
     def __getitem__(self, key):
         return self.ch[key]

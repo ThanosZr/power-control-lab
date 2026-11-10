@@ -102,23 +102,27 @@
    draw:p=>`<path d="M-30,-30 H-14 V-24 a6,6 0 0,1 0,12 a6,6 0 0,1 0,12 a6,6 0 0,1 0,12 a6,6 0 0,1 0,12 V30 H-30 M30,-30 H14 V-24 a6,6 0 0,0 0,12 a6,6 0 0,0 0,12 a6,6 0 0,0 0,12 a6,6 0 0,0 0,12 V30 H30"/><path class="thin" d="M-3,-26 V26 M3,-26 V26"/><circle class="dot" cx="-20" cy="-26" r="2.6"/><circle class="dot" cx="20" cy="${p.pol==='opp'?26:-26}" r="2.6"/>`},
   // lightning current (3.5): Heidler or double exponential, IEC 62305-1 waveforms or fitted to a front/tail time
   ILG:{name:'Κεραυνικό ρεύμα (Heidler)',prefix:'I',group:'Πηγές',pins:{p:[0,-40],n:[0,40]},box:[-17,-17,34,34],
-   params:[sel('shape','Κυματομορφή',[['10/350','10/350 μs: πρώτο θετικό πλήγμα (IEC 62305-1)'],['1/200','1/200 μs: πρώτο αρνητικό πλήγμα'],['0.25/100','0,25/100 μs: επόμενο αρνητικό πλήγμα'],['custom','Άλλη T1/T2 (προσαρμογή των τ₁, τ₂)']],'10/350',
+   params:[sel('shape','Κυματομορφή',[['10/350','10/350 μs: πρώτο θετικό πλήγμα (IEC 62305-1)'],['1/200','1/200 μs: πρώτο αρνητικό πλήγμα'],['0.25/100','0,25/100 μs: επόμενο αρνητικό πλήγμα'],['custom','Άλλη T1/T2 (προσαρμογή των τ₁, τ₂)'],['direct','Παράμετροι τ₁, τ₂, η (π.χ. από εργαλείο)']],'10/350',
      {hint:'Heidler: i(t) = (I₀/η)·(t/τ₁)ⁿ/(1 + (t/τ₁)ⁿ)·e^(−t/τ₂). Οι τρεις τυπικές με τα τ₁, τ₂, η του IEC 62305-1 (n = 10). T1 = 1,25·(t₉₀ − t₁₀), T2 από την εικονική αρχή ως το 50 % στην ουρά.'}),
     num('Ipk','Μέγιστο ρεύμα I₀ (βγαίνει από το p)','A',200e3,{signed:true}),
-    sel('model','Μοντέλο',[['heidler','Heidler'],['dexp','Διπλοεκθετικό: I₀/η·(e^(−t/τ₂) − e^(−t/τ₁))']],'heidler',{show:p=>p.shape==='custom'}),
-    num('T1','Χρόνος μετώπου T1','s',1.2e-6,{show:p=>p.shape==='custom'}),num('T2','Χρόνος ημίσεος T2','s',50e-6,{show:p=>p.shape==='custom'}),num('n','Εκθέτης n (Heidler)','',10,{show:p=>p.shape==='custom'&&p.model!=='dexp'}),
+    sel('model','Μοντέλο',[['heidler','Heidler'],['dexp','Διπλοεκθετικό: I₀/η·(e^(−t/τ₂) − e^(−t/τ₁))']],'heidler',{show:p=>p.shape==='custom'||p.shape==='direct'}),
+    num('tau1','τ₁','s',1.83192713504729e-6,{show:p=>p.shape==='direct',hint:'i(t) = (I₀/η)·(t/τ₁)ⁿ/(1 + (t/τ₁)ⁿ)·e^(−t/τ₂), όπως το Lightning Impulse Manager. Με η = μέγιστο της μορφής (AutoH) η κορυφή είναι I₀· με άλλο η (FixedH) είναι I₀·max/η.'}),
+    num('tau2','τ₂','s',284.843991112265e-6,{show:p=>p.shape==='direct'}),num('eta','η','',0.986296525678929,{show:p=>p.shape==='direct'}),
+    num('T1','Χρόνος μετώπου T1','s',1.2e-6,{show:p=>p.shape==='custom'}),num('T2','Χρόνος ημίσεος T2','s',50e-6,{show:p=>p.shape==='custom'}),num('n','Εκθέτης n (Heidler)','',10,{show:p=>(p.shape==='custom'||p.shape==='direct')&&p.model!=='dexp'}),
     num('t0','Καθυστέρηση','s',0,{zero:true})],
    value:p=>p.Ipk,unit:'A',
    draw:()=>'<path d="M0,-40 V-16 M0,16 V40"/><circle r="16"/><path class="thin" d="M3,-11 L-4,1 L2,1 L-3,11 M-3,11 L-4,5 M-3,11 L1,7"/>'},
   // multiport elements (3.5): N windings or ports, one above the other, a_k on the left and b_k on the right (dots at a_k)
   // impulse voltage (3.8): double exponential v = (V₀/η)·(e^(−t/τ₂) − e^(−t/τ₁)), IEC 60060-1 times
   VIMP:{name:'Κρουστική τάση (1,2/50, 250/2500)',prefix:'V',group:'Πηγές',pins:{p:[0,-40],n:[0,40]},box:[-17,-17,34,34],
-   params:[sel('shape','Κυματομορφή',[['1.2/50','1,2/50 μs: κεραυνική (LI)'],['250/2500','250/2500 μs: χειρισμών (SI, χρόνος κορυφής)'],['custom','Άλλη (προσαρμογή των τ₁, τ₂)'],['ramp','Ράμπα με κλίση S ως τη V₀']],'1.2/50',
+   params:[sel('shape','Κυματομορφή',[['1.2/50','1,2/50 μs: κεραυνική (LI)'],['170/2500','170/2500 μs: χειρισμών (SI, T1 30–90 %)'],['250/2500','250/2500 μs: χειρισμών (SI, χρόνος κορυφής)'],['custom','Άλλη (προσαρμογή των τ₁, τ₂)'],['direct','Παράμετροι α, β, K (π.χ. από εργαλείο)'],['ramp','Ράμπα με κλίση S ως τη V₀']],'1.2/50',
      {hint:'v(t) = (V₀/η)·(e^(−t/τ₂) − e^(−t/τ₁)), κορυφή V₀. IEC 60060-1: T1 = 1,67·(t₉₀ − t₃₀), T2 από την εικονική αρχή t₃₀ − 0,3·T1 ως το 50 % στην ουρά. Για 250/2500: χρόνος κορυφής T_p και T2 από το t = 0.'}),
     num('Vpk','Μέγιστη τάση V₀','V',100e3,{signed:true}),
     sel('basis','Ορισμός χρόνων',[['iec','T1 (30–90 %) και T2 από την εικονική αρχή'],['tp','T_p (χρόνος κορυφής) και T2 από το t = 0']],'iec',{show:p=>p.shape==='custom'}),
     num('T1','Χρόνος μετώπου T1 ή T_p','s',1.2e-6,{show:p=>p.shape==='custom'}),num('T2','Χρόνος ημίσεος T2','s',50e-6,{show:p=>p.shape==='custom'}),
     num('S','Κλίση μετώπου S','V/s',1e12,{show:p=>p.shape==='ramp'}),
+    num('alpha','α (ουρά)','1/s',14659.1086811327,{show:p=>p.shape==='direct',hint:'v(t) = V₀·K·(e^(−αt) − e^(−βt)), όπως το Voltage Impulse GUI. Η κορυφή είναι V₀ όταν K = 1/max(e^(−αt) − e^(−βt)).'}),
+    num('beta','β (μέτωπο)','1/s',2468926.6530487,{show:p=>p.shape==='direct'}),num('K','K','',1.03725220061775,{show:p=>p.shape==='direct'}),
     num('Rs','Εσωτερική αντίσταση','Ω',0,{zero:true,hint:'Π.χ. Z της γραμμής: «προσπίπτον κύμα πίσω από Z».'}),num('t0','Καθυστέρηση','s',0,{zero:true})],
    value:p=>p.Vpk,unit:'V',
    draw:()=>'<path d="M0,-40 V-16 M0,16 V40"/><circle r="16"/><path class="thin" d="M-8,7 L-5,-8 C-2,-8 0,4 9,6"/><path class="thin" d="M-5,-12 H5"/>'},
@@ -472,10 +476,17 @@
    let lam=1,y,q;for(let k=0;k<20;k++){y=[x[0]+lam*dx[0],x[1]+lam*dx[1]];q=res(y);if(Math.hypot(...q)<Math.hypot(...r))break;lam/=2;}x=y;r=q;}
   const w=mk(x),m=waveMeasure(w,basis);return {...w,eta:m.peak,fitT1:m.T1,fitT2:m.T2,ok:Math.hypot(...r)<1e-4};}
  // impulse voltage (3.8): fitted on the definitions of IEC 60060-1
- const VIMP_STD={'1.2/50':{T1:1.2e-6,T2:50e-6,basis:'iec'},'250/2500':{T1:250e-6,T2:2500e-6,basis:'tp'}};
+ // 170/2500: the switching impulse of IEC 60060-1:2025 (T1 by 30–90 %), as in the Voltage Impulse GUI 1.1 (3.15)
+ const VIMP_STD={'1.2/50':{T1:1.2e-6,T2:50e-6,basis:'iec'},'170/2500':{T1:170e-6,T2:2500e-6,basis:'iec'},'250/2500':{T1:250e-6,T2:2500e-6,basis:'tp'}};
+ // given parameters (3.15, from a tool or its CSV): the times are measured, not fitted
+ const directCache=new Map();
+ function directWave(kind,n,tau1,tau2,eta,basis){const key=[kind,n,tau1,tau2,eta,basis].join('|');let m=directCache.get(key);
+  if(!m){m=waveMeasure({kind,n,tau1,tau2},basis);directCache.set(key,m);}return {kind,n,tau1,tau2,eta,T1:m.T1,T2:m.T2,peak:m.peak,fitOk:tau1>0&&tau2>0&&eta>0};}
  const vimpCache=new Map();
  function impulseWave(p){const V0=parseEng(p.Vpk)||0,t0=Math.max(0,parseEng(p.t0)||0),pre=VIMP_STD[p.shape];
   if(p.shape==='ramp'){const S=Math.abs(parseEng(p.S))||1e12,tr=Math.abs(V0)/S||1e-9;return {kind:'ramp',tr,S,eta:1,I0:V0,t0,T1:tr,T2:Infinity,tau1:tr,tau2:tr,fitOk:true};}
+  if(p.shape==='direct'){const a=parseEng(p.alpha),b=parseEng(p.beta),K=parseEng(p.K);if(!(a>0&&b>a&&K>0))return {kind:'dexp',n:10,tau1:1e-6,tau2:1e-5,eta:1,I0:0,t0,T1:NaN,T2:NaN,basis:'iec',fitOk:false,err:'α, β, K > 0 και β > α.'};
+   return {...directWave('dexp',10,1/b,1/a,1/K,'iec'),I0:V0,t0,basis:'iec'};}
   const T1=pre?pre.T1:Math.max(parseEng(p.T1)||1.2e-6,1e-12),T2=pre?pre.T2:Math.max(parseEng(p.T2)||50e-6,1.5*T1),basis=pre?pre.basis:(p.basis==='tp'?'tp':'iec'),key=[T1,T2,basis].join('|');
   let f=vimpCache.get(key);if(!f){f=waveFit('dexp',T1,T2,10,basis);vimpCache.set(key,f);}
   return {kind:'dexp',n:10,tau1:f.tau1,tau2:f.tau2,eta:f.eta,I0:V0,t0,T1,T2,basis,fitOk:f.ok};}
@@ -520,6 +531,9 @@
  // the waveform of a lightning-current part: {kind, n, tau1, tau2, eta, I0, t0, T1, T2}
  function lightningWave(p){const I0=parseEng(p.Ipk)||0,t0=Math.max(0,parseEng(p.t0)||0),pre=HEIDLER[p.shape];
   if(pre)return {kind:'heidler',...pre,I0,t0};
+  if(p.shape==='direct'){const kind=p.model==='dexp'?'dexp':'heidler',n=Math.max(1,Math.min(30,parseEng(p.n)||10)),t1=parseEng(p.tau1),t2=parseEng(p.tau2),eta=parseEng(p.eta);
+   if(!(t1>0&&t2>0&&eta>0))return {kind,n,tau1:1e-6,tau2:1e-4,eta:1,I0:0,t0,T1:NaN,T2:NaN,fitOk:false,err:'τ₁, τ₂, η > 0.'};
+   return {...directWave(kind,n,t1,t2,eta),I0,t0};}
   const T1=Math.max(parseEng(p.T1)||1.2e-6,1e-12),T2=Math.max(parseEng(p.T2)||50e-6,1.5*T1),kind=p.model==='dexp'?'dexp':'heidler',n=Math.max(1,Math.min(30,parseEng(p.n)||10));
   const f=waveFit(kind,T1,T2,n);return {kind,n,tau1:f.tau1,tau2:f.tau2,eta:f.eta,I0,t0,T1,T2,fitOk:f.ok};}
  function pinKind(c,pin){const s=sigPins(c)[pin];return s?s.dir:'el';}

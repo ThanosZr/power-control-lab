@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Σύνθεση ελέγχου</title>
+<link rel="stylesheet" href="../addon.css">
+<link rel="stylesheet" href="composer.css">
+</head>
+<body>
+<header><b>Σύνθεση ελέγχου</b> <small class="muted">βρόχοι από τον πιο εξωτερικό στον πιο εσωτερικό, ελεγκτής ανά βρόχο (pcl.control)</small></header>
+<div class="row"><label>Ενεργοποιητής <select id="act"></select></label><label>Δειγματοληψία από <select id="clock"></select></label><button id="suggest">Πρόταση από το κύκλωμα</button></div>
+<div id="loops"></div>
+<div class="row"><button id="add">+ βρόχος</button></div>
+<div class="row"><button id="apply" class="primary">Εφαρμογή στο κύκλωμα</button><label class="row"><input type="number" id="tend" value="0.4" step="0.05" style="width:6em"> s</label><button id="compare">Σύγκριση: κλασικός ↔ AI</button></div>
+<div id="diagram"></div>
+<div id="out"></div>
+<p id="msg" class="small"></p>
+<script src="/studio/parts.js"></script>
+<script src="/studio/addon_client.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>

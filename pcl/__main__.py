@@ -8,11 +8,13 @@
   python -m pcl run buck.json --t-end 5m --solver scipy --method Radau --out out.json
   python -m pcl sweep buck.json --grid L1.L=22u,47u,100u --grid R1.R=5:20:4 --measure Vo=V:C1:avg:10 --measure I:L1:pp:10 --t-end 5m --out sweep.csv
   python -m pcl sweep tutorial:buck --grid L1.L=22u:220u:10 --measure I:L1:pp:10 --t-end 5m --out sweep.parquet
+  python -m pcl plot out.csv --preset ieee --mapping label_mapping.csv --table maxima.tex --out fig.pdf
   python -m pcl bifurcation tutorial:pcm_chaos IC.v --values 1.4:3:33 --channel Y:AM1 --stat end --transient 300 --record 64 --out bif.mat
   python -m pcl job request.json --out result.json      (MATLAB/Octave, 3.14: the request as JSON, see pcl/core.py job)
 """
 import argparse
 import json
+from pathlib import Path
 import sys
 
 from .core import PclError, _clean, job, load, parse_value, tutorial, tutorials
@@ -87,7 +89,29 @@ def main(argv=None):
     a.add_argument('--set', action='append', help='<id>.<παράμετρος>=<τιμή>')
     a.add_argument('--workers', type=int, help='παράλληλες διεργασίες Node')
     a.add_argument('--out', help='.csv, .json, .mat, .parquet ή .h5')
+    a = sub.add_parser('plot', help='γραφική για δημοσίευση από CSV (3.15): spec σε JSON, ή αρχεία με --preset/--mapping')
+    a.add_argument('spec', nargs='+', help='spec.json, ή ένα ή περισσότερα CSV')
+    a.add_argument('--preset', help='ieee, thesis, slides, lab ή αρχείο JSON')
+    a.add_argument('--mapping', help='label_mapping.csv')
+    a.add_argument('--kind', choices=('2d', 'waterfall'))
+    a.add_argument('--signal', help='το σήμα του waterfall')
+    a.add_argument('--table', help='πίνακας ακροτάτων (.csv ή .tex)')
+    a.add_argument('--out', help='.pdf, .svg, .eps ή .png')
     args = ap.parse_args(argv)
+    if args.cmd == 'plot':
+        from . import plotting
+        try:
+            spec = json.loads(Path(args.spec[0]).read_text(encoding='utf-8')) if args.spec[0].endswith('.json') else {'files': args.spec}
+            for k in ('preset', 'mapping', 'kind', 'signal', 'table', 'out'):
+                if getattr(args, k):
+                    spec[k] = getattr(args, k)
+            spec.setdefault('out', 'figure.pdf')
+            r = plotting.figure(spec)
+        except (ValueError, RuntimeError, OSError) as e:
+            print(f'pcl: {e}', file=sys.stderr)
+            return 2
+        print(f"{r['out']}: {r['size_cm'][0]:.1f} × {r['size_cm'][1]:.1f} cm, πρότυπο {r['preset']}, ομάδες: {', '.join(r['groups'])}")
+        return 0
     try:
         if args.cmd == 'tutorials':
             for t in tutorials():

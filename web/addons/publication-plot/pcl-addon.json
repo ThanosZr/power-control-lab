@@ -1,0 +1,10 @@
+{
+  "id": "publication-plot",
+  "name": "Γραφική για δημοσίευση",
+  "version": "1.0.0",
+  "author": "Thanos Zr",
+  "description": "Τα κανάλια του scope ως εικόνα με τα πρότυπα IEEE, διπλωματικής, διαφανειών ή αναφοράς (τα ίδια JSON με την Python και το MATLAB): μέγεθος σε cm, γραμματοσειρές σε pt, ομάδες ανά μονάδα, πίνακας ακροτάτων, SVG και PNG.",
+  "entry": "index.html",
+  "kind": ["plot", "panel"],
+  "permissions": ["project.read", "files"]
+}

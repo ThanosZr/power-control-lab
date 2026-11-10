@@ -535,7 +535,7 @@ function togglePin(id,k){const c=editor.comp(id);if(!c)return;editor.remember();
  if(L.size)c.live=[...L];else{delete c.live;delete c.liveBase;}saveLocal();refreshControls();renderProps();if(L.has(k))setLivePanel(true);}
 function renderProps(){const box=$('#props-body');if(!box||!propsOpen())return;
  box.querySelectorAll('details.psec').forEach(d=>{PS[d.dataset.sec]=d.open;}); // the toggle event may not have fired yet
- const sel=editor.selection(),act=document.activeElement,fk=box.contains(act)?act.dataset.k:null;let h;
+ const sel=editor.selection(),act=document.activeElement,fk=box.contains(act)?act.dataset.k:null;let h;if(window.Addons&&Addons.frames.size)Addons.emit('selection',sel.c);
  const one=sel.c.length===1&&!sel.w.length?editor.comp(sel.c[0]):null;
  if(one&&one.type!=='JUNC')h=propsComp(one);else if(one)h=propsJunc(one);else if(sel.w.length===1&&!sel.c.length)h=propsWire(editor.wire(sel.w[0]));
  else if(sel.c.length+sel.w.length>1)h=propsMulti(sel);else h=propsCircuit();
@@ -555,6 +555,9 @@ function propsComp(c){const def=P.PARTS[c.type],p={...P.defaults(c.type),...c.pa
   h+=psec('p-src','Συνδέσεις σημάτων',sigIns.map(pin=>{const v=c.params?.['in_'+pin]||'';return `<div class="prow"><span>Είσοδος ${esc(pin)}</span><span class="pin-in"><select data-src="${esc(pin)}"><option value="">${wired(pin)?'από σύρμα':'— (καμία)'}</option>${outs.map(o=>`<option value="${esc(o.v)}" ${o.v===v?'selected':''}>${esc(o.t)}</option>`).join('')}</select></span></div>`;}).join('')+'<small class="muted">Σύνδεση χωρίς καλώδιο: ισοδυναμεί με σύρμα.</small>',{cnt:sigIns.length});}
  const sig=signalsFor(c);if(sig.length)h+=psec('p-scope','Scope',`<div class="chips">${sig.map(([pre,n,f])=>`<button class="chip" data-probe="${pre}${c.id}${f||''}">⌁ ${esc(n)}</button>`).join('')}</div>`,{def:true});
  const skip=S.sim?.net?.diag?.skipped.find(x=>x.id===c.id);if(skip)h+=`<p class="small bad">Εκτός επίλυσης: ${skip.why==='openI'?'πηγή ρεύματος σε ανοιχτό κύκλωμα':'χωρίς σύνδεση'}.</p>`;
+ const tools=window.Addons?Addons.forType(c.type):[];
+ if(tools.length||c.from)h+=psec('p-tools','Παράμετροι από κώδικα',(c.from?`<p class="from-tool">Από εργαλείο: ${Object.entries(c.from).map(([k,v])=>`${esc(k)} (${esc(v.tool||'')})`).join(', ')}</p>`:'')+
+  tools.map(a=>`<button class="chip" data-tool="${esc(a.id)}" title="${esc(a.description||'')}">⚙ ${esc((a.targets.find(t=>t.type===c.type)||{}).label||a.name)}</button>`).join(''),{def:true});
  h+=`<p class="muted small">Οι αλλαγές εφαρμόζονται αμέσως, και ενώ τρέχει η προσομοίωση. Με 📌 μια παράμετρος μπαίνει με ρυθμιστή στις ζωντανές παράμετροι.</p>`;
  return h;}
 function propsJunc(j){const n=editor.wiresAt(j.id).length;return `<div class="props-head"><div><small>Κόμβος</small><b>${esc(j.id)}</b></div><button class="x" data-pclose>✕</button></div>
@@ -601,6 +604,7 @@ function propsCircuit(){const d=S.sim?.net?.diag,doc=editor.doc,so=doc.solve||{}
 function bindProps(box,c){
  box.querySelector('[data-pclose]')?.addEventListener('click',()=>editor.select([],[]));
  box.querySelectorAll('[data-probe]').forEach(b=>b.onclick=()=>addProbe(b.dataset.probe));
+ box.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>Addons.open(b.dataset.tool,{target:c.id}));
  box.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>focusComp(b.dataset.focus));
  box.querySelectorAll('[data-solve]').forEach(el=>el.onchange=()=>{const k=el.dataset.solve;let v=el.value;if(k==='rleak'||k==='tbase'){v=v.trim()?P.parseEng(v):'';if(v!==''&&!(v>0)){el.classList.add('bad');return;}}if((k==='rtol'||k==='hmax')&&v!=='')v=+v;editor.setSolve({[k]:v});});
  box.querySelectorAll('[data-stepcheck]').forEach(b=>b.onclick=()=>{if(S.sim&&!S.error)S.sim.stepCheck();renderDiag();openDiag();});
@@ -629,6 +633,7 @@ function diagItems(){const out=[],lb=id=>editor.comp(id)?.label||id;
   for(const q of sim.net.diag?.islands||[]){const k=q.pins[0],cid=k?k.slice(0,k.lastIndexOf(':')):null;out.push({sev:'info',grp:'net',src:'browser',id:cid,msg:`Αιωρούμενο τμήμα${cid?' ('+lb(cid)+'…)':''}: ${q.ref==='ref'?'ένας κόμβος του στα 0 V':'μέση τάση 0 V ως προς τη γη'}.`,fix:'Οι τάσεις μέσα στο τμήμα δεν αλλάζουν. Η επιλογή είναι στις ρυθμίσεις του κυκλώματος.'});}
   for(const r of sim.diagnostics())out.push(r);}
  for(const r of S.batchDiag||[])out.push(r);
+ for(const r of S.addonDiag||[])out.push(r);
  return out;}
 function renderDiag(){const box=$('#diag-list');if(!box)return;S.diagSeen=S.sim?.dgVer;const all=diagItems(),lb=id=>editor.comp(id)?.label||id,cnt={error:0,warn:0,info:0};
  for(const r of all)cnt[r.sev]++;
@@ -722,7 +727,7 @@ function scenRun(){if(SCEN.busy)return;const code=$('#scen-code').value;if(!code
  $('#scen-run').disabled=true;$('#scen-stop').disabled=false;$('#scen-prog').textContent='';
  scenState(SCEN.ready?'τρέχει…':'φορτώνεται η Python (Pyodide)…','busy');
  scenWorker().postMessage({type:'run',code,project:project(),name:tutorial().title||'κύκλωμα'});}
-function scenStop(){if(SCEN.pool)SCEN.pool.stop();if(SCEN.worker){SCEN.worker.terminate();SCEN.worker=null;SCEN.ready=false;}scenOut('Διακόπηκε. Η Python ξαναφορτώνεται στην επόμενη εκτέλεση.','e');scenDone(false);}
+function scenStop(){if(SCEN.pool)SCEN.pool.stop();for(const p of SCEN.evals?.values()||[])p.rej(new Error('Διακόπηκε.'));SCEN.evals?.clear();if(SCEN.worker){SCEN.worker.terminate();SCEN.worker=null;SCEN.ready=false;}scenOut('Διακόπηκε. Η Python ξαναφορτώνεται στην επόμενη εκτέλεση.','e');scenDone(false);}
 function scenDone(ok,wall){SCEN.busy=false;$('#scen-run').disabled=false;$('#scen-stop').disabled=true;$('#scen-prog').textContent='';
  scenState(ok?`✓ σε ${(wall??(performance.now()-SCEN.t0)/1000).toFixed(1)} s`:'σταμάτησε με σφάλμα',ok?'':'bad');}
 function scenMsg(m){switch(m.type){
@@ -736,6 +741,7 @@ function scenMsg(m){switch(m.type){
  case 'error':scenOut(m.text,'e');scenTab('out');break;
  case 'done':scenDone(m.ok,m.wall);break;
  case 'batch':scenBatch(m);break;
+ case 'evalres':{const p=SCEN.evals?.get(m.id);if(p){SCEN.evals.delete(m.id);if(m.error)p.rej(new Error(m.error));else p.res(m.result);}break;}
  case 'batch-fetch':scenBatchWrite(m.sab,SCEN.batchOut);SCEN.batchOut=null;break;}}
 // 3.15: a sweep of the panel in parallel. The worker sent its requests and waits (Atomics.wait) on its SharedArrayBuffer;
 // the pool answers them, and the JSON of the answers goes back in the buffer (a bigger buffer when it does not fit)
@@ -743,6 +749,31 @@ async function scenBatch(m){const pool=SCEN.pool||(SCEN.pool=new Pool.SimPool())
  try{outs=await pool.map(m.qs,(i,r,done,n)=>{$('#scen-prog').textContent=`σημείο ${done}/${n} · ${pool.n} workers`;},true);}
  catch(e){outs=m.qs.map(()=>({error:String(e&&e.message||e)}));}
  scenBatchWrite(m.sab,new TextEncoder().encode(Scenario.json({workers:pool.n,wall_s:(performance.now()-t0)/1000,outs})));}
+// 3.15: Python of an add-on or of the link, in the panel's worker (the same interpreter as the scenarios)
+function scenEval(code,inputs,files,addon){return new Promise((res,rej)=>{const id=(SCEN.evalSeq=(SCEN.evalSeq||0)+1);(SCEN.evals||(SCEN.evals=new Map())).set(id,{res,rej});
+ scenWorker().postMessage({type:'eval',id,code,inputs,files,addon,project:project(),name:tutorial().title||'κύκλωμα'});});}
+// ------------------------------------------------------------------ add-ons and the link (3.15, ROADMAP §35, §36)
+function addonDock(a){const box=document.createElement('section');box.className='addon-dock';box.innerHTML=`<header><b title="${esc(a.description||'')}">${esc(a.name)}</b><small class="muted">${esc(a.version||'')}</small><button data-dmin title="Ελαχιστοποίηση">▁</button><button data-dwide title="Μεγαλύτερο">⤢</button><button data-dx title="Κλείσιμο">✕</button></header><div class="addon-body"></div>`;
+ $('#addon-docks').appendChild(box);box.querySelector('[data-dx]').onclick=()=>Addons.close(a.id);box.querySelector('[data-dmin]').onclick=()=>box.classList.toggle('min');box.querySelector('[data-dwide]').onclick=()=>box.classList.toggle('wide');
+ return {body:box.querySelector('.addon-body'),show:()=>box.classList.remove('min'),remove:()=>box.remove()};}
+function renderAddons(){const L=$('#addons-list');if(!L||!window.Addons)return;const A=Addons;
+ L.innerHTML=A.list.length?A.list.map(a=>`<div class="addon-item"><div><b>${esc(a.name)}</b> <small class="muted">${esc(a.version||'')}${a.builtin?' · ενσωματωμένο':' · του χρήστη'}</small>${a.error?`<p class="bad">${esc(a.error)}</p>`:`<p class="muted">${esc(a.description||'')}</p>`}</div>
+  <div class="acts">${a.error?'':`<button data-aopen="${esc(a.id)}">Άνοιγμα</button>`}${a.builtin?'':`<button data-arm="${esc(a.id)}" title="Αφαίρεση">🗑</button>`}</div></div>`).join(''):`<p class="muted small">${A.err?'Τα πρόσθετα θέλουν τον server της εφαρμογής (python run.py): '+esc(A.err):'Κανένα πρόσθετο.'}</p>`;
+ L.querySelectorAll('[data-aopen]').forEach(b=>b.onclick=()=>Addons.open(b.dataset.aopen,{target:editor.selection().c[0]||''}));
+ L.querySelectorAll('[data-arm]').forEach(b=>b.onclick=async()=>{if(!confirm('Αφαίρεση του πρόσθετου '+b.dataset.arm+';'))return;try{await Addons.remove(b.dataset.arm);}catch(e){alert(e.message);}});
+ $('#addons-dir').textContent=A.userDir?'φάκελος χρήστη: '+A.userDir:'';
+ const k=A.link;$('#link-box').innerHTML=`<label><input type="checkbox" id="link-on" ${k.on?'checked':''}> <b>Σύνδεση με εξωτερικά προγράμματα</b></label>
+  <p class="muted small">Προγράμματα Python ή MATLAB σε αυτόν τον υπολογιστή διαβάζουν και αλλάζουν το κύκλωμα της οθόνης, τρέχουν προσομοιώσεις και στέλνουν πίνακες ή γραφήματα εδώ: <code>pcl.link.connect()</code>, <code>pcl_link('info')</code>. Το token είναι στο <code>~/.pcl/link.json</code>.</p>
+  ${k.on?`<p class="small">${k.err?`<span class="bad">${esc(k.err)}</span>`:'● ενεργή'}${k.n?` · ${k.n} κλήσεις, τελευταία ${esc(k.last.method)} (${esc(k.last.t)})${k.last.ok?'':' με σφάλμα'}`:''}</p>`:''}`;
+ $('#link-on').onchange=e=>Addons.linkOn(e.target.checked);
+}
+function initAddons(){if(!window.Addons||!$('#addons-card'))return;
+ Addons.init({editor,project,applyProject:pr=>{applyProject(pr);},sim:()=>S.error?null:S.sim,scopeKeys:()=>(scope.cfg?.panes||[]).flatMap(p=>(p.ch||p.channels||[]).map(c=>typeof c==='string'?c:c.key)),
+  selection:()=>editor.selection().c,version:()=>($('footer b')?.textContent||''),title:()=>tutorial().title||'',tutorial:()=>S.tut?.id||null,
+  python:(code,inputs,files)=>scenEval(code,inputs,files),show:d=>{$('#scen').open=true;scenShow(typeof d==='object'&&d&&d.type?d:{type:'text',text:typeof d==='string'?d:JSON.stringify(d,null,1)});},
+  notify:r=>{(S.addonDiag||(S.addonDiag=[])).push({grp:'sim',...r});if(S.addonDiag.length>200)S.addonDiag.shift();renderDiag();},dock:addonDock,changed:renderAddons});
+ $('#addon-file').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const a=await Addons.install(f);alert(`Εγκαταστάθηκε: ${a.name} ${a.version}`);}catch(x){alert('Δεν εγκαταστάθηκε: '+x.message);}};
+ $('#addons-refresh').onclick=()=>Addons.refresh();}
 function scenBatchWrite(sab,bytes){if(!sab||!bytes)return;const h=new Int32Array(sab,0,2),cap=sab.byteLength-8;
  if(bytes.length>cap){SCEN.batchOut=bytes;h[1]=bytes.length;Atomics.store(h,0,2);Atomics.notify(h,0);return;}
  new Uint8Array(sab,8,bytes.length).set(bytes);h[1]=bytes.length;Atomics.store(h,0,1);Atomics.notify(h,0);}
@@ -1730,7 +1761,7 @@ function boot(){
  const grip=$('#grip');grip.onpointerdown=e=>{e.preventDefault();grip.setPointerCapture(e.pointerId);const h0=$('.work').getBoundingClientRect().height,y0=e.clientY;grip.onpointermove=ev=>{$('.work').style.height=Math.max(240,Math.min(1000,h0+ev.clientY-y0))+'px';};grip.onpointerup=()=>{grip.onpointermove=null;};};
  renderPalette();
  // restore last state or start with a tutorial
- initScenarios();
+ initScenarios();initAddons();
  let st=null;try{st=JSON.parse(localStorage.getItem('pcl2-state'));}catch{}
  const qs=new URLSearchParams(location.search),want=qs.get('tutorial');let imp=null;
  if(qs.get('import')){try{imp=JSON.parse(localStorage.getItem('pcl2-import'));localStorage.removeItem('pcl2-import');}catch{}history.replaceState(null,'',location.pathname);}

@@ -50,6 +50,14 @@ def _show_hook(obj, title=None):
     return obj
 _c._show_hook = _show_hook
 
+def _eval_addon(src, inputs, data, name):
+    # 3.15: Python of an add-on (or of an outside program through the link): the variables of inputs, pcl, and the circuit
+    # on the screen as p; the answer is the variable result (JSON)
+    _c._default = _c.Project(json.loads(data), name=name or 'κύκλωμα') if data else _c._default
+    ns = {'__name__': '__addon__', 'pcl': pcl, 'p': _c._default, 'json': json, **json.loads(inputs)}
+    exec(compile(src, '<πρόσθετο>', 'exec'), ns)
+    return json.dumps(_c._clean(ns.get('result')), default=str)
+
 def _run_user(src, data, name):
     _c._default = _c.Project(json.loads(data), name=name or 'κύκλωμα')
     ns = {'__name__': '__main__', 'pcl': pcl, 'p': _c._default}
@@ -71,7 +79,7 @@ async function boot(){
   if(!py)throw new Error('Δεν φορτώθηκε η Python (Pyodide): '+(last&&last.message||last)+'. Χρειάζεται το τοπικό αντίγραφο (python tools/get_pyodide.py) ή σύνδεση στο internet.');
   PyRT.attach(py,py._base); // the Python blocks of the circuits use the same interpreter
   py.FS.mkdirTree('/pcl_pkg/pcl');
-  for(const f of ['__init__.py','core.py','formats.py']){const r=await fetch('../pcl/'+f);if(!r.ok)throw new Error('Δεν βρέθηκε το pcl/'+f+': τα σενάρια θέλουν τον server της εφαρμογής (python run.py).');py.FS.writeFile('/pcl_pkg/pcl/'+f,await r.text());}
+  for(const f of ['__init__.py','core.py','formats.py','impulse.py','control.py']){const r=await fetch('../pcl/'+f);if(!r.ok)throw new Error('Δεν βρέθηκε το pcl/'+f+': τα σενάρια θέλουν τον server της εφαρμογής (python run.py).');py.FS.writeFile('/pcl_pkg/pcl/'+f,await r.text());}
   py.runPython("import sys; sys.path.insert(0, '/pcl_pkg')");
   py.registerJsModule('pcl_host',{
    call:s=>{lastTick=0;return Scenario.json(Scenario.handle(JSON.parse(s),{tick:f=>{const n=Date.now();if(n-lastTick>200){lastTick=n;post({type:'tick',f});}}}));},
@@ -94,7 +102,16 @@ function batch(s){if(!self.crossOriginIsolated||typeof SharedArrayBuffer==='unde
 // the files the script wrote in its folder become downloads
 function listFiles(dir){const out=[];for(const n of py.FS.readdir(dir)){if(n==='.'||n==='..')continue;const p=dir+'/'+n,st=py.FS.stat(p);if(py.FS.isDir(st.mode))out.push(...listFiles(p));else out.push(p);}return out;}
 
-self.onmessage=async e=>{const m=e.data;if(m.type!=='run')return;
+// 3.15: Python of an add-on: its files (modules next to its page) under /addon_pkg/<id>, then the code; the answer is `result`
+async function evalAddon(m){try{await boot();
+  if(m.files&&Object.keys(m.files).length){const dir='/addon_pkg/'+String(m.addon||'x').replace(/[^a-z0-9-]/g,'');py.FS.mkdirTree(dir);
+   for(const [n,t] of Object.entries(m.files))if(/^[A-Za-z_][A-Za-z0-9_]*\.py$/.test(n))py.FS.writeFile(dir+'/'+n,t);
+   py.runPython(`import sys\nif '${dir}' not in sys.path: sys.path.insert(0, '${dir}')`);}
+  const f=py.globals.get('_eval_addon');let out;try{out=f(String(m.code||''),JSON.stringify(m.inputs||{}),m.project?JSON.stringify(m.project):'',m.name||'');}finally{f.destroy();}
+  post({type:'evalres',id:m.id,result:JSON.parse(out)});}
+ catch(x){const msg=String(x&&x.message||x),i=msg.lastIndexOf('\n',msg.length-2);post({type:'evalres',id:m.id,error:(i>0?msg.slice(i+1):msg).trim()});}}
+
+self.onmessage=async e=>{const m=e.data;if(m.type==='eval')return evalAddon(m);if(m.type!=='run')return;
  try{await boot();
   const dir='/home/pyodide/scen'+Date.now();py.FS.mkdirTree(dir);py.FS.chdir(dir);
   const run=py.globals.get('_run_user'),t0=Date.now();

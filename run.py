@@ -9,7 +9,7 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import BoundedSemaphore, Timer
 import traceback
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 import webbrowser
 
 from engine import __version__
@@ -29,10 +29,12 @@ from engine.studio_math import studio_math
 from engine.batch import batch_sim
 from engine.templates import template_solve
 from pcl.core import job as pcl_job, PclError, _pairs
+from engine import addons as ADDONS
 
 ROOT=Path(__file__).resolve().parent/'web'
 PCL=Path(__file__).resolve().parent/'pcl'       # the pcl package, also for the app's "Σενάρια" panel (3.14)
 SLOTS=BoundedSemaphore(2)
+LINK=ADDONS.Link()      # 3.15: outside programs (Python, MATLAB) → the circuit open in the page
 ACTIONS={'analyze':steady,'inverse':inverse,'linearize':linearize,
          'switching':switching,'envelope':envelope,'design':size_components,
          'sweep':sweep,'capacitance':capacitance,'problem':solve_problem,'curves':operating_curves,
@@ -82,6 +84,75 @@ ACTIONS['scenario_sweep']=scenario('sweep')
 
 
 class Handler(BaseHTTPRequestHandler):
+    # 3.15: add-ons and the link only for this computer: a local client and a Host header of this computer (no DNS rebinding)
+    def local(self):
+        host=(self.headers.get('Host') or '').rsplit(':',1)[0].strip('[]').lower()
+        return self.client_address[0] in ('127.0.0.1','::1') and host in ('127.0.0.1','localhost','::1')
+
+    def alive(self):
+        # the page that waits for a call is still connected (a closed connection reads as end of stream)
+        import select,socket       # select + MSG_PEEK: the same on Windows (no MSG_DONTWAIT there)
+        try:
+            if not select.select([self.connection],[],[],0)[0]:
+                return True
+            return self.connection.recv(1,socket.MSG_PEEK)!=b''
+        except (OSError,ValueError):
+            return False
+
+    def body(self,limit):
+        size=int(self.headers.get('Content-Length','0'))
+        if not 0<size<=limit:
+            raise InputError('Μη έγκυρο μέγεθος αιτήματος.')
+        data=json.loads(self.rfile.read(size))
+        if not isinstance(data,dict):
+            raise InputError('Απαιτείται αντικείμενο JSON.')
+        return data
+
+    def addon_get(self,path,query):
+        if not self.local():
+            self.send(403,{'error':'Μόνο από αυτόν τον υπολογιστή.'}); return
+        if path=='/api/addons':
+            self.send(200,{'addons':ADDONS.listing(),'user_dir':str(ADDONS.USER)}); return
+        if path=='/api/presets':           # 3.15: the figure presets (pcl/presets/*.json), for the publication add-on
+            out={}
+            for f in sorted((PCL/'presets').glob('*.json')):
+                out[f.stem]=json.loads(f.read_text(encoding='utf-8'))
+            self.send(200,{'presets':out}); return
+        if path=='/api/link/token':
+            self.send(200,{'token':LINK.token,'connected':LINK.connected()}); return
+        if path=='/api/link/next':
+            if not LINK.ok(query.get('token',[''])[0]):
+                self.send(403,{'error':'Λάθος token.'}); return
+            c=LINK.next(25.0,self.alive)
+            if c is None:
+                self.send_response(204);self.send_header('Content-Length','0');self.send_header('Cache-Control','no-store');self.end_headers()
+            else:
+                self.send(200,c)
+            return
+        self.send(404,{'error':'Δεν βρέθηκε.'})
+
+    def addon_post(self,action):
+        if not self.local():
+            self.send(403,{'error':'Μόνο από αυτόν τον υπολογιστή.'}); return
+        try:
+            data=self.body(30<<20)
+            if action=='addon_install':
+                self.send(200,ADDONS.install(data)); return
+            if action=='addon_remove':
+                self.send(200,ADDONS.remove(data)); return
+            if not LINK.ok(data.get('token')):
+                self.send(403,{'error':'Λάθος token (δες το ~/.pcl/link.json).'}); return
+            if action=='link/reply':
+                LINK.reply(data.get('id'),{k:data[k] for k in ('result','error') if k in data}); self.send(200,{'ok':True}); return
+            if action=='link/call':
+                a=LINK.call(data.get('method'),data.get('args') or {},data.get('timeout') or 120)
+                self.send(400 if 'error' in a else 200,a); return
+            self.send(404,{'error':'Άγνωστη ενέργεια.'})
+        except TimeoutError as e:
+            self.send(504,{'error':str(e)})
+        except (ADDONS.AddonError,InputError,ValueError,TypeError) as e:
+            self.send(400,{'error':str(e) or 'Μη έγκυρα δεδομένα.'})
+
     def send(self,status,body,kind='application/json; charset=utf-8'):
         if not isinstance(body,bytes):
             body=json.dumps(body,ensure_ascii=False,allow_nan=False).encode('utf-8')
@@ -99,14 +170,16 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        path=urlsplit(self.path).path
+        u=urlsplit(self.path);path=u.path
+        if path in ('/api/addons','/api/presets') or path.startswith('/api/link/'):
+            self.addon_get(path,parse_qs(u.query)); return
         if path=='/api/health':
             self.send(200,{'ok':True,'version':__version__,'engine':'Python + SymPy + SciPy · browser MNA'})
         elif path=='/api/catalog':
             self.send(200,{'models':public_catalog()})
-        elif path.startswith('/pcl/'):          # the pcl package's sources for the "Σενάρια" panel (3.14; formats.py 3.15)
+        elif path.startswith('/pcl/'):          # the pcl package's modules for the "Σενάρια" panel and the add-ons (3.14, 3.15)
             name=path[5:]
-            if name not in ('__init__.py','core.py','formats.py') or not (PCL/name).is_file():
+            if not (name.endswith('.py') and name.replace('_','').replace('.py','').isalpha() and name!='__main__.py') or not (PCL/name).is_file():
                 self.send(404,{'error':'Δεν βρέθηκε.'}); return
             self.send(200,(PCL/name).read_bytes(),'text/x-python; charset=utf-8')
         else:
@@ -116,6 +189,11 @@ class Handler(BaseHTTPRequestHandler):
             elif (ROOT/relative).is_dir():
                 self.send_response(301);self.send_header('Location',path+'/');self.send_header('Content-Length','0');self.end_headers();return
             file=(ROOT/relative).resolve()
+            if relative.startswith('addons/') and not file.is_file() and self.local():      # 3.15: the user's add-ons (~/.pcl/addons)
+                file=ADDONS.user_file(relative[7:]) or file
+                if file.is_file() and file.is_relative_to(ADDONS.USER.resolve()):
+                    kind=mimetypes.guess_type(file)[0] or 'application/octet-stream'
+                    self.send(200,file.read_bytes(),kind+'; charset=utf-8' if kind.startswith(('text/','application/javascript')) else kind); return
             if not file.is_relative_to(ROOT) or not file.is_file():
                 self.send(404,{'error':'Δεν βρέθηκε.'})
                 return
@@ -124,6 +202,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         action=urlsplit(self.path).path.removeprefix('/api/')
+        if action in ('addon_install','addon_remove','link/call','link/reply'):
+            if self.headers.get_content_type()!='application/json':
+                self.send(415,{'error':'Απαιτείται application/json.'}); return
+            self.addon_post(action); return
         if action not in ACTIONS:
             self.send(404,{'error':'Άγνωστη ανάλυση.'}); return
         if self.headers.get_content_type()!='application/json':
@@ -166,6 +248,7 @@ def main():
     url=f'http://127.0.0.1:{server.server_port}'
     print(f'Power Converter Lab {__version__} · {url}',flush=True)
     print('Stop: Ctrl+C. Keep this terminal open.',flush=True)
+    LINK.write_file(url)            # 3.15: for pcl.link (Python) and pcl_link (MATLAB) on this computer
     if not args.no_browser:
         Timer(.8,lambda:webbrowser.open(url)).start()
     try:

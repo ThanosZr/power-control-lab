@@ -1,0 +1,10 @@
+{
+  "id": "control-composer",
+  "name": "Σύνθεση ελέγχου (κλασικός και AI)",
+  "version": "1.0.0",
+  "author": "Thanos Zr",
+  "description": "Βρόχοι που διαλέγεις, από έναν ως όλη την αλυσίδα, με ελεγκτή ανά βρόχο: PI, PI + νευρωνικό δίκτυο που μαθαίνει online, ή δικός σου κώδικας Python. Το φυτό είναι το κύκλωμα της εφαρμογής. Σύγκριση κλασικού και AI στο ίδιο σενάριο, διάγραμμα βρόχου με ζωντανές τιμές.",
+  "entry": "index.html",
+  "kind": ["panel"],
+  "permissions": ["project.read", "project.write", "run", "python", "show", "files"]
+}

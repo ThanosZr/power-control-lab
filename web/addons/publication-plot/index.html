@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Γραφική για δημοσίευση</title>
+<link rel="stylesheet" href="../addon.css">
+</head>
+<body>
+<header><b>Γραφική για δημοσίευση</b> <small class="muted">από το scope, με τα πρότυπα του pcl/presets (ίδια με Python και MATLAB)</small></header>
+<div class="grid">
+ <label>Πρότυπο <select id="preset"></select></label>
+ <label>Τίτλος <input id="title" placeholder="(χωρίς)"></label>
+ <label>Από t (s) <input id="t0" placeholder="αρχή"></label>
+ <label>Έως t (s) <input id="t1" placeholder="τέλος"></label>
+</div>
+<div id="chans" class="row small"></div>
+<div class="row"><button id="draw" class="primary">Σχεδίαση από το scope</button><button id="svg" disabled>Λήψη SVG</button><button id="png" disabled>Λήψη PNG</button><button id="csv" disabled>Πίνακας ακροτάτων (CSV)</button></div>
+<div id="fig"></div>
+<div id="tbl"></div>
+<p id="msg" class="small"></p>
+<script src="/studio/addon_client.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>

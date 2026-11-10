@@ -1,0 +1,5 @@
+{"name": "slides", "title": "Διαφάνειες (16:9, 18 pt)", "width_cm": 24.0, "height_cm": 13.5, "dpi": 200,
+ "font": "DejaVu Sans", "font_fallback": ["Arial", "Helvetica", "sans-serif"], "size": {"base": 18, "title": 20, "label": 18, "tick": 16, "legend": 16},
+ "interpreter": "tex", "linewidth": 2.4, "markersize": 7, "grid": true, "grid_alpha": 0.3, "box": false, "legend": "best",
+ "colors": ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#000000", "#F0E442"],
+ "linestyles": ["-", "-", "-", "-"], "formats": ["png", "svg", "pdf"]}
