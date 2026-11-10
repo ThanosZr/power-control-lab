@@ -76,4 +76,12 @@ const R={};
 // a buck for the SciPy comparison: the power stage as an instance
 {const pr=build('buck',{});const r=SUB.create(pr,['S1','D1','L1']);const keys=['V:C1','I:X1/L1'];
  R.batchBuck={req:MNA.exportForBatch(r.project,keys),open:MNA.exportForBatch(pr,['V:C1','I:L1']),browser:run(r.project,keys,2e-3)};}
+// 3.19: «/name» on a wire inside a definition is the top level's name; references outwards listed, a signal source → a port
+{const def={title:'load',components:[{id:'P1',type:'PORT',x:0,y:0,rot:0,params:{name:'g'}},{id:'R1',type:'R',x:0,y:0,rot:0,params:{R:4}},{id:'GN',type:'GAIN',x:0,y:0,rot:0,params:{K:2,in_u:'K1:y'}},{id:'DS',type:'DISP',x:0,y:0,rot:0,params:{}}],
+   wires:[{id:'a',a:{c:'R1',p:'a'},b:{c:'R1',p:'a'},name:'/vbus',pts:[]},{id:'b',a:{c:'R1',p:'b'},b:{c:'P1',p:'p'},pts:[]},{id:'c',a:{c:'GN',p:'y'},b:{c:'DS',p:'u'},pts:[]}]};
+ const pr={version:3,subcircuits:{load:def},components:[{id:'V1',type:'VDC',x:0,y:0,rot:0,params:{V:12}},{id:'G',type:'GND',x:0,y:0,rot:0,params:{}},{id:'K1',type:'CONST',x:0,y:0,rot:0,params:{v:3}},
+   {id:'X1',type:'SUB',x:0,y:0,rot:0,params:{def:'load'}}],wires:[{id:'t1',a:{c:'V1',p:'p'},b:{c:'V1',p:'p'},name:'vbus',pts:[]},{id:'t2',a:{c:'V1',p:'n'},b:{c:'G',p:'g'},pts:[]},{id:'t3',a:{c:'X1',p:'g'},b:{c:'G',p:'g'},pts:[]}]};
+ SUB.sync(pr);const s=new MNA.Sim(clone(pr),{hDiv:50});s.run(1e-3);const ext=SUB.externalRefs(pr,'load');const r=SUB.refToPort(pr,'load','GN','in_u');const s2=new MNA.Sim(clone(r.project),{hDiv:50});s2.run(1e-3);
+ R.slashName={i:s.now('I:X1/R1'),gn:s.now('Y:X1/GN'),ext,port:r.port,inst:r.project.components.find(c=>c.id==='X1').params,gn2:s2.now('Y:X1/GN'),
+  ext2:SUB.externalRefs(r.project,'load'),ports:SUB.portsOf(r.project.subcircuits.load).map(p=>[p.name,p.kind])};}
 process.stdout.write(JSON.stringify(R));

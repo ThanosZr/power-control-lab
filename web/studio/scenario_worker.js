@@ -5,7 +5,7 @@
 //   in:  {type:'run', code, project, name}
 //   out: {type:'ready'|'out'|'err'|'show'|'progress'|'file'|'done'|'error', ...}
 self.window=self; // tutorials.js registers on window
-importScripts('expr.js','parts.js','stepcheck.js','subcircuit.js','bus.js','pyrt.js','mna.js','metrics.js','tutorials.js','scenario.js');
+importScripts('expr.js','parts.js','stepcheck.js','subcircuit.js','bus.js','units.js','pyrt.js','mna.js','metrics.js','tutorials.js','scenario.js');
 const VERSION='0.26.4';
 let py=null,booting=null,project=null,lastTick=0;
 const post=(m,tr)=>self.postMessage(m,tr||[]);

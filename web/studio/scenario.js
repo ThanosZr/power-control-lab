@@ -65,6 +65,8 @@
   const out={keys,meta:{T:s.T,h:s.h,hDiv:opts.hDiv,method:s.method,step:s.var?'var':'fixed',rtol:s.var?s.rtol:null,hMin:s.var?s.hMin:null,hMax:s.var?(s.hCap||s.hMax):null,
     steps:s.steps,rejected:s.nRej||0,t_end:s.t,points:t.length,wall_s:(Date.now()-w0)/1000,warnings:s.net.warnings},
    measure:meas,diag:s.diagnostics().map(d=>({sev:d.sev,grp:d.grp,id:d.id||null,t:d.t,n:d.n,msg:d.msg,fix:d.fix||''}))};
+  // 3.19: the event log, when asked (events: true or a list of kinds)
+  if(q.events){const E=s.events(),kinds=Array.isArray(q.events)?new Set(q.events):null;out.events={list:kinds?E.list.filter(e=>kinds.has(e.kind)):E.list,n:E.n,kinds:E.kinds,max:E.max};}
   if(q.waveforms!==false){const keep=decimate(t,Y,+q.max_points||200000);
    out.t=keep?keep.map(i=>t[i]):t;out.ch={};keys.forEach((k,j)=>{out.ch[k]=keep?keep.map(i=>Y[j][i]):Y[j];});out.meta.returned=out.t.length;}
   return out;}

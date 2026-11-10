@@ -505,12 +505,14 @@ class Project:
         return int(hdiv or sim.get('hDiv') or 200), method or sim.get('method') or 'TR', st
 
     def run(self, t_end=None, solver='browser', channels=None, hdiv=None, method=None, step=None, rtol=None, hmax=None,
-            t_from=0.0, max_points=200000, measure=None, timeout=None, scipy_method='Radau', waveforms=True, save_state=None, resume=None):
+            t_from=0.0, max_points=200000, measure=None, timeout=None, scipy_method='Radau', waveforms=True, save_state=None, resume=None,
+            events=False):
         """One simulation. t_end: duration in s (default the tutorial's stopT). channels: keys as in the app's scope
         (default the project's scope, else V and I of every element). step='var' for the variable step (§40).
         solver='scipy' runs engine.batch.simulate on the same netlist (method scipy_method, rtol, max step hmax in s).
         3.16: save_state='file' keeps the end state; resume='file' continues from a saved state up to the time t_end
-        (the end time, not a duration), with the same numbers as one run. Browser solver only."""
+        (the end time, not a duration), with the same numbers as one run. Browser solver only.
+        3.19: events=True (or a list of kinds, e.g. ['switch', 'cmp']) keeps the event log in Result.events (both solvers)."""
         if save_state is not None or resume is not None:
             if solver != 'browser':
                 raise PclError('Η αποθήκευση και η συνέχεια της κατάστασης γίνονται με τον λύτη του browser (solver="browser").')
@@ -528,10 +530,11 @@ class Project:
         if solver == 'browser':
             hd, mt, st = self._settings(hdiv, method, step, rtol, hmax)
             out = _node({'action': 'run', 'project': self.data, 't_end': t_end, 'channels': keys, 'hdiv': hd, 'method': mt,
-                         'step': st, 'from': t_from, 'max_points': max_points, 'measure': meas, 'waveforms': bool(waveforms)}, timeout=timeout)
+                         'step': st, 'from': t_from, 'max_points': max_points, 'measure': meas, 'waveforms': bool(waveforms),
+                         'events': events or False}, timeout=timeout)
             return self._result(out)
         if solver == 'scipy':
-            return self._run_scipy(t_end, keys, scipy_method, rtol, hmax, max_points, meas, t_from)
+            return self._run_scipy(t_end, keys, scipy_method, rtol, hmax, max_points, meas, t_from, events)
         raise PclError(f'Άγνωστος λύτης «{solver}»: browser ή scipy.')
 
     def stream(self, t_end=None, chunk=None, channels=None, hdiv=None, method=None, step=None, rtol=None, hmax=None, t_from=0.0,
@@ -617,7 +620,10 @@ class Project:
 
     def _result(self, out):
         meta = {**out['meta'], 'solver': 'browser (web/studio/mna.js' + (')' if IN_BROWSER else ', Node)')}
-        return Result(out.get('t') or [], out['keys'], out.get('ch') or {}, meta, self, out.get('measure') or {}, out.get('diag') or [])
+        res = Result(out.get('t') or [], out['keys'], out.get('ch') or {}, meta, self, out.get('measure') or {}, out.get('diag') or [])
+        if out.get('events'):
+            res.events, res.meta['events'] = out['events']['list'], {k: out['events'][k] for k in ('n', 'kinds', 'max')}
+        return res
 
     def _query(self, t_end=None, channels=None, hdiv=None, method=None, step=None, rtol=None, hmax=None, t_from=0.0, max_points=200000,
                measure=None, **_):
@@ -631,7 +637,7 @@ class Project:
         return {'action': 'run', 'project': self.data, 't_end': t_end, 'channels': keys, 'hdiv': hd, 'method': mt, 'step': st,
                 'from': t_from, 'max_points': max_points, 'measure': meas, 'waveforms': False, 'check': False}
 
-    def _run_scipy(self, t_end, keys, method, rtol, hmax, max_points, meas, t_from):
+    def _run_scipy(self, t_end, keys, method, rtol, hmax, max_points, meas, t_from, events=False):
         import numpy as np
         from engine.batch import simulate, BatchError
         if keys is None:
@@ -643,7 +649,7 @@ class Project:
         try:
             r = simulate({'net': exp['net'], 'channels': exp['channels'], 't_end': t_end, 'method': method,
                           'rtol': float(rtol) if rtol else 1e-6, 'max_step': float(parse_value(hmax)) if hmax else 0,
-                          'max_points': max_points, '_local': True})
+                          'max_points': max_points, '_local': True, 'events': 20000 if events else 0})
         except BatchError as e:
             raise PclError(str(e)) from e
         t = np.array(r['t'], dtype=float)
@@ -656,6 +662,10 @@ class Project:
                 't_end': r['t_end'], 'status': r['status'], 'message': r['message'], 'points': r['stats']['points'], 'returned': len(t),
                 'wall_s': r['stats']['wall_s'], 'T': _base_T(self)}
         res = Result(t.tolist(), keys, {k: v.tolist() for k, v in ch.items()}, meta, self, {}, r.get('diag') or [])
+        if events and r.get('events'):
+            kinds = frozenset(events) if isinstance(events, (list, tuple, frozenset)) or type(events).__name__ == 'set' else None
+            res.events = [e for e in r['events']['list'] if kinds is None or e['kind'] in kinds]
+            res.meta['events'] = {'n': r['events']['n'], 'max': r['events']['max']}
         for m in meas:
             res.measured[m['name']] = res.measure(m['key'], m['stat'], m.get('periods', 1), at=m.get('at'), f1=m.get('f1'))
         return res
@@ -938,6 +948,7 @@ class Result:
         self.ch = ch
         self.measured = dict(measured or {})
         self.diag = list(diag or [])
+        self.events = []                # 3.19: the event log (run(events=True)): dicts t, kind, id, src, v, side, …
         pm = {'project': project.name, 'hash': project.hash(), 'changes': dict(project.changes)} if project is not None else {}
         self.meta = {'pcl': version(), **pm, 'date': datetime.datetime.now().isoformat(timespec='seconds'), **meta}
 
@@ -946,6 +957,17 @@ class Result:
 
     def __repr__(self):
         return f'<pcl.Result {len(self.t)} σημεία × {len(self.keys)} κανάλια, {self.meta.get("solver")}>'
+
+    def events_csv(self, path, kinds=None):
+        """The event log (3.19) as CSV: t, kind, id, source, value, side, unit, clock, n, from; kinds limits it."""
+        cols = ('t', 'kind', 'id', 'src', 'v', 'side', 'u', 'clk', 'n', 'from')
+        with open(path, 'w', encoding='utf-8', newline='') as f:
+            w = csv.writer(f)
+            w.writerow(['t [s]', 'kind', 'id', 'source', 'value', 'side', 'unit', 'clock', 'n', 'from'])
+            for e in self.events:
+                if kinds is None or e.get('kind') in kinds:
+                    w.writerow(['' if e.get(c) is None else e.get(c) for c in cols])
+        return path
 
     def measure(self, key, stat='avg', periods=1, at=None, f1=None):
         """Over the last `periods` base periods T: avg, rms, min, max, pp (trapezoidal in time); end; at (a time); thd (%).

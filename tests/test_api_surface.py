@@ -52,5 +52,20 @@ class ApiSurface(unittest.TestCase):
         self.assertEqual(added, [('server', '/api/new')])
 
 
+    def test_experimental_surface(self):
+        # 3.19 (question 1 of 3.18): AI control and the workbench are listed but stay out of the rule of 4.x
+        self.assertTrue(api_surface.experimental('pcl', 'pcl.control.InverseTrainer'))
+        self.assertTrue(api_surface.experimental('pcl', 'pcl.workbench.prepare'))
+        self.assertFalse(api_surface.experimental('pcl', 'pcl.Project.run'))
+        snap = api_surface.merged({'groups': {}, 'removed': []}, self.now, '3.19')
+        self.assertIn('pcl.control.', snap['experimental']['pcl'])
+        self.assertIn('πειρ.', api_surface.report(snap))
+        # the 3.19 additions: events from a run, the B1 blocks, units on a constant and a gain, the frame of a Mux
+        self.assertIn('events', self.now['pcl']['pcl.Project.run']['params'])
+        for t in ('F2', 'RLIM', 'RT', 'EDGE'):
+            self.assertIn('part:' + t, self.now['project'])
+        self.assertIn('unit', self.now['project']['part:CONST']['params'])
+        self.assertIn('frame', self.now['project']['part:MUX']['params'])
+
 if __name__ == '__main__':
     unittest.main()

@@ -13,7 +13,7 @@
 //    pin stands for separate pins of the same part ('abc' = a, b, c). expand() gives the part back with conn = 'sep'.
 //  - ports of a subcircuit with a width > 1 (flatten keeps it on the junction as $w), a constant with values separated
 //    by ';' ("10; 0").
-//  - element-wise blocks (gain, sum, product, division, saturation, comparator, logic, integrator, low-pass, z⁻¹, PI):
+//  - element-wise blocks (gain, sum, product, division, saturation, comparator, logic, integrator, low-pass, z⁻¹, PI, and from 3.19 the second-order filter, rate limiter, rate transition, edge detector, and the display, which shows the vector):
 //    with a bus at an input the block becomes one copy per element (<id>[1], <id>[2], …). A scalar input goes to every
 //    copy, and a parameter written with ';' gives one value per copy ("1; -1").
 // Everything else has width 1; a junction, a tag (Goto / From) and a port of width 1 take the width of what they join.
@@ -27,7 +27,7 @@
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
  class BusError extends Error{}
  const WIRING=new Set(['MUX','DEMUX','BSEL','EBUS']);
- const ELEMENTWISE=new Set(['GAIN','SUM','MUL','DIV','SAT','CMP','LOGIC','INT','LPF','UD','PIB','CONST']);
+ const ELEMENTWISE=new Set(['GAIN','SUM','MUL','DIV','SAT','CMP','LOGIC','INT','LPF','UD','PIB','CONST','F2','RLIM','RT','EDGE','DISP']);
  const FREE=new Set(['JUNC','TAGO','TAGI']);
  const COND='abcdef';
  const PORT_PIN={PORT:'p',SIN:'y',SOUT:'u'};
@@ -171,7 +171,7 @@
    if(t==='EBUS'){for(let i=0;i<nOf(c,2,6,3);i++)bunion(bit(k('bus'),i+1),k(COND[i]));continue;}
    if((t==='JUNC'&&w(k('j'))>1)||(t==='TAGO'&&w(k('u'))>1)||(t==='TAGI'&&w(k('y'))>1))continue;
    if(ELEMENTWISE.has(t)&&S.copies(id)>1){const n=S.copies(id),vals=perElement(c,n);vec[id]=n;
-    for(let r=1;r<=n;r++){const rid=id+'['+r+']',q={...c,id:rid,label:lab(c)+'['+r+']',params:vals[r-1]};delete q.live;delete q.liveBase;out.push(q);
+    for(let r=1;r<=n;r++){const rid=id+'['+r+']',q={...c,id:rid,label:lab(c)+'['+r+']',params:vals[r-1]};delete q.live;delete q.liveBase;delete q.liveRate;out.push(q);
      for(const p of Object.keys(P.pinsOf(q))){const rk=rid+':'+p;real.add(rk);bunion(rk,bit(k(p),w(k(p))>1?r:1));}}
     continue;}
    const m=members(c);
@@ -192,6 +192,6 @@
    rk.forEach((x,i)=>{const at=x.lastIndexOf(':');wires.push({id:jid+'w'+(i+1),a:{c:jid,p:'j'},b:{c:x.slice(0,at),p:x.slice(at+1)},pts:[]});});}
   return {project:{...project,components:out,wires},warnings:[],vec};}
 
- const api={WIRING,ELEMENTWISE,COND,needs,members,widths,expand,constWidth,selIdx,namesJoin,migrateNames,BusError};
+ const api={WIRING,ELEMENTWISE,COND,needs,members,widths,expand,constWidth,selIdx,namesJoin,migrateNames,graph,BusError};
  root.Bus=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

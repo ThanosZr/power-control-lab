@@ -1,6 +1,15 @@
 {
- "version": "3.18",
+ "version": "3.19",
  "stable_from": "4.0",
+ "experimental": {
+  "pcl": [
+   "pcl.control.",
+   "pcl.workbench."
+  ],
+  "cli": [
+   "workbench"
+  ]
+ },
  "groups": {
   "pcl": {
    "pcl.BifurcationResult": {
@@ -149,7 +158,8 @@
      "scipy_method",
      "waveforms",
      "save_state",
-     "resume"
+     "resume",
+     "events"
     ],
     "since": "3.18"
    },
@@ -219,6 +229,13 @@
    "pcl.Result.as_dict": {
     "params": [],
     "since": "3.18"
+   },
+   "pcl.Result.events_csv": {
+    "params": [
+     "path",
+     "kinds"
+    ],
+    "since": "3.19"
    },
    "pcl.Result.frame": {
     "params": [],
@@ -1109,7 +1126,8 @@
      "--out",
      "--chunk",
      "--state",
-     "--resume"
+     "--resume",
+     "--events"
     ],
     "since": "3.18"
    },
@@ -1636,7 +1654,8 @@
      "sim",
      "scope",
      "meta",
-     "tutorial"
+     "tutorial",
+     "program"
     ],
     "since": "3.18"
    },
@@ -1651,9 +1670,33 @@
      "label",
      "params",
      "live",
-     "liveBase"
+     "liveBase",
+     "liveRate"
     ],
     "since": "3.18"
+   },
+   "file.program": {
+    "params": [
+     "t",
+     "id",
+     "k",
+     "v",
+     "rate"
+    ],
+    "since": "3.19"
+   },
+   "file.solve": {
+    "params": [
+     "unconn",
+     "island",
+     "rleak",
+     "tbase",
+     "step",
+     "rtol",
+     "hmax",
+     "units"
+    ],
+    "since": "3.19"
    },
    "file.subcircuit": {
     "params": [
@@ -1749,7 +1792,8 @@
    },
    "part:CONST": {
     "params": [
-     "v"
+     "v",
+     "unit"
     ],
     "pins": [
      "y"
@@ -1861,6 +1905,18 @@
     ],
     "since": "3.18"
    },
+   "part:EDGE": {
+    "params": [
+     "edge",
+     "tw"
+    ],
+    "pins": [
+     "n",
+     "u",
+     "y"
+    ],
+    "since": "3.19"
+   },
    "part:EXPR": {
     "params": [
      "expr",
@@ -1873,6 +1929,19 @@
      "y"
     ],
     "since": "3.18"
+   },
+   "part:F2": {
+    "params": [
+     "kind",
+     "f0",
+     "zeta",
+     "u0"
+    ],
+    "pins": [
+     "u",
+     "y"
+    ],
+    "since": "3.19"
    },
    "part:FEST": {
     "params": [
@@ -1893,7 +1962,8 @@
    },
    "part:GAIN": {
     "params": [
-     "K"
+     "K",
+     "unit"
     ],
     "pins": [
      "u",
@@ -2153,7 +2223,8 @@
    },
    "part:MUX": {
     "params": [
-     "n"
+     "n",
+     "frame"
     ],
     "pins": [
      "u1",
@@ -2296,6 +2367,31 @@
      "y"
     ],
     "since": "3.18"
+   },
+   "part:RLIM": {
+    "params": [
+     "up",
+     "dn",
+     "y0"
+    ],
+    "pins": [
+     "u",
+     "y"
+    ],
+    "since": "3.19"
+   },
+   "part:RT": {
+    "params": [
+     "clock",
+     "trig",
+     "mode",
+     "y0"
+    ],
+    "pins": [
+     "u",
+     "y"
+    ],
+    "since": "3.19"
    },
    "part:SAT": {
     "params": [

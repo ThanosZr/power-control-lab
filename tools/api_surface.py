@@ -32,6 +32,14 @@ from engine import __version__  # noqa: E402
 SNAP = ROOT / 'tools' / 'api_surface.json'
 OUT = ROOT / 'docs' / 'API.md'
 STABLE_FROM = '4.0'           # the major version from which the surface is stable
+# 3.19 (question 1 of 3.18): what stays out of the rule of 4.x. AI control (§38, stages 3–4 to come) and the Control
+# Workbench (§19) still change; they are listed but marked experimental, and a change there needs no --allow-removal.
+# When they settle they become stable, which is an addition. Prefixes of keys per surface.
+EXPERIMENTAL = {'pcl': ('pcl.control.', 'pcl.workbench.'), 'cli': ('workbench',)}
+
+
+def experimental(g, k):
+    return any(k.startswith(p) for p in EXPERIMENTAL.get(g, ()))
 GROUPS = {
     'pcl': 'Πακέτο Python `pcl`',
     'cli': 'Γραμμή εντολών `python -m pcl`',
@@ -184,8 +192,11 @@ process.stdout.write(JSON.stringify(out));"""
         raise SystemExit(r.stderr)
     out = json.loads(r.stdout)
     # the fields of the file itself (docs/ARCHITECTURE.md §2): new fields are optional, an old file always opens
-    out['file'] = {'params': ['version', 'components', 'wires', 'subcircuits', 'solve', 'sim', 'scope', 'meta', 'tutorial']}
-    out['file.component'] = {'params': ['id', 'type', 'x', 'y', 'rot', 'flip', 'label', 'params', 'live', 'liveBase']}
+    out['file'] = {'params': ['version', 'components', 'wires', 'subcircuits', 'solve', 'sim', 'scope', 'meta', 'tutorial', 'program']}
+    out['file.component'] = {'params': ['id', 'type', 'x', 'y', 'rot', 'flip', 'label', 'params', 'live', 'liveBase', 'liveRate']}
+    # 3.19: the program of parameter changes and the options of the solution that it adds
+    out['file.program'] = {'params': ['t', 'id', 'k', 'v', 'rate']}
+    out['file.solve'] = {'params': ['unconn', 'island', 'rleak', 'tbase', 'step', 'rtol', 'hmax', 'units']}
     out['file.wire'] = {'params': ['id', 'a', 'b', 'pts', 'name', 'color', 'width']}
     out['file.subcircuit'] = {'params': ['title', 'desc', 'version', 'components', 'wires', 'params']}
     return out
@@ -226,7 +237,8 @@ def merged(old, new, version, removal_reason=None, broken=()):
     removed = list(old.get('removed', []))
     for g, k, why in broken:
         removed.append({'group': g, 'key': k, 'what': why, 'version': version, 'reason': removal_reason or ''})
-    return {'version': version, 'stable_from': STABLE_FROM, 'groups': groups, 'removed': removed}
+    return {'version': version, 'stable_from': STABLE_FROM, 'experimental': {g: list(v) for g, v in EXPERIMENTAL.items()},
+            'groups': groups, 'removed': removed}
 
 
 # ------------------------------------------------------------------------------------------------------------- report
@@ -251,7 +263,29 @@ def report(snap):
         f'- **Ο έλεγχος:** το `python tools/api_surface.py` σταματά όταν κάτι λείπει ή έχασε όρισμα. Πριν από την {snap["stable_from"]} περνά μόνο με '
         '`--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 η αφαίρεση σημείου της ίδιας κύριας έκδοσης δεν περνά.',
         '',
+        '- **Πειραματικά (3.19):** ' + ', '.join(f'`{p}…`' for v in EXPERIMENTAL.values() for p in v) + ' (έλεγχος με AI §38, Control Workbench §19). '
+        'Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). '
+        'Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38, και η μετάβαση είναι προσθήκη. Στους πίνακες: «πειρ.».',
+        '',
         'Στους πίνακες, «Από» είναι η έκδοση της πρώτης καταγραφής: η 3.18 για ό,τι υπήρχε ήδη.',
+        '',
+        '## Σημεία επέκτασης (3.19): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα',
+        '',
+        '| Τι | Σήμερα | Επέκταση με προσθήκες |',
+        '|---|---|---|',
+        '| Μονάδες και τύποι θυρών (`units.js`, `project.solve.units`) | V, A, rad, rad/s, N·m, V·s, 1· πλαίσια abc, αβ, dq· `warn`, `strict`, `off` | '
+        'νέες μονάδες και πλαίσια είναι νέες λέξεις· κάθε νέο στοιχείο δηλώνει τις δικές του θύρες· ένα στοιχείο χωρίς δήλωση μένει «χωρίς τύπο», '
+        'άρα ένα παλιό αρχείο δεν παίρνει νέο σφάλμα από στοιχείο που ήδη είχε |',
+        '| Πρόγραμμα αλλαγών παραμέτρων (`project.program`) | `{t, id, k, v, rate}` στα στοιχεία του κυρίως κυκλώματος (και στις δημόσιες παραμέτρους υποκυκλωμάτων) | '
+        'νέα προαιρετικά πεδία (π.χ. διαδρομή `X1/L1`, σχήμα ράμπας)· ένα πεδίο που δεν αναγνωρίζεται αγνοείται |',
+        '| Αρχείο συμβάντων (`Sim.events`, `Result.events`, `events` στον server) | είδη switch, diode, scr, gap, cmp, latch, edge, sample, duty, jump, live, program | '
+        'νέα είδη και νέα πεδία ανά συμβάν· τα υπάρχοντα δεν αλλάζουν σημασία |',
+        '| Ζωντανές και δομικές παράμετροι (`Parts.structural`) | δομική = αλλάζει τους ακροδέκτες, ή είναι στη λίστα `STRUCT` (π.χ. φέρον PWM) | '
+        'η λίστα μεγαλώνει με νέα στοιχεία· μια παράμετρος δεν γίνεται δομική από ζωντανή μέσα στην 4.x |',
+        '| Ονόματα συρμάτων και Goto/From | τοπικά στο instance, «/όνομα» για το κυρίως κύκλωμα | νέα προθέματα (π.χ. του γονικού instance) ως νέα σύνταξη |',
+        '| Αναφορές από μέσα προς τα έξω | δουλεύουν (πρώτα μέσα, μετά έξω)· λίστα στον ορισμό, μετατροπή σε θύρα ή δημόσια | — (καμία αλλαγή σημασίας) |',
+        '| Μπλοκ B1 | F2 (lp, hp, bp, notch), RLIM, RT (zoh, delay), EDGE (rise, fall, both) | νέες επιλογές στις ίδιες παραμέτρους (π.χ. all-pass) |',
+        '| Λύτης SciPy, συνεχή μπλοκ | T/200, ή T/1000 με πηγές από σήμα· πεδίο `cont_div` | — |',
         '',
     ]
     if snap['removed']:
@@ -269,7 +303,7 @@ def report(snap):
             out += [f'| `{k[2:]}` | {e.get("perm") or "—"} | {e["since"]} |' for k, e in entries.items()]
         else:
             out += ['| Σημείο | Ορίσματα | Από |', '|---|---|---|']
-            out += [f'| `{k}` | {", ".join(f"`{p}`" for p in e["params"]) or "—"} | {e["since"]} |' for k, e in entries.items()]
+            out += [f'| `{k}` | {", ".join(f"`{p}`" for p in e["params"]) or "—"} | {e["since"]}{" · πειρ." if experimental(g, k) else ""} |' for k, e in entries.items()]
         out += ['']
     return '\n'.join(out)
 
@@ -298,13 +332,16 @@ def main(argv=None):
             return 1
         print(f'API: {sum(len(v) for v in new.values())} σημεία, ενημερωμένο.')
         return 0
-    if broken:
+    exp_only = broken and all(experimental(g, k) for g, k, _ in broken)
+    if broken and exp_only and not a.allow_removal:
+        a.allow_removal = 'πειραματικό σημείο'
+    if broken and not exp_only:
         if not a.allow_removal:
             print('Αλλαγή που σπάει το API:\n' + '\n'.join(f'  {g}: {k} ({w})' for g, k, w in broken) +
                   '\nΑν είναι σκόπιμη: python tools/api_surface.py --allow-removal "λόγος".')
             return 1
         if vkey(__version__) >= vkey(STABLE_FROM):
-            same = [b for b in broken if vkey(old['groups'][b[0]][b[1]]['since'])[0] == vkey(__version__)[0] or vkey(old.get('version', '0'))[0] == vkey(__version__)[0]]
+            same = [b for b in broken if not experimental(b[0], b[1]) and vkey(old['groups'][b[0]][b[1]]['since'])[0] == vkey(__version__)[0] or vkey(old.get('version', '0'))[0] == vkey(__version__)[0]]
             if same:
                 print('Μέσα στην ίδια κύρια έκδοση δεν αφαιρείται τίποτα: σημείωσέ το παρωχημένο και αφαίρεσέ το στην επόμενη κύρια έκδοση.')
                 return 1

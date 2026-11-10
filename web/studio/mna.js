@@ -18,6 +18,7 @@
  const SC=root.StepCheck||(typeof require!=='undefined'?require('./stepcheck.js'):null);
  const SUBC=root.SubCircuit||(typeof require!=='undefined'?require('./subcircuit.js'):null);
  const BUS=root.Bus||(typeof require!=='undefined'?require('./bus.js'):null);
+ const UNITS=root.Units||(typeof require!=='undefined'?require('./units.js'):null);
  const GMIN=1e-9;
  // program t:value at t; left = the value just before t (the end of a step that lands on a jump, 3.15)
  const schedAt=(s,t,dflt,left)=>{if(!s)return dflt;let v=s[0][1];const tl=left?t-1e-15-4e-16*Math.abs(t):0;if(left?s[0][0]>=tl:t<s[0][0])return dflt;for(const [ts,val] of s){if(left?ts<tl:ts<=t+1e-15)v=val;else break;}return v;};
@@ -90,6 +91,8 @@
  function buildNetlist(project){
   // subcircuits (3.17, §9): the solver sees one flat circuit (instance parts as X1/<id>, ports as junctions)
   let subWarn=[];if(SUBC&&SUBC.needs(project)){try{const f=SUBC.flatten(project);project=f.project;subWarn=f.warnings;}catch(e){throw e instanceof SUBC.SubcircuitError?new NetlistError(e.message):e;}}
+  // units and vector types of the signal ports (3.19, §3): a frame into another frame stops here, units are warnings
+  let units=null;if(UNITS){try{units=UNITS.check(project);subWarn.push(...units.warnings);}catch(e){throw e instanceof UNITS.UnitError?new NetlistError(e.message):e;}}
   // buses and vectors (3.18, §3): the solver sees scalar wires only (element-wise blocks on a bus as <id>[k])
   let vec={};if(BUS&&BUS.needs(project)){try{const b=BUS.expand(project);project=b.project;subWarn.push(...b.warnings);vec=b.vec;}catch(e){throw e instanceof BUS.BusError?new NetlistError(e.message):e;}}
   const comps=(project.components||[]).filter(c=>P.PARTS[c.type]&&c.type!=='SUB');
@@ -306,6 +309,13 @@
     else if(T==='SR'){st.q=p.q0==='1'?1:0;st.sp=0;}
     else if(T==='INT'){b.y0=num(p.y0,0);b.lo=num(p.lo,-1e9);b.hi=num(p.hi,1e9);b.wrap=p.wrap==='2pi';st.s=b.y0;st.u=0;st.t=0;}
     else if(T==='LPF'){b.tau=1/(2*Math.PI*Math.max(num(p.fc,1e3),1e-9));st.s=num(p.y0,0);st.u=0;st.t=0;}
+    // 3.19: second-order filter (states: low-pass output and its derivative/ω₀), rate limiter, rate transition, edge detector
+    else if(T==='F2'){b.kind=['lp','hp','bp','notch'].includes(p.kind)?p.kind:'lp';b.w0=2*Math.PI*Math.max(num(p.f0,1e3),1e-9);b.z=Math.max(num(p.zeta,.7071),1e-9);
+     const u0=num(p.u0,0);st.s=[u0,0];st.u=u0;st.t=0;b.ft=b.kind==='hp'||b.kind==='notch';}
+    else if(T==='RLIM'){b.up=Math.max(num(p.up,1e3),0);b.dn=Math.max(num(p.dn,1e3),0);st.s=num(p.y0,0);st.u=st.s;st.t=0;b.ft=false;}
+    else if(T==='RT'){b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';b.y0=num(p.y0,0);b.mode=p.mode==='delay'?'delay':'zoh';st.last=null;st.y=b.y0;st.mem=b.y0;b.ft=b.mode==='zoh';
+     if(!(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type)))warnings.push(`${b.label}: διάλεξε μπλοκ PWM ή Ρολόι (αλλιώς η έξοδος μένει ${b.y0}).`);}
+    else if(T==='EDGE'){b.edge=['rise','fall','both'].includes(p.edge)?p.edge:'rise';b.tw=Math.max(0,num(p.tw,0));st.p=0;st.n=0;st.tOn=null;}
     else if(T==='CLARKE'||T==='ICLARKE')b.pw=p.inv==='pow';
     else if(T==='PLL'){const wn=2*Math.PI*Math.max(num(p.bw,20),1e-6);b.Kp=2*.7071*wn;b.Ki=wn*wn;b.w0=2*Math.PI*num(p.f0,50);st.th=num(p.th0,0)*Math.PI/180;st.w=b.w0;st.xi=0;st.t=0;}
     else if(T==='CLK'||T==='RAMP'){b.f=Math.max(num(p.f,1e5),1e-6);b.ph=num(p.phase,0)/360;if(T==='CLK')b.duty=Math.min(1,Math.max(0,num(p.duty,.5)));else{b.shape=p.shape==='tri'?'tri':'saw';b.lo=num(p.lo,0);b.hi=num(p.hi,1);}}
@@ -330,7 +340,7 @@
   const diag={unconn,island,rleak,skipped:[...skip].map(([id,why])=>({id,why})),open,freeEnds,freeNets,islands};
   const rowBase=nNodes;for(const e of els)if(e.row!==undefined)e.row+=rowBase;
   const sig=compileSignals(blocks,sigNets,ctrls,els,compInfo,warnings);
-  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId,sig,sigPin,diag,tbase,step,vec};
+  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId,sig,sigPin,diag,tbase,step,vec,units};
  }
 
  // ---------------------------------------------------------------- signal graph (3.0)
@@ -359,6 +369,14 @@
  }
  // comparator crossing function: > 0 means "switch to 1" when the output is 0, < 0 "switch to 0" when it is 1.
  // A tiny built-in band (≈1e-9 relative) keeps the two thresholds apart when the hysteresis is zero.
+ // 3.19: Φ = e^{A·dt} of the second-order filter, A = ω₀·[[0, 1], [−1, −2ζ]] (states: low-pass output, its derivative/ω₀).
+ // e^{A·dt} = e^{σ·dt}·(C·I + S·(A − σI)), σ = −ζω₀, Δ = ω₀²(ζ² − 1): cosh/sinh, cos/sin or the series near Δ·dt² = 0.
+ // The same lines are in engine/batch.py f2_phi.
+ function f2Phi(w0,z,dt){const s=-z*w0,D=w0*w0*(z*z-1),x=D*dt*dt;let eC,eS;
+  if(Math.abs(x)<1e-4){const e=Math.exp(s*dt);eC=e*(1+x/2+x*x/24+x*x*x/720);eS=e*dt*(1+x/6+x*x/120+x*x*x/5040);}
+  else if(D>0){const r=Math.sqrt(D),ep=Math.exp((s+r)*dt),em=Math.exp((s-r)*dt);eC=(ep+em)/2;eS=(ep-em)/(2*r);}
+  else{const r=Math.sqrt(-D),e=Math.exp(s*dt);eC=e*Math.cos(r*dt);eS=e*Math.sin(r*dt)/r;}
+  const a=z*w0*eS,c=w0*eS;return [eC+a,c,-c,eC-a];}
  function cmpF(b,s,pv,nv){const g=pv-nv,tol=1e-9*(Math.abs(pv)+Math.abs(nv))+1e-12,h=Math.max(b.hys,4*tol)/2;return s?g+h-tol:g-h+tol;}
 
  // ---------------------------------------------------------------- dense LU
@@ -534,6 +552,7 @@
    this.keys=keys;this.chIndex=new Map(keys.map((k,i)=>[k,i]));
    if(!same)this.allocRecord();
    this.project=project;
+   if(fresh){this.progInit(project.program);this.evInit();}
    if(fresh){this.t=0;this.beLeft=2;this.prevSig='';this.periodsDone=0;this.started=false;this.steps=0;this.changes=[];for(const c of net.ctrls){c.k=null;c.xi=0;}
     // carrier phase and duty first (the initial switch states depend on them), then the
     // consistent solution, the samples due at t = 0 and the controllers measuring it
@@ -571,7 +590,35 @@
    for(const b of bs)Object.assign(b,patch);if('sched' in patch)this.jsc=null;this.evalBlocks('commit');this.computeVals();return true;}
   setHold(id,patch){const q=this.shById.get(id);if(!q)return false;if(patch.trig&&patch.trig!==q.trig)q.last=null;Object.assign(q,patch);return true;}
   // a change made by the user while running: drawn on the scope and kept so it can be replayed
-  markChange(rec){(this.changes||(this.changes=[])).push({t:this.t,...rec});if(this.changes.length>500)this.changes.shift();}
+  markChange(rec){(this.changes||(this.changes=[])).push({t:this.t,...rec});if(this.changes.length>5000)this.changes.shift();
+   this.logEv(rec.prog?'program':'live',rec.id+'.'+rec.k,rec.v,{id:rec.id,from:rec.from,...(rec.rate?{rate:rec.rate}:{})});}
+  // 3.19: program of parameter changes (project.program = [{t, id, k, v, rate?}], §4). At t the part's parameter changes as a
+  // live change does (load with the states kept), so a live session written as a program runs again bit for bit. With a
+  // rate (units/s) the change is a ramp in steps of T/50 at most (200 steps at most), from the value at t.
+  progInit(list){this.prog=(Array.isArray(list)?list:[]).filter(e=>e&&Number.isFinite(+e.t)&&e.id&&e.k).map(e=>({t:+e.t,id:String(e.id),k:String(e.k),v:e.v,...(+e.rate>0?{rate:+e.rate}:{})})).sort((a,b)=>a.t-b.t);this.progI=0;}
+  addProgram(e){if(!this.prog)this.progInit([]);const q={t:Number.isFinite(+e.t)?Math.max(+e.t,this.t):this.t,id:String(e.id),k:String(e.k),v:e.v,...(+e.rate>0?{rate:+e.rate}:{}),...(e.live?{live:true}:{})};
+   let i=this.prog.length;while(i>this.progI&&this.prog[i-1].t>q.t)i--;this.prog.splice(i,0,q);return q;}
+  progNext(){return this.prog&&this.progI<this.prog.length?this.prog[this.progI].t:Infinity;}
+  progDue(eps){let n=0;while(this.prog&&this.progI<this.prog.length&&this.prog[this.progI].t<=this.t+eps){this.progApply(this.prog[this.progI++]);n++;}return n;}
+  progApply(e){const pr=JSON.parse(JSON.stringify(this.project)),c=(pr.components||[]).find(x=>x.id===e.id);
+   if(!c){this.note('prog:'+e.id,{sev:'warn',grp:'live',id:e.id,msg:`Πρόγραμμα αλλαγών: δεν υπάρχει το στοιχείο ${e.id} (t = ${P.eng(e.t,'s',4)}).`,fix:'Διόρθωσε ή σβήσε τη γραμμή του προγράμματος στις ρυθμίσεις του κυκλώματος.'});return;}
+   const pd=P.defaults(c.type)||{},from=(c.params||{})[e.k]??pd[e.k];
+   if(e.rate>0&&!e.part){const v0=typeof from==='number'?from:P.parseEng(String(from)),v1=+e.v;
+    if(Number.isFinite(v0)&&Number.isFinite(v1)&&v1!==v0){const dur=Math.abs(v1-v0)/e.rate,n=Math.max(1,Math.min(200,Math.ceil(dur/(this.T/50)-1e-9)));
+     const pts=Array.from({length:n},(_,j)=>({t:e.t+dur*(j+1)/n,id:e.id,k:e.k,v:j+1===n?v1:v0+(v1-v0)*(j+1)/n,part:true}));
+     const rest=this.prog.slice(this.progI).concat(pts).sort((a,b)=>a.t-b.t);this.prog.length=this.progI;this.prog.push(...rest);
+     this.markChange({id:e.id,k:e.k,v:v1,label:`${c.label||e.id}: ${e.k} → ${P.eng(v1,'',4)} με ${P.eng(e.rate,'/s',3)}`,from,rate:e.rate,prog:true,live:!!e.live});return;}}
+   c.params={...(c.params||{}),[e.k]:e.v};this.load(pr,false);
+   if(!e.part)this.markChange({id:e.id,k:e.k,v:e.v,label:`${c.label||e.id}: ${e.k} → ${typeof e.v==='number'?P.eng(e.v,'',4):e.v}`,from,prog:true});}
+  // 3.19: the event log (§3): switchings, comparator and latch changes, edges, discrete samples (blocks, Sample & Hold,
+  // duty updates of the PWM), programmed jumps and live changes, each with time, kind, source, value and the side of the
+  // instant ('t+': the value after it). A ring of the last `max` events with counts per kind; opts.events = false: off.
+  evInit(){this.ev={on:this.opts.events!==false,max:Math.max(100,Math.round(+this.opts.eventsMax)||20000),list:[],n:0,kinds:{}};}
+  logEv(kind,src,v,x){const E=this.ev;if(!E||!E.on)return;E.n++;E.kinds[kind]=(E.kinds[kind]||0)+1;E.list.push({t:this.t,kind,src,v,side:'t+',...x});
+   if(E.list.length>E.max*1.25)E.list.splice(0,E.list.length-E.max);}
+  events(){const E=this.ev;if(!E)return {list:[],n:0,kinds:{},max:0};return {list:E.list.length>E.max?E.list.slice(-E.max):E.list,n:E.n,kinds:E.kinds,max:E.max};}
+  // a switch's state is set by its gate at the start of a step, a diode's at the end (for the next one): each at its instant
+  evSwitches(t0){for(const e of this.swEls()){const on=e.on?1:0;if(e.evOn!==undefined&&e.evOn!==on){const c=this.net.compInfo.get(e.cid);this.logEv(e.k==='D'?(e.gk||e.fire?'scr':e.gap?'gap':'diode'):'switch',(c?.label||e.cid)+(e.role&&e.role!=='main'?'/'+e.role:''),on,{id:e.cid,...(e.k==='S'&&t0!==undefined?{t:t0}:{})});}e.evOn=on;}}
   // ------------------------------------------------------------ channels
   channelKeys(){
    const k=[];for(const n of this.net.nets)k.push('N:'+n.canon);
@@ -678,7 +725,7 @@
   // take the samples due at the current instant (left value: the state before any switching at t)
   sampleHolds(){let any=false;for(const q of this.net.shs){if(q.sig)continue;const g=this.shGrid(q);if(!g)continue;const u=(this.t-g.b)/g.d,n=Math.round(u);
     if(Math.abs(u-n)>1e-7||q.last===n)continue;q.last=n;
-    let v=q.qty==='V'?this.compV(q.src):this.compI(q.src);if(!Number.isFinite(v))v=NaN;q.h=v;q.n++;q.log.t.push(this.t);q.log.v.push(v);
+    let v=q.qty==='V'?this.compV(q.src):this.compI(q.src);if(!Number.isFinite(v))v=NaN;q.h=v;q.n++;q.log.t.push(this.t);q.log.v.push(v);this.logEv('sample',q.label||q.id,v,{id:q.id,u:q.qty==='V'?'V':'A',clk:q.clock,n});
     if(q.log.t.length>60000){q.log.t.splice(0,10000);q.log.v.splice(0,10000);}any=true;}
    return any;}
   samples(id){return this.shById.get(id)?.log||null;}
@@ -714,6 +761,7 @@
      if(d>k.dmax||d<k.dmin){k.xi-=k.Ki*T*e;d=Math.min(k.dmax,Math.max(k.dmin,ff+k.Kp*e+k.xi+der));}
      k.d=d;}
     if(period){k.dOn=k.d;k.dOff=k.d;}else k.dOff=k.d;
+    if(!force)this.logEv('duty',k.id,k.d,{id:k.id,n:idx,...(period?{}:{half:true})});
     if(first||k.tkPrev===null){k.tkPrev=k.tk-T;k.dPrev=k.dOn;k.dPrevOff=k.dOff;}
    }
    return changed;
@@ -740,7 +788,7 @@
      case 'DIV':{const d=rd(I.b);y=Math.abs(d)>b.eps?rd(I.a)/d:st.y;if(!trial)st.y=y;break;}
      case 'SAT':y=Math.min(b.hi,Math.max(b.lo,rd(I.u)));break;
      case 'CMP':{const pv=rd(I.p),nv=rd(I.n),f=cmpF(b,st.s,pv,nv);const s2=st.s?(f<0?0:1):(f>0?1:0);
-      if(trial)b.f1=f;else{st.s=s2;st.f0=cmpF(b,s2,pv,nv);}y=s2;break;}
+      if(trial)b.f1=f;else{if(s2!==st.s&&!disc)this.logEv('cmp',b.label,s2,{id:b.id});st.s=s2;st.f0=cmpF(b,s2,pv,nv);}y=s2;break;}
      case 'LOGIC':{const a=rd(I.a)>=.5,c=rd(I.b)>=.5;y={and:a&&c,or:a||c,xor:a!==c,not:!a,nand:!(a&&c),nor:!(a||c)}[b.op]?1:0;break;}
      case 'PIB':{if(disc&&this.blkDue(b,force)){const Ts=this.shGrid(b).d,e=rd(I.u);if(force&&!this.started)st.xi=0;
        st.xi+=b.Ki*Ts*e;let q=b.y0+b.Kp*e+st.xi;if(q>b.ymax||q<b.ymin){st.xi-=b.Ki*Ts*e;q=Math.min(b.ymax,Math.max(b.ymin,b.y0+b.Kp*e+st.xi));}st.y=q;sampled=true;if(b.track){st.kt=b.Kp>0?Math.min(1,b.Ki*Ts/b.Kp):1;pend.push(b);}}
@@ -756,10 +804,18 @@
      // Python: called once per sample instant (not in the 'init' pass, whose inputs come before the first solution)
      case 'PY':{if(mode==='sample'&&b.rt&&this.blkDue(b,force)){st.ys=b.rt.step(this.t,b.inNames.map(k=>rd(I[k])));sampled=true;}
       ys={};b.outNames.forEach((k,i)=>{const v=st.ys?st.ys[i]:b.y0;ys[k]=Number.isFinite(v)?v:0;});break;}
-     case 'SR':{const S=rd(I.s)>=.5,Rr=rd(I.r)>=.5;let q=st.q;if(S&&!st.sp)q=1;if(Rr)q=0;if(!trial){st.q=q;st.sp=S;}ys={q,nq:1-q};break;}
+     case 'SR':{const S=rd(I.s)>=.5,Rr=rd(I.r)>=.5;let q=st.q;if(S&&!st.sp)q=1;if(Rr)q=0;if(!trial){if(q!==st.q)this.logEv('latch',b.label,q,{id:b.id});st.q=q;st.sp=S;}ys={q,nq:1-q};break;}
      // continuous states: input held since the previous evaluation (the solver steps are short), state written after the pass
      case 'INT':{const dt=Math.max(0,this.t-st.t);let v=Math.min(b.hi,Math.max(b.lo,st.s+dt*st.u));if(b.wrap)v-=2*Math.PI*Math.floor(v/(2*Math.PI));y=v;if(!trial)cont.push([b,v]);break;}
      case 'LPF':{const dt=Math.max(0,this.t-st.t),v=st.u+(st.s-st.u)*Math.exp(-dt/b.tau);y=v;if(!trial)cont.push([b,v]);break;}
+     // 3.19: exact solution with the input held since the previous evaluation, as LPF (Φ = e^{A·dt}, f2Phi)
+     case 'F2':{const dt=Math.max(0,this.t-st.t),F=f2Phi(b.w0,b.z,dt),d1=st.s[0]-st.u,d2=st.s[1],q1=st.u+F[0]*d1+F[1]*d2,q2=F[2]*d1+F[3]*d2,u=rd(I.u);
+      y=b.kind==='lp'?q1:b.kind==='bp'?2*b.z*q2:b.kind==='hp'?u-q1-2*b.z*q2:u-2*b.z*q2;if(!trial)cont.push([b,[q1,q2]]);break;}
+     case 'RLIM':{const dt=Math.max(0,this.t-st.t),v=st.s+Math.min(b.up*dt,Math.max(-b.dn*dt,st.u-st.s));y=v;if(!trial)cont.push([b,v]);break;}
+     case 'RT':if(disc&&this.blkDue(b,force)){if(b.mode==='delay'){st.y=force?b.y0:st.mem;pend.push(b);}else st.y=rd(I.u);sampled=true;}y=st.y;break;
+     case 'EDGE':{const l=rd(I.u)>=.5,e=l!==!!st.p&&(b.edge==='both'||(b.edge==='rise')===l);let n=st.n,tOn=st.tOn;
+      if(e&&!trial){n++;tOn=this.t;st.n=n;st.tOn=tOn;st.p=l?1:0;this.logEv('edge',b.label,n,{id:b.id});}else if(!trial)st.p=l?1:0;
+      const on=e||(tOn!==null&&(b.tw>0?this.t<tOn+b.tw-1e-7*this.h:this.t===tOn));ys={y:on?1:0,n:e&&trial?n+1:n};break;}
      case 'CLARKE':{const a=rd(I.a),bb=rd(I.b),c=rd(I.c),k=b.pw?Math.sqrt(1.5):1;ys={al:k*(2*a-bb-c)/3,be:k*(bb-c)/Q3};break;}
      case 'ICLARKE':{const k=b.pw?Math.sqrt(2/3):1,al=k*rd(I.al),be=k*rd(I.be);ys={a:al,b:-al/2+Q3/2*be,c:-al/2-Q3/2*be};break;}
      case 'PARK':{const al=rd(I.al),be=rd(I.be),th=rd(I.th),c=Math.cos(th),sn=Math.sin(th);ys={d:al*c+be*sn,q:-al*sn+be*c};break;}
@@ -776,13 +832,14 @@
      case 'RAMP':{const u=b.f*t-b.ph,fr=Math.max(0,u-Math.floor(u+1e-11));y=b.lo+(b.hi-b.lo)*(b.shape==='tri'?Math.abs(1-2*fr):fr);break;}
      case 'DISP':y=rd(I.u);break;
      case 'SH':{const q=b.sh;if(b.sig&&disc){const g=this.shGrid(q);if(g){const u=(this.t-g.b)/g.d,n=Math.round(u);
-       if(Math.abs(u-n)<=1e-7&&(force||q.last!==n)){const v=rd(I.u);q.h=v;sampled=true;if(mode==='sample'){if(q.last!==n){q.n++;q.log.t.push(this.t);q.log.v.push(v);}else{q.log.v[q.log.v.length-1]=v;}q.last=n;}}}}
+       if(Math.abs(u-n)<=1e-7&&(force||q.last!==n)){const v=rd(I.u);q.h=v;sampled=true;if(mode==='sample'){if(q.last!==n){q.n++;q.log.t.push(this.t);q.log.v.push(v);this.logEv('sample',q.label||q.id,v,{id:q.id,clk:q.clock,n});}else{q.log.v[q.log.v.length-1]=v;}q.last=n;}}}}
       y=q.h;break;}
     }
     // outputs: the first one is the block's main value (channel Y:id), the others are Y:id:pin
     const ol=b.outList,yo=(trial?this.yoT:this.yo)[b.i];if(ol.length){if(!ys)ys={[ol[0]]:y};y=ys[ol[0]]??0;}
     yb[b.i]=y;for(let k=0;k<ol.length;k++){const v=ys[ol[k]]??0;yo[k]=v;const n=b.outs[ol[k]];if(n>=0)sv[n]=v;}
    }
+   if(sampled&&!trial&&this.ev?.on&&mode==='sample')for(const b of G.blocks)if((b.type==='PIB'||b.type==='UD'||b.type==='RT'||b.type==='PY')&&b.st.last!==null&&b.st.evN!==b.st.last){b.st.evN=b.st.last;this.logEv('sample',b.label,b.type==='PY'?(b.st.ys?b.st.ys[0]:b.y0):b.st.y,{id:b.id,clk:b.clock,n:b.st.last});}
    for(const b of pend){if(b.type==='PIB')b.st.xi+=b.st.kt*rd(b.ins.tr);else b.st.mem=rd(b.ins.u);} // back-calculation: dx_i/dt = K_i·(e + tr/K_p), tracking time T_t = K_p/K_i
    for(const [b,v] of cont){if(b.type==='FEST'){b.st.pa=v[0];b.st.pb=v[1];b.st.u=[rd(b.ins.al),rd(b.ins.be),rd(b.ins.wr)];}else{b.st.s=v;b.st.u=rd(b.ins.u);}b.st.t=this.t;}
    return sampled;
@@ -812,9 +869,10 @@
   // programs t:value of sources, resistances, constant-power loads and constant blocks: the times, and whether a value jumps at t (3.15)
   jumpScheds(){if(this.jsc)return this.jsc;const L=[];
    for(const e of this.net.els){if(!e.sched&&!(e.k==='V'&&e.src?.sched))continue;
-    if(e.k==='G')L.push([e.sched,e.R]);else if(e.k==='CPL')L.push([e.sched,e.P]);else if(e.k==='I'&&!e.wave&&!(e.sigIn>=0))L.push([e.sched,e.I]);
-    else if(e.k==='V'&&e.imE===undefined&&!(e.sigIn>=0)&&e.src.kind==='dc')L.push([e.src.sched,e.src.V]);}
-   for(const b of this.net.sig.blocks)if(b.type==='CONST'&&b.sched)L.push([b.sched,b.sched[0][1]]);
+    const lb=this.net.compInfo.get(e.cid)?.label||e.cid;
+    if(e.k==='G')L.push([e.sched,e.R,lb]);else if(e.k==='CPL')L.push([e.sched,e.P,lb]);else if(e.k==='I'&&!e.wave&&!(e.sigIn>=0))L.push([e.sched,e.I,lb]);
+    else if(e.k==='V'&&e.imE===undefined&&!(e.sigIn>=0)&&e.src.kind==='dc')L.push([e.src.sched,e.src.V,lb]);}
+   for(const b of this.net.sig.blocks)if(b.type==='CONST'&&b.sched)L.push([b.sched,b.sched[0][1],b.label]);
    return this.jsc=L;}
   jumpAt(t){for(const [s,d] of this.jumpScheds()){const a=schedAt(s,t,d,true),b=schedAt(s,t,d);if(a!==b&&!(Number.isNaN(a)&&Number.isNaN(b)))return true;}return false;}
   values(t){ // time-dependent element values at time t
@@ -1051,8 +1109,10 @@
      if(b.type==='CLK'&&b.duty>0&&b.duty<1)c.push(nx(Math.floor(u-b.duty+1e-9)+1,b.duty));if(b.type==='RAMP'&&b.shape==='tri')c.push(nx(Math.floor(u-.5+1e-9)+1,.5));
      for(const te of c)if(te>this.t+eps&&te<t)t=te;}
     else if(b.type==='CONST')sch(b.sched);
-    else if(b.type==='PIB'||b.type==='UD'||b.type==='PY'){const ts=this.shNext(b);if(ts>this.t+eps&&ts<t)t=ts;}
+    else if(b.type==='PIB'||b.type==='UD'||b.type==='PY'||b.type==='RT'){const ts=this.shNext(b);if(ts>this.t+eps&&ts<t)t=ts;}
+    else if(b.type==='EDGE'&&b.tw>0&&b.st.tOn!==null){const te=b.st.tOn+b.tw;if(te>this.t+eps&&te<t)t=te;} // end of the edge pulse (3.19)
    }
+   {const tp=this.progNext();if(tp>this.t+eps&&tp<t)t=tp;} // program of parameter changes (3.19)
    // base-period boundary for statistics
    const Tb=this.T,kb=Math.floor((this.t+eps)/Tb)+1,tb=kb*Tb,tO=t;if(tb>this.t+eps&&tb<t)t=tb;
    this.evStat=t<tO; // only the statistics boundary: not a discontinuity for the variable step
@@ -1071,13 +1131,14 @@
   run(duration,maxSteps=Infinity,deadline=Infinity){
    const tEnd=this.t+duration;let steps=0;const eps=this.h*1e-7;if(this.var&&this.capDirty)this.modeCap();
    while(this.t<tEnd-eps&&steps<maxSteps){
+    if(this.progNext()<=this.t+eps){this.progDue(eps);continue;}
     const tn=this.nextEvent(tEnd),stat=this.evStat;let hs=this.var?this.hv:this.h;
     // variable step: right after a switching (a gate that changes now, or a diode/comparator/gap at the end of the last step) the next steps are
     // backward Euler, first order and without an error estimate on the first one: they start at 1/8 and grow ×2 per step
     if(this.var&&(this.endFlipPrev||this.jumpNow||this.gateSigPeek(this.t+Math.min(hs,tn-this.t)/2)!==this.prevSig)){hs=this.hGrid(Math.max(this.hMin,this.hv/8));this.hv=hs;}
     let h=Math.min(hs,tn-this.t);if(tn-this.t-h<this.h*1e-3)h=tn-this.t;
     h=this.spwmCut(h);
-    let snap=null,be=0,jn=this.jumpNow;if(this.var){snap=this.saveState();be=this.beLeft;}
+    let snap=null,be=0,jn=this.jumpNow;if(this.var){snap=this.saveState();be=this.beLeft;}const t0=this.t;
     this.leftAt=this.evJump?tn:null;
     const hst=this.step(h);
     // variable step (3.13): a step whose local error is above the tolerance is taken again, smaller
@@ -1086,11 +1147,12 @@
     if(hst<this.h*1e-6&&++this.nTiny===2000)this.note('tiny',{sev:'warn',grp:'step',id:null,msg:`Πολλά βήματα κάτω από 10⁻⁶·Δt (συμβάντα πολύ κοντά το ένα στο άλλο, από t = ${P.eng(this.t,'s',4)}).`,fix:'Συνήθως διακόπτης ή συγκριτής που αλλάζει κατάσταση συνεχώς (chattering): έλεγξε την υστέρηση ή τον νεκρό χρόνο.'});
     if(this.method==='TR'&&this.lastSmooth&&!this.lastDisc&&this.stEls.length<=4000)this.ringCheck();else if(this.lastDisc)this.rx=null;
     // land exactly on event times; a programmed jump there makes the next step start like a switching (3.15)
-    if(Math.abs(this.t-tn)<eps){this.t=tn;if(this.evJump&&this.jumpAt(tn))this.jumpNow=true;}
+    if(Math.abs(this.t-tn)<eps){this.t=tn;if(this.evJump&&this.jumpAt(tn)){this.jumpNow=true;if(this.ev?.on)for(const [sc,d,id] of this.jumpScheds()){const a=schedAt(sc,tn,d,true),b=schedAt(sc,tn,d);if(a!==b)this.logEv('jump',id,b,{from:a});}}}
     this.leftAt=null;
     if(this.lastDisc||this.topoSig===null)this.topoCheck();
     this.started=true;
     this.evalBlocks('commit');
+    if(this.ev?.on)this.evSwitches(t0);
     const Tb=this.T,onB=Math.abs(this.t/Tb-Math.round(this.t/Tb))<1e-9;
     this.recordNow();
     if(onB&&this.t>0)this.closePeriod();
@@ -1145,18 +1207,20 @@
   const ims=imList.map(m=>({ph:m.ph.map(q=>({L:idx.get(q.L),V:idx.get(q.V)})),RR:m.RR,LM:m.LM,p:m.p,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{...m.st}}));
   const bix=new Map(net.sig.order.map((b,i)=>[b,i]));
   const blocks=net.sig.order.map(b=>{const o={id:b.id,type:b.type,ins:b.ins,outs:b.outs,st:JSON.parse(JSON.stringify(b.st))};
-   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
+   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
    if(b.type==='DCM')o.recs={w:{v:[[b.m,1]]},te:{i:[[idx.get(b.gy),b.psi]]}};
    if(b.type==='IM')o.im=imx.get(b.im);
    if(b.type==='SM')o.sm=smx.get(b.sm);
    if(b.type==='SRM')o.srm=srmx.get(b.srm);
-   if(b.type==='PIB'||b.type==='UD'||b.type==='PY'){o.clock=cix.get(b.clock)??null;o.clk=clkOf(b.clock);}
+   if(b.type==='PIB'||b.type==='UD'||b.type==='PY'||b.type==='RT'){o.clock=cix.get(b.clock)??null;o.clk=clkOf(b.clock);}
    if(b.type==='VM')o.rec=vd(b.np,b.nn);else if(b.type==='AM')o.rec={i:[[idx.get(b.el),-1]]};else if(b.type==='MEAS'){const c=ci(b.src);o.rec=(b.qty==='V'?V(c):I(c))||null;}
    if(b.type==='SH'){o.sh=shx.get(b.id);o.sig=!!b.sig;}return o;});
   const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase','upd','dIn'])o[f]=k[f];
    const s=ci(k.sensor);o.sensorRec=k.mode==='pi'?(shx.has(k.sensor)?{sh:shx.get(k.sensor)}:k.qty==='V'?V(s):I(s)):null;o.ffARec=V(ci(k.ffA));o.ffBRec=V(ci(k.ffB));return o;});
   const channels={},skipped=[];for(const key of keys){const r=rec(key);if(r)channels[key]=r;else skipped.push(key);}
-  return {net:{nNodes:net.nNodes,size:net.size,els,ctrls,shs,sig:{n:net.sig.n,blocks},ims,sms,srms,tbase:net.tbase},channels,skipped};
+  // 3.19: the program of parameter changes runs in the browser solver only (it rebuilds the netlist at each entry)
+  const notes=Array.isArray(project.program)&&project.program.length?[`Το πρόγραμμα αλλαγών παραμέτρων (${project.program.length}) δεν περνά στον SciPy: τρέχει μόνο στον λύτη του browser και στο pcl. Για τον SciPy γράψε τις αλλαγές ως πρόγραμμα t:τιμή στις παραμέτρους που το δέχονται (D, αναφορά, σταθερά, πηγές, R).`]:[];
+  return {net:{nNodes:net.nNodes,size:net.size,els,ctrls,shs,sig:{n:net.sig.n,blocks},ims,sms,srms,tbase:net.tbase},channels,skipped,notes};
  }
  // one point of a parameter sweep (bifurcation diagram): set comp.param = value, run `transient` base periods and
  // return the per-period statistic (min, max, avg, end = value at the period boundary) of channel `key` over the next `record` periods

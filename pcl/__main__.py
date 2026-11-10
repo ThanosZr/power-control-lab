@@ -82,6 +82,7 @@ def main(argv=None):
             a.add_argument('--chunk', help='3.16: σε κομμάτια των τόσων s (ακέραιες περίοδοι), κάθε κομμάτι στο --out (CSV) μόλις βγει')
             a.add_argument('--state', help='3.16: αρχείο με την κατάσταση μετά από κάθε κομμάτι (για --resume)')
             a.add_argument('--resume', help='3.16: συνέχεια από αποθηκευμένη κατάσταση· το --t-end είναι τότε ο χρόνος τέλους')
+            a.add_argument('--events', help='3.19: το αρχείο συμβάντων σε CSV (μεταγωγές, συγκριτές, δείγματα, ζωντανές αλλαγές)')
         if name == 'sweep':
             a.add_argument('--resume', action='store_true', help='3.16: παραλείπει τα σημεία που υπάρχουν ήδη στο --out (σάρωση που σταμάτησε)')
             a.add_argument('--grid', action='append', required=True, help='<id>.<παράμετρος>=τιμή1,τιμή2,… ή από:έως:πλήθος')
@@ -247,7 +248,9 @@ def main(argv=None):
                 print(args.state)
             return 0
         if args.cmd == 'run':
-            r = p.run(t_end=t_end, measure=meas, **kw)
+            r = p.run(t_end=t_end, measure=meas, events=bool(getattr(args, 'events', None)), **kw)
+            if getattr(args, 'events', None):
+                print(r.events_csv(args.events))
             for k, v in r.measured.items():
                 print(f'{k} = {v:.6g}')
             for d in r.diag:

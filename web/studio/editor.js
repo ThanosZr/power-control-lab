@@ -65,6 +65,7 @@
    if(doc.version!==undefined)this.doc.version=doc.version; // 3.18: from version 3 wire names join (Bus.namesJoin)
    if(doc.solve)this.doc.solve={...doc.solve}; // options of the solution (3.7): unconnected parts, floating parts
    if(doc.subcircuits)this.doc.subcircuits=JSON.parse(JSON.stringify(doc.subcircuits)); // definitions of subcircuits (3.17)
+   if(Array.isArray(doc.program)&&doc.program.length)this.doc.program=JSON.parse(JSON.stringify(doc.program)); // program of parameter changes (3.19)
    this.dropDangling();
    for(const w of this.doc.wires)if(!w.pts.length&&!w.fixed){const full=this.wirePts(w);if(!orth(full))this.route(w);}
    this.sel.c.clear();this.sel.w.clear();this.undoStack=[];this.redoStack=[];this.render();if(!keepView){this.userView=false;this.fit();}}
@@ -95,6 +96,7 @@
    const sig=new Set(),el=new Set();for(const [k,v] of kind){const r=find(k);if(v==='in'||v==='out')sig.add(r);else if(v==='el')el.add(r);}
    return {of:k=>par.has(k)?(sig.has(find(k))?'sig':el.has(find(k))?'el':'j'):null,kind,root:k=>par.has(k)?find(k):null};}
   // options of the solution (3.7), saved with the circuit
+  setProgram(list){this.remember();if(Array.isArray(list)&&list.length)this.doc.program=list;else delete this.doc.program;this.changed('param');}
   setSolve(patch){this.remember();const s={...(this.doc.solve||{}),...patch};for(const k of Object.keys(s))if(s[k]===''||s[k]===undefined||s[k]===null)delete s[k];this.doc.solve=s;if(!Object.keys(s).length)delete this.doc.solve;this.changed('param');}
   // which parts the solver left out, which pins are open (3.7): drawn on the schematic
   setDiag(d){this.diag=d||null;this.renderDiag();}
@@ -264,6 +266,8 @@
     case 'ILG':return (p.shape==='custom'?e(+p.T1,'s')+'/'+e(+p.T2,'s'):p.shape==='direct'?'τ₁, τ₂, η':p.shape+' μs')+' · '+e(+p.Ipk,'A');case 'MOD3':return {spwm:'SPWM',svpwm:'SVPWM',square:'six-step'}[p.mode]||'';case 'FEST':return 'R̂_R '+e(+p.RR,'Ω');
     case 'EXPR':return String(p.expr||'').slice(0,28);case 'PY':return (p.pars?String(p.pars).slice(0,26):'Python');
     case 'INT':return p.wrap==='2pi'?'mod 2π':(+p.lo>-1e8||+p.hi<1e8)?'['+e(+p.lo)+', '+e(+p.hi)+']':'';case 'LPF':return 'f_c = '+e(+p.fc,'Hz');
+    case 'F2':return ({lp:'LP',hp:'HP',bp:'BP',notch:'notch'}[p.kind]||'LP')+' · '+e(+p.f0,'Hz')+' · ζ '+(+p.zeta).toLocaleString('el-GR',{maximumFractionDigits:3});case 'RLIM':return '↑ '+e(+p.up,'/s')+(+p.dn!==+p.up?' · ↓ '+e(+p.dn,'/s'):'');
+    case 'RT':return p.mode==='delay'?'z⁻¹':'ZOH';case 'EDGE':return ({rise:'↑',fall:'↓',both:'↕'}[p.edge]||'↑')+(+p.tw>0?' · '+e(+p.tw,'s'):'');
     case 'CLARKE':case 'ICLARKE':return p.inv==='pow'?'ισχύς':'πλάτος';case 'PARK':case 'IPARK':return '';case 'PLL':return e(+p.f0,'Hz')+' · BW '+e(+p.bw,'Hz');
     case 'DCM':return 'ψ '+(+p.psi).toLocaleString('el-GR')+' · J '+(+p.J).toLocaleString('el-GR')+(p.load==='sig'?' · τ_L σήμα':'');
     case 'CLK':return e(+p.f,'Hz')+' · '+(+p.duty).toLocaleString('el-GR');case 'RAMP':return e(+p.f,'Hz')+' · '+e(+p.lo)+'…'+e(+p.hi);

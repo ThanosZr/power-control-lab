@@ -182,6 +182,30 @@ class Scenarios(unittest.TestCase):
         self.assertAlmostEqual(float(x['V_C1'][-1, 0]), r['V:C1'][-1], places=9)
         self.assertEqual(json.loads(str(x['meta'][0]))['project'], 'buck')
 
+    def test_event_log(self):
+        # 3.19: Result.events from both solvers (the same switchings), a filter by kind, the CSV and the command line
+        p = pcl.tutorial('buck')
+        a = p.run('0.2m', channels=['I:L1'], events=True)
+        b = p.run('0.2m', channels=['I:L1'], solver='scipy', scipy_method='LSODA', events=['switch'])
+        self.assertEqual(a.meta['events']['kinds']['switch'], 40)
+        sa = [e['t'] for e in a.events if e['kind'] == 'switch']
+        sb = [e['t'] for e in b.events]
+        self.assertEqual({e['kind'] for e in b.events}, {'switch'})
+        self.assertEqual(len(sa), len(sb))
+        for x, y in zip(sa, sb):
+            self.assertAlmostEqual(x, y, delta=1e-12)
+        self.assertEqual(p.run('0.1m', channels=['I:L1']).events, [])     # off by default
+        out = self.tmp / 'ev.csv'
+        a.events_csv(out, kinds=['duty'])
+        rows = list(csv.reader(out.open(encoding='utf-8')))
+        self.assertEqual(rows[0][:3], ['t [s]', 'kind', 'id'])
+        self.assertEqual({r[1] for r in rows[1:]}, {'duty'})
+        out2 = self.tmp / 'ev2.csv'
+        run = subprocess.run([sys.executable, '-m', 'pcl', 'run', 'tutorial:buck', '--t-end', '0.1m', '--channels', 'I:L1', '--events', str(out2)],
+                             capture_output=True, text=True, cwd=str(ROOT), timeout=300)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn('switch', out2.read_text(encoding='utf-8'))
+
     def test_command_line(self):
         out = self.tmp / 'cli.csv'
         run = subprocess.run([sys.executable, '-m', 'pcl', 'run', 'tutorial:buck?start=steady', '--set', 'L1.L=200u', '--t-end', '2m',

@@ -263,9 +263,10 @@
    params:[ref('src','Στοιχείο',['L','R','C','VDC','CPL','SW','D','SCR','XFMR','IDC','VAC','VAC3']),sel('qty','Μέγεθος',[['I','Ρεύμα'],['V','Τάση']],'I')],value:()=>null,
    draw:p=>sb(60,26)+tx(`${p.qty==='V'?'v':'i'}(${xe(p.src||'?')})`)+sl('M30,0 H40')},
   CONST:{name:'Σταθερά / πρόγραμμα',prefix:'K',group:'Σήματα',pins:{},spins:{y:O(30,0)},box:[-20,-12,40,24],blk:true,
-   params:[txt('v','Τιμή ή πρόγραμμα','1',{hint:'Σταθερή τιμή ή «t:τιμή», π.χ. 0:5, 0.002:10. Αλλάζει και εν κινήσει από τις ζωντανές παραμέτρους.'})],value:()=>null,
+   params:[txt('v','Τιμή ή πρόγραμμα','1',{hint:'Σταθερή τιμή ή «t:τιμή», π.χ. 0:5, 0.002:10. Αλλάζει και εν κινήσει από τις ζωντανές παραμέτρους.'}),
+    txt('unit','Μονάδα (προαιρετικά)','',{hint:'π.χ. A για αναφορά ρεύματος, rad/s για ταχύτητα. Ελέγχεται στις συνδέσεις και φαίνεται στα scopes (3.19).'})],value:()=>null,
    draw:p=>sb(40,24)+tx(String(p.v).includes(':')?'c(t)':xe(String(p.v).slice(0,6)))+sl('M20,0 H30')},
-  GAIN:{name:'Κέρδος',prefix:'GN',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,params:[num('K','Κέρδος K','',1,{signed:true,zero:true})],value:()=>null,
+  GAIN:{name:'Κέρδος',prefix:'GN',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,params:[num('K','Κέρδος K','',1,{signed:true,zero:true}),txt('unit','Μονάδα εξόδου','',{hint:'Κενό: άγνωστη (ταιριάζει με όλα). «=»: ίδια με την είσοδο (αδιάστατο K). Ή η μονάδα της εξόδου, π.χ. V για ω·L·i (3.19).'})],value:()=>null,
    draw:()=>'<path class="block sblk" d="M-20,-15 L20,0 L-20,15 Z"/>'+tx('K',-7)+sl('M-30,0 H-20 M20,0 H30')},
   SUM:{name:'Άθροισμα',prefix:'SUM',group:'Σήματα',pins:{},spins:p=>{const o={a:I(-30,-10),b:I(-30,10),y:O(30,0)};if(String(p.signs||'').length>=3)o.c=I(0,30);return o;},box:[-15,-15,30,30],blk:true,
    params:[txt('signs','Πρόσημα εισόδων (a, b, c)','+-',{hint:'π.χ. «+-» για a − b, «++-» για a + b − c (τρίτη είσοδος από κάτω).'})],value:()=>null,
@@ -370,6 +371,24 @@
   LPF:{name:'Βαθυπερατό 1ης τάξης',prefix:'LPF',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
    params:[num('fc','Συχνότητα αποκοπής','Hz',1000),num('y0','Αρχική τιμή','',0,{signed:true,zero:true})],value:p=>p.fc,unit:'Hz',
    draw:()=>sb(40,30)+'<path class="thin" d="M-13,-5 H0 Q6,-5 12,8"/>'+sl('M-30,0 H-20 M20,0 H30')},
+  // B1, the rest (3.19): second-order filter, rate limiter, rate transition, edge detector. All work per element of a bus.
+  F2:{name:'Φίλτρο 2ης τάξης',prefix:'F2',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
+   params:[sel('kind','Είδος',[['lp','Βαθυπερατό ω₀²/D(s)'],['hp','Υψηλοπερατό s²/D(s)'],['bp','Ζωνοπερατό 2ζω₀·s/D(s)'],['notch','Notch (s² + ω₀²)/D(s)']],'lp',{hint:'D(s) = s² + 2ζω₀s + ω₀², ω₀ = 2πf₀. Κέρδος 1 στη ζώνη διέλευσης (το ζωνοπερατό στο f₀). Το notch στο 2f κόβει την κυμάτωση 2ω σε μονοφασικό PLL ή DC bus.'}),
+    num('f0','Συχνότητα f₀','Hz',1000),num('zeta','Απόσβεση ζ','',0.7071,{hint:'Q = 1/(2ζ). Στο βαθυπερατό με ζ < 1: υπερύψωση exp(−πζ/√(1−ζ²)) στο βήμα.'}),
+    num('u0','Είσοδος πριν από t = 0','',0,{signed:true,zero:true,hint:'Το φίλτρο ξεκινά σε ισορροπία με αυτή την είσοδο (βαθυπερατό: έξοδος u₀, υψηλοπερατό και ζωνοπερατό: 0).'})],value:p=>p.f0,unit:'Hz',
+   draw:p=>sb(40,30)+'<path class="thin" d="'+({hp:'M-13,8 Q-6,-5 0,-5 H13',bp:'M-13,8 Q-4,-10 0,-6 Q4,-10 13,8',notch:'M-13,-5 H-5 Q0,10 5,-5 H13'}[p.kind]||'M-13,-5 H0 Q6,-5 12,8')+'"/>'+tx('2',13,-5,'bsm')+sl('M-30,0 H-20 M20,0 H30')},
+  RLIM:{name:'Όριο ρυθμού μεταβολής',prefix:'RL',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
+   params:[num('up','Μέγιστος ρυθμός ανόδου','1/s',1000,{hint:'Μονάδα εισόδου ανά δευτερόλεπτο, π.χ. A/s για αναφορά ρεύματος. Η έξοδος ακολουθεί την είσοδο με κλίση το πολύ τόση.'}),
+    num('dn','Μέγιστος ρυθμός καθόδου','1/s',1000),num('y0','Αρχική έξοδος','',0,{signed:true,zero:true})],value:()=>null,
+   draw:()=>sb(40,30)+'<path class="thin" d="M-13,8 H-7 L7,-7 H13"/>'+tx('/',0,13,'bsm')+sl('M-30,0 H-20 M20,0 H30')},
+  RT:{name:'Μετάβαση ρυθμού',prefix:'RT',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
+   params:[CLOCK({label:'Ρολόι εξόδου (PWM ή μπλοκ Ρολόι)'}),TRIG,sel('mode','Μεταφορά',[['zoh','Δείγμα της στιγμής (ZOH): y = u(t_k)'],['delay','Ντετερμινιστική με καθυστέρηση: y = u(t_{k−1})']],'zoh',{hint:'Από γρήγορο σε αργό ρυθμό (π.χ. ADC 20 kHz → ελεγκτής 10 kHz). «Με καθυστέρηση» η έξοδος δεν εξαρτάται από τη σειρά υπολογισμού στη στιγμή του δείγματος, όπως η μεταφορά ανάμεσα σε δύο tasks.'}),
+    num('y0','Αρχική έξοδος','',0,{signed:true,zero:true})],value:()=>null,
+   draw:p=>sb(40,30)+'<path class="thin" d="M-13,6 H-6 V-2 H2 V-8 H13"/>'+tx(p.mode==='delay'?'z⁻¹':'ZOH',0,12,'bsm')+sl('M-30,0 H-20 M20,0 H30')},
+  EDGE:{name:'Ανιχνευτής ακμής',prefix:'ED',group:'Σήματα',pins:{},spins:{u:I(-30,0),y:O(30,-8),n:O(30,8)},box:[-20,-18,40,36],blk:true,
+   params:[sel('edge','Ακμή',[['rise','Ανερχόμενη (0 → 1)'],['fall','Κατερχόμενη (1 → 0)'],['both','Και οι δύο']],'rise',{hint:'Είσοδος ≥ 0,5 = 1, και πριν από t = 0 θεωρείται 0 (όπως στο SR latch). Έξοδος y = 1 για διάρκεια t_w μετά την ακμή, n = πλήθος ακμών από την αρχή.'}),
+    num('tw','Διάρκεια παλμού t_w','s',0,{zero:true,hint:'0 = μόνο η στιγμή της ακμής (για latch, μετρητή ή reset). Με t_w > 0 το τέλος του παλμού είναι συμβάν του λύτη, ίδιο στον browser και στον SciPy.'})],value:()=>null,
+   draw:p=>sb(40,36)+'<path class="thin" d="'+(p.edge==='fall'?'M-13,-6 H-2 V6 H6':'M-13,6 H-2 V-6 H6')+(p.edge==='both'?' V6 H11':'')+'"/>'+tx('y',14,-5,'bsm')+tx('n',14,11,'bsm')+sl('M-30,0 H-20 M20,-8 H30 M20,8 H30')},
   CLARKE:{name:'Clarke abc → αβ',prefix:'CL',group:'Σήματα',pins:{},spins:p=>isBus(p)?{abc:I(-30,0),ab:O(30,0)}:{a:I(-30,-10),b:I(-30,0),c:I(-30,10),al:O(30,-10),be:O(30,10)},box:[-20,-20,40,40],blk:true,
    bus:p=>isBus(p)?{abc:['a','b','c'],ab:['al','be']}:{},
    params:[sel('inv','Κλίμακα',[['amp','Διατήρηση πλάτους (α = a)'],['pow','Διατήρηση ισχύος']],'amp'),CONN('abc → αβ')],value:()=>null,
@@ -415,7 +434,8 @@
   // buses (3.18, ROADMAP §3): wiring only, Bus.expand takes them out before the solver
   MUX:{name:'Mux (σήματα → δίαυλος)',prefix:'MX',group:'Δίαυλοι',pins:{},spins:p=>{const n=nIO(p),o={};for(let k=0;k<n;k++)o['u'+(k+1)]=I(-20,ioY(n,k));o.y=O(20,0);return o;},
    box:p=>{const n=nIO(p);return [-8,-10*n-2,16,20*n+4];},
-   params:[num('n','Είσοδοι','',3,{hint:'2 έως 8. Η έξοδος είναι δίαυλος με τις εισόδους στη σειρά, από πάνω προς τα κάτω. Μια είσοδος που είναι δίαυλος δίνει όλα της τα σήματα.'})],value:p=>nIO(p),unit:'',
+   params:[num('n','Είσοδοι','',3,{hint:'2 έως 8. Η έξοδος είναι δίαυλος με τις εισόδους στη σειρά, από πάνω προς τα κάτω. Μια είσοδος που είναι δίαυλος δίνει όλα της τα σήματα.'}),
+    sel('frame','Τύπος διανύσματος',[['auto','Από τις εισόδους (π.χ. d, q → dq)'],['abc','abc'],['ab','αβ'],['dq','dq'],['none','Γενικό (χωρίς τύπο)']],'auto',{hint:'3.19: ο τύπος ελέγχεται στις συνδέσεις, ώστε ένα αβ να μη μπαίνει σε είσοδο dq. Με abc, αβ ή dq οι είσοδοι πρέπει να είναι οι συνιστώσες του με τη σειρά.'})],value:p=>nIO(p),unit:'',
    draw:p=>{const n=nIO(p);return `<rect class="block sblk" x="-4" y="${-10*n}" width="8" height="${20*n}" rx="2"/>`+sl(Array.from({length:n},(_,k)=>`M-20,${ioY(n,k)} H-4`).join(' '))+sbl('M4,0 H20');}},
   DEMUX:{name:'Demux (δίαυλος → σήματα)',prefix:'DX',group:'Δίαυλοι',pins:{},spins:p=>{const n=nIO(p),o={u:I(-20,0)};for(let k=0;k<n;k++)o['y'+(k+1)]=O(20,ioY(n,k));return o;},
    box:p=>{const n=nIO(p);return [-8,-10*n-2,16,20*n+4];},
@@ -599,6 +619,17 @@
   const T1=Math.max(parseEng(p.T1)||1.2e-6,1e-12),T2=Math.max(parseEng(p.T2)||50e-6,1.5*T1),kind=p.model==='dexp'?'dexp':'heidler',n=Math.max(1,Math.min(30,parseEng(p.n)||10));
   const f=waveFit(kind,T1,T2,n);return {kind,n,tau1:f.tau1,tau2:f.tau2,eta:f.eta,I0,t0,T1,T2,fitOk:f.ok};}
  function pinKind(c,pin){const s=sigPins(c)[pin];return s?s.dir:'el';}
+ // 3.19 (§4): a structural parameter changes the graph (the pins of the part) or what the solver is built around (the
+ // carrier, the mode of a PWM): its change during a run asks for a restart, and it cannot be pinned (📌). Everything else
+ // is live: applied at the boundary of a solver step (a discrete block uses it at its next sample).
+ const STRUCT={PWM:new Set(['mode','carrier','upd']),SW:new Set(['gate','model']),VAC3:new Set(['conn'])};
+ const structCache=new Map();
+ function structural(type,k){const key=type+'|'+k;if(structCache.has(key))return structCache.get(key);let r=!!STRUCT[type]?.has(k);
+  const d=PARTS[type],pd=d?.params?.find(x=>x.k===k);if(!r&&pd&&pd.struct)r=true;
+  if(!r&&d&&pd){const base={...defaults(type)},keys=q=>{try{return Object.keys(pinsOf({type,params:q})).sort().join(',');}catch(e){return '?';}},k0=keys(base);
+   const tries=pd.type==='select'?pd.options.map(o=>o[0]):pd.type==='bool'?[true,false]:pd.type==='num'&&['n','nw','N'].includes(k)?[2,3,4,5,6]:pd.type==='text'&&['signs','ins','outs'].includes(k)?['+-','++-','a,b','x']:[];
+   r=tries.some(v=>keys({...base,[k]:v})!==k0);}
+  structCache.set(key,r);return r;}
  // the declared width of a pin (3.18): a bus pin of a part, a port of a subcircuit; 1 otherwise (Bus.widths infers the rest)
  function pinWidth(c,pin){const d=PARTS[c?.type];if(!d)return 1;if(c.type==='SUB'){const q=(c.params?.$ports||[]).find(x=>x.name===pin);return q&&+q.w>1?+q.w:1;}
   if(typeof d.bus==='function'){const m=d.bus({...defaults(c.type),...(c.params||{})})||{};if(m[pin])return m[pin].length;}return 1;}
@@ -635,7 +666,7 @@
   const out=[];for(const part of s.split(/[;,]\s*(?=[-+.\d])/)){const [a,b]=part.split(':');const t=parseEng(a),v=parseEng(b);if(!Number.isFinite(t)||!Number.isFinite(v))return null;out.push([t,v]);}
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
- const api={PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
+ const api={structural,PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
   parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,bewley,movChar,
   srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;

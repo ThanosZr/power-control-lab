@@ -49,10 +49,10 @@ const {chromium}=require('playwright');const fs=require('fs');const OUT=process.
  R.named.mark=await p.evaluate(()=>document.querySelectorAll('.wname.link').length);
  R.named.run=await p.evaluate(id=>{PCL.reset();PCL.S.sim.run(0.04);const q=PCL.S.sim.lastPeriod('I:'+id);return {warn:PCL.S.sim.net.warnings.length,amp:q?(q.max-q.min)/2:null};},R.scratch.R1);
  // a bus into a scalar input: an error with the two pins, no hidden conversion
- R.mismatch=await p.evaluate(()=>{const E=PCL.editor,K=E.addPart('CONST',100,400),D=E.addPart('DISP',220,400);E.setParams(K.id,{v:'1; 2'});
-  E.doc.wires.push({id:E.newId('w'),a:{c:K.id,p:'y'},b:{c:D.id,p:'u'},pts:[]});E.render();E.changed('struct');return {err:PCL.S.error||'',notice:document.querySelector('#notice')?.innerText||''};});
+ R.mismatch=await p.evaluate(()=>{const E=PCL.editor,K=E.addPart('CONST',100,400),D=E.addPart('MOD3',220,400);E.setParams(K.id,{v:'1; 2'});
+  E.doc.wires.push({id:E.newId('w'),a:{c:K.id,p:'y'},b:{c:D.id,p:'vdc'},pts:[]});E.render();E.changed('struct');return {err:PCL.S.error||'',notice:document.querySelector('#notice')?.innerText||''};});
  // 6. Ctrl+G on the resistors and the bus part: the port that crosses the bus wire gets width 3 and a bus pin
- await p.evaluate(()=>{const E=PCL.editor;E.doc.components=E.doc.components.filter(c=>c.type!=='CONST'&&c.type!=='DISP');E.doc.wires=E.doc.wires.filter(w=>E.comp(w.a.c)&&E.comp(w.b.c));E.render();E.changed('struct');
+ await p.evaluate(()=>{const E=PCL.editor;E.doc.components=E.doc.components.filter(c=>c.type!=='CONST'&&c.type!=='MOD3');E.doc.wires=E.doc.wires.filter(w=>E.comp(w.a.c)&&E.comp(w.b.c));E.render();E.changed('struct');
   E.select(E.doc.components.filter(c=>['R','EBUS','JUNC'].includes(c.type)).map(c=>c.id),[]);E.svg.focus();});
  await p.keyboard.press('Control+g');await p.waitForTimeout(400);
  R.group=await p.evaluate(()=>{const E=PCL.editor,x=E.doc.components.find(c=>c.type==='SUB');return {ports:(x?.params.$ports||[]).map(q=>q.name+':'+(q.w||1)),buspin:document.querySelectorAll('.pin.buspin').length,err:PCL.S.error};});

@@ -13,7 +13,8 @@
 // Flat circuit: the parts of instance X1 become X1/<id> (nested: X1/X2/<id>), labels X1/<label>, ports become junctions
 // (JUNC), so a wire to X1.p is a wire to X1/<port>. References inside a definition (switch → PWM, sensor, clock, the
 // source of a signal input) look in the definition first and then outwards; from outside, a path such as X1/L1 reaches
-// a part inside an instance. Goto / From names are local to the instance ("/name" = the name of the top level). Ground
+// a part inside an instance. Goto / From names and wire names are local to the instance ("/name" = the name of the top
+// level; for wires from 3.19). Ground
 // is one node everywhere. A definition that contains itself (directly or through others) is an error; a missing
 // definition leaves the instance out with a message.
 (function(root){
@@ -102,7 +103,8 @@
     comps.push(q);}
    const portIds=new Set(list.filter(isPort).map(c=>c.id));
    for(const w of wlist){const e=x=>({c:me.pfx+x.c,p:portIds.has(x.c)?'j':x.p});
-    wires.push({...w,id:me.pfx+w.id,a:e(w.a),b:e(w.b),...(w.name&&me.pfx?{name:me.pfx+w.name}:{}),pts:me.pfx?[]:w.pts||[]});}};
+    // wire names (3.18) are local to the instance; «/name» is the name of the top level, as for Goto / From (3.19)
+    wires.push({...w,id:me.pfx+w.id,a:e(w.a),b:e(w.b),...(w.name?{name:tagName(w.name,me.pfx)}:{}),pts:me.pfx?[]:w.pts||[]});}};
   walk(project.components||[],project.wires||[],{pfx:'',lbl:'',parent:null,stack:[],inst:null});
   // the pins of instances → the junction of the port inside
   const keep=[];for(const w of wires){let ok=true;const end=x=>{if(!instSet.has(x.c))return x;const e=portEnd.get(x.c+':'+x.p);if(!e){ok=false;
@@ -246,6 +248,26 @@
  // the definitions a definition needs (itself and the nested ones), for export as a library file
  function closure(project,name){const out={},go=n=>{const d=project.subcircuits?.[n];if(!d||out[n])return;out[n]=clone(d);for(const c of d.components||[])if(c.type==='SUB')go(c.params?.def);};go(name);return out;}
 
- const api={PORT_KIND,PORT_PIN,okName,needs,portsOf,layout,instances,cycleOf,innerParts,flatten,setParam,paramOf,sync,create,expand,makeUnique,closure,newDefName,SubcircuitError};
+ // 3.19 (question 3 of 3.17): what a definition takes from outside itself, so that an exported definition says what it
+ // needs: [{id, k, ref, kind: 'ref' | 'in'}] for references (switch → PWM, sensor, clock) and signal sources (in_<pin>)
+ // whose part is not in the definition. They keep working (looked up outwards, as before); refToPort makes a signal
+ // source a port of the definition, wired inside, with the same source in every instance (in_<port> of the instance).
+ function externalRefs(project,name){const d=project?.subcircuits?.[name];if(!d)return [];const local=new Set((d.components||[]).map(c=>c.id)),out=[];
+  const head=v=>String(v).split('/')[0];
+  for(const c of d.components||[]){const pd=P.PARTS[c.type]?.params||[];
+   for(const q of pd)if(q.type==='ref'&&c.params?.[q.k]&&!local.has(head(c.params[q.k])))out.push({id:c.id,k:q.k,ref:String(c.params[q.k]),kind:'ref'});
+   for(const [k,v] of Object.entries(c.params||{})){if(!k.startsWith('in_')||!v)continue;const sv=String(v),i=sv.lastIndexOf(':');if(i<0)continue;
+    if(!local.has(head(sv.slice(0,i))))out.push({id:c.id,k,ref:sv,kind:'in'});}}
+  return out;}
+ function refToPort(project,name,id,k){const pr=clone(project),d=pr.subcircuits?.[name];if(!d)throw new SubcircuitError(`Δεν υπάρχει ο ορισμός «${name}».`);
+  const c=(d.components||[]).find(x=>x.id===id),v=c?.params?.[k];if(!c||!k.startsWith('in_')||!v)throw new SubcircuitError(`${id}.${k}: δεν είναι είσοδος σήματος με πηγή.`);
+  const pin=k.slice(3),names=new Set(portsOf(d).map(p=>p.name)),ids=new Set(d.components.map(x=>x.id));let pn=pin,i=1;while(names.has(pn))pn=pin+(++i);let pid='SI1',j=1;while(ids.has(pid))pid='SI'+(++j);
+  const pos=P.pinPos(c,pin)||[c.x||0,c.y||0];
+  d.components.push({id:pid,type:'SIN',x:pos[0]-60,y:pos[1],rot:0,flip:false,label:pn,params:{name:pn}});
+  (d.wires=d.wires||[]).push({id:'w'+pid,a:{c:pid,p:'y'},b:{c:id,p:pin},pts:[]});delete c.params[k];
+  const setIn=list=>{for(const x of list||[])if(x.type==='SUB'&&x.params?.def===name)x.params={...x.params,['in_'+pn]:String(v)};};
+  setIn(pr.components);for(const dd of Object.values(pr.subcircuits||{}))setIn(dd.components);
+  sync(pr);return {project:pr,port:pn};}
+ const api={externalRefs,refToPort,PORT_KIND,PORT_PIN,okName,needs,portsOf,layout,instances,cycleOf,innerParts,flatten,setParam,paramOf,sync,create,expand,makeUnique,closure,newDefName,SubcircuitError};
  root.SubCircuit=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

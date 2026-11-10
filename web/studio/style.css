@@ -389,3 +389,9 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .part .sym .busbar,.pal-item .sym .busbar{fill:var(--wire);stroke:var(--wire)}
 .pin.buspin{stroke-width:2.2}
 .wname.link{text-decoration:underline;text-decoration-style:dotted}
+
+/* 3.19: event log and the ramp rate of a pinned parameter */
+.ev-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
+.ev-table th,.ev-table td{text-align:left;padding:2px 4px;border-bottom:1px solid var(--line,#ddd);white-space:nowrap}
+.ev-table td button{all:unset;cursor:pointer;text-decoration:underline dotted}
+.ctl-row .prate{flex:0 0 4.5em;width:4.5em}

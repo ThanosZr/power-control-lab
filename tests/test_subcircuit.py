@@ -134,3 +134,16 @@ class PclPaths(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+    def test_slash_names_and_outward_references(self):
+        # 3.19: «/vbus» on a wire inside a definition joins the top level's «vbus» (questions 6 of 3.18 and 3 of 3.17);
+        # what a definition takes from outside is listed, and a signal source becomes a port with the same numbers
+        r = self.R['slashName']
+        self.assertAlmostEqual(r['i'], 12 / 4, delta=1e-9)
+        self.assertEqual(r['gn'], 6)
+        self.assertEqual(r['ext'], [{'id': 'GN', 'k': 'in_u', 'ref': 'K1:y', 'kind': 'in'}])
+        self.assertEqual(r['port'], 'u')
+        self.assertEqual(r['inst']['in_u'], 'K1:y')
+        self.assertEqual(r['gn2'], 6)
+        self.assertEqual(r['ext2'], [])
+        self.assertIn(['u', 'in'], r['ports'])

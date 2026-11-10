@@ -125,6 +125,25 @@ def sat_d_inv(q, psi):
     return math.copysign(i, psi)
 
 
+def f2_phi(w0, z, dt):
+    """Φ = e^{A·dt} of the second-order filter (3.19), A = ω₀·[[0, 1], [−1, −2ζ]]; the same lines as mna.js f2Phi."""
+    s, D = -z * w0, w0 * w0 * (z * z - 1)
+    x = D * dt * dt
+    if abs(x) < 1e-4:
+        e = math.exp(s * dt)
+        eC, eS = e * (1 + x / 2 + x * x / 24 + x * x * x / 720), e * dt * (1 + x / 6 + x * x / 120 + x * x * x / 5040)
+    elif D > 0:
+        r = math.sqrt(D)
+        ep, em = math.exp((s + r) * dt), math.exp((s - r) * dt)
+        eC, eS = (ep + em) / 2, (ep - em) / (2 * r)
+    else:
+        r = math.sqrt(-D)
+        e = math.exp(s * dt)
+        eC, eS = e * math.cos(r * dt), e * math.sin(r * dt) / r
+    a, c = z * w0 * eS, w0 * eS
+    return eC + a, c, -c, eC - a
+
+
 def _f(v, d=0.0):
     try:
         v = float(v)
@@ -325,7 +344,14 @@ class Circuit:
             self.blocks.append(b)
         self.zc = [b for b in self.blocks if b['type'] == 'CMP']
         # continuous in time: integrators, filters, the PLL, and expressions of t (e.g. I_dc + I_ac·sin(2πft))
-        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL', 'FEST') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
+        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL', 'FEST', 'F2', 'RLIM') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
+        # 3.19 (question 5 of 3.18): with sources driven by signals (a controlled source, a PWM with its duty from a signal, a
+        # gate from a signal) the continuous blocks are integrated over T/1000 instead of T/200, close to the browser's step,
+        # so a control loop through them has the same transients; data['cont_div'] sets it
+        isint = lambda n: isinstance(n, int) and n >= 0
+        self.sig_src = any(isint(e.get('sigIn')) or (e.get('gate') == 'sig' and isint(e.get('gIn'))) for e in net['els']) or \
+            any(isint(k.get('dIn')) for k in net.get('ctrls', []))
+        self.cont_div = 1000 if self.sig_src else 200
         self.sv = [0.0] * self.nsig
         self.yb = [0.0] * len(self.blocks)
         self.yo = [[0.0] * len(b.get('outList') or []) for b in self.blocks]
@@ -376,6 +402,7 @@ class Circuit:
         self.crow = {ci: size + j for j, ci in enumerate(self.iC)}
         self.ns = self.nI + len(self.iC)
         self.on = {i: False for i in self.iD + self.iS + self.iSG}
+        self.ev, self.ev_n, self._evon, self.ev_max = [], 0, {}, 20000      # 3.19: the event log, as Sim.logEv in the browser
         self.gon = {i: False for i in self.iD if E[i].get('gk')}
         self.cap_rs = 0.0
         self.cache = {}
@@ -1045,6 +1072,21 @@ class Circuit:
         b, d = g
         return b + (math.floor((t - b) / d + 1e-7) + 1) * d
 
+    def log_ev(self, t, kind, src, v, **x):
+        """One entry of the event log (3.19): the same kinds and fields as Sim.logEv in the browser, with the part's id."""
+        self.ev_n += 1
+        if len(self.ev) < self.ev_max:
+            self.ev.append({'t': t, 'kind': kind, 'id': src, 'src': src, 'v': v, 'side': 't+', **x})
+
+    def ev_switches(self, t):
+        for i in self.iD + self.iS + self.iSG:
+            on = 1 if self.on[i] else 0
+            e = self.els[i]
+            if i in self._evon and self._evon[i] != on:
+                kind = 'switch' if e['k'] == 'S' else 'gap' if e.get('gap') else 'scr' if (e.get('gk') or e.get('fire')) else 'diode'
+                self.log_ev(t, kind, e.get('cid'), on)
+            self._evon[i] = on
+
     def sh_sample(self, t, x, z):
         """Samples due at t (state at t, before any switching at that instant)."""
         any_ = False
@@ -1061,6 +1103,7 @@ class Circuit:
             q['h'] = v
             q['t'].append(t)
             q['v'].append(v)
+            self.log_ev(t, 'sample', q['id'], v, n=n)
             any_ = True
         return any_
 
@@ -1117,6 +1160,8 @@ class Circuit:
                 k.dOn = k.dOff = k.d
             else:
                 k.dOff = k.d
+            if not force:
+                self.log_ev(t, 'duty', k.id, k.d, n=idx, **({} if period else {'half': True}))
             if first or k.tkPrev is None:
                 k.tkPrev, k.dPrev, k.dPrevOff = k.tk - k.T, k.dOn, k.dOff
         return changed
@@ -1185,6 +1230,8 @@ class Circuit:
                 if trial:
                     b['f1'] = f
                 else:
+                    if s2 != st['s'] and not disc:
+                        self.log_ev(t, 'cmp', b['id'], s2)
                     st['s'], st['f0'] = s2, self.cmp_f(b, s2, pv, nv)
                 y = float(s2)
             elif ty == 'LOGIC':
@@ -1253,6 +1300,8 @@ class Circuit:
                 if Rr:
                     q = 0
                 if not trial:
+                    if q != st['q']:
+                        self.log_ev(t, 'latch', b['id'], q)
                     st['q'], st['sp'] = q, S
                 ys = {'q': float(q), 'nq': float(1 - q)}
             elif ty == 'INT':
@@ -1268,6 +1317,42 @@ class Circuit:
                 y = st['u'] + (st['s'] - st['u']) * math.exp(-dt / b['tau'])
                 if not trial:
                     cont.append((b, y))
+            elif ty == 'F2':            # 3.19: input held since the previous evaluation, exact (Φ = e^{A·dt})
+                dt = max(0.0, t - st['t'])
+                F = f2_phi(b['w0'], b['z'], dt)
+                d1, d2 = st['s'][0] - st['u'], st['s'][1]
+                q1, q2 = st['u'] + F[0] * d1 + F[1] * d2, F[2] * d1 + F[3] * d2
+                u, k = rd(I.get('u')), b.get('kind')
+                y = q1 if k == 'lp' else 2 * b['z'] * q2 if k == 'bp' else u - q1 - 2 * b['z'] * q2 if k == 'hp' else u - 2 * b['z'] * q2
+                if not trial:
+                    cont.append((b, [q1, q2]))
+            elif ty == 'RLIM':
+                dt = max(0.0, t - st['t'])
+                y = st['s'] + min(b['up'] * dt, max(-b['dn'] * dt, st['u'] - st['s']))
+                if not trial:
+                    cont.append((b, y))
+            elif ty == 'RT':
+                if disc and self.blk_due(b, t, force):
+                    if b.get('mode') == 'delay':
+                        st['y'] = b['y0'] if force else st['mem']
+                        pend.append(b)
+                    else:
+                        st['y'] = rd(I.get('u'))
+                    sampled = True
+                y = st['y']
+            elif ty == 'EDGE':
+                lv = rd(I.get('u')) >= .5
+                e = lv != bool(st['p']) and (b['edge'] == 'both' or (b['edge'] == 'rise') == lv)
+                n, ton = st['n'], st['tOn']
+                if not trial:
+                    if e:
+                        n, ton = n + 1, t
+                        st['n'], st['tOn'] = n, ton
+                        self.log_ev(t, 'edge', b['id'], n)
+                    st['p'] = 1 if lv else 0
+                tw = b.get('tw') or 0.0
+                on = e or (ton is not None and (t < ton + tw - 1e-9 * self.base_T if tw > 0 else t == ton))
+                ys = {'y': 1.0 if on else 0.0, 'n': float(n + 1 if e and trial else n)}
             elif ty == 'CLARKE':
                 a, bb, c = rd(I.get('a')), rd(I.get('b')), rd(I.get('c'))
                 k = math.sqrt(1.5) if b.get('pw') else 1.0
@@ -1356,6 +1441,13 @@ class Circuit:
                 yo[j][k] = v
                 if o.get(name, -1) >= 0:
                     sv[o[name]] = v
+        if sampled and not trial and mode == 'sample':
+            for b in self.blocks:
+                st = b['st']
+                if b['type'] in ('PIB', 'UD', 'RT', 'PY') and st.get('last') is not None and st.get('evN') != st['last']:
+                    st['evN'] = st['last']
+                    v = (st['ys'][0] if st.get('ys') else _f(b.get('y0'), 0)) if b['type'] == 'PY' else st['y']
+                    self.log_ev(t, 'sample', b['id'], v, n=st['last'])
         for b in pend:                  # z⁻¹ stores its input; PI back-calculation: dx_i/dt = K_i·(e + tr/K_p)
             if b['type'] == 'PIB':
                 b['st']['xi'] += b['st']['kt'] * rd(b['ins'].get('tr'))
@@ -1390,10 +1482,14 @@ class Circuit:
                 for ts, _ in b['sched'] or []:
                     if t + eps < ts < tn:
                         tn = ts
-            elif ty in ('PIB', 'UD', 'PY'):
+            elif ty in ('PIB', 'UD', 'PY', 'RT'):
                 ts = self.sh_next(b, t)
                 if t + eps < ts < tn:
                     tn = ts
+            elif ty == 'EDGE' and (b.get('tw') or 0) > 0 and b['st'].get('tOn') is not None:
+                te = b['st']['tOn'] + b['tw']
+                if t + eps < te < tn:
+                    tn = te
         return tn
 
     # ------------------------------------------------------------ events
@@ -1440,7 +1536,7 @@ class Circuit:
             tn = min(tn, t + self.tau_min)
         tn = self.block_events(t, tn, eps)
         if self.has_cont:               # continuous blocks are integrated at segment ends, as the browser does at its steps
-            tn = min(tn, t + self.base_T / 200)
+            tn = min(tn, t + self.base_T / self.cont_div)
         sp = [k for k in self.ctrls if k.mode == 'spwm']
         if sp:
             outs = ('a', 'na', 'b', 'nb') if any(k.dt > 0 for k in sp) else ('a', 'b')
@@ -1555,6 +1651,9 @@ def simulate(data):
     if not isinstance(channels, dict) or len(channels) > 40:
         raise BatchError('Μέχρι 40 σήματα.')
     ckt = Circuit(data['net'])
+    ckt.ev_max = int(min(200000, max(0, _f(data.get('events'), 20000))))   # 3.19: entries of the event log (0: none)
+    if data.get('cont_div'):
+        ckt.cont_div = int(min(20000, max(10, _f(data.get('cont_div'), ckt.cont_div))))
     # default step limit: diode events inside a long smooth segment (AC sources)
     # must not be stepped over, and the reference trace needs enough points
     auto_step = max_step <= 0
@@ -1604,6 +1703,7 @@ def simulate(data):
         before = (tuple(ckt.on.values()), tuple(ckt.gon.values()))
         ckt.set_gates((t + tn) / 2)
         tp, z = ckt.consistent(t, x)
+        ckt.ev_switches(t)              # 3.19: the states for (t, t_n), logged at t as in the browser
         if (tuple(ckt.on.values()), tuple(ckt.gon.values())) != before:
             ckt.eval_blocks(t, x, z, 'commit')
             ckt.tl_record(t, z)
@@ -1762,6 +1862,7 @@ def simulate(data):
         't': [float(f'{v:.12g}') for v in T[keep]],
         'ch': {k: r6(cols[j][keep]) for j, k in enumerate(keys)},
         'samples': {q['id']: {'t': [float(f'{v:.12g}') for v in q['t']], 'v': r6(q['v'])} for q in ckt.shs},
+        'events': {'list': ckt.ev, 'n': ckt.ev_n, 'max': ckt.ev_max},
         'diag': diag + ([{'sev': 'warn', 'grp': 'server', 'id': None, 'key': 'srv:' + status, 'msg': message, 'fix': ''}] if status != 'ok' else []),
     }
 

@@ -17,6 +17,12 @@ const pll=project([{id:'V3',type:'VAC3',params:{Vpk:100,f:50,phase:30}},{id:'G',
 const cont=project([{id:'K1',type:'CONST',params:{v:2}},{id:'I1',type:'INT',params:{y0:1}},{id:'K3',type:'CONST',params:{v:'0:0, 0.001:1'}},{id:'F1',type:'LPF',params:{fc:100}},
   {id:'CK',type:'CLK',params:{f:1000}},{id:'K4',type:'CONST',params:{v:1}},{id:'P1',type:'PIB',params:{Kp:1,Ki:100,clock:'CK',aw:'track'}},{id:'S1',type:'SAT',params:{lo:-2,hi:2}},{id:'D1',type:'SUM',params:{signs:'+-'}}],
   [['K1:y','I1:u'],['K3:y','F1:u'],['K4:y','P1:u'],['P1:y','S1:u'],['S1:y','D1:a'],['P1:y','D1:b'],['D1:y','P1:tr']]);
+// 3.19: B1 blocks: second-order filters (LP, HP on a step; notch, BP on 50 Hz), rate limiter, rate transition (ZOH and delayed), edge detector
+const b1=project([{id:'K1',type:'CONST',params:{v:'0:0, 0.001:1'}},{id:'FL',type:'F2',params:{kind:'lp',f0:200,zeta:.3}},{id:'FH',type:'F2',params:{kind:'hp',f0:200,zeta:.3}},
+  {id:'K2',type:'CONST',params:{v:'0:0, 0.001:1, 0.006:-1'}},{id:'RL',type:'RLIM',params:{up:500,dn:200}},{id:'EX',type:'EXPR',params:{expr:'sin(2*pi*50*t)+0.3*sin(2*pi*400*t)',ins:''}},
+  {id:'FN',type:'F2',params:{kind:'notch',f0:50,zeta:.2}},{id:'FB',type:'F2',params:{kind:'bp',f0:400,zeta:.1}},{id:'CK',type:'CLK',params:{f:1000}},{id:'ED',type:'EDGE',params:{edge:'rise',tw:1e-4}},
+  {id:'R1',type:'RT',params:{clock:'CK',mode:'zoh'}},{id:'R2',type:'RT',params:{clock:'CK',mode:'delay'}}],
+  [['K1:y','FL:u'],['K1:y','FH:u'],['K2:y','RL:u'],['EX:y','FN:u'],['EX:y','FB:u'],['CK:y','ED:u'],['FL:y','R1:u'],['FL:y','R2:u']]);
 // 3.3.1: cell model (R₀, R₁‖C₁, Warburg as R–C bank, OCV from a signal) driven by a current source from an expression
 const eisCell=project([{id:'I1',type:'IDC',params:{ctl:'sig'}},{id:'EX1',type:'EXPR',params:{expr:'1 + 0.5*sin(2*pi*200*t)',ins:'x'}},{id:'R0',type:'R',params:{R:.03}},{id:'R1',type:'R',params:{R:.02}},{id:'C1',type:'C',params:{C:.05}},
   {id:'W1',type:'CPE',params:{kind:'warburg',sigma:.05,fmin:1,fmax:1e4,N:16}},{id:'OCV',type:'VDC',params:{ctl:'sig'}},{id:'K37',type:'CONST',params:{v:3.7}},{id:'G',type:'GND'},{id:'VM1',type:'VM'},{id:'AM1',type:'AM'}],
@@ -53,6 +59,7 @@ const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},[
  pcm_half:['peak_cm',{ramp:'half'},['Y:AM1','Y:SR1','GS:S1']],pcm_sub:['peak_cm',{D:'0.6',ramp:'none'},['Y:AM1','GS:S1']],
  blk_cmp_z1:['blocks_loop',{mod:'cmp',delay:'z1'},['Y:AM1','Y:UD1','GS:S1']],blk_pwm:['blocks_loop',{},['Y:AM1','D:PWM1','Y:PI1']],
  dcm:[dcm,null,['Y:M1','Y:M1:te','I:M1']],pll:[pll,null,['Y:PL:w','Y:PK','Y:PK:q']],cont:[cont,null,['Y:I1','Y:F1','Y:P1','Y:S1']],
+ b1:[b1,null,['Y:FL','Y:FH','Y:RL','Y:FN','Y:FB','Y:ED','Y:ED:n','Y:R1','Y:R2']],
  dc_cur:['dc_drive',{mode:'current'},['Y:AM1','D:PWM1','Y:M1']],
  code_py:['code_loop',{ctrl:'python',ff:'expr'},['Y:AM1','D:PWM1','Y:PI1','Y:EX1']],
  eis_cell:[eisCell,null,['Y:VM1','Y:AM1']],
@@ -74,11 +81,14 @@ const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},[
 // browser results for the 3.0 cases: per-period peaks of the last periods, to compare solver against solver
 const jsRun={dc_cur:['Y:AM1',.012],pcm_half:['Y:AM1',1e-3],pcm_sub:['Y:AM1',4e-4],blk_cmp_z1:['Y:AM1',4e-3],blk_pwm:['Y:AM1',4e-3]};   // pcm_sub: before chaos separates the two solvers
 // browser values at given instants (3.1)
-const jsAt={dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05],eis_cell:[.004,.011,.02],im_dol:[.05,.1,.3,.6],mp_kl:[5e-4,2e-3,5e-3],mp_kg:[1e-4,1e-3],sm_align:[.02,.1,.3],sm_pm:[.02,.1,.2],mp_lg:[4e-6,50e-6,200e-6],sm_sat:[.02,.1,.3],isl_ref:[.005,.012,.02],vimp:[1e-6,3e-6,2e-5,6e-5],sg_ring:[5e-6,15e-6,25e-6,40e-6],sg_trig:[4e-6,10e-6,20e-6],sg_iext:[10e-6,30e-6,60e-6],mov_ramp:[5e-6,10e-6,20e-6,40e-6],tw_r3z:[5e-6,15e-6,25e-6,35e-6,95e-6],tw_li:[3e-6,12e-6,25e-6,65e-6],tw_book:[1.5e-6,3e-6,5e-6,7e-6],arr_ideal:[8e-6,15e-6,30e-6],arr_zno:[8e-6,15e-6,30e-6],marx:[1e-6,2.2e-6,20e-6,80e-6],chop:[2e-6,3.3e-6,4e-6,8e-6],ll_step:[101e-6,130e-6,160e-6,262e-6,510e-6,790e-6],ll_li:[102e-6,110e-6,150e-6],vt_ramp:[.15e-6,.21e-6,.5e-6],vt_li:[.5e-6,1e-6,3e-6,10e-6],hv1533:[1e-6,2.4e-6,20e-6,60e-6],hv1537:[1e-6,2.2e-6,20e-6,80e-6],div1515:[.013,.051,.0975],isl_leak:[.005,.012,.02],srm_m:[.005,.02,.06],srm_t:[.005,.02,.06]};
+const jsAt={b1:[.00305,.0045,.0085,.0205],dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05],eis_cell:[.004,.011,.02],im_dol:[.05,.1,.3,.6],mp_kl:[5e-4,2e-3,5e-3],mp_kg:[1e-4,1e-3],sm_align:[.02,.1,.3],sm_pm:[.02,.1,.2],mp_lg:[4e-6,50e-6,200e-6],sm_sat:[.02,.1,.3],isl_ref:[.005,.012,.02],vimp:[1e-6,3e-6,2e-5,6e-5],sg_ring:[5e-6,15e-6,25e-6,40e-6],sg_trig:[4e-6,10e-6,20e-6],sg_iext:[10e-6,30e-6,60e-6],mov_ramp:[5e-6,10e-6,20e-6,40e-6],tw_r3z:[5e-6,15e-6,25e-6,35e-6,95e-6],tw_li:[3e-6,12e-6,25e-6,65e-6],tw_book:[1.5e-6,3e-6,5e-6,7e-6],arr_ideal:[8e-6,15e-6,30e-6],arr_zno:[8e-6,15e-6,30e-6],marx:[1e-6,2.2e-6,20e-6,80e-6],chop:[2e-6,3.3e-6,4e-6,8e-6],ll_step:[101e-6,130e-6,160e-6,262e-6,510e-6,790e-6],ll_li:[102e-6,110e-6,150e-6],vt_ramp:[.15e-6,.21e-6,.5e-6],vt_li:[.5e-6,1e-6,3e-6,10e-6],hv1533:[1e-6,2.4e-6,20e-6,60e-6],hv1537:[1e-6,2.2e-6,20e-6,80e-6],div1515:[.013,.051,.0975],isl_leak:[.005,.012,.02],srm_m:[.005,.02,.06],srm_t:[.005,.02,.06]};
 const out={};for(const [k,[id,o,keys]] of Object.entries(cases)){
  if(k==='code_py'){const pr=build('code_loop',{ctrl:'python',ff:'expr'});const r=MNA.exportForBatch(pr,keys);out[k]={net:r.net,channels:r.channels};
   const s=new MNA.Sim(build('code_loop',{ctrl:'pib',ff:'expr'}),{hDiv:1000});s.run(.003);const p=s.per,i=s.chIndex.get('Y:AM1'),pk=[];for(let q=8;q>=1;q--){const j=(p.head-q+p.cap)%p.cap;pk.push({max:p.max[j*p.nch+i],min:p.min[j*p.nch+i],t:p.t[j]});}
   out[k].js={T:s.T,pk,end:s.now('D:PWM1')};continue;}const pr=typeof id==='string'?build(id,o):id;const r=MNA.exportForBatch(pr,keys);out[k]={net:r.net,channels:r.channels};
  if(jsRun[k]){const [key,dur]=jsRun[k];const s=new MNA.Sim(pr,{hDiv:1000});s.run(dur);const p=s.per,i=s.chIndex.get(key),pk=[];for(let q=8;q>=1;q--){const j=(p.head-q+p.cap)%p.cap;pk.push({max:p.max[j*p.nch+i],min:p.min[j*p.nch+i],t:p.t[j]});}out[k].js={T:s.T,pk,end:s.now(key)};}}
 for(const [k,ts] of Object.entries(jsAt)){const [id,o,keys]=cases[k];const s=new MNA.Sim(typeof id==='string'?build(id,o):id,{hDiv:k==='im_dol'?4000:k==='mp_lg'?200:k.startsWith('sm_')?100:1000});out[k].at=ts.map(t=>{s.run(t-s.t);return [t,...keys.map(q=>s.now(q))];});}
+// 3.19: the event log of the browser for the buck in DCM (switch, diode, duty), to compare with the server's
+{const s=new MNA.Sim(cases.buck_dcm?(typeof cases.buck_dcm[0]==='string'?build(cases.buck_dcm[0],cases.buck_dcm[1]):cases.buck_dcm[0]):buckDcm,{hDiv:1000});s.run(2e-4);
+ out.buck_dcm.ev=s.events().list.filter(e=>['switch','diode','duty'].includes(e.kind)).map(e=>[e.t,e.kind,e.id,e.v]);}
 console.log(JSON.stringify(out));

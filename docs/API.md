@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 3.18: **προσωρινό**. Γίνεται σταθερό από την 4.0. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (317 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 3.19: **προσωρινό**. Γίνεται σταθερό από την 4.0. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (324 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -10,7 +10,22 @@
 - **Αρχεία project:** ένα παλιό αρχείο ανοίγει πάντα (ARCHITECTURE §4). Νέα πεδία είναι προαιρετικά. Όταν χρειάζεται μετατροπή, αυξάνεται το `version` του αρχείου και η μετατροπή γίνεται στο άνοιγμα, με test. Το `version` 3 (3.18): τα σύρματα με το ίδιο όνομα είναι ένας κόμβος· ένα παλιότερο αρχείο ανοίγει ίδιο (`Bus.migrateNames`: όπου ένα όνομα ήταν ετικέτα σε δύο κόμβους, το δεύτερο γίνεται «όνομα·2»).
 - **Ο έλεγχος:** το `python tools/api_surface.py` σταματά όταν κάτι λείπει ή έχασε όρισμα. Πριν από την 4.0 περνά μόνο με `--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 η αφαίρεση σημείου της ίδιας κύριας έκδοσης δεν περνά.
 
+- **Πειραματικά (3.19):** `pcl.control.…`, `pcl.workbench.…`, `workbench…` (έλεγχος με AI §38, Control Workbench §19). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38, και η μετάβαση είναι προσθήκη. Στους πίνακες: «πειρ.».
+
 Στους πίνακες, «Από» είναι η έκδοση της πρώτης καταγραφής: η 3.18 για ό,τι υπήρχε ήδη.
+
+## Σημεία επέκτασης (3.19): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
+
+| Τι | Σήμερα | Επέκταση με προσθήκες |
+|---|---|---|
+| Μονάδες και τύποι θυρών (`units.js`, `project.solve.units`) | V, A, rad, rad/s, N·m, V·s, 1· πλαίσια abc, αβ, dq· `warn`, `strict`, `off` | νέες μονάδες και πλαίσια είναι νέες λέξεις· κάθε νέο στοιχείο δηλώνει τις δικές του θύρες· ένα στοιχείο χωρίς δήλωση μένει «χωρίς τύπο», άρα ένα παλιό αρχείο δεν παίρνει νέο σφάλμα από στοιχείο που ήδη είχε |
+| Πρόγραμμα αλλαγών παραμέτρων (`project.program`) | `{t, id, k, v, rate}` στα στοιχεία του κυρίως κυκλώματος (και στις δημόσιες παραμέτρους υποκυκλωμάτων) | νέα προαιρετικά πεδία (π.χ. διαδρομή `X1/L1`, σχήμα ράμπας)· ένα πεδίο που δεν αναγνωρίζεται αγνοείται |
+| Αρχείο συμβάντων (`Sim.events`, `Result.events`, `events` στον server) | είδη switch, diode, scr, gap, cmp, latch, edge, sample, duty, jump, live, program | νέα είδη και νέα πεδία ανά συμβάν· τα υπάρχοντα δεν αλλάζουν σημασία |
+| Ζωντανές και δομικές παράμετροι (`Parts.structural`) | δομική = αλλάζει τους ακροδέκτες, ή είναι στη λίστα `STRUCT` (π.χ. φέρον PWM) | η λίστα μεγαλώνει με νέα στοιχεία· μια παράμετρος δεν γίνεται δομική από ζωντανή μέσα στην 4.x |
+| Ονόματα συρμάτων και Goto/From | τοπικά στο instance, «/όνομα» για το κυρίως κύκλωμα | νέα προθέματα (π.χ. του γονικού instance) ως νέα σύνταξη |
+| Αναφορές από μέσα προς τα έξω | δουλεύουν (πρώτα μέσα, μετά έξω)· λίστα στον ορισμό, μετατροπή σε θύρα ή δημόσια | — (καμία αλλαγή σημασίας) |
+| Μπλοκ B1 | F2 (lp, hp, bp, notch), RLIM, RT (zoh, delay), EDGE (rise, fall, both) | νέες επιλογές στις ίδιες παραμέτρους (π.χ. all-pass) |
+| Λύτης SciPy, συνεχή μπλοκ | T/200, ή T/1000 με πηγές από σήμα· πεδίο `cont_div` | — |
 
 ## Αφαιρέσεις και αλλαγές που σπάνε
 
@@ -20,7 +35,7 @@
 
 ## Πακέτο Python `pcl`
 
-144 σημεία.
+145 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -45,13 +60,14 @@
 | `pcl.Project.get` | `key` | 3.18 |
 | `pcl.Project.hash` | — | 3.18 |
 | `pcl.Project.params` | — | 3.18 |
-| `pcl.Project.run` | `t_end`, `solver`, `channels`, `hdiv`, `method`, `step`, `rtol`, `hmax`, `t_from`, `max_points`, `measure`, `timeout`, `scipy_method`, `waveforms`, `save_state`, `resume` | 3.18 |
+| `pcl.Project.run` | `t_end`, `solver`, `channels`, `hdiv`, `method`, `step`, `rtol`, `hmax`, `t_from`, `max_points`, `measure`, `timeout`, `scipy_method`, `waveforms`, `save_state`, `resume`, `events` | 3.18 |
 | `pcl.Project.save` | `path` | 3.18 |
 | `pcl.Project.set` | `key`, `value` | 3.18 |
 | `pcl.Project.stream` | `t_end`, `chunk`, `channels`, `hdiv`, `method`, `step`, `rtol`, `hmax`, `t_from`, `max_points`, `measure`, `state`, `resume`, `to`, `timeout`, `waveforms`, `set` | 3.18 |
 | `pcl.Project.sweep` | `grid`, `points`, `t_end`, `measure`, `workers`, `solver`, `mode`, `progress`, `to`, `resume`, `**run_kw` | 3.18 |
 | `pcl.Result` | `t`, `keys`, `ch`, `meta`, `project`, `measured`, `diag` | 3.18 |
 | `pcl.Result.as_dict` | — | 3.18 |
+| `pcl.Result.events_csv` | `path`, `kinds` | 3.19 |
 | `pcl.Result.frame` | — | 3.18 |
 | `pcl.Result.measure` | `key`, `stat`, `periods`, `at`, `f1` | 3.18 |
 | `pcl.Result.save` | `path`, `**kw` | 3.18 |
@@ -70,27 +86,27 @@
 | `pcl.SweepResult.to_mat` | `path` | 3.18 |
 | `pcl.SweepResult.to_parquet` | `path`, `compression` | 3.18 |
 | `pcl.bifurcation` | `param`, `values`, `**kw` | 3.18 |
-| `pcl.control.InverseTrainer` | `project`, `loops`, `actuator`, `loop`, `clock`, `t_excite`, `hold`, `dither`, `seed`, `hidden_emu`, `hidden_ctrl`, `lr_emu`, `lr_ctrl`, `epochs_emu`, `epochs_ctrl`, `alpha`, `max_step`, `lr_emu_online`, `lr_ctrl_online`, `run` | 3.18 |
-| `pcl.control.InverseTrainer.controller` | `epochs` | 3.18 |
-| `pcl.control.InverseTrainer.ctrl_spec` | `learn` | 3.18 |
-| `pcl.control.InverseTrainer.emulator` | `epochs` | 3.18 |
-| `pcl.control.InverseTrainer.excite` | — | 3.18 |
-| `pcl.control.InverseTrainer.nets` | — | 3.18 |
-| `pcl.control.InverseTrainer.online` | `learn` | 3.18 |
-| `pcl.control.InverseTrainer.run_all` | `progress` | 3.18 |
-| `pcl.control.InverseTrainer.status` | — | 3.18 |
-| `pcl.control.InverseTrainer.to_dict` | — | 3.18 |
-| `pcl.control.RLTrainer` | `project`, `loops`, `actuator`, `loop`, `clock`, `t_end`, `base`, `hidden`, `sigma`, `lr`, `population`, `seed`, `w_overshoot`, `w_ise`, `nnmax`, `variants`, `run`, `workers` | 3.18 |
-| `pcl.control.RLTrainer.ctrl_spec` | `flat` | 3.18 |
-| `pcl.control.RLTrainer.iterate` | `n`, `progress` | 3.18 |
-| `pcl.control.RLTrainer.project` | `flat` | 3.18 |
-| `pcl.control.RLTrainer.to_dict` | — | 3.18 |
-| `pcl.control.compare` | `project`, `loops`, `actuator`, `variants`, `t_end`, `clock`, `run`, `workers`, `loop` | 3.18 |
-| `pcl.control.compose` | `project`, `loops`, `actuator`, `clock`, `prefix`, `replace` | 3.18 |
-| `pcl.control.inv_nn_code` | `nets` | 3.18 |
-| `pcl.control.metrics` | `t`, `r`, `y`, `t_from` | 3.18 |
-| `pcl.control.rl_code` | `theta` | 3.18 |
-| `pcl.control.rl_theta0` | `n_state`, `hidden`, `seed`, `scale` | 3.18 |
+| `pcl.control.InverseTrainer` | `project`, `loops`, `actuator`, `loop`, `clock`, `t_excite`, `hold`, `dither`, `seed`, `hidden_emu`, `hidden_ctrl`, `lr_emu`, `lr_ctrl`, `epochs_emu`, `epochs_ctrl`, `alpha`, `max_step`, `lr_emu_online`, `lr_ctrl_online`, `run` | 3.18 · πειρ. |
+| `pcl.control.InverseTrainer.controller` | `epochs` | 3.18 · πειρ. |
+| `pcl.control.InverseTrainer.ctrl_spec` | `learn` | 3.18 · πειρ. |
+| `pcl.control.InverseTrainer.emulator` | `epochs` | 3.18 · πειρ. |
+| `pcl.control.InverseTrainer.excite` | — | 3.18 · πειρ. |
+| `pcl.control.InverseTrainer.nets` | — | 3.18 · πειρ. |
+| `pcl.control.InverseTrainer.online` | `learn` | 3.18 · πειρ. |
+| `pcl.control.InverseTrainer.run_all` | `progress` | 3.18 · πειρ. |
+| `pcl.control.InverseTrainer.status` | — | 3.18 · πειρ. |
+| `pcl.control.InverseTrainer.to_dict` | — | 3.18 · πειρ. |
+| `pcl.control.RLTrainer` | `project`, `loops`, `actuator`, `loop`, `clock`, `t_end`, `base`, `hidden`, `sigma`, `lr`, `population`, `seed`, `w_overshoot`, `w_ise`, `nnmax`, `variants`, `run`, `workers` | 3.18 · πειρ. |
+| `pcl.control.RLTrainer.ctrl_spec` | `flat` | 3.18 · πειρ. |
+| `pcl.control.RLTrainer.iterate` | `n`, `progress` | 3.18 · πειρ. |
+| `pcl.control.RLTrainer.project` | `flat` | 3.18 · πειρ. |
+| `pcl.control.RLTrainer.to_dict` | — | 3.18 · πειρ. |
+| `pcl.control.compare` | `project`, `loops`, `actuator`, `variants`, `t_end`, `clock`, `run`, `workers`, `loop` | 3.18 · πειρ. |
+| `pcl.control.compose` | `project`, `loops`, `actuator`, `clock`, `prefix`, `replace` | 3.18 · πειρ. |
+| `pcl.control.inv_nn_code` | `nets` | 3.18 · πειρ. |
+| `pcl.control.metrics` | `t`, `r`, `y`, `t_from` | 3.18 · πειρ. |
+| `pcl.control.rl_code` | `theta` | 3.18 · πειρ. |
+| `pcl.control.rl_theta0` | `n_state`, `hidden`, `seed`, `scale` | 3.18 · πειρ. |
 | `pcl.current` | — | 3.18 |
 | `pcl.formats.write_hdf5` | `path`, `columns`, `meta`, `matrices` | 3.18 |
 | `pcl.formats.write_parquet` | `path`, `columns`, `meta`, `compression`, `created_by` | 3.18 |
@@ -149,25 +165,25 @@
 | `pcl.tutorials` | — | 3.18 |
 | `pcl.use` | `project` | 3.18 |
 | `pcl.version` | — | 3.18 |
-| `pcl.workbench.CircuitPlant` | `params` | 3.18 |
-| `pcl.workbench.CircuitPlant.clone` | — | 3.18 |
-| `pcl.workbench.CircuitPlant.close` | — | 3.18 |
-| `pcl.workbench.CircuitPlant.deriv` | `x`, `u` | 3.18 |
-| `pcl.workbench.CircuitPlant.initial_state` | — | 3.18 |
-| `pcl.workbench.CircuitPlant.measured` | — | 3.18 |
-| `pcl.workbench.CircuitPlant.measured_scale` | — | 3.18 |
-| `pcl.workbench.CircuitPlant.output` | — | 3.18 |
-| `pcl.workbench.CircuitPlant.params_dict` | — | 3.18 |
-| `pcl.workbench.CircuitPlant.reset_state` | — | 3.18 |
-| `pcl.workbench.CircuitPlant.step` | `u`, `dt` | 3.18 |
-| `pcl.workbench.CircuitPlant.u_range` | — | 3.18 |
-| `pcl.workbench.CircuitPlant.viz_state` | — | 3.18 |
-| `pcl.workbench.CircuitPlant.y_range` | — | 3.18 |
-| `pcl.workbench.launch` | `workbench`, `project`, `input`, `measure`, `state`, `u_range`, `y_range`, `state_scale`, `name`, `solver`, `settle`, `headless`, `dt`, `steps`, `n`, `app` | 3.18 |
-| `pcl.workbench.plant_class` | `project`, `input`, `measure`, `state`, `u_range`, `y_range`, `state_scale`, `name`, `pid`, `settle`, `solver`, `params`, `input_name`, `output_name` | 3.18 |
-| `pcl.workbench.prepare` | `project`, `input`, `measure`, `state` | 3.18 |
-| `pcl.workbench.register` | `workbench` | 3.18 |
-| `pcl.workbench.run_scheme` | `plant`, `scheme_cls`, `reference`, `dt`, `params` | 3.18 |
+| `pcl.workbench.CircuitPlant` | `params` | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.clone` | — | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.close` | — | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.deriv` | `x`, `u` | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.initial_state` | — | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.measured` | — | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.measured_scale` | — | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.output` | — | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.params_dict` | — | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.reset_state` | — | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.step` | `u`, `dt` | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.u_range` | — | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.viz_state` | — | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.y_range` | — | 3.18 · πειρ. |
+| `pcl.workbench.launch` | `workbench`, `project`, `input`, `measure`, `state`, `u_range`, `y_range`, `state_scale`, `name`, `solver`, `settle`, `headless`, `dt`, `steps`, `n`, `app` | 3.18 · πειρ. |
+| `pcl.workbench.plant_class` | `project`, `input`, `measure`, `state`, `u_range`, `y_range`, `state_scale`, `name`, `pid`, `settle`, `solver`, `params`, `input_name`, `output_name` | 3.18 · πειρ. |
+| `pcl.workbench.prepare` | `project`, `input`, `measure`, `state` | 3.18 · πειρ. |
+| `pcl.workbench.register` | `workbench` | 3.18 · πειρ. |
+| `pcl.workbench.run_scheme` | `plant`, `scheme_cls`, `reference`, `dt`, `params` | 3.18 · πειρ. |
 
 ## Γραμμή εντολών `python -m pcl`
 
@@ -180,7 +196,7 @@
 | `python -m pcl job` | `<spec>`, `--out` | 3.18 |
 | `python -m pcl link` | `<request>`, `--out` | 3.18 |
 | `python -m pcl plot` | `<spec>`, `--preset`, `--mapping`, `--kind`, `--signal`, `--table`, `--out` | 3.18 |
-| `python -m pcl run` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--chunk`, `--state`, `--resume` | 3.18 |
+| `python -m pcl run` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--chunk`, `--state`, `--resume`, `--events` | 3.18 |
 | `python -m pcl sweep` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--resume`, `--grid`, `--zip`, `--workers` | 3.18 |
 | `python -m pcl tutorial` | `<id>`, `--opt`, `--out` | 3.18 |
 | `python -m pcl tutorials` | — | 3.18 |
@@ -307,12 +323,14 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-72 σημεία.
+78 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
-| `file` | version, components, wires, subcircuits, solve, sim, scope, meta, tutorial | — | 3.18 |
-| `file.component` | id, type, x, y, rot, flip, label, params, live, liveBase | — | 3.18 |
+| `file` | version, components, wires, subcircuits, solve, sim, scope, meta, tutorial, program | — | 3.18 |
+| `file.component` | id, type, x, y, rot, flip, label, params, live, liveBase, liveRate | — | 3.18 |
+| `file.program` | t, id, k, v, rate | — | 3.19 |
+| `file.solve` | unconn, island, rleak, tbase, step, rtol, hmax, units | — | 3.19 |
 | `file.subcircuit` | title, desc, version, components, wires, params | — | 3.18 |
 | `file.wire` | id, a, b, pts, name, color, width | — | 3.18 |
 | `part:AM` | — | a, b, y | 3.18 |
@@ -321,7 +339,7 @@
 | `part:CLARKE` | inv, conn | a, ab, abc, al, b, be, c | 3.18 |
 | `part:CLK` | f, duty, phase | y | 3.18 |
 | `part:CMP` | hys | n, p, y | 3.18 |
-| `part:CONST` | v | y | 3.18 |
+| `part:CONST` | v, unit | y | 3.18 |
 | `part:CPE` | kind, sigma, Q, alpha, fmin, fmax, N | a, b | 3.18 |
 | `part:CPL` | P, Vmin, sched | n, p | 3.18 |
 | `part:D` | Ron, Vf, Roff | a, k | 3.18 |
@@ -330,9 +348,11 @@
 | `part:DISP` | dig | u | 3.18 |
 | `part:DIV` | eps | a, b, y | 3.18 |
 | `part:EBUS` | n | a, b, bus, c | 3.18 |
+| `part:EDGE` | edge, tw | n, u, y | 3.19 |
 | `part:EXPR` | expr, ins, pars | u1, u2, y | 3.18 |
+| `part:F2` | kind, f0, zeta, u0 | u, y | 3.19 |
 | `part:FEST` | mode, RR, LM, psi0 | al, be, psi, th, w1, wr | 3.18 |
-| `part:GAIN` | K | u, y | 3.18 |
+| `part:GAIN` | K, unit | u, y | 3.18 |
 | `part:GND` | — | g | 3.18 |
 | `part:ICLARKE` | inv, conn | a, ab, abc, al, b, be, c | 3.18 |
 | `part:IDC` | ctl, I, sched | n, p, u | 3.18 |
@@ -351,7 +371,7 @@
 | `part:MOD3` | mode, conn | d, da, db, dc, v, va, vb, vc, vdc | 3.18 |
 | `part:MOV` | model, Uref, Iref, alpha, tbl | a, b | 3.18 |
 | `part:MUL` | — | a, b, y | 3.18 |
-| `part:MUX` | n | u1, u2, u3, y | 3.18 |
+| `part:MUX` | n, frame | u1, u2, u3, y | 3.18 |
 | `part:PARK` | conn | ab, al, be, d, dq, q, th | 3.18 |
 | `part:PIB` | Kp, Ki, clock, trig, y0, aw, ymin, ymax | tr, u, y | 3.18 |
 | `part:PLL` | f0, bw, th0, conn | a, abc, amp, b, c, th, w | 3.18 |
@@ -360,6 +380,8 @@
 | `part:PY` | code, ins, outs, pars, clock, trig, y0 | e, y | 3.18 |
 | `part:R` | R, sched | a, b | 3.18 |
 | `part:RAMP` | f, shape, lo, hi, phase | y | 3.18 |
+| `part:RLIM` | up, dn, y0 | u, y | 3.19 |
+| `part:RT` | clock, trig, mode, y0 | u, y | 3.19 |
 | `part:SAT` | lo, hi | u, y | 3.18 |
 | `part:SCR` | fire, refsrc, alpha, shift, pw, fref, pwm, out, Ron, Vf, Roff | a, k | 3.18 |
 | `part:SG` | vt, Ub, U0, kde, Dde, trig, Rarc, ext, Iext, Roff | a, b | 3.18 |

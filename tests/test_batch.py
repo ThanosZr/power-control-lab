@@ -130,7 +130,7 @@ class BatchSolver(unittest.TestCase):
         # (15.3.3: the load and the divider form a loop of capacitors, which the server solves with 1 μΩ in series; the low-voltage arm
         # then differs by 4·10⁻⁵). 3.12: the divider of 15.1.5 with Radau (time constants of 0.1 ns at 50 Hz); the Schering bridge stays
         # out (Radau needs minutes there), its browser results are checked against phasors in test_tutorials
-        for name, tol in (('dcm', 2e-3), ('pll', 1e-3), ('cont', 2e-3), ('eis_cell', 5e-3), ('im_dol', 3e-3),
+        for name, tol in (('dcm', 2e-3), ('pll', 1e-3), ('cont', 2e-3), ('b1', 2e-3), ('eis_cell', 5e-3), ('im_dol', 3e-3),
                           ('mp_kl', 5e-5), ('mp_kg', 1e-5), ('sm_align', 2e-4), ('sm_pm', 3e-4), ('mp_lg', 1e-4),
                           ('srm_m', 3e-4), ('srm_t', 3e-4), ('sm_sat', 3e-4), ('isl_ref', 1e-4), ('isl_leak', 1e-4), ('vimp', 1e-4),
                           ('sg_ring', 1e-5), ('sg_trig', 1e-5), ('sg_iext', 1e-5), ('mov_ramp', 1e-4), ('tw_r3z', 1e-5), ('tw_li', 1e-5),
@@ -155,6 +155,26 @@ class BatchSolver(unittest.TestCase):
             w = (t >= q['t'] - T - 1e-12) & (t <= q['t'] + 1e-12)
             self.assertAlmostEqual(float(y[w].max()), q['max'], delta=1e-3)
             self.assertAlmostEqual(float(y[w].min()), q['min'], delta=1e-3)
+
+    def test_event_log_parity(self):
+        # 3.19: the same events from the browser (Sim.events) and the server (simulate → events), buck in DCM over 20 periods.
+        # Switch edges and duty updates at the same instants; a diode turns off at the root of its current in both, and on
+        # one browser step (T/1000) later in the browser, which sees the reverse voltage at the end of the step
+        js = self.req['buck_dcm']['ev']
+        r = self.run_case('buck_dcm', 2e-4, 'LSODA', rtol=1e-9, atol=1e-11)
+        py = [[e['t'], e['kind'], e['id'], e['v']] for e in r['events']['list'] if e['kind'] in ('switch', 'diode', 'duty')]
+        A, B = {}, {}
+        for e in js:
+            A.setdefault((e[1], e[2], e[3]), []).append(e[0])
+        for e in py:
+            B.setdefault((e[1], e[2], e[3]), []).append(e[0])
+        self.assertEqual({k: len(v) for k, v in A.items()}, {k: len(v) for k, v in B.items()})
+        self.assertEqual(len(A[('diode', 'D1', 0)]), 20)
+        for k, ts in A.items():
+            tol = 2e-8 if k[0] == 'diode' else 1e-12
+            for a, b in zip(ts, B[k]):
+                self.assertAlmostEqual(a, b, delta=tol, msg=str(k))
+        self.assertEqual(r['events']['n'], len(r['events']['list']))
 
     def test_code_blocks_parity(self):
         # 3.3: the Python block runs natively on the server, the expression tree is evaluated by eval_ast;

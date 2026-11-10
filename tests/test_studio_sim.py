@@ -564,6 +564,21 @@ class StudioSimulator(unittest.TestCase):
         self.assertAlmostEqual(r['vmin'], math.sqrt(3) * 325 * math.cos(math.pi / 6), delta=0.5)
         self.assertAlmostEqual(r['vscr'], vd * math.cos(math.pi / 6), delta=0.002 * vd)
 
+    def test_b1_blocks(self):
+        # 3.19: second-order filter (input held over the step, exact Φ = e^{A·dt}), rate limiter, edge detector, rate transition
+        q, z, w0 = self.o['b1'], .3, 2 * math.pi * 1000
+        self.assertAlmostEqual(q['ov'], math.exp(-math.pi * z / math.sqrt(1 - z * z)), delta=1e-4)
+        self.assertAlmostEqual(q['tp'], math.pi / (w0 * math.sqrt(1 - z * z)), delta=2e-6)
+        self.assertAlmostEqual(q['lp'], 1 / (2 * z), delta=2e-3)
+        self.assertAlmostEqual(q['bp'], 1.0, delta=1e-3)
+        self.assertLess(q['notch'], 1e-3)
+        self.assertAlmostEqual(q['rl'], .5, delta=1e-3)
+        self.assertEqual(q['ed']['n'], 11)
+        self.assertEqual(q['ed']['y'], 0)                 # the 0.1 ms pulse after the edge at 10 ms is over at 10.5 ms
+        self.assertAlmostEqual(q['ed']['zoh'], 10, delta=1e-9)
+        self.assertAlmostEqual(q['ed']['delay'], 9, delta=1e-9)
+        self.assertEqual(q['warn'], [])
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
@@ -591,3 +606,4 @@ class IntegrationMethods(unittest.TestCase):
             self.assertAlmostEqual(o['flyback']['vo'], 8, delta=8 * tol)
             self.assertAlmostEqual(o['bidir_open']['ripple'], 223.2143, delta=223 * tol)
             self.assertAlmostEqual(o['bidir_pi']['at10ms'], 800, delta=4)
+

@@ -88,7 +88,7 @@ const bus=project([C('V1','VAC3',{Vpk:100,f:50,conn:'bus'}),C('B1','EBUS'),...RL
 // 4. widths that do not fit: messages, never a hidden conversion
 {const e=(comps,conns)=>err(()=>new MNA.Sim(project(comps,conns),{}));
  R.errors={
-  scalarIn:e([C('K1','CONST',{v:'1; 2; 3'}),C('D1','DISP')],[['K1:y','D1:u']]),
+  scalarIn:e([C('K1','CONST',{v:'1; 2; 3'}),C('D1','MOD3')],[['K1:y','D1:vdc']]), // 3.19: the display takes a vector now, the modulator's V_dc does not
   demux:e([C('K1','CONST',{v:'1; 2; 3'}),C('DX','DEMUX',{n:2})],[['K1:y','DX:u']]),
   elementwise:e([C('K1','CONST',{v:'1; 2'}),C('K2','CONST',{v:'1; 2; 3'}),C('S','SUM')],[['K1:y','S:a'],['K2:y','S:b']]),
   select:e([C('K1','CONST',{v:'1; 2'}),C('BS','BSEL',{idx:'1, 3'}),C('D','DEMUX',{n:2})],[['K1:y','BS:u'],['BS:y','D:u']]),
@@ -97,7 +97,7 @@ const bus=project([C('V1','VAC3',{Vpk:100,f:50,conn:'bus'}),C('B1','EBUS'),...RL
   port:err(()=>new MNA.Sim(project([C('K1','CONST',{v:'1; 2; 3'}),C('X1','SUB',{def:'d'})],[['K1:y','X1:u']],{subcircuits:{d:{title:'d',version:'1',params:[],
    components:[C('u','SIN',{name:'u',width:'2'}),C('DX','DEMUX',{n:2}),C('A','DISP'),C('B','DISP')],wires:wires([['u:y','DX:u'],['DX:y1','A:u'],['DX:y2','B:u']])}}}),{}))};
  // the editor never throws: it gets the messages with the widths
- const w=BUS.widths(project([C('K1','CONST',{v:'1; 2; 3'}),C('D1','DISP')],[['K1:y','D1:u']]));R.errors.editor=w.errors;}
+ const w=BUS.widths(project([C('K1','CONST',{v:'1; 2; 3'}),C('D1','MOD3')],[['K1:y','D1:vdc']]));R.errors.editor=w.errors;}
 
 // 5. the tutorial: the widths the editor draws (top level, after sync), equal to the scalar circuit the solver gets, old
 //    tutorials untouched (no bus: expand leaves the project as it is), SciPy request
@@ -112,4 +112,16 @@ const bus=project([C('V1','VAC3',{Vpk:100,f:50,conn:'bus'}),C('B1','EBUS'),...RL
  R.tutorial.flat={wiring:flat.components.filter(c=>BUS.WIRING.has(c.type)).length,busPins:flat.components.filter(c=>Object.keys(BUS.members(c)).length).length,
   copies:flat.components.filter(c=>/\[\d+\]$/.test(c.id)).length,junctions:flat.components.filter(c=>c.id.startsWith('~J')).length};}
 
+// 3.19: the B1 blocks on a vector: two elements with their own parameters (';'), the same numbers as two scalar circuits
+{const mk=(v,z,up)=>({components:[C('K','CONST',{v}),C('F','F2',{kind:'lp',f0:500,zeta:z}),C('RL','RLIM',{up,dn:up}),C('E','EDGE',{edge:'both'})],
+   wires:wires([['K:y','F:u'],['K:y','RL:u'],['F:y','E:u']]),solve:{tbase:1e-3},version:3});
+ const vec=mk('0:0, 0.001:1; 0:0, 0.002:2','0.3; 0.6','500; 2000');const DX=C('DX','DEMUX',{n:2}),DR=C('DR','DEMUX',{n:2}),DE=C('DE','DEMUX',{n:2});
+ vec.components.push(DX,DR,DE,C('A1','DISP'),C('A2','DISP'),C('B1','DISP'),C('B2','DISP'),C('N1','DISP'),C('N2','DISP'));
+ vec.wires=vec.wires.concat(wires([['F:y','DX:u'],['DX:y1','A1:u'],['DX:y2','A2:u'],['RL:y','DR:u'],['DR:y1','B1:u'],['DR:y2','B2:u'],['E:n','DE:u'],['DE:y1','N1:u'],['DE:y2','N2:u']]).map((w,i)=>({...w,id:'v'+i})));
+ const run=(p,keys)=>{const s=new MNA.Sim(p,{h:1e-6});s.run(.006);return keys.map(k=>s.now(k));};
+ const v=run(vec,['Y:A1','Y:A2','Y:B1','Y:B2','Y:N1','Y:N2']),a=run(mk('0:0, 0.001:1','0.3','500'),['Y:F','Y:RL','Y:E:n']),b=run(mk('0:0, 0.002:2','0.6','2000'),['Y:F','Y:RL','Y:E:n']);
+ R.vecB1={vec:v,sep:[a[0],b[0],a[1],b[1],a[2],b[2]]};}
+// 3.19 (question 3 of 3.18): the display takes a vector (one copy per element, the app shows [a; b; c])
+{const p={version:3,components:[C('K','CONST',{v:'1; 2; 3'}),C('D','DISP')],wires:wires([['K:y','D:u']])};const s=new MNA.Sim(p,{hDiv:50});s.run(1e-3);
+ R.vecDisp={vec:s.net.vec.D,v:[1,2,3].map(k=>s.now('Y:D['+k+']'))};}
 process.stdout.write(JSON.stringify(R));

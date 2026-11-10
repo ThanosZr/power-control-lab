@@ -341,5 +341,16 @@ for(const [D,r,h] of [[.4,0,500],[.6,0,500],[.6,0,2000],[.6,.5,500],[.6,1,500]])
   const after=id.filter((_,i)=>t[i]>m.t2);s.run(.02);const last=s.lastPeriod('I:XL/La'),va=s.lastPeriod('V:XI/Va');
   return {meta:m,tau,id:id[id.length-1],iq:iq[iq.length-1],dev:Math.max(...after.map(x=>Math.abs(x-m.id))),ia:(last.max-last.min)/2,va:(va.max-va.min)/2,steps:s.steps};};
  out.bus_dq={on:one({}),off:one({dec:'off'})};}
+// 3.19: B1 blocks against closed form: second-order step and frequency response, rate limiter, edge count, rate transition
+{const run=(comps,conns,dur,keys,win,ds=1e-5)=>{const pr=project(comps,conns);pr.solve={tbase:1e-3};const s=new Sim(pr,{h:1e-6});const r={};for(const k of keys)r[k]={mx:-Infinity,mn:Infinity,tmx:0};
+  while(s.t<dur-1e-12){s.run(Math.min(ds,dur-s.t));if(s.t<dur-win)continue;for(const k of keys){const y=s.now(k);if(y>r[k].mx){r[k].mx=y;r[k].tmx=s.t;}if(y<r[k].mn)r[k].mn=y;}}return {r,s};};
+ const st=run([{id:'K',type:'CONST',params:{v:'0:0, 0.001:1'}},{id:'F',type:'F2',params:{kind:'lp',f0:1000,zeta:.3}},{id:'RL',type:'RLIM',params:{up:500,dn:500}}],[['K:y','F:u'],['K:y','RL:u']],.0026,['Y:F'],.0016,1e-6);
+ const rl=(()=>{const pr=project([{id:'K',type:'CONST',params:{v:'0:0, 0.001:1'}},{id:'RL',type:'RLIM',params:{up:500,dn:500}}],[['K:y','RL:u']]);pr.solve={tbase:1e-3};const s=new Sim(pr,{h:1e-6});s.run(.002);return s.now('Y:RL');})();
+ const sine=(f,kind,zeta)=>run([{id:'EX',type:'EXPR',params:{expr:`sin(2*pi*${f}*t)`,ins:''}},{id:'F',type:'F2',params:{kind,f0:f,zeta}}],[['EX:y','F:u']],kind==='notch'?.3:.1,['Y:F'],2/f).r['Y:F'];
+ const lp=sine(200,'lp',.3),bp=sine(400,'bp',.1),nt=sine(50,'notch',.2);
+ const ed=(()=>{const pr=project([{id:'CK',type:'CLK',params:{f:1000}},{id:'E',type:'EDGE',params:{edge:'rise',tw:1e-4}},{id:'EX',type:'EXPR',params:{expr:'1000*t',ins:''}},
+   {id:'R1',type:'RT',params:{clock:'CK',mode:'zoh'}},{id:'R2',type:'RT',params:{clock:'CK',mode:'delay'}}],[['CK:y','E:u'],['EX:y','R1:u'],['EX:y','R2:u']]);pr.solve={tbase:1e-3};
+   const s=new Sim(pr,{h:1e-6});s.run(.0105);return {n:s.now('Y:E:n'),y:s.now('Y:E'),zoh:s.now('Y:R1'),delay:s.now('Y:R2'),t:s.t,warn:s.net.warnings};})();
+ out.b1={ov:st.r['Y:F'].mx-1,tp:st.r['Y:F'].tmx-.001,rl,lp:(lp.mx-lp.mn)/2,bp:(bp.mx-bp.mn)/2,notch:(nt.mx-nt.mn)/2,ed,warn:st.s.net.warnings};}
 out.ms=Date.now()-t0;
 console.log(JSON.stringify(out,null,1));

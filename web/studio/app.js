@@ -48,7 +48,7 @@ function loop(now){
  if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){pause();notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
  requestAnimationFrame(loop);
 }
-function draw(all){scope.draw();navRange();if(all||S.frame%3===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();}if(all||S.frame%8===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();if(S.sim&&S.sim.dgVer!==S.diagSeen)renderDiag();}if(all){if(!S.running&&!S.switching){renderFFT();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
+function draw(all){scope.draw();navRange();if(all||S.frame%3===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();}if(all||S.frame%8===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();if(S.sim&&S.sim.dgVer!==S.diagSeen)renderDiag();}if(all){if(!S.running&&!S.switching){renderFFT();renderEvents();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
 function navRange(){const el=$('#nav-range');if(!el||el.offsetParent===null||!S.sim)return;const [a,b]=scope.viewRange();el.textContent=`${eng(a,'s',4)} … ${eng(b,'s',4)} · ${fmt((b-a)/S.sim.T,3)} T${scope.cfg.frozen?' · σταθερή προβολή':' · ζωντανά'}`;}
 function updateClock(){const s=S.sim;if(!s)return;$('#clock').textContent='t = '+eng(s.t,'s',5);$('#periods').textContent=`${Math.floor(s.t/s.T+1e-9)} T · βήματα ${s.steps.toLocaleString('el-GR')}`;
  $('#cpu').hidden=!S.limited;$('#speed-note').textContent=S.speed==='max'?'όσο αντέχει ο υπολογιστής':`${eng(S.speed*s.T,'s',3)} ανά δευτερόλεπτο`;$('#step-note').textContent=s.var?`Δt = ${eng(s.hv,'s',3)} μεταβλητό (${eng(s.hMin,'s',2)} … ${eng(s.hCap||s.hMax,'s',2)}) · απορρίψεις ${s.nRej}`:'Δt = '+eng(s.h,'s',3)+' · T = '+eng(s.T,'s',3);}
@@ -69,6 +69,7 @@ function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;if(['
  if(c.type==='KL'||c.type==='KG'){const n=s.net.compInfo.get(c.id)?.ports?.length||0;return {i:s.now('I:'+c.id),text:Array.from({length:n},(_,k)=>(avg?'⌀ ':'')+'i'+'₁₂₃₄₅₆₇₈'[k]+' '+eng(val((k?'I'+(k+1):'I')+':'+c.id),'A',3)).join(' · ')};}
  if(c.type==='DCM')return {i:s.now('I:'+c.id),text:'ω '+eng(val('Y:'+c.id),'rad/s',4)+' · '+(avg?'⌀ ':'')+eng(val('I:'+c.id),'A',3)};
  if(OUT_SYM[c.type]&&c.type!=='SR'){const os=outsOf(c);return {text:os.map((o,k)=>OUT_SYM[c.type][o]+' '+eng(s.now('Y:'+c.id+(k?':'+o:'')),blkUnit(c,o),3)).join(' · ')};}
+ if(P.BLOCKS.has(c.type)&&s.net?.vec?.[c.id]>1&&!LOGIC_BLK.has(c.type)){const n=s.net.vec[c.id],u=blkUnit(c);return {text:'['+Array.from({length:n},(_,k)=>eng(s.now('Y:'+c.id+'['+(k+1)+']'),u,+(c.params?.dig)||3)).join('; ')+']'};} // 3.19: a vector (question 3 of 3.18)
  if(P.BLOCKS.has(c.type)){const y=s.now('Y:'+c.id);if(LOGIC_BLK.has(c.type))return {on:y>=.5,text:(c.type==='SR'?'Q = ':'y = ')+(y>=.5?'1':'0')};
   const u=blkUnit(c);return {text:(c.type==='DISP'?'':c.type==='VM'||c.type==='VP'?'v = ':c.type==='AM'||c.type==='IP'?'i = ':'y = ')+eng(y,u,+(c.params?.dig)||4)};}
  const i=val('I:'+c.id),v=val('V:'+c.id);let on;
@@ -79,12 +80,13 @@ function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;if(['
  return {on,i:avg?i:s.now('I:'+c.id),text};}
 
 // signal blocks (3.0): output unit, and which outputs are 0/1
-const LOGIC_BLK=new Set(['CMP','SR','CLK','LOGIC']);
+const LOGIC_BLK=new Set(['CMP','SR','CLK','LOGIC','EDGE']);
 function blkUnit(c,pin){if(!c)return '';const t=c.type;if(t==='VM'||t==='VP')return 'V';if(t==='AM'||t==='IP')return 'A';if(t==='MEAS')return c.params?.qty==='V'?'V':'A';
- if(t==='DCM')return pin==='te'?'N·m':'rad/s';if(t==='IM')return pin==='te'?'N·m':pin==='psi'?'V·s':pin==='w'||!pin?'rad/s':'rad';if(t==='SM')return pin==='te'?'N·m':pin==='th'?'rad':pin==='id'||pin==='iq'?'A':'rad/s';if(t==='SRM')return pin==='te'?'N·m':pin==='th'?'rad':/^i\d$/.test(pin||'')?'A':'rad/s';if(t==='FEST')return pin==='psi'?'V·s':pin==='w1'?'rad/s':'rad';if(t==='PLL')return pin==='amp'?'':pin==='w'?'rad/s':'rad';if(t==='INT'&&c.params?.wrap==='2pi')return 'rad';return '';}
+ if(t==='DCM')return pin==='te'?'N·m':'rad/s';if(t==='IM')return pin==='te'?'N·m':pin==='psi'?'V·s':pin==='w'||!pin?'rad/s':'rad';if(t==='SM')return pin==='te'?'N·m':pin==='th'?'rad':pin==='id'||pin==='iq'?'A':'rad/s';if(t==='SRM')return pin==='te'?'N·m':pin==='th'?'rad':/^i\d$/.test(pin||'')?'A':'rad/s';if(t==='FEST')return pin==='psi'?'V·s':pin==='w1'?'rad/s':'rad';if(t==='PLL')return pin==='amp'?'':pin==='w'?'rad/s':'rad';if(t==='INT'&&c.params?.wrap==='2pi')return 'rad';
+ const u=S.sim?.net?.units?.out(c.id,pin)?.u;return u&&u!=='1'?u:'';} // 3.19: what the units check inferred (a constant or gain with a unit, filters, sums …)
 // symbols of the outputs of multi-output blocks (first output = channel Y:id, the others Y:id:pin)
-const OUT_SYM={IM:{w:'ω',te:'τ_e',psi:'|ψ_R|',thf:'θ_f',thr:'θ_r'},SM:{w:'ω',te:'τ_e',th:'θ',id:'i_d',iq:'i_q'},SRM:{w:'ω',te:'τ_e',th:'θ_e',i1:'i₁',i2:'i₂',i3:'i₃',i4:'i₄'},FEST:{th:'θ̂',psi:'|ψ̂|',w1:'ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ω',te:'τ_e'},PLL:{th:'θ',w:'ω',amp:'V̂_d'},CLARKE:{al:'α',be:'β'},IPARK:{al:'α',be:'β'},PARK:{d:'d',q:'q'},ICLARKE:{a:'a',b:'b',c:'c'},SR:{q:'Q',nq:'Q̄'}};
-const OUT_TXT={IM:{w:'ταχύτητα ω',te:'ροπή τ_e',psi:'ροή δρομέα |ψ_R|',thf:'γωνία ροής θ_f',thr:'γωνία δρομέα θ_r'},SM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'ηλεκτρική γωνία δρομέα θ',id:'ρεύμα i_d',iq:'ρεύμα i_q'},SRM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'γωνία θ_e της φάσης 1',i1:'ρεύμα φάσης 1 (αισθητήρας)',i2:'ρεύμα φάσης 2 (αισθητήρας)',i3:'ρεύμα φάσης 3 (αισθητήρας)',i4:'ρεύμα φάσης 4 (αισθητήρας)'},FEST:{th:'γωνία θ̂',psi:'ροή |ψ̂|',w1:'συχνότητα ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ταχύτητα ω',te:'ροπή τ_e'},PLL:{th:'γωνία θ',w:'συχνότητα ω',amp:'πλάτος (v_d)'},CLARKE:{al:'συνιστώσα α',be:'συνιστώσα β'},IPARK:{al:'συνιστώσα α',be:'συνιστώσα β'},PARK:{d:'συνιστώσα d',q:'συνιστώσα q'},ICLARKE:{a:'φάση a',b:'φάση b',c:'φάση c'},SR:{q:'έξοδος Q',nq:'έξοδος Q̄'}};
+const OUT_SYM={IM:{w:'ω',te:'τ_e',psi:'|ψ_R|',thf:'θ_f',thr:'θ_r'},SM:{w:'ω',te:'τ_e',th:'θ',id:'i_d',iq:'i_q'},SRM:{w:'ω',te:'τ_e',th:'θ_e',i1:'i₁',i2:'i₂',i3:'i₃',i4:'i₄'},FEST:{th:'θ̂',psi:'|ψ̂|',w1:'ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ω',te:'τ_e'},PLL:{th:'θ',w:'ω',amp:'V̂_d'},CLARKE:{al:'α',be:'β'},IPARK:{al:'α',be:'β'},PARK:{d:'d',q:'q'},ICLARKE:{a:'a',b:'b',c:'c'},SR:{q:'Q',nq:'Q̄'},EDGE:{y:'y',n:'n'}};
+const OUT_TXT={IM:{w:'ταχύτητα ω',te:'ροπή τ_e',psi:'ροή δρομέα |ψ_R|',thf:'γωνία ροής θ_f',thr:'γωνία δρομέα θ_r'},SM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'ηλεκτρική γωνία δρομέα θ',id:'ρεύμα i_d',iq:'ρεύμα i_q'},SRM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'γωνία θ_e της φάσης 1',i1:'ρεύμα φάσης 1 (αισθητήρας)',i2:'ρεύμα φάσης 2 (αισθητήρας)',i3:'ρεύμα φάσης 3 (αισθητήρας)',i4:'ρεύμα φάσης 4 (αισθητήρας)'},FEST:{th:'γωνία θ̂',psi:'ροή |ψ̂|',w1:'συχνότητα ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ταχύτητα ω',te:'ροπή τ_e'},PLL:{th:'γωνία θ',w:'συχνότητα ω',amp:'πλάτος (v_d)'},CLARKE:{al:'συνιστώσα α',be:'συνιστώσα β'},IPARK:{al:'συνιστώσα α',be:'συνιστώσα β'},PARK:{d:'συνιστώσα d',q:'συνιστώσα q'},ICLARKE:{a:'φάση a',b:'φάση b',c:'φάση c'},SR:{q:'έξοδος Q',nq:'έξοδος Q̄'},EDGE:{y:'παλμός y στην ακμή',n:'πλήθος ακμών n'}};
 function outsOf(c){const q=c?.params?.conn==='bus'?{...c,params:{...c.params,conn:'sep'}}:c;return Object.entries(P.sigPins(q)).filter(([,d])=>d.dir==='out').map(([k])=>k);}
 // a block on a bus (3.18) runs as one block per element, <id>[k]: how many (after the last build), and the id without [k]
 const vecN=id=>S.sim?.net?.vec?.[id]||0,vecBase=id=>{const m=/^(.*)\[(\d+)\]$/.exec(String(id));return m?{id:m[1],k:+m[2]}:null;};
@@ -173,6 +175,18 @@ function rawSeries(key){const s=S.sim;const k=simKey(key);const i=k===null?undef
 // fundamental: the AC source, the SPWM reference or the PLL, else the switching frequency
 function autoF1(){for(const c of editor.doc.components){const p={...P.defaults(c.type),...c.params};if(c.type==='VAC3'||c.type==='VAC')return [+p.f,`πηγή ${c.label||c.id}`];if(c.type==='PWM'&&p.mode==='spwm')return [+p.fref,`αναφορά SPWM ${c.label||c.id}`];if(c.type==='PLL')return [+p.f0,`PLL ${c.label||c.id}`];}
  return S.sim?[1/S.sim.T,'συχνότητα βάσης (μεταγωγή)']:[50,'προεπιλογή'];}
+// 3.19: the event log (Sim.events, §3): the last events of the chosen kind and source, CSV of all that the solver keeps
+const EV_KIND={switch:'μεταγωγή διακόπτη',diode:'δίοδος',scr:'θυρίστορ',gap:'σπινθηριστής',cmp:'συγκριτής',latch:'latch',edge:'ακμή',sample:'δείγμα',duty:'ενημέρωση D',jump:'άλμα προγράμματος',live:'ζωντανή αλλαγή',program:'πρόγραμμα αλλαγών'};
+function evRows(){const E=S.sim?.events?S.sim.events():{list:[],n:0,kinds:{}},k=$('#ev-kind')?.value||'',q=($('#ev-src')?.value||'').trim().toLowerCase();
+ return {E,rows:E.list.filter(e=>(!k||e.kind===k)&&(!q||String(e.src).toLowerCase().includes(q)||String(e.id||'').toLowerCase().includes(q)))};}
+function renderEvents(){const box=$('#ev-out');if(!box||!S.sim||!$('#ev-block').open)return;const {E,rows}=evRows(),sel=$('#ev-kind');
+ const have=Object.keys(E.kinds);if(sel&&sel.options.length-1!==have.length){const v=sel.value;sel.innerHTML='<option value="">Όλα</option>'+have.map(k=>`<option value="${k}">${esc(EV_KIND[k]||k)} (${E.kinds[k]})</option>`).join('');sel.value=have.includes(v)?v:'';}
+ const fv=e=>typeof e.v==='number'?eng(e.v,e.u||'',5):esc(String(e.v));
+ box.innerHTML=`<small class="muted">${E.n} συμβάντα${E.n>E.list.length?`, κρατιούνται τα τελευταία ${E.list.length}`:''}${rows.length!==E.list.length?` · ${rows.length} με το φίλτρο`:''}.</small>`+
+  (rows.length?`<table class="ev-table"><tr><th>t</th><th>είδος</th><th>πηγή</th><th>τιμή</th></tr>${rows.slice(-80).reverse().map(e=>`<tr><td>${eng(e.t,'s',6)}</td><td>${esc(EV_KIND[e.kind]||e.kind)}</td><td>${e.id?`<button data-focus="${esc(String(e.id).split('[')[0])}">${esc(e.src)}</button>`:esc(e.src)}</td><td>${fv(e)}${e.from!==undefined?` <span class="muted">(από ${esc(String(typeof e.from==='number'?eng(e.from,'',4):e.from))})</span>`:''}</td></tr>`).join('')}</table>`:'<p class="muted small">Κανένα ακόμη. Τρέξε την προσομοίωση.</p>');
+ box.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>focusComp(b.dataset.focus));}
+function eventsCsv(){const {rows}=evRows();if(!rows.length)return;const q=v=>v===undefined||v===null?'':/[",\n]/.test(String(v))?'"'+String(v).replace(/"/g,'""')+'"':String(v);
+ download('events.csv',['t [s],kind,id,source,value,side,unit,clock,n,from',...rows.map(e=>[e.t,e.kind,e.id,e.src,e.v,e.side,e.u,e.clk,e.n,e.from].map(q).join(','))].join('\n'),'text/csv');}
 function renderFFT(){const box=$('#ff-out');if(!box||!S.sim||!$('#ff-block').open)return;
  const sig=$('#ff-sig');const chans=scope.channels();const keep=sig.value;
  sig.innerHTML=chans.map(c=>`<option value="${esc(c.key)}">${esc(c.label)}</option>`).join('')||'<option value="">— πρόσθεσε σήμα στο scope —</option>';if(chans.some(c=>c.key===keep))sig.value=keep;
@@ -369,21 +383,29 @@ function sampleCompareHTML(r){const out=[];for(const [id,sv] of Object.entries(r
 // the carrier phase from the next carrier period, the sampling rule from the next trigger. Every
 // change is kept with its simulation time, drawn on the scope, and D / reference changes can be
 // turned into a t:value program, so pressing ⟲ replays the same run.
+// 3.19: only changes at the same instant merge, so a session written as a program replays bit for bit
 function liveChange(id,k,v,label,from){const s=S.sim;if(!s||!(s.t>0))return;const L=s.changes||(s.changes=[]);const last=L[L.length-1];
- if(last&&last.id===id&&last.k===k&&s.t-last.t<=s.T*1.0001){last.v=v;last.label=label;}else s.markChange({id,k,v,label,from});renderLiveLog();if(!S.running)draw(true);}
+ if(last&&last.id===id&&last.k===k&&s.t===last.t){last.v=v;last.label=label;}else s.markChange({id,k,v,label,from});renderLiveLog();if(!S.running)draw(true);}
 function renderLiveLog(){const box=$('#lp-log');if(!box)return;const L=S.sim?.changes||[];
  if(!L.length){box.innerHTML='<small class="muted">Οι αλλαγές που κάνεις όσο τρέχει η προσομοίωση σημειώνονται στο scope.</small>';return;}
- const rep=L.some(c=>c.k==='D'||c.k==='ref'||c.k==='v');
- box.innerHTML=`<div class="lp-log-head"><b>${L.length} ${L.length===1?'αλλαγή':'αλλαγές'}</b>${rep?'<button id="lp-sched" title="Οι αλλαγές του D και της αναφοράς γίνονται πρόγραμμα t:τιμή: με ⟲ ξαναπαίζεται η ίδια προσομοίωση">→ πρόγραμμα t:τιμή</button>':''}</div>
+ const rep=L.some(c=>!c.prog||c.live);
+ box.innerHTML=`<div class="lp-log-head"><b>${L.length} ${L.length===1?'αλλαγή':'αλλαγές'}</b>${rep?'<button id="lp-sched" title="Οι αλλαγές γίνονται πρόγραμμα t:τιμή (το D, η αναφορά και οι σταθερές στις παραμέτρους τους, οι υπόλοιπες στο πρόγραμμα του κυκλώματος): με ⟲ ξαναπαίζεται η ίδια προσομοίωση">→ πρόγραμμα t:τιμή</button>':''}</div>
   <ol>${L.slice(-5).map(c=>`<li><span>${eng(c.t,'s',4)}</span> ${esc(c.label)}</li>`).join('')}</ol>`;
  $('#lp-sched')?.addEventListener('click',changesToSchedule);}
-function changesToSchedule(){const L=(S.sim?.changes||[]).filter(c=>c.k==='D'||c.k==='ref'||c.k==='v');if(!L.length)return;const by=new Map();
+// live changes → programs (3.19): D, the reference and a constant become their own t:value program as before; every
+// other parameter (and every ramp) goes to the program of the circuit (project.program), which the solver applies at
+// the same instants as a live change (Sim.progApply). The parameters start again from their value before the first change.
+function changesToSchedule(){const L=(S.sim?.changes||[]).filter(c=>!c.prog||c.live);if(!L.length)return;const by=new Map();
  for(const c of L){const key=c.id+'|'+c.k;if(!by.has(key))by.set(key,[]);by.get(key).push(c);}
- const f=v=>+(+v).toPrecision(8);
- for(const [key,list] of by){const [id,k]=key.split('|');const comp=editor.comp(id);if(!comp)continue;const base=(P.parseSched(list[0].from)||[]).filter(([t])=>t<list[0].t-1e-15);
-  const prog=[...base,...list.map(c=>[c.t,c.v])].map(([t,v])=>`${+t.toPrecision(9)}:${f(v)}`).join(', ');
-  editor.setParams(id,k==='D'?{dsched:prog,D:f((base.length?base:[[0,list[0].v]])[0][1])}:k==='v'?{v:prog}:{ref:prog});}
- notice('Οι αλλαγές έγιναν πρόγραμμα t:τιμή στο '+[...by.keys()].map(k=>esc(k.split('|')[0])).join(', ')+'. Πάτα ⟲ για να ξαναπαίξει η ίδια προσομοίωση.','info');}
+ const f=v=>typeof v==='number'?+(+v).toPrecision(8):v,prog=[...(editor.doc.program||[])],moved=[];
+ for(const [key,list] of by){const [id,k]=key.split('|');const comp=editor.comp(id);if(!comp)continue;
+  if(['D','ref','v'].includes(k)&&!list.some(c=>c.rate)){const base=(P.parseSched(list[0].from)||[]).filter(([t])=>t<list[0].t-1e-15);
+   const pr=[...base,...list.map(c=>[c.t,c.v])].map(([t,v])=>`${+t.toPrecision(9)}:${f(v)}`).join(', ');
+   editor.setParams(id,k==='D'?{dsched:pr,D:f((base.length?base:[[0,list[0].v]])[0][1])}:k==='v'?{v:pr}:{ref:pr});moved.push(id);continue;}
+  for(const c of list)prog.push({t:c.t,id,k,v:c.v,...(c.rate?{rate:c.rate}:{})});
+  const b=list[0].from;editor.setParams(id,{[k]:b===undefined?comp.params[k]:(typeof b==='string'&&Number.isFinite(P.parseEng(b))&&!b.includes(':')?P.parseEng(b):b)});moved.push(id);}
+ if(prog.length!==(editor.doc.program||[]).length)editor.setProgram(prog.sort((a,b)=>a.t-b.t));
+ notice('Οι αλλαγές έγιναν πρόγραμμα t:τιμή στο '+[...new Set(moved)].map(esc).join(', ')+'. Πάτα ⟲ για να ξαναπαίξει η ίδια προσομοίωση.','info');}
 function updateLivePanel(){const s=S.sim;if(!s||$('#live-panel')?.hidden)return;
  for(const el of $$('#live-controls [data-shout]')){const q=s.shById.get(el.dataset.shout);if(!q){el.textContent='';continue;}const u=q.qty==='V'?'V':'A',lt=q.log.t[q.log.t.length-1];
   el.innerHTML=`h = <b>${eng(q.h,u,5)}</b> · ${q.n} δείγματα${Number.isFinite(lt)?` · τελευταίο ${eng(lt,'s',5)}`:''}`;}
@@ -432,7 +454,7 @@ function refreshControls(){
  const pinned=editor.doc.components.filter(c=>Array.isArray(c.live)&&c.live.length);
  box.innerHTML+=pinned.map(c=>c.live.map(k=>{const d=partDef(c)?.params.find(x=>x.k===k);if(!d||d.type!=='num')return '';const v=numOf(c.params[k]??d.def),m=pinMap(c,k),key=c.id+'|'+k;
   return `<div class="ctl ctl-pin"><label>${esc(c.label||c.id)} · ${esc(d.label)} <output data-pout="${esc(key)}">${eng(v,d.unit||'',4)}</output></label><input type="range" min="0" max="${PSL}" step="1" value="${pinX(m,v)}" data-pr="${esc(key)}" aria-label="${esc((c.label||c.id)+' '+d.label)}">
-   <div class="ctl-row"><input data-pv="${esc(key)}" value="${esc(P.eng(v,'',6).replace(/\s/g,''))}" inputmode="decimal" aria-label="τιμή"><button data-pc="${esc(key)}" title="Ο ρυθμιστής γύρω από την τρέχουσα τιμή (×0,1 … ×10)">⟲</button><button data-pu="${esc(key)}" title="Αφαίρεση από τις ζωντανές παράμετροι">✕</button></div></div>`;}).join('')).join('');
+   <div class="ctl-row"><input data-pv="${esc(key)}" value="${esc(P.eng(v,'',6).replace(/\s/g,''))}" inputmode="decimal" aria-label="τιμή"><input class="prate" data-prate="${esc(key)}" value="${c.liveRate?.[d.k]?esc(P.eng(+c.liveRate[d.k],'',4).replace(/\s/g,'')):''}" placeholder="άλμα" inputmode="decimal" title="Ρυθμός (${esc(d.unit||'μονάδες')}/s): η αλλαγή γίνεται ράμπα με αυτή την κλίση, σε βήματα το πολύ T/50. Κενό: άλμα." aria-label="ρυθμός μεταβολής"><button data-pc="${esc(key)}" title="Ο ρυθμιστής γύρω από την τρέχουσα τιμή (×0,1 … ×10)">⟲</button><button data-pu="${esc(key)}" title="Αφαίρεση από τις ζωντανές παράμετροι">✕</button></div></div>`;}).join('')).join('');
  if(!box.innerHTML)box.innerHTML='<div class="muted small">Χωρίς μπλοκ PWM, Sample & Hold ή θυρίστορ. Με 📌 στο πάνελ παραμέτρων μπαίνει εδώ οποιαδήποτε αριθμητική παράμετρος.</div>';
  const al=box.querySelector('[data-alpha]');if(al){const setA=(commit)=>{const a=+al.value,from=scr[0].params?.alpha;for(const c of scr)c.params.alpha=a;S.sim?.setFiring(a);box.querySelector('[data-aout]').textContent=fmt(a,4)+'°';editor.renderLabels();liveChange('SCR','alpha',a,`α → ${fmt(a,4)}°`,String(from));if(commit){saveLocal();if(S.theory)renderTheory();}};al.oninput=()=>setA(false);al.onchange=()=>setA(true);}
  const setD=(id,d,commit)=>{d=Math.min(1,Math.max(0,d));const c=editor.comp(id);if(!c)return;const from=c.params.dsched||String(c.params.D??P.defaults('PWM').D);c.params.D=+d.toFixed(6);if(c.params.dsched){c.params.dsched='';S.sim?.setControl(id,{dsched:null});}S.sim?.setControl(id,{D:c.params.D});
@@ -465,7 +487,11 @@ function refreshControls(){
   liveChange(id,'trig',el.value,`${c.label||id}: ${el.selectedOptions[0].textContent.split(' (')[0].split(' · ')[0]}`,from);saveLocal();if(S.theory)renderTheory();});
  const pinNow=(key,v,commit)=>{const [id,k]=key.split('|');const c=editor.comp(id);const d=c&&partDef(c)?.params.find(x=>x.k===k);if(!c||!d||!Number.isFinite(v))return;
   const nv=+v.toPrecision(6);if(commit&&!S.pinDrag&&numOf(c.params[k]??d.def)===nv)return; // the same value again (e.g. change on blur after Enter)
-  const from=String(c.params[k]??d.def);if(!S.pinDrag){editor.remember();S.pinDrag=true;}c.params[k]=nv;liveApply();editor.renderPart(c);editor.renderLabels();
+  const rate=+(c.liveRate?.[k]||0);if(rate>0&&!commit)return; // a ramp starts when the value is set, not while dragging
+  const from=String(c.params[k]??d.def);if(!S.pinDrag){editor.remember();S.pinDrag=true;}c.params[k]=nv;
+  if(rate>0&&S.sim&&S.sim.t>0&&atTop()){S.sim.addProgram({t:S.sim.t,id,k,v:nv,rate,live:true});S.pinDrag=false;saveLocal();renderLiveLog();editor.renderPart(c);editor.renderLabels();
+   const o=box.querySelector(`[data-pout="${CSS.escape(key)}"]`);if(o)o.textContent=eng(nv,d.unit||'',4)+' (ράμπα)';return;} // 3.19: the solver ramps it (Sim.progApply)
+  liveApply();editor.renderPart(c);editor.renderLabels();
   const o=box.querySelector(`[data-pout="${CSS.escape(key)}"]`);if(o)o.textContent=eng(c.params[k],d.unit||'',4);const t=box.querySelector(`[data-pv="${CSS.escape(key)}"]`);if(t&&document.activeElement!==t)t.value=P.eng(c.params[k],'',6).replace(/\s/g,'');
   liveChange(id,k,c.params[k],`${c.label||id}: ${d.label} → ${eng(c.params[k],d.unit||'',4)}`,from);
   if(commit){S.pinDrag=false;saveLocal();renderProps();if(S.theory)renderTheory();scheduleMath();}};
@@ -476,6 +502,8 @@ function refreshControls(){
    const [id,k]=inp.dataset.pv.split('|'),r=box.querySelector(`[data-pr="${CSS.escape(inp.dataset.pv)}"]`);if(r)r.value=pinX(pinMap(editor.comp(id),k),v);};inp.onchange=go;inp.onkeydown=e=>{if(e.key==='Enter')go();};});
  $$('#live-controls [data-pc]').forEach(b=>b.onclick=()=>{const [id,k]=b.dataset.pc.split('|');const c=editor.comp(id);if(!c)return;c.liveBase={...(c.liveBase||{}),[k]:numOf(c.params[k])};saveLocal();refreshControls();});
  $$('#live-controls [data-pu]').forEach(b=>b.onclick=()=>{const [id,k]=b.dataset.pu.split('|');togglePin(id,k);});
+ $$('#live-controls [data-prate]').forEach(inp=>inp.onchange=()=>{const [id,k]=inp.dataset.prate.split('|');const c=editor.comp(id);if(!c)return;const raw=inp.value.trim(),v=raw?P.parseEng(raw):0;
+  if(raw&&!(v>0)){inp.classList.add('bad');return;}inp.classList.remove('bad');const r={...(c.liveRate||{})};if(v>0)r[k]=v;else delete r[k];if(Object.keys(r).length)c.liveRate=r;else delete c.liveRate;saveLocal();});
  renderLiveLog();updateLivePanel();
 }
 // slider of a pinned parameter: logarithmic over [b/10, 10·b] for a positive base b, else linear around it
@@ -558,8 +586,8 @@ function setProps(open){const el=$('#props');if(!el)return;el.classList.toggle('
  try{localStorage.setItem('pcl2-props',open?'1':'0');}catch{}if(open)renderProps();}
 function focusComp(id){const c=editor.comp(id);if(!c)return;editor.select([id],[]);editor.userView=true;editor.view.cx=c.x;editor.view.cy=c.y;editor.applyView();}
 function togglePin(id,k){const c=editor.comp(id);if(!c)return;editor.remember();const L=new Set(c.live||[]);
- if(L.has(k)){L.delete(k);if(c.liveBase)delete c.liveBase[k];}else{L.add(k);const d=partDef(c).params.find(x=>x.k===k);const v=numOf(c.params[k]??d?.def);c.liveBase={...(c.liveBase||{}),[k]:Number.isFinite(v)?v:0};}
- if(L.size)c.live=[...L];else{delete c.live;delete c.liveBase;}saveLocal();refreshControls();renderProps();if(L.has(k))setLivePanel(true);}
+ if(L.has(k)){L.delete(k);if(c.liveBase)delete c.liveBase[k];if(c.liveRate){delete c.liveRate[k];if(!Object.keys(c.liveRate).length)delete c.liveRate;}}else{L.add(k);const d=partDef(c).params.find(x=>x.k===k);const v=numOf(c.params[k]??d?.def);c.liveBase={...(c.liveBase||{}),[k]:Number.isFinite(v)?v:0};}
+ if(L.size)c.live=[...L];else{delete c.live;delete c.liveBase;delete c.liveRate;}saveLocal();refreshControls();renderProps();if(L.has(k))setLivePanel(true);}
 function renderProps(){const box=$('#props-body');if(!box||!propsOpen())return;
  box.querySelectorAll('details.psec').forEach(d=>{PS[d.dataset.sec]=d.open;}); // the toggle event may not have fired yet
  const sel=editor.selection(),act=document.activeElement,fk=box.contains(act)?act.dataset.k:null;let h;if(window.Addons&&Addons.frames.size)Addons.emit('selection',sel.c);
@@ -572,7 +600,7 @@ function renderProps(){const box=$('#props-body');if(!box||!propsOpen())return;
 function propsComp(c){const def=partDef(c),p={...pdefaults(c),...c.params},live=new Set(c.live||[]),machine=['IM','SM','SRM','DCM'].includes(c.type),inDef=!atTop(),pub=inDef?publicOf(c.id):new Map();
  const secOf=d=>c.type==='PWM'&&CTL_K.has(d.k)?'ctl':INIT_K.has(d.k)?'init':MECH_K.has(d.k)?'mech':!machine&&LOSS_K.has(d.k)?'loss':'main';
  const groups=new Map();for(const d of def.params){if(d.show&&!d.show(p))continue;const g=secOf(d);if(!groups.has(g))groups.set(g,[]);groups.get(g).push(d);}
- const row=d=>`<div class="prow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span><span class="pin-in">${fieldHTML(c,d,p).replace(` id="f_${d.k}"`,'')}${inDef?(['num','text','select','bool'].includes(d.type)?`<button class="pinbtn pubbtn${pub.has(d.k)?' on':''}" data-pub-k="${d.k}" aria-pressed="${pub.has(d.k)}" title="${pub.has(d.k)?'Δημόσια παράμετρος «'+esc(pub.get(d.k))+'» του υποκυκλώματος: κλικ για να μείνει εσωτερική':'Δημόσια παράμετρος του υποκυκλώματος: αλλάζει χωριστά σε κάθε instance'}">⤴</button>`:''):d.type==='num'?`<button class="pinbtn${live.has(d.k)?' on':''}" data-pin-k="${d.k}" aria-pressed="${live.has(d.k)}" title="${live.has(d.k)?'Αφαίρεση από τις ζωντανές παράμετροι':'📌 Στις ζωντανές παράμετροι, με ρυθμιστή'}">📌</button>`:''}</span>${d.hint?`<small>${esc(d.hint)}</small>`:''}</div>`;
+ const row=d=>`<div class="prow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span><span class="pin-in">${fieldHTML(c,d,p).replace(` id="f_${d.k}"`,'')}${inDef?(['num','text','select','bool','ref'].includes(d.type)?`<button class="pinbtn pubbtn${pub.has(d.k)?' on':''}" data-pub-k="${d.k}" aria-pressed="${pub.has(d.k)}" title="${pub.has(d.k)?'Δημόσια παράμετρος «'+esc(pub.get(d.k))+'» του υποκυκλώματος: κλικ για να μείνει εσωτερική':'Δημόσια παράμετρος του υποκυκλώματος: αλλάζει χωριστά σε κάθε instance'}">⤴</button>`:''):d.type==='num'&&!P.structural(c.type,d.k)?`<button class="pinbtn${live.has(d.k)?' on':''}" data-pin-k="${d.k}" aria-pressed="${live.has(d.k)}" title="${live.has(d.k)?'Αφαίρεση από τις ζωντανές παράμετροι':'📌 Στις ζωντανές παράμετροι, με ρυθμιστή'}">📌</button>`:''}</span>${d.hint?`<small>${esc(d.hint)}</small>`:''}</div>`;
  let h=`<div class="props-head"><div><small>${esc(def.name)}</small><input data-plabel value="${esc(c.label||c.id)}" aria-label="Όνομα στοιχείου"></div><button class="x" data-pclose title="Αποεπιλογή (Esc)">✕</button></div>`;
  for(const [g,title] of PSEC){const L=groups.get(g);if(L?.length)h+=psec('p-'+g,title,L.map(row).join(''),{def:g==='main',cnt:L.length});}
  if(c.type==='SUB')h+=propsSub(c);else if(!def.params.length)h+='<p class="muted small">Χωρίς παραμέτρους.</p>';
@@ -580,6 +608,11 @@ function propsComp(c){const def=partDef(c),p={...pdefaults(c),...c.params},live=
  if(sigIns.length){const outs=editor.doc.components.filter(k=>k.id!==c.id).flatMap(k=>Object.entries(P.sigPins(k)).filter(([,v])=>v.dir==='out').map(([pin])=>({v:k.id+':'+pin,t:`${k.label||k.id}.${pin}`}))).sort((a,b)=>a.t.localeCompare(b.t,undefined,{numeric:true}));
   const wired=pin=>editor.wiresAt(c.id,pin).length>0;
   h+=psec('p-src','Συνδέσεις σημάτων',sigIns.map(pin=>{const v=c.params?.['in_'+pin]||'';return `<div class="prow"><span>Είσοδος ${esc(pin)}</span><span class="pin-in"><select data-src="${esc(pin)}"><option value="">${wired(pin)?'από σύρμα':'— (καμία)'}</option>${outs.map(o=>`<option value="${esc(o.v)}" ${o.v===v?'selected':''}>${esc(o.t)}</option>`).join('')}</select></span></div>`;}).join('')+'<small class="muted">Σύνδεση χωρίς καλώδιο: ισοδυναμεί με σύρμα.</small>',{cnt:sigIns.length});}
+ // 3.19: what each signal port carries (units check of the last netlist) and what an input expects
+ const UT=S.sim?.net?.units,sp=Object.entries(P.sigPins(c));
+ if(UT&&window.Units&&atTop()&&sp.length){const rows=sp.map(([pin,v])=>{const e=v.dir==='in'?Units.expect(c,pin):null;
+   return `<li><b>${esc(pin)}</b> ${v.dir==='in'?'←':'→'} ${esc(Units.txt(UT.type(c.id+':'+pin)))}${e&&(e.u||e.f)?` <span class="muted">(περιμένει ${esc(Units.txt(e))})</span>`:''}</li>`;});
+  h+=psec('p-units','Μονάδες και τύποι θυρών',`<ul class="diag-list">${rows.join('')}</ul><small class="muted">Από τον έλεγχο μονάδων (ρύθμιση στο κύκλωμα). «Χωρίς τύπο» ταιριάζει με όλα.</small>`);}
  const sig=S.pfx===null?[]:signalsFor(c);if(sig.length)h+=psec('p-scope','Scope',`<div class="chips">${sig.map(([pre,n,f])=>`<button class="chip" data-probe="${pre}${pid(c.id)}${f||''}">⌁ ${esc(n)}</button>`).join('')}</div>`,{def:true});
  const skip=S.sim?.net?.diag?.skipped.find(x=>x.id===c.id);if(skip)h+=`<p class="small bad">Εκτός επίλυσης: ${skip.why==='openI'?'πηγή ρεύματος σε ανοιχτό κύκλωμα':'χωρίς σύνδεση'}.</p>`;
  const tools=window.Addons?Addons.forType(c.type):[];
@@ -615,7 +648,9 @@ function propsCircuit(){const d=S.sim?.net?.diag,doc=editor.doc,so=doc.solve||{}
   <small>Π.χ. δευτερεύον μετασχηματιστή χωρίς γείωση. Οι τάσεις μέσα στο τμήμα δεν αλλάζουν, μόνο ως προς τη γη.</small></div>
   <div class="prow"><span>R διαρροής προς τη γη <em>Ω</em></span><span class="pin-in"><input data-solve="rleak" value="${so.rleak?esc(P.eng(+so.rleak,'',4).replace(/\s/g,'')):''}" placeholder="κενό: G_min = 1 nS" inputmode="decimal"></span><small>Για «Αυτόματα»: σε κάθε κόμβο του αιωρούμενου τμήματος.</small></div>
   <div class="prow"><span>Βάση χρόνου T <em>s</em></span><span class="pin-in"><input data-solve="tbase" value="${so.tbase?esc(P.eng(+so.tbase,'',4).replace(/\s/g,'')):''}" placeholder="κενό: 1 ms" inputmode="decimal"></span><small>Όταν καμία πηγή δεν ορίζει χρόνο (π.χ. γεννήτρια Marx με φορτισμένους πυκνωτές). Το βήμα είναι T/N από την επιλογή «Βήμα».</small></div>
-  <small class="muted">Αποθηκεύονται με το κύκλωμα και ισχύουν και στον λύτη του server.</small>`,{cnt:(so.unconn||so.island||so.rleak||so.tbase)?'αλλαγμένες':''});
+  <div class="prow"><span>Μονάδες και τύποι σημάτων</span><span class="pin-in">${opt('units',[['warn','Προειδοποίηση για μονάδες, σφάλμα για abc/αβ/dq'],['strict','Αυστηρός: και οι μονάδες σφάλμα'],['off','Χωρίς έλεγχο']],so.units||'warn')}</span>
+  <small>Ένα αβ σε είσοδο dq (ή dq σε Clarke) σταματά την προσομοίωση. Άλλη μονάδα (A σε είσοδο V, άθροισμα V με A) ή άλλη συνιστώσα (β στο α) είναι προειδοποίηση. Μονάδα σε σταθερά ή κέρδος: στις παραμέτρους τους.</small></div>
+  <small class="muted">Αποθηκεύονται με το κύκλωμα και ισχύουν και στον λύτη του server.</small>`,{cnt:(so.unconn||so.island||so.rleak||so.tbase||so.units)?'αλλαγμένες':''});
  const sv=k=>so[k]===undefined?'':String(so[k]);
  h+=psec('c-step','Βήμα του λύτη',`<div class="prow"><span>Βήμα</span><span class="pin-in">${opt('step',[['','Σταθερό T/N (επιλογή «Βήμα Δt»)'],['var','Μεταβλητό, με έλεγχο σφάλματος']],sv('step'))}</span>
   <small>Μεταβλητό: σε κάθε βήμα εκτιμάται το τοπικό σφάλμα των καταστάσεων (ρεύματα πηνίων, τάσεις πυκνωτών, ροές) από διαιρεμένες διαφορές· αν περνά την ανοχή, το βήμα ξαναγίνεται μικρότερο, αλλιώς μεγαλώνει. Οι μεταγωγές και τα συμβάντα βρίσκονται όπως και με το σταθερό. Το T/N της επιλογής «Βήμα Δt» είναι το αρχικό βήμα, και το ελάχιστο είναι T/N·10⁻³.</small></div>
@@ -627,6 +662,9 @@ function propsCircuit(){const d=S.sim?.net?.diag,doc=editor.doc,so=doc.solve||{}
   <ul class="kbd-list"><li><b>W</b>: εργαλείο σύρματος. Κλικ οπουδήποτε για αρχή, κλικ για γωνίες, διπλό κλικ ή Enter για ελεύθερο άκρο, Backspace για μία γωνία πίσω, Esc για έξοδο.</li>
   <li>Σύρε ένα ελεύθερο άκρο πάνω σε ακροδέκτη ή σύρμα: συνδέεται.</li><li>Στοιχείο δύο ακροδεκτών (R, L, αμπερόμετρο, probe ρεύματος) πάνω σε σύρμα, στον άξονά του: μπαίνει σε σειρά.</li>
   <li>Probe τάσης ή βολτόμετρο: ο ακροδέκτης κουμπώνει πάνω στο σύρμα.</li><li>Alt ή Ctrl + σύρσιμο από σύρμα: διακλάδωση.</li></ul>`);
+ const pg=doc.program||[];
+ if(pg.length)h+=psec('c-prog','Πρόγραμμα αλλαγών παραμέτρων',`<ol class="diag-list">${pg.slice(0,12).map(e=>`<li><span>${eng(+e.t,'s',4)}</span> <button data-focus="${esc(e.id)}">${lb(e.id)}</button>${esc(e.k)} → ${esc(typeof e.v==='number'?eng(e.v,'',4):String(e.v))}${e.rate?' · ράμπα '+esc(eng(+e.rate,'/s',3)):''}</li>`).join('')}${pg.length>12?`<li class="muted">… και ${pg.length-12} ακόμη</li>`:''}</ol>
+  <div class="prow"><button data-progclear>✕ Σβήσιμο του προγράμματος</button><small>Ο λύτης αλλάζει κάθε παράμετρο τη στιγμή της, όπως μια ζωντανή αλλαγή. Τρέχει στον browser, στο pcl και στους workers· ο SciPy δεν το βλέπει (εκεί: πρόγραμμα t:τιμή στις παραμέτρους που το δέχονται).</small></div>`,{cnt:pg.length});
  const pins=doc.components.filter(c=>c.live?.length);
  if(pins.length)h+=psec('c-live','Ζωντανές παράμετροι (📌)',`<ul class="diag-list">${pins.map(c=>`<li><button data-focus="${esc(c.id)}">${esc(c.label||c.id)}</button>${c.live.map(k=>esc(P.PARTS[c.type].params.find(d=>d.k===k)?.label||k)).join(', ')}</li>`).join('')}</ul>`,{cnt:pins.reduce((s,c)=>s+c.live.length,0)});
  return h;}
@@ -637,6 +675,7 @@ function bindProps(box,c){
  box.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>focusComp(b.dataset.focus));
  box.querySelector('[data-group]')?.addEventListener('click',()=>groupSel());
  box.querySelectorAll('[data-solve]').forEach(el=>el.onchange=()=>{const k=el.dataset.solve;let v=el.value;if(k==='rleak'||k==='tbase'){v=v.trim()?P.parseEng(v):'';if(v!==''&&!(v>0)){el.classList.add('bad');return;}}if((k==='rtol'||k==='hmax')&&v!=='')v=+v;editor.setSolve({[k]:v});});
+ box.querySelector('[data-progclear]')?.addEventListener('click',()=>{editor.setProgram([]);renderProps();});
  box.querySelectorAll('[data-stepcheck]').forEach(b=>b.onclick=()=>{if(S.sim&&!S.error)S.sim.stepCheck();renderDiag();openDiag();});
  box.querySelectorAll('[data-eset]').forEach(el=>el.onchange=()=>{editor.settings[el.dataset.eset]=el.checked;saveSettings();});
  if(!c&&!atTop())bindDef(box);
@@ -647,7 +686,8 @@ function bindProps(box,c){
   bindSub(box,c);
   box.querySelectorAll('[data-src]').forEach(el=>el.onchange=()=>{editor.setParams(id,{['in_'+el.dataset.src]:el.value||undefined});if(!el.value)delete editor.comp(id).params['in_'+el.dataset.src];editor.renderPins();});
   box.querySelectorAll('[data-k]').forEach(el=>{const go=()=>{const k=el.dataset.k,f=fieldValue(c,k,el);el.classList.toggle('bad',!!f.bad);if(f.bad)return;const v=f.v;
-    const cur=editor.comp(id)?.params[k];if(cur===v||(el.dataset.num&&numOf(cur)===v))return;editor.setParams(id,{[k]:v});};
+    const cur=editor.comp(id)?.params[k];if(cur===v||(el.dataset.num&&numOf(cur)===v))return;editor.setParams(id,{[k]:v});
+    if(S.sim&&S.sim.t>0&&P.structural(c.type,k))notice(`«${esc(partDef(c)?.params.find(d=>d.k===k)?.label||k)}» είναι δομική παράμετρος (αλλάζει τη συνδεσμολογία ή τον τρόπο λειτουργίας): για σωστό αποτέλεσμα ξεκίνα από την αρχή με ⟲.`,'info');};
    el.onchange=go;if(el.dataset.num)el.onkeydown=e=>{if(e.key==='Enter')go();};});}
  const w=editor.selection().w.length===1?editor.wire(editor.selection().w[0]):null;
  if(w){const id=w.id;box.querySelector('[data-wname]')?.addEventListener('change',e=>{editor.setWireProps(id,{name:e.target.value.trim()});renderChannels();});
@@ -1004,11 +1044,19 @@ function propsDef(){const name=S.nav[S.nav.length-1].name,d=curDef(),ports=SubC.
  const pp=d.params||[];
  h+=psec('d-pub','Δημόσιες παράμετροι',(pp.length?pp.map((q,i)=>`<div class="prow"><span><input data-pp="${i}" data-pf="label" value="${esc(q.label||q.k)}" aria-label="Ετικέτα"> <em>${esc(q.unit||'')}</em></span><span class="pin-in"><input data-pp="${i}" data-pf="def" value="${esc(q.def??'')}" aria-label="Προεπιλογή" title="Προεπιλογή"><button class="pinbtn" data-ppdel="${i}" title="Αφαίρεση">✕</button></span>
    <small>όνομα <input class="pp-k" data-pp="${i}" data-pf="k" value="${esc(q.k)}" aria-label="Όνομα"> → ${(q.bind||[]).map(([c,k])=>esc(c+'.'+k)).join(', ')||'—'}</small></div>`).join(''):'<p class="small muted">Καμία. Διάλεξε ένα στοιχείο και πάτα ⤴ δίπλα σε μια παράμετρό του: γίνεται δημόσια και αλλάζει χωριστά σε κάθε instance. Ίδιο όνομα σε δύο στοιχεία = μία κοινή παράμετρος.</p>'),{def:true,cnt:pp.length});
+ // 3.19 (question 3 of 3.17): what this definition takes from outside it. It keeps working; a signal source can become a
+ // port, a reference (PWM, clock, sensor) a public parameter, so that an exported definition does not depend on the project
+ const ext=SubC.externalRefs({subcircuits:{[name]:{components:editor.doc.components}}},name);
+ if(ext.length)h+=psec('d-ext','Αναφορές προς τα έξω',`<ul class="diag-list">${ext.map(r=>`<li><button data-focus="${esc(r.id)}">${esc(r.id)}</button>${esc(r.kind==='in'?'είσοδος '+r.k.slice(3):r.k)} → ${esc(r.ref)} ${r.kind==='in'?`<button class="chip" data-refport="${esc(r.id+'|'+r.k)}" title="Θύρα του ορισμού στη θέση της αναφοράς· κάθε instance παίρνει την ίδια πηγή στη νέα του είσοδο">→ θύρα</button>`:`<button class="chip" data-refpub="${esc(r.id+'|'+r.k)}" title="Δημόσια παράμετρος: κάθε instance διαλέγει το δικό του">⤴ δημόσια</button>`}</li>`).join('')}</ul><small class="muted">Βρίσκονται πρώτα μέσα στον ορισμό και μετά έξω. Ένας ορισμός που εξάγεται τις χρειάζεται στο νέο project.</small>`,{cnt:ext.length});
  h+=`<div class="chips"><button class="chip" data-subup>↑ Έξοδος</button><button class="chip" data-subexport title="Ο ορισμός (και όσοι χρησιμοποιεί) σε αρχείο, για άλλο project">⇩ Εξαγωγή ορισμού</button></div>`;
  return h;}
 function bindDef(box){const d=curDef();if(!d)return;const name=S.nav[S.nav.length-1].name,redo=()=>{buildSim(false);saveLocal();renderCrumbs();renderProps();};
  box.querySelectorAll('[data-subup]').forEach(b=>b.onclick=()=>leaveSub(S.nav.length-1));
  box.querySelector('[data-subexport]')?.addEventListener('click',()=>exportDef(name));
+ box.querySelectorAll('[data-refpub]').forEach(b=>b.onclick=()=>{const [id,k]=b.dataset.refpub.split('|');togglePublic(id,k);redo();});
+ box.querySelectorAll('[data-refport]').forEach(b=>b.onclick=()=>{const [id,k]=b.dataset.refport.split('|');commitView();
+  try{const r=SubC.refToPort(S.top,name,id,k);S.top=r.project;const nd=S.top.subcircuits[name];editor.load({components:nd.components||[],wires:nd.wires||[],version:S.top.version},{keepView:true});notice(`Νέα θύρα «${esc(r.port)}»· κάθε instance παίρνει την ίδια πηγή στην είσοδό του.`,'info');}
+  catch(e){notice(esc(e.message),'error');return;}redo();});
  box.querySelectorAll('[data-dk]').forEach(el=>el.onchange=()=>{d[el.dataset.dk]=el.value;redo();renderPalette();});
  box.querySelectorAll('[data-pp]').forEach(el=>el.onchange=()=>{const q=d.params[+el.dataset.pp],f=el.dataset.pf;let v=el.value.trim();
   if(f==='k'){if(!SubC.okName(v)||d.params.some(x=>x!==q&&x.k===v)){el.classList.add('bad');return;}
@@ -1918,6 +1966,7 @@ function boot(){
  $('#avgline').onchange=e=>{scope.cfg.avgLine=e.target.checked;draw(true);};
  ['#rm-sig','#rm-ev','#rm-ref','#rm-band','#rm-val','#rm-t'].forEach(q=>$(q).onchange=renderMetricsPanel);$('#rm-block').ontoggle=renderMetricsPanel;
  ['#ff-sig','#ff-f1','#ff-p','#ff-h'].forEach(q=>$(q).onchange=renderFFT);$('#ff-block').ontoggle=renderFFT;
+ $('#ev-block').ontoggle=renderEvents;$('#ev-kind').onchange=renderEvents;$('#ev-src').oninput=renderEvents;$('#ev-csv').onclick=eventsCsv;
  $('#eis-block').ontoggle=renderEISForm;$('#eis-run').onclick=runEIS;$('#eis-stop').onclick=()=>{EIS.run=false;};
  ['#bf-sig','#bf-stat'].forEach(q=>$(q).onchange=renderPoincare);$('#bf-block').ontoggle=()=>{renderBifurcationForm();renderPoincare();};$('#bf-run').onclick=runBifurcation;$('#bf-stop').onclick=stopBifurcation;
  $('#bt-run').onclick=runBatch;$('#bt-clear').onclick=clearBatch;$('#bt-show').onchange=e=>{scope.setRefs(e.target.checked&&S.batch?{label:S.batch.label,data:S.batch.data}:null);};
@@ -1982,5 +2031,6 @@ function boot(){
 }
 function renderTheoryLive(){if(!atTop()||document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
-window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun};
+window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
+ renderEvents,togglePin,refreshControls,changesToSchedule,renderProps}; // 3.19: for tests/ui/live_flow.js
 })();

@@ -46,6 +46,14 @@ class Buses(unittest.TestCase):
         self.assertIn({'type': 'PORT', 'width': '3'}, s['create']['ports'])
         self.assertLess(s['create']['maxDiff'], 1e-9)
 
+    def test_display_of_a_vector(self):
+        self.assertEqual(self.R['vecDisp'], {'vec': 3, 'v': [1, 2, 3]})
+
+    def test_vector_b1_blocks_are_scalar_copies(self):
+        # 3.19: second-order filter, rate limiter and edge detector per element, parameters with ';'
+        v = self.R['vecB1']
+        self.assertEqual(v['vec'], v['sep'])
+
     def test_vector_pi_is_two_scalar_loops(self):
         v = self.R['vecPI']
         self.assertTrue(v['same'])
@@ -81,7 +89,7 @@ class Buses(unittest.TestCase):
 
     def test_widths_that_do_not_fit(self):
         e = self.R['errors']
-        self.assertIn('πλάτος 3 (K1.y) και 1 (D1.u)', e['scalarIn'])
+        self.assertIn('πλάτος 3 (K1.y) και 1 (D1.vdc)', e['scalarIn'])
         self.assertIn('δεν χωρίζεται σε 2', e['demux'])
         self.assertIn('η είσοδος a έχει πλάτος 2', e['elementwise'])
         self.assertIn('ζητά το στοιχείο 3', e['select'])
