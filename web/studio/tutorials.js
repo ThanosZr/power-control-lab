@@ -896,6 +896,71 @@
    return project(comps,wires,{sim:{hDiv:2000,speed:5,stopT:dur},
     scope:{panes:[[['Y:F1/Ia','i_a σφάλματος'],['Y:F1/Ib','i_b σφάλματος'],['Y:F1/Ic','i_c σφάλματος']],[['Y:F1/Ig','ρεύμα προς γη'],['Y:CB1/Ia','i_a διακόπτη']]],window:{unit:'T',n:4}},
     meta:{grid,kind,xf,dur,cb:o.cb==='open',xfp:xf?{grp:'Dyn11',Sn:40e6,U1:150e3,U2:20e3,uk:10,Pk:200e3}:null}});}});
+ // 4.3: synchronous generator (§31.6), the IEEE First Benchmark Model (§25), IEEE 9 in EMT from its load flow (§31.7)
+ const ph3=['a','b','c'];
+ // three-phase short circuit at the terminals of a generator at no load (typical round-rotor data, as in the part)
+ T.push({id:'gen_sc',group:'Συστήματα ισχύος (4.3)',title:'Τριφασικό βραχυκύκλωμα στα άκρα σύγχρονης γεννήτριας',theory:'formula',topology:'gen_sc',
+  options:[{k:'t0',label:'Στιγμή σφάλματος',options:[['zero','v_a = 0 (μέγιστη συνιστώσα DC στη φάση a)'],['peak','v_a στο μέγιστο (χωρίς DC στη φάση a)']],def:'zero'},
+   {k:'ra',label:'R_a',options:[['0.003','0,003 pu (τυπική)'],['0.01','0,01 pu (γρήγορη απόσβεση της DC)']],def:'0.003'}],
+  desc:'Γεννήτρια 100 MVA, 13,8 kV χωρίς φορτίο, με τάση 1 pu. Στα 40 ms περίπου γίνεται τριφασικό βραχυκύκλωμα στα άκρα της. Το ρεύμα περνά από την υπομεταβατική στη μεταβατική και στη μόνιμη τιμή, με τις σταθερές χρόνου T″_d και T′_d· η συνιστώσα DC σβήνει με T_a.',
+  tasks:['Σύγκρινε το πλάτος του ρεύματος στην αρχή, στα 0,3 s και στα 2 s με τα E/X″_d, E/X′_d, E/X_d της κάρτας.','Με σφάλμα στο μέγιστο της v_a, η φάση a ξεκινά χωρίς συνιστώσα DC· οι b και c όχι.','Το ρεύμα διέγερσης πηδά στο σφάλμα: η ροή του δρομέα διατηρείται.'],
+  build(o){const Ra=+o.ra||0.003,f=50,w=2*Math.PI*f,t0=(Math.ceil(0.04*f*2)/(2*f))+(o.t0==='peak'?1/(4*f):0);
+   const comps=[C('SG1','GEN3',160,240,{Ra,V0:1,ang0:0},{label:'γεννήτρια'}),C('F1','FLT3',360,340,{kind:'abcg',ton:t0,Rf:0,Rg:0},{lbl:'below'}),gnd(160,360)];
+   const wires=ph3.map((k,j)=>['SG1:'+k,'F1:'+k]);
+   return project(comps,wires,{version:4,sim:{hDiv:400,speed:2,stopT:2.5},
+    scope:{panes:[[['Y:F1/Ia','i_a'],['Y:F1/Ib','i_b'],['Y:F1/Ic','i_c']],[['Y:SG1:ifd','i_fd (pu)'],['Y:SG1:te','T_e (pu)']]],window:{unit:'s',n:2.5}},
+    meta:{gen:{...Parts.defaults('GEN3'),Ra,V0:1},t0}});}});
+ // IEEE First Benchmark Model (1977): generator, Δ-Y transformer, line with series capacitor, infinite bus; six masses
+ const FBM_SHAFT={shaft:'multi',Hm:'0.092897; 0.155589; 0.858670; 0.884215; 0.868495; 0.0342165',Km:'19.303; 34.929; 52.038; 70.858; 2.822',Dmu:'0; 0; 0; 0; 0',Tfr:'30; 26; 22; 22; 0; 0',gm:5};
+ function fbmPoint(P0,pf,Xc){const Q0=P0*Math.tan(Math.acos(pf)),c=(r,i)=>({r,i}),mul=(a,b)=>c(a.r*b.r-a.i*b.i,a.r*b.i+a.i*b.r),sub=(a,b)=>c(a.r-b.r,a.i-b.i),sh=c(Math.cos(Math.PI/6),Math.sin(Math.PI/6));
+  const I=c(P0,-Q0),VA=mul(sub(c(1,0),mul(c(0,0.14),I)),sh),Ih=mul(I,sh),VB=sub(VA,mul(c(0.02,0.5-Xc),Ih)),E=sub(VB,mul(c(0,0.06),Ih));
+  return {E:Math.hypot(E.r,E.i),eAng:Math.atan2(E.i,E.r),bAng:Math.atan2(VB.i,VB.r)};}
+ T.push({id:'fbm',group:'Συστήματα ισχύος (4.3)',title:'IEEE First Benchmark Model: υποσύγχρονος συντονισμός (SSR)',theory:'formula',topology:'fbm',
+  options:[{k:'case',label:'Περίπτωση',options:[['1T','1-T: σφάλμα στο B, X_c = 0,371 pu'],['1S','1-S: αυτοδιέγερση, ρυθμός 3, X_c = 0,287 pu']],def:'1T'}],
+  desc:'Το δίκτυο και ο στρόβιλος-γεννήτρια του IEEE First Benchmark Model (1977): γεννήτρια 892,4 MVA με άξονα έξι μαζών (HP, IP, LPA, LPB, GEN, EXC), μετασχηματιστής Δ-Υ, γραμμή με πυκνωτή σειράς και άπειρος ζυγός, όλα σε ανά μονάδα της γεννήτριας στα 60 Hz. 1-T: P = 0,9 pu, cos φ = 0,9· τριφασικό σφάλμα με γη μέσω X_F = 0,04 pu στο B, όταν v_a = 0, που εκκαθαρίζεται σε 0,075 s στα μηδενισμένα ρεύματα. 1-S: χωρίς φορτίο, μοντέλο δρομέα του ρυθμού 3 και απόσβεση στη μάζα της γεννήτριας· ένας μικρός παλμός ροπής διεγείρει τους ρυθμούς.',
+  tasks:['1-T: σύγκρινε τη ροπή LPA–LPB και GEN–EXC με το Σχ. 5 του paper (κάρτα).','1-S: ο ρυθμός 3 (25,55 Hz) μεγαλώνει με ρυθμό περίπου 1,52 1/s· μέτρησε από την περιβάλλουσα της ροπής.','Άλλαξε το X_c του πυκνωτή και δες πότε ο συντονισμός f₀ − f_er πέφτει πάνω σε άλλο στρεπτικό ρυθμό.'],
+  build(o){const S1=o.case==='1S',Sn=892.4e6,Ug=22e3,Uh=500e3,f=60,w=2*Math.PI*f,Zb=Uh*Uh/Sn,Xc=S1?0.287:0.371,P0=S1?0:0.9,op=fbmPoint(P0,0.9,Xc);
+   const tf=S1?0:(Math.ceil((0.05*w+op.bAng)/Math.PI)*Math.PI-op.bAng)/w;
+   const rotor=S1?{data:'circ',cXad:1.66,cXfd:0.04080,cRfd:0.00764,cXkd:0,cRkd:0,cXaq:1.58,cX1q:0.04556,cR1q:0.00998,cX2q:0,cR2q:0}
+    :{data:'circ',cXad:1.66,cXfd:0.062,cRfd:0.53/377,cXkd:0.0055,cRkd:1.54/377,cXaq:1.58,cX1q:0.326,cR1q:5.3/377,cX2q:0.095,cR2q:3.1/377};
+   const comps=[C('SG1','GEN3',140,300,{Sn,Un:Ug,f,pp:1,...rotor,Ra:0,Xl:0.13,X0:0.13,...FBM_SHAFT,Dm:S1?'0; 0; 0; 0; 0.77504; 0':'0; 0; 0; 0; 0; 0',V0:1,ang0:0,
+     ...(S1?{mech:'sched',Tm:'0:0, 0.02:0.05, 0.03:0'}:{})},{label:'γεννήτρια'}),
+    C('T1','XF3',320,300,{grp:'Dyn11',U1:Ug,U2:Uh,Sn,f,uk:14,Pk:0,i0:0,P0:0}),
+    C('LN1','LINE3',500,300,{unit:'pu',Un:Uh,Sb:Sn,f,R1:0.02,X1:0.5,B1:0,z0:'given',R0:0.5,X0:1.56,B0:0},{label:'γραμμή'}),
+    C('E1','VAC3',980,300,{Vpk:op.E*Uh*Math.SQRT2/Math.sqrt(3),f,phase:op.eAng*180/Math.PI,Rs:0,Ls:0},{label:'άπειρος ζυγός'}),C('GND','GND',980,380,{},{label:'0 V'})];
+   const wires=[['E1:n','GND:g']];
+   ph3.forEach((k,j)=>{const y=200+100*j;comps.push(C('C'+k,'C',660,y,{C:1/(w*Xc*Zb)},{rot:1,label:'C_'+k}),C('LS'+k,'L',820,y,{L:0.06*Zb/w},{label:'X_s'}));
+    wires.push(['SG1:'+k,'T1:'+k+'1'],['T1:'+k+'2','LN1:'+k+'1'],['LN1:'+k+'2','C'+k+':p'],['C'+k+':n','LS'+k+':a'],['LS'+k+':b','E1:'+k]);});
+   if(!S1){comps.push(C('CB1','CB3',760,560,{cmd:`0:0, ${+tf.toFixed(6)}:1, ${+(tf+0.075).toFixed(6)}:0`},{label:'σφάλμα στο B'}));
+    ph3.forEach((k,j)=>{comps.push(C('LF'+k,'L',900,520+40*j,{L:0.04*Zb/w},{label:'X_F'}));wires.push(['C'+k+':n','CB1:'+k+'1'],['CB1:'+k+'2','LF'+k+':a'],['LF'+k+':b','GND:g']);});}
+   const panes=S1?[[['Y:SG1:ts2','IP–LPA'],['Y:SG1:ts4','LPB–GEN']],[['Y:SG1','ω (pu)']]]:[[['Y:SG1:ts3','LPA–LPB'],['Y:SG1:ts5','GEN–EXC']],[['Y:SG1:te','T_e (pu)']],[['I:SG1','i_a γεννήτριας'],['V:Ca','v του πυκνωτή']]];
+   return project(comps,wires,{version:4,sim:{hDiv:333,speed:2,stopT:S1?4:+(tf+0.5).toFixed(4)},scope:{panes,window:{unit:'s',n:S1?4:0.5}},meta:{case:S1?'1S':'1T',tf,Xc,P0}});}});
+ // IEEE 9-bus (WSCC) system in EMT, from its load flow (pcl.network.ieee9(), MATPOWER numbering; machines of Anderson & Fouad)
+ const IEEE9_LF={1:[1.04,0],2:[1.025,9.280005],3:[1.025,4.664751],5:[1.012654,-3.687396],7:[1.015883,0.727536],9:[0.995631,-3.988805]};
+ const IEEE9_GEN={G1:{Xd:0.1460,Xdp:0.0608,Xdpp:0.0608,Xq:0.0969,Xqp:0.0969,Xqpp:0.0969,Xl:0.0336,X0:0.0336,Td0p:8.96,Td0pp:0,Tq0p:0,Tq0pp:0,H:23.64},
+  G2:{Xd:0.8958,Xdp:0.1198,Xdpp:0.1198,Xq:0.8645,Xqp:0.1969,Xqpp:0.1969,Xl:0.0521,X0:0.0521,Td0p:6.00,Td0pp:0,Tq0p:0.535,Tq0pp:0,H:6.40},
+  G3:{Xd:1.3125,Xdp:0.1813,Xdpp:0.1813,Xq:1.2578,Xqp:0.25,Xqpp:0.25,Xl:0.0742,X0:0.0742,Td0p:5.89,Td0pp:0,Tq0p:0.600,Tq0pp:0,H:3.01}};
+ T.push({id:'ieee9_emt',group:'Συστήματα ισχύος (4.3)',title:'IEEE 9 ζυγών σε EMT, από τη ροή φορτίου',theory:'formula',topology:'ieee9_emt',
+  options:[{k:'ev',label:'Γεγονός',options:[['none','Καμία διαταραχή: η μόνιμη κατάσταση της ροής φορτίου'],['fault','Σφάλμα 5 κύκλων (A&F, Παρ. 2.7), μηχανές ως κλασικό μοντέλο'],['full','Το ίδιο σφάλμα με τα πλήρη δεδομένα, χωρίς AVR']],def:'none'}],
+  desc:'Το δίκτυο WSCC των 9 ζυγών (αρίθμηση του MATPOWER, 345 kV, 100 MVA, 60 Hz). Οι γεννήτριες έχουν τα δεδομένα του Anderson & Fouad (Πίν. 2.1) και ξεκινούν από την τάση |V|∠θ της ροής φορτίου του pcl.network· τα φορτία είναι σταθερές εμπεδήσεις ίσες με το φορτίο στην τάση της ροής φορτίου. Οι μετασχηματιστές είναι κλάδοι σε ανά μονάδα, όπως στη ροή φορτίου. Χωρίς διαταραχή το EMT μένει στη ροή φορτίου.',
+  tasks:['Χωρίς διαταραχή: P, Q και δ των γεννητριών μένουν σταθερά· η κάρτα δείχνει τις τιμές της ροής φορτίου και του Anderson & Fouad.','Σφάλμα με κλασικό μοντέλο: η δ₂ − δ₁ ανεβαίνει περίπου 70° και επιστρέφει, όπως στο Σχ. 2.22 του Anderson & Fouad (85° από 17,5°).','Με τα πλήρη δεδομένα και σταθερή E_fd οι γεννήτριες 2 και 3 χάνουν τον συγχρονισμό: η ροή του άξονα q σβήνει γρήγορα (T′_q0 ≈ 0,5 s) και χωρίς AVR η E_fd δεν βοηθά.'],
+  build(o){const F=o.ev==='fault'||o.ev==='full',cl=o.ev==='fault',Un=345e3,Sb=100e6,f=60,c={conn:'bus'};
+   // the classical model of the example: E′ behind X′_d constant (X′_q = X′_d, very long T′_d0 and T′_q0)
+   const GD=id=>cl?{...IEEE9_GEN[id],Xqp:IEEE9_GEN[id].Xdp,Xqpp:IEEE9_GEN[id].Xdp,Td0p:1000,Tq0p:1000}:IEEE9_GEN[id];
+   const L=(id,x,y,r,xx,b,rot)=>C(id,'LINE3',x,y,{unit:'pu',Un,Sb,f,R1:r,X1:xx,B1:b,z0:'same',...c},{rot:rot||0,label:id});
+   const G=(id,bus,x,y)=>C(id,'GEN3',x,y,{Sn:Sb,Un,f,pp:1,data:'std',...GD(id),Ra:0,shaft:'one',D:0,V0:IEEE9_LF[bus][0],ang0:IEEE9_LF[bus][1],...c},{label:id+' (ζυγός '+bus+')'});
+   const Ld=(id,bus,x,y,P,Q)=>{const V=IEEE9_LF[bus][0];return C(id,'LOAD3',x,y,{cn:'yn',Un,f,P:P/(V*V),Q:Q/(V*V),model:'z',...c},{label:id,lbl:'below'});};
+   const comps=[G('G2',2,100,160),J('B2',220,160),L('T28',320,160,0,0.0625,0),J('B8',440,160),L('L87',580,160,0.0085,0.072,0.149),J('B7',720,160),L('L76',860,160,0.0119,0.1008,0.209),J('B6',1000,160),
+    L('T63',1120,160,0,0.0586,0),J('B3',1220,160),C('G3','GEN3',1360,160,{Sn:Sb,Un,f,pp:1,data:'std',...GD('G3'),Ra:0,shaft:'one',D:0,V0:IEEE9_LF[3][0],ang0:IEEE9_LF[3][1],...c},{flip:true,label:'G3 (ζυγός 3)'}),
+    Ld('LD7',7,720,280,100e6,35e6),L('L89',440,320,0.032,0.161,0.306,1),J('B9',440,480),Ld('LD9',9,320,600,125e6,50e6),L('L65',1000,320,0.039,0.17,0.358,1),J('B5',1000,480),Ld('LD5',5,1120,600,90e6,30e6),
+    L('L94',580,560,0.01,0.085,0.176),J('B4',720,640),L('L54',860,560,0.017,0.092,0.158),L('T41',720,760,0,0.0576,0,1),J('B1',720,880),G('G1',1,560,880)];
+   const wires=[['G2:abc','B2'],['B2','T28:abc1'],['T28:abc2','B8'],['B8','L87:abc1'],['L87:abc2','B7'],['B7','L76:abc1'],['L76:abc2','B6'],['B6','T63:abc1'],['T63:abc2','B3'],['B3','G3:abc'],
+    ['B7','LD7:abc'],['B9','LD9:abc'],['B6','L65:abc1'],['L65:abc2','B5'],['B5','LD5:abc'],['B9','L94:abc1'],['L94:abc2','B4'],['B5','L54:abc1'],['L54:abc2','B4'],['B4','T41:abc1'],['T41:abc2','B1'],['B1','G1:abc']];
+   if(F){comps.push(C('CB8','CB3',440,250,{cmd:'0:1, 0.183333:0',...c},{rot:1,label:'CB 8'}),J('FP',440,300),C('CB9','CB3',440,400,{cmd:'0:1, 0.183333:0',...c},{rot:1,label:'CB 9'}),C('F1','FLT3',540,300,{kind:'abcg',ton:0.1,Rf:0,Rg:0,...c},{lbl:'below'}));
+    comps.find(q=>q.id==='L89').y=340;wires.push(['B8','CB8:abc1'],['CB8:abc2','FP'],['FP','F1:abc'],['FP','L89:abc1'],['L89:abc2','CB9:abc1'],['CB9:abc2','B9']);}
+   else wires.push(['B8','L89:abc1'],['L89:abc2','B9']);
+   const panes=[[['Y:G1:d','δ₁ (°)'],['Y:G2:d','δ₂ (°)'],['Y:G3:d','δ₃ (°)']],[['Y:G1:pe','P₁'],['Y:G2:pe','P₂'],['Y:G3:pe','P₃']],[['Y:G1','ω₁'],['Y:G2','ω₂'],['Y:G3','ω₃']]];
+   return project(comps,wires,{version:4,sim:{hDiv:400,speed:F?5:2,stopT:F?2:0.5},scope:{panes,window:{unit:'s',n:F?2:0.5}},meta:{lf:IEEE9_LF,fault:F,classical:cl}});}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
  root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};

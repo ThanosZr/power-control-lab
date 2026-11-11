@@ -498,6 +498,52 @@
     num('Vmin','Κάτω από V_min: σταθερή εμπέδηση','%',70,{show:p=>p.model==='zip',hint:'Τα μέρη i και p γίνονται σταθερή εμπέδηση κάτω από αυτή την τάση (π.χ. σε σφάλμα), όπως στα προγράμματα ροής φορτίου.'}),CONN('abc')],
    value:p=>p.P,unit:'W',
    draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="50" rx="4"/>'+(isBus(p)?bl('M0,-40 V-30'):'<path d="M-20,-40 V-30 M0,-40 V-30 M20,-40 V-30"/>')+'<path class="thin" d="M-12,-18 V8 M0,-18 V8 M12,-18 V8 M-16,8 H16"/>'+tx('P,Q',0,17,'bsm')},
+  // 4.3 (§31.6, §25): synchronous generator with field and dampers, a shaft of one or more masses, steady start from the
+  // terminal voltage of a load flow. Per unit on S_n, U_n (reactances, resistances), times in s.
+  GEN3:{name:'Σύγχρονη γεννήτρια (διέγερση, αποσβεστήρες, άξονας)',prefix:'G',group:'Δίκτυο',pins:p=>{const o=isBus(p)?{abc:[40,0]}:{a:[40,-20],b:[40,0],c:[40,20]};if(p.neut==='pin')o.n=[40,40];return o;},
+   box:p=>[-30,-35,60,p.shaft==='multi'?80:70],bus:p=>isBus(p)?{abc:['a','b','c']}:{},spins:p=>genSpins(p),
+   params:[num('Sn','Ονομαστική ισχύς S_n (βάση των ανά μονάδα)','VA',100e6),num('Un','Ονομαστική πολική τάση U_n','V',13.8e3),num('f','Συχνότητα','Hz',50),num('pp','Ζεύγη πόλων p','',1),
+    sel('data','Δεδομένα μηχανής',[['std','Τυπικά: X_d, X′_d, X″_d, T′_d0, …'],['circ','Κύκλωμα δρομέα: X_ad, X_fd, R_fd, …']],'std',{hint:'Τυπικά δεδομένα: μετατρέπονται στο κύκλωμα του δρομέα (διέγερση και έως ένας αποσβεστήρας στον άξονα d, έως δύο στον q). Ένα τύλιγμα παραλείπεται όταν η σταθερά χρόνου του είναι 0.'}),
+    sel('conv','Μετατροπή σε κύκλωμα',[['exact','Ακριβής (ορισμοί IEEE 115)'],['class','Κλασική (προσεγγιστική)']],'exact',{show:p=>p.data!=='circ',hint:'Ακριβής: οι σταθερές χρόνου βραχυκύκλωσης και ανοιχτού κυκλώματος είναι ακριβώς οι ρίζες του κυκλώματος, όπως στο παράρτημα του IEEE First Benchmark Model. Κλασική: οι προσεγγιστικοί τύποι (T′_d0 για τη διέγερση μόνη, T″_d0 για τον αποσβεστήρα).'}),
+    num('Ra','Αντίσταση στάτη R_a','pu',0.003,{zero:true}),num('Xl','Σκέδαση στάτη X_l','pu',0.15,{zero:true}),num('X0','Μηδενική ακολουθία X₀','pu',0.15,{hint:'Αυτεπαγωγή μηδενικής ακολουθίας του στάτη (συνήθως κοντά στη X_l).'}),
+    num('Xd','X_d','pu',1.81,{show:p=>p.data!=='circ'}),num('Xdp','X′_d','pu',0.3,{show:p=>p.data!=='circ'}),num('Xdpp','X″_d','pu',0.23,{show:p=>p.data!=='circ'}),
+    num('Xq','X_q','pu',1.76,{show:p=>p.data!=='circ'}),num('Xqp','X′_q','pu',0.65,{show:p=>p.data!=='circ',hint:'Ίση με X_q (ή T′_q0 = 0): χωρίς αργό τύλιγμα στον άξονα q (μηχανή έκτυπων πόλων).'}),num('Xqpp','X″_q','pu',0.25,{show:p=>p.data!=='circ'}),
+    num('Td0p','T′_d0','s',8,{show:p=>p.data!=='circ'}),num('Td0pp','T″_d0','s',0.03,{zero:true,show:p=>p.data!=='circ',hint:'0: χωρίς αποσβεστήρα στον άξονα d.'}),
+    num('Tq0p','T′_q0','s',1,{zero:true,show:p=>p.data!=='circ'}),num('Tq0pp','T″_q0','s',0.07,{zero:true,show:p=>p.data!=='circ'}),
+    num('cXad','X_ad','pu',1.66,{show:p=>p.data==='circ'}),num('cXfd','X_fd (σκέδαση διέγερσης)','pu',0.062,{zero:true,show:p=>p.data==='circ'}),num('cRfd','R_fd','pu',0.0014,{show:p=>p.data==='circ',hint:'Σε ανά μονάδα. Αν η πηγή δίνει 377·R (όπως ο Πίνακας I του First Benchmark), διαίρεσε με 377.'}),
+    num('cXkd','X_kd (αποσβεστήρας d)','pu',0.0055,{zero:true,show:p=>p.data==='circ'}),num('cRkd','R_kd','pu',0.0041,{zero:true,show:p=>p.data==='circ',hint:'0: χωρίς αποσβεστήρα d.'}),
+    num('cXaq','X_aq','pu',1.58,{show:p=>p.data==='circ'}),num('cX1q','X_1q','pu',0.326,{zero:true,show:p=>p.data==='circ'}),num('cR1q','R_1q','pu',0.0141,{zero:true,show:p=>p.data==='circ',hint:'0: χωρίς αυτό το τύλιγμα.'}),
+    num('cX2q','X_2q','pu',0.095,{zero:true,show:p=>p.data==='circ'}),num('cR2q','R_2q','pu',0.0082,{zero:true,show:p=>p.data==='circ'}),
+    sel('shaft','Άξονας',[['one','Μία μάζα (H, D)'],['multi','Πολλές μάζες με ελατήρια']],'one',{hint:'Ανά μονάδα: 2H·dω/dt = T, dδ/dt = ω_b·(ω − 1) με δ σε ηλεκτρικά rad, K σε ανά μονάδα ροπή ανά rad, D σε ανά μονάδα ροπή ανά ανά μονάδα ταχύτητα.'}),
+    num('H','Σταθερά αδράνειας H','s',3.5,{show:p=>p.shaft!=='multi'}),num('D','Απόσβεση D','pu',0,{zero:true,show:p=>p.shaft!=='multi'}),
+    txt('Hm','H ανά μάζα (s, με «;»)','0.6; 2.5; 0.05',{show:p=>p.shaft==='multi',hint:'Από τη μία άκρη του άξονα στην άλλη, π.χ. στρόβιλοι, γεννήτρια, διεγέρτρια.'}),
+    txt('Km','K ανά τμήμα άξονα (pu/rad, με «;»)','40; 3',{show:p=>p.shaft==='multi',hint:'Ένα λιγότερο από τις μάζες: το τμήμα k ενώνει τις μάζες k και k + 1.'}),
+    txt('Dm','D ανά μάζα (pu, με «;»)','0; 0; 0',{show:p=>p.shaft==='multi',hint:'Απόσβεση ως προς τη σύγχρονη ταχύτητα: D·(ω − 1).'}),
+    txt('Dmu','D ανά τμήμα άξονα (pu, με «;»)','0; 0',{show:p=>p.shaft==='multi',hint:'Αμοιβαία απόσβεση D·(ω_k − ω_k+1).'}),
+    txt('Tfr','Μερίδιο της T_m ανά μάζα (%, με «;»)','100; 0; 0',{show:p=>p.shaft==='multi'}),num('gm','Μάζα της γεννήτριας (αριθμός)','',2,{show:p=>p.shaft==='multi'}),
+    sel('exc','Τάση διέγερσης E_fd',[['init','Από τη μόνιμη κατάσταση (σταθερή)'],['sched','Τιμή ή πρόγραμμα'],['sig','Από σήμα (ακροδέκτης efd)']],'init',{hint:'E_fd σε ανά μονάδα στην ευθεία του διακένου: E_fd = 1 δίνει 1 pu τάση χωρίς φορτίο.'}),
+    txt('Efd','E_fd(t)','1',{show:p=>p.exc==='sched',hint:'Σταθερή τιμή ή «t:τιμή» σε pu.'}),
+    sel('mech','Μηχανική ροπή T_m',[['init','Από τη μόνιμη κατάσταση (σταθερή)'],['sched','Τιμή ή πρόγραμμα'],['sig','Από σήμα (ακροδέκτης tm)']],'init'),
+    txt('Tm','T_m(t)','0',{show:p=>p.mech==='sched',hint:'Σταθερή τιμή ή «t:τιμή» σε pu, μοιρασμένη στις μάζες κατά τα μερίδια.'}),
+    sel('init','Αρχική κατάσταση',[['lf','Μόνιμη κατάσταση από την τάση ακροδεκτών (ροή φορτίου)'],['zero','Από την αρχή (ροές 0, ω = 1)']],'lf',{hint:'Ροή φορτίου: το κύκλωμα λύνεται πρώτα με φασιθέτες, με τη γεννήτρια ως πηγή |V|∠θ, και η μηχανή, ο άξονας και το δίκτυο ξεκινούν από αυτή τη μόνιμη κατάσταση.'}),
+    num('V0','Τάση ακροδεκτών |V|','pu',1,{show:p=>p.init!=='zero'}),num('ang0','Γωνία τάσης θ (φάση a)','°',0,{signed:true,zero:true,show:p=>p.init!=='zero',hint:'v_a = √2·|V|·U_n/√3·sin(ωt + θ), όπως οι πηγές της εφαρμογής.'}),
+    sel('neut','Ουδέτερος στάτη',[['gnd','Γειωμένος'],['iso','Μονωμένος'],['pin','Ακροδέκτης n']],'gnd'),CONN('abc')],
+   value:p=>p.Sn,unit:'VA',
+   draw:p=>{const sp=genSpins(p),L=Object.entries(sp);let h='<rect class="block" x="-30" y="-35" width="60" height="'+(p.shaft==='multi'?80:70)+'" rx="6"/><circle r="15" cy="-5"/><path class="thin" d="M-8,-5 c3,-7 5,-7 8,0 c3,7 5,7 8,0"/>'+tx('SG',0,22,'bsm');
+    h+=isBus(p)?bl('M30,0 H40'):'<path d="M30,-20 H40 M30,0 H40 M30,20 H40"/>';if(p.neut==='pin')h+='<path d="M30,40 H40"/>';
+    const LB={w:'ω',te:'τ',pe:'P',qe:'Q',vt:'V',ifd:'i_f',d:'δ'};for(const [k,s] of L){const [x,y]=s.at;if(LB[k])h+=tx(LB[k],-23,y+3,'pinl');h+=sl(x<-30?`M${x},${y} H-30`:y<-35?`M${x},${y} V-35`:`M${x},${y} V${p.shaft==='multi'?45:35}`);}
+    return h;}},
+  // 4.3: three-phase line as one π section from sequence data (R₁, X₁, B₁, R₀, X₀, B₀), in Ω and S or in per unit
+  LINE3:{name:'Γραμμή (τμήμα π, ακολουθίες)',prefix:'LN',group:'Δίκτυο',pins:p=>isBus(p)?{abc1:[-40,0],abc2:[40,0]}:{a1:[-40,-20],b1:[-40,0],c1:[-40,20],a2:[40,-20],b2:[40,0],c2:[40,20]},box:[-30,-25,60,50],
+   bus:p=>isBus(p)?{abc1:['a1','b1','c1'],abc2:['a2','b2','c2']}:{},
+   params:[sel('unit','Δεδομένα σε',[['ohm','Ω και S (σύνολο της γραμμής)'],['pu','Ανά μονάδα στη βάση S_b, U_n']],'ohm'),num('Un','Ονομαστική πολική τάση U_n','V',150e3),
+    num('Sb','Ισχύς βάσης S_b','VA',100e6,{show:p=>p.unit==='pu'}),num('f','Συχνότητα','Hz',50),
+    num('R1','R₁ (θετική ακολουθία, Ω ή pu)','',5,{zero:true}),num('X1','X₁ (Ω ή pu)','',40),num('B1','B₁ (εγκάρσια, όλη η γραμμή, S ή pu)','',3e-4,{zero:true,hint:'Μισή σε κάθε άκρο (τμήμα π). 0: χωρίς χωρητικότητα.'}),
+    sel('z0','Μηδενική ακολουθία',[['same','Ίδια με τη θετική'],['given','R₀, X₀, B₀']],'same'),
+    num('R0','R₀ (Ω ή pu)','',15,{zero:true,show:p=>p.z0==='given'}),num('X0','X₀ (Ω ή pu)','',120,{show:p=>p.z0==='given'}),num('B0','B₀ (S ή pu)','',2e-4,{zero:true,show:p=>p.z0==='given',hint:'B₀ ≤ B₁ (η χωρητικότητα μεταξύ φάσεων είναι (C₁ − C₀)/3).'}),CONN('abc')],
+   value:p=>p.X1,unit:'',
+   draw:p=>'<rect class="block" x="-30" y="-25" width="60" height="50" rx="4"/>'+(isBus(p)?bl('M-40,0 H-30 M30,0 H40'):'<path d="M-40,-20 H-30 M-40,0 H-30 M-40,20 H-30 M30,-20 H40 M30,0 H40 M30,20 H40"/>')
+    +'<path class="thin" d="M-18,-4 h6 c2,-6 4,-6 6,0 c2,-6 4,-6 6,0 c2,-6 4,-6 6,0 h6 M-18,-4 v10 M18,-4 v10 M-22,6 h8 M14,6 h8 M-22,10 h8 M14,10 h8"/>'+tx('π',0,-12,'bsm')},
  };
  const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Μηχανές','Δίκτυο','Φορτία','Έλεγχος','Σήματα','Δίαυλοι','Κώδικας','Υποκυκλώματα','Βασικά'];
  function defaults(type){const o={};for(const p of PARTS[type].params)o[p.k]=p.def;return o;}
@@ -549,6 +595,103 @@
  // saturated d axis of the synchronous machine (3.6): f(i) = L_dsat·i + ψ_k·(1 − e^(−(L_d − L_dsat)·|i|/ψ_k))·sign(i), and its inverse (Newton)
  function satD(q,i){const a=Math.abs(i),dL=q.Ld-q.Ldsat,e=Math.exp(-dL*a/q.psik);return {psi:Math.sign(i)*(q.Ldsat*a+q.psik*(1-e)),L:q.Ldsat+dL*e};}
  function satDinv(q,psi){const a=Math.abs(psi);let i=a/q.Ld;for(let k=0;k<50;k++){const f=satD(q,i),di=(f.psi-a)/f.L;i-=di;if(Math.abs(di)<1e-13*(1+i))break;}return Math.sign(psi)*i;}
+ // generator (4.3): outputs on the left (ω first: the channel Y:id), inputs on top, shaft-section torques at the bottom
+ function genSpins(p){const o={w:O(-40,-30),te:O(-40,-20),pe:O(-40,-10),qe:O(-40,0),vt:O(-40,10),ifd:O(-40,20),d:O(-40,30)};
+  if(p.exc==='sig')o.efd=I(-10,-45);if(p.mech==='sig')o.tm=I(10,-45);
+  if(p.shaft==='multi'){const n=Math.min(6,Math.max(0,plist(p.Hm).length-1));for(let k=0;k<n;k++)o['ts'+(k+1)]=O(-25+10*k,55);}
+  return o;}
+ // ---------------------------------------------------------------- synchronous generator (4.3, ROADMAP §31.6, §25)
+ // One axis of the rotor from the standard data. Reactances in pu, times in pu (ω_b·T). Exact (IEEE 115 definitions, as
+ // in the appendix of the IEEE First Benchmark Model): the short-circuit time constants T′, T″ follow from X″ = X·T′T″/(T′₀T″₀)
+ // and X′ = X·T′(T′ − T″)/(T′(T′ − T″) − (T′ − T′₀)(T′ − T″₀)) (1/X(s) in partial fractions); then the rotor circuit
+ // X_l + X_a ∥ (R₁/s + X₁) ∥ (R₂/s + X₂) whose open- and short-circuit polynomials have those roots (Newton from the
+ // classical circuit). Classical: the usual approximate formulas (T′₀ for the first winding alone, T″₀ for the second with
+ // the first shorted). One winding: exact either way.
+ function genTsc(X,X1,X2,T10,T20){const P=X2*T10*T20/X,f=T=>X1*(T*(T-P/T)-(T-T10)*(T-T20))-X*T*(T-P/T);let T=X1/X*T10;
+  for(let k=0;k<80;k++){const d=(f(T*(1+1e-7))-f(T))/(T*1e-7);if(!(Math.abs(d)>0))break;const dT=f(T)/d;T-=dT;if(Math.abs(dT)<1e-14*T)break;}
+  return [T,P/T];}
+ // the rotor circuit of two windings with the given open- and short-circuit polynomials: Newton on the four equations in
+ // X₁, X₂, 1/R₁, 1/R₂ from the classical circuit (start), the slow winding (field on the d axis) first
+ function genCirc2(Xa,Xl,a1,a2,b1,b2,start){const Lm=Xa*Xl/(Xa+Xl);
+  const Fn=z=>{const [A,B,x1,x2]=z,P=x1*x2;return [(Xa+A)*x1+(Xa+B)*x2-a1,(Xa*(A+B)+A*B)*P-a2,(Lm+A)*x1+(Lm+B)*x2-b1,(Lm*(A+B)+A*B)*P-b2];};
+  const sc=[a1,a2,b1,b2];let z=[start[0].X,start[1].X,1/start[0].R,1/start[1].R];
+  for(let it=0;it<100;it++){const f=Fn(z),err=Math.max(...f.map((v,k)=>Math.abs(v/sc[k])));if(err<1e-13)break;
+   const J=[[],[],[],[]];for(let q=0;q<4;q++){const d=Math.abs(z[q])*1e-7+1e-12,zz=z.slice();zz[q]+=d;const g=Fn(zz);for(let k=0;k<4;k++)J[k][q]=(g[k]-f[k])/d;}
+   const Ji=matInv(J),dz=[0,1,2,3].map(k=>J[0]?Ji[k].reduce((s,v,q)=>s+v*f[q],0):0);let lam=1;
+   for(let tries=0;tries<30;tries++){const zn=z.map((v,k)=>v-lam*dz[k]);if(zn.every(v=>v>0)&&Fn(zn).reduce((s,v,k)=>s+Math.abs(v/sc[k]),0)<f.reduce((s,v,k)=>s+Math.abs(v/sc[k]),0)){z=zn;break;}lam/=2;if(tries===29)return null;}}
+  const f=Fn(z);if(!z.every(v=>v>0&&Number.isFinite(v))||Math.max(...f.map((v,k)=>Math.abs(v/sc[k])))>1e-9)return null;
+  const w=[{X:z[0],R:1/z[2]},{X:z[1],R:1/z[3]}];w.sort((p,q)=>(Xa+q.X)/q.R-(Xa+p.X)/p.R);return w;}
+ function genAxis(X,X1,X2,Xl,T10,T20,wb,exact){
+  const Xa=X-Xl,one=(Xp,T0)=>{const Xw=Xa*(Xp-Xl)/(Xa-Xp+Xl);return {X:Xw,R:(Xa+Xw)/(wb*T0)};};
+  if(!(Xa>0))return {err:'Χρειάζεται X > X_l.'};
+  const w1=T10>0&&X1>Xl&&X1<X,w2=T20>0&&X2>Xl&&X2<(w1?X1:X);
+  if(!w1&&!w2)return {Xa,w:[]};
+  if(w1&&!w2)return {Xa,w:[one(X1,T10)]};
+  if(!w1&&w2)return {Xa,w:[one(X2,T20)]};
+  if(!(T10>T20))return {err:'Χρειάζεται T′₀ > T″₀.'};
+  const classic=()=>{const f=one(X1,T10),X2w=(X2-Xl)*Xa*f.X/(Xa*f.X-(X2-Xl)*(Xa+f.X));return X2w>0?[f,{X:X2w,R:(X2w+Xa*f.X/(Xa+f.X))/(wb*T20)}]:null;};
+  if(exact){const [T1,T2]=genTsc(X,X1,X2,T10,T20);
+   if(T1>T2&&T2>0&&T10>T1&&T20>T2){const c0=classic();if(c0){const r=genCirc2(Xa,Xl,wb*(T10+T20),wb*wb*T10*T20,wb*(T1+T2),wb*wb*T1*T2,c0);if(r)return {Xa,w:r,T:[T1,T2]};}}}
+  // classical (or the exact one has no solution: the data do not fit two rotor windings without a Canay reactance)
+  const c=classic();if(!c)return {err:'Τα X′ και X″ δεν δίνουν θετική σκέδαση αποσβεστήρα.'};
+  return {Xa,w:c,classical:exact};}
+ const plist=s=>String(s??'').split(/[;\n]/).map(x=>x.trim()).filter(x=>x!=='').map(x=>parseEng(x));
+ // the generator from its parameters: per-unit data, the rotor circuits, the inductance matrices of the d and q groups
+ // in SI (power-invariant Park, the rotor referred to the stator: L = X·L_b, R = R·Z_b with Z_b = U_n²/S_n, so that the
+ // stator–rotor mutuals are symmetric), their inverses, and the shaft. {err} when the data do not make a machine.
+ function genModel(p){const n=(v,d)=>{const x=parseEng(v);return Number.isFinite(x)?x:d;};
+  const Sn=Math.max(n(p.Sn,100e6),1),Un=Math.max(n(p.Un,13.8e3),1e-3),f=Math.max(n(p.f,50),1e-6),pp=Math.max(1,Math.round(n(p.pp,1))),wb=2*Math.PI*f;
+  const Zb=Un*Un/Sn,Lb=Zb/wb,Ra=Math.max(n(p.Ra,0),0),Xl=Math.max(n(p.Xl,0.15),0),X0=Math.max(n(p.X0,Xl)||Xl,1e-6);
+  let Xad,Xaq,dw,qw,note=null;
+  if(p.data==='circ'){Xad=n(p.cXad,1.66);Xaq=n(p.cXaq,1.58);
+   if(!(Xad>0)||!(Xaq>0))return {err:'Χρειάζονται X_ad > 0 και X_aq > 0.'};
+   const w=(X,R)=>({X:n(X,0),R:n(R,0)});
+   dw=[w(p.cXfd,p.cRfd),w(p.cXkd,p.cRkd)].filter((q,k)=>k===0||q.R>0);qw=[w(p.cX1q,p.cR1q),w(p.cX2q,p.cR2q)].filter(q=>q.R>0);
+   if(!(dw[0].R>0)||!(dw[0].X>=0))return {err:'Το τύλιγμα διέγερσης θέλει R_fd > 0 και X_fd ≥ 0.'};}
+  else{const ex=p.conv!=='class';
+   const d=genAxis(n(p.Xd,1.81),n(p.Xdp,0.3),n(p.Xdpp,0.23),Xl,n(p.Td0p,8),n(p.Td0pp,0.03),wb,ex);if(d.err)return {err:'Άξονας d: '+d.err};
+   const q=genAxis(n(p.Xq,1.76),n(p.Xqp,0.65),n(p.Xqpp,0.25),Xl,n(p.Tq0p,1),n(p.Tq0pp,0.07),wb,ex);if(q.err)return {err:'Άξονας q: '+q.err};
+   if(!d.w.length)return {err:'Άξονας d: χρειάζεται τύλιγμα διέγερσης (X′_d < X_d και T′_d0 > 0).'};
+   Xad=d.Xa;Xaq=q.Xa;dw=d.w;qw=q.w;if(d.classical||q.classical)note='Η ακριβής μετατροπή δεν έχει λύση με δύο τυλίγματα: κλασική.';}
+  for(const q of [...dw,...qw])if(!(q.X>=0)||!(q.R>0))return {err:'Ένα τύλιγμα του δρομέα βγαίνει με αρνητική σκέδαση ή αντίσταση: έλεγξε τα δεδομένα.'};
+  const grp=(Xm,Xs,ws)=>{const N=1+ws.length,L=[];for(let i=0;i<N;i++){L.push([]);for(let j=0;j<N;j++)L[i].push(Xm*Lb);}
+   L[0][0]=(Xs+Xm)*Lb;ws.forEach((q,k)=>{L[k+1][k+1]=(Xm+q.X)*Lb;});return {L,G:matInv(L)};};
+  const D=grp(Xad,Xl,dw),Q=grp(Xaq,Xl,qw),nd=dw.length,nq=qw.length;
+  // shaft: masses in per unit on S_n (2H·dω/dt = T, dδ/dt = ω_b(ω − 1), δ in electrical rad, K in pu torque per rad)
+  let sh;
+  if(p.shaft==='multi'){const H=plist(p.Hm),K=plist(p.Km),Ds=plist(p.Dm),Dmu=plist(p.Dmu),fr=plist(p.Tfr),N=H.length,gm=Math.round(n(p.gm,1))-1;
+   if(N<1||H.some(x=>!(x>0)))return {err:'Άξονας: οι σταθερές H πρέπει να είναι θετικές.'};
+   if(K.length!==N-1||K.some(x=>!(x>0)))return {err:`Άξονας: χρειάζονται ${N-1} θετικές σταθερές ελατηρίου K.`};
+   if(!(gm>=0&&gm<N))return {err:`Άξονας: η μάζα της γεννήτριας πρέπει να είναι από 1 έως ${N}.`};
+   const F=Array.from({length:N},(_,i)=>Math.max(fr[i]||0,0)),tot=F.reduce((a,b)=>a+b,0);
+   sh={N,H,K,D:Array.from({length:N},(_,i)=>Math.max(Ds[i]||0,0)),Dmu:Array.from({length:N-1},(_,i)=>Math.max(Dmu[i]||0,0)),fr:tot>0?F.map(x=>x/tot):F.map((_,i)=>i===gm?1:0),gm};}
+  else sh={N:1,H:[Math.max(n(p.H,3.5),1e-6)],K:[],D:[Math.max(n(p.D,0),0)],Dmu:[],fr:[1],gm:0};
+  return {Sn,Un,f,pp,wb,Zb,Lb,Ra,Xl,X0,Xad,Xaq,dw,qw,nd,nq,N:3+nd+nq,Ld:D.L,Gd:D.G,Lq:Q.L,Gq:Q.G,L0:X0*Lb,g0:1/(X0*Lb),
+   Rr:[...dw,...qw].map(q=>q.R*Zb),vfK:dw[0].R/Xad*Un,ifK:Xad*Un/Sn,sh,note};}
+ // Γ(θ) of the flux element: ports a, b, c (to the neutral), then the d rotor windings, then the q ones; θ the electrical
+ // angle of the d axis from phase a, the q axis 90° ahead. Γ = Tᵀ·blockdiag(Γ_d, Γ_q, 1/L₀)·T with T orthonormal.
+ const R23=Math.sqrt(2/3),R13=1/Math.sqrt(3);
+ function genGamma(g,th,G){const N=g.N,nd=g.nd,dd=[],qq=[];
+  for(let k=0;k<3;k++){const a=th-k*2*Math.PI/3;dd.push(R23*Math.cos(a));qq.push(-R23*Math.sin(a));}
+  const Gd=g.Gd,Gq=g.Gq,g0=g.g0/3;
+  for(let k=0;k<3;k++)for(let j=0;j<3;j++)G[k*N+j]=Gd[0][0]*dd[k]*dd[j]+Gq[0][0]*qq[k]*qq[j]+g0;
+  for(let r=0;r<nd;r++){const c=3+r;for(let k=0;k<3;k++){const v=Gd[0][r+1]*dd[k];G[k*N+c]=v;G[c*N+k]=v;}for(let s=0;s<nd;s++)G[c*N+3+s]=Gd[r+1][s+1];for(let s=0;s<g.nq;s++){G[c*N+3+nd+s]=0;G[(3+nd+s)*N+c]=0;}}
+  for(let r=0;r<g.nq;r++){const c=3+nd+r;for(let k=0;k<3;k++){const v=Gq[0][r+1]*qq[k];G[k*N+c]=v;G[c*N+k]=v;}for(let s=0;s<g.nq;s++)G[c*N+3+nd+s]=Gq[r+1][s+1];}
+  return G;}
+ // d, q (power-invariant) of the stator part of a port vector at angle θ
+ function genDQ(x,th){let d=0,q=0,z=0;for(let k=0;k<3;k++){const a=th-k*2*Math.PI/3;d+=R23*Math.cos(a)*x[k];q-=R23*Math.sin(a)*x[k];z+=R13*x[k];}return [d,q,z];}
+ // steady state from the positive-sequence phasors (peak, cosine reference) of the stator port voltage and of the current
+ // into the machine, at ω (rad/s): θ₀ (d axis at t = 0), dq currents, field current, port fluxes, E_fd (pu) and the
+ // electrical torque on the rotor (pu, motor sense). The dampers carry no current.
+ function genSteady(g,V,I,w){const k=Math.sqrt(1.5),Lq=g.Lq[0][0],Ld=g.Ld[0][0],Lad=g.Xad*g.Lb;
+  const E=[V[0]+w*Lq*I[1],V[1]-w*Lq*I[0]],th=Math.atan2(E[1],E[0])-Math.PI/2,c=Math.cos(th),s=Math.sin(th);
+  const rot=z=>[k*(z[0]*c+z[1]*s),k*(z[1]*c-z[0]*s)],[vd,vq]=rot(V),[id,iq]=rot(I);
+  const ifd=(vq/w-Ld*id)/Lad,pd=Ld*id+Lad*ifd,pq=Lq*iq;
+  const psi=new Float64Array(g.N);for(let j=0;j<3;j++){const a=th-j*2*Math.PI/3;psi[j]=R23*(Math.cos(a)*pd-Math.sin(a)*pq);}
+  psi[3]=g.Ld[1][0]*id+g.Ld[1][1]*ifd;for(let r=1;r<g.nd;r++)psi[3+r]=g.Ld[r+1][0]*id+g.Ld[r+1][1]*ifd;
+  for(let r=0;r<g.nq;r++)psi[3+g.nd+r]=g.Lq[r+1][0]*iq;
+  const If=new Float64Array(g.N);If[3]=ifd;
+  return {th,vd,vq,id,iq,ifd,psi,Efd:g.Rr[0]*ifd/g.vfK,Te:(pd*iq-pq*id)*g.wb/g.Sn,res:vd+w*Lq*iq};}
  function srmAlignedPsi(q,i){const dL=q.La-q.Lsat;return dL>0&&q.psik>0?q.Lsat*i+q.psik*(1-Math.exp(-dL*i/q.psik)):q.La*i;}
  function srmModelPsi(q,th,i){return q.Lu*i+(srmAlignedPsi(q,i)-q.Lu*i)*(1-Math.cos(th))/2;}
  function srmTableText(q,cur=[0,5,10,15,20,25,30,35,40],ang=[0,30,60,90,120,150,180]){const r=x=>+x.toPrecision(4);
@@ -676,7 +819,8 @@
  // the network library: a change rebuilds its definition (4.1); from 4.2 a value that keeps the inner circuit the same is
  // live (the reload carries the states by the inner ids), and only what changes the inner circuit is structural
  Object.assign(STRUCT,{GRID3:new Set(['z0','conn']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn']),
-  XF3:new Set(['grp','P0','core','conn']),LOAD3:new Set(['cn','model','conn'])});
+  XF3:new Set(['grp','P0','core','conn']),LOAD3:new Set(['cn','model','conn']),
+  GEN3:new Set(['data','conv','shaft','Hm','exc','mech','init','neut','conn']),LINE3:new Set(['unit','z0','conn'])});
  const structCache=new Map();
  function structural(type,k){const key=type+'|'+k;if(structCache.has(key))return structCache.get(key);let r=!!STRUCT[type]?.has(k);
   const d=PARTS[type],pd=d?.params?.find(x=>x.k===k);if(!r&&pd&&pd.struct)r=true;
@@ -722,6 +866,7 @@
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
  const api={structural,PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
   parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,bewley,movChar,
-  srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv};
+  srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv,
+  genModel,genAxis,genTsc,genGamma,genDQ,genSteady,plist};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

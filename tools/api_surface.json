@@ -1,5 +1,5 @@
 {
- "version": "4.2",
+ "version": "4.3",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -1144,6 +1144,16 @@
     ],
     "since": "4.2"
    },
+   "pcl.network.Network.to_emt": {
+    "params": [
+     "lf",
+     "machines",
+     "name",
+     "t_end",
+     "hdiv"
+    ],
+    "since": "4.3"
+   },
    "pcl.network.Network.transformer": {
     "params": [
      "hv",
@@ -1615,7 +1625,8 @@
      "--bus",
      "--mode",
      "--tmin",
-     "--out"
+     "--out",
+     "--emt"
     ],
     "since": "4.2"
    },
@@ -2536,6 +2547,76 @@
     ],
     "since": "3.18"
    },
+   "part:GEN3": {
+    "params": [
+     "Sn",
+     "Un",
+     "f",
+     "pp",
+     "data",
+     "conv",
+     "Ra",
+     "Xl",
+     "X0",
+     "Xd",
+     "Xdp",
+     "Xdpp",
+     "Xq",
+     "Xqp",
+     "Xqpp",
+     "Td0p",
+     "Td0pp",
+     "Tq0p",
+     "Tq0pp",
+     "cXad",
+     "cXfd",
+     "cRfd",
+     "cXkd",
+     "cRkd",
+     "cXaq",
+     "cX1q",
+     "cR1q",
+     "cX2q",
+     "cR2q",
+     "shaft",
+     "H",
+     "D",
+     "Hm",
+     "Km",
+     "Dm",
+     "Dmu",
+     "Tfr",
+     "gm",
+     "exc",
+     "Efd",
+     "mech",
+     "Tm",
+     "init",
+     "V0",
+     "ang0",
+     "neut",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "abc",
+     "b",
+     "c",
+     "d",
+     "efd",
+     "ifd",
+     "n",
+     "pe",
+     "qe",
+     "te",
+     "tm",
+     "ts1",
+     "ts2",
+     "vt",
+     "w"
+    ],
+    "since": "4.3"
+   },
    "part:GND": {
     "params": [],
     "pins": [
@@ -2736,6 +2817,33 @@
      "b"
     ],
     "since": "3.18"
+   },
+   "part:LINE3": {
+    "params": [
+     "unit",
+     "Un",
+     "Sb",
+     "f",
+     "R1",
+     "X1",
+     "B1",
+     "z0",
+     "R0",
+     "X0",
+     "B0",
+     "conn"
+    ],
+    "pins": [
+     "a1",
+     "a2",
+     "abc1",
+     "abc2",
+     "b1",
+     "b2",
+     "c1",
+     "c2"
+    ],
+    "since": "4.3"
    },
    "part:LOAD3": {
     "params": [

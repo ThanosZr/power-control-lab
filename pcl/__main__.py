@@ -73,6 +73,11 @@ def _net(args):
                   f'  I_b = {r.get("Ib", r["Ik"]) / 1e3:9.4f}' + (f'  I_k = {r["Ik_ss"] / 1e3:9.4f}' if 'Ik_ss' in r else ''))
             rows.append({'kind': 'sc', **{k: v for k, v in r.items() if k != 'machines' and not isinstance(v, complex)},
                          **{k: [v.real, v.imag] for k, v in r.items() if isinstance(v, complex)}})
+    if args.emt:                # 4.3: the network as a project of the app that starts from the load flow
+        r = net.load_flow()
+        machines = N.IEEE9_MACHINES if src == 'ieee9' else None
+        Path(args.emt).write_text(json.dumps(net.to_emt(r, machines=machines), ensure_ascii=False, indent=1), encoding='utf-8')
+        print(f'Project EMT (εκκίνηση από τη ροή φορτίου): {args.emt}')
     if args.out:
         if args.out.endswith('.csv'):
             import csv
@@ -169,6 +174,7 @@ def main(argv=None):
     a.add_argument('--mode', choices=['max', 'min'], default='max')
     a.add_argument('--tmin', type=float, default=0.1, help='ελάχιστος χρόνος καθυστέρησης για το I_b (s)')
     a.add_argument('--out', help='αρχείο .json ή .csv με τα αποτελέσματα')
+    a.add_argument('--emt', help='4.3: αρχείο .json με το δίκτυο ως project της εφαρμογής, που ξεκινά από τη ροή φορτίου (ieee9: μηχανές του Anderson & Fouad)')
     a = sub.add_parser('link', help='μία κλήση στην ανοιχτή εφαρμογή (3.15): αρχείο JSON {method, args, client} → JSON (για το Octave)')
     a.add_argument('request')
     a.add_argument('--out', required=True)

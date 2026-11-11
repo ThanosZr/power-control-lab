@@ -258,6 +258,8 @@
     case 'FLT3':return ({ag:'a–γη',bg:'b–γη',cg:'c–γη',ab:'a–b',bc:'b–c',ca:'c–a',abg:'ab–γη',bcg:'bc–γη',cag:'ca–γη',abc:'3φ',abcg:'3φ–γη'}[p.kind]||p.kind)+(p.ctl==='sig'?' · από σήμα':' · '+e(+p.ton,'s')+(+p.toff>0?'–'+e(+p.toff,'s'):''));
     case 'CB3':return p.ctl==='sig'?'εντολή από σήμα':String(p.cmd||'').slice(0,22);
     case 'XF3':return p.grp+' · '+e(+p.Sn,'VA')+' · '+e(+p.U1,'V')+'/'+e(+p.U2,'V');
+    case 'GEN3':return e(+p.Sn,'VA')+' · '+e(+p.Un,'V')+(p.shaft==='multi'?' · '+P.plist(p.Hm).length+' μάζες':' · H '+(+p.H).toLocaleString('el-GR')+' s')+(p.init==='zero'?'':' · '+(+p.V0).toLocaleString('el-GR')+'∠'+(+p.ang0).toLocaleString('el-GR')+'°');
+    case 'LINE3':return (p.unit==='pu'?'pu: ':'')+'X₁ '+(+p.X1).toLocaleString('el-GR')+(+p.B1?' · B₁ '+(+p.B1).toLocaleString('el-GR'):'');
     case 'LOAD3':return e(+p.P,'W')+(+p.Q?' · '+e(+p.Q,'var'):'')+' · '+({yn:'YN',y:'Y',d:'Δ'}[p.cn]||'');
     case 'CONST':return String(p.v).includes(':')?String(p.v).slice(0,22):'';case 'GAIN':return 'K = '+(String(p.K).includes(';')?String(p.K).split(';').map(x=>e(+x.trim())).join('; '):e(+p.K));case 'SUM':return '';
     case 'SAT':return '['+e(+p.lo)+', '+e(+p.hi)+']';case 'CMP':return +p.hys>0?'h = '+e(+p.hys):'';case 'LOGIC':return ['nand','nor','xor'].includes(p.op)?p.op.toUpperCase():'';

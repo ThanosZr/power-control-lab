@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.2: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (383 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.3: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (386 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.2.
+Κανένα στην 4.3.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-198 σημεία.
+199 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -181,6 +181,7 @@
 | `pcl.network.Network.remove` | `name` | 4.2 |
 | `pcl.network.Network.short_circuit` | `bus`, `fault`, `mode`, `f115`, `tmin`, `temp`, `lv_tol`, `fc`, `breaking`, `rgf` | 4.2 |
 | `pcl.network.Network.shunt` | `bus`, `P`, `Q`, `name` | 4.2 |
+| `pcl.network.Network.to_emt` | `lf`, `machines`, `name`, `t_end`, `hdiv` | 4.3 |
 | `pcl.network.Network.transformer` | `hv`, `lv`, `Sr`, `Uhv`, `Ulv`, `uk`, `ur`, `group`, `X0X`, `R0R`, `Zn_hv`, `Zn_lv`, `tap`, `KT`, `shift`, `name` | 4.2 |
 | `pcl.network.Network.transformer3` | `a`, `b`, `c`, `Sr`, `Ur`, `uk`, `ur`, `group`, `ref`, `z0`, `KT`, `name` | 4.2 |
 | `pcl.network.Network.unit` | `bus`, `gen`, `trafo`, `oltc`, `pT`, `Zn`, `earthed`, `name`, `P`, `V`, `Qmin`, `Qmax`, `slack` | 4.2 |
@@ -252,7 +253,7 @@
 | `python -m pcl channels` | `<project>` | 3.18 |
 | `python -m pcl job` | `<spec>`, `--out` | 3.18 |
 | `python -m pcl link` | `<request>`, `--out` | 3.18 |
-| `python -m pcl net` | `<network>`, `--lf`, `--sc`, `--bus`, `--mode`, `--tmin`, `--out` | 4.2 |
+| `python -m pcl net` | `<network>`, `--lf`, `--sc`, `--bus`, `--mode`, `--tmin`, `--out`, `--emt` | 4.2 |
 | `python -m pcl plot` | `<spec>`, `--preset`, `--mapping`, `--kind`, `--signal`, `--table`, `--out` | 3.18 |
 | `python -m pcl run` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--chunk`, `--state`, `--resume`, `--events` | 3.18 |
 | `python -m pcl sweep` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--resume`, `--grid`, `--zip`, `--workers` | 3.18 |
@@ -381,7 +382,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-83 σημεία.
+85 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -413,6 +414,7 @@
 | `part:FEST` | mode, RR, LM, psi0 | al, be, psi, th, w1, wr | 3.18 |
 | `part:FLT3` | kind, Rf, Rg, ctl, ton, toff, conn | a, abc, b, c, f | 4.1 |
 | `part:GAIN` | K, unit | u, y | 3.18 |
+| `part:GEN3` | Sn, Un, f, pp, data, conv, Ra, Xl, X0, Xd, Xdp, Xdpp, Xq, Xqp, Xqpp, Td0p, Td0pp, Tq0p, Tq0pp, cXad, cXfd, cRfd, cXkd, cRkd, cXaq, cX1q, cR1q, cX2q, cR2q, shaft, H, D, Hm, Km, Dm, Dmu, Tfr, gm, exc, Efd, mech, Tm, init, V0, ang0, neut, conn | a, abc, b, c, d, efd, ifd, n, pe, qe, te, tm, ts1, ts2, vt, w | 4.3 |
 | `part:GND` | — | g | 3.18 |
 | `part:GRID3` | Un, f, phase, cf, emf, Sk, XR, z0, Z0Z1, Sk1, XR0, Rn, conn | a, abc, b, c | 4.1 |
 | `part:ICLARKE` | inv, conn | a, ab, abc, al, b, be, c | 3.18 |
@@ -426,6 +428,7 @@
 | `part:KG` | kind, mat | a1, a2, b1, b2 | 3.18 |
 | `part:KL` | nw, L1, L2, L3, L4, k, kpairs, Lmat, Rw, i0 | a1, a2, a3, a4, b1, b2, b3, b4 | 3.18 |
 | `part:L` | L, i0, Rs | a, b | 3.18 |
+| `part:LINE3` | unit, Un, Sb, f, R1, X1, B1, z0, R0, X0, B0, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.3 |
 | `part:LOAD3` | cn, Un, f, P, Q, model, kz, ki, kp, Vmin, conn | a, abc, b, c | 4.1 |
 | `part:LOGIC` | op | a, b, y | 3.18 |
 | `part:LPF` | fc, y0 | u, y | 3.18 |

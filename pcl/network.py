@@ -730,6 +730,86 @@ class Network:
         res['_idx'] = idx
         return res
 
+    # ------------------------------------------------------------ to the EMT solver (4.3)
+    def to_emt(self, lf=None, machines=None, name=None, t_end=0.5, hdiv=400):
+        """The network as a project of the app for an EMT run that starts in the steady state of the load flow (4.3):
+        each generator a GEN3 whose terminal voltage |V|∠θ is the load-flow result at its bus (the EMT start solves the
+        circuit with phasors around it, see THEORY), each branch a LINE3 π section in per unit (a branch with a tap a YNyn0
+        XF3), each load a LOAD3 of constant impedance equal to the load at its load-flow voltage (P·(z + i/V + p/V²)), each
+        shunt a LOAD3 at U_n. machines: {generator name: GEN3 parameters} (e.g. IEEE9_MACHINES); the rest typical values.
+        lf: a result of load_flow (computed when None). Returns the project dict (pcl.Project(net.to_emt()))."""
+        lf = lf or self.load_flow()
+        if not lf.get('converged'):
+            raise NetworkError('the load flow did not converge')
+        machines = machines or {}
+        names = [b for b in self.buses if self.buses[b]['type'] != 'internal']
+        ncol = max(1, math.ceil(math.sqrt(len(names))))
+        pos = {b: (240 + 520 * (i % ncol), 200 + 420 * (i // ncol)) for i, b in enumerate(names)}
+        comps, wires, notes = [], [], []
+
+        def C(cid, typ, x, y, params, rot=0, label=None):
+            comps.append({'id': cid, 'type': typ, 'x': x, 'y': y, 'rot': rot, 'flip': False, 'label': label or cid, 'params': params})
+            return cid
+
+        def W(a, b):
+            wires.append({'id': f'w{len(wires) + 1}', 'a': {'c': a[0], 'p': a[1]}, 'b': {'c': b[0], 'p': b[1]}, 'pts': []})
+
+        jid = {b: C('B' + b, 'JUNC', *pos[b], {}, label='') for b in names}
+        f = self.f
+        for e in self.elements:
+            k, nm = e['kind'], e['name']
+            if k == 'generator':
+                b = e['bus']
+                x, y = pos[b]
+                r = lf['buses'][b]
+                prm = {'Sn': e['Sr'], 'Un': self.buses[b]['Un'], 'f': f, 'conn': 'bus', 'V0': r['V'], 'ang0': r['angle']}
+                prm.update(machines.get(nm, {}))
+                C(nm, 'GEN3', x - 160, y - 120, prm)
+                W((nm, 'abc'), (jid[b], 'j'))
+            elif k == 'branch':
+                a, b = e['a'], e['b']
+                (xa, ya), (xb, yb) = pos[a], pos[b]
+                xm, ym = (xa + xb) // 2 // 10 * 10, (ya + yb) // 2 // 10 * 10 + 60
+                Un = self.buses[a]['Un']
+                if e['angle'] or (e['ratio'] and abs(e['ratio'] - 1) > 1e-12):
+                    if e['angle']:
+                        raise NetworkError(f'{nm}: phase-shifting branches are not in the EMT export yet')
+                    z = math.hypot(e['r'], e['x'])
+                    C(nm, 'XF3', xm, ym, {'grp': 'YNyn0', 'Sn': self.S_base, 'U1': Un, 'U2': self.buses[b]['Un'], 'f': f, 'uk': 100 * z,
+                                          'Pk': e['r'] * self.S_base, 'i0': 0, 'P0': 0, 'tap': 100 * (e['ratio'] - 1), 'conn': 'bus'})
+                    notes.append(f'{nm}: tap {e["ratio"]}: XF3 with half of the leakage on each side (the load flow has it after the tap)')
+                else:
+                    C(nm, 'LINE3', xm, ym, {'unit': 'pu', 'Un': Un, 'Sb': self.S_base, 'f': f, 'R1': e['r'], 'X1': e['x'], 'B1': e['bc'],
+                                            'z0': 'same', 'conn': 'bus'})
+                W((nm, 'abc1'), (jid[a], 'j'))
+                W((nm, 'abc2'), (jid[b], 'j'))
+            elif k == 'line':
+                a, b = e['a'], e['b']
+                (xa, ya), (xb, yb) = pos[a], pos[b]
+                L, n = e['length'], max(1, e['parallel'])
+                prm = {'unit': 'ohm', 'Un': self.buses[a]['Un'], 'f': f, 'R1': e['R'] * L / n, 'X1': e['X'] * L / n, 'B1': e['B'] * L * n, 'conn': 'bus'}
+                if e.get('R0') is not None and e.get('X0') is not None:
+                    prm.update({'z0': 'given', 'R0': e['R0'] * L / n, 'X0': e['X0'] * L / n, 'B0': e['B'] * L * n})
+                C(nm, 'LINE3', (xa + xb) // 2 // 10 * 10, (ya + yb) // 2 // 10 * 10 + 60, prm)
+                W((nm, 'abc1'), (jid[a], 'j'))
+                W((nm, 'abc2'), (jid[b], 'j'))
+            elif k in ('load', 'shunt'):
+                b = e['bus']
+                x, y = pos[b]
+                V = lf['buses'][b]['V']
+                zz, ii, pp = e.get('zip', (1.0, 0.0, 0.0)) if k == 'load' else (1.0, 0.0, 0.0)
+                kk = zz + ii / V + pp / (V * V)
+                C(nm, 'LOAD3', x + (100 if k == 'load' else -100), y + 120, {'cn': 'yn', 'Un': self.buses[b]['Un'], 'f': f,
+                                                                           'P': e['P'] * kk, 'Q': e['Q'] * kk, 'model': 'z', 'conn': 'bus'})
+                W((nm, 'abc'), (jid[b], 'j'))
+            else:
+                raise NetworkError(f'{nm}: {k} is not in the EMT export yet (generator, branch, line, load, shunt)')
+        scope = [[['Y:' + e['name'], 'ω ' + e['name']] for e in self.elements if e['kind'] == 'generator'],
+                 [['Y:' + e['name'] + ':pe', 'P ' + e['name']] for e in self.elements if e['kind'] == 'generator']]
+        return {'version': 4, 'components': comps, 'wires': wires, 'name': name or self.name or 'network',
+                'sim': {'hDiv': int(hdiv), 'speed': 5, 'stopT': float(t_end)}, 'scope': {'panes': scope, 'window': {'unit': 'T', 'n': 10}},
+                'meta': {'lf': {b: {'V': lf['buses'][b]['V'], 'angle': lf['buses'][b]['angle']} for b in names}, 'notes': notes}}
+
 
 def _coo(n, rows, cols, vals):
     Y = np.zeros((n, n), complex)
@@ -894,6 +974,19 @@ def ieee(case):
 
 def ieee9():
     return ieee(9)
+
+
+# 4.3: the machines of the WSCC 9-bus system on the 100 MVA base (Anderson & Fouad, Power System Control and Stability,
+# Table 2.1): X_d, X′_d, X_q, X′_q, X_l, T′_d0, T′_q0 and H = stored energy / 100 MVA. No subtransient data: one field
+# winding, one q winding where T′_q0 > 0 (generator 1 is a hydro unit without). Names as in ieee9().
+IEEE9_MACHINES = {
+    'G1': {'Sn': 100e6, 'data': 'std', 'Xd': 0.1460, 'Xdp': 0.0608, 'Xdpp': 0.0608, 'Xq': 0.0969, 'Xqp': 0.0969, 'Xqpp': 0.0969, 'Xl': 0.0336,
+           'X0': 0.0336, 'Td0p': 8.96, 'Td0pp': 0, 'Tq0p': 0, 'Tq0pp': 0, 'Ra': 0, 'shaft': 'one', 'H': 23.64, 'D': 0},
+    'G2': {'Sn': 100e6, 'data': 'std', 'Xd': 0.8958, 'Xdp': 0.1198, 'Xdpp': 0.1198, 'Xq': 0.8645, 'Xqp': 0.1969, 'Xqpp': 0.1969, 'Xl': 0.0521,
+           'X0': 0.0521, 'Td0p': 6.00, 'Td0pp': 0, 'Tq0p': 0.535, 'Tq0pp': 0, 'Ra': 0, 'shaft': 'one', 'H': 6.40, 'D': 0},
+    'G3': {'Sn': 100e6, 'data': 'std', 'Xd': 1.3125, 'Xdp': 0.1813, 'Xdpp': 0.1813, 'Xq': 1.2578, 'Xqp': 0.25, 'Xqpp': 0.25, 'Xl': 0.0742,
+           'X0': 0.0742, 'Td0p': 5.89, 'Td0pp': 0, 'Tq0p': 0.600, 'Tq0pp': 0, 'Ra': 0, 'shaft': 'one', 'H': 3.01, 'D': 0},
+}
 
 
 def ieee14():

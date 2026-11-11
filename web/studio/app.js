@@ -64,6 +64,7 @@ function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;if(['
  if(c.type==='PY'){const os=outsOf(c);return {text:os.map((o,k)=>o+' = '+eng(s.now('Y:'+c.id+(k?':'+o:'')),'',4)).join(' · ')};}
  if(c.type==='IM')return {i:s.now('I:'+c.id),text:'ω '+eng(val('Y:'+c.id),'rad/s',4)+' · τ '+eng(val('Y:'+c.id+':te'),'N·m',3)+' · |ψ| '+eng(s.now('Y:'+c.id+':psi'),'V·s',3)};
  if(c.type==='SRM'){const n=s.net.compInfo.get(c.id)?.srm?.N||0;return {i:s.now('I:'+c.id),text:'ω '+eng(val('Y:'+c.id),'rad/s',4)+' · τ '+eng(val('Y:'+c.id+':te'),'N·m',3)+' · '+Array.from({length:n},(_,k)=>'i'+'₁₂₃₄'[k]+' '+eng(val((k?'I'+(k+1):'I')+':'+c.id),'A',3)).join(' · ')};}
+ if(c.type==='GEN3')return {i:s.now('I:'+c.id),text:'ω '+fmt(val('Y:'+c.id),5)+' pu · P '+fmt(val('Y:'+c.id+':pe'),4)+' · Q '+fmt(val('Y:'+c.id+':qe'),4)+' pu · δ '+fmt(val('Y:'+c.id+':d'),4)+'°'};
  if(c.type==='SM')return {i:s.now('I:'+c.id),text:'ω '+eng(val('Y:'+c.id),'rad/s',4)+' · τ '+eng(val('Y:'+c.id+':te'),'N·m',3)+' · i_d '+eng(val('Y:'+c.id+':id'),'A',3)+' · i_q '+eng(val('Y:'+c.id+':iq'),'A',3)};
  if(c.type==='TL')return {i:s.now('I:'+c.id),text:'v₁ '+eng(val('V:'+c.id),'V',3)+' · v₂ '+eng(val('V2:'+c.id),'V',3)};
  if(c.type==='KL'||c.type==='KG'){const n=s.net.compInfo.get(c.id)?.ports?.length||0;return {i:s.now('I:'+c.id),text:Array.from({length:n},(_,k)=>(avg?'⌀ ':'')+'i'+'₁₂₃₄₅₆₇₈'[k]+' '+eng(val((k?'I'+(k+1):'I')+':'+c.id),'A',3)).join(' · ')};}
@@ -82,11 +83,12 @@ function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;if(['
 // signal blocks (3.0): output unit, and which outputs are 0/1
 const LOGIC_BLK=new Set(['CMP','SR','CLK','LOGIC','EDGE']);
 function blkUnit(c,pin){if(!c)return '';const t=c.type;if(t==='VM'||t==='VP')return 'V';if(t==='AM'||t==='IP')return 'A';if(t==='MEAS')return c.params?.qty==='V'?'V':'A';
- if(t==='DCM')return pin==='te'?'N·m':'rad/s';if(t==='IM')return pin==='te'?'N·m':pin==='psi'?'V·s':pin==='w'||!pin?'rad/s':'rad';if(t==='SM')return pin==='te'?'N·m':pin==='th'?'rad':pin==='id'||pin==='iq'?'A':'rad/s';if(t==='SRM')return pin==='te'?'N·m':pin==='th'?'rad':/^i\d$/.test(pin||'')?'A':'rad/s';if(t==='FEST')return pin==='psi'?'V·s':pin==='w1'?'rad/s':'rad';if(t==='PLL')return pin==='amp'?'':pin==='w'?'rad/s':'rad';if(t==='INT'&&c.params?.wrap==='2pi')return 'rad';
+ if(t==='DCM')return pin==='te'?'N·m':'rad/s';if(t==='IM')return pin==='te'?'N·m':pin==='psi'?'V·s':pin==='w'||!pin?'rad/s':'rad';if(t==='SM')return pin==='te'?'N·m':pin==='th'?'rad':pin==='id'||pin==='iq'?'A':'rad/s';if(t==='SRM')return pin==='te'?'N·m':pin==='th'?'rad':/^i\d$/.test(pin||'')?'A':'rad/s';if(t==='GEN3')return pin==='d'?'°':'pu';if(t==='FEST')return pin==='psi'?'V·s':pin==='w1'?'rad/s':'rad';if(t==='PLL')return pin==='amp'?'':pin==='w'?'rad/s':'rad';if(t==='INT'&&c.params?.wrap==='2pi')return 'rad';
  const u=S.sim?.net?.units?.out(c.id,pin)?.u;return u&&u!=='1'?u:'';} // 3.19: what the units check inferred (a constant or gain with a unit, filters, sums …)
 // symbols of the outputs of multi-output blocks (first output = channel Y:id, the others Y:id:pin)
-const OUT_SYM={IM:{w:'ω',te:'τ_e',psi:'|ψ_R|',thf:'θ_f',thr:'θ_r'},SM:{w:'ω',te:'τ_e',th:'θ',id:'i_d',iq:'i_q'},SRM:{w:'ω',te:'τ_e',th:'θ_e',i1:'i₁',i2:'i₂',i3:'i₃',i4:'i₄'},FEST:{th:'θ̂',psi:'|ψ̂|',w1:'ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ω',te:'τ_e'},PLL:{th:'θ',w:'ω',amp:'V̂_d'},CLARKE:{al:'α',be:'β'},IPARK:{al:'α',be:'β'},PARK:{d:'d',q:'q'},ICLARKE:{a:'a',b:'b',c:'c'},SR:{q:'Q',nq:'Q̄'},EDGE:{y:'y',n:'n'}};
-const OUT_TXT={IM:{w:'ταχύτητα ω',te:'ροπή τ_e',psi:'ροή δρομέα |ψ_R|',thf:'γωνία ροής θ_f',thr:'γωνία δρομέα θ_r'},SM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'ηλεκτρική γωνία δρομέα θ',id:'ρεύμα i_d',iq:'ρεύμα i_q'},SRM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'γωνία θ_e της φάσης 1',i1:'ρεύμα φάσης 1 (αισθητήρας)',i2:'ρεύμα φάσης 2 (αισθητήρας)',i3:'ρεύμα φάσης 3 (αισθητήρας)',i4:'ρεύμα φάσης 4 (αισθητήρας)'},FEST:{th:'γωνία θ̂',psi:'ροή |ψ̂|',w1:'συχνότητα ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ταχύτητα ω',te:'ροπή τ_e'},PLL:{th:'γωνία θ',w:'συχνότητα ω',amp:'πλάτος (v_d)'},CLARKE:{al:'συνιστώσα α',be:'συνιστώσα β'},IPARK:{al:'συνιστώσα α',be:'συνιστώσα β'},PARK:{d:'συνιστώσα d',q:'συνιστώσα q'},ICLARKE:{a:'φάση a',b:'φάση b',c:'φάση c'},SR:{q:'έξοδος Q',nq:'έξοδος Q̄'},EDGE:{y:'παλμός y στην ακμή',n:'πλήθος ακμών n'}};
+const GEN_TS={ts1:'T₁₂',ts2:'T₂₃',ts3:'T₃₄',ts4:'T₄₅',ts5:'T₅₆',ts6:'T₆₇'};
+const OUT_SYM={GEN3:{w:'ω',te:'T_e',pe:'P',qe:'Q',vt:'|V|',ifd:'i_fd',d:'δ',...GEN_TS},IM:{w:'ω',te:'τ_e',psi:'|ψ_R|',thf:'θ_f',thr:'θ_r'},SM:{w:'ω',te:'τ_e',th:'θ',id:'i_d',iq:'i_q'},SRM:{w:'ω',te:'τ_e',th:'θ_e',i1:'i₁',i2:'i₂',i3:'i₃',i4:'i₄'},FEST:{th:'θ̂',psi:'|ψ̂|',w1:'ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ω',te:'τ_e'},PLL:{th:'θ',w:'ω',amp:'V̂_d'},CLARKE:{al:'α',be:'β'},IPARK:{al:'α',be:'β'},PARK:{d:'d',q:'q'},ICLARKE:{a:'a',b:'b',c:'c'},SR:{q:'Q',nq:'Q̄'},EDGE:{y:'y',n:'n'}};
+const OUT_TXT={GEN3:{w:'ταχύτητα ω (pu, μάζα της γεννήτριας)',te:'ηλεκτρική ροπή T_e (pu)',pe:'ενεργός ισχύς P (pu)',qe:'άεργος ισχύς Q (pu)',vt:'τάση ακροδεκτών |V| (pu)',ifd:'ρεύμα διέγερσης i_fd (pu)',d:'γωνία φορτίου δ (°)',ts1:'ροπή τμήματος άξονα 1–2 (pu)',ts2:'ροπή τμήματος 2–3 (pu)',ts3:'ροπή τμήματος 3–4 (pu)',ts4:'ροπή τμήματος 4–5 (pu)',ts5:'ροπή τμήματος 5–6 (pu)',ts6:'ροπή τμήματος 6–7 (pu)'},IM:{w:'ταχύτητα ω',te:'ροπή τ_e',psi:'ροή δρομέα |ψ_R|',thf:'γωνία ροής θ_f',thr:'γωνία δρομέα θ_r'},SM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'ηλεκτρική γωνία δρομέα θ',id:'ρεύμα i_d',iq:'ρεύμα i_q'},SRM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'γωνία θ_e της φάσης 1',i1:'ρεύμα φάσης 1 (αισθητήρας)',i2:'ρεύμα φάσης 2 (αισθητήρας)',i3:'ρεύμα φάσης 3 (αισθητήρας)',i4:'ρεύμα φάσης 4 (αισθητήρας)'},FEST:{th:'γωνία θ̂',psi:'ροή |ψ̂|',w1:'συχνότητα ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ταχύτητα ω',te:'ροπή τ_e'},PLL:{th:'γωνία θ',w:'συχνότητα ω',amp:'πλάτος (v_d)'},CLARKE:{al:'συνιστώσα α',be:'συνιστώσα β'},IPARK:{al:'συνιστώσα α',be:'συνιστώσα β'},PARK:{d:'συνιστώσα d',q:'συνιστώσα q'},ICLARKE:{a:'φάση a',b:'φάση b',c:'φάση c'},SR:{q:'έξοδος Q',nq:'έξοδος Q̄'},EDGE:{y:'παλμός y στην ακμή',n:'πλήθος ακμών n'}};
 function outsOf(c){const q=c?.params?.conn==='bus'?{...c,params:{...c.params,conn:'sep'}}:c;return Object.entries(P.sigPins(q)).filter(([,d])=>d.dir==='out').map(([k])=>k);}
 // a block on a bus (3.18) runs as one block per element, <id>[k]: how many (after the last build), and the id without [k]
 const vecN=id=>S.sim?.net?.vec?.[id]||0,vecBase=id=>{const m=/^(.*)\[(\d+)\]$/.exec(String(id));return m?{id:m[1],k:+m[2]}:null;};
@@ -103,7 +105,7 @@ function addProbe(key,label){if(!S.sim)return;const ok=scope.addChannel(key,labe
 function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash');}
 function signalsFor(c,full){const t=c.type,nv=vecN(full||(S.pfx?pid(c.id):c.id));if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI'||t==='SUB'||SubC.PORT_KIND[t]||window.NetLib&&NetLib.isLib(t))return [];
  if(t==='PY')return outsOf(c).map((o,k)=>['Y:','έξοδος '+o,k?':'+o:'']);
- if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:t==='IM'||t==='SM'?[...m,['I:','ρεύμα φάσης a'],['V:','πολική τάση v_ab']]:t==='SRM'?[...m,...Array.from({length:P.srmGeo({...P.defaults(t),...c.params})[0]},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα φάσης ${k+1}`],[(k?'V'+(k+1):'V')+':',`τάση φάσης ${k+1}`],['PSI'+(k+1)+':',`ροή φάσης ${k+1} ψ`]]).flat()]:m;}
+ if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:t==='GEN3'?[...m,['I:','ρεύμα φάσης a (προς το δίκτυο)'],['V:','τάση φάσης a ως προς τον ουδέτερο']]:t==='IM'||t==='SM'?[...m,['I:','ρεύμα φάσης a'],['V:','πολική τάση v_ab']]:t==='SRM'?[...m,...Array.from({length:P.srmGeo({...P.defaults(t),...c.params})[0]},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα φάσης ${k+1}`],[(k?'V'+(k+1):'V')+':',`τάση φάσης ${k+1}`],['PSI'+(k+1)+':',`ροή φάσης ${k+1} ψ`]]).flat()]:m;}
  if(P.BLOCKS.has(t)&&nv>1)return Array.from({length:nv},(_,k)=>['Y:',`έξοδος y, στοιχείο ${k+1} του διαύλου`,`[${k+1}]`]);
  if(P.BLOCKS.has(t))return [['Y:',t==='DISP'?'τιμή εισόδου':t==='VM'?'τάση (μέτρηση)':t==='VP'?'τάση ως προς τη γη':t==='AM'?'ρεύμα a → b (μέτρηση)':t==='IP'?'ρεύμα a → b (τσιμπίδα)':t==='SR'?'έξοδος Q':'έξοδος y']];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
  if(t==='SH')return [['H:','κρατημένη τιμή (δείγματα)']];
@@ -597,7 +599,7 @@ function renderProps(){const box=$('#props-body');if(!box||!propsOpen())return;
  box.innerHTML=h;
  box.querySelectorAll('details.psec').forEach(d=>d.ontoggle=()=>{PS[d.dataset.sec]=d.open;try{localStorage.setItem('pcl2-props-sec',JSON.stringify(PS));}catch{}});
  bindProps(box,one);if(fk)box.querySelector(`[data-k="${CSS.escape(fk)}"]`)?.focus();}
-function propsComp(c){const def=partDef(c),p={...pdefaults(c),...c.params},live=new Set(c.live||[]),machine=['IM','SM','SRM','DCM'].includes(c.type),inDef=!atTop(),pub=inDef?publicOf(c.id):new Map();
+function propsComp(c){const def=partDef(c),p={...pdefaults(c),...c.params},live=new Set(c.live||[]),machine=['IM','SM','SRM','DCM','GEN3'].includes(c.type),inDef=!atTop(),pub=inDef?publicOf(c.id):new Map();
  const secOf=d=>c.type==='PWM'&&CTL_K.has(d.k)?'ctl':INIT_K.has(d.k)?'init':MECH_K.has(d.k)?'mech':!machine&&LOSS_K.has(d.k)?'loss':'main';
  const groups=new Map();for(const d of def.params){if(d.show&&!d.show(p))continue;const g=secOf(d);if(!groups.has(g))groups.set(g,[]);groups.get(g).push(d);}
  const row=d=>`<div class="prow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span><span class="pin-in">${fieldHTML(c,d,p).replace(` id="f_${d.k}"`,'')}${inDef?(['num','text','select','bool','ref'].includes(d.type)?`<button class="pinbtn pubbtn${pub.has(d.k)?' on':''}" data-pub-k="${d.k}" aria-pressed="${pub.has(d.k)}" title="${pub.has(d.k)?'Δημόσια παράμετρος «'+esc(pub.get(d.k))+'» του υποκυκλώματος: κλικ για να μείνει εσωτερική':'Δημόσια παράμετρος του υποκυκλώματος: αλλάζει χωριστά σε κάθε instance'}">⤴</button>`:''):d.type==='num'&&!P.structural(c.type,d.k)?`<button class="pinbtn${live.has(d.k)?' on':''}" data-pin-k="${d.k}" aria-pressed="${live.has(d.k)}" title="${live.has(d.k)?'Αφαίρεση από τις ζωντανές παράμετροι':'📌 Στις ζωντανές παράμετροι, με ρυθμιστή'}">📌</button>`:''}</span>${d.hint?`<small>${esc(d.hint)}</small>`:''}</div>`;
@@ -1289,6 +1291,38 @@ function evalOrderHTML(){const o=S.sim?.net.sig.order||[];if(!o.length)return ''
 // 3.18: the dq current loop on buses. Plant L·di/dt = v − e − R·i in dq (θ = ωt − 90°), PI with K_p = ω_c·L, K_i = ω_c·R and
 // decoupling ωL: i_dq/i*_dq = ω_c/(s + ω_c); in steady state v_dq = e_dq + (R + jωL)·i_dq
 // 4.1: fault in a network (IEC 60909 by symmetrical components; the phase-domain solution of netlib.js for any fault)
+// 4.3: generator short circuit (classical decrement curve), First Benchmark (shaft modes, published results), IEEE 9 from its load flow
+function genScTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.gen)return '';const p={...P.defaults('GEN3'),...m.gen},g=P.genModel(p);if(g.err)return '';
+ const [T1,T2]=P.genTsc(+p.Xd,+p.Xdp,+p.Xdpp,+p.Td0p,+p.Td0pp),Ib=g.Sn/(Math.sqrt(3)*g.Un),X2=(+p.Xdpp+ +p.Xqpp)/2,Ta=X2/(g.wb*Math.max(+p.Ra,1e-9));
+ const Iac=tau=>((1/p.Xdpp-1/p.Xdp)*Math.exp(-tau/T2)+(1/p.Xdp-1/p.Xd)*Math.exp(-tau/T1)+1/p.Xd)*Ib;
+ let h=`<ul class="eqs"><li>Συμμετρικό ρεύμα (E = 1 pu, I_b = ${eng(Ib,'A')}): I_ac(τ) = E·[(1/X″_d − 1/X′_d)·e^(−τ/T″_d) + (1/X′_d − 1/X_d)·e^(−τ/T′_d) + 1/X_d]·I_b</li>
+  <li>I″ = E/X″_d = <b>${eng(Ib/p.Xdpp,'A')}</b>, I′ = E/X′_d = <b>${eng(Ib/p.Xdp,'A')}</b>, I = E/X_d = <b>${eng(Ib/p.Xd,'A')}</b> (RMS)</li>
+  <li>Σταθερές βραχυκύκλωσης (ακριβείς): T′_d = <b>${eng(T1,'s',4)}</b>, T″_d = <b>${eng(T2,'s',4)}</b>· συνιστώσα DC: T_a = X₂/(ω·R_a) = ${eng(Ta,'s',3)} με X₂ = (X″_d + X″_q)/2</li></ul>`;
+ const tau=s.t-m.t0-1/(2*g.f);if(tau<0.02)return h+'<p class="muted small">Τρέξε πέρα από το σφάλμα για τη σύγκριση.</p>';
+ const ac=['a','b','c'].map(k=>{const q=s.lastPeriod('Y:F1/I'+k);return q?Math.sqrt(Math.max(0,q.rms*q.rms-q.avg*q.avg)):NaN;});
+ return h+cmpRows([['I_ac στο τ = '+eng(tau,'s',3)+' (μέσος των φάσεων)',Iac(tau),(ac[0]+ac[1]+ac[2])/3,'A']])+'<p class="muted small">Προσομοίωση: RMS της τελευταίας περιόδου χωρίς τη μέση τιμή (DC), μέσος όρος των τριών φάσεων. Η διαφορά ανά φάση (έως 1–2 %) είναι η 2η αρμονική από X″_q ≠ X″_d.</p>';}
+// natural frequencies of a shaft (pu masses H, springs K per electrical rad): ω² = eig(ω_b·K/(2H)), by Jacobi on the symmetric form
+function shaftModes(H,K,fb){const n=H.length,A=Array.from({length:n},()=>new Array(n).fill(0));
+ for(let i=0;i<n-1;i++){A[i][i]+=K[i];A[i+1][i+1]+=K[i];A[i][i+1]-=K[i];A[i+1][i]-=K[i];}
+ const w=2*Math.PI*fb;for(let i=0;i<n;i++)for(let j=0;j<n;j++)A[i][j]*=w/(2*Math.sqrt(H[i]*H[j]));
+ for(let sw=0;sw<60;sw++){let off=0;for(let p=0;p<n;p++)for(let q=p+1;q<n;q++)off+=A[p][q]*A[p][q];if(off<1e-22)break;
+  for(let p=0;p<n;p++)for(let q=p+1;q<n;q++){if(Math.abs(A[p][q])<1e-300)continue;const th=(A[q][q]-A[p][p])/(2*A[p][q]),t=Math.sign(th||1)/(Math.abs(th)+Math.sqrt(th*th+1)),c=1/Math.sqrt(t*t+1),sn=t*c;
+   for(let k=0;k<n;k++){const a=A[k][p],b=A[k][q];A[k][p]=c*a-sn*b;A[k][q]=sn*a+c*b;}for(let k=0;k<n;k++){const a=A[p][k],b=A[q][k];A[p][k]=c*a-sn*b;A[q][k]=sn*a+c*b;}}}
+ return A.map((r,i)=>Math.sqrt(Math.max(0,r[i]))/(2*Math.PI)).sort((a,b)=>a-b).filter(x=>x>1e-3);}
+function fbmTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.case)return '';const c=compAt('SG1'),p={...P.defaults('GEN3'),...(c?.params||{})};
+ const fm=shaftModes(P.plist(p.Hm),P.plist(p.Km),+p.f),X2=m.case==='1S'?0.13+1.66*0.0408/(1.66+0.0408):0.135,Xt=X2+0.14+0.5+0.06,fer=60*Math.sqrt(m.Xc/Xt);
+ let h=`<ul class="eqs"><li>Στρεπτικοί ρυθμοί του άξονα (ιδιοτιμές): ${fm.map(x=>'<b>'+fmt(x,4)+'</b>').join(', ')} Hz· στο paper (Σχ. 4) 15,71, 20,21, 25,55, 32,28 Hz</li>
+  <li>Ηλεκτρικός συντονισμός: f_er = f₀·√(X_c/X_Σ) = 60·√(${fmt(m.Xc,3)}/${fmt(Xt,4)}) = <b>${fmt(fer,4)} Hz</b>, στον δρομέα f₀ − f_er = <b>${fmt(60-fer,4)} Hz</b></li></ul>`;
+ if(m.case==='1S')return h+`<p>Αποτελέσματα του paper (μοντέλο έξι μαζών): ο ρυθμός 3 μεγαλώνει με σ = 1,525 1/s· σταθερή ταλάντωση με επιπλέον απόσβεση 75,9 pu στη γεννήτρια, ή R_a = 0,467 pu, ή X_c μικρότερο κατά 0,047 pu. Ο έλεγχος (tests, αναφορά επαλήθευσης) δίνει 1,520 1/s και ρυθμό ≈ 0 στις τρεις κρίσιμες τιμές.</p>`;
+ if(s.t<m.tf+0.45)return h+'<p class="muted small">Τρέξε ως το τέλος (0,5 s μετά το σφάλμα) για τη σύγκριση με το Σχ. 5.</p>';
+ return h+`<p>Σχ. 5 του paper (συνεχής γραμμή, ανάγνωση από το σχήμα): LPA–LPB έως ≈ 3,4 pu στα 0,135 s και ≈ 3,3 pu στα 0,32 s μετά το σφάλμα· GEN–EXC έως ≈ 1,0 pu στα 0,44 s. Σύγκρινε στο scope (ο χρόνος του scope μετρά από το 0· το σφάλμα είναι στα ${eng(m.tf,'s',4)}). Η ηλεκτρική ροπή του Σχ. 5c έχει το αντίθετο πρόσημο (ροπή κινητήρα).</p>`;}
+const IEEE9_AF={G2:61.0975,G3:54.1431};
+function ieee9Theory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.lf)return '';
+ const rows=[];for(const [g,b] of [['G1',1],['G2',2],['G3',3]]){const q=s.lastPeriod('Y:'+g+':vt');rows.push([`|V| ζυγού ${b} (${g})`,m.lf[b][0],q?.avg,'pu']);}
+ for(const [ld,b] of [['LD5',5],['LD7',7],['LD9',9]]){const q=s.lastPeriod('V:'+ld+'/Ra');rows.push([`|V| ζυγού ${b}`,m.lf[b][0],q?q.rms/(345e3/Math.sqrt(3)):NaN,'pu']);}
+ if(!m.fault)for(const g of ['G2','G3']){const q=s.lastPeriod('Y:'+g+':d');rows.push([`δ ${g} (Anderson & Fouad, Πίν. 9.1)`,IEEE9_AF[g],q?.avg,'°']);}
+ return `<ul class="eqs"><li>Ροή φορτίου (pcl.network, Newton–Raphson): οι γεννήτριες ξεκινούν από |V|∠θ του ζυγού τους· τα φορτία ως σταθερή εμπέδηση στην τάση της ροής φορτίου</li>
+  <li>Αρχικοποίηση: το κύκλωμα λύνεται με φασιθέτες στα ${fmt(60,3)} Hz (ω_e = (2/h)·tan(ωh/2) για τον τραπεζοειδή), οι μηχανές από τη μόνιμη κατάστασή τους (δ, i_d, i_q, i_fd, E_fd, T_m)</li></ul>`+(m.fault?'':cmpRows(rows));}
 function netFaultTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.grid||!window.NetLib)return '';
  const g=m.xf?NetLib.behindXF(m.grid,m.xfp):{seq:NetLib.gridZ(m.grid)},z=g.seq,ref=NetLib.faultCurrents(g,{kind:m.kind}),Un=m.xf?m.xfp.U2:m.grid.Un;
  const Z1=Math.hypot(z.R1,z.X1),c2=(a,b)=>Math.hypot(a,b);
@@ -1801,6 +1835,9 @@ function formulaTheory(t){
  if(t.topology==='sub_legs')return subLegsTheory();
  if(t.topology==='bus_dq')return busDqTheory();
  if(t.topology==='net_fault')return netFaultTheory();
+ if(t.topology==='gen_sc')return genScTheory();
+ if(t.topology==='fbm')return fbmTheory();
+ if(t.topology==='ieee9_emt')return ieee9Theory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const D=+W.D,Vin=+V.V,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
   eqs=[`V_o = ${t.topology==='cuk'?'−':''}V_in·D/(1−D) = <b>${eng(Vo,'V')}</b>`,`I_L1 = |I_o|·D/(1−D) = <b>${eng(IL1,'A')}</b>, |I_L2| = |I_o| = <b>${eng(Math.abs(Io),'A')}</b>`,`Δi_L1 = V_in·D·T/L1 = <b>${eng(Vin*D*Ts/L1,'A')}</b>, Δi_L2 = V_in·D·T/L2 = <b>${eng(Vin*D*Ts/L2,'A')}</b>`,`V_C1 = ${t.topology==='cuk'?'V_in + |V_o|':'V_in'} = <b>${eng(t.topology==='cuk'?Vin+Math.abs(Vo):Vin,'V')}</b>`];

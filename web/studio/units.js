@@ -89,6 +89,7 @@
    case 'PLL':return pin==='th'?T('rad'):pin==='w'?T('rad/s'):T(isBus(p)?inp('abc').u:sepU(['a','b','c']));
    case 'FEST':return pin==='th'?T('rad'):pin==='psi'?T('V·s'):T('rad/s');
    case 'MOD3':return isBus(p)?T('1','abc'):T('1','abc',{da:'a',db:'b',dc:'c'}[pin]);
+   case 'GEN3':return NONE; // 4.3: per-unit outputs and the load angle in degrees: no SI unit to check
    case 'DCM':case 'IM':case 'SM':case 'SRM':
     return pin==='te'?T('N·m'):pin==='w'?T('rad/s'):['th','thf','thr'].includes(pin)?T('rad'):pin==='psi'?T('V·s'):pin==='id'||pin==='iq'?T('A','dq',pin.slice(1)):/^i\d$/.test(pin)?T('A'):NONE;
    case 'MUX':{const n=Math.max(2,Math.min(8,Math.round(+p.n)||3)),ins=Array.from({length:n},(_,i)=>inp('u'+(i+1))),u=agreeU(ins.map(x=>x.u));

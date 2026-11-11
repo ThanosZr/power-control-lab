@@ -1,6 +1,6 @@
 'use strict';
 // Network library (4.1, ROADMAP §31): network equivalent with S″k, X/R and Z₀, fault, circuit breaker, three-phase
-// transformer with a vector group, three-phase load. Each part is a subcircuit made from its parameters (defOf) out of
+// transformer with a vector group, three-phase load; line as a π section from sequence data (4.3). Each part is a subcircuit made from its parameters (defOf) out of
 // primitive parts (VAC3, KG, KL, SW, SCR, XFMR, R, L, C, AM). expand() turns them into SUB instances with generated
 // definitions before SubCircuit.flatten, so the browser solver, the SciPy export, the buses, the units and the
 // channels (e.g. F1/Ia) see ordinary parts. No solver code knows about the library.
@@ -9,7 +9,7 @@
 // (gridZ) and the fault currents of a fault at its terminals in the phase domain (faultCurrents), for the analysis.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
- const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3'];
+ const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3'];
  const isLib=t=>TYPES.includes(t);
  const RMIN=1e-4;               // a bolted fault or a closed pole: 0,1 mΩ inside the circuit
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -136,7 +136,27 @@
    if(!(Pw>0)&&!Q){const r=B.comp('R'+PH[j],'R',{R:1e12});B.wire(a,[r,'a']);B.wire([r,'b'],b);}}
   return B.def();}
 
- const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,XF3:xfDef,LOAD3:loadDef};
+ // ---------------------------------------------------------------- line as one π section (4.3)
+ // sequence data → phase domain: series Z_s = (2Z₁ + Z₀)/3, Z_m = (Z₀ − Z₁)/3 (as the network equivalent), half of the
+ // shunt at each end: C₀ from each phase to ground and (C₁ − C₀)/3 between phases (C = B/ω)
+ function lineData(p0){const p={...P.defaults('LINE3'),...(p0||{})},f=Math.max(num(p.f,50),1e-9),w=2*Math.PI*f,Un=Math.max(num(p.Un,150e3),1e-9);
+  const k=p.unit==='pu'?Un*Un/Math.max(num(p.Sb,100e6),1e-9):1,R1=Math.max(num(p.R1,0),0)*k,X1=Math.max(num(p.X1,0),1e-9)*k,B1=Math.max(num(p.B1,0),0)/k;
+  const g=p.z0==='given',R0=g?Math.max(num(p.R0,0),0)*k:R1,X0=g?Math.max(num(p.X0,0),1e-9)*k:X1,B0=g?Math.max(num(p.B0,0),0)/k:B1;
+  return {w,R1,X1,B1,R0,X0,B0,C0:B0/w,Cm:Math.max(B1-B0,0)/(3*w),warn:B0>B1*(1+1e-9)?'B₀ > B₁: η χωρητικότητα μεταξύ φάσεων μηδενίζεται.':null};}
+ function lineDef(c){const p=prm(c),d=lineData(p),B=builder('Γραμμή'),A=B.terms(p,['a1','b1','c1'],'abc1'),Z=B.terms(p,['a2','b2','c2'],'abc2');
+  const Rs=(2*d.R1+d.R0)/3,Rm=(d.R0-d.R1)/3,Ls=(2*d.X1+d.X0)/(3*d.w),Lm=(d.X0-d.X1)/(3*d.w);
+  const mat=(dg,o)=>`${s(dg)}, ${s(o)}, ${s(o)}; ${s(o)}, ${s(dg)}, ${s(o)}; ${s(o)}, ${s(o)}, ${s(dg)}`;
+  let mid;
+  if(Math.abs(Lm)<=1e-12*Ls&&Math.abs(Rm)<=1e-12*(Rs||1)){mid=PH.map((x,k)=>{const l=B.comp('L'+x,'L',{L:Ls,i0:0,Rs:Rs});B.wire(A[k],[l,'a']);return [l,'b'];});}
+  else{const K=B.comp('Z','KL',{Lmat:mat(Ls,Lm),Rw:0,i0:'0'});let Rk=null;if(Rs>0)Rk=B.comp('R','KG',{kind:'R',mat:mat(Rs,Rm)});
+   mid=PH.map((x,k)=>{const q=k+1;if(Rk){B.wire(A[k],[Rk,'a'+q]);B.wire([Rk,'b'+q],[K,'a'+q]);}else B.wire(A[k],[K,'a'+q]);return [K,'b'+q];});}
+  PH.forEach((x,k)=>B.wire(mid[k],Z[k]));
+  if(d.C0>0||d.Cm>0)for(const [T,e] of [[A,'1'],[Z,'2']]){
+   if(d.C0>0)PH.forEach((x,k)=>{const q=B.comp('C'+x+e,'C',{C:d.C0/2,v0:0,esr:0});B.wire(T[k],[q,'p']);B.wire([q,'n'],B.gnd());});
+   if(d.Cm>0)PH.forEach((x,k)=>{const q=B.comp('C'+x+PH[(k+1)%3]+e,'C',{C:d.Cm/2,v0:0,esr:0});B.wire(T[k],[q,'p']);B.wire([q,'n'],T[(k+1)%3]);});}
+  return B.def();}
+
+ const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef};
  function defOf(c){return DEFS[c.type](c);}
 
  // ---------------------------------------------------------------- project → project with SUB instances
@@ -152,7 +172,7 @@
   out.components=conv(project.components,'');
   return out;}
  // warnings of the parameters (e.g. an S″k1 that does not fit), for the netlist warnings
- function warnings(project){const out=[];const scan=list=>{for(const c of list||[])if(c.type==='GRID3'){const z=gridZ(c.params);if(z.warn)out.push(`${c.label||c.id}: ${z.warn}`);}};
+ function warnings(project){const out=[];const scan=list=>{for(const c of list||[]){if(c.type==='GRID3'){const z=gridZ(c.params);if(z.warn)out.push(`${c.label||c.id}: ${z.warn}`);}if(c.type==='LINE3'){const d=lineData(c.params);if(d.warn)out.push(`${c.label||c.id}: ${d.warn}`);}}};
   scan(project?.components);for(const d of Object.values(project?.subcircuits||{}))scan(d.components);return out;}
 
  // ---------------------------------------------------------------- analysis: a fault at the terminals of the equivalent
@@ -188,7 +208,7 @@
   // the transformer's impedance per phase of an equivalent star at side 2 (Ω): u_k·U₂²/S_n
   const Sn=num(xf.Sn,40e6),Zk=num(xf.uk,10)/100*U2*U2/Sn,Rk=num(xf.Pk,0)*(U2/Sn)**2,Xk=Math.sqrt(Math.max(Zk*Zk-Rk*Rk,0));
   return {seq:{R1:g.R1*r+Rk,X1:g.X1*r+Xk,R0:Rk,X0:Xk,E:g.E*U2/U1},n:d.n};}
- const api={TYPES,isLib,needs,expand,defOf,warnings,gridZ,xfData,faultCurrents,behindXF,GROUPS};
+ const api={TYPES,isLib,needs,expand,defOf,warnings,gridZ,xfData,lineData,faultCurrents,behindXF,GROUPS};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;
  root.NetLib=api;
 })(typeof window!=='undefined'?window:globalThis);

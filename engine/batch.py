@@ -394,7 +394,7 @@ class Circuit:
         self.iGY = [i for i, e in enumerate(E) if e['k'] == 'GY']      # machine gyrators (3.1)
         # multiports (3.5): coupled inductors (flux element 'F', one current state per port) and conductance matrices ('MG');
         # the flux element of a synchronous machine has machine states instead (below)
-        self.iF = [i for i, e in enumerate(E) if e['k'] == 'F' and e.get('sm') is None and e.get('srm') is None]
+        self.iF = [i for i, e in enumerate(E) if e['k'] == 'F' and e.get('sm') is None and e.get('srm') is None and e.get('gen') is None]
         self.iMG = [i for i, e in enumerate(E) if e['k'] == 'MG']
         self.cur = [(i, None) for i in self.iL] + [(i, q) for i in self.iF for q in range(int(E[i]['N']))]
         self.nI = len(self.cur)
@@ -480,8 +480,24 @@ class Circuit:
             st = m.get('st') or {}
             self.x0 = np.concatenate([self.x0, [_f(v) for v in (F.get('psi') or [0.0] * m['N'])], [_f(st.get('w')), _f(st.get('the'))]])
             k0 += m['N'] + 2
-        if self.ims or self.sms or self.srms:
-            extra = 4 * (len(self.ims) + len(self.sms)) + sum(m['N'] + 2 for m in self.srms)
+        # generators (4.3): the fluxes of the ports (stator a, b, c and rotor windings), then the angles and the speeds of the
+        # masses of the shaft; the port currents i = Γ(θ)·ψ are sources, dψ/dt is the port voltage (as the machines above)
+        self.gens = net.get('gens') or []
+        for m in self.gens:
+            m['k0'] = k0
+            F = E[m['F']]
+            m['ports'] = F['ports']
+            for key in ('Gd', 'Gq'):
+                m[key] = np.array(m[key], dtype=float)
+            st = m.get('st') or {}
+            M = m['sh']['N']
+            self.x0 = np.concatenate([self.x0, [_f(v) for v in (F.get('psi') or [0.0] * m['N'])], [_f(v) for v in st.get('ph', [0.0] * M)],
+                                      [_f(v, 1.0) for v in st.get('w', [1.0] * M)]])
+            k0 += m['N'] + 2 * M
+        for q, m in enumerate(self.gens):
+            E[m['fV']]['gen'] = q
+        if self.ims or self.sms or self.srms or self.gens:
+            extra = 4 * (len(self.ims) + len(self.sms)) + sum(m['N'] + 2 for m in self.srms) + sum(m['N'] + 2 * m['sh']['N'] for m in self.gens)
             self.Bx = np.hstack([self.Bx, np.zeros((n, extra))])
             self.Dm = np.vstack([self.Dm, np.zeros((extra, n))])
             self.ns = self.nsn + extra
@@ -501,7 +517,8 @@ class Circuit:
         lg += [E[i]['tau'] for i in self.iT]
         tb = _f(net.get('tbase'), 0)          # time base of the circuit settings (3.10), when no source sets one
         self.base_T = min([k.T for k in self.ctrls], default=None) or (1 / max(_f(clk.get('f'), 1e5), 1e-6) if clk else None) or next(
-            (1 / max(1e-6, _f(E[i]['src'].get('f'), 50)) for i in self.iV if E[i]['src'].get('kind') == 'ac'), None) or (min(lg) if lg else (tb if tb > 0 else 1e-3))
+            (1 / max(1e-6, _f(E[i]['src'].get('f'), 50)) for i in self.iV if E[i]['src'].get('kind') == 'ac'), None) or (
+            1 / self.gens[0]['f'] if self.gens else None) or (min(lg) if lg else (tb if tb > 0 else 1e-3))
         self._z = None
         self._yb = []
         self._yo = []
@@ -605,7 +622,81 @@ class Circuit:
         tl = self.sig_in(n) if isinstance(n, int) and n >= 0 else sched_at(m.get('sched'), t, (m.get('sched') or [[0, 0]])[0][1])
         return [V(a) - V(b) for a, b in m['ports']] + [(te - tl - m['b'] * w) / m['J'], m['Nr'] * w], te
 
+    # ------------------------------------------------------------ synchronous generator (4.3)
+    # the same model as Sim.genStep / Parts.genGamma in the browser: power-invariant Park, d axis at the angle of the
+    # generator mass, Γ = Pᵀ·blockdiag(Γ_d, Γ_q, 1/L₀)·P on the ports (a, b, c, d rotor windings, q rotor windings)
+    def gen_cur(self, m, x):
+        """Port currents, the stator d, q currents and fluxes at the present angle."""
+        k0, N, nd, nq = m['k0'], m['N'], m['nd'], m['nq']
+        psi = x[k0:k0 + N]
+        th = x[k0 + N + m['sh']['gm']]
+        a = th - np.arange(3) * 2 * math.pi / 3
+        dr, qr = math.sqrt(2 / 3) * np.cos(a), -math.sqrt(2 / 3) * np.sin(a)
+        pd, pq, p0 = float(dr @ psi[:3]), float(qr @ psi[:3]), float(np.sum(psi[:3])) / math.sqrt(3)
+        idv = m['Gd'] @ np.concatenate([[pd], psi[3:3 + nd]])
+        iqv = m['Gq'] @ np.concatenate([[pq], psi[3 + nd:3 + nd + nq]])
+        i0 = m['g0'] * p0
+        i = np.empty(N)
+        i[:3] = dr * idv[0] + qr * iqv[0] + i0 / math.sqrt(3)
+        i[3:3 + nd] = idv[1:]
+        i[3 + nd:] = iqv[1:]
+        return i, idv[0], iqv[0], pd, pq
+
+    def gen_efd(self, m, t):
+        if m['exc'] == 'sig':
+            return self.sig_in(m.get('efdIn'))
+        if m['exc'] == 'sched':
+            return sched_at(m['efdS'], t, m['efdS'][0][1])
+        return m['Efd0']
+
+    def gen_tm(self, m, t):
+        if m['mech'] == 'sig':
+            return self.sig_in(m.get('tmIn'))
+        if m['mech'] == 'sched':
+            return sched_at(m['tmS'], t, m['tmS'][0][1])
+        return m['Tm0']
+
+    def gen_deriv(self, m, t, x, z):
+        k0, N, sh = m['k0'], m['N'], m['sh']
+        M = sh['N']
+        V = lambda nd: z[nd] if nd >= 0 else 0.0
+        _, i_d, i_q, pd, pq = self.gen_cur(m, x)
+        tem = (pd * i_q - pq * i_d) * m['wb'] / m['Sn']
+        ph, w = x[k0 + N:k0 + N + M], x[k0 + N + M:k0 + N + 2 * M]
+        Tm = self.gen_tm(m, t)
+        dw = np.empty(M)
+        for j in range(M):
+            T = Tm * sh['fr'][j] - sh['D'][j] * (w[j] - 1) + (tem if j == sh['gm'] else 0.0)
+            if j > 0:
+                T += sh['K'][j - 1] * (ph[j - 1] - ph[j]) + sh['Dmu'][j - 1] * (w[j - 1] - w[j])
+            if j < M - 1:
+                T -= sh['K'][j] * (ph[j] - ph[j + 1]) + sh['Dmu'][j] * (w[j] - w[j + 1])
+            dw[j] = T / (2 * sh['H'][j])
+        return np.concatenate([[V(a) - V(b) for a, b in m['ports']], m['wb'] * w, dw])
+
+    def gen_out(self, m, t, x, z):
+        k0, N, sh = m['k0'], m['N'], m['sh']
+        M, gm = sh['N'], sh['gm']
+        i, i_d, i_q, pd, pq = self.gen_cur(m, x)
+        V = lambda nd: z[nd] if nd >= 0 else 0.0
+        vn = V(m['nN'])
+        v = [V(n) - vn for n in m['term']]
+        ph = x[k0 + N:k0 + N + M]
+        d = ph[gm] + math.pi - m['wb'] * t
+        d -= 2 * math.pi * math.floor((d + math.pi) / (2 * math.pi))
+        out = {'w': float(x[k0 + N + M + gm]), 'te': -(pd * i_q - pq * i_d) * m['wb'] / m['Sn'],
+               'pe': -(v[0] * i[0] + v[1] * i[1] + v[2] * i[2]) / m['Sn'],
+               'qe': -((v[1] - v[2]) * i[0] + (v[2] - v[0]) * i[1] + (v[0] - v[1]) * i[2]) / (math.sqrt(3) * m['Sn']),
+               'vt': math.hypot(math.sqrt(2 / 3) * (v[0] - (v[1] + v[2]) / 2), (v[1] - v[2]) / math.sqrt(2)) / m['Un'],
+               'ifd': float(i[3]) * m['ifK'], 'd': math.degrees(d)}
+        for j in range(M - 1):
+            out[f'ts{j + 1}'] = sh['K'][j] * (ph[j] - ph[j + 1])
+        return out
+
     def Vsrc(self, e, t, x=None):
+        if 'gen' in e:                  # the field of a generator: E_fd·(R_fd/X_ad)·U_n
+            m = self.gens[e['gen']]
+            return self.gen_efd(m, t) * m['vfK']
         if 'im' in e:
             return self.im_e(self.ims[e['im'][0]], x if x is not None else self.x0)[e['im'][1]]
         n = e.get('sigIn')
@@ -732,6 +823,12 @@ class Circuit:
             b[E[i]['row']] = self.Vsrc(E[i], t, x)
         for m in self.srms:
             for (a, bb), i in zip(m['ports'], self.srm_currents(m, x if x is not None else self.x0)):
+                if a >= 0:
+                    b[a] -= i
+                if bb >= 0:
+                    b[bb] += i
+        for m in self.gens:
+            for (a, bb), i in zip(m['ports'], self.gen_cur(m, x if x is not None else self.x0)[0]):
                 if a >= 0:
                     b[a] -= i
                 if bb >= 0:
@@ -1009,6 +1106,8 @@ class Circuit:
                 return float(self.srm_currents(self.srms[e['srm']], x)[port])
             if e.get('sm') is not None:
                 return float(self.sm_ports(self.sms[e['sm']], x)[port])
+            if e.get('gen') is not None:
+                return float(self.gen_cur(self.gens[e['gen']], x)[0][port])
             return float(x[self.cur.index((i, port))])
         if k == 'MG':
             N = int(e['N'])
@@ -1274,6 +1373,8 @@ class Circuit:
                 k0, N = m['k0'], m['N']
                 ys = {'w': x[k0 + N], 'te': self.srm_deriv(m, t, x, z)[1], 'th': x[k0 + N + 1] % P2}
                 ys.update({f'i{k + 1}': c for k, c in enumerate(self.srm_currents(m, x))})
+            elif ty == 'GEN3':
+                ys = self.gen_out(self.gens[b['gen']], t, x, z)
             elif ty == 'SM':
                 m = self.sms[b['sm']]
                 k0 = m['k0']
@@ -1726,6 +1827,8 @@ def simulate(data):
                 d[m['k0']:m['k0'] + 4] = ckt.sm_deriv(m, tt, yy, zof(tt, yy))[0]
             for m in ckt.srms:                 # switched reluctance machines: ψ of each phase, ω, θ
                 d[m['k0']:m['k0'] + m['N'] + 2] = ckt.srm_deriv(m, tt, yy, zof(tt, yy))[0]
+            for m in ckt.gens:                 # generators (4.3): port fluxes, angles and speeds of the masses
+                d[m['k0']:m['k0'] + m['N'] + 2 * m['sh']['N']] = ckt.gen_deriv(m, tt, yy, zof(tt, yy))
             for i in ckt.iDE:                  # volt–time gaps: dD/dt = (|v| − U₀)^k above U₀, while open
                 e = ckt.els[i]
                 q = e['gap']['de']
