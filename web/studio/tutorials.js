@@ -888,10 +888,10 @@
   tasks:['Σύγκρινε το I″k κάθε φάσης στην κάρτα με τον τύπο της IEC 60909 (μόνιμη τιμή, όταν σβήσει η συνιστώσα DC με τ = X/(ωR)).','Μονοφασικό με μονωμένο ουδέτερο: σχεδόν μηδέν ρεύμα. Πίσω από το Dyn11 όμως ρέει, γιατί το αστέρι 20 kV είναι γειωμένο.','Με «Ανοίγει στα 200 ms»: κάθε πόλος σβήνει στο δικό του μηδέν ρεύματος (δες και το αρχείο συμβάντων).'],
   build(o){const xf=o.xf==='dyn11',kind=o.kind||'abc',iso=o.z0==='iso',dur=o.cb==='open'?.26:.2;
    const grid=xf?{Un:150e3,Sk:5e9,XR:10}:{Un:20e3,Sk:500e6,XR:10};Object.assign(grid,iso?{z0:'iso'}:{z0:'ratio',Z0Z1:+o.z0||1.5,XR0:5},{conn:'bus'});
-   const comps=[C('G1','GRID3',120,200,grid,{label:'δίκτυο'}),C('CB1','CB3',260,200,{cmd:o.cb==='open'?'0:1, 0.2:0':'0:1',conn:'bus'}),
-    C('J1','JUNC',560,200),C('F1','FLT3',560,320,{kind,ton:.04,conn:'bus'}),C('L1','LOAD3',700,320,{Un:20e3,P:5e6,Q:2e6,cn:'y',conn:'bus'})];
+   const comps=[C('G1','GRID3',220,200,grid,{label:'δίκτυο'}),C('CB1','CB3',360,200,{cmd:o.cb==='open'?'0:1, 0.2:0':'0:1',conn:'bus'}),
+    C('J1','JUNC',660,200),C('F1','FLT3',660,340,{kind,ton:.04,conn:'bus'},{lbl:'below'}),C('L1','LOAD3',820,340,{Un:20e3,P:5e6,Q:2e6,cn:'y',conn:'bus'},{lbl:'below'})];
    const wires=[['G1:abc','CB1:abc1'],['J1:j','F1:abc'],['J1:j','L1:abc']];
-   if(xf){comps.push(C('T1','XF3',420,200,{grp:'Dyn11',Sn:40e6,U1:150e3,U2:20e3,uk:10,Pk:200e3,i0:.5,conn:'bus'}));wires.push(['CB1:abc2','T1:abc1'],['T1:abc2','J1:j']);}
+   if(xf){comps.push(C('T1','XF3',520,200,{grp:'Dyn11',Sn:40e6,U1:150e3,U2:20e3,uk:10,Pk:200e3,i0:.5,conn:'bus'}));wires.push(['CB1:abc2','T1:abc1'],['T1:abc2','J1:j']);}
    else wires.push(['CB1:abc2','J1:j']);
    return project(comps,wires,{sim:{hDiv:2000,speed:5,stopT:dur},
     scope:{panes:[[['Y:F1/Ia','i_a σφάλματος'],['Y:F1/Ib','i_b σφάλματος'],['Y:F1/Ic','i_c σφάλματος']],[['Y:F1/Ig','ρεύμα προς γη'],['Y:CB1/Ia','i_a διακόπτη']]],window:{unit:'T',n:4}},

@@ -201,7 +201,7 @@
    const idx=(x,y)=>y*W+x;const sx=Math.round((a[0]-x0)/G),sy=Math.round((a[1]-y0)/G),tx=Math.round((b[0]-x0)/G),ty=Math.round((b[1]-y0)/G);
    blocked[idx(sx,sy)]=0;blocked[idx(tx,ty)]=0;
    const dirIndex=d=>DIRS.findIndex(q=>q[0]===d[0]&&q[1]===d[1]);
-   const sd=dirIndex(da),tdIn=db&&(db[0]||db[1])?dirIndex([-db[0],-db[1]]):-1;
+   const sd=da?dirIndex(da):-1,tdIn=db&&(db[0]||db[1])?dirIndex([-db[0],-db[1]]):-1;
    const N=W*H*4,cost=new Float64Array(N).fill(Infinity),prev=new Int32Array(N).fill(-1);
    const h=(x,y)=>Math.abs(x-tx)+Math.abs(y-ty);const heap=new MinHeap();
    const starts=sd>=0?[sd]:[0,1,2,3];const startCell=idx(sx,sy);
@@ -254,7 +254,7 @@
     case 'MEAS':case 'VM':case 'AM':case 'VP':case 'IP':case 'SR':case 'DISP':return '';
     case 'SUB':return String(p.$title||p.def||''); // subcircuit (3.17): the title of its definition
     // network library (4.1)
-    case 'GRID3':return e(+p.Un,'V')+' · '+e(+p.Sk,'VA')+' · X/R '+(+p.XR).toLocaleString('el-GR');
+    case 'GRID3':return e(+p.Sk,'VA')+' · '+e(+p.Un,'V');
     case 'FLT3':return ({ag:'a–γη',bg:'b–γη',cg:'c–γη',ab:'a–b',bc:'b–c',ca:'c–a',abg:'ab–γη',bcg:'bc–γη',cag:'ca–γη',abc:'3φ',abcg:'3φ–γη'}[p.kind]||p.kind)+(p.ctl==='sig'?' · από σήμα':' · '+e(+p.ton,'s')+(+p.toff>0?'–'+e(+p.toff,'s'):''));
     case 'CB3':return p.ctl==='sig'?'εντολή από σήμα':String(p.cmd||'').slice(0,22);
     case 'XF3':return p.grp+' · '+e(+p.Sn,'VA')+' · '+e(+p.U1,'V')+'/'+e(+p.U2,'V');
