@@ -410,7 +410,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 278 tests (Python και Node) και 11 σενάρια περιβάλλοντος. Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 277 tests (Python και Node) και 11 σενάρια περιβάλλοντος. Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',
