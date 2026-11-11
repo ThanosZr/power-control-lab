@@ -7,8 +7,8 @@ __all__ = ['BifurcationResult', 'PclError', 'bifurcation', 'Plot', 'Project', 'R
 
 
 def __getattr__(name):
-    # pcl.link and pcl.impulse on first use (3.15): the app's Python worker loads only the modules it needs
-    if name in ('link', 'impulse', 'plotting'):
+    # pcl.link and pcl.impulse on first use (3.15): the app's Python worker loads only the modules it needs (4.2: network)
+    if name in ('link', 'impulse', 'plotting', 'network'):
         import importlib
         return importlib.import_module(f'{__name__}.{name}')
     raise AttributeError(name)

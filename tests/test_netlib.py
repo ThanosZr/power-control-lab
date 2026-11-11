@@ -156,3 +156,54 @@ class NetworkLibrary(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+CASES42 = Path(__file__).resolve().parent / 'js' / 'netlib42_cases.js'
+
+
+@unittest.skipIf(shutil.which('node') is None, 'Node.js not installed (the network library is web/studio/netlib.js).')
+class Additions42(unittest.TestCase):
+    """The open points of 4.1, as additions (4.2): EMF U_n/√3 with c only in Z₁, ZIP load (current sources in the frame
+    of a PLL with a compensated damping resistor), three-legged core (zero-sequence magnetizing at side 1, Dommel
+    ch. 6), voltage across the breaker poles, live parameters of the library parts."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.r = json.loads(subprocess.run(['node', str(CASES42)], capture_output=True, text=True, timeout=900, check=True).stdout)
+
+    def test_emf_option(self):
+        Ik3 = 500e6 / (math.sqrt(3) * 20e3)                     # c·U_n/√3 over c·U_n²/S″k
+        self.assertAlmostEqual(self.r['emf_c'], Ik3, delta=2e-3 * Ik3)
+        self.assertAlmostEqual(self.r['emf_un'], Ik3 / 1.1, delta=2e-3 * Ik3)
+
+    def test_zip_powers(self):
+        z = self.r['zip']
+        for k, (kz, ki, kp) in {'p': (0, 0, 1), 'i': (0, 1, 0), 'mix': (0.4, 0.3, 0.3), 'delta': (0, 0, 1)}.items():
+            V = z[k]['V']
+            f = kz * V * V + ki * V + kp
+            self.assertAlmostEqual(z[k]['P'], 8e6 * f, delta=0.01 * 8e6, msg=k)
+            self.assertAlmostEqual(z[k]['Q'], 3e6 * f, delta=0.02 * 3e6, msg=k)
+            self.assertFalse(z[k]['warn'], k)
+        V = z['z']['V']                                          # constant impedance: P ∝ V² (as in 4.1)
+        self.assertAlmostEqual(z['z']['P'], 8e6 * V * V, delta=2e-3 * 8e6)
+
+    def test_three_legged_core(self):
+        c = self.r['core']
+        Ir = 10e6 / (math.sqrt(3) * 20e3)                      # i₀₀ = 100 %: rated current at the rated phase voltage
+        self.assertAlmostEqual(c['zero3leg'], Ir + c['zero3x1'], delta=2e-3 * Ir)
+        self.assertAlmostEqual(c['pos3leg'], c['pos3x1'], delta=1e-3 * c['pos3x1'])   # positive sequence unchanged
+        self.assertAlmostEqual(c['zero5leg'], c['zero3x1'], delta=1e-9)            # five-legged: as three units
+        self.assertAlmostEqual(c['zero3x1'], c['pos3x1'], delta=1e-9)
+
+    def test_pole_voltage(self):
+        p = self.r['pole']
+        self.assertTrue(p['channel'])
+        self.assertLess(p['diff'], 1e-9)
+        self.assertLess(p['closed'], 1.0)
+        self.assertGreater(p['open'], 1e4)
+
+    def test_live_parameters(self):
+        lv = self.r['live']
+        st = lv['structural']
+        self.assertEqual(st, {'P': False, 'cn': True, 'Sk': False, 'grp': True, 'uk': False, 'cmd': False, 'kind': True})
+        self.assertGreater(abs(lv['after'] - lv['fresh']), 1.0)  # the states were carried over, not restarted

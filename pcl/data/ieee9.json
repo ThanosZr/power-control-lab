@@ -1,0 +1,276 @@
+{
+ "format": "pcl-network",
+ "version": 1,
+ "f": 50.0,
+ "S_base": 100000000.0,
+ "name": "IEEE 9-bus (WSCC) test case",
+ "buses": {
+  "1": {
+   "Un": 345000.0,
+   "type": "slack",
+   "V": 1.04,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  },
+  "2": {
+   "Un": 345000.0,
+   "type": "PV",
+   "V": 1.025,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  },
+  "3": {
+   "Un": 345000.0,
+   "type": "PV",
+   "V": 1.025,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  },
+  "4": {
+   "Un": 345000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  },
+  "5": {
+   "Un": 345000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  },
+  "6": {
+   "Un": 345000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  },
+  "7": {
+   "Un": 345000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  },
+  "8": {
+   "Un": 345000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  },
+  "9": {
+   "Un": 345000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  }
+ },
+ "elements": [
+  {
+   "kind": "load",
+   "name": "load5",
+   "bus": "5",
+   "P": 90000000.0,
+   "Q": 30000000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load7",
+   "bus": "7",
+   "P": 100000000.0,
+   "Q": 35000000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load9",
+   "bus": "9",
+   "P": 125000000.0,
+   "Q": 50000000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "generator",
+   "name": "G1",
+   "bus": "1",
+   "Sr": 100000000.0,
+   "Ur": 345000.0,
+   "xd2": 0.2,
+   "cosphi": 0.85,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 72300000.0,
+   "V": 1.04,
+   "Qmin": -300000000.0,
+   "Qmax": 300000000.0,
+   "slack": true
+  },
+  {
+   "kind": "generator",
+   "name": "G2",
+   "bus": "2",
+   "Sr": 100000000.0,
+   "Ur": 345000.0,
+   "xd2": 0.2,
+   "cosphi": 0.85,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 163000000.0,
+   "V": 1.025,
+   "Qmin": -300000000.0,
+   "Qmax": 300000000.0,
+   "slack": false
+  },
+  {
+   "kind": "generator",
+   "name": "G3",
+   "bus": "3",
+   "Sr": 100000000.0,
+   "Ur": 345000.0,
+   "xd2": 0.2,
+   "cosphi": 0.85,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 85000000.0,
+   "V": 1.025,
+   "Qmin": -300000000.0,
+   "Qmax": 300000000.0,
+   "slack": false
+  },
+  {
+   "kind": "branch",
+   "name": "br1",
+   "a": "1",
+   "b": "4",
+   "r": 0.0,
+   "x": 0.0576,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br2",
+   "a": "4",
+   "b": "5",
+   "r": 0.017,
+   "x": 0.092,
+   "bc": 0.158,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br3",
+   "a": "5",
+   "b": "6",
+   "r": 0.039,
+   "x": 0.17,
+   "bc": 0.358,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br4",
+   "a": "3",
+   "b": "6",
+   "r": 0.0,
+   "x": 0.0586,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br5",
+   "a": "6",
+   "b": "7",
+   "r": 0.0119,
+   "x": 0.1008,
+   "bc": 0.209,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br6",
+   "a": "7",
+   "b": "8",
+   "r": 0.0085,
+   "x": 0.072,
+   "bc": 0.149,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br7",
+   "a": "8",
+   "b": "2",
+   "r": 0.0,
+   "x": 0.0625,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br8",
+   "a": "8",
+   "b": "9",
+   "r": 0.032,
+   "x": 0.161,
+   "bc": 0.306,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br9",
+   "a": "9",
+   "b": "4",
+   "r": 0.01,
+   "x": 0.085,
+   "bc": 0.176,
+   "ratio": 0.0,
+   "angle": 0.0
+  }
+ ],
+ "source": "Public IEEE test case data (University of Washington archive), as distributed with MATPOWER (case9.m, 3-clause BSD). Generators: rating = mBase and x″d = 0,2 pu are typical values for the short circuit, not part of the IEEE data."
+}

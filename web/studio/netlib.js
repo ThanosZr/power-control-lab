@@ -42,7 +42,8 @@
   else if(mode==='sk1'){const K=3*cf*Un*Un/Math.max(num(p.Sk1,400e6),1e-9),Ar=2*R1,Ai=2*X1,b=Ar*c0+Ai*s0,d=b*b-(Ar*Ar+Ai*Ai-K*K);
    const r=d>=0?-b+Math.sqrt(d):NaN;if(!(r>0)){warn='Το S″k1 δεν ταιριάζει με το S″k και τα X/R (θα χρειαζόταν |Z₀| ≤ 0): μηδενική ακολουθία ίση με τη θετική.';R0=R1;X0=X1;}else{R0=r*c0;X0=r*s0;}}
   else{const Z0=Math.max(num(p.Z0Z1,1),1e-9)*Z1;R0=Z0*c0+3*Math.max(num(p.Rn,0),0);X0=Z0*s0;}
-  return {E:cf*Un/Math.sqrt(3),Un,cf,w,f,R1,X1,R0,X0,iso:mode==='iso',warn};}
+  // 4.2: EMF c·U_n/√3 (as in 4.1) or U_n/√3 with c only in Z₁
+  return {E:(p.emf==='un'?1:cf)*Un/Math.sqrt(3),Un,cf,w,f,R1,X1,R0,X0,iso:mode==='iso',warn};}
 
  function gridDef(c){const p=prm(c),z=gridZ(p),B=builder('Ισοδύναμο δικτύου'),T=B.terms(p,PH,'abc');
   const Rs=(2*z.R1+z.R0)/3,Rm=(z.R0-z.R1)/3,Ls=(2*z.X1+z.X0)/(3*z.w),Lm=(z.X0-z.X1)/(3*z.w);
@@ -70,7 +71,9 @@
   const gate=p.ctl==='sig'?[B.comp('$cmd','SIN',{name:'cmd'}),'y']:[B.comp('cmd','CONST',{v:String(p.cmd??'0:1')}),'y'];
   const Ron=Math.max(num(p.Ron,1e-4),1e-7),Roff=Math.max(num(p.Roff,1e6),1);
   PH.forEach((x,k)=>{const m=B.comp('I'+x,'AM',{}),mid=B.node('m'+x),q={fire:'sig',Ron,Roff,Vf:0},f=B.comp('Q'+x+'1','SCR',q),r=B.comp('Q'+x+'2','SCR',q);
-   B.wire(A[k],[m,'a']);B.wire([m,'b'],mid);B.wire(mid,[f,'a']);B.wire([f,'k'],Z[k]);B.wire(Z[k],[r,'a']);B.wire([r,'k'],mid);B.wire(gate,[f,'g']);B.wire(gate,[r,'g']);});
+   B.wire(A[k],[m,'a']);B.wire([m,'b'],mid);B.wire(mid,[f,'a']);B.wire([f,'k'],Z[k]);B.wire(Z[k],[r,'a']);B.wire([r,'k'],mid);B.wire(gate,[f,'g']);B.wire(gate,[r,'g']);
+   // 4.2: the voltage across the pole (side 1 − side 2), channel CB1/Va …, for the transient recovery voltage
+   if(p.vm===true||p.vm==='true'){const v=B.comp('V'+x,'VM',{});B.wire(A[k],[v,'p']);B.wire(Z[k],[v,'n']);}});
   return B.def();}
 
  // ---------------------------------------------------------------- three-phase transformer from three single-phase units
@@ -90,11 +93,41 @@
    const u=B.comp('T'+PH[k],'XFMR',{n:d.n,Lm:d.Lm,im0:0,Llk1:d.Xk/2/d.w,Llk2:d.Xk/2/d.w*d.n*d.n,R1:d.Rk/2,R2:d.Rk/2*d.n*d.n,pol:'same'});
    B.wire(p1,[u,'p1']);B.wire(p2,[u,'p2']);B.wire(s1,[u,'s1']);B.wire(s2,[u,'s2']);
    if(d.Rfe>0){const r=B.comp('Rfe'+PH[k],'R',{R:d.Rfe});B.wire(p1,[r,'a']);B.wire(p2,[r,'b']);}}
+  // 4.2: three-legged core: the zero-sequence flux closes through air and tank, a linear zero-sequence magnetizing
+  // inductance at side 1 (Dommel, ch. 6). Three 1:1 couplers across the side-1 windings drive a delta loop with
+  // L = 3·L₀m: the positive and negative sequence sum to zero around the delta (no current), the zero sequence sees
+  // L₀m per phase. Five-legged and shell type: as three single-phase units (the zero sequence as the positive).
+  if(p.core==='3leg'){const L0=d.Zb1/Math.max(num(p.i00,100)/100,1e-6)/d.w,Lk=1e-6*L0,loop=[];
+   for(let k=0;k<3;k++){const [p1,p2]=ends(d.G[0],A,k,1,d.G[2]);const u=B.comp('Z0'+PH[k],'XFMR',{n:1,Lm:L0*1e6,im0:0,Llk1:Lk,Llk2:Lk,R1:0,R2:0,pol:'same'});
+    B.wire(p1,[u,'p1']);B.wire(p2,[u,'p2']);loop.push(u);}
+   B.wire([loop[0],'s2'],[loop[1],'s1']);B.wire([loop[1],'s2'],[loop[2],'s1']);
+   const l=B.comp('L0m','L',{L:3*L0,i0:0,Rs:0});B.wire([loop[2],'s2'],[l,'a']);B.wire([l,'b'],[loop[0],'s1']);
+   const g=B.comp('Rz0','R',{R:1e6});B.wire([loop[0],'s1'],[g,'a']);B.wire([g,'b'],B.gnd());}
   return B.def();}
 
  // ---------------------------------------------------------------- three-phase load (constant impedance, R ∥ X per phase)
  function loadDef(c){const p=prm(c),B=builder('Τριφασικό φορτίο'),T=B.terms(p,PH,'abc'),cn=p.cn||'yn',k=cn==='d'?3:1;
-  const Un=Math.max(num(p.Un,20e3),1e-9),Pw=num(p.P,0),Q=num(p.Q,0),w=2*Math.PI*Math.max(num(p.f,50),1e-9);
+  const zip=p.model==='zip',kz=zip?Math.max(num(p.kz,0),0)/100:1,ki=zip?Math.max(num(p.ki,0),0)/100:0,kp=zip?Math.max(num(p.kp,100),0)/100:0;
+  const Un=Math.max(num(p.Un,20e3),1e-9),Pw=num(p.P,0)*kz,Q=num(p.Q,0)*kz,w=2*Math.PI*Math.max(num(p.f,50),1e-9);
+  // 4.2: the current and power parts of a ZIP load: current sources from signals, i_d = (2/3)·P_t/|v|, i_q = −(2/3)·Q_t/|v|
+  // in the frame of a PLL on the terminal voltages (|v| its amplitude), P_t = P·(i·V + p) with V = |v|/(√2·U_n/√3),
+  // constant impedance below V_min. The PLL (20 Hz) makes the reference follow the voltage smoothly: an ideal current
+  // source that followed the instantaneous voltage would see only the inductance of the network and be unstable.
+  if(zip&&(ki>0||kp>0)){const P0=num(p.P,0),Q0=num(p.Q,0),Vp=Un*Math.SQRT2/Math.sqrt(3),vm=Math.max(num(p.Vmin,70),1)/100;
+   const f=Math.max(num(p.f,50),1e-9),pll=B.comp('PLL','PLL',{f0:f,bw:20,th0:0});
+   PH.forEach((x,j)=>{const v=B.comp('VM'+x,'VM',{});B.wire(T[j],[v,'p']);B.wire([v,'n'],B.gnd());B.wire([v,'y'],[pll,x]);});
+   const V='(max(amp,1e-6*Vp)/Vp)',g=`(${V}>=vm ? ki*${V}+kp : (ki*vm+kp)*${V}*${V}/(vm*vm))`,pars=`P0 = ${s(P0)}, Q0 = ${s(Q0)}, ki = ${s(ki)}, kp = ${s(kp)}, vm = ${s(vm)}, Vp = ${s(Vp)}`;
+   // a damping resistor in star (20 % of |S| at U_n): the sources never drive the network's inductance alone (the
+   // trapezoidal rule would chatter); its power, from the same smoothed |v|, is taken off the P source
+   const S0=Math.max(Math.hypot(P0,Q0),1),Rsh=Un*Un/(0.2*S0),Nst=cn==='yn'?null:B.node('Nsh');
+   PH.forEach((x,j)=>{const r=B.comp('Rd'+x,'R',{R:Rsh});B.wire(T[j],[r,'a']);B.wire([r,'b'],Nst||B.gnd());});
+   const pd=`(1.5*max(amp,0)*max(amp,0)/${s(Rsh)})`;
+   const xd=B.comp('Xd','EXPR',{expr:`(2/3)*(${g}*P0-${pd})/max(amp,1e-6*Vp)`,ins:'amp',pars}),xq=B.comp('Xq','EXPR',{expr:`-(2/3)*${g}*Q0/max(amp,1e-6*Vp)`,ins:'amp',pars});
+   const lp=B.comp('LPV','LPF',{fc:10});B.wire([pll,'amp'],[lp,'u']);B.wire([lp,'y'],[xd,'amp']);B.wire([lp,'y'],[xq,'amp']);   // |v| smoothed (10 Hz)
+   const ip=B.comp('IPK','IPARK',{}),ic=B.comp('ICL','ICLARKE',{inv:'amp'});
+   B.wire([xd,'y'],[ip,'d']);B.wire([xq,'y'],[ip,'q']);B.wire([pll,'th'],[ip,'th']);B.wire([ip,'al'],[ic,'al']);B.wire([ip,'be'],[ic,'be']);
+   PH.forEach((x,j)=>{const I=B.comp('I'+x,'IDC',{ctl:'sig'});B.wire([ic,x],[I,'u']);B.wire([I,'p'],B.gnd());B.wire([I,'n'],T[j]);});
+   if(!(kz>0))return B.def();}
   const N=cn==='yn'?null:cn==='y'?B.node('N'):null;
   for(let j=0;j<3;j++){const a=T[j],b=cn==='d'?T[(j+1)%3]:cn==='y'?N:B.gnd();
    if(Pw>0){const r=B.comp('R'+PH[j],'R',{R:k*Un*Un/Pw});B.wire(a,[r,'a']);B.wire([r,'b'],b);}

@@ -455,6 +455,7 @@
    bus:p=>isBus(p)?{abc:['a','b','c']}:{},
    params:[num('Un','Ονομαστική πολική τάση U_n','V',20e3),num('f','Συχνότητα','Hz',50),num('phase','Φάση της a','°',0,{signed:true,zero:true}),
     num('cf','Συντελεστής τάσης c (IEC 60909)','',1.1,{hint:'Η ΗΕΔ είναι c·U_n/√3 και Z₁ = c·U_n²/S″k, οπότε ένα τριφασικό βραχυκύκλωμα στα άκρα δίνει I″k3 = S″k/(√3·U_n). c = 1 για ΗΕΔ ίση με την ονομαστική.'}),
+    sel('emf','ΗΕΔ της πηγής',[['c','c·U_n/√3 (όπως ως τώρα)'],['un','U_n/√3, το c μόνο στο Z₁']],'c',{hint:'«U_n/√3»: η ΗΕΔ είναι η ονομαστική και το c μένει μόνο στο Z₁ = c·U_n²/S″k, οπότε το τριφασικό βραχυκύκλωμα στα άκρα δίνει S″k/(√3·U_n·c) (4.2).'}),
     num('Sk','S″k τριφασικό','VA',500e6),num('XR','X/R θετικής ακολουθίας','',10),
     sel('z0','Μηδενική ακολουθία',[['ratio','Z₀/Z₁ και X₀/R₀'],['sk1','S″k1 μονοφασικό και X₀/R₀'],['iso','Μονωμένος ουδέτερος']],'ratio',{hint:'Μέσα είναι εμπέδηση 3×3 με Z_s = (2Z₁ + Z₀)/3 και Z_m = (Z₀ − Z₁)/3: δίνει σωστά ρεύματα σε κάθε είδος σφάλματος χωρίς να «ξέρει» το σφάλμα.'}),
     num('Z0Z1','|Z₀|/|Z₁|','',1,{show:p=>(p.z0||'ratio')==='ratio'}),num('Sk1','S″k1 μονοφασικό','VA',400e6,{show:p=>p.z0==='sk1',hint:'I″k1 = √3·c·U_n/|2Z₁ + Z₀|, με S″k1 = √3·U_n·I″k1.'}),
@@ -473,7 +474,8 @@
    bus:p=>isBus(p)?{abc1:['a1','b1','c1'],abc2:['a2','b2','c2']}:{},spins:p=>p.ctl==='sig'?{cmd:I(0,40)}:{},
    params:[sel('ctl','Χειρισμός',[['time','Πρόγραμμα εντολών'],['sig','Από σήμα (ακροδέκτης cmd: ≥ 0,5 κλειστός)']],'time'),
     txt('cmd','Εντολές t:κατάσταση','0:1, 0.1:0',{show:p=>p.ctl!=='sig',hint:'1 = κλείσιμο, 0 = άνοιγμα. Κάθε πόλος ανοίγει στο πρώτο μηδέν του ρεύματός του μετά την εντολή (αντιπαράλληλα θυρίστορ από σήμα).'}),
-    num('Ron','R_on ανά πόλο','Ω',1e-4),num('Roff','R_off ανά πόλο','Ω',1e6),CONN('abc')],
+    num('Ron','R_on ανά πόλο','Ω',1e-4),num('Roff','R_off ανά πόλο','Ω',1e6),
+    bool('vm','Μέτρηση τάσης πόλων (TRV)',false,{hint:'Κανάλια CB1/Va, CB1/Vb, CB1/Vc: η τάση ανάμεσα στις δύο πλευρές κάθε πόλου, για τη μεταβατική τάση επαναφοράς (pcl.network.trv) (4.2).'}),CONN('abc')],
    value:()=>null,
    draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="60" rx="4"/>'+(isBus(p)?bl('M-40,0 H-25 M25,0 H40'):'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25 M25,-20 H40 M25,0 H40 M25,20 H40"/>')+'<path class="thin" d="M-14,0 H-6 L8,-10 M8,0 H14"/>'+tx('CB',0,22,'bsm')+(p.ctl==='sig'?sl('M0,40 V30'):'')},
   XF3:{name:'Μετασχηματιστής τριφασικός (ομάδα σύνδεσης)',prefix:'TR',group:'Δίκτυο',pins:p=>isBus(p)?{abc1:[-40,0],abc2:[40,0]}:{a1:[-40,-20],b1:[-40,0],c1:[-40,20],a2:[40,-20],b2:[40,0],c2:[40,20]},box:[-25,-30,50,60],
@@ -482,13 +484,18 @@
      {hint:'Κεφαλαίο: πλευρά 1 (a1, b1, c1), μικρό: πλευρά 2. N/n: ουδέτερος γειωμένος. Ο αριθμός × 30° είναι η καθυστέρηση της πλευράς 2 (11 = προπορεία 30°).'}),
     num('Sn','Ονομαστική ισχύς S_n','VA',40e6),num('U1','Πολική τάση πλευράς 1','V',150e3),num('U2','Πολική τάση πλευράς 2','V',20e3),num('f','Συχνότητα','Hz',50),
     num('uk','Τάση βραχυκύκλωσης u_k','%',10),num('Pk','Απώλειες χαλκού P_k','W',0,{zero:true}),num('i0','Ρεύμα κενού i_0','%',0.5,{zero:true,hint:'0 = χωρίς ρεύμα μαγνήτισης (πολύ μεγάλη L_m).'}),num('P0','Απώλειες σιδήρου P_0','W',0,{zero:true}),
-    num('tap','Τάπ στην πλευρά 1','%',0,{signed:true,zero:true,hint:'+2,5 % = 2,5 % περισσότερες σπείρες στην πλευρά 1 (χαμηλότερη τάση στην πλευρά 2).'}),CONN('abc')],
+    num('tap','Τάπ στην πλευρά 1','%',0,{signed:true,zero:true,hint:'+2,5 % = 2,5 % περισσότερες σπείρες στην πλευρά 1 (χαμηλότερη τάση στην πλευρά 2).'}),
+    sel('core','Πυρήνας',[['3x1','Τρεις μονοφασικοί (όπως ως τώρα)'],['5leg','Πέντε σκελών ή shell'],['3leg','Τριών σκελών']],'3x1',{hint:'Τριών σκελών: η ροή μηδενικής ακολουθίας κλείνει από τον αέρα και το δοχείο, οπότε η μαγνήτιση μηδενικής ακολουθίας είναι μικρή και γραμμική, στην πλευρά 1 (Dommel, EMTP Theory Book, κεφ. 6). Πέντε σκελών και shell: ίδια με τη θετική, όπως οι τρεις μονοφασικοί (4.2).'}),
+    num('i00','Ρεύμα κενού μηδενικής ακολουθίας i₀₀','%',100,{show:p=>p.core==='3leg',hint:'Ρεύμα μαγνήτισης με τάση μηδενικής ακολουθίας ίση με την ονομαστική φασική, στην πλευρά 1. 100 % = X₀m ίση με την εμπέδηση βάσης.'}),CONN('abc')],
    value:p=>p.grp,unit:'',
    draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="60" rx="4"/>'+(isBus(p)?bl('M-40,0 H-25 M25,0 H40'):'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25 M25,-20 H40 M25,0 H40 M25,20 H40"/>')+'<circle class="thin" cx="-6" cy="-4" r="11"/><circle class="thin" cx="6" cy="-4" r="11"/>'+tx(xe(String(p.grp||'')),0,22,'bsm')},
   LOAD3:{name:'Τριφασικό φορτίο (P, Q)',prefix:'LD',group:'Δίκτυο',pins:p=>isBus(p)?{abc:[0,-40]}:{a:[-20,-40],b:[0,-40],c:[20,-40]},box:[-25,-30,50,50],
    bus:p=>isBus(p)?{abc:['a','b','c']}:{},
    params:[sel('cn','Σύνδεση',[['yn','Y με γειωμένο ουδέτερο'],['y','Y χωρίς γείωση'],['d','Δ']],'yn'),num('Un','Ονομαστική πολική τάση U_n','V',20e3),num('f','Συχνότητα','Hz',50),
-    num('P','Ενεργός ισχύς P (στην U_n)','W',10e6,{zero:true}),num('Q','Άεργος ισχύς Q (στην U_n)','var',3e6,{signed:true,zero:true,hint:'Θετική: επαγωγική (L), αρνητική: χωρητική (C). Σταθερή εμπέδηση: R ∥ X ανά φάση.'}),CONN('abc')],
+    num('P','Ενεργός ισχύς P (στην U_n)','W',10e6,{zero:true}),num('Q','Άεργος ισχύς Q (στην U_n)','var',3e6,{signed:true,zero:true,hint:'Θετική: επαγωγική (L), αρνητική: χωρητική (C). Σταθερή εμπέδηση: R ∥ X ανά φάση.'}),
+    sel('model','Μοντέλο',[['z','Σταθερή εμπέδηση (όπως ως τώρα)'],['zip','ZIP (εμπέδηση, ρεύμα, ισχύς)']],'z',{hint:'ZIP: P(V) = P·(z·V² + i·V + p), το ίδιο το Q, με V = |V|/U_n από το διάνυσμα αβ των τάσεων (4.2). Τα μέρη i και p είναι πηγές ρεύματος από σήμα.'}),
+    num('kz','z (σταθερή εμπέδηση)','%',0,{zero:true,show:p=>p.model==='zip'}),num('ki','i (σταθερό ρεύμα)','%',0,{zero:true,show:p=>p.model==='zip'}),num('kp','p (σταθερή ισχύς)','%',100,{zero:true,show:p=>p.model==='zip'}),
+    num('Vmin','Κάτω από V_min: σταθερή εμπέδηση','%',70,{show:p=>p.model==='zip',hint:'Τα μέρη i και p γίνονται σταθερή εμπέδηση κάτω από αυτή την τάση (π.χ. σε σφάλμα), όπως στα προγράμματα ροής φορτίου.'}),CONN('abc')],
    value:p=>p.P,unit:'W',
    draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="50" rx="4"/>'+(isBus(p)?bl('M0,-40 V-30'):'<path d="M-20,-40 V-30 M0,-40 V-30 M20,-40 V-30"/>')+'<path class="thin" d="M-12,-18 V8 M0,-18 V8 M12,-18 V8 M-16,8 H16"/>'+tx('P,Q',0,17,'bsm')},
  };
@@ -666,8 +673,10 @@
  // carrier, the mode of a PWM): its change during a run asks for a restart, and it cannot be pinned (📌). Everything else
  // is live: applied at the boundary of a solver step (a discrete block uses it at its next sample).
  const STRUCT={PWM:new Set(['mode','carrier','upd']),SW:new Set(['gate','model']),VAC3:new Set(['conn'])};
- // the network library (4.1): a change rebuilds its definition, so its parameters are not live (yet)
- for(const t of ['GRID3','FLT3','CB3','XF3','LOAD3'])STRUCT[t]=new Set(PARTS[t].params.map(q=>q.k));
+ // the network library: a change rebuilds its definition (4.1); from 4.2 a value that keeps the inner circuit the same is
+ // live (the reload carries the states by the inner ids), and only what changes the inner circuit is structural
+ Object.assign(STRUCT,{GRID3:new Set(['z0','conn']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn']),
+  XF3:new Set(['grp','P0','core','conn']),LOAD3:new Set(['cn','model','conn'])});
  const structCache=new Map();
  function structural(type,k){const key=type+'|'+k;if(structCache.has(key))return structCache.get(key);let r=!!STRUCT[type]?.has(k);
   const d=PARTS[type],pd=d?.params?.find(x=>x.k===k);if(!r&&pd&&pd.struct)r=true;

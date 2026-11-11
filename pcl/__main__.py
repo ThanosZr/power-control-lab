@@ -47,6 +47,45 @@ def _kv(items):
     return out
 
 
+def _net(args):
+    """4.2: load flow and IEC 60909-0 from the command line."""
+    from . import network as N
+    src = args.network
+    if src in ('ieee9', 'ieee14'):
+        net = N.ieee(int(src[4:]))
+    elif src.endswith('.m'):
+        net = N.read_matpower(src)
+    else:
+        net = N.load(src)
+    rows = []
+    if args.lf:
+        r = net.load_flow()
+        print(f'Ροή φορτίου: {"συνέκλινε" if r["converged"] else "ΔΕΝ συνέκλινε"} σε {r["iterations"]} επαναλήψεις, απώλειες {r["losses"] / 1e6:.4f} MW')
+        for b, v in r['buses'].items():
+            if net.buses[b]['type'] == 'internal':
+                continue
+            print(f'  {b:>6}  V = {v["V"]:.5f} pu  θ = {v["angle"]:9.4f}°  P = {v["P"] / 1e6:9.4f} MW  Q = {v["Q"] / 1e6:9.4f} Mvar')
+            rows.append({'kind': 'lf', 'bus': b, **v})
+    if args.sc:
+        print(f'IEC 60909-0, {args.sc}, {args.mode}: I″k, i_p (B, 20 Hz), I_b, I_k σε kA')
+        for r in net.iec60909(args.sc, args.bus, mode=args.mode, tmin=args.tmin):
+            print(f'  {r["bus"]:>6}  U_n = {r["Un"] / 1e3:7.2f} kV  I″k = {r["Ik"] / 1e3:9.4f}  i_pB = {r["ip_b"] / 1e3:9.4f}  i_pC = {r["ip_c"] / 1e3:9.4f}'
+                  f'  I_b = {r.get("Ib", r["Ik"]) / 1e3:9.4f}' + (f'  I_k = {r["Ik_ss"] / 1e3:9.4f}' if 'Ik_ss' in r else ''))
+            rows.append({'kind': 'sc', **{k: v for k, v in r.items() if k != 'machines' and not isinstance(v, complex)},
+                         **{k: [v.real, v.imag] for k, v in r.items() if isinstance(v, complex)}})
+    if args.out:
+        if args.out.endswith('.csv'):
+            import csv
+            keys = sorted({k for r in rows for k in r})
+            with open(args.out, 'w', newline='', encoding='utf-8') as f:
+                w = csv.DictWriter(f, keys)
+                w.writeheader()
+                w.writerows(rows)
+        else:
+            Path(args.out).write_text(json.dumps(_clean(rows), ensure_ascii=False, indent=1), encoding='utf-8')
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='python -m pcl', description='Power & Control Lab: σενάρια από κώδικα (αλλαγή παραμέτρων, προσομοίωση, εξαγωγή).',
                                  formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
@@ -122,10 +161,20 @@ def main(argv=None):
     a.add_argument('--settle', default='0', help='s πριν από το πρώτο βήμα (μόνιμη κατάσταση)')
     a.add_argument('--headless', help='χωρίς GUI: σχήματα του workbench με κόμμα, π.χ. iaic,pid, σε κλιμακωτή αναφορά')
     a.add_argument('--dt', type=float, default=0.01, help='δείγμα του workbench (s)')
+    a = sub.add_parser('net', help='4.2: ροή φορτίου και βραχυκυκλώματα κατά IEC 60909-0 σε δίκτυο (JSON του pcl.network, αρχείο MATPOWER, ieee9, ieee14)')
+    a.add_argument('network', help='αρχείο .json (pcl.network.save) ή .m (MATPOWER), ή ieee9 / ieee14')
+    a.add_argument('--lf', action='store_true', help='ροή φορτίου (Newton–Raphson)')
+    a.add_argument('--sc', choices=['3ph', '2ph', '1ph', '2phE'], help='βραχυκύκλωμα σε κάθε ζυγό (ή σε όσους δίνει το --bus)')
+    a.add_argument('--bus', nargs='*', help='ζυγοί')
+    a.add_argument('--mode', choices=['max', 'min'], default='max')
+    a.add_argument('--tmin', type=float, default=0.1, help='ελάχιστος χρόνος καθυστέρησης για το I_b (s)')
+    a.add_argument('--out', help='αρχείο .json ή .csv με τα αποτελέσματα')
     a = sub.add_parser('link', help='μία κλήση στην ανοιχτή εφαρμογή (3.15): αρχείο JSON {method, args, client} → JSON (για το Octave)')
     a.add_argument('request')
     a.add_argument('--out', required=True)
     args = ap.parse_args(argv)
+    if args.cmd == 'net':
+        return _net(args)
     if args.cmd == 'link':
         from . import link
         q = json.loads(Path(args.request).read_text(encoding='utf-8'))

@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.1.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (348 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.2: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (383 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.1.1.
+Κανένα στην 4.2.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-164 σημεία.
+198 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -165,6 +165,40 @@
 | `pcl.link.App.show` | `obj`, `title` | 3.18 |
 | `pcl.link.connect` | `url`, `token`, `timeout`, `client` | 3.18 |
 | `pcl.load` | `path` | 3.18 |
+| `pcl.network.Network` | `f`, `S_base`, `name` | 4.2 |
+| `pcl.network.Network.branch_pu` | `a`, `b`, `r`, `x`, `bc`, `ratio`, `angle`, `name` | 4.2 |
+| `pcl.network.Network.bus` | `name`, `Un`, `kind`, `V`, `angle`, `Vmin`, `Vmax` | 4.2 |
+| `pcl.network.Network.element` | `name` | 4.2 |
+| `pcl.network.Network.feeder` | `bus`, `Ik`, `Sk`, `RX`, `X0X`, `R0X0`, `c`, `Ik_min`, `Un`, `name`, `V`, `angle`, `slack` | 4.2 |
+| `pcl.network.Network.generator` | `bus`, `Sr`, `Ur`, `xd2`, `cosphi`, `RG`, `xdsat`, `pG`, `X0`, `earthed`, `P`, `V`, `Qmin`, `Qmax`, `slack`, `name` | 4.2 |
+| `pcl.network.Network.iec60909` | `fault`, `buses`, `**kw` | 4.2 |
+| `pcl.network.Network.impedances` | `mode` | 4.2 |
+| `pcl.network.Network.line` | `a`, `b`, `R`, `X`, `length`, `B`, `R0`, `X0`, `parallel`, `name`, `alpha` | 4.2 |
+| `pcl.network.Network.load` | `bus`, `P`, `Q`, `zip`, `name` | 4.2 |
+| `pcl.network.Network.load_flow` | `tol`, `max_iter`, `q_limits`, `flat` | 4.2 |
+| `pcl.network.Network.motor` | `bus`, `Pr`, `Ur`, `cosphi`, `eta`, `ILR`, `p`, `n`, `RX`, `name` | 4.2 |
+| `pcl.network.Network.reactor` | `a`, `X`, `R`, `b`, `X0`, `R0`, `name` | 4.2 |
+| `pcl.network.Network.remove` | `name` | 4.2 |
+| `pcl.network.Network.short_circuit` | `bus`, `fault`, `mode`, `f115`, `tmin`, `temp`, `lv_tol`, `fc`, `breaking`, `rgf` | 4.2 |
+| `pcl.network.Network.shunt` | `bus`, `P`, `Q`, `name` | 4.2 |
+| `pcl.network.Network.transformer` | `hv`, `lv`, `Sr`, `Uhv`, `Ulv`, `uk`, `ur`, `group`, `X0X`, `R0R`, `Zn_hv`, `Zn_lv`, `tap`, `KT`, `shift`, `name` | 4.2 |
+| `pcl.network.Network.transformer3` | `a`, `b`, `c`, `Sr`, `Ur`, `uk`, `ur`, `group`, `ref`, `z0`, `KT`, `name` | 4.2 |
+| `pcl.network.Network.unit` | `bus`, `gen`, `trafo`, `oltc`, `pT`, `Zn`, `earthed`, `name`, `P`, `V`, `Qmin`, `Qmax`, `slack` | 4.2 |
+| `pcl.network.NetworkError` | — | 4.2 |
+| `pcl.network.c_factor` | `Un`, `which`, `lv_tol` | 4.2 |
+| `pcl.network.from_dict` | `d` | 4.2 |
+| `pcl.network.ieee` | `case` | 4.2 |
+| `pcl.network.ieee14` | — | 4.2 |
+| `pcl.network.ieee9` | — | 4.2 |
+| `pcl.network.kappa` | `rx` | 4.2 |
+| `pcl.network.load` | `path` | 4.2 |
+| `pcl.network.mu_factor` | `ratio`, `tmin` | 4.2 |
+| `pcl.network.q_factor` | `m_mw`, `tmin` | 4.2 |
+| `pcl.network.read_matpower` | `source`, `Un_default` | 4.2 |
+| `pcl.network.save` | `net`, `path` | 4.2 |
+| `pcl.network.superposition` | `net`, `bus`, `lf`, `loads` | 4.2 |
+| `pcl.network.to_dict` | `net` | 4.2 |
+| `pcl.network.trv` | `t`, `v`, `t0`, `uf` | 4.2 |
 | `pcl.params` | — | 3.18 |
 | `pcl.parse_value` | `v` | 3.18 |
 | `pcl.plot` | `x`, `ys`, `title`, `xlabel`, `ylabel` | 3.18 |
@@ -210,7 +244,7 @@
 
 ## Γραμμή εντολών `python -m pcl`
 
-10 σημεία.
+11 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -218,6 +252,7 @@
 | `python -m pcl channels` | `<project>` | 3.18 |
 | `python -m pcl job` | `<spec>`, `--out` | 3.18 |
 | `python -m pcl link` | `<request>`, `--out` | 3.18 |
+| `python -m pcl net` | `<network>`, `--lf`, `--sc`, `--bus`, `--mode`, `--tmin`, `--out` | 4.2 |
 | `python -m pcl plot` | `<spec>`, `--preset`, `--mapping`, `--kind`, `--signal`, `--table`, `--out` | 3.18 |
 | `python -m pcl run` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--chunk`, `--state`, `--resume`, `--events` | 3.18 |
 | `python -m pcl sweep` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--resume`, `--grid`, `--zip`, `--workers` | 3.18 |
@@ -359,7 +394,7 @@
 | `part:AM` | — | a, b, y | 3.18 |
 | `part:BSEL` | idx | u, y | 3.18 |
 | `part:C` | C, v0, esr | n, p | 3.18 |
-| `part:CB3` | ctl, cmd, Ron, Roff, conn | a1, a2, abc1, abc2, b1, b2, c1, c2, cmd | 4.1 |
+| `part:CB3` | ctl, cmd, Ron, Roff, vm, conn | a1, a2, abc1, abc2, b1, b2, c1, c2, cmd | 4.1 |
 | `part:CLARKE` | inv, conn | a, ab, abc, al, b, be, c | 3.18 |
 | `part:CLK` | f, duty, phase | y | 3.18 |
 | `part:CMP` | hys | n, p, y | 3.18 |
@@ -379,7 +414,7 @@
 | `part:FLT3` | kind, Rf, Rg, ctl, ton, toff, conn | a, abc, b, c, f | 4.1 |
 | `part:GAIN` | K, unit | u, y | 3.18 |
 | `part:GND` | — | g | 3.18 |
-| `part:GRID3` | Un, f, phase, cf, Sk, XR, z0, Z0Z1, Sk1, XR0, Rn, conn | a, abc, b, c | 4.1 |
+| `part:GRID3` | Un, f, phase, cf, emf, Sk, XR, z0, Z0Z1, Sk1, XR0, Rn, conn | a, abc, b, c | 4.1 |
 | `part:ICLARKE` | inv, conn | a, ab, abc, al, b, be, c | 3.18 |
 | `part:IDC` | ctl, I, sched | n, p, u | 3.18 |
 | `part:ILG` | shape, Ipk, model, tau1, tau2, eta, T1, T2, n, t0 | n, p | 3.18 |
@@ -391,7 +426,7 @@
 | `part:KG` | kind, mat | a1, a2, b1, b2 | 3.18 |
 | `part:KL` | nw, L1, L2, L3, L4, k, kpairs, Lmat, Rw, i0 | a1, a2, a3, a4, b1, b2, b3, b4 | 3.18 |
 | `part:L` | L, i0, Rs | a, b | 3.18 |
-| `part:LOAD3` | cn, Un, f, P, Q, conn | a, abc, b, c | 4.1 |
+| `part:LOAD3` | cn, Un, f, P, Q, model, kz, ki, kp, Vmin, conn | a, abc, b, c | 4.1 |
 | `part:LOGIC` | op | a, b, y | 3.18 |
 | `part:LPF` | fc, y0 | u, y | 3.18 |
 | `part:MEAS` | src, qty | y | 3.18 |
@@ -431,5 +466,5 @@
 | `part:VIMP` | shape, Vpk, basis, T1, T2, S, alpha, beta, K, Rs, t0 | n, p | 3.18 |
 | `part:VM` | — | n, p, y | 3.18 |
 | `part:VP` | — | p, y | 3.18 |
-| `part:XF3` | grp, Sn, U1, U2, f, uk, Pk, i0, P0, tap, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.1 |
+| `part:XF3` | grp, Sn, U1, U2, f, uk, Pk, i0, P0, tap, core, i00, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.1 |
 | `part:XFMR` | n, Lm, im0, Llk1, Llk2, R1, R2, pol | p1, p2, s1, s2 | 3.18 |

@@ -5,7 +5,7 @@
 // 3.16: a circuit with a Python block (PI + NN, inverse ANN, RL, own code) loads Python (Pyodide) in this worker the first
 // time it needs it, so the AI comparisons run in the pool and not in the page.
 self.window=self; // tutorials.js registers on window
-importScripts('expr.js','parts.js','stepcheck.js','netlib.js','subcircuit.js','bus.js','units.js','pyrt.js','mna.js','metrics.js','tutorials.js','scenario.js');
+importScripts('expr.js','parts.js','stepcheck.js','netlib.js','subcircuit.js','bus.js','units.js','pyrt.js','sparse.js','mna.js','metrics.js','tutorials.js','scenario.js');
 const VERSION='0.26.4';let booting=null;
 function python(){if(PyRT.ready)return Promise.resolve();if(booting)return booting;
  booting=(async()=>{const bases=['../vendor/pyodide/',`https://cdn.jsdelivr.net/npm/pyodide@${VERSION}/`];let last;

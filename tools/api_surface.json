@@ -1,5 +1,5 @@
 {
- "version": "4.1.1",
+ "version": "4.2",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -960,6 +960,342 @@
     ],
     "since": "3.18"
    },
+   "pcl.network.Network": {
+    "params": [
+     "f",
+     "S_base",
+     "name"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.branch_pu": {
+    "params": [
+     "a",
+     "b",
+     "r",
+     "x",
+     "bc",
+     "ratio",
+     "angle",
+     "name"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.bus": {
+    "params": [
+     "name",
+     "Un",
+     "kind",
+     "V",
+     "angle",
+     "Vmin",
+     "Vmax"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.element": {
+    "params": [
+     "name"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.feeder": {
+    "params": [
+     "bus",
+     "Ik",
+     "Sk",
+     "RX",
+     "X0X",
+     "R0X0",
+     "c",
+     "Ik_min",
+     "Un",
+     "name",
+     "V",
+     "angle",
+     "slack"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.generator": {
+    "params": [
+     "bus",
+     "Sr",
+     "Ur",
+     "xd2",
+     "cosphi",
+     "RG",
+     "xdsat",
+     "pG",
+     "X0",
+     "earthed",
+     "P",
+     "V",
+     "Qmin",
+     "Qmax",
+     "slack",
+     "name"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.iec60909": {
+    "params": [
+     "fault",
+     "buses",
+     "**kw"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.impedances": {
+    "params": [
+     "mode"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.line": {
+    "params": [
+     "a",
+     "b",
+     "R",
+     "X",
+     "length",
+     "B",
+     "R0",
+     "X0",
+     "parallel",
+     "name",
+     "alpha"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.load": {
+    "params": [
+     "bus",
+     "P",
+     "Q",
+     "zip",
+     "name"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.load_flow": {
+    "params": [
+     "tol",
+     "max_iter",
+     "q_limits",
+     "flat"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.motor": {
+    "params": [
+     "bus",
+     "Pr",
+     "Ur",
+     "cosphi",
+     "eta",
+     "ILR",
+     "p",
+     "n",
+     "RX",
+     "name"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.reactor": {
+    "params": [
+     "a",
+     "X",
+     "R",
+     "b",
+     "X0",
+     "R0",
+     "name"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.remove": {
+    "params": [
+     "name"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.short_circuit": {
+    "params": [
+     "bus",
+     "fault",
+     "mode",
+     "f115",
+     "tmin",
+     "temp",
+     "lv_tol",
+     "fc",
+     "breaking",
+     "rgf"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.shunt": {
+    "params": [
+     "bus",
+     "P",
+     "Q",
+     "name"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.transformer": {
+    "params": [
+     "hv",
+     "lv",
+     "Sr",
+     "Uhv",
+     "Ulv",
+     "uk",
+     "ur",
+     "group",
+     "X0X",
+     "R0R",
+     "Zn_hv",
+     "Zn_lv",
+     "tap",
+     "KT",
+     "shift",
+     "name"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.transformer3": {
+    "params": [
+     "a",
+     "b",
+     "c",
+     "Sr",
+     "Ur",
+     "uk",
+     "ur",
+     "group",
+     "ref",
+     "z0",
+     "KT",
+     "name"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.Network.unit": {
+    "params": [
+     "bus",
+     "gen",
+     "trafo",
+     "oltc",
+     "pT",
+     "Zn",
+     "earthed",
+     "name",
+     "P",
+     "V",
+     "Qmin",
+     "Qmax",
+     "slack"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.NetworkError": {
+    "params": [],
+    "since": "4.2"
+   },
+   "pcl.network.c_factor": {
+    "params": [
+     "Un",
+     "which",
+     "lv_tol"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.from_dict": {
+    "params": [
+     "d"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.ieee": {
+    "params": [
+     "case"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.ieee14": {
+    "params": [],
+    "since": "4.2"
+   },
+   "pcl.network.ieee9": {
+    "params": [],
+    "since": "4.2"
+   },
+   "pcl.network.kappa": {
+    "params": [
+     "rx"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.load": {
+    "params": [
+     "path"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.mu_factor": {
+    "params": [
+     "ratio",
+     "tmin"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.q_factor": {
+    "params": [
+     "m_mw",
+     "tmin"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.read_matpower": {
+    "params": [
+     "source",
+     "Un_default"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.save": {
+    "params": [
+     "net",
+     "path"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.superposition": {
+    "params": [
+     "net",
+     "bus",
+     "lf",
+     "loads"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.to_dict": {
+    "params": [
+     "net"
+    ],
+    "since": "4.2"
+   },
+   "pcl.network.trv": {
+    "params": [
+     "t",
+     "v",
+     "t0",
+     "uf"
+    ],
+    "since": "4.2"
+   },
    "pcl.params": {
     "params": [],
     "since": "3.18"
@@ -1270,6 +1606,18 @@
      "--out"
     ],
     "since": "3.18"
+   },
+   "python -m pcl net": {
+    "params": [
+     "<network>",
+     "--lf",
+     "--sc",
+     "--bus",
+     "--mode",
+     "--tmin",
+     "--out"
+    ],
+    "since": "4.2"
    },
    "python -m pcl plot": {
     "params": [
@@ -1934,6 +2282,7 @@
      "cmd",
      "Ron",
      "Roff",
+     "vm",
      "conn"
     ],
     "pins": [
@@ -2200,6 +2549,7 @@
      "f",
      "phase",
      "cf",
+     "emf",
      "Sk",
      "XR",
      "z0",
@@ -2394,6 +2744,11 @@
      "f",
      "P",
      "Q",
+     "model",
+     "kz",
+     "ki",
+     "kp",
+     "Vmin",
      "conn"
     ],
     "pins": [
@@ -3011,6 +3366,8 @@
      "i0",
      "P0",
      "tap",
+     "core",
+     "i00",
      "conn"
     ],
     "pins": [

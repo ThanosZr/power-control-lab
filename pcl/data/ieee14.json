@@ -1,0 +1,578 @@
+{
+ "format": "pcl-network",
+ "version": 1,
+ "f": 50.0,
+ "S_base": 100000000.0,
+ "name": "IEEE 14-bus test case",
+ "buses": {
+  "1": {
+   "Un": 1000.0,
+   "type": "slack",
+   "V": 1.06,
+   "angle": 0.0,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  },
+  "2": {
+   "Un": 1000.0,
+   "type": "PV",
+   "V": 1.045,
+   "angle": -4.98,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  },
+  "3": {
+   "Un": 1000.0,
+   "type": "PV",
+   "V": 1.01,
+   "angle": -12.72,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  },
+  "4": {
+   "Un": 1000.0,
+   "type": "PQ",
+   "V": 1.019,
+   "angle": -10.33,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  },
+  "5": {
+   "Un": 1000.0,
+   "type": "PQ",
+   "V": 1.02,
+   "angle": -8.78,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  },
+  "6": {
+   "Un": 1000.0,
+   "type": "PV",
+   "V": 1.07,
+   "angle": -14.22,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  },
+  "7": {
+   "Un": 1000.0,
+   "type": "PQ",
+   "V": 1.062,
+   "angle": -13.37,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  },
+  "8": {
+   "Un": 1000.0,
+   "type": "PV",
+   "V": 1.09,
+   "angle": -13.36,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  },
+  "9": {
+   "Un": 1000.0,
+   "type": "PQ",
+   "V": 1.056,
+   "angle": -14.94,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  },
+  "10": {
+   "Un": 1000.0,
+   "type": "PQ",
+   "V": 1.051,
+   "angle": -15.1,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  },
+  "11": {
+   "Un": 1000.0,
+   "type": "PQ",
+   "V": 1.057,
+   "angle": -14.79,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  },
+  "12": {
+   "Un": 1000.0,
+   "type": "PQ",
+   "V": 1.055,
+   "angle": -15.07,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  },
+  "13": {
+   "Un": 1000.0,
+   "type": "PQ",
+   "V": 1.05,
+   "angle": -15.16,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  },
+  "14": {
+   "Un": 1000.0,
+   "type": "PQ",
+   "V": 1.036,
+   "angle": -16.04,
+   "Vmin": 0.94,
+   "Vmax": 1.06
+  }
+ },
+ "elements": [
+  {
+   "kind": "load",
+   "name": "load2",
+   "bus": "2",
+   "P": 21700000.0,
+   "Q": 12700000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load3",
+   "bus": "3",
+   "P": 94200000.0,
+   "Q": 19000000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load4",
+   "bus": "4",
+   "P": 47800000.0,
+   "Q": -3900000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load5",
+   "bus": "5",
+   "P": 7600000.0,
+   "Q": 1600000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load6",
+   "bus": "6",
+   "P": 11200000.0,
+   "Q": 7500000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load9",
+   "bus": "9",
+   "P": 29500000.0,
+   "Q": 16600000.000000002,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "shunt",
+   "name": "sh9",
+   "bus": "9",
+   "P": 0.0,
+   "Q": -19000000.0
+  },
+  {
+   "kind": "load",
+   "name": "load10",
+   "bus": "10",
+   "P": 9000000.0,
+   "Q": 5800000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load11",
+   "bus": "11",
+   "P": 3500000.0,
+   "Q": 1800000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load12",
+   "bus": "12",
+   "P": 6100000.0,
+   "Q": 1600000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load13",
+   "bus": "13",
+   "P": 13500000.0,
+   "Q": 5800000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load14",
+   "bus": "14",
+   "P": 14900000.0,
+   "Q": 5000000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "generator",
+   "name": "G1",
+   "bus": "1",
+   "Sr": 100000000.0,
+   "Ur": 1000.0,
+   "xd2": 0.2,
+   "cosphi": 0.85,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 232400000.0,
+   "V": 1.06,
+   "Qmin": 0.0,
+   "Qmax": 10000000.0,
+   "slack": true
+  },
+  {
+   "kind": "generator",
+   "name": "G2",
+   "bus": "2",
+   "Sr": 100000000.0,
+   "Ur": 1000.0,
+   "xd2": 0.2,
+   "cosphi": 0.85,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 40000000.0,
+   "V": 1.045,
+   "Qmin": -40000000.0,
+   "Qmax": 50000000.0,
+   "slack": false
+  },
+  {
+   "kind": "generator",
+   "name": "G3",
+   "bus": "3",
+   "Sr": 100000000.0,
+   "Ur": 1000.0,
+   "xd2": 0.2,
+   "cosphi": 0.85,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 0.0,
+   "V": 1.01,
+   "Qmin": 0.0,
+   "Qmax": 40000000.0,
+   "slack": false
+  },
+  {
+   "kind": "generator",
+   "name": "G4",
+   "bus": "6",
+   "Sr": 100000000.0,
+   "Ur": 1000.0,
+   "xd2": 0.2,
+   "cosphi": 0.85,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 0.0,
+   "V": 1.07,
+   "Qmin": -6000000.0,
+   "Qmax": 24000000.0,
+   "slack": false
+  },
+  {
+   "kind": "generator",
+   "name": "G5",
+   "bus": "8",
+   "Sr": 100000000.0,
+   "Ur": 1000.0,
+   "xd2": 0.2,
+   "cosphi": 0.85,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 0.0,
+   "V": 1.09,
+   "Qmin": -6000000.0,
+   "Qmax": 24000000.0,
+   "slack": false
+  },
+  {
+   "kind": "branch",
+   "name": "br1",
+   "a": "1",
+   "b": "2",
+   "r": 0.01938,
+   "x": 0.05917,
+   "bc": 0.0528,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br2",
+   "a": "1",
+   "b": "5",
+   "r": 0.05403,
+   "x": 0.22304,
+   "bc": 0.0492,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br3",
+   "a": "2",
+   "b": "3",
+   "r": 0.04699,
+   "x": 0.19797,
+   "bc": 0.0438,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br4",
+   "a": "2",
+   "b": "4",
+   "r": 0.05811,
+   "x": 0.17632,
+   "bc": 0.034,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br5",
+   "a": "2",
+   "b": "5",
+   "r": 0.05695,
+   "x": 0.17388,
+   "bc": 0.0346,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br6",
+   "a": "3",
+   "b": "4",
+   "r": 0.06701,
+   "x": 0.17103,
+   "bc": 0.0128,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br7",
+   "a": "4",
+   "b": "5",
+   "r": 0.01335,
+   "x": 0.04211,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br8",
+   "a": "4",
+   "b": "7",
+   "r": 0.0,
+   "x": 0.20912,
+   "bc": 0.0,
+   "ratio": 0.978,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br9",
+   "a": "4",
+   "b": "9",
+   "r": 0.0,
+   "x": 0.55618,
+   "bc": 0.0,
+   "ratio": 0.969,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br10",
+   "a": "5",
+   "b": "6",
+   "r": 0.0,
+   "x": 0.25202,
+   "bc": 0.0,
+   "ratio": 0.932,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br11",
+   "a": "6",
+   "b": "11",
+   "r": 0.09498,
+   "x": 0.1989,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br12",
+   "a": "6",
+   "b": "12",
+   "r": 0.12291,
+   "x": 0.25581,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br13",
+   "a": "6",
+   "b": "13",
+   "r": 0.06615,
+   "x": 0.13027,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br14",
+   "a": "7",
+   "b": "8",
+   "r": 0.0,
+   "x": 0.17615,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br15",
+   "a": "7",
+   "b": "9",
+   "r": 0.0,
+   "x": 0.11001,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br16",
+   "a": "9",
+   "b": "10",
+   "r": 0.03181,
+   "x": 0.0845,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br17",
+   "a": "9",
+   "b": "14",
+   "r": 0.12711,
+   "x": 0.27038,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br18",
+   "a": "10",
+   "b": "11",
+   "r": 0.08205,
+   "x": 0.19207,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br19",
+   "a": "12",
+   "b": "13",
+   "r": 0.22092,
+   "x": 0.19988,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "br20",
+   "a": "13",
+   "b": "14",
+   "r": 0.17093,
+   "x": 0.34802,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  }
+ ],
+ "source": "Public IEEE test case data (University of Washington archive), as distributed with MATPOWER (case14.m, 3-clause BSD). Generators: rating = mBase and x″d = 0,2 pu are typical values for the short circuit, not part of the IEEE data."
+}

@@ -18,6 +18,9 @@
  const SC=root.StepCheck||(typeof require!=='undefined'?require('./stepcheck.js'):null);
  const SUBC=root.SubCircuit||(typeof require!=='undefined'?require('./subcircuit.js'):null);
  const BUS=root.Bus||(typeof require!=='undefined'?require('./bus.js'):null);
+ const SPM=root.Sparse||(typeof require!=='undefined'?require('./sparse.js'):null);
+ // 4.2 (§32): the sparse LU above this many unknowns ('auto'); below it the dense LU, as before
+ const SPARSE_MIN=120;
  const UNITS=root.Units||(typeof require!=='undefined'?require('./units.js'):null);
  const GMIN=1e-9;
  // program t:value at t; left = the value just before t (the end of a step that lands on a jump, 3.15)
@@ -33,8 +36,8 @@
  // leaves out the functions; restoring walks a new solver of the same project (same structure) and writes the data back,
  // so the run continues with the same numbers. Objects met twice are kept once ($ref); typed arrays as base64 of their
  // bytes (exact); NaN, ±Infinity and −0 by name; an object with getState/setState (a Python block) keeps its own state.
- // Left out: the project (rebuilt), the LU cache (rebuilt the same) and the scope's buffers (ring, per).
- const SNAP_SKIP=new Set(['project','cache','ring','per']);
+ // Left out: the project (rebuilt), the LU cache and the sparse pattern (rebuilt the same) and the scope's buffers (ring, per).
+ const SNAP_SKIP=new Set(['project','cache','ring','per','sp','spq','spw','rec']);   // 4.2: the sparse pattern is rebuilt the same
  const SNAP_TA={Float64Array,Float32Array,Int32Array,Uint32Array,Int16Array,Uint16Array,Int8Array,Uint8Array,Uint8ClampedArray};
  function b64of(ta){const u=new Uint8Array(ta.buffer,ta.byteOffset,ta.byteLength);if(typeof Buffer!=='undefined')return Buffer.from(u).toString('base64');
   let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s);}
@@ -382,7 +385,7 @@
 
  // ---------------------------------------------------------------- dense LU
  // multiport conductance: port current i_k (a_k → b_k inside the element) = Σ_j c·G_kj·(v(a_j) − v(b_j))
- function stampM(A,n,ports,N,G,c){const ad=(r,q,v)=>{if(r>=0&&q>=0)A[r*n+q]+=v;};
+ function stampM(ad0,ports,N,G,c){const ad=(r,q,v)=>{if(r>=0&&q>=0)ad0(r,q,v);};
   for(let k=0;k<N;k++)for(let j=0;j<N;j++){const g=c*G[k*N+j];if(!g)continue;const [ak,bk]=ports[k],[aj,bj]=ports[j];ad(ak,aj,g);ad(ak,bj,-g);ad(bk,aj,-g);ad(bk,bj,g);}}
  function luFactor(A,n,piv){
   for(let k=0;k<n;k++){let p=k,max=Math.abs(A[k*n+k]);for(let i=k+1;i<n;i++){const v=Math.abs(A[i*n+k]);if(v>max){max=v;p=i;}}
@@ -398,7 +401,7 @@
 
  // ---------------------------------------------------------------- simulator
  class Sim{
-  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,step:opts.step||null};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
+  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,step:opts.step||null,solver:opts.solver||null};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
   // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
   basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>b.type==='CLK'||b.type==='RAMP');if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
    const lg=[...this.net.compInfo.values()].filter(c=>c.wave||c.line);if(lg.length)return Math.min(...lg.map(c=>c.wave?c.wave.T1:c.line.tau));return this.net.tbase||1e-3;}
@@ -513,11 +516,11 @@
    const keep=this.net.els.filter(e=>e.k==='F').map(e=>[e,e.cc]);try{return this.stateMap0(h,S,ns,n);}finally{for(const [e,c] of keep)e.cc=c;}}
   stateMap0(h,S,ns,n){
    this.values(this.t);if(this.hasCPL||this.hasNL){this.cplLinearize();this.nlLinearize();}
-   this.assemble(h,'BE');const A=this.A.slice(),piv=new Int32Array(n);luFactor(A,n,piv);
+   const F0=this.factor(h,'BE');const A=F0.A,piv=F0.piv;
    const M=new Float64Array(ns*ns),b=new Float64Array(n),J=(a,c,j)=>{if(a>=0)b[a]-=j;if(c>=0)b[c]+=j;};
    for(let k=0;k<ns;k++){b.fill(0);const sk=S[k],e=sk.e;
     if(sk.k==='L')J(e.a,e.b,1);else if(sk.k==='C')J(e.a,e.b,-e.C/h);else{const N=e.N,G=e.Gnow;for(let q=0;q<N;q++)J(e.ports[q][0],e.ports[q][1],G[q*N+sk.j]);}
-    luSolve(A,n,piv,b);const V=i=>i<0?0:b[i];
+    if(F0.sp)SPM.solve(F0.sp,b,this.spw);else luSolve(A,n,piv,b);const V=i=>i<0?0:b[i];
     for(let i=0;i<ns;i++){const q=S[i],f=q.e;let y;
      if(q.k==='L')y=h/f.L*(V(f.a)-V(f.b))+(i===k?1:0);else if(q.k==='C')y=V(f.a)-V(f.b);else{const pp=f.ports[q.j];y=(i===k?1:0)+h*(V(pp[0])-V(pp[1]));}
      M[i*ns+k]=y;}}
@@ -538,7 +541,7 @@
     const ob=new Map(old.sig.blocks.map(b=>[b.id,b]));for(const b of net.sig.blocks){const o=ob.get(b.id);if(o&&o.type===b.type&&b.type!=='SH'){b.st={...b.st,...o.st};if(b.clock!==o.clock||b.trig!==o.trig)b.st.last=null;}}
    }
    this.net=net;this.jsc=null;this.swl=null;this.topo=new Map();this.topoSig=null;this.jumpNow=false;this.leftAt=null;const nb=net.sig.blocks.length;this.sv=new Float64Array(net.sig.n);this.svT=new Float64Array(net.sig.n);this.yb=new Float64Array(nb);this.ybT=new Float64Array(nb);
-   this.yo=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.yoT=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.ctrlById=new Map(net.ctrls.map(k=>[k.id,k]));this.clkById=new Map(net.sig.blocks.filter(b=>b.type==='CLK').map(b=>[b.id,b]));this.shById=new Map(net.shs.map(q=>[q.id,q]));this.n=net.size;this.A=new Float64Array(this.n*this.n);this.piv=new Int32Array(this.n);this.b=new Float64Array(this.n);this.cache=new Map();
+   this.yo=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.yoT=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.ctrlById=new Map(net.ctrls.map(k=>[k.id,k]));this.clkById=new Map(net.sig.blocks.filter(b=>b.type==='CLK').map(b=>[b.id,b]));this.shById=new Map(net.shs.map(q=>[q.id,q]));this.n=net.size;{const sv=this.opts.solver||project?.sim?.solver||'auto';this.sparse=!!SPM&&(sv==='sparse'||(sv!=='dense'&&this.n>=SPARSE_MIN));}this.sp=null;this.spq=null;this.rec=null;this.A=this.sparse?null:new Float64Array(this.n*this.n);this.lustat={fact:0,hit:0,miss:0};this.piv=new Int32Array(this.n);this.b=new Float64Array(this.n);this.cache=new Map();
    if(!this.x||this.x.length!==this.n||fresh)this.x=new Float64Array(this.n);
    this.pyBlocks(old&&!fresh?old:null);
    this.ims=[...net.compInfo.values()].filter(c=>c.im).map(c=>c.im);for(const m of this.ims)this.imSources(m);
@@ -896,9 +899,14 @@
    }
   }
   assemble(h,mode){
-   const n=this.n,A=this.A;A.fill(0);
-   const g=(a,b,G)=>{if(a>=0)A[a*n+a]+=G;if(b>=0)A[b*n+b]+=G;if(a>=0&&b>=0){A[a*n+b]-=G;A[b*n+a]-=G;}};
-   for(let i=0;i<this.net.nNodes;i++)A[i*n+i]+=GMIN;
+   const n=this.n;let ad;
+   // 4.2: every stamp goes through ad(row, col, value): the dense matrix, or the slots of the sparse pattern
+   // (a position outside the pattern is collected and the pattern grows, see spAssemble)
+   if(this.rec)ad=(r,q,v)=>{this.rec.push(r*n+q);};
+   else if(this.sp){const S=this.sp,M=S.map,X=S.Ax;X.fill(0);ad=(r,q,v)=>{const k=M.get(r*n+q);if(k===undefined)S.miss.push(r*n+q);else X[k]+=v;};}
+   else{const A=this.A;A.fill(0);ad=(r,q,v)=>{A[r*n+q]+=v;};}
+   const g=(a,b,G)=>{if(a>=0)ad(a,a,G);if(b>=0)ad(b,b,G);if(a>=0&&b>=0){ad(a,b,-G);ad(b,a,-G);}};
+   for(let i=0;i<this.net.nNodes;i++)ad(i,i,GMIN);
    const tr=mode==='TR';
    for(const e of this.net.els){
     switch(e.k){
@@ -908,14 +916,14 @@
      case 'S':g(e.a,e.b,e.on?1/e.Ron:1/e.Roff);break;
      case 'D':g(e.a,e.b,e.on?1/e.Ron:1/e.Roff);break;
      case 'CPL':g(e.a,e.b,e.g);break;
-     case 'F':{const c=mode==='BDF2'?h/this.bdf.a0:tr?h/2:h,N=e.N,G=e.Gnow;e.cc=c;stampM(A,n,e.ports,N,G,c);break;} // flux multiport: i = c·Γ·v + J
-     case 'MG':stampM(A,n,e.ports,e.N,e.Gm,1);break;
+     case 'F':{const c=mode==='BDF2'?h/this.bdf.a0:tr?h/2:h,N=e.N,G=e.Gnow;e.cc=c;stampM(ad,e.ports,N,G,c);break;} // flux multiport: i = c·Γ·v + J
+     case 'MG':stampM(ad,e.ports,e.N,e.Gm,1);break;
      case 'TL':g(e.a1,e.b1,1/e.Ze);g(e.a2,e.b2,1/e.Ze);break;
      case 'NL':g(e.a,e.b,e.g);break;
-     case 'V':{const r=e.row;if(e.a>=0){A[e.a*n+r]+=1;A[r*n+e.a]+=1;}if(e.b>=0){A[e.b*n+r]-=1;A[r*n+e.b]-=1;}break;}
-     case 'GY':{const r=e.row,Y=e.psi;if(e.a>=0){A[e.a*n+r]+=1;A[r*n+e.a]+=1;}if(e.b>=0){A[e.b*n+r]-=1;A[r*n+e.b]-=1;}if(e.m>=0){A[r*n+e.m]-=Y;A[e.m*n+r]-=Y;}break;} // gyrator: v_ab = ψ·ω, τ = ψ·i into node ω
-     case 'X':{const r=e.row,N=e.n;if(e.s1>=0){A[e.s1*n+r]+=1;A[r*n+e.s1]+=1;}if(e.s2>=0){A[e.s2*n+r]-=1;A[r*n+e.s2]-=1;}
-      if(e.p1>=0){A[e.p1*n+r]-=N;A[r*n+e.p1]-=N;}if(e.p2>=0){A[e.p2*n+r]+=N;A[r*n+e.p2]+=N;}break;}
+     case 'V':{const r=e.row;if(e.a>=0){ad(e.a,r,1);ad(r,e.a,1);}if(e.b>=0){ad(e.b,r,-1);ad(r,e.b,-1);}break;}
+     case 'GY':{const r=e.row,Y=e.psi;if(e.a>=0){ad(e.a,r,1);ad(r,e.a,1);}if(e.b>=0){ad(e.b,r,-1);ad(r,e.b,-1);}if(e.m>=0){ad(r,e.m,-Y);ad(e.m,r,-Y);}break;} // gyrator: v_ab = ψ·ω, τ = ψ·i into node ω
+     case 'X':{const r=e.row,N=e.n;if(e.s1>=0){ad(e.s1,r,1);ad(r,e.s1,1);}if(e.s2>=0){ad(e.s2,r,-1);ad(r,e.s2,-1);}
+      if(e.p1>=0){ad(e.p1,r,-N);ad(r,e.p1,-N);}if(e.p2>=0){ad(e.p2,r,N);ad(r,e.p2,N);}break;}
     }
    }
   }
@@ -940,13 +948,29 @@
   }
   cplLinearize(){for(const e of this.net.els)if(e.k==='CPL'){let v=e.v0??(this.V(e.a)-this.V(e.b));const P=e.Pnow;
    if(Math.abs(v)<e.Vmin){e.g=P/(e.Vmin*e.Vmin);e.J=0;}else{e.g=-P/(v*v);e.J=2*P/v;}}}
+  // 4.2 (§32): one factorization of the present matrix, dense (luFactor) or sparse (sparse.js: fixed pattern from the
+  // stamps, minimum-degree ordering once, LU with threshold pivoting); {A, piv} or {sp}
+  factor(h,mode){
+   if(!this.sparse){this.assemble(h,mode);luFactor(this.A,this.n,this.piv);return {A:this.A.slice(),piv:this.piv.slice()};}
+   this.spAssemble(h,mode);
+   try{return {sp:SPM.lu(this.sp,this.sp.Ax,this.spq,0.1)};}
+   catch(e){if(e instanceof SPM.SparseError)throw new NetlistError('Ιδιόμορφο σύστημα: βρόχος ιδανικών πηγών τάσης ή κόμβος χωρίς διαδρομή. Πρόσθεσε μικρή αντίσταση ή γείωση.');throw e;}
+  }
+  spAssemble(h,mode){
+   const n=this.n;
+   if(!this.sp){this.rec=[];try{this.assemble(h,mode);}finally{}const keys=this.rec;this.rec=null;for(let i=0;i<n;i++)keys.push(i*n+i);
+    this.sp={...SPM.pattern(n,keys),miss:[]};this.sp.Ax=new Float64Array(this.sp.nnz);this.spq=SPM.order(this.sp);this.spw=new Float64Array(n);}
+   this.assemble(h,mode);
+   if(this.sp.miss.length){const keys=[...this.sp.map.keys(),...this.sp.miss];this.sp={...SPM.pattern(n,keys),miss:[]};this.sp.Ax=new Float64Array(this.sp.nnz);this.spq=SPM.order(this.sp);this.cache.clear();this.assemble(h,mode);}
+  }
   solveOnce(h,mode){
    let key=null;
    if(!this.hasCPL&&!this.hasTV&&!this.hasNL){key=mode+(h/this.h).toPrecision(17)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of this.net.els)if(e.k==='S'||e.k==='D')key+=e.on?'1':'0';
     for(const e of this.net.els)if(e.k==='G'&&e.sched)key+='|'+e.Rnow;}
    let f=key&&this.cache.get(key);
-   if(!f){this.assemble(h,mode);luFactor(this.A,this.n,this.piv);f={A:this.A.slice(),piv:this.piv.slice()};if(key){if(this.cache.size>256)this.cache.clear();this.cache.set(key,f);}}
-   this.rhs(h,mode);const sol=this.b.slice();luSolve(f.A,this.n,f.piv,sol);return sol;
+   const st=this.lustat;if(f)st.hit++;
+   if(!f){st.fact++;if(key)st.miss++;f=this.factor(h,mode);if(key){if(this.cache.size>256)this.cache.clear();this.cache.set(key,f);}}
+   this.rhs(h,mode);const sol=this.b.slice();if(f.sp)SPM.solve(f.sp,sol,this.spw);else luSolve(f.A,this.n,f.piv,sol);return sol;
   }
   solve(h,mode){
    if(!this.hasCPL&&!this.hasNL)return this.solveOnce(h,mode);
