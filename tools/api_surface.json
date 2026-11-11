@@ -1,5 +1,5 @@
 {
- "version": "4.0",
+ "version": "4.1",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -1753,6 +1753,27 @@
     ],
     "since": "3.18"
    },
+   "part:CB3": {
+    "params": [
+     "ctl",
+     "cmd",
+     "Ron",
+     "Roff",
+     "conn"
+    ],
+    "pins": [
+     "a1",
+     "a2",
+     "abc1",
+     "abc2",
+     "b1",
+     "b2",
+     "c1",
+     "c2",
+     "cmd"
+    ],
+    "since": "4.1"
+   },
    "part:CLARKE": {
     "params": [
      "inv",
@@ -1961,6 +1982,25 @@
     ],
     "since": "3.18"
    },
+   "part:FLT3": {
+    "params": [
+     "kind",
+     "Rf",
+     "Rg",
+     "ctl",
+     "ton",
+     "toff",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "abc",
+     "b",
+     "c",
+     "f"
+    ],
+    "since": "4.1"
+   },
    "part:GAIN": {
     "params": [
      "K",
@@ -1978,6 +2018,29 @@
      "g"
     ],
     "since": "3.18"
+   },
+   "part:GRID3": {
+    "params": [
+     "Un",
+     "f",
+     "phase",
+     "cf",
+     "Sk",
+     "XR",
+     "z0",
+     "Z0Z1",
+     "Sk1",
+     "XR0",
+     "Rn",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "abc",
+     "b",
+     "c"
+    ],
+    "since": "4.1"
    },
    "part:ICLARKE": {
     "params": [
@@ -2148,6 +2211,23 @@
      "b"
     ],
     "since": "3.18"
+   },
+   "part:LOAD3": {
+    "params": [
+     "cn",
+     "Un",
+     "f",
+     "P",
+     "Q",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "abc",
+     "b",
+     "c"
+    ],
+    "since": "4.1"
    },
    "part:LOGIC": {
     "params": [
@@ -2421,6 +2501,7 @@
     ],
     "pins": [
      "a",
+     "g",
      "k"
     ],
     "since": "3.18"
@@ -2742,6 +2823,32 @@
      "y"
     ],
     "since": "3.18"
+   },
+   "part:XF3": {
+    "params": [
+     "grp",
+     "Sn",
+     "U1",
+     "U2",
+     "f",
+     "uk",
+     "Pk",
+     "i0",
+     "P0",
+     "tap",
+     "conn"
+    ],
+    "pins": [
+     "a1",
+     "a2",
+     "abc1",
+     "abc2",
+     "b1",
+     "b2",
+     "c1",
+     "c2"
+    ],
+    "since": "4.1"
    },
    "part:XFMR": {
     "params": [

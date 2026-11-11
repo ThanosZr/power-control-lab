@@ -54,7 +54,7 @@ function updateClock(){const s=S.sim;if(!s)return;$('#clock').textContent='t = '
  $('#cpu').hidden=!S.limited;$('#speed-note').textContent=S.speed==='max'?'όσο αντέχει ο υπολογιστής':`${eng(S.speed*s.T,'s',3)} ανά δευτερόλεπτο`;$('#step-note').textContent=s.var?`Δt = ${eng(s.hv,'s',3)} μεταβλητό (${eng(s.hMin,'s',2)} … ${eng(s.hCap||s.hMax,'s',2)}) · απορρίψεις ${s.nRej}`:'Δt = '+eng(s.h,'s',3)+' · T = '+eng(s.T,'s',3);}
 
 // live values on the schematic
-function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;if(['GND','JUNC','TAGO','TAGI','SUB','PORT','SIN','SOUT'].includes(c0.type))return null;
+function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;if(['GND','JUNC','TAGO','TAGI','SUB','PORT','SIN','SOUT'].includes(c0.type)||window.NetLib&&NetLib.isLib(c0.type))return null;
  const c=S.pfx?{...c0,id:S.pfx+c0.id}:c0;
  const avg=S.running&&(S.speed==='max'||S.speed>=200);const val=k=>{if(avg){const p=s.lastPeriod(k);return p?p.avg:s.now(k);}return s.now(k);};
  if(c.type==='PWM'){const d=s.now('D:'+c.id);return {text:'D = '+fmt(d,4)};}
@@ -101,7 +101,7 @@ function chanLabel(key){const [pre,id0,pin]=key.split(':'),vb=vecBase(id0);if(vb
  const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',GS:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold',Y:c?.type==='VM'?'v':c?.type==='AM'?'i':c?.type==='SR'?'Q':'y'}[pre]||pre)+'('+name+')';}
 function addProbe(key,label){if(!S.sim)return;const ok=scope.addChannel(key,label||chanLabel(key));renderChannels();if(!ok)flash('#chan-list');else{flash('#scope-card');}draw(true);}
 function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash');}
-function signalsFor(c,full){const t=c.type,nv=vecN(full||(S.pfx?pid(c.id):c.id));if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI'||t==='SUB'||SubC.PORT_KIND[t])return [];
+function signalsFor(c,full){const t=c.type,nv=vecN(full||(S.pfx?pid(c.id):c.id));if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI'||t==='SUB'||SubC.PORT_KIND[t]||window.NetLib&&NetLib.isLib(t))return [];
  if(t==='PY')return outsOf(c).map((o,k)=>['Y:','έξοδος '+o,k?':'+o:'']);
  if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:t==='IM'||t==='SM'?[...m,['I:','ρεύμα φάσης a'],['V:','πολική τάση v_ab']]:t==='SRM'?[...m,...Array.from({length:P.srmGeo({...P.defaults(t),...c.params})[0]},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα φάσης ${k+1}`],[(k?'V'+(k+1):'V')+':',`τάση φάσης ${k+1}`],['PSI'+(k+1)+':',`ροή φάσης ${k+1} ψ`]]).flat()]:m;}
  if(P.BLOCKS.has(t)&&nv>1)return Array.from({length:nv},(_,k)=>['Y:',`έξοδος y, στοιχείο ${k+1} του διαύλου`,`[${k+1}]`]);
@@ -963,6 +963,8 @@ function compAt(path){const parts=String(path).split('/'),defs=defsOf();let list
 // every part of the circuit, inside instances too: [{c, id (path), label}]
 function allComps(){const doc=atTop()?editor.doc:fullDoc(),defs=doc.subcircuits||{},out=[];
  const walk=(list,pfx,lp,depth)=>{for(const c of list){if(c.type==='SUB'){const d=defs[c.params?.def];if(d&&depth<8)walk(SubC.innerParts(d,c),pfx+c.id+'/',lp+(c.label||c.id)+'/',depth+1);continue;}
+  // a part of the network library (4.1): its channels are those of the parts of its generated definition (e.g. F1/Ia)
+  if(window.NetLib&&NetLib.isLib(c.type)){out.push({c,id:pfx+c.id,label:lp+(c.label||c.id)});walk(NetLib.defOf(c).components.filter(k=>k.type==='AM'||k.type==='XFMR'||k.type==='R'||k.type==='L'||k.type==='C'),pfx+c.id+'/',lp+(c.label||c.id)+'/',depth+1);continue;}
   out.push({c,id:pfx+c.id,label:lp+(c.label||c.id)});}};
  walk(doc.components||[],'','',0);return out;}
 // parameters of a part for the forms: an instance has the public parameters of its definition
@@ -1286,6 +1288,20 @@ function evalOrderHTML(){const o=S.sim?.net.sig.order||[];if(!o.length)return ''
 // k·360°/N: Δi_Σ = V_in·(N·D − m)(m + 1 − N·D)/(N·L·f_s), m = ⌊N·D⌋ (zero when N·D is an integer); in phase: N·Δi.
 // 3.18: the dq current loop on buses. Plant L·di/dt = v − e − R·i in dq (θ = ωt − 90°), PI with K_p = ω_c·L, K_i = ω_c·R and
 // decoupling ωL: i_dq/i*_dq = ω_c/(s + ω_c); in steady state v_dq = e_dq + (R + jωL)·i_dq
+// 4.1: fault in a network (IEC 60909 by symmetrical components; the phase-domain solution of netlib.js for any fault)
+function netFaultTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.grid||!window.NetLib)return '';
+ const g=m.xf?NetLib.behindXF(m.grid,m.xfp):{seq:NetLib.gridZ(m.grid)},z=g.seq,ref=NetLib.faultCurrents(g,{kind:m.kind}),Un=m.xf?m.xfp.U2:m.grid.Un;
+ const Z1=Math.hypot(z.R1,z.X1),c2=(a,b)=>Math.hypot(a,b);
+ let h=`<ul class="eqs"><li>${m.xf?'Δίκτυο ανηγμένο στα 20 kV και μετασχηματιστής: Z₁ = Z_Q·(U₂/U₁)² + Z_T, Z₀ = Z_T (το τρίγωνο κόβει τη μηδενική του δικτύου)':'Ισοδύναμο δικτύου (IEC 60909): Z₁ = c·U_n²/S″k'}: Z₁ = ${eng(z.R1,'Ω',3)} + j${eng(z.X1,'Ω',3)}, Z₀ = ${eng(z.R0,'Ω',3)} + j${eng(z.X0,'Ω',3)}, E = c·U_n/√3 = <b>${eng(z.E,'V')}</b></li>
+  <li>I″k3 = E/|Z₁| = <b>${eng(z.E/Z1,'A')}</b>, I″k2 = √3·E/|2Z₁| = <b>${eng(Math.sqrt(3)*z.E/(2*Z1),'A')}</b>, I″k1 = 3E/|2Z₁ + Z₀| = <b>${eng(3*z.E/c2(2*z.R1+z.R0,2*z.X1+z.X0),'A')}</b>, I″kE2E = 3E/|Z₁ + 2Z₀| = <b>${eng(3*z.E/c2(z.R1+2*z.R0,z.X1+2*z.X0),'A')}</b></li>
+  <li>Κρουστικό ρεύμα: i_p = κ·√2·I″k3, κ = 1,02 + 0,98·e^(−3R/X) = <b>${fmt(1.02+.98*Math.exp(-3*z.R1/z.X1),4)}</b>, σταθερά της DC τ = X/(ωR) = ${eng(z.X1/(z.R1*2*Math.PI*50),'s')}</li></ul>`;
+ const done=s.t>=Math.min(m.dur,.2)-1e-9;
+ if(!done)return h+'<p class="muted small">Τρέξε ως τα 200 ms για τη σύγκριση (η DC συνιστώσα σβήνει πρώτα).</p>';
+ if(m.cb&&s.t>.2+1e-9){const ev=(s.events?.().list||[]).filter(e=>e.t>.2&&e.kind==='scr'&&!e.v).map(e=>`${esc(e.name||e.src||'')} στα ${eng(e.t,'s',5)}`);
+  return h+`<p>Ο διακόπτης πήρε εντολή στα 200 ms. Πόλοι που έσβησαν: ${ev.length?ev.join(', '):'—'}. Κάθε πόλος σβήνει στο μηδέν του ρεύματός του.</p>`;}
+ const rows=[];for(const x of ['a','b','c'])if(ref[x]>1)rows.push(['I″k φάσης '+x,ref[x],s.lastPeriod('Y:F1/I'+x)?.rms,'A']);
+ if(ref.g>1||/g$/.test(m.kind))rows.push(['ρεύμα προς γη 3I₀',ref.g,s.lastPeriod('Y:F1/Ig')?.rms,'A']);
+ return h+cmpRows(rows)+`<p class="muted small">Θεωρία: λύση στο πεδίο των φάσεων με Z_s = (2Z₁ + Z₀)/3, Z_m = (Z₀ − Z₁)/3 (ίδια με τους τύπους παραπάνω). Προσομοίωση: RMS της τελευταίας περιόδου.</p>`;}
 function busDqTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.L)return '';const {E,R,L,f,fc,wc,Kp,Ki,id,iq,dec,t1,t2}=m,w=2*Math.PI*f;
  const t=s.t,idr=t>=t1?id:0,iqr=t>=t2?iq:0,vd=E+R*idr-w*L*iqr,vq=R*iqr+w*L*idr,ia=s.lastPeriod('I:XL/La'),va=s.lastPeriod('V:XI/Va');
  return `<ul class="eqs"><li>Φυτό στο dq: L·di_d/dt = v_d − e_d − R·i_d + ωL·i_q, L·di_q/dt = v_q − e_q − R·i_q − ωL·i_d (θ = ωt − 90°, e_d = Ê = ${eng(E,'V')}, e_q = 0)</li>
@@ -1784,6 +1800,7 @@ function formulaTheory(t){
  if(t.topology==='polyphase')return polyTheory();
  if(t.topology==='sub_legs')return subLegsTheory();
  if(t.topology==='bus_dq')return busDqTheory();
+ if(t.topology==='net_fault')return netFaultTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const D=+W.D,Vin=+V.V,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
   eqs=[`V_o = ${t.topology==='cuk'?'−':''}V_in·D/(1−D) = <b>${eng(Vo,'V')}</b>`,`I_L1 = |I_o|·D/(1−D) = <b>${eng(IL1,'A')}</b>, |I_L2| = |I_o| = <b>${eng(Math.abs(Io),'A')}</b>`,`Δi_L1 = V_in·D·T/L1 = <b>${eng(Vin*D*Ts/L1,'A')}</b>, Δi_L2 = V_in·D·T/L2 = <b>${eng(Vin*D*Ts/L2,'A')}</b>`,`V_C1 = ${t.topology==='cuk'?'V_in + |V_o|':'V_in'} = <b>${eng(t.topology==='cuk'?Vin+Math.abs(Vo):Vin,'V')}</b>`];

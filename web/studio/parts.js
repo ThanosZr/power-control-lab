@@ -110,7 +110,8 @@
    value:()=>null,
    draw:()=>'<path d="M-30,0 H-9 M9,0 H30 M9,-10 V10"/><path class="fill" d="M-9,-10 L9,0 L-9,10 Z"/>'},
   SCR:{name:'Θυρίστορ (SCR)',prefix:'Q',group:'Ημιαγωγοί',pins:{a:[-30,0],k:[30,0]},box:[-10,-11,29,26],
-   params:[sel('fire','Έναυση',[['alpha','Γωνία α ως προς πηγή AC'],['pwm','Από PWM'],['on','Συνεχώς (σαν δίοδος)']],'alpha'),
+   spins:p=>p.fire==='sig'?{g:I(0,30)}:{},
+   params:[sel('fire','Έναυση',[['alpha','Γωνία α ως προς πηγή AC'],['pwm','Από PWM'],['on','Συνεχώς (σαν δίοδος)'],['sig','Από σήμα (ακροδέκτης g, 4.1)']],'alpha',{hint:'Από σήμα: άγει όσο το g ≥ 0,5 και είναι ορθά πολωμένο· όταν το g πέσει, σβήνει στο επόμενο μηδέν του ρεύματος (όπως ένας πόλος διακόπτη ισχύος).'}),
     ref('refsrc','Πηγή αναφοράς',['VAC','VAC3'],{show:p=>p.fire==='alpha',hint:'Η α μετριέται από τη θετική διάβαση από το μηδέν της τάσης αναφοράς (φάση a στην τριφασική).'}),
     num('alpha','Γωνία έναυσης α','°',30,{zero:true,show:p=>p.fire==='alpha'}),
     num('shift','Μετατόπιση','°',0,{signed:true,zero:true,show:p=>p.fire==='alpha',hint:'Προστίθεται στην α: 180° για τα θυρίστορ της αρνητικής ημιπεριόδου, 30° + 60°·k στις τριφασικές γέφυρες.'}),
@@ -118,7 +119,7 @@
     ref('pwm','Μπλοκ PWM',['PWM'],{show:p=>p.fire==='pwm'}),sel('out','Έξοδος PWM',[['a','g'],['na','ḡ'],['b','g₂'],['nb','ḡ₂']],'a',{show:p=>p.fire==='pwm'}),
     num('Ron','R_on','Ω',1e-3),num('Vf','Τάση γονάτου V_f','V',0,{zero:true}),num('Roff','R_off','Ω',1e6)],
    value:()=>null,
-   draw:()=>'<path d="M-30,0 H-9 M9,0 H30 M9,-10 V10 M9,5 L18,14"/><path class="fill" d="M-9,-10 L9,0 L-9,10 Z"/>'},
+   draw:p=>'<path d="M-30,0 H-9 M9,0 H30 M9,-10 V10 M9,5 L18,14"/><path class="fill" d="M-9,-10 L9,0 L-9,10 Z"/>'+(p.fire==='sig'?sl('M18,14 V22 H0 V30'):'')},
   XFMR:{name:'Μετασχηματιστής',prefix:'T',group:'Μαγνητικά',pins:{p1:[-30,-30],p2:[-30,30],s1:[30,-30],s2:[30,30]},box:[-20,-26,40,52],
    params:[num('n','Λόγος N₂/N₁','',1),num('Lm','Αυτεπαγωγή μαγνήτισης (πρωτεύον)','H',1e-3),num('im0','Αρχικό ρεύμα μαγνήτισης','A',0,{signed:true,zero:true}),
     num('Llk1','Σκέδαση πρωτεύοντος L_lk1','H',0,{zero:true,hint:'Σε σειρά με το πρωτεύον, έξω από την L_m. Στο flyback χρειάζεται κύκλωμα clamp (RCD).'}),num('Llk2','Σκέδαση δευτερεύοντος L_lk2','H',0,{zero:true}),
@@ -448,8 +449,50 @@
    box:p=>{const n=nEL(p);return [-8,-10*n-2,16,20*n+4];},
    params:[num('n','Αγωγοί','',3,{hint:'2 έως 6, ακροδέκτες a, b, c, … Ο ακροδέκτης «bus» είναι ένας ηλεκτρικός δίαυλος με τους αγωγούς στη σειρά: δύο δίαυλοι ενώνονται αγωγό προς αγωγό (a με a, b με b, …), όπως οι ακροδέκτες «abc» των τριφασικών στοιχείων.'})],value:p=>nEL(p),unit:'',
    draw:p=>{const n=nEL(p);return `<rect class="block busbar" x="-4" y="${-10*n}" width="8" height="${20*n}" rx="2"/>`+`<path d="${Array.from({length:n},(_,k)=>`M-20,${ioY(n,k)} H-4`).join(' ')}"/>`+bl('M4,0 H20')+Array.from({length:n},(_,k)=>tx('abcdef'[k],-13,ioY(n,k)-3,'bsm')).join('');}},
+  // network library (4.1, ROADMAP §31): each of these is a subcircuit made from its parameters by netlib.js
+  // (NetLib.defOf), out of the primitive parts above, so both solvers, the buses and the channels see it as such
+  GRID3:{name:'Ισοδύναμο δικτύου (S″k, X/R, Z₀)',prefix:'NET',group:'Δίκτυο',pins:p=>isBus(p)?{abc:[40,0]}:{a:[40,-20],b:[40,0],c:[40,20]},box:[-20,-30,40,60],
+   bus:p=>isBus(p)?{abc:['a','b','c']}:{},
+   params:[num('Un','Ονομαστική πολική τάση U_n','V',20e3),num('f','Συχνότητα','Hz',50),num('phase','Φάση της a','°',0,{signed:true,zero:true}),
+    num('cf','Συντελεστής τάσης c (IEC 60909)','',1.1,{hint:'Η ΗΕΔ είναι c·U_n/√3 και Z₁ = c·U_n²/S″k, οπότε ένα τριφασικό βραχυκύκλωμα στα άκρα δίνει I″k3 = S″k/(√3·U_n). c = 1 για ΗΕΔ ίση με την ονομαστική.'}),
+    num('Sk','S″k τριφασικό','VA',500e6),num('XR','X/R θετικής ακολουθίας','',10),
+    sel('z0','Μηδενική ακολουθία',[['ratio','Z₀/Z₁ και X₀/R₀'],['sk1','S″k1 μονοφασικό και X₀/R₀'],['iso','Μονωμένος ουδέτερος']],'ratio',{hint:'Μέσα είναι εμπέδηση 3×3 με Z_s = (2Z₁ + Z₀)/3 και Z_m = (Z₀ − Z₁)/3: δίνει σωστά ρεύματα σε κάθε είδος σφάλματος χωρίς να «ξέρει» το σφάλμα.'}),
+    num('Z0Z1','|Z₀|/|Z₁|','',1,{show:p=>(p.z0||'ratio')==='ratio'}),num('Sk1','S″k1 μονοφασικό','VA',400e6,{show:p=>p.z0==='sk1',hint:'I″k1 = √3·c·U_n/|2Z₁ + Z₀|, με S″k1 = √3·U_n·I″k1.'}),
+    num('XR0','X₀/R₀','',10,{show:p=>p.z0!=='iso'}),num('Rn','Αντίσταση γείωσης ουδετέρου R_n','Ω',0,{zero:true,show:p=>(p.z0||'ratio')==='ratio',hint:'Προστίθεται 3R_n στη μηδενική ακολουθία.'}),CONN('abc')],
+   value:p=>p.Sk,unit:'VA',
+   draw:p=>'<rect class="block" x="-20" y="-30" width="40" height="60" rx="6"/>'+(isBus(p)?bl('M20,0 H40'):'<path d="M20,-20 H40 M20,0 H40 M20,20 H40"/>')+'<path class="thin" d="M-12,-14 c3,-8 6,-8 8,0 c2,8 5,8 8,0 M-12,8 H12 M-12,16 H12 M-6,24 H6"/>'+tx('S″k',0,-20,'bsm')},
+  FLT3:{name:'Σφάλμα (βραχυκύκλωμα)',prefix:'F',group:'Δίκτυο',pins:p=>isBus(p)?{abc:[0,-40]}:{a:[-20,-40],b:[0,-40],c:[20,-40]},box:[-25,-30,50,50],
+   bus:p=>isBus(p)?{abc:['a','b','c']}:{},spins:p=>p.ctl==='sig'?{f:I(-40,0)}:{},
+   params:[sel('kind','Είδος',[['ag','a–γη'],['bg','b–γη'],['cg','c–γη'],['ab','a–b'],['bc','b–c'],['ca','c–a'],['abg','a–b–γη'],['bcg','b–c–γη'],['cag','c–a–γη'],['abc','a–b–c'],['abcg','a–b–c–γη']],'abc'),
+    num('Rf','R_f ανά φάση','Ω',0,{zero:true,hint:'0 = μεταλλικό (10⁻⁴ Ω μέσα στο κύκλωμα).'}),num('Rg','R_g προς γη','Ω',0,{zero:true,show:p=>/g$/.test(p.kind||'abc')}),
+    sel('ctl','Χειρισμός',[['time','Χρόνοι'],['sig','Από σήμα (ακροδέκτης f ≥ 0,5)']],'time'),
+    num('ton','Έναρξη','s',0.04,{zero:true,show:p=>p.ctl!=='sig'}),num('toff','Εκκαθάριση (0 = ποτέ)','s',0,{zero:true,show:p=>p.ctl!=='sig'}),CONN('abc')],
+   value:p=>p.kind,unit:'',
+   draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="50" rx="4"/>'+(isBus(p)?bl('M0,-40 V-30'):'<path d="M-20,-40 V-30 M0,-40 V-30 M20,-40 V-30"/>')+'<path class="fill" d="M3,-24 L-8,-3 L0,-3 L-5,14 L9,-8 L1,-8 L7,-24 Z"/>'+(p.ctl==='sig'?sl('M-40,0 H-25'):'')},
+  CB3:{name:'Διακόπτης ισχύος (τριφασικός)',prefix:'CB',group:'Δίκτυο',pins:p=>isBus(p)?{abc1:[-40,0],abc2:[40,0]}:{a1:[-40,-20],b1:[-40,0],c1:[-40,20],a2:[40,-20],b2:[40,0],c2:[40,20]},box:[-25,-30,50,60],
+   bus:p=>isBus(p)?{abc1:['a1','b1','c1'],abc2:['a2','b2','c2']}:{},spins:p=>p.ctl==='sig'?{cmd:I(0,40)}:{},
+   params:[sel('ctl','Χειρισμός',[['time','Πρόγραμμα εντολών'],['sig','Από σήμα (ακροδέκτης cmd: ≥ 0,5 κλειστός)']],'time'),
+    txt('cmd','Εντολές t:κατάσταση','0:1, 0.1:0',{show:p=>p.ctl!=='sig',hint:'1 = κλείσιμο, 0 = άνοιγμα. Κάθε πόλος ανοίγει στο πρώτο μηδέν του ρεύματός του μετά την εντολή (αντιπαράλληλα θυρίστορ από σήμα).'}),
+    num('Ron','R_on ανά πόλο','Ω',1e-4),num('Roff','R_off ανά πόλο','Ω',1e6),CONN('abc')],
+   value:()=>null,
+   draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="60" rx="4"/>'+(isBus(p)?bl('M-40,0 H-25 M25,0 H40'):'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25 M25,-20 H40 M25,0 H40 M25,20 H40"/>')+'<path class="thin" d="M-14,0 H-6 L8,-10 M8,0 H14"/>'+tx('CB',0,22,'bsm')+(p.ctl==='sig'?sl('M0,40 V30'):'')},
+  XF3:{name:'Μετασχηματιστής τριφασικός (ομάδα σύνδεσης)',prefix:'TR',group:'Δίκτυο',pins:p=>isBus(p)?{abc1:[-40,0],abc2:[40,0]}:{a1:[-40,-20],b1:[-40,0],c1:[-40,20],a2:[40,-20],b2:[40,0],c2:[40,20]},box:[-25,-30,50,60],
+   bus:p=>isBus(p)?{abc1:['a1','b1','c1'],abc2:['a2','b2','c2']}:{},
+   params:[sel('grp','Ομάδα σύνδεσης',[['Yy0','Yy0'],['YNyn0','YNyn0'],['Yyn0','Yyn0'],['YNy0','YNy0'],['Yd1','Yd1'],['Yd11','Yd11'],['YNd1','YNd1'],['YNd11','YNd11'],['Dy1','Dy1'],['Dy11','Dy11'],['Dyn1','Dyn1'],['Dyn11','Dyn11'],['Dd0','Dd0']],'Dyn11',
+     {hint:'Κεφαλαίο: πλευρά 1 (a1, b1, c1), μικρό: πλευρά 2. N/n: ουδέτερος γειωμένος. Ο αριθμός × 30° είναι η καθυστέρηση της πλευράς 2 (11 = προπορεία 30°).'}),
+    num('Sn','Ονομαστική ισχύς S_n','VA',40e6),num('U1','Πολική τάση πλευράς 1','V',150e3),num('U2','Πολική τάση πλευράς 2','V',20e3),num('f','Συχνότητα','Hz',50),
+    num('uk','Τάση βραχυκύκλωσης u_k','%',10),num('Pk','Απώλειες χαλκού P_k','W',0,{zero:true}),num('i0','Ρεύμα κενού i_0','%',0.5,{zero:true,hint:'0 = χωρίς ρεύμα μαγνήτισης (πολύ μεγάλη L_m).'}),num('P0','Απώλειες σιδήρου P_0','W',0,{zero:true}),
+    num('tap','Τάπ στην πλευρά 1','%',0,{signed:true,zero:true,hint:'+2,5 % = 2,5 % περισσότερες σπείρες στην πλευρά 1 (χαμηλότερη τάση στην πλευρά 2).'}),CONN('abc')],
+   value:p=>p.grp,unit:'',
+   draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="60" rx="4"/>'+(isBus(p)?bl('M-40,0 H-25 M25,0 H40'):'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25 M25,-20 H40 M25,0 H40 M25,20 H40"/>')+'<circle class="thin" cx="-6" cy="-4" r="11"/><circle class="thin" cx="6" cy="-4" r="11"/>'+tx(xe(String(p.grp||'')),0,22,'bsm')},
+  LOAD3:{name:'Τριφασικό φορτίο (P, Q)',prefix:'LD',group:'Δίκτυο',pins:p=>isBus(p)?{abc:[0,-40]}:{a:[-20,-40],b:[0,-40],c:[20,-40]},box:[-25,-30,50,50],
+   bus:p=>isBus(p)?{abc:['a','b','c']}:{},
+   params:[sel('cn','Σύνδεση',[['yn','Y με γειωμένο ουδέτερο'],['y','Y χωρίς γείωση'],['d','Δ']],'yn'),num('Un','Ονομαστική πολική τάση U_n','V',20e3),num('f','Συχνότητα','Hz',50),
+    num('P','Ενεργός ισχύς P (στην U_n)','W',10e6,{zero:true}),num('Q','Άεργος ισχύς Q (στην U_n)','var',3e6,{signed:true,zero:true,hint:'Θετική: επαγωγική (L), αρνητική: χωρητική (C). Σταθερή εμπέδηση: R ∥ X ανά φάση.'}),CONN('abc')],
+   value:p=>p.P,unit:'W',
+   draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="50" rx="4"/>'+(isBus(p)?bl('M0,-40 V-30'):'<path d="M-20,-40 V-30 M0,-40 V-30 M20,-40 V-30"/>')+'<path class="thin" d="M-12,-18 V8 M0,-18 V8 M12,-18 V8 M-16,8 H16"/>'+tx('P,Q',0,17,'bsm')},
  };
- const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Μηχανές','Φορτία','Έλεγχος','Σήματα','Δίαυλοι','Κώδικας','Υποκυκλώματα','Βασικά'];
+ const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Μηχανές','Δίκτυο','Φορτία','Έλεγχος','Σήματα','Δίαυλοι','Κώδικας','Υποκυκλώματα','Βασικά'];
  function defaults(type){const o={};for(const p of PARTS[type].params)o[p.k]=p.def;return o;}
  // electrical + signal pins of one placed part; the electrical pins of a multiport depend on its parameters (3.5)
  function elPins(c){const d=PARTS[c.type];if(!d)return {};return typeof d.pins==='function'?d.pins({...defaults(c.type),...(c.params||{})}):d.pins;}
@@ -623,6 +666,8 @@
  // carrier, the mode of a PWM): its change during a run asks for a restart, and it cannot be pinned (📌). Everything else
  // is live: applied at the boundary of a solver step (a discrete block uses it at its next sample).
  const STRUCT={PWM:new Set(['mode','carrier','upd']),SW:new Set(['gate','model']),VAC3:new Set(['conn'])};
+ // the network library (4.1): a change rebuilds its definition, so its parameters are not live (yet)
+ for(const t of ['GRID3','FLT3','CB3','XF3','LOAD3'])STRUCT[t]=new Set(PARTS[t].params.map(q=>q.k));
  const structCache=new Map();
  function structural(type,k){const key=type+'|'+k;if(structCache.has(key))return structCache.get(key);let r=!!STRUCT[type]?.has(k);
   const d=PARTS[type],pd=d?.params?.find(x=>x.k===k);if(!r&&pd&&pd.struct)r=true;

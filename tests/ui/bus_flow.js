@@ -1,7 +1,7 @@
 // Buses and vectors in the studio (3.18, ROADMAP §3): the tutorial drawn with buses (thick wires with their width, bus
 // pins, the dq loop on the theory), a vector block's channels and live values, a part switched to its bus pin, an
 // electrical bus, wire names that join (and an older file that opens the same), a width that does not fit, Ctrl+G across
-// a bus. Needs Node + Playwright.
+// a bus; the network library on buses (4.1). Needs Node + Playwright.
 // Usage: python run.py --no-browser --port 8765  then  node tests/ui/bus_flow.js http://127.0.0.1:8765/ <out-dir>
 const {chromium}=require('playwright');const fs=require('fs');const OUT=process.argv[3]||'.';
 (async()=>{const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:1500,height:1000}});const p=await ctx.newPage();const errs=[];
@@ -66,6 +66,15 @@ const {chromium}=require('playwright');const fs=require('fs');const OUT=process.
  const [fc]=await Promise.all([p.waitForEvent('filechooser'),p.click('#open')]);await fc.setFiles(oldFile);await p.waitForTimeout(700);
  R.old=await p.evaluate(()=>{PCL.reset();PCL.S.sim.run(1e-4);return {version:PCL.editor.doc.version,names:PCL.editor.doc.wires.map(w=>w.name).filter(Boolean).sort(),
   notice:document.querySelector('#notice')?.innerText||'',i:[PCL.S.sim.now('I:R1'),PCL.S.sim.now('I:R2')],err:PCL.S.error};});
+ // 8. the network library (4.1) on three-phase buses: the fault tutorial opens without messages, its parts are in the
+ //    palette, the fault currents are channels, the theory card agrees with IEC 60909 after 200 ms
+ await p.goto(base+'?tutorial=net_fault');await p.waitForTimeout(900);
+ R.net=await p.evaluate(()=>{PCL.reset();PCL.S.sim.run(0.2);PCL.renderTheory?.();const th=document.querySelector('#theory')?.innerText||'';
+  const d=[...document.querySelectorAll('#theory table.cmp tbody tr')].map(r=>parseFloat((r.cells[3]?.textContent||'').replace(',','.').replace('−','-')));
+  return {err:PCL.S.error,warn:(PCL.S.sim.net.warnings||[]).length,bus:document.querySelectorAll('.wire.bus').length,
+   palette:[...document.querySelectorAll('[data-part="GRID3"],[data-part="FLT3"],[data-part="CB3"],[data-part="XF3"],[data-part="LOAD3"]')].length,
+   opt:[...document.querySelectorAll('#add-signal option')].map(o=>o.value).filter(v=>/^Y:F1\/I[abcg]$/.test(v)).length,iec:/IEC 60909/.test(th),diff:d};});
+ await p.screenshot({path:OUT+'/net_fault.png'});
  console.log(JSON.stringify(R,null,1));console.log('ERR',JSON.stringify(errs.slice(0,5)));
  const near=(a,b,tol)=>Math.abs(a-b)<=tol;
  const ok=R.draw.bus>=8&&R.draw.widths.join()==='2,3'&&R.draw.pins>=6&&!R.draw.stale
@@ -76,5 +85,6 @@ const {chromium}=require('playwright');const fs=require('fs');const OUT=process.
   &&R.named.link===2&&R.named.mark===2&&R.named.version===3&&near(R.named.run.amp,10,.01)
   &&R.old.version===3&&R.old.names.join()==='v,v·2'&&/v·2/.test(R.old.notice)&&!R.old.err&&near(R.old.i[0],1,1e-9)&&near(R.old.i[1],2,1e-9)
   &&/πλάτος 2/.test(R.mismatch.err)&&/πλάτος 2/.test(R.mismatch.notice)
-  &&R.group.ports.includes('e1:3')&&R.group.buspin>=2&&!R.group.err&&near(R.group.run.amp,10,.01)&&!errs.length;
+  &&R.group.ports.includes('e1:3')&&R.group.buspin>=2&&!R.group.err&&near(R.group.run.amp,10,.01)
+  &&!R.net.err&&!R.net.warn&&R.net.bus>=4&&R.net.palette===5&&R.net.opt===4&&R.net.iec&&R.net.diff.length===3&&R.net.diff.every(d=>Math.abs(d)<1)&&!errs.length;
  console.log(ok?'PASS':'FAIL');await b.close();process.exit(ok?0:1);})().catch(e=>{console.error('FAILED',e);process.exit(1);});

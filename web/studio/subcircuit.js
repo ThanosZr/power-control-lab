@@ -19,6 +19,8 @@
 // definition leaves the instance out with a message.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
+ // the network library (4.1): its parts become instances of generated definitions before anything else here
+ const NL=root.NetLib||(typeof require!=='undefined'?require('./netlib.js'):null);
  const PORT_KIND={PORT:'el',SIN:'in',SOUT:'out'},PORT_PIN={PORT:'p',SIN:'y',SOUT:'u'};
  // outward direction of each port symbol in its own coordinates (the flag points away from the inner circuit)
  const PORT_OUT={PORT:[1,0],SIN:[-1,0],SOUT:[1,0]};
@@ -28,7 +30,7 @@
  const okName=n=>typeof n==='string'&&/^[^\s:./$][^:./]*$/.test(n)&&n!=='def';
  class SubcircuitError extends Error{}
 
- function needs(project){return !!(project&&(project.components||[]).some(c=>c.type==='SUB'||isPort(c)));}
+ function needs(project){return !!(project&&((project.components||[]).some(c=>c.type==='SUB'||isPort(c))||NL&&NL.needs(project)));}
 
  // the ports of a definition, ordered along each side as drawn: [{id, name, kind, side}]
  function portsOf(def){
@@ -76,7 +78,8 @@
  // the flat circuit: {project (no SUB, no ports, no definitions), warnings}
  function flatten(project){
   if(!needs(project))return {project,warnings:[]};
-  const defs=project.subcircuits||{},warnings=[],warn=m=>{if(!warnings.includes(m)&&warnings.length<40)warnings.push(m);};
+  const libWarn=NL?NL.warnings(project):[];if(NL)project=NL.expand(project);
+  const defs=project.subcircuits||{},warnings=[...libWarn],warn=m=>{if(!warnings.includes(m)&&warnings.length<40)warnings.push(m);};
   const comps=[],wires=[],portEnd=new Map(),instSet=new Set(),noDef=new Set(),pending=[],instIn=[];
   const walk=(list,wlist,ctx)=>{
    const local=new Set(list.map(c=>c.id)),me={...ctx,local};

@@ -878,6 +878,24 @@
     scope:{panes:[[['Y:PK','i_d'],['Y:PK:q','i_q']],[['I:XL/La','i_a'],['I:XL/Lb','i_b'],['I:XL/Lc','i_c']],[['V:XI/Va','v_a (αντιστροφέας)'],['V:E','e_a (δίκτυο)']]],window:{unit:'T',n:2}},
     meta:{E,R,L,f,fc,wc,Kp,Ki,id,iq,dec,t1,t2,dur:.04}});
    return pr;}});
+ // 4.1: network library (ROADMAP §31): network equivalent, breaker, transformer, fault, load, as one-wire buses
+ T.push({id:'net_fault',group:'Δίκτυο (4.1)',title:'Βραχυκύκλωμα σε δίκτυο: IEC 60909 και συμμετρικές συνιστώσες',theory:'formula',topology:'net_fault',
+  options:[{k:'kind',label:'Σφάλμα στα 40 ms',options:[['abc','Τριφασικό'],['ag','Μονοφασικό a–γη'],['ab','Διφασικό a–b'],['abg','Διφασικό με γη a–b–γη']],def:'abc'},
+   {k:'xf',label:'Θέση',options:[['none','Στα άκρα του δικτύου 20 kV'],['dyn11','Πίσω από μετασχηματιστή 150/20 kV Dyn11']],def:'none'},
+   {k:'z0',label:'Μηδενική ακολουθία του δικτύου',options:[['1.5','Z₀ = 1,5·Z₁'],['3','Z₀ = 3·Z₁'],['iso','Μονωμένος ουδέτερος']],def:'1.5'},
+   {k:'cb',label:'Διακόπτης ισχύος',options:[['none','Μένει κλειστός'],['open','Ανοίγει στα 200 ms']],def:'none'}],
+  desc:'Ένα ισοδύναμο δικτύου (S″k, X/R, Z₀) τροφοδοτεί μέσω διακόπτη ισχύος (και, αν θέλεις, μετασχηματιστή Dyn11) ένα φορτίο. Στα 40 ms γίνεται σφάλμα. Όλα τα σύρματα είναι τριφασικοί δίαυλοι. Κάθε στοιχείο της βιβλιοθήκης «Δίκτυο» είναι υποκύκλωμα από απλά στοιχεία, οπότε τα ρεύματα φαίνονται ως F1/Ia, CB1/Ia κ.λπ.',
+  tasks:['Σύγκρινε το I″k κάθε φάσης στην κάρτα με τον τύπο της IEC 60909 (μόνιμη τιμή, όταν σβήσει η συνιστώσα DC με τ = X/(ωR)).','Μονοφασικό με μονωμένο ουδέτερο: σχεδόν μηδέν ρεύμα. Πίσω από το Dyn11 όμως ρέει, γιατί το αστέρι 20 kV είναι γειωμένο.','Με «Ανοίγει στα 200 ms»: κάθε πόλος σβήνει στο δικό του μηδέν ρεύματος (δες και το αρχείο συμβάντων).'],
+  build(o){const xf=o.xf==='dyn11',kind=o.kind||'abc',iso=o.z0==='iso',dur=o.cb==='open'?.26:.2;
+   const grid=xf?{Un:150e3,Sk:5e9,XR:10}:{Un:20e3,Sk:500e6,XR:10};Object.assign(grid,iso?{z0:'iso'}:{z0:'ratio',Z0Z1:+o.z0||1.5,XR0:5},{conn:'bus'});
+   const comps=[C('G1','GRID3',120,200,grid,{label:'δίκτυο'}),C('CB1','CB3',260,200,{cmd:o.cb==='open'?'0:1, 0.2:0':'0:1',conn:'bus'}),
+    C('J1','JUNC',560,200),C('F1','FLT3',560,320,{kind,ton:.04,conn:'bus'}),C('L1','LOAD3',700,320,{Un:20e3,P:5e6,Q:2e6,cn:'y',conn:'bus'})];
+   const wires=[['G1:abc','CB1:abc1'],['J1:j','F1:abc'],['J1:j','L1:abc']];
+   if(xf){comps.push(C('T1','XF3',420,200,{grp:'Dyn11',Sn:40e6,U1:150e3,U2:20e3,uk:10,Pk:200e3,i0:.5,conn:'bus'}));wires.push(['CB1:abc2','T1:abc1'],['T1:abc2','J1:j']);}
+   else wires.push(['CB1:abc2','J1:j']);
+   return project(comps,wires,{sim:{hDiv:2000,speed:5,stopT:dur},
+    scope:{panes:[[['Y:F1/Ia','i_a σφάλματος'],['Y:F1/Ib','i_b σφάλματος'],['Y:F1/Ic','i_c σφάλματος']],[['Y:F1/Ig','ρεύμα προς γη'],['Y:CB1/Ia','i_a διακόπτη']]],window:{unit:'T',n:4}},
+    meta:{grid,kind,xf,dur,cb:o.cb==='open',xfp:xf?{grp:'Dyn11',Sn:40e6,U1:150e3,U2:20e3,uk:10,Pk:200e3}:null}});}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
  root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};

@@ -253,6 +253,12 @@
     case 'SH':return (p.in==='sig'?'u':(p.qty==='V'?'v(':'i(')+(p.src||'—')+')')+' · '+({start:'αρχή T',mid:'μέσο T',both:'2 ανά T'}[p.trig]||'');
     case 'MEAS':case 'VM':case 'AM':case 'VP':case 'IP':case 'SR':case 'DISP':return '';
     case 'SUB':return String(p.$title||p.def||''); // subcircuit (3.17): the title of its definition
+    // network library (4.1)
+    case 'GRID3':return e(+p.Un,'V')+' · '+e(+p.Sk,'VA')+' · X/R '+(+p.XR).toLocaleString('el-GR');
+    case 'FLT3':return ({ag:'a–γη',bg:'b–γη',cg:'c–γη',ab:'a–b',bc:'b–c',ca:'c–a',abg:'ab–γη',bcg:'bc–γη',cag:'ca–γη',abc:'3φ',abcg:'3φ–γη'}[p.kind]||p.kind)+(p.ctl==='sig'?' · από σήμα':' · '+e(+p.ton,'s')+(+p.toff>0?'–'+e(+p.toff,'s'):''));
+    case 'CB3':return p.ctl==='sig'?'εντολή από σήμα':String(p.cmd||'').slice(0,22);
+    case 'XF3':return p.grp+' · '+e(+p.Sn,'VA')+' · '+e(+p.U1,'V')+'/'+e(+p.U2,'V');
+    case 'LOAD3':return e(+p.P,'W')+(+p.Q?' · '+e(+p.Q,'var'):'')+' · '+({yn:'YN',y:'Y',d:'Δ'}[p.cn]||'');
     case 'CONST':return String(p.v).includes(':')?String(p.v).slice(0,22):'';case 'GAIN':return 'K = '+(String(p.K).includes(';')?String(p.K).split(';').map(x=>e(+x.trim())).join('; '):e(+p.K));case 'SUM':return '';
     case 'SAT':return '['+e(+p.lo)+', '+e(+p.hi)+']';case 'CMP':return +p.hys>0?'h = '+e(+p.hys):'';case 'LOGIC':return ['nand','nor','xor'].includes(p.op)?p.op.toUpperCase():'';
     case 'PIB':return 'K_p '+e(+p.Kp)+' · K_i '+e(+p.Ki);case 'UD':return '';

@@ -227,6 +227,7 @@
     const e={k:'D',a,b,Ron:Math.max(num(p.Ron,1e-3),1e-7),Roff:Math.max(num(p.Roff,1e6),1),Vf:num(p.Vf,0),on:false,key:c.id,gk:'scr',gon:false};
     if(fire==='pwm'){e.gate='pwm';e.pwm=p.pwm;e.out=p.out||'a';if(!(p.pwm&&byId.get(p.pwm)?.type==='PWM'))warnings.push(`${c.label||c.id}: διάλεξε μπλοκ PWM για την έναυση.`);}
     else if(fire==='on')e.gate='on';
+    else if(fire==='sig'){e.gate='sig';e.gIn=sn(c.id,'g');info.gIn=e.gIn;}
     else{e.gate='alpha';e.fire={refsrc:p.refsrc,alpha:num(p.alpha,30),shift:num(p.shift,0),pw:Math.min(359,Math.max(num(p.pw,20),.1)),f:Math.max(num(p.fref,50),1e-6),ph0:0};}
     info.main=add(e);}
    else if(T==='XFMR'){const p1=node(c.id,'p1'),p2=node(c.id,'p2');let s1=node(c.id,'s1'),s2=node(c.id,'s2');const opp=p.pol==='opp';if(opp)[s1,s2]=[s2,s1];
