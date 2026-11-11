@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (329 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.1.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (348 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.1.
+Κανένα στην 4.1.1.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-145 σημεία.
+164 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -115,18 +115,37 @@
 | `pcl.formats.write_hdf5` | `path`, `columns`, `meta`, `matrices` | 3.18 |
 | `pcl.formats.write_parquet` | `path`, `columns`, `meta`, `compression`, `created_by` | 3.18 |
 | `pcl.get` | `key` | 3.18 |
+| `pcl.impulse.auto_H` | `tau1_us`, `tau2_us`, `n`, `t` | 4.1.1 |
 | `pcl.impulse.check_voltage` | `alpha`, `beta`, `K`, `Vp`, `profile`, `X`, `Y`, `method`, `Vpeak` | 3.18 |
+| `pcl.impulse.compare_current` | `row`, `time`, `signal`, `unit`, `shift`, `normalize` | 4.1.1 |
+| `pcl.impulse.compare_voltage` | `row`, `time`, `signal`, `unit`, `shift`, `normalize` | 4.1.1 |
 | `pcl.impulse.dexp` | `t`, `alpha`, `beta` | 3.18 |
+| `pcl.impulse.dexp_characteristics` | `alpha`, `beta` | 4.1.1 |
 | `pcl.impulse.fit_heidler` | `T1`, `T2`, `Im`, `n`, `H`, `H_value` | 3.18 |
 | `pcl.impulse.fit_profile` | `code`, `Vp` | 3.18 |
 | `pcl.impulse.fit_voltage` | `X`, `Y`, `Vp`, `method`, `profile` | 3.18 |
+| `pcl.impulse.frontline_geometry` | `I0`, `tau1`, `tau2`, `n`, `eta`, `dt`, `tend` | 4.1.1 |
 | `pcl.impulse.heidler` | `t`, `tau1`, `tau2`, `n` | 3.18 |
+| `pcl.impulse.heidler_name` | `T1_us`, `T2_us`, `Im_A` | 4.1.1 |
+| `pcl.impulse.heidler_reference` | `row`, `dt` | 4.1.1 |
+| `pcl.impulse.heidler_row` | `T1_us`, `T2_us`, `Im_A`, `n`, `H_mode`, `H_input`, `tau1_guess_us`, `tau2_guess_us`, `dt`, `tend`, `created_at`, `sampled` | 4.1.1 |
+| `pcl.impulse.lightning_current` | `Im`, `H`, `tau1_us`, `tau2_us`, `n`, `t` | 4.1.1 |
 | `pcl.impulse.lightning_times` | `m` | 3.18 |
 | `pcl.impulse.read_heidler_csv` | `path_or_text` | 3.18 |
+| `pcl.impulse.read_rows` | `path_or_text` | 4.1.1 |
+| `pcl.impulse.read_signal_csv` | `path_or_text` | 4.1.1 |
 | `pcl.impulse.read_voltage_csv` | `path_or_text` | 3.18 |
+| `pcl.impulse.rows_csv` | `rows`, `kind` | 4.1.1 |
+| `pcl.impulse.save_rows` | `rows`, `folder`, `kind` | 4.1.1 |
 | `pcl.impulse.times` | `f`, `t_lo`, `t_hi` | 3.18 |
+| `pcl.impulse.validate_voltage` | `exact`, `sampled`, `cfg`, `profile` | 4.1.1 |
+| `pcl.impulse.voltage_characteristics` | `t`, `v` | 4.1.1 |
 | `pcl.impulse.voltage_measure` | `alpha`, `beta` | 3.18 |
+| `pcl.impulse.voltage_name` | `Vp_kV`, `X_us`, `Y_us`, `method` | 4.1.1 |
+| `pcl.impulse.voltage_reference` | `row` | 4.1.1 |
+| `pcl.impulse.voltage_row` | `X_us`, `Y_us`, `Vp_kV`, `method`, `profile`, `polarity`, `dt`, `tend`, `tol_peak`, `tol_X`, `tol_Y`, `created_at` | 4.1.1 |
 | `pcl.impulse.voltage_times` | `m` | 3.18 |
+| `pcl.impulse.waveform_characteristics` | `t`, `i` | 4.1.1 |
 | `pcl.job` | `spec`, `allow_paths` | 3.18 |
 | `pcl.link.App` | `url`, `token`, `timeout`, `client` | 3.18 |
 | `pcl.link.App.call` | `method`, `timeout`, `**args` | 3.18 |

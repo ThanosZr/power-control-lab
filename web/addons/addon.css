@@ -12,3 +12,13 @@ table{border-collapse:collapse;width:100%;margin:8px 0;font-variant-numeric:tabu
 .pass{color:var(--ok);font-weight:600}.fail{color:var(--bad);font-weight:600}.err{color:var(--bad)}
 code{font-size:12px}
 label.row{flex-direction:row;align-items:center;gap:4px;color:inherit;margin:0 8px 0 0}
+/* 4.1.1: small plots of the impulse tools (details, front-line geometry, comparison with EMTP) */
+:root{--c0:#17302a;--c1:#c2410c;--front:#b03a5b}
+@media (prefers-color-scheme:dark){:root{--c0:#e3ece9;--c1:#fb923c;--front:#f07a95}}
+svg.plot{display:block;margin:8px 0;max-width:720px;font-size:10px;fill:var(--mut)}
+svg.plot path{fill:none;stroke-width:1.6}svg.plot .c0{stroke:var(--c0)}svg.plot .c1{stroke:var(--c1);stroke-dasharray:5 3}
+svg.plot .c0t{fill:var(--c0)}svg.plot .c1t{fill:var(--c1)}
+svg.plot line.g{stroke:var(--line);stroke-width:.6}svg.plot line.ref{stroke:var(--mut);stroke-dasharray:3 3;stroke-width:.8}svg.plot line.front{stroke:var(--front);stroke-width:1.8}
+svg.plot circle.pt{fill:var(--acc)}svg.plot text.pl{fill:var(--fg)}
+label.chk{flex-direction:row;align-items:center;gap:6px}
+details summary{cursor:pointer;color:var(--mut)}

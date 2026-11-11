@@ -1,11 +1,29 @@
 {
   "id": "impulse-params",
   "name": "Κρουστικές πηγές: παράμετροι από κώδικα",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Thanos Zr",
-  "description": "Τ₁, τ₂, η του ρεύματος Heidler και α, β, K της κρουστικής τάσης από T1/T2 και κορυφή, με τα προφίλ και τις ανοχές του IEC 60060-1 και έλεγχο PASS/FAIL. Θύρα σε Python των Lightning Impulse Manager 1.2.0 και Voltage Impulse GUI 1.1. Διαβάζει και τα CSV τους.",
+  "description": "Τ₁, τ₂, η του ρεύματος Heidler και α, β, K της κρουστικής τάσης από T1/T2 και κορυφή, με τα προφίλ και τις ανοχές του IEC 60060-1 και έλεγχο PASS/FAIL. Θύρα σε Python των Lightning Impulse Manager 1.2.0 και Voltage Impulse GUI 1.1: γραμμές αποτελεσμάτων με το σχήμα και το όνομα αρχείου τους, λεπτομέρειες με γράφημα, γεωμετρία μετώπου, πίνακας επαλήθευσης, σύγκριση με CSV του EMTP (4.1.1). Διαβάζει και γράφει τα CSV τους.",
   "entry": "index.html",
-  "kind": ["params", "panel"],
-  "targets": [{"type": "ILG", "label": "Παράμετροι Heidler από T1/T2"}, {"type": "VIMP", "label": "Παράμετροι α, β, K από T1/T2 και προφίλ IEC"}],
-  "permissions": ["project.read", "project.write", "python", "show", "files"]
+  "kind": [
+    "params",
+    "panel"
+  ],
+  "targets": [
+    {
+      "type": "ILG",
+      "label": "Παράμετροι Heidler από T1/T2"
+    },
+    {
+      "type": "VIMP",
+      "label": "Παράμετροι α, β, K από T1/T2 και προφίλ IEC"
+    }
+  ],
+  "permissions": [
+    "project.read",
+    "project.write",
+    "python",
+    "show",
+    "files"
+  ]
 }

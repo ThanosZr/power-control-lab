@@ -54,7 +54,7 @@
 | `pcl/control.py` | 893 |
 | `pcl/core.py` | 1302 |
 | `pcl/formats.py` | 222 |
-| `pcl/impulse.py` | 254 |
+| `pcl/impulse.py` | 858 |
 | `pcl/link.py` | 131 |
 | `pcl/plotting.py` | 340 |
 | `pcl/workbench.py` | 295 |
@@ -70,6 +70,7 @@
 | `tests/test_control.py` | 213 |
 | `tests/test_derivation.py` | 93 |
 | `tests/test_engine.py` | 276 |
+| `tests/test_impulse_tools.py` | 150 |
 | `tests/test_live_program.py` | 49 |
 | `tests/test_live_sim.py` | 149 |
 | `tests/test_matlab.py` | 150 |
@@ -95,7 +96,7 @@
 | `tests/js/subcircuit_cases.js` | 87 |
 | `tests/js/tutorial_cases.js` | 137 |
 | `tests/js/units_cases.js` | 52 |
-| `tests/ui/addons_flow.js` | 102 |
+| `tests/ui/addons_flow.js` | 125 |
 | `tests/ui/blocks_flow.js` | 140 |
 | `tests/ui/bus_flow.js` | 90 |
 | `tests/ui/editor_interactions.js` | 45 |
@@ -1860,6 +1861,39 @@ _(χωρίς συναρτήσεις)_
 | 230 | function | `_rows` |
 | 235 | function | `read_heidler_csv` |
 | 246 | function | `read_voltage_csv` |
+| 294 | function | `_num_name` |
+| 300 | function | `heidler_name` |
+| 304 | function | `voltage_name` |
+| 308 | function | `_grid` |
+| 313 | function | `_xing` |
+| 320 | function | `lightning_current` |
+| 330 | function | `waveform_characteristics` |
+| 358 | function | `auto_H` |
+| 363 | function | `_sampled_times` |
+| 383 | function | `_refine_heidler` |
+| 393 | function | `_now` |
+| 397 | function | `heidler_row` |
+| 425 | function | `frontline_geometry` |
+| 450 | function | `dexp_characteristics` |
+| 466 | function | `_dexp_derived` |
+| 476 | function | `voltage_characteristics` |
+| 493 | function | `_selected` |
+| 501 | function | `_refine_voltage` |
+| 511 | function | `validate_voltage` |
+| 590 | function | `voltage_row` |
+| 630 | function | `_cell` |
+| 640 | function | `rows_csv` |
+| 654 | function | `save_rows` |
+| 667 | function | `read_rows` |
+| 682 | function | `read_signal_csv` |
+| 714 | function | `_clean` |
+| 726 | function | `_interp` |
+| 742 | function | `_corr` |
+| 756 | function | `_auto_unit` |
+| 763 | function | `heidler_reference` |
+| 775 | function | `voltage_reference` |
+| 791 | function | `compare_current` |
+| 826 | function | `compare_voltage` |
 
 ### `pcl/link.py`
 

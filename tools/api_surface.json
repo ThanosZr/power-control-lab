@@ -1,5 +1,5 @@
 {
- "version": "4.1",
+ "version": "4.1.1",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -562,6 +562,15 @@
     ],
     "since": "3.18"
    },
+   "pcl.impulse.auto_H": {
+    "params": [
+     "tau1_us",
+     "tau2_us",
+     "n",
+     "t"
+    ],
+    "since": "4.1.1"
+   },
    "pcl.impulse.check_voltage": {
     "params": [
      "alpha",
@@ -576,6 +585,28 @@
     ],
     "since": "3.18"
    },
+   "pcl.impulse.compare_current": {
+    "params": [
+     "row",
+     "time",
+     "signal",
+     "unit",
+     "shift",
+     "normalize"
+    ],
+    "since": "4.1.1"
+   },
+   "pcl.impulse.compare_voltage": {
+    "params": [
+     "row",
+     "time",
+     "signal",
+     "unit",
+     "shift",
+     "normalize"
+    ],
+    "since": "4.1.1"
+   },
    "pcl.impulse.dexp": {
     "params": [
      "t",
@@ -583,6 +614,13 @@
      "beta"
     ],
     "since": "3.18"
+   },
+   "pcl.impulse.dexp_characteristics": {
+    "params": [
+     "alpha",
+     "beta"
+    ],
+    "since": "4.1.1"
    },
    "pcl.impulse.fit_heidler": {
     "params": [
@@ -612,6 +650,18 @@
     ],
     "since": "3.18"
    },
+   "pcl.impulse.frontline_geometry": {
+    "params": [
+     "I0",
+     "tau1",
+     "tau2",
+     "n",
+     "eta",
+     "dt",
+     "tend"
+    ],
+    "since": "4.1.1"
+   },
    "pcl.impulse.heidler": {
     "params": [
      "t",
@@ -620,6 +670,49 @@
      "n"
     ],
     "since": "3.18"
+   },
+   "pcl.impulse.heidler_name": {
+    "params": [
+     "T1_us",
+     "T2_us",
+     "Im_A"
+    ],
+    "since": "4.1.1"
+   },
+   "pcl.impulse.heidler_reference": {
+    "params": [
+     "row",
+     "dt"
+    ],
+    "since": "4.1.1"
+   },
+   "pcl.impulse.heidler_row": {
+    "params": [
+     "T1_us",
+     "T2_us",
+     "Im_A",
+     "n",
+     "H_mode",
+     "H_input",
+     "tau1_guess_us",
+     "tau2_guess_us",
+     "dt",
+     "tend",
+     "created_at",
+     "sampled"
+    ],
+    "since": "4.1.1"
+   },
+   "pcl.impulse.lightning_current": {
+    "params": [
+     "Im",
+     "H",
+     "tau1_us",
+     "tau2_us",
+     "n",
+     "t"
+    ],
+    "since": "4.1.1"
    },
    "pcl.impulse.lightning_times": {
     "params": [
@@ -633,11 +726,38 @@
     ],
     "since": "3.18"
    },
+   "pcl.impulse.read_rows": {
+    "params": [
+     "path_or_text"
+    ],
+    "since": "4.1.1"
+   },
+   "pcl.impulse.read_signal_csv": {
+    "params": [
+     "path_or_text"
+    ],
+    "since": "4.1.1"
+   },
    "pcl.impulse.read_voltage_csv": {
     "params": [
      "path_or_text"
     ],
     "since": "3.18"
+   },
+   "pcl.impulse.rows_csv": {
+    "params": [
+     "rows",
+     "kind"
+    ],
+    "since": "4.1.1"
+   },
+   "pcl.impulse.save_rows": {
+    "params": [
+     "rows",
+     "folder",
+     "kind"
+    ],
+    "since": "4.1.1"
    },
    "pcl.impulse.times": {
     "params": [
@@ -647,6 +767,22 @@
     ],
     "since": "3.18"
    },
+   "pcl.impulse.validate_voltage": {
+    "params": [
+     "exact",
+     "sampled",
+     "cfg",
+     "profile"
+    ],
+    "since": "4.1.1"
+   },
+   "pcl.impulse.voltage_characteristics": {
+    "params": [
+     "t",
+     "v"
+    ],
+    "since": "4.1.1"
+   },
    "pcl.impulse.voltage_measure": {
     "params": [
      "alpha",
@@ -654,11 +790,50 @@
     ],
     "since": "3.18"
    },
+   "pcl.impulse.voltage_name": {
+    "params": [
+     "Vp_kV",
+     "X_us",
+     "Y_us",
+     "method"
+    ],
+    "since": "4.1.1"
+   },
+   "pcl.impulse.voltage_reference": {
+    "params": [
+     "row"
+    ],
+    "since": "4.1.1"
+   },
+   "pcl.impulse.voltage_row": {
+    "params": [
+     "X_us",
+     "Y_us",
+     "Vp_kV",
+     "method",
+     "profile",
+     "polarity",
+     "dt",
+     "tend",
+     "tol_peak",
+     "tol_X",
+     "tol_Y",
+     "created_at"
+    ],
+    "since": "4.1.1"
+   },
    "pcl.impulse.voltage_times": {
     "params": [
      "m"
     ],
     "since": "3.18"
+   },
+   "pcl.impulse.waveform_characteristics": {
+    "params": [
+     "t",
+     "i"
+    ],
+    "since": "4.1.1"
    },
    "pcl.job": {
     "params": [

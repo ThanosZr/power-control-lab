@@ -1,4 +1,4 @@
-// Browser check of the add-ons and the link (3.15, ROADMAP §35, §36): the built-in impulse add-on opened from the parameters
+// Browser check of the add-ons and the link (3.15, ROADMAP §35, §36; the rest of the impulse tools 4.1.1): the built-in impulse add-on opened from the parameters
 // panel of a Heidler source computes τ₁, τ₂, η in the app's Python and writes them to the source; a Python program on this
 // computer reads and changes the circuit on the screen, runs it and sends a table and a message to the app.
 // Usage: python run.py --no-browser --port 8765  then  node tests/ui/addons_flow.js http://127.0.0.1:8765/ <out-dir>
@@ -33,6 +33,29 @@ const ROOT=path.resolve(__dirname,'../..');
  await fr.waitForFunction(()=>/PASS|FAIL/.test(document.querySelector('#out').textContent),null,{timeout:120000});
  ok(/PASS/.test(await fr.$eval('#out',e=>e.textContent)),'κρουστική 1,2/50: PASS με τα όρια του IEC 60060-1');
  await p.screenshot({path:path.join(OUT,'addons_impulse.png')});
+ // 1b) 4.1.1: the rest of the two tools: validation table and details, the row of the Lightning Impulse Manager, the
+ //     front-line geometry, the comparison with an EMTP CSV (a column after a text column, in kA, 2 μs later)
+ await fr.click('#v-row');await fr.waitForFunction(()=>/V_100_kV_X_1p2_Y_50_IEC_T1_T2/.test(document.querySelector('#out').textContent)||/err/.test(document.querySelector('#msg').className),null,{timeout:180000});
+ const vr=await fr.evaluate(()=>({txt:document.querySelector('#out').textContent,svg:!!document.querySelector('#plot svg'),rows:document.querySelectorAll('#out tbody tr').length}));
+ ok(/PASS/.test(vr.txt)&&vr.svg&&vr.rows>=11,'κρουστική τάση: γραμμή του εργαλείου, πίνακας επαλήθευσης ('+vr.rows+' γραμμές) και γράφημα');
+ await fr.click('[data-tab="i"]');await fr.fill('#i-g1','1.8319');await fr.fill('#i-g2','284.844');await fr.click('#i-row');
+ await fr.waitForFunction(()=>/T1_1_T2_200_Ip_-100000/.test(document.querySelector('#out').textContent)||/err/.test(document.querySelector('#msg').className),null,{timeout:240000});
+ const ir=await fr.$eval('#out',e=>e.textContent);ok(/1,8319271/.test(ir),'Heidler: η γραμμή του Lightning Impulse Manager (τ₁ = 1,8319271… μs, όπως το CSV του)');
+ const [dl]=await Promise.all([p.waitForEvent('download',{timeout:30000}).catch(()=>null),fr.click('#dl-row')]);
+ ok(dl&&dl.suggestedFilename()==='T1_1_T2_200_Ip_-100000.csv','λήψη της γραμμής με το όνομα αρχείου του εργαλείου: '+(dl?dl.suggestedFilename():'—'));
+ await fr.click('#i-geo');await fr.waitForFunction(()=>/T1_geom/.test(document.querySelector('#out').textContent)||/err/.test(document.querySelector('#msg').className),null,{timeout:180000});
+ ok(/1,25/.test(await fr.$eval('#out',e=>e.textContent)),'γεωμετρία μετώπου: λόγος 1,25');
+ {const H=0.986296525678929,t1=1.83192713504729e-6,t2=284.843991112265e-6,lines=['time,note,C1-Bus4a@xyz'];
+  for(let k=0;k<=20000;k++){const t=k*20e-9,x=t-2e-6,r=x>0?(x/t1)**10:0;lines.push(`${t},n/a,${(x>0?-100000/H*r/(1+r)*Math.exp(-x/t2):0)/1e3}`);}
+  const f=path.join(OUT,'emtp_test.csv');require('fs').writeFileSync(f,lines.join('\n')+'\n');
+  await fr.click('[data-tab="emtp"]');await fr.setInputFiles('#emtp-file',f);
+  await fr.waitForFunction(()=>document.querySelectorAll('#emtp-col option').length===2,null,{timeout:120000});
+  ok(await fr.$eval('#emtp-col option:last-child',o=>o.value==='3'&&/C1-Bus4a@xyz/.test(o.textContent)),'EMTP: η στήλη κρατά τον αριθμό της (3) και το όνομά της, καμία δεν διαλέγεται μόνη της');
+  await fr.selectOption('#emtp-col','3');
+  await fr.waitForFunction(()=>/συσχέτιση/.test(document.querySelector('#out').textContent)||/err/.test(document.querySelector('#msg').className),null,{timeout:240000});
+  const em=await fr.evaluate(()=>({txt:document.querySelector('#out').textContent,shift:+document.querySelector('#emtp-shift').value,svg:document.querySelectorAll('#plot svg path').length}));
+  ok(/kA/.test(em.txt)&&/Matching/.test(em.txt)&&Math.abs(em.shift+2e-6)<3e-8&&em.svg>=2,`EMTP: μονάδα kA αυτόματα, ίδια πολικότητα, μετατόπιση ${em.shift} s, δύο καμπύλες`);}
+ await p.screenshot({path:path.join(OUT,'addons_impulse_tools.png')});
  // 2) the link: a Python program on this computer
  await p.evaluate(()=>PCL.loadTutorial('buck'));await p.waitForTimeout(400);
  // the link closed: the first call knocks, the app asks, Αποδοχή opens the link and the call goes on (on demand)
