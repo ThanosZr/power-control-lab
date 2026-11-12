@@ -18,6 +18,13 @@
 | sample and hold | δειγματοληψία και συγκράτηση (S&H) | Sample & Hold σε ελληνικό κείμενο | 4.6 |
 | full bridge | πλήρης γέφυρα | full-bridge | 4.6 |
 | DC offset | συνεχής συνιστώσα (DC offset) | | 4.6 |
+| multilayer perceptron (MLP) | νευρωνικό δίκτυο πολλών στρωμάτων (MLP) | perceptron σκέτο | 4.7 |
+| learning rate | ρυθμός μάθησης η | learning rate σε ελληνικό κείμενο | 4.7 |
+| feedback-error learning | μάθηση από το σήμα σφάλματος (feedback-error learning): το δίκτυο μαθαίνει από ό,τι δίνει ακόμη ο ελεγκτής ανάδρασης | | 4.7 |
+| inverse model | αντίστροφο μοντέλο (ποια είσοδος δίνει την επιθυμητή έξοδο) | ανάστροφο | 4.7 |
+| online / offline training | εκπαίδευση μέσα στην προσομοίωση (online) / από δεδομένα, πριν (offline) | | 4.7 |
+| freeze (learning) | πάγωμα της μάθησης | πάγωσε τα βάρη ως «freeze» | 4.7 |
+| weights, biases | βάρη, πολώσεις | | 4.7 |
 | multiplexer / demultiplexer | πολυπλέκτης (Mux) / αποπολυπλέκτης (Demux) | | 4.6 |
 
 ## Καθιερωμένοι όροι που ήδη χρησιμοποιούνται

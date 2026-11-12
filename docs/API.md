@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.6: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (422 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.7: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (433 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.6.
+Κανένα στην 4.7.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-233 σημεία.
+237 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -109,6 +109,9 @@
 | `pcl.control.compose` | `project`, `loops`, `actuator`, `clock`, `prefix`, `replace` | 3.18 · πειρ. |
 | `pcl.control.inv_nn_code` | `nets` | 3.18 · πειρ. |
 | `pcl.control.metrics` | `t`, `r`, `y`, `t_from` | 3.18 · πειρ. |
+| `pcl.control.nn_block` | `ins`, `net`, `hidden`, `xs`, `ys`, `ymin`, `ymax`, `train`, `clock`, `**kw` | 4.7 · πειρ. |
+| `pcl.control.nn_init` | `sizes`, `seed`, `zero_out` | 4.7 · πειρ. |
+| `pcl.control.nn_text` | `net` | 4.7 · πειρ. |
 | `pcl.control.rl_code` | `theta` | 3.18 · πειρ. |
 | `pcl.control.rl_theta0` | `n_state`, `hidden`, `seed`, `scale` | 3.18 · πειρ. |
 | `pcl.current` | — | 3.18 |
@@ -187,6 +190,7 @@
 | `pcl.link.App.get` | `key` | 3.18 |
 | `pcl.link.App.info` | — | 3.18 |
 | `pcl.link.App.load` | `project` | 3.18 |
+| `pcl.link.App.machines` | — | 4.7 |
 | `pcl.link.App.notify` | `msg`, `sev`, `fix` | 3.18 |
 | `pcl.link.App.params` | `cid` | 3.18 |
 | `pcl.link.App.project` | — | 3.18 |
@@ -279,14 +283,17 @@
 
 ## Γραμμή εντολών `python -m pcl`
 
-11 σημεία.
+14 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
 | `python -m pcl bifurcation` | `<project>`, `<param>`, `--values`, `--channel`, `--stat`, `--transient`, `--record`, `--set`, `--workers`, `--out` | 3.18 |
 | `python -m pcl channels` | `<project>` | 3.18 |
+| `python -m pcl design` | `--machine`, `--controller`, `--goal`, `--cycles`, `--out` | 4.7 |
+| `python -m pcl gui` | `--offline` | 4.7 |
 | `python -m pcl job` | `<spec>`, `--out` | 3.18 |
 | `python -m pcl link` | `<request>`, `--out` | 3.18 |
+| `python -m pcl machines` | — | 4.7 |
 | `python -m pcl net` | `<network>`, `--lf`, `--sc`, `--bus`, `--mode`, `--tmin`, `--out`, `--emt` | 4.2 |
 | `python -m pcl plot` | `<spec>`, `--preset`, `--mapping`, `--kind`, `--signal`, `--table`, `--out` | 3.18 |
 | `python -m pcl run` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--chunk`, `--state`, `--resume`, `--events` | 3.18 |
@@ -339,7 +346,7 @@
 
 ## API πρόσθετων και σύνδεσης (`addons.js` M, `pcl.link.App`, `PclApp`)
 
-19 σημεία.
+20 σημεία.
 
 | Μέθοδος | Άδεια | Από |
 |---|---|---|
@@ -349,6 +356,7 @@
 | `download` | files | 3.18 |
 | `get` | project.read | 3.18 |
 | `info` | — | 3.18 |
+| `machines` | project.read | 4.7 |
 | `notify` | show | 3.18 |
 | `params` | project.read | 3.18 |
 | `presets` | — | 3.18 |
@@ -400,7 +408,7 @@
 
 ## Αιτήματα σεναρίων (`web/studio/scenario.js`)
 
-10 σημεία.
+12 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -409,15 +417,17 @@
 | `action:channels` | — | 3.18 |
 | `action:close` | — | 3.18 |
 | `action:export` | — | 3.18 |
+| `action:machines` | — | 4.7 |
 | `action:open` | — | 3.18 |
 | `action:run` | — | 3.18 |
 | `action:state` | — | 3.18 |
+| `action:stepcheck` | — | 4.7 |
 | `action:tutorial` | — | 3.18 |
 | `action:tutorials` | — | 3.18 |
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-86 σημεία.
+87 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -472,6 +482,7 @@
 | `part:MOV` | model, Uref, Iref, alpha, tbl | a, b | 3.18 |
 | `part:MUL` | — | a, b, y | 3.18 |
 | `part:MUX` | n, frame | u1, u2, u3, y | 3.18 |
+| `part:NN` | ins, xs, hidden, ys, ymin, ymax, train, learn, opt, lr, clip, l2, nl, init, seed, w, clock, trig, y0 | L, e, fz, tgt, x1, x2, y | 4.7 |
 | `part:PARK` | conn | ab, al, be, d, dq, q, th | 3.18 |
 | `part:PIB` | Kp, Ki, clock, trig, y0, aw, ymin, ymax | tr, u, y | 3.18 |
 | `part:PLL` | f0, bw, th0, conn | a, abc, amp, b, c, th, w | 3.18 |

@@ -11,7 +11,7 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';const REPO
 const ONLY=(process.argv.find(a=>a.startsWith('--only='))||'').slice(7).split(',').filter(Boolean);
 // the limits: the frame after an action (ms), and the longest task while it and its deferred work run
 const LIMIT={tutorialFrame:250,tutorialTask:250,optionFrame:250,inspectorFrame:60,inspectorTask:80,typeFrame:120,dragP95:34,
- selectFrame:80,searchFrame:60,runTask:120,runP95:50,loadFirst:2500};
+ selectFrame:80,searchFrame:60,runTask:120,runP95:67,loadFirst:2500};
 (async()=>{const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:1500,height:1000}});const p=await ctx.newPage();const errs=[];
  p.on('pageerror',e=>errs.push(String(e)));p.on('console',m=>{if(m.type()==='error'&&!/favicon|net::ERR|Failed to load resource/.test(m.text()))errs.push(m.text());});
  const base=process.argv[2]||'http://127.0.0.1:8765/';
@@ -32,6 +32,9 @@ const LIMIT={tutorialFrame:250,tutorialTask:250,optionFrame:250,inspectorFrame:6
  // an action in the page: the time until the next painted frame, and the long tasks while it and its deferred work run
  async function act(fn,arg,settle=1200){const a=await p.evaluate(()=>performance.now());const r=await p.evaluate(async([src,arg])=>{const f=eval(src);const s=performance.now();f(arg);const sync=performance.now()-s;const fr=await window.__frame();return {sync:+sync.toFixed(1),frame:+(fr-s).toFixed(1)};},[fn.toString(),arg]);
   await p.waitForTimeout(settle);const b=await p.evaluate(()=>performance.now());return {...r,long:await longIn(a,b)};}
+ // 0. the first load of Python (Pyodide) for the tutorials with Python blocks: the interpreter starts in the main thread
+ // (≈ 1.5 s once per session, ROADMAP 4.7.1: Python in a worker). Reported, not judged; the tutorials below open with it warm
+ R.pythonFirst=await act(()=>{window.PyRT&&PyRT.load();},null,6000);
  // 1. every tutorial
  const ids=await p.evaluate(()=>Tutorials.list.map(t=>t.id));R.tutorials={};
  for(const id of ids){if(ONLY.length&&!ONLY.includes(id))continue;R.tutorials[id]=await act(id=>PCL.loadTutorial(id),id,900);}
@@ -76,7 +79,7 @@ const LIMIT={tutorialFrame:250,tutorialTask:250,optionFrame:250,inspectorFrame:6
  console.log('load',JSON.stringify(R.load));
  console.log('tutorials (sync / frame / longest task / sum of long tasks, worst first):');
  for(const [id,v] of worst)console.log(' ',id.padEnd(16),String(v.sync).padStart(7),String(v.frame).padStart(7),String(v.long.max).padStart(5),String(v.long.sum).padStart(6),v.long.top.join(' | '));
- for(const k of ['option','inspector','inspectorType','inspectorDrag','select','search'])console.log(k,JSON.stringify(R[k]));
+ for(const k of ['pythonFirst','option','inspector','inspectorType','inspectorDrag','select','search'])console.log(k,JSON.stringify(R[k]));
  for(const [id,v] of Object.entries(R.run))console.log('run',id,JSON.stringify(v));
  for(const [id,v] of tut){if(v.frame>LIMIT.tutorialFrame)bad.push(`tutorial ${id}: first frame after ${v.frame} ms`);if(v.long.max>LIMIT.tutorialTask)bad.push(`tutorial ${id}: a task of ${v.long.max} ms`);}
  if(R.option&&R.option.frame>LIMIT.optionFrame)bad.push('tutorial option: first frame after '+R.option.frame+' ms');

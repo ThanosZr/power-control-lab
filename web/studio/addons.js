@@ -8,7 +8,7 @@
 //   info, presets · project.get, params, get, selection, channels, scope, values (project.read) · set, set_many, project.load (project.write)
 //   run, batch, bifurcation (run) · python (python) · show, notify (show) · download (files)
 (function(root){
- const PERM={'project.get':'project.read',params:'project.read',get:'project.read',selection:'project.read',channels:'project.read',scope:'project.read',values:'project.read',
+ const PERM={'project.get':'project.read',machines:'project.read',params:'project.read',get:'project.read',selection:'project.read',channels:'project.read',scope:'project.read',values:'project.read',
   set:'project.write',set_many:'project.write','project.load':'project.write',run:'run',batch:'run',bifurcation:'run',python:'python',show:'show',notify:'show',download:'files'};
  const PERM_TXT={'project.read':'διαβάζει το κύκλωμα και τα αποτελέσματα','project.write':'αλλάζει παραμέτρους ή φορτώνει κύκλωμα','run':'τρέχει προσομοιώσεις',
   'python':'τρέχει κώδικα Python (στον browser)','show':'δείχνει πίνακες, γραφήματα και μηνύματα','files':'κατεβάζει αρχεία'};

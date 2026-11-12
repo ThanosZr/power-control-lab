@@ -15,6 +15,7 @@
 | `get` | `key` (`R1.R`) | η τιμή | `project.read` |
 | `selection` | | τα επιλεγμένα στοιχεία | `project.read` |
 | `channels` | | τα κανάλια και η περίοδος T | `project.read` |
+| `machines` | | 4.7: οι μηχανές της εφαρμογής: τύπος, όνομα, είδος (`dc`, `induction`, `sync`, `srm`, `gen`), έξοδοι, ακροδέκτες, παράμετροι με προεπιλογές (το διαβάζει το `pcl.gui`) | `project.read` |
 | `scope` | `keys` (προαιρετικό) | ό,τι κρατά τώρα το scope: `keys, t, ch, T, now` | `project.read` |
 | `values` | `keys` | οι τωρινές τιμές των καναλιών: `{t, values}` (για ζωντανές οπτικοποιήσεις) | `project.read` |
 | `set` | `key, value, source` | η νέα τιμή (με αναίρεση στην εφαρμογή) | `project.write` |

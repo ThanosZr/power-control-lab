@@ -73,6 +73,8 @@
   // iterate raw samples of channel ci within [t0,t1] (one sample margin)
   eachRaw(ci,t0,t1,fn){const r=this.sim.ring;const start=(r.head-r.n+r.cap)%r.cap;let i=Math.max(0,this.ringIndex(t0)-1);
    for(;i<r.n;i++){const j=(start+i)%r.cap,t=r.t[j];fn(t,ci===-2?0:r.d[j*r.nch+ci]);if(t>t1)break;}}
+  // how many raw samples lie in [t0, t1] (two binary searches)
+  rawCount(t0,t1){if(!this.sim?.ring?.n)return 0;return this.ringIndex(t1)-this.ringIndex(t0);}
   eachPeriod(ci,t0,t1,fn){const p=this.sim.per;const start=(p.head-p.n+p.cap)%p.cap;for(let i=0;i<p.n;i++){const j=(start+i)%p.cap,t=p.t[j];if(t<t0)continue;if(t>t1+this.sim.T)break;const o=j*p.nch+ci;fn(t,ci===-2?0:p.avg[o],ci===-2?0:p.min[o],ci===-2?0:p.max[o]);}}
   valueAt(ci,t){if(ci===-2)return 0;const r=this.sim.ring;if(!r.n)return NaN;const start=(r.head-r.n+r.cap)%r.cap;let i=this.ringIndex(t);i=Math.min(Math.max(i,0),r.n-1);
    const j=(start+i)%r.cap;if(i>0){const jp=(start+i-1)%r.cap,t0=r.t[jp],t1=r.t[j];if(t1>t0&&t<=t1){const a=(t-t0)/(t1-t0);return r.d[jp*r.nch+ci]*(1-a)+r.d[j*r.nch+ci]*a;}}return r.d[j*r.nch+ci];}
@@ -112,6 +114,11 @@
     let lo=Infinity,hi=-Infinity;const data=[];
     chans.forEach((ch,k)=>{const ci=this.resolve(ch.key),f=tfs[k];if(ci===-1){data.push(null);return;}
      if(periods){const pts=[];this.eachPeriod(ci,t0,t1,(t,a,mn,mx)=>{pts.push([t,f(a),f(mn),f(mx)]);lo=Math.min(lo,f(mn));hi=Math.max(hi,f(mx));});data.push({ch,pts,kind:'per',f});}
+     // 4.7: many more samples than pixels: first, min, max and last per pixel column in one pass, without an array of
+     // every sample (a running SRM drew 10⁵ samples per frame)
+     else if(this.rawCount(t0,t1)>pw*2){const W2=Math.max(1,Math.ceil(pw)),fi=new Float64Array(W2),mn=new Float64Array(W2).fill(Infinity),mx=new Float64Array(W2).fill(-Infinity),la=new Float64Array(W2),has=new Uint8Array(W2),k=W2/span;
+      this.eachRaw(ci,t0,t1,(t,v)=>{v=f(v);let c=Math.floor((t-t0)*k);if(c<0)c=0;else if(c>=W2)c=W2-1;if(!has[c]){has[c]=1;fi[c]=v;}if(v<mn[c])mn[c]=v;if(v>mx[c])mx[c]=v;la[c]=v;if(t>=t0&&t<=t1){if(v<lo)lo=v;if(v>hi)hi=v;}});
+      data.push({ch,cols:{fi,mn,mx,la,has},kind:'col',f});}
      else{const arr=[];this.eachRaw(ci,t0,t1,(t,v)=>{v=f(v);arr.push(t,v);if(t>=t0&&t<=t1){if(v<lo)lo=v;if(v>hi)hi=v;}});data.push({ch,arr,kind:'raw',f});}});
     chans.forEach((ch,k)=>this.refRange(ch.key,t0,t1,(t,v)=>{v=tfs[k](v);if(t>=t0&&t<=t1){if(v<lo)lo=v;if(v>hi)hi=v;}}));
     if(lanes){lo=-.25;hi=(nL-1)*1.2+1.4;}
@@ -131,11 +138,17 @@
     for(const d of data){if(!d)continue;const col=d.ch.color;
      if(d.kind==='per'){c.fillStyle=col+'33';c.beginPath();d.pts.forEach(([t,,mn],i)=>{i?c.lineTo(X(t),Y(mn)):c.moveTo(X(t),Y(mn));});for(let i=d.pts.length-1;i>=0;i--){const [t,,,mx]=d.pts[i];c.lineTo(X(t),Y(mx));}c.closePath();c.fill();
       c.strokeStyle=col;c.lineWidth=1.6;c.beginPath();d.pts.forEach(([t,a],i)=>{i?c.lineTo(X(t),Y(a)):c.moveTo(X(t),Y(a));});c.stroke();continue;}
-     const arr=d.arr,n=arr.length/2;c.strokeStyle=col;c.lineWidth=1.5;c.lineJoin='round';c.beginPath();
+     // per column a vertical stroke from the side the trace comes from to the other (2 points, not 4: half the segments
+     // to rasterise, which in a canvas without a GPU was most of a frame), bevel joins
+     if(d.kind==='col'){const q=d.cols;c.strokeStyle=col;c.lineWidth=1.5;c.lineJoin='bevel';c.beginPath();let started=false;
+      for(let i=0;i<q.has.length;i++){if(!q.has[i])continue;const x=this.padL+i+.5,up=q.fi[i]<=q.la[i],a=up?q.mn[i]:q.mx[i],b=up?q.mx[i]:q.mn[i];
+       if(!started){c.moveTo(x,Y(a));started=true;}else c.lineTo(x,Y(a));c.lineTo(x,Y(b));}
+      c.stroke();}
+     else{const arr=d.arr,n=arr.length/2;c.strokeStyle=col;c.lineWidth=1.5;c.lineJoin='round';c.beginPath();
      if(n<=pw*2){for(let i=0;i<n;i++){const x=X(arr[2*i]),y=Y(arr[2*i+1]);i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();}
      else{let col0=-1,mn=0,mx=0,first=0,last=0,started=false;
       const flush=()=>{if(col0<0)return;const x=this.padL+col0+.5;if(!started){c.moveTo(x,Y(first));started=true;}else c.lineTo(x,Y(first));c.lineTo(x,Y(mn));c.lineTo(x,Y(mx));c.lineTo(x,Y(last));};
-      for(let i=0;i<n;i++){const cx=Math.floor(X(arr[2*i])-this.padL),v=arr[2*i+1];if(cx!==col0){flush();col0=cx;mn=mx=first=last=v;}else{if(v<mn)mn=v;if(v>mx)mx=v;last=v;}}flush();c.stroke();}
+      for(let i=0;i<n;i++){const cx=Math.floor(X(arr[2*i])-this.padL),v=arr[2*i+1];if(cx!==col0){flush();col0=cx;mn=mx=first=last=v;}else{if(v<mn)mn=v;if(v>mx)mx=v;last=v;}}flush();c.stroke();}}
      // reference trace (server solver), dashed in the same colour
      if(this.refs?.data?.[d.ch.key]){const pts=[];this.refRange(d.ch.key,t0,t1,(t,v)=>pts.push(t,d.f(v)));const m=pts.length/2;c.save();c.setLineDash([6,4]);c.lineWidth=1.4;c.strokeStyle='#18353a';c.globalAlpha=.75;c.beginPath();
       if(m<=pw*2){for(let i=0;i<m;i++){const x=X(pts[2*i]),y=Y(pts[2*i+1]);i?c.lineTo(x,y):c.moveTo(x,y);}}

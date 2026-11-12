@@ -1,5 +1,5 @@
 {
- "version": "4.6",
+ "version": "4.7",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -517,6 +517,35 @@
      "t_from"
     ],
     "since": "3.18"
+   },
+   "pcl.control.nn_block": {
+    "params": [
+     "ins",
+     "net",
+     "hidden",
+     "xs",
+     "ys",
+     "ymin",
+     "ymax",
+     "train",
+     "clock",
+     "**kw"
+    ],
+    "since": "4.7"
+   },
+   "pcl.control.nn_init": {
+    "params": [
+     "sizes",
+     "seed",
+     "zero_out"
+    ],
+    "since": "4.7"
+   },
+   "pcl.control.nn_text": {
+    "params": [
+     "net"
+    ],
+    "since": "4.7"
    },
    "pcl.control.rl_code": {
     "params": [
@@ -1163,6 +1192,10 @@
      "project"
     ],
     "since": "3.18"
+   },
+   "pcl.link.App.machines": {
+    "params": [],
+    "since": "4.7"
    },
    "pcl.link.App.notify": {
     "params": [
@@ -1888,6 +1921,22 @@
     ],
     "since": "3.18"
    },
+   "python -m pcl design": {
+    "params": [
+     "--machine",
+     "--controller",
+     "--goal",
+     "--cycles",
+     "--out"
+    ],
+    "since": "4.7"
+   },
+   "python -m pcl gui": {
+    "params": [
+     "--offline"
+    ],
+    "since": "4.7"
+   },
    "python -m pcl job": {
     "params": [
      "<spec>",
@@ -1901,6 +1950,10 @@
      "--out"
     ],
     "since": "3.18"
+   },
+   "python -m pcl machines": {
+    "params": [],
+    "since": "4.7"
    },
    "python -m pcl net": {
     "params": [
@@ -2180,6 +2233,11 @@
     "perm": "",
     "since": "3.18"
    },
+   "M.machines": {
+    "params": [],
+    "perm": "project.read",
+    "since": "4.7"
+   },
    "M.notify": {
     "params": [],
     "perm": "show",
@@ -2446,6 +2504,10 @@
     "params": [],
     "since": "3.18"
    },
+   "action:machines": {
+    "params": [],
+    "since": "4.7"
+   },
    "action:open": {
     "params": [],
     "since": "3.18"
@@ -2457,6 +2519,10 @@
    "action:state": {
     "params": [],
     "since": "3.18"
+   },
+   "action:stepcheck": {
+    "params": [],
+    "since": "4.7"
    },
    "action:tutorial": {
     "params": [],
@@ -3241,6 +3307,39 @@
      "y"
     ],
     "since": "3.18"
+   },
+   "part:NN": {
+    "params": [
+     "ins",
+     "xs",
+     "hidden",
+     "ys",
+     "ymin",
+     "ymax",
+     "train",
+     "learn",
+     "opt",
+     "lr",
+     "clip",
+     "l2",
+     "nl",
+     "init",
+     "seed",
+     "w",
+     "clock",
+     "trig",
+     "y0"
+    ],
+    "pins": [
+     "L",
+     "e",
+     "fz",
+     "tgt",
+     "x1",
+     "x2",
+     "y"
+    ],
+    "since": "4.7"
    },
    "part:PARK": {
     "params": [
