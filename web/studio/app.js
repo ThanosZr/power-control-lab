@@ -22,7 +22,7 @@ function project(){return {...fullDoc(),tutRef:S.tutRef||null,sim:{hDiv:+$('#sim
 function buildSim(fresh){
  const doc=fullDoc();
  try{
-  if(!S.sim||fresh){S.sim=new MNA.Sim(doc,{hDiv:+$('#sim-step').value,method:$('#method').value});}
+  if(!S.sim||fresh){window.Live?.drop();S.sim=new MNA.Sim(doc,{hDiv:+$('#sim-step').value,method:$('#method').value});}
   else S.sim.load(doc,false);
   S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);notice('');editor.setDiag(viewDiag(S.sim.net.diag));
  }catch(e){S.error=e.message;pause();
@@ -38,14 +38,23 @@ function buildSim(fresh){
 }
 function lineCtx(){return {editor,api,changed:()=>{}};}
 function play(){if(!S.sim||S.error)return;if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;requestAnimationFrame(loop);}
-function pause(){S.running=false;scope.running=false;$('#play')?.classList.remove('running');if($('#play'))$('#play').innerHTML='▶ Προσομοίωση';draw(true);}
+function pause(){if(window.Live?.active)Live.stop();S.running=false;scope.running=false;$('#play')?.classList.remove('running');if($('#play'))$('#play').innerHTML='▶ Προσομοίωση';draw(true);}
 function reset(){pause();buildSim(true);scope.cfg.frozen=null;draw(true);}
 function stepT(n=1){if(!S.sim||S.error)return;pause();S.sim.run(n*S.sim.T);draw(true);}
 function runToEnd(){if(!S.sim||!(S.stopT>0))return;pause();const t0=performance.now();notice('Υπολογισμός έως '+eng(S.stopT,'s')+'…','info');
  const chunk=()=>{const left=S.stopT-S.sim.t;if(left<=1e-12){notice('');draw(true);return;}try{S.sim.run(left,Infinity,performance.now()+40);}catch(e){notice(esc(e.message),'error');return;}draw(false);updateClock();
   if(performance.now()-t0>120000){notice('Σταμάτησε μετά από 2 λεπτά. Μεγάλωσε το βήμα ή μείωσε τη διάρκεια.','error');return;}setTimeout(chunk,0);};chunk();}
 function loop(now){
- if(!S.running)return;const dt=Math.min(.1,(now-S.last)/1000);S.last=now;
+ if(!S.running)return;
+ // 4.6: the solver in its own thread (live.js) when it can; the page only draws
+ if(window.Live&&S.noLive!==S.sim&&(Live.active||Live.eligible(S.sim))&&(Live.active||Live.start(S.sim,{speed:S.speed,stopT:S.stopT})||(S.noLive=S.sim,false))){
+  // the worker could not start (e.g. another set of channels): the solver goes on in the page
+  if(Live.error&&Live.errorStart){Live.error=null;Live.stop();S.noLive=S.sim;requestAnimationFrame(loop);return;}
+  if(Live.error){const msg=Live.error;Live.error=null;S.error=msg;pause();notice('Σφάλμα λύτη: '+esc(msg),'error');return;}
+  S.limited=!!Live.limited;S.frame++;draw(false,editor.busy()||!!scope.drag);
+  if(Live.ended){pause();notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
+  requestAnimationFrame(loop);return;}
+ const dt=Math.min(.1,(now-S.last)/1000);S.last=now;
  let want=S.speed==='max'?1e9:dt*S.speed*S.sim.T;if(S.stopT>0)want=Math.min(want,S.stopT-S.sim.t);
  // the solver's share of the frame (4.6): about 12 ms when nobody touches the page (the simulation as fast as before),
  // and what is left of 6 ms after the input and the drawing while the user zooms, pans, drags, draws a selection, or
@@ -120,7 +129,7 @@ function signalsFor(c,full){const t=c.type,nv=vecN(full||(S.pfx?pid(c.id):c.id))
  if(t==='PY')return outsOf(c).map((o,k)=>['Y:','έξοδος '+o,k?':'+o:'']);
  if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:t==='GEN3'?[...m,['I:','ρεύμα φάσης a (προς το δίκτυο)'],['V:','τάση φάσης a ως προς τον ουδέτερο']]:t==='IM'||t==='SM'?[...m,['I:','ρεύμα φάσης a'],['V:','πολική τάση v_ab']]:t==='SRM'?[...m,...Array.from({length:P.srmGeo({...P.defaults(t),...c.params})[0]},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα φάσης ${k+1}`],[(k?'V'+(k+1):'V')+':',`τάση φάσης ${k+1}`],['PSI'+(k+1)+':',`ροή φάσης ${k+1} ψ`]]).flat()]:m;}
  if(P.BLOCKS.has(t)&&nv>1)return Array.from({length:nv},(_,k)=>['Y:',`έξοδος y, στοιχείο ${k+1} του διαύλου`,`[${k+1}]`]);
- if(P.BLOCKS.has(t))return [['Y:',t==='DISP'?'τιμή εισόδου':t==='VM'?'τάση (μέτρηση)':t==='VP'?'τάση ως προς τη γη':t==='AM'?'ρεύμα a → b (μέτρηση)':t==='IP'?'ρεύμα a → b (τσιμπίδα)':t==='SR'?'έξοδος Q':'έξοδος y']];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','duty D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
+ if(P.BLOCKS.has(t))return [['Y:',t==='DISP'?'τιμή εισόδου':t==='VM'?'τάση (μέτρηση)':t==='VP'?'τάση ως προς τη γη':t==='AM'?'ρεύμα a → b (μέτρηση)':t==='IP'?'ρεύμα a → b (τσιμπίδα)':t==='SR'?'έξοδος Q':'έξοδος y']];if(t==='PWM'){const k=c.params?.mode==='pi';return [['D:','λόγος κατάτμησης D'],['G:','παλμός πύλης g'],['CAR:','φέρον c(t)'],...(k?[['REF:','αναφορά'],['MEAS:','μετρούμενο']]:[])];}
  if(t==='SH')return [['H:','κρατημένη τιμή (δείγματα)']];
  if(t==='MOV')return [['I:','ρεύμα αλεξικέραυνου'],['V:','τάση αλεξικέραυνου'],['P:','ισχύς']];
  if(t==='SG')return [['I:','ρεύμα σπινθηριστή'],['V:','τάση στο διάκενο'],['P:','ισχύς στο τόξο']];
@@ -400,7 +409,7 @@ function sampleCompareHTML(r){const out=[];for(const [id,sv] of Object.entries(r
   for(let i=0;i<n;i++){dt=Math.max(dt,Math.abs(A[i][0]-b[i][0]));if(Number.isFinite(A[i][1])&&Number.isFinite(b[i][1])){dv=Math.max(dv,Math.abs(A[i][1]-b[i][1]));sc=Math.max(sc,Math.abs(A[i][1]));}}
   const u=S.sim.shById.get(id)?.qty==='V'?'V':'A';
   out.push(`<tr><td>${esc(editor.comp(id)?.label||id)}</td><td>${a.length}</td><td>${b.length}${off>0?` (από το #${off+1})`:''}</td><td>${eng(dt,'s')}</td><td>${eng(dv,u)}</td><td>${sc?fmt(100*dv/sc,3)+' %':'—'}</td></tr>`);}
- return out.length?`<h4>Δείγματα Sample & Hold</h4><div class="wrap"><table><thead><tr><th>Μπλοκ</th><th>δείγματα server</th><th>δείγματα browser</th><th>max |Δt|</th><th>max |Δ τιμής|</th><th>/ max</th></tr></thead><tbody>${out.join('')}</tbody></table></div><p class="muted small">Ίδιες στιγμές δειγματοληψίας (από το φέρον) και ίδια τιμή του ρεύματος τη στιγμή του δείγματος στους δύο λύτες.</p>`:'';}
+ return out.length?`<h4>Δείγματα S&H</h4><div class="wrap"><table><thead><tr><th>Μπλοκ</th><th>δείγματα server</th><th>δείγματα browser</th><th>max |Δt|</th><th>max |Δ τιμής|</th><th>/ max</th></tr></thead><tbody>${out.join('')}</tbody></table></div><p class="muted small">Ίδιες στιγμές δειγματοληψίας (από το φέρον) και ίδια τιμή του ρεύματος τη στιγμή του δείγματος στους δύο λύτες.</p>`:'';}
 
 // ------------------------------------------------------------------ live parameters (panel over the scope)
 // They change the running simulation without a pause: D, m, α and the PI reference at the next step,
@@ -409,7 +418,7 @@ function sampleCompareHTML(r){const out=[];for(const [id,sv] of Object.entries(r
 // turned into a t:value program, so pressing ⟲ replays the same run.
 // 3.19: only changes at the same instant merge, so a session written as a program replays bit for bit
 function liveChange(id,k,v,label,from){const s=S.sim;if(!s||!(s.t>0))return;const L=s.changes||(s.changes=[]);const last=L[L.length-1];
- if(last&&last.id===id&&last.k===k&&s.t===last.t){last.v=v;last.label=label;}else s.markChange({id,k,v,label,from});renderLiveLog();if(!S.running)draw(true);}
+ if(last&&last.id===id&&last.k===k&&s.t===last.t&&!window.Live?.active){last.v=v;last.label=label;}else s.markChange({id,k,v,label,from});renderLiveLog();if(!S.running)draw(true);}
 function renderLiveLog(){const box=$('#lp-log');if(!box)return;const L=S.sim?.changes||[];
  if(!L.length){box.innerHTML='<small class="muted">Οι αλλαγές που κάνεις όσο τρέχει η προσομοίωση σημειώνονται στο scope.</small>';return;}
  const rep=L.some(c=>!c.prog||c.live);
@@ -460,15 +469,15 @@ function refreshControls(){
   if(p.mode==='fixed'||p.mode==='pp')h=`<label>${esc(c.label||c.id)} · D <output data-dout="${c.id}">${fmt(+p.D,4)}</output></label><input type="range" min="0" max="1" step="0.0005" value="${+p.D}" data-d="${c.id}">
    <div class="ctl-btns"><button data-dd="${c.id}" data-step="-0.01">−0,01</button><button data-dd="${c.id}" data-step="-0.001">−0,001</button>${meta.D0!==undefined?`<button data-dset="${c.id}" data-val="${meta.D0}">D₀ = ${fmt(meta.D0,4)}</button>`:''}<button data-dd="${c.id}" data-step="0.001">+0,001</button><button data-dd="${c.id}" data-step="0.01">+0,01</button></div>${p.dsched?'<small>Υπάρχει πρόγραμμα D(t)· η χειροκίνητη αλλαγή το απενεργοποιεί.</small>':''}`;
   else if(p.mode==='pi')h=`<label>${esc(c.label||c.id)} · αναφορά ${+p.Kd?'PID':'PI'} <output data-dnow="${c.id}"></output></label><div class="ctl-row"><input data-ref="${c.id}" value="${esc(p.ref)}"><button data-refapply="${c.id}">Εφαρμογή</button></div><small>Σταθερή τιμή ή πρόγραμμα «t:τιμή». K_p = ${eng(+p.Kp)}, K_i = ${eng(+p.Ki)}${+p.Kd?`, K_d = ${eng(+p.Kd)}`:''}.${editor.comp(p.sensor)?.type==='SH'?` Μετρά το δείγμα του ${esc(editor.comp(p.sensor).label||p.sensor)}.`:''}</small>`;
-  else if(p.mode==='ext')h=`<label>${esc(c.label||c.id)} · D από σήμα <output data-dnow="${c.id}"></output></label><small>Το duty έρχεται από τον ακροδέκτη d${p.upd==='double'&&p.carrier!=='saw'?' (δύο ενημερώσεις ανά T)':''}.</small>`;
+  else if(p.mode==='ext')h=`<label>${esc(c.label||c.id)} · D από σήμα <output data-dnow="${c.id}"></output></label><small>Ο λόγος κατάτμησης D έρχεται από τον ακροδέκτη d${p.upd==='double'&&p.carrier!=='saw'?' (δύο ενημερώσεις ανά T)':''}.</small>`;
   else if(p.mode==='spwm')h=`<label>${esc(c.label||c.id)} · m <output data-mout="${c.id}">${fmt(+p.m,3)}</output></label><input type="range" min="0" max="1.2" step="0.01" value="${+p.m}" data-m="${c.id}">`;
-  const sw=switchesOf(c.id);const probe=`<div class="ctl-btns ctl-probe"><button data-probe-d="${c.id}" title="Το duty D στο scope">⌁ D</button><button data-pulse="${c.id}" title="${sw.length?'Ο παλμός πύλης κάθε διακόπτη: '+esc(sw.map(x=>x.label||x.id).join(', ')):'Ο παλμός g του PWM'}">⌁ παλμ${sw.length>1?'οί':'ός'} ${esc(sw.length?sw.map(x=>x.label||x.id).join(', '):'g')}</button></div>`;
+  const sw=switchesOf(c.id);const probe=`<div class="ctl-btns ctl-probe"><button data-probe-d="${c.id}" title="Ο λόγος κατάτμησης D στο scope">⌁ D</button><button data-pulse="${c.id}" title="${sw.length?'Ο παλμός πύλης κάθε διακόπτη: '+esc(sw.map(x=>x.label||x.id).join(', ')):'Ο παλμός g του PWM'}">⌁ παλμ${sw.length>1?'οί':'ός'} ${esc(sw.length?sw.map(x=>x.label||x.id).join(', '):'g')}</button></div>`;
   return `<div class="ctl">${h}${probe}${phase(c,p)}</div>`;}).join('');
  box.innerHTML=group+(pw.length>=3?`<details class="ctl-more"><summary>Ανά PWM (${pw.length})</summary>${per}</details>`:per);
  const trigOpts=P.PARTS.SH.params.find(d=>d.k==='trig').options;
  box.innerHTML+=editor.doc.components.filter(c=>c.type==='SH').map(c=>{const p={...P.defaults('SH'),...c.params};
   const short={start:'Αρχή περιόδου (reset ή μέγιστο) · 1/T',mid:'Μέσο περιόδου (ελάχιστο τριγώνου) · 1/T',both:'Και τα δύο ακρότατα · 2/T'};
-  return `<div class="ctl ctl-sh"><label>${esc(c.label||c.id)} · Sample & Hold</label><select data-trig="${c.id}" aria-label="Πότε παίρνει δείγμα">${trigOpts.map(([k,n])=>`<option value="${k}" title="${esc(n)}" ${p.trig===k?'selected':''}>${esc(short[k]||n)}</option>`).join('')}</select><div class="lp-read" data-shout="${c.id}"></div></div>`;}).join('');
+  return `<div class="ctl ctl-sh"><label>${esc(c.label||c.id)} · S&H</label><select data-trig="${c.id}" aria-label="Πότε παίρνει δείγμα">${trigOpts.map(([k,n])=>`<option value="${k}" title="${esc(n)}" ${p.trig===k?'selected':''}>${esc(short[k]||n)}</option>`).join('')}</select><div class="lp-read" data-shout="${c.id}"></div></div>`;}).join('');
  // constants / programs of signal blocks: changed live, like the reference of the built-in PI
  box.innerHTML+=editor.doc.components.filter(c=>c.type==='CONST').sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})).map(c=>{const p={...P.defaults('CONST'),...c.params};
   return `<div class="ctl"><label>${esc(c.label||c.id)} · σταθερά <output data-kout="${c.id}"></output></label><div class="ctl-row"><input data-kv="${c.id}" value="${esc(p.v)}"><button data-kapply="${c.id}">Εφαρμογή</button></div></div>`;}).join('');
@@ -479,7 +488,7 @@ function refreshControls(){
  box.innerHTML+=pinned.map(c=>c.live.map(k=>{const d=partDef(c)?.params.find(x=>x.k===k);if(!d||d.type!=='num')return '';const v=numOf(c.params[k]??d.def),m=pinMap(c,k),key=c.id+'|'+k;
   return `<div class="ctl ctl-pin"><label>${esc(c.label||c.id)} · ${esc(d.label)} <output data-pout="${esc(key)}">${eng(v,d.unit||'',4)}</output></label><input type="range" min="0" max="${PSL}" step="1" value="${pinX(m,v)}" data-pr="${esc(key)}" aria-label="${esc((c.label||c.id)+' '+d.label)}">
    <div class="ctl-row"><input data-pv="${esc(key)}" value="${esc(P.eng(v,'',6).replace(/\s/g,''))}" inputmode="decimal" aria-label="τιμή"><input class="prate" data-prate="${esc(key)}" value="${c.liveRate?.[d.k]?esc(P.eng(+c.liveRate[d.k],'',4).replace(/\s/g,'')):''}" placeholder="άλμα" inputmode="decimal" title="Ρυθμός (${esc(d.unit||'μονάδες')}/s): η αλλαγή γίνεται ράμπα με αυτή την κλίση, σε βήματα το πολύ T/50. Κενό: άλμα." aria-label="ρυθμός μεταβολής"><button data-pc="${esc(key)}" title="Ο ρυθμιστής γύρω από την τρέχουσα τιμή (×0,1 … ×10)">⟲</button><button data-pu="${esc(key)}" title="Αφαίρεση από τις ζωντανές παράμετροι">✕</button></div></div>`;}).join('')).join('');
- if(!box.innerHTML)box.innerHTML='<div class="muted small">Χωρίς μπλοκ PWM, Sample & Hold ή θυρίστορ. Με 📌 στο πάνελ παραμέτρων μπαίνει εδώ οποιαδήποτε αριθμητική παράμετρος.</div>';
+ if(!box.innerHTML)box.innerHTML='<div class="muted small">Χωρίς μπλοκ PWM, S&H ή θυρίστορ. Με 📌 στο πάνελ παραμέτρων μπαίνει εδώ οποιαδήποτε αριθμητική παράμετρος.</div>';
  const al=box.querySelector('[data-alpha]');if(al){const setA=(commit)=>{const a=+al.value,from=scr[0].params?.alpha;for(const c of scr)c.params.alpha=a;S.sim?.setFiring(a);box.querySelector('[data-aout]').textContent=fmt(a,4)+'°';editor.renderLabels();liveChange('SCR','alpha',a,`α → ${fmt(a,4)}°`,String(from));if(commit){saveLocal();if(S.theory)renderTheory();}};al.oninput=()=>setA(false);al.onchange=()=>setA(true);}
  const setD=(id,d,commit)=>{d=Math.min(1,Math.max(0,d));const c=editor.comp(id);if(!c)return;const from=c.params.dsched||String(c.params.D??P.defaults('PWM').D);c.params.D=+d.toFixed(6);if(c.params.dsched){c.params.dsched='';S.sim?.setControl(id,{dsched:null});}S.sim?.setControl(id,{D:c.params.D});
   const o=box.querySelector(`[data-dout="${id}"]`);if(o)o.textContent=fmt(d,4);const r=box.querySelector(`[data-d="${id}"]`);if(r&&commit)r.value=d;editor.renderLabels();editor.updateLive();liveChange(id,'D',c.params.D,`${c.label||id}: D → ${fmt(c.params.D,4)}`,from);if(commit)saveLocal();};
@@ -1102,16 +1111,31 @@ function importDefs(text){const q=JSON.parse(text);if(q?.pcl!=='subcircuit'||!q.
  renderPalette();saveLocal();return ren.get(q.name)||[...ren.values()][0];}
 
 // ------------------------------------------------------------------ palette
-function renderPalette(){const q=($('#pal-search').value||'').toLowerCase();
+// the library (4.6, decision 55): one taxonomy at a time (select above the list, remembered), groups and subgroups that
+// open and close (remembered per taxonomy), the search above all of them (it opens every group), ☆ favourites and recent
+// parts (in this browser). The groups come from library.js (Library.view); the subcircuits of the project come last.
+const PAL={tax:'field',open:{},fav:[],recent:[]};
+function palLoad(){try{const o=JSON.parse(localStorage.getItem('pcl-library')||'{}');if(o.tax&&Library.TAX.some(t=>t.id===o.tax))PAL.tax=o.tax;PAL.open=o.open||{};PAL.fav=Array.isArray(o.fav)?o.fav:[];PAL.recent=Array.isArray(o.recent)?o.recent:[];}catch{}}
+function palSave(){try{localStorage.setItem('pcl-library',JSON.stringify({tax:PAL.tax,open:PAL.open,fav:PAL.fav,recent:PAL.recent}));}catch{}}
+function palRecent(t){if(!P.PARTS[t])return;PAL.recent=[t,...PAL.recent.filter(x=>x!==t)].slice(0,12);palSave();if(PAL.tax==='mine')renderPalette();}
+function palItem(k,d){const fav=PAL.fav.includes(k);return `<div class="pal-row"><button class="pal-item" draggable="true" data-part="${k}" title="${esc(d.name)} · κλικ και μετά κλικ στον καμβά, ή σύρσιμο"><svg viewBox="-42 -42 84 84"><g class="sym">${d.draw(P.defaults(k))}</g></svg><span>${esc(d.name)}</span></button><button class="pal-fav${fav?' on':''}" data-fav="${k}" title="${fav?'Αφαίρεση από τα αγαπημένα':'Στα αγαπημένα'}" aria-pressed="${fav}">${fav?'★':'☆'}</button></div>`;}
+function renderPalette(){const q=($('#pal-search').value||'').trim();
+ const sel=$('#pal-tax');if(sel&&!sel.options.length)sel.innerHTML=Library.TAX.map(t=>`<option value="${t.id}">${esc(t.title)}</option>`).join('');if(sel)sel.value=PAL.tax;
  // subcircuits of the project (3.17): one item per definition, plus import of a definition file
- const defs=Object.entries(defsOf()).filter(([k,d])=>!q||String(d.title||k).toLowerCase().includes(q)||k.toLowerCase().includes(q)||'υποκύκλωμα'.includes(q));
+ const ql=q.toLowerCase(),defs=Object.entries(defsOf()).filter(([k,d])=>!ql||String(d.title||k).toLowerCase().includes(ql)||k.toLowerCase().includes(ql)||'υποκύκλωμα'.includes(ql));
  const subItems=defs.map(([k,d])=>{const pr=subParams(k),L=P.subLayout(pr.$ports),sc=Math.min(1,84/(2*L.W+30),84/(2*L.H+30));
-  return `<button class="pal-item" draggable="true" data-part="SUB:${esc(k)}" title="Υποκύκλωμα «${esc(d.title||k)}» · κλικ και μετά κλικ στον καμβά, ή σύρσιμο"><svg viewBox="-42 -42 84 84"><g class="sym" transform="scale(${sc})">${P.PARTS.SUB.draw(pr)}</g></svg><span>${esc(d.title||k)}</span></button>`;}).join('');
- $('#palette-list').innerHTML=P.GROUPS.map(g=>{const items=Object.entries(P.PARTS).filter(([k,d])=>d.group===g&&!d.hidden&&(!q||d.name.toLowerCase().includes(q)||k.toLowerCase().includes(q)));
-  const extra=g==='Υποκυκλώματα'?subItems+(q?'':`<button class="pal-item pal-import" data-subimport title="Ορισμός υποκυκλώματος από αρχείο .pclsub.json"><span>⇧ Εισαγωγή ορισμού…</span></button>`):'';if(!items.length&&!extra)return '';
-  return `<div class="pal-group"><small>${esc(g)}</small>${items.map(([k,d])=>`<button class="pal-item" draggable="true" data-part="${k}" title="${esc(d.name)} · κλικ και μετά κλικ στον καμβά, ή σύρσιμο"><svg viewBox="-42 -42 84 84"><g class="sym">${d.draw(P.defaults(k))}</g></svg><span>${esc(d.name)}</span></button>`).join('')}${extra}</div>`;}).join('');
- $$('.pal-item[data-part]').forEach(b=>{b.onclick=()=>{const t=b.dataset.part;if(t.startsWith('SUB:')){const pr=subParams(t.slice(4));if(!pr||!placeOk({type:'SUB',params:pr}))return;editor.beginPlace('SUB',pr);}else editor.beginPlace(t);notice('Κλικ στον καμβά για τοποθέτηση · R περιστροφή · Esc ακύρωση','info');setTimeout(()=>notice(''),3500);};
-  b.ondragstart=e=>{e.dataTransfer.setData('application/x-pcl-part',b.dataset.part);e.dataTransfer.effectAllowed='copy';};});
+  return `<div class="pal-row"><button class="pal-item" draggable="true" data-part="SUB:${esc(k)}" title="Υποκύκλωμα «${esc(d.title||k)}» · κλικ και μετά κλικ στον καμβά, ή σύρσιμο"><svg viewBox="-42 -42 84 84"><g class="sym" transform="scale(${sc})">${P.PARTS.SUB.draw(pr)}</g></svg><span>${esc(d.title||k)}</span></button></div>`;}).join('')+(q?'':`<button class="pal-item pal-import" data-subimport title="Ορισμός υποκυκλώματος από αρχείο .pclsub.json"><span>⇧ Εισαγωγή ορισμού…</span></button>`);
+ const groups=Library.view(PAL.tax,P.PARTS,{q,fav:PAL.fav,recent:PAL.recent});const op=PAL.open[PAL.tax]||{};
+ const isOpen=(key,i)=>q?true:key in op?op[key]:(PAL.tax==='field'?i<2:PAL.tax==='course'?i<1:true);
+ let h=groups.map((g,i)=>{const key=g.title;const body=g.sub.map(s=>{const items=s.items.map(k=>palItem(k,P.PARTS[k])).join('')||(g.empty?`<p class="muted small pal-empty">${esc(g.empty)}</p>`:'');
+   if(!s.title)return items;const sk=key+'/'+s.title;return `<details class="pal-sub" data-pk="${esc(sk)}"${isOpen(sk,0)?' open':''}><summary>${esc(s.title)} <span class="muted">${s.items.length}</span></summary>${items}</details>`;}).join('');
+  return `<details class="pal-group" data-pk="${esc(key)}"${isOpen(key,i)?' open':''}><summary>${esc(g.title)} <span class="muted">${g.n}</span></summary>${body}</details>`;}).join('');
+ if(subItems)h+=`<details class="pal-group" data-pk="$subs"${isOpen('$subs',0)?' open':''}><summary>Υποκυκλώματα του project <span class="muted">${defs.length}</span></summary>${subItems}</details>`;
+ $('#palette-list').innerHTML=h||'<p class="muted small pal-empty">Κανένα στοιχείο δεν ταιριάζει.</p>';
+ $$('#palette-list details[data-pk]').forEach(d=>d.addEventListener('toggle',()=>{if(q)return;(PAL.open[PAL.tax]||(PAL.open[PAL.tax]={}))[d.dataset.pk]=d.open;palSave();}));
+ $$('#palette-list [data-fav]').forEach(b=>b.onclick=e=>{e.stopPropagation();const k=b.dataset.fav;PAL.fav=PAL.fav.includes(k)?PAL.fav.filter(x=>x!==k):[...PAL.fav,k];palSave();renderPalette();});
+ $$('.pal-item[data-part]').forEach(b=>{b.onclick=()=>{const t=b.dataset.part;if(t.startsWith('SUB:')){const pr=subParams(t.slice(4));if(!pr||!placeOk({type:'SUB',params:pr}))return;editor.beginPlace('SUB',pr);}else{editor.beginPlace(t);palRecent(t);}notice('Κλικ στον καμβά για τοποθέτηση · R περιστροφή · Esc ακύρωση','info');setTimeout(()=>notice(''),3500);};
+  b.ondragstart=e=>{e.dataTransfer.setData('application/x-pcl-part',b.dataset.part);e.dataTransfer.effectAllowed='copy';if(!b.dataset.part.startsWith('SUB:'))palRecent(b.dataset.part);};});
  $('[data-subimport]')?.addEventListener('click',()=>{const f=document.createElement('input');f.type='file';f.accept='.json,application/json';f.onchange=async()=>{const x=f.files[0];if(!x)return;
   try{const n=importDefs(await x.text());notice(`Ο ορισμός «${esc(n)}» μπήκε στη βιβλιοθήκη του project (παλέτα, ομάδα «Υποκυκλώματα»).`,'info');setTimeout(()=>notice(''),4000);}catch(err){notice('Εισαγωγή: '+esc(err.message),'error');}};f.click();});}
 
@@ -1291,7 +1315,7 @@ function polyTheory(){const s=S.sim,m=S.tutMeta||{};const legs=editor.doc.compon
   `Ισομερής καταμερισμός: P_k = P/N = ${eng(Pw/N,'W')}, I_k = −P/(N·V_bus) = <b>${eng(Ik,'A')}</b> ανά κλάδο, ⟨i_Σ⟩ = N·I_k = <b>${eng(N*Ik,'A')}</b>.`,
   pi?`Κάθε κλάδος έχει δικό του PI ρεύματος: μετρά το i_L του κλάδου στην αρχή της δικής του περιόδου (μέγιστο του τριγώνου, άρα μέση τιμή) και ακολουθεί την αναφορά του, ό,τι κι αν διαφέρει ανάμεσα στους κλάδους.`
    :Rs.some(r=>r>0)?`Ανοιχτός βρόχος με αντίσταση πηνίων: σε μόνιμη κατάσταση V_bus − (1 − D)·V_st = R_k·I_k, άρα I_k = (V_bus − (1 − D)·V_st)/R_k. Ο κλάδος με τη μεγαλύτερη R παίρνει λιγότερο ρεύμα: ${legs.map((c,i)=>`${esc(c.label||c.id)} ${eng(expI[i],'A',4)}`).join(', ')}.`
-   :`Ανοιχτός βρόχος με ιδανικούς κλάδους: τα μέσα ρεύματα μένουν όσο ήταν στην αρχή, γιατί τίποτα δεν τα επαναφέρει. Μια αλλαγή φάσης ή duty αφήνει μόνιμη ανισοκατανομή.`,
+   :`Ανοιχτός βρόχος με ιδανικούς κλάδους: τα μέσα ρεύματα μένουν όσο ήταν στην αρχή, γιατί τίποτα δεν τα επαναφέρει. Μια αλλαγή φάσης ή λόγου κατάτμησης αφήνει μόνιμη ανισοκατανομή.`,
   `D₀ = 1 − V_bus/V_st = 1 − ${fmt(vlo,4)}/${fmt(vhi,5)} = <b>${fmt(D,5)}</b>${Math.abs(Dk-D)>1e-6?` (εδώ D = ${fmt(Dk,5)}, γιατί καλύπτει και την πτώση R·I)`:''}, Δi_k = (V_bus − R·I_k)·D/(L·f) = <b>${eng(dI,'A')}</b> (${fmt(100*dI/Math.abs(Ik),3)} % του |I_k|), κορυφή |I_k| + Δi_k/2 = <b>${eng(Math.abs(Ik)+dI/2,'A')}</b>.`,
   same?`Συμφασικά οι κλάδοι κυματώνουν μαζί: Δi_Σ = N·Δi_k = <b>${eng(N*dI,'A')}</b>, στη συχνότητα f = ${eng(fs,'Hz')}.`
    :equal&&!unequalL?`Μετατοπισμένα: r = N·D − ⌊N·D⌋ = ${fmt(rr,4)}, Δi_Σ = (V_st/L)·(T/N)·r(1 − r) = <b>${eng(shiftF(vhi),'A')}</b>. Σε κάθε υποπερίοδο T/N άγουν ⌊N·D⌋ ή ⌊N·D⌋ + 1 κάτω διακόπτες· η κυμάτωση που μένει έχει συχνότητα N·f = ${eng(N*fs,'Hz')}.${rr<1e-6||rr>1-1e-6?' <b>Εδώ N·D είναι ακέραιος: ιδανική ακύρωση.</b>':''}`
@@ -1413,7 +1437,7 @@ function pcmTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!paramsOf('V1')
  const Ipk=vl?ic+ma*(1-D)*T+m1*D*T:ic-ma*D*T,Iv=vl?ic+ma*(1-D)*T:Ipk-m2*(1-D)*T;
  const pk=lastPeriods('Y:AM1',8),dd=lastPeriods('GS:S1',8);const ds=dd.map(q=>q.avg);const spread=ds.length?Math.max(...ds)-Math.min(...ds):NaN;
  const alt=ds.length>=6&&ds.slice(2).every((d,k)=>Math.abs(d-ds[k])<2e-3)&&spread>2e-3;
- const verdict=!ds.length?'':spread<2e-3?'σταθερό: ίδιο duty σε κάθε περίοδο (1T)':alt?'υποαρμονική: το duty εναλλάσσεται κάθε περίοδο (2T)':'υποαρμονική / χαοτική: το duty αλλάζει από περίοδο σε περίοδο';
+ const verdict=!ds.length?'':spread<2e-3?'σταθερό: ίδιος λόγος κατάτμησης σε κάθε περίοδο (1T)':alt?'υποαρμονική: ο λόγος κατάτμησης εναλλάσσεται κάθε περίοδο (2T)':'υποαρμονική / χαοτική: ο λόγος κατάτμησης αλλάζει από περίοδο σε περίοδο';
  const mc=1+ma/m1,Qp=1/(Math.PI*(mc*(1-D)-.5));
  let h=`<div class="tm"><span class="badge ${stable?'ccm':'dcm'}">${stable?'|λ| < 1: σταθερό':'|λ| ≥ 1: ασταθές'}</span> ${vl?'valley · ':''}D = ${fmt(D,3)} · m_a = ${m.ramp==='none'?'0':m.ramp==='half'?(vl?'m₁/2':'m₂/2'):(vl?'m₁':'m₂')}</div>`;
  h+=`<ul class="eqs"><li>Κλίσεις: m₁ = (V_in − V_o)/L = <b>${eng(m1,'A/s')}</b> (ON), m₂ = V_o/L = <b>${eng(m2,'A/s')}</b> (OFF), ράμπα m_a = <b>${eng(ma,'A/s')}</b></li>`;
@@ -1425,20 +1449,20 @@ function pcmTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!paramsOf('V1')
   <li>Στη μόνιμη κατάσταση: Î = i_c − m_a·D·T = <b>${eng(Ipk,'A')}</b>, κοιλάδα Î − m₂(1 − D)T = <b>${eng(Iv,'A')}</b></li>
   <li>Στο μοντέλο μικρού σήματος (Ridley) η ίδια αστάθεια είναι ένα ζεύγος πόλων στο f_s/2 με Q = 1/(π(m_c(1 − D) − 0,5)), m_c = 1 + m_a/m₁: Q = <b>${Number.isFinite(Qp)&&Qp>0?fmt(Qp,3):'αρνητικό (ασταθές)'}</b>${Qp>2?' (μεγάλη συντονισμένη κορυφή, κοντά στο όριο)':''}</li>`;
  h+=`<li>Ο χάρτης «δείγμα στο ρολόι → επόμενο δείγμα» έχει δύο ευθύγραμμα κομμάτια: με κλίση λ όταν ο συγκριτής αλλάζει μέσα στην περίοδο, και με κλίση 1 όταν δεν αλλάζει (ολόκληρη περίοδος ON ή OFF). Με σταθερή τάση εξόδου (μπαταρία) αυτό δεν δίνει τη διαδοχή 2T → 4T: μόλις |λ| > 1 η λειτουργία γίνεται χαοτική. Δες τον χάρτη και το διάγραμμα στο «Διακλαδώσεις και Poincaré».</li></ul>`;
- h+=cmpRows(vl?[['κορυφή (στο ρολόι, τελευταία T)',stable?Ipk:NaN,pk.length?pk[pk.length-1].max:NaN,'A'],['κοιλάδα (τελευταία T)',stable?Iv:NaN,pk.length?pk[pk.length-1].min:NaN,'A'],['duty',stable?D:NaN,ds.length?ds[ds.length-1]:NaN,'']]
-  :[['κορυφή Î (τελευταία T)',stable?Ipk:NaN,pk.length?pk[pk.length-1].max:NaN,'A'],['κοιλάδα (τελευταία T)',stable?Iv:NaN,pk.length?pk[pk.length-1].min:NaN,'A'],['⟨i_L⟩',stable?(Ipk+Iv)/2:NaN,pk.length?pk[pk.length-1].avg:NaN,'A'],['duty',stable?D:NaN,ds.length?ds[ds.length-1]:NaN,'']]);
+ h+=cmpRows(vl?[['κορυφή (στο ρολόι, τελευταία T)',stable?Ipk:NaN,pk.length?pk[pk.length-1].max:NaN,'A'],['κοιλάδα (τελευταία T)',stable?Iv:NaN,pk.length?pk[pk.length-1].min:NaN,'A'],['λόγος κατάτμησης D',stable?D:NaN,ds.length?ds[ds.length-1]:NaN,'']]
+  :[['κορυφή Î (τελευταία T)',stable?Ipk:NaN,pk.length?pk[pk.length-1].max:NaN,'A'],['κοιλάδα (τελευταία T)',stable?Iv:NaN,pk.length?pk[pk.length-1].min:NaN,'A'],['⟨i_L⟩',stable?(Ipk+Iv)/2:NaN,pk.length?pk[pk.length-1].avg:NaN,'A'],['λόγος κατάτμησης D',stable?D:NaN,ds.length?ds[ds.length-1]:NaN,'']]);
  if(ds.length)h+=`<h4>Τελευταίες ${ds.length} περίοδοι</h4><p class="small">${esc(verdict)}</p><div class="wrap"><table class="cmp"><thead><tr><th>περίοδος</th>${ds.map((d,k)=>`<th>${k-ds.length+1||'τελ.'}</th>`).join('')}</tr></thead><tbody>
-  <tr><td>duty</td>${ds.map(d=>`<td>${fmt(d,3)}</td>`).join('')}</tr><tr><td>κορυφή i_L</td>${pk.map(q=>`<td>${fmt(q.max,4)}</td>`).join('')}</tr></tbody></table></div>`;
+  <tr><td>D</td>${ds.map(d=>`<td>${fmt(d,3)}</td>`).join('')}</tr><tr><td>κορυφή i_L</td>${pk.map(q=>`<td>${fmt(q.max,4)}</td>`).join('')}</tr></tbody></table></div>`;
  h+=`<p class="small muted">Η στιγμή που αλλάζει ο συγκριτής εντοπίζεται μέσα στο βήμα του λύτη. Ο λύτης δεν έχει ειδικό κώδικα για current-mode: είναι γενικά μπλοκ (ρολόι, latch, συγκριτής, άθροισμα${vl?', λογικές πύλες':''}). Ο λύτης SciPy στον server δίνει τις ίδιες κορυφές στη σταθερή περιοχή. Στην υποαρμονική συμφωνεί για δεκάδες περιόδους και μετά δίνει την ίδια συμπεριφορά αλλά όχι την ίδια ακολουθία: εκεί κάθε μικρή αριθμητική διαφορά μεγαλώνει κατά |λ| σε κάθε περίοδο.</p>`;
  return h+evalOrderHTML();}
 // 3.3: the PI as Python code (and feedforward from an expression block): same rules as the PI block, so the same duty
 function codeTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('AM1'))return '';const T=1/m.fs,Vin=+paramsOf('V1').V,Vo=+paramsOf('VO').V,D=Vo/Vin,dI=(Vin-Vo)*D*T/+paramsOf('L1').L;
  const i=s.now('Y:K1'),ia=avgOver('Y:AM1',5),dsim=avgOver('D:PWM1',5)?.avg,b=s.net.sig.blocks.find(x=>x.id==='PI1'),calls=b?.type==='PY'&&b.st.last!=null?b.st.last+1:NaN;
  const early=lastPeriods('Y:AM1',20000).find(q=>q.t>=5e-4-1e-12);
- let h=`<div class="tm"><span class="badge">${m.py?'PI σε Python':'PI διακριτός (μπλοκ)'}</span>${m.ff?' · feedforward d = u + v_o/v_in':''}</div><ul class="eqs">
+ let h=`<div class="tm"><span class="badge">${m.py?'PI σε Python':'PI διακριτός (μπλοκ)'}</span>${m.ff?' · πρόσθια τροφοδότηση d = u + v_o/v_in':''}</div><ul class="eqs">
   <li>${m.py?`Ο κώδικας εκτελείται στην αρχή κάθε περιόδου του PWM: ${Number.isFinite(calls)?`<b>${calls}</b> κλήσεις ως τώρα (t·f_s + 1)`:'μία κλήση ανά T'}. Η έξοδος u μένει σταθερή ως την επόμενη κλήση, όπως σε μικροελεγκτή. Python ${esc(PyRT.py?.version?'μέσω Pyodide '+PyRT.py.version:'')}`:'Το μπλοκ «PI διακριτός» κάνει τις ίδιες πράξεις με τον κώδικα Python του tutorial, άρα δίνει ακριβώς το ίδιο D.'}</li>
   <li>K_p = <b>${eng(m.kp)}</b>, K_i = <b>${eng(m.ki)}</b>, D = V_o/V_in = <b>${fmt(D,4)}</b>, Δi = <b>${eng(dI,'A')}</b>. Ο PI μετρά την κοιλάδα (αρχή περιόδου πριονωτού), άρα κοιλάδα = i_ref</li>
-  <li>${m.ff?'Feedforward: το μπλοκ έκφρασης δίνει d = u + v_o/v_in από τα βολτόμετρα. Το D είναι σωστό από την πρώτη περίοδο και ο PI διορθώνει μόνο τις απώλειες και τα μεταβατικά (u ≈ 0 στη μόνιμη κατάσταση).':'Χωρίς feedforward ο ολοκληρωτής πρέπει να φτάσει μόνος του το D = V_o/V_in. Στην εκκίνηση το D είναι 0 και το ρεύμα πέφτει, ώσπου ο ολοκληρωτής να ανέβει.'}</li></ul>`;
+  <li>${m.ff?'Πρόσθια τροφοδότηση (feedforward): το μπλοκ έκφρασης δίνει d = u + v_o/v_in από τα βολτόμετρα. Το D είναι σωστό από την πρώτη περίοδο και ο PI διορθώνει μόνο τις απώλειες και τα μεταβατικά (u ≈ 0 στη μόνιμη κατάσταση).':'Χωρίς πρόσθια τροφοδότηση ο ολοκληρωτής πρέπει να φτάσει μόνος του το D = V_o/V_in. Στην εκκίνηση το D είναι 0 και το ρεύμα πέφτει, ώσπου ο ολοκληρωτής να ανέβει.'}</li></ul>`;
  h+=cmpRows([['κοιλάδα i_L',i,ia?.min,'A'],['⟨i_L⟩ (τελευταίες 5 T)',i+dI/2,ia?.avg,'A'],['D',D,dsim,''],...(m.ff?[['κοιλάδα στα 0,5 ms (αρχική αναφορά)',m.i0,early?.min,'A']]:[])]);
  return h+evalOrderHTML();}
 // 3.3.1: battery cell test: Z at the perturbation frequency from the Fourier series of v_cell and i_cell (last 2 periods of f)
@@ -1598,7 +1622,7 @@ function chaosTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp(
  const Vin=+paramsOf('V1').V,L=+paramsOf('L1').L,C=+paramsOf('C1').C,R=+paramsOf('R1').R,T=m.T,vo=avgOver('V:C1',20)?.avg,d=avgOver('Y:SR1',20)?.avg,m1=Vin/L,m2=Number.isFinite(vo)?(vo-Vin)/L:NaN;
  let h=`<div class="tm"><span class="badge ${q.period===1?'ccm':'dcm'}">${esc(periodText(q))}</span> i_c = ${eng(s.now('Y:IC'),'A')}</div><ul class="eqs">
   <li>Peak current-mode χωρίς ράμπα: το δείγμα του ρεύματος στο ρολόι (η κοιλάδα) ${q.period===1?'είναι ίδιο σε κάθε περίοδο':q.period>1?`επαναλαμβάνεται κάθε ${q.period} περιόδους: ${q.distinct.map(v=>eng(v,'A',4)).join(', ')}`:'δεν επαναλαμβάνεται: χαοτική λειτουργία (ή πολύ αργό μεταβατικό)'}</li>
-  <li>Μέση τάση εξόδου ${eng(vo,'V')}, μέσο duty ${fmt(d,3)}. Κλίσεις m₁ = V_in/L = <b>${eng(m1,'A/s')}</b>, m₂ = (V_o − V_in)/L = <b>${eng(m2,'A/s')}</b></li>
+  <li>Μέση τάση εξόδου ${eng(vo,'V')}, μέσος λόγος κατάτμησης ${fmt(d,3)}. Κλίσεις m₁ = V_in/L = <b>${eng(m1,'A/s')}</b>, m₂ = (V_o − V_in)/L = <b>${eng(m2,'A/s')}</b></li>
   <li>Αν η τάση εξόδου ήταν σταθερή, ο χάρτης θα ήταν μονοδιάστατος με λ = −m₂/m₁ = <b>${fmt(-m2/m1,3)}</b>, ασταθής για D > 0,5. Εδώ RC = ${eng(R*C,'s')} = ${fmt(R*C/T,3)}·T: η τάση αλλάζει αισθητά μέσα σε λίγες περιόδους, ο χάρτης είναι δισδιάστατος (i_L, v_o) και ο πρώτος διπλασιασμός έρχεται νωρίτερα, γύρω στο D ≈ 0,4</li>
   <li>Με τις τιμές του tutorial, καθώς μεγαλώνει το i_c: 1T → 2T (περίπου 1,65 A) → 4T (2,37 A) → 8T (2,62 A) → χάος (2,70 A). Τα διαστήματα μικραίνουν, όπως στη διαδοχή του Feigenbaum. Επειδή ο χάρτης είναι κατά τμήματα ομαλός, ο λόγος των διαστημάτων δεν είναι ακριβώς 4,67</li></ul>`;
  h+=`<p class="small muted">Το διάγραμμα διακλάδωσης βγαίνει από το «Διακλαδώσεις και Poincaré» πλάι στο scope (σάρωση του i_c). Οι τιμές είναι του γνωστού παραδείγματος των Deane & Hamill (V_in = 10 V, L = 1 mH, C = 12 μF, R = 20 Ω, T = 100 μs).</p>`;
@@ -1619,7 +1643,7 @@ function dcDriveTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.com
   if(wait)return h+wait;h+=cmpRows([['μέγιστο ⟨i_a⟩ στην εκκίνηση',ip,ipk,'A'],['ω στο τέλος',s.t>m.tTL?w1:w0,wNow,'rad/s'],['⟨i_a⟩ (τελευταίες 5 T)',s.t>m.tTL?i1:b*w0/psi,iA,'A']]);
   return h+`<p class="small muted">Η μικρή διαφορά στην ταχύτητα είναι η αντίσταση R_on των διακοπτών, που προστίθεται στην R_a.</p>`;}
  const tr=Math.log(9)/m.ac;
- h+=`<li>Βρόχος ρεύματος: u* = PI(i_ref − i_a) + Ê − R_a,ενεργ·i_a, με Ê = ψ̂·ω (feedforward). Εύρος ζώνης α_c = 2π·200 Hz = <b>${eng(m.ac,'rad/s')}</b>: K_p = α_c·L_a = <b>${eng(m.kpc)}</b>, ${m.act?`R_a,ενεργ = α_c·L_a − R_a = <b>${eng(m.Rac,'Ω')}</b>, K_i = α_c²·L_a = <b>${eng(m.kic)}</b>`:`K_i = α_c·R_a = <b>${eng(m.kic)}</b> (το μηδενικό του PI ακυρώνει τον πόλο R_a/L_a)`}</li>
+ h+=`<li>Βρόχος ρεύματος: u* = PI(i_ref − i_a) + Ê − R_a,ενεργ·i_a, με Ê = ψ̂·ω (πρόσθια τροφοδότηση). Εύρος ζώνης α_c = 2π·200 Hz = <b>${eng(m.ac,'rad/s')}</b>: K_p = α_c·L_a = <b>${eng(m.kpc)}</b>, ${m.act?`R_a,ενεργ = α_c·L_a − R_a = <b>${eng(m.Rac,'Ω')}</b>, K_i = α_c²·L_a = <b>${eng(m.kic)}</b>`:`K_i = α_c·R_a = <b>${eng(m.kic)}</b> (το μηδενικό του PI ακυρώνει τον πόλο R_a/L_a)`}</li>
   <li>Ιδανικά i_a/i_ref = α_c/(s + α_c): χρόνος ανόδου 10–90 % ln9/α_c = <b>${eng(tr,'s')}</b>. ${m.act?'Με την ενεργή αντίσταση ένα σφάλμα στο Ê σβήνει κι αυτό με α_c':`Χωρίς ενεργή αντίσταση ένα σφάλμα στο Ê σβήνει με R_a/L_a = ${eng(Ra/La,'rad/s')}, δηλαδή ${fmt(m.ac/(Ra/La),3)} φορές πιο αργά`}. Η καθυστέρηση δειγματοληψίας και PWM (περίπου 1,5·T) δίνει μικρή υπερύψωση</li>
   <li>Η ημιγέφυρα δίνει u ∈ [0, V_dc]: το ρεύμα αλλάζει φορά (πέδηση) αλλά η τάση όχι. Με u = 0 το ρεύμα πέφτει με di/dt = −(R_a·i + ψ·ω)/L_a. Ο κορεσμός είναι στο μπλοκ 0 … V_dc, άρα ο PI χρειάζεται back-calculation: tr = u_sat − u*, dx_i/dt = K_i·(e + tr/K_p)</li>`;
  if(m.mode==='current'){const ps=per('Y:AM1'),r=cross(ps,.005,0,10),ir=s.now('Y:KI'),Dth=(Ra*ir+psi*wNow)/Vdc;
@@ -1635,7 +1659,7 @@ function dcDriveTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.com
   <li>Μόνιμη κατάσταση: ω = ω_ref, i_a = (b·ω + τ_L)/ψ, u = R_a·i_a + ψ·ω, D = u/V_dc</li></ul>`;
  const ith=(b*wth+tl)/psi,uth=Ra*ith+psi*wth;
  if(wait)return h+wait;h+=cmpRows([['μέγιστη ω πριν από το φορτίο',m.wref,wmax,'rad/s'],...(s.t>m.tTL?[['ελάχιστη ω μετά το βήμα φορτίου',m.wref-dpk,wmin,'rad/s']]:[]),['ω τώρα',wth,wNow,'rad/s'],['⟨i_a⟩ (τελευταίες 5 T)',ith,iA,'A'],['D',uth/Vdc,dA,'']]);
- return h+`<p class="small muted">Οι θεωρητικές τιμές θεωρούν ιδανικό βρόχο ρεύματος (i_a = i_ref) και ακριβή feedforward. Οι παράμετροι της μηχανής είναι τυπικές τιμές.</p>`+evalOrderHTML();}
+ return h+`<p class="small muted">Οι θεωρητικές τιμές θεωρούν ιδανικό βρόχο ρεύματος (i_a = i_ref) και ακριβή πρόσθια τροφοδότηση. Οι παράμετροι της μηχανής είναι τυπικές τιμές.</p>`+evalOrderHTML();}
 // traveling waves (3.8): the same problem by the method of characteristics (P.bewley), a lattice diagram, theory vs simulation
 function twModel(){const s=S.sim,m=S.tutMeta||{},c=s?.net.compInfo.get('T1');if(!s||!c?.line||!m.dur)return null;const Z=c.line.Z,tau=c.line.tau;
  const RLp=paramsOf('RL'),RAp=paramsOf('RA'),book=m.case==='book';
@@ -2007,7 +2031,7 @@ function exportCSV(){const s=S.sim;if(!s)return;const ch=scope.channels();if(!ch
 
 // ------------------------------------------------------------------ scope inputs
 function syncScopeInputs(){const w=scope.cfg.window;$('#win-n').value=+(+w.n).toPrecision(4);$('#win-unit').value=w.unit;$('#trigger').value=scope.cfg.trigger;$('#display').value=scope.cfg.display;}
-function setSpeed(v){S.speed=v==='max'?'max':+v;const sel=$('#speed');if(![...sel.options].some(o=>o.value===String(v))){const o=document.createElement('option');o.value=String(v);o.textContent=v+' T/s';sel.appendChild(o);}sel.value=String(v);}
+function setSpeed(v){S.speed=v==='max'?'max':+v;window.Live?.speed(S.speed,S.stopT);const sel=$('#speed');if(![...sel.options].some(o=>o.value===String(v))){const o=document.createElement('option');o.value=String(v);o.textContent=v+' T/s';sel.appendChild(o);}sel.value=String(v);}
 
 // ------------------------------------------------------------------ settings modal
 function openSettings(){const s=editor.settings,m=$('#settings');m.hidden=false;
@@ -2026,7 +2050,10 @@ function openSettings(){const s=editor.settings,m=$('#settings');m.hidden=false;
   ${chk('freeEnds','Ελεύθερα άκρα: σύρμα που αφήνεις στο κενό κρατά ελεύθερο άκρο (αλλιώς ακυρώνεται)')}${chk('autoConnect','Στοιχείο που αφήνεις πάνω σε σύρμα ή ακροδέκτη συνδέεται, ή μπαίνει σε σειρά (Shift: χωρίς σύνδεση)')}
   ${sel('snapPx','Κούμπωμα σε ακροδέκτη ή σύρμα σε απόσταση',[[6,'6 px'],[12,'12 px'],[20,'20 px']])}
   ${chk('autoRoute','Αυτόματη δρομολόγηση A* όταν αφήνεις στοιχείο (αλλιώς κρατά τη δική σου διαδρομή)')}</section>
-  <section><h3>Ζωντανές ενδείξεις</h3>${chk('showLive','Τιμές πάνω στο κύκλωμα')}${chk('showArrows','Βέλη φοράς ρεύματος')}</section>`;
+  <section><h3>Ζωντανές ενδείξεις</h3>${chk('showLive','Τιμές πάνω στο κύκλωμα')}${chk('showArrows','Βέλη φοράς ρεύματος')}</section>
+  <section><h3>Απόδοση</h3><label class="frow check"><input type="checkbox" id="set-live-worker" ${window.Live&&!Live.off?'checked':''} ${window.Live?.supported()?'':'disabled'}><span>Η προσομοίωση σε δικό της thread (Worker): το σχέδιο δεν περιμένει ποτέ τον λύτη${window.Live?.supported()?'':' (δεν υποστηρίζεται εδώ: χρειάζεται SharedArrayBuffer)'}</span></label>
+  <p class="muted small">Χωρίς αυτό ο λύτης τρέχει στη σελίδα και υποχωρεί όσο κάνεις zoom, μετακίνηση ή σύρσιμο. Τα κυκλώματα με μπλοκ Python τρέχουν πάντα στη σελίδα.</p></section>`;
+ $('#set-live-worker')?.addEventListener('change',e=>{if(!window.Live)return;const was=S.running;if(Live.active)pause();Live.off=!e.target.checked;try{localStorage.setItem('pcl-live-worker',Live.off?'off':'on');}catch{}if(was)play();});
  $$('#settings [data-set]').forEach(el=>el.onchange=()=>{const k=el.dataset.set;let v=el.type==='checkbox'?el.checked:el.value;if(k==='wireWidth'||k==='snapPx')v=+v;editor.settings[k]=v;saveSettings();editor.render();renderProps();});}
 
 // ------------------------------------------------------------------ boot
@@ -2052,11 +2079,11 @@ function boot(){
  $('#step-mode').onchange=e=>{editor.setSolve({step:e.target.value==='var'?'var':''});};
  document.querySelectorAll('[data-dsev]').forEach(x=>x.onchange=renderDiag);$('#diag-src').onchange=renderDiag;$('#diag-q').oninput=renderDiag;
  $('#diag-check').onclick=()=>{if(S.sim&&!S.error)S.sim.stepCheck();renderDiag();};
- $('#diag-clear').onclick=()=>{if(S.sim){S.sim.dg=new Map();S.sim.dgVer=(S.sim.dgVer||0)+1;}S.batchDiag=[];renderDiag();};
+ $('#diag-clear').onclick=()=>{if(S.sim){S.sim.dg=new Map();S.sim.dgVer=(S.sim.dgVer||0)+1;window.Live?.call('dgClear');}S.batchDiag=[];renderDiag();};
  try{if(localStorage.getItem('pcl-diag-open')==='1')$('#diag').open=true;}catch(e){}
  $('#diag').addEventListener('toggle',()=>{try{localStorage.setItem('pcl-diag-open',$('#diag').open?'1':'0');}catch(e){}});
  $('#sim-step').onchange=()=>{if(S.sim){S.sim.setStep(+$('#sim-step').value);S.sim.cache.clear();updateClock();scheduleStepCheck();}};
- $('#stop').onchange=e=>{const v=P.parseEng(e.target.value);S.stopT=Number.isFinite(v)&&v>0?v*1e-3:0;saveLocal();};
+ $('#stop').onchange=e=>{const v=P.parseEng(e.target.value);S.stopT=Number.isFinite(v)&&v>0?v*1e-3:0;window.Live?.speed(S.speed,S.stopT);saveLocal();};
  $('#win-n').onchange=e=>{const v=P.parseEng(e.target.value);if(v>0){scope.cfg.window.n=v;scope.cfg.frozen=null;draw(true);}};
  $('#win-unit').onchange=e=>{scope.cfg.window.unit=e.target.value;scope.cfg.frozen=null;draw(true);};
  $('#trigger').onchange=e=>{scope.cfg.trigger=e.target.value;draw(true);};$('#display').onchange=e=>{scope.cfg.display=e.target.value;draw(true);};
@@ -2105,11 +2132,17 @@ function boot(){
  $('#save').onclick=()=>download((tutorial().id||'circuit')+'.pcl.json',JSON.stringify(project(),null,1));
  $('#open').onclick=()=>$('#file').click();
  $('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const pr=JSON.parse(await f.text());if(!Array.isArray(pr.components))throw Error('Δεν είναι αρχείο κυκλώματος.');S.tut=pr.tutorial||{id:'empty',options:{}};S.tutMeta=null;S.tutRef=pr.tutRef||tutorialRef(S.tut);applyProject(pr);if(typeof pr.scenario==='string')S.scenForeign=true;renderTutorial();runTheory();}catch(err){notice('Άνοιγμα: '+esc(err.message),'error');}e.target.value='';};
- $('#pal-search').oninput=renderPalette;$('#pal-toggle').onclick=()=>document.body.classList.toggle('pal-hidden');
+ // the wheel over the bench (toolbar, library, drawing, parameters) never scrolls the page (4.6): a list that can still scroll
+ // in that direction takes it (and keeps it, overscroll-behavior), the drawing zooms, anything else ignores it
+ $('.bench')?.addEventListener('wheel',e=>{if(e.defaultPrevented)return;let el=e.target;const top=e.currentTarget;
+  while(el&&el!==top){if(el.nodeType===1&&Editor.canScroll(el,e)){const st=getComputedStyle(el);if(/(auto|scroll)/.test(st.overflowY+st.overflowX))return;}el=el.parentNode;}
+  e.preventDefault();},{passive:false});
+ palLoad();$('#pal-search').oninput=renderPalette;$('#pal-tax').onchange=e=>{PAL.tax=e.target.value;palSave();renderPalette();};$('#pal-toggle').onclick=()=>document.body.classList.toggle('pal-hidden');
  // parameters panel (3.7) and wire tool
  {let open=innerWidth>700;try{const v=localStorage.getItem('pcl2-props');if(v)open=v==='1';}catch{}setProps(open);
   $('#props-btn').onclick=()=>setProps(!propsOpen());$('#props-tab').onclick=()=>setProps(true);}
  $('#wire-tool').onclick=()=>{editor.setWireTool(!editor.wireTool);editor.svg.focus({preventScroll:true});};
+ try{if(window.Live&&localStorage.getItem('pcl-live-worker')==='off')Live.off=true;}catch{}
  // the time of the last input anywhere on the page: the solver yields the frame to the page for 250 ms after it (4.6)
  for(const ev of ['pointerdown','pointermove','wheel','keydown'])document.addEventListener(ev,()=>{S.lastInput=performance.now();},{capture:true,passive:true});
  document.addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))closeMenu();if(!e.target.closest('#inspector')&&!e.target.closest('.schem')&&!e.target.closest('#ctx'))closeInspector();});

@@ -7,7 +7,7 @@ const {chromium}=require('playwright');
  const ok=(c,msg)=>{if(!c)fail.push(msg);};
  await p.goto(U);await p.evaluate(()=>localStorage.clear());await p.goto(U);await p.waitForTimeout(1200);
  // palette group
- ok(await p.$$eval('.pal-group small',e=>e.some(x=>x.textContent.trim().toLowerCase()==='σήματα')),'palette group «Σήματα»');
+ ok(await p.$$eval('.pal-group > summary',e=>e.some(x=>/^Σήματα και μαθηματικά/.test(x.textContent.trim()))),'palette group «Σήματα και μαθηματικά» (4.6: groups by field)');
  // empty circuit: constant → display, drawn with the mouse
  await p.evaluate(()=>window.PCL.loadTutorial('empty',{}));await p.waitForTimeout(600);
  await p.evaluate(()=>{const e=window.PCL.editor;e.addPart('CONST',200,200);e.addPart('DISP',360,200);e.addPart('R',360,320);e.addPart('SW',200,320,{gate:'sig'});e.fit();});await p.waitForTimeout(400);
@@ -65,7 +65,7 @@ const {chromium}=require('playwright');
  await p.screenshot({path:'pcm_unstable.png'});
  await p.evaluate(()=>window.PCL.loadTutorial('peak_cm',{ramp:'half'}));await p.waitForTimeout(800);
  await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.sim.T*80);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(800);
- th=await p.$eval('#theory',e=>e.textContent);ok(/σταθερό: ίδιο duty σε κάθε περίοδο/.test(th),'stable with m₂/2');ok(/κορυφή Î \(τελευταία T\)4,136 A4,136 A/.test(th),'peak = i_c − m_a·D·T');
+ th=await p.$eval('#theory',e=>e.textContent);ok(/σταθερό: ίδιος λόγος κατάτμησης σε κάθε περίοδο/.test(th),'stable with m₂/2');ok(/κορυφή Î \(τελευταία T\)4,136 A4,136 A/.test(th),'peak = i_c − m_a·D·T');
  // logic outputs share one scope pane, one lane each
  ok(await p.evaluate(()=>window.PCL.scope.cfg.panes[1].ch.every(c=>window.Scope.isLogic(c.key))),'logic lanes');
  await p.screenshot({path:'pcm_stable.png'});
@@ -104,7 +104,7 @@ const {chromium}=require('playwright');
  await p.screenshot({path:'pcm_chaos.png'});
  await p.evaluate(()=>window.PCL.loadTutorial('peak_cm',{mode:'valley',D:'0.6'}));await p.waitForTimeout(800);
  await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.sim.T*80);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(500);
- th=await p.$eval('#theory',e=>e.textContent);ok(/λ = \(m_a − m₁\)\/\(m₂ \+ m_a\) = -0,6667/.test(th)&&/σταθερό: ίδιο duty/.test(th),'valley theory');
+ th=await p.$eval('#theory',e=>e.textContent);ok(/λ = \(m_a − m₁\)\/\(m₂ \+ m_a\) = -0,6667/.test(th)&&/σταθερό: ίδιος λόγος κατάτμησης/.test(th),'valley theory');
  ok(await p.evaluate(()=>!!document.querySelector('#bf-map path.map')),'ideal map drawn');
  // 3.3: PI in Python (Pyodide, local copy) and feedforward from an expression block
  await p.evaluate(()=>window.PCL.loadTutorial('code_loop',{ctrl:'python',ff:'expr'}));

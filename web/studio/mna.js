@@ -500,7 +500,7 @@
    // walk back along dependencies inside the remaining set until a block repeats
    let b=[...left][0];const path=[];while(!path.includes(b)){path.push(b);b=deps[b.i].find(p=>left.has(p));}
    const cyc=path.slice(path.indexOf(b)).reverse();
-   throw new NetlistError('Αλγεβρικός βρόχος στα μπλοκ σημάτων: '+cyc.concat(cyc[0]).map(q=>q.label).join(' → ')+'. Βάλε μια «Καθυστέρηση z⁻¹» (ή Sample & Hold) μέσα στον βρόχο.');}
+   throw new NetlistError('Αλγεβρικός βρόχος στα μπλοκ σημάτων: '+cyc.concat(cyc[0]).map(q=>q.label).join(' → ')+'. Βάλε μια «Καθυστέρηση z⁻¹» (ή S&H) μέσα στον βρόχο.');}
   return {nets:sigNets,n:sigNets.length,blocks,order,zc:blocks.filter(b=>b.type==='CMP'),drv};
  }
  // comparator crossing function: > 0 means "switch to 1" when the output is 0, < 0 "switch to 0" when it is 1.

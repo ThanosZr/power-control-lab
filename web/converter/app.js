@@ -206,7 +206,7 @@ function renderInspector(){
  const rows=[];const row=(a,b)=>rows.push(`<tr><td>${a}</td><td>${b}</td></tr>`);
  if(m){
   if(type==='source'){row('Μέσο ρεύμα εισόδου',fmt(m.Iin,5)+' A');row('Ισχύς εισόδου',fmt(c.vin*m.Iin,5)+' W');}
-  if(type==='switch'){row('Duty D',fmt(m.duty,6));row('tON',fmt(m.duty/c.fs*1e6,5)+' μs');row('Μέγιστη τάση',fmt(m.Vswitch,5)+' V');row('Ρεύμα κορυφής',fmt(m.Ipeak,5)+' A');row('RMS ρεύμα',fmt(m.ISrms,5)+' A');}
+  if(type==='switch'){row('Λόγος κατάτμησης D',fmt(m.duty,6));row('tON',fmt(m.duty/c.fs*1e6,5)+' μs');row('Μέγιστη τάση',fmt(m.Vswitch,5)+' V');row('Ρεύμα κορυφής',fmt(m.Ipeak,5)+' A');row('RMS ρεύμα',fmt(m.ISrms,5)+' A');}
   if(type==='diode'){row('Μέσο ρεύμα',fmt(m.IDmean,5)+' A');row('RMS ρεύμα',fmt(m.IDrms,5)+' A');row('Ανάστροφη τάση',fmt(m.Vdiode_reverse,5)+' V');row('Διάρκεια αγωγής δ',fmt(m.delta,5));}
   if(type==='inductor'||type==='transformer'){row('Κρίσιμη επαγωγή Lcrit',fmt(m.Lcrit*1e6,5)+' μH');row('L / Lcrit',fmt(m.L_margin,4)+' → '+r.mode);row('ΔiL,pp',fmt(m.Iripple_pp,5)+' A');row('Imin / Ipk',fmt(m.Ivalley,4)+' / '+fmt(m.Ipeak,4)+' A');row('Μέσο / RMS',fmt(m.ILmean,4)+' / '+fmt(m.ILrms,4)+' A');if(type==='transformer'){row('Τάση διακόπτη',fmt(m.Vswitch,5)+' V');row('Ανάστροφη τάση διόδου',fmt(m.Vdiode_reverse,5)+' V');}}
   if(type==='capacitor'){row('ΔVo,pp',fmt(m.Vripple_pp*1000,5)+' mV');row('Δq,pp',fmt(m.charge_pp*1e6,5)+' μC');row('RMS ρεύμα πυκνωτή',fmt(m.ICrms,5)+' A');row('Τάση',fmt(m.signed_output,5)+' V');}

@@ -6,7 +6,7 @@
  <meta name="description" content="Εκπαιδευτικό εργαστήριο ηλεκτρονικών ισχύος: σχεδίαση κυκλώματος, προσομοίωση σε πραγματικό χρόνο, scopes και θεωρία για όλους τους βασικούς μετατροπείς.">
  <link rel="stylesheet" href="studio/style.css">
  <script src="studio/expr.js" defer></script><script src="studio/parts.js" defer></script><script src="studio/pyrt.js" defer></script><script src="studio/stepcheck.js" defer></script><script src="studio/netlib.js" defer></script><script src="studio/subcircuit.js" defer></script><script src="studio/bus.js" defer></script><script src="studio/units.js" defer></script><script src="studio/sparse.js" defer></script><script src="studio/mna.js" defer></script><script src="studio/editor.js" defer></script>
- <script src="studio/scope.js" defer></script><script src="studio/linemodels.js" defer></script><script src="studio/tutorials.js" defer></script><script src="studio/exercises/pe2_battery.js" defer></script><script src="studio/templates.js" defer></script><script src="studio/metrics.js" defer></script><script src="studio/scenario.js" defer></script><script src="studio/pool.js" defer></script><script src="studio/addons.js" defer></script><script src="studio/math.js" defer></script><script src="studio/linedata.js" defer></script><script src="studio/app.js" defer></script>
+ <script src="studio/scope.js" defer></script><script src="studio/live.js" defer></script><script src="studio/library.js" defer></script><script src="studio/linemodels.js" defer></script><script src="studio/tutorials.js" defer></script><script src="studio/exercises/pe2_battery.js" defer></script><script src="studio/templates.js" defer></script><script src="studio/metrics.js" defer></script><script src="studio/scenario.js" defer></script><script src="studio/pool.js" defer></script><script src="studio/addons.js" defer></script><script src="studio/math.js" defer></script><script src="studio/linedata.js" defer></script><script src="studio/app.js" defer></script>
 </head>
 <body>
 <header class="top">
@@ -27,7 +27,7 @@
    <button id="props-btn" class="tool-toggle on" aria-pressed="true" aria-controls="props" title="Πάνελ παραμέτρων (πλήκτρο I)">☰ Παράμετροι</button>
   </div>
   <div class="work">
-   <aside class="palette"><input id="pal-search" placeholder="Αναζήτηση στοιχείου…"><div id="palette-list"></div></aside>
+   <aside class="palette"><input id="pal-search" placeholder="Αναζήτηση στοιχείου…" aria-label="Αναζήτηση στοιχείου"><select id="pal-tax" aria-label="Ταξινόμηση της βιβλιοθήκης" title="Ταξινόμηση της βιβλιοθήκης"></select><div id="palette-list"></div></aside>
    <div id="canvas" class="canvas"></div>
    <aside id="props" class="props" aria-label="Παράμετροι"><button id="props-tab" class="props-tab" aria-expanded="true" title="Άνοιγμα του πάνελ παραμέτρων (I)">◂ Παράμετροι</button><div id="props-body" class="props-body"></div></aside>
   </div>
@@ -171,7 +171,7 @@ pcl.tutorial('buck', start='steady')   # το project ενός tutorial</pre></d
    <div><div class="th-head"><h4>Θεωρία & σύγκριση με την προσομοίωση</h4><button id="theory-refresh" title="Επανυπολογισμός με τις τρέχουσες τιμές">↻</button></div><div id="theory" class="theory"></div></div>
   </div>
  </section>
- <footer>Power &amp; Control Lab <b>4.5</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
+ <footer>Power &amp; Control Lab <b>4.6</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
 </main>
 <div id="notice" class="notice" hidden></div>
 <div id="inspector" class="popup inspector" hidden></div>

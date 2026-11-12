@@ -426,3 +426,13 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .livel .a-s>div{transform:translate(0,-.8em)}.livel .a-m>div{transform:translate(-50%,-.8em)}.livel .a-e>div{transform:translate(-100%,-.8em)}
 .livel .lbl{color:var(--ink)}.livel .val{color:#5f7671}.livel .lv{color:var(--accent2)}
 .livel .lv:empty,.livel .val:empty{display:none}
+/* 4.6: the library in categories (library.js) */
+.palette select{width:100%;margin-bottom:6px;font-size:12px}
+.pal-group{margin:2px 0 4px}.pal-group>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:4px;padding:5px 4px;border-radius:6px;font-size:11px;font-weight:700;color:var(--ink);letter-spacing:.02em}
+.pal-group>summary::before,.pal-sub>summary::before{content:'▸';color:var(--muted);transition:transform .12s;display:inline-block}.pal-group[open]>summary::before,.pal-sub[open]>summary::before{transform:rotate(90deg)}
+.pal-group>summary:hover{background:#eef5f2}.pal-group summary .muted,.pal-sub summary .muted{margin-left:auto;font-weight:400;font-size:10px}
+.pal-group>summary::-webkit-details-marker,.pal-sub>summary::-webkit-details-marker{display:none}
+.pal-sub{margin:0 0 2px 8px}.pal-sub>summary{cursor:pointer;list-style:none;display:flex;gap:4px;align-items:center;padding:3px 4px;font-size:10.5px;color:var(--muted);text-transform:none}
+.pal-row{position:relative}.pal-row .pal-item{margin-bottom:2px}
+.pal-fav{position:absolute;right:0;top:50%;transform:translateY(-50%);border:none;background:#fbfcfbd9;padding:2px 4px;font-size:13px;color:#b9c7c2;opacity:0;cursor:pointer}.pal-row:hover .pal-fav,.pal-fav.on,.pal-fav:focus-visible{opacity:1}.pal-fav.on{color:#d39a2a}
+.pal-empty{margin:4px 6px}

@@ -4,11 +4,12 @@
 // frames counted with requestAnimationFrame in the page. Also: the wheel over labels, live values and the live panel must
 // not scroll the page. Needs Node + Playwright.
 // Usage: python run.py --no-browser --port 8765  then  node tests/ui/perf_flow.js http://127.0.0.1:8765/ <out-dir> [--report]
-// Pass/fail: the 95th percentile of the frame interval and the longest frame, against the limits below (headless Chromium
-// draws in software, so the limits are looser than the 16 ms the application aims at on a real machine; --report prints
-// the numbers without failing).
+// Pass/fail: the median, the 95th percentile and the longest frame interval against the limits below. Headless Chromium
+// draws in software and the CI machine has few cores (the simulation's worker takes one), so the limits with a running
+// simulation are looser than the 16 ms the application aims at on a real machine; without a simulation the median must be
+// one frame (60 frames per second). --report prints the numbers without failing.
 const {chromium}=require('playwright');const OUT=process.argv[3]||'.';const REPORT=process.argv.includes('--report');
-const LIMIT={p95:34,max:80};
+const LIMIT={still:{p50:17,p95:34,max:100},sim:{p50:34,p95:67,max:200}};
 // a large circuit: rows of R–L–C ladders with sources, every row grounded, about 200 parts and 200 wires
 function bigDoc(rows=10,cols=6){const components=[],wires=[];let w=0;const W=()=>'w'+(++w);
  for(let r=0;r<rows;r++){const y=r*120;const src='V'+(r+1);components.push({id:src,type:'VDC',x:0,y:y+40,rot:0,flip:false,label:src,params:{V:10+r}});
@@ -58,7 +59,7 @@ function bigDoc(rows=10,cols=6){const components=[],wires=[];let w=0;const W=()=
   for(const [x,y] of pts){await p.mouse.move(x,y);for(let i=0;i<6;i++)await p.mouse.wheel(0,200);}await p.waitForTimeout(150);return {moved:(await p.evaluate(()=>window.scrollY))-y0};})();
  await p.screenshot({path:OUT+'/perf_large.png'});
  console.log(JSON.stringify(R,null,1));
- const bad=[];for(const [k,v] of Object.entries(R)){if(!v||typeof v!=='object'||!v.zoom)continue;for(const g of ['zoom','pan','drag','select']){const f=v[g];if(f.p95>LIMIT.p95||f.max>LIMIT.max)bad.push(`${k} ${g}: p95 ${f.p95} ms, max ${f.max} ms`);}}
+ const bad=[];for(const [k,v] of Object.entries(R)){if(!v||typeof v!=='object'||!v.zoom)continue;const L=k.endsWith('+sim')?LIMIT.sim:LIMIT.still;for(const g of ['zoom','pan','drag','select']){const f=v[g];if(f.p50>L.p50||f.p95>L.p95||f.max>L.max)bad.push(`${k} ${g}: p50 ${f.p50}, p95 ${f.p95}, max ${f.max} ms`);}}
  if(R.scroll.moved!==0)bad.push('the page scrolled by '+R.scroll.moved+' px under the wheel');
  if(!(R['large'].selected>50))bad.push('selection rectangle selected '+R['large'].selected+' parts');
  if(errs.length)bad.push('errors: '+errs.slice(0,3).join(' | '));
