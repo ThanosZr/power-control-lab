@@ -17,6 +17,14 @@ const pll=project([{id:'V3',type:'VAC3',params:{Vpk:100,f:50,phase:30}},{id:'G',
 const cont=project([{id:'K1',type:'CONST',params:{v:2}},{id:'I1',type:'INT',params:{y0:1}},{id:'K3',type:'CONST',params:{v:'0:0, 0.001:1'}},{id:'F1',type:'LPF',params:{fc:100}},
   {id:'CK',type:'CLK',params:{f:1000}},{id:'K4',type:'CONST',params:{v:1}},{id:'P1',type:'PIB',params:{Kp:1,Ki:100,clock:'CK',aw:'track'}},{id:'S1',type:'SAT',params:{lo:-2,hi:2}},{id:'D1',type:'SUM',params:{signs:'+-'}}],
   [['K1:y','I1:u'],['K3:y','F1:u'],['K4:y','P1:u'],['P1:y','S1:u'],['S1:y','D1:a'],['P1:y','D1:b'],['D1:y','P1:tr']]);
+// 4.7: the neural network block in a loop: an RC plant fed by a source from a signal, a PI and a network that learns the
+// feedforward from the PI's output (feedback-error learning, Adam); and a second one learning a target with SGD
+const nnFel=project([{id:'CK',type:'CLK',params:{f:1000}},{id:'R0',type:'CONST',params:{v:'0:0, 0.01:1, 0.04:0.4, 0.07:0.8'}},{id:'E1',type:'SUM',params:{signs:'+-'}},
+  {id:'P1',type:'PIB',params:{Kp:.3,Ki:30,clock:'CK',ymin:-5,ymax:5}},{id:'N1',type:'NN',params:{ins:'r',xs:'1',hidden:'6',train:'err',lr:.003,clock:'CK',ymin:-3,ymax:3,seed:7}},
+  {id:'U1',type:'SUM',params:{signs:'++'}},{id:'V1',type:'VDC',params:{ctl:'sig'}},{id:'R1',type:'R',params:{R:10}},{id:'C1',type:'C',params:{C:1e-3}},{id:'VM',type:'VM'},
+  {id:'N2',type:'NN',params:{ins:'v',hidden:'4',train:'tgt',opt:'sgd',lr:.05,clock:'CK',ymin:-5,ymax:5,seed:2,init:'rand'}},{id:'K2',type:'GAIN',params:{K:-1.5}},{id:'G',type:'GND'}],
+  [['R0:y','E1:a'],['VM:y','E1:b'],['E1:y','P1:u'],['R0:y','N1:r'],['P1:y','N1:e'],['P1:y','U1:a'],['N1:y','U1:b'],['U1:y','V1:u'],['V1:p','R1:a'],['R1:b','C1:p'],['C1:n','G:g'],['V1:n','G:g'],
+   ['VM:p','C1:p'],['VM:n','G:g'],['VM:y','N2:v'],['VM:y','K2:u'],['K2:y','N2:tgt']]);
 // 3.19: B1 blocks: second-order filters (LP, HP on a step; notch, BP on 50 Hz), rate limiter, rate transition (ZOH and delayed), edge detector
 const b1=project([{id:'K1',type:'CONST',params:{v:'0:0, 0.001:1'}},{id:'FL',type:'F2',params:{kind:'lp',f0:200,zeta:.3}},{id:'FH',type:'F2',params:{kind:'hp',f0:200,zeta:.3}},
   {id:'K2',type:'CONST',params:{v:'0:0, 0.001:1, 0.006:-1'}},{id:'RL',type:'RLIM',params:{up:500,dn:200}},{id:'EX',type:'EXPR',params:{expr:'sin(2*pi*50*t)+0.3*sin(2*pi*400*t)',ins:''}},
@@ -60,6 +68,7 @@ const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},[
  blk_cmp_z1:['blocks_loop',{mod:'cmp',delay:'z1'},['Y:AM1','Y:UD1','GS:S1']],blk_pwm:['blocks_loop',{},['Y:AM1','D:PWM1','Y:PI1']],
  dcm:[dcm,null,['Y:M1','Y:M1:te','I:M1']],pll:[pll,null,['Y:PL:w','Y:PK','Y:PK:q']],cont:[cont,null,['Y:I1','Y:F1','Y:P1','Y:S1']],
  b1:[b1,null,['Y:FL','Y:FH','Y:RL','Y:FN','Y:FB','Y:ED','Y:ED:n','Y:R1','Y:R2']],
+ nn_fel:[nnFel,null,['V:C1','Y:N1','Y:N1:L','Y:P1','Y:N2','Y:N2:L']],
  dc_cur:['dc_drive',{mode:'current'},['Y:AM1','D:PWM1','Y:M1']],
  code_py:['code_loop',{ctrl:'python',ff:'expr'},['Y:AM1','D:PWM1','Y:PI1','Y:EX1']],
  eis_cell:[eisCell,null,['Y:VM1','Y:AM1']],
@@ -81,7 +90,7 @@ const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},[
 // browser results for the 3.0 cases: per-period peaks of the last periods, to compare solver against solver
 const jsRun={dc_cur:['Y:AM1',.012],pcm_half:['Y:AM1',1e-3],pcm_sub:['Y:AM1',4e-4],blk_cmp_z1:['Y:AM1',4e-3],blk_pwm:['Y:AM1',4e-3]};   // pcm_sub: before chaos separates the two solvers
 // browser values at given instants (3.1)
-const jsAt={b1:[.00305,.0045,.0085,.0205],dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05],eis_cell:[.004,.011,.02],im_dol:[.05,.1,.3,.6],mp_kl:[5e-4,2e-3,5e-3],mp_kg:[1e-4,1e-3],sm_align:[.02,.1,.3],sm_pm:[.02,.1,.2],mp_lg:[4e-6,50e-6,200e-6],sm_sat:[.02,.1,.3],isl_ref:[.005,.012,.02],vimp:[1e-6,3e-6,2e-5,6e-5],sg_ring:[5e-6,15e-6,25e-6,40e-6],sg_trig:[4e-6,10e-6,20e-6],sg_iext:[10e-6,30e-6,60e-6],mov_ramp:[5e-6,10e-6,20e-6,40e-6],tw_r3z:[5e-6,15e-6,25e-6,35e-6,95e-6],tw_li:[3e-6,12e-6,25e-6,65e-6],tw_book:[1.5e-6,3e-6,5e-6,7e-6],arr_ideal:[8e-6,15e-6,30e-6],arr_zno:[8e-6,15e-6,30e-6],marx:[1e-6,2.2e-6,20e-6,80e-6],chop:[2e-6,3.3e-6,4e-6,8e-6],ll_step:[101e-6,130e-6,160e-6,262e-6,510e-6,790e-6],ll_li:[102e-6,110e-6,150e-6],vt_ramp:[.15e-6,.21e-6,.5e-6],vt_li:[.5e-6,1e-6,3e-6,10e-6],hv1533:[1e-6,2.4e-6,20e-6,60e-6],hv1537:[1e-6,2.2e-6,20e-6,80e-6],div1515:[.013,.051,.0975],isl_leak:[.005,.012,.02],srm_m:[.005,.02,.06],srm_t:[.005,.02,.06]};
+const jsAt={nn_fel:[.0095,.0205,.0395,.0605,.0995],b1:[.00305,.0045,.0085,.0205],dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05],eis_cell:[.004,.011,.02],im_dol:[.05,.1,.3,.6],mp_kl:[5e-4,2e-3,5e-3],mp_kg:[1e-4,1e-3],sm_align:[.02,.1,.3],sm_pm:[.02,.1,.2],mp_lg:[4e-6,50e-6,200e-6],sm_sat:[.02,.1,.3],isl_ref:[.005,.012,.02],vimp:[1e-6,3e-6,2e-5,6e-5],sg_ring:[5e-6,15e-6,25e-6,40e-6],sg_trig:[4e-6,10e-6,20e-6],sg_iext:[10e-6,30e-6,60e-6],mov_ramp:[5e-6,10e-6,20e-6,40e-6],tw_r3z:[5e-6,15e-6,25e-6,35e-6,95e-6],tw_li:[3e-6,12e-6,25e-6,65e-6],tw_book:[1.5e-6,3e-6,5e-6,7e-6],arr_ideal:[8e-6,15e-6,30e-6],arr_zno:[8e-6,15e-6,30e-6],marx:[1e-6,2.2e-6,20e-6,80e-6],chop:[2e-6,3.3e-6,4e-6,8e-6],ll_step:[101e-6,130e-6,160e-6,262e-6,510e-6,790e-6],ll_li:[102e-6,110e-6,150e-6],vt_ramp:[.15e-6,.21e-6,.5e-6],vt_li:[.5e-6,1e-6,3e-6,10e-6],hv1533:[1e-6,2.4e-6,20e-6,60e-6],hv1537:[1e-6,2.2e-6,20e-6,80e-6],div1515:[.013,.051,.0975],isl_leak:[.005,.012,.02],srm_m:[.005,.02,.06],srm_t:[.005,.02,.06]};
 const out={};for(const [k,[id,o,keys]] of Object.entries(cases)){
  if(k==='code_py'){const pr=build('code_loop',{ctrl:'python',ff:'expr'});const r=MNA.exportForBatch(pr,keys);out[k]={net:r.net,channels:r.channels};
   const s=new MNA.Sim(build('code_loop',{ctrl:'pib',ff:'expr'}),{hDiv:1000});s.run(.003);const p=s.per,i=s.chIndex.get('Y:AM1'),pk=[];for(let q=8;q>=1;q--){const j=(p.head-q+p.cap)%p.cap;pk.push({max:p.max[j*p.nch+i],min:p.min[j*p.nch+i],t:p.t[j]});}

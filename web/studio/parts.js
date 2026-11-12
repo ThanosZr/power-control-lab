@@ -26,6 +26,9 @@
  const codeIO=(ins,outs)=>{const o={};ins.forEach((k,i)=>o[k]=I(-40,-10*(ins.length-1)+20*i));outs.filter(k=>!(k in o)).forEach((k,i,a)=>o[k]=O(40,-10*(a.length-1)+20*i));return o;};
  const codeH=(ins,outs)=>Math.max(15,10*Math.max(ins.length,outs.length));
  const pyIns=p=>Ex.names(p.ins,6,false),pyOuts=p=>Ex.names(p.outs,6,false).filter(k=>!pyIns(p).includes(k));
+ // 4.7: the neural network block: its named inputs, and when it learns the learning signal (e or tgt) and the freeze input fz;
+ // outputs y and the learning curve L
+ const nnIns=p=>[...Ex.names(p.ins,6,false),...(p.train==='err'?['e','fz']:p.train==='tgt'?['tgt','fz']:[])],nnOuts=p=>p.train==='err'||p.train==='tgt'?['y','L']:['y'];
  const codeDraw=(ins,outs,label)=>{const h=codeH(ins,outs);return sb(60,2*h)+tx(label,0,4,'btxt')+sl([...ins.map((k,i)=>`M-40,${-10*(ins.length-1)+20*i} H-30`),...outs.map((k,i)=>`M30,${-10*(outs.length-1)+20*i} H40`)].join(' '))
   +ins.map((k,i)=>tx(k,-27,-10*(ins.length-1)+20*i-3,'pinl')).join('')+outs.map((k,i)=>tx(k,27,-10*(outs.length-1)+20*i-3,'pinl')).join('');};
  const PY_DEFAULT='# Καλείται σε κάθε δείγμα του ρολογιού.\n# u: είσοδοι, s: κατάσταση, p: παράμετροι (και p["Ts"] = περίοδος δειγματοληψίας).\ndef init(p):\n    return {"xi": 0.0}\n\ndef step(t, u, s, p):\n    e = u["e"]\n    s["xi"] += p["Ki"] * p["Ts"] * e\n    return {"y": p["Kp"] * e + s["xi"]}\n';
@@ -328,6 +331,26 @@
     txt('ins','Είσοδοι','e',{hint:'Ονόματα χωρισμένα με κόμμα, έως 6.'}),txt('outs','Έξοδοι','y',{hint:'Ονόματα χωρισμένα με κόμμα, έως 6.'}),
     txt('pars','Παράμετροι p','Kp = 0.1, Ki = 100',{hint:'Αριθμοί που φτάνουν στον κώδικα ως p["όνομα"].'}),CLOCK(),TRIG,num('y0','Αρχική τιμή εξόδων','',0,{signed:true,zero:true})],value:()=>null,
    draw:p=>codeDraw(pyIns(p),pyOuts(p),'Py')},
+  // 4.7: a multilayer perceptron with fixed weights or learning inside the simulation (web/studio/nn.js)
+  NN:{name:'Νευρωνικό δίκτυο (MLP)',prefix:'NN',group:'Έλεγχος',pins:{},spins:p=>codeIO(nnIns(p),nnOuts(p)),box:p=>{const h=codeH(nnIns(p),nnOuts(p));return [-30,-h,60,2*h];},blk:true,
+   params:[txt('ins','Είσοδοι','x1, x2',{hint:'Ονόματα χωρισμένα με κόμμα, έως 6. Στο δίκτυο μπαίνει κάθε είσοδος διαιρεμένη με την κλίμακά της.'}),
+    txt('xs','Κλίμακες εισόδων','1',{hint:'Μία τιμή για όλες ή μία ανά είσοδο (κόμμα): τυπικό μέγεθος κάθε εισόδου, ώστε στο δίκτυο να μπαίνουν τιμές γύρω στο ±1.'}),
+    txt('hidden','Κρυφά στρώματα','8',{hint:'Νευρώνες ανά κρυφό στρώμα (tanh), π.χ. 8 ή 16, 8. Η έξοδος είναι γραμμική.'}),
+    num('ys','Κλίμακα εξόδου','',1,{signed:true,hint:'y = κλίμακα × έξοδος του δικτύου. Η ίδια κλίμακα κανονικοποιεί το σφάλμα της μάθησης.'}),
+    num('ymin','Κάτω όριο εξόδου','',-1,{signed:true,zero:true}),num('ymax','Άνω όριο εξόδου','',1,{signed:true,zero:true}),
+    sel('train','Μάθηση',[['off','Όχι: σταθερά βάρη'],['err','Online, με σήμα σφάλματος e (feedback-error learning)'],['tgt','Online, προς στόχο tgt (εποπτευόμενη)']],'off',
+     {hint:'Σε κάθε δείγμα: «σήμα σφάλματος»: τα βάρη αλλάζουν ώστε να μικρύνει το e (π.χ. η έξοδος ενός PI σε σειρά: το δίκτυο μαθαίνει την πρόσθια τροφοδότηση που λείπει). «Στόχος»: το δίκτυο μαθαίνει να δίνει tgt από τις εισόδους. Η είσοδος fz ≥ 0,5 παγώνει τη μάθηση.'}),
+    bool('learn','Μαθαίνει',true,{show:p=>p.train==='err'||p.train==='tgt',hint:'Κλειστό: τα βάρη μένουν όπως είναι (πάγωμα). Αλλάζει και την ώρα της προσομοίωσης (📌).'}),
+    sel('opt','Αλγόριθμος',[['adam','Adam'],['sgd','Κλίση (SGD)']],'adam',{show:p=>p.train==='err'||p.train==='tgt'}),
+    num('lr','Ρυθμός μάθησης η','',1e-3,{show:p=>p.train==='err'||p.train==='tgt'}),
+    num('clip','Όριο κλίσης','',5,{show:p=>p.train==='err'||p.train==='tgt',hint:'Κάθε στοιχείο της κλίσης κόβεται στο ±όριο πριν από το βήμα.'}),
+    num('l2','Απόσβεση βαρών (L2)','',0,{zero:true,show:p=>p.train==='err'||p.train==='tgt'}),
+    num('nl','Παράθυρο καμπύλης μάθησης','δείγματα',200,{show:p=>p.train==='err'||p.train==='tgt',hint:'Η έξοδος L είναι η RMS τιμή του σφάλματος στα τελευταία τόσα δείγματα (εκθετικός μέσος).'}),
+    sel('init','Αρχικά βάρη (όταν δεν δίνονται)',[['zero','Τυχαία, με μηδενική έξοδο (για online μάθηση)'],['rand','Όλα τυχαία']],'zero'),
+    num('seed','Σπόρος τυχαίων βαρών','',1,{zero:true}),
+    {k:'w',label:'Βάρη (JSON)',type:'code',def:'',hint:'{"sizes": [εισόδους, …, 1], "W": [...], "b": [...]}, όπως τα δίνει το pcl.control. Κενό: τυχαία από τον σπόρο. «Κράτα τα βάρη» στις ρυθμίσεις γράφει εδώ ό,τι έμαθε το δίκτυο.'},
+    CLOCK(),TRIG,num('y0','Αρχική έξοδος','',0,{signed:true,zero:true})],value:()=>null,
+   draw:p=>codeDraw(nnIns(p),nnOuts(p),'NN')+(p.train==='err'||p.train==='tgt'?'<path class="thin" d="M-9,13 l4,-6 l3,4 l5,-8"/>':'')},
   IM:{name:'Μηχανή επαγωγής (ισοδύναμο αντίστροφου Γ)',prefix:'M',group:'Μηχανές',pins:p=>isBus(p)?{abc:[-40,0]}:{a:[-40,-20],b:[-40,0],c:[-40,20]},bus:p=>isBus(p)?{abc:['a','b','c']}:{},box:[-25,-25,50,50],lbl:'above',
    spins:p=>p.load==='sig'?{w:O(40,-20),te:O(40,-10),psi:O(40,0),thf:O(40,10),thr:O(40,20),tl:I(0,40)}:{w:O(40,-20),te:O(40,-10),psi:O(40,0),thf:O(40,10),thr:O(40,20)},
    params:[num('Rs','Αντίσταση στάτη R_s','Ω',3),num('RR','Αντίσταση δρομέα R_R','Ω',2,{hint:'Ανάστροφο-Γ: R_R, L_M και L_σ αντί για R_r, L_m, L_ls, L_lr (γ = L_m/L_r).'}),num('Lsig','Αυτεπαγωγή σκέδασης L_σ','H',0.025),

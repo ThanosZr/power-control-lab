@@ -235,6 +235,66 @@ def step(t, u, s, p):
 '''
 
 
+# ------------------------------------------------------------------ 4.7: the neural network block of the app (NN)
+# The block computes in JavaScript (web/studio/nn.js) and in the SciPy solver (engine/batch.py); its weights have the
+# format of the networks above. These helpers make the weights the block starts from, with the same generator as the
+# app (so a block with empty weights and a given seed starts from exactly these), and its parameters.
+def _mulberry32(seed):
+    a = [int(seed) & 0xFFFFFFFF]
+
+    def r():
+        a[0] = (a[0] + 0x6D2B79F5) & 0xFFFFFFFF
+        t = a[0]
+        t = ((t ^ (t >> 15)) * (t | 1)) & 0xFFFFFFFF
+        t = (t ^ ((t + (((t ^ (t >> 7)) * (t | 61)) & 0xFFFFFFFF)) & 0xFFFFFFFF)) & 0xFFFFFFFF
+        return ((t ^ (t >> 14)) & 0xFFFFFFFF) / 4294967296
+    return r
+
+
+def nn_init(sizes, seed=1, zero_out=True):
+    """Weights N(0, 1/n_in) as the app's NN block draws them for this seed (zero_out: last layer zero, output 0)."""
+    r = _mulberry32(seed)
+    W, b = [], []
+    for i in range(len(sizes) - 1):
+        last = i == len(sizes) - 2
+        sd = math.sqrt(1 / sizes[i])
+        L = []
+        for _ in range(sizes[i + 1]):
+            row = []
+            for _ in range(sizes[i]):
+                u1, u2 = 1 - r(), r()
+                z = math.sqrt(-2 * math.log(u1)) * math.cos(2 * math.pi * u2)
+                row.append(0.0 if (zero_out and last) else sd * z)
+            L.append(row)
+        W.append(L)
+        b.append([0.0] * sizes[i + 1])
+    return {'sizes': list(sizes), 'W': W, 'b': b}
+
+
+def nn_text(net):
+    """The weights as the text of the block's parameter «Βάρη» (9 significant digits, as the app writes them)."""
+    r = lambda v: float(f'{float(v):.9g}')
+    sizes = net.get('sizes') or [len(net['W'][0][0])] + [len(L) for L in net['W']]
+    return json.dumps({'sizes': list(sizes), 'W': [[[r(v) for v in row] for row in L] for L in net['W']],
+                       'b': [[r(v) for v in row] for row in net['b']]}, separators=(',', ':'))
+
+
+def nn_block(ins, net=None, hidden=(8,), xs=1, ys=1.0, ymin=-1.0, ymax=1.0, train='off', clock=None, **kw):
+    """Parameters of an NN block: inputs (names), weights (a network as above, or None for random ones from 'seed'),
+    scales of the inputs and the output, limits, learning ('off', 'err' or 'tgt') and the other parameters by name
+    (lr, opt, clip, l2, nl, init, seed, learn, trig, y0)."""
+    names = [k.strip() for k in (ins.split(',') if isinstance(ins, str) else ins) if k.strip()]
+    if net is not None and len(net['W'][0][0]) != len(names):
+        raise ValueError(f'το δίκτυο έχει {len(net["W"][0][0])} εισόδους, το μπλοκ {len(names)}')
+    p = {'ins': ', '.join(names), 'xs': ', '.join(f'{v:g}' for v in xs) if isinstance(xs, (list, tuple)) else f'{xs:g}',
+         'hidden': ', '.join(str(int(h)) for h in hidden), 'ys': ys, 'ymin': ymin, 'ymax': ymax, 'train': train,
+         'w': nn_text(net) if net is not None else ''}
+    if clock:
+        p['clock'] = clock
+    p.update(kw)
+    return p
+
+
 def inv_nn_code(nets):
     """The block code of an inverse controller with its trained networks (emu, ctrl, scale, UN)."""
     return PY_INV_NN.replace('@NETS@', json.dumps(nets)).replace('@MLP@', MLP_SRC)

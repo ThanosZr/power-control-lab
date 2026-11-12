@@ -19,10 +19,27 @@
  const SUBC=root.SubCircuit||(typeof require!=='undefined'?require('./subcircuit.js'):null);
  const BUS=root.Bus||(typeof require!=='undefined'?require('./bus.js'):null);
  const SPM=root.Sparse||(typeof require!=='undefined'?require('./sparse.js'):null);
+ const NNET=root.NNet||(typeof require!=='undefined'?require('./nn.js'):null);
  // 4.2 (§32): the sparse LU above this many unknowns ('auto'); below it the dense LU, as before
  const SPARSE_MIN=120;
  const UNITS=root.Units||(typeof require!=='undefined'?require('./units.js'):null);
  const GMIN=1e-9;
+ // 4.7: the neural network block (nn.js). Its weights live in the state (st.net, and the moments of Adam in st.opt), so they
+ // travel with snapshots and the live worker; a live change keeps what it learned unless the weights' definition changed
+ // (st.wsig: the text of the weights, the layers, the seed, the start)
+ function nnBuild(b,p,warnings){const st=b.st;b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';b.y0=num(p.y0,0);st.last=null;
+  b.inNames=Ex.names(p.ins,6,false);const xs=String(p.xs??'1').split(/[,;\s]+/).filter(Boolean).map(v=>num(v,1));b.xs=b.inNames.map((k,i)=>{const v=xs.length>1?xs[i]:xs[0];return Number.isFinite(v)&&v!==0?v:1;});
+  b.ys=num(p.ys,1)||1;b.ymin=num(p.ymin,-1);b.ymax=num(p.ymax,1);if(b.ymax<b.ymin)[b.ymin,b.ymax]=[b.ymax,b.ymin];
+  b.train=p.train==='err'||p.train==='tgt'?p.train:'off';b.learn=p.learn!==false&&p.learn!=='false';b.opt=p.opt==='sgd'?'sgd':'adam';b.lr=Math.max(0,num(p.lr,1e-3));b.clip=Math.max(0,num(p.clip,5));b.l2=Math.max(0,num(p.l2,0));b.nl=Math.max(1,num(p.nl,200));
+  const sizes=NNET.sizesOf(b.inNames.length,p.hidden??'8'),w=NNET.parse(p.w,sizes);if(w&&w.error)warnings.push(`${b.label}: ${w.error}· χρησιμοποιούνται τυχαία βάρη.`);
+  const net=w&&w.net?w.net:NNET.init(sizes,num(p.seed,1)|0,p.init!=='rand');b.wsig=[String(p.w||'').length,String(p.w||'').slice(0,64),String(p.hidden),num(p.seed,1),p.init,b.inNames.length,b.opt].join('|');
+  Object.assign(st,{net,opt:NNET.optState(net,b.opt),wsig:b.wsig,y:b.y0,L:0,m2:0,n:0,yraw:0,sat:false});}
+ // one sample: forward pass on the scaled inputs, output scaled and limited; learning when it is on and fz < 0.5
+ // (error signal: e/ys; target: (tgt − y)/ys; not while the output sits on a limit with an error signal, as the PI's anti-windup)
+ function nnStep(b,st,x,eIn,fz){const acts=NNET.fwd(st.net,x.map((v,i)=>v/b.xs[i])),o=acts[acts.length-1][0],y=b.ys*o,yl=Math.min(b.ymax,Math.max(b.ymin,y));
+  if(b.train!=='off'){const e=b.train==='err'?eIn/b.ys:(eIn-y)/b.ys;st.n++;st.m2+=(e*e-st.m2)/Math.min(st.n,b.nl);st.L=Math.abs(b.ys)*Math.sqrt(Math.max(0,st.m2));
+   if(b.learn&&!(fz>=.5)&&b.lr>0&&Number.isFinite(e)&&!(b.train==='err'&&st.sat))NNET.learn(st.net,st.opt,acts,-e,{lr:b.lr,clip:b.clip,l2:b.l2,opt:b.opt});}
+  st.sat=yl!==y;st.y=Number.isFinite(yl)?yl:0;st.yraw=y;}
  // 4.7: records in shared memory in a cross-origin isolated page (allocRecord)
  const shared=typeof window!=='undefined'&&typeof SharedArrayBuffer!=='undefined'&&!!root.crossOriginIsolated;
  // program t:value at t; left = the value just before t (the end of a step that lands on a jump, 3.15)
@@ -441,6 +458,7 @@
      try{b.ast=Ex.parse(b.expr,[...ins,...Object.keys(pars)]);}catch(e){warnings.push(`${b.label}: ${e.message} Η έξοδος είναι 0.`);b.ast=['num',0];}b.fn=Ex.compile(b.ast);}
     else if(T==='PY'){b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';b.y0=num(p.y0,0);st.last=null;st.ys=null;b.inNames=Ex.names(p.ins,6,false);
      b.outNames=Ex.names(p.outs,6,false).filter(k=>!b.inNames.includes(k));b.pars=Ex.params(p.pars);b.code=String(p.code??'');if(!b.outNames.length)warnings.push(`${b.label}: δεν έχει εξόδους.`);}
+    else if(T==='NN'){nnBuild(b,p,warnings);if(!(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type)))warnings.push(`${b.label}: διάλεξε μπλοκ PWM ή Ρολόι (αλλιώς η έξοδος μένει ${b.y0}).`);}
     else if(T==='PIB'||T==='UD'){b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';b.y0=num(p.y0,0);st.last=null;st.y=b.y0;
      if(T==='PIB'){b.Kp=num(p.Kp,0);b.Ki=num(p.Ki,0);b.track=p.aw==='track';b.ymin=b.track?-Infinity:num(p.ymin,0);b.ymax=b.track?Infinity:num(p.ymax,1);st.xi=0;}else st.mem=b.y0;
      if(!(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type)))warnings.push(`${b.label}: διάλεξε μπλοκ PWM ή Ρολόι (αλλιώς η έξοδος μένει ${b.y0}).`);}
@@ -490,7 +508,7 @@
   for(const b of blocks)for(const n of Object.values(b.outs))if(n>=0){if(drv.has(n))dup.push(drv.get(n).label+' / '+b.label);else drv.set(n,b);}
   if(dup.length)warnings.push('Δύο έξοδοι στο ίδιο σύρμα σήματος: '+dup.slice(0,4).join(', ')+'.');
   const loose=[];const chk=(n,name)=>{if(n<0||!drv.has(n))loose.push(name);};
-  for(const b of blocks)for(const [k,n] of Object.entries(b.ins))chk(n,b.label+'.'+k);
+  for(const b of blocks)for(const [k,n] of Object.entries(b.ins))if(!(b.type==='NN'&&k==='fz'))chk(n,b.label+'.'+k); // the freeze input of a network is optional
   for(const k of ctrls)if(k.mode==='ext')chk(k.dIn,k.label+'.d');
   for(const e of els)if(e.gate==='sig'){const c=compInfo.get(e.cid);chk(e.gIn,(c?.label||e.cid)+'.g');}
   if(loose.length)warnings.push('Είσοδοι σήματος χωρίς πηγή (διαβάζονται ως 0): '+loose.slice(0,6).join(', ')+(loose.length>6?' …':'')+'.');
@@ -674,7 +692,7 @@
     for(const [id,c] of net.compInfo)if(c.sm){const o=old.compInfo.get(id);if(o?.sm)c.sm.st={...o.sm.st};}
     for(const [id,c] of net.compInfo)if(c.srm){const o=old.compInfo.get(id);if(o?.srm&&o.srm.N===c.srm.N)c.srm.st={...o.srm.st};}
     for(const [id,c] of net.compInfo)if(c.gen){const o=old.compInfo.get(id)?.gen;if(o&&o.g.sh.N===c.gen.g.sh.N){c.gen.st=genCopy(o.st);c.gen.Efd0=o.Efd0;c.gen.Tm0=o.Tm0;}} // the generator keeps its shaft and its steady values
-    const ob=new Map(old.sig.blocks.map(b=>[b.id,b]));for(const b of net.sig.blocks){const o=ob.get(b.id);if(o&&o.type===b.type&&b.type!=='SH'){b.st={...b.st,...o.st};if(b.clock!==o.clock||b.trig!==o.trig)b.st.last=null;}}
+    const ob=new Map(old.sig.blocks.map(b=>[b.id,b]));for(const b of net.sig.blocks){const o=ob.get(b.id);if(o&&o.type===b.type&&b.type!=='SH'){const nw=b.type==='NN'&&o.st.wsig!==b.wsig?{net:b.st.net,opt:b.st.opt,wsig:b.wsig,n:0,m2:0,L:0}:null;b.st={...b.st,...o.st,...(nw||{})};if(b.clock!==o.clock||b.trig!==o.trig)b.st.last=null;}}
    }
    this.net=net;this.jsc=null;this.swl=null;this.topo=new Map();this.topoSig=null;this.jumpNow=false;this.leftAt=null;const nb=net.sig.blocks.length;this.sv=new Float64Array(net.sig.n);this.svT=new Float64Array(net.sig.n);this.yb=new Float64Array(nb);this.ybT=new Float64Array(nb);
    this.yo=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.yoT=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.ctrlById=new Map(net.ctrls.map(k=>[k.id,k]));this.clkById=new Map(net.sig.blocks.filter(b=>b.type==='CLK').map(b=>[b.id,b]));this.shById=new Map(net.shs.map(q=>[q.id,q]));this.n=net.size;{const sv=this.opts.solver||project?.sim?.solver||'auto';this.sparse=!!SPM&&(sv==='sparse'||(sv!=='dense'&&this.n>=SPARSE_MIN));}this.sp=null;this.spq=null;this.rec=null;this.A=this.sparse?null:new Float64Array(this.n*this.n);this.lustat={fact:0,hit:0,miss:0};this.piv=new Int32Array(this.n);this.b=new Float64Array(this.n);this.cache=new Map();
@@ -967,6 +985,8 @@
      // Python: called once per sample instant (not in the 'init' pass, whose inputs come before the first solution)
      case 'PY':{if(mode==='sample'&&b.rt&&this.blkDue(b,force)){st.ys=b.rt.step(this.t,b.inNames.map(k=>rd(I[k])));sampled=true;}
       ys={};b.outNames.forEach((k,i)=>{const v=st.ys?st.ys[i]:b.y0;ys[k]=Number.isFinite(v)?v:0;});break;}
+     case 'NN':{if(mode==='sample'&&this.blkDue(b,force)){nnStep(b,st,b.inNames.map(k=>rd(I[k])),b.train==='err'?rd(I.e):b.train==='tgt'?rd(I.tgt):0,b.train==='off'?0:rd(I.fz));sampled=true;}
+      ys={y:st.y,L:st.L};break;}
      case 'SR':{const S=rd(I.s)>=.5,Rr=rd(I.r)>=.5;let q=st.q;if(S&&!st.sp)q=1;if(Rr)q=0;if(!trial){if(q!==st.q)this.logEv('latch',b.label,q,{id:b.id});st.q=q;st.sp=S;}ys={q,nq:1-q};break;}
      // continuous states: input held since the previous evaluation (the solver steps are short), state written after the pass
      case 'INT':{const dt=Math.max(0,this.t-st.t);let v=Math.min(b.hi,Math.max(b.lo,st.s+dt*st.u));if(b.wrap)v-=2*Math.PI*Math.floor(v/(2*Math.PI));y=v;if(!trial)cont.push([b,v]);break;}
@@ -1004,7 +1024,7 @@
     const ol=b.outList,yo=(trial?this.yoT:this.yo)[b.i];if(ol.length){if(!ys)ys={[ol[0]]:y};y=ys[ol[0]]??0;}
     yb[b.i]=y;for(let k=0;k<ol.length;k++){const v=ys[ol[k]]??0;yo[k]=v;const n=b.outs[ol[k]];if(n>=0)sv[n]=v;}
    }
-   if(sampled&&!trial&&this.ev?.on&&mode==='sample')for(const b of G.blocks)if((b.type==='PIB'||b.type==='UD'||b.type==='RT'||b.type==='PY')&&b.st.last!==null&&b.st.evN!==b.st.last){b.st.evN=b.st.last;this.logEv('sample',b.label,b.type==='PY'?(b.st.ys?b.st.ys[0]:b.y0):b.st.y,{id:b.id,clk:b.clock,n:b.st.last});}
+   if(sampled&&!trial&&this.ev?.on&&mode==='sample')for(const b of G.blocks)if((b.type==='PIB'||b.type==='UD'||b.type==='RT'||b.type==='PY'||b.type==='NN')&&b.st.last!==null&&b.st.evN!==b.st.last){b.st.evN=b.st.last;this.logEv('sample',b.label,b.type==='PY'?(b.st.ys?b.st.ys[0]:b.y0):b.st.y,{id:b.id,clk:b.clock,n:b.st.last});}
    for(const b of pend){if(b.type==='PIB')b.st.xi+=b.st.kt*rd(b.ins.tr);else b.st.mem=rd(b.ins.u);} // back-calculation: dx_i/dt = K_i·(e + tr/K_p), tracking time T_t = K_p/K_i
    for(const [b,v] of cont){if(b.type==='FEST'){b.st.pa=v[0];b.st.pb=v[1];b.st.u=[rd(b.ins.al),rd(b.ins.be),rd(b.ins.wr)];}else{b.st.s=v;b.st.u=rd(b.ins.u);}b.st.t=this.t;}
    return sampled;
@@ -1341,7 +1361,7 @@
      if(b.type==='CLK'&&b.duty>0&&b.duty<1)c.push(nx(Math.floor(u-b.duty+1e-9)+1,b.duty));if(b.type==='RAMP'&&b.shape==='tri')c.push(nx(Math.floor(u-.5+1e-9)+1,.5));
      for(const te of c)if(te>this.t+eps&&te<t)t=te;}
     else if(b.type==='CONST')sch(b.sched);
-    else if(b.type==='PIB'||b.type==='UD'||b.type==='PY'||b.type==='RT'){const ts=this.shNext(b);if(ts>this.t+eps&&ts<t)t=ts;}
+    else if(b.type==='PIB'||b.type==='UD'||b.type==='PY'||b.type==='RT'||b.type==='NN'){const ts=this.shNext(b);if(ts>this.t+eps&&ts<t)t=ts;}
     else if(b.type==='EDGE'&&b.tw>0&&b.st.tOn!==null){const te=b.st.tOn+b.tw;if(te>this.t+eps&&te<t)t=te;} // end of the edge pulse (3.19)
    }
    {const tp=this.progNext();if(tp>this.t+eps&&tp<t)t=tp;} // program of parameter changes (3.19)
@@ -1446,13 +1466,13 @@
   const ims=imList.map(m=>({ph:m.ph.map(q=>({L:idx.get(q.L),V:idx.get(q.V)})),RR:m.RR,LM:m.LM,p:m.p,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{...m.st}}));
   const bix=new Map(net.sig.order.map((b,i)=>[b,i]));
   const blocks=net.sig.order.map(b=>{const o={id:b.id,type:b.type,ins:b.ins,outs:b.outs,st:JSON.parse(JSON.stringify(b.st))};
-   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
+   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw','xs','ys','train','learn','opt','lr','clip','l2','nl'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
    if(b.type==='DCM')o.recs={w:{v:[[b.m,1]]},te:{i:[[idx.get(b.gy),b.psi]]}};
    if(b.type==='IM')o.im=imx.get(b.im);
    if(b.type==='SM')o.sm=smx.get(b.sm);
    if(b.type==='GEN3')o.gen=genx.get(b.gen);
    if(b.type==='SRM')o.srm=srmx.get(b.srm);
-   if(b.type==='PIB'||b.type==='UD'||b.type==='PY'||b.type==='RT'){o.clock=cix.get(b.clock)??null;o.clk=clkOf(b.clock);}
+   if(b.type==='PIB'||b.type==='UD'||b.type==='PY'||b.type==='RT'||b.type==='NN'){o.clock=cix.get(b.clock)??null;o.clk=clkOf(b.clock);}
    if(b.type==='VM')o.rec=vd(b.np,b.nn);else if(b.type==='AM')o.rec={i:[[idx.get(b.el),-1]]};else if(b.type==='MEAS'){const c=ci(b.src);o.rec=(b.qty==='V'?V(c):I(c))||null;}
    if(b.type==='SH'){o.sh=shx.get(b.id);o.sig=!!b.sig;}return o;});
   const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase','upd','dIn'])o[f]=k[f];

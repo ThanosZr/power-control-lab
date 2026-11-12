@@ -12,7 +12,7 @@
 //  written, 3 failed, 4 aborted before the start; [2] = bytes of the final state in data (JSON of {snap, rh, rn, ph, pn}).
 //  The page waits for [1] = 2 by spinning (a few ms: the solver works in slices of 4 ms and looks at [0] after each).
 self.window=self;
-importScripts('expr.js','parts.js','stepcheck.js','netlib.js','subcircuit.js','bus.js','units.js','pyrt.js','sparse.js','mna.js','linemodels.js');
+importScripts('expr.js','parts.js','stepcheck.js','netlib.js','subcircuit.js','bus.js','units.js','pyrt.js','sparse.js','nn.js','mna.js','linemodels.js');
 let sim=null,R=null;
 const enc=new TextEncoder(),mc=new MessageChannel();mc.port1.onmessage=e=>loop(e.data);
 // R: the current run {id, epoch, ctl, data, speed, stopT, …}; a loop of an older run finds another R and ends

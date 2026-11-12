@@ -82,6 +82,7 @@
    case 'SAT':case 'LPF':case 'F2':case 'RLIM':case 'UD':case 'RT':return pass('u');
    case 'INT':{const i=inp('u');return T(p.wrap==='2pi'?'rad':intU(i.u),i.f,i.c);}
    case 'PIB':{const i=inp('u');return T(null,i.f,i.c);}
+   case 'NN':return NONE; // 4.7: whatever the network was trained to give (its scales hold the units)
    case 'CLARKE':{const u=isBus(p)?inp('abc').u:sepU(['a','b','c']);return T(u,'ab',isBus(p)?null:pin);}
    case 'ICLARKE':{const u=isBus(p)?inp('ab').u:sepU(['al','be']);return T(u,'abc',isBus(p)?null:pin);}
    case 'PARK':{const u=isBus(p)?inp('ab').u:sepU(['al','be']);return T(u,'dq',isBus(p)?null:pin);}

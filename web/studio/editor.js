@@ -312,6 +312,7 @@
     case 'CONST':return String(p.v).includes(':')?String(p.v).slice(0,22):'';case 'GAIN':return 'K = '+(String(p.K).includes(';')?String(p.K).split(';').map(x=>e(+x.trim())).join('; '):e(+p.K));case 'SUM':return '';
     case 'SAT':return '['+e(+p.lo)+', '+e(+p.hi)+']';case 'CMP':return +p.hys>0?'h = '+e(+p.hys):'';case 'LOGIC':return ['nand','nor','xor'].includes(p.op)?p.op.toUpperCase():'';
     case 'PIB':return 'K_p '+e(+p.Kp)+' · K_i '+e(+p.Ki);case 'UD':return '';
+    case 'NN':return (window.NNet&&window.Expr?NNet.sizesOf(Expr.names(p.ins,6,false).length,p.hidden).join('–'):'')+(p.train==='err'?' · μαθαίνει (e)':p.train==='tgt'?' · μαθαίνει (στόχος)':String(p.w||'').trim()?' · έτοιμα βάρη':'');
     case 'IM':return 'p = '+p.pp+' · L_M '+e(+p.LM,'H');case 'SRM':return (p.mag==='table'?'ψ(θ, i) από πίνακα':'L_u '+e(+p.Lu,'H')+' · L_a '+e(+p.La,'H'))+(p.load==='sig'?' · τ_L σήμα':'');case 'SM':return 'L_d '+e(+p.Ld,'H')+(p.sat==='d'?' (κορεσμός)':'')+' · L_q '+e(+p.Lq,'H')+(+p.psim>0?' · ψ_m '+e(+p.psim,'V·s'):'');
     case 'KL':{const m=P.klMatrix(p);return m.err?'⚠ πίνακας L':m.L.length+'×'+m.L.length+(String(p.Lmat||'').trim()?' · πίνακας L':' · k '+P.fmtNum(+p.k));}
     case 'KG':{const m=P.parseMat(p.mat);return m?m.length+'×'+m.length+' '+(p.kind==='G'?'G':'R'):'⚠ πίνακας';}

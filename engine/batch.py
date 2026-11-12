@@ -284,6 +284,85 @@ def eval_ast(n, v, t):
     return float({'<': a < b, '>': a > b, '<=': a <= b, '>=': a >= b, '==': a == b, '!=': a != b, '&&': bool(a and b), '||': bool(a or b)}[op])
 
 
+# ------------------------------------------------------------------ 4.7: the neural network block (web/studio/nn.js)
+# The same arithmetic in the same order as the browser: forward pass (tanh hidden, linear output), back-propagation for
+# one output, clipped gradient, L2 on the weights, SGD or Adam. The weights come with the block's state (st['net']).
+def _nn_fwd(net, x):
+    acts = [list(x)]
+    a = acts[0]
+    L = len(net['W'])
+    for i in range(L):
+        z = []
+        for row, bo in zip(net['W'][i], net['b'][i]):
+            s = bo
+            for w, v in zip(row, a):
+                s += w * v
+            z.append(math.tanh(s) if i < L - 1 else s)
+        a = z
+        acts.append(a)
+    return acts
+
+
+def _nn_learn(net, opt, acts, g, lr, clip, l2, kind):
+    L = len(net['W'])
+    clip = clip if clip > 0 else math.inf
+    gW, gb = [None] * L, [None] * L
+    delta = [g]
+    for i in range(L - 1, -1, -1):
+        a, W = acts[i], net['W'][i]
+        gW[i] = [[d * v for v in a] for d in delta]
+        gb[i] = list(delta)
+        if i > 0:
+            da = []
+            for j in range(len(a)):
+                s = 0.0
+                for q in range(len(delta)):
+                    s += W[q][j] * delta[q]
+                da.append(s * (1 - a[j] * a[j]))
+            delta = da
+    opt['k'] = opt.get('k', 0) + 1
+    b1, b2, eps = .9, .999, 1e-8
+    c1, c2 = 1 - b1 ** opt['k'], 1 - b2 ** opt['k']
+    adam = kind == 'adam'
+    p = [0]
+
+    def step(w, gr):
+        gg = max(-clip, min(clip, gr))
+        if adam:
+            k = p[0]
+            m = opt['m'][k] = b1 * opt['m'][k] + (1 - b1) * gg
+            v = opt['v'][k] = b2 * opt['v'][k] + (1 - b2) * gg * gg
+            p[0] += 1
+            return w - lr * (m / c1) / (math.sqrt(v / c2) + eps)
+        p[0] += 1
+        return w - lr * gg
+    for i in range(L):
+        W = net['W'][i]
+        for q, row in enumerate(W):
+            for j in range(len(row)):
+                row[j] = step(row[j], gW[i][q][j] + l2 * row[j])
+        bb = net['b'][i]
+        for q in range(len(bb)):
+            bb[q] = step(bb[q], gb[i][q])
+
+
+def _nn_step(b, st, x, e_in, fz):
+    """One sample of the block, as nnStep in web/studio/mna.js."""
+    acts = _nn_fwd(st['net'], [v / s for v, s in zip(x, b['xs'])])
+    y = b['ys'] * acts[-1][0]
+    yl = min(b['ymax'], max(b['ymin'], y))
+    if b['train'] != 'off':
+        e = e_in / b['ys'] if b['train'] == 'err' else (e_in - y) / b['ys']
+        st['n'] += 1
+        st['m2'] += (e * e - st['m2']) / min(st['n'], b['nl'])
+        st['L'] = abs(b['ys']) * math.sqrt(max(0.0, st['m2']))
+        if b['learn'] and not fz >= .5 and b['lr'] > 0 and math.isfinite(e) and not (b['train'] == 'err' and st.get('sat')):
+            _nn_learn(st['net'], st['opt'], acts, -e, b['lr'], b['clip'], b['l2'], b['opt'])
+    st['sat'] = yl != y
+    st['y'] = yl if math.isfinite(yl) else 0.0
+    st['yraw'] = y
+
+
 def make_python_block(code, ins, outs, pars, Ts, label):
     """Same contract as web/studio/pyrt.js: step(t, u, s, p) with init(p); returns the list of outputs."""
     g = {'math': math, '__name__': 'pcl_block'}
@@ -1360,6 +1439,13 @@ class Circuit:
                     y = 0.0
                 if not math.isfinite(y):
                     y = 0.0
+            elif ty == 'NN':
+                if mode == 'sample' and self.blk_due(b, t, force):
+                    tr = b.get('train', 'off')
+                    _nn_step(b, st, [rd(I.get(k)) for k in b['inNames']], rd(I.get('e')) if tr == 'err' else rd(I.get('tgt')) if tr == 'tgt' else 0.0,
+                             0.0 if tr == 'off' else rd(I.get('fz')))
+                    sampled = True
+                ys = {'y': st['y'], 'L': st.get('L', 0.0)}
             elif ty == 'PY':
                 if mode == 'sample' and self.blk_due(b, t, force):
                     if '_rt' not in b:
@@ -1545,7 +1631,7 @@ class Circuit:
         if sampled and not trial and mode == 'sample':
             for b in self.blocks:
                 st = b['st']
-                if b['type'] in ('PIB', 'UD', 'RT', 'PY') and st.get('last') is not None and st.get('evN') != st['last']:
+                if b['type'] in ('PIB', 'UD', 'RT', 'PY', 'NN') and st.get('last') is not None and st.get('evN') != st['last']:
                     st['evN'] = st['last']
                     v = (st['ys'][0] if st.get('ys') else _f(b.get('y0'), 0)) if b['type'] == 'PY' else st['y']
                     self.log_ev(t, 'sample', b['id'], v, n=st['last'])
@@ -1583,7 +1669,7 @@ class Circuit:
                 for ts, _ in b['sched'] or []:
                     if t + eps < ts < tn:
                         tn = ts
-            elif ty in ('PIB', 'UD', 'PY', 'RT'):
+            elif ty in ('PIB', 'UD', 'PY', 'RT', 'NN'):
                 ts = self.sh_next(b, t)
                 if t + eps < ts < tn:
                     tn = ts

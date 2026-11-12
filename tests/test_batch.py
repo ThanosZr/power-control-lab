@@ -156,6 +156,21 @@ class BatchSolver(unittest.TestCase):
             self.assertAlmostEqual(float(y[w].max()), q['max'], delta=1e-3)
             self.assertAlmostEqual(float(y[w].min()), q['min'], delta=1e-3)
 
+    def test_nn_block_parity(self):
+        # 4.7: the neural network block (web/studio/nn.js, engine/batch.py _nn_step): a network learning the feedforward of
+        # an RC plant from a PI's output (Adam) and one learning a target (SGD), sampled at 1 kHz. The browser and the
+        # server update the weights with the same arithmetic; what differs is the plant's integration (h = T/1000 against
+        # LSODA) and math.tanh against Math.tanh in the last bit
+        req = self.req['nn_fel']
+        keys = list(req['channels'].keys())
+        r = self.run_case('nn_fel', req['at'][-1][0], 'LSODA', rtol=1e-9, atol=1e-11)
+        self.assertEqual(r['status'], 'ok')
+        t = np.array(r['t'])
+        for row in req['at']:
+            for k, v in zip(keys, row[1:]):
+                y = float(np.interp(row[0], t, np.array(r['ch'][k])))
+                self.assertAlmostEqual(y, v, delta=2e-3 * max(1, abs(v)), msg=f'{k} at {row[0]}')
+
     def test_event_log_parity(self):
         # 3.19: the same events from the browser (Sim.events) and the server (simulate → events), buck in DCM over 20 periods.
         # Switch edges and duty updates at the same instants; a diode turns off at the root of its current in both, and on
