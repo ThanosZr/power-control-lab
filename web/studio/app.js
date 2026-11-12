@@ -37,25 +37,39 @@ function buildSim(fresh){
  refreshControls();renderChannels();updateClock();renderProps();syncStepMode();scheduleStepCheck();
 }
 function lineCtx(){return {editor,api,changed:()=>{}};}
-function play(){if(!S.sim||S.error)return;if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;requestAnimationFrame(loop);}
-function pause(){if(window.Live?.active)Live.stop();S.running=false;scope.running=false;$('#play')?.classList.remove('running');if($('#play'))$('#play').innerHTML='▶ Προσομοίωση';draw(true);}
+function play(keep){if(!keep)S.stepTo=0;if(!S.sim||S.error)return;if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;requestAnimationFrame(loop);}
+function pause(){if(window.Live?.active)Live.stop();S.stepTo=0;S.running=false;scope.running=false;$('#play')?.classList.remove('running');if($('#play'))$('#play').innerHTML='▶ Προσομοίωση';draw(true);}
 function reset(){pause();buildSim(true);scope.cfg.frozen=null;draw(true);}
-function stepT(n=1){if(!S.sim||S.error)return;pause();S.sim.run(n*S.sim.T);draw(true);}
-function runToEnd(){if(!S.sim||!(S.stopT>0))return;pause();const t0=performance.now();notice('Υπολογισμός έως '+eng(S.stopT,'s')+'…','info');
+function stepT(n=1){if(!S.sim||S.error)return;pause();
+ // 4.8: Python blocks without Python on the page: the periods in the worker of the live simulation, else Python here first
+ if(S.sim.pyLazy?.()){if(window.Live&&S.noLive!==S.sim&&Live.eligible(S.sim)){S.stepTo=S.sim.t+n*S.sim.T;play(true);return;}pyPage().then(ok=>{if(ok)stepT(n);});return;}
+ S.sim.run(n*S.sim.T);draw(true);}
+// 4.8: Python on the page, only when the page itself must run a circuit with Python blocks (no worker): loaded once, and the
+// stand-ins of the blocks become the real ones with the state they carry
+async function pyPage(){if(!window.PyRT)return false;const was=PyRT.ready;if(!was)notice('Φορτώνεται η Python στη σελίδα (μία φορά)…','info');
+ try{await PyRT.load();}catch(err){notice('Δεν φορτώθηκε η Python (Pyodide): '+esc(err.message)+'. Χρειάζεται σύνδεση στο internet ή τοπικό αντίγραφο: <code>python tools/get_pyodide.py</code>.','error');return false;}
+ try{S.sim?.pyUpgrade();}catch(e){S.error=e.message;notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');return false;}
+ if(!was)notice('');return true;}
+function runToEnd(){if(!S.sim||!(S.stopT>0))return;pause();
+ if(S.sim.pyLazy?.()){if(window.Live&&S.noLive!==S.sim&&Live.eligible(S.sim)){S.stepTo=S.stopT;play(true);return;}pyPage().then(ok=>{if(ok)runToEnd();});return;}
+ const t0=performance.now();notice('Υπολογισμός έως '+eng(S.stopT,'s')+'…','info');
  const chunk=()=>{const left=S.stopT-S.sim.t;if(left<=1e-12){notice('');draw(true);return;}try{S.sim.run(left,Infinity,performance.now()+40);}catch(e){notice(esc(e.message),'error');return;}draw(false);updateClock();
   if(performance.now()-t0>120000){notice('Σταμάτησε μετά από 2 λεπτά. Μεγάλωσε το βήμα ή μείωσε τη διάρκεια.','error');return;}setTimeout(chunk,0);};chunk();}
 function loop(now){
  if(!S.running)return;
  // 4.6: the solver in its own thread (live.js) when it can; the page only draws
- if(window.Live&&S.noLive!==S.sim&&(Live.active||Live.eligible(S.sim))&&(Live.active||Live.start(S.sim,{speed:S.speed,stopT:S.stopT})||(S.noLive=S.sim,false))){
+ if(window.Live&&S.noLive!==S.sim&&(Live.active||Live.eligible(S.sim))&&(Live.active||Live.start(S.sim,{speed:S.stepTo?'max':S.speed,stopT:S.stepTo||S.stopT})||(S.noLive=S.sim,false))){
+  // an error of Python code at the start (4.8: the blocks run in the worker): shown as an error of the circuit
+  if(Live.error&&Live.errorStart&&Live.errorPy){const msg=Live.error;Live.error=null;Live.stop();S.error=msg;pause();notice('Η προσομοίωση σταμάτησε: '+esc(msg),'error');return;}
   // the worker could not start (e.g. another set of channels): the solver goes on in the page
   if(Live.error&&Live.errorStart){Live.error=null;Live.stop();S.noLive=S.sim;requestAnimationFrame(loop);return;}
   if(Live.error){const msg=Live.error;Live.error=null;S.error=msg;pause();notice('Σφάλμα λύτη: '+esc(msg),'error');return;}
   S.limited=!!Live.limited;S.frame++;draw(false,editor.busy()||!!scope.drag);
-  if(Live.ended){pause();notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
+  if(Live.ended){const st=S.stepTo;pause();if(!st)notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
   requestAnimationFrame(loop);return;}
+ if(S.sim.pyLazy?.()){const st=S.stepTo;pause();pyPage().then(ok=>{if(ok){S.stepTo=st;play(!!st);}});return;}
  const dt=Math.min(.1,(now-S.last)/1000);S.last=now;
- let want=S.speed==='max'?1e9:dt*S.speed*S.sim.T;if(S.stopT>0)want=Math.min(want,S.stopT-S.sim.t);
+ let want=S.speed==='max'?1e9:dt*S.speed*S.sim.T;const end=S.stepTo||S.stopT;if(end>0)want=Math.min(want,end-S.sim.t);
  // the solver's share of the frame (4.6): about 12 ms when nobody touches the page (the simulation as fast as before),
  // and what is left of 6 ms after the input and the drawing while the user zooms, pans, drags, draws a selection, or
  // moves the pointer, types or turns the wheel anywhere on the page (250 ms after the last input), so that the page
@@ -65,10 +79,11 @@ function loop(now){
  const before=S.sim.t;try{S.sim.run(want,Infinity,performance.now()+budget);}catch(e){S.error=e.message;notice('Σφάλμα λύτη: '+esc(e.message),'error');pause();return;}
  S.limited=S.speed!=='max'&&S.sim.t-before<want*.98;
  S.frame++;const t1=performance.now();draw(false,busy);S.drawMs=.8*(S.drawMs||0)+.2*(performance.now()-t1);
+ if(S.stepTo>0&&S.sim.t>=S.stepTo-1e-12){pause();return;}
  if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){pause();notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
  requestAnimationFrame(loop);
 }
-function draw(all,busy){scope.draw();navRange();if(all||S.frame%(busy?12:4)===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();}if(all||S.frame%(busy?24:8)===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();if(S.sim&&S.sim.dgVer!==S.diagSeen)renderDiag();}if(all){if(!S.running&&!S.switching){renderFFT();renderEvents();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
+function draw(all,busy){scope.draw();navRange();if(all||S.frame%(busy?12:4)===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();window.Watch?.update(all);}if(all||S.frame%(busy?24:8)===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();if(S.sim&&S.sim.dgVer!==S.diagSeen)renderDiag();}if(all){if(!S.running&&!S.switching){renderFFT();renderEvents();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
 // text of an element only when it changes (in the loop of the simulation an unchanged text still costs a layout)
 function setText(el,t){if(el&&el.textContent!==t)el.textContent=t;}
 function navRange(){const el=$('#nav-range');if(!el||!S.sim)return;const [a,b]=scope.viewRange();setText(el,`${eng(a,'s',4)} … ${eng(b,'s',4)} · ${fmt((b-a)/S.sim.T,3)} T${scope.cfg.frozen?' · σταθερή προβολή':' · ζωντανά'}`);}
@@ -109,8 +124,8 @@ function blkUnit(c,pin){if(!c)return '';const t=c.type;if(t==='VM'||t==='VP')ret
  const u=S.sim?.net?.units?.out(c.id,pin)?.u;return u&&u!=='1'?u:'';} // 3.19: what the units check inferred (a constant or gain with a unit, filters, sums …)
 // symbols of the outputs of multi-output blocks (first output = channel Y:id, the others Y:id:pin)
 const GEN_TS={ts1:'T₁₂',ts2:'T₂₃',ts3:'T₃₄',ts4:'T₄₅',ts5:'T₅₆',ts6:'T₆₇'};
-const OUT_SYM={NN:{y:'y',L:'L'},GEN3:{w:'ω',te:'T_e',pe:'P',qe:'Q',vt:'|V|',ifd:'i_fd',d:'δ',...GEN_TS},IM:{w:'ω',te:'τ_e',psi:'|ψ_R|',thf:'θ_f',thr:'θ_r'},SM:{w:'ω',te:'τ_e',th:'θ',id:'i_d',iq:'i_q'},SRM:{w:'ω',te:'τ_e',th:'θ_e',i1:'i₁',i2:'i₂',i3:'i₃',i4:'i₄'},FEST:{th:'θ̂',psi:'|ψ̂|',w1:'ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ω',te:'τ_e'},PLL:{th:'θ',w:'ω',amp:'V̂_d'},CLARKE:{al:'α',be:'β'},IPARK:{al:'α',be:'β'},PARK:{d:'d',q:'q'},ICLARKE:{a:'a',b:'b',c:'c'},SR:{q:'Q',nq:'Q̄'},EDGE:{y:'y',n:'n'}};
-const OUT_TXT={NN:{y:'έξοδος y του δικτύου',L:'σφάλμα μάθησης L (RMS, καμπύλη μάθησης)'},GEN3:{w:'ταχύτητα ω (pu, μάζα της γεννήτριας)',te:'ηλεκτρική ροπή T_e (pu)',pe:'ενεργός ισχύς P (pu)',qe:'άεργος ισχύς Q (pu)',vt:'τάση ακροδεκτών |V| (pu)',ifd:'ρεύμα διέγερσης i_fd (pu)',d:'γωνία φορτίου δ (°)',ts1:'ροπή τμήματος άξονα 1–2 (pu)',ts2:'ροπή τμήματος 2–3 (pu)',ts3:'ροπή τμήματος 3–4 (pu)',ts4:'ροπή τμήματος 4–5 (pu)',ts5:'ροπή τμήματος 5–6 (pu)',ts6:'ροπή τμήματος 6–7 (pu)'},IM:{w:'ταχύτητα ω',te:'ροπή τ_e',psi:'ροή δρομέα |ψ_R|',thf:'γωνία ροής θ_f',thr:'γωνία δρομέα θ_r'},SM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'ηλεκτρική γωνία δρομέα θ',id:'ρεύμα i_d',iq:'ρεύμα i_q'},SRM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'γωνία θ_e της φάσης 1',i1:'ρεύμα φάσης 1 (αισθητήρας)',i2:'ρεύμα φάσης 2 (αισθητήρας)',i3:'ρεύμα φάσης 3 (αισθητήρας)',i4:'ρεύμα φάσης 4 (αισθητήρας)'},FEST:{th:'γωνία θ̂',psi:'ροή |ψ̂|',w1:'συχνότητα ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ταχύτητα ω',te:'ροπή τ_e'},PLL:{th:'γωνία θ',w:'συχνότητα ω',amp:'πλάτος (v_d)'},CLARKE:{al:'συνιστώσα α',be:'συνιστώσα β'},IPARK:{al:'συνιστώσα α',be:'συνιστώσα β'},PARK:{d:'συνιστώσα d',q:'συνιστώσα q'},ICLARKE:{a:'φάση a',b:'φάση b',c:'φάση c'},SR:{q:'έξοδος Q',nq:'έξοδος Q̄'},EDGE:{y:'παλμός y στην ακμή',n:'πλήθος ακμών n'}};
+const OUT_SYM={NN:{y:'y',L:'L',dy:'∂y'},GEN3:{w:'ω',te:'T_e',pe:'P',qe:'Q',vt:'|V|',ifd:'i_fd',d:'δ',...GEN_TS},IM:{w:'ω',te:'τ_e',psi:'|ψ_R|',thf:'θ_f',thr:'θ_r'},SM:{w:'ω',te:'τ_e',th:'θ',id:'i_d',iq:'i_q'},SRM:{w:'ω',te:'τ_e',th:'θ_e',i1:'i₁',i2:'i₂',i3:'i₃',i4:'i₄'},FEST:{th:'θ̂',psi:'|ψ̂|',w1:'ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ω',te:'τ_e'},PLL:{th:'θ',w:'ω',amp:'V̂_d'},CLARKE:{al:'α',be:'β'},IPARK:{al:'α',be:'β'},PARK:{d:'d',q:'q'},ICLARKE:{a:'a',b:'b',c:'c'},SR:{q:'Q',nq:'Q̄'},EDGE:{y:'y',n:'n'}};
+const OUT_TXT={NN:{y:'έξοδος y του δικτύου',L:'σφάλμα μάθησης L (RMS, καμπύλη μάθησης)',dy:'παράγωγος dy = ∂y/∂(είσοδος) (εξομοιωτής)'},GEN3:{w:'ταχύτητα ω (pu, μάζα της γεννήτριας)',te:'ηλεκτρική ροπή T_e (pu)',pe:'ενεργός ισχύς P (pu)',qe:'άεργος ισχύς Q (pu)',vt:'τάση ακροδεκτών |V| (pu)',ifd:'ρεύμα διέγερσης i_fd (pu)',d:'γωνία φορτίου δ (°)',ts1:'ροπή τμήματος άξονα 1–2 (pu)',ts2:'ροπή τμήματος 2–3 (pu)',ts3:'ροπή τμήματος 3–4 (pu)',ts4:'ροπή τμήματος 4–5 (pu)',ts5:'ροπή τμήματος 5–6 (pu)',ts6:'ροπή τμήματος 6–7 (pu)'},IM:{w:'ταχύτητα ω',te:'ροπή τ_e',psi:'ροή δρομέα |ψ_R|',thf:'γωνία ροής θ_f',thr:'γωνία δρομέα θ_r'},SM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'ηλεκτρική γωνία δρομέα θ',id:'ρεύμα i_d',iq:'ρεύμα i_q'},SRM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'γωνία θ_e της φάσης 1',i1:'ρεύμα φάσης 1 (αισθητήρας)',i2:'ρεύμα φάσης 2 (αισθητήρας)',i3:'ρεύμα φάσης 3 (αισθητήρας)',i4:'ρεύμα φάσης 4 (αισθητήρας)'},FEST:{th:'γωνία θ̂',psi:'ροή |ψ̂|',w1:'συχνότητα ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ταχύτητα ω',te:'ροπή τ_e'},PLL:{th:'γωνία θ',w:'συχνότητα ω',amp:'πλάτος (v_d)'},CLARKE:{al:'συνιστώσα α',be:'συνιστώσα β'},IPARK:{al:'συνιστώσα α',be:'συνιστώσα β'},PARK:{d:'συνιστώσα d',q:'συνιστώσα q'},ICLARKE:{a:'φάση a',b:'φάση b',c:'φάση c'},SR:{q:'έξοδος Q',nq:'έξοδος Q̄'},EDGE:{y:'παλμός y στην ακμή',n:'πλήθος ακμών n'}};
 function outsOf(c){const q=c?.params?.conn==='bus'?{...c,params:{...c.params,conn:'sep'}}:c;return Object.entries(P.sigPins(q)).filter(([,d])=>d.dir==='out').map(([k])=>k);}
 // a block on a bus (3.18) runs as one block per element, <id>[k]: how many (after the last build), and the id without [k]
 const vecN=id=>S.sim?.net?.vec?.[id]||0,vecBase=id=>{const m=/^(.*)\[(\d+)\]$/.exec(String(id));return m?{id:m[1],k:+m[2]}:null;};
@@ -549,6 +564,24 @@ const PSL=1000;
 function pinMap(c,k){const d=partDef(c)?.params.find(x=>x.k===k);const b=c.liveBase?.[k]??numOf(c.params[k]??d?.def);return b>0?{log:true,lo:b/10,hi:b*10}:{log:false,lo:b-Math.max(1,Math.abs(b)),hi:b+Math.max(1,Math.abs(b))};}
 function pinX(m,v){const x=m.log?PSL*Math.log(Math.max(v,m.lo*1e-6)/m.lo)/Math.log(m.hi/m.lo):PSL*(v-m.lo)/(m.hi-m.lo);return Math.round(Math.min(PSL,Math.max(0,x)));}
 function pinV(m,x){return m.log?m.lo*Math.pow(m.hi/m.lo,x/PSL):m.lo+(m.hi-m.lo)*x/PSL;}
+// a parameter changed while the circuit runs, from the tiles over the drawing (4.8, §47, watch.js): the same paths as the
+// live panel. A constant or the reference of a PI (a value or a t:value program) through setBlock / setControl, the duty
+// of a PWM through setControl, anything else (a number, yes/no, a choice) by a load with the states (liveApply), which
+// live.js forwards to the worker. Each change is marked on the scope (liveChange) and can become a program; one step of
+// undo per gesture; commit = the end of a gesture (saved, panels and theory again).
+function liveParam(id,k,v,commit){const c=editor.comp(id),d=c&&partDef(c)?.params.find(x=>x.k===k);if(!c||!d)return false;
+ const from=c.params[k]??d.def,fin=()=>{editor.renderPart(c);editor.renderLabels();if(commit){saveLocal();renderProps();if(S.theory)renderTheory();scheduleMath();}else saveLocalSoon();};
+ editor.remember('lp:'+id+'|'+k);
+ if((c.type==='CONST'&&k==='v')||(c.type==='PWM'&&k==='ref')){const t=String(v).trim(),sch=P.parseSched(t);if(!sch)return false;c.params[k]=t;
+  if(c.type==='CONST')S.sim?.setBlock(id,{sched:sch});else S.sim?.setControl(id,{ref:sch});
+  if(!t.includes(':'))liveChange(id,k,sch[0][1],`${c.label||id}${k==='ref'?': αναφορά':''} → ${eng(sch[0][1],d.unit||'',4)}`,String(from));fin();return true;}
+ if(c.type==='PWM'&&k==='D'){const nv=+Math.min(1,Math.max(0,+v)).toFixed(6);const fr=c.params.dsched||String(from);c.params.D=nv;if(c.params.dsched){c.params.dsched='';S.sim?.setControl(id,{dsched:null});}S.sim?.setControl(id,{D:nv});
+  editor.updateLive();liveChange(id,'D',nv,`${c.label||id}: D → ${fmt(nv,4)}`,fr);fin();refreshControls();return true;}
+ const nv=d.type==='num'?+(+v).toPrecision(6):d.type==='bool'?!!v:String(v);if(d.type==='num'&&!Number.isFinite(nv))return false;
+ if(nv===(d.type==='num'?numOf(from):d.type==='bool'?!!from:String(from))&&commit){fin();return true;}
+ c.params[k]=nv;liveApply();
+ const txt=d.type==='num'?eng(nv,d.unit||'',4):d.type==='bool'?(nv?'ναι':'όχι'):String((d.options||[]).find(o=>String(o[0])===nv)?.[1]??nv);
+ liveChange(id,k,nv,`${c.label||id}: ${d.label} → ${txt}`,d.type==='bool'?!!from:String(from));fin();return true;}
 
 // ------------------------------------------------------------------ inspector
 function closeInspector(){$('#inspector').hidden=true;$('#inspector').innerHTML='';}
@@ -667,7 +700,7 @@ function renderProps(){const box=$('#props-body');if(!box||!propsOpen())return;
 function propsComp(c){const def=partDef(c),p={...pdefaults(c),...c.params},live=new Set(c.live||[]),machine=['IM','SM','SRM','DCM','GEN3'].includes(c.type),inDef=!atTop(),pub=inDef?publicOf(c.id):new Map();
  const secOf=d=>c.type==='PWM'&&CTL_K.has(d.k)?'ctl':INIT_K.has(d.k)?'init':MECH_K.has(d.k)?'mech':!machine&&LOSS_K.has(d.k)?'loss':'main';
  const groups=new Map();for(const d of def.params){if(d.show&&!d.show(p))continue;const g=secOf(d);if(!groups.has(g))groups.set(g,[]);groups.get(g).push(d);}
- const row=d=>`<div class="prow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span><span class="pin-in">${fieldHTML(c,d,p).replace(` id="f_${d.k}"`,'')}${inDef?(['num','text','select','bool','ref'].includes(d.type)?`<button class="pinbtn pubbtn${pub.has(d.k)?' on':''}" data-pub-k="${d.k}" aria-pressed="${pub.has(d.k)}" title="${pub.has(d.k)?'Δημόσια παράμετρος «'+esc(pub.get(d.k))+'» του υποκυκλώματος: κλικ για να μείνει εσωτερική':'Δημόσια παράμετρος του υποκυκλώματος: αλλάζει χωριστά σε κάθε instance'}">⤴</button>`:''):d.type==='num'&&!P.structural(c.type,d.k)?`<button class="pinbtn${live.has(d.k)?' on':''}" data-pin-k="${d.k}" aria-pressed="${live.has(d.k)}" title="${live.has(d.k)?'Αφαίρεση από τις ζωντανές παράμετροι':'📌 Στις ζωντανές παράμετροι, με ρυθμιστή'}">📌</button>`:''}</span>${d.hint?`<small>${esc(d.hint)}</small>`:''}</div>`;
+ const row=d=>`<div class="prow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span><span class="pin-in">${fieldHTML(c,d,p).replace(` id="f_${d.k}"`,'')}${inDef?(['num','text','select','bool','ref'].includes(d.type)?`<button class="pinbtn pubbtn${pub.has(d.k)?' on':''}" data-pub-k="${d.k}" aria-pressed="${pub.has(d.k)}" title="${pub.has(d.k)?'Δημόσια παράμετρος «'+esc(pub.get(d.k))+'» του υποκυκλώματος: κλικ για να μείνει εσωτερική':'Δημόσια παράμετρος του υποκυκλώματος: αλλάζει χωριστά σε κάθε instance'}">⤴</button>`:''):d.type==='num'&&!P.structural(c.type,d.k)?`<button class="pinbtn${live.has(d.k)?' on':''}" data-pin-k="${d.k}" aria-pressed="${live.has(d.k)}" title="${live.has(d.k)?'Αφαίρεση από τις ζωντανές παράμετροι':'📌 Στις ζωντανές παράμετροι, με ρυθμιστή'}">📌</button>`:''}${!inDef&&atTop()&&window.Watch&&((['num','bool','select'].includes(d.type)&&!P.structural(c.type,d.k))||(c.type==='CONST'&&d.k==='v')||(c.type==='PWM'&&d.k==='ref'))?`<button class="pinbtn${Watch.has(c.id,d.k)?' on':''}" data-wtile-k="${d.k}" aria-pressed="${Watch.has(c.id,d.k)}" title="${Watch.has(c.id,d.k)?'Αφαίρεση του πλακιδίου από το σχέδιο':'▣ Πλακίδιο πάνω στο σχέδιο, δίπλα στο στοιχείο: αλλάζει την ώρα που τρέχει'}">▣</button>`:''}</span>${d.hint?`<small>${esc(d.hint)}</small>`:''}</div>`;
  let h=`<div class="props-head"><div><small>${esc(def.name)}</small><input data-plabel value="${esc(c.label||c.id)}" aria-label="Όνομα στοιχείου"></div><button class="x" data-pclose title="Αποεπιλογή (Esc)">✕</button></div>`;
  for(const [g,title] of PSEC){const L=groups.get(g);if(L?.length)h+=psec('p-'+g,title,L.map(row).join(''),{def:g==='main',cnt:L.length});}
  if(c.type==='SUB')h+=propsSub(c);else if(!def.params.length)h+='<p class="muted small">Χωρίς παραμέτρους.</p>';
@@ -749,6 +782,7 @@ function bindProps(box,c){
  if(c&&c.type!=='JUNC'){const id=c.id;
   box.querySelector('[data-plabel]')?.addEventListener('change',e=>{editor.setParams(id,{},{label:e.target.value||id});renderChannels();});
   box.querySelectorAll('[data-pin-k]').forEach(b=>b.onclick=()=>togglePin(id,b.dataset.pinK));
+  box.querySelectorAll('[data-wtile-k]').forEach(b=>b.onclick=()=>{Watch.toggleCtl(id,b.dataset.wtileK);renderProps();});
   box.querySelectorAll('[data-pub-k]').forEach(b=>b.onclick=()=>togglePublic(id,b.dataset.pubK));
   bindSub(box,c);
   box.querySelectorAll('[data-src]').forEach(el=>el.onchange=()=>{editor.setParams(id,{['in_'+el.dataset.src]:el.value||undefined});if(!el.value)delete editor.comp(id).params['in_'+el.dataset.src];editor.renderPins();});
@@ -790,12 +824,13 @@ function flashComp(id){focusComp(id);const g=document.querySelector(`#canvas .pa
 let stepCheckTimer=0,stepCheckSeq=0,stepCheckPool=null;
 // the step check after every build or change (modes at the present switch states), debounced. 4.7: in a worker of its own
 // (the eigenvalues and eigenvectors took 20–70 ms of the page on every change of a large circuit): the circuit and, after a
-// run, the solver's state (snapshot) go there, the messages come back to the same solver. Python blocks: in the page, which
-// has Python already. Without workers, or if the worker fails: in the page, as before.
+// run, the solver's state (snapshot) go there, the messages come back to the same solver. Python blocks: in the page when
+// it has Python already, else in the pool. Without workers, or if the worker fails: in the page, as before.
 function scheduleStepCheck(){clearTimeout(stepCheckTimer);stepCheckTimer=setTimeout(runStepCheck,250);renderDiag();}
 function runStepCheck(){const sim=S.sim;if(!sim||S.error)return renderDiag();const seq=++stepCheckSeq;
  const inPage=()=>{if(seq!==stepCheckSeq||sim!==S.sim)return;try{sim.stepCheck();}catch(e){}renderDiag();};
- if(!window.Worker||!window.Pool||S.noStepWorker||sim.net.sig.blocks.some(b=>b.type==='PY'))return inPage();
+ // (4.8: Python blocks with stand-ins on the page go to the pool, whose worker loads Python itself)
+ if(!window.Worker||!window.Pool||S.noStepWorker||sim.net.sig.blocks.some(b=>b.type==='PY'&&!b.rt?.lazy))return inPage();
  let q;try{q={action:'stepcheck',project:fullDoc(),opts:{...sim.opts,method:sim.method},state:sim.steps>0?sim.snapshot():null};}catch(e){return inPage();}
  stepCheckPool=stepCheckPool||new Pool.SimPool(1);
  stepCheckPool.map([q]).then(([list])=>{if(seq!==stepCheckSeq||sim!==S.sim)return;
@@ -990,6 +1025,7 @@ function openMenu(ev){
  if(ev.kind==='comp'){const c=editor.comp(ev.id);if(!c)return;
   if(c.type!=='JUNC'&&S.pfx!==null)items.push(...signalsFor(c).map(([pre,n,f])=>({t:'⌁ Scope: '+n,f:()=>addProbe(pre+pid(c.id)+(f||''))})));
   if(c.type==='JUNC'&&S.pfx!==null)items.push({t:'⌁ Scope: τάση κόμβου',f:()=>addProbe('VN:'+pid(c.id)+':j')});
+  if(c.type!=='JUNC'&&atTop()&&window.Watch)items.push({t:'▣ Πλακίδια πάνω στο σχέδιο…',k:'S',f:()=>Watch.openAdd(c.id)});
   if(c.type==='SUB')items.push(...subMenu(c));
   {const n=editor.selection().c.filter(id=>editor.comp(id)?.type!=='JUNC').length;if(n&&editor.selection().c.includes(c.id))items.push({t:'▣ Υποκύκλωμα από την επιλογή'+(n>1?` (${n})`:''),k:'Ctrl+G',f:()=>groupSel()});}
   if(c.type!=='JUNC')items.push('-',{t:'Ρυθμίσεις…',k:'διπλό κλικ',f:()=>openInspector(c.id,ev.x,ev.y)},{t:'Περιστροφή',k:'R',f:()=>editor.rotateSel()},{t:'Καθρέφτης',k:'M',f:()=>editor.mirrorSel()},{t:'Διπλότυπο',k:'Ctrl+D',f:()=>{editor.copySel();editor.paste(20,20);}});
@@ -1082,6 +1118,7 @@ function leaveSub(level=0){if(atTop())return;commitView();while(S.nav.length>lev
  else{const cur=S.nav[S.nav.length-1];S.pfx=cur.inst?cur.inst+'/':null;const d=S.top.subcircuits[cur.name];editor.load({components:d.components||[],wires:d.wires||[],version:S.top.version});}
  renderCrumbs();renderPalette();buildSim(false);renderChannels();if(atTop()&&S.theory)runTheory();}
 function renderCrumbs(){let b=$('#crumbs');if(!b){b=document.createElement('nav');b.id='crumbs';b.className='crumbs';b.setAttribute('aria-label','Επίπεδα υποκυκλωμάτων');$('#canvas').appendChild(b);}
+ window.Watch?.render(); // the tiles over the drawing: only at the top level (4.8)
  if(atTop()){b.hidden=true;b.innerHTML='';return;}b.hidden=false;const defs=defsOf();
  const cur=S.nav[S.nav.length-1],n=SubC.instances({...S.top,subcircuits:defs},cur.name).length;
  b.innerHTML=`<button data-lvl="0" title="Πίσω στο κύκλωμα">⌂ Κύκλωμα</button>`+S.nav.map((x,i)=>`<span>›</span><button data-lvl="${i+1}" ${i===S.nav.length-1?'aria-current="true"':''}>${esc(x.inst?x.inst.split('/').pop():'ορισμός')} · ${esc(defs[x.name]?.title||x.name)}</button>`).join('')+
@@ -1683,18 +1720,20 @@ function nnCycles(m){const s=S.sim;if(!s)return [];const ps=lastPeriods('Y:IAE',
  const out=[];let prev=0;for(let k=1;k<=m.cycles;k++){const tk=k*m.P;if(s.t<tk-1e-6)break;const v=at(tk);if(v===null)break;out.push(v-prev);prev=v;}return out;}
 function nnTheory(t){const s=S.sim,m=S.tutMeta||{};if(!s||!m.P||!editor.comp('M1'))return '';const nn=editor.comp('NN1'),p=nn?{...P.defaults('NN'),...nn.params}:null;
  const b=nnBlock('NN1'),st=b?.st,learn=p&&(p.train==='err'||p.train==='tgt'),cyc=nnCycles(m);
- const kind=!nn?'μόνο PI':learn?'PI + νευρωνικό που μαθαίνει online':'PI + αντίστροφο μοντέλο (σταθερά βάρη)';
+ const emu=!!editor.comp('NNE'),se=emu?nnBlock('NNE')?.st:null;
+ const kind=!nn?'μόνο PI':emu?'PI + αντίστροφο που μαθαίνει μέσω εξομοιωτή':learn?'PI + νευρωνικό που μαθαίνει online':'PI + αντίστροφο μοντέλο (σταθερά βάρη)';
  let h=`<div class="tm"><span class="badge">${esc(kind)}</span>${nn?` δίκτυο ${(st?.net?.sizes||[2,8,1]).join(' – ')}`:''}${learn&&st?` · ${Parts.fmtNum(st.opt?.k||0)} ενημερώσεις · L = ${eng(st.L,'V',3)}`:''}</div><ul class="eqs">
   <li>Μηχανή: u = R_a·i + L_a·di/dt + ψ·ω, &nbsp;J·dω/dt = ψ·i − b·ω − τ_L, &nbsp;τ_L = k·ω·|ω| (ανεμιστήρας, k = ${eng(m.kf,'N·m·s²')})</li>
   <li>Η τάση που χρειάζεται για να ακολουθήσει ω_r με επιτάχυνση α_r (το «αντίστροφο μοντέλο»): u* = ψ·ω_r + (R_a/ψ)·(J·α_r + b·ω_r + k·ω_r·|ω_r|) + L_a·di/dt. Μη γραμμική στο ω_r, γραμμική στο α_r· ο PI μόνος του τη βρίσκει μόνο με σφάλμα</li>
-  ${learn?`<li>Feedback-error learning: u = u_PI + u_NN(ω_r, α_r). Σε κάθε δείγμα (1 kHz) τα βάρη αλλάζουν κατά Δw = η·(u_PI/${fmt(+p.ys,3)})·∂u_NN/∂w (${p.opt==='adam'?'Adam':'κλίση'}, η = ${fmt(+p.lr,3)}): ό,τι πρέπει ακόμη να δώσει ο PI είναι το σφάλμα του δικτύου, και όσο το δίκτυο μαθαίνει, ο PI δίνει λιγότερα. Δεν μαθαίνει όσο η έξοδος είναι στο όριο (όπως το anti-windup)</li>`:''}
+  ${emu?`<li>Εξομοιωτής (NNE): μαθαίνει τη μηχανή από τις μετρήσεις, α̂ = f(u[k−1], ω[k−1]) με στόχο α = (ω − ω[k−1])/T_s${se?` (L = ${eng(se.L,'rad/s²',3)})`:''}. Το αντίγραφό του (NNC, ίδια βάρη) υπολογίζει στην έξοδο του ελεγκτή, α̂_c = f(u_NN, ω_r), με την ευαισθησία ∂α̂_c/∂u</li>
+  <li>Ελεγκτής (NN1): μαθαίνει να κάνει το μοντέλο να δίνει α_r: σφάλμα e_c = K·(α_r − α̂_c)·∂α̂_c/∂u (specialized inverse learning). Το μοντέλο μαθαίνει από ό,τι έκανε η μηχανή (ανοιχτός βρόχος), άρα ο PI που δρα παράλληλα δεν το παραπλανά· με το σφάλμα της μηχανής στη θέση του α̂_c ο ελεγκτής θα έπεφτε στον κορεσμό</li>`:learn?`<li>Feedback-error learning: u = u_PI + u_NN(ω_r, α_r). Σε κάθε δείγμα (1 kHz) τα βάρη αλλάζουν κατά Δw = η·(u_PI/${fmt(+p.ys,3)})·∂u_NN/∂w (${p.opt==='adam'?'Adam':'κλίση'}, η = ${fmt(+p.lr,3)}): ό,τι πρέπει ακόμη να δώσει ο PI είναι το σφάλμα του δικτύου, και όσο το δίκτυο μαθαίνει, ο PI δίνει λιγότερα. Δεν μαθαίνει όσο η έξοδος είναι στο όριο (όπως το anti-windup)</li>`:''}
   ${nn&&!learn?`<li>Αντίστροφο μοντέλο: το δίκτυο έμαθε offline u από (ω, α) σε προσομοίωση με διέγερση (tools/nn_weights.py, RMS σφάλμα ≈ 1 V)· εδώ παίρνει τα (ω_r, α_r) της αναφοράς. Ό,τι δεν ξέρει (άλλο φορτίο, τιμές εκτός της περιοχής εκπαίδευσης) το διορθώνει ο PI</li>`:''}
   <li>Όρια: ο ελεγκτής είναι PI + πρόσθια τροφοδότηση, άρα η ευστάθεια είναι του PI· το δίκτυο αλλάζει μόνο την είσοδο που ο PI δεν χρειάζεται να βρει. Έξω από την περιοχή που είδε (ω > 160 rad/s, άλλη μηχανή) το δίκτυο προεκτείνει χωρίς εγγύηση, και ο κορεσμός ±${m.Vmax} V περιορίζει ό,τι κι αν ζητήσει</li></ul>`;
  if(!cyc.length)h+='<p class="small muted">Τρέξε την προσομοίωση: εδώ εμφανίζεται το IAE κάθε κύκλου της αναφοράς (1,6 s).</p>';
  else h+=`<table class="cmp"><thead><tr><th>Κύκλος</th>${cyc.map((_,k)=>`<th>${k+1}</th>`).join('')}</tr></thead><tbody><tr><td>IAE (rad)</td>${cyc.map(v=>`<td>${fmt(v,3)}</td>`).join('')}</tr></tbody></table><p class="small muted">IAE = ∫|ω_r − ω|dt ανά κύκλο· σύνολο ${fmt(s.now('Y:IAE'),4)} rad, ISE = ${fmt(s.now('Y:ISE'),4)} rad²/s.</p>`;
  if(t.id==='nn_compare'){const key=JSON.stringify(S.tut?.options||{}),r=NNC.key===key?NNC.res:null;
-  h+=`<h4>Σύγκριση των τριών ελεγκτών</h4>${r?`<table class="cmp"><thead><tr><th>Ελεγκτής</th>${(r[0].per||[]).map((_,k)=>`<th>IAE ${k+1}</th>`).join('')}<th>IAE</th><th>ISE</th></tr></thead><tbody>${r.map(q=>`<tr><td>${esc(q.name)}</td>${(q.per||[]).map(v=>`<td>${fmt(v,3)}</td>`).join('')}<td>${fmt(q.iae,4)}</td><td>${fmt(q.ise,4)}</td></tr>`).join('')}</tbody></table>`:''}
-   <button class="primary-ghost" data-nncmp ${NNC.busy?'disabled':''}>${NNC.busy?'Τρέχει στο παρασκήνιο…':r?'Ξανά':'Σύγκρινε και τους τρεις'}</button> <small class="muted">Τρέχει μόνο PI, PI + online και αντίστροφο μοντέλο με το ίδιο φορτίο, σε ξεχωριστά threads.</small>`;}
+  h+=`<h4>Σύγκριση των ελεγκτών</h4>${r?`<table class="cmp"><thead><tr><th>Ελεγκτής</th>${(r[0].per||[]).map((_,k)=>`<th>IAE ${k+1}</th>`).join('')}<th>IAE</th><th>ISE</th></tr></thead><tbody>${r.map(q=>`<tr><td>${esc(q.name)}</td>${(q.per||[]).map(v=>`<td>${fmt(v,3)}</td>`).join('')}<td>${fmt(q.iae,4)}</td><td>${fmt(q.ise,4)}</td></tr>`).join('')}</tbody></table>`:''}
+   <button class="primary-ghost" data-nncmp ${NNC.busy?'disabled':''}>${NNC.busy?'Τρέχει στο παρασκήνιο…':r?'Ξανά':'Σύγκρινε και τους τέσσερις'}</button> <small class="muted">Τρέχει μόνο PI, PI + online, αντίστροφο μοντέλο και αντίστροφο μέσω εξομοιωτή με το ίδιο φορτίο, σε ξεχωριστά threads.</small>`;}
  return h;}
 function nnGuiCode(){return `<h4>Το ίδιο από κώδικα (pcl.designer)</h4><pre class="code small">import pcl, pcl.designer as D
 ms = {m['type']: m for m in D.machines()}            # ή D.machines(pcl.link.connect()): από την ανοιχτή εφαρμογή
@@ -1703,7 +1742,7 @@ for r in out['results']:
     print(r['label'], round(r['J'], 3), r['metrics'])
 pcl.link.connect().load(out['best']['project'])     # στην εφαρμογή («Αποδοχή»)</pre><p class="small muted">Κανόνες σύνθεσης ανά είδος μηχανής: ΣΡ (πηγή τάσης από σήμα), επαγωγής (αντιστροφέας, FOC), σύγχρονη (dq, MTPA), SRM (ασύμμετρος μετατροπέας). Οι γεννήτριες στην 4.8.</p>`;}
 async function runNNCompare(){const t=tutorial();if(NNC.busy||t.id!=='nn_compare')return;const o={...S.tut.options},key=JSON.stringify(o);NNC.busy=true;renderTheory();
- const vars=[['pi','Μόνο PI'],['pinn','PI + online'],['inv','PI + αντίστροφο']];const pool=NNC.pool||(NNC.pool=new Pool.SimPool(3));
+ const vars=[['pi','Μόνο PI'],['pinn','PI + online'],['inv','PI + αντίστροφο'],['emu','PI + μέσω εξομοιωτή']];const pool=NNC.pool||(NNC.pool=new Pool.SimPool(4));
  try{const qs=vars.map(([c])=>{const pr=t.build({...o,ctrl:c}),m=pr.meta;const meas=[{key:'Y:IAE',stat:'end'},{key:'Y:ISE',stat:'end'},...Array.from({length:m.cycles},(_,k)=>({key:'Y:IAE',stat:'at',at:(k+1)*m.P,name:'c'+(k+1)}))];
    return {action:'run',project:pr,t_end:pr.sim.stopT,hdiv:pr.sim.hDiv,channels:['Y:IAE','Y:ISE'],measure:meas,waveforms:false,check:false};});
   const outs=await pool.map(qs);NNC.res=outs.map((r,i)=>{const M=r.measure,n=Object.keys(M).filter(k=>/^c\d+$/.test(k)).length,c=Array.from({length:n},(_,k)=>M['c'+(k+1)]);return {name:vars[i][1],iae:M['Y:IAE:end'],ise:M['Y:ISE:end'],per:c.map((v,k)=>v-(k?c[k-1]:0))};});NNC.key=key;}
@@ -2144,7 +2183,7 @@ function boot(){
  editor=new Editor($('#canvas'),{settings:saved,
   onchange:kind=>{if(kind==='struct'||kind==='param'){if(S.batch)S.batch.stale=true;buildSim(false);if(S.theory)setTimeout(()=>{if(tutorial().theory==='v1'||tutorial().theory==='formula')runTheory();},50);scheduleMath();}
    // a move (drag, arrow keys) is saved a moment later, once (4.6: the whole project as JSON on every drag end cost a frame)
-   if(kind==='geom')saveLocalSoon();else saveLocal();if(kind==='struct')renderChannels();},
+   if(kind==='geom')saveLocalSoon();else saveLocal();if(kind==='struct')renderChannels();if(kind==='struct'||kind==='param')window.Watch?.render();},
   onselect:sel=>{$('#selinfo').textContent=sel.c.length+sel.w.length?`${sel.c.length} στοιχεία · ${sel.w.length} σύρματα επιλεγμένα`:'';renderProps();},
   ontool:on=>{const b=$('#wire-tool');b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));},
   onedit:ev=>{if(ev.kind==='comp'){const c=editor.comp(ev.id);if(c?.type==='SUB'){enterSub(c.params.def,S.pfx===null?null:pid(c.id));return;}const sg=editor.settings.dblclick==='scope'&&S.pfx!==null?signalsFor(c):[];if(sg.length)addProbe(sg[0][0]+pid(ev.id)+(sg[0][2]||''));else openInspector(ev.id,ev.x,ev.y);}else openWireInspector(ev.id,ev.x,ev.y);},
@@ -2153,6 +2192,11 @@ function boot(){
   oncontext:openMenu,onwarn:t=>{notice(t,'error');setTimeout(()=>notice(''),5000);}});
  editor.setLive(liveOf);
  scope=new Scope($('#scope-canvas'),{onfreeze:()=>{$('#live-btn').hidden=false;},onchange:()=>{requestMeasure();},onhover:()=>{}});
+ // the tiles of the control signals over the drawing (4.8, ROADMAP §47)
+ window.Watch?.init({get S(){return S;},get editor(){return editor;},get scope(){return scope;},eng,fmt,esc,topDoc,atTop,compAt,partDef,numOf,chanLabel,
+  unit:key=>{const [pre,id,pin]=key.split(':');if(pre==='Y'){const c=compAt(id);if(c&&!vecBase(id))return blkUnit({...c,id},pin);}return Scope.unitOf(key,S.sim);},
+  signals:()=>SIGS,setParam:liveParam,save:saveLocal,saveSoon:saveLocalSoon,toSchedule:changesToSchedule});
+ $('#watch-btn')?.addEventListener('click',()=>Watch.show());
  editor.svg.addEventListener('pointermove',e=>{const el=e.target.closest?.('[data-c]');hoverComp=el?.dataset.c||null;hoverPos=[e.clientX,e.clientY];updateHover();});
  editor.svg.addEventListener('pointerleave',()=>{hoverComp=null;updateHover();});
  // toolbar
@@ -2225,6 +2269,12 @@ function boot(){
   $('#props-btn').onclick=()=>setProps(!propsOpen());$('#props-tab').onclick=()=>setProps(true);}
  $('#wire-tool').onclick=()=>{editor.setWireTool(!editor.wireTool);editor.svg.focus({preventScroll:true});};
  try{if(window.Live&&localStorage.getItem('pcl-live-worker')==='off')Live.off=true;}catch{}
+ // 4.8: Python blocks run in the worker of the live simulation, which loads Python there: the page builds them without
+ // the interpreter (no freeze when a tutorial with Python opens); the page loads Python only if it must run them itself
+ if(window.PyRT&&window.Live&&Live.supported()&&!PyRT.ready)PyRT.lazy=true;
+ // Python loaded on the page for any reason (an add-on, a script, pyPage): the stand-ins become the real blocks
+ if(window.PyRT)PyRT.onready=()=>{if(window.Live?.active||!S.sim?.pyLazy?.())return;try{S.sim.pyUpgrade();}catch(e){S.error=e.message;notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');}};
+ if(window.Live)Live.onstatus=m=>{if(m.python==='loading')notice('Φορτώνεται η Python στο thread της προσομοίωσης (μία φορά· η σελίδα συνεχίζει κανονικά)…','info');else if(m.python==='ready')notice('');};
  // the time of the last input anywhere on the page: the solver yields the frame to the page for 250 ms after it (4.6)
  for(const ev of ['pointerdown','pointermove','wheel','keydown'])document.addEventListener(ev,()=>{S.lastInput=performance.now();},{capture:true,passive:true});
  document.addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))closeMenu();if(!e.target.closest('#inspector')&&!e.target.closest('.schem')&&!e.target.closest('#ctx'))closeInspector();});
@@ -2232,6 +2282,7 @@ function boot(){
   // by the position of the key (4.6): the same with a Greek layout (e.key «π», «ι», «ζ»)
   if(e.code==='KeyP'&&plain&&!typing){setLivePanel($('#live-panel').hidden);return;}
   if(e.code==='KeyI'&&plain&&!typing){setProps(!propsOpen());return;}
+  if(e.code==='KeyS'&&plain&&!e.shiftKey&&!typing&&window.Watch){Watch.show();return;}
   // Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z) from anywhere except a text field, which keeps its own undo
   if((e.ctrlKey||e.metaKey)&&!e.altKey&&(e.code==='KeyZ'||e.code==='KeyY')&&e.target!==editor.svg){const text=tg&&(tg.isContentEditable||tg.tagName==='TEXTAREA'||(tg.tagName==='INPUT'&&/^(text|number|search|email|url|password|tel|)$/.test(tg.type||'')));if(!text&&editor.key(e,true))return;}
   if(e.key==='Escape'){closeMenu();closeInspector();gallery(false);$('#settings').hidden=true;if(e.target!==editor.svg&&editor.escape(false))editor.svg.focus({preventScroll:true});}   // Esc always drops the part being placed
@@ -2254,5 +2305,5 @@ function boot(){
 function renderTheoryLive(){if(!atTop()||document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
 window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
- renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,runNNCompare,get NNC(){return NNC;}}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare
+ renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare
 })();

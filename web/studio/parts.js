@@ -28,7 +28,7 @@
  const pyIns=p=>Ex.names(p.ins,6,false),pyOuts=p=>Ex.names(p.outs,6,false).filter(k=>!pyIns(p).includes(k));
  // 4.7: the neural network block: its named inputs, and when it learns the learning signal (e or tgt) and the freeze input fz;
  // outputs y and the learning curve L
- const nnIns=p=>[...Ex.names(p.ins,6,false),...(p.train==='err'?['e','fz']:p.train==='tgt'?['tgt','fz']:[])],nnOuts=p=>p.train==='err'||p.train==='tgt'?['y','L']:['y'];
+ const nnIns=p=>[...Ex.names(p.ins,6,false),...(p.train==='err'?['e','fz']:p.train==='tgt'?['tgt','fz']:[])],nnOuts=p=>[...(p.train==='err'||p.train==='tgt'?['y','L']:['y']),...(String(p.jac||'').trim()?['dy']:[])];
  const codeDraw=(ins,outs,label)=>{const h=codeH(ins,outs);return sb(60,2*h)+tx(label,0,4,'btxt')+sl([...ins.map((k,i)=>`M-40,${-10*(ins.length-1)+20*i} H-30`),...outs.map((k,i)=>`M30,${-10*(outs.length-1)+20*i} H40`)].join(' '))
   +ins.map((k,i)=>tx(k,-27,-10*(ins.length-1)+20*i-3,'pinl')).join('')+outs.map((k,i)=>tx(k,27,-10*(outs.length-1)+20*i-3,'pinl')).join('');};
  const PY_DEFAULT='# Καλείται σε κάθε δείγμα του ρολογιού.\n# u: είσοδοι, s: κατάσταση, p: παράμετροι (και p["Ts"] = περίοδος δειγματοληψίας).\ndef init(p):\n    return {"xi": 0.0}\n\ndef step(t, u, s, p):\n    e = u["e"]\n    s["xi"] += p["Ki"] * p["Ts"] * e\n    return {"y": p["Kp"] * e + s["xi"]}\n';
@@ -347,6 +347,8 @@
     num('clip','Όριο κλίσης','',5,{show:p=>p.train==='err'||p.train==='tgt',hint:'Κάθε στοιχείο της κλίσης κόβεται στο ±όριο πριν από το βήμα.'}),
     num('l2','Απόσβεση βαρών (L2)','',0,{zero:true,show:p=>p.train==='err'||p.train==='tgt'}),
     num('nl','Παράθυρο καμπύλης μάθησης','δείγματα',200,{show:p=>p.train==='err'||p.train==='tgt',hint:'Η έξοδος L είναι η RMS τιμή του σφάλματος στα τελευταία τόσα δείγματα (εκθετικός μέσος).'}),
+    txt('share','Βάρη από το μπλοκ (αντίγραφο)','',{hint:'id ενός άλλου μπλοκ NN με ίδιο μέγεθος, π.χ. NNE: αυτό το μπλοκ υπολογίζει με τα βάρη εκείνου όπως είναι τη στιγμή του δείγματος και δεν μαθαίνει μόνο του. Για τον εξομοιωτή του αντίστροφου ελέγχου σε δύο αντίγραφα: ένα μαθαίνει το σύστημα από τις μετρήσεις, το άλλο υπολογίζει στην έξοδο του ελεγκτή. Κενό: δικά του βάρη.'}),
+    txt('jac','Έξοδος παραγώγου ως προς την είσοδο','',{struct:true,hint:'Όνομα μιας εισόδου, π.χ. u: η έξοδος dy = ∂y/∂u (στις μονάδες των σημάτων). Για τον εξομοιωτή του αντίστροφου ελέγχου: ο ελεγκτής μαθαίνει από το σφάλμα επί ∂ŷ/∂u (specialized inverse learning). Κενό: χωρίς.'}),
     sel('init','Αρχικά βάρη (όταν δεν δίνονται)',[['zero','Τυχαία, με μηδενική έξοδο (για online μάθηση)'],['rand','Όλα τυχαία']],'zero'),
     num('seed','Σπόρος τυχαίων βαρών','',1,{zero:true}),
     {k:'w',label:'Βάρη (JSON)',type:'code',def:'',hint:'{"sizes": [εισόδους, …, 1], "W": [...], "b": [...]}, όπως τα δίνει το pcl.control. Κενό: τυχαία από τον σπόρο. «Κράτα τα βάρη» στις ρυθμίσεις γράφει εδώ ό,τι έμαθε το δίκτυο.'},

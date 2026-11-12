@@ -32,9 +32,13 @@ const LIMIT={tutorialFrame:250,tutorialTask:250,optionFrame:250,inspectorFrame:6
  // an action in the page: the time until the next painted frame, and the long tasks while it and its deferred work run
  async function act(fn,arg,settle=1200){const a=await p.evaluate(()=>performance.now());const r=await p.evaluate(async([src,arg])=>{const f=eval(src);const s=performance.now();f(arg);const sync=performance.now()-s;const fr=await window.__frame();return {sync:+sync.toFixed(1),frame:+(fr-s).toFixed(1)};},[fn.toString(),arg]);
   await p.waitForTimeout(settle);const b=await p.evaluate(()=>performance.now());return {...r,long:await longIn(a,b)};}
- // 0. the first load of Python (Pyodide) for the tutorials with Python blocks: the interpreter starts in the main thread
- // (≈ 1.5 s once per session, ROADMAP 4.7.1: Python in a worker). Reported, not judged; the tutorials below open with it warm
- R.pythonFirst=await act(()=>{window.PyRT&&PyRT.load();},null,6000);
+ // 0. Python blocks (4.8): a tutorial with a Python block opens without Python on the page, and +100 T runs in the worker
+ // of the simulation, which loads Python there; the page never stops (4.7: ≈ 1.5 s once, the interpreter in the main
+ // thread) and Python is not loaded on the page
+ R.pythonOpen=await act(()=>PCL.loadTutorial('code_loop',{ctrl:'python',ff:'expr'}),null,900);
+ {const a=await p.evaluate(()=>performance.now());await p.evaluate(()=>PCL.stepT(100));
+  await p.waitForFunction(()=>!PCL.S.running||PCL.S.error,null,{timeout:90000});
+  R.pythonRun={...await p.evaluate(()=>({periods:+(PCL.S.sim.t/PCL.S.sim.T).toFixed(6),err:PCL.S.error,pageHasPython:!!PyRT.ready,stand_ins:PCL.S.sim.pyLazy()})),long:await longIn(a,await p.evaluate(()=>performance.now()))};}
  // 1. every tutorial
  const ids=await p.evaluate(()=>Tutorials.list.map(t=>t.id));R.tutorials={};
  for(const id of ids){if(ONLY.length&&!ONLY.includes(id))continue;R.tutorials[id]=await act(id=>PCL.loadTutorial(id),id,900);}
@@ -79,9 +83,11 @@ const LIMIT={tutorialFrame:250,tutorialTask:250,optionFrame:250,inspectorFrame:6
  console.log('load',JSON.stringify(R.load));
  console.log('tutorials (sync / frame / longest task / sum of long tasks, worst first):');
  for(const [id,v] of worst)console.log(' ',id.padEnd(16),String(v.sync).padStart(7),String(v.frame).padStart(7),String(v.long.max).padStart(5),String(v.long.sum).padStart(6),v.long.top.join(' | '));
- for(const k of ['pythonFirst','option','inspector','inspectorType','inspectorDrag','select','search'])console.log(k,JSON.stringify(R[k]));
+ for(const k of ['pythonOpen','pythonRun','option','inspector','inspectorType','inspectorDrag','select','search'])console.log(k,JSON.stringify(R[k]));
  for(const [id,v] of Object.entries(R.run))console.log('run',id,JSON.stringify(v));
  for(const [id,v] of tut){if(v.frame>LIMIT.tutorialFrame)bad.push(`tutorial ${id}: first frame after ${v.frame} ms`);if(v.long.max>LIMIT.tutorialTask)bad.push(`tutorial ${id}: a task of ${v.long.max} ms`);}
+ if(R.pythonOpen.long.max>LIMIT.tutorialTask)bad.push('a tutorial with Python: a task of '+R.pythonOpen.long.max+' ms ('+R.pythonOpen.long.top.join(' | ')+')');
+ {const q=R.pythonRun;if(q.err||q.periods!==100||q.pageHasPython||q.long.max>LIMIT.runTask)bad.push('Python in the worker: '+JSON.stringify(q));}
  if(R.option&&R.option.frame>LIMIT.optionFrame)bad.push('tutorial option: first frame after '+R.option.frame+' ms');
  if(!R.inspector?.visible)bad.push('the settings window did not open with a double click');
  else{if(R.inspector.frame>LIMIT.inspectorFrame)bad.push('settings window: frame after '+R.inspector.frame+' ms');if(R.inspector.long.max>LIMIT.inspectorTask)bad.push('settings window: a task of '+R.inspector.long.max+' ms');}

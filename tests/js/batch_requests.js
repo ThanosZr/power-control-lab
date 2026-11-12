@@ -22,9 +22,11 @@ const cont=project([{id:'K1',type:'CONST',params:{v:2}},{id:'I1',type:'INT',para
 const nnFel=project([{id:'CK',type:'CLK',params:{f:1000}},{id:'R0',type:'CONST',params:{v:'0:0, 0.01:1, 0.04:0.4, 0.07:0.8'}},{id:'E1',type:'SUM',params:{signs:'+-'}},
   {id:'P1',type:'PIB',params:{Kp:.3,Ki:30,clock:'CK',ymin:-5,ymax:5}},{id:'N1',type:'NN',params:{ins:'r',xs:'1',hidden:'6',train:'err',lr:.003,clock:'CK',ymin:-3,ymax:3,seed:7}},
   {id:'U1',type:'SUM',params:{signs:'++'}},{id:'V1',type:'VDC',params:{ctl:'sig'}},{id:'R1',type:'R',params:{R:10}},{id:'C1',type:'C',params:{C:1e-3}},{id:'VM',type:'VM'},
-  {id:'N2',type:'NN',params:{ins:'v',hidden:'4',train:'tgt',opt:'sgd',lr:.05,clock:'CK',ymin:-5,ymax:5,seed:2,init:'rand'}},{id:'K2',type:'GAIN',params:{K:-1.5}},{id:'G',type:'GND'}],
+  {id:'N2',type:'NN',params:{ins:'v',hidden:'4',train:'tgt',opt:'sgd',lr:.05,clock:'CK',ymin:-5,ymax:5,seed:2,init:'rand',jac:'v'}},{id:'K2',type:'GAIN',params:{K:-1.5}},{id:'G',type:'GND'},
+  // 4.8: the derivative output dy of N2, and a copy with N2's weights (share) at another input, with its own dy
+  {id:'N3',type:'NN',params:{ins:'v',hidden:'4',train:'off',share:'N2',jac:'v',clock:'CK',ymin:-5,ymax:5,seed:9,init:'rand'}}],
   [['R0:y','E1:a'],['VM:y','E1:b'],['E1:y','P1:u'],['R0:y','N1:r'],['P1:y','N1:e'],['P1:y','U1:a'],['N1:y','U1:b'],['U1:y','V1:u'],['V1:p','R1:a'],['R1:b','C1:p'],['C1:n','G:g'],['V1:n','G:g'],
-   ['VM:p','C1:p'],['VM:n','G:g'],['VM:y','N2:v'],['VM:y','K2:u'],['K2:y','N2:tgt']]);
+   ['VM:p','C1:p'],['VM:n','G:g'],['VM:y','N2:v'],['VM:y','K2:u'],['K2:y','N2:tgt'],['R0:y','N3:v']]);
 // 3.19: B1 blocks: second-order filters (LP, HP on a step; notch, BP on 50 Hz), rate limiter, rate transition (ZOH and delayed), edge detector
 const b1=project([{id:'K1',type:'CONST',params:{v:'0:0, 0.001:1'}},{id:'FL',type:'F2',params:{kind:'lp',f0:200,zeta:.3}},{id:'FH',type:'F2',params:{kind:'hp',f0:200,zeta:.3}},
   {id:'K2',type:'CONST',params:{v:'0:0, 0.001:1, 0.006:-1'}},{id:'RL',type:'RLIM',params:{up:500,dn:200}},{id:'EX',type:'EXPR',params:{expr:'sin(2*pi*50*t)+0.3*sin(2*pi*400*t)',ins:''}},
@@ -68,7 +70,7 @@ const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},[
  blk_cmp_z1:['blocks_loop',{mod:'cmp',delay:'z1'},['Y:AM1','Y:UD1','GS:S1']],blk_pwm:['blocks_loop',{},['Y:AM1','D:PWM1','Y:PI1']],
  dcm:[dcm,null,['Y:M1','Y:M1:te','I:M1']],pll:[pll,null,['Y:PL:w','Y:PK','Y:PK:q']],cont:[cont,null,['Y:I1','Y:F1','Y:P1','Y:S1']],
  b1:[b1,null,['Y:FL','Y:FH','Y:RL','Y:FN','Y:FB','Y:ED','Y:ED:n','Y:R1','Y:R2']],
- nn_fel:[nnFel,null,['V:C1','Y:N1','Y:N1:L','Y:P1','Y:N2','Y:N2:L']],
+ nn_fel:[nnFel,null,['V:C1','Y:N1','Y:N1:L','Y:P1','Y:N2','Y:N2:L','Y:N2:dy','Y:N3','Y:N3:dy']],
  dc_cur:['dc_drive',{mode:'current'},['Y:AM1','D:PWM1','Y:M1']],
  code_py:['code_loop',{ctrl:'python',ff:'expr'},['Y:AM1','D:PWM1','Y:PI1','Y:EX1']],
  eis_cell:[eisCell,null,['Y:VM1','Y:AM1']],

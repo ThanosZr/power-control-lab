@@ -8,7 +8,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from engine.batch import _nn_fwd, _nn_learn
+from engine.batch import _nn_fwd, _nn_learn, _nn_jac
 from pcl.control import nn_init, nn_text, nn_block
 
 JS = Path(__file__).resolve().parent / 'js' / 'nn_cases.js'
@@ -88,6 +88,19 @@ class NeuralNetworkBlock(unittest.TestCase):
         self.assertGreater(T['frozen']['L'], 3 * T['fast']['L'])                         # frozen at 2 s: the PI does it all
         self.assertAlmostEqual(T['frozen']['k'], 2001, delta=1)                          # no update after the freeze
         self.assertLess(T['ref']['per'][-1], 0.5 * pi[-1])                              # a new pattern in the same range
+        emu = T['emu']['per']                                                           # 4.8: the inverse through an emulator
+        self.assertTrue(all(b < a for a, b in zip(emu, emu[1:])), msg=emu)             # better every cycle,
+        self.assertLess(emu[1], 0.5 * pi[1])                                            # half the PI's error from the 2nd cycle,
+        self.assertLess(emu[-1], 0.3 * pi[-1])                                          # and as good as the online one at the end
+
+    def test_derivative_output(self):
+        # 4.8: ∂(output)/∂(input k) of the block NN (output dy): the browser's (nn.js jac) against central differences, and
+        # the server's (engine/batch.py _nn_jac) against the browser's, on the same networks
+        for q in self.r['jac']:
+            acts = _nn_fwd(q['net'], q['x'])
+            for k, (js, fd) in enumerate(q['d']):
+                self.assertAlmostEqual(js, fd, delta=1e-7 * max(1, abs(fd)), msg=(q['sizes'], k))
+                self.assertAlmostEqual(_nn_jac(q['net'], acts, k), js, delta=1e-14 * max(1, abs(js)))
 
     def test_block_parameters_from_python(self):
         net = nn_init([2, 6, 1], 4, False)

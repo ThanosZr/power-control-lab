@@ -427,7 +427,9 @@
     ['IPK:al','ICL:al'],['IPK:be','ICL:be'],['ICL:a','MD:va',[[645,-150]]],['ICL:b','MD:vb',[[651,-138]]],['ICL:c','MD:vc',[[658,-125]]],['KDC:y','MD:vdc',[[645,-38],[645,-100]]],['MD:da','TGda:u'],['MD:db','TGdb:u'],['MD:dc','TGdc:u']);
    // θ̂ to Park through a second "from" tag
    const ws=wires.map(w=>w[0]==='TFth2x'?['TFth3:y','PK:th']:w);comps.push(C('TFth3','TAGI',64,-288,{name:'θ̂'}));
-   return project(comps,ws,{sim:{hDiv:40,speed:20,stopT:1.5},scope:{panes:[[['Y:M1','ω_m'],['Y:KW','ω_ref']],[['Y:PK','i_d'],['Y:PK:q','i_q']],[['Y:M1:psi','|ψ_R| (πραγματική)'],['Y:FE:psi','|ψ̂_R|']],[['Y:M1:te','τ_e']]],window:{unit:'s',n:1.5}},
+   // 4.8 (§47): the speed reference next to its block, the references and currents of the vector control in the panel
+   const watch={tiles:[{ctl:'KW.v',label:'ω_ref',at:[-290,-200],al:'r',rng:[0,2*wref],steps:'-10%; +10%'},['Y:M1','ω_m'],['Y:PIS','i_q* (από τον PI ταχύτητας)'],['Y:GL','i_d* (ροή)'],['Y:PK','i_d'],['Y:PK:q','i_q']]};
+   return project(comps,ws,{watch,sim:{hDiv:40,speed:20,stopT:1.5},scope:{panes:[[['Y:M1','ω_m'],['Y:KW','ω_ref']],[['Y:PK','i_d'],['Y:PK:q','i_q']],[['Y:M1:psi','|ψ_R| (πραγματική)'],['Y:FE:psi','|ψ̂_R|']],[['Y:M1:te','τ_e']]],window:{unit:'s',n:1.5}},
     meta:{...IMP,Vdc:600,fs:5e3,psin,wb,wref,k,kpc,kic,kps,kis,Imax,ac,as,TL:10,tTL:.6}});}});
  // ------------------------------------------------------------------ 3.5: synchronous reluctance machine (Θάνος, 8/11): the rotor turns to the minimum reluctance
  const r4=v=>+v.toPrecision(4);
@@ -844,17 +846,40 @@
     w:learn?'':JSON.stringify(NN_DC_INV||{})};
    comps.push(C('NN1','NN',330,340,nn,{label:learn?'NN (μαθαίνει)':'NN αντίστροφο'}),C('TFr2','TAGI',190,300,{name:'ω_r'}),C('TFa','TAGI',190,340,{name:'α_r'}));
    const yy=learn?330:340;wires.push(['TFr2:y','NN1:wr',learn?[]:[[250,300],[250,330]]],['TFa:y','NN1:ar',learn?[[250,340],[250,320]]:[[250,340],[250,350]]],['NN1:y','U1:b',[[400,yy],[400,230]]]);
-   if(learn){comps.push(C('TFpi','TAGI',190,380,{name:'u_PI'}));wires.push(['TFpi:y','NN1:e',[[250,380],[250,350]]]);
+   // 4.8: the inverse learned online through an emulator, two copies of one network (specialized inverse learning, as
+   // PY_INV_NN of pcl.control): NNE learns the machine from the measurements, α̂ = f(u[k−1], ω[k−1]) → α = Δω/T_s; its copy
+   // NNC (share) computes at the controller's own output, α̂_c = f(u_NN, ω_r), with dy = ∂α̂_c/∂u. The controller learns
+   // to make the model give α_r: e_c = K·(α_r − α̂_c)·∂α̂_c/∂u (one sample later, z⁻¹, so that no loop is algebraic).
+   // The model is learned in open loop from what the machine did, so the PI that also acts does not bias it.
+   if(ctrl==='emu'){const Ts=1e-3;comps.push(C('TFu5','TAGI',470,330,{name:'u'}),C('UDu','UD',560,330,{clock:'CLK1',trig:'start',y0:0},{label:'u[k−1]'}),
+     C('TFw5','TAGI',470,380,{name:'ω'}),C('UDw','UD',560,380,{clock:'CLK1',trig:'start',y0:0},{label:'ω[k−1]'}),
+     C('DW','SUM',660,440,{signs:'+-'},{label:'ω − ω[k−1]'}),C('TFw6','TAGI',560,430,{name:'ω'}),C('GAm','GAIN',750,440,{K:1/Ts},{label:'α = Δω/T_s'}),
+     C('NNE','NN',710,355,{ins:'u, w',xs:'220, 150',hidden:'8',ys:1000,ymin:-1e5,ymax:1e5,train:'tgt',opt:'adam',lr:2e-3,clip:5,nl:400,init:'zero',seed:2,clock:'CLK1',trig:'start',y0:0},{label:'εξομοιωτής α̂(u, ω): μαθαίνει'}),
+     C('TFr5','TAGI',470,580,{name:'ω_r'}),C('NNC','NN',710,560,{ins:'u, w',xs:'220, 150',hidden:'8',ys:1000,ymin:-1e5,ymax:1e5,train:'off',share:'NNE',jac:'u',init:'zero',seed:2,clock:'CLK1',trig:'start',y0:0},{label:'αντίγραφο στην έξοδο του ελεγκτή'}),
+     C('TFa5','TAGI',470,650,{name:'α_r'}),C('EA','SUM',820,660,{signs:'+-'},{label:'α_r − α̂_c'}),
+     C('MC','MUL',920,600,{},{label:'× ∂α̂/∂u'}),C('GKc','GAIN',1010,600,{K:.1},{label:'K'}),C('UDe','UD',1100,600,{clock:'CLK1',trig:'start',y0:0},{label:'z⁻¹'}),C('TGec','TAGO',1190,600,{name:'e_c'}),C('TFec','TAGI',190,380,{name:'e_c'}),
+     C('TFn5','TAGI',470,540,{name:'u_NN'}),C('TGn','TAGO',470,290,{name:'u_NN'}));
+    wires.push(['TFu5:y','UDu:u'],['TFw5:y','UDw:u'],['UDu:y','NNE:u',[[620,330],[620,345]]],['UDw:y','NNE:w',[[620,380],[620,365]]],['TFw6:y','DW:a',[[610,430]]],['UDw:y','DW:b',[[600,380],[600,450],[630,450]]],['DW:y','GAm:u'],
+     ['GAm:y','NNE:tgt',[[790,440],[790,410],[650,410],[650,375]]],['TFn5:y','NNC:u',[[620,540],[620,550]]],['TFr5:y','NNC:w',[[620,580],[620,570]]],
+     ['TFa5:y','EA:a',[[780,650]]],['NNC:y','EA:b',[[770,560],[770,670]]],['EA:y','MC:a',[[870,660],[870,590]]],['NNC:dy','MC:b',[[790,580],[790,610]]],['MC:y','GKc:u'],['GKc:y','UDe:u'],['UDe:y','TGec:u'],
+     ['TFec:y','NN1:e',[[250,380],[250,350]]],['NN1:y','TGn:u',[[420,yy],[420,290]]]);}
+   else if(learn){comps.push(C('TFpi','TAGI',190,380,{name:'u_PI'}));wires.push(['TFpi:y','NN1:e',[[250,380],[250,350]]]);
     if(o.freeze&&o.freeze!=='never'){const tf=o.freeze==='f2'?2*P/1.6:Math.floor(cyc*3/4)*P;comps.push(C('FZ','CONST',90,440,{v:`0:0, ${+tf.toFixed(4)}:1`},{label:'πάγωμα'}));wires.push(['FZ:y','NN1:fz',[[260,440],[260,370]]]);}}}
   else{comps.push(C('K0','CONST',330,330,{v:0},{label:'χωρίς δίκτυο'}));wires.push(['K0:y','U1:b',[[400,330],[400,230]]]);}
-  const panes=[[['Y:LP','ω_r'],['Y:M1','ω']],[['Y:E1','e = ω_r − ω']],[['Y:PI1','u_PI'],...(ctrl!=='pi'?[['Y:NN1','u_NN']]:[])],...(ctrl==='pinn'||ctrl==='online'?[[['Y:NN1:L','L (σφάλμα μάθησης)']]]:[[['Y:IAE','IAE']]])];
-  return project(comps,wires,{sim:{hDiv:20,speed:1000,stopT},scope:{panes,window:{unit:'s',n:3.2}},
+  const panes=[[['Y:LP','ω_r'],['Y:M1','ω']],[['Y:E1','e = ω_r − ω']],[['Y:PI1','u_PI'],...(ctrl!=='pi'?[['Y:NN1','u_NN']]:[])],...(ctrl==='pinn'||ctrl==='online'?[[['Y:NN1:L','L (σφάλμα μάθησης)']]]:ctrl==='emu'?[[['Y:NNE:L','L του εξομοιωτή (rad/s²)']]]:[[['Y:IAE','IAE']]])];
+  // 4.8 (§47): the target and the learning switch live over the drawing; the reference tile sets a constant ω* over the
+  // program of steps (→ πρόγραμμα t:τιμή keeps it), the load factor a step of ±50 %
+  // the controls next to their blocks, the signals in the panel
+  const learnTile=ctrl==='pinn'||ctrl==='online'||ctrl==='emu',watch={tiles:[{ctl:'KW.v',label:'ω* (στόχος)',at:[10,-50],al:'r',rng:[0,200],steps:'-20; +20; =100'},
+   ...(learnTile?[{ctl:'NN1.learn',label:ctrl==='emu'?'Ο ελεγκτής μαθαίνει':'Μαθαίνει',at:[430,390]}]:[]),...(ctrl==='emu'?[{ctl:'NNE.learn',label:'Ο εξομοιωτής μαθαίνει',at:[860,300]},['Y:NNE:L','L του εξομοιωτή']]:[]),{ctl:'KL.v',label:'Φορτίο (συντελεστής)',at:[10,640],al:'r',rng:[0,4],steps:'-50%; +50%'},
+   ['Y:M1','ω'],['Y:E1','e = ω_r − ω'],...(learnTile?[['Y:NN1:L','L (σφάλμα μάθησης)']]:[]),['Y:PI1','u_PI'],['Y:IAE','IAE']]};
+  return project(comps,wires,{watch,sim:{hDiv:20,speed:1000,stopT},scope:{panes,window:{unit:'s',n:3.2}},
    meta:{P,fc,kf,Kp,Ki,ctrl,cycles:cyc,Ra,La:10e-3,psi:1,J:.02,bm:.002,Vmax:220}});}
  T.push({id:'nn_compare',group:'Έλεγχος με νευρωνικά δίκτυα (4.7)',title:'Έλεγχος με νευρωνικό δίκτυο: σύγκριση',theory:'formula',topology:'nn_compare',
-  options:[{k:'ctrl',label:'Ελεγκτής',options:[['pi','Μόνο PI'],['pinn','PI + νευρωνικό που μαθαίνει online (feedback-error learning)'],['inv','PI + αντίστροφο μοντέλο (νευρωνικό, εκπαιδευμένο offline)']],def:'pinn'},
+  options:[{k:'ctrl',label:'Ελεγκτής',options:[['pi','Μόνο PI'],['pinn','PI + νευρωνικό που μαθαίνει online (feedback-error learning)'],['inv','PI + αντίστροφο μοντέλο (νευρωνικό, εκπαιδευμένο offline)'],['emu','PI + αντίστροφο που μαθαίνει μέσω εξομοιωτή (δύο αντίγραφα ενός δικτύου, 4.8)']],def:'pinn'},
    {k:'load',label:'Φορτίο',options:[['fan','Ανεμιστήρας τ_L = k·ω·|ω|'],['step','Ανεμιστήρας, διπλάσιο από τη μέση της προσομοίωσης']],def:'fan'}],
   desc:'Έλεγχος ταχύτητας μηχανής ΣΡ με φορτίο ανεμιστήρα, ο μετατροπέας ως πηγή τάσης από σήμα (μέση τιμή). Η αναφορά επαναλαμβάνει ένα μοτίβο βημάτων κάθε 1,6 s, φιλτραρισμένο στα 5 Hz (ω_r και η παράγωγός του α_r). Ο PI μόνος του αργεί στα βήματα. Το νευρωνικό δίκτυο δίνει από τα (ω_r, α_r) την τάση που χρειάζεται η μηχανή (πρόσθια τροφοδότηση), είτε μαθαίνοντας online από την έξοδο του PI είτε με βάρη ενός αντίστροφου μοντέλου εκπαιδευμένου εκ των προτέρων. Οι τιμές της μηχανής είναι τυπικές.',
-  tasks:['Τρέξε «Μόνο PI» και κράτα τα IAE και ISE στο τέλος (κάρτα θεωρίας). Μετά «PI + νευρωνικό»: στον πρώτο κύκλο είναι σχεδόν ίδιο, από τον δεύτερο το σφάλμα μικραίνει κάθε φορά.','Δες στο scope το u_PI: όσο το δίκτυο μαθαίνει, ο PI χρειάζεται να δώσει όλο και λιγότερα· αυτό ακριβώς είναι το σφάλμα του δικτύου (feedback-error learning).','«Αντίστροφο μοντέλο»: τα βάρη είναι έτοιμα, άρα βελτιώνει από την αρχή. Στην κάρτα θεωρίας «Σύγκρινε και τους τρεις» τρέχει όλες τις εκδοχές στο παρασκήνιο και δίνει τον πίνακα.','Με «διπλάσιο φορτίο» το αντίστροφο μοντέλο δεν το ξέρει (εκτός εκπαίδευσης): ο PI καλύπτει τη διαφορά. Το online δίκτυο ξαναπροσαρμόζεται.','Στις ρυθμίσεις του NN (διπλό κλικ): «Κράτα τα βάρη που έμαθε» τα γράφει στο μπλοκ, ώστε την επόμενη φορά να ξεκινά εκπαιδευμένο.'],
+  tasks:['Τρέξε «Μόνο PI» και κράτα τα IAE και ISE στο τέλος (κάρτα θεωρίας). Μετά «PI + νευρωνικό»: στον πρώτο κύκλο είναι σχεδόν ίδιο, από τον δεύτερο το σφάλμα μικραίνει κάθε φορά.','Δες στο scope το u_PI: όσο το δίκτυο μαθαίνει, ο PI χρειάζεται να δώσει όλο και λιγότερα· αυτό ακριβώς είναι το σφάλμα του δικτύου (feedback-error learning).','«Αντίστροφο μοντέλο»: τα βάρη είναι έτοιμα, άρα βελτιώνει από την αρχή. Στην κάρτα θεωρίας «Σύγκρινε και τους τέσσερις» τρέχει όλες τις εκδοχές στο παρασκήνιο και δίνει τον πίνακα.','«Μέσω εξομοιωτή»: ένα δεύτερο δίκτυο μαθαίνει τη μηχανή (α̂ από u και ω) και ένα αντίγραφό του δίνει στον ελεγκτή την ευαισθησία ∂α̂/∂u· από τον δεύτερο κύκλο είναι ήδη κοντά στο αντίστροφο μοντέλο. Δες στα πλακίδια το L του εξομοιωτή και κλείσε τη μάθηση του καθενός χωριστά.','Με «διπλάσιο φορτίο» το αντίστροφο μοντέλο δεν το ξέρει (εκτός εκπαίδευσης): ο PI καλύπτει τη διαφορά. Το online δίκτυο ξαναπροσαρμόζεται.','Στις ρυθμίσεις του NN (διπλό κλικ): «Κράτα τα βάρη που έμαθε» τα γράφει στο μπλοκ, ώστε την επόμενη φορά να ξεκινά εκπαιδευμένο.'],
   build(o){return nnDrive({ctrl:o.ctrl,load:o.load,cycles:4,lr:'mid'});}});
  T.push({id:'nn_online',group:'Έλεγχος με νευρωνικά δίκτυα (4.7)',title:'Νευρωνικό που μαθαίνει αμέσως',theory:'formula',topology:'nn_online',
   options:[{k:'lr',label:'Μάθηση',options:[['fast','Γρήγορη: κλίση (SGD), η = 0,02'],['adam','Adam, η = 3·10⁻⁴'],['slow','Αργή: κλίση, η = 0,002']],def:'fast'},

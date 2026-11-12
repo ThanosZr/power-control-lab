@@ -346,12 +346,36 @@ def _nn_learn(net, opt, acts, g, lr, clip, l2, kind):
             bb[q] = step(bb[q], gb[i][q])
 
 
-def _nn_step(b, st, x, e_in, fz):
-    """One sample of the block, as nnStep in web/studio/mna.js."""
-    acts = _nn_fwd(st['net'], [v / s for v, s in zip(x, b['xs'])])
+def _nn_jac(net, acts, k):
+    """d(output)/d(input k) at the activations of a forward pass, as jac in web/studio/nn.js (4.8)."""
+    L = len(net['W'])
+    v = [row[k] for row in net['W'][0]]
+    for i in range(L):
+        if i > 0:
+            z = []
+            for row in net['W'][i]:
+                s = 0.0
+                for w, q in zip(row, v):
+                    s += w * q
+                z.append(s)
+            v = z
+        if i < L - 1:
+            a = acts[i + 1]
+            v = [q * (1 - a[j] * a[j]) for j, q in enumerate(v)]
+    return v[0]
+
+
+def _nn_step(b, st, x, e_in, fz, src=None):
+    """One sample of the block, as nnStep in web/studio/mna.js; src = the block whose weights a copy uses (4.8)."""
+    net = src['st']['net'] if src is not None else st['net']
+    acts = _nn_fwd(net, [v / s for v, s in zip(x, b['xs'])])
     y = b['ys'] * acts[-1][0]
+    jk = b.get('jac', -1)
+    if jk is not None and jk >= 0:
+        d = b['ys'] * _nn_jac(net, acts, jk) / b['xs'][jk]
+        st['dy'] = d if math.isfinite(d) else 0.0
     yl = min(b['ymax'], max(b['ymin'], y))
-    if b['train'] != 'off':
+    if b['train'] != 'off' and src is None:
         e = e_in / b['ys'] if b['train'] == 'err' else (e_in - y) / b['ys']
         st['n'] += 1
         st['m2'] += (e * e - st['m2']) / min(st['n'], b['nl'])
@@ -421,6 +445,13 @@ class Circuit:
             ci = b.get('clock')
             b['clock'] = ci if isinstance(ci, int) and 0 <= ci < len(self.ctrls) else None
             self.blocks.append(b)
+        # 4.8: a network that computes with the weights of another (share), linked as in web/studio/mna.js
+        for b in self.blocks:
+            if b['type'] == 'NN' and b.get('share'):
+                pre = b['id'][:b['id'].rfind('/') + 1] if '/' in b['id'] else ''
+                s = next((q for q in self.blocks if q is not b and q['type'] == 'NN' and q['id'] in (pre + b['share'], b['share'])), None)
+                ok = s is not None and s['st'].get('net', {}).get('sizes') == b['st'].get('net', {}).get('sizes')
+                b['_src'] = s if ok else None
         self.zc = [b for b in self.blocks if b['type'] == 'CMP']
         # continuous in time: integrators, filters, the PLL, and expressions of t (e.g. I_dc + I_ac·sin(2πft))
         self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL', 'FEST', 'F2', 'RLIM') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
@@ -1443,9 +1474,9 @@ class Circuit:
                 if mode == 'sample' and self.blk_due(b, t, force):
                     tr = b.get('train', 'off')
                     _nn_step(b, st, [rd(I.get(k)) for k in b['inNames']], rd(I.get('e')) if tr == 'err' else rd(I.get('tgt')) if tr == 'tgt' else 0.0,
-                             0.0 if tr == 'off' else rd(I.get('fz')))
+                             0.0 if tr == 'off' else rd(I.get('fz')), b.get('_src'))
                     sampled = True
-                ys = {'y': st['y'], 'L': st.get('L', 0.0)}
+                ys = {'y': st['y'], 'L': st.get('L', 0.0), 'dy': st.get('dy', 0.0)}
             elif ty == 'PY':
                 if mode == 'sample' and self.blk_due(b, t, force):
                     if '_rt' not in b:

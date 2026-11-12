@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.7: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (433 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.8: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (433 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.7.
+Κανένα στην 4.8.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -482,7 +482,7 @@
 | `part:MOV` | model, Uref, Iref, alpha, tbl | a, b | 3.18 |
 | `part:MUL` | — | a, b, y | 3.18 |
 | `part:MUX` | n, frame | u1, u2, u3, y | 3.18 |
-| `part:NN` | ins, xs, hidden, ys, ymin, ymax, train, learn, opt, lr, clip, l2, nl, init, seed, w, clock, trig, y0 | L, e, fz, tgt, x1, x2, y | 4.7 |
+| `part:NN` | ins, xs, hidden, ys, ymin, ymax, train, learn, opt, lr, clip, l2, nl, share, jac, init, seed, w, clock, trig, y0 | L, e, fz, tgt, x1, x2, y | 4.7 |
 | `part:PARK` | conn | ab, al, be, d, dq, q, th | 3.18 |
 | `part:PIB` | Kp, Ki, clock, trig, y0, aw, ymin, ymax | tr, u, y | 3.18 |
 | `part:PLL` | f0, bw, th0, conn | a, abc, amp, b, c, th, w | 3.18 |

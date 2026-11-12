@@ -30,14 +30,18 @@
  function nnBuild(b,p,warnings){const st=b.st;b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';b.y0=num(p.y0,0);st.last=null;
   b.inNames=Ex.names(p.ins,6,false);const xs=String(p.xs??'1').split(/[,;\s]+/).filter(Boolean).map(v=>num(v,1));b.xs=b.inNames.map((k,i)=>{const v=xs.length>1?xs[i]:xs[0];return Number.isFinite(v)&&v!==0?v:1;});
   b.ys=num(p.ys,1)||1;b.ymin=num(p.ymin,-1);b.ymax=num(p.ymax,1);if(b.ymax<b.ymin)[b.ymin,b.ymax]=[b.ymax,b.ymin];
+  // 4.8: the output dy = ∂y/∂(input jac), in the units of the signals (the emulator of the inverse control)
+  b.jac=p.jac?b.inNames.indexOf(String(p.jac).trim()):-1;b.share=String(p.share??'').trim();if(p.jac&&b.jac<0)warnings.push(`${b.label}: η είσοδος «${p.jac}» για την παράγωγο δεν υπάρχει.`);
   b.train=p.train==='err'||p.train==='tgt'?p.train:'off';b.learn=p.learn!==false&&p.learn!=='false';b.opt=p.opt==='sgd'?'sgd':'adam';b.lr=Math.max(0,num(p.lr,1e-3));b.clip=Math.max(0,num(p.clip,5));b.l2=Math.max(0,num(p.l2,0));b.nl=Math.max(1,num(p.nl,200));
   const sizes=NNET.sizesOf(b.inNames.length,p.hidden??'8'),w=NNET.parse(p.w,sizes);if(w&&w.error)warnings.push(`${b.label}: ${w.error}· χρησιμοποιούνται τυχαία βάρη.`);
   const net=w&&w.net?w.net:NNET.init(sizes,num(p.seed,1)|0,p.init!=='rand');b.wsig=[String(p.w||'').length,String(p.w||'').slice(0,64),String(p.hidden),num(p.seed,1),p.init,b.inNames.length,b.opt].join('|');
-  Object.assign(st,{net,opt:NNET.optState(net,b.opt),wsig:b.wsig,y:b.y0,L:0,m2:0,n:0,yraw:0,sat:false});}
+  Object.assign(st,{net,opt:NNET.optState(net,b.opt),wsig:b.wsig,y:b.y0,L:0,m2:0,n:0,yraw:0,sat:false,dy:0});}
  // one sample: forward pass on the scaled inputs, output scaled and limited; learning when it is on and fz < 0.5
  // (error signal: e/ys; target: (tgt − y)/ys; not while the output sits on a limit with an error signal, as the PI's anti-windup)
- function nnStep(b,st,x,eIn,fz){const acts=NNET.fwd(st.net,x.map((v,i)=>v/b.xs[i])),o=acts[acts.length-1][0],y=b.ys*o,yl=Math.min(b.ymax,Math.max(b.ymin,y));
-  if(b.train!=='off'){const e=b.train==='err'?eIn/b.ys:(eIn-y)/b.ys;st.n++;st.m2+=(e*e-st.m2)/Math.min(st.n,b.nl);st.L=Math.abs(b.ys)*Math.sqrt(Math.max(0,st.m2));
+ // 4.8: a copy (share) computes with the weights of its source block as they are at this sample and does not learn
+ function nnStep(b,st,x,eIn,fz,src){const net=src?src.st.net:st.net,acts=NNET.fwd(net,x.map((v,i)=>v/b.xs[i])),o=acts[acts.length-1][0],y=b.ys*o,yl=Math.min(b.ymax,Math.max(b.ymin,y));
+  if(b.jac>=0){const d=b.ys*NNET.jac(net,acts,b.jac)/b.xs[b.jac];st.dy=Number.isFinite(d)?d:0;}  // before this sample's learning step
+  if(b.train!=='off'&&!src){const e=b.train==='err'?eIn/b.ys:(eIn-y)/b.ys;st.n++;st.m2+=(e*e-st.m2)/Math.min(st.n,b.nl);st.L=Math.abs(b.ys)*Math.sqrt(Math.max(0,st.m2));
    if(b.learn&&!(fz>=.5)&&b.lr>0&&Number.isFinite(e)&&!(b.train==='err'&&st.sat))NNET.learn(st.net,st.opt,acts,-e,{lr:b.lr,clip:b.clip,l2:b.l2,opt:b.opt});}
   st.sat=yl!==y;st.y=Number.isFinite(yl)?yl:0;st.yraw=y;}
  // 4.7: records in shared memory in a cross-origin isolated page (allocRecord)
@@ -508,7 +512,13 @@
   for(const b of blocks)for(const n of Object.values(b.outs))if(n>=0){if(drv.has(n))dup.push(drv.get(n).label+' / '+b.label);else drv.set(n,b);}
   if(dup.length)warnings.push('Δύο έξοδοι στο ίδιο σύρμα σήματος: '+dup.slice(0,4).join(', ')+'.');
   const loose=[];const chk=(n,name)=>{if(n<0||!drv.has(n))loose.push(name);};
-  for(const b of blocks)for(const [k,n] of Object.entries(b.ins))if(!(b.type==='NN'&&k==='fz'))chk(n,b.label+'.'+k); // the freeze input of a network is optional
+  for(const b of blocks)for(const [k,n] of Object.entries(b.ins))if(!(b.type==='NN'&&k==='fz'))chk(n,b.label+'.'+k);
+  // 4.8: a network that uses the weights of another (share): the same id in the same level of the circuit, the same sizes
+  for(const b of blocks)if(b.type==='NN'){b.src=null;if(!b.share)continue;const pre=b.id.includes('/')?b.id.slice(0,b.id.lastIndexOf('/')+1):'';
+   const s=blocks.find(q=>q!==b&&q.type==='NN'&&(q.id===pre+b.share||q.id===b.share));
+   if(!s){warnings.push(`${b.label}: δεν υπάρχει μπλοκ NN «${b.share}» για τα βάρη· χρησιμοποιεί τα δικά του.`);continue;}
+   if(JSON.stringify(s.st.net.sizes)!==JSON.stringify(b.st.net.sizes)){warnings.push(`${b.label}: το ${s.label} έχει άλλο μέγεθος (${s.st.net.sizes.join('-')} αντί για ${b.st.net.sizes.join('-')})· χρησιμοποιεί τα δικά του βάρη.`);continue;}
+   b.src=s;} // the freeze input of a network is optional
   for(const k of ctrls)if(k.mode==='ext')chk(k.dIn,k.label+'.d');
   for(const e of els)if(e.gate==='sig'){const c=compInfo.get(e.cid);chk(e.gIn,(c?.label||e.cid)+'.g');}
   if(loose.length)warnings.push('Είσοδοι σήματος χωρίς πηγή (διαβάζονται ως 0): '+loose.slice(0,6).join(', ')+(loose.length>6?' …':'')+'.');
@@ -755,11 +765,19 @@
   genEfd(m,t){return m.exc==='sig'?(m.efdIn>=0&&this.sv?this.sv[m.efdIn]:0):m.exc==='sched'?schedAt(m.efdS,t,m.efdS[0][1]):m.Efd0;}
   imSources(m){const s=m.st,wr=m.p*s.w,g=m.RR/m.LM,ea=-g*s.pa-wr*s.pb,eb=-g*s.pb+wr*s.pa,Q=Math.sqrt(3)/2;m.ph[0].V.imE=ea;m.ph[1].V.imE=-ea/2+Q*eb;m.ph[2].V.imE=-ea/2-Q*eb;}
   pyBlocks(old){const bs=this.net.sig.blocks.filter(b=>b.type==='PY');const prev=new Map((old?.sig.blocks||[]).filter(b=>b.type==='PY'&&b.rt).map(b=>[b.id,b]));
-   if(bs.length){const R=root.PyRT;if(!R||!R.ready){const e=new NetlistError('Το κύκλωμα έχει μπλοκ Python: φορτώνεται η Python (Pyodide)…');e.needPython=true;throw e;}
+   if(bs.length){const R=root.PyRT,lazy=!!(R&&!R.ready&&R.lazy);if(!R||(!R.ready&&!lazy)){const e=new NetlistError('Το κύκλωμα έχει μπλοκ Python: φορτώνεται η Python (Pyodide)…');e.needPython=true;throw e;}
     for(const b of bs){const g=this.shGrid(b),Ts=g?g.d:0;if(!g)this.net.warnings.push(`${b.label}: χωρίς ρολόι δεν καλείται ποτέ (διάλεξε PWM ή μπλοκ Ρολόι).`);
-     b.sig=JSON.stringify([b.code,b.inNames,b.outNames,b.pars,Ts]);const o=prev.get(b.id);
-     if(o&&o.sig===b.sig){b.rt=o.rt;prev.delete(b.id);}else{try{b.rt=R.make(b.code,{ins:b.inNames,outs:b.outNames,pars:b.pars,Ts,label:b.label});}catch(e){throw new NetlistError(e.message);}if(o){b.st.ys=null;b.st.last=null;}}}}
+     b.sig=JSON.stringify([b.code,b.inNames,b.outNames,b.pars,Ts]);const o=prev.get(b.id),opt={ins:b.inNames,outs:b.outNames,pars:b.pars,Ts,label:b.label};
+     // 4.8: without Python on the page a stand-in (PyRT.stub); a stand-in becomes the real block when Python is there
+     if(o&&o.sig===b.sig&&!(o.rt?.lazy&&R.ready)){b.rt=o.rt;prev.delete(b.id);}
+     else{try{b.rt=lazy?R.stub(opt):R.make(b.code,opt);if(o&&o.sig===b.sig&&o.rt?.lazy){b.rt.setState(o.rt.state);prev.delete(b.id);}}catch(e){const ne=new NetlistError(e.message);ne.py=true;throw ne;}if(o&&o.sig!==b.sig){b.st.ys=null;b.st.last=null;}}}}
    for(const o of prev.values())o.rt?.destroy?.();}
+  // 4.8: Python blocks with stand-ins (the page without the interpreter), and the real blocks in their place once it is
+  // loaded, with the state they carry (from a run in the worker)
+  pyLazy(){return this.net.sig.blocks.some(b=>b.type==='PY'&&b.rt&&b.rt.lazy);}
+  // (at t = 0 the circuit is built again: the stand-ins gave zeros for the first sample)
+  pyUpgrade(){const R=root.PyRT;if(!R||!R.ready)return false;if(!(this.t>0)){if(this.pyLazy())this.load(this.project,true);return true;}for(const b of this.net.sig.blocks){if(b.type!=='PY'||!b.rt?.lazy)continue;const st=b.rt.state,o=b.rt.o;
+    try{b.rt=R.make(b.code,o);b.rt.setState(st);}catch(e){const ne=new NetlistError(e.message);ne.py=true;throw ne;}}return true;}
   setMethod(m){this.method=['TR','BE','BDF2'].includes(m)?m:'TR';this.cache.clear();this.beLeft=Math.max(this.beLeft,1);this.capDirty=true;}
   setControl(id,patch){const k=this.net.ctrls.find(c=>c.id===id);if(!k)return false;Object.assign(k,patch);return true;}
   // a block on a bus (3.18) is one block per element, <id>[k]: a live change reaches every element
@@ -786,7 +804,9 @@
      const rest=this.prog.slice(this.progI).concat(pts).sort((a,b)=>a.t-b.t);this.prog.length=this.progI;this.prog.push(...rest);
      this.markChange({id:e.id,k:e.k,v:v1,label:`${c.label||e.id}: ${e.k} → ${P.eng(v1,'',4)} με ${P.eng(e.rate,'/s',3)}`,from,rate:e.rate,prog:true,live:!!e.live});return;}}
    c.params={...(c.params||{}),[e.k]:e.v};this.load(pr,false);
-   if(!e.part)this.markChange({id:e.id,k:e.k,v:e.v,label:`${c.label||e.id}: ${e.k} → ${typeof e.v==='number'?P.eng(e.v,'',4):e.v}`,from,prog:true});}
+   // the name of the parameter as in its form; yes/no and choices as words (4.8)
+   if(!e.part){const d=P.PARTS[c.type]?.params?.find?.(q=>q.k===e.k),vt=typeof e.v==='number'?P.eng(e.v,'',4):typeof e.v==='boolean'?(e.v?'ναι':'όχι'):String((d?.options||[]).find(o=>String(o[0])===String(e.v))?.[1]??e.v);
+    this.markChange({id:e.id,k:e.k,v:e.v,label:`${c.label||e.id}: ${d?.label||e.k} → ${vt}`,from,prog:true});}}
   // 3.19: the event log (§3): switchings, comparator and latch changes, edges, discrete samples (blocks, Sample & Hold,
   // duty updates of the PWM), programmed jumps and live changes, each with time, kind, source, value and the side of the
   // instant ('t+': the value after it). A ring of the last `max` events with counts per kind; opts.events = false: off.
@@ -985,8 +1005,8 @@
      // Python: called once per sample instant (not in the 'init' pass, whose inputs come before the first solution)
      case 'PY':{if(mode==='sample'&&b.rt&&this.blkDue(b,force)){st.ys=b.rt.step(this.t,b.inNames.map(k=>rd(I[k])));sampled=true;}
       ys={};b.outNames.forEach((k,i)=>{const v=st.ys?st.ys[i]:b.y0;ys[k]=Number.isFinite(v)?v:0;});break;}
-     case 'NN':{if(mode==='sample'&&this.blkDue(b,force)){nnStep(b,st,b.inNames.map(k=>rd(I[k])),b.train==='err'?rd(I.e):b.train==='tgt'?rd(I.tgt):0,b.train==='off'?0:rd(I.fz));sampled=true;}
-      ys={y:st.y,L:st.L};break;}
+     case 'NN':{if(mode==='sample'&&this.blkDue(b,force)){nnStep(b,st,b.inNames.map(k=>rd(I[k])),b.train==='err'?rd(I.e):b.train==='tgt'?rd(I.tgt):0,b.train==='off'?0:rd(I.fz),b.src);sampled=true;}
+      ys={y:st.y,L:st.L,dy:st.dy||0};break;}
      case 'SR':{const S=rd(I.s)>=.5,Rr=rd(I.r)>=.5;let q=st.q;if(S&&!st.sp)q=1;if(Rr)q=0;if(!trial){if(q!==st.q)this.logEv('latch',b.label,q,{id:b.id});st.q=q;st.sp=S;}ys={q,nq:1-q};break;}
      // continuous states: input held since the previous evaluation (the solver steps are short), state written after the pass
      case 'INT':{const dt=Math.max(0,this.t-st.t);let v=Math.min(b.hi,Math.max(b.lo,st.s+dt*st.u));if(b.wrap)v-=2*Math.PI*Math.floor(v/(2*Math.PI));y=v;if(!trial)cont.push([b,v]);break;}
@@ -1466,7 +1486,7 @@
   const ims=imList.map(m=>({ph:m.ph.map(q=>({L:idx.get(q.L),V:idx.get(q.V)})),RR:m.RR,LM:m.LM,p:m.p,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{...m.st}}));
   const bix=new Map(net.sig.order.map((b,i)=>[b,i]));
   const blocks=net.sig.order.map(b=>{const o={id:b.id,type:b.type,ins:b.ins,outs:b.outs,st:JSON.parse(JSON.stringify(b.st))};
-   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw','xs','ys','train','learn','opt','lr','clip','l2','nl'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
+   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw','xs','ys','train','learn','opt','lr','clip','l2','nl','jac','share'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
    if(b.type==='DCM')o.recs={w:{v:[[b.m,1]]},te:{i:[[idx.get(b.gy),b.psi]]}};
    if(b.type==='IM')o.im=imx.get(b.im);
    if(b.type==='SM')o.sm=smx.get(b.sm);

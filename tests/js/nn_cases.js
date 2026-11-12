@@ -38,5 +38,9 @@ const build=(id,o={})=>{const t=T.get(id);const oo={};for(const op of t.options)
 const cycles=pr=>{const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});const per=[];let i0=0;for(let r=0;r<pr.meta.cycles;r++){s.run(pr.meta.P);const v=s.now('Y:IAE');per.push(v-i0);i0=v;}
  return {per,warnings:s.net.warnings,L:s.chIndex.has('Y:NN1:L')?s.now('Y:NN1:L'):null,k:s.net.sig.blocks.find(b=>b.id==='NN1')?.st.opt?.k??null};};
 out.tut={};for(const [k,id,o] of [['pi','nn_compare',{ctrl:'pi'}],['pinn','nn_compare',{ctrl:'pinn'}],['inv','nn_compare',{ctrl:'inv'}],['inv_step','nn_compare',{ctrl:'inv',load:'step'}],['pi_step','nn_compare',{ctrl:'pi',load:'step'}],
- ['fast','nn_online',{}],['frozen','nn_online',{freeze:'f2'}],['ref','nn_online',{event:'ref'}]])out.tut[k]=cycles(build(id,o));
+ ['fast','nn_online',{}],['frozen','nn_online',{freeze:'f2'}],['ref','nn_online',{event:'ref'}],['emu','nn_compare',{ctrl:'emu'}]])out.tut[k]=cycles(build(id,o));
+// 7. 4.8: the derivative of the output (jac) against central differences, on random networks, one and two hidden layers
+{const r=N.rng(5);out.jac=[[3,6,1],[2,5,4,1]].map(sizes=>{const net=N.init(sizes,7,false),x=Array.from({length:sizes[0]},()=>2*r()-1);
+  return {sizes,x,net,d:Array.from({length:sizes[0]},(_,k)=>{const acts=N.fwd(net,x),h=1e-6,xp=x.slice(),xm=x.slice();xp[k]+=h;xm[k]-=h;
+   return [N.jac(net,acts,k),(N.fwd(net,xp).at(-1)[0]-N.fwd(net,xm).at(-1)[0])/(2*h)];})};});}
 console.log(JSON.stringify(out));

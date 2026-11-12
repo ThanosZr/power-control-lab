@@ -1,5 +1,5 @@
 {
- "version": "4.7",
+ "version": "4.8",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -3323,6 +3323,8 @@
      "clip",
      "l2",
      "nl",
+     "share",
+     "jac",
      "init",
      "seed",
      "w",

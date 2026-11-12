@@ -6,6 +6,11 @@
 //   def step(t, u, s, p): -> outputs as dict {name: value}, list, number, or (outputs, s)
 // u: inputs by name, s: state (persists between calls), p: parameters of the block plus Ts (sample period).
 // getState/setState (3.16): the state s as text, for a saved run that continues later (MNA snapshot).
+// 4.8: Python off the page. With PyRT.lazy (set by the app when the live simulation can run in a worker) a circuit with
+// Python blocks is built on the page without the interpreter: each block gets a stand-in (stub) that keeps the state as
+// text and cannot step. ▶, +1 T and ⏩ run in the worker of the live simulation, which loads Python there (no freeze of
+// the page); the state comes back as text. Only a run on the page itself (no worker) loads Python here, once
+// (Sim.pyUpgrade replaces the stand-ins and keeps their state).
 (function(root){
  const VERSION='0.26.4';
  const WRAP=`
@@ -64,12 +69,19 @@ def __pcl_make(__src, __ins, __outs, __p):
     return this.attach(this.py,this.source);})().catch(e=>{this.error=e;this.loading=null;throw e;});
    return this.loading;},
   // a Pyodide loaded elsewhere (the "Σενάρια" worker, 3.14): the blocks of its circuits use the same Python
-  attach(py,source){this.py=py;this.source=source||this.source;this.py.runPython(WRAP);this.makeFn=this.py.globals.get('__pcl_make');this.ready=true;this.loading=this.loading||Promise.resolve(this);return this;},
+  attach(py,source){this.py=py;this.source=source||this.source;this.py.runPython(WRAP);this.makeFn=this.py.globals.get('__pcl_make');this.ready=true;this.loading=this.loading||Promise.resolve(this);
+   try{this.onready?.(this);}catch(e){} // 4.8: the app turns the stand-ins of its circuit into the real blocks
+   return this;},
   make(src,o){if(!this.ready)throw new Error('Η Python δεν έχει φορτωθεί.');let call;
    try{call=this.makeFn(String(src||''),o.ins,o.outs,this.py.toPy({...o.pars,Ts:o.Ts}));}catch(e){throw new Error(`${o.label}: ${pyMessage(e)}`);}
    return {step:(t,u)=>{let r;try{r=call(t,u);}catch(e){throw new Error(`${o.label} (t = ${t.toPrecision(6)} s): ${pyMessage(e)}`);}const a=r.toJs();r.destroy();return a;},
     getState:()=>{try{return call.getstate();}catch(e){throw new Error(`${o.label}: ${pyMessage(e)}`);}},
-    setState:txt=>{try{call.setstate(txt);}catch(e){throw new Error(`${o.label}: ${pyMessage(e)}`);}},
-    destroy:()=>{try{call.destroy();}catch(e){}}};}};
+    setState:txt=>{if(txt===null||txt===undefined)return;try{call.setstate(txt);}catch(e){throw new Error(`${o.label}: ${pyMessage(e)}`);}},
+    destroy:()=>{try{call.destroy();}catch(e){}}};},
+  // the stand-in of a block while the page has no Python (4.8): the state as text (null = as init gives it)
+  lazy:false,
+  // (at t = 0, the first sample while the circuit is built: zeros, which the worker replaces with its own start)
+  stub(o){return {lazy:true,o,state:null,step(t){if(t===0)return new Array(o.outs.length).fill(0);const e=new Error(`${o.label}: η Python δεν έχει φορτωθεί στη σελίδα (το μπλοκ τρέχει στο thread της προσομοίωσης).`);e.needPython=true;throw e;},
+   getState(){return this.state;},setState(txt){this.state=txt===undefined?null:txt;},destroy(){}};}};
  root.PyRT=PyRT;if(typeof module!=='undefined')module.exports=PyRT;
 })(typeof window!=='undefined'?window:globalThis);

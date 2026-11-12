@@ -43,7 +43,9 @@
    // the labels of the parts (name, value, live value) are HTML above the svg, in the coordinates of the drawing (4.6): an SVG
    // text is laid out again whenever the screen scale changes (on every wheel event of a zoom), an HTML text is not
    const lab=document.createElement('div');lab.className='livel';lab.setAttribute('aria-hidden','true');xf.appendChild(lab);
-   this.vp=svg.querySelector('.viewport');this.L={wires:svg.querySelector('.wires'),parts:svg.querySelector('.parts'),dots:svg.querySelector('.dots'),pins:svg.querySelector('.pins'),live:lab,over:svg.querySelector('.over')};
+   // the tiles of the control signals (4.8, ROADMAP §47, watch.js): HTML in the same units, above the labels
+   const sig=document.createElement('div');sig.className='sigl';sig.hidden=true;xf.appendChild(sig);
+   this.vp=svg.querySelector('.viewport');this.L={wires:svg.querySelector('.wires'),parts:svg.querySelector('.parts'),dots:svg.querySelector('.dots'),pins:svg.querySelector('.pins'),live:lab,sig,over:svg.querySelector('.over')};
    svg.addEventListener('pointerdown',e=>this.down(e));svg.addEventListener('pointermove',e=>this.move(e));svg.addEventListener('pointerup',e=>this.up(e));
    svg.addEventListener('pointercancel',()=>this.cancelDrag());svg.addEventListener('contextmenu',e=>e.preventDefault());
    svg.addEventListener('dblclick',e=>this.dbl(e));
@@ -84,6 +86,7 @@
    if(doc.solve)this.doc.solve={...doc.solve}; // options of the solution (3.7): unconnected parts, floating parts
    if(doc.subcircuits)this.doc.subcircuits=JSON.parse(JSON.stringify(doc.subcircuits)); // definitions of subcircuits (3.17)
    if(Array.isArray(doc.program)&&doc.program.length)this.doc.program=JSON.parse(JSON.stringify(doc.program)); // program of parameter changes (3.19)
+   if(doc.watch)this.doc.watch=JSON.parse(JSON.stringify(doc.watch)); // the tiles of the control signals over the drawing (4.8, watch.js)
    this.dropDangling();
    for(const w of this.doc.wires)if(!w.pts.length&&!w.fixed){const full=this.wirePts(w);if(!orth(full))this.route(w);}
    this.sel.c.clear();this.sel.w.clear();this.undoStack=[];this.redoStack=[];this.render();if(!keepView){this.userView=false;this.fit();}}
@@ -267,7 +270,9 @@
    clearTimeout(this._vT);this._vT=setTimeout(()=>{this._vT=0;this.applyView();},140);}
   applyView(){if(this._vRaf){cancelAnimationFrame(this._vRaf);this._vRaf=0;}if(this._vT){clearTimeout(this._vT);this._vT=0;}const [w0,h0]=this.areaSize();const w=Math.max(w0,50),h=Math.max(h0,50),k=this.view.k;
    const x0=this.view.cx-w/(2*k),y0=this.view.cy-h/(2*k),vb=`${x0} ${y0} ${w/k} ${h/k}`;if(vb!==this._vb){this._vb=vb;this.svg.setAttribute('viewBox',vb);}this.px=1/k;
-   {const lt=`matrix(${k},0,0,${k},${-x0*k},${-y0*k})`;if(lt!==this._lt){this._lt=lt;this.L.live.style.transform=lt;}}
+   {const lt=`matrix(${k},0,0,${k},${-x0*k},${-y0*k})`;if(lt!==this._lt){this._lt=lt;this.L.live.style.transform=lt;this.L.sig.style.transform=lt;
+    // the tiles keep a readable size: on the screen between 0.8 and 1.3 of their size, whatever the zoom (4.8)
+    this.L.sig.style.setProperty('--wk',String(+(Math.min(1.3,Math.max(.8,k))/k).toFixed(4)));}}
    if(this.xf.style.transform)this.xf.style.transform='';this._cv={cx:this.view.cx,cy:this.view.cy,k};
    this.gridBg(x0,y0,k);const zo=k<.7;if(zo!==this._zo){this._zo=zo;this.svg.classList.toggle('zoomed-out',zo);}}
   // the grid as a CSS background of the window (4.6): drawn by the compositor, the same at every zoom (an SVG pattern of
@@ -284,7 +289,10 @@
   fit(margin=50){const b=this.extent();if(!b){this.view={cx:400,cy:250,k:1};this.applyView();return;}const [rw,rh]=this.areaSize();
    const k=Math.min(1.9,Math.max(.25,Math.min((rw||800)/(b[2]-b[0]+2*margin),(rh||450)/(b[3]-b[1]+2*margin))));this.view={cx:(b[0]+b[2])/2,cy:(b[1]+b[3])/2,k};this.applyView();}
   extent(){const xs=[],ys=[];for(const c of this.doc.components){const b=P.bbox(c);xs.push(b[0],b[2]+(c.type==='JUNC'||c.type==='GND'?0:85));ys.push(b[1]-30,b[3]+14);for(const p of Object.keys(P.pinsOf(c))){const q=this.pin(c,p);xs.push(q[0]);ys.push(q[1]);}}
-   for(const w of this.doc.wires)for(const p of w.pts||[]){xs.push(p[0]);ys.push(p[1]);}if(!xs.length)return null;return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
+   for(const w of this.doc.wires)for(const p of w.pts||[]){xs.push(p[0]);ys.push(p[1]);}if(!xs.length)return null;
+   // the tiles of the control signals on the drawing (4.8), when they are shown
+   const wt=this.doc.watch;if(wt&&wt.show!==false&&Array.isArray(wt.tiles))for(const t of wt.tiles)if(Array.isArray(t?.at)&&t.at.every(Number.isFinite)){const x0=t.at[0]-(t.al==='r'?150:0);xs.push(x0,x0+150);ys.push(t.at[1],t.at[1]+(t.ctl?96:66));}
+   return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
   render(){this.renderWires();this.L.parts.innerHTML=this.doc.components.map(c=>this.partSVG(c)).join('');this.partEls();this.renderLabels();this.renderPins();this.renderSel();this.applyView();this._lv=new Map();this.updateLive(true);this.renderDiag();}
   // part element by id (the live values read it on every refresh)
   partEls(){const m=this.partEl=new Map();for(const g of this.L.parts.children)m.set(g.dataset.c,g);return m;}

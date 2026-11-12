@@ -10,6 +10,8 @@
 //  - learn(net, opt, acts, g, o): one step on the loss with dL/d(output) = g (for L = ½e², g = −e): back-propagation,
 //    gradient clipped to ±o.clip, weight decay o.l2 (not on the biases), SGD or Adam (β₁ 0.9, β₂ 0.999, ε 1e-8).
 //  - parse(text, sizes): weights from JSON (null if the text is empty or does not fit the sizes).
+//  - jac(net, acts, k) (4.8): d(output)/d(input k) at the activations of a forward pass, for the emulator of the inverse
+//    control (specialized inverse learning: the controller learns through the emulator's sensitivity ∂ŷ/∂u).
 (function(root){
  function rng(seed){let a=(seed>>>0)||0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296;};}
  function gauss(r){const u1=1-r(),u2=r();return Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);}
@@ -34,6 +36,10 @@
   const step=(w,gr)=>{let gg=Math.max(-clip,Math.min(clip,gr));if(adam){const m=opt.m[p]=b1*opt.m[p]+(1-b1)*gg,v=opt.v[p]=b2*opt.v[p]+(1-b2)*gg*gg;p++;return w-o.lr*(m/c1)/(Math.sqrt(v/c2)+eps);}p++;return w-o.lr*gg;};
   for(let i=0;i<L;i++){const W=net.W[i];for(let q=0;q<W.length;q++){const row=W[q];for(let j=0;j<row.length;j++)row[j]=step(row[j],gW[i][q][j]+l2*row[j]);}
    const bb=net.b[i];for(let q=0;q<bb.length;q++)bb[q]=step(bb[q],gb[i][q]);}}
+ function jac(net,acts,k){const L=net.W.length;let v=net.W[0].map(row=>row[k]);
+  for(let i=0;i<L;i++){if(i>0){const W=net.W[i],z=new Array(W.length);for(let o=0;o<W.length;o++){let s=0;const row=W[o];for(let j=0;j<row.length;j++)s+=row[j]*v[j];z[o]=s;}v=z;}
+   if(i<L-1){const a=acts[i+1];v=v.map((q,j)=>q*(1-a[j]*a[j]));}}
+  return v[0];}
  function optState(net,kind){const n=count(net);return kind==='adam'?{k:0,m:new Array(n).fill(0),v:new Array(n).fill(0)}:{k:0};}
  // sizes from the inputs and the hidden layers ("8" or "16, 8"); at most 4 hidden layers of 64
  function sizesOf(nin,hidden){const h=String(hidden??'').split(/[,;\s]+/).map(Number).filter(v=>Number.isFinite(v)&&v>=1).slice(0,4).map(v=>Math.min(64,Math.round(v)));return [Math.max(1,nin),...h,1];}
@@ -46,6 +52,6 @@
   return {net:{sizes:sz,W:net.W.map(L=>L.map(r=>r.map(Number))),b:net.b.map(r=>r.map(Number))}};}
  // the weights as the text of the block's parameter (rounded to 9 significant digits, enough for a float32-trained net)
  function text(net){const r=v=>+(+v).toPrecision(9);return JSON.stringify({sizes:net.sizes||[net.W[0][0].length,...net.W.map(L=>L.length)],W:net.W.map(L=>L.map(row=>row.map(r))),b:net.b.map(row=>row.map(r))});}
- const api={rng,gauss,init,fwd,learn,count,optState,sizesOf,parse,text};
+ const api={rng,gauss,init,fwd,learn,count,optState,sizesOf,parse,text,jac};
  root.NNet=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

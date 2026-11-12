@@ -107,7 +107,11 @@ const {chromium}=require('playwright');
  th=await p.$eval('#theory',e=>e.textContent);ok(/λ = \(m_a − m₁\)\/\(m₂ \+ m_a\) = -0,6667/.test(th)&&/σταθερό: ίδιος λόγος κατάτμησης/.test(th),'valley theory');
  ok(await p.evaluate(()=>!!document.querySelector('#bf-map path.map')),'ideal map drawn');
  // 3.3: PI in Python (Pyodide, local copy) and feedforward from an expression block
+ // 4.8: the page builds Python blocks without Python (they run in the worker of ▶); this test runs them on the page itself
+ // (PCL.S.sim.run), so it loads Python here first: PCL.pyPage
  await p.evaluate(()=>window.PCL.loadTutorial('code_loop',{ctrl:'python',ff:'expr'}));
+ ok(await p.evaluate(()=>!window.PyRT.ready&&window.PCL.S.sim.pyLazy()&&!window.PCL.S.error),'a Python block without Python on the page (4.8)');
+ await p.evaluate(()=>window.PCL.pyPage());
  await p.waitForFunction(()=>window.PyRT?.ready&&window.PCL.S.sim&&!window.PCL.S.error&&window.PCL.S.sim.net.sig.blocks.some(b=>b.type==='PY'),null,{timeout:90000});
  await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.stopT-S.sim.t);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(500);
  th=await p.$eval('#theory',e=>e.textContent);ok(/201 κλήσεις/.test(th),'python calls');ok(/κοιλάδα i_L10 A10 A/.test(th),'valley at the reference (python)');ok(/κοιλάδα στα 0,5 ms \(αρχική αναφορά\)5 A(5 A|4,99\d A)/.test(th),'feedforward start');
