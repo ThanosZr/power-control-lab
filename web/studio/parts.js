@@ -51,6 +51,16 @@
    const [lx,ly,anc]=q.x<-W?[-W+6,q.y+3,'start']:q.x>W?[W-6,q.y+3,'end']:q.y<-H?[q.x,-H+12,'middle']:[q.x,H-6,'middle'];
    s+=`<text class="pinl" x="${lx}" y="${ly}" text-anchor="${anc}">${xe(q.name.slice(0,5))}</text>`;}
   return s;}
+ // 4.4: typical single-circuit lines (positions and heights in m, radii in cm, R_dc in Ω/km; phase 0 = ground wire), the same
+ // data as pcl/lineconst.py TYPICAL (a test keeps them equal)
+ const TLM_TYPICAL={
+  '150kV':{name:'Τυπική γραμμή 150 kV, απλό κύκλωμα (ACSR 636 MCM)',rho:100,length:50,earth:'carson',skin:true,
+   wires:[{ph:0,x:-4.25,y:23.81,ymid:14.01,r:0.4765,Rdc:3.4617,tD:0.5},{ph:0,x:4.25,y:23.81,ymid:14.01,r:0.4765,Rdc:3.4617,tD:0.5},
+    {ph:1,x:-6.28,y:19.95,ymid:10.15,r:1.2575,Rdc:0.0877,tD:0.3157},{ph:2,x:0,y:19.95,ymid:10.15,r:1.2575,Rdc:0.0877,tD:0.3157},{ph:3,x:6.28,y:19.95,ymid:10.15,r:1.2575,Rdc:0.0877,tD:0.3157}]},
+  '400kV':{name:'Τυπική γραμμή 400 kV, απλό κύκλωμα (2 × ACSR 954 MCM)',rho:100,length:100,earth:'carson',skin:true,
+   wires:[{ph:0,x:-6.1,y:27.15,ymid:18.35,r:0.63,Rdc:2.0276,tD:0.5},{ph:0,x:6.1,y:27.15,ymid:18.35,r:0.63,Rdc:2.0276,tD:0.5}],
+   bundles:[{ph:1,x:-8.6,y:20,ymid:11.2,n:2,R:20,ang:0,r:1.521,Rdc:0.0587,tD:0.3335},{ph:2,x:0,y:20,ymid:11.2,n:2,R:20,ang:0,r:1.521,Rdc:0.0587,tD:0.3335},
+    {ph:3,x:8.6,y:20,ymid:11.2,n:2,R:20,ang:0,r:1.521,Rdc:0.0587,tD:0.3335}]}};
  const PARTS={
   R:{name:'Αντίσταση',prefix:'R',group:'Παθητικά',pins:{a:[-30,0],b:[30,0]},box:[-22,-8,44,16],
    params:[num('R','Αντίσταση','Ω',10),txt('sched','R(t)','',{hint:SCHED})],
@@ -544,6 +554,22 @@
    value:p=>p.X1,unit:'',
    draw:p=>'<rect class="block" x="-30" y="-25" width="60" height="50" rx="4"/>'+(isBus(p)?bl('M-40,0 H-30 M30,0 H40'):'<path d="M-40,-20 H-30 M-40,0 H-30 M-40,20 H-30 M30,-20 H40 M30,0 H40 M30,20 H40"/>')
     +'<path class="thin" d="M-18,-4 h6 c2,-6 4,-6 6,0 c2,-6 4,-6 6,0 c2,-6 4,-6 6,0 h6 M-18,-4 v10 M18,-4 v10 M-22,6 h8 M14,6 h8 M-22,10 h8 M14,10 h8"/>'+tx('π',0,-12,'bsm')},
+  // line from geometry (4.4, ROADMAP §26): the conductors (line data, as the EMTP Line Data) give Z′(ω), Y′(ω) in Python
+  // (pcl/lineconst.py, /api/line_model); the solver uses the model kept in `mdl`: CP (modal Bergeron with R/4, R/2, R/4)
+  // or FD (J. Marti: Z_c(s), A(s)·e^(−sτ) as rational functions with real poles, recursive convolution), constant real T_i
+  TLM:{name:'Γραμμή από γεωμετρία (CP / FD)',prefix:'LG',group:'Δίκτυο',pins:p=>tlmPins(p),box:p=>{const M=tlmM(p),h=isBus(p)&&M===3?50:Math.max(50,20*M+10);return [-30,-h/2,60,h];},
+   bus:p=>isBus(p)&&tlmM(p)===3?{abc1:['a1','b1','c1'],abc2:['a2','b2','c2']}:{},
+   params:[sel('model','Μοντέλο',[['cp','CP: σταθερές παράμετροι (Bergeron, R/4 – R/2 – R/4)'],['fd','FD: εξάρτηση από τη συχνότητα (J. Marti)']],'cp',{hint:'Όπως το EMTP: CP στη συχνότητα που δίνεις (κάθε ρυθμός μια γραμμή Bergeron με συγκεντρωμένη R), FD με Z_c(ω) και A(ω) ως ρητές συναρτήσεις. Και τα δύο με σταθερό πραγματικό T_i.'}),
+    num('len','Μήκος','km',100),
+    num('f','Συχνότητα των παραμέτρων (CP)','Hz',50,{show:p=>p.model!=='fd',hint:'50 Hz για μόνιμη κατάσταση και σφάλματα, 1–5 kHz για χειρισμούς, 100–500 kHz για κεραυνούς.'}),
+    num('fmin','Ελάχιστη συχνότητα προσαρμογής','Hz',0.01,{show:p=>p.model==='fd'}),num('dec','Δεκάδες','',9,{show:p=>p.model==='fd',hint:'Μέγιστη συχνότητα f_min·10^δεκάδες (προεπιλογή 0,01 Hz … 10 MHz, όπως το EMTP).'}),
+    num('ppd','Σημεία ανά δεκάδα','',10,{show:p=>p.model==='fd'}),num('fti','Συχνότητα του T_i','Hz',1000,{show:p=>p.model==='fd',hint:'Ο πραγματικός T_i υπολογίζεται σε μία συχνότητα (το EMTP προτείνει 0,5–5 kHz για χειρισμούς).'}),
+    txt('data','Δεδομένα γραμμής (JSON)',JSON.stringify(TLM_TYPICAL['400kV']),{show:()=>false}),txt('mdl','Υπολογισμένο μοντέλο (JSON)','',{show:()=>false}),
+    sel('conn','Ακροδέκτες',[['sep','Χωριστοί'],['bus','Δίαυλος abc (3 φάσεις)']],'sep')],
+   value:p=>p.len,unit:'km',
+   draw:p=>{const M=tlmM(p),bus=isBus(p)&&M===3,h=bus?50:Math.max(50,20*M+10),y=k=>-10*(M-1)+20*k;
+    return `<rect class="block" x="-30" y="${-h/2}" width="60" height="${h}" rx="4"/>`+(bus?bl('M-40,0 H-30 M30,0 H40'):`<path d="${Array.from({length:M},(_,k)=>`M-40,${y(k)} H-30 M30,${y(k)} H40`).join(' ')}"/>`)
+     +'<path class="thin" d="M-20,-6 Q-10,-14 0,-6 T20,-6 M-20,4 H20"/>'+tx(p.model==='fd'?'FD':'CP',0,18,'bsm');}},
  };
  const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Μηχανές','Δίκτυο','Φορτία','Έλεγχος','Σήματα','Δίαυλοι','Κώδικας','Υποκυκλώματα','Βασικά'];
  function defaults(type){const o={};for(const p of PARTS[type].params)o[p.k]=p.def;return o;}
@@ -803,6 +829,23 @@
   if(!(Z>0))return {err:'Η κυματική αντίσταση πρέπει να είναι θετική.'};if(!(tau>0))return {err:'Ο χρόνος διάδοσης πρέπει να είναι θετικός.'};
   const R=p.spec==='zt'?(num(p.Rt)||0):(num(p.Rp)||0)*num(p.len);if(!(R>=0))return {err:'Η αντίσταση σειράς δεν μπορεί να είναι αρνητική.'};
   const N=R>0?Math.round(num(p.nsec)||1):1;if(!(N>=1&&N<=1000))return {err:'Τα τμήματα πρέπει να είναι από 1 ως 1000.'};return {Z,tau,R,N};}
+
+ const tlmCache=new Map();
+ function tlmData(p){const s=String(p.data??'');if(tlmCache.has(s))return tlmCache.get(s);let d=null;try{d=JSON.parse(s);}catch(e){d=null;}if(tlmCache.size>64)tlmCache.clear();tlmCache.set(s,d);return d;}
+ // number of phases: the largest phase number of the conductors (0 = ground wire); 3 when the data cannot be read
+ function tlmM(p){const d=tlmData(p);if(!d)return 3;let M=0;for(const w of [...(d.wires||[]),...(d.bundles||[])])M=Math.max(M,Math.round(+w.ph)||0);return Math.max(1,Math.min(12,M||3));}
+ function tlmPin(k,end){return 'abcdefghijkl'[k]+end;}
+ function tlmPins(p){const M=tlmM(p);if(isBus(p)&&M===3)return {abc1:[-40,0],abc2:[40,0]};const o={},y=k=>-10*(M-1)+20*k;for(let k=0;k<M;k++){o[tlmPin(k,1)]=[-40,y(k)];o[tlmPin(k,2)]=[40,y(k)];}return o;}
+ // what the model was computed from: a change in any of these asks for a new model
+ function tlmKey(p){const d=tlmData(p),n=v=>{const x=parseEng(v);return Number.isFinite(x)?x:String(v);};
+  const o={data:d,model:p.model==='fd'?'fd':'cp',len:n(p.len)};if(o.model==='cp')o.f=n(p.f);else Object.assign(o,{fmin:n(p.fmin),dec:n(p.dec),ppd:n(p.ppd),fti:n(p.fti)});return JSON.stringify(o);}
+ // the model for the solver: {M, type, Ti (M×M, by rows), modes} or {err}
+ function tlmModel(p){if(!tlmData(p))return {err:'τα δεδομένα της γραμμής δεν διαβάζονται (JSON).'};let m=null;try{m=p.mdl?JSON.parse(p.mdl):null;}catch(e){m=null;}
+  if(!m||!m.modes)return {err:'δεν έχει υπολογιστεί μοντέλο. Άνοιξε «Δεδομένα γραμμής» και πάτα «Υπολογισμός» (χρειάζεται ο server).',need:true};
+  if(m.src!==tlmKey(p))return {err:'το μοντέλο είναι παλιό (άλλαξαν δεδομένα, μήκος ή επιλογές). «Δεδομένα γραμμής» → «Υπολογισμός».',need:true};
+  const M=m.M;if(!(M>=1&&m.Ti?.length===M&&m.modes.length===M))return {err:'μη έγκυρο μοντέλο γραμμής.'};
+  for(const q of m.modes){const tau=+q.tau;if(!(tau>0))return {err:'μη έγκυρος χρόνος διάδοσης στο μοντέλο.'};}
+  return m;}
  // the waveform of a lightning-current part: {kind, n, tau1, tau2, eta, I0, t0, T1, T2}
  function lightningWave(p){const I0=parseEng(p.Ipk)||0,t0=Math.max(0,parseEng(p.t0)||0),pre=HEIDLER[p.shape];
   if(pre)return {kind:'heidler',...pre,I0,t0};
@@ -820,7 +863,7 @@
  // live (the reload carries the states by the inner ids), and only what changes the inner circuit is structural
  Object.assign(STRUCT,{GRID3:new Set(['z0','conn']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn']),
   XF3:new Set(['grp','P0','core','conn']),LOAD3:new Set(['cn','model','conn']),
-  GEN3:new Set(['data','conv','shaft','Hm','exc','mech','init','neut','conn']),LINE3:new Set(['unit','z0','conn'])});
+  GEN3:new Set(['data','conv','shaft','Hm','exc','mech','init','neut','conn']),LINE3:new Set(['unit','z0','conn']),TLM:new Set(['model','data','mdl','len','f','fmin','dec','ppd','fti','conn'])});
  const structCache=new Map();
  function structural(type,k){const key=type+'|'+k;if(structCache.has(key))return structCache.get(key);let r=!!STRUCT[type]?.has(k);
   const d=PARTS[type],pd=d?.params?.find(x=>x.k===k);if(!r&&pd&&pd.struct)r=true;
@@ -865,7 +908,7 @@
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
  const api={structural,PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
-  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,bewley,movChar,
+  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,bewley,movChar,TLM_TYPICAL,tlmData,tlmM,tlmPin,tlmPins,tlmKey,tlmModel,
   srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv,
   genModel,genAxis,genTsc,genGamma,genDQ,genSteady,plist};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;

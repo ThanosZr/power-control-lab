@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.3: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (386 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.4: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (415 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.3.
+Κανένα στην 4.4.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-199 σημεία.
+226 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -147,6 +147,33 @@
 | `pcl.impulse.voltage_times` | `m` | 3.18 |
 | `pcl.impulse.waveform_characteristics` | `t`, `i` | 4.1.1 |
 | `pcl.job` | `spec`, `allow_paths` | 3.18 |
+| `pcl.lineconst.LineError` | — | 4.4 |
+| `pcl.lineconst.api` | `req` | 4.4 |
+| `pcl.lineconst.carson_integral` | `hi`, `hk`, `x`, `f`, `rho`, `mu`, `s` | 4.4 |
+| `pcl.lineconst.carson_series` | `D`, `phi`, `f`, `rho`, `switch` | 4.4 |
+| `pcl.lineconst.conductors` | `data` | 4.4 |
+| `pcl.lineconst.cp_model` | `data`, `f`, `length` | 4.4 |
+| `pcl.lineconst.exact_admittance` | `data`, `f`, `length` | 4.4 |
+| `pcl.lineconst.fd_model` | `data`, `length`, `fmin`, `decades`, `ppd`, `fti`, `tol_zc`, `tol_a`, `n0`, `curves` | 4.4 |
+| `pcl.lineconst.freqs` | `fmin`, `decades`, `ppd` | 4.4 |
+| `pcl.lineconst.line_admittance` | `Z`, `Y`, `L` | 4.4 |
+| `pcl.lineconst.load_data` | `path` | 4.4 |
+| `pcl.lineconst.modal` | `Z`, `Y`, `Ti` | 4.4 |
+| `pcl.lineconst.model_admittance` | `model`, `s` | 4.4 |
+| `pcl.lineconst.nlt_solve` | `network`, `tmax`, `n`, `window` | 4.4 |
+| `pcl.lineconst.phase_matrices` | `data`, `f`, `s`, `**kw` | 4.4 |
+| `pcl.lineconst.phases` | `data` | 4.4 |
+| `pcl.lineconst.q_error` | `Z`, `Y`, `Ti` | 4.4 |
+| `pcl.lineconst.rational` | `s`, `d`, `r`, `p` | 4.4 |
+| `pcl.lineconst.reduce_phases` | `Z`, `P`, `cs` | 4.4 |
+| `pcl.lineconst.report` | `data`, `f` | 4.4 |
+| `pcl.lineconst.save_data` | `data`, `path` | 4.4 |
+| `pcl.lineconst.sequence` | `Z` | 4.4 |
+| `pcl.lineconst.ti_matrix` | `Z`, `Y` | 4.4 |
+| `pcl.lineconst.typical` | `key` | 4.4 |
+| `pcl.lineconst.vfit` | `s`, `F`, `n`, `d`, `weight`, `iters`, `p0` | 4.4 |
+| `pcl.lineconst.z_internal` | `f`, `r`, `q`, `Rdc`, `mur`, `skin`, `s` | 4.4 |
+| `pcl.lineconst.zy` | `data`, `f`, `earth`, `skin`, `s` | 4.4 |
 | `pcl.link.App` | `url`, `token`, `timeout`, `client` | 3.18 |
 | `pcl.link.App.call` | `method`, `timeout`, `**args` | 3.18 |
 | `pcl.link.App.channels` | — | 3.18 |
@@ -263,7 +290,7 @@
 
 ## Server: `/api/<ενέργεια>` και διαδρομές
 
-34 σημεία.
+35 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -283,6 +310,7 @@
 | `/api/envelope` | — | 3.18 |
 | `/api/health` | — | 3.18 |
 | `/api/inverse` | — | 3.18 |
+| `/api/line_model` | — | 4.4 |
 | `/api/linearize` | — | 3.18 |
 | `/api/link/call` | — | 3.18 |
 | `/api/link/deny` | — | 3.18 |
@@ -382,7 +410,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-85 σημεία.
+86 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -462,6 +490,7 @@
 | `part:TAGI` | name | y | 3.18 |
 | `part:TAGO` | name | u | 3.18 |
 | `part:TL` | spec, Z, tau, len, vel, Lp, Cp, Rt, Rp, nsec | a1, a2, b1, b2 | 3.18 |
+| `part:TLM` | model, len, f, fmin, dec, ppd, fti, data, mdl, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.4 |
 | `part:UD` | clock, trig, y0 | u, y | 3.18 |
 | `part:VAC` | Vpk, f, phase, off, Rs, Ls | n, p | 3.18 |
 | `part:VAC3` | Vpk, f, phase, seq, Rs, Ls, conn | a, abc, b, c, n | 3.18 |

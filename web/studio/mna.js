@@ -120,7 +120,7 @@
      const s=e.src;if(!e.gen&&!(e.sigIn>=0)&&s&&s.kind==='ac'&&Math.abs(s.f-f0)<=1e-6*f0){br[r]=s.Vpk*Math.cos(s.ph-Math.PI/2);bi[r]=s.Vpk*Math.sin(s.ph-Math.PI/2);}break;}
     case 'X':{const r=e.row,N=e.n;ad(e.s1,r,1,0);ad(r,e.s1,1,0);ad(e.s2,r,-1,0);ad(r,e.s2,-1,0);ad(e.p1,r,-N,0);ad(r,e.p1,-N,0);ad(e.p2,r,N,0);ad(r,e.p2,N,0);break;}
     case 'GY':{const r=e.row,Y=e.psi;ad(e.a,r,1,0);ad(r,e.a,1,0);ad(e.b,r,-1,0);ad(r,e.b,-1,0);ad(r,e.m,-Y,0);ad(e.m,r,-Y,0);break;}
-    case 'TL':case 'CPL':case 'NL':left.add(e.k);break;
+    case 'TL':case 'TLM':case 'CPL':case 'NL':left.add(e.k);break;
    }
   }
   gens.forEach((m,q)=>{const Vp=m.V0*m.g.Un*Math.SQRT2/Math.sqrt(3);
@@ -167,6 +167,7 @@
   for(const e of net.els)if(e.k==='F'&&!e.gen&&!e.sm&&!e.srm&&e.Lm){const N=e.N;for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=e.Lm[k*N+j]*e.i[j];e.psi[k]=s;}e.psi1.set(e.psi);}
   // a generator's stator ports: the voltage behind R_a (the phasor solution had the machine replaced by sources)
   gens.forEach((m,q)=>{for(let k=0;k<3;k++){const pn=m.F.ports[k][0];if(pn!==m.term[k])x0[pn]=xr[m.term[k]]-m.g.Ra*m.g.Zb*xr[n0+3*q+k];}});
+  if(left.has('TLM'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: οι γραμμές από γεωμετρία (CP/FD) ξεκινούν χωρίς φορτίο.');
   if(left.has('TL'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: οι γραμμές με κατανεμημένες παραμέτρους (Bergeron) ξεκινούν χωρίς φορτίο.');
   if(left.has('CPL')||left.has('NL'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: τα φορτία σταθερής ισχύος και τα αλεξικέραυνα μένουν έξω από τη λύση με φασιθέτες.');
   sim.lfInit=rep;sim.acPh={w,w0,xr:xr.slice(0,n0),xi:xi.slice(0,n0),xd:Xd.slice(0,n0)};return x0;}
@@ -186,6 +187,22 @@
  function tlElement(o,g){const N=g.N||1,R=g.R||0,r=R/(4*N),Ze=g.Z+r;
   return {k:'TL',...o,Z:g.Z,tau:g.tau,N,Rl:R,ts:g.tau/N,Ze,hh:(g.Z-r)/Ze,Ih:[0,0],IhS:new Float64Array(2*N),q:new Float64Array(3*N+1),iE:new Float64Array(2),
    H:{t:[],c:Array.from({length:3*N+1},()=>[]),s:0,cut:0}};}
+ // line from geometry (4.4, ROADMAP §26): M modes, each a line in its own frame, phases ↔ modes by a constant real T_i
+ // (v_mode = T_iᵀ·v, i = T_i·i_mode). CP: per mode Z_e = Z_c + R/4 and the history of Dommel (as 'TL' with one section).
+ // FD (J. Marti): per mode Z_c(s) = d + Σ k/(s + p) and A(s) = e^(−sτ)·Σ c/(s + q), recursive convolutions that are exact
+ // for inputs linear over the step; at each end i = (v − h_z − b)/Z_eq with b = A ⊛ f of the other end, f = v + Z_c ⊛ i.
+ function tlmElement(o,n1,n2,g){const M=g.M,Ti=new Float64Array(M*M);for(let r=0;r<M;r++)for(let k=0;k<M;k++)Ti[r*M+k]=g.Ti[r][k];
+  const modes=g.modes.map(q=>{if(g.type!=='fd'){const Zc=+q.Zc,R=Math.max(0,+q.R||0),r=R/4,Ze=Zc+r;return {cp:true,Zc,R,tau:+q.tau,Ze,hh:(Zc-r)/Ze};}
+   const z=q.zc,a=q.a,F=v=>Float64Array.from(v.map(Number));
+   return {fd:true,tau:+q.tau,d:+z.d,kr:F(z.r),kp:F(z.p),ar:F(a.r),ap:F(a.p),z1:new Float64Array(z.r.length),z2:new Float64Array(z.r.length),
+    y1:new Float64Array(a.r.length),y2:new Float64Array(a.r.length),i1:0,i2:0,u:new Float64Array(4),Zeq:+z.d,hz1:0,hz2:0,b1:0,b2:0};});
+  const nc=g.type==='fd'?2:4;
+  return {k:'TLM',...o,M,n1,n2,p1:n1.map(a=>[a,-1]),p2:n2.map(a=>[a,-1]),Ti,fd:g.type==='fd',modes,tauMin:Math.min(...modes.map(m=>m.tau)),tauMax:Math.max(...modes.map(m=>m.tau)),
+   Gp:new Float64Array(M*M),gH:NaN,Ihm:new Float64Array(2*M),Ih:new Float64Array(2*M),iE:new Float64Array(2*M),vm:new Float64Array(2*M),q:new Float64Array(nc*M),
+   H:{t:[],c:Array.from({length:nc*M},()=>[]),s:0,cut:0}};}
+ // (E = e^(−ph), a₀ = ∫₀ʰ e^(−ps) ds, a₁/h = ∫₀ʰ s·e^(−ps) ds / h) of one real pole p over a step h, without cancellation for small ph
+ function rcCoef(p,h){const x=p*h;if(x<1e-4){const x2=x*x;return [Math.exp(-x),h*(1-x/2+x2/6-x*x2/24),h*(0.5-x/3+x2/8-x*x2/30)];}
+  const E=Math.exp(-x),em=-Math.expm1(-x);return [E,em/p,(em-x*E)/(p*x)];}
  function buildNetlist(project){
   // subcircuits (3.17, §9): the solver sees one flat circuit (instance parts as X1/<id>, ports as junctions)
   let subWarn=[];if(SUBC&&SUBC.needs(project)){try{const f=SUBC.flatten(project);project=f.project;subWarn=f.warnings;}catch(e){throw e instanceof SUBC.SubcircuitError?new NetlistError(e.message):e;}}
@@ -253,7 +270,7 @@
   // wire names label their net
   for(const w of project.wires||[])if(w.name){const n=pinNet.get(w.a.c+':'+w.a.p);if(n&&!n.name)n.name=w.name;}
   // pins that touch nothing else
-  const open=[];for(const c of comps){if(c.type==='JUNC'||c.type==='TL'||skip.has(c.id)||!Object.keys(P.elPins(c)).length)continue;for(const p of Object.keys(P.elPins(c))){const n=pinNet.get(c.id+':'+p);if(n&&n.keys.filter(k=>!isJ(k)).length===1&&c.type!=='GND')open.push(c.id+':'+p);}}
+  const open=[];for(const c of comps){if(c.type==='JUNC'||c.type==='TL'||c.type==='TLM'||skip.has(c.id)||!Object.keys(P.elPins(c)).length)continue;for(const p of Object.keys(P.elPins(c))){const n=pinNet.get(c.id+':'+p);if(n&&n.keys.filter(k=>!isJ(k)).length===1&&c.type!=='GND')open.push(c.id+':'+p);}}
   const lbl=id=>byId.get(id)?.label||id,unc=[...skip].filter(([,r])=>r==='unconn').map(([id])=>lbl(id)),oi=[...skip].filter(([,r])=>r==='openI').map(([id])=>lbl(id)),cut=(l,n=6)=>l.slice(0,n).join(', ')+(l.length>n?` και ${l.length-n} ακόμη`:'');
   if(unconn==='error'&&(unc.length||oi.length||open.length))throw new NetlistError([unc.length?'ασύνδετα στοιχεία: '+cut(unc):'',oi.length?'πηγή ρεύματος σε ανοιχτό κύκλωμα: '+cut(oi):'',open.length?'ανοιχτοί ακροδέκτες: '+cut(open):''].filter(Boolean).join('· ')+'. Σύνδεσέ τα ή άλλαξε την επιλογή «Ασύνδετα» στο πάνελ παραμέτρων.');
   if(unconn==='warn'){if(unc.length)warnings.push('Ασύνδετα στοιχεία, εκτός επίλυσης: '+cut(unc)+'.');if(oi.length)warnings.push('Πηγή ρεύματος σε ανοιχτό κύκλωμα, εκτός επίλυσης: '+cut(oi)+'.');
@@ -290,6 +307,10 @@
    else if(T==='TL'){const g=P.tlParams(p);if(g.err)throw new NetlistError(`${c.label||c.id}: ${g.err}`);
     const a1=node(c.id,'a1'),b1=node(c.id,'b1'),a2=node(c.id,'a2'),b2=node(c.id,'b2');info.pins=[a1,b1];info.ports=[[a1,b1],[a2,b2]];info.line=g;
     info.main=add(tlElement({a:a1,b:b1,a1,b1,a2,b2,key:c.id},g));}
+   else if(T==='TLM'){const g=P.tlmModel(p);if(g.err)throw new NetlistError(`${c.label||c.id}: ${g.err}`);const M=g.M;
+    if(M!==P.tlmM(p))throw new NetlistError(`${c.label||c.id}: το μοντέλο έχει ${M} φάσεις, τα δεδομένα ${P.tlmM(p)}. Υπολόγισε ξανά.`);
+    const n1=[],n2=[];for(let k=0;k<M;k++){n1.push(node(c.id,P.tlmPin(k,1)));n2.push(node(c.id,P.tlmPin(k,2)));}
+    info.pins=[n1[0],-1];info.ports=[...n1.map(a=>[a,-1]),...n2.map(a=>[a,-1])];info.tlm=g;info.main=add(tlmElement({a:n1[0],b:-1,key:c.id},n1,n2,g));}
    else if(T==='SG'){const a=node(c.id,'a'),b=node(c.id,'b');info.pins=[a,b];const Ub=p.vt==='de'?1:num(p.Ub,0),tr=String(p.trig??'').trim()===''?Infinity:P.parseEng(p.trig);
     if(!(Ub>0))throw new NetlistError(`${c.label||c.id}: η τάση διάσπασης πρέπει να είναι θετική.`);if(Number.isNaN(tr))throw new NetlistError(`${c.label||c.id}: μη έγκυρος χρόνος έναυσης.`);
     const ext=['zero','iext','never'].includes(p.ext)?p.ext:'zero';let de=null;
@@ -443,7 +464,7 @@
   // Capacitors count as a path (their charge fixes the potential); ideal current sources do not.
   const islands=[];
   {const N=nNodes,par=Int32Array.from({length:N+1},(_,i)=>i),f=x=>{while(par[x]!==x){par[x]=par[par[x]];x=par[x];}return x;},u=(a,b)=>{const ra=f(a<0?N:a),rb=f(b<0?N:b);if(ra!==rb)par[ra]=rb;};
-   for(const e of els){if(e.k==='I')continue;if(e.k==='X'){u(e.p1,e.p2);u(e.s1,e.s2);continue;}if(e.k==='TL'){u(e.a1,e.a2);u(e.b1,e.b2);continue;}if(e.ports){for(const [a,b] of e.ports)u(a,b);continue;}if(e.a!==undefined&&e.b!==undefined)u(e.a,e.b);}
+   for(const e of els){if(e.k==='I')continue;if(e.k==='X'){u(e.p1,e.p2);u(e.s1,e.s2);continue;}if(e.k==='TL'){u(e.a1,e.a2);u(e.b1,e.b2);continue;}if(e.k==='TLM'){for(let k=0;k<e.M;k++){u(e.n1[k],e.n2[k]);u(e.n1[k],-1);}continue;}if(e.ports){for(const [a,b] of e.ports)u(a,b);continue;}if(e.a!==undefined&&e.b!==undefined)u(e.a,e.b);}
    const g=f(N),grp=new Map();for(let i=0;i<N;i++){const r=f(i);if(r===g)continue;if(!grp.has(r))grp.set(r,[]);grp.get(r).push(i);}
    for(const nodes of grp.values())islands.push({nodes,pins:nodes.filter(i=>i<nets.length).map(i=>nets[i].canon),ref:island});
    if(islands.length&&island==='error')throw new NetlistError('Τμήμα του κυκλώματος χωρίς αγώγιμη σύνδεση με τη γείωση: '+islands.map(q=>cut(q.pins,3)||'εσωτερικοί κόμβοι').join(' · ')+'. Βάλε γείωση ή άλλαξε την επιλογή «Αιωρούμενα τμήματα».');
@@ -516,16 +537,16 @@
   // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
   basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>b.type==='CLK'||b.type==='RAMP');if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
    for(const c of this.net.compInfo.values())if(c.gen)return 1/c.gen.g.f; // 4.3: a network of generators runs on their period
-   const lg=[...this.net.compInfo.values()].filter(c=>c.wave||c.line);if(lg.length)return Math.min(...lg.map(c=>c.wave?c.wave.T1:c.line.tau));return this.net.tbase||1e-3;}
+   const lg=[...this.net.compInfo.values()].filter(c=>c.wave||c.line||c.tlm);if(lg.length)return Math.min(...lg.map(c=>c.wave?c.wave.T1:c.line?c.line.tau:Math.min(...c.tlm.modes.map(q=>+q.tau))));return this.net.tbase||1e-3;}
   // the step never exceeds the shortest line delay (the history at t − τ must be known)
-  tlMaxStep(){let m=Infinity;for(const e of this.net.els)if(e.k==='TL')m=Math.min(m,e.ts);return m;}
+  tlMaxStep(){let m=Infinity;for(const e of this.net.els){if(e.k==='TL')m=Math.min(m,e.ts);else if(e.k==='TLM')m=Math.min(m,e.tauMin);}return m;}
   setStep(hDiv,h){this.opts.hDiv=hDiv||this.opts.hDiv;this.opts.h=h||null;this.hUser=this.opts.h||this.T/this.opts.hDiv;this.h=Math.min(this.hUser,this.tlMaxStep());this.hv=null;this.varSetup();this.lteH=null;this.capDirty=true;}
   // ------------------------------------------------------------ variable step (3.13, ROADMAP §40)
   // the reactive states (L currents, C voltages, fluxes of the multiports): the local error, the two-step ringing check and the mode analysis use them
   stIndex(){const S=[];for(const e of this.net.els){if(e.k==='L')S.push({e,k:'L'});else if(e.k==='C')S.push({e,k:'C'});else if(e.k==='F')for(let j=0;j<e.N;j++)S.push({e,k:'F',j});}
    // the end currents of the lines take part in the local error too (their history is a state of the line), not in the mode analysis
    // and so do the states of the machines kept outside the circuit (rotor flux of the induction machine, speeds)
-   const A=[...S];for(const e of this.net.els)if(e.k==='TL'){A.push({e,k:'T',j:0});A.push({e,k:'T',j:1});}
+   const A=[...S];for(const e of this.net.els){if(e.k==='TL'){A.push({e,k:'T',j:0});A.push({e,k:'T',j:1});}else if(e.k==='TLM')for(let j=0;j<2*e.M;j++)A.push({e,k:'T',j});}
    for(const c of this.net.compInfo.values()){const e={cid:c.id};if(c.im){A.push({e,m:c.im,k:'M',f:'pa'},{e,m:c.im,k:'M',f:'pb'},{e,m:c.im,k:'W'});}else if(c.sm||c.srm)A.push({e,m:c.sm||c.srm,k:'W'});else if(c.gen)for(let j=0;j<c.gen.g.sh.N;j++)A.push({e,m:c.gen,k:'Wg',j});}
    this.stEls=S;this.stAll=A;const n=A.length;this.stKind=Uint8Array.from(A,q=>q.k==='C'?0:q.k==='F'||q.k==='M'?2:q.k==='W'||q.k==='Wg'?3:1);
    if(!this.lteSc||this.lteSc.length!==n){this.lteSc=new Float64Array(n);this.ringD=new Float64Array(n);this.ringN=new Uint16Array(n);this.lteH=null;this.rx=null;}
@@ -784,9 +805,9 @@
   V(i){return i<0?0:this.x[i];}
   elCurrent(e){const v=this.V(e.a)-this.V(e.b);
    switch(e.k){case 'G':return v/e.Rnow;case 'L':return e.i;case 'C':return e.i;case 'V':return -this.x[e.row];case 'I':return e.Inow;
-    case 'S':return v*(e.on?1/e.Ron:1/e.Roff);case 'GY':return this.x[e.row];case 'D':return e.on?(v-e.Vf)/e.Ron:v/e.Roff;case 'CPL':return e.g*v+e.J;case 'F':return e.i[0];case 'MG':return this.portI(e,0);case 'TL':return e.iE[0];case 'NL':return e.ch.cur(v).i;}return 0;}
+    case 'S':return v*(e.on?1/e.Ron:1/e.Roff);case 'GY':return this.x[e.row];case 'D':return e.on?(v-e.Vf)/e.Ron:v/e.Roff;case 'CPL':return e.g*v+e.J;case 'F':return e.i[0];case 'MG':return this.portI(e,0);case 'TL':return e.iE[0];case 'TLM':return e.iE[0];case 'NL':return e.ch.cur(v).i;}return 0;}
   // current of port k of a multiport
-  portI(e,k){if(e.k==='F')return e.i[k];if(e.k==='TL')return e.iE[k];let s=0;for(let j=0;j<e.N;j++)s+=e.Gm[k*e.N+j]*(this.V(e.ports[j][0])-this.V(e.ports[j][1]));return s;}
+  portI(e,k){if(e.k==='F')return e.i[k];if(e.k==='TL'||e.k==='TLM')return e.iE[k];let s=0;for(let j=0;j<e.N;j++)s+=e.Gm[k*e.N+j]*(this.V(e.ports[j][0])-this.V(e.ports[j][1]));return s;}
   // values of all channels at the current solution
   computeVals(){
    const out=this.vals;let j=0;const x=this.x;if(this.net.sig.blocks.length)this.evalBlocks('trial');
@@ -989,10 +1010,11 @@
   zcFrac(){this.evalBlocks('trial',false,true);let th=null;
    for(const b of this.net.sig.zc){const s=b.st.s,f0=b.st.f0,f1=b.f1;if(!(s?f1<0:f1>0))continue;const d=f0-f1;const q=Math.min(1,Math.max(0,d!==0?f0/d:0));if(th===null||q<th)th=q;}
    return th;}
-  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);}
+  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='TLM')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut,e.modes.map(m=>m.fd?[m.z1.slice(),m.z2.slice(),m.y1.slice(),m.y2.slice(),m.i1,m.i2]:null)]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);}
    return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el,ms:[...(this.ims||[]),...(this.sms||[]),...(this.srms||[])].map(m=>[m,{...m.st}]),gs:(this.gens||[]).map(m=>[m,genCopy(m.st),m.Efd0,m.Tm0])};}
   restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
-   for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];}else if(e.k==='TL'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];e.trigDone=r[3];e.Dacc=r[4];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
+   for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];}else if(e.k==='TL'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);}else if(e.k==='TLM'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);
+    r[5].forEach((q,k)=>{if(!q)return;const m=e.modes[k];m.z1.set(q[0]);m.z2.set(q[1]);m.y1.set(q[2]);m.y2.set(q[3]);m.i1=q[4];m.i2=q[5];});}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];e.trigDone=r[3];e.Dacc=r[4];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
    for(const [m,st] of S.ms||[]){m.st={...st};if(m.ph)this.imSources(m);}
    for(const [m,st,e,t] of S.gs||[]){m.st=genCopy(st);m.Efd0=e;m.Tm0=t;}}
   // the whole state for a later continuation (3.16): {format, version, t, opts, method, state}. JSON-able, so it goes to a file
@@ -1033,6 +1055,7 @@
     else if(e.k==='V'&&e.gen)e.Vnow=this.genEfd(e.gen,t)*e.gen.g.vfK;
     else if(e.k==='V'){const s=e.src;e.Vnow=e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):s.kind==='dc'?schedAt(s.sched,t,s.V,L):s.kind==='wave'?P.waveAt(s.w,t):s.off+s.Vpk*Math.sin(2*Math.PI*s.f*t+s.ph);}
     else if(e.k==='TL')this.tlSources(e,t);
+    else if(e.k==='TLM')this.tlmSources(e,t);
     else if(e.k==='CPL')e.Pnow=schedAt(e.sched,t,e.P,L);
    }
   }
@@ -1057,6 +1080,7 @@
      case 'F':{const c=mode==='BDF2'?h/this.bdf.a0:tr?h/2:h,N=e.N,G=e.Gnow;e.cc=c;stampM(ad,e.ports,N,G,c);break;} // flux multiport: i = c·Γ·v + J
      case 'MG':stampM(ad,e.ports,e.N,e.Gm,1);break;
      case 'TL':g(e.a1,e.b1,1/e.Ze);g(e.a2,e.b2,1/e.Ze);break;
+     case 'TLM':{const G=this.tlmG(e,h);stampM(ad,e.p1,e.M,G,1);stampM(ad,e.p2,e.M,G,1);break;}
      case 'NL':g(e.a,e.b,e.g);break;
      case 'V':{const r=e.row;if(e.a>=0){ad(e.a,r,1);ad(r,e.a,1);}if(e.b>=0){ad(e.b,r,-1);ad(r,e.b,-1);}break;}
      case 'GY':{const r=e.row,Y=e.psi;if(e.a>=0){ad(e.a,r,1);ad(r,e.a,1);}if(e.b>=0){ad(e.b,r,-1);ad(r,e.b,-1);}if(e.m>=0){ad(r,e.m,-Y);ad(e.m,r,-Y);}break;} // gyrator: v_ab = ψ·ω, τ = ψ·i into node ω
@@ -1079,6 +1103,7 @@
       for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=G[k*N+j]*(base[j]-(e.p0?e.p0[j]:0));Jv[k]=s;J(e.ports[k][0],e.ports[k][1],s);}break;}
      case 'I':J(e.a,e.b,-e.Inow);break;
      case 'TL':J(e.a1,e.b1,e.Ih[0]);J(e.a2,e.b2,e.Ih[1]);break;
+     case 'TLM':for(let k=0;k<e.M;k++){J(e.n1[k],-1,e.Ih[k]);J(e.n2[k],-1,e.Ih[e.M+k]);}break;
      case 'NL':J(e.a,e.b,e.J);break;
      case 'V':b[e.row]=e.Vnow;break;
     }
@@ -1154,6 +1179,7 @@
     else if(e.k==='F'){const N=e.N,G=e.Gnow;e.psi1.set(e.psi);for(let k=0;k<N;k++){const [a,bb]=e.ports[k];e.psi[k]=e.base[k]+e.cc*(this.V(a)-this.V(bb));}
      for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=G[k*N+j]*(e.psi[j]-(e.p0?e.p0[j]:0));e.i[k]=s;}}
     else if(e.k==='TL')this.tlRecord(e,this.t+h);
+    else if(e.k==='TLM')this.tlmRecord(e,this.t+h,h);
    }
    if(this.ims)for(const m of this.ims)this.imStep(m,h);
    if(this.sms)for(const m of this.sms)this.smStep(m,h);
@@ -1170,7 +1196,7 @@
    if(x0)for(const e of this.net.els){if(e.k==='D'&&!e.gap)e.on=!!(e.gk&&e.gon);}
    for(let it=0;it<40;it++){sol=this.solve(hs,'BE');if(x0)break;const bad=this.check(sol,true);if(!bad.length)break;for(const b of bad)b.e.on=!b.e.on;}
    this.x=sol;if(x0){for(let i=0;i<x0.length&&i<sol.length;i++)sol[i]=x0[i];for(const [e,i] of ic)e.i=i;} // 4.3: the steady start of a load flow (acInit), capacitor currents included
-   for(const e of this.net.els){const v=this.V(e.a)-this.V(e.b);if(e.k==='D'){e.vPrev=v;e.iPrev=e.on?(v-e.Vf)/e.Ron:v/e.Roff;}if(e.k==='CPL')e.v0=v;if(e.k==='TL'&&!e.H.t.length)this.tlRecord(e,0);}
+   for(const e of this.net.els){const v=this.V(e.a)-this.V(e.b);if(e.k==='D'){e.vPrev=v;e.iPrev=e.on?(v-e.Vf)/e.Ron:v/e.Roff;}if(e.k==='CPL')e.v0=v;if(e.k==='TL'&&!e.H.t.length)this.tlRecord(e,0);if(e.k==='TLM'&&!e.H.t.length)this.tlmRecord(e,0,0);}
    this.computeVals();
   }
   // line (3.8, losses 3.11): history sources of every section at time t from the record at t − τ/N (Dommel, lumped R/4, R/2, R/4).
@@ -1186,6 +1212,41 @@
    while(H.s+2<H.t.length&&H.t[H.s+1]<t-1.5*e.ts)H.s++;if(H.s>4096){H.t.splice(0,H.s);for(const c of C)c.splice(0,H.s);H.cut+=H.s;H.s=0;}}
   // all columns at time tq by linear interpolation; zero before t = 0 (the line starts de-energized)
   tlHist(e,tq){const H=e.H,n=H.t.length,C=H.c,out=e.q;if(tq<0||!n){out.fill(0);return out;}let j=n-1;
+   if(tq>=H.t[j]){for(let k=0;k<C.length;k++)out[k]=C[k][j];return out;}let lo=H.s,hi=j;if(tq<=H.t[lo]){for(let k=0;k<C.length;k++)out[k]=C[k][lo];return out;}
+   while(hi-lo>1){const m=(lo+hi)>>1;if(H.t[m]<=tq)lo=m;else hi=m;}const f=(tq-H.t[lo])/((H.t[hi]-H.t[lo])||1);
+   for(let k=0;k<C.length;k++){const c=C[k];out[k]=c[lo]+(c[hi]-c[lo])*f;}return out;}
+  // ------------------------------------------------------------ line from geometry (4.4)
+  // the phase conductance at each end for the step h: T_i·diag(1/Z_e or 1/Z_eq(h))·T_iᵀ (the same at both ends)
+  tlmG(e,h){if(e.gH===h)return e.Gp;const M=e.M,Ti=e.Ti,G=e.Gp,gk=new Float64Array(M);
+   for(let k=0;k<M;k++){const m=e.modes[k];if(m.cp)gk[k]=1/m.Ze;else{let Z=m.d;for(let i=0;i<m.kp.length;i++){const c=rcCoef(m.kp[i],h);Z+=m.kr[i]*(c[1]-c[2]);}m.Zeq=Z;gk[k]=1/Z;}}
+   for(let r=0;r<M;r++)for(let q=0;q<M;q++){let s=0;for(let k=0;k<M;k++)s+=Ti[r*M+k]*gk[k]*Ti[q*M+k];G[r*M+q]=s;}e.gH=h;return G;}
+  // history sources at t (the end of the step that starts at this.t): per mode, then to the phases with T_i
+  tlmSources(e,t){const M=e.M,h=Math.max(0,t-this.t),Ihm=e.Ihm;if(e.fd)this.tlmG(e,h);
+   for(let k=0;k<M;k++){const m=e.modes[k];
+    if(m.cp){const q=this.tlmHist(e,t-m.tau),v1=q[4*k],v2=q[4*k+1],i1=q[4*k+2],i2=q[4*k+3],Ze=m.Ze,hh=m.hh,cp=(1+hh)/2,cm=(1-hh)/2;
+     const AL=v1/Ze+hh*i1,AR=v2/Ze+hh*i2;Ihm[k]=-cp*AR-cm*AL;Ihm[M+k]=-cp*AL-cm*AR;continue;}
+    // inputs of the propagation convolutions: f of the other end at t − τ and t − h − τ
+    let q=this.tlmHist(e,t-m.tau);const u1=q[2*k+1],u2=q[2*k];q=this.tlmHist(e,t-h-m.tau);const u1p=q[2*k+1],u2p=q[2*k];
+    m.u[0]=u1;m.u[1]=u1p;m.u[2]=u2;m.u[3]=u2p;let b1=0,b2=0;
+    for(let i=0;i<m.ap.length;i++){const [E,a0,a1]=rcCoef(m.ap[i],h),c=m.ar[i];b1+=E*m.y1[i]+c*(a0*u1+a1*(u1p-u1));b2+=E*m.y2[i]+c*(a0*u2+a1*(u2p-u2));}
+    let hz1=0,hz2=0;for(let i=0;i<m.kp.length;i++){const [E,,a1]=rcCoef(m.kp[i],h),c=m.kr[i];hz1+=c*(E*m.z1[i]+a1*m.i1);hz2+=c*(E*m.z2[i]+a1*m.i2);}
+    m.b1=b1;m.b2=b2;m.hz1=hz1;m.hz2=hz2;Ihm[k]=-(hz1+b1)/m.Zeq;Ihm[M+k]=-(hz2+b2)/m.Zeq;}
+   const Ti=e.Ti,Ih=e.Ih;for(let r=0;r<M;r++){let s1=0,s2=0;for(let k=0;k<M;k++){s1+=Ti[r*M+k]*Ihm[k];s2+=Ti[r*M+k]*Ihm[M+k];}Ih[r]=s1;Ih[M+r]=s2;}}
+  // after a step: modal voltages and currents at both ends, the states of the convolutions, the record for t + τ
+  tlmRecord(e,t,h){const M=e.M,Ti=e.Ti,vm=e.vm,H=e.H,C=H.c;
+   for(let k=0;k<M;k++){let s1=0,s2=0;for(let r=0;r<M;r++){s1+=Ti[r*M+k]*this.V(e.n1[r]);s2+=Ti[r*M+k]*this.V(e.n2[r]);}vm[k]=s1;vm[M+k]=s2;}
+   const im=new Float64Array(2*M);H.t.push(t);
+   for(let k=0;k<M;k++){const m=e.modes[k];
+    if(m.cp){const i1=vm[k]/m.Ze+e.Ihm[k],i2=vm[M+k]/m.Ze+e.Ihm[M+k];im[k]=i1;im[M+k]=i2;C[4*k].push(vm[k]);C[4*k+1].push(vm[M+k]);C[4*k+2].push(i1);C[4*k+3].push(i2);continue;}
+    const Zeq=h>0?m.Zeq:m.d,i1=(vm[k]-m.hz1-m.b1)/Zeq,i2=(vm[M+k]-m.hz2-m.b2)/Zeq;let s1=m.d*i1,s2=m.d*i2;
+    for(let i=0;i<m.kp.length;i++){const [E,a0,a1]=rcCoef(m.kp[i],h);m.z1[i]=E*m.z1[i]+a0*i1+a1*(m.i1-i1);m.z2[i]=E*m.z2[i]+a0*i2+a1*(m.i2-i2);s1+=m.kr[i]*m.z1[i];s2+=m.kr[i]*m.z2[i];}
+    const u=m.u;for(let i=0;i<m.ap.length;i++){const [E,a0,a1]=rcCoef(m.ap[i],h),c=m.ar[i];m.y1[i]=E*m.y1[i]+c*(a0*u[0]+a1*(u[1]-u[0]));m.y2[i]=E*m.y2[i]+c*(a0*u[2]+a1*(u[3]-u[2]));}
+    m.i1=i1;m.i2=i2;im[k]=i1;im[M+k]=i2;C[2*k].push(vm[k]+s1);C[2*k+1].push(vm[M+k]+s2);}
+   for(let r=0;r<M;r++){let s1=0,s2=0;for(let k=0;k<M;k++){s1+=Ti[r*M+k]*im[k];s2+=Ti[r*M+k]*im[M+k];}e.iE[r]=s1;e.iE[M+r]=s2;}
+   const keep=t-2.5*e.tauMax-4*(this.hUser||0);while(H.s+2<H.t.length&&H.t[H.s+1]<keep)H.s++;
+   if(H.s>4096){H.t.splice(0,H.s);for(const c of C)c.splice(0,H.s);H.cut+=H.s;H.s=0;}}
+  // all columns at time tq (linear interpolation), zero before t = 0 (the line starts without charge)
+  tlmHist(e,tq){const H=e.H,n=H.t.length,C=H.c,out=e.q;if(tq<0||!n){out.fill(0);return out;}const j=n-1;
    if(tq>=H.t[j]){for(let k=0;k<C.length;k++)out[k]=C[k][j];return out;}let lo=H.s,hi=j;if(tq<=H.t[lo]){for(let k=0;k<C.length;k++)out[k]=C[k][lo];return out;}
    while(hi-lo>1){const m=(lo+hi)>>1;if(H.t[m]<=tq)lo=m;else hi=m;}const f=(tq-H.t[lo])/((H.t[hi]-H.t[lo])||1);
    for(let k=0;k<C.length;k++){const c=C[k];out[k]=c[lo]+(c[hi]-c[lo])*f;}return out;}

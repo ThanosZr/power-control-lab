@@ -29,9 +29,14 @@ function buildSim(fresh){
   if(e.needPython){notice(esc(e.message),'info'); // code blocks (3.3): load Pyodide once, then build again
    PyRT.load().then(()=>{buildSim(true);draw(true);if(!S.error)notice(`Η Python (Pyodide ${esc(PyRT.py?.version||'')}) είναι έτοιμη (${PyRT.source?.startsWith('http')?'από το CDN':'τοπικό αντίγραφο'}).`,'info');setTimeout(()=>notice(''),3000);})
     .catch(err=>notice('Δεν φορτώθηκε η Python (Pyodide): '+esc(err.message)+'. Χρειάζεται σύνδεση στο internet ή τοπικό αντίγραφο: <code>python tools/get_pyodide.py</code>.','error'));}
+  // 4.4: a line from geometry without a model (or with an old one): the server computes it, then the circuit is built again
+  else if(window.LineData&&/Δεδομένα γραμμής/.test(e.message)&&!S.lineBusy&&editor.doc.components.some(k=>k.type==='TLM')){S.lineBusy=true;notice('Υπολογισμός του μοντέλου της γραμμής (σταθερές γραμμής και '+(/FD/.test(e.message)?'προσαρμογή':'ρυθμοί')+') στον server…','info');
+   LineData.refresh(lineCtx(),editor.doc.components).then(n=>{S.lineBusy=false;buildSim(true);draw(true);if(!S.error&&n)notice(`Υπολογίστηκε το μοντέλο ${n===1?'μιας γραμμής':n+' γραμμών'}.`,'info');setTimeout(()=>notice(''),3000);})
+    .catch(err=>{S.lineBusy=false;notice('Η γραμμή χρειάζεται μοντέλο από τον server (python run.py): '+esc(err.message),'error');});}
   else notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');editor.setDiag(null);}
  refreshControls();renderChannels();updateClock();renderProps();syncStepMode();scheduleStepCheck();
 }
+function lineCtx(){return {editor,api,changed:()=>{}};}
 function play(){if(!S.sim||S.error)return;if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;requestAnimationFrame(loop);}
 function pause(){S.running=false;scope.running=false;$('#play')?.classList.remove('running');if($('#play'))$('#play').innerHTML='▶ Προσομοίωση';draw(true);}
 function reset(){pause();buildSim(true);scope.cfg.frozen=null;draw(true);}
@@ -112,14 +117,23 @@ function signalsFor(c,full){const t=c.type,nv=vecN(full||(S.pfx?pid(c.id):c.id))
  if(t==='MOV')return [['I:','ρεύμα αλεξικέραυνου'],['V:','τάση αλεξικέραυνου'],['P:','ισχύς']];
  if(t==='SG')return [['I:','ρεύμα σπινθηριστή'],['V:','τάση στο διάκενο'],['P:','ισχύς στο τόξο']];
  if(t==='TL')return [['V:','τάση στην αρχή (a1 − b1)'],['V2:','τάση στο τέλος (a2 − b2)'],['I:','ρεύμα που μπαίνει στην αρχή'],['I2:','ρεύμα που μπαίνει στο τέλος']];
+ if(t==='TLM'){const M=P.tlmM({...P.defaults(t),...c.params}),out=[];for(let j=0;j<2*M;j++){const pin=P.tlmPin(j%M,j<M?1:2),pre=j?String(j+1):'';out.push([`V${pre}:`,`τάση ${pin} (προς γη)`],[`I${pre}:`,`ρεύμα που μπαίνει στο ${pin}`]);}return out;}
  if(t==='KL'||t==='KG'){const n=P.nPorts({...P.defaults(t),...c.params}),w=t==='KL'?'τυλίγματος':'θύρας';return Array.from({length:n},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα ${w} ${k+1} (a → b)`],[(k?'V'+(k+1):'V')+':',`τάση ${w} ${k+1}`]]).flat();}
  const base=[['I:','ρεύμα'],['V:','τάση'],['P:',['VDC','VAC','IDC'].includes(t)?'ισχύς που δίνει':'ισχύς']];if(t==='SW'||t==='SCR')base.splice(1,0,['GS:','παλμός πύλης (1 = ON)']);if(t==='SW'&&(+c.params?.Eon>0||+c.params?.Eoff>0))base.push(['PSW:','απώλειες μεταγωγής (μέση ανά T)']);
  if(t==='VAC3')return [['I:','ρεύμα φάσης a'],['Ib:','ρεύμα φάσης b'],['Ic:','ρεύμα φάσης c'],['V:','τάση v_an'],['Vb:','τάση v_bn'],['Vc:','τάση v_cn'],['Vab:','πολική τάση v_ab'],['P:','ισχύς που δίνει (3φ)']];if(t==='XFMR')return [['I:','ρεύμα πρωτεύοντος'],['V:','τάση πρωτεύοντος'],['I2:','ρεύμα δευτερεύοντος'],['V2:','τάση δευτερεύοντος'],['Im:','ρεύμα μαγνήτισης'],['P:','ισχύς']];return base;}
+// 4.4: the signal list with a search (accents and case ignored, every word must match the group or the signal)
+const fold=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+let SIGS=[];
+function fillSignals(){const sel=$('#add-signal'),q=fold($('#sig-search')?.value||'').split(/\s+/).filter(Boolean),opts=[],groups=new Map();let n=0;
+ for(const g of SIGS){const hit=g.items.filter(it=>q.every(w=>fold(g.label+' '+it.text).includes(w)));if(hit.length){groups.set(g,hit);n+=hit.length;}}
+ opts.push(`<option value="">${q.length?(n?`+ Σήμα στο scope… (${n} βρέθηκαν)`:'Κανένα σήμα δεν ταιριάζει'):'+ Σήμα στο scope…'}</option>`);
+ for(const [g,hit] of groups)opts.push(`<optgroup label="${esc(g.label)}">`+hit.map(it=>`<option value="${esc(it.value)}">${esc(it.text)}</option>`).join('')+'</optgroup>');
+ sel.innerHTML=opts.join('');return n;}
 function renderChannels(){
- const sel=$('#add-signal');const opts=['<option value="">+ Σήμα στο scope…</option>'];
- for(const {c,id,label} of allComps()){const sg=signalsFor(c,id);if(!sg.length)continue;opts.push(`<optgroup label="${esc(label)} · ${esc(P.PARTS[c.type].name)}">`+sg.map(([p,n,f])=>`<option value="${p}${id}${f||''}">${esc(n)} ${esc(label)}</option>`).join('')+'</optgroup>');}
- const nodes=(topDoc().wires||[]).filter(w=>w.name).map(w=>`<option value="VN:${w.a.c}:${w.a.p}">τάση κόμβου ${esc(w.name)}</option>`);if(nodes.length)opts.push('<optgroup label="Κόμβοι με όνομα">'+nodes.join('')+'</optgroup>');
- sel.innerHTML=opts.join('');
+ SIGS=[];
+ for(const {c,id,label} of allComps()){const sg=signalsFor(c,id);if(!sg.length)continue;SIGS.push({label:`${label} · ${P.PARTS[c.type].name}`,items:sg.map(([p,n,f])=>({value:`${p}${id}${f||''}`,text:`${n} ${label}`}))});}
+ const nodes=(topDoc().wires||[]).filter(w=>w.name).map(w=>({value:`VN:${w.a.c}:${w.a.p}`,text:`τάση κόμβου ${w.name}`}));if(nodes.length)SIGS.push({label:'Κόμβοι με όνομα',items:nodes});
+ fillSignals();
  const panes=scope.cfg.panes;
  $('#chan-list').innerHTML=panes.map((p,pi)=>`<div class="pane-row"><div class="pane-head"><b>Παράθυρο ${pi+1}</b><label class="mini"><input type="checkbox" data-pauto="${pi}" ${p.y?.auto===false?'':'checked'}> auto</label>${p.y?.auto===false?`<input class="ymin" data-pmin="${pi}" value="${p.y.min??''}" placeholder="min"><input class="ymax" data-pmax="${pi}" value="${p.y.max??''}" placeholder="max">`:''}<label class="mini"><input type="checkbox" data-pzero="${pi}" ${p.zero?'checked':''}> 0</label></div>
   ${p.ch.map(ch=>`<div class="chan" data-key="${esc(ch.key)}"><label class="sw"><input type="checkbox" data-on="${esc(ch.key)}" ${ch.on?'checked':''}><i style="background:${ch.color}"></i></label><input class="clabel" data-label="${esc(ch.key)}" value="${esc(ch.label)}"><select data-pane="${esc(ch.key)}">${[0,1,2,3].map(i=>`<option value="${i}" ${i===pi?'selected':''}>Π${i+1}</option>`).join('')}</select><button class="x" data-rm="${esc(ch.key)}" title="Αφαίρεση">✕</button></div>`).join('')||'<div class="muted small">Κανένα σήμα. Δεξί κλικ σε στοιχείο → Scope, ή επίλεξε από τη λίστα.</div>'}</div>`).join('');
@@ -544,7 +558,7 @@ function openInspector(id,x,y){
  const wired=pin=>editor.doc.wires.some(w=>(w.a.c===c.id&&w.a.p===pin)||(w.b.c===c.id&&w.b.p===pin));
  const srcRows=sigIns.map(pin=>{const v=c.params?.['in_'+pin]||'';return `<label class="frow"><span>Πηγή της εισόδου ${esc(pin)}</span><select data-src="${esc(pin)}"><option value="">${wired(pin)?'από σύρμα':'— (καμία)'}</option>${outs.map(o=>`<option value="${esc(o.v)}" ${o.v===v?'selected':''}>${esc(o.t)}</option>`).join('')}${v&&!outs.some(o=>o.v===v)?`<option value="${esc(v)}" selected>${esc(v)} (λείπει)</option>`:''}</select></label>`;}).join('');
  ins.innerHTML=`<div class="ins-head"><div><small>${esc(def.name)}</small><input class="ins-label" data-label value="${esc(c.label||c.id)}"></div><button class="x" data-close>✕</button></div>
-  <div class="ins-body">${rows||(srcRows?'':'<p class="muted small">Χωρίς παραμέτρους.</p>')}${srcRows?`<div class="ins-srcs"><small class="muted">Σύνδεση χωρίς καλώδιο: διάλεξε από ποια έξοδο παίρνει σήμα κάθε είσοδος. Ισοδυναμεί με σύρμα.</small>${srcRows}</div>`:''}</div>${sig?`<div class="ins-probes">${sig}</div>`:''}
+  <div class="ins-body">${c.type==='TLM'?`<button class="primary-ghost ld-open" data-linedata>Δεδομένα γραμμής…</button><small class="muted">${esc(P.tlmModel(p).err||'Μοντέλο '+(p.model==='fd'?'FD':'CP')+' ενημερωμένο.')}</small>`:''}${rows||(srcRows?'':'<p class="muted small">Χωρίς παραμέτρους.</p>')}${srcRows?`<div class="ins-srcs"><small class="muted">Σύνδεση χωρίς καλώδιο: διάλεξε από ποια έξοδο παίρνει σήμα κάθε είσοδος. Ισοδυναμεί με σύρμα.</small>${srcRows}</div>`:''}</div>${sig?`<div class="ins-probes">${sig}</div>`:''}
   <div class="ins-foot"><small>Οι αλλαγές εφαρμόζονται αμέσως, και ενώ τρέχει η προσομοίωση. Μονάδες SI με προθέματα: 5.6u, 100m, 20k.</small></div>`;
  placePopup(ins,x,y);
  const apply=el=>{const k=el.dataset.k,f=fieldValue(c,k,el);el.classList.toggle('bad',!!f.bad);if(f.bad)return;const v=f.v;
@@ -553,6 +567,7 @@ function openInspector(id,x,y){
  ins.querySelectorAll('[data-k]').forEach(el=>{el.onchange=()=>apply(el);if(el.dataset.num)el.onkeydown=e=>{if(e.key==='Enter')apply(el);};});
  ins.querySelector('[data-label]').onchange=e=>{editor.setParams(id,{},{label:e.target.value||id});renderChannels();};
  ins.querySelector('[data-close]').onclick=closeInspector;
+ ins.querySelector('[data-linedata]')?.addEventListener('click',()=>{closeInspector();LineData.open(id,lineCtx());});
  ins.querySelectorAll('[data-probe]').forEach(b=>b.onclick=()=>addProbe(b.dataset.probe));
 }
 const WIRE_COLORS=['','#147966','#c47a1c','#2f5fa0','#b03a5b','#6b4fa0','#203a3f'];
@@ -1323,6 +1338,19 @@ function ieee9Theory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.lf)return '';
  if(!m.fault)for(const g of ['G2','G3']){const q=s.lastPeriod('Y:'+g+':d');rows.push([`δ ${g} (Anderson & Fouad, Πίν. 9.1)`,IEEE9_AF[g],q?.avg,'°']);}
  return `<ul class="eqs"><li>Ροή φορτίου (pcl.network, Newton–Raphson): οι γεννήτριες ξεκινούν από |V|∠θ του ζυγού τους· τα φορτία ως σταθερή εμπέδηση στην τάση της ροής φορτίου</li>
   <li>Αρχικοποίηση: το κύκλωμα λύνεται με φασιθέτες στα ${fmt(60,3)} Hz (ω_e = (2/h)·tan(ωh/2) για τον τραπεζοειδή), οι μηχανές από τη μόνιμη κατάστασή τους (δ, i_d, i_q, i_fd, E_fd, T_m)</li></ul>`+(m.fault?'':cmpRows(rows));}
+// 4.4: line from geometry. The modes of each line (from its model) and what the run shows at the open end
+function lineFdTheory(){const s=S.sim,m=S.tutMeta||{};if(!s)return '';const ids=['L1','L2'].filter(id=>s.net.compInfo.get(id)?.tlm);if(!ids.length)return '';
+ const lab=id=>s.net.compInfo.get(id)?.label||id;
+ let h='<ul class="eqs"><li>Ρουτίνα σταθερών (pcl/lineconst.py, όπως το Line Data του EMTP): Z′(ω) με Carson για την επιστροφή από τη γη και Bessel για τον σωληνωτό αγωγό (T/D), P′ από τα είδωλα, αγωγοί προστασίας με απαλοιφή, δέσμες με ένωση· Y′ = G′ + jω·P′⁻¹.</li>'
+  +'<li>Ρυθμοί: v_m = T_iᵀ·v, i = T_i·i_m, με T_i τα ιδιοδιανύσματα του Y′Z′ σε μία συχνότητα (πραγματικά, σταθερά). Κάθε ρυθμός είναι μονοφασική γραμμή: i_k = v_k/Z + I_h(t − τ).</li>'
+  +'<li>CP: Z_c = √(L′/C′), τ = ℓ·√(L′C′), R = R′ℓ στα R/4 – R/2 – R/4. FD (J. Marti): Z_c(s) = k₀ + Σ k_i/(s + p_i) και A(s) = e^(−sτ)·Σ c_i/(s + q_i), αναδρομικές συνελίξεις.</li></ul>';
+ for(const id of ids){const g=s.net.compInfo.get(id).tlm;h+=`<p><b>${esc(lab(id))}</b> (${g.type==='fd'?'FD, T_i στα '+eng(g.fti,'Hz'):'CP στα '+eng(g.f,'Hz')}):</p><table class="cmp"><tr><th>ρυθμός</th><th>Z_c</th><th>τ</th><th>${g.type==='fd'?'πόλοι Z_c / A':'R (όλη η γραμμή)'}</th></tr>`
+  +g.modes.map((q,k)=>`<tr><td>${k+1}${k===0?' (γης)':''}</td><td>${eng(g.type==='fd'?q.zc.d:q.Zc,'Ω',4)}</td><td>${eng(q.tau,'s',5)}</td><td>${g.type==='fd'?q.zc.p.length+' / '+q.a.p.length:eng(q.R,'Ω',3)}</td></tr>`).join('')+'</table>';}
+ if(s.t<Math.min(m.dur||0,1e-3))return h+'<p class="muted small">Τρέξε την προσομοίωση για τις μετρήσεις στο ανοιχτό άκρο.</p>';
+ const pk=k=>{const r=rawSeries(k);if(!r)return null;let mx=0,tm=0,first=null;const y0=Math.max(...r.y.map(Math.abs));for(let i=0;i<r.y.length;i++){const a=Math.abs(r.y[i]);if(a>mx){mx=a;tm=r.t[i];}if(first===null&&a>0.05*y0)first=r.t[i];}return {mx,tm,first};};
+ const rows=ids.map(id=>{const a=pk('V4:'+id),b=pk('V5:'+id);return `<tr><td>${esc(lab(id))}</td><td>${a?eng(a.first,'s',4):'—'}</td><td>${a?eng(a.mx,'V',4):'—'}</td><td>${b?eng(b.mx,'V',4):'—'}</td></tr>`;}).join('');
+ return h+`<table class="cmp"><tr><th>γραμμή</th><th>άφιξη στο a2 (5 %)</th><th>max |v_a2|</th><th>max |v_b2|</th></tr>${rows}</table>`
+  +'<p class="muted small">Επαλήθευση (tests/test_lines.py): ο λύτης ταυτίζεται με το ίδιο μοντέλο λυμένο στο πεδίο της συχνότητας με αριθμητικό μετασχηματισμό Laplace, και το FD με την ακριβή γραμμή (χωρίς προσαρμογή) σε λίγα τοις χιλίοις του μεγίστου· το CP στα 50 Hz απέχει πολύ στις επαγόμενες τάσεις, γιατί κρατά την απόσβεση του ρυθμού γης στα 50 Hz.</p>';}
 function netFaultTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.grid||!window.NetLib)return '';
  const g=m.xf?NetLib.behindXF(m.grid,m.xfp):{seq:NetLib.gridZ(m.grid)},z=g.seq,ref=NetLib.faultCurrents(g,{kind:m.kind}),Un=m.xf?m.xfp.U2:m.grid.Un;
  const Z1=Math.hypot(z.R1,z.X1),c2=(a,b)=>Math.hypot(a,b);
@@ -1835,6 +1863,7 @@ function formulaTheory(t){
  if(t.topology==='sub_legs')return subLegsTheory();
  if(t.topology==='bus_dq')return busDqTheory();
  if(t.topology==='net_fault')return netFaultTheory();
+ if(t.topology==='line_fd')return lineFdTheory();
  if(t.topology==='gen_sc')return genScTheory();
  if(t.topology==='fbm')return fbmTheory();
  if(t.topology==='ieee9_emt')return ieee9Theory();
@@ -2039,6 +2068,11 @@ function boot(){
  const METHOD_NOTE={TR:'2ης τάξης, χωρίς απόσβεση',BDF2:'2ης τάξης, απόσβεση στις υψηλές συχνότητες',BE:'1ης τάξης, ισχυρή απόσβεση'};
  $('#method').onchange=e=>{S.sim?.setMethod(e.target.value);scheduleStepCheck();$('#method-note').textContent=METHOD_NOTE[e.target.value];saveLocal();};
  $('#add-signal').onchange=e=>{if(e.target.value)addProbe(e.target.value);e.target.value='';};
+ $('#sig-search').oninput=()=>fillSignals();
+ // 4.4: the add-ons card from the top bar (it sits below the scope and the scenarios)
+ $('#open-addons').onclick=()=>{const d=$('#addons-block');if(!d)return;d.open=true;$('#addons-card').scrollIntoView({behavior:'smooth',block:'start'});};
+ // Enter adds the first signal that matches; Esc clears the search
+ $('#sig-search').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const o=$('#add-signal').querySelector('option[value]:not([value=""])');if(o){addProbe(o.value);}}else if(e.key==='Escape'){e.target.value='';fillSignals();}};
  const probeSel=pre=>{const ids=editor.selection().c.filter(id=>{const c=editor.comp(id);return c&&signalsFor(c).some(([p,,f])=>p===pre&&!f);});if(!ids.length){notice('Επίλεξε πρώτα στοιχεία στο κύκλωμα (κλικ ή ορθογώνιο).','info');setTimeout(()=>notice(''),2500);return;}ids.forEach(id=>addProbe(pre+pid(id)));};
  $('#probe-i').onclick=()=>probeSel('I:');$('#probe-v').onclick=()=>probeSel('V:');
  $('#csv').onclick=exportCSV;
@@ -2085,6 +2119,6 @@ function boot(){
 }
 function renderTheoryLive(){if(!atTop()||document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
-window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
+window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
  renderEvents,togglePin,refreshControls,changesToSchedule,renderProps}; // 3.19: for tests/ui/live_flow.js
 })();

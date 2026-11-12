@@ -1,5 +1,5 @@
 {
- "version": "4.3",
+ "version": "4.4",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -841,6 +841,228 @@
      "allow_paths"
     ],
     "since": "3.18"
+   },
+   "pcl.lineconst.LineError": {
+    "params": [],
+    "since": "4.4"
+   },
+   "pcl.lineconst.api": {
+    "params": [
+     "req"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.carson_integral": {
+    "params": [
+     "hi",
+     "hk",
+     "x",
+     "f",
+     "rho",
+     "mu",
+     "s"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.carson_series": {
+    "params": [
+     "D",
+     "phi",
+     "f",
+     "rho",
+     "switch"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.conductors": {
+    "params": [
+     "data"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.cp_model": {
+    "params": [
+     "data",
+     "f",
+     "length"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.exact_admittance": {
+    "params": [
+     "data",
+     "f",
+     "length"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.fd_model": {
+    "params": [
+     "data",
+     "length",
+     "fmin",
+     "decades",
+     "ppd",
+     "fti",
+     "tol_zc",
+     "tol_a",
+     "n0",
+     "curves"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.freqs": {
+    "params": [
+     "fmin",
+     "decades",
+     "ppd"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.line_admittance": {
+    "params": [
+     "Z",
+     "Y",
+     "L"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.load_data": {
+    "params": [
+     "path"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.modal": {
+    "params": [
+     "Z",
+     "Y",
+     "Ti"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.model_admittance": {
+    "params": [
+     "model",
+     "s"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.nlt_solve": {
+    "params": [
+     "network",
+     "tmax",
+     "n",
+     "window"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.phase_matrices": {
+    "params": [
+     "data",
+     "f",
+     "s",
+     "**kw"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.phases": {
+    "params": [
+     "data"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.q_error": {
+    "params": [
+     "Z",
+     "Y",
+     "Ti"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.rational": {
+    "params": [
+     "s",
+     "d",
+     "r",
+     "p"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.reduce_phases": {
+    "params": [
+     "Z",
+     "P",
+     "cs"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.report": {
+    "params": [
+     "data",
+     "f"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.save_data": {
+    "params": [
+     "data",
+     "path"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.sequence": {
+    "params": [
+     "Z"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.ti_matrix": {
+    "params": [
+     "Z",
+     "Y"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.typical": {
+    "params": [
+     "key"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.vfit": {
+    "params": [
+     "s",
+     "F",
+     "n",
+     "d",
+     "weight",
+     "iters",
+     "p0"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.z_internal": {
+    "params": [
+     "f",
+     "r",
+     "q",
+     "Rdc",
+     "mur",
+     "skin",
+     "s"
+    ],
+    "since": "4.4"
+   },
+   "pcl.lineconst.zy": {
+    "params": [
+     "data",
+     "f",
+     "earth",
+     "skin",
+     "s"
+    ],
+    "since": "4.4"
    },
    "pcl.link.App": {
     "params": [
@@ -1786,6 +2008,10 @@
    "/api/inverse": {
     "params": [],
     "since": "3.18"
+   },
+   "/api/line_model": {
+    "params": [],
+    "since": "4.4"
    },
    "/api/linearize": {
     "params": [],
@@ -3363,6 +3589,31 @@
      "b2"
     ],
     "since": "3.18"
+   },
+   "part:TLM": {
+    "params": [
+     "model",
+     "len",
+     "f",
+     "fmin",
+     "dec",
+     "ppd",
+     "fti",
+     "data",
+     "mdl",
+     "conn"
+    ],
+    "pins": [
+     "a1",
+     "a2",
+     "abc1",
+     "abc2",
+     "b1",
+     "b2",
+     "c1",
+     "c2"
+    ],
+    "since": "4.4"
    },
    "part:UD": {
     "params": [

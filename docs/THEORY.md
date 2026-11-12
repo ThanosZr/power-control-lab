@@ -356,6 +356,36 @@ Z_s = (2Z₁ + Z₀)/3,  Z_m = (Z₀ − Z₁)/3,
 
 **SciPy.** Ροές των θυρών, γωνίες και ταχύτητες των μαζών ως καταστάσεις· ρεύματα θυρών i = Γ(θ)·ψ ως πηγές (όπως οι μηχανές της 3.5), dψ/dt = τάση θύρας. Ίδιο μοντέλο, άλλη ολοκλήρωση.
 
+## 8θ. Γραμμές από τη γεωμετρία: σταθερές, CP και FD (4.4)
+
+Σταθερές και μοντέλα στο `pcl/lineconst.py` (`/api/line_model`), η γραμμή στον λύτη στο `web/studio/mna.js` (`tlmElement`, `tlmSources`, `tlmRecord`, `tlmG`), τα δεδομένα στο `parts.js` (`TLM`, `tlmKey`, `tlmModel`), το παράθυρο στο `linedata.js`. Συμβάσεις όπως το LINE CONSTANTS του EMTP (Dommel, EMTP Theory Book, κεφ. 4).
+
+**Αγωγοί.** Μέσο ύψος h = (2·h_μέσο + h_πύργου)/3. Δέσμη: n αγωγοί σε κύκλο ακτίνας R, ως χωριστοί αγωγοί με την ίδια φάση. Εσωτερική εμπέδηση σωληνωτού αγωγού (εσωτερική ακτίνα q = r·(1 − 2·T/D), ρ από το R_dc):
+Z_int = ρ·m/(2πr)·[I₀(mr)K₁(mq) + K₀(mr)I₁(mq)] / [I₁(mr)K₁(mq) − I₁(mq)K₁(mr)], m = √(jωμ/ρ), με τις κλιμακωμένες συναρτήσεις Bessel (χωρίς υπερχείλιση). Χωρίς επιδερμικό φαινόμενο: R_dc + jω·L_dc με L_dc του σωλήνα.
+
+**Επιστροφή από τη γη.** Z_ii = Z_int + jω(μ₀/2π)·ln(2h/r) + ΔZ(2h, 0), Z_ik = jω(μ₀/2π)·ln(D_ik/d_ik) + ΔZ(D_ik, φ_ik). Το ΔZ από τη σειρά Carson (Dommel 4.10–4.12) για a = 4π√5·10⁻⁴·D·√(f/ρ) ≤ 10 και από την ασυμπτωτική (4.14) πάνω από 10:
+- οι συντελεστές b_i έχουν πρόσημο + για i = 1…4, − για 5…8 κ.ο.κ. (b_i = ±|b_{i−2}|/(i(i+2))). Ο τύπος 4.12 διαβάζεται κι ως πολλαπλασιασμός με το πρόσημο σε κάθε βήμα, κάτι που δίνει λάθος από a ≈ 1,
+- το LINE CONSTANTS αλλάζει στο a = 5, όπου η ασυμπτωτική απέχει έως 0,4 % και το Z′(ω) έχει σκαλοπάτι που χαλά την προσαρμογή του FD. Στο a = 10 και οι δύο απέχουν < 3·10⁻⁵ από το ολοκλήρωμα του Carson,
+- επιλογές: το ολοκλήρωμα ΔZ = (sμ₀/π)·∫₀^∞ e^(−(h_i+h_k)λ)·cos(xλ)/(λ + √(λ² + sμ₀/ρ)) dλ (αριθμητικά, και σε μιγαδικό s), το μιγαδικό βάθος p = √(ρ/(sμ₀)) (Deri κ.ά.), ή τέλειο έδαφος.
+
+**Εγκάρσια.** P_ii = ln(2h/r)/(2πε₀), P_ik = ln(D_ik/d_ik)/(2πε₀), Y′ = G′ + jω·P′⁻¹ με G′ = 0,2·10⁻⁹ S/km στη διαγώνιο των φάσεων (όπως το FD του EMTP).
+
+**Φάσεις.** Δέσμες και αγωγοί προστασίας ακριβώς: Y_s = Z⁻¹ και C = P⁻¹ αθροίζονται ανά φάση (ίδια τάση, άθροισμα ρευμάτων), η φάση 0 έχει τάση 0 και φεύγει, και μετά αντιστροφή.
+
+**Ρυθμοί.** T_i: ιδιοδιανύσματα του Y′Z′ σε μία συχνότητα (CP: η συχνότητα του μοντέλου, FD: 1 kHz ή όποια δοθεί), από τον πιο αργό ρυθμό (γης). Κάθε στήλη κανονικοποιείται, στρέφεται ώστε η αγωγιμότητα του ρυθμού να είναι μηδέν, και κρατιέται το πραγματικό μέρος (όπως το EMTP). Ρυθμοί: Z′_m = T_iᵀZ′T_i, Y′_m = T_i⁻¹Y′T_i⁻ᵀ (διαγώνιοι), v_m = T_iᵀv, i = T_i·i_m. Σφάλμα του σταθερού T_i: η μεγαλύτερη σχετική εκτός διαγωνίου σύζευξη του T_i⁻¹(Y′Z′)T_i.
+
+**CP.** Ανά ρυθμό Z_c = √(L′/C′), τ = ℓ√(L′C′), R = R′ℓ σε R/4 – τ/2 – R/2 – τ/2 – R/4. Στον λύτη (Dommel): i_k = v_k/Z_e + I_k, Z_e = Z_c + R/4, h = (Z_c − R/4)/(Z_c + R/4), I_k(t) = −(1+h)/2·[v_m/Z_e + h·i_m](t − τ) − (1−h)/2·[v_k/Z_e + h·i_k](t − τ).
+
+**FD (J. Marti).** Ανά ρυθμό Z_c(s) ≈ k₀ + Σ k_i/(s + p_i) (σχετικό σφάλμα ≤ 1 %) και A(s) = e^(−γℓ) ≈ e^(−sτ)·Σ c_i/(s + q_i) (απόλυτο σφάλμα ≤ 0,5 %), από 0,01 Hz ως 10 MHz, 10 σημεία ανά δεκάδα:
+- vector fitting (Gustavsen–Semlyen 1999) με πραγματικούς πόλους, όπως το μοντέλο του J. Marti: μετακίνηση πόλων με σ(s), μιγαδικά ζεύγη → πραγματικά μέρη, ασταθείς → κατοπτρισμός, πόλοι μέχρι την ανοχή,
+- τ στο [ℓ/c, ℓ/v(f_max)], με χρυσή τομή για το μικρότερο σφάλμα,
+- στον λύτη, για κάθε πόλο p και βήμα h: y(t) = e^(−ph)·y(t − h) + a₀·u(t) + (a₁/h)·(u(t − h) − u(t)), a₀ = ∫₀ʰe^(−ps)ds, a₁ = ∫₀ʰs·e^(−ps)ds (ακριβές για u γραμμικό στο βήμα, και με μεταβλητό βήμα),
+- σε κάθε άκρο: f = v + Z_c ⊛ i (κύμα που φεύγει), b = A ⊛ f του άλλου άκρου (με τα f στο t − τ και t − h − τ από το ιστορικό με γραμμική παρεμβολή), i = (v − h_z − b)/Z_eq, Z_eq = k₀ + Σ k_i·(a₀ − a₁/h).
+
+Και στα δύο: βήμα ≤ min τ, η γραμμή ξεκινά χωρίς φορτίο, το ιστορικό και οι καταστάσεις των συνελίξεων αποθηκεύονται και επανέρχονται (εντοπισμός μεταβάσεων, κομμάτια).
+
+**Ανεξάρτητη αναφορά (αντί του SciPy).** Ακριβής γραμμή στο πεδίο της συχνότητας, σε κάθε s με μιγαδικά ιδιοδιανύσματα: Y_s = T·diag(γ·coth γℓ)·T⁻¹·Z′⁻¹, Y_m = −T·diag(γ/sinh γℓ)·T⁻¹·Z′⁻¹. Μαζί με τα υπόλοιπα στοιχεία λύνεται κομβικά σε s = c + jω_k, ω_k = (k + ½)·2π/T, και επιστρέφει στον χρόνο με αριθμητικό μετασχηματισμό Laplace: x(t_n) = (Δω/π)·e^(ct_n)·Re[e^(jπn/N)·N·IFFT(X·σ)], c = ln(N²)/T, παράθυρο Hanning, T = 2·t_max. Το ίδιο για τα μοντέλα CP και FD όπως προσαρμόστηκαν, ώστε να ξεχωρίζουν το σφάλμα του λύτη και το σφάλμα του μοντέλου.
+
 ## 9. Ο λύτης αναφοράς (SciPy)
 
 Το `engine/batch.py` λύνει το ίδιο netlist (`MNA.exportForBatch`) με διαφορετική μέθοδο:
@@ -412,3 +442,9 @@ Z_s = (2Z₁ + Z₀)/3,  Z_m = (Z₀ − Z₁)/3,
 - P. M. Anderson, A. A. Fouad, *Power System Control and Stability*, IEEE Press: το δίκτυο των 9 ζυγών (Πίν. 2.1, 9.1, Παράδειγμα 2.7).
 - IEEE Subsynchronous Resonance Task Force, «First benchmark model for computer simulation of subsynchronous resonance», *IEEE Trans. PAS* 96(5), 1977: μηχανή, άξονας, δίκτυο και αποτελέσματα της επαλήθευσης της 4.3.
 - H. W. Dommel, *EMTP Theory Book*, κεφ. 8: σύγχρονη μηχανή στο EMTP και αρχικοποίηση στη μόνιμη κατάσταση.
+- J. R. Carson, «Wave propagation in overhead wires with ground return», *Bell System Technical Journal* 5, 1926: επιστροφή από τη γη. H. W. Dommel, *EMTP Theory Book*, κεφ. 4 (σειρά Carson 4.10–4.14, σωληνωτός αγωγός, δέσμες, αγωγοί προστασίας, ρυθμοί): η ρουτίνα σταθερών της 4.4 και οι Πίνακες 4.1, 4.3, 4.4 της επαλήθευσης.
+- A. Deri, G. Tevan, A. Semlyen, A. Castanheira, «The complex ground return plane: a simplified model for homogeneous and multi-layer earth return», *IEEE Trans. PAS* 100(8), 1981: μιγαδικό βάθος.
+- J. R. Marti, «Accurate modelling of frequency-dependent transmission lines in electromagnetic transient simulations», *IEEE Trans. PAS* 101(1), 1982: μοντέλο FD.
+- B. Gustavsen, A. Semlyen, «Rational approximation of frequency domain responses by vector fitting», *IEEE Trans. Power Delivery* 14(3), 1999: προσαρμογή.
+- A. Semlyen, A. Dabuleanu, «Fast and accurate switching transient calculations on transmission lines with ground return using recursive convolutions», *IEEE Trans. PAS* 94(2), 1975: αναδρομική συνέλιξη.
+- L. M. Wedepohl, «Power system transients: errors incurred in the numerical inversion of the Laplace transform», *Proc. 26th Midwest Symposium on Circuits and Systems*, 1983, και D. J. Wilcox, «Numerical Laplace transformation and inversion», *Int. J. Electrical Engineering Education* 15, 1978: αριθμητικός μετασχηματισμός Laplace.

@@ -50,6 +50,14 @@ ACTIONS['studio_math']=studio_math
 ACTIONS['batch_sim']=batch_sim
 # solution templates as data (pcl-template-1)
 ACTIONS['template_solve']=template_solve
+# 4.4: overhead line constants and the CP / FD line models (pcl/lineconst.py) for the part 'TLM'
+def line_model(data):
+    from pcl import lineconst
+    try:
+        return lineconst.api(data)
+    except lineconst.LineError as e:
+        raise InputError(str(e)) from e
+ACTIONS['line_model']=line_model
 
 
 # scripted scenarios (3.14, ROADMAP §30): the pcl package's job() for MATLAB/Octave (webwrite) and other tools,

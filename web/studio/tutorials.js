@@ -961,6 +961,31 @@
    else wires.push(['B8','L89:abc1'],['L89:abc2','B9']);
    const panes=[[['Y:G1:d','δ₁ (°)'],['Y:G2:d','δ₂ (°)'],['Y:G3:d','δ₃ (°)']],[['Y:G1:pe','P₁'],['Y:G2:pe','P₂'],['Y:G3:pe','P₃']],[['Y:G1','ω₁'],['Y:G2','ω₂'],['Y:G3','ω₃']]];
    return project(comps,wires,{version:4,sim:{hDiv:400,speed:F?5:2,stopT:F?2:0.5},scope:{panes,window:{unit:'s',n:F?2:0.5}},meta:{lf:IEEE9_LF,fault:F,classical:cl}});}});
+ // ------------------------------------------------------------------ 4.4: lines from geometry, CP and FD (ROADMAP §26)
+ // the typical 400 kV line of 100 km (Parts.TLM_TYPICAL), with its models from tools/line_models.py (pcl/lineconst.py)
+ const LM=()=>root.LineModels||(typeof require!=='undefined'?require('./linemodels.js'):null);
+ function tlmPart(id,x,y,model,f,label){const P=root.Parts,p={...P.defaults('TLM'),model,len:100,data:JSON.stringify(P.TLM_TYPICAL['400kV'])};if(model==='cp')p.f=f;
+  const m=LM()?.[model==='cp'?`400kV|100|cp|${f}`:'400kV|100|fd'];p.mdl=m?JSON.stringify({...m,src:P.tlmKey(p)}):'';return C(id,'TLM',x,y,p,{label});}
+ T.push({id:'line_fd',group:'Γραμμές (4.4)',title:'Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD)',theory:'formula',topology:'line_fd',
+  options:[{k:'cmp',label:'Γραμμές',options:[['cp50','CP στα 50 Hz και FD, δίπλα δίπλα'],['cp5k','CP στα 5 kHz και FD'],['fd','Μόνο FD']],def:'cp50'},
+   {k:'src',label:'Ζεύξη',options:[['step','Μία φάση (a), βηματική 1 kV πίσω από 10 Ω'],['ac3','Τριφασική 400 kV, στην κορυφή της v_a']],def:'step'}],
+  desc:'Η τυπική γραμμή 400 kV απλού κυκλώματος (2 × ACSR 954 MCM ανά φάση, δύο αγωγοί προστασίας, ρ = 100 Ω·m), 100 km, ανοιχτή στο τέλος. Οι σταθερές βγαίνουν από τη γεωμετρία (Carson, Bessel, αγωγοί προστασίας με απαλοιφή) με τη ρουτίνα pcl/lineconst.py, όπως το Line Data του EMTP· η γραμμή γίνεται τρεις ρυθμοί με σταθερό πραγματικό T_i. Το CP κρατά τις παραμέτρους μιας συχνότητας (κάθε ρυθμός Bergeron με R/4 – R/2 – R/4), το FD (J. Marti) προσαρμόζει Z_c(ω) και A(ω) με ρητές συναρτήσεις από 0,01 Hz ως 10 MHz. Το «Δεδομένα γραμμής…» της γραμμής (δεξί κλικ ή διπλό κλικ) δείχνει τους πίνακες, τους ρυθμούς και την προσαρμογή.',
+  tasks:['Μία φάση: δες στο τέλος της φάσης a το κύμα που φτάνει περίπου 336 μs μετά (ρυθμός γης) και 334 μs (ρυθμοί αέρα), και στις φάσεις b, c την επαγόμενη τάση.','CP στα 50 Hz έναντι FD: ο ρυθμός γης στα 50 Hz έχει πολύ μικρή απόσβεση· το CP κρατά ψηλά τις επαγόμενες τάσεις, το FD τις σβήνει όπως η ακριβής γραμμή.','CP στα 5 kHz: πιο κοντά στο FD στο πρώτο μέτωπο, χειρότερα στη χαμηλή συχνότητα.','Τριφασική ζεύξη: η υπέρταση στο ανοιχτό άκρο (έως περίπου 2 pu) και η ταλάντωση με περίοδο 4τ.','Άνοιξε «Δεδομένα γραμμής…» και άλλαξε την ειδική αντίσταση του εδάφους ή το μήκος: το μοντέλο ξαναϋπολογίζεται στον server.'],
+  build(o){const both=o.cmp!=='fd',f=o.cmp==='cp5k'?5000:50,ac=o.src==='ac3',Vpk=400e3*Math.SQRT2/Math.sqrt(3);
+   const comps=[gnd(320,420)],wires=[],panes=[[],[]];
+   const rig=(sfx,y,line,lab)=>{const V='V'+sfx,L='L'+sfx;
+    if(ac){comps.push(C(V,'VAC3',100,y,{Vpk,f:50,phase:90,Rs:10},{label:'400 kV'}));wires.push([V+':a',L+':a1'],[V+':b',L+':b1'],[V+':c',L+':c1'],[V+':n','G1:g',[[100,400],[320,400]]]);}
+    else{comps.push(C(V,'VIMP',100,y,{shape:'ramp',Vpk:1e3,S:1e3/1e-6,Rs:10},{label:'1 kV'}),C('RB'+sfx,'R',170,y+40,{R:10},{rot:1,label:'R_b'}),C('RC'+sfx,'R',250,y+40,{R:10},{rot:1,label:'R_c'}));
+     wires.push([V+':p',L+':a1',[[100,y-20]]],[V+':n','G1:g',[[100,400],[320,400]]],[L+':b1','RB'+sfx+':a',[[170,y]]],[L+':c1','RC'+sfx+':a',[[250,y+20]]],['RB'+sfx+':b','G1:g',[[170,400]]],['RC'+sfx+':b','G1:g',[[250,400]]]);}
+    comps.push(line);return lab;};
+   const top=both?tlmPart('L1',320,100,'cp',f,`CP ${f===50?'50 Hz':'5 kHz'}`):tlmPart('L1',320,100,'fd',0,'FD');
+   const l1=rig('1',100,top,both?`CP${f===50?'50':'5k'}`:'FD');
+   if(both){rig('2',260,tlmPart('L2',320,260,'fd',0,'FD'),'FD');}
+   const ids=both?[['L1',l1],['L2','FD']]:[['L1',l1]];
+   for(const [id,lab] of ids){panes[0].push(['V4:'+id,`v_a2 ${lab}`]);panes[1].push(['V5:'+id,`v_b2 ${lab}`]);}
+   if(!ac)for(const [id,lab] of ids)panes[1].push(['V6:'+id,`v_c2 ${lab}`]);
+   const stopT=ac?0.02:4e-3;
+   return project(comps,wires,{sim:{hDiv:ac?20000:1,speed:ac?0.2:0.05,stopT,method:'TR'},scope:{panes,window:{unit:'s',n:stopT}},meta:{cmp:o.cmp,src:o.src,f,dur:stopT}});}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
  root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};
