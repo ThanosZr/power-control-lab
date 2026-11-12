@@ -32,4 +32,11 @@ const blk=(s,id='NN1')=>s.net.sig.blocks.find(b=>b.id===id);
  const s2=new MNA.Sim(learnPr({w:'oops'}),{hDiv:10});out.badjson=s2.net.warnings.filter(w=>w.includes('NN1'));}
 // 5. fixed weights: the output is the network's, scaled and limited
 {const net={sizes:[1,1],W:[[[2]]],b:[[.5]]};const s=new MNA.Sim(learnPr({train:'off',w:N.text(net),ys:2,ymin:-1,ymax:3}),{hDiv:10});s.run(.0525);const x=Math.sin(2*Math.PI*5*.052);out.fixed=[s.now('Y:NN1'),Math.min(3,Math.max(-1,2*(2*x+.5)))];}
+// 6. the tutorials (4.7): IAE per cycle of the reference for each controller
+require(W+'/tutorials.js');const T=globalThis.Tutorials;
+const build=(id,o={})=>{const t=T.get(id);const oo={};for(const op of t.options)oo[op.k]=o[op.k]??op.def;return t.build(oo);};
+const cycles=pr=>{const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});const per=[];let i0=0;for(let r=0;r<pr.meta.cycles;r++){s.run(pr.meta.P);const v=s.now('Y:IAE');per.push(v-i0);i0=v;}
+ return {per,warnings:s.net.warnings,L:s.chIndex.has('Y:NN1:L')?s.now('Y:NN1:L'):null,k:s.net.sig.blocks.find(b=>b.id==='NN1')?.st.opt?.k??null};};
+out.tut={};for(const [k,id,o] of [['pi','nn_compare',{ctrl:'pi'}],['pinn','nn_compare',{ctrl:'pinn'}],['inv','nn_compare',{ctrl:'inv'}],['inv_step','nn_compare',{ctrl:'inv',load:'step'}],['pi_step','nn_compare',{ctrl:'pi',load:'step'}],
+ ['fast','nn_online',{}],['frozen','nn_online',{freeze:'f2'}],['ref','nn_online',{event:'ref'}]])out.tut[k]=cycles(build(id,o));
 console.log(JSON.stringify(out));

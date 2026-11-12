@@ -805,6 +805,64 @@
      panes=[[['Y:M1','ω'],['Y:KW','ω_ref']],[['Y:AM1','i_a'],['Y:GPsi','i_ref']],[['D:PWM1','D']]];stopT=.4;}}
    return project(comps,wires,{sim:{hDiv:100,speed:300,stopT},scope:{panes,window:{unit:'T',n:Math.round(stopT*fs)}},
     meta:{Vdc,Ra,La,psi,J:Jm,bm,fs,fc:200,ac,as,act:act?1:0,Imax,kpc,kic,Rac,kps,kis,bac,mode:o.mode,wref:150,TL:10,tTL:.25,tw:.02}});}});
+ // ------------------------------------------------------------------ 4.7: control with neural networks (ROADMAP «Τι προτείνω» 4.7.3)
+ // A DC machine with a fan load τ_L = k·ω·|ω| fed by a voltage from a signal (the average model of a chopper, ±220 V),
+ // speed control sampled at 1 kHz. The reference ω* repeats a pattern of steps every 1.6 s and is smoothed by a
+ // first-order filter (5 Hz): ω_r and its exact derivative α_r = (ω* − ω_r)·2π·5. The PI acts on ω_r − ω; the network
+ // block (NN) gives a voltage from (ω_r, α_r): learning online from the PI's output (feedback-error learning: what the PI
+ // still has to add is the network's error), or with fixed weights of an inverse model trained offline (tools/nn_weights.py).
+ // NN_DC_INV is written by tools/nn_weights.py (the inverse model v(ω, α) of this machine from a run with excitation)
+ const NN_DC_INV={"sizes":[2,8,1],"W":[[[-0.000196855529,-0.000585019264],[-0.00147413259,0.00413199889],[1.13285398,-1.42811895],[-0.0038094443,-0.0168887702],[2.02795126,0.983219845],[0.00091771286,0.00526566844],[1.84753788,1.00917867],[-0.017440966,-0.0755657269]],[[2.61533759e-05,0.000225399988,0.186715961,0.00103488762,0.794718947,-0.00023806689,0.652777748,0.00210686257]]],"b":[[0.000101152191,0.00100884197,-0.625029923,0.00160634516,-1.9693165,-0.000361073163,-0.300061243,0.0107803439],[1.06752442]]};
+ const NN_PAT=[[0,0],[.1,100],[.5,150],[.9,50],[1.3,120]],NN_PAT2=[[0,40],[.2,140],[.45,20],[.7,90],[1.05,160],[1.35,60]];
+ function nnSched(cycles,P=1.6,from=0,pat=NN_PAT){const out=[];for(let r=0;r<cycles;r++)for(const [t,v] of pat)out.push(`${+(from+t+r*P).toFixed(4)}:${v}`);return out;}
+ function nnDrive(o){const P=1.6,fc=5,kf=1.33e-3,Ra=1,Kp=.5,Ki=10,cyc=o.cycles||4,stopT=+(cyc*P).toFixed(4),ctrl=o.ctrl;
+  let ref=nnSched(cyc,P);if(o.event==='ref'){const k=Math.floor(cyc/2);ref=[...nnSched(k,P),...nnSched(cyc-k,P,k*P,NN_PAT2)];}
+  const kl=o.load==='step'?`0:1, ${+(Math.floor(cyc/2)*P).toFixed(4)}:2`:'1';
+  const comps=[C('CLK1','CLK',40,-120,{f:1000},{label:'Ρολόι 1 kHz'}),
+   // reference: ω* → filter → ω_r, α_r
+   C('KW','CONST',40,0,{v:ref.join(', ')},{label:'ω*'}),C('LP','LPF',140,0,{fc},{label:'5 Hz'}),C('TGr','TAGO',240,0,{name:'ω_r'}),
+   C('DA','SUM',140,80,{signs:'+-'},{label:'ω* − ω_r'}),C('TFr0','TAGI',40,90,{name:'ω_r'}),C('GA','GAIN',230,80,{K:+(2*Math.PI*fc).toPrecision(6)},{label:'2π·5'}),C('TGa','TAGO',320,80,{name:'α_r'}),
+   // controller: e = ω_r − ω, PI, + network, limited to ±220 V
+   C('TFr','TAGI',40,200,{name:'ω_r'}),C('TFw','TAGI',40,240,{name:'ω'}),C('E1','SUM',140,210,{signs:'+-'},{label:'e'}),
+   C('PI1','PIB',240,210,{Kp,Ki,clock:'CLK1',trig:'start',y0:0,ymin:-220,ymax:220},{label:'PI ταχύτητας'}),C('TGpi','TAGO',330,170,{name:'u_PI'}),
+   C('U1','SUM',450,220,{signs:'++'},{label:'u'}),C('SAT1','SAT',540,220,{lo:-220,hi:220},{label:'±220 V'}),C('TGu','TAGO',630,220,{name:'u'}),C('TGe','TAGO',230,260,{name:'e'}),
+   // plant: voltage from the signal u, DC machine, fan load
+   C('TFu','TAGI',-20,560,{name:'u'}),C('V1','VDC',120,560,{ctl:'sig',V:0},{label:'μετατροπέας',lbl:'left'}),gnd(120,650),
+   C('M1','DCM',300,560,{Ra,La:10e-3,psi:1,J:.02,bm:.002,load:'sig',w0:0,ia0:0},{label:'M'}),C('TGw','TAGO',430,550,{name:'ω'}),
+   C('KL','CONST',40,700,{v:kl},{label:'συντελεστής φορτίου'}),C('TFw3','TAGI',40,760,{name:'ω'}),
+   C('TLX','EXPR',170,730,{expr:'k*u1*u2*abs(u2)',ins:'u1, u2',pars:`k = ${kf}`},{label:'τ_L = k·ω·|ω|'}),
+   // performance: IAE = ∫|e|, ISE = ∫e²
+   C('TFe','TAGI',460,720,{name:'e'}),C('AE','EXPR',570,690,{expr:'abs(u1)',ins:'u1'},{label:'|e|'}),C('IAE','INT',680,690,{y0:0},{label:'IAE'}),
+   C('SE','EXPR',570,770,{expr:'u1*u1',ins:'u1'},{label:'e²'}),C('ISE','INT',680,770,{y0:0},{label:'ISE'})];
+  const wires=[['KW:y','LP:u'],['LP:y','TGr:u'],['KW:y','DA:a',[[90,0],[90,70]]],['TFr0:y','DA:b'],['DA:y','GA:u'],['GA:y','TGa:u'],
+   ['TFr:y','E1:a'],['TFw:y','E1:b',[[90,240],[90,220]]],['E1:y','PI1:u'],['E1:y','TGe:u',[[185,210],[185,260]]],['PI1:y','U1:a'],['PI1:y','TGpi:u',[[285,210],[285,170]]],['U1:y','SAT1:u'],['SAT1:y','TGu:u'],
+   ['TFu:y','V1:u'],['V1:p','M1:a'],['V1:n','G1:g'],['M1:b','G1:g',[[300,650]]],['M1:w','TGw:u'],
+   ['KL:y','TLX:u1',[[100,700],[100,720]]],['TFw3:y','TLX:u2',[[100,760],[100,740]]],['TLX:y','M1:tl',[[240,730],[240,560]]],
+   ['TFe:y','AE:u1',[[510,720],[510,690]]],['TFe:y','SE:u1',[[510,720],[510,770]]],['AE:y','IAE:u'],['SE:y','ISE:u']];
+  if(ctrl!=='pi'){const learn=ctrl!=='inv',lr=o.lr==='slow'?.002:o.lr==='adam'?3e-4:o.lr==='fast'?.02:.005,opt=o.lr==='adam'?'adam':'sgd';
+   const nn={ins:'wr, ar',xs:'150, 3000',hidden:'8',ys:100,ymin:-220,ymax:220,train:learn?'err':'off',opt,lr,clip:5,nl:400,init:'zero',seed:1,clock:'CLK1',trig:'start',y0:0,
+    w:learn?'':JSON.stringify(NN_DC_INV||{})};
+   comps.push(C('NN1','NN',330,340,nn,{label:learn?'NN (μαθαίνει)':'NN αντίστροφο'}),C('TFr2','TAGI',190,300,{name:'ω_r'}),C('TFa','TAGI',190,340,{name:'α_r'}));
+   const yy=learn?330:340;wires.push(['TFr2:y','NN1:wr',learn?[]:[[250,300],[250,330]]],['TFa:y','NN1:ar',learn?[[250,340],[250,320]]:[[250,340],[250,350]]],['NN1:y','U1:b',[[400,yy],[400,230]]]);
+   if(learn){comps.push(C('TFpi','TAGI',190,380,{name:'u_PI'}));wires.push(['TFpi:y','NN1:e',[[250,380],[250,350]]]);
+    if(o.freeze&&o.freeze!=='never'){const tf=o.freeze==='f2'?2*P/1.6:Math.floor(cyc*3/4)*P;comps.push(C('FZ','CONST',90,440,{v:`0:0, ${+tf.toFixed(4)}:1`},{label:'πάγωμα'}));wires.push(['FZ:y','NN1:fz',[[260,440],[260,370]]]);}}}
+  else{comps.push(C('K0','CONST',330,330,{v:0},{label:'χωρίς δίκτυο'}));wires.push(['K0:y','U1:b',[[400,330],[400,230]]]);}
+  const panes=[[['Y:LP','ω_r'],['Y:M1','ω']],[['Y:E1','e = ω_r − ω']],[['Y:PI1','u_PI'],...(ctrl!=='pi'?[['Y:NN1','u_NN']]:[])],...(ctrl==='pinn'||ctrl==='online'?[[['Y:NN1:L','L (σφάλμα μάθησης)']]]:[[['Y:IAE','IAE']]])];
+  return project(comps,wires,{sim:{hDiv:20,speed:1000,stopT},scope:{panes,window:{unit:'s',n:3.2}},
+   meta:{P,fc,kf,Kp,Ki,ctrl,cycles:cyc,Ra,La:10e-3,psi:1,J:.02,bm:.002,Vmax:220}});}
+ T.push({id:'nn_compare',group:'Έλεγχος με νευρωνικά δίκτυα (4.7)',title:'Έλεγχος με νευρωνικό δίκτυο: σύγκριση',theory:'formula',topology:'nn_compare',
+  options:[{k:'ctrl',label:'Ελεγκτής',options:[['pi','Μόνο PI'],['pinn','PI + νευρωνικό που μαθαίνει online (feedback-error learning)'],['inv','PI + αντίστροφο μοντέλο (νευρωνικό, εκπαιδευμένο offline)']],def:'pinn'},
+   {k:'load',label:'Φορτίο',options:[['fan','Ανεμιστήρας τ_L = k·ω·|ω|'],['step','Ανεμιστήρας, διπλάσιο από τη μέση της προσομοίωσης']],def:'fan'}],
+  desc:'Έλεγχος ταχύτητας μηχανής ΣΡ με φορτίο ανεμιστήρα, ο μετατροπέας ως πηγή τάσης από σήμα (μέση τιμή). Η αναφορά επαναλαμβάνει ένα μοτίβο βημάτων κάθε 1,6 s, φιλτραρισμένο στα 5 Hz (ω_r και η παράγωγός του α_r). Ο PI μόνος του αργεί στα βήματα. Το νευρωνικό δίκτυο δίνει από τα (ω_r, α_r) την τάση που χρειάζεται η μηχανή (πρόσθια τροφοδότηση), είτε μαθαίνοντας online από την έξοδο του PI είτε με βάρη ενός αντίστροφου μοντέλου εκπαιδευμένου εκ των προτέρων. Οι τιμές της μηχανής είναι τυπικές.',
+  tasks:['Τρέξε «Μόνο PI» και κράτα τα IAE και ISE στο τέλος (κάρτα θεωρίας). Μετά «PI + νευρωνικό»: στον πρώτο κύκλο είναι σχεδόν ίδιο, από τον δεύτερο το σφάλμα μικραίνει κάθε φορά.','Δες στο scope το u_PI: όσο το δίκτυο μαθαίνει, ο PI χρειάζεται να δώσει όλο και λιγότερα· αυτό ακριβώς είναι το σφάλμα του δικτύου (feedback-error learning).','«Αντίστροφο μοντέλο»: τα βάρη είναι έτοιμα, άρα βελτιώνει από την αρχή. Στην κάρτα θεωρίας «Σύγκρινε και τους τρεις» τρέχει όλες τις εκδοχές στο παρασκήνιο και δίνει τον πίνακα.','Με «διπλάσιο φορτίο» το αντίστροφο μοντέλο δεν το ξέρει (εκτός εκπαίδευσης): ο PI καλύπτει τη διαφορά. Το online δίκτυο ξαναπροσαρμόζεται.','Στις ρυθμίσεις του NN (διπλό κλικ): «Κράτα τα βάρη που έμαθε» τα γράφει στο μπλοκ, ώστε την επόμενη φορά να ξεκινά εκπαιδευμένο.'],
+  build(o){return nnDrive({ctrl:o.ctrl,load:o.load,cycles:4,lr:'mid'});}});
+ T.push({id:'nn_online',group:'Έλεγχος με νευρωνικά δίκτυα (4.7)',title:'Νευρωνικό που μαθαίνει αμέσως',theory:'formula',topology:'nn_online',
+  options:[{k:'lr',label:'Μάθηση',options:[['fast','Γρήγορη: κλίση (SGD), η = 0,02'],['adam','Adam, η = 3·10⁻⁴'],['slow','Αργή: κλίση, η = 0,002']],def:'fast'},
+   {k:'event',label:'Στη μέση (3,2 s)',options:[['load','Διπλάσιο φορτίο'],['ref','Νέο μοτίβο αναφοράς'],['none','Καμία αλλαγή']],def:'load'},
+   {k:'freeze',label:'Πάγωμα της μάθησης',options:[['never','Μαθαίνει συνέχεια'],['f6','Πάγωμα στα 4,8 s'],['f2','Πάγωμα στα 2 s, πριν από την αλλαγή']],def:'never'}],
+  desc:'Το ίδιο κύκλωμα με τη «σύγκριση», με το νευρωνικό δίκτυο να ξεκινά χωρίς εκπαίδευση (έξοδος 0) και να μαθαίνει μέσα στα πρώτα δευτερόλεπτα. Στο scope η καμπύλη μάθησης L: η RMS τιμή του σφάλματος μάθησης (της εξόδου του PI) στα τελευταία 400 δείγματα. Στη μέση αλλάζει το φορτίο ή η αναφορά, και το δίκτυο ξαναπροσαρμόζεται, εκτός αν η μάθηση έχει παγώσει (είσοδος fz ή παράμετρος «Μαθαίνει»).',
+  tasks:['Δες την L να πέφτει στον πρώτο κιόλας κύκλο με τη «Γρήγορη»: το δίκτυο μαθαίνει την τάση που χρειάζεται η μηχανή για κάθε (ω_r, α_r).','«Νέο μοτίβο αναφοράς»: το δίκτυο έμαθε μια σχέση, όχι μια χρονοσειρά· το νέο μοτίβο (μέσα στην ίδια περιοχή ταχυτήτων) ακολουθείται αμέσως.','«Διπλάσιο φορτίο»: η L ανεβαίνει στην αλλαγή και ξαναπέφτει. Με «Πάγωμα στα 2 s» μένει ψηλά: ο PI κάνει όλη τη διόρθωση.','Ξεκλείδωσε/κλείδωσε τη μάθηση την ώρα της προσομοίωσης: διπλό κλικ στο NN → «Μαθαίνει».','Σύγκρινε «Γρήγορη» και «Αργή»: γρηγορότερη μάθηση, αλλά και πιο θορυβώδη βάρη (δες το u_NN).'],
+  build(o){return nnDrive({ctrl:'online',load:o.event==='load'?'step':'fan',event:o.event,freeze:o.freeze,cycles:5,lr:o.lr});}});
  // ------------------------------------------------------------------ 3.17: subcircuits (ROADMAP §9)
  // one leg (PWM, switch, diode, inductor) as a definition; N instances with their own phase, interleaved on one output
  T.push({id:'sub_legs',group:'Υποκυκλώματα (3.17)',title:'Πολυφασικός buck από ένα υποκύκλωμα σκέλους',theory:'formula',topology:'sub_legs',

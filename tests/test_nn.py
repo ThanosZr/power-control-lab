@@ -71,6 +71,24 @@ class NeuralNetworkBlock(unittest.TestCase):
         self.assertAlmostEqual(y, ref, delta=1e-12)
         self.assertTrue(self.r['text'])
 
+    def test_tutorials(self):
+        T = self.r['tut']
+        for k, v in T.items():
+            self.assertEqual(v['warnings'], [], msg=k)
+        pi = T['pi']['per']
+        self.assertAlmostEqual(pi[3], pi[1], delta=0.01 * pi[1])                       # the PI alone: the same every cycle
+        on = T['pinn']['per']
+        self.assertTrue(all(b < a for a, b in zip(on, on[1:])), msg=on)                 # online: better every cycle
+        self.assertLess(on[-1], 0.3 * pi[-1])
+        inv = T['inv']['per']
+        self.assertLess(max(inv), 0.1 * pi[0])                                          # the inverse model from the start
+        self.assertGreater(T['inv_step']['per'][-1], 2 * inv[-1])                       # a load it was not trained for
+        self.assertLess(T['inv_step']['per'][-1], 0.3 * T['pi_step']['per'][-1])       # … and the PI covers the difference
+        self.assertLess(T['fast']['per'][0], 0.5 * pi[0])                               # learns within the first cycle
+        self.assertGreater(T['frozen']['L'], 3 * T['fast']['L'])                         # frozen at 2 s: the PI does it all
+        self.assertAlmostEqual(T['frozen']['k'], 2001, delta=1)                          # no update after the freeze
+        self.assertLess(T['ref']['per'][-1], 0.5 * pi[-1])                              # a new pattern in the same range
+
     def test_block_parameters_from_python(self):
         net = nn_init([2, 6, 1], 4, False)
         p = nn_block('r, y', net, hidden=(6,), xs=(10, 10), ys=0.5, train='err', clock='CLK1', lr=1e-3)

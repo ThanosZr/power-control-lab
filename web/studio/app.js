@@ -1676,6 +1676,34 @@ function chaosTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp(
  return h+evalOrderHTML();}
 // 3.1: DC machine drive. Ideal loops (exact feedforward, no delay): i/i_ref = α_c/(s + α_c); with active damping a load
 // step gives ω = −(τ_L/J)·t·e^(−α_s t), with IMC ω = −τ_L/((Js + b)(s + α_s)), which recovers with J/b
+// 4.7: control with neural networks (nn_compare, nn_online): the model, the learning rule, IAE per cycle of the reference,
+// and for the comparison the three controllers run in the background (pool of workers) with the same options
+const NNC={res:null,key:'',busy:false};
+function nnCycles(m){const s=S.sim;if(!s)return [];const ps=lastPeriods('Y:IAE',20000);const at=tt=>{let best=null;for(const q of ps)if(q.t<=tt+1e-9)best=q;else break;return best?best.max:null;};
+ const out=[];let prev=0;for(let k=1;k<=m.cycles;k++){const tk=k*m.P;if(s.t<tk-1e-6)break;const v=at(tk);if(v===null)break;out.push(v-prev);prev=v;}return out;}
+function nnTheory(t){const s=S.sim,m=S.tutMeta||{};if(!s||!m.P||!editor.comp('M1'))return '';const nn=editor.comp('NN1'),p=nn?{...P.defaults('NN'),...nn.params}:null;
+ const b=nnBlock('NN1'),st=b?.st,learn=p&&(p.train==='err'||p.train==='tgt'),cyc=nnCycles(m);
+ const kind=!nn?'μόνο PI':learn?'PI + νευρωνικό που μαθαίνει online':'PI + αντίστροφο μοντέλο (σταθερά βάρη)';
+ let h=`<div class="tm"><span class="badge">${esc(kind)}</span>${nn?` δίκτυο ${(st?.net?.sizes||[2,8,1]).join(' – ')}`:''}${learn&&st?` · ${Parts.fmtNum(st.opt?.k||0)} ενημερώσεις · L = ${eng(st.L,'V',3)}`:''}</div><ul class="eqs">
+  <li>Μηχανή: u = R_a·i + L_a·di/dt + ψ·ω, &nbsp;J·dω/dt = ψ·i − b·ω − τ_L, &nbsp;τ_L = k·ω·|ω| (ανεμιστήρας, k = ${eng(m.kf,'N·m·s²')})</li>
+  <li>Η τάση που χρειάζεται για να ακολουθήσει ω_r με επιτάχυνση α_r (το «αντίστροφο μοντέλο»): u* = ψ·ω_r + (R_a/ψ)·(J·α_r + b·ω_r + k·ω_r·|ω_r|) + L_a·di/dt. Μη γραμμική στο ω_r, γραμμική στο α_r· ο PI μόνος του τη βρίσκει μόνο με σφάλμα</li>
+  ${learn?`<li>Feedback-error learning: u = u_PI + u_NN(ω_r, α_r). Σε κάθε δείγμα (1 kHz) τα βάρη αλλάζουν κατά Δw = η·(u_PI/${fmt(+p.ys,3)})·∂u_NN/∂w (${p.opt==='adam'?'Adam':'κλίση'}, η = ${fmt(+p.lr,3)}): ό,τι πρέπει ακόμη να δώσει ο PI είναι το σφάλμα του δικτύου, και όσο το δίκτυο μαθαίνει, ο PI δίνει λιγότερα. Δεν μαθαίνει όσο η έξοδος είναι στο όριο (όπως το anti-windup)</li>`:''}
+  ${nn&&!learn?`<li>Αντίστροφο μοντέλο: το δίκτυο έμαθε offline u από (ω, α) σε προσομοίωση με διέγερση (tools/nn_weights.py, RMS σφάλμα ≈ 1 V)· εδώ παίρνει τα (ω_r, α_r) της αναφοράς. Ό,τι δεν ξέρει (άλλο φορτίο, τιμές εκτός της περιοχής εκπαίδευσης) το διορθώνει ο PI</li>`:''}
+  <li>Όρια: ο ελεγκτής είναι PI + πρόσθια τροφοδότηση, άρα η ευστάθεια είναι του PI· το δίκτυο αλλάζει μόνο την είσοδο που ο PI δεν χρειάζεται να βρει. Έξω από την περιοχή που είδε (ω > 160 rad/s, άλλη μηχανή) το δίκτυο προεκτείνει χωρίς εγγύηση, και ο κορεσμός ±${m.Vmax} V περιορίζει ό,τι κι αν ζητήσει</li></ul>`;
+ if(!cyc.length)h+='<p class="small muted">Τρέξε την προσομοίωση: εδώ εμφανίζεται το IAE κάθε κύκλου της αναφοράς (1,6 s).</p>';
+ else h+=`<table class="cmp"><thead><tr><th>Κύκλος</th>${cyc.map((_,k)=>`<th>${k+1}</th>`).join('')}</tr></thead><tbody><tr><td>IAE (rad)</td>${cyc.map(v=>`<td>${fmt(v,3)}</td>`).join('')}</tr></tbody></table><p class="small muted">IAE = ∫|ω_r − ω|dt ανά κύκλο· σύνολο ${fmt(s.now('Y:IAE'),4)} rad, ISE = ${fmt(s.now('Y:ISE'),4)} rad²/s.</p>`;
+ if(t.id==='nn_compare'){const key=JSON.stringify(S.tut?.options||{}),r=NNC.key===key?NNC.res:null;
+  h+=`<h4>Σύγκριση των τριών ελεγκτών</h4>${r?`<table class="cmp"><thead><tr><th>Ελεγκτής</th>${(r[0].per||[]).map((_,k)=>`<th>IAE ${k+1}</th>`).join('')}<th>IAE</th><th>ISE</th></tr></thead><tbody>${r.map(q=>`<tr><td>${esc(q.name)}</td>${(q.per||[]).map(v=>`<td>${fmt(v,3)}</td>`).join('')}<td>${fmt(q.iae,4)}</td><td>${fmt(q.ise,4)}</td></tr>`).join('')}</tbody></table>`:''}
+   <button class="primary-ghost" data-nncmp ${NNC.busy?'disabled':''}>${NNC.busy?'Τρέχει στο παρασκήνιο…':r?'Ξανά':'Σύγκρινε και τους τρεις'}</button> <small class="muted">Τρέχει μόνο PI, PI + online και αντίστροφο μοντέλο με το ίδιο φορτίο, σε ξεχωριστά threads.</small>`;}
+ return h;}
+async function runNNCompare(){const t=tutorial();if(NNC.busy||t.id!=='nn_compare')return;const o={...S.tut.options},key=JSON.stringify(o);NNC.busy=true;renderTheory();
+ const vars=[['pi','Μόνο PI'],['pinn','PI + online'],['inv','PI + αντίστροφο']];const pool=NNC.pool||(NNC.pool=new Pool.SimPool(3));
+ try{const qs=vars.map(([c])=>{const pr=t.build({...o,ctrl:c}),m=pr.meta;const meas=[{key:'Y:IAE',stat:'end'},{key:'Y:ISE',stat:'end'},...Array.from({length:m.cycles},(_,k)=>({key:'Y:IAE',stat:'at',at:(k+1)*m.P,name:'c'+(k+1)}))];
+   return {action:'run',project:pr,t_end:pr.sim.stopT,hdiv:pr.sim.hDiv,channels:['Y:IAE','Y:ISE'],measure:meas,waveforms:false,check:false};});
+  const outs=await pool.map(qs);NNC.res=outs.map((r,i)=>{const M=r.measure,n=Object.keys(M).filter(k=>/^c\d+$/.test(k)).length,c=Array.from({length:n},(_,k)=>M['c'+(k+1)]);return {name:vars[i][1],iae:M['Y:IAE:end'],ise:M['Y:ISE:end'],per:c.map((v,k)=>v-(k?c[k-1]:0))};});NNC.key=key;}
+ catch(e){notice('Σύγκριση: '+esc(e.message),'error');}finally{NNC.busy=false;renderTheory();runMath();}}
+// the card is drawn in the theory and, for formula tutorials, in the mathematics card too: one listener for both
+document.addEventListener('click',e=>{if(e.target.closest?.('[data-nncmp]'))runNNCompare();});
 function dcDriveTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('M1'))return '';const M=paramsOf('M1'),Ra=+M.Ra,La=+M.La,psi=+M.psi,J=+M.J,b=+M.bm,Vdc=+paramsOf('V1').V,T=1/m.fs;
  const per=k=>lastPeriods(k,20000).map(q=>({...q,tm:q.t-T/2}));const wNow=s.now('Y:M1'),iA=avgOver('Y:AM1',5)?.avg,dA=avgOver('D:PWM1',5)?.avg,tl=m.mode==='current'?0:(s.t>m.tTL?m.TL:0);
  const cross=(ps,t0,y0,y1)=>{const f=v=>(v-y0)/(y1-y0);let a=NaN,c=NaN;for(let k=1;k<ps.length;k++){const p0=ps[k-1],p1=ps[k];if(p1.tm<t0)continue;const g0=f(p0.avg),g1=f(p1.avg),at=x=>p0.tm+(x-g0)/(g1-g0)*(p1.tm-p0.tm);if(isNaN(a)&&g0<.1&&g1>=.1)a=at(.1);if(isNaN(c)&&g0<.9&&g1>=.9){c=at(.9);break;}}return c-a;};
@@ -1920,6 +1948,7 @@ function scheringTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.C2)return '';c
 function formulaTheory(t){
  if(t.topology==='sampling')return samplingTheory();
  if(t.topology==='dc_drive')return dcDriveTheory();
+ if(t.topology==='nn_compare'||t.topology==='nn_online')return nnTheory(t);
  if(t.topology==='blocks_loop')return blocksTheory();
  if(t.topology==='peak_cm')return pcmTheory();
  if(t.topology==='pcm_chaos')return chaosTheory();
@@ -2219,5 +2248,5 @@ function boot(){
 function renderTheoryLive(){if(!atTop()||document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
 window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
- renderEvents,togglePin,refreshControls,changesToSchedule,renderProps}; // 3.19: for tests/ui/live_flow.js
+ renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,runNNCompare,get NNC(){return NNC;}}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare
 })();
