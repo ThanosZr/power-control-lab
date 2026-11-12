@@ -137,6 +137,10 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:6px}
 .popup{position:fixed;z-index:50;background:#fff;border:1px solid #cfdcd7;border-radius:10px;box-shadow:0 12px 32px #18353a26}
 .inspector{width:330px;max-height:80vh;overflow:auto}
 .ins-head{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 12px;border-bottom:1px solid var(--line)}
+/* 4.7: the settings window moves with its title */
+.ins-head{cursor:move;user-select:none;gap:6px}.ins-head>div{flex:1 1 auto;min-width:0}.ins-head input,.ins-head button{cursor:auto}.ins-head button{cursor:pointer}
+.ins-grip{color:#9fb3ad;font-size:14px;line-height:1;padding-top:12px;margin-left:-4px}
+.popup.moving{box-shadow:0 18px 42px #18353a40;will-change:transform}
 .ins-head small{color:var(--muted);display:block;font-size:10.5px}.ins-label{font-weight:700;border-color:transparent;padding:2px 4px;margin-left:-4px;width:200px}.ins-label:hover{border-color:var(--line)}
 .ins-body{padding:8px 12px;display:flex;flex-direction:column;gap:7px}
 .frow{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted)}.frow em{font-style:normal;color:#9aaba6}.frow small{font-size:10px;color:#8a9b96}

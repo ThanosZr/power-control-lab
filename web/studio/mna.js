@@ -23,6 +23,8 @@
  const SPARSE_MIN=120;
  const UNITS=root.Units||(typeof require!=='undefined'?require('./units.js'):null);
  const GMIN=1e-9;
+ // 4.7: records in shared memory in a cross-origin isolated page (allocRecord)
+ const shared=typeof window!=='undefined'&&typeof SharedArrayBuffer!=='undefined'&&!!root.crossOriginIsolated;
  // program t:value at t; left = the value just before t (the end of a step that lands on a jump, 3.15)
  const schedAt=(s,t,dflt,left)=>{if(!s)return dflt;let v=s[0][1];const tl=left?t-1e-15-4e-16*Math.abs(t):0;if(left?s[0][0]>=tl:t<s[0][0])return dflt;for(const [ts,val] of s){if(left?ts<tl:ts<=t+1e-15)v=val;else break;}return v;};
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -797,8 +799,11 @@
   }
   allocRecord(){
    const nch=this.keys.length,cap=this.opts.cap||Math.max(20000,Math.min(200000,Math.floor(24e6/(4*nch+8))));
-   this.ring={t:new Float64Array(cap),d:new Float32Array(cap*nch),g:new Uint8Array(cap),nch,cap,head:0,n:0};
-   const pc=20000;this.per={t:new Float64Array(pc),avg:new Float32Array(pc*nch),min:new Float32Array(pc*nch),max:new Float32Array(pc*nch),rms:new Float32Array(pc*nch),end:new Float32Array(pc*nch),nch,cap:pc,head:0,n:0};
+   // 4.7: in a cross-origin isolated page the buffers are shared memory from the start, so that the live worker (live.js)
+   // uses them as they are: copying them at ▶ cost one frame of 80 ms in a circuit of 300 channels (≈ 140 MB)
+   const A=(C,n)=>shared?new C(new SharedArrayBuffer(n*C.BYTES_PER_ELEMENT)):new C(n);
+   this.ring={t:A(Float64Array,cap),d:A(Float32Array,cap*nch),g:A(Uint8Array,cap),nch,cap,head:0,n:0};
+   const pc=20000;this.per={t:A(Float64Array,pc),avg:A(Float32Array,pc*nch),min:A(Float32Array,pc*nch),max:A(Float32Array,pc*nch),rms:A(Float32Array,pc*nch),end:A(Float32Array,pc*nch),nch,cap:pc,head:0,n:0};
    this.acc={t0:this.t,dur:0,s:new Float64Array(nch),q:new Float64Array(nch),mn:new Float64Array(nch).fill(Infinity),mx:new Float64Array(nch).fill(-Infinity)};
    this.vals=new Float64Array(nch);this.prevVals=null;
   }

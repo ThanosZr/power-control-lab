@@ -146,12 +146,15 @@ function fillSignals(){const sel=$('#add-signal'),q=fold($('#sig-search')?.value
  opts.push(`<option value="">${q.length?(n?`+ Σήμα στο scope… (${n} βρέθηκαν)`:'Κανένα σήμα δεν ταιριάζει'):'+ Σήμα στο scope…'}</option>`);
  for(const [g,hit] of groups)opts.push(`<optgroup label="${esc(g.label)}">`+hit.map(it=>`<option value="${esc(it.value)}">${esc(it.text)}</option>`).join('')+'</optgroup>');
  sel.innerHTML=opts.join('');return n;}
+// 4.7: the signal menu (hundreds of options in a large circuit) and the channel list are written again only when they changed
+let sigKey='',chanKey='';
 function renderChannels(){
  SIGS=[];
  for(const {c,id,label} of allComps()){const sg=signalsFor(c,id);if(!sg.length)continue;SIGS.push({label:`${label} · ${P.PARTS[c.type].name}`,items:sg.map(([p,n,f])=>({value:`${p}${id}${f||''}`,text:`${n} ${label}`}))});}
  const nodes=(topDoc().wires||[]).filter(w=>w.name).map(w=>({value:`VN:${w.a.c}:${w.a.p}`,text:`τάση κόμβου ${w.name}`}));if(nodes.length)SIGS.push({label:'Κόμβοι με όνομα',items:nodes});
- fillSignals();
+ {const k=JSON.stringify(SIGS)+'|'+($('#sig-search')?.value||'');if(k!==sigKey){sigKey=k;fillSignals();}}
  const panes=scope.cfg.panes;
+ {const k=JSON.stringify(panes);if(k===chanKey&&$('#chan-list').childElementCount)return;chanKey=k;}
  $('#chan-list').innerHTML=panes.map((p,pi)=>`<div class="pane-row"><div class="pane-head"><b>Παράθυρο ${pi+1}</b><label class="mini"><input type="checkbox" data-pauto="${pi}" ${p.y?.auto===false?'':'checked'}> auto</label>${p.y?.auto===false?`<input class="ymin" data-pmin="${pi}" value="${p.y.min??''}" placeholder="min"><input class="ymax" data-pmax="${pi}" value="${p.y.max??''}" placeholder="max">`:''}<label class="mini"><input type="checkbox" data-pzero="${pi}" ${p.zero?'checked':''}> 0</label></div>
   ${p.ch.map(ch=>`<div class="chan" data-key="${esc(ch.key)}"><label class="sw"><input type="checkbox" data-on="${esc(ch.key)}" ${ch.on?'checked':''}><i style="background:${ch.color}"></i></label><input class="clabel" data-label="${esc(ch.key)}" value="${esc(ch.label)}"><select data-pane="${esc(ch.key)}">${[0,1,2,3].map(i=>`<option value="${i}" ${i===pi?'selected':''}>Π${i+1}</option>`).join('')}</select><button class="x" data-rm="${esc(ch.key)}" title="Αφαίρεση">✕</button></div>`).join('')||'<div class="muted small">Κανένα σήμα. Δεξί κλικ σε στοιχείο → Scope, ή επίλεξε από τη λίστα.</div>'}</div>`).join('');
  $$('#chan-list [data-rm]').forEach(b=>b.onclick=()=>{scope.removeChannel(b.dataset.rm);renderChannels();draw(true);});
@@ -162,7 +165,9 @@ function renderChannels(){
  $$('#chan-list [data-pzero]').forEach(b=>b.onchange=()=>{scope.cfg.panes[+b.dataset.pzero].zero=b.checked;draw(true);});
  $$('#chan-list [data-pmin],#chan-list [data-pmax]').forEach(b=>b.onchange=()=>{const pi=+(b.dataset.pmin??b.dataset.pmax);const p=scope.cfg.panes[pi];const v=P.parseEng(b.value);if(Number.isFinite(v)){if(b.dataset.pmin!==undefined)p.y.min=v;else p.y.max=v;}draw(true);});
 }
-function renderMeasure(){
+// 4.7: a burst of scope changes (five channels of a tutorial, a drag of the cursors) gives one table on the next frame
+let measureRaf=0;function requestMeasure(){if(measureRaf)return;measureRaf=requestAnimationFrame(()=>{measureRaf=0;renderMeasure();});}
+function renderMeasure(){if(measureRaf){cancelAnimationFrame(measureRaf);measureRaf=0;}
  if(!S.sim)return;const rows=[];const cur=scope.cfg.cursors;
  for(const ch of scope.channels()){if(!ch.on)continue;const st=scope.stats(ch.key);const u=MeasureUnit(ch.key);const lp=S.sim.lastPeriod(ch.key.startsWith('VN:')?(()=>{const n=S.sim.net.pinNet.get(ch.key.slice(3));return n&&!n.ground?'N:'+n.canon:'';})():ch.key);
   let cv='';if(cur.length){const ci=scope.resolve(ch.key);const a=ci===-1?NaN:scope.valueAt(ci,cur[0]),b=cur[1]!==undefined&&ci!==-1?scope.valueAt(ci,cur[1]):NaN;cv=`<td>${eng(a,u)}</td><td>${cur.length>1?eng(b,u):''}</td><td>${cur.length>1?eng(b-a,u):''}</td>`;}
@@ -565,8 +570,21 @@ function fieldHTML(c,def,p){const v=p[def.k]??def.def;const id='f_'+def.k;
  if(def.type==='text')return `<input id="${id}" data-k="${def.k}" value="${esc(v)}" placeholder="${esc(def.ph||'')}">`;
  if(def.type==='code')return `<textarea id="${id}" data-k="${def.k}" class="code" rows="14" spellcheck="false">${esc(v)}</textarea>`;
  return `<input id="${id}" data-k="${def.k}" data-num="1" value="${esc(typeof v==='number'?P.eng(v,'',6).replace(/\s/g,''):v)}" inputmode="decimal">`;}
-function openInspector(id,x,y){
+// 4.7: the settings window is dragged by its title (a CSS transform while it moves, no layout), and once moved it opens
+// where it was left, in this session and the next (localStorage pcl-ins-pos). Rebuilt after a change (a select, a
+// source), it keeps its place and the field that had the focus.
+const INS={pos:null};try{const o=JSON.parse(localStorage.getItem('pcl-ins-pos')||'null');if(o&&Number.isFinite(o.x)&&Number.isFinite(o.y))INS.pos=o;}catch(e){}
+function placeAt(el,left,top){el.hidden=false;const W=el.offsetWidth,H=el.offsetHeight;el.style.left=Math.max(8,Math.min(left,innerWidth-W-8))+'px';el.style.top=Math.max(8,Math.min(top,innerHeight-Math.min(H,innerHeight-16)-8))+'px';}
+function popupDrag(el,onDone){const h=el.querySelector('.ins-head');if(!h)return;
+ h.onpointerdown=e=>{if(e.button!==0||e.target.closest('input,button,select,textarea,a'))return;e.preventDefault();try{h.setPointerCapture(e.pointerId);}catch(x){}
+  const x0=e.clientX,y0=e.clientY,L=parseFloat(el.style.left)||0,T=parseFloat(el.style.top)||0,W=el.offsetWidth;let dx=0,dy=0,raf=0;el.classList.add('moving');
+  h.onpointermove=ev=>{dx=Math.max(8-L,Math.min(innerWidth-W-8-L,ev.clientX-x0));dy=Math.max(8-T,Math.min(innerHeight-48-T,ev.clientY-y0));
+   if(!raf)raf=requestAnimationFrame(()=>{raf=0;el.style.transform=`translate(${dx}px,${dy}px)`;});};
+  h.onpointerup=h.onpointercancel=()=>{h.onpointermove=h.onpointerup=h.onpointercancel=null;if(raf)cancelAnimationFrame(raf);el.style.transform='';el.classList.remove('moving');
+   if(dx||dy){el.style.left=(L+dx)+'px';el.style.top=(T+dy)+'px';onDone?.(L+dx,T+dy);}};};}
+function openInspector(id,x,y,keep){
  const c=editor.comp(id);if(!c)return;const def=partDef(c);const p={...pdefaults(c),...c.params};const ins=$('#inspector');
+ const was=keep&&!ins.hidden?{left:parseFloat(ins.style.left),top:parseFloat(ins.style.top),focus:document.activeElement&&ins.contains(document.activeElement)?(document.activeElement.dataset.k||document.activeElement.dataset.src||null):null}:null;
  const rows=def.params.filter(d=>!d.show||d.show(p)).map(d=>`<label class="frow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span>${fieldHTML(c,d,p)}${d.hint?`<small>${esc(d.hint)}</small>`:''}</label>`).join('');
  const sig=(S.pfx===null?[]:signalsFor(c)).slice(0,4).map(([pre,n,f])=>`<button class="chip" data-probe="${pre}${pid(c.id)}${f||''}">⌁ ${esc(n)}</button>`).join('');
  // signal inputs: a source can be chosen here instead of drawing a wire (3.0)
@@ -574,14 +592,20 @@ function openInspector(id,x,y){
  const outs=editor.doc.components.filter(k=>k.id!==c.id).flatMap(k=>Object.entries(P.sigPins(k)).filter(([,v])=>v.dir==='out').map(([pin])=>({v:k.id+':'+pin,t:`${k.label||k.id}.${pin}`+(k.type==='TAGI'?` (ετικέτα «${k.params?.name||''}»)`:'')}))).sort((a,b)=>a.t.localeCompare(b.t,undefined,{numeric:true}));
  const wired=pin=>editor.doc.wires.some(w=>(w.a.c===c.id&&w.a.p===pin)||(w.b.c===c.id&&w.b.p===pin));
  const srcRows=sigIns.map(pin=>{const v=c.params?.['in_'+pin]||'';return `<label class="frow"><span>Πηγή της εισόδου ${esc(pin)}</span><select data-src="${esc(pin)}"><option value="">${wired(pin)?'από σύρμα':'— (καμία)'}</option>${outs.map(o=>`<option value="${esc(o.v)}" ${o.v===v?'selected':''}>${esc(o.t)}</option>`).join('')}${v&&!outs.some(o=>o.v===v)?`<option value="${esc(v)}" selected>${esc(v)} (λείπει)</option>`:''}</select></label>`;}).join('');
- ins.innerHTML=`<div class="ins-head"><div><small>${esc(def.name)}</small><input class="ins-label" data-label value="${esc(c.label||c.id)}"></div><button class="x" data-close>✕</button></div>
+ ins.innerHTML=`<div class="ins-head" title="Σύρε από εδώ για να μετακινήσεις το παράθυρο"><span class="ins-grip" aria-hidden="true">⠿</span><div><small>${esc(def.name)}</small><input class="ins-label" data-label value="${esc(c.label||c.id)}"></div><button class="x" data-close>✕</button></div>
   <div class="ins-body">${c.type==='TLM'?`<button class="primary-ghost ld-open" data-linedata>Δεδομένα γραμμής…</button><small class="muted">${esc(P.tlmModel(p).err||'Μοντέλο '+(p.model==='fd'?'FD':'CP')+' ενημερωμένο.')}</small>`:''}${rows||(srcRows?'':'<p class="muted small">Χωρίς παραμέτρους.</p>')}${srcRows?`<div class="ins-srcs"><small class="muted">Σύνδεση χωρίς καλώδιο: διάλεξε από ποια έξοδο παίρνει σήμα κάθε είσοδος. Ισοδυναμεί με σύρμα.</small>${srcRows}</div>`:''}</div>${sig?`<div class="ins-probes">${sig}</div>`:''}
   <div class="ins-foot"><small>Οι αλλαγές εφαρμόζονται αμέσως, και ενώ τρέχει η προσομοίωση. Μονάδες SI με προθέματα: 5.6u, 100m, 20k.</small></div>`;
- placePopup(ins,x,y);
- const apply=el=>{const k=el.dataset.k,f=fieldValue(c,k,el);el.classList.toggle('bad',!!f.bad);if(f.bad)return;const v=f.v;
-  editor.setParams(id,{[k]:v});const def2=def.params.find(d=>d.k===k);if(def2?.type==='select'||def2?.type==='bool'||k==='gate'||k==='ff'||k==='mode'||k==='ins'||k==='outs')openInspector(id,parseFloat(ins.style.left)-12,parseFloat(ins.style.top)-12);};
- ins.querySelectorAll('[data-src]').forEach(el=>el.onchange=()=>{editor.setParams(id,{['in_'+el.dataset.src]:el.value||undefined});if(!el.value)delete editor.comp(id).params['in_'+el.dataset.src];editor.renderPins();openInspector(id,parseFloat(ins.style.left)-12,parseFloat(ins.style.top)-12);});
- ins.querySelectorAll('[data-k]').forEach(el=>{el.onchange=()=>apply(el);if(el.dataset.num)el.onkeydown=e=>{if(e.key==='Enter')apply(el);};});
+ if(was)placeAt(ins,was.left,was.top);else if(INS.pos)placeAt(ins,INS.pos.x,INS.pos.y);else placePopup(ins,x,y);
+ popupDrag(ins,(l,t)=>{INS.pos={x:l,y:t};try{localStorage.setItem('pcl-ins-pos',JSON.stringify(INS.pos));}catch(e){}});
+ if(was?.focus){const f=ins.querySelector(`[data-k="${CSS.escape(was.focus)}"],[data-src="${CSS.escape(was.focus)}"]`);if(f)f.focus({preventScroll:true});}
+ // a value in force: the same as the part has now (a typed value that equals it changes nothing)
+ const same=(k,v)=>{const o=editor.comp(id)?.params?.[k];return o!==undefined&&String(o)===String(v);};
+ const apply=(el,quiet)=>{const k=el.dataset.k,f=fieldValue(c,k,el);if(!quiet||!f.bad)el.classList.toggle('bad',!!f.bad);if(f.bad)return;const v=f.v;if(quiet&&same(k,v))return;
+  editor.setParams(id,{[k]:v});const def2=def.params.find(d=>d.k===k);if(def2?.type==='select'||def2?.type==='bool'||k==='gate'||k==='ff'||k==='mode'||k==='ins'||k==='outs')openInspector(id,0,0,true);};
+ ins.querySelectorAll('[data-src]').forEach(el=>el.onchange=()=>{editor.setParams(id,{['in_'+el.dataset.src]:el.value||undefined});if(!el.value)delete editor.comp(id).params['in_'+el.dataset.src];editor.renderPins();openInspector(id,0,0,true);});
+ // 4.7: a number takes effect 0.4 s after the last key (one undo step for the burst), as well as with Enter or on leaving the field
+ ins.querySelectorAll('[data-k]').forEach(el=>{el.onchange=()=>{clearTimeout(el._t);apply(el);};if(el.dataset.num){el.onkeydown=e=>{if(e.key==='Enter'){clearTimeout(el._t);apply(el);}};
+  el.oninput=()=>{clearTimeout(el._t);el._t=setTimeout(()=>{if(el.isConnected)apply(el,true);},400);};}});
  ins.querySelector('[data-label]').onchange=e=>{editor.setParams(id,{},{label:e.target.value||id});renderChannels();};
  ins.querySelector('[data-close]').onclick=closeInspector;
  ins.querySelector('[data-linedata]')?.addEventListener('click',()=>{closeInspector();LineData.open(id,lineCtx());});
@@ -598,7 +622,7 @@ function openWireInspector(id,x,y){const w=editor.wire(id);if(!w)return;const in
   <div class="frow"><span>Χρώμα</span><div class="swatches">${WIRE_COLORS.map(c=>`<button data-wc="${c}" class="${(w.color||'')===c?'on':''}" style="background:${c||'var(--wire)'}" title="${c||'προεπιλογή'}"></button>`).join('')}</div></div>
   <label class="frow"><span>Πάχος</span><select data-ww>${['',1.5,2.2,3,4].map(v=>`<option value="${v}" ${String(w.width||'')===String(v)?'selected':''}>${v||'προεπιλογή'}</option>`).join('')}</select></label>
   <div class="ins-probes">${bw>1?'':'<button class="chip" data-wprobe>⌁ Τάση κόμβου</button>'}<button class="chip" data-wroute>↯ Αυτόματη δρομολόγηση</button></div></div>`;
- placePopup(ins,x,y);
+ if(INS.pos)placeAt(ins,INS.pos.x,INS.pos.y);else placePopup(ins,x,y);popupDrag(ins,(l,t)=>{INS.pos={x:l,y:t};try{localStorage.setItem('pcl-ins-pos',JSON.stringify(INS.pos));}catch(e){}});
  ins.querySelector('[data-wname]').onchange=e=>{editor.setWireProps(id,{name:e.target.value.trim()});renderChannels();};
  ins.querySelectorAll('[data-wc]').forEach(b=>b.onclick=()=>{editor.setWireProps(id,{color:b.dataset.wc||undefined});openWireInspector(id,x,y);});
  ins.querySelector('[data-ww]').onchange=e=>editor.setWireProps(id,{width:e.target.value?+e.target.value:undefined});
@@ -754,9 +778,19 @@ function renderDiag(){const box=$('#diag-list');if(!box)return;S.diagSeen=S.sim?
  box.querySelectorAll('[data-dfocus]').forEach(b=>b.onclick=()=>flashComp(b.dataset.dfocus));}
 function openDiag(){const d=$('#diag');if(d&&!d.open){d.open=true;try{localStorage.setItem('pcl-diag-open','1');}catch(e){}}}
 function flashComp(id){focusComp(id);const g=document.querySelector(`#canvas .part[data-c="${CSS.escape(id)}"]`);if(!g)return;g.classList.remove('diag-hi');void g.getBoundingClientRect();g.classList.add('diag-hi');setTimeout(()=>g.classList.remove('diag-hi'),1800);}
-let stepCheckTimer=0;
-// the step check after every build or change (modes at the present switch states), debounced
-function scheduleStepCheck(){clearTimeout(stepCheckTimer);stepCheckTimer=setTimeout(()=>{if(S.sim&&!S.error)try{S.sim.stepCheck();}catch(e){}renderDiag();},250);renderDiag();}
+let stepCheckTimer=0,stepCheckSeq=0,stepCheckPool=null;
+// the step check after every build or change (modes at the present switch states), debounced. 4.7: in a worker of its own
+// (the eigenvalues and eigenvectors took 20–70 ms of the page on every change of a large circuit): the circuit and, after a
+// run, the solver's state (snapshot) go there, the messages come back to the same solver. Python blocks: in the page, which
+// has Python already. Without workers, or if the worker fails: in the page, as before.
+function scheduleStepCheck(){clearTimeout(stepCheckTimer);stepCheckTimer=setTimeout(runStepCheck,250);renderDiag();}
+function runStepCheck(){const sim=S.sim;if(!sim||S.error)return renderDiag();const seq=++stepCheckSeq;
+ const inPage=()=>{if(seq!==stepCheckSeq||sim!==S.sim)return;try{sim.stepCheck();}catch(e){}renderDiag();};
+ if(!window.Worker||!window.Pool||S.noStepWorker||sim.net.sig.blocks.some(b=>b.type==='PY'))return inPage();
+ let q;try{q={action:'stepcheck',project:fullDoc(),opts:{...sim.opts,method:sim.method},state:sim.steps>0?sim.snapshot():null};}catch(e){return inPage();}
+ stepCheckPool=stepCheckPool||new Pool.SimPool(1);
+ stepCheckPool.map([q]).then(([list])=>{if(seq!==stepCheckSeq||sim!==S.sim)return;
+   sim.dgPre=list||[];sim.dgVer=(sim.dgVer||0)+1;renderDiag();},inPage);}
 function syncStepMode(){const m=$('#step-mode');if(m)m.value=editor.doc.solve?.step==='var'?'var':'fixed';}
 // ------------------------------------------------------------------ scenarios (3.14, ROADMAP §30)
 // Python in a worker (scenario_worker.js): the pcl package with the app's solver, on a copy of the circuit on the screen
@@ -1119,7 +1153,11 @@ function palLoad(){try{const o=JSON.parse(localStorage.getItem('pcl-library')||'
 function palSave(){try{localStorage.setItem('pcl-library',JSON.stringify({tax:PAL.tax,open:PAL.open,fav:PAL.fav,recent:PAL.recent}));}catch{}}
 function palRecent(t){if(!P.PARTS[t])return;PAL.recent=[t,...PAL.recent.filter(x=>x!==t)].slice(0,12);palSave();if(PAL.tax==='mine')renderPalette();}
 function palItem(k,d){const fav=PAL.fav.includes(k);return `<div class="pal-row"><button class="pal-item" draggable="true" data-part="${k}" title="${esc(d.name)} · κλικ και μετά κλικ στον καμβά, ή σύρσιμο"><svg viewBox="-42 -42 84 84"><g class="sym">${d.draw(P.defaults(k))}</g></svg><span>${esc(d.name)}</span></button><button class="pal-fav${fav?' on':''}" data-fav="${k}" title="${fav?'Αφαίρεση από τα αγαπημένα':'Στα αγαπημένα'}" aria-pressed="${fav}">${fav?'★':'☆'}</button></div>`;}
+// 4.7: the library is rebuilt only when what it shows changed (search, taxonomy, favourites, recent, open groups, the
+// project's subcircuits); every tutorial and every change used to draw all the symbols again (≈ 5 ms each)
+let palKey='';
 function renderPalette(){const q=($('#pal-search').value||'').trim();
+ {const k=JSON.stringify([q,PAL.tax,PAL.fav,PAL.recent,PAL.open[PAL.tax]||null,defsOf()]);if(k===palKey&&$('#palette-list').childElementCount)return;palKey=k;}
  const sel=$('#pal-tax');if(sel&&!sel.options.length)sel.innerHTML=Library.TAX.map(t=>`<option value="${t.id}">${esc(t.title)}</option>`).join('');if(sel)sel.value=PAL.tax;
  // subcircuits of the project (3.17): one item per definition, plus import of a definition file
  const ql=q.toLowerCase(),defs=Object.entries(defsOf()).filter(([k,d])=>!ql||String(d.title||k).toLowerCase().includes(ql)||k.toLowerCase().includes(ql)||'υποκύκλωμα'.includes(ql));
@@ -1132,7 +1170,7 @@ function renderPalette(){const q=($('#pal-search').value||'').trim();
   return `<details class="pal-group" data-pk="${esc(key)}"${isOpen(key,i)?' open':''}><summary>${esc(g.title)} <span class="muted">${g.n}</span></summary>${body}</details>`;}).join('');
  if(subItems)h+=`<details class="pal-group" data-pk="$subs"${isOpen('$subs',0)?' open':''}><summary>Υποκυκλώματα του project <span class="muted">${defs.length}</span></summary>${subItems}</details>`;
  $('#palette-list').innerHTML=h||'<p class="muted small pal-empty">Κανένα στοιχείο δεν ταιριάζει.</p>';
- $$('#palette-list details[data-pk]').forEach(d=>d.addEventListener('toggle',()=>{if(q)return;(PAL.open[PAL.tax]||(PAL.open[PAL.tax]={}))[d.dataset.pk]=d.open;palSave();}));
+ $$('#palette-list details[data-pk]').forEach(d=>d.addEventListener('toggle',()=>{if(q)return;(PAL.open[PAL.tax]||(PAL.open[PAL.tax]={}))[d.dataset.pk]=d.open;palSave();palKey=JSON.stringify([q,PAL.tax,PAL.fav,PAL.recent,PAL.open[PAL.tax]||null,defsOf()]);}));
  $$('#palette-list [data-fav]').forEach(b=>b.onclick=e=>{e.stopPropagation();const k=b.dataset.fav;PAL.fav=PAL.fav.includes(k)?PAL.fav.filter(x=>x!==k):[...PAL.fav,k];palSave();renderPalette();});
  $$('.pal-item[data-part]').forEach(b=>{b.onclick=()=>{const t=b.dataset.part;if(t.startsWith('SUB:')){const pr=subParams(t.slice(4));if(!pr||!placeOk({type:'SUB',params:pr}))return;editor.beginPlace('SUB',pr);}else{editor.beginPlace(t);palRecent(t);}notice('Κλικ στον καμβά για τοποθέτηση · R περιστροφή · Esc ακύρωση','info');setTimeout(()=>notice(''),3500);};
   b.ondragstart=e=>{e.dataTransfer.setData('application/x-pcl-part',b.dataset.part);e.dataTransfer.effectAllowed='copy';if(!b.dataset.part.startsWith('SUB:'))palRecent(b.dataset.part);};});
@@ -2070,7 +2108,7 @@ function boot(){
   canPlace:placeOk,subParams:name=>subParams(name),
   oncontext:openMenu,onwarn:t=>{notice(t,'error');setTimeout(()=>notice(''),5000);}});
  editor.setLive(liveOf);
- scope=new Scope($('#scope-canvas'),{onfreeze:()=>{$('#live-btn').hidden=false;},onchange:()=>{renderMeasure();},onhover:()=>{}});
+ scope=new Scope($('#scope-canvas'),{onfreeze:()=>{$('#live-btn').hidden=false;},onchange:()=>{requestMeasure();},onhover:()=>{}});
  editor.svg.addEventListener('pointermove',e=>{const el=e.target.closest?.('[data-c]');hoverComp=el?.dataset.c||null;hoverPos=[e.clientX,e.clientY];updateHover();});
  editor.svg.addEventListener('pointerleave',()=>{hoverComp=null;updateHover();});
  // toolbar

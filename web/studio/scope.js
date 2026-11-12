@@ -25,15 +25,16 @@
    canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.setPointerCapture(e.pointerId);this.drag={x:e.offsetX,view:this.viewRange(),moved:false};});
    canvas.addEventListener('pointerup',e=>{const d=this.drag;this.drag=null;if(d&&!d.moved)this.cursorAt(e);});
    canvas.addEventListener('wheel',e=>{e.preventDefault();this.zoomAt(e.offsetX,Math.exp(e.deltaY*.0015));},{passive:false});
-   canvas.addEventListener('dblclick',()=>{this.cfg.frozen=null;this.cfg.cursors=[];this.opt.onchange?.();this.draw();});
+   canvas.addEventListener('dblclick',()=>{this.cfg.frozen=null;this.cfg.cursors=[];this.opt.onchange?.();this.requestDraw();});
   }
-  attach(sim){this.sim=sim;this.draw();}
-  // one drawing on the next frame for a burst of pointer or wheel events (4.6); the running loop draws anyway
+  attach(sim){this.sim=sim;this.requestDraw();}
+  // one drawing on the next frame for a burst of pointer or wheel events (4.6); the running loop draws anyway.
+  // 4.7: also attach, channels added or moved, cursors, navigation: a tutorial with five channels drew six times in a row
   requestDraw(){if(this._raf)return;this._raf=requestAnimationFrame(()=>{this._raf=0;this.draw();});}
   // the colours of the theme, read again at most once a second (getComputedStyle in every frame forced a style recalculation)
   colors(){const now=performance.now();if(!this._col||now-this._col.t>1000){const css=getComputedStyle(this.cv);this._col={t:now,ink:css.getPropertyValue('--scope-ink')||'#203a3f',grid:css.getPropertyValue('--scope-grid')||'#e3ebe7',bg:css.getPropertyValue('--scope-bg')||'#fbfdfc'};}return this._col;}
   // reference traces from another solver: {label, data:{key:{t,y}}}, drawn dashed over the channel
-  setRefs(refs){this.refs=refs||null;this.draw();}
+  setRefs(refs){this.refs=refs||null;this.requestDraw();}
   refRange(key,t0,t1,fn){const d=this.refs?.data?.[key];if(!d)return false;const t=d.t;let lo=0,hi=t.length;while(lo<hi){const m=(lo+hi)>>1;if(t[m]<t0)lo=m+1;else hi=m;}
    for(let i=Math.max(0,lo-1);i<t.length;i++){fn(t[i],d.y[i]);if(t[i]>t1)break;}return true;}
   // navigation buttons: start, left, right, live, focus, in, out, all, autoy
@@ -48,7 +49,7 @@
    else if(kind==='in'||kind==='out'){const f=kind==='in'?.5:2,w=Math.max(span*f,4*s.h);if(live){const W=this.cfg.window;this.cfg.window=W.unit==='T'?{unit:'T',n:Math.max(+(W.n*f).toPrecision(6),4*s.h/T)}:{unit:'s',n:w};}else{const c=(a+b)/2;clamp(c-w/2,c+w/2);}}
    else if(kind==='all')this.cfg.frozen=[0,end];
    else if(kind==='autoy')for(const p of this.cfg.panes)p.y={auto:true};
-   this.opt.onchange?.();this.draw();}
+   this.opt.onchange?.();this.requestDraw();}
   resize(){const r=this.cv.parentElement.getBoundingClientRect(),dpr=window.devicePixelRatio||1;this.W=Math.max(200,r.width);this.H=Math.max(160,r.height);
    this.cv.width=Math.round(this.W*dpr);this.cv.height=Math.round(this.H*dpr);this.cv.style.width=this.W+'px';this.cv.style.height=this.H+'px';this.ctx.setTransform(dpr,0,0,dpr,0,0);this.draw();}
   // ------------------------------------------------------------ channels
@@ -60,9 +61,9 @@
   channels(){return this.cfg.panes.flatMap((p,pi)=>p.ch.map(c=>({...c,pane:pi})));}
   addChannel(key,label,pane=null){if(this.channels().some(c=>c.key===key))return false;const used=new Set(this.channels().map(c=>c.color));const color=COLORS.find(c=>!used.has(c))||COLORS[this.channels().length%COLORS.length];
    const unit=Scope.unitOf(key,this.sim);let pi=pane;if(pi===null){pi=this.cfg.panes.findIndex(p=>p.ch.length&&Scope.unitOf(p.ch[0].key,this.sim)===unit);if(pi<0){if(this.cfg.panes.length===1&&!this.cfg.panes[0].ch.length)pi=0;else if(this.cfg.panes.length<4){this.cfg.panes.push({ch:[]});pi=this.cfg.panes.length-1;}else pi=this.cfg.panes.length-1;}}
-   while(this.cfg.panes.length<=pi)this.cfg.panes.push({ch:[]});this.cfg.panes[pi].ch.push({key,label,color,on:true});this.opt.onchange?.();this.draw();return true;}
-  removeChannel(key){for(const p of this.cfg.panes)p.ch=p.ch.filter(c=>c.key!==key);this.cfg.panes=this.cfg.panes.filter((p,i)=>p.ch.length||i===0);this.opt.onchange?.();this.draw();}
-  moveChannel(key,pane){let ch=null;for(const p of this.cfg.panes){const i=p.ch.findIndex(c=>c.key===key);if(i>=0)ch=p.ch.splice(i,1)[0];}if(!ch)return;while(this.cfg.panes.length<=pane)this.cfg.panes.push({ch:[]});this.cfg.panes[pane].ch.push(ch);this.cfg.panes=this.cfg.panes.filter((p,i)=>p.ch.length||i===0);this.opt.onchange?.();this.draw();}
+   while(this.cfg.panes.length<=pi)this.cfg.panes.push({ch:[]});this.cfg.panes[pi].ch.push({key,label,color,on:true});this.opt.onchange?.();this.requestDraw();return true;}
+  removeChannel(key){for(const p of this.cfg.panes)p.ch=p.ch.filter(c=>c.key!==key);this.cfg.panes=this.cfg.panes.filter((p,i)=>p.ch.length||i===0);this.opt.onchange?.();this.requestDraw();}
+  moveChannel(key,pane){let ch=null;for(const p of this.cfg.panes){const i=p.ch.findIndex(c=>c.key===key);if(i>=0)ch=p.ch.splice(i,1)[0];}if(!ch)return;while(this.cfg.panes.length<=pane)this.cfg.panes.push({ch:[]});this.cfg.panes[pane].ch.push(ch);this.cfg.panes=this.cfg.panes.filter((p,i)=>p.ch.length||i===0);this.opt.onchange?.();this.requestDraw();}
   // ------------------------------------------------------------ data access
   windowSec(){const w=this.cfg.window,T=this.sim?.T||1e-3;return w.unit==='T'?w.n*T:w.n;}
   viewRange(){const s=this.sim;if(!s)return [0,1];if(this.cfg.frozen)return this.cfg.frozen;const W=this.windowSec();let t1=s.t;
@@ -87,7 +88,7 @@
   zoomAt(x,f){if(this.cfg.follow!==false&&!this.cfg.frozen){const W=this.cfg.window,T=this.sim?.T||1;const n=Math.max(+(W.n*f).toPrecision(6),(this.sim?.h||1e-9)*4/(W.unit==='T'?T:1));this.cfg.window={unit:W.unit,n};this.opt.onchange?.();this.requestDraw();return;}
    const [a,b]=this.viewRange(),pw=this.plotW();const tm=a+(Math.min(Math.max(x-this.padL,0),pw)/pw)*(b-a);const na=tm-(tm-a)*f,nb=tm+(b-tm)*f;if(nb-na<(this.sim?.h||1e-9)*4)return;this.cfg.frozen=[na,nb];this.opt.onfreeze?.();this.requestDraw();}
   cursorAt(e){if(!this.sim)return;const [a,b]=this.viewRange();const t=a+(e.offsetX-this.padL)/this.plotW()*(b-a);if(t<a||t>b)return;
-   if(e.shiftKey&&this.cfg.cursors.length)this.cfg.cursors[1]=t;else this.cfg.cursors=e.shiftKey?[t]:(this.cfg.cursors.length===1?[this.cfg.cursors[0],t]:[t]);this.opt.onchange?.();this.draw();}
+   if(e.shiftKey&&this.cfg.cursors.length)this.cfg.cursors[1]=t;else this.cfg.cursors=e.shiftKey?[t]:(this.cfg.cursors.length===1?[this.cfg.cursors[0],t]:[t]);this.opt.onchange?.();this.requestDraw();}
   plotW(){return this.W-this.padL-this.padR;}
   drawSamples(ch,t0,t1,X,Y){const L=this.sim?.samples?.(ch.key.slice(2));if(!L||!L.t.length)return;const t=L.t;let lo=0,hi=t.length;while(lo<hi){const m=(lo+hi)>>1;if(t[m]<t0)lo=m+1;else hi=m;}
    let n=0;for(let i=lo;i<t.length&&t[i]<=t1;i++)n++;if(!n||n>this.plotW()/2.5)return;const c=this.ctx;c.save();c.fillStyle=ch.color;c.strokeStyle='#fff';c.lineWidth=1.2;
