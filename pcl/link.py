@@ -87,6 +87,10 @@ class App:
         return self.call('scope', keys=keys or [])
 
     # simulations with the app's solver (its pool of workers)
+    def machines(self):
+        """The machines of the app (4.7): type, name, kind, outputs, pins, parameters with defaults (pcl.gui reads them)."""
+        return self.call('machines')
+
     def run(self, t_end=None, channels=None, measure=None, **kw):
         q = {'t_end': float(parse_value(t_end)) if t_end is not None else None, 'channels': channels, 'measure': _measures(measure), **kw}
         out = self.call('run', **{k: v for k, v in q.items() if v is not None})

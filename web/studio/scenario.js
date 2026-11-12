@@ -123,6 +123,7 @@
   if(q.action==='channels'){const s=new MNA.Sim(q.project,{hDiv:50});return {keys:s.keys,T:s.T};}
   if(q.action==='tutorial')return tutorial(q);
   if(q.action==='tutorials')return tutorials();
+  if(q.action==='machines')return P.machines(); // 4.7
   if(q.action==='bifurcation')return bifurcation(q,hooks);
   if(q.action==='open')return open(q);
   if(q.action==='advance')return advance(q,hooks);

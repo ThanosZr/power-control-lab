@@ -163,6 +163,12 @@ def _write_atomic(path, text):
     os.replace(tmp, path)
 
 
+def machines():
+    """The machines the app has (4.7): type, name, kind (dc, induction, sync, srm, gen), speed/torque outputs, load input,
+    pins and parameters with defaults, from web/studio/parts.js (the same list as the link's machines())."""
+    return _node({'action': 'machines'})
+
+
 def tutorials():
     """The tutorials and their options: [{id, title, group, options: [{k, label, def, choices}]}]."""
     return _node({'action': 'tutorials'})

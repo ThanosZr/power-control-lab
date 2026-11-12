@@ -46,6 +46,7 @@
   selection:()=>A.ctx.selection(),
   presets:async()=>{const r=await fetch('api/presets');if(!r.ok)throw new Error('Τα πρότυπα θέλουν τον server της εφαρμογής.');return (await r.json()).presets;},
   channels:()=>{const s=A.ctx.sim();return s?{keys:[...s.keys],T:s.T}:{keys:[],T:null};},
+  machines:()=>root.Parts.machines(), // 4.7: the machines of the app, with their pins and parameters (pcl.gui reads them)
   values:a=>{const s=A.ctx.sim();if(!s)return {t:null,values:{}};const v={};for(const k of a.keys||[])if(s.chIndex.has(k))v[k]=s.now(k);return {t:s.t,values:v};},
   scope:a=>scopeData(a),
   run:async a=>solve({...query(a),action:'run'}),

@@ -258,6 +258,7 @@
    draw:p=>'<rect class="block" x="-34" y="-20" width="68" height="40" rx="6"/><path class="thin" d="M-24,8 L-14,-8 L-4,8 L6,-8 L16,8 L24,-4"/><path class="thin accent" d="M-26,-2 H26"/>'+(p.mode==='ext'?sl('M-40,0 H-34'):'')},
   // ---------------------------------------------------------------- machines (3.1)
   DCM:{name:'Μηχανή ΣΡ (ανεξάρτητη διέγερση)',prefix:'M',group:'Μηχανές',pins:{a:[0,-40],b:[0,40]},box:[-20,-20,40,40],lbl:'left',
+   machine:{kind:'dc',speed:'w',torque:'te',load:{param:'load',sig:'tl',sched:'TL'},inertia:'J',supply:'τάση τυμπάνου (τσόπερ ή γέφυρα, εδώ μέση τιμή)'},
    spins:p=>p.load==='sig'?{w:O(40,-10),te:O(40,10),tl:I(-40,0)}:{w:O(40,-10),te:O(40,10)},
    params:[num('Ra','Αντίσταση τυμπάνου R_a','Ω',0.5),num('La','Αυτεπαγωγή τυμπάνου L_a','H',10e-3),num('psi','Ροή ψ (σταθερά k)','V·s/rad',1,{hint:'Αντι-ΗΕΔ E = ψ·ω, ροπή τ_e = ψ·i_a.'}),
     num('J','Ροπή αδράνειας J','kg·m²',0.02),num('bm','Τριβή b','N·m·s',0.002,{zero:true}),
@@ -351,7 +352,7 @@
     {k:'w',label:'Βάρη (JSON)',type:'code',def:'',hint:'{"sizes": [εισόδους, …, 1], "W": [...], "b": [...]}, όπως τα δίνει το pcl.control. Κενό: τυχαία από τον σπόρο. «Κράτα τα βάρη» στις ρυθμίσεις γράφει εδώ ό,τι έμαθε το δίκτυο.'},
     CLOCK(),TRIG,num('y0','Αρχική έξοδος','',0,{signed:true,zero:true})],value:()=>null,
    draw:p=>codeDraw(nnIns(p),nnOuts(p),'NN')+(p.train==='err'||p.train==='tgt'?'<path class="thin" d="M-9,13 l4,-6 l3,4 l5,-8"/>':'')},
-  IM:{name:'Μηχανή επαγωγής (ισοδύναμο αντίστροφου Γ)',prefix:'M',group:'Μηχανές',pins:p=>isBus(p)?{abc:[-40,0]}:{a:[-40,-20],b:[-40,0],c:[-40,20]},bus:p=>isBus(p)?{abc:['a','b','c']}:{},box:[-25,-25,50,50],lbl:'above',
+  IM:{machine:{kind:'induction',speed:'w',torque:'te',load:{param:'load',sig:'tl',sched:'TL'},inertia:'J',supply:'τριφασικός αντιστροφέας με διανυσματικό έλεγχο (FOC)'},name:'Μηχανή επαγωγής (ισοδύναμο αντίστροφου Γ)',prefix:'M',group:'Μηχανές',pins:p=>isBus(p)?{abc:[-40,0]}:{a:[-40,-20],b:[-40,0],c:[-40,20]},bus:p=>isBus(p)?{abc:['a','b','c']}:{},box:[-25,-25,50,50],lbl:'above',
    spins:p=>p.load==='sig'?{w:O(40,-20),te:O(40,-10),psi:O(40,0),thf:O(40,10),thr:O(40,20),tl:I(0,40)}:{w:O(40,-20),te:O(40,-10),psi:O(40,0),thf:O(40,10),thr:O(40,20)},
    params:[num('Rs','Αντίσταση στάτη R_s','Ω',3),num('RR','Αντίσταση δρομέα R_R','Ω',2,{hint:'Ανάστροφο-Γ: R_R, L_M και L_σ αντί για R_r, L_m, L_ls, L_lr (γ = L_m/L_r).'}),num('Lsig','Αυτεπαγωγή σκέδασης L_σ','H',0.025),
     num('LM','Αυτεπαγωγή μαγνήτισης L_M','H',0.3),num('pp','Ζεύγη πόλων p','',2),num('J','Ροπή αδράνειας J','kg·m²',0.02),num('bm','Τριβή b','N·m·s',0.002,{zero:true}),
@@ -361,7 +362,7 @@
    draw:p=>(isBus(p)?bl('M-40,0 H-22'):'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25"/>')+'<circle r="22"/>'+tx('IM',0,4,'btxt')+sl('M22,-20 H40 M25,-10 H40 M25,0 H40 M25,10 H40 M22,20 H40')+(p.load==='sig'?sl('M0,22 V40'):'')
     +tx('ω',30,-23,'pinl')+tx('τ',30,-13,'pinl')+tx('ψ',30,-3,'pinl')+tx('θf',30,7,'pinl')+tx('θr',30,17,'pinl')},
   // synchronous machine (3.5): d, q inductances and magnet flux; ψ_m = 0 is the synchronous reluctance machine (SynRM)
-  SM:{name:'Σύγχρονη μηχανή (SynRM / PMSM)',prefix:'M',group:'Μηχανές',pins:p=>isBus(p)?{abc:[-40,0]}:{a:[-40,-20],b:[-40,0],c:[-40,20]},bus:p=>isBus(p)?{abc:['a','b','c']}:{},box:[-25,-25,50,50],lbl:'above',
+  SM:{machine:{kind:'sync',speed:'w',torque:'te',load:{param:'load',sig:'tl',sched:'TL'},inertia:'J',supply:'τριφασικός αντιστροφέας, έλεγχος dq (MTPA)'},name:'Σύγχρονη μηχανή (SynRM / PMSM)',prefix:'M',group:'Μηχανές',pins:p=>isBus(p)?{abc:[-40,0]}:{a:[-40,-20],b:[-40,0],c:[-40,20]},bus:p=>isBus(p)?{abc:['a','b','c']}:{},box:[-25,-25,50,50],lbl:'above',
    spins:p=>{const o={w:O(40,-20),te:O(40,-10),th:O(40,0),id:O(40,10),iq:O(40,20)};if(p.load==='sig')o.tl=I(0,40);return o;},
    params:[num('Rs','Αντίσταση στάτη R_s','Ω',2),num('Ld','Αυτεπαγωγή άξονα d L_d','H',0.15,{hint:'SynRM: d είναι ο άξονας της ελάχιστης μαγνητικής αντίστασης (L_d > L_q). PMSM: d είναι ο άξονας του μαγνήτη (στην IPMSM L_q > L_d, στην SPMSM L_d = L_q).'}),
     num('Lq','Αυτεπαγωγή άξονα q L_q','H',0.03),
@@ -376,7 +377,7 @@
     +tx('ω',30,-23,'pinl')+tx('τ',30,-13,'pinl')+tx('θ',30,-3,'pinl')+tx('d',30,7,'pinl')+tx('q',30,17,'pinl')},
   // switched reluctance machine (3.6): one winding per phase, pins on top (phase k: a_k, b_k 20 apart, phases 160 apart, under the columns
   // of an asymmetric bridge); ψ(θ, i) from parameters or a table, torque from the co-energy
-  SRM:{name:'Μηχανή μεταβλητής μαγνητικής αντίστασης (SRM)',prefix:'M',group:'Μηχανές',pins:p=>srmPins(srmGeo(p)[0]),box:p=>{const N=srmGeo(p)[0];return [-80*(N-1)-40,-30,160*(N-1)+80,60];},lbl:'left',
+  SRM:{machine:{kind:'srm',speed:'w',torque:'te',load:{param:'load',sig:'tl',sched:'TL'},inertia:'J',supply:'ασύμμετρος μετατροπέας ανά φάση, υστέρηση ρεύματος'},name:'Μηχανή μεταβλητής μαγνητικής αντίστασης (SRM)',prefix:'M',group:'Μηχανές',pins:p=>srmPins(srmGeo(p)[0]),box:p=>{const N=srmGeo(p)[0];return [-80*(N-1)-40,-30,160*(N-1)+80,60];},lbl:'left',
    spins:p=>srmSpins(p),
    params:[sel('geo','Δομή N_s/N_r',[['8/6','8/6: 4 φάσεις, N_r = 6'],['6/4','6/4: 3 φάσεις, N_r = 4'],['12/8','12/8: 3 φάσεις, N_r = 8']],'8/6',{hint:'Γωνία φάσης θ_e = N_r·θ − (k − 1)·2π/N: 0 όταν ο πόλος του δρομέα είναι μη ευθυγραμμισμένος με τη φάση k, π όταν είναι ευθυγραμμισμένος.'}),
     num('Rs','Αντίσταση φάσης R','Ω',0.5),
@@ -536,7 +537,7 @@
    draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="50" rx="4"/>'+(isBus(p)?bl('M0,-40 V-30'):'<path d="M-20,-40 V-30 M0,-40 V-30 M20,-40 V-30"/>')+'<path class="thin" d="M-12,-18 V8 M0,-18 V8 M12,-18 V8 M-16,8 H16"/>'+tx('P,Q',0,17,'bsm')},
   // 4.3 (§31.6, §25): synchronous generator with field and dampers, a shaft of one or more masses, steady start from the
   // terminal voltage of a load flow. Per unit on S_n, U_n (reactances, resistances), times in s.
-  GEN3:{name:'Σύγχρονη γεννήτρια (διέγερση, αποσβεστήρες, άξονας)',prefix:'G',group:'Δίκτυο',pins:p=>{const o=isBus(p)?{abc:[40,0]}:{a:[40,-20],b:[40,0],c:[40,20]};if(p.neut==='pin')o.n=[40,40];return o;},
+  GEN3:{machine:{kind:'gen',speed:'w',torque:'te',voltage:'vt',inputs:{exc:'efd',mech:'tm'},inertia:'H',supply:'δίκτυο (γεννήτρια)'},name:'Σύγχρονη γεννήτρια (διέγερση, αποσβεστήρες, άξονας)',prefix:'G',group:'Δίκτυο',pins:p=>{const o=isBus(p)?{abc:[40,0]}:{a:[40,-20],b:[40,0],c:[40,20]};if(p.neut==='pin')o.n=[40,40];return o;},
    box:p=>[-30,-35,60,p.shaft==='multi'?80:70],bus:p=>isBus(p)?{abc:['a','b','c']}:{},spins:p=>genSpins(p),
    params:[num('Sn','Ονομαστική ισχύς S_n (βάση των ανά μονάδα)','VA',100e6),num('Un','Ονομαστική πολική τάση U_n','V',13.8e3),num('f','Συχνότητα','Hz',50),num('pp','Ζεύγη πόλων p','',1),
     sel('data','Δεδομένα μηχανής',[['std','Τυπικά: X_d, X′_d, X″_d, T′_d0, …'],['circ','Κύκλωμα δρομέα: X_ad, X_fd, R_fd, …']],'std',{hint:'Τυπικά δεδομένα: μετατρέπονται στο κύκλωμα του δρομέα (διέγερση και έως ένας αποσβεστήρας στον άξονα d, έως δύο στον q). Ένα τύλιγμα παραλείπεται όταν η σταθερά χρόνου του είναι 0.'}),
@@ -939,7 +940,13 @@
   const out=[];for(const part of s.split(/[;,]\s*(?=[-+.\d])/)){const [a,b]=part.split(':');const t=parseEng(a),v=parseEng(b);if(!Number.isFinite(t)||!Number.isFinite(v))return null;out.push([t,v]);}
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
- const api={structural,PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,fmtNum,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
+ // 4.7: the machines the app has, for programs outside it (pcl.machines(), the link's machines(), the Python GUI of
+ // pcl.gui): every part with a «machine» descriptor (kind, speed and torque outputs, load input, inertia), its pins and
+ // its parameters with their defaults. A machine added later with a descriptor shows up there without other changes.
+ function machines(){return Object.entries(PARTS).filter(([,d])=>d.machine).map(([type,d])=>{const p=defaults(type),sp=sigPins({type,params:p}),m=d.machine;
+  return {type,name:d.name,...m,pins:Object.keys(elPins({type,params:p})),outputs:Object.entries(sp).filter(([,v])=>v.dir==='out').map(([k])=>k),
+   params:d.params.map(x=>({k:x.k,label:x.label,unit:x.unit||'',def:x.def,type:x.type,...(x.options?{options:x.options.map(o=>o[0])}:{})}))};});}
+ const api={machines,structural,PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,fmtNum,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
   parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,bewley,movChar,TLM_TYPICAL,tlmData,tlmM,tlmPin,tlmPins,tlmKey,tlmModel,
   srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv,
   genModel,genAxis,genTsc,genGamma,genDQ,genSteady,plist};

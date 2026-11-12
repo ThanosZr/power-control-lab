@@ -175,12 +175,49 @@ def main(argv=None):
     a.add_argument('--tmin', type=float, default=0.1, help='ελάχιστος χρόνος καθυστέρησης για το I_b (s)')
     a.add_argument('--out', help='αρχείο .json ή .csv με τα αποτελέσματα')
     a.add_argument('--emt', help='4.3: αρχείο .json με το δίκτυο ως project της εφαρμογής, που ξεκινά από τη ροή φορτίου (ieee9: μηχανές του Anderson & Fouad)')
+    a = sub.add_parser('gui', help='4.7: παράθυρο σύνθεσης ελέγχου με νευρωνικά για κάθε μηχανή της εφαρμογής (tkinter + matplotlib)')
+    a.add_argument('--offline', action='store_true', help='χωρίς την εφαρμογή: οι μηχανές από το parts.js, τα τρεξίματα με τον λύτη σε Node')
+    a = sub.add_parser('design', help='4.7: η ίδια σύνθεση χωρίς παράθυρο: μηχανή, στόχοι με βάρη, ελεγκτής → αρχείο project')
+    a.add_argument('--machine', default='DCM', help='τύπος μηχανής (DCM, IM, SM, SRM ή ό,τι δίνει το «python -m pcl machines»)')
+    a.add_argument('--controller', default='auto', choices=[k for k, _ in __import__('pcl.designer', fromlist=['x']).CONTROLLERS])
+    a.add_argument('--goal', action='append', default=[], help='στόχος=βάρος: iae, ise, overshoot, settle, effort, load (π.χ. --goal iae=1)')
+    a.add_argument('--cycles', type=int, default=3)
+    a.add_argument('--out', help='αρχείο JSON του καλύτερου κυκλώματος')
+    sub.add_parser('machines', help='4.7: οι μηχανές της εφαρμογής (είδος, έξοδοι, παράμετροι)')
     a = sub.add_parser('link', help='μία κλήση στην ανοιχτή εφαρμογή (3.15): αρχείο JSON {method, args, client} → JSON (για το Octave)')
     a.add_argument('request')
     a.add_argument('--out', required=True)
     args = ap.parse_args(argv)
     if args.cmd == 'net':
         return _net(args)
+    if args.cmd == 'gui':
+        try:
+            from . import gui
+        except ImportError as e:
+            print('Το παράθυρο θέλει tkinter (Anaconda: έρχεται μαζί· Linux: sudo apt install python3-tk) και matplotlib:', e, file=sys.stderr)
+            return 2
+        gui.main(offline=args.offline)
+        return 0
+    if args.cmd == 'machines':
+        from .core import machines
+        for m in machines():
+            print(f"{m['type']:6} {m['kind']:10} {m['name']}  (έξοδοι: {', '.join(m['outputs'])})")
+        return 0
+    if args.cmd == 'design':
+        from . import designer as D
+        ms = {m['type']: m for m in D.machines()}
+        if args.machine not in ms:
+            print('Άγνωστη μηχανή', args.machine, '· υπάρχουν:', ', '.join(ms), file=sys.stderr)
+            return 2
+        w = {k: float(v) for k, v in (g.split('=', 1) for g in args.goal)} if args.goal else {'iae': 1.0}
+        out = D.design(ms[args.machine], w, controller=args.controller, cycles=args.cycles, progress=lambda s: print(s, file=sys.stderr))
+        for r in out['results']:
+            m = r['metrics']
+            print(f"{r['label']:44} J {r['J']:.3g}  IAE {m['iae']:.3g}  υπέρβαση {m['overshoot']:.3g} %  πτώση στο φορτίο {m['load']:.3g}")
+        if args.out:
+            out['best']['project'].save(args.out)
+            print('Το καλύτερο κύκλωμα:', args.out)
+        return 0
     if args.cmd == 'link':
         from . import link
         q = json.loads(Path(args.request).read_text(encoding='utf-8'))

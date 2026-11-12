@@ -1696,6 +1696,12 @@ function nnTheory(t){const s=S.sim,m=S.tutMeta||{};if(!s||!m.P||!editor.comp('M1
   h+=`<h4>Σύγκριση των τριών ελεγκτών</h4>${r?`<table class="cmp"><thead><tr><th>Ελεγκτής</th>${(r[0].per||[]).map((_,k)=>`<th>IAE ${k+1}</th>`).join('')}<th>IAE</th><th>ISE</th></tr></thead><tbody>${r.map(q=>`<tr><td>${esc(q.name)}</td>${(q.per||[]).map(v=>`<td>${fmt(v,3)}</td>`).join('')}<td>${fmt(q.iae,4)}</td><td>${fmt(q.ise,4)}</td></tr>`).join('')}</tbody></table>`:''}
    <button class="primary-ghost" data-nncmp ${NNC.busy?'disabled':''}>${NNC.busy?'Τρέχει στο παρασκήνιο…':r?'Ξανά':'Σύγκρινε και τους τρεις'}</button> <small class="muted">Τρέχει μόνο PI, PI + online και αντίστροφο μοντέλο με το ίδιο φορτίο, σε ξεχωριστά threads.</small>`;}
  return h;}
+function nnGuiCode(){return `<h4>Το ίδιο από κώδικα (pcl.designer)</h4><pre class="code small">import pcl, pcl.designer as D
+ms = {m['type']: m for m in D.machines()}            # ή D.machines(pcl.link.connect()): από την ανοιχτή εφαρμογή
+out = D.design(ms['IM'], {'iae': 1, 'overshoot': .5}, controller='auto', cycles=3)
+for r in out['results']:
+    print(r['label'], round(r['J'], 3), r['metrics'])
+pcl.link.connect().load(out['best']['project'])     # στην εφαρμογή («Αποδοχή»)</pre><p class="small muted">Κανόνες σύνθεσης ανά είδος μηχανής: ΣΡ (πηγή τάσης από σήμα), επαγωγής (αντιστροφέας, FOC), σύγχρονη (dq, MTPA), SRM (ασύμμετρος μετατροπέας). Οι γεννήτριες στην 4.8.</p>`;}
 async function runNNCompare(){const t=tutorial();if(NNC.busy||t.id!=='nn_compare')return;const o={...S.tut.options},key=JSON.stringify(o);NNC.busy=true;renderTheory();
  const vars=[['pi','Μόνο PI'],['pinn','PI + online'],['inv','PI + αντίστροφο']];const pool=NNC.pool||(NNC.pool=new Pool.SimPool(3));
  try{const qs=vars.map(([c])=>{const pr=t.build({...o,ctrl:c}),m=pr.meta;const meas=[{key:'Y:IAE',stat:'end'},{key:'Y:ISE',stat:'end'},...Array.from({length:m.cycles},(_,k)=>({key:'Y:IAE',stat:'at',at:(k+1)*m.P,name:'c'+(k+1)}))];
@@ -1948,7 +1954,7 @@ function scheringTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.C2)return '';c
 function formulaTheory(t){
  if(t.topology==='sampling')return samplingTheory();
  if(t.topology==='dc_drive')return dcDriveTheory();
- if(t.topology==='nn_compare'||t.topology==='nn_online')return nnTheory(t);
+ if(t.topology==='nn_compare'||t.topology==='nn_online'||t.topology==='nn_gui')return nnTheory(t)+(t.topology==='nn_gui'?nnGuiCode():'');
  if(t.topology==='blocks_loop')return blocksTheory();
  if(t.topology==='peak_cm')return pcmTheory();
  if(t.topology==='pcm_chaos')return chaosTheory();
