@@ -413,3 +413,16 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .ld-rep{border-collapse:collapse;font-size:12px}.ld-rep th,.ld-rep td{border-bottom:1px solid var(--line);padding:3px 8px;text-align:right}.ld-rep th:first-child,.ld-rep td:first-child{text-align:left}
 .ld-plots{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}.ld-plot{width:100%;border:1px solid var(--line);border-radius:6px;background:#fff}
 .ins-body .ld-open{display:block;width:100%;margin-bottom:4px}
+/* 4.6: responsiveness of the drawing. The grid is a CSS background of the svg (editor.gridBg); while dragging, the current
+   arrows wait for the end of the drag; panels that scroll keep the wheel to themselves and never pass it on to the page */
+.canvas{background-repeat:repeat;--grid-dot:#c9d6d1;--grid-dot-far:#dfe7e3;--grid-line:#e8eeeb}
+.schem-xf{position:absolute;inset:0;transform-origin:0 0;will-change:transform}
+.schem{overflow:visible}
+.schem.dragging .arrows{display:none}
+.canvas,.palette,#palette-list,.props,.props-body,.live-panel,.inspector{overscroll-behavior:contain}
+.livel{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;pointer-events:none;user-select:none;-webkit-user-select:none}
+.livel .lbls{position:absolute;left:0;top:0}
+.livel .lbls>div{position:absolute;white-space:nowrap;line-height:1}
+.livel .a-s>div{transform:translate(0,-.8em)}.livel .a-m>div{transform:translate(-50%,-.8em)}.livel .a-e>div{transform:translate(-100%,-.8em)}
+.livel .lbl{color:var(--ink)}.livel .val{color:#5f7671}.livel .lv{color:var(--accent2)}
+.livel .lv:empty,.livel .val:empty{display:none}

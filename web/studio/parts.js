@@ -897,10 +897,15 @@
  function boxOf(c){const b=PARTS[c.type].box;return typeof b==='function'?b({...defaults(c.type),...(c.params||{})}):b;}
  function bbox(c){const [bx,by,bw,bh]=boxOf(c);const pts=[[bx,by],[bx+bw,by],[bx,by+bh],[bx+bw,by+bh]].map(p=>xf(c,p));
   const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
+ // numbers in Greek notation (4.6): one Intl.NumberFormat per set of options, the same text as toLocaleString('el-GR', o)
+ // but without building a new formatter on every call (it was the largest single cost while dragging a large circuit)
+ const NF=new Map();
+ function fmtNum(v,o){const k=o?JSON.stringify(o):'';let f=NF.get(k);if(!f){f=new Intl.NumberFormat('el-GR',o);NF.set(k,f);}return f.format(v);}
+ const NF6={maximumFractionDigits:6};
  // engineering notation
  const PRE=[[1e9,'G'],[1e6,'M'],[1e3,'k'],[1,''],[1e-3,'m'],[1e-6,'μ'],[1e-9,'n'],[1e-12,'p']];
  function eng(v,unit='',d=3){if(v===null||v===undefined||!Number.isFinite(v))return '—';if(Math.abs(v)<1e-13)return '0'+(unit?' '+unit:'');const a=Math.abs(v);
-  for(const [k,p] of PRE)if(a>=k*.9995){const s=Number((v/k).toPrecision(d)).toLocaleString('el-GR',{maximumFractionDigits:6});return s+(unit||p?' '+p+unit:'');}
+  for(const [k,p] of PRE)if(a>=k*.9995){const s=fmtNum(Number((v/k).toPrecision(d)),NF6);return s+(unit||p?' '+p+unit:'');}
   return v.toExponential(2)+' '+unit;}
  const PFX={G:1e9,M:1e6,k:1e3,K:1e3,m:1e-3,u:1e-6,'μ':1e-6,'µ':1e-6,n:1e-9,p:1e-12};
  function parseEng(s){if(typeof s==='number')return s;s=String(s).trim().replace(',','.').replace(/\s+/g,'');if(!s)return NaN;
@@ -911,7 +916,7 @@
   const out=[];for(const part of s.split(/[;,]\s*(?=[-+.\d])/)){const [a,b]=part.split(':');const t=parseEng(a),v=parseEng(b);if(!Number.isFinite(t)||!Number.isFinite(v))return null;out.push([t,v]);}
   out.sort((x,y)=>x[0]-y[0]);return out.length?out:null;}
  const BLOCKS=new Set(Object.keys(PARTS).filter(k=>PARTS[k].blk));
- const api={structural,PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
+ const api={structural,PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,fmtNum,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
   parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,bewley,movChar,TLM_TYPICAL,tlmData,tlmM,tlmPin,tlmPins,tlmKey,tlmModel,
   srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv,
   genModel,genAxis,genTsc,genGamma,genDQ,genSteady,plist};

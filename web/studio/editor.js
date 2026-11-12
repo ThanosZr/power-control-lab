@@ -7,6 +7,10 @@
 //  W (wire tool)              -> click anywhere to start, click for corners, double click / Enter to stop at a free end (3.7)
 //  a part dropped or moved onto a wire connects there; a two-pin part along a wire goes in series (3.7, Shift: no connection)
 //  middle-drag / Space+drag   -> pan; wheel -> zoom (all remappable in settings)
+// Responsiveness (4.6): the view (zoom, pan) changes once per frame (requestAnimationFrame) whatever the rate of the
+// wheel; the grid is a CSS background, not an SVG pattern; dragging moves the dragged parts, their pins, labels and dots
+// with a translation and redraws only the wires that touch them (one full redraw at the end); live values touch only
+// the text that changed; parts and wires have an index by id. busy() tells the page that the user is in a gesture.
 (function(root){
  const P=root.Parts;const NS='http://www.w3.org/2000/svg';const G=10;
  const snap=v=>Math.round(v/G)*G;
@@ -30,16 +34,22 @@
    this.settings=Object.assign({leftDrag:'select',middleDrag:'pan',rightButton:'menu',wheel:'zoom',dblclick:'edit',marquee:'direction',grid:true,gridStyle:'dots',wireWidth:2.2,corner:'round',showLive:true,showArrows:true,autoRoute:false,freeEnds:true,autoConnect:true,snapPx:12},opt.settings||{});
    const svg=this.svg=document.createElementNS(NS,'svg');svg.setAttribute('class','schem');svg.setAttribute('tabindex','0');
    svg.setAttribute('aria-label','Κύκλωμα. Διπλό κλικ σε στοιχείο για ρυθμίσεις, δεξί κλικ για scope.');
-   svg.innerHTML=`<defs><pattern id="gdots" width="${G}" height="${G}" patternUnits="userSpaceOnUse"><circle cx="0" cy="0" r=".75" class="gdot"/></pattern>
-    <pattern id="glines" width="${G*5}" height="${G*5}" patternUnits="userSpaceOnUse"><path d="M${G*5},0 H0 V${G*5}" class="gline"/></pattern>
-    <marker id="flowArr" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="flowhead"/></marker>
+   svg.innerHTML=`<defs><marker id="flowArr" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="flowhead"/></marker>
     <marker id="sigArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L10,5 L0,9 z" class="sighead"/></marker></defs>
-    <g class="viewport"><rect class="gridbg" x="-50000" y="-50000" width="100000" height="100000"/><g class="wires"></g><g class="parts"></g><g class="dots"></g><g class="pins"></g><g class="livel"></g><g class="over"></g></g>`;
-   holder.replaceChildren(svg);
-   this.vp=svg.querySelector('.viewport');this.L={wires:svg.querySelector('.wires'),parts:svg.querySelector('.parts'),dots:svg.querySelector('.dots'),pins:svg.querySelector('.pins'),live:svg.querySelector('.livel'),over:svg.querySelector('.over')};
+    <g class="viewport"><g class="wires"></g><g class="parts"></g><g class="dots"></g><g class="pins"></g><g class="over"></g></g>`;
+   // the layer that carries the pending view during a gesture (4.6): a CSS transform on an HTML element moves the drawn
+   // picture without layout; on the svg itself it would lay out every text again (their size depends on the screen scale)
+   const xf=this.xf=document.createElement('div');xf.className='schem-xf';xf.appendChild(svg);holder.replaceChildren(xf);
+   // the labels of the parts (name, value, live value) are HTML above the svg, in the coordinates of the drawing (4.6): an SVG
+   // text is laid out again whenever the screen scale changes (on every wheel event of a zoom), an HTML text is not
+   const lab=document.createElement('div');lab.className='livel';lab.setAttribute('aria-hidden','true');xf.appendChild(lab);
+   this.vp=svg.querySelector('.viewport');this.L={wires:svg.querySelector('.wires'),parts:svg.querySelector('.parts'),dots:svg.querySelector('.dots'),pins:svg.querySelector('.pins'),live:lab,over:svg.querySelector('.over')};
    svg.addEventListener('pointerdown',e=>this.down(e));svg.addEventListener('pointermove',e=>this.move(e));svg.addEventListener('pointerup',e=>this.up(e));
    svg.addEventListener('pointercancel',()=>this.cancelDrag());svg.addEventListener('contextmenu',e=>e.preventDefault());
-   svg.addEventListener('dblclick',e=>this.dbl(e));svg.addEventListener('wheel',e=>this.wheel(e),{passive:false});
+   svg.addEventListener('dblclick',e=>this.dbl(e));
+   // the wheel anywhere over the work area (also over HTML layers inside it: live values, panels) zooms the drawing and
+   // never scrolls the page (4.6); a layer that scrolls itself (class 'own-scroll') keeps its wheel while it can scroll
+   holder.addEventListener('wheel',e=>{const t=e.target;if(t&&t!==svg&&!svg.contains(t)){const own=t.closest?.('.own-scroll');if(own&&own!==holder&&Editor.canScroll(own,e)){return;}}this.wheel(e);},{passive:false});
    svg.addEventListener('keydown',e=>this.key(e));svg.addEventListener('keyup',e=>{if(e.code==='Space'){this.space=false;svg.classList.remove('grab');}});
    svg.addEventListener('pointerleave',()=>{this.hover=null;this.L.over.querySelector('.ghost')?.remove();});
    holder.addEventListener('dragover',e=>{if(e.dataTransfer.types.includes('application/x-pcl-part')){e.preventDefault();}});
@@ -47,19 +57,27 @@
     // 'SUB:<name>' = an instance of a subcircuit definition (3.17)
     let prm;if(t.startsWith('SUB:')){const q={type:'SUB',params:this.opt.subParams?.(t.slice(4))};if(!q.params||(this.opt.canPlace&&!this.opt.canPlace(q)))return;t='SUB';prm=q.params;}
     const c=this.addPart(t,snap(p[0]),snap(p[1]),prm);if(c&&!e.shiftKey&&this.autoConnect([c.id]))this.changed('struct');});
-   this.ro=new ResizeObserver(()=>{if(!this.userView)this.fit();else this.applyView();});this.ro.observe(holder);
+   this.ro=new ResizeObserver(en=>{const r=en[en.length-1]?.contentRect;if(r)this.size=[r.width,r.height];if(!this.userView)this.fit();else this.applyView();});this.ro.observe(holder);
   }
   // ---------------------------------------------------------- model
-  comp(id){return this.doc.components.find(c=>c.id===id);}
-  wire(id){return this.doc.wires.find(w=>w.id===id);}
+  // by id, through an index rebuilt when the array changes (another array, another length, or an entry with another id)
+  comp(id){const a=this.doc.components;let m=this._ci;if(!m||m.a!==a||m.n!==a.length){m=this._ci={a,n:a.length,m:new Map(a.map(c=>[c.id,c]))};}let c=m.m.get(id);
+   if(c&&c.id!==id){this._ci=null;return this.comp(id);}if(!c&&m.m.size!==a.length){m.m=new Map(a.map(x=>[x.id,x]));c=m.m.get(id);}return c;}
+  wire(id){const a=this.doc.wires;let m=this._wi;if(!m||m.a!==a||m.n!==a.length){m=this._wi={a,n:a.length,m:new Map(a.map(w=>[w.id,w]))};}let w=m.m.get(id);
+   if(w&&w.id!==id){this._wi=null;return this.wire(id);}return w;}
+  // the user is zooming, panning, dragging or drawing a selection now (or did within the last 150 ms)
+  busy(){return !!(this.press&&this.press.moved)||!!this.drag||performance.now()-(this.lastGesture||0)<150;}
   newId(prefix){let i=1;const ids=new Set(this.doc.components.map(c=>c.id).concat(this.doc.wires.map(w=>w.id)));while(ids.has(prefix+i))i++;return prefix+i;}
   pin(c,p){const comp=typeof c==='string'?this.comp(c):c;return P.pinPos(comp,p);}
   wirePts(w){const a=this.pin(w.a.c,w.a.p),b=this.pin(w.b.c,w.b.p);return [a,...(w.pts||[]),b];}
   setWirePts(w,full){const n=normalize(full);w.pts=n.slice(1,-1);}
   snapshot(){return JSON.stringify(this.doc);}
-  remember(){this.undoStack.push(this.snapshot());if(this.undoStack.length>120)this.undoStack.shift();this.redoStack=[];}
-  undo(){if(!this.undoStack.length)return;this.redoStack.push(this.snapshot());this.doc=JSON.parse(this.undoStack.pop());this.cleanSel();this.render();this.changed('struct');}
-  redo(){if(!this.redoStack.length)return;this.undoStack.push(this.snapshot());this.doc=JSON.parse(this.redoStack.pop());this.cleanSel();this.render();this.changed('struct');}
+  // one undo step per completed action (4.6): a run of changes with the same key (e.g. a slider, or the same parameter
+  // typed again) within 800 ms is one step
+  remember(key){const now=performance.now();if(key&&this._mem&&this._mem.key===key&&now-this._mem.t<800&&this.undoStack.length){this._mem.t=now;this.redoStack=[];return;}
+   this._mem=key?{key,t:now}:null;this.undoStack.push(this.snapshot());if(this.undoStack.length>120)this.undoStack.shift();this.redoStack=[];}
+  undo(){this._mem=null;if(!this.undoStack.length)return;this.redoStack.push(this.snapshot());this.doc=JSON.parse(this.undoStack.pop());this.cleanSel();this.render();this.changed('struct');}
+  redo(){this._mem=null;if(!this.redoStack.length)return;this.undoStack.push(this.snapshot());this.doc=JSON.parse(this.redoStack.pop());this.cleanSel();this.render();this.changed('struct');}
   cleanSel(){for(const id of [...this.sel.c])if(!this.comp(id))this.sel.c.delete(id);for(const id of [...this.sel.w])if(!this.wire(id))this.sel.w.delete(id);}
   load(doc,{keepView=false}={}){this.doc={components:(doc.components||[]).map(c=>({rot:0,flip:false,params:{},...c,params:{...(c.params||{})}})),wires:(doc.wires||[]).map(w=>({...w,pts:(w.pts||[]).map(p=>[...p])}))};
    if(doc.version!==undefined)this.doc.version=doc.version; // 3.18: from version 3 wire names join (Bus.namesJoin)
@@ -75,7 +93,7 @@
    this.doc={...doc,components:doc.components.map(c=>({rot:0,flip:false,...c,params:{...(c.params||{})}})),wires:doc.wires.map(w=>({...w,pts:(w.pts||[]).map(p=>[...p])}))};
    this.dropDangling();for(const w of this.doc.wires){const o=keep.get(w.id);if(!w.pts.length&&!w.fixed&&!(o&&o.a.c===w.a.c&&o.b.c===w.b.c)){const full=this.wirePts(w);if(!orth(full))this.route(w);}}
    this.sel.c.clear();this.sel.w.clear();for(const id of sel)if(this.comp(id))this.sel.c.add(id);this.render();this.changed('struct');}
-  changed(kind){this.opt.onchange?.(kind);this.opt.onselect?.(this.selection());}
+  changed(kind,sel=true){this.opt.onchange?.(kind);if(sel)this.opt.onselect?.(this.selection());}
   selection(){return {c:[...this.sel.c],w:[...this.sel.w]};}
   select(cids=[],wids=[],add=false){if(!add){this.sel.c.clear();this.sel.w.clear();}cids.forEach(i=>this.sel.c.add(i));wids.forEach(i=>this.sel.w.add(i));this.renderSel();this.opt.onselect?.(this.selection());}
   addPart(type,x,y,params){
@@ -84,7 +102,7 @@
    if(type==='SW'&&!c.params.pwm){const pwm=this.doc.components.find(k=>k.type==='PWM');if(pwm)c.params.pwm=pwm.id;}
    if(type==='SH'){const pwm=this.doc.components.find(k=>k.type==='PWM'),l=this.doc.components.find(k=>k.type==='L');if(pwm&&!c.params.clock)c.params.clock=pwm.id;if(l&&!c.params.src)c.params.src=l.id;}
    this.doc.components.push(c);this.render();this.select([id]);this.changed('struct');return c;}
-  setParams(id,patch,{label}={}){const c=this.comp(id);if(!c)return;this.remember();Object.assign(c.params,patch);if(label!==undefined)c.label=label;
+  setParams(id,patch,{label}={}){const c=this.comp(id);if(!c)return;this.remember('p:'+id+':'+Object.keys(patch).sort().join(',')+(label!==undefined?':label':''));Object.assign(c.params,patch);if(label!==undefined)c.label=label;
    // a parameter can remove a signal pin (e.g. gate back to PWM): its wires go with it
    if(this.dropDangling()){this.tidyJunctions();this.render();this.changed('struct');return;}
    this.renderPart(c);this.renderLabels();this.renderPins();this.renderWires();this.changed('param');}
@@ -231,25 +249,55 @@
    const p1=out[1];if(old[1]===p1[1]&&old[0]!==p1[0])out[1]=[p1[0],q[1]];else out[1]=[q[0],p1[1]];
    return normalize(out);}
   // ---------------------------------------------------------- rendering
-  applyView(){const r=this.holder.getBoundingClientRect();const w=Math.max(r.width,50),h=Math.max(r.height,50),k=this.view.k;
-   this.svg.setAttribute('viewBox',`${this.view.cx-w/(2*k)} ${this.view.cy-h/(2*k)} ${w/k} ${h/k}`);this.px=1/k;
-   this.svg.querySelector('.gridbg').setAttribute('fill',!this.settings.grid?'transparent':this.settings.gridStyle==='lines'?'url(#glines)':'url(#gdots)');
-   this.svg.classList.toggle('zoomed-out',k<.7);}
-  fit(margin=50){const b=this.extent();if(!b){this.view={cx:400,cy:250,k:1};this.applyView();return;}const r=this.holder.getBoundingClientRect();
-   const k=Math.min(1.9,Math.max(.25,Math.min((r.width||800)/(b[2]-b[0]+2*margin),(r.height||450)/(b[3]-b[1]+2*margin))));this.view={cx:(b[0]+b[2])/2,cy:(b[1]+b[3])/2,k};this.applyView();}
+  // size of the drawing area in CSS pixels (from the ResizeObserver; measured once if not known yet)
+  areaSize(){if(!this.size||!(this.size[0]>0)){const r=this.holder.getBoundingClientRect();if(r.width>0)this.size=[r.width,r.height];else return [800,450];}return this.size;}
+  // the view on the next frame: many wheel or pan events within one frame give one change of the viewBox
+  // During a gesture (wheel, pan) the drawn view is carried onto the pending one by a CSS transform of the layer around the svg, which the
+  // compositor applies without layout or paint; the viewBox follows 140 ms after the last change (a new viewBox lays out
+  // every text and every non-scaling stroke again: 5–7 ms on 200 parts). The svg has overflow visible, so what lies
+  // around the window is already painted when it comes into view; the grid is the background of the window and is
+  // always drawn for the pending view.
+  requestView(){this.lastGesture=performance.now();this.px=1/this.view.k;if(this._vRaf)return;this._vRaf=requestAnimationFrame(()=>{this._vRaf=0;this.viewFrame();});}
+  viewFrame(){const c=this._cv;if(!c){this.applyView();return;}const [w0,h0]=this.areaSize(),W=Math.max(w0,50),H=Math.max(h0,50),k=this.view.k,a=k/c.k;
+   // far from the drawn view (zoomed out more than 2.5 times, or in more than 6): the new view at once
+   if(!(a>=.4&&a<=6)){this.applyView();return;}
+   const tx=W/2*(1-a)+(c.cx-this.view.cx)*k,ty=H/2*(1-a)+(c.cy-this.view.cy)*k;
+   this.xf.style.transform=Math.abs(a-1)<1e-12&&Math.abs(tx)<1e-9&&Math.abs(ty)<1e-9?'':`translate(${tx}px,${ty}px) scale(${a})`;
+   this.gridBg(this.view.cx-W/(2*k),this.view.cy-H/(2*k),k);
+   clearTimeout(this._vT);this._vT=setTimeout(()=>{this._vT=0;this.applyView();},140);}
+  applyView(){if(this._vRaf){cancelAnimationFrame(this._vRaf);this._vRaf=0;}if(this._vT){clearTimeout(this._vT);this._vT=0;}const [w0,h0]=this.areaSize();const w=Math.max(w0,50),h=Math.max(h0,50),k=this.view.k;
+   const x0=this.view.cx-w/(2*k),y0=this.view.cy-h/(2*k),vb=`${x0} ${y0} ${w/k} ${h/k}`;if(vb!==this._vb){this._vb=vb;this.svg.setAttribute('viewBox',vb);}this.px=1/k;
+   {const lt=`matrix(${k},0,0,${k},${-x0*k},${-y0*k})`;if(lt!==this._lt){this._lt=lt;this.L.live.style.transform=lt;}}
+   if(this.xf.style.transform)this.xf.style.transform='';this._cv={cx:this.view.cx,cy:this.view.cy,k};
+   this.gridBg(x0,y0,k);const zo=k<.7;if(zo!==this._zo){this._zo=zo;this.svg.classList.toggle('zoomed-out',zo);}}
+  // the grid as a CSS background of the window (4.6): drawn by the compositor, the same at every zoom (an SVG pattern of
+  // 100 000 × 100 000 units was re-rastered at every change of the view); below 6 px between dots only every fifth
+  gridBg(x0,y0,k){const st=this.holder.style,on=this.settings.grid!==false,lines=this.settings.gridStyle==='lines';
+   if(!on){if(this._gk!=='off'){this._gk='off';st.backgroundImage='none';}return;}
+   let step=(lines?G*5:G)*k;if(!lines&&step<6)step*=5;const ox=((-x0*k)%step+step)%step,oy=((-y0*k)%step+step)%step;
+   const key=(lines?'l':'d')+(this._zo?'z':'')+step.toFixed(3);
+   if(key!==this._gk){this._gk=key;const col=this._zo?'var(--grid-dot-far,#dfe7e3)':'var(--grid-dot,#c9d6d1)';
+    if(lines){st.backgroundImage='linear-gradient(to right,var(--grid-line,#e8eeeb) 1px,transparent 1px),linear-gradient(to bottom,var(--grid-line,#e8eeeb) 1px,transparent 1px)';}
+    else{const r=Math.max(.7,Math.min(1.6,.75*k));st.backgroundImage=`radial-gradient(circle at ${r}px ${r}px,${col} ${r}px,transparent ${r+.6}px)`;}
+    st.backgroundSize=`${step}px ${step}px`;}
+   const rr=lines?0:Math.max(.7,Math.min(1.6,.75*k));st.backgroundPosition=`${ox-rr}px ${oy-rr}px`;}
+  fit(margin=50){const b=this.extent();if(!b){this.view={cx:400,cy:250,k:1};this.applyView();return;}const [rw,rh]=this.areaSize();
+   const k=Math.min(1.9,Math.max(.25,Math.min((rw||800)/(b[2]-b[0]+2*margin),(rh||450)/(b[3]-b[1]+2*margin))));this.view={cx:(b[0]+b[2])/2,cy:(b[1]+b[3])/2,k};this.applyView();}
   extent(){const xs=[],ys=[];for(const c of this.doc.components){const b=P.bbox(c);xs.push(b[0],b[2]+(c.type==='JUNC'||c.type==='GND'?0:85));ys.push(b[1]-30,b[3]+14);for(const p of Object.keys(P.pinsOf(c))){const q=this.pin(c,p);xs.push(q[0]);ys.push(q[1]);}}
    for(const w of this.doc.wires)for(const p of w.pts||[]){xs.push(p[0]);ys.push(p[1]);}if(!xs.length)return null;return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
-  render(){this.renderWires();this.L.parts.innerHTML=this.doc.components.map(c=>this.partSVG(c)).join('');this.renderLabels();this.renderPins();this.renderSel();this.applyView();this.updateLive();this.renderDiag();}
+  render(){this.renderWires();this.L.parts.innerHTML=this.doc.components.map(c=>this.partSVG(c)).join('');this.partEls();this.renderLabels();this.renderPins();this.renderSel();this.applyView();this._lv=new Map();this.updateLive(true);this.renderDiag();}
+  // part element by id (the live values read it on every refresh)
+  partEls(){const m=this.partEl=new Map();for(const g of this.L.parts.children)m.set(g.dataset.c,g);return m;}
   partSVG(c){const def=P.PARTS[c.type];if(c.type==='JUNC')return `<g class="part junc" data-c="${c.id}"><circle class="hit" r="7" cx="${c.x}" cy="${c.y}"/></g>`;
    const [bx,by,bw,bh]=P.boxOf(c);const tf=`translate(${c.x},${c.y}) rotate(${90*(c.rot||0)}) scale(${c.flip?-1:1},1)`;
    // the title text of a rotated or mirrored symbol stays upright and readable (3.5): inverse of rotate·scale about its centre
    let sym=def.draw({...P.defaults(c.type),...c.params});const r=c.rot||0,f=c.flip?-1:1;
    if(r||c.flip)sym=sym.replace(/<text class="(btxt|bsm)" x="([-\d.]+)" y="([-\d.]+)"/g,(m,k,x,y)=>`${m} transform="translate(${x} ${+y-4}) scale(${f} 1) rotate(${-90*r}) translate(${-x} ${4-y})"`);
    return `<g class="part t-${c.type}" data-c="${c.id}" transform="${tf}"><rect class="hit" x="${bx-4}" y="${by-4}" width="${bw+8}" height="${bh+8}" rx="5"/><g class="sym">${sym}</g></g>`;}
-  renderPart(c){const el=this.L.parts.querySelector(`[data-c="${CSS.escape(c.id)}"]`);if(el)el.outerHTML=this.partSVG(c);this.renderSel();}
+  renderPart(c){const el=this.L.parts.querySelector(`[data-c="${CSS.escape(c.id)}"]`);if(el){el.outerHTML=this.partSVG(c);this.partEls();this._lv?.delete(c.id);}this.renderSel();}
   valueText(c){const p={...P.defaults(c.type),...c.params},e=P.eng;
-   switch(c.type){case 'R':return p.sched?'R(t)':e(+p.R,'Ω');case 'L':return e(+p.L,'H');case 'C':return e(+p.C,'F');case 'VDC':return p.ctl==='sig'?'V από σήμα':e(+p.V,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');case 'VAC':return e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'VAC3':return '3φ '+e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'SCR':return p.fire==='alpha'?'α '+(+p.alpha).toLocaleString('el-GR')+'°'+(+p.shift?' +'+(+p.shift).toLocaleString('el-GR')+'°':''):p.fire==='pwm'?'g · '+(p.pwm||'—'):'';
-    case 'IDC':return p.ctl==='sig'?'I από σήμα':e(+p.I,'A');case 'CPE':return p.kind==='cpe'?'Q '+e(+p.Q)+' · α '+(+p.alpha).toLocaleString('el-GR'):'σ '+e(+p.sigma,'Ω/√s');case 'CPL':return p.sched?'P(t)':e(+p.P,'W');case 'XFMR':return '1 : '+(+p.n).toLocaleString('el-GR',{maximumFractionDigits:4});case 'SW':return (p.model==='igbt'?'IGBT · ':'')+(p.gate==='sig'?'g από σήμα':p.gate==='pwm'?({a:'g',na:'ḡ',b:'g₂',nb:'ḡ₂'}[p.out]||'g')+' · '+(p.pwm||'—'):p.gate==='on'?'ON':'OFF');
+   switch(c.type){case 'R':return p.sched?'R(t)':e(+p.R,'Ω');case 'L':return e(+p.L,'H');case 'C':return e(+p.C,'F');case 'VDC':return p.ctl==='sig'?'V από σήμα':e(+p.V,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');case 'VAC':return e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'VAC3':return '3φ '+e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'SCR':return p.fire==='alpha'?'α '+P.fmtNum(+p.alpha)+'°'+(+p.shift?' +'+P.fmtNum(+p.shift)+'°':''):p.fire==='pwm'?'g · '+(p.pwm||'—'):'';
+    case 'IDC':return p.ctl==='sig'?'I από σήμα':e(+p.I,'A');case 'CPE':return p.kind==='cpe'?'Q '+e(+p.Q)+' · α '+P.fmtNum(+p.alpha):'σ '+e(+p.sigma,'Ω/√s');case 'CPL':return p.sched?'P(t)':e(+p.P,'W');case 'XFMR':return '1 : '+P.fmtNum(+p.n,{maximumFractionDigits:4});case 'SW':return (p.model==='igbt'?'IGBT · ':'')+(p.gate==='sig'?'g από σήμα':p.gate==='pwm'?({a:'g',na:'ḡ',b:'g₂',nb:'ḡ₂'}[p.out]||'g')+' · '+(p.pwm||'—'):p.gate==='on'?'ON':'OFF');
     case 'SH':return (p.in==='sig'?'u':(p.qty==='V'?'v(':'i(')+(p.src||'—')+')')+' · '+({start:'αρχή T',mid:'μέσο T',both:'2 ανά T'}[p.trig]||'');
     case 'MEAS':case 'VM':case 'AM':case 'VP':case 'IP':case 'SR':case 'DISP':return '';
     case 'SUB':return String(p.$title||p.def||''); // subcircuit (3.17): the title of its definition
@@ -258,34 +306,36 @@
     case 'FLT3':return ({ag:'a–γη',bg:'b–γη',cg:'c–γη',ab:'a–b',bc:'b–c',ca:'c–a',abg:'ab–γη',bcg:'bc–γη',cag:'ca–γη',abc:'3φ',abcg:'3φ–γη'}[p.kind]||p.kind)+(p.ctl==='sig'?' · από σήμα':' · '+e(+p.ton,'s')+(+p.toff>0?'–'+e(+p.toff,'s'):''));
     case 'CB3':return p.ctl==='sig'?'εντολή από σήμα':String(p.cmd||'').slice(0,22);
     case 'XF3':return p.grp+' · '+e(+p.Sn,'VA')+' · '+e(+p.U1,'V')+'/'+e(+p.U2,'V');
-    case 'GEN3':return e(+p.Sn,'VA')+' · '+e(+p.Un,'V')+(p.shaft==='multi'?' · '+P.plist(p.Hm).length+' μάζες':' · H '+(+p.H).toLocaleString('el-GR')+' s')+(p.init==='zero'?'':' · '+(+p.V0).toLocaleString('el-GR')+'∠'+(+p.ang0).toLocaleString('el-GR')+'°');
-    case 'LINE3':return (p.unit==='pu'?'pu: ':'')+'X₁ '+(+p.X1).toLocaleString('el-GR')+(+p.B1?' · B₁ '+(+p.B1).toLocaleString('el-GR'):'');
+    case 'GEN3':return e(+p.Sn,'VA')+' · '+e(+p.Un,'V')+(p.shaft==='multi'?' · '+P.plist(p.Hm).length+' μάζες':' · H '+P.fmtNum(+p.H)+' s')+(p.init==='zero'?'':' · '+P.fmtNum(+p.V0)+'∠'+P.fmtNum(+p.ang0)+'°');
+    case 'LINE3':return (p.unit==='pu'?'pu: ':'')+'X₁ '+P.fmtNum(+p.X1)+(+p.B1?' · B₁ '+P.fmtNum(+p.B1):'');
     case 'LOAD3':return e(+p.P,'W')+(+p.Q?' · '+e(+p.Q,'var'):'')+' · '+({yn:'YN',y:'Y',d:'Δ'}[p.cn]||'');
     case 'CONST':return String(p.v).includes(':')?String(p.v).slice(0,22):'';case 'GAIN':return 'K = '+(String(p.K).includes(';')?String(p.K).split(';').map(x=>e(+x.trim())).join('; '):e(+p.K));case 'SUM':return '';
     case 'SAT':return '['+e(+p.lo)+', '+e(+p.hi)+']';case 'CMP':return +p.hys>0?'h = '+e(+p.hys):'';case 'LOGIC':return ['nand','nor','xor'].includes(p.op)?p.op.toUpperCase():'';
     case 'PIB':return 'K_p '+e(+p.Kp)+' · K_i '+e(+p.Ki);case 'UD':return '';
     case 'IM':return 'p = '+p.pp+' · L_M '+e(+p.LM,'H');case 'SRM':return (p.mag==='table'?'ψ(θ, i) από πίνακα':'L_u '+e(+p.Lu,'H')+' · L_a '+e(+p.La,'H'))+(p.load==='sig'?' · τ_L σήμα':'');case 'SM':return 'L_d '+e(+p.Ld,'H')+(p.sat==='d'?' (κορεσμός)':'')+' · L_q '+e(+p.Lq,'H')+(+p.psim>0?' · ψ_m '+e(+p.psim,'V·s'):'');
-    case 'KL':{const m=P.klMatrix(p);return m.err?'⚠ πίνακας L':m.L.length+'×'+m.L.length+(String(p.Lmat||'').trim()?' · πίνακας L':' · k '+(+p.k).toLocaleString('el-GR'));}
+    case 'KL':{const m=P.klMatrix(p);return m.err?'⚠ πίνακας L':m.L.length+'×'+m.L.length+(String(p.Lmat||'').trim()?' · πίνακας L':' · k '+P.fmtNum(+p.k));}
     case 'KG':{const m=P.parseMat(p.mat);return m?m.length+'×'+m.length+' '+(p.kind==='G'?'G':'R'):'⚠ πίνακας';}
     case 'VIMP':return (p.shape==='ramp'?'ράμπα '+e(+p.S*1e-6,'V/μs'):p.shape==='custom'?e(+p.T1,'s')+'/'+e(+p.T2,'s'):p.shape==='direct'?'α, β, K':p.shape+' μs')+' · '+e(+p.Vpk,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');
-    case 'SG':return (p.vt==='de'?'U₀ '+e(P.parseEng(p.U0),'V')+' · k '+(+p.kde).toLocaleString('el-GR'):e(+p.Ub,'V'))+(String(p.trig??'').trim()?' · έναυση '+e(P.parseEng(p.trig),'s'):'');
-    case 'MOV':return p.model==='table'?'πίνακας i–v':e(+p.Uref,'V')+' @ '+e(+p.Iref,'A')+' · α '+(+p.alpha).toLocaleString('el-GR');
+    case 'SG':return (p.vt==='de'?'U₀ '+e(P.parseEng(p.U0),'V')+' · k '+P.fmtNum(+p.kde):e(+p.Ub,'V'))+(String(p.trig??'').trim()?' · έναυση '+e(P.parseEng(p.trig),'s'):'');
+    case 'MOV':return p.model==='table'?'πίνακας i–v':e(+p.Uref,'V')+' @ '+e(+p.Iref,'A')+' · α '+P.fmtNum(+p.alpha);
     case 'TL':{const g=P.tlParams(p);return g.err?'⚠ '+g.err:'Z '+e(g.Z,'Ω')+' · τ '+e(g.tau,'s')+(g.R>0?' · R '+e(g.R,'Ω')+(g.N>1?' ×'+g.N:''):'');}
     case 'ILG':return (p.shape==='custom'?e(+p.T1,'s')+'/'+e(+p.T2,'s'):p.shape==='direct'?'τ₁, τ₂, η':p.shape+' μs')+' · '+e(+p.Ipk,'A');case 'MOD3':return {spwm:'SPWM',svpwm:'SVPWM',square:'six-step'}[p.mode]||'';case 'FEST':return 'R̂_R '+e(+p.RR,'Ω');
     case 'EXPR':return String(p.expr||'').slice(0,28);case 'PY':return (p.pars?String(p.pars).slice(0,26):'Python');
     case 'INT':return p.wrap==='2pi'?'mod 2π':(+p.lo>-1e8||+p.hi<1e8)?'['+e(+p.lo)+', '+e(+p.hi)+']':'';case 'LPF':return 'f_c = '+e(+p.fc,'Hz');
-    case 'F2':return ({lp:'LP',hp:'HP',bp:'BP',notch:'notch'}[p.kind]||'LP')+' · '+e(+p.f0,'Hz')+' · ζ '+(+p.zeta).toLocaleString('el-GR',{maximumFractionDigits:3});case 'RLIM':return '↑ '+e(+p.up,'/s')+(+p.dn!==+p.up?' · ↓ '+e(+p.dn,'/s'):'');
+    case 'F2':return ({lp:'LP',hp:'HP',bp:'BP',notch:'notch'}[p.kind]||'LP')+' · '+e(+p.f0,'Hz')+' · ζ '+P.fmtNum(+p.zeta,{maximumFractionDigits:3});case 'RLIM':return '↑ '+e(+p.up,'/s')+(+p.dn!==+p.up?' · ↓ '+e(+p.dn,'/s'):'');
     case 'RT':return p.mode==='delay'?'z⁻¹':'ZOH';case 'EDGE':return ({rise:'↑',fall:'↓',both:'↕'}[p.edge]||'↑')+(+p.tw>0?' · '+e(+p.tw,'s'):'');
     case 'CLARKE':case 'ICLARKE':return p.inv==='pow'?'ισχύς':'πλάτος';case 'PARK':case 'IPARK':return '';case 'PLL':return e(+p.f0,'Hz')+' · BW '+e(+p.bw,'Hz');
-    case 'DCM':return 'ψ '+(+p.psi).toLocaleString('el-GR')+' · J '+(+p.J).toLocaleString('el-GR')+(p.load==='sig'?' · τ_L σήμα':'');
-    case 'CLK':return e(+p.f,'Hz')+' · '+(+p.duty).toLocaleString('el-GR');case 'RAMP':return e(+p.f,'Hz')+' · '+e(+p.lo)+'…'+e(+p.hi);
-    case 'PWM':return e(+p.fs,'Hz')+(+p.phase&&p.mode!=='spwm'?' · φ '+(+p.phase).toLocaleString('el-GR',{maximumFractionDigits:2})+'°':'')+(+p.dt>0?' · t_d '+e(+p.dt,'s'):'')+' · '+(p.mode==='fixed'?'D = '+(+p.D).toLocaleString('el-GR'):p.mode==='pi'?'PI':p.mode==='spwm'?'SPWM m = '+p.m:p.mode==='ext'?'D από σήμα':'2 έξοδοι');default:return '';}}
+    case 'DCM':return 'ψ '+P.fmtNum(+p.psi)+' · J '+P.fmtNum(+p.J)+(p.load==='sig'?' · τ_L σήμα':'');
+    case 'CLK':return e(+p.f,'Hz')+' · '+P.fmtNum(+p.duty);case 'RAMP':return e(+p.f,'Hz')+' · '+e(+p.lo)+'…'+e(+p.hi);
+    case 'PWM':return e(+p.fs,'Hz')+(+p.phase&&p.mode!=='spwm'?' · φ '+P.fmtNum(+p.phase,{maximumFractionDigits:2})+'°':'')+(+p.dt>0?' · t_d '+e(+p.dt,'s'):'')+' · '+(p.mode==='fixed'?'D = '+P.fmtNum(+p.D):p.mode==='pi'?'PI':p.mode==='spwm'?'SPWM m = '+p.m:p.mode==='ext'?'D από σήμα':'2 έξοδοι');default:return '';}}
   renderLabels(){
    this.L.live.innerHTML=this.doc.components.filter(c=>!['JUNC','GND','TAGO','TAGI','PORT','SIN','SOUT'].includes(c.type)).map(c=>{const b=P.bbox(c);const pk=Object.keys(P.elPins(c));const q0=pk[0]&&this.pin(c,pk[0]),q1=pk[1]&&this.pin(c,pk[1]);const blk=!pk.length;const vert=!blk&&c.type!=='XFMR'&&c.type!=='VAC3'&&q0&&q1&&q0[0]===q1[0];
     // signal blocks (3.0) keep their label above, the PWM / S&H blocks at the side as before
     const lb=c.lbl||P.PARTS[c.type].lbl;const side=(vert||blk)&&!(blk&&P.BLOCKS.has(c.type))&&lb!=='below'&&lb!=='above';const below=lb==='below',left=side&&lb==='left';const x=left?b[0]-8:side?b[2]+8:(b[0]+b[2])/2,y=side?(b[1]+b[3])/2-(blk?10:2):below?b[3]+40:b[1]-7;const anchor=left?'end':side?'start':'middle';
-    return `<g class="lbls" data-l="${c.id}"><text class="lbl" x="${x}" y="${side?y:y-24}" text-anchor="${anchor}">${esc(c.label||c.id)}</text><text class="val" x="${x}" y="${side?y+13:y-12}" text-anchor="${anchor}">${esc(this.valueText(c))}</text><text class="lv" x="${x}" y="${side?y+26:y}" text-anchor="${anchor}"></text></g>`;}).join('');
-   this.liveRefs=new Map();for(const g of this.L.live.querySelectorAll('[data-l]'))this.liveRefs.set(g.dataset.l,g.querySelector('.lv'));
+    // HTML: each line at its baseline (x, y) in the units of the drawing, aligned like text-anchor (class a-s / a-m / a-e)
+    const at=(yy)=>`style="left:${x}px;top:${yy}px"`;
+    return `<div class="lbls a-${anchor[0]}" data-l="${esc(c.id)}"><div class="lbl" ${at(side?y:y-24)}>${esc(c.label||c.id)}</div><div class="val" ${at(side?y+13:y-12)}>${esc(this.valueText(c))}</div><div class="lv" ${at(side?y+26:y)}></div></div>`;}).join('');
+   this.liveRefs=new Map();for(const g of this.L.live.querySelectorAll('[data-l]'))this.liveRefs.set(g.dataset.l,g.querySelector('.lv'));this._lv=new Map();
   }
   renderWires(){
    const W=this.settings.wireWidth;const count=new Map();for(const w of this.doc.wires)for(const e of [w.a,w.b]){const k=e.c+':'+e.p;count.set(k,(count.get(k)||0)+1);}
@@ -295,7 +345,13 @@
    // a name on wires of different drawn nets joins them (version ≥ 3): those names get ⇄
    const joined=new Set();if((+this.doc.version||0)>=3){const m=new Map();for(const w of this.doc.wires){if(!w.name)continue;const k=w.a.c+':'+w.a.p,key=w.name+'|'+NK.of(k);if(!m.has(key))m.set(key,new Set());m.get(key).add(NK.root(k));}
     for(const [key,r] of m)if(r.size>1)joined.add(key.slice(0,key.lastIndexOf('|')));}
-   for(const w of this.doc.wires){const pts=this.wirePts(w);if(pts.some(p=>!p))continue;const sig=NK.of(w.a.c+':'+w.a.p)==='sig',nb=BW?BW.wire(w):1;
+   this.wctx={NK,BW,joined,W};for(const w of this.doc.wires)h+=this.wireSVG(w);
+   for(const c of this.doc.components){if(c.type==='JUNC'){const n=count.get(c.id+':j')||0;if(n>=3)dots+=`<circle class="jdot${NK.of(c.id+':j')==='sig'?' sig':''}" data-pc="${esc(c.id)}" cx="${c.x}" cy="${c.y}" r="${NK.of(c.id+':j')==='sig'?2.8:3.6}"/>`;else if(n===1)dots+=`<circle class="jfree" data-pc="${esc(c.id)}" cx="${c.x}" cy="${c.y}" r="3.6"/>`;continue;}
+    for(const p of Object.keys(P.pinsOf(c))){if((count.get(c.id+':'+p)||0)>=2){const q=this.pin(c,p),sg=NK.of(c.id+':'+p)==='sig';dots+=`<circle class="jdot${sg?' sig':''}" data-pc="${esc(c.id)}" cx="${q[0]}" cy="${q[1]}" r="${sg?2.8:3.6}"/>`;}}}
+   this.L.wires.innerHTML=h;this.L.dots.innerHTML=dots;this.pinCount=count;
+  }
+  // markup of one wire (with the net kinds and bus widths of the last full redraw)
+  wireSVG(w){const {NK,BW,joined,W}=this.wctx;let h='';const pts=this.wirePts(w);if(pts.some(p=>!p))return '';const sig=NK.of(w.a.c+':'+w.a.p)==='sig',nb=BW?BW.wire(w):1;
     // signal wires: thinner, own colour, arrow where they enter an input
     const ina=sig&&NK.kind.get(w.a.c+':'+w.a.p)==='in',inb=sig&&NK.kind.get(w.b.c+':'+w.b.p)==='in';const d=this.pathD(ina&&!inb?pts.slice().reverse():pts);
     const sw=w.width?w.width:sig?Math.max(1.2,W*.62):W;
@@ -304,11 +360,9 @@
     if(nb>1){const m=this.midLabel(pts),hz=this.segDir(pts);h+=`<path class="bslash" d="M${m[0]-4},${m[1]+5} L${m[0]+4},${m[1]-5}"/><text class="bwidth" x="${m[0]+(hz?6:7)}" y="${m[1]+(hz?13:4)}">${nb}</text>`;}
     for(let i=1;i<pts.length;i++)h+=`<path class="whit" data-w="${w.id}" data-seg="${i-1}" d="M${pts[i-1][0]},${pts[i-1][1]} L${pts[i][0]},${pts[i][1]}"/>`;
     if(w.name){const m=this.midLabel(pts),jn=joined.has(w.name);h+=`<text class="wname${jn?' link':''}" x="${m[0]}" y="${m[1]-6}" text-anchor="middle">${jn?'⇄ ':''}${esc(w.name)}</text>`;}
-    h+='</g>';}
-   for(const c of this.doc.components){if(c.type==='JUNC'){const n=count.get(c.id+':j')||0;if(n>=3)dots+=`<circle class="jdot${NK.of(c.id+':j')==='sig'?' sig':''}" cx="${c.x}" cy="${c.y}" r="${NK.of(c.id+':j')==='sig'?2.8:3.6}"/>`;else if(n===1)dots+=`<circle class="jfree" cx="${c.x}" cy="${c.y}" r="3.6"/>`;continue;}
-    for(const p of Object.keys(P.pinsOf(c))){if((count.get(c.id+':'+p)||0)>=2){const q=this.pin(c,p),sg=NK.of(c.id+':'+p)==='sig';dots+=`<circle class="jdot${sg?' sig':''}" cx="${q[0]}" cy="${q[1]}" r="${sg?2.8:3.6}"/>`;}}}
-   this.L.wires.innerHTML=h;this.L.dots.innerHTML=dots;this.pinCount=count;
-  }
+    h+='</g>';return h;}
+  // redraw one wire in place (dragging)
+  redrawWire(w){const el=this.L.wires.querySelector(`[data-w="${CSS.escape(w.id)}"]`);const h=this.wctx?this.wireSVG(w):'';if(el){if(h)el.outerHTML=h;else el.remove();}}
   pathD(pts){if(this.settings.corner!=='round'||pts.length<3)return 'M'+pts.map(p=>p.join(',')).join(' L');
    let d=`M${pts[0][0]},${pts[0][1]}`;for(let i=1;i<pts.length-1;i++){const [ax,ay]=pts[i-1],[bx,by]=pts[i],[cx,cy]=pts[i+1];const r=Math.min(5,Math.hypot(bx-ax,by-ay)/2,Math.hypot(cx-bx,cy-by)/2);
     const ux=Math.sign(bx-ax),uy=Math.sign(by-ay),vx=Math.sign(cx-bx),vy=Math.sign(cy-by);d+=` L${bx-ux*r},${by-uy*r} Q${bx},${by} ${bx+vx*r},${by+vy*r}`;}
@@ -320,21 +374,24 @@
    for(const c of this.doc.components){for(const p of Object.keys(P.pinsOf(c))){const q=this.pin(c,p);const n=count.get(c.id+':'+p)||0;
     const k=c.type==='JUNC'?'j':P.pinKind(c,p),src=k==='in'?c.params?.['in_'+p]:null,linked=!!src;
     const sg=k==='in'||k==='out',bus=c.type!=='JUNC'&&this.bw?.any&&this.bw.pin(c.id+':'+p)>1;
-    h+=`<circle class="pin${n||linked?'':' open'}${c.type==='JUNC'?' jpin':''}${sg?' spin '+k:''}${linked?' linked':''}${bus?' buspin':''}" data-pin="${c.id}:${p}" cx="${q[0]}" cy="${q[1]}" r="${c.type==='JUNC'?5:bus?5:sg?3.4:4.2}"/>`;
+    h+=`<circle class="pin${n||linked?'':' open'}${c.type==='JUNC'?' jpin':''}${sg?' spin '+k:''}${linked?' linked':''}${bus?' buspin':''}" data-pin="${c.id}:${p}" data-pc="${esc(c.id)}" cx="${q[0]}" cy="${q[1]}" r="${c.type==='JUNC'?5:bus?5:sg?3.4:4.2}"/>`;
     // an input that takes its signal from the parameters: a small tag "← block.output" outside the pin
     if(linked){const [sc,sp]=String(src).split(':'),s0=this.comp(sc),d=P.pinDir(c,p),ok=!!(s0&&P.pinsOf(s0)[sp]);const t=(ok?'← '+(s0.label||sc)+'.'+sp:'← ? '+src);
      const anchor=d[0]<0?'end':d[0]>0?'start':'middle',x=q[0]+d[0]*7,y=q[1]+(d[1]?d[1]*12:-5);
-     h+=`<text class="stag${ok?'':' bad'}" x="${x}" y="${y}" text-anchor="${anchor}">${esc(t)}</text>`;}}}
+     h+=`<text class="stag${ok?'':' bad'}" data-pc="${esc(c.id)}" x="${x}" y="${y}" text-anchor="${anchor}">${esc(t)}</text>`;}}}
    this.L.pins.innerHTML=h;}
   renderSel(){for(const g of this.L.parts.querySelectorAll('.part'))g.classList.toggle('sel',this.sel.c.has(g.dataset.c));for(const g of this.L.wires.querySelectorAll('.wire'))g.classList.toggle('sel',this.sel.w.has(g.dataset.w));}
   // live values from the simulator
   setLive(fn){this.live=fn;this.updateLive();}
-  updateLive(){if(!this.live||!this.liveRefs)return;
-   for(const c of this.doc.components){const v=this.live(c);const g=this.L.parts.querySelector(`[data-c="${CSS.escape(c.id)}"]`);if(!g)continue;
-    g.classList.toggle('on',!!v?.on);g.classList.toggle('off',v?.on===false);
+  // live values: only what changed is written (text, on/off class); nothing while the user drags (the page asks again later)
+  updateLive(force){if(!this.live||!this.liveRefs)return;if(!force&&this.drag)return;const els=this.partEl||this.partEls(),last=this._lv||(this._lv=new Map()),show=this.settings.showLive;
+   for(const c of this.doc.components){const v=this.live(c);const g=els.get(c.id);if(!g)continue;
+    const on=v?.on===true?1:v?.on===false?2:0,txt=c.type==='DISP'?(v?.text||'—'):(show&&v?.text?v.text:''),o=last.get(c.id);
+    if(o&&o.on===on&&o.txt===txt&&o.g===g)continue;last.set(c.id,{on,txt,g});
+    g.classList.toggle('on',on===1);g.classList.toggle('off',on===2);
     const t=this.liveRefs.get(c.id);
-    if(c.type==='DISP'){const d=g.querySelector('.sym .bsm');if(d)d.textContent=v?.text||'—';if(t)t.textContent='';continue;} // the display shows its value inside
-    if(t)t.textContent=this.settings.showLive&&v?.text?v.text:'';}
+    if(c.type==='DISP'){const d=g.querySelector('.sym .bsm');if(d)d.textContent=txt;if(t)t.textContent='';continue;} // the display shows its value inside
+    if(t)t.textContent=txt;}
    this.drawArrows();}
   drawArrows(){let h='';const types=['L','R','C','VDC','VAC','D','SW','CPL','IDC'];let big=0;const vals=new Map();if(this.settings.showArrows&&this.live)for(const c of this.doc.components)if(types.includes(c.type)){const v=this.live(c);vals.set(c.id,v);if(v&&Number.isFinite(v.i))big=Math.max(big,Math.abs(v.i));}
    if(this.settings.showArrows&&this.live)for(const c of this.doc.components){if(!types.includes(c.type))continue;const v=vals.get(c.id);if(!v||!Number.isFinite(v.i)||Math.abs(v.i)<Math.max(1e-9,2e-3*big))continue;
@@ -344,9 +401,10 @@
     const bb=P.bbox(c),horiz=Math.abs(a[1]-b[1])<1,off=horiz?[0,(bb[3]-c.y)+12]:[(c.x-bb[0])+12,0];
     const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2,ux=Math.sign(b[0]-a[0]),uy=Math.sign(b[1]-a[1]),L=12;
     h+=`<path class="flow" d="M${mx-ux*L-off[0]*(horiz?0:1)},${my-uy*L+off[1]*(horiz?1:0)} L${mx+ux*L-off[0]*(horiz?0:1)},${my+uy*L+off[1]*(horiz?1:0)}" marker-end="url(#flowArr)"/>`;}
-   let g=this.L.over.querySelector('.arrows');if(!g){g=document.createElementNS(NS,'g');g.setAttribute('class','arrows');this.L.over.appendChild(g);}g.innerHTML=h;}
+   let g=this.L.over.querySelector('.arrows');if(!g){g=document.createElementNS(NS,'g');g.setAttribute('class','arrows');this.L.over.appendChild(g);this._ah=null;}if(h!==this._ah){this._ah=h;g.innerHTML=h;}}
   // ---------------------------------------------------------- coordinates
-  world(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const m=this.svg.getScreenCTM();if(!m)return [0,0];const p=pt.matrixTransform(m.inverse());return [p.x,p.y];}
+  // the point of the drawing under the pointer, from the pending view (the same as the screen matrix once the view is drawn)
+  world(e){return this.worldNow(e);}
   // element under the pointer even while the svg holds pointer capture
   hitAt(e){const t=document.elementFromPoint(e.clientX,e.clientY);return this.hitOf({target:t&&this.svg.contains(t)?t:this.svg});}
   hitOf(e){const t=e.target;return {pin:t.closest?.('[data-pin]')?.dataset.pin,c:t.closest?.('[data-c]')?.dataset.c,w:t.closest?.('[data-w]')?.dataset.w,seg:t.dataset?.seg!==undefined?+t.dataset.seg:null};}
@@ -384,8 +442,8 @@
    const pr=this.press;if(!pr){this.hoverPin(e);return;}
    const dist=Math.hypot(e.clientX-pr.x,e.clientY-pr.y);if(!pr.moved&&dist<4)return;
    if(!pr.moved){pr.moved=true;this.beginDrag(pr);}
-   if(pr.kind==='pan'){const k=this.view.k;this.view.cx=pr.view.cx-(e.clientX-pr.x)/k;this.view.cy=pr.view.cy-(e.clientY-pr.y)/k;this.applyView();return;}
-   if(pr.kind==='marquee'){this.drawMarquee(pr.p,p);return;}
+   if(pr.kind==='pan'){const k=this.view.k;this.view.cx=pr.view.cx-(e.clientX-pr.x)/k;this.view.cy=pr.view.cy-(e.clientY-pr.y)/k;this.requestView();return;}
+   if(pr.kind==='marquee'){this.lastGesture=performance.now();this.drawMarquee(pr.p,p);return;}
    if(pr.kind==='move'){this.dragMove(snap(p[0]-pr.p[0]),snap(p[1]-pr.p[1]));return;}
    if(pr.kind==='seg'&&pr.seg){this.dragSeg(p);return;}
    if(pr.kind==='wire'||pr.kind==='wirefromwire'){this.previewWire(p,this.hitAt(e));return;}
@@ -404,28 +462,34 @@
     if(!pr.moved){if(pr.junc){this.select([pr.junc],[]);return;}if(pr.kind==='wire'){this.remember();this.startWire(pr.h.pin,true);}return;}
     this.finishWire(p,h);return;}
   }
-  cancelDrag(){this.press=null;this.svg.classList.remove('panning');this.L.over.querySelector('.marquee')?.remove();}
+  cancelDrag(){this.press=null;this.svg.classList.remove('panning');this.L.over.querySelector('.marquee')?.remove();if(this.drag){this.drag=null;this.svg.classList.remove('dragging');this.render();}}
   hoverPin(e){const pin=e.target.dataset?.pin;this.svg.classList.toggle('over-pin',!!pin);const id=e.target.closest?.('[data-c]')?.dataset.c||(pin&&pin.split(':')[0])||null;
    if(id!==this.hotPart){this.hotPart=id;for(const el of this.L.pins.querySelectorAll('.pin.hot'))el.classList.remove('hot');if(id)for(const el of this.L.pins.querySelectorAll(`[data-pin^="${CSS.escape(id)}:"]`))el.classList.add('hot');}}
   dbl(e){if(this.wiring){this.finishFree();return;}const h=this.hitAt(e);if(h.c&&this.comp(h.c)?.type!=='JUNC'){this.opt.onedit?.({kind:'comp',id:h.c,x:e.clientX,y:e.clientY,dbl:true});}else if(h.w)this.opt.onedit?.({kind:'wire',id:h.w,x:e.clientX,y:e.clientY,dbl:true});}
   menu(e,h){if(h.c&&!this.sel.c.has(h.c))this.select([h.c],[]);else if(!h.c&&h.w&&!this.sel.w.has(h.w))this.select([],[h.w]);
    this.opt.oncontext?.({kind:h.c?'comp':h.w?'wire':'empty',id:h.c||h.w,pin:h.pin,x:e.clientX,y:e.clientY,world:this.world(e)});}
+  // the point of the drawing under the pointer from the pending view (not from the screen matrix, which lags one frame)
+  worldNow(e){const r=this.holder.getBoundingClientRect(),[w,h]=this.areaSize(),k=this.view.k;return [this.view.cx+(e.clientX-r.left-w/2)/k,this.view.cy+(e.clientY-r.top-h/2)/k];}
   wheel(e){e.preventDefault();this.userView=true;const zoom=this.settings.wheel==='zoom'?!e.shiftKey:(e.ctrlKey||e.metaKey);
-   if(zoom){const p=this.world(e),f=Math.exp(-e.deltaY*(e.deltaMode?0.05:0.0015));const k=Math.min(4,Math.max(.15,this.view.k*f));const r=k/this.view.k;
+   if(zoom){const p=this.worldNow(e),f=Math.exp(-e.deltaY*(e.deltaMode?0.05:0.0015));const k=Math.min(4,Math.max(.15,this.view.k*f));const r=k/this.view.k;
     this.view.cx=p[0]-(p[0]-this.view.cx)/r;this.view.cy=p[1]-(p[1]-this.view.cy)/r;this.view.k=k;}
    else{const k=this.view.k;this.view.cx+=(e.shiftKey?e.deltaY:e.deltaX)/k;this.view.cy+=(e.shiftKey?0:e.deltaY)/k;}
-   this.applyView();}
-  key(e){
-   const k=e.key.toLowerCase(),ctrl=e.ctrlKey||e.metaKey;
-   if(e.target!==this.svg)return;
+   this.requestView();}
+  // shortcuts by the position of the key (e.code, 4.6): with a Greek layout e.key is «ζ» for Z; the page also calls
+  // key() for Ctrl+Z / Ctrl+Y when the focus is not in a text field
+  static letter(e){return /^Key[A-Z]$/.test(e.code||'')?e.code.slice(3).toLowerCase():String(e.key||'').toLowerCase();}
+  key(e,fromPage){
+   const ctrl=e.ctrlKey||e.metaKey,named=String(e.key||'').toLowerCase(),k=named.length===1?Editor.letter(e):named;
+   if(!fromPage&&e.target!==this.svg)return;
    if(e.code==='Space'){this.space=true;this.svg.classList.add('grab');e.preventDefault();return;}
    if(k==='escape'){this.escape(true);return;}
    if(this.wiring&&k==='backspace'){e.preventDefault();this.wiring.via.pop();this.previewWire(this.hover||this.pin(this.wiring.from.c,this.wiring.from.p),null);return;}
    if(this.wiring&&k==='enter'){e.preventDefault();this.finishFree(this.hover);return;}
    if(!ctrl&&k==='w'){this.setWireTool(!this.wireTool);return;}
    if(k==='delete'||k==='backspace'){e.preventDefault();this.deleteSel();return;}
-   if(ctrl&&k==='z'&&!e.shiftKey){e.preventDefault();this.undo();return;}
-   if(ctrl&&(k==='y'||(k==='z'&&e.shiftKey))){e.preventDefault();this.redo();return;}
+   if(ctrl&&k==='z'&&!e.shiftKey){e.preventDefault();this.undo();return true;}
+   if(ctrl&&(k==='y'||(k==='z'&&e.shiftKey))){e.preventDefault();this.redo();return true;}
+   if(fromPage)return false;
    if(ctrl&&k==='a'){e.preventDefault();this.select(this.doc.components.map(c=>c.id),this.doc.wires.map(w=>w.id));return;}
    if(ctrl&&k==='c'){this.copySel();return;}
    if(ctrl&&k==='v'){e.preventDefault();this.paste();return;}
@@ -440,7 +504,11 @@
   // ---------------------------------------------------------- drag: parts
   beginDrag(pr){
    if(pr.kind==='move'){this.remember();const ids=this.sel.c;this.drag={start:new Map([...ids].map(id=>{const c=this.comp(id);return [id,[c.x,c.y]];})),
-     wires:this.doc.wires.filter(w=>ids.has(w.a.c)||ids.has(w.b.c)).map(w=>({w,both:ids.has(w.a.c)&&ids.has(w.b.c),aMoves:ids.has(w.a.c),pts:this.wirePts(w)}))};}
+     wires:this.doc.wires.filter(w=>ids.has(w.a.c)||ids.has(w.b.c)).map(w=>({w,both:ids.has(w.a.c)&&ids.has(w.b.c),aMoves:ids.has(w.a.c),pts:this.wirePts(w)}))};
+    // what moves with a translation: the pins, pin tags, labels and dots of the dragged parts
+    const tr=[];for(const el of this.svg.querySelectorAll('.pins [data-pc],.dots [data-pc]'))if(ids.has(el.dataset.pc))tr.push(el);
+    for(const id of ids){const l=this.L.live.querySelector(`[data-l="${CSS.escape(id)}"]`);if(l)tr.push(l);}
+    this.drag.tr=tr;this.svg.classList.add('dragging');}
    if(pr.kind==='seg'){const w=this.wire(pr.h.w);if(!w||pr.h.seg===null){pr.seg=null;return;}this.remember();pr.seg={w,k:pr.h.seg,pts:this.wirePts(w)};}
    if(pr.kind==='marquee')this.drawMarquee(pr.p,pr.p);
    if(pr.kind==='wire'||pr.kind==='wirefromwire'){this.remember();this.startWireFrom(pr);}
@@ -451,16 +519,26 @@
    for(const o of d.wires){const w=o.w;if(o.both){w.pts=o.pts.slice(1,-1).map(p=>[p[0]+dx,p[1]+dy]);continue;}
     const full=o.aMoves?o.pts:o.pts.slice().reverse();const end=o.aMoves?w.a:w.b;const q=this.pin(end.c,end.p);
     let r=this.adjustEnd(full,q);if(!o.aMoves)r=r.reverse();this.setWirePts(w,r);}
-   // move DOM directly for smoothness
-   for(const id of d.start.keys()){const c=this.comp(id);const g=this.L.parts.querySelector(`[data-c="${CSS.escape(id)}"]`);if(g&&c.type!=='JUNC')g.setAttribute('transform',`translate(${c.x},${c.y}) rotate(${90*(c.rot||0)}) scale(${c.flip?-1:1},1)`);else if(g)g.querySelector('circle').setAttribute('cx',c.x),g.querySelector('circle').setAttribute('cy',c.y);}
-   this.renderWires();this.renderPins();this.renderLabels();this.renderSel();this.updateLive();
+   // move the DOM directly: the dragged parts, a translation of their pins, labels and dots, and only the wires that touch them
+   const els=this.partEl||this.partEls();
+   for(const id of d.start.keys()){const c=this.comp(id);const g=els.get(id);if(g&&c.type!=='JUNC')g.setAttribute('transform',`translate(${c.x},${c.y}) rotate(${90*(c.rot||0)}) scale(${c.flip?-1:1},1)`);else if(g)g.querySelector('circle').setAttribute('cx',c.x),g.querySelector('circle').setAttribute('cy',c.y);}
+   if(d.tr){const t=`translate(${dx},${dy})`;if(t!==d.lastT){d.lastT=t;const th=`translate(${dx}px,${dy}px)`;for(const el of d.tr){if(el.namespaceURI===NS)el.setAttribute('transform',t);else el.style.transform=th;}}}
+   if(this.wctx)for(const o of d.wires)this.redrawWire(o.w);else this.renderWires();
   }
   endDrag(notify=true,auto=true){
    const d=this.drag;if(d&&this.settings.autoRoute)for(const o of d.wires)if(!o.both)this.route(o.w);
    let struct=false;
    if(d&&auto){const ids=[...d.start.keys()],mv=new Set(ids);for(const id of ids)if(this.comp(id)?.type==='JUNC'&&this.mergeJunction(id,mv))struct=true;
     if(this.autoConnect(ids.filter(id=>this.comp(id)&&this.comp(id).type!=='JUNC')))struct=true;}
-   this.drag=null;this.render();this.changed(struct?'struct':'geom');void notify;}
+   // only a move: the DOM is already where the parts are; the translated pins, labels and dots take their new coordinates
+   // (no full redraw, no new parameter panel: the selection did not change)
+   if(!struct&&d&&d.tr){this.bakeMove(d);if(this.settings.autoRoute&&this.wctx)for(const o of d.wires)this.redrawWire(o.w);this.drag=null;this.svg.classList.remove('dragging');this._lv=new Map();this.updateLive(true);this.changed('geom',false);return;}
+   this.drag=null;this.svg.classList.remove('dragging');this.render();this.changed(struct?'struct':'geom');void notify;}
+  // the translation of a drag written into the coordinates of the moved pins, dots, pin tags and labels
+  bakeMove(d){const m=/translate\(([-\d.e]+)p?x?,\s*([-\d.e]+)/;
+   for(const el of d.tr){if(el.namespaceURI===NS){const t=el.getAttribute('transform');const q=t&&m.exec(t);if(!q)continue;const dx=+q[1],dy=+q[2];el.removeAttribute('transform');
+     if(el.tagName==='circle'){el.setAttribute('cx',+el.getAttribute('cx')+dx);el.setAttribute('cy',+el.getAttribute('cy')+dy);}else{el.setAttribute('x',+el.getAttribute('x')+dx);el.setAttribute('y',+el.getAttribute('y')+dy);}}
+    else{const q=m.exec(el.style.transform||'');if(!q)continue;const dx=+q[1],dy=+q[2];el.style.transform='';for(const k of el.children){k.style.left=(parseFloat(k.style.left)+dx)+'px';k.style.top=(parseFloat(k.style.top)+dy)+'px';}}}}
   // ---------------------------------------------------------- drag: wire segment
   dragSeg(p){
    const s=this.press.seg;const base=s.pts.map(q=>[...q]);let k=s.k;const n=base.length;
@@ -471,7 +549,7 @@
    if(k===pts.length-2){const last=pts[pts.length-1],st=stub(last,pts[pts.length-2]);if(same(st,last))pts=[...pts.slice(0,-1),[...last],last];else pts=[...pts.slice(0,-1),[...st],st,last];}
    const d=horiz?snap(p[1]-this.press.p[1]):snap(p[0]-this.press.p[0]);
    if(horiz){pts[k]=[pts[k][0],pts[k][1]+d];pts[k+1]=[pts[k+1][0],pts[k+1][1]+d];}else{pts[k]=[pts[k][0]+d,pts[k][1]];pts[k+1]=[pts[k+1][0]+d,pts[k+1][1]];}
-   void n;this.setWirePts(s.w,pts);this.renderWires();this.renderPins();this.renderSel();
+   void n;this.setWirePts(s.w,pts);if(this.wctx)this.redrawWire(s.w);else this.renderWires();
   }
   // ---------------------------------------------------------- marquee
   drawMarquee(a,b){let r=this.L.over.querySelector('.marquee');if(!r){r=document.createElementNS(NS,'rect');r.setAttribute('class','marquee');this.L.over.appendChild(r);}
@@ -543,6 +621,9 @@
    this.doc.wires=this.doc.wires.filter(x=>x!==w);this.doc.wires.push(w1,w2);this.render();return j.id;}
   // nets for probes: pin keys connected to a wire
   wireNetPin(wid){const w=this.wire(wid);return w?w.a.c+':'+w.a.p:null;}
+  // can this element scroll further in the direction of the wheel
+  static canScroll(el,e){const dy=e.deltaY,dx=e.deltaX;if(Math.abs(dy)>=Math.abs(dx)){if(el.scrollHeight<=el.clientHeight+1)return false;return dy<0?el.scrollTop>0:el.scrollTop+el.clientHeight<el.scrollHeight-1;}
+   if(el.scrollWidth<=el.clientWidth+1)return false;return dx<0?el.scrollLeft>0:el.scrollLeft+el.clientWidth<el.scrollWidth-1;}
  }
  root.Editor=Editor;root.EditorUtil={normalize,orth};
 })(window);

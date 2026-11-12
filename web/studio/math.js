@@ -5,7 +5,7 @@
 (function(root){
  const P=root.Parts;
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- const fmt=(v,d=4)=>Number.isFinite(+v)?Number((+v).toPrecision(d)).toLocaleString('el-GR',{maximumFractionDigits:9}):'—';
+ const FMT9={maximumFractionDigits:9},fmt=(v,d=4)=>Number.isFinite(+v)?P.fmtNum(Number((+v).toPrecision(d)),FMT9):'—';
  const eng=(v,u='',d=4)=>P.eng(+v,u,d);
  const mm=(m,cls='')=>m&&m.mathml?`<div class="math ${cls}">${m.mathml}</div>`:'';
  const step=s=>`<div class="mstep"><h5>${esc(s.title)}</h5>${s.explanation?`<p>${esc(s.explanation)}</p>`:''}${mm(s.math)}${s.numeric?`<div class="sub-l">αντικατάσταση</div>${mm(s.numeric,'num')}`:''}${s.result?mm(s.result,'res'):''}</div>`;

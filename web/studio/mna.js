@@ -1356,7 +1356,7 @@
    return Math.max(hi,this.h*1e-6);
   }
   run(duration,maxSteps=Infinity,deadline=Infinity){
-   const tEnd=this.t+duration;let steps=0;const eps=this.h*1e-7;if(this.var&&this.capDirty)this.modeCap();
+   const tEnd=this.t+duration;let steps=0;const eps=this.h*1e-7,hasDl=deadline!==Infinity;if(this.var&&this.capDirty)this.modeCap();
    while(this.t<tEnd-eps&&steps<maxSteps){
     if(this.progNext()<=this.t+eps){this.progDue(eps);continue;}
     const tn=this.nextEvent(tEnd),stat=this.evStat;let hs=this.var?this.hv:this.h;
@@ -1386,7 +1386,8 @@
     // order at one instant: samples (t_sample), then the controller update (t_update); a second
     // point at the same t makes the held value, the carrier reset and the duty step vertical
     const sm=this.sampleHolds(),sb=this.evalBlocks('sample'),cu=this.sampleControllers(false);if(sm||sb||cu)this.recordNow();
-    if((steps&255)===0&&performance.now()>deadline)break;
+    // the time limit of the frame after every step (4.6; it was every 256 steps, ~10 ms late on a large circuit)
+    if(hasDl&&performance.now()>deadline)break;
    }
    this.computeVals();
    return steps;

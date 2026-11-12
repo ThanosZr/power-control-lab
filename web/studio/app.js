@@ -3,7 +3,7 @@
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const P=window.Parts,SubC=window.SubCircuit,eng=(v,u,d=4)=>P.eng(v,u,d);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt=(v,d=4)=>Number.isFinite(v)?Number(v.toPrecision(d)).toLocaleString('el-GR',{maximumFractionDigits:8}):'—';
+const FMT8={maximumFractionDigits:8},fmt=(v,d=4)=>Number.isFinite(v)?Parts.fmtNum(Number(v.toPrecision(d)),FMT8):'—';
 const S={tut:{id:'buck',options:{}},sim:null,running:false,frame:0,speed:100,stopT:0,error:null,last:0,limited:false,
  nav:[],top:null,pfx:''}; // subcircuits (3.17): the levels open in the editor, the top document while inside, the path of the open instance
 let editor,scope;
@@ -47,16 +47,24 @@ function runToEnd(){if(!S.sim||!(S.stopT>0))return;pause();const t0=performance.
 function loop(now){
  if(!S.running)return;const dt=Math.min(.1,(now-S.last)/1000);S.last=now;
  let want=S.speed==='max'?1e9:dt*S.speed*S.sim.T;if(S.stopT>0)want=Math.min(want,S.stopT-S.sim.t);
- const before=S.sim.t;try{S.sim.run(want,Infinity,now+14);}catch(e){S.error=e.message;notice('Σφάλμα λύτη: '+esc(e.message),'error');pause();return;}
+ // the solver's share of the frame (4.6): about 12 ms when nobody touches the page (the simulation as fast as before),
+ // and what is left of 6 ms after the input and the drawing while the user zooms, pans, drags, draws a selection, or
+ // moves the pointer, types or turns the wheel anywhere on the page (250 ms after the last input), so that the page
+ // follows the hand at 60 frames per second
+ const busy=editor.busy()||!!scope.drag,used=performance.now()-now,input=busy||now-(S.lastInput||0)<250;
+ const budget=input?Math.max(1.5,6-used-(S.drawMs||0)):Math.max(4,12.5-used);
+ const before=S.sim.t;try{S.sim.run(want,Infinity,performance.now()+budget);}catch(e){S.error=e.message;notice('Σφάλμα λύτη: '+esc(e.message),'error');pause();return;}
  S.limited=S.speed!=='max'&&S.sim.t-before<want*.98;
- S.frame++;draw(false);
+ S.frame++;const t1=performance.now();draw(false,busy);S.drawMs=.8*(S.drawMs||0)+.2*(performance.now()-t1);
  if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){pause();notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
  requestAnimationFrame(loop);
 }
-function draw(all){scope.draw();navRange();if(all||S.frame%3===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();}if(all||S.frame%8===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();if(S.sim&&S.sim.dgVer!==S.diagSeen)renderDiag();}if(all){if(!S.running&&!S.switching){renderFFT();renderEvents();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
-function navRange(){const el=$('#nav-range');if(!el||el.offsetParent===null||!S.sim)return;const [a,b]=scope.viewRange();el.textContent=`${eng(a,'s',4)} … ${eng(b,'s',4)} · ${fmt((b-a)/S.sim.T,3)} T${scope.cfg.frozen?' · σταθερή προβολή':' · ζωντανά'}`;}
-function updateClock(){const s=S.sim;if(!s)return;$('#clock').textContent='t = '+eng(s.t,'s',5);$('#periods').textContent=`${Math.floor(s.t/s.T+1e-9)} T · βήματα ${s.steps.toLocaleString('el-GR')}`;
- $('#cpu').hidden=!S.limited;$('#speed-note').textContent=S.speed==='max'?'όσο αντέχει ο υπολογιστής':`${eng(S.speed*s.T,'s',3)} ανά δευτερόλεπτο`;$('#step-note').textContent=s.var?`Δt = ${eng(s.hv,'s',3)} μεταβλητό (${eng(s.hMin,'s',2)} … ${eng(s.hCap||s.hMax,'s',2)}) · απορρίψεις ${s.nRej}`:'Δt = '+eng(s.h,'s',3)+' · T = '+eng(s.T,'s',3);}
+function draw(all,busy){scope.draw();navRange();if(all||S.frame%(busy?12:4)===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();}if(all||S.frame%(busy?24:8)===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();if(S.sim&&S.sim.dgVer!==S.diagSeen)renderDiag();}if(all){if(!S.running&&!S.switching){renderFFT();renderEvents();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
+// text of an element only when it changes (in the loop of the simulation an unchanged text still costs a layout)
+function setText(el,t){if(el&&el.textContent!==t)el.textContent=t;}
+function navRange(){const el=$('#nav-range');if(!el||!S.sim)return;const [a,b]=scope.viewRange();setText(el,`${eng(a,'s',4)} … ${eng(b,'s',4)} · ${fmt((b-a)/S.sim.T,3)} T${scope.cfg.frozen?' · σταθερή προβολή':' · ζωντανά'}`);}
+function updateClock(){const s=S.sim;if(!s)return;setText($('#clock'),'t = '+eng(s.t,'s',5));setText($('#periods'),`${Math.floor(s.t/s.T+1e-9)} T · βήματα ${Parts.fmtNum(s.steps)}`);
+ {const cpu=$('#cpu');if(cpu&&cpu.hidden!==!S.limited)cpu.hidden=!S.limited;}setText($('#speed-note'),S.speed==='max'?'όσο αντέχει ο υπολογιστής':`${eng(S.speed*s.T,'s',3)} ανά δευτερόλεπτο`);setText($('#step-note'),s.var?`Δt = ${eng(s.hv,'s',3)} μεταβλητό (${eng(s.hMin,'s',2)} … ${eng(s.hCap||s.hMax,'s',2)}) · απορρίψεις ${s.nRej}`:'Δt = '+eng(s.h,'s',3)+' · T = '+eng(s.T,'s',3));}
 
 // live values on the schematic
 function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;if(['GND','JUNC','TAGO','TAGI','SUB','PORT','SIN','SOUT'].includes(c0.type)||window.NetLib&&NetLib.isLib(c0.type))return null;
@@ -1988,7 +1996,9 @@ async function runMath(){
 window.addEventListener('resize',()=>{clearTimeout(window.__mr);window.__mr=setTimeout(()=>MathPanel.redraw($('#math')),200);});
 
 // ------------------------------------------------------------------ files
-function saveLocal(){try{localStorage.setItem('pcl2-state',JSON.stringify(project()));}catch{}}
+function saveLocal(){clearTimeout(S.saveT);S.saveT=0;try{localStorage.setItem('pcl2-state',JSON.stringify(project()));}catch{}}
+function saveLocalSoon(){clearTimeout(S.saveT);S.saveT=setTimeout(saveLocal,400);}
+addEventListener('pagehide',()=>{if(S.saveT)saveLocal();});
 function download(name,text,type='application/json'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);}
 function exportCSV(){const s=S.sim;if(!s)return;const ch=scope.channels();if(!ch.length){notice('Πρόσθεσε σήματα στο scope πρώτα.','info');return;}const [t0,t1]=scope.viewRange();const idx=ch.map(c=>scope.resolve(c.key));
  const r=s.ring,start=(r.head-r.n+r.cap)%r.cap;let out='time [s],'+ch.map(c=>`"${c.label} [${Scope.unitOf(c.key,s)}]"`).join(',')+'\n';
@@ -2023,7 +2033,9 @@ function openSettings(){const s=editor.settings,m=$('#settings');m.hidden=false;
 function boot(){
  const saved=loadSettings();
  editor=new Editor($('#canvas'),{settings:saved,
-  onchange:kind=>{if(kind==='struct'||kind==='param'){if(S.batch)S.batch.stale=true;buildSim(false);if(S.theory)setTimeout(()=>{if(tutorial().theory==='v1'||tutorial().theory==='formula')runTheory();},50);scheduleMath();}saveLocal();if(kind==='struct')renderChannels();},
+  onchange:kind=>{if(kind==='struct'||kind==='param'){if(S.batch)S.batch.stale=true;buildSim(false);if(S.theory)setTimeout(()=>{if(tutorial().theory==='v1'||tutorial().theory==='formula')runTheory();},50);scheduleMath();}
+   // a move (drag, arrow keys) is saved a moment later, once (4.6: the whole project as JSON on every drag end cost a frame)
+   if(kind==='geom')saveLocalSoon();else saveLocal();if(kind==='struct')renderChannels();},
   onselect:sel=>{$('#selinfo').textContent=sel.c.length+sel.w.length?`${sel.c.length} στοιχεία · ${sel.w.length} σύρματα επιλεγμένα`:'';renderProps();},
   ontool:on=>{const b=$('#wire-tool');b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));},
   onedit:ev=>{if(ev.kind==='comp'){const c=editor.comp(ev.id);if(c?.type==='SUB'){enterSub(c.params.def,S.pfx===null?null:pid(c.id));return;}const sg=editor.settings.dblclick==='scope'&&S.pfx!==null?signalsFor(c):[];if(sg.length)addProbe(sg[0][0]+pid(ev.id)+(sg[0][2]||''));else openInspector(ev.id,ev.x,ev.y);}else openWireInspector(ev.id,ev.x,ev.y);},
@@ -2098,10 +2110,15 @@ function boot(){
  {let open=innerWidth>700;try{const v=localStorage.getItem('pcl2-props');if(v)open=v==='1';}catch{}setProps(open);
   $('#props-btn').onclick=()=>setProps(!propsOpen());$('#props-tab').onclick=()=>setProps(true);}
  $('#wire-tool').onclick=()=>{editor.setWireTool(!editor.wireTool);editor.svg.focus({preventScroll:true});};
+ // the time of the last input anywhere on the page: the solver yields the frame to the page for 250 ms after it (4.6)
+ for(const ev of ['pointerdown','pointermove','wheel','keydown'])document.addEventListener(ev,()=>{S.lastInput=performance.now();},{capture:true,passive:true});
  document.addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))closeMenu();if(!e.target.closest('#inspector')&&!e.target.closest('.schem')&&!e.target.closest('#ctx'))closeInspector();});
  document.addEventListener('keydown',e=>{const tg=e.target,typing=tg&&(tg.isContentEditable||/^(INPUT|SELECT|TEXTAREA)$/.test(tg.tagName)),plain=!e.ctrlKey&&!e.metaKey&&!e.altKey;
-  if((e.key==='p'||e.key==='P')&&plain&&!typing){setLivePanel($('#live-panel').hidden);return;}
-  if((e.key==='i'||e.key==='I')&&plain&&!typing){setProps(!propsOpen());return;}
+  // by the position of the key (4.6): the same with a Greek layout (e.key «π», «ι», «ζ»)
+  if(e.code==='KeyP'&&plain&&!typing){setLivePanel($('#live-panel').hidden);return;}
+  if(e.code==='KeyI'&&plain&&!typing){setProps(!propsOpen());return;}
+  // Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z) from anywhere except a text field, which keeps its own undo
+  if((e.ctrlKey||e.metaKey)&&!e.altKey&&(e.code==='KeyZ'||e.code==='KeyY')&&e.target!==editor.svg){const text=tg&&(tg.isContentEditable||tg.tagName==='TEXTAREA'||(tg.tagName==='INPUT'&&/^(text|number|search|email|url|password|tel|)$/.test(tg.type||'')));if(!text&&editor.key(e,true))return;}
   if(e.key==='Escape'){closeMenu();closeInspector();gallery(false);$('#settings').hidden=true;if(e.target!==editor.svg&&editor.escape(false))editor.svg.focus({preventScroll:true});}   // Esc always drops the part being placed
   if(e.target===document.body&&e.code==='Space'){e.preventDefault();S.running?pause():play();}});
  // resizable canvas

@@ -13,21 +13,25 @@
  const LOGIC=new Set(['G','GS']),LOGIC_BLK=new Set(['CMP','SR','CLK','LOGIC']);
  const isLogic=(key,sim)=>{const [pre,id]=key.split(':');if(LOGIC.has(pre))return true;if(pre!=='Y')return false;const c=(sim||root.PCL?.S?.sim)?.net.compInfo.get(id);return !!(c&&LOGIC_BLK.has(c.type));};
  function niceStep(span,n){const raw=span/Math.max(1,n),p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;return (m<1.5?1:m<3.5?2:m<7.5?5:10)*p;}
- function fmtT(t,step,tmax){const m=Math.max(Math.abs(tmax??t),step);const [k,u]=m<1e-6?[1e9,'ns']:m<1e-3?[1e6,'μs']:m<1?[1e3,'ms']:[1,'s'];const d=Math.max(0,Math.ceil(-Math.log10(step*k)-1e-9));return (t*k).toLocaleString('el-GR',{minimumFractionDigits:d,maximumFractionDigits:d,useGrouping:false})+' '+u;}
+ function fmtT(t,step,tmax){const m=Math.max(Math.abs(tmax??t),step);const [k,u]=m<1e-6?[1e9,'ns']:m<1e-3?[1e6,'μs']:m<1?[1e3,'ms']:[1,'s'];const d=Math.max(0,Math.ceil(-Math.log10(step*k)-1e-9));return root.Parts.fmtNum(t*k,{minimumFractionDigits:d,maximumFractionDigits:d,useGrouping:false})+' '+u;}
  const eng=(v,u)=>root.Parts.eng(v,u,4);
  class Scope{
   constructor(canvas,opt={}){
    this.cv=canvas;this.ctx=canvas.getContext('2d');this.opt=opt;this.sim=null;
    this.cfg={panes:[{ch:[]}],window:{unit:'T',n:20},trigger:'roll',display:'auto',frozen:null,cursors:[],follow:true};
    this.hoverX=null;this.ro=new ResizeObserver(()=>this.resize());this.ro.observe(canvas.parentElement);
-   canvas.addEventListener('pointermove',e=>{this.hoverX=e.offsetX;this.hoverY=e.offsetY;if(this.drag)this.panTo(e);if(!this.running)this.draw();});
-   canvas.addEventListener('pointerleave',()=>{this.hoverX=null;if(!this.running)this.draw();this.opt.onhover?.(null);});
+   canvas.addEventListener('pointermove',e=>{this.hoverX=e.offsetX;this.hoverY=e.offsetY;if(this.drag)this.panTo(e);if(!this.running)this.requestDraw();});
+   canvas.addEventListener('pointerleave',()=>{this.hoverX=null;if(!this.running)this.requestDraw();this.opt.onhover?.(null);});
    canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.setPointerCapture(e.pointerId);this.drag={x:e.offsetX,view:this.viewRange(),moved:false};});
    canvas.addEventListener('pointerup',e=>{const d=this.drag;this.drag=null;if(d&&!d.moved)this.cursorAt(e);});
    canvas.addEventListener('wheel',e=>{e.preventDefault();this.zoomAt(e.offsetX,Math.exp(e.deltaY*.0015));},{passive:false});
    canvas.addEventListener('dblclick',()=>{this.cfg.frozen=null;this.cfg.cursors=[];this.opt.onchange?.();this.draw();});
   }
   attach(sim){this.sim=sim;this.draw();}
+  // one drawing on the next frame for a burst of pointer or wheel events (4.6); the running loop draws anyway
+  requestDraw(){if(this._raf)return;this._raf=requestAnimationFrame(()=>{this._raf=0;this.draw();});}
+  // the colours of the theme, read again at most once a second (getComputedStyle in every frame forced a style recalculation)
+  colors(){const now=performance.now();if(!this._col||now-this._col.t>1000){const css=getComputedStyle(this.cv);this._col={t:now,ink:css.getPropertyValue('--scope-ink')||'#203a3f',grid:css.getPropertyValue('--scope-grid')||'#e3ebe7',bg:css.getPropertyValue('--scope-bg')||'#fbfdfc'};}return this._col;}
   // reference traces from another solver: {label, data:{key:{t,y}}}, drawn dashed over the channel
   setRefs(refs){this.refs=refs||null;this.draw();}
   refRange(key,t0,t1,fn){const d=this.refs?.data?.[key];if(!d)return false;const t=d.t;let lo=0,hi=t.length;while(lo<hi){const m=(lo+hi)>>1;if(t[m]<t0)lo=m+1;else hi=m;}
@@ -79,9 +83,9 @@
    if(D<=0)return null;return {avg:S/D,rms:Math.sqrt(Math.max(0,Q/D)),min:mn,max:mx,pp:mx-mn,src:'raw'};}
   usePeriods(t0){const d=this.cfg.display;if(d==='avg')return true;if(d==='raw')return false;const [a,b]=this.viewRange();return t0<this.ringStart()-1e-12&&(b-a)>3*this.sim.T||(b-a)/this.sim.h>4e5;}
   // ------------------------------------------------------------ interaction
-  panTo(e){const d=this.drag;if(!d)return;const dx=e.offsetX-d.x;if(Math.abs(dx)>3)d.moved=true;if(!d.moved)return;const [a,b]=d.view,span=b-a,pw=this.plotW();const sh=-dx/pw*span;this.cfg.frozen=[a+sh,b+sh];this.opt.onfreeze?.();this.draw();}
-  zoomAt(x,f){if(this.cfg.follow!==false&&!this.cfg.frozen){const W=this.cfg.window,T=this.sim?.T||1;const n=Math.max(+(W.n*f).toPrecision(6),(this.sim?.h||1e-9)*4/(W.unit==='T'?T:1));this.cfg.window={unit:W.unit,n};this.opt.onchange?.();this.draw();return;}
-   const [a,b]=this.viewRange(),pw=this.plotW();const tm=a+(Math.min(Math.max(x-this.padL,0),pw)/pw)*(b-a);const na=tm-(tm-a)*f,nb=tm+(b-tm)*f;if(nb-na<(this.sim?.h||1e-9)*4)return;this.cfg.frozen=[na,nb];this.opt.onfreeze?.();this.draw();}
+  panTo(e){const d=this.drag;if(!d)return;const dx=e.offsetX-d.x;if(Math.abs(dx)>3)d.moved=true;if(!d.moved)return;const [a,b]=d.view,span=b-a,pw=this.plotW();const sh=-dx/pw*span;this.cfg.frozen=[a+sh,b+sh];this.opt.onfreeze?.();this.requestDraw();}
+  zoomAt(x,f){if(this.cfg.follow!==false&&!this.cfg.frozen){const W=this.cfg.window,T=this.sim?.T||1;const n=Math.max(+(W.n*f).toPrecision(6),(this.sim?.h||1e-9)*4/(W.unit==='T'?T:1));this.cfg.window={unit:W.unit,n};this.opt.onchange?.();this.requestDraw();return;}
+   const [a,b]=this.viewRange(),pw=this.plotW();const tm=a+(Math.min(Math.max(x-this.padL,0),pw)/pw)*(b-a);const na=tm-(tm-a)*f,nb=tm+(b-tm)*f;if(nb-na<(this.sim?.h||1e-9)*4)return;this.cfg.frozen=[na,nb];this.opt.onfreeze?.();this.requestDraw();}
   cursorAt(e){if(!this.sim)return;const [a,b]=this.viewRange();const t=a+(e.offsetX-this.padL)/this.plotW()*(b-a);if(t<a||t>b)return;
    if(e.shiftKey&&this.cfg.cursors.length)this.cfg.cursors[1]=t;else this.cfg.cursors=e.shiftKey?[t]:(this.cfg.cursors.length===1?[this.cfg.cursors[0],t]:[t]);this.opt.onchange?.();this.draw();}
   plotW(){return this.W-this.padL-this.padR;}
@@ -91,7 +95,7 @@
   // ------------------------------------------------------------ drawing
   draw(){
    const c=this.ctx,W=this.W||600,H=this.H||300;if(!c)return;c.clearRect(0,0,W,H);this.padL=64;this.padR=14;
-   const css=getComputedStyle(this.cv);const ink=css.getPropertyValue('--scope-ink')||'#203a3f',grid=css.getPropertyValue('--scope-grid')||'#e3ebe7',bg=css.getPropertyValue('--scope-bg')||'#fbfdfc';
+   if(this._raf){cancelAnimationFrame(this._raf);this._raf=0;}const {ink,grid,bg}=this.colors();
    c.fillStyle=bg;c.fillRect(0,0,W,H);
    const s=this.sim;const panes=this.cfg.panes;const top=6,bottom=24,gap=10,ph=(H-top-bottom-gap*(panes.length-1))/panes.length;
    if(!s){return;}
