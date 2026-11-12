@@ -227,7 +227,7 @@ class CircuitPlant:
         return [0.0]
 
     def deriv(self, x, u):
-        raise NotImplementedError('Το φυτό είναι το κύκλωμα: step(u, dt), όχι deriv.')
+        raise NotImplementedError('Το σύστημα υπό έλεγχο (plant) είναι το κύκλωμα: step(u, dt), όχι deriv.')
 
 
 def plant_class(project, input, measure, state=(), u_range=(-1.0, 1.0), y_range=(-1.0, 1.0), state_scale=None,  # noqa: A002
@@ -291,5 +291,5 @@ def launch(workbench, project, input, measure, state=(), u_range=(-1, 1), y_rang
         m = sc.metrics()
         rows.append({'scheme': cls.name, 'plant': Plant.name, **{k: round(float(v), 5) for k, v in m.items() if isinstance(v, (int, float))}})
     if app is not None and rows:
-        app.show(rows, title='Workbench με φυτό το κύκλωμα')
+        app.show(rows, title='Workbench με το κύκλωμα ως σύστημα υπό έλεγχο')
     return rows

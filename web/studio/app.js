@@ -1368,8 +1368,8 @@ function netFaultTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.grid||!window.
  return h+cmpRows(rows)+`<p class="muted small">Θεωρία: λύση στο πεδίο των φάσεων με Z_s = (2Z₁ + Z₀)/3, Z_m = (Z₀ − Z₁)/3 (ίδια με τους τύπους παραπάνω). Προσομοίωση: RMS της τελευταίας περιόδου.</p>`;}
 function busDqTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.L)return '';const {E,R,L,f,fc,wc,Kp,Ki,id,iq,dec,t1,t2}=m,w=2*Math.PI*f;
  const t=s.t,idr=t>=t1?id:0,iqr=t>=t2?iq:0,vd=E+R*idr-w*L*iqr,vq=R*iqr+w*L*idr,ia=s.lastPeriod('I:XL/La'),va=s.lastPeriod('V:XI/Va');
- return `<ul class="eqs"><li>Φυτό στο dq: L·di_d/dt = v_d − e_d − R·i_d + ωL·i_q, L·di_q/dt = v_q − e_q − R·i_q − ωL·i_d (θ = ωt − 90°, e_d = Ê = ${eng(E,'V')}, e_q = 0)</li>
-  <li>PI με μηδενικό στον πόλο του φυτού: K_p = ω_c·L = <b>${fmt(Kp,4)}</b> Ω, K_i = ω_c·R = <b>${fmt(Ki,4)}</b> Ω/s (f_c = ${fmt(fc,3)} Hz)</li>
+ return `<ul class="eqs"><li>Σύστημα υπό έλεγχο (plant) στο dq: L·di_d/dt = v_d − e_d − R·i_d + ωL·i_q, L·di_q/dt = v_q − e_q − R·i_q − ωL·i_d (θ = ωt − 90°, e_d = Ê = ${eng(E,'V')}, e_q = 0)</li>
+  <li>PI με μηδενικό στον πόλο του συστήματος υπό έλεγχο: K_p = ω_c·L = <b>${fmt(Kp,4)}</b> Ω, K_i = ω_c·R = <b>${fmt(Ki,4)}</b> Ω/s (f_c = ${fmt(fc,3)} Hz)</li>
   <li>${dec?`Με αποσύζευξη v* = PI(e) + e_dq + ωL·(−i_q, i_d): i_dq/i*_dq = ω_c/(s + ω_c), τ = 1/ω_c = <b>${eng(1/wc,'s')}</b>, οι άξονες ανεξάρτητοι`:`Χωρίς αποσύζευξη ο όρος ωL·i = ${eng(w*L,'Ω')}·i μένει: ένα βήμα στο i_q σπρώχνει το i_d και το αντίστροφο`}</li>
   <li>Μόνιμη κατάσταση: v_dq = e_dq + (R + jωL)·i_dq, |v| = <b>${eng(Math.hypot(vd,vq),'V')}</b>, Î_φάσης = √(i_d² + i_q²) = <b>${eng(Math.hypot(idr,iqr),'A')}</b></li></ul>`+
   cmpRows([['i_d',idr,s.now('Y:PK'),'A'],['i_q',iqr,s.now('Y:PK:q'),'A'],['Î φάσης a',Math.hypot(idr,iqr),ia?(ia.max-ia.min)/2:NaN,'A'],['V̂ αντιστροφέα (φάση a)',Math.hypot(vd,vq),va?(va.max-va.min)/2:NaN,'V']])+

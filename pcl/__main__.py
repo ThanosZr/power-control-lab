@@ -151,7 +151,7 @@ def main(argv=None):
     a.add_argument('--signal', help='το σήμα του waterfall')
     a.add_argument('--table', help='πίνακας ακροτάτων (.csv ή .tex)')
     a.add_argument('--out', help='.pdf, .svg, .eps ή .png')
-    a = sub.add_parser('workbench', help='3.16: το Control Workbench με φυτό ένα κύκλωμα (της εφαρμογής μέσω σύνδεσης, αρχείο ή tutorial)')
+    a = sub.add_parser('workbench', help='3.16: το Control Workbench με ένα κύκλωμα ως σύστημα υπό έλεγχο (plant, της εφαρμογής μέσω σύνδεσης, αρχείο ή tutorial)')
     a.add_argument('--path', required=True, help='ο φάκελος του Control Workbench')
     a.add_argument('project', nargs='?', help='αρχείο JSON ή tutorial:<id>[?…] (αλλιώς --link)')
     a.add_argument('--link', action='store_true', help='το κύκλωμα της ανοιχτής εφαρμογής (pcl.link), και ο πίνακας πίσω σε αυτήν')
