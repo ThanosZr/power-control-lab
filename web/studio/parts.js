@@ -333,6 +333,34 @@
     txt('pars','Παράμετροι p','Kp = 0.1, Ki = 100',{hint:'Αριθμοί που φτάνουν στον κώδικα ως p["όνομα"].'}),CLOCK(),TRIG,num('y0','Αρχική τιμή εξόδων','',0,{signed:true,zero:true})],value:()=>null,
    draw:p=>codeDraw(pyIns(p),pyOuts(p),'Py')},
   // 4.7: a multilayer perceptron with fixed weights or learning inside the simulation (web/studio/nn.js)
+  // 4.8 (ROADMAP §46): one control loop with a learning network, as a library part (netlib.js aicDef: PI, network,
+  // emulator); its façade over the drawing (watch.js facade) changes scheme, mode, target and learning while it runs
+  AIC:{name:'Ελεγκτής AI (βρόχος με νευρωνικό)',prefix:'C',group:'Έλεγχος',pins:{},spins:p=>({r:I(-40,-20),y:I(-40,20),u:O(40,-30),L:O(40,-10),iae:O(40,10),sat:O(40,30),...(p.scheme==='emu'?{yd:O(0,-50)}:{})}),box:[-30,-40,60,80],blk:true,
+   params:[sel('scheme','Σχήμα',[['pi','Μόνο PI'],['fel','PI + νευρωνικό που μαθαίνει online (feedback-error learning)'],['inv','PI + αντίστροφο μοντέλο (σταθερά βάρη)'],['emu','PI + αντίστροφο μέσω εξομοιωτή (δύο αντίγραφα)']],'fel'),
+    sel('mode','Αναφορά',[['ref','Από την είσοδο r'],['live','Ζωντανός στόχος (παράμετρος «Στόχος»)']],'ref',{hint:'«Ζωντανός στόχος»: η αναφορά είναι η παράμετρος «Στόχος», που αλλάζει την ώρα που τρέχει (ρυθμιστής στην πρόσοψη).'}),
+    num('target','Στόχος','',100,{signed:true,zero:true,show:p=>p.mode==='live'}),
+    bool('learn','Μαθαίνει (keep learning)',true,{hint:'Κλειστό: τα βάρη μένουν όπως είναι. Αλλάζει και την ώρα της προσομοίωσης.'}),
+    num('fs','Συχνότητα δειγματοληψίας','Hz',1000),num('fr','Εύρος του φίλτρου αναφοράς','Hz',5,{hint:'Η αναφορά περνά από βαθυπερατό: r_f και η παράγωγός της ṙ_f είναι οι είσοδοι του δικτύου.'}),
+    num('Kp','K_p','',.5,{zero:true,signed:true}),num('Ki','K_i','1/s',10,{zero:true,signed:true}),
+    num('umin','Κάτω όριο εξόδου','',-220,{signed:true,zero:true}),num('umax','Άνω όριο εξόδου','',220,{signed:true,zero:true}),
+    num('rs','Κλίμακα αναφοράς','',150,{hint:'Τυπικό μέγεθος της αναφοράς (και της μέτρησης), για τις εισόδους του δικτύου.'}),num('dxs','Κλίμακα της παραγώγου ṙ','',0,{zero:true,hint:'Τυπικό μέγεθος της ṙ_f για την είσοδο του δικτύου· 0: 2π·f_r·(κλίμακα αναφοράς).'}),num('us','Κλίμακα εξόδου του δικτύου','',100),
+    txt('hidden','Κρυφά στρώματα','8'),sel('opt','Αλγόριθμος',[['sgd','Κλίση (SGD)'],['adam','Adam']],'sgd'),num('lr','Ρυθμός μάθησης η','',.005),
+    num('elr','Ρυθμός μάθησης του εξομοιωτή','',2e-3,{show:p=>p.scheme==='emu'}),num('K','Κέρδος του σφάλματος μέσω εξομοιωτή K','',.1,{show:p=>p.scheme==='emu'}),
+    num('ds','Κλίμακα της παραγώγου ẏ','',0,{zero:true,show:p=>p.scheme==='emu',hint:'0: 2π·f_r·(κλίμακα αναφοράς)/4.'}),
+    num('seed','Σπόρος τυχαίων βαρών','',1,{zero:true}),
+    {k:'w',label:'Βάρη (JSON)',type:'code',def:'',hint:'Τα βάρη του ελεγκτή (μορφή pcl.control). «Κράτα τα βάρη» και «Εκπαίδευση εκτός οθόνης» στην πρόσοψη τα γράφουν εδώ. Στο «αντίστροφο μοντέλο» μένουν σταθερά, αλλιώς είναι η αρχή της μάθησης.'}],value:()=>null,
+   draw:p=>sb(60,80)+tx('AI',0,-2,'btxt big')+tx({pi:'PI',fel:'PI+NN',inv:'NN⁻¹',emu:'NN⁻¹·εξ.'}[p.scheme]||'',0,14,'bsm')+'<path class="thin" d="M-12,24 l5,-7 l4,5 l6,-10 l5,6"/>'+sl('M-40,-20 H-30 M-40,20 H-30 M30,-30 H40 M30,-10 H40 M30,10 H40 M30,30 H40')+(p.scheme==='emu'?sl('M0,-40 V-50'):'')},
+  // 4.8: the multi-objective cascade of the EV workbench (moevc) as a library part (netlib.js evcDef)
+  EVC:{name:'Πολυκριτηριακός ελεγκτής οχήματος (ταχύτητα → ροπή → ρεύμα)',prefix:'MO',group:'Έλεγχος',pins:{},spins:{r:I(-40,-40),y:I(-40,-20),i:I(-40,0),soc:I(-40,20),tl:I(-40,40),u:O(40,-40),tau:O(40,-20),rg:O(40,0),lim:O(40,20),keep:O(40,40),pw:O(0,60)},box:[-30,-50,60,100],blk:true,
+   params:[sel('scheme','Σχήμα',[['moevc','Συζευγμένο: ρυθμιστής αναφοράς, ταχύτητα → επιτάχυνση → ροπή (moevc)'],['moev','Καταρράκτης: ταχύτητα → ροπή με επόπτη SOC/ισχύος (moev)']],'moevc',{hint:'Τα δύο σχήματα του Control Workbench EV/DC. Στο «moev» ο PI ταχύτητας δίνει απευθείας ροπή· στο «moevc» δίνει επιτάχυνση, που γίνεται ροπή μέσω της δυναμικής του οχήματος, και ο ρυθμιστής αναφοράς κόβει τον στόχο στα όρια.'}),
+    sel('mode','Τρόπος',[['balanced','Ισορροπημένος'],['eco','Οικονομικός (eco)'],['performance','Επιδόσεων (performance)']],'balanced',{hint:'Όπως στο workbench: eco ανεβάζει το βάρος της ενέργειας και χαμηλώνει τα όρια ισχύος και ρεύματος, performance το αντίθετο.'}),
+    num('ws','Βάρος ταχύτητας','',1,{zero:true}),num('wt','Βάρος ροπής','',.75,{zero:true}),num('we','Βάρος ενέργειας','',.55,{zero:true,hint:'Μαζί με το χαμηλό SOC μειώνει τη ροπή που ζητείται και τα όρια.'}),
+    num('Kt','K_t (= K_e)','N·m/A',.2),num('Ke','K_e','V·s/rad',.2),num('R','R_a','Ω',.22),num('J','Ισοδύναμη ροπή αδράνειας J','kg·m²',.17),num('B','Τριβή B','N·m·s/rad',.012,{zero:true}),
+    num('kpw','K_p ταχύτητας → ροπή','N·m·s/rad',.2,{show:p=>p.scheme==='moev'}),num('kiw','K_i ταχύτητας → ροπή','N·m/rad',.6,{zero:true,show:p=>p.scheme==='moev'}),num('atl','Όριο ροπής επιτάχυνσης','N·m',40,{show:p=>p.scheme==='moev'}),
+    num('kpa','K_p ταχύτητας → επιτάχυνση','1/s',2.2,{show:p=>p.scheme!=='moev'}),num('kia','K_i ταχύτητας → επιτάχυνση','1/s²',.45,{zero:true,show:p=>p.scheme!=='moev'}),num('alim','Όριο επιτάχυνσης','rad/s²',150,{show:p=>p.scheme!=='moev'}),num('aff','Πρόσθια τροφοδότηση της επιτάχυνσης αναφοράς','',1,{zero:true,show:p=>p.scheme!=='moev',hint:'Η παράγωγος της αναφοράς (φιλτραρισμένη) προστίθεται στην επιτάχυνση που ζητείται: ο βρόχος ταχύτητας δεν «φορτώνει» τον ολοκληρωτή στις ράμπες και το όχημα δεν κυλά πίσω στη στάση. 0: όπως ο καταρράκτης «moevc» του Control Workbench, χωρίς αυτήν.'}),num('fr','Συχνότητα του φίλτρου αναφοράς','Hz',2,{show:p=>p.scheme!=='moev'}),num('H','Ορίζοντας του ρυθμιστή αναφοράς','s',.85,{show:p=>p.scheme!=='moev'}),num('ffg','Κέρδος πρόσθιας τροφοδότησης φορτίου','',1,{zero:true,show:p=>p.scheme!=='moev'}),
+    num('taulim','Όριο ροπής','N·m',40),num('ilim','Όριο ρεύματος','A',200),num('plim','Όριο ισχύος','kW',8),num('regen','Όριο ροπής ανάκτησης','N·m',16,{show:p=>p.scheme!=='moev'}),num('slew','Ρυθμός μεταβολής ροπής','N·m/s',420,{show:p=>p.scheme!=='moev'}),
+    num('kpi','K_p ρεύματος','V/A',.02,{zero:true}),num('kii','K_i ρεύματος','V/(A·s)',0,{zero:true}),num('umin','Κάτω όριο τάσης','V',-96,{signed:true}),num('umax','Άνω όριο τάσης','V',96),num('fs','Συχνότητα δειγματοληψίας','Hz',1000)],value:()=>null,
+   draw:p=>sb(60,100)+tx('MO',0,-6,'btxt big')+tx({eco:'eco',performance:'perf',balanced:'bal'}[p.mode]||'bal',0,10,'bsm')+tx(p.scheme==='moev'?'ω→τ→i':'ω→α→τ→i',0,26,'bsm')+sl('M-40,-40 H-30 M-40,-20 H-30 M-40,0 H-30 M-40,20 H-30 M-40,40 H-30 M30,-40 H40 M30,-20 H40 M30,0 H40 M30,20 H40 M30,40 H40 M0,50 V60')},
   NN:{name:'Νευρωνικό δίκτυο (MLP)',prefix:'NN',group:'Έλεγχος',pins:{},spins:p=>codeIO(nnIns(p),nnOuts(p)),box:p=>{const h=codeH(nnIns(p),nnOuts(p));return [-30,-h,60,2*h];},blk:true,
    params:[txt('ins','Είσοδοι','x1, x2',{hint:'Ονόματα χωρισμένα με κόμμα, έως 6. Στο δίκτυο μπαίνει κάθε είσοδος διαιρεμένη με την κλίμακά της.'}),
     txt('xs','Κλίμακες εισόδων','1',{hint:'Μία τιμή για όλες ή μία ανά είσοδο (κόμμα): τυπικό μέγεθος κάθε εισόδου, ώστε στο δίκτυο να μπαίνουν τιμές γύρω στο ±1.'}),
@@ -891,7 +919,7 @@
  const STRUCT={PWM:new Set(['mode','carrier','upd']),SW:new Set(['gate','model']),VAC3:new Set(['conn'])};
  // the network library: a change rebuilds its definition (4.1); from 4.2 a value that keeps the inner circuit the same is
  // live (the reload carries the states by the inner ids), and only what changes the inner circuit is structural
- Object.assign(STRUCT,{GRID3:new Set(['z0','conn']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn']),
+ Object.assign(STRUCT,{AIC:new Set(['scheme']),GRID3:new Set(['z0','conn']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn']),
   XF3:new Set(['grp','P0','core','conn']),LOAD3:new Set(['cn','model','conn']),
   GEN3:new Set(['data','conv','shaft','Hm','exc','mech','init','neut','conn']),LINE3:new Set(['unit','z0','conn']),TLM:new Set(['model','data','mdl','len','f','fmin','dec','ppd','fti','conn'])});
  const structCache=new Map();

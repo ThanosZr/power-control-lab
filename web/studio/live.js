@@ -17,7 +17,7 @@
 // a program. The worker acknowledges the last batch it applied (ctl[3], and in every tick); a stop re-applies on the
 // page the batches the worker had not applied yet, so a change right before a pause is never lost.
 (function(root){
- const PULL=['run','load','reset','setStep','setMethod','restoreSnapshot'],FWD=['setControl','setBlock','setHold','markChange','addProgram'];
+ const PULL=['run','load','reset','setStep','setMethod','restoreSnapshot'],FWD=['setControl','setBlock','setHold','markChange','addProgram','setRecord'];
  // the step checks (stepCheck, before a run, 3.13) look at the structure, the parameters and the switch states: on the
  // page's mirror while the worker runs, and their result (dgPre) stays on the page when the state comes back
  const L={active:false,epoch:0,off:false,why:'',sim:null,w:null,ctl:null,data:null,startSnap:null,onend:null,onerror:null,lastTick:0,seq:0,q:[],out:[]};

@@ -35,10 +35,12 @@ const blk=(s,id='NN1')=>s.net.sig.blocks.find(b=>b.id===id);
 // 6. the tutorials (4.7): IAE per cycle of the reference for each controller
 require(W+'/tutorials.js');const T=globalThis.Tutorials;
 const build=(id,o={})=>{const t=T.get(id);const oo={};for(const op of t.options)oo[op.k]=o[op.k]??op.def;return t.build(oo);};
-const cycles=pr=>{const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});const per=[];let i0=0;for(let r=0;r<pr.meta.cycles;r++){s.run(pr.meta.P);const v=s.now('Y:IAE');per.push(v-i0);i0=v;}
+const cycles=(pr,key='Y:IAE')=>{const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});const per=[];let i0=0;for(let r=0;r<pr.meta.cycles;r++){s.run(pr.meta.P);const v=s.now(key);per.push(v-i0);i0=v;}
  return {per,warnings:s.net.warnings,L:s.chIndex.has('Y:NN1:L')?s.now('Y:NN1:L'):null,k:s.net.sig.blocks.find(b=>b.id==='NN1')?.st.opt?.k??null};};
 out.tut={};for(const [k,id,o] of [['pi','nn_compare',{ctrl:'pi'}],['pinn','nn_compare',{ctrl:'pinn'}],['inv','nn_compare',{ctrl:'inv'}],['inv_step','nn_compare',{ctrl:'inv',load:'step'}],['pi_step','nn_compare',{ctrl:'pi',load:'step'}],
  ['fast','nn_online',{}],['frozen','nn_online',{freeze:'f2'}],['ref','nn_online',{event:'ref'}],['emu','nn_compare',{ctrl:'emu'}]])out.tut[k]=cycles(build(id,o));
+// 8. 4.8: the block «Ελεγκτής AI» (a library part, netlib.js aicDef) is the same loop as the tutorial wired by hand
+require(W+'/netlib.js');out.aic={};for(const sc of ['pi','fel','inv','emu'])out.aic[sc]=cycles(T.get('ai_block').build({scheme:sc,mode:'ref',load:'fan',cycles:4}),'Y:C1/IAE');   // 4 cycles of the program (the tutorial repeats an expression)
 // 7. 4.8: the derivative of the output (jac) against central differences, on random networks, one and two hidden layers
 {const r=N.rng(5);out.jac=[[3,6,1],[2,5,4,1]].map(sizes=>{const net=N.init(sizes,7,false),x=Array.from({length:sizes[0]},()=>2*r()-1);
   return {sizes,x,net,d:Array.from({length:sizes[0]},(_,k)=>{const acts=N.fwd(net,x),h=1e-6,xp=x.slice(),xm=x.slice();xp[k]+=h;xm[k]-=h;

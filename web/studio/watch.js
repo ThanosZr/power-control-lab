@@ -4,7 +4,7 @@
 //    slider and a number for a numeric parameter (or a constant, or the reference of a PI), a switch for a yes/no
 //    parameter (e.g. «Μαθαίνει» of a network), a list for a choice, and step buttons such as −10 % / +10 %.
 //  - A tile is pinned next to its part on the drawing, or sits in a floating panel over the work area. On the drawing it
-//    is HTML in the layer .sigl inside .schem-xf, in the units of the drawing like the labels: zoom and pan move it with
+//    is HTML in the layer .wtl inside .schem-xf, in the units of the drawing like the labels: zoom and pan move it with
 //    the drawing at no cost (ARCHITECTURE §3, «Απόκριση του σχεδίου»).
 //  - The watch table: every tile as a row with value, unit, sample time, source, NaN and saturation.
 //  - The layout belongs to the project (doc.watch) and a tutorial can bring its own (project extra 'watch').
@@ -108,21 +108,21 @@
 
  // ------------------------------------------------------------ drawing the tiles
  const sparkSVG='<svg class="wt-sp" viewBox="0 0 140 28" preserveAspectRatio="none" aria-hidden="true"><polyline points=""/></svg>';
- function tileHTML(t,pinned){const x=C(),q=info(t);
-  const head=`<div class="wt-h" title="${pinned?'Σύρε για μετακίνηση':''}"><b class="wt-n">${esc(q.name)}</b><small class="wt-s">${esc(q.src)}</small><button class="wt-b" data-wact="dock" title="${pinned?'Στο πάνελ σημάτων':'Στο σχέδιο, δίπλα στο στοιχείο του'}">${pinned?'⇲':'⇱'}</button><button class="wt-b" data-wact="rm" title="Αφαίρεση">✕</button></div>`;
+ function tileHTML(t,pinned,bare){const x=C(),q=info(t);
+  const head=`<div class="wt-h" title="${pinned?'Σύρε για μετακίνηση':''}"><b class="wt-n">${esc(q.name)}</b><small class="wt-s">${esc(bare?'':q.src)}</small>${bare?'':`<button class="wt-b" data-wact="dock" title="${pinned?'Στο πάνελ σημάτων':'Στο σχέδιο, δίπλα στο στοιχείο του'}">${pinned?'⇲':'⇱'}</button><button class="wt-b" data-wact="rm" title="Αφαίρεση">✕</button>`}</div>`;
   const style=pinned?` style="left:${t.at[0]-(t.al==='r'?150:0)}px;top:${t.at[1]}px"`:'';let body='';
   if(q.kind==='sig')body=`<div class="wt-v"><span class="wt-x">—</span><em>${esc(q.unit)}</em><i class="wt-f"></i></div>${sparkSVG}`;
   else if(q.kind==='num'){const steps=(t.steps||['-10%','+10%']).map(parseStep).filter(Boolean),m=sliderMap(t.base??q.base,t.rng||(q.c.type==='PWM'&&q.d.k==='D'?[0,1]:null));
    body=`<div class="wt-v"><input class="wt-in" value="${esc(q.sched&&!Number.isFinite(+q.raw)&&q.raw.includes(':')?q.raw:P.eng(q.v,'',6).replace(/\s/g,''))}" inputmode="decimal" aria-label="${esc(q.name)}"><em>${esc(q.unit)}</em><i class="wt-f"></i></div>
     <input type="range" class="wt-r" min="0" max="${SL}" step="1" value="${Number.isFinite(q.v)?toX(m,q.v):SL/2}" aria-label="${esc(q.name)}">${steps.length?`<div class="wt-st">${steps.map((s,i)=>`<button data-wstep="${i}">${esc(s.text)}</button>`).join('')}</div>`:''}${q.out?sparkSVG:''}`;}
   else if(q.kind==='bool')body=`<label class="wt-sw"><input type="checkbox" ${q.v?'checked':''} aria-label="${esc(q.name)}"><span>${q.v?'ναι':'όχι'}</span></label>`;
-  else if(q.kind==='sel')body=`<select class="wt-sel" aria-label="${esc(q.name)}">${(q.d.options||[]).map(([k,n])=>`<option value="${esc(k)}" ${String(k)===q.v?'selected':''}>${esc(n)}</option>`).join('')}</select>`;
+  else if(q.kind==='sel')body=`<select class="wt-choice" aria-label="${esc(q.name)}">${(q.d.options||[]).map(([k,n])=>`<option value="${esc(k)}" ${String(k)===q.v?'selected':''}>${esc(n)}</option>`).join('')}</select>`;
   else body='<div class="wt-v"><span class="wt-x muted">δεν υπάρχει</span></div>';
   return `<div class="wt wt-${q.kind}${pinned?' wt-pin'+(t.al==='r'?' al-r':''):''}" data-wt="${esc(t.id)}"${style}>${head}${body}</div>`;}
- function bindRefs(box,w){for(const el of box.querySelectorAll('[data-wt]')){const t=w.tiles.find(o=>o.id===el.dataset.wt);if(!t)continue;const q=info(t);
+ function bindRefs(box,w,into){for(const el of box.querySelectorAll('[data-wt]')){const t=w.tiles.find(o=>o.id===el.dataset.wt);if(!t)continue;const q=info(t);
   const r={t,el,q,key:t.key||q.out||null,x:el.querySelector('.wt-x'),f:el.querySelector('.wt-f'),pl:el.querySelector('.wt-sp polyline'),inp:el.querySelector('.wt-in'),rng:el.querySelector('.wt-r'),
-   cb:el.querySelector('.wt-sw input'),sel:el.querySelector('.wt-sel'),last:{},lastT:NaN};
-  if(q.kind==='num')r.map=sliderMap(t.base??q.base,t.rng||(q.c.type==='PWM'&&q.d.k==='D'?[0,1]:null));W.refs.set(t.id,r);}}
+   cb:el.querySelector('.wt-sw input'),sel:el.querySelector('.wt-choice'),last:{},lastT:NaN};
+  if(q.kind==='num')r.map=sliderMap(t.base??q.base,t.rng||(q.c.type==='PWM'&&q.d.k==='D'?[0,1]:null));(into||W.refs).set(t.id,r);}}
  function tableHTML(w){return `<table class="wtab"><thead><tr><th>Σήμα</th><th>Τιμή</th><th>Μονάδα</th><th>Δείγμα</th><th>Πηγή</th><th>Κατάσταση</th></tr></thead><tbody>${w.tiles.map(t=>{const q=info(t);
    return `<tr data-wr="${esc(t.id)}"><td>${esc(q.name)}</td><td class="num" data-wv>—</td><td>${esc(q.unit||'')}</td><td>${esc(sampleText(t))}</td><td>${esc(q.src)}${q.c?` · ${esc(P.PARTS[q.c.type]?.name||q.c.type)}`:''}</td><td data-wf></td></tr>`;}).join('')}</tbody></table>`;}
 
@@ -167,7 +167,7 @@
   x.save();W.render(true);const q=W.panel.querySelector('.wp-q');if(!W.addFor){q.value='';suggest(true);}else suggest();q.focus({preventScroll:true});}
 
  // ------------------------------------------------------------ events (delegated: one listener per box)
- function tileOf(el){const d=el.closest?.('[data-wt]');return d&&W.refs.get(d.dataset.wt);}
+ function tileOf(el){const d=el.closest?.('[data-wt]');return d&&(W.refs.get(d.dataset.wt)||F.refs.get(d.dataset.wt));}
  function bindEvents(box){
   box.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const r=tileOf(b);if(!r)return;
    if(b.dataset.wact==='rm'){C().editor.remember();const w=layout(false);w.tiles=w.tiles.filter(t=>t.id!==r.t.id);C().save();W.render(true);return;}
@@ -193,7 +193,7 @@
   W.pend=[r,v];if(!W.raf)W.raf=requestAnimationFrame(()=>{W.raf=0;const q=W.pend;W.pend=null;if(q)go(q[0],q[1],false);});}
  function showNum(r,v,fromSlider){if(r.inp&&document.activeElement!==r.inp){const s=P.eng(v,'',6).replace(/\s/g,'');if(r.inp.value!==s)r.inp.value=s;}if(r.rng&&!fromSlider)r.rng.value=toX(r.map,v);}
  // the other tiles of the same parameter (and this one after a commit) follow the value in the circuit
- W.sync=skip=>{for(const r of W.refs.values()){if(r===skip||!r.t.ctl)continue;const c=C().editor.comp(r.t.ctl.c);if(!c)continue;const raw=c.params[r.t.ctl.k]??r.q.d?.def;
+ W.sync=skip=>{for(const r of [...W.refs.values(),...F.refs.values()]){if(r===skip||!r.t.ctl)continue;const c=C().editor.comp(r.t.ctl.c);if(!c)continue;const raw=c.params[r.t.ctl.k]??r.q.d?.def;
   if(r.q.kind==='num'){if(r.q.sched&&String(raw).includes(':')){if(document.activeElement!==r.inp)r.inp.value=String(raw);}else showNum(r,r.q.sched?P.parseEng(String(raw)):C().numOf(raw));}
   else if(r.q.kind==='bool'){r.cb.checked=!!raw;const s=r.cb.nextElementSibling;if(s)s.textContent=raw?'ναι':'όχι';}
   else if(r.q.kind==='sel'&&r.sel.value!==String(raw))r.sel.value=String(raw);}};
@@ -210,6 +210,8 @@
  // tile has the focus only the values follow, so typing is not interrupted
  W.render=force=>{const x=C(),ed=x?.editor;if(!ed?.L?.sig)return;const layer=ed.L.sig,p=panelEl(),w=layout(false);
   const top=x.atTop()&&x.S.pfx!==null,vis=!!(top&&w&&w.show);W.vis=vis;
+  // the façade of an AI controller follows the circuit (not while one of its fields is being typed in)
+  if(F.id){if(!top)W.facade(null);else if(!(F.el&&F.el.contains(document.activeElement)))renderFacade();}
   const btn=document.getElementById('watch-btn');if(btn){btn.classList.toggle('on',vis);btn.setAttribute('aria-pressed',String(vis));}
   const focus=document.activeElement&&(layer.contains(document.activeElement)||p.contains(document.activeElement))&&!document.activeElement.classList.contains('wp-q');
   if(focus&&!force){W.sync();return;}
@@ -234,7 +236,7 @@
  const FLAG={nan:['⚠ NaN','bad'],hi:['⤒ στο άνω όριο','sat'],lo:['⤓ στο κάτω όριο','sat']};
  function valueOf(s,key){const ci=C().scope.resolve(key);return ci===-2?0:ci>=0?s.vals[ci]:NaN;}
  // values and curves; all = also the curves of a sim that did not move (after a load or a step)
- W.update=all=>{if(!W.vis)return;const x=C(),s=x.S.sim;if(!s||x.S.error)return;const sc=x.scope;
+ W.update=all=>{const x=C(),s=x?.S.sim;if(F.id&&s&&!x.S.error)facadeUpdate(s,all);if(!W.vis)return;if(!s||x.S.error)return;const sc=x.scope;
   for(const r of W.refs.values()){if(!r.key)continue;const v=valueOf(s,r.key);
    if(r.q.kind==='sig'){const tx=x.eng(v,'',5);if(r.last.v!==tx){r.last.v=tx;setT(r.x,tx);}}
    const f=flag(r,v);if(r.last.f!==f){r.last.f=f;setT(r.f,f?FLAG[f][0]:'');r.el.classList.toggle('bad',f==='nan');r.el.classList.toggle('sat',f==='hi'||f==='lo');}
@@ -261,6 +263,66 @@
    for(let i=lo;i<e;i+=k){const j=(st+i)%q.cap,o=j*q.nch+ci;f(q.t[j],ci===-2?0:q.min[o]);f(q.t[j],ci===-2?0:q.max[o]);}};
   const env=envelope(per?perIt:raw,t0,t1,56);
   const pts=points(env,140,28);if(r.last.p!==pts){r.last.p=pts;r.pl.setAttribute('points',pts);}}
+
+ // ------------------------------------------------------------ 4.8: the façade of the block «Ελεγκτής AI» (ROADMAP §46)
+ // A floating panel next to the block (one click on it): scheme, mode (offline training in the background, run with the
+ // reference, live target with a slider), «Μαθαίνει», live values and two curves (error, learning), and buttons: reset
+ // the weights, keep the learned ones, compare with the PI alone. Its controls are tiles (the same code as §47); the runs
+ // in the background go to a pool of workers; every change of a parameter is the same as in the settings window.
+ const F={id:null,el:null,refs:new Map(),busy:'',out:''};
+ const FT=id=>({tiles:[{id:'f_t',ctl:{c:id,k:'target'},label:'Στόχος',rng:[0,2*(+(C().editor.comp(id)?.params.rs)||150)],steps:['-10%','+10%']},{id:'f_l',ctl:{c:id,k:'learn'},label:'Συνέχισε να μαθαίνεις'},
+  {id:'f_e',key:'Y:'+id+'/E',label:'Σφάλμα e = r_f − y'},{id:'f_L',key:'Y:'+id+'/NN1:L',label:'Καμπύλη μάθησης L'}]});
+ function facadeEl(){if(F.el)return F.el;const host=C().editor.holder,el=document.createElement('div');el.className='wpanel wfac';el.id='ai-facade';el.hidden=true;host.appendChild(el);F.el=el;bindEvents(el);
+  el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||!F.id)return;const x=C(),id=F.id,c=x.editor.comp(id);if(!c)return;
+   if(b.dataset.fclose!==undefined){W.facade(null);return;}
+   if(b.dataset.fmode==='train'){trainOffline(id);return;}
+   if(b.dataset.fmode){x.setParam(id,'mode',b.dataset.fmode,true);renderFacade();return;}
+   if(b.dataset.freset!==undefined){x.setParams(id,{w:'',seed:(+c.params.seed||1)+1});F.out='Νέα βάρη από την αρχή (μηδενική έξοδος).';renderFacade();return;}
+   if(b.dataset.fkeep!==undefined){const blk=x.simBlock(id+'/NN1');if(!blk||!root.NNet){F.out='Δεν υπάρχει δίκτυο που να έχει μάθει.';renderFacade();return;}x.setParams(id,{w:root.NNet.text(blk.st.net)});F.out='Τα βάρη που έμαθε γράφτηκαν στο μπλοκ: από εδώ ξεκινά την επόμενη φορά.';renderFacade();return;}
+   if(b.dataset.fcmp!==undefined){compare(id);}});
+  el.addEventListener('change',e=>{if(e.target.dataset.fscheme!==undefined&&F.id){C().setParams(F.id,{scheme:e.target.value});}});
+  const head=()=>el.querySelector('.wp-head');el.addEventListener('pointerdown',e=>{const h=e.target.closest('.wp-head');if(!h||e.target.closest('button'))return;e.preventDefault();h.setPointerCapture(e.pointerId);
+   const box=host.getBoundingClientRect(),r=el.getBoundingClientRect(),dx=e.clientX-r.left,dy=e.clientY-r.top;
+   const mv=ev=>{el.style.left=Math.min(Math.max(0,ev.clientX-box.left-dx),Math.max(0,box.width-r.width))+'px';el.style.top=Math.min(Math.max(0,ev.clientY-box.top-dy),Math.max(0,box.height-40))+'px';};
+   const up=()=>{h.removeEventListener('pointermove',mv);h.removeEventListener('pointerup',up);};h.addEventListener('pointermove',mv);h.addEventListener('pointerup',up);});void head;
+  return el;}
+ // open (id of an AIC part) or close (null); placed right of the block on the screen
+ W.facade=id=>{const x=C(),el=facadeEl();if(!id||!x.editor.comp(id)||x.editor.comp(id).type!=='AIC'||!x.atTop()){F.id=null;el.hidden=true;F.refs.clear();return;}
+  const again=F.id===id;F.id=id;if(!again){F.out='';const c=x.editor.comp(id),b=P.bbox(c),m=x.editor.svg.getScreenCTM(),pt=x.editor.svg.createSVGPoint(),hr=x.editor.holder.getBoundingClientRect();
+   pt.x=b[2];pt.y=b[1];const q=m?pt.matrixTransform(m):{x:hr.left+20,y:hr.top+20};el.hidden=false;el.style.right='auto';
+   el.style.left=Math.max(0,Math.min(q.x-hr.left+16,hr.width-250))+'px';el.style.top=Math.max(0,Math.min(q.y-hr.top,hr.height-120))+'px';}
+  renderFacade();};
+ W.facadeId=()=>F.id;
+ function renderFacade(){const x=C(),el=F.el;if(!el||!F.id)return;const c=x.editor.comp(F.id);if(!c||c.type!=='AIC'){W.facade(null);return;}const p={...P.defaults('AIC'),...c.params},w=FT(F.id),live=p.mode==='live';
+  const opts=P.PARTS.AIC.params.find(d=>d.k==='scheme').options;
+  el.innerHTML=`<div class="wp-head"><b>⠿ Ελεγκτής AI</b><small class="wf-id">${esc(c.label||c.id)}</small><button class="x" data-fclose title="Κλείσιμο">✕</button></div>
+   <div class="wf-body own-scroll"><label class="wf-row">Σχήμα <select data-fscheme aria-label="Σχήμα">${opts.map(([k,n])=>`<option value="${esc(k)}" ${k===p.scheme?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
+    <div class="wf-modes" role="group" aria-label="Τρόπος"><button data-fmode="train" ${F.busy?'disabled':''} title="Το ίδιο κύκλωμα τρέχει στο παρασκήνιο με μάθηση· τα βάρη που μαθαίνει γράφονται στο μπλοκ">${F.busy==='train'?'Εκπαιδεύεται…':'Εκπαίδευση εκτός οθόνης'}</button><button data-fmode="ref" class="${live?'':'on'}">Με αναφορά</button><button data-fmode="live" class="${live?'on':''}">Ζωντανός στόχος</button></div>
+    ${live?tileHTML(w.tiles[0],false,true):''}${p.scheme==='pi'?'':tileHTML(w.tiles[1],false,true)}
+    <div class="wf-vals"><span>r_f <b data-fv="LP">—</b></span><span>y <b data-fv="y">—</b></span><span>e <b data-fv="E">—</b></span><span>u <b data-fv="SAT">—</b></span><span>L <b data-fv="L">—</b></span><span>IAE <b data-fv="IAE">—</b></span><span class="wf-sat" data-fv="FLAG"></span></div>
+    ${tileHTML(w.tiles[2],false,true)}${p.scheme==='pi'||p.scheme==='inv'?'':tileHTML(w.tiles[3],false,true)}
+    <div class="wf-btns"><button data-freset title="Βάρη από την αρχή (το δίκτυο ξεκινά με έξοδο 0)">Επαναφορά βαρών</button><button data-fkeep title="Τα βάρη που έμαθε το δίκτυο ως τώρα γράφονται στο μπλοκ">Κράτα τα βάρη</button><button data-fcmp ${F.busy?'disabled':''}>${F.busy==='cmp'?'Τρέχει…':'Σύγκριση με PI'}</button></div>
+    <div class="wf-out small">${F.out}</div></div>`;
+  F.refs.clear();bindRefs(el,w,F.refs);facadeUpdate(x.S.sim,true);}
+ function facadeUpdate(s,all){const x=C(),el=F.el;if(!el||el.hidden||!s)return;const id=F.id,v=k=>valueOf(s,'Y:'+id+'/'+k),f=(k,val,u)=>{const e=el.querySelector(`[data-fv="${k}"]`);if(e)setT(e,x.eng(val,u||'',4));};
+  const rf=v('LP'),e=v('E');f('LP',rf);f('y',rf-e);f('E',e);f('SAT',v('SAT'));f('L',v('NN1:L'));f('IAE',v('IAE'));
+  {const q=el.querySelector('[data-fv="FLAG"]');if(q)setT(q,v('FLAG')>=.5?'⤒⤓ η εντολή είναι στο όριο':'');}
+  for(const r of F.refs.values()){if(!r.key)continue;const val=valueOf(s,r.key);if(r.q.kind==='sig'){const tx=x.eng(val,'',5);if(r.last.v!==tx){r.last.v=tx;setT(r.x,tx);}}if(r.pl&&(all||s.t!==r.lastT)){r.lastT=s.t;spark(r,s,x.scope);}}}
+ // offline training: the same circuit in the background with learning (the scheme «online» if it was the PI alone or
+ // fixed weights), for three times its duration; the weights it learned are written to the block
+ async function trainOffline(id){const x=C();if(F.busy||!root.Pool)return;F.busy='train';F.out='Το κύκλωμα τρέχει στο παρασκήνιο με μάθηση…';renderFacade();
+  try{const pr=JSON.parse(JSON.stringify(x.fullDoc())),c=pr.components.find(q=>q.id===id),sc=c.params.scheme==='pi'||c.params.scheme==='inv'||!c.params.scheme?'fel':c.params.scheme;
+   c.params={...c.params,scheme:sc,learn:true,mode:'ref'};const tEnd=Math.max(3*(x.stopT()||0),3)||10;
+   const pool=F.pool||(F.pool=new root.Pool.SimPool(2));const [out]=await pool.map([{action:'run',project:pr,t_end:tEnd,hdiv:x.hdiv(),channels:['Y:'+id+'/IAE'],measure:[{key:'Y:'+id+'/IAE',stat:'end'}],waveforms:false,check:false,nets:[id+'/NN1']}]);
+   const wt=out.nets?.[id+'/NN1'];if(!wt)throw new Error('δεν βρέθηκαν βάρη');x.setParams(id,{w:wt,scheme:sc});
+   F.out=`Εκπαιδεύτηκε σε ${x.eng(tEnd,'s',3)} προσομοίωσης (${sc==='emu'?'μέσω εξομοιωτή':'online'}). Τα βάρη γράφτηκαν στο μπλοκ· ▶ ξεκινά εκπαιδευμένο.`;}
+  catch(err){F.out='Η εκπαίδευση απέτυχε: '+esc(err.message);}finally{F.busy='';renderFacade();}}
+ // the same circuit with this scheme and with the PI alone, in the background: the IAE of each
+ async function compare(id){const x=C();if(F.busy||!root.Pool)return;F.busy='cmp';renderFacade();
+  try{const base=x.fullDoc(),tEnd=x.stopT()||6.4,mk=sc=>{const pr=JSON.parse(JSON.stringify(base)),c=pr.components.find(q=>q.id===id);c.params={...c.params,...(sc?{scheme:sc}:{})};return {action:'run',project:pr,t_end:tEnd,hdiv:x.hdiv(),channels:['Y:'+id+'/IAE'],measure:[{key:'Y:'+id+'/IAE',stat:'end'}],waveforms:false,check:false};};
+   const pool=F.pool||(F.pool=new root.Pool.SimPool(2));const [a,b]=await pool.map([mk(null),mk('pi')]);const ia=a.measure['Y:'+id+'/IAE:end'],ib=b.measure['Y:'+id+'/IAE:end'];
+   F.out=`<table class="cmp"><tr><th></th><th>IAE (ως ${x.eng(tEnd,'s',3)})</th></tr><tr><td>Αυτό το σχήμα</td><td>${x.fmt(ia,4)}</td></tr><tr><td>Μόνο PI</td><td>${x.fmt(ib,4)}</td></tr></table><small>${ib>0?`${x.fmt(100*(1-ia/ib),3)} % λιγότερο σφάλμα από τον PI.`:''}</small>`;}
+  catch(err){F.out='Η σύγκριση απέτυχε: '+esc(err.message);}finally{F.busy='';renderFacade();}}
 
  // ------------------------------------------------------------ from the app
  W.init=ctx=>{W.ctx=ctx;};

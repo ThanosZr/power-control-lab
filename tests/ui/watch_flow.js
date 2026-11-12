@@ -11,7 +11,7 @@ const assert=(c,m)=>{if(!c)throw new Error('ASSERT: '+m);};
  const base=process.argv[2];await p.goto(base);await p.evaluate(()=>localStorage.clear());await p.goto(base+'?tutorial=nn_online');await p.waitForTimeout(1500);
  const R={};
  // 1. the layout of the tutorial
- R.layout=await p.evaluate(()=>({vis:Watch.vis,btn:document.querySelector('#watch-btn').getAttribute('aria-pressed'),pinned:[...document.querySelectorAll('.sigl .wt .wt-n')].map(e=>e.textContent),
+ R.layout=await p.evaluate(()=>({vis:Watch.vis,btn:document.querySelector('#watch-btn').getAttribute('aria-pressed'),pinned:[...document.querySelectorAll('.wtl .wt .wt-n')].map(e=>e.textContent),
   panel:[...document.querySelectorAll('#watch-panel .wp-body .wt .wt-n')].map(e=>e.textContent),panelShown:!document.querySelector('#watch-panel').hidden}));
  assert(R.layout.vis&&R.layout.btn==='true'&&R.layout.panelShown,'layer on');
  assert(R.layout.pinned.join('|')==='ω* (στόχος)|Μαθαίνει|Φορτίο (συντελεστής)','pinned controls '+R.layout.pinned);
@@ -23,13 +23,13 @@ const assert=(c,m)=>{if(!c)throw new Error('ASSERT: '+m);};
  assert(R.run1.live,'the simulation runs in the worker');assert(R.run2.t>R.run1.t&&R.run2.w!==R.run1.w,'the tile follows the run');assert(R.run2.pts>20,'a curve');
  await p.screenshot({path:OUT+'/watch_running.png'});
  // 3. the switch «Μαθαίνει» while it runs (forwarded to the worker), then a pause
- await p.click('.sigl .wt-bool input');await p.waitForTimeout(400);await p.click('#play');await p.waitForTimeout(200);
- R.learn=await p.evaluate(()=>({learn:PCL.editor.comp('NN1').params.learn,chg:(PCL.S.sim.changes||[]).map(c=>[c.id,c.k,c.v]),label:document.querySelector('.sigl .wt-bool .wt-sw span').textContent}));
+ await p.click('.wtl .wt-bool input');await p.waitForTimeout(400);await p.click('#play');await p.waitForTimeout(200);
+ R.learn=await p.evaluate(()=>({learn:PCL.editor.comp('NN1').params.learn,chg:(PCL.S.sim.changes||[]).map(c=>[c.id,c.k,c.v]),label:document.querySelector('.wtl .wt-bool .wt-sw span').textContent}));
  assert(R.learn.learn===false&&R.learn.chg.some(c=>c[0]==='NN1'&&c[1]==='learn'&&c[2]===false)&&R.learn.label==='όχι','learning switched off live '+JSON.stringify(R.learn));
  // 4. +20 on ω* (a program: from the value it gives now), and a typed load factor
- R.step=await p.evaluate(()=>{const now=PCL.S.sim.now('Y:KW');const t=[...document.querySelectorAll('.sigl .wt')].find(e=>e.querySelector('.wt-n').textContent.startsWith('ω*'));
+ R.step=await p.evaluate(()=>{const now=PCL.S.sim.now('Y:KW');const t=[...document.querySelectorAll('.wtl .wt')].find(e=>e.querySelector('.wt-n').textContent.startsWith('ω*'));
   t.querySelector('[data-wstep="1"]').click();const v=PCL.editor.comp('KW').params.v;
-  const tl=[...document.querySelectorAll('.sigl .wt')].find(e=>e.querySelector('.wt-n').textContent.startsWith('Φορτίο')),inp=tl.querySelector('.wt-in');inp.value='2,5';inp.dispatchEvent(new Event('change',{bubbles:true}));
+  const tl=[...document.querySelectorAll('.wtl .wt')].find(e=>e.querySelector('.wt-n').textContent.startsWith('Φορτίο')),inp=tl.querySelector('.wt-in');inp.value='2,5';inp.dispatchEvent(new Event('change',{bubbles:true}));
   return {now,v,kl:PCL.editor.comp('KL').params.v,inp:t.querySelector('.wt-in').value,chg:(PCL.S.sim.changes||[]).map(c=>[c.id,c.k,c.v])};});
  assert(+R.step.v===+(R.step.now+20).toPrecision(8)&&R.step.inp===R.step.v,'step +20 from the program '+JSON.stringify(R.step));
  assert(R.step.kl==='2.5'&&R.step.chg.some(c=>c[0]==='KL'&&c[2]===2.5),'typed value '+JSON.stringify(R.step));
@@ -42,7 +42,7 @@ const assert=(c,m)=>{if(!c)throw new Error('ASSERT: '+m);};
  assert(R.prog.prog.some(e=>e[0]==='NN1'&&e[1]==='learn'&&e[2]===false)&&R.prog.learn===true&&R.prog.learnAfter===false,'learn → program '+JSON.stringify(R.prog));
  assert(/:/.test(R.prog.kw)&&Math.abs(R.prog.w2-R.prog.w)<=1e-4*Math.max(1,Math.abs(R.prog.w)),'the same run again '+JSON.stringify(R.prog));
  // 6. a tile on the drawing dragged by its title, and Ctrl+Z
- const hb=await p.locator('.sigl .wt-bool .wt-h').boundingBox();
+ const hb=await p.locator('.wtl .wt-bool .wt-h').boundingBox();
  await p.mouse.move(hb.x+20,hb.y+5);await p.mouse.down();await p.mouse.move(hb.x+60,hb.y+30,{steps:6});await p.mouse.move(hb.x+90,hb.y+50,{steps:6});await p.mouse.up();
  R.drag=await p.evaluate(()=>PCL.editor.doc.watch.tiles.find(t=>t.ctl&&t.ctl.k==='learn').at);
  await p.keyboard.press('Control+z');await p.waitForTimeout(200);
@@ -71,7 +71,7 @@ const assert=(c,m)=>{if(!c)throw new Error('ASSERT: '+m);};
  const file=await p.evaluate(()=>JSON.stringify(PCL.project()));
  await p.goto(base+'?tutorial=buck');await p.waitForTimeout(800);R.buck=await p.evaluate(()=>Watch.vis);
  await p.setInputFiles('#file',{name:'nn.pcl.json',mimeType:'application/json',buffer:Buffer.from(file)});await p.waitForTimeout(800);
- R.file=await p.evaluate(()=>({n:PCL.editor.doc.watch.tiles.length,vis:Watch.vis,pinned:document.querySelectorAll('.sigl .wt').length}));
+ R.file=await p.evaluate(()=>({n:PCL.editor.doc.watch.tiles.length,vis:Watch.vis,pinned:document.querySelectorAll('.wtl .wt').length}));
  assert(R.buck===false&&R.file.n===10&&R.file.vis&&R.file.pinned===5,'the layout in the file '+JSON.stringify(R.file));
  // 11. inside a subcircuit the layer is hidden (the tiles are in the coordinates of the circuit)
  await p.goto(base+'?tutorial=sub_legs');await p.waitForTimeout(800);
@@ -81,8 +81,26 @@ const assert=(c,m)=>{if(!c)throw new Error('ASSERT: '+m);};
  assert(/X1\//.test(R.sub.key)&&R.sub.top&&R.sub.inside.join()==='false,true,true'&&R.sub.back&&R.sub.n===1,'subcircuit '+JSON.stringify(R.sub));
  // 12. the vector control of the induction machine: six tiles, values from the run
  await p.goto(base+'?tutorial=im_foc');await p.waitForTimeout(1200);
- R.foc=await p.evaluate(()=>{PCL.S.sim.run(.4);Watch.update(true);return [...document.querySelectorAll('.sigl .wt,#watch-panel .wp-body .wt')].map(e=>[e.querySelector('.wt-n').textContent,e.querySelector('.wt-x')?.textContent??e.querySelector('.wt-in')?.value]);});
+ R.foc=await p.evaluate(()=>{PCL.S.sim.run(.4);Watch.update(true);return [...document.querySelectorAll('.wtl .wt,#watch-panel .wp-body .wt')].map(e=>[e.querySelector('.wt-n').textContent,e.querySelector('.wt-x')?.textContent??e.querySelector('.wt-in')?.value]);});
  assert(R.foc.length===6&&R.foc.every(([,v])=>v&&v!=='—'&&!/NaN/.test(v)),'im_foc tiles '+JSON.stringify(R.foc));
+ // 14. the block «Ελεγκτής AI» (4.8, §46): one click opens its façade; ▶ fills its values and curves; the live target
+ //     shows its slider; «Κράτα τα βάρη» writes what it learned; a short offline training in the background
+ await p.goto(base+'?tutorial=ai_block');await p.waitForTimeout(1200);
+ {const q=await p.evaluate(()=>{const E=PCL.editor,c=E.comp('C1'),m=E.svg.getScreenCTM(),pt=E.svg.createSVGPoint();pt.x=c.x;pt.y=c.y;const r=pt.matrixTransform(m);return {x:r.x,y:r.y};});await p.mouse.click(q.x,q.y);await p.waitForTimeout(300);}
+ R.fac=await p.evaluate(()=>({open:!document.querySelector('#ai-facade').hidden,id:Watch.facadeId(),tiles:[...document.querySelectorAll('#ai-facade .wt .wt-n')].map(e=>e.textContent)}));
+ assert(R.fac.open&&R.fac.id==='C1'&&R.fac.tiles.length===3,'façade '+JSON.stringify(R.fac));
+ R.facRun=await p.evaluate(()=>{PCL.S.sim.run(1.2);Watch.update(true);return {vals:[...document.querySelectorAll('#ai-facade [data-fv]')].map(e=>e.textContent).slice(0,6),pts:document.querySelector('#ai-facade .wt-sig .wt-sp polyline').getAttribute('points').split(' ').length};});
+ assert(R.facRun.vals.every(v=>v&&v!=='—')&&R.facRun.pts>20,'façade values '+JSON.stringify(R.facRun));
+ await p.click('#ai-facade [data-fmode="live"]');await p.waitForTimeout(200);
+ R.facLive=await p.evaluate(()=>({mode:PCL.editor.comp('C1').params.mode,target:!!document.querySelector('#ai-facade .wt-num .wt-r')}));
+ await p.click('#ai-facade [data-fmode="ref"]');await p.click('#ai-facade [data-fkeep]');await p.waitForTimeout(200);
+ R.facKeep=await p.evaluate(()=>(PCL.editor.comp('C1').params.w||'').length);
+ assert(R.facLive.mode==='live'&&R.facLive.target&&R.facKeep>100,'façade live target and keep '+JSON.stringify([R.facLive,R.facKeep]));
+ await p.evaluate(()=>{const s=document.querySelector('#stop');s.value='400';s.dispatchEvent(new Event('change'));});
+ await p.click('#ai-facade [data-fmode="train"]');await p.waitForFunction(()=>!document.querySelector('#ai-facade [data-fmode="train"]').disabled,null,{timeout:120000});
+ R.facTrain=await p.evaluate(()=>document.querySelector('#ai-facade .wf-out').textContent);
+ assert(/Εκπαιδεύτηκε σε 3 s/.test(R.facTrain),'offline training '+R.facTrain);
+ await p.screenshot({path:OUT+'/watch_ai_facade.png'});
  // 13. the cost: Watch.update with every tile and a moving time, and the frames while ▶ runs with the tiles on
  R.cost=await p.evaluate(()=>{const s=PCL.S.sim;let n=0,tt=0;for(let k=0;k<60;k++){s.run(2e-3);const t0=performance.now();Watch.update(false);tt+=performance.now()-t0;n++;}return {mean:tt/n};});
  await p.goto(base+'?tutorial=nn_online');await p.waitForTimeout(1200);await p.click('#play');await p.waitForTimeout(400);

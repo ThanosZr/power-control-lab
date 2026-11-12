@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.8: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (433 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.8: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (439 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -304,7 +304,7 @@
 
 ## Server: `/api/<ενέργεια>` και διαδρομές
 
-35 σημεία.
+36 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -335,6 +335,7 @@
 | `/api/model_proof` | — | 3.18 |
 | `/api/presets` | — | 3.18 |
 | `/api/problem` | — | 3.18 |
+| `/api/record` | — | 4.8 |
 | `/api/scenario_run` | — | 3.18 |
 | `/api/scenario_sweep` | — | 3.18 |
 | `/api/solve` | — | 3.18 |
@@ -427,16 +428,20 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-87 σημεία.
+92 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
-| `file` | version, components, wires, subcircuits, solve, sim, scope, meta, tutorial, program | — | 3.18 |
+| `file` | version, components, wires, subcircuits, solve, sim, scope, meta, tutorial, program, watch | — | 3.18 |
 | `file.component` | id, type, x, y, rot, flip, label, params, live, liveBase, liveRate | — | 3.18 |
 | `file.program` | t, id, k, v, rate | — | 3.19 |
+| `file.sim` | hDiv, speed, stopT, method, rec | — | 4.8 |
 | `file.solve` | unconn, island, rleak, tbase, step, rtol, hmax, units | — | 3.19 |
 | `file.subcircuit` | title, desc, version, components, wires, params | — | 3.18 |
+| `file.watch` | show, tiles, panel | — | 4.8 |
+| `file.watch.tile` | id, key, ctl, label, at, al, rng, steps, span | — | 4.8 |
 | `file.wire` | id, a, b, pts, name, color, width | — | 3.18 |
+| `part:AIC` | scheme, mode, target, learn, fs, fr, Kp, Ki, umin, umax, rs, dxs, us, hidden, opt, lr, elr, K, ds, seed, w | L, iae, r, sat, u, y, yd | 4.8 |
 | `part:AM` | — | a, b, y | 3.18 |
 | `part:BSEL` | idx | u, y | 3.18 |
 | `part:C` | C, v0, esr | n, p | 3.18 |
@@ -454,6 +459,7 @@
 | `part:DIV` | eps | a, b, y | 3.18 |
 | `part:EBUS` | n | a, b, bus, c | 3.18 |
 | `part:EDGE` | edge, tw | n, u, y | 3.19 |
+| `part:EVC` | scheme, mode, ws, wt, we, Kt, Ke, R, J, B, kpw, kiw, atl, kpa, kia, alim, aff, fr, H, ffg, taulim, ilim, plim, regen, slew, kpi, kii, umin, umax, fs | i, keep, lim, pw, r, rg, soc, tau, tl, u, y | 4.8 |
 | `part:EXPR` | expr, ins, pars | u1, u2, y | 3.18 |
 | `part:F2` | kind, f0, zeta, u0 | u, y | 3.19 |
 | `part:FEST` | mode, RR, LM, psi0 | al, be, psi, th, w1, wr | 3.18 |

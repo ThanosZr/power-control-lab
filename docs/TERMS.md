@@ -57,6 +57,17 @@
 | per unit | ανά μονάδα (pu) |
 | load flow | ροή φορτίου |
 | frequency-dependent line | γραμμή με εξάρτηση από τη συχνότητα |
+| tile, watch panel | πλακίδιο, πάνελ «Σήματα» (σήματα και έλεγχοι πάνω στο σχέδιο) |
+| façade (of a block) | πρόσοψη (το παράθυρο ενός μπλοκ με τους τρόπους, τις τιμές και τα κουμπιά του) |
+| emulator (neural), specialized inverse learning | εξομοιωτής, αντίστροφος έλεγχος με εξομοιωτή |
+| reference governor | ρυθμιστής αναφοράς |
+| torque allocation, keep | κατανομή ροπής, κράτηση ροπής |
+| slew rate | ρυθμός μεταβολής |
+| regenerative braking | ανάκτηση (πέδηση με ανάκτηση) |
+| road load, grade | φορτίο δρόμου, κλίση |
+| driving cycle | κύκλος οδήγησης |
+| state of charge (SOC) | κατάσταση φόρτισης (SOC) |
+| logging to a file, recording resolution | καταγραφή σε αρχείο, ανάλυση καταγραφής |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 

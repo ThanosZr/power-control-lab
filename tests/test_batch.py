@@ -171,6 +171,36 @@ class BatchSolver(unittest.TestCase):
                 y = float(np.interp(row[0], t, np.array(r['ch'][k])))
                 self.assertAlmostEqual(y, v, delta=2e-3 * max(1, abs(v)), msg=f'{k} at {row[0]}')
 
+    def test_ai_controller_parity(self):
+        # 4.8: the block «Ελεγκτής AI» with the emulator (a library part made of a PI, the controller network, the emulator
+        # and its copy with the derivative output): the browser and the server agree on the machine, the command and the
+        # networks' outputs while all of them learn
+        req = self.req['aic_emu']
+        keys = list(req['channels'].keys())
+        r = self.run_case('aic_emu', req['at'][-1][0], 'LSODA', rtol=1e-9, atol=1e-11)
+        self.assertEqual(r['status'], 'ok')
+        t = np.array(r['t'])
+        for row in req['at']:
+            for k, v in zip(keys, row[1:]):
+                y = float(np.interp(row[0], t, np.array(r['ch'][k])))
+                self.assertAlmostEqual(y, v, delta=2e-3 * max(1, abs(v)), msg=f'{k} at {row[0]}')
+
+    def test_ev_controller_parity(self):
+        # 4.8: the multi-objective controller of the electric vehicle (a library part: the reference governor, the speed
+        # loop as an acceleration, the vehicle dynamics, the allocation, the slew rate and the current loop) driving the DC
+        # machine at a low SOC: the browser (T/1000) and the server agree on the speed, the torque, the voltage command,
+        # the allocation and the current while the slew rate and the acceleration limit act. Short: the server integrates
+        # the ~40 blocks of the part slowly (≈ 0.5 s per clock period)
+        req = self.req['evc']
+        keys = list(req['channels'].keys())
+        r = self.run_case('evc', req['at'][-1][0] + 5e-4, 'LSODA', rtol=1e-8, atol=1e-10)
+        self.assertEqual(r['status'], 'ok')
+        t = np.array(r['t'])
+        for row in req['at']:
+            for k, v in zip(keys, row[1:]):
+                y = float(np.interp(row[0], t, np.array(r['ch'][k])))
+                self.assertAlmostEqual(y, v, delta=2e-3 * max(1, abs(v)), msg=f'{k} at {row[0]}')
+
     def test_event_log_parity(self):
         # 3.19: the same events from the browser (Sim.events) and the server (simulate → events), buck in DCM over 20 periods.
         # Switch edges and duty updates at the same instants; a diode turns off at the root of its current in both, and on

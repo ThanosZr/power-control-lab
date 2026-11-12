@@ -442,9 +442,9 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .pal-fav{position:absolute;right:0;top:50%;transform:translateY(-50%);border:none;background:#fbfcfbd9;padding:2px 4px;font-size:13px;color:#b9c7c2;opacity:0;cursor:pointer}.pal-row:hover .pal-fav,.pal-fav.on,.pal-fav:focus-visible{opacity:1}.pal-fav.on{color:#d39a2a}
 .pal-empty{margin:4px 6px}
 /* 4.8 (ROADMAP §47): the tiles of the control signals over the drawing (watch.js). On the drawing: HTML in the units of the
-   drawing (.sigl, transformed with the labels); in the panel: the same tiles in a column */
-.sigl{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;pointer-events:none}
-.sigl[hidden]{display:none}
+   drawing (.wtl, transformed with the labels); in the panel: the same tiles in a column */
+.wtl{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;pointer-events:none}
+.wtl[hidden]{display:none}
 .wt{position:relative;width:150px;box-sizing:border-box;background:#fffdf8f2;border:1px solid #e3d3b2;border-radius:7px;box-shadow:0 2px 6px #18353a1c;padding:3px 6px 5px;font-size:11px;line-height:1.25;color:var(--ink);pointer-events:auto}
 .wt-pin{position:absolute;transform:scale(var(--wk,1));transform-origin:0 0}.wt-pin.al-r{transform-origin:100% 0}.wt.drag{opacity:.85;box-shadow:0 6px 16px #18353a33}
 .wt-h{display:flex;align-items:baseline;gap:4px;min-width:0;padding-bottom:2px}.wt-pin .wt-h{cursor:move;user-select:none;-webkit-user-select:none}
@@ -458,7 +458,7 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .wt-r{display:block;width:100%;margin:3px 0 1px;accent-color:var(--accent2)}
 .wt-st{display:flex;gap:3px;flex-wrap:wrap}.wt-st button{flex:1 1 0;font-size:10px;padding:1px 2px;min-width:0}
 .wt-sw{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer}.wt-sw input{flex:0 0 auto;accent-color:var(--accent)}
-.wt-sel{width:100%;font-size:11px}
+.wt-choice{width:100%;font-size:11px}
 .wpanel{position:absolute;z-index:6;width:232px;max-height:calc(100% - 24px);display:flex;flex-direction:column;background:#fffffff5;border:1px solid #cfdcd7;border-radius:10px;box-shadow:0 10px 26px #18353a26;font-size:12px}
 .wpanel[hidden]{display:none}
 .wp-head{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--line);cursor:move;user-select:none;-webkit-user-select:none}.wp-head b{font-size:12px;white-space:nowrap}
@@ -478,3 +478,13 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .wtab tr.bad td{color:var(--danger)}.wtab tr.sat td[data-wf]{color:#a5700f}
 .wpanel.min .wp-body,.wpanel.min .wp-foot,.wpanel.min .wp-tabs{display:none}.wpanel.min .wp-add{padding-bottom:6px}
 .wp-head .x{padding:0 4px;font-size:11px}
+/* 4.8 (ROADMAP §46): the façade of the block «Ελεγκτής AI» (watch.js facade) */
+.wfac{width:270px;z-index:7}.wfac .wf-id{color:var(--muted);font-size:10.5px;margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wf-body{padding:6px 8px 8px;overflow:auto;display:flex;flex-direction:column;gap:6px;min-height:0}
+.wf-row{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--muted)}.wf-row select{font-size:11.5px;color:var(--ink)}
+.wf-modes{display:flex;gap:3px}.wf-modes button{flex:1 1 0;font-size:10.5px;padding:3px 4px;line-height:1.2}.wf-modes button.on{background:#eef7f4;border-color:#9fd0c3;color:var(--accent)}
+.wf-vals{display:grid;grid-template-columns:1fr 1fr;gap:1px 8px;font-size:11px;color:var(--muted)}.wf-vals b{color:var(--accent2);font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600}
+.wf-sat{grid-column:1/-1;color:#a5700f;font-size:10.5px}.wf-sat:empty{display:none}
+.wf-btns{display:flex;gap:3px;flex-wrap:wrap}.wf-btns button{flex:1 1 auto;font-size:10.5px;padding:3px 5px}
+.wf-out:empty{display:none}.wf-out{font-size:11px;line-height:1.35}.wf-out table{font-size:11px}
+.wfac .wt{width:100%}

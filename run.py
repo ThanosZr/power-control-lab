@@ -226,6 +226,17 @@ class Handler(BaseHTTPRequestHandler):
             if self.headers.get_content_type()!='application/json':
                 self.send(415,{'error':'Απαιτείται application/json.'}); return
             self.addon_post(action); return
+        if action=='record':               # 4.8: recording a long run to a file, only for this computer
+            if not self.local():
+                self.send(403,{'error':'Μόνο από αυτόν τον υπολογιστή.'}); return
+            if self.headers.get_content_type()!='application/json':
+                self.send(415,{'error':'Απαιτείται application/json.'}); return
+            try:
+                from engine import recording
+                self.send(200,recording.handle(self.body(recording.MAX_CHUNK+65536)))
+            except (InputError,ValueError,TypeError) as e:
+                self.send(400,{'error':str(e) or 'Μη έγκυρα δεδομένα.'})
+            return
         if action not in ACTIONS:
             self.send(404,{'error':'Άγνωστη ανάλυση.'}); return
         if self.headers.get_content_type()!='application/json':

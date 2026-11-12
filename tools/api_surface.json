@@ -2169,6 +2169,10 @@
     "params": [],
     "since": "3.18"
    },
+   "/api/record": {
+    "params": [],
+    "since": "4.8"
+   },
    "/api/scenario_run": {
     "params": [],
     "since": "3.18"
@@ -2545,7 +2549,8 @@
      "scope",
      "meta",
      "tutorial",
-     "program"
+     "program",
+     "watch"
     ],
     "since": "3.18"
    },
@@ -2575,6 +2580,16 @@
     ],
     "since": "3.19"
    },
+   "file.sim": {
+    "params": [
+     "hDiv",
+     "speed",
+     "stopT",
+     "method",
+     "rec"
+    ],
+    "since": "4.8"
+   },
    "file.solve": {
     "params": [
      "unconn",
@@ -2599,6 +2614,28 @@
     ],
     "since": "3.18"
    },
+   "file.watch": {
+    "params": [
+     "show",
+     "tiles",
+     "panel"
+    ],
+    "since": "4.8"
+   },
+   "file.watch.tile": {
+    "params": [
+     "id",
+     "key",
+     "ctl",
+     "label",
+     "at",
+     "al",
+     "rng",
+     "steps",
+     "span"
+    ],
+    "since": "4.8"
+   },
    "file.wire": {
     "params": [
      "id",
@@ -2610,6 +2647,41 @@
      "width"
     ],
     "since": "3.18"
+   },
+   "part:AIC": {
+    "params": [
+     "scheme",
+     "mode",
+     "target",
+     "learn",
+     "fs",
+     "fr",
+     "Kp",
+     "Ki",
+     "umin",
+     "umax",
+     "rs",
+     "dxs",
+     "us",
+     "hidden",
+     "opt",
+     "lr",
+     "elr",
+     "K",
+     "ds",
+     "seed",
+     "w"
+    ],
+    "pins": [
+     "L",
+     "iae",
+     "r",
+     "sat",
+     "u",
+     "y",
+     "yd"
+    ],
+    "since": "4.8"
    },
    "part:AM": {
     "params": [],
@@ -2828,6 +2900,54 @@
      "y"
     ],
     "since": "3.19"
+   },
+   "part:EVC": {
+    "params": [
+     "scheme",
+     "mode",
+     "ws",
+     "wt",
+     "we",
+     "Kt",
+     "Ke",
+     "R",
+     "J",
+     "B",
+     "kpw",
+     "kiw",
+     "atl",
+     "kpa",
+     "kia",
+     "alim",
+     "aff",
+     "fr",
+     "H",
+     "ffg",
+     "taulim",
+     "ilim",
+     "plim",
+     "regen",
+     "slew",
+     "kpi",
+     "kii",
+     "umin",
+     "umax",
+     "fs"
+    ],
+    "pins": [
+     "i",
+     "keep",
+     "lim",
+     "pw",
+     "r",
+     "rg",
+     "soc",
+     "tau",
+     "tl",
+     "u",
+     "y"
+    ],
+    "since": "4.8"
    },
    "part:EXPR": {
     "params": [

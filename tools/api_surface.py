@@ -150,7 +150,7 @@ def surface_server():
     src = (ROOT / 'run.py').read_text(encoding='utf-8')
     for m in sorted(set(re.findall(r"'/api/(link/[a-z]+|addons|catalog|health|presets)'", src))):
         out['/api/' + m] = {'params': []}
-    for m in sorted(set(re.findall(r"action[=!]=\s*'(link/[a-z]+|addon_[a-z]+)'|'(link/[a-z]+|addon_[a-z]+)'", src))):
+    for m in sorted(set(re.findall(r"action[=!]=\s*'(link/[a-z]+|addon_[a-z]+|record)'|'(link/[a-z]+|addon_[a-z]+)'", src))):
         for g in m:
             if g:
                 out['/api/' + g] = {'params': []}
@@ -203,7 +203,10 @@ process.stdout.write(JSON.stringify(out));"""
         raise SystemExit(r.stderr)
     out = json.loads(r.stdout)
     # the fields of the file itself (docs/ARCHITECTURE.md §2): new fields are optional, an old file always opens
-    out['file'] = {'params': ['version', 'components', 'wires', 'subcircuits', 'solve', 'sim', 'scope', 'meta', 'tutorial', 'program']}
+    out['file'] = {'params': ['version', 'components', 'wires', 'subcircuits', 'solve', 'sim', 'scope', 'meta', 'tutorial', 'program', 'watch']}
+    out['file.sim'] = {'params': ['hDiv', 'speed', 'stopT', 'method', 'rec']}                       # rec: {dt} (4.8)
+    out['file.watch'] = {'params': ['show', 'tiles', 'panel']}                                      # 4.8, ROADMAP §47
+    out['file.watch.tile'] = {'params': ['id', 'key', 'ctl', 'label', 'at', 'al', 'rng', 'steps', 'span']}
     out['file.component'] = {'params': ['id', 'type', 'x', 'y', 'rot', 'flip', 'label', 'params', 'live', 'liveBase', 'liveRate']}
     # 3.19: the program of parameter changes and the options of the solution that it adds
     out['file.program'] = {'params': ['t', 'id', 'k', 'v', 'rate']}

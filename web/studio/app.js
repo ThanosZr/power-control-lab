@@ -18,11 +18,11 @@ function notice(text,kind='info'){const n=$('#notice');if(!text){n.hidden=true;r
 function warnings(list){const w=$('#netwarn');w.innerHTML=(list||[]).map(t=>`<span>⚠ ${esc(t)}</span>`).join('');w.hidden=!(list&&list.length);}
 
 // ------------------------------------------------------------------ simulation
-function project(){return {...fullDoc(),tutRef:S.tutRef||null,sim:{hDiv:+$('#sim-step').value,speed:S.speed,stopT:S.stopT,method:$('#method').value},scope:{cfg:scope.cfg},tutorial:S.tut,...(S.scenCode?{scenario:S.scenCode}:{})};}
+function project(){return {...fullDoc(),tutRef:S.tutRef||null,sim:{hDiv:+$('#sim-step').value,speed:S.speed,stopT:S.stopT,method:$('#method').value,...(+$('#rec-res')?.value>0?{rec:{dt:+$('#rec-res').value}}:{})},scope:{cfg:scope.cfg},tutorial:S.tut,...(S.scenCode?{scenario:S.scenCode}:{})};}
 function buildSim(fresh){
  const doc=fullDoc();
  try{
-  if(!S.sim||fresh){window.Live?.drop();S.sim=new MNA.Sim(doc,{hDiv:+$('#sim-step').value,method:$('#method').value});}
+  if(!S.sim||fresh){window.Live?.drop();S.sim=new MNA.Sim(doc,{hDiv:+$('#sim-step').value,method:$('#method').value});applyRec();}
   else S.sim.load(doc,false);
   S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);notice('');editor.setDiag(viewDiag(S.sim.net.diag));
  }catch(e){S.error=e.message;pause();
@@ -38,12 +38,35 @@ function buildSim(fresh){
 }
 function lineCtx(){return {editor,api,changed:()=>{}};}
 function play(keep){if(!keep)S.stepTo=0;if(!S.sim||S.error)return;if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;requestAnimationFrame(loop);}
-function pause(){if(window.Live?.active)Live.stop();S.stepTo=0;S.running=false;scope.running=false;$('#play')?.classList.remove('running');if($('#play'))$('#play').innerHTML='▶ Προσομοίωση';draw(true);}
+function pause(){if(window.Live?.active)Live.stop();S.stepTo=0;S.running=false;if(REC.on)recFlush();scope.running=false;$('#play')?.classList.remove('running');if($('#play'))$('#play').innerHTML='▶ Προσομοίωση';draw(true);}
 function reset(){pause();buildSim(true);scope.cfg.frozen=null;draw(true);}
 function stepT(n=1){if(!S.sim||S.error)return;pause();
  // 4.8: Python blocks without Python on the page: the periods in the worker of the live simulation, else Python here first
  if(S.sim.pyLazy?.()){if(window.Live&&S.noLive!==S.sim&&Live.eligible(S.sim)){S.stepTo=S.sim.t+n*S.sim.T;play(true);return;}pyPage().then(ok=>{if(ok)stepT(n);});return;}
  S.sim.run(n*S.sim.T);draw(true);}
+// 4.8: long runs. The resolution of the record (a point every dt, a statistic every ~50·dt): the circular buffers then
+// cover dt/h times more time. And the record to a file (engine/recording.py): the scope's channels, every new point,
+// sent about once a second while it runs; the memory keeps the last part of the run, the file all of it.
+function applyRec(){const dt=+$('#rec-res')?.value||0;if(!S.sim)return;const n=dt>0?Math.max(1,Math.round(50*dt/S.sim.T)):1;S.sim.setRecord({dt,n});renderRec();}
+const REC={on:false,name:'',path:'',keys:[],lastT:-Infinity,busy:false,pend:'',lost:0,bytes:0,tLast:0};
+function renderRec(){const b=$('#rec-file'),n=$('#rec-note'),s=S.sim;if(b){b.classList.toggle('on',REC.on);b.textContent=REC.on?`■ καταγράφει${REC.bytes?' · '+eng(REC.bytes,'B',3):''}`:'⭳ σε αρχείο';}
+ if(n&&s){const r=s.ring,h=s.var?(s.hv||s.h):s.h,dt=s.opts.recDt||0,cover=r.cap*Math.max(dt,h);setText(n,`μνήμη ≈ ${eng(cover,'s',2)}${REC.lost?' · '+REC.lost+' κενά στο αρχείο (αραιότερη καταγραφή)':''}`);}}
+async function recToggle(){if(REC.on){await recFlush();REC.on=false;renderRec();notice('Η καταγραφή γράφτηκε στο '+esc(REC.path)+'.','info');return;}
+ const ch=scope.channels();if(!ch.length||!S.sim){notice('Πρόσθεσε πρώτα σήματα στο scope: αυτά γράφονται στο αρχείο.','info');return;}
+ try{const r=await (await fetch('/api/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'start',title:tutorial()?.id||'run',header:['t (s)',...ch.map(c=>String(c.label||c.key).replace(/[,\n]/g,' '))].join(',')})})).json();
+  if(r.error)throw new Error(r.error);Object.assign(REC,{on:true,name:r.name,path:r.path,keys:ch.map(c=>c.key),lastT:S.sim.t-1e-12*Math.max(1,S.sim.t),pend:'',lost:0,bytes:0,tLast:performance.now()});
+  notice('Καταγραφή στο '+esc(r.path)+': όσο τρέχει, κάθε νέο σημείο των σημάτων του scope γράφεται στο αρχείο.','info');setTimeout(()=>notice(''),5000);}
+ catch(e){notice('Καταγραφή σε αρχείο: '+esc(e.message)+' (χρειάζεται ο server της εφαρμογής, python run.py).','error');}renderRec();}
+// the new points of the record since the last write (a gap is counted when the circular buffer passed over them)
+function recCollect(){const s=S.sim;if(!REC.on||!s)return '';const r=s.ring;if(!r.n)return '';const st=(r.head-r.n+r.cap)%r.cap;
+ if(r.t[st]>REC.lastT+1e-15*Math.max(1,Math.abs(REC.lastT))&&Number.isFinite(REC.lastT)&&REC.lastT>0)REC.lost++;
+ let i=Math.max(0,scope.ringIndex(REC.lastT)-1);while(i<r.n&&!(r.t[(st+i)%r.cap]>REC.lastT))i++;const cis=REC.keys.map(k=>scope.resolve(k)),out=[];
+ for(;i<r.n;i++){const j=(st+i)%r.cap,t=r.t[j];out.push(+t.toPrecision(12)+','+cis.map(ci=>ci===-2?'0':ci<0?'NaN':String(+r.d[j*r.nch+ci].toPrecision(7))).join(','));REC.lastT=t;}
+ return out.length?out.join('\n')+'\n':'';}
+async function recFlush(){if(!REC.on)return;REC.pend+=recCollect();if(REC.busy||!REC.pend)return;const body=REC.pend;REC.pend='';REC.busy=true;
+ try{const r=await (await fetch('/api/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'append',name:REC.name,rows:body})})).json();
+  if(r.error)throw new Error(r.error);REC.bytes=r.bytes;if(r.full){REC.on=false;notice('Η καταγραφή έφτασε τα 4 GB και σταμάτησε.','info');}}
+ catch(e){REC.on=false;notice('Καταγραφή σε αρχείο: '+esc(e.message),'error');}finally{REC.busy=false;renderRec();}}
 // 4.8: Python on the page, only when the page itself must run a circuit with Python blocks (no worker): loaded once, and the
 // stand-ins of the blocks become the real ones with the state they carry
 async function pyPage(){if(!window.PyRT)return false;const was=PyRT.ready;if(!was)notice('Φορτώνεται η Python στη σελίδα (μία φορά)…','info');
@@ -83,7 +106,7 @@ function loop(now){
  if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){pause();notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
  requestAnimationFrame(loop);
 }
-function draw(all,busy){scope.draw();navRange();if(all||S.frame%(busy?12:4)===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();window.Watch?.update(all);}if(all||S.frame%(busy?24:8)===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();if(S.sim&&S.sim.dgVer!==S.diagSeen)renderDiag();}if(all){if(!S.running&&!S.switching){renderFFT();renderEvents();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
+function draw(all,busy){scope.draw();navRange();if(all||S.frame%(busy?12:4)===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();window.Watch?.update(all);if(REC.on&&performance.now()-REC.tLast>1000){REC.tLast=performance.now();recFlush();}}if(all||S.frame%(busy?24:8)===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();if(S.sim&&S.sim.dgVer!==S.diagSeen)renderDiag();}if(all){if(!S.running&&!S.switching){renderFFT();renderEvents();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
 // text of an element only when it changes (in the loop of the simulation an unchanged text still costs a layout)
 function setText(el,t){if(el&&el.textContent!==t)el.textContent=t;}
 function navRange(){const el=$('#nav-range');if(!el||!S.sim)return;const [a,b]=scope.viewRange();setText(el,`${eng(a,'s',4)} … ${eng(b,'s',4)} · ${fmt((b-a)/S.sim.T,3)} T${scope.cfg.frozen?' · σταθερή προβολή':' · ζωντανά'}`);}
@@ -91,7 +114,10 @@ function updateClock(){const s=S.sim;if(!s)return;setText($('#clock'),'t = '+eng
  {const cpu=$('#cpu');if(cpu&&cpu.hidden!==!S.limited)cpu.hidden=!S.limited;}setText($('#speed-note'),S.speed==='max'?'όσο αντέχει ο υπολογιστής':`${eng(S.speed*s.T,'s',3)} ανά δευτερόλεπτο`);setText($('#step-note'),s.var?`Δt = ${eng(s.hv,'s',3)} μεταβλητό (${eng(s.hMin,'s',2)} … ${eng(s.hCap||s.hMax,'s',2)}) · απορρίψεις ${s.nRej}`:'Δt = '+eng(s.h,'s',3)+' · T = '+eng(s.T,'s',3));}
 
 // live values on the schematic
-function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;if(['GND','JUNC','TAGO','TAGI','SUB','PORT','SIN','SOUT'].includes(c0.type)||window.NetLib&&NetLib.isLib(c0.type))return null;
+function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;
+ if(c0.type==='EVC'){const id=(S.pfx||'')+c0.id;return {text:'u '+eng(s.now('Y:'+id+'/SAT'),'V',3)+' · τ* '+eng(s.now('Y:'+id+'/TQ'),'N·m',3)+' · keep '+eng(s.now('Y:'+id+'/KP'),'',3)};}
+ if(c0.type==='AIC'){const id=(S.pfx||'')+c0.id,L=s.now('Y:'+id+'/NN1:L');return {text:'u '+eng(s.now('Y:'+id+'/SAT'),'',3)+' · e '+eng(s.now('Y:'+id+'/E'),'',3)+(Number.isFinite(L)?' · L '+eng(L,'',3):'')};}
+ if(['GND','JUNC','TAGO','TAGI','SUB','PORT','SIN','SOUT'].includes(c0.type)||window.NetLib&&NetLib.isLib(c0.type))return null;
  const c=S.pfx?{...c0,id:S.pfx+c0.id}:c0;
  const avg=S.running&&(S.speed==='max'||S.speed>=200);const val=k=>{if(avg){const p=s.lastPeriod(k);return p?p.avg:s.now(k);}return s.now(k);};
  if(c.type==='PWM'){const d=s.now('D:'+c.id);return {text:'D = '+fmt(d,4)};}
@@ -140,7 +166,11 @@ function chanLabel(key){const [pre,id0,pin]=key.split(':'),vb=vecBase(id0);if(vb
  const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',GS:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold',Y:c?.type==='VM'?'v':c?.type==='AM'?'i':c?.type==='SR'?'Q':'y'}[pre]||pre)+'('+name+')';}
 function addProbe(key,label){if(!S.sim)return;const ok=scope.addChannel(key,label||chanLabel(key));renderChannels();if(!ok)flash('#chan-list');else{flash('#scope-card');}draw(true);}
 function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash');}
-function signalsFor(c,full){const t=c.type,nv=vecN(full||(S.pfx?pid(c.id):c.id));if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI'||t==='SUB'||SubC.PORT_KIND[t]||window.NetLib&&NetLib.isLib(t))return [];
+// 4.8: the signals of an AI controller are those of its inner blocks (channels <id>/SAT, <id>/E, …)
+const EVC_SIGS=[['/SAT','εντολή τάσης u'],['/GOV','ω* μετά τον ρυθμιστή αναφοράς'],['/TR','ροπή που χρειάζεται'],['/TQ','ροπή που ζητείται τ*'],['/KP','κράτηση ροπής (keep)'],['/LIM','όριο ενεργό (1)'],['/TP','μέγιστη ροπή (όρια, SOC)'],['/AC','επιτάχυνση που ζητείται'],['/IR','ρεύμα που ζητείται'],['/PW','ισχύς άξονα (kW)'],['/LS','χαμηλό SOC (0 … 1)']];
+const AIC_SIGS=[['/SAT','εντολή u'],['/E','σφάλμα e = r_f − y'],['/LP','αναφορά r_f (μετά το φίλτρο)'],['/GD','παράγωγος της αναφοράς ṙ_f'],['/PI','έξοδος του PI'],['/NN1','έξοδος του δικτύου'],['/NN1:L','καμπύλη μάθησης L'],['/IAE','IAE = ∫|e|dt'],['/FLAG','κορεσμός (1 = στο όριο)']];
+function signalsFor(c,full){const t=c.type,nv=vecN(full||(S.pfx?pid(c.id):c.id));
+ if(t==='EVC')return EVC_SIGS.map(([f,n])=>['Y:',n,f]);if(t==='AIC'){const L=AIC_SIGS.filter(([f])=>f!=='/NN1:L'||(c.params?.scheme||'fel')!=='inv').map(([f,n])=>['Y:',n,f]);return (c.params?.scheme==='emu')?[...L,['Y:','εξομοιωτής: ẏ̂','/NNE'],['Y:','σφάλμα του εξομοιωτή L','/NNE:L'],['Y:','ευαισθησία ∂ẏ̂/∂u','/NNC:dy']]:L;}if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI'||t==='SUB'||SubC.PORT_KIND[t]||window.NetLib&&NetLib.isLib(t))return [];
  if(t==='PY')return outsOf(c).map((o,k)=>['Y:','έξοδος '+o,k?':'+o:'']);
  if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:t==='GEN3'?[...m,['I:','ρεύμα φάσης a (προς το δίκτυο)'],['V:','τάση φάσης a ως προς τον ουδέτερο']]:t==='IM'||t==='SM'?[...m,['I:','ρεύμα φάσης a'],['V:','πολική τάση v_ab']]:t==='SRM'?[...m,...Array.from({length:P.srmGeo({...P.defaults(t),...c.params})[0]},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα φάσης ${k+1}`],[(k?'V'+(k+1):'V')+':',`τάση φάσης ${k+1}`],['PSI'+(k+1)+':',`ροή φάσης ${k+1} ψ`]]).flat()]:m;}
  if(P.BLOCKS.has(t)&&nv>1)return Array.from({length:nv},(_,k)=>['Y:',`έξοδος y, στοιχείο ${k+1} του διαύλου`,`[${k+1}]`]);
@@ -1071,7 +1101,7 @@ function viewDiag(d){if(!d)return d;const pf=S.pfx;if(pf===null)return null;
 // a part by path (X1/L1), with the label of the path and the values of that instance
 function compAt(path){const parts=String(path).split('/'),defs=defsOf();let list=topDoc().components||[],c=null;const lbl=[];
  for(let i=0;i<parts.length;i++){c=list.find(k=>k.id===parts[i]);if(!c)return null;lbl.push(c.label||c.id);
-  if(i<parts.length-1){const d=c.type==='SUB'&&defs[c.params?.def];if(!d)return null;list=SubC.innerParts(d,c);}}
+  if(i<parts.length-1){if(window.NetLib&&NetLib.isLib(c.type)){list=NetLib.defOf(c).components;continue;}const d=c.type==='SUB'&&defs[c.params?.def];if(!d)return null;list=SubC.innerParts(d,c);}}
  return {...c,label:lbl.join('/')};}
 // every part of the circuit, inside instances too: [{c, id (path), label}]
 function allComps(){const doc=atTop()?editor.doc:fullDoc(),defs=doc.subcircuits||{},out=[];
@@ -1259,6 +1289,7 @@ function migrateFile(pr){if(!window.Bus||Bus.namesJoin(pr))return pr;const m=Bus
 function applyProject(pr,keepView){
  pr=migrateFile(pr);pause();if(S.nav.length){S.nav=[];S.top=null;S.pfx='';}if(pr.subcircuits)SubC.sync(pr);editor.load(pr,{keepView});renderCrumbs();renderPalette();if(S.batch)clearBatch();
  const sim=pr.sim||{};if(sim.hDiv){const ss=$('#sim-step'),v=String(sim.hDiv);if(![...ss.options].some(o=>o.value===v))ss.add(new Option('T/'+v,v));ss.value=v;}if(sim.method){$('#method').value=sim.method;$('#method-note').textContent={TR:'2ης τάξης, χωρίς απόσβεση',BDF2:'2ης τάξης, απόσβεση στις υψηλές συχνότητες',BE:'1ης τάξης, ισχυρή απόσβεση'}[sim.method]||'';}setSpeed(sim.speed??100);S.stopT=sim.stopT||0;$('#stop').value=S.stopT?String(+(S.stopT*1e3).toPrecision(6)):'';
+ {const rs=$('#rec-res'),v=String(+(sim.rec?.dt)||0);if(rs){if(![...rs.options].some(o=>o.value===v))rs.add(new Option('κάθε '+eng(+v,'s',3),v));rs.value=[...rs.options].find(o=>+o.value===+v)?.value??'0';}}
  buildSim(true);
  if(pr.scope?.cfg){scope.cfg=pr.scope.cfg;scope.cfg.frozen=null;}
  else{scope.cfg={panes:[{ch:[]}],window:pr.scope?.window||{unit:'T',n:20},trigger:'roll',display:'auto',frozen:null,cursors:[]};
@@ -1718,6 +1749,21 @@ function chaosTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp(
 const NNC={res:null,key:'',busy:false};
 function nnCycles(m){const s=S.sim;if(!s)return [];const ps=lastPeriods('Y:IAE',20000);const at=tt=>{let best=null;for(const q of ps)if(q.t<=tt+1e-9)best=q;else break;return best?best.max:null;};
  const out=[];let prev=0;for(let k=1;k<=m.cycles;k++){const tk=k*m.P;if(s.t<tk-1e-6)break;const v=at(tk);if(v===null)break;out.push(v-prev);prev=v;}return out;}
+// 4.8: the electric vehicle: the models of the vehicle, the battery and the controller, and the energy metrics so far
+function evTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.ev||!editor.comp('M1'))return '';const now=k=>s.now(k),n=(k,u,d=3)=>eng(now(k),u,d);
+ const mo=editor.comp('MO1'),sc=mo?.params?.scheme||'moevc',cyc=Math.floor(s.t/m.D),wait=s.t<m.D?`<p class="small muted">Άφησε να τρέξει τουλάχιστον ένας κύκλος (${eng(m.D,'s')}) για τις μετρικές.</p>`:'';
+ const kind=!mo?(editor.comp('C1')?'Ελεγκτής AI: ένας βρόχος τάσης (PI ή PI + νευρωνικό)':'—'):sc==='moev'?'Πολυκριτηριακός καταρράκτης (moev)':'Πολυκριτηριακός συζευγμένος (moevc)';
+ return `<div class="tm"><span class="badge">${esc(kind)}</span>${mo?` τρόπος ${esc(mo.params.mode||'balanced')}`:''} · κύκλος ${cyc+1} (${eng(m.D,'s')} ο καθένας)</div><ul class="eqs">
+  <li>Όχημα στον άξονα: J_eq = J_m + m·(r_w/n)² = <b>${eng(m.Jeq,'kg·m²')}</b>, v = ω·r_w/n· τ_L = [m·g·C_rr·sgn v + ½·ρ·C_d·A·v·|v| + m·g·sin(atan(κλίση))]·r_w/(n·η) + τ_b + τ_a(x)</li>
+  <li>Μπαταρία: OCV = 45 + 13,8·SOC − 1,8·(1 − SOC)³ V, R_int = 0,075·(1 + 2,6·(1 − SOC)²) Ω, p = v_a·i_a/η (κίνηση) ή ·η (ανάκτηση), i_bat = (OCV − √(OCV² − 4·R_int·p))/(2·R_int), dSOC/dt = −i_bat/(3600·Q)</li>
+  <li>Μετατροπέας: |v_a| ≤ min(V_max, 1,75·OCV, P_max/|i_a|) με P_max = η·min(OCV·I_max − R_int·I_max², OCV²/(4R_int)): η μπαταρία δεν δίνει πάνω από I_max</li>
+  ${mo?sc==='moev'?`<li>moev: τ_req = w_s·PI(ω* − ω) + τ_L + B·ω, τ* = clip(keep·τ_req, ±τ_max(SOC, P)), keep = 0,55 + 0,45·w_t − 0,2·w_e·(χαμηλό SOC)</li>`
+   :`<li>moevc: ω_gov = ω + min(ω* − ω, α_max·H) (ο ρυθμιστής αναφοράς από τα όρια ροπής, ισχύος και SOC), α = PI(ω_gov − ω) + ω̇*_f, τ_req = τ_L + B·ω + J·α, τ* = clip(ρυθμός(keep·τ_req), τ_n, τ_p)</li>`:''}
+  ${mo?`<li>Βρόχος ρεύματος: i* = τ*/K_t, u = K_e·ω + R·i* + K_p·(i* − i)· τώρα τ* = <b>${n('Y:MO1/TQ','N·m')}</b>, keep = <b>${fmt(now('Y:MO1/KP'),3)}</b></li>`:''}
+ </ul>${wait}<table class="tbl"><tr><th>Μετρική (από την αρχή)</th><th>Τιμή</th></tr>
+  <tr><td>Απόσταση</td><td>${n('Y:X','m')}</td></tr><tr><td>Ενέργεια από την μπαταρία E = ∫v_bat·i_bat</td><td>${eng(now('Y:EN')/3600,'Wh',3)}</td></tr>
+  <tr><td>km/kWh · Wh/km</td><td>${fmt(now('Y:KWH'),3)} · ${fmt(now('Y:WHK'),3)}</td></tr><tr><td>N·m/kW (∫|τ_e| / ∫P_bat)</td><td>${fmt(now('Y:NMK'),3)}</td></tr>
+  <tr><td>I_rms τυμπάνου</td><td>${n('Y:IRMS','A')}</td></tr><tr><td>SOC · πτώση</td><td>${fmt(100*now('Y:SOC'),4)} % · ${fmt(now('Y:DSOC'),3)} μον. %</td></tr></table>`;}
 function nnTheory(t){const s=S.sim,m=S.tutMeta||{};if(!s||!m.P||!editor.comp('M1'))return '';const nn=editor.comp('NN1'),p=nn?{...P.defaults('NN'),...nn.params}:null;
  const b=nnBlock('NN1'),st=b?.st,learn=p&&(p.train==='err'||p.train==='tgt'),cyc=nnCycles(m);
  const emu=!!editor.comp('NNE'),se=emu?nnBlock('NNE')?.st:null;
@@ -1993,6 +2039,7 @@ function scheringTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.C2)return '';c
 function formulaTheory(t){
  if(t.topology==='sampling')return samplingTheory();
  if(t.topology==='dc_drive')return dcDriveTheory();
+ if(t.topology==='ev_drive')return evTheory();
  if(t.topology==='nn_compare'||t.topology==='nn_online'||t.topology==='nn_gui')return nnTheory(t)+(t.topology==='nn_gui'?nnGuiCode():'');
  if(t.topology==='blocks_loop')return blocksTheory();
  if(t.topology==='peak_cm')return pcmTheory();
@@ -2184,7 +2231,9 @@ function boot(){
   onchange:kind=>{if(kind==='struct'||kind==='param'){if(S.batch)S.batch.stale=true;buildSim(false);if(S.theory)setTimeout(()=>{if(tutorial().theory==='v1'||tutorial().theory==='formula')runTheory();},50);scheduleMath();}
    // a move (drag, arrow keys) is saved a moment later, once (4.6: the whole project as JSON on every drag end cost a frame)
    if(kind==='geom')saveLocalSoon();else saveLocal();if(kind==='struct')renderChannels();if(kind==='struct'||kind==='param')window.Watch?.render();},
-  onselect:sel=>{$('#selinfo').textContent=sel.c.length+sel.w.length?`${sel.c.length} στοιχεία · ${sel.w.length} σύρματα επιλεγμένα`:'';renderProps();},
+  onselect:sel=>{$('#selinfo').textContent=sel.c.length+sel.w.length?`${sel.c.length} στοιχεία · ${sel.w.length} σύρματα επιλεγμένα`:'';renderProps();
+   // 4.8: one click on a block «Ελεγκτής AI» opens its façade next to it
+   if(window.Watch&&sel.c.length===1&&!sel.w.length&&editor.comp(sel.c[0])?.type==='AIC'&&atTop())Watch.facade(sel.c[0]);},
   ontool:on=>{const b=$('#wire-tool');b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));},
   onedit:ev=>{if(ev.kind==='comp'){const c=editor.comp(ev.id);if(c?.type==='SUB'){enterSub(c.params.def,S.pfx===null?null:pid(c.id));return;}const sg=editor.settings.dblclick==='scope'&&S.pfx!==null?signalsFor(c):[];if(sg.length)addProbe(sg[0][0]+pid(ev.id)+(sg[0][2]||''));else openInspector(ev.id,ev.x,ev.y);}else openWireInspector(ev.id,ev.x,ev.y);},
   ongroup:shift=>{if(shift){const id=editor.selection().c.find(i=>editor.comp(i)?.type==='SUB');if(id)expandSub(id);else{notice('Διάλεξε ένα υποκύκλωμα για ανάπτυξη (Ctrl+Shift+G).','info');setTimeout(()=>notice(''),2500);}}else groupSel();},
@@ -2195,8 +2244,11 @@ function boot(){
  // the tiles of the control signals over the drawing (4.8, ROADMAP §47)
  window.Watch?.init({get S(){return S;},get editor(){return editor;},get scope(){return scope;},eng,fmt,esc,topDoc,atTop,compAt,partDef,numOf,chanLabel,
   unit:key=>{const [pre,id,pin]=key.split(':');if(pre==='Y'){const c=compAt(id);if(c&&!vecBase(id))return blkUnit({...c,id},pin);}return Scope.unitOf(key,S.sim);},
-  signals:()=>SIGS,setParam:liveParam,save:saveLocal,saveSoon:saveLocalSoon,toSchedule:changesToSchedule});
+  signals:()=>SIGS,setParam:liveParam,save:saveLocal,saveSoon:saveLocalSoon,toSchedule:changesToSchedule,
+  // the façade of the AI controller (4.8): parameters as from the settings window, the solver's blocks, background runs
+  setParams:(id,patch)=>editor.setParams(id,patch),simBlock:id=>S.sim?.net.sig.blocks.find(b=>b.id===id)||null,fullDoc,stopT:()=>S.stopT,hdiv:()=>+$('#sim-step').value});
  $('#watch-btn')?.addEventListener('click',()=>Watch.show());
+ $('#rec-res')?.addEventListener('change',()=>{applyRec();saveLocal();});$('#rec-file')?.addEventListener('click',recToggle);
  editor.svg.addEventListener('pointermove',e=>{const el=e.target.closest?.('[data-c]');hoverComp=el?.dataset.c||null;hoverPos=[e.clientX,e.clientY];updateHover();});
  editor.svg.addEventListener('pointerleave',()=>{hoverComp=null;updateHover();});
  // toolbar
@@ -2305,5 +2357,5 @@ function boot(){
 function renderTheoryLive(){if(!atTop()||document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
 window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
- renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare
+ renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare
 })();

@@ -93,6 +93,18 @@ class NeuralNetworkBlock(unittest.TestCase):
         self.assertLess(emu[1], 0.5 * pi[1])                                            # half the PI's error from the 2nd cycle,
         self.assertLess(emu[-1], 0.3 * pi[-1])                                          # and as good as the online one at the end
 
+    def test_ai_controller_block(self):
+        # 4.8: the block «Ελεγκτής AI» expands to the same PI, filter and network as nn_compare wired by hand: the same IAE per
+        # cycle for the PI alone, the online network and the fixed inverse; through an emulator it learns every cycle
+        A, T = self.r['aic'], self.r['tut']
+        for sc, ref in (('pi', 'pi'), ('fel', 'pinn'), ('inv', 'inv')):
+            self.assertEqual(A[sc]['warnings'], [], msg=sc)
+            for a, b in zip(A[sc]['per'], T[ref]['per']):
+                self.assertAlmostEqual(a, b, delta=1e-6 * max(1, b), msg=sc)    # 2π·5 written with 6 digits by hand
+        emu = A['emu']['per']
+        self.assertTrue(all(b < a for a, b in zip(emu, emu[1:])), msg=emu)
+        self.assertLess(emu[-1], 0.3 * A['pi']['per'][-1])
+
     def test_derivative_output(self):
         # 4.8: ∂(output)/∂(input k) of the block NN (output dy): the browser's (nn.js jac) against central differences, and
         # the server's (engine/batch.py _nn_jac) against the browser's, on the same networks

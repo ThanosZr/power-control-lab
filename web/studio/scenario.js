@@ -1,7 +1,7 @@
 'use strict';
 // Scripted scenarios (ROADMAP §30): the requests of the pcl package, answered by the browser's solver. No DOM:
 // the same file serves pcl/runner.js (Node, 3.13) and the "Σενάρια" panel's worker (scenario_worker.js, 3.14).
-//   {action:'run', project, t_end, channels, hdiv, method, step, from, max_points, measure, waveforms, check}
+//   {action:'run', project, t_end, channels, hdiv, method, step, from, max_points, measure, waveforms, check, nets}
 //   {action:'export', project, channels}      the netlist for the SciPy solver (engine/batch.py)
 //   {action:'tutorial', id, options}           the project a tutorial builds
 //   {action:'tutorials'}                       the list of tutorials and their options
@@ -67,6 +67,8 @@
    measure:meas,diag:s.diagnostics().map(d=>({sev:d.sev,grp:d.grp,id:d.id||null,t:d.t,n:d.n,msg:d.msg,fix:d.fix||''}))};
   // 3.19: the event log, when asked (events: true or a list of kinds)
   if(q.events){const E=s.events(),kinds=Array.isArray(q.events)?new Set(q.events):null;out.events={list:kinds?E.list.filter(e=>kinds.has(e.kind)):E.list,n:E.n,kinds:E.kinds,max:E.max};}
+  // 4.8: the weights of network blocks at the end (e.g. ['C1/NN1']), as the text of their parameter (the façade's offline training)
+  if(Array.isArray(q.nets)&&root.NNet){out.nets={};for(const id of q.nets){const b=s.net.sig.blocks.find(x=>x.id===id&&x.type==='NN');if(b)out.nets[id]=root.NNet.text(b.st.net);}}
   if(q.waveforms!==false){const keep=decimate(t,Y,+q.max_points||200000);
    out.t=keep?keep.map(i=>t[i]):t;out.ch={};keys.forEach((k,j)=>{out.ch[k]=keep?keep.map(i=>Y[j][i]):Y[j];});out.meta.returned=out.t.length;}
   return out;}

@@ -17,7 +17,7 @@
   {title:'Δίκτυο και γραμμές',sub:[S('Δίκτυο (τριφασικά)',['GRID3','GEN3','XF3','LOAD3','FLT3','CB3']),S('Γραμμές',['LINE3','TLM','TL']),S('Υψηλές τάσεις',['MOV','SG'])]},
   {title:'Φορτία',sub:[S('',['CPL'])]},
   {title:'Μετρήσεις',sub:[S('',['VM','AM','VP','IP','MEAS','DISP'])]},
-  {title:'Έλεγχος',sub:[S('Διαμόρφωση',['PWM','MOD3','SH']),S('Ρυθμιστές',['PIB','NN']),S('Εκτιμητές και συγχρονισμός',['FEST','PLL'])]},
+  {title:'Έλεγχος',sub:[S('Διαμόρφωση',['PWM','MOD3','SH']),S('Ρυθμιστές',['PIB','NN','AIC','EVC']),S('Εκτιμητές και συγχρονισμός',['FEST','PLL'])]},
   {title:'Σήματα και μαθηματικά',sub:[S('Πηγές σήματος',['CONST','CLK','RAMP']),S('Πράξεις',['GAIN','SUM','MUL','DIV','SAT']),S('Δυναμικά και φίλτρα',['INT','LPF','F2','RLIM','UD','RT']),
    S('Λογική',['CMP','LOGIC','SR','EDGE']),S('Μετασχηματισμοί abc, αβ, dq',['CLARKE','ICLARKE','PARK','IPARK'])]},
   {title:'Δίαυλοι',sub:[S('',['MUX','DEMUX','BSEL','EBUS'])]},
@@ -28,10 +28,10 @@
  const COURSE=[
   {title:'Ηλεκτρικά κυκλώματα',sub:[S('',['R','L','C','VDC','VAC','IDC','VM','AM','VP','IP','GND','XFMR','KL','KG'])]},
   {title:'Ηλεκτρονική ισχύος',sub:[S('Διακόπτες και έλεγχος',['SW','D','SCR','PWM','MOD3','SH']),S('Κύκλωμα',['L','C','R','VDC','VAC','VAC3','CPL','XFMR','KL','CPE']),S('Μετρήσεις',['VM','AM','MEAS','DISP'])]},
-  {title:'Ηλεκτρικές μηχανές και κινητήρια',sub:[S('Μηχανές',['DCM','IM','SM','SRM']),S('Έλεγχος',['CLARKE','ICLARKE','PARK','IPARK','PLL','FEST','PIB','NN','MOD3'])]},
+  {title:'Ηλεκτρικές μηχανές και κινητήρια',sub:[S('Μηχανές',['DCM','IM','SM','SRM']),S('Έλεγχος',['CLARKE','ICLARKE','PARK','IPARK','PLL','FEST','PIB','NN','AIC','EVC','MOD3'])]},
   {title:'Συστήματα ηλεκτρικής ενέργειας',sub:[S('',['GRID3','GEN3','XF3','LOAD3','LINE3','TLM','FLT3','CB3','VAC3','EBUS'])]},
   {title:'Υψηλές τάσεις',sub:[S('',['VIMP','ILG','TL','MOV','SG','C','R'])]},
-  {title:'Συστήματα αυτομάτου ελέγχου',sub:[S('',['CONST','GAIN','SUM','MUL','DIV','SAT','INT','LPF','F2','RLIM','UD','RT','CMP','LOGIC','SR','EDGE','CLK','RAMP','PIB','NN'])]},
+  {title:'Συστήματα αυτομάτου ελέγχου',sub:[S('',['CONST','GAIN','SUM','MUL','DIV','SAT','INT','LPF','F2','RLIM','UD','RT','CMP','LOGIC','SR','EDGE','CLK','RAMP','PIB','NN','AIC'])]},
   {title:'Προγραμματισμός και οργάνωση',sub:[S('',['EXPR','PY','MUX','DEMUX','BSEL','PORT','SIN','SOUT','TAGO','TAGI'])],subs:true}];
  const BASIC=new Set(['R','L','C','VDC','VAC','IDC','GND','SW','D','VM','AM','VP','PWM','CONST','GAIN','SUM','XFMR','DISP']);
  const TAX=[{id:'field',title:'Κατά πεδίο',groups:FIELD},{id:'course',title:'Κατά μάθημα',groups:COURSE,multi:true},{id:'level',title:'Κατά επίπεδο'},{id:'abc',title:'Αλφαβητικά'},{id:'mine',title:'Αγαπημένα και πρόσφατα'}];

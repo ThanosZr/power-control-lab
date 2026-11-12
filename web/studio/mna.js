@@ -459,7 +459,8 @@
     else if(T==='MOD3'){b.mode=['spwm','svpwm','square'].includes(p.mode)?p.mode:'svpwm';}
     else if(T==='FEST'){b.RR=num(p.RR,2);b.LM=Math.max(num(p.LM,.3),1e-9);st.pa=num(p.psi0,0);st.pb=0;st.t=0;st.u=[0,0,0];}
     else if(T==='EXPR'){const ins=Ex.names(p.ins),pars=Ex.params(p.pars);b.inNames=ins;b.parVals=Object.values(pars);b.expr=String(p.expr??'');
-     try{b.ast=Ex.parse(b.expr,[...ins,...Object.keys(pars)]);}catch(e){warnings.push(`${b.label}: ${e.message} Η έξοδος είναι 0.`);b.ast=['num',0];}b.fn=Ex.compile(b.ast);}
+     try{b.ast=Ex.parse(b.expr,[...ins,...Object.keys(pars)]);}catch(e){warnings.push(`${b.label}: ${e.message} Η έξοδος είναι 0.`);b.ast=['num',0];}
+     const cv={};b.parVals.forEach((c,k)=>{cv[ins.length+k]=c;});b.fn=Ex.compile(b.ast,cv);b.xv=new Array(ins.length).fill(0);}
     else if(T==='PY'){b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';b.y0=num(p.y0,0);st.last=null;st.ys=null;b.inNames=Ex.names(p.ins,6,false);
      b.outNames=Ex.names(p.outs,6,false).filter(k=>!b.inNames.includes(k));b.pars=Ex.params(p.pars);b.code=String(p.code??'');if(!b.outNames.length)warnings.push(`${b.label}: δεν έχει εξόδους.`);}
     else if(T==='NN'){nnBuild(b,p,warnings);if(!(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type)))warnings.push(`${b.label}: διάλεξε μπλοκ PWM ή Ρολόι (αλλιώς η έξοδος μένει ${b.y0}).`);}
@@ -563,7 +564,7 @@
 
  // ---------------------------------------------------------------- simulator
  class Sim{
-  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,step:opts.step||null,solver:opts.solver||null};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
+  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,step:opts.step||null,solver:opts.solver||null,recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
   // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
   basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>b.type==='CLK'||b.type==='RAMP');if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
    for(const c of this.net.compInfo.values())if(c.gen)return 1/c.gen.g.f; // 4.3: a network of generators runs on their period
@@ -878,16 +879,23 @@
    }
    return out;
   }
+  // 4.8: the resolution of the record for long runs: a point in the buffer at most every opts.recDt seconds (0 = every
+  // step), and one statistic per opts.perN periods. The buffers stay the same size, so they cover recDt/h and perN times
+  // more time; the values, the statistics and everything the solver computes are those of every step.
+  setRecord(o={}){const dt=+o.dt>0?+o.dt:0,n=Math.max(1,Math.round(+o.n||1));this.opts.recDt=dt;this.opts.perN=n;}
   recordNow(){
-   const r=this.ring,v=this.computeVals(),nch=r.nch,j=r.head;r.t[j]=this.t;const off=j*nch;for(let i=0;i<nch;i++)r.d[off+i]=v[i];
-   r.head=(j+1)%r.cap;r.n=Math.min(r.n+1,r.cap);
+   const r=this.ring,v=this.computeVals(),nch=r.nch,dt=this.opts.recDt||0;
+   const lr=this._recT??-Infinity;if(!dt||this.t<lr||!(this.t-lr<dt*(1-1e-9))){this._recT=this.t;const j=r.head;r.t[j]=this.t;const off=j*nch;for(let i=0;i<nch;i++)r.d[off+i]=v[i];
+    r.head=(j+1)%r.cap;r.n=Math.min(r.n+1,r.cap);}
    // period statistics (trapezoidal in time)
    const a=this.acc;if(this.prevVals){const h=this.t-this.prevT;if(h>0){for(let i=0;i<nch;i++){const y0=this.prevVals[i],y1=v[i];a.s[i]+=h*(y0+y1)/2;a.q[i]+=h*(y0*y0+y0*y1+y1*y1)/3;}a.dur+=h;}}
    for(let i=0;i<nch;i++){const y=v[i];if(y<a.mn[i])a.mn[i]=y;if(y>a.mx[i])a.mx[i]=y;}
    if(!this.prevVals)this.prevVals=new Float64Array(nch);this.prevVals.set(v);this.prevT=this.t;
   }
   closePeriod(){
-   const a=this.acc,p=this.per,nch=p.nch;if(a.dur<=0)return;const j=p.head,off=j*nch;p.t[j]=this.t;
+   const a=this.acc,p=this.per,nch=p.nch;if(a.dur<=0)return;
+   if((this.opts.perN||1)>1&&(this._perK=(this._perK||0)+1)<this.opts.perN)return;this._perK=0; // 4.8: perN periods in one
+   const j=p.head,off=j*nch;p.t[j]=this.t;
    for(let i=0;i<nch;i++){p.avg[off+i]=a.s[i]/a.dur;p.rms[off+i]=Math.sqrt(Math.max(0,a.q[i]/a.dur));p.min[off+i]=a.mn[i];p.max[off+i]=a.mx[i];p.end[off+i]=this.prevVals?this.prevVals[i]:NaN;} // end: the value at the period boundary (e.g. the current at the clock)
    p.head=(j+1)%p.cap;p.n=Math.min(p.n+1,p.cap);
    for(const c of this.lossList){c.loss.P=c.loss.E/a.dur;c.loss.E=0;}
@@ -1001,7 +1009,7 @@
      case 'FEST':{const dt=Math.max(0,this.t-st.t),[ia0,ib0,w0]=st.u,g=b.RR/b.LM,k=dt/2,a11=1+k*g,a12=k*w0,r1=(1-k*g)*st.pa-k*w0*st.pb+dt*b.RR*ia0,r2=(1-k*g)*st.pb+k*w0*st.pa+dt*b.RR*ib0,det=a11*a11+a12*a12;
       const pa=(a11*r1-a12*r2)/det,pb=(a11*r2+a12*r1)/det,ps=Math.hypot(pa,pb),th=Math.atan2(pb,pa),P2=2*Math.PI,ial=rd(I.al),ibe=rd(I.be),iq=-ial*Math.sin(th)+ibe*Math.cos(th);
       if(!trial)cont.push([b,[pa,pb]]);ys={th:th-P2*Math.floor(th/P2),psi:ps,w1:rd(I.wr)+(ps>1e-6?b.RR*iq/ps:0)};break;}
-     case 'EXPR':{const v=b.inNames.map(k=>rd(I[k]));for(const c of b.parVals)v.push(c);y=b.fn(v,t);if(!Number.isFinite(y))y=0;break;}
+     case 'EXPR':{const v=b.xv,nm=b.inNames;for(let q=0;q<nm.length;q++)v[q]=rd(I[nm[q]]);y=b.fn(v,t);if(!Number.isFinite(y))y=0;break;}
      // Python: called once per sample instant (not in the 'init' pass, whose inputs come before the first solution)
      case 'PY':{if(mode==='sample'&&b.rt&&this.blkDue(b,force)){st.ys=b.rt.step(this.t,b.inNames.map(k=>rd(I[k])));sampled=true;}
       ys={};b.outNames.forEach((k,i)=>{const v=st.ys?st.ys[i]:b.y0;ys[k]=Number.isFinite(v)?v:0;});break;}

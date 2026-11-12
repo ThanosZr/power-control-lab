@@ -9,7 +9,7 @@
 // (gridZ) and the fault currents of a fault at its terminals in the phase domain (faultCurrents), for the analysis.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
- const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3'];
+ const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC'];
  const isLib=t=>TYPES.includes(t);
  const RMIN=1e-4;               // a bolted fault or a closed pole: 0,1 mΩ inside the circuit
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -156,7 +156,118 @@
    if(d.Cm>0)PH.forEach((x,k)=>{const q=B.comp('C'+x+PH[(k+1)%3]+e,'C',{C:d.Cm/2,v0:0,esr:0});B.wire(T[k],[q,'p']);B.wire([q,'n'],T[(k+1)%3]);});}
   return B.def();}
 
- const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef};
+ // ---------------------------------------------------------------- 4.8: the block «Ελεγκτής AI» (ROADMAP §46)
+ // One loop: the reference r through a first-order filter (r_f and its exact derivative ṙ_f = (r − r_f)·2π·f_r), a
+ // discrete PI on r_f − y, and a network that gives the feedforward from (r_f, ṙ_f), summed and limited. Schemes:
+ //   pi   the PI alone (the network block is there with zero output, so a change of scheme keeps the PI's state),
+ //   fel  the network learns online from the PI's output (feedback-error learning),
+ //   inv  fixed weights (an inverse model: «Κράτα τα βάρη» or «Εκπαίδευση εκτός οθόνης» write them),
+ //   emu  the inverse learned through an emulator, two copies of one network (the emulator learns ẏ = f(u, y) from the
+ //        measurements, its copy at the controller's output gives ∂ẏ̂/∂u).
+ // Modes: «με αναφορά» (the input r) or «ζωντανός στόχος» (the parameter target, changed live from the façade); the
+ // switch between them is a live parameter of one expression, so the states stay. Outputs: u, the learning curve L,
+ // IAE = ∫|r_f − y|dt, sat (1 when u sits on a limit), and the emulator's ẏ̂ (emu). Inner ids are fixed: channels such as
+ // C1/NN1, C1/E, C1/SAT are the same in every scheme.
+ function aicDef(c){const p=prm(c),B=builder(c.label||c.id),sc=['pi','fel','inv','emu'].includes(p.scheme)?p.scheme:'fel';
+  const fs=Math.max(num(p.fs,1000),1e-6),fr=Math.max(num(p.fr,5),1e-6),rs=Math.abs(num(p.rs,1))||1,us=Math.abs(num(p.us,1))||1,lo=num(p.umin,-1),hi=num(p.umax,1);
+  const learn=p.learn!==false&&p.learn!=='false',live=p.mode==='live';
+  const r=B.comp('$r','SIN',{name:'r'}),y=B.comp('$y','SIN',{name:'y'});
+  B.comp('CLK','CLK',{f:fs});
+  B.comp('TGT','CONST',{v:s(num(p.target,0))});B.comp('SRC','EXPR',{expr:'m*u1+(1-m)*u2',ins:'u1, u2',pars:'m = '+(live?0:1)});B.wire([r,'y'],['SRC','u1']);B.wire(['TGT','y'],['SRC','u2']);
+  B.comp('LP','LPF',{fc:fr,y0:0});B.wire(['SRC','y'],['LP','u']);
+  B.comp('DR','SUM',{signs:'+-'});B.wire(['SRC','y'],['DR','a']);B.wire(['LP','y'],['DR','b']);B.comp('GD','GAIN',{K:2*Math.PI*fr});B.wire(['DR','y'],['GD','u']);
+  B.comp('E','SUM',{signs:'+-'});B.wire(['LP','y'],['E','a']);B.wire([y,'y'],['E','b']);
+  B.comp('PI','PIB',{Kp:num(p.Kp,1),Ki:num(p.Ki,10),clock:'CLK',trig:'start',y0:0,ymin:lo,ymax:hi});B.wire(['E','y'],['PI','u']);
+  const nnp={ins:'r, dr',xs:`${rs}, ${Math.abs(num(p.dxs,0))||+(2*Math.PI*fr*rs).toPrecision(6)}`,hidden:String(p.hidden||'8'),ys:us,ymin:lo,ymax:hi,opt:p.opt==='adam'?'adam':'sgd',lr:num(p.lr,.005),clip:5,nl:400,
+   init:'zero',seed:num(p.seed,1),clock:'CLK',trig:'start',y0:0,learn:sc==='pi'?false:learn,w:sc==='pi'?'':String(p.w||''),train:sc==='inv'?'off':'err'};
+  B.comp('NN1','NN',nnp);B.wire(['LP','y'],['NN1','r']);B.wire(['GD','y'],['NN1','dr']);
+  // the network's share: 0 in «pi» (a gain 0 after it, so the PI alone)
+  B.comp('KN','GAIN',{K:sc==='pi'?0:1});B.wire(['NN1','y'],['KN','u']);
+  B.comp('U','SUM',{signs:'++'});B.wire(['PI','y'],['U','a']);B.wire(['KN','y'],['U','b']);
+  B.comp('SAT','SAT',{lo,hi});B.wire(['U','y'],['SAT','u']);
+  B.comp('FLAG','EXPR',{expr:'abs(u1-u2) > 1e-9*(1+abs(u1)) ? 1 : 0',ins:'u1, u2'});B.wire(['U','y'],['FLAG','u1']);B.wire(['SAT','y'],['FLAG','u2']);
+  B.comp('AE','EXPR',{expr:'abs(u1)',ins:'u1'});B.wire(['E','y'],['AE','u1']);B.comp('IAE','INT',{y0:0});B.wire(['AE','y'],['IAE','u']);
+  if(sc==='emu'){const Ts=1/fs;B.comp('UDu','UD',{clock:'CLK',trig:'start',y0:0});B.wire(['SAT','y'],['UDu','u']);B.comp('UDy','UD',{clock:'CLK',trig:'start',y0:0});B.wire([y,'y'],['UDy','u']);
+   B.comp('DY','SUM',{signs:'+-'});B.wire([y,'y'],['DY','a']);B.wire(['UDy','y'],['DY','b']);B.comp('GY','GAIN',{K:1/Ts});B.wire(['DY','y'],['GY','u']);
+   const ds=Math.abs(num(p.ds,0))||+(2*Math.PI*fr*rs/4).toPrecision(3),em={ins:'u, w',xs:`${Math.max(Math.abs(lo),Math.abs(hi))||1}, ${rs}`,hidden:String(p.hidden||'8'),ys:ds,ymin:-100*ds,ymax:100*ds,clock:'CLK',trig:'start',y0:0,init:'zero',seed:num(p.seed,1)+1};
+   B.comp('NNE','NN',{...em,train:'tgt',opt:'adam',lr:num(p.elr,2e-3),clip:5,nl:400,learn});B.wire(['UDu','y'],['NNE','u']);B.wire(['UDy','y'],['NNE','w']);B.wire(['GY','y'],['NNE','tgt']);
+   B.comp('NNC','NN',{...em,train:'off',share:'NNE',jac:'u'});B.wire(['NN1','y'],['NNC','u']);B.wire(['LP','y'],['NNC','w']);
+   B.comp('EA','SUM',{signs:'+-'});B.wire(['GD','y'],['EA','a']);B.wire(['NNC','y'],['EA','b']);
+   B.comp('MC','MUL',{});B.wire(['EA','y'],['MC','a']);B.wire(['NNC','dy'],['MC','b']);B.comp('GK','GAIN',{K:num(p.K,.1)});B.wire(['MC','y'],['GK','u']);
+   B.comp('UDe','UD',{clock:'CLK',trig:'start',y0:0});B.wire(['GK','y'],['UDe','u']);B.wire(['UDe','y'],['NN1','e']);}
+  else if(sc!=='inv')B.wire(['PI','y'],['NN1','e']);
+  const out=(name,src)=>{const o=B.comp('$'+name,'SOUT',{name});B.wire(src,[o,'u']);};
+  if(sc==='inv')B.comp('L0','CONST',{v:'0'});
+  out('u',['SAT','y']);out('L',sc==='inv'?['L0','y']:['NN1','L']);out('iae',['IAE','y']);out('sat',['FLAG','y']);if(sc==='emu')out('yd',['NNE','y']);
+  return B.def();}
+ // ---------------------------------------------------------------- 4.8: the multi-objective cascade of the EV workbench
+ // (Control Workbench EV/DC v0.17, scheme «moevc», ROADMAP 4.8 (β)): a reference governor that asks the speed loop only
+ // for what the torque, current, power and SOC limits allow; a speed loop that gives an acceleration; the vehicle
+ // dynamics that turn it into a torque request τ = J·α + B·ω + τ_L (the coupling speed ↔ torque); an allocation with
+ // the weights of speed, torque and energy (and low SOC, and the predicted power) and a slew limit; the current loop
+ // with the back-EMF and R·i feedforward. Modes as in the workbench: eco, balanced, performance set the weights and
+ // the limits; every value is a live parameter (expressions and gains), so the weights change while it runs.
+ function evcDef(c){const p=prm(c),B=builder(c.label||c.id),mode=['eco','performance'].includes(p.mode)?p.mode:'balanced',simple=p.scheme==='moev';
+  let ws=num(p.ws,1),wt=num(p.wt,.75),we=num(p.we,.55),pl=num(p.plim,8),il=num(p.ilim,200);
+  // the presets of the workbench: moev sets energy, torque and the limits; moevc (built on moev) also the speed and energy weights
+  if(mode==='eco'){we=Math.max(we,.85);wt=Math.min(wt,.55);pl*=.65;il*=.7;if(!simple){ws=Math.min(ws,.85);we=Math.max(we,.95);}}
+  else if(mode==='performance'){we=Math.min(we,.25);wt=Math.max(wt,.95);pl*=1.35;il*=1.25;if(!simple){ws=Math.max(ws,1.1);we=Math.min(we,.2);}}
+  const kt=Math.max(num(p.Kt,.2),1e-9),ke=num(p.Ke,.2),R=num(p.R,.22),J=Math.max(num(p.J,.17),1e-9),b=num(p.B,.012),H=num(p.H,.85),al=num(p.alim,150),tl=num(p.taulim,40),rg=num(p.regen,16),lo=num(p.umin,-96),hi=num(p.umax,96);
+  const tn=-Math.min(rg,il*kt*.55),f=x=>String(+(+x).toPrecision(10));
+  const io=n=>B.comp('$'+n,'SIN',{name:n}),r=io('r'),y=io('y'),ia=io('i'),soc=io('soc'),tld=io('tl');
+  const E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''});
+  B.comp('CLK','CLK',{f:num(p.fs,1000)});
+  E('LS','min(max((0.45-s)/0.35, 0), 1)','s');B.wire([soc,'y'],['LS','s']);                       // low SOC: 0 … 1
+  if(simple){
+   // moev: speed PI → torque (weighted) + the load and friction feedforward; the supervisor derates with the SOC, keeps a
+   // share of the torque (the weights) and clips to the torque, current and power limits
+   E('SF','min(max(1 - 0.45*ls*min(max(we, 0), 1.5), 0.35), 1.05)','ls','we = '+f(we));B.wire(['LS','y'],['SF','ls']);
+   E('TP','min(min(tl, il*kt, atl)*sf, abs(w) > 2 ? pl*1000/max(abs(w), 2) : 1e12)','sf, w',`tl = ${f(tl)}, il = ${f(il)}, kt = ${f(kt)}, atl = ${f(num(p.atl,40))}, pl = ${f(pl)}`);B.wire(['SF','y'],['TP','sf']);B.wire([y,'y'],['TP','w']);
+   B.comp('EG','SUM',{signs:'+-'});B.wire([r,'y'],['EG','a']);B.wire([y,'y'],['EG','b']);
+   B.comp('PIW','PIB',{Kp:num(p.kpw,.2),Ki:num(p.kiw,.6),clock:'CLK',trig:'start',y0:0,ymin:-1e6,ymax:1e6});B.wire(['EG','y'],['PIW','u']);
+   E('TR','ws*pw + tq + b*w','pw, tq, w',`ws = ${f(ws)}, b = ${f(b)}`);B.wire(['PIW','y'],['TR','pw']);B.wire([tld,'y'],['TR','tq']);B.wire([y,'y'],['TR','w']);
+   E('KP','min(max(0.55 + 0.45*wt - 0.2*we*ls, 0.3), 1.05)','ls',`wt = ${f(wt)}, we = ${f(we)}`);B.wire(['LS','y'],['KP','ls']);
+   B.comp('TS','MUL',{});B.wire(['TR','y'],['TS','a']);B.wire(['KP','y'],['TS','b']);
+   E('TQ','min(max(x, -tp), tp)','x, tp');B.wire(['TS','y'],['TQ','x']);B.wire(['TP','y'],['TQ','tp']);
+   E('LIM','abs(a - b) > 1e-6 ? 1 : 0','a, b');B.wire(['TQ','y'],['LIM','a']);B.wire(['TR','y'],['LIM','b']);
+   B.comp('GOV','GAIN',{K:1});B.wire([r,'y'],['GOV','u']);   // no reference governor: the target as it is
+  }else{
+  E('SF','min(max(1 - 0.5*ls*min(max(we, 0), 1.4), 0.3), 1.05)','ls','we = '+f(we));B.wire(['LS','y'],['SF','ls']);
+  E('TP','max(0, min(min(tl, il*kt)*sf, abs(w) > 2 ? pl*1000/max(abs(w), 2) : 1e12))','sf, w',`tl = ${f(tl)}, il = ${f(il)}, kt = ${f(kt)}, pl = ${f(pl)}`);B.wire(['SF','y'],['TP','sf']);B.wire([y,'y'],['TP','w']);
+  E('AP','min(max((tp - tq - b*w)/J, -al), al)','tp, tq, w',`b = ${f(b)}, J = ${f(J)}, al = ${f(al)}`);B.wire(['TP','y'],['AP','tp']);B.wire([tld,'y'],['AP','tq']);B.wire([y,'y'],['AP','w']);
+  E('AN','min(max((tn - tq - b*w)/J, -al), al)','tq, w',`tn = ${f(tn)}, b = ${f(b)}, J = ${f(J)}, al = ${f(al)}`);B.wire([tld,'y'],['AN','tq']);B.wire([y,'y'],['AN','w']);
+  // the reference governor: what the limits allow within the horizon H
+  E('GOV','r - w >= 0 ? w + min(r - w, max(ap, 0)*H) : w - min(w - r, -min(an, 0)*H)','r, w, ap, an','H = '+f(H));B.wire([r,'y'],['GOV','r']);B.wire([y,'y'],['GOV','w']);B.wire(['AP','y'],['GOV','ap']);B.wire(['AN','y'],['GOV','an']);
+  B.comp('EG','SUM',{signs:'+-'});B.wire(['GOV','y'],['EG','a']);B.wire([y,'y'],['EG','b']);
+  B.comp('PIA','PIB',{Kp:num(p.kpa,2.2),Ki:num(p.kia,.45),clock:'CLK',trig:'start',y0:0,ymin:-1e6,ymax:1e6});B.wire(['EG','y'],['PIA','u']);
+  // 4.8 (not in the workbench, aff = 0 removes it): the acceleration of the reference as a feedforward
+  const aff=num(p.aff,1),fr=Math.max(num(p.fr,2),1e-3);
+  B.comp('LR','LPF',{fc:fr,y0:0});B.wire([r,'y'],['LR','u']);B.comp('DRr','SUM',{signs:'+-'});B.wire([r,'y'],['DRr','a']);B.wire(['LR','y'],['DRr','b']);
+  B.comp('GR','GAIN',{K:2*Math.PI*fr*aff});B.wire(['DRr','y'],['GR','u']);B.comp('AS','SUM',{signs:'++'});B.wire(['PIA','y'],['AS','a']);B.wire(['GR','y'],['AS','b']);
+  E('AC','min(max(a, an), ap)','a, ap, an');B.wire(['AS','y'],['AC','a']);B.wire(['AP','y'],['AC','ap']);B.wire(['AN','y'],['AC','an']);
+  // the coupling: speed objective → torque through the vehicle dynamics
+  E('TR','ff*tq + b*w + J*a','tq, w, a',`ff = ${f(num(p.ffg,1))}, b = ${f(b)}, J = ${f(J)}`);B.wire([tld,'y'],['TR','tq']);B.wire([y,'y'],['TR','w']);B.wire(['AC','y'],['TR','a']);
+  // the multi-objective allocation: speed and torque keep the request, energy (with low SOC) and the power reduce it
+  E('KP','min(max(0.72 + 0.26*min(max(ws, 0), 1.5) + 0.24*min(max(wt, 0), 1.5) - 0.18*min(max(we, 0), 1.5)*ls - 0.08*min(max(abs(tr*w)/1000/pl - 0.85, 0), 1.5), 0.35), 1.15)','tr, w, ls',
+   `ws = ${f(ws)}, wt = ${f(wt)}, we = ${f(we)}, pl = ${f(pl)}`);B.wire(['TR','y'],['KP','tr']);B.wire([y,'y'],['KP','w']);B.wire(['LS','y'],['KP','ls']);
+  B.comp('TS','MUL',{});B.wire(['TR','y'],['TS','a']);B.wire(['KP','y'],['TS','b']);
+  B.comp('SL','RLIM',{up:num(p.slew,420),dn:num(p.slew,420),y0:0});B.wire(['TS','y'],['SL','u']);
+  E('TQ','min(max(x, tn), tp)','x, tp','tn = '+f(tn));B.wire(['SL','y'],['TQ','x']);B.wire(['TP','y'],['TQ','tp']);
+  // as in the workbench: 1 when the torque given differs from the torque needed (the allocation keep ≠ 1, the slew rate or a limit)
+  E('LIM','abs(a - b) > 1e-5*(1 + abs(b)) ? 1 : 0','a, b');B.wire(['TQ','y'],['LIM','a']);B.wire(['TR','y'],['LIM','b']);
+  }
+  // the current loop with the back-EMF and the R·i feedforward
+  B.comp('IR','GAIN',{K:1/kt});B.wire(['TQ','y'],['IR','u']);
+  B.comp('EI','SUM',{signs:'+-'});B.wire(['IR','y'],['EI','a']);B.wire([ia,'y'],['EI','b']);
+  B.comp('PII','PIB',{Kp:num(p.kpi,.02),Ki:num(p.kii,0),clock:'CLK',trig:'start',y0:0,ymin:lo-hi,ymax:hi-lo});B.wire(['EI','y'],['PII','u']);
+  E('FF','ke*w + R*ir','w, ir',`ke = ${f(ke)}, R = ${f(R)}`);B.wire([y,'y'],['FF','w']);B.wire(['IR','y'],['FF','ir']);
+  B.comp('US','SUM',{signs:'++'});B.wire(['FF','y'],['US','a']);B.wire(['PII','y'],['US','b']);
+  B.comp('SAT','SAT',{lo,hi});B.wire(['US','y'],['SAT','u']);
+  E('PW','abs(tr*w)/1000','tr, w');B.wire(['TR','y'],['PW','tr']);B.wire([y,'y'],['PW','w']);
+  const out=(name,src)=>{const o=B.comp('$'+name,'SOUT',{name});B.wire(src,[o,'u']);};
+  out('u',['SAT','y']);out('tau',['TQ','y']);out('rg',['GOV','y']);out('lim',['LIM','y']);out('keep',['KP','y']);out('pw',['PW','y']);
+  return B.def();}
+ const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef};
  function defOf(c){return DEFS[c.type](c);}
 
  // ---------------------------------------------------------------- project → project with SUB instances

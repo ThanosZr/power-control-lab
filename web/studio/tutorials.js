@@ -888,6 +888,111 @@
   desc:'Το ίδιο κύκλωμα με τη «σύγκριση», με το νευρωνικό δίκτυο να ξεκινά χωρίς εκπαίδευση (έξοδος 0) και να μαθαίνει μέσα στα πρώτα δευτερόλεπτα. Στο scope η καμπύλη μάθησης L: η RMS τιμή του σφάλματος μάθησης (της εξόδου του PI) στα τελευταία 400 δείγματα. Στη μέση αλλάζει το φορτίο ή η αναφορά, και το δίκτυο ξαναπροσαρμόζεται, εκτός αν η μάθηση έχει παγώσει (είσοδος fz ή παράμετρος «Μαθαίνει»).',
   tasks:['Δες την L να πέφτει στον πρώτο κιόλας κύκλο με τη «Γρήγορη»: το δίκτυο μαθαίνει την τάση που χρειάζεται η μηχανή για κάθε (ω_r, α_r).','«Νέο μοτίβο αναφοράς»: το δίκτυο έμαθε μια σχέση, όχι μια χρονοσειρά· το νέο μοτίβο (μέσα στην ίδια περιοχή ταχυτήτων) ακολουθείται αμέσως.','«Διπλάσιο φορτίο»: η L ανεβαίνει στην αλλαγή και ξαναπέφτει. Με «Πάγωμα στα 2 s» μένει ψηλά: ο PI κάνει όλη τη διόρθωση.','Ξεκλείδωσε/κλείδωσε τη μάθηση την ώρα της προσομοίωσης: διπλό κλικ στο NN → «Μαθαίνει».','Σύγκρινε «Γρήγορη» και «Αργή»: γρηγορότερη μάθηση, αλλά και πιο θορυβώδη βάρη (δες το u_NN).'],
   build(o){return nnDrive({ctrl:'online',load:o.event==='load'?'step':'fan',event:o.event,freeze:o.freeze,cycles:5,lr:o.lr});}});
+ // 4.8 (ROADMAP §46): the same machine with one block «Ελεγκτής AI» instead of the PI and the network wired by hand;
+ // its façade (click on the block) changes scheme, mode, target and learning while it runs
+ // 4.8: the pattern of steps repeats for ever (an expression of t), so the run lasts minutes; the record keeps a point
+ // per millisecond (the memory then covers minutes) and the load step comes at 1 minute
+ const NN_PAT_EXPR='m < 0.1 ? 0 : m < 0.5 ? 100 : m < 0.9 ? 150 : m < 1.3 ? 50 : 120';
+ function aiBlock(o){const P=1.6,cyc=o.cycles||4,stopT=o.cycles?+(cyc*P).toFixed(4):0,kf=1.33e-3,live=o.mode==='live',tStep=o.cycles?+(Math.floor(cyc/2)*P).toFixed(4):60;
+  const comps=[o.cycles?C('KW','CONST',40,0,{v:nnSched(cyc,P).join(', ')},{label:'ω*'}):C('KW','EXPR',40,0,{expr:NN_PAT_EXPR.replace(/m/g,'mod(t, 1.6)'),ins:''},{label:'ω* (επαναλαμβάνεται)'}),C('TFw','TAGI',40,80,{name:'ω'}),
+   C('C1','AIC',220,40,{scheme:o.scheme,mode:live?'live':'ref',target:100,fs:1000,fr:5,Kp:.5,Ki:10,umin:-220,umax:220,rs:150,dxs:3000,us:100,hidden:'8',opt:'sgd',lr:.005,seed:1,
+    w:o.scheme==='inv'?JSON.stringify(NN_DC_INV):''},{label:'Ελεγκτής AI'}),C('TGu','TAGO',330,10,{name:'u'}),
+   C('TFu','TAGI',-20,300,{name:'u'}),C('V1','VDC',120,300,{ctl:'sig',V:0},{label:'μετατροπέας',lbl:'left'}),gnd(120,390),
+   C('M1','DCM',300,300,{Ra:1,La:10e-3,psi:1,J:.02,bm:.002,load:'sig',w0:0,ia0:0},{label:'M'}),C('TGw','TAGO',430,290,{name:'ω'}),
+   C('KL','CONST',40,440,{v:o.load==='step'?`0:1, ${tStep}:2`:'1'},{label:'συντελεστής φορτίου'}),C('TFw3','TAGI',40,500,{name:'ω'}),
+   C('TLX','EXPR',170,470,{expr:'k*u1*u2*abs(u2)',ins:'u1, u2',pars:`k = ${kf}`},{label:'τ_L = k·ω·|ω|'})];
+  const wires=[['KW:y','C1:r',[[120,0],[120,20]]],['TFw:y','C1:y',[[120,80],[120,60]]],['C1:u','TGu:u',[[290,10]]],['TFu:y','V1:u'],['V1:p','M1:a'],['V1:n','G1:g'],['M1:b','G1:g',[[300,390]]],['M1:w','TGw:u'],
+   ['KL:y','TLX:u1',[[100,440],[100,460]]],['TFw3:y','TLX:u2',[[100,500],[100,480]]],['TLX:y','M1:tl',[[240,470],[240,300]]]];
+  const panes=[[['Y:C1/LP','ω_r'],['Y:M1','ω']],[['Y:C1/E','e = ω_r − ω']],[['Y:C1/PI','u_PI'],['Y:C1/SAT','u']],[['Y:C1/NN1:L','L (σφάλμα μάθησης)']]];
+  const watch={tiles:[{ctl:'C1.learn',label:'Μαθαίνει',at:[300,-80]},{ctl:'C1.target',label:'Στόχος ω*',at:[150,-80],al:'r',rng:[0,200],steps:'-20; +20'},['Y:M1','ω'],['Y:C1/E','e'],['Y:C1/IAE','IAE'],['Y:C1/NN1:L','L']]};
+  return project(comps,wires,{watch,sim:{hDiv:20,speed:1000,stopT,...(o.cycles?{}:{rec:{dt:1e-3}})},scope:{panes,window:{unit:'s',n:3.2}},meta:{P,cycles:cyc,kf,aic:'C1'}});}
+ T.push({id:'ai_block',group:'Έλεγχος με νευρωνικά δίκτυα (4.7)',title:'Ελεγκτής AI με πρόσοψη',theory:'formula',topology:'ai_block',
+  options:[{k:'scheme',label:'Σχήμα',options:[['fel','PI + νευρωνικό online'],['emu','PI + αντίστροφο μέσω εξομοιωτή'],['inv','PI + αντίστροφο μοντέλο (σταθερά βάρη)'],['pi','Μόνο PI']],def:'fel'},
+   {k:'mode',label:'Αναφορά',options:[['ref','Μοτίβο βημάτων (είσοδος r)'],['live','Ζωντανός στόχος (ρυθμιστής)']],def:'ref'},
+   {k:'load',label:'Φορτίο',options:[['fan','Ανεμιστήρας'],['step','Διπλάσιο στο 1 λεπτό']],def:'fan'}],
+  desc:'Τρέχει χωρίς τέλος: η αναφορά επαναλαμβάνεται κάθε 1,6 s, η καταγραφή κρατά ένα σημείο ανά ms (η μνήμη καλύπτει λεπτά) και «⭳ σε αρχείο» γράφει όλο το τρέξιμο στον δίσκο. Η μηχανή ΣΡ της «σύγκρισης» με ένα μόνο μπλοκ «Ελεγκτής AI» (βιβλιοθήκη «Έλεγχος»): μέσα του φίλτρο αναφοράς, PI, νευρωνικό δίκτυο και, στο σχήμα με εξομοιωτή, το δεύτερο δίκτυο με το αντίγραφό του. Κλικ στο μπλοκ ανοίγει την πρόσοψη: σχήμα, τρόπος (εκπαίδευση εκτός οθόνης, τρέξιμο με αναφορά, ζωντανός στόχος), «Μαθαίνει», ζωντανές τιμές και καμπύλες, επαναφορά και αποθήκευση βαρών, σύγκριση με τον PI.',
+  tasks:['Κλικ στο μπλοκ «Ελεγκτής AI»: η πρόσοψη ανοίγει δίπλα του. ▶ και δες το IAE ανά κύκλο και την καμπύλη μάθησης.','«Εκπαίδευση εκτός οθόνης»: το ίδιο κύκλωμα τρέχει στο παρασκήνιο με μάθηση και τα βάρη γράφονται στο μπλοκ· μετά το ▶ ξεκινά εκπαιδευμένο.','«Ζωντανός στόχος»: η αναφορά γίνεται ο ρυθμιστής της πρόσοψης· άλλαξέ τον όσο τρέχει.','Κλείσε το «Μαθαίνει» στη μέση και άλλαξε το φορτίο: ο PI καλύπτει τη διαφορά.','«Σύγκριση με PI»: το ίδιο κύκλωμα με μόνο τον PI στο παρασκήνιο· ο πίνακας δίνει το IAE ανά κύκλο.'],
+  build(o){return aiBlock(o);}});
+ // 4.8: an electric vehicle (ROADMAP §46, decision 50; Control Workbench EV/DC v0.17): battery with SOC, a converter
+ // as an average model (the armature voltage the controller asks for, within what the battery allows), the DC machine
+ // of the tool with the vehicle's inertia reflected to the shaft, the road load (rolling, air, grade that changes with
+ // the distance, a variable load), and the energy metrics. The battery and the vehicle are signal models, as in the
+ // workbench; the machine and its current are the tool's. The driving cycle repeats (minutes, no end of the run).
+ const EVV={R:.22,La:.003,K:.2,Jm:.018,B:.012,gear:7,eta:.92,rw:.255,m:115,Crr:.012,CdA:.32,rho:1.225,Tb:.05,Ta:.45,lp:55,gp:90,Q:18,ocv0:45,ocv1:58.8,Rb:.075,Rg:2.6,ceta:.94,boost:1.75,vmax:96,ibmax:140,vkph:45};
+ // the cycles of the workbench, with a stop at the end so that they repeat (decelerate to 0 and wait)
+ const EV_CYC={urban:{t:[0,.11,.2,.38,.5,.63,.74,.84,.92,1],y:[0,.28,.58,.58,.32,.72,.48,.62,0,0]},grade:{t:[0,.09,.2,.41,.53,.65,.78,.86,.93,1],y:[0,.34,.66,.66,.50,.74,.58,.64,0,0]},
+  // 4.8: hard accelerations, where the power limit of each mode binds (eco 5.2 kW, balanced 8 kW, performance 10.8 kW)
+  sport:{t:[0,.07,.24,.31,.42,.5,.66,.76,.9,1],y:[0,.85,.85,.3,.3,.8,.8,.45,0,0]}};
+ function evDrive(o){const V=EVV,g=9.80665,grade=o.cycle==='grade',sport=o.cycle==='sport',m=V.m+(grade?35:0),g0=grade?4:0,ga=grade?2.5:1.5,soc0=grade?.55:.85,D=+o.D||60;
+  const Jeq=+(V.Jm+m*(V.rw/V.gear)**2).toPrecision(6),wmax=+((V.vkph/3.6)/V.rw*V.gear/.85).toPrecision(6),cy=EV_CYC[grade?'grade':sport?'sport':'urban'];
+  const lut=cy.t.map((t,k)=>`${+(t*D).toPrecision(6)}, ${cy.y[k]}`).join(', ');
+  const ctl=['moev','ai','pi'].includes(o.ctrl)?o.ctrl:'moevc',mo=ctl==='moev'||ctl==='moevc';
+  const comps=[
+   // driving cycle: normalized speed (0 … 0.85 of 45 km/h) repeating every D seconds, with a slow ripple
+   C('REF','EXPR',-300,-80,{expr:`wm*clamp(lut(mod(t, D), ${lut})*(1 + 0.025*sin(2*pi*t/(D/3))), 0, 0.85)`,ins:'',pars:`wm = ${wmax}, D = ${D}`},{label:'κύκλος οδήγησης ω*'}),
+   C('TGr','TAGO',-170,-80,{name:'ω*'}),
+   // the battery (signals): OCV(SOC), R_int(SOC), current from the power the converter draws, SOC
+   C('TFsoc','TAGI',-300,250,{name:'SOC'}),C('TFva','TAGI',-300,290,{name:'v_a'}),C('TFia','TAGI',-300,330,{name:'i_a'}),
+   C('BAT','EXPR',-150,290,{expr:'(oc - sqrt(max(oc*oc - 4*rb*pb, 0)))/(2*rb)',ins:'s, va, ia',pars:''},{label:'i_bat'}),
+   C('TGib','TAGO',-30,290,{name:'i_bat'}),
+   C('GQ','GAIN',60,250,{K:+(-1/(3600*V.Q)).toPrecision(8)},{label:'−1/(3600·Q)'}),C('TFib','TAGI',-30,250,{name:'i_bat'}),
+   C('SOC','INT',160,250,{y0:soc0,lo:0,hi:1},{label:'SOC'}),C('TGs','TAGO',260,250,{name:'SOC'}),
+   // the converter: the armature voltage within ± min(V_max, boost·OCV)
+   C('TFu','TAGI',-300,450,{name:'u'}),C('TFs2','TAGI',-300,490,{name:'SOC'}),C('TFia3','TAGI',-300,530,{name:'i_a'}),
+   C('CNV','EXPR',-150,490,{expr:'',ins:'u, s, ia',pars:''},{label:'V_arm (όρια μπαταρίας)'}),C('TGva','TAGO',-30,470,{name:'v_a'}),
+   C('TFva2','TAGI',40,560,{name:'v_a'}),C('V1','VDC',140,560,{ctl:'sig',V:0},{label:'μετατροπέας',lbl:'left'}),gnd(140,660),
+   C('AM1','AM',260,500,{},{label:'i_a'}),C('TGi','TAGO',340,460,{name:'i_a'}),
+   C('TFl','TAGI',240,600,{name:'τ_L'}),C('M1','DCM',380,560,{Ra:V.R,La:V.La,psi:V.K,J:Jeq,bm:V.B,load:'sig',w0:0,ia0:0},{label:'M (ΣΡ)'}),C('TGw','TAGO',500,550,{name:'ω'}),
+   // the road: distance, grade and load
+   C('TFw','TAGI',-300,660,{name:'ω'}),C('GV','GAIN',-180,660,{K:+(V.rw/V.gear).toPrecision(8)},{label:'v = ω·r/n'}),C('X','INT',-80,660,{y0:0},{label:'απόσταση x'}),C('TGx','TAGO',20,660,{name:'x'}),C('TGv','TAGO',-80,610,{name:'v'}),
+   C('TFw4','TAGI',-300,740,{name:'ω'}),C('TFx','TAGI',-300,780,{name:'x'}),
+   C('ROAD','EXPR',-150,760,{expr:'(m*g*Crr*sg + 0.5*rho*CdA*v*abs(v) + m*g*sin(atan((g0 + ga*sin(2*pi*x/gp))/100)))*rw/(n*eta) + (Tb + Ta*(0.5 + 0.5*sin(2*pi*x/lp)))*sg',
+    ins:'w, x',pars:`m = ${m}, g = ${g}, Crr = ${V.Crr}, rho = ${V.rho}, CdA = ${V.CdA}, g0 = ${g0}, ga = ${ga}, gp = ${V.gp}, rw = ${V.rw}, n = ${V.gear}, eta = ${V.eta}, Tb = ${V.Tb}, Ta = ${V.Ta}, lp = ${V.lp}, v = 0, sg = 0`},{label:'τ_L φορτίου δρόμου'}),
+   C('TGl','TAGO',-30,760,{name:'τ_L'}),
+   // metrics: energy drawn (and regenerated), distance, km/kWh, Wh/km, N·m/kW, RMS current, SOC drop
+   C('TFib2','TAGI',600,-80,{name:'i_bat'}),C('TFs3','TAGI',600,-40,{name:'SOC'}),C('PB','EXPR',720,-60,{expr:'ib*(oc - ib*rb)',ins:'ib, s',pars:''},{label:'P_bat = v_bat·i_bat'}),
+   C('EN','INT',840,-60,{y0:0},{label:'E (J)'}),C('TFx2','TAGI',600,20,{name:'x'}),
+   C('KWH','EXPR',960,0,{expr:'en > 1 ? (x/1000)/(en/3.6e6) : 0',ins:'x, en'},{label:'km/kWh'}),C('WHK','EXPR',960,60,{expr:'x > 1 ? (en/3600)/(x/1000) : 0',ins:'x, en'},{label:'Wh/km'}),
+   C('TFw7','TAGI',600,120,{name:'ω'}),C('AT','EXPR',720,140,{expr:'abs(te)',ins:'te'},{label:'|τ_e|'}),C('IT','INT',840,140,{y0:0},{label:'∫|τ_e|'}),C('IP','INT',840,200,{y0:0},{label:'∫P_bat'}),
+   C('NMK','EXPR',960,170,{expr:'p > 1e-6 ? q/(p/1000) : 0',ins:'q, p'},{label:'N·m/kW'}),
+   C('TFia2','TAGI',600,260,{name:'i_a'}),C('I2','EXPR',720,260,{expr:'i*i',ins:'i'},{label:'i_a²'}),C('II2','INT',840,260,{y0:0},{label:'∫i_a²'}),
+   C('IRMS','EXPR',960,260,{expr:'t > 0 ? sqrt(q/t) : 0',ins:'q'},{label:'I_rms'}),
+   C('TFs4','TAGI',840,320,{name:'SOC'}),C('DSOC','EXPR',960,320,{expr:'100*(s0 - s)',ins:'s',pars:`s0 = ${soc0}`},{label:'πτώση SOC (μον. %)'}),
+   C('TFv2','TAGI',840,380,{name:'v'}),C('KPH','GAIN',960,380,{K:3.6},{label:'km/h'})];
+  // the expressions of the battery need OCV and R_int of the SOC: written out in each (a function of the SOC)
+  const ocv=`(${V.ocv0} + ${+(V.ocv1-V.ocv0).toPrecision(6)}*s - 1.8*(1 - s)^3)`,rb=`(${V.Rb}*(1 + ${V.Rg}*(1 - s)^2))`;
+  const fix=c=>{if(c.params?.expr)c.params.expr=c.params.expr.replace(/\boc\b/g,ocv).replace(/\brb\b/g,rb);return c;};
+  const byId=Object.fromEntries(comps.map(c=>[c.id,c]));
+  byId.BAT.params.expr=`clamp((oc - sqrt(max(oc*oc - 4*rb*pb, 0)))/(2*rb), -${V.ibmax}, ${V.ibmax})`.replace(/pb/g,`(va*ia >= 0 ? va*ia/${V.ceta} : va*ia*${V.ceta})`);
+  // the converter: within ± V_max and the boost of the OCV, and (motoring) within the power the battery can give at its
+  // current limit: P_max = η·min(OCV·I_max − R·I_max², OCV²/(4R)), so |v_a| ≤ P_max/|i_a|
+  const vl=`min(${V.vmax}, ${V.boost}*oc, u*ia > 0 ? ${V.ceta}*min(oc*${V.ibmax} - ${V.ibmax*V.ibmax}*rb, oc*oc/(4*rb))/max(abs(ia), 1) : 1e9)`;
+  byId.CNV.params.expr=`clamp(u, -${vl}, ${vl})`;
+  byId.ROAD.params.expr=byId.ROAD.params.expr.replace(/\bv\b/g,'(w*rw/n)').replace(/\bsg\b/g,'tanh(w*rw/n/0.25)');byId.ROAD.params.pars=byId.ROAD.params.pars.replace(', v = 0, sg = 0','');
+  comps.forEach(fix);
+  const wires=[['REF:y','TGr:u'],['TFsoc:y','BAT:s'],['TFva:y','BAT:va'],['TFia:y','BAT:ia'],['BAT:y','TGib:u'],['TFib:y','GQ:u'],['GQ:y','SOC:u'],['SOC:y','TGs:u'],
+   ['TFu:y','CNV:u'],['TFs2:y','CNV:s'],['TFia3:y','CNV:ia'],['CNV:y','TGva:u'],['TFva2:y','V1:u'],['V1:p','AM1:a',[[140,500]]],['AM1:b','M1:a',[[380,500]]],['AM1:y','TGi:u',[[300,460]]],['V1:n','G1:g'],['M1:b','G1:g',[[380,660]]],['M1:w','TGw:u'],['TFl:y','M1:tl',[[320,600],[320,560]]],
+   ['TFw:y','GV:u'],['GV:y','X:u'],['X:y','TGx:u'],['GV:y','TGv:u',[[-130,660],[-130,610]]],['TFw4:y','ROAD:w'],['TFx:y','ROAD:x'],['ROAD:y','TGl:u'],
+   ['TFib2:y','PB:ib'],['TFs3:y','PB:s'],['PB:y','EN:u'],['TFx2:y','KWH:x'],['EN:y','KWH:en',[[900,-60],[900,10]]],['TFx2:y','WHK:x',[[660,20],[660,50]]],['EN:y','WHK:en',[[910,-60],[910,70]]],
+   ['M1:te','AT:te',[[540,570],[540,140]]],['AT:y','IT:u'],['PB:y','IP:u',[[780,-60],[780,200]]],['IT:y','NMK:q'],['IP:y','NMK:p'],['TFia2:y','I2:i'],['I2:y','II2:u'],['II2:y','IRMS:q'],['TFs4:y','DSOC:s'],['TFv2:y','KPH:u']];
+  // the controller
+  if(mo){comps.push(C('TFr','TAGI',-300,-30,{name:'ω*'}),C('TFw5','TAGI',-300,10,{name:'ω'}),C('TFi5','TAGI',-300,50,{name:'i_a'}),C('TFs5','TAGI',-300,90,{name:'SOC'}),C('TFl5','TAGI',-300,130,{name:'τ_L'}),
+    C('MO1','EVC',-150,40,{scheme:ctl,mode:o.mode||'balanced',J:Jeq,Kt:V.K,Ke:V.K,R:V.R,B:V.B,umin:-V.vmax,umax:V.vmax},{label:'πολυκριτηριακός'}),C('TGu','TAGO',-30,0,{name:'u'}),C('TGt','TAGO',-30,20,{name:'τ*'}));
+   wires.push(['TFr:y','MO1:r',[[-220,-30],[-220,0]]],['TFw5:y','MO1:y',[[-210,10],[-210,20]]],['TFi5:y','MO1:i',[[-200,50],[-200,40]]],['TFs5:y','MO1:soc',[[-200,90],[-200,60]]],['TFl5:y','MO1:tl',[[-210,130],[-210,80]]],['MO1:u','TGu:u'],['MO1:tau','TGt:u']);}
+  else{comps.push(C('TFr','TAGI',-300,-30,{name:'ω*'}),C('TFw5','TAGI',-300,10,{name:'ω'}),
+    C('C1','AIC',-150,0,{scheme:ctl==='ai'?'fel':'pi',fs:1000,fr:2,Kp:1.5,Ki:6,umin:-V.vmax,umax:V.vmax,rs:300,us:50,hidden:'8',opt:'sgd',lr:.003,seed:1},{label:'Ελεγκτής AI'}),C('TGu','TAGO',-30,-30,{name:'u'}));
+   wires.push(['TFr:y','C1:r',[[-220,-30],[-220,-20]]],['TFw5:y','C1:y',[[-220,10],[-220,20]]],['C1:u','TGu:u']);}
+  const watch={tiles:[...(mo?[{ctl:'MO1.mode',label:'Τρόπος',at:[-300,-275]},{ctl:'MO1.ws',label:'Βάρος ταχύτητας',rng:[0,1.5],steps:['-0.1','+0.1']},{ctl:'MO1.wt',label:'Βάρος ροπής',rng:[0,1.5],steps:['-0.1','+0.1']},{ctl:'MO1.we',label:'Βάρος ενέργειας',rng:[0,1.5],steps:['-0.1','+0.1']}]:[]),
+   ['Y:KPH','ταχύτητα (km/h)'],['Y:SOC','SOC'],['Y:KWH','km/kWh'],['Y:WHK','Wh/km'],['Y:NMK','N·m/kW'],['Y:IRMS','I_rms (A)'],['Y:DSOC','πτώση SOC (μον. %)'],...(mo?[['Y:MO1/KP','κράτηση ροπής (keep)'],['Y:MO1/LIM','κατανομή / όριο ενεργό']]:[])]};
+  const panes=[[['Y:REF','ω*'],['Y:M1','ω'],...(ctl==='moevc'?[['Y:MO1/GOV','ω* μετά τον ρυθμιστή']]:[])],[['Y:M1:te','τ_e'],...(mo?[['Y:MO1/TQ','τ*']]:[]),['Y:ROAD','τ_L']],[['Y:SOC','SOC']],[['Y:AM1','i_a']]];
+  return project(comps,wires,{watch,sim:{hDiv:2,speed:3000,stopT:0,rec:{dt:1e-3}},scope:{panes,window:{unit:'s',n:D}},meta:{ev:true,D,soc0,Jeq,wmax,ctrl:ctl}});}
+ T.push({id:'ev_drive',group:'Ηλεκτρικό όχημα (4.8)',title:'Ηλεκτρικό όχημα: πολυκριτηριακός έλεγχος',theory:'formula',topology:'ev_drive',
+  options:[{k:'ctrl',label:'Ελεγκτής',options:[['moevc','Πολυκριτηριακός συζευγμένος: ρυθμιστής αναφοράς, ταχύτητα → επιτάχυνση → ροπή → ρεύμα'],['moev','Πολυκριτηριακός καταρράκτης: ταχύτητα → ροπή → ρεύμα, επόπτης SOC/ισχύος'],['ai','Ελεγκτής AI: PI + νευρωνικό (ένας βρόχος τάσης)'],['pi','Μόνο PI ταχύτητας (τάση)']],def:'moevc'},
+   {k:'mode',label:'Τρόπος',options:[['balanced','Ισορροπημένος'],['eco','Οικονομικός (eco)'],['performance','Επιδόσεων']],def:'balanced'},
+   {k:'cycle',label:'Διαδρομή',options:[['urban','Αστική (κλίση ± 1,5 %, SOC 85 %)'],['grade','Με κλίση 4 % ± 2,5 %, φορτίο +35 kg, SOC 55 %'],['sport','Γρήγορες επιταχύνσεις (εκεί φαίνεται ο τρόπος)']],def:'urban'}],
+  desc:'Όχημα 115 kg με μηχανή ΣΡ (μετάδοση 7:1, τροχός 0,255 m), μπαταρία 18 Ah με OCV(SOC) και R_int(SOC), μετατροπέας ως μέσο μοντέλο, φορτίο δρόμου (κύλιση, αέρας, κλίση που αλλάζει με την απόσταση). Ο κύκλος οδήγησης επαναλαμβάνεται κάθε 60 s και η προσομοίωση δεν τελειώνει: τρέχει όσα λεπτά θέλεις, η καταγραφή κρατά ένα σημείο ανά ms και «⭳ σε αρχείο» γράφει όλο το τρέξιμο στον δίσκο. Ο πολυκριτηριακός ελεγκτής είναι ο καταρράκτης «moevc» του Control Workbench EV/DC: ρυθμιστής αναφοράς από τα όρια, ταχύτητα → επιτάχυνση → ροπή μέσω της δυναμικής του οχήματος, κατανομή με βάρη ταχύτητας, ροπής και ενέργειας, βρόχος ρεύματος.',
+  tasks:['▶ και άφησε τουλάχιστον έναν κύκλο (60 s): στα πλακίδια km/kWh, Wh/km, N·m/kW, I_rms και η πτώση του SOC.','Άλλαξε τον «Τρόπο» σε eco την ώρα που τρέχει (πλακίδιο): η ροπή που ζητείται μειώνεται, η ταχύτητα ακολουθεί πιο αργά και τα km/kWh ανεβαίνουν.','Παίξε με τα βάρη ταχύτητας, ροπής και ενέργειας: η «κράτηση ροπής» (keep) δείχνει πόσο από τη ροπή που χρειάζεται δίνει ο ελεγκτής.','«Με κλίση» και SOC 55 %: ο ρυθμιστής αναφοράς κόβει τον στόχο όταν η ροπή δεν φτάνει (ω* μετά τον ρυθμιστή στο scope).','Σύγκρινε με «Ελεγκτής AI» και «Μόνο PI»: ένας βρόχος τάσης ακολουθεί την ταχύτητα χωρίς να ξέρει την μπαταρία.','Για ώρες: «Καταγραφή» κάθε 10 ms και «⭳ σε αρχείο».'],
+  build(o){return evDrive(o);}});
  T.push({id:'nn_gui',group:'Έλεγχος με νευρωνικά δίκτυα (4.7)',title:'Σύνθεση ελέγχου από Python: κάθε μηχανή, στόχοι με βάρη',theory:'formula',topology:'nn_gui',
   options:[{k:'ctrl',label:'Τι έστειλε το παράθυρο (παράδειγμα)',options:[['pinn','PI + νευρωνικό online'],['inv','PI + αντίστροφο μοντέλο'],['pi','Μόνο PI']],def:'pinn'}],
   desc:'Το εξωτερικό παράθυρο σε Python (python -m pcl gui) διαβάζει από την εφαρμογή ποιες μηχανές υπάρχουν, σε αφήνει να διαλέξεις τι θέλεις να επιτύχει ο έλεγχος (IAE, ISE, υπέρβαση, αποκατάσταση, ενέργεια ελέγχου, ανοχή στο φορτίο, με βάρη), συνθέτει το κύκλωμα ανάλογα με το είδος της μηχανής (ΣΡ, επαγωγής, σύγχρονη, SRM) με πραγματικά σύρματα, εκπαιδεύει, τρέχει τις εκδοχές παράλληλα και στέλνει την καλύτερη εδώ. Το κύκλωμα αυτού του tutorial είναι αυτό που συνθέτει για τη μηχανή ΣΡ, με βήμα φορτίου στον τελευταίο κύκλο.',

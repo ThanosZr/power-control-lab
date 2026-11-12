@@ -44,7 +44,7 @@
    // text is laid out again whenever the screen scale changes (on every wheel event of a zoom), an HTML text is not
    const lab=document.createElement('div');lab.className='livel';lab.setAttribute('aria-hidden','true');xf.appendChild(lab);
    // the tiles of the control signals (4.8, ROADMAP §47, watch.js): HTML in the same units, above the labels
-   const sig=document.createElement('div');sig.className='sigl';sig.hidden=true;xf.appendChild(sig);
+   const sig=document.createElement('div');sig.className='wtl';sig.hidden=true;xf.appendChild(sig);
    this.vp=svg.querySelector('.viewport');this.L={wires:svg.querySelector('.wires'),parts:svg.querySelector('.parts'),dots:svg.querySelector('.dots'),pins:svg.querySelector('.pins'),live:lab,sig,over:svg.querySelector('.over')};
    svg.addEventListener('pointerdown',e=>this.down(e));svg.addEventListener('pointermove',e=>this.move(e));svg.addEventListener('pointerup',e=>this.up(e));
    svg.addEventListener('pointercancel',()=>this.cancelDrag());svg.addEventListener('contextmenu',e=>e.preventDefault());

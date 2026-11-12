@@ -4,6 +4,13 @@ const path=require('path');const W=path.resolve(__dirname,'../../web/studio');
 global.window=globalThis;global.Parts=require(W+'/parts.js');const MNA=require(W+'/mna.js');require(W+'/tutorials.js');
 const T=globalThis.Tutorials;const build=(id,opts={})=>{const t=T.get(id);const o={};for(const op of t.options)o[op.k]=opts[op.k]??op.def;return t.build(o);};
 function project(comps,conns){let n=0;return {components:comps.map(c=>({x:0,y:0,rot:0,...c})),wires:conns.map(([a,b])=>{const [ac,ap]=a.split(':'),[bc,bp]=b.split(':');return {id:'w'+(n++),a:{c:ac,p:ap},b:{c:bc,p:bp},pts:[]};})};}
+// 4.8: the multi-objective controller (EVC «moevc») driving the DC machine of the electric vehicle (J of the vehicle at
+// the shaft): a ramp of the speed target, a load step, a low SOC (the derating and the allocation act); the tutorial's
+// signal models of the battery and the road add switching conditions that the server's integrator resolves very slowly
+const evc=project([{id:'REF',type:'EXPR',params:{expr:'min(400*t, 160)',ins:''}},{id:'TL',type:'CONST',params:{v:'0:0.4, 0.5:2'}},{id:'SOC',type:'CONST',params:{v:.3}},
+  {id:'MO1',type:'EVC',params:{scheme:'moevc',mode:'balanced',J:.1706,umin:-96,umax:96}},{id:'V1',type:'VDC',params:{ctl:'sig'}},{id:'AM1',type:'AM'},
+  {id:'M1',type:'DCM',params:{Ra:.22,La:.003,psi:.2,J:.1706,bm:.012,load:'sig'}},{id:'G',type:'GND'}],
+  [['REF:y','MO1:r'],['M1:w','MO1:y'],['AM1:y','MO1:i'],['SOC:y','MO1:soc'],['TL:y','MO1:tl'],['TL:y','M1:tl'],['MO1:u','V1:u'],['V1:p','AM1:a'],['AM1:b','M1:a'],['M1:b','G:g'],['V1:n','G:g']]);
 // same buck DCM as sim_cases.js (exact steady-state start)
 const buckDcm=project([{id:'V1',type:'VDC',params:{V:24}},{id:'S1',type:'SW',params:{pwm:'PWM1',body:false}},{id:'D1',type:'D'},{id:'L1',type:'L',params:{L:10e-6}},
   {id:'C1',type:'C',params:{C:100e-6,v0:18}},{id:'R1',type:'R',params:{R:50}},{id:'G',type:'GND'},{id:'PWM1',type:'PWM',params:{fs:100e3,D:.3,carrier:'saw'}}],
@@ -71,6 +78,10 @@ const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},[
  dcm:[dcm,null,['Y:M1','Y:M1:te','I:M1']],pll:[pll,null,['Y:PL:w','Y:PK','Y:PK:q']],cont:[cont,null,['Y:I1','Y:F1','Y:P1','Y:S1']],
  b1:[b1,null,['Y:FL','Y:FH','Y:RL','Y:FN','Y:FB','Y:ED','Y:ED:n','Y:R1','Y:R2']],
  nn_fel:[nnFel,null,['V:C1','Y:N1','Y:N1:L','Y:P1','Y:N2','Y:N2:L','Y:N2:dy','Y:N3','Y:N3:dy']],
+ // 4.8: the block «Ελεγκτής AI» through an emulator (a library part: the SciPy solver sees its PI, networks and the copy)
+ aic_emu:[(()=>{const pr=T.get('ai_block').build({scheme:'emu',mode:'ref',load:'fan',cycles:4});pr.components.find(c=>c.id==='KW').params.v='0:0, 0.01:100, 0.05:150';return pr;})(),null,['Y:M1','Y:C1/SAT','Y:C1/NN1','Y:C1/NNE','Y:C1/NNC:dy','Y:C1/IAE']],
+ // 4.8: the electric vehicle with the multi-objective controller (EVC «moevc»: governor, acceleration, torque, current)
+ evc:[evc,null,['Y:M1','Y:MO1/TQ','Y:MO1/SAT','Y:MO1/GOV','Y:MO1/KP','Y:MO1/AC','Y:AM1']],
  dc_cur:['dc_drive',{mode:'current'},['Y:AM1','D:PWM1','Y:M1']],
  code_py:['code_loop',{ctrl:'python',ff:'expr'},['Y:AM1','D:PWM1','Y:PI1','Y:EX1']],
  eis_cell:[eisCell,null,['Y:VM1','Y:AM1']],
@@ -92,13 +103,13 @@ const cases={buck_dcm:[buckDcm,null,['V:C1','I:L1']],rectifier:['rectifier',{},[
 // browser results for the 3.0 cases: per-period peaks of the last periods, to compare solver against solver
 const jsRun={dc_cur:['Y:AM1',.012],pcm_half:['Y:AM1',1e-3],pcm_sub:['Y:AM1',4e-4],blk_cmp_z1:['Y:AM1',4e-3],blk_pwm:['Y:AM1',4e-3]};   // pcm_sub: before chaos separates the two solvers
 // browser values at given instants (3.1)
-const jsAt={nn_fel:[.0095,.0205,.0395,.0605,.0995],b1:[.00305,.0045,.0085,.0205],dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05],eis_cell:[.004,.011,.02],im_dol:[.05,.1,.3,.6],mp_kl:[5e-4,2e-3,5e-3],mp_kg:[1e-4,1e-3],sm_align:[.02,.1,.3],sm_pm:[.02,.1,.2],mp_lg:[4e-6,50e-6,200e-6],sm_sat:[.02,.1,.3],isl_ref:[.005,.012,.02],vimp:[1e-6,3e-6,2e-5,6e-5],sg_ring:[5e-6,15e-6,25e-6,40e-6],sg_trig:[4e-6,10e-6,20e-6],sg_iext:[10e-6,30e-6,60e-6],mov_ramp:[5e-6,10e-6,20e-6,40e-6],tw_r3z:[5e-6,15e-6,25e-6,35e-6,95e-6],tw_li:[3e-6,12e-6,25e-6,65e-6],tw_book:[1.5e-6,3e-6,5e-6,7e-6],arr_ideal:[8e-6,15e-6,30e-6],arr_zno:[8e-6,15e-6,30e-6],marx:[1e-6,2.2e-6,20e-6,80e-6],chop:[2e-6,3.3e-6,4e-6,8e-6],ll_step:[101e-6,130e-6,160e-6,262e-6,510e-6,790e-6],ll_li:[102e-6,110e-6,150e-6],vt_ramp:[.15e-6,.21e-6,.5e-6],vt_li:[.5e-6,1e-6,3e-6,10e-6],hv1533:[1e-6,2.4e-6,20e-6,60e-6],hv1537:[1e-6,2.2e-6,20e-6,80e-6],div1515:[.013,.051,.0975],isl_leak:[.005,.012,.02],srm_m:[.005,.02,.06],srm_t:[.005,.02,.06]};
+const jsAt={nn_fel:[.0095,.0205,.0395,.0605,.0995],aic_emu:[.03,.05,.075],evc:[.0105,.0255,.0405],b1:[.00305,.0045,.0085,.0205],dcm:[.005,.02,.05,.2,.31,.5],pll:[.3],cont:[.003,.05],eis_cell:[.004,.011,.02],im_dol:[.05,.1,.3,.6],mp_kl:[5e-4,2e-3,5e-3],mp_kg:[1e-4,1e-3],sm_align:[.02,.1,.3],sm_pm:[.02,.1,.2],mp_lg:[4e-6,50e-6,200e-6],sm_sat:[.02,.1,.3],isl_ref:[.005,.012,.02],vimp:[1e-6,3e-6,2e-5,6e-5],sg_ring:[5e-6,15e-6,25e-6,40e-6],sg_trig:[4e-6,10e-6,20e-6],sg_iext:[10e-6,30e-6,60e-6],mov_ramp:[5e-6,10e-6,20e-6,40e-6],tw_r3z:[5e-6,15e-6,25e-6,35e-6,95e-6],tw_li:[3e-6,12e-6,25e-6,65e-6],tw_book:[1.5e-6,3e-6,5e-6,7e-6],arr_ideal:[8e-6,15e-6,30e-6],arr_zno:[8e-6,15e-6,30e-6],marx:[1e-6,2.2e-6,20e-6,80e-6],chop:[2e-6,3.3e-6,4e-6,8e-6],ll_step:[101e-6,130e-6,160e-6,262e-6,510e-6,790e-6],ll_li:[102e-6,110e-6,150e-6],vt_ramp:[.15e-6,.21e-6,.5e-6],vt_li:[.5e-6,1e-6,3e-6,10e-6],hv1533:[1e-6,2.4e-6,20e-6,60e-6],hv1537:[1e-6,2.2e-6,20e-6,80e-6],div1515:[.013,.051,.0975],isl_leak:[.005,.012,.02],srm_m:[.005,.02,.06],srm_t:[.005,.02,.06]};
 const out={};for(const [k,[id,o,keys]] of Object.entries(cases)){
  if(k==='code_py'){const pr=build('code_loop',{ctrl:'python',ff:'expr'});const r=MNA.exportForBatch(pr,keys);out[k]={net:r.net,channels:r.channels};
   const s=new MNA.Sim(build('code_loop',{ctrl:'pib',ff:'expr'}),{hDiv:1000});s.run(.003);const p=s.per,i=s.chIndex.get('Y:AM1'),pk=[];for(let q=8;q>=1;q--){const j=(p.head-q+p.cap)%p.cap;pk.push({max:p.max[j*p.nch+i],min:p.min[j*p.nch+i],t:p.t[j]});}
   out[k].js={T:s.T,pk,end:s.now('D:PWM1')};continue;}const pr=typeof id==='string'?build(id,o):id;const r=MNA.exportForBatch(pr,keys);out[k]={net:r.net,channels:r.channels};
  if(jsRun[k]){const [key,dur]=jsRun[k];const s=new MNA.Sim(pr,{hDiv:1000});s.run(dur);const p=s.per,i=s.chIndex.get(key),pk=[];for(let q=8;q>=1;q--){const j=(p.head-q+p.cap)%p.cap;pk.push({max:p.max[j*p.nch+i],min:p.min[j*p.nch+i],t:p.t[j]});}out[k].js={T:s.T,pk,end:s.now(key)};}}
-for(const [k,ts] of Object.entries(jsAt)){const [id,o,keys]=cases[k];const s=new MNA.Sim(typeof id==='string'?build(id,o):id,{hDiv:k==='im_dol'?4000:k==='mp_lg'?200:k.startsWith('sm_')?100:1000});out[k].at=ts.map(t=>{s.run(t-s.t);return [t,...keys.map(q=>s.now(q))];});}
+for(const [k,ts] of Object.entries(jsAt)){const [id,o,keys]=cases[k];const s=new MNA.Sim(typeof id==='string'?build(id,o):id,{hDiv:k==='im_dol'?4000:k==='mp_lg'||k==='aic_emu'?200:k.startsWith('sm_')?100:1000});out[k].at=ts.map(t=>{s.run(t-s.t);return [t,...keys.map(q=>s.now(q))];});}
 // 3.19: the event log of the browser for the buck in DCM (switch, diode, duty), to compare with the server's
 {const s=new MNA.Sim(cases.buck_dcm?(typeof cases.buck_dcm[0]==='string'?build(cases.buck_dcm[0],cases.buck_dcm[1]):cases.buck_dcm[0]):buckDcm,{hDiv:1000});s.run(2e-4);
  out.buck_dcm.ev=s.events().list.filter(e=>['switch','diode','duty'].includes(e.kind)).map(e=>[e.t,e.kind,e.id,e.v]);}
