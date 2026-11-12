@@ -1341,16 +1341,18 @@ function ieee9Theory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.lf)return '';
 // 4.4: line from geometry. The modes of each line (from its model) and what the run shows at the open end
 function lineFdTheory(){const s=S.sim,m=S.tutMeta||{};if(!s)return '';const ids=['L1','L2'].filter(id=>s.net.compInfo.get(id)?.tlm);if(!ids.length)return '';
  const lab=id=>s.net.compInfo.get(id)?.label||id;
- let h='<ul class="eqs"><li>Ρουτίνα σταθερών (pcl/lineconst.py, όπως το Line Data του EMTP): Z′(ω) με Carson για την επιστροφή από τη γη και Bessel για τον σωληνωτό αγωγό (T/D), P′ από τα είδωλα, αγωγοί προστασίας με απαλοιφή, δέσμες με ένωση· Y′ = G′ + jω·P′⁻¹.</li>'
+ let h='<ul class="eqs">'+(m.cable?'<li>Ρουτίνα σταθερών καλωδίων (pcl/lineconst.py, όπως το Cable Data του EMTP): βρόχοι αγωγός–επόμενος αγωγός με εσωτερική, αμοιβαία και εξωτερική σύνθετη αντίσταση των σωλήνων (Bessel), μόνωση jωL = jωμ/2π·ln(r₂/r₁), επιστροφή από τη θάλασσα (άπειρο μέσο) ή το έδαφος (Pollaczek). Y = jω·2πε₀ε(ω)/ln(r₂/r₁) με αιτιατό tanδ· θωρακίσεις με φάση 0 γειωμένες στα δύο άκρα.</li>'
+  :'<li>Ρουτίνα σταθερών (pcl/lineconst.py, όπως το Line Data του EMTP): Z′(ω) με Carson για την επιστροφή από τη γη και Bessel για τον σωληνωτό αγωγό (T/D), P′ από τα είδωλα, αγωγοί προστασίας με απαλοιφή, δέσμες με ένωση· Y′ = G′ + jω·P′⁻¹.</li>')
   +'<li>Ρυθμοί: v_m = T_iᵀ·v, i = T_i·i_m, με T_i τα ιδιοδιανύσματα του Y′Z′ σε μία συχνότητα (πραγματικά, σταθερά). Κάθε ρυθμός είναι μονοφασική γραμμή: i_k = v_k/Z + I_h(t − τ).</li>'
   +'<li>CP: Z_c = √(L′/C′), τ = ℓ·√(L′C′), R = R′ℓ στα R/4 – R/2 – R/4. FD (J. Marti): Z_c(s) = k₀ + Σ k_i/(s + p_i) και A(s) = e^(−sτ)·Σ c_i/(s + q_i), αναδρομικές συνελίξεις.</li></ul>';
  for(const id of ids){const g=s.net.compInfo.get(id).tlm;h+=`<p><b>${esc(lab(id))}</b> (${g.type==='fd'?'FD, T_i στα '+eng(g.fti,'Hz'):'CP στα '+eng(g.f,'Hz')}):</p><table class="cmp"><tr><th>ρυθμός</th><th>Z_c</th><th>τ</th><th>${g.type==='fd'?'πόλοι Z_c / A':'R (όλη η γραμμή)'}</th></tr>`
-  +g.modes.map((q,k)=>`<tr><td>${k+1}${k===0?' (γης)':''}</td><td>${eng(g.type==='fd'?q.zc.d:q.Zc,'Ω',4)}</td><td>${eng(q.tau,'s',5)}</td><td>${g.type==='fd'?q.zc.p.length+' / '+q.a.p.length:eng(q.R,'Ω',3)}</td></tr>`).join('')+'</table>';}
+  +g.modes.map((q,k)=>`<tr><td>${k+1}${k===0&&!m.cable?' (γης)':''}</td><td>${eng(g.type==='fd'?q.zc.d:q.Zc,'Ω',4)}</td><td>${eng(q.tau,'s',5)}</td><td>${g.type==='fd'?q.zc.p.length+' / '+q.a.p.length:eng(q.R,'Ω',3)}</td></tr>`).join('')+'</table>';}
  if(s.t<Math.min(m.dur||0,1e-3))return h+'<p class="muted small">Τρέξε την προσομοίωση για τις μετρήσεις στο ανοιχτό άκρο.</p>';
  const pk=k=>{const r=rawSeries(k);if(!r)return null;let mx=0,tm=0,first=null;const y0=Math.max(...r.y.map(Math.abs));for(let i=0;i<r.y.length;i++){const a=Math.abs(r.y[i]);if(a>mx){mx=a;tm=r.t[i];}if(first===null&&a>0.05*y0)first=r.t[i];}return {mx,tm,first};};
  const rows=ids.map(id=>{const a=pk('V4:'+id),b=pk('V5:'+id);return `<tr><td>${esc(lab(id))}</td><td>${a?eng(a.first,'s',4):'—'}</td><td>${a?eng(a.mx,'V',4):'—'}</td><td>${b?eng(b.mx,'V',4):'—'}</td></tr>`;}).join('');
  return h+`<table class="cmp"><tr><th>γραμμή</th><th>άφιξη στο a2 (5 %)</th><th>max |v_a2|</th><th>max |v_b2|</th></tr>${rows}</table>`
-  +'<p class="muted small">Επαλήθευση (tests/test_lines.py): ο λύτης ταυτίζεται με το ίδιο μοντέλο λυμένο στο πεδίο της συχνότητας με αριθμητικό μετασχηματισμό Laplace, και το FD με την ακριβή γραμμή (χωρίς προσαρμογή) σε λίγα τοις χιλίοις του μεγίστου· το CP στα 50 Hz απέχει πολύ στις επαγόμενες τάσεις, γιατί κρατά την απόσβεση του ρυθμού γης στα 50 Hz.</p>';}
+  +(m.cable?'<p class="muted small">Επαλήθευση (tests/test_lines.py): οι βρόχοι του καλωδίου ταυτίζονται με υπολογισμό πεδίου σε λεπτούς ομόκεντρους φλοιούς (10⁻⁶), ο λύτης με το ίδιο μοντέλο λυμένο με αριθμητικό μετασχηματισμό Laplace, και το FD με το ακριβές καλώδιο σε λίγα τοις χιλίοις· το CP στα 50 Hz κρατά την ταχύτητα των 50 Hz (με την εσωτερική αυτεπαγωγή του αγωγού) και το μέτωπο φτάνει αργότερα.</p>'
+   :'<p class="muted small">Επαλήθευση (tests/test_lines.py): ο λύτης ταυτίζεται με το ίδιο μοντέλο λυμένο στο πεδίο της συχνότητας με αριθμητικό μετασχηματισμό Laplace, και το FD με την ακριβή γραμμή (χωρίς προσαρμογή) σε λίγα τοις χιλίοις του μεγίστου· το CP στα 50 Hz απέχει πολύ στις επαγόμενες τάσεις, γιατί κρατά την απόσβεση του ρυθμού γης στα 50 Hz.</p>');}
 function netFaultTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.grid||!window.NetLib)return '';
  const g=m.xf?NetLib.behindXF(m.grid,m.xfp):{seq:NetLib.gridZ(m.grid)},z=g.seq,ref=NetLib.faultCurrents(g,{kind:m.kind}),Un=m.xf?m.xfp.U2:m.grid.Un;
  const Z1=Math.hypot(z.R1,z.X1),c2=(a,b)=>Math.hypot(a,b);
@@ -1863,7 +1865,7 @@ function formulaTheory(t){
  if(t.topology==='sub_legs')return subLegsTheory();
  if(t.topology==='bus_dq')return busDqTheory();
  if(t.topology==='net_fault')return netFaultTheory();
- if(t.topology==='line_fd')return lineFdTheory();
+ if(t.topology==='line_fd'||t.topology==='cable_fd')return lineFdTheory();
  if(t.topology==='gen_sc')return genScTheory();
  if(t.topology==='fbm')return fbmTheory();
  if(t.topology==='ieee9_emt')return ieee9Theory();

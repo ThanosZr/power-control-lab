@@ -1,6 +1,8 @@
 """Line constants and the CP / FD line models (4.4, ROADMAP §26): pcl/lineconst.py against the EMTP Theory Book (Dommel
 ch. 4) and Carson's integral, the numerical Laplace transform against closed forms, and the line in the browser solver
-(web/studio/mna.js, part 'TLM') against the same model and the exact line in the frequency domain."""
+(web/studio/mna.js, part 'TLM') against the same model and the exact line in the frequency domain. Cables (4.5, Dommel
+ch. 5): the coaxial loops against a field computation of concentric shells, Pollaczek against Wedepohl, the earth
+against the sea limit, the coaxial mode against its closed form, and a submarine cable in the solver."""
 import json
 import math
 import os
@@ -143,27 +145,144 @@ class Laplace(unittest.TestCase):
         self.assertLess(np.abs(V[1][i] - 1.0).max(), 0.01)       # matched source: 2·E/2 = E
 
 
-@unittest.skipUnless(node_ok(), 'node')
-class Solver(unittest.TestCase):
-    """The part 'TLM' in the browser solver, energizing phase a of the typical 400 kV line (100 km, Deri's earth
-    so that the exact line can be evaluated at complex s) through 10 Ω, the other ends through 1 MΩ."""
+def _peec(conds, f, Rref):
+    """Impedance matrix of concentric tubular conductors from a field computation independent of Dommel's formulas: each
+    conductor split into thin shells with uniform current, the shells coupled by their partial inductances (current
+    returning at the radius Rref) and the conductors as the shells in parallel."""
+    sh, own = [], []
+    for k, (ri, ro, rho, n, dmin) in enumerate(conds):
+        # uniform shells and shells graded towards the surfaces (skin outside, proximity inside)
+        if ri == 0:
+            e = np.concatenate([[0], ro - np.geomspace(dmin, ro, n)])
+        else:
+            g = np.geomspace(dmin, (ro - ri) / 2, n // 2)
+            e = np.concatenate([ri + g, ro - g])
+        e = np.unique(np.round(np.clip(np.concatenate([e, np.linspace(ri, ro, n // 2)]), ri, ro), 12))
+        for a, b in zip(e[:-1], e[1:]):
+            sh.append((a, b, rho))
+            own.append(k)
+    w, n = 2 * math.pi * f, len(sh)
+    Z = np.zeros((n, n), complex)
+    k0 = lc.MU0 / (2 * math.pi)
+
+    def own_l(ri, ro):          # internal inductance of a tube with uniform current, per μ₀/2π
+        if ri == 0:
+            return 0.25
+        return ri ** 4 * math.log(ro / ri) / (ro * ro - ri * ri) ** 2 - (3 * ri * ri - ro * ro) / (4 * (ro * ro - ri * ri))
+    for i, (a1, b1, rho) in enumerate(sh):
+        Z[i, i] = rho / (math.pi * (b1 * b1 - a1 * a1)) + 1j * w * k0 * (math.log(Rref / b1) + own_l(a1, b1))
+        for j in range(i + 1, n):
+            a2, b2, _ = sh[j]
+            ri, ro = (a2, b2) if a2 >= b1 else (a1, b1)      # the outer of the two shells
+            L = math.log(Rref / ro) + 0.5 - (ri * ri * math.log(ro / ri) / (ro * ro - ri * ri) if ri > 0 else 0.0)
+            Z[i, j] = Z[j, i] = 1j * w * k0 * L
+    S = np.zeros((n, len(conds)))
+    for i, k in enumerate(own):
+        S[i, k] = 1
+    return np.linalg.inv(S.T @ np.linalg.inv(Z) @ S)
+
+
+class Cables(unittest.TestCase):
+    CORE = {'t': 'c', 'rin': 0, 'rout': 0.0256, 'rho': 1.7e-8}
+
+    def one(self, outer=1.0, medium='perfect', y=5.0, tand=0.0):
+        return {'medium': medium, 'rho': 1 if medium == 'perfect' else 100, 'cables': [{'x': 0, 'y': y, 'ph': [1, 2], 'layers': [
+            self.CORE, {'t': 'i', 'rout': 0.055, 'epsr': 2.3, 'tand': tand}, {'t': 'c', 'rin': 0.055, 'rout': 0.0575, 'rho': 2.8e-8},
+            {'t': 'i', 'rout': outer, 'epsr': 1}]}]}
+
+    def test_coaxial_loops_against_field_computation(self):
+        """Core and sheath (Dommel eqs. 5.1–5.17, Bessel functions of the tubes) against 700 shells, 50 Hz … 100 kHz."""
+        for f in (50, 1e3, 1e4, 1e5):
+            d = math.sqrt(1.7e-8 / (math.pi * f * lc.MU0))
+            Zp = _peec([(0, 0.0256, 1.7e-8, 400, d / 30), (0.055, 0.0575, 2.8e-8, 300, d / 40)], f, 1.0)
+            Z, Y, cs = lc.cable_zy(self.one(), 2j * math.pi * f)
+            self.assertLess((np.abs(Z - Zp) / np.abs(Zp)).max(), 1e-6, msg=f)
+
+    def test_capacitance_and_coaxial_mode(self):
+        """C = 2πε₀ε_r/ln(r₂/r₁) at 50 Hz exactly (ε_r and tanδ are given there), and the core–sheath mode at 1 MHz
+        close to the lossless coaxial line: Z_c = 60/√ε_r·ln(r₂/r₁), v = c/√ε_r."""
+        data = self.one(medium='sea', y=30, tand=4e-4)
+        data['rho'] = 0.2
+        w = 2 * math.pi * 50
+        Z, Y = lc.phase_matrices({**data, 'cables': [{**data['cables'][0], 'ph': [1, 0]}]}, 50)
+        C = 2 * math.pi * lc.EPS0 * 2.3 / math.log(0.055 / 0.0256)
+        self.assertAlmostEqual(Y[0, 0].imag / w / C, 1.0, places=9)
+        self.assertAlmostEqual(Y[0, 0].real / (w * C), 4e-4, places=9)
+        Z, Y = lc.phase_matrices({**data, 'cables': [{**data['cables'][0], 'ph': [1, 0]}]}, 1e6)
+        zc, v = abs(np.sqrt(Z[0, 0] / Y[0, 0])), 2 * math.pi * 1e6 / np.sqrt(Z[0, 0] * Y[0, 0]).imag
+        self.assertAlmostEqual(zc / (60 / math.sqrt(2.3) * math.log(0.055 / 0.0256)), 1, delta=0.01)
+        self.assertAlmostEqual(v / (lc.C0 / math.sqrt(2.3)), 1, delta=0.01)
+
+    def test_permittivity_causal_and_nearly_constant_loss(self):
+        for f in (1, 50, 1e3, 1e5, 1e7):
+            e = lc.permittivity(2j * math.pi * f, 2.3, 4e-4)
+            self.assertAlmostEqual(-e.imag / e.real / 4e-4, 1, delta=0.01 if f > 1 else 0.02, msg=f)
+            self.assertAlmostEqual(e.real / 2.3, 1, delta=0.005, msg=f)
+        # real for real s (a real impulse response), and exactly εr(1 − j·tanδ) at 50 Hz
+        self.assertEqual(lc.permittivity(1e3, 2.3, 4e-4).imag, 0)
+        e = lc.permittivity(2j * math.pi * 50, 2.3, 4e-4)
+        self.assertAlmostEqual(abs(e - 2.3 * (1 - 4e-4j)), 0, places=12)
+
+    def test_pollaczek_against_wedepohl(self):
+        """Dommel: Wedepohl's formulas agree with Pollaczek's integral while |m·d| is small (here 50 Hz, ρ = 100 Ω·m)."""
+        s = 2j * math.pi * 50
+        for h, y, x in ((1.2, 1.2, 0.25), (1.0, 1.5, 0.5), (1.2, 1.2, 0.04)):
+            self_ = x == 0.04
+            a = lc.pollaczek(s, h, y, x, 100, d=x if self_ else None)
+            b = lc.wedepohl(s, h, y, x if self_ else math.hypot(x, h - y), 100, self=self_)
+            self.assertLess(abs(a / b - 1), 2e-5, msg=(h, y, x))
+
+    def test_deep_burial_is_the_infinite_medium(self):
+        """Far below the surface the earth acts as an infinite medium: Pollaczek → the sea-return formula (5.28)."""
+        for f in (50, 1e3):
+            s = 2j * math.pi * f
+            a = lc.pollaczek(s, 2000, 2000, 0.06, 1, d=0.06)
+            b = lc.sea_return(s, 0.06, 0.06, 0, 1)
+            self.assertLess(abs(a / b - 1), 1e-4, msg=f)
+
+    def test_fit_tolerances_typical_cables(self):
+        for key in ('220kV-sea', '150kV-land'):
+            m = lc.fd_model(lc.typical(key))
+            self.assertEqual(m['M'], 3)
+            for q in m['modes']:
+                self.assertLessEqual(q['zc']['err'], 0.01, msg=key)
+                self.assertLessEqual(q['a']['err'], 0.005, msg=key)
+                self.assertTrue(all(p > 0 for p in q['zc']['p'] + q['a']['p']), msg=key)
+
+    def test_bad_cable_data(self):
+        d = lc.typical('220kV-sea')
+        bad = json.loads(json.dumps(d))
+        bad['cables'][0]['layers'][1]['rout'] = 0.02          # insulation inside the core
+        with self.assertRaises(lc.LineError):
+            lc.phase_matrices(bad, 50)
+        mixed = {**d, 'wires': [{'ph': 1, 'x': 0, 'y': 10, 'r': 1, 'Rdc': 0.1}]}
+        with self.assertRaises(lc.LineError):
+            lc.phase_matrices(mixed, 50)
+
+
+class _SolverCase:
+    """The part 'TLM' in the browser solver, energizing phase a through the source resistance Rs (phases b, c through
+    Rs as well), the other ends through 1 MΩ, against the numerical Laplace transform of the same model and of the
+    exact line."""
+    key, earth, Rs, tr, tend, h, n = None, None, 10.0, 20e-6, 3e-3, 0.3e-6, 8192
+
     @classmethod
     def setUpClass(cls):
-        cls.d = lc.typical('400kV')
-        cls.d['earth'] = 'deri'
+        cls.d = lc.typical(cls.key)
+        if cls.earth:
+            cls.d['earth'] = cls.earth
         cls.models = {'cp': lc.cp_model(cls.d, 50), 'fd': lc.fd_model(cls.d)}
-        cls.tend = 3e-3
 
         def net(kind):
-            return {'nodes': 6, 'el': [('V', 1, 0, 10.0, ('ramp', 1.0, 20e-6)), ('R', 2, 0, 10.0), ('R', 3, 0, 10.0),
+            return {'nodes': 6, 'el': [('V', 1, 0, cls.Rs, ('ramp', 1.0, cls.tr)), ('R', 2, 0, cls.Rs), ('R', 3, 0, cls.Rs),
                                        ('LINE', [1, 2, 3], [4, 5, 6], cls.d, kind), ('R', 4, 0, 1e6), ('R', 5, 0, 1e6),
                                        ('R', 6, 0, 1e6)]}
-        cls.ref = {k: lc.nlt_solve(net(m), cls.tend, n=8192) for k, m in cls.models.items()}
-        cls.exact = lc.nlt_solve(net('exact'), cls.tend, n=8192)
+        cls.ref = {k: lc.nlt_solve(net(m), cls.tend, n=cls.n) for k, m in cls.models.items()}
+        cls.exact = lc.nlt_solve(net('exact'), cls.tend, n=cls.n)
 
-    def js(self, kind, h):
-        q = {'data': self.d, 'model': self.models[kind], 'kind': kind, 'f': 50, 'h': h, 'tend': self.tend,
-             'src': {'Vpk': 1.0, 'tr': 20e-6, 'Rs': 10.0}, 'R': 1e6}
+    def js(self, kind):
+        q = {'data': self.d, 'model': self.models[kind], 'kind': kind, 'f': 50, 'h': self.h, 'tend': self.tend,
+             'src': {'Vpk': 1.0, 'tr': self.tr, 'Rs': self.Rs}, 'R': 1e6}
         with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as fh:
             json.dump(q, fh)
         try:
@@ -179,14 +298,57 @@ class Solver(unittest.TestCase):
         pk = np.abs(Vr).max()
         return max(np.abs(np.interp(t, tn, Vr[j]) - V[j]).max() / pk for j in range(6))
 
+
+@unittest.skipUnless(node_ok(), 'node')
+class Solver(_SolverCase, unittest.TestCase):
+    """The typical 400 kV line (100 km, Deri's earth so that the exact line can be evaluated at complex s), 10 Ω."""
+    key, earth = '400kV', 'deri'
+
     def test_cp_same_model(self):
-        t, V = self.js('cp', 0.3e-6)
+        t, V = self.js('cp')
         self.assertLess(self.err(t, V, self.ref["cp"]), 0.004)
 
     def test_fd_same_model_and_exact_line(self):
-        t, V = self.js('fd', 0.3e-6)
+        t, V = self.js('fd')
         self.assertLess(self.err(t, V, self.ref["fd"]), 0.0025)
         self.assertLess(self.err(t, V, self.exact), 0.006)
+
+
+@unittest.skipUnless(node_ok(), 'node')
+class CableSolver(_SolverCase, unittest.TestCase):
+    """The typical 220 kV submarine cable (30 km, sheaths earthed at both ends), 30 Ω (about Z_c). CP at 50 Hz misses
+    the front by tens of µs (the internal inductance of the core at 50 Hz), FD follows the exact cable."""
+    key, Rs, tend, h = '220kV-sea', 30.0, 1.5e-3, 0.2e-6
+
+    def test_cp_same_model_but_not_the_cable(self):
+        t, V = self.js('cp')
+        self.assertLess(self.err(t, V, self.ref["cp"]), 0.0035)
+        self.assertGreater(self.err(t, V, self.exact), 0.3)
+
+    def test_fd_same_model_and_exact_cable(self):
+        t, V = self.js('fd')
+        self.assertLess(self.err(t, V, self.ref["fd"]), 0.0035)
+        self.assertLess(self.err(t, V, self.exact), 0.0035)
+
+
+@unittest.skipUnless(node_ok(), 'node')
+class CableTutorial(unittest.TestCase):
+    """The tutorial 'cable_fd' as the studio builds it (tests/js/cable_tutorial.js), with the models of linemodels.js."""
+    def test_arrival_screening_and_energization(self):
+        r = json.loads(subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'cable_tutorial.js')], capture_output=True, text=True,
+                                      check=True).stdout)
+        tau = 30e3 / (lc.C0 / math.sqrt(2.3))
+        fd, cp = r['step_L2'], r['step_L1']
+        self.assertGreater(fd['arrival'], tau * 0.99)
+        self.assertLess(fd['arrival'], tau + 10e-6)
+        self.assertGreater(cp['arrival'], fd['arrival'] + 10e-6)       # CP at 50 Hz: slower
+        self.assertLess(fd['peakB'], 0.005 * fd['peak'])                # the sheaths screen the front
+        self.assertGreater(cp['peakB'], 0.1 * cp['peak'])               # not at 50 Hz
+        self.assertLess(fd['peak'], 2 * 1e3)
+        Vpk = 220e3 * math.sqrt(2 / 3)
+        self.assertLess(r['ac3_L2']['peak'], 2.0 * Vpk)
+        self.assertGreater(r['ac3_L2']['peak'], 1.2 * Vpk)
+        self.assertTrue(all(not q['warn'] for q in r.values()))
 
 
 if __name__ == '__main__':

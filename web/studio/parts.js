@@ -60,7 +60,10 @@
   '400kV':{name:'Τυπική γραμμή 400 kV, απλό κύκλωμα (2 × ACSR 954 MCM)',rho:100,length:100,earth:'carson',skin:true,
    wires:[{ph:0,x:-6.1,y:27.15,ymid:18.35,r:0.63,Rdc:2.0276,tD:0.5},{ph:0,x:6.1,y:27.15,ymid:18.35,r:0.63,Rdc:2.0276,tD:0.5}],
    bundles:[{ph:1,x:-8.6,y:20,ymid:11.2,n:2,R:20,ang:0,r:1.521,Rdc:0.0587,tD:0.3335},{ph:2,x:0,y:20,ymid:11.2,n:2,R:20,ang:0,r:1.521,Rdc:0.0587,tD:0.3335},
-    {ph:3,x:8.6,y:20,ymid:11.2,n:2,R:20,ang:0,r:1.521,Rdc:0.0587,tD:0.3335}]}};
+    {ph:3,x:8.6,y:20,ymid:11.2,n:2,R:20,ang:0,r:1.521,Rdc:0.0587,tD:0.3335}]},
+  // 4.5: typical single-core XLPE cables (radii in m, resistivities in Ω·m, phase 0 = sheath bonded and earthed at both ends)
+  '220kV-sea':{name:'Τυπικό υποβρύχιο καλώδιο 220 kV (3 μονοπολικά XLPE, θάλασσα)',medium:'sea',rho:0.2,length:30,cables:[{x:-1.0,y:30,ph:[1,0],layers:[{t:'c',rin:0,rout:0.0256,rho:1.7e-08},{t:'i',rout:0.055,epsr:2.3,tand:0.0004},{t:'c',rin:0.055,rout:0.0575,rho:2.8e-08},{t:'i',rout:0.085,epsr:2.3}]},{x:0.0,y:30,ph:[2,0],layers:[{t:'c',rin:0,rout:0.0256,rho:1.7e-08},{t:'i',rout:0.055,epsr:2.3,tand:0.0004},{t:'c',rin:0.055,rout:0.0575,rho:2.8e-08},{t:'i',rout:0.085,epsr:2.3}]},{x:1.0,y:30,ph:[3,0],layers:[{t:'c',rin:0,rout:0.0256,rho:1.7e-08},{t:'i',rout:0.055,epsr:2.3,tand:0.0004},{t:'c',rin:0.055,rout:0.0575,rho:2.8e-08},{t:'i',rout:0.085,epsr:2.3}]}]},
+  '150kV-land':{name:'Τυπικό υπόγειο καλώδιο 150 kV (3 μονοπολικά XLPE 1000 mm², επίπεδη διάταξη)',medium:'earth',rho:100,length:10,cables:[{x:-0.25,y:1.2,ph:[1,0],layers:[{t:'c',rin:0,rout:0.0189,rho:1.93e-08},{t:'i',rout:0.038,epsr:2.5,tand:0.0004},{t:'c',rin:0.038,rout:0.0384,rho:1.72e-08},{t:'i',rout:0.048,epsr:2.3}]},{x:0.0,y:1.2,ph:[2,0],layers:[{t:'c',rin:0,rout:0.0189,rho:1.93e-08},{t:'i',rout:0.038,epsr:2.5,tand:0.0004},{t:'c',rin:0.038,rout:0.0384,rho:1.72e-08},{t:'i',rout:0.048,epsr:2.3}]},{x:0.25,y:1.2,ph:[3,0],layers:[{t:'c',rin:0,rout:0.0189,rho:1.93e-08},{t:'i',rout:0.038,epsr:2.5,tand:0.0004},{t:'c',rin:0.038,rout:0.0384,rho:1.72e-08},{t:'i',rout:0.048,epsr:2.3}]}]}};
  const PARTS={
   R:{name:'Αντίσταση',prefix:'R',group:'Παθητικά',pins:{a:[-30,0],b:[30,0]},box:[-22,-8,44,16],
    params:[num('R','Αντίσταση','Ω',10),txt('sched','R(t)','',{hint:SCHED})],
@@ -833,7 +836,8 @@
  const tlmCache=new Map();
  function tlmData(p){const s=String(p.data??'');if(tlmCache.has(s))return tlmCache.get(s);let d=null;try{d=JSON.parse(s);}catch(e){d=null;}if(tlmCache.size>64)tlmCache.clear();tlmCache.set(s,d);return d;}
  // number of phases: the largest phase number of the conductors (0 = ground wire); 3 when the data cannot be read
- function tlmM(p){const d=tlmData(p);if(!d)return 3;let M=0;for(const w of [...(d.wires||[]),...(d.bundles||[])])M=Math.max(M,Math.round(+w.ph)||0);return Math.max(1,Math.min(12,M||3));}
+ function tlmM(p){const d=tlmData(p);if(!d)return 3;let M=0;for(const w of [...(d.wires||[]),...(d.bundles||[])])M=Math.max(M,Math.round(+w.ph)||0);
+  for(const c of d.cables||[])for(const v of [].concat(c.ph??[]))M=Math.max(M,Math.round(+v)||0);return Math.max(1,Math.min(12,M||3));}
  function tlmPin(k,end){return 'abcdefghijkl'[k]+end;}
  function tlmPins(p){const M=tlmM(p);if(isBus(p)&&M===3)return {abc1:[-40,0],abc2:[40,0]};const o={},y=k=>-10*(M-1)+20*k;for(let k=0;k<M;k++){o[tlmPin(k,1)]=[-40,y(k)];o[tlmPin(k,2)]=[40,y(k)];}return o;}
  // what the model was computed from: a change in any of these asks for a new model

@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.4: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (415 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.5: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (422 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.4.
+Κανένα στην 4.5.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-226 σημεία.
+233 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -149,6 +149,8 @@
 | `pcl.job` | `spec`, `allow_paths` | 3.18 |
 | `pcl.lineconst.LineError` | — | 4.4 |
 | `pcl.lineconst.api` | `req` | 4.4 |
+| `pcl.lineconst.cable_zy` | `data`, `s` | 4.5 |
+| `pcl.lineconst.cables` | `data` | 4.5 |
 | `pcl.lineconst.carson_integral` | `hi`, `hk`, `x`, `f`, `rho`, `mu`, `s` | 4.4 |
 | `pcl.lineconst.carson_series` | `D`, `phi`, `f`, `rho`, `switch` | 4.4 |
 | `pcl.lineconst.conductors` | `data` | 4.4 |
@@ -161,17 +163,22 @@
 | `pcl.lineconst.modal` | `Z`, `Y`, `Ti` | 4.4 |
 | `pcl.lineconst.model_admittance` | `model`, `s` | 4.4 |
 | `pcl.lineconst.nlt_solve` | `network`, `tmax`, `n`, `window` | 4.4 |
+| `pcl.lineconst.permittivity` | `s`, `epsr`, `tand`, `fref` | 4.5 |
 | `pcl.lineconst.phase_matrices` | `data`, `f`, `s`, `**kw` | 4.4 |
 | `pcl.lineconst.phases` | `data` | 4.4 |
+| `pcl.lineconst.pollaczek` | `s`, `h`, `y`, `x`, `rho`, `d` | 4.5 |
 | `pcl.lineconst.q_error` | `Z`, `Y`, `Ti` | 4.4 |
 | `pcl.lineconst.rational` | `s`, `d`, `r`, `p` | 4.4 |
 | `pcl.lineconst.reduce_phases` | `Z`, `P`, `cs` | 4.4 |
 | `pcl.lineconst.report` | `data`, `f` | 4.4 |
 | `pcl.lineconst.save_data` | `data`, `path` | 4.4 |
+| `pcl.lineconst.sea_return` | `s`, `Ri`, `Rk`, `d`, `rho` | 4.5 |
 | `pcl.lineconst.sequence` | `Z` | 4.4 |
 | `pcl.lineconst.ti_matrix` | `Z`, `Y` | 4.4 |
+| `pcl.lineconst.tube` | `s`, `q`, `r`, `rho`, `mur` | 4.5 |
 | `pcl.lineconst.typical` | `key` | 4.4 |
 | `pcl.lineconst.vfit` | `s`, `F`, `n`, `d`, `weight`, `iters`, `p0` | 4.4 |
+| `pcl.lineconst.wedepohl` | `s`, `h`, `y`, `d`, `rho` | 4.5 |
 | `pcl.lineconst.z_internal` | `f`, `r`, `q`, `Rdc`, `mur`, `skin`, `s` | 4.4 |
 | `pcl.lineconst.zy` | `data`, `f`, `earth`, `skin`, `s` | 4.4 |
 | `pcl.link.App` | `url`, `token`, `timeout`, `client` | 3.18 |

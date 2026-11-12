@@ -386,6 +386,29 @@ Z_int = ρ·m/(2πr)·[I₀(mr)K₁(mq) + K₀(mr)I₁(mq)] / [I₁(mr)K₁(mq) 
 
 **Ανεξάρτητη αναφορά (αντί του SciPy).** Ακριβής γραμμή στο πεδίο της συχνότητας, σε κάθε s με μιγαδικά ιδιοδιανύσματα: Y_s = T·diag(γ·coth γℓ)·T⁻¹·Z′⁻¹, Y_m = −T·diag(γ/sinh γℓ)·T⁻¹·Z′⁻¹. Μαζί με τα υπόλοιπα στοιχεία λύνεται κομβικά σε s = c + jω_k, ω_k = (k + ½)·2π/T, και επιστρέφει στον χρόνο με αριθμητικό μετασχηματισμό Laplace: x(t_n) = (Δω/π)·e^(ct_n)·Re[e^(jπn/N)·N·IFFT(X·σ)], c = ln(N²)/T, παράθυρο Hanning, T = 2·t_max. Το ίδιο για τα μοντέλα CP και FD όπως προσαρμόστηκαν, ώστε να ξεχωρίζουν το σφάλμα του λύτη και το σφάλμα του μοντέλου.
 
+## 8ι. Καλώδια (4.5)
+
+Στο `pcl/lineconst.py` (`cables`, `tube`, `pollaczek`, `wedepohl`, `sea_return`, `cable_zy`, `permittivity`). Ίδια μοντέλα CP/FD και ίδιος λύτης με την §8θ. Συμβάσεις του Cable Constants του EMTP (Dommel, EMTP Theory Book, κεφ. 5).
+
+**Στρώματα και βρόχοι.** Καλώδιο: αγωγοί 1…N από μέσα προς τα έξω, με μόνωση μετά από κάθε αγωγό (η τελευταία μπορεί να λείπει: ο αγωγός ακουμπά στο μέσο). Βρόχος k: ρεύμα στον αγωγό k με επιστροφή στον k+1 (ο τελευταίος στο μέσο). Για σωλήνα εσωτερικής ακτίνας q, εξωτερικής r, m = √(sμ/ρ), D = I₁(mr)K₁(mq) − I₁(mq)K₁(mr) (Dommel 5.7):
+- εσωτερική (επιστροφή μέσα): Z_in = ρm/(2πq)·[I₀(mq)K₁(mr) + K₀(mq)I₁(mr)]/D,
+- εξωτερική (επιστροφή έξω): Z_out = ρm/(2πr)·[I₀(mr)K₁(mq) + K₀(mr)I₁(mq)]/D,
+- αμοιβαία: Z_mut = ρ/(2πqr·D),
+- συμπαγής αγωγός (q = 0): Z_out = ρm·I₀(mr)/(2πr·I₁(mr)).
+Βρόχος k: Z_kk = Z_out,k + jω(μ/2π)·ln(r_εξ/r_εσ) της μόνωσης + Z_in,k+1, Z_k,k+1 = −Z_mut,k+1· ο τελευταίος βρόχος παίρνει την επιστροφή του μέσου. Με τα ρεύματα των αγωγών I_loop = A·I (A κάτω τριγωνικός με άσσους): Z_cond = AᵀZ_loopA. Καλώδια μεταξύ τους συζευγνύονται μόνο μέσω του μέσου (όλα τα στοιχεία του μπλοκ i–k ίσα με τη μεταξύ τους εμπέδηση επιστροφής).
+
+**Επιστροφή.** Έδαφος, Pollaczek (5.22–5.23), με h, y τα βάθη, x η οριζόντια απόσταση, d = √(x² + (h − y)²), D = √(x² + (h + y)²):
+Z = (sμ₀/2π)·[K₀(md) − K₀(mD) + 2∫₀^∞ e^(−(h+y)√(α²+m²))·cos(αx)/(α + √(α²+m²)) dα], m = √(sμ₀/ρ).
+Το ολοκλήρωμα αριθμητικά: [0, 50|m|] με προσαρμοστική ολοκλήρωση (εκεί αλλάζει γρήγορα), η ουρά με βάρος cos(αx) (QAWO). Ο τύπος του Wedepohl (5.24–5.25, γ = e^C = 1,781) μόνο για τον έλεγχο. Θάλασσα ως άπειρο μέσο (5.28–5.29): Z_ii = ρm·K₀(mR)/(2πR·K₁(mR)), Z_ik = ρ·K₀(md)/(2πR_iR_k·K₁(mR_i)K₁(mR_k)).
+
+**Εγκάρσια.** Ανά μόνωση y_k = s·2πε₀ε(s)/ln(r_εξ/r_εσ) και Y_cond = A⁻¹·diag(y)·A⁻ᵀ. Το tanδ δεν μένει σταθερό σε όλες τις συχνότητες: σταθερό tanδ δεν είναι αιτιατό (η κρουστική απόκριση δεν είναι πραγματική), και το A(s) δεν προσαρμόζεται με ευσταθείς πόλους κάτω από περίπου 1 %. Μοντέλο ευρείας ζώνης (Djordjevic–Sarkar):
+ε(s) = ε_∞ + K·log₁₀((ω₂ + s)/(ω₁ + s)), ω₁ = 2π·10⁻³, ω₂ = 2π·10¹² rad/s, με K και ε_∞ από ε(j2π·50) = ε_r(1 − j·tanδ).
+Το tanδ μένει στο ±1 % από 1 Hz ως 10 MHz και το ε′ αλλάζει κατά περίπου ε_r·tanδ·1,5 ανά δεκάδα. Με τα δεδομένα των καλωδίων το G′ είναι 0 (οι απώλειες είναι στο tanδ), εκτός αν δοθεί.
+
+**Φάσεις.** Όπως στις εναέριες: οι αγωγοί με φάση 0 έχουν τάση 0 (γειωμένοι στα δύο άκρα, χωρίς μετάθεση), Z_red = (TᵀZ⁻¹T)⁻¹ και Y_red = TᵀYT.
+
+**Επαλήθευση.** Ο βρόχος αγωγός–θωράκιση απέναντι σε υπολογισμό πεδίου ανεξάρτητο από τους τύπους: κάθε αγωγός σε λεπτούς ομόκεντρους φλοιούς με ομοιόμορφο ρεύμα (ομοιόμορφο πλέγμα και πύκνωση προς τις επιφάνειες). Αμοιβαία αυτεπαγωγή φλοιού [a, b] με εσωτερικό σημείο ή φλοιό (επιστροφή στο R): (μ₀/2π)·[ln(R/b) + ½ − a²ln(b/a)/(b² − a²)], και ο αγωγός ως οι φλοιοί του παράλληλα.
+
 ## 9. Ο λύτης αναφοράς (SciPy)
 
 Το `engine/batch.py` λύνει το ίδιο netlist (`MNA.exportForBatch`) με διαφορετική μέθοδο:
@@ -448,3 +471,7 @@ Z_int = ρ·m/(2πr)·[I₀(mr)K₁(mq) + K₀(mr)I₁(mq)] / [I₁(mr)K₁(mq) 
 - B. Gustavsen, A. Semlyen, «Rational approximation of frequency domain responses by vector fitting», *IEEE Trans. Power Delivery* 14(3), 1999: προσαρμογή.
 - A. Semlyen, A. Dabuleanu, «Fast and accurate switching transient calculations on transmission lines with ground return using recursive convolutions», *IEEE Trans. PAS* 94(2), 1975: αναδρομική συνέλιξη.
 - L. M. Wedepohl, «Power system transients: errors incurred in the numerical inversion of the Laplace transform», *Proc. 26th Midwest Symposium on Circuits and Systems*, 1983, και D. J. Wilcox, «Numerical Laplace transformation and inversion», *Int. J. Electrical Engineering Education* 15, 1978: αριθμητικός μετασχηματισμός Laplace.
+- F. Pollaczek, «Über das Feld einer unendlich langen wechselstromdurchflossenen Einfachleitung», *Elektrische Nachrichtentechnik* 3, 1926: επιστροφή από το έδαφος υπόγειων αγωγών. H. W. Dommel, *EMTP Theory Book*, κεφ. 5 (εξ. 5.1–5.29): η ρουτίνα σταθερών καλωδίων της 4.5.
+- L. M. Wedepohl, D. J. Wilcox, «Transient analysis of underground power-transmission systems: system-model and wave-propagation characteristics», *Proc. IEE* 120(2), 1973: σύνθετες αντιστάσεις σωλήνων και ο προσεγγιστικός τύπος της επιστροφής.
+- A. Ametani, «A general formulation of impedance and admittance of cables», *IEEE Trans. PAS* 99(3), 1980: βρόχοι και μετασχηματισμός στους αγωγούς.
+- A. R. Djordjevic, R. M. Biljic, V. D. Likar-Smiljanic, T. K. Sarkar, «Wideband frequency-domain characterization of FR-4 and time-domain causality», *IEEE Trans. Electromagnetic Compatibility* 43(4), 2001: αιτιατή διηλεκτρική απώλεια ευρείας ζώνης.

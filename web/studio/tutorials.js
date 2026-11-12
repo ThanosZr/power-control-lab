@@ -964,8 +964,8 @@
  // ------------------------------------------------------------------ 4.4: lines from geometry, CP and FD (ROADMAP §26)
  // the typical 400 kV line of 100 km (Parts.TLM_TYPICAL), with its models from tools/line_models.py (pcl/lineconst.py)
  const LM=()=>root.LineModels||(typeof require!=='undefined'?require('./linemodels.js'):null);
- function tlmPart(id,x,y,model,f,label){const P=root.Parts,p={...P.defaults('TLM'),model,len:100,data:JSON.stringify(P.TLM_TYPICAL['400kV'])};if(model==='cp')p.f=f;
-  const m=LM()?.[model==='cp'?`400kV|100|cp|${f}`:'400kV|100|fd'];p.mdl=m?JSON.stringify({...m,src:P.tlmKey(p)}):'';return C(id,'TLM',x,y,p,{label});}
+ function tlmPart(id,x,y,model,f,label,line='400kV',len=100){const P=root.Parts,p={...P.defaults('TLM'),model,len,data:JSON.stringify(P.TLM_TYPICAL[line])};if(model==='cp')p.f=f;
+  const m=LM()?.[model==='cp'?`${line}|${len}|cp|${f}`:`${line}|${len}|fd`];p.mdl=m?JSON.stringify({...m,src:P.tlmKey(p)}):'';return C(id,'TLM',x,y,p,{label});}
  T.push({id:'line_fd',group:'Γραμμές (4.4)',title:'Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD)',theory:'formula',topology:'line_fd',
   options:[{k:'cmp',label:'Γραμμές',options:[['cp50','CP στα 50 Hz και FD, δίπλα δίπλα'],['cp5k','CP στα 5 kHz και FD'],['fd','Μόνο FD']],def:'cp50'},
    {k:'src',label:'Ζεύξη',options:[['step','Μία φάση (a), βηματική 1 kV πίσω από 10 Ω'],['ac3','Τριφασική 400 kV, στην κορυφή της v_a']],def:'step'}],
@@ -986,6 +986,25 @@
    if(!ac)for(const [id,lab] of ids)panes[1].push(['V6:'+id,`v_c2 ${lab}`]);
    const stopT=ac?0.02:4e-3;
    return project(comps,wires,{sim:{hDiv:ac?20000:1,speed:ac?0.2:0.05,stopT,method:'TR'},scope:{panes,window:{unit:'s',n:stopT}},meta:{cmp:o.cmp,src:o.src,f,dur:stopT}});}});
+ // ------------------------------------------------------------------ 4.5: cables (ROADMAP §26, Dommel ch. 5)
+ T.push({id:'cable_fd',group:'Καλώδια (4.5)',title:'Ζεύξη υποβρύχιου καλωδίου 220 kV: CP και FD',theory:'formula',topology:'cable_fd',
+  options:[{k:'cmp',label:'Μοντέλα',options:[['cp50','CP στα 50 Hz και FD, δίπλα δίπλα'],['fd','Μόνο FD']],def:'cp50'},
+   {k:'src',label:'Ζεύξη',options:[['step','Μία φάση (a), βηματική 1 kV πίσω από 30 Ω'],['ac3','Τριφασική 220 kV, στην κορυφή της v_a']],def:'step'}],
+  desc:'Τρία μονοπολικά καλώδια XLPE 220 kV (χάλκινος αγωγός, θωράκιση μολύβδου, εξωτερική μόνωση) σε θάλασσα (ρ = 0,2 Ω·m), 30 km, οι θωρακίσεις γειωμένες στα δύο άκρα, ανοιχτό στο τέλος. Οι σταθερές βγαίνουν από τη γεωμετρία των στρωμάτων (βρόχοι αγωγός–θωράκιση με συναρτήσεις Bessel, επιστροφή από τη θάλασσα ως άπειρο μέσο, μόνωση με ε_r και tanδ) με τη ρουτίνα pcl/lineconst.py, όπως το Cable Data του EMTP. Το «Δεδομένα γραμμής…» (διπλό κλικ) δείχνει τα στρώματα, την τομή, τους ρυθμούς και την προσαρμογή FD.',
+  tasks:['Μία φάση: το κύμα φτάνει στο ανοιχτό άκρο περίπου 152 μs μετά (v ≈ c/√ε_r ≈ 198 000 km/s) και διπλασιάζεται· στις φάσεις b, c σχεδόν τίποτα, γιατί οι θωρακίσεις κλείνουν το πεδίο μέσα σε κάθε καλώδιο.','CP στα 50 Hz: το κύμα φτάνει αργότερα (περίπου 174 μs), γιατί η εσωτερική αυτεπαγωγή του αγωγού στα 50 Hz κάνει τον ρυθμό πιο αργό, και η φάση b παίρνει μεγάλη επαγόμενη τάση: στα 50 Hz η λεπτή θωράκιση δεν κλείνει ακόμη το πεδίο (βάθος διείσδυσης στον μόλυβδο περίπου 37 mm), στις συχνότητες του μετώπου το κλείνει. Το FD ακολουθεί το ακριβές καλώδιο σε λίγα τοις χιλίοις (tests/test_lines.py).','Σύγκρινε με το tutorial της εναέριας γραμμής: Z_c του καλωδίου περίπου 30 Ω αντί για 300 Ω, ταχύτητα δύο τρίτα του φωτός.','Τριφασική ζεύξη: υπέρταση στο ανοιχτό άκρο με περίοδο 4τ ≈ 0,6 ms και το μεγάλο ρεύμα φόρτισης.','Στο «Δεδομένα γραμμής…» άλλαξε το μέσο σε έδαφος (Pollaczek) ή το tanδ της μόνωσης και ξαναϋπολόγισε.'],
+  build(o){const both=o.cmp!=='fd',ac=o.src==='ac3',Vpk=220e3*Math.SQRT2/Math.sqrt(3),Rs=ac?1:30,LINE='220kV-sea',LEN=30;
+   const comps=[gnd(320,420)],wires=[],panes=[[],[]];
+   const rig=(sfx,y,line)=>{const V='V'+sfx,L='L'+sfx;
+    if(ac){comps.push(C(V,'VAC3',100,y,{Vpk,f:50,phase:90,Rs},{label:'220 kV'}));wires.push([V+':a',L+':a1'],[V+':b',L+':b1'],[V+':c',L+':c1'],[V+':n','G1:g',[[100,400],[320,400]]]);}
+    else{comps.push(C(V,'VIMP',100,y,{shape:'ramp',Vpk:1e3,S:1e3/5e-6,Rs},{label:'1 kV'}),C('RB'+sfx,'R',170,y+40,{R:Rs},{rot:1,label:'R_b'}),C('RC'+sfx,'R',250,y+40,{R:Rs},{rot:1,label:'R_c'}));
+     wires.push([V+':p',L+':a1',[[100,y-20]]],[V+':n','G1:g',[[100,400],[320,400]]],[L+':b1','RB'+sfx+':a',[[170,y]]],[L+':c1','RC'+sfx+':a',[[250,y+20]]],['RB'+sfx+':b','G1:g',[[170,400]]],['RC'+sfx+':b','G1:g',[[250,400]]]);}
+    comps.push(line);};
+   rig('1',100,both?tlmPart('L1',320,100,'cp',50,'CP 50 Hz',LINE,LEN):tlmPart('L1',320,100,'fd',0,'FD',LINE,LEN));
+   if(both)rig('2',260,tlmPart('L2',320,260,'fd',0,'FD',LINE,LEN));
+   const ids=both?[['L1','CP50'],['L2','FD']]:[['L1','FD']];
+   for(const [id,lab] of ids){panes[0].push(['V4:'+id,`v_a2 ${lab}`]);panes[1].push(['I:'+id,`i_a1 ${lab}`]);}
+   const stopT=ac?0.02:2e-3;
+   return project(comps,wires,{sim:{hDiv:ac?20000:10,speed:ac?0.2:0.05,stopT,method:'TR'},scope:{panes,window:{unit:'s',n:stopT}},meta:{cmp:o.cmp,src:o.src,f:50,dur:stopT,cable:true}});}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
  root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};

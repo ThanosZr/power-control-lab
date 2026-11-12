@@ -1,5 +1,5 @@
 {
- "version": "4.4",
+ "version": "4.5",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -852,6 +852,19 @@
     ],
     "since": "4.4"
    },
+   "pcl.lineconst.cable_zy": {
+    "params": [
+     "data",
+     "s"
+    ],
+    "since": "4.5"
+   },
+   "pcl.lineconst.cables": {
+    "params": [
+     "data"
+    ],
+    "since": "4.5"
+   },
    "pcl.lineconst.carson_integral": {
     "params": [
      "hi",
@@ -957,6 +970,15 @@
     ],
     "since": "4.4"
    },
+   "pcl.lineconst.permittivity": {
+    "params": [
+     "s",
+     "epsr",
+     "tand",
+     "fref"
+    ],
+    "since": "4.5"
+   },
    "pcl.lineconst.phase_matrices": {
     "params": [
      "data",
@@ -971,6 +993,17 @@
      "data"
     ],
     "since": "4.4"
+   },
+   "pcl.lineconst.pollaczek": {
+    "params": [
+     "s",
+     "h",
+     "y",
+     "x",
+     "rho",
+     "d"
+    ],
+    "since": "4.5"
    },
    "pcl.lineconst.q_error": {
     "params": [
@@ -1011,6 +1044,16 @@
     ],
     "since": "4.4"
    },
+   "pcl.lineconst.sea_return": {
+    "params": [
+     "s",
+     "Ri",
+     "Rk",
+     "d",
+     "rho"
+    ],
+    "since": "4.5"
+   },
    "pcl.lineconst.sequence": {
     "params": [
      "Z"
@@ -1023,6 +1066,16 @@
      "Y"
     ],
     "since": "4.4"
+   },
+   "pcl.lineconst.tube": {
+    "params": [
+     "s",
+     "q",
+     "r",
+     "rho",
+     "mur"
+    ],
+    "since": "4.5"
    },
    "pcl.lineconst.typical": {
     "params": [
@@ -1041,6 +1094,16 @@
      "p0"
     ],
     "since": "4.4"
+   },
+   "pcl.lineconst.wedepohl": {
+    "params": [
+     "s",
+     "h",
+     "y",
+     "d",
+     "rho"
+    ],
+    "since": "4.5"
    },
    "pcl.lineconst.z_internal": {
     "params": [

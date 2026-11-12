@@ -1,5 +1,6 @@
 // Browser check of 4.4: the line from geometry (part 'TLM'), its tutorial and theory card, the "Δεδομένα γραμμής" dialog
-// with a new model from the server after a change, and the search in the signal list.
+// with a new model from the server after a change, and the search in the signal list. 4.5: the cable tutorial and the
+// dialog in its cable mode (layers, cross-section, a new FD model after a change of tanδ, back to an overhead line).
 // Usage: python run.py --no-browser --port 8775  then  node tests/ui/line_flow.js http://127.0.0.1:8775/
 const {chromium}=require('playwright');
 (async()=>{const U=process.argv[2]||'http://127.0.0.1:8775/';const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:1500,height:1100}});const p=await ctx.newPage();
@@ -35,5 +36,29 @@ const {chromium}=require('playwright');
  await p.evaluate(()=>{const e=window.PCL.editor,c=e.comp('L1'),d=JSON.parse(c.params.data);d.rho=1000;e.setParams('L1',{data:JSON.stringify(d)});});
  await p.evaluate(()=>window.PCL.reset());await p.waitForFunction(()=>!window.PCL.S.error&&!window.PCL.S.lineBusy,null,{timeout:60000});await p.waitForTimeout(500);
  ok(await p.evaluate(()=>!window.PCL.S.error),'rebuilt with the new CP model');
+ // 4.5: cables
+ await p.goto(U+'?tutorial=cable_fd');await p.waitForTimeout(1500);
+ ok(await p.evaluate(()=>!window.PCL.S.error),'cable tutorial builds without the server: '+await p.evaluate(()=>window.PCL.S.error));
+ await p.click('#toend');await p.waitForFunction(()=>window.PCL.S.sim.t>=0.00195,null,{timeout:90000});await p.waitForTimeout(800);
+ const thc=await p.$eval('#theory',e=>e.innerText);ok(/Cable Data/.test(thc)&&/άφιξη/.test(thc)&&!/\(γης\)/.test(thc),'cable theory card');
+ await p.evaluate(()=>window.PCL.openInspector('L2',400,200));await p.waitForTimeout(300);
+ await p.click('#inspector [data-linedata]');await p.waitForSelector('.ld-modal');
+ ok((await p.$$('.ld-modal .ld-cab')).length===3,'three cables in the table');
+ ok(await p.$eval('.ld-modal [data-kind]',e=>e.value)==='cab','type: cables');
+ ok((await p.$$('.ld-modal .ld-xs circle')).length===4,'cross-section with four layers');
+ ok(await p.$eval('.ld-modal [data-d="medium"]',e=>e.value)==='sea','medium: sea');
+ const td=await p.$('.ld-modal [data-k="lay"][data-i="0"][data-j="1"][data-c="tand"]');await td.fill('1e-3');await td.dispatchEvent('change');await p.waitForTimeout(300);
+ ok(await p.evaluate(()=>JSON.parse(window.PCL.editor.comp('L2').params.data).cables[0].layers[1].tand===1e-3),'tanδ kept in the data');
+ const r1=await p.$('.ld-modal [data-k="lay"][data-i="0"][data-j="0"][data-c="rout"]');ok(await r1.inputValue()==='25.6','radius shown in mm');
+ ok(/παλιό/.test(await p.$eval('.ld-modal [data-msg]',e=>e.innerText)),'a change makes the cable model old');
+ await p.click('.ld-modal [data-run]');await p.waitForFunction(()=>/Υπολογίστηκε|⚠/.test(document.querySelector('.ld-modal [data-msg]')?.innerText||''),null,{timeout:120000});
+ const repc=await p.$eval('.ld-modal',e=>e.textContent);ok(/Υπολογίστηκε/.test(repc),'cable computed: '+repc.slice(0,200));
+ ok((await p.$$('.ld-modal .ld-plot')).length===6,'six fit plots for the cable');
+ await p.click('.ld-modal [data-addc]');await p.waitForTimeout(300);
+ ok(await p.evaluate(()=>{const d=JSON.parse(window.PCL.editor.comp('L2').params.data);return d.cables.length===4&&d.cables[3].ph[0]===4&&d.cables[3].ph[1]===0;}),'a new cable takes the next phase');
+ ok(await p.evaluate(()=>Parts.tlmM(window.PCL.editor.comp('L2').params))===4,'four phases');
+ await p.selectOption('.ld-modal [data-kind]','oh');await p.waitForTimeout(300);
+ ok((await p.$$('.ld-modal [data-add="w"]')).length===1&&!(await p.$$('.ld-modal .ld-cab')).length,'back to an overhead line');
+ await p.click('.ld-modal [data-close]');
  ok(!errs.length,'no JavaScript errors: '+errs.join(' | '));
  await b.close();if(fail.length){console.log('FAIL',fail.join('\n'));process.exit(1);}console.log('PASS line_flow');})().catch(e=>{console.error(e);process.exit(1);});

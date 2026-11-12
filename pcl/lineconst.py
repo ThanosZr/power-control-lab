@@ -99,6 +99,8 @@ def conductors(data):
 
 
 def phases(data):
+    if data.get('cables'):
+        return max(cd['ph'] for c in cables(data) for cd in c['conds'])
     return max(c['ph'] for c in conductors(data))
 
 
@@ -207,6 +209,240 @@ def carson_integral(hi, hk, x, f, rho, mu=MU0, s=None):
     return s * mu / math.pi * complex(re, im)
 
 
+# ---------------------------------------------------------------- single-core cables (4.5, Dommel ch. 5)
+# A cable is a set of coaxial layers from the centre out: conductors ('c': core, sheath, armor, …, each a tube with
+# inner radius rin, outer radius rout, resistivity rho, μ_r) separated by insulations ('i': outer radius rout, ε_r,
+# tanδ, μ_r). Radii in m, resistivity in Ω·m, as the EMTP Cable Data. Each conductor has a phase number in 'ph'
+# (same rules as the overhead conductors: 0 = grounded at both ends and eliminated, equal numbers = bonded).
+# The medium is 'earth' (semi-infinite, Pollaczek; depth y > 0 below the surface) or 'sea' (infinite, ρ ≈ 0.2 Ω·m).
+
+def cables(data):
+    """The cables of the line data in SI: position, conductors (rin, rout, ρ, μ_r, phase) and the insulation after
+    each conductor (ε_r, tanδ, μ_r, inner and outer radius), and the outer radius R."""
+    out = []
+    for n, c in enumerate(data.get('cables', []) or []):
+        x, y = _f(c.get('x')), _f(c.get('y'))
+        lay = c.get('layers') or []
+        ph = [int(_f(v)) for v in (c.get('ph') or [])]
+        conds, r = [], 0.0
+        for L in lay:
+            t = L.get('t', 'c')
+            ro = _f(L.get('rout'))
+            if ro <= r:
+                raise LineError(f'καλώδιο {n + 1}: οι ακτίνες των στρωμάτων πρέπει να αυξάνουν')
+            if t == 'c':
+                ri = _f(L.get('rin'), r)
+                if ri < r - 1e-12 or ri >= ro:
+                    raise LineError(f'καλώδιο {n + 1}: μη έγκυρη εσωτερική ακτίνα αγωγού')
+                if conds and conds[-1]['ins'] is None and ri > r + 1e-12:
+                    raise LineError(f'καλώδιο {n + 1}: κενό ανάμεσα σε αγωγούς χωρίς μόνωση')
+                conds.append({'rin': ri, 'rout': ro, 'rho': _f(L.get('rho')), 'mur': _f(L.get('mur'), 1.0), 'ins': None})
+            else:
+                if not conds:
+                    raise LineError(f'καλώδιο {n + 1}: το πρώτο στρώμα πρέπει να είναι αγωγός')
+                if conds[-1]['ins'] is not None:
+                    raise LineError(f'καλώδιο {n + 1}: δύο μονώσεις στη σειρά· ένωσέ τες σε μία')
+                conds[-1]['ins'] = {'rin': r, 'rout': ro, 'epsr': _f(L.get('epsr'), 1.0), 'tand': _f(L.get('tand'), 0.0),
+                                    'mur': _f(L.get('mur'), 1.0)}
+            r = ro
+        if not conds:
+            raise LineError(f'καλώδιο {n + 1}: χωρίς αγωγούς')
+        for k, cd in enumerate(conds):
+            if cd['rho'] <= 0:
+                raise LineError(f'καλώδιο {n + 1}: η ειδική αντίσταση πρέπει να είναι θετική')
+            if k < len(conds) - 1 and cd['ins'] is None:
+                raise LineError(f'καλώδιο {n + 1}: χρειάζεται μόνωση ανάμεσα στους αγωγούς')
+            cd['ph'] = ph[k] if k < len(ph) else 0
+        if conds[-1]['ins'] is None and conds[-1]['ph'] != 0:
+            raise LineError(f'καλώδιο {n + 1}: ο εξωτερικός αγωγός χωρίς μόνωση ακουμπά στο μέσο: φάση 0')
+        out.append({'x': x, 'y': y, 'conds': conds, 'R': r})
+    for i, a in enumerate(out):
+        for b in out[i + 1:]:
+            if math.hypot(a['x'] - b['x'], a['y'] - b['y']) < a['R'] + b['R'] - 1e-12:
+                raise LineError('δύο καλώδια επικαλύπτονται')
+    return out
+
+
+def tube(s, q, r, rho, mur=1.0):
+    """Internal impedances of a tubular conductor (inner radius q, outer r) per metre at the complex frequency s:
+    (Z_in, Z_out, Z_mutual) of Dommel eq. 5.7, with the scaled Bessel functions (no overflow at high frequencies).
+    A solid conductor (q = 0) has only Z_out. At s = 0 the dc limits."""
+    from scipy.special import ive, kve
+    s = complex(s)
+    area = math.pi * (r * r - q * q)
+    if s == 0:
+        return complex(rho / area), complex(rho / area), complex(rho / area)
+    m = cmath.sqrt(s * MU0 * mur / rho)
+    a = m * r
+    if q <= 0:
+        if abs(a) < 1e-6:
+            return 0j, complex(rho / area), 0j
+        return 0j, rho * m / (2 * math.pi * r) * ive(0, a) / ive(1, a), 0j
+    b = m * q
+    if abs(a) < 1e-6:
+        return complex(rho / area), complex(rho / area), complex(rho / area)
+    E = cmath.exp(-(a - b)) * math.exp(-(a.real - b.real))
+    D = ive(1, a) * kve(1, b) - ive(1, b) * kve(1, a) * E
+    zin = rho * m / (2 * math.pi * q) * (kve(0, b) * ive(1, a) + ive(0, b) * kve(1, a) * E) / D
+    zout = rho * m / (2 * math.pi * r) * (ive(0, a) * kve(1, b) + kve(0, a) * ive(1, b) * E) / D
+    zmut = rho / (2 * math.pi * q * r) * cmath.exp(-a.real + b) / D
+    return zin, zout, zmut
+
+
+def pollaczek(s, h, y, x, rho, d=None):
+    """Earth-return impedance (Ω/m) between the loops of two conductors buried at depths h and y, horizontal distance
+    x, in semi-infinite earth (Pollaczek, Dommel eq. 5.22; the self impedance with d = R, x = R, y = h, eq. 5.23):
+    (sμ₀/2π)·[K₀(md) − K₀(mD) + 2∫₀^∞ e^(−(h+y)√(α²+m²))·cos(αx)/(α + √(α²+m²)) dα], m = √(sμ₀/ρ)."""
+    from scipy.integrate import quad
+    from scipy.special import kve
+    s = complex(s)
+    m = cmath.sqrt(s * MU0 / rho)
+    d = math.hypot(x, h - y) if d is None else d
+    D = math.hypot(x, h + y)
+    H = h + y
+
+    def K0(z):
+        return kve(0, z) * cmath.exp(-z)
+
+    def g(al):                           # the cos(αx) goes to the quadrature's weight (QAWO), not in the function
+        w = cmath.sqrt(al * al + m * m)
+        return cmath.exp(-H * w) / (al + w)
+
+    lim = 40.0 / H + 40.0 * abs(m)
+    # the integrand changes fast near α ≈ |m| (small at low frequency): [0, c] by plain adaptive quadrature with the
+    # cosine inside, the long tail by QAWO (weight cos(αx)). The bracket is O(1) (the K₀ terms), so an absolute floor
+    # of 1e-13 is far below what matters; a relative tolerance alone cannot be met when one part is nearly zero.
+    c = min(lim, 50.0 * abs(m))
+    tol = {'epsabs': 1e-13, 'epsrel': 1e-11}
+
+    def part(fn):
+        v = quad(lambda a: fn(g(a)) * math.cos(a * x), 0, c, limit=400, **tol)[0] if c > 0 else 0.0
+        if lim > c:
+            kw = {'weight': 'cos', 'wvar': x} if x > 0 else {}
+            v += quad(lambda a: fn(g(a)), c, lim, limit=800, **tol, **kw)[0]
+        return v
+
+    re, im = part(lambda z: z.real), part(lambda z: z.imag)
+    return s * MU0 / (2 * math.pi) * (K0(m * d) - K0(m * D) + 2 * complex(re, im))
+
+
+def wedepohl(s, h, y, d, rho, self=False):
+    """Wedepohl's approximation of the earth-return impedance of buried conductors (Dommel eqs. 5.24, 5.25): good to
+    1 % while |m·R| or |m·d| < 0.25. Self: d = R and h = y."""
+    s = complex(s)
+    m = cmath.sqrt(s * MU0 / rho)
+    g = math.exp(0.5772156649015329)     # γ = e^C = 1.781… (C: Euler's constant), as in Wedepohl's formula
+    k = s * MU0 / (2 * math.pi)
+    if self:
+        return k * (-cmath.log(g * m * d / 2) + 0.5 - 4.0 / 3.0 * m * h)
+    return k * (-cmath.log(g * m * d / 2) + 0.5 - 2.0 / 3.0 * m * (h + y))
+
+
+def sea_return(s, Ri, Rk, d, rho):
+    """Return through an infinite medium (sea water), Dommel eqs. 5.28–5.29: self ρm·K₀(mR)/(2πR·K₁(mR)) (d = 0),
+    mutual ρ·K₀(md)/(2πR_iR_k·K₁(mR_i)·K₁(mR_k))."""
+    from scipy.special import kve
+    s = complex(s)
+    m = cmath.sqrt(s * MU0 / rho)
+    if d == 0:
+        a = m * Ri
+        return rho * m / (2 * math.pi * Ri) * kve(0, a) / kve(1, a)
+    ai, ak, ad = m * Ri, m * Rk, m * d
+    # K₀(md)/(K₁(mR_i)K₁(mR_k)) with the scaled functions: e^(−md + mR_i + mR_k)
+    return rho / (2 * math.pi * Ri * Rk) * kve(0, ad) / (kve(1, ai) * kve(1, ak)) * cmath.exp(-ad + ai + ak)
+
+
+F_LOSS = (1e-3, 1e12)     # band of the wideband Debye loss (Hz): tanδ is nearly constant well inside it
+F_EPS = 50.0               # frequency at which εr and tanδ of an insulation are given (Hz)
+
+
+def permittivity(s, epsr, tand, fref=F_EPS):
+    """Relative permittivity ε(s) with the loss tangent tanδ: wideband Debye model (Djordjevic, Sarkar et al. 2001)
+    ε(s) = ε∞ + K·log₁₀((ω₂ + s)/(ω₁ + s)) with ε(j2πf_ref) = εr·(1 − j·tanδ). A constant tanδ at every frequency is not
+    causal (its A(s) has no stable rational fit, and the real-time response is not real); this one is, and its real part
+    changes by only about εr·tanδ·1.5 per decade. tanδ = 0 gives εr."""
+    if not tand:
+        return complex(epsr)
+    w1, w2 = (2 * math.pi * f for f in F_LOSS)
+    sr = 2j * math.pi * fref
+    lg = cmath.log((w2 + sr) / (w1 + sr)) / math.log(10)
+    K = -epsr * tand / lg.imag
+    einf = epsr - K * lg.real
+    return einf + K * cmath.log((w2 + s) / (w1 + s)) / math.log(10)
+
+
+def cable_zy(data, s):
+    """Series impedance and shunt admittance (per metre) of all cable conductors at the complex frequency s, from the
+    coaxial loops (Dommel eqs. 5.1–5.17) and the earth or sea return of the outer loops (5.18–5.29), and the
+    conductors as {ph} for the reduction."""
+    cbs = cables(data)
+    medium = data.get('medium', 'earth')
+    rho = _f(data.get('rho'), 100.0 if medium == 'earth' else 0.2)
+    s = complex(s)
+    blocks, cs, A_all = [], [], []
+    for c in cbs:
+        N = len(c['conds'])
+        Zl = np.zeros((N, N), complex)
+        Yl = np.zeros(N, complex)
+        for k, cd in enumerate(c['conds']):
+            _, zout, _ = tube(s, cd['rin'], cd['rout'], cd['rho'], cd['mur'])
+            Zl[k, k] += zout
+            ins = cd['ins']
+            if ins:
+                Zl[k, k] += s * MU0 * ins['mur'] / (2 * math.pi) * math.log(ins['rout'] / ins['rin'])
+                Cp = 2 * math.pi * EPS0 * ins['epsr'] / math.log(ins['rout'] / ins['rin'])
+                Yl[k] = s * Cp * permittivity(s, 1.0, ins['tand'])
+            else:
+                Yl[k] = np.inf
+            if k + 1 < N:
+                nx = c['conds'][k + 1]
+                zin, _, zmut = tube(s, nx['rin'], nx['rout'], nx['rho'], nx['mur'])
+                Zl[k, k] += zin
+                Zl[k, k + 1] = Zl[k + 1, k] = -zmut
+        if medium == 'sea':
+            Zl[N - 1, N - 1] += sea_return(s, c['R'], c['R'], 0, rho)
+        elif medium == 'perfect':
+            pass
+        else:
+            Zl[N - 1, N - 1] += pollaczek(s, c['y'], c['y'], c['R'], rho, d=c['R'])
+        A = np.tril(np.ones((N, N)))       # I_loop = A·I_conductor, V_conductor = Aᵀ·V_loop
+        Zc = A.T @ Zl @ A
+        if np.isinf(Yl).any():             # the outer conductor touches the medium: its loop voltage is 0
+            Yl = np.where(np.isinf(Yl), 1e12, Yl)
+        Ainv = np.linalg.inv(A)
+        Yc = Ainv @ np.diag(Yl) @ Ainv.T
+        blocks.append((Zc, Yc, N))
+        for cd in c['conds']:
+            cs.append({'ph': cd['ph']})
+        A_all.append(A)
+    n = len(cs)
+    Z = np.zeros((n, n), complex)
+    Y = np.zeros((n, n), complex)
+    o = []
+    k = 0
+    for (Zc, Yc, N) in blocks:
+        o.append(k)
+        Z[k:k + N, k:k + N] = Zc
+        Y[k:k + N, k:k + N] = Yc
+        k += N
+    for i, a in enumerate(cbs):
+        for j, b in enumerate(cbs):
+            if j <= i:
+                continue
+            dx = a['x'] - b['x']
+            d = math.hypot(dx, a['y'] - b['y'])
+            if medium == 'sea':
+                zm = sea_return(s, a['R'], b['R'], d, rho)
+            elif medium == 'perfect':
+                zm = 0j
+            else:
+                zm = pollaczek(s, a['y'], b['y'], abs(dx), rho)
+            Ni, Nj = len(a['conds']), len(b['conds'])
+            Z[o[i]:o[i] + Ni, o[j]:o[j] + Nj] = zm   # only the outer loops couple: every conductor pair sees it
+            Z[o[j]:o[j] + Nj, o[i]:o[i] + Ni] = zm
+    return Z, Y, cs
+
+
 # ---------------------------------------------------------------- matrices per metre
 def zy(data, f=None, earth=None, skin=None, s=None):
     """Series impedance Z′ (Ω/m) and potential coefficients P′ (m/F) of all individual conductors at the frequency f
@@ -269,8 +505,17 @@ def reduce_phases(Z, P, cs):
 
 
 def phase_matrices(data, f=None, s=None, **kw):
-    """Reduced Z′ (Ω/m) and Y′ = G′ + sC′ (S/m) of the M phases at the frequency f (or the complex frequency s)."""
+    """Reduced Z′ (Ω/m) and Y′ = G′ + sC′ (S/m) of the M phases at the frequency f (or the complex frequency s).
+    Cables (4.5): Y′ of the insulations (with tanδ), reduced the same way, and G′ only when the data give it."""
     s = 2j * math.pi * f if s is None else complex(s)
+    if data.get('cables'):
+        if data.get('wires') or data.get('bundles'):
+            raise LineError('εναέριοι αγωγοί και καλώδια στην ίδια γραμμή δεν υποστηρίζονται ακόμη')
+        Z, Ysh, cs = cable_zy(data, s)
+        T = _groups(cs)
+        Zr = np.linalg.inv(T.T @ np.linalg.inv(Z) @ T)
+        G = _f(data.get('G'), 0.0) / 1000.0         # the insulation losses are in tanδ: no extra G′ unless given
+        return Zr, G * np.eye(len(Zr)) + T.T @ Ysh @ T
     Z, P, cs = zy(data, s=s, **kw)
     Zr, Pr = reduce_phases(Z, P, cs)
     G = _f(data.get('G'), G_DEFAULT) / 1000.0
@@ -419,7 +664,12 @@ def _fit_a(s, A, w, L, tmin, tmax, n, tol):
         return fit[4], fit
 
     def best(nn):
-        a, b = tmin, tmax
+        # the error is not unimodal in τ (cables: |A| is still large at f_max): a coarse grid first, then golden
+        # section between the neighbours of the best point
+        grid = np.linspace(tmin, tmax, 25)
+        errs = [err(t, nn)[0] for t in grid]
+        k = int(np.argmin(errs))
+        a, b = grid[max(k - 1, 0)], grid[min(k + 1, len(grid) - 1)]
         g = (math.sqrt(5) - 1) / 2
         c, dd = b - g * (b - a), a + g * (b - a)
         ec, ed = err(c, nn)[0], err(dd, nn)[0]
@@ -477,8 +727,8 @@ def fd_model(data, length=None, fmin=0.01, decades=9, ppd=10, fti=None, tol_zc=0
                 break
             nz += 2
         vmax = 2 * math.pi * fs[-1] / gm[-1, k].imag
-        tmin, tmax = L / C0, L / vmax * 1.0005
-        tau, fa = _fit_a(s, A, None, L, min(tmin, tmax * 0.98), tmax, n0, tol_a)
+        tmax = L / vmax * 1.0005
+        tau, fa = _fit_a(s, A, None, L, max(L / C0, 0.8 * tmax), tmax, n0, tol_a)
         m = {'zc': {'d': fz[0], 'r': fz[1].tolist(), 'p': fz[2].tolist(), 'err': fz[4]},
              'a': {'r': fa[1].tolist(), 'p': fa[2].tolist(), 'err': fa[4]}, 'tau': tau,
              'Zc_inf': fz[0], 'Zc_dc': abs(Zc[0])}
@@ -709,6 +959,24 @@ TYPICAL = {
 }
 
 
+def _sc(x, y, ph, core, ins1, sheath, ins2, rho_c=1.72e-8, rho_s=2.8e-8, eps1=2.3, eps2=2.3):
+    return {'x': x, 'y': y, 'ph': ph,
+            'layers': [{'t': 'c', 'rin': 0, 'rout': core, 'rho': rho_c}, {'t': 'i', 'rout': ins1, 'epsr': eps1, 'tand': 4e-4},
+                       {'t': 'c', 'rin': ins1, 'rout': sheath, 'rho': rho_s}, {'t': 'i', 'rout': ins2, 'epsr': eps2}]}
+
+
+# typical single-core XLPE cables (radii in m): a 220 kV submarine cable (copper core, lead sheath, sea water) and a
+# 150 kV land cable (copper core, copper screen as an equivalent tube, flat formation at 1.2 m)
+TYPICAL.update({
+    '220kV-sea': {'name': 'Τυπικό υποβρύχιο καλώδιο 220 kV (3 μονοπολικά XLPE, θάλασσα)', 'medium': 'sea', 'rho': 0.2,
+                  'length': 30, 'cables': [_sc(x, 30, [k + 1, 0], 0.0256, 0.0550, 0.0575, 0.0850, 1.7e-8, 2.8e-8)
+                                           for k, x in enumerate((-1.0, 0.0, 1.0))]},
+    '150kV-land': {'name': 'Τυπικό υπόγειο καλώδιο 150 kV (3 μονοπολικά XLPE 1000 mm², επίπεδη διάταξη)', 'medium': 'earth',
+                   'rho': 100, 'length': 10, 'cables': [_sc(x, 1.2, [k + 1, 0], 0.0189, 0.0380, 0.0384, 0.0480, 1.93e-8,
+                                                            1.72e-8, 2.5, 2.3) for k, x in enumerate((-0.25, 0.0, 0.25))]},
+})
+
+
 def typical(key):
     return json.loads(json.dumps(TYPICAL[key]))
 
@@ -744,4 +1012,5 @@ def api(req):
         curves = {'f': mdl.pop('f'), 'modes': [m.pop('curve') for m in mdl['modes']]}
         frep = 50.0
     mdl['src'] = req.get('src', '')
-    return {'mdl': mdl, 'report': report(data, frep), 'curves': curves, 'conductors': conductors(data)}
+    return {'mdl': mdl, 'report': report(data, frep), 'curves': curves,
+            'conductors': [] if data.get('cables') else conductors(data)}
