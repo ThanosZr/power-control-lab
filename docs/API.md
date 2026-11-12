@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.8: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (439 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.8.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (448 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.8.
+Κανένα στην 4.8.1.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-237 σημεία.
+239 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -271,6 +271,7 @@
 | `pcl.workbench.CircuitPlant.output` | — | 3.18 · πειρ. |
 | `pcl.workbench.CircuitPlant.params_dict` | — | 3.18 · πειρ. |
 | `pcl.workbench.CircuitPlant.reset_state` | — | 3.18 · πειρ. |
+| `pcl.workbench.CircuitPlant.set_live` | `values` | 4.8.1 · πειρ. |
 | `pcl.workbench.CircuitPlant.step` | `u`, `dt` | 3.18 · πειρ. |
 | `pcl.workbench.CircuitPlant.u_range` | — | 3.18 · πειρ. |
 | `pcl.workbench.CircuitPlant.viz_state` | — | 3.18 · πειρ. |
@@ -280,10 +281,11 @@
 | `pcl.workbench.prepare` | `project`, `input`, `measure`, `state` | 3.18 · πειρ. |
 | `pcl.workbench.register` | `workbench` | 3.18 · πειρ. |
 | `pcl.workbench.run_scheme` | `plant`, `scheme_cls`, `reference`, `dt`, `params` | 3.18 · πειρ. |
+| `pcl.workbench.serve` | `inp`, `out` | 4.8.1 · πειρ. |
 
 ## Γραμμή εντολών `python -m pcl`
 
-14 σημεία.
+15 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -295,6 +297,7 @@
 | `python -m pcl link` | `<request>`, `--out` | 3.18 |
 | `python -m pcl machines` | — | 4.7 |
 | `python -m pcl net` | `<network>`, `--lf`, `--sc`, `--bus`, `--mode`, `--tmin`, `--out`, `--emt` | 4.2 |
+| `python -m pcl plant` | — | 4.8.1 |
 | `python -m pcl plot` | `<spec>`, `--preset`, `--mapping`, `--kind`, `--signal`, `--table`, `--out` | 3.18 |
 | `python -m pcl run` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--chunk`, `--state`, `--resume`, `--events` | 3.18 |
 | `python -m pcl sweep` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--resume`, `--grid`, `--zip`, `--workers` | 3.18 |
@@ -374,7 +377,7 @@
 
 ## MATLAB / Octave (`matlab/`)
 
-28 σημεία.
+31 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -395,11 +398,14 @@
 | `PclApp.setParam` | `key`, `value` | 3.18 |
 | `PclApp.show` | `what`, `title` | 3.18 |
 | `PclApp.values` | `keys` | 3.18 |
+| `PclPlant` | `project`, `varargin` | 4.8.1 |
 | `pcl_bifurcation` | `project`, `param`, `values`, `opts` | 3.18 |
 | `pcl_config` | — | 3.18 |
 | `pcl_job` | `spec`, `server` | 3.18 |
 | `pcl_link` | `method`, `args`, `client` | 3.18 |
 | `pcl_measures` | `m` | 3.18 |
+| `pcl_pi` | `r`, `m`, `cs`, `dt` | 4.8.1 |
+| `pcl_plant_gui` | `opts` | 4.8.1 |
 | `pcl_read` | `file` | 3.18 |
 | `pcl_result` | `j` | 3.18 |
 | `pcl_run` | `project`, `params`, `opts` | 3.18 |
@@ -428,7 +434,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-92 σημεία.
+95 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -443,6 +449,7 @@
 | `file.wire` | id, a, b, pts, name, color, width | — | 3.18 |
 | `part:AIC` | scheme, mode, target, learn, fs, fr, Kp, Ki, umin, umax, rs, dxs, us, hidden, opt, lr, elr, K, ds, seed, w | L, iae, r, sat, u, y, yd | 4.8 |
 | `part:AM` | — | a, b, y | 3.18 |
+| `part:AVR` | type, Vref, dV, TR, KA, TA, TC, TB, TC1, TB1, KF, TF, VRMAX, VRMIN, KC, KLR, ILR, KE, TE, AEX, BEX | e0, efd, ifd, v0, vs, vt | 4.8.1 |
 | `part:BSEL` | idx | u, y | 3.18 |
 | `part:C` | C, v0, esr | n, p | 3.18 |
 | `part:CB3` | ctl, cmd, Ron, Roff, vm, conn | a1, a2, abc1, abc2, b1, b2, c1, c2, cmd | 4.1 |
@@ -465,8 +472,9 @@
 | `part:FEST` | mode, RR, LM, psi0 | al, be, psi, th, w1, wr | 3.18 |
 | `part:FLT3` | kind, Rf, Rg, ctl, ton, toff, conn | a, abc, b, c, f | 4.1 |
 | `part:GAIN` | K, unit | u, y | 3.18 |
-| `part:GEN3` | Sn, Un, f, pp, data, conv, Ra, Xl, X0, Xd, Xdp, Xdpp, Xq, Xqp, Xqpp, Td0p, Td0pp, Tq0p, Tq0pp, cXad, cXfd, cRfd, cXkd, cRkd, cXaq, cX1q, cR1q, cX2q, cR2q, shaft, H, D, Hm, Km, Dm, Dmu, Tfr, gm, exc, Efd, mech, Tm, init, V0, ang0, neut, conn | a, abc, b, c, d, efd, ifd, n, pe, qe, te, tm, ts1, ts2, vt, w | 4.3 |
+| `part:GEN3` | Sn, Un, f, pp, data, conv, Ra, Xl, X0, Xd, Xdp, Xdpp, Xq, Xqp, Xqpp, Td0p, Td0pp, Tq0p, Tq0pp, cXad, cXfd, cRfd, cXkd, cRkd, cXaq, cX1q, cR1q, cX2q, cR2q, shaft, H, D, Hm, Km, Dm, Dmu, Tfr, gm, exc, Efd, mech, Tm, init, V0, ang0, neut, conn | a, abc, b, c, d, e0, efd, ifd, m0, n, pe, qe, te, tm, ts1, ts2, v0, vt, w | 4.3 |
 | `part:GND` | — | g | 3.18 |
+| `part:GOV` | type, dP, Pr, R, TSR, TSM, LC1, LC2, V1, KAX, FHP, FIP, FLP, TCH, TRH, TCO, RP, RT, TR, TP, KS, TG, Ropen, Rclose, Tw, gFL, gNL | g, m0, pm, tm, w | 4.8.1 |
 | `part:GRID3` | Un, f, phase, cf, emf, Sk, XR, z0, Z0Z1, Sk1, XR0, Rn, conn | a, abc, b, c | 4.1 |
 | `part:ICLARKE` | inv, conn | a, ab, abc, al, b, be, c | 3.18 |
 | `part:IDC` | ctl, I, sched | n, p, u | 3.18 |
@@ -493,6 +501,7 @@
 | `part:PIB` | Kp, Ki, clock, trig, y0, aw, ymin, ymax | tr, u, y | 3.18 |
 | `part:PLL` | f0, bw, th0, conn | a, abc, amp, b, c, th, w | 3.18 |
 | `part:PORT` | name, side, width | p | 3.18 |
+| `part:PSS` | KS, TW, T1, T2, T3, T4, VSMAX, VSMIN | vs, w | 4.8.1 |
 | `part:PWM` | fs, mode, D, dsched, carrier, phase, upd, dt, sensor, qty, ref, Kp, Ki, Kd, Tf, ff, ffA, ffB, D0, dmin, dmax, m, fref, refphase | d | 3.18 |
 | `part:PY` | code, ins, outs, pars, clock, trig, y0 | e, y | 3.18 |
 | `part:R` | R, sched | a, b | 3.18 |

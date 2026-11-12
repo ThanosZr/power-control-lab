@@ -1,7 +1,7 @@
 // The electric vehicle (4.8, tutorial ev_drive) in the app and a long run: its tiles (the mode, the weights, the energy
 // metrics), ▶ in the worker without an end, the mode changed live from its tile, «⭳ σε αρχείο» writing every point of the
 // scope's signals to a file while it runs (no gaps, t increasing), the memory of a point per ms, the AI block whose
-// reference repeats (it runs past the old 6.4 s), and no errors. Needs Node + Playwright and the app's server.
+// reference repeats (it runs past the old 6.4 s), the generator with its AVR, PSS and governor and the inside of the AVR (4.8.1), and no errors. Needs Node + Playwright and the app's server.
 // Usage: python run.py --no-browser --port 8765  then  node tests/ui/ev_flow.js http://127.0.0.1:8765/ <out-dir>
 const {chromium}=require('playwright');const fs=require('fs');const path=require('path');const OUT=process.argv[3]||'.';
 const assert=(c,m)=>{if(!c)throw new Error('ASSERT: '+m);};
@@ -56,6 +56,34 @@ const assert=(c,m)=>{if(!c)throw new Error('ASSERT: '+m);};
  await p.goto(base+'?tutorial=ai_block');await p.waitForTimeout(1200);
  R.ai=await p.evaluate(()=>{const s=PCL.S.sim;const r=[];s.run(8);for(const t of [8.25,8.65,9.05,9.45])r.push((s.run(t-s.t),s.now('Y:KW')));return {stopT:PCL.S.stopT,t:s.t,ref:r,kw:PCL.editor.comp('KW').type};});
  assert(R.ai.stopT===0&&R.ai.kw==='EXPR'&&R.ai.ref.join()==='100,150,50,120','repeating reference '+JSON.stringify(R.ai));
+ // 8. the generator with its controls (4.8.1, gen_ctl): the tile of ΔV_ref, the theory card, the fault ridden through
+ //    with the PSS; then a governor chosen from the options: its tile of ΔP_ref and a live step of the load reference
+ await p.goto(base+'?tutorial=gen_ctl');await p.waitForTimeout(1500);
+ R.gen=await p.evaluate(()=>{const s=PCL.S.sim,r={pinned:[...document.querySelectorAll('.wtl .wt .wt-n')].map(e=>e.textContent),warn:s.net.warnings,method:document.querySelector('#method').value,stopT:PCL.S.stopT};
+  let slip=false;for(let k=1;k<=40;k++){s.run(0.1);if(Math.abs(s.now('Y:SG1')-1)>0.02)slip=true;}Object.assign(r,{t:s.t,slip,d:s.now('Y:SG1:d'),efd:s.now('Y:AV1/EFD'),vs:s.now('Y:PS1/VS')});return r;});
+ await p.waitForTimeout(300);R.gen.theory=await p.evaluate(()=>document.querySelector('#theory').textContent);
+ assert(R.gen.pinned.includes('ΔV_ref')&&!R.gen.warn.length&&R.gen.method==='BDF2'&&R.gen.stopT===10,'gen_ctl opened '+JSON.stringify(R.gen));
+ assert(!R.gen.slip&&R.gen.d>40&&R.gen.d<100&&Number.isFinite(R.gen.efd),'the fault ridden through '+JSON.stringify(R.gen));
+ assert(/ST1A/.test(R.gen.theory)&&/PSS/.test(R.gen.theory)&&/E_fd0/.test(R.gen.theory),'gen theory card '+R.gen.theory.slice(0,300));
+ // the inside of the AVR with a double click: its blocks by the flow of the signals, their values while it runs
+ const at=await p.evaluate(()=>{const c=PCL.editor.comp('AV1'),b=Parts.bbox(c),m=PCL.editor.svg.getScreenCTM(),pt=PCL.editor.svg.createSVGPoint();pt.x=(b[0]+b[2])/2;pt.y=(b[1]+b[3])/2;const q=pt.matrixTransform(m);return [q.x,q.y];});
+ await p.mouse.dblclick(at[0],at[1]);await p.waitForTimeout(700);
+ R.inside=await p.evaluate(()=>{const el=document.querySelector('#lib-inside');return {open:!!el&&!el.hidden,id:Inside.openId(),n:el?.querySelectorAll('.in-n').length,e:el?.querySelectorAll('.in-e').length,
+  efd:el?.querySelector('[data-iv="EFD"]')?.textContent,vs:el?.querySelector('[data-iv="$vs"]')?.textContent,vt:el?.querySelector('[data-iv="$vt"]')?.textContent};});
+ assert(R.inside.open&&R.inside.id==='AV1'&&R.inside.n>=12&&R.inside.e>=12&&[R.inside.efd,R.inside.vs,R.inside.vt].every(v=>/^= /.test(v)),'inside of the AVR '+JSON.stringify(R.inside));
+ await p.screenshot({path:OUT+'/gen_inside.png'});
+ await p.keyboard.press('Escape');await p.waitForTimeout(200);
+ assert(await p.evaluate(()=>document.querySelector('#lib-inside').hidden),'Esc closes the inside');
+ // the step +0.02 of ΔV_ref from its tile: the AVR takes the new reference (the library part re-expanded, the states kept)
+ R.dv=await p.evaluate(async()=>{const tile=[...document.querySelectorAll('.wtl .wt')].find(e=>e.querySelector('.wt-n').textContent==='ΔV_ref');
+  const v0=PCL.S.sim.now('Y:SG1:vt');tile.querySelector('[data-wstep="1"]').click();await new Promise(r=>setTimeout(r,300));const s=PCL.S.sim;s.run(3);
+  return {v0,v1:s.now('Y:SG1:vt'),dV:PCL.editor.comp('AV1').params.dV,x:tile.querySelector('.wt-in').value,t:s.t};});
+ assert(+R.dv.dV===0.02&&R.dv.v1-R.dv.v0>0.012,'ΔV_ref from its tile '+JSON.stringify(R.dv));
+ await p.evaluate(()=>{const s=document.querySelector('#tut-options [data-topt="gov"]');s.value='steam';s.dispatchEvent(new Event('change'));});await p.waitForTimeout(1500);
+ await p.evaluate(()=>{const s=document.querySelector('#tut-options [data-topt="ev"]');s.value='none';s.dispatchEvent(new Event('change'));});await p.waitForTimeout(1500);
+ R.gov=await p.evaluate(()=>({pinned:[...document.querySelectorAll('.wtl .wt .wt-n')].map(e=>e.textContent),gv:PCL.editor.comp('GV1')?.params.type,cb:!!PCL.editor.comp('CB2'),warn:PCL.S.sim.net.warnings}));
+ assert(R.gov.gv==='steam'&&!R.gov.cb&&R.gov.pinned.includes('ΔP_ref')&&!R.gov.warn.length,'the governor from the options '+JSON.stringify(R.gov));
+ await p.screenshot({path:OUT+'/gen_ctl.png'});
  assert(!errs.length,'page errors: '+errs.join(' | '));
  fs.writeFileSync(OUT+'/ev_flow.json',JSON.stringify(R,null,1));console.log(JSON.stringify({ok:true,file:R.file,mem:R.mem,mode2:R.mode2.t}));await b.close();
 })().catch(e=>{console.error(e);process.exit(1);});

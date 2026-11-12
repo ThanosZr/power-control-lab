@@ -1,5 +1,5 @@
 {
- "version": "4.8",
+ "version": "4.8.1",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -1814,6 +1814,12 @@
     "params": [],
     "since": "3.18"
    },
+   "pcl.workbench.CircuitPlant.set_live": {
+    "params": [
+     "values"
+    ],
+    "since": "4.8.1"
+   },
    "pcl.workbench.CircuitPlant.step": {
     "params": [
      "u",
@@ -1897,6 +1903,13 @@
      "params"
     ],
     "since": "3.18"
+   },
+   "pcl.workbench.serve": {
+    "params": [
+     "inp",
+     "out"
+    ],
+    "since": "4.8.1"
    }
   },
   "cli": {
@@ -1967,6 +1980,10 @@
      "--emt"
     ],
     "since": "4.2"
+   },
+   "python -m pcl plant": {
+    "params": [],
+    "since": "4.8.1"
    },
    "python -m pcl plot": {
     "params": [
@@ -2409,6 +2426,13 @@
     ],
     "since": "3.18"
    },
+   "PclPlant": {
+    "params": [
+     "project",
+     "varargin"
+    ],
+    "since": "4.8.1"
+   },
    "pcl_bifurcation": {
     "params": [
      "project",
@@ -2442,6 +2466,21 @@
      "m"
     ],
     "since": "3.18"
+   },
+   "pcl_pi": {
+    "params": [
+     "r",
+     "m",
+     "cs",
+     "dt"
+    ],
+    "since": "4.8.1"
+   },
+   "pcl_plant_gui": {
+    "params": [
+     "opts"
+    ],
+    "since": "4.8.1"
    },
    "pcl_read": {
     "params": [
@@ -2691,6 +2730,40 @@
      "y"
     ],
     "since": "3.18"
+   },
+   "part:AVR": {
+    "params": [
+     "type",
+     "Vref",
+     "dV",
+     "TR",
+     "KA",
+     "TA",
+     "TC",
+     "TB",
+     "TC1",
+     "TB1",
+     "KF",
+     "TF",
+     "VRMAX",
+     "VRMIN",
+     "KC",
+     "KLR",
+     "ILR",
+     "KE",
+     "TE",
+     "AEX",
+     "BEX"
+    ],
+    "pins": [
+     "e0",
+     "efd",
+     "ifd",
+     "v0",
+     "vs",
+     "vt"
+    ],
+    "since": "4.8.1"
    },
    "part:BSEL": {
     "params": [
@@ -3078,8 +3151,10 @@
      "b",
      "c",
      "d",
+     "e0",
      "efd",
      "ifd",
+     "m0",
      "n",
      "pe",
      "qe",
@@ -3087,6 +3162,7 @@
      "tm",
      "ts1",
      "ts2",
+     "v0",
      "vt",
      "w"
     ],
@@ -3098,6 +3174,45 @@
      "g"
     ],
     "since": "3.18"
+   },
+   "part:GOV": {
+    "params": [
+     "type",
+     "dP",
+     "Pr",
+     "R",
+     "TSR",
+     "TSM",
+     "LC1",
+     "LC2",
+     "V1",
+     "KAX",
+     "FHP",
+     "FIP",
+     "FLP",
+     "TCH",
+     "TRH",
+     "TCO",
+     "RP",
+     "RT",
+     "TR",
+     "TP",
+     "KS",
+     "TG",
+     "Ropen",
+     "Rclose",
+     "Tw",
+     "gFL",
+     "gNL"
+    ],
+    "pins": [
+     "g",
+     "m0",
+     "pm",
+     "tm",
+     "w"
+    ],
+    "since": "4.8.1"
    },
    "part:GRID3": {
     "params": [
@@ -3524,6 +3639,23 @@
      "p"
     ],
     "since": "3.18"
+   },
+   "part:PSS": {
+    "params": [
+     "KS",
+     "TW",
+     "T1",
+     "T2",
+     "T3",
+     "T4",
+     "VSMAX",
+     "VSMIN"
+    ],
+    "pins": [
+     "vs",
+     "w"
+    ],
+    "since": "4.8.1"
    },
    "part:PWM": {
     "params": [

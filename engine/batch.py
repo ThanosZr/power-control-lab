@@ -798,7 +798,8 @@ class Circuit:
                'pe': -(v[0] * i[0] + v[1] * i[1] + v[2] * i[2]) / m['Sn'],
                'qe': -((v[1] - v[2]) * i[0] + (v[2] - v[0]) * i[1] + (v[0] - v[1]) * i[2]) / (math.sqrt(3) * m['Sn']),
                'vt': math.hypot(math.sqrt(2 / 3) * (v[0] - (v[1] + v[2]) / 2), (v[1] - v[2]) / math.sqrt(2)) / m['Un'],
-               'ifd': float(i[3]) * m['ifK'], 'd': math.degrees(d)}
+               'ifd': float(i[3]) * m['ifK'], 'd': math.degrees(d),
+               'e0': m['Efd0'], 'v0': m.get('V0', 1.0), 'm0': m['Tm0']}     # 4.8.1: the steady state, for the AVR and the governor
         for j in range(M - 1):
             out[f'ts{j + 1}'] = sh['K'][j] * (ph[j] - ph[j + 1])
         return out

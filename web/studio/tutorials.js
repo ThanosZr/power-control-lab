@@ -1128,23 +1128,60 @@
     ph3.forEach((k,j)=>{comps.push(C('LF'+k,'L',900,520+40*j,{L:0.04*Zb/w},{label:'X_F'}));wires.push(['C'+k+':n','CB1:'+k+'1'],['CB1:'+k+'2','LF'+k+':a'],['LF'+k+':b','GND:g']);});}
    const panes=S1?[[['Y:SG1:ts2','IP–LPA'],['Y:SG1:ts4','LPB–GEN']],[['Y:SG1','ω (pu)']]]:[[['Y:SG1:ts3','LPA–LPB'],['Y:SG1:ts5','GEN–EXC']],[['Y:SG1:te','T_e (pu)']],[['I:SG1','i_a γεννήτριας'],['V:Ca','v του πυκνωτή']]];
    return project(comps,wires,{version:4,sim:{hDiv:333,speed:2,stopT:S1?4:+(tf+0.5).toFixed(4)},scope:{panes,window:{unit:'s',n:S1?4:0.5}},meta:{case:S1?'1S':'1T',tf,Xc,P0}});}});
+ // 4.8.1: a generator on an infinite bus with its controls (AVR ST1A/DC1A, PSS, governor with steam or hydro turbine;
+ // Kundur ch. 8–9). Typical round-rotor data of the part, 100 MVA, 13.8 kV, 50 Hz; transformer X_T = 0.15 and two lines
+ // X = 0.5 and 0.93 pu to an infinite bus; P = 0.9, Q = 0.436 pu at |V| = 1 (E_B = 0.90081 pu), a classic study case.
+ function smibPoint(P,Q,Xeq){const Ir=P,Ii=-Q,Er=1+Xeq*Ii,Ei=-Xeq*Ir;return {EB:Math.hypot(Er,Ei),th:-Math.atan2(Ei,Er)*180/Math.PI};}
+ function genCtl(o){const Un=13.8e3,Sb=100e6,f=50,c={conn:'bus'},XT=0.15,X1=0.5,X2=0.93,P=0.9,Q=0.436,op=smibPoint(P,Q,XT+X1*X2/(X1+X2));
+  const avr=o.ctl!=='none',pss=o.ctl==='avr_pss'||o.ctl==='full',gov=o.gov&&o.gov!=='none';
+  const L=(id,x,y,xx,lbl)=>C(id,'LINE3',x,y,{unit:'pu',Un,Sb,f,R1:0,X1:xx,B1:0,z0:'same',...c},{label:lbl});
+  const comps=[C('SG1','GEN3',140,300,{Sn:Sb,Un,f,pp:1,V0:1,ang0:+op.th.toFixed(6),H:3.5,D:0,exc:avr?'sig':'init',mech:gov?'sig':'init',...c},{label:'γεννήτρια'}),
+   L('TR1',320,300,XT,'μετασχηματιστής X_T'),J('HT',460,300),L('LN1',640,240,X1,'γραμμή 1'),J('INF',820,300),
+   J('FP',600,400),L('LN2',700,400,X2,'γραμμή 2'),
+   C('NET','GRID3',960,300,{Un,f,phase:0,cf:+op.EB.toFixed(8),emf:'c',Sk:1e13,XR:10,z0:'ratio',Z0Z1:1,XR0:10,...c},{flip:true,label:'άπειρος ζυγός'})];
+  const wires=[['SG1:abc','TR1:abc1'],['TR1:abc2','HT'],['HT','LN1:abc1'],['LN1:abc2','INF'],['FP','LN2:abc1'],['INF','NET:abc']];
+  // the breakers of line 2 only with the fault: a breaker opens at the current zeros (two thyristors per pole), whose
+  // commutations every half cycle leave a ripple of the order of h in the steady state
+  if(o.ev==='fault'){comps.push(C('CB2','CB3',520,400,{cmd:'0:1, 1.07:0',...c},{label:'CB γραμμής 2'}),C('CB3','CB3',780,400,{cmd:'0:1, 1.07:0',...c},{label:'CB'}),
+    C('F1','FLT3',600,520,{kind:'abcg',ton:1,toff:1.2,Rf:0,Rg:0,...c},{lbl:'below',label:'σφάλμα στη γραμμή 2'}));
+   wires.push(['HT','CB2:abc1'],['CB2:abc2','FP'],['LN2:abc2','CB3:abc1'],['CB3:abc2','INF'],['FP','F1:abc']);}
+  else wires.push(['HT','FP'],['LN2:abc2','INF']);
+  if(avr){comps.push(C('AV1','AVR',140,60,{type:o.ctl==='dc1a'?'dc1a':'st1a',dV:o.ev==='vref'?'0:0, 1:0.05':'0',...(o.ctl==='tgr'?{TC:1,TB:10}:{})},{label:'AVR'}));
+   wires.push(['SG1:vt','AV1:vt'],['SG1:v0','AV1:v0'],['SG1:e0','AV1:e0'],['SG1:ifd','AV1:ifd'],['AV1:efd','SG1:efd']);
+   if(pss){comps.push(C('PS1','PSS',-60,60,{},{label:'PSS'}));wires.push(['SG1:w','PS1:w'],['PS1:vs','AV1:vs']);}}
+  if(gov){comps.push(C('GV1','GOV',340,60,{type:o.gov,dP:o.ev==='load'?'0:0, 1:0.05':'0'},{label:o.gov==='hydro'?'ρυθμιστής (νερό)':'ρυθμιστής (ατμός)'}));
+   wires.push(['SG1:w','GV1:w'],['SG1:m0','GV1:m0'],['GV1:tm','SG1:tm']);}
+  const panes=[[['Y:SG1:d','δ (°)']],[['Y:SG1:pe','P_e'],['Y:SG1:qe','Q_e']],[['Y:SG1:vt','|V| (pu)']],[avr?['Y:AV1/EFD','E_fd']:['Y:SG1:ifd','i_fd']],[['Y:SG1','ω (pu)'],...(gov?[['Y:GV1/PM','P_m']]:[])]];
+  const watch={tiles:[...(avr?[{ctl:'AV1.dV',label:'ΔV_ref',at:[100,-150],rng:[-0.1,0.1],steps:['-0.02','+0.02','=0']}]:[]),...(gov?[{ctl:'GV1.dP',label:'ΔP_ref',at:[340,-150],rng:[-0.3,0.3],steps:['-0.05','+0.05','=0']}]:[]),
+   ['Y:SG1:d','δ (°)'],['Y:SG1:pe','P_e'],['Y:SG1:vt','|V|'],...(avr?[['Y:AV1/EFD','E_fd']]:[]),...(pss?[['Y:PS1/VS','v_s']]:[]),...(gov?[['Y:GV1/PM','P_m'],['Y:GV1/G','βαλβίδα / θυρόφραγμα']]:[]),['Y:SG1','ω']]};
+  const T=o.ev==='load'&&o.gov==='steam'?30:o.ev==='load'?40:10;
+  return project(comps,wires,{version:4,watch,sim:{hDiv:400,method:'BDF2',speed:25,stopT:T},scope:{panes,window:{unit:'s',n:T}},meta:{smib:{XT,X1,X2,P,Q,EB:op.EB,th:op.th},ctl:o.ctl,gov:o.gov,ev:o.ev}});}
+ T.push({id:'gen_ctl',group:'Συστήματα ισχύος (4.8.1)',title:'Γεννήτρια με AVR, PSS και ρυθμιστή στροφών',theory:'formula',topology:'gen_ctl',
+  options:[{k:'ctl',label:'Διέγερση',options:[['none','Σταθερή E_fd'],['avr','AVR ST1A (K_A = 200)'],['avr_pss','AVR ST1A και PSS'],['tgr','ST1A με μείωση μεταβατικού κέρδους (T_C = 1, T_B = 10)'],['dc1a','AVR DC1A (διεγέρτρια ΣΡ)']],def:'avr_pss'},
+   {k:'gov',label:'Ρυθμιστής στροφών',options:[['none','Σταθερή T_m'],['steam','Ατμοστρόβιλος με αναθέρμανση'],['hydro','Υδροστρόβιλος']],def:'none'},
+   {k:'ev',label:'Γεγονός',options:[['fault','Τριφασικό σφάλμα στη γραμμή 2 στο 1 s, απομονώνεται στα 70 ms'],['vref','Βήμα +5 % στο V_ref στο 1 s'],['load','Βήμα +0,05 pu στην αναφορά φορτίου στο 1 s'],['none','Καμία: η ισορροπία της ροής φορτίου']],def:'fault'}],
+  desc:'Γεννήτρια 100 MVA (τυπικά δεδομένα στροβιλογεννήτριας) σε άπειρο ζυγό μέσω μετασχηματιστή και δύο γραμμών, με P = 0,9 και Q = 0,436 pu (E_B = 0,9008 pu, κλασική περίπτωση μελέτης ευστάθειας). Η διέγερση και ο ρυθμιστής στροφών είναι μπλοκ της βιβλιοθήκης «Δίκτυο» με τα μοντέλα του Kundur (κεφ. 8–9) και τα δείγματα δεδομένων του: ST1A ή DC1A, PSS, ατμοστρόβιλος με αναθέρμανση ή υδροστρόβιλος με αγωγό πτώσης. Όλα ξεκινούν από τη ροή φορτίου: η γεννήτρια δίνει τα E_fd, |V| και T_m της ισορροπίας (e0, v0, m0) και οι ελεγκτές δουλεύουν γύρω από αυτά.',
+  tasks:['Σφάλμα με σταθερή E_fd: η γωνία δ ταλαντώνεται αργά με απόσβεση από τους αποσβεστήρες. Με AVR ST1A (K_A = 200) η τάση επανέρχεται γρήγορα αλλά η απόσβεση της ταλάντωσης χειροτερεύει.','Πρόσθεσε τον PSS: η ταλάντωση της δ σβήνει σε 1–2 κύκλους. Δες το v_s και την E_fd.','Βήμα στο V_ref: σύγκρινε ST1A, ST1A με μείωση μεταβατικού κέρδους και DC1A στον χρόνο ανόδου της |V| και στην E_fd.','Ρυθμιστής στροφών και βήμα φορτίου: με ατμό η ισχύς ανεβαίνει σε δύο χρόνους (θάλαμος ατμού και αναθερμαντήρας, T_RH = 7 s)· με νερό πρώτα πέφτει (μη ελάχιστης φάσης, T_W) και η μεταβατική στατικότητα κρατά τη ρύθμιση ευσταθή.','Άλλαξε ζωντανά τα ΔV_ref και ΔP_ref από τα πλακίδια.'],
+  build(o){return genCtl(o);}});
  // IEEE 9-bus (WSCC) system in EMT, from its load flow (pcl.network.ieee9(), MATPOWER numbering; machines of Anderson & Fouad)
  const IEEE9_LF={1:[1.04,0],2:[1.025,9.280005],3:[1.025,4.664751],5:[1.012654,-3.687396],7:[1.015883,0.727536],9:[0.995631,-3.988805]};
  const IEEE9_GEN={G1:{Xd:0.1460,Xdp:0.0608,Xdpp:0.0608,Xq:0.0969,Xqp:0.0969,Xqpp:0.0969,Xl:0.0336,X0:0.0336,Td0p:8.96,Td0pp:0,Tq0p:0,Tq0pp:0,H:23.64},
   G2:{Xd:0.8958,Xdp:0.1198,Xdpp:0.1198,Xq:0.8645,Xqp:0.1969,Xqpp:0.1969,Xl:0.0521,X0:0.0521,Td0p:6.00,Td0pp:0,Tq0p:0.535,Tq0pp:0,H:6.40},
   G3:{Xd:1.3125,Xdp:0.1813,Xdpp:0.1813,Xq:1.2578,Xqp:0.25,Xqpp:0.25,Xl:0.0742,X0:0.0742,Td0p:5.89,Td0pp:0,Tq0p:0.600,Tq0pp:0,H:3.01}};
  T.push({id:'ieee9_emt',group:'Συστήματα ισχύος (4.3)',title:'IEEE 9 ζυγών σε EMT, από τη ροή φορτίου',theory:'formula',topology:'ieee9_emt',
-  options:[{k:'ev',label:'Γεγονός',options:[['none','Καμία διαταραχή: η μόνιμη κατάσταση της ροής φορτίου'],['fault','Σφάλμα 5 κύκλων (A&F, Παρ. 2.7), μηχανές ως κλασικό μοντέλο'],['full','Το ίδιο σφάλμα με τα πλήρη δεδομένα, χωρίς AVR']],def:'none'}],
+  options:[{k:'ev',label:'Γεγονός',options:[['none','Καμία διαταραχή: η μόνιμη κατάσταση της ροής φορτίου'],['fault','Σφάλμα 5 κύκλων (A&F, Παρ. 2.7), μηχανές ως κλασικό μοντέλο'],['full','Το ίδιο σφάλμα με τα πλήρη δεδομένα']],def:'none'},
+   {k:'ctl',label:'Έλεγχος γεννητριών (4.8.1)',options:[['none','Σταθερά E_fd και T_m'],['avr','AVR ST1A σε κάθε γεννήτρια'],['avr_pss','AVR ST1A και PSS'],['full','AVR, PSS και ρυθμιστές στροφών (G1 νερό, G2 και G3 ατμός)']],def:'none'}],
   desc:'Το δίκτυο WSCC των 9 ζυγών (αρίθμηση του MATPOWER, 345 kV, 100 MVA, 60 Hz). Οι γεννήτριες έχουν τα δεδομένα του Anderson & Fouad (Πίν. 2.1) και ξεκινούν από την τάση |V|∠θ της ροής φορτίου του pcl.network· τα φορτία είναι σταθερές εμπεδήσεις ίσες με το φορτίο στην τάση της ροής φορτίου. Οι μετασχηματιστές είναι κλάδοι σε ανά μονάδα, όπως στη ροή φορτίου. Χωρίς διαταραχή το EMT μένει στη ροή φορτίου.',
-  tasks:['Χωρίς διαταραχή: P, Q και δ των γεννητριών μένουν σταθερά· η κάρτα δείχνει τις τιμές της ροής φορτίου και του Anderson & Fouad.','Σφάλμα με κλασικό μοντέλο: η δ₂ − δ₁ ανεβαίνει περίπου 70° και επιστρέφει, όπως στο Σχ. 2.22 του Anderson & Fouad (85° από 17,5°).','Με τα πλήρη δεδομένα και σταθερή E_fd οι γεννήτριες 2 και 3 χάνουν τον συγχρονισμό: η ροή του άξονα q σβήνει γρήγορα (T′_q0 ≈ 0,5 s) και χωρίς AVR η E_fd δεν βοηθά.'],
+  tasks:['Χωρίς διαταραχή: P, Q και δ των γεννητριών μένουν σταθερά· η κάρτα δείχνει τις τιμές της ροής φορτίου και του Anderson & Fouad.','Σφάλμα με κλασικό μοντέλο: η δ₂ − δ₁ ανεβαίνει περίπου 70° και επιστρέφει, όπως στο Σχ. 2.22 του Anderson & Fouad (85° από 17,5°).','Με τα πλήρη δεδομένα και σταθερή E_fd οι γεννήτριες 2 και 3 χάνουν τον συγχρονισμό: η ροή του άξονα q σβήνει γρήγορα (T′_q0 ≈ 0,5 s) και χωρίς AVR η E_fd δεν βοηθά.','Με τα πλήρη δεδομένα και «AVR ST1A σε κάθε γεννήτρια» (4.8.1) οι γεννήτριες μένουν σε συγχρονισμό: η E_fd ανεβαίνει στο όριο κατά το σφάλμα και κρατά τη ροή. Με PSS και ρυθμιστές στροφών σβήνουν και οι ταλαντώσεις. Με κλασικό μοντέλο ο έλεγχος δεν εφαρμόζεται (σταθερή E′).'],
   build(o){const F=o.ev==='fault'||o.ev==='full',cl=o.ev==='fault',Un=345e3,Sb=100e6,f=60,c={conn:'bus'};
    // the classical model of the example: E′ behind X′_d constant (X′_q = X′_d, very long T′_d0 and T′_q0)
    const GD=id=>cl?{...IEEE9_GEN[id],Xqp:IEEE9_GEN[id].Xdp,Xqpp:IEEE9_GEN[id].Xdp,Td0p:1000,Tq0p:1000}:IEEE9_GEN[id];
    const L=(id,x,y,r,xx,b,rot)=>C(id,'LINE3',x,y,{unit:'pu',Un,Sb,f,R1:r,X1:xx,B1:b,z0:'same',...c},{rot:rot||0,label:id});
-   const G=(id,bus,x,y)=>C(id,'GEN3',x,y,{Sn:Sb,Un,f,pp:1,data:'std',...GD(id),Ra:0,shaft:'one',D:0,V0:IEEE9_LF[bus][0],ang0:IEEE9_LF[bus][1],...c},{label:id+' (ζυγός '+bus+')'});
+   const avr=o.ctl&&o.ctl!=='none'&&!cl,pss=avr&&(o.ctl==='avr_pss'||o.ctl==='full'),gov=avr&&o.ctl==='full',xc={...(avr?{exc:'sig'}:{}),...(gov?{mech:'sig'}:{})};
+   const G=(id,bus,x,y)=>C(id,'GEN3',x,y,{Sn:Sb,Un,f,pp:1,data:'std',...GD(id),Ra:0,shaft:'one',D:0,V0:IEEE9_LF[bus][0],ang0:IEEE9_LF[bus][1],...xc,...c},{label:id+' (ζυγός '+bus+')'});
    const Ld=(id,bus,x,y,P,Q)=>{const V=IEEE9_LF[bus][0];return C(id,'LOAD3',x,y,{cn:'yn',Un,f,P:P/(V*V),Q:Q/(V*V),model:'z',...c},{label:id,lbl:'below'});};
    const comps=[G('G2',2,100,160),J('B2',220,160),L('T28',320,160,0,0.0625,0),J('B8',440,160),L('L87',580,160,0.0085,0.072,0.149),J('B7',720,160),L('L76',860,160,0.0119,0.1008,0.209),J('B6',1000,160),
-    L('T63',1120,160,0,0.0586,0),J('B3',1220,160),C('G3','GEN3',1360,160,{Sn:Sb,Un,f,pp:1,data:'std',...GD('G3'),Ra:0,shaft:'one',D:0,V0:IEEE9_LF[3][0],ang0:IEEE9_LF[3][1],...c},{flip:true,label:'G3 (ζυγός 3)'}),
+    L('T63',1120,160,0,0.0586,0),J('B3',1220,160),C('G3','GEN3',1360,160,{Sn:Sb,Un,f,pp:1,data:'std',...GD('G3'),Ra:0,shaft:'one',D:0,V0:IEEE9_LF[3][0],ang0:IEEE9_LF[3][1],...xc,...c},{flip:true,label:'G3 (ζυγός 3)'}),
     Ld('LD7',7,720,280,100e6,35e6),L('L89',440,320,0.032,0.161,0.306,1),J('B9',440,480),Ld('LD9',9,320,600,125e6,50e6),L('L65',1000,320,0.039,0.17,0.358,1),J('B5',1000,480),Ld('LD5',5,1120,600,90e6,30e6),
     L('L94',580,560,0.01,0.085,0.176),J('B4',720,640),L('L54',860,560,0.017,0.092,0.158),L('T41',720,760,0,0.0576,0,1),J('B1',720,880),G('G1',1,560,880)];
    const wires=[['G2:abc','B2'],['B2','T28:abc1'],['T28:abc2','B8'],['B8','L87:abc1'],['L87:abc2','B7'],['B7','L76:abc1'],['L76:abc2','B6'],['B6','T63:abc1'],['T63:abc2','B3'],['B3','G3:abc'],
@@ -1152,8 +1189,15 @@
    if(F){comps.push(C('CB8','CB3',440,250,{cmd:'0:1, 0.183333:0',...c},{rot:1,label:'CB 8'}),J('FP',440,300),C('CB9','CB3',440,400,{cmd:'0:1, 0.183333:0',...c},{rot:1,label:'CB 9'}),C('F1','FLT3',540,300,{kind:'abcg',ton:0.1,Rf:0,Rg:0,...c},{lbl:'below'}));
     comps.find(q=>q.id==='L89').y=340;wires.push(['B8','CB8:abc1'],['CB8:abc2','FP'],['FP','F1:abc'],['FP','L89:abc1'],['L89:abc2','CB9:abc1'],['CB9:abc2','B9']);}
    else wires.push(['B8','L89:abc1'],['L89:abc2','B9']);
-   const panes=[[['Y:G1:d','δ₁ (°)'],['Y:G2:d','δ₂ (°)'],['Y:G3:d','δ₃ (°)']],[['Y:G1:pe','P₁'],['Y:G2:pe','P₂'],['Y:G3:pe','P₃']],[['Y:G1','ω₁'],['Y:G2','ω₂'],['Y:G3','ω₃']]];
-   return project(comps,wires,{version:4,sim:{hDiv:400,speed:F?5:2,stopT:F?2:0.5},scope:{panes,window:{unit:'s',n:F?2:0.5}},meta:{lf:IEEE9_LF,fault:F,classical:cl}});}});
+   // 4.8.1: AVR (and PSS, governor) next to each generator, from its steady state (e0, v0, m0)
+   if(avr)for(const [g,x,y,hy] of [['G1',560,1000,true],['G2',100,40,false],['G3',1360,40,false]]){const n=g.slice(1);
+    comps.push(C('AV'+n,'AVR',x-150,y,{type:'st1a'},{label:'AVR '+n}));wires.push([g+':vt','AV'+n+':vt'],[g+':v0','AV'+n+':v0'],[g+':e0','AV'+n+':e0'],[g+':ifd','AV'+n+':ifd'],['AV'+n+':efd',g+':efd']);
+    if(pss){comps.push(C('PS'+n,'PSS',x-300,y,{},{label:'PSS '+n}));wires.push([g+':w','PS'+n+':w'],['PS'+n+':vs','AV'+n+':vs']);}
+    if(gov){comps.push(C('GV'+n,'GOV',x+150,y,{type:hy?'hydro':'steam'},{label:(hy?'ρυθμιστής (νερό) ':'ρυθμιστής (ατμός) ')+n}));wires.push([g+':w','GV'+n+':w'],[g+':m0','GV'+n+':m0'],['GV'+n+':tm',g+':tm']);}}
+   const panes=[[['Y:G1:d','δ₁ (°)'],['Y:G2:d','δ₂ (°)'],['Y:G3:d','δ₃ (°)']],[['Y:G1:pe','P₁'],['Y:G2:pe','P₂'],['Y:G3:pe','P₃']],[['Y:G1','ω₁'],['Y:G2','ω₂'],['Y:G3','ω₃']],
+    ...(avr?[[['Y:AV1/EFD','E_fd1'],['Y:AV2/EFD','E_fd2'],['Y:AV3/EFD','E_fd3']],[['Y:G1:vt','|V₁|'],['Y:G2:vt','|V₂|'],['Y:G3:vt','|V₃|']]]:[])];
+   const Tf=avr?5:2;
+   return project(comps,wires,{version:4,sim:{hDiv:400,...(avr?{method:'BDF2'}:{}),speed:F?(avr?10:5):2,stopT:F?Tf:0.5},scope:{panes,window:{unit:'s',n:F?Tf:0.5}},meta:{lf:IEEE9_LF,fault:F,classical:cl,ctl:avr?o.ctl:'none'}});}});
  // ------------------------------------------------------------------ 4.4: lines from geometry, CP and FD (ROADMAP §26)
  // the typical 400 kV line of 100 km (Parts.TLM_TYPICAL), with its models from tools/line_models.py (pcl/lineconst.py)
  const LM=()=>root.LineModels||(typeof require!=='undefined'?require('./linemodels.js'):null);

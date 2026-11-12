@@ -85,7 +85,7 @@
  // what a tile is: a signal, or a control of a parameter of a part of the circuit
  function info(t){const x=C(),c0=t.ctl?x.editor.comp(t.ctl.c):null;
   if(t.ctl){const c=c0,d=c&&x.partDef(c)?.params.find(q=>q.k===t.ctl.k);if(!c||!d)return {kind:'gone',name:t.label||t.ctl.k,src:t.ctl.c};
-   const src=c.label||c.id,sched=(c.type==='CONST'&&d.k==='v')||(c.type==='PWM'&&d.k==='ref'),raw=c.params[d.k]??d.def;
+   const src=c.label||c.id,sched=(c.type==='CONST'&&d.k==='v')||(c.type==='PWM'&&d.k==='ref')||d.sched===true,raw=c.params[d.k]??d.def;
    if(d.type==='bool')return {kind:'bool',c,d,name:t.label||d.label,src,v:!!raw};
    if(d.type==='select')return {kind:'sel',c,d,name:t.label||d.label,src,v:String(raw)};
    if(d.type==='num'||sched){const v=sched?P.parseEng(String(raw)):x.numOf(raw),pts=sched&&!Number.isFinite(v)?P.parseSched(String(raw)):null;

@@ -52,8 +52,8 @@ jobs:
           node-version: '22'
       - run: pip install -r requirements.txt
       - name: Octave
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends octave
-      - name: pcl_run, pcl_sweep, pcl_read στο Octave
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends octave fonts-freefont-otf xvfb
+      - name: pcl_run, pcl_sweep, pcl_read, PclPlant και το παράθυρό του στο Octave
         run: |
           octave --version | head -1
           python -m unittest tests.test_matlab -v

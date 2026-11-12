@@ -28,6 +28,11 @@ except ImportError:                                   # the window still works, 
 
 COLS = [('label', 'Εκδοχή', 250), ('J', 'J', 60), ('iae', 'IAE', 70), ('ise', 'ISE', 70), ('overshoot', 'υπέρβαση %', 80),
         ('settle', 'αποκατάσταση s', 95), ('effort', 'ενέργεια ελέγχου', 105), ('load', 'πτώση στο φορτίο', 105)]
+# 4.8.1: a generator has its own measures (the same columns of the table, other meaning)
+EV_COLS = [('label', 'Εκδοχή', 250), ('J', 'J', 60), ('track', 'RMS σφάλμα rad/s', 110), ('energy', 'Wh/km', 70), ('kwh', 'km/kWh', 70),
+           ('irms', 'I_rms A', 70), ('peak', 'ροπή μέγ. N·m', 95), ('rollback', 'κύλιση πίσω rad/s', 110)]
+GEN_COLS = [('label', 'Εκδοχή', 250), ('J', 'J', 60), ('swing', 'πρώτη ταλάντωση °', 110), ('damp', 'απόσβεση s', 80), ('vrec', 'τάση s', 70),
+            ('freq', '|ω − 1| μέγ.', 85), ('effort', 'προσπάθεια διέγερσης', 120), ('slip', 'συγχρονισμός', 95)]
 
 
 def _fmt(v):
@@ -47,8 +52,10 @@ class DesignerGUI(tk.Tk):
         self.machines, self.result, self.selected, self.busy = [], None, None, False
         self.machine_var, self.ctrl_var = tk.StringVar(), tk.StringVar(value=D.CONTROLLERS[-1][1])
         self.cycles_var, self.status = tk.IntVar(value=3), tk.StringVar(value='')
-        self.goal_on = {k: tk.BooleanVar(value=k in ('iae', 'overshoot')) for k, _ in D.GOALS}
-        self.goal_w = {k: tk.DoubleVar(value={'iae': 1.0, 'overshoot': .5}.get(k, .5)) for k, _ in D.GOALS}
+        self.goal_on = {k: tk.BooleanVar(value=k in ('iae', 'overshoot', 'swing', 'damp', 'track', 'energy')) for k, _ in D.GOALS + D.GEN_GOALS + D.EV_GOALS}
+        self.goal_w = {k: tk.DoubleVar(value={'iae': 1.0, 'overshoot': .5, 'swing': 1.0, 'damp': 1.0, 'track': 1.0, 'energy': 1.0}.get(k, .5))
+                       for k, _ in D.GOALS + D.GEN_GOALS + D.EV_GOALS}
+        self.kind = None
         self.param_vars = {}
         self._build()
         self.after(50, self._load_machines)
@@ -68,7 +75,8 @@ class DesignerGUI(tk.Tk):
         self.machine_cb.pack(side=tk.LEFT)
         self.machine_cb.bind('<<ComboboxSelected>>', lambda e: self._on_machine())
         ttk.Label(bar, text='Ελεγκτής').pack(side=tk.LEFT, padx=(16, 2))
-        ttk.Combobox(bar, textvariable=self.ctrl_var, state='readonly', width=40, values=[n for _, n in D.CONTROLLERS]).pack(side=tk.LEFT)
+        self.ctrl_cb = ttk.Combobox(bar, textvariable=self.ctrl_var, state='readonly', width=40, values=[n for _, n in D.CONTROLLERS])
+        self.ctrl_cb.pack(side=tk.LEFT)
         ttk.Label(bar, text='Κύκλοι αναφοράς').pack(side=tk.LEFT, padx=(16, 2))
         ttk.Spinbox(bar, from_=1, to=8, textvariable=self.cycles_var, width=4).pack(side=tk.LEFT)
 
@@ -79,15 +87,9 @@ class DesignerGUI(tk.Tk):
         right = ttk.Frame(body)
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(8, 0))
 
-        gf = ttk.LabelFrame(left, text='Τι θέλεις να επιτύχει (βάρη)')
-        gf.pack(side=tk.TOP, fill=tk.X, pady=4)
-        for k, name in D.GOALS:
-            row = ttk.Frame(gf)
-            row.pack(side=tk.TOP, fill=tk.X, padx=6, pady=1)
-            ttk.Checkbutton(row, text=name, variable=self.goal_on[k], width=30).pack(side=tk.LEFT)
-            ttk.Scale(row, from_=0, to=1, variable=self.goal_w[k], length=110).pack(side=tk.LEFT)
-        ttk.Label(gf, text='J = Σ w·(μέγεθος / μέγεθος του PI βάσης): ο PI βάσης έχει J ≈ Σ w, μικρότερο είναι καλύτερο.',
-                  wraplength=330, foreground='#5b6f69').pack(side=tk.TOP, padx=6, pady=(2, 6))
+        self.gf = ttk.LabelFrame(left, text='Τι θέλεις να επιτύχει (βάρη)')
+        self.gf.pack(side=tk.TOP, fill=tk.X, pady=4)
+        self._build_goals(None)
 
         self.pf = ttk.LabelFrame(left, text='Παράμετροι της μηχανής')
         self.pf.pack(side=tk.TOP, fill=tk.X, pady=4)
@@ -114,12 +116,39 @@ class DesignerGUI(tk.Tk):
         else:
             ttk.Label(right, text='Χωρίς matplotlib δεν υπάρχουν γραφικές (pip install matplotlib).').pack()
         self.tree = ttk.Treeview(right, columns=[c for c, _, _ in COLS], show='headings', height=8)
-        for c, name, w in COLS:
-            self.tree.heading(c, text=name)
-            self.tree.column(c, width=w, anchor=tk.W if c == 'label' else tk.E)
+        self._columns(COLS)
         self.tree.pack(side=tk.TOP, fill=tk.X, pady=4)
         self.tree.bind('<<TreeviewSelect>>', lambda e: self._on_row())
         ttk.Label(self, textvariable=self.status, relief=tk.SUNKEN, anchor=tk.W).pack(side=tk.BOTTOM, fill=tk.X)
+
+    def _columns(self, cols):
+        self.cols = cols
+        for (c, _, _), (_, name, w) in zip(COLS, cols):
+            self.tree.heading(c, text=name)
+            self.tree.column(c, width=w, anchor=tk.W if c == 'label' else tk.E)
+
+    def _build_goals(self, machine):
+        """The goals of this kind of machine (a drive: speed; a generator: angle, damping, voltage), and its controllers."""
+        for w in self.gf.winfo_children():
+            w.destroy()
+        gen = (machine or {}).get('kind') == 'gen'
+        ev = (machine or {}).get('kind') == 'ev'
+        for k, name in D.goals(machine):
+            row = ttk.Frame(self.gf)
+            row.pack(side=tk.TOP, fill=tk.X, padx=6, pady=1)
+            ttk.Checkbutton(row, text=name, variable=self.goal_on[k], width=30).pack(side=tk.LEFT)
+            ttk.Scale(row, from_=0, to=1, variable=self.goal_w[k], length=110).pack(side=tk.LEFT)
+        ttk.Label(self.gf, text=('J = Σ w·(μέγεθος / μέγεθος της διεγέρτριας ΣΡ βάσης)· όποια χάνει τον συγχρονισμό μπαίνει τελευταία.' if gen else
+                                 'J = Σ w·(μέγεθος / μέγεθος του PI ταχύτητας μόνου) σε έναν κύκλο οδήγησης 60 s.' if ev else
+                                 'J = Σ w·(μέγεθος / μέγεθος του PI βάσης): ο PI βάσης έχει J ≈ Σ w, μικρότερο είναι καλύτερο.'),
+                  wraplength=330, foreground='#5b6f69').pack(side=tk.TOP, padx=6, pady=(2, 6))
+        if hasattr(self, 'ctrl_cb'):
+            names = [n for _, n in D.controllers(machine)]
+            self.ctrl_cb.config(values=names)
+            if self.ctrl_var.get() not in names:
+                self.ctrl_var.set(names[-1])
+        if hasattr(self, 'tree'):
+            self._columns(GEN_COLS if gen else EV_COLS if ev else COLS)
 
     # ---------------------------------------------------------------- the app and the machines
     def connect(self):
@@ -163,6 +192,9 @@ class DesignerGUI(tk.Tk):
         if not m:
             return
         self.desc.config(text=D.describe(m))
+        if m.get('kind') != self.kind:
+            self.kind = m.get('kind')
+            self._build_goals(m)
         nums = [q for q in m.get('params', []) if q.get('type') == 'num'][:8]
         for q in nums:
             row = ttk.Frame(self.pf)
@@ -185,11 +217,11 @@ class DesignerGUI(tk.Tk):
         return out
 
     def weights(self):
-        return {k: self.goal_w[k].get() for k, _ in D.GOALS if self.goal_on[k].get()}
+        return {k: self.goal_w[k].get() for k, _ in D.goals(self.machine()) if self.goal_on[k].get()}
 
     def controller(self):
         name = self.ctrl_var.get()
-        return next((k for k, n in D.CONTROLLERS if n == name), 'auto')
+        return next((k for k, n in D.controllers(self.machine()) if n == name), 'auto')
 
     # ---------------------------------------------------------------- actions
     def compose(self):
@@ -200,18 +232,18 @@ class DesignerGUI(tk.Tk):
         c = self.controller()
         try:
             p = D.compose(m, 'pinn' if c == 'auto' else c, params=self.params(), cycles=self.cycles_var.get(),
-                          inv_net=self._inv_placeholder() if c == 'inv' else None)
+                          inv_net=self._inv_placeholder(3 if c == 'rl' else 2) if c in ('inv', 'rl') else None)
         except PclError as e:
             messagebox.showerror('Σύνθεση', str(e))
             return
         self.selected = p
         n, w = len(p.data['components']), len(p.data['wires'])
-        added = [x['id'] for x in p.data['components'] if x['id'] in ('NLP', 'NDA', 'NGA', 'NN1', 'NNS')]
+        added = [x['id'] for x in p.data['components'] if x['id'] in ('NLP', 'NDA', 'NGA', 'NN1', 'NNS', 'AV1', 'PS1', 'GV1', 'MO1', 'C1')]
         self.status.set(f'Συντέθηκε: {n} στοιχεία, {w} σύρματα· νέα: {", ".join(added) or "—"}. «Στείλε στην εφαρμογή» για να το δεις.')
 
-    def _inv_placeholder(self):
+    def _inv_placeholder(self, n=2):
         from .control import nn_init
-        return nn_init([2, 8, 1], 1, True)
+        return nn_init([n, 8, 1], 1, True)
 
     def run_design(self):
         m = self.machine()
@@ -263,13 +295,17 @@ class DesignerGUI(tk.Tk):
         self.tree.delete(*self.tree.get_children())
         for i, r in enumerate(out['results']):
             m = r['metrics']
-            vals = [r['label'] + (' (βάση)' if r.get('base') else '')] + [_fmt(r['J'])] + [_fmt(m[k]) for k in ('iae', 'ise', 'overshoot', 'settle', 'effort', 'load')]
+            fm = lambda k: ('χάνεται' if m[k] else 'κρατά') if k == 'slip' else _fmt(m[k])
+            vals = [r['label'] + (' (βάση)' if r.get('base') else '')] + [_fmt(r['J'])] + [fm(k) for k, _, _ in self.cols[2:]]
             self.tree.insert('', tk.END, iid=str(i), values=vals)
         self.tree.selection_set('0')
         best = out['best']
-        msg = f'Καλύτερη για τους στόχους: {best["label"]} (J = {best["J"]:.3g}, PI βάσης {out["baseline"]["J"]:.3g}).'
+        msg = f'Καλύτερη για τους στόχους: {best["label"]} (J = {best["J"]:.3g}, βάση {out["baseline"]["J"]:.3g}).'
         if out.get('inverse_error') is not None:
             msg += f' Αντίστροφο μοντέλο: RMS σφάλμα {out["inverse_error"]:.3g}.'
+        if out.get('rl'):
+            h = out['rl']
+            msg += f' RL: {h[-1]["episodes"]} επεισόδια, καλύτερο J ανά επανάληψη ' + ' → '.join(f'{x["J_best"]:.3g}' for x in h) + '.'
         self.status.set(msg)
 
     def _on_row(self):
@@ -287,6 +323,41 @@ class DesignerGUI(tk.Tk):
             return
         b = self.result['baseline']
         self.ax_w.clear()
+        if self.kind == 'ev':                        # 4.8.1: the speed of the vehicle over the cycle, and the energy measures
+            self.ax_w.plot(b['t'], b['wr'], color='#7b8e88', lw=1, label='ω*')
+            self.ax_w.plot(b['t'], b['w'], color='#c47a1c', lw=1.2, label='ω, ' + b['label'])
+            self.ax_w.plot(r['t'], r['w'], color='#147966', lw=1.4, label='ω, ' + r['label'])
+            self.ax_w.set_xlabel('t / s')
+            self.ax_w.set_ylabel('ω / (rad/s)')
+            self.ax_w.legend(loc='upper right', fontsize=8)
+            self.ax_w.grid(alpha=.3)
+            self.ax_m.clear()
+            ks = [k for k, _ in D.EV_GOALS]
+            base = [max(abs(b['metrics'][k]), 1e-9) for k in ks]
+            self.ax_m.bar([x - .2 for x in range(len(ks))], [b['metrics'][k] / q for k, q in zip(ks, base)], width=.4, color='#c47a1c', label=b['label'])
+            self.ax_m.bar([x + .2 for x in range(len(ks))], [r['metrics'][k] / q for k, q in zip(ks, base)], width=.4, color='#147966', label=r['label'])
+            self.ax_m.set_xticks(range(len(ks)), ['σφάλμα', 'Wh/km', 'I_rms', 'ροπή', 'κύλιση'], fontsize=8)
+            self.ax_m.set_ylabel('ως προς τη βάση')
+            self.ax_m.legend(fontsize=8)
+            self.ax_m.grid(alpha=.3, axis='y')
+            self.canvas.draw_idle()
+            return
+        if self.kind == 'gen':                       # 4.8.1: the angle and the voltage of a generator
+            self.ax_w.plot(b['t'], b['w'], color='#c47a1c', lw=1.2, label='δ, ' + b['label'])
+            self.ax_w.plot(r['t'], r['w'], color='#147966', lw=1.4, label='δ, ' + r['label'])
+            self.ax_w.set_xlabel('t / s')
+            self.ax_w.set_ylabel('δ / °')
+            self.ax_w.legend(loc='upper right', fontsize=8)
+            self.ax_w.grid(alpha=.3)
+            self.ax_m.clear()
+            self.ax_m.plot(b['t'], b['wr'], color='#c47a1c', lw=1.2, label='|V|, ' + b['label'])
+            self.ax_m.plot(r['t'], r['wr'], color='#147966', lw=1.4, label='|V|, ' + r['label'])
+            self.ax_m.set_xlabel('t / s')
+            self.ax_m.set_ylabel('|V| / pu')
+            self.ax_m.legend(loc='lower right', fontsize=8)
+            self.ax_m.grid(alpha=.3)
+            self.canvas.draw_idle()
+            return
         self.ax_w.plot(b['t'], b['wr'], color='#7b8e88', lw=1, label='ω_r (αναφορά)')
         self.ax_w.plot(b['t'], b['w'], color='#c47a1c', lw=1.2, label='ω, PI βάσης')
         self.ax_w.plot(r['t'], r['w'], color='#147966', lw=1.4, label='ω, ' + r['label'])

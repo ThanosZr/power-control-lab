@@ -115,6 +115,7 @@ function updateClock(){const s=S.sim;if(!s)return;setText($('#clock'),'t = '+eng
 
 // live values on the schematic
 function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;
+ if(c0.type==='AVR'||c0.type==='PSS'||c0.type==='GOV'){const id=(S.pfx||'')+c0.id,v=k=>s.now('Y:'+id+k);return {text:c0.type==='AVR'?'E_fd '+eng(v('/EFD'),'',4):c0.type==='PSS'?'v_s '+eng(v('/VS'),'',3):'P_m '+eng(v('/PM'),'',4)+' · '+(c0.params?.type==='hydro'?'g ':'CV ')+eng(v('/G'),'',3)};}
  if(c0.type==='EVC'){const id=(S.pfx||'')+c0.id;return {text:'u '+eng(s.now('Y:'+id+'/SAT'),'V',3)+' · τ* '+eng(s.now('Y:'+id+'/TQ'),'N·m',3)+' · keep '+eng(s.now('Y:'+id+'/KP'),'',3)};}
  if(c0.type==='AIC'){const id=(S.pfx||'')+c0.id,L=s.now('Y:'+id+'/NN1:L');return {text:'u '+eng(s.now('Y:'+id+'/SAT'),'',3)+' · e '+eng(s.now('Y:'+id+'/E'),'',3)+(Number.isFinite(L)?' · L '+eng(L,'',3):'')};}
  if(['GND','JUNC','TAGO','TAGI','SUB','PORT','SIN','SOUT'].includes(c0.type)||window.NetLib&&NetLib.isLib(c0.type))return null;
@@ -150,8 +151,8 @@ function blkUnit(c,pin){if(!c)return '';const t=c.type;if(t==='VM'||t==='VP')ret
  const u=S.sim?.net?.units?.out(c.id,pin)?.u;return u&&u!=='1'?u:'';} // 3.19: what the units check inferred (a constant or gain with a unit, filters, sums …)
 // symbols of the outputs of multi-output blocks (first output = channel Y:id, the others Y:id:pin)
 const GEN_TS={ts1:'T₁₂',ts2:'T₂₃',ts3:'T₃₄',ts4:'T₄₅',ts5:'T₅₆',ts6:'T₆₇'};
-const OUT_SYM={NN:{y:'y',L:'L',dy:'∂y'},GEN3:{w:'ω',te:'T_e',pe:'P',qe:'Q',vt:'|V|',ifd:'i_fd',d:'δ',...GEN_TS},IM:{w:'ω',te:'τ_e',psi:'|ψ_R|',thf:'θ_f',thr:'θ_r'},SM:{w:'ω',te:'τ_e',th:'θ',id:'i_d',iq:'i_q'},SRM:{w:'ω',te:'τ_e',th:'θ_e',i1:'i₁',i2:'i₂',i3:'i₃',i4:'i₄'},FEST:{th:'θ̂',psi:'|ψ̂|',w1:'ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ω',te:'τ_e'},PLL:{th:'θ',w:'ω',amp:'V̂_d'},CLARKE:{al:'α',be:'β'},IPARK:{al:'α',be:'β'},PARK:{d:'d',q:'q'},ICLARKE:{a:'a',b:'b',c:'c'},SR:{q:'Q',nq:'Q̄'},EDGE:{y:'y',n:'n'}};
-const OUT_TXT={NN:{y:'έξοδος y του δικτύου',L:'σφάλμα μάθησης L (RMS, καμπύλη μάθησης)',dy:'παράγωγος dy = ∂y/∂(είσοδος) (εξομοιωτής)'},GEN3:{w:'ταχύτητα ω (pu, μάζα της γεννήτριας)',te:'ηλεκτρική ροπή T_e (pu)',pe:'ενεργός ισχύς P (pu)',qe:'άεργος ισχύς Q (pu)',vt:'τάση ακροδεκτών |V| (pu)',ifd:'ρεύμα διέγερσης i_fd (pu)',d:'γωνία φορτίου δ (°)',ts1:'ροπή τμήματος άξονα 1–2 (pu)',ts2:'ροπή τμήματος 2–3 (pu)',ts3:'ροπή τμήματος 3–4 (pu)',ts4:'ροπή τμήματος 4–5 (pu)',ts5:'ροπή τμήματος 5–6 (pu)',ts6:'ροπή τμήματος 6–7 (pu)'},IM:{w:'ταχύτητα ω',te:'ροπή τ_e',psi:'ροή δρομέα |ψ_R|',thf:'γωνία ροής θ_f',thr:'γωνία δρομέα θ_r'},SM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'ηλεκτρική γωνία δρομέα θ',id:'ρεύμα i_d',iq:'ρεύμα i_q'},SRM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'γωνία θ_e της φάσης 1',i1:'ρεύμα φάσης 1 (αισθητήρας)',i2:'ρεύμα φάσης 2 (αισθητήρας)',i3:'ρεύμα φάσης 3 (αισθητήρας)',i4:'ρεύμα φάσης 4 (αισθητήρας)'},FEST:{th:'γωνία θ̂',psi:'ροή |ψ̂|',w1:'συχνότητα ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ταχύτητα ω',te:'ροπή τ_e'},PLL:{th:'γωνία θ',w:'συχνότητα ω',amp:'πλάτος (v_d)'},CLARKE:{al:'συνιστώσα α',be:'συνιστώσα β'},IPARK:{al:'συνιστώσα α',be:'συνιστώσα β'},PARK:{d:'συνιστώσα d',q:'συνιστώσα q'},ICLARKE:{a:'φάση a',b:'φάση b',c:'φάση c'},SR:{q:'έξοδος Q',nq:'έξοδος Q̄'},EDGE:{y:'παλμός y στην ακμή',n:'πλήθος ακμών n'}};
+const OUT_SYM={NN:{y:'y',L:'L',dy:'∂y'},GEN3:{w:'ω',te:'T_e',pe:'P',qe:'Q',vt:'|V|',ifd:'i_fd',d:'δ',e0:'E_fd0',v0:'|V|₀',m0:'T_m0',...GEN_TS},IM:{w:'ω',te:'τ_e',psi:'|ψ_R|',thf:'θ_f',thr:'θ_r'},SM:{w:'ω',te:'τ_e',th:'θ',id:'i_d',iq:'i_q'},SRM:{w:'ω',te:'τ_e',th:'θ_e',i1:'i₁',i2:'i₂',i3:'i₃',i4:'i₄'},FEST:{th:'θ̂',psi:'|ψ̂|',w1:'ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ω',te:'τ_e'},PLL:{th:'θ',w:'ω',amp:'V̂_d'},CLARKE:{al:'α',be:'β'},IPARK:{al:'α',be:'β'},PARK:{d:'d',q:'q'},ICLARKE:{a:'a',b:'b',c:'c'},SR:{q:'Q',nq:'Q̄'},EDGE:{y:'y',n:'n'}};
+const OUT_TXT={NN:{y:'έξοδος y του δικτύου',L:'σφάλμα μάθησης L (RMS, καμπύλη μάθησης)',dy:'παράγωγος dy = ∂y/∂(είσοδος) (εξομοιωτής)'},GEN3:{w:'ταχύτητα ω (pu, μάζα της γεννήτριας)',te:'ηλεκτρική ροπή T_e (pu)',pe:'ενεργός ισχύς P (pu)',qe:'άεργος ισχύς Q (pu)',vt:'τάση ακροδεκτών |V| (pu)',ifd:'ρεύμα διέγερσης i_fd (pu)',d:'γωνία φορτίου δ (°)',ts1:'ροπή τμήματος άξονα 1–2 (pu)',ts2:'ροπή τμήματος 2–3 (pu)',ts3:'ροπή τμήματος 3–4 (pu)',ts4:'ροπή τμήματος 4–5 (pu)',ts5:'ροπή τμήματος 5–6 (pu)',ts6:'ροπή τμήματος 6–7 (pu)',e0:'E_fd της ροής φορτίου (για τον AVR)',v0:'|V| της ροής φορτίου (για τον AVR)',m0:'T_m της ροής φορτίου (για τον ρυθμιστή στροφών)'},IM:{w:'ταχύτητα ω',te:'ροπή τ_e',psi:'ροή δρομέα |ψ_R|',thf:'γωνία ροής θ_f',thr:'γωνία δρομέα θ_r'},SM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'ηλεκτρική γωνία δρομέα θ',id:'ρεύμα i_d',iq:'ρεύμα i_q'},SRM:{w:'ταχύτητα ω',te:'ροπή τ_e',th:'γωνία θ_e της φάσης 1',i1:'ρεύμα φάσης 1 (αισθητήρας)',i2:'ρεύμα φάσης 2 (αισθητήρας)',i3:'ρεύμα φάσης 3 (αισθητήρας)',i4:'ρεύμα φάσης 4 (αισθητήρας)'},FEST:{th:'γωνία θ̂',psi:'ροή |ψ̂|',w1:'συχνότητα ω̂₁'},MOD3:{da:'d_a',db:'d_b',dc:'d_c'},DCM:{w:'ταχύτητα ω',te:'ροπή τ_e'},PLL:{th:'γωνία θ',w:'συχνότητα ω',amp:'πλάτος (v_d)'},CLARKE:{al:'συνιστώσα α',be:'συνιστώσα β'},IPARK:{al:'συνιστώσα α',be:'συνιστώσα β'},PARK:{d:'συνιστώσα d',q:'συνιστώσα q'},ICLARKE:{a:'φάση a',b:'φάση b',c:'φάση c'},SR:{q:'έξοδος Q',nq:'έξοδος Q̄'},EDGE:{y:'παλμός y στην ακμή',n:'πλήθος ακμών n'}};
 function outsOf(c){const q=c?.params?.conn==='bus'?{...c,params:{...c.params,conn:'sep'}}:c;return Object.entries(P.sigPins(q)).filter(([,d])=>d.dir==='out').map(([k])=>k);}
 // a block on a bus (3.18) runs as one block per element, <id>[k]: how many (after the last build), and the id without [k]
 const vecN=id=>S.sim?.net?.vec?.[id]||0,vecBase=id=>{const m=/^(.*)\[(\d+)\]$/.exec(String(id));return m?{id:m[1],k:+m[2]}:null;};
@@ -168,9 +169,13 @@ function addProbe(key,label){if(!S.sim)return;const ok=scope.addChannel(key,labe
 function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash');}
 // 4.8: the signals of an AI controller are those of its inner blocks (channels <id>/SAT, <id>/E, …)
 const EVC_SIGS=[['/SAT','εντολή τάσης u'],['/GOV','ω* μετά τον ρυθμιστή αναφοράς'],['/TR','ροπή που χρειάζεται'],['/TQ','ροπή που ζητείται τ*'],['/KP','κράτηση ροπής (keep)'],['/LIM','όριο ενεργό (1)'],['/TP','μέγιστη ροπή (όρια, SOC)'],['/AC','επιτάχυνση που ζητείται'],['/IR','ρεύμα που ζητείται'],['/PW','ισχύς άξονα (kW)'],['/LS','χαμηλό SOC (0 … 1)']];
+// 4.8.1: the controls of a generator (inner blocks of the library parts AVR, PSS, GOV)
+const GEN_CTL_SIGS={AVR:[['/EFD','τάση διέγερσης E_fd'],['/ERR','σφάλμα τάσης (ΔV_ref − ΔV_c + v_s)'],['/TRF','απόκλιση της μετρημένης τάσης ΔV_c'],['/VB','αναφορά V_ref (βάση)']],
+ PSS:[['/VS','έξοδος v_s'],['/DW','απόκλιση ταχύτητας Δω'],['/WO','μετά το washout']],
+ GOV:[['/TM','μηχανική ροπή T_m'],['/PM','μηχανική ισχύς P_m'],['/G','βαλβίδα ή θυρόφραγμα'],['/S','εντολή του ρυθμιστή (ατμός)'],['/ER','σφάλμα του ρυθμιστή (νερό)']]};
 const AIC_SIGS=[['/SAT','εντολή u'],['/E','σφάλμα e = r_f − y'],['/LP','αναφορά r_f (μετά το φίλτρο)'],['/GD','παράγωγος της αναφοράς ṙ_f'],['/PI','έξοδος του PI'],['/NN1','έξοδος του δικτύου'],['/NN1:L','καμπύλη μάθησης L'],['/IAE','IAE = ∫|e|dt'],['/FLAG','κορεσμός (1 = στο όριο)']];
 function signalsFor(c,full){const t=c.type,nv=vecN(full||(S.pfx?pid(c.id):c.id));
- if(t==='EVC')return EVC_SIGS.map(([f,n])=>['Y:',n,f]);if(t==='AIC'){const L=AIC_SIGS.filter(([f])=>f!=='/NN1:L'||(c.params?.scheme||'fel')!=='inv').map(([f,n])=>['Y:',n,f]);return (c.params?.scheme==='emu')?[...L,['Y:','εξομοιωτής: ẏ̂','/NNE'],['Y:','σφάλμα του εξομοιωτή L','/NNE:L'],['Y:','ευαισθησία ∂ẏ̂/∂u','/NNC:dy']]:L;}if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI'||t==='SUB'||SubC.PORT_KIND[t]||window.NetLib&&NetLib.isLib(t))return [];
+ if(t==='EVC')return EVC_SIGS.map(([f,n])=>['Y:',n,f]);if(GEN_CTL_SIGS[t])return GEN_CTL_SIGS[t].filter(([f])=>t!=='GOV'||(f!=='/S'||c.params?.type!=='hydro')&&(f!=='/ER'||c.params?.type==='hydro')).map(([f,n])=>['Y:',n,f]);if(t==='AIC'){const L=AIC_SIGS.filter(([f])=>f!=='/NN1:L'||(c.params?.scheme||'fel')!=='inv').map(([f,n])=>['Y:',n,f]);return (c.params?.scheme==='emu')?[...L,['Y:','εξομοιωτής: ẏ̂','/NNE'],['Y:','σφάλμα του εξομοιωτή L','/NNE:L'],['Y:','ευαισθησία ∂ẏ̂/∂u','/NNC:dy']]:L;}if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI'||t==='SUB'||SubC.PORT_KIND[t]||window.NetLib&&NetLib.isLib(t))return [];
  if(t==='PY')return outsOf(c).map((o,k)=>['Y:','έξοδος '+o,k?':'+o:'']);
  if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:t==='GEN3'?[...m,['I:','ρεύμα φάσης a (προς το δίκτυο)'],['V:','τάση φάσης a ως προς τον ουδέτερο']]:t==='IM'||t==='SM'?[...m,['I:','ρεύμα φάσης a'],['V:','πολική τάση v_ab']]:t==='SRM'?[...m,...Array.from({length:P.srmGeo({...P.defaults(t),...c.params})[0]},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα φάσης ${k+1}`],[(k?'V'+(k+1):'V')+':',`τάση φάσης ${k+1}`],['PSI'+(k+1)+':',`ροή φάσης ${k+1} ψ`]]).flat()]:m;}
  if(P.BLOCKS.has(t)&&nv>1)return Array.from({length:nv},(_,k)=>['Y:',`έξοδος y, στοιχείο ${k+1} του διαύλου`,`[${k+1}]`]);
@@ -1057,8 +1062,9 @@ function openMenu(ev){
   if(c.type==='JUNC'&&S.pfx!==null)items.push({t:'⌁ Scope: τάση κόμβου',f:()=>addProbe('VN:'+pid(c.id)+':j')});
   if(c.type!=='JUNC'&&atTop()&&window.Watch)items.push({t:'▣ Πλακίδια πάνω στο σχέδιο…',k:'S',f:()=>Watch.openAdd(c.id)});
   if(c.type==='SUB')items.push(...subMenu(c));
+  if(window.Inside?.can(c))items.push({t:'⧉ Τι έχει μέσα (μπλοκ και τιμές)',k:'διπλό κλικ',f:()=>Inside.open(c.id)});
   {const n=editor.selection().c.filter(id=>editor.comp(id)?.type!=='JUNC').length;if(n&&editor.selection().c.includes(c.id))items.push({t:'▣ Υποκύκλωμα από την επιλογή'+(n>1?` (${n})`:''),k:'Ctrl+G',f:()=>groupSel()});}
-  if(c.type!=='JUNC')items.push('-',{t:'Ρυθμίσεις…',k:'διπλό κλικ',f:()=>openInspector(c.id,ev.x,ev.y)},{t:'Περιστροφή',k:'R',f:()=>editor.rotateSel()},{t:'Καθρέφτης',k:'M',f:()=>editor.mirrorSel()},{t:'Διπλότυπο',k:'Ctrl+D',f:()=>{editor.copySel();editor.paste(20,20);}});
+  if(c.type!=='JUNC')items.push('-',{t:'Ρυθμίσεις…',k:window.Inside?.can(c)?'':'διπλό κλικ',f:()=>openInspector(c.id,ev.x,ev.y)},{t:'Περιστροφή',k:'R',f:()=>editor.rotateSel()},{t:'Καθρέφτης',k:'M',f:()=>editor.mirrorSel()},{t:'Διπλότυπο',k:'Ctrl+D',f:()=>{editor.copySel();editor.paste(20,20);}});
   items.push({t:'Διαγραφή',k:'Del',f:()=>editor.deleteSel(),cls:'danger'});}
  else if(ev.kind==='wire'){const w=editor.wire(ev.id);if(!w)return;if(S.pfx!==null&&wireWidth(w)===1)items.push({t:'⌁ Scope: τάση κόμβου',f:()=>addProbe('VN:'+pid(w.a.c)+':'+w.a.p,w.name||undefined)},'-');items.push({t:'Όνομα / χρώμα…',k:'διπλό κλικ',f:()=>openWireInspector(w.id,ev.x,ev.y)},{t:'Αυτόματη δρομολόγηση',f:()=>{editor.remember();editor.route(w);editor.render();}},{t:'Διαγραφή',k:'Del',f:()=>editor.deleteSel(),cls:'danger'});}
  else items.push({t:'Επικόλληση',k:'Ctrl+V',f:()=>editor.paste(),dis:!editor.clip},{t:'Επιλογή όλων',k:'Ctrl+A',f:()=>editor.select(editor.doc.components.map(c=>c.id),editor.doc.wires.map(w=>w.id))},{t:'Προσαρμογή προβολής',k:'F',f:()=>editor.fit()},'-',
@@ -1286,7 +1292,7 @@ function loadTutorial(id,options={},keepView=false){
 function migrateFile(pr){if(!window.Bus||Bus.namesJoin(pr))return pr;const m=Bus.migrateNames(pr);
  if(m.renamed.length)setTimeout(()=>notice('Αρχείο παλιότερης έκδοσης: από την 3.18 τα σύρματα με το ίδιο όνομα είναι ένας κόμβος. Για να μείνει ίδιο το κύκλωμα, άλλαξαν ονόματα: '+m.renamed.map(r=>esc((r.where?r.where+': ':'')+r.to.join(', '))).join(' · ')+'.','info'),0);
  return m.project;}
-function applyProject(pr,keepView){
+function applyProject(pr,keepView){window.Inside?.close();
  pr=migrateFile(pr);pause();if(S.nav.length){S.nav=[];S.top=null;S.pfx='';}if(pr.subcircuits)SubC.sync(pr);editor.load(pr,{keepView});renderCrumbs();renderPalette();if(S.batch)clearBatch();
  const sim=pr.sim||{};if(sim.hDiv){const ss=$('#sim-step'),v=String(sim.hDiv);if(![...ss.options].some(o=>o.value===v))ss.add(new Option('T/'+v,v));ss.value=v;}if(sim.method){$('#method').value=sim.method;$('#method-note').textContent={TR:'2ης τάξης, χωρίς απόσβεση',BDF2:'2ης τάξης, απόσβεση στις υψηλές συχνότητες',BE:'1ης τάξης, ισχυρή απόσβεση'}[sim.method]||'';}setSpeed(sim.speed??100);S.stopT=sim.stopT||0;$('#stop').value=S.stopT?String(+(S.stopT*1e3).toPrecision(6)):'';
  {const rs=$('#rec-res'),v=String(+(sim.rec?.dt)||0);if(rs){if(![...rs.options].some(o=>o.value===v))rs.add(new Option('κάθε '+eng(+v,'s',3),v));rs.value=[...rs.options].find(o=>+o.value===+v)?.value??'0';}}
@@ -1749,6 +1755,19 @@ function chaosTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp(
 const NNC={res:null,key:'',busy:false};
 function nnCycles(m){const s=S.sim;if(!s)return [];const ps=lastPeriods('Y:IAE',20000);const at=tt=>{let best=null;for(const q of ps)if(q.t<=tt+1e-9)best=q;else break;return best?best.max:null;};
  const out=[];let prev=0;for(let k=1;k<=m.cycles;k++){const tk=k*m.P;if(s.t<tk-1e-6)break;const v=at(tk);if(v===null)break;out.push(v-prev);prev=v;}return out;}
+// 4.8.1: a generator with its controls on an infinite bus: the models and the state now against the load flow
+function genCtlTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.smib||!editor.comp('SG1'))return '';const now=k=>s.now(k),q=m.smib,av=!!editor.comp('AV1'),ps=!!editor.comp('PS1'),gv=editor.comp('GV1');
+ const ty=av?(editor.comp('AV1').params.type==='dc1a'?'DC1A':'ST1A'):'σταθερή E_fd';
+ return `<div class="tm"><span class="badge">${esc(ty)}${ps?' + PSS':''}${gv?' · '+(gv.params.type==='hydro'?'υδροστρόβιλος':'ατμοστρόβιλος'):''}</span> X_T = ${fmt(q.XT,3)}, γραμμές ${fmt(q.X1,3)} ∥ ${fmt(q.X2,3)} pu, E_B = ${fmt(q.EB,5)} pu</div><ul class="eqs">
+  <li>Ροή φορτίου: P = ${fmt(q.P,3)}, Q = ${fmt(q.Q,3)} pu στη |V| = 1· η γεννήτρια δίνει E_fd0 = <b>${fmt(now('Y:SG1:e0'),5)}</b>${gv?`, T_m0 = <b>${fmt(now('Y:SG1:m0'),5)}</b>`:''} και οι ελεγκτές δουλεύουν γύρω από αυτά (ξεκινούν στην ισορροπία).</li>
+  ${av?(ty==='ST1A'?`<li>ST1A (Kundur Σχ. 8.43): V_c = V_t/(1+sT_R), E_fd = E_fd0 + K_A·(ΔV_ref − ΔV_c + v_s)·(1+sT_C)/(1+sT_B), μέσα στα E_t·V_RMIN … E_t·V_RMAX − K_C·I_fd και με το όριο ρεύματος K_LR·(I_fd − I_LR).</li>`
+   :`<li>DC1A (Kundur Σχ. 8.40): V_R = K_A/(1+sT_A)·(ΔV_ref − ΔV_c − V_F) μέσα στα V_RMIN … V_RMAX, T_E·dE_fd/dt = V_R − (K_E + S_E(E_fd))·E_fd, S_E = A_EX·e^(B_EX·E_fd), ανάδραση ρυθμού V_F = s·K_F/(1+sT_F)·E_fd.</li>`):''}
+  ${ps?`<li>PSS: v_s = K_STAB·sT_W/(1+sT_W)·(1+sT_1)/(1+sT_2)·Δω, περιορισμένο ±0,1: προσθέτει ροπή απόσβεσης σε φάση με το Δω.</li>`:''}
+  ${gv?(gv.params.type==='hydro'?`<li>Υδροστρόβιλος (Σχ. 9.7, 9.10): dU/dt = (1 − (U/G)²)/T_W, P_m = (U − U_NL)·(U/G)², G = A_t·g· ρυθμιστής με μόνιμη στατικότητα R_P και μεταβατική R_T·sT_R/(1+sT_R).</li>`
+   :`<li>Ατμοστρόβιλος (Σχ. 9.21, 9.31): εντολή −Δω/R + ΔP_ref, ρελέ ταχύτητας, σερβοκινητήρας με όρια ρυθμού και θέσης· P_m = F_HP·P_CH + F_IP·P_RH + F_LP·P_CO με T_CH, T_RH, T_CO.</li>`):''}
+ </ul><table class="tbl"><tr><th>Μέγεθος</th><th>Τώρα</th></tr><tr><td>δ (°)</td><td>${fmt(now('Y:SG1:d'),5)}</td></tr><tr><td>|V| (pu)</td><td>${fmt(now('Y:SG1:vt'),5)}</td></tr>
+  <tr><td>P · Q (pu)</td><td>${fmt(now('Y:SG1:pe'),4)} · ${fmt(now('Y:SG1:qe'),4)}</td></tr><tr><td>ω (pu)</td><td>${fmt(now('Y:SG1'),6)}</td></tr>
+  ${av?`<tr><td>E_fd (pu)</td><td>${fmt(now('Y:AV1/EFD'),5)}</td></tr>`:''}${gv?`<tr><td>P_m (pu) · ${gv.params.type==='hydro'?'g':'CV'}</td><td>${fmt(now('Y:GV1/PM'),5)} · ${fmt(now('Y:GV1/G'),4)}</td></tr>`:''}</table>`;}
 // 4.8: the electric vehicle: the models of the vehicle, the battery and the controller, and the energy metrics so far
 function evTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.ev||!editor.comp('M1'))return '';const now=k=>s.now(k),n=(k,u,d=3)=>eng(now(k),u,d);
  const mo=editor.comp('MO1'),sc=mo?.params?.scheme||'moevc',cyc=Math.floor(s.t/m.D),wait=s.t<m.D?`<p class="small muted">Άφησε να τρέξει τουλάχιστον ένας κύκλος (${eng(m.D,'s')}) για τις μετρικές.</p>`:'';
@@ -2040,6 +2059,7 @@ function formulaTheory(t){
  if(t.topology==='sampling')return samplingTheory();
  if(t.topology==='dc_drive')return dcDriveTheory();
  if(t.topology==='ev_drive')return evTheory();
+ if(t.topology==='gen_ctl')return genCtlTheory();
  if(t.topology==='nn_compare'||t.topology==='nn_online'||t.topology==='nn_gui')return nnTheory(t)+(t.topology==='nn_gui'?nnGuiCode():'');
  if(t.topology==='blocks_loop')return blocksTheory();
  if(t.topology==='peak_cm')return pcmTheory();
@@ -2235,13 +2255,14 @@ function boot(){
    // 4.8: one click on a block «Ελεγκτής AI» opens its façade next to it
    if(window.Watch&&sel.c.length===1&&!sel.w.length&&editor.comp(sel.c[0])?.type==='AIC'&&atTop())Watch.facade(sel.c[0]);},
   ontool:on=>{const b=$('#wire-tool');b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));},
-  onedit:ev=>{if(ev.kind==='comp'){const c=editor.comp(ev.id);if(c?.type==='SUB'){enterSub(c.params.def,S.pfx===null?null:pid(c.id));return;}const sg=editor.settings.dblclick==='scope'&&S.pfx!==null?signalsFor(c):[];if(sg.length)addProbe(sg[0][0]+pid(ev.id)+(sg[0][2]||''));else openInspector(ev.id,ev.x,ev.y);}else openWireInspector(ev.id,ev.x,ev.y);},
+  onedit:ev=>{if(ev.kind==='comp'){const c=editor.comp(ev.id);if(c?.type==='SUB'){enterSub(c.params.def,S.pfx===null?null:pid(c.id));return;}if(window.Inside?.can(c)&&Inside.open(c.id))return;const sg=editor.settings.dblclick==='scope'&&S.pfx!==null?signalsFor(c):[];if(sg.length)addProbe(sg[0][0]+pid(ev.id)+(sg[0][2]||''));else openInspector(ev.id,ev.x,ev.y);}else openWireInspector(ev.id,ev.x,ev.y);},
   ongroup:shift=>{if(shift){const id=editor.selection().c.find(i=>editor.comp(i)?.type==='SUB');if(id)expandSub(id);else{notice('Διάλεξε ένα υποκύκλωμα για ανάπτυξη (Ctrl+Shift+G).','info');setTimeout(()=>notice(''),2500);}}else groupSel();},
   canPlace:placeOk,subParams:name=>subParams(name),
   oncontext:openMenu,onwarn:t=>{notice(t,'error');setTimeout(()=>notice(''),5000);}});
  editor.setLive(liveOf);
  scope=new Scope($('#scope-canvas'),{onfreeze:()=>{$('#live-btn').hidden=false;},onchange:()=>{requestMeasure();},onhover:()=>{}});
  // the tiles of the control signals over the drawing (4.8, ROADMAP §47)
+ window.Inside?.init({comp:id=>editor.comp(id),pid,wires:()=>editor.doc.wires,sim:()=>S.error?null:S.sim,eng,holder:()=>editor.holder,notice});
  window.Watch?.init({get S(){return S;},get editor(){return editor;},get scope(){return scope;},eng,fmt,esc,topDoc,atTop,compAt,partDef,numOf,chanLabel,
   unit:key=>{const [pre,id,pin]=key.split(':');if(pre==='Y'){const c=compAt(id);if(c&&!vecBase(id))return blkUnit({...c,id},pin);}return Scope.unitOf(key,S.sim);},
   signals:()=>SIGS,setParam:liveParam,save:saveLocal,saveSoon:saveLocalSoon,toSchedule:changesToSchedule,

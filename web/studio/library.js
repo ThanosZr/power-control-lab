@@ -14,7 +14,7 @@
   {title:'Παθητικά',sub:[S('Βασικά',['R','L','C']),S('Ειδικά',['CPE','KG']),S('Μαγνητικά',['XFMR','KL'])]},
   {title:'Ημιαγωγοί',sub:[S('',['SW','D','SCR'])]},
   {title:'Μηχανές',sub:[S('',['DCM','IM','SM','SRM'])]},
-  {title:'Δίκτυο και γραμμές',sub:[S('Δίκτυο (τριφασικά)',['GRID3','GEN3','XF3','LOAD3','FLT3','CB3']),S('Γραμμές',['LINE3','TLM','TL']),S('Υψηλές τάσεις',['MOV','SG'])]},
+  {title:'Δίκτυο και γραμμές',sub:[S('Δίκτυο (τριφασικά)',['GRID3','GEN3','XF3','LOAD3','FLT3','CB3']),S('Έλεγχος γεννητριών',['AVR','PSS','GOV']),S('Γραμμές',['LINE3','TLM','TL']),S('Υψηλές τάσεις',['MOV','SG'])]},
   {title:'Φορτία',sub:[S('',['CPL'])]},
   {title:'Μετρήσεις',sub:[S('',['VM','AM','VP','IP','MEAS','DISP'])]},
   {title:'Έλεγχος',sub:[S('Διαμόρφωση',['PWM','MOD3','SH']),S('Ρυθμιστές',['PIB','NN','AIC','EVC']),S('Εκτιμητές και συγχρονισμός',['FEST','PLL'])]},
@@ -29,7 +29,7 @@
   {title:'Ηλεκτρικά κυκλώματα',sub:[S('',['R','L','C','VDC','VAC','IDC','VM','AM','VP','IP','GND','XFMR','KL','KG'])]},
   {title:'Ηλεκτρονική ισχύος',sub:[S('Διακόπτες και έλεγχος',['SW','D','SCR','PWM','MOD3','SH']),S('Κύκλωμα',['L','C','R','VDC','VAC','VAC3','CPL','XFMR','KL','CPE']),S('Μετρήσεις',['VM','AM','MEAS','DISP'])]},
   {title:'Ηλεκτρικές μηχανές και κινητήρια',sub:[S('Μηχανές',['DCM','IM','SM','SRM']),S('Έλεγχος',['CLARKE','ICLARKE','PARK','IPARK','PLL','FEST','PIB','NN','AIC','EVC','MOD3'])]},
-  {title:'Συστήματα ηλεκτρικής ενέργειας',sub:[S('',['GRID3','GEN3','XF3','LOAD3','LINE3','TLM','FLT3','CB3','VAC3','EBUS'])]},
+  {title:'Συστήματα ηλεκτρικής ενέργειας',sub:[S('',['GRID3','GEN3','XF3','LOAD3','LINE3','TLM','FLT3','CB3','VAC3','EBUS','AVR','PSS','GOV'])]},
   {title:'Υψηλές τάσεις',sub:[S('',['VIMP','ILG','TL','MOV','SG','C','R'])]},
   {title:'Συστήματα αυτομάτου ελέγχου',sub:[S('',['CONST','GAIN','SUM','MUL','DIV','SAT','INT','LPF','F2','RLIM','UD','RT','CMP','LOGIC','SR','EDGE','CLK','RAMP','PIB','NN','AIC'])]},
   {title:'Προγραμματισμός και οργάνωση',sub:[S('',['EXPR','PY','MUX','DEMUX','BSEL','PORT','SIN','SOUT','TAGO','TAGI'])],subs:true}];

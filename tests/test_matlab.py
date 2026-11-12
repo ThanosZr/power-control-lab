@@ -123,6 +123,69 @@ class Octave(unittest.TestCase):
         self.assertEqual(run['measure'], [{'name': 'Vo', 'key': 'V:C1', 'stat': 'avg', 'periods': 10}])
         self.assertEqual(run['channels'], ['V:C1'])
 
+    def test_plant_matches_python(self):
+        # 4.8.1 (ROADMAP §48): a controller written in MATLAB/Octave closes the loop around a circuit of the lab
+        # (PclPlant over python -m pcl plant): the same PI in Python on pcl.workbench gives the same numbers; a live change
+        # of the load and reset as in Python
+        o = octave("p = PclPlant('tutorial:dc_drive?mode=open', 'input', 'PWM1:d', 'measure', 'M1:w', 'state', {'AM1:y'}, "
+                   "'u_range', [0 1], 'params', {'M1.TL', 0}, 'hdiv', 50); cs = struct('Kp', 0.004, 'Ki', 0.1, 'lo', 0, 'hi', 1); "
+                   "a = p.loop(@pcl_pi, 100 * ones(150, 1), 2e-3, cs); p.setParam('M1.TL', 2); b = p.loop(@pcl_pi, 100 * ones(50, 1), 2e-3, a.cs); "
+                   "p.reset(); y0 = p.y; y1 = p.step(0.5, 2e-3); keys = p.keys; inp = p.input; p.close(); "
+                   "printf('JSON %s\\n', jsonencode(struct('y', [a.y; b.y], 'u', [a.u; b.u], 'i', [a.m(:, 2); b.m(:, 2)], 't', b.t(end), "
+                   "'y0', y0, 'y1', y1, 'keys', {keys}, 'inp', inp)));")
+        import pcl
+        import pcl.workbench as wb
+        P = wb.plant_class(pcl.tutorial('dc_drive', mode='open').set('M1.TL', 0), input='PWM1:d', measure='M1:w', state=['AM1:y'],
+                           u_range=(0, 1), solver={'hdiv': 50})
+        pl = P()
+        x, ys, us, cur = 0.0, [], [], []
+        for k in range(200):                                  # pcl_pi, the same arithmetic
+            if k == 150:
+                pl.set_live({'M1.TL': 2})
+            e = 100.0 - pl.output()
+            xn = x + 0.1 * 2e-3 * e
+            u = 0.0 + 0.004 * e + xn
+            if u > 1:
+                u, xn = 1.0, (x if e > 0 else xn)
+            elif u < 0:
+                u, xn = 0.0, (x if e < 0 else xn)
+            x = xn
+            ys.append(pl.step(u, 2e-3))
+            us.append(pl.last_u)
+            cur.append(float(pl.measured()[1]))
+        pl.reset_state()
+        y1 = pl.step(0.5, 2e-3)
+        pl.close()
+        self.assertEqual((o['keys'], o['inp'], o['y0']), (['Y:M1', 'Y:AM1'], 'WBU', 0))
+        self.assertAlmostEqual(o['t'], 0.4, delta=1e-12)
+        for a, b in zip(o['y'] + o['u'] + o['i'] + [o['y1']], ys + us + cur + [y1]):
+            self.assertAlmostEqual(a, b, delta=1e-12 * max(1.0, abs(b)))
+        self.assertGreater(ys[149], 97)                        # the PI follows 100 rad/s; the load of 2 N·m makes it dip
+        self.assertLess(min(ys[150:170]), ys[149] - 0.3)
+
+    @unittest.skipIf(shutil.which('xvfb-run') is None, 'xvfb-run: χωρίς οθόνη δεν ανοίγει το παράθυρο.')
+    def test_plant_window(self):
+        # 4.8.1: the window of the template (figure + uicontrol, the same in MATLAB and Octave): opens the circuit, runs
+        # 200 samples, the load from its slider, ▶ again for 200
+        code = ("graphics_toolkit('qt'); f = pcl_plant_gui(struct('steps', 200)); S = getappdata(f, 'S'); "
+                "cb = get(S.ui.dist, 'Callback'); set(S.ui.dist, 'Value', 2); cb(S.ui.dist, []); "
+                "cb = get(S.ui.go, 'Callback'); cb(S.ui.go, []); S = getappdata(f, 'S'); "
+                "info = get(S.ui.info, 'String'); if iscell(info), info = strjoin(info, ' '); end; "
+                "printf('JSON %s\\n', jsonencode(struct('n', size(S.buf, 1), 'y', S.buf(end, 3), 'dip', min(S.buf(201:260, 3)), 'u', S.buf(end, 4), "
+                "'info', info))); cb = get(f, 'CloseRequestFcn'); cb(f, []);")
+        r = subprocess.run(['xvfb-run', '-a', 'octave', '--no-gui', '--quiet', '--eval', f"addpath('{(ROOT / 'matlab').as_posix()}'); {code}"],
+                           capture_output=True, text=True, timeout=600, cwd=str(ROOT))
+        out = [x for x in r.stdout.splitlines() if x.startswith('JSON ')]
+        if not out and ('graphics_toolkit' in r.stderr or 'qt' in r.stderr.lower()):
+            self.skipTest('Το Octave δεν έχει γραφικά Qt εδώ.')
+        self.assertTrue(out, r.stderr[-2000:])
+        o = json.loads(out[-1][5:])
+        self.assertEqual(o['n'], 400)
+        self.assertAlmostEqual(o['y'], 100, delta=0.5)
+        self.assertLess(o['dip'], 99.7)
+        self.assertGreater(o['u'], 0.45)
+        self.assertIn('IAE', o['info'])
+
     def test_read_csv_json_mat(self):
         import pcl
         d = Path(tempfile.mkdtemp(prefix='pcl-oct-'))

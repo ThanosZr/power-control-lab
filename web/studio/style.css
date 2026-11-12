@@ -488,3 +488,11 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .wf-btns{display:flex;gap:3px;flex-wrap:wrap}.wf-btns button{flex:1 1 auto;font-size:10.5px;padding:3px 5px}
 .wf-out:empty{display:none}.wf-out{font-size:11px;line-height:1.35}.wf-out table{font-size:11px}
 .wfac .wt{width:100%}
+/* 4.8.1: the inside of a library part (inside.js) */
+.winside{left:12px;top:12px;width:min(980px,calc(100% - 24px));height:min(74%,600px);z-index:8}
+.winside .wp-head{display:flex;align-items:center;gap:8px}.winside .in-t{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.winside .in-body:focus{outline:none}.winside .in-body:focus-visible{outline:2px solid #14796655;outline-offset:-2px}
+.winside .in-body{flex:1;overflow:auto;background:#f7faf9;border-top:1px solid #dfe8e5;border-bottom:1px solid #dfe8e5}.winside .wp-foot{padding:6px 10px}
+.in-svg{display:block}.in-body.fit .in-svg{width:100%;height:auto}.winside .in-fit{font-size:11px;padding:2px 8px;border:1px solid #cfdcd7;border-radius:6px;background:#fff;cursor:pointer;white-space:nowrap}.in-n rect{fill:#fff;stroke:#a9c0b9;stroke-width:1.2}.in-n.io rect{fill:#e6f2ee;stroke:#147966}
+.in-n text{font:11px system-ui,sans-serif;fill:#21302d}.in-id{font-weight:600}.in-ty{font-weight:400;fill:#7b8e88}.in-w{fill:#4f625d}.in-v{font-variant-numeric:tabular-nums;fill:#147966}
+.in-e{fill:none;stroke:#7d958f;stroke-width:1.2}.in-e.back{stroke:#c47a1c;stroke-dasharray:5 4}#in-arr path{fill:#7d958f}.in-pin{font:9.5px system-ui,sans-serif;fill:#7b8e88}

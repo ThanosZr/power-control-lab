@@ -150,10 +150,14 @@
    for(let k=0;k<3;k++){const r=n0+3*q+k,a=m.ang0-Math.PI/2-k*2*Math.PI/3;ad(m.term[k],r,1,0);ad(r,m.term[k],1,0);ad(m.nN,r,-1,0);ad(r,m.nN,-1,0);br[r]=Vp*Math.cos(a);bi[r]=Vp*Math.sin(a);}});
   const sol=csolve(n,Ar,Ai,br,bi);if(!sol){net.warnings.push('Αρχικοποίηση από ροή φορτίου: το κύκλωμα δεν λύνεται με φασιθέτες· ξεκινά από μηδέν.');return null;}
   const [xr,xi]=sol,Vr=i=>i<0?0:xr[i],Vi=i=>i<0?0:xi[i];
+  // 4.8.1: BDF2 also needs the step before t = 0 (i, v, ψ at −h, from the same phasors) and starts with h/h_last = 1, so
+  // that the first step is not a backward-Euler one (which leaves a start transient of the order of h)
+  const bdf=sim.method==='BDF2'&&!sim.var&&sim.h>0,cb=Math.cos(w0*sim.h),sb=Math.sin(w0*sim.h);
   for(const e of net.els){
-   if(e.k==='L'){const dr=Vr(e.a)-Vr(e.b),di=Vi(e.a)-Vi(e.b);e.i=di/(w*e.L);e.i1=e.i;}
-   else if(e.k==='C'){const dr=Vr(e.a)-Vr(e.b),di=Vi(e.a)-Vi(e.b);e.v=dr;e.v1=dr;e.i=-w*e.C*di;}
+   if(e.k==='L'){const dr=Vr(e.a)-Vr(e.b),di=Vi(e.a)-Vi(e.b);e.i=di/(w*e.L);e.i1=bdf?(di*cb-dr*sb)/(w*e.L):e.i;}
+   else if(e.k==='C'){const dr=Vr(e.a)-Vr(e.b),di=Vi(e.a)-Vi(e.b);e.v=dr;e.v1=bdf?dr*cb+di*sb:dr;e.i=-w*e.C*di;}
    else if(e.k==='F'&&!e.gen&&!e.sm&&!e.srm){const N=e.N;for(let k=0;k<N;k++){const [a,b]=e.ports[k];e.psi[k]=(Vi(a)-Vi(b))/w;}e.psi1.set(e.psi);
+    if(bdf)for(let k=0;k<N;k++){const [a,b]=e.ports[k];e.psi1[k]=((Vi(a)-Vi(b))*cb-(Vr(a)-Vr(b))*sb)/w;}
     for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=e.Gam[k*N+j]*e.psi[j];e.i[k]=s;}}}
   // each generator: positive sequence of the terminal phasors, the voltage behind R_a, the steady state, the twisted shaft
   const A=[Math.cos(2*Math.PI/3),Math.sin(2*Math.PI/3)],cm=(a,b)=>[a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]];
@@ -161,7 +165,10 @@
   gens.forEach((m,q)=>{const g=m.g,ph=[],cur=[];for(let k=0;k<3;k++){ph.push([Vr(m.term[k])-Vr(m.nN),Vi(m.term[k])-Vi(m.nN)]);cur.push([xr[n0+3*q+k],xi[n0+3*q+k]]);}
    const seq=z=>{const a1=cm(A,z[1]),a2=cm(cm(A,A),z[2]);return [(z[0][0]+a1[0]+a2[0])/3,(z[0][1]+a1[1]+a2[1])/3];};
    const V1=seq(ph),I1=seq(cur),Vp=[V1[0]-g.Ra*g.Zb*I1[0],V1[1]-g.Ra*g.Zb*I1[1]],ss=P.genSteady(g,Vp,I1,w);
-   const F=m.F;F.psi.set(ss.psi);F.psi1.set(ss.psi);P.genGamma(g,ss.th,F.Gnow);for(let k=0;k<g.N;k++){let s=0;for(let j=0;j<g.N;j++)s+=F.Gnow[k*g.N+j]*F.psi[j];F.i[k]=s;}
+   const F=m.F;F.psi.set(ss.psi);F.psi1.set(ss.psi);
+   if(bdf){   // the stator fluxes one step back (a rotation by ω·h of their space vector); the rotor's are constant
+    const al=(2*ss.psi[0]-ss.psi[1]-ss.psi[2])/3,be=(ss.psi[1]-ss.psi[2])/Math.sqrt(3),z0=(ss.psi[0]+ss.psi[1]+ss.psi[2])/3;
+    const a1=al*cb+be*sb,b1=-al*sb+be*cb;F.psi1[0]=z0+a1;F.psi1[1]=z0-a1/2+Math.sqrt(3)/2*b1;F.psi1[2]=z0-a1/2-Math.sqrt(3)/2*b1;}P.genGamma(g,ss.th,F.Gnow);for(let k=0;k<g.N;k++){let s=0;for(let j=0;j<g.N;j++)s+=F.Gnow[k*g.N+j]*F.psi[j];F.i[k]=s;}
    const sh=g.sh,Tm=-ss.Te,ext=sh.fr.map(x=>x*Tm);ext[sh.gm]+=ss.Te;const phi=new Array(sh.N).fill(0);let S=0;
    for(let i=0;i<sh.N-1;i++){S+=ext[i];phi[i+1]=phi[i]-S/sh.K[i];}
    const off=ss.th-phi[sh.gm],st=m.st;for(let i=0;i<sh.N;i++){st.ph[i]=phi[i]+off;st.w[i]=1;st.wo[i]=1;}for(let i=0;i<sh.N-1;i++)st.ts[i]=sh.K[i]*(st.ph[i]-st.ph[i+1]);
@@ -186,13 +193,14 @@
   const dsol=csolve(n0,Dr,Di,dr,di),x0=new Float64Array(n0),Xd=dsol?dsol[0]:new Float64Array(n0);
   if(!dsol)net.warnings.push('Αρχικοποίηση από ροή φορτίου: το μέρος DC δεν λύνεται· οι πηγές DC ξεκινούν από μηδέν.');
   for(let i=0;i<n0;i++)x0[i]=xr[i]+Xd[i];
-  for(const [e,k,a,b,g] of sh){if(e.gen)continue;const I=g*((a<0?0:Xd[a])-(b<0?0:Xd[b]));if(k<0){e.i+=I;e.i1=e.i;}else e.i[k]+=I;}
-  for(const e of net.els)if(e.k==='F'&&!e.gen&&!e.sm&&!e.srm&&e.Lm){const N=e.N;for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=e.Lm[k*N+j]*e.i[j];e.psi[k]=s;}e.psi1.set(e.psi);}
+  for(const [e,k,a,b,g] of sh){if(e.gen)continue;const I=g*((a<0?0:Xd[a])-(b<0?0:Xd[b]));if(k<0){e.i+=I;e.i1=bdf?e.i1+I:e.i;}else e.i[k]+=I;}   // the DC part: the same in the step before
+  for(const e of net.els)if(e.k==='F'&&!e.gen&&!e.sm&&!e.srm&&e.Lm){const N=e.N;for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=e.Lm[k*N+j]*e.i[j];if(bdf)e.psi1[k]+=s-e.psi[k];e.psi[k]=s;}if(!bdf)e.psi1.set(e.psi);}
   // a generator's stator ports: the voltage behind R_a (the phasor solution had the machine replaced by sources)
   gens.forEach((m,q)=>{for(let k=0;k<3;k++){const pn=m.F.ports[k][0];if(pn!==m.term[k])x0[pn]=xr[m.term[k]]-m.g.Ra*m.g.Zb*xr[n0+3*q+k];}});
   if(left.has('TLM'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: οι γραμμές από γεωμετρία (CP/FD) ξεκινούν χωρίς φορτίο.');
   if(left.has('TL'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: οι γραμμές με κατανεμημένες παραμέτρους (Bergeron) ξεκινούν χωρίς φορτίο.');
   if(left.has('CPL')||left.has('NL'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: τα φορτία σταθερής ισχύος και τα αλεξικέραυνα μένουν έξω από τη λύση με φασιθέτες.');
+  if(bdf)sim.hLast=sim.h;
   sim.lfInit=rep;sim.acPh={w,w0,xr:xr.slice(0,n0),xi:xi.slice(0,n0),xd:Xd.slice(0,n0)};return x0;}
  class NetlistError extends Error{}
 
@@ -416,7 +424,7 @@
     const term=['a','b','c'].map(k=>node(c.id,k)),nN=p.neut==='pin'?node(c.id,'n'):p.neut==='iso'?internal():-1;
     const ports=term.map(t=>[series(t,-1,g.Ra*g.Zb),nN]),xf=internal(),mf=internal(),NM=g.sh.N;
     const m={g,term,nN,init:p.init==='zero'?'zero':'lf',V0:num(p.V0,1),ang0:num(p.ang0,0)*Math.PI/180,exc:['sched','sig'].includes(p.exc)?p.exc:'init',mech:['sched','sig'].includes(p.mech)?p.mech:'init',
-     efdS:P.parseSched(p.Efd)||[[0,1]],tmS:P.parseSched(p.Tm)||[[0,0]],Efd0:num(p.V0,1),Tm0:0,
+     efdS:P.parseSched(p.Efd)||[[0,1]],tmS:P.parseSched(p.Tm)||[[0,0]],Efd0:num(p.V0,1),Tm0:0,V0:p.init==='zero'?1:num(p.V0,1),
      st:{ph:new Array(NM).fill(0),w:new Array(NM).fill(1),wo:new Array(NM).fill(1),ts:new Array(NM-1).fill(0),tem:0,pe:0,qe:0,vt:0,ifd:0,id:0,iq:0}};
     m.fV=add({k:'V',a:xf,b:-1,row:row(),src:{kind:'dc',V:0},gen:m});add({k:'G',a:xf,b:mf,R:g.Rr[0],role:'Rf'});ports.push([mf,-1]);
     for(let r=1;r<g.Rr.length;r++){const md=internal();add({k:'G',a:md,b:-1,R:g.Rr[r],role:'Rk'});ports.push([md,-1]);}
@@ -458,7 +466,7 @@
     else if(T==='LOGIC')b.op=p.op||'or';
     else if(T==='MOD3'){b.mode=['spwm','svpwm','square'].includes(p.mode)?p.mode:'svpwm';}
     else if(T==='FEST'){b.RR=num(p.RR,2);b.LM=Math.max(num(p.LM,.3),1e-9);st.pa=num(p.psi0,0);st.pb=0;st.t=0;st.u=[0,0,0];}
-    else if(T==='EXPR'){const ins=Ex.names(p.ins),pars=Ex.params(p.pars);b.inNames=ins;b.parVals=Object.values(pars);b.expr=String(p.expr??'');
+    else if(T==='EXPR'){const ins=Ex.names(p.ins),pars=Ex.params(p.pars);b.inNames=ins;b.parVals=Object.values(pars);b.expr=String(p.expr??'');b.optIns=Ex.names(p.opt,6,false); // 4.8.1: inputs that may stay unconnected (0) without a warning (library parts)
      try{b.ast=Ex.parse(b.expr,[...ins,...Object.keys(pars)]);}catch(e){warnings.push(`${b.label}: ${e.message} Η έξοδος είναι 0.`);b.ast=['num',0];}
      const cv={};b.parVals.forEach((c,k)=>{cv[ins.length+k]=c;});b.fn=Ex.compile(b.ast,cv);b.xv=new Array(ins.length).fill(0);}
     else if(T==='PY'){b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';b.y0=num(p.y0,0);st.last=null;st.ys=null;b.inNames=Ex.names(p.ins,6,false);
@@ -513,7 +521,7 @@
   for(const b of blocks)for(const n of Object.values(b.outs))if(n>=0){if(drv.has(n))dup.push(drv.get(n).label+' / '+b.label);else drv.set(n,b);}
   if(dup.length)warnings.push('Δύο έξοδοι στο ίδιο σύρμα σήματος: '+dup.slice(0,4).join(', ')+'.');
   const loose=[];const chk=(n,name)=>{if(n<0||!drv.has(n))loose.push(name);};
-  for(const b of blocks)for(const [k,n] of Object.entries(b.ins))if(!(b.type==='NN'&&k==='fz'))chk(n,b.label+'.'+k);
+  for(const b of blocks)for(const [k,n] of Object.entries(b.ins))if(!(b.type==='NN'&&k==='fz')&&!b.optIns?.includes(k))chk(n,b.label+'.'+k);
   // 4.8: a network that uses the weights of another (share): the same id in the same level of the circuit, the same sizes
   for(const b of blocks)if(b.type==='NN'){b.src=null;if(!b.share)continue;const pre=b.id.includes('/')?b.id.slice(0,b.id.lastIndexOf('/')+1):'';
    const s=blocks.find(q=>q!==b&&q.type==='NN'&&(q.id===pre+b.share||q.id===b.share));
@@ -854,7 +862,7 @@
   portI(e,k){if(e.k==='F')return e.i[k];if(e.k==='TL'||e.k==='TLM')return e.iE[k];let s=0;for(let j=0;j<e.N;j++)s+=e.Gm[k*e.N+j]*(this.V(e.ports[j][0])-this.V(e.ports[j][1]));return s;}
   // values of all channels at the current solution
   computeVals(){
-   const out=this.vals;let j=0;const x=this.x;if(this.net.sig.blocks.length)this.evalBlocks('trial');
+   const out=this.vals;let j=0;const x=this.x;if(this.net.sig.blocks.length){if(this.blkFresh)this.blkCopy();else this.evalBlocks('trial');}
    for(const n of this.net.nets)out[j++]=x[n.index];
    for(const c of this.net.compInfo.values()){
     if(c.type==='GND'||c.type==='JUNC'||c.type==='TAGO'||c.type==='TAGI')continue;
@@ -982,7 +990,7 @@
   // nothing is logged). left: time sources take their value just before t (used when looking for a
   // comparator crossing that ends exactly at a ramp reset). Returns true if a discrete block updated.
   evalBlocks(mode,force=false,left=false){
-   const G=this.net.sig;if(!G.blocks.length)return false;const trial=mode==='trial',disc=mode==='sample'||mode==='init';
+   const G=this.net.sig;this.blkFresh=false;if(!G.blocks.length)return false;const trial=mode==='trial',disc=mode==='sample'||mode==='init';
    const sv=trial?this.svT:this.sv,yb=trial?this.ybT:this.yb;sv.fill(0);const t=left?this.t-1e-6*this.h:this.t;const rd=n=>n>=0&&n!==undefined?sv[n]:0;let sampled=false;const pend=[];
    const cont=[],Q3=Math.sqrt(3);
    for(const b of G.order){const st=b.st,I=b.ins;let y=0,ys=null;
@@ -1038,7 +1046,7 @@
      case 'DCM':ys={w:this.V(b.m),te:b.psi*this.x[b.gy.row]};break;
      case 'SRM':{const s=b.srm.st,P2=2*Math.PI;ys={w:s.wo??s.w,te:s.te,th:s.the-P2*Math.floor(s.the/P2)};for(let k=0;k<b.srm.N;k++)ys['i'+(k+1)]=b.srm.F.i[k];break;}
      case 'GEN3':{const m=b.gen,s=m.st,g=m.g,q=g.sh.gm,P2=2*Math.PI;let d=s.ph[q]+Math.PI-g.wb*this.t;d-=P2*Math.floor((d+Math.PI)/P2); // load angle against the sine reference of the sources
-      ys={w:s.wo[q],te:-s.tem,pe:s.pe,qe:s.qe,vt:s.vt,ifd:s.ifd,d:d*180/Math.PI};for(let k=0;k<s.ts.length;k++)ys['ts'+(k+1)]=s.ts[k];break;}
+      ys={w:s.wo[q],te:-s.tem,pe:s.pe,qe:s.qe,vt:s.vt,ifd:s.ifd,d:d*180/Math.PI,e0:m.Efd0,v0:m.V0??1,m0:m.Tm0};for(let k=0;k<s.ts.length;k++)ys['ts'+(k+1)]=s.ts[k];break;}
      case 'SM':{const s=b.sm.st,P2=2*Math.PI;ys={w:s.wo??s.w,te:s.te,th:s.the-P2*Math.floor(s.the/P2),id:s.id,iq:s.iq};break;}
      case 'IM':{const s=b.im.st,P2=2*Math.PI,f=Math.atan2(s.pb,s.pa),r=b.im.p*s.th;ys={w:s.w,te:s.te,psi:Math.hypot(s.pa,s.pb),thf:f-P2*Math.floor(f/P2),thr:r-P2*Math.floor(r/P2)};break;}
      case 'CLK':{const u=b.f*t-b.ph,fr=u-Math.floor(u+1e-11);y=fr<b.duty-1e-11?1:0;break;}
@@ -1057,6 +1065,14 @@
    for(const [b,v] of cont){if(b.type==='FEST'){b.st.pa=v[0];b.st.pb=v[1];b.st.u=[rd(b.ins.al),rd(b.ins.be),rd(b.ins.wr)];}else{b.st.s=v;b.st.u=rd(b.ins.u);}b.st.t=this.t;}
    return sampled;
   }
+  // 4.8.1: right after a pass at this instant (the run loop, nothing changed since) the values for the channels are those
+  // of the pass: a trial pass would give the same numbers (the states it reads are the ones just written), so they are
+  // copied instead of computed a third time per step
+  blkCopy(){this.blkFresh=false;this.svT.set(this.sv);this.ybT.set(this.yb);const a=this.yo,b=this.yoT;for(let i=0;i<a.length;i++){const p=a[i],q=b[i];for(let k=0;k<p.length;k++)q[k]=p[k];}}
+  // 4.8.1: is a discrete block (PI, z⁻¹, rate transition, Python, NN, S&H with a signal input) due now? Without one the
+  // 'sample' pass would only repeat the 'commit' pass (continuous states with dt = 0, the same comparators and latches)
+  blkAnyDue(){const G=this.net.sig;const D=G.disc||(G.disc=G.blocks.filter(b=>['PIB','UD','RT','PY','NN'].includes(b.type)||(b.type==='SH'&&b.sig===true)));
+   for(const b of D){const sh=b.type==='SH',q=sh?b.sh:b,g=this.shGrid(q);if(!g)continue;const u=(this.t-g.b)/g.d,n=Math.round(u);if(Math.abs(u-n)<=1e-7&&(sh?q.last:b.st.last)!==n)return true;}return false;}
   // a discrete block (PI, z⁻¹) is due when t sits on the grid of its clock carrier, once per grid point
   blkDue(b,force){const g=this.shGrid(b);if(!g)return false;const u=(this.t-g.b)/g.d,n=Math.round(u);if(Math.abs(u-n)>1e-7)return false;if(!force&&b.st.last===n)return false;b.st.last=n;return true;}
   // comparator roots inside a step: fraction of the step where the first output change happens (or null)
@@ -1431,14 +1447,15 @@
     this.leftAt=null;
     if(this.lastDisc||this.topoSig===null)this.topoCheck();
     this.started=true;
-    this.evalBlocks('commit');
+    this.evalBlocks('commit');this.blkFresh=true;
     if(this.ev?.on)this.evSwitches(t0);
     const Tb=this.T,onB=Math.abs(this.t/Tb-Math.round(this.t/Tb))<1e-9;
     this.recordNow();
     if(onB&&this.t>0)this.closePeriod();
     // order at one instant: samples (t_sample), then the controller update (t_update); a second
     // point at the same t makes the held value, the carrier reset and the duty step vertical
-    const sm=this.sampleHolds(),sb=this.evalBlocks('sample'),cu=this.sampleControllers(false);if(sm||sb||cu)this.recordNow();
+    const sm=this.sampleHolds();let sb=false;if(sm||this.blkAnyDue()){sb=this.evalBlocks('sample');this.blkFresh=true;}
+    const cu=this.sampleControllers(false);if(cu)this.blkFresh=false;if(sm||sb||cu)this.recordNow();this.blkFresh=false;
     // the time limit of the frame after every step (4.6; it was every 256 steps, ~10 ms late on a large circuit)
     if(hasDl&&performance.now()>deadline)break;
    }
@@ -1461,7 +1478,7 @@
   const genList=[...net.compInfo.values()].filter(c=>c.gen).map(c=>c.gen),genx=new Map(genList.map((m,i)=>[m,i]));
   const els=net.els.map(e=>{const o={};for(const k of F)if(e[k]!==undefined&&e[k]!==null)o[k]=e[k];if(e.k==='F'){o.i=Array.from(e.i);o.psi=Array.from(e.psi);if(e.sm){o.sm=smx.get(e.sm);delete o.Gam;}if(e.srm){o.srm=srmx.get(e.srm);delete o.Gam;}if(e.gen){o.gen=genx.get(e.gen);delete o.Gam;}}return o;});
   const gens=genList.map(m=>{const g=m.g;return {F:idx.get(m.F),fV:idx.get(m.fV),N:g.N,nd:g.nd,nq:g.nq,Gd:g.Gd,Gq:g.Gq,g0:g.g0,wb:g.wb,f:g.f,Sn:g.Sn,Un:g.Un,vfK:g.vfK,ifK:g.ifK,
-   sh:{N:g.sh.N,H:g.sh.H,K:g.sh.K,D:g.sh.D,Dmu:g.sh.Dmu,fr:g.sh.fr,gm:g.sh.gm},exc:m.exc,mech:m.mech,efdS:m.efdS,tmS:m.tmS,efdIn:m.efdIn,tmIn:m.tmIn,Efd0:m.Efd0,Tm0:m.Tm0,
+   sh:{N:g.sh.N,H:g.sh.H,K:g.sh.K,D:g.sh.D,Dmu:g.sh.Dmu,fr:g.sh.fr,gm:g.sh.gm},exc:m.exc,mech:m.mech,efdS:m.efdS,tmS:m.tmS,efdIn:m.efdIn,tmIn:m.tmIn,Efd0:m.Efd0,Tm0:m.Tm0,V0:m.V0??1,
    term:m.term,nN:m.nN,st:{ph:m.st.ph.slice(),w:m.st.w.slice()}};});
   const srms=srmList.map(m=>({F:idx.get(m.F),N:m.N,Nr:m.Nr,I:m.g.I,C:m.g.C,M:m.g.M,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{w:m.st.w,the:m.st.the}}));
   const sms=smList.map(m=>({F:idx.get(m.F),p:m.p,Ld:m.Ld,Lq:m.Lq,psim:m.psim,sat:m.sat,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{w:m.st.w,the:m.st.the}}));

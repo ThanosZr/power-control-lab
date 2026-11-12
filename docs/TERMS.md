@@ -68,6 +68,13 @@
 | driving cycle | κύκλος οδήγησης |
 | state of charge (SOC) | κατάσταση φόρτισης (SOC) |
 | logging to a file, recording resolution | καταγραφή σε αρχείο, ανάλυση καταγραφής |
+| exciter, excitation system, AVR | διεγέρτρια, σύστημα διέγερσης, αυτόματος ρυθμιστής τάσης (AVR) |
+| power system stabilizer (PSS) | σταθεροποιητής συστήματος ισχύος (PSS) |
+| governor, speed droop, permanent / transient droop | ρυθμιστής στροφών, στατικότητα, μόνιμη / μεταβατική στατικότητα |
+| reheater, steam chest, crossover | αναθερμαντήρας, θάλαμος ατμού, σωλήνας μεταφοράς (crossover) |
+| penstock, water starting time, gate | αγωγός πτώσης, χρόνος εκκίνησης νερού T_W, θυρόφραγμα |
+| transient gain reduction | μείωση μεταβατικού κέρδους |
+| policy search, evolution strategies | αναζήτηση πολιτικής, στρατηγικές εξέλιξης (ES) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 

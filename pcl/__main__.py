@@ -166,6 +166,7 @@ def main(argv=None):
     a.add_argument('--settle', default='0', help='s πριν από το πρώτο βήμα (μόνιμη κατάσταση)')
     a.add_argument('--headless', help='χωρίς GUI: σχήματα του workbench με κόμμα, π.χ. iaic,pid, σε κλιμακωτή αναφορά')
     a.add_argument('--dt', type=float, default=0.01, help='δείγμα του workbench (s)')
+    sub.add_parser('plant', help='4.8.1: ένα κύκλωμα ως σύστημα υπό έλεγχο σε γραμμές JSON (stdin/stdout), για το MATLAB και το Octave (PclPlant)')
     a = sub.add_parser('net', help='4.2: ροή φορτίου και βραχυκυκλώματα κατά IEC 60909-0 σε δίκτυο (JSON του pcl.network, αρχείο MATPOWER, ieee9, ieee14)')
     a.add_argument('network', help='αρχείο .json (pcl.network.save) ή .m (MATPOWER), ή ieee9 / ieee14')
     a.add_argument('--lf', action='store_true', help='ροή φορτίου (Newton–Raphson)')
@@ -178,8 +179,9 @@ def main(argv=None):
     a = sub.add_parser('gui', help='4.7: παράθυρο σύνθεσης ελέγχου με νευρωνικά για κάθε μηχανή της εφαρμογής (tkinter + matplotlib)')
     a.add_argument('--offline', action='store_true', help='χωρίς την εφαρμογή: οι μηχανές από το parts.js, τα τρεξίματα με τον λύτη σε Node')
     a = sub.add_parser('design', help='4.7: η ίδια σύνθεση χωρίς παράθυρο: μηχανή, στόχοι με βάρη, ελεγκτής → αρχείο project')
-    a.add_argument('--machine', default='DCM', help='τύπος μηχανής (DCM, IM, SM, SRM ή ό,τι δίνει το «python -m pcl machines»)')
-    a.add_argument('--controller', default='auto', choices=[k for k, _ in __import__('pcl.designer', fromlist=['x']).CONTROLLERS])
+    a.add_argument('--machine', default='DCM', help='τύπος μηχανής (DCM, IM, SM, SRM, GEN3, DCM-ev για το ηλεκτρικό όχημα, ή ό,τι δίνει το «python -m pcl machines»)')
+    _D = __import__('pcl.designer', fromlist=['x'])
+    a.add_argument('--controller', default='auto', choices=sorted({k for k, _ in _D.CONTROLLERS + _D.GEN_CONTROLLERS + _D.EV_CONTROLLERS}))
     a.add_argument('--goal', action='append', default=[], help='στόχος=βάρος: iae, ise, overshoot, settle, effort, load (π.χ. --goal iae=1)')
     a.add_argument('--cycles', type=int, default=3)
     a.add_argument('--out', help='αρχείο JSON του καλύτερου κυκλώματος')
@@ -205,15 +207,21 @@ def main(argv=None):
         return 0
     if args.cmd == 'design':
         from . import designer as D
-        ms = {m['type']: m for m in D.machines()}
+        ms = {m['type'] + ('-ev' if m['kind'] == 'ev' else ''): m for m in D.machines()}     # 4.8.1: DCM-ev, the vehicle
         if args.machine not in ms:
             print('Άγνωστη μηχανή', args.machine, '· υπάρχουν:', ', '.join(ms), file=sys.stderr)
             return 2
-        w = {k: float(v) for k, v in (g.split('=', 1) for g in args.goal)} if args.goal else {'iae': 1.0}
-        out = D.design(ms[args.machine], w, controller=args.controller, cycles=args.cycles, progress=lambda s: print(s, file=sys.stderr))
+        mach = ms[args.machine]
+        gk = [k for k, _ in D.goals(mach)]
+        w = {k: float(v) for k, v in (g.split('=', 1) for g in args.goal)} if args.goal else {gk[0]: 1.0}
+        ctl = args.controller if args.controller in [k for k, _ in D.controllers(mach)] else 'auto'
+        out = D.design(mach, w, controller=ctl, cycles=args.cycles, progress=lambda s: print(s, file=sys.stderr))
         for r in out['results']:
             m = r['metrics']
-            print(f"{r['label']:44} J {r['J']:.3g}  IAE {m['iae']:.3g}  υπέρβαση {m['overshoot']:.3g} %  πτώση στο φορτίο {m['load']:.3g}")
+            if mach['kind'] in ('gen', 'ev'):
+                print(f"{r['label']:44} J {r['J']:.3g}  " + '  '.join(f'{k} {m[k]:.3g}' for k in gk) + ('  χάνει τον συγχρονισμό' if m.get('slip') else ''))
+            else:
+                print(f"{r['label']:44} J {r['J']:.3g}  IAE {m['iae']:.3g}  υπέρβαση {m['overshoot']:.3g} %  πτώση στο φορτίο {m['load']:.3g}")
         if args.out:
             out['best']['project'].save(args.out)
             print('Το καλύτερο κύκλωμα:', args.out)
@@ -227,6 +235,12 @@ def main(argv=None):
         except PclError as e:
             out = {'error': str(e)}
         Path(args.out).write_text(json.dumps(_clean(out), ensure_ascii=False), encoding='utf-8')
+        return 0
+    if args.cmd == 'plant':
+        from . import workbench as wb
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stdin.reconfigure(encoding='utf-8')
+        wb.serve()
         return 0
     if args.cmd == 'workbench':
         from . import workbench as wb

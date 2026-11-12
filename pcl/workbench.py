@@ -99,6 +99,7 @@ class CircuitPlant:
         self.last_u = 0.0
         self.vals = {}
         self.snap = None
+        self.pending = {}
 
     # ------------------------------------------------------------------ the solver, opened on the first step
     def _open(self):
@@ -132,11 +133,17 @@ class CircuitPlant:
 
     def _advance(self, dt, u):
         q = {'action': 'advance', 'sid': self.sid, 't_end': self.t + float(dt), 'max_points': 4}
-        if u is not None:
-            q['set'] = {self.uid: float(u)}
+        if u is not None or self.pending:
+            q['set'] = {**self.pending, **({self.uid: float(u)} if u is not None else {})}
+            self.pending = {}
         out = self.sess(q)
         self.t = float(out['t1'])
         self._read(out)
+
+    def set_live(self, values):
+        """4.8.1: changes of the circuit for the next step, as in the app while it runs ({'M1.TL': 2}: a parameter, the
+        states kept; {'KL': 3}: a «Σταθερά» block). A reset returns to the circuit as it was."""
+        self.pending.update({str(k): v for k, v in dict(values).items()})
 
     def close(self):
         if self.sess is not None:
@@ -206,6 +213,7 @@ class CircuitPlant:
             self.sid, self.t = o['sid'], float(o['t'])
             self.vals = dict(self.vals0)
         self.last_u = 0.0
+        self.pending = {}
 
     def clone(self):
         return type(self)(dict(self.p))
@@ -242,6 +250,74 @@ def plant_class(project, input, measure, state=(), u_range=(-1.0, 1.0), y_range=
              'STATE_SCALE': list(state_scale) if state_scale else None, 'SETTLE': float(parse_value(settle)), 'SOLVER': dict(solver or {}),
              'PARAMS': dict(params or {}), 'input_name': input_name, 'output_name': output_name}
     return type('PclCircuitPlant', (CircuitPlant,), attrs)
+
+
+def serve(inp=None, out=None):
+    """4.8.1 (ROADMAP §48): a CircuitPlant over JSON lines, for MATLAB and Octave (matlab/PclPlant.m, `python -m pcl plant`).
+    The first line opens it: {project, set: [[key, value], …], input, measure, state, u_range, y_range, settle, hdiv, method};
+    then {op: 'step', u, dt} → {t, y, m, u}; {op: 'reset'}; {op: 'set', values: {key: value}}; {op: 'info'}; {op: 'close'}.
+    One answer line per request: {"ok": …} or {"error": "…"}. The steps are those of the Python CircuitPlant, so a
+    controller written in MATLAB sees the same numbers as the same controller in Python."""
+    import json
+    inp = inp or sys.stdin
+    out = out or sys.stdout
+    pl = None
+
+    def state():
+        m = [float(v) for v in pl.measured()]
+        return {'t': pl.t, 'y': m[0], 'm': m, 'u': pl.last_u}
+
+    for line in inp:
+        if not line.strip():
+            continue
+        done = False
+        try:
+            q = json.loads(line)
+            op = q.get('op', 'open' if pl is None else '')
+            if op == 'open':
+                pr = q.get('project')
+                p = Project(pr) if isinstance(pr, dict) else _open(str(pr))
+                for k, v in (q.get('set') or []):
+                    p.set(k, v)
+                st = q.get('state') or []
+                st = [st] if isinstance(st, str) else list(st)
+                solver = {k: q[k] for k in ('hdiv', 'method') if q.get(k)}
+                Plant = plant_class(p, q['input'], q['measure'], st, q.get('u_range') or (-1, 1), q.get('y_range') or (-1, 1),
+                                    settle=q.get('settle') or 0, solver=solver)
+                if pl is not None:
+                    pl.close()
+                pl = Plant()
+                pl.output()
+                r = {**state(), 'keys': [pl.ch_y, *pl.ch_s], 'T': pl.T, 'input': pl.uid, 'u_range': list(pl.u_range())}
+            elif pl is None:
+                raise PclError('Άνοιξε πρώτα το σύστημα (project, input, measure).')
+            elif op == 'step':
+                pl.step(float(q.get('u', 0.0)), float(q['dt']))
+                r = state()
+            elif op == 'reset':
+                pl.reset_state()
+                r = state()
+            elif op == 'set':
+                pl.set_live(q.get('values') or {})
+                r = {'pending': sorted(pl.pending)}
+            elif op == 'info':
+                r = {**state(), 'keys': [pl.ch_y, *pl.ch_s], 'T': pl.T}
+            elif op == 'close':
+                pl.close()
+                pl = None
+                r = {}
+                done = True
+            else:
+                raise PclError(f'Άγνωστη εντολή «{op}» (step, reset, set, info, close).')
+            ans = {'ok': r}
+        except (PclError, KeyError, ValueError, TypeError) as e:
+            ans = {'error': str(e) if not isinstance(e, KeyError) else f'Λείπει το πεδίο {e}.'}
+        out.write(json.dumps(ans, ensure_ascii=False) + '\n')
+        out.flush()
+        if done:
+            break
+    if pl is not None:
+        pl.close()
 
 
 def register(cls, workbench=None):

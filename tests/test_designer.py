@@ -20,7 +20,9 @@ ROOT = Path(__file__).resolve().parent.parent
 class Designer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.ms = {m['type']: m for m in D.machines()}
+        ms = D.machines()
+        cls.ms = {m['type']: m for m in ms if m['kind'] != 'ev'}
+        cls.ev = [m for m in ms if m['kind'] == 'ev']
 
     def test_machines_from_the_app(self):
         kinds = {m['kind'] for m in self.ms.values()}
@@ -28,9 +30,41 @@ class Designer(unittest.TestCase):
         dcm = self.ms['DCM']
         self.assertEqual(dcm['outputs'], ['w', 'te'])
         self.assertIn('J', [q['k'] for q in dcm['params']])
-        self.assertFalse(D.supported(self.ms['GEN3']))
+        self.assertTrue(D.supported(self.ms['GEN3']))             # 4.8.1: generators have a rule
+        self.assertEqual([m['type'] for m in self.ev], ['DCM'])   # and every DC machine is also an electric vehicle
         with self.assertRaises(PclError):
-            D.rule_for(self.ms['GEN3'])
+            D.rule_for({'kind': 'other', 'name': 'x', 'type': 'X'})
+
+    def test_generator_rule(self):
+        # 4.8.1: AVR, PSS and governor around the generator; the fault on line 2; the AVR alone loses synchronism, the
+        # DC1A base keeps it, so the AVR alone comes last (J = ∞)
+        g = self.ms['GEN3']
+        self.assertEqual([k for k, _ in D.goals(g)], ['swing', 'damp', 'vrec', 'freq', 'effort'])
+        p = D.compose(g, 'avr_pss')
+        ids = {c['id']: c['type'] for c in p.data['components']}
+        self.assertEqual((ids['AV1'], ids['PS1']), ('AVR', 'PSS'))
+        self.assertEqual(p.data['meta']['designer']['kind'], 'gen')
+        out = D.design(g, {'swing': 1, 'damp': 1}, controller='avr', workers=2)
+        labels = [r['label'] for r in out['results']]
+        self.assertEqual(len(labels), 2)
+        self.assertTrue(out['baseline']['metrics']['slip'] is False)
+        self.assertAlmostEqual(out['baseline']['J'], 2.0)
+        self.assertEqual(out['results'][-1]['controller'], 'avr')
+        self.assertTrue(out['results'][-1]['metrics']['slip'])
+        self.assertEqual(out['results'][-1]['J'], float('inf'))
+
+    def test_vehicle_rule(self):
+        # 4.8.1: a DC machine as the drive of an electric vehicle with the multi-objective controller (EVC)
+        m = self.ev[0]
+        self.assertEqual([k for k, _ in D.goals(m)], ['track', 'energy', 'irms', 'peak', 'rollback'])
+        p = D.compose(m, 'moevc')
+        self.assertEqual({c['id']: c['type'] for c in p.data['components']}['MO1'], 'EVC')
+        res = p.run(t_end=10, channels=D.EV_KEYS, max_points=20000)
+        mt = D.metrics_ev(res)
+        self.assertLess(mt['track'], 5)
+        self.assertTrue(10 < mt['energy'] < 200)
+        self.assertGreater(mt['irms'], 1)
+        self.assertIn('ηλεκτρικό όχημα', D.describe(m) + m['name'])
 
     def test_composed_circuits_run(self):
         for typ in ('DCM', 'IM', 'SM', 'SRM'):
@@ -63,6 +97,31 @@ class Designer(unittest.TestCase):
         self.assertEqual(len(out['results']), 7)
         pi = [r for r in out['results'] if r['controller'] == 'pi']
         self.assertLess(min(r['metrics']['iae'] for r in pi if r['kb'] > 1), base['metrics']['iae'])   # a wider band tracks better
+
+    def test_reinforcement_learning(self):
+        # 4.8.1: the policy network (ω_r, α_r, e) beside the PI, found by policy search on the user's goals: it starts as
+        # the PI (zero output), and a few iterations of evolution strategies lower J below the PI's
+        from pcl.control import nn_init
+        for typ in ('DCM', 'IM'):
+            p = D.compose(self.ms[typ], 'rl', cycles=1, inv_net=nn_init([3, 8, 1], 1, True))
+            meta = p.data['meta']['designer']
+            nn = next(c for c in p.data['components'] if c['id'] == 'NN1')
+            ends = {(w['a']['c'], w['a']['p'], w['b']['c'], w['b']['p']) for w in p.data['wires']}
+            err = D.RULES[self.ms[typ]['kind']]['err']
+            self.assertEqual((nn['params']['ins'], nn['params']['train']), ('wr, ar, ew', 'off'), msg=typ)
+            self.assertTrue(any({e[:2], e[2:]} == {(err, 'y'), ('NN1', 'ew')} for e in ends), msg=typ)
+            res = p.run(t_end=.04, channels=['Y:M1', 'Y:' + meta['pi'], 'Y:NN1'])
+            self.assertEqual(res.meta.get('warnings'), [], msg=typ)
+            self.assertEqual(max(abs(v) for v in res['Y:NN1']), 0.0, msg=typ)      # zero output: the PI alone
+        out = D.design_rl(self.ms['DCM'], {'iae': 1.0, 'load': 1.0}, cycles=2, workers=3, iters=3, population=4)
+        best, base = out['best'], out['baseline']
+        self.assertEqual(best['controller'], 'rl')
+        self.assertEqual(len(out['rl']), 3)
+        self.assertEqual(out['rl'][-1]['episodes'], 12)
+        self.assertLess(best['J'], 0.9 * base['J'])                    # 12 episodes: J 2 → 1.66 (24 episodes: 1.06)
+        self.assertEqual([r['controller'] for r in out['results']], ['rl', 'pi'])
+        self.assertIn('12 επεισόδια', best['label'])
+        self.assertEqual(json.loads(next(c for c in best['project'].data['components'] if c['id'] == 'NN1')['params']['w'])['sizes'], [3, 8, 1])
 
     def test_command_line(self):
         with tempfile.TemporaryDirectory() as d:

@@ -104,7 +104,7 @@ const bus=project([C('V1','VAC3',{Vpk:100,f:50,conn:'bus'}),C('B1','EBUS'),...RL
 {const pr=build('bus_dq');SUB.sync(pr);const w=BUS.widths(pr),byEnds=(a,b)=>pr.wires.find(x=>x.a.c+':'+x.a.p===a&&x.b.c+':'+x.b.p===b);
  R.tutorial={widths:{inv:w.wire(byEnds('XI:abc','XL:a')),i:w.wire(byEnds('XL:i','CL:abc')),ab:w.wire(byEnds('CL:ab','PK:ab')),dq:w.wire(byEnds('PK:dq','TO1:u')),th:w.wire(byEnds('TH:y','TO2:u')),
    ref:w.wire(byEnds('IR:y','SE:a'))},errors:w.errors,
-  untouched:T.list.filter(t=>!['bus_dq','net_fault','ieee9_emt','empty'].includes(t.id)).map(t=>({id:t.id,needs:BUS.needs(SUB.needs(build(t.id))?SUB.flatten(build(t.id)).project:build(t.id))})).filter(x=>x.needs).map(x=>x.id)};
+  untouched:T.list.filter(t=>!['bus_dq','net_fault','ieee9_emt','gen_ctl','empty'].includes(t.id)).map(t=>({id:t.id,needs:BUS.needs(SUB.needs(build(t.id))?SUB.flatten(build(t.id)).project:build(t.id))})).filter(x=>x.needs).map(x=>x.id)};
  const s=new MNA.Sim(clone(pr),{hDiv:pr.sim.hDiv});s.run(.04);R.tutorial.browser={id:s.now('Y:PK'),iq:s.now('Y:PK:q'),steps:s.steps};
  R.tutorial.req=MNA.exportForBatch(pr,['Y:PK','Y:PK:q','I:XL/La']);
  // the expanded circuit has no bus parts, no bus pins, no wide junctions

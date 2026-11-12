@@ -351,6 +351,36 @@
     {k:'w',label:'Βάρη (JSON)',type:'code',def:'',hint:'Τα βάρη του ελεγκτή (μορφή pcl.control). «Κράτα τα βάρη» και «Εκπαίδευση εκτός οθόνης» στην πρόσοψη τα γράφουν εδώ. Στο «αντίστροφο μοντέλο» μένουν σταθερά, αλλιώς είναι η αρχή της μάθησης.'}],value:()=>null,
    draw:p=>sb(60,80)+tx('AI',0,-2,'btxt big')+tx({pi:'PI',fel:'PI+NN',inv:'NN⁻¹',emu:'NN⁻¹·εξ.'}[p.scheme]||'',0,14,'bsm')+'<path class="thin" d="M-12,24 l5,-7 l4,5 l6,-10 l5,6"/>'+sl('M-40,-20 H-30 M-40,20 H-30 M30,-30 H40 M30,-10 H40 M30,10 H40 M30,30 H40')+(p.scheme==='emu'?sl('M0,-40 V-50'):'')},
   // 4.8: the multi-objective cascade of the EV workbench (moevc) as a library part (netlib.js evcDef)
+  // 4.8.1: controls of a synchronous generator (library parts, netlib.js avrDef, pssDef, govDef; Kundur ch. 8–9)
+  AVR:{name:'Διέγερση και ρυθμιστής τάσης (AVR: IEEE ST1A, DC1A)',prefix:'AVR',group:'Δίκτυο',pins:{},spins:{vt:I(-40,-30),v0:I(-40,-15),e0:I(-40,0),ifd:I(-40,15),vs:I(-40,30),efd:O(40,0)},box:[-30,-40,60,80],blk:true,
+   params:[sel('type','Τύπος',[['st1a','ST1A: στατική διέγερση από τους ακροδέκτες (θυρίστορ)'],['dc1a','DC1A: διεγέρτρια ΣΡ με κορεσμό']],'st1a',{hint:'Kundur §8.6, Σχ. 8.43 (ST1A) και 8.40 (DC1A), με τα δείγματα δεδομένων του βιβλίου ως προεπιλογές. Σύνδεσε vt, v0, e0 και ifd από τη γεννήτρια (με «E_fd: από σήμα» η γεννήτρια δίνει e0 και v0 της ροής φορτίου): η προσομοίωση ξεκινά στην ισορροπία.'}),
+    txt('Vref','V_ref (pu)','',{hint:'Κενό: η |V| της ροής φορτίου (είσοδος v0). Ή μια τιμή.'}),txt('dV','Αλλαγή του V_ref ΔV(t)','0',{sched:true,unit:'pu',hint:'Σταθερή τιμή ή «t:τιμή» σε pu, π.χ. 0:0, 1:0.05 για βήμα 5 % στο 1 s.'}),
+    num('TR','T_R (μετατροπέας τάσης)','s',0.015,{zero:true}),num('KA','K_A','',200),num('TA','T_A','s',0,{zero:true,hint:'0: χωρίς σταθερά χρόνου (ST1A του βιβλίου).'}),
+    num('TC','T_C (μείωση μεταβατικού κέρδους)','s',0,{zero:true,hint:'Με T_B > T_C: μείωση του μεταβατικού κέρδους (TGR), π.χ. T_C = 1, T_B = 10.'}),num('TB','T_B','s',0,{zero:true}),num('TC1','T_C1','s',0,{zero:true}),num('TB1','T_B1','s',0,{zero:true}),
+    num('KF','K_F (ανάδραση ρυθμού)','',0,{zero:true}),num('TF','T_F','s',1),
+    num('VRMAX','V_RMAX','pu',7),num('VRMIN','V_RMIN','pu',-6.4,{signed:true}),num('KC','K_C (πτώση του ανορθωτή)','',0.04,{zero:true,show:p=>p.type!=='dc1a'}),
+    num('KLR','K_LR (όριο ρεύματος διέγερσης)','',4.54,{zero:true,show:p=>p.type!=='dc1a'}),num('ILR','I_LR','pu',4.4,{show:p=>p.type!=='dc1a'}),
+    txt('KE','K_E','',{show:p=>p.type==='dc1a',hint:'Κενό: αυτοδιεγειρόμενη, K_E ώστε V_R = 0 στην αρχή (όπως στο βιβλίο).'}),num('TE','T_E','s',1.15,{show:p=>p.type==='dc1a'}),
+    num('AEX','A_EX (κορεσμός S_E = A_EX·e^(B_EX·E_fd))','',0.014,{zero:true,show:p=>p.type==='dc1a'}),num('BEX','B_EX','',1.55,{zero:true,show:p=>p.type==='dc1a'})],value:()=>null,
+   draw:p=>sb(60,80)+tx('AVR',0,-6,'btxt big')+tx(p.type==='dc1a'?'DC1A':'ST1A',0,12,'bsm')+sl('M-40,-30 H-30 M-40,-15 H-30 M-40,0 H-30 M-40,15 H-30 M-40,30 H-30 M30,0 H40')},
+  PSS:{name:'Σταθεροποιητής συστήματος (PSS)',prefix:'PSS',group:'Δίκτυο',pins:{},spins:{w:I(-40,0),vs:O(40,0)},box:[-30,-20,60,40],blk:true,
+   params:[num('KS','K_STAB','pu',20,{zero:true,hint:'V_s = K·sT_W/(1+sT_W)·(1+sT1)/(1+sT2)·(1+sT3)/(1+sT4)·Δω, στην είσοδο v_s του AVR. Τυπικές τιμές· η ρύθμιση για συγκεκριμένο δίκτυο στο Kundur κεφ. 12.'}),
+    num('TW','T_W (washout)','s',1.4),num('T1','T_1','s',0.154,{zero:true}),num('T2','T_2','s',0.033,{zero:true}),num('T3','T_3','s',0,{zero:true}),num('T4','T_4','s',0,{zero:true}),
+    num('VSMAX','V_SMAX','pu',0.1),num('VSMIN','V_SMIN','pu',-0.1,{signed:true})],value:()=>null,
+   draw:()=>sb(60,40)+tx('PSS',0,-1,'btxt big')+tx('Δω → v_s',0,13,'bsm')+sl('M-40,0 H-30 M30,0 H40')},
+  GOV:{name:'Ρυθμιστής στροφών και στρόβιλος',prefix:'GOV',group:'Δίκτυο',pins:{},spins:{w:I(-40,-15),m0:I(-40,15),tm:O(40,-20),pm:O(40,0),g:O(40,20)},box:[-30,-30,60,60],blk:true,
+   params:[sel('type','Στρόβιλος',[['steam','Ατμοστρόβιλος με αναθέρμανση (μηχανοϋδραυλικός ρυθμιστής)'],['hydro','Υδροστρόβιλος (μόνιμη και μεταβατική στατικότητα, αγωγός πτώσης)']],'steam',{hint:'Kundur Σχ. 9.21 και 9.31 (ατμός), 9.7 και 9.10 (νερό), με τα δείγματα δεδομένων του βιβλίου. Σύνδεσε w και m0 από τη γεννήτρια (με «T_m: από σήμα» η γεννήτρια δίνει m0 της ροής φορτίου) και tm στην είσοδό της.'}),
+    txt('dP','Αλλαγή αναφοράς φορτίου ΔP(t)','0',{sched:true,unit:'pu',hint:'Σταθερή τιμή ή «t:τιμή» σε pu της ισχύος του στροβίλου.'}),num('Pr','Ισχύς στροβίλου / βάση μηχανής P_r','',1),
+    num('R','Στατικότητα R (K_G = 1/R)','pu',0.05,{show:p=>p.type!=='hydro'}),num('TSR','T_SR (ρελέ ταχύτητας)','s',0.7,{zero:true,show:p=>p.type!=='hydro'}),num('TSM','T_SM (σερβοκινητήρας)','s',0.23,{show:p=>p.type!=='hydro'}),
+    num('LC1','Ρυθμός ανοίγματος L_C1','pu/s',1,{show:p=>p.type!=='hydro'}),num('LC2','Ρυθμός κλεισίματος L_C2','pu/s',-3,{signed:true,show:p=>p.type!=='hydro'}),
+    num('V1','Κατώφλι βοηθητικού ρυθμιστή V_1','pu',0.02,{zero:true,show:p=>p.type!=='hydro'}),num('KAX','K_AX','',149,{zero:true,show:p=>p.type!=='hydro'}),
+    num('FHP','F_HP','',0.3,{zero:true,show:p=>p.type!=='hydro'}),num('FIP','F_IP','',0.3,{zero:true,show:p=>p.type!=='hydro'}),num('FLP','F_LP','',0.4,{zero:true,show:p=>p.type!=='hydro'}),
+    num('TCH','T_CH (θάλαμος ατμού)','s',0.3,{zero:true,show:p=>p.type!=='hydro'}),num('TRH','T_RH (αναθερμαντήρας)','s',7,{zero:true,show:p=>p.type!=='hydro'}),num('TCO','T_CO (διασταύρωση)','s',0.5,{zero:true,show:p=>p.type!=='hydro'}),
+    num('RP','Μόνιμη στατικότητα R_P','pu',0.04,{show:p=>p.type==='hydro'}),num('RT','Μεταβατική στατικότητα R_T','pu',0.4,{zero:true,show:p=>p.type==='hydro'}),num('TR','T_R (επαναφορά)','s',5,{show:p=>p.type==='hydro'}),
+    num('TP','T_P (πιλοτική βαλβίδα)','s',0.05,{zero:true,show:p=>p.type==='hydro'}),num('KS','K_s (κέρδος σερβο)','',5,{show:p=>p.type==='hydro'}),num('TG','T_G (κύριος σερβοκινητήρας)','s',0.2,{zero:true,show:p=>p.type==='hydro'}),
+    num('Ropen','Μέγιστος ρυθμός ανοίγματος','pu/s',0.16,{show:p=>p.type==='hydro'}),num('Rclose','Μέγιστος ρυθμός κλεισίματος','pu/s',0.16,{show:p=>p.type==='hydro'}),
+    num('Tw','T_W (χρόνος εκκίνησης νερού)','s',1,{show:p=>p.type==='hydro'}),num('gFL','Θυρόφραγμα πλήρους φορτίου g_FL','pu',0.96,{show:p=>p.type==='hydro'}),num('gNL','Θυρόφραγμα χωρίς φορτίο g_NL','pu',0.16,{zero:true,show:p=>p.type==='hydro'})],value:()=>null,
+   draw:p=>sb(60,60)+tx('GOV',0,-4,'btxt big')+tx(p.type==='hydro'?'νερό':'ατμός',0,12,'bsm')+sl('M-40,-15 H-30 M-40,15 H-30 M30,-20 H40 M30,0 H40 M30,20 H40')},
   EVC:{name:'Πολυκριτηριακός ελεγκτής οχήματος (ταχύτητα → ροπή → ρεύμα)',prefix:'MO',group:'Έλεγχος',pins:{},spins:{r:I(-40,-40),y:I(-40,-20),i:I(-40,0),soc:I(-40,20),tl:I(-40,40),u:O(40,-40),tau:O(40,-20),rg:O(40,0),lim:O(40,20),keep:O(40,40),pw:O(0,60)},box:[-30,-50,60,100],blk:true,
    params:[sel('scheme','Σχήμα',[['moevc','Συζευγμένο: ρυθμιστής αναφοράς, ταχύτητα → επιτάχυνση → ροπή (moevc)'],['moev','Καταρράκτης: ταχύτητα → ροπή με επόπτη SOC/ισχύος (moev)']],'moevc',{hint:'Τα δύο σχήματα του Control Workbench EV/DC. Στο «moev» ο PI ταχύτητας δίνει απευθείας ροπή· στο «moevc» δίνει επιτάχυνση, που γίνεται ροπή μέσω της δυναμικής του οχήματος, και ο ρυθμιστής αναφοράς κόβει τον στόχο στα όρια.'}),
     sel('mode','Τρόπος',[['balanced','Ισορροπημένος'],['eco','Οικονομικός (eco)'],['performance','Επιδόσεων (performance)']],'balanced',{hint:'Όπως στο workbench: eco ανεβάζει το βάρος της ενέργειας και χαμηλώνει τα όρια ισχύος και ρεύματος, performance το αντίθετο.'}),
@@ -680,7 +710,7 @@
  function satDinv(q,psi){const a=Math.abs(psi);let i=a/q.Ld;for(let k=0;k<50;k++){const f=satD(q,i),di=(f.psi-a)/f.L;i-=di;if(Math.abs(di)<1e-13*(1+i))break;}return Math.sign(psi)*i;}
  // generator (4.3): outputs on the left (ω first: the channel Y:id), inputs on top, shaft-section torques at the bottom
  function genSpins(p){const o={w:O(-40,-30),te:O(-40,-20),pe:O(-40,-10),qe:O(-40,0),vt:O(-40,10),ifd:O(-40,20),d:O(-40,30)};
-  if(p.exc==='sig')o.efd=I(-10,-45);if(p.mech==='sig')o.tm=I(10,-45);
+  if(p.exc==='sig'){o.efd=I(-10,-45);o.e0=O(-25,-45);o.v0=O(-40,-45);}if(p.mech==='sig'){o.tm=I(10,-45);o.m0=O(25,-45);} // 4.8.1: e0, v0, m0 of the load flow, for the AVR and the governor
   if(p.shaft==='multi'){const n=Math.min(6,Math.max(0,plist(p.Hm).length-1));for(let k=0;k<n;k++)o['ts'+(k+1)]=O(-25+10*k,55);}
   return o;}
  // ---------------------------------------------------------------- synchronous generator (4.3, ROADMAP §31.6, §25)

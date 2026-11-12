@@ -9,7 +9,7 @@
 // (gridZ) and the fault currents of a fault at its terminals in the phase domain (faultCurrents), for the analysis.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
- const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC'];
+ const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV'];
  const isLib=t=>TYPES.includes(t);
  const RMIN=1e-4;               // a bolted fault or a closed pole: 0,1 mΩ inside the circuit
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -267,7 +267,118 @@
   const out=(name,src)=>{const o=B.comp('$'+name,'SOUT',{name});B.wire(src,[o,'u']);};
   out('u',['SAT','y']);out('tau',['TQ','y']);out('rg',['GOV','y']);out('lim',['LIM','y']);out('keep',['KP','y']);out('pw',['PW','y']);
   return B.def();}
- const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef};
+ // ---------------------------------------------------------------- generator controls (4.8.1, Kundur ch. 8–9)
+ // Built in deviation form around the steady state of the load flow: the generator gives its E_fd and T_m of that state
+ // (outputs e0, m0, and v0 = |V| of the load flow), every lag starts at 0, so a run starts in equilibrium without
+ // searching for V_ref or the load reference. The limits act on the total values. Lags with limits on their output are
+ // integrators that stop at the limit (no windup): dx/dt = (K·u − x)/T, held when the total is at a limit and the rate
+ // pushes outwards.
+ const fT=(T)=>String(+(1/(2*Math.PI*T)).toPrecision(12)),f10=x=>String(+(+x).toPrecision(10));
+ function ctlKit(B){const E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''});
+  // 1/(1+sT) starting at 0 (a gain of 1 when T = 0)
+  const lag=(id,src,T)=>{if(T>1e-6){B.comp(id,'LPF',{fc:fT(T),y0:0});}else B.comp(id,'GAIN',{K:1});B.wire(src,[id,'u']);return [id,'y'];};
+  // (1+sTn)/(1+sTd) = Tn/Td + (1 − Tn/Td)/(1+sTd); a gain of 1 when Td = 0
+  const leadlag=(id,src,Tn,Td)=>{if(!(Td>1e-6))return src;const l=lag(id+'L',src,Td);E(id,'a*u + b*l','u, l',`a = ${f10(Tn/Td)}, b = ${f10(1-Tn/Td)}`);B.wire(src,[id,'u']);B.wire(l,[id,'l']);return [id,'y'];};
+  // K·sT/(1+sT) (washout) and K·s/(1+sT) (rate feedback): K·(u − lag(u))·(1 or 1/T)
+  const wash=(id,src,T,K)=>{const l=lag(id+'L',src,T);E(id,'k*(u - l)','u, l','k = '+f10(K));B.wire(src,[id,'u']);B.wire(l,[id,'l']);return [id,'y'];};
+  // K/(1+sT) whose total (base + x) stays within [lo, hi] without windup; T = 0: K·u clipped
+  const nwLag=(id,src,base,K,T,lo,hi)=>{const L=n=>Number.isFinite(n)?f10(n):(n>0?'1e9':'-1e9');
+   if(!(T>1e-6)){E(id,'min(max(b + k*u, lo), hi) - b','u, b',`k = ${f10(K)}, lo = ${L(lo)}, hi = ${L(hi)}`);B.wire(src,[id,'u']);B.wire(base,[id,'b']);return [id,'y'];}
+   E(id+'R','(b + x >= hi && r > 0) || (b + x <= lo && r < 0) ? 0 : r','r, x, b',`lo = ${L(lo)}, hi = ${L(hi)}`);
+   E(id+'D','(k*u - x)/tt','u, x',`k = ${f10(K)}, tt = ${f10(T)}`);B.wire(src,[id+'D','u']);B.comp(id+'I','INT',{y0:0});
+   B.wire([id+'D','y'],[id+'R','r']);B.wire([id+'I','y'],[id+'D','x']);B.wire([id+'I','y'],[id+'R','x']);B.wire(base,[id+'R','b']);B.wire([id+'R','y'],[id+'I','u']);
+   E(id,'min(max(b + x, lo), hi) - b','x, b',`lo = ${L(lo)}, hi = ${L(hi)}`);B.wire([id+'I','y'],[id,'x']);B.wire(base,[id,'b']);return [id,'y'];};
+  return {E,lag,leadlag,wash,nwLag};}
+ const sched=(v,d)=>{const t=String(v??'').trim();return t===''?String(d):t;};
+ // excitation system: IEEE ST1A (static, potential source) or DC1A (DC exciter with saturation), Kundur §8.6, Fig. 8.40, 8.43
+ function avrDef(c){const p=prm(c),B=builder(c.label||c.id),K=ctlKit(B),E=K.E,type=p.type==='dc1a'?'dc1a':'st1a';
+  const io=n=>B.comp('$'+n,'SIN',{name:n}),vt=io('vt'),v0=io('v0'),e0=io('e0'),ifd=io('ifd'),vs=io('vs');
+  const N=(k,d)=>num(p[k],d),vr=String(p.Vref??'').trim();
+  // the base of the reference: |V| of the load flow (input v0) or a given value; dV(t) on top of it
+  if(vr===''){B.comp('VB','GAIN',{K:1});B.wire([v0,'y'],['VB','u']);}else B.comp('VB','CONST',{v:f10(N('Vref',1))});
+  B.comp('DV','CONST',{v:sched(p.dV,0)});
+  E('DX','v - b','v, b');B.wire([vt,'y'],['DX','v']);B.wire(['VB','y'],['DX','b']);
+  const vc=K.lag('TRF',['DX','y'],N('TR',0));                                  // voltage transducer (on vt − base)
+  const kf=N('KF',type==='dc1a'?0.058:0),tf=N('TF',type==='dc1a'?0.62:1),rf=kf>0&&tf>1e-6;
+  // the first summing point; v_s (the stabilizer) may stay unconnected
+  B.comp('ERR','EXPR',{expr:rf?'dv - c + s - f':'dv - c + s',ins:rf?'dv, c, s, f':'dv, c, s',pars:'',opt:'s'});B.wire(['DV','y'],['ERR','dv']);B.wire(vc,['ERR','c']);B.wire([vs,'y'],['ERR','s']);
+  const vimx=N('VIMAX',Infinity),vimn=N('VIMIN',-Infinity);
+  E('VI','min(max(u, lo), hi)','u',`lo = ${Number.isFinite(vimn)?f10(vimn):'-1e9'}, hi = ${Number.isFinite(vimx)?f10(vimx):'1e9'}`);B.wire(['ERR','y'],['VI','u']);
+  let x=K.leadlag('LL1',['VI','y'],N('TC',0),N('TB',0));x=K.leadlag('LL2',x,N('TC1',0),N('TB1',0));
+  if(type==='st1a'){
+   // V_A = e0 + ΔV_A within [V_AMIN, V_AMAX]; E_fd = V_A − K_LR·max(0, I_fd − I_LR) within [E_t·V_RMIN, E_t·V_RMAX − K_C·I_fd]
+   const dva=K.nwLag('VA',x,[e0,'y'],N('KA',200),N('TA',0),N('VAMIN',-Infinity),N('VAMAX',Infinity));
+   B.comp('EFD','EXPR',{expr:'min(max(e0 + a - klr*max(i - ilr, 0), et*vrmin), et*vrmax - kc*i)',ins:'a, e0, i, et',opt:'i',      // i_fd: optional
+    pars:`klr = ${f10(N('KLR',0))}, ilr = ${f10(N('ILR',4.4))}, vrmin = ${f10(N('VRMIN',-6.4))}, vrmax = ${f10(N('VRMAX',7))}, kc = ${f10(N('KC',0))}`});
+   B.wire(dva,['EFD','a']);B.wire([e0,'y'],['EFD','e0']);B.wire([ifd,'y'],['EFD','i']);B.wire([vt,'y'],['EFD','et']);}
+  else{
+   // DC1A: V_R (from 0, or from V_R0 when K_E is given) within [V_RMIN, V_RMAX], T_E·dE_fd/dt = V_R − (K_E + S_E(E_fd))·E_fd,
+   // S_E = A_EX·exp(B_EX·E_fd); K_E empty: −S_E(E_fd0), so that V_R = 0 at the start (self-excited, Kundur Fig. 8.40)
+   const aex=N('AEX',0.014),bex=N('BEX',1.55),ke=String(p.KE??'').trim()===''?null:N('KE',1);
+   E('VR0',ke===null?'0':'(ke + a*exp(bb*e0))*e0','e0',ke===null?'':`ke = ${f10(ke)}, a = ${f10(aex)}, bb = ${f10(bex)}`);B.wire([e0,'y'],['VR0','e0']);
+   const dvr=K.nwLag('VR',x,['VR0','y'],N('KA',187),N('TA',0.89),N('VRMIN',-1.7),N('VRMAX',1.7));
+   B.comp('XE','INT',{y0:0});
+   E('DE','(r0 + r - (' + (ke===null?'a*exp(bb*(e0 + x)) - a*exp(bb*e0)':'ke + a*exp(bb*(e0 + x))') + ')*(e0 + x))/te','r0, r, e0, x',`a = ${f10(aex)}, bb = ${f10(bex)}, te = ${f10(N('TE',1.15))}`+(ke===null?'':`, ke = ${f10(ke)}`));
+   B.wire(['VR0','y'],['DE','r0']);B.wire(dvr,['DE','r']);B.wire([e0,'y'],['DE','e0']);B.wire(['XE','y'],['DE','x']);B.wire(['DE','y'],['XE','u']);
+   E('EFD','e0 + x','e0, x');B.wire([e0,'y'],['EFD','e0']);B.wire(['XE','y'],['EFD','x']);}
+  // rate feedback K_F·s/(1+s·T_F) of E_fd − e0 into the first summing point
+  if(rf){E('EX','f - e0','f, e0');B.wire(['EFD','y'],['EX','f']);B.wire([e0,'y'],['EX','e0']);const vf=K.wash('VF',['EX','y'],tf,kf/tf);B.wire(vf,['ERR','f']);}
+  const o=B.comp('$efd','SOUT',{name:'efd'});B.wire(['EFD','y'],[o,'u']);
+  return B.def();}
+ // power system stabilizer: K·sT_W/(1+sT_W)·(1+sT1)/(1+sT2)·(1+sT3)/(1+sT4) of Δω, limited (Kundur §8.5, §12.5)
+ function pssDef(c){const p=prm(c),B=builder(c.label||c.id),K=ctlKit(B),E=K.E,N=(k,d)=>num(p[k],d);
+  const w=B.comp('$w','SIN',{name:'w'});E('DW','w - 1','w');B.wire([w,'y'],['DW','w']);
+  let x=K.wash('WO',['DW','y'],N('TW',1.4),N('KS',20));x=K.leadlag('L1',x,N('T1',0.154),N('T2',0.033));x=K.leadlag('L2',x,N('T3',0),N('T4',0));
+  E('VS','min(max(u, lo), hi)','u',`lo = ${f10(N('VSMIN',-0.1))}, hi = ${f10(N('VSMAX',0.1))}`);B.wire(x,['VS','u']);
+  const o=B.comp('$vs','SOUT',{name:'vs'});B.wire(['VS','y'],[o,'u']);
+  return B.def();}
+ // governor and turbine: steam (mechanical-hydraulic governor with speed relay and auxiliary governor, tandem-compound
+ // single reheat turbine, Kundur Fig. 9.21, 9.31) or hydro (governor with permanent and transient droop, nonlinear
+ // turbine and inelastic water column, Kundur Fig. 9.7, 9.10). Output torque T_m = P_m·P_r/ω.
+ function govDef(c){const p=prm(c),B=builder(c.label||c.id),K=ctlKit(B),E=K.E,N=(k,d)=>num(p[k],d),hydro=p.type==='hydro';
+  const w=B.comp('$w','SIN',{name:'w'}),m0=B.comp('$m0','SIN',{name:'m0'}),pr=Math.max(N('Pr',1),1e-6);
+  B.comp('DP','CONST',{v:sched(p.dP,0)});                                       // change of the load reference (pu of P_r)
+  if(!hydro){
+   // initial valve position = turbine power: c0 = T_m0/P_r (ω = 1 at the start)
+   E('C0','m/pr','m','pr = '+f10(pr));B.wire([m0,'y'],['C0','m']);
+   const kg=N('R',0.05)>0?1/N('R',0.05):20;
+   E('S','dp - kg*(w - 1) - kax*max(w - 1 - v1, 0)','dp, w',`kg = ${f10(kg)}, kax = ${f10(N('KAX',149))}, v1 = ${f10(N('V1',0.02))}`);B.wire(['DP','y'],['S','dp']);B.wire([w,'y'],['S','w']);
+   const sr=K.lag('SR',['S','y'],N('TSR',0.7));                                    // speed relay (deviation)
+   // CV servomotor: rate within [L_C2, L_C1], position within [0, 1] of the total c0 + x
+   B.comp('XC','INT',{y0:0});
+   E('RC','(c0 + x >= 1 && r > 0) || (c0 + x <= 0 && r < 0) ? 0 : r','r, x, c0');
+   E('RCV','min(max((s - x)/tsm, l2), l1)','s, x',`tsm = ${f10(N('TSM',0.23))}, l1 = ${f10(N('LC1',1))}, l2 = ${f10(N('LC2',-3))}`);
+   B.wire(sr,['RCV','s']);B.wire(['XC','y'],['RCV','x']);B.wire(['RCV','y'],['RC','r']);B.wire(['XC','y'],['RC','x']);B.wire(['C0','y'],['RC','c0']);B.wire(['RC','y'],['XC','u']);
+   E('CV','min(max(c0 + x, 0), 1)','c0, x');B.wire(['C0','y'],['CV','c0']);B.wire(['XC','y'],['CV','x']);
+   E('DCV','v - c0','v, c0');B.wire(['CV','y'],['DCV','v']);B.wire(['C0','y'],['DCV','c0']);
+   const ch=K.lag('CH',['DCV','y'],N('TCH',0.3)),rh=K.lag('RH',ch,N('TRH',7)),co=K.lag('CO',rh,N('TCO',0.5));
+   E('PM','c0 + fhp*a + fip*b + flp*c','c0, a, b, c',`fhp = ${f10(N('FHP',0.3))}, fip = ${f10(N('FIP',0.3))}, flp = ${f10(N('FLP',0.4))}`);
+   B.wire(['C0','y'],['PM','c0']);B.wire(ch,['PM','a']);B.wire(rh,['PM','b']);B.wire(co,['PM','c']);
+   E('G','v','v');B.wire(['CV','y'],['G','v']);}
+  else{
+   // gate of the load flow: P_m0 = T_m0/P_r, U0 = P_m0 + U_NL (H0 = 1), g0 = U0/A_t; A_t = 1/(g_FL − g_NL), U_NL = A_t·g_NL
+   const gfl=N('gFL',0.96),gnl=N('gNL',0.16),At=1/Math.max(gfl-gnl,1e-6),unl=At*gnl,rp=Math.max(N('RP',0.04),1e-6);
+   E('G0','(m/pr + unl)/at','m',`pr = ${f10(pr)}, unl = ${f10(unl)}, at = ${f10(At)}`);B.wire([m0,'y'],['G0','m']);
+   // speed error, permanent and transient droop on the deviation of the gate x: RP·(ΔP_ref/A_t − x) − Δω − RT·sTR/(1+sTR)·x
+   B.comp('XG','INT',{y0:0});
+   const td=K.wash('TD',['XG','y'],N('TR',5),N('RT',0.4));
+   E('ER','rp*dp/at - (w - 1) - rp*x - d','dp, w, x, d',`rp = ${f10(rp)}, at = ${f10(At)}`);B.wire(['DP','y'],['ER','dp']);B.wire([w,'y'],['ER','w']);B.wire(['XG','y'],['ER','x']);B.wire(td,['ER','d']);
+   const pv=K.lag('PV',['ER','y'],N('TP',0.05));                                    // pilot valve and servomotor
+   E('RG','min(max(ks*u, -rc), ro)','u',`ks = ${f10(N('KS',5))}, rc = ${f10(N('Rclose',0.16))}, ro = ${f10(N('Ropen',0.16))}`);B.wire(pv,['RG','u']);
+   E('RL','(g0 + x >= 1 && r > 0) || (g0 + x <= 0 && r < 0) ? 0 : r','r, x, g0');B.wire(['RG','y'],['RL','r']);B.wire(['XG','y'],['RL','x']);B.wire(['G0','y'],['RL','g0']);B.wire(['RL','y'],['XG','u']);
+   const gs=K.lag('GS',['XG','y'],N('TG',0.2));                                     // gate servomotor
+   E('G','min(max(g0 + x, 0), 1)','g0, x');B.wire(['G0','y'],['G','g0']);B.wire(gs,['G','x']);
+   // water column: dU/dt = (1 − (U/G)²)/T_W with G = A_t·g; P_m = (U − U_NL)·H, H = (U/G)²
+   B.comp('XU','INT',{y0:0});
+   E('DU','(1 - ((u0 + x)/max(at*g, 1e-3))^2)/tw','u0, x, g',`at = ${f10(At)}, tw = ${f10(Math.max(N('Tw',1),1e-6))}`);
+   E('U0','g0*at','g0','at = '+f10(At));B.wire(['G0','y'],['U0','g0']);
+   B.wire(['U0','y'],['DU','u0']);B.wire(['XU','y'],['DU','x']);B.wire(['G','y'],['DU','g']);B.wire(['DU','y'],['XU','u']);
+   E('PM','(u0 + x - unl)*((u0 + x)/max(at*g, 1e-3))^2','u0, x, g',`at = ${f10(At)}, unl = ${f10(unl)}`);B.wire(['U0','y'],['PM','u0']);B.wire(['XU','y'],['PM','x']);B.wire(['G','y'],['PM','g']);}
+  E('TM','pm*pr/max(w, 0.1)','pm, w','pr = '+f10(pr));B.wire(['PM','y'],['TM','pm']);B.wire([w,'y'],['TM','w']);
+  const out=(n,src)=>{const o=B.comp('$'+n,'SOUT',{name:n});B.wire(src,[o,'u']);};
+  out('tm',['TM','y']);out('pm',['PM','y']);out('g',['G','y']);
+  return B.def();}
+ const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef};
  function defOf(c){return DEFS[c.type](c);}
 
  // ---------------------------------------------------------------- project → project with SUB instances
