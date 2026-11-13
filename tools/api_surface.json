@@ -1,5 +1,5 @@
 {
- "version": "4.9",
+ "version": "4.9.1",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -3903,6 +3903,18 @@
     ],
     "since": "3.18"
    },
+   "part:RFX": {
+    "params": [
+     "R0",
+     "tbl",
+     "line"
+    ],
+    "pins": [
+     "a",
+     "b"
+    ],
+    "since": "4.9.1"
+   },
    "part:RLIM": {
     "params": [
      "up",
@@ -3934,9 +3946,11 @@
      "d",
      "n",
      "kL1",
+     "L1fit",
      "Llead",
      "A0",
      "A1",
+     "impl",
      "meas"
     ],
     "pins": [
@@ -3944,6 +3958,22 @@
      "b"
     ],
     "since": "4.9"
+   },
+   "part:SAIX": {
+    "params": [
+     "L0",
+     "R0",
+     "L1",
+     "R1",
+     "C",
+     "tbl0",
+     "tbl1"
+    ],
+    "pins": [
+     "a",
+     "b"
+    ],
+    "since": "4.9.1"
    },
    "part:SAT": {
     "params": [
@@ -4236,6 +4266,7 @@
      "U0",
      "kde",
      "Dde",
+     "impl",
      "meas"
     ],
     "pins": [

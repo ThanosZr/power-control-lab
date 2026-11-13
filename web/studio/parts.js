@@ -53,6 +53,10 @@
  const codeDraw=(ins,outs,label)=>{const h=codeH(ins,outs);return sb(60,2*h)+tx(label,0,4,'btxt')+sl([...ins.map((k,i)=>`M-40,${-10*(ins.length-1)+20*i} H-30`),...outs.map((k,i)=>`M30,${-10*(outs.length-1)+20*i} H40`)].join(' '))
   +ins.map((k,i)=>tx(k,-27,-10*(ins.length-1)+20*i-3,'pinl')).join('')+outs.map((k,i)=>tx(k,27,-10*(outs.length-1)+20*i-3,'pinl')).join('');};
  const PY_DEFAULT='# Καλείται σε κάθε δείγμα του ρολογιού.\n# u: είσοδοι, s: κατάσταση, p: παράμετροι (και p["Ts"] = περίοδος δειγματοληψίας).\ndef init(p):\n    return {"xi": 0.0}\n\ndef step(t, u, s, p):\n    e = u["e"]\n    s["xi"] += p["Ki"] * p["Ts"] * e\n    return {"y": p["Kp"] * e + s["xi"]}\n';
+ // 4.9.1 (ROADMAP §52, rule of 13/11): a part made of other parts runs either as the fast ready-made part (one compact
+ // element of the solver) or as the detailed one built from basic elements, which can be seen and expanded. Parts that were
+ // definitions before 4.9.1 keep the detailed one as default (4.x rule: an old file gives the same numbers).
+ const IMPL=(def='blocks',hint='')=>sel('impl','Υλοποίηση',[['blocks','Αναλυτική από στοιχεία (φαίνεται, αναπτύσσεται)'],['fast','Γρήγορη (συμπαγές στοιχείο του λύτη)']],def,{hint:'Ίδιο μοντέλο, ίδια αποτελέσματα (test ισοδυναμίας). Η αναλυτική είναι φτιαγμένη από βασικά στοιχεία: «⧉ Τι έχει μέσα» τη δείχνει, «▣ Ανάπτυξη σε υποκύκλωμα» την κάνει υποκύκλωμα για αλλαγές. Η γρήγορη λύνει τα εσωτερικά μέσα σε ένα στοιχείο του λύτη.'+(hint?' '+hint:'')});
  const CLOCK=(extra={})=>ref('clock','Ρολόι (PWM ή μπλοκ Ρολόι)',['PWM','CLK'],{hint:'Ενημέρωση σε σημεία του φέροντος του PWM (ή στην ανερχόμενη ακμή του μπλοκ Ρολόι), όπως στο S&H.',...extra});
  const TRIG=sel('trig','Πότε ενημερώνεται',[['start','Αρχή περιόδου του φέροντος (1 ανά T)'],['mid','Μέσο περιόδου (1 ανά T)'],['both','Και τα δύο (2 ανά T)']],'start');
  const SCHED='Πρόγραμμα: ζεύγη «t:τιμή» χωρισμένα με κόμμα, π.χ. 0:60000, 0.005:30000. Κενό = σταθερή τιμή.';
@@ -711,6 +715,7 @@
     sel('ins','Αλυσίδες μονωτήρων',[['ub','Διάσπαση στην τάση U_b (διακόπτης τάσης)'],['de','Καμπύλη τάσης–χρόνου (U₀, k, D)'],['none','Χωρίς διάσπαση']],'ub',{hint:'Ανάμεσα σε κάθε φάση και την κορυφή. Διακόπτης τάσης: U_b ≈ U_50 της αλυσίδας (αρνητική πολικότητα περίπου 700 kV/m × απόσταση διάσπασης, IEC 60071-2). Καμπύλη τάσης–χρόνου: όπως ο σπινθηριστής, ∫ (|u| − U₀)^k dt = D.'}),
     num('Ub','Τάση διάσπασης U_b','V',2.24e6,{show:p=>p.ins==='ub',hint:'Π.χ. απόσταση διάσπασης 3,2 m × 700 kV/m = 2,24 MV.'}),
     num('U0','U₀','V',1.7e6,{show:p=>p.ins==='de'}),num('kde','Εκθέτης k','',1,{show:p=>p.ins==='de'}),num('Dde','Σταθερά D','V^k·s',0.5,{show:p=>p.ins==='de',hint:'Με k = 1 σε V·s (0,5 V·s = 500 kV·μs).'}),
+    IMPL('blocks','Γρήγορη: η γείωση R(I) λύνεται μέσα στη γραμμή του πύργου (η βάση εξαρτάται μόνο από την ιστορία της γραμμής), χωρίς επαναλήψεις Newton.'),
     bool('meas','Μετρήσεις (κορυφή, μονωτήρες, βάση)',true,{hint:'Κανάλια TW/Vtop (τάση κορυφής), TW/Ua … (τάση κάθε αλυσίδας), TW/Ia … (ρεύμα διάσπασης), TW/If (ρεύμα της βάσης).'})],
    value:p=>p.R0,unit:'Ω',
    draw:p=>'<rect class="block" x="-30" y="-50" width="60" height="100" rx="4"/><path d="M-40,-40 H-30 M-40,-20 H-30 M-40,0 H-30 M-40,20 H-30 M-40,40 H-30 M30,-40 H40 M30,-20 H40 M30,0 H40 M30,20 H40 M30,40 H40"/>'
@@ -720,13 +725,25 @@
   SAI:{name:'Αλεξικέραυνο ZnO, μοντέλο IEEE (εξαρτάται από τη συχνότητα)',prefix:'SA',group:'Δίκτυο',pins:{a:[0,-40],b:[0,40]},box:[-14,-24,28,48],
    params:[num('U10','Παραμένουσα τάση U₁₀ (10 kA, 8/20 μs)','V',819e3,{hint:'Από το φύλλο δεδομένων. Π.χ. αλεξικέραυνο 420 kV (U_r 360 kV): 819 kV.'}),
     num('d','Ύψος d','m',3.216),num('n','Παράλληλες στήλες n','',1),
-    num('kL1','Διόρθωση του L₁','',1,{hint:'L₀ = 0,2·d/n μH, R₀ = 100·d/n Ω, L₁ = 15·d/n μH, R₁ = 65·d/n Ω, C = 100·n/d pF. Το IEEE WG ρυθμίζει μετά το L₁ ώστε να βγαίνει η U₁₀ με 8/20 μs (συντελεστής του L₁).'}),
+    num('kL1','Διόρθωση του L₁','',1,{show:p=>!(p.L1fit===true||p.L1fit==='true'),hint:'L₀ = 0,2·d/n μH, R₀ = 100·d/n Ω, L₁ = 15·d/n μH, R₁ = 65·d/n Ω, C = 100·n/d pF. Το IEEE WG ρυθμίζει μετά το L₁ ώστε να βγαίνει η U₁₀ με 8/20 μs (συντελεστής του L₁).'}),
+    bool('L1fit','Ρύθμιση του L₁ στην U₁₀ (διαδικασία IEEE)',false,{hint:'Ο συντελεστής του L₁ βρίσκεται μόνος του, ώστε ρεύμα 10 kA 8/20 μs να δίνει τάση U₁₀ (το αλεξικέραυνο μόνο του, χωρίς τους αγωγούς σύνδεσης· ακρίβεια 0,05 %). Αλλιώς ισχύει η «Διόρθωση του L₁» (4.9.1).'}),
     num('Llead','Αυτεπαγωγή αγωγών σύνδεσης','H',0,{zero:true,hint:'Περίπου 1 μH/m μήκους των αγωγών προς τη φάση και τη γη.'}),
     txt('A0','A0: ρεύμα (kA): τάση (ανά μονάδα U₁₀)','0.01: 0.875, 1: 1.056, 5: 1.131, 10: 1.188, 15: 1.244, 20: 1.313',{hint:'Οι χαρακτηριστικές του IEEE WG (Durbak).'}),
     txt('A1','A1: ρεύμα (kA): τάση (ανά μονάδα U₁₀)','0.01: 0.681, 1: 0.856, 20: 1.000'),
+    IMPL('blocks','Γρήγορη: ένα δίπολο του λύτη που απαλείφει τους δύο εσωτερικούς κόμβους (A0, A1, L₀ ∥ R₀, L₁ ∥ R₁, C) σε κάθε επανάληψη.'),
     bool('meas','Μετρήσεις (τάση, ρεύμα)',true,{hint:'Κανάλια SA/V (τάση a–b) και SA/I (ρεύμα από a προς b).'})],
    value:p=>p.U10,unit:'V',
    draw:()=>'<path d="M0,-40 V-24 M0,24 V40"/><rect x="-10" y="-24" width="20" height="48" rx="2"/><path class="thin" d="M-15,14 L-6,14 L6,-14 L15,-14"/>'+tx('IEEE',0,34,'bsm')},
+  // 4.9.1: compact solver elements behind the fast implementations (hidden from the library; built by NetLib):
+  // the IEEE arrester as one two-terminal element (inner nodes eliminated), and a tower footing R(I) solved from the history
+  // of the tower's line (its foot node joins only that line and this footing)
+  SAIX:{name:'Αλεξικέραυνο IEEE (συμπαγές)',prefix:'AX',group:'Δίκτυο',hidden:true,pins:{a:[0,-40],b:[0,40]},box:[-14,-24,28,48],
+   params:[num('L0','L₀','H',0.6432e-6),num('R0','R₀','Ω',321.6),num('L1','L₁','H',48.24e-6),num('R1','R₁','Ω',209.04),num('C','C','F',31.095e-12),
+    txt('tbl0','A0: ρεύμα: τάση','10: 716625, 1000: 864864'),txt('tbl1','A1: ρεύμα: τάση','10: 557739, 1000: 701064')],value:()=>null,
+   draw:()=>'<path d="M0,-40 V-24 M0,24 V40"/><rect x="-10" y="-24" width="20" height="48" rx="2"/><path class="thin" d="M-15,14 L-6,14 L6,-14 L15,-14"/>'},
+  RFX:{name:'Γείωση πύργου R(I) (από τη γραμμή του πύργου)',prefix:'RX',group:'Δίκτυο',hidden:true,pins:{a:[-30,0],b:[30,0]},box:[-22,-8,44,16],
+   params:[num('R0','R₀','Ω',15),txt('tbl','R(I): ρεύμα: τάση','1: 15, 1000: 14000'),ref('line','Γραμμή του πύργου',['TL'])],value:p=>p.R0,unit:'Ω',
+   draw:()=>'<path d="M-30,0 H-20 l2.5,-7 5,14 5,-14 5,14 5,-14 5,14 5,-14 5,14 2.5,-7 H30"/><path class="thin" d="M-14,10 L14,-10"/>'},
   // 4.9: a note on the drawing (several lines, size, bold, colour); not part of the circuit
   NOTE:{name:'Σημείωση (κείμενο στο σχέδιο)',prefix:'N',group:'Βασικά',pins:{},box:p=>noteBox(p),lbl:'none',
    params:[area('text','Κείμενο','Σημείωση',{hint:'Πολλές γραμμές με Enter. Δεν επηρεάζει την προσομοίωση.'}),num('size','Μέγεθος γραμμάτων','px',16),bool('bold','Έντονα',false),

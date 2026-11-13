@@ -20,17 +20,19 @@
 
  // ---------------------------------------------------------------- building a definition
  function builder(title){
-  const components=[],wires=[];let nw=0,ng=0;const J=new Map();
-  const comp=(id,type,params)=>{components.push({id,type,x:0,y:0,rot:0,flip:false,label:id,params:params||{}});return id;};
-  const wire=(a,b)=>{wires.push({id:'w'+(++nw),a:{c:a[0],p:a[1]},b:{c:b[0],p:b[1]},pts:[]});};
-  const node=name=>{if(!J.has(name))J.set(name,comp('_'+name,'JUNC',{}));return [J.get(name),'j'];};
-  const gnd=()=>[comp('_G'+(++ng),'GND',{}),'g'];
+  const components=[],wires=[];let nw=0,ng=0,placed=false;const J=new Map();
+  // 4.9.1: an optional place [x, y, quarter turns] for the drawing of the definition (inside.js, «Ανάπτυξη σε υποκύκλωμα»), and
+  // optional corner points of a wire; without them NetLib.layoutDef places the parts. The circuit is the same either way.
+  const comp=(id,type,params,at)=>{const c={id,type,x:0,y:0,rot:0,flip:false,label:id,params:params||{}};if(at){c.x=at[0];c.y=at[1];c.rot=at[2]||0;c.at=true;placed=true;}components.push(c);return id;};
+  const wire=(a,b,pts)=>{wires.push({id:'w'+(++nw),a:{c:a[0],p:a[1]},b:{c:b[0],p:b[1]},pts:pts?pts.map(q=>[...q]):[]});};
+  const node=(name,at)=>{if(!J.has(name))J.set(name,comp('_'+name,'JUNC',{},at));return [J.get(name),'j'];};
+  const gnd=at=>[comp('_G'+(++ng),'GND',{},at),'g'];
   // the three terminals of one side: three ports, or one port of width 3 and a bus of conductors (3.18)
   const terms=(p,names,busName)=>{
    if(isBus(p)){const port=comp('$'+busName,'PORT',{name:busName,width:'3'}),eb=comp('_B'+busName,'EBUS',{n:3});wire([port,'p'],[eb,'bus']);
     return PH.map(x=>[eb,x]);}
    return names.map(n=>[comp('$'+n,'PORT',{name:n}),'p']);};
-  return {comp,wire,node,gnd,terms,def:()=>({title,components,wires})};}
+  return {comp,wire,node,gnd,terms,def:()=>placed?{title,components,wires,placed:true}:{title,components,wires}};}
 
  // ---------------------------------------------------------------- network equivalent
  // sequence impedances (Ω) and the EMF (RMS, phase) of a GRID3: Z₁ = c·U_n²/S″k, E = c·U_n/√3
@@ -412,43 +414,78 @@
   for(let e=-2;e<=6.0001;e+=0.25){const I=Math.pow(10,e);out.push(`${s(I)}: ${s(I*R0/Math.sqrt(1+I/Ig))}`);}return {tbl:out.join(', '),Ig};}
  // a tower: the phases pass through (in ≡ out), the ground wires end at the top; the tower is a lossless line from the top
  // to the foot (ground as return), the footing R₀ or R(I), an insulator string (spark gap) from each phase to the top
- function towerDef(c){const p=prm(c),B=builder('Πύργος γραμμής'),meas=p.meas===true||p.meas==='true';
-  const L=['a1','b1','c1','d1','e1'].map(n=>[B.comp('$'+n,'PORT',{name:n}),'p']),R=['a2','b2','c2','d2','e2'].map(n=>[B.comp('$'+n,'PORT',{name:n}),'p']);
-  const top=B.node('top'),foot=B.node('foot');
-  for(const k of [3,4]){B.wire(L[k],top);B.wire(R[k],top);}
-  if(meas){const v=B.comp('Vtop','VP',{});B.wire(top,[v,'p']);}
-  PH.forEach((x,k)=>{const ph=B.node('p'+x);B.wire(L[k],ph);B.wire(R[k],ph);
-   if(meas){const u=B.comp('U'+x,'VM',{});B.wire(ph,[u,'p']);B.wire(top,[u,'n']);}
+ function towerDef(c){const p=prm(c),B=builder('Πύργος γραμμής'),meas=p.meas===true||p.meas==='true',fast=p.impl==='fast'&&p.foot!=='r';
+  // drawing (4.9.1): the phases left to right at y = 0, 60, 120, the top of the tower a bus at y = −240 with the ground wires
+  // (d, e) brought up to it, one column per phase with the string (and the voltmeter beside it), the tower's line and its
+  // footing on the right under the phases
+  const PY=[0,60,120,180,240],TOP=-240,XK=[260,400,540];
+  const L=['a1','b1','c1','d1','e1'].map((n,k)=>[B.comp('$'+n,'PORT',{name:n},[0,PY[k],2]),'p']),R=['a2','b2','c2','d2','e2'].map((n,k)=>[B.comp('$'+n,'PORT',{name:n},[1000,PY[k],0]),'p']);
+  const top=B.node('top',[680,TOP]),foot=B.node('foot',[820,320]);
+  for(const k of [3,4]){B.wire(L[k],top,[[60,PY[k]],[60,TOP]]);B.wire(R[k],top,[[940,PY[k]],[940,TOP]]);}
+  if(meas){const v=B.comp('Vtop','VP',{},[720,TOP-50,0]);B.wire(top,[v,'p'],[[720,TOP]]);}
+  PH.forEach((x,k)=>{const X=XK[k],ph=B.node('p'+x,[X,PY[k]]);B.wire(L[k],ph);B.wire(R[k],ph);
+   if(meas){const u=B.comp('U'+x,'VM',{},[X+60,-105,2]);B.wire(ph,[u,'p'],[[X+60,PY[k]]]);B.wire(top,[u,'n'],[[X+60,TOP]]);}
    if(p.ins==='none')return;
    const q=p.ins==='de'?{vt:'de',U0:s(num(p.U0,1.7e6)),kde:s(num(p.kde,1)),Dde:s(num(p.Dde,.5))}:{vt:'inst',Ub:s(num(p.Ub,2.24e6))};
-   const g=B.comp('S'+x,'SG',{...q,Rarc:'0.1',ext:'never'});
-   if(meas){const a=B.comp('I'+x,'AM',{});B.wire(ph,[a,'a']);B.wire([a,'b'],[g,'a']);}else B.wire(ph,[g,'a']);
+   const g=B.comp('S'+x,'SG',{...q,Rarc:'0.1',ext:'never'},[X,-150,3]);
+   if(meas){const a=B.comp('I'+x,'AM',{},[X,-60,3]);B.wire(ph,[a,'a']);B.wire([a,'b'],[g,'a']);}else B.wire(ph,[g,'a']);
    B.wire([g,'b'],top);});
-  const t=B.comp('T','TL',{spec:'zl',Z:s(num(p.Zt,200)),len:s(num(p.h,27.15)),vel:s(num(p.vt,3e8))});
-  B.wire(top,[t,'a1']);B.wire([t,'a2'],foot);B.wire([t,'b1'],B.gnd());B.wire([t,'b2'],B.gnd());
+  const t=B.comp('T','TL',{spec:'zl',Z:s(num(p.Zt,200)),len:s(num(p.h,27.15)),vel:s(num(p.vt,3e8))},[800,220,1]);
+  B.wire(top,[t,'a1'],[[880,TOP],[880,160]]);B.wire([t,'a2'],foot);B.wire([t,'b1'],B.gnd([740,180]),[[740,160]]);B.wire([t,'b2'],B.gnd([740,300]),[[740,280]]);
   const R0=Math.max(num(p.R0,15),1e-3);let rf;
-  if(p.foot==='r')rf=B.comp('RF','R',{R:s(R0)});else rf=B.comp('RF','MOV',{model:'table',tbl:footTable(R0,num(p.rho,100),num(p.E0,400e3)).tbl});
-  if(meas){const a=B.comp('If','AM',{});B.wire(foot,[a,'a']);B.wire([a,'b'],[rf,'a']);}else B.wire(foot,[rf,'a']);
-  B.wire([rf,'b'],B.gnd());
+  // 4.9.1: fast = the footing R(I) solved from the history of the tower's line (RFX), its ammeter on the ground side so that
+  // the foot node joins only the line and the footing; detailed = a nonlinear resistance in the circuit's Newton (as in 4.9)
+  if(fast){rf=B.comp('RF','RFX',{R0:s(R0),tbl:footTable(R0,num(p.rho,100),num(p.E0,400e3)).tbl,line:'T'},[820,380,1]);B.wire(foot,[rf,'a']);
+   if(meas){const a=B.comp('If','AM',{},[820,450,1]);B.wire([rf,'b'],[a,'a']);B.wire([a,'b'],B.gnd([820,500]));}else B.wire([rf,'b'],B.gnd([820,430]));return B.def();}
+  const yr=meas?460:380;
+  if(p.foot==='r')rf=B.comp('RF','R',{R:s(R0)},[820,yr-10,1]);else rf=B.comp('RF','MOV',{model:'table',tbl:footTable(R0,num(p.rho,100),num(p.E0,400e3)).tbl},[820,yr,0]);
+  if(meas){const a=B.comp('If','AM',{},[820,370,1]);B.wire(foot,[a,'a']);B.wire([a,'b'],[rf,'a']);}else B.wire(foot,[rf,'a']);
+  B.wire([rf,'b'],B.gnd([820,yr+40]));
   return B.def();}
  // the arrester of the IEEE WG 3.4.11 (1992) with the linear elements from the height d and the columns n (Durbak):
  // L₀ = 0,2·d/n μH, R₀ = 100·d/n Ω, L₁ = 15·d/n μH, R₁ = 65·d/n Ω, C = 100·n/d pF; A0 and A1 in per unit of U₁₀
  function saiTable(str,U10){const pts=[];for(const q of String(str||'').split(',')){const m=q.split(':');if(m.length!==2)continue;const I=num(m[0].trim(),NaN)*1e3,v=num(m[1].trim(),NaN)*U10;if(I>0&&v>0)pts.push(`${s(I)}: ${s(v)}`);}return pts.join(', ');}
- function saiParams(p){const d=Math.max(num(p.d,3.216),1e-3),n=Math.max(num(p.n,1),1e-3),q=d/n;
-  return {L0:0.2e-6*q,R0:100*q,L1:15e-6*q*Math.max(num(p.kL1,1),1e-6),R1:65*q,C:100e-12/q};}
+ function saiParams(p){const d=Math.max(num(p.d,3.216),1e-3),n=Math.max(num(p.n,1),1e-3),q=d/n,fit=p.L1fit===true||p.L1fit==='true';
+  return {L0:0.2e-6*q,R0:100*q,L1:15e-6*q*(fit?saiFitL1(p).k:Math.max(num(p.kL1,1),1e-6)),R1:65*q,C:100e-12/q};}
+ // 4.9.1 (question 12 of 4.9): the step of the IEEE WG procedure that adjusts L₁ until a 10 kA 8/20 μs current gives the
+ // residual voltage U₁₀ (the voltage rises with L₁): secant on ln k from k = 1 and 0,8, the arrester alone (fast form, no
+ // leads), to 0,05 %. Kept per set of parameters (a netlist is built often). Needs the solver (MNA) loaded.
+ const FIT=new Map();
+ function saiV10(p,k){const M=root.MNA||(typeof require!=='undefined'?require('./mna.js'):null);if(!M)throw new Error('Η ρύθμιση του L₁ θέλει τον λύτη.');
+  const W=(id,a,b)=>({id,a:{c:a[0],p:a[1]},b:{c:b[0],p:b[1]},pts:[]});
+  const pr={version:4,components:[{id:'I1',type:'ILG',x:0,y:0,rot:0,params:{shape:'custom',model:'heidler',T1:8e-6,T2:20e-6,n:10,Ipk:10e3,t0:0}},
+   {id:'SA',type:'SAI',x:100,y:0,rot:0,params:{U10:p.U10,d:p.d,n:p.n,A0:p.A0,A1:p.A1,kL1:k,L1fit:false,Llead:0,meas:true,impl:'fast'}},
+   {id:'G1',type:'GND',x:0,y:100,rot:0,params:{}},{id:'G2',type:'GND',x:100,y:100,rot:0,params:{}}],wires:[W('w1',['I1','p'],['SA','a']),W('w2',['SA','b'],['G2','g']),W('w3',['I1','n'],['G1','g'])]};
+  const sim=new M.Sim(pr,{hDiv:600,method:'TR'});let v=0;while(sim.t<60e-6){sim.run(Math.min(sim.h,60e-6-sim.t));v=Math.max(v,Math.abs(sim.now('Y:SA/V')));}return v;}
+ function saiFitL1(p0){const p={...P.defaults('SAI'),...(p0||{})},U10=Math.max(num(p.U10,819e3),1),key=[U10,num(p.d,3.216),num(p.n,1),p.A0,p.A1].join('|');
+  if(FIT.has(key))return FIT.get(key);
+  let x0=0,f0=saiV10(p,1)/U10-1,x1=Math.log(0.8),f1=saiV10(p,0.8)/U10-1;
+  for(let it=0;it<20&&Math.abs(f1)>5e-4;it++){const x2=f1!==f0?x1-f1*(x1-x0)/(f1-f0):x1-0.1;x0=x1;f0=f1;x1=Math.min(Math.max(x2,Math.log(1e-3)),Math.log(20));f1=saiV10(p,Math.exp(x1))/U10-1;}
+  const r={k:Math.exp(x1),err:f1};FIT.set(key,r);return r;}
  function saiDef(c){const p=prm(c),B=builder('Αλεξικέραυνο (μοντέλο IEEE)'),meas=p.meas===true||p.meas==='true',U10=Math.max(num(p.U10,819e3),1),k=saiParams(p);
-  const A=[B.comp('$a','PORT',{name:'a'}),'p'],Z=[B.comp('$b','PORT',{name:'b'}),'p'],top=B.node('t'),n0=B.node('n0'),n1=B.node('n1');
-  let at=A;if(meas){const am=B.comp('I','AM',{});B.wire(A,[am,'a']);at=[am,'b'];const vm=B.comp('V','VM',{});B.wire(A,[vm,'p']);B.wire(Z,[vm,'n']);}
-  const Ll=num(p.Llead,0);if(Ll>0){const l=B.comp('Ll','L',{L:s(Ll)});B.wire(at,[l,'a']);B.wire([l,'b'],top);}else B.wire(at,top);
-  const par=(id,from,to,L,R)=>{const l=B.comp('L'+id,'L',{L:s(L)}),r=B.comp('R'+id,'R',{R:s(R)});B.wire(from,[l,'a']);B.wire([l,'b'],to);B.wire(from,[r,'a']);B.wire([r,'b'],to);};
-  par('0',top,n0,k.L0,k.R0);par('1',n0,n1,k.L1,k.R1);
-  const cc=B.comp('C','C',{C:s(k.C)});B.wire(n0,[cc,'p']);B.wire([cc,'n'],Z);
-  const a0=B.comp('A0','MOV',{model:'table',tbl:saiTable(p.A0,U10)}),a1=B.comp('A1','MOV',{model:'table',tbl:saiTable(p.A1,U10)});
-  B.wire(n0,[a0,'a']);B.wire([a0,'b'],Z);B.wire(n1,[a1,'a']);B.wire([a1,'b'],Z);
+  // drawing (4.9.1): a on the left, the line of the arrester to the right, b a rail at the bottom (y = 220)
+  const RB=220,A=[B.comp('$a','PORT',{name:'a'},[0,0,2]),'p'],Z=[B.comp('$b','PORT',{name:'b'},[700,RB,0]),'p'],top=B.node('t',[260,0]),n0=B.node('n0',[400,0]),n1=B.node('n1',[540,0]);
+  let at=A;if(meas){const am=B.comp('I','AM',{},[90,0,0]);B.wire(A,[am,'a']);at=[am,'b'];const vm=B.comp('V','VM',{},[60,90,0]);B.wire(A,[vm,'p']);B.wire(Z,[vm,'n']);}
+  const Ll=num(p.Llead,0);if(Ll>0){const l=B.comp('Ll','L',{L:s(Ll)},[190,0,0]);B.wire(at,[l,'a']);B.wire([l,'b'],top);}else B.wire(at,top);
+  // 4.9.1: fast = the same model as one element of the solver (SAIX: the inner nodes eliminated in each iteration)
+  if(p.impl==='fast'){const x=B.comp('X','SAIX',{L0:s(k.L0),R0:s(k.R0),L1:s(k.L1),R1:s(k.R1),C:s(k.C),tbl0:saiTable(p.A0,U10),tbl1:saiTable(p.A1,U10)},[260,110,0]);B.wire(top,[x,'a']);B.wire([x,'b'],Z);return B.def();}
+  const par=(id,from,to,L,R,x)=>{const l=B.comp('L'+id,'L',{L:s(L)},[x,-40,0]),r=B.comp('R'+id,'R',{R:s(R)},[x,40,0]);B.wire(from,[l,'a']);B.wire([l,'b'],to);B.wire(from,[r,'a']);B.wire([r,'b'],to);};
+  par('0',top,n0,k.L0,k.R0,330);par('1',n0,n1,k.L1,k.R1,470);
+  const cc=B.comp('C','C',{C:s(k.C)},[400,150,0]);B.wire(n0,[cc,'p']);B.wire([cc,'n'],Z);
+  const a0=B.comp('A0','MOV',{model:'table',tbl:saiTable(p.A0,U10)},[460,150,0]),a1=B.comp('A1','MOV',{model:'table',tbl:saiTable(p.A1,U10)},[540,150,0]);
+  B.wire(n0,[a0,'a'],[[400,80],[460,80]]);B.wire([a0,'b'],Z);B.wire(n1,[a1,'a']);B.wire([a1,'b'],Z);
   return B.def();}
  const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef};
  function defOf(c){return DEFS[c.type](c);}
 
+ // 4.9.1 (ROADMAP §52): the parts with two implementations, and a copy of a project with one implementation everywhere
+ // (the SciPy export takes the detailed one: same model, made of elements that solver has)
+ const IMPL_TYPES=['TOWER','SAI'];
+ function forceImpl(project,impl){if(!project)return project;const has=list=>(list||[]).some(c=>IMPL_TYPES.includes(c.type)&&(c.params?.impl||'blocks')!==impl);
+  if(!has(project.components)&&!Object.values(project.subcircuits||{}).some(d=>has(d.components)))return project;
+  const fix=list=>(list||[]).map(c=>IMPL_TYPES.includes(c.type)?{...c,params:{...(c.params||{}),impl}}:c);
+  const subs={};for(const [n,d] of Object.entries(project.subcircuits||{}))subs[n]={...d,components:fix(d.components)};
+  return {...project,components:fix(project.components),subcircuits:subs};}
  // ---------------------------------------------------------------- project → project with SUB instances
  const hasLib=list=>(list||[]).some(c=>isLib(c.type));
  function needs(project){if(!project)return false;if(hasLib(project.components))return true;
@@ -498,7 +535,68 @@
   // the transformer's impedance per phase of an equivalent star at side 2 (Ω): u_k·U₂²/S_n
   const Sn=num(xf.Sn,40e6),Zk=num(xf.uk,10)/100*U2*U2/Sn,Rk=num(xf.Pk,0)*(U2/Sn)**2,Xk=Math.sqrt(Math.max(Zk*Zk-Rk*Rk,0));
   return {seq:{R1:g.R1*r+Rk,X1:g.X1*r+Xk,R0:Rk,X0:Xk,E:g.E*U2/U1},n:d.n};}
- const api={TYPES,isLib,needs,expand,defOf,warnings,gridZ,xfData,lineData,faultCurrents,behindXF,GROUPS,footTable,saiParams};
+ // ---------------------------------------------------------------- 4.9.1 (ROADMAP §52): a drawing of a definition
+ // Positions for the parts of a generated definition, for «⧉ Τι έχει μέσα» and for «Ανάπτυξη σε υποκύκλωμα» (the editor
+ // routes the wires itself). Layers by distance from the ports on the left of the part's symbol (inputs, side 1), the ports
+ // on the right in the last layer, the order in a layer by barycentres; each part turned (0–3 quarter turns) so that its pins
+ // face what they join, a ground just under its pin. opts.sides: {port name: 'l' | 'r'}.
+ function layoutDef(def,opts={}){const DX=opts.dx||160,DY=opts.dy||100,G=10,snap=v=>Math.round(v/G)*G;
+  if(def.placed)return placedDef(def);
+  const cs=def.components.map(c=>({...c,params:{...(c.params||{})},x:0,y:0,rot:0,flip:false})),by=new Map(cs.map(c=>[c.id,c]));
+  const isG=c=>c&&c.type==='GND',isPort=c=>c&&['PORT','SIN','SOUT'].includes(c.type);
+  const isJ=c=>c&&c.type==='JUNC',nb0=new Map(cs.map(c=>[c.id,new Set()])),gpin=new Map();   // direct neighbours; the pin a ground hangs on
+  for(const w of def.wires){const A=by.get(w.a.c),B=by.get(w.b.c);if(!A||!B)continue;
+   if(isG(A)&&!isG(B)){gpin.set(A.id,w.b);continue;}if(isG(B)&&!isG(A)){gpin.set(B.id,w.a);continue;}nb0.get(A.id).add(B.id);nb0.get(B.id).add(A.id);}
+  // a junction is a node of the circuit, not a part: everything on it is a neighbour of everything else on it (junctions
+  // joined to junctions are one node); the junctions are placed afterwards, at the middle of the pins they join
+  const jgrp=new Map();for(const c of cs)if(isJ(c)&&!jgrp.has(c.id)){const g=[],st=[c.id];jgrp.set(c.id,g);while(st.length){const v=st.pop();g.push(v);for(const u of nb0.get(v))if(isJ(by.get(u))&&!jgrp.has(u)){jgrp.set(u,g);st.push(u);}}}
+  const nb=new Map(cs.filter(c=>!isJ(c)).map(c=>[c.id,new Set()]));
+  for(const c of cs){if(isJ(c)||isG(c))continue;for(const u of nb0.get(c.id)){if(!isJ(by.get(u))){nb.get(c.id).add(u);continue;}
+   for(const j of jgrp.get(u))for(const k of nb0.get(j))if(k!==c.id&&!isJ(by.get(k))&&!isG(by.get(k)))nb.get(c.id).add(k);}}
+  const side=c=>{if(c.type==='SIN')return 'l';if(c.type==='SOUT')return 'r';const s=(opts.sides||{})[c.params.name];return s||'l';};
+  const main=cs.filter(c=>!isG(c)&&!isJ(c)),ports=main.filter(isPort),L=new Map();
+  // breadth-first layers from the left ports (or from the first part)
+  let q=ports.filter(c=>side(c)==='l').map(c=>c.id);if(!q.length)q=[main[0]?.id].filter(Boolean);for(const id of q)L.set(id,0);
+  const bfs=()=>{while(q.length){const v=q.shift();for(const u of nb.get(v)){if(L.has(u))continue;if(isPort(by.get(u))&&side(by.get(u))==='r')continue;L.set(u,L.get(v)+1);q.push(u);}}};
+  bfs();for(const c of main)if(!L.has(c.id)&&!(isPort(c)&&side(c)==='r')){L.set(c.id,0);q=[c.id];bfs();}
+  const inner=main.filter(c=>!isPort(c)||side(c)==='l'),last=Math.max(0,...inner.map(c=>L.get(c.id)))+1;
+  for(const c of main)if(isPort(c)&&side(c)==='r')L.set(c.id,last);
+  const nl=Math.max(...main.map(c=>L.get(c.id)))+1,lay=Array.from({length:nl},()=>[]);for(const c of main)lay[L.get(c.id)].push(c.id);
+  // ports keep the order of the part's pins; the rest by barycentres
+  const pinOrder=new Map((opts.order||[]).map((n,i)=>[n,i]));
+  for(const a of lay)a.sort((x,y)=>{const X=by.get(x),Y=by.get(y);if(isPort(X)&&isPort(Y))return (pinOrder.get(X.params.name)??0)-(pinOrder.get(Y.params.name)??0);return 0;});
+  const pos=new Map();const setPos=()=>lay.forEach(a=>a.forEach((v,i)=>pos.set(v,i)));setPos();
+  const bary=(v,dir)=>{const n=[...nb.get(v)].filter(u=>dir>0?L.get(u)<L.get(v):L.get(u)>L.get(v));return n.length?n.reduce((s,u)=>s+pos.get(u),0)/n.length:pos.get(v);};
+  for(let it=0;it<4;it++){for(let l=1;l<nl;l++){if(lay[l].every(v=>isPort(by.get(v))))continue;lay[l].sort((a,b)=>bary(a,1)-bary(b,1));lay[l].forEach((v,i)=>pos.set(v,i));}
+   for(let l=nl-2;l>=0;l--){if(lay[l].every(v=>isPort(by.get(v))))continue;lay[l].sort((a,b)=>bary(a,-1)-bary(b,-1));lay[l].forEach((v,i)=>pos.set(v,i));}}
+  const mx=Math.max(...lay.map(a=>a.length));
+  lay.forEach((a,l)=>{const off=(mx-a.length)*DY/2;a.forEach((v,i)=>{const c=by.get(v);c.x=snap(l*DX);c.y=snap(off+i*DY);});});
+  // turn each part so that its pins face their neighbours (a pin with a ground: downwards)
+  const ctr=id=>{const c=by.get(id);return [c.x,c.y];};
+  const target=(c,pin)=>{const t=[];for(const w of def.wires){let o=null;if(w.a.c===c.id&&w.a.p===pin)o=w.b;else if(w.b.c===c.id&&w.b.p===pin)o=w.a;if(!o)continue;
+   const k=by.get(o.c);if(!k)continue;if(isG(k))t.push([c.x,c.y+200]);else if(isJ(k)){for(const j of jgrp.get(k.id))for(const u of nb0.get(j)){const q=by.get(u);if(q&&q.id!==c.id&&!isJ(q)&&!isG(q))t.push(ctr(q.id));}}else t.push(ctr(k.id));}return t;};
+  for(let pass=0;pass<2;pass++)for(const c of main){let best=null;
+   for(const rot of [0,1,2,3]){c.rot=rot;let cost=0;for(const pn of Object.keys(P.pinsOf(c))){const pp=P.pinPos(c,pn);if(!pp)continue;for(const t of target(c,pn))cost+=Math.hypot(pp[0]-t[0],pp[1]-t[1]);}
+    cost+=rot*1e-3;if(!best||cost<best[0])best=[cost,rot];}c.rot=best?best[1]:0;}
+  // junctions: at the median of the pins they join (x and y apart), on the grid; nudged off a part's centre
+  const centres=new Set(main.map(c=>c.x+','+c.y));
+  for(const c of cs)if(isJ(c)){const P0=[];for(const w of def.wires){const o=w.a.c===c.id?w.b:w.b.c===c.id?w.a:null;if(!o)continue;const k=by.get(o.c);if(k&&!isJ(k)&&!isG(k)){const pp=P.pinPos(k,o.p);if(pp)P0.push(pp);}}
+   if(!P0.length)continue;const med=a=>{const v=a.slice().sort((x,y)=>x-y);return v[(v.length-1)>>1];};let x=snap(med(P0.map(q=>q[0]))),y=snap(med(P0.map(q=>q[1])));
+   while(centres.has(x+','+y))x+=G;centres.add(x+','+y);c.x=x;c.y=y;}
+  // grounds under their pins
+  const used=new Set();for(const g of cs.filter(isG)){const e=gpin.get(g.id),k=e&&by.get(e.c);let pp=k?P.pinPos(k,e.p):null;if(!pp)pp=[0,last*DY];
+   let x=snap(pp[0]),y=snap(pp[1]+30);while(used.has(x+','+y))x+=20;used.add(x+','+y);g.x=x;g.y=y;g.rot=0;}
+  return {...def,components:cs,wires:def.wires.map(w=>({...w,pts:[]}))};}
+ // a definition drawn by its builder: the parts keep their places; a junction or ground without one goes to the middle of
+ // the pins it joins (a ground: under its pin)
+ function placedDef(def){const cs=def.components.map(c=>({...c,params:{...(c.params||{})}})),by=new Map(cs.map(c=>[c.id,c]));
+  for(const c of cs){if(c.at)continue;const P0=[];for(const w of def.wires){const o=w.a.c===c.id?w.b:w.b.c===c.id?w.a:null;if(!o)continue;const k=by.get(o.c);if(k&&k.at){const pp=P.pinPos(k,o.p);if(pp)P0.push(pp);}}
+   if(P0.length){const m=P0.reduce((a,q)=>[a[0]+q[0]/P0.length,a[1]+q[1]/P0.length],[0,0]);c.x=Math.round(m[0]/10)*10;c.y=Math.round(m[1]/10)*10+(c.type==='GND'?30:0);}}
+  for(const c of cs)delete c.at;return {...def,components:cs,wires:def.wires.map(w=>({...w,pts:(w.pts||[]).map(q=>[...q])}))};}
+ // the side of each port: from where the part has the pin on its own symbol (x < 0: left); the order: top to bottom
+ function sidesOf(c){const out={},ord=[];const pins=P.pinsOf({...c,rot:0,flip:false});for(const [n,q] of Object.entries(pins)){out[n]=q[0]<0?'l':q[0]>0?'r':q[1]<0?'l':'r';ord.push([n,q[1],q[0]]);}
+  ord.sort((a,b)=>a[1]-b[1]||a[2]-b[2]);return {sides:out,order:ord.map(o=>o[0])};}
+ const api={TYPES,IMPL_TYPES,forceImpl,layoutDef,sidesOf,saiFitL1,isLib,needs,expand,defOf,warnings,gridZ,xfData,lineData,faultCurrents,behindXF,GROUPS,footTable,saiParams};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;
  root.NetLib=api;
 })(typeof window!=='undefined'?window:globalThis);

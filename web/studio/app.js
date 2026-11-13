@@ -1063,9 +1063,10 @@ function openMenu(ev){
   if(c.type==='JUNC'&&S.pfx!==null)items.push({t:'⌁ Scope: τάση κόμβου',f:()=>addProbe('VN:'+pid(c.id)+':j')});
   if(c.type!=='JUNC'&&atTop()&&window.Watch)items.push({t:'▣ Πλακίδια πάνω στο σχέδιο…',k:'S',f:()=>Watch.openAdd(c.id)});
   if(c.type==='SUB')items.push(...subMenu(c));
-  if(window.Inside?.can(c))items.push({t:'⧉ Τι έχει μέσα (μπλοκ και τιμές)',k:'διπλό κλικ',f:()=>Inside.open(c.id)});
+  if(window.Inside?.can(c))items.push({t:Inside.canDbl(c)?'⧉ Τι έχει μέσα (μπλοκ και τιμές)':'⧉ Τι έχει μέσα (στοιχεία και τιμές)',k:Inside.canDbl(c)?'διπλό κλικ':'',f:()=>Inside.open(c.id)},
+   {t:'▣ Ανάπτυξη σε υποκύκλωμα (για αλλαγές)',f:()=>libToSub(c.id)});
   {const n=editor.selection().c.filter(id=>editor.comp(id)?.type!=='JUNC').length;if(n&&editor.selection().c.includes(c.id))items.push({t:'▣ Υποκύκλωμα από την επιλογή'+(n>1?` (${n})`:''),k:'Ctrl+G',f:()=>groupSel()});}
-  if(c.type!=='JUNC')items.push('-',{t:'Ρυθμίσεις…',k:window.Inside?.can(c)?'':'διπλό κλικ',f:()=>openInspector(c.id,ev.x,ev.y)},{t:'Περιστροφή',k:'R',f:()=>editor.rotateSel()},{t:'Καθρέφτης',k:'M',f:()=>editor.mirrorSel()},{t:'Διπλότυπο',k:'Ctrl+D',f:()=>{editor.copySel();editor.paste(20,20);}});
+  if(c.type!=='JUNC')items.push('-',{t:'Ρυθμίσεις…',k:window.Inside?.canDbl(c)?'':'διπλό κλικ',f:()=>openInspector(c.id,ev.x,ev.y)},{t:'Περιστροφή',k:'R',f:()=>editor.rotateSel()},{t:'Καθρέφτης',k:'M',f:()=>editor.mirrorSel()},{t:'Διπλότυπο',k:'Ctrl+D',f:()=>{editor.copySel();editor.paste(20,20);}});
   items.push({t:'Διαγραφή',k:'Del',f:()=>editor.deleteSel(),cls:'danger'});}
  else if(ev.kind==='wire'){const w=editor.wire(ev.id);if(!w)return;if(S.pfx!==null&&wireWidth(w)===1)items.push({t:'⌁ Scope: τάση κόμβου',f:()=>addProbe('VN:'+pid(w.a.c)+':'+w.a.p,w.name||undefined)},'-');items.push({t:'Όνομα / χρώμα…',k:'διπλό κλικ',f:()=>openWireInspector(w.id,ev.x,ev.y)},{t:'Αυτόματη δρομολόγηση',f:()=>{editor.remember();editor.route(w);editor.render();}},{t:'Διαγραφή',k:'Del',f:()=>editor.deleteSel(),cls:'danger'});}
  else items.push({t:'Επικόλληση',k:'Ctrl+V',f:()=>editor.paste(),dis:!editor.clip},{t:'Επιλογή όλων',k:'Ctrl+A',f:()=>editor.select(editor.doc.components.map(c=>c.id),editor.doc.wires.map(w=>w.id))},{t:'Προσαρμογή προβολής',k:'F',f:()=>editor.fit()},'-',
@@ -1137,6 +1138,9 @@ function groupSel(){const sel=editor.selection().c;
 function expandSub(id){let r;try{r=SubC.expand(levelDoc(),id);}catch(e){notice(esc(e.message),'error');return;}
  applyLevel(r.project,[...r.ids.values()]);const pf=pid(id)+'/';if(S.pfx!==null)renameChannels(k=>{if(!k.startsWith(pf))return k;const rest=k.slice(pf.length),h=rest.split('/')[0];return r.ids.has(h)?(S.pfx||'')+r.ids.get(h)+rest.slice(h.length):k;});
  notice(`Το ${esc(id)} έγινε ανοιχτό κύκλωμα (${r.ids.size} στοιχεία). Ο ορισμός μένει στη βιβλιοθήκη του project.`,'info');setTimeout(()=>notice(''),4000);}
+// 4.9.1 (ROADMAP §52): a library part becomes an ordinary subcircuit with the same inner parts, names and channels
+function libToSub(id){window.Inside?.close();let r;try{r=SubC.fromLib(levelDoc(),id);}catch(e){notice(esc(e.message),'error');return;}
+ applyLevel(r.project,[id]);renderPalette();renderProps();notice(`Το ${esc(id)} έγινε υποκύκλωμα (ορισμός «${esc(r.name)}»): διπλό κλικ για να το ανοίξεις και να το αλλάξεις. Ίδιο κύκλωμα, ίδια κανάλια· οι παράμετροί του είναι πλέον οι τιμές των στοιχείων μέσα.`,'info');setTimeout(()=>notice(''),6000);}
 function uniqueSub(id){let r;try{r=SubC.makeUnique(levelDoc(),id);}catch(e){notice(esc(e.message),'error');return;}applyLevel(r.project,[id]);renderPalette();renderProps();}
 function subMenu(c){const name=c.params?.def,inner=S.pfx===null?[]:allComps().filter(x=>x.id.startsWith(pid(c.id)+'/'));
  return ['-',{t:'⧉ Άνοιγμα του υποκυκλώματος',k:'διπλό κλικ',f:()=>enterSub(name,S.pfx===null?null:pid(c.id))},{t:'Ανάπτυξη σε ανοιχτό κύκλωμα',k:'Ctrl+Shift+G',f:()=>expandSub(c.id)},
@@ -2326,7 +2330,7 @@ function boot(){
    // 4.8: one click on a block «Ελεγκτής AI» opens its façade next to it
    if(window.Watch&&sel.c.length===1&&!sel.w.length&&editor.comp(sel.c[0])?.type==='AIC'&&atTop())Watch.facade(sel.c[0]);},
   ontool:on=>{const b=$('#wire-tool');b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));},
-  onedit:ev=>{if(ev.kind==='comp'){const c=editor.comp(ev.id);if(c?.type==='SUB'){enterSub(c.params.def,S.pfx===null?null:pid(c.id));return;}if(window.Inside?.can(c)&&Inside.open(c.id))return;const sg=editor.settings.dblclick==='scope'&&S.pfx!==null?signalsFor(c):[];if(sg.length)addProbe(sg[0][0]+pid(ev.id)+(sg[0][2]||''));else openInspector(ev.id,ev.x,ev.y);}else openWireInspector(ev.id,ev.x,ev.y);},
+  onedit:ev=>{if(ev.kind==='comp'){const c=editor.comp(ev.id);if(c?.type==='SUB'){enterSub(c.params.def,S.pfx===null?null:pid(c.id));return;}if(window.Inside?.canDbl(c)&&Inside.open(c.id))return;const sg=editor.settings.dblclick==='scope'&&S.pfx!==null?signalsFor(c):[];if(sg.length)addProbe(sg[0][0]+pid(ev.id)+(sg[0][2]||''));else openInspector(ev.id,ev.x,ev.y);}else openWireInspector(ev.id,ev.x,ev.y);},
   ongroup:shift=>{if(shift){const id=editor.selection().c.find(i=>editor.comp(i)?.type==='SUB');if(id)expandSub(id);else{notice('Διάλεξε ένα υποκύκλωμα για ανάπτυξη (Ctrl+Shift+G).','info');setTimeout(()=>notice(''),2500);}}else groupSel();},
   canPlace:placeOk,subParams:name=>subParams(name),
   oncontext:openMenu,onwarn:t=>{notice(t,'error');setTimeout(()=>notice(''),5000);}});
@@ -2448,6 +2452,6 @@ function boot(){
 }
 function renderTheoryLive(){if(!atTop()||document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
-window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
+window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,libToSub,enterSub,leaveSub,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
  renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare
 })();

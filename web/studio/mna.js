@@ -17,6 +17,7 @@
  const Ex=root.Expr||(typeof require!=='undefined'?require('./expr.js'):null);
  const SC=root.StepCheck||(typeof require!=='undefined'?require('./stepcheck.js'):null);
  const SUBC=root.SubCircuit||(typeof require!=='undefined'?require('./subcircuit.js'):null);
+ const NLIB=()=>root.NetLib||(typeof require!=='undefined'?require('./netlib.js'):null);
  const BUS=root.Bus||(typeof require!=='undefined'?require('./bus.js'):null);
  const SPM=root.Sparse||(typeof require!=='undefined'?require('./sparse.js'):null);
  const NNET=root.NNet||(typeof require!=='undefined'?require('./nn.js'):null);
@@ -268,6 +269,43 @@
   return {x,d:clamped||!(dR>0.05)?0:h*th*f.du/dR};}
  function arcCur(e,v){const A=e.arc;if(A.closed)return {i:v/A.Ron,g:1/A.Ron};const r=arcStep(A,v),g=Math.exp(r.x),gd=g+v*g*r.d;
   return {i:g*v,g:Number.isFinite(gd)&&gd>0?gd:g};}
+ // 4.9.1 (ROADMAP §52): the fast implementations of the arrester and the tower footing.
+ // G·x + J + f(x) = 0 with f odd and increasing (a table of the nonlinear resistance): Newton with the voltage limited on the
+ // steep part, as the circuit's own Newton does (the voltage that gives the linearized current on the true curve)
+ function nlLimit(ch,q,x,xn){if(Math.abs(xn)>Math.abs(x)&&q.g>0){const il=q.i+q.g*(xn-x);if(Math.sign(il)===Math.sign(xn)){const xi=ch.inv(il);if(Math.abs(xi)<Math.abs(xn))return xi;}}return xn;}
+ function nlSolve(G,J,ch,x){for(let it=0;it<200;it++){const q=ch.cur(x),f=G*x+J+q.i,d=G+q.g;const xn=nlLimit(ch,q,x,x-f/d);
+   if(Math.abs(xn-x)<=1e-13*(1+Math.abs(xn)))return xn;x=xn;}return x;}
+ // the IEEE arrester as one two-terminal element (SAIX): a → L₀ ∥ R₀ → n0 → L₁ ∥ R₁ → n1, C and A0 from n0, A1 from n1 to b.
+ // Over a step the inductors and the capacitor are companions (the same rules as the L and C of the circuit: TR, BE, BDF2),
+ // so for a terminal voltage v the inner voltages u0, u1 solve two KCL equations (with the G_min every node of the circuit has,
+ // so that both implementations give the same numbers); Newton on (u0, u1) with the limit above.
+ // i = G₀·(v − u0) + J₀ and di/dv = G₀·(1 + G₀·J₂₂/det) from the same Jacobian.
+ function saiSetup(S,h,mode,B){S.h=h;const tr=mode==='TR',bd=mode==='BDF2'&&B;
+  const Lc=(L,i,i1,vL)=>bd?[h/(L*B.a0),-(B.a1*i+B.a2*i1)/B.a0]:tr?[h/(2*L),i+h/(2*L)*vL]:[h/L,i];
+  [S.g0,S.J0]=Lc(S.L0,S.iL0,S.iL0b,S.v-S.u0);[S.g1,S.J1]=Lc(S.L1,S.iL1,S.iL1b,S.u0-S.u1);
+  if(bd){S.gC=S.C*B.a0/h;S.JC=S.C*(B.a1*S.vc+B.a2*S.vc1)/h;}else if(tr){S.gC=2*S.C/h;S.JC=-(S.gC*S.vc+S.ic);}else{S.gC=S.C/h;S.JC=-S.gC*S.vc;}
+  S.G0=S.g0+1/S.R0;S.G1=S.g1+1/S.R1;S.ug=null;}
+ function saiCur(S,v){if(!(S.h>0)){const a=S.ch0.cur(v),b=S.ch1.cur(v);return {i:S.i,g:a.g+b.g+1e-12};}
+  const G0=S.G0,G1=S.G1,gC=S.gC;let u0=S.ug?S.ug[0]:S.u0,u1=S.ug?S.ug[1]:S.u1,a,b;
+  for(let it=0;it<200;it++){a=S.ch0.cur(u0);b=S.ch1.cur(u1);
+   const i1=G1*(u0-u1)+S.J1,F1=G0*(v-u0)+S.J0-i1-(gC+GMIN)*u0-S.JC-a.i,F2=i1-b.i-GMIN*u1,J11=-G0-G1-gC-GMIN-a.g,J22=-G1-GMIN-b.g,det=J11*J22-G1*G1;
+   const n0=nlLimit(S.ch0,a,u0,u0-(F1*J22-G1*F2)/det),n1=nlLimit(S.ch1,b,u1,u1-(J11*F2-G1*F1)/det);
+   const done=Math.abs(n0-u0)<=1e-13*(1+Math.abs(n0))&&Math.abs(n1-u1)<=1e-13*(1+Math.abs(n1));u0=n0;u1=n1;if(done)break;}
+  a=S.ch0.cur(u0);b=S.ch1.cur(u1);const J22=-G1-GMIN-b.g,det=(-G0-G1-gC-GMIN-a.g)*J22-G1*G1,g=G0*(1+G0*J22/det);
+  S.ug=[u0,u1];return {i:G0*(v-u0)+S.J0,g:g>0?g:1e-12};}
+ function saiCommit(S,v){const q=saiCur(S,v),u0=S.ug[0],u1=S.ug[1];
+  S.iL0b=S.iL0;S.iL0=S.g0*(v-u0)+S.J0;S.iL1b=S.iL1;S.iL1=S.g1*(u0-u1)+S.J1;S.ic=S.gC*u0+S.JC;S.vc1=S.vc;S.vc=u0;S.v=v;S.u0=u0;S.u1=u1;S.i=q.i;S.h=0;S.ug=null;}
+ const SAI_ST=['iL0','iL0b','iL1','iL1b','vc','vc1','ic','v','u0','u1','i'];
+ // a fast footing (RFX) gets its tower line; its foot node must join only the end 2 of that line (a2, with b2 at ground) and
+ // the footing, and its other end must be at ground (directly or through an ammeter): then the foot voltage of a step depends
+ // only on the line's history, and the footing is solved there, before the circuit (values)
+ function footLink(net,list){if(!list.length)return;const pins=e=>e.k==='TL'?[e.a1,e.b1,e.a2,e.b2]:e.k==='TLM'?[...e.n1,...e.n2]:e.ports?e.ports.flat():e.k==='X'?[e.p1,e.p2,e.s1,e.s2]:[e.a,e.b];
+  const cnt=new Map();for(const e of net.els)for(const n of pins(e))if(n>=0)cnt.set(n,(cnt.get(n)||0)+1);
+  for(const e of list){const F=e.foot,ci=net.compInfo.get(F.line),tl=ci&&ci.main,lb=net.compInfo.get(e.cid)?.label||e.cid;
+   if(!tl||tl.k!=='TL')throw new NetlistError(`${lb}: η γρήγορη γείωση θέλει τη γραμμή του πύργου («${F.line}»).`);
+   const gndB=e.b<0||(cnt.get(e.b)===2&&net.els.some(x=>x.k==='V'&&x.src?.kind==='dc'&&!(x.src.V)&&!(x.sigIn>=0)&&((x.a===e.b&&x.b<0)||(x.b===e.b&&x.a<0))));
+   if(e.a<0||tl.a2!==e.a||tl.b2>=0||cnt.get(e.a)!==2||!gndB)throw new NetlistError(`${lb}: η γρήγορη γείωση θέλει τον κόμβο της βάσης μόνο με τη γραμμή του πύργου και τη γείωση (αλλιώς: υλοποίηση «αναλυτική»).`);
+   F.tl=tl;}}
  // quasi-steady conductance at contact separation for the current i (q = 1 with u = i/g), by bisection on x
  function arcStart(A,i){const ai=Math.abs(i);if(!(ai>1e-9))return A.xmax;let lo=A.xmin,hi=A.xmax;
   const r=x=>(A.lam-3)*x+2*Math.log(ai)-Math.log(A.P0+A.P1*ai*ai*Math.exp(-x))-A.beta*x;
@@ -392,6 +430,12 @@
      Ron,gmin,xmin:Math.log(gmin),xmax:Math.log(1/Ron),closed:true,x:Math.log(1/Ron),u:0,h:0,th:1,F0:0,xg:null,tsep:null};
     const e={k:'NL',a,b,v0:0,g:0,J:0,arc:A,gk:'arc',gate:'sig',gIn:sn(c.id,'g'),gon:true};e.ch={cur:v=>arcCur(e,v)};info.gIn=e.gIn;info.main=add(e);info.arc=e;}
    else if(T==='MOV'){const a=node(c.id,'a'),b=node(c.id,'b'),ch=P.movChar(p);if(ch.err)throw new NetlistError(`${c.label||c.id}: ${ch.err}`);info.pins=[a,b];info.main=add({k:'NL',a,b,ch,pts:ch.pts,v0:0,g:0,J:0});}
+   else if(T==='SAIX'){const a=node(c.id,'a'),b=node(c.id,'b'),ch0=P.movChar({model:'table',tbl:p.tbl0}),ch1=P.movChar({model:'table',tbl:p.tbl1});
+    if(ch0.err||ch1.err)throw new NetlistError(`${c.label||c.id}: ${ch0.err||ch1.err}`);info.pins=[a,b];const pos=(k,d)=>Math.max(num(p[k],d),1e-30);
+    const S={L0:pos('L0',1e-6),R0:pos('R0',100),L1:pos('L1',1e-5),R1:pos('R1',100),C:pos('C',1e-10),ch0,ch1,h:0,ug:null};for(const k of SAI_ST)S[k]=0;
+    const e={k:'NL',a,b,v0:0,g:0,J:0,sai:S};e.ch={cur:v=>saiCur(S,v)};info.main=add(e);}
+   else if(T==='RFX'){const a=node(c.id,'a'),b=node(c.id,'b'),ch=P.movChar({model:'table',tbl:p.tbl});if(ch.err)throw new NetlistError(`${c.label||c.id}: ${ch.err}`);info.pins=[a,b];
+    const R0=Math.max(num(p.R0,15),1e-6);info.main=add({k:'G',a,b,R:R0,Rnow:R0,foot:{ch,line:String(p.line||''),tl:null,v:0}});}
    else if(T==='IDC'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'I',a,b,I:num(p.I,1),sched:P.parseSched(p.sched),sigIn:p.ctl==='sig'?sn(c.id,'u'):undefined});}
    else if(T==='ILG'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];const w=P.lightningWave(p);
     if(!(w.eta>1e-6&&w.tau1>0&&w.tau2>0))throw new NetlistError(`${c.label||c.id}: δεν βρέθηκαν τ₁, τ₂ για T1 = ${P.eng(w.T1,'s')}, T2 = ${P.eng(w.T2,'s')} (το διπλοεκθετικό θέλει T2/T1 πάνω από περίπου 3).`);
@@ -629,8 +673,9 @@
    // the end currents of the lines take part in the local error too (their history is a state of the line), not in the mode analysis
    // and so do the states of the machines kept outside the circuit (rotor flux of the induction machine, speeds)
    const A=[...S];for(const e of this.net.els){if(e.k==='TL'){A.push({e,k:'T',j:0});A.push({e,k:'T',j:1});}else if(e.k==='TLM')for(let j=0;j<2*e.M;j++)A.push({e,k:'T',j});}
+   for(const e of this.net.els)if(e.sai)A.push({e,k:'XI',s:'iL0'},{e,k:'XI',s:'iL1'},{e,k:'XV',s:'vc'});
    for(const c of this.net.compInfo.values()){const e={cid:c.id};if(c.im){A.push({e,m:c.im,k:'M',f:'pa'},{e,m:c.im,k:'M',f:'pb'},{e,m:c.im,k:'W'});}else if(c.sm||c.srm)A.push({e,m:c.sm||c.srm,k:'W'});else if(c.gen)for(let j=0;j<c.gen.g.sh.N;j++)A.push({e,m:c.gen,k:'Wg',j});}
-   this.stEls=S;this.stAll=A;const n=A.length;this.stKind=Uint8Array.from(A,q=>q.k==='C'?0:q.k==='F'||q.k==='M'?2:q.k==='W'||q.k==='Wg'?3:1);
+   this.stEls=S;this.stAll=A;const n=A.length;this.stKind=Uint8Array.from(A,q=>q.k==='C'||q.k==='XV'?0:q.k==='F'||q.k==='M'?2:q.k==='W'||q.k==='Wg'?3:1);
    if(!this.lteSc||this.lteSc.length!==n){this.lteSc=new Float64Array(n);this.ringD=new Float64Array(n);this.ringN=new Uint16Array(n);this.lteH=null;this.rx=null;}
    // reference magnitudes per kind, the floor of the tolerance (a state that starts from 0 is not held to 10⁻⁴ of nothing):
    // V from the sources and the initial capacitor voltages, I from the current sources, the initial currents and V/R (median R), ψ = V·T
@@ -638,7 +683,7 @@
     else if(e.k==='C')Vr=Math.max(Vr,Math.abs(e.v));else if(e.k==='L')Ir=Math.max(Ir,Math.abs(e.i));else if(e.k==='I')Ir=Math.max(Ir,Math.abs(e.I||0));else if(e.k==='G'&&e.R>0&&!e.role)Rs.push(e.R);}
    for(const c of this.net.compInfo.values())if(c.wave)try{const w=c.wave,t1=w.T1||0;Vr=Math.max(Vr,Math.abs(P.waveAt(w,t1)),Math.abs(P.waveAt(w,3*t1)));}catch(e){}
    Rs.sort((a,b)=>a-b);const Rm=Rs.length?Rs[Rs.length>>1]:1;Vr=Vr||1;Ir=Math.max(Ir,Vr/Rm);this.stRef=[Vr,Ir,Vr*(this.T||1e-3),10];this.capDirty=true;}
-  stVec(){const S=this.stAll,x=new Float64Array(S.length);for(let i=0;i<S.length;i++){const q=S[i],e=q.e;x[i]=q.k==='L'?e.i:q.k==='C'?e.v:q.k==='T'?e.iE[q.j]:q.k==='M'?q.m.st[q.f]:q.k==='W'?q.m.st.w:q.k==='Wg'?q.m.st.w[q.j]:e.psi[q.j];}return x;}
+  stVec(){const S=this.stAll,x=new Float64Array(S.length);for(let i=0;i<S.length;i++){const q=S[i],e=q.e;x[i]=q.k==='L'?e.i:q.k==='C'?e.v:q.k==='XI'||q.k==='XV'?e.sai[q.s]:q.k==='T'?e.iE[q.j]:q.k==='M'?q.m.st[q.f]:q.k==='W'?q.m.st.w:q.k==='Wg'?q.m.st.w[q.j]:e.psi[q.j];}return x;}
   stepCfg(){return {...this.net.step,...(this.opts.step||{})};}
   varSetup(){const c=this.stepCfg();this.var=c.mode==='var';this.rtol=c.rtol;const tl=this.tlMaxStep();
    this.hMax=Math.min(Math.max(this.T/c.hmax,this.h),tl);this.hMin=Math.min(this.hMax,Math.max(this.h*1e-3,this.T*1e-10));
@@ -764,8 +809,8 @@
    this.sms=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm);for(const m of this.sms)this.smOutputs(m);
    this.srms=[...net.compInfo.values()].filter(c=>c.srm).map(c=>c.srm);for(const m of this.srms)this.srmOutputs(m);
    this.gens=[...net.compInfo.values()].filter(c=>c.gen).map(c=>c.gen);this.hasTV=this.sms.length+this.srms.length+this.gens.length>0;
-   this.hasCPL=net.els.some(e=>e.k==='CPL');this.hasNL=net.els.some(e=>e.k==='NL');this.arcEls=net.els.filter(e=>e.arc);
-   if(old&&!fresh)for(const e of net.els)if(e.k==='NL'){const o=old.els.find(x=>x.k==='NL'&&x.cid===e.cid);if(o)e.v0=o.v0;}this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
+   this.hasCPL=net.els.some(e=>e.k==='CPL');this.hasNL=net.els.some(e=>e.k==='NL');this.arcEls=net.els.filter(e=>e.arc);this.saiEls=net.els.filter(e=>e.sai);this.footEls=net.els.filter(e=>e.foot);footLink(net,this.footEls);
+   if(old&&!fresh)for(const e of net.els)if(e.k==='NL'){const o=old.els.find(x=>x.k==='NL'&&x.cid===e.cid);if(o){e.v0=o.v0;if(o.sai&&e.sai)for(const k of SAI_ST)e.sai[k]=o.sai[k];}}this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.hUser=this.opts.h||this.T/this.opts.hDiv;this.h=Math.min(this.hUser,this.tlMaxStep());
    if(fresh){this.hv=null;this.dg=new Map();this.dgPre=[];this.nRej=0;this.nRejRow=0;this.nTiny=0;}this.stIndex();this.varSetup();this.lteH=null;this.rx=null;
    if(fresh&&this.var)this.hv=this.hGrid(Math.max(this.hMin,this.h/64)); // the first steps (backward Euler, no history yet) start small and grow ×2 per step
@@ -1124,10 +1169,10 @@
   zcFrac(){this.evalBlocks('trial',false,true);let th=null;
    for(const b of this.net.sig.zc){const s=b.st.s,f0=b.st.f0,f1=b.f1;if(!(s?f1<0:f1>0))continue;const d=f0-f1;const q=Math.min(1,Math.max(0,d!==0?f0/d:0));if(th===null||q<th)th=q;}
    return th;}
-  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0,e.arc?{...e.arc}:null]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='TLM')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut,e.modes.map(m=>m.fd?[m.z1.slice(),m.z2.slice(),m.y1.slice(),m.y2.slice(),m.i1,m.i2]:null)]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);}
+  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0,e.arc?{...e.arc}:e.sai?{...e.sai}:null]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='TLM')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut,e.modes.map(m=>m.fd?[m.z1.slice(),m.z2.slice(),m.y1.slice(),m.y2.slice(),m.i1,m.i2]:null)]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);}
    return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el,ms:[...(this.ims||[]),...(this.sms||[]),...(this.srms||[])].map(m=>[m,{...m.st}]),gs:(this.gens||[]).map(m=>[m,genCopy(m.st),m.Efd0,m.Tm0])};}
   restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
-   for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];if(r[2])Object.assign(e.arc,r[2]);}else if(e.k==='TL'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);}else if(e.k==='TLM'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);
+   for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];if(r[2])Object.assign(e.arc||e.sai,r[2]);}else if(e.k==='TL'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);}else if(e.k==='TLM'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);
     r[5].forEach((q,k)=>{if(!q)return;const m=e.modes[k];m.z1.set(q[0]);m.z2.set(q[1]);m.y1.set(q[2]);m.y2.set(q[3]);m.i1=q[4];m.i2=q[5];});}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];e.trigDone=r[3];e.Dacc=r[4];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
    for(const [m,st] of S.ms||[]){m.st={...st};if(m.ph)this.imSources(m);}
    for(const [m,st,e,t] of S.gs||[]){m.st=genCopy(st);m.Efd0=e;m.Tm0=t;}}
@@ -1172,6 +1217,9 @@
     else if(e.k==='TLM')this.tlmSources(e,t);
     else if(e.k==='CPL')e.Pnow=schedAt(e.sched,t,e.P,L);
    }
+   // fast tower footings (4.9.1): KCL at the foot, (1/Z_e + G_min)·v + I_h + f(v) = 0, from the line's history alone; the footing
+   // is then the resistance v/f(v) for this step (the circuit gives the same foot voltage, without Newton)
+   if(this.footEls)for(const e of this.footEls){const F=e.foot,tl=F.tl;if(!tl)continue;const v=nlSolve(1/tl.Ze+GMIN,tl.Ih[1],F.ch,F.v),q=F.ch.cur(v);F.v=v;e.Rnow=Math.abs(q.i)>1e-300&&Math.abs(v)>1e-300?v/q.i:e.R;}
   }
   assemble(h,mode){
    const n=this.n;let ad;
@@ -1242,7 +1290,8 @@
   }
   solveOnce(h,mode){
    let key=null;
-   if(!this.hasCPL&&!this.hasTV&&!this.hasNL){key=mode+(h/this.h).toPrecision(17)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of this.net.els)if(e.k==='S'||e.k==='D')key+=e.on?'1':'0';
+   // (a fast tower footing changes its resistance every step: no cached factorization then, 4.9.1)
+   if(!this.hasCPL&&!this.hasTV&&!this.hasNL&&!(this.footEls&&this.footEls.length)){key=mode+(h/this.h).toPrecision(17)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of this.net.els)if(e.k==='S'||e.k==='D')key+=e.on?'1':'0';
     for(const e of this.net.els)if(e.k==='G'&&e.sched)key+='|'+e.Rnow;}
    let f=key&&this.cache.get(key);
    const st=this.lustat;if(f)st.hit++;
@@ -1255,11 +1304,12 @@
    // the arc state: trapezoidal with the trapezoidal rule while the step is not longer than the section's time constant,
    // backward Euler otherwise (a section faster than the step would ring with θ = ½)
    if(this.arcEls.length)for(const e of this.arcEls){const A=e.arc;A.h=h;A.th=mode==='TR'&&h<=A.tau0*(A.alpha?Math.exp(A.alpha*A.x):1)?0.5:1;A.xg=null;A.F0=A.closed?0:arcF(A,A.x,A.u).F;}
+   if(this.saiEls.length)for(const e of this.saiEls)saiSetup(e.sai,h,mode,this.bdf);
    const n=this.hasNL?80:12;let sol,bad=null;for(let it=0;it<n;it++){this.cplLinearize();this.nlLinearize();sol=this.solveOnce(h,mode);
     let conv=true;bad=null;const V=i=>i<0?0:sol[i];
     for(const e of this.net.els){if(e.k==='CPL'){const v=V(e.a)-V(e.b);if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v))){conv=false;bad=e;}e.v0=v;}
      // arrester: Newton with the voltage limited on the steep part (the voltage that gives the linearized current on the true curve)
-     else if(e.k==='NL'){let v=V(e.a)-V(e.b);if(!e.arc&&Math.abs(v)>Math.abs(e.v0)){const it2=e.g*v+e.J,vi=e.ch.inv(it2);if(Math.sign(it2)===Math.sign(v)&&Math.abs(vi)<Math.abs(v))v=vi;}
+     else if(e.k==='NL'){let v=V(e.a)-V(e.b);if(!e.arc&&!e.sai&&Math.abs(v)>Math.abs(e.v0)){const it2=e.g*v+e.J,vi=e.ch.inv(it2);if(Math.sign(it2)===Math.sign(v)&&Math.abs(vi)<Math.abs(v))v=vi;}
       if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v))){conv=false;bad=e;}e.v0=v;}}
     if(conv){bad=null;break;}}
    if(bad&&this.note){const id=bad.cid,lb=this.net.compInfo.get(id)?.label||id; // 3.13: shown in the diagnostics console
@@ -1299,6 +1349,7 @@
     else if(e.k==='TLM')this.tlmRecord(e,this.t+h,h);
    }
    if(this.arcEls.length)for(const e of this.arcEls){const A=e.arc,v=this.V(e.a)-this.V(e.b);if(!A.closed){A.h=h;A.x=arcStep(A,v).x;}A.u=v;A.h=0;A.xg=null;e.v0=v;}
+   if(this.saiEls.length)for(const e of this.saiEls){const v=this.V(e.a)-this.V(e.b);saiCommit(e.sai,v);e.v0=v;}
    if(this.ims)for(const m of this.ims)this.imStep(m,h);
    if(this.sms)for(const m of this.sms)this.smStep(m,h);
    if(this.srms)for(const m of this.srms)this.srmStep(m,h);
@@ -1451,6 +1502,7 @@
   // themselves do not change. Switch states stay as they are.
   trRestart(t){const hs=this.h*1e-3;this.values(t+hs);const sol=this.solve(hs,'BE'),V=i=>i<0?0:sol[i];
    for(const e of this.net.els)if(e.k==='C')e.i=(V(e.a)-V(e.b)-e.v)*e.C/hs;
+   for(const e of this.saiEls||[]){const S=e.sai,v=V(e.a)-V(e.b);saiCur(S,v);S.ic=(S.ug[0]-S.vc)*S.C/hs;S.v=v;S.u0=S.ug[0];S.u1=S.ug[1];S.h=0;S.ug=null;}
    this.x=sol;this.cMode='TR';}
   nextEvent(tMax){
    let t=tMax;const eps=this.h*1e-6;
@@ -1532,6 +1584,8 @@
  // The same netlist (fresh initial conditions) plus a "recipe" per requested
  // channel, for the reference run on the server (engine/batch.py).
  function exportForBatch(project,keys){
+  // 4.9.1: the parts with a fast implementation go to the server as their detailed one (the same model, ROADMAP §52)
+  {const NL=NLIB();if(NL&&NL.forceImpl)project=NL.forceImpl(project,'blocks');}
   // 4.3: a generator that starts from a load flow needs the steady start of the browser (acInit): the states of that netlist
   const lf=(project?.solve?.init==='ac')||JSON.stringify(project?.components||[]).includes('"GEN3"');
   const net=lf?new Sim(project).net:buildNetlist(project),idx=new Map(net.els.map((e,i)=>[e,i]));

@@ -242,6 +242,18 @@
     if(src===instId&&drv.has(pn))c.params[k]=drv.get(pn);else if(src.startsWith(instId+'/'))c.params[k]=loc(src.slice(instId.length+1))+':'+pn;}}
   return {project:pr,ids:map};}
 
+ // 4.9.1 (ROADMAP §52): a part of the network library (tower, arrester, grid, breaker, AVR …) becomes an ordinary instance
+ // of a definition with the same inner parts and names, laid out for the editor: the same circuit and the same channels
+ // (X/<inner id>), but now it can be opened and changed. Its parameters are no longer live (the values are in the parts).
+ function fromLib(project,id){const pr=clone(project),c=(pr.components||[]).find(x=>x.id===id);
+  if(!c||!NL||!NL.isLib(c.type))throw new SubcircuitError(`«${id}» δεν είναι στοιχείο της βιβλιοθήκης «Δίκτυο».`);
+  const def=NL.defOf(c),o=NL.sidesOf(c),laid=NL.layoutDef(def,o),base=c.type.toLowerCase()+'_';
+  const name=newDefName(pr,base),title=`${def.title||P.PARTS[c.type]?.name||c.type} (${c.label||c.id})`;
+  const ip={def:name};for(const [k,v] of Object.entries(c.params||{}))if(k.startsWith('in_'))ip[k]=v;   // signal inputs that name their source
+  pr.subcircuits={...(pr.subcircuits||{}),[name]:{title,desc:`Από το στοιχείο ${c.type} της βιβλιοθήκης (${P.PARTS[c.type]?.name||''}), με τις τιμές του τη στιγμή της ανάπτυξης.`,version:'1',components:laid.components,wires:laid.wires,params:[]}};
+  const k=pr.components.indexOf(c);pr.components[k]={...c,type:'SUB',params:ip};delete pr.components[k].live;delete pr.components[k].liveBase;
+  for(const w of pr.wires||[])if(w.a.c===id||w.b.c===id)w.pts=[];   // the symbol has other pin positions: routed again
+  sync(pr);return {project:pr,name};}
  // this instance gets its own copy of the definition (changes inside it no longer reach the others)
  function makeUnique(project,instId){const pr=clone(project),inst=pr.components.find(c=>c.id===instId)||
    Object.values(pr.subcircuits||{}).flatMap(d=>d.components||[]).find(c=>c.id===instId&&c.type==='SUB');
@@ -271,6 +283,6 @@
   const setIn=list=>{for(const x of list||[])if(x.type==='SUB'&&x.params?.def===name)x.params={...x.params,['in_'+pn]:String(v)};};
   setIn(pr.components);for(const dd of Object.values(pr.subcircuits||{}))setIn(dd.components);
   sync(pr);return {project:pr,port:pn};}
- const api={externalRefs,refToPort,PORT_KIND,PORT_PIN,okName,needs,portsOf,layout,instances,cycleOf,innerParts,flatten,setParam,paramOf,sync,create,expand,makeUnique,closure,newDefName,SubcircuitError};
+ const api={externalRefs,refToPort,PORT_KIND,PORT_PIN,okName,needs,portsOf,layout,instances,cycleOf,innerParts,flatten,setParam,paramOf,sync,create,expand,fromLib,makeUnique,closure,newDefName,SubcircuitError};
  root.SubCircuit=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

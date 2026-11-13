@@ -15,7 +15,9 @@
  const SIGNAL=new Set(['AIC','EVC','AVR','PSS','GOV']);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const short=(s,n)=>{s=String(s??'');return s.length>n?s.slice(0,n-1)+'…':s;};
- const can=c=>!!c&&SIGNAL.has(c.type)&&!!NL()&&NL().isLib(c.type);
+ const can=c=>!!c&&!!NL()&&NL().isLib(c.type);
+ // 4.9.1: a double click shows the inside of the signal parts; the electrical ones open their settings (the inside from the menu)
+ const canDbl=c=>can(c)&&SIGNAL.has(c.type);
 
  // what a block computes, in one line (numbers with 4 significant digits)
  function what(k){const p0=k.params||{},t=k.type,p={};for(const [q,v] of Object.entries(p0)){const n=typeof v==='number'?v:typeof v==='string'&&/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(v.trim())?+v:NaN;p[q]=Number.isFinite(n)&&C()?C().eng(n,'',4).replace(/\s+$/,''):v;}
@@ -92,23 +94,50 @@
   return {svg:`<svg class="in-svg" width="${lay.w}" height="${lay.h}" data-w="${lay.w}" viewBox="0 0 ${lay.w} ${lay.h}" role="img" aria-label="${esc('Τα μπλοκ μέσα στο '+(c.label||c.id))}">
    <defs><marker id="in-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>${s}</svg>`,n:g.nodes.length,ne:g.edges.length,nb:g.edges.filter(e=>e.back).length,title:g.title,layers:lay.nl};}
 
+ // 4.9.1 (ROADMAP §52): the inside of an electrical part (tower, arrester, grid, breaker, transformer …): its elements with
+ // their symbols, laid out by NetLib.layoutDef, the wires as right-angle paths, and under each element its current now
+ // (the meters: their reading). The same positions as «Ανάπτυξη σε υποκύκλωμα» gives in the editor.
+ function elValue(k){const p={...P.defaults(k.type),...(k.params||{})},d=P.PARTS[k.type];let v=null;try{v=d?.value?d.value(p):null;}catch(e){}
+  if(v===null||v===undefined||v==='')return '';const n=typeof v==='number'?v:typeof v==='string'?P.parseEng(v):NaN;return Number.isFinite(n)&&C()?C().eng(n,d.unit||'',3):short(String(v),18);}
+ function drawEl(c){const d=NL().defOf(c),lay=NL().layoutDef(d,NL().sidesOf(c)),cs=lay.components,by=new Map(cs.map(k=>[k.id,k]));I.g={g:{nodes:cs},keys:new Map()};
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;for(const k of cs){const [bx,by2,bw,bh]=P.boxOf(k);const pts=[[bx,by2],[bx+bw,by2+bh]].map(q=>P.xf(k,q));for(const q of [...pts,...Object.keys(P.pinsOf(k)).map(n=>P.pinPos(k,n))]){x0=Math.min(x0,q[0]);y0=Math.min(y0,q[1]);x1=Math.max(x1,q[0]);y1=Math.max(y1,q[1]);}}
+  const M=40,W0=x1-x0+2*M,H0=y1-y0+2*M+16,ox=M-x0,oy=M-y0;let s='';
+  // wires: horizontal first from a pin that points sideways, vertical first otherwise
+  for(const w of lay.wires){const A=by.get(w.a.c),B=by.get(w.b.c);if(!A||!B)continue;const a=P.pinPos(A,w.a.p),b=P.pinPos(B,w.b.p);if(!a||!b)continue;
+   const da=P.pinDir(A,w.a.p),via=w.pts&&w.pts.length?w.pts:[da[0]&&A.type!=='JUNC'?[b[0],a[1]]:[a[0],b[1]]],pts=[a,...via,b].map(q=>(q[0]+ox)+','+(q[1]+oy)).join(' ');
+   s+=`<polyline class="in-ew" points="${pts}"/>`;}
+  for(const k of cs){if(k.type==='JUNC'){const n=[...lay.wires].filter(w=>w.a.c===k.id||w.b.c===k.id).length;if(n>2)s+=`<circle class="in-dot" cx="${k.x+ox}" cy="${k.y+oy}" r="3.2"/>`;continue;}
+   const def=P.PARTS[k.type];if(!def)continue;const tf=`translate(${k.x+ox},${k.y+oy}) rotate(${90*(k.rot||0)}) scale(${k.flip?-1:1},1)`;
+   let sym='';try{sym=def.draw({...P.defaults(k.type),...k.params});}catch(e){sym='<rect class="block" x="-15" y="-10" width="30" height="20"/>';}
+   {const r=k.rot||0,f=k.flip?-1:1;if(r||k.flip)sym=sym.replace(/<text class="(btxt|bsm)" x="([-\d.]+)" y="([-\d.]+)"/g,(m,q,x,y)=>`${m} transform="translate(${x} ${+y-4}) scale(${f} 1) rotate(${-90*r}) translate(${-x} ${4-y})"`);}  // upright text, as in the editor
+   const io=['PORT','SIN','SOUT'].includes(k.type),gnd=k.type==='GND';
+   s+=`<g class="part t-${k.type} in-part" transform="${tf}"><title>${esc(k.id+' · '+(def.name||k.type))}</title><g class="sym">${sym}</g></g>`;
+   if(gnd)continue;const [bx,by2,bw,bh]=P.boxOf(k),bb=[[bx,by2],[bx+bw,by2+bh]].map(q=>P.xf(k,q)),bx1=Math.max(bb[0][0],bb[1][0]),byt=Math.min(bb[0][1],bb[1][1]),byb=Math.max(bb[0][1],bb[1][1]);
+   const tx=bx1+4+ox,lab=io?k.params.name:k.id,val=io?'':elValue(k);
+   s+=`<text class="in-lbl" x="${tx}" y="${byt+10+oy}">${esc(lab)}</text>`;if(val)s+=`<text class="in-val0" x="${tx}" y="${byt+22+oy}">${esc(val)}</text>`;
+   // the live value: meters show their reading, the other elements their current
+   const meter=['AM','VM','VP','IP'].includes(k.type),key=io?null:meter?'Y:'+C().pid(c.id)+'/'+k.id:'I:'+C().pid(c.id)+'/'+k.id;
+   if(key){I.g.keys.set(k.id,key);s+=`<text class="in-v" x="${tx}" y="${Math.max(byb,byt+24)+8+oy}" data-iv="${esc(k.id)}">—</text>`;}}
+  const n=cs.filter(k=>!['JUNC','GND','PORT','SIN','SOUT'].includes(k.type)).length;
+  return {svg:`<svg class="in-svg in-el" width="${W0}" height="${H0}" data-w="${W0}" viewBox="0 0 ${W0} ${H0}" role="img" aria-label="${esc('Τα στοιχεία μέσα στο '+(c.label||c.id))}">${s}</svg>`,n,ne:lay.wires.length,nb:0,title:d.title,el:true};}
+
  function update(){const x=C(),el=I.el;if(!el||el.hidden||!I.g)return;const s=x.sim();
   for(const [id,key] of I.g.keys){const t=el.querySelector(`[data-iv="${CSS.escape(id)}"]`);if(!t)continue;let v=NaN;if(s&&s.chIndex?.has(key))v=s.now(key);
-   const tx=Number.isFinite(v)?'= '+x.eng(v,'',4):'—';if(t.textContent!==tx)t.textContent=tx;}
+   const tx=Number.isFinite(v)?(key.startsWith('I:')?'i = '+x.eng(v,'A',3):'= '+x.eng(v,'',4)):'—';if(t.textContent!==tx)t.textContent=tx;}
   const tt=el.querySelector('[data-it]');if(tt&&s)tt.textContent='t = '+x.eng(s.t,'s',4);}
 
  function open(id){const x=C(),c=id&&x.comp(id);if(!can(c)){close();return false;}
   if(!I.el){const el=document.createElement('div');el.className='wpanel winside';el.id='lib-inside';el.hidden=true;x.holder().appendChild(el);I.el=el;
    el.addEventListener('click',e=>{if(e.target.closest('[data-iclose]'))close();if(e.target.closest('[data-ifit]')){const b=el.querySelector('.in-body');b.classList.toggle('fit');I.fit=b.classList.contains('fit');}});
    el.addEventListener('keydown',e=>{if(e.key==='Escape')close();});}
-  let r;try{r=draw(c);}catch(e){x.notice?.('Δεν σχεδιάστηκε το εσωτερικό: '+esc(e.message),'error');return false;}
+  let r;try{r=SIGNAL.has(c.type)?draw(c):drawEl(c);}catch(e){x.notice?.('Δεν σχεδιάστηκε το εσωτερικό: '+esc(e.message),'error');return false;}
   I.id=id;const el=I.el;
-  el.innerHTML=`<div class="wp-head"><b>⧉ Μέσα στο ${esc(c.label||c.id)}</b><small class="wf-id">${esc(P.PARTS[c.type]?.name||c.type)} · ${r.n} μπλοκ, ${r.ne} σήματα${r.nb?`, ${r.nb} ανατροφοδότηση (διακεκομμένα)`:''}</small><small class="in-t" data-it></small><button class="in-fit" data-ifit title="Όλο το διάγραμμα στο πλάτος του παραθύρου, ή σε φυσικό μέγεθος με κύλιση">⤢ Όλο / 1:1</button><button class="x" data-iclose title="Κλείσιμο (Esc)">✕</button></div>
+  el.innerHTML=`<div class="wp-head"><b>⧉ Μέσα στο ${esc(c.label||c.id)}</b><small class="wf-id">${esc(P.PARTS[c.type]?.name||c.type)} · ${r.el?`${r.n} στοιχεία${c.params?.impl==='fast'?' (γρήγορη υλοποίηση: ένα στοιχείο του λύτη)':''}`:`${r.n} μπλοκ, ${r.ne} σήματα${r.nb?`, ${r.nb} ανατροφοδότηση (διακεκομμένα)`:''}`}</small><small class="in-t" data-it></small><button class="in-fit" data-ifit title="Όλο το διάγραμμα στο πλάτος του παραθύρου, ή σε φυσικό μέγεθος με κύλιση">⤢ Όλο / 1:1</button><button class="x" data-iclose title="Κλείσιμο (Esc)">✕</button></div>
    <div class="in-body own-scroll" tabindex="0">${r.svg}</div>
-   <div class="wp-foot small muted">Μόνο για ανάγνωση: οι τιμές είναι του τρεξίματος, το μπλοκ αλλάζει από τις παραμέτρους του. Πέρασε από πάνω από ένα μπλοκ για την πλήρη έκφραση.</div>`;
+   <div class="wp-foot small muted">${r.el?'Μόνο για ανάγνωση: κάτω από κάθε στοιχείο η τιμή του και το ρεύμα του τώρα (στα όργανα, η ένδειξή τους). Για αλλαγές: «▣ Ανάπτυξη σε υποκύκλωμα» από το μενού του στοιχείου.':'Μόνο για ανάγνωση: οι τιμές είναι του τρεξίματος, το μπλοκ αλλάζει από τις παραμέτρους του. Πέρασε από πάνω από ένα μπλοκ για την πλήρη έκφραση.'}</div>`;
   el.hidden=false;{const b=el.querySelector('.in-body'),sw=+el.querySelector('.in-svg').dataset.w;b.classList.toggle('fit',I.fit??(sw<=1.35*b.clientWidth));}update();clearInterval(I.timer);I.timer=setInterval(update,250);el.querySelector('.in-body')?.focus();return true;}
  function close(){clearInterval(I.timer);I.timer=null;I.id=null;I.g=null;if(I.el)I.el.hidden=true;}
 
- const api={init:ctx=>{I.ctx=ctx;},open,close,can,openId:()=>I.id,graph,layout,update};
+ const api={init:ctx=>{I.ctx=ctx;},open,close,can,canDbl,openId:()=>I.id,graph,layout,update,drawEl};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.Inside=api;
 })(typeof window!=='undefined'?window:globalThis);

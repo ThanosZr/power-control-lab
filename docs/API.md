@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.9: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (465 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.9.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (467 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.9.
+Κανένα στην 4.9.1.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -446,7 +446,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-100 σημεία.
+102 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -521,9 +521,11 @@
 | `part:PY` | code, ins, outs, pars, clock, trig, y0 | e, y | 3.18 |
 | `part:R` | R, sched | a, b | 3.18 |
 | `part:RAMP` | f, shape, lo, hi, phase | y | 3.18 |
+| `part:RFX` | R0, tbl, line | a, b | 4.9.1 |
 | `part:RLIM` | up, dn, y0 | u, y | 3.19 |
 | `part:RT` | clock, trig, mode, y0 | u, y | 3.19 |
-| `part:SAI` | U10, d, n, kL1, Llead, A0, A1, meas | a, b | 4.9 |
+| `part:SAI` | U10, d, n, kL1, L1fit, Llead, A0, A1, impl, meas | a, b | 4.9 |
+| `part:SAIX` | L0, R0, L1, R1, C, tbl0, tbl1 | a, b | 4.9.1 |
 | `part:SAT` | lo, hi | u, y | 3.18 |
 | `part:SCR` | fire, refsrc, alpha, shift, pw, fref, pwm, out, Ron, Vf, Roff | a, g, k | 3.18 |
 | `part:SG` | vt, Ub, U0, kde, Dde, trig, Rarc, ext, Iext, Roff | a, b | 3.18 |
@@ -540,7 +542,7 @@
 | `part:TAGO` | name | u | 3.18 |
 | `part:TL` | spec, Z, tau, len, vel, Lp, Cp, Rt, Rp, nsec | a1, a2, b1, b2 | 3.18 |
 | `part:TLM` | model, len, f, fmin, dec, ppd, fti, data, mdl, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.4 |
-| `part:TOWER` | h, Zt, vt, foot, R0, rho, E0, ins, Ub, U0, kde, Dde, meas | a1, a2, b1, b2, c1, c2, d1, d2, e1, e2 | 4.9 |
+| `part:TOWER` | h, Zt, vt, foot, R0, rho, E0, ins, Ub, U0, kde, Dde, impl, meas | a1, a2, b1, b2, c1, c2, d1, d2, e1, e2 | 4.9 |
 | `part:UD` | clock, trig, y0 | u, y | 3.18 |
 | `part:VAC` | Vpk, f, phase, off, Rs, Ls | n, p | 3.18 |
 | `part:VAC3` | Vpk, f, phase, seq, Rs, Ls, conn | a, abc, b, c, n | 3.18 |

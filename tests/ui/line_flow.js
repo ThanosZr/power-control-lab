@@ -77,5 +77,24 @@ const {chromium}=require('playwright');
  ok((await p.$$('.lbls.note .ntext')).length>=8,'notes on the drawing');
  await p.click('#toend');await p.waitForFunction(()=>window.PCL.S.sim.t>=49e-6,null,{timeout:180000});await p.waitForTimeout(800);
  const thl=await p.$eval('#theory',e=>e.innerText);ok(/Καμία διάσπαση μονωτήρων/.test(thl)&&/LIWL/.test(thl),'lightning card: '+thl.slice(0,160));
+ // 4.9.1 (ROADMAP §52): the inside of an electrical library part (its elements and their currents now), the fast
+ // implementation (the same peak of the tower top), and a part expanded into an ordinary subcircuit that opens in the editor
+ ok(await p.evaluate(()=>Inside.open('T2')),'the inside of the tower opens');await p.waitForTimeout(400);
+ ok((await p.$$('#lib-inside .in-el .part')).length>=20,'tower inside: its elements with symbols');
+ ok(/i = /.test(await p.$eval('#lib-inside',e=>e.textContent)),'tower inside: the currents of the elements');
+ ok(/13 στοιχεία/.test(await p.$eval('#lib-inside .wp-head',e=>e.textContent)),'tower inside: 13 elements');
+ await p.keyboard.press('Escape');await p.evaluate(()=>Inside.close());
+ await p.selectOption('#tut-options [data-topt="impl"]','fast');await p.waitForTimeout(2000);
+ ok(await p.evaluate(()=>window.PCL.editor.comp('T2').params.impl==='fast'&&window.PCL.editor.comp('SEa').params.impl==='fast'),'fast implementation chosen');
+ await p.click('#toend');await p.waitForFunction(()=>window.PCL.S.sim.t>=49e-6,null,{timeout:180000});await p.waitForTimeout(800);
+ const thf=await p.$eval('#theory',e=>e.innerText);ok(/Καμία διάσπαση μονωτήρων/.test(thf),'fast: the same card: '+thf.slice(0,120));
+ ok(await p.evaluate(()=>{Inside.open('SEa');return /γρήγορη υλοποίηση/.test(document.querySelector('#lib-inside .wp-head').textContent);}),'fast arrester: one element of the solver');
+ await p.evaluate(()=>Inside.close());
+ await p.evaluate(()=>window.PCL.libToSub('T2'));await p.waitForTimeout(500);
+ ok(await p.evaluate(()=>{const c=window.PCL.editor.comp('T2');return c.type==='SUB'&&/^tower_/.test(c.params.def);}),'the tower expanded into a subcircuit');
+ ok(await p.evaluate(()=>!window.PCL.S.error),'the expanded circuit builds: '+await p.evaluate(()=>window.PCL.S.error));
+ await p.evaluate(()=>{const c=window.PCL.editor.comp('T2');window.PCL.enterSub(c.params.def,'T2');});await p.waitForTimeout(600);
+ ok(await p.evaluate(()=>window.PCL.editor.doc.components.filter(c=>c.type==='SG').length===3&&!!window.PCL.editor.comp('RF')),'inside the subcircuit: the strings and the footing, editable');
+ await p.evaluate(()=>window.PCL.leaveSub(0));await p.waitForTimeout(400);
  ok(!errs.length,'no JavaScript errors: '+errs.join(' | '));
  await b.close();if(fail.length){console.log('FAIL',fail.join('\n'));process.exit(1);}console.log('PASS line_flow');})().catch(e=>{console.error(e);process.exit(1);});
