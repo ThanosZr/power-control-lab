@@ -68,7 +68,7 @@
 | `pcl/formats.py` | 222 |
 | `pcl/gui.py` | 409 |
 | `pcl/impulse.py` | 858 |
-| `pcl/lineconst.py` | 1023 |
+| `pcl/lineconst.py` | 2172 |
 | `pcl/link.py` | 145 |
 | `pcl/network.py` | 1206 |
 | `pcl/plotting.py` | 340 |
@@ -95,6 +95,7 @@
 | `tests/test_impulse_tools.py` | 150 |
 | `tests/test_library.py` | 41 |
 | `tests/test_lightning.py` | 78 |
+| `tests/test_linedata.py` | 495 |
 | `tests/test_lines.py` | 355 |
 | `tests/test_live_program.py` | 49 |
 | `tests/test_live_sim.py` | 149 |
@@ -2555,46 +2556,94 @@ _(χωρίς συναρτήσεις)_
 | 38 | class | `LineError` |
 | 42 | function | `_f` |
 | 54 | function | `conductors` |
-| 101 | function | `phases` |
-| 108 | function | `z_internal` |
-| 136 | function | `_carson_coeffs` |
-| 155 | function | `carson_series` |
-| 195 | function | `carson_integral` |
-| 219 | function | `cables` |
-| 266 | function | `tube` |
-| 292 | function | `pollaczek` |
-| 329 | function | `wedepohl` |
-| 341 | function | `sea_return` |
-| 359 | function | `permittivity` |
-| 374 | function | `cable_zy` |
-| 447 | function | `zy` |
-| 489 | function | `_groups` |
-| 498 | function | `reduce_phases` |
-| 507 | function | `phase_matrices` |
-| 526 | function | `sequence` |
-| 537 | function | `ti_matrix` |
-| 561 | function | `modal` |
-| 567 | function | `q_error` |
-| 577 | function | `vfit` |
-| 632 | function | `rational` |
-| 638 | function | `freqs` |
-| 643 | function | `cp_model` |
-| 660 | function | `_fit_a` |
-| 698 | function | `fd_model` |
-| 748 | function | `report` |
-| 769 | function | `exact_admittance` |
-| 776 | function | `line_admittance` |
-| 788 | function | `model_admittance` |
-| 807 | function | `nlt_solve` |
-| 875 | function | `_src_laplace` |
-| 891 | function | `_line_y` |
-| 903 | function | `_cp_y` |
-| 923 | function | `_half` |
-| 929 | function | `load_data` |
-| 934 | function | `save_data` |
-| 962 | function | `_sc` |
-| 987 | function | `typical` |
-| 992 | function | `api` |
+| 111 | function | `phases` |
+| 118 | function | `z_internal` |
+| 150 | function | `_zi_opts` |
+| 185 | function | `z_galloway` |
+| 192 | function | `z_int` |
+| 214 | function | `_carson_coeffs` |
+| 233 | function | `carson_series` |
+| 273 | function | `carson_integral` |
+| 297 | function | `soil_layers` |
+| 326 | function | `_tanh` |
+| 331 | function | `_soil_w` |
+| 342 | function | `_cosint` |
+| 360 | function | `earth_overhead` |
+| 373 | function | `_layer_of` |
+| 382 | function | `earth_buried` |
+| 458 | function | `cables` |
+| 505 | function | `_merge_semi` |
+| 542 | function | `tube` |
+| 568 | function | `pollaczek` |
+| 605 | function | `wedepohl` |
+| 617 | function | `sea_return` |
+| 635 | function | `permittivity` |
+| 650 | function | `cable_zy` |
+| 762 | function | `_ins_y` |
+| 776 | function | `_air_z` |
+| 791 | function | `zy` |
+| 836 | function | `_groups` |
+| 845 | function | `reduce_phases` |
+| 860 | function | `_gdiag` |
+| 871 | function | `transposition` |
+| 894 | function | `transpose_avg` |
+| 899 | function | `phase_matrices` |
+| 925 | function | `sequence` |
+| 936 | function | `ti_matrix` |
+| 967 | function | `modal` |
+| 973 | function | `q_error` |
+| 986 | function | `clarke` |
+| 997 | function | `double_ti` |
+| 1009 | function | `balance` |
+| 1031 | function | `line_zy` |
+| 1039 | function | `model_ti` |
+| 1052 | function | `phases_of` |
+| 1064 | function | `auto_fti` |
+| 1083 | function | `seq_matrices` |
+| 1108 | function | `rebuild` |
+| 1180 | function | `zy_from_file` |
+| 1208 | function | `load_zy_mat` |
+| 1234 | function | `vfit` |
+| 1289 | function | `rational` |
+| 1295 | function | `freqs` |
+| 1303 | function | `cp_model` |
+| 1340 | function | `lossless_modes` |
+| 1388 | function | `_msqrt` |
+| 1396 | function | `_fit_a` |
+| 1434 | function | `fd_model` |
+| 1494 | function | `report` |
+| 1518 | function | `sym_matrix` |
+| 1531 | function | `to_sym` |
+| 1537 | function | `matrices` |
+| 1555 | function | `_phys_currents` |
+| 1566 | function | `field` |
+| 1600 | function | `bfield` |
+| 1625 | function | `telecom` |
+| 1653 | function | `_default_sources` |
+| 1660 | function | `_modal_admittance` |
+| 1674 | function | `_end_tests` |
+| 1680 | function | `qerror_tests` |
+| 1704 | function | `exact_pi` |
+| 1714 | function | `nominal_pi` |
+| 1723 | function | `useful` |
+| 1751 | function | `_track` |
+| 1759 | function | `scan` |
+| 1863 | function | `jsonable` |
+| 1883 | function | `exact_admittance` |
+| 1890 | function | `line_admittance` |
+| 1902 | function | `model_admittance` |
+| 1921 | function | `nlt_solve` |
+| 1989 | function | `_src_laplace` |
+| 2005 | function | `_line_y` |
+| 2017 | function | `_cp_y` |
+| 2037 | function | `_half` |
+| 2043 | function | `load_data` |
+| 2048 | function | `save_data` |
+| 2076 | function | `_sc` |
+| 2101 | function | `typical` |
+| 2106 | function | `_req_data` |
+| 2120 | function | `_req_opts` |
+| 2132 | function | `api` |
 
 ### `pcl/link.py`
 

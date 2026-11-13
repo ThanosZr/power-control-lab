@@ -66,11 +66,21 @@ def conductors(data):
         h = y if ymid in (None, '') else (2.0 * _f(ymid) + y) / 3.0
         if h <= r:
             raise LineError('ο αγωγός πρέπει να είναι πάνω από το έδαφος')
-        Rdc = _f(w.get('Rdc')) / 1000.0
+        q = r * (1 - 2 * tD)
+        if w.get('Rdc') in (None, '') and w.get('rho') not in (None, ''):     # 4.11: resistivity instead of R_dc
+            Rdc = _f(w.get('rho')) / (math.pi * (r * r - q * q))
+        else:
+            Rdc = _f(w.get('Rdc')) / 1000.0
         if Rdc <= 0:
             raise LineError('η αντίσταση dc πρέπει να είναι θετική')
-        out.append({'ph': int(_f(w.get('ph'), 1)), 'x': x, 'h': h, 'r': r, 'q': r * (1 - 2 * tD), 'Rdc': Rdc,
-                    'mur': _f(w.get('mur'), 1.0)})
+        c = {'ph': int(_f(w.get('ph'), 1)), 'x': x, 'h': h, 'r': r, 'q': q, 'Rdc': Rdc, 'mur': _f(w.get('mur'), 1.0),
+             'ht': y, 'hm': y if ymid in (None, '') else _f(ymid)}
+        if w.get('dL') not in (None, ''):          # 4.11: an extra internal inductance (mH/km), used by `rebuild`
+            c['dL'] = _f(w.get('dL')) * 1e-6
+        zi = _zi_opts(w, c)
+        if zi:
+            c['zi'] = zi
+        out.append(c)
 
     for w in data.get('wires', []) or []:
         one(w, _f(w.get('x')), _f(w.get('y')), w.get('ymid'))
@@ -130,6 +140,74 @@ def z_internal(f, r, q, Rdc, mur=1.0, skin=True, s=None):
     num = ive(0, a) * kve(1, b) + kve(0, a) * ive(1, b) * E
     den = ive(1, a) * kve(1, b) - ive(1, b) * kve(1, a) * E
     return rho * m / (2 * math.pi * r) * num / den
+
+
+# 4.11: the other models of the internal impedance of the EMTP LINE CONSTANTS (IXTYPE, line_constants §4.5; Dommel
+# §4.1.1.1 and Appendix VII): Galloway–Wedepohl for stranded conductors, GMR, GMR/r, reactance at unit spacing
+ZI_KINDS = ('tube', 'gw', 'gmr', 'gmrr', 'xu')
+
+
+def _zi_opts(w, c):
+    """The model of the internal impedance of one conductor ('zi' in the data): None for the tube (Bessel, the default),
+    or a dict with what the other models need, in SI."""
+    kind = w.get('zi') or 'tube'
+    if kind not in ZI_KINDS:
+        raise LineError(f'άγνωστο μοντέλο εσωτερικής εμπέδησης «{kind}»')
+    if kind == 'tube':
+        return None
+    if kind == 'gw':
+        n = int(_f(w.get('ns')))
+        if n < 3:
+            raise LineError('Galloway–Wedepohl: χρειάζεται το πλήθος των εξωτερικών συρμάτων (≥ 3)')
+        r = c['r']
+        rs = _f(w.get('rs'), 0.0) / 100.0 or r / (1.0 + 1.0 / math.sin(math.pi / n))   # n strands touching on a circle
+        rho = _f(w.get('rho'), 0.0) or c['Rdc'] * math.pi * (r * r - c['q'] * c['q'])
+        return {'kind': 'gw', 'n': n, 'rs': rs, 'rho': rho, 'mus': _f(w.get('mus'), c['mur'])}
+    if kind == 'gmr':
+        g = _f(w.get('gmr')) / 100.0
+    elif kind == 'gmrr':
+        g = _f(w.get('gmrr')) * c['r']
+    else:
+        X, fx = _f(w.get('xu')) / 1000.0, _f(w.get('fx'), 50.0)      # Ω/km at 1 m spacing → Ω/m
+        if not fx > 0:
+            raise LineError('η συχνότητα της αντίδρασης μοναδιαίας απόστασης πρέπει να είναι θετική')
+        g = math.exp(-X / (2 * math.pi * fx * MU0 / (2 * math.pi)))
+        if (w.get('xmode') or 'L') == 'X':
+            return {'kind': 'xu', 'X': X, 'gmr': g}
+    if not 0 < g <= c['r']:
+        raise LineError('η GMR πρέπει να είναι θετική και όχι μεγαλύτερη από την ακτίνα')
+    return {'kind': 'gmr', 'gmr': g}
+
+
+GW_K = 2.25          # Galloway et al. 1964 §2.2.3 (electrolytic tank), Dommel eq. VII.1
+
+
+def z_galloway(s, n, rs, rho, mur=1.0):
+    """Galloway–Wedepohl surface impedance of a stranded conductor (Ω/m): K·m·ρ/(r_s·(n + 2)·π), m = √(sμ₀μ_r/ρ),
+    n outer strands of radius r_s (R = ωL = 2.25·√(ωμ₀μ_rρ)/(r_s·π·(2 + n)·√2) at s = jω, Dommel eq. VII.1)."""
+    m = cmath.sqrt(complex(s) * MU0 * mur / rho)
+    return GW_K * m * rho / (rs * (n + 2) * math.pi)
+
+
+def z_int(c, s, skin=True):
+    """Internal impedance (Ω/m) of a conductor of `conductors()` at the complex frequency s, with its model."""
+    zi = c.get('zi')
+    if not zi:
+        return z_internal(0, c['r'], c['q'], c['Rdc'], c['mur'], skin, s)
+    s = complex(s)
+    if zi['kind'] == 'gmr':
+        return c['Rdc'] + s * MU0 / (2 * math.pi) * math.log(c['r'] / zi['gmr'])
+    if zi['kind'] == 'xu':          # constant reactance at unit spacing: the GMR follows the frequency (jω only)
+        w = abs(s.imag) or 1.0
+        g = math.exp(-zi['X'] / (w * MU0 / (2 * math.pi)))
+        return c['Rdc'] + s * MU0 / (2 * math.pi) * math.log(c['r'] / g)
+    if not skin or s == 0:
+        return z_internal(0, c['r'], c['q'], c['Rdc'], c['mur'], False, s)
+    # the formula is for frequencies where the current is at the surface (above 2–5 kHz); R_dc at low frequencies,
+    # joined smoothly: √(R_dc² + z_GW²) (our choice, analytic in the right half-plane)
+    zg = z_galloway(s, zi['n'], zi['rs'], zi['rho'], zi['mus'])
+    z = cmath.sqrt(c['Rdc'] ** 2 + zg * zg)
+    return z if z.real >= 0 else -z
 
 
 # ---------------------------------------------------------------- earth return
@@ -209,6 +287,167 @@ def carson_integral(hi, hk, x, f, rho, mu=MU0, s=None):
     return s * mu / math.pi * complex(re, im)
 
 
+# ---------------------------------------------------------------- 4.11: layered earth, μ_r of the earth
+# A stratified earth as layers from the surface down, each with ρ, μ_r and a thickness (the last one infinite). The
+# vector potential of a line current is written as a Fourier integral over λ (the wavenumber along x); in each layer
+# A ∝ e^(±u·z) with u = √(λ² + sμ₀μ_r/ρ), and A and (1/μ_r)·∂A/∂z are continuous at each boundary. Seen from above, the
+# whole stack is one "admittance" W(λ): W = ζ_N for the bottom layer, W_i = ζ_i·(W_{i+1} + ζ_i·t)/(ζ_i + W_{i+1}·t),
+# t = tanh(u_i·d_i), ζ = u/μ_r. One layer with μ_r = 1 gives W = u and Carson's integral (Sunde; Nakagawa–Iwamoto 1976).
+
+def soil_layers(data):
+    """The earth of the line data as layers [{rho, mur, d}] (the last d infinite), or None for the homogeneous
+    non-magnetic earth of 4.4–4.5 (Carson's series, Pollaczek), which keeps its own, faster formulas.
+    Keys: rho (Ω·m, top layer), rho2 and dsoil (m, thickness of the top layer) for two layers, mur_e (μ_r of the earth),
+    or soil = [{rho, d, mur}, …] for any number of layers."""
+    if data.get('soil'):
+        L = [{'rho': _f(q.get('rho')), 'mur': _f(q.get('mur'), 1.0), 'd': _f(q.get('d'), math.inf)} for q in data['soil']]
+    else:
+        rho = _f(data.get('rho'), 100.0)
+        mu = _f(data.get('mur_e'), 1.0)
+        L = [{'rho': rho, 'mur': mu, 'd': math.inf}]
+        if data.get('rho2') not in (None, '') and data.get('dsoil') not in (None, ''):
+            d = _f(data.get('dsoil'))
+            if not d > 0:
+                raise LineError('το πάχος του πάνω στρώματος του εδάφους πρέπει να είναι θετικό')
+            L[0]['d'] = d
+            L.append({'rho': _f(data.get('rho2')), 'mur': mu, 'd': math.inf})
+    for q in L:
+        if not q['rho'] > 0 or not q['mur'] > 0:
+            raise LineError('η ειδική αντίσταση και το μ_r του εδάφους πρέπει να είναι θετικά')
+    for q in L[:-1]:
+        if not 0 < q['d'] < math.inf:
+            raise LineError('κάθε στρώμα του εδάφους εκτός από το τελευταίο θέλει πεπερασμένο πάχος')
+    L[-1]['d'] = math.inf
+    if len(L) == 1 and L[0]['mur'] == 1.0:
+        return None
+    return L
+
+
+def _tanh(z):
+    e = cmath.exp(-2 * z)
+    return (1 - e) / (1 + e)
+
+
+def _soil_w(lam, s, L, top=0):
+    """W(λ) of the layers top… seen from above their top boundary, and the u, ζ of every layer."""
+    us = [cmath.sqrt(lam * lam + s * MU0 * q['mur'] / q['rho']) for q in L]
+    zs = [u / q['mur'] for u, q in zip(us, L)]
+    W = zs[-1]
+    for i in range(len(L) - 2, top - 1, -1):
+        t = _tanh(us[i] * L[i]['d'])
+        W = zs[i] * (W + zs[i] * t) / (zs[i] + W * t)
+    return W, us, zs
+
+
+def _cosint(g, x, decay, mmax, rel=1e-11, absol=1e-13):
+    """∫₀^∞ g(λ)·cos(λx) dλ for a complex g that decays like e^(−decay·λ): plain adaptive quadrature up to c (where g
+    changes fast, near λ ≈ |m|), the tail with the cosine as the weight of QUADPACK (QAWO), as `pollaczek`."""
+    from scipy.integrate import quad
+    lim = 40.0 / max(decay, 1e-9) + 40.0 * mmax
+    c = min(lim, 50.0 * mmax) if mmax > 0 else 0.0
+    tol = {'epsabs': absol, 'epsrel': rel}
+
+    def part(fn):
+        v = quad(lambda a: fn(g(a)) * math.cos(a * x), 0, c, limit=400, **tol)[0] if c > 0 else 0.0
+        if lim > c:
+            kw = {'weight': 'cos', 'wvar': x} if x > 0 else {}
+            v += quad(lambda a: fn(g(a)), c, lim, limit=800, **tol, **kw)[0]
+        return v
+
+    return complex(part(lambda z: z.real), part(lambda z: z.imag))
+
+
+def earth_overhead(hi, hk, x, s, soil):
+    """Earth-return correction ΔZ (Ω/m) between two conductors in the air at heights h_i, h_k, horizontal distance x,
+    over layered earth: (sμ₀/π)·∫₀^∞ e^(−(h_i+h_k)λ)·cos(xλ)/(λ + W(λ)) dλ (Carson's integral with W = u for one layer)."""
+    s = complex(s)
+    H = hi + hk
+
+    def g(lam):
+        return cmath.exp(-H * lam) / (lam + _soil_w(lam, s, soil)[0])
+
+    mmax = max(abs(cmath.sqrt(s * MU0 * q['mur'] / q['rho'])) for q in soil)
+    return s * MU0 / math.pi * _cosint(g, abs(x), H, min(mmax, 60.0 / H), rel=1e-12, absol=0)
+
+
+def _layer_of(z, soil):
+    top = 0.0
+    for i, q in enumerate(soil):
+        if z < top + q['d']:
+            return i, top
+        top += q['d']
+    return len(soil) - 1, top
+
+
+def earth_buried(s, h, y, x, soil, d=None):
+    """Earth-return impedance (Ω/m) between the outer loops of two buried conductors at depths h and y, horizontal
+    distance x, in an earth of one or two layers (each with ρ, μ_r): the direct field μ_rμ₀·K₀(m·r)/2π in the layer of
+    the source and the reflections at the surface and at the boundary, Γ_s = (ζ₁ − λ)/(ζ₁ + λ), Γ_b = (ζ₁ − ζ₂)/(ζ₁ + ζ₂),
+    from the Fourier integral (THEORY §8ι). One layer with μ_r = 1 is Pollaczek's formula. Self: d = R, x = R, y = h."""
+    from scipy.special import kve
+    s = complex(s)
+    if len(soil) > 2:
+        raise LineError('καλώδια σε έδαφος με περισσότερα από δύο στρώματα δεν υποστηρίζονται ακόμη')
+    if h > y:
+        h, y = y, h
+    li, _ = _layer_of(h, soil)
+    lk, _ = _layer_of(y, soil)
+    m = [cmath.sqrt(s * MU0 * q['mur'] / q['rho']) for q in soil]
+    mmax = max(abs(v) for v in m)
+    r = math.hypot(x, h - y) if d is None else d
+    k = s * MU0 / (2 * math.pi)
+
+    def K0(z):
+        return kve(0, z) * cmath.exp(-z)
+
+    if len(soil) == 1:
+        mu = soil[0]['mur']
+
+        def g(lam):
+            u = cmath.sqrt(lam * lam + m[0] * m[0])
+            z1 = u / mu
+            return (z1 - lam) / (z1 + lam) * cmath.exp(-u * (h + y)) / u
+
+        return k * mu * (K0(m[0] * r) + _cosint(g, x, h + y, mmax))
+    D = soil[0]['d']
+    for zz in (h, y):
+        if abs(zz - D) < 1e-6:
+            raise LineError('ένα καλώδιο δεν μπορεί να είναι πάνω στο όριο δύο στρωμάτων του εδάφους')
+    mu1, mu2 = soil[0]['mur'], soil[1]['mur']
+
+    def parts(lam):
+        u1 = cmath.sqrt(lam * lam + m[0] * m[0])
+        u2 = cmath.sqrt(lam * lam + m[1] * m[1])
+        z1, z2 = u1 / mu1, u2 / mu2
+        Gs = (z1 - lam) / (z1 + lam)
+        Gb = (z1 - z2) / (z1 + z2)
+        e2 = cmath.exp(-2 * u1 * D)
+        return u1, u2, z1, z2, Gs, Gb, e2
+
+    if li == 0 and lk == 0:
+        def g(lam):
+            u1, u2, z1, z2, Gs, Gb, e2 = parts(lam)
+            num = (Gs * cmath.exp(-u1 * (h + y)) + Gb * cmath.exp(-u1 * (2 * D - h - y))
+                   + Gs * Gb * (cmath.exp(-u1 * (2 * D - h + y)) + cmath.exp(-u1 * (2 * D + h - y))))
+            return num / (1 - Gs * Gb * e2) / u1
+
+        return k * mu1 * (K0(m[0] * r) + _cosint(g, x, min(h + y, 2 * D - h - y), mmax))
+    if li == 0 and lk == 1:
+        def g(lam):
+            u1, u2, z1, z2, Gs, Gb, e2 = parts(lam)
+            return (2 / (z1 + z2) * (cmath.exp(-u1 * (D - h)) + Gs * cmath.exp(-u1 * (D + h)))
+                    * cmath.exp(-u2 * (y - D)) / (1 - Gs * Gb * e2))
+
+        return k * _cosint(g, x, (D - h) + (y - D), mmax)
+
+    def g(lam):
+        u1, u2, z1, z2, Gs, Gb, e2 = parts(lam)
+        W1 = z1 * (1 - Gs * e2) / (1 + Gs * e2)
+        return (z2 - W1) / (z2 + W1) * cmath.exp(-u2 * (h + y - 2 * D)) / u2
+
+    return k * mu2 * (K0(m[1] * r) + _cosint(g, x, h + y - 2 * D, mmax))
+
+
 # ---------------------------------------------------------------- single-core cables (4.5, Dommel ch. 5)
 # A cable is a set of coaxial layers from the centre out: conductors ('c': core, sheath, armor, …, each a tube with
 # inner radius rin, outer radius rout, resistivity rho, μ_r) separated by insulations ('i': outer radius rout, ε_r,
@@ -222,7 +461,7 @@ def cables(data):
     out = []
     for n, c in enumerate(data.get('cables', []) or []):
         x, y = _f(c.get('x')), _f(c.get('y'))
-        lay = c.get('layers') or []
+        lay = _merge_semi(c.get('layers') or [], n)
         ph = [int(_f(v)) for v in (c.get('ph') or [])]
         conds, r = [], 0.0
         for L in lay:
@@ -253,13 +492,50 @@ def cables(data):
             if k < len(conds) - 1 and cd['ins'] is None:
                 raise LineError(f'καλώδιο {n + 1}: χρειάζεται μόνωση ανάμεσα στους αγωγούς')
             cd['ph'] = ph[k] if k < len(ph) else 0
-        if conds[-1]['ins'] is None and conds[-1]['ph'] != 0:
+        if conds[-1]['ins'] is None and conds[-1]['ph'] != 0 and y >= 0:     # in the air (4.11) it may be a phase
             raise LineError(f'καλώδιο {n + 1}: ο εξωτερικός αγωγός χωρίς μόνωση ακουμπά στο μέσο: φάση 0')
         out.append({'x': x, 'y': y, 'conds': conds, 'R': r})
     for i, a in enumerate(out):
         for b in out[i + 1:]:
             if math.hypot(a['x'] - b['x'], a['y'] - b['y']) < a['R'] + b['R'] - 1e-12:
                 raise LineError('δύο καλώδια επικαλύπτονται')
+    return out
+
+
+def _merge_semi(lay, n):
+    """4.11: semiconducting screens ('s' layers, only the outer radius) are merged into the insulation they touch, with
+    its ε_r raised so that the capacitance of the whole gap stays that of the insulation alone:
+    ε′ = ε_r·ln(R_o/R_i)/ln(b/a), (R_i, R_o) the gap between the conductors, (a, b) the insulation itself
+    (Line/Cable Data §2.3.1.2; Gustavsen et al., Part II, eq. 5). The screens add no longitudinal conduction."""
+    if not any((L.get('t') or 'c') == 's' for L in lay):
+        return lay
+    out, r, i = [], 0.0, 0
+    while i < len(lay):
+        L = lay[i]
+        t = L.get('t') or 'c'
+        if t == 'c':
+            out.append(L)
+            r = _f(L.get('rout'))
+            i += 1
+            continue
+        j, ins, Ri = i, None, r
+        while j < len(lay) and (lay[j].get('t') or 'c') in ('s', 'i'):
+            if (lay[j].get('t') or 'c') == 'i':
+                if ins is not None:
+                    raise LineError(f'καλώδιο {n + 1}: δύο μονώσεις στη σειρά· ένωσέ τες σε μία')
+                ins = (j, r)
+            r = _f(lay[j].get('rout'))
+            j += 1
+        if ins is None:
+            raise LineError(f'καλώδιο {n + 1}: ένα ημιαγώγιμο στρώμα χρειάζεται μόνωση δίπλα του')
+        L = dict(lay[ins[0]])
+        a, b = ins[1], _f(L.get('rout'))
+        if not (Ri < r and a < b):
+            raise LineError(f'καλώδιο {n + 1}: οι ακτίνες των στρωμάτων πρέπει να αυξάνουν')
+        L['epsr'] = _f(L.get('epsr'), 1.0) * math.log(r / Ri) / math.log(b / a) if Ri > 0 else _f(L.get('epsr'), 1.0)
+        L['rout'] = r
+        out.append(L)
+        i = j
     return out
 
 
@@ -379,6 +655,20 @@ def cable_zy(data, s):
     medium = data.get('medium', 'earth')
     rho = _f(data.get('rho'), 100.0 if medium == 'earth' else 0.2)
     s = complex(s)
+    soil = soil_layers(data) if medium == 'earth' else None
+    air = [c['y'] < 0 for c in cbs]          # 4.11: a negative depth is a height above the ground
+    if any(air) and not all(air):
+        raise LineError('καλώδια στον αέρα και θαμμένα στο ίδιο σύστημα δεν υποστηρίζονται ακόμη')
+    air = bool(air) and air[0]
+    if air and medium != 'earth':
+        raise LineError('καλώδια πάνω από το έδαφος: μόνο με μέσο «έδαφος»')
+    for c in cbs:
+        if not air and medium == 'earth' and c['y'] <= c['R']:
+            raise LineError('ένα θαμμένο καλώδιο πρέπει να είναι ολόκληρο κάτω από την επιφάνεια')
+        if air and -c['y'] <= c['R']:
+            raise LineError('ένα καλώδιο στον αέρα πρέπει να είναι ολόκληρο πάνω από το έδαφος')
+    loss = data.get('loss') or 'causal'
+    fg0 = _f(data.get('fg0'), 100.0)
     blocks, cs, A_all = [], [], []
     for c in cbs:
         N = len(c['conds'])
@@ -391,7 +681,7 @@ def cable_zy(data, s):
             if ins:
                 Zl[k, k] += s * MU0 * ins['mur'] / (2 * math.pi) * math.log(ins['rout'] / ins['rin'])
                 Cp = 2 * math.pi * EPS0 * ins['epsr'] / math.log(ins['rout'] / ins['rin'])
-                Yl[k] = s * Cp * permittivity(s, 1.0, ins['tand'])
+                Yl[k] = _ins_y(s, Cp, ins['tand'], loss, fg0)
             else:
                 Yl[k] = np.inf
             if k + 1 < N:
@@ -399,10 +689,15 @@ def cable_zy(data, s):
                 zin, _, zmut = tube(s, nx['rin'], nx['rout'], nx['rho'], nx['mur'])
                 Zl[k, k] += zin
                 Zl[k, k + 1] = Zl[k + 1, k] = -zmut
-        if medium == 'sea':
+        if air:                            # the outer loop is an overhead conductor of radius R at the height −y
+            Zl[N - 1, N - 1] += _air_z(s, -c['y'], -c['y'], 0.0, c['R'], rho, soil, data)
+            Yl[N - 1] = 0.0                # the shunt of the outer conductors comes from the potential coefficients
+        elif medium == 'sea':
             Zl[N - 1, N - 1] += sea_return(s, c['R'], c['R'], 0, rho)
         elif medium == 'perfect':
             pass
+        elif soil:
+            Zl[N - 1, N - 1] += earth_buried(s, c['y'], c['y'], c['R'], soil, d=c['R'])
         else:
             Zl[N - 1, N - 1] += pollaczek(s, c['y'], c['y'], c['R'], rho, d=c['R'])
         A = np.tril(np.ones((N, N)))       # I_loop = A·I_conductor, V_conductor = Aᵀ·V_loop
@@ -431,16 +726,65 @@ def cable_zy(data, s):
                 continue
             dx = a['x'] - b['x']
             d = math.hypot(dx, a['y'] - b['y'])
-            if medium == 'sea':
+            if air:
+                zm = _air_z(s, -a['y'], -b['y'], abs(dx), d, rho, soil, data)
+            elif medium == 'sea':
                 zm = sea_return(s, a['R'], b['R'], d, rho)
             elif medium == 'perfect':
                 zm = 0j
+            elif soil:
+                zm = earth_buried(s, a['y'], b['y'], abs(dx), soil)
             else:
                 zm = pollaczek(s, a['y'], b['y'], abs(dx), rho)
             Ni, Nj = len(a['conds']), len(b['conds'])
             Z[o[i]:o[i] + Ni, o[j]:o[j] + Nj] = zm   # only the outer loops couple: every conductor pair sees it
             Z[o[j]:o[j] + Nj, o[i]:o[i] + Ni] = zm
+    if air:                                # potential coefficients of the outer conductors: jacket + air with images
+        nc = len(cbs)
+        P = np.zeros((nc, nc), complex)
+        for i, a in enumerate(cbs):
+            out_c = a['conds'][-1]
+            ins = out_c['ins']
+            P[i, i] = math.log(2 * -a['y'] / a['R']) / (2 * math.pi * EPS0)
+            if ins:
+                eps = ins['epsr'] * _ins_y(s, 1.0, ins['tand'], loss, fg0) / s if s != 0 else ins['epsr']
+                P[i, i] += math.log(ins['rout'] / ins['rin']) / (2 * math.pi * EPS0 * eps)
+            for j, b in enumerate(cbs):
+                if j > i:
+                    dx = a['x'] - b['x']
+                    P[i, j] = P[j, i] = math.log(math.hypot(dx, a['y'] + b['y']) / math.hypot(dx, a['y'] - b['y'])) / (2 * math.pi * EPS0)
+        Ya = s * np.linalg.inv(P)
+        idx = [o[i] + len(c['conds']) - 1 for i, c in enumerate(cbs)]
+        Y[np.ix_(idx, idx)] += Ya
     return Z, Y, cs
+
+
+def _ins_y(s, C, tand, loss='causal', fg0=100.0):
+    """Shunt admittance of an insulation of capacitance C (per metre) with the loss tangent tanδ: the causal wideband
+    model (4.5, default), a constant tanδ (Y = sC + |ω|·C·tanδ), or the old Cable Data G = 2π(f_G0 + f)·tanδ·C
+    (cable_constants §3.4; f_G0 = 100 Hz)."""
+    if not tand or loss == 'causal':
+        return s * C * permittivity(s, 1.0, tand) if tand else s * C
+    w = abs(complex(s).imag)
+    if loss == 'const':
+        return s * C + w * C * tand
+    if loss == 'fg0':
+        return s * C + 2 * math.pi * (fg0 + w / (2 * math.pi)) * tand * C
+    raise LineError(f'άγνωστο μοντέλο απωλειών μόνωσης «{loss}»')
+
+
+def _air_z(s, hi, hk, x, d, rho, soil, data):
+    """Self (d = R, x = 0, hi = hk) or mutual impedance of two outer loops in the air, as overhead conductors:
+    sμ₀/2π·ln(D/d) + the earth correction (Carson's series at s = jω, his integral otherwise, or the layered earth)."""
+    D = math.hypot(x, hi + hk)
+    z = s * MU0 / (2 * math.pi) * math.log(D / d)
+    if s == 0:
+        return z
+    if soil:
+        return z + earth_overhead(hi, hk, x, s, soil)
+    if s.real == 0 and (data.get('earth') or 'carson') == 'carson':
+        return z + carson_series(D, math.asin(min(1.0, x / D)), s.imag / (2 * math.pi), rho)
+    return z + carson_integral(hi, hk, x, 0, rho, s=s)
 
 
 # ---------------------------------------------------------------- matrices per metre
@@ -453,6 +797,7 @@ def zy(data, f=None, earth=None, skin=None, s=None):
     earth = earth or data.get('earth', 'carson')
     skin = data.get('skin', True) if skin is None else skin
     rho = _f(data.get('rho'), 100.0)
+    soil = soil_layers(data)
     s = 2j * math.pi * f if s is None else complex(s)
     imag = s.real == 0
     n = len(cs)
@@ -475,12 +820,14 @@ def zy(data, f=None, earth=None, skin=None, s=None):
                 z = s * MU0 / (2 * math.pi) * cmath.log(Dc / d)
             else:
                 z = s * MU0 / (2 * math.pi) * math.log(D / d)
-                if s != 0 and earth == 'carson' and imag:
+                if s != 0 and soil and earth in ('carson', 'integral'):
+                    z += earth_overhead(a['h'], b['h'], a['x'] - b['x'], s, soil)
+                elif s != 0 and earth == 'carson' and imag:
                     z += carson_series(D, ph, s.imag / (2 * math.pi), rho)
                 elif s != 0 and earth in ('carson', 'integral'):
                     z += carson_integral(a['h'], b['h'], a['x'] - b['x'], 0, rho, s=s)
             if i == k:
-                z += z_internal(0, a['r'], a['q'], a['Rdc'], a['mur'], skin, s)
+                z += z_int(a, s, skin) + s * a.get('dL', 0.0)
             Z[i, k] = Z[k, i] = z
             P[k, i] = P[i, k]
     return Z, P, cs
@@ -495,31 +842,83 @@ def _groups(cs):
     return T
 
 
-def reduce_phases(Z, P, cs):
+def reduce_phases(Z, P, cs, iseg=False):
     """Phase matrices after bundling (equal voltage, summed currents) and the elimination of the ground wires (zero
-    voltage): Y_s = Z⁻¹ and C = P⁻¹ summed per phase, then inverted back (exact for any geometry)."""
+    voltage): Y_s = Z⁻¹ and C = P⁻¹ summed per phase, then inverted back (exact for any geometry). With segmented
+    ground wires (iseg, 4.11) they carry no current: they leave [Z] out, but stay at zero potential in [C] (Dommel
+    §4.1.2.5 b; LINE CONSTANTS ISEG)."""
     T = _groups(cs)
-    Zr = np.linalg.inv(T.T @ np.linalg.inv(Z) @ T)
+    if iseg:
+        keep = [i for i, c in enumerate(cs) if c['ph'] > 0]
+        Zr = np.linalg.inv(T[keep].T @ np.linalg.inv(Z[np.ix_(keep, keep)]) @ T[keep])
+    else:
+        Zr = np.linalg.inv(T.T @ np.linalg.inv(Z) @ T)
     Pr = np.linalg.inv(T.T @ np.linalg.inv(P) @ T)
     return Zr, Pr
+
+
+def _gdiag(data, M, default):
+    """The shunt conductance of the phases (S/m): a number for all, or a list per phase (S/km; an empty entry is the
+    default) as .GPHASE of LINE CONSTANTS."""
+    g = data.get('G')
+    if isinstance(g, (list, tuple)):
+        if len(g) != M:
+            raise LineError(f'το G ανά φάση θέλει {M} τιμές')
+        return np.diag([_f(v, default) / 1000.0 for v in g])
+    return _f(g, default) / 1000.0 * np.eye(M)
+
+
+def transposition(data, M):
+    """The transposition of the line data as [(fraction of the length, permutation)], or None. data['transp'] =
+    {'len': [km…], 'order': [[phase carried by position 1, 2, …], …]} (as .TRANSP: the lengths add up to the line)."""
+    t = data.get('transp')
+    if not t or not t.get('order'):
+        return None
+    order = [[int(_f(v)) for v in o] for o in t['order']]
+    lens = [_f(v) for v in (t.get('len') or [1.0] * len(order))]
+    if len(lens) != len(order) or any(not v > 0 for v in lens):
+        raise LineError('μεταθέσεις: ένα θετικό μήκος για κάθε τμήμα')
+    for o in order:
+        if sorted(o) != list(range(1, M + 1)):
+            raise LineError(f'μεταθέσεις: κάθε τμήμα θέλει τη σειρά των φάσεων 1…{M} (μετάθεση)')
+    tot = sum(lens)
+    out = []
+    for L, o in zip(lens, order):
+        P = np.zeros((M, M))
+        for pos, ph in enumerate(o):
+            P[ph - 1, pos] = 1.0          # the electrical phase ph is at the geometric position pos
+        out.append((L / tot, P))
+    return out
+
+
+def transpose_avg(A, tr):
+    """The average of a phase matrix over the transposition sections, weighted by their length."""
+    return sum(w * P @ A @ P.T for w, P in tr)
 
 
 def phase_matrices(data, f=None, s=None, **kw):
     """Reduced Z′ (Ω/m) and Y′ = G′ + sC′ (S/m) of the M phases at the frequency f (or the complex frequency s).
     Cables (4.5): Y′ of the insulations (with tanδ), reduced the same way, and G′ only when the data give it."""
     s = 2j * math.pi * f if s is None else complex(s)
+    if data.get('zyfile'):
+        return zy_from_file(data, s)
+    if data.get('seq'):
+        return seq_matrices(data['seq'], s)
     if data.get('cables'):
         if data.get('wires') or data.get('bundles'):
             raise LineError('εναέριοι αγωγοί και καλώδια στην ίδια γραμμή δεν υποστηρίζονται ακόμη')
         Z, Ysh, cs = cable_zy(data, s)
         T = _groups(cs)
         Zr = np.linalg.inv(T.T @ np.linalg.inv(Z) @ T)
-        G = _f(data.get('G'), 0.0) / 1000.0         # the insulation losses are in tanδ: no extra G′ unless given
-        return Zr, G * np.eye(len(Zr)) + T.T @ Ysh @ T
-    Z, P, cs = zy(data, s=s, **kw)
-    Zr, Pr = reduce_phases(Z, P, cs)
-    G = _f(data.get('G'), G_DEFAULT) / 1000.0
-    Y = G * np.eye(len(Zr)) + s * np.linalg.inv(Pr)
+        G = _gdiag(data, len(Zr), 0.0)               # the insulation losses are in tanδ: no extra G′ unless given
+        Zr, Y = Zr, G + T.T @ Ysh @ T
+    else:
+        Z, P, cs = zy(data, s=s, **kw)
+        Zr, Pr = reduce_phases(Z, P, cs, bool(data.get('iseg')))
+        Y = _gdiag(data, len(Zr), G_DEFAULT) + s * np.linalg.inv(Pr)
+    tr = transposition(data, len(Zr))
+    if tr and (data['transp'].get('mode') or 'avg') == 'avg':
+        Zr, Y = transpose_avg(Zr, tr), transpose_avg(Y, tr)
     return Zr, Y
 
 
@@ -534,22 +933,29 @@ def sequence(Z):
 
 
 # ---------------------------------------------------------------- modes
-def ti_matrix(Z, Y):
+def ti_matrix(Z, Y, rot='gm0'):
     """The current transformation matrix T_i at one frequency: eigenvectors of Y′Z′, sorted from the slowest mode
-    (ground mode first), each column normalized and rotated so that the modal conductance is zero, then the
-    imaginary part dropped and the column normalized again (as the EMTP)."""
+    (ground mode first), each column normalized and rotated so that the modal conductance is zero (rot = 'gm0', the
+    default of LINE CONSTANTS, IROT = 1) or so that its imaginary part is smallest (rot = 'minimag', IROT = 2, the
+    default of the newer Line/Cable Data), then the imaginary part dropped and the column normalized again."""
     lam, V = np.linalg.eig(Y @ Z)
     gam = np.sqrt(lam)
     vel = (2 * math.pi) / np.maximum(gam.imag, 1e-300)
     order = np.argsort(vel)
     V = V[:, order]
     V = V / np.linalg.norm(V, axis=0)
-    Tv = np.linalg.inv(V).T
-    for j in range(V.shape[1]):
-        ym = (np.linalg.inv(V)[j] @ Y @ Tv[:, j])
-        th = (cmath.phase(ym) - math.pi / 2) / 2
-        V[:, j] *= cmath.exp(1j * th)
+    if rot == 'minimag':
+        for j in range(V.shape[1]):
+            a, b = V[:, j].real, V[:, j].imag
+            th = 0.5 * math.atan2(-2 * float(a @ b), float(a @ a - b @ b))    # max ‖Re(v·e^{jθ})‖²
+            V[:, j] *= cmath.exp(1j * th)
+    else:
         Tv = np.linalg.inv(V).T
+        for j in range(V.shape[1]):
+            ym = (np.linalg.inv(V)[j] @ Y @ Tv[:, j])
+            th = (cmath.phase(ym) - math.pi / 2) / 2
+            V[:, j] *= cmath.exp(1j * th)
+            Tv = np.linalg.inv(V).T
     Ti = V.real
     Ti = Ti / np.linalg.norm(Ti, axis=0)
     for j in range(Ti.shape[1]):              # sign: the largest element positive
@@ -571,6 +977,257 @@ def q_error(Z, Y, Ti):
     d = np.abs(np.diag(Am))
     off = np.abs(Am - np.diag(np.diag(Am)))
     return float((off / d[:, None]).max()) if len(d) > 1 else 0.0
+
+
+# ---------------------------------------------------------------- 4.11: balanced lines, double circuits, T_i options
+TI_KINDS = ('gm0', 'minimag', 'balanced', 'double')
+
+
+def clarke(M):
+    """The generalized Clarke matrix of an M-phase balanced line (cpline eq. 69; Dommel §4.1.3): column 1 = 1/√M (the
+    zero mode), column k = (1, …, 1, −(k − 1), 0, …)/√(k(k − 1)). Orthogonal: T⁻¹ = Tᵀ."""
+    T = np.zeros((M, M))
+    T[:, 0] = 1 / math.sqrt(M)
+    for k in range(2, M + 1):
+        T[:k - 1, k - 1] = 1 / math.sqrt(k * (k - 1))
+        T[k - 1, k - 1] = -(k - 1) / math.sqrt(k * (k - 1))
+    return T
+
+
+def double_ti():
+    """T_i of a double-circuit line with only zero-sequence coupling between the circuits (cpline eqs. 70–77): the
+    ground mode, the inter-circuit zero-sequence mode, and α, β of each circuit. Orthogonal."""
+    T = np.zeros((6, 6))
+    T[:, 0] = 1 / math.sqrt(6)
+    T[:, 1] = np.array([1, 1, 1, -1, -1, -1]) / math.sqrt(6)
+    for c in (0, 1):
+        T[3 * c:3 * c + 3, 2 + 2 * c] = np.array([1, -1, 0]) / math.sqrt(2)
+        T[3 * c:3 * c + 3, 3 + 2 * c] = np.array([1, 1, -2]) / math.sqrt(6)
+    return T
+
+
+def balance(A, kind='balanced'):
+    """A phase matrix averaged as a balanced line (all self and all mutual terms equal) or, for 6 phases, as a double
+    circuit balanced within and between the circuits (self, mutual within, mutual between)."""
+    A = np.asarray(A)
+    M = len(A)
+    off = ~np.eye(M, dtype=bool)
+    if kind == 'double':
+        if M != 6:
+            raise LineError('το διπλό κύκλωμα θέλει 6 φάσεις (1–3 και 4–6)')
+        same = np.zeros((6, 6), bool)
+        same[:3, :3] = same[3:, 3:] = True
+        s_, m_, p_ = np.mean(np.diag(A)), A[same & off].mean(), A[~same].mean()
+        B = np.where(same, m_, p_).astype(A.dtype)
+        np.fill_diagonal(B, s_)
+        return B
+    if M == 1:
+        return A.copy()
+    B = np.full_like(A, A[off].mean())
+    np.fill_diagonal(B, np.mean(np.diag(A)))
+    return B
+
+
+def line_zy(data, f=None, ti='gm0', s=None):
+    """Z′, Y′ of the phases for a model with the T_i option ti: averaged for a balanced line or a double circuit."""
+    Z, Y = phase_matrices(data, f, s=s)
+    if ti in ('balanced', 'double'):
+        return balance(Z, ti), balance(Y, ti)
+    return Z, Y
+
+
+def model_ti(data, f, ti='gm0'):
+    """The real constant T_i of a model: Clarke (balanced), the double-circuit matrix, or the eigenvectors at f rotated
+    for zero modal conductance ('gm0') or the least imaginary part ('minimag')."""
+    if ti not in TI_KINDS:
+        raise LineError(f'άγνωστη επιλογή του T_i «{ti}»')
+    if ti == 'balanced':
+        return clarke(phases_of(data))
+    if ti == 'double':
+        return double_ti()
+    Z, Y = phase_matrices(data, f)
+    return ti_matrix(Z, Y, ti)
+
+
+def phases_of(data):
+    """The number of phases of the line data (any kind of data)."""
+    if data.get('zyfile'):
+        return len(data['zyfile']['Zr'][0])
+    if data.get('seq'):
+        return int(_f(data['seq'].get('M'), 3))
+    return phases(data)
+
+
+AUTO_TI_BAND = (500.0, 5000.0)      # the switching band where T_i should stay constant (line_constants §6.6)
+
+
+def auto_fti(data, band=AUTO_TI_BAND, ti='gm0', cands=None):
+    """The frequency of the constant real T_i chosen automatically (our procedure, in the spirit of the EMTP: «constancy
+    of T_i within the typical frequency range for switching transients», 500 Hz – 5 kHz): the candidate f* (10 per
+    decade from band/10 to band·10) whose T_i gives the smallest largest q-error over the band (5 points per decade).
+    Returns (f*, q-error)."""
+    fb = np.logspace(math.log10(band[0]), math.log10(band[1]), max(3, int(round(5 * math.log10(band[1] / band[0]))) + 1))
+    cands = np.logspace(math.log10(band[0]) - 1, math.log10(band[1]) + 1, 31) if cands is None else np.asarray(cands)
+    zy_b = [phase_matrices(data, f) for f in fb]
+    best = (None, math.inf)
+    for fc in cands:
+        Z, Y = phase_matrices(data, fc)
+        T = ti_matrix(Z, Y, ti)
+        e = max(q_error(Zb, Yb, T) for Zb, Yb in zy_b)
+        if e < best[1]:
+            best = (float(fc), e)
+    return best
+
+
+# ---------------------------------------------------------------- 4.11: lines without geometry
+def seq_matrices(seq, s):
+    """Z′, Y′ (per metre) of an M-phase balanced line from its zero and positive sequence parameters at the complex
+    frequency s, constant with frequency (LINE CONSTANTS «CONSTANT», line_constants §6.5): Z_s = (Z₀ + (M − 1)Z₁)/M,
+    Z_m = (Z₀ − Z₁)/M. Units of `seq` as the EMTP cards: R Ω/km, L mH/km, G S/km, C μF/km."""
+    M = int(_f(seq.get('M'), 3))
+    s = complex(s)
+    g = lambda k, sc: _f(seq.get(k), 0.0) * sc
+    Z0 = g('R0', 1e-3) + s * g('L0', 1e-6)
+    Z1 = g('R1', 1e-3) + s * g('L1', 1e-6)
+    Y0 = g('G0', 1e-3) + s * g('C0', 1e-9)
+    Y1 = g('G1', 1e-3) + s * g('C1', 1e-9)
+    if not (_f(seq.get('L1'), 0) > 0 and _f(seq.get('C1'), 0) > 0 and _f(seq.get('L0'), 0) > 0 and _f(seq.get('C0'), 0) > 0):
+        raise LineError('οι ακολουθίες θέλουν θετικά L₀, C₀, L₁, C₁')
+
+    def mat(a0, a1):
+        A = np.full((M, M), (a0 - a1) / M, complex)
+        np.fill_diagonal(A, (a0 + (M - 1) * a1) / M)
+        return A
+
+    return mat(Z0, Z1), mat(Y0, Y1)
+
+
+RHO_AL = 2.83e-8        # resistivity of aluminium (Ω·m) for the tube of `rebuild`
+
+
+def rebuild(seq, h0=None):
+    """LINE CONSTANTS «LBUILD» (line_constants §6.1, §6.4; conductor_data §2): a balanced line whose zero and positive
+    sequence parameters at the frequency f of `seq` match the given ones, so that every frequency-dependent model can
+    be made from one-frequency data. Our construction: M identical conductors on a regular polygon at the height h
+    (seq['h'], 20 m by default: the sequence data fix the geometry only up to one free length) and one equivalent
+    ground wire above them. Unknowns: the polygon radius a, the conductor radius r, an extra internal inductance ΔL
+    (so that L₁ and C₁ can both be met), the earth resistivity ρ, R_dc (if not given) and the ground wire's R_dc (its
+    circulating current raises R₀; when R₀ needs no ground wire its resistance goes to the upper bound). The skin effect
+    is estimated with an aluminium tube of the given R_dc and radius r (solid if that is not enough metal). Least
+    squares on ln C₁, C₀, L₁, L₀, R₁, R₀ with Carson's earth; continuously transposed (averaged). First guess from
+    C₁ = 2πε₀/ln(D/r) and C₀ = 2πε₀/ln((2h)^M/(r·D^(M−1))). Returns the line data with 'rebuilt' = {got, err, residual}."""
+    from scipy.optimize import least_squares
+    M = int(_f(seq.get('M'), 3))
+    if M < 2:
+        raise LineError('η ανακατασκευή θέλει τουλάχιστον 2 φάσεις')
+    f = _f(seq.get('f'), 50.0)
+    h = _f(seq.get('h'), 20.0) if h0 is None else h0
+    w = 2 * math.pi * f
+    tgt = {k: _f(seq.get(k)) for k in ('R0', 'L0', 'C0', 'R1', 'L1', 'C1')}
+    if any(not tgt[k] > 0 for k in tgt):
+        raise LineError('η ανακατασκευή θέλει θετικά R₀, L₀, C₀, R₁, L₁, C₁')
+    Rdc_given = _f(seq.get('Rdc'), 0.0)
+    k_e = 2 * math.pi * EPS0
+    A = k_e / (tgt['C1'] * 1e-9)                       # ln(D/r)
+    B = k_e / (tgt['C0'] * 1e-9)                       # ln((2h)^M/(r·D^(M−1)))
+    D = min(max(math.exp((M * math.log(2 * h) + A - B) / M), 0.3), 0.8 * h)
+    r = min(max(D / math.exp(A), 2e-3), 0.2 * D)
+    a = D / (2 * math.sin(math.pi / M))
+    x0 = [math.log(a), math.log(r), 0.0, math.log(100.0), math.log(Rdc_given or tgt['R1'] * 0.95), math.log(1.0)]
+    lo = [math.log(0.05), math.log(1e-3), -2.0, math.log(1e-2), math.log(1e-6), math.log(1e-3)]
+    hi = [math.log(0.9 * h), math.log(0.5 * h), 2.0, math.log(1e6), math.log(1e3), math.log(1e6)]
+    x0 = [min(max(v, l + 1e-9), u - 1e-9) for v, l, u in zip(x0, lo, hi)]
+
+    def data_of(x):
+        a, r, dL, rho = math.exp(x[0]), math.exp(x[1]), x[2], math.exp(x[3])
+        Rdc = Rdc_given or math.exp(x[4])
+        area = RHO_AL / (Rdc * 1e-3)                    # Rdc in Ω/km
+        tD = 0.5 if area >= math.pi * r * r else 0.5 * (1 - math.sqrt(1 - area / (math.pi * r * r)))
+        ang = [2 * math.pi * k / M + math.pi / 2 for k in range(M)]
+        wires = [{'ph': k + 1, 'x': a * math.cos(t), 'y': h + a * math.sin(t), 'r': r * 100, 'Rdc': Rdc,
+                  'tD': max(tD, 1e-3), 'dL': dL} for k, t in enumerate(ang)]
+        wires.append({'ph': 0, 'x': 0.0, 'y': h + a + max(3 * r, 1.0), 'r': 0.5, 'Rdc': math.exp(x[5]), 'tD': 0.5})
+        g1 = seq.get('G1')
+        return {'rho': rho, 'earth': 'carson', 'skin': True, 'wires': wires,
+                **({'G': [_f(g1)] * M} if g1 not in (None, '') else {}),
+                'transp': {'order': [[(k + j) % M + 1 for k in range(M)] for j in range(M)], 'mode': 'avg'}}
+
+    keys = ('C1', 'C0', 'L1', 'L0', 'R1', 'R0')
+    wts = (1, 1, 1, 1, 0 if Rdc_given else 1, 1)
+
+    def got_of(d):
+        Z, Y = phase_matrices(d, f)
+        z1, z0 = sequence(Z)
+        c1, c0 = sequence(Y.imag / w)
+        return {'R0': z0.real * 1e3, 'L0': z0.imag / w * 1e6, 'C0': c0 * 1e9, 'R1': z1.real * 1e3,
+                'L1': z1.imag / w * 1e6, 'C1': c1 * 1e9}
+
+    def res(x):
+        try:
+            g = got_of(data_of(x))
+        except LineError:
+            return np.full(len(keys), 10.0)
+        return np.array([wt * math.log(max(g[k], 1e-30) / tgt[k]) for k, wt in zip(keys, wts)])
+
+    sol = least_squares(res, x0, bounds=(lo, hi), xtol=1e-15, ftol=1e-15, gtol=1e-15, max_nfev=3000)
+    out = data_of(sol.x)
+    g = got_of(out)
+    out['rebuilt'] = {'f': f, 'h': h, 'from': dict(tgt), 'got': g, 'err': {k: g[k] / tgt[k] - 1 for k in tgt},
+                      'residual': max(abs(g[k] / tgt[k] - 1) for k in tgt if wts[keys.index(k)])}
+    return out
+
+
+def zy_from_file(data, s):
+    """Z′, Y′ of the phases from tabulated matrices (4.11, «Z′ and Y′ from a file», Line/Cable Data §2.4): data['zyfile'] =
+    {f: [Hz], Zr, Zi, Yr, Yi: [f][i][j] per unit length, unit: 'km' or 'm'}. At a frequency of the table the values
+    themselves, between them interpolated in log f (real and imaginary parts), outside the nearest end."""
+    t = data['zyfile']
+    fs = np.asarray(t['f'], float)
+    k = {'km': 1e-3, 'm': 1.0, 'mile': 1 / 1609.344}[t.get('unit', 'km')]
+    s = complex(s)
+    f = abs(s.imag) / (2 * math.pi)
+    Zr, Zi, Yr, Yi = (np.asarray(t[n], float) for n in ('Zr', 'Zi', 'Yr', 'Yi'))
+    if s.real != 0:
+        raise LineError('οι πίνακες από αρχείο δεν ορίζονται σε μιγαδική συχνότητα')
+    lf = np.log10(fs)
+    x = math.log10(min(max(f, fs[0]), fs[-1]))
+    j = int(np.clip(np.searchsorted(lf, x) - 1, 0, len(fs) - 2)) if len(fs) > 1 else 0
+    if len(fs) == 1 or abs(x - lf[j]) < 1e-12:
+        a, wgt = j, 0.0
+    elif abs(x - lf[j + 1]) < 1e-12:
+        a, wgt = j + 1, 0.0
+    else:
+        a, wgt = j, (x - lf[j]) / (lf[j + 1] - lf[j])
+
+    def at(A):
+        return A[a] if wgt == 0 else A[a] * (1 - wgt) + A[a + 1] * wgt
+
+    return (at(Zr) + 1j * at(Zi)) * k, (at(Yr) + 1j * at(Yi)) * k
+
+
+def load_zy_mat(path_or_bytes, unit='km'):
+    """A MATLAB file with Z (N×N×N_s), Y, f (1×N_s) and line_length (Line/Cable Data §2.4.1) as data['zyfile']."""
+    import io
+    from scipy.io import loadmat
+    src = io.BytesIO(path_or_bytes) if isinstance(path_or_bytes, (bytes, bytearray)) else path_or_bytes
+    m = loadmat(src)
+    for k in ('Z', 'Y', 'f'):
+        if k not in m:
+            raise LineError(f'το αρχείο .mat δεν έχει τη μεταβλητή «{k}»')
+    Z, Y = np.asarray(m['Z'], complex), np.asarray(m['Y'], complex)
+    f = np.asarray(m['f'], float).ravel()
+    if Z.ndim == 2:
+        Z, Y = Z[:, :, None], Y[:, :, None]
+    if Z.shape[2] != len(f) or Y.shape != Z.shape or Z.shape[0] != Z.shape[1]:
+        raise LineError('τα Z, Y πρέπει να είναι N×N×N_s και το f 1×N_s')
+    o = np.argsort(f)
+    Z, Y, f = Z[:, :, o], Y[:, :, o], f[o]
+    tr = lambda A: np.transpose(A, (2, 0, 1))
+    out = {'f': f.tolist(), 'Zr': tr(Z.real).tolist(), 'Zi': tr(Z.imag).tolist(), 'Yr': tr(Y.real).tolist(),
+           'Yi': tr(Y.imag).tolist(), 'unit': unit}
+    if 'line_length' in m:
+        out['length'] = float(np.asarray(m['line_length']).ravel()[0])
+    return out
 
 
 # ---------------------------------------------------------------- vector fitting with real poles
@@ -640,24 +1297,103 @@ def freqs(fmin=0.01, decades=9, ppd=10):
     return fmin * 10 ** (np.arange(n + 1) / ppd)
 
 
-def cp_model(data, f=50.0, length=None):
+CP_MODES = ('lumped', 'lossless', 'distortionless', 'hf')
+
+
+def cp_model(data, f=50.0, length=None, ti='gm0', mode='lumped'):
     """Constant-parameter model: per mode Z_c = √(L′/C′), velocity 1/√(L′C′) and the total modal resistance R′ℓ,
-    from the modal matrices at f with the real T_i of that frequency."""
+    from the modal matrices at f with the real T_i of that frequency (or of the option ti, 4.11). mode (4.11): 'lumped'
+    (R/4, R/2, R/4, as the EMTP), 'lossless' (R = 0), 'distortionless' (the attenuation e^(−R/2Z_c) on each wave,
+    cpline §1.2.3, Dommel §4.2.2.4), 'hf' (lossless high-frequency approximation, all modes at the speed of light,
+    Z_c from 60·ln(2h/r), 60·ln(D/d): for lightning, Dommel §4.1.5.2)."""
     L = (_f(data.get('length'), 1.0) if length is None else length) * 1000.0
-    Z, Y = phase_matrices(data, f)
-    Ti = ti_matrix(Z, Y)
+    if mode not in CP_MODES:
+        raise LineError(f'άγνωστο είδος CP «{mode}»')
+    if mode == 'hf':
+        lm = lossless_modes(data, f, 'hf', ti)
+        modes = [{'Zc': m['Zc'], 'tau': L / m['v'], 'R': 0.0, 'v': m['v']} for m in lm['modes']]
+        return {'type': 'cp', 'M': len(modes), 'f': f, 'length': L / 1000.0, 'Ti': lm['Ti'], 'modes': modes,
+                'qerr': 0.0, 'cp': mode, 'ti': ti}
+    Z, Y = line_zy(data, f, ti)
+    Ti = model_ti(data, f, ti) if ti in ('balanced', 'double') else ti_matrix(Z, Y, ti)
     zm, ym = modal(Z, Y, Ti)
     w = 2 * math.pi * f
     modes = []
     for z, y in zip(zm, ym):
         Lp, Cp = z.imag / w, y.imag / w
-        modes.append({'Zc': math.sqrt(Lp / Cp), 'tau': L * math.sqrt(Lp * Cp), 'R': z.real * L,
-                      'v': 1 / math.sqrt(Lp * Cp)})
-    return {'type': 'cp', 'M': len(Z), 'f': f, 'length': L / 1000.0, 'Ti': Ti.tolist(), 'modes': modes,
-            'qerr': q_error(Z, Y, Ti)}
+        if not (Lp > 0 and Cp > 0):
+            raise LineError('μη φυσικός ρυθμός (L′ ή C′ ≤ 0) στη συχνότητα του CP')
+        m = {'Zc': math.sqrt(Lp / Cp), 'tau': L * math.sqrt(Lp * Cp), 'R': 0.0 if mode == 'lossless' else z.real * L,
+             'v': 1 / math.sqrt(Lp * Cp)}
+        if mode == 'distortionless':
+            m['dl'] = True
+        modes.append(m)
+    out = {'type': 'cp', 'M': len(Z), 'f': f, 'length': L / 1000.0, 'Ti': Ti.tolist(), 'modes': modes,
+           'qerr': q_error(Z, Y, Ti)}
+    if ti != 'gm0':
+        out['ti'] = ti
+    if mode != 'lumped':
+        out['cp'] = mode
+    return out
 
 
-def _fit_a(s, A, w, L, tmin, tmax, n, tol):
+def lossless_modes(data, f=50.0, kind='r0', ti='gm0'):
+    """Modal parameters without losses (LINE CONSTANTS MODAL, line_constants §4.6; print_modal_parameters):
+    'exact' — from the exact Z′, Y′ with G = 0; 'r0' — with R = 0 before the eigen-analysis (the zero mode slower than
+    the aerial ones, as the exact case); 'hf' — the lossless high-frequency approximation: no internal inductance and
+    perfect earth, L′ = μ₀ε₀·P′, so every mode travels at c and the surge impedances in phase quantities are
+    Z_ii = 60·ln(2h/r), Z_ik = 60·ln(D/d) Ω (overhead lines only). Returns {Ti, modes: [{Zc, v, L, C}], Zc (phase
+    matrix, Ω)}."""
+    w = 2 * math.pi * f
+    if kind == 'hf':
+        if data.get('cables') or data.get('seq') or data.get('zyfile'):
+            raise LineError('η προσέγγιση χωρίς απώλειες στις υψηλές συχνότητες θέλει εναέρια γραμμή από γεωμετρία')
+        Z, P, cs = zy(data, f, earth='perfect', skin=False)
+        _, Pr = reduce_phases(Z, P, cs)
+        tr = transposition(data, len(Pr))
+        if tr and (data['transp'].get('mode') or 'avg') == 'avg':
+            Pr = transpose_avg(Pr, tr)
+        if ti in ('balanced', 'double'):
+            Pr = balance(Pr, ti)
+        Zcp = Pr / C0                                 # √(L′/C′) = μ₀ε₀·P′·c = P′/c (Ω)
+        if ti in ('balanced', 'double'):
+            Ti = model_ti(data, f, ti)
+            lam = np.diag(Ti.T @ Zcp @ Ti)
+        else:
+            lam, V = np.linalg.eigh(Zcp)
+            o = np.argsort(-lam)                     # the zero mode (largest Z_c) first, as the other models
+            lam, Ti = lam[o], V[:, o]
+            for j in range(Ti.shape[1]):
+                if Ti[np.argmax(np.abs(Ti[:, j])), j] < 0:
+                    Ti[:, j] = -Ti[:, j]
+        modes = [{'Zc': float(z), 'v': C0, 'L': float(z) / C0, 'C': 1 / (float(z) * C0)} for z in lam]
+        return {'kind': kind, 'Ti': Ti.tolist(), 'modes': modes, 'Zc': Zcp.tolist()}
+    Z, Y = line_zy(data, f, ti)
+    Y = 1j * Y.imag
+    if kind == 'r0':
+        Z = 1j * Z.imag
+    elif kind != 'exact':
+        raise LineError(f'άγνωστο είδος ρυθμών «{kind}»')
+    Ti = model_ti(data, f, ti) if ti in ('balanced', 'double') else ti_matrix(Z, Y, ti)
+    zm, ym = modal(Z, Y, Ti)
+    modes = []
+    for z, y in zip(zm, ym):
+        g = cmath.sqrt(z * y)
+        modes.append({'Zc': abs(cmath.sqrt(z / y)), 'v': w / g.imag, 'L': z.imag / w, 'C': y.imag / w,
+                      'R': z.real, 'att': g.real})
+    Zc = np.linalg.inv(Y) @ _msqrt(Y @ Z)
+    return {'kind': kind, 'Ti': Ti.tolist(), 'modes': modes, 'Zc': np.abs(Zc).tolist()}
+
+
+def _msqrt(A):
+    """Principal square root of a diagonalizable matrix (eigenvalues with a positive real part of the root)."""
+    lam, V = np.linalg.eig(A)
+    g = np.sqrt(lam)
+    g = np.where(g.real < 0, -g, g)
+    return V @ np.diag(g) @ np.linalg.inv(V)
+
+
+def _fit_a(s, A, w, L, tmin, tmax, n, tol, nmax=30):
     """A·e^(sτ) by real poles, with τ chosen in [τ_min, τ_max] for the smallest error (golden section)."""
     def err(tau, nn):
         fit = vfit(s, A * np.exp(s * tau), nn, d=False)
@@ -690,27 +1426,33 @@ def _fit_a(s, A, w, L, tmin, tmax, n, tol):
     nn = n
     while True:
         tau, fit = best(nn)
-        if fit[4] <= tol or nn >= 30:
+        if fit[4] <= tol or nn >= nmax:
             return tau, fit
         nn += 2
 
 
-def fd_model(data, length=None, fmin=0.01, decades=9, ppd=10, fti=None, tol_zc=0.01, tol_a=0.005, n0=6, curves=False):
-    """Frequency-dependent model (J. Marti): constant real T_i (at fti, or 1 kHz), and per mode
-    Z_c(s) ≈ k₀ + Σ r_k/(s + p_k) and A(s) ≈ e^(−sτ)·Σ c_k/(s + q_k), fitted over fmin … fmin·10^decades.
-    Each fit adds poles until its error is below its tolerance (relative for Z_c, absolute for A)."""
+def fd_model(data, length=None, fmin=0.01, decades=9, ppd=10, fti=None, tol_zc=0.01, tol_a=0.005, n0=6, curves=False,
+             ti='gm0', nmax=30):
+    """Frequency-dependent model (J. Marti): constant real T_i (at fti, or 1 kHz; 'auto' chooses it, 4.11; the option
+    ti as `model_ti`), and per mode Z_c(s) ≈ k₀ + Σ r_k/(s + p_k) and A(s) ≈ e^(−sτ)·Σ c_k/(s + q_k), fitted over
+    fmin … fmin·10^decades (or the frequencies of a table of Z′, Y′). Each fit adds poles until its error is below its
+    tolerance (relative for Z_c, absolute for A), at most nmax (as NORMAX of .CTLFIT)."""
     L = (_f(data.get('length'), 1.0) if length is None else length) * 1000.0
+    fauto = None
+    if fti == 'auto':
+        fti, qa = auto_fti(data, ti=ti if ti in ('gm0', 'minimag') else 'gm0')
+        fauto = qa
     fti = fti or 1000.0
-    Zt, Yt = phase_matrices(data, fti)
-    Ti = ti_matrix(Zt, Yt)
-    fs = freqs(fmin, decades, ppd)
+    Ti = model_ti(data, fti, ti)
+    Zt = phase_matrices(data, fti)[0]
+    fs = np.asarray(data['zyfile']['f'], float) if data.get('zyfile') else freqs(fmin, decades, ppd)
     s = 2j * math.pi * fs
     M = len(Zt)
     zc = np.zeros((len(fs), M), complex)
     gm = np.zeros((len(fs), M), complex)
     qe = 0.0
     for i, f in enumerate(fs):
-        Z, Y = phase_matrices(data, f)
+        Z, Y = line_zy(data, f, ti)
         zm, ym = modal(Z, Y, Ti)
         zc[i] = np.sqrt(zm / ym)
         gm[i] = np.sqrt(zm * ym)
@@ -723,12 +1465,12 @@ def fd_model(data, length=None, fmin=0.01, decades=9, ppd=10, fti=None, tol_zc=0
         nz = n0
         while True:
             fz = vfit(s, Zc, nz, d=True, weight=1 / np.abs(Zc))
-            if fz[4] <= tol_zc or nz >= 30:
+            if fz[4] <= tol_zc or nz >= nmax:
                 break
             nz += 2
         vmax = 2 * math.pi * fs[-1] / gm[-1, k].imag
         tmax = L / vmax * 1.0005
-        tau, fa = _fit_a(s, A, None, L, max(L / C0, 0.8 * tmax), tmax, n0, tol_a)
+        tau, fa = _fit_a(s, A, None, L, max(L / C0, 0.8 * tmax), tmax, n0, tol_a, nmax)
         m = {'zc': {'d': fz[0], 'r': fz[1].tolist(), 'p': fz[2].tolist(), 'err': fz[4]},
              'a': {'r': fa[1].tolist(), 'p': fa[2].tolist(), 'err': fa[4]}, 'tau': tau,
              'Zc_inf': fz[0], 'Zc_dc': abs(Zc[0])}
@@ -738,8 +1480,12 @@ def fd_model(data, length=None, fmin=0.01, decades=9, ppd=10, fti=None, tol_zc=0
             m['curve'] = {'Zc': np.abs(Zc).tolist(), 'Zc_fit': np.abs(zf).tolist(), 'A': np.abs(A).tolist(),
                           'A_fit': np.abs(af).tolist()}
         modes.append(m)
-    out = {'type': 'fd', 'M': M, 'length': L / 1000.0, 'fti': fti, 'fmin': fmin, 'fmax': float(fs[-1]),
+    out = {'type': 'fd', 'M': M, 'length': L / 1000.0, 'fti': fti, 'fmin': float(fs[0]), 'fmax': float(fs[-1]),
            'Ti': Ti.tolist(), 'modes': modes, 'qerr': qe}
+    if ti != 'gm0':
+        out['ti'] = ti
+    if fauto is not None:
+        out['fti_auto'] = True
     if curves:
         out['f'] = fs.tolist()
     return out
@@ -763,6 +1509,374 @@ def report(data, f=50.0):
         r['seq'] = {'R1': z1.real * 1000, 'X1': z1.imag * 1000, 'R0': z0.real * 1000, 'X0': z0.imag * 1000,
                     'C1': c1 * 1000, 'C0': c0 * 1000}
     return r
+
+
+# ---------------------------------------------------------------- 4.11: outputs of the line constants
+A_OP = cmath.exp(2j * math.pi / 3)
+
+
+def sym_matrix(M):
+    """T of the symmetrical components of each three-phase circuit (phases 1–3, 4–6, …): V_abc = T·V_012 with
+    T₃ = [[1, 1, 1], [1, a², a], [1, a, a²]] (Fortescue, unnormalized as LINE CONSTANTS). M must be a multiple of 3."""
+    if M % 3:
+        raise LineError('οι συμμετρικές συνιστώσες θέλουν 3, 6, 9 … φάσεις')
+    a = A_OP
+    T3 = np.array([[1, 1, 1], [1, a * a, a], [1, a, a * a]])
+    T = np.zeros((M, M), complex)
+    for k in range(0, M, 3):
+        T[k:k + 3, k:k + 3] = T3
+    return T
+
+
+def to_sym(A):
+    """A phase matrix in symmetrical components, T⁻¹·A·T (rows and columns 0, 1, 2 of each circuit)."""
+    T = sym_matrix(len(A))
+    return np.linalg.solve(T, A @ T)
+
+
+def matrices(data, f=50.0):
+    """The matrices of LINE CONSTANTS (line_constants §4.6) at f: for the physical conductors (overhead lines: [Z], the
+    potential coefficients [P] and [C] = [P]⁻¹), the equivalent phases ([Z_E], [Y_E], [C_E] = Im[Y_E]/ω, [G_E]) and their
+    symmetrical components ([Z_S], [Y_S], [C_S]) when the phases are 3, 6, …; per km (Ω/km, S/km, F/km)."""
+    w = 2 * math.pi * f
+    out = {'f': f}
+    if not (data.get('cables') or data.get('seq') or data.get('zyfile')):
+        Z, P, cs = zy(data, f)
+        out['phys'] = {'Z': Z * 1e3, 'P': P / 1e3, 'C': np.linalg.inv(P) * 1e3,
+                       'labels': [f"{c['ph']}" for c in cs]}
+    Ze, Ye = phase_matrices(data, f)
+    out['phase'] = {'Z': Ze * 1e3, 'Y': Ye * 1e3, 'C': Ye.imag / w * 1e3, 'G': Ye.real * 1e3}
+    if len(Ze) % 3 == 0:
+        Zs, Ys = to_sym(Ze), to_sym(Ye)
+        out['sym'] = {'Z': Zs * 1e3, 'Y': Ys * 1e3, 'C': Ys.imag / w * 1e3}
+    return out
+
+
+def _phys_currents(data, f, I):
+    """Currents of the physical conductors for the phase currents I (A): equal voltage drop in the conductors of a phase,
+    zero in the ground wires (continuous: their induced current is part of the answer, Dommel eq. 4.39)."""
+    Z, P, cs = zy(data, f)
+    T = _groups(cs)
+    Zi = np.linalg.inv(Z)
+    Ze_inv = T.T @ Zi @ T
+    dV = np.linalg.solve(Ze_inv, np.asarray(I, complex))       # the voltage drop per metre of each phase
+    return Zi @ (T @ dV), cs
+
+
+def field(data, V, x, height=0.0, at='avg'):
+    """Electric field (kV/m, rms) at the points x (m) at a height above flat ground, from the phase-to-ground voltages V
+    (kV rms phasors, one per phase): the charges Q = C·V of all conductors (ground wires at zero, bundles at their phase
+    voltage) and their images (line_constants §5.1, eqs. 1–6; at height 0 the field is vertical). at: the conductor
+    heights 'avg' (as the line model), 'mid' (midspan, the lowest) or 'tower'. Returns {x, Ex, Ey (complex), E (rms of
+    the vector), Emax (the major axis of the field ellipse)}."""
+    cs = conductors(data)
+    hk = {'avg': 'h', 'mid': 'hm', 'tower': 'ht'}[at]
+    n = len(cs)
+    P = np.zeros((n, n))
+    for i, a in enumerate(cs):
+        for k, b in enumerate(cs):
+            if i == k:
+                P[i, i] = math.log(2 * a[hk] / a['r'])
+            else:
+                dx = a['x'] - b['x']
+                P[i, k] = math.log(math.hypot(dx, a[hk] + b[hk]) / math.hypot(dx, a[hk] - b[hk]))
+    V = np.asarray(V, complex)
+    Vc = np.array([V[c['ph'] - 1] if c['ph'] > 0 else 0 for c in cs], complex)
+    q = np.linalg.solve(P, Vc)                         # q/(2πε₀), in kV
+    xs = np.atleast_1d(np.asarray(x, float))
+    Ex = np.zeros(len(xs), complex)
+    Ey = np.zeros(len(xs), complex)
+    for c, qq in zip(cs, q):
+        for sgn, yc in ((1, c[hk]), (-1, -c[hk])):
+            dx, dy = xs - c['x'], height - yc
+            r2 = dx * dx + dy * dy
+            Ex += sgn * qq * dx / r2
+            Ey += sgn * qq * dy / r2
+    Erms = np.sqrt(np.abs(Ex) ** 2 + np.abs(Ey) ** 2)
+    Emax = np.sqrt((np.abs(Ex) ** 2 + np.abs(Ey) ** 2 + np.abs(Ex * Ex + Ey * Ey)) / 2)
+    return {'x': xs, 'Ex': Ex, 'Ey': Ey, 'E': Erms, 'Emax': Emax}
+
+
+def bfield(data, I, x, height=1.0, f=50.0, earth='none', at='avg'):
+    """Magnetic flux density (μT, rms) at the points x and a height above ground for the phase currents I (A rms
+    phasors), with the currents of the bundles and the induced currents of the continuous ground wires; the earth
+    currents neglected (earth='none', as the usual right-of-way calculations) or as images at the complex depth
+    h + 2p, p = √(ρ/(jωμ₀)) (earth='deri'). Returns {x, Bx, By, B (rms of the vector), Bmax (ellipse major axis)}."""
+    Ic, cs = _phys_currents(data, f, I)
+    hk = {'avg': 'h', 'mid': 'hm', 'tower': 'ht'}[at]
+    rho = _f(data.get('rho'), 100.0)
+    p = cmath.sqrt(rho / (2j * math.pi * f * MU0)) if earth == 'deri' else None
+    xs = np.atleast_1d(np.asarray(x, float))
+    Bx = np.zeros(len(xs), complex)
+    By = np.zeros(len(xs), complex)
+    k = MU0 / (2 * math.pi) * 1e6
+    for c, i in zip(cs, Ic):
+        srcs = [(c[hk], i)] + ([(-(c[hk] + 2 * p), -i)] if p is not None else [])
+        for yc, ii in srcs:
+            dx, dy = xs - c['x'], height - yc
+            r2 = dx * dx + dy * dy
+            Bx += -k * ii * dy / r2
+            By += k * ii * dx / r2
+    B = np.sqrt(np.abs(Bx) ** 2 + np.abs(By) ** 2)
+    Bmax = np.sqrt((np.abs(Bx) ** 2 + np.abs(By) ** 2 + np.abs(Bx * Bx + By * By)) / 2)
+    return {'x': xs, 'Bx': Bx, 'By': By, 'B': B, 'Bmax': Bmax}
+
+
+def telecom(data, f=50.0, I=None, V=None):
+    """Interference with a communication line (line_constants §5.2; Dommel §4.1.2.5 c): the last equivalent phase is the
+    communication line. Returns the mutual impedances Z_N,k (Ω/km) from the other phases, with the reduction by the
+    continuous ground wires already in them (eq. 4.40a), the same per three-phase circuit in symmetrical components
+    (V_N = Z_zero·I_zero + Z_pos·I_pos + Z_neg·I_neg, unnormalized), the longitudinal voltage per km for the phase
+    currents I (A), and the electrostatic voltage of the insulated communication line for the phase voltages V (V),
+    0 = Σ C_Nk·V_k + C_NN·V_N (eq. 4.40b)."""
+    Z, Y = phase_matrices(data, f)
+    N = len(Z)
+    if N < 2:
+        raise LineError('χρειάζεται τουλάχιστον μία φάση ισχύος και η γραμμή τηλεπικοινωνιών (η τελευταία φάση)')
+    zN = Z[N - 1, :N - 1] * 1e3
+    out = {'Z': zN, 'ZE': Z * 1e3}
+    if (N - 1) % 3 == 0:
+        T = sym_matrix(N - 1)
+        zs = zN @ T
+        out['sym'] = [{'zero': zs[k], 'pos': zs[k + 1], 'neg': zs[k + 2]} for k in range(0, N - 1, 3)]
+    if I is not None:
+        out['dV'] = complex(zN @ np.asarray(I, complex))          # V/km
+    if V is not None:
+        C = Y.imag
+        out['VN'] = complex(-(C[N - 1, :N - 1] @ np.asarray(V, complex)) / C[N - 1, N - 1])
+    return out
+
+
+Q_SOURCES = None      # default test sources: 1∠0°, 1∠0°, 1∠120° for every three phases (line_constants §6.7 .IMBAL)
+
+
+def _default_sources(M):
+    v = []
+    for k in range(M):
+        v.append(cmath.rect(1.0, math.radians(120.0)) if k % 3 == 2 else 1.0 + 0j)
+    return np.array(v, complex)
+
+
+def _modal_admittance(Z, Y, Ti, L):
+    """The nodal admittance (2M × 2M) of the line with a constant real T_i, each mode exact at this frequency but the
+    coupling between the modes that T_i leaves out ignored (what CP and FD do)."""
+    Tinv = np.linalg.inv(Ti)
+    zm = np.diag(Ti.T @ Z @ Ti)
+    ym = np.diag(Tinv @ Y @ Tinv.T)
+    g = np.sqrt(zm * ym)
+    g = np.where(g.real < 0, -g, g)
+    yc = ym / g
+    Ys = Ti @ np.diag(yc / np.tanh(g * L)) @ Ti.T
+    Ym = Ti @ np.diag(-yc / np.sinh(g * L)) @ Ti.T
+    return np.block([[Ys, Ym], [Ym, Ys]])
+
+
+def _end_tests(Yn, M, Vs):
+    Y11, Y12, Y21, Y22 = Yn[:M, :M], Yn[:M, M:], Yn[M:, :M], Yn[M:, M:]
+    Vr = -np.linalg.solve(Y22, Y21 @ Vs)
+    return {'open_v': Vr, 'open_i': Y11 @ Vs + Y12 @ Vr, 'short_i1': Y11 @ Vs, 'short_i2': Y21 @ Vs}
+
+
+def qerror_tests(data, Ti, freqs_, length, sources=None):
+    """The Q-error table of LINE CONSTANTS (line_constants §6.8, Transformation_matrices_and_Qerror §2): at each
+    frequency, the steady state of the line with the constant real T_i against the exact line, with sources at the
+    sending end and the receiving end open (voltages there, currents at the sending end) or short-circuited (currents at
+    both ends); the largest error in % among the quantities that are at least 5 % of the largest. Returns a list of
+    {f, open_v, open_i, short_i1, short_i2}."""
+    Ti = np.asarray(Ti, float)
+    M = len(Ti)
+    L = length * 1000.0
+    Vs = _default_sources(M) if sources is None else np.asarray(sources, complex)
+    out = []
+    for f in freqs_:
+        Z, Y = phase_matrices(data, f)
+        ex = _end_tests(line_admittance(Z, Y, L), M, Vs)
+        ap = _end_tests(_modal_admittance(Z, Y, Ti, L), M, Vs)
+        row = {'f': float(f)}
+        for k in ex:
+            a, b = ex[k], ap[k]
+            big = np.abs(a) >= 0.05 * np.abs(a).max() if np.abs(a).max() > 0 else np.zeros(M, bool)
+            row[k] = float(100 * np.max(np.abs(b[big] - a[big]) / np.abs(a[big]))) if big.any() else 0.0
+        out.append(row)
+    return out
+
+
+def exact_pi(data, f, length):
+    """The exact π of the line at f (Line/Cable Data eqs. 39–41, Dommel §4.2.1.3): Y_series = Y_c/sinh(Γℓ) and
+    Y_shunt = Y_c·tanh(Γℓ/2) as M × M matrices (S), from the exact complex eigenvectors."""
+    Z, Y = phase_matrices(data, f)
+    M = len(Z)
+    Yn = line_admittance(Z, Y, length * 1000.0)
+    Ys, Ym = Yn[:M, :M], Yn[:M, M:]
+    return {'f': f, 'series': -Ym, 'shunt': Ys + Ym}
+
+
+def nominal_pi(data, f, length):
+    """The nominal π at f (Dommel §4.1.2.4, §4.2.1.1): Z_series = Z′ℓ, Y_shunt = Y′ℓ/2 at each end; R, L, G, C."""
+    Z, Y = phase_matrices(data, f)
+    L = length * 1000.0
+    w = 2 * math.pi * f
+    Zs, Yh = Z * L, Y * L / 2
+    return {'f': f, 'Z': Zs, 'Y': Yh, 'R': Zs.real, 'L': Zs.imag / w, 'G': Yh.real, 'C': Yh.imag / w}
+
+
+def useful(data, f=50.0, U=None, length=None):
+    """Quantities of the positive and zero sequence that the EMTP does not print but a study needs (3-phase lines):
+    Z_c1, the surge impedance loading SIL = U²/Z_c1 (U line-to-line kV → MW), the charging current per km and the
+    reactive power per km, the open-end voltage rise (Ferranti) |1/cosh(γ₁ℓ)|, the electrical length, X/R, X₀/X₁,
+    R₀/X₁ and the earth compensation factor of distance protection k₀ = (Z₀ − Z₁)/(3·Z₁)."""
+    Z, Y = phase_matrices(data, f)
+    if len(Z) != 3:
+        raise LineError('τα χρήσιμα μεγέθη ορίζονται για τριφασική γραμμή')
+    w = 2 * math.pi * f
+    z1, z0 = sequence(Z)
+    y1, y0 = sequence(Y)
+    zc1 = cmath.sqrt(z1 / y1)
+    g1 = cmath.sqrt(z1 * y1)
+    out = {'f': f, 'Z1': z1 * 1e3, 'Z0': z0 * 1e3, 'Zc1': zc1, 'Zc0': cmath.sqrt(z0 / y0), 'XR1': z1.imag / z1.real,
+           'X0X1': z0.imag / z1.imag, 'R0X1': z0.real / z1.imag, 'k0': (z0 - z1) / (3 * z1),
+           'v1': w / g1.imag, 'att1': g1.real * 1e3, 'wavelength': 2 * math.pi / g1.imag / 1e3}
+    if U is not None:
+        U = float(U) * 1e3
+        out['SIL'] = U * U / abs(zc1) / 1e6
+        out['Ic'] = U / math.sqrt(3) * abs(y1) * 1e3                 # A/km
+        out['Qc'] = U * U * (y1.imag) * 1e3 / 1e6                    # Mvar/km
+    if length is not None:
+        Lm = float(length) * 1e3
+        out['ferranti'] = abs(1 / cmath.cosh(g1 * Lm))
+        out['theta'] = math.degrees(g1.imag * Lm)
+    return out
+
+
+def _track(V_prev, V):
+    """Order of the columns of V that follows the columns of V_prev (largest overlap)."""
+    from scipy.optimize import linear_sum_assignment
+    O = np.abs(np.conj(V_prev).T @ V)
+    r, c = linear_sum_assignment(-O)
+    return c[np.argsort(r)]
+
+
+def scan(data, fmin=0.01, decades=9, ppd=10, length=None, ti='gm0', fti=None, model=None, sources=None):
+    """All the parameters of the line against frequency, for the graphs and the exports of the dialog (4.11, ROADMAP §26):
+    per frequency (fmin … fmin·10^decades, or the table of a file) Z′ and Y′ of the phases (per km), their symmetrical
+    components (3, 6, … phases), the modes with the constant real T_i of the model (ti, fti; 'auto' allowed) and the
+    exact modes (complex T_i(f), followed by continuity of the eigenvectors), for both: Z_c, γ = α + jβ, v, τ, A = e^(−γℓ);
+    the phase matrices Z_c, Y_c and H = e^(−Γℓ), the error of the constant T_i (q-error and, per mode, 1 − |cos| of the
+    angle between the constant and the exact column), the Q-error tests; and, with a FD model, its fit against the
+    exact Z_c and A with the error at every frequency. Complex numbers as [re, im] pairs or separate re/im arrays."""
+    L = (_f(data.get('length'), 1.0) if length is None else length)
+    Lm = L * 1000.0
+    if fti == 'auto':
+        fti = auto_fti(data, ti=ti if ti in ('gm0', 'minimag') else 'gm0')[0]
+    fti = fti or 1000.0
+    fs = np.asarray(data['zyfile']['f'], float) if data.get('zyfile') else freqs(fmin, decades, ppd)
+    Ti = model_ti(data, fti, ti)
+    Tinv = np.linalg.inv(Ti)
+    M = len(Ti)
+    nf = len(fs)
+    Zs = np.zeros((nf, M, M), complex)
+    Ys = np.zeros((nf, M, M), complex)
+    Zc_ph = np.zeros((nf, M, M), complex)
+    Yc_ph = np.zeros((nf, M, M), complex)
+    H_ph = np.zeros((nf, M, M), complex)
+    cz = np.zeros((nf, M), complex)
+    cy = np.zeros((nf, M), complex)
+    ez = np.zeros((nf, M), complex)
+    ey = np.zeros((nf, M), complex)
+    Tex = np.zeros((nf, M, M), complex)
+    qerr = np.zeros(nf)
+    tierr = np.zeros((nf, M))
+    Vp = None
+    for i, f in enumerate(fs):
+        Z, Y = line_zy(data, f, ti)
+        Zs[i], Ys[i] = Z, Y
+        zm = np.diag(Ti.T @ Z @ Ti)
+        ym = np.diag(Tinv @ Y @ Tinv.T)
+        cz[i], cy[i] = zm, ym
+        lam, V = np.linalg.eig(Y @ Z)
+        V = V / np.linalg.norm(V, axis=0)
+        if Vp is None:
+            g = np.sqrt(lam)
+            o = np.argsort(2 * math.pi * f / np.maximum(np.abs(g.imag), 1e-300))
+        else:
+            o = _track(Vp, V)
+        lam, V = lam[o], V[:, o]
+        for j in range(M):                                    # a phase convention: the largest element real positive
+            k = np.argmax(np.abs(V[:, j]))
+            V[:, j] *= abs(V[k, j]) / V[k, j]
+        Vp = V
+        Tex[i] = V
+        Vinv = np.linalg.inv(V)
+        ez[i] = np.diag(V.T @ Z @ V)
+        ey[i] = np.diag(Vinv @ Y @ Vinv.T)
+        G = _msqrt(Y @ Z)
+        Zc = np.linalg.solve(Y, G)
+        Zc_ph[i] = Zc
+        Yc_ph[i] = np.linalg.inv(Zc)
+        gg = np.sqrt(lam)
+        gg = np.where(gg.real < 0, -gg, gg)
+        H_ph[i] = V @ np.diag(np.exp(-gg * Lm)) @ Vinv
+        qerr[i] = q_error(Z, Y, Ti)
+        for j in range(M):
+            a, b = Ti[:, j], V[:, j]
+            tierr[i, j] = 1 - abs(np.vdot(a, b)) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+    def modes_of(zm, ym):
+        g = np.sqrt(zm * ym)
+        g = np.where(g.real < 0, -g, g)
+        w = 2 * math.pi * fs[:, None]
+        v = w / g.imag
+        return {'Z': zm * 1e3, 'Y': ym * 1e3, 'Zc': np.sqrt(zm / ym), 'alpha': g.real * 1e3, 'beta': g.imag * 1e3,
+                'v': v / 1e3, 'tau': Lm / v * 1e6, 'A': np.exp(-g * Lm), 'R': zm.real * 1e3,
+                'L': zm.imag / w * 1e6, 'G': ym.real * 1e3, 'C': ym.imag / w * 1e9}
+
+    out = {'f': fs, 'M': M, 'length': L, 'ti': ti, 'fti': float(fti), 'Ti': Ti, 'Z': Zs * 1e3, 'Y': Ys * 1e3,
+           'Zc': Zc_ph, 'Yc': Yc_ph, 'H': H_ph, 'modes': modes_of(cz, cy), 'exact': modes_of(ez, ey), 'Tex': Tex,
+           'qerr': qerr, 'tierr': tierr}
+    if M % 3 == 0:
+        T = sym_matrix(M)
+        out['S'] = {'Z': np.array([np.linalg.solve(T, A @ T) for A in Zs]) * 1e3,
+                    'Y': np.array([np.linalg.solve(T, A @ T) for A in Ys]) * 1e3}
+    qf = fs[::max(1, int(round(ppd)))] if not data.get('zyfile') else fs[::max(1, nf // 10)]
+    out['qtests'] = qerror_tests(data, Ti, qf, L, sources)
+    if model is not None and model.get('type') == 'fd':
+        s = 2j * math.pi * fs
+        fit = []
+        Tm = np.asarray(model['Ti'])
+        Tmi = np.linalg.inv(Tm)
+        for k, m in enumerate(model['modes']):
+            zm = np.array([float(Tm[:, k] @ (Zs[i] @ Tm[:, k]).real) + 1j * float(Tm[:, k] @ (Zs[i] @ Tm[:, k]).imag) for i in range(nf)])
+            ym = np.array([Tmi[k] @ Ys[i] @ Tmi[k] for i in range(nf)])
+            g = np.sqrt(zm * ym)
+            g = np.where(g.real < 0, -g, g)
+            zc_ex, a_ex = np.sqrt(zm / ym), np.exp(-g * model['length'] * 1000.0)
+            zc_fit = rational(s, m['zc']['d'], m['zc']['r'], m['zc']['p'])
+            a_fit = rational(s, 0, m['a']['r'], m['a']['p']) * np.exp(-s * m['tau'])
+            fit.append({'Zc': zc_ex, 'Zc_fit': zc_fit, 'A': a_ex, 'A_fit': a_fit,
+                        'err_zc': np.abs(zc_fit - zc_ex) / np.abs(zc_ex), 'err_a': np.abs(a_fit - a_ex),
+                        'zc_poles': m['zc']['p'], 'zc_res': m['zc']['r'], 'zc_inf': m['zc']['d'],
+                        'a_poles': m['a']['p'], 'a_res': m['a']['r'], 'tau': m['tau']})
+        out['fit'] = fit
+    return out
+
+
+def jsonable(x):
+    """numpy arrays and complex numbers as JSON: real arrays as lists, complex ones as {re, im}."""
+    if isinstance(x, dict):
+        return {k: jsonable(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        if x and all(isinstance(v, (complex, np.complexfloating)) for v in x):
+            return {'re': [float(v.real) for v in x], 'im': [float(v.imag) for v in x]}
+        return [jsonable(v) for v in x]
+    if isinstance(x, np.ndarray):
+        if np.iscomplexobj(x):
+            return {'re': np.round(x.real, 15).tolist(), 'im': np.round(x.imag, 15).tolist()}
+        return x.tolist()
+    if isinstance(x, (complex, np.complexfloating)):
+        return {'re': float(x.real), 'im': float(x.imag)}
+    if isinstance(x, np.generic):
+        return x.item()
+    return x
 
 
 # ---------------------------------------------------------------- exact line in the frequency domain
@@ -989,9 +2103,7 @@ def typical(key):
 
 
 # ---------------------------------------------------------------- the server action (/api/line_model)
-def api(req):
-    """{data, model ('cp'|'fd'), len (km), f (CP), fmin, dec, ppd, fti (FD), src} → {mdl, report, curves}: the model the
-    solver uses (with src, the key of what it was computed from), the report at f (CP) or 50 Hz, and for FD the fit."""
+def _req_data(req):
     data = req.get('data')
     if isinstance(data, str):
         try:
@@ -1000,24 +2112,61 @@ def api(req):
             raise LineError('τα δεδομένα της γραμμής δεν είναι JSON')
     if not isinstance(data, dict):
         raise LineError('λείπουν τα δεδομένα της γραμμής')
+    if data.get('seq') and (data['seq'].get('mode') or 'const') == 'rebuild':
+        data = dict(rebuild(data['seq']), **{k: v for k, v in data.items() if k in ('length',)})
+    return data
+
+
+def _req_opts(req, data):
     L = _f(req.get('len'), _f(data.get('length'), 1.0))
     if not L > 0:
         raise LineError('το μήκος πρέπει να είναι θετικό')
-    kind = 'fd' if req.get('model') == 'fd' else 'cp'
+    ti = req.get('ti') or 'gm0'
+    if ti not in TI_KINDS:
+        raise LineError(f'άγνωστη επιλογή του T_i «{ti}»')
+    fti = req.get('fti')
+    fti = 'auto' if (req.get('tiauto') or fti == 'auto') else _f(fti, 1000.0)
+    return L, ti, fti
+
+
+def api(req):
+    """{data, model ('cp'|'fd'|'pi'), len (km), f (CP, π), fmin, dec, ppd, fti (FD; 'auto' or tiauto), ti (T_i option),
+    cp (the kind of CP), nmax, npi (π sections), src} → {mdl, report, curves}: the model the solver uses (with src, the
+    key of what it was computed from), the report at f (CP, π) or 50 Hz, and for FD the fit."""
+    data = _req_data(req)
+    L, ti, fti = _req_opts(req, data)
+    kind = req.get('model') if req.get('model') in ('fd', 'pi') else 'cp'
+    curves = None
     if kind == 'cp':
         f = _f(req.get('f'), 50.0)
         if not f > 0:
             raise LineError('η συχνότητα πρέπει να είναι θετική')
-        mdl = cp_model(data, f, L)
-        curves = None
+        mdl = cp_model(data, f, L, ti, req.get('cp') or 'lumped')
+        frep = f
+    elif kind == 'pi':
+        f = _f(req.get('f'), 50.0)
+        n = int(_f(req.get('npi'), 1))
+        if not (f > 0 and 1 <= n <= 200):
+            raise LineError('π: θετική συχνότητα και 1–200 τμήματα')
+        Z, Y = line_zy(data, f, ti if ti in ('balanced', 'double') else 'gm0')
+        Lm = L * 1000.0
+        w = 2 * math.pi * f
+        mdl = {'type': 'pi', 'M': len(Z), 'f': f, 'length': L, 'N': n, 'R': (Z.real * Lm).tolist(),
+               'L': (Z.imag / w * Lm).tolist(), 'G': (Y.real * Lm).tolist(), 'C': (Y.imag / w * Lm).tolist(),
+               'Ti': np.eye(len(Z)).tolist(), 'modes': [{'tau': 1.0}] * len(Z)}
         frep = f
     else:
         fmin, dec, ppd = _f(req.get('fmin'), 0.01), _f(req.get('dec'), 9), _f(req.get('ppd'), 10)
         if not (fmin > 0 and 1 <= dec <= 12 and 2 <= ppd <= 40):
             raise LineError('εύρος: f_min > 0, 1–12 δεκάδες, 2–40 σημεία ανά δεκάδα')
-        mdl = fd_model(data, L, fmin, dec, ppd, _f(req.get('fti'), 1000.0), curves=True)
+        nmax = int(_f(req.get('nmax'), 30))
+        mdl = fd_model(data, L, fmin, dec, ppd, fti, curves=True, ti=ti, nmax=max(6, min(nmax, 60)))
         curves = {'f': mdl.pop('f'), 'modes': [m.pop('curve') for m in mdl['modes']]}
         frep = 50.0
     mdl['src'] = req.get('src', '')
-    return {'mdl': mdl, 'report': report(data, frep), 'curves': curves,
-            'conductors': [] if data.get('cables') else conductors(data)}
+    rep = report(data, frep)
+    if data.get('rebuilt'):
+        rep['rebuilt'] = data['rebuilt']
+        mdl['rebuilt'] = {'residual': data['rebuilt']['residual']}
+    return {'mdl': mdl, 'report': rep, 'curves': curves,
+            'conductors': [] if (data.get('cables') or data.get('seq') or data.get('zyfile')) else conductors(data)}
