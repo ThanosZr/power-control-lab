@@ -64,7 +64,7 @@
 | `pcl/__main__.py` | 400 |
 | `pcl/control.py` | 953 |
 | `pcl/core.py` | 1312 |
-| `pcl/designer.py` | 691 |
+| `pcl/designer.py` | 791 |
 | `pcl/formats.py` | 222 |
 | `pcl/gui.py` | 409 |
 | `pcl/impulse.py` | 858 |
@@ -86,7 +86,7 @@
 | `tests/test_bus.py` | 145 |
 | `tests/test_control.py` | 213 |
 | `tests/test_derivation.py` | 93 |
-| `tests/test_designer.py` | 153 |
+| `tests/test_designer.py` | 200 |
 | `tests/test_engine.py` | 276 |
 | `tests/test_ev.py` | 102 |
 | `tests/test_gen_ctl.py` | 128 |
@@ -2353,41 +2353,45 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 69 | function | `goals` |
-| 75 | function | `controllers` |
-| 86 | function | `machines` |
-| 93 | function | `supported` |
-| 97 | function | `rule_for` |
-| 106 | function | `_comp` |
-| 113 | function | `_num` |
-| 120 | function | `_sched_max` |
-| 127 | function | `_wire` |
-| 133 | function | `_add` |
-| 137 | function | `_profile` |
-| 145 | function | `compose_gen` |
-| 171 | function | `compose_ev` |
-| 186 | function | `metrics_ev` |
-| 195 | function | `design_ev` |
-| 221 | function | `metrics_gen` |
-| 248 | function | `compose` |
-| 295 | function | `_augment` |
-| 367 | function | `_interp` |
-| 383 | function | `metrics` |
-| 429 | function | `cost` |
-| 441 | function | `train_inverse` |
-| 484 | function | `candidates` |
-| 491 | function | `_label` |
-| 502 | function | `_flat` |
-| 506 | function | `_unflat` |
-| 520 | function | `train_rl` |
-| 563 | function | `gen_candidates` |
-| 569 | function | `_gen_label` |
-| 574 | function | `design_gen` |
-| 599 | function | `design` |
-| 642 | function | `_episode` |
-| 650 | function | `design_rl` |
-| 675 | function | `describe` |
-| 690 | function | `_copy` |
+| 71 | function | `goals` |
+| 77 | function | `controllers` |
+| 88 | function | `machines` |
+| 95 | function | `supported` |
+| 99 | function | `rule_for` |
+| 108 | function | `_comp` |
+| 115 | function | `_num` |
+| 122 | function | `_sched_max` |
+| 129 | function | `_wire` |
+| 135 | function | `_add` |
+| 139 | function | `_profile` |
+| 147 | function | `compose_gen` |
+| 173 | function | `compose_ev` |
+| 188 | function | `metrics_ev` |
+| 197 | function | `design_ev` |
+| 223 | function | `metrics_gen` |
+| 250 | function | `compose` |
+| 297 | function | `_augment` |
+| 369 | function | `_interp` |
+| 385 | function | `metrics` |
+| 431 | function | `cost` |
+| 443 | function | `train_inverse` |
+| 486 | function | `candidates` |
+| 493 | function | `_label` |
+| 504 | function | `_flat` |
+| 508 | function | `_unflat` |
+| 522 | function | `train_rl` |
+| 565 | function | `gen_candidates` |
+| 571 | function | `_gen_label` |
+| 576 | function | `design_gen` |
+| 601 | function | `design` |
+| 646 | function | `_episode` |
+| 654 | function | `design_rl` |
+| 680 | function | `compose_gen_rl` |
+| 706 | function | `compose_ev_rl` |
+| 718 | function | `_gen_rl_cost` |
+| 725 | function | `design_rl_kind` |
+| 775 | function | `describe` |
+| 790 | function | `_copy` |
 
 ### `pcl/formats.py`
 

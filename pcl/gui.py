@@ -232,7 +232,7 @@ class DesignerGUI(tk.Tk):
         c = self.controller()
         try:
             p = D.compose(m, 'pinn' if c == 'auto' else c, params=self.params(), cycles=self.cycles_var.get(),
-                          inv_net=self._inv_placeholder(3 if c == 'rl' else 2) if c in ('inv', 'rl') else None)
+                          inv_net=self._inv_placeholder(3 if c == 'rl' and m.get('kind') != 'ev' else 2) if c in ('inv', 'rl') else None)   # 4.9.1: the vehicle's policy sees (r, ṙ)
         except PclError as e:
             messagebox.showerror('Σύνθεση', str(e))
             return

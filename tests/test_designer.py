@@ -2,6 +2,7 @@
 of the Python GUI pcl/gui.py): the machines read from parts.js, the circuit composed per kind of machine with real
 wires, a run of each, the choice by weighted goals, the command line, and the window when there is a screen."""
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -147,6 +148,52 @@ class Designer(unittest.TestCase):
             self.assertIn('Συντέθηκε', w.status.get())
         finally:
             w.destroy()
+
+
+
+@unittest.skipIf(shutil.which('node') is None, 'Node.js not installed.')
+class RLKinds(unittest.TestCase):
+    """4.9.1 (4.8.2 e): RL also for generators (AVR + PSS + a policy beside the stabilizer) and vehicles (PI + a policy)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ms = {m['type'] + ':' + m['kind']: m for m in D.machines()}
+
+    def test_rl_is_offered(self):
+        self.assertIn('rl', [k for k, _ in D.controllers(self.ms['GEN3:gen'])])
+        self.assertIn('rl', [k for k, _ in D.controllers(self.ms['DCM:ev'])])
+
+    def test_generator_policy_starts_as_avr_pss(self):
+        # zero weights: the AVR + PSS (the policy's clock only moves the points of the steps of TR); other weights: another machine
+        import numpy as np
+        from pcl.control import nn_init
+        ch = ['Y:SG1:d', 'Y:SG1:vt', 'Y:AV1/EFD']
+        a = D.compose_gen(self.ms['GEN3:gen'], 'avr_pss').run(t_end=1.1, channels=ch, max_points=4000)
+        b = D.compose_gen_rl(self.ms['GEN3:gen'], None).run(t_end=1.1, channels=ch + ['Y:NN1'], max_points=4000)
+        net = nn_init([3, 8, 1], 3, False)
+        c = D.compose_gen_rl(self.ms['GEN3:gen'], net).run(t_end=1.1, channels=ch, max_points=4000)
+        pre, aft = np.linspace(0.05, 0.99, 100), np.linspace(1.0, 1.1, 50)
+        at = lambda r, k, tq: np.interp(tq, r.t, r[k])
+        self.assertEqual(max(abs(x) for x in b['Y:NN1']), 0.0)
+        self.assertLess(np.max(np.abs(at(a, 'Y:SG1:d', pre) - at(b, 'Y:SG1:d', pre))), 0.05)       # before the fault
+        self.assertLess(np.max(np.abs(at(a, 'Y:SG1:vt', pre) - at(b, 'Y:SG1:vt', pre))), 2e-3)   # the start itself within 1e-2 in E_fd (4.8.1)
+        self.assertLess(np.max(np.abs(at(a, 'Y:SG1:d', aft) - at(b, 'Y:SG1:d', aft))), 0.2)        # through the fault
+        self.assertGreater(np.max(np.abs(at(b, 'Y:AV1/EFD', pre) - at(c, 'Y:AV1/EFD', pre))), 1e-3)
+        p = D.compose(self.ms['GEN3:gen'], 'rl', inv_net=net)
+        self.assertEqual(p.data['meta']['designer']['controller'], 'rl')
+        self.assertEqual(D._comp(p.data, 'NN1')['params']['ins'], 'dw, dp, dv')
+
+    def test_vehicle_policy_search(self):
+        # one iteration of two episodes: the base (PI) J = Σw, the policy's J finite and not worse than the start
+        out = D.design_rl_kind(self.ms['DCM:ev'], {'track': 1.0, 'energy': 1.0}, workers=3, iters=1, population=2)
+        labels = [r['controller'] for r in out['results']]
+        self.assertEqual(sorted(labels), ['pi', 'rl'])
+        self.assertAlmostEqual(out['baseline']['J'], 2.0, places=9)
+        rl = next(r for r in out['results'] if r['controller'] == 'rl')
+        self.assertTrue(math.isfinite(rl['J']))
+        self.assertLess(rl['J'], 2.05)
+        self.assertEqual(out['rl'][-1]['episodes'], 2)
+        self.assertEqual(D._comp(rl['project'].data, 'C1')['params']['scheme'], 'inv')
 
 
 if __name__ == '__main__':

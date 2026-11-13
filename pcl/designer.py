@@ -56,13 +56,15 @@ RULES = {
 EV_GOALS = [('track', 'Παρακολούθηση της ταχύτητας (RMS σφάλμα)'), ('energy', 'Λιγότερη ενέργεια ανά km (Wh/km)'), ('irms', 'Μικρό ρεύμα RMS'),
             ('peak', 'Μικρή μέγιστη ροπή'), ('rollback', 'Χωρίς κύλιση πίσω στη στάση')]
 EV_CONTROLLERS = [('moevc', 'Πολυκριτηριακός συζευγμένος (moevc)'), ('moev', 'Πολυκριτηριακός καταρράκτης (moev)'), ('ai', 'Ελεγκτής AI (PI + νευρωνικό)'),
-                  ('auto', 'Αυτόματα: ο καλύτερος για τους στόχους')]
+                  ('rl', 'PI + πολιτική από RL (αναζήτηση πολιτικής στους στόχους, δεκάδες επεισόδια)'),
+                  ('auto', 'Αυτόματα: ο καλύτερος για τους στόχους (χωρίς RL)')]
 EV_T = 60.0
 # 4.8.1: the goals and the controllers of a generator (the speed goals above are for drives)
 GEN_GOALS = [('swing', 'Μικρή πρώτη ταλάντωση της γωνίας δ'), ('damp', 'Γρήγορη απόσβεση των ταλαντώσεων'), ('vrec', 'Γρήγορη επαναφορά της τάσης'),
              ('freq', 'Μικρή απόκλιση της ταχύτητας'), ('effort', 'Μικρή προσπάθεια της διέγερσης')]
 GEN_CONTROLLERS = [('avr', 'AVR ST1A (K_A = 200)'), ('avr_pss', 'AVR ST1A + PSS'), ('tgr', 'ST1A με μείωση μεταβατικού κέρδους'),
-                   ('dc1a', 'AVR DC1A (διεγέρτρια ΣΡ)'), ('auto', 'Αυτόματα: ο καλύτερος για τους στόχους')]
+                   ('dc1a', 'AVR DC1A (διεγέρτρια ΣΡ)'), ('rl', 'AVR + PSS + πολιτική από RL (δεκάδες επεισόδια)'),
+                   ('auto', 'Αυτόματα: ο καλύτερος για τους στόχους (χωρίς RL)')]
 GEN_T = 6.0                                        # the run of a generator design, s (fault at 1 s)
 
 
@@ -252,9 +254,9 @@ def compose(machine, controller='pi', params=None, cycles=3, kb=1.0, lr=.005, op
     speed range, cycles × P). A generator (kind 'gen') goes to compose_gen."""
     rule = rule_for(machine)
     if rule.get('gen'):
-        return compose_gen(machine, controller, params=params)
+        return compose_gen_rl(machine, inv_net, params=params) if controller == 'rl' else compose_gen(machine, controller, params=params)
     if rule.get('ev'):
-        return compose_ev(machine, controller, params=params)
+        return compose_ev_rl(machine, inv_net, params=params) if controller == 'rl' else compose_ev(machine, controller, params=params)
     p = tutorial(rule['tutorial'], **rule['options'])
     d = p.data
     m1 = _comp(d, 'M1')
@@ -517,7 +519,7 @@ def _unflat(net, flat):
     return {'sizes': list(net['sizes']), 'W': W, 'b': b}
 
 
-def train_rl(episode, iters=4, population=6, sigma=.1, lr=.05, seed=1, workers=3, progress=None):
+def train_rl(episode, iters=4, population=6, sigma=.1, lr=.05, seed=1, workers=3, progress=None, sizes=(3, 8, 1)):
     """Reinforcement learning by policy search (ROADMAP §38, as pcl.control.RLTrainer, here on the designer's goals): the
     policy is the network (ω_r, α_r, e) → command beside the PI, frozen within an episode. Evolution strategies:
     antithetic Gaussian perturbations of the weights, centred ranks of the returns −J, Adam. episode(net) runs one
@@ -525,7 +527,7 @@ def train_rl(episode, iters=4, population=6, sigma=.1, lr=.05, seed=1, workers=3
     (the PI alone, J = Σw), so the policy only adds what helps. Returns (the best result, the history per iteration)."""
     from .control import _mulberry32, nn_init
     say = progress or (lambda s: None)
-    net0 = nn_init([3, 8, 1], seed, True)
+    net0 = nn_init(list(sizes), seed, True)
     th = _flat(net0)
     n, half = len(th), max(1, int(population) // 2)
     g = _mulberry32(seed + 101)
@@ -600,6 +602,8 @@ def design(machine, weights, controller='auto', cycles=3, params=None, workers=3
     """Runs the base PI and the candidates of the controller family on the same profile, measures the goals and sorts
     by J. progress(text) is told what happens. Returns {'baseline', 'results' (sorted), 'best', 'inverse_error'}.
     A generator goes to design_gen (its own goals and controllers)."""
+    if controller == 'rl' and (rule_for(machine).get('gen') or rule_for(machine).get('ev')):     # 4.9.1
+        return design_rl_kind(machine, weights, params=params, workers=workers, progress=progress)
     if rule_for(machine).get('gen'):
         return design_gen(machine, weights, controller, params=params, workers=workers, progress=progress)
     if rule_for(machine).get('ev'):
@@ -669,6 +673,102 @@ def design_rl(machine, weights, cycles=3, params=None, workers=3, progress=None,
     best['rl'] = hist
     best.pop('flat', None)
     res = [best, base] if best['J'] <= base['J'] else [base, best]
+    return {'baseline': base, 'results': res, 'best': res[0], 'weights': weights, 'inverse_error': None, 'rl': hist}
+
+
+# ------------------------------------------------------------------ 4.9.1 (4.8.2 e): RL for generators and vehicles
+def compose_gen_rl(machine, net, params=None, event='fault'):
+    """A generator with AVR ST1A + PSS and beside the PSS a policy network (Δω, ΔP, ΔV) → a supplementary signal
+    (±0,05 pu) added to the stabilizer's output, sampled at 1 kHz. With zero weights it is the AVR + PSS (the start of
+    the search is a stable machine: the AVR alone loses synchronism on the fault of the scenario)."""
+    from .control import nn_init, nn_text
+    p = compose_gen(machine, 'avr_pss', params=params, event=event)
+    d = p.data
+    av = _comp(d, 'AV1')
+    x0, y0 = av.get('x', 0), av.get('y', 0)
+    d['wires'] = [w for w in d['wires'] if not ({w['a']['c'], w['b']['c']} == {'PS1', 'AV1'} and 'vs' in (w['a']['p'], w['b']['p']))]
+    _add(d, 'RLK', 'CLK', x0 - 260, y0 - 170, {'f': 1000}, '1 kHz')
+    _add(d, 'RLW', 'EXPR', x0 - 260, y0 - 120, {'expr': 'w - 1', 'ins': 'w'}, 'Δω')
+    _add(d, 'RLP', 'EXPR', x0 - 260, y0 - 80, {'expr': 'p - m', 'ins': 'p, m'}, 'ΔP')
+    _add(d, 'RLV', 'EXPR', x0 - 260, y0 - 40, {'expr': 'v - r', 'ins': 'v, r'}, 'ΔV')
+    w = nn_text(net or nn_init([3, 8, 1], 1, True))
+    _add(d, 'NN1', 'NN', x0 - 140, y0 - 80, {'ins': 'dw, dp, dv', 'xs': '0.01, 0.5, 0.1', 'hidden': '8', 'ys': 0.05, 'ymin': -0.05, 'ymax': 0.05,
+                                                'train': 'off', 'w': w, 'clip': 5, 'nl': 400, 'init': 'zero', 'seed': 1, 'clock': 'RLK', 'trig': 'start', 'y0': 0},
+         'NN πολιτική (RL)')
+    _add(d, 'RLS', 'SUM', x0 - 60, y0 - 40, {'signs': '++'}, 'v_s + πολιτική')
+    for a, b in (('SG1:w', 'RLW:w'), ('SG1:pe', 'RLP:p'), ('SG1:m0', 'RLP:m'), ('SG1:vt', 'RLV:v'), ('SG1:v0', 'RLV:r'),
+                 ('RLW:y', 'NN1:dw'), ('RLP:y', 'NN1:dp'), ('RLV:y', 'NN1:dv'), ('PS1:vs', 'RLS:a'), ('NN1:y', 'RLS:b'), ('RLS:y', 'AV1:vs')):
+        _wire(d, a, b)
+    d['meta']['designer']['controller'] = 'rl'
+    return Project(d, f'{machine["type"]}_rl')
+
+
+def compose_ev_rl(machine, net, params=None, mode='balanced', cycle='urban'):
+    """The vehicle with the «Ελεγκτής AI» as a PI of the speed and beside it a policy network (r, ṙ) → voltage with
+    fixed weights (scheme 'inv', no learning in the run). With zero weights it is the PI alone, the base of the goals."""
+    from .control import nn_init, nn_text
+    p = compose_ev(machine, 'ai', params=params, mode=mode, cycle=cycle)
+    d = p.data
+    c1 = _comp(d, 'C1')
+    c1['params'].update({'scheme': 'inv', 'learn': False, 'w': nn_text(net or nn_init([2, 8, 1], 1, True))})
+    d['meta']['designer']['controller'] = 'rl'
+    return Project(d, f'{machine["type"]}_ev_rl')
+
+
+def _gen_rl_cost(m, base, weights):
+    # a policy that loses synchronism is graded by how far the speed went (the search needs a slope, not a wall)
+    if m['slip']:
+        return 10.0 + 100.0 * m['freq']
+    return cost(m, base, weights, {'swing': 1.0, 'damp': .05, 'vrec': .05, 'freq': 1e-4, 'effort': 1e-3})
+
+
+def design_rl_kind(machine, weights, params=None, workers=3, progress=None, iters=4, population=6, sigma=.1, lr=.05, seed=1):
+    """4.9.1: RL for a generator (AVR + PSS + policy, the base the classic DC1A as in design_gen) or a vehicle (PI +
+    policy, the base the PI alone as in design_ev): train_rl on the same scenario and the same J. Results sorted by J,
+    with the base and (for a generator) the AVR + PSS without the policy, to see what the search added."""
+    rule = rule_for(machine)
+    say = progress or (lambda s: None)
+    gen = bool(rule.get('gen'))
+    if gen:
+        weights = {k: float(v) for k, v in (weights or {}).items() if float(v or 0) > 0} or {'swing': 1.0, 'damp': 1.0}
+
+        def run(p, label, extra):
+            meta = p.data['meta']['designer']
+            res = p.run(t_end=meta['T'], channels=GEN_KEYS, max_points=60000)
+            return {**extra, 'label': label, 'project': p, 'metrics': metrics_gen(res, meta), 't': res.t, 'w': res['Y:SG1:d'], 'wr': res['Y:SG1:vt']}
+        say('Η βάση (DC1A) και το AVR + PSS χωρίς πολιτική…')
+        base = run(compose_gen(machine, 'dc1a', params=params), _gen_label({'controller': 'dc1a'}), {'controller': 'dc1a', 'base': True})
+        ref = run(compose_gen(machine, 'avr_pss', params=params), _gen_label({'controller': 'avr_pss'}), {'controller': 'avr_pss'})
+        Jf = lambda r: _gen_rl_cost(r['metrics'], base['metrics'], weights)
+
+        def episode(net):
+            r = run(compose_gen_rl(machine, net, params=params), 'AVR + PSS + πολιτική RL', {'controller': 'rl'})
+            r['J'] = Jf(r)
+            return r
+        sizes, others = (3, 8, 1), [base, ref]
+    else:
+        weights = {k: float(v) for k, v in (weights or {}).items() if float(v or 0) > 0} or {'track': 1.0, 'energy': 1.0}
+
+        def run(p, label, extra):
+            res = p.run(t_end=EV_T, channels=EV_KEYS, max_points=60000)
+            return {**extra, 'label': label, 'project': p, 'metrics': metrics_ev(res), 't': res.t, 'w': res['Y:M1'], 'wr': res['Y:REF']}
+        say('Η βάση (PI ταχύτητας)…')
+        base = run(compose_ev(machine, 'pi', params=params), 'Μόνο PI ταχύτητας', {'controller': 'pi', 'base': True})
+        Jf = lambda r: cost(r['metrics'], base['metrics'], weights, {'rollback': .5, 'track': .1})
+
+        def episode(net):
+            r = run(compose_ev_rl(machine, net, params=params), 'PI + πολιτική RL', {'controller': 'rl'})
+            r['J'] = Jf(r)
+            return r
+        sizes, others = (2, 8, 1), [base]
+    for r in others:
+        r['J'] = Jf(r)
+    say(f'RL με αναζήτηση πολιτικής: {iters} επαναλήψεις × {population} επεισόδια σε {workers} παράλληλες διεργασίες…')
+    best, hist = train_rl(episode, iters=iters, population=population, sigma=sigma, lr=lr, seed=seed, workers=workers, progress=say, sizes=sizes)
+    best['episodes'] = hist[-1]['episodes'] if hist else 0
+    best['label'] = f'{best["label"]} ({best["episodes"]} επεισόδια)'
+    best.pop('flat', None)
+    res = sorted([best] + others, key=lambda r: r['J'])
     return {'baseline': base, 'results': res, 'best': res[0], 'weights': weights, 'inverse_error': None, 'rl': hist}
 
 
