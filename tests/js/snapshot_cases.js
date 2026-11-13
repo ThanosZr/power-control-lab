@@ -14,6 +14,8 @@ function one(pr,k1,k2){const opts={hDiv:(pr.sim&&pr.sim.hDiv)||200,method:(pr.si
  let d=ra.length===rb.length?0:Infinity;for(let i=0;i<Math.min(ra.length,rb.length);i++)for(let j=0;j<ra[i].length;j++){const a=ra[i][j],b=rb[i][j];if(!(a===b||(a!==a&&b!==b)))d=Math.max(d,Math.abs(a-b)||Infinity);}
  return {points:ra.length,maxdiff:d===Infinity?'inf':d,kb:Math.round(snap.length/1024)};}
 (async()=>{await PyRT.load();const out={};
- for(const t of T.list){if(t.id==='empty')continue;out[t.id]=one(build(t.id),4,9);}
+ // 4.9: the TRV tutorials run at steps of 0,05–0,5 μs: a short window around their switching (fractions of the base period)
+ const SHORT={trv_terminal:[3.04,3.07],trv_slf:[0.737,0.752]};
+ for(const t of T.list){if(t.id==='empty')continue;const k=SHORT[t.id]||[4,9];out[t.id]=one(build(t.id),k[0],k[1]);}
  for(const id of ['buck','dc_drive','im_foc','twave','code_loop']){const pr=build(id);pr.solve={...(pr.solve||{}),step:'var'};out[id+':var']=one(pr,4,9);}
  process.stdout.write(JSON.stringify(out));})().catch(e=>{console.error(e);process.exit(1);});

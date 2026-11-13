@@ -21,7 +21,7 @@ function run(arc,extra={},o={}){const pr=circuit(arc,extra,o.C,o.tsep,o.hDiv);co
  return out;}
 const out={};
 out.imayr=run('imayr');
-out.kema=run('kema');
+out.kema=run('kema',{},{hDiv:1000000});   // τ₃ = τ₁/k₁/k₂ = 70 ns: a step of 20 ns
 out.habedank=run('habedank');
 out.mayr=run('mayr',{P0:'30k',tau:'0.3u'});
 // a weak arc (cooling power 0,5 kW): it reignites after the first current zero and burns on

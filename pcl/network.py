@@ -989,8 +989,26 @@ IEEE9_MACHINES = {
 }
 
 
-def ieee14():
-    return ieee(14)
+# 4.9 (decision 35): nominal voltages of the IEEE 14-bus case, whose data are per unit only (MATPOWER base kV 0).
+# 'pf': 132 kV for buses 1–5, 33 kV for 6 and 9–14, 11 kV for 8, 1 kV for 7 (the levels of a published PowerFactory
+# model of the case); '138': every bus at 138 kV (a published PSCAD model, terminal voltages 1,06·138 = 146,28 kV …).
+# The branches stay per unit, so the load flow in per unit is the same; only the physical values (A, Ω, kV) change.
+IEEE14_LEVELS = {
+    'pf': {**{str(b): 132e3 for b in (1, 2, 3, 4, 5)}, **{str(b): 33e3 for b in (6, 9, 10, 11, 12, 13, 14)}, '7': 1e3, '8': 11e3},
+    '138': {str(b): 138e3 for b in range(1, 15)},
+}
+
+
+def ieee14(levels=None):
+    """The IEEE 14-bus case. levels: None (U_n = 1 kV on every bus, the per-unit data as published), 'pf' (132/33/11/1 kV)
+    or '138' (138 kV everywhere): see IEEE14_LEVELS."""
+    net = ieee(14)
+    if levels is not None:
+        if levels not in IEEE14_LEVELS:
+            raise NetworkError(f'ieee14: levels one of {sorted(IEEE14_LEVELS)} or None')
+        for b, U in IEEE14_LEVELS[levels].items():
+            net.buses[b]['Un'] = U
+    return net
 
 
 # ---------------------------------------------------------------- JSON

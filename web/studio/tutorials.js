@@ -1203,6 +1203,45 @@
  const LM=()=>root.LineModels||(typeof require!=='undefined'?require('./linemodels.js'):null);
  function tlmPart(id,x,y,model,f,label,line='400kV',len=100){const P=root.Parts,p={...P.defaults('TLM'),model,len,data:JSON.stringify(P.TLM_TYPICAL[line])};if(model==='cp')p.f=f;
   const m=LM()?.[model==='cp'?`${line}|${len}|cp|${f}`:`${line}|${len}|fd`];p.mdl=m?JSON.stringify({...m,src:P.tlmKey(p)}):'';return C(id,'TLM',x,y,p,{label});}
+ // 4.9 (ROADMAP §31): transient recovery voltage of a breaker (IEC 62271-100) and the arc on a short-line fault
+ // terminal fault at 145 kV: network equivalent, bus capacitance and n lines (open at their far ends) per phase, the
+ // breaker with the voltage across its poles, a fault at its terminals; the first pole to clear against the rated TRV
+ T.push({id:'trv_terminal',group:'Διακόπτες ισχύος (4.9)',title:'TRV σε σφάλμα ακροδεκτών: IEC 62271-100',theory:'formula',topology:'trv_terminal',
+  options:[{k:'duty',label:'Δοκιμή (ρεύμα)',options:[['T100','T100: 100 % του I_sc (31,5 kA)'],['T60','T60: 60 %'],['T30','T30: 30 %'],['T10','T10: 10 %']],def:'T100'},
+   {k:'kind',label:'Σφάλμα',options:[['abc','Τριφασικό χωρίς γη (k_pp = 1,5)'],['abcg','Τριφασικό με γη, X₀/X₁ = 3 (k_pp ≈ 1,3)']],def:'abc'},
+   {k:'n',label:'Γραμμές στον ζυγό',options:[['6','6 γραμμές (Z_c/6 = 67 Ω)'],['4','4 γραμμές (100 Ω)'],['2','2 γραμμές (200 Ω)']],def:'6'},
+   {k:'cb',label:'Χωρητικότητα ζυγού',options:[['20n','20 nF (καθυστέρηση ≈ 2 μs)'],['5n','5 nF'],['80n','80 nF']],def:'20n'},
+   {k:'pole',label:'Πόλος',options:[['ideal','Ιδανικός (ανοίγει στο μηδέν)'],['arc','Με τόξο (βελτιωμένο Mayr)']],def:'ideal'}],
+  desc:'Ένα δίκτυο 145 kV τροφοδοτεί ζυγό με χωρητικότητα και n γραμμές (Z_c = 400 Ω, κλεισμένες στη χαρακτηριστική τους εμπέδηση, όπως μακριές γραμμές προς άλλα δίκτυα: χωρίς ανακλάσεις). Στα άκρα του διακόπτη γίνεται σφάλμα στα 20 ms και ο διακόπτης ανοίγει στα 60 ms. Ο πρώτος πόλος που σβήνει βλέπει τη μεταβατική τάση επαναφοράς (TRV): στην κάρτα, απέναντι στην ονομαστική TRV του IEC 62271-100 για 145 kV / 31,5 kA.',
+  tasks:['T100 με 6 γραμμές: η TRV μένει κάτω από τη γραμμή αναφοράς τεσσάρων παραμέτρων (u₁, t₁, u_c, t₂) και δεξιά από τη γραμμή καθυστέρησης;','Με 4 ή 2 γραμμές ο ρυθμός ανόδου μεγαλώνει (Z_c/n): το RRRV ξεπερνά τα 2 kV/μs;','Τριφασικό με γη: η TRV του πρώτου πόλου πέφτει (k_pp ≈ 1,3 αντί για 1,5).','T30/T10: λιγότερο ρεύμα, ο ρυθμός πέφτει, αλλά το πρότυπο ζητά μεγαλύτερο RRRV (5 και 7 kV/μs): η δοκιμή T10 αντιστοιχεί σε σφάλμα πίσω από μετασχηματιστή, με ελάχιστη χωρητικότητα.'],
+  build(o){const duty=o.duty||'T100',fr={T100:1,T60:.6,T30:.3,T10:.1}[duty]||1,Isc=31.5e3*fr,Un=145e3,n=+o.n||6,Cb=Parts.parseEng(o.cb||'20n'),gnd=o.kind==='abcg';
+   const grid={Un,Sk:Math.sqrt(3)*Un*Isc,XR:15,z0:'ratio',Z0Z1:gnd?3:1,XR0:15,conn:'sep'};
+   const comps=[C('G1','GRID3',160,220,grid,{label:'δίκτυο 145 kV'}),C('CB1','CB3',520,220,{cmd:'0:1, 0.06:0',vm:true,model:o.pole==='arc'?'arc':'ideal',arc:'imayr'},{label:'CB'}),
+    C('F1','FLT3',700,220,{kind:gnd?'abcg':'abc',ton:.02},{label:'σφάλμα'})];
+   const wires=[['CB1:a2','F1:a'],['CB1:b2','F1:b'],['CB1:c2','F1:c']];
+   ['a','b','c'].forEach((x,k)=>{const y=140+80*k;comps.push(C('B'+x,'JUNC',360,y),C('C'+x,'C',300,y+40,{C:Cb}),C('GC'+x,'GND',300,y+80),
+     C('TL'+x,'TL',420,y+40,{spec:'zt',Z:400/n,tau:100e-6,nsec:1},{label:'γραμμές '+x}),C('GT'+x,'GND',360,y+80),C('RT'+x,'R',480,y+40,{R:400/n},{rot:1,label:'Z_c/n'}),C('GR'+x,'GND',480,y+80));
+    wires.push(['G1:'+x,'B'+x+':j'],['B'+x+':j','CB1:'+x+'1'],['B'+x+':j','C'+x+':p'],['C'+x+':n','GC'+x+':g'],['B'+x+':j','TL'+x+':a1'],['TL'+x+':b1','GT'+x+':g'],['TL'+x+':b2','GT'+x+':g'],['TL'+x+':a2','RT'+x+':a'],['RT'+x+':b','GR'+x+':g']);});
+   return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:40000,method:'TR',speed:2,stopT:.064},
+    scope:{panes:[[['Y:CB1/Va','TRV πόλου a'],['Y:CB1/Vb','TRV πόλου b'],['Y:CB1/Vc','TRV πόλου c']],[['Y:CB1/Ia','i_a'],['Y:CB1/Ib','i_b'],['Y:CB1/Ic','i_c']]],window:{unit:'s',n:.064}},
+    meta:{trv:{Ur:Un,Isc:31.5e3,duty,kpp:gnd?1.3:1.5,topen:.06,n,Cb,pole:o.pole||'ideal'}}});}});
+ // short-line fault at 245 kV / 50 kA (IEC 62271-100 §7.109, Annex A): source with the supply circuit's TRV, the
+ // breaker with an arc, a short line (Z = 450 Ω) to the fault; L90 is the most severe for a weakened arc
+ T.push({id:'trv_slf',group:'Διακόπτες ισχύος (4.9)',title:'Σφάλμα κοντινής γραμμής και τόξο του διακόπτη',theory:'formula',topology:'trv_slf',
+  options:[{k:'ratio',label:'Δοκιμή',options:[['0.9','L90: I_L = 90 % του I_sc'],['0.75','L75'],['0.95','L95 (πιο κοντά)'],['0.6','L60']],def:'0.9'},
+   {k:'arc',label:'Μοντέλο τόξου',options:[['imayr','Mayr βελτιωμένο (από μετρήσεις)'],['kema','Τρία τροποποιημένα Mayr'],['habedank','Cassie + Mayr'],['mayr','Mayr']],def:'imayr'},
+   {k:'state',label:'Διακόπτης',options:[['1','Όπως στις μετρήσεις (P₀ = 15,9 kW)'],['0.45','Εξασθενημένος (P₀ × 0,45)'],['0.3','Πολύ εξασθενημένος (P₀ × 0,3)']],def:'1'}],
+  desc:'Μονοφασικό κύκλωμα δοκιμής κοντινής γραμμής (IEC 62271-100, Σχ. 48): πηγή U_r/√3 με αυτεπαγωγή για I_sc = 50 kA, χωρητικότητα και αντίσταση της πλευράς της πηγής, ο διακόπτης με τόξο (χωρισμός επαφών στα 14,7 ms) και γραμμή Z = 450 Ω μήκους τέτοιου ώστε το ρεύμα να είναι I_L. Μετά το μηδέν η πλευρά της γραμμής δίνει πριονωτή τάση με ρυθμό s·I_L: το τόξο πρέπει να ψυχθεί μέσα σε λίγα μs.',
+  tasks:['L90 με τον διακόπτη των μετρήσεων: διακοπή στο πρώτο μηδέν, ρεύμα μετά το τόξο λίγα mA.','Εξασθενημένος: στο L90 θερμική επανέναυση, στο L75 και στο L95 διακοπή. Γιατί το πρότυπο ζητά L90 και L75;','Σύγκρινε στην κάρτα το u₀, το u_L*, το t_L και την TRV στην πρώτη κορυφή με τους τύπους του Παραρτήματος A.'],
+  build(o){const Ur=245e3,Isc=50e3,f=50,w=2*Math.PI*f,r=+o.ratio||0.9,UG=Ur/Math.sqrt(3),LS=UG/(w*Isc),IL=r*Isc,LL=UG*(1-r)/(IL*w),Z=450,tsep=0.0147;
+   const sc=+o.state||1,arcP={arc:o.arc||'imayr',cmd:'0:1, '+tsep+':0'};if(sc!==1){if(arcP.arc==='kema')arcP.Pi2=String(30*sc);else if(arcP.arc==='habedank')arcP.Pm=String(30e3*sc);else arcP.P0=String((arcP.arc==='mayr'?15917:15917)*sc);}
+   const comps=[C('V1','VAC',100,220,{Vpk:UG*Math.SQRT2,f,phase:0},{label:'U_r/√3'}),C('LS','L',220,140,{L:LS},{label:'L_S'}),C('J1','JUNC',340,140),
+    C('CD','C',340,240,{C:10e-9},{label:'C_d'}),C('RS','R',420,240,{R:450},{rot:1,label:'R_s'}),C('CB1','ARC',520,140,arcP,{label:'CB'}),
+    C('TL1','TL',700,160,{spec:'zt',Z,tau:LL/Z,nsec:1},{label:'γραμμή'}),C('G1','GND',100,320),C('G2','GND',340,320),C('G3','GND',420,320),C('G4','GND',640,320),C('G5','GND',780,320)];
+   const wires=[['V1:p','LS:a'],['LS:b','J1:j'],['V1:n','G1:g'],['J1:j','CD:p'],['CD:n','G2:g'],['J1:j','RS:a'],['RS:b','G3:g'],['J1:j','CB1:a'],['CB1:b','TL1:a1'],['TL1:b1','G4:g'],['TL1:a2','G5:g'],['TL1:b2','G5:g']];
+   return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:400000,method:'TR',speed:0.05,stopT:0.0156},
+    scope:{panes:[[['Y:CB1/V','τάση διακόπτη (TRV)']],[['Y:CB1/I','ρεύμα τόξου']],[['Garc:CB1/A1','αγωγιμότητα τόξου']]],window:{unit:'s',n:0.0156}},
+    meta:{slf:{Ur,Isc,f,ratio:r,arc:arcP.arc,state:sc,tsep,LL,LS,Z}}});}});
  T.push({id:'line_fd',group:'Γραμμές (4.4)',title:'Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD)',theory:'formula',topology:'line_fd',
   options:[{k:'cmp',label:'Γραμμές',options:[['cp50','CP στα 50 Hz και FD, δίπλα δίπλα'],['cp5k','CP στα 5 kHz και FD'],['fd','Μόνο FD']],def:'cp50'},
    {k:'src',label:'Ζεύξη',options:[['step','Μία φάση (a), βηματική 1 kV πίσω από 10 Ω'],['ac3','Τριφασική 400 kV, στην κορυφή της v_a']],def:'step'}],

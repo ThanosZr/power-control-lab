@@ -176,6 +176,20 @@ class LoadFlow(unittest.TestCase):
             self.assertAlmostEqual(r['buses'][b]['angle'], a, delta=2e-5, msg=b)
         self.assertAlmostEqual(r['losses'] / 1e6, 4.641021, delta=1e-5)
 
+    def test_ieee14_voltage_levels(self):
+        # 4.9: nominal voltages for the per-unit case (decision 35); the load flow in per unit does not change
+        base, pf, hv = N.ieee14(), N.ieee14('pf'), N.ieee14('138')
+        self.assertEqual({b: pf.buses[b]['Un'] for b in ('1', '5', '6', '7', '8', '14')},
+                         {'1': 132e3, '5': 132e3, '6': 33e3, '7': 1e3, '8': 11e3, '14': 33e3})
+        self.assertTrue(all(hv.buses[b]['Un'] == 138e3 for b in hv.buses))
+        a, b, c = base.load_flow(), pf.load_flow(), hv.load_flow()
+        for k in a['buses']:
+            self.assertAlmostEqual(a['buses'][k]['V'], b['buses'][k]['V'], places=12)
+            self.assertAlmostEqual(a['buses'][k]['V'], c['buses'][k]['V'], places=12)
+        self.assertAlmostEqual(c['buses']['1']['V'] * 138, 146.28, places=2)     # as the terminal voltage of a 138 kV model
+        with self.assertRaises(N.NetworkError):
+            N.ieee14('400')
+
     def test_ieee14_against_the_ieee_solution(self):
         # the solution stored in the IEEE common data format (3 decimals for V, 2 for the angle)
         ref = {'2': (1.045, -4.98), '3': (1.010, -12.72), '4': (1.019, -10.33), '5': (1.020, -8.78), '6': (1.070, -14.22),

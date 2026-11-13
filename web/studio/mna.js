@@ -144,7 +144,10 @@
     case 'X':{const r=e.row,N=e.n;ad(e.s1,r,1,0);ad(r,e.s1,1,0);ad(e.s2,r,-1,0);ad(r,e.s2,-1,0);ad(e.p1,r,-N,0);ad(r,e.p1,-N,0);ad(e.p2,r,N,0);ad(r,e.p2,N,0);break;}
     case 'GY':{const r=e.row,Y=e.psi;ad(e.a,r,1,0);ad(r,e.a,1,0);ad(e.b,r,-1,0);ad(r,e.b,-1,0);ad(r,e.m,-Y,0);ad(e.m,r,-Y,0);break;}
     case 'NL':if(e.arc&&e.arc.closed){y(e.a,e.b,1/e.arc.Ron,0);break;}left.add(e.k);break;
-    case 'TL':case 'TLM':case 'CPL':left.add(e.k);break;
+    case 'TL':{// 4.9: a distributed line at ω₀ as its exact two-port (lossless; R adds only a small start transient)
+     const th=w0*e.tau,y11=-1/(e.Z*Math.tan(th)),y12=1/(e.Z*Math.sin(th)),P=[[e.a1,e.b1],[e.a2,e.b2]];
+     for(let k=0;k<2;k++)for(let j=0;j<2;j++){const g=k===j?y11:y12,[ak,bk]=P[k],[aj,bj]=P[j];ad(ak,aj,0,g);ad(bk,bj,0,g);ad(ak,bj,0,-g);ad(bk,aj,0,-g);}break;}
+    case 'TLM':case 'CPL':left.add(e.k);break;
    }
   }
   gens.forEach((m,q)=>{const Vp=m.V0*m.g.Un*Math.SQRT2/Math.sqrt(3);
@@ -159,7 +162,8 @@
    else if(e.k==='C'){const dr=Vr(e.a)-Vr(e.b),di=Vi(e.a)-Vi(e.b);e.v=dr;e.v1=bdf?dr*cb+di*sb:dr;e.i=-w*e.C*di;}
    else if(e.k==='F'&&!e.gen&&!e.sm&&!e.srm){const N=e.N;for(let k=0;k<N;k++){const [a,b]=e.ports[k];e.psi[k]=(Vi(a)-Vi(b))/w;}e.psi1.set(e.psi);
     if(bdf)for(let k=0;k<N;k++){const [a,b]=e.ports[k];e.psi1[k]=((Vi(a)-Vi(b))*cb-(Vr(a)-Vr(b))*sb)/w;}
-    for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=e.Gam[k*N+j]*e.psi[j];e.i[k]=s;}}}
+    for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=e.Gam[k*N+j]*e.psi[j];e.i[k]=s;}}
+   else if(e.k==='TL')tlSteady(e,w0,sim.h,[Vr(e.a1)-Vr(e.b1),Vi(e.a1)-Vi(e.b1)],[Vr(e.a2)-Vr(e.b2),Vi(e.a2)-Vi(e.b2)]);}
   // each generator: positive sequence of the terminal phasors, the voltage behind R_a, the steady state, the twisted shaft
   const A=[Math.cos(2*Math.PI/3),Math.sin(2*Math.PI/3)],cm=(a,b)=>[a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]];
   const rep=[];
@@ -216,6 +220,17 @@
  function deFrac(v0,v1,need,U0,k){let lo=0,hi=1;for(let i=0;i<50;i++){const m=(lo+hi)/2;if(deInt(v0,v1,m,U0,k)<need)lo=m;else hi=m;}return hi;}
  // line element (3.8; losses and sections 3.11): N sections of τ/N, each with R/N lumped as R/4 at its ends and R/2 inside (Dommel),
  // which gives Z_e = Z + R/(4N) and h = (Z − R/(4N))/(Z + R/(4N)); lossless when R = 0 (h = 1)
+ // 4.9: the history of a distributed line in a sinusoidal steady state (phasors of the end voltages, ω₀): junction
+ // voltages and section currents from the lossless line equations, sampled every h from −(τ/N + 3h) to 0, so that a
+ // start from a load flow (solve.init 'ac') carries the line energized (e.g. the line side of a short-line fault)
+ function tlSteady(e,w0,h,V1,V2){const N=e.N,Z=e.Z,th=w0*e.tau,mul=(a,b)=>[a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]];
+  const y11=[0,-1/(Z*Math.tan(th))],y12=[0,1/(Z*Math.sin(th))],I1a=mul(y11,V1),I1b=mul(y12,V2),I1=[I1a[0]+I1b[0],I1a[1]+I1b[1]];
+  const at=x=>{const c=Math.cos(th*x),sn=Math.sin(th*x);return {v:[V1[0]*c+Z*I1[1]*sn,V1[1]*c-Z*I1[0]*sn],i:[I1[0]*c+V1[1]/Z*sn,I1[1]*c-V1[0]/Z*sn]};};
+  const J=Array.from({length:N+1},(_,k)=>at(k/N)),H=e.H,C=H.c,n=Math.max(4,Math.ceil(e.ts/h)+3);H.t.length=0;for(const c of C)c.length=0;
+  const re=(z,t)=>z[0]*Math.cos(w0*t)-z[1]*Math.sin(w0*t);
+  for(let q=n;q>=0;q--){const t=-q*h;H.t.push(t);for(let k=0;k<=N;k++)C[k].push(re(J[k].v,t));
+   for(let j=0;j<N;j++){C[N+1+j].push(re(J[j].i,t));C[2*N+1+j].push(-re(J[j+1].i,t));}}
+  H.s=0;H.cut=0;e.iE[0]=C[N+1][n];e.iE[1]=C[3*N][n];}
  function tlElement(o,g){const N=g.N||1,R=g.R||0,r=R/(4*N),Ze=g.Z+r;
   return {k:'TL',...o,Z:g.Z,tau:g.tau,N,Rl:R,ts:g.tau/N,Ze,hh:(g.Z-r)/Ze,Ih:[0,0],IhS:new Float64Array(2*N),q:new Float64Array(3*N+1),iE:new Float64Array(2),
    H:{t:[],c:Array.from({length:3*N+1},()=>[]),s:0,cut:0}};}
@@ -1237,7 +1252,9 @@
   solve(h,mode){
    if(!this.hasCPL&&!this.hasNL)return this.solveOnce(h,mode);
    for(const e of this.net.els)if(e.k==='CPL')e.v0=this.V(e.a)-this.V(e.b);
-   if(this.arcEls.length)for(const e of this.arcEls){const A=e.arc;A.h=h;A.th=mode==='TR'?0.5:1;A.xg=null;A.F0=A.closed?0:arcF(A,A.x,A.u).F;}
+   // the arc state: trapezoidal with the trapezoidal rule while the step is not longer than the section's time constant,
+   // backward Euler otherwise (a section faster than the step would ring with θ = ½)
+   if(this.arcEls.length)for(const e of this.arcEls){const A=e.arc;A.h=h;A.th=mode==='TR'&&h<=A.tau0*(A.alpha?Math.exp(A.alpha*A.x):1)?0.5:1;A.xg=null;A.F0=A.closed?0:arcF(A,A.x,A.u).F;}
    const n=this.hasNL?80:12;let sol,bad=null;for(let it=0;it<n;it++){this.cplLinearize();this.nlLinearize();sol=this.solveOnce(h,mode);
     let conv=true;bad=null;const V=i=>i<0?0:sol[i];
     for(const e of this.net.els){if(e.k==='CPL'){const v=V(e.a)-V(e.b);if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v))){conv=false;bad=e;}e.v0=v;}
@@ -1312,7 +1329,7 @@
    e.iE[0]=C[N+1][C[N+1].length-1];e.iE[1]=C[3*N][C[3*N].length-1];
    while(H.s+2<H.t.length&&H.t[H.s+1]<t-1.5*e.ts)H.s++;if(H.s>4096){H.t.splice(0,H.s);for(const c of C)c.splice(0,H.s);H.cut+=H.s;H.s=0;}}
   // all columns at time tq by linear interpolation; zero before t = 0 (the line starts de-energized)
-  tlHist(e,tq){const H=e.H,n=H.t.length,C=H.c,out=e.q;if(tq<0||!n){out.fill(0);return out;}let j=n-1;
+  tlHist(e,tq){const H=e.H,n=H.t.length,C=H.c,out=e.q;if(!n||tq<Math.min(0,H.t[0])-1e-18){out.fill(0);return out;}let j=n-1;
    if(tq>=H.t[j]){for(let k=0;k<C.length;k++)out[k]=C[k][j];return out;}let lo=H.s,hi=j;if(tq<=H.t[lo]){for(let k=0;k<C.length;k++)out[k]=C[k][lo];return out;}
    while(hi-lo>1){const m=(lo+hi)>>1;if(H.t[m]<=tq)lo=m;else hi=m;}const f=(tq-H.t[lo])/((H.t[hi]-H.t[lo])||1);
    for(let k=0;k<C.length;k++){const c=C[k];out[k]=c[lo]+(c[hi]-c[lo])*f;}return out;}

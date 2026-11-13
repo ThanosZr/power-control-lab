@@ -165,5 +165,32 @@ class Envelope(unittest.TestCase):
         self.assertIsNotNone(c2['t_first'])
 
 
+
+class SameInTheBrowser(unittest.TestCase):
+    def test_trv_js_gives_the_same_numbers(self):
+        import json
+        import shutil
+        import subprocess
+        from pathlib import Path
+        if shutil.which('node') is None:
+            self.skipTest('Node.js not installed')
+        run = subprocess.run(['node', str(Path(__file__).resolve().parent / 'js' / 'trv_cases.js')], capture_output=True, text=True, timeout=120)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        o = json.loads(run.stdout)
+        cases = [[3.6e3, 'T100', 1.5, 'S1'], [12e3, 'T60', 1.3, 'S1'], [72.5e3, 'T10', 1.5, 'S1'], [12e3, 'T100', 1.5, 'S2'], [36e3, 'OP', 2.0, 'S1'],
+                 [12e3, 'OP', 2.5, 'S2'], [20e3, 'T100', 1.3, 'S1'], [15e3, 'SLF', None, 'S1'], [145e3, 'T100', None, 'S1'], [145e3, 'T60', None, 'S1'],
+                 [145e3, 'T30', None, 'S1'], [245e3, 'T10', None, 'S1'], [170e3, 'T100', 1.5, 'S1'], [145e3, 'OP', None, 'S1'], [1100e3, 'T100', None, 'S1'],
+                 [1200e3, 'T60', None, 'S1'], [1100e3, 'OP', None, 'S1'], [245e3, 'SLF', None, 'S1']]
+        for c, j in zip(cases, o['rated']):
+            p = T.rated(*c)
+            for k, v in p.items():
+                if isinstance(v, float) and k in j:
+                    self.assertAlmostEqual(v, j[k], delta=1e-12 * max(abs(v), 1e-30), msg=f'{c} {k}')
+        for r, j in zip((0.9, 0.75), o['slf']):
+            p = T.slf(245e3, 50e3, r)
+            for k in ('u0', 'uL', 'tL', 'um', 'rrrv_slf', 'us', 'uT', 'tT', 'L'):
+                self.assertAlmostEqual(p[k], j[k], delta=1e-12 * abs(p[k]), msg=f'L{r} {k}')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -78,7 +78,9 @@ class Arc(unittest.TestCase):
         self.assertLess(abs(b['ext'] - r['ext']), 0.005 * r['ext'], name)              # extinction peak
         self.assertLess(abs(b['peak'] - r['peak']), 1e-4 * abs(r['peak']), name)       # TRV peak
         self.assertAlmostEqual(b['tpeak'], r['tpeak'], delta=2e-7, msg=name)
-        self.assertLess(abs(b['post'] - r['post']), tol_post * r['post'] + 1e-5, name)  # post-arc current
+        # post-arc current; the solver's 1 nS shunt at every node (GMIN) leaks through the chain's inner nodes too
+        leak = len(o['sections']) * 1e-9 * abs(r['peak'])
+        self.assertLess(abs(b['post'] - r['post']), tol_post * r['post'] + 1e-5 + leak, name)
         self.assertLess(b['iend'], 1e-2, name)                                         # interrupted at the first zero
         return b
 

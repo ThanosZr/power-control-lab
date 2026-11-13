@@ -76,7 +76,7 @@
   if(m==='cassie')return [S({lam:1,tau0:v('tauc',1.2e-6),P0:v('Uc',1500)**2})];
   if(m==='schwarz')return [S({tau0:v('tau',0.27e-6),P0:v('P0',15917),alpha:v('alpha',0.25),beta:v('beta',0.6)})];
   if(m==='habedank')return [S({lam:1,tau0:v('tauc',1.2e-6),P0:v('Uc',1500)**2}),S({tau0:v('taum',0.3e-6),P0:v('Pm',30e3)})];
-  if(m==='kema'){const t1=v('tau1',8.55e-6),k1=v('k1',5.7),k2=v('k2',10),k3=v('k3',100),P2=v('Pi2',10);
+  if(m==='kema'){const t1=v('tau1',4e-6),k1=v('k1',5.7),k2=v('k2',10),k3=v('k3',100),P2=v('Pi2',30);
    return [S({lam:1.4,tau0:t1,P0:v('Pi1',4.4e6)}),S({lam:1.9,tau0:t1/k1,P0:P2}),S({lam:2,tau0:t1/k1/k2,P0:k3*P2})];}
   return [S({tau0:v('tau',0.27e-6),P0:v('P0',15917),P1:v('P1',0.9943)})];}
  function arcChain(B,p,a,b,gate,tag=''){const L=arcSections(p);let prev=a;

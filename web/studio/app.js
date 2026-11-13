@@ -1506,6 +1506,53 @@ function lineFdTheory(){const s=S.sim,m=S.tutMeta||{};if(!s)return '';const ids=
  return h+`<table class="cmp"><tr><th>γραμμή</th><th>άφιξη στο a2 (5 %)</th><th>max |v_a2|</th><th>max |v_b2|</th></tr>${rows}</table>`
   +(m.cable?'<p class="muted small">Επαλήθευση (tests/test_lines.py): οι βρόχοι του καλωδίου ταυτίζονται με υπολογισμό πεδίου σε λεπτούς ομόκεντρους φλοιούς (10⁻⁶), ο λύτης με το ίδιο μοντέλο λυμένο με αριθμητικό μετασχηματισμό Laplace, και το FD με το ακριβές καλώδιο σε λίγα τοις χιλίοις· το CP στα 50 Hz κρατά την ταχύτητα των 50 Hz (με την εσωτερική αυτεπαγωγή του αγωγού) και το μέτωπο φτάνει αργότερα.</p>'
    :'<p class="muted small">Επαλήθευση (tests/test_lines.py): ο λύτης ταυτίζεται με το ίδιο μοντέλο λυμένο στο πεδίο της συχνότητας με αριθμητικό μετασχηματισμό Laplace, και το FD με την ακριβή γραμμή (χωρίς προσαρμογή) σε λίγα τοις χιλίοις του μεγίστου· το CP στα 50 Hz απέχει πολύ στις επαγόμενες τάσεις, γιατί κρατά την απόσβεση του ρυθμού γης στα 50 Hz.</p>');}
+// 4.9: TRV cards. The first current zero of a pole after t₀ where the current stays (|i| < 1 A for 50 μs), by linear
+// interpolation, and the voltage across the pole from there (t from the zero)
+function trvAfterZero(ik,vk,t0,win=1e-3){const I=rawSeries(ik),V=rawSeries(vk);if(!I||!V)return null;
+ for(let j=1;j<I.t.length;j++){if(I.t[j]<=t0||I.y[j-1]*I.y[j]>0)continue;const a=I.y[j-1],b=I.y[j],tz=I.t[j-1]+(I.t[j]-I.t[j-1])*(a!==b?a/(a-b):0);
+  let hold=true,end=null;for(let q=j+1;q<I.t.length&&I.t[q]<tz+50e-6;q++)if(Math.abs(I.y[q])>1){hold=false;break;}if(!hold)continue;
+  const t=[],u=[];for(let q=0;q<V.t.length;q++)if(V.t[q]>=tz&&V.t[q]<=tz+win){t.push(V.t[q]-tz);u.push(V.y[q]);}
+  if(V.t[V.t.length-1]>=tz+win)end=true;return {tz,t,u,complete:!!end};}
+ return null;}
+function trvSvg(t,u,spec,o={}){const W=520,H=230,L=52,R=12,T=12,B=34,tmax=o.tmax||t[t.length-1]||1e-3;let big=0;for(const x of u)if(Math.abs(x)>Math.abs(big))big=x;const sg=big>=0?1:-1;
+ const umax=Math.max(spec?spec.uc*1.15:0,...u.map(x=>sg*x),1),X=x=>L+(W-L-R)*x/tmax,Y=y=>H-B-(H-T-B)*y/umax;
+ const path=(pts)=>pts.map((p,i)=>(i?'L':'M')+X(p[0]).toFixed(1)+','+Y(p[1]).toFixed(1)).join(' ');
+ const step=Math.max(1,Math.floor(t.length/700)),cur=[];for(let i=0;i<t.length;i+=step)cur.push([t[i],sg*u[i]]);
+ let g=`<svg viewBox="0 0 ${W} ${H}" class="trvplot" style="width:100%;max-width:560px"><rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="none" stroke="currentColor" stroke-opacity=".25"/>`;
+ for(let k=0;k<=4;k++){const x=tmax*k/4,y=umax*k/4;g+=`<text x="${X(x)}" y="${H-B+14}" font-size="10" text-anchor="middle">${fmt(x*1e6,3)}</text><text x="${L-4}" y="${Y(y)+3}" font-size="10" text-anchor="end">${fmt(y/1e3,3)}</text>`;}
+ g+=`<text x="${(L+W-R)/2}" y="${H-4}" font-size="10" text-anchor="middle">t από το μηδέν του ρεύματος (μs)</text><text x="12" y="${(T+H-B)/2}" font-size="10" transform="rotate(-90 12 ${(T+H-B)/2})" text-anchor="middle">kV</text>`;
+ if(spec){const ref=TRV.referenceLine(spec,tmax),dl=TRV.delayLine(spec);g+=`<path d="${path(ref)}" fill="none" stroke="#c0392b" stroke-width="1.6"/><path d="${path(dl)}" fill="none" stroke="#c0392b" stroke-dasharray="4 3"/>`;}
+ g+=`<path d="${path(cur)}" fill="none" stroke="#1f6fb2" stroke-width="1.4"/></svg>`;return g;}
+function trvTerminalTheory(){const s=S.sim,m=(S.tutMeta||{}).trv;if(!s||!m||!window.TRV)return '';
+ const spec=TRV.rated(m.Ur,m.duty,m.kpp,'S1',50),E=Math.sqrt(2/3)*m.Ur;
+ const par=spec.params==='4p'?`u₁ = 0,75·k_pp·√(2/3)·U_r = <b>${eng(spec.u1,'V')}</b>, t₁ = u₁/(${fmt(spec.rrrv*1e-9,3)} kV/μs) = <b>${eng(spec.t1,'s')}</b>, u_c = k_pp·k_af·√(2/3)·U_r = <b>${eng(spec.uc,'V')}</b> (k_af = ${fmt(spec.kaf,3)}), t₂ = <b>${eng(spec.t2,'s')}</b>`:
+  `u_c = k_pp·k_af·√(2/3)·U_r = <b>${eng(spec.uc,'V')}</b> (k_af = ${fmt(spec.kaf,3)}), t₃ = <b>${eng(spec.t3,'s')}</b>, RRRV = u_c/t₃ = <b>${fmt(spec.rrrv*1e-9,3)} kV/μs</b>`;
+ let h=`<ul class="eqs"><li>Ονομαστική TRV (IEC 62271-100:2021, §7.105.5) για U_r = 145 kV, ${m.duty}, k_pp = ${fmt(spec.kpp,2)}: ${par}</li>
+  <li>Γραμμή καθυστέρησης: t_d = <b>${eng(spec.td,'s')}</b>, ως u′ = ${eng(spec.ud,'V')} στο t′ = ${eng(spec.tdp,'s')}. Η TRV του δικτύου πρέπει να μένει κάτω από τη γραμμή αναφοράς (IEEE C37.011 §4).</li>
+  <li>Πρώτος πόλος: τάση ισχύος επαναφοράς ≈ k_pp·√(2/3)·U_r = ${eng(spec.kpp*E,'V')}· αρχικός ρυθμός ≈ k_pp·√2·ω·I·Z_eq, με Z_eq τις ${m.n} γραμμές (${eng(400/m.n,'Ω')}) παράλληλα με τη χωρητικότητα του ζυγού.</li></ul>`;
+ let best=null;for(const x of ['a','b','c']){const r=trvAfterZero('Y:CB1/I'+x,'Y:CB1/V'+x,m.topen,0.6e-3);if(r&&(!best||r.tz<best.tz))best={...r,x};}
+ if(!best||!best.complete)return h+'<p class="muted small">Τρέξε ως ~1 ms μετά το άνοιγμα (60 ms) για τη σύγκριση: ο πρώτος πόλος σβήνει στο πρώτο μηδέν του ρεύματός του.</p>';
+ const c=TRV.compare(best.t,best.u,spec);
+ h+=`<p>Πρώτος πόλος: <b>${best.x}</b>, μηδέν ρεύματος στα ${eng(best.tz,'s',5)}. ${c.ok?'<span class="good">Η TRV μένει κάτω από τη γραμμή αναφοράς</span>':'<span class="warn-text">Η TRV ξεπερνά τη γραμμή αναφοράς</span>'} (μέγιστος λόγος u/u_ref = ${fmt(c.ratio,3)}${c.t_first!=null?', πρώτη υπέρβαση στα '+eng(c.t_first,'s'):''}).</p>`+trvSvg(best.t,best.u,spec,{tmax:0.6e-3});
+ h+=cmpRows([['RRRV (εφαπτομένη από την αρχή)',spec.rrrv,c.rrrv,'V/s'],['κορυφή στο παράθυρο 0,6 ms',spec.uc,c.uc,'V']]);
+ return h+`<p class="muted small">Μπλε: η τάση του πόλου από το μηδέν του ρεύματος (απόλυτη τιμή). Κόκκινο: η γραμμή αναφοράς και η γραμμή καθυστέρησης της ονομαστικής TRV. Στη «Διαφορά» ο λόγος προσομοίωση/ονομαστική − 1: αρνητικός σημαίνει περιθώριο.</p>`;}
+function trvSlfTheory(){const s=S.sim,m=(S.tutMeta||{}).slf;if(!s||!m||!window.TRV)return '';
+ const a=TRV.slf(m.Ur,m.Isc,m.ratio,m.f),tau=m.LL/m.Z;
+ let h=`<ul class="eqs"><li>Παράρτημα A: I_L = ${fmt(m.ratio*100,3)} % του I_sc = <b>${eng(a.IL,'A')}</b>, u₀ = √2·U_G·(1 − I_L/I_sc) = <b>${eng(a.u0,'V')}</b> (η τάση της γραμμής τη στιγμή της διακοπής), u_L* = k·u₀ = <b>${eng(a.uL,'V')}</b> με k = 1,6</li>
+  <li>Ρυθμός της πλευράς της γραμμής s·I_L = √2·ω·Z·I_L = <b>${fmt(a.rate_line*1e-9,3)} kV/μs</b>, t_L = k·L_L/Z = <b>${eng(a.tL,'s')}</b> (μήκος ≈ ${eng(a.L,'m')}); πλευρά της πηγής RRRV·I_L/I_sc = ${fmt(a.rrrv_slf*1e-9,3)} kV/μs· TRV στην πρώτη κορυφή u_T = u_L* + u_s* = <b>${eng(a.uT,'V')}</b></li>
+  <li>Στη γραμμή χωρίς απώλειες της προσομοίωσης η πριονωτή πάει ως 2·u₀ σε 2τ = ${eng(2*tau,'s')} (k = 2)· οι πραγματικές γραμμές αποσβένουν (k = 1,6).</li></ul>`;
+ const I=rawSeries('Y:CB1/I'),V=rawSeries('Y:CB1/V');if(!I||!V)return h;
+ let j0=-1;for(let j=1;j<I.t.length;j++)if(I.t[j]>m.tsep&&I.y[j-1]*I.y[j]<=0){j0=j;break;}
+ if(j0<0)return h+'<p class="muted small">Τρέξε ως τα 15,6 ms: το τόξο ξεκινά στα 14,7 ms και το πρώτο μηδέν έρχεται λίγο μετά.</p>';
+ const ia=I.y[j0-1],ib=I.y[j0],tz=I.t[j0-1]+(I.t[j0]-I.t[j0-1])*ia/(ia-ib);
+ let post=0,last=0,ext=0;for(let q=0;q<I.t.length;q++){const dt=I.t[q]-tz;if(dt>5e-6&&dt<100e-6)post=Math.max(post,Math.abs(I.y[q]));if(dt>-30e-6&&dt<0)ext=Math.max(ext,Math.abs(V.y[q]));last=I.y[q];}
+ const tend=I.t[I.t.length-1],ok=tend>tz+100e-6&&Math.abs(last)<1;
+ const t=[],u=[];for(let q=0;q<V.t.length;q++)if(V.t[q]>=tz&&V.t[q]<=tz+Math.min(4*tau,60e-6)){t.push(V.t[q]-tz);u.push(V.y[q]);}
+ let pk=0,tp=0;const lim=2*tau*1.3;for(let q=0;q<t.length;q++)if(t[q]<=lim&&Math.abs(u[q])>pk){pk=Math.abs(u[q]);tp=t[q];}
+ let rate=NaN;{const f=(x)=>{for(let q=0;q<t.length;q++)if(Math.abs(u[q])>=x*pk)return t[q];return NaN;};const t2=f(.2),t8=f(.8);if(t8>t2)rate=0.6*pk/(t8-t2);}
+ h+=`<p>${tend<tz+100e-6?'<span class="muted">Τρέξε λίγο ακόμη μετά το μηδέν.</span>':ok?'<span class="good">Διακοπή στο πρώτο μηδέν</span> (στα '+eng(tz,'s',5)+'): το ρεύμα μετά το τόξο φτάνει τα '+eng(post,'A')+'.':'<span class="warn-text">Θερμική επανέναυση</span>: μετά το μηδέν των '+eng(tz,'s',5)+' το τόξο ξαναζεσταίνεται και το ρεύμα συνεχίζει ως το επόμενο μηδέν.'} Κορυφή σβέσης πριν από το μηδέν: ${eng(ext,'V')}.</p>`;
+ if(ok&&t.length>3){h+=trvSvg(t,u,null,{tmax:t[t.length-1]});h+=cmpRows([['ρυθμός ανόδου (20–80 % της πρώτης κορυφής)',a.rate_line+a.rrrv_slf,rate,'V/s'],['πρώτη κορυφή (γραμμή με k = 2 + πηγή)',2*a.u0+a.rrrv_slf*Math.max(2*tau-a.supply.td,0),pk,'V'],['χρόνος της πρώτης κορυφής 2τ',2*tau,tp,'s']]);}
+ return h;}
 function netFaultTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.grid||!window.NetLib)return '';
  const g=m.xf?NetLib.behindXF(m.grid,m.xfp):{seq:NetLib.gridZ(m.grid)},z=g.seq,ref=NetLib.faultCurrents(g,{kind:m.kind}),Un=m.xf?m.xfp.U2:m.grid.Un;
  const Z1=Math.hypot(z.R1,z.X1),c2=(a,b)=>Math.hypot(a,b);
@@ -2085,6 +2132,8 @@ function formulaTheory(t){
  if(t.topology==='sub_legs')return subLegsTheory();
  if(t.topology==='bus_dq')return busDqTheory();
  if(t.topology==='net_fault')return netFaultTheory();
+ if(t.topology==='trv_terminal')return trvTerminalTheory();
+ if(t.topology==='trv_slf')return trvSlfTheory();
  if(t.topology==='line_fd'||t.topology==='cable_fd')return lineFdTheory();
  if(t.topology==='gen_sc')return genScTheory();
  if(t.topology==='fbm')return fbmTheory();

@@ -335,7 +335,7 @@ def envelope_of(t, u, t0=0.0):
     uc = us[ip]
     if uc <= 0:
         raise TRVError('envelope_of: no recovery voltage')
-    cand = [i for i in range(1, ip + 1) if ts[i] > 0]
+    cand = [i for i in range(1, ip + 1) if ts[i] > 0 and us[i] >= 0.05 * uc] or [i for i in range(1, ip + 1) if ts[i] > 0]   # above 5 % of u_c: not the noise of the zero
     i1 = max(cand, key=lambda i: us[i] / ts[i])             # first segment: through O, tangential, not cutting
     m1 = us[i1] / ts[i1]
     two = {'params': '2p', 'uc': uc, 't3': uc / m1, 'rrrv': m1, 'contact1': (ts[i1], us[i1]), 'peak': (ts[ip], uc)}
@@ -413,14 +413,14 @@ def compare(t, u, spec, t0=0.0):
     (``rated``): ``ok`` when the curve stays at or under the reference line at every instant (the system TRV within
     the breaker's capability, IEEE C37.011 §4); the smallest margin (V, and relative to u_c) and where it occurs, counted
     where the reference line is above 5 % of u_c (near the origin both are zero); ``ratio``, the largest u/u_ref there;
-    the first instant above the line; and the envelope of the curve (``envelope_of``) with the ratios of its peak and
+    the first instant above the line by more than 1 % of u_c; and the envelope of the curve (``envelope_of``) with the ratios of its peak and
     rate of rise to the rated ones."""
     ts, us, _ = _prep(t, u, t0, nmax=10 ** 9)
     ref = reference_line(spec, max(ts))
     worst, at, first, ratio = None, None, None, 0.0
     for a, b in zip(ts, us):
         r = line_value(ref, a)
-        if b > r + 1e-9 * spec['uc'] and first is None:
+        if b > r + 0.01 * spec['uc'] and first is None:      # 1 % of u_c: the sampling of the current zero
             first = a
         if r < 0.05 * spec['uc']:
             continue
