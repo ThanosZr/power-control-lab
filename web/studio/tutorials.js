@@ -1308,7 +1308,7 @@
     [['I:I1','κεραυνός'],['Y:T2/If','βάση T2'],...(sa!=='none'?[['Y:SEa/I','ZnO είσοδος a']]:[])]];
    const stopT=50e-6;
    return project(comps,wires,{version:4,sim:{hDiv:2,method:'TR',speed:400,stopT},scope:{panes,window:{unit:'s',n:stopT}},
-    meta:{lg:{I,strike:o.strike||'tower',foot:o.foot||'ion',R0,rho:100,E0:400e3,sa,open,Zt:200,h:27.15,Ub:2.24e6,U10:819e3,LIWL:1425e3,Ks:1.15,dist:56,v:3e8,t0:1e-6}}});}});
+    meta:{lg:{I,strike:o.strike||'tower',foot:o.foot||'ion',R0,rho:100,E0:400e3,sa,open,Zt:200,h:27.15,Ub:2.24e6,U10:819e3,LIWL:1425e3,Ks:1.15,dist:56,v:3e8,t0:1e-6,stop:stopT}}});}});
  T.push({id:'line_fd',group:'Γραμμές (4.4)',title:'Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD)',theory:'formula',topology:'line_fd',
   options:[{k:'cmp',label:'Γραμμές',options:[['cp50','CP στα 50 Hz και FD, δίπλα δίπλα'],['cp5k','CP στα 5 kHz και FD'],['fd','Μόνο FD']],def:'cp50'},
    {k:'src',label:'Ζεύξη',options:[['step','Μία φάση (a), βηματική 1 kV πίσω από 10 Ω'],['ac3','Τριφασική 400 kV, στην κορυφή της v_a']],def:'step'}],

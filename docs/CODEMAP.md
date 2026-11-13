@@ -9,7 +9,7 @@
 |---|---:|
 | `web/studio/addon_client.js` | 30 |
 | `web/studio/addons.js` | 109 |
-| `web/studio/app.js` | 2433 |
+| `web/studio/app.js` | 2453 |
 | `web/studio/bus.js` | 197 |
 | `web/studio/editor.js` | 642 |
 | `web/studio/expr.js` | 73 |
@@ -93,6 +93,7 @@
 | `tests/test_generator.py` | 223 |
 | `tests/test_impulse_tools.py` | 150 |
 | `tests/test_library.py` | 41 |
+| `tests/test_lightning.py` | 78 |
 | `tests/test_lines.py` | 355 |
 | `tests/test_live_program.py` | 49 |
 | `tests/test_live_sim.py` | 149 |
@@ -124,7 +125,7 @@
 | `tests/js/gen_cases.js` | 78 |
 | `tests/js/gen_ctl_cases.js` | 39 |
 | `tests/js/library_cases.js` | 11 |
-| `tests/js/lightning_cases.js` | 16 |
+| `tests/js/lightning_cases.js` | 22 |
 | `tests/js/line_cases.js` | 15 |
 | `tests/js/live_cases.js` | 31 |
 | `tests/js/netlib42_cases.js` | 50 |
@@ -147,7 +148,7 @@
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/ev_flow.js` | 89 |
 | `tests/ui/features_flow.js` | 84 |
-| `tests/ui/line_flow.js` | 75 |
+| `tests/ui/line_flow.js` | 81 |
 | `tests/ui/live_flow.js` | 41 |
 | `tests/ui/perf_flow.js` | 68 |
 | `tests/ui/scenario_flow.js` | 70 |
@@ -607,88 +608,90 @@
 | 1520 | const fn | `path` |
 | 1527 | function | `trvTerminalTheory` |
 | 1540 | function | `trvSlfTheory` |
-| 1558 | function | `netFaultTheory` |
-| 1571 | function | `busDqTheory` |
-| 1579 | function | `subLegsTheory` |
-| 1588 | function | `blocksTheory` |
-| 1603 | function | `pcmTheory` |
-| 1629 | function | `codeTheory` |
-| 1639 | function | `eisTheory` |
-| 1641 | const fn | `ser` |
-| 1654 | function | `imSteady` |
-| 1657 | function | `imPar` |
-| 1658 | function | `phaseRms` |
-| 1659 | function | `vfTheory` |
-| 1672 | function | `focTheory` |
-| 1689 | function | `synTheory` |
-| 1708 | const fn | `need` |
-| 1728 | function | `pmTheory` |
-| 1730 | const fn | `mtpa` |
-| 1746 | function | `srmTheory` |
-| 1761 | const fn | `curve` |
-| 1772 | function | `lgTheory` |
-| 1783 | const fn | `cr` |
-| 1790 | function | `chaosTheory` |
-| 1805 | function | `nnCycles` |
-| 1808 | function | `genCtlTheory` |
-| 1821 | function | `evTheory` |
-| 1835 | function | `nnTheory` |
-| 1852 | function | `nnGuiCode` |
-| 1858 | function | `runNNCompare` |
-| 1866 | function | `dcDriveTheory` |
-| 1867 | const fn | `per` |
-| 1868 | const fn | `cross` |
-| 1898 | function | `twModel` |
-| 1901 | const fn | `g` |
-| 1904 | function | `twLattice` |
-| 1911 | const fn | `marks` |
-| 1914 | function | `twTheory` |
-| 1922 | const fn | `at` |
-| 1939 | function | `arTheory` |
-| 1959 | function | `impulseMeasure` |
-| 1961 | const fn | `cross` |
-| 1964 | function | `marxTheory` |
-| 1982 | function | `chopModel` |
-| 1985 | const fn | `f` |
-| 1988 | function | `chopTheory` |
-| 2002 | function | `cmp3` |
-| 2006 | function | `hvExact` |
-| 2007 | function | `hv153Theory` |
-| 2033 | function | `besI1e` |
-| 2035 | function | `heaviside` |
-| 2037 | function | `lossTheory` |
-| 2056 | function | `vtBreak` |
-| 2057 | function | `vtTheory` |
-| 2077 | function | `hvdivTheory` |
-| 2079 | const fn | `r` |
-| 2091 | function | `scheringTheory` |
-| 2092 | const fn | `inv` |
-| 2101 | const fn | `sr` |
-| 2107 | function | `formulaTheory` |
-| 2188 | function | `nodeAvg` |
-| 2194 | function | `circuitForMath` |
-| 2226 | function | `scheduleMath` |
-| 2227 | function | `batteryKey` |
-| 2229 | function | `mathChoices` |
-| 2230 | const fn | `prim` |
-| 2232 | function | `renderMathChoices` |
-| 2234 | function | `runTemplate` |
-| 2240 | function | `runMath` |
-| 2262 | function | `saveLocal` |
-| 2263 | function | `saveLocalSoon` |
-| 2265 | function | `download` |
-| 2266 | function | `exportCSV` |
-| 2272 | function | `syncScopeInputs` |
-| 2273 | function | `setSpeed` |
-| 2276 | function | `openSettings` |
-| 2277 | const fn | `sel` |
-| 2278 | const fn | `chk` |
-| 2299 | function | `boot` |
-| 2354 | const fn | `mv` |
-| 2355 | const fn | `up` |
-| 2356 | const fn | `navOpen` |
-| 2367 | const fn | `probeSel` |
-| 2429 | function | `renderTheoryLive` |
+| 1560 | function | `lightningTheory` |
+| 1562 | const fn | `pk` |
+| 1577 | function | `netFaultTheory` |
+| 1590 | function | `busDqTheory` |
+| 1598 | function | `subLegsTheory` |
+| 1607 | function | `blocksTheory` |
+| 1622 | function | `pcmTheory` |
+| 1648 | function | `codeTheory` |
+| 1658 | function | `eisTheory` |
+| 1660 | const fn | `ser` |
+| 1673 | function | `imSteady` |
+| 1676 | function | `imPar` |
+| 1677 | function | `phaseRms` |
+| 1678 | function | `vfTheory` |
+| 1691 | function | `focTheory` |
+| 1708 | function | `synTheory` |
+| 1727 | const fn | `need` |
+| 1747 | function | `pmTheory` |
+| 1749 | const fn | `mtpa` |
+| 1765 | function | `srmTheory` |
+| 1780 | const fn | `curve` |
+| 1791 | function | `lgTheory` |
+| 1802 | const fn | `cr` |
+| 1809 | function | `chaosTheory` |
+| 1824 | function | `nnCycles` |
+| 1827 | function | `genCtlTheory` |
+| 1840 | function | `evTheory` |
+| 1854 | function | `nnTheory` |
+| 1871 | function | `nnGuiCode` |
+| 1877 | function | `runNNCompare` |
+| 1885 | function | `dcDriveTheory` |
+| 1886 | const fn | `per` |
+| 1887 | const fn | `cross` |
+| 1917 | function | `twModel` |
+| 1920 | const fn | `g` |
+| 1923 | function | `twLattice` |
+| 1930 | const fn | `marks` |
+| 1933 | function | `twTheory` |
+| 1941 | const fn | `at` |
+| 1958 | function | `arTheory` |
+| 1978 | function | `impulseMeasure` |
+| 1980 | const fn | `cross` |
+| 1983 | function | `marxTheory` |
+| 2001 | function | `chopModel` |
+| 2004 | const fn | `f` |
+| 2007 | function | `chopTheory` |
+| 2021 | function | `cmp3` |
+| 2025 | function | `hvExact` |
+| 2026 | function | `hv153Theory` |
+| 2052 | function | `besI1e` |
+| 2054 | function | `heaviside` |
+| 2056 | function | `lossTheory` |
+| 2075 | function | `vtBreak` |
+| 2076 | function | `vtTheory` |
+| 2096 | function | `hvdivTheory` |
+| 2098 | const fn | `r` |
+| 2110 | function | `scheringTheory` |
+| 2111 | const fn | `inv` |
+| 2120 | const fn | `sr` |
+| 2126 | function | `formulaTheory` |
+| 2208 | function | `nodeAvg` |
+| 2214 | function | `circuitForMath` |
+| 2246 | function | `scheduleMath` |
+| 2247 | function | `batteryKey` |
+| 2249 | function | `mathChoices` |
+| 2250 | const fn | `prim` |
+| 2252 | function | `renderMathChoices` |
+| 2254 | function | `runTemplate` |
+| 2260 | function | `runMath` |
+| 2282 | function | `saveLocal` |
+| 2283 | function | `saveLocalSoon` |
+| 2285 | function | `download` |
+| 2286 | function | `exportCSV` |
+| 2292 | function | `syncScopeInputs` |
+| 2293 | function | `setSpeed` |
+| 2296 | function | `openSettings` |
+| 2297 | const fn | `sel` |
+| 2298 | const fn | `chk` |
+| 2319 | function | `boot` |
+| 2374 | const fn | `mv` |
+| 2375 | const fn | `up` |
+| 2376 | const fn | `navOpen` |
+| 2387 | const fn | `probeSel` |
+| 2449 | function | `renderTheoryLive` |
 
 ### `web/studio/bus.js`
 

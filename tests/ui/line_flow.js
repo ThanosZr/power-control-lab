@@ -71,5 +71,11 @@ const {chromium}=require('playwright');
  await p.click('#toend');await p.waitForFunction(()=>window.PCL.S.sim.t>=0.01559,null,{timeout:120000});await p.waitForTimeout(800);
  const ths=await p.$eval('#theory',e=>e.innerText);ok(/Διακοπή στο πρώτο μηδέν/.test(ths)&&/R_s/.test(ths),'short-line-fault card: '+ths.slice(0,160));
  ok(await p.evaluate(()=>Number.isFinite(window.PCL.S.sim.now('Garc:CB1/A1'))),'arc conductance channel');
+ // 4.9: the lightning tutorial with notes on the drawing (NOTE) and its card
+ await p.goto(U+'?tutorial=lightning_gis');await p.waitForTimeout(2500);
+ ok(await p.evaluate(()=>!window.PCL.S.error),'lightning tutorial builds: '+await p.evaluate(()=>window.PCL.S.error));
+ ok((await p.$$('.lbls.note .ntext')).length>=8,'notes on the drawing');
+ await p.click('#toend');await p.waitForFunction(()=>window.PCL.S.sim.t>=49e-6,null,{timeout:180000});await p.waitForTimeout(800);
+ const thl=await p.$eval('#theory',e=>e.innerText);ok(/Καμία διάσπαση μονωτήρων/.test(thl)&&/LIWL/.test(thl),'lightning card: '+thl.slice(0,160));
  ok(!errs.length,'no JavaScript errors: '+errs.join(' | '));
  await b.close();if(fail.length){console.log('FAIL',fail.join('\n'));process.exit(1);}console.log('PASS line_flow');})().catch(e=>{console.error(e);process.exit(1);});

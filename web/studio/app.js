@@ -1555,6 +1555,25 @@ function trvSlfTheory(){const s=S.sim,m=(S.tutMeta||{}).slf;if(!s||!m||!window.T
  h+=`<p>${tend<tz+100e-6?'<span class="muted">Τρέξε λίγο ακόμη μετά το μηδέν.</span>':ok?'<span class="good">Διακοπή στο πρώτο μηδέν</span> (στα '+eng(tz,'s',5)+'): το ρεύμα μετά το τόξο φτάνει τα '+eng(post,'A')+'.':'<span class="warn-text">Θερμική επανέναυση</span>: μετά το μηδέν των '+eng(tz,'s',5)+' το τόξο ξαναζεσταίνεται και το ρεύμα συνεχίζει ως το επόμενο μηδέν.'} Κορυφή σβέσης πριν από το μηδέν: ${eng(ext,'V')}.</p>`;
  if(ok&&t.length>3){h+=trvSvg(t,u,null,{tmax:t[t.length-1]});h+=cmpRows([['ρυθμός ανόδου (20–80 % της πρώτης κορυφής)',a.rate_line+a.rrrv_slf,rate,'V/s'],['πρώτη κορυφή (γραμμή με k = 2 + πηγή)',2*a.u0+a.rrrv_slf*Math.max(2*tau-a.supply.td,0),pk,'V'],['χρόνος της πρώτης κορυφής 2τ',2*tau,tp,'s']]);}
  return h;}
+// 4.9: the lightning tutorial (lightning_gis): footing R(I), tower, arrester, the flashovers and the peaks in the substation
+// against the lightning impulse withstand voltage (with the safety factor K_s), and the protective-distance rule
+function lightningTheory(){const s=S.sim,m=(S.tutMeta||{}).lg;if(!s||!m)return '';
+ const Ig=m.E0*m.rho/(2*Math.PI*m.R0*m.R0),k=window.NetLib?NetLib.saiParams({d:3.216,n:1,kL1:1}):null,Ri=I=>m.R0/Math.sqrt(1+I/Ig);
+ const pk=key=>{const r=rawSeries(key);if(!r)return null;let v=0,t=0;for(let j=0;j<r.y.length;j++)if(Math.abs(r.y[j])>v){v=Math.abs(r.y[j]);t=r.t[j];}return {v,t,r};};
+ const If=pk('Y:T2/If'),lim=m.LIWL/m.Ks;
+ let h=`<ul class="eqs"><li>Γείωση ${m.foot==='ion'?`με ιονισμό: R(I) = R₀/√(1 + I/I_g), I_g = E₀·ρ/(2π·R₀²) = <b>${eng(Ig,'A')}</b> (R₀ = ${eng(m.R0,'Ω')}, ρ = ${fmt(m.rho,3)} Ω·m, E₀ = 400 kV/m)${If&&If.v>1?`· στο ρεύμα κορυφής της βάσης του T2 (${eng(If.v,'A')}) R = <b>${eng(Ri(If.v),'Ω')}</b>`:''}`:`σταθερή R₀ = ${eng(m.R0,'Ω')}`}</li>
+  <li>Πύργος: γραμμή χωρίς απώλειες Z_t = ${eng(m.Zt,'Ω')}, τ = h/c = ${eng(m.h/3e8,'s')}· αλυσίδες μονωτήρων: διάσπαση στα <b>${eng(m.Ub,'V')}</b> (≈ 700 kV/m × 3,2 m)</li>
+  ${k?`<li>Αλεξικέραυνο IEEE (U₁₀ = ${eng(m.U10,'V')}, d = 3,216 m): L₀ = ${eng(k.L0,'H')}, R₀ = ${eng(k.R0,'Ω')}, L₁ = ${eng(k.L1,'H')}, R₁ = ${eng(k.R1,'Ω')}, C = ${eng(k.C,'F')}</li>`:''}
+  <li>Αντοχή του εξοπλισμού 420 kV σε κεραυνό (LIWL) ${eng(m.LIWL,'V')}· με συντελεστή ασφαλείας K_s = ${fmt(m.Ks,3)}: <b>${eng(lim,'V')}</b> (IEC 60071-2)</li></ul>`;
+ if(s.t<m.stop-1e-9)return h+'<p class="muted small">Τρέξε ως τα 50 μs για τις κορυφές και τις διασπάσεις.</p>';
+ const fl=[];for(const tw of ['T1','T2','T3'])for(const x of ['a','b','c']){const r=rawSeries(`Y:${tw}/I${x}`);if(!r)continue;const j=r.y.findIndex(v=>Math.abs(v)>1);if(j>=0)fl.push(`${tw} φάση ${x} στα ${eng(r.t[j],'s',3)}`);}
+ const top=pk('Y:T2/Vtop');
+ h+=`<p>${fl.length?'<span class="warn-text">Διάσπαση μονωτήρων</span>: '+fl.join(', '):'<span class="good">Καμία διάσπαση μονωτήρων</span>'}. Κορυφή της τάσης του T2: ${top?eng(top.v,'V'):'—'}.</p>`;
+ const rows=[];for(const [pre,lab] of [['VE','Είσοδος (CVT, αλεξικέραυνο)'],['VG','GIS, στον διακόπτη'],['VT','Μετασχηματιστής']])for(const x of ['a','b','c']){const q=pk('Y:'+pre+x);if(q)rows.push([lab+' '+x,q.v,q.t]);}
+ h+=`<table class="cmp"><thead><tr><th>Θέση</th><th>Κορυφή</th><th>Στιγμή</th><th>Περιθώριο ως ${eng(lim,'V')}</th></tr></thead><tbody>${rows.map(([n,v,t])=>`<tr><td>${esc(n)}</td><td>${eng(v,'V')}</td><td>${eng(t,'s',3)}</td><td class="${v>lim?'warn-text':'good'}">${v>0?fmt((lim/v-1)*100,3)+' %':'—'}${v>m.LIWL?' (πάνω από το LIWL)':v>lim?' (πάνω από LIWL/K_s)':''}</td></tr>`).join('')}</tbody></table>`;
+ if(m.sa!=='none'){const r=rawSeries('Y:VEa'),e=pk('Y:VEa'),g=pk('Y:VGa');if(r&&e&&g&&e.v>50e3){let S1=0;for(let j=1;j<r.y.length;j++){if(r.t[j]>e.t)break;const d=Math.abs(r.y[j]-r.y[j-1])/((r.t[j]-r.t[j-1])||1);if(d>S1)S1=d;}
+  h+=cmpRows([['φάση a: U_G ≈ U_E + 2·S·d/v (d = 56 m, S = μέγιστη du/dt στην είσοδο)',e.v+2*S1*m.dist/m.v,g.v,'V']])+'<p class="muted small">Ο κανόνας της απόστασης προστασίας υποθέτει μέτωπο ράμπας και ανοιχτό άκρο πίσω από το αλεξικέραυνο· είναι εκτίμηση, όχι ακριβής τύπος.</p>';}}
+ return h+'<p class="muted small">Η τάση 50 Hz των φάσεων λείπει: η γραμμή από γεωμετρία δεν ξεκινά ακόμη από μόνιμη κατάσταση (to do).</p>';}
 function netFaultTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.grid||!window.NetLib)return '';
  const g=m.xf?NetLib.behindXF(m.grid,m.xfp):{seq:NetLib.gridZ(m.grid)},z=g.seq,ref=NetLib.faultCurrents(g,{kind:m.kind}),Un=m.xf?m.xfp.U2:m.grid.Un;
  const Z1=Math.hypot(z.R1,z.X1),c2=(a,b)=>Math.hypot(a,b);
@@ -2136,6 +2155,7 @@ function formulaTheory(t){
  if(t.topology==='net_fault')return netFaultTheory();
  if(t.topology==='trv_terminal')return trvTerminalTheory();
  if(t.topology==='trv_slf')return trvSlfTheory();
+ if(t.topology==='lightning_gis')return lightningTheory();
  if(t.topology==='line_fd'||t.topology==='cable_fd')return lineFdTheory();
  if(t.topology==='gen_sc')return genScTheory();
  if(t.topology==='fbm')return fbmTheory();

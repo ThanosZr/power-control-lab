@@ -82,6 +82,15 @@
 | contact separation, current zero, post-arc current | χωρισμός επαφών, μηδέν του ρεύματος, ρεύμα μετά το τόξο |
 | thermal / dielectric reignition | θερμική / διηλεκτρική επανέναυση |
 | black-box arc model, cooling power | μοντέλο τόξου μαύρου κουτιού, ισχύς ψύξης |
+| backflashover | ανάστροφη υπερπήδηση |
+| shielding failure | αστοχία θωράκισης |
+| footing resistance, soil ionization | αντίσταση γείωσης του πύργου (της βάσης), ιονισμός του εδάφους |
+| insulator string, critical flashover voltage (CFO, U₅₀) | αλυσίδα μονωτήρων, τάση διάσπασης 50 % |
+| lightning impulse withstand level (LIWL, BIL) | επίπεδο αντοχής σε κεραυνό |
+| insulation coordination, safety factor | συντονισμός μόνωσης, συντελεστής ασφαλείας |
+| protective distance | απόσταση προστασίας |
+| bushing, gas-insulated substation (GIS), bus duct | διαπεραστής, υποσταθμός με μόνωση αερίου (GIS), ζυγός GIS |
+| note (on the drawing) | σημείωση |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
