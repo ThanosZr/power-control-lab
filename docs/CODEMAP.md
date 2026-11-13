@@ -124,6 +124,7 @@
 | `tests/js/gen_cases.js` | 78 |
 | `tests/js/gen_ctl_cases.js` | 39 |
 | `tests/js/library_cases.js` | 11 |
+| `tests/js/lightning_cases.js` | 16 |
 | `tests/js/line_cases.js` | 15 |
 | `tests/js/live_cases.js` | 31 |
 | `tests/js/netlib42_cases.js` | 50 |
