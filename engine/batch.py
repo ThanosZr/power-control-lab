@@ -32,6 +32,7 @@ import time
 
 import numpy as np
 from scipy.integrate import solve_ivp
+from scipy.linalg import lu_factor, lu_solve
 
 GMIN = 1e-9
 METHODS = ('Radau', 'BDF', 'LSODA', 'RK45', 'RK23', 'DOP853')
@@ -104,6 +105,35 @@ def mov_inv(e, i):
         k += 1
     I, V, a = seg[k]
     return math.copysign(V * _powr(y / I, 1 / a), i)
+
+
+def arc_F(a, x, u):
+    """4.9.1 (ROADMAP §31, THEORY §8μ): one section of a black-box arc, x = ln g, dx/dt = (q − 1)/τ with q = g^(λ−1)·u²/Π,
+    τ = τ₀·g^α, Π = (P₀ + P₁·g·u²)·g^β — the same function as arcF in web/studio/mna.js."""
+    g = math.exp(x)
+    D = a['P0'] + a['P1'] * g * u * u
+    q = math.exp((a['lam'] - 1 - a['beta']) * x) * u * u / D
+    return (q - 1) / (a['tau0'] * math.exp(a['alpha'] * x))
+
+
+def arc_start(a, i):
+    """The quasi-steady x (q = 1 with u = i/g) for the current i at contact separation, by bisection (arcStart)."""
+    ai = abs(i)
+    lo, hi = a['xmin'], a['xmax']
+    if not ai > 1e-9:
+        return hi
+    r = lambda x: (a['lam'] - 3) * x + 2 * math.log(ai) - math.log(a['P0'] + a['P1'] * ai * ai * math.exp(-x)) - a['beta'] * x
+    if r(hi) >= 0:
+        return hi
+    if r(lo) <= 0:
+        return lo
+    for _ in range(200):
+        m = (lo + hi) / 2
+        if r(m) > 0:
+            lo = m
+        else:
+            hi = m
+    return (lo + hi) / 2
 
 
 def sat_d(q, i):
@@ -488,7 +518,10 @@ class Circuit:
             e['hh'] = (e['Z'] - r) / e['Ze']
             e['H'] = {'t': [], 'c': [[] for _ in range(3 * N + 1)]}
         self.tau_min = min((E[i]['ts'] for i in self.iT), default=math.inf)
-        self.iN = [i for i, e in enumerate(E) if e['k'] == 'NL']       # surge arresters (3.9)
+        self.iN = [i for i, e in enumerate(E) if e['k'] == 'NL' and not e.get('arc')]      # surge arresters (3.9)
+        # 4.9.1: the arc sections of breaker poles (ARCX): i = g·v with x = ln g one more state (below); closed: g = 1/R_on
+        self.iA = [i for i, e in enumerate(E) if e['k'] == 'NL' and e.get('arc')]
+        self.aclosed = {i: bool(E[i]['arc'].get('closed', True)) for i in self.iA}
         for i in self.iN:
             E[i]['pts'] = [(float(a), float(b)) for a, b in E[i]['pts']]
             E[i]['seg'] = mov_seg(E[i]['pts'])
@@ -620,6 +653,15 @@ class Circuit:
             self.Bx = np.hstack([self.Bx, np.zeros((n, m))])
             self.Dm = np.vstack([self.Dm, np.zeros((m, n))])
             self.x0 = np.concatenate([self.x0, np.zeros(m)])
+            self.ns += m
+        if self.iA:                     # arcs: x = ln g of each section
+            for q, i in enumerate(self.iA):
+                E[i]['kA'] = self.ns + q
+            m = len(self.iA)
+            A0 = [E[i]['arc'] for i in self.iA]
+            self.Bx = np.hstack([self.Bx, np.zeros((n, m))])
+            self.Dm = np.vstack([self.Dm, np.zeros((m, n))])
+            self.x0 = np.concatenate([self.x0, [_f(a.get('x'), a['xmax']) for a in A0]])
             self.ns += m
         clk = next((b for b in self.blocks if b['type'] in ('CLK', 'RAMP')), None)
         lg = [_f(E[i]['wave'].get('T1'), 1e-6) for i in self.iI if E[i].get('wave')]     # a lightning current: its front time (3.5)
@@ -975,7 +1017,7 @@ class Circuit:
                 return self.build(t)
             raise BatchError('Ιδιόμορφο σύστημα στον batch λύτη (βρόχος ιδανικών πηγών ή κόμβος χωρίς διαδρομή).')
         M = self.Dm @ Ainv
-        return {'Ainv': Ainv, 'M': M, 'J': M @ self.Bx, 'bd': bd, 'Z1': Ainv @ self.Bc if self.inj else None}
+        return {'Ainv': Ainv, 'M': M, 'J': M @ self.Bx, 'bd': bd, 'Z1': Ainv @ self.Bc if self.inj else None, 'A': A}
 
     def bsrc(self, t, x=None):
         b = np.zeros(self.n)
@@ -1019,7 +1061,25 @@ class Circuit:
 
     def solve_z(self, t, x, tp):
         b = self.Bx @ x + self.bsrc(t, x) + tp['bd']
-        z0 = tp['Ainv'] @ b
+        if self.iA:
+            # 4.9.1: the arcs' conductances g = e^x (or 1/R_on) go into the matrix of this evaluation: as injections through
+            # the inverse without them, the inner node of two sections in series (only G_min to ground) left the voltages
+            # with errors of 1e-5 (a condition number of g/G_min)
+            A = tp['A'].copy()
+            for i in self.iA:
+                e = self.els[i]
+                g = self.arc_g(i, x)
+                for p, q in ((e['a'], e['b']), (e['b'], e['a'])):
+                    if p >= 0:
+                        A[p, p] += g
+                        if q >= 0:
+                            A[p, q] -= g
+            lu = lu_factor(A, check_finite=False)
+            z0 = lu_solve(lu, b, check_finite=False)
+            if self.inj:
+                tp = dict(tp, Z1=lu_solve(lu, self.Bc, check_finite=False))
+        else:
+            z0 = tp['Ainv'] @ b
         if self.iN:
             return self.solve_nl(t, z0, tp)
         if not self.iP:
@@ -1043,13 +1103,18 @@ class Circuit:
         self.icpl = icp
         return z0 + tp['Z1'] @ icp
 
+    def arc_g(self, i, x):
+        e = self.els[i]
+        a = e['arc']
+        return 1 / a['Ron'] if self.aclosed[i] else math.exp(min(max(float(x[e['kA']]), a['xmin']), a['xmax']))
+
     def solve_nl(self, t, z0, tp):
         """Arresters (and constant-power loads with them): Newton on the injection voltages v = v₀ + K·g(v), with the voltage
         limited on the steep part of an arrester (the voltage that gives the linearized current on the true curve)."""
         E = self.els
         K = self.Cv @ tp['Z1']
         v0 = self.Cv @ z0
-        nP = len(self.iP)
+        nP, nN = len(self.iP), len(self.iN)
         P = [sched_at(E[i].get('sched'), t, _f(E[i].get('P'))) for i in self.iP]
         v = np.concatenate([np.where(np.abs(v0[:nP]) > 0, v0[:nP], 1.0), self.vnl]) if nP else self.vnl.copy()
 
@@ -1067,7 +1132,7 @@ class Circuit:
                 gi[q], gd[q] = gfun(q, v[q])
             J = gi - gd * v
             vn = np.linalg.solve(np.eye(m) - K * gd[None, :], v0 + K @ J)
-            for q in range(nP, m):
+            for q in range(nP, nP + nN):
                 if abs(vn[q]) > abs(v[q]):
                     it2 = gd[q] * vn[q] + J[q]
                     vi = mov_inv(E[self.iN[q - nP]], it2)
@@ -1078,8 +1143,8 @@ class Circuit:
             if done:
                 break
         inj = np.array([gfun(q, v[q])[0] for q in range(m)])
-        self.vnl = v[nP:].copy()
-        self.inl = inj[nP:].copy()
+        self.vnl = v[nP:nP + nN].copy()
+        self.inl = inj[nP:nP + nN].copy()
         if nP:
             self.icpl = inj[:nP].copy()
         return z0 + tp['Z1'] @ inj
@@ -1168,6 +1233,26 @@ class Circuit:
             if self.els[i]['gk'] == 'igbt' and not self.gon[i]:
                 self.on[i] = False
 
+    def arc_gates(self, t, x, z):
+        """4.9.1: a pole with an arc closes (R_on) or its contacts separate (arcGate in web/studio/mna.js): the arc starts at
+        the quasi-steady conductance of the present current, so the current goes on. Changes x in place."""
+        changed = False
+        for i in self.iA:
+            e = self.els[i]
+            a = e['arc']
+            on = self.gate_state(e, t)
+            if on and not self.aclosed[i]:
+                self.aclosed[i] = True
+                x[e['kA']] = a['xmax']
+            elif not on and self.aclosed[i]:
+                v = (z[e['a']] if e['a'] >= 0 else 0) - (z[e['b']] if e['b'] >= 0 else 0)
+                self.aclosed[i] = False
+                x[e['kA']] = arc_start(a, v / a['Ron'])
+            else:
+                continue
+            changed = True
+        return changed
+
     def may_turn_on(self, i, init=False):
         gk = self.els[i].get('gk')
         return not gk or self.gon[i] or (init and gk == 'scr')
@@ -1250,6 +1335,8 @@ class Circuit:
             if rec.get('out'):
                 return float(self._yo[j][rec['out']]) if j < len(self._yo) else 0.0
             return float(self._yb[j]) if j < len(self._yb) else 0.0
+        if 'garc' in rec:               # 4.9.1: the conductance of an arc section
+            return float(self.arc_g(rec['garc'], x))
         if 'sw' in rec:                 # gate pulse of one switch (after dead time)
             i = rec['sw']
             on = self.on.get(i, False) if self.els[i]['k'] == 'S' else self.gon.get(i, False)
@@ -1286,6 +1373,8 @@ class Circuit:
         if k == 'CPL':
             return float(self.icpl[self.iP.index(i)])
         if k == 'NL':
+            if e.get('arc'):
+                return self.arc_g(i, x) * (V(e['a']) - V(e['b']))
             return float(self.inl[self.iN.index(i)])
         if k == 'TL':
             e2 = (e['a1'], e['b1']) if port == 0 else (e['a2'], e['b2'])
@@ -1971,7 +2060,10 @@ def simulate(data):
             break
         tn = ckt.next_event(t, t_end)
         before = (tuple(ckt.on.values()), tuple(ckt.gon.values()))
+        za = ckt.solve_z(t, x, tp) if ckt.iA else None     # the arcs' currents before their gates change
         ckt.set_gates((t + tn) / 2)
+        if ckt.arc_gates(t, x, za):
+            before = None
         tp, z = ckt.consistent(t, x)
         ckt.ev_switches(t)              # 3.19: the states for (t, t_n), logged at t as in the browser
         if (tuple(ckt.on.values()), tuple(ckt.gon.values())) != before:
@@ -1989,7 +2081,7 @@ def simulate(data):
             return cache['z']
 
         def fun(tt, yy, tp=tp):
-            d = ckt.Dm @ zof(tt, yy) if ckt.inj else tp['M'] @ (ckt.Bx @ yy + ckt.bsrc(tt, yy) + tp['bd'])
+            d = ckt.Dm @ zof(tt, yy) if ckt.inj or ckt.iA else tp['M'] @ (ckt.Bx @ yy + ckt.bsrc(tt, yy) + tp['bd'])
             for m in ckt.ims:                  # machine states: ψ_R, ω, θ from the stator currents
                 d[m['k0']:m['k0'] + 4] = ckt.im_deriv(m, tt, yy)[0]
             for m in ckt.sms:                  # synchronous machines: ψ_αβ from the port voltages, ω, θ
@@ -2007,6 +2099,17 @@ def simulate(data):
                     zz = zof(tt, yy)
                     u = abs((zz[e['a']] if e['a'] >= 0 else 0) - (zz[e['b']] if e['b'] >= 0 else 0)) - q['U0']
                     d[e['kD']] = u ** q['k'] if u > 0 else 0.0
+            for i in ckt.iA:                   # arcs: d ln g/dt = F(ln g, v), held at the bounds of g; closed: held at R_on
+                e = ckt.els[i]
+                k = e['kA']
+                if ckt.aclosed[i]:
+                    d[k] = 0.0
+                    continue
+                a, xa = e['arc'], float(yy[k])
+                xc = min(max(xa, a['xmin']), a['xmax'])
+                zz = zof(tt, yy)
+                f = arc_F(a, xc, (zz[e['a']] if e['a'] >= 0 else 0) - (zz[e['b']] if e['b'] >= 0 else 0))
+                d[k] = 0.0 if (xa <= a['xmin'] and f < 0) or (xa >= a['xmax'] and f > 0) else f
             return d
         events, owners = [], []
         for i in ckt.iD:
@@ -2067,11 +2170,24 @@ def simulate(data):
             events.append(ev)
             owners.append(b)
         kw = dict(method=method, rtol=rtol, atol=atol, max_step=max_step, events=events or None)
-        if implicit and not ckt.iP and not ckt.iN and not ckt.ims and not ckt.sms and not ckt.srms and not ckt.iDE:     # the machines make the system nonlinear: numerical Jacobian
+        if implicit and not ckt.iP and not ckt.iN and not ckt.iA and not ckt.ims and not ckt.sms and not ckt.srms and not ckt.iDE:     # the machines make the system nonlinear: numerical Jacobian
             if ckt.gens:                    # 4.9.1: generators: their port currents and torques in the Jacobian (jac_gen)
                 kw['jac'] = lambda tt, yy, tp=tp: ckt.jac_gen(tt, yy, tp)
             else:
                 kw['jac'] = (lambda tt, yy, J=tp['J']: J) if method == 'LSODA' else tp['J']
+        if implicit and ckt.iA:
+            # 4.9.1: arcs: a forward-difference Jacobian with a fixed step. SciPy's own (num_jac) grows its step tenfold at every
+            # call for a column that does not change (a closed pole, a section held at g_min) until it overflows
+            def jfd(tt, yy, fun=fun):
+                f0 = fun(tt, yy)
+                Jf = np.empty((len(yy), len(yy)))
+                for j in range(len(yy)):
+                    h = 1.5e-8 * max(abs(yy[j]), 1.0)
+                    y1 = yy.copy()
+                    y1[j] += h
+                    Jf[:, j] = (fun(tt, y1) - f0) / h
+                return Jf
+            kw['jac'] = jfd
         sol = solve_ivp(fun, (t, tn), x, **kw)
         stats['segments'] += 1
         stats['nfev'] += int(sol.nfev)

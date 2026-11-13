@@ -1589,14 +1589,14 @@
   // 4.3: a generator that starts from a load flow needs the steady start of the browser (acInit): the states of that netlist
   const lf=(project?.solve?.init==='ac')||JSON.stringify(project?.components||[]).includes('"GEN3"');
   const net=lf?new Sim(project).net:buildNetlist(project),idx=new Map(net.els.map((e,i)=>[e,i]));
-  // 4.9: the arc of a breaker pole is only in this solver for now (its check: an independent stiff integration, tests/test_arc.py)
-  if(net.els.some(e=>e.arc))throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη το τόξο του διακόπτη (ARC, CB3 με τόξο): τρέχει μόνο ο λύτης της εφαρμογής.');
   const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm','gap','a1','b1','a2','b2','Z','tau','Rl','pts'];
   // synchronous machines (3.5): parameters and initial states; the server integrates ψ_α, ψ_β, ω, θ
   const smList=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm),smx=new Map(smList.map((m,i)=>[m,i]));
   const srmList=[...net.compInfo.values()].filter(c=>c.srm).map(c=>c.srm),srmx=new Map(srmList.map((m,i)=>[m,i]));
   const genList=[...net.compInfo.values()].filter(c=>c.gen).map(c=>c.gen),genx=new Map(genList.map((m,i)=>[m,i]));
-  const els=net.els.map(e=>{const o={};for(const k of F)if(e[k]!==undefined&&e[k]!==null)o[k]=e[k];if(e.k==='F'){o.i=Array.from(e.i);o.psi=Array.from(e.psi);if(e.sm){o.sm=smx.get(e.sm);delete o.Gam;}if(e.srm){o.srm=srmx.get(e.srm);delete o.Gam;}if(e.gen){o.gen=genx.get(e.gen);delete o.Gam;}}return o;});
+  const els=net.els.map(e=>{const o={};for(const k of F)if(e[k]!==undefined&&e[k]!==null)o[k]=e[k];if(e.k==='F'){o.i=Array.from(e.i);o.psi=Array.from(e.psi);if(e.sm){o.sm=smx.get(e.sm);delete o.Gam;}if(e.srm){o.srm=srmx.get(e.srm);delete o.Gam;}if(e.gen){o.gen=genx.get(e.gen);delete o.Gam;}}
+   // 4.9.1: an arc section (ARCX): its model and its state; the server integrates x = ln g (engine/batch.py)
+   if(e.arc){const A=e.arc;o.arc={lam:A.lam,tau0:A.tau0,alpha:A.alpha,P0:A.P0,P1:A.P1,beta:A.beta,Ron:A.Ron,xmin:A.xmin,xmax:A.xmax,closed:A.closed,x:A.x};}return o;});
   const gens=genList.map(m=>{const g=m.g;return {F:idx.get(m.F),fV:idx.get(m.fV),N:g.N,nd:g.nd,nq:g.nq,Gd:g.Gd,Gq:g.Gq,g0:g.g0,wb:g.wb,f:g.f,Sn:g.Sn,Un:g.Un,vfK:g.vfK,ifK:g.ifK,
    sh:{N:g.sh.N,H:g.sh.H,K:g.sh.K,D:g.sh.D,Dmu:g.sh.Dmu,fr:g.sh.fr,gm:g.sh.gm},exc:m.exc,mech:m.mech,efdS:m.efdS,tmS:m.tmS,efdIn:m.efdIn,tmIn:m.tmIn,Efd0:m.Efd0,Tm0:m.Tm0,V0:m.V0??1,
    term:m.term,nN:m.nN,st:{ph:m.st.ph.slice(),w:m.st.w.slice()}};});
@@ -1614,6 +1614,7 @@
    if(pre==='H'){const q=shx.get(id);return q===undefined?null:{sh:q};}
    if(pre==='Y'){const c=ci(id);if(!c||!c.blk)return null;const k=pin?c.blk.outList.indexOf(pin):0;return k<0?null:k?{blk:bix.get(c.blk),out:k}:{blk:bix.get(c.blk)};}
    if(pre==='GS'){const c=ci(id);return c&&c.main&&(c.type==='SW'||c.type==='SCR')?{sw:idx.get(c.main)}:null;}
+   if(pre==='Garc'){const c=ci(id);return c&&c.arc?{garc:idx.get(c.arc)}:null;}
    const c=ci(id);if(!c)return null;
    if(c.type==='VAC3'){const ph=c.phases,pv=q=>vd(q.pin,c.n),pi=q=>({i:[[idx.get(q.e),1]]});
     return {V:pv(ph[0]),I:pi(ph[0]),P:{sum:ph.map(q=>({prod:[pv(q),pi(q)]}))},Vb:pv(ph[1]),Vc:pv(ph[2]),Ib:pi(ph[1]),Ic:pi(ph[2]),Vab:vd(ph[0].pin,ph[1].pin)}[pre]||null;}

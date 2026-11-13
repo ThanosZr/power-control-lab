@@ -1,6 +1,7 @@
 // The arc of a breaker pole (4.9, ARCX sections through ARC and CB3): a terminal fault on a source–L–(breaker ∥ C)
 // circuit for several arc models, with the state at contact separation and the waveforms after it (for an independent
-// stiff integration in tests/test_arc.py), a degraded arc that reignites, and a three-phase CB3 with arcs.
+// stiff integration in tests/test_arc.py), a degraded arc that reignites, and a three-phase CB3 with arcs; each case also
+// exported for the SciPy solver (4.9.1).
 // Usage: node arc_cases.js -> JSON
 const path=require('path');const W=path.resolve(__dirname,'../../web/studio');
 global.window=globalThis;global.Parts=require(W+'/parts.js');for(const f of ['netlib','subcircuit','bus','units','expr','nn'])require(W+'/'+f+'.js');
@@ -16,7 +17,9 @@ function run(arc,extra={},o={}){const pr=circuit(arc,extra,o.C,o.tsep,o.hDiv);co
  const tsep=o.tsep??0.0148;s.run(tsep+s.h);
  const L=s.net.els.find(e=>e.k==='L'),Cc=s.net.els.find(e=>e.k==='C');
  const out={arc,U,L:Lv,C:pr.components.find(c=>c.id==='C1').params.C,t0:s.t,iL:L.i,vc:Cc.v,warn:s.net.warnings,
-  sections:s.arcEls.map(e=>{const A=e.arc;return {x:A.x,lam:A.lam,tau0:A.tau0,alpha:A.alpha,P0:A.P0,P1:A.P1,beta:A.beta,gmin:A.gmin};}),rec:[]};
+  sections:s.arcEls.map(e=>{const A=e.arc;return {x:A.x,lam:A.lam,tau0:A.tau0,alpha:A.alpha,P0:A.P0,P1:A.P1,beta:A.beta,gmin:A.gmin};}),rec:[],
+  // 4.9.1: the same circuit for the SciPy solver (engine/batch.py), from t = 0
+  batch:MNA.exportForBatch(pr,['Y:CB1/I','Y:CB1/V','Garc:CB1/A1'])};
  const t1=s.t+(o.win??0.4e-3);while(s.t<t1-1e-12){s.run(Math.min(1e-7,t1-s.t));out.rec.push([s.t,s.now('Y:CB1/I'),s.now('Y:CB1/V')]);}
  return out;}
 const out={};
@@ -34,6 +37,7 @@ out.weak=run('imayr',{P0:'500'},{win:2.5e-3});
  if(cb){Object.assign(cb.params,{model:'arc',arc:'imayr',vm:true,ctl:'time',cmd:'0:1, 0.1:0'});pr.sim={...pr.sim,hDiv:20000,method:'TR'};
   const s=new MNA.Sim(pr,{hDiv:20000,method:'TR'});const keys=s.keys.filter(k=>k.startsWith('Garc:'+cb.id+'/'));
   let tEnd=0.2;try{s.run(tEnd);}catch(e){out.three={err:String(e)};}
-  if(!out.three)out.three={id:cb.id,keys,cmd:cb.params.cmd,i:['a','b','c'].map(x=>s.now('Y:'+cb.id+'/I'+x)),g:keys.map(k=>s.now(k)),warn:s.net.warnings};}
+  if(!out.three)out.three={id:cb.id,keys,cmd:cb.params.cmd,i:['a','b','c'].map(x=>s.now('Y:'+cb.id+'/I'+x)),g:keys.map(k=>s.now(k)),warn:s.net.warnings,
+   batch:MNA.exportForBatch(pr,[...['a','b','c'].map(x=>'Y:'+cb.id+'/I'+x),...keys])};}
  else out.three={err:'no CB3 in net_fault'};}
 console.log(JSON.stringify(out));

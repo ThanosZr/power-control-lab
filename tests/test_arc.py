@@ -3,7 +3,8 @@ against an independent stiff integration (SciPy Radau, rtol 1e-10) of the same c
 terminal fault of 145 kV / 20 kA, for single-section (improved Mayr, Mayr), two-section (Cassie + Mayr) and three-section
 (the three modified Mayr) arcs: the current zero, the extinction peak before it, the TRV peak and its instant, the
 post-arc current. Also: a weak arc reignites and burns on, a closed pole is its R_on, and a three-phase CB3 with arcs
-interrupts on all three poles."""
+interrupts on all three poles. 4.9.1: the same cases in the SciPy solver (engine/batch.py, x = ln g a state of the ODE),
+from t = 0, against the same reference."""
 import json
 import math
 import shutil
@@ -65,6 +66,13 @@ class Arc(unittest.TestCase):
         if run.returncode:
             raise RuntimeError(run.stderr)
         cls.R = json.loads(run.stdout)
+        cls.refs = {}
+
+    def ref(self, name):
+        # the reference integration of a case, once for the browser's test and the SciPy one
+        if name not in self.refs:
+            self.refs[name] = reference(self.R[name])
+        return self.refs[name]
 
     def against_reference(self, name, tol_post=0.02):
         o = self.R[name]
@@ -72,7 +80,7 @@ class Arc(unittest.TestCase):
         ts = np.array([r[0] for r in o['rec']])
         ib = np.array([r[1] for r in o['rec']])
         vb = np.array([r[2] for r in o['rec']])
-        tr, ir, vr = reference(o)
+        tr, ir, vr = self.ref(name)
         b, r = features(ts, ib, vb, o['t0']), features(tr, ir, vr, o['t0'])
         self.assertAlmostEqual(b['tz'], r['tz'], delta=2e-7, msg=name)                  # the current zero (step 0,1 µs)
         self.assertLess(abs(b['ext'] - r['ext']), 0.005 * r['ext'], name)              # extinction peak
@@ -83,6 +91,61 @@ class Arc(unittest.TestCase):
         self.assertLess(abs(b['post'] - r['post']), tol_post * r['post'] + 1e-5 + leak, name)
         self.assertLess(b['iend'], 1e-2, name)                                         # interrupted at the first zero
         return b
+
+    def scipy_run(self, o, t_end, keys=('Y:CB1/I', 'Y:CB1/V')):
+        from engine.batch import simulate
+        d = o['batch']
+        self.assertEqual(d['skipped'], [])
+        r = simulate({'net': d['net'], 'channels': d['channels'], 't_end': t_end, 'method': 'Radau', 'rtol': 1e-8, 'atol': 1e-9,
+                      'max_points': 200000, '_local': True, 'wall': 300})
+        self.assertEqual(r['status'], 'ok', r['message'])
+        return np.array(r['t']), [np.array(r['ch'][k], float) for k in keys]
+
+    def scipy_against_reference(self, name, tol_post=0.1):
+        # the SciPy run from t = 0 (the pole closed, then its contacts separate), resampled at the browser's points
+        o = self.R[name]
+        ts = np.array([r[0] for r in o['rec']])
+        t, (i, v) = self.scipy_run(o, float(ts[-1]))
+        s = features(ts, np.interp(ts, t, i), np.interp(ts, t, v), o['t0'])
+        tr, ir, vr = self.ref(name)
+        r = features(tr, ir, vr, o['t0'])
+        self.assertAlmostEqual(s['tz'], r['tz'], delta=2e-7, msg=name)
+        self.assertLess(abs(s['ext'] - r['ext']), 0.005 * r['ext'], name)
+        self.assertLess(abs(s['peak'] - r['peak']), 1e-4 * abs(r['peak']), name)
+        self.assertAlmostEqual(s['tpeak'], r['tpeak'], delta=2e-7, msg=name)
+        leak = len(o['sections']) * 1e-9 * abs(r['peak'])
+        self.assertLess(abs(s['post'] - r['post']), tol_post * r['post'] + 1e-5 + leak, name)
+        self.assertLess(s['iend'], 1e-2, name)
+
+    def test_scipy_single_sections(self):
+        self.scipy_against_reference('imayr')
+        self.scipy_against_reference('mayr')
+
+    def test_scipy_sections_in_series(self):
+        # the inner nodes of the chain have only G_min to ground: the arcs' g go into the matrix of each evaluation
+        self.scipy_against_reference('habedank')
+        self.scipy_against_reference('kema')
+
+    def test_scipy_weak_arc_reignites(self):
+        o = self.R['weak']
+        ts = np.array([r[0] for r in o['rec']])
+        ib = np.array([r[1] for r in o['rec']])
+        t, (i, _v) = self.scipy_run(o, float(ts[-1]))
+        i = np.interp(ts, t, i)
+        self.assertGreater(abs(i[-1]), 1e3)
+        self.assertLess(abs(i[-1] - ib[-1]), 1e-3 * abs(ib[-1]))
+
+    def test_scipy_three_phases(self):
+        t3 = self.R['three']
+        keys = list(t3['batch']['channels'])
+        t, ys = self.scipy_run(t3, 0.2, keys)
+        for k, y in zip(keys, ys):
+            if k.startswith('Garc:'):
+                self.assertLess(y[-1], 1e-9, k)
+                self.assertGreater(float(np.interp(0.09, t, y)), 1e3, k)      # closed before 0,1 s: 1/R_on
+            else:
+                self.assertLess(abs(y[-1]), 1e-2, k)
+                self.assertGreater(float(np.max(np.abs(y))), 1e3, k)
 
     def test_improved_mayr(self):
         b = self.against_reference('imayr')
