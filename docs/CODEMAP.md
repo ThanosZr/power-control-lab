@@ -44,7 +44,7 @@
 | `engine/__init__.py` | 1 |
 | `engine/addons.py` | 322 |
 | `engine/analysis.py` | 307 |
-| `engine/batch.py` | 2097 |
+| `engine/batch.py` | 2151 |
 | `engine/bidir.py` | 564 |
 | `engine/boundary.py` | 97 |
 | `engine/circuit.py` | 75 |
@@ -63,7 +63,7 @@
 | `pcl/__init__.py` | 14 |
 | `pcl/__main__.py` | 398 |
 | `pcl/control.py` | 953 |
-| `pcl/core.py` | 1308 |
+| `pcl/core.py` | 1312 |
 | `pcl/designer.py` | 691 |
 | `pcl/formats.py` | 222 |
 | `pcl/gui.py` | 409 |
@@ -89,7 +89,7 @@
 | `tests/test_designer.py` | 153 |
 | `tests/test_engine.py` | 276 |
 | `tests/test_ev.py` | 102 |
-| `tests/test_gen_ctl.py` | 82 |
+| `tests/test_gen_ctl.py` | 128 |
 | `tests/test_generator.py` | 223 |
 | `tests/test_impl.py` | 89 |
 | `tests/test_impulse_tools.py` | 150 |
@@ -150,7 +150,7 @@
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/ev_flow.js` | 89 |
 | `tests/ui/features_flow.js` | 84 |
-| `tests/ui/line_flow.js` | 81 |
+| `tests/ui/line_flow.js` | 100 |
 | `tests/ui/live_flow.js` | 41 |
 | `tests/ui/perf_flow.js` | 68 |
 | `tests/ui/scenario_flow.js` | 70 |
@@ -1962,44 +1962,45 @@ _(χωρίς συναρτήσεις)_
 | 755 | method | `Circuit.gen_efd` |
 | 762 | method | `Circuit.gen_tm` |
 | 769 | method | `Circuit.gen_deriv` |
-| 787 | method | `Circuit.gen_out` |
-| 807 | method | `Circuit.Vsrc` |
-| 823 | method | `Circuit.topo` |
-| 833 | method | `Circuit.build` |
-| 930 | method | `Circuit.bsrc` |
-| 970 | method | `Circuit.solve_z` |
-| 996 | method | `Circuit.solve_nl` |
-| 1038 | method | `Circuit.tl_hist` |
-| 1055 | method | `Circuit.tl_sec` |
-| 1062 | method | `Circuit.tl_ih` |
-| 1066 | method | `Circuit.tl_record` |
-| 1085 | method | `Circuit.scr_u` |
-| 1089 | method | `Circuit.scr_gate` |
-| 1093 | method | `Circuit.scr_edges` |
-| 1100 | method | `Circuit.gate_state` |
-| 1113 | method | `Circuit.set_gates` |
-| 1121 | method | `Circuit.may_turn_on` |
-| 1125 | method | `Circuit.tolerances` |
-| 1131 | method | `Circuit.consistent` |
-| 1173 | method | `Circuit.value` |
-| 1209 | method | `Circuit.current` |
-| 1252 | method | `Circuit.prime` |
-| 1262 | method | `Circuit.sig_in` |
-| 1266 | method | `Circuit.sh_grid` |
-| 1278 | method | `Circuit.sh_next` |
-| 1285 | method | `Circuit.log_ev` |
-| 1291 | method | `Circuit.ev_switches` |
-| 1300 | method | `Circuit.sh_sample` |
-| 1320 | method | `Circuit.sample` |
-| 1381 | method | `Circuit.cmp_f` |
-| 1387 | method | `Circuit.blk_due` |
-| 1398 | method | `Circuit.eval_blocks` |
-| 1686 | method | `Circuit.block_events` |
-| 1715 | method | `Circuit.next_event` |
-| 1782 | function | `_decimate` |
-| 1799 | function | `_diagnose` |
-| 1850 | function | `simulate` |
-| 2091 | function | `batch_sim` |
+| 787 | method | `Circuit.jac_gen` |
+| 837 | method | `Circuit.gen_out` |
+| 857 | method | `Circuit.Vsrc` |
+| 873 | method | `Circuit.topo` |
+| 883 | method | `Circuit.build` |
+| 980 | method | `Circuit.bsrc` |
+| 1020 | method | `Circuit.solve_z` |
+| 1046 | method | `Circuit.solve_nl` |
+| 1088 | method | `Circuit.tl_hist` |
+| 1105 | method | `Circuit.tl_sec` |
+| 1112 | method | `Circuit.tl_ih` |
+| 1116 | method | `Circuit.tl_record` |
+| 1135 | method | `Circuit.scr_u` |
+| 1139 | method | `Circuit.scr_gate` |
+| 1143 | method | `Circuit.scr_edges` |
+| 1150 | method | `Circuit.gate_state` |
+| 1163 | method | `Circuit.set_gates` |
+| 1171 | method | `Circuit.may_turn_on` |
+| 1175 | method | `Circuit.tolerances` |
+| 1181 | method | `Circuit.consistent` |
+| 1223 | method | `Circuit.value` |
+| 1259 | method | `Circuit.current` |
+| 1302 | method | `Circuit.prime` |
+| 1312 | method | `Circuit.sig_in` |
+| 1316 | method | `Circuit.sh_grid` |
+| 1328 | method | `Circuit.sh_next` |
+| 1335 | method | `Circuit.log_ev` |
+| 1341 | method | `Circuit.ev_switches` |
+| 1350 | method | `Circuit.sh_sample` |
+| 1370 | method | `Circuit.sample` |
+| 1431 | method | `Circuit.cmp_f` |
+| 1437 | method | `Circuit.blk_due` |
+| 1448 | method | `Circuit.eval_blocks` |
+| 1736 | method | `Circuit.block_events` |
+| 1765 | method | `Circuit.next_event` |
+| 1832 | function | `_decimate` |
+| 1849 | function | `_diagnose` |
+| 1900 | function | `simulate` |
+| 2145 | function | `batch_sim` |
 
 ### `engine/bidir.py`
 
@@ -2279,72 +2280,72 @@ _(χωρίς συναρτήσεις)_
 | 627 | method | `Project._result` |
 | 634 | method | `Project._query` |
 | 646 | method | `Project._run_scipy` |
-| 679 | method | `Project.sweep` |
-| 753 | method | `Project._sweep_meta` |
-| 758 | method | `Project.bifurcation` |
-| 815 | class | `_SweepFile` |
-| 820 | method | `_SweepFile.__init__` |
-| 834 | method | `_SweepFile._val` |
-| 842 | method | `_SweepFile._read` |
-| 861 | method | `_SweepFile._line` |
-| 865 | method | `_SweepFile.add` |
-| 869 | method | `_SweepFile.close` |
-| 875 | function | `_sweep_point` |
-| 883 | function | `_as_list` |
-| 893 | function | `_spec` |
-| 909 | function | `_measures` |
-| 932 | function | `_base_T` |
-| 939 | function | `_unit` |
-| 943 | function | `_matname` |
-| 948 | class | `Result` |
-| 951 | method | `Result.__init__` |
-| 961 | method | `Result.__getitem__` |
-| 964 | method | `Result.__repr__` |
-| 967 | method | `Result.events_csv` |
-| 978 | method | `Result.measure` |
-| 1038 | method | `Result.frame` |
-| 1047 | method | `Result._meta_lines` |
-| 1051 | method | `Result.to_csv` |
-| 1064 | method | `Result._vars` |
-| 1074 | method | `Result.as_dict` |
-| 1078 | method | `Result.to_json` |
-| 1082 | method | `Result.to_mat` |
-| 1093 | method | `Result.to_parquet` |
-| 1101 | method | `Result.to_hdf5` |
-| 1107 | method | `Result.save` |
-| 1111 | function | `_save` |
-| 1118 | class | `SweepResult` |
-| 1121 | method | `SweepResult.__init__` |
-| 1127 | method | `SweepResult.__repr__` |
-| 1130 | method | `SweepResult.column` |
-| 1133 | method | `SweepResult.frame` |
-| 1140 | method | `SweepResult.to_csv` |
-| 1152 | method | `SweepResult.to_json` |
-| 1156 | method | `SweepResult.to_mat` |
-| 1163 | method | `SweepResult._columns` |
-| 1167 | method | `SweepResult.to_parquet` |
-| 1173 | method | `SweepResult.to_hdf5` |
-| 1178 | method | `SweepResult.save` |
-| 1182 | class | `BifurcationResult` |
-| 1186 | method | `BifurcationResult.__init__` |
-| 1193 | method | `BifurcationResult.__repr__` |
-| 1196 | method | `BifurcationResult.changes` |
-| 1205 | method | `BifurcationResult.rows` |
-| 1209 | method | `BifurcationResult._columns` |
-| 1213 | method | `BifurcationResult.frame` |
-| 1220 | method | `BifurcationResult.plot` |
-| 1223 | method | `BifurcationResult.to_csv` |
-| 1234 | method | `BifurcationResult.to_json` |
-| 1238 | method | `BifurcationResult.to_mat` |
-| 1244 | method | `BifurcationResult.to_parquet` |
-| 1249 | method | `BifurcationResult.to_hdf5` |
-| 1254 | method | `BifurcationResult.save` |
-| 1265 | function | `_el` |
-| 1270 | function | `_matrix` |
-| 1275 | function | `_ascii` |
-| 1282 | function | `_mat_char` |
-| 1287 | function | `_mat_value` |
-| 1300 | function | `_savemat` |
+| 683 | method | `Project.sweep` |
+| 757 | method | `Project._sweep_meta` |
+| 762 | method | `Project.bifurcation` |
+| 819 | class | `_SweepFile` |
+| 824 | method | `_SweepFile.__init__` |
+| 838 | method | `_SweepFile._val` |
+| 846 | method | `_SweepFile._read` |
+| 865 | method | `_SweepFile._line` |
+| 869 | method | `_SweepFile.add` |
+| 873 | method | `_SweepFile.close` |
+| 879 | function | `_sweep_point` |
+| 887 | function | `_as_list` |
+| 897 | function | `_spec` |
+| 913 | function | `_measures` |
+| 936 | function | `_base_T` |
+| 943 | function | `_unit` |
+| 947 | function | `_matname` |
+| 952 | class | `Result` |
+| 955 | method | `Result.__init__` |
+| 965 | method | `Result.__getitem__` |
+| 968 | method | `Result.__repr__` |
+| 971 | method | `Result.events_csv` |
+| 982 | method | `Result.measure` |
+| 1042 | method | `Result.frame` |
+| 1051 | method | `Result._meta_lines` |
+| 1055 | method | `Result.to_csv` |
+| 1068 | method | `Result._vars` |
+| 1078 | method | `Result.as_dict` |
+| 1082 | method | `Result.to_json` |
+| 1086 | method | `Result.to_mat` |
+| 1097 | method | `Result.to_parquet` |
+| 1105 | method | `Result.to_hdf5` |
+| 1111 | method | `Result.save` |
+| 1115 | function | `_save` |
+| 1122 | class | `SweepResult` |
+| 1125 | method | `SweepResult.__init__` |
+| 1131 | method | `SweepResult.__repr__` |
+| 1134 | method | `SweepResult.column` |
+| 1137 | method | `SweepResult.frame` |
+| 1144 | method | `SweepResult.to_csv` |
+| 1156 | method | `SweepResult.to_json` |
+| 1160 | method | `SweepResult.to_mat` |
+| 1167 | method | `SweepResult._columns` |
+| 1171 | method | `SweepResult.to_parquet` |
+| 1177 | method | `SweepResult.to_hdf5` |
+| 1182 | method | `SweepResult.save` |
+| 1186 | class | `BifurcationResult` |
+| 1190 | method | `BifurcationResult.__init__` |
+| 1197 | method | `BifurcationResult.__repr__` |
+| 1200 | method | `BifurcationResult.changes` |
+| 1209 | method | `BifurcationResult.rows` |
+| 1213 | method | `BifurcationResult._columns` |
+| 1217 | method | `BifurcationResult.frame` |
+| 1224 | method | `BifurcationResult.plot` |
+| 1227 | method | `BifurcationResult.to_csv` |
+| 1238 | method | `BifurcationResult.to_json` |
+| 1242 | method | `BifurcationResult.to_mat` |
+| 1248 | method | `BifurcationResult.to_parquet` |
+| 1253 | method | `BifurcationResult.to_hdf5` |
+| 1258 | method | `BifurcationResult.save` |
+| 1269 | function | `_el` |
+| 1274 | function | `_matrix` |
+| 1279 | function | `_ascii` |
+| 1286 | function | `_mat_char` |
+| 1291 | function | `_mat_value` |
+| 1304 | function | `_savemat` |
 
 ### `pcl/designer.py`
 
