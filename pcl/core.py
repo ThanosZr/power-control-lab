@@ -540,7 +540,7 @@ class Project:
                          'events': events or False}, timeout=timeout)
             return self._result(out)
         if solver == 'scipy':
-            return self._run_scipy(t_end, keys, scipy_method, rtol, hmax, max_points, meas, t_from, events)
+            return self._run_scipy(t_end, keys, scipy_method, rtol, hmax, max_points, meas, t_from, events, timeout)
         raise PclError(f'Άγνωστος λύτης «{solver}»: browser ή scipy.')
 
     def stream(self, t_end=None, chunk=None, channels=None, hdiv=None, method=None, step=None, rtol=None, hmax=None, t_from=0.0,
@@ -643,7 +643,7 @@ class Project:
         return {'action': 'run', 'project': self.data, 't_end': t_end, 'channels': keys, 'hdiv': hd, 'method': mt, 'step': st,
                 'from': t_from, 'max_points': max_points, 'measure': meas, 'waveforms': False, 'check': False}
 
-    def _run_scipy(self, t_end, keys, method, rtol, hmax, max_points, meas, t_from, events=False):
+    def _run_scipy(self, t_end, keys, method, rtol, hmax, max_points, meas, t_from, events=False, timeout=None):
         import numpy as np
         from engine.batch import simulate, BatchError
         if keys is None:
@@ -655,7 +655,8 @@ class Project:
         try:
             r = simulate({'net': exp['net'], 'channels': exp['channels'], 't_end': t_end, 'method': method,
                           'rtol': float(rtol) if rtol else 1e-6, 'max_step': float(parse_value(hmax)) if hmax else 0,
-                          'max_points': max_points, '_local': True, 'events': 20000 if events else 0})
+                          'max_points': max_points, '_local': True, 'events': 20000 if events else 0,
+                          'wall': float(timeout) if timeout else None})   # 4.9.1: a local run is limited by timeout (default 45 s, as the server)
         except BatchError as e:
             raise PclError(str(e)) from e
         t = np.array(r['t'], dtype=float)
@@ -667,6 +668,9 @@ class Project:
         meta = {'solver': f'scipy ({method}, engine/batch.py)', 'method': method, 'rtol': r['rtol'], 'max_step': r['max_step'],
                 't_end': r['t_end'], 'status': r['status'], 'message': r['message'], 'points': r['stats']['points'], 'returned': len(t),
                 'wall_s': r['stats']['wall_s'], 'T': _base_T(self)}
+        if r['status'] != 'ok':           # 4.9.1: a run cut short (time limit) says so, instead of returning part of it silently
+            import warnings
+            warnings.warn(f"SciPy: {r['message']} Μεγαλύτερο timeout στο run() για περισσότερο χρόνο.", RuntimeWarning, stacklevel=3)
         res = Result(t.tolist(), keys, {k: v.tolist() for k, v in ch.items()}, meta, self, {}, r.get('diag') or [])
         if events and r.get('events'):
             kinds = frozenset(events) if isinstance(events, (list, tuple, frozenset)) or type(events).__name__ == 'set' else None

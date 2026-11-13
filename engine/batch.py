@@ -784,6 +784,56 @@ class Circuit:
             dw[j] = T / (2 * sh['H'][j])
         return np.concatenate([[V(a) - V(b) for a, b in m['ports']], m['wb'] * w, dw])
 
+    def jac_gen(self, t, x, tp):
+        """4.9.1: the Jacobian of the circuit with generators. The port currents of a generator are sources that depend on
+        its fluxes and angle (bsrc), so M·Bx alone misses them: around nodes joined only by inductors (a generator behind a
+        transformer and lines) the stiff mode (Σ1/L)/G_min is then unknown to Radau/BDF, which crawl. Here J = M·(Bx + B_g)
+        with B_g = ∂(injections)/∂x (linear in the fluxes, the angle by a central difference); the rows of a generator: its
+        port voltages through ∂z/∂x = A⁻¹·(Bx + B_g), the angles from the speeds, the speeds by differences of its own states."""
+        n, ns = self.n, len(x)
+        Bg = np.zeros((n, ns))
+        for m in self.gens:
+            k0, N = m['k0'], m['N']
+            th = k0 + N + m['sh']['gm']
+            i0 = self.gen_cur(m, x)[0]
+            for j in list(range(k0, k0 + N)) + [th]:
+                h = 1e-6 * max(1.0, abs(x[j])) if j == th else max(1.0, abs(x[j]))
+                xp = x.copy()
+                xp[j] += h
+                if j == th:
+                    xm = x.copy()
+                    xm[j] -= h
+                    di = (self.gen_cur(m, xp)[0] - self.gen_cur(m, xm)[0]) / (2 * h)
+                else:
+                    di = (self.gen_cur(m, xp)[0] - i0) / h        # exact: linear in the fluxes at a fixed angle
+                for (a, bb), d in zip(m['ports'], di):
+                    if a >= 0:
+                        Bg[a, j] -= d
+                    if bb >= 0:
+                        Bg[bb, j] += d
+        Bt = self.Bx + Bg
+        J = tp['M'] @ Bt
+        Zx = tp['Ainv'] @ Bt
+        z = tp['Ainv'] @ (self.Bx @ x + self.bsrc(t, x) + tp['bd'])
+        for m in self.gens:
+            k0, N, M = m['k0'], m['N'], m['sh']['N']
+            rows = range(k0, k0 + N + 2 * M)
+            J[k0:k0 + N + 2 * M, :] = 0.0
+            for r, (a, bb) in enumerate(m['ports']):     # dψ/dt = v_a − v_b
+                if a >= 0:
+                    J[k0 + r, :] += Zx[a, :]
+                if bb >= 0:
+                    J[k0 + r, :] -= Zx[bb, :]
+            for j in range(M):                            # dφ/dt = ω_b·ω
+                J[k0 + N + j, k0 + N + M + j] = m['wb']
+            d0 = self.gen_deriv(m, t, x, z)[N + M:]
+            for j in range(k0, k0 + N + 2 * M):           # dω/dt from the torques: its own states
+                h = 1e-7 * max(1.0, abs(x[j]))
+                xp = x.copy()
+                xp[j] += h
+                J[k0 + N + M:k0 + N + 2 * M, j] = (self.gen_deriv(m, t, xp, z)[N + M:] - d0) / h
+        return J
+
     def gen_out(self, m, t, x, z):
         k0, N, sh = m['k0'], m['N'], m['sh']
         M, gm = sh['N'], sh['gm']
@@ -1865,7 +1915,8 @@ def simulate(data):
     atol = min(1.0, max(1e-14, _f(data.get('atol'), 1e-9)))
     max_step = _f(data.get('max_step'), 0)
     max_points = int(min(200000, max(1000, _f(data.get('max_points'), 40000))))
-    wall = min(LIMITS['wall'], max(1.0, _f(data.get('wall'), LIMITS['wall'])))
+    # the server keeps its 45 s; a local run (pcl, MATLAB through pcl) takes the limit it is given (4.9.1)
+    wall = max(1.0, _f(data.get('wall'), LIMITS['wall'])) if data.get('_local') else min(LIMITS['wall'], max(1.0, _f(data.get('wall'), LIMITS['wall'])))
     channels = data.get('channels') or {}
     if not isinstance(channels, dict) or len(channels) > 40:
         raise BatchError('Μέχρι 40 σήματα.')
@@ -2017,7 +2068,10 @@ def simulate(data):
             owners.append(b)
         kw = dict(method=method, rtol=rtol, atol=atol, max_step=max_step, events=events or None)
         if implicit and not ckt.iP and not ckt.iN and not ckt.ims and not ckt.sms and not ckt.srms and not ckt.iDE:     # the machines make the system nonlinear: numerical Jacobian
-            kw['jac'] = (lambda tt, yy, J=tp['J']: J) if method == 'LSODA' else tp['J']
+            if ckt.gens:                    # 4.9.1: generators: their port currents and torques in the Jacobian (jac_gen)
+                kw['jac'] = lambda tt, yy, tp=tp: ckt.jac_gen(tt, yy, tp)
+            else:
+                kw['jac'] = (lambda tt, yy, J=tp['J']: J) if method == 'LSODA' else tp['J']
         sol = solve_ivp(fun, (t, tn), x, **kw)
         stats['segments'] += 1
         stats['nfev'] += int(sol.nfev)

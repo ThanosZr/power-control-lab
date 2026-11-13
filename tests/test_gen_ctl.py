@@ -78,5 +78,51 @@ class GeneratorControls(unittest.TestCase):
         self.assertEqual(a['warn'], [])
 
 
+
+@unittest.skipIf(shutil.which('node') is None, 'Node.js not installed (the project is built by web/studio in Node).')
+class SciPyEquivalence(unittest.TestCase):
+    """4.9.1 (4.8.2 b): the generator controls in the SciPy solver (engine/batch.py), against the browser solver at T/1000.
+    Possible since the Jacobian of SciPy has the generator's terms (Circuit.jac_gen): without them a generator behind a
+    transformer and lines (nodes joined only by inductors, a mode (Σ1/L)/G_min) did not finish 5 ms in 5 minutes."""
+
+    @staticmethod
+    def _pair(ctl, gov, dv, dp, t_end, ch):
+        import pcl
+        pr = pcl.tutorial('gen_ctl', ctl=ctl, gov=gov, ev='none')
+        pr.set('AV1.dV', dv)
+        pr.set('GV1.dP', dp)
+        rb = pr.run(t_end, channels=ch, hdiv=1000)
+        rs = pr.run(t_end, channels=ch, solver='scipy', rtol=1e-7, timeout=900)
+        return rb, rs
+
+    def test_st1a_pss_steam(self):
+        # the small scenario of the ROADMAP: ST1A + PSS + steam with reheat, a step of V_ref at 20 ms and of the load
+        # reference at 30 ms, values at 19, 40, 80 and 150 ms
+        import numpy as np
+        ch = ['Y:SG1', 'Y:SG1:pe', 'Y:SG1:vt', 'Y:SG1:d', 'Y:AV1/EFD', 'Y:PS1/VS', 'Y:GV1/TM']
+        rb, rs = self._pair('avr_pss', 'steam', '0:0, 0.02:0.02', '0:0, 0.03:0.05', 0.15, ch)
+        self.assertEqual(rs.meta['status'], 'ok', rs.meta)
+        tol = {'Y:SG1': 2e-6, 'Y:SG1:pe': 1e-4, 'Y:SG1:vt': 1e-4, 'Y:SG1:d': 2e-3, 'Y:PS1/VS': 1e-4, 'Y:GV1/TM': 1e-4}
+        for k in ch:
+            for tq in (0.019, 0.04, 0.08, 0.15):
+                b, s = float(np.interp(tq, rb.t, rb[k])), float(np.interp(tq, rs.t, rs[k]))
+                if k == 'Y:AV1/EFD':                # gain 200: SciPy holds the inputs of the blocks over T/1000
+                    self.assertLess(abs(b - s), 5e-3 * abs(b) + 1e-3, (k, tq, b, s))
+                else:
+                    self.assertLess(abs(b - s), tol[k], (k, tq, b, s))
+        self.assertGreater(float(np.interp(0.04, rb.t, rb['Y:AV1/EFD'])), 5)       # the step of V_ref is there
+
+    def test_dc1a_hydro(self):
+        import numpy as np
+        ch = ['Y:SG1:pe', 'Y:SG1:vt', 'Y:AV1/EFD', 'Y:GV1/TM', 'Y:GV1/G']
+        rb, rs = self._pair('dc1a', 'hydro', '0:0, 0.01:0.02', '0:0, 0.02:0.05', 0.06, ch)
+        self.assertEqual(rs.meta['status'], 'ok', rs.meta)
+        tol = {'Y:SG1:pe': 5e-4, 'Y:SG1:vt': 5e-4, 'Y:AV1/EFD': 1e-3, 'Y:GV1/TM': 1e-4, 'Y:GV1/G': 1e-4}
+        for k in ch:
+            for tq in (0.009, 0.03, 0.06):
+                b, s = float(np.interp(tq, rb.t, rb[k])), float(np.interp(tq, rs.t, rs[k]))
+                self.assertLess(abs(b - s), tol[k], (k, tq, b, s))
+
+
 if __name__ == '__main__':
     unittest.main()
