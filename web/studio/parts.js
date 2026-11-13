@@ -16,6 +16,26 @@
  const sl=d=>`<path class="sigl" d="${d}"/>`;
  // buses (3.18): thick leads, electrical (bl) and signal (sbl); CONN = separate pins or one bus pin
  const bl=d=>`<path class="busl" d="${d}"/>`,sbl=d=>`<path class="sigl busl" d="${d}"/>`;
+ // 4.9 (ROADMAP §31): the arc of a circuit-breaker pole, black-box models (THEORY §Arc). Values: indicative, from the
+ // literature (the improved Mayr: a fit to current-zero measurements of a 245 kV / 50 kA SF6 puffer breaker; the
+ // three-Mayr model: the breaker constants of a 145 kV breaker and median state values). Real breakers: to do (decision 76).
+ const ARC_MODELS=[['imayr','Mayr βελτιωμένο: P = P₀ + P₁·u·i (από μετρήσεις)'],['mayr','Mayr'],['cassie','Cassie'],['habedank','Cassie + Mayr σε σειρά (Habedank)'],
+  ['schwarz','Mayr τροποποιημένο: τ = τ₀·g^α, P = P₀·g^β (Schwarz)'],['kema','Τρία τροποποιημένα Mayr σε σειρά (KEMA)']];
+ const arcParams=(on=()=>true)=>{const m=(...k)=>p=>on(p)&&k.includes(p.arc||'imayr');return [
+  sel('arc','Μοντέλο τόξου',ARC_MODELS,'imayr',{show:on,hint:'Η αγωγιμότητα g του τόξου μετά τον χωρισμό των επαφών: dg/dt = (g^λ·u²/Π − g)/τ ανά τμήμα (Mayr λ = 2, Π = P₀· Cassie λ = 1, Π = U_c²). Ενδεικτικές τιμές από τη βιβλιογραφία.'}),
+  num('tau','Σταθερά χρόνου τ','s',0.27e-6,{show:m('imayr','mayr','schwarz'),hint:'Mayr: 0,1–0,5 μs σε SF6. Στο Schwarz είναι το τ₀ (τ = τ₀·g^α).'}),
+  num('P0','Ισχύς ψύξης P₀','W',15917,{show:m('imayr','mayr','schwarz'),hint:'Βελτιωμένο Mayr: P₀ = 15 917 W και P₁ = 0,9943 με τ = 0,27 μs ταιριάζουν σε μετρήσεις κοντινής γραμμής 90 % ενός διακόπτη SF6 245 kV / 50 kA.'}),
+  num('P1','Συντελεστής P₁','',0.9943,{show:m('imayr'),hint:'P = P₀ + P₁·u·i: η ψύξη αυξάνει με την ηλεκτρική ισχύ (πίεση από τη θέρμανση του αερίου). P₁ < 1.'}),
+  num('alpha','Εκθέτης α','',0.25,{show:m('schwarz')}),num('beta','Εκθέτης β','',0.6,{show:m('schwarz')}),
+  num('tauc','Σταθερά χρόνου Cassie τ_c','s',1.2e-6,{show:m('cassie','habedank')}),
+  num('Uc','Τάση τόξου Cassie U_c','V',1500,{show:m('cassie','habedank'),hint:'Η σταθερή τάση του τόξου σε μεγάλα ρεύματα (Π = U_c²).'}),
+  num('taum','Σταθερά χρόνου Mayr τ_m','s',0.3e-6,{show:m('habedank')}),num('Pm','Ισχύς ψύξης Mayr P_m','W',30e3,{show:m('habedank')}),
+  num('tau1','τ₁ (πρώτο τμήμα)','s',8.55e-6,{show:m('kema'),hint:'τ₂ = τ₁/k₁, τ₃ = τ₂/k₂. Π₃ = k₃·Π₂ είναι η ισχύς ψύξης του τρίτου (καθαρό Mayr) τμήματος.'}),
+  num('Pi1','Π₁ (λ₁ = 1,4)','A^0,4·V^1,6',4.4e6,{show:m('kema'),hint:'Ορίζει την τάση του τόξου σε μεγάλα ρεύματα: U ≈ (Π₁/|i|^0,4)^(1/1,6) (≈ 1 kV στα 40 kA).'}),
+  num('Pi2','Π₂ (λ₂ = 1,9)','A^0,9·V^1,1',10,{show:m('kema')}),
+  num('k1','k₁','',5.7,{show:m('kema')}),num('k2','k₂','',10,{show:m('kema')}),num('k3','k₃','',100,{show:m('kema')}),
+  num('gmin','Ελάχιστη αγωγιμότητα','S',1e-12,{show:on,hint:'Κάτω όριο της αγωγιμότητας μετά τη διακοπή (ρεύμα μετά το τόξο σε S × V).'})];};
+
  const CONN=what=>sel('conn','Ακροδέκτες',[['sep','Χωριστοί'],['bus',`Δίαυλος ${what} (ένας ακροδέκτης)`]],'sep',{hint:'Δίαυλος (3.18): ένα σύρμα μεταφέρει όλες τις φάσεις ή συνιστώσες, στη σειρά που γράφεται. Το ίδιο κύκλωμα με χωριστά σύρματα δίνει τα ίδια αποτελέσματα.'});
  const isBus=p=>p.conn==='bus';
  const WIDTH=sel('width','Πλάτος (δίαυλος)',[['1','1: ένα σήμα ή ό,τι συνδεθεί'],['2','2 (π.χ. αβ, dq)'],['3','3 (π.χ. abc)'],['4','4'],['5','5'],['6','6']],'1',{hint:'Πλάτος > 1: ο ακροδέκτης του συμβόλου είναι δίαυλος με τόσα σήματα ή αγωγούς (3.18). Με 1 περνά ό,τι συνδεθεί, και δίαυλος.'});
@@ -571,10 +591,23 @@
    bus:p=>isBus(p)?{abc1:['a1','b1','c1'],abc2:['a2','b2','c2']}:{},spins:p=>p.ctl==='sig'?{cmd:I(0,40)}:{},
    params:[sel('ctl','Χειρισμός',[['time','Πρόγραμμα εντολών'],['sig','Από σήμα (ακροδέκτης cmd: ≥ 0,5 κλειστός)']],'time'),
     txt('cmd','Εντολές t:κατάσταση','0:1, 0.1:0',{show:p=>p.ctl!=='sig',hint:'1 = κλείσιμο, 0 = άνοιγμα. Κάθε πόλος ανοίγει στο πρώτο μηδέν του ρεύματός του μετά την εντολή (αντιπαράλληλα θυρίστορ από σήμα).'}),
-    num('Ron','R_on ανά πόλο','Ω',1e-4),num('Roff','R_off ανά πόλο','Ω',1e6),
+    sel('model','Πόλος',[['ideal','Ιδανικός: ανοίγει στο πρώτο μηδέν'],['arc','Με τόξο (4.9)']],'ideal',{hint:'Με τόξο: κάθε πόλος είναι ένα μοντέλο τόξου από τον χωρισμό των επαφών (η εντολή 0)· το ρεύμα διακόπτεται σε ένα μηδέν αν το τόξο ψυχθεί απέναντι στην TRV.'}),
+    ...arcParams(p=>p.model==='arc'),
+    num('Ron','R_on ανά πόλο','Ω',1e-4),num('Roff','R_off ανά πόλο','Ω',1e6,{show:p=>p.model!=='arc'}),
     bool('vm','Μέτρηση τάσης πόλων (TRV)',false,{hint:'Κανάλια CB1/Va, CB1/Vb, CB1/Vc: η τάση ανάμεσα στις δύο πλευρές κάθε πόλου, για τη μεταβατική τάση επαναφοράς (pcl.network.trv) (4.2).'}),CONN('abc')],
    value:()=>null,
    draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="60" rx="4"/>'+(isBus(p)?bl('M-40,0 H-25 M25,0 H40'):'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25 M25,-20 H40 M25,0 H40 M25,20 H40"/>')+'<path class="thin" d="M-14,0 H-6 L8,-10 M8,0 H14"/>'+tx('CB',0,22,'bsm')+(p.ctl==='sig'?sl('M0,40 V30'):'')},
+  ARCX:{name:'Τμήμα τόξου',prefix:'AX',group:'Δίκτυο',hidden:true,pins:{a:[-20,0],b:[20,0]},spins:{g:I(0,-20)},box:[-12,-8,24,16],
+   params:[num('lam','Εκθέτης λ','',2),num('tau0','τ₀','s',0.27e-6),num('alpha','α','',0),num('P0','Π (P₀)','',15917),num('P1','P₁','',0),num('beta','β','',0),
+    num('Ron','R κλειστού','Ω',1e-4),num('gmin','g_min','S',1e-12)],value:()=>null,
+   draw:()=>'<path d="M-20,0 H-10 M10,0 H20"/><path class="thin" d="M-10,0 C-6,-6 -2,6 2,0 S8,-4 10,0"/>'},
+  ARC:{name:'Διακόπτης με τόξο (μονοφασικός)',prefix:'CBA',group:'Δίκτυο',pins:{a:[-40,0],b:[40,0]},box:[-25,-16,50,32],spins:p=>p.ctl==='sig'?{cmd:I(0,30)}:{},
+   params:[sel('ctl','Χειρισμός',[['time','Πρόγραμμα εντολών'],['sig','Από σήμα (ακροδέκτης cmd: ≥ 0,5 κλειστός)']],'time'),
+    txt('cmd','Εντολές t:κατάσταση','0:1, 0.005:0',{show:p=>p.ctl!=='sig',hint:'1 = κλειστός, 0 = χωρισμός των επαφών (αρχή του τόξου). Το ρεύμα διακόπτεται σε ένα μηδέν του, αν το τόξο ψυχθεί αρκετά απέναντι στη μεταβατική τάση επαναφοράς· αλλιώς επανέναυση ως το επόμενο μηδέν.'}),
+    ...arcParams(),num('Ron','R κλειστού','Ω',1e-4),
+    bool('vm','Μέτρηση τάσης (TRV)',true,{hint:'Κανάλι V:<id>/V: η τάση ανάμεσα στους ακροδέκτες (a − b).'})],
+   value:p=>(ARC_MODELS.find(m=>m[0]===(p.arc||'imayr'))||ARC_MODELS[0])[0],
+   draw:p=>'<rect class="block" x="-25" y="-16" width="50" height="32" rx="4"/><path d="M-40,0 H-25 M25,0 H40"/><path class="thin" d="M-14,4 H-6 L8,-6 M8,4 H14"/><path class="thin" d="M-4,-1 C-2,-5 0,1 2,-3 S5,-2 6,-4"/>'+tx('CB~',0,13,'bsm')+(p.ctl==='sig'?sl('M0,30 V16'):'')},
   XF3:{name:'Μετασχηματιστής τριφασικός (ομάδα σύνδεσης)',prefix:'TR',group:'Δίκτυο',pins:p=>isBus(p)?{abc1:[-40,0],abc2:[40,0]}:{a1:[-40,-20],b1:[-40,0],c1:[-40,20],a2:[40,-20],b2:[40,0],c2:[40,20]},box:[-25,-30,50,60],
    bus:p=>isBus(p)?{abc1:['a1','b1','c1'],abc2:['a2','b2','c2']}:{},
    params:[sel('grp','Ομάδα σύνδεσης',[['Yy0','Yy0'],['YNyn0','YNyn0'],['Yyn0','Yyn0'],['YNy0','YNy0'],['Yd1','Yd1'],['Yd11','Yd11'],['YNd1','YNd1'],['YNd11','YNd11'],['Dy1','Dy1'],['Dy11','Dy11'],['Dyn1','Dyn1'],['Dyn11','Dyn11'],['Dd0','Dd0']],'Dyn11',
@@ -949,7 +982,7 @@
  const STRUCT={PWM:new Set(['mode','carrier','upd']),SW:new Set(['gate','model']),VAC3:new Set(['conn'])};
  // the network library: a change rebuilds its definition (4.1); from 4.2 a value that keeps the inner circuit the same is
  // live (the reload carries the states by the inner ids), and only what changes the inner circuit is structural
- Object.assign(STRUCT,{AIC:new Set(['scheme']),GRID3:new Set(['z0','conn']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn']),
+ Object.assign(STRUCT,{AIC:new Set(['scheme']),GRID3:new Set(['z0','conn']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn','model','arc']),ARC:new Set(['ctl','vm','arc']),
   XF3:new Set(['grp','P0','core','conn']),LOAD3:new Set(['cn','model','conn']),
   GEN3:new Set(['data','conv','shaft','Hm','exc','mech','init','neut','conn']),LINE3:new Set(['unit','z0','conn']),TLM:new Set(['model','data','mdl','len','f','fmin','dec','ppd','fti','conn'])});
  const structCache=new Map();

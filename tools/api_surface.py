@@ -86,6 +86,7 @@ def surface_pcl():
     import pcl.lineconst
     import pcl.link
     import pcl.network
+    import pcl.trv
     import pcl.plotting
     import pcl.workbench
     out = {}
@@ -99,7 +100,7 @@ def surface_pcl():
                 out[f'pcl.{name}.{m}'] = {'params': sig(f) if inspect.isfunction(f) else ['(property)']}
         elif callable(obj):
             out['pcl.' + name] = {'params': sig(obj)}
-    for mod in (pcl.link, pcl.control, pcl.workbench, pcl.plotting, pcl.formats, pcl.impulse, pcl.network, pcl.lineconst):
+    for mod in (pcl.link, pcl.control, pcl.workbench, pcl.plotting, pcl.formats, pcl.impulse, pcl.network, pcl.lineconst, pcl.trv):
         short = mod.__name__
         for name, obj in vars(mod).items():
             if name.startswith('_') or getattr(obj, '__module__', None) != mod.__name__ or not (inspect.isfunction(obj) or inspect.isclass(obj)):

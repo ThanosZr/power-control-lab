@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.8.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (448 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.8.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (462 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-239 σημεία.
+251 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -257,6 +257,18 @@
 | `pcl.set` | `key`, `value` | 3.18 |
 | `pcl.show` | `obj`, `title` | 3.18 |
 | `pcl.sweep` | `grid`, `**kw` | 3.18 |
+| `pcl.trv.TRVError` | — | 4.8.1 |
+| `pcl.trv.compare` | `t`, `u`, `spec`, `t0` | 4.8.1 |
+| `pcl.trv.default_kpp` | `Ur`, `earthed`, `duty` | 4.8.1 |
+| `pcl.trv.delay_line` | `spec` | 4.8.1 |
+| `pcl.trv.envelope_of` | `t`, `u`, `t0` | 4.8.1 |
+| `pcl.trv.itrv` | `Ur`, `Isc`, `f` | 4.8.1 |
+| `pcl.trv.line_data` | `Ur`, `f` | 4.8.1 |
+| `pcl.trv.line_value` | `pts`, `t` | 4.8.1 |
+| `pcl.trv.pole_factors` | `kpp` | 4.8.1 |
+| `pcl.trv.rated` | `Ur`, `duty`, `kpp`, `f`, `earthed` | 4.8.1 |
+| `pcl.trv.reference_line` | `spec`, `t_end` | 4.8.1 |
+| `pcl.trv.slf` | `Ur`, `Isc`, `ratio`, `f`, `itrv_req`, `Z`, `k`, `tdL`, `td` | 4.8.1 |
 | `pcl.tutorial` | `tid`, `**options` | 3.18 |
 | `pcl.tutorials` | — | 3.18 |
 | `pcl.use` | `project` | 3.18 |
@@ -434,7 +446,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-95 σημεία.
+97 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -449,10 +461,12 @@
 | `file.wire` | id, a, b, pts, name, color, width | — | 3.18 |
 | `part:AIC` | scheme, mode, target, learn, fs, fr, Kp, Ki, umin, umax, rs, dxs, us, hidden, opt, lr, elr, K, ds, seed, w | L, iae, r, sat, u, y, yd | 4.8 |
 | `part:AM` | — | a, b, y | 3.18 |
+| `part:ARC` | ctl, cmd, arc, tau, P0, P1, alpha, beta, tauc, Uc, taum, Pm, tau1, Pi1, Pi2, k1, k2, k3, gmin, Ron, vm | a, b, cmd | 4.8.1 |
+| `part:ARCX` | lam, tau0, alpha, P0, P1, beta, Ron, gmin | a, b, g | 4.8.1 |
 | `part:AVR` | type, Vref, dV, TR, KA, TA, TC, TB, TC1, TB1, KF, TF, VRMAX, VRMIN, KC, KLR, ILR, KE, TE, AEX, BEX | e0, efd, ifd, v0, vs, vt | 4.8.1 |
 | `part:BSEL` | idx | u, y | 3.18 |
 | `part:C` | C, v0, esr | n, p | 3.18 |
-| `part:CB3` | ctl, cmd, Ron, Roff, vm, conn | a1, a2, abc1, abc2, b1, b2, c1, c2, cmd | 4.1 |
+| `part:CB3` | ctl, cmd, model, arc, tau, P0, P1, alpha, beta, tauc, Uc, taum, Pm, tau1, Pi1, Pi2, k1, k2, k3, gmin, Ron, Roff, vm, conn | a1, a2, abc1, abc2, b1, b2, c1, c2, cmd | 4.1 |
 | `part:CLARKE` | inv, conn | a, ab, abc, al, b, be, c | 3.18 |
 | `part:CLK` | f, duty, phase | y | 3.18 |
 | `part:CMP` | hys | n, p, y | 3.18 |

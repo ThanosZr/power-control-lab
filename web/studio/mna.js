@@ -143,7 +143,8 @@
      const s=e.src;if(!e.gen&&!(e.sigIn>=0)&&s&&s.kind==='ac'&&Math.abs(s.f-f0)<=1e-6*f0){br[r]=s.Vpk*Math.cos(s.ph-Math.PI/2);bi[r]=s.Vpk*Math.sin(s.ph-Math.PI/2);}break;}
     case 'X':{const r=e.row,N=e.n;ad(e.s1,r,1,0);ad(r,e.s1,1,0);ad(e.s2,r,-1,0);ad(r,e.s2,-1,0);ad(e.p1,r,-N,0);ad(r,e.p1,-N,0);ad(e.p2,r,N,0);ad(r,e.p2,N,0);break;}
     case 'GY':{const r=e.row,Y=e.psi;ad(e.a,r,1,0);ad(r,e.a,1,0);ad(e.b,r,-1,0);ad(r,e.b,-1,0);ad(r,e.m,-Y,0);ad(e.m,r,-Y,0);break;}
-    case 'TL':case 'TLM':case 'CPL':case 'NL':left.add(e.k);break;
+    case 'NL':if(e.arc&&e.arc.closed){y(e.a,e.b,1/e.arc.Ron,0);break;}left.add(e.k);break;
+    case 'TL':case 'TLM':case 'CPL':left.add(e.k);break;
    }
   }
   gens.forEach((m,q)=>{const Vp=m.V0*m.g.Un*Math.SQRT2/Math.sqrt(3);
@@ -234,6 +235,29 @@
  // (E = e^(−ph), a₀ = ∫₀ʰ e^(−ps) ds, a₁/h = ∫₀ʰ s·e^(−ps) ds / h) of one real pole p over a step h, without cancellation for small ph
  function rcCoef(p,h){const x=p*h;if(x<1e-4){const x2=x*x;return [Math.exp(-x),h*(1-x/2+x2/6-x*x2/24),h*(0.5-x/3+x2/8-x*x2/30)];}
   const E=Math.exp(-x),em=-Math.expm1(-x);return [E,em/p,(em-x*E)/(p*x)];}
+ // 4.9 (ROADMAP §31, THEORY §Arc): one section of a black-box arc, dg/dt = (g^λ·u²/Π − g)/τ with τ = τ₀·g^α and
+ // Π = (P₀ + P₁·g·u²)·g^β (Mayr: λ = 2, Π = P₀· Cassie: λ = 1, Π = U_c²· improved Mayr: P₁· Schwarz: α, β· a section of the
+ // three-Mayr model: λ = 1,4, 1,9, 2). The state is x = ln g: dx/dt = F = (q − 1)/τ, q = g^(λ−1)·u²/Π.
+ function arcF(A,x,u){const g=Math.exp(x),u2=u*u,tau=A.tau0*(A.alpha?Math.exp(A.alpha*x):1),pb=A.beta?Math.exp(A.beta*x):1,D=A.P0+A.P1*g*u2,
+  gl=Math.exp((A.lam-1)*x),q=gl*u2/(D*pb),F=(q-1)/tau;
+  const dqx=q*((A.lam-1)-A.beta-(D>0?A.P1*g*u2/D:0)),dqu=D>0?gl*2*u*A.P0/(pb*D*D):0;
+  return {F,dx:dqx/tau-A.alpha*(q-1)/tau,du:dqu/tau};}
+ // x at the end of the step for the trial voltage v: x₁ = x₀ + h·(θ·F(x₁, v) + (1 − θ)·F(x₀, u₀)), θ = ½ (trapezoidal) or 1,
+ // by Newton on x₁ (from the last iterate of the same step); dx₁/dv for the linearization of i = e^x₁·v
+ function arcStep(A,v){if(!(A.h>0))return {x:A.x,d:0};const h=A.h,th=A.th,lo=A.xmin,hi=A.xmax;
+  let x=A.xg!=null?A.xg:Math.min(hi,Math.max(lo,A.x+h*A.F0)),f=null,dR=1,clamped=false;
+  for(let it=0;it<80;it++){f=arcF(A,x,v);const R=x-A.x-h*(th*f.F+(1-th)*A.F0);dR=1-h*th*f.dx;
+   let st=dR>0.05?-R/dR:-R/Math.max(Math.abs(dR),1);if(st>2)st=2;else if(st<-2)st=-2;
+   const xn=Math.min(hi,Math.max(lo,x+st));clamped=xn===lo||xn===hi;const dx=Math.abs(xn-x);x=xn;if(dx<1e-13*(1+Math.abs(x)))break;}
+  A.xg=x;f=arcF(A,x,v);dR=1-h*th*f.dx;
+  return {x,d:clamped||!(dR>0.05)?0:h*th*f.du/dR};}
+ function arcCur(e,v){const A=e.arc;if(A.closed)return {i:v/A.Ron,g:1/A.Ron};const r=arcStep(A,v),g=Math.exp(r.x),gd=g+v*g*r.d;
+  return {i:g*v,g:Number.isFinite(gd)&&gd>0?gd:g};}
+ // quasi-steady conductance at contact separation for the current i (q = 1 with u = i/g), by bisection on x
+ function arcStart(A,i){const ai=Math.abs(i);if(!(ai>1e-9))return A.xmax;let lo=A.xmin,hi=A.xmax;
+  const r=x=>(A.lam-3)*x+2*Math.log(ai)-Math.log(A.P0+A.P1*ai*ai*Math.exp(-x))-A.beta*x;
+  if(r(hi)>=0)return hi;if(r(lo)<=0)return lo;for(let k=0;k<200;k++){const m=(lo+hi)/2;if(r(m)>0)lo=m;else hi=m;}return (lo+hi)/2;}
+
  function buildNetlist(project){
   // subcircuits (3.17, §9): the solver sees one flat circuit (instance parts as X1/<id>, ports as junctions)
   let subWarn=[];if(SUBC&&SUBC.needs(project)){try{const f=SUBC.flatten(project);project=f.project;subWarn=f.warnings;}catch(e){throw e instanceof SUBC.SubcircuitError?new NetlistError(e.message):e;}}
@@ -348,6 +372,10 @@
     if(p.vt==='de'){de={U0:num(p.U0,0),k:num(p.kde,1),D:num(p.Dde,0)};if(!(de.U0>0))throw new NetlistError(`${c.label||c.id}: η τάση έναρξης U₀ πρέπει να είναι θετική.`);
      if(!(de.k>=0&&de.k<=10))throw new NetlistError(`${c.label||c.id}: ο εκθέτης k πρέπει να είναι από 0 ως 10.`);if(!(de.D>0))throw new NetlistError(`${c.label||c.id}: η σταθερά D πρέπει να είναι θετική.`);}
     info.main=add({k:'D',a,b,Ron:Math.max(num(p.Rarc,.1),1e-7),Roff:Math.max(num(p.Roff,1e10),1),Vf:0,on:false,key:c.id,Dacc:0,gap:{Ub:de?de.U0:Ub,trig:tr,ext,Iext:ext==='iext'?Math.max(0,num(p.Iext,1)):0,de}});}
+   else if(T==='ARCX'){const a=node(c.id,'a'),b=node(c.id,'b');info.pins=[a,b];const Ron=Math.max(num(p.Ron,1e-4),1e-7),gmin=Math.max(num(p.gmin,1e-12),1e-30);
+    const A={lam:num(p.lam,2),tau0:Math.max(num(p.tau0,0.27e-6),1e-15),alpha:num(p.alpha,0),P0:Math.max(num(p.P0,15917),1e-30),P1:Math.min(Math.max(num(p.P1,0),0),0.999999),beta:num(p.beta,0),
+     Ron,gmin,xmin:Math.log(gmin),xmax:Math.log(1/Ron),closed:true,x:Math.log(1/Ron),u:0,h:0,th:1,F0:0,xg:null,tsep:null};
+    const e={k:'NL',a,b,v0:0,g:0,J:0,arc:A,gk:'arc',gate:'sig',gIn:sn(c.id,'g'),gon:true};e.ch={cur:v=>arcCur(e,v)};info.gIn=e.gIn;info.main=add(e);info.arc=e;}
    else if(T==='MOV'){const a=node(c.id,'a'),b=node(c.id,'b'),ch=P.movChar(p);if(ch.err)throw new NetlistError(`${c.label||c.id}: ${ch.err}`);info.pins=[a,b];info.main=add({k:'NL',a,b,ch,pts:ch.pts,v0:0,g:0,J:0});}
    else if(T==='IDC'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'I',a,b,I:num(p.I,1),sched:P.parseSched(p.sched),sigIn:p.ctl==='sig'?sn(c.id,'u'):undefined});}
    else if(T==='ILG'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];const w=P.lightningWave(p);
@@ -505,7 +533,7 @@
     else if(rleak>0)for(const i of q.nodes)els.push({k:'G',a:i,b:-1,R:rleak,cid:'#island',role:'leak'});}}
   const tbase=num(SO.tbase,0)>0?num(SO.tbase,0):0; // time base when no source sets one (3.10), e.g. a Marx generator with charged capacitors
   // step (3.13): fixed T/N, or variable with error control (relative tolerance, largest step T/hmax)
-  const step={mode:SO.step==='var'?'var':'fixed',rtol:Math.min(1e-2,Math.max(1e-7,num(SO.rtol,1e-5))),hmax:Math.max(1,num(SO.hmax,50))};
+  const step={mode:SO.step==='var'?'var':'fixed',rtol:Math.min(1e-2,Math.max(1e-7,num(SO.rtol,1e-5))),hmax:Math.max(1,num(SO.hmax,50)),trStart:SO.trStart==='be'?'be':'state'};
   const diag={unconn,island,rleak,skipped:[...skip].map(([id,why])=>({id,why})),open,freeEnds,freeNets,islands};
   const rowBase=nNodes;for(const e of els)if(e.row!==undefined)e.row+=rowBase;
   const sig=compileSignals(blocks,sigNets,ctrls,els,compInfo,warnings);
@@ -721,7 +749,7 @@
    this.sms=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm);for(const m of this.sms)this.smOutputs(m);
    this.srms=[...net.compInfo.values()].filter(c=>c.srm).map(c=>c.srm);for(const m of this.srms)this.srmOutputs(m);
    this.gens=[...net.compInfo.values()].filter(c=>c.gen).map(c=>c.gen);this.hasTV=this.sms.length+this.srms.length+this.gens.length>0;
-   this.hasCPL=net.els.some(e=>e.k==='CPL');this.hasNL=net.els.some(e=>e.k==='NL');
+   this.hasCPL=net.els.some(e=>e.k==='CPL');this.hasNL=net.els.some(e=>e.k==='NL');this.arcEls=net.els.filter(e=>e.arc);
    if(old&&!fresh)for(const e of net.els)if(e.k==='NL'){const o=old.els.find(x=>x.k==='NL'&&x.cid===e.cid);if(o)e.v0=o.v0;}this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.hUser=this.opts.h||this.T/this.opts.hDiv;this.h=Math.min(this.hUser,this.tlMaxStep());
    if(fresh){this.hv=null;this.dg=new Map();this.dgPre=[];this.nRej=0;this.nRejRow=0;this.nTiny=0;}this.stIndex();this.varSetup();this.lteH=null;this.rx=null;
@@ -840,6 +868,7 @@
     if(c.type==='VAC3')k.push('Vb:'+c.id,'Vc:'+c.id,'Ib:'+c.id,'Ic:'+c.id,'Vab:'+c.id);
     if(c.loss)k.push('PSW:'+c.id);
     if(c.type==='SW'||c.type==='SCR')k.push('GS:'+c.id);
+    if(c.type==='ARCX')k.push('Garc:'+c.id);
     if(c.blk)k.push('Y:'+c.id,...c.blk.outList.slice(1).map(q=>'Y:'+c.id+':'+q)); // signal outputs of an electrical part (machine)
    }
    return k;
@@ -883,6 +912,7 @@
     if(c.srm)for(let q=0;q<c.srm.N;q++)out[j++]=c.main.psi[q];
     if(c.loss)out[j++]=c.loss.P;
     if(c.type==='SW'||c.type==='SCR'){const e=c.main;out[j++]=(e.k==='S'?e.on:e.gon)?1:0;} // the gate pulse this switch receives (after dead time)
+    if(c.type==='ARCX'){const A=c.arc.arc;out[j++]=A.closed?1/A.Ron:Math.exp(A.x);}
     if(c.blk){out[j++]=this.ybT[c.blk.i];const yo=this.yoT[c.blk.i];for(let q=1;q<yo.length;q++)out[j++]=yo[q];}
    }
    return out;
@@ -1079,10 +1109,10 @@
   zcFrac(){this.evalBlocks('trial',false,true);let th=null;
    for(const b of this.net.sig.zc){const s=b.st.s,f0=b.st.f0,f1=b.f1;if(!(s?f1<0:f1>0))continue;const d=f0-f1;const q=Math.min(1,Math.max(0,d!==0?f0/d:0));if(th===null||q<th)th=q;}
    return th;}
-  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='TLM')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut,e.modes.map(m=>m.fd?[m.z1.slice(),m.z2.slice(),m.y1.slice(),m.y2.slice(),m.i1,m.i2]:null)]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);}
+  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0,e.arc?{...e.arc}:null]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='TLM')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut,e.modes.map(m=>m.fd?[m.z1.slice(),m.z2.slice(),m.y1.slice(),m.y2.slice(),m.i1,m.i2]:null)]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);}
    return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el,ms:[...(this.ims||[]),...(this.sms||[]),...(this.srms||[])].map(m=>[m,{...m.st}]),gs:(this.gens||[]).map(m=>[m,genCopy(m.st),m.Efd0,m.Tm0])};}
   restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
-   for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];}else if(e.k==='TL'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);}else if(e.k==='TLM'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);
+   for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];if(r[2])Object.assign(e.arc,r[2]);}else if(e.k==='TL'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);}else if(e.k==='TLM'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);
     r[5].forEach((q,k)=>{if(!q)return;const m=e.modes[k];m.z1.set(q[0]);m.z2.set(q[1]);m.y1.set(q[2]);m.y2.set(q[3]);m.i1=q[4];m.i2=q[5];});}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];e.trigDone=r[3];e.Dacc=r[4];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
    for(const [m,st] of S.ms||[]){m.st={...st};if(m.ph)this.imSources(m);}
    for(const [m,st,e,t] of S.gs||[]){m.st=genCopy(st);m.Efd0=e;m.Tm0=t;}}
@@ -1207,11 +1237,12 @@
   solve(h,mode){
    if(!this.hasCPL&&!this.hasNL)return this.solveOnce(h,mode);
    for(const e of this.net.els)if(e.k==='CPL')e.v0=this.V(e.a)-this.V(e.b);
+   if(this.arcEls.length)for(const e of this.arcEls){const A=e.arc;A.h=h;A.th=mode==='TR'?0.5:1;A.xg=null;A.F0=A.closed?0:arcF(A,A.x,A.u).F;}
    const n=this.hasNL?80:12;let sol,bad=null;for(let it=0;it<n;it++){this.cplLinearize();this.nlLinearize();sol=this.solveOnce(h,mode);
     let conv=true;bad=null;const V=i=>i<0?0:sol[i];
     for(const e of this.net.els){if(e.k==='CPL'){const v=V(e.a)-V(e.b);if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v))){conv=false;bad=e;}e.v0=v;}
      // arrester: Newton with the voltage limited on the steep part (the voltage that gives the linearized current on the true curve)
-     else if(e.k==='NL'){let v=V(e.a)-V(e.b);if(Math.abs(v)>Math.abs(e.v0)){const it2=e.g*v+e.J,vi=e.ch.inv(it2);if(Math.sign(it2)===Math.sign(v)&&Math.abs(vi)<Math.abs(v))v=vi;}
+     else if(e.k==='NL'){let v=V(e.a)-V(e.b);if(!e.arc&&Math.abs(v)>Math.abs(e.v0)){const it2=e.g*v+e.J,vi=e.ch.inv(it2);if(Math.sign(it2)===Math.sign(v)&&Math.abs(vi)<Math.abs(v))v=vi;}
       if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v))){conv=false;bad=e;}e.v0=v;}}
     if(conv){bad=null;break;}}
    if(bad&&this.note){const id=bad.cid,lb=this.net.compInfo.get(id)?.label||id; // 3.13: shown in the diagnostics console
@@ -1250,11 +1281,12 @@
     else if(e.k==='TL')this.tlRecord(e,this.t+h);
     else if(e.k==='TLM')this.tlmRecord(e,this.t+h,h);
    }
+   if(this.arcEls.length)for(const e of this.arcEls){const A=e.arc,v=this.V(e.a)-this.V(e.b);if(!A.closed){A.h=h;A.x=arcStep(A,v).x;}A.u=v;A.h=0;A.xg=null;e.v0=v;}
    if(this.ims)for(const m of this.ims)this.imStep(m,h);
    if(this.sms)for(const m of this.sms)this.smStep(m,h);
    if(this.srms)for(const m of this.srms)this.srmStep(m,h);
    if(this.gens)for(const m of this.gens)this.genStep(m,h);
-   this.t+=h;this.steps++;this.hLast=h;
+   this.t+=h;this.steps++;this.hLast=h;this.cMode=mode;
   }
   // consistent initial solution at t=0: inductors act as current sources (i0),
   // capacitors as voltage sources (v0): backward Euler with a vanishing step
@@ -1332,7 +1364,7 @@
   }
   stepCore(h){
    const t0=this.t,mid=t0+h/2;let edged=false;
-   const sig=this.gateSig(mid),gateChange=sig!==this.prevSig;
+   const sig=this.gateSig(mid),gateChange=sig!==this.prevSig;if(gateChange&&this.arcEls.length)this.arcGate(t0);
    // a programmed jump at t0 (3.15) is a discontinuity like a gate change: the post-jump point at the same instant,
    // then backward Euler (the trapezoidal rule would ring around the jump in a stiff circuit)
    const jump=this.jumpNow,disc=gateChange||jump;this.jumpNow=false;if(disc)this.beLeft=2;
@@ -1342,6 +1374,8 @@
    if(disc&&this.steps>0){this.edgePoint(t0);edged=true;}
    const smooth=!disc&&this.beLeft<=0;let mode=this.beLeft>0?'BE':this.method;this.prevSig=sig;
    if(mode==='BDF2'){const w=this.hLast?h/this.hLast:0;if(!(w>.2&&w<5))mode='BE';else this.bdf={w,a0:(1+2*w)/(1+w),a1:-(1+w),a2:w*w/(1+w)};}
+   // 4.9: the trapezoidal rule after backward-Euler steps starts from consistent derivatives (THEORY §TR restart)
+   if(mode==='TR'&&this.cMode==='BE'&&this.net.step.trStart!=='be')this.trRestart(t0);
    this.values(t0+h);
    let sol=this.solve(h,mode),bad=this.check(sol);
    if(!bad.length){
@@ -1388,6 +1422,19 @@
    for(let it=0;it<30;it++){sol=this.solve(hs,'BE');const bad=this.check(sol);if(!bad.length)break;for(const b of bad){b.e.on=!b.e.on;if(b.e.gap){if(b.e.on)b.e.tOn=t;else b.e.tOff=t;}}}
    this.x=sol;}
   edgePoint(t){this.edgeSolve(t);this.evalBlocks('commit');this.recordNow();}
+  // 4.9: a pole with an arc closes (R_on) or its contacts separate: the arc starts at the quasi-steady conductance of the
+  // present current (q = 1), so the current goes on and the arc voltage is the one of a burning arc
+  arcGate(t){for(const e of this.arcEls){const A=e.arc;if(e.gon&&!A.closed){A.closed=true;A.x=A.xmax;}
+   else if(!e.gon&&A.closed){const v=this.V(e.a)-this.V(e.b),i=v/A.Ron;A.closed=false;A.x=arcStart(A,i);A.u=i/Math.exp(A.x);A.tsep=t;e.v0=A.u;}}}
+  // 4.9 (4.8.2 γ): restart of the trapezoidal rule after backward-Euler steps. The trapezoidal history uses the
+  // derivative of every state at t (the voltage of an inductor or flux port, the current of a capacitor); after BE steps
+  // the stored values are backward differences, off by O(h), and the error excites the undamped (−1)ⁿ mode of the rule
+  // (a Nyquist ripple that never decays in a lossless network, e.g. a generator on a line). The derivatives come
+  // instead from the network at t with every state held (a vanishing BE step, as at a switching instant); the states
+  // themselves do not change. Switch states stay as they are.
+  trRestart(t){const hs=this.h*1e-3;this.values(t+hs);const sol=this.solve(hs,'BE'),V=i=>i<0?0:sol[i];
+   for(const e of this.net.els)if(e.k==='C')e.i=(V(e.a)-V(e.b)-e.v)*e.C/hs;
+   this.x=sol;this.cMode='TR';}
   nextEvent(tMax){
    let t=tMax;const eps=this.h*1e-6;
    for(const k of this.net.ctrls){if(k.mode==='spwm'){continue;}for(const e of this.ctrlEdges(k))if(e>this.t+eps&&e<t)t=e;
@@ -1471,6 +1518,8 @@
   // 4.3: a generator that starts from a load flow needs the steady start of the browser (acInit): the states of that netlist
   const lf=(project?.solve?.init==='ac')||JSON.stringify(project?.components||[]).includes('"GEN3"');
   const net=lf?new Sim(project).net:buildNetlist(project),idx=new Map(net.els.map((e,i)=>[e,i]));
+  // 4.9: the arc of a breaker pole is only in this solver for now (its check: an independent stiff integration, tests/test_arc.py)
+  if(net.els.some(e=>e.arc))throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη το τόξο του διακόπτη (ARC, CB3 με τόξο): τρέχει μόνο ο λύτης της εφαρμογής.');
   const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm','gap','a1','b1','a2','b2','Z','tau','Rl','pts'];
   // synchronous machines (3.5): parameters and initial states; the server integrates ψ_α, ψ_β, ω, θ
   const smList=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm),smx=new Map(smList.map((m,i)=>[m,i]));

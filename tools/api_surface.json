@@ -1748,6 +1748,100 @@
     ],
     "since": "3.18"
    },
+   "pcl.trv.TRVError": {
+    "params": [],
+    "since": "4.8.1"
+   },
+   "pcl.trv.compare": {
+    "params": [
+     "t",
+     "u",
+     "spec",
+     "t0"
+    ],
+    "since": "4.8.1"
+   },
+   "pcl.trv.default_kpp": {
+    "params": [
+     "Ur",
+     "earthed",
+     "duty"
+    ],
+    "since": "4.8.1"
+   },
+   "pcl.trv.delay_line": {
+    "params": [
+     "spec"
+    ],
+    "since": "4.8.1"
+   },
+   "pcl.trv.envelope_of": {
+    "params": [
+     "t",
+     "u",
+     "t0"
+    ],
+    "since": "4.8.1"
+   },
+   "pcl.trv.itrv": {
+    "params": [
+     "Ur",
+     "Isc",
+     "f"
+    ],
+    "since": "4.8.1"
+   },
+   "pcl.trv.line_data": {
+    "params": [
+     "Ur",
+     "f"
+    ],
+    "since": "4.8.1"
+   },
+   "pcl.trv.line_value": {
+    "params": [
+     "pts",
+     "t"
+    ],
+    "since": "4.8.1"
+   },
+   "pcl.trv.pole_factors": {
+    "params": [
+     "kpp"
+    ],
+    "since": "4.8.1"
+   },
+   "pcl.trv.rated": {
+    "params": [
+     "Ur",
+     "duty",
+     "kpp",
+     "f",
+     "earthed"
+    ],
+    "since": "4.8.1"
+   },
+   "pcl.trv.reference_line": {
+    "params": [
+     "spec",
+     "t_end"
+    ],
+    "since": "4.8.1"
+   },
+   "pcl.trv.slf": {
+    "params": [
+     "Ur",
+     "Isc",
+     "ratio",
+     "f",
+     "itrv_req",
+     "Z",
+     "k",
+     "tdL",
+     "td"
+    ],
+    "since": "4.8.1"
+   },
    "pcl.tutorial": {
     "params": [
      "tid",
@@ -2731,6 +2825,55 @@
     ],
     "since": "3.18"
    },
+   "part:ARC": {
+    "params": [
+     "ctl",
+     "cmd",
+     "arc",
+     "tau",
+     "P0",
+     "P1",
+     "alpha",
+     "beta",
+     "tauc",
+     "Uc",
+     "taum",
+     "Pm",
+     "tau1",
+     "Pi1",
+     "Pi2",
+     "k1",
+     "k2",
+     "k3",
+     "gmin",
+     "Ron",
+     "vm"
+    ],
+    "pins": [
+     "a",
+     "b",
+     "cmd"
+    ],
+    "since": "4.8.1"
+   },
+   "part:ARCX": {
+    "params": [
+     "lam",
+     "tau0",
+     "alpha",
+     "P0",
+     "P1",
+     "beta",
+     "Ron",
+     "gmin"
+    ],
+    "pins": [
+     "a",
+     "b",
+     "g"
+    ],
+    "since": "4.8.1"
+   },
    "part:AVR": {
     "params": [
      "type",
@@ -2791,6 +2934,24 @@
     "params": [
      "ctl",
      "cmd",
+     "model",
+     "arc",
+     "tau",
+     "P0",
+     "P1",
+     "alpha",
+     "beta",
+     "tauc",
+     "Uc",
+     "taum",
+     "Pm",
+     "tau1",
+     "Pi1",
+     "Pi2",
+     "k1",
+     "k2",
+     "k3",
+     "gmin",
      "Ron",
      "Roff",
      "vm",

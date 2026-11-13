@@ -9,7 +9,7 @@
 // (gridZ) and the fault currents of a fault at its terminals in the phase domain (faultCurrents), for the analysis.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
- const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV'];
+ const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC'];
  const isLib=t=>TYPES.includes(t);
  const RMIN=1e-4;               // a bolted fault or a closed pole: 0,1 mΩ inside the circuit
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -66,12 +66,38 @@
   sw('g',F,B.gnd(),Rg,g);
   return B.def();}
 
+ // ---------------------------------------------------------------- arc of a pole (4.9, THEORY §Arc)
+ // the sections of a black-box arc model between two terminals, each an ARCX (dg/dt = (g^λ·u²/Π − g)/τ, τ = τ₀·g^α,
+ // Π = (P₀ + P₁·g·u²)·g^β), in series through inner nodes; gate: the command (≥ 0,5 closed). Names A1, A2, A3 (channels
+ // Garc:<id>/A1 …) stay the same for every model.
+ function arcSections(p){const m=p.arc||'imayr',v=(k,d)=>num(p[k],d),Ron=Math.max(v('Ron',1e-4),1e-7),gmin=Math.max(v('gmin',1e-12),1e-30);
+  const S=o=>({lam:2,tau0:0.27e-6,alpha:0,P0:15917,P1:0,beta:0,Ron,gmin,...o});
+  if(m==='mayr')return [S({tau0:v('tau',0.27e-6),P0:v('P0',15917)})];
+  if(m==='cassie')return [S({lam:1,tau0:v('tauc',1.2e-6),P0:v('Uc',1500)**2})];
+  if(m==='schwarz')return [S({tau0:v('tau',0.27e-6),P0:v('P0',15917),alpha:v('alpha',0.25),beta:v('beta',0.6)})];
+  if(m==='habedank')return [S({lam:1,tau0:v('tauc',1.2e-6),P0:v('Uc',1500)**2}),S({tau0:v('taum',0.3e-6),P0:v('Pm',30e3)})];
+  if(m==='kema'){const t1=v('tau1',8.55e-6),k1=v('k1',5.7),k2=v('k2',10),k3=v('k3',100),P2=v('Pi2',10);
+   return [S({lam:1.4,tau0:t1,P0:v('Pi1',4.4e6)}),S({lam:1.9,tau0:t1/k1,P0:P2}),S({lam:2,tau0:t1/k1/k2,P0:k3*P2})];}
+  return [S({tau0:v('tau',0.27e-6),P0:v('P0',15917),P1:v('P1',0.9943)})];}
+ function arcChain(B,p,a,b,gate,tag=''){const L=arcSections(p);let prev=a;
+  L.forEach((q,k)=>{const id='A'+tag+(k+1),x=B.comp(id,'ARCX',q),nx=k===L.length-1?b:B.node('arc'+tag+(k+1));B.wire(prev,[x,'a']);B.wire([x,'b'],nx);B.wire(gate,[x,'g']);prev=nx;});}
+
+ // single-phase circuit breaker with an arc (ARC): ammeter I, the arc sections, the voltage across (V)
+ function arcBreakerDef(c){const p=prm(c),B=builder('Διακόπτης με τόξο'),A=B.terms(p,['a'],'a')[0],Z=B.terms(p,['b'],'b')[0];
+  const gate=p.ctl==='sig'?[B.comp('$cmd','SIN',{name:'cmd'}),'y']:[B.comp('cmd','CONST',{v:String(p.cmd??'0:1, 0.005:0')}),'y'];
+  const m=B.comp('I','AM',{}),mid=B.node('m');B.wire(A,[m,'a']);B.wire([m,'b'],mid);arcChain(B,p,mid,Z,gate);
+  if(p.vm!==false&&p.vm!=='false'){const vv=B.comp('V','VM',{});B.wire(A,[vv,'p']);B.wire(Z,[vv,'n']);}
+  return B.def();}
+
  // ---------------------------------------------------------------- circuit breaker: two antiparallel thyristors per pole
  function breakerDef(c){const p=prm(c),B=builder('Διακόπτης ισχύος'),A=B.terms(p,['a1','b1','c1'],'abc1'),Z=B.terms(p,['a2','b2','c2'],'abc2');
   const gate=p.ctl==='sig'?[B.comp('$cmd','SIN',{name:'cmd'}),'y']:[B.comp('cmd','CONST',{v:String(p.cmd??'0:1')}),'y'];
   const Ron=Math.max(num(p.Ron,1e-4),1e-7),Roff=Math.max(num(p.Roff,1e6),1);
-  PH.forEach((x,k)=>{const m=B.comp('I'+x,'AM',{}),mid=B.node('m'+x),q={fire:'sig',Ron,Roff,Vf:0},f=B.comp('Q'+x+'1','SCR',q),r=B.comp('Q'+x+'2','SCR',q);
-   B.wire(A[k],[m,'a']);B.wire([m,'b'],mid);B.wire(mid,[f,'a']);B.wire([f,'k'],Z[k]);B.wire(Z[k],[r,'a']);B.wire([r,'k'],mid);B.wire(gate,[f,'g']);B.wire(gate,[r,'g']);
+  PH.forEach((x,k)=>{const m=B.comp('I'+x,'AM',{}),mid=B.node('m'+x);B.wire(A[k],[m,'a']);B.wire([m,'b'],mid);
+   // 4.9: a pole with an arc (sections Aa1 … per phase) instead of the thyristor pair
+   if(p.model==='arc')arcChain(B,p,mid,Z[k],gate,x);
+   else{const q={fire:'sig',Ron,Roff,Vf:0},f=B.comp('Q'+x+'1','SCR',q),r=B.comp('Q'+x+'2','SCR',q);
+   B.wire(mid,[f,'a']);B.wire([f,'k'],Z[k]);B.wire(Z[k],[r,'a']);B.wire([r,'k'],mid);B.wire(gate,[f,'g']);B.wire(gate,[r,'g']);}
    // 4.2: the voltage across the pole (side 1 − side 2), channel CB1/Va …, for the transient recovery voltage
    if(p.vm===true||p.vm==='true'){const v=B.comp('V'+x,'VM',{});B.wire(A[k],[v,'p']);B.wire(Z[k],[v,'n']);}});
   return B.def();}
@@ -378,7 +404,7 @@
   const out=(n,src)=>{const o=B.comp('$'+n,'SOUT',{name:n});B.wire(src,[o,'u']);};
   out('tm',['TM','y']);out('pm',['PM','y']);out('g',['G','y']);
   return B.def();}
- const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef};
+ const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef};
  function defOf(c){return DEFS[c.type](c);}
 
  // ---------------------------------------------------------------- project → project with SUB instances
