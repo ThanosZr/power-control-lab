@@ -1165,6 +1165,15 @@
     ],
     "since": "3.18"
    },
+   "pcl.link.App.advance": {
+    "params": [
+     "dt",
+     "set",
+     "keys",
+     "draw"
+    ],
+    "since": "4.9.1"
+   },
    "pcl.link.App.call": {
     "params": [
      "method",
@@ -1221,6 +1230,10 @@
      "**inputs"
     ],
     "since": "3.18"
+   },
+   "pcl.link.App.reset": {
+    "params": [],
+    "since": "4.9.1"
    },
    "pcl.link.App.run": {
     "params": [
@@ -1935,6 +1948,24 @@
     "params": [],
     "since": "3.18"
    },
+   "pcl.workbench.LivePlant": {
+    "params": [
+     "params"
+    ],
+    "since": "4.9.1"
+   },
+   "pcl.workbench.LivePlant.clone": {
+    "params": [],
+    "since": "4.9.1"
+   },
+   "pcl.workbench.LivePlant.close": {
+    "params": [],
+    "since": "4.9.1"
+   },
+   "pcl.workbench.LivePlant.reset_state": {
+    "params": [],
+    "since": "4.9.1"
+   },
    "pcl.workbench.launch": {
     "params": [
      "workbench",
@@ -1952,9 +1983,29 @@
      "dt",
      "steps",
      "n",
-     "app"
+     "app",
+     "live"
     ],
     "since": "3.18"
+   },
+   "pcl.workbench.live_plant_class": {
+    "params": [
+     "app",
+     "input",
+     "measure",
+     "state",
+     "u_range",
+     "y_range",
+     "state_scale",
+     "name",
+     "pid",
+     "settle",
+     "solver",
+     "params",
+     "input_name",
+     "output_name"
+    ],
+    "since": "4.9.1"
    },
    "pcl.workbench.plant_class": {
     "params": [
@@ -1989,6 +2040,17 @@
      "workbench"
     ],
     "since": "3.18"
+   },
+   "pcl.workbench.run_live": {
+    "params": [
+     "plant",
+     "scheme",
+     "targets",
+     "dt",
+     "learn",
+     "offline"
+    ],
+    "since": "4.9.1"
    },
    "pcl.workbench.run_scheme": {
     "params": [
@@ -2158,6 +2220,7 @@
      "--path",
      "<project>",
      "--link",
+     "--live",
      "--set",
      "--input",
      "--measure",
@@ -2320,6 +2383,11 @@
    }
   },
   "link": {
+   "M.advance": {
+    "params": [],
+    "perm": "run",
+    "since": "4.9.1"
+   },
    "M.batch": {
     "params": [],
     "perm": "run",

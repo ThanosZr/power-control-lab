@@ -17,6 +17,14 @@ The circuit comes from a file, a tutorial, or the app open in the browser throug
     # then: python examples/workbench_plant.py --workbench /path/to/control_workbench --link
 
 The steps run where the solver is (here), the results can go back to the app's panel with app.show(...).
+
+4.9.1: or live, on the circuit of the screen (LivePlant): each step sets u in the app, runs the app's own simulation dt
+further and reads y there, so the workbench's «Run · live target» and «keep learning» drive what you watch (the offline
+steps of a scheme run on an off-screen copy):
+
+    Live = wb.live_plant_class(app, input='PWM1:d', measure='M1:w', state=['AM1:y'], u_range=(0, 1), y_range=(0, 220))
+    wb.register(Live, '/path/to/control_workbench')               # or: python -m pcl workbench --path … --link --live …
+    log = wb.run_live(Live(), scheme, [(200, 80.0), (200, 150.0)], 0.01, learn=True)   # the same without its GUI
 """
 import sys
 from pathlib import Path
@@ -320,6 +328,110 @@ def serve(inp=None, out=None):
         pl.close()
 
 
+# ---------------------------------------------------------------------- 4.9.1 (4.8.2 a): the circuit on the screen, live
+class LivePlant(CircuitPlant):
+    """A workbench Plant that is the circuit open in the app (pcl.link): each step(u, dt) sets u on the screen, runs the
+    app's own simulation dt further (paused in between, the scope drawn) and reads y there, so the workbench's controller
+    drives what you watch, with «Run · live target» and «keep learning» of its GUI as for any plant. clone() gives an
+    off-screen copy of the same circuit (CircuitPlant in Node), so the offline steps of a scheme (excitation, emulator,
+    controller) do not touch the screen; the online step runs on it. Made by live_plant_class."""
+
+    APP = None
+
+    def _open(self):
+        app = self.APP
+        if app is None:
+            raise PclError('Το LivePlant θέλει σύνδεση με την εφαρμογή: pcl.workbench.live_plant_class(pcl.link.connect(), …).')
+        if self.uid == 'WBU':                          # a signal input of the circuit: the screen gets the block WBU that feeds it
+            app.load(self.data)
+        keys = app.channels()['keys']
+        if not keys:
+            raise PclError('Η εφαρμογή δεν έχει προσομοίωση: άνοιξε το κύκλωμα (και ⟲ αν έχει σφάλμα).')
+        self.ch_y = _chan(keys, self.MEASURE)
+        self.ch_s = [_chan(keys, s) for s in self.STATE]
+        self.sess = app
+        self.t = float(app.info().get('t') or 0.0)
+        self.vals = {k: 0.0 for k in [self.ch_y] + self.ch_s}
+        self.vals0 = dict(self.vals)
+        self.snap = True
+        if self.SETTLE > 0:
+            self._advance(self.SETTLE, None)
+            self.vals0 = dict(self.vals)
+
+    def _advance(self, dt, u):
+        s = dict(self.pending)
+        if u is not None:
+            s[self.uid + '.v'] = float(u)
+        self.pending = {}
+        out = self.APP.advance(dt, set=s, keys=[self.ch_y] + self.ch_s)
+        self.t = float(out['t'])
+        for k, v in (out.get('values') or {}).items():
+            if v is not None:
+                self.vals[k] = float(v)
+
+    def reset_state(self):
+        """The simulation of the screen from the start (as ⟲), then the settling time if there is one."""
+        if self.sess is not None:
+            self.APP.reset()
+            self.t = 0.0
+            self.vals = dict(self.vals0)
+            if self.SETTLE > 0:
+                self._advance(self.SETTLE, None)
+        self.last_u = 0.0
+        self.pending = {}
+
+    def clone(self):
+        return self.OFFLINE(dict(self.p))
+
+    def close(self):
+        self.sess = None
+
+
+def live_plant_class(app, input, measure, state=(), u_range=(-1.0, 1.0), y_range=(-1.0, 1.0), state_scale=None,  # noqa: A002
+                     name=None, pid='pcl_live', settle=0.0, solver=None, params=None, input_name='u', output_name='y'):
+    """4.9.1: a LivePlant class on the circuit open in the app (app = pcl.link.connect()). The arguments as plant_class;
+    the off-screen copy (clone) is plant_class of the same circuit with solver (e.g. {'hdiv': 50})."""
+    proj = app.project()
+    off = plant_class(proj, input, measure, state, u_range, y_range, state_scale, name, pid + '_offline', settle, solver, params,
+                      input_name, output_name)
+    base = plant_class(proj, input, measure, state, u_range, y_range, state_scale, name or f'Η οθόνη ({proj.name})', pid, settle,
+                       solver, params, input_name, output_name)
+    attrs = {k: getattr(base, k) for k in ('id', 'name', 'PROJECT', 'INPUT', 'MEASURE', 'STATE', 'U_RANGE', 'Y_RANGE', 'STATE_SCALE',
+                                          'SETTLE', 'SOLVER', 'PARAMS', 'input_name', 'output_name')}
+    return type('PclLivePlant', (LivePlant,), {**attrs, 'APP': app, 'OFFLINE': off})
+
+
+def run_live(plant, scheme, targets, dt, learn=True, offline=True):
+    """4.9.1: «Run · live target» and «keep learning» of the workbench without its GUI. scheme: a scheme object of the
+    workbench made on the plant (e.g. IndirectAdaptiveInverse(plant, reference, dt, {})); offline: run its offline steps
+    first (on an off-screen copy when the plant is a LivePlant: the scheme's own plant is swapped while they run);
+    targets: [(n samples, set-point), …] held one after the other, as the live slider; learn: the emulator and the
+    controller keep adapting online (adapt_emu, adapt_ctrl). Returns the log of the online loop (lists per signal)."""
+    steps = scheme.steps()
+    if offline and len(steps) > 1:
+        live = scheme.plant
+        scheme.plant = live.clone() if isinstance(live, LivePlant) else live
+        for st in steps[:-1]:
+            scheme.run_step(st.id)
+        scheme.plant = live
+    last = steps[-1].id
+    scheme._done_steps.discard(last)
+    scheme.active_step_id = last
+    scheme.online_k = 0
+    scheme.k = 0
+    scheme.run_continuous = False
+    if hasattr(scheme, 'adapt_emu'):
+        scheme.adapt_emu = bool(learn)
+        scheme.adapt_ctrl = bool(learn)
+    for n, sp in targets:
+        scheme.set_setpoint(float(sp))
+        for _ in range(int(n)):
+            if scheme.micro_step() is None:
+                break
+    scheme.set_setpoint(None)
+    return scheme.log
+
+
 def register(cls, workbench=None):
     """Registers the plant class in the workbench's registry (core.registry.register_plant). workbench: its folder,
     put on sys.path if given. Returns the class."""
@@ -344,11 +456,13 @@ def run_scheme(plant, scheme_cls, reference, dt, params=None):
 
 
 def launch(workbench, project, input, measure, state=(), u_range=(-1, 1), y_range=(-1, 1), state_scale=None, name=None,  # noqa: A002
-           solver=None, settle=0.0, headless=None, dt=0.01, steps=(0.3, 0.7, 0.5), n=60, app=None):
+           solver=None, settle=0.0, headless=None, dt=0.01, steps=(0.3, 0.7, 0.5), n=60, app=None, live=False):
     """The workbench with the circuit as a plant (`python -m pcl workbench …`). Without headless: its GUI, where the
     plant is in the list. headless=['iaic', 'pid']: those schemes on a staircase reference (fractions `steps` of the
     output range, n samples each, sample dt), a row of metrics per scheme, and the table to the app if `app`."""
-    Plant = plant_class(project, input, measure, state, u_range, y_range, state_scale, name, settle=settle, solver=solver)
+    # 4.9.1: live=True (with app): the plant is the circuit on the screen (LivePlant), the offline steps on a copy
+    Plant = (live_plant_class(app, input, measure, state, u_range, y_range, state_scale, name, settle=settle, solver=solver) if live and app is not None
+             else plant_class(project, input, measure, state, u_range, y_range, state_scale, name, settle=settle, solver=solver))
     register(Plant, workbench)
     import bootstrap  # noqa: F401 - the workbench's own plants and schemes
     if not headless:

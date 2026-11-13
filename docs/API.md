@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.9.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (467 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.9.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (476 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-251 σημεία.
+259 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -185,6 +185,7 @@
 | `pcl.lineconst.z_internal` | `f`, `r`, `q`, `Rdc`, `mur`, `skin`, `s` | 4.4 |
 | `pcl.lineconst.zy` | `data`, `f`, `earth`, `skin`, `s` | 4.4 |
 | `pcl.link.App` | `url`, `token`, `timeout`, `client` | 3.18 |
+| `pcl.link.App.advance` | `dt`, `set`, `keys`, `draw` | 4.9.1 |
 | `pcl.link.App.call` | `method`, `timeout`, `**args` | 3.18 |
 | `pcl.link.App.channels` | — | 3.18 |
 | `pcl.link.App.get` | `key` | 3.18 |
@@ -195,6 +196,7 @@
 | `pcl.link.App.params` | `cid` | 3.18 |
 | `pcl.link.App.project` | — | 3.18 |
 | `pcl.link.App.python` | `code`, `**inputs` | 3.18 |
+| `pcl.link.App.reset` | — | 4.9.1 |
 | `pcl.link.App.run` | `t_end`, `channels`, `measure`, `**kw` | 3.18 |
 | `pcl.link.App.scope` | `keys` | 3.18 |
 | `pcl.link.App.selection` | — | 3.18 |
@@ -288,10 +290,16 @@
 | `pcl.workbench.CircuitPlant.u_range` | — | 3.18 · πειρ. |
 | `pcl.workbench.CircuitPlant.viz_state` | — | 3.18 · πειρ. |
 | `pcl.workbench.CircuitPlant.y_range` | — | 3.18 · πειρ. |
-| `pcl.workbench.launch` | `workbench`, `project`, `input`, `measure`, `state`, `u_range`, `y_range`, `state_scale`, `name`, `solver`, `settle`, `headless`, `dt`, `steps`, `n`, `app` | 3.18 · πειρ. |
+| `pcl.workbench.LivePlant` | `params` | 4.9.1 · πειρ. |
+| `pcl.workbench.LivePlant.clone` | — | 4.9.1 · πειρ. |
+| `pcl.workbench.LivePlant.close` | — | 4.9.1 · πειρ. |
+| `pcl.workbench.LivePlant.reset_state` | — | 4.9.1 · πειρ. |
+| `pcl.workbench.launch` | `workbench`, `project`, `input`, `measure`, `state`, `u_range`, `y_range`, `state_scale`, `name`, `solver`, `settle`, `headless`, `dt`, `steps`, `n`, `app`, `live` | 3.18 · πειρ. |
+| `pcl.workbench.live_plant_class` | `app`, `input`, `measure`, `state`, `u_range`, `y_range`, `state_scale`, `name`, `pid`, `settle`, `solver`, `params`, `input_name`, `output_name` | 4.9.1 · πειρ. |
 | `pcl.workbench.plant_class` | `project`, `input`, `measure`, `state`, `u_range`, `y_range`, `state_scale`, `name`, `pid`, `settle`, `solver`, `params`, `input_name`, `output_name` | 3.18 · πειρ. |
 | `pcl.workbench.prepare` | `project`, `input`, `measure`, `state` | 3.18 · πειρ. |
 | `pcl.workbench.register` | `workbench` | 3.18 · πειρ. |
+| `pcl.workbench.run_live` | `plant`, `scheme`, `targets`, `dt`, `learn`, `offline` | 4.9.1 · πειρ. |
 | `pcl.workbench.run_scheme` | `plant`, `scheme_cls`, `reference`, `dt`, `params` | 3.18 · πειρ. |
 | `pcl.workbench.serve` | `inp`, `out` | 4.8.1 · πειρ. |
 
@@ -315,7 +323,7 @@
 | `python -m pcl sweep` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--resume`, `--grid`, `--zip`, `--workers` | 3.18 |
 | `python -m pcl tutorial` | `<id>`, `--opt`, `--out` | 3.18 |
 | `python -m pcl tutorials` | — | 3.18 |
-| `python -m pcl workbench` | `--path`, `<project>`, `--link`, `--set`, `--input`, `--measure`, `--state`, `--state-scale`, `--u`, `--y`, `--hdiv`, `--settle`, `--headless`, `--dt` | 3.18 |
+| `python -m pcl workbench` | `--path`, `<project>`, `--link`, `--live`, `--set`, `--input`, `--measure`, `--state`, `--state-scale`, `--u`, `--y`, `--hdiv`, `--settle`, `--headless`, `--dt` | 3.18 |
 
 ## Server: `/api/<ενέργεια>` και διαδρομές
 
@@ -362,10 +370,11 @@
 
 ## API πρόσθετων και σύνδεσης (`addons.js` M, `pcl.link.App`, `PclApp`)
 
-20 σημεία.
+21 σημεία.
 
 | Μέθοδος | Άδεια | Από |
 |---|---|---|
+| `advance` | run | 4.9.1 |
 | `batch` | run | 3.18 |
 | `bifurcation` | run | 3.18 |
 | `channels` | project.read | 3.18 |

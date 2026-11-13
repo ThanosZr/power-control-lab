@@ -155,6 +155,7 @@ def main(argv=None):
     a.add_argument('--path', required=True, help='ο φάκελος του Control Workbench')
     a.add_argument('project', nargs='?', help='αρχείο JSON ή tutorial:<id>[?…] (αλλιώς --link)')
     a.add_argument('--link', action='store_true', help='το κύκλωμα της ανοιχτής εφαρμογής (pcl.link), και ο πίνακας πίσω σε αυτήν')
+    a.add_argument('--live', action='store_true', help='4.9.1 (με --link): ο ελεγκτής του workbench οδηγεί την προσομοίωση της οθόνης, βήμα προς βήμα (Run · live target, keep learning)')
     a.add_argument('--set', action='append', help='<id>.<παράμετρος>=<τιμή>')
     a.add_argument('--input', required=True, help='η είσοδος u: μπλοκ «Σταθερά» (π.χ. AC1R) ή <id>:<ακροδέκτης> (π.χ. PWM1:d)')
     a.add_argument('--measure', required=True, help='η έξοδος y, π.χ. M1:w')
@@ -257,7 +258,8 @@ def main(argv=None):
             for k, v in _kv(args.set).items():
                 p.set(k, v)
             rows = wb.launch(args.path, p, args.input, args.measure, args.state or (), args.u, args.y, args.state_scale, solver={'hdiv': args.hdiv},
-                             settle=args.settle, headless=args.headless.split(',') if args.headless else None, dt=args.dt, app=app)
+                             settle=args.settle, headless=args.headless.split(',') if args.headless else None, dt=args.dt, app=app,
+                             live=bool(args.live and app is not None))
         except PclError as e:
             print(f'pcl: {e}', file=sys.stderr)
             return 2

@@ -91,6 +91,16 @@ class App:
         """The machines of the app (4.7): type, name, kind, outputs, pins, parameters with defaults (pcl.gui reads them)."""
         return self.call('machines')
 
+    def advance(self, dt, set=None, keys=None, draw=False):   # noqa: A002 - the API's word
+        """4.9.1: one step of an external controller on the circuit of the screen: the values of set ({'<id>.<param>': value};
+        a «Σταθερά» block directly, other parameters as live changes that keep the states), the simulation dt seconds further
+        (paused in between, the scope drawn), and {t, values} of the channels keys."""
+        return self.call('advance', dt=float(parse_value(dt)), set=set or {}, keys=list(keys or []), draw=bool(draw))
+
+    def reset(self):
+        """4.9.1: the simulation of the screen from the start (as ⟲)."""
+        return self.call('reset')
+
     def run(self, t_end=None, channels=None, measure=None, **kw):
         q = {'t_end': float(parse_value(t_end)) if t_end is not None else None, 'channels': channels, 'measure': _measures(measure), **kw}
         out = self.call('run', **{k: v for k, v in q.items() if v is not None})

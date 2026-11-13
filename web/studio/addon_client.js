@@ -20,7 +20,7 @@
  window.PCL={call,target:q.get('target')||'',
   info:()=>call('info'),project:()=>call('project.get'),load:project=>call('project.load',{project}),params:id=>call('params',{id}),
   get:key=>call('get',{key}),set:(key,value,source)=>call('set',{key,value,source}),setMany:(values,source)=>call('set_many',{values,source}),
-  selection:()=>call('selection'),presets:()=>call('presets'),channels:()=>call('channels'),scope:(o={})=>call('scope',o),values:keys=>call('values',{keys}),
+  selection:()=>call('selection'),presets:()=>call('presets'),channels:()=>call('channels'),scope:(o={})=>call('scope',o),values:keys=>call('values',{keys}),advance:(dt,set,keys)=>call('advance',{dt,set,keys}),reset:()=>call('reset'),
   run:(o={})=>call('run',o),batch:queries=>call('batch',{queries}),bifurcation:o=>call('bifurcation',o),
   python:(code,inputs,files)=>call('python',{code,inputs:inputs||{},files:files||{}}),
   show:obj=>call('show',{obj}),notify:(msg,sev,fix)=>call('notify',{msg,sev,fix}),

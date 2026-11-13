@@ -4,7 +4,7 @@ function r = pcl_link(method, args, client)
 %   pcl_link('set', struct('key', 'R1.R', 'value', 10));
 %   With the link closed in the app, the call «knocks»: the app shows Αποδοχή / Απόρριψη and the call waits for it.
 %   The address and the token are in ~/.pcl/link.json (PCL_HOME moves it), written by python run.py.
-%   Methods: info, project.get, project.load, params, get, set, set_many, selection, channels, scope, values, run,
+%   Methods: info, project.get, project.load, params, get, set, set_many, selection, channels, scope, values, advance (4.9.1), reset, run,
 %   batch, bifurcation, python, show, notify (docs/ADDONS.md). MATLAB: webwrite. Octave: through python -m pcl link.
 if nargin < 2 || isempty(args), args = struct(); end
 c = pcl_config();

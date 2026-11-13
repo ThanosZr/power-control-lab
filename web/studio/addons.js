@@ -9,7 +9,7 @@
 //   run, batch, bifurcation (run) · python (python) · show, notify (show) · download (files)
 (function(root){
  const PERM={'project.get':'project.read',machines:'project.read',params:'project.read',get:'project.read',selection:'project.read',channels:'project.read',scope:'project.read',values:'project.read',
-  set:'project.write',set_many:'project.write','project.load':'project.write',run:'run',batch:'run',bifurcation:'run',python:'python',show:'show',notify:'show',download:'files'};
+  set:'project.write',set_many:'project.write','project.load':'project.write',run:'run',advance:'run',reset:'run',batch:'run',bifurcation:'run',python:'python',show:'show',notify:'show',download:'files'};
  const PERM_TXT={'project.read':'διαβάζει το κύκλωμα και τα αποτελέσματα','project.write':'αλλάζει παραμέτρους ή φορτώνει κύκλωμα','run':'τρέχει προσομοιώσεις',
   'python':'τρέχει κώδικα Python (στον browser)','show':'δείχνει πίνακες, γραφήματα και μηνύματα','files':'κατεβάζει αρχεία'};
  const A={list:[],ctx:null,frames:new Map(),pool:null,link:{on:false,token:null,n:0,last:null,err:null},PERM,PERM_TXT};
@@ -47,6 +47,7 @@
   presets:async()=>{const r=await fetch('api/presets');if(!r.ok)throw new Error('Τα πρότυπα θέλουν τον server της εφαρμογής.');return (await r.json()).presets;},
   channels:()=>{const s=A.ctx.sim();return s?{keys:[...s.keys],T:s.T}:{keys:[],T:null};},
   machines:()=>root.Parts.machines(), // 4.7: the machines of the app, with their pins and parameters (pcl.gui reads them)
+  advance:a=>A.ctx.advance(a),reset:()=>A.ctx.reset(),   // 4.9.1: an external controller steps the circuit of the screen (pcl.workbench live)
   values:a=>{const s=A.ctx.sim();if(!s)return {t:null,values:{}};const v={};for(const k of a.keys||[])if(s.chIndex.has(k))v[k]=s.now(k);return {t:s.t,values:v};},
   scope:a=>scopeData(a),
   run:async a=>solve({...query(a),action:'run'}),

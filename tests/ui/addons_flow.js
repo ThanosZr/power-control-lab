@@ -62,13 +62,15 @@ const ROOT=path.resolve(__dirname,'../..');
  await p.evaluate(()=>{document.querySelector('#addons-block').open=true;});ok(!(await p.isChecked('#link-on')),'η σύνδεση είναι κλειστή εξ ορισμού');
  const py=["import pcl","app = pcl.link.connect()","i = app.info()","print('tut', i['tutorial'], 'api', i['api'], i['app'])","app.set('R1.R', 20)",
   "r = app.run(t_end=2e-3, measure={'Vo': ('V:C1', 'avg', 10)})","print('Vo', round(r.measured['Vo'], 3))",
-  "print('py', app.python('result = x * 2', x=21))","print('machines', ','.join(sorted(m['kind'] for m in app.machines())))","app.show({'από': 'Python', 'Vo': r.measured['Vo']}, 'σύνδεση')","app.notify('μήνυμα από την Python')"].join('\n');
+  "print('py', app.python('result = x * 2', x=21))","print('machines', ','.join(sorted(m['kind'] for m in app.machines())))","app.show({'από': 'Python', 'Vo': r.measured['Vo']}, 'σύνδεση')","app.notify('μήνυμα από την Python')",
+  "a1 = app.advance(1e-4, set={'R1.R': 20}, keys=['V:C1']); a2 = app.advance(1e-4, keys=['V:C1'])","print('adv', round(a2['t'] - a1['t'], 9), 'V:C1' in a2['values'])","print('reset', app.reset()['t'])"].join('\n');
  const ch=spawn('python3',['-c',py],{cwd:ROOT});let txt='';ch.stdout.on('data',d=>txt+=d);ch.stderr.on('data',d=>txt+=d);const closed=new Promise(r=>ch.on('close',r));
  await p.waitForSelector('.knock-toast',{timeout:30000});ok(/Python/.test(await p.$eval('.knock-toast',e=>e.textContent)),'αίτημα σύνδεσης με το όνομα του προγράμματος');
  await p.click('.knock-toast [data-k="1"]');const code=await closed;
  ok(await p.isChecked('#link-on'),'με «Αποδοχή» η σύνδεση άνοιξε');
  ok(code===0&&/tut buck api 4 Power & Control Lab/.test(txt)&&/py 42/.test(txt),'Python → εφαρμογή: info (api 4), python '+txt.trim().replace(/\n/g,' | '));
  ok(/machines dc,gen,induction,srm,sync/.test(txt),'Python → εφαρμογή: machines() (4.7) δίνει τα είδη των μηχανών');
+ ok(/adv 0\.0001 True/.test(txt)&&/reset 0/.test(txt),'Python → εφαρμογή: advance (4.9.1) προχωρά την προσομοίωση της οθόνης κατά dt και δίνει τις τιμές, reset από την αρχή');
  const vo=+((txt.match(/Vo ([\d.]+)/)||[])[1]);ok(vo>11.5&&vo<12.5,'Python → εφαρμογή: run με τον λύτη της εφαρμογής, Vo = '+vo);
  ok(await p.evaluate(()=>+PCL.editor.comp('R1').params.R)===20,'η αλλαγή R1.R = 20 φαίνεται στο κύκλωμα');
  ok(await p.$$eval('.scen-tbl',x=>x.length)>=1,'ο πίνακας της Python στο πάνελ');

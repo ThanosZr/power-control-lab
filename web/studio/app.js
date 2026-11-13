@@ -40,6 +40,18 @@ function lineCtx(){return {editor,api,changed:()=>{}};}
 function play(keep){if(!keep)S.stepTo=0;if(!S.sim||S.error)return;if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;requestAnimationFrame(loop);}
 function pause(){if(window.Live?.active)Live.stop();S.stepTo=0;S.running=false;if(REC.on)recFlush();scope.running=false;$('#play')?.classList.remove('running');if($('#play'))$('#play').innerHTML='▶ Προσομοίωση';draw(true);}
 function reset(){pause();buildSim(true);scope.cfg.frozen=null;draw(true);}
+// 4.9.1 (4.8.2 a): one step of an external controller on the circuit of the screen (pcl.link 'advance', the Control Workbench
+// with pcl.workbench.live_plant_class): the new values (a «Σταθερά» block directly, other parameters as live changes that keep the
+// states), the simulation dt further, the scope drawn at most every 40 ms, and the measurements. The circuit stays paused in between.
+function linkAdvance(a){if(!S.sim||S.error)throw new Error('Δεν υπάρχει προσομοίωση στην οθόνη (ή έχει σφάλμα).');if(S.running)pause();
+ if(S.sim.pyLazy?.())throw new Error('Κύκλωμα με μπλοκ Python: το βήμα από έξω θέλει την Python στη σελίδα (άνοιξε πρώτα μια φορά την προσομοίωση).');
+ for(const [k,v] of Object.entries(a.set||{})){const i=k.lastIndexOf('.'),id=i>0?k.slice(0,i):k,p=i>0?k.slice(i+1):'v',c=editor.comp(id);if(!c)throw new Error(`Δεν υπάρχει το στοιχείο «${id}».`);
+  if(c.type==='CONST'&&p==='v'){const t=String(v),sch=P.parseSched(t);if(!sch)throw new Error(`Τιμή «${t}» για το ${id}.`);c.params.v=t;S.sim.setBlock(id,{sched:sch});}
+  else if(!liveParam(id,p,v,false)){editor.setParams(id,{[p]:typeof v==='object'?JSON.stringify(v):v});}}
+ const dt=+a.dt;if(!(dt>0&&dt<1e3))throw new Error('Το dt πρέπει να είναι θετικό (s).');S.sim.run(dt);
+ const now=performance.now();if(!S.advT||now-S.advT>40||a.draw){S.advT=now;draw(true);}
+ const v={};for(const k of a.keys||[])if(S.sim.chIndex.has(k))v[k]=S.sim.now(k);return {t:S.sim.t,values:v};}
+function linkReset(){reset();return {t:S.sim?S.sim.t:null};}
 function stepT(n=1){if(!S.sim||S.error)return;pause();
  // 4.8: Python blocks without Python on the page: the periods in the worker of the live simulation, else Python here first
  if(S.sim.pyLazy?.()){if(window.Live&&S.noLive!==S.sim&&Live.eligible(S.sim)){S.stepTo=S.sim.t+n*S.sim.T;play(true);return;}pyPage().then(ok=>{if(ok)stepT(n);});return;}
@@ -995,7 +1007,7 @@ function knockToast(k,answer){const t=document.createElement('div');t.className=
  t.innerHTML=`<b>Αίτημα σύνδεσης</b><p>Το «${esc(k.client)}» σε αυτόν τον υπολογιστή ζητά να διαβάσει και να αλλάξει το κύκλωμα και να τρέξει προσομοιώσεις.</p><div><button class="primary" data-k="1">Αποδοχή</button><button data-k="0">Απόρριψη</button></div>`;
  document.body.appendChild(t);const done=ok=>{t.remove();answer(ok);};t.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>done(b.dataset.k==='1'));setTimeout(()=>{if(t.isConnected)done(false);},55000);}
 function initAddons(){if(!window.Addons||!$('#addons-card'))return;
- Addons.init({editor,project,applyProject:pr=>{applyProject(pr);},sim:()=>S.error?null:S.sim,scopeKeys:()=>(scope.cfg?.panes||[]).flatMap(p=>(p.ch||p.channels||[]).map(c=>typeof c==='string'?c:c.key)),
+ Addons.init({editor,project,applyProject:pr=>{applyProject(pr);},sim:()=>S.error?null:S.sim,advance:linkAdvance,reset:linkReset,scopeKeys:()=>(scope.cfg?.panes||[]).flatMap(p=>(p.ch||p.channels||[]).map(c=>typeof c==='string'?c:c.key)),
   selection:()=>editor.selection().c,version:()=>($('footer b')?.textContent||''),title:()=>tutorial().title||'',tutorial:()=>S.tut?.id||null,
   python:(code,inputs,files)=>scenEval(code,inputs,files),show:d=>{$('#scen').open=true;scenShow(typeof d==='object'&&d&&d.type?d:{type:'text',text:typeof d==='string'?d:JSON.stringify(d,null,1)});},
   notify:r=>{(S.addonDiag||(S.addonDiag=[])).push({grp:'sim',...r});if(S.addonDiag.length>200)S.addonDiag.shift();renderDiag();},dock:addonDock,changed:renderAddons,knock:knockToast});
