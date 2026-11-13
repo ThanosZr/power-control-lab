@@ -1,7 +1,8 @@
 """Every library part in two implementations (4.9.1, ROADMAP §52, rule of 13/11): the fast ready-made part and the detailed
 one built from basic elements give the same circuit; a library part expanded into an ordinary subcircuit (SubCircuit.fromLib)
 gives the same numbers bit for bit; every part has a drawing (NetLib.layoutDef, Inside.drawEl); the L₁ of the IEEE arrester
-can be adjusted to U₁₀; the SciPy export takes the detailed implementation."""
+can be adjusted to U₁₀; the SciPy export takes the detailed implementation, and a struck tower with an arrester gives the
+same numbers in the SciPy solver (4.9.1)."""
 import json
 import subprocess
 import unittest
@@ -80,9 +81,56 @@ class Drawing(unittest.TestCase):
 class Export(unittest.TestCase):
     def test_scipy_gets_the_detailed_parts(self):
         r = cases([{'kind': 'export'}])[0]
-        self.assertEqual(r['compact'], 9)                          # 6 arresters + 3 footings, fast, in the browser solver
-        self.assertEqual(r['nNLlocal'], 6)
-        self.assertEqual(r['nNL'], 15)                             # 12 ZnO + 3 footings R(I) for the server
+        self.assertEqual(r['compact'], 2)                          # the arrester and the footing, fast, in the browser solver
+        self.assertEqual(r['nNLlocal'], 1)
+        self.assertEqual(r['nNL'], 3)                              # 2 ZnO + the footing R(I) for the server
+        self.assertIn('TLM', r['gis'])                             # the multi-conductor lines: refused, not left out
+
+
+class SciPyTower(unittest.TestCase):
+    """4.9.1: the tower and the arrester in the SciPy solver (engine/batch.py), from their detailed implementation, against
+    the browser solver: a tower struck at its top by -250 kA (3/100 us), the strings flash over, the arrester on phase a
+    takes the current."""
+
+    def pair(self, c, rtol=1e-6):
+        import numpy as np
+        from engine.batch import simulate
+        o = cases([dict(c, kind='tower')])[0]
+        self.assertEqual(o['warn'], [])
+        rec = np.array(o['rec'])
+        ts = rec[:, 0]
+        d = o['batch']
+        self.assertEqual(d['skipped'], [])
+        r = simulate({'net': d['net'], 'channels': d['channels'], 't_end': float(ts[-1]), 'method': 'Radau', 'rtol': rtol,
+                      'atol': 1e-9, 'max_points': 200000, '_local': True, 'wall': 600})
+        self.assertEqual(r['status'], 'ok', r['message'])
+        t = np.array(r['t'])
+        out = {}
+        for j, k in enumerate(o['ch']):
+            b = rec[:, j + 1]
+            s = np.interp(ts, t, np.array(r['ch'][k], float))
+            first = lambda y: next((float(ts[i]) for i in range(len(y)) if abs(y[i]) > 1), None)
+            out[k] = (float(np.max(np.abs(b))), float(np.max(np.abs(s))), first(b), first(s))
+        return out, o['h']
+
+    def test_instantaneous_strings(self):
+        # the three strings see the same voltage and flash over together, in both solvers
+        out, h = self.pair({'ins': 'ub'})
+        for k, (pb, ps, fb, fs) in out.items():
+            self.assertLess(abs(pb - ps), 1e-3 * pb, k)
+            if k != 'Y:TW1/Vtop':
+                self.assertIsNotNone(fb, k)
+                self.assertAlmostEqual(fb, fs, delta=1.01 * h, msg=k)
+        self.assertGreater(out['Y:SA1/I'][0], 5e4)
+
+    def test_volt_time_strings(self):
+        # the volt-time flashover falls inside a step of the browser: its peaks just after converge to the SciPy ones with
+        # the step (20 -> 80 steps per travel time of the tower: 3 % -> 0.3 %)
+        out, h = self.pair({'ins': 'de', 'hDiv': 80})
+        for k, (pb, ps, fb, fs) in out.items():
+            self.assertLess(abs(pb - ps), 1e-2 * pb, k)
+            if fb is not None:
+                self.assertAlmostEqual(fb, fs, delta=1.01 * h, msg=k)
 
 
 if __name__ == '__main__':

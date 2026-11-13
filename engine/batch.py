@@ -35,6 +35,7 @@ from scipy.integrate import solve_ivp
 from scipy.linalg import lu_factor, lu_solve
 
 GMIN = 1e-9
+KINDS = {'C', 'CPL', 'D', 'F', 'G', 'GY', 'I', 'L', 'MG', 'NL', 'S', 'TL', 'V', 'X'}     # the elements of the netlist known here
 METHODS = ('Radau', 'BDF', 'LSODA', 'RK45', 'RK23', 'DOP853')
 IMPLICIT = {'Radau', 'BDF', 'LSODA'}
 LIMITS = {'els': 800, 'nodes': 600, 't_end': 10.0, 'wall': 45.0, 'points': 600000, 'periods': 20000}
@@ -451,6 +452,10 @@ def make_python_block(code, ins, outs, pars, Ts, label):
 class Circuit:
     def __init__(self, net):
         self.els = net['els']
+        # 4.9.1: an element this solver does not know is an error, not an open circuit
+        bad = sorted({str(e.get('k')) for e in self.els} - KINDS)
+        if bad:
+            raise BatchError('Στοιχεία που δεν έχει ο λύτης SciPy: ' + ', '.join(bad) + '.')
         self.nN = int(net['nNodes'])
         size = int(net['size'])
         if len(self.els) > LIMITS['els'] or self.nN > LIMITS['nodes']:
@@ -2218,6 +2223,24 @@ def simulate(data):
                         ckt.on[owners[q]] = not ckt.on[owners[q]]
                         if owners[q] in ckt.iSG and not ckt.on[owners[q]]:
                             ckt.just_off[owners[q]] = te
+                        stats['diode_events'] += 1
+            # 4.9.1: a gap that breaks down takes with it the open gaps within 1e-9 of their own breakdown at that instant
+            # (the same voltage: the three strings of a tower), as in one step of the browser. Their events differ only by
+            # rounding, and only the first one stops the integration; after it closes, the others' voltage has collapsed
+            closed = [q for q in owners if not isinstance(q, (dict, tuple)) and q in ckt.iSG and ckt.on[q]]
+            if closed and any(not ckt.on[i] for i in ckt.iSG):
+                zp = zof(te, x)
+                for i in ckt.iSG:
+                    e = ckt.els[i]
+                    if ckt.on[i] or ckt.just_off.get(i) == te:
+                        continue
+                    gp = e['gap']
+                    if gp.get('de'):
+                        near = x[e['kD']] >= gp['de']['D'] * (1 - 1e-9)
+                    else:
+                        near = abs((zp[e['a']] if e['a'] >= 0 else 0) - (zp[e['b']] if e['b'] >= 0 else 0)) >= gp['Ub'] * (1 - 1e-9)
+                    if near:
+                        ckt.on[i] = True
                         stats['diode_events'] += 1
             stuck = stuck + 1 if te - t < 1e-12 * ckt.base_T else 0
             if stuck > 60:

@@ -1589,6 +1589,9 @@
   // 4.3: a generator that starts from a load flow needs the steady start of the browser (acInit): the states of that netlist
   const lf=(project?.solve?.init==='ac')||JSON.stringify(project?.components||[]).includes('"GEN3"');
   const net=lf?new Sim(project).net:buildNetlist(project),idx=new Map(net.els.map((e,i)=>[e,i]));
+  // 4.9.1: the server has no multi-conductor line yet: refused, rather than left out of the circuit
+  if(net.els.some(e=>e.k==='TLM'))throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη τις πολυφασικές γραμμές (TLM, σταθερές ή FD): τρέχει μόνο ο λύτης της εφαρμογής. Οι μονοφασικές γραμμές (TL), οι πύργοι, τα αλεξικέραυνα και το τόξο τρέχουν και στον SciPy.');
+  if(net.els.some(e=>e.sai||e.foot))throw new NetlistError('Εσωτερικό σφάλμα: συμπαγές στοιχείο (SAIX, RFX) στην εξαγωγή για τον SciPy.');
   const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm','gap','a1','b1','a2','b2','Z','tau','Rl','pts'];
   // synchronous machines (3.5): parameters and initial states; the server integrates ψ_α, ψ_β, ω, θ
   const smList=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm),smx=new Map(smList.map((m,i)=>[m,i]));

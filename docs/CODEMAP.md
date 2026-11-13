@@ -21,7 +21,7 @@
 | `web/studio/live_worker.js` | 88 |
 | `web/studio/math.js` | 144 |
 | `web/studio/metrics.js` | 89 |
-| `web/studio/mna.js` | 1676 |
+| `web/studio/mna.js` | 1679 |
 | `web/studio/netlib.js` | 602 |
 | `web/studio/nn.js` | 57 |
 | `web/studio/parts.js` | 1109 |
@@ -44,7 +44,7 @@
 | `engine/__init__.py` | 1 |
 | `engine/addons.py` | 322 |
 | `engine/analysis.py` | 307 |
-| `engine/batch.py` | 2267 |
+| `engine/batch.py` | 2290 |
 | `engine/bidir.py` | 564 |
 | `engine/boundary.py` | 97 |
 | `engine/circuit.py` | 75 |
@@ -91,7 +91,7 @@
 | `tests/test_ev.py` | 102 |
 | `tests/test_gen_ctl.py` | 136 |
 | `tests/test_generator.py` | 223 |
-| `tests/test_impl.py` | 89 |
+| `tests/test_impl.py` | 137 |
 | `tests/test_impulse_tools.py` | 150 |
 | `tests/test_library.py` | 41 |
 | `tests/test_lightning.py` | 78 |
@@ -125,7 +125,7 @@
 | `tests/js/ev_cases.js` | 37 |
 | `tests/js/gen_cases.js` | 78 |
 | `tests/js/gen_ctl_cases.js` | 39 |
-| `tests/js/impl_cases.js` | 50 |
+| `tests/js/impl_cases.js` | 63 |
 | `tests/js/library_cases.js` | 11 |
 | `tests/js/lightning_cases.js` | 22 |
 | `tests/js/line_cases.js` | 15 |
@@ -1229,17 +1229,17 @@ _(χωρίς συναρτήσεις)_
 | 1538 | const fn | `sig` |
 | 1543 | method | `run` |
 | 1586 | function | `exportForBatch` |
-| 1605 | const fn | `ci` |
-| 1606 | const fn | `vd` |
-| 1607 | const fn | `V` |
-| 1608 | const fn | `I` |
-| 1609 | const fn | `portRec` |
-| 1610 | const fn | `rec` |
-| 1627 | const fn | `clkOf` |
-| 1653 | function | `sweepPoint` |
-| 1658 | function | `setPath` |
-| 1664 | function | `eisPoint` |
-| 1672 | function | `resume` |
+| 1608 | const fn | `ci` |
+| 1609 | const fn | `vd` |
+| 1610 | const fn | `V` |
+| 1611 | const fn | `I` |
+| 1612 | const fn | `portRec` |
+| 1613 | const fn | `rec` |
+| 1630 | const fn | `clkOf` |
+| 1656 | function | `sweepPoint` |
+| 1661 | function | `setPath` |
+| 1667 | function | `eisPoint` |
+| 1675 | function | `resume` |
 
 ### `web/studio/netlib.js`
 
@@ -1921,92 +1921,92 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 43 | class | `BatchError` |
-| 47 | function | `sched_at` |
-| 61 | function | `wave_at` |
-| 75 | function | `mov_seg` |
-| 80 | function | `_powr` |
-| 84 | function | `mov_cur` |
-| 98 | function | `mov_inv` |
-| 110 | function | `arc_F` |
-| 119 | function | `arc_start` |
-| 139 | function | `sat_d` |
-| 146 | function | `sat_d_inv` |
-| 158 | function | `f2_phi` |
-| 177 | function | `_f` |
-| 185 | class | `Ctrl` |
-| 189 | method | `Ctrl.__init__` |
-| 214 | method | `Ctrl.dbl` |
-| 217 | method | `Ctrl.raw` |
-| 237 | method | `Ctrl.gate` |
-| 249 | method | `Ctrl.carrier_at` |
-| 260 | method | `Ctrl.edges` |
-| 280 | function | `_lut` |
-| 291 | function | `eval_ast` |
-| 320 | function | `_nn_fwd` |
-| 336 | function | `_nn_learn` |
-| 379 | function | `_nn_jac` |
-| 398 | function | `_nn_step` |
-| 420 | function | `make_python_block` |
-| 451 | class | `Circuit` |
-| 452 | method | `Circuit.__init__` |
-| 680 | method | `Circuit.R` |
-| 683 | method | `Circuit.im_e` |
-| 692 | method | `Circuit.im_deriv` |
-| 705 | method | `Circuit.sm_cur` |
-| 717 | method | `Circuit.sm_ports` |
-| 722 | method | `Circuit.sm_deriv` |
-| 737 | method | `Circuit.srm_A` |
-| 742 | method | `Circuit._seg` |
-| 746 | method | `Circuit.srm_cur` |
-| 753 | method | `Circuit.srm_torque` |
-| 762 | method | `Circuit.srm_currents` |
-| 767 | method | `Circuit.srm_deriv` |
-| 780 | method | `Circuit.gen_cur` |
-| 797 | method | `Circuit.gen_efd` |
-| 804 | method | `Circuit.gen_tm` |
-| 811 | method | `Circuit.gen_deriv` |
-| 829 | method | `Circuit.jac_gen` |
-| 879 | method | `Circuit.gen_out` |
-| 899 | method | `Circuit.Vsrc` |
-| 915 | method | `Circuit.topo` |
-| 925 | method | `Circuit.build` |
-| 1022 | method | `Circuit.bsrc` |
-| 1062 | method | `Circuit.solve_z` |
-| 1106 | method | `Circuit.arc_g` |
-| 1111 | method | `Circuit.solve_nl` |
-| 1153 | method | `Circuit.tl_hist` |
-| 1170 | method | `Circuit.tl_sec` |
-| 1177 | method | `Circuit.tl_ih` |
-| 1181 | method | `Circuit.tl_record` |
-| 1200 | method | `Circuit.scr_u` |
-| 1204 | method | `Circuit.scr_gate` |
-| 1208 | method | `Circuit.scr_edges` |
-| 1215 | method | `Circuit.gate_state` |
-| 1228 | method | `Circuit.set_gates` |
-| 1236 | method | `Circuit.arc_gates` |
-| 1256 | method | `Circuit.may_turn_on` |
-| 1260 | method | `Circuit.tolerances` |
-| 1266 | method | `Circuit.consistent` |
-| 1308 | method | `Circuit.value` |
-| 1346 | method | `Circuit.current` |
-| 1391 | method | `Circuit.prime` |
-| 1401 | method | `Circuit.sig_in` |
-| 1405 | method | `Circuit.sh_grid` |
-| 1417 | method | `Circuit.sh_next` |
-| 1424 | method | `Circuit.log_ev` |
-| 1430 | method | `Circuit.ev_switches` |
-| 1439 | method | `Circuit.sh_sample` |
-| 1459 | method | `Circuit.sample` |
-| 1520 | method | `Circuit.cmp_f` |
-| 1526 | method | `Circuit.blk_due` |
-| 1537 | method | `Circuit.eval_blocks` |
-| 1825 | method | `Circuit.block_events` |
-| 1854 | method | `Circuit.next_event` |
-| 1921 | function | `_decimate` |
-| 1938 | function | `_diagnose` |
-| 1989 | function | `simulate` |
-| 2261 | function | `batch_sim` |
+| 44 | class | `BatchError` |
+| 48 | function | `sched_at` |
+| 62 | function | `wave_at` |
+| 76 | function | `mov_seg` |
+| 81 | function | `_powr` |
+| 85 | function | `mov_cur` |
+| 99 | function | `mov_inv` |
+| 111 | function | `arc_F` |
+| 120 | function | `arc_start` |
+| 140 | function | `sat_d` |
+| 147 | function | `sat_d_inv` |
+| 159 | function | `f2_phi` |
+| 178 | function | `_f` |
+| 186 | class | `Ctrl` |
+| 190 | method | `Ctrl.__init__` |
+| 215 | method | `Ctrl.dbl` |
+| 218 | method | `Ctrl.raw` |
+| 238 | method | `Ctrl.gate` |
+| 250 | method | `Ctrl.carrier_at` |
+| 261 | method | `Ctrl.edges` |
+| 281 | function | `_lut` |
+| 292 | function | `eval_ast` |
+| 321 | function | `_nn_fwd` |
+| 337 | function | `_nn_learn` |
+| 380 | function | `_nn_jac` |
+| 399 | function | `_nn_step` |
+| 421 | function | `make_python_block` |
+| 452 | class | `Circuit` |
+| 453 | method | `Circuit.__init__` |
+| 685 | method | `Circuit.R` |
+| 688 | method | `Circuit.im_e` |
+| 697 | method | `Circuit.im_deriv` |
+| 710 | method | `Circuit.sm_cur` |
+| 722 | method | `Circuit.sm_ports` |
+| 727 | method | `Circuit.sm_deriv` |
+| 742 | method | `Circuit.srm_A` |
+| 747 | method | `Circuit._seg` |
+| 751 | method | `Circuit.srm_cur` |
+| 758 | method | `Circuit.srm_torque` |
+| 767 | method | `Circuit.srm_currents` |
+| 772 | method | `Circuit.srm_deriv` |
+| 785 | method | `Circuit.gen_cur` |
+| 802 | method | `Circuit.gen_efd` |
+| 809 | method | `Circuit.gen_tm` |
+| 816 | method | `Circuit.gen_deriv` |
+| 834 | method | `Circuit.jac_gen` |
+| 884 | method | `Circuit.gen_out` |
+| 904 | method | `Circuit.Vsrc` |
+| 920 | method | `Circuit.topo` |
+| 930 | method | `Circuit.build` |
+| 1027 | method | `Circuit.bsrc` |
+| 1067 | method | `Circuit.solve_z` |
+| 1111 | method | `Circuit.arc_g` |
+| 1116 | method | `Circuit.solve_nl` |
+| 1158 | method | `Circuit.tl_hist` |
+| 1175 | method | `Circuit.tl_sec` |
+| 1182 | method | `Circuit.tl_ih` |
+| 1186 | method | `Circuit.tl_record` |
+| 1205 | method | `Circuit.scr_u` |
+| 1209 | method | `Circuit.scr_gate` |
+| 1213 | method | `Circuit.scr_edges` |
+| 1220 | method | `Circuit.gate_state` |
+| 1233 | method | `Circuit.set_gates` |
+| 1241 | method | `Circuit.arc_gates` |
+| 1261 | method | `Circuit.may_turn_on` |
+| 1265 | method | `Circuit.tolerances` |
+| 1271 | method | `Circuit.consistent` |
+| 1313 | method | `Circuit.value` |
+| 1351 | method | `Circuit.current` |
+| 1396 | method | `Circuit.prime` |
+| 1406 | method | `Circuit.sig_in` |
+| 1410 | method | `Circuit.sh_grid` |
+| 1422 | method | `Circuit.sh_next` |
+| 1429 | method | `Circuit.log_ev` |
+| 1435 | method | `Circuit.ev_switches` |
+| 1444 | method | `Circuit.sh_sample` |
+| 1464 | method | `Circuit.sample` |
+| 1525 | method | `Circuit.cmp_f` |
+| 1531 | method | `Circuit.blk_due` |
+| 1542 | method | `Circuit.eval_blocks` |
+| 1830 | method | `Circuit.block_events` |
+| 1859 | method | `Circuit.next_event` |
+| 1926 | function | `_decimate` |
+| 1943 | function | `_diagnose` |
+| 1994 | function | `simulate` |
+| 2284 | function | `batch_sim` |
 
 ### `engine/bidir.py`
 

@@ -6,6 +6,7 @@
 //  {kind:'draw'}                            the drawing of every library part (NetLib.layoutDef, Inside.drawEl): parts, overlaps
 //  {kind:'fit', U10, d, n}                  the L₁ of the IEEE arrester adjusted to U₁₀, and the voltage it then gives
 //  {kind:'export'}                          the SciPy export of fast parts: the detailed elements, no compact ones
+//  {kind:'tower', I, ins, stop, hDiv}       a struck tower with an arrester (detailed) and its SciPy export (from the fast one)
 const path=require('path');const W=path.resolve(__dirname,'../../web/studio');
 global.window=globalThis;global.Parts=require(W+'/parts.js');global.Expr=require(W+'/expr.js');global.StepCheck=require(W+'/stepcheck.js');
 global.LineModels=require(W+'/linemodels.js');
@@ -44,7 +45,19 @@ function draw(){Inside.init({pid:id=>id,eng:(v,u)=>P.eng(v,u||'',3),comp:()=>nul
  return out;}
 function fit(o){const r=NL.saiFitL1({U10:o.U10,d:o.d,n:o.n});const pr=arrProject({I:10e3,T1:8e-6,T2:20e-6},'blocks',{U10:o.U10,d:o.d,n:o.n,L1fit:true});
  const s=new MNA.Sim(pr,{hDiv:600,method:'TR'});let v=0;while(s.t<60e-6){s.run(Math.min(s.h,60e-6-s.t));v=Math.max(v,Math.abs(s.now('Y:SA1/V')));}return {k:r.k,err:r.err,v};}
-function exportCase(){const pr=build('lightning_gis',{impl:'fast'}),ex=MNA.exportForBatch(pr,['Y:T2/Vtop']);const els=ex.net?.els||[];
- const local=new MNA.Sim(pr,{hDiv:pr.sim.hDiv});return {nNL:els.filter(e=>e.k==='NL').length,nG:els.filter(e=>e.k==='G').length,compact:local.net.els.filter(e=>e.sai||e.foot).length,nNLlocal:local.net.els.filter(e=>e.k==='NL').length};}
+// a tower struck at its top (Heidler, negative), the ground wires and the phases into resistances, an arrester on phase a
+function towerProject(o,impl){const C=(id,type,params={})=>({id,type,x:0,y:0,rot:0,flip:false,label:id,params});
+ const comps=[C('I1','ILG',{shape:'custom',model:'heidler',T1:3e-6,T2:100e-6,n:10,Ipk:-(o.I||250e3),t0:0}),C('TW1','TOWER',{foot:o.foot||'ion',ins:o.ins||'ub',impl}),C('G0','GND'),
+  C('SA1','SAI',{U10:819e3,d:3.216,n:1,meas:true,impl}),C('GS','GND')],wires=[Wr('w0',['I1','n'],['G0','g']),Wr('w1',['I1','p'],['TW1','d1']),Wr('ws1',['TW1','a2'],['SA1','a']),Wr('ws2',['SA1','b'],['GS','g'])];
+ let k=1;const term=(pin,R)=>{const r='R'+k,g='G'+k;k++;comps.push(C(r,'R',{R}),C(g,'GND'));wires.push(Wr('wa'+k,['TW1',pin],[r,'a']),Wr('wb'+k,[r,'b'],[g,'g']));};
+ for(const p of ['d2','e1','e2'])term(p,500);for(const p of ['a1','b1','c1','a2','b2','c2'])term(p,400);
+ return {version:4,components:comps,wires};}
+const TOWER_CH=['Y:TW1/Vtop','Y:TW1/If','Y:TW1/Ia','Y:TW1/Ib','Y:TW1/Ic','Y:SA1/V','Y:SA1/I'];
+function tower(o){const pr=towerProject(o,'blocks'),s=new MNA.Sim(pr,{hDiv:o.hDiv||20,method:'TR'}),rec=[],stop=o.stop||8e-6;
+ while(s.t<stop-1e-15){s.run(Math.min(s.h,stop-s.t));rec.push([s.t,...TOWER_CH.map(k=>s.now(k))]);}
+ return {h:s.h,ch:TOWER_CH,rec,warn:s.net.warnings,batch:MNA.exportForBatch(towerProject(o,'fast'),TOWER_CH)};}
+function exportCase(){const pr=towerProject({},'fast'),ex=MNA.exportForBatch(pr,['Y:TW1/Vtop']),els=ex.net.els,local=new MNA.Sim(pr,{hDiv:20});
+ let gis=null;try{MNA.exportForBatch(build('lightning_gis',{impl:'fast'}),['Y:T2/Vtop']);}catch(e){gis=e.message;}
+ return {nNL:els.filter(e=>e.k==='NL').length,compact:local.net.els.filter(e=>e.sai||e.foot).length,nNLlocal:local.net.els.filter(e=>e.k==='NL').length,gis};}
 const cases=JSON.parse(process.argv[2]||'[]');
-console.log(JSON.stringify(cases.map(c=>c.kind==='arr'?arr(c):c.kind==='lightning'?lightning(c.ov||{}):c.kind==='expand'?expand(c.id,c.stop):c.kind==='draw'?draw():c.kind==='fit'?fit(c):c.kind==='export'?exportCase():{err:'kind'})));
+console.log(JSON.stringify(cases.map(c=>c.kind==='arr'?arr(c):c.kind==='lightning'?lightning(c.ov||{}):c.kind==='expand'?expand(c.id,c.stop):c.kind==='draw'?draw():c.kind==='fit'?fit(c):c.kind==='export'?exportCase():c.kind==='tower'?tower(c):{err:'kind'})));

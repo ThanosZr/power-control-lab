@@ -91,6 +91,12 @@
 | protective distance | απόσταση προστασίας |
 | bushing, gas-insulated substation (GIS), bus duct | διαπεραστής, υποσταθμός με μόνωση αερίου (GIS), ζυγός GIS |
 | note (on the drawing) | σημείωση |
+| implementation: fast / detailed (from elements) | υλοποίηση: γρήγορη / αναλυτική (από στοιχεία) |
+| expand into a subcircuit, look inside | ανάπτυξη σε υποκύκλωμα, «τι έχει μέσα» |
+| leader progression model (LPM), disruptive effect | μοντέλο προόδου οχετού (LPM), ολοκληρωτική μέθοδος (ενέργεια διάσπασης) |
+| volt–time curve | καμπύλη τάσης–χρόνου |
+| black-box component (locked model) | στοιχείο «μαύρο κουτί» (κλειδωμένο μοντέλο) |
+| policy (RL), episode | πολιτική, επεισόδιο |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
