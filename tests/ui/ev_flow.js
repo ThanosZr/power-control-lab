@@ -62,7 +62,7 @@ const assert=(c,m)=>{if(!c)throw new Error('ASSERT: '+m);};
  R.gen=await p.evaluate(()=>{const s=PCL.S.sim,r={pinned:[...document.querySelectorAll('.wtl .wt .wt-n')].map(e=>e.textContent),warn:s.net.warnings,method:document.querySelector('#method').value,stopT:PCL.S.stopT};
   let slip=false;for(let k=1;k<=40;k++){s.run(0.1);if(Math.abs(s.now('Y:SG1')-1)>0.02)slip=true;}Object.assign(r,{t:s.t,slip,d:s.now('Y:SG1:d'),efd:s.now('Y:AV1/EFD'),vs:s.now('Y:PS1/VS')});return r;});
  await p.waitForTimeout(300);R.gen.theory=await p.evaluate(()=>document.querySelector('#theory').textContent);
- assert(R.gen.pinned.includes('ΔV_ref')&&!R.gen.warn.length&&R.gen.method==='BDF2'&&R.gen.stopT===10,'gen_ctl opened '+JSON.stringify(R.gen));
+ assert(R.gen.pinned.includes('ΔV_ref')&&!R.gen.warn.length&&R.gen.method==='TR'&&R.gen.stopT===10,'gen_ctl opened '+JSON.stringify(R.gen));
  assert(!R.gen.slip&&R.gen.d>40&&R.gen.d<100&&Number.isFinite(R.gen.efd),'the fault ridden through '+JSON.stringify(R.gen));
  assert(/ST1A/.test(R.gen.theory)&&/PSS/.test(R.gen.theory)&&/E_fd0/.test(R.gen.theory),'gen theory card '+R.gen.theory.slice(0,300));
  // the inside of the AVR with a double click: its blocks by the flow of the signals, their values while it runs

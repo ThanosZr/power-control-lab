@@ -24,7 +24,7 @@ class GeneratorControls(unittest.TestCase):
     def test_start_in_equilibrium(self):
         for c in self.R['steady']:
             self.assertEqual(c['warn'], [], c)
-            self.assertLess(c['dev']['pe'], 5e-4, c)               # P_e within 0.05 % over 1 s (BDF2, T/400)
+            self.assertLess(c['dev']['pe'], 5e-4, c)               # P_e within 0.05 % over 1 s (TR with the consistent restart, T/400)
             self.assertLess(c['dev']['efd'], 1e-2, c)              # E_fd (the AVR's gain of 200 included)
             if c['gov'] != 'none':
                 self.assertLess(c['dev']['tm'], 1e-5, c)

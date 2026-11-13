@@ -1155,7 +1155,7 @@
   const watch={tiles:[...(avr?[{ctl:'AV1.dV',label:'ΔV_ref',at:[100,-150],rng:[-0.1,0.1],steps:['-0.02','+0.02','=0']}]:[]),...(gov?[{ctl:'GV1.dP',label:'ΔP_ref',at:[340,-150],rng:[-0.3,0.3],steps:['-0.05','+0.05','=0']}]:[]),
    ['Y:SG1:d','δ (°)'],['Y:SG1:pe','P_e'],['Y:SG1:vt','|V|'],...(avr?[['Y:AV1/EFD','E_fd']]:[]),...(pss?[['Y:PS1/VS','v_s']]:[]),...(gov?[['Y:GV1/PM','P_m'],['Y:GV1/G','βαλβίδα / θυρόφραγμα']]:[]),['Y:SG1','ω']]};
   const T=o.ev==='load'&&o.gov==='steam'?30:o.ev==='load'?40:10;
-  return project(comps,wires,{version:4,watch,sim:{hDiv:400,method:'BDF2',speed:25,stopT:T},scope:{panes,window:{unit:'s',n:T}},meta:{smib:{XT,X1,X2,P,Q,EB:op.EB,th:op.th},ctl:o.ctl,gov:o.gov,ev:o.ev}});}
+  return project(comps,wires,{version:4,watch,sim:{hDiv:400,method:'TR',speed:25,stopT:T},scope:{panes,window:{unit:'s',n:T}},meta:{smib:{XT,X1,X2,P,Q,EB:op.EB,th:op.th},ctl:o.ctl,gov:o.gov,ev:o.ev}});}
  T.push({id:'gen_ctl',group:'Συστήματα ισχύος (4.8.1)',title:'Γεννήτρια με AVR, PSS και ρυθμιστή στροφών',theory:'formula',topology:'gen_ctl',
   options:[{k:'ctl',label:'Διέγερση',options:[['none','Σταθερή E_fd'],['avr','AVR ST1A (K_A = 200)'],['avr_pss','AVR ST1A και PSS'],['tgr','ST1A με μείωση μεταβατικού κέρδους (T_C = 1, T_B = 10)'],['dc1a','AVR DC1A (διεγέρτρια ΣΡ)']],def:'avr_pss'},
    {k:'gov',label:'Ρυθμιστής στροφών',options:[['none','Σταθερή T_m'],['steam','Ατμοστρόβιλος με αναθέρμανση'],['hydro','Υδροστρόβιλος']],def:'none'},
@@ -1197,7 +1197,7 @@
    const panes=[[['Y:G1:d','δ₁ (°)'],['Y:G2:d','δ₂ (°)'],['Y:G3:d','δ₃ (°)']],[['Y:G1:pe','P₁'],['Y:G2:pe','P₂'],['Y:G3:pe','P₃']],[['Y:G1','ω₁'],['Y:G2','ω₂'],['Y:G3','ω₃']],
     ...(avr?[[['Y:AV1/EFD','E_fd1'],['Y:AV2/EFD','E_fd2'],['Y:AV3/EFD','E_fd3']],[['Y:G1:vt','|V₁|'],['Y:G2:vt','|V₂|'],['Y:G3:vt','|V₃|']]]:[])];
    const Tf=avr?5:2;
-   return project(comps,wires,{version:4,sim:{hDiv:400,...(avr?{method:'BDF2'}:{}),speed:F?(avr?10:5):2,stopT:F?Tf:0.5},scope:{panes,window:{unit:'s',n:F?Tf:0.5}},meta:{lf:IEEE9_LF,fault:F,classical:cl,ctl:avr?o.ctl:'none'}});}});
+   return project(comps,wires,{version:4,sim:{hDiv:400,...(avr?{method:'TR'}:{}),speed:F?(avr?10:5):2,stopT:F?Tf:0.5},scope:{panes,window:{unit:'s',n:F?Tf:0.5}},meta:{lf:IEEE9_LF,fault:F,classical:cl,ctl:avr?o.ctl:'none'}});}});
  // ------------------------------------------------------------------ 4.4: lines from geometry, CP and FD (ROADMAP §26)
  // the typical 400 kV line of 100 km (Parts.TLM_TYPICAL), with its models from tools/line_models.py (pcl/lineconst.py)
  const LM=()=>root.LineModels||(typeof require!=='undefined'?require('./linemodels.js'):null);

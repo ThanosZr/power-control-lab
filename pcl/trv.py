@@ -308,19 +308,7 @@ def pole_factors(kpp):
 
 
 # ---------------------------------------------------------------- envelope of a prospective TRV (Annex D)
-def _area(ts, us, line, a, b):
-    s = 0.0
-    for i in range(a, b):
-        d0 = line(ts[i]) - us[i]
-        d1 = line(ts[i + 1]) - us[i + 1]
-        s += 0.5 * (d0 + d1) * (ts[i + 1] - ts[i])
-    return s
-
-
-def envelope_of(t, u, t0=0.0):
-    """The envelope of a prospective TRV curve by the method of Annex D. t from current zero (or t0 subtracted),
-    u ≥ 0 rising to its highest peak (the sign of the largest excursion is taken). Returns {'params': '4p', u1, t1, uc,
-    t2} or {'params': '2p', uc, t3}, with 'case' (D.2 c) 1, 2, 3i or 3ii) and the contact points."""
+def _prep(t, u, t0, nmax=4000):
     ts = [float(x) - t0 for x in t]
     us = [float(x) for x in u]
     if len(ts) != len(us) or len(ts) < 3:
@@ -328,9 +316,22 @@ def envelope_of(t, u, t0=0.0):
     big = max(range(len(us)), key=lambda i: abs(us[i]))
     sg = 1.0 if us[big] >= 0 else -1.0
     pairs = [(a, sg * b) for a, b in zip(ts, us) if a >= 0]
-    ts = [p[0] for p in pairs]
-    us = [p[1] for p in pairs]
-    ip = max(range(len(us)), key=lambda i: us[i])           # highest peak
+    if len(pairs) > nmax:                       # thinned for speed, the highest peak kept
+        ip = max(range(len(pairs)), key=lambda i: pairs[i][1])
+        st = -(-len(pairs) // nmax)
+        keep = set(range(0, len(pairs), st)) | {ip, len(pairs) - 1}
+        pairs = [pairs[i] for i in sorted(keep)]
+    return [p[0] for p in pairs], [p[1] for p in pairs], sg
+
+
+def envelope_of(t, u, t0=0.0):
+    """The envelope of a prospective TRV curve by the method of Annex D. t from current zero (or t0 subtracted),
+    the sign of the largest excursion taken as positive. Returns {'params': '4p', u1, t1, uc, t2} or {'params': '2p', uc,
+    t3}, with rrrv (slope of the first segment), 'case' (D.2 c) 1, 2, 3i or 3ii) and the points of contact."""
+    import bisect
+    ts, us, _ = _prep(t, u, t0)
+    n = len(ts)
+    ip = max(range(n), key=lambda i: us[i])                 # highest peak
     uc = us[ip]
     if uc <= 0:
         raise TRVError('envelope_of: no recovery voltage')
@@ -345,17 +346,26 @@ def envelope_of(t, u, t0=0.0):
     for i in range(i1, ip + 1):
         while len(hull) >= 2:
             a, b = hull[-2], hull[-1]
-            cross = (ts[b] - ts[a]) * (us[i] - us[a]) - (us[b] - us[a]) * (ts[i] - ts[a])
-            if cross >= 0:
+            if (ts[b] - ts[a]) * (us[i] - us[a]) - (us[b] - us[a]) * (ts[i] - ts[a]) >= 0:
                 hull.pop()
             else:
                 break
         hull.append(i)
     gaps = [(a, b) for a, b in zip(hull, hull[1:]) if b - a > 1 and not (a == i1 and b == ip)]
+    # cumulative integral of the curve (trapezoids) for the areas between curve and envelope
+    P = [0.0] * n
+    for i in range(1, n):
+        P[i] = P[i - 1] + 0.5 * (us[i] + us[i - 1]) * (ts[i] - ts[i - 1])
+
+    def curve_int(x):
+        k = min(max(bisect.bisect_right(ts, x) - 1, 0), n - 2)
+        d = x - ts[k]
+        uk = us[k] + (us[k + 1] - us[k]) * d / (ts[k + 1] - ts[k]) if ts[k + 1] > ts[k] else us[k]
+        return P[k] + 0.5 * (us[k] + uk) * d
 
     def corners(slope, ta, ua):
-        # third segment through (ta, ua) with the given slope: B with the first segment, A with the horizontal
-        if abs(m1 - slope) < 1e-30 or slope <= 0:
+        # third segment through (ta, ua): B with the first segment, A with the horizontal
+        if slope <= 0 or abs(m1 - slope) < 1e-30:
             return None
         tB = (ua - slope * ta) / (m1 - slope)
         tA = ta + (uc - ua) / slope
@@ -364,27 +374,26 @@ def envelope_of(t, u, t0=0.0):
         return {'params': '4p', 'u1': m1 * tB, 't1': tB, 'uc': uc, 't2': tA, 'rrrv': m1}
 
     def equal_area():
-        # the tangent touching at one point with equal areas between curve and envelope on either side of it
+        # the tangent at one hull vertex with equal areas between curve and envelope on either side of the contact
         best = None
-        for j in range(i1 + 1, ip):
-            sl = (us[j + 1] - us[j - 1]) / (ts[j + 1] - ts[j - 1])
+        for q in range(1, len(hull) - 1):
+            j, jl, jr = hull[q], hull[q - 1], hull[q + 1]
+            sl = 0.5 * ((us[j] - us[jl]) / (ts[j] - ts[jl]) + (us[jr] - us[j]) / (ts[jr] - ts[j]))
             c = corners(sl, ts[j], us[j])
             if not c:
                 continue
-            env = lambda x, c=c: min(m1 * x, c['u1'] + sl * (x - c['t1']), uc)
-            iB = min(range(len(ts)), key=lambda q: abs(ts[q] - c['t1']))
-            iA = min(range(len(ts)), key=lambda q: abs(ts[q] - c['t2']))
-            a1 = _area(ts, us, env, min(iB, j), j)
-            a2 = _area(ts, us, env, j, max(iA, j))
+            tB, tA, tj = c['t1'], c['t2'], ts[j]
+            env_int = lambda x0, x1: 0.5 * (c['u1'] + sl * (x0 - tB) + c['u1'] + sl * (x1 - tB)) * (x1 - x0)
+            a1 = env_int(tB, tj) - (curve_int(tj) - curve_int(tB))
+            a2 = env_int(tj, min(tA, ts[-1])) - (curve_int(min(tA, ts[-1])) - curve_int(tj))
             d = abs(a1 - a2)
             if best is None or d < best[0]:
-                best = (d, dict(c, contact=(ts[j], us[j])))
+                best = (d, dict(c, contact=(tj, us[j])))
         return best[1] if best else None
 
     if len(gaps) == 1:
         a, b = gaps[0]
-        sl = (us[b] - us[a]) / (ts[b] - ts[a])
-        c = corners(sl, ts[a], us[a])
+        c = corners((us[b] - us[a]) / (ts[b] - ts[a]), ts[a], us[a])
         if c:
             return dict(c, case='1', contact1=(ts[i1], us[i1]), contacts=((ts[a], us[a]), (ts[b], us[b])))
     if len(gaps) > 1:
@@ -402,23 +411,23 @@ def envelope_of(t, u, t0=0.0):
 def compare(t, u, spec, t0=0.0):
     """A prospective TRV curve (e.g. from the simulation; t from current zero, or t0 subtracted) against a rating
     (``rated``): ``ok`` when the curve stays at or under the reference line at every instant (the system TRV within
-    the breaker's capability, IEEE C37.011 §4), the smallest margin (V, and relative to u_c) and where it occurs, the
-    first instant above the line, and the envelope of the curve (``envelope_of``) with the ratios of its peak and rate
-    of rise to the rated ones."""
-    ts = [float(x) - t0 for x in t]
-    us = [float(x) for x in u]
-    big = max(range(len(us)), key=lambda i: abs(us[i]))
-    sg = 1.0 if us[big] >= 0 else -1.0
+    the breaker's capability, IEEE C37.011 §4); the smallest margin (V, and relative to u_c) and where it occurs, counted
+    where the reference line is above 5 % of u_c (near the origin both are zero); ``ratio``, the largest u/u_ref there;
+    the first instant above the line; and the envelope of the curve (``envelope_of``) with the ratios of its peak and
+    rate of rise to the rated ones."""
+    ts, us, _ = _prep(t, u, t0, nmax=10 ** 9)
     ref = reference_line(spec, max(ts))
-    worst, at, first = None, None, None
+    worst, at, first, ratio = None, None, None, 0.0
     for a, b in zip(ts, us):
-        if a < 0:
+        r = line_value(ref, a)
+        if b > r + 1e-9 * spec['uc'] and first is None:
+            first = a
+        if r < 0.05 * spec['uc']:
             continue
-        m = line_value(ref, a) - sg * b
+        m = r - b
+        ratio = max(ratio, b / r)
         if worst is None or m < worst:
             worst, at = m, a
-        if m < 0 and first is None:
-            first = a
-    env = envelope_of(ts, us)
-    return {'ok': worst is not None and worst >= 0, 'margin': worst, 'margin_rel': worst / spec['uc'], 't_margin': at,
-            't_first': first, 'envelope': env, 'uc_ratio': env['uc'] / spec['uc'], 'rrrv_ratio': env['rrrv'] / spec['rrrv']}
+    env = envelope_of(t, u, t0)
+    return {'ok': first is None, 'margin': worst, 'margin_rel': worst / spec['uc'] if worst is not None else None, 't_margin': at,
+            'ratio': ratio, 't_first': first, 'envelope': env, 'uc_ratio': env['uc'] / spec['uc'], 'rrrv_ratio': env['rrrv'] / spec['rrrv']}
