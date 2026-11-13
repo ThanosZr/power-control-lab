@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.11: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (515 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.11: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (538 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-292 σημεία.
+312 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -215,12 +215,32 @@
 | `pcl.lineconst.z_internal` | `f`, `r`, `q`, `Rdc`, `mur`, `skin`, `s` | 4.4 |
 | `pcl.lineconst.zy` | `data`, `f`, `earth`, `skin`, `s` | 4.4 |
 | `pcl.lineconst.zy_from_file` | `data`, `s` | 4.11 |
+| `pcl.linereport.ReportError` | — | 4.11 |
+| `pcl.linereport.api_export` | `req` | 4.11 |
+| `pcl.linereport.api_scan` | `req` | 4.11 |
+| `pcl.linereport.plot` | `sc`, `items`, `preset`, `out`, `form`, `elems`, `style`, `title` | 4.11 |
+| `pcl.linereport.read_exact_pi` | `text` | 4.11 |
+| `pcl.linereport.read_fd_mod` | `text` | 4.11 |
+| `pcl.linereport.read_nominal_pi` | `text` | 4.11 |
+| `pcl.linereport.report_html` | `data`, `f`, `length`, `U`, `sc`, `mdl`, `figures`, `title` | 4.11 |
+| `pcl.linereport.report_pdf` | `data`, `path`, `f`, `length`, `U`, `sc`, `preset` | 4.11 |
+| `pcl.linereport.script` | `req` | 4.11 |
+| `pcl.linereport.series` | `sc`, `dom`, `qty`, `elems` | 4.11 |
+| `pcl.linereport.table` | `sc`, `items`, `form` | 4.11 |
+| `pcl.linereport.to_csv` | `sc`, `items`, `form`, `sep`, `decimal` | 4.11 |
+| `pcl.linereport.to_json` | `sc`, `indent` | 4.11 |
+| `pcl.linereport.to_mat` | `sc`, `path` | 4.11 |
+| `pcl.linereport.write_cp_netlist` | `mdl`, `name`, `k`, `m` | 4.11 |
+| `pcl.linereport.write_exact_pi` | `data`, `freqs`, `length` | 4.11 |
+| `pcl.linereport.write_fd_mod` | `mdl` | 4.11 |
+| `pcl.linereport.write_nominal_pi` | `data`, `f`, `length` | 4.11 |
 | `pcl.link.App` | `url`, `token`, `timeout`, `client` | 3.18 |
 | `pcl.link.App.advance` | `dt`, `set`, `keys`, `draw` | 4.9.1 |
 | `pcl.link.App.call` | `method`, `timeout`, `**args` | 3.18 |
 | `pcl.link.App.channels` | — | 3.18 |
 | `pcl.link.App.get` | `key` | 3.18 |
 | `pcl.link.App.info` | — | 3.18 |
+| `pcl.link.App.line` | `cid` | 4.11 |
 | `pcl.link.App.load` | `project` | 3.18 |
 | `pcl.link.App.machines` | — | 4.7 |
 | `pcl.link.App.notify` | `msg`, `sev`, `fix` | 3.18 |
@@ -360,7 +380,7 @@
 
 ## Server: `/api/<ενέργεια>` και διαδρομές
 
-36 σημεία.
+38 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -380,7 +400,9 @@
 | `/api/envelope` | — | 3.18 |
 | `/api/health` | — | 3.18 |
 | `/api/inverse` | — | 3.18 |
+| `/api/line_export` | — | 4.11 |
 | `/api/line_model` | — | 4.4 |
+| `/api/line_scan` | — | 4.11 |
 | `/api/linearize` | — | 3.18 |
 | `/api/link/call` | — | 3.18 |
 | `/api/link/deny` | — | 3.18 |
@@ -403,7 +425,7 @@
 
 ## API πρόσθετων και σύνδεσης (`addons.js` M, `pcl.link.App`, `PclApp`)
 
-21 σημεία.
+22 σημεία.
 
 | Μέθοδος | Άδεια | Από |
 |---|---|---|
@@ -414,6 +436,7 @@
 | `download` | files | 3.18 |
 | `get` | project.read | 3.18 |
 | `info` | — | 3.18 |
+| `line` | project.read | 4.11 |
 | `machines` | project.read | 4.7 |
 | `notify` | show | 3.18 |
 | `params` | project.read | 3.18 |

@@ -491,5 +491,89 @@ class Outputs(unittest.TestCase):
         self.assertLess(r['report']['rebuilt']['residual'], 1e-9)
 
 
+
+class Exports(unittest.TestCase):
+    """The outputs of the window (pcl/linereport.py): each file read back gives the numbers it was written from."""
+
+    @classmethod
+    def setUpClass(cls):
+        from pcl import linereport as lr
+        cls.lr = lr
+        cls.d = lc.typical('400kV')
+        cls.S = lc.scan(cls.d, 1, 5, 4, length=100)
+
+    def test_table_csv(self):
+        head, rows = self.lr.table(self.S, [('modes', 'Zc'), ('ti', 'qerr')])
+        self.assertEqual(head[0], 'f [Hz]')
+        self.assertEqual(rows.shape, (len(self.S['f']), 1 + 2 * 3 + 1))
+        np.testing.assert_allclose(rows[:, 1], np.abs(self.S['modes']['Zc'][:, 0]))
+        txt = self.lr.to_csv(self.S, [('phase', 'Z')], form='reim', sep=';', decimal=',')
+        first = txt.splitlines()[1].split(';')
+        self.assertAlmostEqual(float(first[1].replace(',', '.')), self.S['Z'][0, 0, 0].real, delta=1e-9)
+        self.assertEqual(len(txt.splitlines()[0].split(';')), 1 + 2 * 6)       # the symmetric Z: six elements, Re and Im
+        with self.assertRaises(self.lr.ReportError):
+            self.lr.series(self.S, 'fit', 'Zc')                                   # no FD model in this scan
+
+    def test_mat(self):
+        b = self.lr.to_mat(self.S)
+        z = lc.load_zy_mat(b)
+        self.assertEqual(z['length'], 100.0)
+        d2 = dict(self.d, zyfile=z)
+        for f in self.S['f'][[0, 3, -1]]:
+            Z1, Y1 = lc.phase_matrices(self.d, f)
+            Z2, Y2 = lc.phase_matrices(d2, f)
+            self.assertLess(np.abs(Z2 - Z1).max() / np.abs(Z1).max(), 1e-12)
+            self.assertLess(np.abs(Y2 - Y1).max() / np.abs(Y1).max(), 1e-12)
+
+    def test_pi_files(self):
+        txt = self.lr.write_exact_pi(self.d, [50, 1000], 100)
+        r = self.lr.read_exact_pi(txt)
+        self.assertEqual((r['M'], r['f']), (3, [50.0, 1000.0]))
+        for k, f in enumerate((50, 1000)):
+            p = lc.exact_pi(self.d, f, 100)
+            self.assertLess(np.abs(r['series'][k] - p['series']).max() / np.abs(p['series']).max(), 1e-9)
+            self.assertLess(np.abs(r['shunt'][k] - p['shunt']).max() / np.abs(p['shunt']).max(), 1e-9)
+        n = self.lr.read_nominal_pi(self.lr.write_nominal_pi(self.d, 50, 100))
+        q = lc.nominal_pi(self.d, 50, 100)
+        self.assertLess(np.abs(n['L'] - q['L']).max() / np.abs(q['L']).max(), 1e-9)
+        self.assertLess(np.abs(n['C'] - 2 * q['C']).max() / np.abs(q['C']).max(), 1e-9)   # the total C, half at each end
+
+    def test_model_files(self):
+        m = lc.fd_model(self.d, 100, 0.1, 7, 6)
+        r = self.lr.read_fd_mod(self.lr.write_fd_mod(m))
+        self.assertEqual(r['length'], 100.0)
+        for s in 2j * np.pi * np.array([0.5, 50, 5e3, 5e5]):
+            Y1, Y2 = lc.model_admittance(m, s), lc.model_admittance(r, s)
+            self.assertLess(np.abs(Y2 - Y1).max() / np.abs(Y1).max(), 1e-10)          # T_i written with 12 decimals
+        cp = lc.cp_model(self.d, 50, 100)
+        lines = self.lr.write_cp_netlist(cp, 'L1').splitlines()
+        self.assertEqual(lines[0], '_TLM;L1;6;6;ka,kb,kc,ma,mb,mc,')
+        L, R, Zc, tau = map(float, lines[2].split())
+        self.assertAlmostEqual(R * L, cp['modes'][0]['R'], delta=1e-4 * cp['modes'][0]['R'])
+        self.assertAlmostEqual(tau, cp['modes'][0]['tau'], delta=1e-5 * tau)
+        self.assertEqual(len(lines), 2 + 3 + 3 + 3)
+
+    def test_report_script_api(self):
+        import json
+        h = self.lr.report_html(self.d, 50, 100, 400, self.S, figures=False)
+        for part in ('Z_E των φάσεων', 'Χρήσιμα μεγέθη', 'SIL', 'Q-error', '</html>'):
+            self.assertIn(part, h)
+        for kind in ('cp', 'pi', 'fd'):
+            code = self.lr.script({'data': self.d, 'len': 100, 'model': kind, 'fmin': 1, 'dec': 5, 'ppd': 6, 'fti': 'auto'})
+            compile(code, 'line_scan.py', 'exec')
+            self.assertIn('lc.scan(data', code)
+        out = self.lr.api_scan({'data': self.d, 'len': 100, 'fmin': 1, 'dec': 4, 'ppd': 4, 'U': 400,
+                                'sources': [{'re': 1, 'im': 0}, 1, [0.5, 0.2]]})
+        json.dumps(out, allow_nan=False)
+        self.assertIn('SIL', out['useful'])
+        self.assertEqual(len(out['qtests']), 5)
+        for fmt in ('csv', 'json', 'mat', 'script', 'exact_pi', 'nominal_pi'):
+            e = self.lr.api_export({'fmt': fmt, 'data': self.d, 'len': 100, 'fmin': 1, 'dec': 3, 'ppd': 4, 'name': 'Γ 1'})
+            self.assertTrue(e['name'].startswith('Γ1'))
+            self.assertTrue(e.get('text') or e.get('base64'))
+        with self.assertRaises(lc.LineError):
+            self.lr.api_export({'fmt': 'fd_mod', 'data': self.d})
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -1828,7 +1828,7 @@ def scan(data, fmin=0.01, decades=9, ppd=10, length=None, ti='gm0', fti=None, mo
         v = w / g.imag
         return {'Z': zm * 1e3, 'Y': ym * 1e3, 'Zc': np.sqrt(zm / ym), 'alpha': g.real * 1e3, 'beta': g.imag * 1e3,
                 'v': v / 1e3, 'tau': Lm / v * 1e6, 'A': np.exp(-g * Lm), 'R': zm.real * 1e3,
-                'L': zm.imag / w * 1e6, 'G': ym.real * 1e3, 'C': ym.imag / w * 1e9}
+                'L': zm.imag / w * 1e6, 'G': ym.real * 1e9, 'C': ym.imag / w * 1e12}
 
     out = {'f': fs, 'M': M, 'length': L, 'ti': ti, 'fti': float(fti), 'Ti': Ti, 'Z': Zs * 1e3, 'Y': Ys * 1e3,
            'Zc': Zc_ph, 'Yc': Yc_ph, 'H': H_ph, 'modes': modes_of(cz, cy), 'exact': modes_of(ez, ey), 'Tex': Tex,

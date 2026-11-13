@@ -58,6 +58,17 @@ def line_model(data):
     except lineconst.LineError as e:
         raise InputError(str(e)) from e
 ACTIONS['line_model']=line_model
+# 4.11: every parameter against frequency, and the exports of the «Δεδομένα γραμμής» window (pcl/linereport.py)
+def line_action(name):
+    def act(data):
+        from pcl import lineconst,linereport
+        try:
+            return getattr(linereport,name)(data)
+        except (lineconst.LineError,linereport.ReportError) as e:
+            raise InputError(str(e)) from e
+    return act
+ACTIONS['line_scan']=line_action('api_scan')
+ACTIONS['line_export']=line_action('api_export')
 
 
 # scripted scenarios (3.14, ROADMAP §30): the pcl package's job() for MATLAB/Octave (webwrite) and other tools,

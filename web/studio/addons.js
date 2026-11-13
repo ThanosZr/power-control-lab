@@ -5,10 +5,10 @@
 // * The link: programs on this computer call the same methods through the server (engine/addons.py Link), when the
 //   user has turned it on: the page takes each call with a long poll and posts the answer back.
 // Methods (and the permission an add-on needs for each; the link may call all of them):
-//   info, presets · project.get, params, get, selection, channels, scope, values (project.read) · set, set_many, project.load (project.write)
+//   info, presets · project.get, params, get, selection, channels, scope, values, line (project.read) · set, set_many, project.load (project.write)
 //   run, batch, bifurcation (run) · python (python) · show, notify (show) · download (files)
 (function(root){
- const PERM={'project.get':'project.read',machines:'project.read',params:'project.read',get:'project.read',selection:'project.read',channels:'project.read',scope:'project.read',values:'project.read',
+ const PERM={'project.get':'project.read',machines:'project.read',line:'project.read',params:'project.read',get:'project.read',selection:'project.read',channels:'project.read',scope:'project.read',values:'project.read',
   set:'project.write',set_many:'project.write','project.load':'project.write',run:'run',advance:'run',reset:'run',batch:'run',bifurcation:'run',python:'python',show:'show',notify:'show',download:'files'};
  const PERM_TXT={'project.read':'διαβάζει το κύκλωμα και τα αποτελέσματα','project.write':'αλλάζει παραμέτρους ή φορτώνει κύκλωμα','run':'τρέχει προσομοιώσεις',
   'python':'τρέχει κώδικα Python (στον browser)','show':'δείχνει πίνακες, γραφήματα και μηνύματα','files':'κατεβάζει αρχεία'};
@@ -46,6 +46,12 @@
   selection:()=>A.ctx.selection(),
   presets:async()=>{const r=await fetch('api/presets');if(!r.ok)throw new Error('Τα πρότυπα θέλουν τον server της εφαρμογής.');return (await r.json()).presets;},
   channels:()=>{const s=A.ctx.sim();return s?{keys:[...s.keys],T:s.T}:{keys:[],T:null};},
+  // 4.11: the data of a line (part TLM a.id), or what the «Δεδομένα γραμμής» window sent last («Στην Python»)
+  line:a=>{if(!a.id){if(!A.lineOut)throw new Error('Το παράθυρο «Δεδομένα γραμμής» δεν έχει στείλει τίποτα («Στην Python»).');return clone(A.lineOut);}
+   const c=comp(a.id);if(c.type!=='TLM')throw new Error(`Το ${a.id} δεν είναι γραμμή (TLM).`);const p={...(root.Parts.defaults?root.Parts.defaults('TLM'):{}),...c.params};
+   let data=null,mdl=null;try{data=JSON.parse(p.data||'null');}catch(e){}try{mdl=JSON.parse(p.mdl||'null');}catch(e){}
+   const opts={};for(const k of ['model','len','f','fmin','dec','ppd','fti','ti','tiauto','cp','npi','nmax'])if(p[k]!==undefined&&p[k]!=='')opts[k]=num(p[k]);
+   return {id:a.id,data,opts,mdl};},
   machines:()=>root.Parts.machines(), // 4.7: the machines of the app, with their pins and parameters (pcl.gui reads them)
   advance:a=>A.ctx.advance(a),reset:()=>A.ctx.reset(),   // 4.9.1: an external controller steps the circuit of the screen (pcl.workbench live)
   values:a=>{const s=A.ctx.sim();if(!s)return {t:null,values:{}};const v={};for(const k of a.keys||[])if(s.chIndex.has(k))v[k]=s.now(k);return {t:s.t,values:v};},

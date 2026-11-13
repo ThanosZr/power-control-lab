@@ -8,7 +8,7 @@
 | Αρχείο | Γραμμές |
 |---|---:|
 | `web/studio/addon_client.js` | 30 |
-| `web/studio/addons.js` | 110 |
+| `web/studio/addons.js` | 116 |
 | `web/studio/app.js` | 2529 |
 | `web/studio/bus.js` | 197 |
 | `web/studio/editor.js` | 642 |
@@ -40,7 +40,7 @@
 | `web/studio/units.js` | 156 |
 | `web/studio/watch.js` | 339 |
 | `pcl/runner.js` | 27 |
-| `run.py` | 294 |
+| `run.py` | 305 |
 | `engine/__init__.py` | 1 |
 | `engine/addons.py` | 322 |
 | `engine/analysis.py` | 307 |
@@ -69,7 +69,8 @@
 | `pcl/gui.py` | 409 |
 | `pcl/impulse.py` | 858 |
 | `pcl/lineconst.py` | 2172 |
-| `pcl/link.py` | 145 |
+| `pcl/linereport.py` | 737 |
+| `pcl/link.py` | 150 |
 | `pcl/network.py` | 1206 |
 | `pcl/plotting.py` | 340 |
 | `pcl/trv.py` | 433 |
@@ -95,7 +96,7 @@
 | `tests/test_impulse_tools.py` | 150 |
 | `tests/test_library.py` | 41 |
 | `tests/test_lightning.py` | 78 |
-| `tests/test_linedata.py` | 495 |
+| `tests/test_linedata.py` | 579 |
 | `tests/test_lines.py` | 355 |
 | `tests/test_live_program.py` | 49 |
 | `tests/test_live_sim.py` | 149 |
@@ -329,7 +330,7 @@
 
 ## API του server (`run.py`, `/api/<action>`)
 
-`analyze`, `batch_sim`, `bidir`, `boundary`, `capacitance`, `curves`, `derivation`, `design`, `envelope`, `inverse`, `line_model`, `linearize`, `model_proof`, `problem`, `scenario_run`, `scenario_sweep`, `solve`, `studio_math`, `sweep`, `switching`, `template_solve`, `validate_circuit`
+`analyze`, `batch_sim`, `bidir`, `boundary`, `capacitance`, `curves`, `derivation`, `design`, `envelope`, `inverse`, `line_export`, `line_model`, `line_scan`, `linearize`, `model_proof`, `problem`, `scenario_run`, `scenario_sweep`, `solve`, `studio_math`, `sweep`, `switching`, `template_solve`, `validate_circuit`
 
 ## Templates δεδομένων (`web/studio/exercises/`)
 
@@ -356,7 +357,7 @@
 | 30 | function | `poolOf` |
 | 32 | function | `solve` |
 | 33 | function | `scopeData` |
-| 68 | function | `onMessage` |
+| 74 | function | `onMessage` |
 
 ### `web/studio/app.js`
 
@@ -1906,17 +1907,18 @@ _(χωρίς συναρτήσεις)_
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
 | 54 | function | `line_model` |
-| 65 | function | `scenario` |
-| 94 | class | `Handler` |
-| 96 | method | `Handler.local` |
-| 100 | method | `Handler.alive` |
-| 110 | method | `Handler.body` |
-| 119 | method | `Handler.addon_get` |
-| 149 | method | `Handler.addon_post` |
-| 176 | method | `Handler.send` |
-| 192 | method | `Handler.do_GET` |
-| 223 | method | `Handler.do_POST` |
-| 269 | function | `main` |
+| 62 | function | `line_action` |
+| 76 | function | `scenario` |
+| 105 | class | `Handler` |
+| 107 | method | `Handler.local` |
+| 111 | method | `Handler.alive` |
+| 121 | method | `Handler.body` |
+| 130 | method | `Handler.addon_get` |
+| 160 | method | `Handler.addon_post` |
+| 187 | method | `Handler.send` |
+| 203 | method | `Handler.do_GET` |
+| 234 | method | `Handler.do_POST` |
+| 280 | function | `main` |
 
 ### `engine/__init__.py`
 
@@ -2645,6 +2647,44 @@ _(χωρίς συναρτήσεις)_
 | 2120 | function | `_req_opts` |
 | 2132 | function | `api` |
 
+### `pcl/linereport.py`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 41 | class | `ReportError` |
+| 45 | function | `_labels` |
+| 50 | function | `series` |
+| 100 | function | `_cols` |
+| 109 | function | `table` |
+| 126 | function | `to_csv` |
+| 140 | function | `to_json` |
+| 145 | function | `to_mat` |
+| 169 | function | `_tri` |
+| 174 | function | `_rows` |
+| 178 | function | `_untri` |
+| 188 | function | `write_exact_pi` |
+| 206 | function | `_numbers` |
+| 210 | function | `read_exact_pi` |
+| 248 | function | `write_nominal_pi` |
+| 261 | function | `read_nominal_pi` |
+| 279 | function | `_modechar` |
+| 283 | function | `write_fd_mod` |
+| 309 | function | `read_fd_mod` |
+| 352 | function | `write_cp_netlist` |
+| 372 | function | `plot` |
+| 433 | function | `_svg` |
+| 448 | function | `_c` |
+| 455 | function | `_mat_html` |
+| 466 | function | `_kv_html` |
+| 478 | function | `report_html` |
+| 569 | function | `_fmt` |
+| 579 | function | `report_pdf` |
+| 599 | function | `script` |
+| 652 | function | `_version` |
+| 661 | function | `_scan_req` |
+| 679 | function | `api_scan` |
+| 700 | function | `api_export` |
+
 ### `pcl/link.py`
 
 | Γραμμή | Είδος | Όνομα |
@@ -2664,14 +2704,15 @@ _(χωρίς συναρτήσεις)_
 | 79 | method | `App.selection` |
 | 82 | method | `App.channels` |
 | 85 | method | `App.scope` |
-| 90 | method | `App.machines` |
-| 94 | method | `App.advance` |
-| 100 | method | `App.reset` |
-| 104 | method | `App.run` |
-| 110 | method | `App.python` |
-| 115 | method | `App.show` |
-| 133 | method | `App.notify` |
-| 137 | function | `connect` |
+| 89 | method | `App.line` |
+| 95 | method | `App.machines` |
+| 99 | method | `App.advance` |
+| 105 | method | `App.reset` |
+| 109 | method | `App.run` |
+| 115 | method | `App.python` |
+| 120 | method | `App.show` |
+| 138 | method | `App.notify` |
+| 142 | function | `connect` |
 
 ### `pcl/network.py`
 

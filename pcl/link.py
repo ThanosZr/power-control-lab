@@ -86,6 +86,11 @@ class App:
         """What the app's scope holds now: {keys, t, ch, T, now}."""
         return self.call('scope', keys=keys or [])
 
+    def line(self, cid=None):
+        """4.11: the data of a line: {id, data, opts, mdl} of the part TLM cid, or (cid None) what the «Δεδομένα γραμμής»
+        window sent last with «Στην Python». data goes to pcl.lineconst (scan, matrices, …) and opts to its options."""
+        return self.call('line', id=cid)
+
     # simulations with the app's solver (its pool of workers)
     def machines(self):
         """The machines of the app (4.7): type, name, kind, outputs, pins, parameters with defaults (pcl.gui reads them)."""

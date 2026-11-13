@@ -1412,6 +1412,156 @@
     ],
     "since": "4.11"
    },
+   "pcl.linereport.ReportError": {
+    "params": [],
+    "since": "4.11"
+   },
+   "pcl.linereport.api_export": {
+    "params": [
+     "req"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.api_scan": {
+    "params": [
+     "req"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.plot": {
+    "params": [
+     "sc",
+     "items",
+     "preset",
+     "out",
+     "form",
+     "elems",
+     "style",
+     "title"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.read_exact_pi": {
+    "params": [
+     "text"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.read_fd_mod": {
+    "params": [
+     "text"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.read_nominal_pi": {
+    "params": [
+     "text"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.report_html": {
+    "params": [
+     "data",
+     "f",
+     "length",
+     "U",
+     "sc",
+     "mdl",
+     "figures",
+     "title"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.report_pdf": {
+    "params": [
+     "data",
+     "path",
+     "f",
+     "length",
+     "U",
+     "sc",
+     "preset"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.script": {
+    "params": [
+     "req"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.series": {
+    "params": [
+     "sc",
+     "dom",
+     "qty",
+     "elems"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.table": {
+    "params": [
+     "sc",
+     "items",
+     "form"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.to_csv": {
+    "params": [
+     "sc",
+     "items",
+     "form",
+     "sep",
+     "decimal"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.to_json": {
+    "params": [
+     "sc",
+     "indent"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.to_mat": {
+    "params": [
+     "sc",
+     "path"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.write_cp_netlist": {
+    "params": [
+     "mdl",
+     "name",
+     "k",
+     "m"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.write_exact_pi": {
+    "params": [
+     "data",
+     "freqs",
+     "length"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.write_fd_mod": {
+    "params": [
+     "mdl"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.write_nominal_pi": {
+    "params": [
+     "data",
+     "f",
+     "length"
+    ],
+    "since": "4.11"
+   },
    "pcl.link.App": {
     "params": [
      "url",
@@ -1451,6 +1601,12 @@
    "pcl.link.App.info": {
     "params": [],
     "since": "3.18"
+   },
+   "pcl.link.App.line": {
+    "params": [
+     "cid"
+    ],
+    "since": "4.11"
    },
    "pcl.link.App.load": {
     "params": [
@@ -2581,9 +2737,17 @@
     "params": [],
     "since": "3.18"
    },
+   "/api/line_export": {
+    "params": [],
+    "since": "4.11"
+   },
    "/api/line_model": {
     "params": [],
     "since": "4.4"
+   },
+   "/api/line_scan": {
+    "params": [],
+    "since": "4.11"
    },
    "/api/linearize": {
     "params": [],
@@ -2697,6 +2861,11 @@
     "params": [],
     "perm": "",
     "since": "3.18"
+   },
+   "M.line": {
+    "params": [],
+    "perm": "project.read",
+    "since": "4.11"
    },
    "M.machines": {
     "params": [],
