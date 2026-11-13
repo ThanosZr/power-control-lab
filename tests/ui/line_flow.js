@@ -60,5 +60,16 @@ const {chromium}=require('playwright');
  await p.selectOption('.ld-modal [data-kind]','oh');await p.waitForTimeout(300);
  ok((await p.$$('.ld-modal [data-add="w"]')).length===1&&!(await p.$$('.ld-modal .ld-cab')).length,'back to an overhead line');
  await p.click('.ld-modal [data-close]');
+ // 4.9: the two TRV tutorials, run to the end, with their cards (the rated envelope; the arc of the short-line fault)
+ await p.goto(U+'?tutorial=trv_terminal');await p.waitForTimeout(1500);
+ ok(await p.evaluate(()=>!window.PCL.S.error),'TRV tutorial builds: '+await p.evaluate(()=>window.PCL.S.error));
+ await p.click('#toend');await p.waitForFunction(()=>window.PCL.S.sim.t>=0.0639,null,{timeout:120000});await p.waitForTimeout(800);
+ const tht=await p.$eval('#theory',e=>e.innerText);ok(/κάτω από τη γραμμή αναφοράς/.test(tht)&&/Πρώτος πόλος: b/.test(tht),'terminal-fault card: '+tht.slice(0,160));
+ ok((await p.$$('#theory svg.trvplot path')).length>=3,'TRV plot with the reference and delay lines');
+ await p.goto(U+'?tutorial=trv_slf');await p.waitForTimeout(1500);
+ ok(await p.evaluate(()=>!window.PCL.S.error),'SLF tutorial builds: '+await p.evaluate(()=>window.PCL.S.error));
+ await p.click('#toend');await p.waitForFunction(()=>window.PCL.S.sim.t>=0.01559,null,{timeout:120000});await p.waitForTimeout(800);
+ const ths=await p.$eval('#theory',e=>e.innerText);ok(/Διακοπή στο πρώτο μηδέν/.test(ths)&&/R_s/.test(ths),'short-line-fault card: '+ths.slice(0,160));
+ ok(await p.evaluate(()=>Number.isFinite(window.PCL.S.sim.now('Garc:CB1/A1'))),'arc conductance channel');
  ok(!errs.length,'no JavaScript errors: '+errs.join(' | '));
  await b.close();if(fail.length){console.log('FAIL',fail.join('\n'));process.exit(1);}console.log('PASS line_flow');})().catch(e=>{console.error(e);process.exit(1);});

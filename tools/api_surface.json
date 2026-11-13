@@ -1,5 +1,5 @@
 {
- "version": "4.8.1",
+ "version": "4.9",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -1553,7 +1553,9 @@
     "since": "4.2"
    },
    "pcl.network.ieee14": {
-    "params": [],
+    "params": [
+     "levels"
+    ],
     "since": "4.2"
    },
    "pcl.network.ieee9": {
@@ -1750,7 +1752,7 @@
    },
    "pcl.trv.TRVError": {
     "params": [],
-    "since": "4.8.1"
+    "since": "4.9"
    },
    "pcl.trv.compare": {
     "params": [
@@ -1759,7 +1761,7 @@
      "spec",
      "t0"
     ],
-    "since": "4.8.1"
+    "since": "4.9"
    },
    "pcl.trv.default_kpp": {
     "params": [
@@ -1767,13 +1769,13 @@
      "earthed",
      "duty"
     ],
-    "since": "4.8.1"
+    "since": "4.9"
    },
    "pcl.trv.delay_line": {
     "params": [
      "spec"
     ],
-    "since": "4.8.1"
+    "since": "4.9"
    },
    "pcl.trv.envelope_of": {
     "params": [
@@ -1781,7 +1783,7 @@
      "u",
      "t0"
     ],
-    "since": "4.8.1"
+    "since": "4.9"
    },
    "pcl.trv.itrv": {
     "params": [
@@ -1789,27 +1791,27 @@
      "Isc",
      "f"
     ],
-    "since": "4.8.1"
+    "since": "4.9"
    },
    "pcl.trv.line_data": {
     "params": [
      "Ur",
      "f"
     ],
-    "since": "4.8.1"
+    "since": "4.9"
    },
    "pcl.trv.line_value": {
     "params": [
      "pts",
      "t"
     ],
-    "since": "4.8.1"
+    "since": "4.9"
    },
    "pcl.trv.pole_factors": {
     "params": [
      "kpp"
     ],
-    "since": "4.8.1"
+    "since": "4.9"
    },
    "pcl.trv.rated": {
     "params": [
@@ -1819,14 +1821,14 @@
      "f",
      "earthed"
     ],
-    "since": "4.8.1"
+    "since": "4.9"
    },
    "pcl.trv.reference_line": {
     "params": [
      "spec",
      "t_end"
     ],
-    "since": "4.8.1"
+    "since": "4.9"
    },
    "pcl.trv.slf": {
     "params": [
@@ -1840,7 +1842,7 @@
      "tdL",
      "td"
     ],
-    "since": "4.8.1"
+    "since": "4.9"
    },
    "pcl.tutorial": {
     "params": [

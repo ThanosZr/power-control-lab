@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.8.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (462 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.9: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (462 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.8.1.
+Κανένα στην 4.9.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -227,7 +227,7 @@
 | `pcl.network.c_factor` | `Un`, `which`, `lv_tol` | 4.2 |
 | `pcl.network.from_dict` | `d` | 4.2 |
 | `pcl.network.ieee` | `case` | 4.2 |
-| `pcl.network.ieee14` | — | 4.2 |
+| `pcl.network.ieee14` | `levels` | 4.2 |
 | `pcl.network.ieee9` | — | 4.2 |
 | `pcl.network.kappa` | `rx` | 4.2 |
 | `pcl.network.load` | `path` | 4.2 |
@@ -257,18 +257,18 @@
 | `pcl.set` | `key`, `value` | 3.18 |
 | `pcl.show` | `obj`, `title` | 3.18 |
 | `pcl.sweep` | `grid`, `**kw` | 3.18 |
-| `pcl.trv.TRVError` | — | 4.8.1 |
-| `pcl.trv.compare` | `t`, `u`, `spec`, `t0` | 4.8.1 |
-| `pcl.trv.default_kpp` | `Ur`, `earthed`, `duty` | 4.8.1 |
-| `pcl.trv.delay_line` | `spec` | 4.8.1 |
-| `pcl.trv.envelope_of` | `t`, `u`, `t0` | 4.8.1 |
-| `pcl.trv.itrv` | `Ur`, `Isc`, `f` | 4.8.1 |
-| `pcl.trv.line_data` | `Ur`, `f` | 4.8.1 |
-| `pcl.trv.line_value` | `pts`, `t` | 4.8.1 |
-| `pcl.trv.pole_factors` | `kpp` | 4.8.1 |
-| `pcl.trv.rated` | `Ur`, `duty`, `kpp`, `f`, `earthed` | 4.8.1 |
-| `pcl.trv.reference_line` | `spec`, `t_end` | 4.8.1 |
-| `pcl.trv.slf` | `Ur`, `Isc`, `ratio`, `f`, `itrv_req`, `Z`, `k`, `tdL`, `td` | 4.8.1 |
+| `pcl.trv.TRVError` | — | 4.9 |
+| `pcl.trv.compare` | `t`, `u`, `spec`, `t0` | 4.9 |
+| `pcl.trv.default_kpp` | `Ur`, `earthed`, `duty` | 4.9 |
+| `pcl.trv.delay_line` | `spec` | 4.9 |
+| `pcl.trv.envelope_of` | `t`, `u`, `t0` | 4.9 |
+| `pcl.trv.itrv` | `Ur`, `Isc`, `f` | 4.9 |
+| `pcl.trv.line_data` | `Ur`, `f` | 4.9 |
+| `pcl.trv.line_value` | `pts`, `t` | 4.9 |
+| `pcl.trv.pole_factors` | `kpp` | 4.9 |
+| `pcl.trv.rated` | `Ur`, `duty`, `kpp`, `f`, `earthed` | 4.9 |
+| `pcl.trv.reference_line` | `spec`, `t_end` | 4.9 |
+| `pcl.trv.slf` | `Ur`, `Isc`, `ratio`, `f`, `itrv_req`, `Z`, `k`, `tdL`, `td` | 4.9 |
 | `pcl.tutorial` | `tid`, `**options` | 3.18 |
 | `pcl.tutorials` | — | 3.18 |
 | `pcl.use` | `project` | 3.18 |
