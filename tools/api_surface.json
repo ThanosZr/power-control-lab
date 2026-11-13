@@ -1,5 +1,5 @@
 {
- "version": "4.9.1",
+ "version": "4.10",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -3040,6 +3040,67 @@
     ],
     "since": "4.1"
    },
+   "part:CHB": {
+    "params": [
+     "N",
+     "cell",
+     "C",
+     "Vdc",
+     "Ron",
+     "Rp",
+     "fs",
+     "norm",
+     "sel",
+     "band",
+     "impl"
+    ],
+    "pins": [
+     "a",
+     "b",
+     "n",
+     "ref",
+     "v",
+     "vav"
+    ],
+    "since": "4.10"
+   },
+   "part:CHBX": {
+    "params": [
+     "N",
+     "cell",
+     "C",
+     "Vdc",
+     "Ron",
+     "Rp"
+    ],
+    "pins": [
+     "a",
+     "b",
+     "i",
+     "s1",
+     "s10",
+     "s2",
+     "s3",
+     "s4",
+     "s5",
+     "s6",
+     "s7",
+     "s8",
+     "s9",
+     "v",
+     "v1",
+     "v10",
+     "v2",
+     "v3",
+     "v4",
+     "v5",
+     "v6",
+     "v7",
+     "v8",
+     "v9"
+    ],
+    "since": "4.10"
+   },
    "part:CLARKE": {
     "params": [
      "inv",
@@ -3774,6 +3835,46 @@
     ],
     "since": "3.18"
    },
+   "part:NLC": {
+    "params": [
+     "N",
+     "cell",
+     "Vdc",
+     "norm",
+     "sel",
+     "band",
+     "clock",
+     "trig"
+    ],
+    "pins": [
+     "i",
+     "n",
+     "ref",
+     "s1",
+     "s10",
+     "s2",
+     "s3",
+     "s4",
+     "s5",
+     "s6",
+     "s7",
+     "s8",
+     "s9",
+     "sw",
+     "v1",
+     "v10",
+     "v2",
+     "v3",
+     "v4",
+     "v5",
+     "v6",
+     "v7",
+     "v8",
+     "v9",
+     "vav"
+    ],
+    "since": "4.10"
+   },
    "part:NN": {
     "params": [
      "ins",
@@ -4164,6 +4265,43 @@
     ],
     "since": "3.18"
    },
+   "part:SPLL": {
+    "params": [
+     "f0",
+     "bw",
+     "k",
+     "k0",
+     "th0",
+     "impl"
+    ],
+    "pins": [
+     "al",
+     "amp",
+     "be",
+     "th",
+     "v",
+     "w"
+    ],
+    "since": "4.10"
+   },
+   "part:SPLX": {
+    "params": [
+     "f0",
+     "bw",
+     "k",
+     "k0",
+     "th0"
+    ],
+    "pins": [
+     "al",
+     "amp",
+     "be",
+     "th",
+     "v",
+     "w"
+    ],
+    "since": "4.10"
+   },
    "part:SR": {
     "params": [
      "q0"
@@ -4213,6 +4351,43 @@
      "w"
     ],
     "since": "3.18"
+   },
+   "part:SSSC": {
+    "params": [
+     "mode",
+     "N",
+     "Vdc",
+     "ma",
+     "sense",
+     "X",
+     "Iref",
+     "Vbref",
+     "Kp",
+     "Ki",
+     "KpI",
+     "KiI",
+     "KpV",
+     "KiV",
+     "kpd",
+     "fv",
+     "kid",
+     "dmax",
+     "mmax",
+     "f0",
+     "bw",
+     "fx",
+     "ton"
+    ],
+    "pins": [
+     "dth",
+     "i",
+     "v",
+     "vav",
+     "vb",
+     "vref",
+     "x"
+    ],
+    "since": "4.10"
    },
    "part:SUB": {
     "params": [

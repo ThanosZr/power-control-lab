@@ -9,7 +9,7 @@
 // (gridZ) and the fault currents of a fault at its terminals in the phase domain (faultCurrents), for the analysis.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
- const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC','TOWER','SAI'];
+ const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC','TOWER','SAI','CHB','SPLL','SSSC'];
  const isLib=t=>TYPES.includes(t);
  const RMIN=1e-4;               // a bolted fault or a closed pole: 0,1 mΩ inside the circuit
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -475,13 +475,105 @@
   const a0=B.comp('A0','MOV',{model:'table',tbl:saiTable(p.A0,U10)},[460,150,0]),a1=B.comp('A1','MOV',{model:'table',tbl:saiTable(p.A1,U10)},[540,150,0]);
   B.wire(n0,[a0,'a'],[[400,80],[460,80]]);B.wire([a0,'b'],Z);B.wire(n1,[a1,'a']);B.wire([a1,'b'],Z);
   return B.def();}
- const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef};
+ // ---------------------------------------------------------------- 4.10 (ROADMAP §50): modular converters
+ // a cascaded arm: the nearest-level modulator (NLC) on its own clock, and the cells. Fast: one compact element (CHBX) whose
+ // cell capacitors are states of one row of the solver; detailed: N cells from switches (MOSFET model, no body diode: an
+ // ideal two-way switch with R_on) and capacitors, the gates from the insertion states s_k. The same modulator in both.
+ const nCells=p=>Math.max(1,Math.min(64,Math.round(num(p.N,10))||1));
+ function chbDef(c){const p=prm(c),B=builder(c.label||c.id),N=nCells(p),hb=p.cell==='hb',V0=num(p.Vdc,1000),Vn=V0>0?V0:1000;
+  const A=[B.comp('$a','PORT',{name:'a'}),'p'],Z=[B.comp('$b','PORT',{name:'b'}),'p'],ref=B.comp('$ref','SIN',{name:'ref'});
+  const out=(name,src)=>{const o=B.comp('$'+name,'SOUT',{name});B.wire(src,[o,'u']);};
+  B.comp('CLK','CLK',{f:s(Math.max(num(p.fs,10e3),1)),duty:'0.5',phase:'0'});
+  B.comp('NLC','NLC',{N:String(N),cell:hb?'hb':'fb',Vdc:s(Vn),norm:p.norm==='nom'?'nom':'avg',sel:p.sel==='reduced'?'reduced':'sort',band:s(Math.max(num(p.band,20),0)),clock:'CLK',trig:'start'});
+  B.wire([ref,'y'],['NLC','ref']);out('vav',['NLC','vav']);out('n',['NLC','n']);
+  const cell={N:String(N),cell:hb?'hb':'fb',C:s(num(p.C,10e-3)),Vdc:s(V0),Ron:s(num(p.Ron,1e-3)),Rp:s(Math.max(num(p.Rp,0),0))};
+  if(p.impl!=='blocks'){B.comp('X','CHBX',cell);B.wire(A,['X','a']);B.wire(['X','b'],Z);B.wire(['X','i'],['NLC','i']);out('v',['X','v']);
+   for(let k=1;k<=N;k++){B.wire(['NLC','s'+k],['X','s'+k]);B.wire(['X','v'+k],['NLC','v'+k]);}return B.def();}
+  // detailed: the arm current through a meter, the arm voltage, then cell after cell from a to b
+  const am=B.comp('I','AM',{});B.wire(A,[am,'a']);B.wire([am,'y'],['NLC','i']);
+  const vm=B.comp('VAB','VM',{});B.wire(A,[vm,'p']);B.wire(Z,[vm,'n']);out('v',[vm,'y']);
+  const Ron=s(Math.max(num(p.Ron,1e-3),1e-7)),Rp=Math.max(num(p.Rp,0),0);let prev=[am,'b'];
+  const sw=(id,d,src,g)=>{B.comp(id,'SW',{gate:'sig',model:'mos',Ron,Roff:'1e9',body:false});B.wire(d,[id,'d']);B.wire([id,'s'],src);B.wire(g,[id,'g']);};
+  const gate=(id,k,expr)=>{B.comp(id,'EXPR',{expr,ins:'s',pars:''});B.wire(['NLC','s'+k],[id,'s']);return [id,'y'];};
+  for(let k=1;k<=N;k++){const P=B.node('P'+k),M=B.node('M'+k),nxt=k===N?Z:B.node('x'+k);
+   B.comp('C'+k,'C',{C:cell.C,v0:cell.Vdc});B.wire(P,['C'+k,'p']);B.wire(['C'+k,'n'],M);
+   if(Rp>0){B.comp('Rp'+k,'R',{R:s(Rp)});B.wire(P,['Rp'+k,'a']);B.wire(['Rp'+k,'b'],M);}
+   B.comp('V'+k,'VM',{});B.wire(P,['V'+k,'p']);B.wire(M,['V'+k,'n']);B.wire(['V'+k,'y'],['NLC','v'+k]);
+   const X=B.node('X'+k);B.wire(prev,X);
+   if(hb){ // half bridge: the leg between P and M, the cell between its middle (X) and M; s = 1: upper on
+    sw('S'+k+'a',P,X,gate('G'+k+'a',k,'s > 0.5'));sw('S'+k+'b',X,M,gate('G'+k+'b',k,'s < 0.5'));B.wire(M,nxt);}
+   else{ // H bridge: legs X (S1, S2) and Y (S3, S4); s = +1: S1, S4 (+v_C); s = −1: S2, S3 (−v_C); s = 0: S1, S3 (bypass through P)
+    const Y=B.node('Y'+k);sw('S'+k+'a',P,X,gate('G'+k+'a',k,'s > -0.5'));sw('S'+k+'b',X,M,gate('G'+k+'b',k,'s < -0.5'));
+    sw('S'+k+'c',P,Y,gate('G'+k+'c',k,'s < 0.5'));sw('S'+k+'d',Y,M,gate('G'+k+'d',k,'s > 0.5'));B.wire(Y,nxt);}
+   prev=nxt;}
+  return B.def();}
+ // the single-phase SOGI-PLL: fast = one block (SPLX); detailed = integrators and expressions with the same updates
+ function spllDef(c){const p=prm(c),B=builder(c.label||c.id),wn=2*Math.PI*Math.max(num(p.bw,20),1e-6),Kp=2*.7071*wn,Ki=wn*wn,w0=2*Math.PI*num(p.f0,50),k=Math.max(num(p.k,Math.SQRT2),1e-6),th0=num(p.th0,0)*Math.PI/180;
+  const v=B.comp('$v','SIN',{name:'v'}),out=(name,src)=>{const o=B.comp('$'+name,'SOUT',{name});B.wire(src,[o,'u']);};
+  const k0=Math.max(num(p.k0,0.1),0);
+  if(p.impl!=='blocks'){B.comp('X','SPLX',{f0:s(num(p.f0,50)),bw:s(Math.max(num(p.bw,20),1e-6)),k:s(k),k0:s(k0),th0:s(num(p.th0,0))});B.wire([v,'y'],['X','v']);
+   for(const o of ['th','w','amp','al','be'])out(o,['X',o]);return B.def();}
+  const E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''});
+  B.comp('AL','INT',{y0:'0'});B.comp('BE','INT',{y0:'0'});B.comp('TH','INT',{y0:s(th0),wrap:'2pi'});B.comp('XI','INT',{y0:'0'});
+  E('E','a > 1e-9 ? q/a : 0','q, a');E('Q','-x1*sin(th) + x2*cos(th)','x1, x2, th');E('A','hypot(x1, x2)','x1, x2');E('W','min(max(w0 + kp*er + xi, lo), hi)','er, xi',`w0 = ${s(w0)}, kp = ${s(Kp)}, lo = ${s(w0*0.5)}, hi = ${s(w0*1.5)}`);
+  if(k0>0){B.comp('X0','INT',{y0:'0'});E('D0','w*k0*(v - x0 - x1)','w, v, x0, x1','k0 = '+s(k0));E('D1','w*(k*(v - x0 - x1) - x2)','w, v, x0, x1, x2','k = '+s(k));
+   B.wire(['W','y'],['D0','w']);B.wire([v,'y'],['D0','v']);B.wire(['X0','y'],['D0','x0']);B.wire(['AL','y'],['D0','x1']);B.wire(['D0','y'],['X0','u']);B.wire(['X0','y'],['D1','x0']);}
+  else E('D1','w*(k*(v - x1) - x2)','w, v, x1, x2','k = '+s(k));E('D2','w*x1','w, x1');E('DX','(w >= hi && er > 0) || (w <= lo && er < 0) ? 0 : ki*er','w, er',`ki = ${s(Ki)}, lo = ${s(w0*0.5)}, hi = ${s(w0*1.5)}`);E('VD','x1*cos(th) + x2*sin(th)','x1, x2, th');
+  const w=(a,b)=>B.wire(a,b);
+  for(const id of ['Q','A','D1','D2','VD'])w(['AL','y'],[id,'x1']);for(const id of ['Q','A','D1','VD'])w(['BE','y'],[id,'x2']);for(const id of ['Q','VD'])w(['TH','y'],[id,'th']);
+  w(['Q','y'],['E','q']);w(['A','y'],['E','a']);w(['E','y'],['W','er']);w(['E','y'],['DX','er']);w(['W','y'],['DX','w']);w(['XI','y'],['W','xi']);
+  w(['W','y'],['D1','w']);w(['W','y'],['D2','w']);w([v,'y'],['D1','v']);
+  w(['D1','y'],['AL','u']);w(['D2','y'],['BE','u']);w(['W','y'],['TH','u']);w(['DX','y'],['XI','u']);
+  out('th',['TH','y']);out('w',['W','y']);out('amp',['VD','y']);out('al',['AL','y']);out('be',['BE','y']);
+  return B.def();}
+ // the controller of a modular SSSC (Hingorani & Gyugyi §6.3; Sen 1998): the injected voltage in quadrature with the line
+ // current (θ_i from a SOGI-PLL on i), v_ref = |V_q|·sin(θ_i + 90° − sign(V_q)·(90° − Δθ)): V_q > 0 lags the current
+ // (capacitive), V_q < 0 leads it (inductive); Δθ > 0 makes the device take active power from the line (its capacitors
+ // charge), from a PI on V_C,ref − v_av. V_q: m_a·N·V_C (fixed), or X_ref·Î with a PI on the measured X, or a PI on the
+ // amplitude of the line current or of a bus voltage. THEORY §8ξ.
+ function ssscDef(c){const p=prm(c),B=builder(c.label||c.id),N=Math.max(1,num(p.N,10)),Vdc=Math.max(num(p.Vdc,1000),1e-9),mode=['ma','x','i','v'].includes(p.mode)?p.mode:'x';
+  const io=n=>B.comp('$'+n,'SIN',{name:n}),ii=io('i'),vv=io('v'),vav=io('vav'),vb=io('vb'),out=(name,src)=>{const o=B.comp('$'+name,'SOUT',{name});B.wire(src,[o,'u']);};
+  const E=(id,expr,ins,pars,opt)=>B.comp(id,'EXPR',{expr,ins,pars:pars||'',...(opt?{opt}:{})});const w=(a,b)=>B.wire(a,b);
+  const Vmax=Math.max(num(p.mmax,1),0)*N*Vdc,dmax=Math.max(num(p.dmax,20),0)*Math.PI/180,pll={f0:s(num(p.f0,50)),bw:s(Math.max(num(p.bw,8),1e-6)),k:s(Math.max(num(p.kpll,Math.SQRT2),1e-3)),k0:s(Math.max(num(p.k0pll,0),0)),th0:'0',impl:'fast'},ton=s(Math.max(num(p.ton,0.15),0));
+  B.comp('PLI','SPLL',pll);w([ii,'y'],['PLI','v']);
+  // Δθ from the mean capacitor voltage (an integrator held within ±Δθ_max, no windup)
+  // (the mean voltage through a second-order filter: the 2f ripple of the cells out, and no algebraic loop through the modulator)
+  B.comp('VAF','F2',{kind:'lp',f0:s(Math.max(num(p.fv,10),1e-3)),zeta:'0.7071',u0:s(Vdc)});w([vav,'y'],['VAF','u']);
+  B.comp('DCR','CONST',{v:s(Vdc)});E('EV','r - u','r, u');w(['DCR','y'],['EV','r']);w(['VAF','y'],['EV','u']);
+  E('DIU','t < ton ? 0 : ki*er','er',`ki = ${s(num(p.kid,4e-3))}, ton = ${ton}`);w(['EV','y'],['DIU','er']);B.comp('DI','INT',{y0:'0',lo:s(-dmax),hi:s(dmax)});w(['DIU','y'],['DI','u']);
+  E('DTH','min(max(kp*er + x, -dm), dm)','er, x',`kp = ${s(num(p.kpd,2e-4))}, dm = ${s(dmax)}`);w(['EV','y'],['DTH','er']);w(['DI','y'],['DTH','x']);
+  // the measured reactance: X = V_q/Î, V_q = the part of v in quadrature (lagging) with i; V_q and Î through the same
+  // second-order filter (a different filtering of the two made the quotient swing when the current changed)
+  E('VQI','-2*v*cos(th + pi/2)','v, th');w([vv,'y'],['VQI','v']);w(['PLI','th'],['VQI','th']);
+  const flt={kind:'lp',f0:s(Math.max(num(p.fx,10),1e-3)),zeta:'0.7071',u0:'0'};
+  B.comp('VQF','F2',flt);w(['VQI','y'],['VQF','u']);B.comp('IAF','F2',flt);w(['PLI','amp'],['IAF','u']);
+  E('XM','a > 1e-9 ? q/a : 0','q, a');w(['VQF','y'],['XM','q']);w(['IAF','y'],['XM','a']);
+  const sched=(v,d)=>{const t=String(v??'').trim();return t===''?String(d):t;};
+  const lim=`vm = ${s(Vmax)}`;
+  // V_q = Î·X_cmd (Î filtered: an amplitude that swings at 50 Hz, as the SOGI's with a DC part in the current, times the
+  // sine of the reference gave a DC voltage, a DC current and more swing: unstable in the inductive mode): X_cmd = X_ref + PI(X_ref − X) (reactance), PI(I_ref − Î) (current, Ω per A) or PI((V_ref − V̂)/V_ref)
+  // (bus voltage, Ω per unit); the PI held while V_q is at its limit or before t_on (no windup)
+  if(mode==='ma'){B.comp('VQ','CONST',{v:s((p.sense==='ind'?-1:1)*Math.max(num(p.ma,0.8),0)*N*Vdc)});}
+  else{const kp=s(mode==='x'?num(p.Kp,0.5):mode==='i'?num(p.KpI,0.02):num(p.KpV,5)),ki=s(mode==='x'?num(p.Ki,20):mode==='i'?num(p.KiI,5):num(p.KiV,200));
+   const R=mode==='x'?sched(p.X,10):mode==='i'?sched(p.Iref,100):sched(p.Vbref,1000);B.comp('REF','CONST',{v:R});
+   let meas;if(mode==='x')meas=['XM','y'];else if(mode==='i')meas=['PLI','amp'];else{B.comp('PLV','SPLL',pll);w([vb,'y'],['PLV','v']);meas=['PLV','amp'];}
+   E('ER',mode==='v'?'abs(r) > 1e-9 ? (r - m)/abs(r) : 0':'r - m','r, m');w(['REF','y'],['ER','r']);w(meas,['ER','m']);
+   const base=mode==='x'?'r + ':'';
+   E('PIU',`t < ton || (abs(a*(${base}kp*er + x)) >= vm && (${base}kp*er + x)*er > 0) ? 0 : ki*er`,'er, x, r, a',`kp = ${kp}, ki = ${ki}, ${lim}, ton = ${ton}`);B.comp('PIX','INT',{y0:'0'});
+   w(['ER','y'],['PIU','er']);w(['PIX','y'],['PIU','x']);w(['REF','y'],['PIU','r']);w(['IAF','y'],['PIU','a']);w(['PIU','y'],['PIX','u']);
+   E('VQ',`min(max(a*(${base}kp*er + x), -vm), vm)`,'er, x, r, a',`kp = ${kp}, ${lim}`);w(['ER','y'],['VQ','er']);w(['PIX','y'],['VQ','x']);w(['REF','y'],['VQ','r']);w(['IAF','y'],['VQ','a']);}
+  // the reference: zero until t_on (the PLL locks first)
+  E('VR','t < ton ? 0 : abs(q)*sin(th + pi/2 - sign(q)*(pi/2 - d))','q, th, d',`ton = ${ton}`);w(['VQ','y'],['VR','q']);w(['PLI','th'],['VR','th']);w(['DTH','y'],['VR','d']);
+  out('vref',['VR','y']);out('x',['XM','y']);out('dth',['DTH','y']);
+  return B.def();}
+ const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef,CHB:chbDef,SPLL:spllDef,SSSC:ssscDef};
  function defOf(c){return DEFS[c.type](c);}
 
  // 4.9.1 (ROADMAP §52): the parts with two implementations, and a copy of a project with one implementation everywhere
  // (the SciPy export takes the detailed one: same model, made of elements that solver has)
- const IMPL_TYPES=['TOWER','SAI'];
- function forceImpl(project,impl){if(!project)return project;const has=list=>(list||[]).some(c=>IMPL_TYPES.includes(c.type)&&(c.params?.impl||'blocks')!==impl);
+ const IMPL_TYPES=['TOWER','SAI','CHB','SPLL'];
+ // (the default of a part: 'blocks' for the parts that were definitions before 4.9.1, 'fast' for the new ones, 4.10)
+ function forceImpl(project,impl){if(!project)return project;const has=list=>(list||[]).some(c=>IMPL_TYPES.includes(c.type)&&(c.params?.impl||P.defaults(c.type).impl||'blocks')!==impl);
   if(!has(project.components)&&!Object.values(project.subcircuits||{}).some(d=>has(d.components)))return project;
   const fix=list=>(list||[]).map(c=>IMPL_TYPES.includes(c.type)?{...c,params:{...(c.params||{}),impl}}:c);
   const subs={};for(const [n,d] of Object.entries(project.subcircuits||{}))subs[n]={...d,components:fix(d.components)};
@@ -494,7 +586,8 @@
   const defs={...(project.subcircuits||{})},out={...project,subcircuits:defs};
   const conv=(list,scope)=>(list||[]).map(c=>{if(!isLib(c.type))return c;const name='$net/'+(scope?scope+'/':'')+c.id,ip={def:name};
    for(const [k,v] of Object.entries(c.params||{}))if(k.startsWith('in_'))ip[k]=v;   // signal inputs that name their source
-   defs[name]=defOf(c);return {...c,type:'SUB',params:ip};});
+   const d=defOf(c);if(hasLib(d.components))d.components=conv(d.components,name.slice(5)); // 4.10: a library part inside a definition (the SOGI-PLL of the m-SSSC)
+   defs[name]=d;return {...c,type:'SUB',params:ip};});
   for(const [n,d] of Object.entries(project.subcircuits||{}))if(hasLib(d.components))defs[n]={...d,components:conv(d.components,n)};
   out.components=conv(project.components,'');
   return out;}

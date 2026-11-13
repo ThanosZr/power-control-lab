@@ -12,7 +12,7 @@
  const I={id:null,el:null,timer:null,g:null};
  const W=150,H=54,DX=190,DY=74,PAD=24;
  const C=()=>I.ctx;
- const SIGNAL=new Set(['AIC','EVC','AVR','PSS','GOV']);
+ const SIGNAL=new Set(['AIC','EVC','AVR','PSS','GOV','SSSC','SPLL']);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const short=(s,n)=>{s=String(s??'');return s.length>n?s.slice(0,n-1)+'…':s;};
  const can=c=>!!c&&!!NL()&&NL().isLib(c.type);

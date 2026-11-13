@@ -128,6 +128,9 @@ function updateClock(){const s=S.sim;if(!s)return;setText($('#clock'),'t = '+eng
 // live values on the schematic
 function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;
  if(c0.type==='AVR'||c0.type==='PSS'||c0.type==='GOV'){const id=(S.pfx||'')+c0.id,v=k=>s.now('Y:'+id+k);return {text:c0.type==='AVR'?'E_fd '+eng(v('/EFD'),'',4):c0.type==='PSS'?'v_s '+eng(v('/VS'),'',3):'P_m '+eng(v('/PM'),'',4)+' · '+(c0.params?.type==='hydro'?'g ':'CV ')+eng(v('/G'),'',3)};}
+ if(c0.type==='CHB'){const id=(S.pfx||'')+c0.id;return {text:'n '+fmt(s.now('Y:'+id+'/NLC'),3)+' · V_C '+eng(s.now('Y:'+id+'/NLC:vav'),'V',4)};}
+ if(c0.type==='SSSC'){const id=(S.pfx||'')+c0.id;return {text:'X '+eng(s.now('Y:'+id+'/XM'),'Ω',3)+' · Δθ '+fmt(s.now('Y:'+id+'/DTH')*180/Math.PI,3)+'°'};}
+ if(c0.type==='SPLL'){const id=(S.pfx||'')+c0.id,f=c0.params?.impl==='blocks';return {text:'f '+eng(s.now('Y:'+id+(f?'/W':'/X:w'))/(2*Math.PI),'Hz',4)+' · Â '+eng(s.now('Y:'+id+(f?'/VD':'/X:amp')),'',3)};}
  if(c0.type==='EVC'){const id=(S.pfx||'')+c0.id;return {text:'u '+eng(s.now('Y:'+id+'/SAT'),'V',3)+' · τ* '+eng(s.now('Y:'+id+'/TQ'),'N·m',3)+' · keep '+eng(s.now('Y:'+id+'/KP'),'',3)};}
  if(c0.type==='AIC'){const id=(S.pfx||'')+c0.id,L=s.now('Y:'+id+'/NN1:L');return {text:'u '+eng(s.now('Y:'+id+'/SAT'),'',3)+' · e '+eng(s.now('Y:'+id+'/E'),'',3)+(Number.isFinite(L)?' · L '+eng(L,'',3):'')};}
  if(['GND','JUNC','TAGO','TAGI','SUB','PORT','SIN','SOUT'].includes(c0.type)||window.NetLib&&NetLib.isLib(c0.type))return null;
@@ -182,11 +185,17 @@ function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void
 // 4.8: the signals of an AI controller are those of its inner blocks (channels <id>/SAT, <id>/E, …)
 const EVC_SIGS=[['/SAT','εντολή τάσης u'],['/GOV','ω* μετά τον ρυθμιστή αναφοράς'],['/TR','ροπή που χρειάζεται'],['/TQ','ροπή που ζητείται τ*'],['/KP','κράτηση ροπής (keep)'],['/LIM','όριο ενεργό (1)'],['/TP','μέγιστη ροπή (όρια, SOC)'],['/AC','επιτάχυνση που ζητείται'],['/IR','ρεύμα που ζητείται'],['/PW','ισχύς άξονα (kW)'],['/LS','χαμηλό SOC (0 … 1)']];
 // 4.8.1: the controls of a generator (inner blocks of the library parts AVR, PSS, GOV)
+// 4.10 (§50): the signals of the modular arm, the SOGI-PLL and the m-SSSC controller (names inside their definitions, netlib.js)
+const MOD_SIGS={CHB:p=>{const f=p.impl!=='blocks',N=Math.max(1,Math.min(64,Math.round(+p.N)||1));return [['/NLC','στάθμη n (υπομονάδες μέσα, με πρόσημο)'],['/NLC:vav','μέση τάση πυκνωτών'],['/NLC:sw','μεταγωγές υπομονάδων (σύνολο)'],
+  [f?'/X':'/VAB','τάση βραχίονα v_ab'],[f?'/X:i':'/I','ρεύμα βραχίονα (a → b)'],...Array.from({length:N},(_,k)=>[f?'/X:v'+(k+1):'/V'+(k+1),'τάση πυκνωτή '+(k+1)]),...Array.from({length:N},(_,k)=>['/NLC:s'+(k+1),'κατάσταση υπομονάδας '+(k+1)+' (−1, 0, +1)'])];},
+ SPLL:p=>p.impl==='blocks'?[['/TH','γωνία θ'],['/W','κυκλική συχνότητα ω'],['/VD','πλάτος (v_d)'],['/AL','v′ (α)'],['/BE','qv′ (β)']]:[['/X','γωνία θ'],['/X:w','κυκλική συχνότητα ω'],['/X:amp','πλάτος (v_d)'],['/X:al','v′ (α)'],['/X:be','qv′ (β)']],
+ SSSC:p=>[['/VR','αναφορά τάσης v_ref'],['/VQ','εντολή V_q (θετική: χωρητική)'],['/XM','μετρημένη αντίδραση X'],['/DTH','διόρθωση γωνίας Δθ (rad)'],['/VAF','μέση τάση πυκνωτών (φιλτραρισμένη)'],['/PLI/X','γωνία του ρεύματος θ_i − 90°'],['/PLI/X:amp','πλάτος του ρεύματος Î']]};
 const GEN_CTL_SIGS={AVR:[['/EFD','τάση διέγερσης E_fd'],['/ERR','σφάλμα τάσης (ΔV_ref − ΔV_c + v_s)'],['/TRF','απόκλιση της μετρημένης τάσης ΔV_c'],['/VB','αναφορά V_ref (βάση)']],
  PSS:[['/VS','έξοδος v_s'],['/DW','απόκλιση ταχύτητας Δω'],['/WO','μετά το washout']],
  GOV:[['/TM','μηχανική ροπή T_m'],['/PM','μηχανική ισχύς P_m'],['/G','βαλβίδα ή θυρόφραγμα'],['/S','εντολή του ρυθμιστή (ατμός)'],['/ER','σφάλμα του ρυθμιστή (νερό)']]};
 const AIC_SIGS=[['/SAT','εντολή u'],['/E','σφάλμα e = r_f − y'],['/LP','αναφορά r_f (μετά το φίλτρο)'],['/GD','παράγωγος της αναφοράς ṙ_f'],['/PI','έξοδος του PI'],['/NN1','έξοδος του δικτύου'],['/NN1:L','καμπύλη μάθησης L'],['/IAE','IAE = ∫|e|dt'],['/FLAG','κορεσμός (1 = στο όριο)']];
 function signalsFor(c,full){const t=c.type,nv=vecN(full||(S.pfx?pid(c.id):c.id));
+ if(MOD_SIGS[t])return MOD_SIGS[t]({...Parts.defaults(t),...(c.params||{})}).map(([f,n])=>['Y:',n,f]);
  if(t==='EVC')return EVC_SIGS.map(([f,n])=>['Y:',n,f]);if(GEN_CTL_SIGS[t])return GEN_CTL_SIGS[t].filter(([f])=>t!=='GOV'||(f!=='/S'||c.params?.type!=='hydro')&&(f!=='/ER'||c.params?.type==='hydro')).map(([f,n])=>['Y:',n,f]);if(t==='AIC'){const L=AIC_SIGS.filter(([f])=>f!=='/NN1:L'||(c.params?.scheme||'fel')!=='inv').map(([f,n])=>['Y:',n,f]);return (c.params?.scheme==='emu')?[...L,['Y:','εξομοιωτής: ẏ̂','/NNE'],['Y:','σφάλμα του εξομοιωτή L','/NNE:L'],['Y:','ευαισθησία ∂ẏ̂/∂u','/NNC:dy']]:L;}if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI'||t==='SUB'||SubC.PORT_KIND[t]||window.NetLib&&NetLib.isLib(t))return [];
  if(t==='PY')return outsOf(c).map((o,k)=>['Y:','έξοδος '+o,k?':'+o:'']);
  if(OUT_TXT[t]){const os=outsOf(c),m=os.map((o,k)=>[k?'Y:':'Y:',OUT_TXT[t][o]||o,k?':'+o:'']);return t==='DCM'?[...m,['I:','ρεύμα τυμπάνου i_a'],['V:','τάση τυμπάνου v_a'],['P:','ηλεκτρική ισχύς']]:t==='GEN3'?[...m,['I:','ρεύμα φάσης a (προς το δίκτυο)'],['V:','τάση φάσης a ως προς τον ουδέτερο']]:t==='IM'||t==='SM'?[...m,['I:','ρεύμα φάσης a'],['V:','πολική τάση v_ab']]:t==='SRM'?[...m,...Array.from({length:P.srmGeo({...P.defaults(t),...c.params})[0]},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα φάσης ${k+1}`],[(k?'V'+(k+1):'V')+':',`τάση φάσης ${k+1}`],['PSI'+(k+1)+':',`ροή φάσης ${k+1} ψ`]]).flat()]:m;}

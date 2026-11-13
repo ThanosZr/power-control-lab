@@ -418,6 +418,55 @@ def _nn_step(b, st, x, e_in, fz, src=None):
     st['yraw'] = y
 
 
+def nlc_step(b, st, ref, i, v):
+    """4.10: nearest-level modulation and the choice of the cells, as nlcStep in web/studio/mna.js (THEORY §8ο):
+    n = round(v_ref/V_C) within ±N (0…N for half bridges); the |n| cells with the sign of n are the lowest when the current
+    charges them, the highest otherwise; 'reduced' keeps them while n stays and the spread is within ΔV."""
+    N = b['N']
+    s0 = 0.0
+    for q in v:
+        s0 += q
+    vav = s0 / N
+    Vn = vav if b['avg'] and vav > 1e-9 * b['Vdc'] else b['Vdc']
+    r = ref / Vn
+    n = math.floor(r + 0.5) if math.isfinite(r) else 0      # Math.round
+    n = int(max(0 if b['hb'] else -N, min(N, n)))
+    m, sg = abs(n), (n > 0) - (n < 0)
+    charge = sg * i >= 0
+    old = list(st['s'])
+    order = sorted(range(N), key=lambda k: (v[k], k))
+    low = lambda L: L
+    high = lambda L: L[::-1]
+
+    def full():
+        L = low(order) if charge else high(order)
+        out = [0] * N
+        for k in range(m):
+            out[L[k]] = sg
+        return out
+    pn = st['n']
+    if not b['red'] or not m or sg != (pn > 0) - (pn < 0) or not pn:
+        s = full()
+    else:
+        ins = [k for k in order if old[k] == sg]
+        out = [k for k in order if old[k] != sg]
+        spread = v[order[N - 1]] - v[order[0]]
+        if m == len(ins):
+            s = old if spread <= b['band'] else full()
+        else:
+            s = [sg if q == sg else 0 for q in old]
+            if m > len(ins):
+                L = low(out) if charge else high(out)
+                for k in range(m - len(ins)):
+                    s[L[k]] = sg
+            else:
+                L = high(ins) if charge else low(ins)
+                for k in range(len(ins) - m):
+                    s[L[k]] = 0
+    st['sw'] += sum(1 for k in range(N) if s[k] != old[k])
+    st['s'], st['n'], st['vav'] = s, n, vav
+
+
 def make_python_block(code, ins, outs, pars, Ts, label):
     """Same contract as web/studio/pyrt.js: step(t, u, s, p) with init(p); returns the list of outputs."""
     g = {'math': math, '__name__': 'pcl_block'}
@@ -489,7 +538,7 @@ class Circuit:
                 b['_src'] = s if ok else None
         self.zc = [b for b in self.blocks if b['type'] == 'CMP']
         # continuous in time: integrators, filters, the PLL, and expressions of t (e.g. I_dc + I_ac·sin(2πft))
-        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL', 'FEST', 'F2', 'RLIM') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
+        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL', 'FEST', 'F2', 'RLIM', 'SPLX') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
         # 3.19 (question 5 of 3.18): with sources driven by signals (a controlled source, a PWM with its duty from a signal, a
         # gate from a signal) the continuous blocks are integrated over T/1000 instead of T/200, close to the browser's step,
         # so a control loop through them has the same transients; data['cont_div'] sets it
@@ -1667,6 +1716,30 @@ class Circuit:
                         self.log_ev(t, 'latch', b['id'], q)
                     st['q'], st['sp'] = q, S
                 ys = {'q': float(q), 'nq': float(1 - q)}
+            elif ty == 'SPLX':           # 4.10: the single-phase SOGI-PLL, every state as INT (web/studio/mna.js, same lines)
+                dt = max(0.0, t - st['t'])
+                cl = lambda q: min(1e9, max(-1e9, q))
+                al, be, xi = cl(st['x1'] + dt * st['d1']), cl(st['x2'] + dt * st['d2']), cl(st['xi'] + dt * st['dxi'])
+                k0 = _f(b.get('k0'), 0.1)
+                x0 = cl(st.get('x0', 0.0) + dt * st.get('d0', 0.0)) if k0 > 0 else 0.0
+                th = cl(st['th'] + dt * st['w'])
+                th -= P2 * math.floor(th / P2)
+                cs, sn = math.cos(th), math.sin(th)
+                vq, amp = -al * sn + be * cs, math.hypot(al, be)
+                er = vq / amp if amp > 1e-9 else 0.0
+                lo, hi = b['w0'] * 0.5, b['w0'] * 1.5
+                w, u = min(max(b['w0'] + b['Kp'] * er + xi, lo), hi), rd(I.get('v'))
+                if not trial:
+                    st.update(x1=al, x2=be, th=th, xi=xi, w=w, x0=x0, d1=w * (b['k'] * (u - x0 - al) - be), d2=w * al, dxi=0.0 if (w >= hi and er > 0) or (w <= lo and er < 0) else b['Ki'] * er, t=t)
+                    if k0 > 0:
+                        st['d0'] = w * k0 * (u - x0 - al)
+                ys = {'th': th, 'w': w, 'amp': al * cs + be * sn, 'al': al, 'be': be}
+            elif ty == 'NLC':            # 4.10: nearest-level modulation with sorting, a discrete block on its clock
+                if disc and self.blk_due(b, t, force):
+                    nlc_step(b, st, rd(I.get('ref')), rd(I.get('i')), [rd(I.get(k)) for k in b['inV']])
+                    sampled = True
+                ys = {'n': st['n'], 'vav': st['vav'], 'sw': st['sw']}
+                ys.update({'s%d' % (k + 1): st['s'][k] for k in range(b['N'])})
             elif ty == 'INT':
                 dt = max(0.0, t - st['t'])
                 v = min(b['hi'], max(b['lo'], st['s'] + dt * st['u']))
@@ -1845,7 +1918,7 @@ class Circuit:
                 for ts, _ in b['sched'] or []:
                     if t + eps < ts < tn:
                         tn = ts
-            elif ty in ('PIB', 'UD', 'PY', 'RT', 'NN'):
+            elif ty in ('PIB', 'UD', 'PY', 'RT', 'NN', 'NLC'):
                 ts = self.sh_next(b, t)
                 if t + eps < ts < tn:
                     tn = ts

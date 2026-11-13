@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.9.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (476 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.10: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (482 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.9.1.
+Κανένα στην 4.10.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -455,7 +455,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-102 σημεία.
+108 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -476,6 +476,8 @@
 | `part:BSEL` | idx | u, y | 3.18 |
 | `part:C` | C, v0, esr | n, p | 3.18 |
 | `part:CB3` | ctl, cmd, model, arc, tau, P0, P1, alpha, beta, tauc, Uc, taum, Pm, tau1, Pi1, Pi2, k1, k2, k3, gmin, Ron, Roff, vm, conn | a1, a2, abc1, abc2, b1, b2, c1, c2, cmd | 4.1 |
+| `part:CHB` | N, cell, C, Vdc, Ron, Rp, fs, norm, sel, band, impl | a, b, n, ref, v, vav | 4.10 |
+| `part:CHBX` | N, cell, C, Vdc, Ron, Rp | a, b, i, s1, s10, s2, s3, s4, s5, s6, s7, s8, s9, v, v1, v10, v2, v3, v4, v5, v6, v7, v8, v9 | 4.10 |
 | `part:CLARKE` | inv, conn | a, ab, abc, al, b, be, c | 3.18 |
 | `part:CLK` | f, duty, phase | y | 3.18 |
 | `part:CMP` | hys | n, p, y | 3.18 |
@@ -519,6 +521,7 @@
 | `part:MOV` | model, Uref, Iref, alpha, tbl | a, b | 3.18 |
 | `part:MUL` | — | a, b, y | 3.18 |
 | `part:MUX` | n, frame | u1, u2, u3, y | 3.18 |
+| `part:NLC` | N, cell, Vdc, norm, sel, band, clock, trig | i, n, ref, s1, s10, s2, s3, s4, s5, s6, s7, s8, s9, sw, v1, v10, v2, v3, v4, v5, v6, v7, v8, v9, vav | 4.10 |
 | `part:NN` | ins, xs, hidden, ys, ymin, ymax, train, learn, opt, lr, clip, l2, nl, share, jac, init, seed, w, clock, trig, y0 | L, e, fz, tgt, x1, x2, y | 4.7 |
 | `part:NOTE` | text, size, bold, color, frame | — | 4.9 |
 | `part:PARK` | conn | ab, al, be, d, dq, q, th | 3.18 |
@@ -542,8 +545,11 @@
 | `part:SIN` | name, side, width | y | 3.18 |
 | `part:SM` | Rs, Ld, Lq, sat, Ldsat, psikd, psim, pp, J, bm, load, TL, w0, th0, conn | a, abc, b, c, id, iq, te, th, tl, w | 3.18 |
 | `part:SOUT` | name, side, width | u | 3.18 |
+| `part:SPLL` | f0, bw, k, k0, th0, impl | al, amp, be, th, v, w | 4.10 |
+| `part:SPLX` | f0, bw, k, k0, th0 | al, amp, be, th, v, w | 4.10 |
 | `part:SR` | q0 | nq, q, r, s | 3.18 |
 | `part:SRM` | geo, Rs, mag, Lu, La, Lsat, psik, Imax, tbl, J, bm, load, TL, w0, th0 | a1, a2, a3, a4, b1, b2, b3, b4, i1, i2, i3, i4, te, th, tl, w | 3.18 |
+| `part:SSSC` | mode, N, Vdc, ma, sense, X, Iref, Vbref, Kp, Ki, KpI, KiI, KpV, KiV, kpd, fv, kid, dmax, mmax, f0, bw, fx, ton | dth, i, v, vav, vb, vref, x | 4.10 |
 | `part:SUB` | def | — | 3.18 |
 | `part:SUM` | signs | a, b, y | 3.18 |
 | `part:SW` | gate, pwm, out, model, Ron, Vce0, Roff, body, Vfd, Rd, Eon, Eoff, Vref, Iref | d, g, s | 3.18 |

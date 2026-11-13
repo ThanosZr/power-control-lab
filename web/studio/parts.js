@@ -46,6 +46,14 @@
  // code blocks (3.3): inputs on the left and outputs on the right, named by the user, 20 apart on the grid
  const codeIO=(ins,outs)=>{const o={};ins.forEach((k,i)=>o[k]=I(-40,-10*(ins.length-1)+20*i));outs.filter(k=>!(k in o)).forEach((k,i,a)=>o[k]=O(40,-10*(a.length-1)+20*i));return o;};
  const codeH=(ins,outs)=>Math.max(15,10*Math.max(ins.length,outs.length));
+ // 4.10: the parameters of a cascaded arm (shared by CHB and its compact element CHBX) and the pins of NLC and CHBX
+ const nCells=p=>Math.max(1,Math.min(64,Math.round(+p.N)||1));
+ const chbParams=()=>[num('N','Υπομονάδες N','',10,{hint:'Έως 64.'}),sel('cell','Υπομονάδα',[['fb','Γέφυρα H: −v_C, 0, +v_C (CHB, SSSC, STATCOM)'],['hb','Ημιγέφυρα: 0, +v_C (MMC)']],'fb'),
+  num('C','Πυκνωτής υπομονάδας C','F',10e-3),num('Vdc','Αρχική τάση πυκνωτών V_C','V',1000,{zero:true}),num('Ron','R_on ανά ημιαγωγό σε αγωγή','Ω',1e-3,{hint:'Σε κάθε υπομονάδα άγουν δύο ημιαγωγοί (γέφυρα H) ή ένας (ημιγέφυρα): R_arm = N·2·R_on ή N·R_on.'}),
+  num('Rp','Αντίσταση απωλειών παράλληλα σε κάθε πυκνωτή','Ω',0,{zero:true,hint:'0 = χωρίς. Παριστάνει τις απώλειες της υπομονάδας ως εκφόρτιση του πυκνωτή.'})];
+ const nlcIns=p=>['ref','i',...Array.from({length:nCells(p)},(_,k)=>'v'+(k+1))],nlcOuts=p=>['n','vav','sw',...Array.from({length:nCells(p)},(_,k)=>'s'+(k+1))];
+ const nlcIO=p=>codeIO(nlcIns(p),nlcOuts(p)),nlcH=p=>codeH(nlcIns(p),nlcOuts(p));
+ const chbxIO=p=>codeIO(Array.from({length:nCells(p)},(_,k)=>'s'+(k+1)),['v','i',...Array.from({length:nCells(p)},(_,k)=>'v'+(k+1))]),chbxH=p=>codeH(Array.from({length:nCells(p)},(_,k)=>'s'+(k+1)),[...Array.from({length:nCells(p)+2},(_,k)=>'x'+k)]);
  const pyIns=p=>Ex.names(p.ins,6,false),pyOuts=p=>Ex.names(p.outs,6,false).filter(k=>!pyIns(p).includes(k));
  // 4.7: the neural network block: its named inputs, and when it learns the learning signal (e or tgt) and the freeze input fz;
  // outputs y and the learning curve L
@@ -744,6 +752,53 @@
   RFX:{name:'Γείωση πύργου R(I) (από τη γραμμή του πύργου)',prefix:'RX',group:'Δίκτυο',hidden:true,pins:{a:[-30,0],b:[30,0]},box:[-22,-8,44,16],
    params:[num('R0','R₀','Ω',15),txt('tbl','R(I): ρεύμα: τάση','1: 15, 1000: 14000'),ref('line','Γραμμή του πύργου',['TL'])],value:p=>p.R0,unit:'Ω',
    draw:()=>'<path d="M-30,0 H-20 l2.5,-7 5,14 5,-14 5,14 5,-14 5,14 5,-14 5,14 2.5,-7 H30"/><path class="thin" d="M-14,10 L14,-10"/>'},
+  // 4.10 (ROADMAP §50): modular multilevel converters. A cascaded arm of N cells (H bridges, or half bridges as in the MMC)
+  // with their capacitors, the nearest-level modulation (NLC) with balancing of the capacitors by sorting, the single-phase
+  // PLL with a second-order generalized integrator (SOGI) and the controller of a modular SSSC.
+  CHB:{name:'Αρθρωτός βραχίονας: γέφυρες H σε σειρά (CHB)',prefix:'CH',group:'Ημιαγωγοί',pins:{a:[0,-50],b:[0,50]},spins:{ref:I(-40,-20),vav:O(40,-20),n:O(40,0),v:O(40,20)},box:[-30,-36,60,72],
+   params:[...chbParams(),num('fs','Συχνότητα δειγματοληψίας της NLC','Hz',10e3,{hint:'Η στάθμη και η επιλογή των υπομονάδων αλλάζουν μόνο σε αυτά τα σημεία (ρολόι μέσα στο στοιχείο).'}),
+    sel('norm','Στάθμη της NLC από',[['avg','Τη μέση τάση των πυκνωτών (μετρημένη)'],['nom','Την ονομαστική V_C']],'avg',{hint:'n = round(v_ref / V_C), περιορισμένο στο ±N (στο 0…N για ημιγέφυρες).'}),
+    sel('sel','Εξισορρόπηση των πυκνωτών',[['sort','Ταξινόμηση σε κάθε δείγμα'],['reduced','Ταξινόμηση μόνο όταν χρειάζεται (μειωμένη συχνότητα μεταγωγής)']],'sort',{hint:'Ταξινόμηση: όταν το ρεύμα φορτίζει τους πυκνωτές που μπαίνουν, μπαίνουν οι n με τη μικρότερη τάση, αλλιώς οι n με τη μεγαλύτερη. Με μειωμένη συχνότητα: όταν το n μένει ίδιο και οι τάσεις απέχουν λιγότερο από ΔV, οι ίδιες υπομονάδες μένουν μέσα· όταν το n αλλάζει, μπαίνουν ή βγαίνουν μόνο όσες χρειάζεται.'}),
+    num('band','Ζώνη ΔV (μέγιστη − ελάχιστη τάση)','V',20,{show:p=>p.sel==='reduced'}),
+    IMPL('fast','Γρήγορη: ένα στοιχείο του λύτη με τις N τάσεις των πυκνωτών ως καταστάσεις (συνάρτηση μεταγωγής: +v_C, −v_C ή παράκαμψη ανά υπομονάδα). Αναλυτική: N γέφυρες από διακόπτες και πυκνωτές με τη λογική των πυλών.')],
+   value:p=>p.N,unit:'',
+   draw:p=>'<path d="M0,-50 V-36 M0,36 V50"/><rect x="-22" y="-36" width="44" height="72" rx="3"/>'+[-22,-6,10].map(y=>`<rect class="thin" x="-12" y="${y}" width="24" height="12" rx="1"/>`).join('')+'<path class="thin" d="M0,-24 V-22 M0,-10 V-6 M0,6 V10 M0,22 V26"/>'+tx(p.cell==='hb'?'½H':'H',0,-27,'bsm')+tx('N='+p.N,0,33,'bsm')+sl('M-40,-20 H-22 M22,-20 H40 M22,0 H40 M22,20 H40')},
+  NLC:{name:'Διαμόρφωση πλησιέστερης στάθμης (NLC) με ταξινόμηση',prefix:'NLC',group:'Σήματα',pins:{},spins:p=>nlcIO(p),box:p=>{const h=nlcH(p);return [-30,-h,60,2*h];},blk:true,
+   params:[num('N','Υπομονάδες N','',10),sel('cell','Υπομονάδα',[['fb','Γέφυρα H: s = −1, 0, +1'],['hb','Ημιγέφυρα: s = 0, +1']],'fb'),
+    num('Vdc','Ονομαστική τάση πυκνωτή V_C','V',1000),sel('norm','Στάθμη από',[['avg','Τη μέση τάση των πυκνωτών'],['nom','Την ονομαστική V_C']],'avg'),
+    sel('sel','Εξισορρόπηση',[['sort','Ταξινόμηση σε κάθε δείγμα'],['reduced','Μόνο όταν χρειάζεται (ζώνη ΔV)']],'sort'),num('band','Ζώνη ΔV','V',20,{show:p=>p.sel==='reduced'}),CLOCK(),TRIG],
+   value:p=>p.N,unit:'',
+   draw:p=>codeDraw(nlcIns(p),nlcOuts(p),'NLC')},
+  SPLL:{name:'PLL μονοφασικό (SOGI)',prefix:'SPLL',group:'Σήματα',pins:{},spins:{v:I(-30,0),th:O(30,-20),w:O(30,-10),amp:O(30,0),al:O(30,10),be:O(30,20)},box:[-20,-25,40,50],blk:true,
+   params:[num('f0','Ονομαστική συχνότητα','Hz',50),num('bw','Εύρος ζώνης του βρόχου','Hz',20,{hint:'Όπως το τριφασικό PLL: ω_n = 2π·εύρος, ζ = 0,707, σφάλμα κανονικοποιημένο με το πλάτος.'}),
+    num('k','Κέρδος του SOGI k','',Math.SQRT2,{hint:'Μικρότερο k: καλύτερο φιλτράρισμα αρμονικών, πιο αργή απόκριση. √2 είναι η συνήθης επιλογή (ζ = 0,707 του SOGI).'}),
+    num('k0','Απόρριψη DC k₀','',0.1,{zero:true,hint:'Τρίτος ολοκληρωτής που εκτιμά το DC της εισόδου και το αφαιρεί πριν από το SOGI (αλλιώς το DC περνά στο qv′ με κέρδος k). 0 = το κλασικό SOGI.'}),
+    num('th0','Αρχική γωνία','°',0,{signed:true,zero:true}),
+    IMPL('fast','Γρήγορη: ένα μπλοκ με τις καταστάσεις του SOGI και του βρόχου. Αναλυτική: ολοκληρωτές και εκφράσεις της βιβλιοθήκης.')],value:p=>p.f0,unit:'Hz',
+   draw:()=>sb(40,50)+tx('SOGI',0,-2,'bsm')+tx('PLL',0,8,'bsm')+sl('M-30,0 H-20 M20,-20 H30 M20,-10 H30 M20,0 H30 M20,10 H30 M20,20 H30')},
+  SSSC:{name:'Έλεγχος αρθρωτού SSSC (m-SSSC)',prefix:'SSC',group:'Δίκτυο',pins:{},spins:{i:I(-40,-30),v:I(-40,-10),vav:I(-40,10),vb:I(-40,30),vref:O(40,-20),x:O(40,0),dth:O(40,20)},box:[-30,-40,60,80],blk:true,
+   params:[sel('mode','Τρόπος',[['ma','Σταθερός δείκτης διαμόρφωσης m_a'],['x','Έγχυση αντίδρασης X (πρόσθια τροφοδότηση + PI)'],['i','Έλεγχος ρεύματος γραμμής'],['v','Έλεγχος τάσης ζυγού (είσοδος vb)']],'x',{hint:'Η εγχεόμενη τάση είναι κάθετη στο ρεύμα της γραμμής (θ_i από SOGI-PLL), με μικρή διόρθωση γωνίας Δθ από τη μέση τάση των πυκνωτών, ώστε η διάταξη να παίρνει από τη γραμμή την ενεργό ισχύ των απωλειών της.'}),
+    num('N','Υπομονάδες N','',10),num('Vdc','Τάση πυκνωτή V_C (αναφορά)','V',1000),
+    num('ma','m_a','',0.8,{show:p=>p.mode==='ma'}),sel('sense','Χαρακτήρας',[['cap','Χωρητικός (η τάση καθυστερεί 90° από το ρεύμα)'],['ind','Επαγωγικός (προηγείται 90°)']],'cap',{show:p=>p.mode==='ma'}),
+    txt('X','X_ref (χωρητική θετική)','10',{sched:true,unit:'Ω',show:p=>p.mode==='x',hint:'Σταθερή τιμή ή «t:τιμή» σε Ω, π.χ. 0:0, 0.1:10. Θετική: χωρητική (μειώνει την αντίδραση της γραμμής), αρνητική: επαγωγική.'}),
+    txt('Iref','I_ref (πλάτος)','100',{sched:true,unit:'A',show:p=>p.mode==='i'}),txt('Vbref','V_ref του ζυγού (πλάτος)','1000',{sched:true,unit:'V',show:p=>p.mode==='v'}),
+    num('Kp','K_p του βρόχου X','Ω/Ω',0.5,{zero:true,show:p=>p.mode==='x',hint:'Ο PI δίνει αντίδραση X_cmd (Ω) και η εντολή είναι V_q = Î·X_cmd. Στον τρόπο X μαζί με την πρόσθια τροφοδότηση X_ref.'}),
+    num('Ki','K_i του βρόχου X','Ω/(Ω·s)',20,{zero:true,show:p=>p.mode==='x'}),
+    num('KpI','K_p του βρόχου ρεύματος','Ω/A',0.02,{zero:true,show:p=>p.mode==='i',hint:'X_cmd = PI(I_ref − Î). Μεγάλο κέρδος φέρνει τη χωρητική X κοντά στην αντίδραση της γραμμής (συντονισμός).'}),
+    num('KiI','K_i του βρόχου ρεύματος','Ω/(A·s)',5,{zero:true,show:p=>p.mode==='i'}),
+    num('KpV','K_p του βρόχου τάσης','Ω',5,{zero:true,show:p=>p.mode==='v',hint:'X_cmd = PI((V_ref − V̂)/V_ref), το σφάλμα ανά μονάδα.'}),
+    num('KiV','K_i του βρόχου τάσης','Ω/s',200,{zero:true,show:p=>p.mode==='v'}),
+    num('kpd','K_p του βρόχου V_C → Δθ','rad/V',2e-4,{zero:true}),num('fv','Φίλτρο της μέσης τάσης (2ης τάξης)','Hz',10),num('kid','K_i του βρόχου V_C → Δθ','rad/(V·s)',4e-3,{zero:true}),num('dmax','Μέγιστη |Δθ|','°',20),
+    num('mmax','Μέγιστο m_a','',1),num('f0','Ονομαστική συχνότητα','Hz',50),num('bw','Εύρος ζώνης του PLL','Hz',8,{hint:'Το PLL κλειδώνει στο ρεύμα που η ίδια η διάταξη αλλάζει: με επαγωγική έγχυση η γωνία του ρεύματος ακολουθεί το σφάλμα του PLL προς την ανάποδη μεριά και ο βρόχος γίνεται πιο γρήγορος. Με 20 Hz η επαγωγική έγχυση πάνω από ~10 Ω ταλαντεύεται (στο tutorial), με 8 Hz όχι.'}),num('fx','Φίλτρο της μέτρησης της X (2ης τάξης)','Hz',10,{hint:'Η αντίδραση μετριέται από τη συνιστώσα της τάσης v (είσοδος) σε τετραγωνισμό με το ρεύμα: X = V_q/Î.'}),
+    num('ton','Ενεργοποίηση στο','s',0.15,{zero:true,hint:'Ως τότε v_ref = 0 (όλες οι υπομονάδες σε παράκαμψη), ώστε να κλειδώσει το PLL στο ρεύμα.'})],value:()=>null,
+   draw:()=>sb(60,80)+tx('m-SSSC',0,4,'bsm')+sl('M-40,-30 H-30 M-40,-10 H-30 M-40,10 H-30 M-40,30 H-30 M30,-20 H40 M30,0 H40 M30,20 H40')},
+  // 4.10: the compact solver elements behind the fast implementations of CHB and SPLL (hidden from the library; built by NetLib)
+  CHBX:{name:'Αρθρωτός βραχίονας (συμπαγής)',prefix:'CX',group:'Ημιαγωγοί',hidden:true,pins:{a:[0,-50],b:[0,50]},spins:p=>chbxIO(p),box:p=>{const h=Math.max(36,chbxH(p));return [-30,-h,60,2*h];},
+   params:[...chbParams()],value:()=>null,
+   draw:p=>'<path d="M0,-50 V-36 M0,36 V50"/><rect x="-22" y="-36" width="44" height="72" rx="3"/>'+tx('CHB',0,4,'bsm')},
+  SPLX:{name:'PLL μονοφασικό (SOGI, συμπαγές)',prefix:'SPX',group:'Σήματα',hidden:true,pins:{},spins:{v:I(-30,0),th:O(30,-20),w:O(30,-10),amp:O(30,0),al:O(30,10),be:O(30,20)},box:[-20,-25,40,50],blk:true,
+   params:[num('f0','f₀','Hz',50),num('bw','Εύρος ζώνης','Hz',20),num('k','k','',Math.SQRT2),num('k0','k₀','',0.1,{zero:true}),num('th0','θ₀','°',0,{signed:true,zero:true})],value:p=>p.f0,unit:'Hz',
+   draw:()=>sb(40,50)+tx('SOGI',0,4,'bsm')},
   // 4.9: a note on the drawing (several lines, size, bold, colour); not part of the circuit
   NOTE:{name:'Σημείωση (κείμενο στο σχέδιο)',prefix:'N',group:'Βασικά',pins:{},box:p=>noteBox(p),lbl:'none',
    params:[area('text','Κείμενο','Σημείωση',{hint:'Πολλές γραμμές με Enter. Δεν επηρεάζει την προσομοίωση.'}),num('size','Μέγεθος γραμμάτων','px',16),bool('bold','Έντονα',false),
