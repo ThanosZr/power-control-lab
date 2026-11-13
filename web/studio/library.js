@@ -14,7 +14,7 @@
   {title:'Παθητικά',sub:[S('Βασικά',['R','L','C']),S('Ειδικά',['CPE','KG']),S('Μαγνητικά',['XFMR','KL'])]},
   {title:'Ημιαγωγοί',sub:[S('',['SW','D','SCR'])]},
   {title:'Μηχανές',sub:[S('',['DCM','IM','SM','SRM'])]},
-  {title:'Δίκτυο και γραμμές',sub:[S('Δίκτυο (τριφασικά)',['GRID3','GEN3','XF3','LOAD3','FLT3','CB3']),S('Διακόπτες ισχύος',['ARC']),S('Έλεγχος γεννητριών',['AVR','PSS','GOV']),S('Γραμμές',['LINE3','TLM','TL']),S('Υψηλές τάσεις',['MOV','SG'])]},
+  {title:'Δίκτυο και γραμμές',sub:[S('Δίκτυο (τριφασικά)',['GRID3','GEN3','XF3','LOAD3','FLT3','CB3']),S('Διακόπτες ισχύος',['ARC']),S('Έλεγχος γεννητριών',['AVR','PSS','GOV']),S('Γραμμές',['LINE3','TLM','TL']),S('Υψηλές τάσεις',['MOV','SG','SAI','TOWER'])]},
   {title:'Φορτία',sub:[S('',['CPL'])]},
   {title:'Μετρήσεις',sub:[S('',['VM','AM','VP','IP','MEAS','DISP'])]},
   {title:'Έλεγχος',sub:[S('Διαμόρφωση',['PWM','MOD3','SH']),S('Ρυθμιστές',['PIB','NN','AIC','EVC']),S('Εκτιμητές και συγχρονισμός',['FEST','PLL'])]},
@@ -23,16 +23,16 @@
   {title:'Δίαυλοι',sub:[S('',['MUX','DEMUX','BSEL','EBUS'])]},
   {title:'Κώδικας',sub:[S('',['EXPR','PY'])]},
   {title:'Υποκυκλώματα',sub:[S('',['PORT','SIN','SOUT'])],subs:true},
-  {title:'Βασικά',sub:[S('',['GND','TAGO','TAGI'])]}];
+  {title:'Βασικά',sub:[S('',['GND','TAGO','TAGI','NOTE'])]}];
  // by course or exercise: where a part is used (a part may be in more than one course)
  const COURSE=[
   {title:'Ηλεκτρικά κυκλώματα',sub:[S('',['R','L','C','VDC','VAC','IDC','VM','AM','VP','IP','GND','XFMR','KL','KG'])]},
   {title:'Ηλεκτρονική ισχύος',sub:[S('Διακόπτες και έλεγχος',['SW','D','SCR','PWM','MOD3','SH']),S('Κύκλωμα',['L','C','R','VDC','VAC','VAC3','CPL','XFMR','KL','CPE']),S('Μετρήσεις',['VM','AM','MEAS','DISP'])]},
   {title:'Ηλεκτρικές μηχανές και κινητήρια',sub:[S('Μηχανές',['DCM','IM','SM','SRM']),S('Έλεγχος',['CLARKE','ICLARKE','PARK','IPARK','PLL','FEST','PIB','NN','AIC','EVC','MOD3'])]},
-  {title:'Συστήματα ηλεκτρικής ενέργειας',sub:[S('',['GRID3','GEN3','XF3','LOAD3','LINE3','TLM','FLT3','CB3','ARC','VAC3','EBUS','AVR','PSS','GOV'])]},
-  {title:'Υψηλές τάσεις',sub:[S('',['VIMP','ILG','TL','MOV','SG','C','R'])]},
+  {title:'Συστήματα ηλεκτρικής ενέργειας',sub:[S('',['GRID3','GEN3','XF3','LOAD3','LINE3','TLM','TOWER','SAI','FLT3','CB3','ARC','VAC3','EBUS','AVR','PSS','GOV'])]},
+  {title:'Υψηλές τάσεις',sub:[S('',['VIMP','ILG','TL','MOV','SG','SAI','TOWER','C','R'])]},
   {title:'Συστήματα αυτομάτου ελέγχου',sub:[S('',['CONST','GAIN','SUM','MUL','DIV','SAT','INT','LPF','F2','RLIM','UD','RT','CMP','LOGIC','SR','EDGE','CLK','RAMP','PIB','NN','AIC'])]},
-  {title:'Προγραμματισμός και οργάνωση',sub:[S('',['EXPR','PY','MUX','DEMUX','BSEL','PORT','SIN','SOUT','TAGO','TAGI'])],subs:true}];
+  {title:'Προγραμματισμός και οργάνωση',sub:[S('',['EXPR','PY','MUX','DEMUX','BSEL','PORT','SIN','SOUT','TAGO','TAGI','NOTE'])],subs:true}];
  const BASIC=new Set(['R','L','C','VDC','VAC','IDC','GND','SW','D','VM','AM','VP','PWM','CONST','GAIN','SUM','XFMR','DISP']);
  const TAX=[{id:'field',title:'Κατά πεδίο',groups:FIELD},{id:'course',title:'Κατά μάθημα',groups:COURSE,multi:true},{id:'level',title:'Κατά επίπεδο'},{id:'abc',title:'Αλφαβητικά'},{id:'mine',title:'Αγαπημένα και πρόσφατα'}];
  const strip=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();

@@ -8,6 +8,7 @@
  const txt=(k,label,def,extra={})=>({k,label,type:'text',def,...extra});
  const ref=(k,label,kinds,extra={})=>({k,label,type:'ref',kinds,def:'',...extra});
  const bool=(k,label,def,extra={})=>({k,label,type:'bool',def,...extra});
+ const area=(k,label,def,extra={})=>({k,label,type:'area',def,...extra});   // 4.9: several lines (a note on the drawing)
  // signal pins (3.0): {at, dir}; a part's signal pins may depend on its parameters
  const I=(x,y)=>({at:[x,y],dir:'in'}),O=(x,y)=>({at:[x,y],dir:'out'});
  const xe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -82,6 +83,11 @@
     {ph:1,x:-6.28,y:19.95,ymid:10.15,r:1.2575,Rdc:0.0877,tD:0.3157},{ph:2,x:0,y:19.95,ymid:10.15,r:1.2575,Rdc:0.0877,tD:0.3157},{ph:3,x:6.28,y:19.95,ymid:10.15,r:1.2575,Rdc:0.0877,tD:0.3157}]},
   '400kV':{name:'Τυπική γραμμή 400 kV, απλό κύκλωμα (2 × ACSR 954 MCM)',rho:100,length:100,earth:'carson',skin:true,
    wires:[{ph:0,x:-6.1,y:27.15,ymid:18.35,r:0.63,Rdc:2.0276,tD:0.5},{ph:0,x:6.1,y:27.15,ymid:18.35,r:0.63,Rdc:2.0276,tD:0.5}],
+   bundles:[{ph:1,x:-8.6,y:20,ymid:11.2,n:2,R:20,ang:0,r:1.521,Rdc:0.0587,tD:0.3335},{ph:2,x:0,y:20,ymid:11.2,n:2,R:20,ang:0,r:1.521,Rdc:0.0587,tD:0.3335},
+    {ph:3,x:8.6,y:20,ymid:11.2,n:2,R:20,ang:0,r:1.521,Rdc:0.0587,tD:0.3335}]},
+  // 4.9: the same 400 kV line with its two ground wires kept as conductors 4 and 5 (for lightning: they end at the tower tops)
+  '400kV-gw':{name:'Τυπική γραμμή 400 kV με τους αγωγούς προστασίας ως αγωγούς 4 και 5 (για κεραυνούς)',rho:100,length:100,earth:'carson',skin:true,
+   wires:[{ph:4,x:-6.1,y:27.15,ymid:18.35,r:0.63,Rdc:2.0276,tD:0.5},{ph:5,x:6.1,y:27.15,ymid:18.35,r:0.63,Rdc:2.0276,tD:0.5}],
    bundles:[{ph:1,x:-8.6,y:20,ymid:11.2,n:2,R:20,ang:0,r:1.521,Rdc:0.0587,tD:0.3335},{ph:2,x:0,y:20,ymid:11.2,n:2,R:20,ang:0,r:1.521,Rdc:0.0587,tD:0.3335},
     {ph:3,x:8.6,y:20,ymid:11.2,n:2,R:20,ang:0,r:1.521,Rdc:0.0587,tD:0.3335}]},
   // 4.5: typical single-core XLPE cables (radii in m, resistivities in Ω·m, phase 0 = sheath bonded and earthed at both ends)
@@ -690,7 +696,46 @@
    draw:p=>{const M=tlmM(p),bus=isBus(p)&&M===3,h=bus?50:Math.max(50,20*M+10),y=k=>-10*(M-1)+20*k;
     return `<rect class="block" x="-30" y="${-h/2}" width="60" height="${h}" rx="4"/>`+(bus?bl('M-40,0 H-30 M30,0 H40'):`<path d="${Array.from({length:M},(_,k)=>`M-40,${y(k)} H-30 M30,${y(k)} H40`).join(' ')}"/>`)
      +'<path class="thin" d="M-20,-6 Q-10,-14 0,-6 T20,-6 M-20,4 H20"/>'+tx(p.model==='fd'?'FD':'CP',0,18,'bsm');}},
+  // 4.9 (ROADMAP §51): a transmission-line tower for lightning studies (network library, NetLib.towerDef): the tower as a
+  // lossless vertical line (Z_t, height, speed) from its top to the footing resistance (constant, or R(I) with soil
+  // ionization), an insulator string between each phase and the top (flashover at U_50 or on a volt–time curve).
+  // Pins in the order of the conductors of a line from geometry with its two ground wires kept (a, b, c, d, e): the phases
+  // pass through, the ground wires end at the top.
+  TOWER:{name:'Πύργος γραμμής (κεραυνοί)',prefix:'TW',group:'Δίκτυο',pins:{a1:[-40,-40],b1:[-40,-20],c1:[-40,0],d1:[-40,20],e1:[-40,40],a2:[40,-40],b2:[40,-20],c2:[40,0],d2:[40,20],e2:[40,40]},box:[-30,-50,60,100],
+   params:[num('h','Ύψος (κορυφή, αγωγοί προστασίας)','m',27.15,{hint:'Ο πύργος γίνεται μια γραμμή χωρίς απώλειες από την κορυφή ως τη βάση, με επιστροφή τη γη: χρόνος διάδοσης τ = h/v. Το βήμα του λύτη μένει ≤ τ.'}),
+    num('Zt','Κυματική αντίσταση Z_t','Ω',200,{hint:'Τυπικά 100–300 Ω. Κύλινδρος ακτίνας r: Z_t = 60·(ln(2√2·h/r) − 1) (Sargent–Darveniza). Το CIGRE TB 63 δίνει τύπους για μορφές πύργων.'}),
+    num('vt','Ταχύτητα διάδοσης στον πύργο','m/s',3e8,{hint:'Συνήθως c· μερικοί οδηγοί προτείνουν 0,85·c.'}),
+    sel('foot','Γείωση της βάσης',[['ion','R(I) με ιονισμό του εδάφους (CIGRE, IEEE 1243)'],['r','Σταθερή R₀']],'ion',{hint:'Ιονισμός: R(I) = R₀/√(1 + I/I_g), I_g = E₀·ρ/(2π·R₀²). Σε μεγάλα ρεύματα το έδαφος γύρω από τα ηλεκτρόδια ιονίζεται και η αντίσταση πέφτει.'}),
+    num('R0','R₀ (χαμηλό ρεύμα, χαμηλή συχνότητα)','Ω',15),
+    num('rho','Ειδική αντίσταση εδάφους ρ','Ω·m',100,{show:p=>p.foot!=='r'}),num('E0','Πεδίο ιονισμού E₀','V/m',400e3,{show:p=>p.foot!=='r',hint:'Περίπου 400 kV/m (CIGRE).'}),
+    sel('ins','Αλυσίδες μονωτήρων',[['ub','Διάσπαση στην τάση U_b (διακόπτης τάσης)'],['de','Καμπύλη τάσης–χρόνου (U₀, k, D)'],['none','Χωρίς διάσπαση']],'ub',{hint:'Ανάμεσα σε κάθε φάση και την κορυφή. Διακόπτης τάσης: U_b ≈ U_50 της αλυσίδας (αρνητική πολικότητα περίπου 700 kV/m × απόσταση διάσπασης, IEC 60071-2). Καμπύλη τάσης–χρόνου: όπως ο σπινθηριστής, ∫ (|u| − U₀)^k dt = D.'}),
+    num('Ub','Τάση διάσπασης U_b','V',2.24e6,{show:p=>p.ins==='ub',hint:'Π.χ. απόσταση διάσπασης 3,2 m × 700 kV/m = 2,24 MV.'}),
+    num('U0','U₀','V',1.7e6,{show:p=>p.ins==='de'}),num('kde','Εκθέτης k','',1,{show:p=>p.ins==='de'}),num('Dde','Σταθερά D','V^k·s',0.5,{show:p=>p.ins==='de',hint:'Με k = 1 σε V·s (0,5 V·s = 500 kV·μs).'}),
+    bool('meas','Μετρήσεις (κορυφή, μονωτήρες, βάση)',true,{hint:'Κανάλια TW/Vtop (τάση κορυφής), TW/Ua … (τάση κάθε αλυσίδας), TW/Ia … (ρεύμα διάσπασης), TW/If (ρεύμα της βάσης).'})],
+   value:p=>p.R0,unit:'Ω',
+   draw:p=>'<rect class="block" x="-30" y="-50" width="60" height="100" rx="4"/><path d="M-40,-40 H-30 M-40,-20 H-30 M-40,0 H-30 M-40,20 H-30 M-40,40 H-30 M30,-40 H40 M30,-20 H40 M30,0 H40 M30,20 H40 M30,40 H40"/>'
+    +'<path class="thin" d="M-10,44 L-4,-38 L4,-38 L10,44 M-20,-30 H20 M-16,-14 H16 M-7,2 H7 M-8,18 L8,30 M8,18 L-8,30 M-6,-30 L6,-14 M6,-30 L-6,-14"/>'+tx('TW',0,-42,'bsm')},
+  // 4.9: a metal-oxide arrester with the frequency-dependent model of the IEEE WG 3.4.11 (1992): A0 and A1 nonlinear,
+  // L0 ∥ R0, L1 ∥ R1 and C from the height d and the columns n (network library, NetLib.saiDef)
+  SAI:{name:'Αλεξικέραυνο ZnO, μοντέλο IEEE (εξαρτάται από τη συχνότητα)',prefix:'SA',group:'Δίκτυο',pins:{a:[0,-40],b:[0,40]},box:[-14,-24,28,48],
+   params:[num('U10','Παραμένουσα τάση U₁₀ (10 kA, 8/20 μs)','V',819e3,{hint:'Από το φύλλο δεδομένων. Π.χ. αλεξικέραυνο 420 kV (U_r 360 kV): 819 kV.'}),
+    num('d','Ύψος d','m',3.216),num('n','Παράλληλες στήλες n','',1),
+    num('kL1','Διόρθωση του L₁','',1,{hint:'L₀ = 0,2·d/n μH, R₀ = 100·d/n Ω, L₁ = 15·d/n μH, R₁ = 65·d/n Ω, C = 100·n/d pF. Το IEEE WG ρυθμίζει μετά το L₁ ώστε να βγαίνει η U₁₀ με 8/20 μs (συντελεστής του L₁).'}),
+    num('Llead','Αυτεπαγωγή αγωγών σύνδεσης','H',0,{zero:true,hint:'Περίπου 1 μH/m μήκους των αγωγών προς τη φάση και τη γη.'}),
+    txt('A0','A0: ρεύμα (kA): τάση (ανά μονάδα U₁₀)','0.01: 0.875, 1: 1.056, 5: 1.131, 10: 1.188, 15: 1.244, 20: 1.313',{hint:'Οι χαρακτηριστικές του IEEE WG (Durbak).'}),
+    txt('A1','A1: ρεύμα (kA): τάση (ανά μονάδα U₁₀)','0.01: 0.681, 1: 0.856, 20: 1.000'),
+    bool('meas','Μετρήσεις (τάση, ρεύμα)',true,{hint:'Κανάλια SA/V (τάση a–b) και SA/I (ρεύμα από a προς b).'})],
+   value:p=>p.U10,unit:'V',
+   draw:()=>'<path d="M0,-40 V-24 M0,24 V40"/><rect x="-10" y="-24" width="20" height="48" rx="2"/><path class="thin" d="M-15,14 L-6,14 L6,-14 L15,-14"/>'+tx('IEEE',0,34,'bsm')},
+  // 4.9: a note on the drawing (several lines, size, bold, colour); not part of the circuit
+  NOTE:{name:'Σημείωση (κείμενο στο σχέδιο)',prefix:'N',group:'Βασικά',pins:{},box:p=>noteBox(p),lbl:'none',
+   params:[area('text','Κείμενο','Σημείωση',{hint:'Πολλές γραμμές με Enter. Δεν επηρεάζει την προσομοίωση.'}),num('size','Μέγεθος γραμμάτων','px',16),bool('bold','Έντονα',false),
+    sel('color','Χρώμα',[['ink','Σκούρο'],['acc','Πράσινο'],['red','Κόκκινο'],['blue','Μπλε'],['muted','Γκρι']],'ink'),bool('frame','Πλαίσιο',false)],
+   value:()=>null,draw:()=>''},
  };
+ // the box of a note from its lines and its size (the text is drawn in HTML by the editor, Editor.renderLabels)
+ function noteBox(p){const L=String(p.text??'').split('\n'),z=Math.max(6,Math.min(96,parseEng(p.size)||16));const w=Math.max(4,...L.map(l=>l.length))*z*(p.bold===true||p.bold==='true'?.6:.56);
+  return [0,0,Math.round(w+8),Math.round(L.length*z*1.25+6)];}
  const GROUPS=['Πηγές','Παθητικά','Ημιαγωγοί','Μαγνητικά','Μηχανές','Δίκτυο','Φορτία','Έλεγχος','Σήματα','Δίαυλοι','Κώδικας','Υποκυκλώματα','Βασικά'];
  function defaults(type){const o={};for(const p of PARTS[type].params)o[p.k]=p.def;return o;}
  // electrical + signal pins of one placed part; the electrical pins of a multiport depend on its parameters (3.5)

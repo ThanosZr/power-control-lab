@@ -15,11 +15,14 @@ sys.path.insert(0, str(ROOT))
 from pcl import lineconst as lc  # noqa: E402
 
 OUT = ROOT / 'web' / 'studio' / 'linemodels.js'
-# (key, typical line, length in km, model, CP frequency in Hz)
+# (key, typical line, length in km, model, CP frequency or the frequency of the FD T_i in Hz)
 CASES = [('400kV|100|cp|50', '400kV', 100, 'cp', 50.0), ('400kV|100|cp|5000', '400kV', 100, 'cp', 5000.0),
          ('400kV|100|fd', '400kV', 100, 'fd', None),
          # 4.5: the submarine cable of the tutorial 'cable_fd'
-         ('220kV-sea|30|cp|50', '220kV-sea', 30, 'cp', 50.0), ('220kV-sea|30|fd', '220kV-sea', 30, 'fd', None)]
+         ('220kV-sea|30|cp|50', '220kV-sea', 30, 'cp', 50.0), ('220kV-sea|30|fd', '220kV-sea', 30, 'fd', None),
+         # 4.9: the lightning tutorial 'lightning_gis': the 400 kV line with its ground wires as conductors 4 and 5, a long
+         # section against reflections and the spans between towers; T_i at 500 kHz (the band of a lightning surge)
+         ('400kV-gw|30|fd|500k', '400kV-gw', 30, 'fd', 5e5), ('400kV-gw|0.3|fd|500k', '400kV-gw', 0.3, 'fd', 5e5)]
 
 
 def _round(x):
@@ -36,7 +39,8 @@ def models():
     out = {}
     for key, line, L, kind, f in CASES:
         d = lc.typical(line)
-        m = lc.cp_model(d, f, L) if kind == 'cp' else lc.fd_model(d, L)
+        # FD: f is the frequency of T_i when given (otherwise the default, 1 kHz)
+        m = lc.cp_model(d, f, L) if kind == 'cp' else (lc.fd_model(d, L, fti=f) if f else lc.fd_model(d, L))
         out[key] = _round(json.loads(json.dumps(m)))
     return out
 

@@ -637,6 +637,7 @@ function fieldHTML(c,def,p){const v=p[def.k]??def.def;const id='f_'+def.k;
   return `<select id="${id}" data-k="${def.k}"><option value="">—</option>${opts.map(k=>`<option value="${k.id}" ${v===k.id?'selected':''}>${esc(k.label||k.id)} (${esc(P.PARTS[k.type].name)})</option>`).join('')}${far}</select>`;}
  if(def.type==='text')return `<input id="${id}" data-k="${def.k}" value="${esc(v)}" placeholder="${esc(def.ph||'')}">`;
  if(def.type==='code')return `<textarea id="${id}" data-k="${def.k}" class="code" rows="14" spellcheck="false">${esc(v)}</textarea>`;
+ if(def.type==='area')return `<textarea id="${id}" data-k="${def.k}" class="area" rows="4">${esc(v)}</textarea>`;   // 4.9: a note
  return `<input id="${id}" data-k="${def.k}" data-num="1" value="${esc(typeof v==='number'?P.eng(v,'',6).replace(/\s/g,''):v)}" inputmode="decimal">`;}
 // 4.7: the settings window is dragged by its title (a CSS transform while it moves, no layout), and once moved it opens
 // where it was left, in this session and the next (localStorage pcl-ins-pos). Rebuilt after a change (a select, a

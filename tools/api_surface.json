@@ -3741,6 +3741,17 @@
     ],
     "since": "4.7"
    },
+   "part:NOTE": {
+    "params": [
+     "text",
+     "size",
+     "bold",
+     "color",
+     "frame"
+    ],
+    "pins": [],
+    "since": "4.9"
+   },
    "part:PARK": {
     "params": [
      "conn"
@@ -3916,6 +3927,23 @@
      "y"
     ],
     "since": "3.19"
+   },
+   "part:SAI": {
+    "params": [
+     "U10",
+     "d",
+     "n",
+     "kL1",
+     "Llead",
+     "A0",
+     "A1",
+     "meas"
+    ],
+    "pins": [
+     "a",
+     "b"
+    ],
+    "since": "4.9"
    },
    "part:SAT": {
     "params": [
@@ -4193,6 +4221,36 @@
      "c2"
     ],
     "since": "4.4"
+   },
+   "part:TOWER": {
+    "params": [
+     "h",
+     "Zt",
+     "vt",
+     "foot",
+     "R0",
+     "rho",
+     "E0",
+     "ins",
+     "Ub",
+     "U0",
+     "kde",
+     "Dde",
+     "meas"
+    ],
+    "pins": [
+     "a1",
+     "a2",
+     "b1",
+     "b2",
+     "c1",
+     "c2",
+     "d1",
+     "d2",
+     "e1",
+     "e2"
+    ],
+    "since": "4.9"
    },
    "part:UD": {
     "params": [

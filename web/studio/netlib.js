@@ -9,7 +9,7 @@
 // (gridZ) and the fault currents of a fault at its terminals in the phase domain (faultCurrents), for the analysis.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
- const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC'];
+ const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC','TOWER','SAI'];
  const isLib=t=>TYPES.includes(t);
  const RMIN=1e-4;               // a bolted fault or a closed pole: 0,1 mΩ inside the circuit
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -404,7 +404,49 @@
   const out=(n,src)=>{const o=B.comp('$'+n,'SOUT',{name:n});B.wire(src,[o,'u']);};
   out('tm',['TM','y']);out('pm',['PM','y']);out('g',['G','y']);
   return B.def();}
- const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef};
+ // ---------------------------------------------------------------- 4.9: lightning (ROADMAP §51)
+ // R(I) of a tower footing with soil ionization (CIGRE TB 63, IEEE 1243): R = R₀/√(1 + I/I_g), I_g = E₀·ρ/(2π·R₀²), as the
+ // points (current: voltage) of a nonlinear resistance; between the points the solver interpolates in log–log (slope 1 at
+ // low currents where R = R₀, ½ at high currents where u ∝ √I)
+ function footTable(R0,rho,E0){const Ig=E0*rho/(2*Math.PI*R0*R0),out=[];
+  for(let e=-2;e<=6.0001;e+=0.25){const I=Math.pow(10,e);out.push(`${s(I)}: ${s(I*R0/Math.sqrt(1+I/Ig))}`);}return {tbl:out.join(', '),Ig};}
+ // a tower: the phases pass through (in ≡ out), the ground wires end at the top; the tower is a lossless line from the top
+ // to the foot (ground as return), the footing R₀ or R(I), an insulator string (spark gap) from each phase to the top
+ function towerDef(c){const p=prm(c),B=builder('Πύργος γραμμής'),meas=p.meas===true||p.meas==='true';
+  const L=['a1','b1','c1','d1','e1'].map(n=>[B.comp('$'+n,'PORT',{name:n}),'p']),R=['a2','b2','c2','d2','e2'].map(n=>[B.comp('$'+n,'PORT',{name:n}),'p']);
+  const top=B.node('top'),foot=B.node('foot');
+  for(const k of [3,4]){B.wire(L[k],top);B.wire(R[k],top);}
+  if(meas){const v=B.comp('Vtop','VP',{});B.wire(top,[v,'p']);}
+  PH.forEach((x,k)=>{const ph=B.node('p'+x);B.wire(L[k],ph);B.wire(R[k],ph);
+   if(meas){const u=B.comp('U'+x,'VM',{});B.wire(ph,[u,'p']);B.wire(top,[u,'n']);}
+   if(p.ins==='none')return;
+   const q=p.ins==='de'?{vt:'de',U0:s(num(p.U0,1.7e6)),kde:s(num(p.kde,1)),Dde:s(num(p.Dde,.5))}:{vt:'inst',Ub:s(num(p.Ub,2.24e6))};
+   const g=B.comp('S'+x,'SG',{...q,Rarc:'0.1',ext:'never'});
+   if(meas){const a=B.comp('I'+x,'AM',{});B.wire(ph,[a,'a']);B.wire([a,'b'],[g,'a']);}else B.wire(ph,[g,'a']);
+   B.wire([g,'b'],top);});
+  const t=B.comp('T','TL',{spec:'zl',Z:s(num(p.Zt,200)),len:s(num(p.h,27.15)),vel:s(num(p.vt,3e8))});
+  B.wire(top,[t,'a1']);B.wire([t,'a2'],foot);B.wire([t,'b1'],B.gnd());B.wire([t,'b2'],B.gnd());
+  const R0=Math.max(num(p.R0,15),1e-3);let rf;
+  if(p.foot==='r')rf=B.comp('RF','R',{R:s(R0)});else rf=B.comp('RF','MOV',{model:'table',tbl:footTable(R0,num(p.rho,100),num(p.E0,400e3)).tbl});
+  if(meas){const a=B.comp('If','AM',{});B.wire(foot,[a,'a']);B.wire([a,'b'],[rf,'a']);}else B.wire(foot,[rf,'a']);
+  B.wire([rf,'b'],B.gnd());
+  return B.def();}
+ // the arrester of the IEEE WG 3.4.11 (1992) with the linear elements from the height d and the columns n (Durbak):
+ // L₀ = 0,2·d/n μH, R₀ = 100·d/n Ω, L₁ = 15·d/n μH, R₁ = 65·d/n Ω, C = 100·n/d pF; A0 and A1 in per unit of U₁₀
+ function saiTable(str,U10){const pts=[];for(const q of String(str||'').split(',')){const m=q.split(':');if(m.length!==2)continue;const I=num(m[0].trim(),NaN)*1e3,v=num(m[1].trim(),NaN)*U10;if(I>0&&v>0)pts.push(`${s(I)}: ${s(v)}`);}return pts.join(', ');}
+ function saiParams(p){const d=Math.max(num(p.d,3.216),1e-3),n=Math.max(num(p.n,1),1e-3),q=d/n;
+  return {L0:0.2e-6*q,R0:100*q,L1:15e-6*q*Math.max(num(p.kL1,1),1e-6),R1:65*q,C:100e-12/q};}
+ function saiDef(c){const p=prm(c),B=builder('Αλεξικέραυνο (μοντέλο IEEE)'),meas=p.meas===true||p.meas==='true',U10=Math.max(num(p.U10,819e3),1),k=saiParams(p);
+  const A=[B.comp('$a','PORT',{name:'a'}),'p'],Z=[B.comp('$b','PORT',{name:'b'}),'p'],top=B.node('t'),n0=B.node('n0'),n1=B.node('n1');
+  let at=A;if(meas){const am=B.comp('I','AM',{});B.wire(A,[am,'a']);at=[am,'b'];const vm=B.comp('V','VM',{});B.wire(A,[vm,'p']);B.wire(Z,[vm,'n']);}
+  const Ll=num(p.Llead,0);if(Ll>0){const l=B.comp('Ll','L',{L:s(Ll)});B.wire(at,[l,'a']);B.wire([l,'b'],top);}else B.wire(at,top);
+  const par=(id,from,to,L,R)=>{const l=B.comp('L'+id,'L',{L:s(L)}),r=B.comp('R'+id,'R',{R:s(R)});B.wire(from,[l,'a']);B.wire([l,'b'],to);B.wire(from,[r,'a']);B.wire([r,'b'],to);};
+  par('0',top,n0,k.L0,k.R0);par('1',n0,n1,k.L1,k.R1);
+  const cc=B.comp('C','C',{C:s(k.C)});B.wire(n0,[cc,'p']);B.wire([cc,'n'],Z);
+  const a0=B.comp('A0','MOV',{model:'table',tbl:saiTable(p.A0,U10)}),a1=B.comp('A1','MOV',{model:'table',tbl:saiTable(p.A1,U10)});
+  B.wire(n0,[a0,'a']);B.wire([a0,'b'],Z);B.wire(n1,[a1,'a']);B.wire([a1,'b'],Z);
+  return B.def();}
+ const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef};
  function defOf(c){return DEFS[c.type](c);}
 
  // ---------------------------------------------------------------- project → project with SUB instances
@@ -456,7 +498,7 @@
   // the transformer's impedance per phase of an equivalent star at side 2 (Ω): u_k·U₂²/S_n
   const Sn=num(xf.Sn,40e6),Zk=num(xf.uk,10)/100*U2*U2/Sn,Rk=num(xf.Pk,0)*(U2/Sn)**2,Xk=Math.sqrt(Math.max(Zk*Zk-Rk*Rk,0));
   return {seq:{R1:g.R1*r+Rk,X1:g.X1*r+Xk,R0:Rk,X0:Xk,E:g.E*U2/U1},n:d.n};}
- const api={TYPES,isLib,needs,expand,defOf,warnings,gridZ,xfData,lineData,faultCurrents,behindXF,GROUPS};
+ const api={TYPES,isLib,needs,expand,defOf,warnings,gridZ,xfData,lineData,faultCurrents,behindXF,GROUPS,footTable,saiParams};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;
  root.NetLib=api;
 })(typeof window!=='undefined'?window:globalThis);

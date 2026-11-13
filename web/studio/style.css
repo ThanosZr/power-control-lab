@@ -428,6 +428,10 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .livel{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;pointer-events:none;user-select:none;-webkit-user-select:none}
 .livel .lbls{position:absolute;left:0;top:0}
 .livel .lbls>div{position:absolute;white-space:nowrap;line-height:1}
+/* 4.9: notes on the drawing (NOTE) */
+.livel .lbls.note>.ntext{white-space:pre;line-height:1.25;font-family:inherit}
+.livel .lbls.note>.nframe{border:1.5px solid currentColor;border-radius:4px;padding:3px 6px;margin:-4px 0 0 -7px}
+.props textarea.area,.inspector textarea.area{width:100%;font:inherit;resize:vertical}
 .livel .a-s>div{transform:translate(0,-.8em)}.livel .a-m>div{transform:translate(-50%,-.8em)}.livel .a-e>div{transform:translate(-100%,-.8em)}
 .livel .lbl{color:var(--ink)}.livel .val{color:#5f7671}.livel .lv{color:var(--accent2)}
 .livel .lv:empty,.livel .val:empty{display:none}

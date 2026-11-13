@@ -1247,6 +1247,68 @@
    return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:400000,method:'TR',speed:0.05,stopT:0.0156},
     scope:{panes:[[['Y:CB1/V','τάση διακόπτη (TRV)']],[['Y:CB1/I','ρεύμα τόξου']],[['Garc:CB1/A1','αγωγιμότητα τόξου']]],window:{unit:'s',n:0.0156}},
     meta:{slf:{Ur,Isc,f,ratio:r,arc:arcP.arc,state:sc,tsep,LL,LS,Z,Rs,Cd}}});}});
+ // 4.9 (ROADMAP §51): a lightning stroke on a 400 kV line next to a GIS substation and the insulation coordination of the
+ // substation, after the structure of the EMTP example «Insulation coordination of a 765 kV GIS»: a long FD section
+ // against reflections, three towers with 300 m FD spans (the ground wires kept as conductors 4 and 5), footing R(I) with
+ // soil ionization, insulator strings that flash over, ZnO arresters with the IEEE model, bushings and GIS bus ducts as
+ // lossless lines, an open breaker in the GIS and the transformer as a capacitance. Values of the elements: typical
+ // (EMTP example, IEEE WG 3.4.11 for the arrester, CIGRE TB 63 for the footing).
+ function tlmGW(id,x,y,len,label){const P=root.Parts,p={...P.defaults('TLM'),model:'fd',len,fti:5e5,data:JSON.stringify(P.TLM_TYPICAL['400kV-gw'])};
+  const m=LM()?.[`400kV-gw|${len}|fd|500k`];p.mdl=m?JSON.stringify({...m,src:P.tlmKey(p)}):'';return C(id,'TLM',x,y,p,{label});}
+ const note=(id,x,y,text,o={})=>C(id,'NOTE',x,y,{text,size:o.size||16,bold:!!o.bold,color:o.color||'ink',frame:!!o.frame},{label:''});
+ T.push({id:'lightning_gis',group:'Κεραυνοί και συντονισμός μόνωσης (4.9)',title:'Κεραυνός σε γραμμή 400 kV δίπλα σε υποσταθμό GIS: συντονισμός μόνωσης',theory:'formula',topology:'lightning_gis',
+  options:[{k:'strike',label:'Πλήγμα',options:[['tower','Στην κορυφή του πύργου T2 (ανάστροφη υπερπήδηση)'],['phase','Στη φάση a δίπλα στον T2 (αστοχία θωράκισης)']],def:'tower'},
+   {k:'I',label:'Ρεύμα κεραυνού (αρνητικό, 3/100 μs)',options:[['200','200 kA'],['100','100 kA'],['50','50 kA'],['20','20 kA'],['10','10 kA']],def:'200'},
+   {k:'foot',label:'Γείωση πύργων',options:[['ion','R(I) με ιονισμό, R₀ = 15 Ω'],['r','Σταθερή 15 Ω'],['r50','Σταθερή 50 Ω (κακή γείωση)']],def:'ion'},
+   {k:'sa',label:'Αλεξικέραυνα',options:[['both','Στην είσοδο και στον μετασχηματιστή'],['entry','Μόνο στην είσοδο'],['none','Χωρίς']],def:'both'},
+   {k:'cb',label:'Διακόπτης στο GIS',options:[['open','Ανοιχτός'],['closed','Κλειστός']],def:'open'}],
+  desc:'Κεραυνός 3/100 μs πέφτει στον πύργο T2 μιας γραμμής 400 kV (ή στη φάση a, αν περάσει τη θωράκιση). Η γραμμή είναι η τυπική 400 kV από τη γεωμετρία με τους δύο αγωγούς προστασίας ως αγωγούς 4 και 5, σε μοντέλο FD: ανοίγματα 300 m και ένα τμήμα 30 km προς το δίκτυο, ώστε οι ανακλάσεις να μη γυρίσουν μέσα στα 50 μs. Κάθε πύργος είναι μια γραμμή χωρίς απώλειες (Z_t = 200 Ω, 27 m) με γείωση R(I) και αλυσίδες μονωτήρων που διασπώνται στα 2,24 MV. Το κύμα μπαίνει στον υποσταθμό: αλεξικέραυνο ZnO (μοντέλο IEEE, U₁₀ = 819 kV) και CVT στην είσοδο, διαπεραστής, ζυγοί GIS (Z = 73 Ω), μετασχηματιστής τάσης, ανοιχτός διακόπτης, και στην άλλη πλευρά ο μετασχηματιστής ισχύος (4 nF) με το δικό του αλεξικέραυνο. Οι τάσεις συγκρίνονται με το επίπεδο αντοχής σε κεραυνό του εξοπλισμού 420 kV (1425 kV) και με τον συντελεστή ασφαλείας 1,15 (IEC 60071-2).',
+  tasks:['200 kA στον πύργο: ποιες αλυσίδες διασπώνται και πότε; Δες στην κάρτα την τάση της κορυφής του T2 και τις τάσεις των μονωτήρων.','Γείωση 50 Ω αντί για R(I): η κορυφή ανεβαίνει και η διάσπαση γίνεται νωρίτερα και με μικρότερο ρεύμα. Από ποιο ρεύμα και πάνω υπάρχει ανάστροφη υπερπήδηση;','Πλήγμα στη φάση με 10–20 kA (αστοχία θωράκισης): η υπέρταση φτάνει απευθείας στον υποσταθμό.','Χωρίς αλεξικέραυνα: πόσο ξεπερνά η τάση στον ανοιχτό διακόπτη το 1425 kV; Με αλεξικέραυνο μόνο στην είσοδο: πόση είναι η απόσταση προστασίας (σύγκρινε με U ≈ U_res + 2·S·d/v της κάρτας);','Κλειστός διακόπτης: το κύμα φτάνει στον μετασχηματιστή. Χρειάζεται εκεί δεύτερο αλεξικέραυνο;','Άνοιξε τον πύργο ή το αλεξικέραυνο (διπλό κλικ): δες τι έχουν μέσα. Τα κείμενα στο σχέδιο είναι στοιχεία «Σημείωση».'],
+  build(o){const I=(+o.I||200)*1e3,ion=o.foot==='ion',R0=o.foot==='r50'?50:15,sa=o.sa||'both',open=o.cb!=='closed',Y0=200,PHS=['a','b','c'],rowY=[160,360,560];
+   const tw=(id,x,lab,r0)=>C(id,'TOWER',x,Y0,{h:27.15,Zt:200,vt:3e8,foot:ion?'ion':'r',R0:r0,rho:100,E0:400e3,ins:'ub',Ub:2.24e6,meas:true},{label:lab});
+   const comps=[tlmGW('L30',260,Y0,30,'30 km'),tw('T1',400,'T1',R0),tlmGW('S1',540,Y0,0.3,'300 m'),tw('T2',680,'T2',R0),tlmGW('S2',820,Y0,0.3,'300 m'),tw('T3',960,'T3',o.foot==='r50'?R0:1),
+    C('I1','ILG',620,60,{shape:'custom',model:'heidler',T1:3e-6,T2:100e-6,n:10,Ipk:-I,t0:1e-6},{label:'κεραυνός'}),C('GI','GND',620,110),
+    C('RTa','R',110,290,{R:400},{rot:1,label:'R_a'}),C('RTb','R',140,290,{R:400},{rot:1,label:'R_b'}),C('RTc','R',170,290,{R:400},{rot:1,label:'R_c'}),
+    C('GTa','GND',110,330),C('GTb','GND',140,330),C('GTc','GND',170,330),J('JW',205,230),C('GW','GND',205,300)];
+   const wires=[['L30:a1','RTa:a',[[110,160]]],['L30:b1','RTb:a',[[140,180]]],['L30:c1','RTc:a',[[170,200]]],['RTa:b','GTa:g'],['RTb:b','GTb:g'],['RTc:b','GTc:g'],
+    ['L30:d1','JW:j',[[205,220]]],['L30:e1','JW:j',[[205,240]]],['JW:j','GW:g'],['I1:n','GI:g']];
+   const chain=[['L30','T1'],['T1','S1'],['S1','T2'],['T2','S2'],['S2','T3']];
+   for(const [a,b] of chain)for(const x of ['a','b','c','d','e'])wires.push([a+':'+x+'2',b+':'+x+'1']);
+   wires.push(o.strike==='phase'?['I1:p','T2:a2',[[730,20],[730,160]]]:['I1:p','T2:d2',[[740,20],[740,220]]]);
+   const tl=(id,x,Y,len,Z,lab)=>C(id,'TL',x,Y+20,{spec:'zl',Z,len,vel:3e8},{label:lab});
+   PHS.forEach((ph,k)=>{const Y=rowY[k],q=s=>s+ph,G=(id,x,y)=>comps.push(C(q(id),'GND',x,y));
+    // from the last tower to the row of this phase
+    wires.push(['T3:'+ph+'2',q('Lc')+':a',k===0?[]:[[1030+20*(k-1),Y0-40+20*k],[1030+20*(k-1),Y]]]);
+    comps.push(C(q('Lc'),'L',1110,Y,{L:10e-6},{label:'10 μH'}),J(q('JE'),1180,Y),C(q('VE'),'VP',1180,Y-40,{},{label:'u_E'+ph}),C(q('Cv'),'C',1180,Y+60,{C:4e-9},{label:'CVT'}),J(q('J2'),1240,Y),
+     C(q('Lb'),'L',1310,Y,{L:10e-6},{label:'10 μH'}),tl(q('TB'),1430,Y,8,250,'διαπεραστής'),J(q('JB'),1530,Y),C(q('CB'),'C',1530,Y+60,{C:0.1e-9},{label:'0,1 nF'}),
+     tl(q('TG'),1630,Y,48,73,'GIS 48 m'),J(q('JG'),1730,Y),C(q('VG'),'VP',1730,Y-40,{},{label:'u_G'+ph}),C(q('Cvt'),'C',1730,Y+60,{C:0.1e-9},{label:'VT'}),
+     C(q('BR'),'R',1800,Y,{R:open?1e6:1e-3},{label:open?'CB ανοιχτός':'CB κλειστός'}),tl(q('TH'),1930,Y,52,73,'GIS 52 m'),J(q('JH'),2030,Y),C(q('CH'),'C',2030,Y+60,{C:0.1e-9},{label:'0,1 nF'}),
+     tl(q('TC'),2130,Y,8,250,'διαπεραστής'),C(q('Lt'),'L',2250,Y,{L:10e-6},{label:'10 μH'}),J(q('JT'),2330,Y),C(q('VT'),'VP',2330,Y-40,{},{label:'u_T'+ph}),C(q('Ct'),'C',2330,Y+60,{C:4e-9},{label:'μετασχ. 4 nF'}));
+    G('GCv',1180,Y+100);G('GB',1530,Y+100);G('GVt',1730,Y+100);G('GH',2030,Y+100);G('GCt',2330,Y+100);
+    for(const [t,x] of [['TB',1490],['TG',1690],['TH',1990],['TC',2190]])G('G'+t,x,Y+50);
+    wires.push([q('Lc')+':b',q('JE')+':j'],[q('JE')+':j',q('VE')+':p'],[q('JE')+':j',q('Cv')+':p'],[q('Cv')+':n',q('GCv')+':g'],[q('JE')+':j',q('J2')+':j'],[q('J2')+':j',q('Lb')+':a'],
+     [q('Lb')+':b',q('TB')+':a1'],[q('TB')+':a2',q('JB')+':j'],[q('JB')+':j',q('CB')+':p'],[q('CB')+':n',q('GB')+':g'],[q('JB')+':j',q('TG')+':a1'],[q('TG')+':a2',q('JG')+':j'],
+     [q('JG')+':j',q('VG')+':p'],[q('JG')+':j',q('Cvt')+':p'],[q('Cvt')+':n',q('GVt')+':g'],[q('JG')+':j',q('BR')+':a'],[q('BR')+':b',q('TH')+':a1'],[q('TH')+':a2',q('JH')+':j'],
+     [q('JH')+':j',q('CH')+':p'],[q('CH')+':n',q('GH')+':g'],[q('JH')+':j',q('TC')+':a1'],[q('TC')+':a2',q('Lt')+':a'],[q('Lt')+':b',q('JT')+':j'],[q('JT')+':j',q('VT')+':p'],
+     [q('JT')+':j',q('Ct')+':p'],[q('Ct')+':n',q('GCt')+':g']);
+    for(const [t,x] of [['TB',1430],['TG',1630],['TH',1930],['TC',2130]])wires.push([q(t)+':b1',q(t)+':b2'],[q(t)+':b2',q('G'+t)+':g']);
+    const sa1=sa!=='none',sa2=sa==='both',arr=(id,x)=>C(q(id),'SAI',x,Y+70,{U10:819e3,d:3.216,n:1,kL1:1,Llead:5e-6,meas:true},{label:'ZnO'});
+    if(sa1){comps.push(arr('SE',1260));G('GSE',1260,Y+120);wires.push([q('J2')+':j',q('SE')+':a',[[1260,Y]]],[q('SE')+':b',q('GSE')+':g']);}
+    if(sa2){comps.push(arr('ST',2400));G('GST',2400,Y+120);wires.push([q('JT')+':j',q('ST')+':a',[[2400,Y]]],[q('ST')+':b',q('GST')+':g']);}});
+   comps.push(note('N1',40,-200,'Συντονισμός μόνωσης υποσταθμού GIS 400 kV: κεραυνός στη γραμμή',{size:28,bold:true,frame:true}),
+    note('N2',40,-140,(o.strike==='phase'?'– Αστοχία θωράκισης: πλήγμα στη φάση a':'– Ανάστροφη υπερπήδηση: πλήγμα στην κορυφή του πύργου T2')+'\n– Γείωση πύργων R(I) = R₀/√(1 + I/I_g) με ιονισμό του εδάφους\n– Αλεξικέραυνα ZnO με το μοντέλο IEEE (εξάρτηση από τη συχνότητα)\n– Γραμμές FD από τη γεωμετρία, οι αγωγοί προστασίας ως αγωγοί 4 και 5',{size:16}),
+    note('N3',40,360,'Δίκτυο\n(τερματισμός 400 Ω)',{size:15,bold:true}),note('N4',200,80,'Γραμμή 400 kV: 30 km, ώστε να μη\nγυρίσουν ανακλάσεις μέσα στα 50 μs',{size:14,color:'muted'}),
+    note('N5',470,300,'Ανοίγματα 300 m, πύργοι T1–T3\n(Z_t = 200 Ω, h = 27 m, μονωτήρες 2,24 MV)',{size:14,color:'muted'}),
+    note('N6',650,-60,`${I/1e3} kA, 3/100 μs`,{size:16,bold:true,color:'red'}),
+    note('N7',1080,60,'Υποσταθμός αέρα (AIS)',{size:20,bold:true,color:'blue'}),note('N8',1560,60,'Υποσταθμός GIS (SF₆)',{size:20,bold:true,color:'blue'}),
+    note('N9',2120,60,'Αέρας και μετασχηματιστής ισχύος',{size:20,bold:true,color:'blue'}),
+    note('N10',1700,680,'Επίπεδο αντοχής σε κεραυνό (420 kV): 1425 kV\nμε συντελεστή ασφαλείας 1,15: 1239 kV',{size:15,color:'red'}));
+   const PANE=(pre,lab)=>PHS.map(ph=>['Y:'+pre+ph,lab+' '+ph]);
+   const panes=[PANE('VE','u_E'),PANE('VG','u_G (GIS)'),PANE('VT','u_T (μετασχ.)'),[['Y:T2/Vtop','κορυφή T2'],['Y:T2/Ua','μονωτήρας a'],['Y:T2/Ub','μονωτήρας b'],['Y:T2/Uc','μονωτήρας c']],
+    [['I:I1','κεραυνός'],['Y:T2/If','βάση T2'],...(sa!=='none'?[['Y:SEa/I','ZnO είσοδος a']]:[])]];
+   const stopT=50e-6;
+   return project(comps,wires,{version:4,sim:{hDiv:2,method:'TR',speed:400,stopT},scope:{panes,window:{unit:'s',n:stopT}},
+    meta:{lg:{I,strike:o.strike||'tower',foot:o.foot||'ion',R0,rho:100,E0:400e3,sa,open,Zt:200,h:27.15,Ub:2.24e6,U10:819e3,LIWL:1425e3,Ks:1.15,dist:56,v:3e8,t0:1e-6}}});}});
  T.push({id:'line_fd',group:'Γραμμές (4.4)',title:'Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD)',theory:'formula',topology:'line_fd',
   options:[{k:'cmp',label:'Γραμμές',options:[['cp50','CP στα 50 Hz και FD, δίπλα δίπλα'],['cp5k','CP στα 5 kHz και FD'],['fd','Μόνο FD']],def:'cp50'},
    {k:'src',label:'Ζεύξη',options:[['step','Μία φάση (a), βηματική 1 kV πίσω από 10 Ω'],['ac3','Τριφασική 400 kV, στην κορυφή της v_a']],def:'step'}],

@@ -307,7 +307,7 @@
    switch(c.type){case 'R':return p.sched?'R(t)':e(+p.R,'Ω');case 'L':return e(+p.L,'H');case 'C':return e(+p.C,'F');case 'VDC':return p.ctl==='sig'?'V από σήμα':e(+p.V,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');case 'VAC':return e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'VAC3':return '3φ '+e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'SCR':return p.fire==='alpha'?'α '+P.fmtNum(+p.alpha)+'°'+(+p.shift?' +'+P.fmtNum(+p.shift)+'°':''):p.fire==='pwm'?'g · '+(p.pwm||'—'):'';
     case 'IDC':return p.ctl==='sig'?'I από σήμα':e(+p.I,'A');case 'CPE':return p.kind==='cpe'?'Q '+e(+p.Q)+' · α '+P.fmtNum(+p.alpha):'σ '+e(+p.sigma,'Ω/√s');case 'CPL':return p.sched?'P(t)':e(+p.P,'W');case 'XFMR':return '1 : '+P.fmtNum(+p.n,{maximumFractionDigits:4});case 'SW':return (p.model==='igbt'?'IGBT · ':'')+(p.gate==='sig'?'g από σήμα':p.gate==='pwm'?({a:'g',na:'ḡ',b:'g₂',nb:'ḡ₂'}[p.out]||'g')+' · '+(p.pwm||'—'):p.gate==='on'?'ON':'OFF');
     case 'SH':return (p.in==='sig'?'u':(p.qty==='V'?'v(':'i(')+(p.src||'—')+')')+' · '+({start:'αρχή T',mid:'μέσο T',both:'2 ανά T'}[p.trig]||'');
-    case 'MEAS':case 'VM':case 'AM':case 'VP':case 'IP':case 'SR':case 'DISP':return '';
+    case 'MEAS':case 'VM':case 'AM':case 'VP':case 'IP':case 'SR':case 'DISP':case 'NOTE':return '';
     case 'SUB':return String(p.$title||p.def||''); // subcircuit (3.17): the title of its definition
     // network library (4.1)
     case 'GRID3':return e(+p.Sk,'VA')+' · '+e(+p.Un,'V');
@@ -337,8 +337,12 @@
     case 'DCM':return 'ψ '+P.fmtNum(+p.psi)+' · J '+P.fmtNum(+p.J)+(p.load==='sig'?' · τ_L σήμα':'');
     case 'CLK':return e(+p.f,'Hz')+' · '+P.fmtNum(+p.duty);case 'RAMP':return e(+p.f,'Hz')+' · '+e(+p.lo)+'…'+e(+p.hi);
     case 'PWM':return e(+p.fs,'Hz')+(+p.phase&&p.mode!=='spwm'?' · φ '+P.fmtNum(+p.phase,{maximumFractionDigits:2})+'°':'')+(+p.dt>0?' · t_d '+e(+p.dt,'s'):'')+' · '+(p.mode==='fixed'?'D = '+P.fmtNum(+p.D):p.mode==='pi'?'PI':p.mode==='spwm'?'SPWM m = '+p.m:p.mode==='ext'?'D από σήμα':'2 έξοδοι');default:return '';}}
+  // 4.9: a note (NOTE): its lines in the label layer at the top left of its box, upright whatever the rotation
+  noteHTML(c){const p={...P.defaults('NOTE'),...c.params},b=P.bbox(c),z=Math.max(6,Math.min(96,P.parseEng(p.size)||16)),bold=p.bold===true||p.bold==='true',fr=p.frame===true||p.frame==='true';
+   const col={acc:'var(--accent,#1f7a5c)',red:'#b3261e',blue:'#1d4e89',muted:'#6b7c78'}[p.color]||'var(--ink,#16302b)';
+   return `<div class="lbls note" data-l="${esc(c.id)}"><div class="ntext${fr?' nframe':''}" style="left:${b[0]+3}px;top:${b[1]+3}px;font-size:${z}px;font-weight:${bold?700:400};color:${col}">${esc(String(p.text??''))}</div><div class="lv" hidden></div></div>`;}
   renderLabels(){
-   this.L.live.innerHTML=this.doc.components.filter(c=>!['JUNC','GND','TAGO','TAGI','PORT','SIN','SOUT'].includes(c.type)).map(c=>{const b=P.bbox(c);const pk=Object.keys(P.elPins(c));const q0=pk[0]&&this.pin(c,pk[0]),q1=pk[1]&&this.pin(c,pk[1]);const blk=!pk.length;const vert=!blk&&c.type!=='XFMR'&&c.type!=='VAC3'&&q0&&q1&&q0[0]===q1[0];
+   this.L.live.innerHTML=this.doc.components.filter(c=>!['JUNC','GND','TAGO','TAGI','PORT','SIN','SOUT'].includes(c.type)).map(c=>{if(c.type==='NOTE')return this.noteHTML(c);const b=P.bbox(c);const pk=Object.keys(P.elPins(c));const q0=pk[0]&&this.pin(c,pk[0]),q1=pk[1]&&this.pin(c,pk[1]);const blk=!pk.length;const vert=!blk&&c.type!=='XFMR'&&c.type!=='VAC3'&&q0&&q1&&q0[0]===q1[0];
     // signal blocks (3.0) keep their label above, the PWM / S&H blocks at the side as before
     const lb=c.lbl||P.PARTS[c.type].lbl;const side=(vert||blk)&&!(blk&&P.BLOCKS.has(c.type))&&lb!=='below'&&lb!=='above';const below=lb==='below',left=side&&lb==='left';const x=left?b[0]-8:side?b[2]+8:(b[0]+b[2])/2,y=side?(b[1]+b[3])/2-(blk?10:2):below?b[3]+40:b[1]-7;const anchor=left?'end':side?'start':'middle';
     // HTML: each line at its baseline (x, y) in the units of the drawing, aligned like text-anchor (class a-s / a-m / a-e)

@@ -280,7 +280,7 @@
   let units=null;if(UNITS){try{units=UNITS.check(project);subWarn.push(...units.warnings);}catch(e){throw e instanceof UNITS.UnitError?new NetlistError(e.message):e;}}
   // buses and vectors (3.18, §3): the solver sees scalar wires only (element-wise blocks on a bus as <id>[k])
   let vec={};if(BUS&&BUS.needs(project)){try{const b=BUS.expand(project);project=b.project;subWarn.push(...b.warnings);vec=b.vec;}catch(e){throw e instanceof BUS.BusError?new NetlistError(e.message):e;}}
-  const comps=(project.components||[]).filter(c=>P.PARTS[c.type]&&c.type!=='SUB');
+  const comps=(project.components||[]).filter(c=>P.PARTS[c.type]&&c.type!=='SUB'&&c.type!=='NOTE');   // 4.9: a note is only on the drawing
   const byId=new Map(comps.map(c=>[c.id,c]));
   const parent=new Map(),find=k=>{let r=k;while(parent.get(r)!==r)r=parent.get(r);let x=k;while(parent.get(x)!==r){const n=parent.get(x);parent.set(x,r);x=n;}return r;};
   const union=(a,b)=>{const ra=find(a),rb=find(b);if(ra!==rb)parent.set(ra,rb);};

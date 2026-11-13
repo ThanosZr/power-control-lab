@@ -976,6 +976,13 @@ TYPICAL.update({
                                                             1.72e-8, 2.5, 2.3) for k, x in enumerate((-0.25, 0.0, 0.25))]},
 })
 
+# 4.9: the same 400 kV line with its two ground wires kept as conductors 4 and 5 (they end at the tower tops of a lightning
+# study instead of being eliminated)
+TYPICAL['400kV-gw'] = dict(json.loads(json.dumps(TYPICAL['400kV'])),
+                           name='Τυπική γραμμή 400 kV με τους αγωγούς προστασίας ως αγωγούς 4 και 5 (για κεραυνούς)')
+TYPICAL['400kV-gw']['wires'][0]['ph'] = 4
+TYPICAL['400kV-gw']['wires'][1]['ph'] = 5
+
 
 def typical(key):
     return json.loads(json.dumps(TYPICAL[key]))
