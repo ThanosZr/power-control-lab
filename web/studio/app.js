@@ -1540,6 +1540,7 @@ function trvSlfTheory(){const s=S.sim,m=(S.tutMeta||{}).slf;if(!s||!m||!window.T
  const a=TRV.slf(m.Ur,m.Isc,m.ratio,m.f),tau=m.LL/m.Z;
  let h=`<ul class="eqs"><li>Παράρτημα A: I_L = ${fmt(m.ratio*100,3)} % του I_sc = <b>${eng(a.IL,'A')}</b>, u₀ = √2·U_G·(1 − I_L/I_sc) = <b>${eng(a.u0,'V')}</b> (η τάση της γραμμής τη στιγμή της διακοπής), u_L* = k·u₀ = <b>${eng(a.uL,'V')}</b> με k = 1,6</li>
   <li>Ρυθμός της πλευράς της γραμμής s·I_L = √2·ω·Z·I_L = <b>${fmt(a.rate_line*1e-9,3)} kV/μs</b>, t_L = k·L_L/Z = <b>${eng(a.tL,'s')}</b> (μήκος ≈ ${eng(a.L,'m')}); πλευρά της πηγής RRRV·I_L/I_sc = ${fmt(a.rrrv_slf*1e-9,3)} kV/μs· TRV στην πρώτη κορυφή u_T = u_L* + u_s* = <b>${eng(a.uT,'V')}</b></li>
+  <li>Πλευρά της πηγής (κύκλωμα τροφοδοσίας της δοκιμής): R_s = RRRV/(√2·ω·I_sc) = <b>${eng(m.Rs,'Ω')}</b> για ${fmt(a.supply.rrrv*1e-9,3)} kV/μs, C_d = t_d/R_s = <b>${eng(m.Cd,'F')}</b> για t_d = ${eng(a.supply.td,'s')}</li>
   <li>Στη γραμμή χωρίς απώλειες της προσομοίωσης η πριονωτή πάει ως 2·u₀ σε 2τ = ${eng(2*tau,'s')} (k = 2)· οι πραγματικές γραμμές αποσβένουν (k = 1,6).</li></ul>`;
  const I=rawSeries('Y:CB1/I'),V=rawSeries('Y:CB1/V');if(!I||!V)return h;
  let j0=-1;for(let j=1;j<I.t.length;j++)if(I.t[j]>m.tsep&&I.y[j-1]*I.y[j]<=0){j0=j;break;}

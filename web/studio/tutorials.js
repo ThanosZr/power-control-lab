@@ -1230,18 +1230,23 @@
  T.push({id:'trv_slf',group:'Διακόπτες ισχύος (4.9)',title:'Σφάλμα κοντινής γραμμής και τόξο του διακόπτη',theory:'formula',topology:'trv_slf',
   options:[{k:'ratio',label:'Δοκιμή',options:[['0.9','L90: I_L = 90 % του I_sc'],['0.75','L75'],['0.95','L95 (πιο κοντά)'],['0.6','L60']],def:'0.9'},
    {k:'arc',label:'Μοντέλο τόξου',options:[['imayr','Mayr βελτιωμένο (από μετρήσεις)'],['kema','Τρία τροποποιημένα Mayr'],['habedank','Cassie + Mayr'],['mayr','Mayr']],def:'imayr'},
-   {k:'state',label:'Διακόπτης',options:[['1','Όπως στις μετρήσεις (P₀ = 15,9 kW)'],['0.45','Εξασθενημένος (P₀ × 0,45)'],['0.3','Πολύ εξασθενημένος (P₀ × 0,3)']],def:'1'}],
+   {k:'state',label:'Διακόπτης',options:[['1','Όπως στις μετρήσεις'],['weak','Εξασθενημένος (λιγότερη ψύξη)'],['vweak','Πολύ εξασθενημένος']],def:'1'}],
   desc:'Μονοφασικό κύκλωμα δοκιμής κοντινής γραμμής (IEC 62271-100, Σχ. 48): πηγή U_r/√3 με αυτεπαγωγή για I_sc = 50 kA, χωρητικότητα και αντίσταση της πλευράς της πηγής, ο διακόπτης με τόξο (χωρισμός επαφών στα 14,7 ms) και γραμμή Z = 450 Ω μήκους τέτοιου ώστε το ρεύμα να είναι I_L. Μετά το μηδέν η πλευρά της γραμμής δίνει πριονωτή τάση με ρυθμό s·I_L: το τόξο πρέπει να ψυχθεί μέσα σε λίγα μs.',
-  tasks:['L90 με τον διακόπτη των μετρήσεων: διακοπή στο πρώτο μηδέν, ρεύμα μετά το τόξο λίγα mA.','Εξασθενημένος: στο L90 θερμική επανέναυση, στο L75 και στο L95 διακοπή. Γιατί το πρότυπο ζητά L90 και L75;','Σύγκρινε στην κάρτα το u₀, το u_L*, το t_L και την TRV στην πρώτη κορυφή με τους τύπους του Παραρτήματος A.'],
-  build(o){const Ur=245e3,Isc=50e3,f=50,w=2*Math.PI*f,r=+o.ratio||0.9,UG=Ur/Math.sqrt(3),LS=UG/(w*Isc),IL=r*Isc,LL=UG*(1-r)/(IL*w),Z=450,tsep=0.0147;
-   const sc=+o.state||1,arcP={arc:o.arc||'imayr',cmd:'0:1, '+tsep+':0'};if(sc!==1){if(arcP.arc==='kema')arcP.Pi2=String(30*sc);else if(arcP.arc==='habedank')arcP.Pm=String(30e3*sc);else arcP.P0=String((arcP.arc==='mayr'?15917:15917)*sc);}
+  tasks:['L90 με τον διακόπτη των μετρήσεων: διακοπή στο πρώτο μηδέν, ρεύμα μετά το τόξο λίγα mA.','Εξασθενημένος: στο L90 θερμική επανέναυση, στο L75 και στο L60 διακοπή (στο L95 ανάλογα με το μοντέλο). Γιατί το πρότυπο ζητά L90 και L75;','Mayr με σταθερή ισχύ ψύξης P₀: αποτυγχάνει ήδη στο L90 με τις τιμές των μετρήσεων. Τι προσθέτει ο όρος P₁·u·i του βελτιωμένου Mayr;','Σύγκρινε στην κάρτα το u₀, το u_L*, το t_L και την TRV στην πρώτη κορυφή με τους τύπους του Παραρτήματος A.'],
+  build(o){const Ur=245e3,Isc=50e3,f=50,w=2*Math.PI*f,r=+o.ratio||0.9,UG=Ur/Math.sqrt(3),LS=UG/(w*Isc),IL=r*Isc,LL=UG*(1-r)/(IL*w),Z=450,tsep=0.0147,
+    // supply side as in Annex A: R_s ∥ C_d behind L_S, with the rated RRRV of the supply circuit (2 kV/µs at I_sc) and its delay t_d (2 µs)
+    sup=window.TRV?TRV.rated(Ur,'SLF',null,'S1',f):{rrrv:2e9,td:2e-6},Rs=sup.rrrv/(Math.SQRT2*w*Isc),Cd=sup.td/Rs;
+   const arcP={arc:o.arc||'imayr',cmd:'0:1, '+tsep+':0'},WEAK={imayr:[.33,.25],mayr:[.45,.3],kema:[.35,.25],habedank:[.7,.45]},sc=o.state==='weak'?WEAK[arcP.arc][0]:o.state==='vweak'?WEAK[arcP.arc][1]:1;
+   // the cooling power scaled: P₀ (Mayr), Π₂ and so Π₃ (three Mayr), P_m (Cassie + Mayr); the factors put the weak breaker
+   // just past thermal failure at L90 while L75 and L60 still clear (runs in tests/test_trv.py)
+   if(sc!==1){if(arcP.arc==='kema')arcP.Pi2=String(30*sc);else if(arcP.arc==='habedank')arcP.Pm=String(30e3*sc);else arcP.P0=String(15917*sc);}
    const comps=[C('V1','VAC',100,220,{Vpk:UG*Math.SQRT2,f,phase:0},{label:'U_r/√3'}),C('LS','L',220,140,{L:LS},{label:'L_S'}),C('J1','JUNC',340,140),
-    C('CD','C',340,240,{C:10e-9},{label:'C_d'}),C('RS','R',420,240,{R:450},{rot:1,label:'R_s'}),C('CB1','ARC',520,140,arcP,{label:'CB'}),
+    C('CD','C',340,240,{C:Cd},{label:'C_d'}),C('RS','R',420,240,{R:Rs},{rot:1,label:'R_s'}),C('CB1','ARC',520,140,arcP,{label:'CB'}),
     C('TL1','TL',700,160,{spec:'zt',Z,tau:LL/Z,nsec:1},{label:'γραμμή'}),C('G1','GND',100,320),C('G2','GND',340,320),C('G3','GND',420,320),C('G4','GND',640,320),C('G5','GND',780,320)];
    const wires=[['V1:p','LS:a'],['LS:b','J1:j'],['V1:n','G1:g'],['J1:j','CD:p'],['CD:n','G2:g'],['J1:j','RS:a'],['RS:b','G3:g'],['J1:j','CB1:a'],['CB1:b','TL1:a1'],['TL1:b1','G4:g'],['TL1:a2','G5:g'],['TL1:b2','G5:g']];
    return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:400000,method:'TR',speed:0.05,stopT:0.0156},
     scope:{panes:[[['Y:CB1/V','τάση διακόπτη (TRV)']],[['Y:CB1/I','ρεύμα τόξου']],[['Garc:CB1/A1','αγωγιμότητα τόξου']]],window:{unit:'s',n:0.0156}},
-    meta:{slf:{Ur,Isc,f,ratio:r,arc:arcP.arc,state:sc,tsep,LL,LS,Z}}});}});
+    meta:{slf:{Ur,Isc,f,ratio:r,arc:arcP.arc,state:sc,tsep,LL,LS,Z,Rs,Cd}}});}});
  T.push({id:'line_fd',group:'Γραμμές (4.4)',title:'Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD)',theory:'formula',topology:'line_fd',
   options:[{k:'cmp',label:'Γραμμές',options:[['cp50','CP στα 50 Hz και FD, δίπλα δίπλα'],['cp5k','CP στα 5 kHz και FD'],['fd','Μόνο FD']],def:'cp50'},
    {k:'src',label:'Ζεύξη',options:[['step','Μία φάση (a), βηματική 1 kV πίσω από 10 Ω'],['ac3','Τριφασική 400 kV, στην κορυφή της v_a']],def:'step'}],

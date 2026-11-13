@@ -192,5 +192,57 @@ class SameInTheBrowser(unittest.TestCase):
                 self.assertAlmostEqual(p[k], j[k], delta=1e-12 * abs(p[k]), msg=f'L{r} {k}')
 
 
+class TheTutorials(unittest.TestCase):
+    """The two TRV tutorials run headless (tests/js/trv_tutorial_cases.js, the post-processing of their cards)."""
+    @classmethod
+    def setUpClass(cls):
+        import json
+        import shutil
+        import subprocess
+        from pathlib import Path
+        if shutil.which('node') is None:
+            raise unittest.SkipTest('Node.js not installed')
+        run = subprocess.run(['node', str(Path(__file__).resolve().parent / 'js' / 'trv_tutorial_cases.js')], capture_output=True, text=True,
+                             timeout=600)
+        if run.returncode:
+            raise RuntimeError(run.stderr)
+        cls.R = {(d['id'], tuple(sorted(d['ov'].items()))): d for d in json.loads(run.stdout)}
+
+    def get(self, id_, **ov):
+        d = self.R[(id_, tuple(sorted(ov.items())))]
+        self.assertEqual(d['warn'], [])
+        return d
+
+    def test_terminal_fault_against_the_rated_envelope(self):
+        d = self.get('trv_terminal')                        # six lines of 400 Ω: below the T100 line of 145 kV
+        self.assertEqual(d['pole'], 'b')
+        self.assertTrue(d['ok'])
+        self.assertLess(d['ratio'], 0.85)
+        self.assertAlmostEqual(d['uc_rated'], 1.5 * 1.4 * math.sqrt(2 / 3) * 145e3, delta=1)
+        two = self.get('trv_terminal', n='2')               # two lines: the initial rate is three times higher
+        self.assertFalse(two['ok'])
+        self.assertGreater(two['ratio'], 1.2)
+        self.assertGreater(two['rrrv'], 2 * d['rrrv'])
+        g = self.get('trv_terminal', kind='abcg')           # effectively earthed: k_pp 1,3, a lower recovery voltage
+        self.assertEqual(g['kpp'], 1.3)
+        self.assertTrue(g['ok'])
+        self.assertLess(g['uc'], d['uc'])
+        a = self.get('trv_terminal', pole='arc')            # the arc changes the first microseconds, not the peak
+        self.assertTrue(a['ok'])
+        self.assertLess(abs(a['uc'] - d['uc']), 0.005 * d['uc'])
+
+    def test_short_line_fault(self):
+        for r in ('0.9', '0.75'):                           # the breaker of the measurements clears L90 and L75
+            d = self.get('trv_slf') if r == '0.9' else self.get('trv_slf', ratio=r)
+            self.assertLess(abs(d['last']), 1)
+            self.assertLess(d['post'], 1e-2)
+            self.assertLess(abs(d['peak'] - d['peak_theory']), 0.1 * d['peak_theory'])  # 2·u₀ + supply side
+        for arc in ('imayr', 'kema', 'habedank'):           # weak: thermal failure at L90 only
+            ov = {} if arc == 'imayr' else {'arc': arc}
+            self.assertGreater(abs(self.get('trv_slf', state='weak', **ov)['last']), 100, arc)
+            self.assertLess(abs(self.get('trv_slf', state='weak', ratio='0.75', **ov)['last']), 1, arc)
+        self.assertGreater(abs(self.get('trv_slf', arc='mayr')['last']), 100)  # constant cooling power: fails already
+
+
 if __name__ == '__main__':
     unittest.main()
