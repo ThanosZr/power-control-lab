@@ -125,7 +125,10 @@ class SolverState(unittest.TestCase):
         self.assertGreater(len(out), 35)
         bad = {k: v for k, v in out.items() if v['maxdiff'] != 0}
         self.assertEqual(bad, {}, 'continuation differs')
-        self.assertTrue(all(v['kb'] < 2000 for v in out.values()))
+        # 4.13: the cross-bonded cable keeps ten wideband sections of six conductors (their models and the records of their
+        # waves): up to 6 MB; the others under 2 MB
+        big = {k: v['kb'] for k, v in out.items() if v['kb'] >= {'cable_xb': 6000}.get(k, 2000)}
+        self.assertEqual(big, {})
 
 
 if __name__ == '__main__':

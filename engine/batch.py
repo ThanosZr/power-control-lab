@@ -1120,9 +1120,9 @@ class Circuit:
                     b[a] -= ih
                 if bb >= 0:
                     b[bb] += ih
-        for i in self.iTM:              # 4.12: the CP histories (the FD states enter through Bx)
+        for i in self.iTM:              # 4.12: the CP histories (the FD and wideband states enter through Bx)
             e = E[i]
-            if e['fd']:
+            if e['fd'] or e.get('wb'):
                 continue
             I1, I2 = self.tlm_ih(e, t)
             for ns_, I in ((e['n1'], I1), (e['n2'], I2)):
@@ -1295,6 +1295,16 @@ class Circuit:
             e = E[i]
             M = int(e['M'])
             e['M'] = M
+            if e.get('wb'):             # 4.13: the wideband line (states below, tlw_setup)
+                e['fd'] = False
+                e['n1'] = [int(a) for a in e['n1']]
+                e['n2'] = [int(a) for a in e['n2']]
+                e['G'] = np.array(e['G0'], dtype=float).reshape(M, M)
+                H = e.get('H')
+                e['H'] = {'t': list(H['t']), 'c': [list(c) for c in H['c']]} if H else {'t': [], 'c': [[] for _ in range(2 * M)]}
+                e['vm0'] = None
+                e['w0'] = np.array(e['w0'], dtype=float) if e.get('w0') is not None else None
+                continue
             e['Ti'] = np.array(e['Ti'], dtype=float).reshape(M, M)
             e['n1'] = [int(a) for a in e['n1']]
             e['n2'] = [int(a) for a in e['n2']]
@@ -1324,6 +1334,7 @@ class Circuit:
                 cols += [(i, k)] * (2 * npz + 2 * npa)
                 m['x0'] = [float(v) for v in x0]
         if not cols:
+            self.tlw_setup()
             return
         nn = len(cols)
         self.Bx = np.hstack([self.Bx, np.zeros((n, nn))])
@@ -1362,6 +1373,109 @@ class Circuit:
         self.x0 = np.concatenate([self.x0, x0])
         self.ns = ns
         self.Ds = Ds
+        self.tlw_setup()
+
+    def tlw_setup(self):
+        """4.13: wideband lines (Sim.tlwSources in the browser): at each end i = G₀·v + Σ w·Re(R·x) − Σ w·Re(R·z) into the
+        line, with per pole of Y_c a state dx/dt = q·x + v (complex: two real states, w = 2) and per pole of H a state
+        dz/dt = p·z + w_m(t − τ) of the other end's wave from the record; w = 2·(G₀·v + Σ w·Re(R·x)) − Σ w·Re(R·z). The
+        convolutions are exact here, where the browser convolves recursively over its step: an independent check."""
+        E, n = self.els, self.n
+        wl = [i for i in self.iTM if E[i].get('wb')]
+        if not wl:
+            return
+        blocks, k0 = [], self.ns
+        for i in wl:
+            e = E[i]
+            M = e['M']
+            for S in [e['yc']] + list(e['grp']):
+                S['pr'] = np.array(S['pr'], float)
+                S['pi'] = np.array(S['pi'], float)
+                S['w'] = np.array(S['w'], float)
+                N = int(S['N'])
+                S['R'] = (np.array(S['Rr'], float) + 1j * np.array(S['Ri'], float)).reshape(N, M, M)
+                S['cx'] = S['pi'] > 0
+                S['nst'] = int(np.sum(np.where(S['cx'], 2, 1)))     # real states of one conductor of one end
+            # state index of (set, end, pole, conductor); a complex pole has its imaginary part in the next state
+            lay = {}
+            for key, S in [('y', e['yc'])] + [(('g', j), g) for j, g in enumerate(e['grp'])]:
+                for end in (0, 1):
+                    for k in range(int(S['N'])):
+                        for c in range(M):
+                            lay[(key, end, k, c)] = k0
+                            k0 += 2 if S['cx'][k] else 1
+            e['lay'] = lay
+            blocks.append(e)
+        nn = k0 - self.ns
+        self.Bx = np.hstack([self.Bx, np.zeros((n, nn))])
+        self.Dm = np.vstack([self.Dm, np.zeros((nn, n))])
+        ns = self.ns + nn
+        Ds = np.zeros((ns, ns))
+        if self.Ds is not None:
+            Ds[:self.ns, :self.ns] = self.Ds
+        x0 = np.zeros(nn)
+        for e in blocks:
+            M, lay = e['M'], e['lay']
+            nyc = int(e['yc']['N'])
+            nz = int(e['nz'])
+            Xr, Xi = np.array(e['Xr'], float), np.array(e['Xi'], float)
+            Zr, Zi = np.array(e['Zr'], float), np.array(e['Zi'], float)
+            for key, S in [('y', e['yc'])] + [(('g', j), g) for j, g in enumerate(e['grp'])]:
+                i0 = sum(int(g['N']) for g in e['grp'][:key[1]]) if key != 'y' else 0
+                for end, ends in ((0, e['n1']), (1, e['n2'])):
+                    for k in range(int(S['N'])):
+                        q = complex(S['pr'][k], S['pi'][k])
+                        w = S['w'][k]
+                        for c in range(M):
+                            j = lay[(key, end, k, c)]
+                            if key == 'y':
+                                xr, xi = Xr[(end * nyc + k) * M + c], Xi[(end * nyc + k) * M + c]
+                                a = ends[c]
+                                if a >= 0:
+                                    self.Dm[j, a] += 1.0          # dx/dt = q·x + v
+                            else:
+                                xr, xi = Zr[(end * nz + i0 + k) * M + c], Zi[(end * nz + i0 + k) * M + c]
+                            sg = -1.0 if key == 'y' else 1.0      # injection into the node: −Y_c part, +H part
+                            for r, a in enumerate(ends):
+                                if a < 0:
+                                    continue
+                                R = S['R'][k, r, c]
+                                self.Bx[a, j] += sg * w * R.real
+                                if S['cx'][k]:
+                                    self.Bx[a, j + 1] -= sg * w * R.imag
+                            if S['cx'][k]:
+                                Ds[j, j], Ds[j, j + 1], Ds[j + 1, j], Ds[j + 1, j + 1] = q.real, -q.imag, q.imag, q.real
+                                x0[j - self.ns], x0[j + 1 - self.ns] = xr, xi
+                            else:
+                                Ds[j, j] = q.real
+                                x0[j - self.ns] = xr
+        self.x0 = np.concatenate([self.x0, x0])
+        self.ns = ns
+        self.Ds = Ds
+
+    def tlw_ix(self, e, x):
+        """Σ w·Re(R·x) of Y_c and of H at both ends: (yc1, yc2, h1, h2), each M values."""
+        M, lay = e['M'], e['lay']
+        out = [np.zeros(M) for _ in range(4)]
+        for key, S in [('y', e['yc'])] + [(('g', j), g) for j, g in enumerate(e['grp'])]:
+            for end in (0, 1):
+                acc = out[end] if key == 'y' else out[2 + end]
+                for k in range(int(S['N'])):
+                    for c in range(M):
+                        j = lay[(key, end, k, c)]
+                        z = complex(x[j], x[j + 1]) if S['cx'][k] else complex(x[j], 0.0)
+                        acc += S['w'][k] * (S['R'][k, :, c] * z).real
+        return out
+
+    def tlw_end(self, e, z, x):
+        """Voltages, currents into the line and waves at both ends of a wideband line."""
+        V = lambda nd: z[nd] if nd >= 0 else 0.0
+        v1 = np.array([V(a) for a in e['n1']])
+        v2 = np.array([V(a) for a in e['n2']])
+        y1, y2, h1, h2 = self.tlw_ix(e, x)
+        G = e['G']
+        i1, i2 = G @ v1 + y1 - h1, G @ v2 + y2 - h2
+        return v1, v2, i1, i2, i1 + G @ v1 + y1, i2 + G @ v2 + y2
 
     def tlm_hist(self, e, tq):
         """The record of a line from geometry at tq (linear interpolation); before the record: at rest, or with the trapped
@@ -1370,6 +1484,8 @@ class Circuit:
         T, C = H['t'], H['c']
         if not T or (tq < 0 and tq < T[0]):
             out = [0.0] * len(C)
+            if e.get('wb'):
+                return list(e['w0']) if e.get('w0') is not None else out
             if e['vm0'] is not None:
                 for k in range(e['M']):
                     if e['fd']:
@@ -1400,10 +1516,21 @@ class Circuit:
         return I1, I2
 
     def tlm_force(self, t):
-        """The delayed inputs of the FD propagation states: c·f of the other end at t − τ."""
+        """The delayed inputs of the FD propagation states: c·f of the other end at t − τ (and of the wideband H states:
+        the other end's wave at t − τ_g, 4.13)."""
         f = np.zeros(self.ns)
         for i in self.iTM:
             e = self.els[i]
+            if e.get('wb'):
+                M, lay = e['M'], e['lay']
+                for j, g in enumerate(e['grp']):
+                    q = self.tlm_hist(e, t - float(g['tau']))
+                    for end in (0, 1):
+                        u = q[M:2 * M] if end == 0 else q[0:M]
+                        for k in range(int(g['N'])):
+                            for c in range(M):
+                                f[lay[(('g', j), end, k, c)]] += u[c]
+                continue
             if not e['fd']:
                 continue
             for k, m in enumerate(e['modes']):
@@ -1439,7 +1566,14 @@ class Circuit:
             H = e['H']
             if H['t'] and t < H['t'][-1]:
                 continue
-            if e['fd'] and x is None:
+            if (e['fd'] or e.get('wb')) and x is None:
+                continue
+            if e.get('wb'):
+                _, _, _, _, w1, w2 = self.tlw_end(e, z, x)
+                H['t'].append(t)
+                for r in range(e['M']):
+                    H['c'][r].append(float(w1[r]))
+                    H['c'][e['M'] + r].append(float(w2[r]))
                 continue
             v1, v2, i1, i2, b1, b2 = self.tlm_modal(e, t, x, z)
             H['t'].append(t)
@@ -1637,6 +1771,10 @@ class Circuit:
         if k == 'TL':
             e2 = (e['a1'], e['b1']) if port == 0 else (e['a2'], e['b2'])
             return (V(e2[0]) - V(e2[1])) / e['Ze'] + self.tl_ih(e, t)[port]
+        if k == 'TLM' and e.get('wb'):  # 4.13: a wideband line, in the phases directly
+            M = e['M']
+            _, _, i1, i2, _, _ = self.tlw_end(e, z, x)
+            return float((i1 if port < M else i2)[port % M])
         if k == 'TLM':                  # 4.12: the phase current into the line at port (0…M−1 end 1, M…2M−1 end 2)
             M = e['M']
             v1, v2, i1, i2, _, _ = self.tlm_modal(e, t, x, z)

@@ -105,6 +105,8 @@
   // 4.5: typical single-core XLPE cables (radii in m, resistivities in Ω·m, phase 0 = sheath bonded and earthed at both ends)
   '220kV-sea':{name:'Τυπικό υποβρύχιο καλώδιο 220 kV (3 μονοπολικά XLPE, θάλασσα)',medium:'sea',rho:0.2,length:30,cables:[{x:-1.0,y:30,ph:[1,0],layers:[{t:'c',rin:0,rout:0.0256,rho:1.7e-08},{t:'i',rout:0.055,epsr:2.3,tand:0.0004},{t:'c',rin:0.055,rout:0.0575,rho:2.8e-08},{t:'i',rout:0.085,epsr:2.3}]},{x:0.0,y:30,ph:[2,0],layers:[{t:'c',rin:0,rout:0.0256,rho:1.7e-08},{t:'i',rout:0.055,epsr:2.3,tand:0.0004},{t:'c',rin:0.055,rout:0.0575,rho:2.8e-08},{t:'i',rout:0.085,epsr:2.3}]},{x:1.0,y:30,ph:[3,0],layers:[{t:'c',rin:0,rout:0.0256,rho:1.7e-08},{t:'i',rout:0.055,epsr:2.3,tand:0.0004},{t:'c',rin:0.055,rout:0.0575,rho:2.8e-08},{t:'i',rout:0.085,epsr:2.3}]}]},
   '150kV-land':{name:'Τυπικό υπόγειο καλώδιο 150 kV (3 μονοπολικά XLPE 1000 mm², επίπεδη διάταξη)',medium:'earth',rho:100,length:10,cables:[{x:-0.25,y:1.2,ph:[1,0],layers:[{t:'c',rin:0,rout:0.0189,rho:1.93e-08},{t:'i',rout:0.038,epsr:2.5,tand:0.0004},{t:'c',rin:0.038,rout:0.0384,rho:1.72e-08},{t:'i',rout:0.048,epsr:2.3}]},{x:0.0,y:1.2,ph:[2,0],layers:[{t:'c',rin:0,rout:0.0189,rho:1.93e-08},{t:'i',rout:0.038,epsr:2.5,tand:0.0004},{t:'c',rin:0.038,rout:0.0384,rho:1.72e-08},{t:'i',rout:0.048,epsr:2.3}]},{x:0.25,y:1.2,ph:[3,0],layers:[{t:'c',rin:0,rout:0.0189,rho:1.93e-08},{t:'i',rout:0.038,epsr:2.5,tand:0.0004},{t:'c',rin:0.038,rout:0.0384,rho:1.72e-08},{t:'i',rout:0.048,epsr:2.3}]}]}};
+ // 4.13: the land cable with its sheaths kept as conductors 4–6 (pcl.lineconst.TYPICAL['150kV-land-s'])
+ TLM_TYPICAL['150kV-land-s']=(()=>{const d=JSON.parse(JSON.stringify(TLM_TYPICAL['150kV-land']));d.name='Τυπικό υπόγειο καλώδιο 150 kV με τους μανδύες ως αγωγούς 4–6 (για cross-bonding)';d.cables.forEach((c,k)=>{c.ph=[k+1,k+4];});return d;})();
  const PARTS={
   R:{name:'Αντίσταση',prefix:'R',group:'Παθητικά',pins:{a:[-30,0],b:[30,0]},box:[-22,-8,44,16],
    params:[num('R','Αντίσταση','Ω',10),txt('sched','R(t)','',{hint:SCHED})],
@@ -695,25 +697,36 @@
   // line from geometry (4.4, ROADMAP §26): the conductors (line data, as the EMTP Line Data) give Z′(ω), Y′(ω) in Python
   // (pcl/lineconst.py, /api/line_model); the solver uses the model kept in `mdl`: CP (modal Bergeron with R/4, R/2, R/4)
   // or FD (J. Marti: Z_c(s), A(s)·e^(−sτ) as rational functions with real poles, recursive convolution), constant real T_i
-  TLM:{name:'Γραμμή από γεωμετρία (CP / FD)',prefix:'LG',group:'Δίκτυο',pins:p=>tlmPins(p),box:p=>{const M=tlmM(p),h=isBus(p)&&M===3?50:Math.max(50,20*M+10);return [-30,-h/2,60,h];},
+  TLM:{name:'Γραμμή από γεωμετρία (CP / FD / WB)',prefix:'LG',group:'Δίκτυο',pins:p=>tlmPins(p),box:p=>{const M=tlmM(p),h=isBus(p)&&M===3?50:Math.max(50,20*M+10);return [-30,-h/2,60,h];},
    bus:p=>isBus(p)&&tlmM(p)===3?{abc1:['a1','b1','c1'],abc2:['a2','b2','c2']}:{},
-   params:[sel('model','Μοντέλο',[['cp','CP: σταθερές παράμετροι (Bergeron, R/4 – R/2 – R/4)'],['fd','FD: εξάρτηση από τη συχνότητα (J. Marti)'],['pi','π ονομαστικό σε τμήματα (4.11)']],'cp',{hint:'Όπως το EMTP: CP στη συχνότητα που δίνεις (κάθε ρυθμός μια γραμμή Bergeron με συγκεντρωμένη R), FD με Z_c(ω) και A(ω) ως ρητές συναρτήσεις, και τα δύο με σταθερό πραγματικό T_i· π: συζευγμένα R, L, C σε N τμήματα.'}),
+   params:[sel('model','Μοντέλο',[['cp','CP: σταθερές παράμετροι (Bergeron, R/4 – R/2 – R/4)'],['fd','FD: εξάρτηση από τη συχνότητα (J. Marti)'],['pi','π ονομαστικό σε τμήματα (4.11)'],['wb','WB: wideband στο πεδίο των φάσεων (ULM, 4.13)']],'cp',{hint:'Όπως το EMTP: CP στη συχνότητα που δίνεις (κάθε ρυθμός μια γραμμή Bergeron με συγκεντρωμένη R), FD με Z_c(ω) και A(ω) ως ρητές συναρτήσεις, και τα δύο με σταθερό πραγματικό T_i· π: συζευγμένα R, L, C σε N τμήματα.'}),
     num('len','Μήκος','km',100),
-    num('f','Συχνότητα των παραμέτρων (CP, π)','Hz',50,{show:p=>p.model!=='fd',hint:'50 Hz για μόνιμη κατάσταση και σφάλματα, 1–5 kHz για χειρισμούς, 100–500 kHz για κεραυνούς.'}),
+    num('f','Συχνότητα των παραμέτρων (CP, π)','Hz',50,{show:p=>p.model!=='fd'&&p.model!=='wb',hint:'50 Hz για μόνιμη κατάσταση και σφάλματα, 1–5 kHz για χειρισμούς, 100–500 kHz για κεραυνούς.'}),
     sel('cp','Είδος CP',[['lumped','R/4 – R/2 – R/4'],['lossless','χωρίς απώλειες'],['distortionless','χωρίς παραμόρφωση'],['hf','χωρίς απώλειες, υψηλές συχνότητες']],'lumped',{show:p=>(p.model||'cp')==='cp'}),
     num('npi','Τμήματα του π','',1,{show:p=>p.model==='pi'}),
-    num('fmin','Ελάχιστη συχνότητα προσαρμογής','Hz',0.01,{show:p=>p.model==='fd'}),num('dec','Δεκάδες','',9,{show:p=>p.model==='fd',hint:'Μέγιστη συχνότητα f_min·10^δεκάδες (προεπιλογή 0,01 Hz … 10 MHz, όπως το EMTP).'}),
-    num('ppd','Σημεία ανά δεκάδα','',10,{show:p=>p.model==='fd'}),num('fti','Συχνότητα του T_i','Hz',1000,{show:p=>p.model==='fd'&&p.tiauto!=='1',hint:'Ο πραγματικός T_i υπολογίζεται σε μία συχνότητα (το EMTP προτείνει 0,5–5 kHz για χειρισμούς).'}),
+    num('fmin','Ελάχιστη συχνότητα προσαρμογής','Hz',0.01,{show:p=>p.model==='fd'||p.model==='wb'}),num('dec','Δεκάδες','',9,{show:p=>p.model==='fd'||p.model==='wb',hint:'Μέγιστη συχνότητα f_min·10^δεκάδες (προεπιλογή 0,01 Hz … 10 MHz, όπως το EMTP).'}),
+    num('ppd','Σημεία ανά δεκάδα','',10,{show:p=>p.model==='fd'||p.model==='wb'}),num('fti','Συχνότητα του T_i','Hz',1000,{show:p=>p.model==='fd'&&p.tiauto!=='1',hint:'Ο πραγματικός T_i υπολογίζεται σε μία συχνότητα (το EMTP προτείνει 0,5–5 kHz για χειρισμούς).'}),
     sel('tiauto','Συχνότητα του T_i αυτόματα',[['0','Όχι'],['1','Ναι (500 Hz – 5 kHz)']],'0',{show:p=>p.model==='fd'}),
-    num('nmax','Πόλοι ανά συνάρτηση (μέγιστο)','',30,{show:p=>p.model==='fd'}),
-    sel('ti','Πραγματικός T_i',[['gm0','G_m = 0 (EMTP)'],['minimag','ελάχιστο φανταστικό'],['balanced','ισορροπημένη (Clarke)'],['double','διπλό κύκλωμα']],'gm0',{show:p=>p.model!=='pi'}),
+    num('nmax','Πόλοι ανά συνάρτηση (μέγιστο)','',30,{show:p=>p.model==='fd'||p.model==='wb'}),
+    sel('ti','Πραγματικός T_i',[['gm0','G_m = 0 (EMTP)'],['minimag','ελάχιστο φανταστικό'],['balanced','ισορροπημένη (Clarke)'],['double','διπλό κύκλωμα']],'gm0',{show:p=>p.model!=='pi'&&p.model!=='wb'}),
+    // 4.13: the options of the wideband fitter (as the WB fitter of the EMTP: tolerance, cable model correction, DC
+    // correction, grouping, the advanced delays, passivity), or a model file of the EMTP
+    sel('wsrc','Μοντέλο WB από',[['fit','προσαρμογή εδώ (pcl.wideband)'],['emtp','αρχείο του EMTP (_WB.mod)']],'fit',{show:p=>p.model==='wb',hint:'Το αρχείο _WB.mod του WB fitter του EMTP διαβάζεται στο «Δεδομένα γραμμής» → «Μοντέλο»· χρειάζεται τις ίδιες φάσεις.'}),
+    num('wtol','Ανοχή της προσαρμογής','%',0.2,{show:p=>p.model==='wb'&&p.wsrc!=='emtp',hint:'Μέγιστο σφάλμα του H (απόλυτο) και του Y_c (ως προς το μέτρο του) σε κάθε συχνότητα.'}),
+    sel('wgrp','Ομαδοποίηση ρυθμών με ίδια καθυστέρηση',[['1','Ναι'],['0','Όχι']],'1',{show:p=>p.model==='wb'&&p.wsrc!=='emtp'}),
+    sel('wfdcm','Διόρθωση για καλώδια (FDCM)',[['auto','αυτόματα, όταν υπόλοιπο/πόλος > 1000'],['always','πάντα'],['never','ποτέ']],'auto',{show:p=>p.model==='wb'&&p.wsrc!=='emtp'}),
+    sel('wdc','Διόρθωση DC',[['0','Όχι'],['1','Ναι (κάτω από 1 Hz χωριστά· f_min ≤ 0,001 Hz)']],'0',{show:p=>p.model==='wb'&&p.wsrc!=='emtp'}),
+    sel('wlfw','Βάρος στις χαμηλές συχνότητες',[['100','100 (προεπιλογή)'],['300','300'],['30','30'],['0','χωρίς (το απλό ULM)']],'100',{show:p=>p.model==='wb'&&p.wsrc!=='emtp',hint:'Το σφάλμα του H μετρά ως προς |1 − H| του ρυθμού με τη μικρότερη απόσβεση, έως αυτόν τον συντελεστή: ένα κοντό τμήμα (π.χ. ελάσσον τμήμα cross-bonding) κρατά τη σύνθετη αντίσταση σειράς του στα 50 Hz. Η επιβολή παθητικότητας μετρά τις αλλαγές του H με τον ίδιο τρόπο.'}),
+    sel('wopt','Καθυστερήσεις με βελτιστοποίηση',[['0','Όχι (Bode, και αναζήτηση όταν δεν σβήνει στη ζώνη)'],['1','Ναι, σε όλες']],'0',{show:p=>p.model==='wb'&&p.wsrc!=='emtp'}),
+    sel('wpas','Παθητικότητα',[['check','έλεγχος (σάρωση)'],['enforce','έλεγχος και επιβολή'],['none','χωρίς έλεγχο']],'check',{show:p=>p.model==='wb'}),
+    txt('wbref','Αρχείο WB του EMTP','',{show:()=>false}),txt('wbtxt','Κείμενο του αρχείου WB','',{show:()=>false}),
     txt('vtrap','Παγιδευμένο φορτίο: τάση ανά αγωγό (V)','',{show:p=>p.model!=='pi',hint:'4.11: η γραμμή ξεκινά φορτισμένη σε αυτές τις τάσεις ΣΡ (μία ανά φάση, με κόμμα), όπως οι αρχικές συνθήκες του CP/FD του EMTP (για επαναζεύξη). Όχι μαζί με εκκίνηση από ροή φορτίου.'}),
     txt('data','Δεδομένα γραμμής (JSON)',JSON.stringify(TLM_TYPICAL['400kV']),{show:()=>false}),txt('mdl','Υπολογισμένο μοντέλο (JSON)','',{show:()=>false}),
     sel('conn','Ακροδέκτες',[['sep','Χωριστοί'],['bus','Δίαυλος abc (3 φάσεις)']],'sep')],
    value:p=>p.len,unit:'km',
    draw:p=>{const M=tlmM(p),bus=isBus(p)&&M===3,h=bus?50:Math.max(50,20*M+10),y=k=>-10*(M-1)+20*k;
     return `<rect class="block" x="-30" y="${-h/2}" width="60" height="${h}" rx="4"/>`+(bus?bl('M-40,0 H-30 M30,0 H40'):`<path d="${Array.from({length:M},(_,k)=>`M-40,${y(k)} H-30 M30,${y(k)} H40`).join(' ')}"/>`)
-     +'<path class="thin" d="M-20,-6 Q-10,-14 0,-6 T20,-6 M-20,4 H20"/>'+tx(p.model==='fd'?'FD':'CP',0,18,'bsm');}},
+     +'<path class="thin" d="M-20,-6 Q-10,-14 0,-6 T20,-6 M-20,4 H20"/>'+tx(p.model==='fd'?'FD':p.model==='wb'?'WB':'CP',0,18,'bsm');}},
   // 4.9 (ROADMAP §51): a transmission-line tower for lightning studies (network library, NetLib.towerDef): the tower as a
   // lossless vertical line (Z_t, height, speed) from its top to the footing resistance (constant, or R(I) with soil
   // ionization), an insulator string between each phase and the top (flashover at U_50 or on a volt–time curve).
@@ -1078,22 +1091,32 @@
  function tlmData(p){const s=String(p.data??'');if(tlmCache.has(s))return tlmCache.get(s);let d=null;try{d=JSON.parse(s);}catch(e){d=null;}if(tlmCache.size>64)tlmCache.clear();tlmCache.set(s,d);return d;}
  // number of phases: the largest phase number of the conductors (0 = ground wire); 3 when the data cannot be read
  function tlmM(p){const d=tlmData(p);if(!d)return 3;let M=0;for(const w of [...(d.wires||[]),...(d.bundles||[])])M=Math.max(M,Math.round(+w.ph)||0);
+  // 4.13: a homogeneous cross-bonded cable (pcl.lineconst.xbond_avg): the sheaths (second conductor of each cable) as one
+  // conductor ('bond') or grounded ('gnd'), the phases numbered again
+  if(d.cables&&(d.xbond==='bond'||d.xbond==='gnd')&&d.cables.length===3){const ph=d.cables.map(c=>[].concat(c.ph??[]).map(v=>Math.round(+v)||0)),s0=ph[0][1]||0;
+   const all=ph.flatMap((q,i)=>q.map((v,k)=>k===1?(d.xbond==='gnd'?0:(s0||99)):v));return Math.max(1,Math.min(12,new Set(all.filter(v=>v>0)).size||3));}
   for(const c of d.cables||[])for(const v of [].concat(c.ph??[]))M=Math.max(M,Math.round(+v)||0);
   if(d.seq)M=Math.round(+d.seq.M)||3;else if(d.zyfile&&d.zyfile.Zr?.length)M=d.zyfile.Zr[0].length;return Math.max(1,Math.min(12,M||3));}
  function tlmPin(k,end){return 'abcdefghijkl'[k]+end;}
  function tlmPins(p){const M=tlmM(p);if(isBus(p)&&M===3)return {abc1:[-40,0],abc2:[40,0]};const o={},y=k=>-10*(M-1)+20*k;for(let k=0;k<M;k++){o[tlmPin(k,1)]=[-40,y(k)];o[tlmPin(k,2)]=[40,y(k)];}return o;}
  // what the model was computed from: a change in any of these asks for a new model
  function tlmKey(p){const d=tlmData(p),n=v=>{const x=parseEng(v);return Number.isFinite(x)?x:String(v);};
-  const o={data:d,model:['fd','pi'].includes(p.model)?p.model:'cp',len:n(p.len)};if(o.model!=='fd')o.f=n(p.f);else Object.assign(o,{fmin:n(p.fmin),dec:n(p.dec),ppd:n(p.ppd),fti:n(p.fti)});
+  const o={data:d,model:['fd','pi','wb'].includes(p.model)?p.model:'cp',len:n(p.len)};if(o.model==='wb')Object.assign(o,{fmin:n(p.fmin),dec:n(p.dec),ppd:n(p.ppd)});else if(o.model!=='fd')o.f=n(p.f);else Object.assign(o,{fmin:n(p.fmin),dec:n(p.dec),ppd:n(p.ppd),fti:n(p.fti)});
   // 4.11: the options of the model enter the key only when they differ from the defaults (old models stay valid)
   if(o.model==='cp'&&p.cp&&p.cp!=='lumped')o.cp=p.cp;if(o.model==='pi')o.npi=n(p.npi??1);if(o.model!=='pi'&&p.ti&&p.ti!=='gm0')o.ti=p.ti;
-  if(o.model==='fd'){if(p.tiauto==='1'){o.tiauto=1;delete o.fti;}if(p.nmax!=null&&+p.nmax!==30)o.nmax=n(p.nmax);}return JSON.stringify(o);}
+  if(o.model==='fd'){if(p.tiauto==='1'){o.tiauto=1;delete o.fti;}if(p.nmax!=null&&+p.nmax!==30)o.nmax=n(p.nmax);}
+  // 4.13: the wideband options (only when they differ from the defaults), or the EMTP file the model was read from
+  if(o.model==='wb'){if(p.wsrc==='emtp'){o.wsrc='emtp';o.wbref=String(p.wbref||'');for(const k of ['fmin','dec','ppd'])delete o[k];}
+   else{if(p.wtol!=null&&+p.wtol!==0.2)o.wtol=n(p.wtol);if(p.wgrp==='0')o.wgrp=0;if(p.wfdcm&&p.wfdcm!=='auto')o.wfdcm=p.wfdcm;if(p.wdc==='1')o.wdc=1;if(p.wopt==='1')o.wopt=1;if(p.wlfw!=null&&+p.wlfw!==100)o.wlfw=n(p.wlfw);if(p.nmax!=null&&+p.nmax!==30)o.nmax=n(p.nmax);}
+   if(p.wpas&&p.wpas!=='check')o.wpas=p.wpas;}
+  return JSON.stringify(o);}
  // the model for the solver: {M, type, Ti (M×M, by rows), modes} or {err}
  function tlmModel(p){if(!tlmData(p))return {err:'τα δεδομένα της γραμμής δεν διαβάζονται (JSON).'};let m=null;try{m=p.mdl?JSON.parse(p.mdl):null;}catch(e){m=null;}
   if(!m||!m.modes)return {err:'δεν έχει υπολογιστεί μοντέλο. Άνοιξε «Δεδομένα γραμμής» και πάτα «Υπολογισμός» (χρειάζεται ο server).',need:true};
   if(m.src!==tlmKey(p))return {err:'το μοντέλο είναι παλιό (άλλαξαν δεδομένα, μήκος ή επιλογές). «Δεδομένα γραμμής» → «Υπολογισμός».',need:true};
   const M=m.M;if(!(M>=1&&m.Ti?.length===M&&m.modes.length===M))return {err:'μη έγκυρο μοντέλο γραμμής.'};
   for(const q of m.modes){const tau=+q.tau;if(!(tau>0))return {err:'μη έγκυρος χρόνος διάδοσης στο μοντέλο.'};}
+  if(m.type==='wb'&&!(Array.isArray(m.groups)&&m.groups.length&&m.groups.every(g=>+g.tau>0&&Array.isArray(g.p))&&m.yc?.d?.length===M))return {err:'μη έγκυρο μοντέλο WB.'};
   return m;}
  // the waveform of a lightning-current part: {kind, n, tau1, tau2, eta, I0, t0, T1, T2}
  function lightningWave(p){const I0=parseEng(p.Ipk)||0,t0=Math.max(0,parseEng(p.t0)||0),pre=HEIDLER[p.shape];

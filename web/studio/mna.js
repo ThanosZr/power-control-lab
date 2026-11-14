@@ -272,13 +272,13 @@
   if(dc&&A[0]>1-1e-9)A=[1-1e-9,0];   // at DC a lossless fit would be a short
   const H=cx.m(A,cx.e(-w*m.tau)),H2=cx.m(H,H),den=cx.m(Zc,cx.s([1,0],H2));
   return {Ys:cx.d(cx.a([1,0],H2),den),Ym:cx.d(cx.k(H,-2),den),Zc,gz,ga,ph:cx.e(-w*m.tau)};}
- function tlmAcY(e,w,h,dc){const M=e.M,Ti=e.Ti,Y=e.modes.map(m=>tlmModeY(m,w,h,dc)),Bs=new Float64Array(2*M*M),Bm=new Float64Array(2*M*M);
+ function tlmAcY(e,w,h,dc){if(e.wb)return tlwAcY(e,w,h,dc);const M=e.M,Ti=e.Ti,Y=e.modes.map(m=>tlmModeY(m,w,h,dc)),Bs=new Float64Array(2*M*M),Bm=new Float64Array(2*M*M);
   for(let r=0;r<M;r++)for(let q=0;q<M;q++){let sr=0,si=0,mr=0,mi=0;for(let k=0;k<M;k++){const t=Ti[r*M+k]*Ti[q*M+k];sr+=t*Y[k].Ys[0];si+=t*Y[k].Ys[1];mr+=t*Y[k].Ym[0];mi+=t*Y[k].Ym[1];}
    Bs[2*(r*M+q)]=sr;Bs[2*(r*M+q)+1]=si;Bm[2*(r*M+q)]=mr;Bm[2*(r*M+q)+1]=mi;}
   return {Y,Bs,Bm};}
  // the record of every mode over (−τ_max − 3h, 0] from the phasors (sampled every min(h, T₀/4000)), the convolution
  // states of the FD modes and the end currents at t = 0
- function tlmSteady(e,w,h,V1,V2,Y){const M=e.M,Ti=e.Ti,H=e.H,C=H.c,re=(z,t)=>z[0]*Math.cos(w*t)-z[1]*Math.sin(w*t);
+ function tlmSteady(e,w,h,V1,V2,Y){if(e.wb)return tlwSteady(e,w,h,V1,V2,e.acY);const M=e.M,Ti=e.Ti,H=e.H,C=H.c,re=(z,t)=>z[0]*Math.cos(w*t)-z[1]*Math.sin(w*t);
   const vm=(V)=>Array.from({length:M},(_,k)=>{let a=[0,0];for(let r=0;r<M;r++)a=cx.a(a,cx.k(V[r],Ti[r*M+k]));return a;});
   const U1=vm(V1),U2=vm(V2),I1=[],I2=[],F1=[],F2=[];
   for(let k=0;k<M;k++){const y=Y[k];I1.push(cx.a(cx.m(y.Ys,U1[k]),cx.m(y.Ym,U2[k])));I2.push(cx.a(cx.m(y.Ys,U2[k]),cx.m(y.Ym,U1[k])));
@@ -300,7 +300,7 @@
  // (v_mode = T_iᵀ·v, i = T_i·i_mode). CP: per mode Z_e = Z_c + R/4 and the history of Dommel (as 'TL' with one section).
  // FD (J. Marti): per mode Z_c(s) = d + Σ k/(s + p) and A(s) = e^(−sτ)·Σ c/(s + q), recursive convolutions that are exact
  // for inputs linear over the step; at each end i = (v − h_z − b)/Z_eq with b = A ⊛ f of the other end, f = v + Z_c ⊛ i.
- function tlmElement(o,n1,n2,g){const M=g.M,Ti=new Float64Array(M*M);for(let r=0;r<M;r++)for(let k=0;k<M;k++)Ti[r*M+k]=g.Ti[r][k];
+ function tlmElement(o,n1,n2,g){if(g.type==='wb')return tlwElement(o,n1,n2,g);const M=g.M,Ti=new Float64Array(M*M);for(let r=0;r<M;r++)for(let k=0;k<M;k++)Ti[r*M+k]=g.Ti[r][k];
   // 4.11: CP without distortion (cpline §1.2.3, Dommel §4.2.2.4): lossless with every arriving wave times e^(−R/2Z_c)
   const modes=g.modes.map(q=>{if(g.type!=='fd'){const Zc=+q.Zc,R=Math.max(0,+q.R||0);if(q.dl)return {cp:true,Zc,R,tau:+q.tau,Ze:Zc,hh:1,att:Math.exp(-R/(2*Zc))};
     const r=R/4,Ze=Zc+r;return {cp:true,Zc,R,tau:+q.tau,Ze,hh:(Zc-r)/Ze,att:1};}
@@ -316,6 +316,76 @@
   return {k:'TLM',...o,M,n1,n2,vm0,p1:n1.map(a=>[a,-1]),p2:n2.map(a=>[a,-1]),Ti,fd:g.type==='fd',modes,tauMin:Math.min(...modes.map(m=>m.tau)),tauMax:Math.max(...modes.map(m=>m.tau)),
    Gp:new Float64Array(M*M),gH:NaN,Ihm:new Float64Array(2*M),Ih:new Float64Array(2*M),iE:new Float64Array(2*M),vm:new Float64Array(2*M),q:new Float64Array(nc*M),
    H:{t:[],c:Array.from({length:nc*M},()=>[]),s:0,cut:0}};}
+ // 4.13 (ROADMAP §26 step 4, THEORY §8φ): the wideband line/cable (universal line model) in the phase domain. At each end
+ // i_k = Y_c ⊛ v_k − H ⊛ w_m with w = i + Y_c ⊛ v the wave of the other end, Y_c(s) = G₀ + Σ R/(s − q) and
+ // H(s) = Σ_g e^(−sτ_g)·Σ R/(s − p) (pcl/wideband.py). Recursive convolutions with complex poles (one of each conjugate
+ // pair kept, twice its real part), exact for inputs linear over the step (rcCoefC); the delayed waves interpolated
+ // linearly in the record (2M columns: w of end 1, w of end 2). At each end a conductance G_eq = G₀ + Σ Re R·(a₀ − a₁).
+ function rcCoefC(qr,qi,h,o,j){const pr=-qr,pi=-qi,xr=pr*h,xi=pi*h,ax=Math.hypot(xr,xi);
+  const Em=Math.exp(-xr),Er=Em*Math.cos(xi),Ei=-Em*Math.sin(xi);let a0r,a0i,a1r,a1i;
+  const mul=(ar,ai,br,bi)=>[ar*br-ai*bi,ar*bi+ai*br],div=(ar,ai,br,bi)=>{const d=br*br+bi*bi;return [(ar*br+ai*bi)/d,(ai*br-ar*bi)/d];};
+  if(ax<1e-4){const [x2r,x2i]=mul(xr,xi,xr,xi),[x3r,x3i]=mul(x2r,x2i,xr,xi);
+   a0r=h*(1-xr/2+x2r/6-x3r/24);a0i=h*(-xi/2+x2i/6-x3i/24);a1r=h*(0.5-xr/3+x2r/8-x3r/30);a1i=h*(-xi/3+x2i/8-x3i/30);}
+  else{const emr=1-Er,emi=-Ei;[a0r,a0i]=div(emr,emi,pr,pi);const [xer,xei]=mul(xr,xi,Er,Ei),[pxr,pxi]=mul(pr,pi,xr,xi);[a1r,a1i]=div(emr-xer,emi-xei,pxr,pxi);}
+  o[j]=Er;o[j+1]=Ei;o[j+2]=a0r;o[j+3]=a0i;o[j+4]=a1r;o[j+5]=a1i;}
+ function wbSet(P,M){const MM=M*M,N=P.p.length,pr=new Float64Array(N),pi=new Float64Array(N),w=new Float64Array(N),Rr=new Float64Array(N*MM),Ri=new Float64Array(N*MM);
+  for(let k=0;k<N;k++){pr[k]=+P.p[k][0];pi[k]=+P.p[k][1];w[k]=pi[k]>0?2:1;for(let r=0;r<M;r++)for(let c=0;c<M;c++){Rr[k*MM+r*M+c]=+P.rr[k][r][c];Ri[k*MM+r*M+c]=+((P.ri&&P.ri[k])?P.ri[k][r][c]:0);}}
+  return {N,pr,pi,w,Rr,Ri,co:new Float64Array(6*N),hC:NaN};}
+ function wbCo(S,h){if(S.hC===h)return S.co;for(let k=0;k<S.N;k++){if(h>0)rcCoefC(S.pr[k],S.pi[k],h,S.co,6*k);else{const j=6*k;S.co[j]=1;S.co[j+1]=0;S.co[j+2]=S.co[j+3]=S.co[j+4]=S.co[j+5]=0;}}S.hC=h;return S.co;}
+ // the response of one pole to a sinusoid of ω (the recursive convolution of step h, or 1/(jω − q) for h = 0)
+ function wbPoleG(S,k,w,h){if(!(h>0))return cx.d([1,0],[-S.pr[k],w-S.pi[k]]);const c=wbCo(S,h),j=6*k,z=cx.e(w*h);
+  return cx.d(cx.a(cx.m(z,[c[j+2],c[j+3]]),cx.m(cx.s([1,0],z),[c[j+4],c[j+5]])),cx.s(z,[c[j],c[j+1]]));}
+ // Σ_k of the transfer of each kept pole for a real input of ω: R·G(ω) (+ R*·conj(G(−ω)) for a pair), M×M complex
+ function wbSum(S,M,w,h,out,sc){const MM=M*M;for(let k=0;k<S.N;k++){const g=wbPoleG(S,k,w,h);let g2=null;if(S.w[k]>1){const q=wbPoleG(S,k,-w,h);g2=[q[0],-q[1]];}
+   for(let i=0;i<MM;i++){const R=[S.Rr[k*MM+i],S.Ri[k*MM+i]];let v=cx.m(R,g);if(g2)v=cx.a(v,cx.m([R[0],-R[1]],g2));if(sc)v=cx.m(v,sc);out[2*i]+=v[0];out[2*i+1]+=v[1];}}}
+ function tlwElement(o,n1,n2,g){const M=g.M,MM=M*M;
+  const yc=wbSet(g.yc,M),G0=new Float64Array(MM);for(let r=0;r<M;r++)for(let c=0;c<M;c++)G0[r*M+c]=+g.yc.d[r][c];
+  const grp=g.groups.map(q=>Object.assign(wbSet(q,M),{tau:+q.tau}));
+  const nz=grp.reduce((s,q)=>s+q.N,0),taus=grp.map(q=>q.tau);
+  const e={k:'TLM',wb:true,...o,M,n1,n2,vm0:null,p1:n1.map(a=>[a,-1]),p2:n2.map(a=>[a,-1]),Ti:new Float64Array(MM).map((_,i)=>i%(M+1)===0?1:0),
+   modes:(g.modes||[]).map(q=>({tau:+q.tau})),tauMin:Math.min(...taus),tauMax:Math.max(...taus),yc,G0,grp,
+   Xr:new Float64Array(2*yc.N*M),Xi:new Float64Array(2*yc.N*M),Zr:new Float64Array(2*nz*M),Zi:new Float64Array(2*nz*M),ZNr:new Float64Array(2*nz*M),ZNi:new Float64Array(2*nz*M),
+   vp:new Float64Array(2*M),hy:new Float64Array(2*M),cv:new Float64Array(2*M),w0:null,Gp:new Float64Array(MM),gH:NaN,Ihm:new Float64Array(2*M),Ih:new Float64Array(2*M),iE:new Float64Array(2*M),
+   vm:new Float64Array(2*M),q:new Float64Array(2*M),qq:new Float64Array(2*M),H:{t:[],c:Array.from({length:2*M},()=>[]),s:0,cut:0}};
+  // trapped charge (cpline σ. 11, WidebandLineCable σ. 3): at rest with V₀ on the conductors, w = Y_c(0)·V₀ at both ends,
+  // every convolution state at its DC value (x = −V₀/q, z = −w/p)
+  if(o.vtrap&&o.vtrap.some(v=>v)){const V0=Float64Array.from({length:M},(_,r)=>o.vtrap[r]||0),w0=new Float64Array(2*M);e.vm0=V0;
+   const Y0=new Float64Array(2*MM);wbSum(yc,M,0,0,Y0);for(let r=0;r<M;r++){let s=0;for(let c=0;c<M;c++)s+=(G0[r*M+c]+Y0[2*(r*M+c)])*V0[c];w0[r]=w0[M+r]=s;}e.w0=w0;
+   for(let end=0;end<2;end++){for(let k=0;k<yc.N;k++){const d=cx.d([1,0],[-yc.pr[k],-yc.pi[k]]);for(let c=0;c<M;c++){const j=(end*yc.N+k)*M+c;e.Xr[j]=d[0]*V0[c];e.Xi[j]=d[1]*V0[c];}}
+    let i0=0;for(const q of grp){for(let k=0;k<q.N;k++){const d=cx.d([1,0],[-q.pr[k],-q.pi[k]]);for(let c=0;c<M;c++){const j=(end*nz+i0+k)*M+c;e.Zr[j]=d[0]*w0[c];e.Zi[j]=d[1]*w0[c];}}i0+=q.N;}
+    e.vp.set(V0,end*M);}}
+  delete e.vtrap;e.nz=nz;return e;}
+ // the two-port of the discrete model at ω (h > 0) or of the fitted functions (h = 0; dc: s = 0), for a start from the
+ // steady state: Y = M⁻¹·N with the Y_c and H that the convolutions represent (the delay as e^(−jωτ))
+ function tlwAcY(e,w,h,dc){const M=e.M,MM=M*M,Yc=new Float64Array(2*MM),Hd=new Float64Array(2*MM);
+  for(let i=0;i<MM;i++)Yc[2*i]=e.G0[i];wbSum(e.yc,M,w,h,Yc);for(const q of e.grp)wbSum(q,M,w,h,Hd,cx.e(-w*q.tau));
+  if(dc)for(let i=0;i<2*MM;i++)Hd[i]*=1-1e-9;   // at DC a line without shunt losses would be a short
+  const n=2*M,Ar=new Float64Array(n*n),Ai=new Float64Array(n*n);
+  for(let r=0;r<M;r++)for(let c=0;c<M;c++){const h0=Hd[2*(r*M+c)],h1=Hd[2*(r*M+c)+1];Ar[r*n+M+c]=Ar[(M+r)*n+c]=h0;Ai[r*n+M+c]=Ai[(M+r)*n+c]=h1;}
+  for(let r=0;r<n;r++)Ar[r*n+r]+=1;
+  // N = [Y_c −H·Y_c; −H·Y_c Y_c], column by column
+  const HY=new Float64Array(2*MM);for(let r=0;r<M;r++)for(let c=0;c<M;c++){let sr=0,si=0;for(let k=0;k<M;k++){const a=[Hd[2*(r*M+k)],Hd[2*(r*M+k)+1]],b=[Yc[2*(k*M+c)],Yc[2*(k*M+c)+1]],p=cx.m(a,b);sr+=p[0];si+=p[1];}HY[2*(r*M+c)]=sr;HY[2*(r*M+c)+1]=si;}
+  // the columns of end 1 of Y (Y11 above, Y21 below); the line is symmetric: Y22 = Y11, Y12 = Y21
+  const Bs=new Float64Array(2*MM),Bm=new Float64Array(2*MM);
+  for(let c=0;c<M;c++){const br=new Float64Array(n),bi=new Float64Array(n);
+   for(let r=0;r<M;r++){br[r]=Yc[2*(r*M+c)];bi[r]=Yc[2*(r*M+c)+1];br[M+r]=-HY[2*(r*M+c)];bi[M+r]=-HY[2*(r*M+c)+1];}
+   const sol=csolve(n,Ar.slice(),Ai.slice(),br,bi);if(!sol)continue;const [xr,xi]=sol;
+   for(let r=0;r<M;r++){Bs[2*(r*M+c)]=xr[r];Bs[2*(r*M+c)+1]=xi[r];Bm[2*(r*M+c)]=xr[M+r];Bm[2*(r*M+c)+1]=xi[M+r];}}
+  return {Bs,Bm,Y:{Yc,Hd,w,h}};}
+ function tlwSteady(e,w,h,V1,V2,A){const M=e.M,H=e.H,C=H.c,re=(z,t)=>z[0]*Math.cos(w*t)-z[1]*Math.sin(w*t),Y=A.Y;
+  const mv=(B,V,r)=>{let a=[0,0];for(let c=0;c<M;c++)a=cx.a(a,cx.m([B[2*(r*M+c)],B[2*(r*M+c)+1]],V[c]));return a;};
+  const I1=[],I2=[],W1=[],W2=[];for(let r=0;r<M;r++){I1.push(cx.a(mv(A.Bs,V1,r),mv(A.Bm,V2,r)));I2.push(cx.a(mv(A.Bs,V2,r),mv(A.Bm,V1,r)));}
+  for(let r=0;r<M;r++){W1.push(cx.a(I1[r],mv(Y.Yc,V1,r)));W2.push(cx.a(I2[r],mv(Y.Yc,V2,r)));}
+  const dt=Math.min(h>0?h:Infinity,2*Math.PI/w/4000),n=Math.ceil((e.tauMax+3*(h||dt))/dt)+2;H.t.length=0;for(const c of C)c.length=0;
+  for(let q=n;q>=0;q--){const t=-q*dt;H.t.push(t);for(let r=0;r<M;r++){C[r].push(re(W1[r],t));C[M+r].push(re(W2[r],t));}}
+  H.s=0;H.cut=0;
+  // states at t = 0 of a real sinusoidal input: x = (G(ω)·V + G(−ω)·V*)/2 (complex for a complex pole)
+  const st=(S,end,V,base,Xr,Xi,ph)=>{for(let k=0;k<S.N;k++){const g=wbPoleG(S,k,w,h),gm=wbPoleG(S,k,-w,h);
+    for(let c=0;c<M;c++){let v=V[c];if(ph)v=cx.m(v,ph);const a=cx.m(g,v),b=cx.m(gm,[v[0],-v[1]]),j=(end*base+k)*M+c;Xr[j]=(a[0]+b[0])/2;Xi[j]=(a[1]+b[1])/2;}}};
+  st(e.yc,0,V1,e.yc.N,e.Xr,e.Xi,null);st(e.yc,1,V2,e.yc.N,e.Xr,e.Xi,null);
+  let i0=0;for(const q of e.grp){const ph=cx.e(-w*q.tau);
+   for(let k=0;k<q.N;k++){const g=wbPoleG(q,k,w,h),gm=wbPoleG(q,k,-w,h);for(let c=0;c<M;c++){for(let end=0;end<2;end++){const W=end===0?W2:W1,v=cx.m(W[c],ph),a=cx.m(g,v),b=cx.m(gm,[v[0],-v[1]]),j=(end*e.nz+i0+k)*M+c;e.Zr[j]=(a[0]+b[0])/2;e.Zi[j]=(a[1]+b[1])/2;}}}i0+=q.N;}
+  for(let r=0;r<M;r++){e.vp[r]=re(V1[r],-h);e.vp[M+r]=re(V2[r],-h);e.iE[r]=I1[r][0];e.iE[M+r]=I2[r][0];}}
  // 4.11: the nominal π of a line from geometry in N equal sections (Dommel §4.2.2.1): per section the coupled series R (a
  // conductance matrix R⁻¹, or resistors when R is diagonal) and L (a flux element), and at each end of it the halves of the
  // shunt C and G as capacitors and resistors to ground and between the phases (row sums and −C_ik). A 0 V source at every
@@ -1333,15 +1403,19 @@
   zcFrac(){this.evalBlocks('trial',false,true);let th=null;
    for(const b of this.net.sig.zc){const s=b.st.s,f0=b.st.f0,f1=b.f1;if(!(s?f1<0:f1>0))continue;const d=f0-f1;const q=Math.min(1,Math.max(0,d!==0?f0/d:0));if(th===null||q<th)th=q;}
    return th;}
-  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0,e.arc?{...e.arc}:e.sai?{...e.sai}:null]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='TLM')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut,e.modes.map(m=>m.fd?[m.z1.slice(),m.z2.slice(),m.y1.slice(),m.y2.slice(),m.i1,m.i2]:null)]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);else if(e.k==='CHB')el.push([e,e.vc.slice(),e.vc1.slice(),e.i,e.s.slice(),e.sKey]);}
+  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0,e.arc?{...e.arc}:e.sai?{...e.sai}:null]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='TLM')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut,e.modes.map(m=>m.fd?[m.z1.slice(),m.z2.slice(),m.y1.slice(),m.y2.slice(),m.i1,m.i2]:null),e.wb?[e.Xr.slice(),e.Xi.slice(),e.Zr.slice(),e.Zi.slice(),e.vp.slice()]:null]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);else if(e.k==='CHB')el.push([e,e.vc.slice(),e.vc1.slice(),e.i,e.s.slice(),e.sKey]);}
    return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el,ms:[...(this.ims||[]),...(this.sms||[]),...(this.srms||[])].map(m=>[m,{...m.st}]),gs:(this.gens||[]).map(m=>[m,genCopy(m.st),m.Efd0,m.Tm0])};}
   restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
    for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];if(r[2])Object.assign(e.arc||e.sai,r[2]);}else if(e.k==='TL'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);}else if(e.k==='TLM'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);
-    r[5].forEach((q,k)=>{if(!q)return;const m=e.modes[k];m.z1.set(q[0]);m.z2.set(q[1]);m.y1.set(q[2]);m.y2.set(q[3]);m.i1=q[4];m.i2=q[5];});}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];e.trigDone=r[3];e.Dacc=r[4];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else if(e.k==='CHB'){e.vc.set(r[1]);e.vc1.set(r[2]);e.i=r[3];e.s.set(r[4]);e.sKey=r[5];}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
+    r[5].forEach((q,k)=>{if(!q)return;const m=e.modes[k];m.z1.set(q[0]);m.z2.set(q[1]);m.y1.set(q[2]);m.y2.set(q[3]);m.i1=q[4];m.i2=q[5];});
+    if(e.wb&&r[6]){e.Xr.set(r[6][0]);e.Xi.set(r[6][1]);e.Zr.set(r[6][2]);e.Zi.set(r[6][3]);e.vp.set(r[6][4]);}}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];e.trigDone=r[3];e.Dacc=r[4];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else if(e.k==='CHB'){e.vc.set(r[1]);e.vc1.set(r[2]);e.i=r[3];e.s.set(r[4]);e.sKey=r[5];}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
    for(const [m,st] of S.ms||[]){m.st={...st};if(m.ph)this.imSources(m);}
    for(const [m,st,e,t] of S.gs||[]){m.st=genCopy(st);m.Efd0=e;m.Tm0=t;}}
   // the whole state for a later continuation (3.16): {format, version, t, opts, method, state}. JSON-able, so it goes to a file
-  snapshot(){return {format:'pcl-state',version:1,t:this.t,opts:{...this.opts},method:this.method,state:snapEncode(this)};}
+  // 4.13: the records of the lines first lose what they no longer need (the part before H.s, kept up to 4096 samples
+  // between two splices): a cross-bonded cable of ten wideband sections otherwise saved some 4 MB of old samples
+  snapshot(){for(const e of this.net.els){const H=e.H;if((e.k==='TL'||e.k==='TLM')&&H&&H.s>0&&Array.isArray(H.t)){H.t.splice(0,H.s);for(const c of H.c)c.splice(0,H.s);H.cut+=H.s;H.s=0;}}
+   return {format:'pcl-state',version:1,t:this.t,opts:{...this.opts},method:this.method,state:snapEncode(this)};}
   restoreSnapshot(S){if(!S||S.format!=='pcl-state'||!S.state)throw new NetlistError('Δεν είναι αποθηκευμένη κατάσταση του Power & Control Lab.');snapRestore(this,S.state);this.cache.clear();return this;}
   // the gate signature at t without changing the switches (the variable step looks ahead: a switching starts the next step small)
   gateSigPeek(t){let s='';for(const e of this.net.els){if(e.k!=='S'&&!e.gk)continue;let on=false;
@@ -1554,11 +1628,11 @@
    for(let k=0;k<C.length;k++){const c=C[k];out[k]=c[lo]+(c[hi]-c[lo])*f;}return out;}
   // ------------------------------------------------------------ line from geometry (4.4)
   // the phase conductance at each end for the step h: T_i·diag(1/Z_e or 1/Z_eq(h))·T_iᵀ (the same at both ends)
-  tlmG(e,h){if(e.gH===h)return e.Gp;const M=e.M,Ti=e.Ti,G=e.Gp,gk=new Float64Array(M);
+  tlmG(e,h){if(e.gH===h)return e.Gp;if(e.wb)return this.tlwG(e,h);const M=e.M,Ti=e.Ti,G=e.Gp,gk=new Float64Array(M);
    for(let k=0;k<M;k++){const m=e.modes[k];if(m.cp)gk[k]=1/m.Ze;else{let Z=m.d;for(let i=0;i<m.kp.length;i++){const c=rcCoef(m.kp[i],h);Z+=m.kr[i]*(c[1]-c[2]);}m.Zeq=Z;gk[k]=1/Z;}}
    for(let r=0;r<M;r++)for(let q=0;q<M;q++){let s=0;for(let k=0;k<M;k++)s+=Ti[r*M+k]*gk[k]*Ti[q*M+k];G[r*M+q]=s;}e.gH=h;return G;}
   // history sources at t (the end of the step that starts at this.t): per mode, then to the phases with T_i
-  tlmSources(e,t){const M=e.M,h=Math.max(0,t-this.t),Ihm=e.Ihm;if(e.fd)this.tlmG(e,h);
+  tlmSources(e,t){if(e.wb)return this.tlwSources(e,t);const M=e.M,h=Math.max(0,t-this.t),Ihm=e.Ihm;if(e.fd)this.tlmG(e,h);
    for(let k=0;k<M;k++){const m=e.modes[k];
     if(m.cp){const q=this.tlmHist(e,t-m.tau),v1=q[4*k],v2=q[4*k+1],i1=q[4*k+2],i2=q[4*k+3],Ze=m.Ze,hh=m.hh,cp=(1+hh)/2,cm=(1-hh)/2;
      const AL=(v1/Ze+hh*i1)*m.att,AR=(v2/Ze+hh*i2)*m.att;Ihm[k]=-cp*AR-cm*AL;Ihm[M+k]=-cp*AL-cm*AR;continue;}
@@ -1570,7 +1644,7 @@
     m.b1=b1;m.b2=b2;m.hz1=hz1;m.hz2=hz2;Ihm[k]=-(hz1+b1)/m.Zeq;Ihm[M+k]=-(hz2+b2)/m.Zeq;}
    const Ti=e.Ti,Ih=e.Ih;for(let r=0;r<M;r++){let s1=0,s2=0;for(let k=0;k<M;k++){s1+=Ti[r*M+k]*Ihm[k];s2+=Ti[r*M+k]*Ihm[M+k];}Ih[r]=s1;Ih[M+r]=s2;}}
   // after a step: modal voltages and currents at both ends, the states of the convolutions, the record for t + τ
-  tlmRecord(e,t,h){const M=e.M,Ti=e.Ti,vm=e.vm,H=e.H,C=H.c;
+  tlmRecord(e,t,h){if(e.wb)return this.tlwRecord(e,t,h);const M=e.M,Ti=e.Ti,vm=e.vm,H=e.H,C=H.c;
    for(let k=0;k<M;k++){let s1=0,s2=0;for(let r=0;r<M;r++){s1+=Ti[r*M+k]*this.V(e.n1[r]);s2+=Ti[r*M+k]*this.V(e.n2[r]);}vm[k]=s1;vm[M+k]=s2;}
    const im=new Float64Array(2*M);H.t.push(t);
    for(let k=0;k<M;k++){const m=e.modes[k];
@@ -1582,8 +1656,43 @@
    for(let r=0;r<M;r++){let s1=0,s2=0;for(let k=0;k<M;k++){s1+=Ti[r*M+k]*im[k];s2+=Ti[r*M+k]*im[M+k];}e.iE[r]=s1;e.iE[M+r]=s2;}
    const keep=t-2.5*e.tauMax-4*(this.hUser||0);while(H.s+2<H.t.length&&H.t[H.s+1]<keep)H.s++;
    if(H.s>4096){H.t.splice(0,H.s);for(const c of C)c.splice(0,H.s);H.cut+=H.s;H.s=0;}}
+  // 4.13: the wideband line. G_eq = G₀ + Σ w·Re(R·(a₀ − a₁)) (w = 2 for a kept pole of a pair), the same at both ends
+  tlwG(e,h){const M=e.M,MM=M*M,G=e.Gp,S=e.yc,c=wbCo(S,h);G.set(e.G0);
+   for(let k=0;k<S.N;k++){const j=6*k,cr=c[j+2]-c[j+4],ci=c[j+3]-c[j+5],w=S.w[k];for(let i=0;i<MM;i++)G[i]+=w*(S.Rr[k*MM+i]*cr-S.Ri[k*MM+i]*ci);}
+   e.gH=h;return G;}
+  // history currents at t: Y_c's part from its states and the voltages of the step before, minus H ⊛ w of the other end
+  // (the propagation states advanced to t with w at t − τ and t − h − τ from the record, kept for tlwRecord)
+  tlwSources(e,t){const M=e.M,MM=M*M,h=Math.max(0,t-this.t),S=e.yc,c=wbCo(S,h),hy=e.hy,cv=e.cv;this.tlmG(e,h);hy.fill(0);cv.fill(0);
+   for(let end=0;end<2;end++){const o=end*M;for(let k=0;k<S.N;k++){const j=6*k,Er=c[j],Ei=c[j+1],a1r=c[j+4],a1i=c[j+5],w=S.w[k];
+     for(let q=0;q<M;q++){const x=(end*S.N+k)*M+q,yr=Er*e.Xr[x]-Ei*e.Xi[x]+a1r*e.vp[o+q],yi=Er*e.Xi[x]+Ei*e.Xr[x]+a1i*e.vp[o+q];
+      for(let r=0;r<M;r++)hy[o+r]+=w*(S.Rr[k*MM+r*M+q]*yr-S.Ri[k*MM+r*M+q]*yi);}}}
+   let i0=0;const uq=e.qq;
+   for(const g of e.grp){const gc=wbCo(g,h);let q=this.tlmHist(e,t-g.tau);uq.set(q);q=this.tlmHist(e,t-h-g.tau);
+    for(let end=0;end<2;end++){const o=end*M,om=(1-end)*M;   // the input of end 1 is the wave of end 2 and the reverse
+     for(let k=0;k<g.N;k++){const j=6*k,Er=gc[j],Ei=gc[j+1],a0r=gc[j+2],a0i=gc[j+3],a1r=gc[j+4],a1i=gc[j+5],w=g.w[k];
+      for(let p=0;p<M;p++){const x=(end*e.nz+i0+k)*M+p,u=uq[om+p],du=q[om+p]-u;
+       const zr=Er*e.Zr[x]-Ei*e.Zi[x]+a0r*u+a1r*du,zi=Er*e.Zi[x]+Ei*e.Zr[x]+a0i*u+a1i*du;e.ZNr[x]=zr;e.ZNi[x]=zi;
+       for(let r=0;r<M;r++)cv[o+r]+=w*(g.Rr[k*MM+r*M+p]*zr-g.Ri[k*MM+r*M+p]*zi);}}}
+    i0+=g.N;}
+   for(let i=0;i<2*M;i++)e.Ih[i]=hy[i]-cv[i];}
+  // after a step: the currents into the line, the states of Y_c (with the new voltages) and of H, the waves for t + τ
+  tlwRecord(e,t,h){const M=e.M,MM=M*M,H=e.H,C=H.c,S=e.yc,v=e.vm;for(let r=0;r<M;r++){v[r]=this.V(e.n1[r]);v[M+r]=this.V(e.n2[r]);}
+   const i=new Float64Array(2*M);
+   if(h>0){const G=this.tlmG(e,h);for(let end=0;end<2;end++){const o=end*M;for(let r=0;r<M;r++){let s=e.Ih[o+r];for(let q=0;q<M;q++)s+=G[r*M+q]*v[o+q];i[o+r]=s;}}
+    const c=wbCo(S,h);for(let end=0;end<2;end++){const o=end*M;for(let k=0;k<S.N;k++){const j=6*k;for(let q=0;q<M;q++){const x=(end*S.N+k)*M+q,xr=e.Xr[x],xi=e.Xi[x],vn=v[o+q],dv=e.vp[o+q]-vn;
+      e.Xr[x]=c[j]*xr-c[j+1]*xi+c[j+2]*vn+c[j+4]*dv;e.Xi[x]=c[j]*xi+c[j+1]*xr+c[j+3]*vn+c[j+5]*dv;}}}
+    e.Zr.set(e.ZNr);e.Zi.set(e.ZNi);}
+   else i.set(e.iE);
+   // w = i + Y_c ⊛ v = i + G₀·v + Σ w·Re(R·x)
+   H.t.push(t);
+   for(let end=0;end<2;end++){const o=end*M;for(let r=0;r<M;r++){let s=i[o+r];for(let q=0;q<M;q++)s+=e.G0[r*M+q]*v[o+q];
+     for(let k=0;k<S.N;k++){const w=S.w[k];for(let q=0;q<M;q++){const x=(end*S.N+k)*M+q;s+=w*(S.Rr[k*MM+r*M+q]*e.Xr[x]-S.Ri[k*MM+r*M+q]*e.Xi[x]);}}
+     C[o+r].push(h>0||!e.w0?s:e.w0[o+r]);}}
+   e.vp.set(v);e.iE.set(i);
+   const keep=t-2.5*e.tauMax-4*(this.hUser||0);while(H.s+2<H.t.length&&H.t[H.s+1]<keep)H.s++;
+   if(H.s>4096){H.t.splice(0,H.s);for(const c of C)c.splice(0,H.s);H.cut+=H.s;H.s=0;}}
   // all columns at time tq (linear interpolation), zero before t = 0 (the line starts without charge)
-  tlmHist(e,tq){const H=e.H,n=H.t.length,C=H.c,out=e.q;if(!n||(tq<0&&tq<H.t[0]-1e-18)){out.fill(0);if(e.vm0){const M=e.M;for(let k=0;k<M;k++){if(e.fd){out[2*k]=out[2*k+1]=e.vm0[k];}else{out[4*k]=out[4*k+1]=e.vm0[k];}}}return out;}const j=n-1;
+  tlmHist(e,tq){const H=e.H,n=H.t.length,C=H.c,out=e.q;if(!n||(tq<0&&tq<H.t[0]-1e-18)){out.fill(0);if(e.wb){if(e.w0)out.set(e.w0);return out;}if(e.vm0){const M=e.M;for(let k=0;k<M;k++){if(e.fd){out[2*k]=out[2*k+1]=e.vm0[k];}else{out[4*k]=out[4*k+1]=e.vm0[k];}}}return out;}const j=n-1;
    if(tq>=H.t[j]){for(let k=0;k<C.length;k++)out[k]=C[k][j];return out;}let lo=H.s,hi=j;if(tq<=H.t[lo]){for(let k=0;k<C.length;k++)out[k]=C[k][lo];return out;}
    while(hi-lo>1){const m=(lo+hi)>>1;if(H.t[m]<=tq)lo=m;else hi=m;}const f=(tq-H.t[lo])/((H.t[hi]-H.t[lo])||1);
    for(let k=0;k<C.length;k++){const c=C[k];out[k]=c[lo]+(c[hi]-c[lo])*f;}return out;}
@@ -1772,6 +1881,10 @@
    if(e.arc){const A=e.arc;o.arc={lam:A.lam,tau0:A.tau0,alpha:A.alpha,P0:A.P0,P1:A.P1,beta:A.beta,Ron:A.Ron,xmin:A.xmin,xmax:A.xmax,closed:A.closed,x:A.x};}
    const hist=H=>H&&H.t.length?{t:H.t.slice(H.s),c:H.c.map(c=>c.slice(H.s))}:null;
    if(e.k==='TL'&&e.H.t.length)o.H=hist(e.H);
+   // 4.13: a wideband line: its poles and residues, its states and the record of its waves (engine/batch.py tlw_*)
+   if(e.k==='TLM'&&e.wb){const A=x=>Array.from(x),set=S=>({N:S.N,pr:A(S.pr),pi:A(S.pi),w:A(S.w),Rr:A(S.Rr),Ri:A(S.Ri)});
+    Object.assign(o,{wb:true,n1:e.n1.slice(),n2:e.n2.slice(),M:e.M,G0:A(e.G0),yc:set(e.yc),grp:e.grp.map(g=>({...set(g),tau:g.tau})),nz:e.nz,
+     Xr:A(e.Xr),Xi:A(e.Xi),Zr:A(e.Zr),Zi:A(e.Zi),vp:A(e.vp),w0:e.w0?A(e.w0):null,H:hist(e.H),modes:e.grp.map(g=>({tau:g.tau}))});return o;}
    if(e.k==='TLM'){Object.assign(o,{n1:e.n1.slice(),n2:e.n2.slice(),M:e.M,Ti:Array.from(e.Ti),vm0:e.vm0?Array.from(e.vm0):null,H:hist(e.H),
     modes:e.modes.map(m=>m.cp?{cp:true,Zc:m.Zc,R:m.R,tau:m.tau,Ze:m.Ze,hh:m.hh,att:m.att}:{fd:true,tau:m.tau,d:m.d,kr:Array.from(m.kr),kp:Array.from(m.kp),ar:Array.from(m.ar),ap:Array.from(m.ap),
      z1:Array.from(m.z1),z2:Array.from(m.z2),y1:Array.from(m.y1),y2:Array.from(m.y2),i1:m.i1,i2:m.i2})});}

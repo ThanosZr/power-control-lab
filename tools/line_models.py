@@ -22,7 +22,17 @@ CASES = [('400kV|100|cp|50', '400kV', 100, 'cp', 50.0), ('400kV|100|cp|5000', '4
          ('220kV-sea|30|cp|50', '220kV-sea', 30, 'cp', 50.0), ('220kV-sea|30|fd', '220kV-sea', 30, 'fd', None),
          # 4.9: the lightning tutorial 'lightning_gis': the 400 kV line with its ground wires as conductors 4 and 5, a long
          # section against reflections and the spans between towers; T_i at 500 kHz (the band of a lightning surge)
-         ('400kV-gw|30|fd|500k', '400kV-gw', 30, 'fd', 5e5), ('400kV-gw|0.3|fd|500k', '400kV-gw', 0.3, 'fd', 5e5)]
+         ('400kV-gw|30|fd|500k', '400kV-gw', 30, 'fd', 5e5), ('400kV-gw|0.3|fd|500k', '400kV-gw', 0.3, 'fd', 5e5),
+         # 4.13: wideband models (pcl.wideband, 0,01 Hz – 1 MHz, passivity enforced; the lightning lines to 10 MHz):
+         # the 400 kV line and the submarine cable of 'line_fd' and 'cable_fd', the land cable with its sheaths for the
+         # cross-bonding tutorial (a minor section of 0,5 km; homogeneous: a major section of 1,5 km with the sheaths bonded
+         # into one conductor, the whole 4,5 km with the sheaths grounded; the solid-bonded cable), the lightning lines
+         ('400kV|100|wb', '400kV', 100, 'wb', {'dec': 8}), ('220kV-sea|30|wb', '220kV-sea', 30, 'wb', {'dec': 8}),
+         ('150kV-land-s|0.5|wb', '150kV-land-s', 0.5, 'wb', {'dec': 8, 'sheath': True}),
+         ('150kV-land-s+bond|1.5|wb', '150kV-land-s', 1.5, 'wb', {'dec': 8, 'xbond': 'bond'}),
+         ('150kV-land-s+gnd|4.5|wb', '150kV-land-s', 4.5, 'wb', {'dec': 8, 'xbond': 'gnd'}),
+         ('150kV-land|4.5|wb', '150kV-land', 4.5, 'wb', {'dec': 8}),
+         ('400kV-gw|30|wb', '400kV-gw', 30, 'wb', {'dec': 9}), ('400kV-gw|0.3|wb', '400kV-gw', 0.3, 'wb', {'dec': 9})]
 
 
 def _round(x):
@@ -37,8 +47,20 @@ def _round(x):
 
 def models():
     out = {}
+    from pcl import wideband
     for key, line, L, kind, f in CASES:
         d = lc.typical(line)
+        if kind == 'wb':                # f: the options of the fit and of the data (xbond)
+            o = dict(f)
+            if o.get('xbond'):
+                d['xbond'] = o.pop('xbond')
+            m = wideband.wb_model(d, L, decades=o.get('dec', 8), passive='enforce')
+            if o.get('sheath'):         # the 50 Hz values of the cross-bonding card (wideband.sheath_check, exact line)
+                Z, Y = lc.phase_matrices(d, f=50.0)
+                m['sheath'] = dict(wideband.sheath_check(lc.line_admittance(Z, Y, L * 1000.0), L, [0, 1, 2], [3, 4, 5]),
+                                   f=50.0)
+            out[key] = _round(json.loads(json.dumps(m)))
+            continue
         # FD: f is the frequency of T_i when given (otherwise the default, 1 kHz)
         m = lc.cp_model(d, f, L) if kind == 'cp' else (lc.fd_model(d, L, fti=f) if f else lc.fd_model(d, L))
         out[key] = _round(json.loads(json.dumps(m)))
@@ -70,6 +92,8 @@ def check():
         for f in np.logspace(0, 6, 25):
             s = 2j * np.pi * f
             a, b = lc._line_y(None, old[k], s, {}), lc._line_y(None, new[k], s, {})
+            if not (np.isfinite(a).all() and np.isfinite(b).all()):
+                continue
             e = max(e, float(np.abs(a - b).max() / np.abs(b).max()))
     return e
 

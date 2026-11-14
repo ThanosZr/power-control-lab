@@ -788,7 +788,7 @@ def api_load(req):
     return {'zyfile': lc.jsonable(z)}
 
 
-EXPORTS = ('csv', 'json', 'mat', 'html', 'pdf', 'script', 'exact_pi', 'nominal_pi', 'fd_mod', 'cp_netlist')
+EXPORTS = ('csv', 'json', 'mat', 'html', 'pdf', 'script', 'exact_pi', 'nominal_pi', 'fd_mod', 'cp_netlist', 'wb_mod')
 
 
 def api_export(req):
@@ -799,10 +799,15 @@ def api_export(req):
     base = ''.join(ch for ch in str(req.get('name') or 'line') if ch.isalnum() or ch in '-_') or 'line'
     if fmt == 'script':
         return {'name': base + '.py', 'mime': 'text/x-python', 'text': script(req)}
-    if fmt in ('fd_mod', 'cp_netlist'):
+    if fmt in ('fd_mod', 'cp_netlist', 'wb_mod'):
         mdl = req.get('mdl')
         if not isinstance(mdl, dict):
             raise lc.LineError('λείπει το μοντέλο (υπολόγισέ το πρώτα)')
+        if fmt == 'wb_mod':             # 4.13: the wideband model in the layout of the EMTP model file
+            from . import wideband
+            if mdl.get('type') != 'wb':
+                raise lc.LineError('το μοντέλο δεν είναι WB')
+            return {'name': base + '_WB.mod', 'mime': 'text/plain', 'text': wideband.write_wb_mod(mdl)}
         if fmt == 'fd_mod':
             return {'name': base + '_FD.mod', 'mime': 'text/plain', 'text': write_fd_mod(mdl)}
         return {'name': base + '_CP.txt', 'mime': 'text/plain', 'text': write_cp_netlist(mdl, base[:16] or 'TLM1')}

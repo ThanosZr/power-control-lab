@@ -34,6 +34,7 @@ from engine import addons as ADDONS
 ROOT=Path(__file__).resolve().parent/'web'
 PCL=Path(__file__).resolve().parent/'pcl'       # the pcl package, also for the app's "Σενάρια" panel (3.14)
 SLOTS=BoundedSemaphore(2)
+API_MAX=8_000_000                     # bytes of an analysis request
 LINK=ADDONS.Link()      # 3.15: outside programs (Python, MATLAB) → the circuit open in the page
 ACTIONS={'analyze':steady,'inverse':inverse,'linearize':linearize,
          'switching':switching,'envelope':envelope,'design':size_components,
@@ -256,7 +257,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send(415,{'error':'Απαιτείται application/json.'}); return
         try:
             size=int(self.headers.get('Content-Length','0'))
-            if not 0<size<=400000:
+            # 4.13: 8 MB (a wideband model of a cross-bonded cable has some 70 kB per section; with the Z′, Y′ table of
+            # Line/Cable Data and a model file of the EMTP a request of the line dialog passes 400 kB)
+            if not 0<size<=API_MAX:
                 raise InputError('Μη έγκυρο μέγεθος αιτήματος.')
             data=json.loads(self.rfile.read(size))
             if not isinstance(data,dict):

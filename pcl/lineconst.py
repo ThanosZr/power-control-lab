@@ -719,8 +719,8 @@ def cable_zy(data, s):
         Ainv = np.linalg.inv(A)
         Yc = Ainv @ np.diag(Yl) @ Ainv.T
         blocks.append((Zc, Yc, N))
-        for cd in c['conds']:
-            cs.append({'ph': cd['ph']})
+        for k, cd in enumerate(c['conds']):
+            cs.append({'ph': cd['ph'], 'cab': len(blocks) - 1, 'k': k})
         A_all.append(A)
     n = len(cs)
     Z = np.zeros((n, n), complex)
@@ -903,6 +903,44 @@ def transposition(data, M):
     return out
 
 
+XBOND_KINDS = ('none', 'avg', 'bond', 'gnd')
+
+
+def xbond_avg(Z, Y, cs, kind):
+    """4.13: the homogeneous model of a cross-bonded cable (Cable Constants §2.4, IXBD = 1, and §10): the matrices of
+    the conductors averaged over the three positions of the sheaths along a major section (sheath i in cable i, i + 1,
+    i + 2 of the three minor sections), as a transposition of the sheaths only. kind: 'avg' — the six conductors kept
+    (cores and sheaths, the phases of the data); 'bond' — the three sheaths bonded into one conductor (equal voltage,
+    summed current: the four conductors of §10.2); 'gnd' — the sheaths continuously grounded (the three-conductor
+    approximation of §2.4). Needs three cables, each with a sheath (its second conductor)."""
+    if kind not in XBOND_KINDS:
+        raise LineError(f'άγνωστο είδος cross-bonding «{kind}»')
+    if kind == 'none':
+        return Z, Y, cs
+    cabs = sorted({c['cab'] for c in cs})
+    sh = [next((i for i, c in enumerate(cs) if c['cab'] == b and c['k'] == 1), None) for b in cabs]
+    if len(cabs) != 3 or any(i is None for i in sh):
+        raise LineError('cross-bonding: χρειάζονται τρία καλώδια, το καθένα με μανδύα (δεύτερο αγωγό)')
+    n = len(cs)
+    P = np.eye(n)
+    for j in range(3):
+        P[sh[j], sh[j]] = 0.0
+        P[sh[(j + 1) % 3], sh[j]] = 1.0
+    P2 = P @ P
+    Za = (Z + P @ Z @ P.T + P2 @ Z @ P2.T) / 3
+    Ya = (Y + P @ Y @ P.T + P2 @ Y @ P2.T) / 3
+    cs = [dict(c) for c in cs]
+    if kind in ('bond', 'gnd'):
+        ph0 = cs[sh[0]]['ph']
+        for i in sh:
+            cs[i]['ph'] = 0 if kind == 'gnd' else (ph0 or max(c['ph'] for c in cs) + 1)
+        used = sorted({c['ph'] for c in cs if c['ph'] > 0})
+        ren = {p: k + 1 for k, p in enumerate(used)}
+        for c in cs:
+            c['ph'] = ren.get(c['ph'], 0)
+    return Za, Ya, cs
+
+
 def transpose_avg(A, tr):
     """The average of a phase matrix over the transposition sections, weighted by their length."""
     return sum(w * P @ A @ P.T for w, P in tr)
@@ -920,6 +958,8 @@ def phase_matrices(data, f=None, s=None, **kw):
         if data.get('wires') or data.get('bundles'):
             raise LineError('εναέριοι αγωγοί και καλώδια στην ίδια γραμμή δεν υποστηρίζονται ακόμη')
         Z, Ysh, cs = cable_zy(data, s)
+        if (data.get('xbond') or 'none') != 'none':
+            Z, Ysh, cs = xbond_avg(Z, Ysh, cs, data['xbond'])
         T = _groups(cs)
         Zr = np.linalg.inv(T.T @ np.linalg.inv(Z) @ T)
         G = _gdiag(data, len(Zr), 0.0)               # the insulation losses are in tanδ: no extra G′ unless given
@@ -1223,6 +1263,15 @@ def load_zy_mat(path_or_bytes, unit='km'):
     from scipy.io import loadmat
     src = io.BytesIO(path_or_bytes) if isinstance(path_or_bytes, (bytes, bytearray)) else path_or_bytes
     m = loadmat(src)
+    # 4.13: the parameters file that Line/Cable Data writes (<device>_parameters.mat) keeps f, Z, Y in one structure
+    if 'Z' not in m:
+        for k, v in list(m.items()):
+            if k.startswith('__') or not (isinstance(v, np.ndarray) and v.dtype.names):
+                continue
+            if all(n in v.dtype.names for n in ('f', 'Z', 'Y')):
+                st = v.ravel()[0]
+                m = {n: st[n] for n in v.dtype.names}
+                break
     for k in ('Z', 'Y', 'f'):
         if k not in m:
             raise LineError(f'το αρχείο .mat δεν έχει τη μεταβλητή «{k}»')
@@ -1959,9 +2008,10 @@ def line_admittance(Z, Y, L):
     g = np.where(g.real < 0, -g, g)
     Tinv = np.linalg.inv(Ti)
     Zi = np.linalg.inv(Z)
-    gl = g * L
-    Ys = Ti @ np.diag(g / np.tanh(gl)) @ Tinv @ Zi
-    Ym = -Ti @ np.diag(g / np.sinh(gl)) @ Tinv @ Zi
+    # 4.13: coth and 1/sinh through e^(−γℓ) (no overflow for strongly damped modes at high frequencies)
+    e2 = np.exp(-2 * g * L)
+    Ys = Ti @ np.diag(g * (1 + e2) / (1 - e2)) @ Tinv @ Zi
+    Ym = -Ti @ np.diag(2 * g * np.exp(-g * L) / (1 - e2)) @ Tinv @ Zi
     return np.block([[Ys, Ym], [Ym, Ys]])
 
 
@@ -1969,6 +2019,9 @@ def model_admittance(model, s):
     """The nodal admittance that a CP, FD or π model represents at s = jω (to compare a model with the exact line)."""
     if model.get('type') == 'pi':
         return _pi_y(model, s)
+    if model.get('type') == 'wb':                # 4.13: the wideband model (pcl.wideband)
+        from . import wideband
+        return wideband.wb_admittance(model, s)
     Ti = np.array(model['Ti'])
     M = len(Ti)
     Ys = np.zeros((M, M), complex)
@@ -2072,7 +2125,17 @@ def _src_laplace(src, s):
 
 def _line_y(data, kind, s, cache):
     """Nodal admittance of a line at the complex frequency s: 'exact' from Z′(s), Y′(s) of the line data (Bessel,
-    Deri or Carson's integral at the complex s, exact complex eigenvectors), or a CP/FD model as fitted."""
+    Deri or Carson's integral at the complex s, exact complex eigenvectors), or a CP/FD model as fitted. 4.13: the
+    same data and model object at the same s computed once (the sections of a cross-bonded cable)."""
+    key = (id(data), kind if isinstance(kind, str) else id(kind), s)
+    if key not in cache:
+        if len(cache) > 64:
+            cache.clear()
+        cache[key] = _line_y1(data, kind, s)
+    return cache[key]
+
+
+def _line_y1(data, kind, s):
     if kind == 'exact':
         Z, Y = phase_matrices(data, s=s)
         L = _f(data.get('length'), 1.0) * 1000.0
@@ -2193,6 +2256,11 @@ TYPICAL['400kV-gw'] = dict(json.loads(json.dumps(TYPICAL['400kV'])),
                            name='Τυπική γραμμή 400 kV με τους αγωγούς προστασίας ως αγωγούς 4 και 5 (για κεραυνούς)')
 TYPICAL['400kV-gw']['wires'][0]['ph'] = 4
 TYPICAL['400kV-gw']['wires'][1]['ph'] = 5
+# 4.13: the same 150 kV land cable with its sheaths kept as conductors 4–6 (for cross-bonding and sheath voltages)
+TYPICAL['150kV-land-s'] = dict(json.loads(json.dumps(TYPICAL['150kV-land'])),
+                               name='Τυπικό υπόγειο καλώδιο 150 kV με τους μανδύες ως αγωγούς 4–6 (για cross-bonding)')
+for _k, _c in enumerate(TYPICAL['150kV-land-s']['cables']):
+    _c['ph'] = [_k + 1, _k + 4]
 
 
 def typical(key):
@@ -2226,13 +2294,31 @@ def _req_opts(req, data):
     return L, ti, fti
 
 
+def _wb_opts(req):
+    """4.13: the options of the wideband fit from a request (tol in %, as the EMTP fitter)."""
+    from . import wideband
+    tol = _f(req.get('tol'), 0.2) / 100.0
+    if not 1e-5 <= tol <= 0.1:
+        raise LineError('ανοχή της προσαρμογής: 0,001 % – 10 %')
+    fdcm = req.get('fdcm') or 'auto'
+    passive = req.get('passive') or 'check'
+    if fdcm not in wideband.FDCM_KINDS or passive not in wideband.PASSIVE_KINDS:
+        raise LineError('άγνωστη επιλογή του wideband')
+    lfw = _f(req.get('lfw'), 100.0)
+    if not 0 <= lfw <= 1e4:
+        raise LineError('βάρος στις χαμηλές συχνότητες: 0 (χωρίς) έως 10 000')
+    return {'tol': tol, 'nmax': max(6, min(int(_f(req.get('nmax'), 30)), 80)), 'group': bool(req.get('group', True)),
+            'fdcm': fdcm, 'ratio': _f(req.get('ratio'), 1000.0), 'dc': bool(req.get('dc')), 'opt': bool(req.get('opt')),
+            'passive': passive, 'lfw': lfw}
+
+
 def api(req):
     """{data, model ('cp'|'fd'|'pi'), len (km), f (CP, π), fmin, dec, ppd, fti (FD; 'auto' or tiauto), ti (T_i option),
     cp (the kind of CP), nmax, npi (π sections), src} → {mdl, report, curves}: the model the solver uses (with src, the
     key of what it was computed from), the report at f (CP, π) or 50 Hz, and for FD the fit."""
     data = _req_data(req)
     L, ti, fti = _req_opts(req, data)
-    kind = req.get('model') if req.get('model') in ('fd', 'pi') else 'cp'
+    kind = req.get('model') if req.get('model') in ('fd', 'pi', 'wb') else 'cp'
     curves = None
     if kind == 'cp':
         f = _f(req.get('f'), 50.0)
@@ -2252,6 +2338,21 @@ def api(req):
                'L': (Z.imag / w * Lm).tolist(), 'G': (Y.real * Lm).tolist(), 'C': (Y.imag / w * Lm).tolist(),
                'Ti': np.eye(len(Z)).tolist(), 'modes': [{'tau': 1.0}] * len(Z)}
         frep = f
+    elif kind == 'wb':
+        # 4.13: the wideband model (pcl.wideband), fitted here, or read from a model file of the EMTP (_WB.mod)
+        from . import wideband
+        fmin, dec, ppd = _f(req.get('fmin'), 0.01), _f(req.get('dec'), 8), _f(req.get('ppd'), 10)
+        if not (fmin > 0 and 1 <= dec <= 12 and 2 <= ppd <= 40):
+            raise LineError('εύρος: f_min > 0, 1–12 δεκάδες, 2–40 σημεία ανά δεκάδα')
+        wopt = _wb_opts(req)
+        if req.get('wbmod'):
+            mdl = wideband.import_model(str(req['wbmod']), data, L, wopt['passive'])
+            mdl['wbref'] = str(req.get('wbref') or '')
+            curves = mdl.pop('curves', None)
+        else:
+            mdl = wideband.wb_model(data, L, fmin, dec, ppd, curves=True, **wopt)
+            curves = mdl.pop('curves')
+        frep = 50.0
     else:
         fmin, dec, ppd = _f(req.get('fmin'), 0.01), _f(req.get('dec'), 9), _f(req.get('ppd'), 10)
         if not (fmin > 0 and 1 <= dec <= 12 and 2 <= ppd <= 40):
@@ -2275,6 +2376,9 @@ def api(req):
                 elif kind == 'fd':
                     m = fd_model(data, Ls, fmin, dec, ppd, fti, ti=ti, nmax=max(6, min(nmax, 60)))
                     m.pop('f', None)
+                    cache[key] = m
+                elif kind == 'wb':
+                    m = wideband.wb_model(data, Ls, fmin, dec, ppd, **wopt)
                     cache[key] = m
                 else:
                     cache[key] = None
