@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.10: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (482 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.10: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (484 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-259 σημεία.
+261 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -221,6 +221,7 @@
 | `pcl.network.Network.remove` | `name` | 4.2 |
 | `pcl.network.Network.short_circuit` | `bus`, `fault`, `mode`, `f115`, `tmin`, `temp`, `lv_tol`, `fc`, `breaking`, `rgf` | 4.2 |
 | `pcl.network.Network.shunt` | `bus`, `P`, `Q`, `name` | 4.2 |
+| `pcl.network.Network.sssc` | `line`, `X`, `Vq`, `P`, `Xmax`, `name` | 4.10 |
 | `pcl.network.Network.to_emt` | `lf`, `machines`, `name`, `t_end`, `hdiv` | 4.3 |
 | `pcl.network.Network.transformer` | `hv`, `lv`, `Sr`, `Uhv`, `Ulv`, `uk`, `ur`, `group`, `X0X`, `R0R`, `Zn_hv`, `Zn_lv`, `tap`, `KT`, `shift`, `name` | 4.2 |
 | `pcl.network.Network.transformer3` | `a`, `b`, `c`, `Sr`, `Ur`, `uk`, `ur`, `group`, `ref`, `z0`, `KT`, `name` | 4.2 |
@@ -237,6 +238,7 @@
 | `pcl.network.q_factor` | `m_mw`, `tmin` | 4.2 |
 | `pcl.network.read_matpower` | `source`, `Un_default` | 4.2 |
 | `pcl.network.save` | `net`, `path` | 4.2 |
+| `pcl.network.sssc_placement` | `net`, `lines`, `X`, `ratings`, `weights`, `Smax`, `tol`, `frac` | 4.10 |
 | `pcl.network.superposition` | `net`, `bus`, `lf`, `loads` | 4.2 |
 | `pcl.network.to_dict` | `net` | 4.2 |
 | `pcl.network.trv` | `t`, `v`, `t0`, `uf` | 4.2 |

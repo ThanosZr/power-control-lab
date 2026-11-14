@@ -81,7 +81,7 @@ jobs:
           python run.py --no-browser --port 8765 > server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8765/api/health >/dev/null && break; sleep 1; done
           mkdir -p ui-out && cd ui-out
-          for f in studio_flow editor_interactions features_flow blocks_flow wiring_flow step_flow scenario_flow addons_flow subcircuit_flow bus_flow live_flow line_flow ux_flow perf_flow speed_flow watch_flow ev_flow; do
+          for f in studio_flow editor_interactions features_flow blocks_flow wiring_flow step_flow scenario_flow addons_flow subcircuit_flow bus_flow live_flow line_flow ux_flow perf_flow speed_flow watch_flow ev_flow facts_flow; do
             echo "== $f"; node ../tests/ui/$f.js http://127.0.0.1:8765/ .
           done
       - name: Εικόνες των σεναρίων

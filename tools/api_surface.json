@@ -1475,6 +1475,17 @@
     ],
     "since": "4.2"
    },
+   "pcl.network.Network.sssc": {
+    "params": [
+     "line",
+     "X",
+     "Vq",
+     "P",
+     "Xmax",
+     "name"
+    ],
+    "since": "4.10"
+   },
    "pcl.network.Network.to_emt": {
     "params": [
      "lf",
@@ -1614,6 +1625,19 @@
      "path"
     ],
     "since": "4.2"
+   },
+   "pcl.network.sssc_placement": {
+    "params": [
+     "net",
+     "lines",
+     "X",
+     "ratings",
+     "weights",
+     "Smax",
+     "tol",
+     "frac"
+    ],
+    "since": "4.10"
    },
    "pcl.network.superposition": {
     "params": [

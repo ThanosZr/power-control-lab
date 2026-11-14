@@ -115,6 +115,59 @@ class Loop(unittest.TestCase):
         self.assertLess(r[1]['vmax'] - r[1]['vmin'], 160, r[1])
 
 
+class LoadFlow(unittest.TestCase):
+    """pcl.network: the compensator as a series reactance in the load flow (IEEE 9 buses), its targets and the placement."""
+
+    def test_reactance_equals_a_shorter_branch(self):
+        from pcl import network as N
+        a = N.ieee9()
+        e = a.element('br5')
+        Xc = 0.3 * e['x'] * a._zb(e['a'])                     # 30 % of the branch's reactance, capacitive
+        a.sssc('br5', X=Xc, name='S1')
+        r1 = a.load_flow()
+        b = N.ieee9()
+        b.element('br5')['x'] *= 0.7
+        r2 = b.load_flow()
+        self.assertLess(max(abs(r1['buses'][k]['V'] - r2['buses'][k]['V']) for k in r1['buses']), 1e-12)
+        self.assertLess(max(abs(r1['buses'][k]['angle'] - r2['buses'][k]['angle']) for k in r1['buses']), 1e-9)
+        s = r1['sssc']['S1']
+        self.assertAlmostEqual(s['Vq'], Xc * s['I'], delta=1e-6 * abs(s['Vq']))
+        self.assertAlmostEqual(s['Q'], -3 * Xc * s['I'] ** 2, delta=1e-6 * abs(s['Q']))
+        # the flows of a branch add up to its losses, and the losses of the case to the sum over the branches
+        self.assertAlmostEqual(sum(f['loss'] for f in r1['branches']), r1['losses'], delta=1e-6 * r1['losses'])
+
+    def test_targets_and_round_trip(self):
+        from pcl import network as N
+        for ln, X in (('br5', 30.0), ('br2', -20.0), ('br9', 25.0)):
+            a = N.ieee9()
+            a.sssc(ln, X=X, name='S1')
+            r = a.load_flow()
+            f = next(b for b in r['branches'] if b['name'] == ln)
+            for kw in ({'P': f['Pa']}, {'Vq': r['sssc']['S1']['Vq']}):
+                b = N.ieee9()
+                b.sssc(ln, name='S1', **kw)
+                q = b.load_flow()
+                self.assertTrue(q['converged'])
+                self.assertAlmostEqual(q['sssc']['S1']['X'], X, delta=1e-6 * abs(X), msg=(ln, kw))
+            c = N.from_dict(N.to_dict(a))                        # saved and read back with its compensator
+            self.assertAlmostEqual(c.load_flow()['buses']['5']['V'], r['buses']['5']['V'], delta=1e-14)
+
+    def test_placement(self):
+        from pcl import network as N
+        lines = ['br2', 'br3', 'br5', 'br6', 'br8', 'br9']
+        r = N.sssc_placement(N.ieee9(), lines=lines, weights={'loading': 1, 'losses': 1, 'vdev': 0.5, 'size': 0.2})
+        self.assertEqual(len(r['cases']), 5 * len(lines))
+        self.assertEqual(r['best'], min(r['cases'], key=lambda c: c['score']))
+        keys = N.SSSC_GOALS
+        for c in r['pareto']:                                  # nobody on the front is dominated
+            self.assertFalse(any(all(d[k] <= c[k] for k in keys) and any(d[k] < c[k] for k in keys) for d in r['cases']))
+        for c in r['cases']:
+            if not c['pareto']:
+                self.assertTrue(any(all(d[k] <= c[k] for k in keys) and any(d[k] < c[k] for k in keys) for d in r['cases']))
+        small = N.sssc_placement(N.ieee9(), lines=lines, Smax=1e5)
+        self.assertTrue(all(c['size'] <= 1e5 for c in small['cases']))
+
+
 class SciPy(unittest.TestCase):
     def test_arm_against_scipy(self):
         # the SciPy export takes the detailed arm (switches and capacitors); compared halfway between the samples of the
@@ -138,6 +191,64 @@ class SciPy(unittest.TestCase):
             b = np.interp(tm, ts, rec[:, j + 1])
             s = np.interp(tm, t, np.array(r['ch'][k], float))
             self.assertLessEqual(float(np.max(np.abs(b - s))), tol[k], k)
+
+
+
+def tutorial_lf(X, m):
+    """pcl.network's load flow of the three-phase tutorial: the grid's EMF (slack at bus 0) behind U_n²/S″k, π lines, the
+    coupling inductance as a branch from bus 1 to bus 4 carrying the compensator, the load as a constant impedance."""
+    from pcl import network as N
+    w, Un = 2 * math.pi * m['f'], m['Un']
+    n = N.Network(f=m['f'])
+    for b in '01342':
+        n.bus(b, Un)
+    n.feeder('0', Sk=m['Sk'], V=1.0)
+    R = Un * Un / m['Sk'] / math.sqrt(1 + m['XR'] ** 2)
+    n.reactor('0', R * m['XR'], R=R, b='1', name='Zk')
+    for nm, (a, b) in {'L13': ('1', '3'), 'L32': ('3', '2'), 'L42': ('4', '2')}.items():
+        n.line(a, b, m['r'], w * m['l'], length=m['lines'][nm], B=w * m['c'], name=nm)
+    n.branch_pu('1', '4', 0.0, w * m['Lk'] / (Un * Un / n.S_base), name='K14')
+    n.sssc('K14', X=X, name='S1')
+    n.load('2', m['P'], m['Q'], zip=(1, 0, 0))
+    return n.load_flow()
+
+
+class Tutorials(unittest.TestCase):
+    """The two tutorials as the app builds them (headless)."""
+
+    def test_single_phase_steps_and_detailed_arm(self):
+        # X_ref 0 → +10 Ω (0,3 s) → −8 Ω (0,8 s): the current at the end of each part against the line with an ideal series
+        # reactance. The detailed arm (40 switches, 10 capacitors) from the steady start keeps its charged capacitors
+        # (4.10: a capacitor with v₀ is a stiff source in the DC part of the start) and gives the same current
+        keys = ['I:L1', 'Y:SC1/XM', 'Y:CH1/NLC:vav']
+        a, d = cases([{'kind': 'tut', 'id': 'sssc_1ph', 'opts': {}, 'at': [0.28, 0.78, 1.2], 'keys': keys},
+                      {'kind': 'tut', 'id': 'sssc_1ph', 'opts': {'impl': 'blocks', 'X': 'cap'}, 'at': [0.12, 0.7], 'keys': keys}])
+        V = 150e3 * math.sqrt(2 / 3)
+        for q, X in zip(a['out'], (0.0, 10.0, -8.0)):
+            self.assertLess(abs(q['I:L1']['amp'] / line_current(V=V, X=X) - 1), 0.01, (X, q))
+            if X:
+                self.assertLess(abs(q['Y:SC1/XM']['mean'] / X - 1), 0.02, (X, q))
+            self.assertLess(abs(q['Y:CH1/NLC:vav']['mean'] / 1000 - 1), 0.03, (X, q))
+        self.assertEqual(d['warn'], [])
+        self.assertLess(abs(d['out'][0]['Y:CH1/NLC:vav']['mean'] - 1000), 0.5, d['out'][0])
+        self.assertLess(abs(d['out'][1]['I:L1']['amp'] / line_current(V=V, X=10.0) - 1), 0.005, d['out'][1])
+
+    def test_three_phase_against_load_flow(self):
+        # 150 kV, four buses: the run (0 → +10 → −8 Ω) against the load flow of the same network with the compensator as a
+        # series reactance; the three phases are controlled separately
+        keys = ['Y:AMa', 'Y:AMb', 'Y:AMc', 'Y:SCa/XM', 'Y:SCb/XM', 'Y:SCc/XM', 'V:LD2/Ra']
+        r = cases([{'kind': 'tut', 'id': 'sssc_3ph', 'opts': {}, 'at': [0.28, 0.78, 1.2], 'keys': keys}])[0]
+        self.assertEqual(r['warn'], [])
+        m = r['meta']['sssc']
+        for q, X in zip(r['out'], (0.0, 10.0, -8.0)):
+            lf = tutorial_lf(X, m)
+            self.assertTrue(lf['converged'])
+            for p in 'abc':
+                self.assertLess(abs(q['Y:AM' + p]['amp'] / math.sqrt(2) / lf['sssc']['S1']['I'] - 1), 0.006, (X, p, q))
+                if X:
+                    self.assertLess(abs(q['Y:SC' + p + '/XM']['mean'] / X - 1), 0.02, (X, p, q))
+            V2 = lf['buses']['2']['V'] * m['Un'] / math.sqrt(3)
+            self.assertLess(abs(q['V:LD2/Ra']['amp'] / math.sqrt(2) / V2 - 1), 0.003, (X, q))
 
 
 if __name__ == '__main__':

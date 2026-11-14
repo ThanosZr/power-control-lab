@@ -127,6 +127,9 @@
   // v = dψ/dt (inductors, capacitors, flux elements, the machine): the start is then exact for the step, not only for h → 0
   const w0=2*Math.PI*f0,w=sim.method==='TR'&&!sim.var&&sim.h>0?2/sim.h*Math.tan(w0*sim.h/2):w0,n0=net.size,n=n0+3*gens.length,Ar=new Float64Array(n*n),Ai=new Float64Array(n*n),br=new Float64Array(n),bi=new Float64Array(n);
   sim.values(0);sim.gateSig(0);
+  // 4.10: a capacitor with an initial voltage (a cell or DC-link capacitor) keeps it as the DC part of its start: a stiff
+  // source v₀ in the DC solution below (the others stay open there, as before)
+  const vC0=new Map();for(const e of net.els)if(e.k==='C'&&e.v)vC0.set(e,e.v);
   const ad=(r,q,re,im)=>{if(r<0||q<0)return;Ar[r*n+q]+=re;Ai[r*n+q]+=im;};
   const y=(a,b,re,im)=>{ad(a,a,re,im);ad(b,b,re,im);ad(a,b,-re,-im);ad(b,a,-re,-im);};
   for(let i=0;i<net.nNodes;i++)ad(i,i,GMIN,0);
@@ -143,6 +146,8 @@
     case 'V':{const r=e.row;ad(e.a,r,1,0);ad(r,e.a,1,0);ad(e.b,r,-1,0);ad(r,e.b,-1,0);
      const s=e.src;if(!e.gen&&!(e.sigIn>=0)&&s&&s.kind==='ac'&&Math.abs(s.f-f0)<=1e-6*f0){br[r]=s.Vpk*Math.cos(s.ph-Math.PI/2);bi[r]=s.Vpk*Math.sin(s.ph-Math.PI/2);}break;}
     case 'X':{const r=e.row,N=e.n;ad(e.s1,r,1,0);ad(r,e.s1,1,0);ad(e.s2,r,-1,0);ad(r,e.s2,-1,0);ad(e.p1,r,-N,0);ad(r,e.p1,-N,0);ad(e.p2,r,N,0);ad(r,e.p2,N,0);break;}
+    // 4.10: an arm at t = 0 as its cells' insertion states give it: with every cell bypassed (s = 0) the arm resistance only
+    case 'CHB':{const r=e.row;ad(e.a,r,1,0);ad(r,e.a,1,0);ad(e.b,r,-1,0);ad(r,e.b,-1,0);ad(r,r,-e.Rarm,0);if(e.s.some(q=>q))left.add('CHB');break;}
     case 'GY':{const r=e.row,Y=e.psi;ad(e.a,r,1,0);ad(r,e.a,1,0);ad(e.b,r,-1,0);ad(r,e.b,-1,0);ad(r,e.m,-Y,0);ad(e.m,r,-Y,0);break;}
     case 'NL':if(e.arc&&e.arc.closed){y(e.a,e.b,1/e.arc.Ron,0);break;}left.add(e.k);break;
     case 'TL':{// 4.9: a distributed line at ω₀ as its exact two-port (lossless; R adds only a small start transient)
@@ -194,8 +199,10 @@
     dr[r]=e.gen?sim.genEfd(e.gen,0)*e.gen.g.vfK:e.sigIn>=0?0:q&&q.kind==='dc'?e.Vnow:q&&q.kind==='ac'?(q.off||0):0;break;}
    case 'I':if(!(e.sigIn>=0)&&!e.wave){if(e.a>=0)dr[e.a]-=e.Inow;if(e.b>=0)dr[e.b]+=e.Inow;}break;
    case 'X':{const r=e.row,N=e.n;dad(e.s1,r,1);dad(r,e.s1,1);dad(e.s2,r,-1);dad(r,e.s2,-1);dad(e.p1,r,-N);dad(r,e.p1,-N);dad(e.p2,r,N);dad(r,e.p2,N);break;}
-   case 'GY':{const r=e.row,Y=e.psi;dad(e.a,r,1);dad(r,e.a,1);dad(e.b,r,-1);dad(r,e.b,-1);dad(r,e.m,-Y);dad(e.m,r,-Y);break;}}}
+   case 'GY':{const r=e.row,Y=e.psi;dad(e.a,r,1);dad(r,e.a,1);dad(e.b,r,-1);dad(r,e.b,-1);dad(r,e.m,-Y);dad(e.m,r,-Y);break;}
+   case 'CHB':{const r=e.row;dad(e.a,r,1);dad(r,e.a,1);dad(e.b,r,-1);dad(r,e.b,-1);dad(r,r,-e.Rarm);break;}}}
   for(const [,,a,b,g] of sh)dy(a,b,g);
+  for(const [e,v] of vC0){const g=1e9*w0*e.C;dy(e.a,e.b,g);if(e.a>=0)dr[e.a]+=g*v;if(e.b>=0)dr[e.b]-=g*v;}
   const dsol=csolve(n0,Dr,Di,dr,di),x0=new Float64Array(n0),Xd=dsol?dsol[0]:new Float64Array(n0);
   if(!dsol)net.warnings.push('Αρχικοποίηση από ροή φορτίου: το μέρος DC δεν λύνεται· οι πηγές DC ξεκινούν από μηδέν.');
   for(let i=0;i<n0;i++)x0[i]=xr[i]+Xd[i];
@@ -203,6 +210,9 @@
   for(const e of net.els)if(e.k==='F'&&!e.gen&&!e.sm&&!e.srm&&e.Lm){const N=e.N;for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=e.Lm[k*N+j]*e.i[j];if(bdf)e.psi1[k]+=s-e.psi[k];e.psi[k]=s;}if(!bdf)e.psi1.set(e.psi);}
   // a generator's stator ports: the voltage behind R_a (the phasor solution had the machine replaced by sources)
   gens.forEach((m,q)=>{for(let k=0;k<3;k++){const pn=m.F.ports[k][0];if(pn!==m.term[k])x0[pn]=xr[m.term[k]]-m.g.Ra*m.g.Zb*xr[n0+3*q+k];}});
+  for(const e of vC0.keys()){const d=(e.a<0?0:Xd[e.a])-(e.b<0?0:Xd[e.b]);e.v+=d;e.v1+=d;}
+  for(const e of net.els)if(e.k==='CHB')e.i=x0[e.row];
+  if(left.has('CHB'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: οι αρθρωτοί βραχίονες μπαίνουν στη λύση με φασιθέτες σε παράκαμψη (R_arm), όχι με τις υπομονάδες που έχουν μέσα στο t = 0.');
   if(left.has('TLM'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: οι γραμμές από γεωμετρία (CP/FD) ξεκινούν χωρίς φορτίο.');
   if(left.has('TL'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: οι γραμμές με κατανεμημένες παραμέτρους (Bergeron) ξεκινούν χωρίς φορτίο.');
   if(left.has('CPL')||left.has('NL'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: τα φορτία σταθερής ισχύος και τα αλεξικέραυνα μένουν έξω από τη λύση με φασιθέτες.');
@@ -410,9 +420,10 @@
    for(let again=true;again;){again=false;for(const c of comps){if(!cond(c)||dead.has(c.id))continue;const ps=elp(c);if(ps.length!==2)continue;const ns=ps.map(pn=>netOf.get(c.id+':'+pn));
     if(ns.some(n=>n&&!n.ground&&deg.get(n)===1)){dead.add(c.id);for(const n of ns)if(n&&!n.ground)deg.set(n,deg.get(n)-1);again=true;}}}
    for(const id of dead){const c=byId.get(id),q={...P.defaults(c.type),...(c.params||{})};if(c.type==='IDC'||c.type==='ILG'||(c.type==='L'&&num(q.i0,0)!==0))skip.set(id,'openI');}}
-  const freeNets=[];for(let i=nets.length-1;i>=0;i--){const n=nets[i];if(!n.keys.some(k=>!isJ(k)&&!skip.has(cidOf(k)))){if(n.keys.every(isJ))freeNets.push(n.keys.map(cidOf));nets.splice(i,1);}}
+  const libJ=new Set(comps.filter(c=>c.libPort).map(c=>c.id));   // 4.10: the ports of library parts (an unused output is not a forgotten wire)
+  const freeNets=[];for(let i=nets.length-1;i>=0;i--){const n=nets[i];if(!n.keys.some(k=>!isJ(k)&&!skip.has(cidOf(k)))){if(n.keys.every(isJ)&&!n.keys.every(k=>libJ.has(cidOf(k))))freeNets.push(n.keys.map(cidOf));nets.splice(i,1);}}
   const wcount=new Map();for(const w of project.wires||[])for(const e of [w.a,w.b])wcount.set(e.c,(wcount.get(e.c)||0)+1);
-  const freeEnds=comps.filter(c=>c.type==='JUNC'&&wcount.get(c.id)===1).map(c=>c.id);
+  const freeEnds=comps.filter(c=>c.type==='JUNC'&&!c.libPort&&wcount.get(c.id)===1).map(c=>c.id);
   nets.sort((a,b)=>a.canon<b.canon?-1:1);nets.forEach((n,i)=>n.index=i);
   const pinNet=new Map();for(const n of nets)for(const k of n.keys)pinNet.set(k,n);if(gnd)for(const k of gnd.keys)pinNet.set(k,gnd);
   // wire names label their net

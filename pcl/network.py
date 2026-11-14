@@ -218,6 +218,21 @@ class Network:
         """A branch in per unit of S_base and the buses' U_n (the MATPOWER model: tap ratio and shift at bus a)."""
         return self._add('branch', name, a=a, b=b, r=float(r), x=float(x), bc=float(bc), ratio=float(ratio), angle=float(angle))
 
+    def sssc(self, line, X=None, Vq=None, P=None, Xmax=None, name=None):
+        """4.10 (ROADMAP §50): a static synchronous series compensator (or its modular form, the m-SSSC) in series with a line
+        or a branch, in the load flow as a series reactance that adds −jX (Ω on the base of the line's end a; X > 0
+        capacitive, X < 0 inductive): a given X, or a voltage V_q (V, per phase, positive capacitive) in quadrature with the
+        line current (X = V_q/I), or the X that makes the active power from end a equal to P (W), within ±Xmax (Ω).
+        Hingorani & Gyugyi, Understanding FACTS, §6.3; the variable series reactance of Acha et al., FACTS, §5.4.1, here
+        with an outer secant iteration around the Newton–Raphson load flow. Not in the short-circuit calculation (bypassed)."""
+        if sum(v is not None for v in (X, Vq, P)) != 1:
+            raise NetworkError('sssc: give exactly one of X, Vq, P')
+        e = self.element(line)
+        if e['kind'] not in ('line', 'branch'):
+            raise NetworkError(f'sssc: {line} is not a line or a branch')
+        return self._add('sssc', name, line=str(line), X=None if X is None else float(X), Vq=None if Vq is None else float(Vq),
+                         P=None if P is None else float(P), Xmax=None if Xmax is None else float(Xmax))
+
     def remove(self, name):
         self.elements = [e for e in self.elements if e['name'] != name]
 
@@ -625,15 +640,16 @@ class Network:
         Vset = {b: d['V'] for b, d in self.buses.items()}
         ang = {b: d['angle'] for b, d in self.buses.items()}
         qlim = {}
+        xs = self._sssc_x()            # 4.10: Ω of the series compensators on each line, X > 0 capacitive
         for e in self.elements:
             k = e['kind']
             if k == 'line':
                 zb = self._zb(e['a'])
-                z = complex(e['R'], e['X']) * e['length'] / e['parallel'] / zb
+                z = complex(e['R'], e['X']) * e['length'] / e['parallel'] / zb - 1j * xs.get(e['name'], 0.0) / zb
                 series(e['a'], e['b'], z, 1.0, e['B'] * e['length'] * e['parallel'] * zb)
             elif k == 'branch':
                 ta = (e['ratio'] or 1.0) * cmath.exp(1j * math.radians(e['angle']))
-                series(e['a'], e['b'], complex(e['r'], e['x']), ta, e['bc'])
+                series(e['a'], e['b'], complex(e['r'], e['x']) - 1j * xs.get(e['name'], 0.0) / self._zb(e['a']), ta, e['bc'])
             elif k == 'reactor':
                 zb = self._zb(e['a'])
                 z = complex(e['R'], e['X']) / zb
@@ -684,9 +700,54 @@ class Network:
         Y = _coo(n, rows, cols, vals)
         return names, idx, Y, Sbus, load, types, Vset, ang, qlim
 
+    def _sssc_x(self):
+        out = {}
+        for e in self.elements:
+            if e['kind'] == 'sssc':
+                out[e['line']] = out.get(e['line'], 0.0) + (e.get('_X') if e.get('_X') is not None else (e['X'] or 0.0))
+        return out
+
     def load_flow(self, tol=1e-10, max_iter=30, q_limits=False, flat=False):
         """Newton–Raphson in polar coordinates. Returns a dict: V (pu) and angle (deg) per bus, P, Q injected by the
-        sources (W, var), branch flows, losses, iterations, converged."""
+        sources (W, var), branch flows (4.10: lines and branches, both ends), losses, iterations, converged; with series
+        compensators (sssc) also 'sssc': X, V_q, I, Q per compensator."""
+        sc = [e for e in self.elements if e['kind'] == 'sssc']
+        for e in sc:
+            e['_X'] = e['X'] if e['X'] is not None else 0.0
+        if any(e['X'] is None for e in sc):
+            return self._lf_sssc(sc, tol, max_iter, q_limits, flat)
+        return self._lf(tol, max_iter, q_limits, flat)
+
+    def _lf_sssc(self, sc, tol, max_iter, q_limits, flat, it_max=60):
+        """4.10: X of the compensators with a target (V_q or P) by a secant iteration, one compensator at a time
+        (Gauss–Seidel over the compensators), each X within ±Xmax."""
+        def g(e, res):
+            f = next(b for b in res['branches'] if b['name'] == e['line'])
+            return (e['_X'] * f['I'] - e['Vq']) if e['Vq'] is not None else (f['Pa'] - e['P'])
+        res = self._lf(tol, max_iter, q_limits, flat)
+        for _ in range(it_max):
+            worst = 0.0
+            for e in sc:
+                if e['X'] is not None:
+                    continue
+                lim = abs(e['Xmax']) if e['Xmax'] is not None else math.inf
+                scale = (abs(e['Vq']) if e['Vq'] is not None else abs(e['P'])) or 1.0
+                x0, g0 = e['_X'], g(e, res)
+                x1 = min(max(x0 + (1.0 if g0 < 0 else -1.0) * (0.05 * self._zb(self.element(e['line'])['a'])) * (1 if e['Vq'] is None or e['Vq'] >= 0 else -1), -lim), lim)
+                for _k in range(40):
+                    e['_X'] = x1
+                    res = self._lf(tol, max_iter, q_limits, flat)
+                    g1 = g(e, res)
+                    if abs(g1) < 1e-9 * scale or x1 == x0:
+                        break
+                    x2 = x1 - g1 * (x1 - x0) / (g1 - g0) if g1 != g0 else x1
+                    x0, g0, x1 = x1, g1, min(max(x2, -lim), lim)
+                worst = max(worst, abs(g(e, res)) / scale)
+            if worst < 1e-8:
+                break
+        return res
+
+    def _lf(self, tol=1e-10, max_iter=30, q_limits=False, flat=False):
         names, idx, Y, Sg, load, types, Vset, ang, qlim = self._lf_model()
         n = len(names)
         if not any(t == 'slack' for t in types.values()):
@@ -728,7 +789,39 @@ class Network:
         res['losses'] = float((Sgen.sum() - Sl.sum()).real * self.S_base)
         res['_V'] = V
         res['_idx'] = idx
+        res['branches'] = self._flows(V, idx)
+        sc = [e for e in self.elements if e['kind'] == 'sssc']
+        if sc:
+            res['sssc'] = {}
+            for e in sc:
+                f = next(b for b in res['branches'] if b['name'] == e['line'])
+                X = e['_X'] if e.get('_X') is not None else e['X']
+                res['sssc'][e['name']] = {'line': e['line'], 'X': float(X), 'Vq': float(X * f['I']), 'I': f['I'], 'Q': float(-3 * X * f['I'] ** 2)}
         return res
+
+    def _flows(self, V, idx):
+        """4.10: the flows of the lines and branches at both ends (W, var, the current in A at end a), with the
+        compensators' reactance, as stamped in _lf_model."""
+        xs, out = self._sssc_x(), []
+        for e in self.elements:
+            k = e['kind']
+            if k not in ('line', 'branch'):
+                continue
+            zb = self._zb(e['a'])
+            if k == 'line':
+                z = complex(e['R'], e['X']) * e['length'] / e['parallel'] / zb - 1j * xs.get(e['name'], 0.0) / zb
+                ta, bsh = 1.0 + 0j, e['B'] * e['length'] * e['parallel'] * zb
+            else:
+                z = complex(e['r'], e['x']) - 1j * xs.get(e['name'], 0.0) / zb
+                ta, bsh = (e['ratio'] or 1.0) * cmath.exp(1j * math.radians(e['angle'])), e['bc']
+            y, va, vb = 1 / z, V[idx[e['a']]], V[idx[e['b']]]
+            ia = (y + 0.5j * bsh) / abs(ta) ** 2 * va - y / ta.conjugate() * vb
+            ib = -y / ta * va + (y + 0.5j * bsh) * vb
+            sa, sb = va * ia.conjugate() * self.S_base, vb * ib.conjugate() * self.S_base
+            Ib = self.S_base / (math.sqrt(3) * self.buses[e['a']]['Un'])
+            out.append({'name': e['name'], 'a': e['a'], 'b': e['b'], 'Pa': float(sa.real), 'Qa': float(sa.imag), 'Pb': float(sb.real),
+                        'Qb': float(sb.imag), 'S': float(max(abs(sa), abs(sb))), 'I': float(abs(ia) * Ib), 'loss': float((sa + sb).real)})
+        return out
 
     # ------------------------------------------------------------ to the EMT solver (4.3)
     def to_emt(self, lf=None, machines=None, name=None, t_end=0.5, hdiv=400):
@@ -863,6 +956,66 @@ def _nr(Y, V, Sg, load, pv, pq, tol, max_iter):
     mis = S - (Sg - _zip(load, Vm))
     F = np.r_[mis[pvpq].real, mis[pq].imag]
     return V, it, bool(np.max(np.abs(F), initial=0.0) < tol)
+
+
+# ---------------------------------------------------------------- 4.10: where to put a series compensator
+SSSC_GOALS = ('loading', 'losses', 'vdev', 'size')
+
+
+def sssc_placement(net, lines=None, X=None, ratings=None, weights=None, Smax=None, tol=1e-10, frac=(-0.3, -0.15, 0.15, 0.3, 0.5)):
+    """4.10 (ROADMAP §50): a series compensator (sssc, a series reactance in the load flow) on each candidate line and at
+    each reactance of X (Ω, > 0 capacitive; without X the fractions frac of each line's own reactance), the criteria of
+    every case and the weighted choice and its Pareto front.
+
+    Criteria (smaller is better): 'loading' = the largest |S|/rating over the lines and branches (rating: ratings[name] in
+    VA, else the largest |S| of the case without compensator, the same for all); 'losses' (W); 'vdev' = the largest |V − 1|
+    (pu) over the PQ buses; 'size' = |Q| of the compensator (var, 3·|X|·I²). weights: {criterion: w} on the criteria
+    divided by their values without compensator ('size' by the largest size of the cases), default all 1. Smax (var):
+    cases whose compensator would be larger are left out. Returns {'base', 'cases', 'best', 'pareto'}: every case
+    {line, X, loading, losses, vdev, size, I, score, pareto}; cases that do not converge are left out."""
+    def crit(res, Xc=0.0, line=None):
+        fl = res['branches']
+        rt = ratings or {}
+        smax = base_s if base_s else max(b['S'] for b in fl)
+        load = max(b['S'] / (rt.get(b['name']) or smax) for b in fl)
+        vdev = max((abs(v['V'] - 1) for k, v in res['buses'].items() if res['types'].get(k) == 'PQ'), default=0.0)
+        I = next((b['I'] for b in fl if b['name'] == line), 0.0)
+        return {'loading': float(load), 'losses': float(res['losses']), 'vdev': float(vdev), 'size': float(3 * abs(Xc) * I * I), 'I': float(I)}
+    base_s = None
+    work = from_dict(to_dict(net))
+    r0 = work.load_flow(tol=tol)
+    base_s = max(b['S'] for b in r0['branches'])
+    base = crit(r0)
+    cand = list(lines) if lines is not None else [e['name'] for e in work.elements if e['kind'] in ('line', 'branch')]
+    def xline(ln):
+        e = work.element(ln)
+        return e['X'] * e['length'] / e['parallel'] if e['kind'] == 'line' else e['x'] * work._zb(e['a'])
+    cases = []
+    for ln in cand:
+        for x in (list(X) if X is not None else [f * xline(ln) for f in frac]):
+            w = from_dict(to_dict(net))
+            w.sssc(ln, X=x, name='_SSSC')
+            try:
+                r = w.load_flow(tol=tol)
+            except (NetworkError, np.linalg.LinAlgError):
+                continue
+            if not r['converged']:
+                continue
+            c = crit(r, x, ln)
+            if Smax is not None and c['size'] > Smax:
+                continue
+            cases.append({'line': ln, 'X': float(x), **c})
+    W = {k: 1.0 for k in SSSC_GOALS}
+    W.update(weights or {})
+    smax = max((c['size'] for c in cases), default=1.0) or 1.0
+    norm = {'loading': base['loading'] or 1.0, 'losses': base['losses'] or 1.0, 'vdev': base['vdev'] or 1.0, 'size': smax}
+    for c in cases:
+        c['score'] = float(sum(W[k] * c[k] / norm[k] for k in SSSC_GOALS))
+    # the Pareto front: no other case at least as good in every criterion and better in one
+    for c in cases:
+        c['pareto'] = not any(all(d[k] <= c[k] for k in SSSC_GOALS) and any(d[k] < c[k] for k in SSSC_GOALS) for d in cases if d is not c)
+    best = min(cases, key=lambda c: c['score']) if cases else None
+    return {'base': base, 'cases': cases, 'best': best, 'pareto': [c for c in cases if c['pareto']]}
 
 
 # ---------------------------------------------------------------- superposition (pre-fault state from the load flow)

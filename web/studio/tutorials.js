@@ -1349,6 +1349,57 @@
    for(const [id,lab] of ids){panes[0].push(['V4:'+id,`v_a2 ${lab}`]);panes[1].push(['I:'+id,`i_a1 ${lab}`]);}
    const stopT=ac?0.02:2e-3;
    return project(comps,wires,{sim:{hDiv:ac?20000:10,speed:ac?0.2:0.05,stopT,method:'TR'},scope:{panes,window:{unit:'s',n:stopT}},meta:{cmp:o.cmp,src:o.src,f:50,dur:stopT,cable:true}});}});
+ // ------------------------------------------------------------------ 4.10 (ROADMAP §50): the modular SSSC
+ // A cascaded arm of N H bridges (CHB) in series with a line, its nearest-level modulation with sorting (NLC) and the m-SSSC
+ // controller (SOGI-PLL on the line current, the injected voltage in quadrature with it, Δθ from the mean cell voltage).
+ // Values: typical (10 cells of 1 kV with 10 mF per phase; line 0.08 Ω/km, 1.2 mH/km, 9.5 nF/km).
+ const SSSC_X={steps:'0:0, 0.3:10, 0.8:-8',cap:'10',ind:'-8'};
+ function ssscChannels(id,fast,N){const a=fast?`Y:${id}/X`:`Y:${id}/VAB`;return {arm:a,cells:Array.from({length:N},(_,k)=>fast?`Y:${id}/X:v${k+1}`:`Y:${id}/V${k+1}`)};}
+ T.push({id:'sssc_1ph',group:'FACTS: αρθρωτός SSSC (4.10)',title:'Αρθρωτός SSSC σε γραμμή (μονοφασικό)',theory:'formula',topology:'sssc',
+  options:[{k:'mode',label:'Έλεγχος',options:[['x','Έγχυση αντίδρασης X (πρόσθια τροφοδότηση + PI)'],['ma','Σταθερός δείκτης m_a = 0,5 (χωρητικός)'],['i','Ρεύμα γραμμής: 280 A → 180 A (0,8 s)']],def:'x'},
+   {k:'X',label:'X_ref (τρόπος X)',options:[['steps','0 → +10 Ω (0,3 s) → −8 Ω (0,8 s)'],['cap','+10 Ω (χωρητική)'],['ind','−8 Ω (επαγωγική)']],def:'steps'},
+   {k:'sel',label:'Εξισορρόπηση πυκνωτών',options:[['sort','Ταξινόμηση σε κάθε δείγμα'],['reduced','Μειωμένη συχνότητα μεταγωγής (ζώνη 30 V)']],def:'sort'},
+   {k:'impl',label:'Βραχίονας',options:[['fast','Γρήγορος (συνάρτηση μεταγωγής)'],['blocks','Αναλυτικός (40 διακόπτες, 10 πυκνωτές)']],def:'fast'},
+   {k:'d',label:'Γωνία μεταφοράς δ',options:[['4','4°'],['8','8°']],def:'4'}],
+  desc:'Δύο ζυγοί 150 kV (πολική) με γωνία δ, μεταξύ τους γραμμή 100 km (8 Ω, 120 mH: X_L = 37,7 Ω) και σε σειρά ένας αρθρωτός SSSC: 10 γέφυρες H με πυκνωτή 10 mF στο 1 kV η καθεμία (ως 10 kV). Ο έλεγχος κλειδώνει στο ρεύμα με μονοφασικό PLL (SOGI) και εγχέει τάση κάθετη σε αυτό: καθυστερεί 90° (χωρητική, μειώνει την αντίδραση της γραμμής) ή προηγείται (επαγωγική). Μια μικρή γωνία Δθ από τη μέση τάση των πυκνωτών παίρνει από τη γραμμή την ενεργό ισχύ των απωλειών. Η διαμόρφωση πλησιέστερης στάθμης (NLC) βάζει n = round(v_ref/V_C) υπομονάδες και η ταξινόμηση διαλέγει ποιες.',
+  tasks:['Τρόπος X με βήματα: στα 0,3 s +10 Ω, το ρεύμα ανεβαίνει από 221 σε ~296 A· στα 0,8 s −8 Ω, πέφτει στα ~184 A. Σύγκρινε στην κάρτα με το I = 2V·sin(δ/2)/|R + j(X_L − X)|.','Δες τις τάσεις των 10 πυκνωτών: μένουν κοντά στο 1 kV. Πόσο απέχουν μεταξύ τους με ταξινόμηση σε κάθε δείγμα και πόσο με μειωμένη συχνότητα μεταγωγής; Πόσες μεταγωγές έγιναν σε κάθε περίπτωση;','Η γωνία Δθ: θετική όταν η διάταξη πρέπει να πάρει ενέργεια (χωρητική), αρνητική στην επαγωγική. Γιατί; (Η δειγματοληψία της NLC καθυστερεί την τάση.)','Γρήγορος και αναλυτικός βραχίονας: ίδια αποτελέσματα· πόσο πιο αργά τρέχει ο αναλυτικός;','Σταθερό m_a: η τάση μένει 5 kV όποιο κι αν είναι το ρεύμα. Τι αντίδραση «βλέπει» η γραμμή;'],
+  build(o){const N=10,Vdc=1000,V=150e3*Math.SQRT2/Math.sqrt(3),fast=o.impl!=='blocks',mode=o.mode||'x',d=+o.d||4,ch=ssscChannels('CH1',fast,N);
+   const sc={mode,N,Vdc,X:SSSC_X[o.X||'steps'],ma:0.5,sense:'cap',Iref:'0:280, 0.8:180'};
+   const comps=[C('V1','VAC',80,220,{Vpk:V,f:50,phase:d},{label:'V₁∠δ'}),C('R1','R',180,140,{R:8},{label:'R'}),C('L1','L',280,140,{L:0.12},{label:'L'}),C('AM1','AM',380,140,{},{label:'i'}),
+    C('CH1','CHB',500,140,{N,C:10e-3,Vdc,fs:10e3,sel:o.sel==='reduced'?'reduced':'sort',band:30,impl:fast?'fast':'blocks'},{rot:3,label:'m-SSSC'}),
+    C('V2','VAC',660,220,{Vpk:V,f:50,phase:0},{label:'V₂∠0'}),C('SC1','SSSC',500,320,sc,{label:'έλεγχος'}),C('G1','GND',80,300),C('G2','GND',660,300)];
+   const wires=[['V1:p','R1:a',[[80,140]]],['R1:b','L1:a'],['L1:b','AM1:a'],['AM1:b','CH1:a'],['CH1:b','V2:p',[[660,140]]],['V1:n','G1:g'],['V2:n','G2:g'],
+    ['AM1:y','SC1:i'],['CH1:v','SC1:v'],['CH1:vav','SC1:vav'],['SC1:vref','CH1:ref']];
+   return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:10,method:'TR',speed:0.2,stopT:1.2},
+    scope:{panes:[[['I:L1','ρεύμα γραμμής']],[[ch.arm,'τάση SSSC'],['Y:SC1/VR','αναφορά']],[['Y:SC1/XM','X μετρημένη'],['Y:SC1/VQ','V_q (εντολή)']],ch.cells.slice(0,4).map((k,i)=>[k,'v_C'+(i+1)])],window:{unit:'s',n:0.1}},
+    meta:{sssc:{V,d,R:8,L:0.12,f:50,N,Vdc,C:10e-3,mode,X:sc.X,Iref:sc.Iref,ma:sc.ma,sense:sc.sense,fast,phases:1}}});}});
+ // three phases, four buses at 150 kV: a grid at bus 1, two paths to the load at bus 2 (through the m-SSSC and a 100 km line,
+ // or through bus 3 and 50 + 70 km of line); one arm and one controller per phase
+ T.push({id:'sssc_3ph',group:'FACTS: αρθρωτός SSSC (4.10)',title:'Αρθρωτός SSSC σε δίκτυο 150 kV (τριφασικό, 4 ζυγοί)',theory:'formula',topology:'sssc',
+  options:[{k:'X',label:'X_ref',options:[['steps','0 → +10 Ω (0,3 s) → −8 Ω (0,8 s)'],['cap','+10 Ω (χωρητική)'],['ind','−8 Ω (επαγωγική)']],def:'steps'},
+   {k:'sel',label:'Εξισορρόπηση πυκνωτών',options:[['sort','Ταξινόμηση σε κάθε δείγμα'],['reduced','Μειωμένη συχνότητα μεταγωγής (ζώνη 30 V)']],def:'reduced'},
+   {k:'load',label:'Φορτίο στον ζυγό 2',options:[['150','150 MW, 30 Mvar'],['250','250 MW, 50 Mvar']],def:'150'}],
+  desc:'Τριφασικό δίκτυο 150 kV με τέσσερις ζυγούς: ισοδύναμο δικτύου στον ζυγό 1 (5 GVA), δύο διαδρομές προς το φορτίο του ζυγού 2: μέσω του m-SSSC (ζυγός 4) και γραμμής 100 km, ή μέσω του ζυγού 3 και γραμμών 50 + 70 km. Γραμμές τμήματα π με 0,08 Ω/km, 1,2 mH/km, 9,5 nF/km. Ένας αρθρωτός βραχίονας (10 × 1 kV) με αυτεπαγωγή σύζευξης 5 mH (η σκέδαση του μετασχηματιστή σύζευξης ή το πηνίο του βραχίονα) και ένας ελεγκτής ανά φάση. Χωρίς αυτήν ο βραχίονας θα ήταν ανάμεσα στις εγκάρσιες χωρητικότητες των δύο γραμμών και κάθε αλλαγή στάθμης θα έδινε κρουστικό ρεύμα στη μέτρηση. Η χωρητική έγχυση στέλνει περισσότερη ισχύ από τη διαδρομή του SSSC, η επαγωγική λιγότερη.',
+  tasks:['Πώς μοιράζεται η ισχύς στις δύο διαδρομές πριν από τα 0,3 s, με +10 Ω και με −8 Ω; Σύγκρινε στην κάρτα με τη ροή φορτίου του pcl.network με την ίδια αντίδραση σε σειρά.','Οι τρεις φάσεις ελέγχονται χωριστά: έχουν την ίδια X και την ίδια Δθ;','Με φορτίο 250 MW το ρεύμα ανεβαίνει: πόση X μπορεί να δώσει η διάταξη με 10 kV ανά φάση;'],
+  build(o){const N=10,Vdc=1000,f=50,w=2*Math.PI*f,X=SSSC_X[o.X||'steps'],P=+o.load||150,Q=P/5;
+   // the network with three-phase buses (one wire per bus), the arms one per phase between two bus splitters
+   const ln=(id,x,y,km,label)=>C(id,'LINE3',x,y,{unit:'ohm',Un:150e3,f,R1:+(0.08*km).toFixed(6),X1:+(w*1.2e-3*km).toFixed(6),B1:+(w*9.5e-9*km).toExponential(6),z0:'same',conn:'bus'},{label});
+   const comps=[C('NET','GRID3',100,860,{Un:150e3,f,Sk:5e9,XR:10,cf:1,emf:'un',conn:'bus'},{label:'ζυγός 1'}),C('J1','JUNC',180,860),
+    C('B1','EBUS',220,340,{n:3},{flip:true}),C('B2','EBUS',680,340,{n:3},{label:'ζυγός 4'}),
+    ln('L13',400,860,50,'1–3 · 50 km'),ln('L32',680,860,70,'3–2 · 70 km'),ln('L42',780,340,100,'4–2 · 100 km'),
+    C('J2','JUNC',900,340),C('LD2','LOAD3',900,480,{cn:'yn',Un:150e3,f,P:P*1e6,Q:Q*1e6,conn:'bus'},{label:'ζυγός 2'})];
+   const wires=[['NET:abc','J1:j'],['J1:j','B1:bus',[[180,340]]],['J1:j','L13:abc1'],['L13:abc2','L32:abc1'],['L32:abc2','J2:j',[[900,860]]],
+    ['B2:bus','L42:abc1'],['L42:abc2','J2:j'],['J2:j','LD2:abc']];
+   ['a','b','c'].forEach((ph,k)=>{const y=80+260*k;
+    comps.push(C('AM'+ph,'AM',300,y,{},{label:'i_'+ph}),C('LK'+ph,'L',390,y,{L:5e-3},{label:'L_σ '+ph}),
+     C('CH'+ph,'CHB',520,y,{N,C:10e-3,Vdc,fs:10e3,sel:o.sel==='sort'?'sort':'reduced',band:30,impl:'fast'},{rot:3,label:'SSSC '+ph}),
+     C('SC'+ph,'SSSC',520,y+150,{mode:'x',N,Vdc,X},{label:'έλεγχος '+ph}));
+    wires.push(['B1:'+ph,'AM'+ph+':a',k===1?undefined:[[255,320+20*k],[255,y]]],['AM'+ph+':b','LK'+ph+':a'],['LK'+ph+':b','CH'+ph+':a'],
+     ['CH'+ph+':b','B2:'+ph,k===1?undefined:[[640,y],[640,320+20*k]]],
+     ['AM'+ph+':y','SC'+ph+':i'],['CH'+ph+':v','SC'+ph+':v'],['CH'+ph+':vav','SC'+ph+':vav'],['SC'+ph+':vref','CH'+ph+':ref']);});
+   return project(comps,wires.map(w=>w.filter(x=>x!==undefined)),{version:4,solve:{init:'ac'},sim:{hDiv:10,method:'TR',speed:0.1,stopT:1.2},
+    scope:{panes:[[['Y:AMa','i_a (SSSC)'],['Y:AMb','i_b'],['Y:AMc','i_c']],[['Y:CHa/X','v_a SSSC'],['Y:SCa/VR','αναφορά a']],[['Y:SCa/XM','X a'],['Y:SCb/XM','X b'],['Y:SCc/XM','X c']],[['Y:CHa/NLC:vav','V_C a'],['Y:CHb/NLC:vav','V_C b'],['Y:CHc/NLC:vav','V_C c']]],window:{unit:'s',n:0.1}},
+    meta:{sssc:{phases:3,N,Vdc,C:10e-3,X,f,Un:150e3,Sk:5e9,XR:10,P:P*1e6,Q:Q*1e6,lines:{L13:50,L32:70,L42:100},Lk:5e-3,r:0.08,l:1.2e-3,c:9.5e-9,fast:true,mode:'x'}}});}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
  root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};

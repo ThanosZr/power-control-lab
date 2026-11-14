@@ -1517,6 +1517,56 @@ function ieee9Theory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.lf)return '';
  if(!m.fault)for(const g of ['G2','G3']){const q=s.lastPeriod('Y:'+g+':d');rows.push([`δ ${g} (Anderson & Fouad, Πίν. 9.1)`,IEEE9_AF[g],q?.avg,'°']);}
  return `<ul class="eqs"><li>Ροή φορτίου (pcl.network, Newton–Raphson): οι γεννήτριες ξεκινούν από |V|∠θ του ζυγού τους· τα φορτία ως σταθερή εμπέδηση στην τάση της ροής φορτίου</li>
   <li>Αρχικοποίηση: το κύκλωμα λύνεται με φασιθέτες στα ${fmt(60,3)} Hz (ω_e = (2/h)·tan(ωh/2) για τον τραπεζοειδή), οι μηχανές από τη μόνιμη κατάστασή τους (δ, i_d, i_q, i_fd, E_fd, T_m)</li></ul>`+(m.fault?'':cmpRows(rows));}
+// 4.10: the modular SSSC. Single phase: two sources and a line with the compensator as −jX in series (or a constant
+// quadrature voltage); three phases: the phasor solution of the four-bus network with the same series reactance
+function schedNow(str,t){const q=P.parseSched(String(str??''));if(!q)return NaN;let v=q[0][1];for(const [ti,vi] of q)if(ti<=t+1e-12)v=vi;return v;}
+// fundamental (peak) of a recorded signal over the last nc cycles, by the trapezoidal rule on the recorded steps
+function fundOf(key,f,nc=4){const r=rawSeries(key);if(!r||r.t.length<8)return NaN;const t1=r.t[r.t.length-1];let j0=r.t.length-1;while(j0>0&&r.t[j0-1]>=t1-nc/f-1e-12)j0--;
+ const Tw=t1-r.t[j0];if(Tw<0.9*nc/f)return NaN;const w=2*Math.PI*f;let a=0,b=0;
+ for(let j=j0+1;j<r.t.length;j++){const dt=r.t[j]-r.t[j-1],y0=r.y[j-1],y1=r.y[j];a+=dt*(y0*Math.cos(w*r.t[j-1])+y1*Math.cos(w*r.t[j]))/2;b+=dt*(y0*Math.sin(w*r.t[j-1])+y1*Math.sin(w*r.t[j]))/2;}
+ return 2*Math.hypot(a,b)/Tw;}
+// phasors of the 150 kV tutorial network (RMS, phase quantities): grid E behind Z = U_n²/S″k at bus 1, π lines, the
+// compensator −jX in series with jωL_σ from bus 1 to bus 4, the load at bus 2 as Y = (P − jQ)/U_n²
+function ssscNet3(m,X){const w=2*Math.PI*m.f,Un=m.Un,E=Un/Math.sqrt(3),Z1=Un*Un/m.Sk,R1=Z1/Math.sqrt(1+m.XR*m.XR);
+ const c=(re,im=0)=>({re,im}),add=(a,b)=>c(a.re+b.re,a.im+b.im),sub=(a,b)=>c(a.re-b.re,a.im-b.im),mul=(a,b)=>c(a.re*b.re-a.im*b.im,a.re*b.im+a.im*b.re),
+  div=(a,b)=>{const d=b.re*b.re+b.im*b.im;return c((a.re*b.re+a.im*b.im)/d,(a.im*b.re-a.re*b.im)/d);},abs=a=>Math.hypot(a.re,a.im);
+ const Y=[...Array(4)].map(()=>[...Array(4)].map(()=>c(0))),I=[...Array(4)].map(()=>c(0));
+ const ser=(i,j,z,B=0)=>{const y=div(c(1),z);Y[i][i]=add(Y[i][i],add(y,c(0,B/2)));Y[j][j]=add(Y[j][j],add(y,c(0,B/2)));Y[i][j]=sub(Y[i][j],y);Y[j][i]=sub(Y[j][i],y);};
+ const ln=km=>[c(m.r*km,w*m.l*km),w*m.c*km];
+ const zs=c(R1,R1*m.XR);Y[0][0]=add(Y[0][0],div(c(1),zs));I[0]=div(c(E),zs);
+ ser(0,1,...ln(m.lines.L13));ser(1,2,...ln(m.lines.L32));ser(3,2,...ln(m.lines.L42));const zk=c(0,w*(m.Lk||0)-X);ser(0,3,zk);
+ Y[2][2]=add(Y[2][2],c(m.P/(Un*Un),-m.Q/(Un*Un)));
+ const A=Y.map((r,i)=>[...r,I[i]]);for(let k=0;k<4;k++){for(let i=k+1;i<4;i++){const f=div(A[i][k],A[k][k]);for(let j=k;j<5;j++)A[i][j]=sub(A[i][j],mul(f,A[k][j]));}}
+ const V=Array(4);for(let i=3;i>=0;i--){let s=A[i][4];for(let j=i+1;j<4;j++)s=sub(s,mul(A[i][j],V[j]));V[i]=div(s,A[i][i]);}
+ const Is=div(sub(V[0],V[3]),zk),cj=a=>c(a.re,-a.im),P14=3*mul(V[0],cj(Is)).re,[z13]=ln(m.lines.L13),y13=ln(m.lines.L13)[1],I13=add(div(sub(V[0],V[1]),z13),mul(V[0],c(0,y13/2))),P13=3*mul(V[0],cj(I13)).re;
+ return {I:abs(Is),V1:abs(V[0])/E,V2:abs(V[2]),V2pu:abs(V[2])/E,P14,P13};}
+function ssscTheory(){const s=S.sim,m=(S.tutMeta||{}).sssc;if(!s||!m)return '';const f=m.f,T=s.T,nT=Math.max(1,Math.round(1/(f*T))),tnow=s.t;
+ const ctl=m.phases===3?'SCa':'SC1',bw=+(paramsOf(ctl)?.bw??8);
+ let h=`<div class="tm"><span class="badge">m-SSSC</span> ${m.N} υπομονάδες × ${eng(m.Vdc,'V')} ανά φάση (ως ${eng(m.N*m.Vdc,'V')}), C = ${eng(m.C,'F')}</div><ul class="eqs">
+  <li>Βραχίονας: v = Σ s_k·v_Ck − R_arm·i, s_k ∈ {−1, 0, +1} (γέφυρα H). Κάθε πυκνωτής C·dv_k/dt = s_k·i με τον κανόνα της ολοκλήρωσης: στον γρήγορο βραχίονα μία γραμμή του MNA, v_a − v_b − R_eq·i = E με R_eq = R_arm + Σ s_k²·h/(2C)</li>
+  <li>Διαμόρφωση πλησιέστερης στάθμης: n = round(v_ref/V̄_C), |n| ≤ N. Ταξινόμηση: όταν sign(n)·i ≥ 0 οι πυκνωτές φορτίζονται και μπαίνουν οι |n| με τη μικρότερη τάση, αλλιώς οι |n| με τη μεγαλύτερη. Μειωμένη συχνότητα μεταγωγής: οι ίδιες υπομονάδες όσο το n δεν αλλάζει και η διασπορά μένει στη ζώνη</li>
+  <li>PLL με SOGI (μονοφασικό, στο ρεύμα της γραμμής, ${eng(bw,'Hz')}): α′ = ω′[k(v − α) − β], β′ = ω′α, ω′ = ω₀ + PI{(−α·sin θ + β·cos θ)/√(α² + β²)}, θ′ = ω′</li>
+  <li>Νόμος: v_ref = |V_q|·sin(θ + π/2 − sign(V_q)·(π/2 − Δθ)) με V_q = Î·X_εντ. Για V_q &gt; 0 η τάση καθυστερεί 90° από το ρεύμα: χωρητική, μειώνει τη συνολική αντίδραση. Δθ από PI στη μέση τάση των πυκνωτών: η μικρή ενεργός συνιστώσα καλύπτει τις απώλειες</li>`;
+ const Xr=m.mode==='x'?schedNow(m.X,tnow):NaN,cells=k=>m.phases===3?`Y:CH${k}/X:v`:(m.fast?'Y:CH1/X:v':'Y:CH1/V');
+ if(m.phases!==3){const w=2*Math.PI*f,XL=w*m.L,D=2*m.V*Math.sin(m.d*Math.PI/360);let I=NaN,Vq=NaN;
+  if(m.mode==='x'){I=D/Math.hypot(m.R,XL-Xr);Vq=Xr*I;h+=`<li>Μόνιμη κατάσταση: I = (V₁∠δ − V₂)/(R + j(X_L − X)), |Î| = 2V̂·sin(δ/2)/|R + j(X_L − X)| με X_L = ${eng(XL,'Ω')}, X = ${eng(Xr,'Ω')}: <b>${eng(I,'A')}</b> (με X = 0: ${eng(D/Math.hypot(m.R,XL),'A')})</li>`;}
+  else if(m.mode==='ma'){Vq=(m.sense==='ind'?-1:1)*(m.ma??0.5)*m.N*m.Vdc;const a=m.R*m.R+XL*XL,b=-2*XL*Vq,cc=Vq*Vq-D*D;I=(-b+Math.sqrt(b*b-4*a*cc))/(2*a);
+   h+=`<li>Σταθερή τάση V̂_q = m_a·N·V_C = ${eng(Math.abs(Vq),'V')} σε τετραγωνισμό: |ΔV̂| = |(R + jX_L)·Î ${Vq>0?'−':'+'} jV̂_q| → <b>|Î| = ${eng(I,'A')}</b>· η «αντίδραση» V_q/Î αλλάζει με το ρεύμα</li>`;}
+  else{I=schedNow(m.Iref,tnow);h+=`<li>Έλεγχος ρεύματος: Î → I_ref = <b>${eng(I,'A')}</b>, η απαιτούμενη X = X_L − √((2V̂·sin(δ/2)/Î)² − R²) = ${eng(XL-Math.sqrt(Math.max((D/I)**2-m.R*m.R,0)),'Ω')}</li>`;}
+  h+='</ul>';if(tnow<0.3)return h+'<p class="muted small">Τρέξε την προσομοίωση (μετρήσεις στους τέσσερις τελευταίους κύκλους, ~0,2 s μετά από κάθε βήμα της αναφοράς).</p>';
+  const ia=fundOf('I:L1',f),va=fundOf(m.fast?'Y:CH1/X':'Y:CH1/VAB',f),vc=[...Array(m.N)].map((_,k)=>s.now(cells(1)+(k+1))),sw=s.now('Y:CH1/NLC:sw');
+  const rows=[['|Î| (θεμελιώδης)',I,ia,'A'],['|V̂_q| (θεμελιώδης)',Math.abs(m.mode==='i'?NaN:Vq),va,'V']];if(m.mode==='x')rows.push(['X μετρημένη (μέση, 4 κύκλοι)',Xr,avgOver('Y:SC1/XM',4*nT)?.avg,'Ω']);
+  rows.push(['V̄_C (μέση)',m.Vdc,avgOver('Y:CH1/NLC:vav',4*nT)?.avg,'V']);
+  return h+cmpRows(rows)+`<p class="small">Τάσεις πυκνωτών τώρα: ${eng(Math.min(...vc),'V',4)} … ${eng(Math.max(...vc),'V',4)} (διασπορά ${eng(Math.max(...vc)-Math.min(...vc),'V',3)}). Αλλαγές κατάστασης υπομονάδων: ${fmt(sw,6)}, δηλαδή ${eng(sw/m.N/Math.max(tnow,1e-9),'Hz',3)} ανά υπομονάδα. Δθ = ${fmt(s.now('Y:SC1/DTH')*180/Math.PI,3)}°.</p>`;}
+ const q=ssscNet3(m,Number.isFinite(Xr)?Xr:0),q0=ssscNet3(m,0);
+ h+=`<li>Φασιθέτες του δικτύου (το ίδιο κύκλωμα με σταθερές εμπεδήσεις: δίκτυο E = U_n/√3 πίσω από U_n²/S″k, γραμμές π, φορτίο Y = (P − jQ)/U_n², ο SSSC ως −jX σε σειρά με jωL_σ = ${eng(2*Math.PI*f*(m.Lk||0),'Ω')}). Με X = ${eng(Number.isFinite(Xr)?Xr:0,'Ω')}: |I| = <b>${eng(q.I,'A')}</b> RMS, P μέσω του SSSC (1–4–2) = <b>${eng(q.P14,'W')}</b>, μέσω του ζυγού 3 = ${eng(q.P13,'W')}, |V₂| = ${fmt(q.V2pu,5)} pu. Με X = 0: ${eng(q0.P14,'W')} και ${eng(q0.P13,'W')}</li>
+  <li>Η ίδια λύση με τη ροή φορτίου του pcl.network: <code>net.sssc(κλάδος, X=…)</code> στον κλάδο της σύζευξης, φορτίο με zip = (1, 0, 0) (tests/test_sssc.py)</li></ul>`;
+ if(tnow<0.3)return h+'<p class="muted small">Τρέξε την προσομοίωση (μετρήσεις στους τέσσερις τελευταίους κύκλους, ~0,2 s μετά από κάθε βήμα της αναφοράς).</p>';
+ const rows=[];for(const p of ['a','b','c'])rows.push([`|I| φάσης ${p} (RMS θεμελιώδους)`,q.I,fundOf('Y:AM'+p,f)/Math.SQRT2,'A']);
+ for(const p of ['a','b','c'])rows.push([`X φάσης ${p} (μέση, 4 κύκλοι)`,Xr,avgOver('Y:SC'+p+'/XM',4*nT)?.avg,'Ω']);
+ rows.push(['|V₂| (RMS φάσης a)',q.V2,phaseRms('V:LD2/Ra',T,4*nT),'V']);
+ for(const p of ['a','b','c'])rows.push([`V̄_C φάσης ${p}`,m.Vdc,avgOver('Y:CH'+p+'/NLC:vav',4*nT)?.avg,'V']);
+ return h+cmpRows(rows)+`<p class="small">Δθ: ${['a','b','c'].map(p=>fmt(s.now('Y:SC'+p+'/DTH')*180/Math.PI,3)+'°').join(', ')}. Κάθε φάση έχει δικό της PLL και βρόχο τάσης: οι τρεις X ταυτίζονται, οι Δθ διαφέρουν όσο διαφέρουν οι απώλειες και η αρχική φόρτιση.</p>`;}
 // 4.4: line from geometry. The modes of each line (from its model) and what the run shows at the open end
 function lineFdTheory(){const s=S.sim,m=S.tutMeta||{};if(!s)return '';const ids=['L1','L2'].filter(id=>s.net.compInfo.get(id)?.tlm);if(!ids.length)return '';
  const lab=id=>s.net.compInfo.get(id)?.label||id;
@@ -2185,6 +2235,7 @@ function formulaTheory(t){
  if(t.topology==='gen_sc')return genScTheory();
  if(t.topology==='fbm')return fbmTheory();
  if(t.topology==='ieee9_emt')return ieee9Theory();
+ if(t.topology==='sssc')return ssscTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const D=+W.D,Vin=+V.V,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
   eqs=[`V_o = ${t.topology==='cuk'?'−':''}V_in·D/(1−D) = <b>${eng(Vo,'V')}</b>`,`I_L1 = |I_o|·D/(1−D) = <b>${eng(IL1,'A')}</b>, |I_L2| = |I_o| = <b>${eng(Math.abs(Io),'A')}</b>`,`Δi_L1 = V_in·D·T/L1 = <b>${eng(Vin*D*Ts/L1,'A')}</b>, Δi_L2 = V_in·D·T/L2 = <b>${eng(Vin*D*Ts/L2,'A')}</b>`,`V_C1 = ${t.topology==='cuk'?'V_in + |V_o|':'V_in'} = <b>${eng(t.topology==='cuk'?Vin+Math.abs(Vo):Vin,'V')}</b>`];

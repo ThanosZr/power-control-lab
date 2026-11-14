@@ -96,7 +96,8 @@
    for(const c of list){if(c.type==='SUB')continue;const id=me.pfx+c.id,label=me.lbl+(c.label||c.id);
     if(isPort(c)){if(!me.inst)warn(`${label}: θύρα υποκυκλώματος έξω από υποκύκλωμα (ενώνει μόνο τα σύρματά της).`);
      // a port with a width (3.18): the junction keeps it, so Bus.expand checks it like the pin of the symbol
-     const pw=Math.round(+c.params?.width||1);comps.push({id,type:'JUNC',x:c.x||0,y:c.y||0,rot:0,flip:false,label,params:pw>1?{$w:pw}:{}});continue;}
+     // 4.10: the port of a library part (definition $net/…) is marked, so an output left unused is not a free wire end
+     const pw=Math.round(+c.params?.width||1),lib=String(me.stack[me.stack.length-1]||'').startsWith('$net/');comps.push({id,type:'JUNC',x:c.x||0,y:c.y||0,rot:0,flip:false,label,params:pw>1?{$w:pw}:{},...(lib?{libPort:true}:{})});continue;}
     const q={...c,id,label,params:{...(c.params||{})}},d=P.PARTS[c.type];
     if(me.pfx){for(const pd of d?.params||[])if(pd.type==='ref'&&q.params[pd.k])q.params[pd.k]=resolve(q.params[pd.k]);
      if(c.type==='TAGO'||c.type==='TAGI')q.params.name=tagName(q.params.name,me.pfx);}

@@ -48,7 +48,7 @@
  const codeH=(ins,outs)=>Math.max(15,10*Math.max(ins.length,outs.length));
  // 4.10: the parameters of a cascaded arm (shared by CHB and its compact element CHBX) and the pins of NLC and CHBX
  const nCells=p=>Math.max(1,Math.min(64,Math.round(+p.N)||1));
- const chbParams=()=>[num('N','Υπομονάδες N','',10,{hint:'Έως 64.'}),sel('cell','Υπομονάδα',[['fb','Γέφυρα H: −v_C, 0, +v_C (CHB, SSSC, STATCOM)'],['hb','Ημιγέφυρα: 0, +v_C (MMC)']],'fb'),
+ const chbParams=()=>[num('N','Υπομονάδες N','',10,{hint:'Έως 64. Ο βραχίονας αλλάζει την τάση του σε βήματα V_C: σε δίκτυο βάλε σε σειρά την αυτεπαγωγή σύζευξης (σκέδαση μετασχηματιστή ή πηνίο βραχίονα). Ανάμεσα σε δύο χωρητικούς κόμβους (εγκάρσιες χωρητικότητες γραμμών) κάθε βήμα θα έδινε κρουστικό ρεύμα.'}),sel('cell','Υπομονάδα',[['fb','Γέφυρα H: −v_C, 0, +v_C (CHB, SSSC, STATCOM)'],['hb','Ημιγέφυρα: 0, +v_C (MMC)']],'fb'),
   num('C','Πυκνωτής υπομονάδας C','F',10e-3),num('Vdc','Αρχική τάση πυκνωτών V_C','V',1000,{zero:true}),num('Ron','R_on ανά ημιαγωγό σε αγωγή','Ω',1e-3,{hint:'Σε κάθε υπομονάδα άγουν δύο ημιαγωγοί (γέφυρα H) ή ένας (ημιγέφυρα): R_arm = N·2·R_on ή N·R_on.'}),
   num('Rp','Αντίσταση απωλειών παράλληλα σε κάθε πυκνωτή','Ω',0,{zero:true,hint:'0 = χωρίς. Παριστάνει τις απώλειες της υπομονάδας ως εκφόρτιση του πυκνωτή.'})];
  const nlcIns=p=>['ref','i',...Array.from({length:nCells(p)},(_,k)=>'v'+(k+1))],nlcOuts=p=>['n','vav','sw',...Array.from({length:nCells(p)},(_,k)=>'s'+(k+1))];

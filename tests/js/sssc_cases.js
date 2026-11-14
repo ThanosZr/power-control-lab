@@ -8,6 +8,8 @@
 //  {kind:'loop', mode, X, …}                        two sources, a line R–L and the m-SSSC (CHB + controller): the current, X,
 //                                                     Δθ, the cell voltages at the end
 //  {kind:'scipy', …}                                a short run of 'arm' and its SciPy export (from the detailed arm)
+//  {kind:'tut', id, opts, at:[t…], keys:[…]}       a tutorial (sssc_1ph, sssc_3ph) as the app builds it: at each t the 50 Hz
+//                                                     fundamental (peak, last 4 cycles) and the 4-cycle mean of every key
 const path=require('path');const W=path.resolve(__dirname,'../../web/studio');
 global.window=globalThis;global.Parts=require(W+'/parts.js');global.Expr=require(W+'/expr.js');global.StepCheck=require(W+'/stepcheck.js');
 global.LineModels=require(W+'/linemodels.js');
@@ -54,5 +56,12 @@ function scipy(o){const pr=armProject({...o,impl:'fast'}),s=new MNA.Sim(pr,{hDiv
  while(s.t<T-1e-12){s.run(Math.min(s.h,T-s.t));rec.push([s.t,...ch.map(k=>s.now(k))]);}
  const bs=new MNA.Sim(NetLib.forceImpl(pr,'blocks'),{hDiv:o.hDiv||100}),keys=bs.keys.filter(k=>ch.includes(k));
  return {rec,ch,batch:MNA.exportForBatch(pr,keys),h:s.h,warn:s.net.warnings};}
-const F={arm,armpair,nlc,sogi,loop,scipy};
+// the fundamental (peak) and the mean of each key over the last nc cycles of f, from the samples of every step
+function tut(o){require(W+'/tutorials.js');const t=Tutorials.get(o.id),pr=t.build(o.opts||{}),sv=pr.sim||{},s=new MNA.Sim(pr,{hDiv:sv.hDiv||10,method:sv.method||'TR'}),f=50,nc=4,w=2*Math.PI*f,t0=Date.now();
+ const keys=o.keys,buf=[],out=[];for(const T of o.at){while(s.t<T-1e-12){s.run(Math.min(s.h,T-s.t));buf.push([s.t,...keys.map(k=>s.now(k))]);if(buf.length&&buf[0][0]<s.t-nc/f-1e-3)buf.shift();}
+  const r={t:s.t};const w0=buf.filter(q=>q[0]>=s.t-nc/f-1e-12),Tw=w0[w0.length-1][0]-w0[0][0];
+  keys.forEach((k,j)=>{let a=0,b=0,m=0;for(let i=1;i<w0.length;i++){const dt=w0[i][0]-w0[i-1][0],y0=w0[i-1][j+1],y1=w0[i][j+1];a+=dt*(y0*Math.cos(w*w0[i-1][0])+y1*Math.cos(w*w0[i][0]))/2;b+=dt*(y0*Math.sin(w*w0[i-1][0])+y1*Math.sin(w*w0[i][0]))/2;m+=dt*(y0+y1)/2;}
+   r[k]={amp:2*Math.hypot(a,b)/Tw,mean:m/Tw};});out.push(r);}
+ return {out,ms:Date.now()-t0,h:s.h,warn:s.net.warnings,meta:pr.meta};}
+const F={arm,armpair,nlc,sogi,loop,scipy,tut};
 const cases=JSON.parse(process.argv[2]||'[]');console.log(JSON.stringify(cases.map(c=>F[c.kind](c))));

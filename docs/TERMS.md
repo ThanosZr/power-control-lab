@@ -97,7 +97,14 @@
 | volt–time curve | καμπύλη τάσης–χρόνου |
 | black-box component (locked model) | στοιχείο «μαύρο κουτί» (κλειδωμένο μοντέλο) |
 | policy (RL), episode | πολιτική, επεισόδιο |
+| modular multilevel converter (MMC), cascaded H-bridge (CHB), cell / submodule | αρθρωτός πολυεπίπεδος μετατροπέας, γέφυρες H σε σειρά, υπομονάδα |
+| nearest level control (NLC), capacitor voltage balancing (sorting) | διαμόρφωση πλησιέστερης στάθμης, εξισορρόπηση τάσεων πυκνωτών (ταξινόμηση) |
+| reduced switching frequency | μειωμένη συχνότητα μεταγωγής |
+| static synchronous series compensator (SSSC), modular SSSC (m-SSSC) | στατός σύγχρονος αντισταθμιστής σειράς, αρθρωτός SSSC |
+| second-order generalized integrator (SOGI) | γενικευμένος ολοκληρωτής δεύτερης τάξης |
+| coupling transformer / coupling inductance | μετασχηματιστής / αυτεπαγωγή σύζευξης |
+| compensator placement, Pareto front | θέση του αντισταθμιστή, μέτωπο Pareto |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
-PWM, SPWM, SVPWM, PLL, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.
+PWM, SPWM, SVPWM, PLL, FACTS, SSSC, CHB, MMC, NLC, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.
