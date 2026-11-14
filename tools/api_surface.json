@@ -1,5 +1,5 @@
 {
- "version": "4.15",
+ "version": "4.16",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -4073,6 +4073,24 @@
     ],
     "since": "3.18"
    },
+   "part:FILT3": {
+    "params": [
+     "kind",
+     "C1",
+     "L",
+     "R",
+     "C2",
+     "Rp",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "abc",
+     "b",
+     "c"
+    ],
+    "since": "4.16"
+   },
    "part:FLT3": {
     "params": [
      "kind",
@@ -4416,6 +4434,191 @@
      "b"
     ],
     "since": "3.18"
+   },
+   "part:LCC6": {
+    "params": [
+     "impl",
+     "sync",
+     "shift",
+     "f0",
+     "bw",
+     "ini",
+     "th0",
+     "pw",
+     "Ron",
+     "Vf",
+     "Roff",
+     "Rsn",
+     "Csn",
+     "tq",
+     "Ith",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "abc",
+     "am",
+     "ao",
+     "b",
+     "blk",
+     "c",
+     "cf",
+     "gl",
+     "gm",
+     "n",
+     "p",
+     "th",
+     "va",
+     "vb",
+     "vc"
+    ],
+    "since": "4.16"
+   },
+   "part:LCCC": {
+    "params": [
+     "mode",
+     "iext",
+     "Idn",
+     "Vdn",
+     "Iord",
+     "tramp",
+     "Tid",
+     "KpR",
+     "TiR",
+     "aminR",
+     "amaxR",
+     "KpI",
+     "TiI",
+     "aminC",
+     "KpG",
+     "TiG",
+     "aminG",
+     "amaxI",
+     "gref",
+     "dI",
+     "dgc",
+     "gemin",
+     "V1",
+     "I1",
+     "V2",
+     "I2",
+     "Tv",
+     "kc",
+     "blks",
+     "fr",
+     "Vfr",
+     "tdet",
+     "afr",
+     "tfr",
+     "tprot"
+    ],
+    "pins": [
+     "ao",
+     "blk",
+     "cc",
+     "fr",
+     "gm",
+     "id",
+     "iord",
+     "iref",
+     "vd"
+    ],
+    "since": "4.16"
+   },
+   "part:LCCM": {
+    "params": [
+     "shift",
+     "f0",
+     "Ith"
+    ],
+    "pins": [
+     "am",
+     "cf",
+     "gl",
+     "gm",
+     "i1",
+     "i2",
+     "i3",
+     "i4",
+     "i5",
+     "i6",
+     "va",
+     "vb",
+     "vc",
+     "w"
+    ],
+    "since": "4.16"
+   },
+   "part:LCCS": {
+    "params": [
+     "model",
+     "impl",
+     "Sn",
+     "U1",
+     "U2",
+     "f",
+     "uk",
+     "tap",
+     "bw",
+     "pw",
+     "Ron",
+     "Vf",
+     "Rsn",
+     "Csn",
+     "tq",
+     "fm",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "abc",
+     "am",
+     "ao",
+     "b",
+     "blk",
+     "c",
+     "cf",
+     "gm",
+     "id",
+     "n",
+     "p",
+     "vd"
+    ],
+    "since": "4.16"
+   },
+   "part:LCCX": {
+    "params": [
+     "shift",
+     "f0",
+     "bw",
+     "ini",
+     "th0",
+     "pw",
+     "Ron",
+     "Vf",
+     "Roff",
+     "Rsn",
+     "Csn",
+     "tq"
+    ],
+    "pins": [
+     "a",
+     "am",
+     "ao",
+     "b",
+     "blk",
+     "c",
+     "cf",
+     "gl",
+     "gm",
+     "n",
+     "p",
+     "th",
+     "va",
+     "vb",
+     "vc"
+    ],
+    "since": "4.16"
    },
    "part:LINE3": {
     "params": [
@@ -4814,6 +5017,7 @@
      "f0",
      "bw",
      "th0",
+     "ini",
      "conn"
     ],
     "pins": [
@@ -5022,7 +5226,8 @@
      "out",
      "Ron",
      "Vf",
-     "Roff"
+     "Roff",
+     "tq"
     ],
     "pins": [
      "a",
@@ -5541,6 +5746,27 @@
      "s2"
     ],
     "since": "3.18"
+   },
+   "part:ZSER3": {
+    "params": [
+     "Rs",
+     "Ls",
+     "Rp1",
+     "Lp",
+     "Rp2",
+     "conn"
+    ],
+    "pins": [
+     "a1",
+     "a2",
+     "abc1",
+     "abc2",
+     "b1",
+     "b2",
+     "c1",
+     "c2"
+    ],
+    "since": "4.16"
    }
   }
  },

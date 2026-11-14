@@ -9,7 +9,7 @@
 // (gridZ) and the fault currents of a fault at its terminals in the phase domain (faultCurrents), for the analysis.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
- const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC','TOWER','SAI','CHB','SPLL','SSSC','MMC','MMCC'];
+ const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC','TOWER','SAI','CHB','SPLL','SSSC','MMC','MMCC','LCC6','LCCS','LCCC','FILT3','ZSER3'];
  const isLib=t=>TYPES.includes(t);
  const RMIN=1e-4;               // a bolted fault or a closed pole: 0,1 mΩ inside the circuit
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -772,12 +772,182 @@
   [['ma',0],['mb',-2*Math.PI/3],['mc',2*Math.PI/3]].forEach(([n,f])=>{const id='M'+n[1].toUpperCase();E(id,'d*cos(th + f) - q*sin(th + f)','d, q, th','f = '+s(f));w(['MD','y'],[id,'d']);w(['MQ','y'],[id,'q']);w(th,[id,'th']);out(n,[id,'y']);});
   return B.def();}
 
- const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef,CHB:chbDef,SPLL:spllDef,SSSC:ssscDef,MMC:mmcDef,MMCC:mmccDef};
+ // ---------------------------------------------------------------- 4.16 (§42): line-commutated converters (THEORY §8ω)
+ const LPH=[0,2,1,0,2,1];
+ // The six-pulse bridge. Fast: the compact element LCCX (valves, oscillator, firing and measurement in the solver). Detailed:
+ // six thyristors, each behind an ammeter, an RC snubber across both; the oscillator is a PLL block on the commutation voltages;
+ // valve k fires at the upward zero of sin(u_k), u_k = θ + π/3 + shift − kπ/3 − α (a comparator, so the instant is located inside
+ // the step), its gate held while cos(u_k) ≥ cos(pw) and not blocked; α and γ from the measurement block LCCM.
+ function lcc6Def(c){const p=prm(c),B=builder(c.label||c.id),T=B.terms(p,PH,'abc'),Pp=[B.comp('$p','PORT',{name:'p'}),'p'],Np=[B.comp('$n','PORT',{name:'n'}),'p'];
+  const sin=n=>[B.comp('$'+n,'SIN',{name:n}),'y'],out=(n,src)=>{const o=B.comp('$'+n,'SOUT',{name:n});B.wire(src,[o,'u']);},w=(a,b)=>B.wire(a,b),E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''});
+  const ao=sin('ao'),blk=sin('blk');
+  const S=p.sync==='sig'?['va','vb','vc'].map(sin):PH.map((x,k)=>{const v=B.comp('V'+x,'VP',{});w(T[k],[v,'p']);return [v,'y'];});
+  const f0=s(Math.max(num(p.f0,50),1e-6)),bw=s(Math.max(num(p.bw,1.125),1e-6)),sh=num(p.shift,0),th0=s(num(p.th0,0)),ini=p.ini==='th0'?'th0':'v',pw=Math.min(179.9,Math.max(num(p.pw,120),1));
+  const v={Ron:s(Math.max(num(p.Ron,0.01),1e-7)),Vf:s(Math.max(num(p.Vf,0),0)),Roff:s(Math.max(num(p.Roff,1e8),1))},Rs=Math.max(num(p.Rsn,5000),0),Cs=Math.max(num(p.Csn,0.05e-6),0),tq=s(Math.max(num(p.tq,0),0));
+  if(p.impl!=='blocks'){B.comp('X','LCCX',{shift:s(sh),f0,bw,ini,th0,pw:s(pw),...v,Rsn:s(Rs),Csn:s(Cs),tq});
+   PH.forEach((x,k)=>{w(T[k],['X',x]);w(S[k],['X','v'+x]);});w(['X','p'],Pp);w(['X','n'],Np);w(ao,['X','ao']);w(blk,['X','blk']);
+   for(const o of ['am','gm','gl','th','cf'])out(o,['X',o]);return B.def();}
+  B.comp('PLL','PLL',{f0,bw,th0,ini,conn:'sep'});PH.forEach((x,k)=>w(S[k],['PLL',x]));B.comp('Z0','CONST',{v:'0'});
+  B.comp('M','LCCM',{shift:s(sh),f0,Ith:s(Math.max(num(p.Ith,1),0))});PH.forEach((x,k)=>w(S[k],['M','v'+x]));w(['PLL','w'],['M','w']);
+  const cw=s(Math.cos(pw*Math.PI/180));
+  for(let k=0;k<6;k++){const n=k+1,q=T[LPH[k]],top=k%2===0,A=top?q:Np,K=top?Pp:q,X=B.node('X'+n),c0=s(Math.PI/3+sh*Math.PI/180-k*Math.PI/3);
+   B.comp('I'+n,'AM',{});w(A,['I'+n,'a']);w(['I'+n,'b'],X);w(['I'+n,'y'],['M','i'+n]);
+   B.comp('Q'+n,'SCR',{fire:'sig',...v,tq});w(X,['Q'+n,'a']);w(['Q'+n,'k'],K);
+   if(Rs>0&&Cs>0){const m=B.node('S'+n);B.comp('RS'+n,'R',{R:s(Rs)});B.comp('CS'+n,'C',{C:s(Cs),v0:'0'});w(A,['RS'+n,'a']);w(['RS'+n,'b'],m);w(m,['CS'+n,'p']);w(['CS'+n,'n'],K);}
+   E('U'+n,'sin(th + c - a*pi/180)','th, a','c = '+c0);w(['PLL','th'],['U'+n,'th']);w(ao,['U'+n,'a']);
+   B.comp('K'+n,'CMP',{});w(['U'+n,'y'],['K'+n,'p']);w(['Z0','y'],['K'+n,'n']);
+   E('G'+n,'q > 0.5 && b < 0.5 && cos(th + c - a*pi/180) >= cw ? 1 : 0','q, b, th, a',`c = ${c0}, cw = ${cw}`);
+   w(['K'+n,'y'],['G'+n,'q']);w(blk,['G'+n,'b']);w(['PLL','th'],['G'+n,'th']);w(ao,['G'+n,'a']);w(['G'+n,'y'],['Q'+n,'g']);}
+  for(const o of ['am','gm','gl','cf'])out(o,['M',o]);out('th',['PLL','th']);
+  return B.def();}
+ // The twelve-pulse station: the DC voltage across it and its current out of p; detailed: two transformers (YNy0, YNd1) and two
+ // bridges in series on the DC side, both synchronised to the AC bus (the Δ bridge with −30°); average (4.16, no commutations):
+ // a PLL like the oscillators of the bridges, the bus voltage in its frame gives V̂ and δ (the voltage ahead of the reference), so
+ // the valves fire α′ = α + δ after the voltage; E_LL = √(3/2)·V̂·U₂/(U₁(1 + tap)) on the valve side, V_d0 = 2·(3√2/π)·E_LL,
+ // X_c = u_k·U₂²/S_n, R_c = 2·(3/π)·X_c (Kundur (10.29)–(10.30)); on the DC side from n a diode, the source V_d0·cos α′, R_c and a
+ // switch open while blocked; on the AC side fundamental currents set by I_d (below); γ = π − α′ − μ with
+ // cos(α′ + μ) = cos α′ − √2·X_c·I_d/E_LL ((10.10)), 0 (and cf) when the commutation cannot end.
+ function lccsDef(c){const p=prm(c),B=builder(c.label||c.id),T=B.terms(p,PH,'abc'),Pp=[B.comp('$p','PORT',{name:'p'}),'p'],Np=[B.comp('$n','PORT',{name:'n'}),'p'];
+  const sin=n=>[B.comp('$'+n,'SIN',{name:n}),'y'],out=(n,src)=>{const o=B.comp('$'+n,'SOUT',{name:n});B.wire(src,[o,'u']);},w=(a,b)=>B.wire(a,b),E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''});
+  const ao=sin('ao'),blk=sin('blk');
+  const Sn=Math.max(num(p.Sn,603.73e6),1),U1=Math.max(num(p.U1,345e3),1),U2=Math.max(num(p.U2,213.4557e3),1),f=Math.max(num(p.f,50),1e-6),uk=Math.max(num(p.uk,18),1e-6),tap=num(p.tap,0);
+  const am=B.comp('IDC','AM',{}),P=B.node('P');w(P,[am,'a']);w([am,'b'],Pp);const vm=B.comp('VDC','VM',{});w(Pp,[vm,'p']);w(Np,[vm,'n']);out('vd',[vm,'y']);out('id',[am,'y']);
+  const S=PH.map((x,k)=>{const v=B.comp('V'+x,'VP',{});w(T[k],[v,'p']);return [v,'y'];});
+  if(p.model!=='avg'){
+   const xf=g=>({grp:g,Sn:s(Sn),U1:s(U1),U2:s(U2),f:s(f),uk:s(uk),Pk:'0',i0:'0',P0:'0',tap:s(tap),core:'3x1',conn:'sep'});
+   B.comp('TY','XF3',xf('YNy0'));B.comp('TD','XF3',xf('YNd1'));
+   const br=sh=>({impl:p.impl==='blocks'?'blocks':'fast',sync:'sig',shift:s(sh),f0:s(f),bw:s(Math.max(num(p.bw,1.125),1e-6)),ini:'v',th0:'0',pw:s(num(p.pw,120)),Ron:s(num(p.Ron,0.01)),Vf:s(num(p.Vf,0)),Roff:'1e8',
+    Rsn:s(num(p.Rsn,5000)),Csn:s(num(p.Csn,0.05e-6)),tq:s(Math.max(num(p.tq,0),0)),conn:'sep'});
+   B.comp('BY','LCC6',br(0));B.comp('BD','LCC6',br(-30));
+   PH.forEach((x,k)=>{w(T[k],['TY',x+'1']);w(T[k],['TD',x+'1']);w(['TY',x+'2'],['BY',x]);w(['TD',x+'2'],['BD',x]);w(S[k],['BY','v'+x]);w(S[k],['BD','v'+x]);});
+   const M=B.node('M');w(P,['BY','p']);w(['BY','n'],M);w(M,['BD','p']);w(['BD','n'],Np);
+   for(const b of ['BY','BD']){w(ao,[b,'ao']);w(blk,[b,'blk']);}
+   out('am',['BY','am']);E('GM','min(a, b)','a, b');w(['BY','gm'],['GM','a']);w(['BD','gm'],['GM','b']);out('gm',['GM','y']);
+   E('CF','max(a, b)','a, b');w(['BY','cf'],['CF','a']);w(['BD','cf'],['CF','b']);out('cf',['CF','y']);
+   return B.def();}
+  const n=U2/(U1*(1+tap/100)),Xc=uk/100*U2*U2/Sn,Rc=6/Math.PI*Xc,kE=Math.sqrt(1.5)*n,kV=6*Math.SQRT2/Math.PI*kE,Vb=U1*Math.SQRT2/Math.sqrt(3);
+  // the firing reference: a PLL like the oscillator of the bridges (the same bandwidth); the bus voltage in its frame (d, q,
+  // through a low-pass): the amplitude and δ = θ_v − θ, the angle by which the voltage leads the reference. The valves fire at α
+  // after the reference, so α + δ after the voltage: that angle sets V_d, μ, γ and φ, as in the bridges (a jump of the AC
+  // phase moves the actual firing angle until the oscillator follows).
+  B.comp('PLL','PLL',{f0:s(f),bw:s(Math.max(num(p.bw,1.125),1e-6)),th0:'0',ini:'v',conn:'sep'});PH.forEach((x,k)=>w(S[k],['PLL',x]));
+  const fm=s(Math.max(num(p.fm,500),1));
+  E('VDQ','(2*va - vb - vc)/3*cos(th) + (vb - vc)/sqrt(3)*sin(th)','va, vb, vc, th');E('VQQ','-(2*va - vb - vc)/3*sin(th) + (vb - vc)/sqrt(3)*cos(th)','va, vb, vc, th');
+  for(const q of ['VDQ','VQQ']){PH.forEach((x,k)=>w(S[k],[q,'v'+x]));w(['PLL','th'],[q,'th']);}
+  B.comp('FD','LPF',{fc:fm,y0:s(Vb)});w(['VDQ','y'],['FD','u']);B.comp('FQ','LPF',{fc:fm,y0:'0'});w(['VQQ','y'],['FQ','u']);
+  E('FA','max(hypot(d, q), k)','d, q','k = '+s(0.05*Vb));w(['FD','y'],['FA','d']);w(['FQ','y'],['FA','q']);
+  E('AA','a + atan2(q, d)*180/pi','a, d, q');w(ao,['AA','a']);w(['FD','y'],['AA','d']);w(['FQ','y'],['AA','q']);const aa=['AA','y'];
+  E('VD0','k*v','v','k = '+s(kV));w(['FA','y'],['VD0','v']);
+  E('VSU','b > 0.5 ? 0 : v*cos(a*pi/180)','v, a, b');w(['VD0','y'],['VSU','v']);w(aa,['VSU','a']);w(blk,['VSU','b']);
+  E('NB','b > 0.5 ? 0 : 1','b');w(blk,['NB','b']);
+  const X1=B.node('X1'),X2=B.node('X2'),X3=B.node('X3');
+  B.comp('DV','D',{Ron:'1e-6',Roff:'1e9',Vf:'0'});w(Np,['DV','a']);w(['DV','k'],X1);
+  B.comp('VS','VDC',{ctl:'sig',Rs:'0'});w(X1,['VS','n']);w(['VS','p'],X2);w(['VSU','y'],['VS','u']);
+  B.comp('RC','R',{R:s(Rc)});w(X2,['RC','a']);w(['RC','b'],X3);
+  B.comp('SB','SW',{gate:'sig',model:'mos',Ron:'1e-6',Roff:'1e9',body:false});w(X3,['SB','d']);w(['SB','s'],P);w(['NB','y'],['SB','g']);
+  // AC side: the fundamental of the valve currents, 2·(√6/π)·n·I_d per phase (RMS, Kundur (10.32)) with overlap: the active
+  // part c = (cos α + cos(α + μ))/2 = cos φ ((10.20); it gives P = V_d·I_d exactly) and the reactive part
+  // s = (μ − cos(2α + μ)·sin μ)/(4·sin(α + μ/2)·sin(μ/2)) = c·tan φ, the exact tan φ with overlap (sin α at μ → 0); both on
+  // the phase of the bus voltage, θ + δ: a current set by the DC current, as the bridges are
+  E('DL','atan2(q, d)','d, q');w(['FD','y'],['DL','d']);w(['FQ','y'],['DL','q']);
+  E('CA','(cos(a*pi/180) + u)/2','a, u');w(aa,['CA','a']);w(['GMU','y'],['CA','u']);
+  E('AR','a*pi/180','a');w(aa,['AR','a']);E('MU','max(acos(u) - r, 0)','u, r');w(['GMU','y'],['MU','u']);w(['AR','y'],['MU','r']);
+  E('SQ','m < 1e-6 ? sin(r) : (m - cos(2*r + m)*sin(m))/(4*(sin(r + m/2) < 0 ? -1 : 1)*max(abs(sin(r + m/2)), 1e-3)*sin(m/2))','r, m');
+  w(['AR','y'],['SQ','r']);w(['MU','y'],['SQ','m']);
+  B.comp('PLLN','PLL',{f0:s(f),bw:s(Math.max(num(p.bw,1.125),1e-6)),th0:'0',ini:'v',lead:'1',conn:'sep'});PH.forEach((x,k)=>w(S[k],['PLLN',x])); // the same PLL, θ one step ahead (the sources read the signals of the previous step)
+  PH.forEach((x,k)=>{const ph=s([0,-2*Math.PI/3,2*Math.PI/3][k]);
+   E('IR'+x,'b > 0.5 ? 0 : k*abs(i)*(c*cos(th + dl + f) + q*sin(th + dl + f))','i, th, dl, c, q, b',`k = ${s(Math.SQRT2*2*Math.sqrt(6)/Math.PI*n)}, f = ${ph}`);
+   w([am,'y'],['IR'+x,'i']);w(['PLLN','th'],['IR'+x,'th']);w(['DL','y'],['IR'+x,'dl']);w(['CA','y'],['IR'+x,'c']);w(['SQ','y'],['IR'+x,'q']);w(blk,['IR'+x,'b']);
+   B.comp('IS'+x,'IDC',{ctl:'sig'});w(B.gnd(),['IS'+x,'p']);w(['IS'+x,'n'],T[k]);w(['IR'+x,'y'],['IS'+x,'u']);}); // the source drives u from n out of p: so u flows out of the bus
+  // across the DC terminals an RC like the snubbers of the valves (a path for the reactors when the diode stops conducting)
+  {const m=B.node('SN');B.comp('RSN','R',{R:s(2*Math.max(num(p.Rsn,5000),1))});B.comp('CSN','C',{C:s(Math.max(num(p.Csn,0.05e-6),1e-12)/2),v0:'0'});w(Pp,['RSN','a']);w(['RSN','b'],m);w(m,['CSN','p']);w(['CSN','n'],Np);}
+  E('EL','k*v','v','k = '+s(kE));w(['FA','y'],['EL','v']);
+  E('GMU','min(max(cos(a*pi/180) - k*abs(i)/el, -1), 1)','a, i, el','k = '+s(Math.SQRT2*Xc));w(aa,['GMU','a']);w([am,'y'],['GMU','i']);w(['EL','y'],['GMU','el']);
+  E('GMR','u <= -0.999999 ? 0 : 180 - acos(u)*180/pi','u');w(['GMU','y'],['GMR','u']);B.comp('GM','LPF',{fc:s(12*f),y0:'90'});w(['GMR','y'],['GM','u']);out('gm',['GM','y']); // the γ of the next valves: a lag of about one pulse (and no algebraic loop through the control)
+  E('CF','u <= -0.999999 ? 1 : 0','u');w(['GMU','y'],['CF','u']);out('cf',['CF','y']);
+  out('am',aa);
+  return B.def();}
+ // The control of a station (the first CIGRE HVDC benchmark, THEORY §8ω), β = π − α. Measurements in per unit: the current
+ // through a first-order filter (the transducer), the voltage (the inverter sees V_p − V_n < 0: taken with the opposite sign).
+ // Order: the inverter (or a rectifier with its own order) limits it by the VDCOL on the filtered V_d + k·I_d, with an optional
+ // ramp from I₁ after the deblocking; a rectifier of the benchmark takes it from the inverter (iref). Rectifier: a PI of the
+ // current error to β within [π − α_max, π − α_min]; forced retard (optional): α_fr for t_fr after V_d stayed below V_fr for
+ // t_det, armed again when V_d is back above 0,8 pu. Inverter: a PI of (order − ΔI − I_d) and a PI of max(γ_ref + Δγ(I_err) − γ,
+ // γ_err,min), the larger β of the two (the lower α). Every integral held while blocked; the integral limited to the output range.
+ function lcccDef(c){const p=prm(c),B=builder(c.label||c.id),inv=p.mode==='inv',D=Math.PI/180;
+  const sin=n=>[B.comp('$'+n,'SIN',{name:n}),'y'],out=(n,src)=>{const o=B.comp('$'+n,'SOUT',{name:n});B.wire(src,[o,'u']);},w=(a,b)=>B.wire(a,b),E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''});
+  const pos=(x,d)=>Math.max(num(x,d),1e-9),Idn=pos(p.Idn,2000),Vdn=pos(p.Vdn,500e3),Tid=pos(p.Tid,1.2e-3);
+  E('KI','u*k','u','k = '+s(1/Idn));w(sin('id'),['KI','u']);B.comp('FI','LPF',{fc:s(1/(2*Math.PI*Tid)),y0:'0'});w(['KI','y'],['FI','u']);const I=['FI','y'];
+  E('KV','u*k','u','k = '+s((inv?-1:1)/Vdn));w(sin('vd'),['KV','u']);const V=['KV','y'];
+  B.comp('BLK','CONST',{v:String(p.blks??'0:1, 0.04:0').trim()||'0'});
+  const sch=P.parseSched(String(p.blks??'0:1, 0.04:0'))||[[0,0]];let tdb=0;for(let i=1;i<sch.length;i++)if(sch[i][1]<.5&&sch[i-1][1]>=.5){tdb=sch[i][0];break;}
+  let ord;
+  if(inv||p.iext!=='sig'){const V1=num(p.V1,0.4),V2=Math.max(num(p.V2,0.9),V1+1e-6),I1=num(p.I1,0.55),I2=num(p.I2,1),tr=Math.max(num(p.tramp,0),0);
+   E('VC','v + k*i','v, i','k = '+s(num(p.kc,0.01)));w(V,['VC','v']);w(I,['VC','i']);B.comp('FV','LPF',{fc:s(1/(2*Math.PI*pos(p.Tv,0.02))),y0:'1'});w(['VC','y'],['FV','u']);
+   E('VDL','v <= v1 ? i1 : (v >= v2 ? i2 : i1 + (i2 - i1)*(v - v1)/(v2 - v1))','v',`v1 = ${s(V1)}, v2 = ${s(V2)}, i1 = ${s(I1)}, i2 = ${s(I2)}`);w(['FV','y'],['VDL','v']);
+   const t0=String(p.Iord??'1').trim();B.comp('IO','CONST',{v:t0===''?'1':t0});
+   E('ORD',tr>0?'min(i1 + (o - i1)*min(max((t - t0)/tr, 0), 1), d)':'min(o, d)','o, d',`i1 = ${s(I1)}, t0 = ${s(tdb)}, tr = ${s(tr||1)}`);w(['IO','y'],['ORD','o']);w(['VDL','y'],['ORD','d']);ord=['ORD','y'];}
+  else ord=sin('iref');
+  out('iord',ord);
+  const pi=(id,err,Kp,Ti,lo,hi,init,hold)=>{E(id+'U','b > 0.5 ? 0 : k*er','er, b','k = '+s(Kp/pos(Ti,1e-3)));w(err,[id+'U','er']);w(hold,[id+'U','b']);
+   B.comp(id+'X','INT',{y0:s(init),lo:s(lo),hi:s(hi)});w([id+'U','y'],[id+'X','u']);
+   E(id,'min(max(kp*er + x, lo), hi)','er, x',`kp = ${s(Kp)}, lo = ${s(lo)}, hi = ${s(hi)}`);w(err,[id,'er']);w([id+'X','y'],[id,'x']);return [id,'y'];};
+  if(!inv){const lo=Math.PI-num(p.amaxR,150.2)*D,hi=Math.PI-num(p.aminR,5)*D;let hold=['BLK','y'],fr=null;
+   E('ER','o - i','o, i');w(ord,['ER','o']);w(I,['ER','i']);
+   if(p.fr==='on'){const tdet=pos(p.tdet,0.005);
+    B.comp('QA','SR',{q0:'1'});B.comp('QF','SR',{q0:'0'});
+    E('FDU','t > tp && v < vf && a > 0.5 ? 1 : -1000','v, a',`tp = ${s(num(p.tprot,0.3))}, vf = ${s(num(p.Vfr,0.3))}`);w(V,['FDU','v']);w(['QA','q'],['FDU','a']);
+    B.comp('FD','INT',{y0:'0',lo:'0',hi:s(tdet)});w(['FDU','y'],['FD','u']);
+    E('TRG','d >= k && a > 0.5 ? 1 : 0','d, a','k = '+s(0.999*tdet));w(['FD','y'],['TRG','d']);w(['QA','q'],['TRG','a']);
+    E('ARM','v > 0.8 ? 1 : 0','v');w(V,['ARM','v']);w(['ARM','y'],['QA','s']);w(['TRG','y'],['QA','r']);w(['TRG','y'],['QF','s']);
+    E('TMU','q > 0.5 ? 1 : -1e6','q');w(['QF','q'],['TMU','q']);B.comp('TM','INT',{y0:'0',lo:'0',hi:'100'});w(['TMU','y'],['TM','u']);
+    E('TMD','m >= k ? 1 : 0','m','k = '+s(pos(p.tfr,0.1)));w(['TM','y'],['TMD','m']);w(['TMD','y'],['QF','r']);
+    E('HLD','b > 0.5 || f > 0.5 ? 1 : 0','b, f');w(['BLK','y'],['HLD','b']);w(['QF','q'],['HLD','f']);hold=['HLD','y'];fr=['QF','q'];}
+   const b=pi('PR',['ER','y'],num(p.KpR,1.0989),num(p.TiR,0.01092),lo,hi,Math.PI/2,hold);
+   if(fr){E('AO','f > 0.5 ? af : (pi - b)*k','b, f',`af = ${s(num(p.afr,140))}, k = ${s(1/D)}`);w(b,['AO','b']);w(fr,['AO','f']);out('fr',fr);}
+   else{E('AO','(pi - b)*k','b','k = '+s(1/D));w(b,['AO','b']);B.comp('F0','CONST',{v:'0'});out('fr',['F0','y']);}
+   out('ao',['AO','y']);out('blk',['BLK','y']);B.comp('C1','CONST',{v:'1'});out('cc',['C1','y']);
+   return B.def();}
+  const dI=Math.max(num(p.dI,0.1),1e-6),loI=Math.PI-num(p.amaxI,150.2)*D;
+  E('EC','o - m - i','o, i','m = '+s(dI));w(ord,['EC','o']);w(I,['EC','i']);
+  const bc=pi('PC',['EC','y'],num(p.KpI,0.63),num(p.TiI,0.01524),loI,Math.PI-num(p.aminC,70)*D,Math.PI-num(p.aminC,70)*D,['BLK','y']);
+  E('EG','max((r + (er <= 0 ? 0 : (er >= m ? dg : dg*er/m)) - g)*k, gl)','er, g',`r = ${s(num(p.gref,15))}, m = ${s(dI)}, dg = ${s(Math.max(num(p.dgc,16),0))}, k = ${s(D)}, gl = ${s(num(p.gemin,-31.17)*D)}`);
+  E('IE','o - i','o, i');w(ord,['IE','o']);w(I,['IE','i']);w(['IE','y'],['EG','er']);w(sin('gm'),['EG','g']);
+  const bg=pi('PG',['EG','y'],num(p.KpG,0.7506),num(p.TiG,0.0544),loI,Math.PI-num(p.aminG,90)*D,Math.PI-num(p.aminG,90)*D,['BLK','y']);
+  E('AO','(pi - max(c, g))*k','c, g','k = '+s(1/D));w(bc,['AO','c']);w(bg,['AO','g']);out('ao',['AO','y']);out('blk',['BLK','y']);
+  E('CC','c > g ? 1 : 0','c, g');w(bc,['CC','c']);w(bg,['CC','g']);out('cc',['CC','y']);B.comp('F0','CONST',{v:'0'});out('fr',['F0','y']);
+  return B.def();}
+ // A three-phase AC filter, per phase in a grounded star: a capacitor; tuned (C, L, R in series); second-order high-pass
+ // (C in series with L ∥ R); the double filter of the CIGRE benchmark (C₁ in series with (L + R + C₂) ∥ R_p)
+ function filtDef(c){const p=prm(c),B=builder(c.label||c.id),T=B.terms(p,PH,'abc'),k=['c','st','hp','cig'].includes(p.kind)?p.kind:'c';
+  const pos=(x,d)=>Math.max(num(x,d),1e-15),C1=pos(p.C1,1e-6),L=pos(p.L,0.1),R=Math.max(num(p.R,10),0),C2=pos(p.C2,10e-6),Rp=pos(p.Rp,100);
+  PH.forEach((x,i)=>{const cap=(id,C,a,b)=>{B.comp(id,'C',{C:s(C),v0:'0'});B.wire(a,[id,'p']);B.wire([id,'n'],b);};
+   if(k==='c'){cap('C'+x,C1,T[i],B.gnd());return;}
+   const m=B.node('M'+x);cap('C'+x,C1,T[i],m);
+   if(k==='st'){B.comp('L'+x,'L',{L:s(L),Rs:s(R)});B.wire(m,['L'+x,'a']);B.wire(['L'+x,'b'],B.gnd());}
+   else if(k==='hp'){B.comp('L'+x,'L',{L:s(L)});B.wire(m,['L'+x,'a']);B.wire(['L'+x,'b'],B.gnd());if(R>0){B.comp('R'+x,'R',{R:s(R)});B.wire(m,['R'+x,'a']);B.wire(['R'+x,'b'],B.gnd());}}
+   else{const q=B.node('N'+x);B.comp('L'+x,'L',{L:s(L),Rs:s(R)});B.wire(m,['L'+x,'a']);B.wire(['L'+x,'b'],q);cap('D'+x,C2,q,B.gnd());
+    B.comp('R'+x,'R',{R:s(Rp)});B.wire(m,['R'+x,'a']);B.wire(['R'+x,'b'],B.gnd());}});
+  return B.def();}
+
+ // 4.16: a three-phase series impedance, per phase R_s + L_s in series with (R_p1 + L_p) ∥ R_p2 (the AC systems of the benchmark)
+ function zserDef(c){const p=prm(c),B=builder(c.label||c.id),T1=B.terms(p,['a1','b1','c1'],'abc1'),T2=B.terms(p,['a2','b2','c2'],'abc2');
+  const Rs=Math.max(num(p.Rs,1),0),Ls=Math.max(num(p.Ls,0),0),Rp1=Math.max(num(p.Rp1,0),0),Lp=Math.max(num(p.Lp,0.1),0),Rp2=Math.max(num(p.Rp2,0),0);
+  PH.forEach((x,k)=>{let a=T1[k];
+   if(Ls>0){const m=B.node('S'+x);B.comp('LS'+x,'L',{L:s(Ls),Rs:s(Rs)});B.wire(a,['LS'+x,'a']);B.wire(['LS'+x,'b'],m);a=m;}
+   else if(Rs>0){const m=B.node('S'+x);B.comp('RS'+x,'R',{R:s(Rs)});B.wire(a,['RS'+x,'a']);B.wire(['RS'+x,'b'],m);a=m;}
+   const any=Lp>0||Rp1>0||Rp2>0;if(!any){B.wire(a,T2[k]);return;}
+   if(Lp>0){B.comp('LP'+x,'L',{L:s(Lp),Rs:s(Rp1)});B.wire(a,['LP'+x,'a']);B.wire(['LP'+x,'b'],T2[k]);}
+   else if(Rp1>0){B.comp('RQ'+x,'R',{R:s(Rp1)});B.wire(a,['RQ'+x,'a']);B.wire(['RQ'+x,'b'],T2[k]);}
+   if(Rp2>0){B.comp('RP'+x,'R',{R:s(Rp2)});B.wire(a,['RP'+x,'a']);B.wire(['RP'+x,'b'],T2[k]);}});
+  return B.def();}
+
+ const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef,CHB:chbDef,SPLL:spllDef,SSSC:ssscDef,MMC:mmcDef,MMCC:mmccDef,LCC6:lcc6Def,LCCS:lccsDef,LCCC:lcccDef,FILT3:filtDef,ZSER3:zserDef};
  function defOf(c){return DEFS[c.type](c);}
 
  // 4.9.1 (ROADMAP §52): the parts with two implementations, and a copy of a project with one implementation everywhere
  // (the SciPy export takes the detailed one: same model, made of elements that solver has)
- const IMPL_TYPES=['TOWER','SAI','CHB','SPLL','MMC'];
+ const IMPL_TYPES=['TOWER','SAI','CHB','SPLL','MMC','LCC6','LCCS'];
  // (the default of a part: 'blocks' for the parts that were definitions before 4.9.1, 'fast' for the new ones, 4.10)
  function forceImpl(project,impl){if(!project)return project;const has=list=>(list||[]).some(c=>IMPL_TYPES.includes(c.type)&&(c.params?.impl||P.defaults(c.type).impl||'blocks')!==impl);
   if(!has(project.components)&&!Object.values(project.subcircuits||{}).some(d=>has(d.components)))return project;

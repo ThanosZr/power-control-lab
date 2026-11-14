@@ -1524,6 +1524,50 @@
     scope:{panes:[[['Y:CT1/PP','P σταθμού 1 (pu)'],['Y:CT2/PP','P σταθμού 2 (pu)']],[['Y:CT1/Fvdc','V_dc 1 (pu)'],['Y:CT2/Fvdc','V_dc 2 (pu)']],[['Y:MMC1/IDC','I_dc 1'],['Y:MMC2/IDC','I_dc 2']],
      [['Y:MMC1/IAa','i_a 1'],['Y:MMC1/IAb','i_b 1'],['Y:MMC1/IAc','i_c 1']],arm],window:{unit:'s',n:0.2}},
     meta:{hvdc:{model,N,ev,ectl:mmc.ectl,S:1059e6,Vdc:640e3,Vac:333e3,C:mmc.C,Larm:0.05,Ron:1e-3,Sk:10e9,uk:18,len:70}}});}});
+ // ------------------------------------------------------------------ 4.16 (§42): the first CIGRE HVDC benchmark (LCC)
+ // The network of the benchmark at 50 Hz (Faruque et al. 2006 Fig. 1 and Table V, Watson & Arrillaga App. D), the transformers
+ // and the controls of the example of the benchmark in PSCAD; the events of Faruque et al. (at 1,0 s for 0,15 s, 0,1 Ω)
+ const LCC_EV={ss:'Μόνιμη κατάσταση',step:'Βήμα της εντολής ρεύματος 1 → 0,9 pu στο 1,0 s',dcf:'Σφάλμα DC στο μέσο της γραμμής (1,0–1,15 s)',ac1:'Σφάλμα φάσης a–γη στον ζυγό του αντιστροφέα (1,0–1,15 s)',ac3:'Τριφασικό σφάλμα στον ζυγό του αντιστροφέα (1,0–1,15 s)'};
+ T.push({id:'hvdc_lcc',group:'HVDC: LCC (4.16)',title:'Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW)',theory:'formula',topology:'hvdc_lcc',
+  options:[{k:'model',label:'Μοντέλο σταθμών',options:[['fast','Λεπτομερές (γρήγορη υλοποίηση των γεφυρών)'],['blocks','Λεπτομερές (αναλυτική: θυρίστορ, PLL, συγκριτές)'],['avg','Μέσο μοντέλο (χωρίς μεταγωγές)']],def:'fast'},
+   {k:'ev',label:'Γεγονός',options:Object.entries(LCC_EV),def:'ss'},
+   {k:'gref',label:'γ_ref του αντιστροφέα',options:[['15','15° (benchmark)'],['18','18°']],def:'15'},
+   {k:'fr',label:'Εξαναγκασμένη καθυστέρηση στον ανορθωτή',options:[['off','Όχι (benchmark)'],['on','Ναι (α = 140° για 0,1 s)']],def:'off'}],
+  desc:'Μονοπολική ζεύξη 500 kV, 2 kA με μετατροπείς 12 παλμών, όπως το πρώτο benchmark HVDC της CIGRE: ασθενή δίκτυα AC (SCR 2,5) 345 kV (ανορθωτής, 1,088 pu ∠22,18°) και 230 kV (αντιστροφέας, 0,935 pu ∠−23,14°) με εμπεδήσεις που αποσβένουν στη 2η αρμονική, πυκνωτές και φίλτρα (11η/13η και υψιπερατό), μετασχηματιστές YNy0 και YNd1 με u_k 18 %, αντιδραστήρες εξομάλυνσης 0,5968 H και γραμμή DC ως ισοδύναμο T (2 × 2,5 Ω, 26 μF). Ο ανορθωτής ρυθμίζει το ρεύμα· ο αντιστροφέας το γ (15°), με έλεγχο ρεύματος με περιθώριο 0,1 pu και VDCOL που δίνει και την εντολή του ανορθωτή. Τα δίκτυα AC ξεκινούν από τη μόνιμη κατάσταση με τις γέφυρες μπλοκαρισμένες ως τα 40 ms.',
+  tasks:['Μόνιμη κατάσταση: σύγκρινε V_d, α του ανορθωτή, α και γ του αντιστροφέα με την κάρτα (τύποι του Kundur) και με τα αποτελέσματα του benchmark (Faruque 2006: α_r ≈ 16,9°, α_i ≈ 141,9°, γ ≈ 15,1°).','Βήμα ρεύματος: ποιος σταθμός ρυθμίζει το ρεύμα και ποιος την τάση; Πόσο αλλάζει το α του ανορθωτή;','Σφάλμα DC: τι κάνει ο VDCOL στην εντολή, και σε πόσο χρόνο ξαναβρίσκει η ζεύξη τα 1000 MW μετά την εκκαθάριση;','Σφάλματα AC στον αντιστροφέα: πότε έχουμε αποτυχία μετάβασης; Δες τη σημαία cf και το γ. Πόσο φτάνει το ρεύμα DC;','Μέσο μοντέλο: ποια μεγέθη δίνει σωστά (V_d, I_d, P, Q, α) και τι δεν δείχνει (αρμονικές, αποτυχία μετάβασης);'],
+  build(o){const model=['fast','blocks','avg'].includes(o.model)?o.model:'fast',ev=LCC_EV[o.ev]?o.ev:'ss',f=50,gref=o.gref==='18'?18:15;
+   const st={model:model==='avg'?'avg':'det',impl:model==='blocks'?'blocks':'fast',uk:18,f,conn:'bus'};
+   const comps=[],wires=[];const vpk=(u,pu)=>+(pu*u*Math.SQRT2/Math.sqrt(3)).toPrecision(8);
+   // rectifier side
+   comps.push(C('SR','VAC3',40,300,{Vpk:vpk(345e3,1.088),f,phase:22.18,seq:'abc',Rs:0,Ls:0,conn:'bus'},{label:'345 kV · 1,088 pu ∠22,18°'}),C('GR','GND',40,380,{},{label:'0 V'}),
+    C('ZR','ZSER3',160,300,{Rs:3.737,Ls:0,Rp1:0,Lp:0.151,Rp2:2160.633,conn:'bus'},{label:'Z δικτύου'}),J('JR',280,300),
+    C('FR1','FILT3',280,440,{kind:'c',C1:3.342e-6,conn:'bus'},{label:'C 3,342 μF'}),C('FR2','FILT3',380,440,{kind:'cig',C1:6.685e-6,L:0.1364,R:29.76,C2:74.28e-6,Rp:261.87,conn:'bus'},{label:'φίλτρο 11/13'}),
+    C('FR3','FILT3',480,440,{kind:'hp',C1:6.685e-6,L:0.0136,R:83.32,conn:'bus'},{label:'υψιπερατό'}),
+    C('STR','LCCS',600,300,{...st,Sn:603.73e6,U1:345e3,U2:213.4557e3},{label:'ανορθωτής'}),C('GS1','GND',680,400,{},{label:'0 V'}),
+    C('CR','LCCC',600,560,{mode:'rect',iext:'sig',fr:o.fr==='on'?'on':'off',afr:140,tfr:0.1,Vfr:0.3,tdet:0.005,tprot:0.3},{label:'έλεγχος ανορθωτή'}));
+   wires.push(['SR:abc','ZR:abc1'],['SR:n','GR:g'],['ZR:abc2','JR:j'],['JR:j','FR1:abc'],['JR:j','FR2:abc'],['JR:j','FR3:abc'],['JR:j','STR:abc'],['STR:n','GS1:g']);
+   // DC: smoothing reactors and the T line
+   comps.push(C('LR','L',780,260,{L:0.5968},{label:'0,5968 H'}),C('R1','R',880,260,{R:2.5},{label:'2,5 Ω'}),J('JM',960,260),C('CM','C',960,360,{C:26e-6},{rot:1,label:'26 μF'}),C('GM','GND',960,420,{},{label:'0 V'}),
+    C('R2','R',1040,260,{R:2.5},{label:'2,5 Ω'}),C('LI','L',1140,260,{L:0.5968},{label:'0,5968 H'}));
+   wires.push(['STR:p','LR:a'],['LR:b','R1:a'],['R1:b','JM:j'],['JM:j','CM:p'],['CM:n','GM:g'],['JM:j','R2:a'],['R2:b','LI:a']);
+   // inverter side (the station flipped: its n on the line, its p grounded)
+   comps.push(C('STI','LCCS',1320,300,{...st,Sn:591.79e6,U1:230e3,U2:209.2288e3},{label:'αντιστροφέας',flip:true}),C('GS2','GND',1240,400,{},{label:'0 V'}),
+    C('CI','LCCC',1320,560,{mode:'inv',gref,Iord:ev==='step'?'0:1, 1:0.9':'1'},{label:'έλεγχος αντιστροφέα',flip:true}),
+    J('JI',1640,300),C('FI1','FILT3',1640,440,{kind:'c',C1:7.522e-6,conn:'bus'},{label:'C 7,522 μF'}),C('FI2','FILT3',1540,440,{kind:'cig',C1:15.04e-6,L:0.0606,R:13.23,C2:167.2e-6,Rp:116.38,conn:'bus'},{label:'φίλτρο 11/13'}),
+    C('FI3','FILT3',1440,440,{kind:'hp',C1:15.04e-6,L:0.0061,R:37.03,conn:'bus'},{label:'υψιπερατό'}),
+    C('ZI','ZSER3',1760,300,{Rs:0.7406,Ls:0.0365,Rp1:0.7406,Lp:0.0365,Rp2:24.81,conn:'bus'},{label:'Z δικτύου',flip:true}),
+    C('SI','VAC3',1880,300,{Vpk:vpk(230e3,0.935),f,phase:-23.14,seq:'abc',Rs:0,Ls:0,conn:'bus'},{label:'230 kV · 0,935 pu ∠−23,14°',flip:true}),C('GI','GND',1880,380,{},{label:'0 V'}));
+   wires.push(['LI:b','STI:n'],['STI:p','GS2:g'],['STI:abc','JI:j'],['JI:j','FI1:abc'],['JI:j','FI2:abc'],['JI:j','FI3:abc'],['JI:j','ZI:abc1'],['ZI:abc2','SI:abc'],['SI:n','GI:g']);
+   // controls: the measured current and voltage of each station, the γ of the inverter, the order of the rectifier from the inverter (VDCOL)
+   wires.push(['STR:id','CR:id'],['STR:vd','CR:vd'],['CR:ao','STR:ao'],['CR:blk','STR:blk'],['CI:iord','CR:iref'],
+    ['STI:id','CI:id'],['STI:vd','CI:vd'],['STI:gm','CI:gm'],['CI:ao','STI:ao'],['CI:blk','STI:blk']);
+   if(ev==='dcf'){comps.push(C('FDC','SW',1020,360,{gate:'sig',model:'mos',Ron:0.1,Roff:1e9,body:false},{rot:1,label:'σφάλμα DC'}),C('KDC','CONST',1100,440,{v:'0:0, 1:1, 1.15:0'}),C('GF','GND',1020,440,{},{label:'0 V'}));
+    wires.push(['JM:j','FDC:d'],['FDC:s','GF:g'],['KDC:y','FDC:g']);}
+   if(ev==='ac1'||ev==='ac3'){comps.push(C('FAC','FLT3',1640,180,{kind:ev==='ac1'?'ag':'abcg',Rf:0.1,Rg:0,ton:1,toff:1.15,clr:'inst',conn:'bus'},{label:'σφάλμα AC'}));wires.push(['JI:j','FAC:abc']);}
+   return project(comps,wires,{version:4,solve:{tbase:0.02,init:'ac'},sim:{hDiv:400,method:'TR',speed:0.05,stopT:ev==='ss'?1.5:2},
+    scope:{panes:[[['Y:CR/KV','V_d ανορθωτή (pu)'],['Y:CI/KV','V_d αντιστροφέα (pu)']],[['Y:CR/FI','I_d ανορθωτή (pu)'],['Y:CI/FI','I_d αντιστροφέα (pu)'],['Y:CI/ORD','εντολή (VDCOL)']],
+     [['Y:CR/AO','α ανορθωτή (°)'],['Y:CI/AO','α αντιστροφέα (°)'],['Y:STI/GM','γ αντιστροφέα (°)']],[['Y:STI/CF','αποτυχία μετάβασης'],['Y:CI/CC','αντιστροφέας σε έλεγχο ρεύματος']]],window:{unit:'s',n:0.4}},
+    meta:{lcc:{model,ev,gref,Idn:2000,Vdn:500e3,r:{U1:345e3,U2:213.4557e3,Sn:603.73e6,uk:18},i:{U1:230e3,U2:209.2288e3,Sn:591.79e6,uk:18}}}});}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
  root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};

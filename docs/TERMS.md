@@ -142,7 +142,20 @@
 | DC overvoltage limiter | όριο υπέρτασης DC (4.15) |
 | fault clearing at current zero | εκκαθάριση σφάλματος στον μηδενισμό του ρεύματος (4.15) |
 | integrator windup | συσσώρευση (windup) του ολοκληρωτή (4.15) |
+| line-commutated converter (LCC), valve, six-pulse / twelve-pulse bridge | μετατροπέας φυσικής μετάβασης (LCC), βαλβίδα, γέφυρα 6 / 12 παλμών (4.16) |
+| firing (delay) angle α, extinction (margin) angle γ, overlap angle μ | γωνία έναυσης α, γωνία σβέσης γ, γωνία επικάλυψης μ (4.16) |
+| natural commutation point | φυσικό σημείο μετάβασης (4.16) |
+| commutation voltage, commutation reactance X_c | τάση μεταγωγής, αντίδραση μεταγωγής X_c (4.16) |
+| commutation failure | αποτυχία μετάβασης (4.16) |
+| constant current (CC) control, current margin | έλεγχος σταθερού ρεύματος (CC), περιθώριο ρεύματος (4.16) |
+| constant extinction angle (CEA) control | έλεγχος σταθερής γωνίας σβέσης (CEA, γ σταθερό) (4.16) |
+| voltage-dependent current order limiter (VDCOL) | όριο της εντολής ρεύματος από την τάση (VDCOL) (4.16) |
+| phase-locked oscillator (PLO), equidistant firing | ταλαντωτής κλειδωμένος στη φάση (PLO), ισαπέχουσα πυροδότηση (4.16) |
+| forced retard | εξαναγκασμένη καθυστέρηση (4.16) |
+| turn-off time t_q | χρόνος σβέσης t_q (4.16) |
+| smoothing reactor | αντιδραστήρας εξομάλυνσης (4.16) |
+| short-circuit ratio (SCR) | λόγος βραχυκύκλωσης (SCR) (4.16) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
-PWM, SPWM, SVPWM, PLL, FACTS, SSSC, CHB, MMC, HVDC, LCC, AVM, CCSC, NLC, ULM, FDCM, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.
+PWM, SPWM, SVPWM, PLL, PLO, FACTS, SSSC, CHB, MMC, HVDC, LCC, CEA, VDCOL, AVM, CCSC, NLC, ULM, FDCM, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.

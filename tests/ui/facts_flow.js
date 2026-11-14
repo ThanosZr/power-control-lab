@@ -2,6 +2,7 @@
 // current, the injected voltage, X and V_C against the closed form), the detailed arm from the tutorial's option, and
 // the three-phase one on the 150 kV network (the phasor solution of the card against the run, the three phases).
 // 4.14: the MMC-HVDC link with its card (Model 4) and the energy per MVA for N = 400 and 20.
+// 4.16: the LCC benchmark with its card (formulas and PSCAD), the average model.
 // No errors on the page. Needs Node + Playwright and the app's server.
 // Usage: python run.py --no-browser --port 8765  then  node tests/ui/facts_flow.js http://127.0.0.1:8765/ <out-dir>
 const {chromium}=require('playwright');const fs=require('fs');const OUT=process.argv[3]||'.';
@@ -47,6 +48,20 @@ const diff=s=>parseFloat(String(s).replace(',','.').replace('−','-'));
  R.kj400=await kj();await p.selectOption('#tut-options [data-topt="N"]','20');await p.waitForTimeout(1500);R.kj20=await kj();
  assert(R.kj400>25&&R.kj400<35&&Math.abs(R.kj20/R.kj400-1)<1e-3,'the same energy for N = 400 and 20: '+R.kj400+' '+R.kj20);
  await p.screenshot({path:OUT+'/hvdc_mmc.png'});
+ // 4.16: the CIGRE HVDC benchmark (LCC) to the steady state: the card's formulas against the run, and the run against
+ // the PSCAD results of the benchmark (the second table); the average model builds and runs
+ await p.goto(base+'?tutorial=hvdc_lcc');await p.waitForTimeout(1500);
+ assert(await p.evaluate(()=>!window.PCL.S.error),'hvdc_lcc builds: '+await p.evaluate(()=>window.PCL.S.error));
+ t0=Date.now();await runTo(1.5);R.wallLcc=(Date.now()-t0)/1000;
+ R.lcc=await p.$$eval('#theory table.cmp',ts=>ts.map(t=>[...t.querySelectorAll('tbody tr')].map(r=>[...r.cells].map(c=>c.textContent))));
+ assert(R.lcc.length===2&&R.lcc[0].length===3&&R.lcc[1].length===6,'two tables in the LCC card '+JSON.stringify(R.lcc));
+ for(const r of R.lcc[0])assert(Math.abs(diff(r[3]))<1.5,'lcc formulas: '+JSON.stringify(r));
+ for(const r of R.lcc[1])assert(Math.abs(diff(r[3]))<2,'lcc against PSCAD: '+JSON.stringify(r));
+ assert(/LCC-HVDC/.test(await p.$eval('#theory',e=>e.textContent)),'LCC badge');
+ await p.screenshot({path:OUT+'/hvdc_lcc.png'});
+ await p.selectOption('#tut-options [data-topt="model"]','avg');await p.waitForTimeout(1500);
+ assert(await p.evaluate(()=>!window.PCL.S.error&&window.PCL.editor.comp('STR').params.model==='avg'),'average model chosen');
+ await runTo(0.3);assert(await p.evaluate(()=>Number.isFinite(window.PCL.S.sim.now('Y:CR/KV'))),'average model runs');
  assert(!errs.length,'page errors: '+errs.join(' | '));
- fs.writeFileSync(OUT+'/facts_flow.json',JSON.stringify(R,null,1));console.log(JSON.stringify({ok:true,wallDet:R.wallDet,wall3:R.wall3,wallHvdc:R.wallHvdc}));await b.close();
+ fs.writeFileSync(OUT+'/facts_flow.json',JSON.stringify(R,null,1));console.log(JSON.stringify({ok:true,wallDet:R.wallDet,wall3:R.wall3,wallHvdc:R.wallHvdc,wallLcc:R.wallLcc}));await b.close();
 })().catch(e=>{console.error(e);process.exit(1);});

@@ -501,6 +501,54 @@
   m.n=n;m.cnt=n;return m.disc?'|'+n:'';}
  function mmcSave(m){return {n:m.n,cnt:m.cnt,kS:m.kS,blk:m.blk,first:m.first,order:m.order.slice()};}
  function mmcLoad(m,o){m.n=o.n;m.cnt=o.cnt;m.kS=o.kS;m.blk=o.blk;m.first=o.first;if(o.order&&o.order.length===m.order.length)m.order.set(o.order);}
+ // 4.16 (§42): the six-pulse bridge (LCC). Valve k = 1…6 (index 0…5) on phase a, c, b, a, c, b; the odd valves on top (anode
+ // on the phase, cathode on p), the even ones below (anode on n). Valve k conducts after valve k − 2 of its row; its natural
+ // firing point is the upward zero of its commutation voltage (e_a − e_c for valve 1), its γ is counted from its extinction
+ // to the upward zero of the voltage it then sees (e_a − e_b for valve 1, the downward zero of the commutation voltage of
+ // valve k + 2). e = the commutation voltages: the sync voltages without their zero sequence, turned by the shift. THEORY §8ω.
+ const LCC_PH=[0,2,1,0,2,1],P2=2*Math.PI,wrap2=x=>x-P2*Math.floor(x/P2);
+ function lccCom(va,vb,vc,sh,out){const al=(2*va-vb-vc)/3,be=(vb-vc)/Math.sqrt(3),c=Math.cos(sh),s=Math.sin(sh),a2=al*c-be*s,b2=al*s+be*c;
+  const e=[a2,-a2/2+b2*Math.sqrt(3)/2,-a2/2-b2*Math.sqrt(3)/2];
+  for(let k=0;k<6;k++){const q=LCC_PH[k],r=LCC_PH[(k+4)%6];out[k]=k%2===0?e[q]-e[r]:e[r]-e[q];}return out;}
+ function lccMeasInit(st){st.mt=-1;st.mu=new Float64Array(6);st.tnat=new Float64Array(6).fill(NaN);st.toff=new Float64Array(6).fill(NaN);st.won=new Uint8Array(6);
+  st.gq=new Float64Array(6).fill(NaN);st.gn=0;st.am=0;st.gm=0;st.gl=0;st.cfT=-1e9;st.cfn=0;}
+ // one pass of the measurement at t (states only when commit is true): the upward zero crossings of the commutation voltages
+ // (linear between the passes) give the natural firing points, the downward ones the γ of the valve before in the same row;
+ // a valve that conducts again at its γ zero (or is still conducting there) failed to commutate: γ = 0 and the flag cf for one
+ // period. α = ω·(t_on − t_nat), γ = ω·(t_zero − t_off), with ω of the oscillator. gm: the least γ of the last six valves.
+ function lccMeasure(b,st,t,u,on,w,commit){const T0=P2/b.w0,dt=t-st.mt,fresh=st.mt>=0&&dt>0;let am=st.am,gl=st.gl,cfT=st.cfT;const gq=commit?st.gq:Float64Array.from(st.gq);let gn=st.gn;
+  const ww=Math.max(Math.abs(w),.1*b.w0);
+  for(let k=0;k<6;k++){const u0=st.mu[k],u1=u[k];if(!fresh)continue;
+   if(u0<0&&u1>=0){const tc=st.mt+dt*(u0/(u0-u1));if(commit)st.tnat[k]=tc;}
+   else if(u0>0&&u1<=0){const tc=st.mt+dt*(u0/(u0-u1)),j=(k+4)%6;
+    if(st.won[j]){gl=0;gq[gn%6]=0;gn++;cfT=t;if(commit)st.cfn++;}
+    else if(Number.isFinite(st.toff[j])){gl=ww*(tc-st.toff[j]);gq[gn%6]=gl;gn++;if(commit)st.toff[j]=NaN;}}}
+  for(let k=0;k<6;k++){const o=on[k]?1:0;if(o===st.won[k])continue;
+   if(o){const tn=st.tnat[k];if(Number.isFinite(tn)&&t-tn<T0)am=ww*(t-tn);if(commit)st.toff[k]=NaN;}
+   else if(commit)st.toff[k]=t;
+   if(commit)st.won[k]=o;}
+  let gm=Infinity;for(let k=0;k<6;k++)if(Number.isFinite(gq[k]))gm=Math.min(gm,gq[k]);if(!Number.isFinite(gm))gm=0;
+  if(commit){st.am=am;st.gl=gl;st.gn=gn;st.cfT=cfT;st.gm=gm;st.mt=t;for(let k=0;k<6;k++)st.mu[k]=u[k];}
+  const R=180/Math.PI;return {am:am*R,gm:gm*R,gl:gl*R,cf:t-cfT<T0?1:0};}
+ // the oscillator (the PLL block's equations: q of the voltage over its amplitude into a PI, θ = ∫ω, the input held since the
+ // previous pass) and the gate of valve k at t: ψ_k − α in [0, pw) mod 2π, ψ_k = θ + π/3 + shift − kπ/3 (ψ_a = θ + π/2 + shift
+ // the phase of e_a, the natural point of valve 1 at ψ_a = π/6)
+ function lccPlo(b,st,t,va,vb,vc,commit){const dt=Math.max(0,t-st.t);let th=st.th+dt*st.w;th-=P2*Math.floor(th/P2);
+  const al=(2*va-vb-vc)/3,be=(vb-vc)/Math.sqrt(3),amp=Math.hypot(al,be);
+  if(b.ini&&!st.ok&&amp>1e-9){th=Math.atan2(be,al);th-=P2*Math.floor(th/P2);if(commit)st.ok=true;}
+  const cs=Math.cos(th),sn=Math.sin(th),vq=-al*sn+be*cs;
+  const er=amp>1e-9?vq/amp:0,xi=st.xi+b.Ki*dt*er,w=b.w0+b.Kp*er+xi;if(commit){st.th=th;st.xi=xi;st.w=w;st.t=t;}return {th,w};}
+ function lccU(b,st,k,t,ao){return wrap2(st.th+st.w*(t-st.t)+b.c0-k*Math.PI/3-ao);}
+ // the firing order and the block of a bridge from the signals of the last pass (read at the gates, as the MMC arm its reference)
+ function lccIn(b,sv){return {ao:(b.ins.ao>=0&&sv?sv[b.ins.ao]:90)*Math.PI/180,blk:b.ins.blk>=0&&sv?sv[b.ins.blk]>=.5:false};}
+ // the next gate edge of the bridge after t (a pulse starts at u = 0 and ends at u = pw)
+ // block parameters and states (the element LCCX and the measurement block LCCM of the detailed implementation)
+ function lccSetup(b,p){const wn=2*Math.PI*Math.max(num(p.bw,1.125),1e-6),st=b.st;b.Kp=2*.7071*wn;b.Ki=wn*wn;b.w0=2*Math.PI*Math.max(num(p.f0,50),1e-6);
+  b.sh=num(p.shift,0)*Math.PI/180;b.c0=Math.PI/3+b.sh;b.ini=p.ini==='v';st.ok=false;b.pw=Math.min(179.9,Math.max(num(p.pw,120),1))*Math.PI/180;
+  st.th=num(p.th0,0)*Math.PI/180;st.w=b.w0;st.xi=0;st.t=0;b.u=new Float64Array(6);lccMeasInit(st);}
+ function lccEdge(b,st,t,sv){const q=lccIn(b,sv);if(q.blk||!(st.w>1e-6))return Infinity;let best=Infinity;
+  for(let k=0;k<6;k++){const u=lccU(b,st,k,t,q.ao),up=(P2-u)/st.w,dn=(u<b.pw?b.pw-u:P2+b.pw-u)/st.w;best=Math.min(best,up,dn);}return t+best;}
+ function lccGate(b,e,t,sv){const q=lccIn(b,sv);return !q.blk&&lccU(b,b.st,e.lccK,t,q.ao)<b.pw;}
  // nearest-level modulation and the choice of the cells (§50): n = round(v_ref/V_C) within ±N (0…N for half bridges); the
  // |n| cells inserted with the sign of n are those with the lowest voltages when the current charges them (sign(n)·i > 0),
  // the highest ones otherwise. With 'reduced' the cells stay as they are while n and its sign stay and the spread of the
@@ -697,6 +745,17 @@
     e.d1=add({k:'D',a:x,b,Ron:1e-6,Roff:1e9,Vf:0,on:false,key:c.id+'#d1',gk:'igbt',gon:false,gate:'sig',gIn:g});
     e.d2=add({k:'D',a:b,b:a,Ron:Math.max(N*Ron,1e-6),Roff:1e9,Vf:0,on:false,key:c.id+'#d2',gk:'igbt',gon:false,gate:'sig',gIn:g});
     info.blk=mkBlock(c,p,'MMCA',{chb:e,ft:false});}
+   // 4.16 (§42): the six-pulse bridge of thyristors with its firing inside (the fast implementation of LCC6): six gated diodes
+   // (R_on, V_f, latched while their current flows; a valve whose voltage turns positive within t_q of its extinction fires
+   // again by itself) with an RC snubber across each; the oscillator, the firing and the measurement of α and γ in the block
+   // of the element (lccPlo, lccU, lccMeasure); the start of each gate pulse is an event of the step (lccEdge). THEORY §8ω.
+   else if(T==='LCCX'){const ph=['a','b','c'].map(q=>node(c.id,q)),Pn=node(c.id,'p'),Nn=node(c.id,'n');info.pins=[ph[0],Pn];
+    const Ron=Math.max(num(p.Ron,0.01),1e-7),Roff=Math.max(num(p.Roff,1e8),1),Vf=Math.max(num(p.Vf,0),0),tq=Math.max(num(p.tq,0),0),Rs=num(p.Rsn,5000),Cs=num(p.Csn,0.05e-6);
+    const blk=mkBlock(c,p,'LCCX',{ft:false,ftIns:['va','vb','vc']}),V=[];
+    for(let k=0;k<6;k++){const q=ph[LCC_PH[k]],top=k%2===0,a=top?q:Nn,b=top?Pn:q;
+     V.push(add({k:'D',a,b,Ron,Roff,Vf,on:false,key:c.id+'#v'+(k+1),gk:'scr',gon:false,gate:'lcc',lccB:blk.i,lccK:k,tq}));
+     if(Rs>0&&Cs>0){const m=internal();add({k:'G',a,b:m,R:Rs,role:'Rsn'});add({k:'C',a:m,b,C:Cs,v:0,i:0,key:c.id+'#s'+(k+1)});}}
+    info.main=V[0];info.valves=V;info.blk=blk;blk.valves=V;lccSetup(blk,p);}
    else if(T==='IDC'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'I',a,b,I:num(p.I,1),sched:P.parseSched(p.sched),sigIn:p.ctl==='sig'?sn(c.id,'u'):undefined});}
    else if(T==='ILG'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];const w=P.lightningWave(p);
     if(!(w.eta>1e-6&&w.tau1>0&&w.tau2>0))throw new NetlistError(`${c.label||c.id}: δεν βρέθηκαν τ₁, τ₂ για T1 = ${P.eng(w.T1,'s')}, T2 = ${P.eng(w.T2,'s')} (το διπλοεκθετικό θέλει T2/T1 πάνω από περίπου 3).`);
@@ -722,7 +781,7 @@
     if(p.gate==='pwm'&&!(p.pwm&&byId.get(p.pwm)?.type==='PWM'))warnings.push(`${c.label||c.id}: διάλεξε μπλοκ PWM στις ρυθμίσεις (αλλιώς μένει OFF).`);}
    else if(T==='D'){const a=node(c.id,'a'),b=node(c.id,'k');info.pins=[a,b];info.main=add({k:'D',a,b,Ron:Math.max(num(p.Ron,1e-3),1e-7),Roff:Math.max(num(p.Roff,1e6),1),Vf:num(p.Vf,0),on:false,key:c.id});}
    else if(T==='SCR'){const a=node(c.id,'a'),b=node(c.id,'k');info.pins=[a,b];const fire=p.fire||'alpha';
-    const e={k:'D',a,b,Ron:Math.max(num(p.Ron,1e-3),1e-7),Roff:Math.max(num(p.Roff,1e6),1),Vf:num(p.Vf,0),on:false,key:c.id,gk:'scr',gon:false};
+    const e={k:'D',a,b,Ron:Math.max(num(p.Ron,1e-3),1e-7),Roff:Math.max(num(p.Roff,1e6),1),Vf:num(p.Vf,0),on:false,key:c.id,gk:'scr',gon:false,tq:Math.max(num(p.tq,0),0)};
     if(fire==='pwm'){e.gate='pwm';e.pwm=p.pwm;e.out=p.out||'a';if(!(p.pwm&&byId.get(p.pwm)?.type==='PWM'))warnings.push(`${c.label||c.id}: διάλεξε μπλοκ PWM για την έναυση.`);}
     else if(fire==='on')e.gate='on';
     else if(fire==='sig'){e.gate='sig';e.gIn=sn(c.id,'g');info.gIn=e.gIn;}
@@ -811,6 +870,7 @@
     else if(T==='DIV'){b.eps=Math.max(0,num(p.eps,1e-9));st.y=0;}
     else if(T==='SAT'){b.lo=num(p.lo,0);b.hi=num(p.hi,1);}
     else if(T==='CMP'){b.hys=Math.max(0,num(p.hys,0));st.s=0;st.f0=0;}
+    else if(T==='LCCM'){lccSetup(b,p);b.Ith=Math.max(num(p.Ith,1),0);b.ft=false;b.ftIns=['va','vb','vc','w','i1','i2','i3','i4','i5','i6'];}
     else if(T==='LOGIC')b.op=p.op||'or';
     else if(T==='MOD3'){b.mode=['spwm','svpwm','square'].includes(p.mode)?p.mode:'svpwm';}
     else if(T==='FEST'){b.RR=num(p.RR,2);b.LM=Math.max(num(p.LM,.3),1e-9);st.pa=num(p.psi0,0);st.pb=0;st.t=0;st.u=[0,0,0];}
@@ -834,7 +894,7 @@
      if(!(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type)))warnings.push(`${b.label}: διάλεξε μπλοκ PWM ή Ρολόι (αλλιώς η έξοδος μένει ${b.y0}).`);}
     else if(T==='EDGE'){b.edge=['rise','fall','both'].includes(p.edge)?p.edge:'rise';b.tw=Math.max(0,num(p.tw,0));st.p=0;st.n=0;st.tOn=null;}
     else if(T==='CLARKE'||T==='ICLARKE')b.pw=p.inv==='pow';
-    else if(T==='PLL'){const wn=2*Math.PI*Math.max(num(p.bw,20),1e-6);b.Kp=2*.7071*wn;b.Ki=wn*wn;b.w0=2*Math.PI*num(p.f0,50);st.th=num(p.th0,0)*Math.PI/180;st.w=b.w0;st.xi=0;st.t=0;}
+    else if(T==='PLL'){const wn=2*Math.PI*Math.max(num(p.bw,20),1e-6);b.Kp=2*.7071*wn;b.Ki=wn*wn;b.w0=2*Math.PI*num(p.f0,50);b.ini=p.ini==='v';b.lead=p.lead==='1';st.th=num(p.th0,0)*Math.PI/180;st.w=b.w0;st.xi=0;st.t=0;st.ok=false;}
     // 4.10: nearest-level modulation with sorting (a discrete block on a clock), and the single-phase SOGI-PLL
     else if(T==='NLC'){b.N=Math.max(1,Math.min(64,Math.round(num(p.N,10))));b.hb=p.cell==='hb';b.Vdc=Math.max(num(p.Vdc,1000),1e-9);b.avg=p.norm!=='nom';b.red=p.sel==='reduced';b.trg=p.sel==='trigger'?1:0;b.band=Math.max(num(p.band,20),0);
      b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';st.last=null;st.s=new Array(b.N).fill(0);st.n=0;st.sw=0;st.vav=b.Vdc;b.inV=Array.from({length:b.N},(_,k)=>'v'+(k+1));
@@ -884,7 +944,9 @@
   for(const k of ctrls)if(k.mode==='ext')chk(k.dIn,k.label+'.d');
   for(const e of els)if(e.gate==='sig'){const c=compInfo.get(e.cid);chk(e.gIn,(c?.label||e.cid)+'.g');}
   if(loose.length)warnings.push('Είσοδοι σήματος χωρίς πηγή (διαβάζονται ως 0): '+loose.slice(0,6).join(', ')+(loose.length>6?' …':'')+'.');
-  const deps=blocks.map(b=>b.ft?[...new Set(Object.entries(b.ins).filter(([k,n])=>k!=='tr'&&n>=0&&drv.has(n)).map(([,n])=>drv.get(n)))]:[]);
+  // 4.16: a block without feedthrough may still read some inputs within the pass (ftIns: the bridge reads its sync voltages and
+  // its valve currents, but its firing order only at the gates, after the pass): it follows the blocks that drive those inputs
+  const deps=blocks.map(b=>b.ft||b.ftIns?[...new Set(Object.entries(b.ins).filter(([k,n])=>k!=='tr'&&n>=0&&drv.has(n)&&(b.ft||b.ftIns.includes(k))).map(([,n])=>drv.get(n)))]:[]);
   const indeg=blocks.map((b,i)=>deps[i].length),users=blocks.map(()=>[]);deps.forEach((d,i)=>d.forEach(p=>users[p.i].push(blocks[i])));
   const ready=blocks.filter((b,i)=>!indeg[i]),order=[];
   while(ready.length){ready.sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));const b=ready.shift();order.push(b);for(const u of users[b.i])if(--indeg[u.i]===0)ready.push(u);}
@@ -1404,8 +1466,13 @@
      case 'IPARK':{const d=rd(I.d),q=rd(I.q),th=rd(I.th),c=Math.cos(th),sn=Math.sin(th);ys={al:d*c-q*sn,be:d*sn+q*c};break;}
      case 'PLL':{ // synchronous-frame PLL: q-component of the voltage, normalised by the amplitude, drives a PI to ω; θ = ∫ω
       const dt=Math.max(0,this.t-st.t),P2=2*Math.PI;let th=st.th+dt*st.w;th-=P2*Math.floor(th/P2);
-      const a=rd(I.a),bb=rd(I.b),c=rd(I.c),al=(2*a-bb-c)/3,be=(bb-c)/Q3,cs=Math.cos(th),sn=Math.sin(th),vd=al*cs+be*sn,vq=-al*sn+be*cs,amp=Math.hypot(al,be);
-      const e=amp>1e-9?vq/amp:0,xi=st.xi+b.Ki*dt*e,w=b.w0+b.Kp*e+xi;if(!trial){st.th=th;st.xi=xi;st.w=w;st.t=this.t;}ys={th,w,amp:vd};break;}
+      const a=rd(I.a),bb=rd(I.b),c=rd(I.c),al=(2*a-bb-c)/3,be=(bb-c)/Q3,amp=Math.hypot(al,be);
+      if(b.ini&&!st.ok&&amp>1e-9){th=Math.atan2(be,al);th-=P2*Math.floor(th/P2);if(!trial)st.ok=true;} // 4.16: locked from the start (θ on the voltage at the first pass)
+      const cs=Math.cos(th),sn=Math.sin(th),vd=al*cs+be*sn,vq=-al*sn+be*cs;
+      const e=amp>1e-9?vq/amp:0,xi=st.xi+b.Ki*dt*e,w=b.w0+b.Kp*e+xi;if(!trial){st.th=th;st.xi=xi;st.w=w;st.t=this.t;}
+      // 4.16 (internal, the average LCC model): θ one step ahead, for a source driven by it (the sources read the signals of the
+      // previous step: without it the injected current lags by ω·h)
+      ys={th:b.lead?th+w*this.h:th,w,amp:vd};break;}
      // 4.10: the single-phase SOGI-PLL (states integrated with the input held since the previous evaluation, as PLL and INT)
      case 'SPLX':{const dt=Math.max(0,this.t-st.t),P2=2*Math.PI,cl=v=>Math.min(1e9,Math.max(-1e9,v)),al=cl(st.x1+dt*st.d1),be=cl(st.x2+dt*st.d2),xi=cl(st.xi+dt*st.dxi),x0=b.k0>0?cl(st.x0+dt*st.d0):0;
       let th=cl(st.th+dt*st.w);th-=P2*Math.floor(th/P2);
@@ -1414,6 +1481,11 @@
      // 4.10: the cell voltages and the current of an arm, for its modulator (states: no feedthrough from the insertion pins)
      case 'CHBX':{const e=b.chb;ys={i:e.i,v:this.V(e.a)-this.V(e.b)};for(let k=0;k<e.N;k++)ys['v'+(k+1)]=e.vc[k];break;}
      // 4.14: an MMC arm: current, voltage, sum and mean of the capacitor voltages, inserted cells (states: no feedthrough)
+     // 4.16: the six-pulse bridge (its oscillator and the measurement of α and γ) and the measurement block of the detailed bridge
+     case 'LCCX':case 'LCCM':{const va=rd(I.va),vb=rd(I.vb),vc=rd(I.vc),X=b.type==='LCCX';let th=0,w;
+      if(X){const o=lccPlo(b,st,this.t,va,vb,vc,!trial);th=o.th;w=o.w;}else w=rd(I.w);
+      const on=X?b.valves.map(e=>e.on):[rd(I.i1),rd(I.i2),rd(I.i3),rd(I.i4),rd(I.i5),rd(I.i6)].map(i=>i>b.Ith);
+      ys=lccMeasure(b,st,this.t,lccCom(va,vb,vc,b.sh,b.u),on,w,!trial);if(X)ys.th=th;break;}
      case 'MMCA':{const e=b.chb,m=e.mmc;let sum=0;for(let k=0;k<e.N;k++)sum+=e.vc[k];ys={i:e.i,v:this.V(e.a)-this.V(e.bx),vs:sum,vav:sum/m.N,n:m.n};break;}
      case 'NLC':{if(disc&&this.blkDue(b,force)){nlcStep(b,st,rd(I.ref),rd(I.i),b.inV.map(k=>rd(I[k])));sampled=true;}
       ys={n:st.n,vav:st.vav,sw:st.sw};for(let k=0;k<b.N;k++)ys['s'+(k+1)]=st.s[k];break;}
@@ -1469,10 +1541,10 @@
   restoreSnapshot(S){if(!S||S.format!=='pcl-state'||!S.state)throw new NetlistError('Δεν είναι αποθηκευμένη κατάσταση του Power & Control Lab.');snapRestore(this,S.state);this.cache.clear();return this;}
   // the gate signature at t without changing the switches (the variable step looks ahead: a switching starts the next step small)
   gateSigPeek(t){let s='';for(const e of this.net.els){if(e.k!=='S'&&!e.gk)continue;let on=false;
-    if(e.gate==='on')on=true;else if(e.gate==='sig')on=((e.gIn>=0?this.sv[e.gIn]:0)>=.5)!==!!e.ginv;else if(e.gate==='pwm'){const k=this.ctrlById.get(e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
+    if(e.gate==='on')on=true;else if(e.gate==='sig')on=((e.gIn>=0?this.sv[e.gIn]:0)>=.5)!==!!e.ginv;else if(e.gate==='pwm'){const k=this.ctrlById.get(e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);else if(e.gate==='lcc')on=lccGate(this.net.sig.blocks[e.lccB],e,t,this.sv);
     s+=on?'1':'0';}for(const e of this.chbEls||[])s+=e.mmc?(e.mmc.disc?'|'+e.mmc.cnt:''):chbStates(e,this.sv,false);return s;}
   gateSig(t){let s='';for(const e of this.net.els){if(e.k!=='S'&&!e.gk)continue;let on=false;
-    if(e.gate==='on')on=true;else if(e.gate==='sig')on=((e.gIn>=0?this.sv[e.gIn]:0)>=.5)!==!!e.ginv;else if(e.gate==='pwm'){const k=this.net.ctrls.find(c=>c.id===e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
+    if(e.gate==='on')on=true;else if(e.gate==='sig')on=((e.gIn>=0?this.sv[e.gIn]:0)>=.5)!==!!e.ginv;else if(e.gate==='pwm'){const k=this.net.ctrls.find(c=>c.id===e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);else if(e.gate==='lcc')on=lccGate(this.net.sig.blocks[e.lccB],e,t,this.sv);
     if(e.k==='S')e.on=on;else{e.gon=on;if(e.gk==='igbt'&&!on)e.on=false;}s+=on?'1':'0';}for(const e of this.chbEls||[])s+=e.mmc?mmcSample(e,this.sv,t,this.h):chbStates(e,this.sv,true);return s;}
   // ------------------------------------------------------------ assembly
   // programs t:value of sources, resistances, constant-power loads and constant blocks: the times, and whether a value jumps at t (3.15)
@@ -1623,7 +1695,7 @@
       else{const x=Math.abs(v),x0=Math.abs(e.vPrev??0);if(x>g.Ub*(1+1e-9))bad.push({e,frac:x0<g.Ub?(g.Ub-x0)/(x-x0):0});}}
      continue;}
     if(e.on){const i=(v-e.Vf)/e.Ron;if(i<-1e-9*(1+Math.abs(e.iPrev||0))){const i0=e.iPrev??0;bad.push({e,frac:i0>0?i0/(i0-i):0});}}
-    else if(v>e.Vf+1e-7&&(!e.gk||e.gon||(init&&e.gk==='scr'))){const v0=e.vPrev??(e.Vf-1);bad.push({e,frac:v0<e.Vf?(e.Vf-v0)/(v-v0):0});}}
+    else if(v>e.Vf+1e-7&&(!e.gk||e.gon||(init&&e.gk==='scr')||(e.tq>0&&e.tOffQ!==undefined&&this.t-e.tOffQ<e.tq))){const v0=e.vPrev??(e.Vf-1);bad.push({e,frac:v0<e.Vf?(e.Vf-v0)/(v-v0):0});}}
    return bad;
   }
   commit(sol,h,mode){
@@ -1632,7 +1704,8 @@
     if(e.k==='L'){const v=this.V(e.a)-this.V(e.b);e.i1=e.i;e.i=e.g*v+e.J;}
     else if(e.k==='C'){const v=this.V(e.a)-this.V(e.b);e.v1=e.v;e.i=e.g*v+e.J;e.v=v;}
     else if(e.k==='D'){const v=this.V(e.a)-this.V(e.b),q=e.gap?.de;if(q)e.Dacc=e.on||Math.abs(v)<=q.U0?0:(e.Dacc||0)+h*deInt(e.vPrev??0,v,1,q.U0,q.k); // the effect builds only above U₀
-     e.vPrev=v;e.iPrev=e.on?(v-e.Vf)/e.Ron:v/e.Roff;if(e.gap&&e.on&&this.t+h>=e.gap.trig)e.trigDone=true;}
+     e.vPrev=v;e.iPrev=e.on?(v-e.Vf)/e.Ron:v/e.Roff;if(e.gap&&e.on&&this.t+h>=e.gap.trig)e.trigDone=true;
+     if(e.tq>0){if(e.wasOn&&!e.on)e.tOffQ=this.t;e.wasOn=e.on;}} // 4.16: a thyristor with t_q: the instant of its extinction
     else if(e.k==='CPL'){const v=this.V(e.a)-this.V(e.b);e.v0=v;if(Math.abs(v)<e.Vmin){e.g=e.Pnow/(e.Vmin*e.Vmin);e.J=0;}else{e.g=e.Pnow/(v*v);e.J=0;}}
     else if(e.k==='F'){const N=e.N,G=e.Gnow;e.psi1.set(e.psi);for(let k=0;k<N;k++){const [a,bb]=e.ports[k];e.psi[k]=e.base[k]+e.cc*(this.V(a)-this.V(bb));}
      for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=G[k*N+j]*(e.psi[j]-(e.p0?e.p0[j]:0));e.i[k]=s;}}
@@ -1845,6 +1918,7 @@
    for(const e of this.net.els){if(e.sched)sch(e.sched);if(e.k==='V'&&e.src.sched)sch(e.src.sched);}
    for(const k of this.net.ctrls){sch(k.dsched);if(k.mode==='pi')sch(k.ref);}
    for(const e of this.net.els)if(e.fire)for(const te of this.scrEdges(e))if(te>this.t+eps&&te<t)t=te;
+   for(const b of this.net.sig.blocks)if(b.type==='LCCX'){const te=lccEdge(b,b.st,this.t,this.sv);if(te>this.t+eps&&te<t)t=te;} // 4.16: the start and end of each gate pulse
    for(const e of this.net.els)if(e.gap&&!e.trigDone&&e.gap.trig>this.t+eps&&e.gap.trig<t)t=e.gap.trig; // spark-gap trigger
    // signal blocks: clock edges, ramp resets / extremes, programs, discrete updates
    for(const b of this.net.sig.blocks){
@@ -1924,7 +1998,9 @@
   // states of a steady start or of trapped charge). The nominal π not yet: its capacitances between the phases make loops of
   // capacitors, which the server's formulation (capacitor voltages as states) only solves with a tiny series R (very stiff)
   if(net.hasPi)throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη το π ονομαστικό των γραμμών από γεωμετρία (οι χωρητικότητες ανάμεσα στις φάσεις κάνουν βρόχους πυκνωτών): τρέχει μόνο ο λύτης της εφαρμογής. Τα μοντέλα CP και FD τρέχουν και στον SciPy (4.12).');
-  if(net.els.some(e=>e.sai||e.foot||e.k==='CHB'))throw new NetlistError('Εσωτερικό σφάλμα: συμπαγές στοιχείο (SAIX, RFX, CHBX) στην εξαγωγή για τον SciPy.');
+  if(net.els.some(e=>e.sai||e.foot||e.k==='CHB'||e.gate==='lcc'))throw new NetlistError('Εσωτερικό σφάλμα: συμπαγές στοιχείο (SAIX, RFX, CHBX, LCCX) στην εξαγωγή για τον SciPy.');
+  if(net.sig.blocks.some(b=>b.lead))throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη το μέσο μοντέλο του σταθμού LCC (4.16): τρέχει μόνο ο λύτης της εφαρμογής, ή διάλεξε το λεπτομερές.');
+  if(net.els.some(e=>e.tq>0))throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη τον χρόνο σβέσης t_q των θυρίστορ (4.16): τρέχει μόνο ο λύτης της εφαρμογής, ή βάλε t_q = 0.');
   const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm','gap','a1','b1','a2','b2','Z','tau','Rl','pts'];
   // synchronous machines (3.5): parameters and initial states; the server integrates ψ_α, ψ_β, ω, θ
   const smList=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm),smx=new Map(smList.map((m,i)=>[m,i]));
@@ -1982,7 +2058,7 @@
   const ims=imList.map(m=>({ph:m.ph.map(q=>({L:idx.get(q.L),V:idx.get(q.V)})),RR:m.RR,LM:m.LM,p:m.p,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{...m.st}}));
   const bix=new Map(net.sig.order.map((b,i)=>[b,i]));
   const blocks=net.sig.order.map(b=>{const o={id:b.id,type:b.type,ins:b.ins,outs:b.outs,st:JSON.parse(JSON.stringify(b.st))};
-   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw','xs','ys','train','learn','opt','lr','clip','l2','nl','jac','share','k','k0','N','hb','Vdc','avg','red','trg','band','inV'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
+   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw','xs','ys','train','learn','opt','lr','clip','l2','nl','jac','share','k','k0','N','hb','Vdc','avg','red','trg','band','inV','ini','sh','Ith'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
    if(b.type==='DCM')o.recs={w:{v:[[b.m,1]]},te:{i:[[idx.get(b.gy),b.psi]]}};
    if(b.type==='IM')o.im=imx.get(b.im);
    if(b.type==='SM')o.sm=smx.get(b.sm);

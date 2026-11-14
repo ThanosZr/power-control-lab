@@ -420,6 +420,76 @@ def _nn_step(b, st, x, e_in, fz, src=None):
     st['yraw'] = y
 
 
+# 4.16 (ROADMAP §42, THEORY §8ω): the measurement of a six-pulse bridge (LCCM), the same lines as web/studio/mna.js
+# (lccCom, lccMeasure). Valve k = 1…6 on phase a, c, b, a, c, b, the odd ones on top; e = the sync voltages without their zero
+# sequence, turned by the shift; the commutation voltage of valve k is e of its phase minus e of the valve before in its row.
+LCC_PH = (0, 2, 1, 0, 2, 1)
+
+
+def lcc_com(va, vb, vc, sh):
+    al, be = (2 * va - vb - vc) / 3, (vb - vc) / math.sqrt(3)
+    c, s = math.cos(sh), math.sin(sh)
+    a2, b2 = al * c - be * s, al * s + be * c
+    e = (a2, -a2 / 2 + b2 * math.sqrt(3) / 2, -a2 / 2 - b2 * math.sqrt(3) / 2)
+    return [e[LCC_PH[k]] - e[LCC_PH[(k + 4) % 6]] if k % 2 == 0 else e[LCC_PH[(k + 4) % 6]] - e[LCC_PH[k]] for k in range(6)]
+
+
+def lcc_measure(b, st, t, u, on, w, commit):
+    """One pass at t (states only when commit): the upward zeros of the commutation voltages (linear between the passes)
+    give the natural firing points, the downward ones the γ of the valve before in the same row; a valve that conducts at
+    its γ zero failed to commutate (γ = 0, cf for one period). Outputs in degrees."""
+    if 'mu' not in st or not isinstance(st.get('mu'), list):
+        st.update(mt=-1.0, mu=[0.0] * 6, tnat=[math.nan] * 6, toff=[math.nan] * 6, won=[0] * 6, gq=[math.nan] * 6, gn=0,
+                  am=0.0, gm=0.0, gl=0.0, cfT=-1e9, cfn=0)
+    T0 = 2 * math.pi / b['w0']
+    dt = t - st['mt']
+    fresh = st['mt'] >= 0 and dt > 0
+    am, gl, cfT, gn = st['am'], st['gl'], st['cfT'], st['gn']
+    gq = st['gq'] if commit else list(st['gq'])
+    ww = max(abs(w), 0.1 * b['w0'])
+    if fresh:
+        for k in range(6):
+            u0, u1 = st['mu'][k], u[k]
+            if u0 < 0 <= u1:
+                if commit:
+                    st['tnat'][k] = st['mt'] + dt * (u0 / (u0 - u1))
+            elif u0 > 0 >= u1:
+                tc, j = st['mt'] + dt * (u0 / (u0 - u1)), (k + 4) % 6
+                if st['won'][j]:
+                    gl = 0.0
+                    gq[gn % 6] = 0.0
+                    gn += 1
+                    cfT = t
+                    if commit:
+                        st['cfn'] += 1
+                elif math.isfinite(st['toff'][j]):
+                    gl = ww * (tc - st['toff'][j])
+                    gq[gn % 6] = gl
+                    gn += 1
+                    if commit:
+                        st['toff'][j] = math.nan
+    for k in range(6):
+        o = 1 if on[k] else 0
+        if o == st['won'][k]:
+            continue
+        if o:
+            tn = st['tnat'][k]
+            if math.isfinite(tn) and t - tn < T0:
+                am = ww * (t - tn)
+            if commit:
+                st['toff'][k] = math.nan
+        elif commit:
+            st['toff'][k] = t
+        if commit:
+            st['won'][k] = o
+    fin = [q for q in gq if math.isfinite(q)]
+    gm = min(fin) if fin else 0.0
+    if commit:
+        st.update(am=am, gl=gl, gn=gn, cfT=cfT, gm=gm, mt=t, mu=list(u))
+    R = 180 / math.pi
+    return {'am': am * R, 'gm': gm * R, 'gl': gl * R, 'cf': 1.0 if t - cfT < T0 else 0.0}
+
+
 def nlc_step(b, st, ref, i, v):
     """4.10: nearest-level modulation and the choice of the cells, as nlcStep in web/studio/mna.js (THEORY §8ο):
     n = round(v_ref/V_C) within ±N (0…N for half bridges); the |n| cells with the sign of n are the lowest when the current
@@ -2158,6 +2228,11 @@ class Circuit:
                 th -= P2 * math.floor(th / P2)
                 a, bb, c = rd(I.get('a')), rd(I.get('b')), rd(I.get('c'))
                 al, be = (2 * a - bb - c) / 3, (bb - c) / Q3
+                if b.get('ini') and not st.get('ok') and math.hypot(al, be) > 1e-9:   # 4.16: locked from the start
+                    th = math.atan2(be, al)
+                    th -= P2 * math.floor(th / P2)
+                    if not trial:
+                        st['ok'] = True
                 vd, vq, amp = al * math.cos(th) + be * math.sin(th), -al * math.sin(th) + be * math.cos(th), math.hypot(al, be)
                 e = vq / amp if amp > 1e-9 else 0.0
                 xi = st['xi'] + b['Ki'] * dt * e
@@ -2165,6 +2240,9 @@ class Circuit:
                 if not trial:
                     st['th'], st['xi'], st['w'], st['t'] = th, xi, w, t
                 ys = {'th': th, 'w': w, 'amp': vd}
+            elif ty == 'LCCM':           # 4.16: the measurement of α, γ and of a commutation failure of a bridge
+                u = lcc_com(rd(I.get('va')), rd(I.get('vb')), rd(I.get('vc')), b.get('sh', 0.0))
+                ys = lcc_measure(b, st, t, u, [rd(I.get('i%d' % (k + 1))) > b.get('Ith', 1.0) for k in range(6)], rd(I.get('w')), not trial)
             elif ty == 'DCM':
                 ys = {k: self.value(r, t, x, z) for k, r in (b.get('recs') or {}).items()}
             elif ty == 'MOD3':

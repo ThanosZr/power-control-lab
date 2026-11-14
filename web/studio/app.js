@@ -167,6 +167,10 @@ function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;
  // 4.14: the MMC and its control: what they do now
  if(c0.type==='MMCC'){const id=(S.pfx||'')+c0.id;return {text:'P '+fmt(s.now('Y:'+id+'/PP'),3)+' · Q '+fmt(s.now('Y:'+id+'/QQ'),3)+' pu'+(s.now('Y:'+id+'/BLK')>0.5?' · μπλοκαρισμένος':'')};}
  if(c0.type==='MMC'){const id=(S.pfx||'')+c0.id;return {text:'V_dc '+eng(s.now('Y:'+id+'/VDC'),'V',4)+' · I_dc '+eng(s.now('Y:'+id+'/IDC'),'A',3)};}
+ // 4.16: the LCC station, its bridge and its control
+ if(c0.type==='LCCS'){const id=(S.pfx||'')+c0.id;return {text:'V_d '+eng(s.now('Y:'+id+'/VDC'),'V',4)+' · I_d '+eng(s.now('Y:'+id+'/IDC'),'A',3)+' · γ '+fmt(s.now('Y:'+id+'/GM'),3)+'°'+(s.now('Y:'+id+'/CF')>0.5?' · αποτυχία μετάβασης':'')};}
+ if(c0.type==='LCC6'){const id=(S.pfx||'')+c0.id,m=c0.params?.impl==='blocks'?'/M':'/X';return {text:'α '+fmt(s.now('Y:'+id+m),3)+'° · γ '+fmt(s.now('Y:'+id+m+':gm'),3)+'°'+(s.now('Y:'+id+m+':cf')>0.5?' · αποτυχία μετάβασης':'')};}
+ if(c0.type==='LCCC'){const id=(S.pfx||'')+c0.id,inv=c0.params?.mode==='inv';return {text:'α '+fmt(s.now('Y:'+id+'/AO'),4)+'° · I_d '+fmt(s.now('Y:'+id+'/FI'),3)+' pu'+(inv?(s.now('Y:'+id+'/CC')>0.5?' · έλεγχος ρεύματος':' · έλεγχος γ'):'')+(s.now('Y:'+id+'/BLK')>0.5?' · μπλοκαρισμένος':'')};}
  if(c0.type==='SPLL'){const id=(S.pfx||'')+c0.id,f=c0.params?.impl==='blocks';return {text:'f '+eng(s.now('Y:'+id+(f?'/W':'/X:w'))/(2*Math.PI),'Hz',4)+' · Â '+eng(s.now('Y:'+id+(f?'/VD':'/X:amp')),'',3)};}
  if(c0.type==='EVC'){const id=(S.pfx||'')+c0.id;return {text:'u '+eng(s.now('Y:'+id+'/SAT'),'V',3)+' · τ* '+eng(s.now('Y:'+id+'/TQ'),'N·m',3)+' · keep '+eng(s.now('Y:'+id+'/KP'),'',3)};}
  if(c0.type==='AIC'){const id=(S.pfx||'')+c0.id,L=s.now('Y:'+id+'/NN1:L');return {text:'u '+eng(s.now('Y:'+id+'/SAT'),'',3)+' · e '+eng(s.now('Y:'+id+'/E'),'',3)+(Number.isFinite(L)?' · L '+eng(L,'',3):'')};}
@@ -233,6 +237,18 @@ const MOD_SIGS={CHB:p=>{const f=p.impl!=='blocks',N=Math.max(1,Math.min(64,Math.
   if(m==='m1')for(const x of ['a','b','c'])for(const [u,n] of [['U','άνω'],['L','κάτω']])L.push(['/'+u+x+'I',`ρεύμα, ${n} βραχίονας ${x}`],['/'+u+x+'N',`υπομονάδες μέσα, ${n} βραχίονας ${x}`],['/'+u+x+'N:vav',`μέση τάση πυκνωτή, ${n} βραχίονας ${x}`]);
   if(m==='m4')L.push(['/VCD','τάση του C_dc'],['/IDS','ρεύμα που παίρνει η πλευρά DC']);
   if(m!=='m4'&&p.ccsc!=='off')L.push(['/ZD','κυκλοφορούν ρεύμα, d (2ω₀)'],['/ZQ','κυκλοφορούν ρεύμα, q (2ω₀)'],['/UCa','τάση του CCSC, φάση a']);
+  return L;},
+ // 4.16 (§42): the LCC bridge, the twelve-pulse station and its control (names inside their definitions, netlib.js)
+ LCC6:p=>{const f=p.impl!=='blocks',m=f?'/X':'/M',L=[[m,'α της τελευταίας πυροδότησης (°, από το φυσικό σημείο)'],[m+':gm','γ, το μικρότερο των 6 τελευταίων σβέσεων (°)'],[m+':gl','γ της τελευταίας σβέσης (°)'],[m+':cf','αποτυχία μετάβασης (1 για μία περίοδο)'],
+   [f?'/X:th':'/PLL','γωνία του ταλαντωτή θ']];if(!f)L.push(['/PLL:w','κυκλική συχνότητα του ταλαντωτή ω'],...[1,2,3,4,5,6].map(k=>['/G'+k,'παλμός της βαλβίδας '+k]),...[1,2,3,4,5,6].map(k=>['/I'+k,'ρεύμα της βαλβίδας '+k]));return L;},
+ LCCS:p=>{const L=[['/VDC','τάση DC (p − n)'],['/IDC','ρεύμα DC (έξοδος του p)'],['/GM','γ (°)'],['/CF','αποτυχία μετάβασης'],...['a','b','c'].map(x=>['/V'+x,'τάση του ζυγού, φάση '+x])];
+  if(p.model==='avg')L.push(['/AA','α ως προς την τάση του ζυγού (°)'],['/FA','πλάτος της τάσης του ζυγού'],['/DL','γωνία της τάσης ως προς τον ταλαντωτή δ (rad)'],['/VD0','V_d0'],['/MU','επικάλυψη μ (rad)'],['/IRa','ρεύμα θεμελιώδους προς τον σταθμό, φάση a']);
+  else{const b=p.impl==='blocks'?'M':'X';L.push(['/BY/'+b,'α, γέφυρα Y (°)'],['/BD/'+b,'α, γέφυρα Δ (°)'],['/BY/'+b+':gm','γ, γέφυρα Y (°)'],['/BD/'+b+':gm','γ, γέφυρα Δ (°)']);}
+  return L;},
+ LCCC:p=>{const inv=p.mode==='inv',own=inv||p.iext!=='sig',L=[['/AO','εντολή α (°)'],['/FI','I_d (pu, μετά το φίλτρο του μετρητή)'],['/KV','V_d (pu)'],['/BLK','μπλοκάρισμα (1)']];
+  if(own)L.push(['/ORD','εντολή ρεύματος μετά τον VDCOL (pu)'],['/FV','V_d + k·I_d φιλτραρισμένη (είσοδος του VDCOL)'],['/VDL','όριο του VDCOL (pu)']);
+  if(inv)L.push(['/CC','σε έλεγχο ρεύματος (1)'],['/EC','σφάλμα ρεύματος με το περιθώριο'],['/PC','β του PI ρεύματος (rad)'],['/EG','σφάλμα του γ (rad)'],['/PG','β του PI του γ (rad)']);
+  else{L.push(['/ER','σφάλμα ρεύματος (pu)'],['/PR','β του PI ρεύματος (rad)']);if(p.fr==='on')L.push(['/QF','εξαναγκασμένη καθυστέρηση (1)'],['/FD','χρόνος με V_d < V_fr']);}
   return L;},
  MMCC:p=>[['/PP','P προς τον μετατροπέα (pu)'],['/QQ','Q προς τον μετατροπέα (pu)'],['/VD','v_d (pu)'],['/VQ','v_q (pu)'],['/ID','i_d (pu)'],['/IQ','i_q (pu)'],['/IDL','i_d,ref μετά το όριο (pu)'],['/IQL','i_q,ref μετά το όριο (pu)'],['/Fvdc','V_dc (pu, φιλτραρισμένη)'],['/Fidc','I_dc (pu, φιλτραρισμένο)'],['/VG','|v| (pu)'],['/TH','γωνία θ'],['/MA','m_a'],['/BLK','μπλοκάρισμα (1)'],['/BRK','εντολή διακόπτη AC (1 κλειστός)'],['/PL','προστασία υπερέντασης DC (1)']],
  SSSC:p=>[['/VR','αναφορά τάσης v_ref'],['/VQ','εντολή V_q (θετική: χωρητική)'],['/XM','μετρημένη αντίδραση X'],['/DTH','διόρθωση γωνίας Δθ (rad)'],['/VAF','μέση τάση πυκνωτών (φιλτραρισμένη)'],['/PLI/X','γωνία του ρεύματος θ_i − 90°'],['/PLI/X:amp','πλάτος του ρεύματος Î']]};
@@ -1637,6 +1653,27 @@ function hvdcTheory(){const s=S.sim,m=(S.tutMeta||{}).hvdc;if(!s||!m)return '';c
    rows.push(['v_W (ενέργεια των βραχιόνων) ≈ V_dc στους ακροδέκτες',vd,vw,'V']);if(ua!=null&&la!=null)rows.push(['(Σv_C,άνω − Σv_C,κάτω)/V_dc, φάση a (εξισορρόπηση)',NaN,(ua-la)/m.Vdc,'']);}
   rows.push(['Ρεύμα άνω βραχίονα a, κορυφή ≈ I_dc/3 + Î/2',Math.abs(Idc)/3+I/2,Math.max(Math.abs(avgOver(m.model==='m1'?'Y:MMC1/UaI':'Y:MMC1/AUa:i',1)?.max??NaN),Math.abs(avgOver(m.model==='m1'?'Y:MMC1/UaI':'Y:MMC1/AUa:i',1)?.min??NaN)),'A']);}
  return h+cmpRows(rows)+`<p class="small">ΔW βραχίονα ≈ ${eng(dW,'J')} από ${eng(Wa,'J')} (m = ${fmt(mm,3)}, cosφ = 1)· η κυμάτωση της Σv_C ≈ ΔW/(C/N·V_dc). P₁ = ${fmt(P1,4)} pu, P₂ = ${fmt(P2,4)} pu.</p>`;}
+// 4.16: the CIGRE HVDC benchmark (LCC). Kundur ch. 10 with the measured bus voltage, I_d and α (γ at the inverter): V_d of each
+// station, μ, the α of the inverter that the measured γ implies; then the run against the PSCAD results of the benchmark
+// (Faruque et al. 2006, Tables I–II). Twelve pulses: two bridges in series, each with E_LL = √(3/2)·V̂·U₂/U₁ and X_c = u_k·U₂²/S_n
+function lccTheory(){const s=S.sim,m=(S.tutMeta||{}).lcc;if(!s||!m)return '';const D=Math.PI/180,names={fast:'λεπτομερές (γρήγορη υλοποίηση των γεφυρών)',blocks:'λεπτομερές (αναλυτική υλοποίηση)',avg:'μέσο μοντέλο'};
+ const st=q=>{const n=q.U2/q.U1,Xc=q.uk/100*q.U2*q.U2/q.Sn;return {n,Xc,Rc:6/Math.PI*Xc};},R=st(m.r),I=st(m.i);
+ let h=`<div class="tm"><span class="badge">LCC-HVDC</span> ${names[m.model]||m.model} · 12 παλμοί (YNy0 + YNd1) · X_c = ${eng(R.Xc,'Ω')} / ${eng(I.Xc,'Ω')} ανά γέφυρα · R_c = (6/π)·X_c = ${eng(R.Rc,'Ω')} / ${eng(I.Rc,'Ω')} (ανορθωτής / αντιστροφέας)</div><ul class="eqs">
+  <li>V_d0 = 2·(3√2/π)·E_LL (Kundur (10.29)) με E_LL = √(3/2)·V̂·U₂/U₁ (πολική RMS στις βαλβίδες)· ανορθωτής V_d = V_d0·cos α − R_c·I_d (10.30), αντιστροφέας V_d = V_d0·cos γ − R_c·I_d (10.14)</li>
+  <li>Επικάλυψη: cos(α + μ) = cos α − √2·X_c·I_d/E_LL (10.10)· στον αντιστροφέα cos β = cos γ − √2·X_c·I_d/E_LL, β = π − α· cos φ ≈ (cos α + cos(α + μ))/2 (10.20), Q = P·tan φ</li>
+  <li>Έλεγχος: ο ανορθωτής ρυθμίζει το ρεύμα (α ≥ 5°)· ο αντιστροφέας το γ (${m.gref}°), με έλεγχο ρεύματος στο I_ord − 0,1 pu (περιθώριο) αν ο ανορθωτής φτάσει στο α_min· ο VDCOL μειώνει την εντολή όταν πέφτει η V_d</li></ul>`;
+ if(s.t<0.8)return h+'<p class="muted small">Τρέξε την προσομοίωση (μετρήσεις στις τελευταίες 5 περιόδους, μετά τα 0,8 s· μόνιμη κατάσταση γύρω στο 1,5 s).</p>';
+ const g=(k,n=5)=>avgOver(k,n),Vh=k=>Math.SQRT2*(['a','b','c'].map(x=>g(k+x)?.rms??NaN).reduce((a,b)=>a+b,0)/3);
+ const Vr=Vh('Y:STR/V'),Vi=Vh('Y:STI/V'),Id=g('Y:STR/IDC')?.avg,Idi=Math.abs(g('Y:STI/IDC')?.avg),Vdr=g('Y:STR/VDC')?.avg,Vdi=Math.abs(g('Y:STI/VDC')?.avg);
+ const ar=g('Y:CR/AO')?.avg,ai=g('Y:CI/AO')?.avg,gm=g('Y:STI/GM')?.avg,Er=Math.sqrt(1.5)*Vr*R.n,Ei=Math.sqrt(1.5)*Vi*I.n,V0r=6*Math.SQRT2/Math.PI*Er,V0i=6*Math.SQRT2/Math.PI*Ei;
+ const mu=Math.acos(Math.min(1,Math.max(-1,Math.cos(ar*D)-Math.SQRT2*R.Xc*Id/Er)))/D-ar,bi=Math.acos(Math.min(1,Math.max(-1,Math.cos(gm*D)-Math.SQRT2*I.Xc*Idi/Ei)))/D;
+ const cf=Math.cos(ar*D)/2+Math.cos((ar+mu)*D)/2,Pr=Vdr*Id,Qr=Pr*Math.tan(Math.acos(Math.min(1,cf)));
+ const rows=[['V_d ανορθωτή = V_d0·cos α − R_c·I_d',V0r*Math.cos(ar*D)-R.Rc*Id,Vdr,'V'],['V_d αντιστροφέα = V_d0·cos γ − R_c·I_d',V0i*Math.cos(gm*D)-I.Rc*Idi,Vdi,'V'],
+  ['α αντιστροφέα = π − β από το μετρημένο γ',180-bi,ai,'°']];
+ const far=[['V_d ανορθωτή (pu)',0.99,Vdr/m.Vdn,''],['V_d αντιστροφέα (pu)',0.972,Vdi/m.Vdn,''],['I_d (pu)',1,Id/m.Idn,''],['α ανορθωτή',16.92,ar,'°'],['α αντιστροφέα',141.89,ai,'°'],['γ',15.1,gm,'°']];
+ return h+cmpRows(rows)+`<p class="small">Μετρημένα: V̂ = ${eng(Vr,'V')} / ${eng(Vi,'V')} στους ζυγούς, V_d0 = ${eng(V0r,'V')} / ${eng(V0i,'V')}, μ ανορθωτή = ${fmt(mu,3)}°, cos φ ≈ ${fmt(cf,3)}, P = ${eng(Pr,'W')}, Q ≈ ${eng(Qr,'var')} στον ανορθωτή.${m.model==='avg'?'':' Στο λεπτομερές το γ είναι το μικρότερο των βαλβίδων της τελευταίας περιόδου (όπως στο benchmark), άρα λίγο κάτω από τη μέση τιμή που υποθέτει ο τύπος.'}</p>
+  <h4>Απέναντι στο benchmark (PSCAD, Faruque κ.ά. 2006, Πίν. I–II)</h4>`+cmpRows(far)
+  +`<p class="muted small">${m.ev==='ss'?'':'Με γεγονός στο 1,0 s: η σύγκριση έχει νόημα πριν από αυτό ή αφού ξανασταθεροποιηθεί η ζεύξη. '}${m.gref!==15?'Με γ_ref ≠ 15° οι τιμές του benchmark δεν ισχύουν. ':''}Το μέσο μοντέλο δεν έχει μεταγωγές: δεν δείχνει αποτυχία μετάβασης σε μονοφασικό σφάλμα, ούτε αρμονικές.</p>`;}
 // 4.13: a wideband model in a card: its groups of modes, delays, poles, the errors of the fit and the passivity check
 function wbModelHTML(name,g){const f=g.fit||{},ps=g.passive||null;
  return `<p><b>${esc(name)}</b> (WB, ${g.fit?.source==='EMTP'?'από αρχείο του EMTP':'προσαρμογή '+eng(g.fmin,'Hz')+' – '+eng(g.fmax,'Hz')}): Y_c με ${g.npoles?.yc??g.yc.p.length} πόλους, H σε ${g.groups.length} ομάδες ρυθμών.</p><table class="cmp"><tr><th>ομάδα</th><th>ρυθμοί</th><th>τ</th><th>πόλοι</th></tr>`
@@ -2338,6 +2375,7 @@ function formulaTheory(t){
  if(t.topology==='ieee9_emt')return ieee9Theory();
  if(t.topology==='sssc')return ssscTheory();
  if(t.topology==='hvdc_mmc')return hvdcTheory();
+ if(t.topology==='hvdc_lcc')return lccTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const D=+W.D,Vin=+V.V,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
   eqs=[`V_o = ${t.topology==='cuk'?'−':''}V_in·D/(1−D) = <b>${eng(Vo,'V')}</b>`,`I_L1 = |I_o|·D/(1−D) = <b>${eng(IL1,'A')}</b>, |I_L2| = |I_o| = <b>${eng(Math.abs(Io),'A')}</b>`,`Δi_L1 = V_in·D·T/L1 = <b>${eng(Vin*D*Ts/L1,'A')}</b>, Δi_L2 = V_in·D·T/L2 = <b>${eng(Vin*D*Ts/L2,'A')}</b>`,`V_C1 = ${t.topology==='cuk'?'V_in + |V_o|':'V_in'} = <b>${eng(t.topology==='cuk'?Vin+Math.abs(Vo):Vin,'V')}</b>`];

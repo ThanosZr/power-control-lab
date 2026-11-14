@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.15: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (571 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.16: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (578 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.15.
+Κανένα στην 4.16.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -541,7 +541,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-111 σημεία.
+118 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -581,6 +581,7 @@
 | `part:EXPR` | expr, ins, pars | u1, u2, y | 3.18 |
 | `part:F2` | kind, f0, zeta, u0 | u, y | 3.19 |
 | `part:FEST` | mode, RR, LM, psi0 | al, be, psi, th, w1, wr | 3.18 |
+| `part:FILT3` | kind, C1, L, R, C2, Rp, conn | a, abc, b, c | 4.16 |
 | `part:FLT3` | kind, Rf, Rg, ctl, ton, toff, clr, conn | a, abc, b, c, f | 4.1 |
 | `part:GAIN` | K, unit | u, y | 3.18 |
 | `part:GEN3` | Sn, Un, f, pp, data, conv, Ra, Xl, X0, Xd, Xdp, Xdpp, Xq, Xqp, Xqpp, Td0p, Td0pp, Tq0p, Tq0pp, cXad, cXfd, cRfd, cXkd, cRkd, cXaq, cX1q, cR1q, cX2q, cR2q, shaft, H, D, Hm, Km, Dm, Dmu, Tfr, gm, exc, Efd, mech, Tm, init, V0, ang0, neut, conn | a, abc, b, c, d, e0, efd, ifd, m0, n, pe, qe, te, tm, ts1, ts2, v0, vt, w | 4.3 |
@@ -598,6 +599,11 @@
 | `part:KG` | kind, mat | a1, a2, b1, b2 | 3.18 |
 | `part:KL` | nw, L1, L2, L3, L4, k, kpairs, Lmat, Rw, i0 | a1, a2, a3, a4, b1, b2, b3, b4 | 3.18 |
 | `part:L` | L, i0, Rs | a, b | 3.18 |
+| `part:LCC6` | impl, sync, shift, f0, bw, ini, th0, pw, Ron, Vf, Roff, Rsn, Csn, tq, Ith, conn | a, abc, am, ao, b, blk, c, cf, gl, gm, n, p, th, va, vb, vc | 4.16 |
+| `part:LCCC` | mode, iext, Idn, Vdn, Iord, tramp, Tid, KpR, TiR, aminR, amaxR, KpI, TiI, aminC, KpG, TiG, aminG, amaxI, gref, dI, dgc, gemin, V1, I1, V2, I2, Tv, kc, blks, fr, Vfr, tdet, afr, tfr, tprot | ao, blk, cc, fr, gm, id, iord, iref, vd | 4.16 |
+| `part:LCCM` | shift, f0, Ith | am, cf, gl, gm, i1, i2, i3, i4, i5, i6, va, vb, vc, w | 4.16 |
+| `part:LCCS` | model, impl, Sn, U1, U2, f, uk, tap, bw, pw, Ron, Vf, Rsn, Csn, tq, fm, conn | a, abc, am, ao, b, blk, c, cf, gm, id, n, p, vd | 4.16 |
+| `part:LCCX` | shift, f0, bw, ini, th0, pw, Ron, Vf, Roff, Rsn, Csn, tq | a, am, ao, b, blk, c, cf, gl, gm, n, p, th, va, vb, vc | 4.16 |
 | `part:LINE3` | unit, Un, Sb, f, R1, X1, B1, z0, R0, X0, B0, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.3 |
 | `part:LOAD3` | cn, Un, f, P, Q, model, kz, ki, kp, Vmin, conn | a, abc, b, c | 4.1 |
 | `part:LOGIC` | op | a, b, y | 3.18 |
@@ -615,7 +621,7 @@
 | `part:NOTE` | text, size, bold, color, frame | — | 4.9 |
 | `part:PARK` | conn | ab, al, be, d, dq, q, th | 3.18 |
 | `part:PIB` | Kp, Ki, clock, trig, y0, aw, ymin, ymax | tr, u, y | 3.18 |
-| `part:PLL` | f0, bw, th0, conn | a, abc, amp, b, c, th, w | 3.18 |
+| `part:PLL` | f0, bw, th0, ini, conn | a, abc, amp, b, c, th, w | 3.18 |
 | `part:PORT` | name, side, width | p | 3.18 |
 | `part:PSS` | KS, TW, T1, T2, T3, T4, VSMAX, VSMIN | vs, w | 4.8.1 |
 | `part:PWM` | fs, mode, D, dsched, carrier, phase, upd, dt, sensor, qty, ref, Kp, Ki, Kd, Tf, ff, ffA, ffB, D0, dmin, dmax, m, fref, refphase | d | 3.18 |
@@ -628,7 +634,7 @@
 | `part:SAI` | U10, d, n, kL1, L1fit, Llead, A0, A1, impl, meas | a, b | 4.9 |
 | `part:SAIX` | L0, R0, L1, R1, C, tbl0, tbl1 | a, b | 4.9.1 |
 | `part:SAT` | lo, hi | u, y | 3.18 |
-| `part:SCR` | fire, refsrc, alpha, shift, pw, fref, pwm, out, Ron, Vf, Roff | a, g, k | 3.18 |
+| `part:SCR` | fire, refsrc, alpha, shift, pw, fref, pwm, out, Ron, Vf, Roff, tq | a, g, k | 3.18 |
 | `part:SG` | vt, Ub, U0, kde, Dde, trig, Rarc, ext, Iext, Roff | a, b | 3.18 |
 | `part:SH` | in, src, qty, clock, trig, init, h0 | u, y | 3.18 |
 | `part:SIN` | name, side, width | y | 3.18 |
@@ -656,3 +662,4 @@
 | `part:VP` | — | p, y | 3.18 |
 | `part:XF3` | grp, Sn, U1, U2, f, uk, Pk, i0, P0, tap, core, i00, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.1 |
 | `part:XFMR` | n, Lm, im0, Llk1, Llk2, R1, R2, pol | p1, p2, s1, s2 | 3.18 |
+| `part:ZSER3` | Rs, Ls, Rp1, Lp, Rp2, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.16 |
