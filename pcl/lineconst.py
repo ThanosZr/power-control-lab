@@ -2193,6 +2193,27 @@ def api(req):
         mdl = fd_model(data, L, fmin, dec, ppd, fti, curves=True, ti=ti, nmax=max(6, min(nmax, 60)))
         curves = {'f': mdl.pop('f'), 'modes': [m.pop('curve') for m in mdl['modes']]}
         frep = 50.0
+    # 4.12: transpositions as separate sections in the solver (data['transp']['mode'] == 'sec'): the model above is the
+    # untransposed line over the whole length; per section the same line over its length (CP and FD; π scales its
+    # totals in the solver) and the order of the phases on the geometric positions
+    tr = transposition(data, mdl['M']) if (data.get('transp') or {}).get('mode') == 'sec' else None
+    if tr:
+        secs, cache = [], {}
+        for w, P in tr:
+            key = round(w, 12)
+            if key not in cache:
+                Ls = L * w
+                if kind == 'cp':
+                    cache[key] = cp_model(data, frep, Ls, ti, req.get('cp') or 'lumped')
+                elif kind == 'fd':
+                    m = fd_model(data, Ls, fmin, dec, ppd, fti, ti=ti, nmax=max(6, min(nmax, 60)))
+                    m.pop('f', None)
+                    cache[key] = m
+                else:
+                    cache[key] = None
+            order = [int(np.argmax(P[:, pos])) + 1 for pos in range(P.shape[1])]
+            secs.append({'frac': w, 'order': order, 'model': cache[key]})
+        mdl['sections'] = secs
     mdl['src'] = req.get('src', '')
     rep = report(data, frep)
     if data.get('rebuilt'):

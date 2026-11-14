@@ -1679,7 +1679,10 @@ function lightningTheory(){const s=S.sim,m=(S.tutMeta||{}).lg;if(!s||!m)return '
  h+=`<table class="cmp"><thead><tr><th>Θέση</th><th>Κορυφή</th><th>Στιγμή</th><th>Περιθώριο ως ${eng(lim,'V')}</th></tr></thead><tbody>${rows.map(([n,v,t])=>`<tr><td>${esc(n)}</td><td>${eng(v,'V')}</td><td>${eng(t,'s',3)}</td><td class="${v>lim?'warn-text':'good'}">${v>0?fmt((lim/v-1)*100,3)+' %':'—'}${v>m.LIWL?' (πάνω από το LIWL)':v>lim?' (πάνω από LIWL/K_s)':''}</td></tr>`).join('')}</tbody></table>`;
  if(m.sa!=='none'){const r=rawSeries('Y:VEa'),e=pk('Y:VEa'),g=pk('Y:VGa');if(r&&e&&g&&e.v>50e3){let S1=0;for(let j=1;j<r.y.length;j++){if(r.t[j]>e.t)break;const d=Math.abs(r.y[j]-r.y[j-1])/((r.t[j]-r.t[j-1])||1);if(d>S1)S1=d;}
   h+=cmpRows([['φάση a: U_G ≈ U_E + 2·S·d/v (d = 56 m, S = μέγιστη du/dt στην είσοδο)',e.v+2*S1*m.dist/m.v,g.v,'V']])+'<p class="muted small">Ο κανόνας της απόστασης προστασίας υποθέτει μέτωπο ράμπας και ανοιχτό άκρο πίσω από το αλεξικέραυνο· είναι εκτίμηση, όχι ακριβής τύπος.</p>';}}
- return h+'<p class="muted small">Η τάση 50 Hz των φάσεων λείπει: η γραμμή από γεωμετρία δεν ξεκινά ακόμη από μόνιμη κατάσταση (to do).</p>';}
+ // 4.12: with the 50 Hz voltage the lines start from the steady state; the voltage of each insulator adds the phase voltage
+ if(m.u50){const ph={peak:'στο θετικό μέγιστο',zero:'στο μηδέν',neg:'στο αρνητικό μέγιστο'}[m.u50];
+  return h+`<p class="muted small">Τάση λειτουργίας 420 kV, 50 Hz (κορυφή φάσης ${eng(m.Vs,'V')}), η φάση a ${ph} τη στιγμή του κεραυνού· οι γραμμές ξεκινούν από τη μόνιμη κατάσταση (4.12). Η τάση κάθε μονωτήρα είναι u_φάσης − u_πύργου: με αρνητικό κεραυνό στον πύργο, η φάση στο θετικό μέγιστο διασπάται πιο εύκολα.</p>`;}
+ return h+'<p class="muted small">Χωρίς τάση 50 Hz των φάσεων (μόνο ο κεραυνός)· η επιλογή «Τάση λειτουργίας» τη βάζει, με τις γραμμές από τη μόνιμη κατάσταση (4.12).</p>';}
 function netFaultTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.grid||!window.NetLib)return '';
  const g=m.xf?NetLib.behindXF(m.grid,m.xfp):{seq:NetLib.gridZ(m.grid)},z=g.seq,ref=NetLib.faultCurrents(g,{kind:m.kind}),Un=m.xf?m.xfp.U2:m.grid.Un;
  const Z1=Math.hypot(z.R1,z.X1),c2=(a,b)=>Math.hypot(a,b);

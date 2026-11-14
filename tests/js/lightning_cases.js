@@ -15,8 +15,8 @@ function arr(o){const W=(id,a,b)=>({id,a:{c:a[0],p:a[1]},b:{c:b[0],p:b[1]},pts:[
  while(s.t<stop-1e-12){s.run(Math.min(s.h,stop-s.t));v=Math.max(v,Math.abs(s.now('Y:SA1/V')));i=Math.max(i,Math.abs(s.now('Y:SA1/I')));}return {arr:o,v,i,h:s.h};}
 function run(ov){if(ov.arr)return arr(ov.arr);const pr=build(ov),s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv,method:pr.sim.method||'TR'}),m=pr.meta.lg;
  const ch=['I:I1','Y:T2/Vtop','Y:T2/If'];for(const x of ['a','b','c']){ch.push('Y:VE'+x,'Y:VG'+x,'Y:VT'+x);for(const t of ['T1','T2','T3'])ch.push(`Y:${t}/U${x}`,`Y:${t}/I${x}`);if(m.sa!=='none')ch.push(`Y:SE${x}/I`,`Y:SE${x}/V`);}
- const peak={},flash={};for(const c of ch)peak[c]=0;
- while(s.t<pr.sim.stopT-1e-12){s.run(Math.min(s.h,pr.sim.stopT-s.t));for(const c of ch){const v=Math.abs(s.now(c));if(!(v<=peak[c]))peak[c]=v;
+ const peak={},flash={},rng={};for(const c of ch){peak[c]=0;rng[c]=[Infinity,-Infinity];}   // 4.12: and the range of each channel
+ while(s.t<pr.sim.stopT-1e-12){s.run(Math.min(s.h,pr.sim.stopT-s.t));for(const c of ch){const y=s.now(c),v=Math.abs(y);if(!(v<=peak[c]))peak[c]=v;if(y<rng[c][0])rng[c][0]=y;if(y>rng[c][1])rng[c][1]=y;
   const g=/^Y:(T\d)\/I([abc])$/.exec(c);if(g&&v>1&&flash[g[1]+g[2]]===undefined)flash[g[1]+g[2]]=s.t;}}
- return {ov,peak,flash,t:s.t,h:s.h};}
+ return {ov,peak,flash,rng,t:s.t,h:s.h,warn:s.net.warnings};}
 const cases=JSON.parse(process.argv[2]||'[{}]');console.log(JSON.stringify(cases.map(run)));
