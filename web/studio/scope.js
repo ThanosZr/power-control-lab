@@ -4,6 +4,10 @@
 //    the ring buffer, per-period mean + min/max band beyond it
 //  * roll / period-synchronised display, frozen view with wheel zoom + drag pan
 //  * hover readout, two pinned cursors (click / Shift+click), window statistics
+//  * 4.11 (decision 4.11-θ): what left the ring buffer is not lost from the screen: a min/max envelope of the whole run
+//    (ENV_B buckets that double in width as the run grows, fed from the ring at every drawing), and with a recording the
+//    samples themselves read back from the file (opt.archive, per pixel column first/min/max/last); zoom on x, y or both
+//    (wheel over the y axis or with Shift, a rectangle with Ctrl or the ▭ tool), and a history of the views (↶)
 (function(root){
  const COLORS=['#147966','#c47a1c','#2f5fa0','#b03a5b','#6b4fa0','#3d8b3d','#1f8fa0','#8a5a2b'];
  const UNIT={V:'V',I:'A',P:'W',N:'V',VN:'V',V2:'V',I2:'A',Im:'A',Vb:'V',Vc:'V',Vab:'V',Ib:'A',Ic:'A',PSW:'W',D:'',G:'',GS:'',REF:'',MEAS:'',CAR:''};
@@ -15,17 +19,21 @@
  function niceStep(span,n){const raw=span/Math.max(1,n),p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;return (m<1.5?1:m<3.5?2:m<7.5?5:10)*p;}
  function fmtT(t,step,tmax){const m=Math.max(Math.abs(tmax??t),step);const [k,u]=m<1e-6?[1e9,'ns']:m<1e-3?[1e6,'μs']:m<1?[1e3,'ms']:[1,'s'];const d=Math.max(0,Math.ceil(-Math.log10(step*k)-1e-9));return root.Parts.fmtNum(t*k,{minimumFractionDigits:d,maximumFractionDigits:d,useGrouping:false})+' '+u;}
  const eng=(v,u)=>root.Parts.eng(v,u,4);
+ const ENV_B=4096;
  class Scope{
   constructor(canvas,opt={}){
    this.cv=canvas;this.ctx=canvas.getContext('2d');this.opt=opt;this.sim=null;
-   this.cfg={panes:[{ch:[]}],window:{unit:'T',n:20},trigger:'roll',display:'auto',frozen:null,cursors:[],follow:true};
+   this.cfg={panes:[{ch:[]}],window:{unit:'T',n:20},trigger:'roll',display:'auto',frozen:null,cursors:[],follow:true,zoomAxes:'x',box:false};this.hist=[];
    this.hoverX=null;this.ro=new ResizeObserver(()=>this.resize());this.ro.observe(canvas.parentElement);
-   canvas.addEventListener('pointermove',e=>{this.hoverX=e.offsetX;this.hoverY=e.offsetY;if(this.drag)this.panTo(e);if(!this.running)this.requestDraw();});
+   canvas.addEventListener('pointermove',e=>{this.hoverX=e.offsetX;this.hoverY=e.offsetY;if(this.boxSel){this.boxSel.x1=e.offsetX;this.boxSel.y1=e.offsetY;this.requestDraw();return;}if(this.drag)this.panTo(e);if(!this.running)this.requestDraw();});
    canvas.addEventListener('pointerleave',()=>{this.hoverX=null;if(!this.running)this.requestDraw();this.opt.onhover?.(null);});
-   canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.setPointerCapture(e.pointerId);this.drag={x:e.offsetX,view:this.viewRange(),moved:false};});
-   canvas.addEventListener('pointerup',e=>{const d=this.drag;this.drag=null;if(d&&!d.moved)this.cursorAt(e);});
-   canvas.addEventListener('wheel',e=>{e.preventDefault();this.zoomAt(e.offsetX,Math.exp(e.deltaY*.0015));},{passive:false});
-   canvas.addEventListener('dblclick',()=>{this.cfg.frozen=null;this.cfg.cursors=[];this.opt.onchange?.();this.requestDraw();});
+   canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.setPointerCapture(e.pointerId);
+    if(e.ctrlKey||e.metaKey||this.cfg.box){this.boxSel={x0:e.offsetX,y0:e.offsetY,x1:e.offsetX,y1:e.offsetY};return;}this.drag={x:e.offsetX,view:this.viewRange(),moved:false};});
+   canvas.addEventListener('pointerup',e=>{if(this.boxSel){const b=this.boxSel;this.boxSel=null;this.boxZoom(b);return;}const d=this.drag;this.drag=null;if(d&&!d.moved)this.cursorAt(e);});
+   // wheel: the time axis; over the y labels, with Shift or in the mode 'y' the pane under the pointer; 'xy' both
+   canvas.addEventListener('wheel',e=>{e.preventDefault();const f=Math.exp(e.deltaY*.0015),ax=this.cfg.zoomAxes||'x';this.histPush(true);
+    if(e.offsetX<this.padL||e.shiftKey||ax==='y')this.zoomY(e.offsetY,f);else{this.zoomAt(e.offsetX,f);if(ax==='xy')this.zoomY(e.offsetY,f);}},{passive:false});
+   canvas.addEventListener('dblclick',()=>{this.histPush();this.cfg.frozen=null;this.cfg.cursors=[];this.opt.onchange?.();this.requestDraw();});
   }
   attach(sim){this.sim=sim;this.requestDraw();}
   // one drawing on the next frame for a burst of pointer or wheel events (4.6); the running loop draws anyway.
@@ -38,7 +46,23 @@
   refRange(key,t0,t1,fn){const d=this.refs?.data?.[key];if(!d)return false;const t=d.t;let lo=0,hi=t.length;while(lo<hi){const m=(lo+hi)>>1;if(t[m]<t0)lo=m+1;else hi=m;}
    for(let i=Math.max(0,lo-1);i<t.length;i++){fn(t[i],d.y[i]);if(t[i]>t1)break;}return true;}
   // navigation buttons: start, left, right, live, focus, in, out, all, autoy
-  nav(kind){const s=this.sim;if(!s)return;const T=s.T,end=Math.max(s.t,1e-12);const [a,b]=this.viewRange(),span=b-a,live=!this.cfg.frozen;
+  // 4.11: the views before each zoom or move (↶ goes back); a burst of wheel events is one step
+  histPush(burst){const now=performance.now();if(burst&&now-(this._hT||0)<500){this._hT=now;return;}this._hT=now;
+   this.hist.push(JSON.stringify({frozen:this.cfg.frozen,window:this.cfg.window,follow:this.cfg.follow,ys:this.cfg.panes.map(p=>p.y||null)}));if(this.hist.length>60)this.hist.shift();}
+  back(){const h=this.hist.pop();if(!h)return false;const o=JSON.parse(h);Object.assign(this.cfg,{frozen:o.frozen,window:o.window,follow:o.follow});o.ys.forEach((y,i)=>{if(this.cfg.panes[i]){if(y)this.cfg.panes[i].y=y;else delete this.cfg.panes[i].y;}});
+   this.opt.onchange?.();this.requestDraw();return true;}
+  // the pane under y: {pane, L}
+  paneAt(y){const k=(this.layout||[]).findIndex(L=>y>=L.y0-4&&y<=L.y1+4);return k<0?null:{pane:this.cfg.panes[k],L:this.layout[k]};}
+  zoomY(y,f){const q=this.paneAt(y);if(!q)return;const {L}=q,vm=L.lo+(L.y1-y)/(L.y1-L.y0)*(L.hi-L.lo),lo=vm-(vm-L.lo)*f,hi=vm+(L.hi-vm)*f;if(!(hi>lo))return;
+   q.pane.y={auto:false,min:lo,max:hi};this.opt.onchange?.();this.requestDraw();}
+  // a rectangle: the time range and/or the value range of the pane where it started (zoomAxes)
+  boxZoom(b){const ax=this.cfg.zoomAxes==='y'?'y':this.cfg.zoomAxes==='xy'||this.cfg.box?'xy':'x';const pw=this.plotW();if(Math.abs(b.x1-b.x0)<5&&Math.abs(b.y1-b.y0)<5)return;this.histPush();
+   if(ax!=='y'&&Math.abs(b.x1-b.x0)>=5){const [a,c]=this.viewRange(),tx=x=>a+(Math.min(Math.max(x-this.padL,0),pw)/pw)*(c-a),t0=tx(Math.min(b.x0,b.x1)),t1=tx(Math.max(b.x0,b.x1));
+    if(t1-t0>(this.sim?.h||1e-12)*2){this.cfg.frozen=[t0,t1];this.opt.onfreeze?.();}}
+   if(ax!=='x'&&Math.abs(b.y1-b.y0)>=5){const q=this.paneAt(b.y0);if(q){const L=q.L,v=y=>L.lo+(L.y1-y)/(L.y1-L.y0)*(L.hi-L.lo),lo=v(Math.max(b.y0,b.y1)),hi=v(Math.min(b.y0,b.y1));if(hi>lo)q.pane.y={auto:false,min:lo,max:hi};}}
+   this.opt.onchange?.();this.requestDraw();}
+  nav(kind){const s=this.sim;if(!s)return;if(kind==='back'){this.back();return;}if(kind==='box'){this.cfg.box=!this.cfg.box;this.opt.onchange?.();return;}
+   if(kind!=='follow')this.histPush();const T=s.T,end=Math.max(s.t,1e-12);const [a,b]=this.viewRange(),span=b-a,live=!this.cfg.frozen;
    const clamp=(x0,x1)=>{const w=x1-x0;if(x1>=end-1e-12*end){if(w>=end){this.cfg.frozen=[0,end];return;}this.cfg.frozen=null;this.cfg.window={unit:'s',n:w};return;}if(x0<0){x0=0;x1=w;}this.cfg.frozen=[x0,x1];};
    if(kind==='follow'){this.cfg.follow=this.cfg.follow===false;if(this.cfg.follow)this.cfg.frozen=null;}
    else if(kind==='live'){this.cfg.frozen=null;}
@@ -86,7 +110,7 @@
    if(D<=0)return null;return {avg:S/D,rms:Math.sqrt(Math.max(0,Q/D)),min:mn,max:mx,pp:mx-mn,src:'raw'};}
   usePeriods(t0){const d=this.cfg.display;if(d==='avg')return true;if(d==='raw')return false;const [a,b]=this.viewRange();return t0<this.ringStart()-1e-12&&(b-a)>3*this.sim.T||(b-a)/this.sim.h>4e5;}
   // ------------------------------------------------------------ interaction
-  panTo(e){const d=this.drag;if(!d)return;const dx=e.offsetX-d.x;if(Math.abs(dx)>3)d.moved=true;if(!d.moved)return;const [a,b]=d.view,span=b-a,pw=this.plotW();const sh=-dx/pw*span;this.cfg.frozen=[a+sh,b+sh];this.opt.onfreeze?.();this.requestDraw();}
+  panTo(e){const d=this.drag;if(!d)return;const dx=e.offsetX-d.x;if(Math.abs(dx)>3){if(!d.moved)this.histPush();d.moved=true;}if(!d.moved)return;const [a,b]=d.view,span=b-a,pw=this.plotW();const sh=-dx/pw*span;this.cfg.frozen=[a+sh,b+sh];this.opt.onfreeze?.();this.requestDraw();}
   zoomAt(x,f){if(this.cfg.follow!==false&&!this.cfg.frozen){const W=this.cfg.window,T=this.sim?.T||1;const n=Math.max(+(W.n*f).toPrecision(6),(this.sim?.h||1e-9)*4/(W.unit==='T'?T:1));this.cfg.window={unit:W.unit,n};this.opt.onchange?.();this.requestDraw();return;}
    const [a,b]=this.viewRange(),pw=this.plotW();const tm=a+(Math.min(Math.max(x-this.padL,0),pw)/pw)*(b-a);const na=tm-(tm-a)*f,nb=tm+(b-tm)*f;if(nb-na<(this.sim?.h||1e-9)*4)return;this.cfg.frozen=[na,nb];this.opt.onfreeze?.();this.requestDraw();}
   cursorAt(e){if(!this.sim)return;const [a,b]=this.viewRange();const t=a+(e.offsetX-this.padL)/this.plotW()*(b-a);if(t<a||t>b)return;
@@ -95,6 +119,33 @@
   drawSamples(ch,t0,t1,X,Y){const L=this.sim?.samples?.(ch.key.slice(2));if(!L||!L.t.length)return;const t=L.t;let lo=0,hi=t.length;while(lo<hi){const m=(lo+hi)>>1;if(t[m]<t0)lo=m+1;else hi=m;}
    let n=0;for(let i=lo;i<t.length&&t[i]<=t1;i++)n++;if(!n||n>this.plotW()/2.5)return;const c=this.ctx;c.save();c.fillStyle=ch.color;c.strokeStyle='#fff';c.lineWidth=1.2;
    for(let i=lo;i<t.length&&t[i]<=t1;i++){const v=L.v[i];if(!Number.isFinite(v))continue;c.beginPath();c.arc(X(t[i]),Y(v),3.4,0,7);c.fill();c.stroke();}c.restore();}
+  // ------------------------------------------------------------ 4.11: what left the ring buffer
+  // the envelope of the whole run: ENV_B buckets of width w from t = 0 (min and max of every channel), fed with the ring's
+  // new samples; when the run passes ENV_B·w the buckets merge in pairs and w doubles
+  envReset(){const s=this.sim,nch=s.ring.nch;this.env={sim:s,nch,cap:s.ring.cap,w:0,mn:new Float32Array(ENV_B*nch).fill(Infinity),mx:new Float32Array(ENV_B*nch).fill(-Infinity),has:new Uint8Array(ENV_B),lastT:-Infinity,lost:0};return this.env;}
+  ingest(){const s=this.sim;if(!s?.ring?.n)return;const r=s.ring;let E=this.env;if(!E||E.sim!==s||E.nch!==r.nch||E.cap!==r.cap||s.t<E.lastT)E=this.envReset();
+   const start=(r.head-r.n+r.cap)%r.cap,nch=r.nch;if(r.n===r.cap&&Number.isFinite(E.lastT)&&r.t[start]>E.lastT)E.lost++;
+   let i=Number.isFinite(E.lastT)?Math.max(0,this.ringIndex(E.lastT)-1):0;while(i<r.n&&r.t[(start+i)%r.cap]<=E.lastT)i++;
+   for(;i<r.n;i++){const j=(start+i)%r.cap,t=r.t[j];if(!(t>=0))continue;if(!(E.w>0))E.w=Math.max(s.h||1e-9,1e-12)*4;let k=Math.floor(t/E.w);
+    while(k>=ENV_B){const M=E.mn,X=E.mx,H=E.has;for(let b=0;b<ENV_B/2;b++){const o=b*nch,o1=2*b*nch,o2=(2*b+1)*nch;for(let q=0;q<nch;q++){M[o+q]=Math.min(M[o1+q],M[o2+q]);X[o+q]=Math.max(X[o1+q],X[o2+q]);}H[b]=H[2*b]|H[2*b+1];}
+     M.fill(Infinity,ENV_B/2*nch);X.fill(-Infinity,ENV_B/2*nch);H.fill(0,ENV_B/2);E.w*=2;k=Math.floor(t/E.w);}
+    const o=k*nch,ro=j*nch;for(let q=0;q<nch;q++){const v=r.d[ro+q];if(v<E.mn[o+q])E.mn[o+q]=v;if(v>E.mx[o+q])E.mx[o+q]=v;}E.has[k]=1;E.lastT=t;}}
+  // columns {fi, mn, mx, la, has} of W2 pixels over [t0, t1] for channel ci: from the envelope (or a file), then the ring's
+  // own samples over the part it still holds
+  colsOf(ci,t0,t1,W2,f,src){const fi=new Float64Array(W2),mn=new Float64Array(W2).fill(Infinity),mx=new Float64Array(W2).fill(-Infinity),la=new Float64Array(W2),has=new Uint8Array(W2),k=W2/(t1-t0);
+   const put=(c,a,lo,hi,b)=>{if(c<0||c>=W2)return;if(!has[c]){has[c]=1;fi[c]=a;}if(lo<mn[c])mn[c]=lo;if(hi>mx[c])mx[c]=hi;la[c]=b;};const rs=this.ringStart();
+   if(src&&src.file){const d=src.file;if(d.raw){const v=d.v;for(let i=0;i<d.t.length;i++){const t=d.t[i];if(t>=rs||v[i]==null)continue;const y=f(v[i]);put(Math.floor((t-t0)*k),y,y,y,y);}}
+    else for(let c=0;c<W2;c++){if(!d.has[c]||d.mn[c]==null||(d.tf[c]>=rs))continue;put(c,f(d.fi[c]),Math.min(f(d.mn[c]),f(d.mx[c])),Math.max(f(d.mn[c]),f(d.mx[c])),f(d.la[c]));}}
+   // the envelope where the file has nothing (before the recording started, or without one)
+   if(this.env&&ci>=0){const E=this.env,w=E.w,nch=E.nch,fileHas=has.slice();if(w>0)for(let b=Math.max(0,Math.floor(t0/w));b<ENV_B&&b*w<=t1;b++){if(!E.has[b])continue;const tb=(b+.5)*w;if(tb>=rs)continue;const a=f(E.mn[b*nch+ci]),z=f(E.mx[b*nch+ci]),lo=Math.min(a,z),hi=Math.max(a,z);
+     const c0=Math.floor((b*w-t0)*k),c1=Math.floor(((b+1)*w-t0)*k);for(let c=Math.max(0,c0);c<=Math.min(W2-1,c1);c++)if(!fileHas[c])put(c,lo,lo,hi,hi);}}
+   if(ci!==-1)this.eachRaw(ci,Math.max(t0,rs),t1,(t,v)=>{v=f(v);put(Math.floor((t-t0)*k),v,v,v,v);});
+   return {fi,mn,mx,la,has};}
+  // the samples of the view from the recording (opt.archive(t0, t1, keys, n) → Promise), asked once per view
+  archiveFor(t0,t1,W2,keys){if(!this.opt.archive||!keys.length)return undefined;const key=[t0.toPrecision(12),t1.toPrecision(12),W2,keys.join('|')].join('/');const A=this.arch;
+   if(A&&A.key===key)return A.data;if(this._archKey!==key){this._archKey=key;clearTimeout(this._archT);
+    this._archT=setTimeout(()=>{this.arch={key,data:undefined};Promise.resolve(this.opt.archive(t0,t1,keys,W2)).then(d=>{if(this.arch?.key===key){this.arch.data=d||null;this.requestDraw();}},()=>{if(this.arch?.key===key){this.arch.data=null;this.requestDraw();}});},150);}
+   return undefined;}
   // ------------------------------------------------------------ drawing
   draw(){
    const c=this.ctx,W=this.W||600,H=this.H||300;if(!c)return;c.clearRect(0,0,W,H);this.padL=64;this.padR=14;
@@ -103,7 +154,12 @@
    const s=this.sim;const panes=this.cfg.panes;const top=6,bottom=24,gap=10,ph=(H-top-bottom-gap*(panes.length-1))/panes.length;
    if(!s){return;}
    const [t0,t1]=this.viewRange(),span=t1-t0,pw=this.plotW();const X=t=>this.padL+(t-t0)/span*pw;
-   const periods=this.usePeriods(t0);
+   this.ingest();
+   // 4.11: the view reaches before the ring: the file (a recording) or the envelope, before the per-period band
+   const lost=t0<this.ringStart()-1e-12&&this.sim.ring.n>0&&this.cfg.display!=='avg',W2c=Math.max(1,Math.ceil(pw));
+   const vkeys=lost&&(this.cfg.frozen||!this.running)?[...new Set(panes.flatMap(p=>p.ch.filter(c=>c.on).map(c=>c.key)))]:[];
+   const arch=lost&&vkeys.length?this.archiveFor(t0,t1,W2c,vkeys):undefined;this.archState=lost?(arch?'file':arch===undefined&&this.opt.archive&&vkeys.length?'wait':'env'):null;
+   const periods=!(lost&&arch)&&this.usePeriods(t0)&&!(lost&&this.cfg.display==='auto'&&this.env&&this.env.w>0&&!(this.sim.T>0&&span>3*this.sim.T&&this.sim.per.n>0));
    const xs=niceStep(span,Math.max(2,Math.floor(pw/90)));
    this.layout=[];
    panes.forEach((pane,pi)=>{
@@ -114,6 +170,8 @@
     let lo=Infinity,hi=-Infinity;const data=[];
     chans.forEach((ch,k)=>{const ci=this.resolve(ch.key),f=tfs[k];if(ci===-1){data.push(null);return;}
      if(periods){const pts=[];this.eachPeriod(ci,t0,t1,(t,a,mn,mx)=>{pts.push([t,f(a),f(mn),f(mx)]);lo=Math.min(lo,f(mn));hi=Math.max(hi,f(mx));});data.push({ch,pts,kind:'per',f});}
+     else if(lost){const q=this.colsOf(ci,t0,t1,W2c,f,arch&&arch.cols?.[ch.key]?{file:{...arch,...arch.cols[ch.key]}}:null);
+      for(let i=0;i<W2c;i++)if(q.has[i]){if(q.mn[i]<lo)lo=q.mn[i];if(q.mx[i]>hi)hi=q.mx[i];}data.push({ch,cols:q,kind:'col',f});}
      // 4.7: many more samples than pixels: first, min, max and last per pixel column in one pass, without an array of
      // every sample (a running SRM drew 10⁵ samples per frame)
      else if(this.rawCount(t0,t1)>pw*2){const W2=Math.max(1,Math.ceil(pw)),fi=new Float64Array(W2),mn=new Float64Array(W2).fill(Infinity),mx=new Float64Array(W2).fill(-Infinity),la=new Float64Array(W2),has=new Uint8Array(W2),k=W2/span;
@@ -173,11 +231,13 @@
    // time axis
    c.fillStyle=ink;c.textAlign='center';c.textBaseline='top';c.font='10.5px ui-monospace,Menlo,Consolas,monospace';
    for(let t=Math.ceil(t0/xs)*xs;t<=t1;t+=xs)c.fillText(fmtT(t,xs,t1),X(t),H-bottom+6);
-   c.textAlign='right';c.fillStyle='#7b8e88';c.fillText(periods?'μέση τιμή ανά περίοδο · σκιά: min–max':'',W-this.padR,H-bottom+6);
+   c.textAlign='right';c.fillStyle='#7b8e88';c.fillText(periods?'μέση τιμή ανά περίοδο · σκιά: min–max':this.archState==='file'?'από το αρχείο καταγραφής':this.archState==='wait'?'φόρτωση από το αρχείο…':this.archState==='env'?`περιβάλλουσα min–max · τα δείγματα από t = ${fmtT(this.ringStart(),xs,t1)}`:'',W-this.padR,H-bottom+6);
+   if(this.boxSel){const b=this.boxSel,ax=this.cfg.zoomAxes==='y'?'y':this.cfg.zoomAxes==='xy'||this.cfg.box?'xy':'x';c.fillStyle='#14796622';c.strokeStyle='#147966';
+    const x0=ax==='y'?this.padL:Math.min(b.x0,b.x1),x1=ax==='y'?W-this.padR:Math.max(b.x0,b.x1),y0=ax==='x'?top:Math.min(b.y0,b.y1),y1=ax==='x'?H-bottom:Math.max(b.y0,b.y1);c.fillRect(x0,y0,x1-x0,y1-y0);c.strokeRect(x0+.5,y0+.5,x1-x0,y1-y0);}
    if(this.refs){c.textBaseline='top';c.font='600 10.5px Inter,system-ui,sans-serif';const lbl='- - -  '+this.refs.label,w=c.measureText(lbl).width;c.fillStyle='#ffffffd9';c.fillRect(W-this.padR-w-10,top+3,w+8,15);c.fillStyle='#18353a';c.fillText(lbl,W-this.padR-6,top+5);}
    // hover readout
    if(this.hoverX!==null&&this.hoverX>this.padL&&this.hoverX<W-this.padR){const t=t0+(this.hoverX-this.padL)/pw*span;c.strokeStyle='#7b8e8899';c.beginPath();c.moveTo(this.hoverX+.5,top);c.lineTo(this.hoverX+.5,H-bottom);c.stroke();
-    const rows=[];for(const L of this.layout)L.chans.forEach((ch,k)=>{const ci=this.resolve(ch.key);if(ci===-1)return;const v=periods?NaN:this.valueAt(ci,t);rows.push([ch,v]);if(Number.isFinite(v)){c.fillStyle=ch.color;c.beginPath();c.arc(this.hoverX,L.Y(L.tfs[k](v)),3,0,7);c.fill();}});
+    const rows=[];for(const L of this.layout)L.chans.forEach((ch,k)=>{const ci=this.resolve(ch.key);if(ci===-1)return;const v=periods||(this.archState&&t<this.ringStart())?NaN:this.valueAt(ci,t);rows.push([ch,v]);if(Number.isFinite(v)){c.fillStyle=ch.color;c.beginPath();c.arc(this.hoverX,L.Y(L.tfs[k](v)),3,0,7);c.fill();}});
     this.opt.onhover?.({t,rows});}
   }
  }

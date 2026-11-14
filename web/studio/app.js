@@ -22,7 +22,7 @@ function project(){return {...fullDoc(),tutRef:S.tutRef||null,sim:{hDiv:+$('#sim
 function buildSim(fresh){
  const doc=fullDoc();
  try{
-  if(!S.sim||fresh){window.Live?.drop();S.sim=new MNA.Sim(doc,{hDiv:+$('#sim-step').value,method:$('#method').value});applyRec();}
+  if(!S.sim||fresh){window.Live?.drop();S.sim=new MNA.Sim(doc,{hDiv:+$('#sim-step').value,method:$('#method').value,mem:memSetting()});applyRec();}
   else S.sim.load(doc,false);
   S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);notice('');editor.setDiag(viewDiag(S.sim.net.diag));
  }catch(e){S.error=e.message;pause();
@@ -37,7 +37,7 @@ function buildSim(fresh){
  refreshControls();renderChannels();updateClock();renderProps();syncStepMode();scheduleStepCheck();
 }
 function lineCtx(){return {editor,api,changed:()=>{}};}
-function play(keep){if(!keep)S.stepTo=0;if(!S.sim||S.error)return;if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;requestAnimationFrame(loop);}
+function play(keep){if(!keep)S.stepTo=0;if(!S.sim||S.error)return;if(REC.set.auto&&!REC.on&&S.sim.t===0&&scope.channels().length)recToggle();if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;requestAnimationFrame(loop);}
 function pause(){if(window.Live?.active)Live.stop();S.stepTo=0;S.running=false;if(REC.on)recFlush();scope.running=false;$('#play')?.classList.remove('running');if($('#play'))$('#play').innerHTML='▶ Προσομοίωση';draw(true);}
 function reset(){pause();buildSim(true);scope.cfg.frozen=null;draw(true);}
 // 4.9.1 (4.8.2 a): one step of an external controller on the circuit of the screen (pcl.link 'advance', the Control Workbench
@@ -60,13 +60,41 @@ function stepT(n=1){if(!S.sim||S.error)return;pause();
 // cover dt/h times more time. And the record to a file (engine/recording.py): the scope's channels, every new point,
 // sent about once a second while it runs; the memory keeps the last part of the run, the file all of it.
 function applyRec(){const dt=+$('#rec-res')?.value||0;if(!S.sim)return;const n=dt>0?Math.max(1,Math.round(50*dt/S.sim.T)):1;S.sim.setRecord({dt,n});renderRec();}
-const REC={on:false,name:'',path:'',keys:[],lastT:-Infinity,busy:false,pend:'',lost:0,bytes:0,tLast:0};
+const REC={on:false,name:'',path:'',keys:[],cols:[],sim:null,lastT:-Infinity,evN:0,busy:false,pend:'',lost:0,bytes:0,tLast:0,set:{dest:'temp',dir:null,auto:false},disk:null};
+// 4.11 (decision 4.11-θ): the memory of the scope with its estimates, where the recording goes, and reading it back
+const MEM_KEY='pcl-scope-mem',MEM_OPTS=[24,64,128,256,512,1024,2048];
+function memSetting(){try{const v=+localStorage.getItem(MEM_KEY);return MEM_OPTS.includes(v)?v:24;}catch(e){return 24;}}
+const fmtDur=x=>!(x>0)?'—':x>=7200?(x/3600).toFixed(x>=36000?0:1).replace('.',',')+' h':x>=120?(x/60).toFixed(x>=1200?0:1).replace('.',',')+' min':eng(x,'s',2);
+function memEstimate(){const s=S.sim;if(!s?.ring)return null;const r=s.ring,nch=r.nch,h=s.var?(s.hv||s.h):s.h,dt=s.opts.recDt||0,bytes=r.cap*(9+4*nch)+(s.per?.cap||0)*nch*20,
+  cover=r.cap*Math.max(dt,h),dev=(navigator.deviceMemory||0)*1024,mb=bytes/1048576,warn=[];
+ if(s.memNote)warn.push(s.memNote);if(dev&&mb>dev*0.25)warn.push(`πάνω από το 25 % της μνήμης του υπολογιστή (${eng(dev*1048576,'B',2)})`);if(mb>1536)warn.push('κοντά στο όριο ενός buffer του browser (≈ 2 GB)');
+ const rowB=14+9*Math.max(1,REC.keys.length||scope.channels().length),rate=rowB/Math.max(dt,h);
+ return {mb,cover,nch,warn,rate};}
+function recArchive(t0,t1,keys,n){if(!REC.name||REC.sim!==S.sim)return null;const cols=keys.map(k=>REC.cols[REC.keys.indexOf(k)]).filter(Boolean);if(!cols.length)return null;
+ return (REC.on?recFlush():Promise.resolve()).then(()=>fetch('/api/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'range',name:REC.name,t0,t1,keys:cols,n})}))
+  .then(r=>r.json()).then(j=>{if(j.error)throw new Error(j.error);const out={...j,cols:{}};keys.forEach(k=>{const c=REC.cols[REC.keys.indexOf(k)];if(c&&j.cols[c])out.cols[k]=j.cols[c];});return out;});}
+async function recSettings(upd){try{const r=await (await fetch('/api/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'settings',...(upd||{})})})).json();if(r.error)throw new Error(r.error);
+  REC.set={dest:r.dest,dir:r.dir,auto:r.auto};REC.disk=r.disk;REC.temp=r.temp;REC.err=null;}catch(e){REC.err=e.message;}renderRecPanel();renderRec();}
+function renderRecPanel(){const P=$('#rec-panel');if(!P||P.hidden)return;const e=memEstimate(),d=REC.disk;
+ P.innerHTML=`<div class="rp-row"><label title="Περισσότερη μνήμη = περισσότερος χρόνος με όλα τα δείγματα· η αλλαγή ξεκινά την προσομοίωση από την αρχή">Μνήμη του scope <select id="rec-mem">${MEM_OPTS.map(v=>`<option value="${v}" ${v===memSetting()?'selected':''}>${v<1024?v+' MB':v/1024+' GB'}</option>`).join('')}</select></label><small class="muted">${e?`≈ ${fmtDur(e.cover)} με όλα τα δείγματα (${e.nch} κανάλια)· πριν από αυτά η περιβάλλουσα min–max ή, με καταγραφή, τα δείγματα από το αρχείο`:''}</small></div>
+  <div class="rp-row"><b>Καταγραφή σε αρχείο:</b><label><input type="radio" name="rp-dest" value="temp" ${REC.set.dest!=='dir'?'checked':''}> προσωρινά</label><small class="muted">${esc(REC.temp||'~/.pcl/recordings')} · σβήνονται οι παλαιότερες πάνω από 2 GB ή μία εβδομάδα</small></div>
+  <div class="rp-row"><label><input type="radio" name="rp-dest" value="dir" ${REC.set.dest==='dir'?'checked':''}> σε φάκελο</label><input id="rp-dir" placeholder="πλήρης διαδρομή, π.χ. D:\\Μετρήσεις" value="${esc(REC.set.dir||'')}"><label><input type="checkbox" id="rp-create"> δημιουργία</label><button id="rp-save">Να το θυμάσαι</button></div>
+  <div class="rp-row"><label><input type="checkbox" id="rp-auto" ${REC.set.auto?'checked':''}> πάντα καταγραφή (ξεκινά μόνη της σε κάθε ▶ από την αρχή)</label></div>
+  <div class="rp-row small">${d&&!d.error?`ελεύθερα ${eng(d.free,'B',3)} στο ${esc(d.folder)}`:d?.error?'<span class="bad">'+esc(d.error)+'</span>':''}${e?` · ≈ ${eng(e.rate,'B',3)} ανά δευτερόλεπτο προσομοίωσης${d&&!d.error&&e.rate>0?` (χωρούν ≈ ${fmtDur(d.free/e.rate)} προσομοίωσης)`:''}`:''}${REC.err?' · <span class="bad">'+esc(REC.err)+'</span>':''}</div>`;
+ P.querySelectorAll('[name="rp-dest"]').forEach(r=>r.onchange=()=>{if(r.value==='dir'&&!$('#rp-dir').value.trim()){REC.set.dest='dir';renderRecPanel();return;}recSettings({dest:r.value,...(r.value==='dir'?{dir:$('#rp-dir').value.trim(),create:$('#rp-create').checked}:{})});});
+ $('#rp-save').onclick=()=>recSettings({dir:$('#rp-dir').value.trim(),dest:'dir',create:$('#rp-create').checked});
+ $('#rp-auto').onchange=e=>recSettings({auto:e.target.checked});
+ const m=$('#rec-mem');m.onchange=()=>{try{localStorage.setItem(MEM_KEY,m.value);}catch(x){}if(REC.on)recToggle();buildSim(true);draw(true);renderRec();renderRecPanel();notice(`Μνήμη scope ${m.options[m.selectedIndex].text}: η προσομοίωση ξεκινά από την αρχή.`,'info');setTimeout(()=>notice(''),3500);};}
 function renderRec(){const b=$('#rec-file'),n=$('#rec-note'),s=S.sim;if(b){b.classList.toggle('on',REC.on);b.textContent=REC.on?`■ καταγράφει${REC.bytes?' · '+eng(REC.bytes,'B',3):''}`:'⭳ σε αρχείο';}
- if(n&&s){const r=s.ring,h=s.var?(s.hv||s.h):s.h,dt=s.opts.recDt||0,cover=r.cap*Math.max(dt,h);setText(n,`μνήμη ≈ ${eng(cover,'s',2)}${REC.lost?' · '+REC.lost+' κενά στο αρχείο (αραιότερη καταγραφή)':''}`);}}
+ if(n&&s){const e=memEstimate();if(!e)return;setText(n,`μνήμη ≈ ${fmtDur(e.cover)} (${eng(e.mb*1048576,'B',2)}, ${e.nch} κανάλια)${e.warn.length?' · ⚠ '+e.warn.join('· '):''}${REC.lost?' · '+REC.lost+' κενά στο αρχείο (αραιότερη καταγραφή)':''}`);n.classList.toggle('bad',e.warn.length>0);}}
 async function recToggle(){if(REC.on){await recFlush();REC.on=false;renderRec();notice('Η καταγραφή γράφτηκε στο '+esc(REC.path)+'.','info');return;}
  const ch=scope.channels();if(!ch.length||!S.sim){notice('Πρόσθεσε πρώτα σήματα στο scope: αυτά γράφονται στο αρχείο.','info');return;}
- try{const r=await (await fetch('/api/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'start',title:tutorial()?.id||'run',header:['t (s)',...ch.map(c=>String(c.label||c.key).replace(/[,\n]/g,' '))].join(',')})})).json();
-  if(r.error)throw new Error(r.error);Object.assign(REC,{on:true,name:r.name,path:r.path,keys:ch.map(c=>c.key),lastT:S.sim.t-1e-12*Math.max(1,S.sim.t),pend:'',lost:0,bytes:0,tLast:performance.now()});
+  // the header: the labels of the channels, made unique (the scope reads the columns back by these names)
+  const seen=new Map();REC.pendCols=ch.map(c=>{let l=String(c.label||c.key).replace(/[,\n"]/g,' ').trim()||c.key;const k=(seen.get(l)||0)+1;seen.set(l,k);return k>1?l+' #'+k:l;});
+  try{const r=await (await fetch('/api/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'start',title:tutorial()?.id||'run',header:['t (s)',...REC.pendCols].join(','),
+   dest:REC.set.dest,...(REC.set.dest==='dir'?{dir:REC.set.dir}:{})})})).json();
+  if(r.error)throw new Error(r.error);Object.assign(REC,{on:true,name:r.name,path:r.path,keys:ch.map(c=>c.key),cols:REC.pendCols,sim:S.sim,evN:S.sim.events?.().n||0,lastT:S.sim.t-1e-12*Math.max(1,S.sim.t),pend:'',lost:0,bytes:0,tLast:performance.now()});
+  if(r.free!=null)REC.disk={folder:r.folder,free:r.free};if(r.removed?.length)notice(`Σβήστηκαν ${r.removed.length} παλιές προσωρινές καταγραφές (όριο χώρου ή ηλικίας).`,'info');
   notice('Καταγραφή στο '+esc(r.path)+': όσο τρέχει, κάθε νέο σημείο των σημάτων του scope γράφεται στο αρχείο.','info');setTimeout(()=>notice(''),5000);}
  catch(e){notice('Καταγραφή σε αρχείο: '+esc(e.message)+' (χρειάζεται ο server της εφαρμογής, python run.py).','error');}renderRec();}
 // the new points of the record since the last write (a gap is counted when the circular buffer passed over them)
@@ -75,10 +103,13 @@ function recCollect(){const s=S.sim;if(!REC.on||!s)return '';const r=s.ring;if(!
  let i=Math.max(0,scope.ringIndex(REC.lastT)-1);while(i<r.n&&!(r.t[(st+i)%r.cap]>REC.lastT))i++;const cis=REC.keys.map(k=>scope.resolve(k)),out=[];
  for(;i<r.n;i++){const j=(st+i)%r.cap,t=r.t[j];out.push(+t.toPrecision(12)+','+cis.map(ci=>ci===-2?'0':ci<0?'NaN':String(+r.d[j*r.nch+ci].toPrecision(7))).join(','));REC.lastT=t;}
  return out.length?out.join('\n')+'\n':'';}
-async function recFlush(){if(!REC.on)return;REC.pend+=recCollect();if(REC.busy||!REC.pend)return;const body=REC.pend;REC.pend='';REC.busy=true;
+async function recFlush(){if(!REC.on)return;REC.pend+=recCollect();if(REC.busy)return REC.wait;if(!REC.pend)return;const body=REC.pend;REC.pend='';REC.busy=true;let done;REC.wait=new Promise(z=>done=z);
+ // 4.11: the events of the run beside the file (<name>.events.csv)
+ const ev=S.sim?.events?.(),newEv=ev&&ev.n>REC.evN?ev.list.slice(-Math.min(ev.list.length,ev.n-REC.evN)):[];if(ev)REC.evN=ev.n;
+ if(newEv.length)fetch('/api/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'events',name:REC.name,rows:newEv.map(e=>[e.t,e.kind,e.src,typeof e.v==='number'?e.v:String(e.v??'')])})}).catch(()=>{});
  try{const r=await (await fetch('/api/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'append',name:REC.name,rows:body})})).json();
   if(r.error)throw new Error(r.error);REC.bytes=r.bytes;if(r.full){REC.on=false;notice('Η καταγραφή έφτασε τα 4 GB και σταμάτησε.','info');}}
- catch(e){REC.on=false;notice('Καταγραφή σε αρχείο: '+esc(e.message),'error');}finally{REC.busy=false;renderRec();}}
+ catch(e){REC.on=false;notice('Καταγραφή σε αρχείο: '+esc(e.message),'error');}finally{REC.busy=false;done();renderRec();}}
 // 4.8: Python on the page, only when the page itself must run a circuit with Python blocks (no worker): loaded once, and the
 // stand-ins of the blocks become the real ones with the state they carry
 async function pyPage(){if(!window.PyRT)return false;const was=PyRT.ready;if(!was)notice('Φορτώνεται η Python στη σελίδα (μία φορά)…','info');
@@ -2407,7 +2438,7 @@ function boot(){
   canPlace:placeOk,subParams:name=>subParams(name),
   oncontext:openMenu,onwarn:t=>{notice(t,'error');setTimeout(()=>notice(''),5000);}});
  editor.setLive(liveOf);
- scope=new Scope($('#scope-canvas'),{onfreeze:()=>{$('#live-btn').hidden=false;},onchange:()=>{requestMeasure();},onhover:()=>{}});
+ scope=new Scope($('#scope-canvas'),{onfreeze:()=>{$('#live-btn').hidden=false;},onchange:()=>{requestMeasure();$('#nav-box')?.classList.toggle('on',!!scope.cfg.box);},onhover:()=>{},archive:recArchive});
  // the tiles of the control signals over the drawing (4.8, ROADMAP §47)
  window.Inside?.init({comp:id=>editor.comp(id),pid,wires:()=>editor.doc.wires,sim:()=>S.error?null:S.sim,eng,holder:()=>editor.holder,notice});
  window.Watch?.init({get S(){return S;},get editor(){return editor;},get scope(){return scope;},eng,fmt,esc,topDoc,atTop,compAt,partDef,numOf,chanLabel,
@@ -2417,6 +2448,10 @@ function boot(){
   setParams:(id,patch)=>editor.setParams(id,patch),simBlock:id=>S.sim?.net.sig.blocks.find(b=>b.id===id)||null,fullDoc,stopT:()=>S.stopT,hdiv:()=>+$('#sim-step').value});
  $('#watch-btn')?.addEventListener('click',()=>Watch.show());
  $('#rec-res')?.addEventListener('change',()=>{applyRec();saveLocal();});$('#rec-file')?.addEventListener('click',recToggle);
+ // 4.11: the memory of the scope (remembered), the panel of the recordings, the zoom axes
+ $('#rec-opts')?.addEventListener('click',()=>{const P=$('#rec-panel');P.hidden=!P.hidden;if(!P.hidden)recSettings();});
+ $('#zoom-axes')?.addEventListener('change',e=>{scope.cfg.zoomAxes=e.target.value;});
+ recSettings().catch(()=>{});
  editor.svg.addEventListener('pointermove',e=>{const el=e.target.closest?.('[data-c]');hoverComp=el?.dataset.c||null;hoverPos=[e.clientX,e.clientY];updateHover();});
  editor.svg.addEventListener('pointerleave',()=>{hoverComp=null;updateHover();});
  // toolbar

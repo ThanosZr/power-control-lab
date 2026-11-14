@@ -48,6 +48,21 @@ const assert=(c,m)=>{if(!c)throw new Error('ASSERT: '+m);};
  // 5. the memory: a fixed ring of points 1 ms apart
  R.mem=await p.evaluate(()=>{const r=PCL.S.sim.ring;return {cap:r.cap,n:r.n,span:r.n>1?r.t[(r.head-1+r.cap)%r.cap]-r.t[(r.head-r.n+r.cap)%r.cap]:0,note:document.querySelector('#rec-note').textContent};});
  assert(R.mem.span>2&&Math.abs(R.mem.span/(R.mem.n-1)-1e-3)<1e-6,'a point per ms in the memory '+JSON.stringify(R.mem));
+ // 5b. 4.11 (decision 4.11-θ): the scope reads its recording back: the same numbers as the memory over a window both hold;
+ //     the envelope of the whole run; the memory of the scope chosen in its panel (with its estimate); y zoom and ↶
+ R.arch=await p.evaluate(async()=>{const k='Y:M1',a=PCL.REC.lastT0??0,t0=Math.max(PCL.scope.ringStart(),PCL.S.sim.t-2.5),t1=t0+0.1;
+  const d=await PCL.scope.opt.archive(t0,t1,[k],2000),ci=PCL.scope.resolve(k);let err=0;
+  d.t.forEach((t,i)=>{if(t<t0||t>t1)return;const v=PCL.scope.valueAt(ci,t),f=d.cols[k].v[i];err=Math.max(err,Math.abs(v-f)/Math.max(1e-9,Math.abs(v)));});
+  const E=PCL.scope.env;return {rows:d.rows,raw:d.raw,err,envW:E?.w,envN:E?[...E.has].filter(Boolean).length:0,t:PCL.S.sim.t};});
+ assert(R.arch.raw&&R.arch.rows>=100&&R.arch.err<2e-6,'the file holds the numbers of the memory '+JSON.stringify(R.arch));
+ assert(R.arch.envW>0&&R.arch.envN*R.arch.envW>0.8*R.arch.t,'the envelope covers the run '+JSON.stringify(R.arch));
+ await p.click('#rec-opts');await p.waitForSelector('#rec-mem');await p.selectOption('#rec-mem','64');await p.waitForTimeout(800);
+ R.mem64=await p.evaluate(()=>({cap:PCL.S.sim.ring.cap,nch:PCL.S.sim.ring.nch,note:document.querySelector('#rec-note').textContent,panel:document.querySelector('#rec-panel').textContent}));
+ assert(R.mem64.cap===Math.floor(64*1048576/(4*R.mem64.nch+9))&&/μνήμη ≈/.test(R.mem64.note)&&/ελεύθερα/.test(R.mem64.panel)&&/ανά δευτερόλεπτο προσομοίωσης/.test(R.mem64.panel),'memory of the scope '+JSON.stringify(R.mem64));
+ await p.click('#rec-opts');
+ {const cv=await p.$('#scope-canvas'),bb=await cv.boundingBox();await p.evaluate(()=>PCL.scope.draw());await p.mouse.move(bb.x+30,bb.y+40);await p.mouse.wheel(0,-300);await p.waitForTimeout(300);
+  R.zy=await p.evaluate(()=>PCL.scope.cfg.panes[0].y);await p.click('[data-nav="back"]');await p.waitForTimeout(200);R.zb=await p.evaluate(()=>PCL.scope.cfg.panes[0].y||null);
+  assert(R.zy&&R.zy.auto===false&&R.zb===null,'y zoom over the axis and back '+JSON.stringify([R.zy,R.zb]));}
  // 6. the theory card: the models and the metrics so far
  R.theory=await p.evaluate(()=>document.querySelector('#theory').textContent);
  assert(/J_eq = J_m/.test(R.theory)&&/moevc/.test(R.theory)&&/km\/kWh/.test(R.theory)&&/Οικονομικός|eco/.test(R.theory),'theory card '+R.theory.slice(0,300));

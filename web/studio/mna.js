@@ -746,7 +746,7 @@
 
  // ---------------------------------------------------------------- simulator
  class Sim{
-  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,step:opts.step||null,solver:opts.solver||null,recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
+  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,mem:+opts.mem>0?+opts.mem:0,step:opts.step||null,solver:opts.solver||null,recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
   // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
   basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>b.type==='CLK'||b.type==='RAMP');if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
    for(const c of this.net.compInfo.values())if(c.gen)return 1/c.gen.g.f; // 4.3: a network of generators runs on their period
@@ -1022,11 +1022,15 @@
    return k;
   }
   allocRecord(){
-   const nch=this.keys.length,cap=this.opts.cap||Math.max(20000,Math.min(200000,Math.floor(24e6/(4*nch+8))));
+   // 4.11: the memory of the scope in MB (opts.mem, the user's setting); the default keeps the 24 MB of before
+   const nch=this.keys.length,mem=+this.opts.mem>0?+this.opts.mem:0;let cap=this.opts.cap||(mem?Math.max(20000,Math.floor(mem*1048576/(4*nch+9))):Math.max(20000,Math.min(200000,Math.floor(24e6/(4*nch+8)))));this.memNote=null;
+   if(!this.opts.cap&&mem){const lim=Math.floor(2**31/Math.max(1,nch));if(cap>lim){cap=lim;this.memNote='η μνήμη περιορίστηκε στο όριο ενός buffer';}}
    // 4.7: in a cross-origin isolated page the buffers are shared memory from the start, so that the live worker (live.js)
    // uses them as they are: copying them at ▶ cost one frame of 80 ms in a circuit of 300 channels (≈ 140 MB)
    const A=(C,n)=>shared?new C(new SharedArrayBuffer(n*C.BYTES_PER_ELEMENT)):new C(n);
-   this.ring={t:A(Float64Array,cap),d:A(Float32Array,cap*nch),g:A(Uint8Array,cap),nch,cap,head:0,n:0};
+   try{this.ring={t:A(Float64Array,cap),d:A(Float32Array,cap*nch),g:A(Uint8Array,cap),nch,cap,head:0,n:0};}
+   catch(e){cap=Math.max(20000,Math.min(200000,Math.floor(24e6/(4*nch+8))));this.memNote=`δεν δόθηκαν ${Math.round(mem)} MB από τον browser: ${Math.round(cap*(4*nch+9)/1048576)} MB`;
+    this.ring={t:A(Float64Array,cap),d:A(Float32Array,cap*nch),g:A(Uint8Array,cap),nch,cap,head:0,n:0};}
    const pc=20000;this.per={t:A(Float64Array,pc),avg:A(Float32Array,pc*nch),min:A(Float32Array,pc*nch),max:A(Float32Array,pc*nch),rms:A(Float32Array,pc*nch),end:A(Float32Array,pc*nch),nch,cap:pc,head:0,n:0};
    this.acc={t0:this.t,dur:0,s:new Float64Array(nch),q:new Float64Array(nch),mn:new Float64Array(nch).fill(Infinity),mx:new Float64Array(nch).fill(-Infinity)};
    this.vals=new Float64Array(nch);this.prevVals=null;

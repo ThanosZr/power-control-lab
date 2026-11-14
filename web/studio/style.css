@@ -519,3 +519,6 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 
 /* 4.9.1: the inside of an electrical library part (inside.js drawEl) */
 .in-el .in-ew{fill:none;stroke:var(--wire);stroke-width:1.6;stroke-linejoin:round}.in-el .in-dot{fill:var(--wire)}.in-el .in-lbl{font:600 11px system-ui,sans-serif;fill:#21302d}.in-el .in-val0{font:10.5px system-ui,sans-serif;fill:#4f625d}.in-el .in-v{font:10.5px system-ui,sans-serif;font-variant-numeric:tabular-nums;fill:#147966}
+/* 4.11: the panel of the recordings (where, always, estimates) */
+.rec-panel{border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin:4px 0;background:#fbfdfc;font-size:12px}.rec-panel .rp-row{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:3px 0}
+.rec-panel #rp-dir{flex:1;min-width:180px;font-size:12px}#rec-note.bad{color:var(--danger)}.rec-line{display:flex;gap:4px;align-items:center}.rec-opts{font-size:11px;padding:0 5px;line-height:1.4}#nav-box.on{background:var(--accent,#147966);color:#fff}
