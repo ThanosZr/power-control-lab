@@ -57,7 +57,7 @@ function tower(o){const pr=towerProject(o,'blocks'),s=new MNA.Sim(pr,{hDiv:o.hDi
  while(s.t<stop-1e-15){s.run(Math.min(s.h,stop-s.t));rec.push([s.t,...TOWER_CH.map(k=>s.now(k))]);}
  return {h:s.h,ch:TOWER_CH,rec,warn:s.net.warnings,batch:MNA.exportForBatch(towerProject(o,'fast'),TOWER_CH)};}
 function exportCase(){const pr=towerProject({},'fast'),ex=MNA.exportForBatch(pr,['Y:TW1/Vtop']),els=ex.net.els,local=new MNA.Sim(pr,{hDiv:20});
- let gis=null;try{MNA.exportForBatch(build('lightning_gis',{impl:'fast'}),['Y:T2/Vtop']);}catch(e){gis=e.message;}
- return {nNL:els.filter(e=>e.k==='NL').length,compact:local.net.els.filter(e=>e.sai||e.foot).length,nNLlocal:local.net.els.filter(e=>e.k==='NL').length,gis};}
+ let gis=null,ntlm=0;try{const r=MNA.exportForBatch(build('lightning_gis',{impl:'fast'}),['Y:T2/Vtop']);ntlm=r.net.els.filter(e=>e.k==='TLM').length;}catch(e){gis=e.message;}   // 4.12: the lines go too
+ return {nNL:els.filter(e=>e.k==='NL').length,compact:local.net.els.filter(e=>e.sai||e.foot).length,nNLlocal:local.net.els.filter(e=>e.k==='NL').length,gis,ntlm};}
 const cases=JSON.parse(process.argv[2]||'[]');
 console.log(JSON.stringify(cases.map(c=>c.kind==='arr'?arr(c):c.kind==='lightning'?lightning(c.ov||{}):c.kind==='expand'?expand(c.id,c.stop):c.kind==='draw'?draw():c.kind==='fit'?fit(c):c.kind==='export'?exportCase():c.kind==='tower'?tower(c):{err:'kind'})));

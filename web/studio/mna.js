@@ -808,7 +808,7 @@
 
  // ---------------------------------------------------------------- simulator
  class Sim{
-  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,mem:+opts.mem>0?+opts.mem:0,step:opts.step||null,solver:opts.solver||null,recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
+  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,mem:+opts.mem>0?+opts.mem:0,eventsMax:+opts.eventsMax>0?+opts.eventsMax:0,...(opts.events===false?{events:false}:{}),step:opts.step||null,solver:opts.solver||null,recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
   // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
   basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>b.type==='CLK'||b.type==='RAMP');if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
    for(const c of this.net.compInfo.values())if(c.gen)return 1/c.gen.g.f; // 4.3: a network of generators runs on their period
@@ -1757,8 +1757,10 @@
   // 4.3: a generator that starts from a load flow needs the steady start of the browser (acInit): the states of that netlist
   const lf=(project?.solve?.init==='ac')||JSON.stringify(project?.components||[]).includes('"GEN3"');
   const net=lf?new Sim(project).net:buildNetlist(project),idx=new Map(net.els.map((e,i)=>[e,i]));
-  // 4.9.1: the server has no multi-conductor line yet: refused, rather than left out of the circuit
-  if(net.els.some(e=>e.k==='TLM')||net.hasPi)throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη τις πολυφασικές γραμμές (TLM, σταθερές ή FD): τρέχει μόνο ο λύτης της εφαρμογής. Οι μονοφασικές γραμμές (TL), οι πύργοι, τα αλεξικέραυνα και το τόξο τρέχουν και στον SciPy.');
+  // 4.12: the lines from geometry go to the server too (CP and FD per mode with T_i, the record before t = 0 and the FD
+  // states of a steady start or of trapped charge). The nominal π not yet: its capacitances between the phases make loops of
+  // capacitors, which the server's formulation (capacitor voltages as states) only solves with a tiny series R (very stiff)
+  if(net.hasPi)throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη το π ονομαστικό των γραμμών από γεωμετρία (οι χωρητικότητες ανάμεσα στις φάσεις κάνουν βρόχους πυκνωτών): τρέχει μόνο ο λύτης της εφαρμογής. Τα μοντέλα CP και FD τρέχουν και στον SciPy (4.12).');
   if(net.els.some(e=>e.sai||e.foot||e.k==='CHB'))throw new NetlistError('Εσωτερικό σφάλμα: συμπαγές στοιχείο (SAIX, RFX, CHBX) στην εξαγωγή για τον SciPy.');
   const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm','gap','a1','b1','a2','b2','Z','tau','Rl','pts'];
   // synchronous machines (3.5): parameters and initial states; the server integrates ψ_α, ψ_β, ω, θ
@@ -1767,7 +1769,13 @@
   const genList=[...net.compInfo.values()].filter(c=>c.gen).map(c=>c.gen),genx=new Map(genList.map((m,i)=>[m,i]));
   const els=net.els.map(e=>{const o={};for(const k of F)if(e[k]!==undefined&&e[k]!==null)o[k]=e[k];if(e.k==='F'){o.i=Array.from(e.i);o.psi=Array.from(e.psi);if(e.sm){o.sm=smx.get(e.sm);delete o.Gam;}if(e.srm){o.srm=srmx.get(e.srm);delete o.Gam;}if(e.gen){o.gen=genx.get(e.gen);delete o.Gam;}}
    // 4.9.1: an arc section (ARCX): its model and its state; the server integrates x = ln g (engine/batch.py)
-   if(e.arc){const A=e.arc;o.arc={lam:A.lam,tau0:A.tau0,alpha:A.alpha,P0:A.P0,P1:A.P1,beta:A.beta,Ron:A.Ron,xmin:A.xmin,xmax:A.xmax,closed:A.closed,x:A.x};}return o;});
+   if(e.arc){const A=e.arc;o.arc={lam:A.lam,tau0:A.tau0,alpha:A.alpha,P0:A.P0,P1:A.P1,beta:A.beta,Ron:A.Ron,xmin:A.xmin,xmax:A.xmax,closed:A.closed,x:A.x};}
+   const hist=H=>H&&H.t.length?{t:H.t.slice(H.s),c:H.c.map(c=>c.slice(H.s))}:null;
+   if(e.k==='TL'&&e.H.t.length)o.H=hist(e.H);
+   if(e.k==='TLM'){Object.assign(o,{n1:e.n1.slice(),n2:e.n2.slice(),M:e.M,Ti:Array.from(e.Ti),vm0:e.vm0?Array.from(e.vm0):null,H:hist(e.H),
+    modes:e.modes.map(m=>m.cp?{cp:true,Zc:m.Zc,R:m.R,tau:m.tau,Ze:m.Ze,hh:m.hh,att:m.att}:{fd:true,tau:m.tau,d:m.d,kr:Array.from(m.kr),kp:Array.from(m.kp),ar:Array.from(m.ar),ap:Array.from(m.ap),
+     z1:Array.from(m.z1),z2:Array.from(m.z2),y1:Array.from(m.y1),y2:Array.from(m.y2),i1:m.i1,i2:m.i2})});}
+   return o;});
   const gens=genList.map(m=>{const g=m.g;return {F:idx.get(m.F),fV:idx.get(m.fV),N:g.N,nd:g.nd,nq:g.nq,Gd:g.Gd,Gq:g.Gq,g0:g.g0,wb:g.wb,f:g.f,Sn:g.Sn,Un:g.Un,vfK:g.vfK,ifK:g.ifK,
    sh:{N:g.sh.N,H:g.sh.H,K:g.sh.K,D:g.sh.D,Dmu:g.sh.Dmu,fr:g.sh.fr,gm:g.sh.gm},exc:m.exc,mech:m.mech,efdS:m.efdS,tmS:m.tmS,efdIn:m.efdIn,tmIn:m.tmIn,Efd0:m.Efd0,Tm0:m.Tm0,V0:m.V0??1,
    term:m.term,nN:m.nN,st:{ph:m.st.ph.slice(),w:m.st.w.slice()}};});
@@ -1776,8 +1784,12 @@
   const ci=id=>net.compInfo.get(id),cix=new Map(net.ctrls.map((k,i)=>[k.id,i]));
   const vd=(a,b)=>({v:[[a,1],[b,-1]].filter(q=>q[0]>=0)});
   const V=c=>c&&c.pins?vd(c.pins[0],c.pins[1]):null;
-  const I=c=>{if(!c||!c.main)return null;if(c.type==='GEN3')return {i:[[idx.get(c.main),-1]]};if(c.type==='XFMR')return {i:[[idx.get(c.main),-c.main.n],[idx.get(c.mag),1]]};if(c.type==='SW')return {i:[[idx.get(c.main),1],...(c.body?[[idx.get(c.body),-1]]:[])]};return {i:[[idx.get(c.main),1]]};};
-  const portRec=(c,pre)=>{const m=pre.match(/^([VI])(\d)$/);if(!m||!c.ports)return null;const q=+m[2]-1;if(q<1||q>=c.ports.length)return null;return m[1]==='V'?vd(c.ports[q][0],c.ports[q][1]):{i:[[idx.get(c.main),1,q]]};};
+  // 4.12: the port currents of a line from geometry: π (the 0 V sources at its ends) and transposition sections (the
+  // section and the position that carry the phase)
+  const linePort=(c,q)=>{const m=c.main,M=m.M;if(m.k==='PIL')return {i:[[idx.get(m.vs[q]),1]]};if(m.k!=='TLS')return {i:[[idx.get(m),1,q]]};
+   const x=q<M?m.first:m.last,pos=x.o.indexOf(q%M),j=q<M?pos:M+pos;return x.e.k==='PIL'?{i:[[idx.get(x.e.vs[j]),1]]}:{i:[[idx.get(x.e),1,j]]};};
+  const I=c=>{if(!c||!c.main)return null;if(c.type==='TLM')return linePort(c,0);if(c.type==='GEN3')return {i:[[idx.get(c.main),-1]]};if(c.type==='XFMR')return {i:[[idx.get(c.main),-c.main.n],[idx.get(c.mag),1]]};if(c.type==='SW')return {i:[[idx.get(c.main),1],...(c.body?[[idx.get(c.body),-1]]:[])]};return {i:[[idx.get(c.main),1]]};};
+  const portRec=(c,pre)=>{const m=pre.match(/^([VI])(\d+)$/);if(!m||!c.ports)return null;const q=+m[2]-1;if(q<1||q>=c.ports.length)return null;return m[1]==='V'?vd(c.ports[q][0],c.ports[q][1]):c.type==='TLM'?linePort(c,q):{i:[[idx.get(c.main),1,q]]};};
   const rec=key=>{const [pre,id,pin]=key.split(':');
    if(pre==='VN'){const n=net.pinNet.get(id+':'+pin);return n?{v:n.ground?[]:[[n.index,1]]}:null;}
    if(pre==='N'){const n=net.nets.find(x=>x.canon===key.slice(2));return n?{v:[[n.index,1]]}:null;}

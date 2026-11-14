@@ -1028,7 +1028,8 @@
   if(!m){m=waveMeasure({kind,n,tau1,tau2},basis);directCache.set(key,m);}return {kind,n,tau1,tau2,eta,T1:m.T1,T2:m.T2,peak:m.peak,fitOk:tau1>0&&tau2>0&&eta>0};}
  const vimpCache=new Map();
  function impulseWave(p){const V0=parseEng(p.Vpk)||0,t0=Math.max(0,parseEng(p.t0)||0),pre=VIMP_STD[p.shape];
-  if(p.shape==='ramp'){const S=Math.abs(parseEng(p.S))||1e12,tr=Math.abs(V0)/S||1e-9;return {kind:'ramp',tr,S,eta:1,I0:V0,t0,T1:tr,T2:Infinity,tau1:tr,tau2:tr,fitOk:true};}
+  if(p.shape==='ramp'){const S=Math.abs(parseEng(p.S))||1e12,tr=V0?Math.max(Math.abs(V0)/S,1e-12):1e-6;   // 4.12: a ramp of 0 V no longer sets a time base of 1 ns
+  return {kind:'ramp',tr,S,eta:1,I0:V0,t0,T1:tr,T2:Infinity,tau1:tr,tau2:tr,fitOk:true};}
   if(p.shape==='direct'){const a=parseEng(p.alpha),b=parseEng(p.beta),K=parseEng(p.K);if(!(a>0&&b>a&&K>0))return {kind:'dexp',n:10,tau1:1e-6,tau2:1e-5,eta:1,I0:0,t0,T1:NaN,T2:NaN,basis:'iec',fitOk:false,err:'α, β, K > 0 και β > α.'};
    return {...directWave('dexp',10,1/b,1/a,1/K,'iec'),I0:V0,t0,basis:'iec'};}
   const T1=pre?pre.T1:Math.max(parseEng(p.T1)||1.2e-6,1e-12),T2=pre?pre.T2:Math.max(parseEng(p.T2)||50e-6,1.5*T1),basis=pre?pre.basis:(p.basis==='tp'?'tp':'iec'),key=[T1,T2,basis].join('|');

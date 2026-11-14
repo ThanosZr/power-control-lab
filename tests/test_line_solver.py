@@ -32,10 +32,10 @@ def node_ok():
         return False
 
 
-def run_case(kind, model, params=None, init='ac', h=20e-6, tend=0.04, Rs=1.0, RL=400.0, every=1, data=None):
+def run_case(kind, model, params=None, init='ac', h=20e-6, tend=0.04, Rs=1.0, RL=400.0, every=1, data=None, batch=False, full=False):
     d = data or lc.typical('400kV')
     q = {'data': d, 'model': model, 'kind': kind, 'f': 50, 'f0': 50, 'Vpk': VPK, 'Rs': Rs, 'RL': RL, 'h': h, 'tend': tend,
-         'init': init, 'params': params or {}, 'every': every}
+         'init': init, 'params': params or {}, 'every': every, 'batch': batch}
     with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as fh:
         json.dump(q, fh)
     try:
@@ -54,6 +54,8 @@ def run_case(kind, model, params=None, init='ac', h=20e-6, tend=0.04, Rs=1.0, RL
     V = np.linalg.solve(Yn, I)
     t, v = np.array(o['t']), np.array(o['v'])
     err = max(np.abs(v[k] - (V[3 + k] * np.exp(1j * w * t)).real).max() for k in range(3)) / abs(V[3])
+    if full:
+        return err, o, V
     return err, o
 
 
@@ -211,6 +213,126 @@ def run_case_sections(m, data):
     V = np.linalg.solve(Yn, I)
     t, v = np.array(o['t']), np.array(o['v'])
     return max(np.abs(v[k] - (V[3 + k] * np.exp(1j * w * t)).real).max() for k in range(3)) / abs(V[3]), o
+
+
+@unittest.skipUnless(node_ok(), 'node')
+class InTheSciPySolver(unittest.TestCase):
+    """4.12: TLM in engine/batch.py (CP with the history at t − τ, FD with its convolutions as ODE states) against the
+    browser, from rest (energization, line_cases) and from the steady state (the record before t = 0 and the FD states
+    exported with the netlist)."""
+    d = lc.typical('400kV')
+
+    def batch(self, o, t_end, rtol, atol):
+        from engine.batch import simulate
+        b = o['batch']
+        return simulate({'net': b['net'], 'channels': b['channels'], 't_end': t_end, 'method': 'Radau', 'rtol': rtol, 'atol': atol,
+                         'max_points': 200000, 'wall': 300, '_local': True})
+
+    def energize(self, data, kind, model, tend):
+        q = {'data': data, 'model': model, 'kind': kind, 'f': 50, 'h': 0.3e-6, 'tend': tend, 'src': {'Vpk': 1.0, 'tr': 20e-6, 'Rs': 10.0},
+             'R': 1e6, 'params': {}, 'batch': True}
+        with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as fh:
+            json.dump(q, fh)
+        try:
+            o = json.loads(subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'line_cases.js'), fh.name], capture_output=True,
+                                          text=True, check=True).stdout)
+        finally:
+            os.unlink(fh.name)
+        r = self.batch(o, tend, 1e-7, 1e-9)
+        self.assertEqual(r['status'], 'ok', r['message'])
+        t, V, tb = np.array(o['t']), np.array(o['v']), np.array(r['t'])
+        pk = np.abs(V).max()
+        return [np.abs(np.interp(t, tb, np.array(r['ch'][k], float)) - V[j]).max() / pk
+                for j, k in enumerate(['V:L1', 'V:Rb', 'V:Rc', 'V:Ra2', 'V:Rb2', 'V:Rc2'])]
+
+    def test_energization_cp(self):
+        e = self.energize(self.d, 'cp', lc.cp_model(self.d, 50), 3e-3)
+        self.assertLess(max(e), 3e-3)          # the far end: the browser interpolates the steep front over its step
+
+    def test_energization_fd(self):
+        e = self.energize(self.d, 'fd', lc.fd_model(self.d), 1.2e-3)
+        self.assertLess(max(e), 1e-3)
+
+    def test_energization_cp_sections(self):
+        d = copy.deepcopy(self.d)
+        d['length'] = 100.0
+        d['transp'] = {'len': [1, 1, 1], 'order': [[1, 2, 3], [2, 3, 1], [3, 1, 2]], 'mode': 'sec'}
+        m = lc.api({'data': d, 'model': 'cp', 'len': 100, 'f': 50})['mdl']
+        e = self.energize(d, 'cp', m, 1.5e-3)
+        self.assertLess(max(e), 3e-3)
+
+    def test_steady_start(self):
+        for kind, m in (('cp', lc.cp_model(self.d, 50)), ('fd', lc.fd_model(self.d))):
+            with self.subTest(kind=kind):
+                _, o, V = run_case(kind, m, tend=0.02, batch=True, full=True)
+                r = self.batch(o, 0.02, 1e-6, 1e-3)
+                self.assertEqual(r['status'], 'ok', r['message'])
+                tb = np.array(r['t'])
+                w = 2 * math.pi * 50
+                for k, key in enumerate(['V:Ra', 'V:Rb', 'V:Rc']):
+                    yb = np.array(r['ch'][key], float)
+                    self.assertLess(np.abs(yb - (V[3 + k] * np.exp(1j * w * tb)).real).max() / abs(V[3]), 2e-5)
+                ib, ij = np.array(r['ch']['I:L1'], float), np.array(o['v'][4])
+                self.assertLess(np.abs(np.interp(np.array(o['t']), tb, ib) - ij).max() / np.abs(ij).max(), 2e-5)
+
+    def test_pi_refused(self):
+        m = lc.api({'data': self.d, 'model': 'pi', 'len': 100, 'f': 50, 'npi': 2})['mdl']
+        with self.assertRaises(subprocess.CalledProcessError) as cm:
+            run_case('pi', m, {'npi': 2}, tend=1e-4, batch=True)
+        self.assertIn('π ονομαστικό', cm.exception.stderr)
+
+
+class DataOptions413(unittest.TestCase):
+    """4.12: the conductor temperature, the sensitivity of the sequence parameters, the communication line in the scan."""
+    d = lc.typical('400kV')
+
+    def test_temperature(self):
+        d = copy.deepcopy(self.d)
+        r20 = lc.report(d)['seq']['R1']
+        d['temp'] = 20
+        self.assertAlmostEqual(lc.report(d)['seq']['R1'], r20, places=14)
+        d['temp'] = 70
+        cs20, cs70 = lc.conductors(self.d), lc.conductors(d)
+        for a, b in zip(cs20, cs70):           # R_dc·(1 + α·50) with the default α of aluminium
+            self.assertAlmostEqual(b['Rdc'] / a['Rdc'], 1 + lc.ALPHA_AL * 50, places=12)
+        d['wires'][0]['alpha'] = 0.0
+        self.assertAlmostEqual(lc.conductors(d)[0]['Rdc'], cs20[0]['Rdc'], places=15)
+        self.assertGreater(lc.report(d)['seq']['R1'], r20)
+        d['temp'] = -400
+        with self.assertRaises(lc.LineError):
+            lc.conductors(d)
+
+    def test_sensitivity(self):
+        r = lc.sensitivity(self.d, 'rho', [10, 100, 1000])['rows']
+        self.assertTrue(r[0]['X0'] < r[1]['X0'] < r[2]['X0'])          # a deeper return path: more zero-sequence inductance
+        self.assertAlmostEqual(r[0]['X1'], r[2]['X1'], delta=1e-3 * r[0]['X1'])   # the positive sequence hardly sees the earth
+        base = lc.report(self.d)['seq']
+        mid = lc.sensitivity(self.d, 'rho', [self.d['rho']])['rows'][0]
+        for k in ('R1', 'X1', 'R0', 'X0'):
+            self.assertAlmostEqual(mid[k], base[k], places=12)
+        self.assertAlmostEqual(mid['C1'], base['C1'] * 1e9, places=9)
+        h = lc.sensitivity(self.d, 'dh', [-2, 0, 2])['rows']
+        self.assertTrue(h[0]['C1'] > h[1]['C1'] > h[2]['C1'])            # higher conductors: less capacitance
+        s = lc.sensitivity(self.d, 'sag', [0, 10])['rows']
+        self.assertGreater(s[1]['C0'], s[0]['C0'])
+        t = lc.sensitivity(self.d, 'temp', [20, 80])['rows']
+        self.assertGreater(t[1]['R1'], t[0]['R1'])
+        self.assertAlmostEqual(t[1]['C1'], t[0]['C1'], places=12)
+        with self.assertRaises(lc.LineError):
+            lc.vary(self.d, 'xyz', 1)
+        from pcl import linereport as lr
+        out = lr.api_sens({'data': self.d, 'param': 'rho', 'lo': 10, 'hi': 1000, 'n': 3})
+        self.assertAlmostEqual(out['rows'][1]['v'], 100.0)                # logarithmic in ρ
+
+    def test_telecom_in_the_scan(self):
+        from pcl import linereport as lr
+        d = copy.deepcopy(self.d)
+        d['wires'].append({'ph': 4, 'x': 30, 'y': 6, 'r': 0.2, 'Rdc': 50})
+        out = lr.api_scan({'data': d, 'len': 100, 'f': 50, 'ppd': 4, 'dec': 4, 'telecom': {'I': 1000, 'U': 400}})
+        T = out['telecom']
+        ref = lc.telecom(d, 50, T['I']['re'] and [complex(a, b) for a, b in zip(T['I']['re'], T['I']['im'])])
+        self.assertAlmostEqual(T['dV']['re'], ref['dV'].real, places=9)
+        self.assertGreater(math.hypot(T['VN']['re'], T['VN']['im']), 1e3)      # kV on an insulated line 30 m away
 
 
 def lightning(cases):

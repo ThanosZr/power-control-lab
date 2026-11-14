@@ -22,9 +22,9 @@
  const ZI=[['tube','σωλήνας (Bessel)'],['gw','Galloway–Wedepohl'],['gmr','GMR (cm)'],['gmrr','GMR/r'],['xu','X μοναδιαίας απόστασης']];
  const ZIP={gw:['ns','εξωτερικά σύρματα'],gmr:['gmr','GMR (cm)'],gmrr:['gmrr','GMR/r'],xu:['xu','X (Ω/km) στο 1 m']};
  const WCOL=[['ph','Φάση','',40],['x','x (m)','',56],['y','Ύψος στον πύργο (m)','',58],['ymid','Ύψος στο μέσο (m)','κενό: όπως στον πύργο',58],['r','Ακτίνα (cm)','',54],['Rdc','R_dc (Ω/km)','κενό: από το ρ',62],
-  ['rho','ρ (Ω·m)','αντί για R_dc (άφησε το R_dc κενό)',62],['tD','T/D','0,5 = συμπαγής',46],['mur','μ_r','',38]];
+  ['rho','ρ (Ω·m)','αντί για R_dc (άφησε το R_dc κενό)',62],['tD','T/D','0,5 = συμπαγής',46],['mur','μ_r','',38],['alpha','α (1/K)','4.12: θερμικός συντελεστής της R στους 20 °C· κενό: 0,00403 (αλουμίνιο)',50]];
  const BCOL=[['ph','Φάση','',40],['x','x (m)','',56],['y','Ύψος στον πύργο (m)','',58],['ymid','Ύψος στο μέσο (m)','',58],['n','Αγωγοί','',38],['R','Ακτίνα δέσμης (cm)','απόσταση κέντρου–αγωγού',54],['ang','Γωνία (°)','πρώτου αγωγού',46],
-  ['r','Ακτίνα αγωγού (cm)','',54],['Rdc','R_dc (Ω/km)','κενό: από το ρ',62],['rho','ρ (Ω·m)','αντί για R_dc',62],['tD','T/D','',46],['mur','μ_r','',38]];
+  ['r','Ακτίνα αγωγού (cm)','',54],['Rdc','R_dc (Ω/km)','κενό: από το ρ',62],['rho','ρ (Ω·m)','αντί για R_dc',62],['tD','T/D','',46],['mur','μ_r','',38],['alpha','α (1/K)','κενό: 0,00403',50]];
  const MEDIUM=[['earth','Έδαφος (Pollaczek)'],['sea','Θάλασσα (άπειρο μέσο)'],['perfect','Τέλεια αγώγιμο μέσο']];
  // cable layers: conductor (radii in m in the data, mm in the table), insulation, semiconducting screen (merged into the insulation)
  const LCOL=[['rin','r_εσ (mm)','μόνο ο πρώτος αγωγός· οι άλλοι αρχίζουν εκεί που τελειώνει το προηγούμενο στρώμα',54],['rout','r_εξ (mm)','',54],
@@ -82,13 +82,14 @@
  function niceStep(r){const e=Math.floor(Math.log10(r/5)),b=10**e,m=r/5/b;return (m<1.5?1:m<3.5?2:m<7.5?5:10)*b;}
  function chartSVG(st){const W=st.W||640,H=st.H||290,ML=62,MR=14,MT=20,MB=34,xs=st.x,on=st.series.filter(s=>!s.off);
   const xl=st.xlog!==false,tx=v=>xl?Math.log10(v):v;let x0=st.x0??Math.min(...xs),x1=st.x1??Math.max(...xs);if(x1<=x0)x1=x0+1;
-  const ix=[];for(let i=0;i<xs.length;i++)if(xs[i]>=x0*(1-1e-12)&&xs[i]<=x1*(1+1e-12))ix.push(i);
+  const ix=[];for(let i=0;i<xs.length;i++)if(xs[i]>=x0-1e-12*Math.abs(x0)&&xs[i]<=x1+1e-12*Math.abs(x1))ix.push(i);
   const all=on.flatMap(s=>ix.map(i=>s.y[i])).filter(Number.isFinite),pos=all.length&&all.every(v=>v>0);
   const ylog=st.ylog==='auto'?pos&&Math.max(...all)/Math.min(...all)>30:!!st.ylog&&pos;st.ylogUsed=ylog;
   let y0,y1;if(!all.length){y0=0;y1=1;}else if(ylog){y0=Math.log10(Math.min(...all));y1=Math.log10(Math.max(...all));if(y1-y0>14)y0=y1-14;if(y1-y0<0.3){y0-=0.15;y1+=0.15;}}
   else{y0=Math.min(...all);y1=Math.max(...all);if(st.refs)for(const r of st.refs){y1=Math.max(y1,r.y);}if(y1-y0<1e-12*Math.max(1,Math.abs(y1))){y0-=0.5*Math.abs(y0||1);y1+=0.5*Math.abs(y1||1);}const pad=(y1-y0)*0.05;y0-=pad;y1+=pad;if(st.zero!==false&&all.every(v=>v>=0)&&y0<0)y0=0;}
+  if(st.yr&&st.yr.log===ylog&&st.yr[1]>st.yr[0]){y0=st.yr[0];y1=st.yr[1];}   // 4.12: a zoom on y (Shift+drag)
   const X=v=>ML+(tx(v)-tx(x0))/(tx(x1)-tx(x0))*(W-ML-MR),Y=v=>{const t=ylog?Math.log10(Math.max(v,10**(y0-1))):v;return H-MB-(t-y0)/(y1-y0)*(H-MB-MT);};
-  st.map={X,Y,ML,MR,MT,MB,W,H,x0,x1,ix,ylog,inv:px=>{const t=tx(x0)+(px-ML)/(W-ML-MR)*(tx(x1)-tx(x0));return xl?10**t:t;}};
+  st.map={X,Y,ML,MR,MT,MB,W,H,x0,x1,ix,ylog,xl,y0,y1,invY:py=>y0+(H-MB-py)/(H-MB-MT)*(y1-y0),inv:px=>{const t=tx(x0)+(px-ML)/(W-ML-MR)*(tx(x1)-tx(x0));return xl?10**t:t;}};
   const F='font-family="system-ui,sans-serif"';let s=`<svg xmlns="http://www.w3.org/2000/svg" class="ld-chart" viewBox="0 0 ${W} ${H}" ${F} font-size="10.5">`;
   s+=`<rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>`;
   if(st.title)s+=`<text x="${ML}" y="13" font-size="11.5" font-weight="600" fill="#203a3f">${esc(st.title)}</text>`;
@@ -108,22 +109,29 @@
   return s+`</g><g class="ld-cur" style="display:none"><line y1="${MT}" y2="${H-MB}" stroke="#203a3f" stroke-dasharray="2 2"/></g><rect class="ld-zoom" y="${MT}" height="${H-MB-MT}" fill="#14796622" style="display:none"/></svg>`;}
  // mounts a chart in el: st = {id, x, series:[{name, y, color, dash, off}], xlab, ylab, ylog ('auto'|true|false), xlog, title, refs}
  function mountChart(el,st,onCsv){const draw=()=>{el.innerHTML=`<div class="ld-ctool"><button data-ylog title="Λογαριθμικός ή γραμμικός άξονας y">${st.ylog==='auto'?'y: αυτόματα':st.ylog?'y: λογ.':'y: γραμμ.'}</button>`+
-   `<button data-reset title="Όλο το εύρος (και διπλό κλικ)">⤢ Όλο</button><button data-svg>SVG</button><button data-png>PNG</button><button data-csv>CSV</button><span class="small muted" data-read></span></div>`+
+   `<button data-back title="Το προηγούμενο ζουμ (4.12)">↶</button><button data-reset title="Όλο το εύρος (και διπλό κλικ)">⤢ Όλο</button><button data-svg>SVG</button><button data-png>PNG</button><button data-csv>CSV</button><span class="small muted" data-read></span></div>`+
    `<div class="ld-cbox">${chartSVG(st)}<div class="ld-ctip" style="display:none"></div></div><div class="ld-cleg">`+st.series.map((q,k)=>`<span data-s="${k}" class="${q.off?'off':''}" title="Κλικ: κρύψε/δείξε· Shift+κλικ: μόνο αυτή"><i style="background:${q.color};${q.dash?'background:repeating-linear-gradient(90deg,'+q.color+' 0 4px,transparent 4px 6px)':''}"></i>${esc(q.name)}</span>`).join('')+'</div>';wire();};
   const wire=()=>{const svg=el.querySelector('svg'),m=st.map,tip=el.querySelector('.ld-ctip'),cur=svg.querySelector('.ld-cur'),zr=svg.querySelector('.ld-zoom');
-   const px=e=>{const r=svg.getBoundingClientRect();return (e.clientX-r.left)/r.width*m.W;};let z0=null;
-   svg.onmousemove=e=>{const x=px(e);if(z0!=null){zr.setAttribute('x',Math.min(z0,x));zr.setAttribute('width',Math.abs(x-z0));}
-    if(x<m.ML||x>m.W-m.MR){cur.style.display='none';tip.style.display='none';return;}const f=m.inv(x);let bi=m.ix[0],bd=Infinity;for(const i of m.ix){const dd=Math.abs(Math.log(st.x[i]/f));if(dd<bd){bd=dd;bi=i;}}
+   const px=e=>{const r=svg.getBoundingClientRect();return (e.clientX-r.left)/r.width*m.W;},py=e=>{const r=svg.getBoundingClientRect();return (e.clientY-r.top)/r.height*m.H;};let z0=null,zy0=null,zmode='x';
+   // 4.12: the same zoom as the scope: drag on x, Shift+drag on y, Ctrl+drag a rectangle, ↶ the previous one
+   const push=()=>{(st.hist=st.hist||[]).push([st.x0,st.x1,st.yr]);if(st.hist.length>40)st.hist.shift();};
+   svg.onmousemove=e=>{const x=px(e),y=py(e);if(z0!=null){if(zmode!=='y'){zr.setAttribute('x',Math.min(z0,x));zr.setAttribute('width',Math.abs(x-z0));}if(zmode!=='x'){zr.setAttribute('y',Math.min(zy0,y));zr.setAttribute('height',Math.abs(y-zy0));}}
+    if(x<m.ML||x>m.W-m.MR){cur.style.display='none';tip.style.display='none';return;}const f=m.inv(x);let bi=m.ix[0],bd=Infinity;for(const i of m.ix){const dd=m.xl?Math.abs(Math.log(st.x[i]/f)):Math.abs(st.x[i]-f);if(dd<bd){bd=dd;bi=i;}}
     const cx=m.X(st.x[bi]);cur.style.display='';cur.firstChild.setAttribute('x1',cx);cur.firstChild.setAttribute('x2',cx);
     const rows=st.series.map((q,k)=>q.off?'':`<div><i style="background:${q.color}"></i>${esc(q.name)}: <b>${fmt(q.y[bi],5)}</b></div>`).join('');
     tip.innerHTML=`<div><b>${esc(st.xlab?.split(' ')[0]||'f')} = ${fmt(st.x[bi],5)}</b></div>`+rows;tip.style.display='';const r=svg.getBoundingClientRect(),left=(cx/m.W)*r.width;
     tip.style.left=(left>r.width*0.6?left-tip.offsetWidth-10:left+10)+'px';tip.style.top='6px';el.querySelector('[data-read]').textContent='';};
    svg.onmouseleave=()=>{cur.style.display='none';tip.style.display='none';};
-   svg.onmousedown=e=>{z0=px(e);zr.style.display='';zr.setAttribute('x',z0);zr.setAttribute('width',0);e.preventDefault();};
-   svg.onmouseup=e=>{if(z0==null)return;const x=px(e),a=Math.min(z0,x),b=Math.max(z0,x);z0=null;zr.style.display='none';if(b-a<6)return;
-    st.x0=m.inv(Math.max(a,m.ML));st.x1=m.inv(Math.min(b,m.W-m.MR));draw();};
-   svg.ondblclick=()=>{st.x0=st.x1=undefined;draw();};
-   el.querySelector('[data-reset]').onclick=()=>{st.x0=st.x1=undefined;draw();};
+   svg.onmousedown=e=>{z0=px(e);zy0=py(e);zmode=e.ctrlKey||e.metaKey?'xy':e.shiftKey?'y':'x';zr.style.display='';
+    zr.setAttribute('x',zmode==='y'?m.ML:z0);zr.setAttribute('width',zmode==='y'?m.W-m.ML-m.MR:0);zr.setAttribute('y',zmode==='x'?m.MT:zy0);zr.setAttribute('height',zmode==='x'?m.H-m.MT-m.MB:0);e.preventDefault();};
+   svg.onmouseup=e=>{if(z0==null)return;const x=px(e),y=py(e),a=Math.min(z0,x),b=Math.max(z0,x),c=Math.min(zy0,y),d=Math.max(zy0,y),mode=zmode;z0=null;zr.style.display='none';
+    zr.setAttribute('y',m.MT);zr.setAttribute('height',m.H-m.MT-m.MB);
+    const okx=b-a>=6,oky=d-c>=6;if(!(mode==='x'?okx:mode==='y'?oky:okx&&oky))return;push();
+    if(mode!=='y'){st.x0=m.inv(Math.max(a,m.ML));st.x1=m.inv(Math.min(b,m.W-m.MR));}
+    if(mode!=='x'){const lo=m.invY(Math.min(d,m.H-m.MB)),hi=m.invY(Math.max(c,m.MT));st.yr=[lo,hi];st.yr.log=m.ylog;}draw();};
+   svg.ondblclick=()=>{push();st.x0=st.x1=undefined;st.yr=null;draw();};
+   el.querySelector('[data-reset]').onclick=()=>{push();st.x0=st.x1=undefined;st.yr=null;draw();};
+   el.querySelector('[data-back]').onclick=()=>{const h=st.hist?.pop();if(!h)return;[st.x0,st.x1,st.yr]=h;draw();};
    el.querySelector('[data-ylog]').onclick=()=>{st.ylog=st.ylog==='auto'?!st.ylogUsed:st.ylog?false:'auto';draw();};
    el.querySelectorAll('[data-s]').forEach(sp=>sp.onclick=e=>{const k=+sp.dataset.s;if(e.shiftKey)st.series.forEach((q,j)=>q.off=j!==k&&q.mate!==k&&st.series[k].mate!==j);else{st.series[k].off=!st.series[k].off;}if(st.onToggle)st.onToggle(st.series);draw();});
    el.querySelector('[data-svg]').onclick=()=>download((st.file||'chart')+'.svg',svgText(svg),'image/svg+xml');
@@ -292,7 +300,8 @@
    <div class="ld-row"><label><input type="checkbox" data-o="two" ${two?'checked':''}> Έδαφος δύο στρωμάτων</label>${two?`<label>πάχος πάνω στρώματος d (m) <input data-d="dsoil" value="${esc(d.dsoil??'')}" style="width:56px"></label><label>ρ₂ (Ω·m) <input data-d="rho2" value="${esc(d.rho2??'')}" style="width:60px"></label>`:''}
     <label title="Σχετική μαγνητική διαπερατότητα του εδάφους (ολοκλήρωμα του Carson)">μ_r εδάφους <input data-d="mur_e" value="${esc(d.mur_e??'')}" placeholder="1" style="width:44px"></label></div>
    ${isOH(d)?`<div class="ld-row"><label title="Ένας αριθμός για όλες τις φάσεις, ή ένας ανά φάση χωρισμένος με κόμμα (S/km)">G ανά φάση (S/km) <input data-o="Gl" value="${esc(Array.isArray(d.G)?d.G.join(', '):'')}" placeholder="π.χ. 2e-9, 2e-9, 3e-9" style="width:150px"></label>
-    <label title="Οι αγωγοί προστασίας μονωμένοι σε τμήματα: δεν μετρούν στο Z, μετρούν στο C (Dommel 4.1.2.5 b)"><input type="checkbox" data-o="iseg" ${d.iseg?'checked':''}> Αγωγοί προστασίας σε τμήματα</label></div>
+    <label title="Οι αγωγοί προστασίας μονωμένοι σε τμήματα: δεν μετρούν στο Z, μετρούν στο C (Dommel 4.1.2.5 b)"><input type="checkbox" data-o="iseg" ${d.iseg?'checked':''}> Αγωγοί προστασίας σε τμήματα</label>
+    <label title="4.12: η θερμοκρασία των αγωγών· τα R_dc (ή ρ) των δεδομένων είναι στους 20 °C και γίνονται R₂₀·(1 + α·(T − 20)), με α του αγωγού (στήλη α, προεπιλογή 0,00403 1/K, αλουμίνιο IEC 60889)">θερμοκρασία αγωγών (°C) <input data-d="temp" value="${esc(d.temp??'')}" placeholder="20" style="width:44px"></label></div>
    <div class="ld-row"><label><input type="checkbox" data-o="tr" ${tr?'checked':''}> Μεταθέσεις</label>${tr?`<label title="Μήκη των τμημάτων (km ή σχετικά)">μήκη <input data-o="trlen" value="${esc((tr.len||[]).join(', '))}" style="width:110px"></label>
     <label title="Η σειρά των φάσεων σε κάθε τμήμα: 123; 231; 312">σειρά <input data-o="trord" value="${esc((tr.order||[]).map(o=>o.join('')).join('; '))}" style="width:110px"></label><label title="Μέσος όρος: οι πίνακες της γραμμής είναι ο μέσος όρος των τμημάτων ανά μήκος (τέλεια μετάθεση). Χωριστά τμήματα (4.12): ο λύτης βάζει κάθε τμήμα ως γραμμή χωρίς μετάθεση με τη σειρά των φάσεών του· οι πίνακες και τα γραφήματα εδώ δείχνουν τη γραμμή χωρίς μετάθεση.">στον λύτη <select data-o="trmode"><option value="avg" ${(tr.mode||'avg')==='avg'?'selected':''}>μέσος όρος</option><option value="sec" ${tr.mode==='sec'?'selected':''}>χωριστά τμήματα</option></select></label>`:''}</div>`:''}
    ${isCable(d)?`<div class="ld-row"><label title="Απώλειες της μόνωσης: αιτιατό μοντέλο ευρείας ζώνης (προεπιλογή), σταθερό G = ωC·tanδ, ή της παλιάς Cable Data G = 2π(f_G0 + f)·C·tanδ">Απώλειες μόνωσης <select data-d="loss"><option value="causal" ${(d.loss||'causal')==='causal'?'selected':''}>αιτιατό (ευρείας ζώνης)</option><option value="const" ${d.loss==='const'?'selected':''}>σταθερό tanδ</option><option value="fg0" ${d.loss==='fg0'?'selected':''}>Cable Data (f_G0 + f)</option></select></label>
@@ -347,11 +356,22 @@
   if(sc.qtests?.length){s+=`<h3>Έλεγχος του T_i (Q-error, %)</h3><p class="small muted">Μόνιμη κατάσταση με τον σταθερό T_i απέναντι στην ακριβή γραμμή, πηγές 1∠0°, 1∠0°, 1∠120° ανά τριάδα στο άκρο αποστολής· ανοικτό ή βραχυκυκλωμένο άκρο λήψης· το μέγιστο σφάλμα ανάμεσα στα μεγέθη που είναι τουλάχιστον 5 % του μεγαλύτερου (line_constants §6.8).</p>
    <table class="ld-rep"><tr><th>f (Hz)</th><th>ανοικτό: V λήψης</th><th>ανοικτό: I αποστολής</th><th>βραχυκύκλωμα: I αποστολής</th><th>βραχυκύκλωμα: I λήψης</th></tr>`+
    sc.qtests.map(r=>`<tr><td>${fmt(r.f)}</td>${['open_v','open_i','short_i1','short_i2'].map(k=>`<td class="${r[k]>5?'bad':''}">${fmt(r[k],3)}</td>`).join('')}</tr>`).join('')+'</table>';}
+  if(sc.telecom){const T=sc.telecom;if(T.err)s+=`<h3>Γραμμή τηλεπικοινωνιών</h3><p class="bad small">⚠ ${esc(T.err)}</p>`;else{const ab=z=>z?Math.hypot(z.re,z.im):NaN,Z=T.Z,n=Z.re.length,L=+sc.length||1;
+   s+=`<h3>Γραμμή τηλεπικοινωνιών <small class="muted">(line_constants §5.2, Dommel 4.1.2.5 c)</small></h3><table class="ld-rep"><tr><th>από τη φάση</th>${[...Array(n)].map((_,k)=>`<th>${k+1}</th>`).join('')}</tr>
+    <tr><td>Z_N,k (Ω/km)</td>${[...Array(n)].map((_,k)=>`<td>${cfmt(Z.re[k],Z.im[k])}</td>`).join('')}</tr></table>`+
+    (T.sym?.length?`<table class="ld-rep"><tr><th>κύκλωμα</th><th>Z μηδενικής</th><th>Z θετικής</th><th>Z αρνητικής</th></tr>${T.sym.map((q,i)=>`<tr><td>${i+1}</td><td>${cfmt(q.zero.re,q.zero.im)}</td><td>${cfmt(q.pos.re,q.pos.im)}</td><td>${cfmt(q.neg.re,q.neg.im)}</td></tr>`).join('')}</table>`:'')+
+    `<p>Επαγόμενη διαμήκης τάση (μαγνητική): <b>${fmt(ab(T.dV)/Math.SQRT2)} V/km</b> RMS, στα ${fmt(L)} km <b>${fmt(ab(T.dV)*L/Math.SQRT2)} V</b> · ηλεκτροστατική τάση της μονωμένης γραμμής: <b>${fmt(ab(T.VN)/Math.SQRT2/1e3)} kV</b> RMS
+     <span class="small muted">(συμμετρικά ρεύματα ${fmt(VIEW.I)} A και τάσεις ${fmt(VIEW.U)} kV στις άλλες φάσεις· με τη μείωση από τους συνεχείς αγωγούς προστασίας)</span></p>`;}}
   if(sc.fields){s+=`<h3>Πεδία στο έδαφος (προφίλ στα ${fmt(sc.fields.height)} m)</h3><div class="ld-row"><label>U (kV) <input data-U value="${esc(VIEW.U)}" style="width:60px"></label><label>I (A) <input data-I value="${esc(VIEW.I)}" style="width:60px"></label>
    <span class="small muted">Τριφασικά συμμετρικά συστήματα σε κάθε κύκλωμα· E από τα φορτία Q = C·V με τα είδωλα (line_constants §5.1), B από τα ρεύματα με τα επαγόμενα στους αγωγούς προστασίας (κύριοι άξονες των ελλείψεων). Οι γραμμές αναφοράς είναι οι τιμές του ICNIRP 2010 για το κοινό στα 50 Hz.</span></div><div class="ld-fplots"><div data-fE></div><div data-fB></div></div>`;}
   return s;}
 
  // ---------------------------------------------------------------- the dialog
+ const SENS=[['rho','ρ εδάφους (Ω·m)'],['dh','ύψος όλων των αγωγών +Δh (m)'],['sag','βέλος (m)'],['temp','θερμοκρασία αγωγών (°C)']];
+ const SENS_DEF={rho:[10,1000],dh:[-5,5],sag:[0,20],temp:[0,100]};
+ // 4.12: a series of a kept scan on the frequencies of the current one (linear in log f; outside its range: none)
+ function onF(fx,f0,y){if(fx.length===f0.length&&fx.every((v,i)=>Math.abs(v-f0[i])<=1e-9*v))return y;const L0=f0.map(Math.log);
+  return fx.map(v=>{const x=Math.log(v);if(x<L0[0]-1e-12||x>L0[L0.length-1]+1e-12)return NaN;let j=1;while(j<L0.length-1&&L0[j]<x)j++;const t=(x-L0[j-1])/((L0[j]-L0[j-1])||1);return y[j-1]+(y[j]-y[j-1])*t;});}
  const TABS=[['data','Αγωγοί'],['model','Μοντέλο'],['graphs','Γραφήματα'],['tables','Πίνακες'],['export','Εξαγωγή']];
  // opens the dialog for the part `id`; ctx = {editor, api(action, data) → Promise, changed()}
  function open(id,ctx){const c=ctx.editor.comp(id);if(!c)return;const p0={...P.defaults('TLM'),...c.params};
@@ -359,6 +379,8 @@
   const norm=()=>{if(!isOH(d))return;d.wires=d.wires||[];d.bundles=d.bundles||[];};norm();let last=null,status=null,sc=null,scKey=null,scBusy=false,scErr=null;
   const G=Object.assign({tab:'data',dom:'modes',qty:'Zc',form:'mag',cmp:true},store.get('graph',{}));let tab=store.get('tab','data');if(!TABS.some(t=>t[0]===tab))tab='data';
   const hide=new Set(),undo=[];let sel=null,xsI=0,view=null,charts=[];
+  // 4.12: a kept scan to compare with (dashed in the same charts), and the sensitivity of the sequence parameters
+  let refSc=null,sens=null,sensBusy=false,sensErr=null;const SP=Object.assign({param:'rho',lo:10,hi:1000,n:21,f:50,qty:'RX'},store.get('sens',{}));
   const box=document.createElement('div');box.className='modal ld-modal';document.body.appendChild(box);
   const close=()=>{box.remove();document.removeEventListener('keydown',onKey);};const onKey=e=>{if(e.key==='Escape')close();else if((e.ctrlKey||e.metaKey)&&e.key==='z'&&tab==='data'&&undo.length&&!/INPUT|SELECT/.test(document.activeElement?.tagName||'')){e.preventDefault();doUndo();}};document.addEventListener('keydown',onKey);
   const pars=()=>({...P.defaults('TLM'),...ctx.editor.comp(id).params});
@@ -368,7 +390,7 @@
   let pend=false;const later=()=>{if(pend)return;pend=true;setTimeout(()=>{pend=false;if(box.isConnected)render();},0);};
   const saveData=()=>{status=null;ctx.editor.setParams(id,{data:JSON.stringify(d)});ctx.changed();};
   const scanReq=()=>{const p=pars();const q={data:d,len:num(p.len),fmin:num(p.fmin),dec:num(p.dec),ppd:num(p.ppd),fti:num(p.fti),ti:p.ti||'gm0',tiauto:p.tiauto==='1'||p.tiauto===true,f:num(p.f)||50,
-   field:{U:400,I:1000}};let m=null;try{m=p.mdl?JSON.parse(p.mdl):null;}catch(e){}if(m&&m.type==='fd'&&m.src===P.tlmKey(p))q.mdl=m;return q;};
+   field:{U:400,I:1000},...(VIEW.tel?{telecom:{U:+VIEW.U||400,I:+VIEW.I||1000}}:{})};let m=null;try{m=p.mdl?JSON.parse(p.mdl):null;}catch(e){}if(m&&m.type==='fd'&&m.src===P.tlmKey(p))q.mdl=m;return q;};
   const doScan=async()=>{if(scBusy)return;scBusy=true;scErr=null;render();const q=scanReq(),key=JSON.stringify(q);
    try{sc=await ctx.api('line_scan',q);scKey=key;}catch(e){scErr=e.message||String(e);}scBusy=false;if(box.isConnected)render();};
   const scanOld=()=>sc&&scKey!==JSON.stringify(scanReq());
@@ -414,8 +436,17 @@
      <label>Μορφή <select data-g="form">${FORMS.map(([k,l])=>`<option value="${k}" ${G.form===k?'selected':''}>${esc(l)}</option>`).join('')}</select></label>
      ${G.dom==='modes'||G.dom==='exact'?`<label title="Οι ακριβείς ρυθμοί (μιγαδικός T_i(f)) διακεκομμένοι πάνω στους ρυθμούς του σταθερού T_i"><input type="checkbox" data-g="cmp" ${G.cmp?'checked':''}> σύγκριση σταθερού / ακριβούς</label>`:''}
      <span class="small muted">T_i ${esc(TIK[sc.ti]||sc.ti)} στα ${fmt(sc.fti)} Hz · ${sc.f.length} συχνότητες · μήκος ${fmt(sc.length)} km</span></div>
-     <div class="ld-chartw" data-chart></div><p class="small muted">${G.dom==='ti'?'Η απόκλιση μεγαλώνει πολύ σε υψηλές συχνότητες όπου οι ρυθμοί εκφυλίζονται (ίδια ταχύτητα): εκεί η επιλογή των στηλών είναι αυθαίρετη και το σφάλμα δεν μετρά· μετρά το q-error και οι δοκιμές Q-error (καρτέλα «Πίνακες»). ':''}Σύρσιμο: μεγέθυνση στη ζώνη· διπλό κλικ: όλο το εύρος· κλικ στο υπόμνημα: κρύψε/δείξε (Shift: μόνο αυτή).</p>`:''}`;}
-   if(t==='tables')return `<div class="ld-row">${scanBar()}</div><div data-tables>${tablesHTML(sc)}</div>`;
+     <div class="ld-row"><button data-refkeep title="4.12: κράτα αυτή τη σάρωση· άλλαξε τη διάταξη ή τις επιλογές, σάρωσε ξανά, και η κρατημένη φαίνεται διακεκομμένη στα ίδια γραφήματα">Κράτα ως αναφορά</button>
+      ${refSc?`<label><input type="checkbox" data-g="ref" ${G.ref!==false?'checked':''}> σύγκριση με την αναφορά <small class="muted">(${esc(refSc.lab)})</small></label><button data-refdrop>Χωρίς αναφορά</button>`:''}</div>
+     <div class="ld-chartw" data-chart></div><p class="small muted">${G.dom==='ti'?'Η απόκλιση μεγαλώνει πολύ σε υψηλές συχνότητες όπου οι ρυθμοί εκφυλίζονται (ίδια ταχύτητα): εκεί η επιλογή των στηλών είναι αυθαίρετη και το σφάλμα δεν μετρά· μετρά το q-error και οι δοκιμές Q-error (καρτέλα «Πίνακες»). ':''}Σύρσιμο: μεγέθυνση στη ζώνη· διπλό κλικ: όλο το εύρος· κλικ στο υπόμνημα: κρύψε/δείξε (Shift: μόνο αυτή).</p>`:''}
+     <h3>Ευαισθησία των ακολουθιών <small class="muted">(4.12, τρεις φάσεις)</small></h3><div class="ld-row">
+      <label>Παράμετρος <select data-sp="param">${SENS.map(([k,l])=>`<option value="${k}" ${SP.param===k?'selected':''}>${esc(l)}</option>`).join('')}</select></label>
+      <label>από <input data-sp="lo" value="${esc(SP.lo)}" style="width:54px"></label><label>έως <input data-sp="hi" value="${esc(SP.hi)}" style="width:54px"></label>
+      <label>σημεία <input data-sp="n" value="${esc(SP.n)}" style="width:36px"></label><label>f (Hz) <input data-sp="f" value="${esc(SP.f)}" style="width:44px"></label>
+      <label>Μέγεθος <select data-sp="qty">${[['RX','R και X (Ω/km)'],['C','C (nF/km)'],['B','B (μS/km)']].map(([k,l])=>`<option value="${k}" ${SP.qty===k?'selected':''}>${l}</option>`).join('')}</select></label>
+      <button data-sens ${sensBusy?'disabled':''}>${sensBusy?'Υπολογισμός…':'Σάρωση ευαισθησίας'}</button><span class="small ${sensErr?'bad':'muted'}">${sensErr?'⚠ '+esc(sensErr):'Οι παράμετροι ακολουθιών (θετική, μηδενική) καθώς αλλάζει μία παράμετρος, όπως τα σχήματα ευαισθησίας του Part I.'}</span></div>
+     ${sens?'<div class="ld-chartw" data-schart></div>':''}`;}
+   if(t==='tables')return `<div class="ld-row">${scanBar()}</div><div class="ld-row"><label title="4.12 (line_constants §5.2): η τελευταία φάση των δεδομένων είναι η γραμμή τηλεπικοινωνιών· οι άλλες φάσεις με συμμετρικά ρεύματα I και τάσεις U/√3"><input type="checkbox" data-tel ${VIEW.tel?'checked':''}> Η τελευταία φάση είναι γραμμή τηλεπικοινωνιών</label></div><div data-tables>${tablesHTML(sc)}</div>`;
    if(t==='export'){const tm=P.tlmModel(p),ok=!tm.err&&!tm.need;
     return `<div class="ld-row">${scanBar()}</div><h3>Αναφορά</h3><div class="ld-row ld-ex"><button data-ex="html">Αναφορά HTML</button><button data-ex="pdf">PDF (γραφήματα, matplotlib)</button><span class="small muted">Η αναφορά HTML τυπώνεται σε PDF από τον browser· έχει πίνακες, ακολουθίες, χρήσιμα μεγέθη, ρυθμούς, Q-error, μοντέλο και γραφήματα.</span></div>
      <h3>Δεδομένα</h3><div class="ld-row ld-ex"><button data-ex="csv">CSV (όλα τα μεγέθη)</button><label><select data-csvform><option value="magang">μέτρο και γωνία</option><option value="reim">Re και Im</option></select></label><label><select data-csvsep><option value=",">«,» και «.»</option><option value=";">«;» και «,» (Excel ελληνικά)</option></select></label>
@@ -501,7 +532,7 @@ lr.plot(sc, [('modes', 'Zc'), ('modes', 'alpha')], preset='ieee', out='modes.pdf
     else{const l=d.bundles[d.bundles.length-1];d.bundles.push(l?{...l,x:+l.x+8,ph:(+l.ph||0)+1}:{ph:1,x:0,y:15,n:2,R:20,ang:0,r:1.5,Rdc:0.06,tD:0.33});}saveData();later();});
    box.querySelectorAll('[data-d]').forEach(el=>el.onchange=()=>{const k=el.dataset.d,v=el.value.trim();snap();if(k==='skin')d.skin=el.checked;else if(k==='earth'||k==='loss')d[k]=el.value;
     else if(k==='medium'){const was=d.medium||'earth';d.medium=el.value;if(el.value==='sea'&&was!=='sea')d.rho=0.2;else if(was==='sea'&&el.value!=='sea')d.rho=100;}
-    else if(['G','mur_e','fg0','rho2','dsoil'].includes(k)&&v===''){delete d[k];}else{const x=num(v);if(x===null){el.classList.add('bad');undo.pop();return;}d[k]=x;}saveData();later();});
+    else if(['G','mur_e','fg0','rho2','dsoil','temp'].includes(k)&&v===''){delete d[k];}else{const x=num(v);if(x===null){el.classList.add('bad');undo.pop();return;}d[k]=x;}saveData();later();});
    box.querySelectorAll('[data-o]').forEach(el=>el.onchange=()=>{const k=el.dataset.o,v=el.value.trim();snap();
     if(k==='two'){if(el.checked){d.rho2=d.rho2??(+d.rho||100)*10;d.dsoil=d.dsoil??5;}else{delete d.rho2;delete d.dsoil;}}
     else if(k==='iseg'){if(el.checked)d.iseg=true;else delete d.iseg;}
@@ -535,16 +566,28 @@ lr.plot(sc, [('modes', 'Zc'), ('modes', 'alpha')], preset='ieee', out='modes.pdf
     const c=l?JSON.parse(JSON.stringify(l)):NEW_CABLE();if(l){c.x=+l.x+2*Math.max(...l.layers.map(q=>+q.rout||0));c.ph=[].concat(l.ph).map((v,k)=>k===0?M+1:+v);}else c.x=0;d.cables.push(c);view=null;saveData();later();};};
   // the charts of the scan
   const wireGraphs=()=>{box.querySelectorAll('[data-g]').forEach(el=>el.onchange=()=>{const k=el.dataset.g;G[k]=el.type==='checkbox'?el.checked:el.value;if(k==='dom'){G.qty=Object.keys(Q[G.dom].q)[0];}store.set('graph',G);render();});
+   const rk=box.querySelector('[data-refkeep]');if(rk)rk.onclick=()=>{if(!sc)return;const t=new Date();refSc={sc,lab:`${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`};G.ref=true;render();};
+   const rd=box.querySelector('[data-refdrop]');if(rd)rd.onclick=()=>{refSc=null;render();};
+   box.querySelectorAll('[data-sp]').forEach(el=>el.onchange=()=>{const k=el.dataset.sp;if(k==='param'||k==='qty'){SP[k]=el.value;if(k==='param'){[SP.lo,SP.hi]=SENS_DEF[el.value];}}else{const x=num(el.value);if(x===null){el.classList.add('bad');return;}SP[k]=k==='n'?Math.round(x):x;}store.set('sens',SP);if(k!=='qty')sens=null;render();});
+   const sb=box.querySelector('[data-sens]');if(sb)sb.onclick=async()=>{if(sensBusy)return;sensBusy=true;sensErr=null;render();
+    try{sens=await ctx.api('line_sens',{data:d,param:SP.param,lo:SP.lo,hi:SP.hi,n:SP.n,f:SP.f});}catch(e){sensErr=e.message||String(e);sens=null;}sensBusy=false;if(box.isConnected)render();};
+   const se=box.querySelector('[data-schart]');if(se&&sens){const rows=sens.rows,x=rows.map(r=>r.v),lab=(SENS.find(q=>q[0]===sens.param)||[,''])[1];
+    const S=SP.qty==='C'?[['C1','C₁','#147966'],['C0','C₀','#b5472c']]:SP.qty==='B'?[['B1','B₁','#147966'],['B0','B₀','#b5472c']]:[['R1','R₁','#147966'],['X1','X₁','#2f5fa0'],['R0','R₀','#b5472c'],['X0','X₀','#8a5a00']];
+    charts.push(mountChart(se,{id:'ldsens',x,xlog:sens.param==='rho',xlab:lab,ylab:SP.qty==='C'?'C (nF/km)':SP.qty==='B'?'B (μS/km)':'Ω/km',ylog:false,title:`Ακολουθίες στα ${fmt(sens.f)} Hz συναρτήσει: ${lab}`,
+     series:S.map(([k,n,col])=>({name:n,y:rows.map(r=>r[k]),color:col})),file:`${c.label||c.id}_sens_${sens.param}`}));}
    const el=box.querySelector('[data-chart]');if(!el||!sc)return;const [title,unit]=Q[G.dom].q[G.qty];let ss=seriesOf(sc,G.dom,G.qty);
    const offs=store.get('off:'+G.dom+G.qty,[]);
    let series=ss.map((s,k)=>({name:s.name,y:valOf(s,G.form),color:SC[(s.mate!=null?ss[s.mate].el?.[0]:s.el?.[0]??k)%SC.length],dash:s.dash,mate:s.mate,off:offs.includes(s.name)}));
    if(G.dom==='phase'||G.dom==='sym'||(G.dom==='ti'&&G.qty==='ti'))series.forEach((s,k)=>{s.color=SC[k%SC.length];});
    if((G.dom==='modes'||G.dom==='exact')&&G.cmp){const other=G.dom==='modes'?'exact':'modes';const s2=seriesOf(sc,other,G.qty);
     series=series.concat(s2.map((s,k)=>({name:s.name+(other==='exact'?' (ακριβής)':' (σταθερός T_i)'),y:valOf(s,G.form),color:SC[k%SC.length],dash:true,off:offs.includes(s.name+(other==='exact'?' (ακριβής)':' (σταθερός T_i)'))})));}
+   if(refSc&&G.ref!==false&&refSc.sc.M===sc.M){try{const rs=seriesOf(refSc.sc,G.dom,G.qty);
+    series=series.concat(rs.map((s,k)=>({name:s.name+' (αναφορά)',y:onF(sc.f,refSc.sc.f,valOf(s,G.form)),color:series[k]?.color||SC[k%SC.length],dash:true,off:offs.includes(s.name+' (αναφορά)')})));}catch(e){}}
    const anyC=ss.some(s=>s.im),ylab=(anyC?(G.form==='ang'?'∠':G.form==='re'?'Re ':G.form==='im'?'Im ':'|')+title+(G.form==='mag'?'|':''):title)+(G.form==='ang'&&anyC?' (°)':unit?' ('+unit+')':'');
    charts.push(mountChart(el,{id:'ldc'+id.replace(/\W/g,''),x:sc.f,series,ylab,ylog:G.form==='mag'||!anyC?'auto':false,title:`${Q[G.dom].t}: ${ylab}`,file:`${c.label||c.id}_${G.dom}_${G.qty}`,
     onToggle:s=>store.set('off:'+G.dom+G.qty,s.filter(q=>q.off).map(q=>q.name))}));};
-  const wireTables=()=>{box.querySelectorAll('[data-U]').forEach(i=>i.onchange=()=>{const x=num(i.value);if(x>0){VIEW.U=x;saveView();later();}});
+  const wireTables=()=>{const tl=box.querySelector('[data-tel]');if(tl)tl.onchange=()=>{VIEW.tel=tl.checked;saveView();render();};
+   box.querySelectorAll('[data-U]').forEach(i=>i.onchange=()=>{const x=num(i.value);if(x>0){VIEW.U=x;saveView();later();}});
    box.querySelectorAll('[data-I]').forEach(i=>i.onchange=()=>{const x=num(i.value);if(x>0){VIEW.I=x;saveView();later();}});
    const F=sc?.fields;if(F){const kE=VIEW.U/F.U,kB=VIEW.I/F.I,lim=F.limits||{};
     charts.push(mountChart(box.querySelector('[data-fE]'),{id:'ldfe',x:F.x,xlog:false,xlab:'x (m)',ylab:'E (kV/m)',ylog:false,title:`|E| στα ${fmt(F.height)} m για U = ${fmt(VIEW.U)} kV`,

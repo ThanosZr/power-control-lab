@@ -161,3 +161,49 @@ class ReadBack(unittest.TestCase):
         with self.assertRaises(ValueError):
             recording.read_range('../x.csv', 0, 1)
 
+
+
+class OldRecordings(unittest.TestCase):
+    """4.12: the list with sizes and times, the events read back for the viewer, and the compression of a recording."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.env = mock.patch.dict(os.environ, {'PCL_HOME': self.tmp.name})
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+        self.tmp.cleanup()
+
+    def test_list_events_and_gzip(self):
+        import gzip
+        r = recording.handle({'op': 'start', 'title': 'gz', 'header': 't (s),v'})
+        name = r['name']
+        recording.handle({'op': 'append', 'name': name, 'rows': ''.join(f'{i * 1e-3:.6g},{(i % 7) * 0.5:.6g}\n' for i in range(5000))})
+        recording.handle({'op': 'events', 'name': name, 'rows': [[0.001, 'switch', 'S1, a', 1], [0.002, 'gap', 'SG"1', 'on']]})
+        items = recording.handle({'op': 'list'})['items']
+        it = next(x for x in items if x['name'] == name)
+        self.assertTrue(it['events'])
+        self.assertGreater(it['bytes'], 40000)
+        ev = recording.handle({'op': 'events_read', 'name': name})
+        self.assertEqual(ev['rows'][0][1:3], ['switch', 'S1, a'])     # quoted fields with commas and quotes read back
+        self.assertEqual(ev['rows'][1][2], 'SG"1')
+        self.assertEqual(recording.handle({'op': 'info', 'name': name})['rows'], 5000)
+        g = recording.handle({'op': 'gzip', 'name': name})
+        p = Path(r['path'])
+        self.assertFalse(p.exists())
+        gz = p.with_name(g['gz'])
+        self.assertTrue(gz.exists() and p.with_name(p.name[:-4] + '.events.csv.gz').exists())
+        self.assertLess(g['bytes'], g['from'] / 3)
+        with gzip.open(gz, 'rt') as f:
+            lines = f.read().splitlines()
+        self.assertEqual(lines[0], 't (s),v')
+        self.assertEqual(len(lines), 5001)
+        with self.assertRaises(ValueError):
+            recording.handle({'op': 'info', 'name': name})            # the CSV is gone: no reading back
+        r2 = recording.handle({'op': 'start', 'title': 'keep', 'header': 't (s),v'})
+        recording.handle({'op': 'append', 'name': r2['name'], 'rows': '0,1\n1e-3,2\n'})
+        recording.handle({'op': 'gzip', 'name': r2['name'], 'keep': True})
+        self.assertTrue(Path(r2['path']).exists())
+        with self.assertRaises(ValueError):
+            recording.handle({'op': 'gzip', 'name': '../x.csv'})

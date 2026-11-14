@@ -35,7 +35,7 @@ from scipy.integrate import solve_ivp
 from scipy.linalg import lu_factor, lu_solve
 
 GMIN = 1e-9
-KINDS = {'C', 'CPL', 'D', 'F', 'G', 'GY', 'I', 'L', 'MG', 'NL', 'S', 'TL', 'V', 'X'}     # the elements of the netlist known here
+KINDS = {'C', 'CPL', 'D', 'F', 'G', 'GY', 'I', 'L', 'MG', 'NL', 'S', 'TL', 'TLM', 'V', 'X'}     # the elements of the netlist known here
 METHODS = ('Radau', 'BDF', 'LSODA', 'RK45', 'RK23', 'DOP853')
 IMPLICIT = {'Radau', 'BDF', 'LSODA'}
 LIMITS = {'els': 800, 'nodes': 600, 't_end': 10.0, 'wall': 45.0, 'points': 600000, 'periods': 20000}
@@ -570,8 +570,10 @@ class Circuit:
             r = _f(e.get('Rl'), 0) / (4 * N)
             e['N'], e['ts'], e['Ze'] = N, e['tau'] / N, e['Z'] + r
             e['hh'] = (e['Z'] - r) / e['Ze']
-            e['H'] = {'t': [], 'c': [[] for _ in range(3 * N + 1)]}
-        self.tau_min = min((E[i]['ts'] for i in self.iT), default=math.inf)
+            H = e.get('H')          # 4.12: the record before t = 0 of a steady start (the browser's tlSteady)
+            e['H'] = {'t': list(H['t']), 'c': [list(c) for c in H['c']]} if H else {'t': [], 'c': [[] for _ in range(3 * N + 1)]}
+        self.iTM = [i for i, e in enumerate(E) if e['k'] == 'TLM']     # 4.12: lines from geometry (below)
+        self.tau_min = min([E[i]['ts'] for i in self.iT] + [float(m['tau']) for i in self.iTM for m in E[i]['modes']], default=math.inf)
         self.iN = [i for i, e in enumerate(E) if e['k'] == 'NL' and not e.get('arc')]      # surge arresters (3.9)
         # 4.9.1: the arc sections of breaker poles (ARCX): i = g·v with x = ln g one more state (below); closed: g = 1/R_on
         self.iA = [i for i, e in enumerate(E) if e['k'] == 'NL' and e.get('arc')]
@@ -717,10 +719,11 @@ class Circuit:
             self.Dm = np.vstack([self.Dm, np.zeros((m, n))])
             self.x0 = np.concatenate([self.x0, [_f(a.get('x'), a['xmax']) for a in A0]])
             self.ns += m
+        self.tlm_setup()
         clk = next((b for b in self.blocks if b['type'] in ('CLK', 'RAMP')), None)
         lg = [_f(E[i]['wave'].get('T1'), 1e-6) for i in self.iI if E[i].get('wave')]     # a lightning current: its front time (3.5)
         lg += [_f(E[i]['src']['w'].get('T1'), 1e-6) for i in self.iV if E[i]['src'].get('kind') == 'wave']   # an impulse voltage (3.8)
-        lg += [E[i]['tau'] for i in self.iT]
+        lg += [E[i]['tau'] for i in self.iT] + [float(m['tau']) for i in self.iTM for m in E[i]['modes']]
         tb = _f(net.get('tbase'), 0)          # time base of the circuit settings (3.10), when no source sets one
         self.base_T = min([k.T for k in self.ctrls], default=None) or (1 / max(_f(clk.get('f'), 1e5), 1e-6) if clk else None) or next(
             (1 / max(1e-6, _f(E[i]['src'].get('f'), 50)) for i in self.iV if E[i]['src'].get('kind') == 'ac'), None) or (
@@ -909,6 +912,8 @@ class Circuit:
                         Bg[bb, j] += d
         Bt = self.Bx + Bg
         J = tp['M'] @ Bt
+        if self.Ds is not None:
+            J = J + self.Ds
         Zx = tp['Ainv'] @ Bt
         z = tp['Ainv'] @ (self.Bx @ x + self.bsrc(t, x) + tp['bd'])
         for m in self.gens:
@@ -1022,6 +1027,15 @@ class Circuit:
             e = E[i]
             g(e['a1'], e['b1'], 1 / e['Ze'])
             g(e['a2'], e['b2'], 1 / e['Ze'])
+        for i in self.iTM:              # 4.12: T_i·diag(1/Z_e or 1/d)·T_iᵀ at each end, to ground
+            e = E[i]
+            for ns_ in (e['n1'], e['n2']):
+                for r, a in enumerate(ns_):
+                    if a < 0:
+                        continue
+                    for q, c in enumerate(ns_):
+                        if c >= 0:
+                            A[a, c] += e['G'][r, q]
         for i in self.iV:
             vrow(E[i]['a'], E[i]['b'], E[i]['row'])
         for i in self.iC:
@@ -1071,7 +1085,8 @@ class Circuit:
                 return self.build(t)
             raise BatchError('Ιδιόμορφο σύστημα στον batch λύτη (βρόχος ιδανικών πηγών ή κόμβος χωρίς διαδρομή).')
         M = self.Dm @ Ainv
-        return {'Ainv': Ainv, 'M': M, 'J': M @ self.Bx, 'bd': bd, 'Z1': Ainv @ self.Bc if self.inj else None, 'A': A}
+        J = M @ self.Bx if self.Ds is None else M @ self.Bx + self.Ds
+        return {'Ainv': Ainv, 'M': M, 'J': J, 'bd': bd, 'Z1': Ainv @ self.Bc if self.inj else None, 'A': A}
 
     def bsrc(self, t, x=None):
         b = np.zeros(self.n)
@@ -1103,6 +1118,16 @@ class Circuit:
                     b[a] -= ih
                 if bb >= 0:
                     b[bb] += ih
+        for i in self.iTM:              # 4.12: the CP histories (the FD states enter through Bx)
+            e = E[i]
+            if e['fd']:
+                continue
+            I1, I2 = self.tlm_ih(e, t)
+            for ns_, I in ((e['n1'], I1), (e['n2'], I2)):
+                ph = e['Ti'] @ I
+                for r, a in enumerate(ns_):
+                    if a >= 0:
+                        b[a] -= ph[r]
         for i in self.iI:
             e = E[i]
             n = e.get('sigIn')
@@ -1209,7 +1234,7 @@ class Circuit:
         Column j <= N: voltage of junction j (0 = start, N = end); N+1+j: current into section j at its start; 2N+1+j: at its end."""
         H = e['H']
         T, C = H['t'], H['c']
-        if tq < 0 or not T:
+        if not T or (tq < 0 and tq < T[0]):
             return [0.0] * len(C)
         j = bisect.bisect_right(T, tq)
         if j >= len(T):
@@ -1232,7 +1257,9 @@ class Circuit:
         q = self.tl_hist(e, t - e['ts'])
         return self.tl_sec(e, q, 0)[0], self.tl_sec(e, q, e['N'] - 1)[1]
 
-    def tl_record(self, t, z):
+    def tl_record(self, t, z, x=None):
+        if self.iTM:
+            self.tlm_record(t, z, x)
         for i in self.iT:
             e = self.els[i]
             H = e['H']
@@ -1249,6 +1276,181 @@ class Circuit:
             for j in range(N):
                 C[N + 1 + j].append(v[j] / Ze + S[j][0])
                 C[2 * N + 1 + j].append(v[j + 1] / Ze + S[j][1])
+
+    # ------------------------------------------------------------ lines from geometry (4.12)
+    def tlm_setup(self):
+        """4.12: lines from geometry (TLM), the same model as the browser's: per mode a line in its own frame, phases ↔ modes by
+        a constant real T_i (v_mode = T_iᵀ·v, i = T_i·i_mode). CP: Dommel's R/4, R/2, R/4 (or without distortion the arriving
+        waves times e^(−R/2Z_c)), a conductance 1/Z_e and a history current from t − τ (method of steps). FD: the
+        convolutions as ODE states, per pole of Z_c(s) = d + Σ k/(s + p) a state dz/dt = −p·z + i and per pole of
+        A(s)·e^(sτ) = Σ c/(s + q) a state dy/dt = −q·y + c·f(t − τ), with f = v + Z_c ⊛ i = 2v − Σ y of the other end from the
+        record; at each end v = d·i + Σ k·z + Σ y, a conductance 1/d and the states in Bx. Exact for the fitted model, where
+        the browser convolves recursively with inputs linear over its step: an independent check of that."""
+        E, n = self.els, self.n
+        self.Ds = None
+        cols = []
+        for i in self.iTM:
+            e = E[i]
+            M = int(e['M'])
+            e['M'] = M
+            e['Ti'] = np.array(e['Ti'], dtype=float).reshape(M, M)
+            e['n1'] = [int(a) for a in e['n1']]
+            e['n2'] = [int(a) for a in e['n2']]
+            e['fd'] = bool(e['modes'][0].get('fd'))
+            g = []
+            for m in e['modes']:
+                m['tau'] = float(m['tau'])
+                if m.get('fd'):
+                    for k in ('kr', 'kp', 'ar', 'ap'):
+                        m[k] = np.array(m[k], dtype=float)
+                    m['d'] = float(m['d'])
+                    g.append(1 / m['d'])
+                else:
+                    g.append(1 / float(m['Ze']))
+            e['G'] = e['Ti'] @ np.diag(g) @ e['Ti'].T
+            nc = 2 if e['fd'] else 4
+            H = e.get('H')
+            e['H'] = {'t': list(H['t']), 'c': [list(c) for c in H['c']]} if H else {'t': [], 'c': [[] for _ in range(nc * M)]}
+            vm0 = e.get('vm0')
+            e['vm0'] = np.array(vm0, dtype=float) if vm0 is not None else None
+            if not e['fd']:
+                continue
+            for k, m in enumerate(e['modes']):
+                npz, npa = len(m['kp']), len(m['ap'])
+                m['k0'] = self.ns + len(cols)
+                x0 = list(m.get('z1') or [0.0] * npz) + list(m.get('z2') or [0.0] * npz) + list(m.get('y1') or [0.0] * npa) + list(m.get('y2') or [0.0] * npa)
+                cols += [(i, k)] * (2 * npz + 2 * npa)
+                m['x0'] = [float(v) for v in x0]
+        if not cols:
+            return
+        nn = len(cols)
+        self.Bx = np.hstack([self.Bx, np.zeros((n, nn))])
+        self.Dm = np.vstack([self.Dm, np.zeros((nn, n))])
+        x0 = []
+        ns = self.ns + nn
+        Ds = np.zeros((ns, ns))
+        for i in self.iTM:
+            e = E[i]
+            if not e['fd']:
+                continue
+            Ti = e['Ti']
+            for k, m in enumerate(e['modes']):
+                npz, npa, d = len(m['kp']), len(m['ap']), m['d']
+                z1, z2 = m['k0'], m['k0'] + npz
+                y1, y2 = z2 + npz, z2 + npz + npa
+                x0 += m['x0']
+                for ends, zc, yc in ((e['n1'], z1, y1), (e['n2'], z2, y2)):
+                    for r, a in enumerate(ends):
+                        if a < 0:
+                            continue
+                        for j in range(npz):
+                            self.Bx[a, zc + j] += Ti[r, k] * m['kr'][j] / d     # i = (v − Σ k·z − Σ y)/d into the line
+                            self.Dm[zc + j, a] += Ti[r, k] / d                  # dz/dt = −p·z + i
+                        for q in range(npa):
+                            self.Bx[a, yc + q] += Ti[r, k] / d
+                    for j in range(npz):
+                        Ds[zc + j, zc + j] -= m['kp'][j]
+                        for jj in range(npz):
+                            Ds[zc + j, zc + jj] -= m['kr'][jj] / d
+                        for q in range(npa):
+                            Ds[zc + j, yc + q] -= 1 / d
+                    for q in range(npa):
+                        Ds[yc + q, yc + q] -= m['ap'][q]                       # dy/dt = −q·y + c·f(t − τ)
+                m['z1'], m['z2'], m['y1'], m['y2'] = z1, z2, y1, y2
+        self.x0 = np.concatenate([self.x0, x0])
+        self.ns = ns
+        self.Ds = Ds
+
+    def tlm_hist(self, e, tq):
+        """The record of a line from geometry at tq (linear interpolation); before the record: at rest, or with the trapped
+        charge (v_mode = T_iᵀ·V₀ and no current)."""
+        H = e['H']
+        T, C = H['t'], H['c']
+        if not T or (tq < 0 and tq < T[0]):
+            out = [0.0] * len(C)
+            if e['vm0'] is not None:
+                for k in range(e['M']):
+                    if e['fd']:
+                        out[2 * k] = out[2 * k + 1] = e['vm0'][k]
+                    else:
+                        out[4 * k] = out[4 * k + 1] = e['vm0'][k]
+            return out
+        j = bisect.bisect_right(T, tq)
+        if j >= len(T):
+            return [c[-1] for c in C]
+        if j == 0:
+            return [c[0] for c in C]
+        t0, t1 = T[j - 1], T[j]
+        f = (tq - t0) / (t1 - t0) if t1 > t0 else 1.0
+        return [c[j - 1] + (c[j] - c[j - 1]) * f for c in C]
+
+    def tlm_ih(self, e, t):
+        """The modal history currents of a CP line at both ends at t (as Sim.tlmSources)."""
+        M = e['M']
+        I1, I2 = np.zeros(M), np.zeros(M)
+        for k, m in enumerate(e['modes']):
+            q = self.tlm_hist(e, t - m['tau'])
+            v1, v2, i1, i2 = q[4 * k:4 * k + 4]
+            Ze, hh, att = float(m['Ze']), float(m['hh']), float(m.get('att', 1))
+            AL, AR = (v1 / Ze + hh * i1) * att, (v2 / Ze + hh * i2) * att
+            I1[k] = -(1 + hh) / 2 * AR - (1 - hh) / 2 * AL
+            I2[k] = -(1 + hh) / 2 * AL - (1 - hh) / 2 * AR
+        return I1, I2
+
+    def tlm_force(self, t):
+        """The delayed inputs of the FD propagation states: c·f of the other end at t − τ."""
+        f = np.zeros(self.ns)
+        for i in self.iTM:
+            e = self.els[i]
+            if not e['fd']:
+                continue
+            for k, m in enumerate(e['modes']):
+                q = self.tlm_hist(e, t - m['tau'])
+                u1, u2 = q[2 * k + 1], q[2 * k]
+                npa = len(m['ap'])
+                f[m['y1']:m['y1'] + npa] = m['ar'] * u1
+                f[m['y2']:m['y2'] + npa] = m['ar'] * u2
+        return f
+
+    def tlm_modal(self, e, t, x, z):
+        """Modal voltages and currents into the line at both ends."""
+        V = lambda nd: z[nd] if nd >= 0 else 0.0
+        Ti = e['Ti']
+        v1 = Ti.T @ np.array([V(a) for a in e['n1']])
+        v2 = Ti.T @ np.array([V(a) for a in e['n2']])
+        if not e['fd']:
+            I1, I2 = self.tlm_ih(e, t)
+            Ze = np.array([float(m['Ze']) for m in e['modes']])
+            return v1, v2, v1 / Ze + I1, v2 / Ze + I2, None, None
+        i1, i2, b1, b2 = np.zeros(e['M']), np.zeros(e['M']), np.zeros(e['M']), np.zeros(e['M'])
+        for k, m in enumerate(e['modes']):
+            npz, npa = len(m['kp']), len(m['ap'])
+            b1[k] = float(np.sum(x[m['y1']:m['y1'] + npa]))
+            b2[k] = float(np.sum(x[m['y2']:m['y2'] + npa]))
+            i1[k] = (v1[k] - float(m['kr'] @ x[m['z1']:m['z1'] + npz]) - b1[k]) / m['d']
+            i2[k] = (v2[k] - float(m['kr'] @ x[m['z2']:m['z2'] + npz]) - b2[k]) / m['d']
+        return v1, v2, i1, i2, b1, b2
+
+    def tlm_record(self, t, z, x):
+        for i in self.iTM:
+            e = self.els[i]
+            H = e['H']
+            if H['t'] and t < H['t'][-1]:
+                continue
+            if e['fd'] and x is None:
+                continue
+            v1, v2, i1, i2, b1, b2 = self.tlm_modal(e, t, x, z)
+            H['t'].append(t)
+            C = H['c']
+            for k in range(e['M']):
+                if e['fd']:
+                    C[2 * k].append(2 * v1[k] - b1[k])          # f = v + Z_c ⊛ i = 2v − b
+                    C[2 * k + 1].append(2 * v2[k] - b2[k])
+                else:
+                    C[4 * k].append(v1[k])
+                    C[4 * k + 1].append(v2[k])
+                    C[4 * k + 2].append(i1[k])
+                    C[4 * k + 3].append(i2[k])
 
     # ------------------------------------------------------------ gates and states
     def scr_u(self, e, t):
@@ -1433,6 +1635,11 @@ class Circuit:
         if k == 'TL':
             e2 = (e['a1'], e['b1']) if port == 0 else (e['a2'], e['b2'])
             return (V(e2[0]) - V(e2[1])) / e['Ze'] + self.tl_ih(e, t)[port]
+        if k == 'TLM':                  # 4.12: the phase current into the line at port (0…M−1 end 1, M…2M−1 end 2)
+            M = e['M']
+            v1, v2, i1, i2, _, _ = self.tlm_modal(e, t, x, z)
+            im = i1 if port < M else i2
+            return float(e['Ti'][port % M] @ im)
         v = V(e.get('a')) - V(e.get('b'))
         if k == 'G':
             return v / self.R(e, t)
@@ -1968,7 +2175,7 @@ class Circuit:
             gp = self.els[i]['gap']
             if not self.els[i]['trig_done'] and t + eps < gp['trig'] < tn:
                 tn = gp['trig']
-        if self.iT:                     # method of steps: the history at t − τ must already be recorded
+        if self.iT or self.iTM:         # method of steps: the history at t − τ must already be recorded
             tn = min(tn, t + self.tau_min)
         tn = self.block_events(t, tn, eps)
         if self.has_cont:               # continuous blocks are integrated at segment ends, as the browser does at its steps
@@ -2096,7 +2303,7 @@ def simulate(data):
     auto_step = max_step <= 0
     if auto_step:
         max_step = ckt.base_T / (50 if ckt.ctrls else 200)
-        if ckt.iT:                      # the line history is interpolated between the solver's points
+        if ckt.iT or ckt.iTM:           # the line history is interpolated between the solver's points
             max_step = min(max_step, ckt.tau_min / 50)
     if t_end / ckt.base_T > LIMITS['periods']:
         raise BatchError(f'Πάνω από {LIMITS["periods"]} περίοδοι: μείωσε τη διάρκεια.')
@@ -2120,7 +2327,7 @@ def simulate(data):
     ckt.prime(0.0)
     ckt.set_gates(0.0)
     tp, z = ckt.consistent(0.0, x, init=True)
-    ckt.tl_record(0.0, z)
+    ckt.tl_record(0.0, z, x)
     ckt.sh_sample(0.0, x, z)
     ckt.eval_blocks(0.0, x, z, 'sample', force=True)
     ckt.sample(0.0, x, z, force=True)
@@ -2146,7 +2353,7 @@ def simulate(data):
         ckt.ev_switches(t)              # 3.19: the states for (t, t_n), logged at t as in the browser
         if (tuple(ckt.on.values()), tuple(ckt.gon.values())) != before:
             ckt.eval_blocks(t, x, z, 'commit')
-            ckt.tl_record(t, z)
+            ckt.tl_record(t, z, x)
             record(t, x, z)            # the point right after switching: vertical edges
         itol, vtol = ckt.tolerances(x)
         cache = {}
@@ -2188,6 +2395,8 @@ def simulate(data):
                 zz = zof(tt, yy)
                 f = arc_F(a, xc, (zz[e['a']] if e['a'] >= 0 else 0) - (zz[e['b']] if e['b'] >= 0 else 0))
                 d[k] = 0.0 if (xa <= a['xmin'] and f < 0) or (xa >= a['xmax'] and f > 0) else f
+            if ckt.Ds is not None:             # 4.12: the FD line states: their own dynamics and the delayed inputs
+                d = d + ckt.Ds @ yy + ckt.tlm_force(tt)
             return d
         events, owners = [], []
         for i in ckt.iD:
@@ -2278,7 +2487,7 @@ def simulate(data):
         for j in range(1, len(sol.t)):
             yy = sol.y[:, j]
             zj = zof(float(sol.t[j]), yy)
-            ckt.tl_record(float(sol.t[j]), zj)
+            ckt.tl_record(float(sol.t[j]), zj, yy)
             record(float(sol.t[j]), yy, zj)
         t_new = float(sol.t[-1])
         x = sol.y[:, -1].copy()
@@ -2324,7 +2533,7 @@ def simulate(data):
                     x[ckt.els[i]['kD']] = 0.0
             tp, z = ckt.consistent(t, x)
             ckt.eval_blocks(t, x, z, 'commit', flip=flip)
-            ckt.tl_record(t, z)
+            ckt.tl_record(t, z, x)
             record(t, x, z)
         else:
             t = tn if abs(t_new - tn) < 1e-9 * ckt.base_T else t_new

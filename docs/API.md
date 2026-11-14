@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.11: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (541 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.12: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (545 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.11.
+Κανένα στην 4.12.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-314 σημεία.
+317 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -196,6 +196,7 @@
 | `pcl.lineconst.save_data` | `data`, `path` | 4.4 |
 | `pcl.lineconst.scan` | `data`, `fmin`, `decades`, `ppd`, `length`, `ti`, `fti`, `model`, `sources` | 4.11 |
 | `pcl.lineconst.sea_return` | `s`, `Ri`, `Rk`, `d`, `rho` | 4.5 |
+| `pcl.lineconst.sensitivity` | `data`, `param`, `values`, `f` | 4.11 |
 | `pcl.lineconst.seq_matrices` | `seq`, `s` | 4.11 |
 | `pcl.lineconst.sequence` | `Z` | 4.4 |
 | `pcl.lineconst.soil_layers` | `data` | 4.11 |
@@ -208,6 +209,7 @@
 | `pcl.lineconst.tube` | `s`, `q`, `r`, `rho`, `mur` | 4.5 |
 | `pcl.lineconst.typical` | `key` | 4.4 |
 | `pcl.lineconst.useful` | `data`, `f`, `U`, `length` | 4.11 |
+| `pcl.lineconst.vary` | `data`, `param`, `value` | 4.11 |
 | `pcl.lineconst.vfit` | `s`, `F`, `n`, `d`, `weight`, `iters`, `p0` | 4.4 |
 | `pcl.lineconst.wedepohl` | `s`, `h`, `y`, `d`, `rho` | 4.5 |
 | `pcl.lineconst.z_galloway` | `s`, `n`, `rs`, `rho`, `mur` | 4.11 |
@@ -219,6 +221,7 @@
 | `pcl.linereport.api_export` | `req` | 4.11 |
 | `pcl.linereport.api_load` | `req` | 4.11 |
 | `pcl.linereport.api_scan` | `req` | 4.11 |
+| `pcl.linereport.api_sens` | `req` | 4.11 |
 | `pcl.linereport.fields` | `data`, `U`, `I`, `f`, `height`, `at`, `earth`, `span`, `n`, `grid`, `map_at` | 4.11 |
 | `pcl.linereport.plot` | `sc`, `items`, `preset`, `out`, `form`, `elems`, `style`, `title` | 4.11 |
 | `pcl.linereport.read_exact_pi` | `text` | 4.11 |
@@ -382,7 +385,7 @@
 
 ## Server: `/api/<ενέργεια>` και διαδρομές
 
-39 σημεία.
+40 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -406,6 +409,7 @@
 | `/api/line_load` | — | 4.11 |
 | `/api/line_model` | — | 4.4 |
 | `/api/line_scan` | — | 4.11 |
+| `/api/line_sens` | — | 4.11 |
 | `/api/linearize` | — | 3.18 |
 | `/api/link/call` | — | 3.18 |
 | `/api/link/deny` | — | 3.18 |

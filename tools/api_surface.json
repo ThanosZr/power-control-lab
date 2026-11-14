@@ -1,5 +1,5 @@
 {
- "version": "4.11",
+ "version": "4.12",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -1256,6 +1256,15 @@
     ],
     "since": "4.5"
    },
+   "pcl.lineconst.sensitivity": {
+    "params": [
+     "data",
+     "param",
+     "values",
+     "f"
+    ],
+    "since": "4.11"
+   },
    "pcl.lineconst.seq_matrices": {
     "params": [
      "seq",
@@ -1340,6 +1349,14 @@
      "f",
      "U",
      "length"
+    ],
+    "since": "4.11"
+   },
+   "pcl.lineconst.vary": {
+    "params": [
+     "data",
+     "param",
+     "value"
     ],
     "since": "4.11"
    },
@@ -1429,6 +1446,12 @@
     "since": "4.11"
    },
    "pcl.linereport.api_scan": {
+    "params": [
+     "req"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.api_sens": {
     "params": [
      "req"
     ],
@@ -2772,6 +2795,10 @@
     "since": "4.4"
    },
    "/api/line_scan": {
+    "params": [],
+    "since": "4.11"
+   },
+   "/api/line_sens": {
     "params": [],
     "since": "4.11"
    },

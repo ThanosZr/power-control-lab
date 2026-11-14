@@ -42,7 +42,14 @@ const {chromium}=require('playwright');
   const lab=await p.$$eval('.ld-modal .ld-chart text',t=>t.map(x=>x.textContent).filter(x=>/^10/.test(x)).length);ok(lab<=5,'zoomed to a band of frequencies: '+lab+' decade labels');
   await p.click('.ld-modal .ld-cleg span[data-s="0"]');ok((await p.$$('.ld-modal .ld-chart path[d^="M"]')).length===5,'the legend hides a curve'); }
  await p.selectOption('.ld-modal [data-g="dom"]','phase');await p.waitForTimeout(150);ok((await p.$$('.ld-modal .ld-cleg span')).length===6,'Z′ of the phases: the six elements of a symmetric 3 × 3');
+ // 4.12: a kept scan in the same charts, and the sensitivity of the sequence parameters
+ await p.click('.ld-modal [data-refkeep]');await p.waitForTimeout(150);ok((await p.$$('.ld-modal [data-chart] .ld-cleg span')).length===12,'the kept scan, dashed beside the current one');
+ await p.click('.ld-modal [data-g="ref"]');await p.waitForTimeout(150);ok((await p.$$('.ld-modal [data-chart] .ld-cleg span')).length===6,'the comparison off');
+ await p.selectOption('.ld-modal [data-sp="param"]','temp');await p.waitForTimeout(100);await p.fill('.ld-modal [data-sp="n"]','5');await p.press('.ld-modal [data-sp="n"]','Tab');await p.waitForTimeout(100);
+ await p.click('.ld-modal [data-sens]');await p.waitForSelector('.ld-modal [data-schart] .ld-chart',{timeout:60000});
+ ok((await p.$$('.ld-modal [data-schart] .ld-cleg span')).length===4,'sensitivity: R₁, X₁, R₀, X₀ against the temperature');
  await p.click('.ld-modal [data-tab="tables"]');await p.waitForTimeout(200);const tb=await p.$eval('.ld-modal',e=>e.textContent);
+ ok((await p.$$('.ld-modal [data-tel]')).length===1,'the option of a communication line');
  ok(/\[Z_E\] φάσεων/.test(tb)&&/\[C_S\] συμμετρικών/.test(tb)&&/SIL/.test(tb)&&/Q-error/.test(tb),'tables: matrices, useful quantities, Q-error');
  ok((await p.$$('.ld-modal [data-fE] .ld-chart')).length===1,'the field profile under the line');
  await p.click('.ld-modal [data-tab="export"]');

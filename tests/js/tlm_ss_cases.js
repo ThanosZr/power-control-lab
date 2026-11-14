@@ -1,5 +1,5 @@
 // 4.12: a line from geometry that starts from the sinusoidal steady state (solve.init 'ac'). Three AC sources behind Rs at
-// the sending end, R loads at the receiving end. Usage: node tlm_ss_cases.js case.json -> {t, v: [[a2], [b2], [c2], [a1]], steps, warn}
+// the sending end, R loads at the receiving end. Usage: node tlm_ss_cases.js case.json -> {t, v: [[a2], [b2], [c2], [a1], [I a1]], steps, warn, batch}
 // case = {data, model, kind 'cp'|'fd'|'pi', params, f (CP), f0, Vpk, Rs, RL, h, tend, init 'ac'|'zero', every}
 const path=require('path');const W=path.resolve(__dirname,'../../web/studio');
 global.Parts=require(W+'/parts.js');const MNA=require(W+'/mna.js');const P=global.Parts;
@@ -11,6 +11,8 @@ if(q.model)pl.mdl=JSON.stringify({...q.model,src:P.tlmKey({...P.defaults('TLM'),
 const comps=[{id:'L1',type:'TLM',params:pl},{id:'G',type:'GND'}],conns=[];
 ['a','b','c'].forEach((ph,k)=>{comps.push({id:'V'+ph,type:'VAC',params:{Vpk:q.Vpk,f:q.f0,phase:-120*k,Rs:q.Rs}});conns.push(['V'+ph+':p','L1:'+ph+'1'],['V'+ph+':n','G:g']);
  comps.push({id:'R'+ph,type:'R',params:{R:q.RL}});conns.push(['L1:'+ph+'2','R'+ph+':a'],['R'+ph+':b','G:g']);});
-const s=new MNA.Sim(project(comps,conns),{h:q.h});const T=[],V=[[],[],[],[]],every=q.every||1;
-while(s.t<q.tend-1e-12){s.run(Math.min(s.h*every,q.tend-s.t));T.push(s.t);['a','b','c'].forEach((ph,k)=>V[k].push(s.now('V:R'+ph)));V[3].push(s.now('V:L1'));}
-console.log(JSON.stringify({t:T,v:V,steps:s.steps,h:s.h,warn:s.net.warnings,ac:!!s.acPh}));
+const s=new MNA.Sim(project(comps,conns),{h:q.h});const T=[],V=[[],[],[],[],[]],every=q.every||1;
+while(s.t<q.tend-1e-12){s.run(Math.min(s.h*every,q.tend-s.t));T.push(s.t);['a','b','c'].forEach((ph,k)=>V[k].push(s.now('V:R'+ph)));V[3].push(s.now('V:L1'));V[4].push(s.now('I:L1'));}
+// 4.12: the same circuit for the SciPy solver (engine/batch.py)
+const batch=q.batch?MNA.exportForBatch(project(comps,conns),['V:Ra','V:Rb','V:Rc','V:L1','I:L1']):null;
+console.log(JSON.stringify({batch,t:T,v:V,steps:s.steps,h:s.h,warn:s.net.warnings,ac:!!s.acPh}));

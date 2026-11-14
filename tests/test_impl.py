@@ -84,7 +84,8 @@ class Export(unittest.TestCase):
         self.assertEqual(r['compact'], 2)                          # the arrester and the footing, fast, in the browser solver
         self.assertEqual(r['nNLlocal'], 1)
         self.assertEqual(r['nNL'], 3)                              # 2 ZnO + the footing R(I) for the server
-        self.assertIn('TLM', r['gis'])                             # the multi-conductor lines: refused, not left out
+        self.assertIsNone(r['gis'])                                # 4.12: the lines from geometry go to the server too
+        self.assertEqual(r['ntlm'], 3)                             # 30 km and the two spans of 300 m
 
 
 class SciPyTower(unittest.TestCase):

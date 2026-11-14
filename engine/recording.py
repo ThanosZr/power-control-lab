@@ -14,6 +14,9 @@ title), and the page refers to it by that name only: nothing outside the folders
   first, minimum, maximum and last value of each pixel column, otherwise the rows themselves.
 * Estimates: the free space of the folder (shutil.disk_usage) and the bytes of a row, for the page's warnings.
 * Events beside the file: <name>.events.csv (t, kind, source, value), so that a recording keeps what happened in it.
+
+4.12: the list gives sizes and times (the page opens an old recording in a viewer through info and range), and a
+recording can be compressed (<name>.gz, with its events) when it is no longer needed for reading back.
 """
 import json
 import os
@@ -324,6 +327,35 @@ def read_range(name, t0, t1, keys=None, n=1000):
     return out
 
 
+def compress(name, keep=False):
+    """4.12: gzip a recording (and its events) to <name>.gz beside it; without keep the CSV goes (it can then no longer be
+    read back by the scope). Returns {'gz', 'bytes', 'from'}."""
+    import gzip
+    p = _path(name)
+    if not p.exists():
+        raise ValueError('Η καταγραφή δεν υπάρχει.')
+    out = []
+    for q in (p, p.with_name(p.name[:-4] + '.events.csv')):
+        if not q.exists():
+            continue
+        gz = q.with_name(q.name + '.gz')
+        with open(q, 'rb') as fi, gzip.open(gz, 'wb', compresslevel=6) as fo:
+            shutil.copyfileobj(fi, fo, 1024 * 1024)
+        out.append((q, gz))
+    size0, size1 = sum(q.stat().st_size for q, _ in out), sum(g.stat().st_size for _, g in out)
+    if not keep:
+        for q, _ in out:
+            q.unlink()
+        _index.pop(str(p), None)
+    return {'gz': out[0][1].name, 'bytes': size1, 'from': size0}
+
+
+def listing(d, keep=50):
+    """The recordings of a folder, newest last: name, bytes, modification time, whether it has events."""
+    fs = sorted((f for f in d.glob('*.csv') if NAME.fullmatch(f.name) and not f.name.endswith('.events.csv')), key=lambda f: f.stat().st_mtime)[-keep:]
+    return [{'name': f.name, 'bytes': f.stat().st_size, 'mtime': f.stat().st_mtime, 'events': f.with_name(f.name[:-4] + '.events.csv').exists()} for f in fs]
+
+
 def handle(data):
     op = data.get('op')
     if op == 'start':
@@ -357,14 +389,29 @@ def handle(data):
     if op == 'check':
         return disk(data.get('dest') or 'temp', data.get('dir'))
     if op == 'list':
-        out = {'folder': str(folder()), 'files': sorted(f.name for f in folder().glob('*.csv') if not f.name.endswith('.events.csv'))[-50:]}
+        out = {'folder': str(folder()), 'files': sorted(f.name for f in folder().glob('*.csv') if not f.name.endswith('.events.csv'))[-50:],
+               'items': listing(folder())}
         d = settings()['dir']
         if d:
             try:
                 dd = user_folder(d)
                 out['dir'] = str(dd)
                 out['dir_files'] = sorted(f.name for f in dd.glob('*.csv') if NAME.fullmatch(f.name) and not f.name.endswith('.events.csv'))[-50:]
+                out['dir_items'] = listing(dd)
+                for it in out['dir_items']:
+                    _where.setdefault(it['name'], dd)
             except (ValueError, OSError):
                 pass
         return out
+    if op == 'gzip':
+        return compress(data.get('name'), bool(data.get('keep')))
+    if op == 'events_read':           # 4.12: the events of a recording, for the viewer
+        p = _path(data.get('name'))
+        q = p.with_name(p.name[:-4] + '.events.csv')
+        if not q.exists():
+            return {'rows': []}
+        import csv
+        with open(q, encoding='utf-8', newline='') as f:
+            rows = list(csv.reader(f))[1:]
+        return {'rows': rows[-int(min(20000, max(1, data.get('n') or 2000))):], 'n': len(rows)}
     raise ValueError('Άγνωστη ενέργεια καταγραφής.')

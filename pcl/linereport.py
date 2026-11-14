@@ -14,6 +14,7 @@ The EMTP layouts follow the published descriptions; reading them back here is te
 (without the EMTP; the poles and residues of the FD file are in rad/s, as pcl.lineconst keeps them).
 """
 import base64
+import cmath
 import html
 import io
 import json
@@ -730,6 +731,18 @@ def api_scan(req):
         out['lossless'] = lc.jsonable(lc.lossless_modes(data, f, req.get('lossless') or 'r0'))
     except lc.LineError:
         pass
+    tq = req.get('telecom') if isinstance(req.get('telecom'), dict) else None
+    if tq:          # 4.12: the last phase is a communication line: balanced currents I and voltages U/√3 on the others
+        try:
+            Zp, _ = lc.phase_matrices(data, f)
+            n = len(Zp) - 1
+            a = [cmath.exp(-2j * math.pi * k / 3) for k in range(n)]
+            I = [lc._f(tq.get('I'), 1000.0) * math.sqrt(2) * a[k % 3] for k in range(n)]
+            V = [lc._f(tq.get('U'), 400.0) * 1e3 * math.sqrt(2 / 3) * a[k % 3] for k in range(n)]
+            out['telecom'] = lc.jsonable(lc.telecom(data, f, I, V))
+            out['telecom']['I'], out['telecom']['V'] = lc.jsonable(I), lc.jsonable(V)
+        except (lc.LineError, np.linalg.LinAlgError) as e:
+            out['telecom'] = {'err': str(e)}
     if not (data.get('cables') or data.get('seq') or data.get('zyfile')):
         fq = req.get('field') if isinstance(req.get('field'), dict) else {}
         try:
@@ -738,6 +751,23 @@ def api_scan(req):
         except (lc.LineError, KeyError, np.linalg.LinAlgError):
             pass
     return out
+
+
+def api_sens(req):
+    """4.12: {data, param ('rho'|'dh'|'sag'|'temp'), lo, hi, n, f} → the sequence parameters against the parameter
+    (lineconst.sensitivity), n points from lo to hi (logarithmic for ρ)."""
+    data = lc._req_data(req)
+    p = req.get('param') or 'rho'
+    lo, hi, n = lc._f(req.get('lo'), 10.0), lc._f(req.get('hi'), 1000.0), int(lc._f(req.get('n'), 21))
+    if not (2 <= n <= 101 and hi > lo):
+        raise lc.LineError('ευαισθησία: 2–101 σημεία και μέγιστο > ελάχιστο')
+    if p == 'rho':
+        if not lo > 0:
+            raise lc.LineError('ευαισθησία: ρ > 0')
+        vals = np.geomspace(lo, hi, n)
+    else:
+        vals = np.linspace(lo, hi, n)
+    return lc.jsonable(lc.sensitivity(data, p, vals.tolist(), lc._f(req.get('f'), 50.0)))
 
 
 def api_load(req):

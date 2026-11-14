@@ -22,7 +22,7 @@ function project(){return {...fullDoc(),tutRef:S.tutRef||null,sim:{hDiv:+$('#sim
 function buildSim(fresh){
  const doc=fullDoc();
  try{
-  if(!S.sim||fresh){window.Live?.drop();S.sim=new MNA.Sim(doc,{hDiv:+$('#sim-step').value,method:$('#method').value,mem:memSetting()});applyRec();}
+  if(!S.sim||fresh){window.Live?.drop();S.sim=new MNA.Sim(doc,{hDiv:+$('#sim-step').value,method:$('#method').value,mem:memSetting(),eventsMax:evMaxSetting()});applyRec();}
   else S.sim.load(doc,false);
   S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);notice('');editor.setDiag(viewDiag(S.sim.net.diag));
  }catch(e){S.error=e.message;pause();
@@ -80,10 +80,13 @@ function renderRecPanel(){const P=$('#rec-panel');if(!P||P.hidden)return;const e
   <div class="rp-row"><b>Καταγραφή σε αρχείο:</b><label><input type="radio" name="rp-dest" value="temp" ${REC.set.dest!=='dir'?'checked':''}> προσωρινά</label><small class="muted">${esc(REC.temp||'~/.pcl/recordings')} · σβήνονται οι παλαιότερες πάνω από 2 GB ή μία εβδομάδα</small></div>
   <div class="rp-row"><label><input type="radio" name="rp-dest" value="dir" ${REC.set.dest==='dir'?'checked':''}> σε φάκελο</label><input id="rp-dir" placeholder="πλήρης διαδρομή, π.χ. D:\\Μετρήσεις" value="${esc(REC.set.dir||'')}"><label><input type="checkbox" id="rp-create"> δημιουργία</label><button id="rp-save">Να το θυμάσαι</button></div>
   <div class="rp-row"><label><input type="checkbox" id="rp-auto" ${REC.set.auto?'checked':''}> πάντα καταγραφή (ξεκινά μόνη της σε κάθε ▶ από την αρχή)</label></div>
+  <div class="rp-row"><b>Καταγραφές:</b><button id="rp-view" ${REC.name?'':'disabled'} title="Η καταγραφή αυτής της προσομοίωσης σε παράθυρο προβολής (διαβάζει μόνο ό,τι σχεδιάζει)">Προβολή της τρέχουσας</button><button id="rp-list" title="Οι καταγραφές του προσωρινού φακέλου και του φακέλου σου: άνοιγμα ή συμπίεση (4.12)">Παλαιότερες…</button></div><div id="rp-items"></div>
   <div class="rp-row small">${d&&!d.error?`ελεύθερα ${eng(d.free,'B',3)} στο ${esc(d.folder)}`:d?.error?'<span class="bad">'+esc(d.error)+'</span>':''}${e?` · ≈ ${eng(e.rate,'B',3)} ανά δευτερόλεπτο προσομοίωσης${d&&!d.error&&e.rate>0?` (χωρούν ≈ ${fmtDur(d.free/e.rate)} προσομοίωσης)`:''}`:''}${REC.err?' · <span class="bad">'+esc(REC.err)+'</span>':''}</div>`;
  P.querySelectorAll('[name="rp-dest"]').forEach(r=>r.onchange=()=>{if(r.value==='dir'&&!$('#rp-dir').value.trim()){REC.set.dest='dir';renderRecPanel();return;}recSettings({dest:r.value,...(r.value==='dir'?{dir:$('#rp-dir').value.trim(),create:$('#rp-create').checked}:{})});});
  $('#rp-save').onclick=()=>recSettings({dir:$('#rp-dir').value.trim(),dest:'dir',create:$('#rp-create').checked});
  $('#rp-auto').onchange=e=>recSettings({auto:e.target.checked});
+ $('#rp-view').onclick=async()=>{if(!REC.name)return;if(REC.on)await recFlush();window.RecView?.open(REC.name);};
+ $('#rp-list').onclick=()=>window.RecView?.list($('#rp-items'));
  const m=$('#rec-mem');m.onchange=()=>{try{localStorage.setItem(MEM_KEY,m.value);}catch(x){}if(REC.on)recToggle();buildSim(true);draw(true);renderRec();renderRecPanel();notice(`Μνήμη scope ${m.options[m.selectedIndex].text}: η προσομοίωση ξεκινά από την αρχή.`,'info');setTimeout(()=>notice(''),3500);};}
 function renderRec(){const b=$('#rec-file'),n=$('#rec-note'),s=S.sim;if(b){b.classList.toggle('on',REC.on);b.textContent=REC.on?`■ καταγράφει${REC.bytes?' · '+eng(REC.bytes,'B',3):''}`:'⭳ σε αρχείο';}
  if(n&&s){const e=memEstimate();if(!e)return;setText(n,`μνήμη ≈ ${fmtDur(e.cover)} (${eng(e.mb*1048576,'B',2)}, ${e.nch} κανάλια)${e.warn.length?' · ⚠ '+e.warn.join('· '):''}${REC.lost?' · '+REC.lost+' κενά στο αρχείο (αραιότερη καταγραφή)':''}`);n.classList.toggle('bad',e.warn.length>0);}}
@@ -325,6 +328,10 @@ function renderEvents(){const box=$('#ev-out');if(!box||!S.sim||!$('#ev-block').
  box.innerHTML=`<small class="muted">${E.n} συμβάντα${E.n>E.list.length?`, κρατιούνται τα τελευταία ${E.list.length}`:''}${rows.length!==E.list.length?` · ${rows.length} με το φίλτρο`:''}.</small>`+
   (rows.length?`<table class="ev-table"><tr><th>t</th><th>είδος</th><th>πηγή</th><th>τιμή</th></tr>${rows.slice(-80).reverse().map(e=>`<tr><td>${eng(e.t,'s',6)}</td><td>${esc(EV_KIND[e.kind]||e.kind)}</td><td>${e.id?`<button data-focus="${esc(String(e.id).split('[')[0])}">${esc(e.src)}</button>`:esc(e.src)}</td><td>${fv(e)}${e.from!==undefined?` <span class="muted">(από ${esc(String(typeof e.from==='number'?eng(e.from,'',4):e.from))})</span>`:''}</td></tr>`).join('')}</table>`:'<p class="muted small">Κανένα ακόμη. Τρέξε την προσομοίωση.</p>');
  box.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>focusComp(b.dataset.focus));}
+// 4.12: how many events the solver keeps (the setting of the log, remembered), and the log as JSON
+const EVMAX_KEY='pcl.evmax',EVMAX_OPTS=[2000,20000,200000];
+function evMaxSetting(){try{const v=+localStorage.getItem(EVMAX_KEY);return EVMAX_OPTS.includes(v)?v:20000;}catch(e){return 20000;}}
+function eventsJson(){const {E,rows}=evRows();if(!rows.length)return;download('events.json',JSON.stringify({n:E.n,kept:E.list.length,max:E.max,kinds:E.kinds,events:rows},null,1),'application/json');}
 function eventsCsv(){const {rows}=evRows();if(!rows.length)return;const q=v=>v===undefined||v===null?'':/[",\n]/.test(String(v))?'"'+String(v).replace(/"/g,'""')+'"':String(v);
  download('events.csv',['t [s],kind,id,source,value,side,unit,clock,n,from',...rows.map(e=>[e.t,e.kind,e.id,e.src,e.v,e.side,e.u,e.clk,e.n,e.from].map(q).join(','))].join('\n'),'text/csv');}
 function renderFFT(){const box=$('#ff-out');if(!box||!S.sim||!$('#ff-block').open)return;
@@ -2474,7 +2481,8 @@ function boot(){
  $('#avgline').onchange=e=>{scope.cfg.avgLine=e.target.checked;draw(true);};
  ['#rm-sig','#rm-ev','#rm-ref','#rm-band','#rm-val','#rm-t'].forEach(q=>$(q).onchange=renderMetricsPanel);$('#rm-block').ontoggle=renderMetricsPanel;
  ['#ff-sig','#ff-f1','#ff-p','#ff-h'].forEach(q=>$(q).onchange=renderFFT);$('#ff-block').ontoggle=renderFFT;
- $('#ev-block').ontoggle=renderEvents;$('#ev-kind').onchange=renderEvents;$('#ev-src').oninput=renderEvents;$('#ev-csv').onclick=eventsCsv;
+ $('#ev-block').ontoggle=renderEvents;$('#ev-kind').onchange=renderEvents;$('#ev-src').oninput=renderEvents;$('#ev-csv').onclick=eventsCsv;if($('#ev-json'))$('#ev-json').onclick=eventsJson;
+ if($('#ev-max')){const m=$('#ev-max');m.value=String(evMaxSetting());m.onchange=()=>{try{localStorage.setItem(EVMAX_KEY,m.value);}catch(e){}if(S.sim?.ev)S.sim.ev.max=+m.value;renderEvents();};}
  $('#eis-block').ontoggle=renderEISForm;$('#eis-run').onclick=runEIS;$('#eis-stop').onclick=()=>{EIS.run=false;};
  ['#bf-sig','#bf-stat'].forEach(q=>$(q).onchange=renderPoincare);$('#bf-block').ontoggle=()=>{renderBifurcationForm();renderPoincare();};$('#bf-run').onclick=runBifurcation;$('#bf-stop').onclick=stopBifurcation;
  $('#bt-run').onclick=runBatch;$('#bt-clear').onclick=clearBatch;$('#bt-show').onchange=e=>{scope.setRefs(e.target.checked&&S.batch?{label:S.batch.label,data:S.batch.data}:null);};

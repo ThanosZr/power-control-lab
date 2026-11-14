@@ -24,6 +24,7 @@ the exact line in the frequency domain, and the time-domain solver against the n
 (tests/test_lines.py, VERIFICATION.md).
 """
 import cmath
+import copy
 import json
 import math
 
@@ -50,6 +51,9 @@ def _f(v, d=None):
         raise LineError(f'μη αριθμητική τιμή: {v!r}')
 
 
+ALPHA_AL = 0.00403          # 4.12: temperature coefficient of the resistance at 20 °C, hard-drawn aluminium (IEC 60889)
+
+
 # ---------------------------------------------------------------- the conductors
 def conductors(data):
     """The individual conductors of the line data, in SI: phase, x, average height h, radius r, inner radius q,
@@ -73,8 +77,16 @@ def conductors(data):
             Rdc = _f(w.get('Rdc')) / 1000.0
         if Rdc <= 0:
             raise LineError('η αντίσταση dc πρέπει να είναι θετική')
+        # 4.12: the resistance at the operating temperature, R(T) = R₂₀·(1 + α·(T − 20 °C)) (α of the wire, default the
+        # hard-drawn aluminium of IEC 60889, 0,00403 1/K); the data give R_dc (or ρ) at 20 °C
+        kT = 1.0
+        if data.get('temp') not in (None, ''):
+            kT = 1.0 + _f(w.get('alpha'), ALPHA_AL) * (_f(data['temp']) - 20.0)
+            if not kT > 0:
+                raise LineError('θερμοκρασία: η αντίσταση βγαίνει μη θετική')
+            Rdc *= kT
         c = {'ph': int(_f(w.get('ph'), 1)), 'x': x, 'h': h, 'r': r, 'q': q, 'Rdc': Rdc, 'mur': _f(w.get('mur'), 1.0),
-             'ht': y, 'hm': y if ymid in (None, '') else _f(ymid)}
+             'ht': y, 'hm': y if ymid in (None, '') else _f(ymid), 'kT': kT}
         if w.get('dL') not in (None, ''):          # 4.11: an extra internal inductance (mH/km), used by `rebuild`
             c['dL'] = _f(w.get('dL')) * 1e-6
         zi = _zi_opts(w, c)
@@ -161,7 +173,7 @@ def _zi_opts(w, c):
             raise LineError('Galloway–Wedepohl: χρειάζεται το πλήθος των εξωτερικών συρμάτων (≥ 3)')
         r = c['r']
         rs = _f(w.get('rs'), 0.0) / 100.0 or r / (1.0 + 1.0 / math.sin(math.pi / n))   # n strands touching on a circle
-        rho = _f(w.get('rho'), 0.0) or c['Rdc'] * math.pi * (r * r - c['q'] * c['q'])
+        rho = _f(w.get('rho'), 0.0) * c.get('kT', 1.0) or c['Rdc'] * math.pi * (r * r - c['q'] * c['q'])
         return {'kind': 'gw', 'n': n, 'rs': rs, 'rho': rho, 'mus': _f(w.get('mus'), c['mur'])}
     if kind == 'gmr':
         g = _f(w.get('gmr')) / 100.0
@@ -1489,6 +1501,57 @@ def fd_model(data, length=None, fmin=0.01, decades=9, ppd=10, fti=None, tol_zc=0
     if curves:
         out['f'] = fs.tolist()
     return out
+
+
+SENS_PARAMS = ('rho', 'dh', 'sag', 'temp')
+
+
+def vary(data, param, value):
+    """4.12: a copy of the line data with one parameter changed: the earth resistivity 'rho' (Ω·m, the upper layer of a
+    two-layer earth), 'dh' all conductors higher by dh (m, at the tower and at mid-span), 'sag' (m: the height at mid-span
+    = the height at the tower − sag), 'temp' the conductor temperature (°C, R_dc at 20 °C in the data)."""
+    if param not in SENS_PARAMS:
+        raise LineError(f'άγνωστη παράμετρος «{param}»')
+    v = _f(value)
+    d = copy.deepcopy(data)
+    if param == 'rho':
+        if not v > 0:
+            raise LineError('η ειδική αντίσταση του εδάφους πρέπει να είναι θετική')
+        d['rho'] = v
+        return d
+    if param == 'temp':
+        d['temp'] = v
+        return d
+    if d.get('cables') or d.get('seq') or d.get('zyfile'):
+        raise LineError('ύψη και βέλος μόνο για εναέριες γραμμές από γεωμετρία')
+    for w in (d.get('wires') or []) + (d.get('bundles') or []):
+        y = _f(w.get('y'))
+        if param == 'dh':
+            w['y'] = y + v
+            if w.get('ymid') not in (None, ''):
+                w['ymid'] = _f(w['ymid']) + v
+        else:
+            if v < 0:
+                raise LineError('το βέλος δεν μπορεί να είναι αρνητικό')
+            w['ymid'] = y - v
+    return d
+
+
+def sensitivity(data, param, values, f=50.0):
+    """4.12: the sequence parameters (R, X Ω/km, C nF/km, B μS/km of the positive and zero sequence) of a three-phase line
+    against one parameter of the data (vary), as the sensitivity figures of the parameter-determination papers."""
+    f = _f(f, 50.0)
+    w = 2 * math.pi * f
+    rows = []
+    for v in values:
+        Z, Y = phase_matrices(vary(data, param, v), f)
+        if len(Z) != 3:
+            raise LineError('η ευαισθησία θέλει γραμμή τριών φάσεων (τις ακολουθίες)')
+        z1, z0 = sequence(Z)
+        c1, c0 = sequence(Y.imag / w)
+        rows.append({'v': _f(v), 'R1': z1.real * 1e3, 'X1': z1.imag * 1e3, 'R0': z0.real * 1e3, 'X0': z0.imag * 1e3,
+                     'C1': c1 * 1e12, 'C0': c0 * 1e12, 'B1': c1 * w * 1e9, 'B0': c0 * w * 1e9})
+    return {'param': param, 'f': f, 'rows': rows}
 
 
 def report(data, f=50.0):

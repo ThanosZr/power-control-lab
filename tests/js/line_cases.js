@@ -12,4 +12,6 @@ const conns=[['V1:p','L1:a1'],['V1:n','G:g']],R=['Rb','Rc','Ra2','Rb2','Rc2'];
 ['b1','c1','a2','b2','c2'].forEach((p,i)=>{comps.push({id:R[i],type:'R',params:{R:i<2?q.src.Rs:q.R}});conns.push(['L1:'+p,R[i]+':a'],[R[i]+':b','G:g']);});
 const s=new MNA.Sim(project(comps,conns),{h:q.h});const T=[],V=[[],[],[],[],[],[]];
 while(s.t<q.tend-1e-12){s.run(Math.min(q.h*5,q.tend-s.t));T.push(s.t);V[0].push(s.now('V:L1'));R.forEach((r,i)=>V[i+1].push(s.now('V:'+r)));}
-console.log(JSON.stringify({t:T,v:V,steps:s.steps,warn:s.net.warnings}));
+// 4.12: the same circuit for the SciPy solver (engine/batch.py)
+const batch=q.batch?MNA.exportForBatch(project(comps,conns),['V:L1','V:Rb','V:Rc','V:Ra2','V:Rb2','V:Rc2','I:L1','I5:L1']):null;
+console.log(JSON.stringify({batch,t:T,v:V,steps:s.steps,warn:s.net.warnings}));

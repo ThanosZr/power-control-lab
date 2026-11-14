@@ -522,3 +522,8 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 /* 4.11: the panel of the recordings (where, always, estimates) */
 .rec-panel{border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin:4px 0;background:#fbfdfc;font-size:12px}.rec-panel .rp-row{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:3px 0}
 .rec-panel #rp-dir{flex:1;min-width:180px;font-size:12px}#rec-note.bad{color:var(--danger)}.rec-line{display:flex;gap:4px;align-items:center}.rec-opts{font-size:11px;padding:0 5px;line-height:1.4}#nav-box.on{background:var(--accent,#147966);color:#fff}
+
+/* 4.12: the viewer of a recording */
+.rv-cv{width:100%;height:auto;border:1px solid var(--line);border-radius:8px;cursor:crosshair;background:#fff}
+.rv-chans{display:flex;flex-wrap:wrap;gap:4px 12px;margin:6px 0}.rv-chans label{display:flex;align-items:center;gap:4px;font-size:12px}.rv-chans i{display:inline-block;width:14px;height:3px}
+.rv-list td,.rv-list th{font-size:12px}.rv-list button{margin-left:4px}

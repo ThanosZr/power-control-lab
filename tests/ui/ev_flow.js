@@ -63,6 +63,14 @@ const assert=(c,m)=>{if(!c)throw new Error('ASSERT: '+m);};
  {const cv=await p.$('#scope-canvas'),bb=await cv.boundingBox();await p.evaluate(()=>PCL.scope.draw());await p.mouse.move(bb.x+30,bb.y+40);await p.mouse.wheel(0,-300);await p.waitForTimeout(300);
   R.zy=await p.evaluate(()=>PCL.scope.cfg.panes[0].y);await p.click('[data-nav="back"]');await p.waitForTimeout(200);R.zb=await p.evaluate(()=>PCL.scope.cfg.panes[0].y||null);
   assert(R.zy&&R.zy.auto===false&&R.zb===null,'y zoom over the axis and back '+JSON.stringify([R.zy,R.zb]));}
+ // 5c. 4.12: the viewer of the recording (index and range of the server), and the list of the recordings
+ R.view=await p.evaluate(async()=>{const v=await RecView.open(PCL.REC.name);await new Promise(r=>setTimeout(r,900));const st=v.state(),txt=v.box.textContent;v.close();return {...st,txt:txt.slice(0,400)};});
+ assert(R.view.rows>1000&&R.view.raw===false&&R.view.x1>R.view.x0&&/γραμμές/.test(R.view.txt),'the viewer of the recording '+JSON.stringify(R.view));
+ await p.click('#rec-opts');await p.click('#rp-list');await p.waitForSelector('#rp-items [data-rvopen]',{timeout:10000});
+ R.items=await p.$$eval('#rp-items [data-rvopen]',b=>b.map(x=>x.dataset.rvopen));
+ assert(R.items.includes(R.rec0.name),'the list of the recordings '+JSON.stringify(R.items));
+ await p.click(`#rp-items [data-rvopen="${R.items[0]}"]`);await p.waitForSelector('.rv-modal canvas',{timeout:10000});await p.waitForTimeout(500);
+ await p.keyboard.press('Escape');await p.click('#rec-opts');
  // 6. the theory card: the models and the metrics so far
  R.theory=await p.evaluate(()=>document.querySelector('#theory').textContent);
  assert(/J_eq = J_m/.test(R.theory)&&/moevc/.test(R.theory)&&/km\/kWh/.test(R.theory)&&/Οικονομικός|eco/.test(R.theory),'theory card '+R.theory.slice(0,300));
