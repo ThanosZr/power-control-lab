@@ -1422,9 +1422,31 @@
     ],
     "since": "4.11"
    },
+   "pcl.linereport.api_load": {
+    "params": [
+     "req"
+    ],
+    "since": "4.11"
+   },
    "pcl.linereport.api_scan": {
     "params": [
      "req"
+    ],
+    "since": "4.11"
+   },
+   "pcl.linereport.fields": {
+    "params": [
+     "data",
+     "U",
+     "I",
+     "f",
+     "height",
+     "at",
+     "earth",
+     "span",
+     "n",
+     "grid",
+     "map_at"
     ],
     "since": "4.11"
    },
@@ -2738,6 +2760,10 @@
     "since": "3.18"
    },
    "/api/line_export": {
+    "params": [],
+    "since": "4.11"
+   },
+   "/api/line_load": {
     "params": [],
     "since": "4.11"
    },
@@ -4924,10 +4950,16 @@
      "model",
      "len",
      "f",
+     "cp",
+     "npi",
      "fmin",
      "dec",
      "ppd",
      "fti",
+     "tiauto",
+     "nmax",
+     "ti",
+     "vtrap",
      "data",
      "mdl",
      "conn"

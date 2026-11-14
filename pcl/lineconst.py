@@ -1795,9 +1795,8 @@ def scan(data, fmin=0.01, decades=9, ppd=10, length=None, ti='gm0', fti=None, mo
         cz[i], cy[i] = zm, ym
         lam, V = np.linalg.eig(Y @ Z)
         V = V / np.linalg.norm(V, axis=0)
-        if Vp is None:
-            g = np.sqrt(lam)
-            o = np.argsort(2 * math.pi * f / np.maximum(np.abs(g.imag), 1e-300))
+        if Vp is None:                                        # the exact mode k starts as the column k of the constant T_i
+            o = _track(Ti / np.linalg.norm(Ti, axis=0), V)
         else:
             o = _track(Vp, V)
         lam, V = lam[o], V[:, o]
@@ -1900,7 +1899,9 @@ def line_admittance(Z, Y, L):
 
 
 def model_admittance(model, s):
-    """The nodal admittance that a CP or FD model represents at s = jω (to compare a model with the exact line)."""
+    """The nodal admittance that a CP, FD or π model represents at s = jω (to compare a model with the exact line)."""
+    if model.get('type') == 'pi':
+        return _pi_y(model, s)
     Ti = np.array(model['Ti'])
     M = len(Ti)
     Ys = np.zeros((M, M), complex)
@@ -2022,6 +2023,11 @@ def _cp_y(model, s):
     Ym = np.zeros((M, M), complex)
     for k, m in enumerate(model['modes']):
         Zc, tau, R = m['Zc'], m['tau'], m['R']
+        if m.get('dl'):                      # 4.11: without distortion, γℓ = sτ + R/(2Z_c) and Z_c real
+            x = s * tau + R / (2 * Zc)
+            Ys[k, k] = 1 / (Zc * cmath.tanh(x))
+            Ym[k, k] = -1 / (Zc * cmath.sinh(x))
+            continue
         h = _half(Zc, tau / 2, s)
         # chain: R/4 – half – R/2 – half – R/4 with ABCD matrices
         def ser(r):
@@ -2032,6 +2038,30 @@ def _cp_y(model, s):
         Ym[k, k] = -1 / B
     # i = T_i·i_mode and v_mode = T_iᵀ·v, so Y_phase = T_i·Y_mode·T_iᵀ
     return np.block([[Ti @ Ys @ Ti.T, Ti @ Ym @ Ti.T], [Ti @ Ym @ Ti.T, Ti @ Ys @ Ti.T]])
+
+
+def _pi_y(model, s):
+    """4.11: the nominal π in N sections at s (totals R, L, G, C of the model): the nodal matrix of the ladder, series
+    admittance ((R + sL)/N)⁻¹ between neighbouring nodes and (G + sC)/(2N) at each end of every section, reduced onto the
+    two ends (Kron) — the cascade of ABCD matrices loses its digits for many sections at high frequencies."""
+    N = int(model['N'])
+    Z = (np.asarray(model['R']) + s * np.asarray(model['L'])) / N
+    Y = (np.asarray(model['G']) + s * np.asarray(model['C'])) / (2 * N)
+    M = len(Z)
+    Ys = np.linalg.inv(Z)
+    A = np.zeros(((N + 1) * M, (N + 1) * M), complex)
+    for k in range(N):
+        a, b = slice(k * M, (k + 1) * M), slice((k + 1) * M, (k + 2) * M)
+        A[a, a] += Ys + Y
+        A[b, b] += Ys + Y
+        A[a, b] -= Ys
+        A[b, a] -= Ys
+    ends = list(range(M)) + list(range(N * M, (N + 1) * M))
+    if N == 1:
+        return A[np.ix_(ends, ends)]
+    inner = list(range(M, N * M))
+    Aee, Aei, Aie, Aii = A[np.ix_(ends, ends)], A[np.ix_(ends, inner)], A[np.ix_(inner, ends)], A[np.ix_(inner, inner)]
+    return Aee - Aei @ np.linalg.solve(Aii, Aie)
 
 
 def _half(Zc, tau, s):

@@ -8,6 +8,7 @@ import cmath
 import io
 import math
 import os
+import shutil
 import sys
 import unittest
 
@@ -573,6 +574,87 @@ class Exports(unittest.TestCase):
             self.assertTrue(e.get('text') or e.get('base64'))
         with self.assertRaises(lc.LineError):
             self.lr.api_export({'fmt': 'fd_mod', 'data': self.d})
+
+
+
+@unittest.skipUnless(shutil.which('node'), 'node')
+class SolverModels(unittest.TestCase):
+    """4.11: the new models of the part 'TLM' in the browser solver (CP without distortion, lossless high-frequency CP, the
+    nominal π in sections) against the numerical Laplace transform of the same model (pcl.lineconst.model_admittance):
+    the typical 400 kV line with Deri's earth, phase a energized through 10 Ω, the far ends through 1 MΩ."""
+    Rs, tr, tend, h, n = 10.0, 20e-6, 2e-3, 0.3e-6, 4096
+
+    @classmethod
+    def setUpClass(cls):
+        cls.d = lc.typical('400kV')
+        cls.d['earth'] = 'deri'
+
+    def run_case(self, model, kind, params):
+        import json
+        import subprocess
+        import tempfile
+        net = {'nodes': 6, 'el': [('V', 1, 0, self.Rs, ('ramp', 1.0, self.tr)), ('R', 2, 0, self.Rs), ('R', 3, 0, self.Rs),
+                                  ('LINE', [1, 2, 3], [4, 5, 6], self.d, model), ('R', 4, 0, 1e6), ('R', 5, 0, 1e6), ('R', 6, 0, 1e6)]}
+        tn, Vr = lc.nlt_solve(net, self.tend, n=self.n)
+        q = {'data': self.d, 'model': model, 'kind': kind, 'f': 50, 'h': self.h, 'tend': self.tend, 'params': params,
+             'src': {'Vpk': 1.0, 'tr': self.tr, 'Rs': self.Rs}, 'R': 1e6}
+        with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as fh:
+            json.dump(q, fh)
+        try:
+            out = subprocess.run(['node', os.path.join(os.path.dirname(__file__), 'js', 'line_cases.js'), fh.name],
+                                 capture_output=True, text=True, check=True).stdout
+        finally:
+            os.unlink(fh.name)
+        o = json.loads(out)
+        t, V = np.array(o['t']), np.array(o['v'])
+        pk = np.abs(Vr).max()
+        return max(np.abs(np.interp(t, tn, Vr[j]) - V[j]).max() / pk for j in range(6)), V
+
+    def test_distortionless(self):
+        m = lc.cp_model(self.d, 50, 100, mode='distortionless')
+        e, V = self.run_case(m, 'cp', {'cp': 'distortionless'})
+        self.assertLess(e, 0.005)
+        m0 = lc.cp_model(self.d, 50, 100, mode='lossless')
+        e0, V0 = self.run_case(m0, 'cp', {'cp': 'lossless'})
+        self.assertLess(e0, 0.005)
+        self.assertLess(np.abs(V[3]).max(), np.abs(V0[3]).max())          # the open end: attenuated against lossless
+
+    def test_hf(self):
+        m = lc.cp_model(self.d, 50, 100, mode='hf')
+        self.n = 8192                    # without losses the corners stay sharp: the transform needs the finer grid
+        e, _ = self.run_case(m, 'cp', {'cp': 'hf'})
+        self.assertLess(e, 0.005)
+
+    def test_trapped_charge(self):
+        # all ends open: the line keeps the dc voltages it was left with (CP lossless exactly; FD with its small G)
+        import json
+        import subprocess
+        import tempfile
+        for kind, model, params in (('cp', lc.cp_model(self.d, 50, 100, mode='lossless'), {'cp': 'lossless'}),
+                                    ('fd', lc.fd_model(self.d, 100, 0.1, 7, 6), {})):
+            q = {'data': self.d, 'model': model, 'kind': kind, 'f': 50, 'h': 1e-6, 'tend': 4e-3,
+                 'params': {**params, 'vtrap': '1, -0.5, 0'}, 'src': {'Vpk': 1e-9, 'tr': 20e-6, 'Rs': 1e9}, 'R': 1e9}
+            if kind == 'fd':
+                q['params'].update({'fmin': 0.1, 'dec': 7, 'ppd': 6})
+            with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as fh:
+                json.dump(q, fh)
+            try:
+                o = json.loads(subprocess.run(['node', os.path.join(os.path.dirname(__file__), 'js', 'line_cases.js'), fh.name],
+                                              capture_output=True, text=True, check=True).stdout)
+            finally:
+                os.unlink(fh.name)
+            V = np.array(o['v'])
+            want = [1, -0.5, 0, 1, -0.5, 0]       # a1, b1, c1, a2, b2, c2 (the rows of line_cases.js)
+            # FD: the fitted A(0) = Σ c/q is 0,9990–0,9995 (the dc conductance 0,2 nS/km and the fit), so the charge loses
+            # about 0,05 % at each passage: 0,85 % in 4 ms (the EMTP notes the same for trapped charge on FD lines)
+            tol = 2e-3 if kind == 'cp' else 1.2e-2
+            for j in range(6):
+                self.assertLess(np.abs(V[j] - want[j]).max(), tol, (kind, j))
+
+    def test_pi_sections(self):
+        m = lc.api({'data': self.d, 'model': 'pi', 'len': 100, 'f': 50, 'npi': 20})['mdl']
+        e, _ = self.run_case(m, 'pi', {'npi': 20})
+        self.assertLess(e, 0.005)
 
 
 if __name__ == '__main__':

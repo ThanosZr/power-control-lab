@@ -23,14 +23,39 @@ const {chromium}=require('playwright');
  await p.evaluate(()=>window.PCL.openInspector('L2',400,200));await p.waitForTimeout(300);
  ok(/Μοντέλο FD ενημερωμένο/.test(await p.$eval('#inspector',e=>e.innerText)),'inspector shows an up-to-date FD model');
  await p.click('#inspector [data-linedata]');await p.waitForSelector('.ld-modal');
- ok((await p.$$('.ld-modal .ld-svg circle')).length===8,'drawing: 2 ground wires and 3 bundles of 2');
+ await p.click('.ld-modal [data-tab="data"]');
+ ok((await p.$$('.ld-modal [data-ci]')).length===8,'drawing: 2 ground wires and 3 bundles of 2');
  const rho=await p.$('.ld-modal [data-d="rho"]');await rho.fill('1000');await rho.dispatchEvent('change');await p.waitForTimeout(300);
  ok(/παλιό/.test(await p.$eval('.ld-modal [data-msg]',e=>e.innerText)),'a change makes the model old');
- await p.click('.ld-modal [data-run]');await p.waitForFunction(()=>/Υπολογίστηκε|⚠/.test(document.querySelector('.ld-modal [data-msg]')?.innerText||''),null,{timeout:60000});
+ await p.click('.ld-modal [data-tab="model"]');await p.click('.ld-modal [data-run]');await p.waitForFunction(()=>/Υπολογίστηκε|⚠/.test(document.querySelector('.ld-modal [data-msg]')?.innerText||''),null,{timeout:60000});
  const rep=await p.$eval('.ld-modal',e=>e.textContent);ok(/Υπολογίστηκε/.test(rep),'computed: '+rep.slice(0,200));
  ok(/Ακολουθίες/.test(rep)&&/Προσαρμογή FD/.test(rep),'report with sequences and the fit');
  ok((await p.$$('.ld-modal .ld-plot')).length===6,'six fit plots');
  const key=await p.evaluate(()=>{const c=window.PCL.editor.comp('L2');return JSON.parse(c.params.mdl).src===Parts.tlmKey({...Parts.defaults('TLM'),...c.params});});ok(key,'the model carries the key of the new data');
+ // 4.11: every parameter against frequency, the tables, the exports, the interactive drawing
+ await p.click('.ld-modal [data-tab="graphs"]');await p.click('.ld-modal [data-scan]');await p.waitForSelector('.ld-modal .ld-chart',{timeout:60000});
+ const nser=await p.$$eval('.ld-modal .ld-cleg span',e=>e.length);ok(nser===6,'Z_c of the three modes, constant and exact T_i: '+nser);
+ ok((await p.$$('.ld-modal .ld-chart path[d^="M"]')).length===6,'six curves drawn');
+ { const svg=await p.$('.ld-modal .ld-chart'),bb=await svg.boundingBox();await p.mouse.move(bb.x+bb.width*0.5,bb.y+bb.height*0.5);await p.waitForTimeout(100);
+  ok(/ρυθμός 1:/.test(await p.$eval('.ld-modal .ld-ctip',e=>e.innerText)),'the cursor shows the values');
+  await p.mouse.move(bb.x+bb.width*0.3,bb.y+bb.height*0.5);await p.mouse.down();await p.mouse.move(bb.x+bb.width*0.6,bb.y+bb.height*0.5,{steps:4});await p.mouse.up();await p.waitForTimeout(100);
+  const lab=await p.$$eval('.ld-modal .ld-chart text',t=>t.map(x=>x.textContent).filter(x=>/^10/.test(x)).length);ok(lab<=5,'zoomed to a band of frequencies: '+lab+' decade labels');
+  await p.click('.ld-modal .ld-cleg span[data-s="0"]');ok((await p.$$('.ld-modal .ld-chart path[d^="M"]')).length===5,'the legend hides a curve'); }
+ await p.selectOption('.ld-modal [data-g="dom"]','phase');await p.waitForTimeout(150);ok((await p.$$('.ld-modal .ld-cleg span')).length===6,'Z′ of the phases: the six elements of a symmetric 3 × 3');
+ await p.click('.ld-modal [data-tab="tables"]');await p.waitForTimeout(200);const tb=await p.$eval('.ld-modal',e=>e.textContent);
+ ok(/\[Z_E\] φάσεων/.test(tb)&&/\[C_S\] συμμετρικών/.test(tb)&&/SIL/.test(tb)&&/Q-error/.test(tb),'tables: matrices, useful quantities, Q-error');
+ ok((await p.$$('.ld-modal [data-fE] .ld-chart')).length===1,'the field profile under the line');
+ await p.click('.ld-modal [data-tab="export"]');
+ for(const [f,re] of [['script',/\.py$/],['csv',/\.csv$/],['exact_pi',/_Exact_PI\.mod$/],['fd_mod',/_FD\.mod$/]]){const [dl]=await Promise.all([p.waitForEvent('download',{timeout:60000}),p.click(`.ld-modal [data-ex="${f}"]`)]);ok(re.test(dl.suggestedFilename()),'export '+f+': '+dl.suggestedFilename());}
+ await p.click('.ld-modal [data-topy]');ok(await p.evaluate(()=>window.Addons?.lineOut?.id==='L2'&&!!window.Addons.lineOut.data.bundles),'«Στην Python» leaves the line for app.line()');
+ await p.click('.ld-modal [data-tab="data"]');
+ { const c=await p.$('.ld-modal [data-src="w0"]'),bb=await c.boundingBox(),x0=await p.evaluate(()=>JSON.parse(window.PCL.editor.comp('L2').params.data).wires[0].x);
+  await p.mouse.move(bb.x+bb.width/2,bb.y+bb.height/2);await p.mouse.down();await p.mouse.move(bb.x+bb.width/2+40,bb.y+bb.height/2,{steps:5});await p.mouse.up();await p.waitForTimeout(200);
+  const x1=await p.evaluate(()=>JSON.parse(window.PCL.editor.comp('L2').params.data).wires[0].x);ok(x1>x0+1,'dragging a ground wire moves it: '+x0+' → '+x1);
+  await p.click('.ld-modal [data-undo]');await p.waitForTimeout(200);ok(await p.evaluate(()=>JSON.parse(window.PCL.editor.comp('L2').params.data).wires[0].x)===x0,'undo puts it back'); }
+ if(!(await p.isVisible('.ld-modal [data-v="ov"]')))await p.click('.ld-modal [data-view]');
+ await p.selectOption('.ld-modal [data-v="ov"]','E');await p.waitForTimeout(300);ok((await p.$$('.ld-modal [data-draw] image')).length===1,'the |E| map over the drawing');
+ await p.selectOption('.ld-modal [data-v="ov"]','none');await p.waitForTimeout(200);
  await p.click('.ld-modal [data-close]');
  // the CP line gets its new model automatically when the run starts again
  await p.evaluate(()=>{const e=window.PCL.editor,c=e.comp('L1'),d=JSON.parse(c.params.data);d.rho=1000;e.setParams('L1',{data:JSON.stringify(d)});});
@@ -43,6 +68,7 @@ const {chromium}=require('playwright');
  const thc=await p.$eval('#theory',e=>e.innerText);ok(/Cable Data/.test(thc)&&/άφιξη/.test(thc)&&!/\(γης\)/.test(thc),'cable theory card');
  await p.evaluate(()=>window.PCL.openInspector('L2',400,200));await p.waitForTimeout(300);
  await p.click('#inspector [data-linedata]');await p.waitForSelector('.ld-modal');
+ await p.click('.ld-modal [data-tab="data"]');
  ok((await p.$$('.ld-modal .ld-cab')).length===3,'three cables in the table');
  ok(await p.$eval('.ld-modal [data-kind]',e=>e.value)==='cab','type: cables');
  ok((await p.$$('.ld-modal .ld-xs circle')).length===4,'cross-section with four layers');
@@ -51,14 +77,19 @@ const {chromium}=require('playwright');
  ok(await p.evaluate(()=>JSON.parse(window.PCL.editor.comp('L2').params.data).cables[0].layers[1].tand===1e-3),'tanδ kept in the data');
  const r1=await p.$('.ld-modal [data-k="lay"][data-i="0"][data-j="0"][data-c="rout"]');ok(await r1.inputValue()==='25.6','radius shown in mm');
  ok(/παλιό/.test(await p.$eval('.ld-modal [data-msg]',e=>e.innerText)),'a change makes the cable model old');
- await p.click('.ld-modal [data-run]');await p.waitForFunction(()=>/Υπολογίστηκε|⚠/.test(document.querySelector('.ld-modal [data-msg]')?.innerText||''),null,{timeout:120000});
+ await p.click('.ld-modal [data-tab="model"]');await p.click('.ld-modal [data-run]');await p.waitForFunction(()=>/Υπολογίστηκε|⚠/.test(document.querySelector('.ld-modal [data-msg]')?.innerText||''),null,{timeout:120000});
  const repc=await p.$eval('.ld-modal',e=>e.textContent);ok(/Υπολογίστηκε/.test(repc),'cable computed: '+repc.slice(0,200));
  ok((await p.$$('.ld-modal .ld-plot')).length===6,'six fit plots for the cable');
- await p.click('.ld-modal [data-addc]');await p.waitForTimeout(300);
+ await p.click('.ld-modal [data-tab="data"]');await p.click('.ld-modal [data-addc]');await p.waitForTimeout(300);
  ok(await p.evaluate(()=>{const d=JSON.parse(window.PCL.editor.comp('L2').params.data);return d.cables.length===4&&d.cables[3].ph[0]===4&&d.cables[3].ph[1]===0;}),'a new cable takes the next phase');
  ok(await p.evaluate(()=>Parts.tlmM(window.PCL.editor.comp('L2').params))===4,'four phases');
  await p.selectOption('.ld-modal [data-kind]','oh');await p.waitForTimeout(300);
  ok((await p.$$('.ld-modal [data-add="w"]')).length===1&&!(await p.$$('.ld-modal .ld-cab')).length,'back to an overhead line');
+ // 4.11: a line from sequence data, and the nominal π as the model of the part
+ await p.selectOption('.ld-modal [data-kind]','seq');await p.waitForTimeout(200);ok((await p.$$('.ld-modal [data-q="R0"]')).length===1,'sequence data form');
+ await p.selectOption('.ld-modal [data-p="model"]','pi');await p.waitForTimeout(200);await p.click('.ld-modal [data-tab="model"]');
+ await p.click('.ld-modal [data-run]');await p.waitForFunction(()=>/Υπολογίστηκε|⚠/.test(document.querySelector('.ld-modal [data-msg]')?.innerText||''),null,{timeout:60000});
+ ok(/Ονομαστικό π/.test(await p.$eval('.ld-modal',e=>e.textContent)),'π model computed: '+(await p.$eval('.ld-modal [data-msg]',e=>e.innerText)));
  await p.click('.ld-modal [data-close]');
  // 4.9: the two TRV tutorials, run to the end, with their cards (the rated envelope; the arc of the short-line fault)
  await p.goto(U+'?tutorial=trv_terminal');await p.waitForTimeout(1500);

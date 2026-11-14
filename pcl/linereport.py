@@ -657,6 +657,45 @@ def _version():
         return ''
 
 
+# ---------------------------------------------------------------- the fields around the line (for the drawing and the profiles)
+def _phasors(M, mag=1.0):
+    """1∠0°, 1∠−120°, 1∠120° for each three phases (a, b, c of every circuit), times mag."""
+    a = [complex(math.cos(-2 * math.pi * k / 3), math.sin(-2 * math.pi * k / 3)) for k in range(3)]
+    return [mag * a[k % 3] for k in range(M)]
+
+
+def fields(data, U=400.0, I=1000.0, f=50.0, height=1.0, at='avg', earth='none', span=None, n=241, grid=(121, 73), map_at='tower'):
+    """E (kV/m) and B (μT) of an overhead line for the line-to-line voltage U (kV rms) and the phase current I (A rms) of
+    balanced three-phase sets (a, b, c of every circuit): the profiles at height over x (the ellipse major axes, as the
+    guidelines take them, with the conductor heights at: 'avg' as the line model and the EMTP, 'mid' the lowest) and two
+    maps over the cross-section (rms of the vector; heights map_at, the tower as the drawing shows it). Both scale linearly with
+    U and I, so the drawing rescales them without asking again. The reference values of ICNIRP 2010 for the public at
+    50 Hz (5 kV/m, 200 μT) come along for the profile."""
+    cs = lc.conductors(data)
+    M = max(c['ph'] for c in cs)
+    xs_c = [c['x'] for c in cs]
+    hk = {'avg': 'h', 'mid': 'hm', 'tower': 'ht'}[at]
+    hmax = max(c[hk] for c in cs)
+    hmap = {'avg': 'h', 'mid': 'hm', 'tower': 'ht'}[map_at]
+    hmax_map = max(c[hmap] for c in cs)
+    half = span or (max(abs(min(xs_c)), abs(max(xs_c))) + max(30.0, hmax))
+    x = np.linspace(-half, half, n)
+    V = _phasors(M, U / math.sqrt(3))
+    Ip = _phasors(M, I)
+    E = lc.field(data, V, x, height, at)
+    B = lc.bfield(data, Ip, x, height, f, earth, at)
+    nx, ny = grid
+    gx = np.linspace(-half, half, nx)
+    gy = np.linspace(0.0, hmax_map * 1.25 + 2.0, ny)
+    Em = np.zeros((ny, nx))
+    Bm = np.zeros((ny, nx))
+    for j, y in enumerate(gy):
+        Em[j] = lc.field(data, V, gx, float(y), map_at)['E']
+        Bm[j] = lc.bfield(data, Ip, gx, float(y), f, earth, map_at)['B']
+    return {'U': U, 'I': I, 'f': f, 'height': height, 'at': at, 'map_at': map_at, 'x': x, 'E': E['Emax'], 'B': B['Bmax'],
+            'gx': gx, 'gy': gy, 'Emap': Em, 'Bmap': Bm, 'limits': {'E': 5.0, 'B': 200.0} if abs(f - 50.0) < 1e-9 else None}
+
+
 # ---------------------------------------------------------------- the server actions (/api/line_scan, /api/line_export)
 def _scan_req(req):
     data = lc._req_data(req)
@@ -691,7 +730,32 @@ def api_scan(req):
         out['lossless'] = lc.jsonable(lc.lossless_modes(data, f, req.get('lossless') or 'r0'))
     except lc.LineError:
         pass
+    if not (data.get('cables') or data.get('seq') or data.get('zyfile')):
+        fq = req.get('field') if isinstance(req.get('field'), dict) else {}
+        try:
+            out['fields'] = lc.jsonable(fields(data, lc._f(fq.get('U'), 400.0), lc._f(fq.get('I'), 1000.0), f,
+                                               lc._f(fq.get('height'), 1.0), fq.get('at') or 'avg', fq.get('earth') or 'none'))
+        except (lc.LineError, KeyError, np.linalg.LinAlgError):
+            pass
     return out
+
+
+def api_load(req):
+    """{base64 (a MATLAB file with Z, Y, f, line_length), unit} → {zyfile} for the line data (Line/Cable Data §2.4.1)."""
+    try:
+        raw = base64.b64decode(str(req.get('base64') or ''), validate=True)
+    except ValueError:
+        raise lc.LineError('το αρχείο δεν διαβάζεται')
+    if not raw:
+        raise lc.LineError('κενό αρχείο')
+    unit = req.get('unit') or 'km'
+    if unit not in ('km', 'm', 'mile'):
+        raise lc.LineError(f'άγνωστη μονάδα μήκους «{unit}»')
+    try:
+        z = lc.load_zy_mat(raw, unit)
+    except (ValueError, TypeError, NotImplementedError, OSError) as e:
+        raise lc.LineError(f'το αρχείο .mat δεν διαβάζεται ({e})')
+    return {'zyfile': lc.jsonable(z)}
 
 
 EXPORTS = ('csv', 'json', 'mat', 'html', 'pdf', 'script', 'exact_pi', 'nominal_pi', 'fd_mod', 'cp_netlist')

@@ -697,11 +697,17 @@
   // or FD (J. Marti: Z_c(s), A(s)·e^(−sτ) as rational functions with real poles, recursive convolution), constant real T_i
   TLM:{name:'Γραμμή από γεωμετρία (CP / FD)',prefix:'LG',group:'Δίκτυο',pins:p=>tlmPins(p),box:p=>{const M=tlmM(p),h=isBus(p)&&M===3?50:Math.max(50,20*M+10);return [-30,-h/2,60,h];},
    bus:p=>isBus(p)&&tlmM(p)===3?{abc1:['a1','b1','c1'],abc2:['a2','b2','c2']}:{},
-   params:[sel('model','Μοντέλο',[['cp','CP: σταθερές παράμετροι (Bergeron, R/4 – R/2 – R/4)'],['fd','FD: εξάρτηση από τη συχνότητα (J. Marti)']],'cp',{hint:'Όπως το EMTP: CP στη συχνότητα που δίνεις (κάθε ρυθμός μια γραμμή Bergeron με συγκεντρωμένη R), FD με Z_c(ω) και A(ω) ως ρητές συναρτήσεις. Και τα δύο με σταθερό πραγματικό T_i.'}),
+   params:[sel('model','Μοντέλο',[['cp','CP: σταθερές παράμετροι (Bergeron, R/4 – R/2 – R/4)'],['fd','FD: εξάρτηση από τη συχνότητα (J. Marti)'],['pi','π ονομαστικό σε τμήματα (4.11)']],'cp',{hint:'Όπως το EMTP: CP στη συχνότητα που δίνεις (κάθε ρυθμός μια γραμμή Bergeron με συγκεντρωμένη R), FD με Z_c(ω) και A(ω) ως ρητές συναρτήσεις, και τα δύο με σταθερό πραγματικό T_i· π: συζευγμένα R, L, C σε N τμήματα.'}),
     num('len','Μήκος','km',100),
-    num('f','Συχνότητα των παραμέτρων (CP)','Hz',50,{show:p=>p.model!=='fd',hint:'50 Hz για μόνιμη κατάσταση και σφάλματα, 1–5 kHz για χειρισμούς, 100–500 kHz για κεραυνούς.'}),
+    num('f','Συχνότητα των παραμέτρων (CP, π)','Hz',50,{show:p=>p.model!=='fd',hint:'50 Hz για μόνιμη κατάσταση και σφάλματα, 1–5 kHz για χειρισμούς, 100–500 kHz για κεραυνούς.'}),
+    sel('cp','Είδος CP',[['lumped','R/4 – R/2 – R/4'],['lossless','χωρίς απώλειες'],['distortionless','χωρίς παραμόρφωση'],['hf','χωρίς απώλειες, υψηλές συχνότητες']],'lumped',{show:p=>(p.model||'cp')==='cp'}),
+    num('npi','Τμήματα του π','',1,{show:p=>p.model==='pi'}),
     num('fmin','Ελάχιστη συχνότητα προσαρμογής','Hz',0.01,{show:p=>p.model==='fd'}),num('dec','Δεκάδες','',9,{show:p=>p.model==='fd',hint:'Μέγιστη συχνότητα f_min·10^δεκάδες (προεπιλογή 0,01 Hz … 10 MHz, όπως το EMTP).'}),
-    num('ppd','Σημεία ανά δεκάδα','',10,{show:p=>p.model==='fd'}),num('fti','Συχνότητα του T_i','Hz',1000,{show:p=>p.model==='fd',hint:'Ο πραγματικός T_i υπολογίζεται σε μία συχνότητα (το EMTP προτείνει 0,5–5 kHz για χειρισμούς).'}),
+    num('ppd','Σημεία ανά δεκάδα','',10,{show:p=>p.model==='fd'}),num('fti','Συχνότητα του T_i','Hz',1000,{show:p=>p.model==='fd'&&p.tiauto!=='1',hint:'Ο πραγματικός T_i υπολογίζεται σε μία συχνότητα (το EMTP προτείνει 0,5–5 kHz για χειρισμούς).'}),
+    sel('tiauto','Συχνότητα του T_i αυτόματα',[['0','Όχι'],['1','Ναι (500 Hz – 5 kHz)']],'0',{show:p=>p.model==='fd'}),
+    num('nmax','Πόλοι ανά συνάρτηση (μέγιστο)','',30,{show:p=>p.model==='fd'}),
+    sel('ti','Πραγματικός T_i',[['gm0','G_m = 0 (EMTP)'],['minimag','ελάχιστο φανταστικό'],['balanced','ισορροπημένη (Clarke)'],['double','διπλό κύκλωμα']],'gm0',{show:p=>p.model!=='pi'}),
+    txt('vtrap','Παγιδευμένο φορτίο: τάση ανά αγωγό (V)','',{show:p=>p.model!=='pi',hint:'4.11: η γραμμή ξεκινά φορτισμένη σε αυτές τις τάσεις ΣΡ (μία ανά φάση, με κόμμα), όπως οι αρχικές συνθήκες του CP/FD του EMTP (για επαναζεύξη). Όχι μαζί με εκκίνηση από ροή φορτίου.'}),
     txt('data','Δεδομένα γραμμής (JSON)',JSON.stringify(TLM_TYPICAL['400kV']),{show:()=>false}),txt('mdl','Υπολογισμένο μοντέλο (JSON)','',{show:()=>false}),
     sel('conn','Ακροδέκτες',[['sep','Χωριστοί'],['bus','Δίαυλος abc (3 φάσεις)']],'sep')],
    value:p=>p.len,unit:'km',
@@ -1071,12 +1077,16 @@
  function tlmData(p){const s=String(p.data??'');if(tlmCache.has(s))return tlmCache.get(s);let d=null;try{d=JSON.parse(s);}catch(e){d=null;}if(tlmCache.size>64)tlmCache.clear();tlmCache.set(s,d);return d;}
  // number of phases: the largest phase number of the conductors (0 = ground wire); 3 when the data cannot be read
  function tlmM(p){const d=tlmData(p);if(!d)return 3;let M=0;for(const w of [...(d.wires||[]),...(d.bundles||[])])M=Math.max(M,Math.round(+w.ph)||0);
-  for(const c of d.cables||[])for(const v of [].concat(c.ph??[]))M=Math.max(M,Math.round(+v)||0);return Math.max(1,Math.min(12,M||3));}
+  for(const c of d.cables||[])for(const v of [].concat(c.ph??[]))M=Math.max(M,Math.round(+v)||0);
+  if(d.seq)M=Math.round(+d.seq.M)||3;else if(d.zyfile&&d.zyfile.Zr?.length)M=d.zyfile.Zr[0].length;return Math.max(1,Math.min(12,M||3));}
  function tlmPin(k,end){return 'abcdefghijkl'[k]+end;}
  function tlmPins(p){const M=tlmM(p);if(isBus(p)&&M===3)return {abc1:[-40,0],abc2:[40,0]};const o={},y=k=>-10*(M-1)+20*k;for(let k=0;k<M;k++){o[tlmPin(k,1)]=[-40,y(k)];o[tlmPin(k,2)]=[40,y(k)];}return o;}
  // what the model was computed from: a change in any of these asks for a new model
  function tlmKey(p){const d=tlmData(p),n=v=>{const x=parseEng(v);return Number.isFinite(x)?x:String(v);};
-  const o={data:d,model:p.model==='fd'?'fd':'cp',len:n(p.len)};if(o.model==='cp')o.f=n(p.f);else Object.assign(o,{fmin:n(p.fmin),dec:n(p.dec),ppd:n(p.ppd),fti:n(p.fti)});return JSON.stringify(o);}
+  const o={data:d,model:['fd','pi'].includes(p.model)?p.model:'cp',len:n(p.len)};if(o.model!=='fd')o.f=n(p.f);else Object.assign(o,{fmin:n(p.fmin),dec:n(p.dec),ppd:n(p.ppd),fti:n(p.fti)});
+  // 4.11: the options of the model enter the key only when they differ from the defaults (old models stay valid)
+  if(o.model==='cp'&&p.cp&&p.cp!=='lumped')o.cp=p.cp;if(o.model==='pi')o.npi=n(p.npi??1);if(o.model!=='pi'&&p.ti&&p.ti!=='gm0')o.ti=p.ti;
+  if(o.model==='fd'){if(p.tiauto==='1'){o.tiauto=1;delete o.fti;}if(p.nmax!=null&&+p.nmax!==30)o.nmax=n(p.nmax);}return JSON.stringify(o);}
  // the model for the solver: {M, type, Ti (M×M, by rows), modes} or {err}
  function tlmModel(p){if(!tlmData(p))return {err:'τα δεδομένα της γραμμής δεν διαβάζονται (JSON).'};let m=null;try{m=p.mdl?JSON.parse(p.mdl):null;}catch(e){m=null;}
   if(!m||!m.modes)return {err:'δεν έχει υπολογιστεί μοντέλο. Άνοιξε «Δεδομένα γραμμής» και πάτα «Υπολογισμός» (χρειάζεται ο server).',need:true};
@@ -1101,7 +1111,7 @@
  // live (the reload carries the states by the inner ids), and only what changes the inner circuit is structural
  Object.assign(STRUCT,{AIC:new Set(['scheme']),GRID3:new Set(['z0','conn']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn','model','arc']),ARC:new Set(['ctl','vm','arc']),
   XF3:new Set(['grp','P0','core','conn']),LOAD3:new Set(['cn','model','conn']),
-  GEN3:new Set(['data','conv','shaft','Hm','exc','mech','init','neut','conn']),LINE3:new Set(['unit','z0','conn']),TLM:new Set(['model','data','mdl','len','f','fmin','dec','ppd','fti','conn'])});
+  GEN3:new Set(['data','conv','shaft','Hm','exc','mech','init','neut','conn']),LINE3:new Set(['unit','z0','conn']),TLM:new Set(['model','data','mdl','len','f','fmin','dec','ppd','fti','conn','cp','npi','tiauto','nmax','ti','vtrap'])});
  const structCache=new Map();
  function structural(type,k){const key=type+'|'+k;if(structCache.has(key))return structCache.get(key);let r=!!STRUCT[type]?.has(k);
   const d=PARTS[type],pd=d?.params?.find(x=>x.k===k);if(!r&&pd&&pd.struct)r=true;

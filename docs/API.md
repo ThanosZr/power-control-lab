@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.11: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (538 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.11: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (541 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-312 σημεία.
+314 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -217,7 +217,9 @@
 | `pcl.lineconst.zy_from_file` | `data`, `s` | 4.11 |
 | `pcl.linereport.ReportError` | — | 4.11 |
 | `pcl.linereport.api_export` | `req` | 4.11 |
+| `pcl.linereport.api_load` | `req` | 4.11 |
 | `pcl.linereport.api_scan` | `req` | 4.11 |
+| `pcl.linereport.fields` | `data`, `U`, `I`, `f`, `height`, `at`, `earth`, `span`, `n`, `grid`, `map_at` | 4.11 |
 | `pcl.linereport.plot` | `sc`, `items`, `preset`, `out`, `form`, `elems`, `style`, `title` | 4.11 |
 | `pcl.linereport.read_exact_pi` | `text` | 4.11 |
 | `pcl.linereport.read_fd_mod` | `text` | 4.11 |
@@ -380,7 +382,7 @@
 
 ## Server: `/api/<ενέργεια>` και διαδρομές
 
-38 σημεία.
+39 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -401,6 +403,7 @@
 | `/api/health` | — | 3.18 |
 | `/api/inverse` | — | 3.18 |
 | `/api/line_export` | — | 4.11 |
+| `/api/line_load` | — | 4.11 |
 | `/api/line_model` | — | 4.4 |
 | `/api/line_scan` | — | 4.11 |
 | `/api/linearize` | — | 3.18 |
@@ -612,7 +615,7 @@
 | `part:TAGI` | name | y | 3.18 |
 | `part:TAGO` | name | u | 3.18 |
 | `part:TL` | spec, Z, tau, len, vel, Lp, Cp, Rt, Rp, nsec | a1, a2, b1, b2 | 3.18 |
-| `part:TLM` | model, len, f, fmin, dec, ppd, fti, data, mdl, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.4 |
+| `part:TLM` | model, len, f, cp, npi, fmin, dec, ppd, fti, tiauto, nmax, ti, vtrap, data, mdl, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.4 |
 | `part:TOWER` | h, Zt, vt, foot, R0, rho, E0, ins, Ub, U0, kde, Dde, impl, meas | a1, a2, b1, b2, c1, c2, d1, d2, e1, e2 | 4.9 |
 | `part:UD` | clock, trig, y0 | u, y | 3.18 |
 | `part:VAC` | Vpk, f, phase, off, Rs, Ls | n, p | 3.18 |

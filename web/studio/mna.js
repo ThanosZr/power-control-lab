@@ -250,14 +250,37 @@
  // FD (J. Marti): per mode Z_c(s) = d + Σ k/(s + p) and A(s) = e^(−sτ)·Σ c/(s + q), recursive convolutions that are exact
  // for inputs linear over the step; at each end i = (v − h_z − b)/Z_eq with b = A ⊛ f of the other end, f = v + Z_c ⊛ i.
  function tlmElement(o,n1,n2,g){const M=g.M,Ti=new Float64Array(M*M);for(let r=0;r<M;r++)for(let k=0;k<M;k++)Ti[r*M+k]=g.Ti[r][k];
-  const modes=g.modes.map(q=>{if(g.type!=='fd'){const Zc=+q.Zc,R=Math.max(0,+q.R||0),r=R/4,Ze=Zc+r;return {cp:true,Zc,R,tau:+q.tau,Ze,hh:(Zc-r)/Ze};}
+  // 4.11: CP without distortion (cpline §1.2.3, Dommel §4.2.2.4): lossless with every arriving wave times e^(−R/2Z_c)
+  const modes=g.modes.map(q=>{if(g.type!=='fd'){const Zc=+q.Zc,R=Math.max(0,+q.R||0);if(q.dl)return {cp:true,Zc,R,tau:+q.tau,Ze:Zc,hh:1,att:Math.exp(-R/(2*Zc))};
+    const r=R/4,Ze=Zc+r;return {cp:true,Zc,R,tau:+q.tau,Ze,hh:(Zc-r)/Ze,att:1};}
    const z=q.zc,a=q.a,F=v=>Float64Array.from(v.map(Number));
    return {fd:true,tau:+q.tau,d:+z.d,kr:F(z.r),kp:F(z.p),ar:F(a.r),ap:F(a.p),z1:new Float64Array(z.r.length),z2:new Float64Array(z.r.length),
     y1:new Float64Array(a.r.length),y2:new Float64Array(a.r.length),i1:0,i2:0,u:new Float64Array(4),Zeq:+z.d,hz1:0,hz2:0,b1:0,b2:0};});
   const nc=g.type==='fd'?2:4;
-  return {k:'TLM',...o,M,n1,n2,p1:n1.map(a=>[a,-1]),p2:n2.map(a=>[a,-1]),Ti,fd:g.type==='fd',modes,tauMin:Math.min(...modes.map(m=>m.tau)),tauMax:Math.max(...modes.map(m=>m.tau)),
+  // 4.11: trapped charge: the line at rest with the dc voltages V₀ on its conductors (v_mode = T_iᵀ·V₀, no current) before t = 0;
+  // the FD propagation states at their dc values c/q·f (Z_c ⊛ i = 0)
+  let vm0=null;if(o.vtrap&&o.vtrap.some(v=>v)){vm0=new Float64Array(M);for(let k=0;k<M;k++){let s=0;for(let r=0;r<M;r++)s+=Ti[r*M+k]*(o.vtrap[r]||0);vm0[k]=s;}
+   modes.forEach((m,k)=>{if(m.fd)for(let i=0;i<m.ap.length;i++){m.y1[i]=m.y2[i]=m.ar[i]/m.ap[i]*vm0[k];}});}
+  delete o.vtrap;
+  return {k:'TLM',...o,M,n1,n2,vm0,p1:n1.map(a=>[a,-1]),p2:n2.map(a=>[a,-1]),Ti,fd:g.type==='fd',modes,tauMin:Math.min(...modes.map(m=>m.tau)),tauMax:Math.max(...modes.map(m=>m.tau)),
    Gp:new Float64Array(M*M),gH:NaN,Ihm:new Float64Array(2*M),Ih:new Float64Array(2*M),iE:new Float64Array(2*M),vm:new Float64Array(2*M),q:new Float64Array(nc*M),
    H:{t:[],c:Array.from({length:nc*M},()=>[]),s:0,cut:0}};}
+ // 4.11: the nominal π of a line from geometry in N equal sections (Dommel §4.2.2.1): per section the coupled series R (a
+ // conductance matrix R⁻¹, or resistors when R is diagonal) and L (a flux element), and at each end of it the halves of the
+ // shunt C and G as capacitors and resistors to ground and between the phases (row sums and −C_ik). A 0 V source at every
+ // end gives the currents into the line (the ports of the part); it starts from the steady state like any RLC network.
+ function piLine(c,n1,n2,g,{add,internal,row}){const M=g.M,N=Math.max(1,Math.min(200,Math.round(+g.N||1))),sc=(A,k)=>A.map(r=>r.map(v=>+v*k));
+  const R=sc(g.R,1/N),L=sc(g.L,1/N),C=sc(g.C,1/(2*N)),G=sc(g.G,1/(2*N)),Gam=P.matInv(L),diagR=R.every((r,i)=>r.every((v,j)=>i===j||Math.abs(v)<=1e-12*Math.abs(R[i][i])));
+  if(!Gam)throw new NetlistError(`${c.label||c.id}: ο πίνακας L του π δεν αντιστρέφεται.`);const GR=diagR?null:P.matInv(R);
+  const vs=[],ends=(ns,tag)=>ns.map((a,k)=>{const b=internal();vs.push(add({k:'V',a,b,row:row(),src:{kind:'dc',V:0},key:c.id+'#'+tag+k}));return b;});
+  const e1=ends(n1,'i1_'),e2=ends(n2,'i2_');
+  const shunt=(ns,tag)=>{for(let i=0;i<M;i++){let cs=0,gs=0;for(let j=0;j<M;j++){cs+=C[i][j];gs+=G[i][j];if(j>i){if(C[i][j]<0)add({k:'C',a:ns[i],b:ns[j],C:-C[i][j],v:0,i:0,key:c.id+tag+i+'_'+j});if(G[i][j]<0)add({k:'G',a:ns[i],b:ns[j],R:-1/G[i][j]});}}
+    if(cs>0)add({k:'C',a:ns[i],b:-1,C:cs,v:0,i:0,key:c.id+tag+i});if(gs>0)add({k:'G',a:ns[i],b:-1,R:1/gs});}};
+  let left=e1;for(let s=0;s<N;s++){const right=s===N-1?e2:n1.map(()=>internal()),mid=n1.map(()=>internal());shunt(left,'#cl'+s+'_');
+   if(diagR)for(let k=0;k<M;k++)add({k:'G',a:left[k],b:mid[k],R:Math.max(R[k][k],1e-9)});else add({k:'MG',ports:left.map((a,k)=>[a,mid[k]]),N:M,Gm:GR.flat()});
+   add({k:'F',ports:mid.map((a,k)=>[a,right[k]]),N:M,Lm:L.flat(),Gam:Gam.flat(),Gnow:Gam.flat(),psi:new Float64Array(M),psi1:new Float64Array(M),i:new Float64Array(M),key:c.id+'#L'+s});
+   shunt(right,'#cr'+s+'_');left=right;}
+  return {k:'PIL',vs,M};}
  // (E = e^(−ph), a₀ = ∫₀ʰ e^(−ps) ds, a₁/h = ∫₀ʰ s·e^(−ps) ds / h) of one real pole p over a step h, without cancellation for small ph
  function rcCoef(p,h){const x=p*h;if(x<1e-4){const x2=x*x;return [Math.exp(-x),h*(1-x/2+x2/6-x*x2/24),h*(0.5-x/3+x2/8-x*x2/30)];}
   const E=Math.exp(-x),em=-Math.expm1(-x);return [E,em/p,(em-x*E)/(p*x)];}
@@ -441,7 +464,7 @@
   // a signal block: inputs/outputs -> signal net index (−1 = not connected)
   const mkBlock=(c,p,T,extra={})=>{const ins={},outs={};for(const [k,v] of Object.entries(P.sigPins(c)))(v.dir==='in'?ins:outs)[k]=sn(c.id,k);
    const b={i:blocks.length,id:c.id,type:T,label:c.label||c.id,ins,outs,outList:Object.keys(outs),st:{},ft:!['UD','INT','LPF'].includes(T),...extra};blocks.push(b);return b;};
-  let nRows=0;const row=()=>nRows++;
+  let nRows=0,hasPi=false;const row=()=>nRows++;
   for(const c of comps){
    if(skip.has(c.id))continue;
    const p={...P.defaults(c.type),...(c.params||{})},T=c.type;
@@ -469,7 +492,11 @@
    else if(T==='TLM'){const g=P.tlmModel(p);if(g.err)throw new NetlistError(`${c.label||c.id}: ${g.err}`);const M=g.M;
     if(M!==P.tlmM(p))throw new NetlistError(`${c.label||c.id}: το μοντέλο έχει ${M} φάσεις, τα δεδομένα ${P.tlmM(p)}. Υπολόγισε ξανά.`);
     const n1=[],n2=[];for(let k=0;k<M;k++){n1.push(node(c.id,P.tlmPin(k,1)));n2.push(node(c.id,P.tlmPin(k,2)));}
-    info.pins=[n1[0],-1];info.ports=[...n1.map(a=>[a,-1]),...n2.map(a=>[a,-1])];info.tlm=g;info.main=add(tlmElement({a:n1[0],b:-1,key:c.id},n1,n2,g));}
+    if(g.type==='pi'){info.pins=[n1[0],-1];info.ports=[...n1.map(a=>[a,-1]),...n2.map(a=>[a,-1])];info.pi=g;info.main=piLine(c,n1,n2,g,{add,internal,row});hasPi=true;}
+    else{info.pins=[n1[0],-1];info.ports=[...n1.map(a=>[a,-1]),...n2.map(a=>[a,-1])];info.tlm=g;
+     const vt=String(p.vtrap??'').trim(),vtrap=vt?vt.split(/[\s,;]+/).filter(Boolean).map(v=>P.parseEng(v)):null;
+     if(vtrap&&(vtrap.length!==M||vtrap.some(v=>!Number.isFinite(v))))throw new NetlistError(`${c.label||c.id}: το παγιδευμένο φορτίο θέλει ${M} τάσεις (μία ανά φάση).`);
+     info.main=add(tlmElement({a:n1[0],b:-1,key:c.id,vtrap},n1,n2,g));}}
    else if(T==='SG'){const a=node(c.id,'a'),b=node(c.id,'b');info.pins=[a,b];const Ub=p.vt==='de'?1:num(p.Ub,0),tr=String(p.trig??'').trim()===''?Infinity:P.parseEng(p.trig);
     if(!(Ub>0))throw new NetlistError(`${c.label||c.id}: η τάση διάσπασης πρέπει να είναι θετική.`);if(Number.isNaN(tr))throw new NetlistError(`${c.label||c.id}: μη έγκυρος χρόνος έναυσης.`);
     const ext=['zero','iext','never'].includes(p.ext)?p.ext:'zero';let de=null;
@@ -656,7 +683,7 @@
   const diag={unconn,island,rleak,skipped:[...skip].map(([id,why])=>({id,why})),open,freeEnds,freeNets,islands};
   const rowBase=nNodes;for(const e of els)if(e.row!==undefined)e.row+=rowBase;
   const sig=compileSignals(blocks,sigNets,ctrls,els,compInfo,warnings);
-  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId,sig,sigPin,diag,tbase,step,vec,units};
+  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId,sig,sigPin,diag,tbase,step,vec,units,hasPi};
  }
 
  // ---------------------------------------------------------------- signal graph (3.0)
@@ -1007,9 +1034,9 @@
   V(i){return i<0?0:this.x[i];}
   elCurrent(e){const v=this.V(e.a)-this.V(e.b);
    switch(e.k){case 'G':return v/e.Rnow;case 'L':return e.i;case 'C':return e.i;case 'V':return -this.x[e.row];case 'I':return e.Inow;
-    case 'S':return v*(e.on?1/e.Ron:1/e.Roff);case 'GY':return this.x[e.row];case 'D':return e.on?(v-e.Vf)/e.Ron:v/e.Roff;case 'CPL':return e.g*v+e.J;case 'F':return e.i[0];case 'MG':return this.portI(e,0);case 'TL':return e.iE[0];case 'TLM':return e.iE[0];case 'NL':return e.ch.cur(v).i;case 'CHB':return this.x[e.row];}return 0;}
+    case 'S':return v*(e.on?1/e.Ron:1/e.Roff);case 'GY':return this.x[e.row];case 'D':return e.on?(v-e.Vf)/e.Ron:v/e.Roff;case 'CPL':return e.g*v+e.J;case 'F':return e.i[0];case 'MG':return this.portI(e,0);case 'TL':return e.iE[0];case 'TLM':return e.iE[0];case 'PIL':return -this.x[e.vs[0].row];case 'NL':return e.ch.cur(v).i;case 'CHB':return this.x[e.row];}return 0;}
   // current of port k of a multiport
-  portI(e,k){if(e.k==='F')return e.i[k];if(e.k==='TL'||e.k==='TLM')return e.iE[k];let s=0;for(let j=0;j<e.N;j++)s+=e.Gm[k*e.N+j]*(this.V(e.ports[j][0])-this.V(e.ports[j][1]));return s;}
+  portI(e,k){if(e.k==='F')return e.i[k];if(e.k==='PIL')return -this.x[e.vs[k].row];if(e.k==='TL'||e.k==='TLM')return e.iE[k];let s=0;for(let j=0;j<e.N;j++)s+=e.Gm[k*e.N+j]*(this.V(e.ports[j][0])-this.V(e.ports[j][1]));return s;}
   // values of all channels at the current solution
   computeVals(){
    const out=this.vals;let j=0;const x=this.x;if(this.net.sig.blocks.length){if(this.blkFresh)this.blkCopy();else this.evalBlocks('trial');}
@@ -1467,7 +1494,7 @@
   tlmSources(e,t){const M=e.M,h=Math.max(0,t-this.t),Ihm=e.Ihm;if(e.fd)this.tlmG(e,h);
    for(let k=0;k<M;k++){const m=e.modes[k];
     if(m.cp){const q=this.tlmHist(e,t-m.tau),v1=q[4*k],v2=q[4*k+1],i1=q[4*k+2],i2=q[4*k+3],Ze=m.Ze,hh=m.hh,cp=(1+hh)/2,cm=(1-hh)/2;
-     const AL=v1/Ze+hh*i1,AR=v2/Ze+hh*i2;Ihm[k]=-cp*AR-cm*AL;Ihm[M+k]=-cp*AL-cm*AR;continue;}
+     const AL=(v1/Ze+hh*i1)*m.att,AR=(v2/Ze+hh*i2)*m.att;Ihm[k]=-cp*AR-cm*AL;Ihm[M+k]=-cp*AL-cm*AR;continue;}
     // inputs of the propagation convolutions: f of the other end at t − τ and t − h − τ
     let q=this.tlmHist(e,t-m.tau);const u1=q[2*k+1],u2=q[2*k];q=this.tlmHist(e,t-h-m.tau);const u1p=q[2*k+1],u2p=q[2*k];
     m.u[0]=u1;m.u[1]=u1p;m.u[2]=u2;m.u[3]=u2p;let b1=0,b2=0;
@@ -1489,7 +1516,7 @@
    const keep=t-2.5*e.tauMax-4*(this.hUser||0);while(H.s+2<H.t.length&&H.t[H.s+1]<keep)H.s++;
    if(H.s>4096){H.t.splice(0,H.s);for(const c of C)c.splice(0,H.s);H.cut+=H.s;H.s=0;}}
   // all columns at time tq (linear interpolation), zero before t = 0 (the line starts without charge)
-  tlmHist(e,tq){const H=e.H,n=H.t.length,C=H.c,out=e.q;if(tq<0||!n){out.fill(0);return out;}const j=n-1;
+  tlmHist(e,tq){const H=e.H,n=H.t.length,C=H.c,out=e.q;if(tq<0||!n){out.fill(0);if(e.vm0){const M=e.M;for(let k=0;k<M;k++){if(e.fd){out[2*k]=out[2*k+1]=e.vm0[k];}else{out[4*k]=out[4*k+1]=e.vm0[k];}}}return out;}const j=n-1;
    if(tq>=H.t[j]){for(let k=0;k<C.length;k++)out[k]=C[k][j];return out;}let lo=H.s,hi=j;if(tq<=H.t[lo]){for(let k=0;k<C.length;k++)out[k]=C[k][lo];return out;}
    while(hi-lo>1){const m=(lo+hi)>>1;if(H.t[m]<=tq)lo=m;else hi=m;}const f=(tq-H.t[lo])/((H.t[hi]-H.t[lo])||1);
    for(let k=0;k<C.length;k++){const c=C[k];out[k]=c[lo]+(c[hi]-c[lo])*f;}return out;}
@@ -1664,7 +1691,7 @@
   const lf=(project?.solve?.init==='ac')||JSON.stringify(project?.components||[]).includes('"GEN3"');
   const net=lf?new Sim(project).net:buildNetlist(project),idx=new Map(net.els.map((e,i)=>[e,i]));
   // 4.9.1: the server has no multi-conductor line yet: refused, rather than left out of the circuit
-  if(net.els.some(e=>e.k==='TLM'))throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη τις πολυφασικές γραμμές (TLM, σταθερές ή FD): τρέχει μόνο ο λύτης της εφαρμογής. Οι μονοφασικές γραμμές (TL), οι πύργοι, τα αλεξικέραυνα και το τόξο τρέχουν και στον SciPy.');
+  if(net.els.some(e=>e.k==='TLM')||net.hasPi)throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη τις πολυφασικές γραμμές (TLM, σταθερές ή FD): τρέχει μόνο ο λύτης της εφαρμογής. Οι μονοφασικές γραμμές (TL), οι πύργοι, τα αλεξικέραυνα και το τόξο τρέχουν και στον SciPy.');
   if(net.els.some(e=>e.sai||e.foot||e.k==='CHB'))throw new NetlistError('Εσωτερικό σφάλμα: συμπαγές στοιχείο (SAIX, RFX, CHBX) στην εξαγωγή για τον SciPy.');
   const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm','gap','a1','b1','a2','b2','Z','tau','Rl','pts'];
   // synchronous machines (3.5): parameters and initial states; the server integrates ψ_α, ψ_β, ω, θ

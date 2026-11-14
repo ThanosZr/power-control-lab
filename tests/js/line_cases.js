@@ -5,7 +5,7 @@ const path=require('path');const W=path.resolve(__dirname,'../../web/studio');
 global.Parts=require(W+'/parts.js');const MNA=require(W+'/mna.js');const P=global.Parts;
 const q=JSON.parse(require('fs').readFileSync(process.argv[2],'utf8'));
 function project(comps,conns){let n=0;return {components:comps.map(c=>({x:0,y:0,rot:0,...c})),wires:conns.map(([a,b])=>{const [ac,ap]=a.split(':'),[bc,bp]=b.split(':');return {id:'w'+(n++),a:{c:ac,p:ap},b:{c:bc,p:bp},pts:[]};})};}
-const pl={model:q.kind,len:q.data.length,data:JSON.stringify(q.data)};if(q.kind==='cp')pl.f=q.f;
+const pl={model:q.kind,len:q.data.length,data:JSON.stringify(q.data),...(q.params||{})};if(q.kind!=='fd')pl.f=q.f;   // 4.11: params (cp, npi)
 pl.mdl=JSON.stringify({...q.model,src:P.tlmKey({...P.defaults('TLM'),...pl})});
 const comps=[{id:'V1',type:'VIMP',params:{shape:'ramp',Vpk:q.src.Vpk,S:q.src.Vpk/q.src.tr,Rs:q.src.Rs}},{id:'L1',type:'TLM',params:pl},{id:'G',type:'GND'}];
 const conns=[['V1:p','L1:a1'],['V1:n','G:g']],R=['Rb','Rc','Ra2','Rb2','Rc2'];

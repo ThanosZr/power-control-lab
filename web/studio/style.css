@@ -418,6 +418,22 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .ld-rep{border-collapse:collapse;font-size:12px}.ld-rep th,.ld-rep td{border-bottom:1px solid var(--line);padding:3px 8px;text-align:right}.ld-rep th:first-child,.ld-rep td:first-child{text-align:left}
 .ld-plots{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}.ld-plot{width:100%;border:1px solid var(--line);border-radius:6px;background:#fff}
 .ins-body .ld-open{display:block;width:100%;margin-bottom:4px}
+/* 4.11: the tabs, charts, interactive drawing and exports of «Δεδομένα γραμμής» */
+.ld-modal .modal-head{gap:12px}.ld-tabs{display:flex;gap:2px;flex:1;justify-content:center}.ld-tabs button{border:1px solid var(--line);background:#f4f8f7;padding:5px 12px;border-radius:7px 7px 0 0;font-size:12.5px;cursor:pointer}
+.ld-tabs button.on{background:#fff;border-bottom-color:#fff;font-weight:600;color:var(--accent,#147966)}
+.ld-top{border-bottom:1px solid var(--line);padding-bottom:8px}.ld-scroll{overflow-x:auto}
+.ld-tab tr.hl td,.ld-cab.hl{background:#e6f3ef}.ld-tab select{font-size:11.5px;padding:2px}
+.ld-draww{position:relative}.ld-draw{max-width:none;touch-action:none;user-select:none}.ld-dtip,.ld-ctip{position:absolute;z-index:3;background:#fffffff2;border:1px solid var(--line);border-radius:6px;padding:4px 7px;font-size:11px;pointer-events:none;box-shadow:0 3px 10px #0002;line-height:1.35;max-width:240px}
+.ld-dtools{margin:0 0 4px}.ld-dtools button,.ld-ctool button{font-size:11.5px;padding:2px 8px}
+.ld-viewp{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:11.5px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin:4px 0;background:#fbfdfc}.ld-viewp label{display:flex;gap:4px;align-items:center}
+.ld-leg span{cursor:pointer;user-select:none}.ld-leg span.off,.ld-cleg span.off{opacity:.38;text-decoration:line-through}
+.ld-side{margin-top:6px}.ld-more{border:1px solid var(--line);border-radius:8px;padding:4px 8px;margin:8px 0;background:#fbfdfc}.ld-more summary{cursor:pointer;font-size:12px;color:var(--muted)}
+.ld-chartw{max-width:900px}.ld-cbox{position:relative}.ld-chart{width:100%;border:1px solid var(--line);border-radius:8px;cursor:crosshair;user-select:none}
+.ld-ctool{display:flex;gap:6px;align-items:center;margin:4px 0}.ld-cleg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;margin:4px 0}.ld-cleg span{cursor:pointer;user-select:none}
+.ld-cleg i,.ld-ctip i{display:inline-block;width:14px;height:3px;margin-right:5px;vertical-align:3px}
+.ld-mats{display:flex;flex-wrap:wrap;gap:6px 18px}.ld-mat caption{text-align:left;font-weight:600;font-size:12px;padding:4px 0}.ld-mat td{font-variant-numeric:tabular-nums;white-space:nowrap}
+.ld-rep td.bad{color:var(--danger);font-weight:600}.ld-fplots{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:10px}
+.ld-ex{gap:8px}.ld-code{background:#f4f8f7;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:11.5px;overflow:auto;max-width:900px}
 /* 4.6: responsiveness of the drawing. The grid is a CSS background of the svg (editor.gridBg); while dragging, the current
    arrows wait for the end of the drag; panels that scroll keep the wheel to themselves and never pass it on to the page */
 .canvas{background-repeat:repeat;--grid-dot:#c9d6d1;--grid-dot-far:#dfe7e3;--grid-line:#e8eeeb}

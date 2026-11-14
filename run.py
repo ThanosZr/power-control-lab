@@ -69,6 +69,7 @@ def line_action(name):
     return act
 ACTIONS['line_scan']=line_action('api_scan')
 ACTIONS['line_export']=line_action('api_export')
+ACTIONS['line_load']=line_action('api_load')
 
 
 # scripted scenarios (3.14, ROADMAP §30): the pcl package's job() for MATLAB/Octave (webwrite) and other tools,
