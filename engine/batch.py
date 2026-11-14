@@ -79,6 +79,8 @@ def mov_seg(pts):
 
 
 def _powr(x, a):
+    if not x > 0:           # 4.12: v/V that underflows to 0 (a denormal |v| in the numerical Jacobian of a long run)
+        return 0.0
     return math.exp(min(a * math.log(x), 700.0))
 
 

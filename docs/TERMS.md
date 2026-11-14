@@ -104,6 +104,13 @@
 | second-order generalized integrator (SOGI) | γενικευμένος ολοκληρωτής δεύτερης τάξης |
 | coupling transformer / coupling inductance | μετασχηματιστής / αυτεπαγωγή σύζευξης |
 | compensator placement, Pareto front | θέση του αντισταθμιστή, μέτωπο Pareto |
+| steady-state initialization (of a line) | εκκίνηση από μόνιμη κατάσταση (4.12) |
+| transposition sections, perfect transposition | μεταθέσεις σε (χωριστά) τμήματα, τέλεια μετάθεση (μέσος όρος) (4.12) |
+| sensitivity (of the sequence parameters) | ευαισθησία (των παραμέτρων ακολουθιών) (4.12) |
+| temperature coefficient of resistance | θερμικός συντελεστής της αντίστασης, α (4.12) |
+| reference (kept) scan | αναφορά, κρατημένη σάρωση (4.12) |
+| recording viewer | παράθυρο προβολής της καταγραφής (4.12) |
+| operating voltage | τάση λειτουργίας (4.12) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 

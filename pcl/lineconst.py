@@ -1508,7 +1508,7 @@ SENS_PARAMS = ('rho', 'dh', 'sag', 'temp')
 
 def vary(data, param, value):
     """4.12: a copy of the line data with one parameter changed: the earth resistivity 'rho' (Ω·m, the upper layer of a
-    two-layer earth), 'dh' all conductors higher by dh (m, at the tower and at mid-span), 'sag' (m: the height at mid-span
+    two-layer earth), 'dh' all conductors (or cables) higher by dh (m, at the tower and at mid-span), 'sag' (m: the height at mid-span
     = the height at the tower − sag), 'temp' the conductor temperature (°C, R_dc at 20 °C in the data)."""
     if param not in SENS_PARAMS:
         raise LineError(f'άγνωστη παράμετρος «{param}»')
@@ -1522,8 +1522,12 @@ def vary(data, param, value):
     if param == 'temp':
         d['temp'] = v
         return d
+    if d.get('cables') and param == 'dh' and not (d.get('wires') or d.get('bundles')):
+        for c in d['cables']:              # cables: higher by dh (a buried cable shallower; above 0 in the air)
+            c['y'] = _f(c.get('y')) + v
+        return d
     if d.get('cables') or d.get('seq') or d.get('zyfile'):
-        raise LineError('ύψη και βέλος μόνο για εναέριες γραμμές από γεωμετρία')
+        raise LineError('το βέλος μόνο για εναέριες γραμμές από γεωμετρία· το ύψος για εναέριες και καλώδια')
     for w in (d.get('wires') or []) + (d.get('bundles') or []):
         y = _f(w.get('y'))
         if param == 'dh':

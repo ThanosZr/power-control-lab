@@ -93,7 +93,7 @@ class SteadyStart(unittest.TestCase):
                 self.assertLess(e, 2e-7)
 
     def test_trapped_charge_keeps_precedence(self):
-        # cpline §5: trapped charge and a steady start do not go together; the line starts from its charge
+        # cpline σ. 11: trapped charge and a steady start do not go together; the line starts from its charge
         m = lc.cp_model(self.d, 50)
         e, o = run_case('cp', m, {'vtrap': '1, -0.5, 0'}, tend=0.002)
         self.assertTrue(any('παγιδευμένο φορτίο' in w for w in o['warn']), o['warn'])
@@ -320,6 +320,12 @@ class DataOptions413(unittest.TestCase):
         self.assertAlmostEqual(t[1]['C1'], t[0]['C1'], places=12)
         with self.assertRaises(lc.LineError):
             lc.vary(self.d, 'xyz', 1)
+        cab = lc.typical('150kV-land')                                   # cables: the depth, not the sag
+        c = lc.sensitivity(cab, 'dh', [-0.5, 0.5])['rows']
+        self.assertNotEqual(c[0]['X0'], c[1]['X0'])
+        self.assertAlmostEqual(lc.vary(cab, 'dh', 0.5)['cables'][0]['y'], float(cab['cables'][0]['y']) + 0.5)
+        with self.assertRaises(lc.LineError):
+            lc.vary(cab, 'sag', 1)
         from pcl import linereport as lr
         out = lr.api_sens({'data': self.d, 'param': 'rho', 'lo': 10, 'hi': 1000, 'n': 3})
         self.assertAlmostEqual(out['rows'][1]['v'], 100.0)                # logarithmic in ρ

@@ -367,7 +367,7 @@
   return s;}
 
  // ---------------------------------------------------------------- the dialog
- const SENS=[['rho','ρ εδάφους (Ω·m)'],['dh','ύψος όλων των αγωγών +Δh (m)'],['sag','βέλος (m)'],['temp','θερμοκρασία αγωγών (°C)']];
+ const SENS=[['rho','ρ εδάφους (Ω·m)'],['dh','ύψος όλων των αγωγών ή καλωδίων +Δh (m)'],['sag','βέλος (m)'],['temp','θερμοκρασία αγωγών (°C)']];
  const SENS_DEF={rho:[10,1000],dh:[-5,5],sag:[0,20],temp:[0,100]};
  // 4.12: a series of a kept scan on the frequencies of the current one (linear in log f; outside its range: none)
  function onF(fx,f0,y){if(fx.length===f0.length&&fx.every((v,i)=>Math.abs(v-f0[i])<=1e-9*v))return y;const L0=f0.map(Math.log);

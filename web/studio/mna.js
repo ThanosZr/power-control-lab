@@ -153,7 +153,7 @@
     case 'TL':{// 4.9: a distributed line at ω₀ as its exact two-port (lossless; R adds only a small start transient)
      const th=w0*e.tau,y11=-1/(e.Z*Math.tan(th)),y12=1/(e.Z*Math.sin(th)),P=[[e.a1,e.b1],[e.a2,e.b2]];
      for(let k=0;k<2;k++)for(let j=0;j<2;j++){const g=k===j?y11:y12,[ak,bk]=P[k],[aj,bj]=P[j];ad(ak,aj,0,g);ad(bk,bj,0,g);ad(ak,bj,0,-g);ad(bk,aj,0,-g);}break;}
-    // 4.12: a line from geometry as the two-port of its model at ω₀ (trapped charge and a steady start do not go together: cpline §5)
+    // 4.12: a line from geometry as the two-port of its model at ω₀ (trapped charge and a steady start do not go together: cpline σ. 11)
     case 'TLM':{if(e.vm0){left.add('TLMQ');break;}const A=tlmAcY(e,w0,sim.var?0:sim.h),M=e.M;e.acY=A;
      for(let r=0;r<M;r++)for(let q=0;q<M;q++){const j=2*(r*M+q),ys=[A.Bs[j],A.Bs[j+1]],ym=[A.Bm[j],A.Bm[j+1]];
       ad(e.n1[r],e.n1[q],ys[0],ys[1]);ad(e.n2[r],e.n2[q],ys[0],ys[1]);ad(e.n1[r],e.n2[q],ym[0],ym[1]);ad(e.n2[r],e.n1[q],ym[0],ym[1]);}break;}

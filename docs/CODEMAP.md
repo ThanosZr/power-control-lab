@@ -45,7 +45,7 @@
 | `engine/__init__.py` | 1 |
 | `engine/addons.py` | 322 |
 | `engine/analysis.py` | 307 |
-| `engine/batch.py` | 2572 |
+| `engine/batch.py` | 2574 |
 | `engine/bidir.py` | 564 |
 | `engine/boundary.py` | 97 |
 | `engine/circuit.py` | 75 |
@@ -69,7 +69,7 @@
 | `pcl/formats.py` | 222 |
 | `pcl/gui.py` | 409 |
 | `pcl/impulse.py` | 858 |
-| `pcl/lineconst.py` | 2286 |
+| `pcl/lineconst.py` | 2290 |
 | `pcl/linereport.py` | 831 |
 | `pcl/link.py` | 150 |
 | `pcl/network.py` | 1206 |
@@ -97,7 +97,7 @@
 | `tests/test_impulse_tools.py` | 150 |
 | `tests/test_library.py` | 41 |
 | `tests/test_lightning.py` | 78 |
-| `tests/test_line_solver.py` | 379 |
+| `tests/test_line_solver.py` | 385 |
 | `tests/test_linedata.py` | 661 |
 | `tests/test_lines.py` | 355 |
 | `tests/test_live_program.py` | 49 |
@@ -2078,94 +2078,94 @@ _(χωρίς συναρτήσεις)_
 | 62 | function | `wave_at` |
 | 76 | function | `mov_seg` |
 | 81 | function | `_powr` |
-| 85 | function | `mov_cur` |
-| 99 | function | `mov_inv` |
-| 111 | function | `arc_F` |
-| 120 | function | `arc_start` |
-| 140 | function | `sat_d` |
-| 147 | function | `sat_d_inv` |
-| 159 | function | `f2_phi` |
-| 178 | function | `_f` |
-| 186 | class | `Ctrl` |
-| 190 | method | `Ctrl.__init__` |
-| 215 | method | `Ctrl.dbl` |
-| 218 | method | `Ctrl.raw` |
-| 238 | method | `Ctrl.gate` |
-| 250 | method | `Ctrl.carrier_at` |
-| 261 | method | `Ctrl.edges` |
-| 281 | function | `_lut` |
-| 292 | function | `eval_ast` |
-| 321 | function | `_nn_fwd` |
-| 337 | function | `_nn_learn` |
-| 380 | function | `_nn_jac` |
-| 399 | function | `_nn_step` |
-| 421 | function | `nlc_step` |
-| 470 | function | `make_python_block` |
-| 501 | class | `Circuit` |
-| 502 | method | `Circuit.__init__` |
-| 737 | method | `Circuit.R` |
-| 740 | method | `Circuit.im_e` |
-| 749 | method | `Circuit.im_deriv` |
-| 762 | method | `Circuit.sm_cur` |
-| 774 | method | `Circuit.sm_ports` |
-| 779 | method | `Circuit.sm_deriv` |
-| 794 | method | `Circuit.srm_A` |
-| 799 | method | `Circuit._seg` |
-| 803 | method | `Circuit.srm_cur` |
-| 810 | method | `Circuit.srm_torque` |
-| 819 | method | `Circuit.srm_currents` |
-| 824 | method | `Circuit.srm_deriv` |
-| 837 | method | `Circuit.gen_cur` |
-| 854 | method | `Circuit.gen_efd` |
-| 861 | method | `Circuit.gen_tm` |
-| 868 | method | `Circuit.gen_deriv` |
-| 886 | method | `Circuit.jac_gen` |
-| 938 | method | `Circuit.gen_out` |
-| 958 | method | `Circuit.Vsrc` |
-| 974 | method | `Circuit.topo` |
-| 984 | method | `Circuit.build` |
-| 1091 | method | `Circuit.bsrc` |
-| 1141 | method | `Circuit.solve_z` |
-| 1185 | method | `Circuit.arc_g` |
-| 1190 | method | `Circuit.solve_nl` |
-| 1232 | method | `Circuit.tl_hist` |
-| 1249 | method | `Circuit.tl_sec` |
-| 1256 | method | `Circuit.tl_ih` |
-| 1260 | method | `Circuit.tl_record` |
-| 1281 | method | `Circuit.tlm_setup` |
-| 1364 | method | `Circuit.tlm_hist` |
-| 1387 | method | `Circuit.tlm_ih` |
-| 1400 | method | `Circuit.tlm_force` |
-| 1415 | method | `Circuit.tlm_modal` |
-| 1434 | method | `Circuit.tlm_record` |
-| 1456 | method | `Circuit.scr_u` |
-| 1460 | method | `Circuit.scr_gate` |
-| 1464 | method | `Circuit.scr_edges` |
-| 1471 | method | `Circuit.gate_state` |
-| 1484 | method | `Circuit.set_gates` |
-| 1492 | method | `Circuit.arc_gates` |
-| 1512 | method | `Circuit.may_turn_on` |
-| 1516 | method | `Circuit.tolerances` |
-| 1522 | method | `Circuit.consistent` |
-| 1564 | method | `Circuit.value` |
-| 1602 | method | `Circuit.current` |
-| 1652 | method | `Circuit.prime` |
-| 1662 | method | `Circuit.sig_in` |
-| 1666 | method | `Circuit.sh_grid` |
-| 1678 | method | `Circuit.sh_next` |
-| 1685 | method | `Circuit.log_ev` |
-| 1691 | method | `Circuit.ev_switches` |
-| 1700 | method | `Circuit.sh_sample` |
-| 1720 | method | `Circuit.sample` |
-| 1781 | method | `Circuit.cmp_f` |
-| 1787 | method | `Circuit.blk_due` |
-| 1798 | method | `Circuit.eval_blocks` |
-| 2110 | method | `Circuit.block_events` |
-| 2139 | method | `Circuit.next_event` |
-| 2206 | function | `_decimate` |
-| 2223 | function | `_diagnose` |
-| 2274 | function | `simulate` |
-| 2566 | function | `batch_sim` |
+| 87 | function | `mov_cur` |
+| 101 | function | `mov_inv` |
+| 113 | function | `arc_F` |
+| 122 | function | `arc_start` |
+| 142 | function | `sat_d` |
+| 149 | function | `sat_d_inv` |
+| 161 | function | `f2_phi` |
+| 180 | function | `_f` |
+| 188 | class | `Ctrl` |
+| 192 | method | `Ctrl.__init__` |
+| 217 | method | `Ctrl.dbl` |
+| 220 | method | `Ctrl.raw` |
+| 240 | method | `Ctrl.gate` |
+| 252 | method | `Ctrl.carrier_at` |
+| 263 | method | `Ctrl.edges` |
+| 283 | function | `_lut` |
+| 294 | function | `eval_ast` |
+| 323 | function | `_nn_fwd` |
+| 339 | function | `_nn_learn` |
+| 382 | function | `_nn_jac` |
+| 401 | function | `_nn_step` |
+| 423 | function | `nlc_step` |
+| 472 | function | `make_python_block` |
+| 503 | class | `Circuit` |
+| 504 | method | `Circuit.__init__` |
+| 739 | method | `Circuit.R` |
+| 742 | method | `Circuit.im_e` |
+| 751 | method | `Circuit.im_deriv` |
+| 764 | method | `Circuit.sm_cur` |
+| 776 | method | `Circuit.sm_ports` |
+| 781 | method | `Circuit.sm_deriv` |
+| 796 | method | `Circuit.srm_A` |
+| 801 | method | `Circuit._seg` |
+| 805 | method | `Circuit.srm_cur` |
+| 812 | method | `Circuit.srm_torque` |
+| 821 | method | `Circuit.srm_currents` |
+| 826 | method | `Circuit.srm_deriv` |
+| 839 | method | `Circuit.gen_cur` |
+| 856 | method | `Circuit.gen_efd` |
+| 863 | method | `Circuit.gen_tm` |
+| 870 | method | `Circuit.gen_deriv` |
+| 888 | method | `Circuit.jac_gen` |
+| 940 | method | `Circuit.gen_out` |
+| 960 | method | `Circuit.Vsrc` |
+| 976 | method | `Circuit.topo` |
+| 986 | method | `Circuit.build` |
+| 1093 | method | `Circuit.bsrc` |
+| 1143 | method | `Circuit.solve_z` |
+| 1187 | method | `Circuit.arc_g` |
+| 1192 | method | `Circuit.solve_nl` |
+| 1234 | method | `Circuit.tl_hist` |
+| 1251 | method | `Circuit.tl_sec` |
+| 1258 | method | `Circuit.tl_ih` |
+| 1262 | method | `Circuit.tl_record` |
+| 1283 | method | `Circuit.tlm_setup` |
+| 1366 | method | `Circuit.tlm_hist` |
+| 1389 | method | `Circuit.tlm_ih` |
+| 1402 | method | `Circuit.tlm_force` |
+| 1417 | method | `Circuit.tlm_modal` |
+| 1436 | method | `Circuit.tlm_record` |
+| 1458 | method | `Circuit.scr_u` |
+| 1462 | method | `Circuit.scr_gate` |
+| 1466 | method | `Circuit.scr_edges` |
+| 1473 | method | `Circuit.gate_state` |
+| 1486 | method | `Circuit.set_gates` |
+| 1494 | method | `Circuit.arc_gates` |
+| 1514 | method | `Circuit.may_turn_on` |
+| 1518 | method | `Circuit.tolerances` |
+| 1524 | method | `Circuit.consistent` |
+| 1566 | method | `Circuit.value` |
+| 1604 | method | `Circuit.current` |
+| 1654 | method | `Circuit.prime` |
+| 1664 | method | `Circuit.sig_in` |
+| 1668 | method | `Circuit.sh_grid` |
+| 1680 | method | `Circuit.sh_next` |
+| 1687 | method | `Circuit.log_ev` |
+| 1693 | method | `Circuit.ev_switches` |
+| 1702 | method | `Circuit.sh_sample` |
+| 1722 | method | `Circuit.sample` |
+| 1783 | method | `Circuit.cmp_f` |
+| 1789 | method | `Circuit.blk_due` |
+| 1800 | method | `Circuit.eval_blocks` |
+| 2112 | method | `Circuit.block_events` |
+| 2141 | method | `Circuit.next_event` |
+| 2208 | function | `_decimate` |
+| 2225 | function | `_diagnose` |
+| 2276 | function | `simulate` |
+| 2568 | function | `batch_sim` |
 
 ### `engine/bidir.py`
 
@@ -2737,41 +2737,41 @@ _(χωρίς συναρτήσεις)_
 | 1408 | function | `_fit_a` |
 | 1446 | function | `fd_model` |
 | 1509 | function | `vary` |
-| 1540 | function | `sensitivity` |
-| 1557 | function | `report` |
-| 1581 | function | `sym_matrix` |
-| 1594 | function | `to_sym` |
-| 1600 | function | `matrices` |
-| 1618 | function | `_phys_currents` |
-| 1629 | function | `field` |
-| 1663 | function | `bfield` |
-| 1688 | function | `telecom` |
-| 1716 | function | `_default_sources` |
-| 1723 | function | `_modal_admittance` |
-| 1737 | function | `_end_tests` |
-| 1743 | function | `qerror_tests` |
-| 1767 | function | `exact_pi` |
-| 1777 | function | `nominal_pi` |
-| 1786 | function | `useful` |
-| 1814 | function | `_track` |
-| 1822 | function | `scan` |
-| 1925 | function | `jsonable` |
-| 1945 | function | `exact_admittance` |
-| 1952 | function | `line_admittance` |
-| 1964 | function | `model_admittance` |
-| 1985 | function | `nlt_solve` |
-| 2053 | function | `_src_laplace` |
-| 2069 | function | `_line_y` |
-| 2081 | function | `_cp_y` |
-| 2106 | function | `_pi_y` |
-| 2130 | function | `_half` |
-| 2136 | function | `load_data` |
-| 2141 | function | `save_data` |
-| 2169 | function | `_sc` |
-| 2194 | function | `typical` |
-| 2199 | function | `_req_data` |
-| 2213 | function | `_req_opts` |
-| 2225 | function | `api` |
+| 1544 | function | `sensitivity` |
+| 1561 | function | `report` |
+| 1585 | function | `sym_matrix` |
+| 1598 | function | `to_sym` |
+| 1604 | function | `matrices` |
+| 1622 | function | `_phys_currents` |
+| 1633 | function | `field` |
+| 1667 | function | `bfield` |
+| 1692 | function | `telecom` |
+| 1720 | function | `_default_sources` |
+| 1727 | function | `_modal_admittance` |
+| 1741 | function | `_end_tests` |
+| 1747 | function | `qerror_tests` |
+| 1771 | function | `exact_pi` |
+| 1781 | function | `nominal_pi` |
+| 1790 | function | `useful` |
+| 1818 | function | `_track` |
+| 1826 | function | `scan` |
+| 1929 | function | `jsonable` |
+| 1949 | function | `exact_admittance` |
+| 1956 | function | `line_admittance` |
+| 1968 | function | `model_admittance` |
+| 1989 | function | `nlt_solve` |
+| 2057 | function | `_src_laplace` |
+| 2073 | function | `_line_y` |
+| 2085 | function | `_cp_y` |
+| 2110 | function | `_pi_y` |
+| 2134 | function | `_half` |
+| 2140 | function | `load_data` |
+| 2145 | function | `save_data` |
+| 2173 | function | `_sc` |
+| 2198 | function | `typical` |
+| 2203 | function | `_req_data` |
+| 2217 | function | `_req_opts` |
+| 2229 | function | `api` |
 
 ### `pcl/linereport.py`
 
