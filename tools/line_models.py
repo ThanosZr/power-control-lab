@@ -32,7 +32,8 @@ CASES = [('400kV|100|cp|50', '400kV', 100, 'cp', 50.0), ('400kV|100|cp|5000', '4
          ('150kV-land-s+bond|1.5|wb', '150kV-land-s', 1.5, 'wb', {'dec': 8, 'xbond': 'bond'}),
          ('150kV-land-s+gnd|4.5|wb', '150kV-land-s', 4.5, 'wb', {'dec': 8, 'xbond': 'gnd'}),
          ('150kV-land|4.5|wb', '150kV-land', 4.5, 'wb', {'dec': 8}),
-         ('400kV-gw|30|wb', '400kV-gw', 30, 'wb', {'dec': 9}), ('400kV-gw|0.3|wb', '400kV-gw', 0.3, 'wb', {'dec': 9})]
+         ('400kV-gw|30|wb', '400kV-gw', 30, 'wb', {'dec': 9}), ('400kV-gw|0.3|wb', '400kV-gw', 0.3, 'wb', {'dec': 9}),
+         ('320kV-dc|70|wb', '320kV-dc', 70, 'wb', {'dec': 10, 'fmin': 1e-3, 'dc': True})]   # 4.14: HVDC, 1 mHz – 10 MHz, DC correction
 
 
 def _round(x):
@@ -54,7 +55,7 @@ def models():
             o = dict(f)
             if o.get('xbond'):
                 d['xbond'] = o.pop('xbond')
-            m = wideband.wb_model(d, L, decades=o.get('dec', 8), passive='enforce')
+            m = wideband.wb_model(d, L, fmin=o.get('fmin', 0.01), decades=o.get('dec', 8), dc=o.get('dc', False), passive='enforce')
             if o.get('sheath'):         # the 50 Hz values of the cross-bonding card (wideband.sheath_check, exact line)
                 Z, Y = lc.phase_matrices(d, f=50.0)
                 m['sheath'] = dict(wideband.sheath_check(lc.line_admittance(Z, Y, L * 1000.0), L, [0, 1, 2], [3, 4, 5]),

@@ -447,7 +447,9 @@ def nlc_step(b, st, ref, i, v):
             out[L[k]] = sg
         return out
     pn = st['n']
-    if not b['red'] or not m or sg != (pn > 0) - (pn < 0) or not pn:
+    if b.get('trg') and n == pn:                             # 4.14: 'trigger' (as EMTP): again only when n changes
+        s = old
+    elif not b['red'] or not m or sg != (pn > 0) - (pn < 0) or not pn:
         s = full()
     else:
         ins = [k for k in order if old[k] == sg]

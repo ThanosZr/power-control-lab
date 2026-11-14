@@ -164,6 +164,9 @@ function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;
  if(c0.type==='AVR'||c0.type==='PSS'||c0.type==='GOV'){const id=(S.pfx||'')+c0.id,v=k=>s.now('Y:'+id+k);return {text:c0.type==='AVR'?'E_fd '+eng(v('/EFD'),'',4):c0.type==='PSS'?'v_s '+eng(v('/VS'),'',3):'P_m '+eng(v('/PM'),'',4)+' · '+(c0.params?.type==='hydro'?'g ':'CV ')+eng(v('/G'),'',3)};}
  if(c0.type==='CHB'){const id=(S.pfx||'')+c0.id;return {text:'n '+fmt(s.now('Y:'+id+'/NLC'),3)+' · V_C '+eng(s.now('Y:'+id+'/NLC:vav'),'V',4)};}
  if(c0.type==='SSSC'){const id=(S.pfx||'')+c0.id;return {text:'X '+eng(s.now('Y:'+id+'/XM'),'Ω',3)+' · Δθ '+fmt(s.now('Y:'+id+'/DTH')*180/Math.PI,3)+'°'};}
+ // 4.14: the MMC and its control: what they do now
+ if(c0.type==='MMCC'){const id=(S.pfx||'')+c0.id;return {text:'P '+fmt(s.now('Y:'+id+'/PP'),3)+' · Q '+fmt(s.now('Y:'+id+'/QQ'),3)+' pu'+(s.now('Y:'+id+'/BLK')>0.5?' · μπλοκαρισμένος':'')};}
+ if(c0.type==='MMC'){const id=(S.pfx||'')+c0.id;return {text:'V_dc '+eng(s.now('Y:'+id+'/VDC'),'V',4)+' · I_dc '+eng(s.now('Y:'+id+'/IDC'),'A',3)};}
  if(c0.type==='SPLL'){const id=(S.pfx||'')+c0.id,f=c0.params?.impl==='blocks';return {text:'f '+eng(s.now('Y:'+id+(f?'/W':'/X:w'))/(2*Math.PI),'Hz',4)+' · Â '+eng(s.now('Y:'+id+(f?'/VD':'/X:amp')),'',3)};}
  if(c0.type==='EVC'){const id=(S.pfx||'')+c0.id;return {text:'u '+eng(s.now('Y:'+id+'/SAT'),'V',3)+' · τ* '+eng(s.now('Y:'+id+'/TQ'),'N·m',3)+' · keep '+eng(s.now('Y:'+id+'/KP'),'',3)};}
  if(c0.type==='AIC'){const id=(S.pfx||'')+c0.id,L=s.now('Y:'+id+'/NN1:L');return {text:'u '+eng(s.now('Y:'+id+'/SAT'),'',3)+' · e '+eng(s.now('Y:'+id+'/E'),'',3)+(Number.isFinite(L)?' · L '+eng(L,'',3):'')};}
@@ -223,6 +226,15 @@ const EVC_SIGS=[['/SAT','εντολή τάσης u'],['/GOV','ω* μετά το�
 const MOD_SIGS={CHB:p=>{const f=p.impl!=='blocks',N=Math.max(1,Math.min(64,Math.round(+p.N)||1));return [['/NLC','στάθμη n (υπομονάδες μέσα, με πρόσημο)'],['/NLC:vav','μέση τάση πυκνωτών'],['/NLC:sw','μεταγωγές υπομονάδων (σύνολο)'],
   [f?'/X':'/VAB','τάση βραχίονα v_ab'],[f?'/X:i':'/I','ρεύμα βραχίονα (a → b)'],...Array.from({length:N},(_,k)=>[f?'/X:v'+(k+1):'/V'+(k+1),'τάση πυκνωτή '+(k+1)]),...Array.from({length:N},(_,k)=>['/NLC:s'+(k+1),'κατάσταση υπομονάδας '+(k+1)+' (−1, 0, +1)'])];},
  SPLL:p=>p.impl==='blocks'?[['/TH','γωνία θ'],['/W','κυκλική συχνότητα ω'],['/VD','πλάτος (v_d)'],['/AL','v′ (α)'],['/BE','qv′ (β)']]:[['/X','γωνία θ'],['/X:w','κυκλική συχνότητα ω'],['/X:amp','πλάτος (v_d)'],['/X:al','v′ (α)'],['/X:be','qv′ (β)']],
+ // 4.14 (§42): the MMC (the arms of Model 2/3: <arm> the sum of the capacitor voltages (first output, no suffix), :vav mean, :n inserted cells, :i, :v)
+ MMC:p=>{const m=p.impl==='blocks'?'m1':p.model||'m2',L=[['/VDC','τάση DC (p − n)'],['/IDC','ρεύμα DC (έξοδος του p)']];
+  for(const x of ['a','b','c'])L.push(['/IA'+x,'ρεύμα AC προς τον μετατροπέα, φάση '+x],['/VA'+x,'τάση AC, φάση '+x]);
+  if(m==='m2'||m==='m3')for(const x of ['a','b','c'])for(const [u,n] of [['U','άνω'],['L','κάτω']])L.push(['/A'+u+x,`άθροισμα τάσεων πυκνωτών, ${n} βραχίονας ${x}`],['/A'+u+x+':i',`ρεύμα, ${n} βραχίονας ${x}`],['/A'+u+x+':n',`υπομονάδες μέσα, ${n} βραχίονας ${x}`],['/A'+u+x+':vav',`μέση τάση πυκνωτή, ${n} βραχίονας ${x}`]);
+  if(m==='m1')for(const x of ['a','b','c'])for(const [u,n] of [['U','άνω'],['L','κάτω']])L.push(['/'+u+x+'I',`ρεύμα, ${n} βραχίονας ${x}`],['/'+u+x+'N',`υπομονάδες μέσα, ${n} βραχίονας ${x}`],['/'+u+x+'N:vav',`μέση τάση πυκνωτή, ${n} βραχίονας ${x}`]);
+  if(m==='m4')L.push(['/VCD','τάση του C_dc'],['/IDS','ρεύμα που παίρνει η πλευρά DC']);
+  if(m!=='m4'&&p.ccsc!=='off')L.push(['/ZD','κυκλοφορούν ρεύμα, d (2ω₀)'],['/ZQ','κυκλοφορούν ρεύμα, q (2ω₀)'],['/UCa','τάση του CCSC, φάση a']);
+  return L;},
+ MMCC:p=>[['/PP','P προς τον μετατροπέα (pu)'],['/QQ','Q προς τον μετατροπέα (pu)'],['/VD','v_d (pu)'],['/VQ','v_q (pu)'],['/ID','i_d (pu)'],['/IQ','i_q (pu)'],['/IDL','i_d,ref μετά το όριο (pu)'],['/IQL','i_q,ref μετά το όριο (pu)'],['/Fvdc','V_dc (pu, φιλτραρισμένη)'],['/Fidc','I_dc (pu, φιλτραρισμένο)'],['/VG','|v| (pu)'],['/TH','γωνία θ'],['/MA','m_a'],['/BLK','μπλοκάρισμα (1)'],['/BRK','εντολή διακόπτη AC (1 κλειστός)'],['/PL','προστασία υπερέντασης DC (1)']],
  SSSC:p=>[['/VR','αναφορά τάσης v_ref'],['/VQ','εντολή V_q (θετική: χωρητική)'],['/XM','μετρημένη αντίδραση X'],['/DTH','διόρθωση γωνίας Δθ (rad)'],['/VAF','μέση τάση πυκνωτών (φιλτραρισμένη)'],['/PLI/X','γωνία του ρεύματος θ_i − 90°'],['/PLI/X:amp','πλάτος του ρεύματος Î']]};
 const GEN_CTL_SIGS={AVR:[['/EFD','τάση διέγερσης E_fd'],['/ERR','σφάλμα τάσης (ΔV_ref − ΔV_c + v_s)'],['/TRF','απόκλιση της μετρημένης τάσης ΔV_c'],['/VB','αναφορά V_ref (βάση)']],
  PSS:[['/VS','έξοδος v_s'],['/DW','απόκλιση ταχύτητας Δω'],['/WO','μετά το washout']],
@@ -1605,6 +1617,23 @@ function ssscTheory(){const s=S.sim,m=(S.tutMeta||{}).sssc;if(!s||!m)return '';c
  rows.push(['|V₂| (RMS φάσης a)',q.V2,phaseRms('V:LD2/Ra',T,4*nT),'V']);
  for(const p of ['a','b','c'])rows.push([`V̄_C φάσης ${p}`,m.Vdc,avgOver('Y:CH'+p+'/NLC:vav',4*nT)?.avg,'V']);
  return h+cmpRows(rows)+`<p class="small">Δθ: ${['a','b','c'].map(p=>fmt(s.now('Y:SC'+p+'/DTH')*180/Math.PI,3)+'°').join(', ')}. Κάθε φάση έχει δικό της PLL και βρόχο τάσης: οι τρεις X ταυτίζονται, οι Δθ διαφέρουν όσο διαφέρουν οι απώλειες και η αρχική φόρτιση.</p>`;}
+// 4.14 (§42): the MMC-HVDC link. The steady state from the ratings and the measured powers: AC current, DC current, arm
+// currents (I_dc/3 ± Î/2), the energy of the capacitors and their ripple (ΔW_arm = S/(3mω)·(1 − (m·cosφ/2)²)^{3/2}), the
+// losses; compared with the means of the last 20 ms (base period 20 ms)
+function hvdcTheory(){const s=S.sim,m=(S.tutMeta||{}).hvdc;if(!s||!m)return '';const w=2*Math.PI*50,Vb=m.Vac*Math.SQRT2/Math.sqrt(3),Vc=m.Vdc/m.N;
+ const H=3*m.N*m.C*Vc*Vc/m.S,Wa=m.N*m.C*Vc*Vc/2,names={m1:'Model 1: κάθε υπομονάδα από IGBT και διόδους',m2:'Model 2: ισοδύναμο βραχίονα με κάθε πυκνωτή',m3:'Model 3: συνάρτηση μεταγωγής βραχίονα (ένας πυκνωτής C/N)',m4:'Model 4: μέσο μοντέλο'};
+ let h=`<div class="tm"><span class="badge">MMC-HVDC</span> ${names[m.model]||m.model} · N = ${m.N} ανά βραχίονα, V_C = ${eng(Vc,'V')}, C = ${eng(m.C,'F')} · ενέργεια ${fmt(H*1000,3)} kJ/MVA</div><ul class="eqs">
+  <li>Βραχίονες: v_u = V_dc/2·(1 − m_j) − u_c,j, v_l = V_dc/2·(1 + m_j) − u_c,j· στάθμη n = round(v_ref/V_C) από την ονομαστική V_C (η ενέργεια των βραχιόνων ισορροπεί μόνη της), ταξινόμηση όταν αλλάζει το n. Τάση AC e_j = (v_l − v_u)/2 = m_j·V_dc/2 πίσω από L_arm/2</li>
+  <li>CCSC: i_z = (i_u + i_l)/2 σε dq αρνητικής ακολουθίας στο 2ω₀t, PI στο μηδέν με αποσύζευξη 2ω₀L_arm· το I_dc/3 (μηδενική ακολουθία) μένει</li>
+  <li>Έλεγχος: P (σταθμός 1) και V_dc (σταθμός 2) στον άξονα d, Q στον q· ρεύμα σε dq με αποσύζευξη, m = v_c·V̂/(v_s/2) με v_s τη μέση Σv_C βραχίονα</li>
+  <li>Μέσο μοντέλο: C_dc = 6C/N = ${eng(6*m.C/m.N,'F')}, L_dc = (2/3)L_arm, R = (2/3)N·R_on· ισχύς I_dc·V_dc = Σ v_conv,j·i_j</li></ul>`;
+ if(s.t<0.3)return h+'<p class="muted small">Τρέξε την προσομοίωση (μετρήσεις στα τελευταία 20 ms, μετά τα 0,3 s).</p>';
+ const P1=avgOver('Y:CT1/PP',1)?.avg,P2=avgOver('Y:CT2/PP',1)?.avg,v1=avgOver('Y:CT1/Fvdc',1)?.avg,Idc=avgOver('Y:MMC1/IDC',1)?.avg,Pw=P1*m.S;
+ const vg=avgOver('Y:CT1/VG',1)?.avg??1,I=Pw/(1.5*Vb*vg),mm=Vb*vg/(m.Vdc/2),dW=Math.abs(Pw)/(3*mm*w)*Math.pow(Math.max(1-(mm/2)**2,0),1.5);
+ const rows=[['I_dc σταθμού 1 = P/V_dc',Pw/(v1*m.Vdc),Idc,'A'],['Î AC σταθμού 1 = 2P/(3V̂), V̂ η μετρημένη στον μετατροπέα',I,lastPP('Y:MMC1/IAa')/2,'A'],['V_dc σταθμού 1 (pu)',1,v1,''],['Απώλειες (P₁ + P₂)/P₁',NaN,(P1+P2)/P1,'']];
+ if(m.model!=='m4'){const key=m.model==='m1'?null:'Y:MMC1/AUa';if(key){const pp=lastPP(key);rows.push(['Κυμάτωση Σv_C άνω βραχίονα a (κορυφή–κορυφή)',dW/(m.N*m.C*Vc)*m.N,pp,'V']);}
+  rows.push(['Ρεύμα άνω βραχίονα a, κορυφή ≈ I_dc/3 + Î/2',Math.abs(Idc)/3+I/2,Math.max(Math.abs(avgOver(m.model==='m1'?'Y:MMC1/UaI':'Y:MMC1/AUa:i',1)?.max??NaN),Math.abs(avgOver(m.model==='m1'?'Y:MMC1/UaI':'Y:MMC1/AUa:i',1)?.min??NaN)),'A']);}
+ return h+cmpRows(rows)+`<p class="small">ΔW βραχίονα ≈ ${eng(dW,'J')} από ${eng(Wa,'J')} (m = ${fmt(mm,3)}, cosφ = 1)· η κυμάτωση της Σv_C ≈ ΔW/(C/N·V_dc). P₁ = ${fmt(P1,4)} pu, P₂ = ${fmt(P2,4)} pu.</p>`;}
 // 4.13: a wideband model in a card: its groups of modes, delays, poles, the errors of the fit and the passivity check
 function wbModelHTML(name,g){const f=g.fit||{},ps=g.passive||null;
  return `<p><b>${esc(name)}</b> (WB, ${g.fit?.source==='EMTP'?'από αρχείο του EMTP':'προσαρμογή '+eng(g.fmin,'Hz')+' – '+eng(g.fmax,'Hz')}): Y_c με ${g.npoles?.yc??g.yc.p.length} πόλους, H σε ${g.groups.length} ομάδες ρυθμών.</p><table class="cmp"><tr><th>ομάδα</th><th>ρυθμοί</th><th>τ</th><th>πόλοι</th></tr>`
@@ -2305,6 +2334,7 @@ function formulaTheory(t){
  if(t.topology==='fbm')return fbmTheory();
  if(t.topology==='ieee9_emt')return ieee9Theory();
  if(t.topology==='sssc')return ssscTheory();
+ if(t.topology==='hvdc_mmc')return hvdcTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const D=+W.D,Vin=+V.V,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
   eqs=[`V_o = ${t.topology==='cuk'?'−':''}V_in·D/(1−D) = <b>${eng(Vo,'V')}</b>`,`I_L1 = |I_o|·D/(1−D) = <b>${eng(IL1,'A')}</b>, |I_L2| = |I_o| = <b>${eng(Math.abs(Io),'A')}</b>`,`Δi_L1 = V_in·D·T/L1 = <b>${eng(Vin*D*Ts/L1,'A')}</b>, Δi_L2 = V_in·D·T/L2 = <b>${eng(Vin*D*Ts/L2,'A')}</b>`,`V_C1 = ${t.topology==='cuk'?'V_in + |V_o|':'V_in'} = <b>${eng(t.topology==='cuk'?Vin+Math.abs(Vo):Vin,'V')}</b>`];

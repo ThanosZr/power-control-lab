@@ -2248,6 +2248,11 @@ TYPICAL.update({
     '150kV-land': {'name': 'Τυπικό υπόγειο καλώδιο 150 kV (3 μονοπολικά XLPE 1000 mm², επίπεδη διάταξη)', 'medium': 'earth',
                    'rho': 100, 'length': 10, 'cables': [_sc(x, 1.2, [k + 1, 0], 0.0189, 0.0380, 0.0384, 0.0480, 1.93e-8,
                                                             1.72e-8, 2.5, 2.3) for k, x in enumerate((-0.25, 0.0, 0.25))]},
+    # 4.14: the two poles of a ±320 kV HVDC link (2 single-core XLPE cables, copper 2000 mm², aluminium sheath, at 1.3 m,
+    # 0.5 m apart; our typical values)
+    '320kV-dc': {'name': 'Τυπικά καλώδια ±320 kV DC (2 μονοπολικά XLPE 2000 mm², υπόγεια)', 'medium': 'earth', 'rho': 100,
+                 'length': 70, 'cables': [_sc(x, 1.3, [k + 1, 0], 0.0265, 0.0535, 0.0565, 0.0625, 1.90e-8, 2.8e-8, 2.3, 2.3)
+                                          for k, x in enumerate((-0.25, 0.25))]},
 })
 
 # 4.9: the same 400 kV line with its two ground wires kept as conductors 4 and 5 (they end at the tower tops of a lightning

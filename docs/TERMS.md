@@ -124,7 +124,19 @@
 | solid bonding, single-point bonding | solid bonding (γείωση στα δύο άκρα), γείωση σε ένα σημείο (4.13) |
 | standing sheath voltage, sheath voltage limiter (SVL) | τάση στάσης του μανδύα, απαγωγός μανδύα (SVL) (4.13) |
 | homogeneous (cross-bonded) model | ομογενές μοντέλο (4.13) |
+| blocking / deblocking (of a converter) | μπλοκάρισμα / απεμπλοκή (του μετατροπέα) (4.14) |
+| submodule (SM), arm, arm inductor | υπομονάδα, βραχίονας, αυτεπαγωγή βραχίονα (4.14) |
+| inserted / bypassed submodule | υπομονάδα μέσα / σε παράκαμψη (4.14) |
+| circulating current suppressing control (CCSC) | καταστολή του κυκλοφορούντος ρεύματος (CCSC) (4.14) |
+| direct modulation | άμεση διαμόρφωση (4.14) |
+| capacitor voltage balancing, sorting | εξισορρόπηση των πυκνωτών, ταξινόμηση (4.14) |
+| average value model (AVM) | μέσο μοντέλο (AVM) (4.14) |
+| arm switching function model | μοντέλο συνάρτησης μεταγωγής βραχίονα (4.14) |
+| detailed equivalent (Thévenin) arm model | ισοδύναμο βραχίονα (Thévenin) (4.14) |
+| star (grounding) reactor | αντιδραστήρας αστέρα (για γείωση) (4.14) |
+| pole-to-pole fault | σφάλμα πόλου–πόλου (4.14) |
+| droop (P/V_dc) | στατικότητα P/V_dc (4.14) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
-PWM, SPWM, SVPWM, PLL, FACTS, SSSC, CHB, MMC, NLC, ULM, FDCM, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.
+PWM, SPWM, SVPWM, PLL, FACTS, SSSC, CHB, MMC, HVDC, LCC, AVM, CCSC, NLC, ULM, FDCM, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.

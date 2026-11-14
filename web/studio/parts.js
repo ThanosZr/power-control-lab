@@ -105,6 +105,8 @@
   // 4.5: typical single-core XLPE cables (radii in m, resistivities in Ω·m, phase 0 = sheath bonded and earthed at both ends)
   '220kV-sea':{name:'Τυπικό υποβρύχιο καλώδιο 220 kV (3 μονοπολικά XLPE, θάλασσα)',medium:'sea',rho:0.2,length:30,cables:[{x:-1.0,y:30,ph:[1,0],layers:[{t:'c',rin:0,rout:0.0256,rho:1.7e-08},{t:'i',rout:0.055,epsr:2.3,tand:0.0004},{t:'c',rin:0.055,rout:0.0575,rho:2.8e-08},{t:'i',rout:0.085,epsr:2.3}]},{x:0.0,y:30,ph:[2,0],layers:[{t:'c',rin:0,rout:0.0256,rho:1.7e-08},{t:'i',rout:0.055,epsr:2.3,tand:0.0004},{t:'c',rin:0.055,rout:0.0575,rho:2.8e-08},{t:'i',rout:0.085,epsr:2.3}]},{x:1.0,y:30,ph:[3,0],layers:[{t:'c',rin:0,rout:0.0256,rho:1.7e-08},{t:'i',rout:0.055,epsr:2.3,tand:0.0004},{t:'c',rin:0.055,rout:0.0575,rho:2.8e-08},{t:'i',rout:0.085,epsr:2.3}]}]},
   '150kV-land':{name:'Τυπικό υπόγειο καλώδιο 150 kV (3 μονοπολικά XLPE 1000 mm², επίπεδη διάταξη)',medium:'earth',rho:100,length:10,cables:[{x:-0.25,y:1.2,ph:[1,0],layers:[{t:'c',rin:0,rout:0.0189,rho:1.93e-08},{t:'i',rout:0.038,epsr:2.5,tand:0.0004},{t:'c',rin:0.038,rout:0.0384,rho:1.72e-08},{t:'i',rout:0.048,epsr:2.3}]},{x:0.0,y:1.2,ph:[2,0],layers:[{t:'c',rin:0,rout:0.0189,rho:1.93e-08},{t:'i',rout:0.038,epsr:2.5,tand:0.0004},{t:'c',rin:0.038,rout:0.0384,rho:1.72e-08},{t:'i',rout:0.048,epsr:2.3}]},{x:0.25,y:1.2,ph:[3,0],layers:[{t:'c',rin:0,rout:0.0189,rho:1.93e-08},{t:'i',rout:0.038,epsr:2.5,tand:0.0004},{t:'c',rin:0.038,rout:0.0384,rho:1.72e-08},{t:'i',rout:0.048,epsr:2.3}]}]}};
+ // 4.14: the two poles of a ±320 kV HVDC link (pcl.lineconst.TYPICAL['320kV-dc']; our typical values)
+ TLM_TYPICAL['320kV-dc']={name:'Τυπικά καλώδια ±320 kV DC (2 μονοπολικά XLPE 2000 mm², υπόγεια)',medium:'earth',rho:100,length:70,cables:[-0.25,0.25].map((x,k)=>({x,y:1.3,ph:[k+1,0],layers:[{t:'c',rin:0,rout:0.0265,rho:1.9e-08},{t:'i',rout:0.0535,epsr:2.3,tand:0.0004},{t:'c',rin:0.0535,rout:0.0565,rho:2.8e-08},{t:'i',rout:0.0625,epsr:2.3}]}))};
  // 4.13: the land cable with its sheaths kept as conductors 4–6 (pcl.lineconst.TYPICAL['150kV-land-s'])
  TLM_TYPICAL['150kV-land-s']=(()=>{const d=JSON.parse(JSON.stringify(TLM_TYPICAL['150kV-land']));d.name='Τυπικό υπόγειο καλώδιο 150 kV με τους μανδύες ως αγωγούς 4–6 (για cross-bonding)';d.cables.forEach((c,k)=>{c.ph=[k+1,k+4];});return d;})();
  const PARTS={
@@ -785,7 +787,7 @@
   NLC:{name:'Διαμόρφωση πλησιέστερης στάθμης (NLC) με ταξινόμηση',prefix:'NLC',group:'Σήματα',pins:{},spins:p=>nlcIO(p),box:p=>{const h=nlcH(p);return [-30,-h,60,2*h];},blk:true,
    params:[num('N','Υπομονάδες N','',10),sel('cell','Υπομονάδα',[['fb','Γέφυρα H: s = −1, 0, +1'],['hb','Ημιγέφυρα: s = 0, +1']],'fb'),
     num('Vdc','Ονομαστική τάση πυκνωτή V_C','V',1000),sel('norm','Στάθμη από',[['avg','Τη μέση τάση των πυκνωτών'],['nom','Την ονομαστική V_C']],'avg'),
-    sel('sel','Εξισορρόπηση',[['sort','Ταξινόμηση σε κάθε δείγμα'],['reduced','Μόνο όταν χρειάζεται (ζώνη ΔV)']],'sort'),num('band','Ζώνη ΔV','V',20,{show:p=>p.sel==='reduced'}),CLOCK(),TRIG],
+    sel('sel','Εξισορρόπηση',[['sort','Ταξινόμηση σε κάθε δείγμα'],['reduced','Μόνο όταν χρειάζεται (ζώνη ΔV)'],['trigger','Ταξινόμηση μόνο όταν αλλάζει το n (όπως το EMTP)']],'sort'),num('band','Ζώνη ΔV','V',20,{show:p=>p.sel==='reduced'}),CLOCK(),TRIG],
    value:p=>p.N,unit:'',
    draw:p=>codeDraw(nlcIns(p),nlcOuts(p),'NLC')},
   SPLL:{name:'PLL μονοφασικό (SOGI)',prefix:'SPLL',group:'Σήματα',pins:{},spins:{v:I(-30,0),th:O(30,-20),w:O(30,-10),amp:O(30,0),al:O(30,10),be:O(30,20)},box:[-20,-25,40,50],blk:true,
@@ -811,6 +813,63 @@
     num('mmax','Μέγιστο m_a','',1),num('f0','Ονομαστική συχνότητα','Hz',50),num('bw','Εύρος ζώνης του PLL','Hz',8,{hint:'Το PLL κλειδώνει στο ρεύμα που η ίδια η διάταξη αλλάζει: με επαγωγική έγχυση η γωνία του ρεύματος ακολουθεί το σφάλμα του PLL προς την ανάποδη μεριά και ο βρόχος γίνεται πιο γρήγορος. Με 20 Hz η επαγωγική έγχυση πάνω από ~10 Ω ταλαντεύεται (στο tutorial), με 8 Hz όχι.'}),num('fx','Φίλτρο της μέτρησης της X (2ης τάξης)','Hz',10,{hint:'Η αντίδραση μετριέται από τη συνιστώσα της τάσης v (είσοδος) σε τετραγωνισμό με το ρεύμα: X = V_q/Î.'}),
     num('ton','Ενεργοποίηση στο','s',0.15,{zero:true,hint:'Ως τότε v_ref = 0 (όλες οι υπομονάδες σε παράκαμψη), ώστε να κλειδώσει το PLL στο ρεύμα.'})],value:()=>null,
    draw:()=>sb(60,80)+tx('m-SSSC',0,4,'bsm')+sl('M-40,-30 H-30 M-40,-10 H-30 M-40,10 H-30 M-40,30 H-30 M30,-20 H40 M30,0 H40 M30,20 H40')},
+  // 4.14 (§42): a modular multilevel converter (MMC) for HVDC, in the four models of the MMC station of EMTP-RV: 1 every
+  // cell from switches and diodes (the detailed implementation), 2 the detailed equivalent (every capacitor in one solver
+  // element per arm), 3 the switching function of the arm (one capacitor C/N per arm), 4 the average model (controlled
+  // sources). The modulation of each arm: references from m_a, m_b, m_c, the circulating-current suppression (CCSC) on θ,
+  // the nearest level and the balancing of the capacitors (THEORY §8χ)
+  MMC:{name:'Μετατροπέας MMC (HVDC, μοντέλα 1–4)',prefix:'MMC',group:'Ημιαγωγοί',
+   pins:p=>isBus(p)?{abc:[-50,-30],p:[50,-40],n:[50,-20]}:{a:[-50,-40],b:[-50,-30],c:[-50,-20],p:[50,-40],n:[50,-20]},
+   bus:p=>isBus(p)?{abc:['a','b','c']}:{},
+   spins:{ma:I(-50,0),mb:I(-50,10),mc:I(-50,20),blk:I(-50,40),va:O(50,0),vb:O(50,10),vc:O(50,20),ia:O(50,30),ib:O(50,40),ic:O(50,50),vdc:O(50,60),idc:O(50,70),vs:O(50,80)},box:[-40,-50,80,140],
+   params:[IMPL('fast','Αναλυτική = Model 1: κάθε υπομονάδα από δύο IGBT με αντιπαράλληλες διόδους και τον πυκνωτή της (για N έως 40). Γρήγορη: ένα από τα μοντέλα 2–4.'),
+    sel('model','Μοντέλο (γρήγορη υλοποίηση)',[['m2','Model 2: ισοδύναμο βραχίονα με κάθε πυκνωτή (ταξινόμηση, μπλοκάρισμα)'],['m3','Model 3: συνάρτηση μεταγωγής βραχίονα (ένας πυκνωτής C/N)'],['m4','Model 4: μέσο μοντέλο (ελεγχόμενες πηγές, C_dc = 6C/N)']],'m2',{show:p=>p.impl!=='blocks',hint:'Όπως ο σταθμός MMC του EMTP-RV. Model 2: κάθε υπομονάδα με την τάση της, ένα στοιχείο του λύτη ανά βραχίονα (ισοδύναμο Thévenin). Model 3: οι πυκνωτές του βραχίονα θεωρούνται ίσοι (κυκλοφορούν ρεύμα και απώλειες ναι, εξισορρόπηση όχι). Model 4: χωρίς βραχίονες· όχι κυκλοφορούν ρεύμα, όχι CCSC· στο μπλοκάρισμα γέφυρα διόδων.'}),
+    num('N','Υπομονάδες ανά βραχίονα N','',400,{hint:'Ημιγέφυρες. Model 2 και 3: έως 2000· Model 1 (αναλυτική): έως 40.'}),
+    num('C','Πυκνωτής υπομονάδας C','F',10e-3,{hint:'Αποθηκευμένη ενέργεια 3·N·C·V_C²/S (30–40 kJ/MVA τυπικά).'}),
+    num('Vdc','Ονομαστική τάση DC (πόλος–πόλος)','V',640e3,{hint:'V_C ονομαστική = V_dc/N· η στάθμη n = round(v_ref/V_C).'}),
+    num('vc0','Αρχική τάση πυκνωτών','pu',1,{zero:true,hint:'Ως προς V_dc/N. 1 = φορτισμένοι (εκκίνηση χωρίς ακολουθία προφόρτισης, όπως στο EMTP)· 0 = άδειοι.'}),
+    num('Larm','Αυτεπαγωγή βραχίονα','H',0.05),num('Ron','R_on ανά ημιαγωγό σε αγωγή','Ω',1e-3,{zero:true,hint:'R_arm = N·R_on (σε κάθε υπομονάδα άγει ένας ημιαγωγός).'}),
+    num('fs','Δειγματοληψία της NLC','Hz',0,{zero:true,hint:'0 = σε κάθε βήμα του λύτη (με τις αναφορές του προηγούμενου, όπως ο έλεγχος του EMTP). Στο Model 1 0 σημαίνει 1/h.'}),
+    sel('sel','Εξισορρόπηση των πυκνωτών',[['trigger','Ταξινόμηση όταν αλλάζει το n (όπως το EMTP)'],['sort','Ταξινόμηση σε κάθε δείγμα'],['reduced','Μόνο όσες υπομονάδες χρειάζονται (ζώνη ΔV)']],'trigger',{show:p=>p.impl==='blocks'||p.model!=='m3'&&p.model!=='m4'}),
+    num('band','Ζώνη ΔV','pu',0.05,{show:p=>p.sel==='reduced',hint:'Ως προς V_C.'}),
+    sel('norm','Στάθμη από',[['nom','Την ονομαστική V_C (άμεση διαμόρφωση)'],['avg','Τη μετρημένη μέση V_C']],'nom',{hint:'Με την ονομαστική η ενέργεια των βραχιόνων ισορροπεί μόνη της (η τάση που μπαίνει μεγαλώνει με τους πυκνωτές). Με τη μετρημένη χρειάζεται έλεγχος ενέργειας, που δεν έχει ο έλεγχος αυτός.'}),
+    sel('ccsc','Καταστολή του κυκλοφορούντος ρεύματος (CCSC)',[['on','Ναι: PI σε dq στο 2θ (αρνητική ακολουθία)'],['off','Όχι']],'on',{show:p=>p.impl==='blocks'||p.model!=='m4'}),
+    num('tcc','Σταθερά χρόνου του CCSC','s',5e-3,{show:p=>p.ccsc!=='off'&&(p.impl==='blocks'||p.model!=='m4'),hint:'K_p = L_arm/τ, K_i = K_p/(4τ).'}),
+    num('f0','Ονομαστική συχνότητα','Hz',50),
+    sel('disc','Αλλαγές εισαγωγής στον λύτη',[['smooth','Τραπεζοειδής από συνεπή σημείο μετά από κάθε αλλαγή'],['disc','Ως ασυνέχεια: BE μετά από κάθε αλλαγή (όπως το Model 1)']],'smooth',{show:p=>p.impl!=='blocks'&&p.model!=='m4',hint:'Η αλλαγή των υπομονάδων δεν σπάει καμία κατάσταση (πυκνωτές, πηνία). Προεπιλογή: τραπεζοειδής, με τις παραγώγους ξαναϋπολογισμένες αμέσως μετά την αλλαγή (με απλό τραπεζοειδή η αλλαγή θα έπιανε μισό βήμα αργότερα: 3 % στο ρεύμα με h = 20 μs). Με BE: όπως ο λύτης χειρίζεται κάθε διακόπτη (ίδιο με το Model 1, αλλά με απόσβεση πρώτης τάξης).'}),CONN('abc')],value:()=>null,
+   draw:p=>'<rect x="-30" y="-50" width="60" height="140" rx="4"/>'+tx('MMC',0,-8,'bsm')+'<path d="M-18,6 H18 M-18,14 H18" class="thin"/>'+tx('AC/DC',0,30,'bsm')+(isBus(p)?'<path d="M-50,-30 H-30"/>':'<path d="M-50,-40 H-30 M-50,-30 H-30 M-50,-20 H-30"/>')+'<path d="M30,-40 H50 M30,-20 H50"/>'+sl('M-50,0 H-30 M-50,10 H-30 M-50,20 H-30 M-50,40 H-30 M30,0 H50 M30,10 H50 M30,20 H50 M30,30 H50 M30,40 H50 M30,50 H50 M30,60 H50 M30,70 H50 M30,80 H50')},
+  // 4.14 (§42): the control of an MMC station as in EMTP-RV (upper level): PLL, dq, outer P / V_dc / droop / V-f and Q / V_ac,
+  // inner current control with decoupling, current limit with priority, protection (DC overcurrent, deep voltage sag),
+  // deblocking and breaker commands. Per unit on the station's ratings; P and Q flow into the converter. THEORY §8χ
+  MMCC:{name:'Έλεγχος σταθμού MMC (HVDC)',prefix:'MCC',group:'Δίκτυο',pins:{},
+   spins:{va:I(-50,-40),vb:I(-50,-30),vc:I(-50,-20),ia:I(-50,0),ib:I(-50,10),ic:I(-50,20),vdc:I(-50,40),idc:I(-50,50),vs:I(-50,60),ma:O(50,-40),mb:O(50,-30),mc:O(50,-20),th:O(50,0),blk:O(50,10),brk:O(50,20),p:O(50,40),q:O(50,50)},box:[-40,-50,80,110],blk:true,
+   params:[sel('mode','Εξωτερικός έλεγχος',[['p','Ενεργός ισχύς P'],['vdc','Τάση DC'],['droop','Στατικότητα P/V_dc'],['vf','Τάση και συχνότητα (V/f, παθητικό δίκτυο)']],'p'),
+    sel('qmode','Έλεγχος Q ή V_ac',[['q','Άεργος ισχύς Q'],['vac','Τάση AC']],'q',{show:p=>p.mode!=='vf'}),
+    num('S','Ονομαστική ισχύς (βάση)','VA',1059e6),num('Vac','Τάση AC στον μετατροπέα (πολική, RMS)','V',333e3),num('Vdc','Ονομαστική τάση DC (πόλος–πόλος)','V',640e3),num('f0','Ονομαστική συχνότητα','Hz',50),
+    txt('Pref','P_ref (προς τον μετατροπέα)','1',{sched:true,unit:'pu',show:p=>p.mode==='p'||p.mode==='droop',hint:'Σταθερή ή «t:τιμή», π.χ. 0:1, 0.5:0.5. Θετική: ισχύς από το δίκτυο AC προς τον μετατροπέα (ανόρθωση).'}),
+    num('Tp','Χρόνος απόκρισης P (5 %)','s',0.1,{show:p=>p.mode==='p'||p.mode==='droop'}),
+    txt('Vdcref','V_dc,ref','1',{sched:true,unit:'pu',show:p=>p.mode==='vdc'||p.mode==='droop'}),num('Tvdc','Χρόνος απόκρισης V_dc (5 %)','s',0.1,{show:p=>p.mode==='vdc'}),
+    num('kdr','Στατικότητα ΔV_dc/ΔP','pu',0.2,{show:p=>p.mode==='droop'}),
+    num('H','Σταθερά ενέργειας των πυκνωτών (για τον PI της V_dc)','s',0.03,{show:p=>p.mode==='vdc',hint:'3·N·C·V_C²/S. Ο PI: 2H·s² + K_p·s + K_i με ζ = 0,8 και χρόνο αποκατάστασης 3/(ζω_n).'}),
+    txt('Vfref','V_ref (V/f)','1',{sched:true,unit:'pu',show:p=>p.mode==='vf'}),num('Tvf','Χρόνος απόκρισης V/f','s',0.1,{show:p=>p.mode==='vf'}),
+    txt('Qref','Q_ref (προς τον μετατροπέα)','0',{sched:true,unit:'pu',show:p=>p.mode!=='vf'&&p.qmode!=='vac'}),num('Tq','Χρόνος απόκρισης Q','s',0.1,{show:p=>p.mode!=='vf'&&p.qmode!=='vac'}),
+    txt('Vacref','V_ac,ref','1',{sched:true,unit:'pu',show:p=>p.mode!=='vf'&&p.qmode==='vac'}),num('Tvac','Χρόνος απόκρισης V_ac','s',0.1,{show:p=>p.mode!=='vf'&&p.qmode==='vac'}),
+    num('Xpcc','X του δικτύου στο σημείο σύνδεσης','pu',0.1,{show:p=>p.mode!=='vf'&&p.qmode==='vac'||p.mode==='vf'}),
+    num('Ti','Χρόνος απόκρισης του ρεύματος (5 %)','s',0.01,{hint:'K_p = X/(ω₀τ), K_i = max(R/τ, K_p/(4τ)), τ = T/3 (αποσύζευξη και πρόσθια τροφοδότηση της τάσης).'}),
+    num('X','X μετατροπέα (L_arm/2 + σκέδαση μετασχηματιστή)','pu',0.255),num('R','R μετατροπέα','pu',0.003,{zero:true}),
+    sel('prio','Προτεραιότητα στο όριο ρεύματος',[['p','Ενεργός ισχύς'],['q','Άεργος ισχύς']],'p'),
+    num('Ilim','Μέγιστο ρεύμα','pu',1.1),num('Idlim','Μέγιστο I_d','pu',1.1,{show:p=>p.prio!=='q'}),num('Iqlim','Μέγιστο I_q','pu',0.5,{show:p=>p.prio==='q'}),
+    num('vmax','Μέγιστη |v_conv|','pu',1.5),num('bw','Εύρος ζώνης του PLL','Hz',20),num('th0','Αρχική γωνία του PLL','°',0,{signed:true,zero:true,hint:'Για εκκίνηση χωρίς μεταβατικό: η γωνία της τάσης της φάσης a στο t = 0 μείον 90°.'}),
+    num('fm','Φίλτρο των μετρήσεων','Hz',2000),
+    sel('prot','Προστασία',[['on','Ναι'],['off','Όχι']],'on',{hint:'Υπερένταση DC → μπλοκάρισμα (κρατιέται) και άνοιγμα του διακόπτη AC μετά από 40 ms· τάση AC κάτω από 0,1 pu → μπλοκάρισμα με 20 ms καθυστέρηση απελευθέρωσης. Ενεργή μετά το t_prot.'}),
+    num('Idcmax','Όριο ρεύματος DC','pu',2,{show:p=>p.prot!=='off'}),num('tprot','Ενεργοποίηση της προστασίας','s',0.3,{zero:true,show:p=>p.prot!=='off'}),
+    num('tdb','Απεμπλοκή των υπομονάδων στο','s',0,{zero:true}),num('tbrk','Κλείσιμο του διακόπτη AC στο','s',0,{zero:true})],value:()=>null,
+   draw:()=>sb(80,110)+tx('MMC',0,-6,'bsm')+tx('έλεγχος',0,10,'bsm')+sl('M-50,-40 H-40 M-50,-30 H-40 M-50,-20 H-40 M-50,0 H-40 M-50,10 H-40 M-50,20 H-40 M-50,40 H-40 M-50,50 H-40 M-50,60 H-40 M40,-40 H50 M40,-30 H50 M40,-20 H50 M40,0 H50 M40,10 H50 M40,20 H50 M40,40 H50 M40,50 H50')},
+  // 4.14: the compact arm of an MMC (Model 2 with every cell, or Model 3 with one capacitor C/N), modulator and blocking inside
+  MMCA:{name:'Βραχίονας MMC (συμπαγής)',prefix:'MA',group:'Ημιαγωγοί',hidden:true,pins:{a:[0,-50],b:[0,50]},spins:{ref:I(-40,-10),blk:I(-40,10),vs:O(40,-20),vav:O(40,-10),n:O(40,0),i:O(40,10),v:O(40,20)},box:[-30,-36,60,72],
+   params:[num('N','N','',400),sel('model','Μοντέλο',[['cells','Κάθε πυκνωτής (Model 2)'],['avg','Ένας πυκνωτής C/N (Model 3)']],'cells'),num('C','C','F',10e-3),num('Vc','V_C ονομαστική','V',1600),num('v0','Αρχική V_C','V',1600,{zero:true}),num('Ron','R_on','Ω',1e-3,{zero:true}),
+    num('fs','f_s','Hz',0,{zero:true}),sel('sel','Εξισορρόπηση',[['trigger','trigger'],['sort','sort'],['reduced','reduced']],'trigger'),num('band','ΔV','pu',0.05),sel('norm','Στάθμη',[['nom','nom'],['avg','avg']],'nom'),sel('disc','Αλλαγές',[['smooth','smooth'],['disc','disc']],'smooth')],value:()=>null,
+   draw:()=>'<path d="M0,-50 V-36 M0,36 V50"/><rect x="-22" y="-36" width="44" height="72" rx="3"/>'+tx('MMC',0,4,'bsm')},
   // 4.10: the compact solver elements behind the fast implementations of CHB and SPLL (hidden from the library; built by NetLib)
   CHBX:{name:'Αρθρωτός βραχίονας (συμπαγής)',prefix:'CX',group:'Ημιαγωγοί',hidden:true,pins:{a:[0,-50],b:[0,50]},spins:p=>chbxIO(p),box:p=>{const h=Math.max(36,chbxH(p));return [-30,-h,60,2*h];},
    params:[...chbParams()],value:()=>null,

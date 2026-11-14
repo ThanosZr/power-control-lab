@@ -470,6 +470,37 @@
  // the insertion states from the signal pins: rounded to −1, 0, +1 (half bridges: 0, +1); the string goes into the gate
  // signature (a change starts the step like a switching) and into the key of the cached factorization
  function chbStates(e,sv,set){let key='';for(let j=0;j<e.N;j++){const n=e.sIn[j],u=n>=0&&sv?sv[n]:0;let q=u>.5?1:u<-.5?-1:0;if(e.hb&&q<0)q=0;if(set)e.s[j]=q;key+=q<0?'-':q?'+':'0';}if(set)e.sKey=key;return key;}
+ // 4.10/4.14: the number of inserted cells: R_eq = R_arm + β·Σs_k² depends only on it, so it keys the cached factorization
+ function chbCount(e){let n=0;for(let j=0;j<e.N;j++)if(e.s[j])n++;return n;}
+ // 4.14 (§42): the modulator of an MMC arm at the start of a step, from the signals of the previous one (as the controls of
+ // EMTP: one step late). Blocked: every cell inserted (the diodes of the element decide the conduction). Otherwise
+ // n = round(v_ref/V_C) in 0…N, V_C the nominal cell voltage (direct modulation: the energy of the arm balances itself) or
+ // the measured mean; the cells by their voltages, kept in order by insertion sort (nearly sorted from the previous sample:
+ // O(N)): the n lowest when the current charges them (i > 0), the n highest otherwise. 'sort': chosen again at every
+ // sample; 'trigger' (as EMTP): only when n changes; 'reduced': while n stays and the spread is within ΔV the cells stay,
+ // a change of n inserts or bypasses only the cells it needs. The return value goes into the gate signature ('' unless the
+ // arm is set to make every change a discontinuity). Same lines in no other file: the SciPy solver takes Model 1.
+ function mmcSample(e,sv,t,h){const m=e.mmc,N=e.N,s=e.s,v=e.vc;const blk=m.blkIn>=0&&sv[m.blkIn]>=.5;
+  if(blk){for(let k=0;k<N;k++)s[k]=1;m.blk=true;m.n=m.N;m.cnt=m.N;return m.disc?'|b':'';}
+  const was=m.blk;m.blk=false;
+  if(m.fs>0&&!was){const k=Math.floor(t*m.fs+1e-6*h*m.fs);if(k===m.kS)return m.disc?'|'+m.cnt:'';m.kS=k;}
+  const ref=m.refIn>=0?sv[m.refIn]:0;
+  if(m.avg){const Vc=m.norm==='avg'&&v[0]>1e-9*m.N*m.Vn?v[0]/m.N:m.Vn;let n=Math.round(ref/Vc);if(!Number.isFinite(n))n=0;n=Math.max(0,Math.min(m.N,n));s[0]=n/m.N;m.n=n;m.cnt=n;return m.disc?'|'+n:'';}
+  let sum=0;for(let k=0;k<N;k++)sum+=v[k];const Vc=m.norm==='avg'&&sum>1e-9*N*m.Vn?sum/N:m.Vn;
+  let n=Math.round(ref/Vc);if(!Number.isFinite(n))n=0;n=Math.max(0,Math.min(N,n));
+  const o=m.order;for(let k=1;k<N;k++){const q=o[k],x=v[q];let j=k-1;while(j>=0&&(v[o[j]]>x||(v[o[j]]===x&&o[j]>q))){o[j+1]=o[j];j--;}o[j+1]=q;}
+  const charge=e.i>=0;
+  const full=()=>{s.fill(0);if(charge)for(let k=0;k<n;k++)s[o[k]]=1;else for(let k=0;k<n;k++)s[o[N-1-k]]=1;};
+  if(was||m.first){m.first=false;full();}
+  else if(m.sel==='sort')full();
+  else if(m.sel==='trigger'){if(n!==m.n)full();}
+  else{const spread=v[o[N-1]]-v[o[0]];
+   if(n===m.n){if(spread>m.band)full();}
+   else if(n>m.n){let need=n-m.n;if(charge){for(let k=0;k<N&&need>0;k++)if(!s[o[k]]){s[o[k]]=1;need--;}}else{for(let k=N-1;k>=0&&need>0;k--)if(!s[o[k]]){s[o[k]]=1;need--;}}}
+   else{let need=m.n-n;if(charge){for(let k=N-1;k>=0&&need>0;k--)if(s[o[k]]){s[o[k]]=0;need--;}}else{for(let k=0;k<N&&need>0;k++)if(s[o[k]]){s[o[k]]=0;need--;}}}}
+  m.n=n;m.cnt=n;return m.disc?'|'+n:'';}
+ function mmcSave(m){return {n:m.n,cnt:m.cnt,kS:m.kS,blk:m.blk,first:m.first,order:m.order.slice()};}
+ function mmcLoad(m,o){m.n=o.n;m.cnt=o.cnt;m.kS=o.kS;m.blk=o.blk;m.first=o.first;if(o.order&&o.order.length===m.order.length)m.order.set(o.order);}
  // nearest-level modulation and the choice of the cells (§50): n = round(v_ref/V_C) within ±N (0…N for half bridges); the
  // |n| cells inserted with the sign of n are those with the lowest voltages when the current charges them (sign(n)·i > 0),
  // the highest ones otherwise. With 'reduced' the cells stay as they are while n and its sign stay and the spread of the
@@ -479,7 +510,8 @@
   const order=[...Array(N).keys()].sort((a,c)=>v[a]-v[c]||a-c),pickLow=list=>list,pickHigh=list=>list.slice().reverse();
   const full=()=>{const L=charge?pickLow(order):pickHigh(order);const s=new Array(N).fill(0);for(let k=0;k<m;k++)s[L[k]]=sg;return s;};
   let s;
-  if(!b.red||!m||sg!==Math.sign(st.n)||!st.n)s=full();
+  if(b.trg&&n===st.n)s=old; // 4.14: 'trigger' (as EMTP): the cells are chosen again only when n changes
+  else if(!b.red||!m||sg!==Math.sign(st.n)||!st.n)s=full();
   else{const ins=order.filter(k=>old[k]===sg),out=order.filter(k=>old[k]!==sg),spread=v[order[N-1]]-v[order[0]];
    if(m===ins.length)s=spread<=b.band?old:full();
    else{s=old.map(q=>q===sg?sg:0);
@@ -650,6 +682,21 @@
    else if(T==='CHBX'){const a=node(c.id,'a'),b=node(c.id,'b');info.pins=[a,b];const N=Math.max(1,Math.min(64,Math.round(num(p.N,10)))),hb=p.cell==='hb',C=Math.max(num(p.C,10e-3),1e-12),V0=num(p.Vdc,1000);
     const e={k:'CHB',a,b,row:row(),N,hb,C,Rp:Math.max(num(p.Rp,0),0),Rarm:N*(hb?1:2)*Math.max(num(p.Ron,1e-3),0),vc:new Float64Array(N).fill(V0),vc1:new Float64Array(N).fill(V0),s:new Int8Array(N),sIn:Array.from({length:N},(_,k)=>sn(c.id,'s'+(k+1))),i:0,Req:0,E:0,key:c.id+'#chb'};
     info.main=add(e);info.chb=e;info.blk=mkBlock(c,p,'CHBX',{chb:e,ft:false});}
+   // 4.14 (§42): an MMC arm with its modulator. N half-bridge cells, every capacitor kept (EMTP's Model 2, the detailed
+   // equivalent), or one capacitor C/N with the insertion index n/N (Model 3, the switching function of the arm); the
+   // nearest level and the choice of the cells inside the element, every step or at f_s (mmcSample). Blocked: all cells
+   // inserted behind a gated diode D1 (charging, i > 0), bridged by a switch while deblocked, and a gated diode D2 across
+   // the arm (bypass, i < 0): the conduction states of the EMTP documentation (Table 1), solved like any diode. THEORY §8χ.
+   else if(T==='MMCA'){const a=node(c.id,'a'),b=node(c.id,'b');info.pins=[a,b];const N=Math.max(1,Math.min(2000,Math.round(num(p.N,400)))),avg=p.model==='avg',Nc=avg?1:N;
+    const C=Math.max(num(p.C,10e-3),1e-12),Vn=Math.max(num(p.Vc,1600),1e-9),V0=num(p.v0,Vn),Ron=Math.max(num(p.Ron,1e-3),0),x=internal(),g=sn(c.id,'blk');
+    const sel=['sort','trigger','reduced'].includes(p.sel)?p.sel:'trigger';
+    const e={k:'CHB',a,b:x,bx:b,row:row(),N:Nc,hb:true,C:avg?C/N:C,Rp:0,Rarm:N*Ron,vc:new Float64Array(Nc).fill(avg?N*V0:V0),vc1:new Float64Array(Nc).fill(avg?N*V0:V0),s:new Float64Array(Nc),sIn:[],i:0,Req:0,E:0,key:c.id+'#mmc',
+     mmc:{N,avg,Vn,norm:p.norm==='avg'?'avg':'nom',sel,band:Math.max(num(p.band,0.05),0)*Vn,fs:Math.max(num(p.fs,0),0),disc:p.disc==='disc',mode:p.disc==='tr'?'tr':p.disc==='disc'?'disc':'restart',cnt0:-1,refIn:sn(c.id,'ref'),blkIn:g,order:Int32Array.from({length:Nc},(_,k)=>k),n:0,cnt:0,kS:null,blk:false,first:true}};
+    info.main=add(e);info.chb=e;
+    e.sdb=add({k:'S',a:x,b,Ron:1e-6,Roff:1e9,on:true,gate:'sig',gIn:g,ginv:true,key:c.id+'#sdb'});
+    e.d1=add({k:'D',a:x,b,Ron:1e-6,Roff:1e9,Vf:0,on:false,key:c.id+'#d1',gk:'igbt',gon:false,gate:'sig',gIn:g});
+    e.d2=add({k:'D',a:b,b:a,Ron:Math.max(N*Ron,1e-6),Roff:1e9,Vf:0,on:false,key:c.id+'#d2',gk:'igbt',gon:false,gate:'sig',gIn:g});
+    info.blk=mkBlock(c,p,'MMCA',{chb:e,ft:false});}
    else if(T==='IDC'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'I',a,b,I:num(p.I,1),sched:P.parseSched(p.sched),sigIn:p.ctl==='sig'?sn(c.id,'u'):undefined});}
    else if(T==='ILG'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];const w=P.lightningWave(p);
     if(!(w.eta>1e-6&&w.tau1>0&&w.tau2>0))throw new NetlistError(`${c.label||c.id}: δεν βρέθηκαν τ₁, τ₂ για T1 = ${P.eng(w.T1,'s')}, T2 = ${P.eng(w.T2,'s')} (το διπλοεκθετικό θέλει T2/T1 πάνω από περίπου 3).`);
@@ -789,7 +836,7 @@
     else if(T==='CLARKE'||T==='ICLARKE')b.pw=p.inv==='pow';
     else if(T==='PLL'){const wn=2*Math.PI*Math.max(num(p.bw,20),1e-6);b.Kp=2*.7071*wn;b.Ki=wn*wn;b.w0=2*Math.PI*num(p.f0,50);st.th=num(p.th0,0)*Math.PI/180;st.w=b.w0;st.xi=0;st.t=0;}
     // 4.10: nearest-level modulation with sorting (a discrete block on a clock), and the single-phase SOGI-PLL
-    else if(T==='NLC'){b.N=Math.max(1,Math.min(64,Math.round(num(p.N,10))));b.hb=p.cell==='hb';b.Vdc=Math.max(num(p.Vdc,1000),1e-9);b.avg=p.norm!=='nom';b.red=p.sel==='reduced';b.band=Math.max(num(p.band,20),0);
+    else if(T==='NLC'){b.N=Math.max(1,Math.min(64,Math.round(num(p.N,10))));b.hb=p.cell==='hb';b.Vdc=Math.max(num(p.Vdc,1000),1e-9);b.avg=p.norm!=='nom';b.red=p.sel==='reduced';b.trg=p.sel==='trigger'?1:0;b.band=Math.max(num(p.band,20),0);
      b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';st.last=null;st.s=new Array(b.N).fill(0);st.n=0;st.sw=0;st.vav=b.Vdc;b.inV=Array.from({length:b.N},(_,k)=>'v'+(k+1));
      if(!(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type)))warnings.push(`${b.label}: διάλεξε μπλοκ PWM ή Ρολόι (αλλιώς οι υπομονάδες μένουν σε παράκαμψη).`);}
     else if(T==='SPLX'){const wn=2*Math.PI*Math.max(num(p.bw,20),1e-6);b.Kp=2*.7071*wn;b.Ki=wn*wn;b.w0=2*Math.PI*num(p.f0,50);b.k=Math.max(num(p.k,Math.SQRT2),1e-6);b.k0=Math.max(num(p.k0,0.1),0);b.ft=false;st.th=num(p.th0,0)*Math.PI/180;st.w=b.w0;st.xi=0;st.t=0;st.x0=0;st.x1=0;st.x2=0;st.d0=0;st.d1=0;st.d2=0;st.dxi=0;}
@@ -880,7 +927,8 @@
  class Sim{
   constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,mem:+opts.mem>0?+opts.mem:0,eventsMax:+opts.eventsMax>0?+opts.eventsMax:0,...(opts.events===false?{events:false}:{}),step:opts.step||null,solver:opts.solver||null,recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
   // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
-  basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>b.type==='CLK'||b.type==='RAMP');if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
+  // (4.14: the sampling clock inside an MMC, Model 1, does not set the step)
+  basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>(b.type==='CLK'||b.type==='RAMP')&&!/\/MCLK$/.test(b.id));if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
    for(const c of this.net.compInfo.values())if(c.gen)return 1/c.gen.g.f; // 4.3: a network of generators runs on their period
    const lg=[...this.net.compInfo.values()].filter(c=>c.wave||c.line||c.tlm);if(lg.length)return Math.min(...lg.map(c=>c.wave?c.wave.T1:c.line?c.line.tau:Math.min(...c.tlm.modes.map(q=>+q.tau))));return this.net.tbase||1e-3;}
   // the step never exceeds the shortest line delay (the history at t − τ must be known)
@@ -1009,7 +1057,7 @@
    const old=this.net;const net=buildNetlist(project);
    if(old&&!fresh){ // carry states by key
     const st=new Map();for(const e of old.els)if(e.key)st.set(e.k+e.key,e);
-    for(const e of net.els)if(e.key&&st.has(e.k+e.key)){const o=st.get(e.k+e.key);if(e.k==='L')e.i=o.i;if(e.k==='C'){e.v=o.v;e.i=o.i;}if(e.k==='D'){e.on=o.on;if(e.gap){e.trigDone=o.trigDone;e.Dacc=o.Dacc||0;}}if(e.k==='CHB'&&o.N===e.N){e.vc.set(o.vc);e.vc1.set(o.vc1);e.i=o.i;e.s.set(o.s);e.sKey=o.sKey;}
+    for(const e of net.els)if(e.key&&st.has(e.k+e.key)){const o=st.get(e.k+e.key);if(e.k==='L')e.i=o.i;if(e.k==='C'){e.v=o.v;e.i=o.i;}if(e.k==='D'){e.on=o.on;if(e.gap){e.trigDone=o.trigDone;e.Dacc=o.Dacc||0;}}if(e.k==='CHB'&&o.N===e.N&&!!o.mmc===!!e.mmc){e.vc.set(o.vc);e.vc1.set(o.vc1);e.i=o.i;e.s.set(o.s);e.sKey=o.sKey;if(e.mmc&&o.mmc&&o.mmc.N===e.mmc.N)mmcLoad(e.mmc,mmcSave(o.mmc));}
      if(e.k==='F'&&o.N===e.N&&!e.sm===!o.sm&&!e.srm===!o.srm&&!e.gen===!o.gen){e.i.set(o.i);if(e.sm||e.srm||e.gen){e.psi.set(o.psi);e.psi1.set(o.psi1);}else{for(let k=0;k<e.N;k++){let s=0;for(let j=0;j<e.N;j++)s+=e.Lm[k*e.N+j]*e.i[j];e.psi[k]=s;}e.psi1.set(e.psi);}}}
     const oc=new Map(old.ctrls.map(c=>[c.id,c]));for(const c of net.ctrls){const o=oc.get(c.id);if(o&&o.mode===c.mode&&o.T===c.T){c.xi=o.xi;c.d=o.d;c.k=o.k;c.tk=o.tk;c.tkPrev=o.tkPrev;c.dPrev=o.dPrev;c.dPrevOff=o.dPrevOff;c.dOn=o.dOn;c.dOff=o.dOff;c.h=c.upd===o.upd?o.h:null;c.meas=o.meas;c.refNow=o.refNow;c.ePrev=o.ePrev;c.dF=o.dF;}}
     for(const e of net.els)if(e.k==='CPL'){const o=old.els.find(x=>x.k==='CPL'&&x.cid===e.cid);if(o)e.v0=o.v0;}
@@ -1029,7 +1077,7 @@
    this.sms=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm);for(const m of this.sms)this.smOutputs(m);
    this.srms=[...net.compInfo.values()].filter(c=>c.srm).map(c=>c.srm);for(const m of this.srms)this.srmOutputs(m);
    this.gens=[...net.compInfo.values()].filter(c=>c.gen).map(c=>c.gen);this.hasTV=this.sms.length+this.srms.length+this.gens.length>0;
-   this.hasCPL=net.els.some(e=>e.k==='CPL');this.hasNL=net.els.some(e=>e.k==='NL');this.arcEls=net.els.filter(e=>e.arc);this.saiEls=net.els.filter(e=>e.sai);this.chbEls=net.els.filter(e=>e.k==='CHB');for(const e of this.chbEls)if(e.sKey===undefined)e.sKey='0'.repeat(e.N);this.footEls=net.els.filter(e=>e.foot);footLink(net,this.footEls);
+   this.hasCPL=net.els.some(e=>e.k==='CPL');this.hasNL=net.els.some(e=>e.k==='NL');this.arcEls=net.els.filter(e=>e.arc);this.saiEls=net.els.filter(e=>e.sai);this.chbEls=net.els.filter(e=>e.k==='CHB');for(const e of this.chbEls)if(e.sKey===undefined)e.sKey=e.mmc?'':'0'.repeat(e.N);this.footEls=net.els.filter(e=>e.foot);footLink(net,this.footEls);
    if(old&&!fresh)for(const e of net.els)if(e.k==='NL'){const o=old.els.find(x=>x.k==='NL'&&x.cid===e.cid);if(o){e.v0=o.v0;if(o.sai&&e.sai)for(const k of SAI_ST)e.sai[k]=o.sai[k];}}this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.hUser=this.opts.h||this.T/this.opts.hDiv;this.h=Math.min(this.hUser,this.tlMaxStep());
    if(fresh){this.hv=null;this.dg=new Map();this.dgPre=[];this.nRej=0;this.nRejRow=0;this.nTiny=0;}this.stIndex();this.varSetup();this.lteH=null;this.rx=null;
@@ -1365,6 +1413,8 @@
       if(!trial){st.x1=al;st.x2=be;st.th=th;st.xi=xi;st.w=w;st.x0=x0;st.d1=w*(b.k*(u-x0-al)-be);st.d2=w*al;st.dxi=(w>=hi&&e>0)||(w<=lo&&e<0)?0:b.Ki*e;if(b.k0>0)st.d0=w*b.k0*(u-x0-al);st.t=this.t;}ys={th,w,amp:al*cs+be*sn,al,be};break;}
      // 4.10: the cell voltages and the current of an arm, for its modulator (states: no feedthrough from the insertion pins)
      case 'CHBX':{const e=b.chb;ys={i:e.i,v:this.V(e.a)-this.V(e.b)};for(let k=0;k<e.N;k++)ys['v'+(k+1)]=e.vc[k];break;}
+     // 4.14: an MMC arm: current, voltage, sum and mean of the capacitor voltages, inserted cells (states: no feedthrough)
+     case 'MMCA':{const e=b.chb,m=e.mmc;let sum=0;for(let k=0;k<e.N;k++)sum+=e.vc[k];ys={i:e.i,v:this.V(e.a)-this.V(e.bx),vs:sum,vav:sum/m.N,n:m.n};break;}
      case 'NLC':{if(disc&&this.blkDue(b,force)){nlcStep(b,st,rd(I.ref),rd(I.i),b.inV.map(k=>rd(I[k])));sampled=true;}
       ys={n:st.n,vav:st.vav,sw:st.sw};for(let k=0;k<b.N;k++)ys['s'+(k+1)]=st.s[k];break;}
      case 'DCM':ys={w:this.V(b.m),te:b.psi*this.x[b.gy.row]};break;
@@ -1403,12 +1453,12 @@
   zcFrac(){this.evalBlocks('trial',false,true);let th=null;
    for(const b of this.net.sig.zc){const s=b.st.s,f0=b.st.f0,f1=b.f1;if(!(s?f1<0:f1>0))continue;const d=f0-f1;const q=Math.min(1,Math.max(0,d!==0?f0/d:0));if(th===null||q<th)th=q;}
    return th;}
-  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0,e.arc?{...e.arc}:e.sai?{...e.sai}:null]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='TLM')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut,e.modes.map(m=>m.fd?[m.z1.slice(),m.z2.slice(),m.y1.slice(),m.y2.slice(),m.i1,m.i2]:null),e.wb?[e.Xr.slice(),e.Xi.slice(),e.Zr.slice(),e.Zi.slice(),e.vp.slice()]:null]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);else if(e.k==='CHB')el.push([e,e.vc.slice(),e.vc1.slice(),e.i,e.s.slice(),e.sKey]);}
+  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0,e.arc?{...e.arc}:e.sai?{...e.sai}:null]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='TLM')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut,e.modes.map(m=>m.fd?[m.z1.slice(),m.z2.slice(),m.y1.slice(),m.y2.slice(),m.i1,m.i2]:null),e.wb?[e.Xr.slice(),e.Xi.slice(),e.Zr.slice(),e.Zi.slice(),e.vp.slice()]:null]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);else if(e.k==='CHB')el.push([e,e.vc.slice(),e.vc1.slice(),e.i,e.s.slice(),e.sKey,e.mmc?mmcSave(e.mmc):null]);}
    return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el,ms:[...(this.ims||[]),...(this.sms||[]),...(this.srms||[])].map(m=>[m,{...m.st}]),gs:(this.gens||[]).map(m=>[m,genCopy(m.st),m.Efd0,m.Tm0])};}
   restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
    for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];if(r[2])Object.assign(e.arc||e.sai,r[2]);}else if(e.k==='TL'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);}else if(e.k==='TLM'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);
     r[5].forEach((q,k)=>{if(!q)return;const m=e.modes[k];m.z1.set(q[0]);m.z2.set(q[1]);m.y1.set(q[2]);m.y2.set(q[3]);m.i1=q[4];m.i2=q[5];});
-    if(e.wb&&r[6]){e.Xr.set(r[6][0]);e.Xi.set(r[6][1]);e.Zr.set(r[6][2]);e.Zi.set(r[6][3]);e.vp.set(r[6][4]);}}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];e.trigDone=r[3];e.Dacc=r[4];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else if(e.k==='CHB'){e.vc.set(r[1]);e.vc1.set(r[2]);e.i=r[3];e.s.set(r[4]);e.sKey=r[5];}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
+    if(e.wb&&r[6]){e.Xr.set(r[6][0]);e.Xi.set(r[6][1]);e.Zr.set(r[6][2]);e.Zi.set(r[6][3]);e.vp.set(r[6][4]);}}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];e.trigDone=r[3];e.Dacc=r[4];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else if(e.k==='CHB'){e.vc.set(r[1]);e.vc1.set(r[2]);e.i=r[3];e.s.set(r[4]);e.sKey=r[5];if(r[6])mmcLoad(e.mmc,r[6]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
    for(const [m,st] of S.ms||[]){m.st={...st};if(m.ph)this.imSources(m);}
    for(const [m,st,e,t] of S.gs||[]){m.st=genCopy(st);m.Efd0=e;m.Tm0=t;}}
   // the whole state for a later continuation (3.16): {format, version, t, opts, method, state}. JSON-able, so it goes to a file
@@ -1419,11 +1469,11 @@
   restoreSnapshot(S){if(!S||S.format!=='pcl-state'||!S.state)throw new NetlistError('Δεν είναι αποθηκευμένη κατάσταση του Power & Control Lab.');snapRestore(this,S.state);this.cache.clear();return this;}
   // the gate signature at t without changing the switches (the variable step looks ahead: a switching starts the next step small)
   gateSigPeek(t){let s='';for(const e of this.net.els){if(e.k!=='S'&&!e.gk)continue;let on=false;
-    if(e.gate==='on')on=true;else if(e.gate==='sig')on=(e.gIn>=0?this.sv[e.gIn]:0)>=.5;else if(e.gate==='pwm'){const k=this.ctrlById.get(e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
-    s+=on?'1':'0';}for(const e of this.chbEls||[])s+=chbStates(e,this.sv,false);return s;}
+    if(e.gate==='on')on=true;else if(e.gate==='sig')on=((e.gIn>=0?this.sv[e.gIn]:0)>=.5)!==!!e.ginv;else if(e.gate==='pwm'){const k=this.ctrlById.get(e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
+    s+=on?'1':'0';}for(const e of this.chbEls||[])s+=e.mmc?(e.mmc.disc?'|'+e.mmc.cnt:''):chbStates(e,this.sv,false);return s;}
   gateSig(t){let s='';for(const e of this.net.els){if(e.k!=='S'&&!e.gk)continue;let on=false;
-    if(e.gate==='on')on=true;else if(e.gate==='sig')on=(e.gIn>=0?this.sv[e.gIn]:0)>=.5;else if(e.gate==='pwm'){const k=this.net.ctrls.find(c=>c.id===e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
-    if(e.k==='S')e.on=on;else{e.gon=on;if(e.gk==='igbt'&&!on)e.on=false;}s+=on?'1':'0';}for(const e of this.chbEls||[])s+=chbStates(e,this.sv,true);return s;}
+    if(e.gate==='on')on=true;else if(e.gate==='sig')on=((e.gIn>=0?this.sv[e.gIn]:0)>=.5)!==!!e.ginv;else if(e.gate==='pwm'){const k=this.net.ctrls.find(c=>c.id===e.pwm);on=k?this.gateOf(k,e.out,t):false;}else if(e.gate==='alpha')on=this.scrGate(e,t);
+    if(e.k==='S')e.on=on;else{e.gon=on;if(e.gk==='igbt'&&!on)e.on=false;}s+=on?'1':'0';}for(const e of this.chbEls||[])s+=e.mmc?mmcSample(e,this.sv,t,this.h):chbStates(e,this.sv,true);return s;}
   // ------------------------------------------------------------ assembly
   // programs t:value of sources, resistances, constant-power loads and constant blocks: the times, and whether a value jumps at t (3.15)
   jumpScheds(){if(this.jsc)return this.jsc;const L=[];
@@ -1533,7 +1583,7 @@
    // (a fast tower footing changes its resistance every step: no cached factorization then, 4.9.1)
    if(!this.hasCPL&&!this.hasTV&&!this.hasNL&&!(this.footEls&&this.footEls.length)){key=mode+(h/this.h).toPrecision(17)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of this.net.els)if(e.k==='S'||e.k==='D')key+=e.on?'1':'0';
     for(const e of this.net.els)if(e.k==='G'&&e.sched)key+='|'+e.Rnow;
-    for(const e of this.chbEls)key+='|'+e.sKey;}
+    for(const e of this.chbEls)key+='|'+(e.mmc?e.mmc.cnt:chbCount(e));}
    let f=key&&this.cache.get(key);
    const st=this.lustat;if(f)st.hit++;
    if(!f){st.fact++;if(key)st.miss++;f=this.factor(h,mode);if(key){if(this.cache.size>256)this.cache.clear();this.cache.set(key,f);}}
@@ -1721,6 +1771,9 @@
    if(mode==='BDF2'){const w=this.hLast?h/this.hLast:0;if(!(w>.2&&w<5))mode='BE';else this.bdf={w,a0:(1+2*w)/(1+w),a1:-(1+w),a2:w*w/(1+w)};}
    // 4.9: the trapezoidal rule after backward-Euler steps starts from consistent derivatives (THEORY §TR restart)
    if(mode==='TR'&&this.cMode==='BE'&&this.net.step.trStart!=='be')this.trRestart(t0);
+   // 4.14: an MMC arm changed its inserted cells at t0 (no discontinuity of the states, so no backward Euler): the
+   // trapezoidal rule from the derivatives right after the change (otherwise the change acts half a step late)
+   else if(mode==='TR'&&this.mmcMoved())this.trRestart(t0);
    this.values(t0+h);
    let sol=this.solve(h,mode),bad=this.check(sol);
    if(!bad.length){
@@ -1767,6 +1820,7 @@
    for(let it=0;it<30;it++){sol=this.solve(hs,'BE');const bad=this.check(sol);if(!bad.length)break;for(const b of bad){b.e.on=!b.e.on;if(b.e.gap){if(b.e.on)b.e.tOn=t;else b.e.tOff=t;}}}
    this.x=sol;}
   edgePoint(t){this.edgeSolve(t);this.evalBlocks('commit');this.recordNow();}
+  mmcMoved(){let m=false;for(const e of this.chbEls||[])if(e.mmc&&e.mmc.mode==='restart'){const k=e.mmc.cnt+(e.mmc.blk?1e6:0);if(k!==e.mmc.cnt0){e.mmc.cnt0=k;m=true;}}return m;}
   // 4.9: a pole with an arc closes (R_on) or its contacts separate: the arc starts at the quasi-steady conductance of the
   // present current (q = 1), so the current goes on and the arc voltage is the one of a burning arc
   arcGate(t){for(const e of this.arcEls){const A=e.arc;if(e.gon&&!A.closed){A.closed=true;A.x=A.xmax;}
@@ -1928,7 +1982,7 @@
   const ims=imList.map(m=>({ph:m.ph.map(q=>({L:idx.get(q.L),V:idx.get(q.V)})),RR:m.RR,LM:m.LM,p:m.p,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{...m.st}}));
   const bix=new Map(net.sig.order.map((b,i)=>[b,i]));
   const blocks=net.sig.order.map(b=>{const o={id:b.id,type:b.type,ins:b.ins,outs:b.outs,st:JSON.parse(JSON.stringify(b.st))};
-   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw','xs','ys','train','learn','opt','lr','clip','l2','nl','jac','share','k','k0','N','hb','Vdc','avg','red','band','inV'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
+   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw','xs','ys','train','learn','opt','lr','clip','l2','nl','jac','share','k','k0','N','hb','Vdc','avg','red','trg','band','inV'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
    if(b.type==='DCM')o.recs={w:{v:[[b.m,1]]},te:{i:[[idx.get(b.gy),b.psi]]}};
    if(b.type==='IM')o.im=imx.get(b.im);
    if(b.type==='SM')o.sm=smx.get(b.sm);
