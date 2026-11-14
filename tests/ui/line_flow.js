@@ -1,6 +1,7 @@
 // Browser check of 4.4: the line from geometry (part 'TLM'), its tutorial and theory card, the "Δεδομένα γραμμής" dialog
 // with a new model from the server after a change, and the search in the signal list. 4.5: the cable tutorial and the
 // dialog in its cable mode (layers, cross-section, a new FD model after a change of tanδ, back to an overhead line).
+// 4.13: the cross-bonded cable tutorial with its card, the WB model in the dialog, its export and an EMTP model file.
 // Usage: python run.py --no-browser --port 8775  then  node tests/ui/line_flow.js http://127.0.0.1:8775/
 const {chromium}=require('playwright');
 (async()=>{const U=process.argv[2]||'http://127.0.0.1:8775/';const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:1500,height:1100}});const p=await ctx.newPage();
@@ -134,5 +135,32 @@ const {chromium}=require('playwright');
  await p.evaluate(()=>{const c=window.PCL.editor.comp('T2');window.PCL.enterSub(c.params.def,'T2');});await p.waitForTimeout(600);
  ok(await p.evaluate(()=>window.PCL.editor.doc.components.filter(c=>c.type==='SG').length===3&&!!window.PCL.editor.comp('RF')),'inside the subcircuit: the strings and the footing, editable');
  await p.evaluate(()=>window.PCL.leaveSub(0));await p.waitForTimeout(400);
+ // 4.13: the cross-bonded cable (nine wideband sections of six conductors and a homogeneous model), its card, the WB model
+ // in the dialog (report, a new fit from the server, the export as _WB.mod and the same file read back as an EMTP model)
+ await p.goto(U+'?tutorial=cable_xb');await p.waitForTimeout(2500);
+ ok(await p.evaluate(()=>!window.PCL.S.error),'cross-bonding tutorial builds without the server: '+await p.evaluate(()=>window.PCL.S.error));
+ ok(await p.evaluate(()=>window.PCL.editor.doc.components.filter(c=>c.type==='TLM').length===10),'nine minor sections and the homogeneous model');
+ await p.click('#toend');await p.waitForFunction(()=>window.PCL.S.sim.t>=0.0199,null,{timeout:300000});await p.waitForTimeout(1200);
+ const thx=await p.$eval('#theory',e=>e.innerText);ok(/E·I·0,5 km/.test(thx)&&/μανδύας a, ένωση 1/.test(thx)&&/cross-bonding \(αναλυτικό\)/.test(thx),'cross-bonding card: '+thx.slice(0,200));
+ const xb=await p.evaluate(()=>[window.PCL.S.sim.now('V10:XS1'),window.PCL.S.sim.now('I:XS1')]);ok(xb.every(Number.isFinite)&&Math.abs(xb[0])<200,'sheath voltage at joint 1 in tens of volts: '+xb);
+ await p.evaluate(()=>window.PCL.openInspector('XS1',400,200));await p.waitForTimeout(300);
+ await p.click('#inspector [data-linedata]');await p.waitForSelector('.ld-modal');
+ await p.click('.ld-modal [data-tab="data"]');ok((await p.$$('.ld-modal [data-d="xbond"]')).length===1,'the cross-bonding option of three cables with sheaths');
+ await p.click('.ld-modal [data-tab="model"]');await p.waitForTimeout(200);
+ const wr=await p.$eval('.ld-modal',e=>e.textContent);ok(/Μοντέλο WB/.test(wr)&&/Παθητικότητα: ✓/.test(wr)&&/αγωγιμότητα κόμβων/i.test(wr),'WB report of the stored model: '+wr.slice(0,160));
+ const tol=await p.$('.ld-modal [data-p="wtol"]');await tol.fill('0.5');await tol.dispatchEvent('change');await p.waitForTimeout(300);
+ await p.click('.ld-modal [data-run]');await p.waitForFunction(()=>/Υπολογίστηκε|⚠/.test(document.querySelector('.ld-modal [data-msg]')?.innerText||''),null,{timeout:180000});
+ ok(/Υπολογίστηκε/.test(await p.$eval('.ld-modal [data-msg]',e=>e.innerText)),'WB fit from the server: '+await p.$eval('.ld-modal [data-msg]',e=>e.innerText));
+ ok((await p.$$('.ld-modal .ld-plot')).length>=2,'WB plots: errors and |H| of the modes');
+ ok(await p.evaluate(()=>{const c=window.PCL.editor.comp('XS1');const m=JSON.parse(c.params.mdl);return m.type==='wb'&&m.opts.tol===0.005&&m.src===Parts.tlmKey({...Parts.defaults('TLM'),...c.params});}),'the new WB model with its options and key');
+ await p.click('.ld-modal [data-tab="export"]');
+ const [dlw]=await Promise.all([p.waitForEvent('download',{timeout:60000}),p.click('.ld-modal [data-ex="wb_mod"]')]);ok(/_WB\.mod$/.test(dlw.suggestedFilename()),'export _WB.mod: '+dlw.suggestedFilename());
+ const wbtxt=require('fs').readFileSync(await dlw.path(),'utf8');ok(/Number of\. conductors/.test(wbtxt),'the layout of the model file of the EMTP');
+ await p.click('.ld-modal [data-tab="model"]');await p.selectOption('.ld-modal [data-p="wsrc"]','emtp');await p.waitForTimeout(300);
+ await p.setInputFiles('.ld-modal [data-wbfile]',{name:'XS1_WB.mod',mimeType:'text/plain',buffer:Buffer.from(wbtxt)});await p.waitForTimeout(500);
+ ok(/Διαβάστηκε/.test(await p.$eval('.ld-modal [data-msg]',e=>e.innerText)),'the EMTP file read');
+ await p.click('.ld-modal [data-run]');await p.waitForFunction(()=>/Υπολογίστηκε|⚠/.test(document.querySelector('.ld-modal [data-msg]')?.innerText||''),null,{timeout:120000});
+ ok(/από αρχείο του EMTP/.test(await p.$eval('.ld-modal',e=>e.textContent)),'the model from the EMTP file, with its report');
+ await p.click('.ld-modal [data-close]');
  ok(!errs.length,'no JavaScript errors: '+errs.join(' | '));
  await b.close();if(fail.length){console.log('FAIL',fail.join('\n'));process.exit(1);}console.log('PASS line_flow');})().catch(e=>{console.error(e);process.exit(1);});

@@ -37,7 +37,8 @@ STABLE_FROM = '4.0'           # the major version from which the surface is stab
 # 3.19 (question 1 of 3.18): what stays out of the rule of 4.x. AI control (§38, stages 3–4 to come) and the Control
 # Workbench (§19) still change; they are listed but marked experimental, and a change there needs no --allow-removal.
 # When they settle they become stable, which is an addition. Prefixes of keys per surface.
-EXPERIMENTAL = {'pcl': ('pcl.control.', 'pcl.workbench.'), 'cli': ('workbench',)}
+# 4.13: pcl.wideband (the wideband fit) is new: experimental until its options settle
+EXPERIMENTAL = {'pcl': ('pcl.control.', 'pcl.workbench.', 'pcl.wideband.'), 'cli': ('workbench',)}
 # 4.0: the first of the two steps of a removal. {surface: {key: (version, what instead)}}: the point keeps working (with a
 # message where it runs) to the end of its major version and may go in the next one. A point that is gone leaves this list.
 DEPRECATED = {}
@@ -88,6 +89,7 @@ def surface_pcl():
     import pcl.link
     import pcl.network
     import pcl.trv
+    import pcl.wideband
     import pcl.plotting
     import pcl.workbench
     out = {}
@@ -101,7 +103,7 @@ def surface_pcl():
                 out[f'pcl.{name}.{m}'] = {'params': sig(f) if inspect.isfunction(f) else ['(property)']}
         elif callable(obj):
             out['pcl.' + name] = {'params': sig(obj)}
-    for mod in (pcl.link, pcl.control, pcl.workbench, pcl.plotting, pcl.formats, pcl.impulse, pcl.network, pcl.lineconst, pcl.linereport, pcl.trv):
+    for mod in (pcl.link, pcl.control, pcl.workbench, pcl.plotting, pcl.formats, pcl.impulse, pcl.network, pcl.lineconst, pcl.linereport, pcl.trv, pcl.wideband):
         short = mod.__name__
         for name, obj in vars(mod).items():
             if name.startswith('_') or getattr(obj, '__module__', None) != mod.__name__ or not (inspect.isfunction(obj) or inspect.isclass(obj)):
@@ -316,9 +318,9 @@ def report(snap):
         '`--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 μέσα στην ίδια κύρια έκδοση δεν περνά ούτε με `--allow-removal`· '
         'στην επόμενη κύρια περνά μόνο για ό,τι ήταν παρωχημένο. Ένα παρωχημένο σημείο πρέπει να υπάρχει ακόμη στον κώδικα.',
         '',
-        '- **Πειραματικά (3.19):** ' + ', '.join(f'`{p}…`' for v in EXPERIMENTAL.values() for p in v) + ' (έλεγχος με AI §38, Control Workbench §19). '
+        '- **Πειραματικά (3.19):** ' + ', '.join(f'`{p}…`' for v in EXPERIMENTAL.values() for p in v) + ' (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13). '
         'Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). '
-        'Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38, και η μετάβαση είναι προσθήκη. Στους πίνακες: «πειρ.».',
+        'Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του), και η μετάβαση είναι προσθήκη. Στους πίνακες: «πειρ.».',
         '',
         'Στους πίνακες, «Από» είναι η έκδοση της πρώτης καταγραφής: η 3.18 για ό,τι υπήρχε ήδη.',
         '',

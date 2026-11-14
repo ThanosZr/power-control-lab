@@ -15,7 +15,8 @@ function one(pr,k1,k2){const opts={hDiv:(pr.sim&&pr.sim.hDiv)||200,method:(pr.si
  return {points:ra.length,maxdiff:d===Infinity?'inf':d,kb:Math.round(snap.length/1024)};}
 (async()=>{await PyRT.load();const out={};
  // 4.9: the TRV tutorials run at steps of 0,05–0,5 μs: a short window around their switching (fractions of the base period)
- const SHORT={trv_terminal:[3.04,3.07],trv_slf:[0.737,0.752]};
+ // 4.13: the cross-bonded cable (18 WB sections of six conductors at 2 μs): 2–5 ms
+ const SHORT={trv_terminal:[3.04,3.07],trv_slf:[0.737,0.752],cable_xb:[0.1,0.25]};
  for(const t of T.list){if(t.id==='empty')continue;const k=SHORT[t.id]||[4,9];out[t.id]=one(build(t.id),k[0],k[1]);}
  for(const id of ['buck','dc_drive','im_foc','twave','code_loop']){const pr=build(id);pr.solve={...(pr.solve||{}),step:'var'};out[id+':var']=one(pr,4,9);}
  process.stdout.write(JSON.stringify(out));})().catch(e=>{console.error(e);process.exit(1);});

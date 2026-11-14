@@ -111,7 +111,20 @@
 | reference (kept) scan | αναφορά, κρατημένη σάρωση (4.12) |
 | recording viewer | παράθυρο προβολής της καταγραφής (4.12) |
 | operating voltage | τάση λειτουργίας (4.12) |
+| wideband model, universal line model (ULM) | μοντέλο wideband (WB), ULM, στο πεδίο των φάσεων (4.13) |
+| propagation function, characteristic admittance | συνάρτηση διάδοσης H, χαρακτηριστική αγωγιμότητα Y_c (4.13) |
+| (relaxed) vector fitting, pole relocation | (χαλαρωμένο) vector fitting, μετακίνηση πόλων (4.13) |
+| modal group, time delay | ομάδα ρυθμών, καθυστέρηση (4.13) |
+| frequency dependent cable model (FDCM), cable model correction | διόρθωση για καλώδια (FDCM) (4.13) |
+| DC correction, partitioned fitting | διόρθωση DC, προσαρμογή σε διαμερισμένη ζώνη (4.13) |
+| passivity check / enforcement, residue perturbation | έλεγχος / επιβολή παθητικότητας, διαταραχή των υπολοίπων (4.13) |
+| nodal admittance (of a line) | αγωγιμότητα κόμβων (4.13) |
+| low-frequency weighting | βάρος στις χαμηλές συχνότητες (4.13) |
+| cross-bonding, major / minor section, link box | cross-bonding, μείζον / ελάσσον τμήμα, link box (κιβώτιο σύνδεσης) (4.13) |
+| solid bonding, single-point bonding | solid bonding (γείωση στα δύο άκρα), γείωση σε ένα σημείο (4.13) |
+| standing sheath voltage, sheath voltage limiter (SVL) | τάση στάσης του μανδύα, απαγωγός μανδύα (SVL) (4.13) |
+| homogeneous (cross-bonded) model | ομογενές μοντέλο (4.13) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
-PWM, SPWM, SVPWM, PLL, FACTS, SSSC, CHB, MMC, NLC, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.
+PWM, SPWM, SVPWM, PLL, FACTS, SSSC, CHB, MMC, NLC, ULM, FDCM, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.

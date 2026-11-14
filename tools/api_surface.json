@@ -1,10 +1,11 @@
 {
- "version": "4.12",
+ "version": "4.13",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
    "pcl.control.",
-   "pcl.workbench."
+   "pcl.workbench.",
+   "pcl.wideband."
   ],
   "cli": [
    "workbench"
@@ -1382,6 +1383,15 @@
     ],
     "since": "4.5"
    },
+   "pcl.lineconst.xbond_avg": {
+    "params": [
+     "Z",
+     "Y",
+     "cs",
+     "kind"
+    ],
+    "since": "4.13"
+   },
    "pcl.lineconst.z_galloway": {
     "params": [
      "s",
@@ -2358,6 +2368,210 @@
    "pcl.version": {
     "params": [],
     "since": "3.18"
+   },
+   "pcl.wideband.WBError": {
+    "params": [],
+    "since": "4.13"
+   },
+   "pcl.wideband.bode_delay": {
+    "params": [
+     "f",
+     "Hm",
+     "g",
+     "L",
+     "level",
+     "decades",
+     "n"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.enforce_passivity": {
+    "params": [
+     "model",
+     "sw",
+     "iters",
+     "delta",
+     "step",
+     "log",
+     "wmax"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.errors": {
+    "params": [
+     "model",
+     "sw",
+     "per_f"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.fit_report": {
+    "params": [
+     "model",
+     "data",
+     "length",
+     "bands"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.h_weight": {
+    "params": [
+     "sw",
+     "wmax"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.import_model": {
+    "params": [
+     "text",
+     "data",
+     "length_km",
+     "passive"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.model_parts": {
+    "params": [
+     "model"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.nodal": {
+    "params": [
+     "Yc",
+     "H"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.passivity": {
+    "params": [
+     "model",
+     "fmin",
+     "fmax",
+     "ppd",
+     "extra"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.rational": {
+    "params": [
+     "s",
+     "p",
+     "R",
+     "D"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.read_wb_mod": {
+    "params": [
+     "text",
+     "length"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.sheath_check": {
+    "params": [
+     "Yn",
+     "length_km",
+     "cores",
+     "sheaths"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.start_poles": {
+    "params": [
+     "fmin",
+     "fmax",
+     "n",
+     "real"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.to_json": {
+    "params": [
+     "fit",
+     "M",
+     "L",
+     "fs"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.vfit_relaxed": {
+    "params": [
+     "s",
+     "F",
+     "poles",
+     "weight",
+     "d",
+     "iters",
+     "stable",
+     "tol_conv",
+     "clip"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.wb_admittance": {
+    "params": [
+     "model",
+     "s"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.wb_fit": {
+    "params": [
+     "sw",
+     "L",
+     "tol",
+     "nmax",
+     "group",
+     "fdcm",
+     "ratio",
+     "dc",
+     "opt",
+     "log",
+     "lfw"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.wb_h": {
+    "params": [
+     "groups",
+     "s"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.wb_model": {
+    "params": [
+     "data",
+     "length",
+     "fmin",
+     "decades",
+     "ppd",
+     "tol",
+     "nmax",
+     "group",
+     "fdcm",
+     "ratio",
+     "dc",
+     "opt",
+     "passive",
+     "curves",
+     "lfw"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.wb_yc": {
+    "params": [
+     "yc",
+     "s"
+    ],
+    "since": "4.13"
+   },
+   "pcl.wideband.write_wb_mod": {
+    "params": [
+     "model"
+    ],
+    "since": "4.13"
    },
    "pcl.workbench.CircuitPlant": {
     "params": [
@@ -4986,6 +5200,16 @@
      "tiauto",
      "nmax",
      "ti",
+     "wsrc",
+     "wtol",
+     "wgrp",
+     "wfdcm",
+     "wdc",
+     "wlfw",
+     "wopt",
+     "wpas",
+     "wbref",
+     "wbtxt",
      "vtrap",
      "data",
      "mdl",

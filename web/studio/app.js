@@ -1605,6 +1605,33 @@ function ssscTheory(){const s=S.sim,m=(S.tutMeta||{}).sssc;if(!s||!m)return '';c
  rows.push(['|V₂| (RMS φάσης a)',q.V2,phaseRms('V:LD2/Ra',T,4*nT),'V']);
  for(const p of ['a','b','c'])rows.push([`V̄_C φάσης ${p}`,m.Vdc,avgOver('Y:CH'+p+'/NLC:vav',4*nT)?.avg,'V']);
  return h+cmpRows(rows)+`<p class="small">Δθ: ${['a','b','c'].map(p=>fmt(s.now('Y:SC'+p+'/DTH')*180/Math.PI,3)+'°').join(', ')}. Κάθε φάση έχει δικό της PLL και βρόχο τάσης: οι τρεις X ταυτίζονται, οι Δθ διαφέρουν όσο διαφέρουν οι απώλειες και η αρχική φόρτιση.</p>`;}
+// 4.13: a wideband model in a card: its groups of modes, delays, poles, the errors of the fit and the passivity check
+function wbModelHTML(name,g){const f=g.fit||{},ps=g.passive||null;
+ return `<p><b>${esc(name)}</b> (WB, ${g.fit?.source==='EMTP'?'από αρχείο του EMTP':'προσαρμογή '+eng(g.fmin,'Hz')+' – '+eng(g.fmax,'Hz')}): Y_c με ${g.npoles?.yc??g.yc.p.length} πόλους, H σε ${g.groups.length} ομάδες ρυθμών.</p><table class="cmp"><tr><th>ομάδα</th><th>ρυθμοί</th><th>τ</th><th>πόλοι</th></tr>`
+  +g.groups.map((q,k)=>`<tr><td>${k+1}${q.dc?' (DC)':''}</td><td>${(q.modes||[]).map(x=>x+1).join(', ')||'—'}</td><td>${eng(q.tau,'s',5)}</td><td>${q.p.length+q.p.filter(z=>z[1]>0).length}</td></tr>`).join('')+'</table>'
+  +`<p class="small">Σφάλμα: H ${f.h_err!=null?fmt(f.h_err,2):'—'} (απόλυτο), Y_c ${f.yc_err!=null?fmt(f.yc_err*100,2)+' %':'—'}${f.method==='fdcm'?' · διόρθωση για καλώδια (FDCM)':''}${ps?' · παθητικότητα: '+(ps.passive?'✓':'✗ ελάχιστη ιδιοτιμή '+fmt(ps.worst,2)+' στα '+eng(ps.fworst,'Hz')):''}.</p>`
+  // 4.13: the nodal admittance against the exact line per band (a short section is ill-conditioned at low frequencies)
+  +(f.yn_bands?`<p class="small">Σφάλμα της αγωγιμότητας κόμβων (ως προς το μεγαλύτερο στοιχείο): ${f.yn_bands.map(b=>`${b[0]?eng(b[0],'Hz'):'0'} – ${b[1]==null?'∞':eng(b[1],'Hz')}: ${fmt(b[2]*100,2)} %`).join(' · ')}${f.lfw>1?` · βάρος χαμηλών συχνοτήτων ${fmt(f.lfw,3)}`:''}.</p>`:'');}
+// 4.13: cross-bonding. The standing voltage of a minor section (exact cable at 50 Hz, wideband.sheath_check) against
+// what the run shows at the joints, the sheath currents, and the peaks of a switching run
+function cableXbTheory(){const s=S.sim,m=(S.tutMeta||{}).xb;if(!s||!m)return '';const LM=window.LineModels||{},ref=LM['150kV-land-s|0.5|wb']?.sheath;
+ const rms=k=>{const r=rawSeries(k);if(!r||!r.t.length)return null;const t1=r.t[r.t.length-1];let a=0,n=0;for(let i=0;i<r.t.length;i++)if(r.t[i]>t1-0.02+1e-12){a+=r.y[i]**2;n++;}return n?Math.sqrt(a/n):null;};
+ const pk=k=>{const r=rawSeries(k);if(!r)return null;let x=0;for(const y of r.y)x=Math.max(x,Math.abs(y));return x;};
+ const lab={xb:'cross-bonding (αναλυτικό)',solid:'solid bonding (αναλυτικό)',gnd:'ομογενές, μανδύες γειωμένοι',bond:'ομογενές, μανδύες ενωμένοι'};
+ const rigs=Object.entries(m.rigs||{}),pin=(g,n,end)=>{const j=n+(end===2?g.M:0);return j>1?String(j):'';};
+ let h='<ul class="eqs"><li>Αναλυτικό (Cable Constants §10.1): κάθε ελάσσον τμήμα ένα μοντέλο WB έξι αγωγών· στις ενώσεις 1, 2, 4, 5, 7, 8 ο μανδύας του καλωδίου a συνεχίζει στο b, του b στο c, του c στο a· στις 0, 3, 6, 9 οι μανδύες ενώνονται και γειώνονται μέσω R_s = '+eng(m.Rs,'Ω')+'.</li>'
+  +'<li>Ομογενές (§2.4, §10.2): Z̄ = (Z + P·Z·Pᵀ + P²·Z·P²ᵀ)/3 και το ίδιο για το Y, P η εναλλαγή των μανδυών· οι μανδύες ένας αγωγός (ίδια τάση, άθροισμα ρευμάτων) ή γειωμένοι (απαλοιφή).</li>'
+  +'<li>Τάση στάσης ελάσσονος τμήματος (μανδύας γειωμένος στην αρχή, ανοιχτός στο τέλος, συμμετρικό ρεύμα I στους αγωγούς): U = E·I·ℓ.</li></ul>';
+ if(ref&&m.ev==='load'){const I=rms(rigs[0]?`I:${rigs[0][1].first}`:'')||0;
+  h+=`<table class="cmp"><tr><th>μανδύας</th><th>E (ακριβές καλώδιο, 50 Hz)</th><th>E·I·0,5 km</th><th>I_s/I με solid bonding</th></tr>`+['a','b','c'].map((q,i)=>`<tr><td>${q}</td><td>${fmt(ref.E[i]*1e3,4)} V/(kA·km)</td><td>${I?eng(ref.E[i]*I*0.5,'V',3):'—'}</td><td>${fmt(ref.Is[i],3)}</td></tr>`).join('')+'</table>';}
+ if(s.t<Math.min(m.dur||0,1e-4))return h+'<p class="muted small">Τρέξε την προσομοίωση για τις μετρήσεις.</p>';
+ const rows=[];for(const [pre,g] of rigs){const ex=g.kind==='xb'||g.kind==='solid',first=g.first,second=first.replace(/S1$/,'S2');
+  if(m.ev==='load'){const I=rms(`I:${first}`);rows.push([lab[g.kind],I,ex?rms(`V${pin(g,4,2)}:${first}`):null,ex?rms(`V${pin(g,4,2)}:${second}`):null,ex?Math.max(...[4,5,6].map(n=>rms(`I${pin(g,n,1)}:${first}`)||0)):g.kind==='bond'?rms(`I${pin(g,4,1)}:${first}`):null]);}
+  else rows.push([lab[g.kind],pk(`V${pin(g,1,2)}:${g.last}`),ex?pk(`V${pin(g,4,2)}:${first}`):null,ex?pk(`V${pin(g,4,2)}:${second}`):null,ex?Math.max(...[4,5,6].map(n=>pk(`I${pin(g,n,1)}:${first}`)||0)):null]);}
+ const v=(x,u)=>x==null?'—':eng(x,u,4);
+ h+=m.ev==='load'?`<table class="cmp"><tr><th>μοντέλο</th><th>I αγωγού a (rms)</th><th>μανδύας a, ένωση 1</th><th>ένωση 2</th><th>ρεύμα μανδύα (μέγιστο rms)</th></tr>${rows.map(r=>`<tr><td>${r[0]}</td><td>${v(r[1],'A')}</td><td>${v(r[2],'V')}</td><td>${v(r[3],'V')}</td><td>${v(r[4],'A')}${r[1]&&r[4]?` (${fmt(100*r[4]/r[1],3)} %)`:''}</td></tr>`).join('')}</table>`
+  :`<table class="cmp"><tr><th>μοντέλο</th><th>max |v_a2|</th><th>max |v μανδύα a|, ένωση 1</th><th>ένωση 2</th><th>max |i μανδύα|</th></tr>${rows.map(r=>`<tr><td>${r[0]}</td><td>${v(r[1],'V')}</td><td>${v(r[2],'V')}</td><td>${v(r[3],'V')}</td><td>${v(r[4],'A')}</td></tr>`).join('')}</table>`;
+ return h+'<p class="muted small">Επαλήθευση (tests/test_wb.py): στο φορτίο το αναλυτικό ταυτίζεται με τη λύση φασιθετών των ίδιων ελασσόνων τμημάτων (ακριβές καλώδιο, ίδιες συνδέσεις)· στη βηματική με τον αριθμητικό μετασχηματισμό Laplace των ίδιων τμημάτων.</p>';}
 // 4.4: line from geometry. The modes of each line (from its model) and what the run shows at the open end
 function lineFdTheory(){const s=S.sim,m=S.tutMeta||{};if(!s)return '';const ids=['L1','L2'].filter(id=>s.net.compInfo.get(id)?.tlm);if(!ids.length)return '';
  const lab=id=>s.net.compInfo.get(id)?.label||id;
@@ -1612,7 +1639,7 @@ function lineFdTheory(){const s=S.sim,m=S.tutMeta||{};if(!s)return '';const ids=
   :'<li>Ρουτίνα σταθερών (pcl/lineconst.py, όπως το Line Data του EMTP): Z′(ω) με Carson για την επιστροφή από τη γη και Bessel για τον σωληνωτό αγωγό (T/D), P′ από τα είδωλα, αγωγοί προστασίας με απαλοιφή, δέσμες με ένωση· Y′ = G′ + jω·P′⁻¹.</li>')
   +'<li>Ρυθμοί: v_m = T_iᵀ·v, i = T_i·i_m, με T_i τα ιδιοδιανύσματα του Y′Z′ σε μία συχνότητα (πραγματικά, σταθερά). Κάθε ρυθμός είναι μονοφασική γραμμή: i_k = v_k/Z + I_h(t − τ).</li>'
   +'<li>CP: Z_c = √(L′/C′), τ = ℓ·√(L′C′), R = R′ℓ στα R/4 – R/2 – R/4. FD (J. Marti): Z_c(s) = k₀ + Σ k_i/(s + p_i) και A(s) = e^(−sτ)·Σ c_i/(s + q_i), αναδρομικές συνελίξεις.</li></ul>';
- for(const id of ids){const g=s.net.compInfo.get(id).tlm;h+=`<p><b>${esc(lab(id))}</b> (${g.type==='fd'?'FD, T_i στα '+eng(g.fti,'Hz'):'CP στα '+eng(g.f,'Hz')}):</p><table class="cmp"><tr><th>ρυθμός</th><th>Z_c</th><th>τ</th><th>${g.type==='fd'?'πόλοι Z_c / A':'R (όλη η γραμμή)'}</th></tr>`
+ for(const id of ids){const g=s.net.compInfo.get(id).tlm;if(g.type==='wb'){h+=wbModelHTML(lab(id),g);continue;}h+=`<p><b>${esc(lab(id))}</b> (${g.type==='fd'?'FD, T_i στα '+eng(g.fti,'Hz'):'CP στα '+eng(g.f,'Hz')}):</p><table class="cmp"><tr><th>ρυθμός</th><th>Z_c</th><th>τ</th><th>${g.type==='fd'?'πόλοι Z_c / A':'R (όλη η γραμμή)'}</th></tr>`
   +g.modes.map((q,k)=>`<tr><td>${k+1}${k===0&&!m.cable?' (γης)':''}</td><td>${eng(g.type==='fd'?q.zc.d:q.Zc,'Ω',4)}</td><td>${eng(q.tau,'s',5)}</td><td>${g.type==='fd'?q.zc.p.length+' / '+q.a.p.length:eng(q.R,'Ω',3)}</td></tr>`).join('')+'</table>';}
  if(s.t<Math.min(m.dur||0,1e-3))return h+'<p class="muted small">Τρέξε την προσομοίωση για τις μετρήσεις στο ανοιχτό άκρο.</p>';
  const pk=k=>{const r=rawSeries(k);if(!r)return null;let mx=0,tm=0,first=null;const y0=Math.max(...r.y.map(Math.abs));for(let i=0;i<r.y.length;i++){const a=Math.abs(r.y[i]);if(a>mx){mx=a;tm=r.t[i];}if(first===null&&a>0.05*y0)first=r.t[i];}return {mx,tm,first};};
@@ -2273,6 +2300,7 @@ function formulaTheory(t){
  if(t.topology==='trv_slf')return trvSlfTheory();
  if(t.topology==='lightning_gis')return lightningTheory();
  if(t.topology==='line_fd'||t.topology==='cable_fd')return lineFdTheory();
+ if(t.topology==='cable_xb')return cableXbTheory();
  if(t.topology==='gen_sc')return genScTheory();
  if(t.topology==='fbm')return fbmTheory();
  if(t.topology==='ieee9_emt')return ieee9Theory();

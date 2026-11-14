@@ -1201,8 +1201,11 @@
  // ------------------------------------------------------------------ 4.4: lines from geometry, CP and FD (ROADMAP §26)
  // the typical 400 kV line of 100 km (Parts.TLM_TYPICAL), with its models from tools/line_models.py (pcl/lineconst.py)
  const LM=()=>root.LineModels||(typeof require!=='undefined'?require('./linemodels.js'):null);
- function tlmPart(id,x,y,model,f,label,line='400kV',len=100){const P=root.Parts,p={...P.defaults('TLM'),model,len,data:JSON.stringify(P.TLM_TYPICAL[line])};if(model==='cp')p.f=f;
-  const m=LM()?.[model==='cp'?`${line}|${len}|cp|${f}`:`${line}|${len}|fd`];p.mdl=m?JSON.stringify({...m,src:P.tlmKey(p)}):'';return C(id,'TLM',x,y,p,{label});}
+ // 4.13: model 'wb' with the options of tools/line_models.py (0,01 Hz – 1 MHz, passivity enforced); xbond: the homogeneous
+ // cross-bonded cable ('bond', 'gnd') of the data
+ function tlmPart(id,x,y,model,f,label,line='400kV',len=100,xb=''){const P=root.Parts,d=JSON.parse(JSON.stringify(P.TLM_TYPICAL[line]));if(xb)d.xbond=xb;
+  const p={...P.defaults('TLM'),model,len,data:JSON.stringify(d)};if(model==='cp')p.f=f;if(model==='wb')Object.assign(p,{dec:8,wpas:'enforce'});
+  const m=LM()?.[model==='cp'?`${line}|${len}|cp|${f}`:model==='wb'?`${line}${xb?'+'+xb:''}|${len}|wb`:`${line}|${len}|fd`];p.mdl=m?JSON.stringify({...m,src:P.tlmKey(p)}):'';return C(id,'TLM',x,y,p,{label});}
  // 4.9 (ROADMAP §31): transient recovery voltage of a breaker (IEC 62271-100) and the arc on a short-line fault
  // terminal fault at 145 kV: network equivalent, bus capacitance and n lines (open at their far ends) per phase, the
  // breaker with the voltage across its poles, a fault at its terminals; the first pole to clear against the rated TRV
@@ -1253,8 +1256,10 @@
  // soil ionization, insulator strings that flash over, ZnO arresters with the IEEE model, bushings and GIS bus ducts as
  // lossless lines, an open breaker in the GIS and the transformer as a capacitance. Values of the elements: typical
  // (EMTP example, IEEE WG 3.4.11 for the arrester, CIGRE TB 63 for the footing).
- function tlmGW(id,x,y,len,label){const P=root.Parts,p={...P.defaults('TLM'),model:'fd',len,fti:5e5,data:JSON.stringify(P.TLM_TYPICAL['400kV-gw'])};
-  const m=LM()?.[`400kV-gw|${len}|fd|500k`];p.mdl=m?JSON.stringify({...m,src:P.tlmKey(p)}):'';return C(id,'TLM',x,y,p,{label});}
+ function tlmGW(id,x,y,len,label,wb){const P=root.Parts,p={...P.defaults('TLM'),model:wb?'wb':'fd',len,data:JSON.stringify(P.TLM_TYPICAL['400kV-gw'])};
+  // 4.13: the wideband lines of the same data (0,01 Hz – 10 MHz, passivity enforced) instead of FD with T_i at 500 kHz
+  if(wb)Object.assign(p,{dec:9,wpas:'enforce'});else p.fti=5e5;
+  const m=LM()?.[wb?`400kV-gw|${len}|wb`:`400kV-gw|${len}|fd|500k`];p.mdl=m?JSON.stringify({...m,src:P.tlmKey(p)}):'';return C(id,'TLM',x,y,p,{label});}
  const note=(id,x,y,text,o={})=>C(id,'NOTE',x,y,{text,size:o.size||16,bold:!!o.bold,color:o.color||'ink',frame:!!o.frame},{label:''});
  T.push({id:'lightning_gis',group:'Κεραυνοί και συντονισμός μόνωσης (4.9)',title:'Κεραυνός σε γραμμή 400 kV δίπλα σε υποσταθμό GIS: συντονισμός μόνωσης',theory:'formula',topology:'lightning_gis',
   options:[{k:'strike',label:'Πλήγμα',options:[['tower','Στην κορυφή του πύργου T2 (ανάστροφη υπερπήδηση)'],['phase','Στη φάση a δίπλα στον T2 (αστοχία θωράκισης)']],def:'tower'},
@@ -1263,12 +1268,13 @@
    {k:'sa',label:'Αλεξικέραυνα',options:[['both','Στην είσοδο και στον μετασχηματιστή'],['entry','Μόνο στην είσοδο'],['none','Χωρίς']],def:'both'},
    {k:'cb',label:'Διακόπτης στο GIS',options:[['open','Ανοιχτός'],['closed','Κλειστός']],def:'open'},
    {k:'impl',label:'Υλοποίηση πύργων και αλεξικέραυνων (4.9.1)',options:[['blocks','Αναλυτική από στοιχεία'],['fast','Γρήγορη (συμπαγή στοιχεία του λύτη)']],def:'blocks'},
-   {k:'u50',label:'Τάση λειτουργίας 50 Hz (4.12)',options:[['0','Χωρίς (μόνο ο κεραυνός)'],['peak','420 kV, η φάση a στο θετικό μέγιστο'],['zero','420 kV, η φάση a στο μηδέν'],['neg','420 kV, η φάση a στο αρνητικό μέγιστο']],def:'0'}],
+   {k:'u50',label:'Τάση λειτουργίας 50 Hz (4.12)',options:[['0','Χωρίς (μόνο ο κεραυνός)'],['peak','420 kV, η φάση a στο θετικό μέγιστο'],['zero','420 kV, η φάση a στο μηδέν'],['neg','420 kV, η φάση a στο αρνητικό μέγιστο']],def:'0'},
+   {k:'lm',label:'Μοντέλο γραμμών (4.13)',options:[['fd','FD (J. Marti, T_i στα 500 kHz)'],['wb','WB: wideband στο πεδίο των φάσεων (0,01 Hz – 10 MHz)']],def:'fd'}],
   desc:'Κεραυνός 3/100 μs πέφτει στον πύργο T2 μιας γραμμής 400 kV (ή στη φάση a, αν περάσει τη θωράκιση). Η γραμμή είναι η τυπική 400 kV από τη γεωμετρία με τους δύο αγωγούς προστασίας ως αγωγούς 4 και 5, σε μοντέλο FD: ανοίγματα 300 m και ένα τμήμα 30 km προς το δίκτυο, ώστε οι ανακλάσεις να μη γυρίσουν μέσα στα 50 μs. Κάθε πύργος είναι μια γραμμή χωρίς απώλειες (Z_t = 200 Ω, 27 m) με γείωση R(I) και αλυσίδες μονωτήρων που διασπώνται στα 2,24 MV. Το κύμα μπαίνει στον υποσταθμό: αλεξικέραυνο ZnO (μοντέλο IEEE, U₁₀ = 819 kV) και CVT στην είσοδο, διαπεραστής, ζυγοί GIS (Z = 73 Ω), μετασχηματιστής τάσης, ανοιχτός διακόπτης, και στην άλλη πλευρά ο μετασχηματιστής ισχύος (4 nF) με το δικό του αλεξικέραυνο. Οι τάσεις συγκρίνονται με το επίπεδο αντοχής σε κεραυνό του εξοπλισμού 420 kV (1425 kV) και με τον συντελεστή ασφαλείας 1,15 (IEC 60071-2).',
   tasks:['200 kA στον πύργο: ποιες αλυσίδες διασπώνται και πότε; Δες στην κάρτα την τάση της κορυφής του T2 και τις τάσεις των μονωτήρων.','Γείωση 50 Ω αντί για R(I): η κορυφή ανεβαίνει και η διάσπαση γίνεται νωρίτερα και με μικρότερο ρεύμα. Από ποιο ρεύμα και πάνω υπάρχει ανάστροφη υπερπήδηση;','Πλήγμα στη φάση με 10–20 kA (αστοχία θωράκισης): η υπέρταση φτάνει απευθείας στον υποσταθμό.','Χωρίς αλεξικέραυνα: πόσο ξεπερνά η τάση στον ανοιχτό διακόπτη το 1425 kV; Με αλεξικέραυνο μόνο στην είσοδο: πόση είναι η απόσταση προστασίας (σύγκρινε με U ≈ U_res + 2·S·d/v της κάρτας);','Κλειστός διακόπτης: το κύμα φτάνει στον μετασχηματιστή. Χρειάζεται εκεί δεύτερο αλεξικέραυνο;','Άνοιξε τον πύργο ή το αλεξικέραυνο (διπλό κλικ): δες τι έχουν μέσα. Τα κείμενα στο σχέδιο είναι στοιχεία «Σημείωση».'],
   build(o){const I=(+o.I||200)*1e3,ion=o.foot==='ion',R0=o.foot==='r50'?50:15,sa=o.sa||'both',open=o.cb!=='closed',Y0=200,PHS=['a','b','c'],rowY=[160,360,560];
    const impl=o.impl==='fast'?'fast':'blocks',tw=(id,x,lab,r0)=>C(id,'TOWER',x,Y0,{h:27.15,Zt:200,vt:3e8,foot:ion?'ion':'r',R0:r0,rho:100,E0:400e3,ins:'ub',Ub:2.24e6,meas:true,impl},{label:lab});
-   const comps=[tlmGW('L30',260,Y0,30,'30 km'),tw('T1',400,'T1',R0),tlmGW('S1',540,Y0,0.3,'300 m'),tw('T2',680,'T2',R0),tlmGW('S2',820,Y0,0.3,'300 m'),tw('T3',960,'T3',o.foot==='r50'?R0:1),
+   const WBL=o.lm==='wb',comps=[tlmGW('L30',260,Y0,30,'30 km',WBL),tw('T1',400,'T1',R0),tlmGW('S1',540,Y0,0.3,'300 m',WBL),tw('T2',680,'T2',R0),tlmGW('S2',820,Y0,0.3,'300 m',WBL),tw('T3',960,'T3',o.foot==='r50'?R0:1),
     C('I1','ILG',620,60,{shape:'custom',model:'heidler',T1:3e-6,T2:100e-6,n:10,Ipk:-I,t0:1e-6},{label:'κεραυνός'}),C('GI','GND',620,110),
     C('RTa','R',110,290,{R:400},{rot:1,label:'R_a'}),C('RTb','R',140,290,{R:400},{rot:1,label:'R_b'}),C('RTc','R',170,290,{R:400},{rot:1,label:'R_c'}),
     J('JW',205,230),C('GW','GND',205,300)];
@@ -1319,7 +1325,7 @@
    return project(comps,wires,{version:4,...(u50?{solve:{init:'ac'}}:{}),sim:{hDiv:u50?1.5e6:2,method:'TR',speed:400,stopT},scope:{panes,window:{unit:'s',n:stopT}},
     meta:{lg:{I,u50,Vs,strike:o.strike||'tower',foot:o.foot||'ion',R0,rho:100,E0:400e3,sa,open,Zt:200,h:27.15,Ub:2.24e6,U10:819e3,LIWL:1425e3,Ks:1.15,dist:56,v:3e8,t0:1e-6,stop:stopT}}});}});
  T.push({id:'line_fd',group:'Γραμμές (4.4)',title:'Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD)',theory:'formula',topology:'line_fd',
-  options:[{k:'cmp',label:'Γραμμές',options:[['cp50','CP στα 50 Hz και FD, δίπλα δίπλα'],['cp5k','CP στα 5 kHz και FD'],['fd','Μόνο FD']],def:'cp50'},
+  options:[{k:'cmp',label:'Γραμμές',options:[['cp50','CP στα 50 Hz και FD, δίπλα δίπλα'],['cp5k','CP στα 5 kHz και FD'],['fd','Μόνο FD'],['wbfd','WB (wideband, 4.13) και FD, δίπλα δίπλα']],def:'cp50'},
    {k:'src',label:'Ζεύξη',options:[['step','Μία φάση (a), βηματική 1 kV πίσω από 10 Ω'],['ac3','Τριφασική 400 kV, στην κορυφή της v_a']],def:'step'}],
   desc:'Η τυπική γραμμή 400 kV απλού κυκλώματος (2 × ACSR 954 MCM ανά φάση, δύο αγωγοί προστασίας, ρ = 100 Ω·m), 100 km, ανοιχτή στο τέλος. Οι σταθερές βγαίνουν από τη γεωμετρία (Carson, Bessel, αγωγοί προστασίας με απαλοιφή) με τη ρουτίνα pcl/lineconst.py, όπως το Line Data του EMTP· η γραμμή γίνεται τρεις ρυθμοί με σταθερό πραγματικό T_i. Το CP κρατά τις παραμέτρους μιας συχνότητας (κάθε ρυθμός Bergeron με R/4 – R/2 – R/4), το FD (J. Marti) προσαρμόζει Z_c(ω) και A(ω) με ρητές συναρτήσεις από 0,01 Hz ως 10 MHz. Το «Δεδομένα γραμμής…» της γραμμής (δεξί κλικ ή διπλό κλικ) δείχνει τους πίνακες, τους ρυθμούς και την προσαρμογή.',
   tasks:['Μία φάση: δες στο τέλος της φάσης a το κύμα που φτάνει περίπου 336 μs μετά (ρυθμός γης) και 334 μs (ρυθμοί αέρα), και στις φάσεις b, c την επαγόμενη τάση.','CP στα 50 Hz έναντι FD: ο ρυθμός γης στα 50 Hz έχει πολύ μικρή απόσβεση· το CP κρατά ψηλά τις επαγόμενες τάσεις, το FD τις σβήνει όπως η ακριβής γραμμή.','CP στα 5 kHz: πιο κοντά στο FD στο πρώτο μέτωπο, χειρότερα στη χαμηλή συχνότητα.','Τριφασική ζεύξη: η υπέρταση στο ανοιχτό άκρο (έως περίπου 2 pu) και η ταλάντωση με περίοδο 4τ.','Άνοιξε «Δεδομένα γραμμής…» και άλλαξε την ειδική αντίσταση του εδάφους ή το μήκος: το μοντέλο ξαναϋπολογίζεται στον server.'],
@@ -1330,8 +1336,8 @@
     else{comps.push(C(V,'VIMP',100,y,{shape:'ramp',Vpk:1e3,S:1e3/1e-6,Rs:10},{label:'1 kV'}),C('RB'+sfx,'R',170,y+40,{R:10},{rot:1,label:'R_b'}),C('RC'+sfx,'R',250,y+40,{R:10},{rot:1,label:'R_c'}));
      wires.push([V+':p',L+':a1',[[100,y-20]]],[V+':n','G1:g',[[100,400],[320,400]]],[L+':b1','RB'+sfx+':a',[[170,y]]],[L+':c1','RC'+sfx+':a',[[250,y+20]]],['RB'+sfx+':b','G1:g',[[170,400]]],['RC'+sfx+':b','G1:g',[[250,400]]]);}
     comps.push(line);return lab;};
-   const top=both?tlmPart('L1',320,100,'cp',f,`CP ${f===50?'50 Hz':'5 kHz'}`):tlmPart('L1',320,100,'fd',0,'FD');
-   const l1=rig('1',100,top,both?`CP${f===50?'50':'5k'}`:'FD');
+   const wb=o.cmp==='wbfd',top=wb?tlmPart('L1',320,100,'wb',0,'WB'):both?tlmPart('L1',320,100,'cp',f,`CP ${f===50?'50 Hz':'5 kHz'}`):tlmPart('L1',320,100,'fd',0,'FD');
+   const l1=rig('1',100,top,wb?'WB':both?`CP${f===50?'50':'5k'}`:'FD');
    if(both){rig('2',260,tlmPart('L2',320,260,'fd',0,'FD'),'FD');}
    const ids=both?[['L1',l1],['L2','FD']]:[['L1',l1]];
    for(const [id,lab] of ids){panes[0].push(['V4:'+id,`v_a2 ${lab}`]);panes[1].push(['V5:'+id,`v_b2 ${lab}`]);}
@@ -1340,7 +1346,7 @@
    return project(comps,wires,{sim:{hDiv:ac?20000:1,speed:ac?0.2:0.05,stopT,method:'TR'},scope:{panes,window:{unit:'s',n:stopT}},meta:{cmp:o.cmp,src:o.src,f,dur:stopT}});}});
  // ------------------------------------------------------------------ 4.5: cables (ROADMAP §26, Dommel ch. 5)
  T.push({id:'cable_fd',group:'Καλώδια (4.5)',title:'Ζεύξη υποβρύχιου καλωδίου 220 kV: CP και FD',theory:'formula',topology:'cable_fd',
-  options:[{k:'cmp',label:'Μοντέλα',options:[['cp50','CP στα 50 Hz και FD, δίπλα δίπλα'],['fd','Μόνο FD']],def:'cp50'},
+  options:[{k:'cmp',label:'Μοντέλα',options:[['cp50','CP στα 50 Hz και FD, δίπλα δίπλα'],['fd','Μόνο FD'],['wbfd','WB (wideband, 4.13) και FD, δίπλα δίπλα']],def:'cp50'},
    {k:'src',label:'Ζεύξη',options:[['step','Μία φάση (a), βηματική 1 kV πίσω από 30 Ω'],['ac3','Τριφασική 220 kV, στην κορυφή της v_a']],def:'step'}],
   desc:'Τρία μονοπολικά καλώδια XLPE 220 kV (χάλκινος αγωγός, θωράκιση μολύβδου, εξωτερική μόνωση) σε θάλασσα (ρ = 0,2 Ω·m), 30 km, οι θωρακίσεις γειωμένες στα δύο άκρα, ανοιχτό στο τέλος. Οι σταθερές βγαίνουν από τη γεωμετρία των στρωμάτων (βρόχοι αγωγός–θωράκιση με συναρτήσεις Bessel, επιστροφή από τη θάλασσα ως άπειρο μέσο, μόνωση με ε_r και tanδ) με τη ρουτίνα pcl/lineconst.py, όπως το Cable Data του EMTP. Το «Δεδομένα γραμμής…» (διπλό κλικ) δείχνει τα στρώματα, την τομή, τους ρυθμούς και την προσαρμογή FD.',
   tasks:['Μία φάση: το κύμα φτάνει στο ανοιχτό άκρο περίπου 152 μs μετά (v ≈ c/√ε_r ≈ 198 000 km/s) και διπλασιάζεται· στις φάσεις b, c σχεδόν τίποτα, γιατί οι θωρακίσεις κλείνουν το πεδίο μέσα σε κάθε καλώδιο.','CP στα 50 Hz: το κύμα φτάνει αργότερα (περίπου 174 μs), γιατί η εσωτερική αυτεπαγωγή του αγωγού στα 50 Hz κάνει τον ρυθμό πιο αργό, και η φάση b παίρνει μεγάλη επαγόμενη τάση: στα 50 Hz η λεπτή θωράκιση δεν κλείνει ακόμη το πεδίο (βάθος διείσδυσης στον μόλυβδο περίπου 37 mm), στις συχνότητες του μετώπου το κλείνει. Το FD ακολουθεί το ακριβές καλώδιο σε λίγα τοις χιλίοις (tests/test_lines.py).','Σύγκρινε με το tutorial της εναέριας γραμμής: Z_c του καλωδίου περίπου 30 Ω αντί για 300 Ω, ταχύτητα δύο τρίτα του φωτός.','Τριφασική ζεύξη: υπέρταση στο ανοιχτό άκρο με περίοδο 4τ ≈ 0,6 ms και το μεγάλο ρεύμα φόρτισης.','Στο «Δεδομένα γραμμής…» άλλαξε το μέσο σε έδαφος (Pollaczek) ή το tanδ της μόνωσης και ξαναϋπολόγισε.'],
@@ -1351,12 +1357,80 @@
     else{comps.push(C(V,'VIMP',100,y,{shape:'ramp',Vpk:1e3,S:1e3/5e-6,Rs},{label:'1 kV'}),C('RB'+sfx,'R',170,y+40,{R:Rs},{rot:1,label:'R_b'}),C('RC'+sfx,'R',250,y+40,{R:Rs},{rot:1,label:'R_c'}));
      wires.push([V+':p',L+':a1',[[100,y-20]]],[V+':n','G1:g',[[100,400],[320,400]]],[L+':b1','RB'+sfx+':a',[[170,y]]],[L+':c1','RC'+sfx+':a',[[250,y+20]]],['RB'+sfx+':b','G1:g',[[170,400]]],['RC'+sfx+':b','G1:g',[[250,400]]]);}
     comps.push(line);};
-   rig('1',100,both?tlmPart('L1',320,100,'cp',50,'CP 50 Hz',LINE,LEN):tlmPart('L1',320,100,'fd',0,'FD',LINE,LEN));
+   const wb=o.cmp==='wbfd';
+   rig('1',100,wb?tlmPart('L1',320,100,'wb',0,'WB',LINE,LEN):both?tlmPart('L1',320,100,'cp',50,'CP 50 Hz',LINE,LEN):tlmPart('L1',320,100,'fd',0,'FD',LINE,LEN));
    if(both)rig('2',260,tlmPart('L2',320,260,'fd',0,'FD',LINE,LEN));
-   const ids=both?[['L1','CP50'],['L2','FD']]:[['L1','FD']];
+   const ids=both?[['L1',wb?'WB':'CP50'],['L2','FD']]:[['L1','FD']];
    for(const [id,lab] of ids){panes[0].push(['V4:'+id,`v_a2 ${lab}`]);panes[1].push(['I:'+id,`i_a1 ${lab}`]);}
    const stopT=ac?0.02:2e-3;
    return project(comps,wires,{sim:{hDiv:ac?20000:10,speed:ac?0.2:0.05,stopT,method:'TR'},scope:{panes,window:{unit:'s',n:stopT}},meta:{cmp:o.cmp,src:o.src,f:50,dur:stopT,cable:true}});}});
+ // ------------------------------------------------------------------ 4.13 (ROADMAP §26): a cross-bonded land cable
+ // The land cable of 4.5 with its sheaths as conductors 4–6 (Parts.TLM_TYPICAL['150kV-land-s']), 4,5 km in three major
+ // sections of three minor sections of 0,5 km, each a WB model. Explicit (Cable Constants §10.1): the sheaths rotated at
+ // the minor joints (the sheath of cable a goes on in cable b, b in c, c in a) and bonded and earthed through R_s at the
+ // major junctions and the two ends; solid bonding: the same sections without the rotation. Homogeneous (§2.4, §10.2):
+ // the matrices averaged over the rotation (pcl.lineconst.xbond_avg), the sheaths bonded into one conductor (a model per
+ // major section, R_s at the junctions) or grounded (one model of 4,5 km).
+ const XB_N=9,XB_DX=160,XB_RL=108;
+ function xbRig(pre,x0,y,kind,Rs,comps,wires){const sec=k=>pre+'S'+(k+1),xs=k=>x0+XB_DX*k;
+  // the sheaths of joint j (0: sending end, 9: receiving end) bonded at x and earthed through R_s
+  const bond=(j,x,n=3)=>{const ids=Array.from({length:n},(_,i)=>pre+'J'+j+'def'[i]);ids.forEach((id,i)=>comps.push(J(id,x,y+10+20*i)));
+   comps.push(C(pre+'R'+j,'R',x,y+100,{R:Rs},{rot:1,label:'R_s'}),C(pre+'G'+j,'GND',x,y+150,{},{label:''}));
+   for(let i=1;i<n;i++)wires.push([ids[i-1],ids[i]]);wires.push([ids[n-1],pre+'R'+j+':a',[[x,y+70]]],[pre+'R'+j+':b',pre+'G'+j+':g']);return ids;};
+  if(kind==='gnd'){comps.push(tlmPart(pre+'S1',xs(4),y-30,'wb',0,'ομογενές 4,5 km','150kV-land-s',4.5,'gnd'));return {first:pre+'S1',last:pre+'S1',M:3,x1:xs(4)-40,x2:xs(4)+40};}
+  if(kind==='bond'){for(let k=0;k<3;k++)comps.push(tlmPart(sec(k),xs(3*k+1),y-20,'wb',0,`ομογενές ${k+1}`,'150kV-land-s',1.5,'bond'));
+   // the bonded sheaths (pin d at y + 10) earthed at the ends and the major junctions
+   for(let j=0;j<=3;j++){const x=j===0?xs(0)-60:j===3?xs(XB_N-1)+60:xs(3*j-1)+XB_DX/2,m=bond(3*j,x,1)[0];
+    if(j>0)wires.push([sec(j-1)+':d2',m]);if(j<3)wires.push([m,sec(j)+':d1']);}
+   for(let k=0;k<2;k++)for(const q of ['a','b','c'])wires.push([sec(k)+':'+q+'2',sec(k+1)+':'+q+'1']);
+   return {first:sec(0),last:sec(2),M:4,x1:xs(1)-40,x2:xs(7)+40};}
+  const rot=kind==='xb';for(let k=0;k<XB_N;k++)comps.push(tlmPart(sec(k),xs(k),y,'wb',0,`${k+1}`,'150kV-land-s',0.5));
+  const s=bond(0,xs(0)-60);['d','e','f'].forEach((q,i)=>wires.push([s[i],sec(0)+':'+q+'1']));
+  const r=bond(XB_N,xs(XB_N-1)+60);['d','e','f'].forEach((q,i)=>wires.push([sec(XB_N-1)+':'+q+'2',r[i]]));
+  for(let k=0;k<XB_N-1;k++){const a=sec(k),b=sec(k+1),x=xs(k),j=k+1;
+   for(const q of ['a','b','c'])wires.push([a+':'+q+'2',b+':'+q+'1']);
+   if(j%3===0){const m=bond(j,x+XB_DX/2);['d','e','f'].forEach((q,i)=>wires.push([a+':'+q+'2',m[i]],[m[i],b+':'+q+'1']));}
+   else if(!rot)for(const q of ['d','e','f'])wires.push([a+':'+q+'2',b+':'+q+'1']);
+   // the cross-bonding joint: d2 → e1 and e2 → f1 one row down, f2 → d1 under the section and back up
+   else wires.push([a+':d2',b+':e1',[[x+60,y+10],[x+60,y+30]]],[a+':e2',b+':f1',[[x+50,y+30],[x+50,y+50]]],[a+':f2',b+':d1',[[x+40,y+70],[x+110,y+70],[x+110,y+10]]]);}
+  return {first:sec(0),last:sec(XB_N-1),M:6,x1:xs(0)-40,x2:xs(XB_N-1)+40};}
+ T.push({id:'cable_xb',group:'Καλώδια: wideband και cross-bonding (4.13)',title:'Υπόγειο καλώδιο 150 kV με cross-bonding: αναλυτικό και ομογενές μοντέλο',theory:'formula',topology:'cable_xb',
+  options:[{k:'cmp',label:'Μοντέλα',options:[['xb_gnd','Αναλυτικό cross-bonding και ομογενές (μανδύες γειωμένοι), δίπλα δίπλα'],['xb_bond','Αναλυτικό και ομογενές (μανδύες ενωμένοι, R_s στις ενώσεις)'],
+    ['xb_solid','Αναλυτικό cross-bonding και solid bonding'],['xb','Μόνο αναλυτικό cross-bonding']],def:'xb_gnd'},
+   {k:'ev',label:'Λειτουργία',options:[['load','Φορτίο 50 Hz (≈ 800 A), από μόνιμη κατάσταση'],['energize','Ζεύξη του ανοιχτού καλωδίου στην κορυφή της v_a'],['step','Βηματική 1 kV στον αγωγό a (μέτωπο 1 μs)']],def:'load'},
+   {k:'rs',label:'R_s γείωσης',options:[['0.1','0,1 Ω'],['1','1 Ω'],['10','10 Ω']],def:'1'}],
+  desc:'Τρία μονοπολικά καλώδια XLPE 150 kV σε επίπεδη διάταξη (το υπόγειο καλώδιο της 4.5) με τους μανδύες ως αγωγούς 4–6, 4,5 km: τρία μείζονα τμήματα, το καθένα τρία ελάσσονα τμήματα των 0,5 km. Κάθε ελάσσον τμήμα είναι ένα μοντέλο WB (wideband, ULM) έξι αγωγών. Στις ενώσεις των ελασσόνων τμημάτων οι μανδύες αλλάζουν θέση (ο μανδύας του καλωδίου a συνεχίζει στο b, του b στο c, του c στο a), ώστε κατά μήκος ενός μείζονος τμήματος κάθε μανδύας περνά από τα τρία καλώδια και οι επαγόμενες τάσεις αλληλοαναιρούνται. Στα άκρα των μειζόνων τμημάτων οι μανδύες ενώνονται και γειώνονται μέσω R_s. Το ομογενές μοντέλο (Cable Constants του EMTP) κάνει την εναλλαγή μέσο όρο των πινάκων: οι μανδύες γίνονται ένας αγωγός, ή γειωμένοι, μένουν μόνο οι αγωγοί. Το solid bonding είναι τα ίδια τμήματα χωρίς εναλλαγή.',
+  tasks:['Φορτίο 50 Hz: πόση τάση έχουν οι μανδύες στις ενώσεις 1 και 2 (link boxes) και πόσο ρεύμα κυκλοφορεί σε αυτούς; Σύγκρινε στην κάρτα με την τάση ανά km και kA ενός ελάσσονος τμήματος.','Solid bonding: το ρεύμα των μανδυών γίνεται μεγάλο κλάσμα του ρεύματος φορτίου (απώλειες στους μανδύες). Γιατί το cross-bonding σχεδόν το μηδενίζει;','Ζεύξη: η τάση στο ανοιχτό άκρο του αγωγού a κατά το αναλυτικό και κατά το ομογενές μοντέλο. Πού συμφωνούν και πού όχι;','Ζεύξη και βηματική: η μεταβατική τάση των μανδυών στις ενώσεις φτάνει kV. Γι\' αυτό τα link boxes έχουν απαγωγούς (SVL). Το ομογενές μοντέλο τη δείχνει;','Άλλαξε την R_s: τι αλλάζει στις τάσεις των μανδυών στο φορτίο και στη ζεύξη;'],
+  build(o){const cmp=o.cmp||'xb_gnd',ev=o.ev||'load',Rs=+o.rs||1,Vpk=150e3*Math.SQRT2/Math.sqrt(3),x0=260;
+   const comps=[],wires=[],rigs=[['X',160,'xb']];if(cmp!=='xb')rigs.push(['Y',520,cmp==='xb_solid'?'solid':cmp.slice(3)]);
+   const info={};
+   for(const [pre,y,kind] of rigs){const g=xbRig(pre,x0,y,kind,Rs,comps,wires);info[pre]={...g,kind};
+    const ya=y-50,a1=g.first+':a1',b1=g.first+':b1',c1=g.first+':c1',x=x0-220;
+    // the step on core a behind 30 Ω, cores b and c earthed through 30 Ω
+    if(ev==='step'){comps.push(C(pre+'V','VIMP',x,ya+40,{shape:'ramp',Vpk:1e3,S:1e9,Rs:30},{label:'1 kV'}),C(pre+'GV','GND',x,ya+110,{},{label:''}),
+      C(pre+'RB','R',x+60,ya+60,{R:30},{rot:1,label:'30 Ω'}),C(pre+'RC','R',x+110,ya+70,{R:30},{rot:1,label:'30 Ω'}),C(pre+'GB','GND',x+60,ya+110,{},{label:''}),C(pre+'GC','GND',x+110,ya+120,{},{label:''}));
+     wires.push([pre+'V:p',a1],[pre+'V:n',pre+'GV:g'],[b1,pre+'RB:a',[[x+60,ya+20]]],[c1,pre+'RC:a'],[pre+'RB:b',pre+'GB:g'],[pre+'RC:b',pre+'GC:g']);}
+    else{comps.push(C(pre+'V','VAC3',x,ya+20,{Vpk,f:50,phase:ev==='energize'?90:0,Rs:ev==='energize'?1:0.5},{label:'150 kV'}),C(pre+'GV','GND',x,ya+90,{},{label:''}));
+     wires.push([pre+'V:a',a1],[pre+'V:b',b1],[pre+'V:c',c1],[pre+'V:n',pre+'GV:g']);
+     // the load: one vertical resistor per phase to ground, a furthest right so that the wires do not cross
+     if(ev==='load'){const xl=g.x2+100;['a','b','c'].forEach((q,i)=>{const x=xl+70*(2-i),y0=ya+20*i;
+       comps.push(C(pre+'RL'+q,'R',x,y0+30,{R:XB_RL},{rot:1,label:'R_L '+q}),C(pre+'GL'+q,'GND',x,y0+80,{},{label:''}));
+       wires.push([g.last+':'+q+'2',pre+'RL'+q+':a'],[pre+'RL'+q+':b',pre+'GL'+q+':g']);});}}}
+   // channels: the core a at the receiving end, the sheaths at joints 1 and 2 (explicit), the sheath currents at the
+   // sending end; the pin numbers of a TLM of M conductors: a1…(M)1 are 1…M, a2… are M + 1…
+   const X=info.X,Y=info.Y,ch=(g,pinNo,end,id)=>`${pinNo+(end===2?g.M:0)>1?'V'+(pinNo+(end===2?g.M:0)):'V'}:${id}`,
+    ich=(g,pinNo,end,id)=>`${pinNo+(end===2?g.M:0)>1?'I'+(pinNo+(end===2?g.M:0)):'I'}:${id}`,lab={xb:'cross-bonding',solid:'solid bonding',gnd:'ομογενές (γειωμένοι)',bond:'ομογενές (ενωμένοι)'};
+   const panes=[[],[],[]];
+   for(const g of [X,Y].filter(Boolean)){const L=lab[g.kind];
+    panes[0].push(ev==='load'?[ich(g,1,1,g.first),'i_a '+L]:[ch(g,1,2,g.last),'v_a2 '+L]);
+    if(g.kind==='xb'||g.kind==='solid'){const s1=g.first,s2=g.first.replace(/S1$/,'S2');
+     panes[1].push([ch(g,4,2,s1),`μανδύας a, ένωση 1 (${L})`]);if(g.kind==='xb')panes[1].push([ch(g,5,2,s1),'μανδύας b, ένωση 1'],[ch(g,4,2,s2),'μανδύας a, ένωση 2']);
+     panes[2].push([ich(g,4,1,s1),`i μανδύα a (${L})`]);if(g.kind==='xb')panes[2].push([ich(g,5,1,s1),'i μανδύα b'],[ich(g,6,1,s1),'i μανδύα c']);}
+    else if(g.kind==='bond')panes[2].push([ich(g,4,1,g.first),'i μανδυών (ομογενές)']);}
+   // the base period: 20 ms with the sources at 50 Hz, the front (1 μs) with the step; h = 2 μs, 1 μs, 0,1 μs
+   const stopT={load:.02,energize:.005,step:3e-4}[ev],hDiv={load:10000,energize:20000,step:10}[ev];
+   return project(comps,wires,{version:4,...(ev==='load'?{solve:{init:'ac'}}:{}),sim:{hDiv,method:'TR',speed:ev==='load'?0.1:0.02,stopT},scope:{panes:panes.filter(p=>p.length),window:{unit:'s',n:stopT}},
+    meta:{xb:{cmp,ev,Rs,Vpk,RL:XB_RL,n:XB_N,lmin:0.5,len:4.5,rigs:Object.fromEntries(Object.entries(info).map(([k,g])=>[k,{kind:g.kind,first:g.first,last:g.last,M:g.M}])),dur:stopT}}});}});
  // ------------------------------------------------------------------ 4.10 (ROADMAP §50): the modular SSSC
  // A cascaded arm of N H bridges (CHB) in series with a line, its nearest-level modulation with sorting (NLC) and the m-SSSC
  // controller (SOGI-PLL on the line current, the injected voltage in quadrature with it, Δθ from the mean cell voltage).

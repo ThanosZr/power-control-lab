@@ -304,6 +304,7 @@
     <label title="4.12: η θερμοκρασία των αγωγών· τα R_dc (ή ρ) των δεδομένων είναι στους 20 °C και γίνονται R₂₀·(1 + α·(T − 20)), με α του αγωγού (στήλη α, προεπιλογή 0,00403 1/K, αλουμίνιο IEC 60889)">θερμοκρασία αγωγών (°C) <input data-d="temp" value="${esc(d.temp??'')}" placeholder="20" style="width:44px"></label></div>
    <div class="ld-row"><label><input type="checkbox" data-o="tr" ${tr?'checked':''}> Μεταθέσεις</label>${tr?`<label title="Μήκη των τμημάτων (km ή σχετικά)">μήκη <input data-o="trlen" value="${esc((tr.len||[]).join(', '))}" style="width:110px"></label>
     <label title="Η σειρά των φάσεων σε κάθε τμήμα: 123; 231; 312">σειρά <input data-o="trord" value="${esc((tr.order||[]).map(o=>o.join('')).join('; '))}" style="width:110px"></label><label title="Μέσος όρος: οι πίνακες της γραμμής είναι ο μέσος όρος των τμημάτων ανά μήκος (τέλεια μετάθεση). Χωριστά τμήματα (4.12): ο λύτης βάζει κάθε τμήμα ως γραμμή χωρίς μετάθεση με τη σειρά των φάσεών του· οι πίνακες και τα γραφήματα εδώ δείχνουν τη γραμμή χωρίς μετάθεση.">στον λύτη <select data-o="trmode"><option value="avg" ${(tr.mode||'avg')==='avg'?'selected':''}>μέσος όρος</option><option value="sec" ${tr.mode==='sec'?'selected':''}>χωριστά τμήματα</option></select></label>`:''}</div>`:''}
+   ${isCable(d)&&(d.cables||[]).length===3&&(d.cables||[]).every(c=>[].concat(c.ph??[]).length>=2)?`<div class="ld-row"><label title="4.13: ομογενές μοντέλο cross-bonding (Cable Constants §2.4, §10): οι πίνακες μέσος όρος στις τρεις θέσεις των μανδυών (δεύτερος αγωγός κάθε καλωδίου) κατά μήκος ενός μείζονος τμήματος· οι μανδύες μένουν ως έχουν, γίνονται ένας αγωγός (ίδια τάση), ή γειωμένοι">Cross-bonding (ομογενές) <select data-d="xbond">${[['none','χωρίς'],['avg','μέσος όρος, όλοι οι αγωγοί'],['bond','μανδύες ενωμένοι σε έναν αγωγό'],['gnd','μανδύες γειωμένοι']].map(([k,l])=>`<option value="${k}" ${(d.xbond||'none')===k?'selected':''}>${l}</option>`).join('')}</select></label></div>`:''}
    ${isCable(d)?`<div class="ld-row"><label title="Απώλειες της μόνωσης: αιτιατό μοντέλο ευρείας ζώνης (προεπιλογή), σταθερό G = ωC·tanδ, ή της παλιάς Cable Data G = 2π(f_G0 + f)·C·tanδ">Απώλειες μόνωσης <select data-d="loss"><option value="causal" ${(d.loss||'causal')==='causal'?'selected':''}>αιτιατό (ευρείας ζώνης)</option><option value="const" ${d.loss==='const'?'selected':''}>σταθερό tanδ</option><option value="fg0" ${d.loss==='fg0'?'selected':''}>Cable Data (f_G0 + f)</option></select></label>
     ${d.loss==='fg0'?`<label>f_G0 (Hz) <input data-d="fg0" value="${esc(d.fg0??'')}" placeholder="100" style="width:50px"></label>`:''}</div>`:''}
   </details>`;}
@@ -321,6 +322,7 @@
   if(R.rebuilt){const b=R.rebuilt;s+=`<p class="small">Ανακατασκευή από τις ακολουθίες στα ${fmt(b.f)} Hz (h = ${fmt(b.h)} m): υπόλοιπο ${fmt(b.residual,2)}.</p>`;}
   if(R.seq){const q=R.seq;s+=`<h3>Ακολουθίες στα ${fmt(R.f)} Hz (με μετάθεση φάσεων)</h3><table class="ld-rep"><tr><th></th><th>R (Ω/km)</th><th>X (Ω/km)</th><th>C (nF/km)</th></tr>
    <tr><td>θετική</td><td>${fmt(q.R1)}</td><td>${fmt(q.X1)}</td><td>${fmt(q.C1*1e9)}</td></tr><tr><td>μηδενική</td><td>${fmt(q.R0)}</td><td>${fmt(q.X0)}</td><td>${fmt(q.C0*1e9)}</td></tr></table>`;}
+  if(mdl.type==='wb')return s+wbReport(mdl,curves);
   if(mdl.type==='pi'){s+=`<h3>Ονομαστικό π στα ${fmt(mdl.f)} Hz, ${mdl.N} ${mdl.N===1?'τμήμα':'τμήματα'}</h3><p class="small muted">Συζευγμένα R, L σε σειρά και C/2, G/2 σε κάθε άκρο κάθε τμήματος (Dommel 4.2.2.1). Χωρίς εξάρτηση από τη συχνότητα· για γραμμή ηλεκτρικά μικρή στη ζώνη που μετρά.</p>`;
    s+=`<table class="ld-rep"><tr><th>φάση</th><th>R (Ω)</th><th>L (mH)</th><th>C (nF)</th></tr>`+mdl.R.map((r,k)=>`<tr><td>${k+1}</td><td>${fmt(r[k])}</td><td>${fmt(mdl.L[k][k]*1e3)}</td><td>${fmt(mdl.C[k][k]*1e9)}</td></tr>`).join('')+'</table>';return s;}
   s+=`<h3>Ρυθμοί στα ${fmt(R.f)} Hz</h3><table class="ld-rep"><tr><th>ρυθμός</th><th>Z_c (Ω)</th><th>v (km/s)</th><th>R′ (Ω/km)</th><th>L′ (mH/km)</th><th>C′ (nF/km)</th>${mdl.type==='cp'?'<th>τ (μs)</th><th>R (Ω)</th>':'<th>τ (μs)</th><th>πόλοι Z_c / A</th><th>σφάλμα Z_c / A</th>'}</tr>`+
@@ -331,6 +333,32 @@
   if(curves){s+=`<h3>Προσαρμογή FD (συνεχής: ακριβές, διακεκομμένη: ρητή συνάρτηση)</h3><p class="small muted">Το σφάλμα του A μετριέται σε απόλυτη τιμή (όπως το EMTP): όπου |A| &lt; 10⁻³ το κύμα έχει ήδη σβήσει και η απόκλιση της καμπύλης δεν μετρά. Όλα τα μεγέθη με κέρσορα και μεγέθυνση: καρτέλα «Γραφήματα».</p><div class="ld-plots">`+curves.modes.map((c,k)=>plot(curves.f,[{y:c.Zc,c:PHC[k+1]},{y:c.Zc_fit,c:'#222',dash:true}],`ρυθμός ${k+1}: |Z_c|`,'Ω')
    +plot(curves.f,[{y:c.A,c:PHC[k+1]},{y:c.A_fit,c:'#222',dash:true}],`ρυθμός ${k+1}: |A|`,'')).join('')+'</div>';}
   return s;}
+ // 4.13: the wideband model. Its options (as the WB fitter of the EMTP) and its report: the groups of H with their delays
+ // and poles, the errors (H absolute, Y_c relative, the nodal admittance per band), the passivity, the curves
+ const WBSEL=['wsrc','wgrp','wfdcm','wdc','wopt','wpas','wlfw'];
+ const hashText=t=>{let h=2166136261;for(let i=0;i<t.length;i++){h^=t.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(16);};
+ const wsel=(k,v,opts)=>`<select data-p="${k}">${opts.map(([a,l])=>`<option value="${a}" ${String(v)===a?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
+ function wbOptsHTML(p){const emtp=p.wsrc==='emtp';
+  return `<div class="ld-row"><label>Μοντέλο WB από ${wsel('wsrc',p.wsrc||'fit',[['fit','προσαρμογή εδώ'],['emtp','αρχείο του EMTP (_WB.mod)']])}</label>
+   ${emtp?`<label>Αρχείο <input type="file" data-wbfile accept=".mod,.txt"></label><span class="small muted">${p.wbref?'φορτωμένο: '+esc(String(p.wbref).split('|')[0]):'κανένα αρχείο'} · ίδιες φάσεις με τα δεδομένα· το μήκος από εδώ.</span>`
+   :`<label>f_min (Hz) <input data-p="fmin" value="${esc(p.fmin)}" style="width:60px"></label><label>Δεκάδες <input data-p="dec" value="${esc(p.dec)}" style="width:40px"></label><label>Σημεία/δεκάδα <input data-p="ppd" value="${esc(p.ppd)}" style="width:40px"></label>
+   <label title="Μέγιστο σφάλμα του H (απόλυτο) και του Y_c (ως προς το μέτρο του)">ανοχή (%) <input data-p="wtol" value="${esc(p.wtol??0.2)}" style="width:44px"></label><label title="Μέγιστο πλήθος πόλων ανά συνάρτηση">πόλοι ≤ <input data-p="nmax" value="${esc(p.nmax??30)}" style="width:40px"></label>`}</div>
+   ${emtp?'':`<div class="ld-row"><label title="Ρυθμοί με ίδια ή σχεδόν ίδια καθυστέρηση σε μία ομάδα (EMTP: Apply grouping)">ομαδοποίηση ${wsel('wgrp',p.wgrp||'1',[['1','ναι'],['0','όχι']])}</label>
+    <label title="Cable model correction (FDCM): κάθε συνεισφορά ρυθμού προσαρμόζεται χωριστά όταν ο λόγος υπόλοιπο/πόλος ξεπερνά το 1000">FDCM ${wsel('wfdcm',p.wfdcm||'auto',[['auto','αυτόματα'],['always','πάντα'],['never','ποτέ']])}</label>
+    <label title="DC correction: η ζώνη κάτω από 1 Hz προσαρμόζεται χωριστά ως διόρθωση (f_min ≤ 0,001 Hz)">διόρθωση DC ${wsel('wdc',p.wdc||'0',[['0','όχι'],['1','ναι']])}</label>
+    <label title="Οι καθυστερήσεις με αναζήτηση γύρω από την εκτίμηση Bode σε όλες τις ομάδες (και χωρίς αυτό: όταν ο ρυθμός δεν σβήνει μέσα στη ζώνη)">καθυστερήσεις ${wsel('wopt',p.wopt||'0',[['0','Bode'],['1','βελτιστοποίηση']])}</label>
+    <label title="Το σφάλμα του H ως προς |1 − H| του λιγότερο αποσβενόμενου ρυθμού (έως αυτόν τον συντελεστή): ένα κοντό τμήμα κρατά τη σύνθετη αντίσταση σειράς του στα 50 Hz">βάρος χαμηλών f ${wsel('wlfw',String(p.wlfw??100),[['100','100'],['300','300'],['30','30'],['0','χωρίς']])}</label></div>`}
+   <div class="ld-row"><label title="Σάρωση των ιδιοτιμών του πραγματικού μέρους της αγωγιμότητας κόμβων· «επιβολή»: διαταραχή των υπολοίπων ώστε να γίνει παθητικό">Παθητικότητα ${wsel('wpas',p.wpas||'check',[['check','έλεγχος'],['enforce','έλεγχος και επιβολή'],['none','χωρίς έλεγχο']])}</label></div>`;}
+ function wbReport(m,cv){const f=m.fit||{},ps=m.passive;let s=`<h3>Μοντέλο WB${f.source==='EMTP'?' από αρχείο του EMTP':''}: Y_c με ${m.npoles?.yc??m.yc.p.length} πόλους, H σε ${m.groups.length} ${m.groups.length===1?'ομάδα':'ομάδες'}</h3>
+  <table class="ld-rep"><tr><th>ομάδα</th><th>ρυθμοί</th><th>τ (μs)</th><th>πόλοι</th></tr>${m.groups.map((g,k)=>`<tr><td>${k+1}${g.dc?' (DC)':''}</td><td>${(g.modes||[]).map(x=>x+1).join(', ')||'—'}</td><td>${fmt(g.tau*1e6,6)}</td><td>${g.p.length+g.p.filter(z=>z[1]>0).length}</td></tr>`).join('')}</table>
+  <p class="small">Σφάλμα: H ${fmt(f.h_err,2)} (απόλυτο), Y_c ${fmt((f.yc_err||0)*100,2)} %${f.method==='fdcm'?' · FDCM':''}${f.lfw>1?' · βάρος χαμηλών συχνοτήτων '+fmt(f.lfw,3):''}${f.ratio!=null?' · λόγος υπόλοιπο/πόλος '+fmt(f.ratio,3):''}.</p>`;
+  if(f.yn_bands)s+=`<p class="small">Αγωγιμότητα κόμβων έναντι της ακριβούς γραμμής: ${f.yn_bands.map(b=>`${b[0]?fmt(b[0])+' Hz':'0'} – ${b[1]==null?'∞':fmt(b[1])+' Hz'}: ${fmt(b[2]*100,2)} %`).join(' · ')}.</p>`;
+  if(ps)s+=`<p class="small${ps.passive?'':' bad'}">Παθητικότητα: ${ps.passive?'✓ παθητικό':'✗ παραβιάσεις σε '+ps.bands.map(b=>fmt(b[0])+' – '+fmt(b[1])+' Hz').join(', ')+' (ελάχιστη ιδιοτιμή '+fmt(ps.worst,2)+')'}${f.enforced?' · επιβλήθηκε σε '+(ps.iters??'—')+' επαναλήψεις':''}${f.enforced===false?' · η επιβολή δεν κρατήθηκε (άλλαζε το μοντέλο πέρα από την ανοχή)':''}.</p>`;
+  if(cv&&cv.f){const yc=cv.yc_err||[],h=cv.h_err||[],yn=cv.yn_err||[];s+=`<div class="ld-plots">${plot(cv.f,[{y:yc,c:PHC[1]},{y:h,c:PHC[2]},...(yn.length?[{y:yn,c:'#222',dash:true}]:[])],'σφάλμα: Y_c, H, Y κόμβων (διακεκομμένη)','')}`
+   +(cv.Hm&&cv.Hm.length?plot(cv.f,cv.Hm.map((y,k)=>({y,c:PHC[(k%(PHC.length-1))+1]})),'|H| των ρυθμών',''):'')
+   +(cv.pf&&cv.pf.length?plot(cv.pf,[{y:cv.plmin.map(v=>Math.max(Math.abs(v),1e-16)),c:'#c0392b'}],'|λ_min/λ_max| του Re Y',''):'')+'</div>';}
+  return s;}
+ function wbPane(p){return `${wbOptsHTML(p)}<div class="ld-actions"><button class="primary-ghost" data-run>Υπολογισμός</button><span class="small muted">Universal Line Model (Morched, Gustavsen, Tartibi) όπως ο WB fitter του EMTP: Y_c με κοινούς πόλους, H σε ομάδες ρυθμών με καθυστερήσεις Bode, υπόλοιπα στο πεδίο των φάσεων, FDCM, διόρθωση DC, έλεγχος και επιβολή παθητικότητας.</span></div>`;}
  const TIK={gm0:'G_m = 0 (EMTP)',minimag:'ελάχιστο φανταστικό',balanced:'ισορροπημένη (Clarke)',double:'διπλό κύκλωμα (μόνο ομοπολική σύζευξη)'};
  const CPK=[['lumped','R/4 – R/2 – R/4 (όπως το EMTP)'],['lossless','χωρίς απώλειες (R = 0)'],['distortionless','χωρίς παραμόρφωση'],['hf','χωρίς απώλειες, υψηλές συχνότητες (κεραυνοί)']];
 
@@ -394,13 +422,13 @@
   const doScan=async()=>{if(scBusy)return;scBusy=true;scErr=null;render();const q=scanReq(),key=JSON.stringify(q);
    try{sc=await ctx.api('line_scan',q);scKey=key;}catch(e){scErr=e.message||String(e);}scBusy=false;if(box.isConnected)render();};
   const scanOld=()=>sc&&scKey!==JSON.stringify(scanReq());
-  const render=()=>{const p=pars(),model=['fd','pi'].includes(p.model)?p.model:'cp',cab=isCable(d),kind=cab?'cab':isSeq(d)?'seq':isFile(d)?'file':'oh';
+  const render=()=>{const p=pars(),model=['fd','pi','wb'].includes(p.model)?p.model:'cp',cab=isCable(d),kind=cab?'cab':isSeq(d)?'seq':isFile(d)?'file':'oh';
    const tm=P.tlmModel(p);
    box.innerHTML=`<div class="modal-box ld-box"><div class="modal-head"><h2>Δεδομένα γραμμής · ${esc(c.label||c.id)}</h2><div class="ld-tabs">${TABS.map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')}</div><button class="x" data-close>✕</button></div><div class="modal-body">
     <div class="ld-row ld-top"><label>Τύπος <select data-kind><option value="oh" ${kind==='oh'?'selected':''}>Εναέρια γραμμή</option><option value="cab" ${cab?'selected':''}>Καλώδια</option><option value="seq" ${kind==='seq'?'selected':''}>Από παραμέτρους ακολουθιών</option><option value="file" ${kind==='file'?'selected':''}>Z′, Y′ από αρχείο (.mat)</option></select></label>
      <label>Έτοιμη γραμμή <select data-preset><option value="">—</option>${Object.entries(P.TLM_TYPICAL).map(([k,v])=>`<option value="${k}">${esc(v.name)}</option>`).join('')}<option value="empty">Κενή</option></select></label>
      <label>Μήκος (km) <input data-p="len" value="${esc(p.len)}" style="width:70px"></label>
-     <label>Μοντέλο <select data-p="model"><option value="cp" ${model==='cp'?'selected':''}>CP (σταθερές παράμετροι)</option><option value="fd" ${model==='fd'?'selected':''}>FD (J. Marti)</option><option value="pi" ${model==='pi'?'selected':''}>π ονομαστικό</option></select></label>
+     <label>Μοντέλο <select data-p="model"><option value="cp" ${model==='cp'?'selected':''}>CP (σταθερές παράμετροι)</option><option value="fd" ${model==='fd'?'selected':''}>FD (J. Marti)</option><option value="pi" ${model==='pi'?'selected':''}>π ονομαστικό</option><option value="wb" ${model==='wb'?'selected':''}>WB (wideband, ULM)</option></select></label>
      <span class="small${status?.bad||(!status&&tm.err)?' bad':''}" data-msg>${status?esc(status.t):tm.err?'⚠ '+esc(tm.err):'✓ Το μοντέλο είναι ενημερωμένο.'}</span></div>
     <div data-pane>${pane(tab,p,model,kind)}</div></div></div>`;
    charts=[];wireCommon();wirePane(tab);};
@@ -421,6 +449,8 @@
       <h3>Αγωγοί (απλοί) <small class="muted">φάση 0 = αγωγός προστασίας· ίδια φάση = παράλληλοι</small></h3><div class="ld-scroll">${table(d.wires,WCOL,'w',sel)}</div><button data-add="w">+ Αγωγός</button>
       <h3>Δέσμες (συμμετρικές)</h3><div class="ld-scroll">${table(d.bundles,BCOL,'b',sel)}</div><button data-add="b">+ Δέσμη</button>`;
     return right?`<div class="ld-grid"><div class="ld-left">${left}</div><div class="ld-right">${tools}${right}</div></div>`:left;}
+   if(t==='model'&&model==='wb'){let m=null;try{m=JSON.parse(p.mdl||'null');}catch(e){}
+    return wbPane(p)+`<div data-rep>${last?reportHTML(last,last.mdl,last.curves):m&&m.type==='wb'&&m.src===P.tlmKey(p)?wbReport(m,null):''}</div>`;}
    if(t==='model'){const fd=model==='fd',pi=model==='pi';
     return `<div class="ld-row">${fd?`<label>f_min (Hz) <input data-p="fmin" value="${esc(p.fmin)}" style="width:60px"></label><label>Δεκάδες <input data-p="dec" value="${esc(p.dec)}" style="width:40px"></label><label>Σημεία/δεκάδα <input data-p="ppd" value="${esc(p.ppd)}" style="width:40px"></label>
       <label>f του T_i (Hz) <input data-p="fti" value="${esc(p.fti)}" style="width:60px" ${p.tiauto==='1'?'disabled':''}></label><label title="Η συχνότητα με το μικρότερο σφάλμα του σταθερού T_i στη ζώνη 500 Hz – 5 kHz (FMATRX αυτόματα)"><input type="checkbox" data-p="tiauto" ${p.tiauto==='1'?'checked':''}> αυτόματα</label>
@@ -451,8 +481,8 @@
     return `<div class="ld-row">${scanBar()}</div><h3>Αναφορά</h3><div class="ld-row ld-ex"><button data-ex="html">Αναφορά HTML</button><button data-ex="pdf">PDF (γραφήματα, matplotlib)</button><span class="small muted">Η αναφορά HTML τυπώνεται σε PDF από τον browser· έχει πίνακες, ακολουθίες, χρήσιμα μεγέθη, ρυθμούς, Q-error, μοντέλο και γραφήματα.</span></div>
      <h3>Δεδομένα</h3><div class="ld-row ld-ex"><button data-ex="csv">CSV (όλα τα μεγέθη)</button><label><select data-csvform><option value="magang">μέτρο και γωνία</option><option value="reim">Re και Im</option></select></label><label><select data-csvsep><option value=",">«,» και «.»</option><option value=";">«;» και «,» (Excel ελληνικά)</option></select></label>
       <button data-ex="json">JSON (η σάρωση)</button><button data-ex="mat">MATLAB .mat</button><span class="small muted">Το .mat έχει Z, Y, f, line_length όπως το θέλει το Line/Cable Data (§2.4.1), και όλα τα υπόλοιπα.</span></div>
-     <h3>Αρχεία μοντέλου στη μορφή του EMTP</h3><div class="ld-row ld-ex"><button data-ex="exact_pi">Exact-PI (.mod)</button><button data-ex="nominal_pi">Nominal-PI (.mod)</button><button data-ex="fd_mod" ${ok&&model==='fd'?'':'disabled'}>FD (.mod)</button><button data-ex="cp_netlist" ${ok&&model==='cp'?'':'disabled'}>CP (netlist _TLM)</button>
-      <span class="small muted">Όπως τα περιγράφουν το Line/Cable Data (σ. 17–18), οι επιλογές του Line Model (σ. 2–6) και το CP m-phase (σ. 10)· ξαναδιαβάζονται από το pcl.linereport. Πόλοι και υπόλοιπα του FD σε rad/s.</span></div>
+     <h3>Αρχεία μοντέλου στη μορφή του EMTP</h3><div class="ld-row ld-ex"><button data-ex="exact_pi">Exact-PI (.mod)</button><button data-ex="nominal_pi">Nominal-PI (.mod)</button><button data-ex="fd_mod" ${ok&&model==='fd'?'':'disabled'}>FD (.mod)</button><button data-ex="cp_netlist" ${ok&&model==='cp'?'':'disabled'}>CP (netlist _TLM)</button><button data-ex="wb_mod" ${ok&&model==='wb'?'':'disabled'}>WB (_WB.mod)</button>
+      <span class="small muted">Όπως τα περιγράφουν το Line/Cable Data (σ. 17–18), οι επιλογές του Line Model (σ. 2–6) και το CP m-phase (σ. 10)· ξαναδιαβάζονται από το pcl.linereport. Πόλοι και υπόλοιπα του FD σε rad/s· το _WB.mod στη διάταξη του WB fitter (ξαναδιαβάζεται εδώ με «Μοντέλο WB από: αρχείο του EMTP»).</span></div>
      <h3>Python</h3><div class="ld-row ld-ex"><button data-ex="script">Script Python</button><button data-topy>Στην Python (σύνδεση)</button><span class="small muted" data-pymsg>Το script ξαναϋπολογίζει τα πάντα με το pcl.lineconst και σχεδιάζει με τα πρότυπα του pcl.plotting.</span></div>
      <div class="ld-row"><label>Πρότυπο γραφημάτων <select data-preset2>${['ieee','thesis','slides','lab'].map(k=>`<option ${store.get('preset','ieee')===k?'selected':''}>${k}</option>`).join('')}</select></label></div>
      <pre class="ld-code" data-code>import pcl
@@ -473,14 +503,17 @@ lr.plot(sc, [('modes', 'Zc'), ('modes', 'alpha')], preset='ieee', out='modes.pdf
   const wireCommon=()=>{
    box.querySelector('[data-close]').onclick=close;box.onclick=e=>{if(e.target===box)close();};
    box.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;store.set('tab',tab);render();});
-   box.querySelectorAll('[data-p]').forEach(el=>el.onchange=()=>{const k=el.dataset.p;let v=el.value;if(k==='tiauto')v=el.checked?'1':'0';else if(!['model','ti','cp'].includes(k)){const x=num(v);if(x===null){el.classList.add('bad');return;}v=x;}status=null;ctx.editor.setParams(id,{[k]:v});ctx.changed();later();});
+   box.querySelectorAll('[data-p]').forEach(el=>el.onchange=()=>{const k=el.dataset.p;let v=el.value;if(k==='tiauto')v=el.checked?'1':'0';else if(!['model','ti','cp',...WBSEL].includes(k)){const x=num(v);if(x===null){el.classList.add('bad');return;}v=x;}status=null;ctx.editor.setParams(id,{[k]:v});ctx.changed();later();});
    box.querySelector('[data-kind]').onchange=e=>{const want=e.target.value,now=isCable(d)?'cab':isSeq(d)?'seq':isFile(d)?'file':'oh';if(want===now)return;snap();
     d=want==='cab'?EMPTY_CAB():want==='seq'?EMPTY_SEQ():want==='file'?{zyfile:null}:EMPTY_OH();if(want==='cab')d.cables.push(NEW_CABLE());if(want==='file')d={zyfile:{f:[],Zr:[],Zi:[],Yr:[],Yi:[],unit:'km'}};norm();view=null;sel=null;saveData();later();};
    const pre=box.querySelector('[data-preset]');pre.onchange=()=>{if(!pre.value)return;snap();d=pre.value==='empty'?(isCable(d)?EMPTY_CAB():EMPTY_OH()):JSON.parse(JSON.stringify(P.TLM_TYPICAL[pre.value]));
     norm();view=null;sel=null;const L=d.length;ctx.editor.setParams(id,{data:JSON.stringify(d),...(L?{len:L}:{})});ctx.changed();later();};
    box.querySelectorAll('[data-scan]').forEach(b=>b.onclick=doScan);};
   const wirePane=t=>{if(t==='data')wireData();else if(t==='model')wireModel();else if(t==='graphs')wireGraphs();else if(t==='tables')wireTables();else if(t==='export')wireExport();};
-  const wireModel=()=>{box.querySelector('[data-run]').onclick=async()=>{const msg=box.querySelector('[data-msg]');msg.textContent='Υπολογισμός…';msg.className='small';
+  const wireModel=()=>{const wf=box.querySelector('[data-wbfile]');if(wf)wf.onchange=async()=>{const f=wf.files?.[0];if(!f)return;const t=await f.text();
+    if(!/Number of\.? conductors/i.test(t)){status={t:'⚠ Δεν μοιάζει με αρχείο _WB.mod του EMTP.',bad:true};render();return;}
+    ctx.editor.setParams(id,{wbtxt:t,wbref:`${f.name}|${t.length}|${hashText(t)}`,wsrc:'emtp'});ctx.changed();status={t:'Διαβάστηκε το '+f.name+'· πάτα «Υπολογισμός».'};render();};
+   box.querySelector('[data-run]').onclick=async()=>{const msg=box.querySelector('[data-msg]');msg.textContent='Υπολογισμός…';msg.className='small';
     try{last=await compute(id,ctx);status={t:'✓ Υπολογίστηκε.'};render();}catch(e){status={t:'⚠ '+(e.message||e),bad:true};render();}};};
   // the drawing: zoom, pan, hover ↔ the table, drag
   const drawBox=()=>box.querySelector('[data-draw]');
@@ -530,7 +563,7 @@ lr.plot(sc, [('modes', 'Zc'), ('modes', 'alpha')], preset='ieee', out='modes.pdf
    box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{snap();const t=b.dataset.del[0],i=+b.dataset.del.slice(1);(t==='w'?d.wires:d.bundles).splice(i,1);sel=null;saveData();later();});
    box.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{snap();if(b.dataset.add==='w'){const l=d.wires[d.wires.length-1];d.wires.push(l?{...l,x:+l.x+2}:{ph:1,x:0,y:15,r:1,Rdc:0.1,tD:0.5});}
     else{const l=d.bundles[d.bundles.length-1];d.bundles.push(l?{...l,x:+l.x+8,ph:(+l.ph||0)+1}:{ph:1,x:0,y:15,n:2,R:20,ang:0,r:1.5,Rdc:0.06,tD:0.33});}saveData();later();});
-   box.querySelectorAll('[data-d]').forEach(el=>el.onchange=()=>{const k=el.dataset.d,v=el.value.trim();snap();if(k==='skin')d.skin=el.checked;else if(k==='earth'||k==='loss')d[k]=el.value;
+   box.querySelectorAll('[data-d]').forEach(el=>el.onchange=()=>{const k=el.dataset.d,v=el.value.trim();snap();if(k==='skin')d.skin=el.checked;else if(k==='earth'||k==='loss')d[k]=el.value;else if(k==='xbond'){if(el.value==='none')delete d.xbond;else d.xbond=el.value;}
     else if(k==='medium'){const was=d.medium||'earth';d.medium=el.value;if(el.value==='sea'&&was!=='sea')d.rho=0.2;else if(was==='sea'&&el.value!=='sea')d.rho=100;}
     else if(['G','mur_e','fg0','rho2','dsoil','temp'].includes(k)&&v===''){delete d[k];}else{const x=num(v);if(x===null){el.classList.add('bad');undo.pop();return;}d[k]=x;}saveData();later();});
    box.querySelectorAll('[data-o]').forEach(el=>el.onchange=()=>{const k=el.dataset.o,v=el.value.trim();snap();
@@ -612,8 +645,11 @@ lr.plot(sc, [('modes', 'Zc'), ('modes', 'alpha')], preset='ieee', out='modes.pdf
   return {box,render,api:{get sc(){return sc;},get d(){return d;},scan:doScan,setTab:t=>{tab=t;render();}}};}
  // asks the server for the model of the part `id` and keeps it in its parameters (with the key of what it was computed from)
  async function compute(id,ctx){const p={...P.defaults('TLM'),...ctx.editor.comp(id).params},src=P.tlmKey(p),d=JSON.parse(p.data);
+  // 4.13: the wideband options as the WB fitter of the EMTP (tolerance in %), or the model file of the EMTP
+  const wb=p.model==='wb'?{tol:num(p.wtol)??0.2,group:p.wgrp!=='0',fdcm:p.wfdcm||'auto',dc:p.wdc==='1',opt:p.wopt==='1',passive:p.wpas||'check',lfw:num(p.wlfw)??100}:{};
+  if(p.model==='wb'&&p.wsrc==='emtp'){if(!p.wbtxt)throw new Error('Διάλεξε το αρχείο _WB.mod του EMTP (καρτέλα «Μοντέλο»).');Object.assign(wb,{wbmod:p.wbtxt,wbref:p.wbref||''});}
   const r=await ctx.api('line_model',{data:d,model:p.model,len:num(p.len),f:num(p.f),fmin:num(p.fmin),dec:num(p.dec),ppd:num(p.ppd),fti:num(p.fti),
-   ti:p.ti||'gm0',tiauto:p.tiauto==='1',cp:p.cp||'lumped',npi:num(p.npi)||1,nmax:num(p.nmax)||30,src});
+   ti:p.ti||'gm0',tiauto:p.tiauto==='1',cp:p.cp||'lumped',npi:num(p.npi)||1,nmax:num(p.nmax)||30,...wb,src});
   ctx.editor.setParams(id,{mdl:JSON.stringify(r.mdl)});ctx.changed();return r;}
  // every line part whose model is missing or old: computed again (for a run, or after a change of the length)
  async function refresh(ctx,comps){const need=comps.filter(c=>c.type==='TLM'&&P.tlmModel({...P.defaults('TLM'),...c.params}).need&&(()=>{try{JSON.parse(c.params?.data??P.defaults('TLM').data);return true;}catch(e){return false;}})());

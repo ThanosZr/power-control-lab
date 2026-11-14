@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.12: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (545 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.13: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (568 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -10,13 +10,13 @@
 - **Αρχεία project:** ένα παλιό αρχείο ανοίγει πάντα (ARCHITECTURE §4). Νέα πεδία είναι προαιρετικά. Όταν χρειάζεται μετατροπή, αυξάνεται το `version` του αρχείου και η μετατροπή γίνεται στο άνοιγμα, με test. Το `version` 3 (3.18): τα σύρματα με το ίδιο όνομα είναι ένας κόμβος· ένα παλιότερο αρχείο ανοίγει ίδιο (`Bus.migrateNames`: όπου ένα όνομα ήταν ετικέτα σε δύο κόμβους, το δεύτερο γίνεται «όνομα·2»).
 - **Ο έλεγχος:** το `python tools/api_surface.py` σταματά όταν κάτι λείπει ή έχασε όρισμα. Ως την 4.0 περνούσε με `--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 μέσα στην ίδια κύρια έκδοση δεν περνά ούτε με `--allow-removal`· στην επόμενη κύρια περνά μόνο για ό,τι ήταν παρωχημένο. Ένα παρωχημένο σημείο πρέπει να υπάρχει ακόμη στον κώδικα.
 
-- **Πειραματικά (3.19):** `pcl.control.…`, `pcl.workbench.…`, `workbench…` (έλεγχος με AI §38, Control Workbench §19). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38, και η μετάβαση είναι προσθήκη. Στους πίνακες: «πειρ.».
+- **Πειραματικά (3.19):** `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `workbench…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του), και η μετάβαση είναι προσθήκη. Στους πίνακες: «πειρ.».
 
 Στους πίνακες, «Από» είναι η έκδοση της πρώτης καταγραφής: η 3.18 για ό,τι υπήρχε ήδη.
 
 ## Παρωχημένα
 
-Κανένα στην 4.12.
+Κανένα στην 4.13.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-317 σημεία.
+340 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -212,6 +212,7 @@
 | `pcl.lineconst.vary` | `data`, `param`, `value` | 4.11 |
 | `pcl.lineconst.vfit` | `s`, `F`, `n`, `d`, `weight`, `iters`, `p0` | 4.4 |
 | `pcl.lineconst.wedepohl` | `s`, `h`, `y`, `d`, `rho` | 4.5 |
+| `pcl.lineconst.xbond_avg` | `Z`, `Y`, `cs`, `kind` | 4.13 |
 | `pcl.lineconst.z_galloway` | `s`, `n`, `rs`, `rho`, `mur` | 4.11 |
 | `pcl.lineconst.z_int` | `c`, `s`, `skin` | 4.11 |
 | `pcl.lineconst.z_internal` | `f`, `r`, `q`, `Rdc`, `mur`, `skin`, `s` | 4.4 |
@@ -333,6 +334,28 @@
 | `pcl.tutorials` | — | 3.18 |
 | `pcl.use` | `project` | 3.18 |
 | `pcl.version` | — | 3.18 |
+| `pcl.wideband.WBError` | — | 4.13 · πειρ. |
+| `pcl.wideband.bode_delay` | `f`, `Hm`, `g`, `L`, `level`, `decades`, `n` | 4.13 · πειρ. |
+| `pcl.wideband.enforce_passivity` | `model`, `sw`, `iters`, `delta`, `step`, `log`, `wmax` | 4.13 · πειρ. |
+| `pcl.wideband.errors` | `model`, `sw`, `per_f` | 4.13 · πειρ. |
+| `pcl.wideband.fit_report` | `model`, `data`, `length`, `bands` | 4.13 · πειρ. |
+| `pcl.wideband.h_weight` | `sw`, `wmax` | 4.13 · πειρ. |
+| `pcl.wideband.import_model` | `text`, `data`, `length_km`, `passive` | 4.13 · πειρ. |
+| `pcl.wideband.model_parts` | `model` | 4.13 · πειρ. |
+| `pcl.wideband.nodal` | `Yc`, `H` | 4.13 · πειρ. |
+| `pcl.wideband.passivity` | `model`, `fmin`, `fmax`, `ppd`, `extra` | 4.13 · πειρ. |
+| `pcl.wideband.rational` | `s`, `p`, `R`, `D` | 4.13 · πειρ. |
+| `pcl.wideband.read_wb_mod` | `text`, `length` | 4.13 · πειρ. |
+| `pcl.wideband.sheath_check` | `Yn`, `length_km`, `cores`, `sheaths` | 4.13 · πειρ. |
+| `pcl.wideband.start_poles` | `fmin`, `fmax`, `n`, `real` | 4.13 · πειρ. |
+| `pcl.wideband.to_json` | `fit`, `M`, `L`, `fs` | 4.13 · πειρ. |
+| `pcl.wideband.vfit_relaxed` | `s`, `F`, `poles`, `weight`, `d`, `iters`, `stable`, `tol_conv`, `clip` | 4.13 · πειρ. |
+| `pcl.wideband.wb_admittance` | `model`, `s` | 4.13 · πειρ. |
+| `pcl.wideband.wb_fit` | `sw`, `L`, `tol`, `nmax`, `group`, `fdcm`, `ratio`, `dc`, `opt`, `log`, `lfw` | 4.13 · πειρ. |
+| `pcl.wideband.wb_h` | `groups`, `s` | 4.13 · πειρ. |
+| `pcl.wideband.wb_model` | `data`, `length`, `fmin`, `decades`, `ppd`, `tol`, `nmax`, `group`, `fdcm`, `ratio`, `dc`, `opt`, `passive`, `curves`, `lfw` | 4.13 · πειρ. |
+| `pcl.wideband.wb_yc` | `yc`, `s` | 4.13 · πειρ. |
+| `pcl.wideband.write_wb_mod` | `model` | 4.13 · πειρ. |
 | `pcl.workbench.CircuitPlant` | `params` | 3.18 · πειρ. |
 | `pcl.workbench.CircuitPlant.clone` | — | 3.18 · πειρ. |
 | `pcl.workbench.CircuitPlant.close` | — | 3.18 · πειρ. |
@@ -619,7 +642,7 @@
 | `part:TAGI` | name | y | 3.18 |
 | `part:TAGO` | name | u | 3.18 |
 | `part:TL` | spec, Z, tau, len, vel, Lp, Cp, Rt, Rp, nsec | a1, a2, b1, b2 | 3.18 |
-| `part:TLM` | model, len, f, cp, npi, fmin, dec, ppd, fti, tiauto, nmax, ti, vtrap, data, mdl, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.4 |
+| `part:TLM` | model, len, f, cp, npi, fmin, dec, ppd, fti, tiauto, nmax, ti, wsrc, wtol, wgrp, wfdcm, wdc, wlfw, wopt, wpas, wbref, wbtxt, vtrap, data, mdl, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.4 |
 | `part:TOWER` | h, Zt, vt, foot, R0, rho, E0, ins, Ub, U0, kde, Dde, impl, meas | a1, a2, b1, b2, c1, c2, d1, d2, e1, e2 | 4.9 |
 | `part:UD` | clock, trig, y0 | u, y | 3.18 |
 | `part:VAC` | Vpk, f, phase, off, Rs, Ls | n, p | 3.18 |
