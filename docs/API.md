@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.14: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (571 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.15: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (571 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.14.
+Κανένα στην 4.15.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -581,7 +581,7 @@
 | `part:EXPR` | expr, ins, pars | u1, u2, y | 3.18 |
 | `part:F2` | kind, f0, zeta, u0 | u, y | 3.19 |
 | `part:FEST` | mode, RR, LM, psi0 | al, be, psi, th, w1, wr | 3.18 |
-| `part:FLT3` | kind, Rf, Rg, ctl, ton, toff, conn | a, abc, b, c, f | 4.1 |
+| `part:FLT3` | kind, Rf, Rg, ctl, ton, toff, clr, conn | a, abc, b, c, f | 4.1 |
 | `part:GAIN` | K, unit | u, y | 3.18 |
 | `part:GEN3` | Sn, Un, f, pp, data, conv, Ra, Xl, X0, Xd, Xdp, Xdpp, Xq, Xqp, Xqpp, Td0p, Td0pp, Tq0p, Tq0pp, cXad, cXfd, cRfd, cXkd, cRkd, cXaq, cX1q, cR1q, cX2q, cR2q, shaft, H, D, Hm, Km, Dm, Dmu, Tfr, gm, exc, Efd, mech, Tm, init, V0, ang0, neut, conn | a, abc, b, c, d, e0, efd, ifd, m0, n, pe, qe, te, tm, ts1, ts2, v0, vt, w | 4.3 |
 | `part:GND` | — | g | 3.18 |
@@ -603,9 +603,9 @@
 | `part:LOGIC` | op | a, b, y | 3.18 |
 | `part:LPF` | fc, y0 | u, y | 3.18 |
 | `part:MEAS` | src, qty | y | 3.18 |
-| `part:MMC` | impl, model, N, C, Vdc, vc0, Larm, Ron, fs, sel, band, norm, ccsc, tcc, f0, disc, conn | a, abc, b, blk, c, ia, ib, ic, idc, ma, mb, mc, n, p, va, vb, vc, vdc, vs | 4.14 |
+| `part:MMC` | impl, model, N, C, Vdc, vc0, Larm, Ron, fs, sel, band, ectl, norm, kh, kv, fe, Rd, fd, ccsc, tcc, f0, disc, conn | a, abc, b, blk, c, ia, ib, ic, idc, ma, mb, mc, n, p, va, vb, vc, vdc, vs | 4.14 |
 | `part:MMCA` | N, model, C, Vc, v0, Ron, fs, sel, band, norm, disc | a, b, blk, i, n, ref, v, vav, vs | 4.14 |
-| `part:MMCC` | mode, qmode, S, Vac, Vdc, f0, Pref, Tp, Vdcref, Tvdc, kdr, H, Vfref, Tvf, Qref, Tq, Vacref, Tvac, Xpcc, Ti, X, R, prio, Ilim, Idlim, Iqlim, vmax, bw, th0, fm, prot, Idcmax, tprot, tdb, tbrk | blk, brk, ia, ib, ic, idc, ma, mb, mc, p, q, th, va, vb, vc, vdc, vs | 4.14 |
+| `part:MMCC` | mode, qmode, S, Vac, Vdc, f0, Pref, Tp, Vdcref, Tvdc, kdr, H, Vfref, Tvf, Qref, Tq, Vacref, Tvac, Xpcc, Ti, X, R, ovl, Vdcmax, kov, prio, Ilim, Idlim, Iqlim, vmax, bw, th0, fm, prot, Idcmax, tprot, tdb, tbrk | blk, brk, ia, ib, ic, idc, ma, mb, mc, p, q, th, va, vb, vc, vdc, vs | 4.14 |
 | `part:MOD3` | mode, conn | d, da, db, dc, v, va, vb, vc, vdc | 3.18 |
 | `part:MOV` | model, Uref, Iref, alpha, tbl | a, b | 3.18 |
 | `part:MUL` | — | a, b, y | 3.18 |

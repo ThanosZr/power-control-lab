@@ -1620,18 +1620,21 @@ function ssscTheory(){const s=S.sim,m=(S.tutMeta||{}).sssc;if(!s||!m)return '';c
 // 4.14 (§42): the MMC-HVDC link. The steady state from the ratings and the measured powers: AC current, DC current, arm
 // currents (I_dc/3 ± Î/2), the energy of the capacitors and their ripple (ΔW_arm = S/(3mω)·(1 − (m·cosφ/2)²)^{3/2}), the
 // losses; compared with the means of the last 20 ms (base period 20 ms)
-function hvdcTheory(){const s=S.sim,m=(S.tutMeta||{}).hvdc;if(!s||!m)return '';const w=2*Math.PI*50,Vb=m.Vac*Math.SQRT2/Math.sqrt(3),Vc=m.Vdc/m.N;
+function hvdcTheory(){const s=S.sim,m=(S.tutMeta||{}).hvdc;if(!s||!m)return '';const w=2*Math.PI*50,Vb=m.Vac*Math.SQRT2/Math.sqrt(3),Vc=m.Vdc/m.N,en=m.model!=='m4'&&m.ectl!=='direct';
  const H=3*m.N*m.C*Vc*Vc/m.S,Wa=m.N*m.C*Vc*Vc/2,names={m1:'Model 1: κάθε υπομονάδα από IGBT και διόδους',m2:'Model 2: ισοδύναμο βραχίονα με κάθε πυκνωτή',m3:'Model 3: συνάρτηση μεταγωγής βραχίονα (ένας πυκνωτής C/N)',m4:'Model 4: μέσο μοντέλο'};
  let h=`<div class="tm"><span class="badge">MMC-HVDC</span> ${names[m.model]||m.model} · N = ${m.N} ανά βραχίονα, V_C = ${eng(Vc,'V')}, C = ${eng(m.C,'F')} · ενέργεια ${fmt(H*1000,3)} kJ/MVA</div><ul class="eqs">
-  <li>Βραχίονες: v_u = V_dc/2·(1 − m_j) − u_c,j, v_l = V_dc/2·(1 + m_j) − u_c,j· στάθμη n = round(v_ref/V_C) από την ονομαστική V_C (η ενέργεια των βραχιόνων ισορροπεί μόνη της), ταξινόμηση όταν αλλάζει το n. Τάση AC e_j = (v_l − v_u)/2 = m_j·V_dc/2 πίσω από L_arm/2</li>
+  <li>Βραχίονες: v_u = V_dc/2·(1 − m_j) − u_c,j, v_l = V_dc/2·(1 + m_j) − u_c,j· ${en?'στάθμη n = round(N·v_ref/Σv_C) από τη μετρημένη Σv_C κάθε βραχίονα (βάζει ακριβώς την αναφορά)':'στάθμη n = round(v_ref/V_C) από την ονομαστική V_C (η ενέργεια των βραχιόνων ισορροπεί μόνη της)'}, ταξινόμηση όταν αλλάζει το n. Τάση AC e_j = (v_l − v_u)/2 = m_j·V_dc/2 πίσω από L_arm/2</li>${en?`
+  <li>Έλεγχος ενέργειας (4.15): u_c,j = u₀ + u_CCSC,j + u_bal,j· u₀ = (V_dc,ονομ − v_W)/2 − R_d·i_z0,HP με v_W = √(Σ_k Σv_C,k²/6), άρα 2L_arm·di_z/dt = v_dc − v_W (η πλευρά DC του Model 4)· εξισορρόπηση με κυκλοφορούν i_h,j = −k_h·ΔW_j/V_dc (συνεχές) και i_v,j = k_v·(W_u,j − W_l,j)·m_j/(V_dc·⟨m²⟩) (θεμελιώδους)</li>`:''}
   <li>CCSC: i_z = (i_u + i_l)/2 σε dq αρνητικής ακολουθίας στο 2ω₀t, PI στο μηδέν με αποσύζευξη 2ω₀L_arm· το I_dc/3 (μηδενική ακολουθία) μένει</li>
-  <li>Έλεγχος: P (σταθμός 1) και V_dc (σταθμός 2) στον άξονα d, Q στον q· ρεύμα σε dq με αποσύζευξη, m = v_c·V̂/(v_s/2) με v_s τη μέση Σv_C βραχίονα</li>
+  <li>Έλεγχος: P (σταθμός 1, με όριο υπέρτασης DC) και V_dc (σταθμός 2) στον άξονα d, Q στον q· ρεύμα σε dq με αποσύζευξη, m = v_c·V̂/(v_s/2) με v_s ${en?'= V_dc,ονομ':'τη μέση Σv_C βραχίονα'}· anti-windup στους εξωτερικούς ολοκληρωτές</li>
   <li>Μέσο μοντέλο: C_dc = 6C/N = ${eng(6*m.C/m.N,'F')}, L_dc = (2/3)L_arm, R = (2/3)N·R_on· ισχύς I_dc·V_dc = Σ v_conv,j·i_j</li></ul>`;
  if(s.t<0.3)return h+'<p class="muted small">Τρέξε την προσομοίωση (μετρήσεις στα τελευταία 20 ms, μετά τα 0,3 s).</p>';
  const P1=avgOver('Y:CT1/PP',1)?.avg,P2=avgOver('Y:CT2/PP',1)?.avg,v1=avgOver('Y:CT1/Fvdc',1)?.avg,Idc=avgOver('Y:MMC1/IDC',1)?.avg,Pw=P1*m.S;
  const vg=avgOver('Y:CT1/VG',1)?.avg??1,I=Pw/(1.5*Vb*vg),mm=Vb*vg/(m.Vdc/2),dW=Math.abs(Pw)/(3*mm*w)*Math.pow(Math.max(1-(mm/2)**2,0),1.5);
  const rows=[['I_dc σταθμού 1 = P/V_dc',Pw/(v1*m.Vdc),Idc,'A'],['Î AC σταθμού 1 = 2P/(3V̂), V̂ η μετρημένη στον μετατροπέα',I,lastPP('Y:MMC1/IAa')/2,'A'],['V_dc σταθμού 1 (pu)',1,v1,''],['Απώλειες (P₁ + P₂)/P₁',NaN,(P1+P2)/P1,'']];
  if(m.model!=='m4'){const key=m.model==='m1'?null:'Y:MMC1/AUa';if(key){const pp=lastPP(key);rows.push(['Κυμάτωση Σv_C άνω βραχίονα a (κορυφή–κορυφή)',dW/(m.N*m.C*Vc)*m.N,pp,'V']);}
+  if(en){const vw=avgOver('Y:MMC1/VW',1)?.avg,vd=avgOver('Y:MMC1/VDC',1)?.avg,ua=m.model==='m1'?null:avgOver('Y:MMC1/AUa',1)?.avg,la=m.model==='m1'?null:avgOver('Y:MMC1/ALa',1)?.avg;
+   rows.push(['v_W (ενέργεια των βραχιόνων) ≈ V_dc στους ακροδέκτες',vd,vw,'V']);if(ua!=null&&la!=null)rows.push(['(Σv_C,άνω − Σv_C,κάτω)/V_dc, φάση a (εξισορρόπηση)',NaN,(ua-la)/m.Vdc,'']);}
   rows.push(['Ρεύμα άνω βραχίονα a, κορυφή ≈ I_dc/3 + Î/2',Math.abs(Idc)/3+I/2,Math.max(Math.abs(avgOver(m.model==='m1'?'Y:MMC1/UaI':'Y:MMC1/AUa:i',1)?.max??NaN),Math.abs(avgOver(m.model==='m1'?'Y:MMC1/UaI':'Y:MMC1/AUa:i',1)?.min??NaN)),'A']);}
  return h+cmpRows(rows)+`<p class="small">ΔW βραχίονα ≈ ${eng(dW,'J')} από ${eng(Wa,'J')} (m = ${fmt(mm,3)}, cosφ = 1)· η κυμάτωση της Σv_C ≈ ΔW/(C/N·V_dc). P₁ = ${fmt(P1,4)} pu, P₂ = ${fmt(P2,4)} pu.</p>`;}
 // 4.13: a wideband model in a card: its groups of modes, delays, poles, the errors of the fit and the passivity check

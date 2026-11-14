@@ -1,5 +1,5 @@
 {
- "version": "4.14",
+ "version": "4.15",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -4081,6 +4081,7 @@
      "ctl",
      "ton",
      "toff",
+     "clr",
      "conn"
     ],
     "pins": [
@@ -4510,7 +4511,13 @@
      "fs",
      "sel",
      "band",
+     "ectl",
      "norm",
+     "kh",
+     "kv",
+     "fe",
+     "Rd",
+     "fd",
      "ccsc",
      "tcc",
      "f0",
@@ -4591,6 +4598,9 @@
      "Ti",
      "X",
      "R",
+     "ovl",
+     "Vdcmax",
+     "kov",
      "prio",
      "Ilim",
      "Idlim",

@@ -9,7 +9,7 @@
 |---|---:|
 | `web/studio/addon_client.js` | 30 |
 | `web/studio/addons.js` | 116 |
-| `web/studio/app.js` | 2633 |
+| `web/studio/app.js` | 2636 |
 | `web/studio/bus.js` | 197 |
 | `web/studio/editor.js` | 642 |
 | `web/studio/expr.js` | 73 |
@@ -22,9 +22,9 @@
 | `web/studio/math.js` | 144 |
 | `web/studio/metrics.js` | 89 |
 | `web/studio/mna.js` | 2026 |
-| `web/studio/netlib.js` | 846 |
+| `web/studio/netlib.js` | 901 |
 | `web/studio/nn.js` | 57 |
-| `web/studio/parts.js` | 1257 |
+| `web/studio/parts.js` | 1266 |
 | `web/studio/pool.js` | 29 |
 | `web/studio/pyrt.js` | 87 |
 | `web/studio/recview.js` | 69 |
@@ -37,7 +37,7 @@
 | `web/studio/subcircuit.js` | 289 |
 | `web/studio/templates.js` | 32 |
 | `web/studio/trv.js` | 56 |
-| `web/studio/tutorials.js` | 1529 |
+| `web/studio/tutorials.js` | 1530 |
 | `web/studio/units.js` | 156 |
 | `web/studio/watch.js` | 339 |
 | `pcl/runner.js` | 27 |
@@ -104,7 +104,7 @@
 | `tests/test_live_program.py` | 49 |
 | `tests/test_live_sim.py` | 149 |
 | `tests/test_matlab.py` | 213 |
-| `tests/test_mmc.py` | 140 |
+| `tests/test_mmc.py` | 203 |
 | `tests/test_netlib.py` | 209 |
 | `tests/test_network.py` | 272 |
 | `tests/test_nn.py` | 130 |
@@ -257,27 +257,27 @@
 | 587 | `EBUS` | Δίαυλος αγωγών (π.χ. τριφασικός) |
 | 593 | `GRID3` | Ισοδύναμο δικτύου (S″k, X/R, Z₀) |
 | 604 | `FLT3` | Σφάλμα (βραχυκύκλωμα) |
-| 612 | `CB3` | Διακόπτης ισχύος (τριφασικός) |
-| 622 | `ARCX` | Τμήμα τόξου |
-| 626 | `ARC` | Διακόπτης με τόξο (μονοφασικός) |
-| 633 | `XF3` | Μετασχηματιστής τριφασικός (ομάδα σύνδεσης) |
-| 644 | `LOAD3` | Τριφασικό φορτίο (P, Q) |
-| 689 | `LINE3` | Γραμμή (τμήμα π, ακολουθίες) |
-| 702 | `TLM` | Γραμμή από γεωμετρία (CP / FD / WB) |
-| 737 | `TOWER` | Πύργος γραμμής (κεραυνοί) |
-| 754 | `SAI` | Αλεξικέραυνο ZnO, μοντέλο IEEE (εξαρτάται από τη συχνότητα) |
-| 769 | `SAIX` | Αλεξικέραυνο IEEE (συμπαγές) |
-| 773 | `RFX` | Γείωση πύργου R(I) (από τη γραμμή του πύργου) |
-| 779 | `CHB` | Αρθρωτός βραχίονας: γέφυρες H σε σειρά (CHB) |
-| 787 | `NLC` | Διαμόρφωση πλησιέστερης στάθμης (NLC) με ταξινόμηση |
-| 793 | `SPLL` | PLL μονοφασικό (SOGI) |
-| 800 | `SSSC` | Έλεγχος αρθρωτού SSSC (m-SSSC) |
-| 821 | `MMC` | Μετατροπέας MMC (HVDC, μοντέλα 1–4) |
-| 844 | `MMCC` | Έλεγχος σταθμού MMC (HVDC) |
-| 869 | `MMCA` | Βραχίονας MMC (συμπαγής) |
-| 874 | `CHBX` | Αρθρωτός βραχίονας (συμπαγής) |
-| 877 | `SPLX` | PLL μονοφασικό (SOGI, συμπαγές) |
-| 881 | `NOTE` | Σημείωση (κείμενο στο σχέδιο) |
+| 613 | `CB3` | Διακόπτης ισχύος (τριφασικός) |
+| 623 | `ARCX` | Τμήμα τόξου |
+| 627 | `ARC` | Διακόπτης με τόξο (μονοφασικός) |
+| 634 | `XF3` | Μετασχηματιστής τριφασικός (ομάδα σύνδεσης) |
+| 645 | `LOAD3` | Τριφασικό φορτίο (P, Q) |
+| 690 | `LINE3` | Γραμμή (τμήμα π, ακολουθίες) |
+| 703 | `TLM` | Γραμμή από γεωμετρία (CP / FD / WB) |
+| 738 | `TOWER` | Πύργος γραμμής (κεραυνοί) |
+| 755 | `SAI` | Αλεξικέραυνο ZnO, μοντέλο IEEE (εξαρτάται από τη συχνότητα) |
+| 770 | `SAIX` | Αλεξικέραυνο IEEE (συμπαγές) |
+| 774 | `RFX` | Γείωση πύργου R(I) (από τη γραμμή του πύργου) |
+| 780 | `CHB` | Αρθρωτός βραχίονας: γέφυρες H σε σειρά (CHB) |
+| 788 | `NLC` | Διαμόρφωση πλησιέστερης στάθμης (NLC) με ταξινόμηση |
+| 794 | `SPLL` | PLL μονοφασικό (SOGI) |
+| 801 | `SSSC` | Έλεγχος αρθρωτού SSSC (m-SSSC) |
+| 822 | `MMC` | Μετατροπέας MMC (HVDC, μοντέλα 1–4) |
+| 851 | `MMCC` | Έλεγχος σταθμού MMC (HVDC) |
+| 878 | `MMCA` | Βραχίονας MMC (συμπαγής) |
+| 883 | `CHBX` | Αρθρωτός βραχίονας (συμπαγής) |
+| 886 | `SPLX` | PLL μονοφασικό (SOGI, συμπαγές) |
+| 890 | `NOTE` | Σημείωση (κείμενο στο σχέδιο) |
 
 ## Tutorials (`web/studio/tutorials.js`)
 
@@ -340,7 +340,7 @@
 | 1440 | `sssc_1ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε γραμμή (μονοφασικό) |
 | 1460 | `sssc_3ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε δίκτυο 150 kV (τριφασικό, 4 ζυγοί) |
 | 1489 | `hvdc_mmc` | HVDC: MMC (4.14) | Σύνδεση HVDC με MMC σημείο προς σημείο (±320 kV, 1000 MW) |
-| 1526 | `empty` | Νέο | Κενό κύκλωμα |
+| 1527 | `empty` | Νέο | Κενό κύκλωμα |
 
 ## API του server (`run.py`, `/api/<action>`)
 
@@ -650,103 +650,103 @@
 | 1585 | const fn | `ln` |
 | 1593 | function | `ssscTheory` |
 | 1623 | function | `hvdcTheory` |
-| 1638 | function | `wbModelHTML` |
-| 1646 | function | `cableXbTheory` |
-| 1647 | const fn | `rms` |
-| 1648 | const fn | `pk` |
-| 1660 | const fn | `v` |
-| 1665 | function | `lineFdTheory` |
-| 1666 | const fn | `lab` |
-| 1674 | const fn | `pk` |
-| 1681 | function | `trvAfterZero` |
-| 1687 | function | `trvSvg` |
-| 1689 | const fn | `path` |
-| 1696 | function | `trvTerminalTheory` |
-| 1709 | function | `trvSlfTheory` |
-| 1729 | function | `lightningTheory` |
-| 1731 | const fn | `pk` |
-| 1749 | function | `netFaultTheory` |
-| 1762 | function | `busDqTheory` |
-| 1770 | function | `subLegsTheory` |
-| 1779 | function | `blocksTheory` |
-| 1794 | function | `pcmTheory` |
-| 1820 | function | `codeTheory` |
-| 1830 | function | `eisTheory` |
-| 1832 | const fn | `ser` |
-| 1845 | function | `imSteady` |
-| 1848 | function | `imPar` |
-| 1849 | function | `phaseRms` |
-| 1850 | function | `vfTheory` |
-| 1863 | function | `focTheory` |
-| 1880 | function | `synTheory` |
-| 1899 | const fn | `need` |
-| 1919 | function | `pmTheory` |
-| 1921 | const fn | `mtpa` |
-| 1937 | function | `srmTheory` |
-| 1952 | const fn | `curve` |
-| 1963 | function | `lgTheory` |
-| 1974 | const fn | `cr` |
-| 1981 | function | `chaosTheory` |
-| 1996 | function | `nnCycles` |
-| 1999 | function | `genCtlTheory` |
-| 2012 | function | `evTheory` |
-| 2026 | function | `nnTheory` |
-| 2043 | function | `nnGuiCode` |
-| 2049 | function | `runNNCompare` |
-| 2057 | function | `dcDriveTheory` |
-| 2058 | const fn | `per` |
-| 2059 | const fn | `cross` |
-| 2089 | function | `twModel` |
-| 2092 | const fn | `g` |
-| 2095 | function | `twLattice` |
-| 2102 | const fn | `marks` |
-| 2105 | function | `twTheory` |
-| 2113 | const fn | `at` |
-| 2130 | function | `arTheory` |
-| 2150 | function | `impulseMeasure` |
-| 2152 | const fn | `cross` |
-| 2155 | function | `marxTheory` |
-| 2173 | function | `chopModel` |
-| 2176 | const fn | `f` |
-| 2179 | function | `chopTheory` |
-| 2193 | function | `cmp3` |
-| 2197 | function | `hvExact` |
-| 2198 | function | `hv153Theory` |
-| 2224 | function | `besI1e` |
-| 2226 | function | `heaviside` |
-| 2228 | function | `lossTheory` |
-| 2247 | function | `vtBreak` |
-| 2248 | function | `vtTheory` |
-| 2268 | function | `hvdivTheory` |
-| 2270 | const fn | `r` |
-| 2282 | function | `scheringTheory` |
-| 2283 | const fn | `inv` |
-| 2292 | const fn | `sr` |
-| 2298 | function | `formulaTheory` |
-| 2383 | function | `nodeAvg` |
-| 2389 | function | `circuitForMath` |
-| 2421 | function | `scheduleMath` |
-| 2422 | function | `batteryKey` |
-| 2424 | function | `mathChoices` |
-| 2425 | const fn | `prim` |
-| 2427 | function | `renderMathChoices` |
-| 2429 | function | `runTemplate` |
-| 2435 | function | `runMath` |
-| 2457 | function | `saveLocal` |
-| 2458 | function | `saveLocalSoon` |
-| 2460 | function | `download` |
-| 2461 | function | `exportCSV` |
-| 2467 | function | `syncScopeInputs` |
-| 2468 | function | `setSpeed` |
-| 2471 | function | `openSettings` |
-| 2472 | const fn | `sel` |
-| 2473 | const fn | `chk` |
-| 2494 | function | `boot` |
-| 2554 | const fn | `mv` |
-| 2555 | const fn | `up` |
-| 2556 | const fn | `navOpen` |
-| 2567 | const fn | `probeSel` |
-| 2629 | function | `renderTheoryLive` |
+| 1641 | function | `wbModelHTML` |
+| 1649 | function | `cableXbTheory` |
+| 1650 | const fn | `rms` |
+| 1651 | const fn | `pk` |
+| 1663 | const fn | `v` |
+| 1668 | function | `lineFdTheory` |
+| 1669 | const fn | `lab` |
+| 1677 | const fn | `pk` |
+| 1684 | function | `trvAfterZero` |
+| 1690 | function | `trvSvg` |
+| 1692 | const fn | `path` |
+| 1699 | function | `trvTerminalTheory` |
+| 1712 | function | `trvSlfTheory` |
+| 1732 | function | `lightningTheory` |
+| 1734 | const fn | `pk` |
+| 1752 | function | `netFaultTheory` |
+| 1765 | function | `busDqTheory` |
+| 1773 | function | `subLegsTheory` |
+| 1782 | function | `blocksTheory` |
+| 1797 | function | `pcmTheory` |
+| 1823 | function | `codeTheory` |
+| 1833 | function | `eisTheory` |
+| 1835 | const fn | `ser` |
+| 1848 | function | `imSteady` |
+| 1851 | function | `imPar` |
+| 1852 | function | `phaseRms` |
+| 1853 | function | `vfTheory` |
+| 1866 | function | `focTheory` |
+| 1883 | function | `synTheory` |
+| 1902 | const fn | `need` |
+| 1922 | function | `pmTheory` |
+| 1924 | const fn | `mtpa` |
+| 1940 | function | `srmTheory` |
+| 1955 | const fn | `curve` |
+| 1966 | function | `lgTheory` |
+| 1977 | const fn | `cr` |
+| 1984 | function | `chaosTheory` |
+| 1999 | function | `nnCycles` |
+| 2002 | function | `genCtlTheory` |
+| 2015 | function | `evTheory` |
+| 2029 | function | `nnTheory` |
+| 2046 | function | `nnGuiCode` |
+| 2052 | function | `runNNCompare` |
+| 2060 | function | `dcDriveTheory` |
+| 2061 | const fn | `per` |
+| 2062 | const fn | `cross` |
+| 2092 | function | `twModel` |
+| 2095 | const fn | `g` |
+| 2098 | function | `twLattice` |
+| 2105 | const fn | `marks` |
+| 2108 | function | `twTheory` |
+| 2116 | const fn | `at` |
+| 2133 | function | `arTheory` |
+| 2153 | function | `impulseMeasure` |
+| 2155 | const fn | `cross` |
+| 2158 | function | `marxTheory` |
+| 2176 | function | `chopModel` |
+| 2179 | const fn | `f` |
+| 2182 | function | `chopTheory` |
+| 2196 | function | `cmp3` |
+| 2200 | function | `hvExact` |
+| 2201 | function | `hv153Theory` |
+| 2227 | function | `besI1e` |
+| 2229 | function | `heaviside` |
+| 2231 | function | `lossTheory` |
+| 2250 | function | `vtBreak` |
+| 2251 | function | `vtTheory` |
+| 2271 | function | `hvdivTheory` |
+| 2273 | const fn | `r` |
+| 2285 | function | `scheringTheory` |
+| 2286 | const fn | `inv` |
+| 2295 | const fn | `sr` |
+| 2301 | function | `formulaTheory` |
+| 2386 | function | `nodeAvg` |
+| 2392 | function | `circuitForMath` |
+| 2424 | function | `scheduleMath` |
+| 2425 | function | `batteryKey` |
+| 2427 | function | `mathChoices` |
+| 2428 | const fn | `prim` |
+| 2430 | function | `renderMathChoices` |
+| 2432 | function | `runTemplate` |
+| 2438 | function | `runMath` |
+| 2460 | function | `saveLocal` |
+| 2461 | function | `saveLocalSoon` |
+| 2463 | function | `download` |
+| 2464 | function | `exportCSV` |
+| 2470 | function | `syncScopeInputs` |
+| 2471 | function | `setSpeed` |
+| 2474 | function | `openSettings` |
+| 2475 | const fn | `sel` |
+| 2476 | const fn | `chk` |
+| 2497 | function | `boot` |
+| 2557 | const fn | `mv` |
+| 2558 | const fn | `up` |
+| 2559 | const fn | `navOpen` |
+| 2570 | const fn | `probeSel` |
+| 2632 | function | `renderTheoryLive` |
 
 ### `web/studio/bus.js`
 
@@ -1405,95 +1405,98 @@ _(χωρίς συναρτήσεις)_
 | 52 | const fn | `mat` |
 | 61 | const fn | `schedOf` |
 | 62 | function | `faultDef` |
-| 66 | const fn | `sw` |
-| 75 | function | `arcSections` |
-| 76 | const fn | `S` |
-| 84 | function | `arcChain` |
-| 88 | function | `arcBreakerDef` |
-| 95 | function | `breakerDef` |
-| 112 | function | `xfData` |
-| 117 | function | `xfDef` |
-| 118 | const fn | `star` |
-| 119 | const fn | `ends` |
-| 137 | function | `loadDef` |
-| 170 | function | `lineData` |
-| 174 | function | `lineDef` |
-| 176 | const fn | `mat` |
-| 199 | function | `aicDef` |
-| 227 | const fn | `out` |
-| 238 | function | `evcDef` |
-| 245 | const fn | `io` |
-| 246 | const fn | `E` |
-| 295 | const fn | `out` |
-| 304 | const fn | `fT` |
-| 305 | function | `ctlKit` |
-| 307 | const fn | `lag` |
-| 309 | const fn | `leadlag` |
-| 311 | const fn | `wash` |
-| 313 | const fn | `nwLag` |
-| 320 | const fn | `sched` |
-| 322 | function | `avrDef` |
-| 323 | const fn | `io` |
-| 324 | const fn | `N` |
-| 357 | function | `pssDef` |
-| 366 | function | `govDef` |
-| 406 | const fn | `out` |
-| 413 | function | `footTable` |
-| 417 | function | `towerDef` |
-| 447 | function | `saiTable` |
-| 448 | function | `saiParams` |
-| 454 | function | `saiV10` |
-| 455 | const fn | `W` |
-| 460 | function | `saiFitL1` |
-| 465 | function | `saiDef` |
-| 472 | const fn | `par` |
-| 482 | const fn | `nCells` |
-| 483 | function | `chbDef` |
-| 485 | const fn | `out` |
-| 496 | const fn | `sw` |
-| 497 | const fn | `gate` |
-| 511 | function | `spllDef` |
-| 516 | const fn | `E` |
-| 522 | const fn | `w` |
-| 534 | function | `ssscDef` |
-| 535 | const fn | `io` |
-| 536 | const fn | `E` |
-| 551 | const fn | `sched` |
-| 576 | function | `mmcDef` |
-| 581 | const fn | `sin` |
-| 582 | const fn | `w` |
-| 588 | const fn | `refs` |
-| 590 | const fn | `ccsc` |
-| 628 | const fn | `arm` |
-| 630 | const fn | `sw` |
-| 653 | function | `mmccDef` |
-| 656 | const fn | `sin` |
-| 657 | const fn | `w` |
-| 658 | const fn | `pos` |
-| 665 | const fn | `dq` |
-| 680 | const fn | `integ` |
-| 721 | function | `defOf` |
-| 727 | function | `forceImpl` |
-| 729 | const fn | `fix` |
-| 733 | const fn | `hasLib` |
-| 734 | function | `needs` |
-| 736 | function | `expand` |
-| 738 | const fn | `conv` |
-| 746 | function | `warnings` |
-| 752 | const fn | `cx` |
-| 754 | function | `csolve` |
-| 759 | function | `faultCurrents` |
-| 778 | function | `behindXF` |
-| 787 | function | `layoutDef` |
-| 790 | const fn | `isG` |
-| 791 | const fn | `isJ` |
-| 800 | const fn | `side` |
-| 804 | const fn | `bfs` |
-| 813 | const fn | `bary` |
-| 819 | const fn | `ctr` |
-| 820 | const fn | `target` |
-| 836 | function | `placedDef` |
-| 841 | function | `sidesOf` |
+| 68 | const fn | `sw` |
+| 79 | function | `arcSections` |
+| 80 | const fn | `S` |
+| 88 | function | `arcChain` |
+| 92 | function | `arcBreakerDef` |
+| 99 | function | `breakerDef` |
+| 116 | function | `xfData` |
+| 121 | function | `xfDef` |
+| 122 | const fn | `star` |
+| 123 | const fn | `ends` |
+| 141 | function | `loadDef` |
+| 174 | function | `lineData` |
+| 178 | function | `lineDef` |
+| 180 | const fn | `mat` |
+| 203 | function | `aicDef` |
+| 231 | const fn | `out` |
+| 242 | function | `evcDef` |
+| 249 | const fn | `io` |
+| 250 | const fn | `E` |
+| 299 | const fn | `out` |
+| 308 | const fn | `fT` |
+| 309 | function | `ctlKit` |
+| 311 | const fn | `lag` |
+| 313 | const fn | `leadlag` |
+| 315 | const fn | `wash` |
+| 317 | const fn | `nwLag` |
+| 324 | const fn | `sched` |
+| 326 | function | `avrDef` |
+| 327 | const fn | `io` |
+| 328 | const fn | `N` |
+| 361 | function | `pssDef` |
+| 370 | function | `govDef` |
+| 410 | const fn | `out` |
+| 417 | function | `footTable` |
+| 421 | function | `towerDef` |
+| 451 | function | `saiTable` |
+| 452 | function | `saiParams` |
+| 458 | function | `saiV10` |
+| 459 | const fn | `W` |
+| 464 | function | `saiFitL1` |
+| 469 | function | `saiDef` |
+| 476 | const fn | `par` |
+| 486 | const fn | `nCells` |
+| 487 | function | `chbDef` |
+| 489 | const fn | `out` |
+| 500 | const fn | `sw` |
+| 501 | const fn | `gate` |
+| 515 | function | `spllDef` |
+| 520 | const fn | `E` |
+| 526 | const fn | `w` |
+| 538 | function | `ssscDef` |
+| 539 | const fn | `io` |
+| 540 | const fn | `E` |
+| 555 | const fn | `sched` |
+| 580 | function | `mmcDef` |
+| 585 | const fn | `sin` |
+| 586 | const fn | `w` |
+| 592 | const fn | `refs` |
+| 594 | const fn | `toU` |
+| 595 | const fn | `ccsc` |
+| 613 | const fn | `energy` |
+| 616 | const fn | `six` |
+| 674 | const fn | `arm` |
+| 676 | const fn | `sw` |
+| 701 | function | `mmccDef` |
+| 704 | const fn | `sin` |
+| 705 | const fn | `w` |
+| 706 | const fn | `pos` |
+| 713 | const fn | `dq` |
+| 728 | const fn | `integ` |
+| 776 | function | `defOf` |
+| 782 | function | `forceImpl` |
+| 784 | const fn | `fix` |
+| 788 | const fn | `hasLib` |
+| 789 | function | `needs` |
+| 791 | function | `expand` |
+| 793 | const fn | `conv` |
+| 801 | function | `warnings` |
+| 807 | const fn | `cx` |
+| 809 | function | `csolve` |
+| 814 | function | `faultCurrents` |
+| 833 | function | `behindXF` |
+| 842 | function | `layoutDef` |
+| 845 | const fn | `isG` |
+| 846 | const fn | `isJ` |
+| 855 | const fn | `side` |
+| 859 | const fn | `bfs` |
+| 868 | const fn | `bary` |
+| 874 | const fn | `ctr` |
+| 875 | const fn | `target` |
+| 891 | function | `placedDef` |
+| 896 | function | `sidesOf` |
 
 ### `web/studio/nn.js`
 
@@ -1547,92 +1550,92 @@ _(χωρίς συναρτήσεις)_
 | 74 | function | `subLayout` |
 | 76 | const fn | `len` |
 | 82 | function | `subDraw` |
-| 887 | function | `noteBox` |
-| 890 | function | `defaults` |
-| 892 | function | `elPins` |
-| 893 | function | `sigPins` |
-| 894 | function | `pinsOf` |
-| 897 | function | `parseMat` |
-| 899 | function | `nPorts` |
-| 900 | function | `portY` |
-| 901 | function | `portPins` |
-| 902 | function | `portBox` |
-| 904 | function | `posDef` |
-| 906 | function | `symmetric` |
-| 907 | function | `matInv` |
-| 912 | function | `klMatrix` |
-| 923 | function | `kgMatrix` |
-| 931 | function | `srmGeo` |
-| 933 | function | `srmSpins` |
-| 935 | function | `srmPins` |
-| 937 | function | `satD` |
-| 938 | function | `satDinv` |
-| 940 | function | `genSpins` |
-| 951 | function | `genTsc` |
-| 956 | function | `genCirc2` |
-| 957 | const fn | `Fn` |
-| 965 | function | `genAxis` |
-| 973 | const fn | `classic` |
-| 979 | const fn | `plist` |
-| 983 | function | `genModel` |
-| 989 | const fn | `w` |
-| 998 | const fn | `grp` |
-| 1015 | function | `genGamma` |
-| 1023 | function | `genDQ` |
-| 1027 | function | `genSteady` |
-| 1029 | const fn | `rot` |
-| 1036 | function | `srmAlignedPsi` |
-| 1037 | function | `srmModelPsi` |
-| 1038 | function | `srmTableText` |
-| 1041 | function | `srmMag` |
-| 1057 | function | `chkMag` |
-| 1059 | function | `srmA` |
-| 1062 | function | `seg` |
-| 1063 | function | `srmPsi` |
-| 1065 | function | `srmCur` |
-| 1067 | function | `srmTorque` |
-| 1070 | function | `srmCoenergy` |
-| 1074 | function | `waveShape` |
-| 1075 | function | `waveAt` |
-| 1078 | function | `waveMeasure` |
-| 1081 | const fn | `cross` |
-| 1087 | function | `waveFit` |
-| 1088 | const fn | `res` |
-| 1099 | function | `directWave` |
-| 1102 | function | `impulseWave` |
-| 1113 | function | `bewley` |
-| 1116 | const fn | `at` |
-| 1122 | function | `movChar` |
-| 1127 | const fn | `pick` |
-| 1128 | const fn | `cur` |
-| 1129 | const fn | `inv` |
-| 1133 | function | `impulseDesign` |
-| 1138 | function | `impulseRoots` |
-| 1141 | function | `tlParams` |
-| 1150 | function | `tlmData` |
-| 1152 | function | `tlmM` |
-| 1159 | function | `tlmPin` |
-| 1160 | function | `tlmPins` |
-| 1162 | function | `tlmKey` |
-| 1173 | function | `tlmModel` |
-| 1181 | function | `lightningWave` |
-| 1188 | function | `pinKind` |
-| 1199 | function | `structural` |
-| 1206 | function | `pinWidth` |
-| 1209 | function | `xf` |
-| 1210 | function | `pinPos` |
-| 1212 | function | `pinDir` |
-| 1217 | function | `cpeParams` |
-| 1218 | function | `cpeBank` |
-| 1222 | function | `cpeZ` |
-| 1223 | function | `cpeZbank` |
-| 1224 | function | `boxOf` |
-| 1225 | function | `bbox` |
-| 1230 | function | `fmtNum` |
-| 1234 | function | `eng` |
-| 1238 | function | `parseEng` |
-| 1241 | function | `parseSched` |
-| 1249 | function | `machines` |
+| 896 | function | `noteBox` |
+| 899 | function | `defaults` |
+| 901 | function | `elPins` |
+| 902 | function | `sigPins` |
+| 903 | function | `pinsOf` |
+| 906 | function | `parseMat` |
+| 908 | function | `nPorts` |
+| 909 | function | `portY` |
+| 910 | function | `portPins` |
+| 911 | function | `portBox` |
+| 913 | function | `posDef` |
+| 915 | function | `symmetric` |
+| 916 | function | `matInv` |
+| 921 | function | `klMatrix` |
+| 932 | function | `kgMatrix` |
+| 940 | function | `srmGeo` |
+| 942 | function | `srmSpins` |
+| 944 | function | `srmPins` |
+| 946 | function | `satD` |
+| 947 | function | `satDinv` |
+| 949 | function | `genSpins` |
+| 960 | function | `genTsc` |
+| 965 | function | `genCirc2` |
+| 966 | const fn | `Fn` |
+| 974 | function | `genAxis` |
+| 982 | const fn | `classic` |
+| 988 | const fn | `plist` |
+| 992 | function | `genModel` |
+| 998 | const fn | `w` |
+| 1007 | const fn | `grp` |
+| 1024 | function | `genGamma` |
+| 1032 | function | `genDQ` |
+| 1036 | function | `genSteady` |
+| 1038 | const fn | `rot` |
+| 1045 | function | `srmAlignedPsi` |
+| 1046 | function | `srmModelPsi` |
+| 1047 | function | `srmTableText` |
+| 1050 | function | `srmMag` |
+| 1066 | function | `chkMag` |
+| 1068 | function | `srmA` |
+| 1071 | function | `seg` |
+| 1072 | function | `srmPsi` |
+| 1074 | function | `srmCur` |
+| 1076 | function | `srmTorque` |
+| 1079 | function | `srmCoenergy` |
+| 1083 | function | `waveShape` |
+| 1084 | function | `waveAt` |
+| 1087 | function | `waveMeasure` |
+| 1090 | const fn | `cross` |
+| 1096 | function | `waveFit` |
+| 1097 | const fn | `res` |
+| 1108 | function | `directWave` |
+| 1111 | function | `impulseWave` |
+| 1122 | function | `bewley` |
+| 1125 | const fn | `at` |
+| 1131 | function | `movChar` |
+| 1136 | const fn | `pick` |
+| 1137 | const fn | `cur` |
+| 1138 | const fn | `inv` |
+| 1142 | function | `impulseDesign` |
+| 1147 | function | `impulseRoots` |
+| 1150 | function | `tlParams` |
+| 1159 | function | `tlmData` |
+| 1161 | function | `tlmM` |
+| 1168 | function | `tlmPin` |
+| 1169 | function | `tlmPins` |
+| 1171 | function | `tlmKey` |
+| 1182 | function | `tlmModel` |
+| 1190 | function | `lightningWave` |
+| 1197 | function | `pinKind` |
+| 1208 | function | `structural` |
+| 1215 | function | `pinWidth` |
+| 1218 | function | `xf` |
+| 1219 | function | `pinPos` |
+| 1221 | function | `pinDir` |
+| 1226 | function | `cpeParams` |
+| 1227 | function | `cpeBank` |
+| 1231 | function | `cpeZ` |
+| 1232 | function | `cpeZbank` |
+| 1233 | function | `boxOf` |
+| 1234 | function | `bbox` |
+| 1239 | function | `fmtNum` |
+| 1243 | function | `eng` |
+| 1247 | function | `parseEng` |
+| 1250 | function | `parseSched` |
+| 1258 | function | `machines` |
 
 ### `web/studio/pool.js`
 
@@ -1965,9 +1968,9 @@ _(χωρίς συναρτήσεις)_
 | 1448 | method | `build` |
 | 1466 | method | `build` |
 | 1468 | const fn | `ln` |
-| 1495 | method | `build` |
-| 1499 | const fn | `station` |
-| 1527 | method | `build` |
+| 1496 | method | `build` |
+| 1500 | const fn | `station` |
+| 1528 | method | `build` |
 
 ### `web/studio/units.js`
 

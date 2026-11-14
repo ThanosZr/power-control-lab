@@ -1489,11 +1489,12 @@
  T.push({id:'hvdc_mmc',group:'HVDC: MMC (4.14)',title:'Σύνδεση HVDC με MMC σημείο προς σημείο (±320 kV, 1000 MW)',theory:'formula',topology:'hvdc_mmc',
   options:[{k:'model',label:'Μοντέλο MMC',options:[['m2','Model 2: ισοδύναμο βραχίονα (κάθε πυκνωτής)'],['m3','Model 3: συνάρτηση μεταγωγής βραχίονα'],['m4','Model 4: μέσο μοντέλο (AVM)'],['m1','Model 1: κάθε υπομονάδα από IGBT (N = 20, αργό)']],def:'m4'},
    {k:'N',label:'Υπομονάδες ανά βραχίονα',options:[['400','400 (401 επίπεδα)'],['100','100'],['20','20']],def:'400'},
+   {k:'ectl',label:'Ενέργεια των βραχιόνων (Model 1–3)',options:[['energy','Έλεγχος ενέργειας (4.15): ίδια απόκριση με το Model 4'],['direct','Άμεση διαμόρφωση (4.14)']],def:'energy'},
    {k:'ev',label:'Γεγονός',options:[['pstep','Βήμα P του σταθμού 1: 1 → 0,5 pu στα 0,5 s'],['acf','Τριφασικό σφάλμα AC στον σταθμό 2 (0,5–0,65 s)'],['dcf','Σφάλμα DC πόλου–πόλου στον σταθμό 2 (0,5 s)'],['rev','Αντιστροφή ροής: 1 → 0 → −0,5 pu (0,5–0,6 s)']],def:'pstep'}],
   desc:'Δύο σταθμοί MMC όπως ο σταθμός MMC του EMTP-RV: δίκτυα AC 400 kV με S″k 10 GVA, μετασχηματιστές 400/333 kV YNd1 με u_k 18 %, αντιδραστήρες αστέρα για αναφορά γης στο τρίγωνο, μετατροπείς με N υπομονάδες ανά βραχίονα (C = 10 mF για N = 400, ίδια ενέργεια για τα άλλα N, 30 kJ/MVA), αυτεπαγωγή βραχίονα 50 mH, και ζεύγος καλωδίων ±320 kV 70 km ως μοντέλο wideband (1 mHz – 10 MHz, με διόρθωση DC). Ο σταθμός 1 ρυθμίζει P και Q, ο σταθμός 2 την τάση DC και Q. Οι πυκνωτές και τα καλώδια ξεκινούν φορτισμένα· οι μετατροπείς απεμπλέκονται στα 50 ms (ώσπου να κλειδώσουν τα PLL).',
-  tasks:['Μετά το βήμα του P στα 0,5 s: πόσο αλλάζει η V_dc του σταθμού 2 και σε πόσο χρόνο επανέρχεται; Σύγκρινε τα μοντέλα 2, 3 και 4.','Στο σφάλμα DC: πόσο φτάνει το ρεύμα DC πριν και μετά το μπλοκάρισμα; Από πού έρχεται το ρεύμα μετά το μπλοκάρισμα;','Με N = 20 οι τάσεις των πυκνωτών και το ρεύμα AC έχουν σκαλοπάτια: πόσο μεγάλα; Πόση είναι η κυμάτωση των πυκνωτών στη σταθερή κατάσταση;'],
+  tasks:['Μετά το βήμα του P στα 0,5 s: πόσο αλλάζει η V_dc του σταθμού 2 και σε πόσο χρόνο επανέρχεται; Σύγκρινε τα μοντέλα 2, 3 και 4.','Με την άμεση διαμόρφωση (4.14) η κυμάτωση των πυκνωτών περνά στην τάση AC και τα Model 2 και 3 απομακρύνονται από το Model 4. Πόσο; Με τον έλεγχο ενέργειας ξανά ίδια: δες τις Σv_C του άνω και του κάτω βραχίονα (εξισορρόπηση).','Στο σφάλμα AC ο σταθμός 2 μπλοκάρει: τι κρατά τη V_dc κάτω από 1,2 pu; (Το όριο υπέρτασης DC του σταθμού 1.)','Στο σφάλμα DC: πόσο φτάνει το ρεύμα DC πριν και μετά το μπλοκάρισμα; Από πού έρχεται το ρεύμα μετά το μπλοκάρισμα;','Με N = 20 οι τάσεις των πυκνωτών και το ρεύμα AC έχουν σκαλοπάτια: πόσο μεγάλα; Πόση είναι η κυμάτωση των πυκνωτών στη σταθερή κατάσταση;'],
   build(o){const model=['m1','m2','m3','m4'].includes(o.model)?o.model:'m4',N=model==='m1'?20:(+o.N||400),ev=HVDC_P[o.ev]?o.ev:'pstep',f=50;
-   const mmc={impl:model==='m1'?'blocks':'fast',model:model==='m1'?'m2':model,N,C:+(10e-3*N/400).toPrecision(6),Vdc:640e3,Larm:0.05,Ron:1e-3,conn:'bus'};
+   const mmc={impl:model==='m1'?'blocks':'fast',model:model==='m1'?'m2':model,N,C:+(10e-3*N/400).toPrecision(6),Vdc:640e3,Larm:0.05,Ron:1e-3,ectl:o.ectl==='direct'?'direct':'energy',conn:'bus'};
    const ctl={S:1059e6,Vac:333e3,Vdc:640e3,f0:f,X:0.075,R:0.002,th0:-120,tdb:0.05,tbrk:0,prot:'on',Idcmax:2,tprot:0.3};
    const comps=[],wires=[];
    const station=(k,x0,dir,ctlp)=>{const X=d=>x0+dir*d,id=s=>s+k;
@@ -1515,14 +1516,14 @@
    const m=LM()?.['320kV-dc|70|wb'];pc.mdl=m?JSON.stringify({...m,src:Pp.tlmKey(pc)}):'';
    comps.push(C('CAB','TLM',900,300,pc,{label:'καλώδια ±320 kV · 70 km (WB)'}));
    wires.push(['MMC1:p','CAB:a1'],['MMC1:n','CAB:b1'],['CAB:a2','MMC2:p'],['CAB:b2','MMC2:n']);
-   if(ev==='acf'){comps.push(C('FAC','FLT3',1400,460,{kind:'abcg',ton:0.5,toff:0.65,conn:'bus'},{label:'σφάλμα AC'}));wires.push(['J2:j','FAC:abc']);}
+   if(ev==='acf'){comps.push(C('FAC','FLT3',1400,460,{kind:'abcg',ton:0.5,toff:0.65,clr:'zero',conn:'bus'},{label:'σφάλμα AC'}));wires.push(['J2:j','FAC:abc']);}
    if(ev==='dcf'){comps.push(C('FDC','SW',1180,300,{gate:'sig',model:'mos',Ron:0.1,Roff:1e9,body:false},{rot:1,label:'σφάλμα DC'}),C('KDC','CONST',1100,420,{v:'0:0, 0.5:1'}));
     wires.push(['FDC:d','MMC2:p'],['FDC:s','MMC2:n'],['KDC:y','FDC:g']);}
    const arm=model==='m4'?[['Y:MMC1/VCD','v του C_dc 1'],['Y:MMC2/VCD','v του C_dc 2']]:model==='m1'?[['Y:MMC1/UaN:vav','μέση V_C άνω a 1'],['Y:MMC1/LaN:vav','μέση V_C κάτω a 1']]:[['Y:MMC1/AUa','Σv_C άνω a 1'],['Y:MMC1/ALa','Σv_C κάτω a 1']];
    return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:1000,method:'TR',speed:0.02,stopT:1},
     scope:{panes:[[['Y:CT1/PP','P σταθμού 1 (pu)'],['Y:CT2/PP','P σταθμού 2 (pu)']],[['Y:CT1/Fvdc','V_dc 1 (pu)'],['Y:CT2/Fvdc','V_dc 2 (pu)']],[['Y:MMC1/IDC','I_dc 1'],['Y:MMC2/IDC','I_dc 2']],
      [['Y:MMC1/IAa','i_a 1'],['Y:MMC1/IAb','i_b 1'],['Y:MMC1/IAc','i_c 1']],arm],window:{unit:'s',n:0.2}},
-    meta:{hvdc:{model,N,ev,S:1059e6,Vdc:640e3,Vac:333e3,C:mmc.C,Larm:0.05,Ron:1e-3,Sk:10e9,uk:18,len:70}}});}});
+    meta:{hvdc:{model,N,ev,ectl:mmc.ectl,S:1059e6,Vdc:640e3,Vac:333e3,C:mmc.C,Larm:0.05,Ron:1e-3,Sk:10e9,uk:18,len:70}}});}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
  root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};

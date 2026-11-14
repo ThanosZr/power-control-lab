@@ -136,6 +136,12 @@
 | star (grounding) reactor | αντιδραστήρας αστέρα (για γείωση) (4.14) |
 | pole-to-pole fault | σφάλμα πόλου–πόλου (4.14) |
 | droop (P/V_dc) | στατικότητα P/V_dc (4.14) |
+| arm energy control, compensated modulation | έλεγχος ενέργειας των βραχιόνων, στάθμη από τη μετρημένη V_C (4.15) |
+| horizontal / vertical energy balancing | εξισορρόπηση ενέργειας ανάμεσα στις φάσεις / άνω–κάτω (4.15) |
+| active damping (virtual resistance) | ενεργή απόσβεση (εικονική αντίσταση) (4.15) |
+| DC overvoltage limiter | όριο υπέρτασης DC (4.15) |
+| fault clearing at current zero | εκκαθάριση σφάλματος στον μηδενισμό του ρεύματος (4.15) |
+| integrator windup | συσσώρευση (windup) του ολοκληρωτή (4.15) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
