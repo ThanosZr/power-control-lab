@@ -139,8 +139,7 @@ class Pcl(unittest.TestCase):
         self.assertEqual(b.comp('V1')['params']['V'], 48)
         self.assertEqual(b.comp('R1')['params']['R'], '=2*Vin')
         r = b.run(t_end=2e-4, channels=['V:R1', 'I:R1'])
-        f = r.frame()
-        ratio = (f['V:R1'] / f['I:R1']).iloc[-1]                          # the solver's R is 2·V_in = 96 Ω
+        ratio = r['V:R1'][-1] / r['I:R1'][-1]                             # the solver's R is 2·V_in = 96 Ω (no pandas needed)
         self.assertAlmostEqual(ratio, 96.0, places=6)
 
 
