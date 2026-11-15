@@ -114,6 +114,8 @@
 | right-half-plane (RHP) zero | μηδενικό στο δεξί ημιεπίπεδο (4.17) |
 | role (of an element in a topology) | ρόλος (στοιχείου στο πρότυπο), λίστα ρόλων (4.17) |
 | guard band / out-of-band samples (of a rational fit) | ζώνη ασφαλείας, δείγματα ασφαλείας (4.17) |
+| technical look / classic look | τεχνική όψη / κλασική όψη (4.17.3) |
+| crisp edges (no antialiasing) | γραμμές σε ακέραια pixel, χωρίς εξομάλυνση (4.17.3) |
 | steady autoscale | σταθερή αυτόματη κλίμακα (4.17.2) |
 | min–max shade, mean line | σκιά min–max, γραμμή της μέσης (4.17.2) |
 | circuit input (global parameter) | είσοδος του κυκλώματος (4.17.1) |

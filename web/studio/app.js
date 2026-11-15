@@ -1378,12 +1378,12 @@ const PAL={tax:'field',open:{},fav:[],recent:[]};
 function palLoad(){try{const o=JSON.parse(localStorage.getItem('pcl-library')||'{}');if(o.tax&&Library.TAX.some(t=>t.id===o.tax))PAL.tax=o.tax;PAL.open=o.open||{};PAL.fav=Array.isArray(o.fav)?o.fav:[];PAL.recent=Array.isArray(o.recent)?o.recent:[];}catch{}}
 function palSave(){try{localStorage.setItem('pcl-library',JSON.stringify({tax:PAL.tax,open:PAL.open,fav:PAL.fav,recent:PAL.recent}));}catch{}}
 function palRecent(t){if(!P.PARTS[t])return;PAL.recent=[t,...PAL.recent.filter(x=>x!==t)].slice(0,12);palSave();if(PAL.tax==='mine')renderPalette();}
-function palItem(k,d){const fav=PAL.fav.includes(k);return `<div class="pal-row"><button class="pal-item" draggable="true" data-part="${k}" title="${esc(d.name)} · κλικ και μετά κλικ στον καμβά, ή σύρσιμο"><svg viewBox="-42 -42 84 84"><g class="sym">${d.draw(P.defaults(k))}</g></svg><span>${esc(d.name)}</span></button><button class="pal-fav${fav?' on':''}" data-fav="${k}" title="${fav?'Αφαίρεση από τα αγαπημένα':'Στα αγαπημένα'}" aria-pressed="${fav}">${fav?'★':'☆'}</button></div>`;}
+function palItem(k,d){const fav=PAL.fav.includes(k);return `<div class="pal-row"><button class="pal-item" draggable="true" data-part="${k}" title="${esc(d.name)} · κλικ και μετά κλικ στον καμβά, ή σύρσιμο"><svg viewBox="-42 -42 84 84"><g class="sym">${P.symHV?P.symHV(P.phaseSplit(k,d.draw(P.defaults(k)))):d.draw(P.defaults(k))}</g></svg><span>${esc(d.name)}</span></button><button class="pal-fav${fav?' on':''}" data-fav="${k}" title="${fav?'Αφαίρεση από τα αγαπημένα':'Στα αγαπημένα'}" aria-pressed="${fav}">${fav?'★':'☆'}</button></div>`;}
 // 4.7: the library is rebuilt only when what it shows changed (search, taxonomy, favourites, recent, open groups, the
 // project's subcircuits); every tutorial and every change used to draw all the symbols again (≈ 5 ms each)
 let palKey='';
 function renderPalette(){const q=($('#pal-search').value||'').trim();
- {const k=JSON.stringify([q,PAL.tax,PAL.fav,PAL.recent,PAL.open[PAL.tax]||null,defsOf()]);if(k===palKey&&$('#palette-list').childElementCount)return;palKey=k;}
+ {const k=JSON.stringify([q,PAL.tax,PAL.fav,PAL.recent,PAL.open[PAL.tax]||null,defsOf(),P.symStyle?.()]);if(k===palKey&&$('#palette-list').childElementCount)return;palKey=k;}
  const sel=$('#pal-tax');if(sel&&!sel.options.length)sel.innerHTML=Library.TAX.map(t=>`<option value="${t.id}">${esc(t.title)}</option>`).join('');if(sel)sel.value=PAL.tax;
  // subcircuits of the project (3.17): one item per definition, plus import of a definition file
  const ql=q.toLowerCase(),defs=Object.entries(defsOf()).filter(([k,d])=>!ql||String(d.title||k).toLowerCase().includes(ql)||k.toLowerCase().includes(ql)||'υποκύκλωμα'.includes(ql));
@@ -2638,8 +2638,12 @@ function openSettings(){const s=editor.settings,m=$('#settings');m.hidden=false;
   ${sel('wheel','Ροδέλα',[['zoom','Zoom (Shift: οριζόντια κύλιση)'],['scroll','Κύλιση (Ctrl: zoom)']])}
   ${sel('dblclick','Διπλό κλικ σε στοιχείο',[['edit','Ρυθμίσεις'],['scope','Scope ρεύματος']])}
   <p class="muted small">Space + σύρσιμο μετακινεί πάντα τον καμβά. Το κείμενο του σχεδίου δεν επιλέγεται ποτέ.</p></section>
+  <section><h3>Όψη</h3>${sel('look','Όψη',[['tech','Τεχνική: λευκό, λεπτές ευθείες, μονόχρωμο (προεπιλογή)'],['classic','Κλασική (όπως ως την 4.17.2)']])}
+  ${sel('sym','Σύμβολα',[['iec','IEC: αντίσταση ως ορθογώνιο'],['ansi','ANSI: αντίσταση ζιγκ-ζαγκ']])}
+  ${s.look==='classic'?'':`${sel('techComp','Πάχος γραμμών των στοιχείων',[[1,'1 px'],[1.5,'1,5 px'],[2,'2 px'],[2.5,'2,5 px']])}${sel('techWire','Πάχος συρμάτων',[[1,'1 px'],[1.5,'1,5 px'],[2,'2 px'],[2.5,'2,5 px']])}${sel('techCorner','Γωνίες συρμάτων',[['sharp','Ορθές'],['round','Στρογγυλεμένες']])}`}
+  <p class="muted small">Στην τεχνική όψη το σχέδιο είναι μονόχρωμο, με γραμμές ίδιου πάχους σε κάθε ζουμ· χρώμα παίρνει μόνο ό,τι έχεις επιλέξει.</p></section>
   <section><h3>Πλέγμα & σύρματα</h3>${chk('grid','Εμφάνιση πλέγματος')}${sel('gridStyle','Μορφή πλέγματος',[['dots','Κουκκίδες'],['lines','Γραμμές']])}
-  ${sel('wireWidth','Πάχος συρμάτων',[[1.6,'Λεπτό'],[2.2,'Κανονικό'],[3,'Χοντρό']])}${sel('corner','Γωνίες συρμάτων',[['round','Στρογγυλεμένες'],['sharp','Ορθές']])}
+  ${s.look==='classic'?`${sel('wireWidth','Πάχος συρμάτων',[[1.6,'Λεπτό'],[2.2,'Κανονικό'],[3,'Χοντρό']])}${sel('corner','Γωνίες συρμάτων',[['round','Στρογγυλεμένες'],['sharp','Ορθές']])}`:''}
   ${chk('freeEnds','Ελεύθερα άκρα: σύρμα που αφήνεις στο κενό κρατά ελεύθερο άκρο (αλλιώς ακυρώνεται)')}${chk('autoConnect','Στοιχείο που αφήνεις πάνω σε σύρμα ή ακροδέκτη συνδέεται, ή μπαίνει σε σειρά (Shift: χωρίς σύνδεση)')}
   ${sel('snapPx','Κούμπωμα σε ακροδέκτη ή σύρμα σε απόσταση',[[6,'6 px'],[12,'12 px'],[20,'20 px']])}
   ${chk('autoRoute','Αυτόματη δρομολόγηση A* όταν αφήνεις στοιχείο (αλλιώς κρατά τη δική σου διαδρομή)')}</section>
@@ -2647,11 +2651,18 @@ function openSettings(){const s=editor.settings,m=$('#settings');m.hidden=false;
   <section><h3>Απόδοση</h3><label class="frow check"><input type="checkbox" id="set-live-worker" ${window.Live&&!Live.off?'checked':''} ${window.Live?.supported()?'':'disabled'}><span>Η προσομοίωση σε δικό της thread (Worker): το σχέδιο δεν περιμένει ποτέ τον λύτη${window.Live?.supported()?'':' (δεν υποστηρίζεται εδώ: χρειάζεται SharedArrayBuffer)'}</span></label>
   <p class="muted small">Χωρίς αυτό ο λύτης τρέχει στη σελίδα και υποχωρεί όσο κάνεις zoom, μετακίνηση ή σύρσιμο. Τα κυκλώματα με μπλοκ Python τρέχουν πάντα στη σελίδα.</p></section>`;
  $('#set-live-worker')?.addEventListener('change',e=>{if(!window.Live)return;const was=S.running;if(Live.active)pause();Live.off=!e.target.checked;try{localStorage.setItem('pcl-live-worker',Live.off?'off':'on');}catch{}if(was)play();});
- $$('#settings [data-set]').forEach(el=>el.onchange=()=>{const k=el.dataset.set;let v=el.type==='checkbox'?el.checked:el.value;if(k==='wireWidth'||k==='snapPx')v=+v;editor.settings[k]=v;saveSettings();editor.render();renderProps();});}
+ $$('#settings [data-set]').forEach(el=>el.onchange=()=>{const k=el.dataset.set;let v=el.type==='checkbox'?el.checked:el.value;if(k==='wireWidth'||k==='snapPx'||k==='techComp'||k==='techWire')v=+v;editor.settings[k]=v;saveSettings();
+  if(k==='look'||k==='sym'||k==='techComp'){applyLook();renderPalette();}editor.render();renderProps();if(k==='look')openSettings();});}
+// 4.17.3 (ROADMAP §65): the look (technical by default, classic) and the style of the symbols, from the settings: a class of
+// the body and the widths as CSS variables; the scope takes the colours of the look at its next drawing
+function applyLook(){const s=editor.settings,tech=s.look!=='classic';document.body.classList.toggle('look-tech',tech);document.body.classList.toggle('look-classic',!tech);
+ document.body.style.setProperty('--w-comp',(+s.techComp||1.5)+'px');P.setSym?.(s.sym==='ansi'?'ansi':'iec');if(scope){scope._col=null;scope.requestDraw?.();}}
 
 // ------------------------------------------------------------------ boot
 function boot(){
  const saved=loadSettings();
+ // 4.17.3: the look and the symbols before the first drawing
+ P.setSym?.(saved.sym==='ansi'?'ansi':'iec');document.body.classList.toggle('look-tech',saved.look!=='classic');document.body.classList.toggle('look-classic',saved.look==='classic');
  editor=new Editor($('#canvas'),{settings:saved,
   onchange:kind=>{if(kind==='struct'||kind==='param'){if(S.batch)S.batch.stale=true;buildSim(false);if(S.theory)setTimeout(()=>{if(tutorial().theory==='v1'||tutorial().theory==='formula')runTheory();},50);scheduleMath();}
    // a move (drag, arrow keys) is saved a moment later, once (4.6: the whole project as JSON on every drag end cost a frame)

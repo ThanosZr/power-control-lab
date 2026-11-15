@@ -31,7 +31,7 @@
   constructor(holder,opt={}){
    this.holder=holder;this.opt=opt;this.doc={components:[],wires:[]};this.sel={c:new Set(),w:new Set()};
    this.undoStack=[];this.redoStack=[];this.view={cx:400,cy:250,k:1};this.mode=null;this.live=null;this.space=false;
-   this.settings=Object.assign({leftDrag:'select',middleDrag:'pan',rightButton:'menu',wheel:'zoom',dblclick:'edit',marquee:'direction',grid:true,gridStyle:'dots',wireWidth:2.2,corner:'round',showLive:true,showArrows:true,autoRoute:false,freeEnds:true,autoConnect:true,snapPx:12},opt.settings||{});
+   this.settings=Object.assign({leftDrag:'select',middleDrag:'pan',rightButton:'menu',wheel:'zoom',dblclick:'edit',marquee:'direction',grid:true,gridStyle:'dots',wireWidth:2.2,corner:'round',look:'tech',sym:'iec',techComp:1.5,techWire:1,techCorner:'sharp',showLive:true,showArrows:true,autoRoute:false,freeEnds:true,autoConnect:true,snapPx:12},opt.settings||{});
    const svg=this.svg=document.createElementNS(NS,'svg');svg.setAttribute('class','schem');svg.setAttribute('tabindex','0');
    svg.setAttribute('aria-label','Κύκλωμα. Διπλό κλικ σε στοιχείο για ρυθμίσεις, δεξί κλικ για scope.');
    svg.innerHTML=`<defs><marker id="flowArr" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="flowhead"/></marker>
@@ -299,7 +299,7 @@
   partSVG(c){const def=P.PARTS[c.type];if(c.type==='JUNC')return `<g class="part junc" data-c="${c.id}"><circle class="hit" r="7" cx="${c.x}" cy="${c.y}"/></g>`;
    const [bx,by,bw,bh]=P.boxOf(c);const tf=`translate(${c.x},${c.y}) rotate(${90*(c.rot||0)}) scale(${c.flip?-1:1},1)`;
    // the title text of a rotated or mirrored symbol stays upright and readable (3.5): inverse of rotate·scale about its centre
-   let sym=def.draw({...P.defaults(c.type),...c.params});const r=c.rot||0,f=c.flip?-1:1;
+   let sym=def.draw({...P.defaults(c.type),...c.params});if(P.symHV)sym=P.symHV(P.phaseSplit(c.type,sym));const r=c.rot||0,f=c.flip?-1:1;
    if(r||c.flip)sym=sym.replace(/<text class="(btxt|bsm)" x="([-\d.]+)" y="([-\d.]+)"/g,(m,k,x,y)=>`${m} transform="translate(${x} ${+y-4}) scale(${f} 1) rotate(${-90*r}) translate(${-x} ${4-y})"`);
    return `<g class="part t-${c.type}" data-c="${c.id}" transform="${tf}"><rect class="hit" x="${bx-4}" y="${by-4}" width="${bw+8}" height="${bh+8}" rx="5"/><g class="sym">${sym}</g></g>`;}
   renderPart(c){const el=this.L.parts.querySelector(`[data-c="${CSS.escape(c.id)}"]`);if(el){el.outerHTML=this.partSVG(c);this.partEls();this._lv?.delete(c.id);}this.renderSel();}
@@ -351,24 +351,30 @@
    this.liveRefs=new Map();for(const g of this.L.live.querySelectorAll('[data-l]'))this.liveRefs.set(g.dataset.l,g.querySelector('.lv'));this._lv=new Map();
   }
   renderWires(){
-   const W=this.settings.wireWidth;const count=new Map();for(const w of this.doc.wires)for(const e of [w.a,w.b]){const k=e.c+':'+e.p;count.set(k,(count.get(k)||0)+1);}
+   // 4.17.3: the technical look has its own width of the wires (1 px by default) and right-angled corners
+   const tech=this.settings.look!=='classic',W=tech?(+this.settings.techWire||1):this.settings.wireWidth;const count=new Map();for(const w of this.doc.wires)for(const e of [w.a,w.b]){const k=e.c+':'+e.p;count.set(k,(count.get(k)||0)+1);}
    let h='',dots='';const NK=this.netKinds();this.nk=NK;
    // buses (3.18): the width of every wire, inferred from what it joins (Bus.widths never throws)
    let BW=null;try{BW=root.Bus?root.Bus.widths(this.doc):null;}catch(e){BW=null;}this.bw=BW;
    // a name on wires of different drawn nets joins them (version ≥ 3): those names get ⇄
    const joined=new Set();if((+this.doc.version||0)>=3){const m=new Map();for(const w of this.doc.wires){if(!w.name)continue;const k=w.a.c+':'+w.a.p,key=w.name+'|'+NK.of(k);if(!m.has(key))m.set(key,new Set());m.get(key).add(NK.root(k));}
     for(const [key,r] of m)if(r.size>1)joined.add(key.slice(0,key.lastIndexOf('|')));}
-   this.wctx={NK,BW,joined,W};for(const w of this.doc.wires)h+=this.wireSVG(w);
+   // 4.17.3: in the technical look a net that holds the pin of one phase of a three-phase part (a, b, c, a1 …) takes the
+   // colour of that phase (a net with two phases, or none, stays dark)
+   const PH=new Map();if(tech&&P.phaseSplit){for(const c of this.doc.components){if(!/^(VAC3|IM|SM|GRID3|FLT3|CB3|XF3|LOAD3|GEN3|LINE3|TLM|MMC|LCC6|LCCS|LCCX|FILT3|ZSER3)$/.test(c.type))continue;
+     for(const pn of Object.keys(P.pinsOf(c))){const m=/^([abc])\d?$/.exec(pn);if(!m)continue;const r=NK.root(c.id+':'+pn);if(r==null)continue;const was=PH.get(r);PH.set(r,was===undefined||was===m[1]?m[1]:'');}}}
+   this.wctx={NK,BW,joined,W,tech,PH};for(const w of this.doc.wires)h+=this.wireSVG(w);
    for(const c of this.doc.components){if(c.type==='JUNC'){const n=count.get(c.id+':j')||0;if(n>=3)dots+=`<circle class="jdot${NK.of(c.id+':j')==='sig'?' sig':''}" data-pc="${esc(c.id)}" cx="${c.x}" cy="${c.y}" r="${NK.of(c.id+':j')==='sig'?2.8:3.6}"/>`;else if(n===1)dots+=`<circle class="jfree" data-pc="${esc(c.id)}" cx="${c.x}" cy="${c.y}" r="3.6"/>`;continue;}
     for(const p of Object.keys(P.pinsOf(c))){if((count.get(c.id+':'+p)||0)>=2){const q=this.pin(c,p),sg=NK.of(c.id+':'+p)==='sig';dots+=`<circle class="jdot${sg?' sig':''}" data-pc="${esc(c.id)}" cx="${q[0]}" cy="${q[1]}" r="${sg?2.8:3.6}"/>`;}}}
    this.L.wires.innerHTML=h;this.L.dots.innerHTML=dots;this.pinCount=count;
   }
   // markup of one wire (with the net kinds and bus widths of the last full redraw)
-  wireSVG(w){const {NK,BW,joined,W}=this.wctx;let h='';const pts=this.wirePts(w);if(pts.some(p=>!p))return '';const sig=NK.of(w.a.c+':'+w.a.p)==='sig',nb=BW?BW.wire(w):1;
+  wireSVG(w){const {NK,BW,joined,W,tech,PH}=this.wctx;let h='';const pts=this.wirePts(w);if(pts.some(p=>!p))return '';const sig=NK.of(w.a.c+':'+w.a.p)==='sig',nb=BW?BW.wire(w):1;
+    const ph=tech&&PH&&!w.color&&nb<=1?PH.get(NK.root(w.a.c+':'+w.a.p)):'';
     // signal wires: thinner, own colour, arrow where they enter an input
     const ina=sig&&NK.kind.get(w.a.c+':'+w.a.p)==='in',inb=sig&&NK.kind.get(w.b.c+':'+w.b.p)==='in';const d=this.pathD(ina&&!inb?pts.slice().reverse():pts);
-    const sw=w.width?w.width:sig?Math.max(1.2,W*.62):W;
-    h+=`<g class="wire${sig?' sig':''}${nb>1?' bus':''}${this.sel.w.has(w.id)?' sel':''}" data-w="${w.id}"><path class="wl" d="${d}"${(ina||inb)?' marker-end="url(#sigArr)"':''} style="${w.color?`stroke:${w.color};`:''}stroke-width:${nb>1?Math.max(3,sw*2.2):sw}px"/>`;
+    const sw=w.width?w.width:sig?(tech?1:Math.max(1.2,W*.62)):ph?Math.max(1.5,W):W;
+    h+=`<g class="wire${sig?' sig':''}${nb>1?' bus':''}${ph?' ph-'+ph:''}${this.sel.w.has(w.id)?' sel':''}" data-w="${w.id}"><path class="wl" d="${d}"${(ina||inb)?' marker-end="url(#sigArr)"':''} style="${w.color?`stroke:${w.color};`:''}stroke-width:${nb>1?(tech?Math.max(2,sw*2):Math.max(3,sw*2.2)):sw}px"/>`;
     // a bus: a slash with its width at the middle of the longest segment
     if(nb>1){const m=this.midLabel(pts),hz=this.segDir(pts);h+=`<path class="bslash" d="M${m[0]-4},${m[1]+5} L${m[0]+4},${m[1]-5}"/><text class="bwidth" x="${m[0]+(hz?6:7)}" y="${m[1]+(hz?13:4)}">${nb}</text>`;}
     for(let i=1;i<pts.length;i++)h+=`<path class="whit" data-w="${w.id}" data-seg="${i-1}" d="M${pts[i-1][0]},${pts[i-1][1]} L${pts[i][0]},${pts[i][1]}"/>`;
@@ -376,7 +382,7 @@
     h+='</g>';return h;}
   // redraw one wire in place (dragging)
   redrawWire(w){const el=this.L.wires.querySelector(`[data-w="${CSS.escape(w.id)}"]`);const h=this.wctx?this.wireSVG(w):'';if(el){if(h)el.outerHTML=h;else el.remove();}}
-  pathD(pts){if(this.settings.corner!=='round'||pts.length<3)return 'M'+pts.map(p=>p.join(',')).join(' L');
+  pathD(pts){if((this.settings.look!=='classic'?this.settings.techCorner!=='round':this.settings.corner!=='round')||pts.length<3)return 'M'+pts.map(p=>p.join(',')).join(' L');
    let d=`M${pts[0][0]},${pts[0][1]}`;for(let i=1;i<pts.length-1;i++){const [ax,ay]=pts[i-1],[bx,by]=pts[i],[cx,cy]=pts[i+1];const r=Math.min(5,Math.hypot(bx-ax,by-ay)/2,Math.hypot(cx-bx,cy-by)/2);
     const ux=Math.sign(bx-ax),uy=Math.sign(by-ay),vx=Math.sign(cx-bx),vy=Math.sign(cy-by);d+=` L${bx-ux*r},${by-uy*r} Q${bx},${by} ${bx+vx*r},${by+vy*r}`;}
    const l=pts[pts.length-1];return d+` L${l[0]},${l[1]}`;}

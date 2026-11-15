@@ -15,6 +15,35 @@
  const sb=(w,h)=>`<rect class="block sblk" x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx="4"/>`;
  const tx=(t,x=0,y=4,cls='btxt')=>`<text class="${cls}" x="${x}" y="${y}" text-anchor="middle">${t}</text>`;
  const sl=d=>`<path class="sigl" d="${d}"/>`;
+ // 4.17.3 (ROADMAP §65): the style of the symbols, «iec» (the default: the resistor as a rectangle) or «ansi» (zig-zag);
+ // setSym changes it, and the editor and the library draw again
+ let SYM='iec';const setSym=v=>{SYM=v==='ansi'?'ansi':'iec';};const symStyle=()=>SYM;
+ // the paths of a symbol made only of horizontal and vertical segments get the class «hv» (drawn without antialiasing in
+ // the technical look: no grey edge); a cache per symbol text
+ const HV=new Map();
+ function hvPath(d){const t=String(d).match(/[a-zA-Z]|-?\d*\.?\d+(?:e-?\d+)?/g)||[];let cmd='',i=0,x=0,y=0,x0=0,y0=0;const n=()=>+t[i++];
+  while(i<t.length){if(/[a-zA-Z]/.test(t[i]))cmd=t[i++];
+   switch(cmd){case 'M':x=n();y=n();x0=x;y0=y;cmd='L';break;case 'm':x+=n();y+=n();x0=x;y0=y;cmd='l';break;
+    case 'H':x=n();break;case 'h':x+=n();break;case 'V':y=n();break;case 'v':y+=n();break;
+    case 'L':{const a=n(),b=n();if(a!==x&&b!==y)return false;x=a;y=b;break;}case 'l':{const a=n(),b=n();if(a!==0&&b!==0)return false;x+=a;y+=b;break;}
+    case 'Z':case 'z':if(x!==x0&&y!==y0)return false;x=x0;y=y0;break;default:return false;}}
+  return true;}
+ function symHV(svg){let r=HV.get(svg);if(r!==undefined)return r;
+  r=String(svg).replace(/<path((?:\s+[\w:-]+="[^"]*")*)\s*\/?>/g,(m,attrs)=>{const d=/\sd="([^"]*)"/.exec(attrs);if(!d||!hvPath(d[1]))return m;
+   return /\sclass="/.test(attrs)?m.replace(/\sclass="([^"]*)"/,(q,c)=>` class="${c} hv"`):m.replace('<path','<path class="hv"');});
+  if(HV.size>4000)HV.clear();HV.set(svg,r);return r;}
+ // the phases of a three-phase part in their colours (technical look): the stubs of a path at three levels (top to
+ // bottom or left to right: a, b, c) become one path per phase with the classes «ph ph-a/b/c»; what else the path has
+ // stays as it was (a neutral, a slanted line)
+ const PH3=new Set(['VAC3','IM','SM','EBUS','GRID3','FLT3','CB3','XF3','LOAD3','GEN3','LINE3','TLM','MMC','LCC6','LCCS','LCCX','FILT3','ZSER3']);
+ function phaseSplit(type,svg){if(!PH3.has(type))return svg;
+  return String(svg).replace(/<path d="([^"]*)"\s*\/>/g,(m,d)=>{const t=d.trim().replace(/\s+/g,' '),re=/M\s*(-?[\d.]+)[ ,]\s*(-?[\d.]+)\s*([HV])\s*(-?[\d.]+)/g,segs=[];let q,joined='';
+   while((q=re.exec(t))){segs.push({x:+q[1],y:+q[2],k:q[3],s:q[0]});joined+=q[0];}
+   if(segs.length<3||joined.replace(/\s/g,'')!==t.replace(/\s/g,''))return m;
+   for(const kind of ['H','V']){const g=segs.filter(z=>z.k===kind),lev=[...new Set(g.map(z=>kind==='H'?z.y:z.x))].sort((a,b)=>a-b);if(g.length<3||lev.length!==3)continue;
+    const rest=segs.filter(z=>z.k!==kind).map(z=>z.s).join(' ');
+    return ['a','b','c'].map((ph,i)=>`<path class="ph ph-${ph}" d="${g.filter(z=>(kind==='H'?z.y:z.x)===lev[i]).map(z=>z.s).join(' ')}"/>`).join('')+(rest?`<path d="${rest}"/>`:'');}
+   return m;});}
  // buses (3.18): thick leads, electrical (bl) and signal (sbl); CONN = separate pins or one bus pin
  const bl=d=>`<path class="busl" d="${d}"/>`,sbl=d=>`<path class="sigl busl" d="${d}"/>`;
  // 4.9 (ROADMAP §31): the arc of a circuit-breaker pole, black-box models (THEORY §Arc). Values: indicative, from the
@@ -113,7 +142,7 @@
   R:{name:'Αντίσταση',prefix:'R',group:'Παθητικά',pins:{a:[-30,0],b:[30,0]},box:[-22,-8,44,16],
    params:[num('R','Αντίσταση','Ω',10),txt('sched','R(t)','',{hint:SCHED})],
    value:p=>p.R,unit:'Ω',
-   draw:()=>'<path d="M-30,0 H-20 l2.5,-7 5,14 5,-14 5,14 5,-14 5,14 5,-14 5,14 2.5,-7 H30"/>'},
+   draw:()=>SYM==='iec'?'<path d="M-30,0 H-15 M15,0 H30"/><path d="M-15,-6 H15 V6 H-15 Z"/>':'<path d="M-30,0 H-20 l2.5,-7 5,14 5,-14 5,14 5,-14 5,14 5,-14 5,14 2.5,-7 H30"/>'},
   CPE:{name:'CPE / Warburg',prefix:'W',group:'Παθητικά',pins:{a:[-30,0],b:[30,0]},box:[-22,-10,44,20],
    params:[sel('kind','Είδος',[['warburg','Warburg: Z = σ(1 − j)/√ω'],['cpe','CPE: Z = 1/(Q·(jω)^α)']],'warburg'),
     num('sigma','Συντελεστής Warburg σ','Ω/√s',0.05,{show:p=>p.kind!=='cpe'}),num('Q','Q','F·s^(α−1)',1,{show:p=>p.kind==='cpe'}),num('alpha','Εκθέτης α (0 < α < 1)','',0.8,{show:p=>p.kind==='cpe'}),
@@ -1382,7 +1411,7 @@
  function machines(){return Object.entries(PARTS).filter(([,d])=>d.machine).map(([type,d])=>{const p=defaults(type),sp=sigPins({type,params:p}),m=d.machine;
   return {type,name:d.name,...m,pins:Object.keys(elPins({type,params:p})),outputs:Object.entries(sp).filter(([,v])=>v.dir==='out').map(([k])=>k),
    params:d.params.map(x=>({k:x.k,label:x.label,unit:x.unit||'',def:x.def,type:x.type,...(x.options?{options:x.options.map(o=>o[0])}:{})}))};});}
- const api={machines,structural,PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,fmtNum,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
+ const api={setSym,symStyle,symHV,hvPath,phaseSplit,machines,structural,PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,fmtNum,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
   parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,bewley,movChar,TLM_TYPICAL,tlmData,tlmM,tlmPin,tlmPins,tlmKey,tlmModel,
   srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv,
   genModel,genAxis,genTsc,genGamma,genDQ,genSteady,plist};

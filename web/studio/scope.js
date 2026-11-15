@@ -256,8 +256,9 @@
     c.strokeStyle=grid;c.lineWidth=1;c.fillStyle=ink;c.font='10.5px ui-monospace,Menlo,Consolas,monospace';c.textAlign='right';c.textBaseline='middle';
     const unit=chans.length?Scope.unitOf(chans[0].key,s):'',yref=Math.max(Math.abs(lo),Math.abs(hi)),yt=lanes?null:PC.ticks(lo,hi,ph,(v,st)=>PC.fmtEng(v,st,unit,yref),()=>11,18);
     if(lanes)chans.forEach((ch,k)=>{for(const v of [0,1]){const y=Y(tfs[k](v));c.beginPath();c.moveTo(this.padL,y);c.lineTo(W-this.padR,y);c.stroke();c.fillStyle=v?ch.color:ink;c.fillText(v?'1':'0',this.padL-6,y);}c.fillStyle=ink;});
-    else yt.vals.forEach((v,k)=>{const y=Y(v);c.beginPath();c.moveTo(this.padL,y);c.lineTo(W-this.padR,y);c.stroke();c.fillText(yt.labels[k],this.padL-6,y);});
-    for(const t of xt.vals){const x=X(t);c.beginPath();c.moveTo(x,y0);c.lineTo(x,y1);c.stroke();}
+    else yt.vals.forEach((v,k)=>{const y=Math.round(Y(v))+.5;c.beginPath();c.moveTo(this.padL,y);c.lineTo(W-this.padR,y);c.stroke();c.fillText(yt.labels[k],this.padL-6,y);});
+    // 4.17.3: grid lines on whole pixels (a line of 1 px between two pixels is a grey line of 2)
+    for(const t of xt.vals){const x=Math.round(X(t))+.5;c.beginPath();c.moveTo(x,y0);c.lineTo(x,y1);c.stroke();}
     if(lo<0&&hi>0&&!lanes){c.strokeStyle='#b8c7c1';c.beginPath();c.moveTo(this.padL,Y(0));c.lineTo(W-this.padR,Y(0));c.stroke();}
     c.strokeStyle='#c9d6d1';c.strokeRect(this.padL+.5,y0+.5,pw-1,ph-1);
     // traces

@@ -8,6 +8,8 @@
 //  6. the memory «αυτόματα» by default; the graphs in the whole window and back (Esc)
 //  7. the settings window: columns when wide, resized from a side and a corner, its size kept
 //  8. the viewer of a recording: its canvas follows its window
+//  9. 4.17.3 (ROADMAP §65): the technical look by default: thin crisp lines, IEC resistor, the phases in colour, the
+//     selected part in colour, widths from the settings; the classic look and the ANSI symbols from the settings
 // Usage: python run.py --no-browser --port 8775  then  node tests/ui/scope_flow.js http://127.0.0.1:8775/ [out]
 const {chromium}=require('playwright');
 (async()=>{const U=process.argv[2]||'http://127.0.0.1:8775/',OUT=process.argv[3]||'.';const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:1500,height:1000}});const p=await ctx.newPage();
@@ -94,6 +96,23 @@ const {chromium}=require('playwright');
   const v=await RecView.open(r.name);await new Promise(z=>setTimeout(z,700));const cv=v.box.querySelector('canvas'),w0=cv.clientWidth,mb=v.box.querySelector('.modal-box');
   mb.style.width=(mb.offsetWidth+200)+'px';await new Promise(z=>setTimeout(z,600));const w1=cv.clientWidth,st=v.state();v.close();return {w0,w1,raw:st.raw,rows:st.rows,framed:mb.classList.contains('wfr')};});
  ok(R.rv.w1>=R.rv.w0+150&&R.rv.framed,'the viewer follows its window '+JSON.stringify(R.rv));
+ // 9. the look
+ await p.goto(U+'?tutorial=buck_vloop');await p.waitForTimeout(1500);
+ R.look=await p.evaluate(()=>{const q=s=>document.querySelector(s),cs=e=>getComputedStyle(e);const rp=q('.part[data-c="R1"] .sym path:last-child'),w=q('.wire .wl');PCL.editor.select(['C1'],[]);
+  const cp=q('.part[data-c="C1"] .sym path');return {body:document.body.className,rd:rp?.getAttribute('d'),rcls:rp?.getAttribute('class'),rsw:cs(rp).strokeWidth,wsw:cs(w).strokeWidth,wsr:cs(w).shapeRendering,wcap:cs(w).strokeLinecap,sel:cs(cp).stroke,
+   src:cs(q('.part[data-c="V1"] .sym circle')).fill};});
+ ok(R.look.body.includes('look-tech')&&/H15 V6 H-15 Z/.test(R.look.rd)&&/hv/.test(R.look.rcls||'')&&R.look.rsw==='1.5px'&&R.look.wsw==='1px'&&R.look.wsr==='crispedges'&&R.look.wcap==='square','technical look by default '+JSON.stringify(R.look));
+ ok(R.look.sel==='rgb(47, 127, 208)'&&R.look.src!=='rgb(255, 255, 255)','the selected part in colour, a source tinted '+JSON.stringify(R.look));
+ await p.goto(U+'?tutorial=bridge3');await p.waitForTimeout(1500);
+ R.look.ph=await p.evaluate(()=>[...document.querySelectorAll('.part .sym .ph-a')].length);
+ await p.click('#open-settings');await p.waitForSelector('#settings [data-set="techComp"]');await p.selectOption('#settings [data-set="techComp"]','2.5');await p.waitForTimeout(200);
+ R.look.w2=await p.evaluate(()=>getComputedStyle(document.querySelector('.part .sym path')).strokeWidth);
+ await p.selectOption('#settings [data-set="look"]','classic');await p.waitForTimeout(300);await p.selectOption('#settings [data-set="sym"]','ansi');await p.waitForTimeout(300);
+ await p.click('#settings-close');await p.goto(U+'?tutorial=buck_vloop');await p.waitForTimeout(1500);
+ R.look.classic=await p.evaluate(()=>{const w=document.querySelector('.wire .wl'),rp=document.querySelector('.part[data-c="R1"] .sym path');return {body:document.body.className,wsw:getComputedStyle(w).strokeWidth,cap:getComputedStyle(w).strokeLinecap,rd:rp.getAttribute('d')};});
+ ok(R.look.ph>=1&&R.look.w2==='2.5px','phases in colour, the width of the parts from the settings '+JSON.stringify(R.look));
+ ok(R.look.classic.body.includes('look-classic')&&R.look.classic.wsw==='2.2px'&&R.look.classic.cap==='round'&&/l2.5,-7/.test(R.look.classic.rd),'the classic look and ANSI symbols from the settings, kept '+JSON.stringify(R.look.classic));
+ await p.evaluate(()=>localStorage.clear());
  await p.screenshot({path:OUT+'/scope_flow.png'});
  ok(!errs.length,'χωρίς σφάλματα JavaScript '+errs.join(' | '));
  console.log(JSON.stringify(R,null,1).slice(0,3000));

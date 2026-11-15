@@ -552,3 +552,76 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .wfr-se::after{content:'';position:absolute;right:3px;bottom:3px;width:6px;height:6px;border-right:2px solid #9fb3ad;border-bottom:2px solid #9fb3ad}
 .wfr-moving,.wfr-moving *{user-select:none}
 .modal-box.wfr{overflow:hidden}.modal-box.wfr .modal-head{cursor:move}.modal-box.wfr .modal-body{flex:1 1 auto;min-height:0}
+
+/* 4.17.3 (ROADMAP §65, THEORY §8Γ): the technical look, the default (body.look-tech; the look of before: body.look-classic).
+   White, flat, monochrome drawing with thin straight lines on whole pixels, as in PSCAD, PowerFactory, EMTP: lines of
+   one width at every zoom (non-scaling), axis-aligned ones without antialiasing (crispEdges: no grey «shadow»), square
+   ends; colour only on what is selected; the widths of the parts and of the wires from the settings (--w-comp, --w-wire) */
+body.look-tech{--ink:#14191b;--muted:#4c5856;--line:#cfd6d3;--bg:#f5f6f6;--wire:#14191b;--w-comp:1.5px;--w-wire:1px;--scope-ink:#2b3436;--scope-grid:#e8ecea;--scope-bg:#fff}
+/* the drawing */
+body.look-tech .schem .gdot{fill:#c9d0cd}body.look-tech .schem.zoomed-out .gdot{fill:#dde2e0}body.look-tech .schem .gline{stroke:#eef1f0}
+body.look-tech .wire .wl{stroke:var(--wire);stroke-linecap:square;stroke-linejoin:miter;shape-rendering:crispEdges}
+body.look-tech .wire.sel .wl{filter:none}
+body.look-tech .part .sym *{stroke:var(--ink);stroke-width:var(--w-comp);stroke-linecap:butt;stroke-linejoin:miter}
+body.look-tech .part .sym .hv,body.look-tech .part .sym rect,body.look-tech .part .sym line{shape-rendering:crispEdges}
+body.look-tech .part .sym .thin{stroke-width:1px}
+body.look-tech .part .sym .fill,body.look-tech .part .sym .dot{fill:var(--ink)}
+body.look-tech .part .sym .block,body.look-tech .part .sym .probe{fill:#fff;stroke:var(--ink)}
+body.look-tech .part .sym .accent{stroke:var(--ink)}
+body.look-tech .part .sym .btxt,body.look-tech .part .sym .bsm{fill:var(--ink);stroke:none}
+body.look-tech .part .sym text{stroke:none;fill:var(--ink)}
+/* a little colour by kind (the lines stay thin and dark; selection overrides all):
+   – phases a, b, c of the three-phase parts: red, green, blue (the stubs of the phases, ph-a/b/c)
+   – sources (DC, AC, three-phase, current, impulse, lightning, network, generator): a warm tint and their sign in red
+   – signal and control blocks (math, integrators, filters, PI, PWM, AI, code): blue; logic and clocks: violet
+   – measurements (voltmeter, ammeter, probes): teal; machines: a grey rotor */
+body.look-tech{--ph-a:#c62828;--ph-b:#2e7d32;--ph-c:#1565c0;--src:#b3261e;--src-bg:#fff5f3;--ctl:#2b5ea7;--ctl-bg:#eef3fb;--ctl-ink:#1b3c70;--lgc:#5e35b1;--lgc-bg:#f4f0fb;--mea:#00796b;--mea-bg:#ecf8f5;--mac-bg:#f2f4f5}
+body.look-tech .part .sym .ph-a{stroke:var(--ph-a)}body.look-tech .part .sym .ph-b{stroke:var(--ph-b)}body.look-tech .part .sym .ph-c{stroke:var(--ph-c)}
+body.look-tech .pal-item .sym .ph-a{stroke:var(--ph-a)}body.look-tech .pal-item .sym .ph-b{stroke:var(--ph-b)}body.look-tech .pal-item .sym .ph-c{stroke:var(--ph-c)}
+body.look-tech :is(.part,.pal-item):is(.t-VDC,.t-VAC,.t-IDC,.t-ILG,.t-VIMP) .sym circle{fill:var(--src-bg)}
+body.look-tech .part:is(.t-VDC,.t-VAC,.t-IDC,.t-ILG,.t-VIMP) .sym .thin{stroke:var(--src)}
+body.look-tech .part:is(.t-VAC3,.t-GRID3,.t-GEN3) .sym .block{fill:var(--src-bg)}body.look-tech .part:is(.t-VAC3,.t-GRID3,.t-GEN3) .sym .thin{stroke:var(--src)}
+body.look-tech .part .sym .sblk{fill:var(--ctl-bg);stroke:var(--ctl)}body.look-tech .part .sym .sigl{stroke:var(--ctl)}
+body.look-tech .part .sym .sblk~.btxt,body.look-tech .part .sym .sblk~.bsm{fill:var(--ctl-ink)}
+body.look-tech .part:is(.t-PWM,.t-SH,.t-AIC,.t-EVC,.t-NN,.t-MOD3,.t-FEST,.t-EXPR,.t-PY,.t-AVR,.t-PSS,.t-GOV) .sym .block{fill:var(--ctl-bg);stroke:var(--ctl)}
+body.look-tech .part:is(.t-PWM,.t-SH,.t-AIC,.t-EVC,.t-NN,.t-MOD3,.t-FEST,.t-EXPR,.t-PY,.t-AVR,.t-PSS,.t-GOV) .sym :is(.btxt,.bsm){fill:var(--ctl-ink)}
+body.look-tech .part:is(.t-CMP,.t-LOGIC,.t-SR,.t-CLK,.t-EDGE) .sym .sblk{fill:var(--lgc-bg);stroke:var(--lgc)}
+body.look-tech .part:is(.t-CMP,.t-LOGIC,.t-SR,.t-CLK,.t-EDGE) .sym :is(.btxt,.bsm){fill:var(--lgc)}
+body.look-tech .part:is(.t-VM,.t-AM,.t-VP,.t-IP,.t-MEAS) .sym circle{fill:var(--mea-bg);stroke:var(--mea)}
+body.look-tech .part:is(.t-VM,.t-AM,.t-VP,.t-IP,.t-MEAS) .sym :is(.btxt,.bsm){fill:var(--mea)}
+body.look-tech .part:is(.t-DCM,.t-IM,.t-SM,.t-SRM) .sym circle{fill:var(--mac-bg)}
+body.look-tech .wire.sig .wl{stroke:var(--ctl)}body.look-tech .pin.spin{stroke:var(--ctl)}body.look-tech .pin.spin.out{fill:var(--ctl)}body.look-tech .sighead{fill:var(--ctl)}
+body.look-tech .pal-item .sym .sblk{fill:var(--ctl-bg);stroke:var(--ctl)}body.look-tech .pal-item .sym .sigl{stroke:var(--ctl)}
+/* no colour for the state of a switch, no faded parts: the drawing stays one colour */
+body.look-tech .part.t-SW.on .sym *,body.look-tech .part.t-D.on .sym *,body.look-tech .part.t-SCR.on .sym *,body.look-tech .part.t-SW.off .sym *{stroke:var(--ink)}
+body.look-tech .part.t-SW.on .sym .fill,body.look-tech .part.t-D.on .sym .fill,body.look-tech .part.t-SCR.on .sym .fill{fill:var(--ink)}
+body.look-tech .jdot{fill:var(--ink)}body.look-tech .flow{stroke:var(--ink);stroke-width:1px}body.look-tech .flowhead{fill:var(--ink)}body.look-tech .pin{stroke:var(--ink)}
+body.look-tech .pal-item .sym .block,body.look-tech .pal-item .sym .probe{fill:#fff;stroke:var(--ink)}body.look-tech .pal-item .sym .btxt,body.look-tech .pal-item .sym .bsm{fill:var(--ink)}
+/* what is selected: its own lines in colour (no dashed box), over every colour of its kind */
+body.look-tech .part.sel .hit{fill:#2f7fd00a;stroke:none}
+body.look-tech .part.sel .sym *,body.look-tech .part.sel .sym .ph-a,body.look-tech .part.sel .sym .ph-b,body.look-tech .part.sel .sym .ph-c,body.look-tech .part.sel .sym .sigl,body.look-tech .part.sel .sym .thin{stroke:var(--sel)!important}body.look-tech .part.sel .sym .fill,body.look-tech .part.sel .sym .dot{fill:var(--sel)}
+body.look-tech .part.sel .sym text,body.look-tech .part.sel .sym .btxt,body.look-tech .part.sel .sym .bsm{fill:var(--sel);stroke:none}
+body.look-tech .part:hover .hit{fill:#2f7fd008}
+body.look-tech .wname{fill:var(--ink)}
+body.look-tech .livel .lbl{color:var(--ink);font-weight:600}body.look-tech .livel .val{color:var(--ink)}body.look-tech .livel .lv{color:var(--ink);font-weight:600}
+/* the library in the same lines */
+body.look-tech .pal-item .sym *{stroke:var(--ink);stroke-width:2px;stroke-linecap:butt;stroke-linejoin:miter}
+body.look-tech .pal-item .sym .thin{stroke-width:1.4px}body.look-tech .pal-item .sym .fill{fill:var(--ink)}
+/* the frame of the application: flat, thin borders, small corners, no soft shadows, no translucency */
+body.look-tech :is(button,select,input,textarea){border-radius:3px}
+body.look-tech :is(.card,.cards .card,.popup,.modal-box,.live-panel,.wpanel,.pane-row,.ctl,.step,.tip,.notice,details.psec,.kv div,.mgrid>div,.copy-box pre,.tinputs,.tchecks li,.th-warn,.th-note,.qcard,#scen-code,.scen-pane,.addon-item,.addon-dock,.knock-toast,.rec-panel,.rv-plot,.ld-svg,.ld-cab,.ld-viewp,.ld-more,.ld-chart,.ld-code,.lattice,.logo){border-radius:4px}
+body.look-tech :is(.badge,.chip,.engine,.diag-counts .dc,.dg-meta .tag){border-radius:3px}
+body.look-tech :is(.card,.cards .card){box-shadow:none}
+body.look-tech :is(.popup,.modal-box,.wpanel,.knock-toast,.addon-dock){box-shadow:0 2px 10px #00000024}
+body.look-tech .live-panel{background:#fff;backdrop-filter:none;box-shadow:0 2px 10px #00000024;border-color:var(--line)}
+body.look-tech .popup.moving{box-shadow:0 2px 12px #0000002e}
+body.look-tech .muted{color:var(--muted)}
+/* the tiles over the drawing, the live controls and the panels in the same flat white (4.17.3) */
+body.look-tech .wt{background:#fff;border-color:var(--line);border-radius:3px;box-shadow:0 1px 3px #0000001a}
+body.look-tech .wt-x{color:var(--ink)}body.look-tech .wt-sp polyline{stroke:var(--ctl)}body.look-tech .wtab td.num{color:var(--ink)}
+body.look-tech :is(.wt-r,.ctl input[type=range]){accent-color:var(--ctl)}
+body.look-tech .ctl{background:#fff;border-color:var(--line)}
+body.look-tech .nav-toggle.toggle.on,body.look-tech .pinbtn.on{background:#eef3fb;border-color:#c5d3ea;color:var(--ctl-ink)}
+body.look-tech .netwarn{background:#fffaf2}
+/* the nets of the phases in their colours (a net with one phase of a three-phase part) */
+body.look-tech .wire.ph-a .wl{stroke:var(--ph-a)}body.look-tech .wire.ph-b .wl{stroke:var(--ph-b)}body.look-tech .wire.ph-c .wl{stroke:var(--ph-c)}
