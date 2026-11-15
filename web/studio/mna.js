@@ -21,6 +21,7 @@
  const BUS=root.Bus||(typeof require!=='undefined'?require('./bus.js'):null);
  const SPM=root.Sparse||(typeof require!=='undefined'?require('./sparse.js'):null);
  const NNET=root.NNet||(typeof require!=='undefined'?require('./nn.js'):null);
+ const TUNE=root.Tune||(typeof require!=='undefined'?require('./tune.js'):null);   // 4.17: PI/PID gains from the circuit
  // 4.2 (§32): the sparse LU above this many unknowns ('auto'); below it the dense LU, as before
  const SPARSE_MIN=120;
  const UNITS=root.Units||(typeof require!=='undefined'?require('./units.js'):null);
@@ -660,6 +661,15 @@
    if(open.length)warnings.push('Ανοιχτοί ακροδέκτες: '+cut(open)+'.');}
   let nNodes=nets.length;
   const node=(cid,pin)=>{const n=pinNet.get(cid+':'+pin);return n&&!n.ground?n.index:-1;};
+  // 4.17: the gains of a PWM in PI/PID mode from the circuit (tune.js, THEORY §8Α). With «από το κύκλωμα» they replace the
+  // hand-set ones and D₀ (here, so that every change of the circuit recomputes them, and the SciPy export carries them);
+  // with hand-set gains, a warning when their sign is against ∂(measured)/∂D of an exactly recognised converter
+  const nodeKey=(cid,pin)=>{const n=pinNet.get(cid+':'+pin);return n?(n.ground?'G':'n'+n.index):null;};
+  const tunePwm=(k,p,c)=>{if(!TUNE)return;const auto=p.gain==='auto',lbl=c.label||c.id;let r;
+   try{r=TUNE.design({p,comps,nodeOf:nodeKey,strict:!auto,signOnly:!auto});}catch(e){r={ok:false,error:String(e&&e.message||e)};}
+   if(auto){if(!r.ok){warnings.push(`${lbl}: κέρδη από το κύκλωμα: ${r.error}· μένουν τα χειροκίνητα.`);return;}
+    k.Kp=r.Kp;k.Ki=r.Ki;k.Kd=r.Kd;k.Tf=r.Tf;if(k.ff!=='ratio'){k.ff='const';k.D0=r.D0;}k.design=r;for(const w of r.warn)warnings.push(`${lbl}: ${w}.`);}
+   else if(r.ok){const g=k.Ki||k.Kp;if(g&&Math.sign(g)!==r.sg)warnings.push(`${lbl}: στο ${r.name} ∂(μέτρηση)/∂D ${r.sg<0?'< 0 (αντιστρέφει)':'> 0'}, ενώ τα κέρδη έχουν ${g>0?'θετικό':'αρνητικό'} πρόσημο: ο βρόχος έχει θετική ανάδραση. Άλλαξε το πρόσημο των K_p, K_i${k.Kd?', K_d':''} ή διάλεξε «Κέρδη: από το κύκλωμα».`);}};
   const internal=()=>nNodes++;
   const els=[],ctrls=[],shs=[],blocks=[],compInfo=new Map();
   // a signal block: inputs/outputs -> signal net index (−1 = not connected)
@@ -805,7 +815,7 @@
    else if(T==='CPL'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'CPL',a,b,P:num(p.P,1000),Vmin:Math.max(num(p.Vmin,5),1e-3),sched:P.parseSched(p.sched),v0:null});}
    else if(T==='PWM'){const fs=Math.max(num(p.fs,20e3),1e-3);ctrls.push({id:c.id,label:c.label||c.id,fs,T:1/fs,mode:p.mode||'fixed',D:num(p.D,.5),dsched:P.parseSched(p.dsched),carrier:p.carrier||'triangle',phase:num(p.phase,0)/360,
      sensor:p.sensor,qty:p.qty||'I',ref:P.parseSched(p.ref)||[[0,0]],Kp:num(p.Kp,0),Ki:num(p.Ki,0),ff:p.ff||'none',ffA:p.ffA,ffB:p.ffB,D0:num(p.D0,.5),dmin:num(p.dmin,.01),dmax:num(p.dmax,.99),
-     Kd:num(p.Kd,0),Tf:num(p.Tf,0),dt:Math.max(0,num(p.dt,0)),dIn:p.mode==='ext'?sn(c.id,'d'):-1,tkPrev:null,dPrev:null,dPrevOff:null,upd:p.upd==='double'?'double':'single',h:null,dOn:num(p.D,.5),dOff:num(p.D,.5),m:num(p.m,.8),fref:num(p.fref,50),refphase:num(p.refphase,0)*Math.PI/180,d:num(p.D,.5),xi:0,k:null,tk:0,meas:0,refNow:0,ePrev:null,dF:0});info.ctrl=ctrls[ctrls.length-1];}
+     Kd:num(p.Kd,0),Tf:num(p.Tf,0),dt:Math.max(0,num(p.dt,0)),dIn:p.mode==='ext'?sn(c.id,'d'):-1,tkPrev:null,dPrev:null,dPrevOff:null,upd:p.upd==='double'?'double':'single',h:null,dOn:num(p.D,.5),dOff:num(p.D,.5),m:num(p.m,.8),fref:num(p.fref,50),refphase:num(p.refphase,0)*Math.PI/180,d:num(p.D,.5),xi:0,k:null,tk:0,meas:0,refNow:0,ePrev:null,dF:0});info.ctrl=ctrls[ctrls.length-1];if(p.mode==='pi')tunePwm(info.ctrl,p,c);}
    else if(T==='IM'){ // induction machine, inverse-Γ, stator frame: each phase R_s + R_R, L_σ and the source e = −(R_R/L_M − jω_r)ψ_R (Y, floating star);
     // ψ_R, ω and θ are states of the machine, advanced after each committed step from the stator currents
     const N=internal(),ph=[];for(const k of ['a','b','c']){const t=node(c.id,k),n1=internal(),n2=internal();add({k:'G',a:t,b:n1,R:num(p.Rs,3)+num(p.RR,2),role:'R'});

@@ -1,5 +1,6 @@
 // Browser check of: response metrics, server reference solver overlay, data
 // templates in the math panel, new tutorials and "open in studio" from /converter/.
+// 4.17: the Ćuk in closed loop with the gains from the circuit (the card, the live panel, the list of roles of the PWM).
 // Usage: python run.py --no-browser --port 8775  then  node tests/ui/features_flow.js http://127.0.0.1:8775/
 const {chromium}=require('playwright');
 (async()=>{const U=process.argv[2]||'http://127.0.0.1:8775/';const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:1500,height:1100},acceptDownloads:true});const p=await ctx.newPage();
@@ -80,5 +81,21 @@ const {chromium}=require('playwright');
  const [q]=await Promise.all([ctx.waitForEvent('page'),p.click('#to-studio')]);await q.waitForLoadState();await q.waitForTimeout(1500);
  const imp=await q.evaluate(()=>({tut:window.PCL.S.tut.id,n:window.PCL.editor.doc.components.length,err:window.PCL.S.error}));ok(imp.tut==='boost'&&imp.n>=8&&!imp.err,'import '+JSON.stringify(imp));
  ok(!(await q.$('#theory .th-warn')),'imported circuit is its own reference');
+ // 4.17: the Ćuk with «PI με κέρδη από το κύκλωμα»: negative gains, the card with the design and V_o at the reference,
+ // the list of roles in the parameters of the PWM, a change of C2 that recomputes the gains
+ await p.goto(U+'?tutorial=cuk');await p.waitForTimeout(1200);
+ await p.selectOption('#tut-options [data-topt="ctrl"]','pi');await p.waitForTimeout(1500);
+ const g0=await p.evaluate(()=>{const k=window.PCL.S.sim.net.ctrls[0];return {Ki:k.Ki,Kp:k.Kp,des:!!k.design,err:window.PCL.S.error,w:window.PCL.S.sim.net.warnings};});
+ ok(g0.des&&g0.Ki<0&&!g0.err&&!g0.w.length,'cuk PI from the circuit '+JSON.stringify(g0));
+ await p.evaluate(()=>{const S=window.PCL.S;window.PCL.pause();S.sim.run(0.03-S.sim.t);window.PCL.renderTheory();});await p.waitForTimeout(600);
+ const cth=await p.$eval('#theory',e=>e.textContent),crow=await p.$$eval('#theory table.cmp tbody tr',tr=>tr.map(r=>[...r.cells].map(c=>c.textContent)));
+ ok(/Κέρδη από το κύκλωμα/.test(cth)&&/G\(0\)/.test(cth)&&/περιθώριο φάσης/.test(cth),'cuk card with the design');
+ const vo=crow.find(r=>r[0]==='V_o');ok(vo&&Math.abs(parseFloat(vo[3].replace(',','.').replace('−','-')))<1.5,'cuk V_o at the reference '+JSON.stringify(vo));
+ ok(/Από το κύκλωμα \(Ćuk/.test(await p.$eval('#live-panel, #lp-body, body',e=>e.textContent)),'live panel: gains from the circuit');
+ await p.evaluate(()=>{const e=window.PCL.editor;e.select(['PWM1'],[]);});await p.waitForTimeout(400);
+ const pp=await p.evaluate(()=>document.querySelector('#props-body')?.textContent||'');
+ ok(!pp||(/Ρόλος L1/.test(pp)&&/Ρόλος C2/.test(pp)),'roles in the parameters of the PWM');
+ const Ki1=g0.Ki,Ki2=await (async()=>{await p.evaluate(()=>window.PCL.editor.setParams('C2',{C:470e-6}));await p.waitForTimeout(1000);return p.evaluate(()=>window.PCL.S.sim.net.ctrls[0].Ki);})();
+ ok(Number.isFinite(Ki2)&&Math.abs(Ki2/Ki1-1)>0.01,'gains recomputed after a change of C2 '+Ki1+' '+Ki2);
  console.log(JSON.stringify({rm:rm.split('\n').slice(0,4),bt:bt.split('\n').slice(0,4),imp},null,1));
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

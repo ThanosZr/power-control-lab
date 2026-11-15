@@ -102,6 +102,18 @@
 | reduced switching frequency | μειωμένη συχνότητα μεταγωγής |
 | static synchronous series compensator (SSSC), modular SSSC (m-SSSC) | στατός σύγχρονος αντισταθμιστής σειράς, αρθρωτός SSSC |
 | second-order generalized integrator (SOGI) | γενικευμένος ολοκληρωτής δεύτερης τάξης |
+| central (three-phase) controller | κεντρικός ελεγκτής (των τριών φάσεων) (4.17) |
+| inter-phase (cluster) balancing | εξισορρόπηση ανάμεσα στις φάσεις (4.17) |
+| reference advance (sampling-delay compensation) | προπορεία της αναφοράς (4.17) |
+| converter-controlled series capacitor (CCSC, εδώ του m-SSSC· όχι η καταστολή του κυκλοφορούντος ρεύματος του MMC) | πυκνωτής σειράς ελεγχόμενος από μετατροπέα (CCSC) (4.17) |
+| natural point, boost mode (CCSC) | φυσικό σημείο, boost (4.17) |
+| state-space averaging, averaged model | μέσο μοντέλο χώρου κατάστασης, μέσο μοντέλο (4.17) |
+| crossover frequency f_c | συχνότητα διέλευσης f_c (4.17) |
+| phase margin, gain margin | περιθώριο φάσης, περιθώριο κέρδους (4.17) |
+| peak sensitivity M_s | μέγιστη ευαισθησία M_s (4.17) |
+| right-half-plane (RHP) zero | μηδενικό στο δεξί ημιεπίπεδο (4.17) |
+| role (of an element in a topology) | ρόλος (στοιχείου στο πρότυπο), λίστα ρόλων (4.17) |
+| guard band / out-of-band samples (of a rational fit) | ζώνη ασφαλείας, δείγματα ασφαλείας (4.17) |
 | coupling transformer / coupling inductance | μετασχηματιστής / αυτεπαγωγή σύζευξης |
 | compensator placement, Pareto front | θέση του αντισταθμιστή, μέτωπο Pareto |
 | steady-state initialization (of a line) | εκκίνηση από μόνιμη κατάσταση (4.12) |

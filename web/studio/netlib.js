@@ -9,7 +9,7 @@
 // (gridZ) and the fault currents of a fault at its terminals in the phase domain (faultCurrents), for the analysis.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
- const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC','TOWER','SAI','CHB','SPLL','SSSC','MMC','MMCC','LCC6','LCCS','LCCC','FILT3','ZSER3'];
+ const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC','TOWER','SAI','CHB','SPLL','SSSC','SSSC3','MMC','MMCC','LCC6','LCCS','LCCC','FILT3','ZSER3'];
  const isLib=t=>TYPES.includes(t);
  const RMIN=1e-4;               // a bolted fault or a closed pole: 0,1 mΩ inside the circuit
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -567,8 +567,75 @@
    w(['ER','y'],['PIU','er']);w(['PIX','y'],['PIU','x']);w(['REF','y'],['PIU','r']);w(['IAF','y'],['PIU','a']);w(['PIU','y'],['PIX','u']);
    E('VQ',`min(max(a*(${base}kp*er + x), -vm), vm)`,'er, x, r, a',`kp = ${kp}, ${lim}`);w(['ER','y'],['VQ','er']);w(['PIX','y'],['VQ','x']);w(['REF','y'],['VQ','r']);w(['IAF','y'],['VQ','a']);}
   // the reference: zero until t_on (the PLL locks first)
-  E('VR','t < ton ? 0 : abs(q)*sin(th + pi/2 - sign(q)*(pi/2 - d))','q, th, d',`ton = ${ton}`);w(['VQ','y'],['VR','q']);w(['PLI','th'],['VR','th']);w(['DTH','y'],['VR','d']);
+  // (4.17: optionally advanced by ω₀·t_adv, the half sample of the modulator; 0 = as in 4.10)
+  E('VR','t < ton ? 0 : abs(q)*sin(th + wa + pi/2 - sign(q)*(pi/2 - d))','q, th, d',`ton = ${ton}, wa = ${s(2*Math.PI*num(p.f0,50)*Math.max(num(p.tadv,0),0))}`);w(['VQ','y'],['VR','q']);w(['PLI','th'],['VR','th']);w(['DTH','y'],['VR','d']);
   out('vref',['VR','y']);out('x',['XM','y']);out('dth',['DTH','y']);
+  return B.def();}
+ // 4.17 (§50): the central controller of a three-phase m-SSSC (THEORY §8ρ): the three arms from one controller. Sync on
+ // the positive sequence of the line currents (one three-phase PLL: i_k = Î·cos θ_k, θ_k = θ − k·2π/3) or a SOGI-PLL per
+ // phase; one loop of the reactance (or of the current or a bus voltage) on the positive sequence; the reference of
+ // each arm in the frame of its current, as the directly controlled SSSC of Hingorani & Gyugyi (Fig. 6.42): a quadrature
+ // part V_q·sin θ_k (the reactive reference, > 0 capacitive) and a part in phase D_k·cos θ_k (the real reference). D_k
+ // holds the capacitors: the energy of a phase N·½·C·V̄_k² grows with ½·D_k·Î_k, so D_k = 2·N·C·V_C/Î·(u + b_k) gives
+ // dV̄_k/dt = u + b_k, with u from a PI on V_C,ref − the mean of the three phases (the total energy) and b_k = (V̄ − V̄_k)/τ_b
+ // (the balancing between the phases, as the clustered balancing of a star cascade STATCOM, Akagi, Inoue, Yoshii 2007,
+ // here in series: Σ b_k = 0, so the balancing does not change the total).
+ function sssc3Def(c){const p=prm(c),B=builder(c.label||c.id),N=Math.max(1,num(p.N,10)),Vdc=Math.max(num(p.Vdc,1000),1e-9),mode=['ma','x','i','v'].includes(p.mode)?p.mode:'x';
+  const sync=p.sync==='phase'?'phase':'pos',bal=p.bal!=='off',Cc=Math.max(num(p.C,10e-3),1e-12),PH=['a','b','c'],SH={a:'th',b:'th - 2*pi/3',c:'th + 2*pi/3'};
+  const sin=n=>[B.comp('$'+n,'SIN',{name:n}),'y'],out=(name,src)=>{const o=B.comp('$'+name,'SOUT',{name});B.wire(src,[o,'u']);};
+  const E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''});const w=(a,b)=>B.wire(a,b);
+  const I3=PH.map(x=>sin('i'+x)),V3=PH.map(x=>sin('v'+x)),C3=PH.map(x=>sin('c'+x));
+  const Vmax=Math.max(num(p.mmax,1),0)*N*Vdc,ton=s(Math.max(num(p.ton,0.15),0)),f0=s(num(p.f0,50)),bw=s(Math.max(num(p.bw,8),1e-6));
+  const flt=fx=>({kind:'lp',f0:s(Math.max(fx,1e-3)),zeta:'0.7071',u0:'0'}),fx=num(p.fx,10);
+  // the synchronisation and the amplitude of the current: th(k) and the filtered amplitude a(k) of phase k
+  let th,amp,IAM;
+  if(sync==='pos'){B.comp('PLI','PLL',{f0,bw,th0:'0'});PH.forEach((x,k)=>w(I3[k],['PLI',x]));B.comp('IAF','F2',flt(fx));w(['PLI','amp'],['IAF','u']);
+   th=()=>['PLI','th'];amp=()=>['IAF','y'];IAM=['IAF','y'];
+   // V_q of the positive sequence: (2/3)·Σ v_k·sin θ_k (the three arm voltages, no 2ω ripple when balanced)
+   E('VQI','2/3*(va*sin(th) + vb*sin(th - 2*pi/3) + vc*sin(th + 2*pi/3))','va, vb, vc, th');PH.forEach((x,k)=>w(V3[k],['VQI','v'+x]));w(['PLI','th'],['VQI','th']);
+   B.comp('VQF','F2',flt(fx));w(['VQI','y'],['VQF','u']);E('XM','a > 1e-9 ? q/a : 0','q, a');w(['VQF','y'],['XM','q']);w(['IAF','y'],['XM','a']);}
+  else{const pll={f0,bw,k:s(Math.SQRT2),k0:'0',th0:'0',impl:'fast'};
+   PH.forEach((x,k)=>{B.comp('PL'+x,'SPLL',pll);w(I3[k],['PL'+x,'v']);B.comp('IAF'+x,'F2',flt(fx));w(['PL'+x,'amp'],['IAF'+x,'u']);
+    E('VQI'+x,'2*v*sin(th)','v, th');w(V3[k],['VQI'+x,'v']);w(['PL'+x,'th'],['VQI'+x,'th']);B.comp('VQF'+x,'F2',flt(fx));w(['VQI'+x,'y'],['VQF'+x,'u']);});
+   th=x=>['PL'+x,'th'];amp=x=>['IAF'+x,'y'];
+   E('IAM','(aa + ab + ac)/3','aa, ab, ac');PH.forEach(x=>w(['IAF'+x,'y'],['IAM','a'+x]));IAM=['IAM','y'];
+   E('XM','aa + ab + ac > 1e-9 ? (qa + qb + qc)/(aa + ab + ac) : 0','qa, qb, qc, aa, ab, ac');PH.forEach(x=>{w(['VQF'+x,'y'],['XM','q'+x]);w(['IAF'+x,'y'],['XM','a'+x]);});}
+  // V_q: as the single-phase controller (the same modes and PI, on the positive sequence or the mean of the phases)
+  const sched=(v,d)=>{const t=String(v??'').trim();return t===''?String(d):t;},lim=`vm = ${s(Vmax)}`;
+  if(mode==='ma'){B.comp('VQ','CONST',{v:s((p.sense==='ind'?-1:1)*Math.max(num(p.ma,0.8),0)*N*Vdc)});}
+  else{const kp=s(mode==='x'?num(p.Kp,0.5):mode==='i'?num(p.KpI,0.02):num(p.KpV,5)),ki=s(mode==='x'?num(p.Ki,20):mode==='i'?num(p.KiI,5):num(p.KiV,200));
+   const R=mode==='x'?sched(p.X,10):mode==='i'?sched(p.Iref,100):sched(p.Vbref,1000);B.comp('REF','CONST',{v:R});
+   let meas;if(mode==='x')meas=['XM','y'];else if(mode==='i')meas=IAM;
+   else{const U3=PH.map(x=>sin('u'+x));B.comp('PLV','PLL',{f0,bw:'20',th0:'0'});PH.forEach((x,k)=>w(U3[k],['PLV',x]));meas=['PLV','amp'];}
+   E('ER',mode==='v'?'abs(r) > 1e-9 ? (r - m)/abs(r) : 0':'r - m','r, m');w(['REF','y'],['ER','r']);w(meas,['ER','m']);
+   const base=mode==='x'?'r + ':'';
+   E('PIU',`t < ton || (abs(a*(${base}kp*er + x)) >= vm && (${base}kp*er + x)*er > 0) ? 0 : ki*er`,'er, x, r, a',`kp = ${kp}, ki = ${ki}, ${lim}, ton = ${ton}`);B.comp('PIX','INT',{y0:'0'});
+   w(['ER','y'],['PIU','er']);w(['PIX','y'],['PIU','x']);w(['REF','y'],['PIU','r']);w(IAM,['PIU','a']);w(['PIU','y'],['PIX','u']);
+   E('VQ',`min(max(a*(${base}kp*er + x), -vm), vm)`,'er, x, r, a',`kp = ${kp}, ${lim}`);w(['ER','y'],['VQ','er']);w(['PIX','y'],['VQ','x']);w(['REF','y'],['VQ','r']);w(IAM,['VQ','a']);}
+  // the energy: u from a PI on V_C,ref − the mean of the three phases (closed loop (s + 1/(2τ))², τ = tv), the integral held
+  // within ±umax and before t_on; the balancing b_k = PI(V̄ − V̄_k), K_p = 1/τ_b, K_i = 1/(4τ_b²)
+  const tv=Math.max(num(p.tv,0.05),1e-4),kpu=1/tv,kiu=1/(4*tv*tv),umax=Math.max(num(p.umax,2000),0),fv=Math.max(num(p.fv,10),1e-3);
+  const vf=id=>B.comp(id,'F2',{kind:'lp',f0:s(fv),zeta:'0.7071',u0:s(Vdc)});
+  E('VM','(ca + cb + cc)/3','ca, cb, cc');PH.forEach((x,k)=>w(C3[k],['VM','c'+x]));vf('VAF');w(['VM','y'],['VAF','u']);
+  B.comp('DCR','CONST',{v:s(Vdc)});E('EV','r - u','r, u');w(['DCR','y'],['EV','r']);w(['VAF','y'],['EV','u']);
+  E('UIU','t < ton ? 0 : ki*er','er',`ki = ${s(kiu)}, ton = ${ton}`);w(['EV','y'],['UIU','er']);B.comp('UI','INT',{y0:'0',lo:s(-umax),hi:s(umax)});w(['UIU','y'],['UI','u']);
+  E('U','min(max(kp*er + x, -um), um)','er, x',`kp = ${s(kpu)}, um = ${s(umax)}`);w(['EV','y'],['U','er']);w(['UI','y'],['U','x']);
+  const kb=bal?1/Math.max(num(p.tb,0.03),1e-4):0,gd=2*N*Cc*Vdc,imin=Math.max(num(p.imin,10),1e-6),dm=Math.max(num(p.dmax,0.3),0)*N*Vdc;
+  // (a PI: with asymmetric currents and the sync on the positive sequence each phase keeps exchanging a little active
+  // power with the line, a constant disturbance that a proportional balancing leaves as a constant difference)
+  const kbi=bal?kb*kb/4:0;
+  PH.forEach((x,k)=>{vf('VKF'+x);w(C3[k],['VKF'+x,'u']);
+   E('BE'+x,'m - v','m, v');w(['VAF','y'],['BE'+x,'m']);w(['VKF'+x,'y'],['BE'+x,'v']);
+   E('BIU'+x,'t < ton ? 0 : ki*er','er',`ki = ${s(kbi)}, ton = ${ton}`);w(['BE'+x,'y'],['BIU'+x,'er']);B.comp('BI'+x,'INT',{y0:'0',lo:s(-umax),hi:s(umax)});w(['BIU'+x,'y'],['BI'+x,'u']);
+   E('BL'+x,'kb*er + x','er, x',`kb = ${s(kb)}`);w(['BE'+x,'y'],['BL'+x,'er']);w(['BI'+x,'y'],['BL'+x,'x']);
+   E('D'+x,'min(max(g/max(a, im)*(u + b), -dm), dm)','u, b, a',`g = ${s(gd)}, im = ${s(imin)}, dm = ${s(dm)}`);w(['U','y'],['D'+x,'u']);w(['BL'+x,'y'],['D'+x,'b']);w(amp(x),['D'+x,'a']);
+   // the reference of arm k: zero until t_on (the PLL locks first)
+   // (advanced by ω₀·t_adv: the nearest level is sampled, so the staircase lags its reference by about half a sample; without
+   // it a capacitive V_q lags by 90° + ε and the arm gives active power, which the energy loop must replace)
+   const ang=`${sync==='pos'?SH[x]:'th'} + wa`;
+   E('VR'+x,`t < ton ? 0 : q*sin(${ang}) + d*cos(${ang})`,'q, th, d',`ton = ${ton}, wa = ${s(2*Math.PI*num(p.f0,50)*Math.max(num(p.tadv,5e-5),0))}`);w(['VQ','y'],['VR'+x,'q']);w(th(x),['VR'+x,'th']);w(['D'+x,'y'],['VR'+x,'d']);
+   out('r'+x,['VR'+x,'y']);});
+  out('x',['XM','y']);out('u',['U','y']);
   return B.def();}
  // ---------------------------------------------------------------- 4.14 (§42): the MMC and the control of its station
  // The MMC in the four models of the MMC station of EMTP-RV (THEORY §8χ). Positive arm currents from p to the phase and from
@@ -942,7 +1009,7 @@
    if(Rp2>0){B.comp('RP'+x,'R',{R:s(Rp2)});B.wire(a,['RP'+x,'a']);B.wire(['RP'+x,'b'],T2[k]);}});
   return B.def();}
 
- const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef,CHB:chbDef,SPLL:spllDef,SSSC:ssscDef,MMC:mmcDef,MMCC:mmccDef,LCC6:lcc6Def,LCCS:lccsDef,LCCC:lcccDef,FILT3:filtDef,ZSER3:zserDef};
+ const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef,CHB:chbDef,SPLL:spllDef,SSSC:ssscDef,SSSC3:sssc3Def,MMC:mmcDef,MMCC:mmccDef,LCC6:lcc6Def,LCCS:lccsDef,LCCC:lcccDef,FILT3:filtDef,ZSER3:zserDef};
  function defOf(c){return DEFS[c.type](c);}
 
  // 4.9.1 (ROADMAP §52): the parts with two implementations, and a copy of a project with one implementation everywhere

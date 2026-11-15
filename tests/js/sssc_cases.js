@@ -8,8 +8,9 @@
 //  {kind:'loop', mode, X, …}                        two sources, a line R–L and the m-SSSC (CHB + controller): the current, X,
 //                                                     Δθ, the cell voltages at the end
 //  {kind:'scipy', …}                                a short run of 'arm' and its SciPy export (from the detailed arm)
-//  {kind:'tut', id, opts, at:[t…], keys:[…]}       a tutorial (sssc_1ph, sssc_3ph) as the app builds it: at each t the 50 Hz
-//                                                     fundamental (peak, last 4 cycles) and the 4-cycle mean of every key
+//  {kind:'tut', id, opts, at:[t…], keys:[…], f}    a tutorial (sssc_1ph, sssc_3ph, ccsc_1ph, ieee9_sssc …) as the app builds it: at each t
+//                                                     the fundamental of f (50 Hz; peak, last 4 cycles) and the 4-cycle mean of every key
+//  {kind:'loop3', …}, {kind:'scipy3', …}           4.17: three phases with the central controller (SSSC3); its SciPy export
 const path=require('path');const W=path.resolve(__dirname,'../../web/studio');
 global.window=globalThis;global.Parts=require(W+'/parts.js');global.Expr=require(W+'/expr.js');global.StepCheck=require(W+'/stepcheck.js');
 global.LineModels=require(W+'/linemodels.js');
@@ -57,11 +58,28 @@ function scipy(o){const pr=armProject({...o,impl:'fast'}),s=new MNA.Sim(pr,{hDiv
  const bs=new MNA.Sim(NetLib.forceImpl(pr,'blocks'),{hDiv:o.hDiv||100}),keys=bs.keys.filter(k=>ch.includes(k));
  return {rec,ch,batch:MNA.exportForBatch(pr,keys),h:s.h,warn:s.net.warnings};}
 // the fundamental (peak) and the mean of each key over the last nc cycles of f, from the samples of every step
-function tut(o){require(W+'/tutorials.js');const t=Tutorials.get(o.id),pr=t.build(o.opts||{}),sv=pr.sim||{},s=new MNA.Sim(pr,{hDiv:sv.hDiv||10,method:sv.method||'TR'}),f=50,nc=4,w=2*Math.PI*f,t0=Date.now();
+function tut(o){require(W+'/tutorials.js');const t=Tutorials.get(o.id),pr=t.build(o.opts||{}),sv=pr.sim||{},s=new MNA.Sim(pr,{hDiv:sv.hDiv||10,method:sv.method||'TR'}),f=o.f||50,nc=4,w=2*Math.PI*f,t0=Date.now();
  const keys=o.keys,buf=[],out=[];for(const T of o.at){while(s.t<T-1e-12){s.run(Math.min(s.h,T-s.t));buf.push([s.t,...keys.map(k=>s.now(k))]);if(buf.length&&buf[0][0]<s.t-nc/f-1e-3)buf.shift();}
   const r={t:s.t};const w0=buf.filter(q=>q[0]>=s.t-nc/f-1e-12),Tw=w0[w0.length-1][0]-w0[0][0];
   keys.forEach((k,j)=>{let a=0,b=0,m=0;for(let i=1;i<w0.length;i++){const dt=w0[i][0]-w0[i-1][0],y0=w0[i-1][j+1],y1=w0[i][j+1];a+=dt*(y0*Math.cos(w*w0[i-1][0])+y1*Math.cos(w*w0[i][0]))/2;b+=dt*(y0*Math.sin(w*w0[i-1][0])+y1*Math.sin(w*w0[i][0]))/2;m+=dt*(y0+y1)/2;}
    r[k]={amp:2*Math.hypot(a,b)/Tw,mean:m/Tw};});out.push(r);}
  return {out,ms:Date.now()-t0,h:s.h,warn:s.net.warnings,meta:pr.meta};}
-const F={arm,armpair,nlc,sogi,loop,scipy,tut};
+// 4.17: three phases, each a source V̂∠(δ − k·120°), R–L, an arm, to a source V̂∠(−k·120°); one central controller (SSSC3)
+function loop3Project(o){const N=o.N||10,Vdc=o.Vdc||1000,comps=[C('SC','SSSC3',{mode:o.mode||'x',X:o.X||'10',N,Vdc,C:o.C||10e-3,sync:o.sync||'pos',ton:o.ton??0.15,...(o.sc||{})})],wires=[];
+ ['a','b','c'].forEach((x,k)=>{const sh=-120*k;comps.push(C('V1'+x,'VAC',{Vpk:o.V||122e3,f:50,phase:(o.d??4)+sh}),C('R'+x,'R',{R:(o.R||8)+(x==='a'?(o.Ra||0):0)}),C('L'+x,'L',{L:o.L||0.12}),C('AM'+x,'AM'),
+   C('CH'+x,'CHB',{N,C:o.C||10e-3,Vdc,fs:o.fs||10000,sel:o.sel||'sort',band:o.band||20,impl:o.impl||'fast'}),C('V2'+x,'VAC',{Vpk:o.V||122e3,f:50,phase:sh}),C('G1'+x,'GND'),C('G2'+x,'GND'));
+  wires.push(Wr('w1'+x,['V1'+x,'p'],['R'+x,'a']),Wr('w2'+x,['R'+x,'b'],['L'+x,'a']),Wr('w3'+x,['L'+x,'b'],['AM'+x,'a']),Wr('w4'+x,['AM'+x,'b'],['CH'+x,'a']),Wr('w5'+x,['CH'+x,'b'],['V2'+x,'p']),
+   Wr('w6'+x,['V1'+x,'n'],['G1'+x,'g']),Wr('w7'+x,['V2'+x,'n'],['G2'+x,'g']),Wr('s1'+x,['AM'+x,'y'],['SC','i'+x]),Wr('s2'+x,['CH'+x,'v'],['SC','v'+x]),Wr('s3'+x,['CH'+x,'vav'],['SC','c'+x]),Wr('s4'+x,['SC','r'+x],['CH'+x,'ref']));});
+ return {version:4,components:comps,wires};}
+// the currents (peak over the last 20 ms), X and Î (means over the last 40 ms), the mean cell voltages of each phase
+function loop3(o){const s=new MNA.Sim(loop3Project(o),{hDiv:o.hDiv||10,method:'TR'}),T=o.T||0.6,t0=Date.now(),ip={a:0,b:0,c:0};let n=0,X=0,Ia=0;
+ while(s.t<T-1e-12){s.run(Math.min(s.h,T-s.t));if(s.t>T-0.02)for(const x of 'abc')ip[x]=Math.max(ip[x],Math.abs(s.now('Y:AM'+x)));
+  if(s.t>T-0.04){n++;X+=s.now('Y:SC/XM');Ia+=s.now(o.sync==='phase'?'Y:SC/IAM':'Y:SC/IAF');}}
+ return {ip,X:X/n,Iamp:Ia/n,vav:[...'abc'].map(x=>s.now('Y:SC/VKF'+x)),D:[...'abc'].map(x=>s.now('Y:SC/D'+x)),u:s.now('Y:SC/U'),ms:Date.now()-t0,h:s.h,warn:s.net.warnings};}
+// a short run of loop3 (fast arms) and its SciPy export (detailed arms): channels at every step
+function scipy3(o){const pr=loop3Project({...o,impl:'fast'}),s=new MNA.Sim(pr,{hDiv:o.hDiv||20,method:'TR'}),T=o.T||0.05,ch=['Y:AMa','Y:AMb','Y:AMc','Y:SC/XM','Y:SC/VKFa','Y:SC/Da','Y:SC/U'],rec=[];
+ while(s.t<T-1e-12){s.run(Math.min(s.h,T-s.t));rec.push([s.t,...ch.map(k=>s.now(k))]);}
+ const fp=NetLib.forceImpl(pr,'blocks'),bs=new MNA.Sim(fp,{hDiv:o.hDiv||20}),keys=bs.keys.filter(k=>ch.includes(k));
+ return {rec,ch,keys,batch:MNA.exportForBatch(pr,keys),h:s.h,warn:s.net.warnings};}
+const F={arm,armpair,nlc,sogi,loop,scipy,tut,loop3,scipy3};
 const cases=JSON.parse(process.argv[2]||'[]');console.log(JSON.stringify(cases.map(c=>F[c.kind](c))));

@@ -149,6 +149,29 @@ class Fit(unittest.TestCase):
         self.assertLess(out[1e3][1], 0.01)
         self.assertLess(out[1.0][2], 2e-3)               # what the old criterion saw: H within the tolerance
 
+    def test_narrow_band_stays_passive(self):
+        """4.17: a band narrower than 0.01 Hz – 1 MHz. Without guard samples the fit is free outside its samples and
+        loses passivity there (10 Hz – 100 kHz: an eigenvalue of Re Y as negative as the largest one, just above 100
+        kHz); with them (weight 0.1, from the geometry) only the small violations of every fit remain, the enforcement
+        removes them within the tolerance, and the band of the user is kept in the model. The default band has no
+        guard samples (the fit as before)."""
+        d = lc.typical('400kV-gw')
+        bad = wb.wb_model(d, 100, fmin=10, decades=4, passive='check', guard='none')
+        self.assertLess(bad['passive']['worst'], -0.5)
+        for fmin, dec in ((10, 4), (50, 3), (10, 2)):
+            c = wb.wb_model(d, 100, fmin=fmin, decades=dec, passive='check')
+            self.assertGreater(c['passive']['worst'], -1e-3, (fmin, dec))
+            self.assertEqual(c['band'], [fmin, fmin * 10 ** dec])
+            self.assertEqual([c['fmin'], c['fmax']], [0.01, 1e6])
+            self.assertEqual(c['guard']['w'], wb.GUARD_W)
+            e = wb.wb_model(d, 100, fmin=fmin, decades=dec, passive='enforce')
+            self.assertTrue(e['passive']['passive'], (fmin, dec, e['passive']))
+            self.assertTrue(e['fit']['enforced'])
+            self.assertLessEqual(max(e['fit']['yc_err'], e['fit']['h_err']), 2 * 0.002 + 1e-12, (fmin, dec))
+        m = wb.wb_model(d, 100, decades=8, passive='none')
+        self.assertNotIn('guard', m)
+        self.assertNotIn('band', m)
+
     def test_mod_file_roundtrip(self):
         """Our model written as the model file of the EMTP and read back: the same nodal admittance."""
         m = stored('220kV-sea|30|wb')

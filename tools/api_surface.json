@@ -1,5 +1,5 @@
 {
- "version": "4.16",
+ "version": "4.17",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -2453,6 +2453,13 @@
     ],
     "since": "4.13"
    },
+   "pcl.wideband.passivity_band": {
+    "params": [
+     "fmin",
+     "fmax"
+    ],
+    "since": "4.17"
+   },
    "pcl.wideband.rational": {
     "params": [
      "s",
@@ -2529,7 +2536,8 @@
      "dc",
      "opt",
      "log",
-     "lfw"
+     "lfw",
+     "wout"
     ],
     "since": "4.13"
    },
@@ -2556,7 +2564,8 @@
      "opt",
      "passive",
      "curves",
-     "lfw"
+     "lfw",
+     "guard"
     ],
     "since": "4.13"
    },
@@ -5072,6 +5081,17 @@
      "sensor",
      "qty",
      "ref",
+     "gain",
+     "ctl",
+     "topo",
+     "rVin",
+     "rL1",
+     "rC1",
+     "rL2",
+     "rC2",
+     "rR",
+     "fc",
+     "pm",
      "Kp",
      "Ki",
      "Kd",
@@ -5436,7 +5456,8 @@
      "f0",
      "bw",
      "fx",
-     "ton"
+     "ton",
+     "tadv"
     ],
     "pins": [
      "dth",
@@ -5448,6 +5469,59 @@
      "x"
     ],
     "since": "4.10"
+   },
+   "part:SSSC3": {
+    "params": [
+     "mode",
+     "sync",
+     "N",
+     "Vdc",
+     "C",
+     "ma",
+     "sense",
+     "X",
+     "Iref",
+     "Vbref",
+     "Kp",
+     "Ki",
+     "KpI",
+     "KiI",
+     "KpV",
+     "KiV",
+     "tv",
+     "umax",
+     "bal",
+     "tb",
+     "fv",
+     "dmax",
+     "imin",
+     "mmax",
+     "f0",
+     "bw",
+     "fx",
+     "tadv",
+     "ton"
+    ],
+    "pins": [
+     "ca",
+     "cb",
+     "cc",
+     "ia",
+     "ib",
+     "ic",
+     "ra",
+     "rb",
+     "rc",
+     "u",
+     "ua",
+     "ub",
+     "uc",
+     "va",
+     "vb",
+     "vc",
+     "x"
+    ],
+    "since": "4.17"
    },
    "part:SUB": {
     "params": [
@@ -5552,6 +5626,7 @@
      "wlfw",
      "wopt",
      "wpas",
+     "wgd",
      "wbref",
      "wbtxt",
      "vtrap",

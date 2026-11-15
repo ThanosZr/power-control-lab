@@ -290,10 +290,23 @@
     ref('sensor','Μετρούμενο στοιχείο',['L','R','C','VDC','CPL','SW','D','SCR','XFMR','IDC','VAC','VAC3','SH'],{show:p=>p.mode==='pi',hint:'Με μπλοκ S&H ο ελεγκτής διαβάζει την κρατημένη τιμή του, δηλαδή το τελευταίο δείγμα.'}),
     sel('qty','Μέγεθος',[['I','Ρεύμα'],['V','Τάση']],'I',{show:p=>p.mode==='pi'}),
     txt('ref','Αναφορά (τιμή ή πρόγραμμα)','0',{hint:'Σταθερή τιμή ή «t:τιμή», π.χ. 0:-800, 0.003:800',show:p=>p.mode==='pi'}),
-    num('Kp','K_p','',1e-3,{zero:true,signed:true,show:p=>p.mode==='pi'}),num('Ki','K_i','1/s',1,{zero:true,signed:true,show:p=>p.mode==='pi'}),num('Kd','K_d (0 = PI)','s',0,{zero:true,signed:true,show:p=>p.mode==='pi',hint:'d = D₀ + K_p·e + K_i·T_s·Σe + K_d·de/dt, με δειγματοληψία μία φορά ανά περίοδο.'}),num('Tf','Φίλτρο παραγώγου T_f','s',0,{zero:true,show:p=>p.mode==='pi'&&+p.Kd!==0,hint:'Πρώτης τάξης φίλτρο στον παράγωγο όρο, π.χ. 2·T_s. 0 = χωρίς φίλτρο.'}),
+    // 4.17: the gains from the circuit (tune.js): the converter is recognised, its elements fill a list of roles that the
+    // user may change, and K_p, K_i (K_d, T_f) and D₀ are computed again whenever the circuit changes
+    sel('gain','Κέρδη',[['manual','Χειροκίνητα (K_p, K_i, K_d)'],['auto','Από το κύκλωμα (μέσο μοντέλο)']],'manual',{show:p=>p.mode==='pi',hint:'4.17: με «Από το κύκλωμα» αναγνωρίζεται ο μετατροπέας (buck, boost, buck–boost, Ćuk, SEPIC) και από τα στοιχεία της λίστας ρόλων υπολογίζονται το G(s) = ∂(μέτρηση)/∂d, το πρόσημό του και τα κέρδη με τα περιθώρια. Ξαναϋπολογίζονται σε κάθε αλλαγή του κυκλώματος.'}),
+    sel('ctl','Ελεγκτής',[['pi','PI'],['pid','PID (διπλό μηδενικό)']],'pi',{show:p=>p.mode==='pi'&&p.gain==='auto'}),
+    sel('topo','Τοπολογία',[['auto','Αναγνώριση από το κύκλωμα'],['buck','Buck'],['boost','Boost'],['buck_boost','Buck–boost'],['cuk','Ćuk'],['sepic','SEPIC']],'auto',{show:p=>p.mode==='pi'&&p.gain==='auto'}),
+    ref('rVin','Ρόλος V_in',['VDC'],{show:p=>p.mode==='pi'&&p.gain==='auto',hint:'Κενό: από την αναγνώριση. Διάλεξε άλλο στοιχείο για να το βάλεις στον ρόλο.'}),
+    ref('rL1','Ρόλος L1',['L'],{show:p=>p.mode==='pi'&&p.gain==='auto'}),
+    ref('rC1','Ρόλος C1 (εξόδου στα buck, boost, buck–boost· σύζευξης στα Ćuk, SEPIC)',['C'],{show:p=>p.mode==='pi'&&p.gain==='auto'}),
+    ref('rL2','Ρόλος L2 (Ćuk, SEPIC)',['L'],{show:p=>p.mode==='pi'&&p.gain==='auto'&&!['buck','boost','buck_boost'].includes(p.topo)}),
+    ref('rC2','Ρόλος C2 εξόδου (Ćuk, SEPIC)',['C'],{show:p=>p.mode==='pi'&&p.gain==='auto'&&!['buck','boost','buck_boost'].includes(p.topo)}),
+    ref('rR','Ρόλος R φορτίου',['R'],{show:p=>p.mode==='pi'&&p.gain==='auto'}),
+    num('fc','Στόχος f_c (0 = η μεγαλύτερη με τα περιθώρια)','Hz',0,{zero:true,show:p=>p.mode==='pi'&&p.gain==='auto'}),
+    num('pm','Περιθώριο φάσης','°',50,{show:p=>p.mode==='pi'&&p.gain==='auto',hint:'Μαζί: περιθώριο κέρδους 6 dB, μέγιστη ευαισθησία 2, μία διέλευση, f_c ≤ f_s/10.'}),
+    num('Kp','K_p','',1e-3,{zero:true,signed:true,show:p=>p.mode==='pi'&&p.gain!=='auto'}),num('Ki','K_i','1/s',1,{zero:true,signed:true,show:p=>p.mode==='pi'&&p.gain!=='auto'}),num('Kd','K_d (0 = PI)','s',0,{zero:true,signed:true,show:p=>p.mode==='pi'&&p.gain!=='auto',hint:'d = D₀ + K_p·e + K_i·T_s·Σe + K_d·de/dt, με δειγματοληψία μία φορά ανά περίοδο. Σε μετατροπέα που αντιστρέφει (buck–boost, Ćuk) τα κέρδη είναι αρνητικά.'}),num('Tf','Φίλτρο παραγώγου T_f','s',0,{zero:true,show:p=>p.mode==='pi'&&p.gain!=='auto'&&+p.Kd!==0,hint:'Πρώτης τάξης φίλτρο στον παράγωγο όρο, π.χ. 2·T_s. 0 = χωρίς φίλτρο.'}),
     sel('ff','Πρόσθια τροφοδότηση (feedforward)',[['none','Χωρίς'],['ratio','D₀ = 1 − V(A)/V(B)'],['const','Σταθερό D₀']],'none',{show:p=>p.mode==='pi'}),
     ref('ffA','V(A)',['VDC','C','CPL','R','VAC'],{show:p=>p.mode==='pi'&&p.ff==='ratio'}),ref('ffB','V(B)',['VDC','C','CPL','R','VAC'],{show:p=>p.mode==='pi'&&p.ff==='ratio'}),
-    num('D0','D₀','',0.5,{zero:true,show:p=>p.mode==='pi'&&p.ff==='const'}),
+    num('D0','D₀','',0.5,{zero:true,show:p=>p.mode==='pi'&&p.ff==='const'&&p.gain!=='auto'}),
     num('dmin','D_min','',0.01,{zero:true,show:p=>p.mode==='pi'}),num('dmax','D_max','',0.99,{show:p=>p.mode==='pi'}),
     num('m','Δείκτης διαμόρφωσης m','',0.8,{show:p=>p.mode==='spwm'}),num('fref','Συχνότητα αναφοράς','Hz',50,{show:p=>p.mode==='spwm'}),
     num('refphase','Φάση αναφοράς','°',0,{signed:true,zero:true,show:p=>p.mode==='spwm'})],
@@ -723,6 +736,7 @@
     sel('wlfw','Βάρος στις χαμηλές συχνότητες',[['100','100 (προεπιλογή)'],['300','300'],['30','30'],['0','χωρίς (το απλό ULM)']],'100',{show:p=>p.model==='wb'&&p.wsrc!=='emtp',hint:'Το σφάλμα του H μετρά ως προς |1 − H| του ρυθμού με τη μικρότερη απόσβεση, έως αυτόν τον συντελεστή: ένα κοντό τμήμα (π.χ. ελάσσον τμήμα cross-bonding) κρατά τη σύνθετη αντίσταση σειράς του στα 50 Hz. Η επιβολή παθητικότητας μετρά τις αλλαγές του H με τον ίδιο τρόπο.'}),
     sel('wopt','Καθυστερήσεις με βελτιστοποίηση',[['0','Όχι (Bode, και αναζήτηση όταν δεν σβήνει στη ζώνη)'],['1','Ναι, σε όλες']],'0',{show:p=>p.model==='wb'&&p.wsrc!=='emtp'}),
     sel('wpas','Παθητικότητα',[['check','έλεγχος (σάρωση)'],['enforce','έλεγχος και επιβολή'],['none','χωρίς έλεγχο']],'check',{show:p=>p.model==='wb'}),
+    sel('wgd','Ζώνη ασφαλείας (4.17)',[['auto','αυτόματα: δείγματα ως 0,01 Hz – 1 MHz με βάρος 0,1'],['none','χωρίς: μόνο η ζώνη']],'auto',{show:p=>p.model==='wb'&&p.wsrc!=='emtp',hint:'Μια ζώνη στενότερη από 0,01 Hz – 1 MHz παίρνει δείγματα και έξω από αυτήν (από τη γεωμετρία), με ανοχή δέκα φορές μεγαλύτερη: έξω από τα δείγματά της η προσαρμογή είναι ελεύθερη και χάνει την παθητικότητα.'}),
     txt('wbref','Αρχείο WB του EMTP','',{show:()=>false}),txt('wbtxt','Κείμενο του αρχείου WB','',{show:()=>false}),
     txt('vtrap','Παγιδευμένο φορτίο: τάση ανά αγωγό (V)','',{show:p=>p.model!=='pi',hint:'4.11: η γραμμή ξεκινά φορτισμένη σε αυτές τις τάσεις ΣΡ (μία ανά φάση, με κόμμα), όπως οι αρχικές συνθήκες του CP/FD του EMTP (για επαναζεύξη). Όχι μαζί με εκκίνηση από ροή φορτίου.'}),
     txt('data','Δεδομένα γραμμής (JSON)',JSON.stringify(TLM_TYPICAL['400kV']),{show:()=>false}),txt('mdl','Υπολογισμένο μοντέλο (JSON)','',{show:()=>false}),
@@ -813,8 +827,30 @@
     num('KiV','K_i του βρόχου τάσης','Ω/s',200,{zero:true,show:p=>p.mode==='v'}),
     num('kpd','K_p του βρόχου V_C → Δθ','rad/V',2e-4,{zero:true}),num('fv','Φίλτρο της μέσης τάσης (2ης τάξης)','Hz',10),num('kid','K_i του βρόχου V_C → Δθ','rad/(V·s)',4e-3,{zero:true}),num('dmax','Μέγιστη |Δθ|','°',20),
     num('mmax','Μέγιστο m_a','',1),num('f0','Ονομαστική συχνότητα','Hz',50),num('bw','Εύρος ζώνης του PLL','Hz',8,{hint:'Το PLL κλειδώνει στο ρεύμα που η ίδια η διάταξη αλλάζει: με επαγωγική έγχυση η γωνία του ρεύματος ακολουθεί το σφάλμα του PLL προς την ανάποδη μεριά και ο βρόχος γίνεται πιο γρήγορος. Με 20 Hz η επαγωγική έγχυση πάνω από ~10 Ω ταλαντεύεται (στο tutorial), με 8 Hz όχι.'}),num('fx','Φίλτρο της μέτρησης της X (2ης τάξης)','Hz',10,{hint:'Η αντίδραση μετριέται από τη συνιστώσα της τάσης v (είσοδος) σε τετραγωνισμό με το ρεύμα: X = V_q/Î.'}),
-    num('ton','Ενεργοποίηση στο','s',0.15,{zero:true,hint:'Ως τότε v_ref = 0 (όλες οι υπομονάδες σε παράκαμψη), ώστε να κλειδώσει το PLL στο ρεύμα.'})],value:()=>null,
+    num('ton','Ενεργοποίηση στο','s',0.15,{zero:true,hint:'Ως τότε v_ref = 0 (όλες οι υπομονάδες σε παράκαμψη), ώστε να κλειδώσει το PLL στο ρεύμα.'}),
+    num('tadv','Προπορεία της αναφοράς (4.17)','s',0,{zero:true,hint:'Η NLC δειγματοληπτεί την αναφορά, οπότε η σκάλα καθυστερεί περίπου μισό δείγμα (50 μs για 10 kHz) και ο βραχίονας ανταλλάσσει ενεργό ισχύ ~V_q·ω·T_s/2 με τη γραμμή, που την αναπληρώνει το Δθ. Με t_adv = 1/(2f_s) η αναφορά προηγείται όσο καθυστερεί η σκάλα. 0 = όπως στην 4.10.'})],value:()=>null,
    draw:()=>sb(60,80)+tx('m-SSSC',0,4,'bsm')+sl('M-40,-30 H-30 M-40,-10 H-30 M-40,10 H-30 M-40,30 H-30 M30,-20 H40 M30,0 H40 M30,20 H40')},
+  // 4.17 (§50): one controller for the three arms of a three-phase m-SSSC (sync on the positive sequence or per phase,
+  // one reactance loop, the total energy and the balancing between the phases). THEORY §8ρ
+  SSSC3:{name:'Κεντρικός έλεγχος τριφασικού m-SSSC',prefix:'SS3',group:'Δίκτυο',pins:{},
+   spins:{ia:I(-50,-70),ib:I(-50,-60),ic:I(-50,-50),va:I(-50,-30),vb:I(-50,-20),vc:I(-50,-10),ca:I(-50,10),cb:I(-50,20),cc:I(-50,30),ua:I(-50,50),ub:I(-50,60),uc:I(-50,70),
+    ra:O(50,-70),rb:O(50,-60),rc:O(50,-50),x:O(50,-30),u:O(50,-10)},box:[-40,-80,80,160],blk:true,
+   params:[sel('mode','Τρόπος',[['ma','Σταθερός δείκτης διαμόρφωσης m_a'],['x','Έγχυση αντίδρασης X (πρόσθια τροφοδότηση + PI)'],['i','Έλεγχος ρεύματος γραμμής (θετική ακολουθία)'],['v','Έλεγχος τάσης ζυγού (είσοδοι ua, ub, uc)']],'x',{hint:'Ένας βρόχος για τις τρεις φάσεις. Η αναφορά κάθε βραχίονα έχει ένα μέρος κάθετο στο ρεύμα της φάσης του (V_q, η άεργος αντιστάθμιση) και ένα μέρος σε φάση με αυτό (D_k), που κρατά τους πυκνωτές: τη συνολική ενέργεια και την εξισορρόπηση ανάμεσα στις φάσεις.'}),
+    sel('sync','Συγχρονισμός',[['pos','Θετική ακολουθία: ένα τριφασικό PLL στα τρία ρεύματα'],['phase','Ανά φάση: ένα SOGI-PLL σε κάθε ρεύμα (όπως η 4.10)']],'pos',{hint:'Με τη θετική ακολουθία οι τρεις τάσεις είναι συμμετρικές και το πλάτος και η X δεν έχουν κυμάτωση 2ω όταν τα ρεύματα είναι συμμετρικά. Με ασύμμετρα ρεύματα η τάση κάθε φάσης δεν είναι ακριβώς κάθετη στο ρεύμα της, και η εξισορρόπηση ανάμεσα στις φάσεις μοιράζει τη διαφορά. Ανά φάση: κάθε τάση κάθετη στο ρεύμα της φάσης της (V_q ανά φάση = Î_k·X).'}),
+    num('N','Υπομονάδες ανά φάση N','',10),num('Vdc','Τάση πυκνωτή V_C (αναφορά)','V',1000),num('C','Πυκνωτής υπομονάδας C','F',10e-3,{hint:'Για τα κέρδη του βρόχου της ενέργειας (ενέργεια ανά φάση N·½·C·V_C²).'}),
+    num('ma','m_a','',0.8,{show:p=>p.mode==='ma'}),sel('sense','Χαρακτήρας',[['cap','Χωρητικός (η τάση καθυστερεί 90° από το ρεύμα)'],['ind','Επαγωγικός (προηγείται 90°)']],'cap',{show:p=>p.mode==='ma'}),
+    txt('X','X_ref (χωρητική θετική)','10',{sched:true,unit:'Ω',show:p=>p.mode==='x',hint:'Σταθερή τιμή ή «t:τιμή» σε Ω, π.χ. 0:0, 0.3:10.'}),
+    txt('Iref','I_ref (πλάτος, θετική ακολουθία)','100',{sched:true,unit:'A',show:p=>p.mode==='i'}),txt('Vbref','V_ref του ζυγού (πλάτος φασικής)','1000',{sched:true,unit:'V',show:p=>p.mode==='v'}),
+    num('Kp','K_p του βρόχου X','Ω/Ω',0.5,{zero:true,show:p=>p.mode==='x'}),num('Ki','K_i του βρόχου X','Ω/(Ω·s)',20,{zero:true,show:p=>p.mode==='x'}),
+    num('KpI','K_p του βρόχου ρεύματος','Ω/A',0.02,{zero:true,show:p=>p.mode==='i'}),num('KiI','K_i του βρόχου ρεύματος','Ω/(A·s)',5,{zero:true,show:p=>p.mode==='i'}),
+    num('KpV','K_p του βρόχου τάσης','Ω',5,{zero:true,show:p=>p.mode==='v'}),num('KiV','K_i του βρόχου τάσης','Ω/s',200,{zero:true,show:p=>p.mode==='v'}),
+    num('tv','Σταθερά χρόνου του βρόχου της ενέργειας','s',0.05,{hint:'u = PI(V_C,ref − V̄) σε V/s με K_p = 1/τ, K_i = 1/(4τ²): κλειστός βρόχος (s + 1/(2τ))².'}),num('umax','Όριο των ολοκληρωτών (u, b_k)','V/s',2000,{hint:'Σε V/s της μέσης τάσης: 2000 V/s σε 10 × 1 kV με 10 mF είναι 200 kW ανά φάση.'}),
+    sel('bal','Εξισορρόπηση ανάμεσα στις φάσεις',[['on','Ναι: b_k = PI(V̄ − V̄_k) με K_p = 1/τ_b, K_i = 1/(4τ_b²)'],['off','Όχι (μόνο η συνολική ενέργεια)']],'on'),num('tb','Σταθερά χρόνου της εξισορρόπησης τ_b','s',0.03,{show:p=>p.bal!=='off'}),
+    num('fv','Φίλτρο των μέσων τάσεων (2ης τάξης)','Hz',10),num('dmax','Μέγιστο |D_k| (κλάσμα του N·V_C)','',0.3),num('imin','Ελάχιστο ρεύμα στο κέρδος D_k','A',10,{hint:'D_k = 2·N·C·V_C/max(Î, I_min)·(u + b_k): σε πολύ μικρό ρεύμα το κέρδος δεν απειρίζεται.'}),
+    num('mmax','Μέγιστο m_a','',1),num('f0','Ονομαστική συχνότητα','Hz',50),num('bw','Εύρος ζώνης του PLL','Hz',8),num('fx','Φίλτρο της μέτρησης της X (2ης τάξης)','Hz',10),
+    num('tadv','Προπορεία της αναφοράς','s',5e-5,{zero:true,hint:'Η NLC δειγματοληπτεί την αναφορά (f_s του βραχίονα), οπότε η σκάλα καθυστερεί περίπου μισό δείγμα: 1/(2f_s) = 50 μs για 10 kHz. Χωρίς προπορεία μια χωρητική V_q καθυστερεί 90° + ε από το ρεύμα και ο βραχίονας δίνει ενεργό ισχύ (~V_q·ω·T_s/2), που πρέπει να την αναπληρώνει ο βρόχος της ενέργειας. 0 = καμία.'}),
+    num('ton','Ενεργοποίηση στο','s',0.15,{zero:true,hint:'Ως τότε όλες οι αναφορές μηδέν (υπομονάδες σε παράκαμψη), ώστε να κλειδώσει το PLL.'})],value:()=>null,
+   draw:()=>sb(80,160)+tx('m-SSSC',0,-4,'bsm')+tx('3φ',0,8,'bsm')+sl('M-50,-70 H-40 M-50,-60 H-40 M-50,-50 H-40 M-50,-30 H-40 M-50,-20 H-40 M-50,-10 H-40 M-50,10 H-40 M-50,20 H-40 M-50,30 H-40 M-50,50 H-40 M-50,60 H-40 M-50,70 H-40 M40,-70 H50 M40,-60 H50 M40,-50 H50 M40,-30 H50 M40,-10 H50')},
   // 4.14 (§42): a modular multilevel converter (MMC) for HVDC, in the four models of the MMC station of EMTP-RV: 1 every
   // cell from switches and diodes (the detailed implementation), 2 the detailed equivalent (every capacitor in one solver
   // element per arm), 3 the switching function of the arm (one capacitor C/N per arm), 4 the average model (controlled
@@ -1259,7 +1295,7 @@
   // 4.13: the wideband options (only when they differ from the defaults), or the EMTP file the model was read from
   if(o.model==='wb'){if(p.wsrc==='emtp'){o.wsrc='emtp';o.wbref=String(p.wbref||'');for(const k of ['fmin','dec','ppd'])delete o[k];}
    else{if(p.wtol!=null&&+p.wtol!==0.2)o.wtol=n(p.wtol);if(p.wgrp==='0')o.wgrp=0;if(p.wfdcm&&p.wfdcm!=='auto')o.wfdcm=p.wfdcm;if(p.wdc==='1')o.wdc=1;if(p.wopt==='1')o.wopt=1;if(p.wlfw!=null&&+p.wlfw!==100)o.wlfw=n(p.wlfw);if(p.nmax!=null&&+p.nmax!==30)o.nmax=n(p.nmax);}
-   if(p.wpas&&p.wpas!=='check')o.wpas=p.wpas;}
+   if(p.wpas&&p.wpas!=='check')o.wpas=p.wpas;if(p.wgd&&p.wgd!=='auto'&&p.wsrc!=='emtp')o.wgd=p.wgd;}
   return JSON.stringify(o);}
  // the model for the solver: {M, type, Ti (M×M, by rows), modes} or {err}
  function tlmModel(p){if(!tlmData(p))return {err:'τα δεδομένα της γραμμής δεν διαβάζονται (JSON).'};let m=null;try{m=p.mdl?JSON.parse(p.mdl):null;}catch(e){m=null;}

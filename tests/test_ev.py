@@ -47,13 +47,15 @@ class ElectricVehicle(unittest.TestCase):
     def test_energy_metrics(self):
         for k in ('moevc', 'moev'):
             a = self.R[k]['at']['60']
-            self.assertTrue(20 < a['kwh'] < 35, (k, a))
+            # 4.17: with the friction of the motor B = 4·10⁻⁴ N·m·s/rad (4.8–4.16: 0,012, half of the energy in friction,
+            # 26 km/kWh) a light vehicle of 115 kg at ~22 km/h on average: 12–20 Wh/km
+            self.assertTrue(50 < a['kwh'] < 80, (k, a))
             self.assertAlmostEqual(a['kwh'] * a['whk'], 1000, delta=1e-6 * 1000)    # km/kWh and Wh/km of the same E and x
             # the energy drawn and the charge (SOC): their ratio is a battery voltage between the OCV at 0 and at 100 %
             q = (self.R[k]['soc0'] - a['soc']) * self.R[k]['Q'] * 3600
             self.assertTrue(45 < a['en'] / q < 58.8, (k, a['en'] / q))
             self.assertAlmostEqual(a['dsoc'], 100 * (self.R[k]['soc0'] - a['soc']), places=9)
-            self.assertTrue(3 < a['nmk'] < 8 and 10 < a['irms'] < 40, a)
+            self.assertTrue(5 < a['nmk'] < 12 and 10 < a['irms'] < 40, a)
 
     def test_coupled_scheme_follows_better(self):
         # the reference governor and the vehicle dynamics in «moevc»: the speed follows the cycle within ~1 rad/s RMS and

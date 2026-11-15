@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.16: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (578 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.17: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (580 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.16.
+Κανένα στην 4.17.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-340 σημεία.
+341 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -344,6 +344,7 @@
 | `pcl.wideband.model_parts` | `model` | 4.13 · πειρ. |
 | `pcl.wideband.nodal` | `Yc`, `H` | 4.13 · πειρ. |
 | `pcl.wideband.passivity` | `model`, `fmin`, `fmax`, `ppd`, `extra` | 4.13 · πειρ. |
+| `pcl.wideband.passivity_band` | `fmin`, `fmax` | 4.17 · πειρ. |
 | `pcl.wideband.rational` | `s`, `p`, `R`, `D` | 4.13 · πειρ. |
 | `pcl.wideband.read_wb_mod` | `text`, `length` | 4.13 · πειρ. |
 | `pcl.wideband.sheath_check` | `Yn`, `length_km`, `cores`, `sheaths` | 4.13 · πειρ. |
@@ -351,9 +352,9 @@
 | `pcl.wideband.to_json` | `fit`, `M`, `L`, `fs` | 4.13 · πειρ. |
 | `pcl.wideband.vfit_relaxed` | `s`, `F`, `poles`, `weight`, `d`, `iters`, `stable`, `tol_conv`, `clip` | 4.13 · πειρ. |
 | `pcl.wideband.wb_admittance` | `model`, `s` | 4.13 · πειρ. |
-| `pcl.wideband.wb_fit` | `sw`, `L`, `tol`, `nmax`, `group`, `fdcm`, `ratio`, `dc`, `opt`, `log`, `lfw` | 4.13 · πειρ. |
+| `pcl.wideband.wb_fit` | `sw`, `L`, `tol`, `nmax`, `group`, `fdcm`, `ratio`, `dc`, `opt`, `log`, `lfw`, `wout` | 4.13 · πειρ. |
 | `pcl.wideband.wb_h` | `groups`, `s` | 4.13 · πειρ. |
-| `pcl.wideband.wb_model` | `data`, `length`, `fmin`, `decades`, `ppd`, `tol`, `nmax`, `group`, `fdcm`, `ratio`, `dc`, `opt`, `passive`, `curves`, `lfw` | 4.13 · πειρ. |
+| `pcl.wideband.wb_model` | `data`, `length`, `fmin`, `decades`, `ppd`, `tol`, `nmax`, `group`, `fdcm`, `ratio`, `dc`, `opt`, `passive`, `curves`, `lfw`, `guard` | 4.13 · πειρ. |
 | `pcl.wideband.wb_yc` | `yc`, `s` | 4.13 · πειρ. |
 | `pcl.wideband.write_wb_mod` | `model` | 4.13 · πειρ. |
 | `pcl.workbench.CircuitPlant` | `params` | 3.18 · πειρ. |
@@ -541,7 +542,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-118 σημεία.
+119 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -624,7 +625,7 @@
 | `part:PLL` | f0, bw, th0, ini, conn | a, abc, amp, b, c, th, w | 3.18 |
 | `part:PORT` | name, side, width | p | 3.18 |
 | `part:PSS` | KS, TW, T1, T2, T3, T4, VSMAX, VSMIN | vs, w | 4.8.1 |
-| `part:PWM` | fs, mode, D, dsched, carrier, phase, upd, dt, sensor, qty, ref, Kp, Ki, Kd, Tf, ff, ffA, ffB, D0, dmin, dmax, m, fref, refphase | d | 3.18 |
+| `part:PWM` | fs, mode, D, dsched, carrier, phase, upd, dt, sensor, qty, ref, gain, ctl, topo, rVin, rL1, rC1, rL2, rC2, rR, fc, pm, Kp, Ki, Kd, Tf, ff, ffA, ffB, D0, dmin, dmax, m, fref, refphase | d | 3.18 |
 | `part:PY` | code, ins, outs, pars, clock, trig, y0 | e, y | 3.18 |
 | `part:R` | R, sched | a, b | 3.18 |
 | `part:RAMP` | f, shape, lo, hi, phase | y | 3.18 |
@@ -644,14 +645,15 @@
 | `part:SPLX` | f0, bw, k, k0, th0 | al, amp, be, th, v, w | 4.10 |
 | `part:SR` | q0 | nq, q, r, s | 3.18 |
 | `part:SRM` | geo, Rs, mag, Lu, La, Lsat, psik, Imax, tbl, J, bm, load, TL, w0, th0 | a1, a2, a3, a4, b1, b2, b3, b4, i1, i2, i3, i4, te, th, tl, w | 3.18 |
-| `part:SSSC` | mode, N, Vdc, ma, sense, X, Iref, Vbref, Kp, Ki, KpI, KiI, KpV, KiV, kpd, fv, kid, dmax, mmax, f0, bw, fx, ton | dth, i, v, vav, vb, vref, x | 4.10 |
+| `part:SSSC` | mode, N, Vdc, ma, sense, X, Iref, Vbref, Kp, Ki, KpI, KiI, KpV, KiV, kpd, fv, kid, dmax, mmax, f0, bw, fx, ton, tadv | dth, i, v, vav, vb, vref, x | 4.10 |
+| `part:SSSC3` | mode, sync, N, Vdc, C, ma, sense, X, Iref, Vbref, Kp, Ki, KpI, KiI, KpV, KiV, tv, umax, bal, tb, fv, dmax, imin, mmax, f0, bw, fx, tadv, ton | ca, cb, cc, ia, ib, ic, ra, rb, rc, u, ua, ub, uc, va, vb, vc, x | 4.17 |
 | `part:SUB` | def | — | 3.18 |
 | `part:SUM` | signs | a, b, y | 3.18 |
 | `part:SW` | gate, pwm, out, model, Ron, Vce0, Roff, body, Vfd, Rd, Eon, Eoff, Vref, Iref | d, g, s | 3.18 |
 | `part:TAGI` | name | y | 3.18 |
 | `part:TAGO` | name | u | 3.18 |
 | `part:TL` | spec, Z, tau, len, vel, Lp, Cp, Rt, Rp, nsec | a1, a2, b1, b2 | 3.18 |
-| `part:TLM` | model, len, f, cp, npi, fmin, dec, ppd, fti, tiauto, nmax, ti, wsrc, wtol, wgrp, wfdcm, wdc, wlfw, wopt, wpas, wbref, wbtxt, vtrap, data, mdl, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.4 |
+| `part:TLM` | model, len, f, cp, npi, fmin, dec, ppd, fti, tiauto, nmax, ti, wsrc, wtol, wgrp, wfdcm, wdc, wlfw, wopt, wpas, wgd, wbref, wbtxt, vtrap, data, mdl, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.4 |
 | `part:TOWER` | h, Zt, vt, foot, R0, rho, E0, ins, Ub, U0, kde, Dde, impl, meas | a1, a2, b1, b2, c1, c2, d1, d2, e1, e2 | 4.9 |
 | `part:UD` | clock, trig, y0 | u, y | 3.18 |
 | `part:VAC` | Vpk, f, phase, off, Rs, Ls | n, p | 3.18 |

@@ -2307,14 +2307,15 @@ def _wb_opts(req):
         raise LineError('ανοχή της προσαρμογής: 0,001 % – 10 %')
     fdcm = req.get('fdcm') or 'auto'
     passive = req.get('passive') or 'check'
-    if fdcm not in wideband.FDCM_KINDS or passive not in wideband.PASSIVE_KINDS:
+    guard = req.get('guard') or 'auto'
+    if fdcm not in wideband.FDCM_KINDS or passive not in wideband.PASSIVE_KINDS or guard not in wideband.GUARD_KINDS:
         raise LineError('άγνωστη επιλογή του wideband')
     lfw = _f(req.get('lfw'), 100.0)
     if not 0 <= lfw <= 1e4:
         raise LineError('βάρος στις χαμηλές συχνότητες: 0 (χωρίς) έως 10 000')
     return {'tol': tol, 'nmax': max(6, min(int(_f(req.get('nmax'), 30)), 80)), 'group': bool(req.get('group', True)),
             'fdcm': fdcm, 'ratio': _f(req.get('ratio'), 1000.0), 'dc': bool(req.get('dc')), 'opt': bool(req.get('opt')),
-            'passive': passive, 'lfw': lfw}
+            'passive': passive, 'lfw': lfw, 'guard': guard}
 
 
 def api(req):

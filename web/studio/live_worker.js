@@ -16,7 +16,7 @@
 //  [3] = the last batch of calls applied (4.8), also sent in every tick (ack).
 //  The page waits for [1] = 2 by spinning (a few ms: the solver works in slices of 4 ms and looks at [0] after each).
 self.window=self;
-importScripts('expr.js','parts.js','stepcheck.js','netlib.js','subcircuit.js','bus.js','units.js','pyrt.js','sparse.js','nn.js','mna.js','linemodels.js');
+importScripts('expr.js','parts.js','stepcheck.js','netlib.js','subcircuit.js','bus.js','units.js','pyrt.js','sparse.js','nn.js','tune.js','mna.js','linemodels.js');
 let sim=null,R=null;
 // 4.8: Python (Pyodide) in this thread for the circuits with Python blocks: loaded the first time one runs, never on the page
 const PYV='0.26.4';let booting=null,early=null;

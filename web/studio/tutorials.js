@@ -54,28 +54,32 @@
     {sim:{hDiv:200,speed:200,stopT:0},scope:{panes:[[['I:L1','i_L']],[['V:C1','v_o']]],window:{unit:'T',n:10}}});}});
  // ------------------------------------------------------------------ Cuk
  T.push({id:'cuk',group:'DC-DC χωρίς απομόνωση',title:'Ćuk',theory:'formula',topology:'cuk',
-  options:[{k:'D',label:'Duty',options:[['0.4','D = 0,4'],['0.6','D = 0,6']],def:'0.4'}],
-  desc:'Η ενέργεια μεταφέρεται μέσω του πυκνωτή C1. Και τα δύο πηνία έχουν συνεχές ρεύμα, άρα και η είσοδος και η έξοδος δεν διακόπτονται. V_o = −V_in·D/(1−D).',
-  tasks:['Scope τάσης στον C1: μέση τιμή V_in + |V_o|.','Σύγκρινε τις κυματώσεις των δύο πηνίων με αυτές του buck–boost.'],
-  build(o){const D=+o.D,Vo=-12*D/(1-D),Io=Vo/8;
+  options:[{k:'D',label:'Duty',options:[['0.4','D = 0,4'],['0.6','D = 0,6']],def:'0.4'},
+   {k:'ctrl',label:'Έλεγχος (4.17)',options:[['ol','Ανοικτός βρόχος (σταθερό D)'],['pi','PI με κέρδη από το κύκλωμα'],['pid','PID με κέρδη από το κύκλωμα']],def:'ol'}],
+  desc:'Η ενέργεια μεταφέρεται μέσω του πυκνωτή C1. Και τα δύο πηνία έχουν συνεχές ρεύμα, άρα και η είσοδος και η έξοδος δεν διακόπτονται. V_o = −V_in·D/(1−D). Με PI/PID (4.17) το PWM μετρά τη V_o και τα κέρδη βγαίνουν από το μέσο μοντέλο του κυκλώματος: ο Ćuk αντιστρέφει (∂V_o/∂D < 0), άρα τα κέρδη είναι αρνητικά.',
+  tasks:['Scope τάσης στον C1: μέση τιμή V_in + |V_o|.','Σύγκρινε τις κυματώσεις των δύο πηνίων με αυτές του buck–boost.','Με «PI με κέρδη από το κύκλωμα» δες στις παραμέτρους του PWM τη λίστα ρόλων (V_in, L1, C1, L2, C2, R) και στον ζωντανό πίνακα τα κέρδη. Άλλαξε το C2 ή το R: τα κέρδη ξαναϋπολογίζονται.','Βάλε «Κέρδη: Χειροκίνητα» με θετικά K_p, K_i: η προειδοποίηση λέει ότι ο βρόχος έχει θετική ανάδραση, και η V_o φεύγει από την αναφορά.'],
+  build(o){const D=+o.D,Vo=-12*D/(1-D),Io=Vo/8,cl=o.ctrl==='pi'||o.ctrl==='pid';
+   const pwm=cl?{fs:100e3,mode:'pi',gain:'auto',ctl:o.ctrl,sensor:'C2',qty:'V',ref:`0:${+Vo.toFixed(4)}, 0.01:${+(1.25*Vo).toFixed(4)}`,dmin:.05,dmax:.85}:{fs:100e3,D};
    return project([C('V1','VDC',100,210,{V:12},{label:'V_in'}),gnd(100,300),C('L1','L',170,150,{L:200e-6,i0:+(Math.abs(Io)*D/(1-D)).toFixed(5)}),J('JA',230,150),C('S1','SW',230,200,{pwm:'PWM1',out:'a',body:false}),C('C1','C',290,150,{C:10e-6,v0:+(12-Vo).toFixed(5)},{rot:3}),
      J('JB',350,150),C('D1','D',350,200,{},{rot:1}),C('L2','L',420,150,{L:200e-6,i0:+Io.toFixed(5)}),J('JO',490,150),C('C2','C',490,210,{C:100e-6,v0:+Vo.toFixed(5)}),C('R1','R',570,210,{R:8},{rot:1,label:'R'}),
-     J('J3',100,270),J('J4',230,270),J('J5',350,270),J('J6',490,270),C('PWM1','PWM',230,60,{fs:100e3,D})],
+     J('J3',100,270),J('J4',230,270),J('J5',350,270),J('J6',490,270),C('PWM1','PWM',230,60,pwm)],
     [['V1:p','L1:a',[[100,150]]],['L1:b','JA'],['JA','S1:d'],['JA','C1:p'],['C1:n','JB'],['JB','D1:a'],['JB','L2:a'],['L2:b','JO',[],{name:'v_o'}],['JO','C2:p'],['JO','R1:a',[[570,150]]],
      ['V1:n','J3'],['J3','G1:g'],['J3','J4'],['J4','S1:s'],['J4','J5'],['J5','D1:k'],['J5','J6'],['J6','C2:n'],['J6','R1:b',[[570,270]]]],
-    {sim:{hDiv:200,speed:200,stopT:0},scope:{panes:[[['I:L1','i_L1'],['I:L2','i_L2']],[['V:C1','v_C1']],[['V:C2','v_o']]],window:{unit:'T',n:10}}});}});
+    {sim:{hDiv:200,speed:200,stopT:cl?0.03:0},scope:{panes:[[['I:L1','i_L1'],['I:L2','i_L2']],[['V:C1','v_C1']],[['V:C2','v_o'],...(cl?[['REF:PWM1','αναφορά']]:[])],...(cl?[[['D:PWM1','D']]]:[])],window:cl?{unit:'T',n:3000}:{unit:'T',n:10}}});}});
  // ------------------------------------------------------------------ SEPIC
  T.push({id:'sepic',group:'DC-DC χωρίς απομόνωση',title:'SEPIC',theory:'formula',topology:'sepic',
-  options:[{k:'D',label:'Duty',options:[['0.4','D = 0,4 · V_o < V_in'],['0.6','D = 0,6 · V_o > V_in']],def:'0.6'}],
-  desc:'Μη αναστρέφουσα έξοδος που μπορεί να είναι μεγαλύτερη ή μικρότερη από την είσοδο: V_o = V_in·D/(1−D). Ο C1 φορτίζεται μέσα στην περίοδο στη V_in.',
-  tasks:['Scope τάσης C1: μέση τιμή V_in.','Δες ότι το ρεύμα της διόδου είναι i_L1 + i_L2 όταν ο S1 είναι OFF.'],
-  build(o){const D=+o.D,Vo=12*D/(1-D),Io=Vo/18;
+  options:[{k:'D',label:'Duty',options:[['0.4','D = 0,4 · V_o < V_in'],['0.6','D = 0,6 · V_o > V_in']],def:'0.6'},
+   {k:'ctrl',label:'Έλεγχος (4.17)',options:[['ol','Ανοικτός βρόχος (σταθερό D)'],['pi','PI με κέρδη από το κύκλωμα'],['pid','PID με κέρδη από το κύκλωμα']],def:'ol'}],
+  desc:'Μη αναστρέφουσα έξοδος που μπορεί να είναι μεγαλύτερη ή μικρότερη από την είσοδο: V_o = V_in·D/(1−D). Ο C1 φορτίζεται μέσα στην περίοδο στη V_in. Με PI/PID (4.17) τα κέρδη βγαίνουν από το μέσο μοντέλο του κυκλώματος.',
+  tasks:['Scope τάσης C1: μέση τιμή V_in.','Δες ότι το ρεύμα της διόδου είναι i_L1 + i_L2 όταν ο S1 είναι OFF.','Με PI ή PID από το κύκλωμα: σύγκρινε τη f_c και το περιθώριο φάσης της κάρτας με τον Ćuk. Και οι δύο έχουν μηδενικό στο δεξί ημιεπίπεδο.'],
+  build(o){const D=+o.D,Vo=12*D/(1-D),Io=Vo/18,cl=o.ctrl==='pi'||o.ctrl==='pid';
+   const pwm=cl?{fs:100e3,mode:'pi',gain:'auto',ctl:o.ctrl,sensor:'C2',qty:'V',ref:`0:${+Vo.toFixed(4)}, 0.01:${+(1.25*Vo).toFixed(4)}`,dmin:.05,dmax:.85}:{fs:100e3,D};
    return project([C('V1','VDC',100,210,{V:12},{label:'V_in'}),gnd(100,300),C('L1','L',170,150,{L:200e-6,i0:+(Io*D/(1-D)).toFixed(5)}),J('JA',230,150),C('S1','SW',230,200,{pwm:'PWM1',out:'a',body:false}),C('C1','C',290,150,{C:10e-6,v0:12},{rot:3}),
      J('JB',350,150),C('L2','L',350,210,{L:200e-6,i0:+(-Io).toFixed(5)},{rot:1}),C('D1','D',410,150),J('JO',480,150),C('C2','C',480,210,{C:100e-6,v0:+Vo.toFixed(5)}),C('R1','R',560,210,{R:18},{rot:1,label:'R'}),
-     J('J3',100,270),J('J4',230,270),J('J5',350,270),J('J6',480,270),C('PWM1','PWM',230,60,{fs:100e3,D})],
+     J('J3',100,270),J('J4',230,270),J('J5',350,270),J('J6',480,270),C('PWM1','PWM',230,60,pwm)],
     [['V1:p','L1:a',[[100,150]]],['L1:b','JA'],['JA','S1:d'],['JA','C1:p'],['C1:n','JB'],['JB','L2:a'],['JB','D1:a'],['D1:k','JO',[],{name:'v_o'}],['JO','C2:p'],['JO','R1:a',[[560,150]]],
      ['V1:n','J3'],['J3','G1:g'],['J3','J4'],['J4','S1:s'],['J4','J5'],['J5','L2:b'],['J5','J6'],['J6','C2:n'],['J6','R1:b',[[560,270]]]],
-    {sim:{hDiv:200,speed:200,stopT:0},scope:{panes:[[['I:L1','i_L1'],['I:L2','i_L2']],[['V:C1','v_C1']],[['V:C2','v_o']]],window:{unit:'T',n:10}}});}});
+    {sim:{hDiv:200,speed:200,stopT:cl?0.03:0},scope:{panes:[[['I:L1','i_L1'],['I:L2','i_L2']],[['V:C1','v_C1']],[['V:C2','v_o'],...(cl?[['REF:PWM1','αναφορά']]:[])],...(cl?[[['D:PWM1','D']]]:[])],window:cl?{unit:'T',n:3000}:{unit:'T',n:10}}});}});
  // ------------------------------------------------------------------ Flyback
  T.push({id:'flyback',group:'DC-DC με απομόνωση',title:'Flyback',theory:'v1',topology:'flyback',
   options:[{k:'R',label:'Φορτίο',options:[['8','R = 8 Ω · CCM'],['40','R = 40 Ω · DCM']],def:'8'},{k:'lk',label:'Μετασχηματιστής',options:[['ideal','Χωρίς σκέδαση'],['clamp','L_lk = 4 μH + RCD clamp']],def:'ideal'}],
@@ -918,7 +922,7 @@
  // of the tool with the vehicle's inertia reflected to the shaft, the road load (rolling, air, grade that changes with
  // the distance, a variable load), and the energy metrics. The battery and the vehicle are signal models, as in the
  // workbench; the machine and its current are the tool's. The driving cycle repeats (minutes, no end of the run).
- const EVV={R:.22,La:.003,K:.2,Jm:.018,B:.012,gear:7,eta:.92,rw:.255,m:115,Crr:.012,CdA:.32,rho:1.225,Tb:.05,Ta:.45,lp:55,gp:90,Q:18,ocv0:45,ocv1:58.8,Rb:.075,Rg:2.6,ceta:.94,boost:1.75,vmax:96,ibmax:140,vkph:45};
+ const EVV={R:.22,La:.003,K:.2,Jm:.018,B:4e-4,gear:7,eta:.92,rw:.255,m:115,Crr:.012,CdA:.32,rho:1.225,Tb:.05,Ta:.45,lp:55,gp:90,Q:18,ocv0:45,ocv1:58.8,Rb:.075,Rg:2.6,ceta:.94,boost:1.75,vmax:96,ibmax:140,vkph:45};
  // the cycles of the workbench, with a stop at the end so that they repeat (decelerate to 0 and wait)
  const EV_CYC={urban:{t:[0,.11,.2,.38,.5,.63,.74,.84,.92,1],y:[0,.28,.58,.58,.32,.72,.48,.62,0,0]},grade:{t:[0,.09,.2,.41,.53,.65,.78,.86,.93,1],y:[0,.34,.66,.66,.50,.74,.58,.64,0,0]},
   // 4.8: hard accelerations, where the power limit of each mode binds (eco 5.2 kW, balanced 8 kW, performance 10.8 kW)
@@ -1168,12 +1172,11 @@
  const IEEE9_GEN={G1:{Xd:0.1460,Xdp:0.0608,Xdpp:0.0608,Xq:0.0969,Xqp:0.0969,Xqpp:0.0969,Xl:0.0336,X0:0.0336,Td0p:8.96,Td0pp:0,Tq0p:0,Tq0pp:0,H:23.64},
   G2:{Xd:0.8958,Xdp:0.1198,Xdpp:0.1198,Xq:0.8645,Xqp:0.1969,Xqpp:0.1969,Xl:0.0521,X0:0.0521,Td0p:6.00,Td0pp:0,Tq0p:0.535,Tq0pp:0,H:6.40},
   G3:{Xd:1.3125,Xdp:0.1813,Xdpp:0.1813,Xq:1.2578,Xqp:0.25,Xqpp:0.25,Xl:0.0742,X0:0.0742,Td0p:5.89,Td0pp:0,Tq0p:0.600,Tq0pp:0,H:3.01}};
- T.push({id:'ieee9_emt',group:'Συστήματα ισχύος (4.3)',title:'IEEE 9 ζυγών σε EMT, από τη ροή φορτίου',theory:'formula',topology:'ieee9_emt',
-  options:[{k:'ev',label:'Γεγονός',options:[['none','Καμία διαταραχή: η μόνιμη κατάσταση της ροής φορτίου'],['fault','Σφάλμα 5 κύκλων (A&F, Παρ. 2.7), μηχανές ως κλασικό μοντέλο'],['full','Το ίδιο σφάλμα με τα πλήρη δεδομένα']],def:'none'},
-   {k:'ctl',label:'Έλεγχος γεννητριών (4.8.1)',options:[['none','Σταθερά E_fd και T_m'],['avr','AVR ST1A σε κάθε γεννήτρια'],['avr_pss','AVR ST1A και PSS'],['full','AVR, PSS και ρυθμιστές στροφών (G1 νερό, G2 και G3 ατμός)']],def:'none'}],
-  desc:'Το δίκτυο WSCC των 9 ζυγών (αρίθμηση του MATPOWER, 345 kV, 100 MVA, 60 Hz). Οι γεννήτριες έχουν τα δεδομένα του Anderson & Fouad (Πίν. 2.1) και ξεκινούν από την τάση |V|∠θ της ροής φορτίου του pcl.network· τα φορτία είναι σταθερές εμπεδήσεις ίσες με το φορτίο στην τάση της ροής φορτίου. Οι μετασχηματιστές είναι κλάδοι σε ανά μονάδα, όπως στη ροή φορτίου. Χωρίς διαταραχή το EMT μένει στη ροή φορτίου.',
-  tasks:['Χωρίς διαταραχή: P, Q και δ των γεννητριών μένουν σταθερά· η κάρτα δείχνει τις τιμές της ροής φορτίου και του Anderson & Fouad.','Σφάλμα με κλασικό μοντέλο: η δ₂ − δ₁ ανεβαίνει περίπου 70° και επιστρέφει, όπως στο Σχ. 2.22 του Anderson & Fouad (85° από 17,5°).','Με τα πλήρη δεδομένα και σταθερή E_fd οι γεννήτριες 2 και 3 χάνουν τον συγχρονισμό: η ροή του άξονα q σβήνει γρήγορα (T′_q0 ≈ 0,5 s) και χωρίς AVR η E_fd δεν βοηθά.','Με τα πλήρη δεδομένα και «AVR ST1A σε κάθε γεννήτρια» (4.8.1) οι γεννήτριες μένουν σε συγχρονισμό: η E_fd ανεβαίνει στο όριο κατά το σφάλμα και κρατά τη ροή. Με PSS και ρυθμιστές στροφών σβήνουν και οι ταλαντώσεις. Με κλασικό μοντέλο ο έλεγχος δεν εφαρμόζεται (σταθερή E′).'],
-  build(o){const F=o.ev==='fault'||o.ev==='full',cl=o.ev==='fault',Un=345e3,Sb=100e6,f=60,c={conn:'bus'};
+ // 4.17: the turbines at the ratings of Anderson & Fouad Table 2.1 (247.5, 192, 128 MVA) on the 100 MVA base of the data:
+ // with P_r = 1 the valve of G2 (163 MW) was at its limit from the start and the case drifted (governors since 4.8.1)
+ const IEEE9_PR={G1:2.475,G2:1.92,G3:1.28};
+ // 4.17: the build of the IEEE 9 case as a function, so that the m-SSSC case (ieee9_sssc) can insert its arms (ext)
+ function ieee9Build(o,ext){const F=o.ev==='fault'||o.ev==='full',cl=o.ev==='fault',Un=345e3,Sb=100e6,f=60,c={conn:'bus'};
    // the classical model of the example: E′ behind X′_d constant (X′_q = X′_d, very long T′_d0 and T′_q0)
    const GD=id=>cl?{...IEEE9_GEN[id],Xqp:IEEE9_GEN[id].Xdp,Xqpp:IEEE9_GEN[id].Xdp,Td0p:1000,Tq0p:1000}:IEEE9_GEN[id];
    const L=(id,x,y,r,xx,b,rot)=>C(id,'LINE3',x,y,{unit:'pu',Un,Sb,f,R1:r,X1:xx,B1:b,z0:'same',...c},{rot:rot||0,label:id});
@@ -1184,7 +1187,7 @@
     L('T63',1120,160,0,0.0586,0),J('B3',1220,160),C('G3','GEN3',1360,160,{Sn:Sb,Un,f,pp:1,data:'std',...GD('G3'),Ra:0,shaft:'one',D:0,V0:IEEE9_LF[3][0],ang0:IEEE9_LF[3][1],...xc,...c},{flip:true,label:'G3 (ζυγός 3)'}),
     Ld('LD7',7,720,280,100e6,35e6),L('L89',440,320,0.032,0.161,0.306,1),J('B9',440,480),Ld('LD9',9,320,600,125e6,50e6),L('L65',1000,320,0.039,0.17,0.358,1),J('B5',1000,480),Ld('LD5',5,1120,600,90e6,30e6),
     L('L94',580,560,0.01,0.085,0.176),J('B4',720,640),L('L54',860,560,0.017,0.092,0.158),L('T41',720,760,0,0.0576,0,1),J('B1',720,880),G('G1',1,560,880)];
-   const wires=[['G2:abc','B2'],['B2','T28:abc1'],['T28:abc2','B8'],['B8','L87:abc1'],['L87:abc2','B7'],['B7','L76:abc1'],['L76:abc2','B6'],['B6','T63:abc1'],['T63:abc2','B3'],['B3','G3:abc'],
+   const wires=[['G2:abc','B2'],['B2','T28:abc1'],['T28:abc2','B8'],['B8','L87:abc1'],['L87:abc2','B7'],...(ext?[]:[['B7','L76:abc1']]),['L76:abc2','B6'],['B6','T63:abc1'],['T63:abc2','B3'],['B3','G3:abc'],
     ['B7','LD7:abc'],['B9','LD9:abc'],['B6','L65:abc1'],['L65:abc2','B5'],['B5','LD5:abc'],['B9','L94:abc1'],['L94:abc2','B4'],['B5','L54:abc1'],['L54:abc2','B4'],['B4','T41:abc1'],['T41:abc2','B1'],['B1','G1:abc']];
    if(F){comps.push(C('CB8','CB3',440,250,{cmd:'0:1, 0.183333:0',...c},{rot:1,label:'CB 8'}),J('FP',440,300),C('CB9','CB3',440,400,{cmd:'0:1, 0.183333:0',...c},{rot:1,label:'CB 9'}),C('F1','FLT3',540,300,{kind:'abcg',ton:0.1,Rf:0,Rg:0,...c},{lbl:'below'}));
     comps.find(q=>q.id==='L89').y=340;wires.push(['B8','CB8:abc1'],['CB8:abc2','FP'],['FP','F1:abc'],['FP','L89:abc1'],['L89:abc2','CB9:abc1'],['CB9:abc2','B9']);}
@@ -1193,11 +1196,48 @@
    if(avr)for(const [g,x,y,hy] of [['G1',560,1000,true],['G2',100,40,false],['G3',1360,40,false]]){const n=g.slice(1);
     comps.push(C('AV'+n,'AVR',x-150,y,{type:'st1a'},{label:'AVR '+n}));wires.push([g+':vt','AV'+n+':vt'],[g+':v0','AV'+n+':v0'],[g+':e0','AV'+n+':e0'],[g+':ifd','AV'+n+':ifd'],['AV'+n+':efd',g+':efd']);
     if(pss){comps.push(C('PS'+n,'PSS',x-300,y,{},{label:'PSS '+n}));wires.push([g+':w','PS'+n+':w'],['PS'+n+':vs','AV'+n+':vs']);}
-    if(gov){comps.push(C('GV'+n,'GOV',x+150,y,{type:hy?'hydro':'steam'},{label:(hy?'ρυθμιστής (νερό) ':'ρυθμιστής (ατμός) ')+n}));wires.push([g+':w','GV'+n+':w'],[g+':m0','GV'+n+':m0'],['GV'+n+':tm',g+':tm']);}}
+    if(gov){comps.push(C('GV'+n,'GOV',x+150,y,{type:hy?'hydro':'steam',Pr:IEEE9_PR[g]},{label:(hy?'ρυθμιστής (νερό) ':'ρυθμιστής (ατμός) ')+n}));wires.push([g+':w','GV'+n+':w'],[g+':m0','GV'+n+':m0'],['GV'+n+':tm',g+':tm']);}}
    const panes=[[['Y:G1:d','δ₁ (°)'],['Y:G2:d','δ₂ (°)'],['Y:G3:d','δ₃ (°)']],[['Y:G1:pe','P₁'],['Y:G2:pe','P₂'],['Y:G3:pe','P₃']],[['Y:G1','ω₁'],['Y:G2','ω₂'],['Y:G3','ω₃']],
     ...(avr?[[['Y:AV1/EFD','E_fd1'],['Y:AV2/EFD','E_fd2'],['Y:AV3/EFD','E_fd3']],[['Y:G1:vt','|V₁|'],['Y:G2:vt','|V₂|'],['Y:G3:vt','|V₃|']]]:[])];
    const Tf=avr?5:2;
-   return project(comps,wires,{version:4,sim:{hDiv:400,...(avr?{method:'TR'}:{}),speed:F?(avr?10:5):2,stopT:F?Tf:0.5},scope:{panes,window:{unit:'s',n:F?Tf:0.5}},meta:{lf:IEEE9_LF,fault:F,classical:cl,ctl:avr?o.ctl:'none'}});}});
+   if(ext){ext.add(comps,wires,panes);return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:10,method:'TR',speed:0.05,stopT:ext.T},scope:{panes,window:{unit:'s',n:0.5}},meta:{lf:IEEE9_LF,fault:false,classical:false,ctl:o.ctl,...ext.meta}});}
+   return project(comps,wires,{version:4,sim:{hDiv:400,...(avr?{method:'TR'}:{}),speed:F?(avr?10:5):2,stopT:F?Tf:0.5},scope:{panes,window:{unit:'s',n:F?Tf:0.5}},meta:{lf:IEEE9_LF,fault:F,classical:cl,ctl:avr?o.ctl:'none',...(ext?ext.meta:{})}});}
+ T.push({id:'ieee9_emt',group:'Συστήματα ισχύος (4.3)',title:'IEEE 9 ζυγών σε EMT, από τη ροή φορτίου',theory:'formula',topology:'ieee9_emt',
+  options:[{k:'ev',label:'Γεγονός',options:[['none','Καμία διαταραχή: η μόνιμη κατάσταση της ροής φορτίου'],['fault','Σφάλμα 5 κύκλων (A&F, Παρ. 2.7), μηχανές ως κλασικό μοντέλο'],['full','Το ίδιο σφάλμα με τα πλήρη δεδομένα']],def:'none'},
+   {k:'ctl',label:'Έλεγχος γεννητριών (4.8.1)',options:[['none','Σταθερά E_fd και T_m'],['avr','AVR ST1A σε κάθε γεννήτρια'],['avr_pss','AVR ST1A και PSS'],['full','AVR, PSS και ρυθμιστές στροφών (G1 νερό, G2 και G3 ατμός)']],def:'none'}],
+  desc:'Το δίκτυο WSCC των 9 ζυγών (αρίθμηση του MATPOWER, 345 kV, 100 MVA, 60 Hz). Οι γεννήτριες έχουν τα δεδομένα του Anderson & Fouad (Πίν. 2.1) και ξεκινούν από την τάση |V|∠θ της ροής φορτίου του pcl.network· τα φορτία είναι σταθερές εμπεδήσεις ίσες με το φορτίο στην τάση της ροής φορτίου. Οι μετασχηματιστές είναι κλάδοι σε ανά μονάδα, όπως στη ροή φορτίου. Χωρίς διαταραχή το EMT μένει στη ροή φορτίου.',
+  tasks:['Χωρίς διαταραχή: P, Q και δ των γεννητριών μένουν σταθερά· η κάρτα δείχνει τις τιμές της ροής φορτίου και του Anderson & Fouad.','Σφάλμα με κλασικό μοντέλο: η δ₂ − δ₁ ανεβαίνει περίπου 70° και επιστρέφει, όπως στο Σχ. 2.22 του Anderson & Fouad (85° από 17,5°).','Με τα πλήρη δεδομένα και σταθερή E_fd οι γεννήτριες 2 και 3 χάνουν τον συγχρονισμό: η ροή του άξονα q σβήνει γρήγορα (T′_q0 ≈ 0,5 s) και χωρίς AVR η E_fd δεν βοηθά.','Με τα πλήρη δεδομένα και «AVR ST1A σε κάθε γεννήτρια» (4.8.1) οι γεννήτριες μένουν σε συγχρονισμό: η E_fd ανεβαίνει στο όριο κατά το σφάλμα και κρατά τη ροή. Με PSS και ρυθμιστές στροφών σβήνουν και οι ταλαντώσεις. Με κλασικό μοντέλο ο έλεγχος δεν εφαρμόζεται (σταθερή E′).'],
+  build(o){return ieee9Build(o);}});
+
+ // 4.17 (§50): the IEEE 9 case in EMT with a three-phase m-SSSC (one arm per phase and the central controller) in series
+ // with the line 7–6 at bus 7 (branch br5 of pcl.network, 6–7: the choice of pcl.network.sssc_placement), through a
+ // coupling inductance (the line's π capacitances are on both sides). AVR, PSS and governors on the generators, so that
+ // the swings after the step of X die out; the steady state against the load flow of pcl.network with the same X
+ // (IEEE9_SSSC_LF, constant-impedance loads; tests/test_sssc.py checks the table)
+ // the load flow of pcl.network for each X (Ω) at the end of each option: the case of ieee9() with the loads as constant
+ // impedances (as the EMT), the coupling L_σ = 5 mH as a branch 7–7s carrying the compensator, the line 7–6 from 7s;
+ // I (A RMS) and P, Q (MW, Mvar: into the compensator from bus 7), |V| (pu), V_q (V RMS). tests/test_sssc.py checks it
+ const IEEE9_SSSC_LF={"0":{I:56.120506,P:-24.015718,Q:-24.155246,V5:1.01267,V7:1.015713,V9:0.995609,Vq:0.0},"60":{I:65.495709,P:-26.916683,Q:-29.598411,V5:1.012062,V7:1.022222,V9:0.996474,Vq:3929.742538},"18":{I:58.591406,P:-24.80338,Q:-25.5672,V5:1.012515,V7:1.017415,V9:0.995832,Vq:1054.645311},"-40":{I:51.404118,P:-22.461403,Q:-21.511406,V5:1.012953,V7:1.012495,V9:0.995191,Vq:-2056.164719}};
+ const IEEE9_SSSC_X={x60:'0:0, 0.4:60',x18:'0:0, 0.4:18',xm40:'0:0, 0.4:-40'};
+ T.push({id:'ieee9_sssc',group:'FACTS: CCSC και IEEE 9 με m-SSSC (4.17)',title:'IEEE 9 ζυγών σε EMT με τριφασικό m-SSSC (κεντρικός έλεγχος)',theory:'formula',topology:'ieee9_sssc',
+  options:[{k:'X',label:'X_ref στη γραμμή 7–6 (στα 0,4 s)',options:[['x60','+60 Ω (χωρητική, 50 % της X της γραμμής)'],['x18','+18 Ω (η επιλογή του sssc_placement με ίσα βάρη)'],['xm40','−40 Ω (επαγωγική)']],def:'x60'},
+   {k:'sync',label:'Συγχρονισμός',options:[['pos','Θετική ακολουθία (ένα τριφασικό PLL)'],['phase','Ανά φάση (SOGI)']],def:'pos'}],
+  desc:'Το δίκτυο των 9 ζυγών του tutorial «IEEE 9 ζυγών σε EMT» (345 kV, 60 Hz, γεννήτριες του Anderson & Fouad με AVR, PSS και ρυθμιστές στροφών) με έναν τριφασικό αρθρωτό SSSC σε σειρά με τη γραμμή 7–6, στον ζυγό 7: έναν βραχίονα 10 × 1 kV (10 mF) ανά φάση με αυτεπαγωγή σύζευξης 5 mH, και τον κεντρικό ελεγκτή της 4.17. Η γραμμή είναι αυτή που διαλέγει η αναζήτηση θέσης του pcl.network (sssc_placement). Στα 0,4 s ο ελεγκτής πάει από X = 0 στη X_ref: η ροή στη διαδρομή 7–6 αλλάζει, οι γεννήτριες ταλαντεύονται και ηρεμούν σε νέα μόνιμη κατάσταση, που η κάρτα τη συγκρίνει με τη ροή φορτίου με την ίδια αντίδραση σε σειρά.',
+  tasks:['Πόσο αλλάζει η ενεργός ισχύς στη γραμμή 7–6 με +60 Ω; Σύγκρινε στην κάρτα με τη ροή φορτίου.','Με την επιλογή του sssc_placement (+18 Ω) η αλλαγή είναι μικρή: γιατί η αναζήτηση την προτιμά; (δες τα κριτήρια: φόρτιση, απώλειες, απόκλιση τάσης, μέγεθος)','Πόση τάση χρειάζεται ο SSSC για +60 Ω, και πόση άεργο ισχύ ανταλλάσσει (3·X·I²);'],
+  build(o){const N=10,Vdc=1000,X=IEEE9_SSSC_X[o.X]||IEEE9_SSSC_X.x60,Lk=5e-3,f=60;
+   const ext={T:2.5,meta:{ieee9sssc:{N,Vdc,C:10e-3,X,Xf:{x60:60,x18:18,xm40:-40}[o.X]??60,Lk,f,line:'br5',sync:o.sync==='phase'?'phase':'pos',lf:IEEE9_SSSC_LF}},
+    add(comps,wires,panes){const y0=-700;
+     comps.push(C('SB1','EBUS',700,y0+260,{n:3},{flip:true}),C('SB2','EBUS',1160,y0+260,{n:3},{label:'προς τη γραμμή 7–6'}),
+      C('SC3','SSSC3',1320,y0+260,{mode:'x',N,Vdc,C:10e-3,X,f0:f,sync:o.sync==='phase'?'phase':'pos'},{label:'κεντρικός έλεγχος'}));
+     wires.push(['B7','SB1:bus',[[720,y0+260]]],['SB2:bus','L76:abc1',[[1230,y0+260],[1230,100],[790,100]]]);
+     ['a','b','c'].forEach((ph,k)=>{const y=y0+260*k;
+      comps.push(C('AM'+ph,'AM',800,y,{},{label:'i_'+ph}),C('LK'+ph,'L',890,y,{L:Lk},{label:'L_σ '+ph}),
+       C('CH'+ph,'CHB',1020,y,{N,C:10e-3,Vdc,fs:10e3,sel:'reduced',band:30,impl:'fast'},{rot:3,label:'SSSC '+ph}));
+      wires.push(['SB1:'+ph,'AM'+ph+':a',...(k===1?[]:[[[755,y0+240+20*k],[755,y]]])],['AM'+ph+':b','LK'+ph+':a'],['LK'+ph+':b','CH'+ph+':a'],
+       ['CH'+ph+':b','SB2:'+ph,...(k===1?[]:[[[1120,y],[1120,y0+240+20*k]]])],
+       ['AM'+ph+':y','SC3:i'+ph],['CH'+ph+':v','SC3:v'+ph],['CH'+ph+':vav','SC3:c'+ph],['SC3:r'+ph,'CH'+ph+':ref']);});
+     panes.unshift([['Y:AMa','i_a (γραμμή 7–6)'],['Y:AMb','i_b'],['Y:AMc','i_c']],[['Y:SC3/XM','X (θετική ακολουθία)'],['Y:SC3/VQ','V_q (εντολή)']],[['Y:CHa/NLC:vav','V_C a'],['Y:CHb/NLC:vav','V_C b'],['Y:CHc/NLC:vav','V_C c']]);}};
+   return ieee9Build({ev:'none',ctl:'full'},ext);}});
  // ------------------------------------------------------------------ 4.4: lines from geometry, CP and FD (ROADMAP §26)
  // the typical 400 kV line of 100 km (Parts.TLM_TYPICAL), with its models from tools/line_models.py (pcl/lineconst.py)
  const LM=()=>root.LineModels||(typeof require!=='undefined'?require('./linemodels.js'):null);
@@ -1460,9 +1500,11 @@
  T.push({id:'sssc_3ph',group:'FACTS: αρθρωτός SSSC (4.10)',title:'Αρθρωτός SSSC σε δίκτυο 150 kV (τριφασικό, 4 ζυγοί)',theory:'formula',topology:'sssc',
   options:[{k:'X',label:'X_ref',options:[['steps','0 → +10 Ω (0,3 s) → −8 Ω (0,8 s)'],['cap','+10 Ω (χωρητική)'],['ind','−8 Ω (επαγωγική)']],def:'steps'},
    {k:'sel',label:'Εξισορρόπηση πυκνωτών',options:[['sort','Ταξινόμηση σε κάθε δείγμα'],['reduced','Μειωμένη συχνότητα μεταγωγής (ζώνη 30 V)']],def:'reduced'},
-   {k:'load',label:'Φορτίο στον ζυγό 2',options:[['150','150 MW, 30 Mvar'],['250','250 MW, 50 Mvar']],def:'150'}],
-  desc:'Τριφασικό δίκτυο 150 kV με τέσσερις ζυγούς: ισοδύναμο δικτύου στον ζυγό 1 (5 GVA), δύο διαδρομές προς το φορτίο του ζυγού 2: μέσω του m-SSSC (ζυγός 4) και γραμμής 100 km, ή μέσω του ζυγού 3 και γραμμών 50 + 70 km. Γραμμές τμήματα π με 0,08 Ω/km, 1,2 mH/km, 9,5 nF/km. Ένας αρθρωτός βραχίονας (10 × 1 kV) με αυτεπαγωγή σύζευξης 5 mH (η σκέδαση του μετασχηματιστή σύζευξης ή το πηνίο του βραχίονα) και ένας ελεγκτής ανά φάση. Χωρίς αυτήν ο βραχίονας θα ήταν ανάμεσα στις εγκάρσιες χωρητικότητες των δύο γραμμών και κάθε αλλαγή στάθμης θα έδινε κρουστικό ρεύμα στη μέτρηση. Η χωρητική έγχυση στέλνει περισσότερη ισχύ από τη διαδρομή του SSSC, η επαγωγική λιγότερη.',
-  tasks:['Πώς μοιράζεται η ισχύς στις δύο διαδρομές πριν από τα 0,3 s, με +10 Ω και με −8 Ω; Σύγκρινε στην κάρτα με τη ροή φορτίου του pcl.network με την ίδια αντίδραση σε σειρά.','Οι τρεις φάσεις ελέγχονται χωριστά: έχουν την ίδια X και την ίδια Δθ;','Με φορτίο 250 MW το ρεύμα ανεβαίνει: πόση X μπορεί να δώσει η διάταξη με 10 kV ανά φάση;'],
+   {k:'load',label:'Φορτίο στον ζυγό 2',options:[['150','150 MW, 30 Mvar'],['250','250 MW, 50 Mvar']],def:'150'},
+   {k:'ctl',label:'Έλεγχος (4.17)',options:[['central','Κεντρικός: ένα PLL θετικής ακολουθίας, ένας βρόχος X, ενέργεια και εξισορρόπηση των τριών φάσεων'],['cphase','Κεντρικός, με συγχρονισμό ανά φάση (SOGI σε κάθε ρεύμα)'],['phase','Ένας ελεγκτής ανά φάση (4.10)']],def:'central'},
+   {k:'unb',label:'Ασυμμετρία (4.17)',options:[['0','Καμία'],['r','R = 10 Ω σε σειρά στη φάση a της διαδρομής του SSSC']],def:'0'}],
+  desc:'Τριφασικό δίκτυο 150 kV με τέσσερις ζυγούς: ισοδύναμο δικτύου στον ζυγό 1 (5 GVA), δύο διαδρομές προς το φορτίο του ζυγού 2: μέσω του m-SSSC (ζυγός 4) και γραμμής 100 km, ή μέσω του ζυγού 3 και γραμμών 50 + 70 km. Γραμμές τμήματα π με 0,08 Ω/km, 1,2 mH/km, 9,5 nF/km. Ένας αρθρωτός βραχίονας (10 × 1 kV) ανά φάση με αυτεπαγωγή σύζευξης 5 mH (η σκέδαση του μετασχηματιστή σύζευξης ή το πηνίο του βραχίονα). Ο κεντρικός ελεγκτής (4.17) οδηγεί και τους τρεις βραχίονες: ένα PLL στη θετική ακολουθία των ρευμάτων, ένας βρόχος της X, και για κάθε φάση ένα μέρος της τάσης κάθετο στο ρεύμα της (η αντιστάθμιση) και ένα σε φάση (η ενέργεια των πυκνωτών και η εξισορρόπηση ανάμεσα στις φάσεις). Με «ένας ελεγκτής ανά φάση» κάθε φάση έχει δικό της SOGI-PLL, βρόχο X και Δθ (4.10). Χωρίς αυτήν ο βραχίονας θα ήταν ανάμεσα στις εγκάρσιες χωρητικότητες των δύο γραμμών και κάθε αλλαγή στάθμης θα έδινε κρουστικό ρεύμα στη μέτρηση. Η χωρητική έγχυση στέλνει περισσότερη ισχύ από τη διαδρομή του SSSC, η επαγωγική λιγότερη.',
+  tasks:['Πώς μοιράζεται η ισχύς στις δύο διαδρομές πριν από τα 0,3 s, με +10 Ω και με −8 Ω; Σύγκρινε στην κάρτα με τη ροή φορτίου του pcl.network με την ίδια αντίδραση σε σειρά.','Με ελεγκτή ανά φάση: έχουν οι τρεις φάσεις την ίδια X και την ίδια Δθ; Με τον κεντρικό: πόσο διαφέρουν οι μέσες τάσεις των πυκνωτών των τριών φάσεων, και πόσο το μέρος D_k σε φάση με το ρεύμα;','Με την ασυμμετρία (10 Ω στη φάση a) τα τρία ρεύματα διαφέρουν: με τον κεντρικό ελεγκτή και συγχρονισμό στη θετική ακολουθία, η τάση κάθε φάσης δεν είναι ακριβώς κάθετη στο ρεύμα της. Τι κάνει η εξισορρόπηση; (δες D_a, D_b, D_c)','Με φορτίο 250 MW το ρεύμα ανεβαίνει: πόση X μπορεί να δώσει η διάταξη με 10 kV ανά φάση;'],
   build(o){const N=10,Vdc=1000,f=50,w=2*Math.PI*f,X=SSSC_X[o.X||'steps'],P=+o.load||150,Q=P/5;
    // the network with three-phase buses (one wire per bus), the arms one per phase between two bus splitters
    const ln=(id,x,y,km,label)=>C(id,'LINE3',x,y,{unit:'ohm',Un:150e3,f,R1:+(0.08*km).toFixed(6),X1:+(w*1.2e-3*km).toFixed(6),B1:+(w*9.5e-9*km).toExponential(6),z0:'same',conn:'bus'},{label});
@@ -1472,16 +1514,51 @@
     C('J2','JUNC',900,340),C('LD2','LOAD3',900,480,{cn:'yn',Un:150e3,f,P:P*1e6,Q:Q*1e6,conn:'bus'},{label:'ζυγός 2'})];
    const wires=[['NET:abc','J1:j'],['J1:j','B1:bus',[[180,340]]],['J1:j','L13:abc1'],['L13:abc2','L32:abc1'],['L32:abc2','J2:j',[[900,860]]],
     ['B2:bus','L42:abc1'],['L42:abc2','J2:j'],['J2:j','LD2:abc']];
-   ['a','b','c'].forEach((ph,k)=>{const y=80+260*k;
+   // 4.17: one central controller (SC3) for the three arms, or one controller per phase (4.10); the asymmetry: R in phase a
+   const ctl=['central','cphase','phase'].includes(o.ctl)?o.ctl:'central',cen=ctl!=='phase',unb=o.unb==='r';
+   if(cen)comps.push(C('SC3','SSSC3',840,150,{mode:'x',N,Vdc,C:10e-3,X,sync:ctl==='cphase'?'phase':'pos'},{label:'κεντρικός έλεγχος'}));
+   ['a','b','c'].forEach((ph,k)=>{const y=80+260*k,ra=unb&&ph==='a';
     comps.push(C('AM'+ph,'AM',300,y,{},{label:'i_'+ph}),C('LK'+ph,'L',390,y,{L:5e-3},{label:'L_σ '+ph}),
-     C('CH'+ph,'CHB',520,y,{N,C:10e-3,Vdc,fs:10e3,sel:o.sel==='sort'?'sort':'reduced',band:30,impl:'fast'},{rot:3,label:'SSSC '+ph}),
-     C('SC'+ph,'SSSC',520,y+150,{mode:'x',N,Vdc,X},{label:'έλεγχος '+ph}));
-    wires.push(['B1:'+ph,'AM'+ph+':a',k===1?undefined:[[255,320+20*k],[255,y]]],['AM'+ph+':b','LK'+ph+':a'],['LK'+ph+':b','CH'+ph+':a'],
-     ['CH'+ph+':b','B2:'+ph,k===1?undefined:[[640,y],[640,320+20*k]]],
-     ['AM'+ph+':y','SC'+ph+':i'],['CH'+ph+':v','SC'+ph+':v'],['CH'+ph+':vav','SC'+ph+':vav'],['SC'+ph+':vref','CH'+ph+':ref']);});
+     C('CH'+ph,'CHB',520,y,{N,C:10e-3,Vdc,fs:10e3,sel:o.sel==='sort'?'sort':'reduced',band:30,impl:'fast'},{rot:3,label:'SSSC '+ph}));
+    if(ra)comps.push(C('RUa','R',455,y,{R:10},{label:'10 Ω'}));
+    if(!cen)comps.push(C('SC'+ph,'SSSC',520,y+150,{mode:'x',N,Vdc,X},{label:'έλεγχος '+ph}));
+    wires.push(['B1:'+ph,'AM'+ph+':a',k===1?undefined:[[255,320+20*k],[255,y]]],['AM'+ph+':b','LK'+ph+':a'],...(ra?[['LK'+ph+':b','RUa:a'],['RUa:b','CH'+ph+':a']]:[['LK'+ph+':b','CH'+ph+':a']]),
+     ['CH'+ph+':b','B2:'+ph,k===1?undefined:[[640,y],[640,320+20*k]]]);
+    if(cen)wires.push(['AM'+ph+':y','SC3:i'+ph],['CH'+ph+':v','SC3:v'+ph],['CH'+ph+':vav','SC3:c'+ph],['SC3:r'+ph,'CH'+ph+':ref']);
+    else wires.push(['AM'+ph+':y','SC'+ph+':i'],['CH'+ph+':v','SC'+ph+':v'],['CH'+ph+':vav','SC'+ph+':vav'],['SC'+ph+':vref','CH'+ph+':ref']);});
+   const xp=cen?[['Y:SC3/XM','X (θετική ακολουθία)'],['Y:SC3/Da','D_a'],['Y:SC3/Db','D_b'],['Y:SC3/Dc','D_c']]:[['Y:SCa/XM','X a'],['Y:SCb/XM','X b'],['Y:SCc/XM','X c']];
    return project(comps,wires.map(w=>w.filter(x=>x!==undefined)),{version:4,solve:{init:'ac'},sim:{hDiv:10,method:'TR',speed:0.1,stopT:1.2},
-    scope:{panes:[[['Y:AMa','i_a (SSSC)'],['Y:AMb','i_b'],['Y:AMc','i_c']],[['Y:CHa/X','v_a SSSC'],['Y:SCa/VR','αναφορά a']],[['Y:SCa/XM','X a'],['Y:SCb/XM','X b'],['Y:SCc/XM','X c']],[['Y:CHa/NLC:vav','V_C a'],['Y:CHb/NLC:vav','V_C b'],['Y:CHc/NLC:vav','V_C c']]],window:{unit:'s',n:0.1}},
-    meta:{sssc:{phases:3,N,Vdc,C:10e-3,X,f,Un:150e3,Sk:5e9,XR:10,P:P*1e6,Q:Q*1e6,lines:{L13:50,L32:70,L42:100},Lk:5e-3,r:0.08,l:1.2e-3,c:9.5e-9,fast:true,mode:'x'}}});}});
+    scope:{panes:[[['Y:AMa','i_a (SSSC)'],['Y:AMb','i_b'],['Y:AMc','i_c']],[['Y:CHa/X','v_a SSSC'],[cen?'Y:SC3/VRa':'Y:SCa/VR','αναφορά a']],xp,[['Y:CHa/NLC:vav','V_C a'],['Y:CHb/NLC:vav','V_C b'],['Y:CHc/NLC:vav','V_C c']]],window:{unit:'s',n:0.1}},
+    meta:{sssc:{phases:3,N,Vdc,C:10e-3,X,f,Un:150e3,Sk:5e9,XR:10,P:P*1e6,Q:Q*1e6,lines:{L13:50,L32:70,L42:100},Lk:5e-3,r:0.08,l:1.2e-3,c:9.5e-9,fast:true,mode:'x',ctl,unb}}});}});
+ // 4.17 (§50): the converter-controlled series capacitor (CCSC): a series capacitor C_s in parallel with the modular arm
+ // (through L_c ∥ R_p and R_c), a bypass switch across the whole and a switch in the converter's branch (the inverter
+ // controlled series compensator of Nelson and Ramey, US 5 814 975). The single-phase line of sssc_1ph; the controller
+ // with its PLL on the line current; X_C = 15 Ω (half of the line's X_L after R)
+ const CCSC_X={steps:'0:15, 0.8:22, 1.1:8',nat:'15',boost:'22'};
+ T.push({id:'ccsc_1ph',group:'FACTS: CCSC και IEEE 9 με m-SSSC (4.17)',title:'CCSC: πυκνωτής σειράς ελεγχόμενος από μετατροπέα (μονοφασικό)',theory:'formula',topology:'ccsc',
+  options:[{k:'mode',label:'Έλεγχος',options:[['x','Έγχυση αντίδρασης X (η συνολική X της διάταξης)'],['ma','Σταθερός δείκτης m_a = 0,5 (χωρητικός, boost)']],def:'x'},
+   {k:'X',label:'X_ref (τρόπος X)',options:[['steps','15 Ω (φυσικό σημείο) → 22 Ω (0,8 s, boost) → 8 Ω (1,1 s)'],['nat','15 Ω: το φυσικό σημείο (μετατροπέας χωρίς ρεύμα)'],['boost','22 Ω: boost']],def:'steps'},
+   {k:'d',label:'Γωνία μεταφοράς δ',options:[['4','4°'],['8','8°']],def:'4'}],
+  desc:'Η γραμμή του μονοφασικού tutorial του m-SSSC (δύο ζυγοί 150 kV, 8 Ω + 120 mH) με CCSC σε σειρά: πυκνωτής C_s = 212 μF (X_C = 15 Ω) παράλληλα με τον κλάδο του μετατροπέα: αρθρωτός βραχίονας 10 × 1,5 kV (10 mF), L_c = 1,5 mH (με R_p = 1 kΩ παράλληλα, για το άνοιγμα του διακόπτη) και R_c = 0,5 Ω. Ως τα 0,2 s ο διακόπτης παράκαμψης είναι κλειστός (χωρίς αντιστάθμιση)· τότε ανοίγει και μπαίνει μόνο ο πυκνωτής· στα 0,5 s κλείνει ο διακόπτης του κλάδου και ο μετατροπέας επιβάλλει την τάση της διάταξης. Ο ελεγκτής είναι ο ίδιος με του m-SSSC, με το PLL στο ρεύμα της γραμμής: η τάση μένει κάθετη στο ρεύμα της γραμμής, όπως ενός πυκνωτή σειράς.',
+  tasks:['Στο φυσικό σημείο (X_ref = X_C = 15 Ω) πόσο ρεύμα φέρει ο μετατροπέας; Σύγκρινε με τον m-SSSC σε σειρά, που φέρει όλο το ρεύμα της γραμμής.','Σε boost (22 Ω) το ρεύμα του πυκνωτή ξεπερνά το ρεύμα της γραμμής: προς ποια φορά κυκλοφορεί η διαφορά μέσα από τον μετατροπέα; Η κάρτα δίνει I_C = (X/X_C)·I.','Το ρεύμα του πυκνωτή και του μετατροπέα έχει αρμονικές της σκάλας, το ρεύμα της γραμμής σχεδόν όχι: γιατί; (ο βρόχος C_s–L_c συντονίζεται στα 1/(2π√(L_c·C_s)))','Τι γίνεται τη στιγμή που κλείνει ο διακόπτης του κλάδου, αν η τάση του μετατροπέα δεν είναι ίση με την τάση του πυκνωτή;'],
+  build(o){const N=10,Vdc=1500,V=150e3*Math.SQRT2/Math.sqrt(3),mode=o.mode==='ma'?'ma':'x',d=+o.d||4,Xc=15,Cs=+(1/(2*Math.PI*50*Xc)).toPrecision(6),ch=ssscChannels('CH1',true,N);
+   const sc={mode,N,Vdc,X:CCSC_X[o.X]||CCSC_X.steps,ma:0.5,sense:'cap',ton:0.15,tadv:5e-5};
+   const sw=(id,x,y,lbl)=>C(id,'SW',x,y,{gate:'sig',model:'mos',Ron:1e-3,Roff:1e6,body:false},{rot:1,label:lbl});
+   const comps=[C('V1','VAC',80,240,{Vpk:V,f:50,phase:d},{label:'V₁∠δ'}),C('R1','R',180,160,{R:8},{label:'R'}),C('L1','L',280,160,{L:0.12},{label:'L'}),C('AM1','AM',380,160,{},{label:'i γραμμής'}),
+    J('JA',460,160),J('JB',880,160),sw('S1',670,60,'παράκαμψη'),C('AM3','AM',560,160,{},{label:'i_C'}),C('CS','C',670,160,{C:Cs},{rot:1,label:'C_s'}),
+    sw('S2',540,300,'κλάδος'),J('JL1',610,300),J('JL2',690,300),C('LC','L',650,300,{L:1.5e-3},{label:'L_c'}),C('RP','R',650,360,{R:1000},{label:'R_p'}),
+    C('RC','R',740,300,{R:0.5},{label:'R_c'}),C('AM2','AM',800,300,{},{label:'i μετατροπέα'}),
+    C('CH1','CHB',880,300,{N,C:10e-3,Vdc,fs:10e3,sel:'sort',impl:'fast'},{rot:3,label:'m-SSSC'}),
+    C('V2','VAC',980,240,{Vpk:V,f:50,phase:0},{label:'V₂∠0'}),C('G1','GND',80,320),C('G2','GND',980,320),
+    C('K1','CONST',600,0,{v:'0:1, 0.2:0'},{label:'παράκαμψη (1 = κλειστή)'}),C('K2','CONST',470,360,{v:'0:0, 0.5:1'},{label:'κλάδος (1 = κλειστός)'}),
+    C('SC1','SSSC',880,470,sc,{label:'έλεγχος'})];
+   const wires=[['V1:p','R1:a',[[80,160]]],['R1:b','L1:a'],['L1:b','AM1:a'],['AM1:b','JA:j'],['JA:j','S1:d',[[460,60]]],['S1:s','JB:j',[[880,60]]],
+    ['JA:j','AM3:a'],['AM3:b','CS:p'],['CS:n','JB:j'],['JA:j','S2:d',[[460,300]]],['S2:s','JL1:j'],['JL1:j','LC:a'],['LC:b','JL2:j'],['JL1:j','RP:a',[[610,360]]],['RP:b','JL2:j',[[690,360]]],
+    ['JL2:j','RC:a'],['RC:b','AM2:a'],['AM2:b','CH1:a'],['CH1:b','JB:j'],['JB:j','V2:p',[[980,160]]],['V1:n','G1:g'],['V2:n','G2:g'],
+    ['K1:y','S1:g'],['K2:y','S2:g'],['AM1:y','SC1:i'],['CH1:v','SC1:v'],['CH1:vav','SC1:vav'],['SC1:vref','CH1:ref']];
+   return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:10,method:'TR',speed:0.2,stopT:1.4},
+    scope:{panes:[[['I:L1','ρεύμα γραμμής'],['Y:AM3','ρεύμα πυκνωτή'],['Y:AM2','ρεύμα μετατροπέα']],[[ch.arm,'τάση μετατροπέα'],['Y:SC1/VR','αναφορά']],[['Y:SC1/XM','X μετρημένη'],['Y:SC1/VQ','V_q (εντολή)']],ch.cells.slice(0,4).map((k,i)=>[k,'v_C'+(i+1)])],window:{unit:'s',n:0.1}},
+    meta:{ccsc:{V,d,R:8,L:0.12,f:50,N,Vdc,C:10e-3,Cs,Xc,Lc:1.5e-3,Rc:0.5,Rp:1000,mode,X:sc.X,ma:sc.ma,t1:0.2,t2:0.5}}});}});
  // 4.14 (ROADMAP §42): an MMC-HVDC link as the test system of the MMC station of EMTP-RV: two stations, AC grids of 10 GVA,
  // transformers 400/333 kV (YNd1, 18 %), star-point reactors, MMCs of N cells per arm (the four models), a ±320 kV cable
  // pair of 70 km as a wideband model (DC correction); station 1 controls P (and Q), station 2 the DC voltage (and Q)

@@ -335,7 +335,7 @@
   return s;}
  // 4.13: the wideband model. Its options (as the WB fitter of the EMTP) and its report: the groups of H with their delays
  // and poles, the errors (H absolute, Y_c relative, the nodal admittance per band), the passivity, the curves
- const WBSEL=['wsrc','wgrp','wfdcm','wdc','wopt','wpas','wlfw'];
+ const WBSEL=['wsrc','wgrp','wfdcm','wdc','wopt','wpas','wlfw','wgd'];
  const hashText=t=>{let h=2166136261;for(let i=0;i<t.length;i++){h^=t.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(16);};
  const wsel=(k,v,opts)=>`<select data-p="${k}">${opts.map(([a,l])=>`<option value="${a}" ${String(v)===a?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
  function wbOptsHTML(p){const emtp=p.wsrc==='emtp';
@@ -348,10 +348,11 @@
     <label title="DC correction: η ζώνη κάτω από 1 Hz προσαρμόζεται χωριστά ως διόρθωση (f_min ≤ 0,001 Hz)">διόρθωση DC ${wsel('wdc',p.wdc||'0',[['0','όχι'],['1','ναι']])}</label>
     <label title="Οι καθυστερήσεις με αναζήτηση γύρω από την εκτίμηση Bode σε όλες τις ομάδες (και χωρίς αυτό: όταν ο ρυθμός δεν σβήνει μέσα στη ζώνη)">καθυστερήσεις ${wsel('wopt',p.wopt||'0',[['0','Bode'],['1','βελτιστοποίηση']])}</label>
     <label title="Το σφάλμα του H ως προς |1 − H| του λιγότερο αποσβενόμενου ρυθμού (έως αυτόν τον συντελεστή): ένα κοντό τμήμα κρατά τη σύνθετη αντίσταση σειράς του στα 50 Hz">βάρος χαμηλών f ${wsel('wlfw',String(p.wlfw??100),[['100','100'],['300','300'],['30','30'],['0','χωρίς']])}</label></div>`}
-   <div class="ld-row"><label title="Σάρωση των ιδιοτιμών του πραγματικού μέρους της αγωγιμότητας κόμβων· «επιβολή»: διαταραχή των υπολοίπων ώστε να γίνει παθητικό">Παθητικότητα ${wsel('wpas',p.wpas||'check',[['check','έλεγχος'],['enforce','έλεγχος και επιβολή'],['none','χωρίς έλεγχο']])}</label></div>`;}
+   <div class="ld-row"><label title="Σάρωση των ιδιοτιμών του πραγματικού μέρους της αγωγιμότητας κόμβων· «επιβολή»: διαταραχή των υπολοίπων ώστε να γίνει παθητικό">Παθητικότητα ${wsel('wpas',p.wpas||'check',[['check','έλεγχος'],['enforce','έλεγχος και επιβολή'],['none','χωρίς έλεγχο']])}</label>${emtp?'':`<label title="Μια ζώνη στενότερη από 0,01 Hz – 1 MHz παίρνει δείγματα και έξω από αυτήν (από τη γεωμετρία), με ανοχή δέκα φορές μεγαλύτερη: έξω από τα δείγματά της η προσαρμογή είναι ελεύθερη και χάνει την παθητικότητα (4.17)">ζώνη ασφαλείας ${wsel('wgd',p.wgd||'auto',[['auto','αυτόματα'],['none','χωρίς']])}</label>`}</div>`;}
  function wbReport(m,cv){const f=m.fit||{},ps=m.passive;let s=`<h3>Μοντέλο WB${f.source==='EMTP'?' από αρχείο του EMTP':''}: Y_c με ${m.npoles?.yc??m.yc.p.length} πόλους, H σε ${m.groups.length} ${m.groups.length===1?'ομάδα':'ομάδες'}</h3>
   <table class="ld-rep"><tr><th>ομάδα</th><th>ρυθμοί</th><th>τ (μs)</th><th>πόλοι</th></tr>${m.groups.map((g,k)=>`<tr><td>${k+1}${g.dc?' (DC)':''}</td><td>${(g.modes||[]).map(x=>x+1).join(', ')||'—'}</td><td>${fmt(g.tau*1e6,6)}</td><td>${g.p.length+g.p.filter(z=>z[1]>0).length}</td></tr>`).join('')}</table>
   <p class="small">Σφάλμα: H ${fmt(f.h_err,2)} (απόλυτο), Y_c ${fmt((f.yc_err||0)*100,2)} %${f.method==='fdcm'?' · FDCM':''}${f.lfw>1?' · βάρος χαμηλών συχνοτήτων '+fmt(f.lfw,3):''}${f.ratio!=null?' · λόγος υπόλοιπο/πόλος '+fmt(f.ratio,3):''}.</p>`;
+  if(m.band)s+=`<p class="small">Ζώνη ${fmt(m.band[0])} – ${fmt(m.band[1])} Hz, με ${m.guard?.n??'—'} δείγματα ασφαλείας ως ${fmt(m.fmin)} – ${fmt(m.fmax)} Hz (βάρος ${fmt(m.guard?.w??0.1,2)}: εκεί η ανοχή είναι δέκα φορές μεγαλύτερη). Ο έλεγχος παθητικότητας σαρώνει από ${fmt(Math.min(m.fmin,0.01)/10)} ως ${fmt(Math.max(m.fmax,1e6)*10)} Hz.</p>`;
   if(f.yn_bands)s+=`<p class="small">Αγωγιμότητα κόμβων έναντι της ακριβούς γραμμής: ${f.yn_bands.map(b=>`${b[0]?fmt(b[0])+' Hz':'0'} – ${b[1]==null?'∞':fmt(b[1])+' Hz'}: ${fmt(b[2]*100,2)} %`).join(' · ')}.</p>`;
   if(ps)s+=`<p class="small${ps.passive?'':' bad'}">Παθητικότητα: ${ps.passive?'✓ παθητικό':'✗ παραβιάσεις σε '+ps.bands.map(b=>fmt(b[0])+' – '+fmt(b[1])+' Hz').join(', ')+' (ελάχιστη ιδιοτιμή '+fmt(ps.worst,2)+')'}${f.enforced?' · επιβλήθηκε σε '+(ps.iters??'—')+' επαναλήψεις':''}${f.enforced===false?' · η επιβολή δεν κρατήθηκε (άλλαζε το μοντέλο πέρα από την ανοχή)':''}.</p>`;
   if(cv&&cv.f){const yc=cv.yc_err||[],h=cv.h_err||[],yn=cv.yn_err||[];s+=`<div class="ld-plots">${plot(cv.f,[{y:yc,c:PHC[1]},{y:h,c:PHC[2]},...(yn.length?[{y:yn,c:'#222',dash:true}]:[])],'σφάλμα: Y_c, H, Y κόμβων (διακεκομμένη)','')}`
@@ -646,7 +647,7 @@ lr.plot(sc, [('modes', 'Zc'), ('modes', 'alpha')], preset='ieee', out='modes.pdf
  // asks the server for the model of the part `id` and keeps it in its parameters (with the key of what it was computed from)
  async function compute(id,ctx){const p={...P.defaults('TLM'),...ctx.editor.comp(id).params},src=P.tlmKey(p),d=JSON.parse(p.data);
   // 4.13: the wideband options as the WB fitter of the EMTP (tolerance in %), or the model file of the EMTP
-  const wb=p.model==='wb'?{tol:num(p.wtol)??0.2,group:p.wgrp!=='0',fdcm:p.wfdcm||'auto',dc:p.wdc==='1',opt:p.wopt==='1',passive:p.wpas||'check',lfw:num(p.wlfw)??100}:{};
+  const wb=p.model==='wb'?{tol:num(p.wtol)??0.2,group:p.wgrp!=='0',fdcm:p.wfdcm||'auto',dc:p.wdc==='1',opt:p.wopt==='1',passive:p.wpas||'check',lfw:num(p.wlfw)??100,guard:p.wgd||'auto'}:{};
   if(p.model==='wb'&&p.wsrc==='emtp'){if(!p.wbtxt)throw new Error('Διάλεξε το αρχείο _WB.mod του EMTP (καρτέλα «Μοντέλο»).');Object.assign(wb,{wbmod:p.wbtxt,wbref:p.wbref||''});}
   const r=await ctx.api('line_model',{data:d,model:p.model,len:num(p.len),f:num(p.f),fmin:num(p.fmin),dec:num(p.dec),ppd:num(p.ppd),fti:num(p.fti),
    ti:p.ti||'gm0',tiauto:p.tiauto==='1',cp:p.cp||'lumped',npi:num(p.npi)||1,nmax:num(p.nmax)||30,...wb,src});

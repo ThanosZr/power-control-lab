@@ -14,7 +14,7 @@
   {title:'Παθητικά',sub:[S('Βασικά',['R','L','C']),S('Ειδικά',['CPE','KG']),S('Μαγνητικά',['XFMR','KL'])]},
   {title:'Ημιαγωγοί',sub:[S('',['SW','D','SCR']),S('Αρθρωτοί μετατροπείς',['CHB'])]},
   {title:'Μηχανές',sub:[S('',['DCM','IM','SM','SRM'])]},
-  {title:'Δίκτυο και γραμμές',sub:[S('Δίκτυο (τριφασικά)',['GRID3','GEN3','XF3','LOAD3','FLT3','CB3']),S('Διακόπτες ισχύος',['ARC']),S('Έλεγχος γεννητριών',['AVR','PSS','GOV']),S('Γραμμές',['LINE3','TLM','TL']),S('Υψηλές τάσεις',['MOV','SG','SAI','TOWER']),S('FACTS',['SSSC']),S('HVDC',['MMC','MMCC','LCC6','LCCS','LCCC']),S('Φίλτρα και εμπεδήσεις δικτύου',['FILT3','ZSER3'])]},
+  {title:'Δίκτυο και γραμμές',sub:[S('Δίκτυο (τριφασικά)',['GRID3','GEN3','XF3','LOAD3','FLT3','CB3']),S('Διακόπτες ισχύος',['ARC']),S('Έλεγχος γεννητριών',['AVR','PSS','GOV']),S('Γραμμές',['LINE3','TLM','TL']),S('Υψηλές τάσεις',['MOV','SG','SAI','TOWER']),S('FACTS',['SSSC','SSSC3']),S('HVDC',['MMC','MMCC','LCC6','LCCS','LCCC']),S('Φίλτρα και εμπεδήσεις δικτύου',['FILT3','ZSER3'])]},
   {title:'Φορτία',sub:[S('',['CPL'])]},
   {title:'Μετρήσεις',sub:[S('',['VM','AM','VP','IP','MEAS','DISP'])]},
   {title:'Έλεγχος',sub:[S('Διαμόρφωση',['PWM','MOD3','SH','NLC']),S('Ρυθμιστές',['PIB','NN','AIC','EVC']),S('Εκτιμητές και συγχρονισμός',['FEST','PLL','SPLL'])]},
@@ -29,7 +29,7 @@
   {title:'Ηλεκτρικά κυκλώματα',sub:[S('',['R','L','C','VDC','VAC','IDC','VM','AM','VP','IP','GND','XFMR','KL','KG'])]},
   {title:'Ηλεκτρονική ισχύος',sub:[S('Διακόπτες και έλεγχος',['SW','D','SCR','PWM','MOD3','SH','CHB','NLC','SPLL','MMC','LCC6']),S('Κύκλωμα',['L','C','R','VDC','VAC','VAC3','CPL','XFMR','KL','CPE']),S('Μετρήσεις',['VM','AM','MEAS','DISP'])]},
   {title:'Ηλεκτρικές μηχανές και κινητήρια',sub:[S('Μηχανές',['DCM','IM','SM','SRM']),S('Έλεγχος',['CLARKE','ICLARKE','PARK','IPARK','PLL','FEST','PIB','NN','AIC','EVC','MOD3'])]},
-  {title:'Συστήματα ηλεκτρικής ενέργειας',sub:[S('',['GRID3','GEN3','XF3','LOAD3','LINE3','TLM','TOWER','SAI','FLT3','CB3','ARC','VAC3','EBUS','AVR','PSS','GOV','SSSC','CHB','SPLL','MMC','MMCC','LCC6','LCCS','LCCC','FILT3','ZSER3'])]},
+  {title:'Συστήματα ηλεκτρικής ενέργειας',sub:[S('',['GRID3','GEN3','XF3','LOAD3','LINE3','TLM','TOWER','SAI','FLT3','CB3','ARC','VAC3','EBUS','AVR','PSS','GOV','SSSC','SSSC3','CHB','SPLL','MMC','MMCC','LCC6','LCCS','LCCC','FILT3','ZSER3'])]},
   {title:'Υψηλές τάσεις',sub:[S('',['VIMP','ILG','TL','MOV','SG','SAI','TOWER','C','R'])]},
   {title:'Συστήματα αυτομάτου ελέγχου',sub:[S('',['CONST','GAIN','SUM','MUL','DIV','SAT','INT','LPF','F2','RLIM','UD','RT','CMP','LOGIC','SR','EDGE','CLK','RAMP','PIB','NN','AIC'])]},
   {title:'Προγραμματισμός και οργάνωση',sub:[S('',['EXPR','PY','MUX','DEMUX','BSEL','PORT','SIN','SOUT','TAGO','TAGI','NOTE'])],subs:true}];

@@ -164,6 +164,7 @@ function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;
  if(c0.type==='AVR'||c0.type==='PSS'||c0.type==='GOV'){const id=(S.pfx||'')+c0.id,v=k=>s.now('Y:'+id+k);return {text:c0.type==='AVR'?'E_fd '+eng(v('/EFD'),'',4):c0.type==='PSS'?'v_s '+eng(v('/VS'),'',3):'P_m '+eng(v('/PM'),'',4)+' · '+(c0.params?.type==='hydro'?'g ':'CV ')+eng(v('/G'),'',3)};}
  if(c0.type==='CHB'){const id=(S.pfx||'')+c0.id;return {text:'n '+fmt(s.now('Y:'+id+'/NLC'),3)+' · V_C '+eng(s.now('Y:'+id+'/NLC:vav'),'V',4)};}
  if(c0.type==='SSSC'){const id=(S.pfx||'')+c0.id;return {text:'X '+eng(s.now('Y:'+id+'/XM'),'Ω',3)+' · Δθ '+fmt(s.now('Y:'+id+'/DTH')*180/Math.PI,3)+'°'};}
+ if(c0.type==='SSSC3'){const id=(S.pfx||'')+c0.id;return {text:'X '+eng(s.now('Y:'+id+'/XM'),'Ω',3)+' · u '+eng(s.now('Y:'+id+'/U'),'V/s',3)};}
  // 4.14: the MMC and its control: what they do now
  if(c0.type==='MMCC'){const id=(S.pfx||'')+c0.id;return {text:'P '+fmt(s.now('Y:'+id+'/PP'),3)+' · Q '+fmt(s.now('Y:'+id+'/QQ'),3)+' pu'+(s.now('Y:'+id+'/BLK')>0.5?' · μπλοκαρισμένος':'')};}
  if(c0.type==='MMC'){const id=(S.pfx||'')+c0.id;return {text:'V_dc '+eng(s.now('Y:'+id+'/VDC'),'V',4)+' · I_dc '+eng(s.now('Y:'+id+'/IDC'),'A',3)};}
@@ -251,7 +252,12 @@ const MOD_SIGS={CHB:p=>{const f=p.impl!=='blocks',N=Math.max(1,Math.min(64,Math.
   else{L.push(['/ER','σφάλμα ρεύματος (pu)'],['/PR','β του PI ρεύματος (rad)']);if(p.fr==='on')L.push(['/QF','εξαναγκασμένη καθυστέρηση (1)'],['/FD','χρόνος με V_d < V_fr']);}
   return L;},
  MMCC:p=>[['/PP','P προς τον μετατροπέα (pu)'],['/QQ','Q προς τον μετατροπέα (pu)'],['/VD','v_d (pu)'],['/VQ','v_q (pu)'],['/ID','i_d (pu)'],['/IQ','i_q (pu)'],['/IDL','i_d,ref μετά το όριο (pu)'],['/IQL','i_q,ref μετά το όριο (pu)'],['/Fvdc','V_dc (pu, φιλτραρισμένη)'],['/Fidc','I_dc (pu, φιλτραρισμένο)'],['/VG','|v| (pu)'],['/TH','γωνία θ'],['/MA','m_a'],['/BLK','μπλοκάρισμα (1)'],['/BRK','εντολή διακόπτη AC (1 κλειστός)'],['/PL','προστασία υπερέντασης DC (1)']],
- SSSC:p=>[['/VR','αναφορά τάσης v_ref'],['/VQ','εντολή V_q (θετική: χωρητική)'],['/XM','μετρημένη αντίδραση X'],['/DTH','διόρθωση γωνίας Δθ (rad)'],['/VAF','μέση τάση πυκνωτών (φιλτραρισμένη)'],['/PLI/X','γωνία του ρεύματος θ_i − 90°'],['/PLI/X:amp','πλάτος του ρεύματος Î']]};
+ SSSC:p=>[['/VR','αναφορά τάσης v_ref'],['/VQ','εντολή V_q (θετική: χωρητική)'],['/XM','μετρημένη αντίδραση X'],['/DTH','διόρθωση γωνίας Δθ (rad)'],['/VAF','μέση τάση πυκνωτών (φιλτραρισμένη)'],['/PLI/X','γωνία του ρεύματος θ_i − 90°'],['/PLI/X:amp','πλάτος του ρεύματος Î']],
+ // 4.17 (§50): the central controller of the three-phase m-SSSC
+ SSSC3:p=>{const pos=p.sync!=='phase',L=[['/VQ','εντολή V_q (θετική: χωρητική)'],['/XM','μετρημένη αντίδραση X (θετική ακολουθία)'],['/U','u: εντολή της συνολικής ενέργειας (V/s)'],['/VAF','μέση τάση πυκνωτών των τριών φάσεων (φιλτραρισμένη)']];
+  if(pos)L.push(['/PLI','γωνία του ρεύματος θ (θετική ακολουθία)'],['/PLI:amp','πλάτος του ρεύματος Î (θετική ακολουθία)'],['/VQF','V_q της θετικής ακολουθίας (μετρημένη)']);
+  for(const x of ['a','b','c']){L.push(['/VR'+x,'αναφορά τάσης, φάση '+x],['/D'+x,'μέρος σε φάση με το ρεύμα D, φάση '+x],['/VKF'+x,'μέση τάση πυκνωτών, φάση '+x],['/BL'+x,'εξισορρόπηση b, φάση '+x]);if(!pos)L.push(['/PL'+x+'/X','γωνία του ρεύματος, φάση '+x],['/PL'+x+'/X:amp','πλάτος του ρεύματος, φάση '+x]);}
+  return L;}};
 const GEN_CTL_SIGS={AVR:[['/EFD','τάση διέγερσης E_fd'],['/ERR','σφάλμα τάσης (ΔV_ref − ΔV_c + v_s)'],['/TRF','απόκλιση της μετρημένης τάσης ΔV_c'],['/VB','αναφορά V_ref (βάση)']],
  PSS:[['/VS','έξοδος v_s'],['/DW','απόκλιση ταχύτητας Δω'],['/WO','μετά το washout']],
  GOV:[['/TM','μηχανική ροπή T_m'],['/PM','μηχανική ισχύς P_m'],['/G','βαλβίδα ή θυρόφραγμα'],['/S','εντολή του ρυθμιστή (ατμός)'],['/ER','σφάλμα του ρυθμιστή (νερό)']]};
@@ -559,6 +565,13 @@ function sampleCompareHTML(r){const out=[];for(const [id,sv] of Object.entries(r
 // change is kept with its simulation time, drawn on the scope, and D / reference changes can be
 // turned into a t:value program, so pressing ⟲ replays the same run.
 // 3.19: only changes at the same instant merge, so a session written as a program replays bit for bit
+// 4.17: the gains of a PWM in PI/PID mode as the solver uses them: hand-set, or from the circuit (tune.js, the design of
+// the last build of the netlist), with the converter, the margins and the elements of the list of roles
+function pwmGainsText(c,p){const k=S.sim?.net?.ctrls?.find(q=>q.id===c.id),d=k?.design;
+ if(p.gain!=='auto')return `K_p = ${eng(+p.Kp)}, K_i = ${eng(+p.Ki)}${+p.Kd?`, K_d = ${eng(+p.Kd)}`:''}.`;
+ if(!d)return 'Κέρδη από το κύκλωμα: δεν υπολογίστηκαν (δες τις προειδοποιήσεις).';
+ const R=Object.entries(d.roles).filter(([r])=>r!=='S'&&r!=='D').map(([r,id])=>`${r} = ${esc(editor.comp(id)?.label||id)}`).join(', ');
+ return `Από το κύκλωμα (${esc(d.name)}, ${R}): K_p = ${eng(k.Kp)}, K_i = ${eng(k.Ki)}${k.Kd?`, K_d = ${eng(k.Kd)}`:''}, D₀ = ${fmt(d.D0,4)}· f_c = ${eng(d.fc,'Hz')}, περιθώριο φάσης ${fmt(d.pm,3)}°${Number.isFinite(d.gm)?`, κέρδους ${fmt(20*Math.log10(d.gm),3)} dB`:''}.`;}
 function liveChange(id,k,v,label,from){const s=S.sim;if(!s||!(s.t>0))return;const L=s.changes||(s.changes=[]);const last=L[L.length-1];
  if(last&&last.id===id&&last.k===k&&s.t===last.t&&!window.Live?.active){last.v=v;last.label=label;}else s.markChange({id,k,v,label,from});renderLiveLog();if(!S.running)draw(true);}
 function renderLiveLog(){const box=$('#lp-log');if(!box)return;const L=S.sim?.changes||[];
@@ -610,7 +623,7 @@ function refreshControls(){
  const per=pw.map(c=>{const p={...P.defaults('PWM'),...c.params};let h='';
   if(p.mode==='fixed'||p.mode==='pp')h=`<label>${esc(c.label||c.id)} · D <output data-dout="${c.id}">${fmt(+p.D,4)}</output></label><input type="range" min="0" max="1" step="0.0005" value="${+p.D}" data-d="${c.id}">
    <div class="ctl-btns"><button data-dd="${c.id}" data-step="-0.01">−0,01</button><button data-dd="${c.id}" data-step="-0.001">−0,001</button>${meta.D0!==undefined?`<button data-dset="${c.id}" data-val="${meta.D0}">D₀ = ${fmt(meta.D0,4)}</button>`:''}<button data-dd="${c.id}" data-step="0.001">+0,001</button><button data-dd="${c.id}" data-step="0.01">+0,01</button></div>${p.dsched?'<small>Υπάρχει πρόγραμμα D(t)· η χειροκίνητη αλλαγή το απενεργοποιεί.</small>':''}`;
-  else if(p.mode==='pi')h=`<label>${esc(c.label||c.id)} · αναφορά ${+p.Kd?'PID':'PI'} <output data-dnow="${c.id}"></output></label><div class="ctl-row"><input data-ref="${c.id}" value="${esc(p.ref)}"><button data-refapply="${c.id}">Εφαρμογή</button></div><small>Σταθερή τιμή ή πρόγραμμα «t:τιμή». K_p = ${eng(+p.Kp)}, K_i = ${eng(+p.Ki)}${+p.Kd?`, K_d = ${eng(+p.Kd)}`:''}.${editor.comp(p.sensor)?.type==='SH'?` Μετρά το δείγμα του ${esc(editor.comp(p.sensor).label||p.sensor)}.`:''}</small>`;
+  else if(p.mode==='pi')h=`<label>${esc(c.label||c.id)} · αναφορά ${p.gain==='auto'?(p.ctl==='pid'?'PID':'PI'):+p.Kd?'PID':'PI'} <output data-dnow="${c.id}"></output></label><div class="ctl-row"><input data-ref="${c.id}" value="${esc(p.ref)}"><button data-refapply="${c.id}">Εφαρμογή</button></div><small>Σταθερή τιμή ή πρόγραμμα «t:τιμή». ${pwmGainsText(c,p)}${editor.comp(p.sensor)?.type==='SH'?` Μετρά το δείγμα του ${esc(editor.comp(p.sensor).label||p.sensor)}.`:''}</small>`;
   else if(p.mode==='ext')h=`<label>${esc(c.label||c.id)} · D από σήμα <output data-dnow="${c.id}"></output></label><small>Ο λόγος κατάτμησης D έρχεται από τον ακροδέκτη d${p.upd==='double'&&p.carrier!=='saw'?' (δύο ενημερώσεις ανά T)':''}.</small>`;
   else if(p.mode==='spwm')h=`<label>${esc(c.label||c.id)} · m <output data-mout="${c.id}">${fmt(+p.m,3)}</output></label><input type="range" min="0" max="1.2" step="0.01" value="${+p.m}" data-m="${c.id}">`;
   const sw=switchesOf(c.id);const probe=`<div class="ctl-btns ctl-probe"><button data-probe-d="${c.id}" title="Ο λόγος κατάτμησης D στο scope">⌁ D</button><button data-pulse="${c.id}" title="${sw.length?'Ο παλμός πύλης κάθε διακόπτη: '+esc(sw.map(x=>x.label||x.id).join(', ')):'Ο παλμός g του PWM'}">⌁ παλμ${sw.length>1?'οί':'ός'} ${esc(sw.length?sw.map(x=>x.label||x.id).join(', '):'g')}</button></div>`;
@@ -800,7 +813,7 @@ const numOf=v=>typeof v==='number'?v:P.parseEng(v);
 let PS={};try{PS=JSON.parse(localStorage.getItem('pcl2-props-sec'))||{};}catch{}
 const INIT_K=new Set(['i0','v0','w0','th0','ia0','im0','psi0','y0','q0','h0','init']),MECH_K=new Set(['J','bm','load','TL']),
  LOSS_K=new Set(['esr','Rs','Ls','Ron','Roff','Vf','Vce0','Vfd','Rd','Eon','Eoff','Vref','Iref','R1','R2','Llk1','Llk2','Rw','body','uni']),
- CTL_K=new Set(['sensor','qty','ref','Kp','Ki','Kd','Tf','ff','ffA','ffB','D0','dmin','dmax','upd']);
+ CTL_K=new Set(['sensor','qty','ref','gain','ctl','topo','rVin','rL1','rC1','rL2','rC2','rR','fc','pm','Kp','Ki','Kd','Tf','ff','ffA','ffB','D0','dmin','dmax','upd']);
 const PSEC=[['main','Κύριες'],['ctl','Βρόχος ελέγχου'],['loss','Απώλειες και παρασιτικά'],['mech','Μηχανικό μέρος και φορτίο'],['init','Αρχικές συνθήκες']];
 function psec(key,title,body,{def=false,cnt='',bad=false}={}){const open=PS[key]??def;
  return `<details class="psec" data-sec="${key}" ${open?'open':''}><summary>${esc(title)}${cnt!==''?`<span class="cnt${bad?' bad':''}">${esc(String(cnt))}</span>`:''}</summary><div class="psec-body">${body}</div></details>`;}
@@ -1607,12 +1620,14 @@ function ssscNet3(m,X){const w=2*Math.PI*m.f,Un=m.Un,E=Un/Math.sqrt(3),Z1=Un*Un/
  const Is=div(sub(V[0],V[3]),zk),cj=a=>c(a.re,-a.im),P14=3*mul(V[0],cj(Is)).re,[z13]=ln(m.lines.L13),y13=ln(m.lines.L13)[1],I13=add(div(sub(V[0],V[1]),z13),mul(V[0],c(0,y13/2))),P13=3*mul(V[0],cj(I13)).re;
  return {I:abs(Is),V1:abs(V[0])/E,V2:abs(V[2]),V2pu:abs(V[2])/E,P14,P13};}
 function ssscTheory(){const s=S.sim,m=(S.tutMeta||{}).sssc;if(!s||!m)return '';const f=m.f,T=s.T,nT=Math.max(1,Math.round(1/(f*T))),tnow=s.t;
- const ctl=m.phases===3?'SCa':'SC1',bw=+(paramsOf(ctl)?.bw??8);
+ const cen=m.phases===3&&m.ctl&&m.ctl!=='phase',ctl=m.phases===3?(cen?'SC3':'SCa'):'SC1',bw=+(paramsOf(ctl)?.bw??8);
  let h=`<div class="tm"><span class="badge">m-SSSC</span> ${m.N} υπομονάδες × ${eng(m.Vdc,'V')} ανά φάση (ως ${eng(m.N*m.Vdc,'V')}), C = ${eng(m.C,'F')}</div><ul class="eqs">
   <li>Βραχίονας: v = Σ s_k·v_Ck − R_arm·i, s_k ∈ {−1, 0, +1} (γέφυρα H). Κάθε πυκνωτής C·dv_k/dt = s_k·i με τον κανόνα της ολοκλήρωσης: στον γρήγορο βραχίονα μία γραμμή του MNA, v_a − v_b − R_eq·i = E με R_eq = R_arm + Σ s_k²·h/(2C)</li>
   <li>Διαμόρφωση πλησιέστερης στάθμης: n = round(v_ref/V̄_C), |n| ≤ N. Ταξινόμηση: όταν sign(n)·i ≥ 0 οι πυκνωτές φορτίζονται και μπαίνουν οι |n| με τη μικρότερη τάση, αλλιώς οι |n| με τη μεγαλύτερη. Μειωμένη συχνότητα μεταγωγής: οι ίδιες υπομονάδες όσο το n δεν αλλάζει και η διασπορά μένει στη ζώνη</li>
+  ${cen?`<li>Κεντρικός ελεγκτής (4.17): ${m.ctl==='cphase'?'ένα SOGI-PLL σε κάθε ρεύμα (θ_k)':`ένα τριφασικό PLL στη θετική ακολουθία των ρευμάτων (${eng(bw,'Hz')}): i_k = Î·cos θ_k, θ_k = θ − k·2π/3`}· V_q = Î·X_εντ με X = V_q/Î της θετικής ακολουθίας</li>
+  <li>Νόμος ανά φάση: v_ref,k = V_q·sin θ_k + D_k·cos θ_k (κάθετο μέρος: η αντιστάθμιση· σε φάση: η ενέργεια). Ενέργεια φάσης N·½·C·V̄_k², άρα D_k = 2·N·C·V_C/Î·(u + b_k) δίνει dV̄_k/dt = u + b_k: u = PI(V_C,ref − V̄) για τη συνολική ενέργεια, b_k = PI(V̄ − V̄_k) για την εξισορρόπηση (Σ b_k = 0)· η αναφορά με προπορεία μισού δείγματος της NLC</li>`:`
   <li>PLL με SOGI (μονοφασικό, στο ρεύμα της γραμμής, ${eng(bw,'Hz')}): α′ = ω′[k(v − α) − β], β′ = ω′α, ω′ = ω₀ + PI{(−α·sin θ + β·cos θ)/√(α² + β²)}, θ′ = ω′</li>
-  <li>Νόμος: v_ref = |V_q|·sin(θ + π/2 − sign(V_q)·(π/2 − Δθ)) με V_q = Î·X_εντ. Για V_q &gt; 0 η τάση καθυστερεί 90° από το ρεύμα: χωρητική, μειώνει τη συνολική αντίδραση. Δθ από PI στη μέση τάση των πυκνωτών: η μικρή ενεργός συνιστώσα καλύπτει τις απώλειες</li>`;
+  <li>Νόμος: v_ref = |V_q|·sin(θ + π/2 − sign(V_q)·(π/2 − Δθ)) με V_q = Î·X_εντ. Για V_q &gt; 0 η τάση καθυστερεί 90° από το ρεύμα: χωρητική, μειώνει τη συνολική αντίδραση. Δθ από PI στη μέση τάση των πυκνωτών: η μικρή ενεργός συνιστώσα καλύπτει τις απώλειες</li>`}`;
  const Xr=m.mode==='x'?schedNow(m.X,tnow):NaN,cells=k=>m.phases===3?`Y:CH${k}/X:v`:(m.fast?'Y:CH1/X:v':'Y:CH1/V');
  if(m.phases!==3){const w=2*Math.PI*f,XL=w*m.L,D=2*m.V*Math.sin(m.d*Math.PI/360);let I=NaN,Vq=NaN;
   if(m.mode==='x'){I=D/Math.hypot(m.R,XL-Xr);Vq=Xr*I;h+=`<li>Μόνιμη κατάσταση: I = (V₁∠δ − V₂)/(R + j(X_L − X)), |Î| = 2V̂·sin(δ/2)/|R + j(X_L − X)| με X_L = ${eng(XL,'Ω')}, X = ${eng(Xr,'Ω')}: <b>${eng(I,'A')}</b> (με X = 0: ${eng(D/Math.hypot(m.R,XL),'A')})</li>`;}
@@ -1628,11 +1643,60 @@ function ssscTheory(){const s=S.sim,m=(S.tutMeta||{}).sssc;if(!s||!m)return '';c
  h+=`<li>Φασιθέτες του δικτύου (το ίδιο κύκλωμα με σταθερές εμπεδήσεις: δίκτυο E = U_n/√3 πίσω από U_n²/S″k, γραμμές π, φορτίο Y = (P − jQ)/U_n², ο SSSC ως −jX σε σειρά με jωL_σ = ${eng(2*Math.PI*f*(m.Lk||0),'Ω')}). Με X = ${eng(Number.isFinite(Xr)?Xr:0,'Ω')}: |I| = <b>${eng(q.I,'A')}</b> RMS, P μέσω του SSSC (1–4–2) = <b>${eng(q.P14,'W')}</b>, μέσω του ζυγού 3 = ${eng(q.P13,'W')}, |V₂| = ${fmt(q.V2pu,5)} pu. Με X = 0: ${eng(q0.P14,'W')} και ${eng(q0.P13,'W')}</li>
   <li>Η ίδια λύση με τη ροή φορτίου του pcl.network: <code>net.sssc(κλάδος, X=…)</code> στον κλάδο της σύζευξης, φορτίο με zip = (1, 0, 0) (tests/test_sssc.py)</li></ul>`;
  if(tnow<0.3)return h+'<p class="muted small">Τρέξε την προσομοίωση (μετρήσεις στους τέσσερις τελευταίους κύκλους, ~0,2 s μετά από κάθε βήμα της αναφοράς).</p>';
- const rows=[];for(const p of ['a','b','c'])rows.push([`|I| φάσης ${p} (RMS θεμελιώδους)`,q.I,fundOf('Y:AM'+p,f)/Math.SQRT2,'A']);
- for(const p of ['a','b','c'])rows.push([`X φάσης ${p} (μέση, 4 κύκλοι)`,Xr,avgOver('Y:SC'+p+'/XM',4*nT)?.avg,'Ω']);
- rows.push(['|V₂| (RMS φάσης a)',q.V2,phaseRms('V:LD2/Ra',T,4*nT),'V']);
+ const rows=[],unb=!!m.unb;for(const p of ['a','b','c'])rows.push([`|I| φάσης ${p} (RMS θεμελιώδους)`,unb?NaN:q.I,fundOf('Y:AM'+p,f)/Math.SQRT2,'A']);
+ if(cen)rows.push(['X θετικής ακολουθίας (μέση, 4 κύκλοι)',Xr,avgOver('Y:SC3/XM',4*nT)?.avg,'Ω']);
+ else for(const p of ['a','b','c'])rows.push([`X φάσης ${p} (μέση, 4 κύκλοι)`,Xr,avgOver('Y:SC'+p+'/XM',4*nT)?.avg,'Ω']);
+ rows.push(['|V₂| (RMS φάσης a)',unb?NaN:q.V2,phaseRms('V:LD2/Ra',T,4*nT),'V']);
  for(const p of ['a','b','c'])rows.push([`V̄_C φάσης ${p}`,m.Vdc,avgOver('Y:CH'+p+'/NLC:vav',4*nT)?.avg,'V']);
- return h+cmpRows(rows)+`<p class="small">Δθ: ${['a','b','c'].map(p=>fmt(s.now('Y:SC'+p+'/DTH')*180/Math.PI,3)+'°').join(', ')}. Κάθε φάση έχει δικό της PLL και βρόχο τάσης: οι τρεις X ταυτίζονται, οι Δθ διαφέρουν όσο διαφέρουν οι απώλειες και η αρχική φόρτιση.</p>`;}
+ const tail=cen?`D_k (σε φάση με το ρεύμα): ${['a','b','c'].map(p=>eng(avgOver('Y:SC3/D'+p,4*nT)?.avg,'V',3)).join(', ')}· u = ${eng(avgOver('Y:SC3/U',4*nT)?.avg,'V/s',3)}. Ένας ελεγκτής για τις τρεις φάσεις: μία X, και κάθε φάση παίρνει την ενεργό ισχύ που της χρειάζεται για να μείνει η V̄_k στη V̄.${unb?' Με την ασυμμετρία (10 Ω στη φάση a) τα ρεύματα διαφέρουν και η λύση με φασιθέτες της κάρτας (συμμετρική) δεν ισχύει· με συγχρονισμό στη θετική ακολουθία η τάση της φάσης a δεν είναι κάθετη στο ρεύμα της και το D_a αναπληρώνει τη διαφορά.':''}`
+  :`Δθ: ${['a','b','c'].map(p=>fmt(s.now('Y:SC'+p+'/DTH')*180/Math.PI,3)+'°').join(', ')}. Κάθε φάση έχει δικό της PLL και βρόχο τάσης: οι τρεις X ταυτίζονται, οι Δθ διαφέρουν όσο διαφέρουν οι απώλειες και η αρχική φόρτιση.`;
+ return h+cmpRows(rows)+`<p class="small">${tail}</p>`;}
+// 4.17 (§50): the CCSC. The device as a series reactance X between two sources (X mode: I = 2V̂·sin(δ/2)/|R + j(X_L − X)|;
+// fixed m_a: |ΔV̂| = |(R + jX_L)·Î − jV̂_q|), the capacitor's share I_C = V_q/X_C = (X/X_C)·I in phase with the line current,
+// the converter the rest I − I_C (opposite past the natural point X = X_C), the internal loop C_s–L_c at 1/(2π√(L_c·C_s))
+function ccscTheory(){const s=S.sim,m=(S.tutMeta||{}).ccsc;if(!s||!m)return '';const f=m.f,T=s.T,nT=Math.max(1,Math.round(1/(f*T))),tnow=s.t,w=2*Math.PI*f,XL=w*m.L,D=2*m.V*Math.sin(m.d*Math.PI/360);
+ const fr=1/(2*Math.PI*Math.sqrt(m.Lc*m.Cs)),stage=tnow<m.t1?0:tnow<m.t2?1:2;
+ // the converter's branch Z_c = R_c + (jωL_c ∥ R_p) and a lossless arm with v_arm = (V_d − jX)·I (X its measured
+ // reactance, V_d for no active power): the device Z = (Z_c + v_arm/I)/(1 + jZ_c/X_C), I_conv/I = 1 − jZ/X_C (exactly
+ // 0 at X = X_C); P_arm = 0 is a quadratic in V_d, the small root
+ const cm=(a,b)=>[a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]],cdv=(a,b)=>{const q=b[0]*b[0]+b[1]*b[1];return [(a[0]*b[0]+a[1]*b[1])/q,(a[1]*b[0]-a[0]*b[1])/q];},cab=a=>Math.hypot(a[0],a[1]);
+ const wl=w*m.Lc,Rp=m.Rp||1e12,Zl=cdv([0,wl*Rp],[Rp,wl]),Zc=[m.Rc+Zl[0],Zl[1]],aa=[1-Zc[1]/m.Xc,Zc[0]/m.Xc],k=cdv([1/m.Xc,0],aa);
+ const dev=X=>{const jkZ=cm([0,1],cm(k,Zc)),A=[1-jkZ[0]-k[0]*X,-jkZ[1]-k[1]*X],B=[k[1],-k[0]],qa=B[0],qb=A[0]-X*B[1],qc=-X*A[1];
+  let Vd;if(Math.abs(qa)<1e-12)Vd=-qc/qb;else{const ds=Math.sqrt(Math.max(qb*qb-4*qa*qc,0)),r1=(-qb+ds)/(2*qa),r2=(-qb-ds)/(2*qa);Vd=Math.abs(r1)<Math.abs(r2)?r1:r2;}
+  const Z=cdv([Vd+Zc[0],-X+Zc[1]],aa),Iv=[A[0]+B[0]*Vd,A[1]+B[1]*Vd];return {Z,iv:cab(Iv),ic:cab([1-Iv[0],-Iv[1]])};};
+ const lineI=Z=>D/Math.hypot(m.R+Z[0],XL+Z[1]);
+ let X=NaN,I=NaN,Vq=NaN,Ic=0,Iv=0,Zd=null;
+ if(stage===0){X=0;I=D/Math.hypot(m.R,XL);}
+ else if(stage===1){X=m.Xc;I=D/Math.hypot(m.R,XL-X);Vq=X*I;Ic=I;}
+ else{let d0;if(m.mode==='x'){X=schedNow(m.X,tnow);d0=dev(X);I=lineI(d0.Z);}
+  else{Vq=(m.ma??0.5)*m.N*m.Vdc;const a=m.R*m.R+XL*XL,b=-2*XL*Vq,cc=Vq*Vq-D*D;I=(-b+Math.sqrt(b*b-4*a*cc))/(2*a);
+   for(let n=0;n<40;n++){X=Vq/I;d0=dev(X);const In=lineI(d0.Z);if(Math.abs(In-I)<1e-9*I){I=In;break;}I=In;}X=Vq/I;d0=dev(X);}
+  Vq=X*I;Zd=d0.Z;Ic=d0.ic*I;Iv=d0.iv*I;}
+ let h=`<div class="tm"><span class="badge">CCSC</span> C_s = ${eng(m.Cs,'F')} (X_C = ${eng(m.Xc,'Ω')}) ∥ μετατροπέας ${m.N} × ${eng(m.Vdc,'V')} (ως ${eng(m.N*m.Vdc,'V')}) με L_c = ${eng(m.Lc,'H')}, R_c = ${eng(m.Rc,'Ω')}</div><ul class="eqs">
+  <li>Οι δύο κλάδοι έχουν την ίδια τάση: ο μετατροπέας την επιβάλλει και ο πυκνωτής παίρνει I_C = V_q/X_C, σε φάση με το ρεύμα της γραμμής (η τάση καθυστερεί 90° από το ρεύμα, το ρεύμα του πυκνωτή προηγείται 90° από την τάση)· ο μετατροπέας φέρει I − I_C</li>
+  <li>Με τον κλάδο Z_c = R_c + (jωL_c ∥ R_p) και τάση βραχίονα (V_d − jX)·I (V_d ώστε ο βραχίονας να μην παίρνει ενεργό ισχύ): Z = (Z_c + V_d − jX)/(1 + jZ_c/X_C), I_C/I = jZ/X_C, I_conv/I = 1 − jZ/X_C· στο X = X_C ακριβώς Z = −jX_C και I_conv = 0${Zd?`· τώρα Z = ${eng(Zd[0],'Ω')} − j${eng(-Zd[1],'Ω')} (το R ≥ 0: οι απώλειες του κλάδου από τη γραμμή)`:''}</li>
+  <li>Η διάταξη ως αντίδραση σε σειρά X = V_q/I: X = X_C στο φυσικό σημείο (ρεύμα μετατροπέα ≈ 0)· X &gt; X_C: boost, I_C &gt; I, το ρεύμα του μετατροπέα αντίθετο· X &lt; X_C: ο μετατροπέας παίρνει μέρος του ρεύματος· X &lt; 0: επαγωγική, ο μετατροπέας φέρει I + |I_C|</li>
+  <li>Ενεργός ισχύς του μετατροπέα: ½·V_d·I με V_d το μέρος της τάσης σε φάση με το ρεύμα της γραμμής, όποιο κι αν είναι το ρεύμα του μετατροπέα (ο πυκνωτής δεν παίρνει ενεργό ισχύ)· άρα ο βρόχος V_C → Δθ του m-SSSC μένει ίδιος, με το PLL στο ρεύμα της γραμμής</li>
+  <li>Ο βρόχος C_s–L_c: f_r = 1/(2π√(L_c·C_s)) = ${eng(fr,'Hz')}· οι αρμονικές της σκάλας κλείνουν κυρίως μέσα από τον πυκνωτή (|Z_C,h| = X_C/h έναντι της γραμμής ~h·X_L), γι' αυτό το ρεύμα της γραμμής μένει σχεδόν ημιτονικό· η R_c αποσβένει</li>
+  <li>Τώρα (${['παράκαμψη: χωρίς αντιστάθμιση','μόνο ο πυκνωτής','μετατροπέας σε λειτουργία'][stage]}): X = ${eng(X,'Ω')}, |Î| = 2V̂·sin(δ/2)/|R + jX_L + Z| = <b>${eng(I,'A')}</b>${stage?`, I_C = <b>${eng(Ic,'A')}</b>, ρεύμα μετατροπέα I − I_C = <b>${eng(Iv,'A')}</b>`:''}</li></ul>`;
+ if(tnow<0.3)return h+'<p class="muted small">Τρέξε την προσομοίωση (μετρήσεις στους τέσσερις τελευταίους κύκλους).</p>';
+ const rows=[['|Î| γραμμής (θεμελιώδης)',I,fundOf('I:L1',f),'A'],['|Î_C| πυκνωτή (θεμελιώδης)',Ic,fundOf('Y:AM3',f),'A']];
+ if(stage===2){rows.push(['|Î| μετατροπέα (θεμελιώδης)',Iv,fundOf('Y:AM2',f),'A'],['X μετρημένη (μέση, 4 κύκλοι)',X,avgOver('Y:SC1/XM',4*nT)?.avg,'Ω'],['V̄_C (μέση)',m.Vdc,avgOver('Y:CH1/NLC:vav',4*nT)?.avg,'V']);}
+ return h+cmpRows(rows)+`<p class="small">Δθ = ${fmt(s.now('Y:SC1/DTH')*180/Math.PI,3)}°. Τα μεταβατικά στα ${fmt(m.t1,3)} s (μπαίνει ο πυκνωτής) και στα ${fmt(m.t2,3)} s (κλείνει ο κλάδος: αν η τάση του μετατροπέα διαφέρει από του πυκνωτή, η διαφορά πέφτει πάνω στο L_c) δεν μπαίνουν στις συγκρίσεις.</p>`;}
+// 4.17 (§50): the IEEE 9 case with the three-phase m-SSSC on the line 7–6: the steady state against the load flow of
+// pcl.network with the same series reactance (the table of the tutorial, IEEE9_SSSC_LF)
+function ieee9ssscTheory(){const s=S.sim,m=(S.tutMeta||{}).ieee9sssc;if(!s||!m)return '';const f=m.f,T=s.T,nT=Math.max(1,Math.round(1/(f*T))),tnow=s.t;
+ const Xr=schedNow(m.X,tnow),key=String(Math.round(Xr)),q=m.lf[key]||m.lf[String(m.Xf)],Vb=345e3/Math.sqrt(3);
+ let h=`<div class="tm"><span class="badge">IEEE 9 + m-SSSC</span> ${m.N} × ${eng(m.Vdc,'V')} ανά φάση στη γραμμή 7–6 (κλάδος br5 του pcl.network), σύζευξη L_σ = ${eng(m.Lk,'H')}, κεντρικός ελεγκτής (${m.sync==='phase'?'SOGI ανά φάση':'θετική ακολουθία'})</div><ul class="eqs">
+  <li>Θέση: <code>pcl.network.sssc_placement(ieee9())</code> με ίσα βάρη διαλέγει τον κλάδο 6–7 με X = 0,15·X_γραμμής ≈ 18 Ω (μικρότερη φόρτιση, απώλειες, απόκλιση τάσης και μέγεθος, κανονικοποιημένα με την περίπτωση χωρίς αντιστάθμιση)</li>
+  <li>Ροή φορτίου με την ίδια X: <code>net.sssc(κλάδος, X=…)</code> στον κλάδο της σύζευξης 7–7s, η γραμμή 7–6 από το 7s, φορτία σταθερής εμπέδησης όπως στο EMT, γεννήτριες PV στις τάσεις τους (οι AVR τις κρατούν· οι ρυθμιστές στροφών μοιράζουν τη μικρή αλλαγή των απωλειών με τη στατικότητα τους, η ροή φορτίου τη δίνει στον ζυγό 1)</li>
+  <li>Με X = ${eng(Xr,'Ω')}: |I| = <b>${eng(q?.I,'A')}</b> RMS, P = ${eng(q?Math.abs(q.P)*1e6:NaN,'W')} από τον ζυγό 6 προς τον 7, V_q = ${eng(q?.Vq,'V')} RMS, άεργος του SSSC 3·X·I² = ${eng(q?3*Xr*q.I*q.I:NaN,'var')}</li></ul>`;
+ if(tnow<0.3)return h+'<p class="muted small">Τρέξε την προσομοίωση· οι συγκρίσεις έχουν νόημα αφού ηρεμήσουν οι γεννήτριες (~1,5 s μετά το βήμα).</p>';
+ const rows=[];for(const p of ['a','b','c'])rows.push([`|I| φάσης ${p} (RMS θεμελιώδους)`,q?.I,fundOf('Y:AM'+p,f)/Math.SQRT2,'A']);
+ rows.push(['X θετικής ακολουθίας (μέση, 4 κύκλοι)',Xr,avgOver('Y:SC3/XM',4*nT)?.avg,'Ω']);
+ for(const [ld,b] of [['LD5',5],['LD7',7],['LD9',9]])rows.push([`|V| ζυγού ${b}`,q?.['V'+b],phaseRms('V:'+ld+'/Ra',T,4*nT)/Vb,'pu']);
+ for(const p of ['a','b','c'])rows.push([`V̄_C φάσης ${p}`,m.Vdc,avgOver('Y:CH'+p+'/NLC:vav',4*nT)?.avg,'V']);
+ return h+cmpRows(rows)+`<p class="small">Χωρίς SSSC (X = 0): |I| = ${eng(m.lf['0'].I,'A')}. Η συχνότητα μένει λίγο κάτω από τα 60 Hz (στατικότητα των ρυθμιστών), άρα οι γωνίες δ γλιστρούν αργά ως προς τη σταθερή αναφορά των 60 Hz.</p>`;}
 // 4.14 (§42): the MMC-HVDC link. The steady state from the ratings and the measured powers: AC current, DC current, arm
 // currents (I_dc/3 ± Î/2), the energy of the capacitors and their ripple (ΔW_arm = S/(3mω)·(1 − (m·cosφ/2)²)^{3/2}), the
 // losses; compared with the means of the last 20 ms (base period 20 ms)
@@ -1676,7 +1740,7 @@ function lccTheory(){const s=S.sim,m=(S.tutMeta||{}).lcc;if(!s||!m)return '';con
   +`<p class="muted small">${m.ev==='ss'?'':'Με γεγονός στο 1,0 s: η σύγκριση έχει νόημα πριν από αυτό ή αφού ξανασταθεροποιηθεί η ζεύξη. '}${m.gref!==15?'Με γ_ref ≠ 15° οι τιμές του benchmark δεν ισχύουν. ':''}Το μέσο μοντέλο δεν έχει μεταγωγές: δεν δείχνει αποτυχία μετάβασης σε μονοφασικό σφάλμα, ούτε αρμονικές.</p>`;}
 // 4.13: a wideband model in a card: its groups of modes, delays, poles, the errors of the fit and the passivity check
 function wbModelHTML(name,g){const f=g.fit||{},ps=g.passive||null;
- return `<p><b>${esc(name)}</b> (WB, ${g.fit?.source==='EMTP'?'από αρχείο του EMTP':'προσαρμογή '+eng(g.fmin,'Hz')+' – '+eng(g.fmax,'Hz')}): Y_c με ${g.npoles?.yc??g.yc.p.length} πόλους, H σε ${g.groups.length} ομάδες ρυθμών.</p><table class="cmp"><tr><th>ομάδα</th><th>ρυθμοί</th><th>τ</th><th>πόλοι</th></tr>`
+ return `<p><b>${esc(name)}</b> (WB, ${g.fit?.source==='EMTP'?'από αρχείο του EMTP':'προσαρμογή '+(g.band?eng(g.band[0],'Hz')+' – '+eng(g.band[1],'Hz')+`, με δείγματα ασφαλείας ως ${eng(g.fmin,'Hz')} – ${eng(g.fmax,'Hz')} (βάρος ${fmt(g.guard?.w??0.1,2)})`:eng(g.fmin,'Hz')+' – '+eng(g.fmax,'Hz'))}): Y_c με ${g.npoles?.yc??g.yc.p.length} πόλους, H σε ${g.groups.length} ομάδες ρυθμών.</p><table class="cmp"><tr><th>ομάδα</th><th>ρυθμοί</th><th>τ</th><th>πόλοι</th></tr>`
   +g.groups.map((q,k)=>`<tr><td>${k+1}${q.dc?' (DC)':''}</td><td>${(q.modes||[]).map(x=>x+1).join(', ')||'—'}</td><td>${eng(q.tau,'s',5)}</td><td>${q.p.length+q.p.filter(z=>z[1]>0).length}</td></tr>`).join('')+'</table>'
   +`<p class="small">Σφάλμα: H ${f.h_err!=null?fmt(f.h_err,2):'—'} (απόλυτο), Y_c ${f.yc_err!=null?fmt(f.yc_err*100,2)+' %':'—'}${f.method==='fdcm'?' · διόρθωση για καλώδια (FDCM)':''}${ps?' · παθητικότητα: '+(ps.passive?'✓':'✗ ελάχιστη ιδιοτιμή '+fmt(ps.worst,2)+' στα '+eng(ps.fworst,'Hz')):''}.</p>`
   // 4.13: the nodal admittance against the exact line per band (a short section is ill-conditioned at low frequencies)
@@ -2374,12 +2438,21 @@ function formulaTheory(t){
  if(t.topology==='fbm')return fbmTheory();
  if(t.topology==='ieee9_emt')return ieee9Theory();
  if(t.topology==='sssc')return ssscTheory();
+ if(t.topology==='ccsc')return ccscTheory();
+ if(t.topology==='ieee9_sssc')return ieee9ssscTheory();
  if(t.topology==='hvdc_mmc')return hvdcTheory();
  if(t.topology==='hvdc_lcc')return lccTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
- if(t.topology==='cuk'||t.topology==='sepic'){const D=+W.D,Vin=+V.V,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
+ if(t.topology==='cuk'||t.topology==='sepic'){const cl=W.mode==='pi',refS=cl?(P.parseSched(String(W.ref))||[[0,0]]):null,vf=cl?refS[refS.length-1][1]:0,Vin=+V.V,D=cl?Math.abs(vf)/(Vin+Math.abs(vf)):+W.D,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
   eqs=[`V_o = ${t.topology==='cuk'?'−':''}V_in·D/(1−D) = <b>${eng(Vo,'V')}</b>`,`I_L1 = |I_o|·D/(1−D) = <b>${eng(IL1,'A')}</b>, |I_L2| = |I_o| = <b>${eng(Math.abs(Io),'A')}</b>`,`Δi_L1 = V_in·D·T/L1 = <b>${eng(Vin*D*Ts/L1,'A')}</b>, Δi_L2 = V_in·D·T/L2 = <b>${eng(Vin*D*Ts/L2,'A')}</b>`,`V_C1 = ${t.topology==='cuk'?'V_in + |V_o|':'V_in'} = <b>${eng(t.topology==='cuk'?Vin+Math.abs(Vo):Vin,'V')}</b>`];
-  rows=[['V_o',Vo,avgOver('V:C2')?.avg,'V'],['⟨i_L1⟩',IL1,avgOver('I:L1')?.avg,'A'],['⟨i_L2⟩ (a→b)',-Math.abs(Io),avgOver('I:L2')?.avg,'A'],['V_C1',t.topology==='cuk'?Vin+Math.abs(Vo):Vin,avgOver('V:C1')?.avg,'V'],['Δi_L1',Vin*D*Ts/L1,lastPP('I:L1'),'A']];}
+  rows=[['V_o',Vo,avgOver('V:C2')?.avg,'V'],['⟨i_L1⟩',IL1,avgOver('I:L1')?.avg,'A'],['⟨i_L2⟩ (a→b)',-Math.abs(Io),avgOver('I:L2')?.avg,'A'],['V_C1',t.topology==='cuk'?Vin+Math.abs(Vo):Vin,avgOver('V:C1')?.avg,'V'],['Δi_L1',Vin*D*Ts/L1,lastPP('I:L1'),'A']];
+  // 4.17: in closed loop the formulas at the final reference (D from V_o), and the design of the gains from the circuit
+  if(cl){const k=S.sim?.net?.ctrls?.find(q=>q.id==='PWM1'),d=k?.design;eqs.unshift(`Κλειστός βρόχος: το PWM μετρά τη V_o και ρυθμίζει το D· οι τύποι στην τελική αναφορά V_ref = ${eng(vf,'V')}, άρα D = ${fmt(D,4)}`);
+   if(d){eqs.push(`Μέσο μοντέλο CCM (${esc(d.name)}, από ${Object.entries(d.roles).filter(([r])=>r!=='S'&&r!=='D').map(([r,id])=>r+' = '+esc(id)).join(', ')}): G(s) = ∂V_o/∂d, G(0) = <b>${eng(d.G0,'V')}</b>${d.G0<0?' (αρνητικό: ο μετατροπέας αντιστρέφει, άρα και τα κέρδη είναι αρνητικά)':''}, συντονισμός ≈ ${eng(d.fr,'Hz')}, μηδενικό στο δεξί ημιεπίπεδο`,
+     `Κέρδη από το κύκλωμα (${d.ctl==='pid'?'PID':'PI'}): K_p = <b>${eng(k.Kp)}</b>, K_i = <b>${eng(k.Ki)}</b> 1/s${k.Kd?`, K_d = <b>${eng(k.Kd)}</b> s, T_f = ${eng(k.Tf,'s')}`:''}, D₀ = ${fmt(d.D0,4)} (στην πρώτη αναφορά)· f_c = <b>${eng(d.fc,'Hz')}</b>, περιθώριο φάσης <b>${fmt(d.pm,3)}°</b>${Number.isFinite(d.gm)?`, κέρδους ${fmt(20*Math.log10(d.gm),3)} dB`:''}, M_s = ${fmt(d.ms,3)}`,
+     `Επιλογή: το μεγαλύτερο K_i με περιθώριο φάσης ≥ ${fmt(+(W.pm??50),3)}°, κέρδους ≥ 6 dB, M_s ≤ 2, μία διέλευση και f_c ≤ f_s/10, με τον βρόχο C(z)·G(jω)·ZOH της δειγματοληψίας. Ο συντονισμός χωρίς απόσβεση και το μηδενικό στο δεξί ημιεπίπεδο κρατούν τη f_c πολύ κάτω από τον συντονισμό.`);}
+   else eqs.push(W.gain==='auto'?'Κέρδη από το κύκλωμα: δεν υπολογίστηκαν (δες τις προειδοποιήσεις).':`Χειροκίνητα κέρδη: K_p = ${eng(+W.Kp)}, K_i = ${eng(+W.Ki)}${+W.Kd?`, K_d = ${eng(+W.Kd)}`:''}${t.topology==='cuk'?' · ο Ćuk αντιστρέφει: τα κέρδη πρέπει να είναι αρνητικά':''}.`);
+   return `<ul class="eqs">${eqs.map(e=>`<li>${e}</li>`).join('')}</ul>${cmpRows(rows)}<h4>Δείκτες από την προσομοίωση</h4>${eventMetricsHTML('V:C2')}`;}}
  else if(t.topology==='hbridge'){const Vd=+V.V,R=+paramsOf('R1').R;const m=W.mode==='fixed'?2*(+W.D)-1:+W.m;const Vo=m*Vd;
   eqs=[`V_o = (2D−1)·V_d = (v_control/V_tri)·V_d = <b>${eng(Vo,'V')}</b>`,`I_o = V_o/R = <b>${eng(Vo/R,'A')}</b>`,`Συχνότητα κυμάτωσης ρεύματος: ${W.mode==='fixed'?'f_s (διπολική)':'2·f_s (μονοπολική)'}`];
   rows=[['V_o (v_A − v_B)',Vo,avgOver('V:R1')?.avg+avgOver('V:L1')?.avg,'V'],['I_o',Vo/R,avgOver('I:L1')?.avg,'A']];}

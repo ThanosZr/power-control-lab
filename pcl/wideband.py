@@ -33,7 +33,12 @@ import numpy as np
 from . import lineconst as lc
 
 WB_DEFAULTS = {'fmin': 0.01, 'dec': 9, 'ppd': 10, 'tol': 0.002, 'nmax': 40, 'group': True, 'fdcm': 'auto',
-               'ratio': 1000.0, 'dc': False, 'opt': False, 'passive': 'check', 'lfw': 100.0}
+               'ratio': 1000.0, 'dc': False, 'opt': False, 'passive': 'check', 'lfw': 100.0, 'guard': 'auto'}
+GUARD_KINDS = ('auto', 'none')
+GUARD_BAND = (0.01, 1e6)        # Hz (4.17): a fit from the geometry always covers this band; a narrower band of the user
+                                # gets samples here outside it (a rational fit is free outside its samples, and there
+                                # it lost passivity: |H| > 1 or Re Y_c < 0 just outside a narrow band)
+GUARD_W = 0.1                   # their weight: the tolerance outside the band is 10 × the tolerance inside it
 FDCM_KINDS = ('auto', 'always', 'never')
 PASSIVE_KINDS = ('check', 'enforce', 'none')
 DC_SPLIT = 1.0                  # Hz: the band below this is fitted as the DC correction (Cervantes et al. 2018)
@@ -460,11 +465,15 @@ def _ratio(groups, res):
     return m
 
 
-def wb_fit(sw, L, tol=0.002, nmax=40, group=True, fdcm='auto', ratio=1000.0, dc=False, opt=False, log=None, lfw=0.0):
+def wb_fit(sw, L, tol=0.002, nmax=40, group=True, fdcm='auto', ratio=1000.0, dc=False, opt=False, log=None, lfw=0.0,
+           wout=None):
     """The wideband fit of a sweep (see the module text). L in m. Returns the model in its internal form.
     lfw > 0 (4.13): the fit of H weighted by h_weight(sw, lfw), the error of H relative to |1 − H| of the least
-    damped mode up to the factor lfw, so that a short section keeps its series impedance at low frequencies."""
+    damped mode up to the factor lfw, so that a short section keeps its series impedance at low frequencies.
+    wout (4.17): a weight per sample (GUARD_W on the guard samples outside the user's band, 1 inside) on every fit and
+    error, or None (the plain fit, bit for bit as before)."""
     f = sw['f']
+    wo = np.ones(len(f)) if wout is None else np.asarray(wout, float)
     s = 2j * math.pi * f
     M = sw['M']
     Ns = len(f)
@@ -477,8 +486,8 @@ def wb_fit(sw, L, tol=0.002, nmax=40, group=True, fdcm='auto', ratio=1000.0, dc=
     n = 4
     best = None
     while True:
-        a, *_ = vfit_relaxed(s, tr, start_poles(f[0], f[-1], n), weight=1 / np.abs(tr), d=True)
-        r, dd, err = _fit_residues(s, Fy, a, np.repeat((1 / nrm)[:, None], Fy.shape[1], axis=1), d=True)
+        a, *_ = vfit_relaxed(s, tr, start_poles(f[0], f[-1], n), weight=(1 / np.abs(tr)) if wout is None else wo / np.abs(tr), d=True)
+        r, dd, err = _fit_residues(s, Fy, a, np.repeat((1 / nrm if wout is None else wo / nrm)[:, None], Fy.shape[1], axis=1), d=True)
         if best is None or err[1] < best[3]:
             best = (a, r, dd, err[1])
         if err[1] <= tol or n >= nmax:
@@ -504,6 +513,8 @@ def wb_fit(sw, L, tol=0.002, nmax=40, group=True, fdcm='auto', ratio=1000.0, dc=
     sel = f >= DC_SPLIT if dc and f[0] < DC_SPLIT and (f >= DC_SPLIT).sum() > 10 else np.ones(Ns, bool)
     sh = s[sel]
     Wh = h_weight(sw, lfw)[sel] if lfw and lfw > 1 else None
+    if wout is not None:
+        Wh = (np.ones(int(sel.sum())) if Wh is None else Wh) * wo[sel]
     werr = (lambda E: float((np.abs(E).reshape(len(sh), -1).max(axis=1) * (1 if Wh is None else Wh)).max()))
     groups = []
     for g in gl:
@@ -515,8 +526,10 @@ def wb_fit(sw, L, tol=0.002, nmax=40, group=True, fdcm='auto', ratio=1000.0, dc=
         edge = any(f0s[i] >= f[-1] * 0.999 for i in g)
         if opt or edge:
             tau, Fm, _ = _opt_delay(sh, Hs, tau, min(tts[i] for i in g), len(g))
-        wg = None if Wh is None else np.clip(1.0 / np.maximum(np.abs(1.0 - sw['Hm'][sel][:, g]).min(axis=1), 1.0 / lfw),
-                                             1.0, lfw)
+        wg = None if not (lfw and lfw > 1) else np.clip(1.0 / np.maximum(np.abs(1.0 - sw['Hm'][sel][:, g]).min(axis=1), 1.0 / lfw),
+                                                        1.0, lfw)
+        if wout is not None:
+            wg = (np.ones(int(sel.sum())) if wg is None else wg) * wo[sel]
         fit = _fit_scalar(sh, Fm, 4, nmax, tol * len(g) / 2, weight=wg, d=False)
         groups.append({'modes': g, 'tau': tau, 'a': fit[0], 'merr': fit[4] / len(g), 'n': len(fit[0]),
                        'searched': bool(opt or edge), 'w': wg})
@@ -573,7 +586,7 @@ def wb_fit(sw, L, tol=0.002, nmax=40, group=True, fdcm='auto', ratio=1000.0, dc=
         a3, r3, _, _, _ = vfit_relaxed(sl, dH.reshape(len(sl), -1), start_poles(f[lo][0], f[lo][-1], nlow), d=False)
         hgroups.append({'tau': tau1, 'p': a3, 'R': r3.reshape(len(a3), M, M), 'modes': [], 'dc': True})
     Hall = wb_h(hgroups, s)
-    info.update(h_err=float(np.abs(Hall - sw['H']).max()), ratio=rat, method=used,
+    info.update(h_err=float((np.abs(Hall - sw['H']).reshape(Ns, -1).max(axis=1) * wo).max()), ratio=rat, method=used,
                 h_err_band=float(np.abs(Hall[sel] - sw['H'][sel]).max()))
     if Wh is not None:
         info.update(lfw=float(lfw), h_err_w=eh)
@@ -661,6 +674,12 @@ def wb_admittance(model, s):
 
 
 # ---------------------------------------------------------------- passivity
+def passivity_band(fmin, fmax):
+    """4.17: the band of the passivity sweep (to which passivity() adds a decade on each side): at least GUARD_BAND,
+    whatever the band of the fit, since the solver sees every frequency (a narrow fit lost passivity just outside)."""
+    return min(float(fmin), GUARD_BAND[0]), max(float(fmax), GUARD_BAND[1])
+
+
 def passivity(model, fmin, fmax, ppd=30, extra=None):
     """The eigenvalues of the real part (Hermitian part) of the nodal admittance over a sweep from fmin/10 to 10·fmax
     (ppd points per decade, plus the frequencies `extra`). Returns {f, lmin (per frequency, the smallest eigenvalue
@@ -731,9 +750,21 @@ def enforce_passivity(model, sw, iters=24, delta=1e-7, step=5e-4, log=None, wmax
     yc0, groups0 = model_parts(model)
     M = model['M']
     f = sw['f']
-    s = 2j * math.pi * f
-    Ns = len(f)
-    nrm = np.abs(sw['Yc']).reshape(Ns, -1).max(axis=1)
+    # 4.17: the change of the model is measured at the samples and, with the weight GUARD_W, at the frequencies of the
+    # passivity sweep outside them (no data there, only the change counts): a change that was free below the lowest
+    # sample put a violation there (a narrow band with guard samples: at 2–4 mHz)
+    pb = passivity_band(f[0], f[-1])
+    flo, fhi = pb[0] / 10, pb[1] * 10
+    elo = lc.freqs(flo, math.log10(f[0] / flo), 5)[:-1] if f[0] > flo * 1.01 else np.zeros(0)
+    ehi = lc.freqs(f[-1], math.log10(fhi / f[-1]), 5)[1:] if fhi > f[-1] * 1.01 else np.zeros(0)
+    fe = np.concatenate([elo, f, ehi])
+    s = 2j * math.pi * fe
+    Ns = len(fe)
+    ys = np.abs(sw['Yc']).reshape(len(f), -1).max(axis=1)
+    yx = lambda q: np.abs(wb_yc(yc0, 2j * math.pi * q)).reshape(len(q), -1).max(axis=1) if len(q) else np.zeros(0)
+    nrm = np.concatenate([yx(elo), ys, yx(ehi)])
+    wext = np.concatenate([np.full(len(elo), GUARD_W), sw['w'] if sw.get('w') is not None else np.ones(len(f)),
+                           np.full(len(ehi), GUARD_W)])
     # parameters: Y_c — per pole (real basis) × upper triangle, plus G₀ upper triangle; H — per pole × M²
     ka = _kinds(yc0['p'])
     By = _basis(s, yc0['p'], ka)
@@ -744,7 +775,9 @@ def enforce_passivity(model, sw, iters=24, delta=1e-7, step=5e-4, log=None, wmax
     iu = np.triu_indices(M)
     mult = np.where(iu[0] == iu[1], 1.0, 2.0)
     # the Gram matrices (the change of a function at the samples per unit coefficient), common to all elements
-    wh = h_weight(sw, wmax)
+    w0 = h_weight(sw, wmax)
+    wh = np.concatenate([np.full(len(elo), w0[0]), w0, np.full(len(ehi), w0[-1])]) * wext
+    nrm = nrm / wext                    # changes on the guard samples and beyond them cost less
     Gy = _gram(np.hstack([By, np.ones((Ns, 1))]) / nrm[:, None])
     Gh = _gram(np.hstack(Bh) * wh[:, None]) if Bh else np.zeros((0, 0))
     Gy_i = np.linalg.inv(Gy + 1e-12 * np.trace(Gy) / len(Gy) * np.eye(len(Gy)))
@@ -753,7 +786,7 @@ def enforce_passivity(model, sw, iters=24, delta=1e-7, step=5e-4, log=None, wmax
     rep = []
     for it in range(iters):
         cur = _rebuild(model, yc0, groups0, xy, D, xh, ka, hk)
-        P = passivity(cur, f[0], f[-1], 30)
+        P = passivity(cur, *pb, 30)
         rep.append(P['worst'])
         if P['passive']:
             return cur, {'iters': it, 'passive': True, 'worst': rep}
@@ -799,11 +832,11 @@ def enforce_passivity(model, sw, iters=24, delta=1e-7, step=5e-4, log=None, wmax
         # a step that changes the fit by more than `step` (near a resonance the linearization is poor) is shortened;
         # the next iteration continues from there
         xy2, D2, xh2 = _apply(x, xy, D, xh, len(ka), [len(k) for k in hk], M, iu)
-        dch = _change(sw, yc0, groups0, xy, D, xh, xy2, D2, xh2, ka, hk, nrm, wh)
+        dch = _change({'f': fe}, yc0, groups0, xy, D, xh, xy2, D2, xh2, ka, hk, nrm, wh)
         alpha = min(1.0, step / dch) if dch > 0 else 1.0
         xy, D, xh = _apply(alpha * x, xy, D, xh, len(ka), [len(k) for k in hk], M, iu)
     cur = _rebuild(model, yc0, groups0, xy, D, xh, ka, hk)
-    P = passivity(cur, f[0], f[-1], 30)
+    P = passivity(cur, *pb, 30)
     return cur, {'iters': iters, 'passive': P['passive'], 'worst': rep + [P['worst']]}
 
 
@@ -936,11 +969,14 @@ def _apply(x, xy, D, xh, ny, nh, M, iu):
 
 # ---------------------------------------------------------------- the model of the solver
 def wb_model(data, length=None, fmin=0.01, decades=9, ppd=10, tol=0.002, nmax=40, group=True, fdcm='auto',
-             ratio=1000.0, dc=False, opt=False, passive='check', curves=False, lfw=100.0):
+             ratio=1000.0, dc=False, opt=False, passive='check', curves=False, lfw=100.0, guard='auto'):
     """The WB model of a line or cable (JSON for the solver, type 'wb'), fitted over fmin … fmin·10^decades (or the
     frequencies of a table of Z′, Y′). passive: 'check' (as the EMTP: a sweep, the result in the report), 'enforce'
     (the residues perturbed until passive), 'none'. lfw: the weight of the fit of H at low frequencies (wb_fit; 0 or 1:
-    none, the plain ULM)."""
+    none, the plain ULM). guard (4.17): 'auto', samples outside a band narrower than GUARD_BAND (from the geometry, with
+    weight GUARD_W) so that the fit stays passive outside it; 'none', the band alone (and always for a table of Z′, Y′)."""
+    if guard not in GUARD_KINDS:
+        raise WBError(f'άγνωστη επιλογή ζώνης ασφαλείας «{guard}»')
     if fdcm not in FDCM_KINDS:
         raise WBError(f'άγνωστη επιλογή FDCM «{fdcm}»')
     if passive not in PASSIVE_KINDS:
@@ -949,12 +985,25 @@ def wb_model(data, length=None, fmin=0.01, decades=9, ppd=10, tol=0.002, nmax=40
     fs = np.asarray(data['zyfile']['f'], float) if data.get('zyfile') else lc.freqs(fmin, decades, ppd)
     if len(fs) < 12:
         raise WBError('η προσαρμογή wideband θέλει τουλάχιστον 12 συχνότητες (το EMTP προτείνει 40 και πάνω)')
+    band = (float(fs[0]), float(fs[-1]))
+    wout = None
+    if guard == 'auto' and not data.get('zyfile'):
+        gp = max(4, int(round(ppd)) // 2)
+        span = lambda a, b: np.geomspace(a, b, max(2, int(math.ceil(math.log10(b / a) * gp)) + 1))
+        lo = span(GUARD_BAND[0], band[0])[:-1] if band[0] > GUARD_BAND[0] * 1.01 else np.zeros(0)
+        hi = span(band[1], GUARD_BAND[1])[1:] if band[1] < GUARD_BAND[1] / 1.01 else np.zeros(0)
+        lo, hi = lo[lo < band[0] / 1.01], hi[hi > band[1] * 1.01]
+        if len(lo) or len(hi):
+            fs = np.concatenate([lo, fs, hi])
+            wout = np.where((fs >= band[0] / 1.0001) & (fs <= band[1] * 1.0001), 1.0, GUARD_W)
     sw = _sweep(data, fs, L)
+    if wout is not None:
+        sw['w'] = wout
     # the weighted fit (lfw) asks for more poles; when they cancel (a residue/pole ratio above the threshold of the cable
     # correction, even after it) or the fit misses the tolerance, the weight is lowered (÷3) down to the plain ULM
     lf = float(lfw or 0)
     while True:
-        fit = wb_fit(sw, L, tol=tol, nmax=nmax, group=group, fdcm=fdcm, ratio=ratio, dc=dc, opt=opt, lfw=lf)
+        fit = wb_fit(sw, L, tol=tol, nmax=nmax, group=group, fdcm=fdcm, ratio=ratio, dc=dc, opt=opt, lfw=lf, wout=wout)
         inf = fit['info']
         if lf <= 1 or (inf['ratio'] <= ratio and inf['h_err'] <= 2 * tol):
             break
@@ -964,8 +1013,13 @@ def wb_model(data, length=None, fmin=0.01, decades=9, ppd=10, tol=0.002, nmax=40
     _yn_info(model, sw)
     model['opts'] = {'tol': tol, 'nmax': nmax, 'group': bool(group), 'fdcm': fdcm, 'ratio': ratio, 'dc': bool(dc),
                      'opt': bool(opt), 'passive': passive, 'lfw': float(lfw or 0)}
+    if wout is not None:                # 4.17: the band of the user, and the guard samples around it
+        model['opts']['guard'] = guard
+        model['band'] = list(band)
+        model['guard'] = {'f': [float(fs[0]), float(fs[-1])], 'w': GUARD_W, 'n': int((wout < 1).sum())}
+    pb = passivity_band(fs[0], fs[-1])
     if passive in ('check', 'enforce'):
-        P = passivity(model, fs[0], fs[-1])
+        P = passivity(model, *pb)
         model['passive'] = {'passive': P['passive'], 'worst': P['worst'], 'fworst': P['fworst'], 'bands': P['bands'],
                             'g0min': P['g0min']}
         if passive == 'enforce' and not P['passive']:
@@ -979,11 +1033,11 @@ def wb_model(data, length=None, fmin=0.01, decades=9, ppd=10, tol=0.002, nmax=40
                 # kept only when passive, within twice the tolerance of the fit and without a worse nodal admittance at
                 # any sample (otherwise the model stays as fitted and the report says so: change the band, the
                 # samples or the tolerance, as the EMTP)
-                nod = all(a <= 1.5 * b + 2 * tol for a, b in zip(e['yn_f'], e0['yn_f']))
+                nod = all(a <= 1.5 * b + 2 * tol for a, b in zip(e.get('yn_fw', e['yn_f']), e0.get('yn_fw', e0['yn_f'])))
                 ok = max(e['yc'], e['h']) <= max(2 * tol, 1.5 * max(model['fit']['yc_err'], model['fit']['h_err']))
                 last = e
                 if rep['passive'] and nod and ok:
-                    P2 = passivity(m2, fs[0], fs[-1])
+                    P2 = passivity(m2, *pb)
                     m2['fit'] = dict(m2['fit'], yc_err=e['yc'], h_err=e['h'], enforced=True, before=model['passive'],
                                      enforce_w=wmax)
                     _yn_info(m2, sw, e)
@@ -995,7 +1049,7 @@ def wb_model(data, length=None, fmin=0.01, decades=9, ppd=10, tol=0.002, nmax=40
                 model['fit'] = dict(model['fit'], enforced=False, enforce_err=max(last['yc'], last['h']),
                                     enforce_yn=last['yn'])
         if curves:
-            P = passivity(model, fs[0], fs[-1])
+            P = passivity(model, *pb)
     if curves:
         e = errors(model, sw, per_f=True)
         model['curves'] = {'f': fs.tolist(), 'yc_err': e['yc_f'], 'h_err': e['h_f'], 'yn_err': e['yn_f'],
@@ -1049,7 +1103,13 @@ def errors(model, sw, per_f=False):
     for k in range(Ns):
         Ye = nodal(sw['Yc'][k], sw['H'][k])
         en[k] = np.abs(nodal(Yf[k], Hf[k]) - Ye).max() / np.abs(Ye).max()
-    out = {'yc': float(ey.max()), 'h': float(eh.max()), 'yn': float(en.max())}
+    w = sw.get('w')                     # 4.17: the guard samples count with their weight (GUARD_W)
+    if w is not None:
+        out = {'yc': float((ey * w).max()), 'h': float((eh * w).max()), 'yn': float((en * w).max())}
+    else:
+        out = {'yc': float(ey.max()), 'h': float(eh.max()), 'yn': float(en.max())}
+    if per_f and w is not None:
+        out['yn_fw'] = (en * w).tolist()
     if per_f:
         out['yc_f'] = ey.tolist()
         out['h_f'] = eh.tolist()
@@ -1146,7 +1206,7 @@ def import_model(text, data, length_km, passive='check'):
         curves = None
     if passive != 'none':
         f1, f2 = (m.get('fmin') or 0.01), (m.get('fmax') or 1e6)
-        P = passivity(m, f1, f2)
+        P = passivity(m, *passivity_band(f1, f2))
         m['passive'] = {'passive': P['passive'], 'worst': P['worst'], 'fworst': P['fworst'], 'bands': P['bands'],
                         'g0min': P['g0min']}
         if curves is not None:
