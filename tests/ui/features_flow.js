@@ -1,6 +1,7 @@
 // Browser check of: response metrics, server reference solver overlay, data
 // templates in the math panel, new tutorials and "open in studio" from /converter/.
 // 4.17: the Ćuk in closed loop with the gains from the circuit (the card, the live panel, the list of roles of the PWM).
+// 4.17.1: the inputs of the circuit in the parameters panel (list, change of a value, a parameter «= …», the toggle ⇥).
 // Usage: python run.py --no-browser --port 8775  then  node tests/ui/features_flow.js http://127.0.0.1:8775/
 const {chromium}=require('playwright');
 (async()=>{const U=process.argv[2]||'http://127.0.0.1:8775/';const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:1500,height:1100},acceptDownloads:true});const p=await ctx.newPage();
@@ -97,5 +98,21 @@ const {chromium}=require('playwright');
  ok(!pp||(/Ρόλος L1/.test(pp)&&/Ρόλος C2/.test(pp)),'roles in the parameters of the PWM');
  const Ki1=g0.Ki,Ki2=await (async()=>{await p.evaluate(()=>window.PCL.editor.setParams('C2',{C:470e-6}));await p.waitForTimeout(1000);return p.evaluate(()=>window.PCL.S.sim.net.ctrls[0].Ki);})();
  ok(Number.isFinite(Ki2)&&Math.abs(Ki2/Ki1-1)>0.01,'gains recomputed after a change of C2 '+Ki1+' '+Ki2);
+ // 4.17.1: the buck: its inputs in the parameters of the circuit; a new value of V_in from there; R = 2·V_in as a
+ // parameter «= …» (its value next to the field, the solver's R); the toggle ⇥ of an input in the part's panel
+ await p.goto(U+'?tutorial=buck');await p.waitForTimeout(1200);
+ await p.evaluate(()=>{const el=document.querySelector('#props');if(el.classList.contains('collapsed'))document.querySelector('#props-btn').click();window.PCL.editor.select([],[]);});await p.waitForTimeout(500);
+ const ip=await p.evaluate(()=>({txt:document.querySelector('#props-body')?.textContent||'',names:[...document.querySelectorAll('#props-body [data-inname]')].map(e=>e.value)}));
+ ok(/Είσοδοι του κυκλώματος/.test(ip.txt)&&JSON.stringify(ip.names)===JSON.stringify(['Vin','L1','C1','R','fs','D']),'inputs of the buck '+JSON.stringify(ip.names));
+ await p.evaluate(()=>{const el=document.querySelector('#props-body [data-inval="V1|V"]');el.value='48';el.dispatchEvent(new Event('change'));});await p.waitForTimeout(800);
+ const vin=await p.evaluate(()=>window.PCL.editor.comp('V1').params.V);ok(vin===48,'V_in from the inputs panel '+vin);
+ await p.evaluate(()=>window.PCL.editor.setParams('R1',{R:'=2*Vin'}));await p.waitForTimeout(1000);
+ const rd=await p.evaluate(()=>{const d=window.PCL.S.sim.net.inputs?.derived?.find(q=>q.id==='R1');const el=window.PCL.S.sim.net.els.find(e=>e.k==='G'&&Math.abs(e.R-96)<1e-9);return {v:d?.value,el:!!el};});
+ ok(rd.v===96&&rd.el,'R = 2·V_in in the solver '+JSON.stringify(rd));
+ await p.evaluate(()=>window.PCL.editor.select(['R1'],[]));await p.waitForTimeout(500);
+ const rp=await p.evaluate(()=>({txt:document.querySelector('#props-body')?.textContent||'',on:!!document.querySelector('#props-body [data-inp-k="R"].on')}));
+ ok(/= 96/.test(rp.txt)&&rp.on,'the value of R = 2·V_in and the toggle in the panel of R1 '+JSON.stringify({on:rp.on}));
+ await p.evaluate(()=>document.querySelector('#props-body [data-inp-k="R"]').click());await p.waitForTimeout(500);
+ ok(await p.evaluate(()=>!(window.PCL.editor.comp('R1').inp||[]).includes('R')),'the toggle removes the input');
  console.log(JSON.stringify({rm:rm.split('\n').slice(0,4),bt:bt.split('\n').slice(0,4),imp},null,1));
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

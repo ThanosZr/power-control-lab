@@ -1,5 +1,5 @@
 {
- "version": "4.17",
+ "version": "4.17.1",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -138,6 +138,10 @@
    "pcl.Project.hash": {
     "params": [],
     "since": "3.18"
+   },
+   "pcl.Project.inputs": {
+    "params": [],
+    "since": "4.17.1"
    },
    "pcl.Project.params": {
     "params": [],
@@ -3867,7 +3871,10 @@
    "part:CONST": {
     "params": [
      "v",
-     "unit"
+     "unit",
+     "input",
+     "name",
+     "desc"
     ],
     "pins": [
      "y"

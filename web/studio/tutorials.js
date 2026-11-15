@@ -2,7 +2,7 @@
 // Tutorial circuits. Each tutorial is a function of its options that returns a
 // complete, editable project: components, wires, simulation settings and scopes.
 (function(root){
- const C=(id,type,x,y,params={},o={})=>({id,type,x,y,rot:o.rot||0,flip:!!o.flip,label:o.label||id,params,...(o.lbl?{lbl:o.lbl}:{})});
+ const C=(id,type,x,y,params={},o={})=>({id,type,x,y,rot:o.rot||0,flip:!!o.flip,label:o.label||id,params,...(o.lbl?{lbl:o.lbl}:{}),...(o.inp?{inp:o.inp,...(o.inpName?{inpName:o.inpName}:{}),...(o.inpDesc?{inpDesc:o.inpDesc}:{})}:{})});   // 4.17.1: inp, inpName, inpDesc (inputs of the circuit)
  const J=(id,x,y)=>C(id,'JUNC',x,y,{},{label:''});
  const pin=s=>{const [c,p]=s.split(':');return {c,p:p||'j'};};
  // version 3 (3.18): wire names join (Bus.namesJoin); no tutorial has one name on two different nets
@@ -931,9 +931,17 @@
   const Jeq=+(V.Jm+m*(V.rw/V.gear)**2).toPrecision(6),wmax=+((V.vkph/3.6)/V.rw*V.gear/.85).toPrecision(6),cy=EV_CYC[grade?'grade':sport?'sport':'urban'];
   const lut=cy.t.map((t,k)=>`${+(t*D).toPrecision(6)}, ${cy.y[k]}`).join(', ');
   const ctl=['moev','ai','pi'].includes(o.ctrl)?o.ctrl:'moevc',mo=ctl==='moev'||ctl==='moevc';
-  const comps=[
-   // driving cycle: normalized speed (0 … 0.85 of 45 km/h) repeating every D seconds, with a slow ripple
-   C('REF','EXPR',-300,-80,{expr:`wm*clamp(lut(mod(t, D), ${lut})*(1 + 0.025*sin(2*pi*t/(D/3))), 0, 0.85)`,ins:'',pars:`wm = ${wmax}, D = ${D}`},{label:'κύκλος οδήγησης ω*'}),
+  // 4.17.1 (§59): the vehicle as inputs of the circuit (constants with «Είσοδος», in the parameters of the circuit with
+  // their explanation); the inertia at the shaft, the friction, the gear of the speed and the road load are expressions
+  // of them, computed again at every change
+  const IN=(name,v,desc,k)=>C('IN_'+name,'CONST',-560,-80+40*k,{v,input:true,name,desc},{label:name});
+  const inputs=[IN('m',m,'μάζα του οχήματος με τον αναβάτη (kg)'+(grade?': 115 + 35 φορτίο':''),0),IN('B',V.B,'ιξώδης τριβή της μηχανής (N·m·s/rad): 1–2 % της ισχύος της στις ονομαστικές στροφές',1),
+   IN('Jm',V.Jm,'ροπή αδράνειας του δρομέα (kg·m²)',2),IN('rw',V.rw,'ακτίνα του τροχού (m)',3),IN('n',V.gear,'λόγος μετάδοσης (στροφές μηχανής ανά στροφή τροχού)',4),
+   IN('eta',V.eta,'απόδοση της μετάδοσης',5),IN('Crr',V.Crr,'συντελεστής κύλισης',6),IN('CdA',V.CdA,'συντελεστής αεροδυναμικής αντίστασης επί μετωπική επιφάνεια (m²)',7),
+   IN('vk',V.vkph,'τελική ταχύτητα του οχήματος (km/h): ο κύκλος φτάνει ως 0,85 της',8)];
+  const comps=[...inputs,
+   // driving cycle: normalized speed (0 … 0.85 of the top speed vk) repeating every D seconds, with a slow ripple
+   C('REF','EXPR',-300,-80,{expr:`(vk/3.6/rw*n/0.85)*clamp(lut(mod(t, D), ${lut})*(1 + 0.025*sin(2*pi*t/(D/3))), 0, 0.85)`,ins:'',pars:`D = ${D}`},{label:'κύκλος οδήγησης ω*'}),
    C('TGr','TAGO',-170,-80,{name:'ω*'}),
    // the battery (signals): OCV(SOC), R_int(SOC), current from the power the converter draws, SOC
    C('TFsoc','TAGI',-300,250,{name:'SOC'}),C('TFva','TAGI',-300,290,{name:'v_a'}),C('TFia','TAGI',-300,330,{name:'i_a'}),
@@ -946,12 +954,12 @@
    C('CNV','EXPR',-150,490,{expr:'',ins:'u, s, ia',pars:''},{label:'V_arm (όρια μπαταρίας)'}),C('TGva','TAGO',-30,470,{name:'v_a'}),
    C('TFva2','TAGI',40,560,{name:'v_a'}),C('V1','VDC',140,560,{ctl:'sig',V:0},{label:'μετατροπέας',lbl:'left'}),gnd(140,660),
    C('AM1','AM',260,500,{},{label:'i_a'}),C('TGi','TAGO',340,460,{name:'i_a'}),
-   C('TFl','TAGI',240,600,{name:'τ_L'}),C('M1','DCM',380,560,{Ra:V.R,La:V.La,psi:V.K,J:Jeq,bm:V.B,load:'sig',w0:0,ia0:0},{label:'M (ΣΡ)'}),C('TGw','TAGO',500,550,{name:'ω'}),
+   C('TFl','TAGI',240,600,{name:'τ_L'}),C('M1','DCM',380,560,{Ra:V.R,La:V.La,psi:V.K,J:'= Jm + m*(rw/n)^2',bm:'= B',load:'sig',w0:0,ia0:0},{label:'M (ΣΡ)'}),C('TGw','TAGO',500,550,{name:'ω'}),
    // the road: distance, grade and load
-   C('TFw','TAGI',-300,660,{name:'ω'}),C('GV','GAIN',-180,660,{K:+(V.rw/V.gear).toPrecision(8)},{label:'v = ω·r/n'}),C('X','INT',-80,660,{y0:0},{label:'απόσταση x'}),C('TGx','TAGO',20,660,{name:'x'}),C('TGv','TAGO',-80,610,{name:'v'}),
+   C('TFw','TAGI',-300,660,{name:'ω'}),C('GV','GAIN',-180,660,{K:'= rw/n'},{label:'v = ω·r/n'}),C('X','INT',-80,660,{y0:0},{label:'απόσταση x'}),C('TGx','TAGO',20,660,{name:'x'}),C('TGv','TAGO',-80,610,{name:'v'}),
    C('TFw4','TAGI',-300,740,{name:'ω'}),C('TFx','TAGI',-300,780,{name:'x'}),
    C('ROAD','EXPR',-150,760,{expr:'(m*g*Crr*sg + 0.5*rho*CdA*v*abs(v) + m*g*sin(atan((g0 + ga*sin(2*pi*x/gp))/100)))*rw/(n*eta) + (Tb + Ta*(0.5 + 0.5*sin(2*pi*x/lp)))*sg',
-    ins:'w, x',pars:`m = ${m}, g = ${g}, Crr = ${V.Crr}, rho = ${V.rho}, CdA = ${V.CdA}, g0 = ${g0}, ga = ${ga}, gp = ${V.gp}, rw = ${V.rw}, n = ${V.gear}, eta = ${V.eta}, Tb = ${V.Tb}, Ta = ${V.Ta}, lp = ${V.lp}, v = 0, sg = 0`},{label:'τ_L φορτίου δρόμου'}),
+    ins:'w, x',pars:`g = ${g}, rho = ${V.rho}, g0 = ${g0}, ga = ${ga}, gp = ${V.gp}, Tb = ${V.Tb}, Ta = ${V.Ta}, lp = ${V.lp}, v = 0, sg = 0`},{label:'τ_L φορτίου δρόμου'}),
    C('TGl','TAGO',-30,760,{name:'τ_L'}),
    // metrics: energy drawn (and regenerated), distance, km/kWh, Wh/km, N·m/kW, RMS current, SOC drop
    C('TFib2','TAGI',600,-80,{name:'i_bat'}),C('TFs3','TAGI',600,-40,{name:'SOC'}),C('PB','EXPR',720,-60,{expr:'ib*(oc - ib*rb)',ins:'ib, s',pars:''},{label:'P_bat = v_bat·i_bat'}),
@@ -981,7 +989,7 @@
    ['M1:te','AT:te',[[540,570],[540,140]]],['AT:y','IT:u'],['PB:y','IP:u',[[780,-60],[780,200]]],['IT:y','NMK:q'],['IP:y','NMK:p'],['TFia2:y','I2:i'],['I2:y','II2:u'],['II2:y','IRMS:q'],['TFs4:y','DSOC:s'],['TFv2:y','KPH:u']];
   // the controller
   if(mo){comps.push(C('TFr','TAGI',-300,-30,{name:'ω*'}),C('TFw5','TAGI',-300,10,{name:'ω'}),C('TFi5','TAGI',-300,50,{name:'i_a'}),C('TFs5','TAGI',-300,90,{name:'SOC'}),C('TFl5','TAGI',-300,130,{name:'τ_L'}),
-    C('MO1','EVC',-150,40,{scheme:ctl,mode:o.mode||'balanced',J:Jeq,Kt:V.K,Ke:V.K,R:V.R,B:V.B,umin:-V.vmax,umax:V.vmax},{label:'πολυκριτηριακός'}),C('TGu','TAGO',-30,0,{name:'u'}),C('TGt','TAGO',-30,20,{name:'τ*'}));
+    C('MO1','EVC',-150,40,{scheme:ctl,mode:o.mode||'balanced',J:'= Jm + m*(rw/n)^2',Kt:V.K,Ke:V.K,R:V.R,B:'= B',umin:-V.vmax,umax:V.vmax},{label:'πολυκριτηριακός'}),C('TGu','TAGO',-30,0,{name:'u'}),C('TGt','TAGO',-30,20,{name:'τ*'}));
    wires.push(['TFr:y','MO1:r',[[-220,-30],[-220,0]]],['TFw5:y','MO1:y',[[-210,10],[-210,20]]],['TFi5:y','MO1:i',[[-200,50],[-200,40]]],['TFs5:y','MO1:soc',[[-200,90],[-200,60]]],['TFl5:y','MO1:tl',[[-210,130],[-210,80]]],['MO1:u','TGu:u'],['MO1:tau','TGt:u']);}
   else{comps.push(C('TFr','TAGI',-300,-30,{name:'ω*'}),C('TFw5','TAGI',-300,10,{name:'ω'}),
     C('C1','AIC',-150,0,{scheme:ctl==='ai'?'fel':'pi',fs:1000,fr:2,Kp:1.5,Ki:6,umin:-V.vmax,umax:V.vmax,rs:300,us:50,hidden:'8',opt:'sgd',lr:.003,seed:1},{label:'Ελεγκτής AI'}),C('TGu','TAGO',-30,-30,{name:'u'}));
@@ -1647,5 +1655,14 @@
     meta:{lcc:{model,ev,gref,Idn:2000,Vdn:500e3,r:{U1:345e3,U2:213.4557e3,Sn:603.73e6,uk:18},i:{U1:230e3,U2:209.2288e3,Sn:591.79e6,uk:18}}}});}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
+ // 4.17.1 (§59): the DC-DC tutorials declare their inputs (parameters marked «Είσοδος», in the parameters of the circuit
+ // with their explanation): V_in, the inductors and capacitors, the load, the switching frequency and (fixed D) the duty
+ const DCDC_IN={V1:[['V','Vin','τάση εισόδου']],L1:[['L','L1','αυτεπαγωγή L1']],L2:[['L','L2','αυτεπαγωγή L2']],C1:[['C','C1','χωρητικότητα C1']],C2:[['C','C2','χωρητικότητα C2 (εξόδου)']],
+  R1:[['R','R','αντίσταση φορτίου']],PWM1:[['fs','fs','συχνότητα μεταγωγής'],['D','D','λόγος κατάτμησης (ανοικτός βρόχος)']]};
+ function dcdcInputs(pr){for(const c of pr.components||[]){const L=DCDC_IN[c.id];if(!L)continue;
+   for(const [k,name,desc] of L){if(k==='D'&&c.params.mode&&c.params.mode!=='fixed')continue;if(c.params[k]===undefined&&k!=='fs')continue;
+    c.inp=[...(c.inp||[]),k];c.inpName={...(c.inpName||{}),[k]:name};c.inpDesc={...(c.inpDesc||{}),[k]:desc};}}
+  return pr;}
+ for(const id of ['buck','boost','buck_boost','cuk','sepic','buck_vloop']){const t=T.find(q=>q.id===id);if(t){const b=t.build;t.build=o=>dcdcInputs(b.call(t,o));}}
  root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};
 })(window);

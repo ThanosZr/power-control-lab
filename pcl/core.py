@@ -459,8 +459,14 @@ class Project:
         (solve.step = 'var', solve.rtol, solve.hmax; sim.hDiv, sim.method). Values: numbers, '47u', or programs 't:value'.
         A list gives one value per element of a block on a bus (3.18): p.set('KD.K', [-1.57, 1.57]) = 'KD.K' = '-1.57; 1.57'."""
         head, dot, prm = key.partition('.')
+        if not dot and key in {q['name'] for q in self.inputs()}:
+            # 4.17.1: an input of the circuit by its name (a parameter marked «Είσοδος», or a constant with «Είσοδος»)
+            q = next(q for q in self.inputs() if q['name'] == key)
+            self.comp(q['id']).setdefault('params', {})[q['k']] = parse_value(value)
+            self.changes[key] = parse_value(value)
+            return self
         if not dot or not prm:
-            raise PclError(f'«{key}»: γράψε <id>.<παράμετρος>, π.χ. L1.L')
+            raise PclError(f'«{key}»: γράψε <id>.<παράμετρος>, π.χ. L1.L, ή το όνομα μιας εισόδου του κυκλώματος')
         if isinstance(value, (list, tuple)):
             value = '; '.join(repr(float(x)) if isinstance(x, (int, float)) else str(x) for x in value)
         v = parse_value(value)
@@ -477,6 +483,24 @@ class Project:
             c.setdefault('params', {})[prm] = v
         self.changes[key] = v
         return self
+
+    def inputs(self):
+        """4.17.1 (ROADMAP §59): the inputs of the circuit, as web/studio/inputs.js lists them: [{name, id, k, value, desc}]
+        for every parameter marked «Είσοδος» (c['inp'], names c['inpName'], explanations c['inpDesc']) and every
+        constant (CONST) with «Είσοδος». value is the stored one (None: the default of the part; a text '= …' is an
+        expression of the inputs, computed by the solver). p.set('<name>', value) changes an input."""
+        safe = (lambda t: (lambda n: n if re.match(r'[A-Za-z_]', n) else '_' + n)(re.sub(r'[^A-Za-z0-9_]', '_', str(t))))
+        out = []
+        for c in self.data.get('components', []):
+            p = c.get('params') or {}
+            if c.get('type') == 'CONST' and p.get('input') in (True, 1, '1', 'true'):
+                lab = c.get('label') or ''
+                name = str(p.get('name') or '').strip() or safe(lab if re.fullmatch(r'[A-Za-z_]\w*', lab) else c['id'])
+                out.append({'name': name, 'id': c['id'], 'k': 'v', 'value': p.get('v'), 'desc': str(p.get('desc') or '')})
+            for k in c.get('inp') or []:
+                name = str((c.get('inpName') or {}).get(k) or '').strip() or safe(f"{c['id']}_{k}")
+                out.append({'name': name, 'id': c['id'], 'k': k, 'value': p.get(k), 'desc': str((c.get('inpDesc') or {}).get(k) or '')})
+        return out
 
     def copy(self):
         q = Project(self.data, self.name)

@@ -114,6 +114,8 @@
 | right-half-plane (RHP) zero | μηδενικό στο δεξί ημιεπίπεδο (4.17) |
 | role (of an element in a topology) | ρόλος (στοιχείου στο πρότυπο), λίστα ρόλων (4.17) |
 | guard band / out-of-band samples (of a rational fit) | ζώνη ασφαλείας, δείγματα ασφαλείας (4.17) |
+| circuit input (global parameter) | είσοδος του κυκλώματος (4.17.1) |
+| parameter expression | παράμετρος από έκφραση («= …») (4.17.1) |
 | coupling transformer / coupling inductance | μετασχηματιστής / αυτεπαγωγή σύζευξης |
 | compensator placement, Pareto front | θέση του αντισταθμιστή, μέτωπο Pareto |
 | steady-state initialization (of a line) | εκκίνηση από μόνιμη κατάσταση (4.12) |

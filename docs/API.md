@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.17: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (580 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.17.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (581 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.17.
+Κανένα στην 4.17.1.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-341 σημεία.
+342 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -63,6 +63,7 @@
 | `pcl.Project.copy` | — | 3.18 |
 | `pcl.Project.get` | `key` | 3.18 |
 | `pcl.Project.hash` | — | 3.18 |
+| `pcl.Project.inputs` | — | 4.17.1 |
 | `pcl.Project.params` | — | 3.18 |
 | `pcl.Project.run` | `t_end`, `solver`, `channels`, `hdiv`, `method`, `step`, `rtol`, `hmax`, `t_from`, `max_points`, `measure`, `timeout`, `scipy_method`, `waveforms`, `save_state`, `resume`, `events` | 3.18 |
 | `pcl.Project.save` | `path` | 3.18 |
@@ -568,7 +569,7 @@
 | `part:CLARKE` | inv, conn | a, ab, abc, al, b, be, c | 3.18 |
 | `part:CLK` | f, duty, phase | y | 3.18 |
 | `part:CMP` | hys | n, p, y | 3.18 |
-| `part:CONST` | v, unit | y | 3.18 |
+| `part:CONST` | v, unit, input, name, desc | y | 3.18 |
 | `part:CPE` | kind, sigma, Q, alpha, fmin, fmax, N | a, b | 3.18 |
 | `part:CPL` | P, Vmin, sched | n, p | 3.18 |
 | `part:D` | Ron, Vf, Roff | a, k | 3.18 |

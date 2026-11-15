@@ -11,7 +11,8 @@
 const path=require('path');const W=path.resolve(__dirname,'../../web/studio');
 global.window=globalThis;global.Parts=require(W+'/parts.js');global.Expr=require(W+'/expr.js');global.MNA=require(W+'/mna.js');require(W+'/tutorials.js');
 const T=global.Tutorials;
-const build=o=>{const pr=T.get(o.id).build(o.opts||{});for(const [id,ps] of Object.entries(o.patch||{})){const c=pr.components.find(q=>q.id===id);if(!c)throw new Error('no '+id);c.params={...c.params,...ps};}return pr;};
+// a tutorial with the defaults of its options (as in the app), then the patches
+const build=o=>{const t=T.get(o.id),pr=t.build({...Object.fromEntries((t.options||[]).map(q=>[q.k,q.def])),...(o.opts||{})});for(const [id,ps] of Object.entries(o.patch||{})){const c=pr.components.find(q=>q.id===id);if(!c)throw new Error('no '+id);c.params={...c.params,...ps};}return pr;};
 const perAvg=(s,key)=>{const p=s.per,i=s.chIndex.get(key);if(i===undefined)return NaN;const j=(p.head-1+p.cap)%p.cap;return p.avg[j*p.nch+i];};
 const ctlOf=s=>{const k=s.net.ctrls[0];return {Kp:k.Kp,Ki:k.Ki,Kd:k.Kd,Tf:k.Tf,D0:k.D0,ff:k.ff};};
 function design(o){const pr=build(o),s=new MNA.Sim(pr,{hDiv:20}),k=s.net.ctrls[0],d=k.design;

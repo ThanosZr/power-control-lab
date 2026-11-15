@@ -572,6 +572,25 @@ function pwmGainsText(c,p){const k=S.sim?.net?.ctrls?.find(q=>q.id===c.id),d=k?.
  if(!d)return 'Κέρδη από το κύκλωμα: δεν υπολογίστηκαν (δες τις προειδοποιήσεις).';
  const R=Object.entries(d.roles).filter(([r])=>r!=='S'&&r!=='D').map(([r,id])=>`${r} = ${esc(editor.comp(id)?.label||id)}`).join(', ');
  return `Από το κύκλωμα (${esc(d.name)}, ${R}): K_p = ${eng(k.Kp)}, K_i = ${eng(k.Ki)}${k.Kd?`, K_d = ${eng(k.Kd)}`:''}, D₀ = ${fmt(d.D0,4)}· f_c = ${eng(d.fc,'Hz')}, περιθώριο φάσης ${fmt(d.pm,3)}°${Number.isFinite(d.gm)?`, κέρδους ${fmt(20*Math.log10(d.gm),3)} dB`:''}.`;}
+// 4.17.1 (§59): the inputs of the circuit. A parameter marked «Είσοδος» (c.inp, with c.inpName and c.inpDesc) or a CONST
+// with «Είσοδος»; their list and values, and the parameters «= …», come from the last build of the netlist (inputs.js)
+function toggleInput(id,k){const c=editor.comp(id);if(!c)return;editor.remember('inp:'+id+':'+k);const L=new Set(c.inp||[]);
+ if(L.has(k)){L.delete(k);if(c.inpName)delete c.inpName[k];if(c.inpDesc)delete c.inpDesc[k];}else L.add(k);
+ if(L.size)c.inp=[...L];else{delete c.inp;delete c.inpName;delete c.inpDesc;}editor.changed('param');saveLocal();renderProps();}
+function setInputMeta(id,k,patch){const c=editor.comp(id);if(!c)return;editor.remember('inpm:'+id+':'+k+':'+Object.keys(patch).join(','));
+ if(c.type==='CONST'&&k==='v'){for(const [q,v] of Object.entries(patch))c.params[q]=v;}
+ else for(const [q,f] of [['name','inpName'],['desc','inpDesc']])if(patch[q]!==undefined){c[f]={...(c[f]||{}),[k]:patch[q]};if(!patch[q])delete c[f][k];if(!Object.keys(c[f]).length)delete c[f];}
+ editor.changed('param');saveLocal();}
+function inputsHTML(){const inf=S.sim?.net?.inputs,doc=editor.doc,L=window.Inputs?Inputs.list(doc):[];if(!L.length&&!(inf?.derived?.length))return '';
+ const val=q=>inf?.inputs?.find(x=>x.id===q.id&&x.k===q.k)?.value;
+ const rows=L.map(q=>{const v=val(q),key=esc(q.id+'|'+q.k),raw=q.raw===undefined?'':String(q.raw);
+  return `<div class="prow inp-row"><span><input data-inname="${key}" value="${esc(q.name)}" style="width:7em" aria-label="Όνομα εισόδου"> <button data-focus="${esc(q.id)}" title="Στο σχέδιο">${esc(q.label)}</button></span>
+   <span class="pin-in"><input data-inval="${key}" value="${esc(raw)}" style="width:8em" inputmode="decimal" aria-label="Τιμή">${q.unit?` <em>${esc(q.unit)}</em>`:''}${Inputs.isExpr(raw)&&Number.isFinite(v)?` <small>= ${esc(eng(v,q.unit))}</small>`:''}</span>
+   <small><input data-indesc="${key}" value="${esc(q.desc)}" placeholder="εξήγηση" style="width:100%" aria-label="Εξήγηση"></small></div>`;}).join('');
+ const der=(inf?.derived||[]).map(d=>{const c=editor.comp(d.id),def=c?partDef(c)?.params.find(x=>x.k===d.k):null;
+  return `<li><button data-focus="${esc(d.id)}">${esc(c?.label||d.id)}</button> ${esc(def?.label||d.k)} = ${esc(d.expr)} = <b>${d.value==null?'—':esc(eng(d.value,def?.unit||''))}</b>${d.error?` <span class="bad">${esc(d.error)}</span>`:''}</li>`;}).join('');
+ return psec('c-inputs','Είσοδοι του κυκλώματος',`${rows||'<p class="muted small">Καμία είσοδος. Σημείωσε μια παράμετρο με ⇥ στο πάνελ του στοιχείου, ή μια σταθερά (CONST) ως «Είσοδος».</p>'}
+  ${der?`<h4>Παράμετροι από εκφράσεις</h4><ul class="diag-list">${der}</ul>`:''}<small class="muted">Μια παράμετρος που αρχίζει με «=» είναι έκφραση των εισόδων (π.χ. «= J_m + m*(r_w/n)^2»: + − * / ^, sqrt, exp, pi …) και υπολογίζεται σε κάθε αλλαγή. Τα μπλοκ έκφρασης βλέπουν τις εισόδους με το όνομά τους.</small>`,{def:true,cnt:L.length});}
 function liveChange(id,k,v,label,from){const s=S.sim;if(!s||!(s.t>0))return;const L=s.changes||(s.changes=[]);const last=L[L.length-1];
  if(last&&last.id===id&&last.k===k&&s.t===last.t&&!window.Live?.active){last.v=v;last.label=label;}else s.markChange({id,k,v,label,from});renderLiveLog();if(!S.running)draw(true);}
 function renderLiveLog(){const box=$('#lp-log');if(!box)return;const L=S.sim?.changes||[];
@@ -726,7 +745,7 @@ function placePopup(el,x,y){el.hidden=false;const r=el.getBoundingClientRect();c
 function fieldValue(c,k,el){if(el.type==='checkbox')return {v:el.checked};const raw=String(el.value),sch=k==='dsched'||k==='sched'||k==='ref'||(k==='v'&&c.type==='CONST');
  if(raw.includes(';')&&window.Bus?.ELEMENTWISE.has(c.type)){const parts=raw.split(';').map(x=>x.trim());
   return parts.every(x=>sch?!x||P.parseSched(x):Number.isFinite(P.parseEng(x)))?{v:parts.join('; ')}:{bad:true};}
- if(el.dataset.num){const v=P.parseEng(raw);return Number.isFinite(v)?{v}:{bad:true};}
+ if(el.dataset.num){if(/^\s*=/.test(raw))return {v:raw.trim()};const v=P.parseEng(raw);return Number.isFinite(v)?{v}:{bad:true};}   // 4.17.1: «= …» an expression of the inputs
  if(sch&&raw&&!P.parseSched(raw))return {bad:true};return {v:raw};}
 function fieldHTML(c,def,p){const v=p[def.k]??def.def;const id='f_'+def.k;
  if(def.type==='select')return `<select id="${id}" data-k="${def.k}">${def.options.map(([k,n])=>`<option value="${k}" ${String(v)===k?'selected':''}>${esc(n)}</option>`).join('')}</select>`;
@@ -833,10 +852,12 @@ function renderProps(){const box=$('#props-body');if(!box||!propsOpen())return;
  box.innerHTML=h;
  box.querySelectorAll('details.psec').forEach(d=>d.ontoggle=()=>{PS[d.dataset.sec]=d.open;try{localStorage.setItem('pcl2-props-sec',JSON.stringify(PS));}catch{}});
  bindProps(box,one);if(fk)box.querySelector(`[data-k="${CSS.escape(fk)}"]`)?.focus();}
-function propsComp(c){const def=partDef(c),p={...pdefaults(c),...c.params},live=new Set(c.live||[]),machine=['IM','SM','SRM','DCM','GEN3'].includes(c.type),inDef=!atTop(),pub=inDef?publicOf(c.id):new Map();
+function propsComp(c){const def=partDef(c),p={...pdefaults(c),...c.params},live=new Set(c.live||[]),inpS=new Set(c.inp||[]),machine=['IM','SM','SRM','DCM','GEN3'].includes(c.type),inDef=!atTop(),pub=inDef?publicOf(c.id):new Map();
  const secOf=d=>c.type==='PWM'&&CTL_K.has(d.k)?'ctl':INIT_K.has(d.k)?'init':MECH_K.has(d.k)?'mech':!machine&&LOSS_K.has(d.k)?'loss':'main';
  const groups=new Map();for(const d of def.params){if(d.show&&!d.show(p))continue;const g=secOf(d);if(!groups.has(g))groups.set(g,[]);groups.get(g).push(d);}
- const row=d=>`<div class="prow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span><span class="pin-in">${fieldHTML(c,d,p).replace(` id="f_${d.k}"`,'')}${inDef?(['num','text','select','bool','ref'].includes(d.type)?`<button class="pinbtn pubbtn${pub.has(d.k)?' on':''}" data-pub-k="${d.k}" aria-pressed="${pub.has(d.k)}" title="${pub.has(d.k)?'Δημόσια παράμετρος «'+esc(pub.get(d.k))+'» του υποκυκλώματος: κλικ για να μείνει εσωτερική':'Δημόσια παράμετρος του υποκυκλώματος: αλλάζει χωριστά σε κάθε instance'}">⤴</button>`:''):d.type==='num'&&!P.structural(c.type,d.k)?`<button class="pinbtn${live.has(d.k)?' on':''}" data-pin-k="${d.k}" aria-pressed="${live.has(d.k)}" title="${live.has(d.k)?'Αφαίρεση από τις ζωντανές παράμετροι':'📌 Στις ζωντανές παράμετροι, με ρυθμιστή'}">📌</button>`:''}${!inDef&&atTop()&&window.Watch&&((['num','bool','select'].includes(d.type)&&!P.structural(c.type,d.k))||(c.type==='CONST'&&d.k==='v')||(c.type==='PWM'&&d.k==='ref'))?`<button class="pinbtn${Watch.has(c.id,d.k)?' on':''}" data-wtile-k="${d.k}" aria-pressed="${Watch.has(c.id,d.k)}" title="${Watch.has(c.id,d.k)?'Αφαίρεση του πλακιδίου από το σχέδιο':'▣ Πλακίδιο πάνω στο σχέδιο, δίπλα στο στοιχείο: αλλάζει την ώρα που τρέχει'}">▣</button>`:''}</span>${d.hint?`<small>${esc(d.hint)}</small>`:''}</div>`;
+ const exprV=d=>{if(!(window.Inputs&&Inputs.exprAt(c,d.k,p[d.k])))return '';const x=S.sim?.net?.inputs?.derived?.find(q=>q.id===c.id&&q.k===d.k);return ` <small class="muted" title="Τιμή από τις εισόδους">= ${x&&x.value!=null?esc(eng(x.value,d.unit||'')):'—'}</small>`;};
+ const inpB=d=>!inDef&&d.type==='num'?`<button class="pinbtn${inpS.has(d.k)?' on':''}" data-inp-k="${d.k}" aria-pressed="${inpS.has(d.k)}" title="${inpS.has(d.k)?'Είσοδος του κυκλώματος «'+esc(c.inpName?.[d.k]||(c.id+'_'+d.k).replace(/[^A-Za-z0-9_]/g,'_'))+'»: κλικ για να πάψει να είναι':'⇥ Είσοδος του κυκλώματος: στις παραμέτρους του κυκλώματος με την εξήγησή της, και με το όνομά της σε παραμέτρους «= …» (4.17.1)'}">⇥</button>`:'';
+ const row=d=>`<div class="prow"><span>${esc(d.label)}${d.unit?` <em>${esc(d.unit)}</em>`:''}</span><span class="pin-in">${fieldHTML(c,d,p).replace(` id="f_${d.k}"`,'')}${exprV(d)}${inpB(d)}${inDef?(['num','text','select','bool','ref'].includes(d.type)?`<button class="pinbtn pubbtn${pub.has(d.k)?' on':''}" data-pub-k="${d.k}" aria-pressed="${pub.has(d.k)}" title="${pub.has(d.k)?'Δημόσια παράμετρος «'+esc(pub.get(d.k))+'» του υποκυκλώματος: κλικ για να μείνει εσωτερική':'Δημόσια παράμετρος του υποκυκλώματος: αλλάζει χωριστά σε κάθε instance'}">⤴</button>`:''):d.type==='num'&&!P.structural(c.type,d.k)?`<button class="pinbtn${live.has(d.k)?' on':''}" data-pin-k="${d.k}" aria-pressed="${live.has(d.k)}" title="${live.has(d.k)?'Αφαίρεση από τις ζωντανές παράμετροι':'📌 Στις ζωντανές παράμετροι, με ρυθμιστή'}">📌</button>`:''}${!inDef&&atTop()&&window.Watch&&((['num','bool','select'].includes(d.type)&&!P.structural(c.type,d.k))||(c.type==='CONST'&&d.k==='v')||(c.type==='PWM'&&d.k==='ref'))?`<button class="pinbtn${Watch.has(c.id,d.k)?' on':''}" data-wtile-k="${d.k}" aria-pressed="${Watch.has(c.id,d.k)}" title="${Watch.has(c.id,d.k)?'Αφαίρεση του πλακιδίου από το σχέδιο':'▣ Πλακίδιο πάνω στο σχέδιο, δίπλα στο στοιχείο: αλλάζει την ώρα που τρέχει'}">▣</button>`:''}</span>${d.hint?`<small>${esc(d.hint)}</small>`:''}</div>`;
  let h=`<div class="props-head"><div><small>${esc(def.name)}</small><input data-plabel value="${esc(c.label||c.id)}" aria-label="Όνομα στοιχείου"></div><button class="x" data-pclose title="Αποεπιλογή (Esc)">✕</button></div>`;
  for(const [g,title] of PSEC){const L=groups.get(g);if(L?.length)h+=psec('p-'+g,title,L.map(row).join(''),{def:g==='main',cnt:L.length});}
  if(c.type==='SUB')h+=propsSub(c);else if(!def.params.length)h+='<p class="muted small">Χωρίς παραμέτρους.</p>';
@@ -869,6 +890,7 @@ function propsMulti(sel){return `<div class="props-head"><div><small>Επιλο�
  <ul class="diag-list">${sel.c.map(id=>editor.comp(id)).filter(c=>c&&c.type!=='JUNC').map(c=>`<li><button data-focus="${esc(c.id)}">${esc(c.label||c.id)}</button><span class="muted">${esc(P.PARTS[c.type].name)}</span></li>`).join('')}</ul>`;}
 function propsCircuit(){const d=S.sim?.net?.diag,doc=editor.doc,so=doc.solve||{},nC=doc.components.filter(c=>c.type!=='JUNC').length,lb=id=>esc(editor.comp(id)?.label||id);
  let h=`<div class="props-head"><div><small>Κύκλωμα</small><b>${esc(tutorial().title||'Κύκλωμα')}</b></div></div><p class="muted small">${nC} στοιχεία · ${doc.wires.length} σύρματα${S.sim&&!S.error?' · '+S.sim.net.nNodes+' κόμβοι':''}. Διάλεξε στοιχείο ή σύρμα για τις παράμετρές του.</p>`;
+ h+=inputsHTML();
  const it=[];if(S.error)it.push(`<li class="bad">⚠ ${esc(S.error)}</li>`);
  if(d){for(const x of d.skipped)it.push(`<li><button data-focus="${esc(x.id)}">${lb(x.id)}</button>${x.why==='openI'?'πηγή ρεύματος σε ανοιχτό κύκλωμα':'χωρίς σύνδεση'}, εκτός επίλυσης</li>`);
   if(d.open.length)it.push(`<li>Ανοιχτοί ακροδέκτες: ${d.open.slice(0,8).map(k=>{const i=k.lastIndexOf(':');return `<button data-focus="${esc(k.slice(0,i))}">${lb(k.slice(0,i))}.${esc(k.slice(i+1))}</button>`;}).join(' ')}${d.open.length>8?' …':''}</li>`);
@@ -912,12 +934,17 @@ function bindProps(box,c){
  box.querySelector('[data-group]')?.addEventListener('click',()=>groupSel());
  box.querySelectorAll('[data-solve]').forEach(el=>el.onchange=()=>{const k=el.dataset.solve;let v=el.value;if(k==='rleak'||k==='tbase'){v=v.trim()?P.parseEng(v):'';if(v!==''&&!(v>0)){el.classList.add('bad');return;}}if((k==='rtol'||k==='hmax')&&v!=='')v=+v;editor.setSolve({[k]:v});});
  box.querySelector('[data-progclear]')?.addEventListener('click',()=>{editor.setProgram([]);renderProps();});
+ box.querySelectorAll('[data-inval]').forEach(el=>el.onchange=()=>{const [id,k]=el.dataset.inval.split('|'),raw=el.value.trim(),v=/^=/.test(raw)?raw:P.parseEng(raw);
+  if(typeof v==='number'&&!Number.isFinite(v)){el.classList.add('bad');return;}el.classList.remove('bad');editor.setParams(id,{[k]:v});renderProps();});
+ box.querySelectorAll('[data-inname]').forEach(el=>el.onchange=()=>{const [id,k]=el.dataset.inname.split('|');setInputMeta(id,k,{name:el.value.trim()});renderProps();});
+ box.querySelectorAll('[data-indesc]').forEach(el=>el.onchange=()=>{const [id,k]=el.dataset.indesc.split('|');setInputMeta(id,k,{desc:el.value});});
  box.querySelectorAll('[data-stepcheck]').forEach(b=>b.onclick=()=>{if(S.sim&&!S.error)S.sim.stepCheck();renderDiag();openDiag();});
  box.querySelectorAll('[data-eset]').forEach(el=>el.onchange=()=>{editor.settings[el.dataset.eset]=el.checked;saveSettings();});
  if(!c&&!atTop())bindDef(box);
  if(c&&c.type!=='JUNC'){const id=c.id;
   box.querySelector('[data-plabel]')?.addEventListener('change',e=>{editor.setParams(id,{},{label:e.target.value||id});renderChannels();});
   box.querySelectorAll('[data-pin-k]').forEach(b=>b.onclick=()=>togglePin(id,b.dataset.pinK));
+  box.querySelectorAll('[data-inp-k]').forEach(b=>b.onclick=()=>toggleInput(id,b.dataset.inpK));
   box.querySelectorAll('[data-wtile-k]').forEach(b=>b.onclick=()=>{Watch.toggleCtl(id,b.dataset.wtileK);renderProps();});
   box.querySelectorAll('[data-pub-k]').forEach(b=>b.onclick=()=>togglePublic(id,b.dataset.pubK));
   bindSub(box,c);
@@ -1240,7 +1267,7 @@ function expandSub(id){let r;try{r=SubC.expand(levelDoc(),id);}catch(e){notice(e
  notice(`Το ${esc(id)} έγινε ανοιχτό κύκλωμα (${r.ids.size} στοιχεία). Ο ορισμός μένει στη βιβλιοθήκη του project.`,'info');setTimeout(()=>notice(''),4000);}
 // 4.9.1 (ROADMAP §52): a library part becomes an ordinary subcircuit with the same inner parts, names and channels
 function libToSub(id){window.Inside?.close();let r;try{r=SubC.fromLib(levelDoc(),id);}catch(e){notice(esc(e.message),'error');return;}
- applyLevel(r.project,[id]);renderPalette();renderProps();notice(`Το ${esc(id)} έγινε υποκύκλωμα (ορισμός «${esc(r.name)}»): διπλό κλικ για να το ανοίξεις και να το αλλάξεις. Ίδιο κύκλωμα, ίδια κανάλια· οι παράμετροί του είναι πλέον οι τιμές των στοιχείων μέσα.`,'info');setTimeout(()=>notice(''),6000);}
+ applyLevel(r.project,[id]);renderPalette();renderProps();notice(`Το ${esc(id)} έγινε υποκύκλωμα (ορισμός «${esc(r.name)}»): διπλό κλικ για να το ανοίξεις και να το αλλάξεις. Ίδιο κύκλωμα, ίδια κανάλια· οι παράμετροί του είναι πλέον οι τιμές των στοιχείων μέσα.${r.frozen?.length?` Οι εκφράσεις (${esc(r.frozen.join(', '))}) μπήκαν με τις τιμές τους τώρα.`:''}${r.lost?.length?` Οι είσοδοι πάνω του (${esc(r.lost.join(', '))}) καταργήθηκαν.`:''}`,'info');setTimeout(()=>notice(''),6000);}
 function uniqueSub(id){let r;try{r=SubC.makeUnique(levelDoc(),id);}catch(e){notice(esc(e.message),'error');return;}applyLevel(r.project,[id]);renderPalette();renderProps();}
 function subMenu(c){const name=c.params?.def,inner=S.pfx===null?[]:allComps().filter(x=>x.id.startsWith(pid(c.id)+'/'));
  return ['-',{t:'⧉ Άνοιγμα του υποκυκλώματος',k:'διπλό κλικ',f:()=>enterSub(name,S.pfx===null?null:pid(c.id))},{t:'Ανάπτυξη σε ανοιχτό κύκλωμα',k:'Ctrl+Shift+G',f:()=>expandSub(c.id)},
@@ -1425,7 +1452,9 @@ function gallery(open=true){const g=$('#gallery');g.hidden=!open;if(!open)return
 // ------------------------------------------------------------------ theory
 let apiChain=Promise.resolve();
 function api(action,data){const run=async()=>{const r=await fetch('/api/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw Error(j.error||'Σφάλμα');return j;};const p=apiChain.then(run,run);apiChain=p.catch(()=>{});return p;}
-function paramsOf(id){const c=editor.comp(id);return c?{...P.defaults(c.type),...c.params}:null;}
+function paramsOf(id){const c=editor.comp(id);if(!c)return null;const p={...P.defaults(c.type),...c.params};
+ // 4.17.1: a parameter «= …» as the number the solver computed from the inputs (the last build of the netlist)
+ const der=S.sim?.net?.inputs?.derived;if(der)for(const d of der)if(d.id===id&&d.value!=null)p[d.k]=d.value;return p;}
 function avgOver(key,n=20){const s=S.sim;if(!s)return null;const i=s.chIndex.get(key);const p=s.per;if(i===undefined||!p.n)return null;n=Math.min(n,p.n);let a=0,mn=Infinity,mx=-Infinity,q=0;
  for(let k=1;k<=n;k++){const j=(p.head-k+p.cap)%p.cap,o=j*p.nch+i;a+=p.avg[o];q+=p.rms[o]**2;mn=Math.min(mn,p.min[o]);mx=Math.max(mx,p.max[o]);}return {avg:a/n,rms:Math.sqrt(q/n),min:mn,max:mx,pp:mx-mn};}
 // a simulated quantity for the prediction questions: {key, stat, periods, abs} on a channel, or samples of an S&H
@@ -2117,7 +2146,7 @@ function evTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.ev||!editor.comp('M1
  const mo=editor.comp('MO1'),sc=mo?.params?.scheme||'moevc',cyc=Math.floor(s.t/m.D),wait=s.t<m.D?`<p class="small muted">Άφησε να τρέξει τουλάχιστον ένας κύκλος (${eng(m.D,'s')}) για τις μετρικές.</p>`:'';
  const kind=!mo?(editor.comp('C1')?'Ελεγκτής AI: ένας βρόχος τάσης (PI ή PI + νευρωνικό)':'—'):sc==='moev'?'Πολυκριτηριακός καταρράκτης (moev)':'Πολυκριτηριακός συζευγμένος (moevc)';
  return `<div class="tm"><span class="badge">${esc(kind)}</span>${mo?` τρόπος ${esc(mo.params.mode||'balanced')}`:''} · κύκλος ${cyc+1} (${eng(m.D,'s')} ο καθένας)</div><ul class="eqs">
-  <li>Όχημα στον άξονα: J_eq = J_m + m·(r_w/n)² = <b>${eng(m.Jeq,'kg·m²')}</b>, v = ω·r_w/n· τ_L = [m·g·C_rr·sgn v + ½·ρ·C_d·A·v·|v| + m·g·sin(atan(κλίση))]·r_w/(n·η) + τ_b + τ_a(x)</li>
+  <li>Όχημα στον άξονα: J_eq = J_m + m·(r_w/n)² = <b>${eng(+(paramsOf('M1')?.J??m.Jeq),'kg·m²')}</b>, v = ω·r_w/n· τ_L = [m·g·C_rr·sgn v + ½·ρ·C_d·A·v·|v| + m·g·sin(atan(κλίση))]·r_w/(n·η) + τ_b + τ_a(x)</li>
   <li>Μπαταρία: OCV = 45 + 13,8·SOC − 1,8·(1 − SOC)³ V, R_int = 0,075·(1 + 2,6·(1 − SOC)²) Ω, p = v_a·i_a/η (κίνηση) ή ·η (ανάκτηση), i_bat = (OCV − √(OCV² − 4·R_int·p))/(2·R_int), dSOC/dt = −i_bat/(3600·Q)</li>
   <li>Μετατροπέας: |v_a| ≤ min(V_max, 1,75·OCV, P_max/|i_a|) με P_max = η·min(OCV·I_max − R_int·I_max², OCV²/(4R_int)): η μπαταρία δεν δίνει πάνω από I_max</li>
   ${mo?sc==='moev'?`<li>moev: τ_req = w_s·PI(ω* − ω) + τ_L + B·ω, τ* = clip(keep·τ_req, ±τ_max(SOC, P)), keep = 0,55 + 0,45·w_t − 0,2·w_e·(χαμηλό SOC)</li>`
@@ -2501,7 +2530,7 @@ function nodeAvg(pin,n){const s=S.sim;if(!s)return null;const nt=s.net.pinNet.ge
 const V1MAP={VDC:['source','Πηγή εισόδου',{p:'p',n:'n'}],SW:['switch','Διακόπτης',{d:'a',s:'b'}],D:['diode','Δίοδος',{a:'a',k:'k'}],L:['inductor','Πηνίο',{a:'a',b:'b'}],
  C:['capacitor','Πυκνωτής εξόδου',{p:'p',n:'n'}],R:['resistor','Φορτίο',{a:'a',b:'b'}],XFMR:['transformer','Μετασχηματιστής (L_m στο πρωτεύον)',null]};
 function circuitForMath(){
- const doc=editor.doc;if(!S.sim||S.error)return {error:'Το κύκλωμα δεν προσομοιώνεται· διόρθωσε πρώτα τη συνδεσμολογία.'};
+ const doc=window.Inputs&&Inputs.needs(editor.doc)?Inputs.resolve(editor.doc).project:editor.doc;if(!S.sim||S.error)   // 4.17.1: the numbers of the inputs and of the parameters «= …»return {error:'Το κύκλωμα δεν προσομοιώνεται· διόρθωσε πρώτα τη συνδεσμολογία.'};
  {const d=S.sim.net.diag,lb=id=>editor.comp(id)?.label||id;const bad=[...(d?.skipped||[]).map(x=>lb(x.id)),...(d?.open||[])]; // 3.7: also parts left out of the solution, whatever the option
   if(bad.length)return {error:'Η συμβολική λύση θέλει κλειστό κύκλωμα. Ασύνδετα ή ανοιχτά: '+bad.slice(0,6).join(', ')+(bad.length>6?' και άλλα':'')+'.'};}
  const par=new Map(),find=k=>{while(par.get(k)!==k){par.set(k,par.get(par.get(k)));k=par.get(k);}return k;};
@@ -2512,6 +2541,10 @@ function circuitForMath(){
  const why='Η πλήρης συμβολική λύση καλύπτει buck, boost, αντιστρέφοντα buck–boost και flyback με ένα στοιχείο ανά ρόλο.';
  if(!used.length)return {error:'Πρόσθεσε στοιχεία ισχύος (πηγή, διακόπτη, πηνίο…) για να βγει η συμβολική λύση.'};
  if(extra.length)return {error:why+' Αυτό το κύκλωμα έχει και: '+extra.map(c=>`${P.PARTS[c.type].name} ${c.label||c.id}`).join(', ')+'.'};
+ // 4.17.1: open pins from the drawing itself (the diagnosis of the solver may still be the one before the last change)
+ {const cnt=new Map();for(const k of par.keys()){const r=find(k);cnt.set(r,(cnt.get(r)||0)+1);}
+  const open=used.flatMap(c=>Object.keys(P.pinsOf(c)).map(pn=>c.id+':'+pn)).filter(k=>par.has(k)&&cnt.get(find(k))===1);
+  if(open.length)return {error:'Η συμβολική λύση θέλει κλειστό κύκλωμα. Ανοιχτοί ακροδέκτες: '+open.slice(0,6).join(', ')+'.'};}
  const by={};for(const c of used){(by[c.type]=by[c.type]||[]).push(c);}
  const dup=Object.entries(by).filter(([,v])=>v.length>1);if(dup.length)return {error:why+' Υπάρχουν περισσότερα από ένα: '+dup.map(([k,v])=>`${P.PARTS[k].name} (${v.map(c=>c.label||c.id).join(', ')})`).join('; ')+'.'};
  const comps=[],groups=new Map(),roles=[],notes=[],params={};

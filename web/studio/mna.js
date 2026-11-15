@@ -22,6 +22,7 @@
  const SPM=root.Sparse||(typeof require!=='undefined'?require('./sparse.js'):null);
  const NNET=root.NNet||(typeof require!=='undefined'?require('./nn.js'):null);
  const TUNE=root.Tune||(typeof require!=='undefined'?require('./tune.js'):null);   // 4.17: PI/PID gains from the circuit
+ const INP=root.Inputs||(typeof require!=='undefined'?require('./inputs.js'):null);   // 4.17.1: inputs and parameters from expressions
  // 4.2 (§32): the sparse LU above this many unknowns ('auto'); below it the dense LU, as before
  const SPARSE_MIN=120;
  const UNITS=root.Units||(typeof require!=='undefined'?require('./units.js'):null);
@@ -587,8 +588,11 @@
   if(r(hi)>=0)return hi;if(r(lo)<=0)return lo;for(let k=0;k<200;k++){const m=(lo+hi)/2;if(r(m)>0)lo=m;else hi=m;}return (lo+hi)/2;}
 
  function buildNetlist(project){
+  // 4.17.1 (§59): the inputs of the circuit and the parameters «= …» computed from them, before anything else (so every
+  // build, and every change while running, computes them again; the rest of the solver sees numbers)
+  let inputs=null,subWarn=[];if(INP&&INP.needs(project)){inputs=INP.resolve(project);project=inputs.project;subWarn.push(...inputs.warnings);}
   // subcircuits (3.17, §9): the solver sees one flat circuit (instance parts as X1/<id>, ports as junctions)
-  let subWarn=[];if(SUBC&&SUBC.needs(project)){try{const f=SUBC.flatten(project);project=f.project;subWarn=f.warnings;}catch(e){throw e instanceof SUBC.SubcircuitError?new NetlistError(e.message):e;}}
+  if(SUBC&&SUBC.needs(project)){try{const f=SUBC.flatten(project);project=f.project;subWarn.push(...f.warnings);}catch(e){throw e instanceof SUBC.SubcircuitError?new NetlistError(e.message):e;}}
   // units and vector types of the signal ports (3.19, §3): a frame into another frame stops here, units are warnings
   let units=null;if(UNITS){try{units=UNITS.check(project);subWarn.push(...units.warnings);}catch(e){throw e instanceof UNITS.UnitError?new NetlistError(e.message):e;}}
   // buses and vectors (3.18, §3): the solver sees scalar wires only (element-wise blocks on a bus as <id>[k])
@@ -884,7 +888,8 @@
     else if(T==='LOGIC')b.op=p.op||'or';
     else if(T==='MOD3'){b.mode=['spwm','svpwm','square'].includes(p.mode)?p.mode:'svpwm';}
     else if(T==='FEST'){b.RR=num(p.RR,2);b.LM=Math.max(num(p.LM,.3),1e-9);st.pa=num(p.psi0,0);st.pb=0;st.t=0;st.u=[0,0,0];}
-    else if(T==='EXPR'){const ins=Ex.names(p.ins),pars=Ex.params(p.pars);b.inNames=ins;b.parVals=Object.values(pars);b.expr=String(p.expr??'');b.optIns=Ex.names(p.opt,6,false); // 4.8.1: inputs that may stay unconnected (0) without a warning (library parts)
+    // 4.17.1: an expression block sees the inputs of the circuit by name, as constants (after its own parameters)
+    else if(T==='EXPR'){const ins=Ex.names(p.ins),pars=Ex.params(p.pars);if(inputs)for(const [n,v] of Object.entries(inputs.env))if(!ins.includes(n)&&!(n in pars))pars[n]=v;b.inNames=ins;b.parVals=Object.values(pars);b.expr=String(p.expr??'');b.optIns=Ex.names(p.opt,6,false); // 4.8.1: inputs that may stay unconnected (0) without a warning (library parts)
      try{b.ast=Ex.parse(b.expr,[...ins,...Object.keys(pars)]);}catch(e){warnings.push(`${b.label}: ${e.message} Η έξοδος είναι 0.`);b.ast=['num',0];}
      const cv={};b.parVals.forEach((c,k)=>{cv[ins.length+k]=c;});b.fn=Ex.compile(b.ast,cv);b.xv=new Array(ins.length).fill(0);}
     else if(T==='PY'){b.clock=p.clock;b.trig=['start','mid','both'].includes(p.trig)?p.trig:'start';b.y0=num(p.y0,0);st.last=null;st.ys=null;b.inNames=Ex.names(p.ins,6,false);
@@ -932,7 +937,7 @@
   const diag={unconn,island,rleak,skipped:[...skip].map(([id,why])=>({id,why})),open,freeEnds,freeNets,islands};
   const rowBase=nNodes;for(const e of els)if(e.row!==undefined)e.row+=rowBase;
   const sig=compileSignals(blocks,sigNets,ctrls,els,compInfo,warnings);
-  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId,sig,sigPin,diag,tbase,step,vec,units,hasPi};
+  return {nets,gnd,pinNet,nNodes,size:nNodes+nRows,els,ctrls,shs,compInfo,warnings,node,byId,sig,sigPin,diag,tbase,step,vec,units,hasPi,inputs:inputs?{inputs:inputs.inputs,derived:inputs.derived,env:inputs.env}:null};
  }
 
  // ---------------------------------------------------------------- signal graph (3.0)
