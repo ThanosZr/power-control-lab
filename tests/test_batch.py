@@ -175,9 +175,11 @@ class BatchSolver(unittest.TestCase):
         # 4.8: the block «Ελεγκτής AI» with the emulator (a library part made of a PI, the controller network, the emulator
         # and its copy with the derivative output): the browser and the server agree on the machine, the command and the
         # networks' outputs while all of them learn
+        # (4.16: the solve takes about 25 s and met the 45 s limit of the server on a slow CI runner; that limit protects
+        # the server, not this check: a local run with its own limit)
         req = self.req['aic_emu']
         keys = list(req['channels'].keys())
-        r = self.run_case('aic_emu', req['at'][-1][0], 'LSODA', rtol=1e-9, atol=1e-11)
+        r = self.run_case('aic_emu', req['at'][-1][0], 'LSODA', rtol=1e-9, atol=1e-11, _local=True, wall=300)
         self.assertEqual(r['status'], 'ok')
         t = np.array(r['t'])
         for row in req['at']:

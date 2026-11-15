@@ -126,8 +126,9 @@ class SolverState(unittest.TestCase):
         bad = {k: v for k, v in out.items() if v['maxdiff'] != 0}
         self.assertEqual(bad, {}, 'continuation differs')
         # 4.13: the cross-bonded cable keeps ten wideband sections of six conductors (their models and the records of their
-        # waves): up to 6 MB; the others under 2 MB
-        big = {k: v['kb'] for k, v in out.items() if v['kb'] >= {'cable_xb': 6000}.get(k, 2000)}
+        # waves): up to 6 MB; 4.16: the LCC benchmark reaches the 48 switch topologies the solver keeps (two bridges with
+        # overlap, snubbers, 119 nodes), each with the data of its step check: up to 8 MB; the others under 2 MB
+        big = {k: v['kb'] for k, v in out.items() if v['kb'] >= {'cable_xb': 6000, 'hvdc_lcc': 8000}.get(k, 2000)}
         self.assertEqual(big, {})
 
 
