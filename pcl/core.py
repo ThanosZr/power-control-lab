@@ -484,6 +484,18 @@ class Project:
         self.changes[key] = v
         return self
 
+    def tune(self, pwm, Kp=None, Ki=None, Kd=None, Tf=None, ff=None, kc=None, convN=None, step=None):
+        """4.17.4 (ROADMAP §64): the analysis of a PWM in closed loop, as the window «Ρύθμιση ελεγκτή»: the converter and its
+        roles, the operating point (D0), G(s) = measured/d ('tf': num, den in descending powers of s; 'poles', 'zeros' as
+        [re, im]), the static ratio M(D), the gains from the circuit ('auto'), and for the gains given (or those from the
+        circuit) the margins ('margins': wc in rad/s, pm in degrees, gm as a ratio, ms), Bode of G and of the loop
+        ('f', 'G', 'L' as [re, im]) and the closed loop on the averaged model ('cl': t, y, r, d) for a step of the
+        reference by step (relative, 0.1 by default), with the feed-forward ff ('none', 'const', 'conv' with kc, convN).
+        Apply gains with p.set('PWM1.gain', 'manual').set('PWM1.Kp', …)."""
+        g = {k: v for k, v in (('Kp', Kp), ('Ki', Ki), ('Kd', Kd), ('Tf', Tf)) if v is not None}
+        opt = {k: v for k, v in (('ff', ff), ('kc', kc), ('convN', convN), ('step', step)) if v is not None}
+        return _node({'action': 'tune', 'project': self.data, 'id': pwm, 'gains': g or None, 'opt': opt})
+
     def inputs(self):
         """4.17.1 (ROADMAP §59): the inputs of the circuit, as web/studio/inputs.js lists them: [{name, id, k, value, desc}]
         for every parameter marked «Είσοδος» (c['inp'], names c['inpName'], explanations c['inpDesc']) and every

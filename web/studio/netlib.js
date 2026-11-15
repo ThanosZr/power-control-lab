@@ -200,7 +200,7 @@
  // switch between them is a live parameter of one expression, so the states stay. Outputs: u, the learning curve L,
  // IAE = ∫|r_f − y|dt, sat (1 when u sits on a limit), and the emulator's ẏ̂ (emu). Inner ids are fixed: channels such as
  // C1/NN1, C1/E, C1/SAT are the same in every scheme.
- function aicDef(c){const p=prm(c),B=builder(c.label||c.id),sc=['pi','fel','inv','emu'].includes(p.scheme)?p.scheme:'fel';
+ function aicDef(c){const p=prm(c),B=builder(c.label||c.id),sc=['pi','fel','fel2','inv','emu'].includes(p.scheme)?p.scheme:'fel';
   const fs=Math.max(num(p.fs,1000),1e-6),fr=Math.max(num(p.fr,5),1e-6),rs=Math.abs(num(p.rs,1))||1,us=Math.abs(num(p.us,1))||1,lo=num(p.umin,-1),hi=num(p.umax,1);
   const learn=p.learn!==false&&p.learn!=='false',live=p.mode==='live';
   const r=B.comp('$r','SIN',{name:'r'}),y=B.comp('$y','SIN',{name:'y'});
@@ -227,6 +227,11 @@
    B.comp('EA','SUM',{signs:'+-'});B.wire(['GD','y'],['EA','a']);B.wire(['NNC','y'],['EA','b']);
    B.comp('MC','MUL',{});B.wire(['EA','y'],['MC','a']);B.wire(['NNC','dy'],['MC','b']);B.comp('GK','GAIN',{K:num(p.K,.1)});B.wire(['MC','y'],['GK','u']);
    B.comp('UDe','UD',{clock:'CLK',trig:'start',y0:0});B.wire(['GK','y'],['UDe','u']);B.wire(['UDe','y'],['NN1','e']);}
+  // 4.17.4 (ROADMAP §62, the source of Thanos §3.7): «fel2», the feed-forward that learns without drift: the error signal
+  // of the network (the PI's output) times the factor of adaptation s = min(1, k·|e|/max(|r_f|, rs/20)) of the tracking
+  // error: the learning fades as the tracking error goes to zero, and stops there (the weights stay bounded)
+  else if(sc==='fel2'){B.comp('SA','EXPR',{expr:'min(1, k*abs(u1)/max(abs(u2), r0))',ins:'u1, u2',pars:`k = ${s(num(p.ka,10))}, r0 = ${s(rs/20)}`});B.wire(['E','y'],['SA','u1']);B.wire(['LP','y'],['SA','u2']);
+   B.comp('EG','MUL',{});B.wire(['PI','y'],['EG','a']);B.wire(['SA','y'],['EG','b']);B.wire(['EG','y'],['NN1','e']);}
   else if(sc!=='inv')B.wire(['PI','y'],['NN1','e']);
   const out=(name,src)=>{const o=B.comp('$'+name,'SOUT',{name});B.wire(src,[o,'u']);};
   if(sc==='inv')B.comp('L0','CONST',{v:'0'});

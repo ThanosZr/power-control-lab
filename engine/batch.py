@@ -185,15 +185,50 @@ def _f(v, d=0.0):
     return v if math.isfinite(v) else d
 
 
+# 4.17.4 (ROADMAP §64): the static ratio |M(D)| of each converter and its inverse, and the convergence method of the source
+# of Thanos (§3.7) for its output: the same lines as web/studio/tune.js (MD, convStart, convStep)
+_MD = {'buck': (lambda D: D, lambda m: m), 'boost': (lambda D: 1 / (1 - D), lambda m: 1 - 1 / m),
+       'buck_boost': (lambda D: D / (1 - D), lambda m: m / (1 + m)), 'cuk': (lambda D: D / (1 - D), lambda m: m / (1 + m)),
+       'sepic': (lambda D: D / (1 - D), lambda m: m / (1 + m))}
+
+
+def conv_step(key, D, r, y, k, dmin, dmax):
+    if key not in _MD:
+        return D
+    M, inv = _MD[key]
+    ar, ay = abs(r), abs(y)
+    if not ar > 0:
+        return D
+    s = min(1.0, max(0.0, (k or 1.0) * abs(ar - ay) / ar))
+    try:
+        Dc = inv(M(min(max(D, dmin), dmax)) * ar / ay) if ay > 1e-9 * ar else dmax
+    except ZeroDivisionError:
+        Dc = D
+    if not math.isfinite(Dc):
+        Dc = D
+    Dc = min(dmax, max(dmin, Dc))
+    return min(dmax, max(dmin, (1 - s) * D + s * Dc))
+
+
+def conv_start(key, r, vin, dmin, dmax):
+    if key not in _MD or not abs(vin) > 0:
+        return (dmin + dmax) / 2
+    try:
+        D = _MD[key][1](abs(r) / abs(vin))
+    except ZeroDivisionError:
+        return (dmin + dmax) / 2
+    return min(dmax, max(dmin, D)) if math.isfinite(D) else (dmin + dmax) / 2
+
+
 class Ctrl:
     """PWM / PI / PID block, same rules as the browser (web/studio/mna.js)."""
-    FIELDS = ('id', 'mode', 'carrier', 'qty', 'ff', 'upd', 'dIn')
+    FIELDS = ('id', 'mode', 'carrier', 'qty', 'ff', 'upd', 'dIn', 'convKey')
 
     def __init__(self, k):
         for f in self.FIELDS:
             setattr(self, f, k.get(f))
         self.T = _f(k.get('T'), 1e-4)
-        for f in ('D', 'phase', 'dt', 'Kp', 'Ki', 'Kd', 'Tf', 'D0', 'dmin', 'dmax', 'm', 'fref', 'refphase'):
+        for f in ('D', 'phase', 'dt', 'Kp', 'Ki', 'Kd', 'Tf', 'D0', 'dmin', 'dmax', 'm', 'fref', 'refphase', 'kc', 'convVin'):
             setattr(self, f, _f(k.get(f)))
         self.dsched = k.get('dsched')
         self.ref = k.get('ref') or [[0, 0]]
@@ -213,6 +248,10 @@ class Ctrl:
         self.refNow = 0.0
         self.ePrev = None
         self.dF = 0.0
+        self.convN = max(1, int(round(_f(k.get('convN'), 1))))
+        self.dc = None                     # 4.17.4: the duty of the convergence method (None: not assigned yet)
+        self.cs = 0.0                      # the sum and the count of the measured output since its last correction
+        self.cn = 0
 
     def dbl(self):
         return self.upd == 'double' and self.mode not in ('spwm', 'pp') and self.carrier != 'saw'
@@ -1957,12 +1996,26 @@ class Circuit:
                 k.meas = self.value(k.sensor, t, x, z)
                 if not math.isfinite(k.meas):
                     k.meas = 0.0
+                if force and not self.started:
+                    k.dc = None
                 ff = 0.0
                 if k.ff == 'ratio':
                     a, b = self.value(k.ffA, t, x, z), self.value(k.ffB, t, x, z)
                     ff = 1 - a / b if abs(b) > 1e-9 else 0.0
                 elif k.ff == 'const':
                     ff = k.D0
+                elif k.ff == 'conv':
+                    # 4.17.4 (ROADMAP §64): the convergence method of the source of Thanos, as tune.js convStart/convStep
+                    if k.dc is None:
+                        k.dc = conv_start(k.convKey, k.refNow, k.convVin, k.dmin, k.dmax)
+                        k.cs, k.cn = 0.0, 0
+                    else:
+                        k.cs += k.meas
+                        k.cn += 1
+                        if period and idx % k.convN == 0:
+                            k.dc = conv_step(k.convKey, k.dc, k.refNow, k.cs / k.cn, k.kc, k.dmin, k.dmax)
+                            k.cs, k.cn = 0.0, 0
+                    ff = k.dc
                 e = k.refNow - k.meas
                 if force and not self.started:
                     k.xi, k.ePrev, k.dF = 0.0, None, 0.0

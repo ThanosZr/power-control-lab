@@ -8,6 +8,7 @@
 //  * AutoRange: the steady automatic range of a running graph: it opens at once when the data leave it, it closes to
 //    the data only after they have used less than `shrink` of it for `hold` ms, with its limits on the grid steps
 //  * bandPath / meanPath: dense data (more samples than pixels) as a min–max shade with the mean as its line
+//  * lineChart (4.17.4): a line chart on a canvas at its CSS size (Bode with a log axis, a step response, a curve)
 //  * Readout: a table of values in a box of its own (its height, its scroll bars), built again only when its rows or
 //    columns change, otherwise only its numbers, at most every `ms` while something runs
 // No DOM in the numerical parts: tests/js/plotcore_cases.js runs them in Node.
@@ -83,6 +84,50 @@
     put(tds[0].lastChild,r.label);r.cells.forEach((x,j)=>put(tds[j+1],x));});
    put(el.querySelector('.ro-note'),note||'');return true;}
  }
- const api={niceStep,nextStep,niceRange,ticks,fmtTime,fmtEng,AutoRange,bandPath,meanPath,Readout};
+ // 4.17.4: a value without a prefix (dB, degrees, a ratio), the decimals of its step
+ function fmtPlain(v,step,unit){const x=Math.abs(v)<step*1e-6?0:v;return fmtNum(x,decs(step))+(unit?' '+unit:'');}
+ // a line chart on a canvas at its CSS size, on the same ticks and labels as the scope (Bode, a step response, a curve):
+ // o = {series: [{x, y, color, width, dash}], xlog, x: [x0, x1], y: [y0, y1], xUnit, yUnit, xPlain, yPlain, title,
+ //      marks: [{x, color, label}] (vertical), hl: [{y, color, label}] (horizontal), pts: [{x, y, color, label}]}
+ // → {X, Y, x0, x1, y0, y1} for what the caller draws on top
+ function lineChart(cv,o){const dpr=root.devicePixelRatio||1,W=Math.max(160,Math.round(cv.clientWidth||cv.width||320)),H=Math.max(100,Math.round(cv.clientHeight||cv.height||180));
+  if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
+  const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
+  const css=root.getComputedStyle?getComputedStyle(cv):null,ink=(css&&css.getPropertyValue('--scope-ink').trim())||'#2b3436',grid=(css&&css.getPropertyValue('--scope-grid').trim())||'#e8ecea',bg=(css&&css.getPropertyValue('--scope-bg').trim())||'#fff';
+  g.fillStyle=bg;g.fillRect(0,0,W,H);
+  const ML=o.ml??60,MR=12,MT=o.title?20:8,MB=26,pw=W-ML-MR,ph=H-MT-MB;
+  let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+  for(const s of o.series||[])for(let i=0;i<s.x.length;i++){const x=s.x[i],y=s.y[i];if(!Number.isFinite(x)||!Number.isFinite(y)||(o.xlog&&!(x>0)))continue;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
+  if(o.x){[x0,x1]=o.x;}if(!(x1>x0)){x0=o.xlog?1:0;x1=o.xlog?10:1;}
+  if(o.y){[y0,y1]=o.y;}else{if(!Number.isFinite(y0)){y0=-1;y1=1;}[y0,y1]=niceRange(y0,y1);}
+  const fx=o.xlog?(x=>Math.log10(x)):(x=>x),X=x=>ML+(fx(x)-fx(x0))/(fx(x1)-fx(x0))*pw,Y=y=>MT+(y1-y)/(y1-y0)*ph,px=v=>Math.round(v)+.5;
+  g.font='10.5px ui-monospace,Menlo,Consolas,monospace';g.lineWidth=1;
+  // the y axis
+  const yref=Math.max(Math.abs(y0),Math.abs(y1)),yt=ticks(y0,y1,ph,(v,st)=>o.yPlain?fmtPlain(v,st,o.yUnit):fmtEng(v,st,o.yUnit,yref),()=>11,16);
+  g.textAlign='right';g.textBaseline='middle';
+  yt.vals.forEach((v,i)=>{const y=px(Y(v));g.strokeStyle=grid;g.beginPath();g.moveTo(ML,y);g.lineTo(W-MR,y);g.stroke();g.fillStyle=ink;g.fillText(yt.labels[i],ML-6,y);});
+  // the x axis: decades (and 2…9 lighter) on a log axis, otherwise the ticks of the core
+  g.textAlign='center';g.textBaseline='top';
+  if(o.xlog){const k0=Math.ceil(Math.log10(x0)-1e-9),k1=Math.floor(Math.log10(x1)+1e-9);
+   for(let k=Math.floor(Math.log10(x0));k<=k1;k++)for(let m=2;m<=9;m++){const v=m*Math.pow(10,k);if(v<x0||v>x1)continue;const x=px(X(v));g.strokeStyle=grid;g.globalAlpha=.55;g.beginPath();g.moveTo(x,MT);g.lineTo(x,MT+ph);g.stroke();g.globalAlpha=1;}
+   let last=-Infinity;for(let k=k0;k<=k1;k++){const v=Math.pow(10,k),x=px(X(v));g.strokeStyle=grid;g.beginPath();g.moveTo(x,MT);g.lineTo(x,MT+ph);g.stroke();
+    const lb=o.xPlain?fmtPlain(v,v,o.xUnit):fmtEng(v,v,o.xUnit,v),w=g.measureText(lb).width;if(x-w/2>last+8){g.fillStyle=ink;g.fillText(lb,Math.min(Math.max(x,ML+w/2),W-MR-w/2),MT+ph+6);last=x+w/2;}}}
+  else{const xref=Math.max(Math.abs(x0),Math.abs(x1)),xt=ticks(x0,x1,pw,(v,st)=>o.xfmt?o.xfmt(v,st,x1):o.xPlain?fmtPlain(v,st,o.xUnit):fmtEng(v,st,o.xUnit,xref),q=>g.measureText(q).width,18);
+   xt.vals.forEach((v,i)=>{const x=px(X(v)),w=g.measureText(xt.labels[i]).width;g.strokeStyle=grid;g.beginPath();g.moveTo(x,MT);g.lineTo(x,MT+ph);g.stroke();g.fillStyle=ink;g.fillText(xt.labels[i],Math.min(Math.max(x,ML+w/2),W-MR-w/2),MT+ph+6);});}
+  g.strokeStyle='#c9d1ce';g.strokeRect(ML+.5,MT+.5,pw-1,ph-1);
+  if(o.title){g.textAlign='left';g.textBaseline='top';g.fillStyle=ink;g.font='600 11px Inter,system-ui,sans-serif';g.fillText(o.title,ML,3);g.font='10.5px ui-monospace,Menlo,Consolas,monospace';}
+  g.save();g.beginPath();g.rect(ML,MT,pw,ph);g.clip();
+  for(const h of o.hl||[]){g.strokeStyle=h.color||ink;g.setLineDash([5,4]);g.beginPath();g.moveTo(ML,px(Y(h.y)));g.lineTo(W-MR,px(Y(h.y)));g.stroke();g.setLineDash([]);}
+  for(const m of o.marks||[]){if(!(m.x>=x0&&m.x<=x1))continue;g.strokeStyle=m.color||ink;g.setLineDash([4,3]);g.beginPath();g.moveTo(px(X(m.x)),MT);g.lineTo(px(X(m.x)),MT+ph);g.stroke();g.setLineDash([]);}
+  for(const s of o.series||[]){g.strokeStyle=s.color||ink;g.lineWidth=s.width||1.5;g.lineJoin='round';g.setLineDash(s.dash||[]);g.beginPath();let pen=false;
+   for(let i=0;i<s.x.length;i++){const x=s.x[i],y=s.y[i];if(!Number.isFinite(x)||!Number.isFinite(y)||(o.xlog&&!(x>0))){pen=false;continue;}const a=X(x),b=Y(y);pen?g.lineTo(a,b):g.moveTo(a,b);pen=true;}g.stroke();g.setLineDash([]);}
+  for(const q of o.pts||[]){g.fillStyle=q.color||ink;g.beginPath();g.arc(X(q.x),Y(q.y),3.2,0,7);g.fill();}
+  g.restore();g.lineWidth=1;
+  g.textBaseline='top';g.font='600 10px Inter,system-ui,sans-serif';
+  for(const m of o.marks||[])if(m.label&&m.x>=x0&&m.x<=x1){g.fillStyle=m.color||ink;g.textAlign='left';g.fillText(m.label,Math.min(X(m.x)+4,W-MR-g.measureText(m.label).width-2),MT+3);}
+  for(const h of o.hl||[])if(h.label){g.fillStyle=h.color||ink;g.textAlign='right';g.fillText(h.label,W-MR-4,Y(h.y)+3);}
+  for(const q of o.pts||[])if(q.label){g.fillStyle=q.color||ink;g.textAlign='left';g.fillText(q.label,X(q.x)+5,Y(q.y)-13);}
+  return {X,Y,x0,x1,y0,y1,ML,MT,pw,ph};}
+ const api={niceStep,nextStep,niceRange,ticks,fmtTime,fmtEng,fmtPlain,AutoRange,bandPath,meanPath,Readout,lineChart};
  root.PlotCore=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

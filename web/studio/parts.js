@@ -333,7 +333,10 @@
     num('fc','Στόχος f_c (0 = η μεγαλύτερη με τα περιθώρια)','Hz',0,{zero:true,show:p=>p.mode==='pi'&&p.gain==='auto'}),
     num('pm','Περιθώριο φάσης','°',50,{show:p=>p.mode==='pi'&&p.gain==='auto',hint:'Μαζί: περιθώριο κέρδους 6 dB, μέγιστη ευαισθησία 2, μία διέλευση, f_c ≤ f_s/10.'}),
     num('Kp','K_p','',1e-3,{zero:true,signed:true,show:p=>p.mode==='pi'&&p.gain!=='auto'}),num('Ki','K_i','1/s',1,{zero:true,signed:true,show:p=>p.mode==='pi'&&p.gain!=='auto'}),num('Kd','K_d (0 = PI)','s',0,{zero:true,signed:true,show:p=>p.mode==='pi'&&p.gain!=='auto',hint:'d = D₀ + K_p·e + K_i·T_s·Σe + K_d·de/dt, με δειγματοληψία μία φορά ανά περίοδο. Σε μετατροπέα που αντιστρέφει (buck–boost, Ćuk) τα κέρδη είναι αρνητικά.'}),num('Tf','Φίλτρο παραγώγου T_f','s',0,{zero:true,show:p=>p.mode==='pi'&&p.gain!=='auto'&&+p.Kd!==0,hint:'Πρώτης τάξης φίλτρο στον παράγωγο όρο, π.χ. 2·T_s. 0 = χωρίς φίλτρο.'}),
-    sel('ff','Πρόσθια τροφοδότηση (feedforward)',[['none','Χωρίς'],['ratio','D₀ = 1 − V(A)/V(B)'],['const','Σταθερό D₀']],'none',{show:p=>p.mode==='pi'}),
+    sel('ff','Πρόσθια τροφοδότηση (feedforward)',[['none','Χωρίς'],['ratio','D₀ = 1 − V(A)/V(B)'],['const','Σταθερό D₀'],['conv','Μέθοδος σύγκλισης (πηγή του Θάνου)']],'none',{show:p=>p.mode==='pi'}),
+    // 4.17.4 (ROADMAP §64): the convergence method: D′ = (1 − s)·D + s·M⁻¹(M(D)·|r|/|y|), s = min(1, k·|r − y|/|r|), every N periods
+    num('kc','Συντελεστής προσαρμογής k','',1,{show:p=>p.mode==='pi'&&p.ff==='conv',hint:'s = min(1, k·|r − y|/|r|): με k = 1 όπως στην πηγή· μεγαλύτερο k, γρηγορότερη σύγκλιση.'}),
+    num('convN','Κάθε N περιόδους (0: αυτόματα)','',0,{zero:true,show:p=>p.mode==='pi'&&p.ff==='conv',hint:'Η διόρθωση του D κάθε N περιόδους μεταγωγής, με τη μέση τιμή της εξόδου σε αυτές· 0: μία περίοδος του πιο αργού ταλαντευόμενου ρυθμού του μέσου μοντέλου, ώστε η μέση τιμή να είναι κοντά εκεί που κάθεται η έξοδος.'}),
     ref('ffA','V(A)',['VDC','C','CPL','R','VAC'],{show:p=>p.mode==='pi'&&p.ff==='ratio'}),ref('ffB','V(B)',['VDC','C','CPL','R','VAC'],{show:p=>p.mode==='pi'&&p.ff==='ratio'}),
     num('D0','D₀','',0.5,{zero:true,show:p=>p.mode==='pi'&&p.ff==='const'&&p.gain!=='auto'}),
     num('dmin','D_min','',0.01,{zero:true,show:p=>p.mode==='pi'}),num('dmax','D_max','',0.99,{show:p=>p.mode==='pi'}),
@@ -426,11 +429,12 @@
   // 4.8 (ROADMAP §46): one control loop with a learning network, as a library part (netlib.js aicDef: PI, network,
   // emulator); its façade over the drawing (watch.js facade) changes scheme, mode, target and learning while it runs
   AIC:{name:'Ελεγκτής AI (βρόχος με νευρωνικό)',prefix:'C',group:'Έλεγχος',pins:{},spins:p=>({r:I(-40,-20),y:I(-40,20),u:O(40,-30),L:O(40,-10),iae:O(40,10),sat:O(40,30),...(p.scheme==='emu'?{yd:O(0,-50)}:{})}),box:[-30,-40,60,80],blk:true,
-   params:[sel('scheme','Σχήμα',[['pi','Μόνο PI'],['fel','PI + νευρωνικό που μαθαίνει online (feedback-error learning)'],['inv','PI + αντίστροφο μοντέλο (σταθερά βάρη)'],['emu','PI + αντίστροφο μέσω εξομοιωτή (δύο αντίγραφα)']],'fel'),
+   params:[sel('scheme','Σχήμα',[['pi','Μόνο PI'],['fel','PI + νευρωνικό που μαθαίνει online (feedback-error learning)'],['fel2','PI + νευρωνικό που μαθαίνει χωρίς εκτροπή (παράγοντας προσαρμογής)'],['inv','PI + αντίστροφο μοντέλο (σταθερά βάρη)'],['emu','PI + αντίστροφο μέσω εξομοιωτή (δύο αντίγραφα)']],'fel'),
     sel('mode','Αναφορά',[['ref','Από την είσοδο r'],['live','Ζωντανός στόχος (παράμετρος «Στόχος»)']],'ref',{hint:'«Ζωντανός στόχος»: η αναφορά είναι η παράμετρος «Στόχος», που αλλάζει την ώρα που τρέχει (ρυθμιστής στην πρόσοψη).'}),
     num('target','Στόχος','',100,{signed:true,zero:true,show:p=>p.mode==='live'}),
     bool('learn','Μαθαίνει (keep learning)',true,{hint:'Κλειστό: τα βάρη μένουν όπως είναι. Αλλάζει και την ώρα της προσομοίωσης.'}),
     num('fs','Συχνότητα δειγματοληψίας','Hz',1000),num('fr','Εύρος του φίλτρου αναφοράς','Hz',5,{hint:'Η αναφορά περνά από βαθυπερατό: r_f και η παράγωγός της ṙ_f είναι οι είσοδοι του δικτύου.'}),
+    num('ka','Συντελεστής προσαρμογής k','',10,{show:p=>p.scheme==='fel2',hint:'4.17.4 (ROADMAP §62): το σήμα μάθησης επί s = min(1, k·|e|/max(|r_f|, κλίμακα/20)): η μάθηση σβήνει όσο το σφάλμα παρακολούθησης πάει στο μηδέν, και τα βάρη δεν εκτρέπονται (πηγή του Θάνου §3.7).'}),
     num('Kp','K_p','',.5,{zero:true,signed:true}),num('Ki','K_i','1/s',10,{zero:true,signed:true}),
     num('umin','Κάτω όριο εξόδου','',-220,{signed:true,zero:true}),num('umax','Άνω όριο εξόδου','',220,{signed:true,zero:true}),
     num('rs','Κλίμακα αναφοράς','',150,{hint:'Τυπικό μέγεθος της αναφοράς (και της μέτρησης), για τις εισόδους του δικτύου.'}),num('dxs','Κλίμακα της παραγώγου ṙ','',0,{zero:true,hint:'Τυπικό μέγεθος της ṙ_f για την είσοδο του δικτύου· 0: 2π·f_r·(κλίμακα αναφοράς).'}),num('us','Κλίμακα εξόδου του δικτύου','',100),
@@ -439,7 +443,7 @@
     num('ds','Κλίμακα της παραγώγου ẏ','',0,{zero:true,show:p=>p.scheme==='emu',hint:'0: 2π·f_r·(κλίμακα αναφοράς)/4.'}),
     num('seed','Σπόρος τυχαίων βαρών','',1,{zero:true}),
     {k:'w',label:'Βάρη (JSON)',type:'code',def:'',hint:'Τα βάρη του ελεγκτή (μορφή pcl.control). «Κράτα τα βάρη» και «Εκπαίδευση εκτός οθόνης» στην πρόσοψη τα γράφουν εδώ. Στο «αντίστροφο μοντέλο» μένουν σταθερά, αλλιώς είναι η αρχή της μάθησης.'}],value:()=>null,
-   draw:p=>sb(60,80)+tx('AI',0,-2,'btxt big')+tx({pi:'PI',fel:'PI+NN',inv:'NN⁻¹',emu:'NN⁻¹·εξ.'}[p.scheme]||'',0,14,'bsm')+'<path class="thin" d="M-12,24 l5,-7 l4,5 l6,-10 l5,6"/>'+sl('M-40,-20 H-30 M-40,20 H-30 M30,-30 H40 M30,-10 H40 M30,10 H40 M30,30 H40')+(p.scheme==='emu'?sl('M0,-40 V-50'):'')},
+   draw:p=>sb(60,80)+tx('AI',0,-2,'btxt big')+tx({pi:'PI',fel:'PI+NN',fel2:'PI+NN·s',inv:'NN⁻¹',emu:'NN⁻¹·εξ.'}[p.scheme]||'',0,14,'bsm')+'<path class="thin" d="M-12,24 l5,-7 l4,5 l6,-10 l5,6"/>'+sl('M-40,-20 H-30 M-40,20 H-30 M30,-30 H40 M30,-10 H40 M30,10 H40 M30,30 H40')+(p.scheme==='emu'?sl('M0,-40 V-50'):'')},
   // 4.8: the multi-objective cascade of the EV workbench (moevc) as a library part (netlib.js evcDef)
   // 4.8.1: controls of a synchronous generator (library parts, netlib.js avrDef, pssDef, govDef; Kundur ch. 8–9)
   AVR:{name:'Διέγερση και ρυθμιστής τάσης (AVR: IEEE ST1A, DC1A)',prefix:'AVR',group:'Δίκτυο',pins:{},spins:{vt:I(-40,-30),v0:I(-40,-15),e0:I(-40,0),ifd:I(-40,15),vs:I(-40,30),efd:O(40,0)},box:[-30,-40,60,80],blk:true,

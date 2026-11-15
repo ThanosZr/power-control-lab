@@ -14,6 +14,10 @@
 // (K_p = 2K_i/ω_z, K_d = K_i/ω_z², T_f = T_s/2), as the buck_vloop tutorial. The signs follow ∂y/∂d: an inverting
 // converter (buck–boost, Ćuk) gets negative gains. Used by mna.js when the netlist is built, so any change of the
 // circuit recomputes them, and by app.js for the card.
+// 4.17.4 (ROADMAP §64): analyze() for the window «Ρύθμιση ελεγκτή» (ctlwin.js): G(s) as a ratio of polynomials
+// (Faddeev–LeVerrier), its poles and zeros (Durand–Kerner), the static ratio M(D), the loop and its margins for any gains,
+// the closed loop on the averaged (large-signal) model with the controller of the PWM; convStart/convStep: the convergence
+// method of the source of Thanos (§3.7) for the output of each converter, shared with mna.js and engine/batch.py
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
  const num=(v,d)=>{const x=typeof v==='number'?v:P&&P.parseEng?P.parseEng(v):parseFloat(v);return Number.isFinite(x)?x:d;};
@@ -102,7 +106,8 @@
  // ---------------------------------------------------------------- the design
  // o: {p: the PWM's parameters (with defaults), comps: [{id, type, params}], nodeOf, strict: an exact circuit only (the
  // check of hand-set gains)}. Returns {ok, …} with the gains, or {ok: false, error}.
- function design(o){const p=o.p,warn=[];const comps=o.comps.map(c=>({id:c.id,type:c.type,params:c.params||{}}));
+ // 4.17.4: the common part of design() and analyze(): the converter, its averaged model at the operating point, G(jω)
+ function prep(o){const p=o.p,warn=[];const comps=o.comps.map(c=>({id:c.id,type:c.type,params:c.params||{}}));
   const forced={};for(const [r,k] of Object.entries(ROLE_KEY))if(p[k])forced[r]=p[k];
   const rec=recognise(p.topo||'auto',comps,o.nodeOf,forced);
   if(!rec)return {ok:false,error:'δεν αναγνωρίζεται buck, boost, buck–boost, Ćuk ή SEPIC στο κύκλωμα'};
@@ -132,10 +137,12 @@
   const G0=dot(c,solveR(op.A,bd.map(v=>-v))||[NaN]);
   if(!Number.isFinite(G0)||Math.abs(G0)<1e-12)return {ok:false,error:'∂(μέτρηση)/∂D = 0 στο σημείο λειτουργίας',key:rec.key,roles};
   const sg=Math.sign(G0);
-  if(o.signOnly)return {ok:true,key:rec.key,name:T.name,roles,sign:rec.sign,G0,sg,D0,warn};
+  if(o.signOnly)return {ok:true,key:rec.key,name:T.name,roles,sign:rec.sign,G0,sg,D0,warn,values:q,ref,c,md,sRole,qty,op,bd,x0,Tc,Tp,fs,dmin,dmax,T,rec,p,signOnly:true};
   // the grid: up to the Nyquist frequency of the samples; the plant with its sign removed, times the zero-order hold
   const wN=Math.PI/Tc,NW=480,wLo=wN*1e-7,W=[];for(let i=0;i<NW;i++)W.push(wLo*Math.pow(0.98*wN/wLo,i/(NW-1)));
   const Graw=W.map(Gat),Gw=W.map((w,i)=>{const g=Graw[i],th=w*Tc,zr=Math.sin(th)/th,zi=-(1-Math.cos(th))/th;return [sg*(g[0]*zr-g[1]*zi),sg*(g[0]*zi+g[1]*zr)];});
+  return {ok:true,p,warn,comps,rec,T,roles,q,sRole,qty,c,md,fs,Tp,dbl,Tc,dmin,dmax,ref,D0,op,x0,bd,Gat,G0,sg,wN,NW,wLo,W,Graw,Gw};}
+ function design(o){const P=prep(o);if(!P.ok||P.signOnly)return P;const {p,warn,rec,T,roles,q,sRole,qty,D0,x0,G0,sg,Tc,fs,wLo,W,NW,wN,Graw,Gw,Gat,ref}=P;
   const mags=Graw.map(g=>Math.hypot(g[0],g[1]));let kr=0;for(let i=1;i<NW;i++)if(mags[i]>mags[kr])kr=i;
   let wr=mags[kr]>1.05*Math.abs(G0)?W[kr]:null;if(!wr){let i=0;while(i<NW&&mags[i]>Math.abs(G0)/Math.SQRT2)i++;wr=i<NW?W[i]:wN/10;}
   const pm=Math.min(Math.max(num(p.pm,50),10),85),fcT=Math.max(num(p.fc,0),0),spec={pm,gm:2,ms:2,wcMax:2*Math.PI*fs/10};
@@ -164,6 +171,67 @@
   return {ok:true,key:rec.key,name:T.name,roles,sign:rec.sign,forcedOk:rec.forcedOk,sensorRole:sRole,qty,ctl,ref,D0,x0,states:T.st,G0,fr:wr/(2*Math.PI),
    fz:Number.isFinite(pick.wz)?pick.wz/(2*Math.PI):null,fc:r.wc/(2*Math.PI),pm:r.pm,gm:r.gm,ms:r.ms,Kp:sgn(g.Kp),Ki:sgn(g.Ki),Kd:sgn(g.Kd),Tf:g.Tf,sg,Tc,
    values:q,warn,bode:f=>Gat(2*Math.PI*f)};}
- const api={TOPO,ORDER,ROLE_KEY,match,recognise,design};
+ // ---------------------------------------------------------------- 4.17.4: the window «Ρύθμιση ελεγκτή» (ROADMAP §64)
+ // the static conversion ratio |M(D)| of each converter and its inverse (CCM, no losses), for the convergence method
+ const MD={buck:{M:D=>D,inv:m=>m,txt:'D'},boost:{M:D=>1/(1-D),inv:m=>1-1/m,txt:'1/(1 − D)'},buck_boost:{M:D=>D/(1-D),inv:m=>m/(1+m),txt:'D/(1 − D)'},
+  cuk:{M:D=>D/(1-D),inv:m=>m/(1+m),txt:'D/(1 − D)'},sepic:{M:D=>D/(1-D),inv:m=>m/(1+m),txt:'D/(1 − D)'}};
+ // the convergence method (the source of Thanos, §3.7, for the output of each converter): D′ from the static ratio corrected
+ // by the measured output, D_corr = M⁻¹(M(D)·|r|/|y|), mixed with the D of now by s = min(1, k·|r − y|/|r|):
+ // D_new = (1 − s)·D + s·D_corr; the first assignment is the static one, M⁻¹(|r|/|V_in|)
+ function convStep(key,D,r,y,k,dmin,dmax){const m=MD[key];if(!m)return D;const ar=Math.abs(r),ay=Math.abs(y);if(!(ar>0))return D;
+  const s=Math.min(1,Math.max(0,(+k||1)*Math.abs(ar-ay)/ar));let Dc=ay>1e-9*ar?m.inv(m.M(Math.min(Math.max(D,dmin),dmax))*ar/ay):dmax;
+  if(!Number.isFinite(Dc))Dc=D;Dc=Math.min(dmax,Math.max(dmin,Dc));return Math.min(dmax,Math.max(dmin,(1-s)*D+s*Dc));}
+ // the interval of the method in samples when N = 0 (automatic): one period of the slowest oscillating mode of the averaged
+ // model (the mean of the output over it is close to where it settles), or four time constants of the slowest real one
+ function convAuto(A,Tc){const p=roots(charpoly(A).a);let T=0;for(const [re,im] of p){if(Math.abs(im)>1e-9)T=Math.max(T,2*Math.PI/Math.abs(im));else if(re<0)T=Math.max(T,Math.min(4/Math.abs(re),1e3*Tc));}
+  return Math.max(1,Math.ceil(T/Tc-1e-9));}
+ function convStart(key,r,vin,dmin,dmax){const m=MD[key];if(!m||!(Math.abs(vin)>0))return (dmin+dmax)/2;const D=m.inv(Math.abs(r)/Math.abs(vin));return Number.isFinite(D)?Math.min(dmax,Math.max(dmin,D)):(dmin+dmax)/2;}
+ // the characteristic polynomial and the adjugate (Faddeev–LeVerrier): det(sI − A) = Σ a_k s^(n−k), adj = Σ B_k s^(n−1−k)
+ function charpoly(A){const n=A.length,I=A.map((r,i)=>r.map((_,j)=>i===j?1:0)),mul=(X,Y)=>X.map(r=>Y[0].map((_,j)=>r.reduce((s,v,k)=>s+v*Y[k][j],0)));
+  const a=[1],B=[I];let M=I;for(let k=1;k<=n;k++){const AM=mul(A,M),ak=-AM.reduce((s,r,i)=>s+r[i],0)/k;a.push(ak);if(k<n){M=AM.map((r,i)=>r.map((v,j)=>v+(i===j?ak:0)));B.push(M);}}return {a,B};}
+ // G(s) = c·adj(sI − A)·b/det(sI − A): numerator and denominator in descending powers of s
+ function tfOf(A,b,c){const {a,B}=charpoly(A);const num=B.map(Bk=>c.reduce((s,ci,i)=>s+ci*Bk[i].reduce((q,v,j)=>q+v*b[j],0),0));return {num,den:a};}
+ // the roots of a polynomial (descending powers; Durand–Kerner), as [re, im]
+ // (rho: the size of the roots of the denominator; a leading coefficient whose term is negligible at |s| = rho next to
+ // the others is a numerical zero, dropped; a monic polynomial keeps its degree)
+ function roots(p,rho){let q=p.slice();const w=(a,k,n)=>Math.abs(a)*Math.pow(rho||1,n-k);
+  while(q.length>1){const n=q.length-1,big=Math.max(...q.map((a,k)=>w(a,k,n)));if(q[0]===0||(rho&&w(q[0],0,n)<1e-11*big))q.shift();else break;}const n=q.length-1;if(n<1)return [];
+  const c=q.map(v=>v/q[0]),R=[];for(let k=0;k<n;k++){const r0=Math.pow(Math.abs(c[n])||1,1/n)||1,th=2*Math.PI*k/n+.4;R.push([r0*Math.cos(th),r0*Math.sin(th)]);}
+  const ev=z=>{let re=1,im=0;for(let k=1;k<=n;k++){const nr=re*z[0]-im*z[1]+c[k],ni=re*z[1]+im*z[0];re=nr;im=ni;}return [re,im];};
+  for(let it=0;it<500;it++){let mv=0;for(let i=0;i<n;i++){let dr=1,di=0;for(let j=0;j<n;j++){if(j===i)continue;const xr=R[i][0]-R[j][0],xi=R[i][1]-R[j][1];const t=dr*xr-di*xi;di=dr*xi+di*xr;dr=t;}
+    const [fr,fi]=ev(R[i]),dd=dr*dr+di*di||1e-300,qr=(fr*dr+fi*di)/dd,qi=(fi*dr-fr*di)/dd;R[i]=[R[i][0]-qr,R[i][1]-qi];mv=Math.max(mv,Math.hypot(qr,qi)/(1+Math.hypot(...R[i])));}if(mv<1e-13)break;}
+  return R.map(([re,im])=>[re,Math.abs(im)<1e-9*(1+Math.abs(re))?0:im]);}
+ // the closed loop on the averaged (large-signal) model: x′ = A(d)·x + b(d), the controller of the PWM (the same lines as
+ // mna.js sampleControllers) sampled every Tc with a hold; a step of the reference by `step` (relative) at `tStep`
+ function closedLoop(P,g,o={}){const {md,c,x0,Tc,dmin,dmax,ref,rec,q}=P,M=md.M,n=x0.length,mix=(X,Y,d)=>X.map((r,i)=>Array.isArray(r)?r.map((v,k)=>d*v+(1-d)*Y[i][k]):d*r+(1-d)*Y[i]);
+  const f=(x,d)=>{const A=mix(M.A1,M.A2,d),b=mix(M.b1,M.b2,d);return A.map((r,i)=>dot(r,x)+b[i]);};
+  const H=o.tEnd||400*Tc,tStep=o.tStep??H*.1,step=o.step??.1,sub=o.sub||16,h=Tc/sub,N=Math.ceil(H/Tc),r1=ref*(1+step),ff=o.ff||'const',kc=o.kc??1,nc=Math.max(1,Math.round(+o.convN>0?o.convN:convAuto(md.op(P.D0).A,Tc)));let cs=0,cn=0;
+  let x=x0.slice(),xi=0,ePrev=null,dF=0,dc=ff==='conv'?convStart(rec.key,ref,q.Vg,dmin,dmax):P.D0,d=P.D0;const T=[],Y=[],Rr=[],Dd=[];
+  // the integrator starts where it holds the operating point (no start-up transient of the controller itself)
+  const ff0=ff==='const'?P.D0:ff==='conv'?dc:0;xi=P.D0-ff0;
+  for(let k=0;k<N;k++){const t=k*Tc,r=t>=tStep?r1:ref,y=dot(c,x),e=r-y;
+   if(ff==='conv'){cs+=y;cn++;if(k%nc===0&&k>0){dc=convStep(rec.key,dc,r,cs/cn,kc,dmin,dmax);cs=0;cn=0;}}
+   const ffv=ff==='const'?P.D0:ff==='conv'?dc:0;let der=0;if(g.Kd){const raw=ePrev===null?0:(e-ePrev)/Tc;dF=g.Tf>0?(g.Tf*dF+Tc*raw)/(g.Tf+Tc):raw;der=g.Kd*dF;}ePrev=e;
+   xi+=g.Ki*Tc*e;d=ffv+g.Kp*e+xi+der;if(d>dmax||d<dmin){xi-=g.Ki*Tc*e;d=Math.min(dmax,Math.max(dmin,ffv+g.Kp*e+xi+der));}
+   T.push(t);Y.push(y);Rr.push(r);Dd.push(d);
+   for(let j=0;j<sub;j++){const k1=f(x,d),x2=x.map((v,i)=>v+h/2*k1[i]),k2=f(x2,d),x3=x.map((v,i)=>v+h/2*k2[i]),k3=f(x3,d),x4=x.map((v,i)=>v+h*k3[i]),k4=f(x4,d);x=x.map((v,i)=>v+h/6*(k1[i]+2*k2[i]+2*k3[i]+k4[i]));}}
+  return {t:T,y:Y,r:Rr,d:Dd,tStep,r0:ref,r1};}
+ // what the window shows: the converter, its operating point, G(s) (numerator, denominator, poles, zeros), M(D), the loop
+ // with the gains given (or those from the circuit), its margins and Bode, and the closed loop in time
+ function analyze(o,gIn,opt={}){const P=prep(o);if(!P.ok)return P;if(P.signOnly)return {ok:false,error:'signOnly'};
+  const {rec,T,roles,q,c,md,op,bd,sg,G0,W,Gw,Graw,Tc,fs,D0,x0,ref,dmin,dmax,warn}=P;
+  const tf=tfOf(op.A,bd,c),poles=roots(tf.den),rho=Math.max(1e-12,...poles.map(z=>Math.hypot(z[0],z[1]))),zeros=roots(tf.num,rho);
+  let g=gIn;const auto=design(o);if(!g)g=auto.ok?{Kp:auto.Kp,Ki:auto.Ki,Kd:auto.Kd,Tf:auto.Tf}:{Kp:0,Ki:0,Kd:0,Tf:0};
+  const gg={Kp:sg*num(g.Kp,0),Ki:sg*num(g.Ki,0),Kd:sg*num(g.Kd,0),Tf:num(g.Tf,0)},spec={pm:num(o.p.pm,50),gm:2,ms:2,wcMax:2*Math.PI*fs/10};
+  const Lw=loopAt(gg,Gw,W,Tc),mg=margins(Lw,W,spec);
+  const pts=[];for(let i=0;i<=60;i++){const D=dmin+(dmax-dmin)*i/60;pts.push([D,MD[rec.key].M(D)]);}
+  // the time of the closed loop: about eight periods of the crossover (at least 400 samples, at most 40 000), the samples
+  // given back at most 2000
+  const tEnd=opt.tEnd||(mg.wc?Math.min(40000*Tc,Math.max(400*Tc,8*2*Math.PI/mg.wc)):400*Tc);
+  const cl0=closedLoop(P,{Kp:num(g.Kp,0),Ki:num(g.Ki,0),Kd:num(g.Kd,0),Tf:num(g.Tf,0)},{ff:opt.ff||o.p.ff||'const',kc:num(opt.kc??o.p.kc,1),convN:num(opt.convN??o.p.convN,0),step:opt.step,tEnd});
+  const dec=Math.max(1,Math.ceil(cl0.t.length/2000)),pick=a=>a.filter((_,i)=>i%dec===0||i===a.length-1),cl={...cl0,t:pick(cl0.t),y:pick(cl0.y),r:pick(cl0.r),d:pick(cl0.d)};
+  return {ok:true,key:rec.key,name:T.name,roles,values:q,ref,D0,x0,states:T.st,G0,sg,fs,Tc,tf,poles,zeros,M:{txt:MD[rec.key].txt,pts,D0},gains:g,auto:auto.ok?{Kp:auto.Kp,Ki:auto.Ki,Kd:auto.Kd,Tf:auto.Tf,fc:auto.fc,pm:auto.pm}:null,
+   margins:mg,f:W.map(w=>w/(2*Math.PI)),G:Graw,L:Lw,cl,warn};}
+ const api={TOPO,ORDER,ROLE_KEY,match,recognise,design,prep,analyze,tfOf,roots,charpoly,convStep,convStart,convAuto,MD,closedLoop};
  root.Tune=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

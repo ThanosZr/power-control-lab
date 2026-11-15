@@ -625,3 +625,16 @@ body.look-tech .nav-toggle.toggle.on,body.look-tech .pinbtn.on{background:#eef3f
 body.look-tech .netwarn{background:#fffaf2}
 /* the nets of the phases in their colours (a net with one phase of a three-phase part) */
 body.look-tech .wire.ph-a .wl{stroke:var(--ph-a)}body.look-tech .wire.ph-b .wl{stroke:var(--ph-b)}body.look-tech .wire.ph-c .wl{stroke:var(--ph-c)}
+/* 4.17.4 (ROADMAP §64): the window «Ρύθμιση ελεγκτή» (ctlwin.js) */
+.ctl-modal .modal-box{width:min(1180px,96vw);height:min(760px,92vh)}
+.ctl-body{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:14px;min-height:0}
+.ctl-left{overflow:auto;min-width:0}.ctl-left section{margin-bottom:8px}.ctl-left p{margin:3px 0}
+.ctl-left .mono{font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-word}
+.ctl-row{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:4px 0}.ctl-row label{display:flex;align-items:center;gap:4px;font-size:12px}
+.ctl-gain{display:grid;grid-template-columns:150px 1fr;gap:8px;align-items:center;margin:3px 0}.ctl-gain label{display:flex;gap:6px;align-items:center;font-size:12px}.ctl-gain input[type=text],.ctl-gain label input{width:90px}
+.ctl-res{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px}.ctl-act{margin-top:10px}
+.ctl-py{white-space:pre-wrap;font-size:11.5px;background:#f6f8f7;border:1px solid var(--line);border-radius:4px;padding:8px;max-height:220px;overflow:auto}
+.ctl-right{display:grid;grid-template-rows:1fr 1fr 1fr .8fr;gap:8px;min-height:0}
+.ctl-cv{width:100%;height:100%;min-height:110px;border:1px solid var(--line);border-radius:4px;background:#fff;display:block}
+@media (max-width:900px){.ctl-body{grid-template-columns:1fr}.ctl-right{grid-template-rows:repeat(4,200px)}}
+

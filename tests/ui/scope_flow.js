@@ -8,6 +8,8 @@
 //  6. the memory «αυτόματα» by default; the graphs in the whole window and back (Esc)
 //  7. the settings window: columns when wide, resized from a side and a corner, its size kept
 //  8. the viewer of a recording: its canvas follows its window
+// 10. 4.17.4 (ROADMAP §64): the window «Ρύθμιση ελεγκτή»: from the settings of the PWM, G(s) and its poles, four charts,
+//     the margins follow a gain, «Εφαρμογή» writes the gains (by hand) into the PWM
 //  9. 4.17.3 (ROADMAP §65): the technical look by default: thin crisp lines, IEC resistor, the phases in colour, the
 //     selected part in colour, widths from the settings; the classic look and the ANSI symbols from the settings
 // Usage: python run.py --no-browser --port 8775  then  node tests/ui/scope_flow.js http://127.0.0.1:8775/ [out]
@@ -113,6 +115,18 @@ const {chromium}=require('playwright');
  ok(R.look.ph>=1&&R.look.w2==='2.5px','phases in colour, the width of the parts from the settings '+JSON.stringify(R.look));
  ok(R.look.classic.body.includes('look-classic')&&R.look.classic.wsw==='2.2px'&&R.look.classic.cap==='round'&&/l2.5,-7/.test(R.look.classic.rd),'the classic look and ANSI symbols from the settings, kept '+JSON.stringify(R.look.classic));
  await p.evaluate(()=>localStorage.clear());
+ // 10. the controller window
+ await p.goto(U+'?tutorial=buck_vloop');await p.waitForTimeout(1500);
+ R.btn=await p.evaluate(()=>{PCL.openInspector('PWM1',300,300);return !!document.querySelector('#inspector [data-ctlwin]');});
+ R.ctl=await p.evaluate(async()=>{PCL.closeInspector();const w=PCL.openCtlWin('PWM1');await new Promise(z=>setTimeout(z,900));const st=w.state(),b=w.box;
+  const cvs=[...b.querySelectorAll('canvas')].map(c=>c.width>0&&c.height>0),txt=b.textContent;
+  const kp=b.querySelector('[data-cw="Kp"]'),k0=+kp.value;kp.value=String(+(k0*3).toPrecision(4));kp.dispatchEvent(new Event('change'));await new Promise(z=>setTimeout(z,400));
+  const st2=w.state();b.querySelector('[data-cwapply]').click();await new Promise(z=>setTimeout(z,300));const c=PCL.editor.comp('PWM1');
+  return {ok:st.R?.ok,key:st.R?.key,pm:st.R?.margins?.pm,pm2:st2.R?.margins?.pm,wc:st.R?.margins?.wc,wc2:st2.R?.margins?.wc,cvs,hasG:/G\(s\)/.test(txt),poles:/πόλοι/.test(txt),gain:c.params.gain,Kp:+c.params.Kp,k0,
+   framed:b.querySelector('.modal-box').classList.contains('wfr'),gone:!document.querySelector('.ctl-modal')};});
+ ok(R.btn&&R.ctl.ok&&R.ctl.key==='buck'&&R.ctl.cvs.length===4&&R.ctl.cvs.every(Boolean)&&R.ctl.hasG&&R.ctl.poles&&R.ctl.framed,'the controller window '+JSON.stringify(R.ctl));
+ // |Kp + Ki/jω| grows with Kp at every ω, so the crossover moves up (the PM may go either way)
+ ok(R.ctl.wc2>R.ctl.wc*1.05&&Math.abs(R.ctl.pm2-R.ctl.pm)>1&&R.ctl.gain==='manual'&&Math.abs(R.ctl.Kp-3*R.ctl.k0)<1e-6*Math.abs(R.ctl.k0)+1e-12&&R.ctl.gone,'margins follow the gain, applied to the PWM '+JSON.stringify(R.ctl));
  await p.screenshot({path:OUT+'/scope_flow.png'});
  ok(!errs.length,'χωρίς σφάλματα JavaScript '+errs.join(' | '));
  console.log(JSON.stringify(R,null,1).slice(0,3000));

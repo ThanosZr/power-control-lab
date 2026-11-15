@@ -798,7 +798,7 @@ function openInspector(id,x,y,keep){
  const wired=pin=>editor.doc.wires.some(w=>(w.a.c===c.id&&w.a.p===pin)||(w.b.c===c.id&&w.b.p===pin));
  const srcRows=sigIns.map(pin=>{const v=c.params?.['in_'+pin]||'';return `<label class="frow"><span>Πηγή της εισόδου ${esc(pin)}</span><select data-src="${esc(pin)}"><option value="">${wired(pin)?'από σύρμα':'— (καμία)'}</option>${outs.map(o=>`<option value="${esc(o.v)}" ${o.v===v?'selected':''}>${esc(o.t)}</option>`).join('')}${v&&!outs.some(o=>o.v===v)?`<option value="${esc(v)}" selected>${esc(v)} (λείπει)</option>`:''}</select></label>`;}).join('');
  ins.innerHTML=`<div class="ins-head" title="Σύρε από εδώ για να μετακινήσεις το παράθυρο"><span class="ins-grip" aria-hidden="true">⠿</span><div><small>${esc(def.name)}</small><input class="ins-label" data-label value="${esc(c.label||c.id)}"></div><button class="x" data-close>✕</button></div>
-  <div class="ins-body">${c.type==='NN'?nnBox(c,p):''}${c.type==='TLM'?`<button class="primary-ghost ld-open" data-linedata>Δεδομένα γραμμής…</button><small class="muted">${esc(P.tlmModel(p).err||'Μοντέλο '+(p.model==='fd'?'FD':'CP')+' ενημερωμένο.')}</small>`:''}${rows||(srcRows?'':'<p class="muted small">Χωρίς παραμέτρους.</p>')}${srcRows?`<div class="ins-srcs"><small class="muted">Σύνδεση χωρίς καλώδιο: διάλεξε από ποια έξοδο παίρνει σήμα κάθε είσοδος. Ισοδυναμεί με σύρμα.</small>${srcRows}</div>`:''}</div>${sig?`<div class="ins-probes">${sig}</div>`:''}
+  <div class="ins-body">${c.type==='PWM'&&p.mode==='pi'&&window.CtlWin?'<button class="primary-ghost ld-open" data-ctlwin title="G(s), Bode, περιθώρια, βηματική, PI/PID και πρόσθια τροφοδότηση, με εφαρμογή στο PWM ή από κώδικα">Ρύθμιση ελεγκτή…</button>':''}${c.type==='NN'?nnBox(c,p):''}${c.type==='TLM'?`<button class="primary-ghost ld-open" data-linedata>Δεδομένα γραμμής…</button><small class="muted">${esc(P.tlmModel(p).err||'Μοντέλο '+(p.model==='fd'?'FD':'CP')+' ενημερωμένο.')}</small>`:''}${rows||(srcRows?'':'<p class="muted small">Χωρίς παραμέτρους.</p>')}${srcRows?`<div class="ins-srcs"><small class="muted">Σύνδεση χωρίς καλώδιο: διάλεξε από ποια έξοδο παίρνει σήμα κάθε είσοδος. Ισοδυναμεί με σύρμα.</small>${srcRows}</div>`:''}</div>${sig?`<div class="ins-probes">${sig}</div>`:''}
   <div class="ins-foot"><small>Οι αλλαγές εφαρμόζονται αμέσως, και ενώ τρέχει η προσομοίωση. Μονάδες SI με προθέματα: 5.6u, 100m, 20k.</small></div>`;
  if(was)placeAt(ins,was.left,was.top);else if(INS.pos)placeAt(ins,INS.pos.x,INS.pos.y);else placePopup(ins,x,y);
  popupDrag(ins,(l,t)=>{INS.pos={x:l,y:t};try{localStorage.setItem('pcl-ins-pos',JSON.stringify(INS.pos));}catch(e){}});
@@ -815,10 +815,18 @@ function openInspector(id,x,y,keep){
  ins.querySelector('[data-label]').onchange=e=>{editor.setParams(id,{},{label:e.target.value||id});renderChannels();};
  ins.querySelector('[data-close]').onclick=closeInspector;
  ins.querySelector('[data-linedata]')?.addEventListener('click',()=>{closeInspector();LineData.open(id,lineCtx());});
+ ins.querySelector('[data-ctlwin]')?.addEventListener('click',()=>{closeInspector();openCtlWin(id);});
  ins.querySelector('[data-nnkeep]')?.addEventListener('click',()=>{const w=nnLearned(id);if(!w){notice('Το δίκτυο δεν έχει μάθει ακόμη: τρέξε πρώτα την προσομοίωση.','info');setTimeout(()=>notice(''),3000);return;}
   editor.setParams(id,{w});openInspector(id,0,0,true);notice('Τα βάρη που έμαθε το δίκτυο γράφτηκαν στο μπλοκ (παράμετρος «Βάρη»): μένουν στο αρχείο και ξεκινά από αυτά.','info');setTimeout(()=>notice(''),4000);});
  ins.querySelectorAll('[data-probe]').forEach(b=>b.onclick=()=>addProbe(b.dataset.probe));
 }
+// 4.17.4 (ROADMAP §64): the window «Ρύθμιση ελεγκτή» of a PWM (ctlwin.js): what it needs from the application
+function ctlCtx(){return {comp:id=>editor.comp(id),params:id=>{const c=editor.comp(id);return {...P.defaults('PWM'),...(c?.params||{})};},eng,parse:v=>P.parseEng(v),
+ notice:t=>{notice(esc(t),'error');setTimeout(()=>notice(''),4000);},
+ args:(id,over)=>{const k=S.sim?.net?.ctrls?.find(q=>q.id===(S.pfx?S.pfx+id:id));if(!k||!k.tuneArgs)return null;return {...k.tuneArgs,p:{...k.tuneArgs.p,...(over||{})}};},
+ apply:(id,v)=>{editor.setParams(id,v);notice(`Τα κέρδη γράφτηκαν στο ${esc(id)} (χειροκίνητα).`,'info');setTimeout(()=>notice(''),3000);},
+ code:(id,st)=>`import pcl\np = pcl.load('κύκλωμα.json')            # ή pcl.tutorial('buck_vloop')\nd = p.tune('${id}')                        # G(s), πόλοι, μηδενικά, περιθώρια, κέρδη από το κύκλωμα\nprint(d['tf'], d['poles'], d['auto'])\nd = p.tune('${id}', Kp=${+(+st.Kp).toPrecision(5)}, Ki=${+(+st.Ki).toPrecision(5)}${st.ctl==='pid'?`, Kd=${+(+st.Kd).toPrecision(5)}, Tf=${+(+st.Tf).toPrecision(5)}`:''}, ff='${st.ff}'${st.ff==='conv'?`, kc=${st.kc}, convN=${st.convN}`:''})\nprint(d['margins'])                       # wc (rad/s), pm (°), gm, ms\np.set('${id}.gain', 'manual').set('${id}.Kp', ${+(+st.Kp).toPrecision(5)}).set('${id}.Ki', ${+(+st.Ki).toPrecision(5)})${st.ctl==='pid'?`.set('${id}.ctl', 'pid').set('${id}.Kd', ${+(+st.Kd).toPrecision(5)}).set('${id}.Tf', ${+(+st.Tf).toPrecision(5)})`:''}.set('${id}.ff', '${st.ff}')\nr = p.run(t_end=0.02, channels=['V:C1'])`};}
+function openCtlWin(id){if(!window.CtlWin)return null;if(!S.sim){notice('Δεν υπάρχει λύτης για το κύκλωμα.','error');return null;}return CtlWin.open(ctlCtx(),id);}
 const WIRE_COLORS=['','#147966','#c47a1c','#2f5fa0','#b03a5b','#6b4fa0','#203a3f'];
 // a named wire can join every wire with the same name (3.18, like Goto/From, for electrical nodes too); a bus has no single node voltage
 const WLINK_HINT='Σύρματα με το ίδιο όνομα είναι ένας κόμβος, χωρίς καλώδιο ανάμεσα: ηλεκτρικό με ηλεκτρικό, σήμα με σήμα (μέσα σε υποκύκλωμα, μόνο στο ίδιο instance). ⇄ = ενώνει σύρματα που δεν συνδέονται αλλιώς.';
@@ -2807,5 +2815,5 @@ function boot(){
 function renderTheoryLive(){if(!atTop()||document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
 window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,libToSub,enterSub,leaveSub,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
- renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush,draw,closeInspector}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare; 4.17.2: scope_flow
+ renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush,draw,closeInspector,openCtlWin}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare; 4.17.2: scope_flow
 })();

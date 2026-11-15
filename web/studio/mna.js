@@ -670,9 +670,14 @@
   // with hand-set gains, a warning when their sign is against ∂(measured)/∂D of an exactly recognised converter
   const nodeKey=(cid,pin)=>{const n=pinNet.get(cid+':'+pin);return n?(n.ground?'G':'n'+n.index):null;};
   const tunePwm=(k,p,c)=>{if(!TUNE)return;const auto=p.gain==='auto',lbl=c.label||c.id;let r;
+   // 4.17.4: what the window «Ρύθμιση ελεγκτή» needs to analyse this PWM again (tune.js analyze)
+   k.tuneArgs={p,comps,nodeOf:nodeKey};
+   // the convergence method: the converter and its nominal input voltage (the first assignment, M⁻¹(|r|/|V_in|))
+   if(k.ff==='conv'){let q;try{q=TUNE.design({p,comps,nodeOf:nodeKey,strict:false,signOnly:true});}catch(e){q={ok:false,error:String(e&&e.message||e)};}
+    if(q.ok&&TUNE.MD&&TUNE.MD[q.key]){k.convKey=q.key;k.convVin=q.values?.Vg??0;if(!(k.convN>0))k.convN=TUNE.convAuto(q.op.A,q.Tp);}else{warnings.push(`${lbl}: η μέθοδος σύγκλισης θέλει έναν αναγνωρισμένο μετατροπέα (${q.error||'—'})· χωρίς πρόσθια τροφοδότηση.`);k.ff='none';}}
    try{r=TUNE.design({p,comps,nodeOf:nodeKey,strict:!auto,signOnly:!auto});}catch(e){r={ok:false,error:String(e&&e.message||e)};}
    if(auto){if(!r.ok){warnings.push(`${lbl}: κέρδη από το κύκλωμα: ${r.error}· μένουν τα χειροκίνητα.`);return;}
-    k.Kp=r.Kp;k.Ki=r.Ki;k.Kd=r.Kd;k.Tf=r.Tf;if(k.ff!=='ratio'){k.ff='const';k.D0=r.D0;}k.design=r;for(const w of r.warn)warnings.push(`${lbl}: ${w}.`);}
+    k.Kp=r.Kp;k.Ki=r.Ki;k.Kd=r.Kd;k.Tf=r.Tf;if(k.ff!=='ratio'&&k.ff!=='conv'){k.ff='const';k.D0=r.D0;}k.design=r;for(const w of r.warn)warnings.push(`${lbl}: ${w}.`);}
    else if(r.ok){const g=k.Ki||k.Kp;if(g&&Math.sign(g)!==r.sg)warnings.push(`${lbl}: στο ${r.name} ∂(μέτρηση)/∂D ${r.sg<0?'< 0 (αντιστρέφει)':'> 0'}, ενώ τα κέρδη έχουν ${g>0?'θετικό':'αρνητικό'} πρόσημο: ο βρόχος έχει θετική ανάδραση. Άλλαξε το πρόσημο των K_p, K_i${k.Kd?', K_d':''} ή διάλεξε «Κέρδη: από το κύκλωμα».`);}};
   const internal=()=>nNodes++;
   const els=[],ctrls=[],shs=[],blocks=[],compInfo=new Map();
@@ -819,7 +824,7 @@
    else if(T==='CPL'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'CPL',a,b,P:num(p.P,1000),Vmin:Math.max(num(p.Vmin,5),1e-3),sched:P.parseSched(p.sched),v0:null});}
    else if(T==='PWM'){const fs=Math.max(num(p.fs,20e3),1e-3);ctrls.push({id:c.id,label:c.label||c.id,fs,T:1/fs,mode:p.mode||'fixed',D:num(p.D,.5),dsched:P.parseSched(p.dsched),carrier:p.carrier||'triangle',phase:num(p.phase,0)/360,
      sensor:p.sensor,qty:p.qty||'I',ref:P.parseSched(p.ref)||[[0,0]],Kp:num(p.Kp,0),Ki:num(p.Ki,0),ff:p.ff||'none',ffA:p.ffA,ffB:p.ffB,D0:num(p.D0,.5),dmin:num(p.dmin,.01),dmax:num(p.dmax,.99),
-     Kd:num(p.Kd,0),Tf:num(p.Tf,0),dt:Math.max(0,num(p.dt,0)),dIn:p.mode==='ext'?sn(c.id,'d'):-1,tkPrev:null,dPrev:null,dPrevOff:null,upd:p.upd==='double'?'double':'single',h:null,dOn:num(p.D,.5),dOff:num(p.D,.5),m:num(p.m,.8),fref:num(p.fref,50),refphase:num(p.refphase,0)*Math.PI/180,d:num(p.D,.5),xi:0,k:null,tk:0,meas:0,refNow:0,ePrev:null,dF:0});info.ctrl=ctrls[ctrls.length-1];if(p.mode==='pi')tunePwm(info.ctrl,p,c);}
+     Kd:num(p.Kd,0),Tf:num(p.Tf,0),kc:num(p.kc,1),convN:Math.max(0,Math.round(num(p.convN,0))),convKey:null,convVin:0,dc:null,cs:0,cn:0,dt:Math.max(0,num(p.dt,0)),dIn:p.mode==='ext'?sn(c.id,'d'):-1,tkPrev:null,dPrev:null,dPrevOff:null,upd:p.upd==='double'?'double':'single',h:null,dOn:num(p.D,.5),dOff:num(p.D,.5),m:num(p.m,.8),fref:num(p.fref,50),refphase:num(p.refphase,0)*Math.PI/180,d:num(p.D,.5),xi:0,k:null,tk:0,meas:0,refNow:0,ePrev:null,dF:0});info.ctrl=ctrls[ctrls.length-1];if(p.mode==='pi')tunePwm(info.ctrl,p,c);}
    else if(T==='IM'){ // induction machine, inverse-Γ, stator frame: each phase R_s + R_R, L_σ and the source e = −(R_R/L_M − jω_r)ψ_R (Y, floating star);
     // ψ_R, ω and θ are states of the machine, advanced after each committed step from the stator currents
     const N=internal(),ph=[];for(const k of ['a','b','c']){const t=node(c.id,k),n1=internal(),n2=internal();add({k:'G',a:t,b:n1,R:num(p.Rs,3)+num(p.RR,2),role:'R'});
@@ -1411,7 +1416,12 @@
     else if(k.mode==='ext'){const v=k.dIn>=0?this.sv[k.dIn]:0;k.d=Number.isFinite(v)?v:0;}
     else if(k.mode==='pi'){const T=Ts;
      k.refNow=schedAt(k.ref,this.t,k.ref[0][1]);const sh=this.shById.get(k.sensor);k.meas=sh?sh.h:k.qty==='V'?this.compV(k.sensor):this.compI(k.sensor);if(!Number.isFinite(k.meas))k.meas=0;
+     if(force&&!this.started)k.dc=null;
      let ff=0;if(k.ff==='ratio'){const a=this.compV(k.ffA),b=this.compV(k.ffB);ff=Math.abs(b)>1e-9?1-a/b:0;}else if(k.ff==='const')ff=k.D0;
+     // 4.17.4 (ROADMAP §64): the convergence method of the source of Thanos as the feed-forward (tune.js convStep)
+     // (the mean of the output over the N periods since the last correction, so that a ringing output does not mislead it)
+     else if(k.ff==='conv'&&TUNE){if(k.dc===null){k.dc=TUNE.convStart(k.convKey,k.refNow,k.convVin,k.dmin,k.dmax);k.cs=0;k.cn=0;}
+      else{k.cs+=k.meas;k.cn++;if(period&&idx%Math.max(1,k.convN)===0){k.dc=TUNE.convStep(k.convKey,k.dc,k.refNow,k.cs/k.cn,k.kc,k.dmin,k.dmax);k.cs=0;k.cn=0;}}ff=k.dc;}
      const e=k.refNow-k.meas;if(force&&!this.started){k.xi=0;k.ePrev=null;k.dF=0;}
      let der=0;if(k.Kd){const raw=k.ePrev===null?0:(e-k.ePrev)/T;k.dF=k.Tf>0?(k.Tf*k.dF+T*raw)/(k.Tf+T):raw;der=k.Kd*k.dF;}k.ePrev=e;
      k.xi+=k.Ki*T*e;let d=ff+k.Kp*e+k.xi+der;
@@ -2003,6 +2013,11 @@
  // ---------------------------------------------------------------- batch export
  // The same netlist (fresh initial conditions) plus a "recipe" per requested
  // channel, for the reference run on the server (engine/batch.py).
+ // 4.17.4 (ROADMAP §64): the analysis of a PWM in closed loop from a project (for pcl and the scenarios): tune.js analyze()
+ // with the given gains (or those from the circuit) and options {ff, kc, convN, step, tEnd}; functions left out
+ function tuneInfo(project,id,gains,opt){if(!TUNE)throw new Error('tune.js λείπει');const net=buildNetlist(project),k=net.ctrls.find(q=>q.id===id);
+  if(!k)throw new Error(`Δεν υπάρχει PWM «${id}».`);if(!k.tuneArgs)throw new Error(`Ο ${id} δεν είναι σε κλειστό βρόχο (PI/PID).`);
+  const r=TUNE.analyze(k.tuneArgs,gains||null,opt||{});if(!r.ok)throw new Error(r.error||'δεν αναλύεται');return r;}
  function exportForBatch(project,keys){
   // 4.9.1: the parts with a fast implementation go to the server as their detailed one (the same model, ROADMAP §52)
   {const NL=NLIB();if(NL&&NL.forceImpl)project=NL.forceImpl(project,'blocks');}
@@ -2082,7 +2097,7 @@
    if(b.type==='PIB'||b.type==='UD'||b.type==='PY'||b.type==='RT'||b.type==='NN'||b.type==='NLC'){o.clock=cix.get(b.clock)??null;o.clk=clkOf(b.clock);}
    if(b.type==='VM')o.rec=vd(b.np,b.nn);else if(b.type==='AM')o.rec={i:[[idx.get(b.el),-1]]};else if(b.type==='MEAS'){const c=ci(b.src);o.rec=(b.qty==='V'?V(c):I(c))||null;}
    if(b.type==='SH'){o.sh=shx.get(b.id);o.sig=!!b.sig;}return o;});
-  const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase','upd','dIn'])o[f]=k[f];
+  const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase','upd','dIn','kc','convN','convKey','convVin'])o[f]=k[f];
    const s=ci(k.sensor);o.sensorRec=k.mode==='pi'?(shx.has(k.sensor)?{sh:shx.get(k.sensor)}:k.qty==='V'?V(s):I(s)):null;o.ffARec=V(ci(k.ffA));o.ffBRec=V(ci(k.ffB));return o;});
   const channels={},skipped=[];for(const key of keys){const r=rec(key);if(r)channels[key]=r;else skipped.push(key);}
   // 3.19: the program of parameter changes runs in the browser solver only (it rebuilds the netlist at each entry)
@@ -2112,6 +2127,6 @@
  // (a parameter changed), the states pass over by key as with a change while running (load without fresh).
  function resume(saved,state,project){const s=new Sim(saved,{...state.opts});s.method=state.method||s.method;s.restoreSnapshot(state);
   if(project&&JSON.stringify(project)!==JSON.stringify(saved))s.load(project,false);return s;}
- const api={Sim,buildNetlist,NetlistError,exportForBatch,sweepPoint,eisPoint,resume,setPath};
+ const api={Sim,buildNetlist,NetlistError,exportForBatch,sweepPoint,eisPoint,resume,setPath,tuneInfo};
  root.MNA=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

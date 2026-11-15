@@ -132,6 +132,7 @@
   if(q.action==='state')return session(q).sim.snapshot();
   if(q.action==='close')return closeSession(q);
   // 4.7: the step check (eigenvalues of the state map) off the page: the same circuit, at the same switch states (snapshot)
+  if(q.action==='tune')return MNA.tuneInfo(q.project,q.id,q.gains||null,q.opt||{}); // 4.17.4
   if(q.action==='stepcheck'){const sm=new MNA.Sim(q.project,q.opts||{});if(q.state)sm.restoreSnapshot(q.state);return sm.stepCheck();}
   throw new Error('Άγνωστη ενέργεια: '+q.action);}
 

@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.17.3: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (581 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.17.4: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (583 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.17.3.
+Κανένα στην 4.17.4.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-342 σημεία.
+343 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -70,6 +70,7 @@
 | `pcl.Project.set` | `key`, `value` | 3.18 |
 | `pcl.Project.stream` | `t_end`, `chunk`, `channels`, `hdiv`, `method`, `step`, `rtol`, `hmax`, `t_from`, `max_points`, `measure`, `state`, `resume`, `to`, `timeout`, `waveforms`, `set` | 3.18 |
 | `pcl.Project.sweep` | `grid`, `points`, `t_end`, `measure`, `workers`, `solver`, `mode`, `progress`, `to`, `resume`, `**run_kw` | 3.18 |
+| `pcl.Project.tune` | `pwm`, `Kp`, `Ki`, `Kd`, `Tf`, `ff`, `kc`, `convN`, `step` | 4.17.4 |
 | `pcl.Result` | `t`, `keys`, `ch`, `meta`, `project`, `measured`, `diag` | 3.18 |
 | `pcl.Result.as_dict` | — | 3.18 |
 | `pcl.Result.events_csv` | `path`, `kinds` | 3.19 |
@@ -524,7 +525,7 @@
 
 ## Αιτήματα σεναρίων (`web/studio/scenario.js`)
 
-12 σημεία.
+13 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -538,6 +539,7 @@
 | `action:run` | — | 3.18 |
 | `action:state` | — | 3.18 |
 | `action:stepcheck` | — | 4.7 |
+| `action:tune` | — | 4.17.4 |
 | `action:tutorial` | — | 3.18 |
 | `action:tutorials` | — | 3.18 |
 
@@ -556,7 +558,7 @@
 | `file.watch` | show, tiles, panel | — | 4.8 |
 | `file.watch.tile` | id, key, ctl, label, at, al, rng, steps, span | — | 4.8 |
 | `file.wire` | id, a, b, pts, name, color, width | — | 3.18 |
-| `part:AIC` | scheme, mode, target, learn, fs, fr, Kp, Ki, umin, umax, rs, dxs, us, hidden, opt, lr, elr, K, ds, seed, w | L, iae, r, sat, u, y, yd | 4.8 |
+| `part:AIC` | scheme, mode, target, learn, fs, fr, ka, Kp, Ki, umin, umax, rs, dxs, us, hidden, opt, lr, elr, K, ds, seed, w | L, iae, r, sat, u, y, yd | 4.8 |
 | `part:AM` | — | a, b, y | 3.18 |
 | `part:ARC` | ctl, cmd, arc, tau, P0, P1, alpha, beta, tauc, Uc, taum, Pm, tau1, Pi1, Pi2, k1, k2, k3, gmin, Ron, vm | a, b, cmd | 4.8.1 |
 | `part:ARCX` | lam, tau0, alpha, P0, P1, beta, Ron, gmin | a, b, g | 4.8.1 |
@@ -626,7 +628,7 @@
 | `part:PLL` | f0, bw, th0, ini, conn | a, abc, amp, b, c, th, w | 3.18 |
 | `part:PORT` | name, side, width | p | 3.18 |
 | `part:PSS` | KS, TW, T1, T2, T3, T4, VSMAX, VSMIN | vs, w | 4.8.1 |
-| `part:PWM` | fs, mode, D, dsched, carrier, phase, upd, dt, sensor, qty, ref, gain, ctl, topo, rVin, rL1, rC1, rL2, rC2, rR, fc, pm, Kp, Ki, Kd, Tf, ff, ffA, ffB, D0, dmin, dmax, m, fref, refphase | d | 3.18 |
+| `part:PWM` | fs, mode, D, dsched, carrier, phase, upd, dt, sensor, qty, ref, gain, ctl, topo, rVin, rL1, rC1, rL2, rC2, rR, fc, pm, Kp, Ki, Kd, Tf, ff, kc, convN, ffA, ffB, D0, dmin, dmax, m, fref, refphase | d | 3.18 |
 | `part:PY` | code, ins, outs, pars, clock, trig, y0 | e, y | 3.18 |
 | `part:R` | R, sched | a, b | 3.18 |
 | `part:RAMP` | f, shape, lo, hi, phase | y | 3.18 |

@@ -114,6 +114,8 @@
 | right-half-plane (RHP) zero | μηδενικό στο δεξί ημιεπίπεδο (4.17) |
 | role (of an element in a topology) | ρόλος (στοιχείου στο πρότυπο), λίστα ρόλων (4.17) |
 | guard band / out-of-band samples (of a rational fit) | ζώνη ασφαλείας, δείγματα ασφαλείας (4.17) |
+| convergence method (adaptation factor) | μέθοδος σύγκλισης (παράγοντας προσαρμογής s) (4.17.4) |
+| parameter drift | εκτροπή των βαρών (4.17.4) |
 | technical look / classic look | τεχνική όψη / κλασική όψη (4.17.3) |
 | crisp edges (no antialiasing) | γραμμές σε ακέραια pixel, χωρίς εξομάλυνση (4.17.3) |
 | steady autoscale | σταθερή αυτόματη κλίμακα (4.17.2) |

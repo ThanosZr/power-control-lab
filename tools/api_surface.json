@@ -1,5 +1,5 @@
 {
- "version": "4.17.3",
+ "version": "4.17.4",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -219,6 +219,20 @@
      "**run_kw"
     ],
     "since": "3.18"
+   },
+   "pcl.Project.tune": {
+    "params": [
+     "pwm",
+     "Kp",
+     "Ki",
+     "Kd",
+     "Tf",
+     "ff",
+     "kc",
+     "convN",
+     "step"
+    ],
+    "since": "4.17.4"
    },
    "pcl.Result": {
     "params": [
@@ -3460,6 +3474,10 @@
     "params": [],
     "since": "4.7"
    },
+   "action:tune": {
+    "params": [],
+    "since": "4.17.4"
+   },
    "action:tutorial": {
     "params": [],
     "since": "3.18"
@@ -3588,6 +3606,7 @@
      "learn",
      "fs",
      "fr",
+     "ka",
      "Kp",
      "Ki",
      "umin",
@@ -5104,6 +5123,8 @@
      "Kd",
      "Tf",
      "ff",
+     "kc",
+     "convN",
      "ffA",
      "ffB",
      "D0",
