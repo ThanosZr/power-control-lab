@@ -12,10 +12,11 @@
 | `web/studio/app.js` | 2819 |
 | `web/studio/bus.js` | 197 |
 | `web/studio/ctlwin.js` | 78 |
-| `web/studio/editor.js` | 648 |
+| `web/studio/editor.js` | 684 |
 | `web/studio/expr.js` | 73 |
 | `web/studio/inputs.js` | 62 |
 | `web/studio/inside.js` | 143 |
+| `web/studio/lblplace.js` | 145 |
 | `web/studio/library.js` | 56 |
 | `web/studio/linedata.js` | 659 |
 | `web/studio/linemodels.js` | 4 |
@@ -103,6 +104,7 @@
 | `tests/test_impl.py` | 138 |
 | `tests/test_impulse_tools.py` | 150 |
 | `tests/test_inputs.py` | 147 |
+| `tests/test_lblplace.py` | 70 |
 | `tests/test_lcc.py` | 223 |
 | `tests/test_library.py` | 41 |
 | `tests/test_lightning.py` | 78 |
@@ -147,6 +149,7 @@
 | `tests/js/gen_ctl_cases.js` | 39 |
 | `tests/js/impl_cases.js` | 63 |
 | `tests/js/inputs_cases.js` | 30 |
+| `tests/js/lblplace_cases.js` | 44 |
 | `tests/js/lcc_cases.js` | 64 |
 | `tests/js/library_cases.js` | 11 |
 | `tests/js/lightning_cases.js` | 22 |
@@ -185,7 +188,7 @@
 | `tests/ui/live_flow.js` | 41 |
 | `tests/ui/perf_flow.js` | 68 |
 | `tests/ui/scenario_flow.js` | 70 |
-| `tests/ui/scope_flow.js` | 134 |
+| `tests/ui/scope_flow.js` | 169 |
 | `tests/ui/speed_flow.js` | 104 |
 | `tests/ui/step_flow.js` | 41 |
 | `tests/ui/studio_flow.js` | 39 |
@@ -923,63 +926,68 @@
 | 280 | method | `gridBg` |
 | 289 | method | `fit` |
 | 291 | method | `extent` |
-| 296 | method | `render` |
-| 298 | method | `partEls` |
-| 299 | method | `partSVG` |
-| 305 | method | `renderPart` |
-| 306 | method | `valueText` |
-| 341 | method | `noteHTML` |
-| 344 | method | `renderLabels` |
-| 349 | const fn | `at` |
-| 353 | method | `renderWires` |
-| 372 | method | `wireSVG` |
-| 384 | method | `redrawWire` |
-| 385 | method | `pathD` |
-| 390 | method | `segDir` |
-| 391 | method | `midLabel` |
-| 392 | method | `renderPins` |
-| 402 | method | `renderSel` |
-| 404 | method | `setLive` |
-| 406 | method | `updateLive` |
-| 415 | method | `drawArrows` |
-| 426 | method | `world` |
-| 428 | method | `hitAt` |
-| 429 | method | `hitOf` |
-| 431 | method | `down` |
-| 457 | method | `move` |
-| 470 | method | `up` |
-| 484 | method | `cancelDrag` |
-| 485 | method | `hoverPin` |
-| 487 | method | `dbl` |
-| 488 | method | `menu` |
-| 491 | method | `worldNow` |
-| 492 | method | `wheel` |
-| 499 | method | `letter` |
-| 500 | method | `key` |
-| 524 | method | `beginDrag` |
-| 535 | method | `dragMove` |
-| 547 | method | `endDrag` |
-| 557 | method | `bakeMove` |
-| 562 | method | `dragSeg` |
-| 565 | const fn | `stub` |
-| 574 | method | `drawMarquee` |
-| 577 | method | `marqueeSelect` |
-| 580 | const fn | `inside` |
-| 587 | method | `escape` |
-| 590 | method | `beginPlace` |
-| 591 | method | `ghost` |
-| 593 | method | `finishPlace` |
-| 594 | method | `cancelPlace` |
-| 596 | method | `startWire` |
-| 597 | method | `startWireFrom` |
-| 598 | method | `previewWire` |
-| 607 | method | `wireClick` |
-| 613 | method | `orthoNext` |
-| 614 | method | `finishWire` |
-| 630 | method | `cancelWire` |
-| 632 | method | `splitWire` |
-| 642 | method | `wireNetPin` |
-| 644 | method | `canScroll` |
+| 298 | method | `render` |
+| 300 | method | `partEls` |
+| 301 | method | `partSVG` |
+| 307 | method | `renderPart` |
+| 308 | method | `valueText` |
+| 310 | const fn | `fn` |
+| 346 | method | `noteHTML` |
+| 351 | method | `lblMeasure` |
+| 358 | method | `lvChars` |
+| 364 | method | `renderLabels` |
+| 370 | const fn | `r1` |
+| 371 | const fn | `line` |
+| 383 | method | `relabelSoon` |
+| 384 | method | `renderWires` |
+| 403 | method | `wireSVG` |
+| 415 | method | `redrawWire` |
+| 416 | method | `pathD` |
+| 421 | method | `segDir` |
+| 422 | method | `midLabel` |
+| 423 | method | `renderPins` |
+| 433 | method | `renderSel` |
+| 437 | method | `setLive` |
+| 439 | method | `updateLive` |
+| 451 | method | `drawArrows` |
+| 462 | method | `world` |
+| 464 | method | `hitAt` |
+| 465 | method | `hitOf` |
+| 467 | method | `down` |
+| 493 | method | `move` |
+| 506 | method | `up` |
+| 520 | method | `cancelDrag` |
+| 521 | method | `hoverPin` |
+| 523 | method | `dbl` |
+| 524 | method | `menu` |
+| 527 | method | `worldNow` |
+| 528 | method | `wheel` |
+| 535 | method | `letter` |
+| 536 | method | `key` |
+| 560 | method | `beginDrag` |
+| 571 | method | `dragMove` |
+| 583 | method | `endDrag` |
+| 593 | method | `bakeMove` |
+| 598 | method | `dragSeg` |
+| 601 | const fn | `stub` |
+| 610 | method | `drawMarquee` |
+| 613 | method | `marqueeSelect` |
+| 616 | const fn | `inside` |
+| 623 | method | `escape` |
+| 626 | method | `beginPlace` |
+| 627 | method | `ghost` |
+| 629 | method | `finishPlace` |
+| 630 | method | `cancelPlace` |
+| 632 | method | `startWire` |
+| 633 | method | `startWireFrom` |
+| 634 | method | `previewWire` |
+| 643 | method | `wireClick` |
+| 649 | method | `orthoNext` |
+| 650 | method | `finishWire` |
+| 666 | method | `cancelWire` |
+| 668 | method | `splitWire` |
+| 678 | method | `wireNetPin` |
+| 680 | method | `canScroll` |
 
 ### `web/studio/expr.js`
 
@@ -1041,6 +1049,32 @@
 | 124 | function | `update` |
 | 129 | function | `open` |
 | 139 | function | `close` |
+
+### `web/studio/lblplace.js`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 19 | const fn | `asc` |
+| 32 | function | `est` |
+| 34 | const fn | `ov` |
+| 36 | function | `clipLen` |
+| 40 | class | `Grid` |
+| 42 | method | `add` |
+| 43 | method | `del` |
+| 44 | method | `near` |
+| 45 | const fn | `midLabel` |
+| 48 | function | `sideOf` |
+| 55 | function | `gather` |
+| 80 | function | `stack` |
+| 104 | function | `cands` |
+| 107 | function | `cost` |
+| 111 | function | `place` |
+| 115 | const fn | `best0` |
+| 118 | const fn | `put` |
+| 119 | const fn | `pick` |
+| 125 | const fn | `ctr` |
+| 134 | function | `layout` |
+| 136 | function | `check` |
 
 ### `web/studio/library.js`
 

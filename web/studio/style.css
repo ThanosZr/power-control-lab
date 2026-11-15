@@ -466,6 +466,10 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .livel .a-s>div{transform:translate(0,-.8em)}.livel .a-m>div{transform:translate(-50%,-.8em)}.livel .a-e>div{transform:translate(-100%,-.8em)}
 .livel .lbl{color:var(--ink)}.livel .val{color:#5f7671}.livel .lv{color:var(--accent2)}
 .livel .lv:empty,.livel .val:empty{display:none}
+/* 4.17.5: labels on dense drawings (lblplace.js): a piece of a line with two texts (as), a value hidden (hid) or cut (max-width
+   with «…»); the label of a selected part shows it whole, over what is beneath */
+.livel .lbls>div.as{transform:translate(0,-.8em)}.livel .lbls>.hid{display:none}
+.livel .lbls.sel{z-index:2}.livel .lbls.sel>.hid:not(:empty){display:block}.livel .lbls.sel>div{max-width:none!important}.livel .lbls.sel>div:not(:empty){background:#ffffffe0}
 /* 4.6: the library in categories (library.js) */
 .palette select{width:100%;margin-bottom:6px;font-size:12px}
 .pal-group{margin:2px 0 4px}.pal-group>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:4px;padding:5px 4px;border-radius:6px;font-size:11px;font-weight:700;color:var(--ink);letter-spacing:.02em}

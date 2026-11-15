@@ -10,6 +10,9 @@
 //  8. the viewer of a recording: its canvas follows its window
 // 10. 4.17.4 (ROADMAP §64): the window «Ρύθμιση ελεγκτή»: from the settings of the PWM, G(s) and its poles, four charts,
 //     the margins follow a gain, «Εφαρμογή» writes the gains (by hand) into the PWM
+// 11. 4.17.5 (ROADMAP §66): the labels of a dense drawing: none on another or on a part (the vehicle, then every
+//     tutorial, and the classic look), a long expression cut to its block (whole in the tooltip and when selected),
+//     numbers for the parameters «= …», the labels again after a move
 //  9. 4.17.3 (ROADMAP §65): the technical look by default: thin crisp lines, IEC resistor, the phases in colour, the
 //     selected part in colour, widths from the settings; the classic look and the ANSI symbols from the settings
 // Usage: python run.py --no-browser --port 8775  then  node tests/ui/scope_flow.js http://127.0.0.1:8775/ [out]
@@ -127,6 +130,38 @@ const {chromium}=require('playwright');
  ok(R.btn&&R.ctl.ok&&R.ctl.key==='buck'&&R.ctl.cvs.length===4&&R.ctl.cvs.every(Boolean)&&R.ctl.hasG&&R.ctl.poles&&R.ctl.framed,'the controller window '+JSON.stringify(R.ctl));
  // |Kp + Ki/jω| grows with Kp at every ω, so the crossover moves up (the PM may go either way)
  ok(R.ctl.wc2>R.ctl.wc*1.05&&Math.abs(R.ctl.pm2-R.ctl.pm)>1&&R.ctl.gain==='manual'&&Math.abs(R.ctl.Kp-3*R.ctl.k0)<1e-6*Math.abs(R.ctl.k0)+1e-12&&R.ctl.gone,'margins follow the gain, applied to the PWM '+JSON.stringify(R.ctl));
+ // 11. 4.17.5 (ROADMAP §66): the labels of a dense drawing (lblplace.js) with the fonts of the page: in the vehicle no
+ //     label on another or on a part; the inputs on one side; a long expression cut to its block, whole in the tooltip
+ //     and when selected; numbers for the parameters «= …»; after a move the labels again; then every tutorial
+ await p.evaluate(()=>localStorage.clear());await p.goto(U+'?tutorial=ev_drive');await p.waitForTimeout(1800);
+ const LBL=()=>{const E=PCL.editor,m=new DOMMatrix(getComputedStyle(E.L.live).transform),k=m.a,h=E.L.live.parentElement.getBoundingClientRect();
+  const toD=r=>[(r.left-h.left-m.e)/k,(r.top-h.top-m.f)/k,(r.right-h.left-m.e)/k,(r.bottom-h.top-m.f)/k];
+  const L=[];for(const g of E.L.live.querySelectorAll('.lbls[data-l]')){if(g.classList.contains('note'))continue;for(const d of g.children){if(!d.textContent||getComputedStyle(d).display==='none')continue;L.push({id:g.dataset.l,r:toD(d.getBoundingClientRect())});}}
+  const ov=(a,b)=>Math.max(0,Math.min(a[2],b[2])-Math.max(a[0],b[0]))*Math.max(0,Math.min(a[3],b[3])-Math.max(a[1],b[1]));let ll=0,lp=0;const bad=[];
+  for(let i=0;i<L.length;i++){for(let j=i+1;j<L.length;j++)if(L[i].id!==L[j].id&&ov(L[i].r,L[j].r)>1){ll++;bad.push(L[i].id+'/'+L[j].id);}for(const q of E.lbl.g.parts)if(ov(L[i].r,q.b)>6){lp++;bad.push(L[i].id+'|'+q.id);}}
+  return {n:L.length,ll,lp,bad:bad.slice(0,6)};};
+ await p.evaluate(`window.__lbl=${LBL}`);R.lbl=await p.evaluate(()=>window.__lbl());
+ R.lbl.ev=await p.evaluate(()=>{const E=PCL.editor,it=new Map(E.lbl.items.map(i=>[i.id,i])),q=s=>document.querySelector(s);const ref=q('.livel [data-l="REF"] .val');
+  const rb=E.lbl.g.items.find(i=>i.id==='REF').b,vw=ref.getBoundingClientRect().width/new DOMMatrix(getComputedStyle(E.L.live).transform).a;
+  const out={inSides:[...new Set(E.doc.components.filter(c=>/^IN_/.test(c.id)).map(c=>it.get(c.id).side))],refCut:it.get('REF').cut,refW:+vw.toFixed(1),boxW:rb[2]-rb[0],
+   title:q('.part[data-c="REF"]>title')?.textContent||'',m1:q('.livel [data-l="M1"] .val').textContent,gv:q('.livel [data-l="GV"] .val').textContent};
+  E.select(['REF'],[]);out.selW=+(ref.getBoundingClientRect().width/new DOMMatrix(getComputedStyle(E.L.live).transform).a).toFixed(1);E.select([],[]);return out;});
+ ok(R.lbl.ll===0&&R.lbl.lp===0&&R.lbl.n>60,'the vehicle: no label on another label or on a part '+JSON.stringify(R.lbl));
+ ok(R.lbl.ev.inSides.length===1&&R.lbl.ev.refCut&&R.lbl.ev.refW<=Math.max(R.lbl.ev.boxW+26,98)&&/clamp\(lut\(mod\(t, D\)/.test(R.lbl.ev.title)&&R.lbl.ev.selW>R.lbl.ev.refW+40,'the inputs on one side, the expression cut to its block, whole in the tooltip and when selected '+JSON.stringify(R.lbl.ev));
+ ok(/J 0,17/.test(R.lbl.ev.m1)&&!/NaN/.test(R.lbl.ev.m1)&&/K = 36,4 m/.test(R.lbl.ev.gv),'numbers for the parameters «= …» '+JSON.stringify([R.lbl.ev.m1,R.lbl.ev.gv]));
+ // a move: the part with its labels, then the labels laid out again
+ R.lbl.mv=await p.evaluate(async()=>{const E=PCL.editor,c=E.comp('KPH'),y0=c.y,s0=E.lbl.items.find(i=>i.id==='KPH').L.lbl.y;E.select(['KPH'],[]);
+  E.beginDrag({kind:'move'});E.dragMove(0,60);E.endDrag(false,false);
+  await new Promise(z=>setTimeout(z,400));return {dy:c.y-y0,s1:E.lbl.items.find(i=>i.id==='KPH').L.lbl.y,s0};});
+ R.lbl.after=await p.evaluate(()=>window.__lbl());
+ ok(R.lbl.mv.dy===60&&Math.abs(R.lbl.mv.s1-R.lbl.mv.s0)>20&&R.lbl.after.ll===0&&R.lbl.after.lp===0,'after a move the labels again '+JSON.stringify([R.lbl.mv,R.lbl.after]));
+ // every tutorial, as it opens (the live values written)
+ R.lbl.all=await p.evaluate(async()=>{const out=[];for(const t of Tutorials.list){PCL.loadTutorial(t.id);await new Promise(z=>setTimeout(z,450));const r=window.__lbl();if(r.ll||r.lp)out.push([t.id,r.ll,r.lp,r.bad]);}return {n:Tutorials.list.length,bad:out};});
+ ok(R.lbl.all.n>=61&&!R.lbl.all.bad.length,'every tutorial: no label on another label or on a part '+JSON.stringify(R.lbl.all));
+ // the classic look: the same
+ await p.evaluate(()=>{PCL.editor.settings.look='classic';document.body.classList.replace('look-tech','look-classic');PCL.loadTutorial('ev_drive');});await p.waitForTimeout(800);
+ R.lbl.classic=await p.evaluate(()=>window.__lbl());await p.evaluate(()=>localStorage.clear());
+ ok(R.lbl.classic.ll===0&&R.lbl.classic.lp===0,'the classic look too '+JSON.stringify(R.lbl.classic));
  await p.screenshot({path:OUT+'/scope_flow.png'});
  ok(!errs.length,'χωρίς σφάλματα JavaScript '+errs.join(' | '));
  console.log(JSON.stringify(R,null,1).slice(0,3000));

@@ -290,6 +290,8 @@
    const k=Math.min(1.9,Math.max(.25,Math.min((rw||800)/(b[2]-b[0]+2*margin),(rh||450)/(b[3]-b[1]+2*margin))));this.view={cx:(b[0]+b[2])/2,cy:(b[1]+b[3])/2,k};this.applyView();}
   extent(){const xs=[],ys=[];for(const c of this.doc.components){const b=P.bbox(c);xs.push(b[0],b[2]+(c.type==='JUNC'||c.type==='GND'?0:85));ys.push(b[1]-30,b[3]+14);for(const p of Object.keys(P.pinsOf(c))){const q=this.pin(c,p);xs.push(q[0]);ys.push(q[1]);}}
    for(const w of this.doc.wires)for(const p of w.pts||[]){xs.push(p[0]);ys.push(p[1]);}if(!xs.length)return null;
+   // 4.17.5: the labels, wherever they went (left, below …)
+   if(this.lbl?.boxes)for(const r of this.lbl.boxes){xs.push(r[0],r[2]);ys.push(r[1],r[3]);}
    // the tiles of the control signals on the drawing (4.8), when they are shown
    const wt=this.doc.watch;if(wt&&wt.show!==false&&Array.isArray(wt.tiles))for(const t of wt.tiles)if(Array.isArray(t?.at)&&t.at.every(Number.isFinite)){const x0=t.at[0]-(t.al==='r'?150:0);xs.push(x0,x0+150);ys.push(t.at[1],t.at[1]+(t.ctl?96:66));}
    return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
@@ -304,8 +306,10 @@
    return `<g class="part t-${c.type}" data-c="${c.id}" transform="${tf}"><rect class="hit" x="${bx-4}" y="${by-4}" width="${bw+8}" height="${bh+8}" rx="5"/><g class="sym">${sym}</g></g>`;}
   renderPart(c){const el=this.L.parts.querySelector(`[data-c="${CSS.escape(c.id)}"]`);if(el){el.outerHTML=this.partSVG(c);this.partEls();this._lv?.delete(c.id);}this.renderSel();}
   valueText(c){const p={...P.defaults(c.type),...c.params},e=P.eng;
-   switch(c.type){case 'R':return p.sched?'R(t)':e(+p.R,'Ω');case 'L':return e(+p.L,'H');case 'C':return e(+p.C,'F');case 'VDC':return p.ctl==='sig'?'V από σήμα':e(+p.V,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');case 'VAC':return e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'VAC3':return '3φ '+e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'SCR':return p.fire==='alpha'?'α '+P.fmtNum(+p.alpha)+'°'+(+p.shift?' +'+P.fmtNum(+p.shift)+'°':''):p.fire==='pwm'?'g · '+(p.pwm||'—'):'';
-    case 'IDC':return p.ctl==='sig'?'I από σήμα':e(+p.I,'A');case 'CPE':return p.kind==='cpe'?'Q '+e(+p.Q)+' · α '+P.fmtNum(+p.alpha):'σ '+e(+p.sigma,'Ω/√s');case 'CPL':return p.sched?'P(t)':e(+p.P,'W');case 'XFMR':return '1 : '+P.fmtNum(+p.n,{maximumFractionDigits:4});case 'SW':return (p.model==='igbt'?'IGBT · ':'')+(p.gate==='sig'?'g από σήμα':p.gate==='pwm'?({a:'g',na:'ḡ',b:'g₂',nb:'ḡ₂'}[p.out]||'g')+' · '+(p.pwm||'—'):p.gate==='on'?'ON':'OFF');
+   // 4.17.5: a parameter that is still an expression «= …» (not computed here) shows «—», not NaN
+   const fn=(v,o)=>Number.isFinite(v)?P.fmtNum(v,o):'—';
+   switch(c.type){case 'R':return p.sched?'R(t)':e(+p.R,'Ω');case 'L':return e(+p.L,'H');case 'C':return e(+p.C,'F');case 'VDC':return p.ctl==='sig'?'V από σήμα':e(+p.V,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');case 'VAC':return e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'VAC3':return '3φ '+e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'SCR':return p.fire==='alpha'?'α '+fn(+p.alpha)+'°'+(+p.shift?' +'+fn(+p.shift)+'°':''):p.fire==='pwm'?'g · '+(p.pwm||'—'):'';
+    case 'IDC':return p.ctl==='sig'?'I από σήμα':e(+p.I,'A');case 'CPE':return p.kind==='cpe'?'Q '+e(+p.Q)+' · α '+fn(+p.alpha):'σ '+e(+p.sigma,'Ω/√s');case 'CPL':return p.sched?'P(t)':e(+p.P,'W');case 'XFMR':return '1 : '+fn(+p.n,{maximumFractionDigits:4});case 'SW':return (p.model==='igbt'?'IGBT · ':'')+(p.gate==='sig'?'g από σήμα':p.gate==='pwm'?({a:'g',na:'ḡ',b:'g₂',nb:'ḡ₂'}[p.out]||'g')+' · '+(p.pwm||'—'):p.gate==='on'?'ON':'OFF');
     case 'SH':return (p.in==='sig'?'u':(p.qty==='V'?'v(':'i(')+(p.src||'—')+')')+' · '+({start:'αρχή T',mid:'μέσο T',both:'2 ανά T'}[p.trig]||'');
     case 'MEAS':case 'VM':case 'AM':case 'VP':case 'IP':case 'SR':case 'DISP':case 'NOTE':return '';
     case 'SUB':return String(p.$title||p.def||''); // subcircuit (3.17): the title of its definition
@@ -314,42 +318,69 @@
     case 'FLT3':return ({ag:'a–γη',bg:'b–γη',cg:'c–γη',ab:'a–b',bc:'b–c',ca:'c–a',abg:'ab–γη',bcg:'bc–γη',cag:'ca–γη',abc:'3φ',abcg:'3φ–γη'}[p.kind]||p.kind)+(p.ctl==='sig'?' · από σήμα':' · '+e(+p.ton,'s')+(+p.toff>0?'–'+e(+p.toff,'s'):''));
     case 'CB3':return p.ctl==='sig'?'εντολή από σήμα':String(p.cmd||'').slice(0,22);
     case 'XF3':return p.grp+' · '+e(+p.Sn,'VA')+' · '+e(+p.U1,'V')+'/'+e(+p.U2,'V');
-    case 'GEN3':return e(+p.Sn,'VA')+' · '+e(+p.Un,'V')+(p.shaft==='multi'?' · '+P.plist(p.Hm).length+' μάζες':' · H '+P.fmtNum(+p.H)+' s')+(p.init==='zero'?'':' · '+P.fmtNum(+p.V0)+'∠'+P.fmtNum(+p.ang0)+'°');
-    case 'LINE3':return (p.unit==='pu'?'pu: ':'')+'X₁ '+P.fmtNum(+p.X1)+(+p.B1?' · B₁ '+P.fmtNum(+p.B1):'');
+    case 'GEN3':return e(+p.Sn,'VA')+' · '+e(+p.Un,'V')+(p.shaft==='multi'?' · '+P.plist(p.Hm).length+' μάζες':' · H '+fn(+p.H)+' s')+(p.init==='zero'?'':' · '+fn(+p.V0)+'∠'+fn(+p.ang0)+'°');
+    case 'LINE3':return (p.unit==='pu'?'pu: ':'')+'X₁ '+fn(+p.X1)+(+p.B1?' · B₁ '+fn(+p.B1):'');
     case 'LOAD3':return e(+p.P,'W')+(+p.Q?' · '+e(+p.Q,'var'):'')+' · '+({yn:'YN',y:'Y',d:'Δ'}[p.cn]||'');
     case 'CONST':return String(p.v).includes(':')?String(p.v).slice(0,22):'';case 'GAIN':return 'K = '+(String(p.K).includes(';')?String(p.K).split(';').map(x=>e(+x.trim())).join('; '):e(+p.K));case 'SUM':return '';
     case 'SAT':return '['+e(+p.lo)+', '+e(+p.hi)+']';case 'CMP':return +p.hys>0?'h = '+e(+p.hys):'';case 'LOGIC':return ['nand','nor','xor'].includes(p.op)?p.op.toUpperCase():'';
     case 'PIB':return 'K_p '+e(+p.Kp)+' · K_i '+e(+p.Ki);case 'UD':return '';
     case 'NN':return (window.NNet&&window.Expr?NNet.sizesOf(Expr.names(p.ins,6,false).length,p.hidden).join('–'):'')+(p.train==='err'?' · μαθαίνει (e)':p.train==='tgt'?' · μαθαίνει (στόχος)':String(p.w||'').trim()?' · έτοιμα βάρη':'');
     case 'IM':return 'p = '+p.pp+' · L_M '+e(+p.LM,'H');case 'SRM':return (p.mag==='table'?'ψ(θ, i) από πίνακα':'L_u '+e(+p.Lu,'H')+' · L_a '+e(+p.La,'H'))+(p.load==='sig'?' · τ_L σήμα':'');case 'SM':return 'L_d '+e(+p.Ld,'H')+(p.sat==='d'?' (κορεσμός)':'')+' · L_q '+e(+p.Lq,'H')+(+p.psim>0?' · ψ_m '+e(+p.psim,'V·s'):'');
-    case 'KL':{const m=P.klMatrix(p);return m.err?'⚠ πίνακας L':m.L.length+'×'+m.L.length+(String(p.Lmat||'').trim()?' · πίνακας L':' · k '+P.fmtNum(+p.k));}
+    case 'KL':{const m=P.klMatrix(p);return m.err?'⚠ πίνακας L':m.L.length+'×'+m.L.length+(String(p.Lmat||'').trim()?' · πίνακας L':' · k '+fn(+p.k));}
     case 'KG':{const m=P.parseMat(p.mat);return m?m.length+'×'+m.length+' '+(p.kind==='G'?'G':'R'):'⚠ πίνακας';}
     case 'VIMP':return (p.shape==='ramp'?'ράμπα '+e(+p.S*1e-6,'V/μs'):p.shape==='custom'?e(+p.T1,'s')+'/'+e(+p.T2,'s'):p.shape==='direct'?'α, β, K':p.shape+' μs')+' · '+e(+p.Vpk,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');
-    case 'SG':return (p.vt==='de'?'U₀ '+e(P.parseEng(p.U0),'V')+' · k '+P.fmtNum(+p.kde):e(+p.Ub,'V'))+(String(p.trig??'').trim()?' · έναυση '+e(P.parseEng(p.trig),'s'):'');
-    case 'MOV':return p.model==='table'?'πίνακας i–v':e(+p.Uref,'V')+' @ '+e(+p.Iref,'A')+' · α '+P.fmtNum(+p.alpha);
+    case 'SG':return (p.vt==='de'?'U₀ '+e(P.parseEng(p.U0),'V')+' · k '+fn(+p.kde):e(+p.Ub,'V'))+(String(p.trig??'').trim()?' · έναυση '+e(P.parseEng(p.trig),'s'):'');
+    case 'MOV':return p.model==='table'?'πίνακας i–v':e(+p.Uref,'V')+' @ '+e(+p.Iref,'A')+' · α '+fn(+p.alpha);
     case 'TL':{const g=P.tlParams(p);return g.err?'⚠ '+g.err:'Z '+e(g.Z,'Ω')+' · τ '+e(g.tau,'s')+(g.R>0?' · R '+e(g.R,'Ω')+(g.N>1?' ×'+g.N:''):'');}
     case 'ILG':return (p.shape==='custom'?e(+p.T1,'s')+'/'+e(+p.T2,'s'):p.shape==='direct'?'τ₁, τ₂, η':p.shape+' μs')+' · '+e(+p.Ipk,'A');case 'MOD3':return {spwm:'SPWM',svpwm:'SVPWM',square:'six-step'}[p.mode]||'';case 'FEST':return 'R̂_R '+e(+p.RR,'Ω');
-    case 'EXPR':return String(p.expr||'').slice(0,28);case 'PY':return (p.pars?String(p.pars).slice(0,26):'Python');
+    // 4.17.5: the whole expression (the layout of the labels cuts it to its block, lblplace.js; whole in the tooltip)
+    case 'EXPR':return String(p.expr||'').slice(0,400);case 'PY':return (p.pars?String(p.pars).slice(0,400):'Python');
     case 'INT':return p.wrap==='2pi'?'mod 2π':(+p.lo>-1e8||+p.hi<1e8)?'['+e(+p.lo)+', '+e(+p.hi)+']':'';case 'LPF':return 'f_c = '+e(+p.fc,'Hz');
-    case 'F2':return ({lp:'LP',hp:'HP',bp:'BP',notch:'notch'}[p.kind]||'LP')+' · '+e(+p.f0,'Hz')+' · ζ '+P.fmtNum(+p.zeta,{maximumFractionDigits:3});case 'RLIM':return '↑ '+e(+p.up,'/s')+(+p.dn!==+p.up?' · ↓ '+e(+p.dn,'/s'):'');
+    case 'F2':return ({lp:'LP',hp:'HP',bp:'BP',notch:'notch'}[p.kind]||'LP')+' · '+e(+p.f0,'Hz')+' · ζ '+fn(+p.zeta,{maximumFractionDigits:3});case 'RLIM':return '↑ '+e(+p.up,'/s')+(+p.dn!==+p.up?' · ↓ '+e(+p.dn,'/s'):'');
     case 'RT':return p.mode==='delay'?'z⁻¹':'ZOH';case 'EDGE':return ({rise:'↑',fall:'↓',both:'↕'}[p.edge]||'↑')+(+p.tw>0?' · '+e(+p.tw,'s'):'');
     case 'CLARKE':case 'ICLARKE':return p.inv==='pow'?'ισχύς':'πλάτος';case 'PARK':case 'IPARK':return '';case 'PLL':return e(+p.f0,'Hz')+' · BW '+e(+p.bw,'Hz');
-    case 'DCM':return 'ψ '+P.fmtNum(+p.psi)+' · J '+P.fmtNum(+p.J)+(p.load==='sig'?' · τ_L σήμα':'');
-    case 'CLK':return e(+p.f,'Hz')+' · '+P.fmtNum(+p.duty);case 'RAMP':return e(+p.f,'Hz')+' · '+e(+p.lo)+'…'+e(+p.hi);
-    case 'PWM':return e(+p.fs,'Hz')+(+p.phase&&p.mode!=='spwm'?' · φ '+P.fmtNum(+p.phase,{maximumFractionDigits:2})+'°':'')+(+p.dt>0?' · t_d '+e(+p.dt,'s'):'')+' · '+(p.mode==='fixed'?'D = '+P.fmtNum(+p.D):p.mode==='pi'?'PI':p.mode==='spwm'?'SPWM m = '+p.m:p.mode==='ext'?'D από σήμα':'2 έξοδοι');default:return '';}}
+    case 'DCM':return 'ψ '+fn(+p.psi)+' · J '+fn(+p.J)+(p.load==='sig'?' · τ_L σήμα':'');
+    case 'CLK':return e(+p.f,'Hz')+' · '+fn(+p.duty);case 'RAMP':return e(+p.f,'Hz')+' · '+e(+p.lo)+'…'+e(+p.hi);
+    case 'PWM':return e(+p.fs,'Hz')+(+p.phase&&p.mode!=='spwm'?' · φ '+fn(+p.phase,{maximumFractionDigits:2})+'°':'')+(+p.dt>0?' · t_d '+e(+p.dt,'s'):'')+' · '+(p.mode==='fixed'?'D = '+fn(+p.D):p.mode==='pi'?'PI':p.mode==='spwm'?'SPWM m = '+p.m:p.mode==='ext'?'D από σήμα':'2 έξοδοι');default:return '';}}
   // 4.9: a note (NOTE): its lines in the label layer at the top left of its box, upright whatever the rotation
   noteHTML(c){const p={...P.defaults('NOTE'),...c.params},b=P.bbox(c),z=Math.max(6,Math.min(96,P.parseEng(p.size)||16)),bold=p.bold===true||p.bold==='true',fr=p.frame===true||p.frame==='true';
    const col={acc:'var(--accent,#1f7a5c)',red:'#b3261e',blue:'#1d4e89',muted:'#6b7c78'}[p.color]||'var(--ink,#16302b)';
    return `<div class="lbls note" data-l="${esc(c.id)}"><div class="ntext${fr?' nframe':''}" style="left:${b[0]+3}px;top:${b[1]+3}px;font-size:${z}px;font-weight:${bold?700:400};color:${col}">${esc(String(p.text??''))}</div><div class="lv" hidden></div></div>`;}
+  // 4.17.5 (ROADMAP §66): the widths of the texts of the labels, with the fonts of the page (style.css .lbl, .val, .lv):
+  // the name in the font of the page (one canvas measure per text, kept), the value and the live value in monospace
+  lblMeasure(){if(this._lm)return this._lm;let cx=null;try{cx=document.createElement('canvas').getContext('2d');}catch(e){cx=null;}
+   if(!cx)return this._lm=root.LblPlace.est;
+   let fam='';try{fam=getComputedStyle(this.L.live).fontFamily;}catch(e){fam='';}const fl=`600 11.5px ${fam||'Inter,system-ui,sans-serif'}`;
+   cx.font='10.5px ui-monospace,Menlo,Consolas,monospace';const cw=cx.measureText('0123456789').width/10,cache=new Map();
+   return this._lm=(t,k)=>{const s=String(t??'');if(!s)return 0;if(k!=='lbl')return [...s].length*cw;let w=cache.get(s);if(w===undefined){cx.font=fl;w=cx.measureText(s).width;cache.set(s,w);}return w;};}
+  // the characters kept for the live value of a part: what it shows now (at least 10, a number with its unit), and never
+  // less than what it showed before (updateLive lays out again when a value grows past it)
+  lvChars(c){const res=this._lvRes||(this._lvRes=new Map());if(c.type==='DISP'||!this.live)return res.get(c.id)||0;
+   let n=0;if(this.settings.showLive){let v=null;try{v=this.live(c);}catch(e){v=null;}const t=v?.text?String(v.text):'';n=t?Math.max([...t].length,10):0;}
+   n=Math.min(48,Math.max(n,res.get(c.id)||0));res.set(c.id,n);return n;}
+  // 4.17.5 (ROADMAP §66, lblplace.js): each label goes where it collides least with the parts, the wires, the other texts and
+  // the other labels; the side of before first, kept when it is free. A value cut or hidden on a dense drawing: whole in
+  // the tooltip of the part and in the label of a selected part
   renderLabels(){
-   this.L.live.innerHTML=this.doc.components.filter(c=>!['JUNC','GND','TAGO','TAGI','PORT','SIN','SOUT'].includes(c.type)).map(c=>{if(c.type==='NOTE')return this.noteHTML(c);const b=P.bbox(c);const pk=Object.keys(P.elPins(c));const q0=pk[0]&&this.pin(c,pk[0]),q1=pk[1]&&this.pin(c,pk[1]);const blk=!pk.length;const vert=!blk&&c.type!=='XFMR'&&c.type!=='VAC3'&&q0&&q1&&q0[0]===q1[0];
-    // signal blocks (3.0) keep their label above, the PWM / S&H blocks at the side as before
-    const lb=c.lbl||P.PARTS[c.type].lbl;const side=(vert||blk)&&!(blk&&P.BLOCKS.has(c.type))&&lb!=='below'&&lb!=='above';const below=lb==='below',left=side&&lb==='left';const x=left?b[0]-8:side?b[2]+8:(b[0]+b[2])/2,y=side?(b[1]+b[3])/2-(blk?10:2):below?b[3]+40:b[1]-7;const anchor=left?'end':side?'start':'middle';
-    // HTML: each line at its baseline (x, y) in the units of the drawing, aligned like text-anchor (class a-s / a-m / a-e)
-    const at=(yy)=>`style="left:${x}px;top:${yy}px"`;
-    return `<div class="lbls a-${anchor[0]}" data-l="${esc(c.id)}"><div class="lbl" ${at(side?y:y-24)}>${esc(c.label||c.id)}</div><div class="val" ${at(side?y+13:y-12)}>${esc(this.valueText(c))}</div><div class="lv" ${at(side?y+26:y)}></div></div>`;}).join('');
+   const doc=this.doc,LP=root.LblPlace;
+   // the numbers of the parameters «= …» of the inputs (4.17.1): the values show numbers, not NaN
+   let num=null;try{const I=root.Inputs;if(I&&I.needs(doc)){const r=I.resolve(doc);num=new Map(r.project.components.map(c=>[c.id,c]));}}catch(e){num=null;}
+   const vt=new Map(),valOf=c=>{let v=vt.get(c.id);if(v===undefined){try{v=this.valueText(num&&num.get(c.id)||c);}catch(e){v='';}vt.set(c.id,v);}return v;};
+   const lay=this.lbl=LP.layout(doc,{measure:this.lblMeasure(),valueText:valOf,lvChars:c=>this.lvChars(c),arrows:!!this.settings.showArrows});const at=new Map(lay.items.map(it=>[it.id,it]));
+   const r1=v=>Math.round(v*10)/10;
+   const line=(k,l,txt)=>`<div class="${k}${l.hid?' hid':''}${l.as?' as':''}" style="left:${r1(l.x)}px;top:${r1(l.y)}px${l.mw?`;max-width:${r1(l.mw)}px;overflow:hidden;text-overflow:ellipsis`:''}">${esc(txt)}</div>`;
+   this.L.live.innerHTML=doc.components.filter(c=>!['JUNC','GND','TAGO','TAGI','PORT','SIN','SOUT'].includes(c.type)).map(c=>{if(c.type==='NOTE')return this.noteHTML(c);
+    const it=at.get(c.id);if(!it)return `<div class="lbls a-m" data-l="${esc(c.id)}" hidden><div class="lv"></div></div>`;
+    // HTML: each line at its baseline (x, y) in the units of the drawing, aligned like text-anchor (class a-s / a-m / a-e;
+    // a piece of a line with two texts: class as)
+    return `<div class="lbls a-${it.a}${this.sel.c.has(c.id)?' sel':''}" data-l="${esc(c.id)}">${line('lbl',it.L.lbl,c.label||c.id)}${line('val',it.L.val,valOf(c))}${line('lv',it.L.lv,'')}</div>`;}).join('');
    this.liveRefs=new Map();for(const g of this.L.live.querySelectorAll('[data-l]'))this.liveRefs.set(g.dataset.l,g.querySelector('.lv'));this._lv=new Map();
+   // the whole value in the tooltip of a part whose value is cut or hidden
+   const els=this.partEl||this.partEls();for(const it of lay.items){const g=els.get(it.id);if(!g)continue;let tt=g.querySelector(':scope>title');
+    if(it.cut||it.hidden&&it.full){const c=this.comp(it.id),t=(c?.label||it.id)+': '+it.full;if(!tt){tt=document.createElementNS(NS,'title');g.prepend(tt);}tt.textContent=t;}else if(tt)tt.remove();}
   }
+  // lay the labels out again a moment later (after a move, or when a live value grew past the room kept for it)
+  relabelSoon(ms=120){clearTimeout(this._rlT);this._rlT=setTimeout(()=>{if(this.drag){this.relabelSoon(ms);return;}this.renderLabels();this.updateLive(true);},ms);}
   renderWires(){
    // 4.17.3: the technical look has its own width of the wires (1 px by default) and right-angled corners
    const tech=this.settings.look!=='classic',W=tech?(+this.settings.techWire||1):this.settings.wireWidth;const count=new Map();for(const w of this.doc.wires)for(const e of [w.a,w.b]){const k=e.c+':'+e.p;count.set(k,(count.get(k)||0)+1);}
@@ -399,18 +430,23 @@
      const anchor=d[0]<0?'end':d[0]>0?'start':'middle',x=q[0]+d[0]*7,y=q[1]+(d[1]?d[1]*12:-5);
      h+=`<text class="stag${ok?'':' bad'}" data-pc="${esc(c.id)}" x="${x}" y="${y}" text-anchor="${anchor}">${esc(t)}</text>`;}}}
    this.L.pins.innerHTML=h;}
-  renderSel(){for(const g of this.L.parts.querySelectorAll('.part'))g.classList.toggle('sel',this.sel.c.has(g.dataset.c));for(const g of this.L.wires.querySelectorAll('.wire'))g.classList.toggle('sel',this.sel.w.has(g.dataset.w));}
+  renderSel(){for(const g of this.L.parts.querySelectorAll('.part'))g.classList.toggle('sel',this.sel.c.has(g.dataset.c));for(const g of this.L.wires.querySelectorAll('.wire'))g.classList.toggle('sel',this.sel.w.has(g.dataset.w));
+   // 4.17.5: the label of a selected part shows what a dense drawing cut or hid
+   for(const g of this.L.live.children)if(g.dataset.l)g.classList.toggle('sel',this.sel.c.has(g.dataset.l));}
   // live values from the simulator
   setLive(fn){this.live=fn;this.updateLive();}
   // live values: only what changed is written (text, on/off class); nothing while the user drags (the page asks again later)
-  updateLive(force){if(!this.live||!this.liveRefs)return;if(!force&&this.drag)return;const els=this.partEl||this.partEls(),last=this._lv||(this._lv=new Map()),show=this.settings.showLive;
+  updateLive(force){if(!this.live||!this.liveRefs)return;if(!force&&this.drag)return;const els=this.partEl||this.partEls(),last=this._lv||(this._lv=new Map()),show=this.settings.showLive;let grow=false;
    for(const c of this.doc.components){const v=this.live(c);const g=els.get(c.id);if(!g)continue;
     const on=v?.on===true?1:v?.on===false?2:0,txt=c.type==='DISP'?(v?.text||'—'):(show&&v?.text?v.text:''),o=last.get(c.id);
     if(o&&o.on===on&&o.txt===txt&&o.g===g)continue;last.set(c.id,{on,txt,g});
     g.classList.toggle('on',on===1);g.classList.toggle('off',on===2);
     const t=this.liveRefs.get(c.id);
     if(c.type==='DISP'){const d=g.querySelector('.sym .bsm');if(d)d.textContent=txt;if(t)t.textContent='';continue;} // the display shows its value inside
-    if(t)t.textContent=txt;}
+    if(t)t.textContent=txt;
+    // 4.17.5: a live value longer than the room kept for it: the labels are laid out again (the room only grows)
+    if(txt&&c.type!=='DISP'&&[...txt].length>(this._lvRes?.get(c.id)||0))grow=true;}
+   if(grow&&!this.drag)this.relabelSoon(250);
    this.drawArrows();}
   drawArrows(){let h='';const types=['L','R','C','VDC','VAC','D','SW','CPL','IDC'];let big=0;const vals=new Map();if(this.settings.showArrows&&this.live)for(const c of this.doc.components)if(types.includes(c.type)){const v=this.live(c);vals.set(c.id,v);if(v&&Number.isFinite(v.i))big=Math.max(big,Math.abs(v.i));}
    if(this.settings.showArrows&&this.live)for(const c of this.doc.components){if(!types.includes(c.type))continue;const v=vals.get(c.id);if(!v||!Number.isFinite(v.i)||Math.abs(v.i)<Math.max(1e-9,2e-3*big))continue;
@@ -551,7 +587,7 @@
     if(this.autoConnect(ids.filter(id=>this.comp(id)&&this.comp(id).type!=='JUNC')))struct=true;}
    // only a move: the DOM is already where the parts are; the translated pins, labels and dots take their new coordinates
    // (no full redraw, no new parameter panel: the selection did not change)
-   if(!struct&&d&&d.tr){this.bakeMove(d);if(this.settings.autoRoute&&this.wctx)for(const o of d.wires)this.redrawWire(o.w);this.drag=null;this.svg.classList.remove('dragging');this._lv=new Map();this.updateLive(true);this.changed('geom',false);return;}
+   if(!struct&&d&&d.tr){this.bakeMove(d);if(this.settings.autoRoute&&this.wctx)for(const o of d.wires)this.redrawWire(o.w);this.drag=null;this.svg.classList.remove('dragging');this._lv=new Map();this.updateLive(true);this.relabelSoon(60);this.changed('geom',false);return;}
    this.drag=null;this.svg.classList.remove('dragging');this.render();this.changed(struct?'struct':'geom');void notify;}
   // the translation of a drag written into the coordinates of the moved pins, dots, pin tags and labels
   bakeMove(d){const m=/translate\(([-\d.e]+)p?x?,\s*([-\d.e]+)/;
