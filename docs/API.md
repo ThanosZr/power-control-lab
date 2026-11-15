@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.17.5: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (583 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.18: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (585 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.17.5.
+Κανένα στην 4.18.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -545,7 +545,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-119 σημεία.
+121 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -589,6 +589,7 @@
 | `part:FLT3` | kind, Rf, Rg, ctl, ton, toff, clr, conn | a, abc, b, c, f | 4.1 |
 | `part:GAIN` | K, unit | u, y | 3.18 |
 | `part:GEN3` | Sn, Un, f, pp, data, conv, Ra, Xl, X0, Xd, Xdp, Xdpp, Xq, Xqp, Xqpp, Td0p, Td0pp, Tq0p, Tq0pp, cXad, cXfd, cRfd, cXkd, cRkd, cXaq, cX1q, cR1q, cX2q, cR2q, shaft, H, D, Hm, Km, Dm, Dmu, Tfr, gm, exc, Efd, mech, Tm, init, V0, ang0, neut, conn | a, abc, b, c, d, e0, efd, ifd, m0, n, pe, qe, te, tm, ts1, ts2, v0, vt, w | 4.3 |
+| `part:GFMC` | law, inner, S, Vac, Vdc, f0, Pref, Qref, Vref, mp, nq, fp, H, tv, tdr, kp, avc, Uref, KE, TE, kv, av, Rv, Xv, Xc, Bf, Tvl, Til, kff, Imax, Ufd, tsoft, ac, vmax, sync, bw, tsync, th0, fm, conn | e, ga, gb, gc, ia, ib, ic, lim, m, ma, mb, mc, meas, oa, ob, oc, p, q, th, va, vb, vc, vdc, w | 4.18 |
 | `part:GND` | — | g | 3.18 |
 | `part:GOV` | type, dP, Pr, R, TSR, TSM, LC1, LC2, V1, KAX, FHP, FIP, FLP, TCH, TRH, TCO, RP, RT, TR, TP, KS, TG, Ropen, Rclose, Tw, gFL, gNL | g, m0, pm, tm, w | 4.8.1 |
 | `part:GRID3` | Un, f, phase, cf, emf, Sk, XR, z0, Z0Z1, Sk1, XR0, Rn, conn | a, abc, b, c | 4.1 |
@@ -665,6 +666,7 @@
 | `part:VIMP` | shape, Vpk, basis, T1, T2, S, alpha, beta, K, Rs, t0 | n, p | 3.18 |
 | `part:VM` | — | n, p, y | 3.18 |
 | `part:VP` | — | p, y | 3.18 |
+| `part:VSC2` | dc, Vdc, mmax, filt, Lf, Rf, Cf, conn | a, abc, b, c, ia, ib, ic, m, ma, mb, mc, meas, n, oa, ob, oc, p, va, vb, vc, vdc | 4.18 |
 | `part:XF3` | grp, Sn, U1, U2, f, uk, Pk, i0, P0, tap, core, i00, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.1 |
 | `part:XFMR` | n, Lm, im0, Llk1, Llk2, R1, R2, pol | p1, p2, s1, s2 | 3.18 |
 | `part:ZSER3` | Rs, Ls, Rp1, Lp, Rp2, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.16 |

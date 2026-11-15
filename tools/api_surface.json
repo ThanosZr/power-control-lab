@@ -1,5 +1,5 @@
 {
- "version": "4.17.5",
+ "version": "4.18",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -4230,6 +4230,77 @@
     ],
     "since": "4.3"
    },
+   "part:GFMC": {
+    "params": [
+     "law",
+     "inner",
+     "S",
+     "Vac",
+     "Vdc",
+     "f0",
+     "Pref",
+     "Qref",
+     "Vref",
+     "mp",
+     "nq",
+     "fp",
+     "H",
+     "tv",
+     "tdr",
+     "kp",
+     "avc",
+     "Uref",
+     "KE",
+     "TE",
+     "kv",
+     "av",
+     "Rv",
+     "Xv",
+     "Xc",
+     "Bf",
+     "Tvl",
+     "Til",
+     "kff",
+     "Imax",
+     "Ufd",
+     "tsoft",
+     "ac",
+     "vmax",
+     "sync",
+     "bw",
+     "tsync",
+     "th0",
+     "fm",
+     "conn"
+    ],
+    "pins": [
+     "e",
+     "ga",
+     "gb",
+     "gc",
+     "ia",
+     "ib",
+     "ic",
+     "lim",
+     "m",
+     "ma",
+     "mb",
+     "mc",
+     "meas",
+     "oa",
+     "ob",
+     "oc",
+     "p",
+     "q",
+     "th",
+     "va",
+     "vb",
+     "vc",
+     "vdc",
+     "w"
+    ],
+    "since": "4.18"
+   },
    "part:GND": {
     "params": [],
     "pins": [
@@ -5802,6 +5873,42 @@
      "y"
     ],
     "since": "3.18"
+   },
+   "part:VSC2": {
+    "params": [
+     "dc",
+     "Vdc",
+     "mmax",
+     "filt",
+     "Lf",
+     "Rf",
+     "Cf",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "abc",
+     "b",
+     "c",
+     "ia",
+     "ib",
+     "ic",
+     "m",
+     "ma",
+     "mb",
+     "mc",
+     "meas",
+     "n",
+     "oa",
+     "ob",
+     "oc",
+     "p",
+     "va",
+     "vb",
+     "vc",
+     "vdc"
+    ],
+    "since": "4.18"
    },
    "part:XF3": {
     "params": [

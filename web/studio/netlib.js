@@ -9,7 +9,7 @@
 // (gridZ) and the fault currents of a fault at its terminals in the phase domain (faultCurrents), for the analysis.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
- const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC','TOWER','SAI','CHB','SPLL','SSSC','SSSC3','MMC','MMCC','LCC6','LCCS','LCCC','FILT3','ZSER3'];
+ const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC','TOWER','SAI','CHB','SPLL','SSSC','SSSC3','MMC','MMCC','VSC2','GFMC','LCC6','LCCS','LCCC','FILT3','ZSER3'];
  const isLib=t=>TYPES.includes(t);
  const RMIN=1e-4;               // a bolted fault or a closed pole: 0,1 mΩ inside the circuit
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -1014,7 +1014,154 @@
    if(Rp2>0){B.comp('RP'+x,'R',{R:s(Rp2)});B.wire(a,['RP'+x,'a']);B.wire(['RP'+x,'b'],T2[k]);}});
   return B.def();}
 
- const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef,CHB:chbDef,SPLL:spllDef,SSSC:ssscDef,SSSC3:sssc3Def,MMC:mmcDef,MMCC:mmccDef,LCC6:lcc6Def,LCCS:lccsDef,LCCC:lcccDef,FILT3:filtDef,ZSER3:zserDef};
+
+ // ---------------------------------------------------------------- 4.18 (§58): grid-forming converters (THEORY §8Ε)
+ // 4.18: the signal ports of VSC2 and GFMC. With conn = 'bus' the measurements travel in one bus meas (i_abc, v_abc, o_abc,
+ // v_dc, width 10) and the modulation in a bus m (width 3): inside, a port of that width with bus selectors (inputs) or
+ // multiplexers (outputs), as the electrical buses of terms(); without, one port per signal
+ const GFM_MEAS=['ia','ib','ic','va','vb','vc','oa','ob','oc','vdc'];
+ function sigPorts(B,bus,inBus,outBus){const ins={},outs={};
+  const sin=n=>{if(bus&&inBus[n]){const [b,k,w]=inBus[n];if(!ins[b])ins[b]=B.comp('$'+b,'SIN',{name:b,width:String(w)});const id='_S'+n;B.comp(id,'BSEL',{idx:String(k)});B.wire([ins[b],'y'],[id,'u']);return [id,'y'];}
+   return [B.comp('$'+n,'SIN',{name:n}),'y'];};
+  const out=(n,src)=>{if(bus&&outBus[n]){const [b,k,w]=outBus[n];if(!outs[b])outs[b]={};outs[b][k]=src;outs[b].w=w;return;}const o=B.comp('$'+n,'SOUT',{name:n});B.wire(src,[o,'u']);};
+  // the multiplexers of an output bus (at most 8 inputs each: groups of three, then the rest)
+  const close=()=>{for(const [b,o] of Object.entries(outs)){const w=o.w,parts=[];for(let k=1;k<=w;k+=3){const g=[];for(let j=k;j<Math.min(k+3,w+1);j++)g.push(o[j]);
+    if(g.length===1)parts.push(g[0]);else{const id='_X'+b+k;B.comp(id,'MUX',{n:String(g.length)});g.forEach((q,i)=>B.wire(q,[id,'u'+(i+1)]));parts.push([id,'y']);}}
+    const sid='$'+b;B.comp(sid,'SOUT',{name:b,width:String(w)});if(parts.length===1)B.wire(parts[0],[sid,'u']);else{const id='_X'+b;B.comp(id,'MUX',{n:String(parts.length)});parts.forEach((q,i)=>B.wire(q,[id,'u'+(i+1)]));B.wire([id,'y'],[sid,'u']);}}};
+  return {sin,out,close};}
+ const busMap=(name,list)=>Object.fromEntries(list.map((n,i)=>[n,[name,i+1,list.length]]));
+ // The two-level VSC as an average model, with its filter (L, or L and capacitors in star with the centre grounded). Ideal DC:
+ // v_j = m_j·V_dc/2 to ground; with the DC terminals v_j = (1 + m_j)·v_dc/2 from n and the current Σ(1 + m_j)·i_j/2 drawn
+ // from p (the same power on both sides). |m_j| ≤ m_max. Outputs: i (converter side), v (terminals, to ground) and o (out of
+ // the terminals). The sources read m of the previous step, as every controlled source.
+ function vsc2Def(c){const p=prm(c),B=builder(c.label||c.id),T=B.terms(p,PH,'abc'),pins=p.dc==='pins',filt=['l','lc','none'].includes(p.filt)?p.filt:'l';
+  const SP=sigPorts(B,isBus(p),busMap('m',['ma','mb','mc']),busMap('meas',GFM_MEAS)),sin=SP.sin,out=SP.out;
+  const w=(a,b)=>B.wire(a,b),E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''});
+  const M=PH.map(x=>sin('m'+x)),mm=s(Math.max(num(p.mmax,1),1e-3));let vdc,Np=null;
+  if(pins){const Pp=[B.comp('$p','PORT',{name:'p'}),'p'];Np=[B.comp('$n','PORT',{name:'n'}),'p'];const vm=B.comp('VD','VM',{});w(Pp,[vm,'p']);w(Np,[vm,'n']);vdc=[vm,'y'];
+   E('IDS','((1 + a)*ia + (1 + b)*ib + (1 + c)*ic)/2','a, b, c, ia, ib, ic');B.comp('ID','IDC',{ctl:'sig'});w(Np,['ID','p']);w(['ID','n'],Pp);w(['IDS','y'],['ID','u']);}
+  else{B.comp('VD','CONST',{v:s(Math.max(num(p.Vdc,800),0))});vdc=['VD','y'];}
+  out('vdc',vdc);
+  PH.forEach((x,k)=>{E('M'+x,'min(max(m, -k), k)','m','k = '+mm);w(M[k],['M'+x,'m']);
+   E('U'+x,pins?'(1 + m)*v/2':'m*v/2','m, v');w(['M'+x,'y'],['U'+x,'m']);w(vdc,['U'+x,'v']);
+   B.comp('V'+x,'VDC',{ctl:'sig',Rs:'0'});w(['U'+x,'y'],['V'+x,'u']);w(pins?Np:B.gnd(),['V'+x,'n']);
+   const am=B.comp('I'+x,'AM',{});w(['V'+x,'p'],[am,'a']);out('i'+x,[am,'y']);let at=[am,'b'];
+   if(filt!=='none'){B.comp('L'+x,'L',{L:s(Math.max(num(p.Lf,5e-3),1e-12)),Rs:s(Math.max(num(p.Rf,0.05),0))});w(at,['L'+x,'a']);at=['L'+x,'b'];}
+   if(filt==='lc'){B.comp('C'+x,'C',{C:s(Math.max(num(p.Cf,20e-6),1e-15))});w(at,['C'+x,'p']);w(['C'+x,'n'],B.gnd());}
+   const ao=B.comp('O'+x,'AM',{});w(at,[ao,'a']);w([ao,'b'],T[k]);out('o'+x,[ao,'y']);
+   const vp=B.comp('P'+x,'VP',{});w(T[k],[vp,'p']);out('v'+x,[vp,'y']);
+   if(pins){w(['M'+x,'y'],['IDS','abc'[k]]);w([am,'y'],['IDS','i'+x]);}});
+  SP.close();return B.def();}
+ // The grid-forming control. Per unit on S, V̂ = √2·V_ac/√3, Î = S/(1.5·V̂); currents and powers out of the converter. dq on
+ // the internal angle θ (v_a = V·cos θ, d on the voltage that the control forms). The law gives the frequency ω (pu) and the
+ // amplitude E: droop ω = 1 − m_p·(P_f − P_ref), E = V_ref − n_q·(Q_f − Q_ref) (P_f, Q_f through ω_f); VSM 2H·dω/dt = P_ref −
+ // P/ω − (ω − ω_r)/m_p, dψ/dt = (Q_ref − Q + (V_ref − V)/n_q)·n_q/τ_v, E = ω·ψ (P = E·i_d and Q = −E·i_q at the internal EMF
+ // with the direct inner control, as the synchronverter); PSC ω = 1 + k_p·(P_ref − P)/ω₀, E = V_ref (+ K_E/(1 + T_E·s)·(U_ref
+ // − |v|)), all ramped from 0 over t_soft at the start. θ = ∫ω₀·ω, or ∫ω₀·ω_PLL while synchronizing (t < t_sync, with the
+ // angle pulled to the PLL) and, for the PSC, in a fault (|v| < U_fd) and 50 ms after it (its backup PLL, θ at its displacement
+ // from the PLL before the fault, the voltage control held); the P–f laws of droop and VSM go on in the current limit.
+ // Direct inner control: v_ref = E − Z_v·i
+ // − k_v·s/(s + α_v)·i; i_ref = (v_ref − u_f − jX·i)/(α_c·L) + i, limited to I_max, v = α_c·L·(i_ref − i) + jX·i + u_f (= v_ref
+ // below the limit; Zhang et al. (54)–(55)). Cascade: v_ref = E − Z_v·o, PI of the capacitor voltage with k_ff·o and jB·v fed
+ // forward → i_ref (|i_ref| ≤ I_max; in the limit an integrator only unwinds) → PI of the current with v and jX·i fed forward. With
+ // the whole o fed forward through a current loop of lag τ_i a load G acts as a capacitance −G·τ_i beside B/ω₀ (THEORY §8Ε):
+ // with too small a k_ff the remainder (1 − k_ff)·o = (1 − k_ff)·(v − v_g)/jX is a feedback of the voltage stronger than
+ // the voltage loop against a network of small impedance. k_ff = 0,8, T_v 3 ms, T_i 0,5 ms by default.
+ function gfmcDef(c){const p=prm(c),B=builder(c.label||c.id);
+  const S=Math.max(num(p.S,10e3),1),Vac=Math.max(num(p.Vac,400),1e-6),Vdc=Math.max(num(p.Vdc,800),1e-6),f0=Math.max(num(p.f0,50),1e-6),w0=2*Math.PI*f0;
+  const Vb=Vac*Math.SQRT2/Math.sqrt(3),Ib=S/(1.5*Vb),law=['droop','vsm','psc'].includes(p.law)?p.law:'droop',cas=p.inner==='cascade',sg=p.sync==='g';
+  const SP=sigPorts(B,isBus(p),busMap('meas',GFM_MEAS),busMap('m',['ma','mb','mc'])),sin=SP.sin,out=SP.out;
+  const w=(a,b)=>B.wire(a,b),E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''});const ref=(id,v,d)=>{const t=String(v??'').trim();B.comp(id,'CONST',{v:t===''?String(d):t});return [id,'y'];};
+  const pos=(x,d)=>Math.max(num(x,d),1e-9),Y=id=>[id,'y'];
+  // an integrator whose input is an expression of named sources (and of its own output z; an input may not be called y, the output)
+  const integ=(id,expr,srcs,pars,y0,lo,hi)=>{E(id+'U',expr,Object.keys(srcs).join(', '),pars);B.comp(id,'INT',{y0:s(y0),lo:s(lo),hi:s(hi)});w([id+'U','y'],[id,'u']);
+   for(const [k,v] of Object.entries(srcs))w(v==='self'?Y(id):v,[id+'U',k]);return Y(id);};
+  // measurements per unit, filtered
+  const fm=s(pos(p.fm,2000)),F={},names=['va','vb','vc','ia','ib','ic',...(cas?['oa','ob','oc']:[]),...(sg?['ga','gb','gc']:[]),'vdc'];
+  if(!cas&&!isBus(p))for(const n of ['oa','ob','oc'])B.comp('$'+n,'SIN',{name:n});  // (no pins oa…oc on the part: nothing reads them)
+  for(const n of names){const b=n==='vdc'?Vdc:(n[0]==='v'||n[0]==='g')?Vb:Ib;E('K'+n,'u*k','u','k = '+s(1/b));w(sin(n),['K'+n,'u']);B.comp('F'+n,'LPF',{fc:fm,y0:'0'});w(Y('K'+n),['F'+n,'u']);F[n]=Y('F'+n);}
+  // the PLL: synchronization before t_sync, and the backup in the current limit
+  const G=sg?['ga','gb','gc']:['va','vb','vc'];B.comp('PLL','PLL',{f0:s(f0),bw:s(pos(p.bw,20)),th0:'0',ini:'v',conn:'sep'});G.forEach((n,k)=>w(F[n],['PLL','abc'[k]]));
+  E('WP','w/k','w','k = '+s(w0));w(['PLL','w'],['WP','w']);E('SY','t < ts ? 1 : 0','','ts = '+s(Math.max(num(p.tsync,0),0)));
+  // the angle: θ (INT, 0 … 2π), dq of the measurements on it
+  const th0=num(p.th0,0)*Math.PI/180,TH=Y('TH');
+  const dq=(id,a,b,cc)=>{E(id+'D','2/3*(a*cos(th) + b*cos(th - 2*pi/3) + c*cos(th + 2*pi/3))','a, b, c, th');E(id+'Q','-2/3*(a*sin(th) + b*sin(th - 2*pi/3) + c*sin(th + 2*pi/3))','a, b, c, th');
+   for(const q of ['D','Q']){w(a,[id+q,'a']);w(b,[id+q,'b']);w(cc,[id+q,'c']);w(TH,[id+q,'th']);}};
+  dq('V',F.va,F.vb,F.vc);dq('I',F.ia,F.ib,F.ic);if(cas)dq('O',F.oa,F.ob,F.oc);
+  E('VG','hypot(d, q)','d, q');w(Y('VD'),['VG','d']);w(Y('VQ'),['VG','q']);E('IG','hypot(d, q)','d, q');w(Y('ID'),['IG','d']);w(Y('IQ'),['IG','q']);
+  const PR=ref('PR',p.Pref,0),QR=ref('QR',p.Qref,0),VR=ref('VR',p.Vref,1),mp=pos(p.mp,2)/100,nq=pos(p.nq,5)/100;
+  // LF: the current limit (from the inner control, below) latched 20 ms; in it the integrator of the VSM flux only unwinds.
+  // FD: a fault, |v| < U_fd, latched 50 ms: the PSC follows its backup PLL and holds its voltage control (Zhang et al.: the
+  // switch by a fault detection logic; a switch by the limit itself locked after the fault, the limit holding the PSL off).
+  // SL: θ from the PLL (synchronizing, and the PSC in a fault). The P–f laws of droop and VSM go on in the limit: the power that
+  // the limit cuts raises the frequency, which keeps parallel units in step (an island in overload) and is bounded by m_p
+  const ts=Math.max(num(p.tsoft,0.05),0);E('SM',ts>0?'min(1, t/ts)':'1','',ts>0?'ts = '+s(ts):'');
+  B.comp('LF','INT',{y0:'0',lo:'0',hi:'1'});E('LFU','l > 0.5 ? 1e9 : -50','l');w(Y('LFU'),['LF','u']);
+  B.comp('FD','INT',{y0:'0',lo:'0',hi:'1'});E('FDU','t > ts && v < uf ? 1e9 : -20','v',`uf = ${s(Math.max(num(p.Ufd,0.6),0))}, ts = ${s(Math.max(ts,num(p.tsync,0))+0.02)}`);w(Y('VG'),['FDU','v']);w(Y('FDU'),['FD','u']);
+  E('SL',law==='psc'?'z > 0 || s > 0.5 ? 1 : 0':'s > 0.5 ? 1 : 0',law==='psc'?'z, s':'s');if(law==='psc')w(Y('FD'),['SL','z']);w(Y('SY'),['SL','s']);
+  // powers: at the internal EMF (VSM with the direct control) or at the measured voltage
+  const X=cas?'O':'I',atE=law==='vsm'&&!cas;
+  if(atE){E('PP','ee*d','ee, d');E('QQ','-ee*q','ee, q');for(const id of ['PP','QQ'])w(Y('EE'),[id,'ee']);w(Y('ID'),['PP','d']);w(Y('IQ'),['QQ','q']);}
+  else{E('PP','vd*xd + vq*xq','vd, vq, xd, xq');E('QQ','vq*xd - vd*xq','vd, vq, xd, xq');for(const id of ['PP','QQ']){w(Y('VD'),[id,'vd']);w(Y('VQ'),[id,'vq']);w(Y(X+'D'),[id,'xd']);w(Y(X+'Q'),[id,'xq']);}}
+  // the law: WL (ω, pu) and EE (E, pu)
+  if(law==='droop'){const wf=s(2*Math.PI*pos(p.fp,5));
+   integ('PF','wf*(x - z)',{x:Y('PP'),z:'self'},'wf = '+wf,0,-10,10);integ('QF','wf*(x - z)',{x:Y('QQ'),z:'self'},'wf = '+wf,0,-10,10);
+   E('WL','1 - mp*(f - r)','f, r','mp = '+s(mp));w(Y('PF'),['WL','f']);w(PR,['WL','r']);
+   E('EE','v - nq*(f - r)','f, r, v','nq = '+s(nq));w(Y('QF'),['EE','f']);w(QR,['EE','r']);w(VR,['EE','v']);}
+  else if(law==='vsm'){const h2=s(2*pos(p.H,2)),td=s(Math.max(num(p.tdr,0),0)),Dq=1/nq;
+   integ('WS','s > 0.5 ? 50*(wp - z) : (r - x/max(z, 0.5) - d*(z - (t < td ? wp : 1)))/h2',{s:Y('SY'),wp:Y('WP'),r:PR,x:Y('PP'),z:'self'},`d = ${s(1/mp)}, td = ${td}, h2 = ${h2}`,1,0.5,1.5);
+   E('YE','(r - x + (t < td ? 0 : dq)*(v - m))/k','r, x, v, m',`dq = ${s(Dq)}, td = ${td}, k = ${s(Dq*pos(p.tv,0.01))}`);w(QR,['YE','r']);w(Y('QQ'),['YE','x']);w(VR,['YE','v']);w(Y('VG'),['YE','m']);
+   // ψ: while synchronizing it follows the amplitude of the PLL's voltage (E = |v_g| when the breaker closes), held during the
+   // soft start, and in the current limit it only unwinds
+   integ('YS','s > 0.5 ? 50*(a - z) : t < ts ? 0 : l > 0 && g > 0 ? 0 : g',{s:Y('SY'),a:['PLL','amp'],l:Y('LF'),g:Y('YE'),z:'self'},'ts = '+s(ts),1,0,2);
+   E('WL','z','z');w(Y('WS'),['WL','z']);E('EE','w*z','w, z');w(Y('WS'),['EE','w']);w(Y('YS'),['EE','z']);}
+  else{E('WL','1 + kp*(r - x)/w0','r, x',`kp = ${s(pos(p.kp,50))}, w0 = ${s(w0)}`);w(PR,['WL','r']);w(Y('PP'),['WL','x']);
+   if(p.avc==='fixed'){E('EE','v','v');w(VR,['EE','v']);}
+   else{const UR=ref('UR',p.Uref,1);integ('XE','l > 0 ? 0 : (ke*(r - u) - z)/te',{l:Y('FD'),r:UR,u:Y('VG'),z:'self'},`ke = ${s(Math.max(num(p.KE,5),0))}, te = ${s(pos(p.TE,0.05))}`,0,-0.5,0.5);
+    E('EE','v + x','v, x');w(VR,['EE','v']);w(Y('XE'),['EE','x']);}}
+  // θ: the law, or the PLL (synchronizing, limited)
+  // (the PSC in a fault: θ held at the displacement from the PLL that it had before, DOF, as the converter frame of the vector
+  // current control that replaces it; without it the frequency transient of the PLL at the fault moved the angle)
+  if(law==='psc'){E('DTH','atan2(sin(z - tp), cos(z - tp))','z, tp');w(TH,['DTH','z']);w(['PLL','th'],['DTH','tp']);
+   integ('DOF','l > 0 ? 0 : 50*(d - z)',{l:Y('FD'),d:Y('DTH'),z:'self'},'',0,-4,4);}
+  E('AER',law==='psc'?'sy > 0.5 ? ka*atan2(sin(tp - z), cos(tp - z)) : lf > 0 ? ka*atan2(sin(tp + df - z), cos(tp + df - z)) : 0':'sy > 0.5 ? ka*atan2(sin(tp - z), cos(tp - z)) : 0',
+   law==='psc'?'sy, tp, z, lf, df':'sy, tp, z','ka = '+s(2*Math.PI*10));w(Y('SY'),['AER','sy']);w(['PLL','th'],['AER','tp']);w(TH,['AER','z']);if(law==='psc'){w(Y('FD'),['AER','lf']);w(Y('DOF'),['AER','df']);}
+  E('THU','w0*(l > 0.5 ? wp : wl) + a','l, wp, wl, a','w0 = '+s(w0));
+  B.comp('TH','INT',{y0:s(((th0%(2*Math.PI))+2*Math.PI)%(2*Math.PI)),wrap:'2pi'});w(Y('THU'),['TH','u']);
+  for(const [k,v] of [['l',Y('SL')],['wp',Y('WP')],['wl',Y('WL')],['a',Y('AER')]])w(v,['THU',k]);
+  E('WW','l > 0.5 ? wp : wl','l, wp, wl');w(Y('SL'),['WW','l']);w(Y('WP'),['WW','wp']);w(Y('WL'),['WW','wl']);
+  // inner control → v_c (dq) and the limit flag LR
+  const xc=Math.max(num(p.Xc,0.15),1e-6),rv=s(Math.max(num(p.Rv,0),0)),xv=s(num(p.Xv,0)),im=s(pos(p.Imax,1.2));
+  if(!cas){const kv=Math.max(num(p.kv,0),0),al=pos(p.ac,600)*xc/w0;
+   if(kv>0){const fc=s(pos(p.av,40)/(2*Math.PI));for(const a of ['D','Q']){B.comp('IL'+a,'LPF',{fc,y0:'0'});w(Y('I'+a),['IL'+a,'u']);}}else for(const a of ['D','Q'])B.comp('IL'+a,'CONST',{v:'0'});
+   E('VRD',`ee*sm - rv*id + xv*iq - kv*(id - ld)`,'ee, sm, id, iq, ld',`rv = ${rv}, xv = ${xv}, kv = ${s(kv)}`);E('VRQ',`-rv*iq - xv*id - kv*(iq - lq)`,'id, iq, lq',`rv = ${rv}, xv = ${xv}, kv = ${s(kv)}`);
+   w(Y('EE'),['VRD','ee']);w(Y('SM'),['VRD','sm']);for(const id of ['VRD','VRQ']){w(Y('ID'),[id,'id']);w(Y('IQ'),[id,'iq']);}w(Y('ILD'),['VRD','ld']);w(Y('ILQ'),['VRQ','lq']);
+   for(const a of ['D','Q']){B.comp('UF'+a,'LPF',{fc:'200',y0:a==='D'?'1':'0'});w(Y('V'+a),['UF'+a,'u']);}
+   E('IRD','(v - u + xc*iq)/al + id','v, u, id, iq',`xc = ${s(xc)}, al = ${s(al)}`);E('IRQ','(v - u - xc*id)/al + iq','v, u, id, iq',`xc = ${s(xc)}, al = ${s(al)}`);
+   w(Y('VRD'),['IRD','v']);w(Y('UFD'),['IRD','u']);w(Y('VRQ'),['IRQ','v']);w(Y('UFQ'),['IRQ','u']);for(const id of ['IRD','IRQ']){w(Y('ID'),[id,'id']);w(Y('IQ'),[id,'iq']);}
+   E('KL','min(1, im/max(hypot(d, q), 1e-9))','d, q','im = '+im);E('LR','hypot(d, q) > im ? 1 : 0','d, q','im = '+im);for(const id of ['KL','LR']){w(Y('IRD'),[id,'d']);w(Y('IRQ'),[id,'q']);}
+   E('VCD','al*(k*r - id) - xc*iq + u','k, r, id, iq, u',`xc = ${s(xc)}, al = ${s(al)}`);E('VCQ','al*(k*r - iq) + xc*id + u','k, r, id, iq, u',`xc = ${s(xc)}, al = ${s(al)}`);
+   w(Y('IRD'),['VCD','r']);w(Y('IRQ'),['VCQ','r']);w(Y('UFD'),['VCD','u']);w(Y('UFQ'),['VCQ','u']);for(const id of ['VCD','VCQ']){w(Y('KL'),[id,'k']);w(Y('ID'),[id,'id']);w(Y('IQ'),[id,'iq']);}}
+  else{const bf=Math.max(num(p.Bf,0.05),1e-6),tvl=pos(p.Tvl,0.003)/3,til=pos(p.Til,0.0005)/3,kpv=bf/(w0*tvl),kiv=kpv/(2*tvl),kpc=xc/(w0*til),kic=kpc/(4*til);
+   E('VRD','ee*sm - rv*od + xv*oq','ee, sm, od, oq',`rv = ${rv}, xv = ${xv}`);w(Y('SM'),['VRD','sm']);E('VRQ','-rv*oq - xv*od','od, oq',`rv = ${rv}, xv = ${xv}`);w(Y('EE'),['VRD','ee']);
+   for(const id of ['VRD','VRQ']){w(Y('OD'),[id,'od']);w(Y('OQ'),[id,'oq']);}
+   for(const a of ['D','Q'])integ('XV'+a,'l > 0.5 && (r - v)*z > 0 ? 0 : ki*(r - v)',{l:Y('LR'),r:Y('VR'+a),v:Y('V'+a),z:'self'},'ki = '+s(kiv),0,-3,3);
+   const kff=s(Math.min(Math.max(num(p.kff,0.8),0),1));E('IRD','kf*od - bf*vq + kp*(r - vd) + x','od, vq, vd, r, x',`kf = ${kff}, bf = ${s(bf)}, kp = ${s(kpv)}`);E('IRQ','kf*oq + bf*vd + kp*(r - vq) + x','oq, vd, vq, r, x',`kf = ${kff}, bf = ${s(bf)}, kp = ${s(kpv)}`);
+   for(const [id,a] of [['IRD','D'],['IRQ','Q']]){w(Y('OD'),[id,'od']);w(Y('OQ'),[id,'oq']);w(Y('VD'),[id,'vd']);w(Y('VQ'),[id,'vq']);w(Y('VR'+a),[id,'r']);w(Y('XV'+a),[id,'x']);}
+   E('KL','min(1, im/max(hypot(d, q), 1e-9))','d, q','im = '+im);E('LR','hypot(d, q) > im ? 1 : 0','d, q','im = '+im);for(const id of ['KL','LR']){w(Y('IRD'),[id,'d']);w(Y('IRQ'),[id,'q']);}
+   for(const a of ['D','Q']){E('IS'+a,'k*r','k, r');w(Y('KL'),['IS'+a,'k']);w(Y('IR'+a),['IS'+a,'r']);integ('XI'+a,'ki*(r - i)',{r:Y('IS'+a),i:Y('I'+a)},'ki = '+s(kic),0,-3,3);}
+   E('VCD','vd - xc*iq + kp*(r - id) + x','vd, iq, id, r, x',`xc = ${s(xc)}, kp = ${s(kpc)}`);E('VCQ','vq + xc*id + kp*(r - iq) + x','vq, id, iq, r, x',`xc = ${s(xc)}, kp = ${s(kpc)}`);
+   for(const [id,a] of [['VCD','D'],['VCQ','Q']]){w(Y('VD'),[id,'vd']);w(Y('VQ'),[id,'vq']);w(Y('ID'),[id,'id']);w(Y('IQ'),[id,'iq']);w(Y('IS'+a),[id,'r']);w(Y('XI'+a),[id,'x']);}}
+  w(Y('LR'),['LFU','l']);
+  // modulation: |v_c| ≤ v_max, m = v_c·V̂/(v_dc/2), dq → abc
+  const km=s(Vb/(Vdc/2)),vmax=s(pos(p.vmax,1.3));E('VSU','v > 0.1 ? v : 1','v');w(F.vdc,['VSU','v']);
+  E('MD','k*d*min(1, vm/max(hypot(d, q), 1e-9))/u','d, q, u',`k = ${km}, vm = ${vmax}`);E('MQ','k*q*min(1, vm/max(hypot(d, q), 1e-9))/u','d, q, u',`k = ${km}, vm = ${vmax}`);
+  for(const id of ['MD','MQ']){w(Y('VCD'),[id,'d']);w(Y('VCQ'),[id,'q']);w(Y('VSU'),[id,'u']);}
+  [['ma',0],['mb',-2*Math.PI/3],['mc',2*Math.PI/3]].forEach(([n,f])=>{const id='M'+n[1].toUpperCase();E(id,'d*cos(th + f) - q*sin(th + f)','d, q, th','f = '+s(f));w(Y('MD'),[id,'d']);w(Y('MQ'),[id,'q']);w(TH,[id,'th']);out(n,Y(id));});
+  out('th',TH);out('w',Y('WW'));out('p',Y('PP'));out('q',Y('QQ'));out('e',Y('EE'));out('lim',Y('LR'));
+  SP.close();return B.def();}
+
+ const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef,CHB:chbDef,SPLL:spllDef,SSSC:ssscDef,SSSC3:sssc3Def,MMC:mmcDef,MMCC:mmccDef,VSC2:vsc2Def,GFMC:gfmcDef,LCC6:lcc6Def,LCCS:lccsDef,LCCC:lcccDef,FILT3:filtDef,ZSER3:zserDef};
  function defOf(c){return DEFS[c.type](c);}
 
  // 4.9.1 (ROADMAP §52): the parts with two implementations, and a copy of a project with one implementation everywhere

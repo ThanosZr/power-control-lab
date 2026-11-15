@@ -1653,6 +1653,90 @@
     scope:{panes:[[['Y:CR/KV','V_d ανορθωτή (pu)'],['Y:CI/KV','V_d αντιστροφέα (pu)']],[['Y:CR/FI','I_d ανορθωτή (pu)'],['Y:CI/FI','I_d αντιστροφέα (pu)'],['Y:CI/ORD','εντολή (VDCOL)']],
      [['Y:CR/AO','α ανορθωτή (°)'],['Y:CI/AO','α αντιστροφέα (°)'],['Y:STI/GM','γ αντιστροφέα (°)']],[['Y:STI/CF','αποτυχία μετάβασης'],['Y:CI/CC','αντιστροφέας σε έλεγχο ρεύματος']]],window:{unit:'s',n:0.4}},
     meta:{lcc:{model,ev,gref,Idn:2000,Vdn:500e3,r:{U1:345e3,U2:213.4557e3,Sn:603.73e6,uk:18},i:{U1:230e3,U2:209.2288e3,Sn:591.79e6,uk:18}}}});}});
+ // ------------------------------------------------------------------ 4.18 (§58): grid-forming converters (THEORY §8Ε)
+ // The two-level VSC as an average model with its filter (VSC2) and the grid-forming control (GFMC); the measurements of the
+ // converter go to the control and its modulation back. Per unit on each converter's ratings
+ // the buses meas and m (conn = 'bus' on both); meas around under the two blocks: VSC2 at (xv, yv), GFMC at (xc, yc), yb below both
+ const gfmWire=(ct,vs,xv,yv,xc,yc,yb)=>[[vs+':meas',ct+':meas',[[xv+70,yv+60],[xv+70,yb],[xc-70,yb],[xc-70,yc]]],[ct+':m',vs+':m']];
+ T.push({id:'gfm_island',group:'Grid-forming (4.18)',title:'Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα',theory:'formula',topology:'gfm_island',
+  options:[{k:'law',label:'Νόμος',options:[['droop','Στατικότητα P–f, Q–V (φίλτρο 5 Hz)'],['vsm','Εικονική σύγχρονη μηχανή (H = 1 s)']],def:'droop'},
+   {k:'inner',label:'Εσωτερικός έλεγχος',options:[['cascade','Καταρράκτης: βρόχος τάσης πυκνωτή και ρεύματος'],['direct','Άμεσα η τάση (με υψιπερατή ανάδραση ρεύματος)']],def:'cascade'},
+   {k:'size',label:'Ονομαστικές ισχείς',options:[['eq','10 kVA και 10 kVA'],['21','10 kVA και 5 kVA']],def:'eq'},
+   {k:'xv',label:'Εικονική αντίδραση X_v',options:[['0.1','0,1 pu'],['0','Χωρίς']],def:'0.1'}],
+  desc:'Δύο μετατροπείς 400 V (μέσο μοντέλο, φίλτρο LC) τροφοδοτούν ένα κοινό φορτίο μέσα από γραμμές με διαφορετική εμπέδηση, χωρίς δίκτυο και χωρίς επικοινωνία. Καθένας σχηματίζει την τάση του (grid-forming): η συχνότητα πέφτει με την ενεργό ισχύ του και το πλάτος με την άεργο (στατικότητα 2 % και 5 % στη δική του βάση). Στα 0,5 s κλείνει ένα δεύτερο φορτίο· στα 1,0 s η μονάδα 1 παίρνει εντολή P_ref = 0,2 pu (δευτερεύουσα ρύθμιση).',
+  tasks:['Σύγκρινε στην κάρτα τη συχνότητα της μόνιμης κατάστασης με τον τύπο ω = 1 − m_p·(P_φορτίου − S₁·P_ref,1)/(S₁ + S₂): δεν εξαρτάται από τις γραμμές.','Με 10 και 5 kVA: η ενεργός ισχύς μοιράζεται 2:1 (ίδιο pu σε κάθε μονάδα). Η άεργος όχι: εξαρτάται από τις πτώσεις τάσης στις γραμμές. Βάλε X_v = 0,1 pu και δες τη διαφορά των Q να μικραίνει.','Η VSM δίνει την ίδια μόνιμη κατάσταση με τη στατικότητα (D_p = 1/m_p) αλλά άλλη μεταβατική: σύγκρινε την πτώση της συχνότητας στα 0,5 s.'],
+  build(o){const law=o.law==='vsm'?'vsm':'droop',cas=o.inner!=='direct',S1=10e3,S2=o.size==='21'?5e3:10e3,St=S1+S2,xv=o.xv==null?0.1:+o.xv||0,Vll=400,f=50,w0=2*Math.PI*f,r=x=>+x.toPrecision(6);
+   const comps=[],wires=[];
+   const unit=(k,y0,S,Rl,Ll)=>{const Zb=Vll*Vll/S,Lf=r(0.06*Zb/w0),Cf=r(0.1/(w0*Zb)),id=q=>q+k;
+    comps.push(C(id('CT'),'GFMC',60,y0+60,{law,inner:cas?'cascade':'direct',S,Vac:Vll,Vdc:800,f0:f,Pref:k===1?'0:0, 1:0.2':'0',Qref:'0',Vref:'1',mp:2,nq:5,fp:5,H:1,tv:0.01,
+      kv:0,Rv:0,Xv:xv,Xc:0.06,Bf:0.1,Tvl:0.003,Til:0.0005,kff:0.8,Imax:1.2,conn:'bus'},{label:'έλεγχος '+k}),
+     C(id('VS'),'VSC2',260,y0,{dc:'ideal',Vdc:800,mmax:1,filt:'lc',Lf,Rf:r(0.005*Zb),Cf,conn:'bus'},{label:`μετατροπέας ${k} (${S/1e3} kVA)`}),
+     C(id('Z'),'ZSER3',480,y0-20,{Rs:Rl,Ls:Ll,Rp1:0,Lp:0,Rp2:0,conn:'bus'},{label:'γραμμή '+k}));
+    wires.push([id('VS')+':abc',id('Z')+':abc1'],[id('Z')+':abc2','JB:j'],...gfmWire(id('CT'),id('VS'),260,y0,60,y0+60,y0+200));};
+   unit(1,160,S1,0.1,1.5e-3);unit(2,520,S2,0.2,3e-3);
+   comps.push(C('JB','JUNC',660,320),C('LD','LOAD3',660,460,{cn:'yn',Un:Vll,f,P:r(0.4*St),Q:r(0.1*St),conn:'bus'},{label:'φορτίο'}),
+    C('CB','CB3',800,320,{cmd:'0:0, 0.5:1',model:'ideal',conn:'bus'},{label:'κλείνει στα 0,5 s'}),C('LS','LOAD3',940,460,{cn:'yn',Un:Vll,f,P:r(0.4*St),Q:0,conn:'bus'},{label:'δεύτερο φορτίο'}));
+   wires.push(['JB:j','LD:abc'],['JB:j','CB:abc1'],['CB:abc2','LS:abc']);
+   return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:400,method:'TR',speed:0.2,stopT:1.5},
+    scope:{panes:[[['Y:CT1/PP','P₁ (pu της μονάδας 1)'],['Y:CT2/PP','P₂ (pu της μονάδας 2)']],[['Y:CT1/WW','f₁ (pu)'],['Y:CT2/WW','f₂ (pu)']],[['Y:CT1/QQ','Q₁ (pu)'],['Y:CT2/QQ','Q₂ (pu)']],[['Y:CT1/VG','|v₁| (pu)'],['Y:CT2/VG','|v₂| (pu)']]],window:{unit:'s',n:1.5}},
+    meta:{gfm:{kind:'island',law,inner:cas?'cascade':'direct',S1,S2,mp:0.02,nq:0.05,xv,tstep:0.5,tpref:1,pref1:0.2,Vll,f}}});}});
+ // The synchronverter of Zhong & Weiss (2011): the inverter of their Table I (100 W, 20,78 V, L_s = L_g = 0,45 mH, C = 22 μF,
+ // R ∥ C 1 kΩ), D_p for 100 % P at −0,5 % frequency, D_q for 100 % Q at −5 % voltage, τ_f = τ_v = 2 ms; the sequence of their
+ // Fig. 5 every 0,3 s (breaker, P_set, Q_set, droops, grid −5 %), with the grid at 50 or 49,95 Hz
+ T.push({id:'gfm_sync',group:'Grid-forming (4.18)',title:'Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011)',theory:'formula',topology:'gfm_sync',
+  options:[{k:'fg',label:'Συχνότητα του δικτύου',options:[['50','50 Hz (ονομαστική)'],['49.95','49,95 Hz (−0,1 %)']],def:'49.95'},
+   {k:'H',label:'Αδράνεια',options:[['0.2','H = 0,2 s (τ_f = 2 ms, όπως το paper)'],['2','H = 2 s (τ_f = 20 ms)']],def:'0.2'}],
+  desc:'Ο αντιστροφέας του Πίν. I των Zhong & Weiss (100 W, 20,78 V πολική, φίλτρο LC, μέσο μοντέλο) ελέγχεται σαν σύγχρονη γεννήτρια: εικονικός δρομέας με αδράνεια J = D_p·τ_f και ροπή T_e = P/θ̇, ροή διέγερσης M_f·i_f από έναν ολοκληρωτή της άεργου, E = θ̇·M_f·i_f (εξ. (6)–(9)). Τα γεγονότα του Σχ. 5, ανά 0,3 s: 0,1 s κλείνει ο διακόπτης (ως τότε συγχρονισμός με PLL στην τάση του δικτύου), 0,3 s P_set = 80 W, 0,6 s Q_set = 60 var, 0,9 s ενεργές οι στατικότητες, 1,2 s η τάση του δικτύου πέφτει 5 %.',
+  tasks:['Ως τα 0,9 s τα P και Q ακολουθούν τις αναφορές χωρίς σφάλμα σε περίπου δέκα περιόδους (ο αργός πόλος του δρομέα, κάρτα).','Με το δίκτυο στα 49,95 Hz: μόλις μπουν οι στατικότητες το P ανεβαίνει κατά 0,1 %/0,5 % × 100 W = 20 W (κάρτα).','Στα 0,9 s το Q πέφτει, γιατί η τάση στους πυκνωτές είναι πάνω από την ονομαστική: ΔQ = D_q·(V_r − V_m). Στα 1,2 s, με το δίκτυο 5 % κάτω, ανεβαίνει ξανά.'],
+  build(o){const S=100,Vll=20.78,f=50,fg=o.fg==null?49.95:+o.fg||50,H=o.H==null?0.2:+o.H||0.2,Ls=0.45e-3,Rs=0.135,Cf=22e-6,Zb=Vll*Vll/S,w0=2*Math.PI*f,Vg=Vll*Math.SQRT2/Math.sqrt(3),r=x=>+x.toPrecision(6);
+   const comps=[C('CT','GFMC',60,360,{law:'vsm',inner:'direct',S,Vac:Vll,Vdc:42,f0:f,Pref:'0:0, 0.3:0.8',Qref:'0:0, 0.6:0.6',Vref:'1',mp:0.5,nq:5,H,tv:0.002,tdr:0.9,kv:0,Rv:0,Xv:0,
+     Xc:r(w0*Ls/Zb),Imax:2,sync:'g',bw:20,tsync:0.1,tsoft:0.05,conn:'bus'},{label:'synchronverter'}),
+    C('VS','VSC2',260,300,{dc:'ideal',Vdc:42,mmax:1,filt:'lc',Lf:Ls,Rf:Rs,Cf,conn:'bus'},{label:'αντιστροφέας 100 W'}),
+    C('JT','JUNC',420,280),C('RP','LOAD3',420,420,{cn:'yn',Un:Vll,f,P:r(Vll*Vll/1000),Q:0,conn:'bus'},{label:'R ∥ C = 1 kΩ'}),
+    C('CB','CB3',540,280,{cmd:'0:0, 0.1:1',model:'ideal',conn:'bus'},{label:'κλείνει στα 0,1 s'}),
+    C('ZG','ZSER3',680,280,{Rs:Rs,Ls:Ls,Rp1:0,Lp:0,Rp2:0,conn:'bus'},{label:'L_g, R_g'}),C('BG','EBUS',800,280,{n:3},{flip:true})];
+   const wires=[['VS:abc','JT:j'],['JT:j','RP:abc'],['JT:j','CB:abc1'],['CB:abc2','ZG:abc1'],['ZG:abc2','BG:bus'],...gfmWire('CT','VS',260,300,60,360,500)];
+   ['a','b','c'].forEach((x,k)=>{const y=200+80*k,X=x.toUpperCase();
+    comps.push(C('G'+X,'VDC',900,y,{ctl:'sig',V:0},{rot:1,label:'v_g'+x}),C('E'+X,'EXPR',1100,y,{expr:`v*(1 - 0.05*(t >= 1.2))*cos(2*pi*fg*t - ${r(2*Math.PI*k/3)})`,ins:'',pars:`v = ${r(Vg)}, fg = ${fg}`},{label:'δίκτυο '+x}),
+     C('P'+X,'VP',860,y-30,{},{label:'g'+x}),C('TO'+X,'TAGO',940,y-40,{name:'v_g'+x},{label:'v_g'+x}),C('TI'+X,'TAGI',-30,400+20*k,{name:'v_g'+x},{label:'v_g'+x}));
+    wires.push(['BG:'+x,'G'+X+':n'],['E'+X+':y','G'+X+':u'],['G'+X+':n','P'+X+':p'],['P'+X+':y','TO'+X+':u'],['TI'+X+':y','CT:g'+x]);});
+   comps.push(C('G1','GND',1000,460,{},{label:'0 V'}));['A','B','C'].forEach(X=>wires.push(['G'+X+':p','G1:g']));
+   return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:1000,method:'TR',speed:0.2,stopT:1.5},
+    scope:{panes:[[['Y:CT/PP','P (pu των 100 W)'],['Y:CT/QQ','Q (pu των 100 var)']],[['Y:CT/WW','θ̇/ω₀ (pu)']],[['Y:CT/VG','|v| στους πυκνωτές (pu)'],['Y:CT/EE','E = θ̇·M_f·i_f (pu)']]],window:{unit:'s',n:1.5}},
+    meta:{gfm:{kind:'sync',S,Vll,fg,f,mp:0.005,nq:0.05,H,tf:2*H*0.005,tv:0.002,Pset:0.8,Qset:0.6,tps:0.3,tqs:0.6,tdr:0.9,tdip:1.2}}});}});
+ // Power-synchronization control in a weak grid (Zhang, Harnefors & Nee 2010): the VSC of their Table I (350 MVA, 195 kV,
+ // phase reactor 0,15 pu, transformer 195/400 kV 12 %, ±150 kV, I_max 1,08 pu) against a 400 kV grid of SCR 1, 2 or 5; their
+ // gains (k_p = 130 rad/s at SCR 1, scaled with the reactance; k_v = 0,477, α_v = 40 rad/s), or vector current control with a
+ // PLL (the control of the MMC station, on the same average model)
+ const GFM_W={step:'Βήμα P_ref +0,1 pu στο 1,2 s',fault:'Τριφασικό σφάλμα στο σημείο σύνδεσης (1,2–1,35 s, 10 Ω)'};
+ T.push({id:'gfm_weak',group:'Grid-forming (4.18)',title:'Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL',theory:'formula',topology:'gfm_weak',
+  options:[{k:'ctl',label:'Έλεγχος',options:[['psc','Grid-forming: PSC με ρύθμιση της τάσης AC'],['gfl','Grid-following: έλεγχος ρεύματος σε dq με PLL']],def:'psc'},
+   {k:'scr',label:'Λόγος βραχυκύκλωσης SCR',options:[['1','1 (πολύ ασθενές, όπως το paper)'],['2','2'],['5','5']],def:'1'},
+   {k:'p0',label:'Ισχύς πριν από το γεγονός',options:[['0.8','0,8 pu'],['0.5','0,5 pu']],def:'0.8'},
+   {k:'ev',label:'Γεγονός',options:Object.entries(GFM_W),def:'step'}],
+  desc:'Ένας VSC 350 MVA (μέσο μοντέλο, πηνίο 0,15 pu, μετασχηματιστής 195/400 kV, 12 %) στέλνει ισχύ σε δίκτυο 400 kV με S″k = SCR·350 MVA. Με PSC ο μετατροπέας σχηματίζει την τάση του και συγχρονίζεται όπως μια σύγχρονη μηχανή, μέσω της ισχύος (dθ/dt = ω₀ + k_p·(P_ref − P)), με υψιπερατή ανάδραση ρεύματος για απόσβεση και όριο ρεύματος με εφεδρικό PLL. Με τον έλεγχο ρεύματος, το PLL στο ασθενές δίκτυο περιορίζει την ισχύ. Το P ανεβαίνει σε βήματα ως την ισχύ της επιλογής και στο 1,2 s γίνεται το γεγονός.',
+  tasks:['SCR 1, 0,8 pu: με PSC η γωνία φορτίου είναι γύρω στις 65° (κάρτα) και το βήμα στα 0,9 pu περνά με μικρή μη ελάχιστη φάση· με έλεγχο ρεύματος και PLL δεν φτάνει.','Με έλεγχο ρεύματος στα 0,5 pu και SCR 1 το βήμα στα 0,6 pu περνά, αλλά αργά (Zhang κ.ά.: το όριο είναι ~0,4–0,5 pu).','Σφάλμα: το ρεύμα μένει στο I_max = 1,08 pu (μόνο μια αιχμή στην αρχή) και ο μετατροπέας περνά στο εφεδρικό PLL· μετά την εκκαθάριση γυρίζει στο PSC.'],
+  build(o){const S=350e6,Vc=195e3,Vdc=300e3,f=50,w0=2*Math.PI*f,Zb=Vc*Vc/S,scr=o.scr==null?1:+o.scr||1,p0=o.p0==null?0.8:+o.p0||0.8,ev=GFM_W[o.ev]?o.ev:'step',psc=o.ctl!=='gfl',r=x=>+x.toPrecision(6);
+   const Xt=0.15+0.11*350/380+1/scr,kp=r(130*Xt/(0.15+0.11*350/380+1));
+   let ps='0:0';for(let k=1;k*0.1<=p0+1e-9;k++)ps+=`, ${r(0.1*k)}:${r(0.1*k)}`;if(ev==='step')ps+=`, 1.2:${r(p0+0.1)}`;
+   const comps=[C('VS','VSC2',300,300,{dc:'ideal',Vdc,mmax:1.155,filt:'l',Lf:0.052,Rf:0.06,conn:'bus'},{label:'VSC 350 MVA'}),
+    C('JP','JUNC',460,280),C('TR','XF3',600,280,{grp:'YNd1',Sn:380e6,U1:400e3,U2:Vc,f,uk:12,Pk:0,i0:0,conn:'bus'},{label:'400/195 kV',flip:true}),
+    C('NET','GRID3',780,280,{Un:400e3,f,phase:0,cf:1,emf:'un',Sk:r(scr*S),XR:10,conn:'bus'},{label:`δίκτυο, SCR ${scr}`,flip:true})];
+   const wires=[['VS:abc','JP:j'],['JP:j','TR:abc2'],['TR:abc1','NET:abc']];
+   if(ev==='fault'){comps.push(C('FL','FLT3',460,420,{kind:'abc',Rf:10,ton:1.2,toff:1.35,conn:'bus'},{label:'σφάλμα'}));wires.push(['JP:j','FL:abc']);}
+   if(psc){comps.push(C('CT','GFMC',80,340,{law:'psc',inner:'direct',S,Vac:Vc,Vdc,f0:f,Pref:ps,Vref:'1',kp,avc:'vac',Uref:'1',KE:10,TE:0.05,kv:0.477,av:40,Rv:0,Xv:0,Xc:0.15,
+     Imax:1.08,ac:600,vmax:1.3,bw:20,th0:-120,tsoft:0.05,conn:'bus'},{label:'PSC'}));wires.push(...gfmWire('CT','VS',300,300,80,340,480));}
+   else{comps.push(C('CT','MMCC',80,340,{mode:'p',qmode:'vac',S,Vac:Vc,Vdc,f0:f,Pref:ps.replace(/:(\d[\d.]*)/g,(m,v)=>':'+(v==='0'?'0':'-'+v)),Tp:0.2,Vacref:'1',Tvac:0.1,Xpcc:r(0.11*350/380+1/scr),
+      Ti:0.01,X:0.15,R:0.0055,prio:'p',Ilim:1.08,Idlim:1.08,vmax:1.3,bw:20,th0:-120,prot:'off',tdb:0,tbrk:0},{label:'έλεγχος ρεύματος'}));
+    // the measurements of the bus meas, the currents into the converter (as the station control takes them), m back in a bus
+    comps.push(C('SI','BSEL',440,420,{idx:'1, 2, 3'},{label:'i_abc'}),C('NI','GAIN',520,420,{K:-1},{label:'−1'}),C('DI','DEMUX',600,420,{n:3}),
+     C('SV','BSEL',440,500,{idx:'4, 5, 6'},{label:'v_abc'}),C('DV','DEMUX',600,500,{n:3}),C('SD','BSEL',440,580,{idx:'10'},{label:'v_dc'}),C('MX','MUX',200,300,{n:3},{label:'m'}),C('K0','CONST',-40,560,{v:'0'},{label:'I_dc, v_s: όχι'}));
+    wires.push(['VS:meas','SI:u'],['VS:meas','SV:u'],['VS:meas','SD:u'],['SI:y','NI:u'],['NI:y','DI:u'],['SV:y','DV:u'],['SD:y','CT:vdc'],['MX:y','VS:m'],['K0:y','CT:idc'],['K0:y','CT:vs']);
+    ['a','b','c'].forEach((x,k)=>wires.push(['DI:y'+(k+1),'CT:i'+x],['DV:y'+(k+1),'CT:v'+x],['CT:m'+x,'MX:u'+(k+1)]));}
+   const P=psc?'Y:CT/PP':'Y:CT/PP',sc=psc?[[['Y:CT/PP','P (pu)']],[['Y:CT/VG','|u_pcc| (pu)'],['Y:CT/EE','V₀ (pu)']],[['Y:CT/IG','|i| (pu)'],['Y:CT/LR','όριο ρεύματος']],[['Y:CT/WW','ω (pu)']]]
+    :[[['Y:CT/PP','P προς τον μετατροπέα (pu)']],[['Y:CT/VG','|u_pcc| (pu)']],[['Y:CT/ID','i_d (pu)'],['Y:CT/IQ','i_q (pu)']]];
+   return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:400,method:'TR',speed:0.2,stopT:1.6},scope:{panes:sc,window:{unit:'s',n:1.6}},
+    meta:{gfm:{kind:'weak',ctl:psc?'psc':'gfl',scr,p0,ev,S,Vc,Xc:0.15,Xtr:r(0.11*350/380),Xg:r(1/scr),kp,Imax:1.08}}});}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
  // 4.17.1 (§59): the DC-DC tutorials declare their inputs (parameters marked «Είσοδος», in the parameters of the circuit

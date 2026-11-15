@@ -26,6 +26,11 @@
 | freeze (learning) | πάγωμα της μάθησης | πάγωσε τα βάρη ως «freeze» | 4.7 |
 | weights, biases | βάρη, πολώσεις | | 4.7 |
 | multiplexer / demultiplexer | πολυπλέκτης (Mux) / αποπολυπλέκτης (Demux) | | 4.6 |
+| grid-forming / grid-following | μετατροπέας που σχηματίζει την τάση (grid-forming) / που ακολουθεί το δίκτυο (grid-following)· στους τίτλους και στην ομάδα των tutorials ο αγγλικός όρος, όπως στη βιβλιογραφία | «διαμόρφωσης δικτύου» (μπερδεύεται με τη διαμόρφωση PWM) | 4.18 |
+| droop (P–f, Q–V) | στατικότητα P–f, Q–V | «πτώση», droop σκέτο | 4.18 |
+| virtual synchronous machine (VSM), synchronverter | εικονική σύγχρονη μηχανή (VSM)· synchronverter το σχήμα των Zhong & Weiss | «εικονική γεννήτρια» για το σχήμα των Zhong & Weiss | 4.18 |
+| power-synchronization control (PSC) | συγχρονισμός μέσω ισχύος (PSC) | «έλεγχος συγχρονισμού ισχύος» | 4.18 |
+| virtual impedance | εικονική εμπέδηση (R_v + jX_v) | | 4.18 |
 
 ## Καθιερωμένοι όροι που ήδη χρησιμοποιούνται
 

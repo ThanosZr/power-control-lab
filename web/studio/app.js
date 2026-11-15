@@ -171,6 +171,9 @@ function liveOf(c0){const s=S.sim;if(!s||S.error||S.pfx===null)return null;
  if(c0.type==='SSSC3'){const id=(S.pfx||'')+c0.id;return {text:'X '+eng(s.now('Y:'+id+'/XM'),'Ω',3)+' · u '+eng(s.now('Y:'+id+'/U'),'V/s',3)};}
  // 4.14: the MMC and its control: what they do now
  if(c0.type==='MMCC'){const id=(S.pfx||'')+c0.id;return {text:'P '+fmt(s.now('Y:'+id+'/PP'),3)+' · Q '+fmt(s.now('Y:'+id+'/QQ'),3)+' pu'+(s.now('Y:'+id+'/BLK')>0.5?' · μπλοκαρισμένος':'')};}
+ // 4.18: the grid-forming control and the average VSC
+ if(c0.type==='GFMC'){const id=(S.pfx||'')+c0.id;return {text:'P '+fmt(s.now('Y:'+id+'/PP'),3)+' · Q '+fmt(s.now('Y:'+id+'/QQ'),3)+' pu · f '+fmt(50*s.now('Y:'+id+'/WW'),4)+' Hz'+(s.now('Y:'+id+'/LR')>0.5?' · όριο ρεύματος':'')};}
+ if(c0.type==='VSC2'){const id=(S.pfx||'')+c0.id;return {text:'î_a '+eng(Math.abs(s.now('Y:'+id+'/Ia')),'A',3)+' · v_dc '+eng(s.now('Y:'+id+'/VD'),'V',3)};}
  if(c0.type==='MMC'){const id=(S.pfx||'')+c0.id;return {text:'V_dc '+eng(s.now('Y:'+id+'/VDC'),'V',4)+' · I_dc '+eng(s.now('Y:'+id+'/IDC'),'A',3)};}
  // 4.16: the LCC station, its bridge and its control
  if(c0.type==='LCCS'){const id=(S.pfx||'')+c0.id;return {text:'V_d '+eng(s.now('Y:'+id+'/VDC'),'V',4)+' · I_d '+eng(s.now('Y:'+id+'/IDC'),'A',3)+' · γ '+fmt(s.now('Y:'+id+'/GM'),3)+'°'+(s.now('Y:'+id+'/CF')>0.5?' · αποτυχία μετάβασης':'')};}
@@ -256,6 +259,14 @@ const MOD_SIGS={CHB:p=>{const f=p.impl!=='blocks',N=Math.max(1,Math.min(64,Math.
   else{L.push(['/ER','σφάλμα ρεύματος (pu)'],['/PR','β του PI ρεύματος (rad)']);if(p.fr==='on')L.push(['/QF','εξαναγκασμένη καθυστέρηση (1)'],['/FD','χρόνος με V_d < V_fr']);}
   return L;},
  MMCC:p=>[['/PP','P προς τον μετατροπέα (pu)'],['/QQ','Q προς τον μετατροπέα (pu)'],['/VD','v_d (pu)'],['/VQ','v_q (pu)'],['/ID','i_d (pu)'],['/IQ','i_q (pu)'],['/IDL','i_d,ref μετά το όριο (pu)'],['/IQL','i_q,ref μετά το όριο (pu)'],['/Fvdc','V_dc (pu, φιλτραρισμένη)'],['/Fidc','I_dc (pu, φιλτραρισμένο)'],['/VG','|v| (pu)'],['/TH','γωνία θ'],['/MA','m_a'],['/BLK','μπλοκάρισμα (1)'],['/BRK','εντολή διακόπτη AC (1 κλειστός)'],['/PL','προστασία υπερέντασης DC (1)']],
+ // 4.18 (§58): the grid-forming control and the average VSC
+ GFMC:p=>{const L=[['/PP','P από τον μετατροπέα (pu)'],['/QQ','Q από τον μετατροπέα (pu)'],['/WW','συχνότητα ω (pu)'],['/EE','πλάτος E του νόμου (pu)'],['/VG','|v| (pu)'],['/IG','|i| (pu)'],['/VD','v_d (pu)'],['/VQ','v_q (pu)'],['/ID','i_d (pu)'],['/IQ','i_q (pu)'],
+   ['/VCD','v_conv,d (pu)'],['/VCQ','v_conv,q (pu)'],['/LR','όριο ρεύματος (1)'],['/TH','γωνία θ'],['/PLL','γωνία του PLL'],['/MA','m_a']];
+  if(p.law==='droop')L.push(['/PF','P φιλτραρισμένη (pu)'],['/QF','Q φιλτραρισμένη (pu)']);if(p.law==='vsm')L.push(['/WS','ω του δρομέα (pu)'],['/YS','ροή διέγερσης ψ = M_f·i_f (pu)']);
+  if(p.law==='psc')L.push(['/FD','σφάλμα: εφεδρικό PLL (1)'],['/DOF','μετατόπιση από το PLL (rad)'],['/XE','ΔV₀ της ρύθμισης τάσης (pu)']);
+  if(p.inner==='cascade')L.push(['/OD','o_d ρεύμα εξόδου (pu)'],['/OQ','o_q (pu)'],['/ISD','i_d,ref μετά το όριο (pu)'],['/ISQ','i_q,ref μετά το όριο (pu)']);else L.push(['/IRD','i_d,ref (pu)'],['/IRQ','i_q,ref (pu)']);
+  return L;},
+ VSC2:p=>[['/Ia','i_a του μετατροπέα'],['/Ib','i_b'],['/Ic','i_c'],['/Oa','o_a στους ακροδέκτες'],['/Pa','v_a στους ακροδέκτες'],['/VD','v_dc'],['/Ma','m_a (μετά τον κορεσμό)']],
  SSSC:p=>[['/VR','αναφορά τάσης v_ref'],['/VQ','εντολή V_q (θετική: χωρητική)'],['/XM','μετρημένη αντίδραση X'],['/DTH','διόρθωση γωνίας Δθ (rad)'],['/VAF','μέση τάση πυκνωτών (φιλτραρισμένη)'],['/PLI/X','γωνία του ρεύματος θ_i − 90°'],['/PLI/X:amp','πλάτος του ρεύματος Î']],
  // 4.17 (§50): the central controller of the three-phase m-SSSC
  SSSC3:p=>{const pos=p.sync!=='phase',L=[['/VQ','εντολή V_q (θετική: χωρητική)'],['/XM','μετρημένη αντίδραση X (θετική ακολουθία)'],['/U','u: εντολή της συνολικής ενέργειας (V/s)'],['/VAF','μέση τάση πυκνωτών των τριών φάσεων (φιλτραρισμένη)']];
@@ -1766,6 +1777,40 @@ function hvdcTheory(){const s=S.sim,m=(S.tutMeta||{}).hvdc;if(!s||!m)return '';c
    rows.push(['v_W (ενέργεια των βραχιόνων) ≈ V_dc στους ακροδέκτες',vd,vw,'V']);if(ua!=null&&la!=null)rows.push(['(Σv_C,άνω − Σv_C,κάτω)/V_dc, φάση a (εξισορρόπηση)',NaN,(ua-la)/m.Vdc,'']);}
   rows.push(['Ρεύμα άνω βραχίονα a, κορυφή ≈ I_dc/3 + Î/2',Math.abs(Idc)/3+I/2,Math.max(Math.abs(avgOver(m.model==='m1'?'Y:MMC1/UaI':'Y:MMC1/AUa:i',1)?.max??NaN),Math.abs(avgOver(m.model==='m1'?'Y:MMC1/UaI':'Y:MMC1/AUa:i',1)?.min??NaN)),'A']);}
  return h+cmpRows(rows)+`<p class="small">ΔW βραχίονα ≈ ${eng(dW,'J')} από ${eng(Wa,'J')} (m = ${fmt(mm,3)}, cosφ = 1)· η κυμάτωση της Σv_C ≈ ΔW/(C/N·V_dc). P₁ = ${fmt(P1,4)} pu, P₂ = ${fmt(P2,4)} pu.</p>`;}
+// 4.18 (§58): the grid-forming converters. The steady states of the laws against the run: the island (droop or VSM:
+// one frequency, P shared by the ratings), the synchronverter of Zhong & Weiss (set mode, droops), the PSC in a weak grid
+// (P = P_ref, the load angle from P = E·V_g·sin δ/X, the voltage at the point of connection). THEORY §8Ε
+function gfmTheory(){const s=S.sim,m=(S.tutMeta||{}).gfm;if(!s||!m)return '';const g=k=>avgOver(k,2)?.avg,D=Math.PI/180;
+ if(m.kind==='island'){const vsm=m.law==='vsm';
+  let h=`<div class="tm"><span class="badge">Grid-forming</span> ${vsm?'VSM (H = 1 s, D_p = 1/m_p)':'στατικότητα με φίλτρο 5 Hz'} · ${m.inner==='cascade'?'καταρράκτης τάσης–ρεύματος':'άμεσα η τάση'} · S₁ = ${eng(m.S1,'VA')}, S₂ = ${eng(m.S2,'VA')} · X_v = ${fmt(m.xv,2)} pu</div><ul class="eqs">
+   <li>${vsm?'2H·dω/dt = P_ref − P/ω − (ω − 1)/m_p (Zhong & Weiss (6), (9))· στη μόνιμη (1 − ω)·ω = m_p·(P − P_ref)':'ω = 1 − m_p·(P_f − P_ref), E = V* − n_q·(Q_f − Q_ref) (Rocabert κ.ά. (8)–(9))'}, m_p = 2 %, n_q = 5 % στη βάση κάθε μονάδας</li>
+   <li>Μία συχνότητα: ΣS_k·P_k = P_φορτίου ⇒ 1 − ω = m_p·(P_φορτίου − S₁·P_ref,1)/(S₁ + S₂)${vsm?' (÷ω)':''}· η ενεργός ισχύς μοιράζεται ανάλογα με τα S_k (ίδιο pu), ανεξάρτητα από τις γραμμές</li>
+   <li>Η άεργος δεν μοιράζεται ακριβώς: E_k − V ≈ X_k·Q_k, με X_k η γραμμή και η εικονική αντίδραση X_v (Rocabert κ.ά. (7), (19))</li></ul>`;
+  if(s.t<0.4)return h+'<p class="muted small">Τρέξε την προσομοίωση (μετρήσεις στις δύο τελευταίες περιόδους).</p>';
+  const p1=g('Y:CT1/PP'),p2=g('Y:CT2/PP'),w1=g('Y:CT1/WW'),w2=g('Y:CT2/WW'),pr=s.t>=m.tpref?m.pref1:0,rhs=m.mp*(p1*m.S1+p2*m.S2-m.S1*pr)/(m.S1+m.S2);
+  const wt=vsm?(1+Math.sqrt(Math.max(1-4*rhs,0)))/2:1-rhs;
+  return h+cmpRows([['Συχνότητα (από τις μετρημένες P)',m.f*wt,m.f*w1,'Hz'],['f₂ − f₁',0,m.f*(w2-w1),'Hz'],['P₁ − P₂ (pu της μονάδας)',pr,p1-p2,''],['P₁·S₁ (W)',NaN,p1*m.S1,'W'],['P₂·S₂ (W)',NaN,p2*m.S2,'W'],['Q₁ − Q₂ (pu)',NaN,g('Y:CT1/QQ')-g('Y:CT2/QQ'),'']])+
+   `<p class="small">Φορτίο ${eng(p1*m.S1+p2*m.S2,'W')}· P_ref,1 = ${fmt(pr,2)} pu ${s.t>=m.tpref?'(από τα 1,0 s)':''}.</p>`;}
+ if(m.kind==='sync'){const gg=m.fg/m.f;
+  let h=`<div class="tm"><span class="badge">Synchronverter</span> Zhong & Weiss 2011, Πίν. I: 100 W, 20,78 V, L_s = L_g = 0,45 mH, C = 22 μF · δίκτυο ${fmt(m.fg,4)} Hz · H = ${fmt(m.H,2)} s (τ_f = ${eng(m.tf,'s')})</div><ul class="eqs">
+   <li>J·θ̈ = T_m − T_e − D_p·(θ̇ − θ̇_r), T_e = P/θ̇, P = θ̇·M_f·i_f·⟨i, sin θ̃⟩ (εξ. (6), (7), (9)), J = D_p·τ_f, D_p για 100 % P στο −0,5 % της συχνότητας</li>
+   <li>K·d(M_f·i_f)/dt = Q_set − Q + D_q·(V_r − V_m), K = θ̇ₙ·D_q·τ_v, D_q για 100 % Q στο −5 % της τάσης· E = θ̇·M_f·i_f</li>
+   <li>Ως τα ${fmt(m.tdr,2)} s («set mode»): θ̇_r = η συχνότητα του δικτύου, χωρίς D_q ⇒ P = θ̇·P_set, Q = Q_set. Μετά: P = θ̇·(P_set + D_p·(θ̇ₙ − θ̇)), Q = Q_set + D_q·(V_r − V_m)</li>
+   <li>Ο αργός πόλος του δρομέα: 2H·s² + D_p·s + ω₀·K_s = 0 με K_s = E·V/X (X = X_s + X_g)</li></ul>`;
+  if(s.t<0.2)return h+'<p class="muted small">Τρέξε την προσομοίωση.</p>';
+  const ps=s.t>=m.tps?m.Pset:0,qs=s.t>=m.tqs?m.Qset:0,dr=s.t>=m.tdr,vm=g('Y:CT/VG'),P=g('Y:CT/PP'),Q=g('Y:CT/QQ');
+  const pt=dr?gg*(ps+(1-gg)/m.mp):gg*ps,qt=dr?qs+(1-vm)/m.nq:qs;
+  return h+cmpRows([['P (W)',100*pt,100*P,'W'],['Q (var)',100*qt,100*Q,'var'],['θ̇/ω₀ = f_δικτύου/f₀',gg,g('Y:CT/WW'),'']])+`<p class="small">${dr?'Στατικότητες ενεργές':'Set mode'}· V_m = ${fmt(vm,4)} pu${s.t>=m.tdip?' (δίκτυο −5 %)':''}.</p>`;}
+ if(m.kind==='weak'){const psc=m.ctl==='psc',X=m.Xc+m.Xtr+m.Xg;
+  let h=`<div class="tm"><span class="badge">${psc?'PSC':'Έλεγχος ρεύματος'}</span> Zhang, Harnefors & Nee 2010, Πίν. I: 350 MVA, 195 kV, X_c = 0,15 pu, μετασχηματιστής ${fmt(m.Xtr,3)} pu · SCR ${m.scr} (X_g = ${fmt(m.Xg,3)} pu)${psc?` · k_p = ${fmt(m.kp,3)} rad/s`:''}</div><ul class="eqs">
+   <li>${psc?'dθ/dt = ω₀ + k_p·(P_ref − P) (4)· v_ref = V₀ − k_v·s/(s + α_v)·i (36)–(37), k_v = 0,477, α_v = 40 rad/s· V₀ = V_ref + K_E/(1 + T_E·s)·(U_ref − |u|) (Σχ. 11)':'PLL στην τάση του σημείου σύνδεσης, P και V_ac στους άξονες d και q, ρεύμα σε dq με αποσύζευξη και πρόσθια τροφοδότηση της τάσης'}</li>
+   <li>Γωνία φορτίου ανάμεσα στην τάση του μετατροπέα και στο δίκτυο: P = E·V_g·sin δ/X, X = X_c + X_T + X_g = ${fmt(X,3)} pu (πάνω από 70° το περιθώριο μικραίνει πολύ, κάτω από 0,06 pu κέρδος ως τις 90°)</li>
+   <li>Στο σφάλμα: i_ref = (v_ref − u_f − jX_c·i)/(α_c·L_c) + i με |i_ref| ≤ I_max = ${fmt(m.Imax,3)} pu (54)–(55)· το εφεδρικό PLL αντί για τον βρόχο συγχρονισμού</li></ul>`;
+  if(s.t<0.3)return h+'<p class="muted small">Τρέξε την προσομοίωση.</p>';
+  if(!psc){const P=g('Y:CT/PP');return h+cmpRows([['P προς τον μετατροπέα (pu)',NaN,P,''],['|u_pcc| (pu)',1,g('Y:CT/VG'),'']]);}
+  const P=g('Y:CT/PP'),E=g('Y:CT/EE'),u=g('Y:CT/VG'),ref=(s.t>=1.2&&m.ev==='step')?m.p0+0.1:(s.t>=0.1*Math.round(m.p0*10)?m.p0:NaN),sd=P*X/Math.max(E,1e-6);
+  return h+cmpRows([['P (pu)',ref,P,''],['|u_pcc| (pu)',1,u,''],['|i| (pu) ≤ I_max',NaN,g('Y:CT/IG'),'']])+`<p class="small">Γωνία φορτίου δ = asin(P·X/(E·V_g)) = ${sd<1?fmt(Math.asin(sd)/D,3)+'°':'—'} με E ≈ V₀ = ${fmt(E,4)} pu.</p>`;}
+ return '';}
 // 4.16: the CIGRE HVDC benchmark (LCC). Kundur ch. 10 with the measured bus voltage, I_d and α (γ at the inverter): V_d of each
 // station, μ, the α of the inverter that the measured γ implies; then the run against the PSCAD results of the benchmark
 // (Faruque et al. 2006, Tables I–II). Twelve pulses: two bridges in series, each with E_LL = √(3/2)·V̂·U₂/U₁ and X_c = u_k·U₂²/S_n
@@ -2490,6 +2535,7 @@ function formulaTheory(t){
  if(t.topology==='ccsc')return ccscTheory();
  if(t.topology==='ieee9_sssc')return ieee9ssscTheory();
  if(t.topology==='hvdc_mmc')return hvdcTheory();
+ if(t.topology==='gfm_island'||t.topology==='gfm_sync'||t.topology==='gfm_weak')return gfmTheory();
  if(t.topology==='hvdc_lcc')return lccTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const cl=W.mode==='pi',refS=cl?(P.parseSched(String(W.ref))||[[0,0]]):null,vf=cl?refS[refS.length-1][1]:0,Vin=+V.V,D=cl?Math.abs(vf)/(Vin+Math.abs(vf)):+W.D,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
