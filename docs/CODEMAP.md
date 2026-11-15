@@ -98,7 +98,7 @@
 | `tests/test_generator.py` | 223 |
 | `tests/test_impl.py` | 138 |
 | `tests/test_impulse_tools.py` | 150 |
-| `tests/test_inputs.py` | 148 |
+| `tests/test_inputs.py` | 147 |
 | `tests/test_lcc.py` | 223 |
 | `tests/test_library.py` | 41 |
 | `tests/test_lightning.py` | 78 |
