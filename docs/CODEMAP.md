@@ -82,7 +82,7 @@
 | `tests/test_api.py` | 73 |
 | `tests/test_api_surface.py` | 106 |
 | `tests/test_arc.py` | 189 |
-| `tests/test_batch.py` | 253 |
+| `tests/test_batch.py` | 255 |
 | `tests/test_bidir_engine.py` | 103 |
 | `tests/test_bidir_sim.py` | 70 |
 | `tests/test_boundary.py` | 50 |
@@ -115,7 +115,7 @@
 | `tests/test_sparse.py` | 39 |
 | `tests/test_sssc.py` | 255 |
 | `tests/test_step.py` | 109 |
-| `tests/test_stream.py` | 135 |
+| `tests/test_stream.py` | 136 |
 | `tests/test_studio_math.py` | 50 |
 | `tests/test_studio_sim.py` | 609 |
 | `tests/test_subcircuit.py` | 149 |
