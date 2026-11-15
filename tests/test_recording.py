@@ -156,6 +156,8 @@ class ReadBack(unittest.TestCase):
             m = inside & (b == j)
             self.assertAlmostEqual(o['cols']['V:a']['mx'][j], float(np.round(v[m], 7).max()), places=6)
             self.assertAlmostEqual(o['cols']['V:a']['mn'][j], float(np.round(v[m], 7).min()), places=6)
+            # 4.17.2: and the mean of the interval (the line over the min–max shade)
+            self.assertAlmostEqual(o['cols']['V:a']['av'][j], float(np.round(v[m], 7).mean()), places=6)
         o = recording.read_range(r['name'], 5, 6)
         self.assertEqual(o['rows'], 0)
         with self.assertRaises(ValueError):

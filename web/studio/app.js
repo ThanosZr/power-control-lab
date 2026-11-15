@@ -62,8 +62,12 @@ function stepT(n=1){if(!S.sim||S.error)return;pause();
 function applyRec(){const dt=+$('#rec-res')?.value||0;if(!S.sim)return;const n=dt>0?Math.max(1,Math.round(50*dt/S.sim.T)):1;S.sim.setRecord({dt,n});renderRec();}
 const REC={on:false,name:'',path:'',keys:[],cols:[],sim:null,lastT:-Infinity,evN:0,busy:false,pend:'',lost:0,bytes:0,tLast:0,set:{dest:'temp',dir:null,auto:false},disk:null};
 // 4.11 (decision 4.11-θ): the memory of the scope with its estimates, where the recording goes, and reading it back
-const MEM_KEY='pcl-scope-mem',MEM_OPTS=[24,64,128,256,512,1024,2048];
-function memSetting(){try{const v=+localStorage.getItem(MEM_KEY);return MEM_OPTS.includes(v)?v:24;}catch(e){return 24;}}
+const MEM_KEY='pcl-scope-mem',MEM_OPTS=[0,24,64,128,256,512,1024,2048];
+// 4.17.2 (ROADMAP §63): «αυτόματα» (the default) by the memory of the computer (navigator.deviceMemory, GB): 8 or more →
+// 128 MB, 4 → 64 MB, less → 32 MB (24 MB before 4.17.2)
+function memAuto(){const g=navigator.deviceMemory||4;return g>=8?128:g>=4?64:32;}
+function memChoice(){try{const v=localStorage.getItem(MEM_KEY),n=+v;return v!==null&&MEM_OPTS.includes(n)?n:0;}catch(e){return 0;}}
+function memSetting(){const v=memChoice();return v>0?v:memAuto();}
 const fmtDur=x=>!(x>0)?'—':x>=7200?(x/3600).toFixed(x>=36000?0:1).replace('.',',')+' h':x>=120?(x/60).toFixed(x>=1200?0:1).replace('.',',')+' min':eng(x,'s',2);
 function memEstimate(){const s=S.sim;if(!s?.ring)return null;const r=s.ring,nch=r.nch,h=s.var?(s.hv||s.h):s.h,dt=s.opts.recDt||0,bytes=r.cap*(9+4*nch)+(s.per?.cap||0)*nch*20,
   cover=r.cap*Math.max(dt,h),dev=(navigator.deviceMemory||0)*1024,mb=bytes/1048576,warn=[];
@@ -76,7 +80,7 @@ function recArchive(t0,t1,keys,n){if(!REC.name||REC.sim!==S.sim)return null;cons
 async function recSettings(upd){try{const r=await (await fetch('/api/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'settings',...(upd||{})})})).json();if(r.error)throw new Error(r.error);
   REC.set={dest:r.dest,dir:r.dir,auto:r.auto};REC.disk=r.disk;REC.temp=r.temp;REC.err=null;}catch(e){REC.err=e.message;}renderRecPanel();renderRec();}
 function renderRecPanel(){const P=$('#rec-panel');if(!P||P.hidden)return;const e=memEstimate(),d=REC.disk;
- P.innerHTML=`<div class="rp-row"><label title="Περισσότερη μνήμη = περισσότερος χρόνος με όλα τα δείγματα· η αλλαγή ξεκινά την προσομοίωση από την αρχή">Μνήμη του scope <select id="rec-mem">${MEM_OPTS.map(v=>`<option value="${v}" ${v===memSetting()?'selected':''}>${v<1024?v+' MB':v/1024+' GB'}</option>`).join('')}</select></label><small class="muted">${e?`≈ ${fmtDur(e.cover)} με όλα τα δείγματα (${e.nch} κανάλια)· πριν από αυτά η περιβάλλουσα min–max ή, με καταγραφή, τα δείγματα από το αρχείο`:''}</small></div>
+ P.innerHTML=`<div class="rp-row"><label title="Περισσότερη μνήμη = περισσότερος χρόνος με όλα τα δείγματα· η αλλαγή ξεκινά την προσομοίωση από την αρχή">Μνήμη του scope <select id="rec-mem">${MEM_OPTS.map(v=>`<option value="${v}" ${v===memChoice()?'selected':''}>${v===0?`αυτόματα (${memAuto()} MB)`:v<1024?v+' MB':v/1024+' GB'}</option>`).join('')}</select></label><small class="muted">${e?`≈ ${fmtDur(e.cover)} με όλα τα δείγματα (${e.nch} κανάλια)· πριν από αυτά η περιβάλλουσα min–max ή, με καταγραφή, τα δείγματα από το αρχείο`:''}</small></div>
   <div class="rp-row"><b>Καταγραφή σε αρχείο:</b><label><input type="radio" name="rp-dest" value="temp" ${REC.set.dest!=='dir'?'checked':''}> προσωρινά</label><small class="muted">${esc(REC.temp||'~/.pcl/recordings')} · σβήνονται οι παλαιότερες πάνω από 2 GB ή μία εβδομάδα</small></div>
   <div class="rp-row"><label><input type="radio" name="rp-dest" value="dir" ${REC.set.dest==='dir'?'checked':''}> σε φάκελο</label><input id="rp-dir" placeholder="πλήρης διαδρομή, π.χ. D:\\Μετρήσεις" value="${esc(REC.set.dir||'')}"><label><input type="checkbox" id="rp-create"> δημιουργία</label><button id="rp-save">Να το θυμάσαι</button></div>
   <div class="rp-row"><label><input type="checkbox" id="rp-auto" ${REC.set.auto?'checked':''}> πάντα καταγραφή (ξεκινά μόνη της σε κάθε ▶ από την αρχή)</label></div>
@@ -152,7 +156,7 @@ function loop(now){
  if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){pause();notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
  requestAnimationFrame(loop);
 }
-function draw(all,busy){scope.draw();navRange();if(all||S.frame%(busy?12:4)===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();window.Watch?.update(all);if(REC.on&&performance.now()-REC.tLast>1000){REC.tLast=performance.now();recFlush();}}if(all||S.frame%(busy?24:8)===0){renderMeasure();updateHover();renderMetricsPanel();updateLivePanel();if(S.sim&&S.sim.dgVer!==S.diagSeen)renderDiag();}if(all){if(!S.running&&!S.switching){renderFFT();renderEvents();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
+function draw(all,busy){scope.draw();navRange();if(all||S.frame%(busy?12:4)===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();window.Watch?.update(all);if(REC.on&&performance.now()-REC.tLast>1000){REC.tLast=performance.now();recFlush();}}if(all||S.frame%(busy?24:8)===0){renderMeasure(all);updateHover();renderMetricsPanel();updateLivePanel();if(S.sim&&S.sim.dgVer!==S.diagSeen)renderDiag();}if(all){if(!S.running&&!S.switching){renderFFT();renderEvents();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
 // text of an element only when it changes (in the loop of the simulation an unchanged text still costs a layout)
 function setText(el,t){if(el&&el.textContent!==t)el.textContent=t;}
 function navRange(){const el=$('#nav-range');if(!el||!S.sim)return;const [a,b]=scope.viewRange();setText(el,`${eng(a,'s',4)} … ${eng(b,'s',4)} · ${fmt((b-a)/S.sim.T,3)} T${scope.cfg.frozen?' · σταθερή προβολή':' · ζωντανά'}`);}
@@ -294,26 +298,32 @@ function renderChannels(){
  {const k=JSON.stringify(SIGS)+'|'+($('#sig-search')?.value||'');if(k!==sigKey){sigKey=k;fillSignals();}}
  const panes=scope.cfg.panes;
  {const k=JSON.stringify(panes);if(k===chanKey&&$('#chan-list').childElementCount)return;chanKey=k;}
- $('#chan-list').innerHTML=panes.map((p,pi)=>`<div class="pane-row"><div class="pane-head"><b>Παράθυρο ${pi+1}</b><label class="mini"><input type="checkbox" data-pauto="${pi}" ${p.y?.auto===false?'':'checked'}> auto</label>${p.y?.auto===false?`<input class="ymin" data-pmin="${pi}" value="${p.y.min??''}" placeholder="min"><input class="ymax" data-pmax="${pi}" value="${p.y.max??''}" placeholder="max">`:''}<label class="mini"><input type="checkbox" data-pzero="${pi}" ${p.zero?'checked':''}> 0</label></div>
-  ${p.ch.map(ch=>`<div class="chan" data-key="${esc(ch.key)}"><label class="sw"><input type="checkbox" data-on="${esc(ch.key)}" ${ch.on?'checked':''}><i style="background:${ch.color}"></i></label><input class="clabel" data-label="${esc(ch.key)}" value="${esc(ch.label)}"><select data-pane="${esc(ch.key)}">${[0,1,2,3].map(i=>`<option value="${i}" ${i===pi?'selected':''}>Π${i+1}</option>`).join('')}</select><button class="x" data-rm="${esc(ch.key)}" title="Αφαίρεση">✕</button></div>`).join('')||'<div class="muted small">Κανένα σήμα. Δεξί κλικ σε στοιχείο → Scope, ή επίλεξε από τη λίστα.</div>'}</div>`).join('');
+ $('#chan-list').innerHTML=panes.map((p,pi)=>`<div class="pane-row"><div class="pane-head"><b>Παράθυρο ${pi+1}</b><label class="mini"><input type="checkbox" data-pauto="${pi}" ${p.y?.auto===false?'':'checked'}> auto</label>${p.y?.auto===false?'':`<select class="ymode" data-pymode="${pi}" title="Αυτόματη κλίμακα: σταθερή (ανοίγει αμέσως, κλείνει μετά από 2 s) ή σε κάθε καρέ (όπως πριν από την 4.17.2)"><option value="">σταθερή</option><option value="frame" ${p.y?.mode==='frame'?'selected':''}>ανά καρέ</option></select>`}${p.y?.auto===false?`<input class="ymin" data-pmin="${pi}" value="${p.y.min??''}" placeholder="min"><input class="ymax" data-pmax="${pi}" value="${p.y.max??''}" placeholder="max">`:''}<label class="mini"><input type="checkbox" data-pzero="${pi}" ${p.zero?'checked':''}> 0</label></div>
+  ${p.ch.map(ch=>`<div class="chan" data-key="${esc(ch.key)}"><label class="sw"><input type="checkbox" data-on="${esc(ch.key)}" ${ch.on?'checked':''}><i style="background:${ch.color}"></i></label><input class="clabel" data-label="${esc(ch.key)}" value="${esc(ch.label)}"><select data-pane="${esc(ch.key)}">${Array.from({length:Math.min(12,panes.length+1)},(_,i)=>i).map(i=>`<option value="${i}" ${i===pi?'selected':''}>Π${i+1}</option>`).join('')}</select><button class="x" data-rm="${esc(ch.key)}" title="Αφαίρεση">✕</button></div>`).join('')||'<div class="muted small">Κανένα σήμα. Δεξί κλικ σε στοιχείο → Scope, ή επίλεξε από τη λίστα.</div>'}</div>`).join('');
  $$('#chan-list [data-rm]').forEach(b=>b.onclick=()=>{scope.removeChannel(b.dataset.rm);renderChannels();draw(true);});
  $$('#chan-list [data-on]').forEach(b=>b.onchange=()=>{const ch=scope.channels().find(c=>c.key===b.dataset.on);for(const p of scope.cfg.panes)for(const c of p.ch)if(c.key===b.dataset.on)c.on=b.checked;void ch;draw(true);});
  $$('#chan-list [data-pane]').forEach(b=>b.onchange=()=>{scope.moveChannel(b.dataset.pane,+b.value);renderChannels();draw(true);});
  $$('#chan-list [data-label]').forEach(b=>b.onchange=()=>{for(const p of scope.cfg.panes)for(const c of p.ch)if(c.key===b.dataset.label)c.label=b.value;draw(true);});
  $$('#chan-list [data-pauto]').forEach(b=>b.onchange=()=>{const p=scope.cfg.panes[+b.dataset.pauto];if(b.checked)p.y={auto:true};else{const L=scope.layout?.[+b.dataset.pauto];p.y={auto:false,min:L?+L.lo.toPrecision(3):-1,max:L?+L.hi.toPrecision(3):1};}renderChannels();draw(true);});
+ $$('#chan-list [data-pymode]').forEach(b=>b.onchange=()=>{const pi=+b.dataset.pymode,p=scope.cfg.panes[pi];p.y={auto:true,...(b.value?{mode:b.value}:{})};scope.yst[pi]=null;draw(true);});
  $$('#chan-list [data-pzero]').forEach(b=>b.onchange=()=>{scope.cfg.panes[+b.dataset.pzero].zero=b.checked;draw(true);});
  $$('#chan-list [data-pmin],#chan-list [data-pmax]').forEach(b=>b.onchange=()=>{const pi=+(b.dataset.pmin??b.dataset.pmax);const p=scope.cfg.panes[pi];const v=P.parseEng(b.value);if(Number.isFinite(v)){if(b.dataset.pmin!==undefined)p.y.min=v;else p.y.max=v;}draw(true);});
 }
-// 4.7: a burst of scope changes (five channels of a tutorial, a drag of the cursors) gives one table on the next frame
-let measureRaf=0;function requestMeasure(){if(measureRaf)return;measureRaf=requestAnimationFrame(()=>{measureRaf=0;renderMeasure();});}
-function renderMeasure(){if(measureRaf){cancelAnimationFrame(measureRaf);measureRaf=0;}
- if(!S.sim)return;const rows=[];const cur=scope.cfg.cursors;
+// 4.7: a burst of scope changes (five channels of a tutorial, a drag of the cursors) gives one table on the next frame.
+// 4.17.2 (ROADMAP §63): the values in a box of their own (its height, its scroll bars, PlotCore.Readout): the table is
+// built again only when its rows or columns change, otherwise only its numbers, at most twice a second while it runs
+let measureRaf=0,MEAS=null;function requestMeasure(){if(measureRaf)return;measureRaf=requestAnimationFrame(()=>{measureRaf=0;renderMeasure(true);});}
+function renderMeasure(force){if(measureRaf){cancelAnimationFrame(measureRaf);measureRaf=0;}
+ if(!S.sim)return;const cur=scope.cfg.cursors;if(!MEAS)MEAS=new PlotCore.Readout($('#measure'));
+ const cols=[{k:'avg',label:'Μέση'},{k:'rms',label:'RMS'},{k:'min',label:'min'},{k:'max',label:'max'},{k:'pp',label:'p-p'},{k:'lp',label:'⌀ τελ. T'}];
+ if(cur.length)cols.push({k:'A',label:`A @ ${eng(cur[0],'s')}`},{k:'B',label:cur.length>1?'B @ '+eng(cur[1],'s'):'B'},{k:'BA',label:'B − A'+(cur.length>1?' · Δt '+eng(cur[1]-cur[0],'s'):'')});
+ const rows=[];
  for(const ch of scope.channels()){if(!ch.on)continue;const st=scope.stats(ch.key);const u=MeasureUnit(ch.key);const lp=S.sim.lastPeriod(ch.key.startsWith('VN:')?(()=>{const n=S.sim.net.pinNet.get(ch.key.slice(3));return n&&!n.ground?'N:'+n.canon:'';})():ch.key);
-  let cv='';if(cur.length){const ci=scope.resolve(ch.key);const a=ci===-1?NaN:scope.valueAt(ci,cur[0]),b=cur[1]!==undefined&&ci!==-1?scope.valueAt(ci,cur[1]):NaN;cv=`<td>${eng(a,u)}</td><td>${cur.length>1?eng(b,u):''}</td><td>${cur.length>1?eng(b-a,u):''}</td>`;}
-  rows.push(`<tr><td><i class="dot" style="background:${ch.color}"></i>${esc(ch.label)}</td><td>${st?eng(st.avg,u):'—'}</td><td>${st&&Number.isFinite(st.rms)?eng(st.rms,u):'—'}</td><td>${st?eng(st.min,u):'—'}</td><td>${st?eng(st.max,u):'—'}</td><td>${st?eng(st.pp,u):'—'}</td><td>${lp?eng(lp.avg,u):'—'}</td>${cv}</tr>`);}
+  const cells=[st?eng(st.avg,u):'—',st&&Number.isFinite(st.rms)?eng(st.rms,u):'—',st?eng(st.min,u):'—',st?eng(st.max,u):'—',st?eng(st.pp,u):'—',lp?eng(lp.avg,u):'—'];
+  if(cur.length){const ci=scope.resolve(ch.key);const a=ci===-1?NaN:scope.valueAt(ci,cur[0]),b=cur[1]!==undefined&&ci!==-1?scope.valueAt(ci,cur[1]):NaN;cells.push(eng(a,u),cur.length>1?eng(b,u):'',cur.length>1?eng(b-a,u):'');}
+  rows.push({key:ch.key,label:ch.label,color:ch.color,cells});}
  const [t0,t1]=scope.viewRange();
- $('#measure').innerHTML=`<table><thead><tr><th>Σήμα</th><th>Μέση</th><th>RMS</th><th>min</th><th>max</th><th>p-p</th><th>⌀ τελ. T</th>${cur.length?`<th>A @ ${eng(cur[0],'s')}</th><th>${cur.length>1?'B @ '+eng(cur[1],'s'):'B'}</th><th>B − A${cur.length>1?' · Δt '+eng(cur[1]-cur[0],'s'):''}</th>`:''}</tr></thead><tbody>${rows.join('')}</tbody></table>
-  <p class="muted small">Στατιστικά στο ορατό παράθυρο ${eng(t0,'s')} … ${eng(t1,'s')}${scope.cfg.frozen?' (σταθερή προβολή · διπλό κλικ για ζωντανή)':''}. Κλικ στο scope: cursor A, Shift+κλικ: cursor B.</p>`;
+ MEAS.set(cols,rows,`Στατιστικά στο ορατό παράθυρο ${eng(t0,'s')} … ${eng(t1,'s')}${scope.cfg.frozen?' (σταθερή προβολή · διπλό κλικ για ζωντανή)':''}. Κλικ στο scope: cursor A, Shift+κλικ: cursor B.`,{force:force||!S.running,ms:500});
 }
 function MeasureUnit(key){return MeasureUnitCache[key.split(':')[0]]??Scope.unitOf(key,S.sim);}const MeasureUnitCache={};
 
@@ -625,7 +635,7 @@ function switchesOf(pwmId){const o={a:0,na:1,b:2,nb:3};return editor.doc.compone
  .sort((x,y)=>(o[x.params.out||'a']??0)-(o[y.params.out||'a']??0)||x.id.localeCompare(y.id,undefined,{numeric:true}));}
 // gate pulses to the scope, in a pane of their own (drawn as stacked lanes)
 function addPulses(keys){if(!S.sim||!keys.length)return;const panes=scope.cfg.panes;let pi=panes.findIndex(p=>p.ch.length&&p.ch.every(ch=>Scope.isLogic(ch.key)));
- if(pi<0)pi=panes.length===1&&!panes[0].ch.length?0:Math.min(panes.length,3);let any=false;for(const k of keys)any=scope.addChannel(k,chanLabel(k),pi)||any;renderChannels();flash(any?'#scope-card':'#chan-list');draw(true);}
+ if(pi<0)pi=panes.length===1&&!panes[0].ch.length?0:Math.min(panes.length,11);let any=false;for(const k of keys)any=scope.addChannel(k,chanLabel(k),pi)||any;renderChannels();flash(any?'#scope-card':'#chan-list');draw(true);}
 function pulseKeys(pwmId){const sw=switchesOf(pwmId);return sw.length?sw.map(c=>'GS:'+c.id):['G:'+pwmId];}
 function refreshControls(){
  const box=$('#live-controls');if(!box)return;
@@ -792,6 +802,7 @@ function openInspector(id,x,y,keep){
   <div class="ins-foot"><small>Οι αλλαγές εφαρμόζονται αμέσως, και ενώ τρέχει η προσομοίωση. Μονάδες SI με προθέματα: 5.6u, 100m, 20k.</small></div>`;
  if(was)placeAt(ins,was.left,was.top);else if(INS.pos)placeAt(ins,INS.pos.x,INS.pos.y);else placePopup(ins,x,y);
  popupDrag(ins,(l,t)=>{INS.pos={x:l,y:t};try{localStorage.setItem('pcl-ins-pos',JSON.stringify(INS.pos));}catch(e){}});
+ window.WinFrame?.frame(ins,{key:'ins',head:'.ins-head',minW:300,minH:180});
  if(was?.focus){const f=ins.querySelector(`[data-k="${CSS.escape(was.focus)}"],[data-src="${CSS.escape(was.focus)}"]`);if(f)f.focus({preventScroll:true});}
  // a value in force: the same as the part has now (a typed value that equals it changes nothing)
  const same=(k,v)=>{const o=editor.comp(id)?.params?.[k];return o!==undefined&&String(o)===String(v);};
@@ -820,6 +831,7 @@ function openWireInspector(id,x,y){const w=editor.wire(id);if(!w)return;const in
   <label class="frow"><span>Πάχος</span><select data-ww>${['',1.5,2.2,3,4].map(v=>`<option value="${v}" ${String(w.width||'')===String(v)?'selected':''}>${v||'προεπιλογή'}</option>`).join('')}</select></label>
   <div class="ins-probes">${bw>1?'':'<button class="chip" data-wprobe>⌁ Τάση κόμβου</button>'}<button class="chip" data-wroute>↯ Αυτόματη δρομολόγηση</button></div></div>`;
  if(INS.pos)placeAt(ins,INS.pos.x,INS.pos.y);else placePopup(ins,x,y);popupDrag(ins,(l,t)=>{INS.pos={x:l,y:t};try{localStorage.setItem('pcl-ins-pos',JSON.stringify(INS.pos));}catch(e){}});
+ window.WinFrame?.frame(ins,{key:'ins',head:'.ins-head',minW:300,minH:180});
  ins.querySelector('[data-wname]').onchange=e=>{editor.setWireProps(id,{name:e.target.value.trim()});renderChannels();};
  ins.querySelectorAll('[data-wc]').forEach(b=>b.onclick=()=>{editor.setWireProps(id,{color:b.dataset.wc||undefined});openWireInspector(id,x,y);});
  ins.querySelector('[data-ww]').onchange=e=>editor.setWireProps(id,{width:e.target.value?+e.target.value:undefined});
@@ -1429,7 +1441,7 @@ function applyProject(pr,keepView){window.Inside?.close();
  const sim=pr.sim||{};if(sim.hDiv){const ss=$('#sim-step'),v=String(sim.hDiv);if(![...ss.options].some(o=>o.value===v))ss.add(new Option('T/'+v,v));ss.value=v;}if(sim.method){$('#method').value=sim.method;$('#method-note').textContent={TR:'2ης τάξης, χωρίς απόσβεση',BDF2:'2ης τάξης, απόσβεση στις υψηλές συχνότητες',BE:'1ης τάξης, ισχυρή απόσβεση'}[sim.method]||'';}setSpeed(sim.speed??100);S.stopT=sim.stopT||0;$('#stop').value=S.stopT?String(+(S.stopT*1e3).toPrecision(6)):'';
  {const rs=$('#rec-res'),v=String(+(sim.rec?.dt)||0);if(rs){if(![...rs.options].some(o=>o.value===v))rs.add(new Option('κάθε '+eng(+v,'s',3),v));rs.value=[...rs.options].find(o=>+o.value===+v)?.value??'0';}}
  buildSim(true);
- if(pr.scope?.cfg){scope.cfg=pr.scope.cfg;scope.cfg.frozen=null;}
+ scope.yst=[];if(pr.scope?.cfg){scope.cfg=pr.scope.cfg;scope.cfg.frozen=null;}
  else{scope.cfg={panes:[{ch:[]}],window:pr.scope?.window||{unit:'T',n:20},trigger:'roll',display:'auto',frozen:null,cursors:[]};
   (pr.scope?.panes||[]).forEach((pane,pi)=>pane.forEach(([key,label])=>scope.addChannel(key,label,pi)));}
  if(typeof pr.scenario==='string')scenSetCode(pr.scenario);
@@ -2611,7 +2623,7 @@ function exportCSV(){const s=S.sim;if(!s)return;const ch=scope.channels();if(!ch
  download('scope.csv',out,'text/csv');}
 
 // ------------------------------------------------------------------ scope inputs
-function syncScopeInputs(){const w=scope.cfg.window;$('#win-n').value=+(+w.n).toPrecision(4);$('#win-unit').value=w.unit;$('#trigger').value=scope.cfg.trigger;$('#display').value=scope.cfg.display;}
+function syncScopeInputs(){const w=scope.cfg.window;$('#win-n').value=+(+w.n).toPrecision(4);$('#win-unit').value=w.unit;$('#trigger').value=scope.cfg.trigger;$('#display').value=scope.cfg.display;if($('#dense-mode'))$('#dense-mode').value=scope.cfg.dense==='solid'?'solid':'band';}
 function setSpeed(v){S.speed=v==='max'?'max':+v;window.Live?.speed(S.speed,S.stopT);const sel=$('#speed');if(![...sel.options].some(o=>o.value===String(v))){const o=document.createElement('option');o.value=String(v);o.textContent=v+' T/s';sel.appendChild(o);}sel.value=String(v);}
 
 // ------------------------------------------------------------------ settings modal
@@ -2653,7 +2665,7 @@ function boot(){
   canPlace:placeOk,subParams:name=>subParams(name),
   oncontext:openMenu,onwarn:t=>{notice(t,'error');setTimeout(()=>notice(''),5000);}});
  editor.setLive(liveOf);
- scope=new Scope($('#scope-canvas'),{onfreeze:()=>{$('#live-btn').hidden=false;},onchange:()=>{requestMeasure();$('#nav-box')?.classList.toggle('on',!!scope.cfg.box);},onhover:()=>{},archive:recArchive});
+ scope=new Scope($('#scope-canvas'),{scroller:$('#scope-scroll'),axis:$('#scope-axis'),status:$('#scope-status'),onfreeze:()=>{$('#live-btn').hidden=false;},onchange:()=>{requestMeasure();$('#nav-box')?.classList.toggle('on',!!scope.cfg.box);},onhover:()=>{},archive:recArchive});
  // the tiles of the control signals over the drawing (4.8, ROADMAP §47)
  window.Inside?.init({comp:id=>editor.comp(id),pid,wires:()=>editor.doc.wires,sim:()=>S.error?null:S.sim,eng,holder:()=>editor.holder,notice});
  window.Watch?.init({get S(){return S;},get editor(){return editor;},get scope(){return scope;},eng,fmt,esc,topDoc,atTop,compAt,partDef,numOf,chanLabel,
@@ -2666,6 +2678,14 @@ function boot(){
  // 4.11: the memory of the scope (remembered), the panel of the recordings, the zoom axes
  $('#rec-opts')?.addEventListener('click',()=>{const P=$('#rec-panel');P.hidden=!P.hidden;if(!P.hidden)recSettings();});
  $('#zoom-axes')?.addEventListener('change',e=>{scope.cfg.zoomAxes=e.target.value;});
+ // 4.17.2 (ROADMAP §63): how dense data look; the graphs in the whole window (Esc: back); the height of the box of the
+ // panes (its corner) kept for the next time
+ $('#dense-mode')?.addEventListener('change',e=>{scope.cfg.dense=e.target.value;draw(true);});
+ {const full=v=>{$('#scope-card').classList.toggle('scope-full',v);$('#scope-full').classList.toggle('on',v);$('#scope-full').setAttribute('aria-pressed',String(v));requestAnimationFrame(()=>scope.resize());};
+  $('#scope-full').onclick=()=>full(!$('#scope-card').classList.contains('scope-full'));
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#scope-card').classList.contains('scope-full')&&![...document.querySelectorAll('.modal')].some(m=>!m.hidden&&m.offsetParent!==null))full(false);});}
+ {const sc=$('#scope-scroll');try{const h=+localStorage.getItem('pcl-scope-h');if(h>=200)sc.style.height=h+'px';}catch(e){}
+  let t=0;new ResizeObserver(()=>{if($('#scope-card').classList.contains('scope-full'))return;clearTimeout(t);t=setTimeout(()=>{const h=Math.round(sc.getBoundingClientRect().height);if(h>=200)try{localStorage.setItem('pcl-scope-h',String(h));}catch(e){}},400);}).observe(sc);}
  recSettings().catch(()=>{});
  editor.svg.addEventListener('pointermove',e=>{const el=e.target.closest?.('[data-c]');hoverComp=el?.dataset.c||null;hoverPos=[e.clientX,e.clientY];updateHover();});
  editor.svg.addEventListener('pointerleave',()=>{hoverComp=null;updateHover();});
@@ -2702,7 +2722,7 @@ function boot(){
    const up=()=>{head.removeEventListener('pointermove',mv);head.removeEventListener('pointerup',up);};head.addEventListener('pointermove',mv);head.addEventListener('pointerup',up);});}
  const navOpen=v=>{$('#scope-nav').hidden=!v;$('#nav-toggle').setAttribute('aria-expanded',v);$('#nav-toggle').classList.toggle('on',v);try{localStorage.setItem('pcl2-nav',v?'1':'0');}catch{}scope.resize();};
  $('#nav-toggle').onclick=()=>navOpen($('#scope-nav').hidden);try{navOpen(localStorage.getItem('pcl2-nav')!=='0');}catch{navOpen(true);}
- $$('#scope-nav [data-nav]').forEach(b=>b.onclick=()=>{scope.nav(b.dataset.nav);$('#live-btn').hidden=!scope.cfg.frozen;$('#nav-follow').classList.toggle('on',scope.cfg.follow!==false);syncScopeInputs();renderChannels();draw(true);});
+ $$('#scope-nav [data-nav]').forEach(b=>b.onclick=()=>{if(b.dataset.nav==='heights'){scope.autoHeights();renderChannels();return;}scope.nav(b.dataset.nav);$('#live-btn').hidden=!scope.cfg.frozen;$('#nav-follow').classList.toggle('on',scope.cfg.follow!==false);syncScopeInputs();renderChannels();draw(true);});
  const METHOD_NOTE={TR:'2ης τάξης, χωρίς απόσβεση',BDF2:'2ης τάξης, απόσβεση στις υψηλές συχνότητες',BE:'1ης τάξης, ισχυρή απόσβεση'};
  $('#method').onchange=e=>{S.sim?.setMethod(e.target.value);scheduleStepCheck();$('#method-note').textContent=METHOD_NOTE[e.target.value];saveLocal();};
  $('#add-signal').onchange=e=>{if(e.target.value)addProbe(e.target.value);e.target.value='';};
@@ -2776,5 +2796,5 @@ function boot(){
 function renderTheoryLive(){if(!atTop()||document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
 window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,libToSub,enterSub,leaveSub,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
- renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare
+ renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush,draw,closeInspector}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare; 4.17.2: scope_flow
 })();

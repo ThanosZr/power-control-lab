@@ -253,8 +253,9 @@ def info(name):
 
 def read_range(name, t0, t1, keys=None, n=1000):
     """The samples of [t0, t1] for the columns keys (header names; all when None): the rows themselves when they are at
-    most 2n, otherwise per column of n equal intervals the first, minimum, maximum and last value and the times of the
-    first and last sample. Returns {'t0', 't1', 'rows', 'raw', 't', 'cols': {key: …}, 'have': [first, last]}."""
+    most 2n, otherwise per column of n equal intervals the first, minimum, maximum, mean (4.17.2: 'av', the mean of the
+    samples of the interval, drawn as the line over the min–max shade) and last value and the times of the first and
+    last sample. Returns {'t0', 't1', 'rows', 'raw', 't', 'cols': {key: …}, 'have': [first, last]}."""
     import numpy as np
     p = _path(name)
     if not p.exists():
@@ -318,12 +319,19 @@ def read_range(name, t0, t1, keys=None, n=1000):
         la = [float(v[e - 1]) if h else None for e, h in zip(ends, has)]
         mn = np.full(n, np.nan)
         mx = np.full(n, np.nan)
+        av = np.full(n, np.nan)
         idx = np.nonzero(has)[0]
         if len(idx):
             mn[idx] = np.fmin.reduceat(v, starts[idx])
             mx[idx] = np.fmax.reduceat(v, starts[idx])
+            fin = np.isfinite(v)
+            sm = np.add.reduceat(np.where(fin, v, 0.0), starts[idx])
+            cn = np.add.reduceat(fin.astype(float), starts[idx])
+            with np.errstate(invalid='ignore', divide='ignore'):
+                av[idx] = np.where(cn > 0, sm / np.maximum(cn, 1), np.nan)
         out['cols'][kk] = {'fi': fi, 'la': la, 'mn': [None if not np.isfinite(x) else float(x) for x in mn],
-                           'mx': [None if not np.isfinite(x) else float(x) for x in mx]}
+                           'mx': [None if not np.isfinite(x) else float(x) for x in mx],
+                           'av': [None if not np.isfinite(x) else float(x) for x in av]}
     return out
 
 
