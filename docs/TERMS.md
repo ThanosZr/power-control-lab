@@ -49,6 +49,14 @@
 | slack variable | χαλαρή μεταβλητή (slack την πρώτη φορά) | μεταβλητή χαλαρότητας· να μην μπερδεύεται με τον ζυγό ταλάντωσης (slack bus) | 4.19.1 |
 | globalization (of Newton's method) | σφαιρικοποίηση | παγκοσμιοποίηση | 4.19.1 |
 | report object | αντικείμενο αναφοράς | report object, αντικείμενο report | 4.19.1 |
+| warm start | θερμή εκκίνηση (warm start την πρώτη φορά)· «από την πρόταση» στο περιβάλλον | ζεστή εκκίνηση, warm-start σημείο | 4.19.2 |
+| cold start (of a solver) | κανονική εκκίνηση· «κρύα» μόνο σε αντιπαράθεση με τη θερμή | ψυχρή εκκίνηση (είναι όρος των μονάδων παραγωγής) | 4.19.2 |
+| starting point (learned) | αρχικό σημείο· νευρωνικό αρχικό σημείο | αρχική εκτίμηση, initial guess, σημείο εκκίνησης | 4.19.2 |
+| experimental | πειραματικό (με αστερίσκο και υποσημείωση όπου φαίνεται στον χρήστη) | δοκιμαστικό, beta | 4.19.2 |
+| accelerator | επιταχυντής | accelerator, επιταχυντής υλικού | 4.19.2 |
+| fingerprint (of a network) | αποτύπωμα | υπογραφή, hash, δακτυλικό αποτύπωμα | 4.19.2 |
+| explicit inverse | ρητός αντίστροφος | άμεσος αντίστροφος, πλήρης αντίστροφος | 4.19.2 |
+| level scheduling | τριγωνικές λύσεις ανά επίπεδο | χρονοπρογραμματισμός επιπέδων | 4.19.2 |
 
 ## Καθιερωμένοι όροι που ήδη χρησιμοποιούνται
 
@@ -226,7 +234,20 @@
 | RMS (electromechanical) simulation, transient stability | προσομοίωση RMS (ηλεκτρομηχανικά μεταβατικά), μεταβατική ευστάθεια (4.19.1, ROADMAP §71) |
 | small-signal stability, participation factor, mode shape | ευστάθεια μικρών διαταραχών, συντελεστής συμμετοχής, μορφή της ταλάντωσης (4.19.1, ROADMAP §71) |
 | inter-area oscillation, critical clearing time | ταλάντωση μεταξύ περιοχών, κρίσιμος χρόνος εκκαθάρισης (4.19.1, ROADMAP §71) |
+| barrier parameter | παράμετρος φραγμού (4.19.2) |
+| central path | κεντρική διαδρομή (4.19.2) |
+| double precision / mixed precision | διπλή ακρίβεια / μικτή ακρίβεια (4.19.2) |
+| feed-forward network | δίκτυο πρόσθιας τροφοδότησης (4.19.2) |
+| hidden layer | κρυφό στρώμα (4.19.2) |
+| validation set | σύνολο επικύρωσης (4.19.2) |
+| standardization (of inputs) | τυποποίηση (4.19.2) |
+| start model | μοντέλο εκκίνησης (4.19.2) |
+| right-hand side | δεξί μέλος (4.19.2) |
+| stand-in (in a test) | υποκατάστατο (4.19.2) |
+| operator (ONNX) | τελεστής (4.19.2) |
+| provider (ONNX Runtime) | πάροχος (4.19.2) |
+| footnote | υποσημείωση (4.19.2) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
-PWM, SPWM, SVPWM, PLL, PLO, FACTS, SSSC, CHB, MMC, HVDC, LCC, CEA, VDCOL, AVM, CCSC, NLC, ULM, FDCM, OPF, SCOPF, PTDF, LODF, LMP, KKT, fast-decoupled (XB, BX), ZIP, ONNX, GPU, CUDA, RMS, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.
+PWM, SPWM, SVPWM, PLL, PLO, FACTS, SSSC, CHB, MMC, HVDC, LCC, CEA, VDCOL, AVM, CCSC, NLC, ULM, FDCM, OPF, SCOPF, PTDF, LODF, LMP, KKT, fast-decoupled (XB, BX), ZIP, ONNX, GPU, CUDA, CuPy, backend, MLP, Adam, RMS, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.

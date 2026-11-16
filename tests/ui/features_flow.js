@@ -126,6 +126,17 @@ const {chromium}=require('playwright');
  await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>!window.PCL.STUDY.busy&&window.PCL.STUDY.r?.study==='n1',null,{timeout:60000});
  const st2=await p.evaluate(()=>window.PCL.STUDY.r.summary);
  ok(st2.outages===186&&st2.islands===9&&st2.failed===0&&st2.solved===177&&st2.chord===177&&st2.newton===0&&/LODF/.test(st2.why),'study: N−1 in AC on IEEE 118, every outage on the factors of the base case '+JSON.stringify(st2).slice(0,200));
+ // 4.19.2 (ROADMAP §68 point 5): the choices of a study. A neural starting point for the optimal power flow (the solver verifies: the
+ // same cost in fewer iterations), and the batch of N−1 on GPU* (experimental: without a card it runs on the CPU and says why)
+ await p.evaluate(()=>window.PCL.loadTutorial('opf_study',{net:'ieee14',kind:'opf',limits:'yes',start:'nn',emt:'lf'}));await p.waitForTimeout(900);
+ await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>!window.PCL.STUDY.busy&&window.PCL.STUDY.r?.study==='opf'&&window.PCL.STUDY.r.summary.start,null,{timeout:60000});
+ const st4=await p.evaluate(()=>({s:window.PCL.STUDY.r.summary,txt:document.querySelector('#study-start')?.textContent||''}));
+ ok(st4.s.start==='warm'&&st4.s.iterations<=6&&Math.abs(st4.s.cost-8081.53)<0.01&&/από την πρόταση του νευρωνικού/.test(st4.txt),'study: the optimal power flow of IEEE 14 from the neural start, '+st4.s.iterations+' iterations, the same cost '+st4.s.cost);
+ await p.evaluate(()=>window.PCL.loadTutorial('pf_study',{net:'ieee14',study:'n1',method:'auto',backend:'gpu'}));await p.waitForTimeout(900);
+ await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>!window.PCL.STUDY.busy&&window.PCL.STUDY.r?.study==='n1'&&window.PCL.STUDY.r.summary.outages===20,null,{timeout:60000});
+ const st5=await p.evaluate(()=>({s:window.PCL.STUDY.r.summary,b:document.querySelector('#study-backend')?.textContent||'',g:document.querySelector('#study-gpu')?.textContent||''}));
+ ok(st5.s.solved===19&&(st5.s.backend==='gpu'||/CPU, γιατί/.test(st5.b))&&/πειραματικό/.test(st5.g)&&/python -m pcl accel/.test(st5.g),
+  'study: N−1 with «GPU*» '+(st5.s.backend==='gpu'?'on the device':'on the CPU, with the reason')+', and the footnote of the experimental path');
  await p.evaluate(()=>window.PCL.loadTutorial('opf_study',{net:'case30',kind:'opf',limits:'yes',emt:'opf'}));await p.waitForTimeout(900);
  const [dlr]=await Promise.all([p.waitForEvent("download",{timeout:60000}),p.click("#theory [data-study=\"report\"]")]);
  const rep=require("fs").readFileSync(await dlr.path(),"utf8"),st3=await p.evaluate(()=>window.PCL.STUDY.r.summary);
