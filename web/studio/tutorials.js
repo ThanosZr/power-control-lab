@@ -1622,35 +1622,41 @@
    const mmc={impl:'fast',model:'m4',N,C:10e-3,Vdc:640e3,Larm:0.05,Ron:1e-3,ectl:'energy',conn:'bus'};
    const ctl={S,Vac:333e3,Vdc:640e3,f0:f,X:0.075,R:0.002,th0:-120,tdb:0.05,tbrk:0,prot:'on',Idcmax:2,tprot:0.3};
    const comps=[],wires=[],isl=ac!=='weak';
-   const station=(k,x0,dir,ctlp,grid)=>{const X=d=>x0+dir*d,id=q=>q+k;
+   const station=(k,x0,dir,ctlp,grid,gap=0)=>{const X=d=>x0+dir*(d<200?d:d+gap),id=q=>q+k;       // gap: room between the transformer and the grid side (4.19: the instruments)
     if(grid)comps.push(C(id('NET'),'GRID3',X(0),300,{Un:400e3,f,Sk:grid,XR:10,cf:1,emf:'un',conn:'bus'},{label:'δίκτυο '+k,flip:dir<0}),C(id('CB'),'CB3',X(120),300,{ctl:'sig',model:'ideal',conn:'bus'},{label:'διακόπτης AC '+k,flip:dir<0}));
     else comps.push(C(id('JL'),'JUNC',X(120),300));
     comps.push(C(id('TR'),'XF3',X(240),300,{grp:'YNd1',Sn:S,U1:400e3,U2:333e3,f,uk:18,i0:0,conn:'bus'},{label:'400/333 kV',flip:dir<0}),
      C(id('J'),'JUNC',X(340),300),C(id('SR'),'LOAD3',X(340),420,{cn:'yn',Un:333e3,f,P:5e4,Q:3e6,conn:'bus'},{label:'αντιδραστήρας αστέρα'}),
      C(id('MMC'),'MMC',X(480),320,mmc,{label:'MMC '+k,flip:dir<0}),C(id('CT'),'MMCC',X(480),600,{...ctl,...ctlp},{label:'έλεγχος '+k,flip:dir<0}));
-    if(grid)wires.push([id('NET')+':abc',id('CB')+':abc1'],[id('CB')+':abc2',id('TR')+':abc1'],[id('CT')+':brk',id('CB')+':cmd']);else wires.push([id('JL')+':j',id('TR')+':abc1']);
+    // 4.19 (decision 220): at station 2 an ammeter in phase a and a voltage probe on the 400 kV side (positive to the AC network)
+    let gs=grid?id('CB')+':abc2':id('JL')+':j';
+    if(gap){const [mL,mR]=busMeter(comps,wires,'M'+k,X(240)+80,300,{i:'i_a προς το AC',v:'v_a 400 kV'});wires.push([gs,mR]);gs=mL;}
+    if(grid)wires.push([id('NET')+':abc',id('CB')+':abc1'],[gs,id('TR')+':abc1'],[id('CT')+':brk',id('CB')+':cmd']);else wires.push([gs,id('TR')+':abc1']);
     wires.push([id('TR')+':abc2',id('J')+':j'],[id('J')+':j',id('SR')+':abc'],[id('J')+':j',id('MMC')+':abc']);
     for(const q of ['va','vb','vc','ia','ib','ic','vdc','idc','vs'])wires.push([id('MMC')+':'+q,id('CT')+':'+q]);
     for(const q of ['ma','mb','mc','blk'])wires.push([id('CT')+':'+q,id('MMC')+':'+q]);};
    station(1,60,1,{mode:'vdc',Vdcref:'1',Tvdc:0.05,H:0.03,qmode:'q',Qref:'0',Tq:0.1},10e9);
    // station 2: P_ref into the converter (−: to the AC side); in the island its share comes from the droop
    const g2={mode:'gfm',law,Pref:ac==='weak'?`0:-0.5, ${te}:-0.9`:'-0.55',Qref:'0',Vref:'1',mp:2,nq:5,fp:5,Hv:2,tv:0.02,kp:50,avc:'vac',Vacref:'1',KE:5,TE:0.05,kv:law==='psc'?0.3:0,av:40,Xv:0,Ilim:1.1,Idlim:1.1,vmax:1.3,bw:20,tsoft:0.05,ac:600,Ufd:0.6};
-   station(2,1740,-1,g2,ac==='weak'?r(1.5*S):0);
+   station(2,1940,-1,g2,ac==='weak'?r(1.5*S):0,200);
    const Pp=root.Parts,d=JSON.parse(JSON.stringify(Pp.TLM_TYPICAL['320kV-dc']));
    const pc={...Pp.defaults('TLM'),model:'wb',len:70,fmin:1e-3,dec:10,wdc:'1',wpas:'enforce',vtrap:'320e3, -320e3',data:JSON.stringify(d)};
    const m=LM()?.['320kV-dc|70|wb'];pc.mdl=m?JSON.stringify({...m,src:Pp.tlmKey(pc)}):'';
    comps.push(C('CAB','TLM',900,300,pc,{label:'καλώδια ±320 kV · 70 km (WB)'}));
-   wires.push(['MMC1:p','CAB:a1'],['MMC1:n','CAB:b1'],['CAB:a2','MMC2:p'],['CAB:b2','MMC2:n']);
-   if(isl){comps.push(C('LD2','LOAD3',1560,440,{cn:'yn',Un:400e3,f,P:600e6,Q:100e6,model:'z',conn:'bus'},{label:'φορτίο 600 MW',lbl:'below'}),C('CBL','CB3',1460,200,{cmd:`0:0, ${te}:1`,model:'ideal',conn:'bus'},{label:`κλείνει στα ${te} s`}),
-     C('LS2','LOAD3',1360,200,{cn:'yn',Un:400e3,f,P:300e6,Q:0,model:'z',conn:'bus'},{label:'+300 MW',lbl:'below'}));wires.push(['JL2:j','LD2:abc'],['JL2:j','CBL:abc1'],['CBL:abc2','LS2:abc']);}
+   // 4.19 (decision 220): the current of the positive pole and the voltage between the poles at station 1
+   comps.push(C('ADC','AM',720,260,{},{label:'I_dc'}),C('VDC','VM',800,200,{},{label:'V_dc',rot:2}));
+   wires.push(['MMC1:p','ADC:a'],['ADC:b','CAB:a1'],['VDC:p','ADC:b'],['VDC:n','CAB:b1'],['MMC1:n','CAB:b1'],['CAB:a2','MMC2:p'],['CAB:b2','MMC2:n']);
+   if(isl){comps.push(C('LD2','LOAD3',1820,440,{cn:'yn',Un:400e3,f,P:600e6,Q:100e6,model:'z',conn:'bus'},{label:'φορτίο 600 MW',lbl:'below'}),C('CBL','CB3',1940,300,{cmd:`0:0, ${te}:1`,model:'ideal',conn:'bus'},{label:`κλείνει στα ${te} s`}),
+     C('LS2','LOAD3',2060,440,{cn:'yn',Un:400e3,f,P:300e6,Q:0,model:'z',conn:'bus'},{label:'+300 MW',lbl:'below'}));wires.push(['JL2:j','LD2:abc'],['JL2:j','CBL:abc1'],['CBL:abc2','LS2:abc']);}
    if(ac==='par'){const SB=500e6,Zb=400e3*400e3/SB,w0=2*Math.PI*f;
-    comps.push(C('VSB','VSC2',1700,60,{dc:'ideal',Vdc:r(2*400e3*Math.SQRT2/Math.sqrt(3)*1.3),mmax:1.155,filt:'l',Lf:r(0.15*Zb/w0),Rf:r(0.003*Zb),conn:'bus'},{label:'μονάδα B 500 MVA',flip:true}),
-     C('CTB','GFMC',1880,-40,{law:'droop',inner:'direct',S:SB,Vac:400e3,Vdc:r(2*400e3*Math.SQRT2/Math.sqrt(3)*1.3),f0:f,Pref:'0.55',Qref:'0',Vref:'1',mp:2,nq:5,fp:5,Xc:0.15,Imax:1.2,tsoft:0.05,conn:'bus'},{label:'grid-forming B'}),
-     C('ZB','ZSER3',1560,60,{Rs:r(0.01*Zb),Ls:r(0.1*Zb/w0),Rp1:0,Lp:0,Rp2:0,conn:'bus'},{label:'γραμμή B'}));
-    wires.push(['VSB:abc','ZB:abc2'],['ZB:abc1','JL2:j'],...gfmWire('CTB','VSB',1700,60,1880,-40,-120));}
+    comps.push(C('VSB','VSC2',2020,80,{dc:'ideal',Vdc:r(2*400e3*Math.SQRT2/Math.sqrt(3)*1.3),mmax:1.155,filt:'l',Lf:r(0.15*Zb/w0),Rf:r(0.003*Zb),conn:'bus'},{label:'μονάδα B 500 MVA',flip:true}),
+     C('CTB','GFMC',2200,-20,{law:'droop',inner:'direct',S:SB,Vac:400e3,Vdc:r(2*400e3*Math.SQRT2/Math.sqrt(3)*1.3),f0:f,Pref:'0.55',Qref:'0',Vref:'1',mp:2,nq:5,fp:5,Xc:0.15,Imax:1.2,tsoft:0.05,conn:'bus'},{label:'grid-forming B'}),
+     C('ZB','ZSER3',1880,60,{Rs:r(0.01*Zb),Ls:r(0.1*Zb/w0),Rp1:0,Lp:0,Rp2:0,conn:'bus'},{label:'γραμμή B'}));
+    wires.push(['VSB:abc','ZB:abc2'],['ZB:abc1','JL2:j'],...gfmWire('CTB','VSB',2020,80,2200,-20,-100));}
    const pB=ac==='par'?[['Y:CTB/PP','P μονάδας B (pu των 500 MVA)']]:[],wB=ac==='par'?[['Y:CTB/WW','f B (pu)']]:[];
    return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:1000,method:'TR',speed:0.02,stopT:1.2},
-    scope:{panes:[[['Y:CT2/G/PP','P σταθμού 2 προς το AC (pu)'],...pB],[['Y:CT2/G/WW','f σταθμού 2 (pu)'],...wB],[['Y:CT2/G/VG','|v| σταθμού 2 (pu)'],['Y:CT2/G/IG','|i| (pu)'],['Y:CT2/G/LR','όριο ρεύματος']],[['Y:CT1/Fvdc','V_dc 1 (pu)'],['Y:CT2/Fvdc','V_dc 2 (pu)']]],window:{unit:'s',n:1.2}},
+    scope:{panes:[[['Y:CT2/G/PP','P σταθμού 2 προς το AC (pu)'],...pB],[['Y:CT2/G/WW','f σταθμού 2 (pu)'],...wB],[['Y:CT2/G/VG','|v| σταθμού 2 (pu)'],['Y:CT2/G/IG','|i| (pu)'],['Y:CT2/G/LR','όριο ρεύματος']],[['Y:CT1/Fvdc','V_dc 1 (pu)'],['Y:CT2/Fvdc','V_dc 2 (pu)']],
+     [['Y:ADC','I_dc του θετικού πόλου (αμπερόμετρο, A)']],[['Y:VDC','V_dc ανάμεσα στους πόλους (βολτόμετρο, V)']],[['Y:M2A','i_a του σταθμού 2 προς το AC (αμπερόμετρο, A)']],[['Y:M2V','v_a στα 400 kV του σταθμού 2 (probe, V)']]],window:{unit:'s',n:1.2}},
     meta:{hvdcgfm:{ac,law,te,S,SB:500e6,mp:0.02,Pload:600e6,dP:300e6,Pr2:0.55,PrB:0.55,scr:1.5}}});}});
  // ------------------------------------------------------------------ 4.16 (§42): the first CIGRE HVDC benchmark (LCC)
  // The network of the benchmark at 50 Hz (Faruque et al. 2006 Fig. 1 and Table V, Watson & Arrillaga App. D), the transformers
@@ -1701,6 +1707,15 @@
  // converter go to the control and its modulation back. Per unit on each converter's ratings
  // the buses meas and m (conn = 'bus' on both); meas around under the two blocks: VSC2 at (xv, yv), GFMC at (xc, yc), yb below both
  const gfmWire=(ct,vs,xv,yv,xc,yc,yb)=>[[vs+':meas',ct+':meas',[[xv+70,yv+60],[xv+70,yb],[xc-70,yb],[xc-70,yc]]],[ct+':m',vs+':m']];
+ // 4.19 (decision 220): instruments at a few points of a drawing, next to the signals of the scope. On a three-phase bus: two
+ // conductor buses with an ammeter in phase a between them and a voltage probe (to ground) after it. The bus pins are at
+ // (x − 20, y) and (x + 160, y), phase a runs at y − 20; the current is positive from the left pin to the right one
+ const busMeter=(comps,wires,id,x,y,o={})=>{const E=(q,ex,fl)=>C(id+q,'EBUS',ex,y,{n:3},{flip:fl,lbl:'none'});
+  const rv=!!o.rev,pa=rv?'b':'a',pb=rv?'a':'b';                     // rev: positive from the right pin to the left one (the ammeter mirrored)
+  comps.push(E('L',x,true),C(id+'A','AM',x+70,y-20,{},{label:o.i||'i_a',flip:rv}),E('R',x+140,false));
+  wires.push([id+'L:a',id+'A:'+pa],[id+'A:'+pb,id+'R:a'],[id+'L:b',id+'R:b'],[id+'L:c',id+'R:c']);
+  if(o.v!==false){comps.push(C(id+'V','VP',x+100,y-60,{},{label:o.v||'v_a'}));wires.push([id+'V:p',id+'A:'+pb]);}
+  return [id+'L:bus',id+'R:bus'];};
  T.push({id:'gfm_island',group:'Grid-forming (4.18)',title:'Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα',theory:'formula',topology:'gfm_island',
   options:[{k:'law',label:'Νόμος',options:[['droop','Στατικότητα P–f, Q–V (φίλτρο 5 Hz)'],['vsm','Εικονική σύγχρονη μηχανή (H = 1 s)']],def:'droop'},
    {k:'inner',label:'Εσωτερικός έλεγχος',options:[['cascade','Καταρράκτης: βρόχος τάσης πυκνωτή και ρεύματος'],['direct','Άμεσα η τάση (με υψιπερατή ανάδραση ρεύματος)']],def:'cascade'},
@@ -1714,14 +1729,16 @@
     comps.push(C(id('CT'),'GFMC',60,y0+60,{law,inner:cas?'cascade':'direct',S,Vac:Vll,Vdc:800,f0:f,Pref:k===1?'0:0, 1:0.2':'0',Qref:'0',Vref:'1',mp:2,nq:5,fp:5,H:1,tv:0.01,
       kv:0,Rv:0,Xv:xv,Xc:0.06,Bf:0.1,Tvl:0.003,Til:0.0005,kff:0.8,Imax:1.2,conn:'bus'},{label:'έλεγχος '+k}),
      C(id('VS'),'VSC2',260,y0,{dc:'ideal',Vdc:800,mmax:1,filt:'lc',Lf,Rf:r(0.005*Zb),Cf,conn:'bus'},{label:`μετατροπέας ${k} (${S/1e3} kVA)`}),
-     C(id('Z'),'ZSER3',480,y0-20,{Rs:Rl,Ls:Ll,Rp1:0,Lp:0,Rp2:0,conn:'bus'},{label:'γραμμή '+k}));
-    wires.push([id('VS')+':abc',id('Z')+':abc1'],[id('Z')+':abc2','JB:j'],...gfmWire(id('CT'),id('VS'),260,y0,60,y0+60,y0+200));};
+     C(id('Z'),'ZSER3',680,y0-20,{Rs:Rl,Ls:Ll,Rp1:0,Lp:0,Rp2:0,conn:'bus'},{label:'γραμμή '+k}));
+    const [mL,mR]=busMeter(comps,wires,'M'+k,380,y0-20,{i:'i_a'+k,v:'v_a'+k});
+    wires.push([id('VS')+':abc',mL],[mR,id('Z')+':abc1'],[id('Z')+':abc2','JB:j'],...gfmWire(id('CT'),id('VS'),260,y0,60,y0+60,y0+200));};
    unit(1,160,S1,0.1,1.5e-3);unit(2,520,S2,0.2,3e-3);
-   comps.push(C('JB','JUNC',660,320),C('LD','LOAD3',660,460,{cn:'yn',Un:Vll,f,P:r(0.4*St),Q:r(0.1*St),conn:'bus'},{label:'φορτίο'}),
-    C('CB','CB3',800,320,{cmd:'0:0, 0.5:1',model:'ideal',conn:'bus'},{label:'κλείνει στα 0,5 s'}),C('LS','LOAD3',940,460,{cn:'yn',Un:Vll,f,P:r(0.4*St),Q:0,conn:'bus'},{label:'δεύτερο φορτίο'}));
+   comps.push(C('JB','JUNC',860,320),C('LD','LOAD3',860,460,{cn:'yn',Un:Vll,f,P:r(0.4*St),Q:r(0.1*St),conn:'bus'},{label:'φορτίο'}),
+    C('CB','CB3',1000,320,{cmd:'0:0, 0.5:1',model:'ideal',conn:'bus'},{label:'κλείνει στα 0,5 s'}),C('LS','LOAD3',1140,460,{cn:'yn',Un:Vll,f,P:r(0.4*St),Q:0,conn:'bus'},{label:'δεύτερο φορτίο'}));
    wires.push(['JB:j','LD:abc'],['JB:j','CB:abc1'],['CB:abc2','LS:abc']);
    return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:400,method:'TR',speed:0.2,stopT:1.5},
-    scope:{panes:[[['Y:CT1/PP','P₁ (pu της μονάδας 1)'],['Y:CT2/PP','P₂ (pu της μονάδας 2)']],[['Y:CT1/WW','f₁ (pu)'],['Y:CT2/WW','f₂ (pu)']],[['Y:CT1/QQ','Q₁ (pu)'],['Y:CT2/QQ','Q₂ (pu)']],[['Y:CT1/VG','|v₁| (pu)'],['Y:CT2/VG','|v₂| (pu)']]],window:{unit:'s',n:1.5}},
+    scope:{panes:[[['Y:CT1/PP','P₁ (pu της μονάδας 1)'],['Y:CT2/PP','P₂ (pu της μονάδας 2)']],[['Y:CT1/WW','f₁ (pu)'],['Y:CT2/WW','f₂ (pu)']],[['Y:CT1/QQ','Q₁ (pu)'],['Y:CT2/QQ','Q₂ (pu)']],[['Y:CT1/VG','|v₁| (pu)'],['Y:CT2/VG','|v₂| (pu)']],
+     [['Y:M1A','i_a της μονάδας 1 (αμπερόμετρο, A)'],['Y:M2A','i_a της μονάδας 2 (A)']],[['Y:M1V','v_a της μονάδας 1 (probe, V)'],['Y:M2V','v_a της μονάδας 2 (V)']]],window:{unit:'s',n:1.5}},
     meta:{gfm:{kind:'island',law,inner:cas?'cascade':'direct',S1,S2,mp:0.02,nq:0.05,xv,tstep:0.5,tpref:1,pref1:0.2,Vll,f}}});}});
  // The synchronverter of Zhong & Weiss (2011): the inverter of their Table I (100 W, 20,78 V, L_s = L_g = 0,45 mH, C = 22 μF,
  // R ∥ C 1 kΩ), D_p for 100 % P at −0,5 % frequency, D_q for 100 % Q at −5 % voltage, τ_f = τ_v = 2 ms; the sequence of their
@@ -1732,20 +1749,22 @@
   desc:'Ο αντιστροφέας του Πίν. I των Zhong & Weiss (100 W, 20,78 V πολική, φίλτρο LC, μέσο μοντέλο) ελέγχεται σαν σύγχρονη γεννήτρια: εικονικός δρομέας με αδράνεια J = D_p·τ_f και ροπή T_e = P/θ̇, ροή διέγερσης M_f·i_f από έναν ολοκληρωτή της άεργου, E = θ̇·M_f·i_f (εξ. (6)–(9)). Τα γεγονότα του Σχ. 5, ανά 0,3 s: 0,1 s κλείνει ο διακόπτης (ως τότε συγχρονισμός με PLL στην τάση του δικτύου), 0,3 s P_set = 80 W, 0,6 s Q_set = 60 var, 0,9 s ενεργές οι στατικότητες, 1,2 s η τάση του δικτύου πέφτει 5 %.',
   tasks:['Ως τα 0,9 s τα P και Q ακολουθούν τις αναφορές χωρίς σφάλμα σε περίπου δέκα περιόδους (ο αργός πόλος του δρομέα, κάρτα).','Με το δίκτυο στα 49,95 Hz: μόλις μπουν οι στατικότητες το P ανεβαίνει κατά 0,1 %/0,5 % × 100 W = 20 W (κάρτα).','Στα 0,9 s το Q πέφτει, γιατί η τάση στους πυκνωτές είναι πάνω από την ονομαστική: ΔQ = D_q·(V_r − V_m). Στα 1,2 s, με το δίκτυο 5 % κάτω, ανεβαίνει ξανά.'],
   build(o){const S=100,Vll=20.78,f=50,fg=o.fg==null?49.95:+o.fg||50,H=o.H==null?0.2:+o.H||0.2,Ls=0.45e-3,Rs=0.135,Cf=22e-6,Zb=Vll*Vll/S,w0=2*Math.PI*f,Vg=Vll*Math.SQRT2/Math.sqrt(3),r=x=>+x.toPrecision(6);
-   const comps=[C('CT','GFMC',60,360,{law:'vsm',inner:'direct',S,Vac:Vll,Vdc:42,f0:f,Pref:'0:0, 0.3:0.8',Qref:'0:0, 0.6:0.6',Vref:'1',mp:0.5,nq:5,H,tv:0.002,tdr:0.9,kv:0,Rv:0,Xv:0,
+   const comps=[C('CT','GFMC',-140,360,{law:'vsm',inner:'direct',S,Vac:Vll,Vdc:42,f0:f,Pref:'0:0, 0.3:0.8',Qref:'0:0, 0.6:0.6',Vref:'1',mp:0.5,nq:5,H,tv:0.002,tdr:0.9,kv:0,Rv:0,Xv:0,
      Xc:r(w0*Ls/Zb),Imax:2,sync:'g',bw:20,tsync:0.1,tsoft:0.05,conn:'bus'},{label:'synchronverter'}),
-    C('VS','VSC2',260,300,{dc:'ideal',Vdc:42,mmax:1,filt:'lc',Lf:Ls,Rf:Rs,Cf,conn:'bus'},{label:'αντιστροφέας 100 W'}),
+    C('VS','VSC2',60,300,{dc:'ideal',Vdc:42,mmax:1,filt:'lc',Lf:Ls,Rf:Rs,Cf,conn:'bus'},{label:'αντιστροφέας 100 W'}),
     C('JT','JUNC',420,280),C('RP','LOAD3',420,420,{cn:'yn',Un:Vll,f,P:r(Vll*Vll/1000),Q:0,conn:'bus'},{label:'R ∥ C = 1 kΩ'}),
     C('CB','CB3',540,280,{cmd:'0:0, 0.1:1',model:'ideal',conn:'bus'},{label:'κλείνει στα 0,1 s'}),
     C('ZG','ZSER3',680,280,{Rs:Rs,Ls:Ls,Rp1:0,Lp:0,Rp2:0,conn:'bus'},{label:'L_g, R_g'}),C('BG','EBUS',800,280,{n:3},{flip:true})];
-   const wires=[['VS:abc','JT:j'],['JT:j','RP:abc'],['JT:j','CB:abc1'],['CB:abc2','ZG:abc1'],['ZG:abc2','BG:bus'],...gfmWire('CT','VS',260,300,60,360,500)];
+   const wires=[['JT:j','RP:abc'],['JT:j','CB:abc1'],['CB:abc2','ZG:abc1'],['ZG:abc2','BG:bus'],...gfmWire('CT','VS',60,300,-140,360,500)];
+   {const [mL,mR]=busMeter(comps,wires,'M',180,280,{i:'i_a',v:'v_a'});wires.push(['VS:abc',mL],[mR,'JT:j']);}
    ['a','b','c'].forEach((x,k)=>{const y=200+80*k,X=x.toUpperCase();
     comps.push(C('G'+X,'VDC',900,y,{ctl:'sig',V:0},{rot:1,label:'v_g'+x}),C('E'+X,'EXPR',1100,y,{expr:`v*(1 - 0.05*(t >= 1.2))*cos(2*pi*fg*t - ${r(2*Math.PI*k/3)})`,ins:'',pars:`v = ${r(Vg)}, fg = ${fg}`},{label:'δίκτυο '+x}),
-     C('P'+X,'VP',860,y-30,{},{label:'g'+x}),C('TO'+X,'TAGO',940,y-40,{name:'v_g'+x},{label:'v_g'+x}),C('TI'+X,'TAGI',-30,400+20*k,{name:'v_g'+x},{label:'v_g'+x}));
+     C('P'+X,'VP',860,y-30,{},{label:'g'+x}),C('TO'+X,'TAGO',940,y-40,{name:'v_g'+x},{label:'v_g'+x}),C('TI'+X,'TAGI',-230,400+20*k,{name:'v_g'+x},{label:'v_g'+x}));
     wires.push(['BG:'+x,'G'+X+':n'],['E'+X+':y','G'+X+':u'],['G'+X+':n','P'+X+':p'],['P'+X+':y','TO'+X+':u'],['TI'+X+':y','CT:g'+x]);});
    comps.push(C('G1','GND',1000,460,{},{label:'0 V'}));['A','B','C'].forEach(X=>wires.push(['G'+X+':p','G1:g']));
    return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:1000,method:'TR',speed:0.2,stopT:1.5},
-    scope:{panes:[[['Y:CT/PP','P (pu των 100 W)'],['Y:CT/QQ','Q (pu των 100 var)']],[['Y:CT/WW','θ̇/ω₀ (pu)']],[['Y:CT/VG','|v| στους πυκνωτές (pu)'],['Y:CT/EE','E = θ̇·M_f·i_f (pu)']]],window:{unit:'s',n:1.5}},
+    scope:{panes:[[['Y:CT/PP','P (pu των 100 W)'],['Y:CT/QQ','Q (pu των 100 var)']],[['Y:CT/WW','θ̇/ω₀ (pu)']],[['Y:CT/VG','|v| στους πυκνωτές (pu)'],['Y:CT/EE','E = θ̇·M_f·i_f (pu)']],
+     [['Y:MA','i_a του αντιστροφέα (αμπερόμετρο, A)']],[['Y:MV','v_a στους πυκνωτές (probe, V)'],['Y:PA','v_a του δικτύου (probe, V)']]],window:{unit:'s',n:1.5}},
     meta:{gfm:{kind:'sync',S,Vll,fg,f,mp:0.005,nq:0.05,H,tf:2*H*0.005,tv:0.002,Pset:0.8,Qset:0.6,tps:0.3,tqs:0.6,tdr:0.9,tdip:1.2}}});}});
  // Power-synchronization control in a weak grid (Zhang, Harnefors & Nee 2010): the VSC of their Table I (350 MVA, 195 kV,
  // phase reactor 0,15 pu, transformer 195/400 kV 12 %, ±150 kV, I_max 1,08 pu) against a 400 kV grid of SCR 1, 2 or 5; their
@@ -1764,10 +1783,11 @@
    const Xt=0.15+0.11*350/380+1/scr,kp=r(130*Xt/(0.15+0.11*350/380+1));
    let ps='0:0';for(let k=1;k*0.1<=p0+1e-9;k++)ps+=`, ${r(0.1*k)}:${r(0.1*k)}`;if(ev==='step')ps+=`, 1.2:${r(p0+0.1)}`;
    const comps=[C('VS','VSC2',300,300,{dc:'ideal',Vdc,mmax:1.155,filt:'l',Lf:0.052,Rf:0.06,conn:'bus'},{label:'VSC 350 MVA'}),
-    C('JP','JUNC',460,280),C('TR','XF3',600,280,{grp:'YNd1',Sn:380e6,U1:400e3,U2:Vc,f,uk:12,Pk:0,i0:0,conn:'bus'},{label:'400/195 kV',flip:true}),
-    C('NET','GRID3',780,280,{Un:400e3,f,phase:0,cf:1,emf:'un',Sk:r(scr*S),XR:10,conn:'bus'},{label:`δίκτυο, SCR ${scr}`,flip:true})];
-   const wires=[['VS:abc','JP:j'],['JP:j','TR:abc2'],['TR:abc1','NET:abc']];
-   if(ev==='fault'){comps.push(C('FL','FLT3',460,420,{kind:'abc',Rf:10,ton:1.2,toff:1.35,conn:'bus'},{label:'σφάλμα'}));wires.push(['JP:j','FL:abc']);}
+    C('JP','JUNC',660,280),C('TR','XF3',800,280,{grp:'YNd1',Sn:380e6,U1:400e3,U2:Vc,f,uk:12,Pk:0,i0:0,conn:'bus'},{label:'400/195 kV',flip:true}),
+    C('NET','GRID3',980,280,{Un:400e3,f,phase:0,cf:1,emf:'un',Sk:r(scr*S),XR:10,conn:'bus'},{label:`δίκτυο, SCR ${scr}`,flip:true})];
+   const wires=[['JP:j','TR:abc2'],['TR:abc1','NET:abc']];
+   {const [mL,mR]=busMeter(comps,wires,'M',400,280,{i:'i_a',v:'v_a (PCC)'});wires.push(['VS:abc',mL],[mR,'JP:j']);}
+   if(ev==='fault'){comps.push(C('FL','FLT3',720,420,{kind:'abc',Rf:10,ton:1.2,toff:1.35,conn:'bus'},{label:'σφάλμα'}));wires.push(['JP:j','FL:abc']);}
    if(psc){comps.push(C('CT','GFMC',80,340,{law:'psc',inner:'direct',S,Vac:Vc,Vdc,f0:f,Pref:ps,Vref:'1',kp,avc:'vac',Uref:'1',KE:10,TE:0.05,kv:0.477,av:40,Rv:0,Xv:0,Xc:0.15,
      Imax:1.08,ac:600,vmax:1.3,bw:20,th0:-120,tsoft:0.05,conn:'bus'},{label:'PSC'}));wires.push(...gfmWire('CT','VS',300,300,80,340,480));}
    else{comps.push(C('CT','MMCC',80,340,{mode:'p',qmode:'vac',S,Vac:Vc,Vdc,f0:f,Pref:ps.replace(/:(\d[\d.]*)/g,(m,v)=>':'+(v==='0'?'0':'-'+v)),Tp:0.2,Vacref:'1',Tvac:0.1,Xpcc:r(0.11*350/380+1/scr),
@@ -1779,6 +1799,7 @@
     ['a','b','c'].forEach((x,k)=>wires.push(['DI:y'+(k+1),'CT:i'+x],['DV:y'+(k+1),'CT:v'+x],['CT:m'+x,'MX:u'+(k+1)]));}
    const P=psc?'Y:CT/PP':'Y:CT/PP',sc=psc?[[['Y:CT/PP','P (pu)']],[['Y:CT/VG','|u_pcc| (pu)'],['Y:CT/EE','V₀ (pu)']],[['Y:CT/IG','|i| (pu)'],['Y:CT/LR','όριο ρεύματος']],[['Y:CT/WW','ω (pu)']]]
     :[[['Y:CT/PP','P προς τον μετατροπέα (pu)']],[['Y:CT/VG','|u_pcc| (pu)']],[['Y:CT/ID','i_d (pu)'],['Y:CT/IQ','i_q (pu)']]];
+   sc.push([['Y:MA','i_a του μετατροπέα (αμπερόμετρο, A)']],[['Y:MV','v_a στο σημείο σύνδεσης (probe, V)']]);
    return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:400,method:'TR',speed:0.2,stopT:1.6},scope:{panes:sc,window:{unit:'s',n:1.6}},
     meta:{gfm:{kind:'weak',ctl:psc?'psc':rob?'gflw':'gfl',scr,p0,ev,S,Vc,Xc:0.15,Xtr:r(0.11*350/380),Xg:r(1/scr),kp,Imax:1.08,pll:rob?pll:20,acc:4}}});}});
  // 4.18.1 (§58): the IEEE 9 case (ieee9Build with AVR, PSS and governors) with the unit at bus 3 a converter of the rating
@@ -1799,9 +1820,10 @@
     add(comps,wires,panes){wires.push(['B7','L76:abc1']);
      if(unit!=='sm'){const gone=new Set(['G3','AV3','PS3','GV3']),own=q=>typeof q==='string'&&gone.has(q.split(':')[0]);
       for(let k=comps.length-1;k>=0;k--)if(gone.has(comps[k].id))comps.splice(k,1);for(let k=wires.length-1;k>=0;k--)if(own(wires[k][0])||own(wires[k][1]))wires.splice(k,1);
-      comps.push(C('VS3','VSC2',1360,160,{dc:'ideal',Vdc,mmax:1.155,filt:'l',Lf,Rf,init:'lf',E0:r(E*Un*Math.SQRT2/Math.sqrt(3)),th0:r(a3-90+dl),conn:'bus'},{label:'μετατροπέας 128 MVA',flip:true}));wires.push(['VS3:abc','B3']);
+      comps.push(C('VS3','VSC2',1560,160,{dc:'ideal',Vdc,mmax:1.155,filt:'l',Lf,Rf,init:'lf',E0:r(E*Un*Math.SQRT2/Math.sqrt(3)),th0:r(a3-90+dl),conn:'bus'},{label:'μετατροπέας 128 MVA',flip:true}));
+      {const [mL,mR]=busMeter(comps,wires,'M3',1300,140,{i:'i_a προς τον ζυγό 3',v:'v_a ζυγού 3',rev:true});wires.push(['B3',mL],[mR,'VS3:abc']);}
       if(gfm){comps.push(C('CT3','GFMC',1180,300,{law:unit,inner:'direct',S,Vac:Un,Vdc,f0:f,Pref:String(r(P3)),Qref:String(r(Q3)),Vref:String(r(E)),mp:5,nq:5,fp:5,H:3.01,tv:0.02,kv:0,Rv:0,Xv:0,Xc:X,Imax:1.2,
-        ac:600,vmax:1.3,bw:20,th0:r(a3-90+dl),tsoft:0,fi:'ref',conn:'bus'},{label:unit==='vsm'?'VSM':'grid-forming (στατικότητα)'}));wires.push(...gfmWire('CT3','VS3',1360,160,1180,300,420));}
+        ac:600,vmax:1.3,bw:20,th0:r(a3-90+dl),tsoft:0,fi:'ref',conn:'bus'},{label:unit==='vsm'?'VSM':'grid-forming (στατικότητα)'}));wires.push(...gfmWire('CT3','VS3',1560,160,1180,300,420));}
       else{comps.push(C('CT3','MMCC',1180,300,{mode:'p',cc:'robust',acc:4,Tii:0.05,S,Vac:Un,Vdc,f0:f,Pref:String(r(-P3)),Vacref:String(V3),frq:unit==='gfl'?'droop':'off',mf:5,Tf:0.05,X,R:0.003,Ilim:1.2,vmax:1.3,bw:5,th0:r(a3-90),prot:'off',tdb:0,tbrk:0},
          {label:unit==='gfl'?'grid-following με απόκριση στη συχνότητα':'grid-following, σταθερή P'}),
         C('SI3','BSEL',1260,420,{idx:'1, 2, 3'},{label:'i_abc'}),C('NI3','GAIN',1220,460,{K:-1},{label:'−1'}),C('DI3','DEMUX',1140,460,{n:3}),C('SV3','BSEL',1260,500,{idx:'4, 5, 6'},{label:'v_abc'}),C('DV3','DEMUX',1140,520,{n:3}),
@@ -1813,7 +1835,8 @@
      wires.push(['B7','CBS:abc1'],['CBS:abc2','LDS:abc']);
      const w3=unit==='sm'?[['Y:G3','ω₃']]:gfm?[['Y:CT3/WW','ω του μετατροπέα']]:unit==='gfl'?[['Y:CT3/WPU','ω του PLL (φίλτρο 50 ms)']]:[];
      const p3=unit==='sm'?[['Y:G3:pe','P₃ (pu των 100 MVA)']]:gfm?[['Y:CT3/PP','P του μετατροπέα (pu των 128 MVA)']]:[['Y:CT3/PP','P προς τον μετατροπέα (pu των 128 MVA)']];
-     panes.length=0;panes.push([['Y:G1','ω₁ (G1)'],['Y:G2','ω₂ (G2)'],...w3],[['Y:G1:pe','P₁ (pu των 100 MVA)'],['Y:G2:pe','P₂'],...p3],[['Y:G1:vt','|V₁|'],['Y:G2:vt','|V₂|'],...(unit==='sm'?[['Y:G3:vt','|V₃|']]:[['Y:CT3/VG','|V₃| (μετατροπέας)']])]);}};
+     panes.length=0;panes.push([['Y:G1','ω₁ (G1)'],['Y:G2','ω₂ (G2)'],...w3],[['Y:G1:pe','P₁ (pu των 100 MVA)'],['Y:G2:pe','P₂'],...p3],[['Y:G1:vt','|V₁|'],['Y:G2:vt','|V₂|'],...(unit==='sm'?[['Y:G3:vt','|V₃|']]:[['Y:CT3/VG','|V₃| (μετατροπέας)']])]);
+     if(unit!=='sm')panes.push([['Y:M3A','i_a του μετατροπέα προς τον ζυγό 3 (αμπερόμετρο, A)']],[['Y:M3V','v_a του ζυγού 3 (probe, V)']]);}};
    const pr=ieee9Build({ev:'none',ctl:'full'},ext);pr.sim={...pr.sim,hDiv:200,speed:0.5,stopT:T};pr.scope={...pr.scope,window:{unit:'s',n:T}};return pr;}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
