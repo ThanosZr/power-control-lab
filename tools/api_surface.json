@@ -1,5 +1,5 @@
 {
- "version": "4.19.1",
+ "version": "4.19.2",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -8,10 +8,16 @@
    "pcl.wideband.",
    "pcl.powerflow.",
    "pcl.opf.",
-   "pcl.ipm."
+   "pcl.ipm.",
+   "pcl.backend.",
+   "pcl.accel.",
+   "pcl.nnstart.",
+   "pcl.onnxio."
   ],
   "cli": [
-   "workbench"
+   "workbench",
+   "python -m pcl accel",
+   "python -m pcl nnstart"
   ]
  },
  "deprecated": {},
@@ -376,6 +382,161 @@
      "compression"
     ],
     "since": "3.18"
+   },
+   "pcl.accel.add_arguments": {
+    "params": [
+     "ap"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.accel.best": {
+    "params": [
+     "f",
+     "k"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.accel.command": {
+    "params": [
+     "args"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.accel.main": {
+    "params": [
+     "argv"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.accel.measure": {
+    "params": [
+     "name",
+     "net",
+     "B",
+     "seed",
+     "gpu",
+     "say"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.accel.mixed": {
+    "params": [
+     "N",
+     "B"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.accel.residual": {
+    "params": [
+     "case",
+     "V",
+     "dS"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.accel.run": {
+    "params": [
+     "cases",
+     "scenarios",
+     "quick",
+     "save",
+     "out"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.accel.system": {
+    "params": [],
+    "since": "4.19.2"
+   },
+   "pcl.backend.Backend": {
+    "params": [
+     "name",
+     "xp",
+     "spm",
+     "info",
+     "why"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.backend.Backend.asarray": {
+    "params": [
+     "a"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.backend.Backend.chunk": {
+    "params": [
+     "N",
+     "B"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.backend.Backend.csr": {
+    "params": [
+     "A"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.backend.Backend.how": {
+    "params": [
+     "N"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.backend.Backend.numpy": {
+    "params": [
+     "a"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.backend.Backend.solver": {
+    "params": [
+     "lu",
+     "how"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.backend.BackendError": {
+    "params": [],
+    "since": "4.19.2"
+   },
+   "pcl.backend.choose": {
+    "params": [
+     "want",
+     "N",
+     "B"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.backend.cpu": {
+    "params": [
+     "why"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.backend.gpu": {
+    "params": [],
+    "since": "4.19.2"
+   },
+   "pcl.backend.home": {
+    "params": [],
+    "since": "4.19.2"
+   },
+   "pcl.backend.measurement": {
+    "params": [],
+    "since": "4.19.2"
+   },
+   "pcl.backend.probe": {
+    "params": [
+     "fresh"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.backend.rule": {
+    "params": [
+     "rows"
+    ],
+    "since": "4.19.2"
    },
    "pcl.bifurcation": {
     "params": [
@@ -922,7 +1083,8 @@
      "sigma",
      "z0",
      "record",
-     "step_control"
+     "step_control",
+     "warm"
     ],
     "since": "4.19.1"
    },
@@ -1839,7 +2001,10 @@
      "load_scale",
      "gen_scale",
      "dS",
-     "tol"
+     "tol",
+     "backend",
+     "how",
+     "start"
     ],
     "since": "4.19.1"
    },
@@ -1879,7 +2044,9 @@
      "branches",
      "ratings",
      "tol",
-     "q_limits"
+     "q_limits",
+     "backend",
+     "how"
     ],
     "since": "4.19.1"
    },
@@ -2276,6 +2443,211 @@
     ],
     "since": "4.2"
    },
+   "pcl.nnstart.Model": {
+    "params": [
+     "graph",
+     "meta"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.Model.applies": {
+    "params": [
+     "net",
+     "case",
+     "study"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.Model.load": {
+    "params": [
+     "path",
+     "net",
+     "study"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.Model.predict": {
+    "params": [
+     "X"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.Model.save": {
+    "params": [
+     "path"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.StartError": {
+    "params": [],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.add_arguments": {
+    "params": [
+     "ap"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.command": {
+    "params": [
+     "args"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.dataset": {
+    "params": [
+     "net",
+     "study",
+     "samples",
+     "spread",
+     "seed",
+     "progress"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.features": {
+    "params": [
+     "ib",
+     "d"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.find": {
+    "params": [
+     "net",
+     "study",
+     "case"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.fingerprint": {
+    "params": [
+     "net",
+     "case",
+     "study"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.fit": {
+    "params": [
+     "X",
+     "Y",
+     "hidden",
+     "epochs",
+     "batch",
+     "lr",
+     "seed",
+     "val"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.folders": {
+    "params": [],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.layout": {
+    "params": [
+     "net",
+     "case",
+     "study"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.network": {
+    "params": [
+     "source"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.propose_opf": {
+    "params": [
+     "model",
+     "net",
+     "dS",
+     "case"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.propose_pf": {
+    "params": [
+     "model",
+     "net",
+     "case",
+     "d"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.summary": {
+    "params": [
+     "model"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.nnstart.train": {
+    "params": [
+     "net",
+     "study",
+     "samples",
+     "spread",
+     "hidden",
+     "epochs",
+     "seed",
+     "check",
+     "progress",
+     "name"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.onnxio.OnnxError": {
+    "params": [],
+    "since": "4.19.2"
+   },
+   "pcl.onnxio.dumps": {
+    "params": [
+     "model"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.onnxio.loads": {
+    "params": [
+     "data"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.onnxio.mlp": {
+    "params": [
+     "W",
+     "b",
+     "x_mean",
+     "x_scale",
+     "y_mean",
+     "y_scale",
+     "meta",
+     "act",
+     "dtype"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.onnxio.read": {
+    "params": [
+     "path"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.onnxio.run": {
+    "params": [
+     "model",
+     "feeds"
+    ],
+    "since": "4.19.2"
+   },
+   "pcl.onnxio.write": {
+    "params": [
+     "path",
+     "model"
+    ],
+    "since": "4.19.2"
+   },
    "pcl.opf.OpfError": {
     "params": [],
     "since": "4.19.1"
@@ -2342,7 +2714,8 @@
      "max_iter",
      "ratings",
      "v_default",
-     "record"
+     "record",
+     "dS"
     ],
     "since": "4.19.1"
    },
@@ -2569,7 +2942,10 @@
      "typ",
      "lu",
      "fallback",
-     "chunk"
+     "chunk",
+     "backend",
+     "how",
+     "Vstart"
     ],
     "since": "4.19.1"
    },
@@ -2596,7 +2972,9 @@
      "max_it",
      "typ",
      "chunk",
-     "fallback"
+     "fallback",
+     "backend",
+     "how"
     ],
     "since": "4.19.1"
    },
@@ -3421,6 +3799,16 @@
    }
   },
   "cli": {
+   "python -m pcl accel": {
+    "params": [
+     "--quick",
+     "--save",
+     "--case",
+     "--scenarios",
+     "--json"
+    ],
+    "since": "4.19.2"
+   },
    "python -m pcl bifurcation": {
     "params": [
      "<project>",
@@ -3488,6 +3876,18 @@
      "--emt"
     ],
     "since": "4.2"
+   },
+   "python -m pcl nnstart": {
+    "params": [
+     "<case>",
+     "--study",
+     "--samples",
+     "--spread",
+     "--epochs",
+     "--seed",
+     "--out"
+    ],
+    "since": "4.19.2"
    },
    "python -m pcl plant": {
     "params": [],

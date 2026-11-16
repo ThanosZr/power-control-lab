@@ -914,7 +914,7 @@ class Network:
         c = self.case()
         return {'branches': list(c.br_name), 'L': powerflow.lodf(c)}
 
-    def contingency(self, kind='ac', branches=None, ratings=None, tol=1e-8, q_limits=False):
+    def contingency(self, kind='ac', branches=None, ratings=None, tol=1e-8, q_limits=False, backend='auto', how=None):
         """N−1: the outage of every branch (or of those named), one at a time.
         kind='dc': the flows after each outage from the DC load flow and the LODF (linear, a screening).
         kind='ac': the full load flow after each outage, all the outages as a batch on the factors of the base case
@@ -923,7 +923,10 @@ class Network:
         ratings: {branch: VA} (default the 'rating' of each branch); without any rating the loading is not judged.
         Returns {'kind', 'base', 'outages': [{'name', 'island', 'converged', 'Smax' (VA) and 'branch' (the most loaded one, by
         loading where ratings exist), 'loading', 'overloads': [(branch, loading)], 'Vmin', 'Vmax' (pu, AC)}], 'worst', 'time',
-        'advice', 'chord', 'newton'}."""
+        'advice', 'chord', 'newton', 'backend', 'how', 'backend_why'}.
+        4.19.2, kind 'ac': backend 'auto' (pcl.backend.choose: the CPU, unless the measurement of this machine found the GPU*
+        faster for a batch of this size), 'cpu' or 'gpu' (experimental*: falls back to the CPU with the reason in
+        'backend_why'); how: the solve of the right-hand sides ('lu', 'inv', 'levels'; default what the backend proposes)."""
         from . import powerflow
         c = self.case()
         if kind not in ('ac', 'dc'):
@@ -957,12 +960,12 @@ class Network:
                     out['outages'].append({'name': c.br_name[k], 'island': True, 'converged': False})
                     continue
                 out['outages'].append(row(k, np.abs(Pf + Lm[:, k] * Pf[k]), {}))
-            out.update(chord=0, newton=0)
+            out.update(chord=0, newton=0, backend='cpu', how=None, backend_why='γραμμικό (LODF): δεν έχει παρτίδα επαναλήψεων')
         else:
             Sf, St = powerflow.branch_flows(c, V0)
             out['base'] = {'S': {c.br_name[k]: float(max(abs(Sf[k]), abs(St[k])) * self.S_base) for k in range(c.nl)},
                            'Vmin': float(np.abs(V0).min()), 'Vmax': float(np.abs(V0).max())}
-            r = powerflow.contingency_ac(c, V0, sel, tol=tol, typ=typ)
+            r = powerflow.contingency_ac(c, V0, sel, tol=tol, typ=typ, backend=backend, how=how)
             for j, k in enumerate(sel):
                 if r['island'][j] or not r['converged'][j]:
                     out['outages'].append({'name': c.br_name[k], 'island': bool(r['island'][j]), 'converged': False})
@@ -972,7 +975,7 @@ class Network:
                 i, m = int(np.argmin(np.abs(V))), int(np.argmax(np.abs(V)))
                 out['outages'].append(row(k, np.maximum(np.abs(Sf), np.abs(St)),
                                           {'Vmin': float(abs(V[i])), 'Vmin_bus': c.names[i], 'Vmax': float(abs(V[m])), 'Vmax_bus': c.names[m]}))
-            out.update(chord=r['chord'], newton=r['newton'])
+            out.update(chord=r['chord'], newton=r['newton'], backend=r['backend'], how=r['how'], backend_why=r['why'])
         ok = [o for o in out['outages'] if o['converged']]
         key = (lambda o: o['loading']) if any(o.get('loading') is not None for o in ok) else (lambda o: o['Smax'])
         out['worst'] = max(ok, key=lambda o: key(o) or 0.0)['name'] if ok else None
@@ -981,12 +984,16 @@ class Network:
         out['time'] = powerflow.time.perf_counter() - t0
         return out
 
-    def batch_flow(self, load_scale=None, gen_scale=None, dS=None, tol=1e-8):
+    def batch_flow(self, load_scale=None, gen_scale=None, dS=None, tol=1e-8, backend='auto', how=None, start=None):
         """Many load flows of this network at once (time series, Monte Carlo): pcl.powerflow.batch on the factors of the base case.
         load_scale: B factors (one per scenario) or B × loads (one per load element, in the order of the elements) on the
         constant-power part of the loads; gen_scale: the same on the active power of the generators; or dS (B × buses, VA):
         a change of the net constant-power injection per bus. The slack covers the balance.
-        Returns {'V' (B × buses, pu), 'angle' (degrees), 'buses', 'converged' (B), 'iterations', 'chord', 'newton', 'time', 'advice'}."""
+        4.19.2: backend and how as in contingency ('auto', 'cpu', 'gpu'*); start: a model of pcl.nnstart for the load flow of
+        this network, which proposes the starting voltages of every scenario (used per scenario only where its mismatch is
+        smaller than at the base solution).
+        Returns {'V' (B × buses, pu), 'angle' (degrees), 'buses', 'converged' (B), 'iterations', 'chord', 'newton', 'time', 'advice',
+        'backend', 'how', 'why', 'proposed'}."""
         from . import powerflow
         c = self.case()
         d = None
@@ -1007,7 +1014,12 @@ class Network:
             d = (0 if d is None else d) + np.asarray(dS, complex) / self.S_base
         if d is None:
             raise NetworkError('batch_flow: give load_scale, gen_scale or dS')
-        r = powerflow.batch(c, d, tol=tol)
+        Vs = None
+        if start is not None:
+            from . import nnstart
+            model = nnstart.find(self, 'pf', c) if isinstance(start, str) else start
+            Vs = None if model is None else nnstart.propose_pf(model, self, c, d)
+        r = powerflow.batch(c, d, tol=tol, backend=backend, how=how, Vstart=Vs)
         r.update(buses=list(c.names), angle=np.degrees(np.angle(r['V'])), advice=powerflow.advise(c, 'batch', len(r['converged'])))
         r['V'] = np.abs(r['V'])
         return r
@@ -1020,9 +1032,24 @@ class Network:
 
     def opf(self, kind='ac', **kw):
         """The optimal power flow (pcl.opf): kind='ac' (interior point on the full equations) or 'dc' (the linear network).
-        See pcl.opf.solve for the options and the result."""
+        See pcl.opf.solve for the options and the result. 4.19.2: dS (a change of the injections, VA per bus) and start='nn' or
+        start=model (pcl.nnstart): a neural network proposes the starting point and the solver verifies."""
         from . import opf
-        return opf.solve(self, kind, **kw)
+        st = kw.get('start')
+        if st is None or isinstance(st, dict) or (isinstance(st, str) and st != 'nn'):
+            return opf.solve(self, kind, **kw)
+        # 4.19.2: start='nn' (the model of this network among those of pcl.nnstart.folders) or a model of pcl.nnstart. The
+        # model proposes the starting point; the solver verifies (see pcl.opf.solve)
+        from . import nnstart
+        model = nnstart.find(self, 'opf') if isinstance(st, str) else st
+        if model is None:
+            kw['start'], note = 'auto', 'νευρωνικό: δεν υπάρχει μοντέλο για αυτό το δίκτυο (python -m pcl nnstart …)'
+        else:
+            kw['start'], note = nnstart.propose_opf(model, self, kw.get('dS')) if kind == 'ac' else ('auto', 'νευρωνικό: μόνο για το πρόβλημα AC')
+        r = opf.solve(self, kind, **kw)
+        if note:
+            r['start_path'] = [note] + list(r.get('start_path') or [])
+        return r
 
     # ------------------------------------------------------------ to the EMT solver (4.3)
     def to_emt(self, lf=None, machines=None, name=None, t_end=0.5, hdiv=400):

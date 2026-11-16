@@ -29,6 +29,8 @@ import numpy as np
 from scipy import sparse as sp
 from scipy.sparse.linalg import splu
 
+from . import backend as BK
+
 PQ, PV, REF = 0, 1, 2
 METHODS = ('auto', 'nr', 'nr_dense', 'nr_ci', 'fdxb', 'fdbx', 'sweep', 'gs', 'dc')
 TXT = {'nr': 'αραιός Newton–Raphson (πολικές συντεταγμένες, σταθερό μοτίβο)', 'nr_dense': 'πυκνός Newton–Raphson (ο δρόμος αναφοράς ως την 4.19)',
@@ -685,40 +687,42 @@ def solve(case, method='auto', tol=1e-8, max_iter=None, q_limits=False, flat=Fal
 
 
 # -------------------------------------------------------------------- many load flows of one topology (batch)
-def _iterate(Ffun, solve, V, pvpq, pq, tol, max_it, mem=8):
+def _iterate(Ffun, solve, V, pvpq, pq, tol, max_it, mem=8, xp=np):
     """The iteration of the batch routines for B columns of V (n × B) at once: Broyden's method on a fixed first Jacobian
     (Kelley, Iterative Methods for Linear and Nonlinear Equations, SIAM 1995, algorithm «brsol»): every iteration costs one
     solve with the factors of that Jacobian for all the columns together, and a few inner products with the steps taken so
     far, which turn the linear convergence of the plain chord iteration into a superlinear one. Ffun(V_act, act) → the
     mismatches (N × b); solve(R, act) → J₀⁻¹·R. A column is done only when its own mismatch is under tol; one that grows, or
-    is not there after max_it iterations, is marked bad. Returns (done, bad, iterations)."""
+    is not there after max_it iterations, is marked bad. Returns (done, bad, iterations).
+    xp: the array module of the backend (4.19.2, pcl.backend): every array here lives where V lives, and with NumPy the
+    operations are those of 4.19.1 in the same order."""
     B = V.shape[1]
     na = len(pvpq)
-    done, bad, its = np.zeros(B, bool), np.zeros(B, bool), np.zeros(B, int)
-    act = np.arange(B)
+    done, bad, its = xp.zeros(B, bool), xp.zeros(B, bool), xp.zeros(B, int)
+    act = xp.arange(B)
     F = Ffun(V, act)
-    e = np.max(np.abs(F), axis=0) if F.size else np.zeros(B)
+    e = xp.max(xp.abs(F), axis=0) if F.size else xp.zeros(B)
     done[e < tol] = True
-    bad[~np.isfinite(e)] = True
+    bad[~xp.isfinite(e)] = True
     live = ~done & ~bad
     act, F, e_prev = act[live], F[:, live], e
     if not len(act):
         return done, bad, its
     steps = []                                            # s_0 … s_n, each N × B (the columns of the scenarios still active are valid)
-    s = np.zeros((F.shape[0], B))
+    s = xp.zeros((F.shape[0], B))
     s[:, act] = solve(-F, act)
     for it in range(1, max_it + 1):
         steps.append(s)
         Va = V[:, act]
-        ang, Vm = np.angle(Va), np.abs(Va)
+        ang, Vm = xp.angle(Va), xp.abs(Va)
         ang[pvpq] += s[:na, act]
         Vm[pq] += s[na:, act]
-        V[:, act] = Vm * np.exp(1j * ang)
+        V[:, act] = Vm * xp.exp(1j * ang)
         its[act] += 1
         F = Ffun(V[:, act], act)
-        e = np.max(np.abs(F), axis=0)
+        e = xp.max(xp.abs(F), axis=0)
         ok = e < tol
-        grow = ~ok & (((e > 4 * e_prev[act]) & (it > 2)) | ~np.isfinite(e))
+        grow = ~ok & (((e > 4 * e_prev[act]) & (it > 2)) | ~xp.isfinite(e))
         done[act[ok]] = True
         bad[act[grow]] = True
         e_prev[act] = e
@@ -732,28 +736,47 @@ def _iterate(Ffun, solve, V, pvpq, pq, tol, max_it, mem=8):
         z = solve(-F, act)
         if len(steps) > mem:                              # restart: the memory of the steps is full
             steps = []
-            s = np.zeros_like(s)
+            s = xp.zeros_like(s)
             s[:, act] = z
             continue
         for j in range(len(steps) - 1):
             sj = steps[j][:, act]
-            z += steps[j + 1][:, act] * (np.einsum('nb,nb->b', sj, z) / np.einsum('nb,nb->b', sj, sj))
+            z += steps[j + 1][:, act] * (xp.einsum('nb,nb->b', sj, z) / xp.einsum('nb,nb->b', sj, sj))
         sn = steps[-1][:, act]
-        den = 1 - np.einsum('nb,nb->b', sn, z) / np.einsum('nb,nb->b', sn, sn)
-        den = np.where(np.abs(den) > 0.05, den, 1.0)      # a step almost against the last one: the plain chord step
-        s = np.zeros_like(s)
+        den = 1 - xp.einsum('nb,nb->b', sn, z) / xp.einsum('nb,nb->b', sn, sn)
+        den = xp.where(xp.abs(den) > 0.05, den, 1.0)      # a step almost against the last one: the plain chord step
+        s = xp.zeros_like(s)
         s[:, act] = z / den
     return done, bad, its
 
 
-def batch(case, dS, V0=None, tol=1e-8, max_it=30, typ=None, lu=None, fallback=True, chunk=None):
+def _on(want, N, B, run):
+    """run(bk) on the backend that pcl.backend chooses for a batch of B columns with N unknowns. Whatever the GPU* path
+    raises (it is experimental: not covered by the CI) is not an error of the study: the batch is done again on the CPU
+    and the reason is kept. Returns (result of run, backend used)."""
+    bk = BK.choose(want, N, B)
+    if bk.gpu:
+        try:
+            return run(bk), bk
+        except Exception as e:                            # noqa: BLE001 (any failure of the device: memory, a missing routine, …)
+            bk = BK.cpu(f'CPU, γιατί η GPU* απέτυχε ({type(e).__name__}: {str(e)[:120]})')
+    return run(bk), bk
+
+
+def batch(case, dS, V0=None, tol=1e-8, max_it=30, typ=None, lu=None, fallback=True, chunk=None, backend='cpu', how=None,
+          Vstart=None):
     """Load flows for B scenarios that differ in their constant-power injections: dS (B × n, complex, pu) is added to the net
     injection of the base case (generation minus load). One Jacobian, factorized once at the base solution V0, serves every
     scenario: each iteration evaluates all the mismatches at once and solves all the right-hand sides in one call (_iterate).
     A scenario is accepted only when its own true mismatch is under tol; one that does not get there is solved by the sparse
     Newton–Raphson from the base solution (fallback), so the result is that of the reference path within tol.
+    4.19.2: backend 'cpu' (the reference, the numbers of 4.19.1), 'gpu' or 'auto' (pcl.backend.choose: the GPU* path is
+    experimental and falls back to the CPU with the reason), how: the solve of the right-hand sides ('lu', 'inv', 'levels').
+    Vstart (B × n): proposed starting voltages (a neural start, pcl.nnstart): a scenario starts from its proposal only when
+    the mismatch there is smaller than at V0, so a bad proposal costs one evaluation and nothing else.
     Returns {'V' (B × n), 'converged' (B), 'iterations' (B), 'chord' (scenarios solved on the common factors), 'newton'
-    (scenarios solved by the fallback), 'time', 'fact' (factorizations)}."""
+    (scenarios solved by the fallback), 'time', 'fact' (factorizations), 'backend', 'how', 'why', 'proposed' (scenarios that
+    started from their proposal)}."""
     t0 = time.perf_counter()
     dS = np.atleast_2d(np.asarray(dS, complex))
     B, n = dS.shape
@@ -770,22 +793,39 @@ def batch(case, dS, V0=None, tol=1e-8, max_it=30, typ=None, lu=None, fallback=Tr
         _, I0 = case.mismatch(V0)
         J.fill(V0, I0)
         lu = J.factor()
-    pvpq, pq = J.pvpq, J.pq
-    Y, L = case.Y, case.load
-    chunk = chunk or int(np.clip(8e4 // max(1, J.N), 16, 2048))        # blocks that stay in the cache (measured: larger blocks are slower per scenario)
-    Vout = np.empty((B, n), complex)
-    done, its = np.zeros(B, bool), np.zeros(B, int)
-    for c0 in range(0, B, chunk):
-        sl = slice(c0, min(B, c0 + chunk))
-        Sspec = case.Sg[:, None] + dS[sl].T                            # n × b
+    if Vstart is not None:
+        Vstart = np.asarray(Vstart, complex)
+        if Vstart.shape != (B, n):
+            raise PowerFlowError(f'Vstart: {B} × {case.n}')
 
-        def Ffun(Va, act):
-            Vm = np.abs(Va)
-            mis = Va * np.conj(Y @ Va) - (Sspec[:, act] - (L[:, 0:1] * Vm ** 2 + L[:, 1:2] * Vm + L[:, 2:3]))
-            return np.vstack((mis.real[pvpq], mis.imag[pq]))
-        V = np.repeat(V0[:, None], sl.stop - sl.start, axis=1)
-        d, _, i = _iterate(Ffun, lambda R, act: lu.solve(R), V, pvpq, pq, tol, max_it)
-        Vout[sl], done[sl], its[sl] = V.T, d, i
+    def run(bk):
+        xp = bk.xp
+        pvpq, pq = bk.asarray(J.pvpq), bk.asarray(J.pq)
+        Y, L, Sg0, V0d = bk.csr(case.Y), bk.asarray(case.load), bk.asarray(case.Sg), bk.asarray(V0)
+        hw = how or bk.how(J.N)
+        slv = bk.solver(lu, hw)
+        ch = chunk or bk.chunk(J.N, B)                                     # CPU: blocks that stay in the cache (measured: larger blocks are slower per scenario)
+        Vout = np.empty((B, n), complex)
+        done, its, nprop = np.zeros(B, bool), np.zeros(B, int), 0
+        for c0 in range(0, B, ch):
+            sl = slice(c0, min(B, c0 + ch))
+            Sspec = Sg0[:, None] + bk.asarray(dS[sl].T)                    # n × b
+
+            def Ffun(Va, act):
+                Vm = xp.abs(Va)
+                mis = Va * xp.conj(Y @ Va) - (Sspec[:, act] - (L[:, 0:1] * Vm ** 2 + L[:, 1:2] * Vm + L[:, 2:3]))
+                return xp.vstack((mis.real[pvpq], mis.imag[pq]))
+            V = xp.repeat(V0d[:, None], sl.stop - sl.start, axis=1)
+            if Vstart is not None:                                         # the proposal, where it is closer to the solution
+                Vp = bk.asarray(np.ascontiguousarray(Vstart[sl].T))
+                allb = xp.arange(sl.stop - sl.start)
+                better = xp.max(xp.abs(Ffun(Vp, allb)), axis=0) < xp.max(xp.abs(Ffun(V, allb)), axis=0)
+                V[:, better] = Vp[:, better]
+                nprop += int(better.sum())
+            d, _, i = _iterate(Ffun, lambda R, act: slv(R), V, pvpq, pq, tol, max_it, xp=xp)
+            Vout[sl], done[sl], its[sl] = bk.numpy(V).T, bk.numpy(d), bk.numpy(i)
+        return Vout, done, its, hw, nprop
+    (Vout, done, its, hw, nprop), bk = _on(backend, J.N, B, run)
     nchord, nnew = int(done.sum()), 0
     if fallback:
         for b in np.flatnonzero(~done):
@@ -793,7 +833,8 @@ def batch(case, dS, V0=None, tol=1e-8, max_it=30, typ=None, lu=None, fallback=Tr
             Vout[b], done[b] = Vb, ok
             its[b] += it
             nnew += 1
-    return {'V': Vout, 'converged': done, 'iterations': its, 'chord': nchord, 'newton': nnew, 'time': time.perf_counter() - t0, 'fact': 1 + nnew}
+    return {'V': Vout, 'converged': done, 'iterations': its, 'chord': nchord, 'newton': nnew, 'time': time.perf_counter() - t0,
+            'fact': 1 + nnew, 'backend': bk.name, 'how': hw, 'why': bk.why, 'proposed': nprop}
 
 
 # -------------------------------------------------------------------- N−1 in AC, as a batch with a low-rank correction
@@ -813,14 +854,17 @@ def _branch_jac(case, k, V):
     return Sf, St, M
 
 
-def contingency_ac(case, V0, outages=None, tol=1e-8, max_it=30, typ=None, chunk=None, fallback=True):
+def contingency_ac(case, V0, outages=None, tol=1e-8, max_it=30, typ=None, chunk=None, fallback=True, backend='cpu', how=None):
     """The load flow after the outage of each branch (one at a time), all of them as a batch on the factors of the base case:
     the Jacobian without branch k is J₀ − U·M_k·Wᵀ (four rows and columns), so its solves come from the solves of J₀ by the
     matrix inversion lemma, and the iteration is that of the batch (_iterate). Each outage is verified with its own mismatch;
     whatever does not converge is solved by the sparse Newton–Raphson on the network without the branch (fallback): if that
     fails too, the outage is reported as not converged (often a voltage collapse). Bridges (the outage splits the network)
     are not solved.
-    Returns {'outages', 'V' (K × n, NaN rows for bridges), 'converged', 'island', 'iterations', 'chord', 'newton', 'time'}."""
+    4.19.2: backend and how as in batch (the GPU* path is experimental). The low-rank matrices of a block are prepared on
+    the CPU (one solve with 4 columns per outage) and the iteration runs on the backend.
+    Returns {'outages', 'V' (K × n, NaN rows for bridges), 'converged', 'island', 'iterations', 'chord', 'newton', 'time',
+    'backend', 'how', 'why'}."""
     t0 = time.perf_counter()
     typ = case.typ if typ is None else typ
     outs = np.arange(case.nl) if outages is None else np.asarray(outages, int)
@@ -835,75 +879,85 @@ def contingency_ac(case, V0, outages=None, tol=1e-8, max_it=30, typ=None, chunk=
     pa[J.pvpq] = np.arange(na)
     pm = np.full(n, -1)
     pm[J.pq] = na + np.arange(J.nm)
-    Vout = np.full((K, n), np.nan, complex)
-    conv = np.zeros(K, bool)
-    its = np.zeros(K, int)
-    nchord = nnew = 0
-    Y, L = case.Y, case.load
     todo = np.flatnonzero(~isl)
-    chunk = chunk or int(np.clip(8e4 // max(1, N), 16, 512))
-    for c0 in range(0, len(todo), chunk):
-        sel = todo[c0:c0 + chunk]
-        k = outs[sel]
-        B = len(k)
-        f, t = case.f[k], case.t[k]
-        col = np.arange(B)
-        # rows and columns of the reduced system touched by each outage (−1: the equation or unknown does not exist)
-        idx = np.stack((pa[f], pa[t], pm[f], pm[t]))                                  # 4 × B (rows P_f, P_t, Q_f, Q_t; columns θ_f, θ_t, |V_f|, |V_t|)
-        has = idx >= 0
-        _, _, M = _branch_jac(case, k, V0)                                           # B × 4 × 4
-        M = M * has.T[:, :, None] * has.T[:, None, :]
-        U = np.zeros((N, 4 * B))
-        jj = np.repeat(col, 4) * 4 + np.tile(np.arange(4), B)
-        ii = idx.T.reshape(-1)
-        ok_e = ii >= 0
-        U[ii[ok_e], jj[ok_e]] = 1.0
-        Z = lu.solve(U).reshape(N, B, 4)                                             # J₀⁻¹·U per outage
-        WZ = np.where(has.T[:, :, None], Z[np.where(has, idx, 0).T, col[:, None], :], 0.0)      # B × 4 × 4 = Wᵀ·Z
-        # (J₀ − U·M·Wᵀ)⁻¹·r = y + Z·C·(Wᵀ·y),  C = (I − M·Wᵀ·Z)⁻¹·M,  y = J₀⁻¹·r
-        A = np.eye(4)[None] - M @ WZ
-        good = np.abs(np.linalg.det(A)) > 1e-10
-        C = np.zeros_like(M)
-        C[good] = np.linalg.solve(A[good], M[good])
-        V = np.repeat(V0[:, None], B, axis=1)
-        gi = np.flatnonzero(good)                          # the outages of this block that the correction can take
+    used = [how]
 
-        def Ffun(Va, act):
-            a = gi[act]
-            ka, fa, ta, ca = k[a], f[a], t[a], np.arange(len(a))
-            Vm = np.abs(Va)
-            I = Y @ Va
-            I[fa, ca] -= case.Yff[ka] * Va[fa, ca] + case.Yft[ka] * Va[ta, ca]
-            I[ta, ca] -= case.Ytf[ka] * Va[fa, ca] + case.Ytt[ka] * Va[ta, ca]
-            mis = Va * np.conj(I) - (case.Sg[:, None] - (L[:, 0:1] * Vm ** 2 + L[:, 1:2] * Vm + L[:, 2:3]))
-            return np.vstack((mis.real[J.pvpq], mis.imag[J.pq]))
+    def run(bk):
+        xp = bk.xp
+        used[0] = how or bk.how(N)
+        slv = bk.solver(lu, used[0])
+        Vout = np.full((K, n), np.nan, complex)
+        conv, its, nchord, bad = np.zeros(K, bool), np.zeros(K, int), 0, []
+        Y, L, Sg0, V0d = bk.csr(case.Y), bk.asarray(case.load), bk.asarray(case.Sg), bk.asarray(V0)
+        pvpq, pq = bk.asarray(J.pvpq), bk.asarray(J.pq)
+        Yff, Yft, Ytf, Ytt = (bk.asarray(a) for a in (case.Yff, case.Yft, case.Ytf, case.Ytt))
+        ch = chunk or (min(bk.chunk(4 * N, len(todo)), 4096) if bk.gpu else int(np.clip(8e4 // max(1, N), 16, 512)))
+        for c0 in range(0, len(todo), ch):
+            sel = todo[c0:c0 + ch]
+            k = outs[sel]
+            B = len(k)
+            f, t = case.f[k], case.t[k]
+            col = np.arange(B)
+            # rows and columns of the reduced system touched by each outage (−1: the equation or unknown does not exist)
+            idx = np.stack((pa[f], pa[t], pm[f], pm[t]))                              # 4 × B (rows P_f, P_t, Q_f, Q_t; columns θ_f, θ_t, |V_f|, |V_t|)
+            has = idx >= 0
+            _, _, M = _branch_jac(case, k, V0)                                       # B × 4 × 4
+            M = M * has.T[:, :, None] * has.T[:, None, :]
+            U = np.zeros((N, 4 * B))
+            jj = np.repeat(col, 4) * 4 + np.tile(np.arange(4), B)
+            ii = idx.T.reshape(-1)
+            ok_e = ii >= 0
+            U[ii[ok_e], jj[ok_e]] = 1.0
+            Z = lu.solve(U).reshape(N, B, 4)                                         # J₀⁻¹·U per outage
+            WZ = np.where(has.T[:, :, None], Z[np.where(has, idx, 0).T, col[:, None], :], 0.0)      # B × 4 × 4 = Wᵀ·Z
+            # (J₀ − U·M·Wᵀ)⁻¹·r = y + Z·C·(Wᵀ·y),  C = (I − M·Wᵀ·Z)⁻¹·M,  y = J₀⁻¹·r
+            A = np.eye(4)[None] - M @ WZ
+            good = np.abs(np.linalg.det(A)) > 1e-10
+            C = np.zeros_like(M)
+            C[good] = np.linalg.solve(A[good], M[good])
+            gi = np.flatnonzero(good)                      # the outages of this block that the correction can take
+            # what the iteration reads, on the backend
+            gid, kd, fd, td = (bk.asarray(a) for a in (gi, k, f, t))
+            idxd, hasd, Cd, Zd = (bk.asarray(a) for a in (idx, has, C, Z))
 
-        def solve_c(R, act):
-            a = gi[act]
-            yv = lu.solve(R)                                                          # N × b
-            ia, ha = idx[:, a], has[:, a]
-            wy = np.where(ha, yv[np.where(ha, ia, 0), np.arange(len(a))], 0.0)        # 4 × b
-            cw = np.einsum('bij,jb->bi', C[a], wy)                                    # b × 4
-            return yv + np.einsum('nbi,bi->nb', Z[:, a, :], cw)
-        Vg = V[:, gi]
-        dg_, _, ig = _iterate(Ffun, solve_c, Vg, J.pvpq, J.pq, tol, max_it)
-        V[:, gi] = Vg
-        done = np.zeros(B, bool)
-        done[gi] = dg_
-        its[sel[gi]] += ig
-        bad = ~done
-        Vout[sel[done]] = V[:, done].T
-        conv[sel[done]] = True
-        nchord += int(done.sum())
-        if fallback:
-            for b in np.flatnonzero(bad):
-                c2 = without(case, int(k[b]))
-                Vb, it, ok, _ = newton(c2, V0.copy(), tol=tol, typ=typ, damp=True, max_iter=30)
-                Vout[sel[b]], conv[sel[b]] = Vb, ok
-                its[sel[b]] += it
-                nnew += 1
+            def Ffun(Va, act):
+                a = gid[act]
+                ka, fa, ta, ca = kd[a], fd[a], td[a], xp.arange(len(a))
+                Vm = xp.abs(Va)
+                I = Y @ Va
+                I[fa, ca] -= Yff[ka] * Va[fa, ca] + Yft[ka] * Va[ta, ca]
+                I[ta, ca] -= Ytf[ka] * Va[fa, ca] + Ytt[ka] * Va[ta, ca]
+                mis = Va * xp.conj(I) - (Sg0[:, None] - (L[:, 0:1] * Vm ** 2 + L[:, 1:2] * Vm + L[:, 2:3]))
+                return xp.vstack((mis.real[pvpq], mis.imag[pq]))
+
+            def solve_c(R, act):
+                a = gid[act]
+                yv = slv(R)                                                           # N × b
+                ia, ha = idxd[:, a], hasd[:, a]
+                wy = xp.where(ha, yv[xp.where(ha, ia, 0), xp.arange(len(a))], 0.0)    # 4 × b
+                cw = xp.einsum('bij,jb->bi', Cd[a], wy)                               # b × 4
+                return yv + xp.einsum('nbi,bi->nb', Zd[:, a, :], cw)
+            Vg = xp.repeat(V0d[:, None], len(gi), axis=1)
+            dg_, _, ig = _iterate(Ffun, solve_c, Vg, pvpq, pq, tol, max_it, xp=xp)
+            dg_, ig, Vg = bk.numpy(dg_), bk.numpy(ig), bk.numpy(Vg)
+            done = np.zeros(B, bool)
+            done[gi] = dg_
+            its[sel[gi]] += ig
+            Vout[sel[gi[dg_]]] = Vg[:, dg_].T
+            conv[sel[done]] = True
+            nchord += int(done.sum())
+            bad.extend((int(sel[b]), int(k[b])) for b in np.flatnonzero(~done))
+        return Vout, conv, its, nchord, bad
+    (Vout, conv, its, nchord, bad), bk = _on(backend, N, 4 * len(todo), run)
+    nnew = 0
+    if fallback:
+        for sb, kb in bad:
+            Vb, it, ok, _ = newton(without(case, kb), V0.copy(), tol=tol, typ=typ, damp=True, max_iter=30)
+            Vout[sb], conv[sb] = Vb, ok
+            its[sb] += it
+            nnew += 1
     return {'outages': outs, 'V': Vout, 'converged': conv, 'island': isl, 'iterations': its, 'chord': nchord, 'newton': nnew,
-            'time': time.perf_counter() - t0}
+            'time': time.perf_counter() - t0, 'backend': bk.name, 'how': used[0], 'why': bk.why}
 
 
 def without(case, k):

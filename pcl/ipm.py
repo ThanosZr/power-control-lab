@@ -32,7 +32,7 @@ class IpmError(ValueError):
 
 
 def ipm(f, x0, gh=None, hess=None, A=None, l=None, u=None, xmin=None, xmax=None, tol=1e-6, max_iter=150, cost_mult=1.0,
-        xi=0.99995, sigma=0.1, z0=1.0, record=False, step_control='auto'):
+        xi=0.99995, sigma=0.1, z0=1.0, record=False, step_control='auto', warm=None):
     """f(x) → (value, gradient); gh(x) → (g, G, h, H): the nonlinear equalities and inequalities with their Jacobians (rows =
     constraints; None when there are none); hess(x, lam, mu, cost_mult) → the Hessian of cost_mult·f + lamᵀ·g + muᵀ·h (for a
     problem without gh: of cost_mult·f, or None for a linear cost). A, l, u: linear constraints (a row with l = u is an
@@ -42,14 +42,20 @@ def ipm(f, x0, gh=None, hess=None, A=None, l=None, u=None, xmin=None, xmax=None,
     step that would leave the feasible region far behind; 'auto' = first without and, if that fails, again with it (the
     result then says so in 'message'). There is no further globalization: on a strongly non-convex problem from a poor
     start the iteration can still fail, and the result says so (converged False, with the reason).
+    warm (4.19.2): a start near a solution, {'gamma': γ₀, 'lam': {'g', 'A_eq', 'x_eq'} (optional, as the result gives them)}.
+    The cold start pushes every slack to at least z0 = 1 and sets z·μ = 1: from a point that is already almost optimal this
+    throws the information of the point away. With warm, the slacks are those of the constraints at x0 (with the floor √γ₀)
+    and the multipliers of the inequalities lie on the central path of the small barrier parameter γ₀ (z·μ = γ₀); those of
+    the equalities are taken as given. The caller decides whether the point deserves it, and falls back to the cold start
+    when the iteration from it fails (pcl.opf does both).
 
     Returns {'x', 'f', 'converged', 'iterations', 'message', 'lam': {'g', 'A_eq', 'x_eq'}, 'mu': {'h', 'A_u', 'A_l', 'x_u',
     'x_l'} (multipliers of the original problem, ≥ 0 for the inequalities), 'cond': the four measures at the end, 'time',
     'history' (with record)}."""
     if step_control == 'auto':
-        r = ipm(f, x0, gh, hess, A, l, u, xmin, xmax, tol, max_iter, cost_mult, xi, sigma, z0, record, False)
+        r = ipm(f, x0, gh, hess, A, l, u, xmin, xmax, tol, max_iter, cost_mult, xi, sigma, z0, record, False, warm)
         if not r['converged']:
-            r2 = ipm(f, x0, gh, hess, A, l, u, xmin, xmax, tol, max_iter, cost_mult, xi, sigma, z0, record, True)
+            r2 = ipm(f, x0, gh, hess, A, l, u, xmin, xmax, tol, max_iter, cost_mult, xi, sigma, z0, record, True, warm)
             if r2['converged']:
                 r2['message'] += ' (with step control, after full steps failed)'
                 r2['time'] += r['time']
@@ -105,6 +111,20 @@ def ipm(f, x0, gh=None, hess=None, A=None, l=None, u=None, xmin=None, xmax=None,
     z[k] = -h[k]
     k = gamma / z > z0
     mu[k] = gamma / z[k]
+    if warm:
+        gamma = float(warm.get('gamma', 1e-4))
+        if not (0 < gamma <= 1):
+            raise IpmError('warm: 0 < gamma ≤ 1')
+        z = np.maximum(-h, np.sqrt(gamma))
+        mu = gamma / z
+        wl = warm.get('lam')
+        if wl is not None:
+            parts = [np.asarray(wl['g'], float) if wl.get('g') is not None else np.zeros(ngn),
+                     np.asarray(wl['A_eq'], float)[ae] if wl.get('A_eq') is not None else np.zeros(len(ae)),
+                     np.asarray(wl['x_eq'], float)[xe] if wl.get('x_eq') is not None else np.zeros(len(xe))]
+            if len(parts[0]) != ngn:
+                raise IpmError(f'warm: {ngn} multipliers of the nonlinear equalities')
+            lam = cost_mult * np.concatenate(parts)
 
     def conds(fv, f_old, df, g, h, G, H, x, z, lam, mu):
         Lx = df + G.T @ lam + H.T @ mu

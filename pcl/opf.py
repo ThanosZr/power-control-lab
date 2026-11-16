@@ -15,6 +15,7 @@ polynomial costs, §7.2 nodal balance); Wang, Murillo-Sánchez, Zimmerman & Thom
 (the formulation and the interior-point method). Costs: polynomial up to the second order (the cost of the test cases);
 piecewise linear costs are not in this version.
 """
+import copy
 import time
 
 import numpy as np
@@ -26,6 +27,9 @@ from .ipm import ipm
 
 class OpfError(ValueError):
     pass
+
+
+GAMMA0 = 1e-5            # barrier parameter of a warm start (measured: THEORY §8Θ)
 
 
 def _diag(v):
@@ -148,10 +152,18 @@ def advise(case, kind='ac', net=None):
 
 
 # -------------------------------------------------------------------- the solution
-def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150, ratings=None, v_default=(0.9, 1.1), record=False):
+def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150, ratings=None, v_default=(0.9, 1.1), record=False, dS=None):
     """kind: 'ac' or 'dc'. flow_limits: use the ratings of the branches (ratings: {branch: VA} adds or replaces some).
     start: 'auto' (= 'mid', the middle of the limits), or 'pf' (the voltages and the dispatch of the network as given).
     v_default: the limits of |V| for buses that have none (AC).
+    4.19.2 — dS (one complex value per bus, VA): a change of the net constant-power injection (a load that grows by ΔS is
+    dS = −ΔS), so that many load scenarios of one network are solved without building it again.
+    start may also be a proposed point of the AC problem (a neural start, pcl.nnstart, or a solution of a nearby case):
+    {'x': (θ, |V|, P_g, Q_g) in rad and pu, 'lam': the 2·n_b multipliers of the power balance (optional), 'gamma': the barrier
+    parameter to start from (default GAMMA0)}. The solver verifies: the proposal is used only if its power mismatch is smaller
+    than that of the normal start, and if the iteration from it does not converge the problem is solved again from the
+    normal start. The result is the same optimum within tol; a bad proposal costs time only. 'start' in the result says
+    what was used ('warm' or 'mid'), 'start_path' how it went, and 'iterations' counts every iteration that was made.
 
     Returns {'converged', 'iterations', 'message', 'cost' (per hour), 'kind', 'buses': {bus: V, angle, P, Q (sources), Pload,
     Qload, 'lmp' and 'lmp_Q' (cost per MWh and per Mvar·h), 'mu_Vmin', 'mu_Vmax'}, 'sources': [{name, bus, P, Q (W, var), 'mu_Pmin',
@@ -161,6 +173,13 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
         raise OpfError("kind: 'ac' or 'dc'")
     t0 = time.perf_counter()
     case = net.case()
+    if dS is not None:
+        dS = np.asarray(dS, complex)
+        if dS.shape != (case.n,):
+            raise OpfError(f'dS: one value per bus ({case.n})')
+        case = copy.copy(case)
+        case.load = case.load.copy()
+        case.load[:, 2] = case.load[:, 2] - dS / net.S_base
     G = sources(net, case)
     nb, ng, nl = case.n, G['n'], case.nl
     base = net.S_base / 1e6                                  # MW per pu
@@ -277,6 +296,9 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
         xmin = np.r_[np.full(nb, -np.inf), Vlo, G['Pmin'], G['Qmin']]
         xmax = np.r_[np.full(nb, np.inf), Vhi, G['Pmax'], G['Qmax']]
         xmin[ref] = xmax[ref] = case.ang0[ref]
+        warm, path = (start if isinstance(start, dict) else None), []
+        if warm is not None:
+            start = 'mid'
         if start in ('auto', 'mid'):
             lo_, hi_ = np.where(np.isfinite(xmin), xmin, -big), np.where(np.isfinite(xmax), xmax, big)
             x0 = (lo_ + hi_) / 2
@@ -291,13 +313,37 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
             x0 = np.r_[case.ang0, np.clip(case.Vset, Vlo, Vhi), np.clip(G['P0'], np.where(np.isfinite(G['Pmin']), G['Pmin'], -big), np.where(np.isfinite(G['Pmax']), G['Pmax'], big)), Qb]
         else:
             raise OpfError("start: 'auto', 'mid' or 'pf'")
-        r = ipm(f, x0, gh, hess, xmin=xmin, xmax=xmax, tol=tol, max_iter=max_iter, cost_mult=1e-4, record=record)
+        r, extra = None, 0
+        if warm is not None:
+            xw = np.asarray(warm.get('x', ()), float)
+            if xw.shape != x0.shape or not np.all(np.isfinite(xw)):
+                path.append('πρόταση με λάθος διαστάσεις ή μη πεπερασμένες τιμές: αγνοήθηκε')
+            else:
+                xw = np.minimum(np.maximum(xw, xmin), xmax)                 # inside the limits (and the reference angle as fixed)
+                bw, b0 = float(np.abs(gh(xw)[0]).max()), float(np.abs(gh(x0)[0]).max())
+                if not bw < b0:
+                    path.append(f'πρόταση με υπόλοιπο ισχύος {bw:.2g} pu, όχι μικρότερο από της κανονικής εκκίνησης ({b0:.2g} pu): αγνοήθηκε')
+                else:
+                    lw = warm.get('lam')
+                    w = {'gamma': float(warm.get('gamma', GAMMA0)), 'lam': None if lw is None else {'g': np.asarray(lw, float)}}
+                    r = ipm(f, xw, gh, hess, xmin=xmin, xmax=xmax, tol=tol, max_iter=max_iter, cost_mult=1e-4, record=record, warm=w,
+                            step_control=False)
+                    if r['converged']:
+                        path.append(f'από την πρόταση (υπόλοιπο ισχύος {bw:.2g} pu απέναντι σε {b0:.2g} pu)')
+                    else:
+                        path.append(f"από την πρόταση δεν συνέκλινε ({r['message']}): ξανά από την κανονική εκκίνηση")
+                        extra, r = r['iterations'], None
+        used = 'warm' if r is not None else 'mid'
+        if r is None:
+            r = ipm(f, x0, gh, hess, xmin=xmin, xmax=xmax, tol=tol, max_iter=max_iter, cost_mult=1e-4, record=record)
+            r['iterations'] += extra
         x = r['x']
         V = x[nb:2 * nb] * np.exp(1j * x[:nb])
         Pg, Qg = x[iPg], x[iQg]
         code = {PF.PQ: 'PQ', PF.PV: 'PV', PF.REF: 'slack'}
         res = net._lf_result(case.names, case.idx, V, Y @ V, L, {b: code[int(case.typ[i])] for i, b in enumerate(case.names)}, r['converged'], r['iterations'])
         res.update(message=r['message'], cost=r['f'], kind='ac', sources=[], binding=[])
+        res['_raw'] = {'x': x.copy(), 'lam': r['lam']['g'].copy()}        # the point as the solver holds it (for pcl.nnstart)
         res.pop('_V', None)
         res.pop('_idx', None)
         lamP, lamQ = r['lam']['g'][:nb] / base, r['lam']['g'][nb:] / base
@@ -336,9 +382,13 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
             res['binding'].append({'kind': 'flow', 'name': q['name'], 'mu': q['mu']})
     res.update(advice=adv, notes=notes, time=time.perf_counter() - t0, cond=r['cond'], method='ipm', start=('mid' if start == 'auto' else start),
                flow_limits=int(len(il)))
+    if kind == 'ac':
+        res.update(start=(used if used == 'warm' else res['start']), start_path=path)
+    elif isinstance(start, dict):
+        raise OpfError('start: a proposed point is for the AC problem only')
     if record:
         res['history'] = r['history']
     return res
 
 
-__all__ = ['solve', 'advise', 'sources', 'OpfError', 'dSbus_dV', 'd2Sbus_dV2', 'dSbr_dV', 'd2Sbr_dV2', 'd2ASbr_dV2']
+__all__ = ['solve', 'advise', 'sources', 'OpfError', 'GAMMA0', 'dSbus_dV', 'd2Sbus_dV2', 'dSbr_dV', 'd2Sbr_dV2', 'd2ASbr_dV2']

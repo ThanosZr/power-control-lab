@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.19.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (668 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.19.2: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (721 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -10,13 +10,13 @@
 - **Αρχεία project:** ένα παλιό αρχείο ανοίγει πάντα (ARCHITECTURE §4). Νέα πεδία είναι προαιρετικά. Όταν χρειάζεται μετατροπή, αυξάνεται το `version` του αρχείου και η μετατροπή γίνεται στο άνοιγμα, με test. Το `version` 3 (3.18): τα σύρματα με το ίδιο όνομα είναι ένας κόμβος· ένα παλιότερο αρχείο ανοίγει ίδιο (`Bus.migrateNames`: όπου ένα όνομα ήταν ετικέτα σε δύο κόμβους, το δεύτερο γίνεται «όνομα·2»).
 - **Ο έλεγχος:** το `python tools/api_surface.py` σταματά όταν κάτι λείπει ή έχασε όρισμα. Ως την 4.0 περνούσε με `--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 μέσα στην ίδια κύρια έκδοση δεν περνά ούτε με `--allow-removal`· στην επόμενη κύρια περνά μόνο για ό,τι ήταν παρωχημένο. Ένα παρωχημένο σημείο πρέπει να υπάρχει ακόμη στον κώδικα.
 
-- **Πειραματικά (3.19):** `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `workbench…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
+- **Πειραματικά (3.19):** `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `pcl.backend.…`, `pcl.accel.…`, `pcl.nnstart.…`, `pcl.onnxio.…`, `workbench…`, `python -m pcl accel…`, `python -m pcl nnstart…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο· και της 4.19.2: τα backends των παρτίδων με τον δρόμο GPU*, το script του επιταχυντή, τα μοντέλα εκκίνησης και τα αρχεία ONNX). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
 
 Στους πίνακες, «Από» είναι η έκδοση της πρώτης καταγραφής: η 3.18 για ό,τι υπήρχε ήδη.
 
 ## Παρωχημένα
 
-Κανένα στην 4.19.1.
+Κανένα στην 4.19.2.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-424 σημεία.
+475 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -91,6 +91,30 @@
 | `pcl.SweepResult.to_json` | `path` | 3.18 |
 | `pcl.SweepResult.to_mat` | `path` | 3.18 |
 | `pcl.SweepResult.to_parquet` | `path`, `compression` | 3.18 |
+| `pcl.accel.add_arguments` | `ap` | 4.19.2 · πειρ. |
+| `pcl.accel.best` | `f`, `k` | 4.19.2 · πειρ. |
+| `pcl.accel.command` | `args` | 4.19.2 · πειρ. |
+| `pcl.accel.main` | `argv` | 4.19.2 · πειρ. |
+| `pcl.accel.measure` | `name`, `net`, `B`, `seed`, `gpu`, `say` | 4.19.2 · πειρ. |
+| `pcl.accel.mixed` | `N`, `B` | 4.19.2 · πειρ. |
+| `pcl.accel.residual` | `case`, `V`, `dS` | 4.19.2 · πειρ. |
+| `pcl.accel.run` | `cases`, `scenarios`, `quick`, `save`, `out` | 4.19.2 · πειρ. |
+| `pcl.accel.system` | — | 4.19.2 · πειρ. |
+| `pcl.backend.Backend` | `name`, `xp`, `spm`, `info`, `why` | 4.19.2 · πειρ. |
+| `pcl.backend.Backend.asarray` | `a` | 4.19.2 · πειρ. |
+| `pcl.backend.Backend.chunk` | `N`, `B` | 4.19.2 · πειρ. |
+| `pcl.backend.Backend.csr` | `A` | 4.19.2 · πειρ. |
+| `pcl.backend.Backend.how` | `N` | 4.19.2 · πειρ. |
+| `pcl.backend.Backend.numpy` | `a` | 4.19.2 · πειρ. |
+| `pcl.backend.Backend.solver` | `lu`, `how` | 4.19.2 · πειρ. |
+| `pcl.backend.BackendError` | — | 4.19.2 · πειρ. |
+| `pcl.backend.choose` | `want`, `N`, `B` | 4.19.2 · πειρ. |
+| `pcl.backend.cpu` | `why` | 4.19.2 · πειρ. |
+| `pcl.backend.gpu` | — | 4.19.2 · πειρ. |
+| `pcl.backend.home` | — | 4.19.2 · πειρ. |
+| `pcl.backend.measurement` | — | 4.19.2 · πειρ. |
+| `pcl.backend.probe` | `fresh` | 4.19.2 · πειρ. |
+| `pcl.backend.rule` | `rows` | 4.19.2 · πειρ. |
 | `pcl.bifurcation` | `param`, `values`, `**kw` | 3.18 |
 | `pcl.control.InverseTrainer` | `project`, `loops`, `actuator`, `loop`, `clock`, `t_excite`, `hold`, `dither`, `seed`, `hidden_emu`, `hidden_ctrl`, `lr_emu`, `lr_ctrl`, `epochs_emu`, `epochs_ctrl`, `alpha`, `max_step`, `lr_emu_online`, `lr_ctrl_online`, `run` | 3.18 · πειρ. |
 | `pcl.control.InverseTrainer.controller` | `epochs` | 3.18 · πειρ. |
@@ -154,7 +178,7 @@
 | `pcl.impulse.voltage_times` | `m` | 3.18 |
 | `pcl.impulse.waveform_characteristics` | `t`, `i` | 4.1.1 |
 | `pcl.ipm.IpmError` | — | 4.19.1 · πειρ. |
-| `pcl.ipm.ipm` | `f`, `x0`, `gh`, `hess`, `A`, `l`, `u`, `xmin`, `xmax`, `tol`, `max_iter`, `cost_mult`, `xi`, `sigma`, `z0`, `record`, `step_control` | 4.19.1 · πειρ. |
+| `pcl.ipm.ipm` | `f`, `x0`, `gh`, `hess`, `A`, `l`, `u`, `xmin`, `xmax`, `tol`, `max_iter`, `cost_mult`, `xi`, `sigma`, `z0`, `record`, `step_control`, `warm` | 4.19.1 · πειρ. |
 | `pcl.job` | `spec`, `allow_paths` | 3.18 |
 | `pcl.lineconst.LineError` | — | 4.4 |
 | `pcl.lineconst.api` | `req` | 4.4 |
@@ -270,11 +294,11 @@
 | `pcl.load` | `path` | 3.18 |
 | `pcl.network.Network` | `f`, `S_base`, `name` | 4.2 |
 | `pcl.network.Network.advice` | `study`, `scenarios` | 4.19.1 |
-| `pcl.network.Network.batch_flow` | `load_scale`, `gen_scale`, `dS`, `tol` | 4.19.1 |
+| `pcl.network.Network.batch_flow` | `load_scale`, `gen_scale`, `dS`, `tol`, `backend`, `how`, `start` | 4.19.1 |
 | `pcl.network.Network.branch_pu` | `a`, `b`, `r`, `x`, `bc`, `ratio`, `angle`, `name`, `rating` | 4.2 |
 | `pcl.network.Network.bus` | `name`, `Un`, `kind`, `V`, `angle`, `Vmin`, `Vmax` | 4.2 |
 | `pcl.network.Network.case` | — | 4.19.1 |
-| `pcl.network.Network.contingency` | `kind`, `branches`, `ratings`, `tol`, `q_limits` | 4.19.1 |
+| `pcl.network.Network.contingency` | `kind`, `branches`, `ratings`, `tol`, `q_limits`, `backend`, `how` | 4.19.1 |
 | `pcl.network.Network.dc_flow` | — | 4.19.1 |
 | `pcl.network.Network.element` | `name` | 4.2 |
 | `pcl.network.Network.feeder` | `bus`, `Ik`, `Sk`, `RX`, `X0X`, `R0X0`, `c`, `Ik_min`, `Un`, `name`, `V`, `angle`, `slack` | 4.2 |
@@ -317,6 +341,33 @@
 | `pcl.network.superposition` | `net`, `bus`, `lf`, `loads` | 4.2 |
 | `pcl.network.to_dict` | `net` | 4.2 |
 | `pcl.network.trv` | `t`, `v`, `t0`, `uf` | 4.2 |
+| `pcl.nnstart.Model` | `graph`, `meta` | 4.19.2 · πειρ. |
+| `pcl.nnstart.Model.applies` | `net`, `case`, `study` | 4.19.2 · πειρ. |
+| `pcl.nnstart.Model.load` | `path`, `net`, `study` | 4.19.2 · πειρ. |
+| `pcl.nnstart.Model.predict` | `X` | 4.19.2 · πειρ. |
+| `pcl.nnstart.Model.save` | `path` | 4.19.2 · πειρ. |
+| `pcl.nnstart.StartError` | — | 4.19.2 · πειρ. |
+| `pcl.nnstart.add_arguments` | `ap` | 4.19.2 · πειρ. |
+| `pcl.nnstart.command` | `args` | 4.19.2 · πειρ. |
+| `pcl.nnstart.dataset` | `net`, `study`, `samples`, `spread`, `seed`, `progress` | 4.19.2 · πειρ. |
+| `pcl.nnstart.features` | `ib`, `d` | 4.19.2 · πειρ. |
+| `pcl.nnstart.find` | `net`, `study`, `case` | 4.19.2 · πειρ. |
+| `pcl.nnstart.fingerprint` | `net`, `case`, `study` | 4.19.2 · πειρ. |
+| `pcl.nnstart.fit` | `X`, `Y`, `hidden`, `epochs`, `batch`, `lr`, `seed`, `val` | 4.19.2 · πειρ. |
+| `pcl.nnstart.folders` | — | 4.19.2 · πειρ. |
+| `pcl.nnstart.layout` | `net`, `case`, `study` | 4.19.2 · πειρ. |
+| `pcl.nnstart.network` | `source` | 4.19.2 · πειρ. |
+| `pcl.nnstart.propose_opf` | `model`, `net`, `dS`, `case` | 4.19.2 · πειρ. |
+| `pcl.nnstart.propose_pf` | `model`, `net`, `case`, `d` | 4.19.2 · πειρ. |
+| `pcl.nnstart.summary` | `model` | 4.19.2 · πειρ. |
+| `pcl.nnstart.train` | `net`, `study`, `samples`, `spread`, `hidden`, `epochs`, `seed`, `check`, `progress`, `name` | 4.19.2 · πειρ. |
+| `pcl.onnxio.OnnxError` | — | 4.19.2 · πειρ. |
+| `pcl.onnxio.dumps` | `model` | 4.19.2 · πειρ. |
+| `pcl.onnxio.loads` | `data` | 4.19.2 · πειρ. |
+| `pcl.onnxio.mlp` | `W`, `b`, `x_mean`, `x_scale`, `y_mean`, `y_scale`, `meta`, `act`, `dtype` | 4.19.2 · πειρ. |
+| `pcl.onnxio.read` | `path` | 4.19.2 · πειρ. |
+| `pcl.onnxio.run` | `model`, `feeds` | 4.19.2 · πειρ. |
+| `pcl.onnxio.write` | `path`, `model` | 4.19.2 · πειρ. |
 | `pcl.opf.OpfError` | — | 4.19.1 · πειρ. |
 | `pcl.opf.advise` | `case`, `kind`, `net` | 4.19.1 · πειρ. |
 | `pcl.opf.d2ASbr_dV2` | `dSa`, `dSm`, `S`, `Cbr`, `Ybr`, `V`, `mu` | 4.19.1 · πειρ. |
@@ -324,7 +375,7 @@
 | `pcl.opf.d2Sbus_dV2` | `Y`, `V`, `lam` | 4.19.1 · πειρ. |
 | `pcl.opf.dSbr_dV` | `Ybr`, `Cbr`, `V` | 4.19.1 · πειρ. |
 | `pcl.opf.dSbus_dV` | `Y`, `V` | 4.19.1 · πειρ. |
-| `pcl.opf.solve` | `net`, `kind`, `flow_limits`, `start`, `tol`, `max_iter`, `ratings`, `v_default`, `record` | 4.19.1 · πειρ. |
+| `pcl.opf.solve` | `net`, `kind`, `flow_limits`, `start`, `tol`, `max_iter`, `ratings`, `v_default`, `record`, `dS` | 4.19.1 · πειρ. |
 | `pcl.opf.sources` | `net`, `case` | 4.19.1 · πειρ. |
 | `pcl.opf.vlimits` | `net`, `case`, `default` | 4.19.1 · πειρ. |
 | `pcl.params` | — | 3.18 |
@@ -358,10 +409,10 @@
 | `pcl.powerflow.Jacobian.rhs` | `mis` | 4.19.1 · πειρ. |
 | `pcl.powerflow.PowerFlowError` | — | 4.19.1 · πειρ. |
 | `pcl.powerflow.advise` | `case`, `study`, `scenarios` | 4.19.1 · πειρ. |
-| `pcl.powerflow.batch` | `case`, `dS`, `V0`, `tol`, `max_it`, `typ`, `lu`, `fallback`, `chunk` | 4.19.1 · πειρ. |
+| `pcl.powerflow.batch` | `case`, `dS`, `V0`, `tol`, `max_it`, `typ`, `lu`, `fallback`, `chunk`, `backend`, `how`, `Vstart` | 4.19.1 · πειρ. |
 | `pcl.powerflow.branch_flows` | `case`, `V`, `Y` | 4.19.1 · πειρ. |
 | `pcl.powerflow.bridges` | `case` | 4.19.1 · πειρ. |
-| `pcl.powerflow.contingency_ac` | `case`, `V0`, `outages`, `tol`, `max_it`, `typ`, `chunk`, `fallback` | 4.19.1 · πειρ. |
+| `pcl.powerflow.contingency_ac` | `case`, `V0`, `outages`, `tol`, `max_it`, `typ`, `chunk`, `fallback`, `backend`, `how` | 4.19.1 · πειρ. |
 | `pcl.powerflow.dc_flow` | `case`, `P` | 4.19.1 · πειρ. |
 | `pcl.powerflow.dc_model` | `case` | 4.19.1 · πειρ. |
 | `pcl.powerflow.fast_decoupled` | `case`, `V`, `scheme`, `tol`, `max_iter`, `typ`, `Sg` | 4.19.1 · πειρ. |
@@ -470,10 +521,11 @@
 
 ## Γραμμή εντολών `python -m pcl`
 
-15 σημεία.
+17 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
+| `python -m pcl accel` | `--quick`, `--save`, `--case`, `--scenarios`, `--json` | 4.19.2 · πειρ. |
 | `python -m pcl bifurcation` | `<project>`, `<param>`, `--values`, `--channel`, `--stat`, `--transient`, `--record`, `--set`, `--workers`, `--out` | 3.18 |
 | `python -m pcl channels` | `<project>` | 3.18 |
 | `python -m pcl design` | `--machine`, `--controller`, `--goal`, `--cycles`, `--out` | 4.7 |
@@ -482,6 +534,7 @@
 | `python -m pcl link` | `<request>`, `--out` | 3.18 |
 | `python -m pcl machines` | — | 4.7 |
 | `python -m pcl net` | `<network>`, `--lf`, `--sc`, `--bus`, `--mode`, `--tmin`, `--out`, `--emt` | 4.2 |
+| `python -m pcl nnstart` | `<case>`, `--study`, `--samples`, `--spread`, `--epochs`, `--seed`, `--out` | 4.19.2 · πειρ. |
 | `python -m pcl plant` | — | 4.8.1 |
 | `python -m pcl plot` | `<spec>`, `--preset`, `--mapping`, `--kind`, `--signal`, `--table`, `--out` | 3.18 |
 | `python -m pcl run` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--hmin`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--chunk`, `--state`, `--resume`, `--events` | 3.18 |

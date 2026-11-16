@@ -16,7 +16,8 @@ from . import network as N
 from .report import Report, network_report
 
 STUDIES = ('advice', 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf')
-OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n1': ('tol', 'q_limits'), 'n1dc': (), 'opf': ('flow_limits', 'start', 'tol', 'max_iter'),
+STARTS = ('auto', 'mid', 'pf', 'nn')
+OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n1': ('tol', 'q_limits', 'backend', 'how'), 'n1dc': (), 'opf': ('flow_limits', 'start', 'tol', 'max_iter'),
            'dcopf': ('flow_limits', 'tol', 'max_iter'), 'advice': ()}
 MAX_BUSES = 20000
 
@@ -66,6 +67,8 @@ def _study(net, study, opt):
     if study not in STUDIES:
         raise StudyError('study: ένα από ' + ', '.join(STUDIES))
     opt = {k: v for k, v in (opt or {}).items() if k in OPTIONS[study] and v is not None and v != ''}
+    if 'start' in opt and opt['start'] not in STARTS:      # 4.19.2: 'nn' = the start model of this network, if there is one
+        raise StudyError('start: ένα από ' + ', '.join(STARTS))
     try:
         if study == 'advice':
             return {k: net.advice(k) for k in ('pf', 'n1', 'batch', 'opf', 'dcopf')}
@@ -92,11 +95,13 @@ def summary(study, res):
         w = next((o for o in ok if o['name'] == res['worst']), None)
         return {'outages': len(res['outages']), 'solved': len(ok), 'islands': len(res['islands']), 'failed': len(res['failed']), 'worst': res['worst'],
                 'worst_branch': w and w['branch'], 'worst_MVA': w and w['Smax'] / 1e6, 'worst_loading': w and w['loading'], 'overloads': sum(bool(o['overloads']) for o in ok),
-                'chord': res.get('chord'), 'newton': res.get('newton'), 'why': res['advice']['why'], 'time_ms': res['time'] * 1e3}
+                'chord': res.get('chord'), 'newton': res.get('newton'), 'why': res['advice']['why'], 'time_ms': res['time'] * 1e3,
+                'backend': res.get('backend'), 'how': res.get('how'), 'backend_why': res.get('backend_why')}
     if study in ('opf', 'dcopf'):
         lmp = [d['lmp'] for d in res['buses'].values()]
         return {'converged': res['converged'], 'iterations': res['iterations'], 'cost': res['cost'], 'losses_MW': res['losses'] / 1e6, 'binding': len(res['binding']),
                 'flow_limits': res.get('flow_limits'), 'lmp_min': min(lmp), 'lmp_max': max(lmp), 'why': res['advice']['why'], 'message': res.get('message'),
+                'start': res.get('start'), 'start_path': res.get('start_path') or [],
                 'sources': [{'name': s['name'], 'bus': s['bus'], 'P_MW': s['P'] / 1e6, 'Q_Mvar': s['Q'] / 1e6} for s in res['sources'][:12]], 'time_ms': res['time'] * 1e3}
     return {}
 

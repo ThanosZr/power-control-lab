@@ -67,6 +67,23 @@ class ApiSurface(unittest.TestCase):
         self.assertIn('unit', self.now['project']['part:CONST']['params'])
         self.assertIn('frame', self.now['project']['part:MUX']['params'])
 
+    def test_the_surface_of_4_19_2(self):
+        # the choices of a study are stable additions to the methods of the network (backend, start, a change of the loads); the
+        # backends with their GPU path, the script of the accelerator, the start models and the ONNX files are experimental
+        self.assertEqual(self.now['pcl']['pcl.network.Network.batch_flow']['params'][-3:], ['backend', 'how', 'start'])
+        self.assertEqual(self.now['pcl']['pcl.network.Network.contingency']['params'][-2:], ['backend', 'how'])
+        for k in ('pcl.network.Network.batch_flow', 'pcl.network.Network.contingency', 'pcl.network.Network.opf'):
+            self.assertFalse(api_surface.experimental('pcl', k), k)
+        for k in ('pcl.backend.choose', 'pcl.backend.Backend.solver', 'pcl.accel.run', 'pcl.nnstart.train', 'pcl.nnstart.Model.load', 'pcl.onnxio.write',
+                  'pcl.onnxio.read', 'pcl.onnxio.run'):
+            self.assertIn(k, self.now['pcl'])
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+        self.assertIn('warm', self.now['pcl']['pcl.ipm.ipm']['params'])
+        self.assertIn('dS', self.now['pcl']['pcl.opf.solve']['params'])
+        for k in ('python -m pcl accel', 'python -m pcl nnstart'):
+            self.assertIn(k, self.now['cli'])
+            self.assertTrue(api_surface.experimental('cli', k), k)
+
     def test_the_surface_of_4_19_1(self):
         # the studies are stable from the start: the methods of the network, the report object, the studies as data, the two actions
         # of the server, the smallest step in the file; the kernels of the steady-state solvers are listed as experimental

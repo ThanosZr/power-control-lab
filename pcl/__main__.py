@@ -188,12 +188,22 @@ def main(argv=None):
     a.add_argument('--cycles', type=int, default=3)
     a.add_argument('--out', help='αρχείο JSON του καλύτερου κυκλώματος')
     sub.add_parser('machines', help='4.7: οι μηχανές της εφαρμογής (είδος, έξοδοι, παράμετροι)')
+    a = sub.add_parser('nnstart', help='4.19.2: εκπαίδευση νευρωνικού αρχικού σημείου για μια μελέτη ενός δικτύου από δικές μας λύσεις (αρχείο ONNX)')
+    __import__('pcl.nnstart', fromlist=['x']).add_arguments(a)
+    a = sub.add_parser('accel', help='4.19.2: τι επιταχυντή έχει το μηχάνημα (GPU* με CuPy: πειραματικό), μέτρηση CPU απέναντι σε GPU στις παρτίδες ροής φορτίου')
+    __import__('pcl.accel', fromlist=['x']).add_arguments(a)
     a = sub.add_parser('link', help='μία κλήση στην ανοιχτή εφαρμογή (3.15): αρχείο JSON {method, args, client} → JSON (για το Octave)')
     a.add_argument('request')
     a.add_argument('--out', required=True)
     args = ap.parse_args(argv)
     if args.cmd == 'net':
         return _net(args)
+    if args.cmd == 'nnstart':
+        from . import nnstart
+        return nnstart.command(args)
+    if args.cmd == 'accel':
+        from . import accel
+        return accel.command(args)
     if args.cmd == 'gui':
         try:
             from . import gui

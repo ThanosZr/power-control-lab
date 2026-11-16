@@ -643,7 +643,7 @@ class Tutorials(unittest.TestCase):
         for a, b in zip(P, (0.898, 1.3432, 0.9419)):
             self.assertAlmostEqual(a, b, places=4)
         self.emt(T['opfEmt'], res, P, [s['Q'] / 100e6 for s in res['sources']])
-        self.assertEqual(T['opfEmt']['meta']['study'], {'net': 'ieee9', 'study': 'opf', 'options': {'flow_limits': True}})
+        self.assertEqual(T['opfEmt']['meta']['study'], {'net': 'ieee9', 'study': 'opf', 'options': {'flow_limits': True, 'start': 'auto'}})
         self.assertTrue(T['opfEmt']['meta']['noAF'])                                              # the card does not compare this point with the book
         # the loads are impedances at the voltage of the optimum, so the generators also cover the same losses
         self.assertAlmostEqual(sum(T['opfEmt']['out'][f'Y:G{i}:pe']['mean'] for i in (1, 2, 3)) * 100, 315.0 + res['losses'] / MW, delta=0.02)

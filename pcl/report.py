@@ -455,6 +455,11 @@ def network_report(net, study='pf', result=None, title=None, **kw):
             r.note('Δεν συγκλίνουν (πιθανή κατάρρευση τάσης): ' + ', '.join(res['failed'][:20]) + (' …' if len(res['failed']) > 20 else ''), 'critical')
         if res['islands']:
             r.note('Η απώλειά τους χωρίζει το δίκτυο (δεν λύνονται): ' + ', '.join(res['islands'][:30]) + (' …' if len(res['islands']) > 30 else ''), 'warning')
+        if res.get('backend') == 'gpu':                    # 4.19.2: the batch ran on the experimental path
+            from .backend import EXPERIMENTAL
+            r.note(f"Η παρτίδα έτρεξε σε GPU* ({res.get('backend_why') or ''}). {EXPERIMENTAL}.", 'info')
+        elif str(res.get('backend_why') or '').startswith('CPU, γιατί'):      # the GPU* was asked for, or chosen, and was not there
+            r.note('Η παρτίδα έτρεξε στη ' + res['backend_why'] + '.', 'info')
         rated = any(o.get('loading') is not None for o in ok)
         top = sorted(ok, key=lambda o: -(o['loading'] if rated and o['loading'] is not None else o['Smax'] if not rated else 0.0))[:20]
         r.heading('Οι βαρύτερες διαταραχές')
@@ -480,6 +485,9 @@ def network_report(net, study='pf', result=None, title=None, **kw):
                  ('Περιορισμοί που δεσμεύουν', len(res['binding'])), ('Όρια ροής στο πρόβλημα', res.get('flow_limits', 0)), ('Χρόνος (ms)', round(res['time'] * 1e3, 1))])
         if not res['converged']:
             r.note(f'Το πρόβλημα δεν λύθηκε ({res["message"]}): οι τιμές παρακάτω δεν είναι βέλτιστες.', 'critical')
+        if res.get('start') == 'warm' or res.get('start_path'):          # 4.19.2: a proposed starting point, verified by the solver
+            r.note('Εκκίνηση του λύτη: ' + ('από προτεινόμενο σημείο' if res.get('start') == 'warm' else 'κανονική')
+                   + (' (' + ' · '.join(res.get('start_path') or []) + ')' if res.get('start_path') else '') + '. Το βέλτιστο είναι το ίδιο μέσα στην ανοχή.', 'info')
         for n in res.get('notes', []):
             r.note(n, 'info')
         src = res['sources']
