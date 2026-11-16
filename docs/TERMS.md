@@ -247,6 +247,16 @@
 | operator (ONNX) | τελεστής (4.19.2) |
 | provider (ONNX Runtime) | πάροχος (4.19.2) |
 | footnote | υποσημείωση (4.19.2) |
+| inverse iteration | αντίστροφη επανάληψη (4.19.3) |
+| iterative refinement | επαναληπτική βελτίωση (4.19.3) |
+| Hessenberg form | μορφή Hessenberg (4.19.3) |
+| balancing (of a matrix) | εξισορρόπηση (4.19.3) |
+| mesh (network of buses) | πλέγμα (4.19.3· όχι «mesh») |
+| infeed | τροφοδότηση (4.19.3) |
+| sub-transmission | υπομεταφορά (4.19.3) |
+| phase shifter | μετατοπιστής φάσης (4.19.3) |
+| profile (of a program) | προφίλ (4.19.3) |
+| channel (recorded quantity) | κανάλι (4.19.3) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
