@@ -132,7 +132,14 @@
    "V": 1.04,
    "Qmin": -300000000.0,
    "Qmax": 300000000.0,
-   "slack": true
+   "slack": true,
+   "Pmin": 10000000.0,
+   "Pmax": 250000000.0,
+   "cost": [
+    0.11,
+    5.0,
+    150.0
+   ]
   },
   {
    "kind": "generator",
@@ -151,7 +158,14 @@
    "V": 1.025,
    "Qmin": -300000000.0,
    "Qmax": 300000000.0,
-   "slack": false
+   "slack": false,
+   "Pmin": 10000000.0,
+   "Pmax": 300000000.0,
+   "cost": [
+    0.085,
+    1.2,
+    600.0
+   ]
   },
   {
    "kind": "generator",
@@ -170,7 +184,14 @@
    "V": 1.025,
    "Qmin": -300000000.0,
    "Qmax": 300000000.0,
-   "slack": false
+   "slack": false,
+   "Pmin": 10000000.0,
+   "Pmax": 270000000.0,
+   "cost": [
+    0.1225,
+    1.0,
+    335.0
+   ]
   },
   {
    "kind": "branch",
@@ -181,7 +202,8 @@
    "x": 0.0576,
    "bc": 0.0,
    "ratio": 0.0,
-   "angle": 0.0
+   "angle": 0.0,
+   "rating": 250000000.0
   },
   {
    "kind": "branch",
@@ -192,7 +214,8 @@
    "x": 0.092,
    "bc": 0.158,
    "ratio": 0.0,
-   "angle": 0.0
+   "angle": 0.0,
+   "rating": 250000000.0
   },
   {
    "kind": "branch",
@@ -203,7 +226,8 @@
    "x": 0.17,
    "bc": 0.358,
    "ratio": 0.0,
-   "angle": 0.0
+   "angle": 0.0,
+   "rating": 150000000.0
   },
   {
    "kind": "branch",
@@ -214,7 +238,8 @@
    "x": 0.0586,
    "bc": 0.0,
    "ratio": 0.0,
-   "angle": 0.0
+   "angle": 0.0,
+   "rating": 300000000.0
   },
   {
    "kind": "branch",
@@ -225,7 +250,8 @@
    "x": 0.1008,
    "bc": 0.209,
    "ratio": 0.0,
-   "angle": 0.0
+   "angle": 0.0,
+   "rating": 150000000.0
   },
   {
    "kind": "branch",
@@ -236,7 +262,8 @@
    "x": 0.072,
    "bc": 0.149,
    "ratio": 0.0,
-   "angle": 0.0
+   "angle": 0.0,
+   "rating": 250000000.0
   },
   {
    "kind": "branch",
@@ -247,7 +274,8 @@
    "x": 0.0625,
    "bc": 0.0,
    "ratio": 0.0,
-   "angle": 0.0
+   "angle": 0.0,
+   "rating": 250000000.0
   },
   {
    "kind": "branch",
@@ -258,7 +286,8 @@
    "x": 0.161,
    "bc": 0.306,
    "ratio": 0.0,
-   "angle": 0.0
+   "angle": 0.0,
+   "rating": 250000000.0
   },
   {
    "kind": "branch",
@@ -269,8 +298,9 @@
    "x": 0.085,
    "bc": 0.176,
    "ratio": 0.0,
-   "angle": 0.0
+   "angle": 0.0,
+   "rating": 250000000.0
   }
  ],
- "source": "Public IEEE test case data (University of Washington archive), as distributed with MATPOWER (case9.m, 3-clause BSD). Generators: rating = mBase and x″d = 0,2 pu are typical values for the short circuit, not part of the IEEE data."
+ "source": "Public IEEE test case data (University of Washington archive), as distributed with MATPOWER (case9.m). Generators: rating = mBase and x″d = 0,2 pu are typical values for the short circuit, not part of the IEEE data. Generator costs and limits as in the MATPOWER file (they are not part of the IEEE data)."
 }

@@ -1786,6 +1786,22 @@
     ],
     "since": "4.2"
    },
+   "pcl.network.Network.advice": {
+    "params": [
+     "study",
+     "scenarios"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.network.Network.batch_flow": {
+    "params": [
+     "load_scale",
+     "gen_scale",
+     "dS",
+     "tol"
+    ],
+    "since": "4.19.1"
+   },
    "pcl.network.Network.branch_pu": {
     "params": [
      "a",
@@ -1795,7 +1811,8 @@
      "bc",
      "ratio",
      "angle",
-     "name"
+     "name",
+     "rating"
     ],
     "since": "4.2"
    },
@@ -1810,6 +1827,24 @@
      "Vmax"
     ],
     "since": "4.2"
+   },
+   "pcl.network.Network.case": {
+    "params": [],
+    "since": "4.19.1"
+   },
+   "pcl.network.Network.contingency": {
+    "params": [
+     "kind",
+     "branches",
+     "ratings",
+     "tol",
+     "q_limits"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.network.Network.dc_flow": {
+    "params": [],
+    "since": "4.19.1"
    },
    "pcl.network.Network.element": {
     "params": [
@@ -1852,7 +1887,10 @@
      "Qmin",
      "Qmax",
      "slack",
-     "name"
+     "name",
+     "Pmin",
+     "Pmax",
+     "cost"
     ],
     "since": "4.2"
    },
@@ -1882,7 +1920,8 @@
      "X0",
      "parallel",
      "name",
-     "alpha"
+     "alpha",
+     "rating"
     ],
     "since": "4.2"
    },
@@ -1905,6 +1944,10 @@
     ],
     "since": "4.2"
    },
+   "pcl.network.Network.lodf": {
+    "params": [],
+    "since": "4.19.1"
+   },
    "pcl.network.Network.motor": {
     "params": [
      "bus",
@@ -1919,6 +1962,27 @@
      "name"
     ],
     "since": "4.2"
+   },
+   "pcl.network.Network.opf": {
+    "params": [
+     "kind",
+     "**kw"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.network.Network.power_flow": {
+    "params": [
+     "method",
+     "tol",
+     "max_iter",
+     "q_limits",
+     "flat"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.network.Network.ptdf": {
+    "params": [],
+    "since": "4.19.1"
    },
    "pcl.network.Network.reactor": {
     "params": [
@@ -2050,6 +2114,18 @@
      "lv_tol"
     ],
     "since": "4.2"
+   },
+   "pcl.network.case_data": {
+    "params": [
+     "name"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.network.case_solution": {
+    "params": [
+     "name"
+    ],
+    "since": "4.19.1"
    },
    "pcl.network.from_dict": {
     "params": [

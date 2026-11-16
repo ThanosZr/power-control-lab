@@ -147,11 +147,13 @@ class Network:
         return self._add('feeder', name, bus=bus, Ik=Ik, Sk=Sk, RX=float(RX), X0X=X0X, R0X0=R0X0, c=c, Ik_min=Ik_min,
                          Un=Un, V=V, angle=angle, slack=slack)
 
-    def line(self, a, b, R, X, length=1.0, B=0.0, R0=None, X0=None, parallel=1, name=None, alpha=0.004):
+    def line(self, a, b, R, X, length=1.0, B=0.0, R0=None, X0=None, parallel=1, name=None, alpha=0.004, rating=None):
         """Line or cable: R, X (Ω/km), B (S/km, charging, load flow only), R₀, X₀ (Ω/km), length (km), identical
-        parallel circuits (no zero-sequence coupling between them)."""
+        parallel circuits (no zero-sequence coupling between them). 4.19.1: rating (VA, all the parallel circuits together)
+        for the optimal power flow and the N−1 screening."""
+        opf = {} if rating is None else {'rating': float(rating)}
         return self._add('line', name, a=a, b=b, R=float(R), X=float(X), length=float(length), B=float(B), R0=R0, X0=X0,
-                         parallel=int(parallel), alpha=alpha)
+                         parallel=int(parallel), alpha=alpha, **opf)
 
     def transformer(self, hv, lv, Sr, Uhv, Ulv, uk, ur=0.0, group='YNd5', X0X=1.0, R0R=1.0, Zn_hv=0.0, Zn_lv=0.0,
                     tap=0.0, KT=True, shift=None, name=None):
@@ -179,11 +181,16 @@ class Network:
         return name
 
     def generator(self, bus, Sr, Ur, xd2, cosphi, RG=None, xdsat=None, pG=0.0, X0=None, earthed=False, P=None, V=None,
-                  Qmin=None, Qmax=None, slack=False, name=None):
+                  Qmin=None, Qmax=None, slack=False, name=None, Pmin=None, Pmax=None, cost=None):
         """Synchronous generator directly connected: S_rG, U_rG, x″d (pu), cos φ_rG, R_G (Ω; None: R_Gf of IEC 60909-0),
-        p_G (voltage regulation), x_dsat; load flow: P (W), V (pu) of a PV bus, reactive limits (var)."""
+        p_G (voltage regulation), x_dsat; load flow: P (W), V (pu) of a PV bus, reactive limits (var).
+        4.19.1, optimal power flow: Pmin, Pmax (W) and cost = (c2, c1, c0), the cost per hour c2·P² + c1·P + c0 with P in MW
+        (the polynomial cost of the MATPOWER cases)."""
+        opf = {k: v for k, v in (('Pmin', Pmin), ('Pmax', Pmax), ('cost', None if cost is None else [float(c) for c in cost])) if v is not None}
+        if cost is not None and len(opf['cost']) != 3:
+            raise NetworkError('cost = (c2, c1, c0): three coefficients')
         return self._add('generator', name, bus=bus, Sr=float(Sr), Ur=float(Ur), xd2=float(xd2), cosphi=float(cosphi), RG=RG,
-                         xdsat=xdsat, pG=float(pG), X0=X0, earthed=earthed, P=P, V=V, Qmin=Qmin, Qmax=Qmax, slack=slack)
+                         xdsat=xdsat, pG=float(pG), X0=X0, earthed=earthed, P=P, V=V, Qmin=Qmin, Qmax=Qmax, slack=slack, **opf)
 
     def unit(self, bus, gen, trafo, oltc=True, pT=0.0, Zn=0.0, earthed=True, name=None, P=None, V=None, Qmin=None, Qmax=None, slack=False):
         """Power station unit S (with on-load tap-changer) or SO (without): gen = dict(Sr, Ur, xd2, cosphi, RG, pG),
@@ -214,9 +221,11 @@ class Network:
         """Shunt admittance given by its power at V = 1 pu (W, var; Q > 0 absorbs, as MATPOWER's Gs, −Bs)."""
         return self._add('shunt', name, bus=bus, P=float(P), Q=float(Q))
 
-    def branch_pu(self, a, b, r, x, bc=0.0, ratio=0.0, angle=0.0, name=None):
-        """A branch in per unit of S_base and the buses' U_n (the MATPOWER model: tap ratio and shift at bus a)."""
-        return self._add('branch', name, a=a, b=b, r=float(r), x=float(x), bc=float(bc), ratio=float(ratio), angle=float(angle))
+    def branch_pu(self, a, b, r, x, bc=0.0, ratio=0.0, angle=0.0, name=None, rating=None):
+        """A branch in per unit of S_base and the buses' U_n (the MATPOWER model: tap ratio and shift at bus a).
+        4.19.1: rating (VA) = the limit of the apparent power at both ends for the optimal power flow and the N−1 screening."""
+        opf = {} if rating is None else {'rating': float(rating)}
+        return self._add('branch', name, a=a, b=b, r=float(r), x=float(x), bc=float(bc), ratio=float(ratio), angle=float(angle), **opf)
 
     def sssc(self, line, X=None, Vq=None, P=None, Xmax=None, name=None):
         """4.10 (ROADMAP §50): a static synchronous series compensator (or its modular form, the m-SSSC) in series with a line
@@ -613,26 +622,37 @@ class Network:
         return [self.short_circuit(b, fault, **kw) for b in (buses or [b for b, d in self.buses.items() if d['type'] != 'internal'])]
 
     # ------------------------------------------------------------ load flow
-    def _lf_model(self):
-        """Ybus (load flow: uncorrected impedances, line charging, taps, phase shifts), injections, bus types."""
+    def _lf_model(self, raw=None):
+        """Ybus (load flow: uncorrected impedances, line charging, taps, phase shifts), injections, bus types.
+        4.19.1: with raw = {} the stamps are not summed into a dense matrix: raw gets 'stamps' = (rows, cols, vals), 'branches' =
+        [(name, i, j, y, bsh, ta, rating in pu or None)] for every series element (the π model of series() below) and
+        'shunts' = [(i, y)]; the place of Y in the result is None. The sparse solvers of pcl.powerflow build on these."""
         names = [b for b in self.buses]
         idx = {n: i for i, n in enumerate(names)}
         n = len(names)
         rows, cols, vals = [], [], []
+        brs, shs, cur = [], [], [None, None]
 
         def add(i, j, v):
             rows.append(i)
             cols.append(j)
             vals.append(v)
+            if i == j and cur[0] is None:
+                shs.append((i, v))
 
         def series(a, b, z, ta=1.0, bsh=0.0):
             # tap ratio ta (complex: shift) at bus a, impedance on the side of b, total charging bsh (pu)
             y = 1 / z
             i, j = idx[a], idx[b]
+            ta = complex(ta)
+            brs.append((cur[0] if not cur[1] else f'{cur[0]}#{cur[1]}', i, j, y, bsh, ta, cur[2] if len(cur) > 2 else None))
+            cur[1] = (cur[1] or 0) + 1
+            cur[0], keep = '', cur[0]                      # the four stamps below belong to the branch, not to the shunts
             add(i, i, (y + 0.5j * bsh) / (abs(ta) ** 2))
             add(i, j, -y / ta.conjugate())
             add(j, i, -y / ta)
             add(j, j, y + 0.5j * bsh)
+            cur[0] = keep
 
         Sbus = np.zeros(n, complex)       # specified generation (pu)
         load = np.zeros((n, 3), complex)  # ZIP parts of the loads at V = 1 (pu)
@@ -643,6 +663,8 @@ class Network:
         xs = self._sssc_x()            # 4.10: Ω of the series compensators on each line, X > 0 capacitive
         for e in self.elements:
             k = e['kind']
+            cur[:] = [e['name'] if k in ('line', 'branch', 'reactor', 'transformer', 'transformer3') else None, 0,
+                      (e['rating'] / self.S_base) if e.get('rating') else None]
             if k == 'line':
                 zb = self._zb(e['a'])
                 z = complex(e['R'], e['X']) * e['length'] / e['parallel'] / zb - 1j * xs.get(e['name'], 0.0) / zb
@@ -654,6 +676,7 @@ class Network:
                 zb = self._zb(e['a'])
                 z = complex(e['R'], e['X']) / zb
                 if e['b'] is None:
+                    cur[0] = None
                     add(idx[e['a']], idx[e['a']], 1 / z)
                 else:
                     series(e['a'], e['b'], z)
@@ -697,6 +720,9 @@ class Network:
                     lo, hi = qlim.get(b, (0.0, 0.0))
                     qlim[b] = (lo + (e['Qmin'] if e['Qmin'] is not None else -1e30) / self.S_base,
                                hi + (e['Qmax'] if e['Qmax'] is not None else 1e30) / self.S_base)
+        if raw is not None:
+            raw.update(stamps=(rows, cols, vals), branches=brs, shunts=shs)
+            return names, idx, None, Sbus, load, types, Vset, ang, qlim
         Y = _coo(n, rows, cols, vals)
         return names, idx, Y, Sbus, load, types, Vset, ang, qlim
 
@@ -776,7 +802,10 @@ class Network:
                     changed = True
             if not changed:
                 break
-        Iinj = Y @ V
+        return self._lf_result(names, idx, V, Y @ V, load, typ, ok, it_total)
+
+    def _lf_result(self, names, idx, V, Iinj, load, typ, ok, it_total):
+        """The result of a load flow from the bus voltages (the dict that load_flow and power_flow return)."""
         S = V * np.conj(Iinj)                        # net injection
         Sl = _zip(load, np.abs(V))
         Sgen = S + Sl
@@ -822,6 +851,172 @@ class Network:
             out.append({'name': e['name'], 'a': e['a'], 'b': e['b'], 'Pa': float(sa.real), 'Qa': float(sa.imag), 'Pb': float(sb.real),
                         'Qb': float(sb.imag), 'S': float(max(abs(sa), abs(sb))), 'I': float(abs(ia) * Ib), 'loss': float((sa + sb).real)})
         return out
+
+    # ------------------------------------------------------------ 4.19.1: the sparse solvers (pcl.powerflow, pcl.opf)
+    def case(self):
+        """The network as arrays in per unit for the solvers of pcl.powerflow (a pcl.powerflow.Case)."""
+        from . import powerflow
+        if any(e['kind'] == 'sssc' and e['X'] is None for e in self.elements):
+            raise NetworkError('a series compensator with a target (V_q or P) is solved by load_flow; give it a reactance X for the sparse solvers')
+        for e in self.elements:
+            if e['kind'] == 'sssc':
+                e['_X'] = e['X']
+        return powerflow.Case(self)
+
+    def advice(self, study='pf', scenarios=1):
+        """What the engine proposes for this network: {'method', 'why' (the reason, in Greek), 'facts'}. study: 'pf' one load flow,
+        'batch' many load flows of this topology, 'n1' the outage of every branch, 'opf' / 'dcopf' the optimal power flow."""
+        from . import powerflow
+        if study in ('opf', 'dcopf'):
+            from . import opf
+            return opf.advise(self.case(), 'ac' if study == 'opf' else 'dc')
+        return powerflow.advise(self.case(), study, scenarios)
+
+    def power_flow(self, method='auto', tol=1e-8, max_iter=None, q_limits=False, flat=False):
+        """The load flow with the sparse solvers (4.19.1, ROADMAP §68). method: 'auto' (the proposal of the engine from the
+        network, in the result with its reason), 'nr' (Newton–Raphson on a sparse Jacobian), 'nr_dense' (the path of load_flow),
+        'nr_ci' (current injections), 'fdxb' / 'fdbx' (fast decoupled), 'sweep' (backward/forward, radial networks without PV
+        buses), 'gs' (Gauss–Seidel, for teaching), 'dc' (the linear DC approximation: angles only).
+        Every method but 'dc' ends on the same mismatch tolerance tol (pu), so the result is the same within it.
+        Returns the dict of load_flow, and 'method', 'path' (what ran, with fallbacks), 'advice', 'time' (s)."""
+        from . import powerflow
+        c = self.case()
+        r = powerflow.solve(c, method, tol=tol, max_iter=max_iter, q_limits=q_limits, flat=flat)
+        code = {powerflow.PQ: 'PQ', powerflow.PV: 'PV', powerflow.REF: 'slack'}
+        typ = {b: code[int(r['typ'][i])] for i, b in enumerate(c.names)}
+        V = r['V']
+        # (the dense path sums the currents as load_flow does, so that «auto» on a small network gives its numbers bit for bit)
+        Iinj = (_coo(c.n, *c.stamps) if r['method'] == 'nr_dense' else c.Y) @ V
+        res = self._lf_result(c.names, c.idx, V, Iinj, c.load, typ, r['converged'], r['iterations'])
+        res.update(method=r['method'], path=r['path'], advice=r['advice'], time=r['time'])
+        if r['method'] == 'dc':
+            res['dc'] = True
+        return res
+
+    def dc_flow(self):
+        """The DC load flow: {'buses': {bus: angle in degrees}, 'branches': [{'name', 'a', 'b', 'P' (W)}]}."""
+        from . import powerflow
+        c = self.case()
+        th, Pf = powerflow.dc_flow(c)
+        return {'buses': {b: float(math.degrees(th[i])) for i, b in enumerate(c.names)},
+                'branches': [{'name': c.br_name[k], 'a': c.names[c.f[k]], 'b': c.names[c.t[k]], 'P': float(Pf[k] * self.S_base)} for k in range(c.nl)]}
+
+    def ptdf(self):
+        """Power transfer distribution factors: {'branches', 'buses', 'H' (branches × buses)}; injection at a bus, taken out at the slack."""
+        from . import powerflow
+        c = self.case()
+        return {'branches': list(c.br_name), 'buses': list(c.names), 'H': powerflow.ptdf(c)}
+
+    def lodf(self):
+        """Line outage distribution factors: {'branches', 'L'}: L[l, k] = the part of the flow of k that passes to l when k goes
+        out (a column of NaN: the outage splits the network)."""
+        from . import powerflow
+        c = self.case()
+        return {'branches': list(c.br_name), 'L': powerflow.lodf(c)}
+
+    def contingency(self, kind='ac', branches=None, ratings=None, tol=1e-8, q_limits=False):
+        """N−1: the outage of every branch (or of those named), one at a time.
+        kind='dc': the flows after each outage from the DC load flow and the LODF (linear, a screening).
+        kind='ac': the full load flow after each outage, all the outages as a batch on the factors of the base case
+        (pcl.powerflow.contingency_ac); every outage is checked on its own mismatch, and one that does not converge on the
+        common factors is solved alone by Newton–Raphson.
+        ratings: {branch: VA} (default the 'rating' of each branch); without any rating the loading is not judged.
+        Returns {'kind', 'base', 'outages': [{'name', 'island', 'converged', 'Smax' (VA) and 'branch' (the most loaded one, by
+        loading where ratings exist), 'loading', 'overloads': [(branch, loading)], 'Vmin', 'Vmax' (pu, AC)}], 'worst', 'time',
+        'advice', 'chord', 'newton'}."""
+        from . import powerflow
+        c = self.case()
+        if kind not in ('ac', 'dc'):
+            raise NetworkError("contingency: kind 'ac' or 'dc'")
+        t0 = powerflow.time.perf_counter()
+        sel = np.arange(c.nl) if branches is None else np.array([c.br_name.index(b) for b in branches], int)
+        rate = c.rate.copy()
+        for k, v in (ratings or {}).items():
+            rate[c.br_name.index(k)] = v / self.S_base
+        base = powerflow.solve(c, 'nr' if c.n > powerflow.DENSE_MAX else 'nr_dense', tol=min(tol, 1e-10), q_limits=q_limits)
+        if not base['converged']:
+            raise NetworkError('the base case does not converge')
+        V0, typ = base['V'], base['typ']
+        out = {'kind': kind, 'advice': powerflow.advise(c, 'n1'), 'outages': []}
+        isl = powerflow.bridges(c)
+
+        def row(k, S, extra):
+            S = np.array(S, float)
+            S[k] = 0.0
+            ld = S / rate
+            j = int(np.nanargmax(ld)) if np.isfinite(ld).any() else int(np.argmax(S))
+            return {'name': c.br_name[k], 'island': False, 'converged': True, 'branch': c.br_name[j], 'Smax': float(S[j] * self.S_base),
+                    'loading': float(ld[j]) if np.isfinite(ld[j]) else None,
+                    'overloads': sorted(((c.br_name[i], float(ld[i])) for i in np.flatnonzero(ld > 1 + 1e-9)), key=lambda q: -q[1]), **extra}
+        if kind == 'dc':
+            th, Pf = powerflow.dc_flow(c)
+            Lm = powerflow.lodf(c)
+            out['base'] = {'P': {c.br_name[k]: float(Pf[k] * self.S_base) for k in range(c.nl)}}
+            for k in sel:
+                if isl[k]:
+                    out['outages'].append({'name': c.br_name[k], 'island': True, 'converged': False})
+                    continue
+                out['outages'].append(row(k, np.abs(Pf + Lm[:, k] * Pf[k]), {}))
+            out.update(chord=0, newton=0)
+        else:
+            Sf, St = powerflow.branch_flows(c, V0)
+            out['base'] = {'S': {c.br_name[k]: float(max(abs(Sf[k]), abs(St[k])) * self.S_base) for k in range(c.nl)},
+                           'Vmin': float(np.abs(V0).min()), 'Vmax': float(np.abs(V0).max())}
+            r = powerflow.contingency_ac(c, V0, sel, tol=tol, typ=typ)
+            for j, k in enumerate(sel):
+                if r['island'][j] or not r['converged'][j]:
+                    out['outages'].append({'name': c.br_name[k], 'island': bool(r['island'][j]), 'converged': False})
+                    continue
+                V = r['V'][j]
+                Sf, St = powerflow.branch_flows(c, V)
+                i, m = int(np.argmin(np.abs(V))), int(np.argmax(np.abs(V)))
+                out['outages'].append(row(k, np.maximum(np.abs(Sf), np.abs(St)),
+                                          {'Vmin': float(abs(V[i])), 'Vmin_bus': c.names[i], 'Vmax': float(abs(V[m])), 'Vmax_bus': c.names[m]}))
+            out.update(chord=r['chord'], newton=r['newton'])
+        ok = [o for o in out['outages'] if o['converged']]
+        key = (lambda o: o['loading']) if any(o.get('loading') is not None for o in ok) else (lambda o: o['Smax'])
+        out['worst'] = max(ok, key=lambda o: key(o) or 0.0)['name'] if ok else None
+        out['islands'] = [o['name'] for o in out['outages'] if o['island']]
+        out['failed'] = [o['name'] for o in out['outages'] if not o['island'] and not o['converged']]
+        out['time'] = powerflow.time.perf_counter() - t0
+        return out
+
+    def batch_flow(self, load_scale=None, gen_scale=None, dS=None, tol=1e-8):
+        """Many load flows of this network at once (time series, Monte Carlo): pcl.powerflow.batch on the factors of the base case.
+        load_scale: B factors (one per scenario) or B × loads (one per load element, in the order of the elements) on the
+        constant-power part of the loads; gen_scale: the same on the active power of the generators; or dS (B × buses, VA):
+        a change of the net constant-power injection per bus. The slack covers the balance.
+        Returns {'V' (B × buses, pu), 'angle' (degrees), 'buses', 'converged' (B), 'iterations', 'chord', 'newton', 'time', 'advice'}."""
+        from . import powerflow
+        c = self.case()
+        d = None
+        loads = [e for e in self.elements if e['kind'] == 'load']
+        gens = [e for e in self.elements if e['kind'] in ('generator', 'unit') and e.get('P') is not None]
+        for sc, els, sign in ((load_scale, loads, -1.0), (gen_scale, gens, 1.0)):
+            if sc is None:
+                continue
+            sc = np.asarray(sc, float)
+            sc = np.repeat(sc[:, None], len(els), axis=1) if sc.ndim == 1 else sc
+            if sc.shape[1] != len(els):
+                raise NetworkError(f'scale: one column per element ({len(els)}), or one factor per scenario')
+            M = np.zeros((len(els), c.n), complex)
+            for j, e in enumerate(els):
+                M[j, c.idx[e['bus']]] = (complex(e['P'], e['Q']) * e['zip'][2] if sign < 0 else e['P']) / self.S_base
+            d = (0 if d is None else d) + sign * (sc - 1) @ M
+        if dS is not None:
+            d = (0 if d is None else d) + np.asarray(dS, complex) / self.S_base
+        if d is None:
+            raise NetworkError('batch_flow: give load_scale, gen_scale or dS')
+        r = powerflow.batch(c, d, tol=tol)
+        r.update(buses=list(c.names), angle=np.degrees(np.angle(r['V'])), advice=powerflow.advise(c, 'batch', len(r['converged'])))
+        r['V'] = np.abs(r['V'])
+        return r
+
+    def opf(self, kind='ac', **kw):
+        """The optimal power flow (pcl.opf): kind='ac' (interior point on the full equations) or 'dc' (the linear network).
+        See pcl.opf.solve for the options and the result."""
+        from . import opf
+        return opf.solve(self, kind, **kw)
 
     # ------------------------------------------------------------ to the EMT solver (4.3)
     def to_emt(self, lf=None, machines=None, name=None, t_end=0.5, hdiv=400):
@@ -1104,25 +1299,54 @@ def read_matpower(source, Un_default=1e3):
             net.load(b, r[2] * 1e6, r[3] * 1e6, name=f'load{b}')
         if r[4] or r[5]:
             net.shunt(b, r[4] * 1e6, -r[5] * 1e6, name=f'sh{b}')
+    gc = _matrix(text, 'gencost')        # 4.19.1: the cost of each generator (same order as the generators)
     for k, r in enumerate(_matrix(text, 'gen'), 1):
         if len(r) > 7 and r[7] <= 0:
             continue
         b = str(int(r[0]))
         slack = net.buses[b]['type'] == 'slack'
+        c = gc[k - 1] if k <= len(gc) else None
+        if c is not None and not (int(c[0]) == 2 and int(c[3]) <= 3):
+            raise NetworkError(f'generator {k}: only polynomial costs up to the second order are read (MATPOWER model 2)')
+        cost = None if c is None else ([0.0] * (3 - int(c[3])) + list(c[4:4 + int(c[3])]))
         net.generator(b, Sr=max(r[6], 1) * 1e6, Ur=net.buses[b]['Un'], xd2=0.2, cosphi=0.85, P=r[1] * 1e6, V=r[5],
-                      Qmin=r[4] * 1e6, Qmax=r[3] * 1e6, slack=slack, name=f'G{k}')
+                      Qmin=r[4] * 1e6, Qmax=r[3] * 1e6, slack=slack, name=f'G{k}',
+                      Pmin=r[9] * 1e6 if len(r) > 9 else None, Pmax=r[8] * 1e6 if len(r) > 8 else None, cost=cost)
         net.buses[b]['V'] = r[5]
     for k, r in enumerate(_matrix(text, 'branch'), 1):
         if len(r) > 10 and r[10] <= 0:
             continue
-        net.branch_pu(str(int(r[0])), str(int(r[1])), r[2], r[3], r[4], r[8], r[9], name=f'br{k}')
+        net.branch_pu(str(int(r[0])), str(int(r[1])), r[2], r[3], r[4], r[8], r[9], name=f'br{k}',
+                      rating=r[5] * 1e6 if len(r) > 5 and r[5] > 0 else None)
     return net
 
 
 def ieee(case):
-    """The IEEE 9- or 14-bus test case (pcl/data/ieee<case>.json, public data as distributed with MATPOWER)."""
-    d = json.loads((DATA / f'ieee{int(case)}.json').read_text())
-    return from_dict(d)
+    """An IEEE test case: 9, 14, 30, 57, 118 or 300 buses (pcl/data/ieee<case>.json: public IEEE test data as distributed with
+    MATPOWER, with the generator costs and limits of those files for the optimal power flow, 4.19.1)."""
+    return case_data(f'ieee{int(case)}')
+
+
+CASES = ('ieee9', 'ieee14', 'ieee30', 'ieee57', 'ieee118', 'ieee300', 'case30', 'case33bw', 'case69')
+
+
+def case_data(name):
+    """A test network of pcl/data by its name (CASES): the IEEE cases, 'case30' (the 30-bus case with line ratings of Alsac &
+    Stott, for the optimal power flow) and the radial feeders 'case33bw' (Baran & Wu) and 'case69'. The bus voltages of each
+    file are the published solution of its load flow."""
+    f = DATA / f'{name}.json'
+    if name not in CASES or not f.exists():
+        raise NetworkError(f'unknown case {name!r}: one of {", ".join(CASES)}')
+    return from_dict(json.loads(f.read_text(encoding='utf-8')))
+
+
+def case_solution(name):
+    """The published load-flow solution of a test network, {bus: (|V| in pu, angle in degrees)}: the bus voltages of the case
+    file (3–4 digits). None for the cases whose file has no solved voltages (ieee9, case30)."""
+    if name not in CASES:
+        raise NetworkError(f'unknown case {name!r}: one of {", ".join(CASES)}')
+    sol = json.loads((DATA / f'{name}.json').read_text(encoding='utf-8')).get('solution')
+    return {b: (v[0], v[1]) for b, v in sol.items()} if sol else None
 
 
 def ieee9():
@@ -1192,7 +1416,7 @@ def from_dict(d):
         if kind == 'transformer3':
             e['Sr'] = e.pop('S')
         if kind == 'branch':
-            net.branch_pu(e['a'], e['b'], e['r'], e['x'], e.get('bc', 0), e.get('ratio', 0), e.get('angle', 0), name=name)
+            net.branch_pu(e['a'], e['b'], e['r'], e['x'], e.get('bc', 0), e.get('ratio', 0), e.get('angle', 0), name=name, rating=e.get('rating'))
             continue
         getattr(net, kind)(name=name, **e)
     return net

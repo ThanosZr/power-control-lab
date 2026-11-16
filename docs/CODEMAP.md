@@ -75,11 +75,14 @@
 | `pcl/formats.py` | 222 |
 | `pcl/gui.py` | 409 |
 | `pcl/impulse.py` | 858 |
+| `pcl/ipm.py` | 170 |
 | `pcl/lineconst.py` | 2400 |
 | `pcl/linereport.py` | 836 |
 | `pcl/link.py` | 150 |
-| `pcl/network.py` | 1206 |
+| `pcl/network.py` | 1430 |
+| `pcl/opf.py` | 344 |
 | `pcl/plotting.py` | 340 |
+| `pcl/powerflow.py` | 931 |
 | `pcl/trv.py` | 433 |
 | `pcl/wideband.py` | 1279 |
 | `pcl/workbench.py` | 485 |
@@ -3046,6 +3049,13 @@ _(χωρίς συναρτήσεις)_
 | 791 | function | `compare_current` |
 | 826 | function | `compare_voltage` |
 
+### `pcl/ipm.py`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 30 | class | `IpmError` |
+| 34 | function | `ipm` |
+
 ### `pcl/lineconst.py`
 
 | Γραμμή | Είδος | Όνομα |
@@ -3239,52 +3249,80 @@ _(χωρίς συναρτήσεις)_
 | 131 | method | `Network._add` |
 | 143 | method | `Network.feeder` |
 | 150 | method | `Network.line` |
-| 156 | method | `Network.transformer` |
-| 164 | method | `Network.transformer3` |
-| 181 | method | `Network.generator` |
-| 188 | method | `Network.unit` |
-| 195 | method | `Network.motor` |
-| 201 | method | `Network.reactor` |
-| 205 | method | `Network.load` |
-| 213 | method | `Network.shunt` |
-| 217 | method | `Network.branch_pu` |
-| 221 | method | `Network.sssc` |
-| 236 | method | `Network.remove` |
-| 239 | method | `Network.element` |
-| 246 | method | `Network._zb` |
-| 250 | method | `Network._ib` |
-| 254 | method | `Network._sc_parts` |
-| 389 | method | `Network._t3` |
-| 424 | method | `Network.impedances` |
-| 432 | method | `Network._index` |
-| 436 | method | `Network._ybus` |
-| 460 | method | `Network._ratios` |
-| 495 | method | `Network.short_circuit` |
-| 579 | method | `Network._breaking` |
-| 611 | method | `Network.iec60909` |
-| 616 | method | `Network._lf_model` |
-| 703 | method | `Network._sssc_x` |
-| 710 | method | `Network.load_flow` |
-| 721 | method | `Network._lf_sssc` |
-| 750 | method | `Network._lf` |
-| 802 | method | `Network._flows` |
-| 827 | method | `Network.to_emt` |
-| 907 | function | `_coo` |
-| 913 | function | `_zip` |
-| 918 | function | `_solve` |
-| 929 | function | `_nr` |
-| 965 | function | `sssc_placement` |
-| 1022 | function | `superposition` |
-| 1046 | function | `trv` |
-| 1080 | function | `_matrix` |
-| 1092 | function | `read_matpower` |
-| 1122 | function | `ieee` |
-| 1128 | function | `ieee9` |
-| 1155 | function | `ieee14` |
-| 1168 | function | `to_dict` |
-| 1181 | function | `from_dict` |
-| 1201 | function | `save` |
-| 1205 | function | `load` |
+| 158 | method | `Network.transformer` |
+| 166 | method | `Network.transformer3` |
+| 183 | method | `Network.generator` |
+| 195 | method | `Network.unit` |
+| 202 | method | `Network.motor` |
+| 208 | method | `Network.reactor` |
+| 212 | method | `Network.load` |
+| 220 | method | `Network.shunt` |
+| 224 | method | `Network.branch_pu` |
+| 230 | method | `Network.sssc` |
+| 245 | method | `Network.remove` |
+| 248 | method | `Network.element` |
+| 255 | method | `Network._zb` |
+| 259 | method | `Network._ib` |
+| 263 | method | `Network._sc_parts` |
+| 398 | method | `Network._t3` |
+| 433 | method | `Network.impedances` |
+| 441 | method | `Network._index` |
+| 445 | method | `Network._ybus` |
+| 469 | method | `Network._ratios` |
+| 504 | method | `Network.short_circuit` |
+| 588 | method | `Network._breaking` |
+| 620 | method | `Network.iec60909` |
+| 625 | method | `Network._lf_model` |
+| 729 | method | `Network._sssc_x` |
+| 736 | method | `Network.load_flow` |
+| 747 | method | `Network._lf_sssc` |
+| 776 | method | `Network._lf` |
+| 807 | method | `Network._lf_result` |
+| 831 | method | `Network._flows` |
+| 856 | method | `Network.case` |
+| 866 | method | `Network.advice` |
+| 875 | method | `Network.power_flow` |
+| 896 | method | `Network.dc_flow` |
+| 904 | method | `Network.ptdf` |
+| 910 | method | `Network.lodf` |
+| 917 | method | `Network.contingency` |
+| 984 | method | `Network.batch_flow` |
+| 1015 | method | `Network.opf` |
+| 1022 | method | `Network.to_emt` |
+| 1102 | function | `_coo` |
+| 1108 | function | `_zip` |
+| 1113 | function | `_solve` |
+| 1124 | function | `_nr` |
+| 1160 | function | `sssc_placement` |
+| 1217 | function | `superposition` |
+| 1241 | function | `trv` |
+| 1275 | function | `_matrix` |
+| 1287 | function | `read_matpower` |
+| 1324 | function | `ieee` |
+| 1333 | function | `case_data` |
+| 1343 | function | `case_solution` |
+| 1352 | function | `ieee9` |
+| 1379 | function | `ieee14` |
+| 1392 | function | `to_dict` |
+| 1405 | function | `from_dict` |
+| 1425 | function | `save` |
+| 1429 | function | `load` |
+
+### `pcl/opf.py`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 27 | class | `OpfError` |
+| 31 | function | `_diag` |
+| 36 | function | `dSbus_dV` |
+| 45 | function | `d2Sbus_dV2` |
+| 60 | function | `dSbr_dV` |
+| 70 | function | `d2Sbr_dV2` |
+| 83 | function | `d2ASbr_dV2` |
+| 92 | function | `sources` |
+| 125 | function | `vlimits` |
+| 136 | function | `advise` |
+| 151 | function | `solve` |
 
 ### `pcl/plotting.py`
 
@@ -3305,6 +3343,52 @@ _(χωρίς συναρτήσεις)_
 | 232 | function | `_mpl` |
 | 251 | function | `_style` |
 | 256 | function | `figure` |
+
+### `pcl/powerflow.py`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 39 | class | `PowerFlowError` |
+| 43 | function | `_csr` |
+| 50 | class | `Case` |
+| 54 | method | `Case.__init__` |
+| 99 | method | `Case.sets` |
+| 103 | method | `Case.start` |
+| 110 | method | `Case.zip` |
+| 114 | method | `Case.mismatch` |
+| 119 | method | `Case.err` |
+| 125 | method | `Case.jac` |
+| 136 | method | `Case.graph` |
+| 155 | method | `Case.tree` |
+| 187 | class | `Jacobian` |
+| 193 | method | `Jacobian.__init__` |
+| 219 | method | `Jacobian.fill` |
+| 232 | method | `Jacobian.factor` |
+| 248 | method | `Jacobian.rhs` |
+| 251 | method | `Jacobian.apply` |
+| 258 | class | `_LU` |
+| 261 | method | `_LU.__init__` |
+| 265 | method | `_LU.solve` |
+| 275 | function | `newton` |
+| 308 | function | `newton_dense` |
+| 318 | function | `_b_matrices` |
+| 336 | function | `fast_decoupled` |
+| 368 | function | `newton_ci` |
+| 448 | function | `sweep` |
+| 489 | function | `gauss_seidel` |
+| 522 | function | `dc_model` |
+| 535 | function | `dc_flow` |
+| 550 | function | `ptdf` |
+| 561 | function | `lodf` |
+| 574 | function | `bridges` |
+| 610 | function | `advise` |
+| 640 | function | `solve` |
+| 688 | function | `_iterate` |
+| 749 | function | `batch` |
+| 800 | function | `_branch_jac` |
+| 816 | function | `contingency_ac` |
+| 909 | function | `without` |
+| 921 | function | `branch_flows` |
 
 ### `pcl/trv.py`
 

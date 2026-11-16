@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.19.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (585 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.19.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (596 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-343 σημεία.
+354 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -265,17 +265,26 @@
 | `pcl.link.connect` | `url`, `token`, `timeout`, `client` | 3.18 |
 | `pcl.load` | `path` | 3.18 |
 | `pcl.network.Network` | `f`, `S_base`, `name` | 4.2 |
-| `pcl.network.Network.branch_pu` | `a`, `b`, `r`, `x`, `bc`, `ratio`, `angle`, `name` | 4.2 |
+| `pcl.network.Network.advice` | `study`, `scenarios` | 4.19.1 |
+| `pcl.network.Network.batch_flow` | `load_scale`, `gen_scale`, `dS`, `tol` | 4.19.1 |
+| `pcl.network.Network.branch_pu` | `a`, `b`, `r`, `x`, `bc`, `ratio`, `angle`, `name`, `rating` | 4.2 |
 | `pcl.network.Network.bus` | `name`, `Un`, `kind`, `V`, `angle`, `Vmin`, `Vmax` | 4.2 |
+| `pcl.network.Network.case` | — | 4.19.1 |
+| `pcl.network.Network.contingency` | `kind`, `branches`, `ratings`, `tol`, `q_limits` | 4.19.1 |
+| `pcl.network.Network.dc_flow` | — | 4.19.1 |
 | `pcl.network.Network.element` | `name` | 4.2 |
 | `pcl.network.Network.feeder` | `bus`, `Ik`, `Sk`, `RX`, `X0X`, `R0X0`, `c`, `Ik_min`, `Un`, `name`, `V`, `angle`, `slack` | 4.2 |
-| `pcl.network.Network.generator` | `bus`, `Sr`, `Ur`, `xd2`, `cosphi`, `RG`, `xdsat`, `pG`, `X0`, `earthed`, `P`, `V`, `Qmin`, `Qmax`, `slack`, `name` | 4.2 |
+| `pcl.network.Network.generator` | `bus`, `Sr`, `Ur`, `xd2`, `cosphi`, `RG`, `xdsat`, `pG`, `X0`, `earthed`, `P`, `V`, `Qmin`, `Qmax`, `slack`, `name`, `Pmin`, `Pmax`, `cost` | 4.2 |
 | `pcl.network.Network.iec60909` | `fault`, `buses`, `**kw` | 4.2 |
 | `pcl.network.Network.impedances` | `mode` | 4.2 |
-| `pcl.network.Network.line` | `a`, `b`, `R`, `X`, `length`, `B`, `R0`, `X0`, `parallel`, `name`, `alpha` | 4.2 |
+| `pcl.network.Network.line` | `a`, `b`, `R`, `X`, `length`, `B`, `R0`, `X0`, `parallel`, `name`, `alpha`, `rating` | 4.2 |
 | `pcl.network.Network.load` | `bus`, `P`, `Q`, `zip`, `name` | 4.2 |
 | `pcl.network.Network.load_flow` | `tol`, `max_iter`, `q_limits`, `flat` | 4.2 |
+| `pcl.network.Network.lodf` | — | 4.19.1 |
 | `pcl.network.Network.motor` | `bus`, `Pr`, `Ur`, `cosphi`, `eta`, `ILR`, `p`, `n`, `RX`, `name` | 4.2 |
+| `pcl.network.Network.opf` | `kind`, `**kw` | 4.19.1 |
+| `pcl.network.Network.power_flow` | `method`, `tol`, `max_iter`, `q_limits`, `flat` | 4.19.1 |
+| `pcl.network.Network.ptdf` | — | 4.19.1 |
 | `pcl.network.Network.reactor` | `a`, `X`, `R`, `b`, `X0`, `R0`, `name` | 4.2 |
 | `pcl.network.Network.remove` | `name` | 4.2 |
 | `pcl.network.Network.short_circuit` | `bus`, `fault`, `mode`, `f115`, `tmin`, `temp`, `lv_tol`, `fc`, `breaking`, `rgf` | 4.2 |
@@ -287,6 +296,8 @@
 | `pcl.network.Network.unit` | `bus`, `gen`, `trafo`, `oltc`, `pT`, `Zn`, `earthed`, `name`, `P`, `V`, `Qmin`, `Qmax`, `slack` | 4.2 |
 | `pcl.network.NetworkError` | — | 4.2 |
 | `pcl.network.c_factor` | `Un`, `which`, `lv_tol` | 4.2 |
+| `pcl.network.case_data` | `name` | 4.19.1 |
+| `pcl.network.case_solution` | `name` | 4.19.1 |
 | `pcl.network.from_dict` | `d` | 4.2 |
 | `pcl.network.ieee` | `case` | 4.2 |
 | `pcl.network.ieee14` | `levels` | 4.2 |
