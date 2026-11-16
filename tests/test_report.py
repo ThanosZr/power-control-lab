@@ -570,6 +570,12 @@ class Tutorials(unittest.TestCase):
             self.assertTrue(a['summary']['converged'], m)
             self.assertAlmostEqual(a['result']['buses']['14']['V'], 1.0355, places=4, msg=m)        # bus 14 of the IEEE 14 case: 1,036 pu in its file
         self.assertTrue(S.run({'case': 'case33bw', 'study': 'pf', 'options': {'method': 'sweep'}})['summary']['converged'])
+        # what the tasks of the tutorial say about the two feeders is what the engine says: the 69-bus one is deep (the sparse
+        # Newton), the 33-bus one is small (the dense one)
+        a33, a69 = N.case_data('case33bw').advice('pf'), N.case_data('case69').advice('pf')
+        self.assertEqual((a33['method'], a69['method']), ('nr_dense', 'nr'))
+        self.assertIn('μικρό δίκτυο', a33['why'])
+        self.assertIn('βαθύ δίκτυο (69 ζυγοί σε 26 επίπεδα)', a69['why'])
 
     def test_operating_point_of_the_optimal_power_flow(self):
         """IEEE9_OPF of tutorials.js (the point from which the EMT of opf_study starts) is the AC optimal power flow of

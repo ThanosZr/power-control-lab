@@ -34,6 +34,21 @@
 | virtual synchronous machine (VSM), synchronverter | εικονική σύγχρονη μηχανή (VSM)· synchronverter το σχήμα των Zhong & Weiss | «εικονική γεννήτρια» για το σχήμα των Zhong & Weiss | 4.18 |
 | power-synchronization control (PSC) | συγχρονισμός μέσω ισχύος (PSC) | «έλεγχος συγχρονισμού ισχύος» | 4.18 |
 | virtual impedance | εικονική εμπέδηση (R_v + jX_v) | | 4.18 |
+| refactorization | επαναπαραγοντοποίηση (με τους ίδιους οδηγούς) | αναπαραγοντοποίηση | 4.19 |
+| pivot, pivoting | οδηγός, οδήγηση (pivot την πρώτη φορά) | περιστροφή, άξονας | 4.19 |
+| factorization path | διαδρομή παραγοντοποίησης | μονοπάτι factorization | 4.19 |
+| digital twin | ψηφιακό δίδυμο (digital twin την πρώτη φορά) | ψηφιακός δίδυμος | 4.19 |
+| GIS (geographic) / GIS (gas-insulated) | GIS (γεωχωρικό) / υποσταθμός GIS (SF6) | σκέτο «GIS» όπου μπερδεύεται | 4.19 |
+| optimal power flow (OPF) | βέλτιστη ροή φορτίου (OPF) | βέλτιστη ροή ισχύος | 4.19.1 |
+| power flow (ως συνώνυμο του load flow) | ροή φορτίου | ροή ισχύος για τη μελέτη (η «ροή ισχύος» ενός κλάδου μένει) | 4.19.1 |
+| mismatch (power, current) | υπόλοιπο (ισχύος, ρεύματος) | ασυμφωνία, αναντιστοιχία | 4.19.1 |
+| contingency, outage (N−1) | διαταραχή, απώλεια (κλάδου)· ανάλυση N−1 | ενδεχόμενο, έκτακτο γεγονός | 4.19.1 |
+| binding constraint | περιορισμός που δεσμεύει | ενεργός περιορισμός χωρίς εξήγηση, δεσμευτικός | 4.19.1 |
+| dispatch | κατανομή (της παραγωγής) | αποστολή, dispatch | 4.19.1 |
+| batch (of scenarios) | παρτίδα (σεναρίων) | δέσμη, batch | 4.19.1 |
+| slack variable | χαλαρή μεταβλητή (slack την πρώτη φορά) | μεταβλητή χαλαρότητας· να μην μπερδεύεται με τον ζυγό ταλάντωσης (slack bus) | 4.19.1 |
+| globalization (of Newton's method) | σφαιρικοποίηση | παγκοσμιοποίηση | 4.19.1 |
+| report object | αντικείμενο αναφοράς | report object, αντικείμενο report | 4.19.1 |
 
 ## Καθιερωμένοι όροι που ήδη χρησιμοποιούνται
 
@@ -183,12 +198,35 @@
 | turn-off time t_q | χρόνος σβέσης t_q (4.16) |
 | smoothing reactor | αντιδραστήρας εξομάλυνσης (4.16) |
 | short-circuit ratio (SCR) | λόγος βραχυκύκλωσης (SCR) (4.16) |
-| refactorization | επαναπαραγοντοποίηση (με τους ίδιους οδηγούς) | αναπαραγοντοποίηση | 4.19 |
-| pivot, pivoting | οδηγός, οδήγηση (pivot την πρώτη φορά) | περιστροφή, άξονας | 4.19 |
-| factorization path | διαδρομή παραγοντοποίησης | μονοπάτι factorization | 4.19 |
-| digital twin | ψηφιακό δίδυμο (digital twin την πρώτη φορά) | ψηφιακός δίδυμος | 4.19 |
-| GIS (geographic) / GIS (gas-insulated) | GIS (γεωχωρικό) / υποσταθμός GIS (SF6) | σκέτο «GIS» όπου μπερδεύεται | 4.19 |
+| slack (swing) bus, PV bus, PQ bus | ζυγός ταλάντωσης, ζυγός PV, ζυγός PQ (4.19.1) |
+| reference bus (of the angle) | ζυγός αναφοράς (της γωνίας) (4.19.1) |
+| sparse Jacobian, fixed pattern | αραιή Ιακωβιανή, σταθερό μοτίβο (4.19.1) |
+| current-injection Newton method | Newton με εγχύσεις ρεύματος (4.19.1) |
+| backward/forward sweep | εμπρός–πίσω σάρωση (4.19.1) |
+| radial / meshed network, weakly meshed | ακτινικό / βροχοειδές δίκτυο, ασθενώς βροχοειδές (4.19.1) |
+| flat start, warm start | επίπεδη εκκίνηση, θερμή εκκίνηση (4.19.1) |
+| reactive power limits (PV → PQ switching) | όρια Q (ο ζυγός PV γίνεται PQ στο όριο) (4.19.1) |
+| tap ratio, phase shifter | λόγος (λήψη) μετασχηματιστή, μετατοπιστής φάσης (4.19.1) |
+| power transfer / line outage distribution factors (PTDF, LODF) | συντελεστές κατανομής ισχύος / απώλειας γραμμής (PTDF, LODF) (4.19.1) |
+| bridge (of a graph), island | γέφυρα (του γράφου), νησίδα (4.19.1) |
+| common factors, chord iteration | κοινοί παράγοντες, επανάληψη με σταθερή Ιακωβιανή (4.19.1) |
+| Broyden's (quasi-Newton) update | ενημέρωση του Broyden (4.19.1) |
+| low-rank correction, matrix inversion lemma (Woodbury) | διόρθωση χαμηλής τάξης, λήμμα αντιστροφής πίνακα (4.19.1) |
+| primal–dual interior-point method | μέθοδος εσωτερικού σημείου πρωτεύοντος–δυϊκού (4.19.1) |
+| logarithmic barrier, barrier parameter | λογαριθμικός φραγμός, παράμετρος του φραγμού (4.19.1) |
+| complementarity, feasibility | συμπληρωματικότητα, εφικτότητα (4.19.1) |
+| Lagrange multiplier, Hessian of the Lagrangian | πολλαπλασιαστής Lagrange, Εσσιανή της Λαγκρανζιανής (4.19.1) |
+| line search, merit function | αναζήτηση γραμμής, συνάρτηση αξίας (4.19.1) |
+| locational marginal price (LMP) | οριακή τιμή ανά ζυγό (LMP) (4.19.1) |
+| marginal cost | οριακό κόστος (4.19.1) |
+| (branch) rating, loading | ονομαστική ισχύς (κλάδου), φόρτιση (4.19.1) |
+| holomorphic embedding, continuation power flow | ολομορφική εμφύτευση, ροή φορτίου συνεχούς παραμέτρου (4.19.1) |
+| security-constrained OPF (SCOPF) | βέλτιστη ροή φορτίου με περιορισμούς ασφαλείας (SCOPF) (4.19.1) |
+| largest / smallest step (of the solver) | μέγιστο / ελάχιστο βήμα (του λύτη) (4.19.1) |
+| RMS (electromechanical) simulation, transient stability | προσομοίωση RMS (ηλεκτρομηχανικά μεταβατικά), μεταβατική ευστάθεια (4.19.1, ROADMAP §71) |
+| small-signal stability, participation factor, mode shape | ευστάθεια μικρών διαταραχών, συντελεστής συμμετοχής, μορφή της ταλάντωσης (4.19.1, ROADMAP §71) |
+| inter-area oscillation, critical clearing time | ταλάντωση μεταξύ περιοχών, κρίσιμος χρόνος εκκαθάρισης (4.19.1, ROADMAP §71) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
-PWM, SPWM, SVPWM, PLL, PLO, FACTS, SSSC, CHB, MMC, HVDC, LCC, CEA, VDCOL, AVM, CCSC, NLC, ULM, FDCM, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.
+PWM, SPWM, SVPWM, PLL, PLO, FACTS, SSSC, CHB, MMC, HVDC, LCC, CEA, VDCOL, AVM, CCSC, NLC, ULM, FDCM, OPF, SCOPF, PTDF, LODF, LMP, KKT, fast-decoupled (XB, BX), ZIP, ONNX, GPU, CUDA, RMS, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.

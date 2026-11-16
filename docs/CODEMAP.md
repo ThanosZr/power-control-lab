@@ -134,7 +134,7 @@
 | `tests/test_powerflow.py` | 303 |
 | `tests/test_recording.py` | 211 |
 | `tests/test_refac.py` | 78 |
-| `tests/test_report.py` | 647 |
+| `tests/test_report.py` | 653 |
 | `tests/test_sparse.py` | 53 |
 | `tests/test_sssc.py` | 444 |
 | `tests/test_step.py` | 167 |
