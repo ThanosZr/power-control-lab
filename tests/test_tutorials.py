@@ -124,6 +124,17 @@ class Tutorials(unittest.TestCase):
         self.assertLess(abs(o['cc_a_tri']['up']['ess']), 0.01 * r['In'])
         # the measured V_dc straight into the division: the fixed step goes through, the same response
         self.assertAlmostEqual(o['cc_a_raw']['mean'], r['mean'], delta=0.05)
+        # the variable step of the tool (local error control): the same response with about a third of the solves, with the
+        # sampled bus voltage and with the measured one straight into the division
+        for fixed, var in (('cc_a_tri', 'cc_a_tri_var'), ('cc_a_raw', 'cc_a_raw_var')):
+            self.assertEqual((o[fixed]['variable'], o[var]['variable']), (False, True))
+            self.assertEqual(o[var]['warn'], [])
+            self.assertLess(o[var]['solves'], 0.5 * o[fixed]['solves'], msg=var)
+            self.assertAlmostEqual(o[var]['mean'], o[fixed]['mean'], delta=0.02, msg=var)
+            self.assertAlmostEqual(o[var]['mean2'], o[fixed]['mean2'], delta=0.05, msg=var)
+            for step in ('up', 'dn'):
+                self.assertAlmostEqual(o[var][step]['rise'], o[fixed][step]['rise'], delta=0.06e-3, msg=(var, step))
+                self.assertLessEqual(o[var][step]['ts'], 2.0e-3 + 1e-9, msg=(var, step))
         # a step of V_st reaches the duty one sample later: the current moves by about ΔV·T/L
         c = o['cc_c_tri']
         self.assertAlmostEqual(c['dev'], c['dV'] * c['T'] / c['L'], delta=0.2)

@@ -43,7 +43,7 @@
 | `web/studio/templates.js` | 32 |
 | `web/studio/trv.js` | 56 |
 | `web/studio/tune.js` | 237 |
-| `web/studio/tutorials.js` | 1978 |
+| `web/studio/tutorials.js` | 1979 |
 | `web/studio/units.js` | 156 |
 | `web/studio/watch.js` | 339 |
 | `web/studio/winframe.js` | 63 |
@@ -163,7 +163,7 @@
 | `tests/test_trstart.py` | 26 |
 | `tests/test_trv.py` | 248 |
 | `tests/test_tune.py` | 277 |
-| `tests/test_tutorials.py` | 740 |
+| `tests/test_tutorials.py` | 751 |
 | `tests/test_units.py` | 78 |
 | `tests/test_watch.py` | 87 |
 | `tests/test_wb.py` | 489 |
@@ -207,7 +207,7 @@
 | `tests/js/trv_cases.js` | 8 |
 | `tests/js/trv_tutorial_cases.js` | 30 |
 | `tests/js/tune_cases.js` | 39 |
-| `tests/js/tutorial_cases.js` | 144 |
+| `tests/js/tutorial_cases.js` | 145 |
 | `tests/js/units_cases.js` | 52 |
 | `tests/js/watch_cases.js` | 41 |
 | `tests/js/wb_cases.js` | 21 |
@@ -365,60 +365,60 @@
 | 229 | `sampling` | Αμφίδρομος · μπαταρία (PE2) | Άσκηση 2 · Επίδραση δειγματοληψίας |
 | 264 | `polyphase` | Αμφίδρομος · μπαταρία (PE2) | Άσκηση 2 · Πολυφασική σχεδίαση |
 | 302 | `current_ctl` | Αμφίδρομος · μπαταρία (PE2) | Άσκηση 3 · Έλεγχος ρεύματος από μπλοκ |
-| 352 | `blocks_loop` | Μπλοκ σημάτων (3.0) | Βρόχος ρεύματος από μπλοκ |
-| 380 | `code_loop` | Μπλοκ κώδικα (3.3) | PI σε Python και πρόσθια τροφοδότηση με έκφραση |
-| 405 | `cell_eis` | Μπαταρίες και EIS (3.3.1) | Δοκιμή κυψέλης: EIS με μετατροπέα |
-| 448 | `im_vf` | Ηλεκτρική κίνηση (3.4) | Μηχανή επαγωγής: V/f και διαμόρφωση SPWM, SVPWM, τετραγωνική |
-| 461 | `im_foc` | Ηλεκτρική κίνηση (3.4) | Μηχανή επαγωγής: διανυσματικός έλεγχος, εξασθένιση πεδίου, R̂_R |
-| 516 | `synrm` | Ηλεκτρική κίνηση (3.5) | Σύγχρονη μηχανή μαγνητικής αντίστασης (SynRM): ευθυγράμμιση, έλεγχος dq, MTPA |
-| 542 | `pmsm` | Ηλεκτρική κίνηση (3.5) | Σύγχρονη μηχανή μόνιμων μαγνητών (PMSM / IPMSM): i_d = 0 και MTPA |
-| 558 | `srm` | Ηλεκτρική κίνηση (3.6) | Μηχανή μεταβλητής μαγνητικής αντίστασης (SRM 8/6): γωνίες, υστέρηση, βρόχος ψ–i |
-| 589 | `lightning` | Κεραυνικά (3.5) | Κεραυνικό ρεύμα Heidler: 10/350, 1/200, 0,25/100 μs |
-| 601 | `twave` | Υψηλές τάσεις (3.8) | Οδεύοντα κύματα: ανάκλαση σε ανοιχτό, βραχυκυκλωμένο ή ωμικό άκρο, διάγραμμα Bewley |
-| 624 | `arrester` | Υψηλές τάσεις (3.9) | Αλεξικέραυνο: παραμένουσα τάση και απόσταση προστασίας |
-| 640 | `marx` | Υψηλές τάσεις (3.10) | Γεννήτρια Marx: πολυβάθμια κρουστική γεννήτρια με σπινθηριστές |
-| 670 | `chop` | Υψηλές τάσεις (3.10) | Αποκομμένη κρουστική τάση: σπινθηριστής αποκοπής |
-| 704 | `hv153` | Υψηλές τάσεις (3.11) | Ασκήσεις 15.3: γεννήτριες κρουστικών τάσεων (βιβλίο, ακριβής λύση, προσομοίωση) |
-| 725 | `lossline` | Υψηλές τάσεις (3.11) | Γραμμή με απώλειες: απόσβεση και παραμόρφωση οδεύοντος κύματος |
-| 742 | `voltime` | Υψηλές τάσεις (3.11) | Καμπύλη τάσης–χρόνου διακένου (κριτήριο ενέργειας διάσπασης) |
-| 758 | `hvdiv` | Υψηλές τάσεις (3.12) | Μέτρηση εναλλασσόμενης υψηλής τάσης: καταμεριστές (ασκήσεις 15.1.3, 15.1.5) |
-| 775 | `schering` | Υψηλές τάσεις (3.12) | Γέφυρα Schering: χωρητικότητα και συντελεστής απωλειών (άσκηση 15.5.12) |
-| 790 | `peak_cm` | Μπλοκ σημάτων (3.0) | Peak current-mode και υποαρμονική |
-| 812 | `pcm_chaos` | Μπλοκ σημάτων (3.0) | Διακλαδώσεις και χάος στο peak current-mode (boost) |
-| 826 | `dc_drive` | Ηλεκτρική κίνηση (3.1) | Μηχανή ΣΡ: βρόχοι ρεύματος και ταχύτητας |
-| 936 | `nn_compare` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Έλεγχος με νευρωνικό δίκτυο: σύγκριση |
-| 942 | `nn_online` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Νευρωνικό που μαθαίνει αμέσως |
-| 967 | `ai_block` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Ελεγκτής AI με πρόσοψη |
-| 1055 | `ev_drive` | Ηλεκτρικό όχημα (4.8) | Ηλεκτρικό όχημα: πολυκριτηριακός έλεγχος |
-| 1062 | `nn_gui` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Σύνθεση ελέγχου από Python: κάθε μηχανή, στόχοι με βάρη |
-| 1069 | `sub_legs` | Υποκυκλώματα (3.17) | Πολυφασικός buck από ένα υποκύκλωμα σκέλους |
-| 1102 | `bus_dq` | Δίαυλοι (3.18) | Βρόχος ρεύματος dq με διαύλους: τριφασικός μετατροπέας προς δίκτυο |
-| 1141 | `net_fault` | Δίκτυο (4.1) | Βραχυκύκλωμα σε δίκτυο: IEC 60909 και συμμετρικές συνιστώσες |
-| 1161 | `gen_sc` | Συστήματα ισχύος (4.3) | Τριφασικό βραχυκύκλωμα στα άκρα σύγχρονης γεννήτριας |
-| 1177 | `fbm` | Συστήματα ισχύος (4.3) | IEEE First Benchmark Model: υποσύγχρονος συντονισμός (SSR) |
-| 1225 | `gen_ctl` | Συστήματα ισχύος (4.8.1) | Γεννήτρια με AVR, PSS και ρυθμιστή στροφών |
-| 1275 | `ieee9_emt` | Συστήματα ισχύος (4.3) | IEEE 9 ζυγών σε EMT, από τη ροή φορτίου |
-| 1306 | `big_grid` | Μεγάλα δίκτυα (4.19.3) | Πλέγμα k × k ζυγών σε EMT: ο γραμμικός λύτης σε μεγάλο δίκτυο |
-| 1321 | `pf_study` | Ροή φορτίου και OPF (4.19.1) | Ροή φορτίου και N−1 σε δίκτυα IEEE |
-| 1332 | `opf_study` | Ροή φορτίου και OPF (4.19.1) | Βέλτιστη ροή φορτίου (OPF) σε δίκτυα IEEE |
-| 1355 | `ieee9_sssc` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | IEEE 9 ζυγών σε EMT με τριφασικό m-SSSC (κεντρικός έλεγχος) |
-| 1385 | `trv_terminal` | Διακόπτες ισχύος (4.9) | TRV σε σφάλμα ακροδεκτών: IEC 62271-100 |
-| 1406 | `trv_slf` | Διακόπτες ισχύος (4.9) | Σφάλμα κοντινής γραμμής και τόξο του διακόπτη |
-| 1437 | `lightning_gis` | Κεραυνοί και συντονισμός μόνωσης (4.9) | Κεραυνός σε γραμμή 400 kV δίπλα σε υποσταθμό GIS: συντονισμός μόνωσης |
-| 1500 | `line_fd` | Γραμμές (4.4) | Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD) |
-| 1521 | `cable_fd` | Καλώδια (4.5) | Ζεύξη υποβρύχιου καλωδίου 220 kV: CP και FD |
-| 1570 | `cable_xb` | Καλώδια: wideband και cross-bonding (4.13) | Υπόγειο καλώδιο 150 kV με cross-bonding: αναλυτικό και ομογενές μοντέλο |
-| 1613 | `sssc_1ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε γραμμή (μονοφασικό) |
-| 1633 | `sssc_3ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε δίκτυο 150 kV (τριφασικό, 4 ζυγοί) |
-| 1671 | `ccsc_1ph` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | CCSC: πυκνωτής σειράς ελεγχόμενος από μετατροπέα (μονοφασικό) |
-| 1699 | `hvdc_mmc` | HVDC: MMC (4.14) | Σύνδεση HVDC με MMC σημείο προς σημείο (±320 kV, 1000 MW) |
-| 1742 | `hvdc_gfm` | Grid-forming (4.18.1) | Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα |
-| 1790 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
-| 1844 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
-| 1871 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
-| 1899 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
-| 1936 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
-| 1966 | `empty` | Νέο | Κενό κύκλωμα |
+| 353 | `blocks_loop` | Μπλοκ σημάτων (3.0) | Βρόχος ρεύματος από μπλοκ |
+| 381 | `code_loop` | Μπλοκ κώδικα (3.3) | PI σε Python και πρόσθια τροφοδότηση με έκφραση |
+| 406 | `cell_eis` | Μπαταρίες και EIS (3.3.1) | Δοκιμή κυψέλης: EIS με μετατροπέα |
+| 449 | `im_vf` | Ηλεκτρική κίνηση (3.4) | Μηχανή επαγωγής: V/f και διαμόρφωση SPWM, SVPWM, τετραγωνική |
+| 462 | `im_foc` | Ηλεκτρική κίνηση (3.4) | Μηχανή επαγωγής: διανυσματικός έλεγχος, εξασθένιση πεδίου, R̂_R |
+| 517 | `synrm` | Ηλεκτρική κίνηση (3.5) | Σύγχρονη μηχανή μαγνητικής αντίστασης (SynRM): ευθυγράμμιση, έλεγχος dq, MTPA |
+| 543 | `pmsm` | Ηλεκτρική κίνηση (3.5) | Σύγχρονη μηχανή μόνιμων μαγνητών (PMSM / IPMSM): i_d = 0 και MTPA |
+| 559 | `srm` | Ηλεκτρική κίνηση (3.6) | Μηχανή μεταβλητής μαγνητικής αντίστασης (SRM 8/6): γωνίες, υστέρηση, βρόχος ψ–i |
+| 590 | `lightning` | Κεραυνικά (3.5) | Κεραυνικό ρεύμα Heidler: 10/350, 1/200, 0,25/100 μs |
+| 602 | `twave` | Υψηλές τάσεις (3.8) | Οδεύοντα κύματα: ανάκλαση σε ανοιχτό, βραχυκυκλωμένο ή ωμικό άκρο, διάγραμμα Bewley |
+| 625 | `arrester` | Υψηλές τάσεις (3.9) | Αλεξικέραυνο: παραμένουσα τάση και απόσταση προστασίας |
+| 641 | `marx` | Υψηλές τάσεις (3.10) | Γεννήτρια Marx: πολυβάθμια κρουστική γεννήτρια με σπινθηριστές |
+| 671 | `chop` | Υψηλές τάσεις (3.10) | Αποκομμένη κρουστική τάση: σπινθηριστής αποκοπής |
+| 705 | `hv153` | Υψηλές τάσεις (3.11) | Ασκήσεις 15.3: γεννήτριες κρουστικών τάσεων (βιβλίο, ακριβής λύση, προσομοίωση) |
+| 726 | `lossline` | Υψηλές τάσεις (3.11) | Γραμμή με απώλειες: απόσβεση και παραμόρφωση οδεύοντος κύματος |
+| 743 | `voltime` | Υψηλές τάσεις (3.11) | Καμπύλη τάσης–χρόνου διακένου (κριτήριο ενέργειας διάσπασης) |
+| 759 | `hvdiv` | Υψηλές τάσεις (3.12) | Μέτρηση εναλλασσόμενης υψηλής τάσης: καταμεριστές (ασκήσεις 15.1.3, 15.1.5) |
+| 776 | `schering` | Υψηλές τάσεις (3.12) | Γέφυρα Schering: χωρητικότητα και συντελεστής απωλειών (άσκηση 15.5.12) |
+| 791 | `peak_cm` | Μπλοκ σημάτων (3.0) | Peak current-mode και υποαρμονική |
+| 813 | `pcm_chaos` | Μπλοκ σημάτων (3.0) | Διακλαδώσεις και χάος στο peak current-mode (boost) |
+| 827 | `dc_drive` | Ηλεκτρική κίνηση (3.1) | Μηχανή ΣΡ: βρόχοι ρεύματος και ταχύτητας |
+| 937 | `nn_compare` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Έλεγχος με νευρωνικό δίκτυο: σύγκριση |
+| 943 | `nn_online` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Νευρωνικό που μαθαίνει αμέσως |
+| 968 | `ai_block` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Ελεγκτής AI με πρόσοψη |
+| 1056 | `ev_drive` | Ηλεκτρικό όχημα (4.8) | Ηλεκτρικό όχημα: πολυκριτηριακός έλεγχος |
+| 1063 | `nn_gui` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Σύνθεση ελέγχου από Python: κάθε μηχανή, στόχοι με βάρη |
+| 1070 | `sub_legs` | Υποκυκλώματα (3.17) | Πολυφασικός buck από ένα υποκύκλωμα σκέλους |
+| 1103 | `bus_dq` | Δίαυλοι (3.18) | Βρόχος ρεύματος dq με διαύλους: τριφασικός μετατροπέας προς δίκτυο |
+| 1142 | `net_fault` | Δίκτυο (4.1) | Βραχυκύκλωμα σε δίκτυο: IEC 60909 και συμμετρικές συνιστώσες |
+| 1162 | `gen_sc` | Συστήματα ισχύος (4.3) | Τριφασικό βραχυκύκλωμα στα άκρα σύγχρονης γεννήτριας |
+| 1178 | `fbm` | Συστήματα ισχύος (4.3) | IEEE First Benchmark Model: υποσύγχρονος συντονισμός (SSR) |
+| 1226 | `gen_ctl` | Συστήματα ισχύος (4.8.1) | Γεννήτρια με AVR, PSS και ρυθμιστή στροφών |
+| 1276 | `ieee9_emt` | Συστήματα ισχύος (4.3) | IEEE 9 ζυγών σε EMT, από τη ροή φορτίου |
+| 1307 | `big_grid` | Μεγάλα δίκτυα (4.19.3) | Πλέγμα k × k ζυγών σε EMT: ο γραμμικός λύτης σε μεγάλο δίκτυο |
+| 1322 | `pf_study` | Ροή φορτίου και OPF (4.19.1) | Ροή φορτίου και N−1 σε δίκτυα IEEE |
+| 1333 | `opf_study` | Ροή φορτίου και OPF (4.19.1) | Βέλτιστη ροή φορτίου (OPF) σε δίκτυα IEEE |
+| 1356 | `ieee9_sssc` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | IEEE 9 ζυγών σε EMT με τριφασικό m-SSSC (κεντρικός έλεγχος) |
+| 1386 | `trv_terminal` | Διακόπτες ισχύος (4.9) | TRV σε σφάλμα ακροδεκτών: IEC 62271-100 |
+| 1407 | `trv_slf` | Διακόπτες ισχύος (4.9) | Σφάλμα κοντινής γραμμής και τόξο του διακόπτη |
+| 1438 | `lightning_gis` | Κεραυνοί και συντονισμός μόνωσης (4.9) | Κεραυνός σε γραμμή 400 kV δίπλα σε υποσταθμό GIS: συντονισμός μόνωσης |
+| 1501 | `line_fd` | Γραμμές (4.4) | Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD) |
+| 1522 | `cable_fd` | Καλώδια (4.5) | Ζεύξη υποβρύχιου καλωδίου 220 kV: CP και FD |
+| 1571 | `cable_xb` | Καλώδια: wideband και cross-bonding (4.13) | Υπόγειο καλώδιο 150 kV με cross-bonding: αναλυτικό και ομογενές μοντέλο |
+| 1614 | `sssc_1ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε γραμμή (μονοφασικό) |
+| 1634 | `sssc_3ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε δίκτυο 150 kV (τριφασικό, 4 ζυγοί) |
+| 1672 | `ccsc_1ph` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | CCSC: πυκνωτής σειράς ελεγχόμενος από μετατροπέα (μονοφασικό) |
+| 1700 | `hvdc_mmc` | HVDC: MMC (4.14) | Σύνδεση HVDC με MMC σημείο προς σημείο (±320 kV, 1000 MW) |
+| 1743 | `hvdc_gfm` | Grid-forming (4.18.1) | Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα |
+| 1791 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
+| 1845 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
+| 1872 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
+| 1900 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
+| 1937 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
+| 1967 | `empty` | Νέο | Κενό κύκλωμα |
 
 ## API του server (`run.py`, `/api/<action>`)
 
@@ -2244,104 +2244,104 @@ _(χωρίς συναρτήσεις)_
 | 275 | method | `build` |
 | 301 | function | `ccDesign` |
 | 309 | method | `build` |
-| 358 | method | `build` |
-| 385 | method | `build` |
-| 410 | method | `build` |
-| 437 | function | `invIM` |
-| 452 | method | `build` |
-| 466 | method | `build` |
-| 493 | const fn | `r4` |
-| 497 | function | `smFoc` |
-| 523 | method | `build` |
-| 547 | method | `build` |
-| 563 | method | `build` |
-| 593 | method | `build` |
-| 609 | method | `build` |
-| 630 | method | `build` |
-| 646 | method | `build` |
-| 657 | function | `marxCircuit` |
-| 676 | method | `build` |
-| 708 | method | `build` |
-| 715 | const fn | `down` |
-| 732 | method | `build` |
-| 749 | method | `build` |
-| 762 | method | `build` |
-| 779 | method | `build` |
-| 796 | method | `build` |
-| 816 | method | `build` |
-| 831 | method | `build` |
-| 877 | function | `nnSched` |
-| 878 | function | `nnDrive` |
-| 941 | method | `build` |
-| 948 | method | `build` |
-| 954 | function | `aiBlock` |
-| 973 | method | `build` |
-| 984 | function | `evDrive` |
-| 991 | const fn | `IN` |
-| 1030 | const fn | `fix` |
-| 1061 | method | `build` |
-| 1066 | method | `build` |
-| 1075 | method | `build` |
-| 1085 | const fn | `y` |
-| 1108 | method | `build` |
-| 1109 | const fn | `ws` |
-| 1148 | method | `build` |
-| 1166 | method | `build` |
-| 1174 | function | `fbmPoint` |
-| 1181 | method | `build` |
-| 1200 | function | `smibPoint` |
-| 1201 | function | `genCtl` |
-| 1203 | const fn | `L` |
-| 1231 | method | `build` |
-| 1241 | function | `ieee9Build` |
-| 1243 | const fn | `GD` |
-| 1244 | const fn | `L` |
-| 1246 | const fn | `G` |
-| 1247 | const fn | `Ld` |
-| 1280 | method | `build` |
-| 1288 | function | `bigGrid` |
-| 1289 | const fn | `B` |
-| 1291 | const fn | `w` |
-| 1311 | method | `build` |
-| 1331 | method | `build` |
-| 1343 | method | `build` |
-| 1360 | method | `build` |
-| 1376 | const fn | `LM` |
-| 1379 | function | `tlmPart` |
-| 1393 | method | `build` |
-| 1412 | method | `build` |
-| 1432 | function | `tlmGW` |
-| 1436 | const fn | `note` |
-| 1448 | method | `build` |
-| 1466 | const fn | `tl` |
-| 1494 | const fn | `PANE` |
-| 1505 | method | `build` |
-| 1507 | const fn | `rig` |
-| 1526 | method | `build` |
-| 1528 | const fn | `rig` |
-| 1548 | function | `xbRig` |
-| 1550 | const fn | `bond` |
-| 1577 | method | `build` |
-| 1612 | function | `ssscChannels` |
-| 1621 | method | `build` |
-| 1641 | method | `build` |
-| 1643 | const fn | `ln` |
-| 1677 | method | `build` |
-| 1679 | const fn | `sw` |
-| 1706 | method | `build` |
-| 1710 | const fn | `station` |
-| 1746 | method | `build` |
-| 1750 | const fn | `station` |
-| 1797 | method | `build` |
-| 1834 | const fn | `gfmWire` |
-| 1838 | const fn | `busMeter` |
-| 1851 | method | `build` |
-| 1853 | const fn | `unit` |
-| 1876 | method | `build` |
-| 1907 | method | `build` |
-| 1940 | method | `build` |
-| 1967 | method | `build` |
-| 1972 | function | `dcdcInputs` |
+| 359 | method | `build` |
+| 386 | method | `build` |
+| 411 | method | `build` |
+| 438 | function | `invIM` |
+| 453 | method | `build` |
+| 467 | method | `build` |
+| 494 | const fn | `r4` |
+| 498 | function | `smFoc` |
+| 524 | method | `build` |
+| 548 | method | `build` |
+| 564 | method | `build` |
+| 594 | method | `build` |
+| 610 | method | `build` |
+| 631 | method | `build` |
+| 647 | method | `build` |
+| 658 | function | `marxCircuit` |
+| 677 | method | `build` |
+| 709 | method | `build` |
+| 716 | const fn | `down` |
+| 733 | method | `build` |
+| 750 | method | `build` |
+| 763 | method | `build` |
+| 780 | method | `build` |
+| 797 | method | `build` |
+| 817 | method | `build` |
+| 832 | method | `build` |
+| 878 | function | `nnSched` |
+| 879 | function | `nnDrive` |
+| 942 | method | `build` |
+| 949 | method | `build` |
+| 955 | function | `aiBlock` |
+| 974 | method | `build` |
+| 985 | function | `evDrive` |
+| 992 | const fn | `IN` |
+| 1031 | const fn | `fix` |
+| 1062 | method | `build` |
+| 1067 | method | `build` |
+| 1076 | method | `build` |
+| 1086 | const fn | `y` |
+| 1109 | method | `build` |
+| 1110 | const fn | `ws` |
+| 1149 | method | `build` |
+| 1167 | method | `build` |
+| 1175 | function | `fbmPoint` |
+| 1182 | method | `build` |
+| 1201 | function | `smibPoint` |
+| 1202 | function | `genCtl` |
+| 1204 | const fn | `L` |
+| 1232 | method | `build` |
+| 1242 | function | `ieee9Build` |
+| 1244 | const fn | `GD` |
+| 1245 | const fn | `L` |
+| 1247 | const fn | `G` |
+| 1248 | const fn | `Ld` |
+| 1281 | method | `build` |
+| 1289 | function | `bigGrid` |
+| 1290 | const fn | `B` |
+| 1292 | const fn | `w` |
+| 1312 | method | `build` |
+| 1332 | method | `build` |
+| 1344 | method | `build` |
+| 1361 | method | `build` |
+| 1377 | const fn | `LM` |
+| 1380 | function | `tlmPart` |
+| 1394 | method | `build` |
+| 1413 | method | `build` |
+| 1433 | function | `tlmGW` |
+| 1437 | const fn | `note` |
+| 1449 | method | `build` |
+| 1467 | const fn | `tl` |
+| 1495 | const fn | `PANE` |
+| 1506 | method | `build` |
+| 1508 | const fn | `rig` |
+| 1527 | method | `build` |
+| 1529 | const fn | `rig` |
+| 1549 | function | `xbRig` |
+| 1551 | const fn | `bond` |
+| 1578 | method | `build` |
+| 1613 | function | `ssscChannels` |
+| 1622 | method | `build` |
+| 1642 | method | `build` |
+| 1644 | const fn | `ln` |
+| 1678 | method | `build` |
+| 1680 | const fn | `sw` |
+| 1707 | method | `build` |
+| 1711 | const fn | `station` |
+| 1747 | method | `build` |
+| 1751 | const fn | `station` |
+| 1798 | method | `build` |
+| 1835 | const fn | `gfmWire` |
+| 1839 | const fn | `busMeter` |
+| 1852 | method | `build` |
+| 1854 | const fn | `unit` |
+| 1877 | method | `build` |
+| 1908 | method | `build` |
+| 1941 | method | `build` |
+| 1968 | method | `build` |
+| 1973 | function | `dcdcInputs` |
 
 ### `web/studio/units.js`
 
