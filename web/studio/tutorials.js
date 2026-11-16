@@ -930,7 +930,7 @@
  function evDrive(o){const V=EVV,g=9.80665,grade=o.cycle==='grade',sport=o.cycle==='sport',m=V.m+(grade?35:0),g0=grade?4:0,ga=grade?2.5:1.5,soc0=grade?.55:.85,D=+o.D||60;
   const Jeq=+(V.Jm+m*(V.rw/V.gear)**2).toPrecision(6),wmax=+((V.vkph/3.6)/V.rw*V.gear/.85).toPrecision(6),cy=EV_CYC[grade?'grade':sport?'sport':'urban'];
   const lut=cy.t.map((t,k)=>`${+(t*D).toPrecision(6)}, ${cy.y[k]}`).join(', ');
-  const ctl=['moev','ai','pi'].includes(o.ctrl)?o.ctrl:'moevc',mo=ctl==='moev'||ctl==='moevc';
+  const ctl=['moev','moevc','ai','pi'].includes(o.ctrl)?o.ctrl:'moevc2',mo=ctl==='moev'||ctl==='moevc'||ctl==='moevc2';
   // 4.17.1 (§59): the vehicle as inputs of the circuit (constants with «Είσοδος», in the parameters of the circuit with
   // their explanation); the inertia at the shaft, the friction, the gear of the speed and the road load are expressions
   // of them, computed again at every change
@@ -996,10 +996,10 @@
    wires.push(['TFr:y','C1:r',[[-220,-30],[-220,-20]]],['TFw5:y','C1:y',[[-220,10],[-220,20]]],['C1:u','TGu:u']);}
   const watch={tiles:[...(mo?[{ctl:'MO1.mode',label:'Τρόπος',at:[-300,-275]},{ctl:'MO1.ws',label:'Βάρος ταχύτητας',rng:[0,1.5],steps:['-0.1','+0.1']},{ctl:'MO1.wt',label:'Βάρος ροπής',rng:[0,1.5],steps:['-0.1','+0.1']},{ctl:'MO1.we',label:'Βάρος ενέργειας',rng:[0,1.5],steps:['-0.1','+0.1']}]:[]),
    ['Y:KPH','ταχύτητα (km/h)'],['Y:SOC','SOC'],['Y:KWH','km/kWh'],['Y:WHK','Wh/km'],['Y:NMK','N·m/kW'],['Y:IRMS','I_rms (A)'],['Y:DSOC','πτώση SOC (μον. %)'],...(mo?[['Y:MO1/KP','κράτηση ροπής (keep)'],['Y:MO1/LIM','κατανομή / όριο ενεργό']]:[])]};
-  const panes=[[['Y:REF','ω*'],['Y:M1','ω'],...(ctl==='moevc'?[['Y:MO1/GOV','ω* μετά τον ρυθμιστή']]:[])],[['Y:M1:te','τ_e'],...(mo?[['Y:MO1/TQ','τ*']]:[]),['Y:ROAD','τ_L']],[['Y:SOC','SOC']],[['Y:AM1','i_a']]];
+  const panes=[[['Y:REF','ω*'],['Y:M1','ω'],...(ctl==='moevc'||ctl==='moevc2'?[['Y:MO1/GOV','ω* μετά τον ρυθμιστή']]:[])],[['Y:M1:te','τ_e'],...(mo?[['Y:MO1/TQ','τ*']]:[]),['Y:ROAD','τ_L']],[['Y:SOC','SOC']],[['Y:AM1','i_a']]];
   return project(comps,wires,{watch,sim:{hDiv:2,speed:3000,stopT:0,rec:{dt:1e-3}},scope:{panes,window:{unit:'s',n:D}},meta:{ev:true,D,soc0,Jeq,wmax,ctrl:ctl}});}
  T.push({id:'ev_drive',group:'Ηλεκτρικό όχημα (4.8)',title:'Ηλεκτρικό όχημα: πολυκριτηριακός έλεγχος',theory:'formula',topology:'ev_drive',
-  options:[{k:'ctrl',label:'Ελεγκτής',options:[['moevc','Πολυκριτηριακός συζευγμένος: ρυθμιστής αναφοράς, ταχύτητα → επιτάχυνση → ροπή → ρεύμα'],['moev','Πολυκριτηριακός καταρράκτης: ταχύτητα → ροπή → ρεύμα, επόπτης SOC/ισχύος'],['ai','Ελεγκτής AI: PI + νευρωνικό (ένας βρόχος τάσης)'],['pi','Μόνο PI ταχύτητας (τάση)']],def:'moevc'},
+  options:[{k:'ctrl',label:'Ελεγκτής',options:[['moevc2','Πολυκριτηριακός συζευγμένος με βάρη που δρουν πάντα (4.18.1)'],['moevc','Πολυκριτηριακός συζευγμένος (4.8): ρυθμιστής αναφοράς, ταχύτητα → ροπή → ρεύμα'],['moev','Πολυκριτηριακός καταρράκτης: ταχύτητα → ροπή → ρεύμα, επόπτης SOC/ισχύος'],['ai','Ελεγκτής AI: PI + νευρωνικό (ένας βρόχος τάσης)'],['pi','Μόνο PI ταχύτητας (τάση)']],def:'moevc2'},
    {k:'mode',label:'Τρόπος',options:[['balanced','Ισορροπημένος'],['eco','Οικονομικός (eco)'],['performance','Επιδόσεων']],def:'balanced'},
    {k:'cycle',label:'Διαδρομή',options:[['urban','Αστική (κλίση ± 1,5 %, SOC 85 %)'],['grade','Με κλίση 4 % ± 2,5 %, φορτίο +35 kg, SOC 55 %'],['sport','Γρήγορες επιταχύνσεις (εκεί φαίνεται ο τρόπος)']],def:'urban'}],
   desc:'Όχημα 115 kg με μηχανή ΣΡ (μετάδοση 7:1, τροχός 0,255 m), μπαταρία 18 Ah με OCV(SOC) και R_int(SOC), μετατροπέας ως μέσο μοντέλο, φορτίο δρόμου (κύλιση, αέρας, κλίση που αλλάζει με την απόσταση). Ο κύκλος οδήγησης επαναλαμβάνεται κάθε 60 s και η προσομοίωση δεν τελειώνει: τρέχει όσα λεπτά θέλεις, η καταγραφή κρατά ένα σημείο ανά ms και «⭳ σε αρχείο» γράφει όλο το τρέξιμο στον δίσκο. Ο πολυκριτηριακός ελεγκτής είναι ο καταρράκτης «moevc» του Control Workbench EV/DC: ρυθμιστής αναφοράς από τα όρια, ταχύτητα → επιτάχυνση → ροπή μέσω της δυναμικής του οχήματος, κατανομή με βάρη ταχύτητας, ροπής και ενέργειας, βρόχος ρεύματος.',
@@ -1609,6 +1609,49 @@
     scope:{panes:[[['Y:CT1/PP','P σταθμού 1 (pu)'],['Y:CT2/PP','P σταθμού 2 (pu)']],[['Y:CT1/Fvdc','V_dc 1 (pu)'],['Y:CT2/Fvdc','V_dc 2 (pu)']],[['Y:MMC1/IDC','I_dc 1'],['Y:MMC2/IDC','I_dc 2']],
      [['Y:MMC1/IAa','i_a 1'],['Y:MMC1/IAb','i_b 1'],['Y:MMC1/IAc','i_c 1']],arm],window:{unit:'s',n:0.2}},
     meta:{hvdc:{model,N,ev,ectl:mmc.ectl,S:1059e6,Vdc:640e3,Vac:333e3,C:mmc.C,Larm:0.05,Ron:1e-3,Sk:10e9,uk:18,len:70}}});}});
+ // 4.18.1 (§58): the MMC station as a grid-forming converter (MMCC mode 'gfm': the law of GFMC inside). The link of hvdc_mmc
+ // (Model 4, cables ±320 kV 70 km WB): station 1 holds V_dc from a strong grid, station 2 forms the AC voltage of an island
+ // (load step), of a weak grid (SCR 1,5, step of P) or of an island together with a second grid-forming unit (VSC2 + GFMC
+ // 500 MVA, droop: the load shared in proportion to the ratings)
+ const HVDC_G={island:'Νησίδα: μόνο φορτία, +300 MW στα 0,6 s',weak:'Ασθενές δίκτυο (SCR 1,5): P 0,5 → 0,9 pu στα 0,6 s',par:'Νησίδα με δεύτερη μονάδα grid-forming 500 MVA: +300 MW στα 0,6 s'};
+ T.push({id:'hvdc_gfm',group:'Grid-forming (4.18.1)',title:'Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα',theory:'formula',topology:'hvdc_gfm',
+  options:[{k:'ac',label:'Δίκτυο του σταθμού 2',options:Object.entries(HVDC_G),def:'island'},{k:'law',label:'Νόμος του σταθμού 2',options:[['droop','Στατικότητα P–f 2 %, Q–V 5 % (φίλτρο 5 Hz)'],['vsm','VSM (H = 2 s)'],['psc','PSC (k_p = 50 rad/s, ρύθμιση V_ac)']],def:'droop'}],
+  desc:'Η σύνδεση HVDC του tutorial MMC (σταθμοί 1059 MVA, Model 4, καλώδια ±320 kV 70 km wideband). Ο σταθμός 1 κρατά την τάση DC από ένα ισχυρό δίκτυο. Ο σταθμός 2 είναι grid-forming: σχηματίζει την τάση AC του δικτύου του με τον νόμο του στοιχείου «Έλεγχος grid-forming» (στατικότητα, VSM ή PSC) μέσα στον έλεγχο του σταθμού, άμεσα η τάση με όριο ρεύματος στο 1,1 pu. Στη νησίδα δεν υπάρχει άλλη πηγή: ο σταθμός ορίζει και τη συχνότητα.',
+  tasks:['Νησίδα: μετά το βήμα φορτίου η συχνότητα πέφτει κατά m_p·ΔP (κάρτα) και η ενέργεια έρχεται από τον σταθμό 1 μέσω της τάσης DC.','Με δεύτερη μονάδα: το φορτίο μοιράζεται ανάλογα με τα 1059 και 500 MVA (ίδιο pu στις δύο), χωρίς επικοινωνία.','Ασθενές δίκτυο: ο σταθμός φτάνει τα 0,9 pu στο SCR 1,5 (ο έλεγχος ρεύματος του σταθμού της 4.18 ήταν ασταθής στο SCR 1).','Σύγκρινε στατικότητα, VSM και PSC στην πτώση της συχνότητας αμέσως μετά το βήμα.'],
+  build(o){const ac=HVDC_G[o.ac]?o.ac:'island',law=['droop','vsm','psc'].includes(o.law)?o.law:'droop',f=50,S=1059e6,N=400,te=0.6,r=x=>+x.toPrecision(6);
+   const mmc={impl:'fast',model:'m4',N,C:10e-3,Vdc:640e3,Larm:0.05,Ron:1e-3,ectl:'energy',conn:'bus'};
+   const ctl={S,Vac:333e3,Vdc:640e3,f0:f,X:0.075,R:0.002,th0:-120,tdb:0.05,tbrk:0,prot:'on',Idcmax:2,tprot:0.3};
+   const comps=[],wires=[],isl=ac!=='weak';
+   const station=(k,x0,dir,ctlp,grid)=>{const X=d=>x0+dir*d,id=q=>q+k;
+    if(grid)comps.push(C(id('NET'),'GRID3',X(0),300,{Un:400e3,f,Sk:grid,XR:10,cf:1,emf:'un',conn:'bus'},{label:'δίκτυο '+k,flip:dir<0}),C(id('CB'),'CB3',X(120),300,{ctl:'sig',model:'ideal',conn:'bus'},{label:'διακόπτης AC '+k,flip:dir<0}));
+    else comps.push(C(id('JL'),'JUNC',X(120),300));
+    comps.push(C(id('TR'),'XF3',X(240),300,{grp:'YNd1',Sn:S,U1:400e3,U2:333e3,f,uk:18,i0:0,conn:'bus'},{label:'400/333 kV',flip:dir<0}),
+     C(id('J'),'JUNC',X(340),300),C(id('SR'),'LOAD3',X(340),420,{cn:'yn',Un:333e3,f,P:5e4,Q:3e6,conn:'bus'},{label:'αντιδραστήρας αστέρα'}),
+     C(id('MMC'),'MMC',X(480),320,mmc,{label:'MMC '+k,flip:dir<0}),C(id('CT'),'MMCC',X(480),600,{...ctl,...ctlp},{label:'έλεγχος '+k,flip:dir<0}));
+    if(grid)wires.push([id('NET')+':abc',id('CB')+':abc1'],[id('CB')+':abc2',id('TR')+':abc1'],[id('CT')+':brk',id('CB')+':cmd']);else wires.push([id('JL')+':j',id('TR')+':abc1']);
+    wires.push([id('TR')+':abc2',id('J')+':j'],[id('J')+':j',id('SR')+':abc'],[id('J')+':j',id('MMC')+':abc']);
+    for(const q of ['va','vb','vc','ia','ib','ic','vdc','idc','vs'])wires.push([id('MMC')+':'+q,id('CT')+':'+q]);
+    for(const q of ['ma','mb','mc','blk'])wires.push([id('CT')+':'+q,id('MMC')+':'+q]);};
+   station(1,60,1,{mode:'vdc',Vdcref:'1',Tvdc:0.05,H:0.03,qmode:'q',Qref:'0',Tq:0.1},10e9);
+   // station 2: P_ref into the converter (−: to the AC side); in the island its share comes from the droop
+   const g2={mode:'gfm',law,Pref:ac==='weak'?`0:-0.5, ${te}:-0.9`:'-0.55',Qref:'0',Vref:'1',mp:2,nq:5,fp:5,Hv:2,tv:0.02,kp:50,avc:'vac',Vacref:'1',KE:5,TE:0.05,kv:law==='psc'?0.3:0,av:40,Xv:0,Ilim:1.1,Idlim:1.1,vmax:1.3,bw:20,tsoft:0.05,ac:600,Ufd:0.6};
+   station(2,1740,-1,g2,ac==='weak'?r(1.5*S):0);
+   const Pp=root.Parts,d=JSON.parse(JSON.stringify(Pp.TLM_TYPICAL['320kV-dc']));
+   const pc={...Pp.defaults('TLM'),model:'wb',len:70,fmin:1e-3,dec:10,wdc:'1',wpas:'enforce',vtrap:'320e3, -320e3',data:JSON.stringify(d)};
+   const m=LM()?.['320kV-dc|70|wb'];pc.mdl=m?JSON.stringify({...m,src:Pp.tlmKey(pc)}):'';
+   comps.push(C('CAB','TLM',900,300,pc,{label:'καλώδια ±320 kV · 70 km (WB)'}));
+   wires.push(['MMC1:p','CAB:a1'],['MMC1:n','CAB:b1'],['CAB:a2','MMC2:p'],['CAB:b2','MMC2:n']);
+   if(isl){comps.push(C('LD2','LOAD3',1560,440,{cn:'yn',Un:400e3,f,P:600e6,Q:100e6,model:'z',conn:'bus'},{label:'φορτίο 600 MW',lbl:'below'}),C('CBL','CB3',1460,200,{cmd:`0:0, ${te}:1`,model:'ideal',conn:'bus'},{label:`κλείνει στα ${te} s`}),
+     C('LS2','LOAD3',1360,200,{cn:'yn',Un:400e3,f,P:300e6,Q:0,model:'z',conn:'bus'},{label:'+300 MW',lbl:'below'}));wires.push(['JL2:j','LD2:abc'],['JL2:j','CBL:abc1'],['CBL:abc2','LS2:abc']);}
+   if(ac==='par'){const SB=500e6,Zb=400e3*400e3/SB,w0=2*Math.PI*f;
+    comps.push(C('VSB','VSC2',1700,60,{dc:'ideal',Vdc:r(2*400e3*Math.SQRT2/Math.sqrt(3)*1.3),mmax:1.155,filt:'l',Lf:r(0.15*Zb/w0),Rf:r(0.003*Zb),conn:'bus'},{label:'μονάδα B 500 MVA',flip:true}),
+     C('CTB','GFMC',1880,-40,{law:'droop',inner:'direct',S:SB,Vac:400e3,Vdc:r(2*400e3*Math.SQRT2/Math.sqrt(3)*1.3),f0:f,Pref:'0.55',Qref:'0',Vref:'1',mp:2,nq:5,fp:5,Xc:0.15,Imax:1.2,tsoft:0.05,conn:'bus'},{label:'grid-forming B'}),
+     C('ZB','ZSER3',1560,60,{Rs:r(0.01*Zb),Ls:r(0.1*Zb/w0),Rp1:0,Lp:0,Rp2:0,conn:'bus'},{label:'γραμμή B'}));
+    wires.push(['VSB:abc','ZB:abc2'],['ZB:abc1','JL2:j'],...gfmWire('CTB','VSB',1700,60,1880,-40,-120));}
+   const pB=ac==='par'?[['Y:CTB/PP','P μονάδας B (pu των 500 MVA)']]:[],wB=ac==='par'?[['Y:CTB/WW','f B (pu)']]:[];
+   return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:1000,method:'TR',speed:0.02,stopT:1.2},
+    scope:{panes:[[['Y:CT2/G/PP','P σταθμού 2 προς το AC (pu)'],...pB],[['Y:CT2/G/WW','f σταθμού 2 (pu)'],...wB],[['Y:CT2/G/VG','|v| σταθμού 2 (pu)'],['Y:CT2/G/IG','|i| (pu)'],['Y:CT2/G/LR','όριο ρεύματος']],[['Y:CT1/Fvdc','V_dc 1 (pu)'],['Y:CT2/Fvdc','V_dc 2 (pu)']]],window:{unit:'s',n:1.2}},
+    meta:{hvdcgfm:{ac,law,te,S,SB:500e6,mp:0.02,Pload:600e6,dP:300e6,Pr2:0.55,PrB:0.55,scr:1.5}}});}});
  // ------------------------------------------------------------------ 4.16 (§42): the first CIGRE HVDC benchmark (LCC)
  // The network of the benchmark at 50 Hz (Faruque et al. 2006 Fig. 1 and Table V, Watson & Arrillaga App. D), the transformers
  // and the controls of the example of the benchmark in PSCAD; the events of Faruque et al. (at 1,0 s for 0,15 s, 0,1 Ω)
@@ -1710,13 +1753,14 @@
  // PLL (the control of the MMC station, on the same average model)
  const GFM_W={step:'Βήμα P_ref +0,1 pu στο 1,2 s',fault:'Τριφασικό σφάλμα στο σημείο σύνδεσης (1,2–1,35 s, 10 Ω)'};
  T.push({id:'gfm_weak',group:'Grid-forming (4.18)',title:'Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL',theory:'formula',topology:'gfm_weak',
-  options:[{k:'ctl',label:'Έλεγχος',options:[['psc','Grid-forming: PSC με ρύθμιση της τάσης AC'],['gfl','Grid-following: έλεγχος ρεύματος σε dq με PLL']],def:'psc'},
-   {k:'scr',label:'Λόγος βραχυκύκλωσης SCR',options:[['1','1 (πολύ ασθενές, όπως το paper)'],['2','2'],['5','5']],def:'1'},
+  options:[{k:'ctl',label:'Έλεγχος',options:[['psc','Grid-forming: PSC με ρύθμιση της τάσης AC'],['gflw','Grid-following, στιβαρός έλεγχος ρεύματος για κάθε SCR (Harnefors κ.ά. 2021, 4.18.1)'],['gfl','Grid-following, ο έλεγχος ρεύματος του σταθμού MMC (PI 10 ms, όπως η 4.18)']],def:'psc'},
+   {k:'scr',label:'Λόγος βραχυκύκλωσης SCR',options:[['1','1 (πολύ ασθενές, όπως το paper)'],['1.5','1,5'],['2','2'],['3','3'],['5','5']],def:'1'},
+   {k:'pll',label:'Εύρος του PLL (grid-following)',options:[['5','5 Hz'],['2','2 Hz'],['20','20 Hz']],def:'5'},
    {k:'p0',label:'Ισχύς πριν από το γεγονός',options:[['0.8','0,8 pu'],['0.5','0,5 pu']],def:'0.8'},
    {k:'ev',label:'Γεγονός',options:Object.entries(GFM_W),def:'step'}],
   desc:'Ένας VSC 350 MVA (μέσο μοντέλο, πηνίο 0,15 pu, μετασχηματιστής 195/400 kV, 12 %) στέλνει ισχύ σε δίκτυο 400 kV με S″k = SCR·350 MVA. Με PSC ο μετατροπέας σχηματίζει την τάση του και συγχρονίζεται όπως μια σύγχρονη μηχανή, μέσω της ισχύος (dθ/dt = ω₀ + k_p·(P_ref − P)), με υψιπερατή ανάδραση ρεύματος για απόσβεση και όριο ρεύματος με εφεδρικό PLL. Με τον έλεγχο ρεύματος, το PLL στο ασθενές δίκτυο περιορίζει την ισχύ. Το P ανεβαίνει σε βήματα ως την ισχύ της επιλογής και στο 1,2 s γίνεται το γεγονός.',
-  tasks:['SCR 1, 0,8 pu: με PSC η γωνία φορτίου είναι γύρω στις 65° (κάρτα) και το βήμα στα 0,9 pu περνά με μικρή μη ελάχιστη φάση· με έλεγχο ρεύματος και PLL δεν φτάνει.','Με έλεγχο ρεύματος στα 0,5 pu και SCR 1 το βήμα στα 0,6 pu περνά, αλλά αργά (Zhang κ.ά.: το όριο είναι ~0,4–0,5 pu).','Σφάλμα: το ρεύμα μένει στο I_max = 1,08 pu (μόνο μια αιχμή στην αρχή) και ο μετατροπέας περνά στο εφεδρικό PLL· μετά την εκκαθάριση γυρίζει στο PSC.'],
-  build(o){const S=350e6,Vc=195e3,Vdc=300e3,f=50,w0=2*Math.PI*f,Zb=Vc*Vc/S,scr=o.scr==null?1:+o.scr||1,p0=o.p0==null?0.8:+o.p0||0.8,ev=GFM_W[o.ev]?o.ev:'step',psc=o.ctl!=='gfl',r=x=>+x.toPrecision(6);
+  tasks:['SCR 1, 0,8 pu: με PSC η γωνία φορτίου είναι γύρω στις 65° (κάρτα) και το βήμα στα 0,9 pu περνά με μικρή μη ελάχιστη φάση.','Ο έλεγχος ρεύματος της 4.18 (PI 10 ms, PLL 20 Hz) ταλαντώνεται στο SCR 1 από την αρχή, χωρίς ισχύ (~400 Hz στο dq): ο βρόχος ρεύματος είναι πολύ αργός απέναντι στην καθυστέρηση της μέτρησης και στο PLL. Στο SCR 2 και 5 δουλεύει.','Ο στιβαρός έλεγχος ρεύματος (χωρίς ολοκληρωτή στον βρόχο ρεύματος, πρόσθια τροφοδότηση της τάσης με το εύρος του βρόχου, ρύθμιση της τάσης AC με αναλογικό μέρος στο d) με την ίδια ρύθμιση σε κάθε SCR: στο SCR 1 φτάνει τα 0,8 pu· τα 0,9 pu (κοντά στο στατικό όριο, κάρτα) μόνο με PLL 2 Hz.','Σφάλμα: με PSC το ρεύμα μένει στο I_max = 1,08 pu (μόνο μια αιχμή στην αρχή) και ο μετατροπέας περνά στο εφεδρικό PLL· μετά την εκκαθάριση γυρίζει στο PSC.'],
+  build(o){const S=350e6,Vc=195e3,Vdc=300e3,f=50,w0=2*Math.PI*f,Zb=Vc*Vc/S,scr=o.scr==null?1:+o.scr||1,p0=o.p0==null?0.8:+o.p0||0.8,ev=GFM_W[o.ev]?o.ev:'step',psc=o.ctl!=='gfl'&&o.ctl!=='gflw',rob=o.ctl==='gflw',pll=o.pll==null?5:+o.pll||5,r=x=>+x.toPrecision(6);
    const Xt=0.15+0.11*350/380+1/scr,kp=r(130*Xt/(0.15+0.11*350/380+1));
    let ps='0:0';for(let k=1;k*0.1<=p0+1e-9;k++)ps+=`, ${r(0.1*k)}:${r(0.1*k)}`;if(ev==='step')ps+=`, 1.2:${r(p0+0.1)}`;
    const comps=[C('VS','VSC2',300,300,{dc:'ideal',Vdc,mmax:1.155,filt:'l',Lf:0.052,Rf:0.06,conn:'bus'},{label:'VSC 350 MVA'}),
@@ -1727,7 +1771,7 @@
    if(psc){comps.push(C('CT','GFMC',80,340,{law:'psc',inner:'direct',S,Vac:Vc,Vdc,f0:f,Pref:ps,Vref:'1',kp,avc:'vac',Uref:'1',KE:10,TE:0.05,kv:0.477,av:40,Rv:0,Xv:0,Xc:0.15,
      Imax:1.08,ac:600,vmax:1.3,bw:20,th0:-120,tsoft:0.05,conn:'bus'},{label:'PSC'}));wires.push(...gfmWire('CT','VS',300,300,80,340,480));}
    else{comps.push(C('CT','MMCC',80,340,{mode:'p',qmode:'vac',S,Vac:Vc,Vdc,f0:f,Pref:ps.replace(/:(\d[\d.]*)/g,(m,v)=>':'+(v==='0'?'0':'-'+v)),Tp:0.2,Vacref:'1',Tvac:0.1,Xpcc:r(0.11*350/380+1/scr),
-      Ti:0.01,X:0.15,R:0.0055,prio:'p',Ilim:1.08,Idlim:1.08,vmax:1.3,bw:20,th0:-120,prot:'off',tdb:0,tbrk:0},{label:'έλεγχος ρεύματος'}));
+      Ti:0.01,X:0.15,R:0.0055,prio:'p',Ilim:1.08,Idlim:1.08,vmax:1.3,bw:rob?pll:20,th0:-120,prot:'off',tdb:0,tbrk:0,...(rob?{cc:'robust',acc:4,Tii:0.05,R:0.00055}:{})},{label:rob?'στιβαρός έλεγχος ρεύματος':'έλεγχος ρεύματος'}));
     // the measurements of the bus meas, the currents into the converter (as the station control takes them), m back in a bus
     comps.push(C('SI','BSEL',440,420,{idx:'1, 2, 3'},{label:'i_abc'}),C('NI','GAIN',520,420,{K:-1},{label:'−1'}),C('DI','DEMUX',600,420,{n:3}),
      C('SV','BSEL',440,500,{idx:'4, 5, 6'},{label:'v_abc'}),C('DV','DEMUX',600,500,{n:3}),C('SD','BSEL',440,580,{idx:'10'},{label:'v_dc'}),C('MX','MUX',200,300,{n:3},{label:'m'}),C('K0','CONST',-40,560,{v:'0'},{label:'I_dc, v_s: όχι'}));
@@ -1736,7 +1780,41 @@
    const P=psc?'Y:CT/PP':'Y:CT/PP',sc=psc?[[['Y:CT/PP','P (pu)']],[['Y:CT/VG','|u_pcc| (pu)'],['Y:CT/EE','V₀ (pu)']],[['Y:CT/IG','|i| (pu)'],['Y:CT/LR','όριο ρεύματος']],[['Y:CT/WW','ω (pu)']]]
     :[[['Y:CT/PP','P προς τον μετατροπέα (pu)']],[['Y:CT/VG','|u_pcc| (pu)']],[['Y:CT/ID','i_d (pu)'],['Y:CT/IQ','i_q (pu)']]];
    return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:400,method:'TR',speed:0.2,stopT:1.6},scope:{panes:sc,window:{unit:'s',n:1.6}},
-    meta:{gfm:{kind:'weak',ctl:psc?'psc':'gfl',scr,p0,ev,S,Vc,Xc:0.15,Xtr:r(0.11*350/380),Xg:r(1/scr),kp,Imax:1.08}}});}});
+    meta:{gfm:{kind:'weak',ctl:psc?'psc':rob?'gflw':'gfl',scr,p0,ev,S,Vc,Xc:0.15,Xtr:r(0.11*350/380),Xg:r(1/scr),kp,Imax:1.08,pll:rob?pll:20,acc:4}}});}});
+ // 4.18.1 (§58): the IEEE 9 case (ieee9Build with AVR, PSS and governors) with the unit at bus 3 a converter of the rating
+ // of G3 (128 MVA): grid-forming (droop of 5 % as its governor, or a VSM with its H) or grid-following (the robust current
+ // control with or without a frequency response of 5 %), from the load flow (85 MW, −10,86 Mvar, 1,025∠4,665°); a load step
+ // at bus 7. The frequency metrics as Tayyebi et al. (2020): the nadir and the RoCoF over 250 ms of the speed of G1
+ const IEEE9_GFM_U={sm:'Σύγχρονη γεννήτρια G3 (AVR, PSS, ρυθμιστής ατμού), όπως το δίκτυο',droop:'Grid-forming: στατικότητα P–f 5 % (όση ο ρυθμιστής της G3), φίλτρο 5 Hz',
+  vsm:'Grid-forming: VSM με H = 3,01 s (όση η G3) και D_p για 5 %',gfl:'Grid-following: στιβαρός έλεγχος ρεύματος, απόκριση στη συχνότητα 5 % (PLL 5 Hz)',gfl0:'Grid-following χωρίς απόκριση στη συχνότητα (σταθερή P)'};
+ T.push({id:'ieee9_gfm',group:'Grid-forming (4.18.1)',title:'IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF)',theory:'formula',topology:'ieee9_gfm',
+  options:[{k:'unit',label:'Στον ζυγό 3',options:Object.entries(IEEE9_GFM_U),def:'droop'},{k:'dp',label:'Βήμα φορτίου στον ζυγό 7 στο 1 s',options:[['50','+50 MW'],['25','+25 MW'],['90','+90 MW']],def:'50'}],
+  desc:'Το δίκτυο των 9 ζυγών σε EMT (ροή φορτίου του pcl.network, AVR, PSS και ρυθμιστές στροφών στις G1, G2) με τη μονάδα του ζυγού 3 ως μετατροπέα 128 MVA (όση η G3, μέσο μοντέλο VSC με πηνίο 0,15 pu) που δίνει τα 85 MW και −10,9 Mvar της ροής φορτίου. Grid-forming: σχηματίζει την τάση του και αλλάζει τη συχνότητά του με την ισχύ (στατικότητα ή εικονική αδράνεια). Grid-following: ακολουθεί τη γωνία του δικτύου με PLL και δίνει ρεύμα· η απόκριση στη συχνότητα έρχεται μετά το PLL. Στο 1 s κλείνει ένα φορτίο στον ζυγό 7.',
+  tasks:['Σύγκρινε στην κάρτα το βύθισμα (nadir) και το RoCoF (σε 250 ms, όπως οι Tayyebi κ.ά. 2020) της ταχύτητας της G1 για κάθε επιλογή του ζυγού 3, με το ίδιο βήμα φορτίου.','Ο grid-forming με στατικότητα δίνει ισχύ αμέσως (σε δεκάδες ms)· η G3 μέσω του ρυθμιστή ατμού (δευτερόλεπτα)· η VSM με H = 3,01 s κάνει ό,τι η αδράνεια της G3, χωρίς τον αργό στρόβιλο.','Ο grid-following χωρίς απόκριση στη συχνότητα αφαιρεί την αδράνεια και τη ρύθμιση της G3: το βύθισμα είναι το μεγαλύτερο. Με απόκριση 5 % πλησιάζει τον grid-forming, αλλά μετά την καθυστέρηση του PLL και του φίλτρου.','Η μόνιμη απόκλιση της συχνότητας (κάρτα) είναι ίδια όταν η στατικότητα είναι ίδια (5 % σε 128 MVA), αλλά οι ρυθμιστές νερού και ατμού φτάνουν εκεί σε δεκάδες δευτερόλεπτα.'],
+  build(o){const unit=IEEE9_GFM_U[o.unit]?o.unit:'droop',dp=+o.dp||50,S=128e6,Un=345e3,f=60,w0=2*Math.PI*f,te=1,T=12,r=x=>+x.toPrecision(6);
+   const Zb=Un*Un/S,X=0.15,Lf=r(X*Zb/w0),Rf=r(0.003*Zb),Vdc=r(2*Un*Math.SQRT2/Math.sqrt(3)*1.3),V3=1.025,a3=4.664751,P3=85e6/S,Q3=-10.859709e6/S;
+   // the EMF of the grid-forming converter behind X for the load flow at bus 3 (pu on S): E = V + jX·conj(S/V)
+   const Ir=P3/V3,Ii=-Q3/V3,Er=V3-X*Ii,Ei=X*Ir,E=Math.hypot(Er,Ei),dl=Math.atan2(Ei,Er)*180/Math.PI,gfm=unit==='droop'||unit==='vsm',gfl=unit==='gfl'||unit==='gfl0';
+   const ext={T,meta:{ieee9gfm:{unit,dp,S,te,mp:0.05,H:3.01,P3,Q3,E,K:{G1:2.475/0.04,G2:1.92/0.05,G3:1.28/0.05},Sb:100e6,f,Twin:0.25}},
+    add(comps,wires,panes){wires.push(['B7','L76:abc1']);
+     if(unit!=='sm'){const gone=new Set(['G3','AV3','PS3','GV3']),own=q=>typeof q==='string'&&gone.has(q.split(':')[0]);
+      for(let k=comps.length-1;k>=0;k--)if(gone.has(comps[k].id))comps.splice(k,1);for(let k=wires.length-1;k>=0;k--)if(own(wires[k][0])||own(wires[k][1]))wires.splice(k,1);
+      comps.push(C('VS3','VSC2',1360,160,{dc:'ideal',Vdc,mmax:1.155,filt:'l',Lf,Rf,init:'lf',E0:r(E*Un*Math.SQRT2/Math.sqrt(3)),th0:r(a3-90+dl),conn:'bus'},{label:'μετατροπέας 128 MVA',flip:true}));wires.push(['VS3:abc','B3']);
+      if(gfm){comps.push(C('CT3','GFMC',1180,300,{law:unit,inner:'direct',S,Vac:Un,Vdc,f0:f,Pref:String(r(P3)),Qref:String(r(Q3)),Vref:String(r(E)),mp:5,nq:5,fp:5,H:3.01,tv:0.02,kv:0,Rv:0,Xv:0,Xc:X,Imax:1.2,
+        ac:600,vmax:1.3,bw:20,th0:r(a3-90+dl),tsoft:0,fi:'ref',conn:'bus'},{label:unit==='vsm'?'VSM':'grid-forming (στατικότητα)'}));wires.push(...gfmWire('CT3','VS3',1360,160,1180,300,420));}
+      else{comps.push(C('CT3','MMCC',1180,300,{mode:'p',cc:'robust',acc:4,Tii:0.05,S,Vac:Un,Vdc,f0:f,Pref:String(r(-P3)),Vacref:String(V3),frq:unit==='gfl'?'droop':'off',mf:5,Tf:0.05,X,R:0.003,Ilim:1.2,vmax:1.3,bw:5,th0:r(a3-90),prot:'off',tdb:0,tbrk:0},
+         {label:unit==='gfl'?'grid-following με απόκριση στη συχνότητα':'grid-following, σταθερή P'}),
+        C('SI3','BSEL',1260,420,{idx:'1, 2, 3'},{label:'i_abc'}),C('NI3','GAIN',1220,460,{K:-1},{label:'−1'}),C('DI3','DEMUX',1140,460,{n:3}),C('SV3','BSEL',1260,500,{idx:'4, 5, 6'},{label:'v_abc'}),C('DV3','DEMUX',1140,520,{n:3}),
+        C('SD3','BSEL',1260,580,{idx:'10'},{label:'v_dc'}),C('MX3','MUX',1290,260,{n:3},{label:'m'}),C('K03','CONST',1040,600,{v:'0'},{label:'I_dc, v_s: όχι'}));
+       wires.push(['VS3:meas','SI3:u'],['VS3:meas','SV3:u'],['VS3:meas','SD3:u'],['SI3:y','NI3:u'],['NI3:y','DI3:u'],['SV3:y','DV3:u'],['SD3:y','CT3:vdc'],['MX3:y','VS3:m'],['K03:y','CT3:idc'],['K03:y','CT3:vs']);
+       ['a','b','c'].forEach((x,k)=>wires.push(['DI3:y'+(k+1),'CT3:i'+x],['DV3:y'+(k+1),'CT3:v'+x],['CT3:m'+x,'MX3:u'+(k+1)]));}}
+     // the load step at bus 7 (constant impedance: dp at the nominal voltage)
+     comps.push(C('CBS','CB3',840,280,{cmd:`0:0, ${te}:1`,model:'ideal',conn:'bus'},{label:`κλείνει στο ${te} s`}),C('LDS','LOAD3',840,400,{cn:'yn',Un,f,P:dp*1e6,Q:0,model:'z',conn:'bus'},{label:`+${dp} MW`,lbl:'below'}));
+     wires.push(['B7','CBS:abc1'],['CBS:abc2','LDS:abc']);
+     const w3=unit==='sm'?[['Y:G3','ω₃']]:gfm?[['Y:CT3/WW','ω του μετατροπέα']]:unit==='gfl'?[['Y:CT3/WPU','ω του PLL (φίλτρο 50 ms)']]:[];
+     const p3=unit==='sm'?[['Y:G3:pe','P₃ (pu των 100 MVA)']]:gfm?[['Y:CT3/PP','P του μετατροπέα (pu των 128 MVA)']]:[['Y:CT3/PP','P προς τον μετατροπέα (pu των 128 MVA)']];
+     panes.length=0;panes.push([['Y:G1','ω₁ (G1)'],['Y:G2','ω₂ (G2)'],...w3],[['Y:G1:pe','P₁ (pu των 100 MVA)'],['Y:G2:pe','P₂'],...p3],[['Y:G1:vt','|V₁|'],['Y:G2:vt','|V₂|'],...(unit==='sm'?[['Y:G3:vt','|V₃|']]:[['Y:CT3/VG','|V₃| (μετατροπέας)']])]);}};
+   const pr=ieee9Build({ev:'none',ctl:'full'},ext);pr.sim={...pr.sim,hDiv:200,speed:0.5,stopT:T};pr.scope={...pr.scope,window:{unit:'s',n:T}};return pr;}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
  // 4.17.1 (§59): the DC-DC tutorials declare their inputs (parameters marked «Είσοδος», in the parameters of the circuit

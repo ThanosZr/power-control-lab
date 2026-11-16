@@ -7,6 +7,8 @@
 //  {kind:'dcpins', at}                                   a converter with its DC terminals on a source: AC and DC powers
 //  {kind:'tut', id, opts, set, at, keys, win}            a tutorial as the app builds it: mean, min, max over win before t
 //  {kind:'scipy', T, keys}                               the 'grid' case in the browser solver and its SciPy export
+//  {kind:'cyc', id, opts, T, Tc, keys}                   4.18.1: a tutorial, the mean of each key over each period Tc
+//  {kind:'scipyTut', id, opts, set, T, keys, hDiv}       4.18.1: a tutorial in the browser solver and its SciPy export
 const path=require('path');const W=path.resolve(__dirname,'../../web/studio');
 global.window=globalThis;global.Parts=require(W+'/parts.js');global.Expr=require(W+'/expr.js');global.StepCheck=require(W+'/stepcheck.js');
 global.LineModels=require(W+'/linemodels.js');
@@ -48,6 +50,14 @@ function tut(o){require(W+'/tutorials.js');const t=Tutorials.get(o.id),opts={};f
 function scipy(o){const pr=gridProject({...o,Pref:o.Pref||'0:0, 0.005:0.2'}),s=new MNA.Sim(pr,{hDiv:o.hDiv||400,method:'TR'}),T=o.T||0.02,ch=o.keys||['Y:CT/PP','Y:CT/WW','I:VS/La'],rec=[];
  while(s.t<T-1e-12){s.run(Math.min(s.h,T-s.t));rec.push([s.t,...ch.map(k=>s.now(k))]);}
  return {rec,ch,batch:MNA.exportForBatch(pr,ch),h:s.h,warn:s.net.warnings};}
+function cyc(o){require(W+'/tutorials.js');const t=Tutorials.get(o.id),opts={};for(const q of t.options||[])opts[q.k]=q.def;Object.assign(opts,o.opts||{});
+ const pr=t.build(opts),sv=pr.sim||{},s=new MNA.Sim(pr,{hDiv:sv.hDiv||400,method:sv.method||'TR'}),Tc=o.Tc||0.02,keys=o.keys,out=[],c0=Date.now();let acc=keys.map(()=>0),n=0,tc=Tc;
+ while(s.t<o.T-1e-12){s.run(s.h);keys.forEach((k,j)=>acc[j]+=s.now(k));n++;if(s.t>=tc-1e-12){out.push([tc,...acc.map(a=>a/n)]);acc=keys.map(()=>0);n=0;tc+=Tc;}}
+ return {out,keys,ms:Date.now()-c0,warn:s.net.warnings,meta:pr.meta};}
+function scipyTut(o){require(W+'/tutorials.js');const t=Tutorials.get(o.id),opts={};for(const q of t.options||[])opts[q.k]=q.def;Object.assign(opts,o.opts||{});
+ const pr=t.build(opts);for(const [id,ps] of Object.entries(o.set||{}))Object.assign(pr.components.find(c=>c.id===id).params,ps);
+ const s=new MNA.Sim(pr,{hDiv:o.hDiv||400,method:'TR'}),ch=o.keys,rec=[];while(s.t<o.T-1e-12){s.run(Math.min(s.h,o.T-s.t));rec.push([s.t,...ch.map(k=>s.now(k))]);}
+ return {rec,ch,batch:MNA.exportForBatch(pr,ch),h:s.h,warn:s.net.warnings};}
 const cases=JSON.parse(process.argv[2]||'[]');const res=[];
-for(const o of cases){try{res.push(o.kind==='grid'?grid(o):o.kind==='island1'?island1(o):o.kind==='dcpins'?dcpins(o):o.kind==='tut'?tut(o):o.kind==='scipy'?scipy(o):{error:'kind'});}catch(e){res.push({error:String(e&&e.stack||e)});}}
+for(const o of cases){try{res.push(o.kind==='grid'?grid(o):o.kind==='island1'?island1(o):o.kind==='dcpins'?dcpins(o):o.kind==='tut'?tut(o):o.kind==='scipy'?scipy(o):o.kind==='cyc'?cyc(o):o.kind==='scipyTut'?scipyTut(o):{error:'kind'});}catch(e){res.push({error:String(e&&e.stack||e)});}}
 process.stdout.write(JSON.stringify(res));

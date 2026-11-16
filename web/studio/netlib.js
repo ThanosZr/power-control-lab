@@ -244,12 +244,22 @@
  // the weights of speed, torque and energy (and low SOC, and the predicted power) and a slew limit; the current loop
  // with the back-EMF and R·i feedforward. Modes as in the workbench: eco, balanced, performance set the weights and
  // the limits; every value is a live parameter (expressions and gains), so the weights change while it runs.
- function evcDef(c){const p=prm(c),B=builder(c.label||c.id),mode=['eco','performance'].includes(p.mode)?p.mode:'balanced',simple=p.scheme==='moev';
+ function evcDef(c){const p=prm(c),B=builder(c.label||c.id),mode=['eco','performance'].includes(p.mode)?p.mode:'balanced',simple=p.scheme==='moev',v2=p.scheme==='moevc2';
   let ws=num(p.ws,1),wt=num(p.wt,.75),we=num(p.we,.55),pl=num(p.plim,8),il=num(p.ilim,200);
   // the presets of the workbench: moev sets energy, torque and the limits; moevc (built on moev) also the speed and energy weights
-  if(mode==='eco'){we=Math.max(we,.85);wt=Math.min(wt,.55);pl*=.65;il*=.7;if(!simple){ws=Math.min(ws,.85);we=Math.max(we,.95);}}
+  // moevc2: the mode shifts the weights instead of clamping them, so that a weight set by hand acts in every mode
+  if(v2){if(mode==='eco'){we+=.4;ws*=.85;wt*=.75;pl*=.75;il*=.8;}else if(mode==='performance'){we*=.4;ws*=1.15;wt*=1.3;pl*=1.25;il*=1.15;}}
+  else if(mode==='eco'){we=Math.max(we,.85);wt=Math.min(wt,.55);pl*=.65;il*=.7;if(!simple){ws=Math.min(ws,.85);we=Math.max(we,.95);}}
   else if(mode==='performance'){we=Math.min(we,.25);wt=Math.max(wt,.95);pl*=1.35;il*=1.25;if(!simple){ws=Math.max(ws,1.1);we=Math.min(we,.2);}}
-  const kt=Math.max(num(p.Kt,.2),1e-9),ke=num(p.Ke,.2),R=num(p.R,.22),J=Math.max(num(p.J,.17),1e-9),b=num(p.B,.012),H=num(p.H,.85),al=num(p.alim,150),tl=num(p.taulim,40),rg=num(p.regen,16),lo=num(p.umin,-96),hi=num(p.umax,96);
+  let al=num(p.alim,150),rg=num(p.regen,16);
+  // 4.18.1 (ζήτημα του Θάνου: «δες αν δουλεύουν σωστά τα βάρη»): moevc2, the weights each on its own handle, all the time
+  // (moevc: the allocation keep reached its ceiling 1.15 with the default weights, so w_s, w_t and «performance» changed
+  // nothing; keep > 1 asked for more torque than needed and a larger w_s tracked worse; w_e acted only below 45 % SOC).
+  // w_s scales the gains of the speed loop; w_t the slew rate of the torque; w_e lowers the acceleration and power limits
+  // and raises the regeneration, at any SOC; keep ≤ 1 (only the low SOC and the power near its limit derate)
+  const cl=(x,a,b)=>Math.min(Math.max(x,a),b),wsn=cl(ws,0,2),wtn=cl(wt,0,2),wen=cl(we,0,2);
+  if(v2){pl*=cl(1.2-0.3*wen,0.5,1.2);rg*=cl(0.8+0.4*wen,0.8,1.6);}
+  const kt=Math.max(num(p.Kt,.2),1e-9),ke=num(p.Ke,.2),R=num(p.R,.22),J=Math.max(num(p.J,.17),1e-9),b=num(p.B,.012),H=num(p.H,.85),tl=num(p.taulim,40),lo=num(p.umin,-96),hi=num(p.umax,96);
   const tn=-Math.min(rg,il*kt*.55),f=x=>String(+(+x).toPrecision(10));
   const io=n=>B.comp('$'+n,'SIN',{name:n}),r=io('r'),y=io('y'),ia=io('i'),soc=io('soc'),tld=io('tl');
   const E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''});
@@ -270,28 +280,33 @@
    B.comp('GOV','GAIN',{K:1});B.wire([r,'y'],['GOV','u']);   // no reference governor: the target as it is
   }else{
   E('SF','min(max(1 - 0.5*ls*min(max(we, 0), 1.4), 0.3), 1.05)','ls','we = '+f(we));B.wire(['LS','y'],['SF','ls']);
-  E('TP','max(0, min(min(tl, il*kt)*sf, abs(w) > 2 ? pl*1000/max(abs(w), 2) : 1e12))','sf, w',`tl = ${f(tl)}, il = ${f(il)}, kt = ${f(kt)}, pl = ${f(pl)}`);B.wire(['SF','y'],['TP','sf']);B.wire([y,'y'],['TP','w']);
+  E('TP','max(0, min(min(tl, il*kt)*sf, abs(w) > 2 ? pl*1000/max(abs(w), 2) : 1e12))','sf, w',`tl = ${f(v2?tl*cl(0.7+0.4*wtn,0.5,1.3):tl)}, il = ${f(il)}, kt = ${f(kt)}, pl = ${f(pl)}`);B.wire(['SF','y'],['TP','sf']);B.wire([y,'y'],['TP','w']);
   E('AP','min(max((tp - tq - b*w)/J, -al), al)','tp, tq, w',`b = ${f(b)}, J = ${f(J)}, al = ${f(al)}`);B.wire(['TP','y'],['AP','tp']);B.wire([tld,'y'],['AP','tq']);B.wire([y,'y'],['AP','w']);
   E('AN','min(max((tn - tq - b*w)/J, -al), al)','tq, w',`tn = ${f(tn)}, b = ${f(b)}, J = ${f(J)}, al = ${f(al)}`);B.wire([tld,'y'],['AN','tq']);B.wire([y,'y'],['AN','w']);
+  // moevc2: the energy weight smooths the reference (a low-pass of 0.25·w_e s): later, gentler accelerations, lower current peaks
+  const te=v2?0.25*wen:0;let rr=[r,'y'];if(te>1e-3){B.comp('RE','LPF',{fc:f(1/(2*Math.PI*te)),y0:0});B.wire([r,'y'],['RE','u']);rr=['RE','y'];}
   // the reference governor: what the limits allow within the horizon H
-  E('GOV','r - w >= 0 ? w + min(r - w, max(ap, 0)*H) : w - min(w - r, -min(an, 0)*H)','r, w, ap, an','H = '+f(H));B.wire([r,'y'],['GOV','r']);B.wire([y,'y'],['GOV','w']);B.wire(['AP','y'],['GOV','ap']);B.wire(['AN','y'],['GOV','an']);
+  E('GOV','r - w >= 0 ? w + min(r - w, max(ap, 0)*H) : w - min(w - r, -min(an, 0)*H)','r, w, ap, an','H = '+f(H));B.wire(rr,['GOV','r']);B.wire([y,'y'],['GOV','w']);B.wire(['AP','y'],['GOV','ap']);B.wire(['AN','y'],['GOV','an']);
   B.comp('EG','SUM',{signs:'+-'});B.wire(['GOV','y'],['EG','a']);B.wire([y,'y'],['EG','b']);
-  B.comp('PIA','PIB',{Kp:num(p.kpa,2.2),Ki:num(p.kia,.45),clock:'CLK',trig:'start',y0:0,ymin:-1e6,ymax:1e6});B.wire(['EG','y'],['PIA','u']);
+  const kw=v2?cl(wsn,0.1,2):1;B.comp('PIA','PIB',{Kp:num(p.kpa,2.2)*kw,Ki:num(p.kia,.45)*kw,clock:'CLK',trig:'start',y0:0,ymin:-1e6,ymax:1e6});B.wire(['EG','y'],['PIA','u']);
   // 4.8 (not in the workbench, aff = 0 removes it): the acceleration of the reference as a feedforward
   const aff=num(p.aff,1),fr=Math.max(num(p.fr,2),1e-3);
-  B.comp('LR','LPF',{fc:fr,y0:0});B.wire([r,'y'],['LR','u']);B.comp('DRr','SUM',{signs:'+-'});B.wire([r,'y'],['DRr','a']);B.wire(['LR','y'],['DRr','b']);
+  B.comp('LR','LPF',{fc:fr,y0:0});B.wire(rr,['LR','u']);B.comp('DRr','SUM',{signs:'+-'});B.wire(rr,['DRr','a']);B.wire(['LR','y'],['DRr','b']);
   B.comp('GR','GAIN',{K:2*Math.PI*fr*aff});B.wire(['DRr','y'],['GR','u']);B.comp('AS','SUM',{signs:'++'});B.wire(['PIA','y'],['AS','a']);B.wire(['GR','y'],['AS','b']);
   E('AC','min(max(a, an), ap)','a, ap, an');B.wire(['AS','y'],['AC','a']);B.wire(['AP','y'],['AC','ap']);B.wire(['AN','y'],['AC','an']);
   // the coupling: speed objective → torque through the vehicle dynamics
   E('TR','ff*tq + b*w + J*a','tq, w, a',`ff = ${f(num(p.ffg,1))}, b = ${f(b)}, J = ${f(J)}`);B.wire([tld,'y'],['TR','tq']);B.wire([y,'y'],['TR','w']);B.wire(['AC','y'],['TR','a']);
   // the multi-objective allocation: speed and torque keep the request, energy (with low SOC) and the power reduce it
-  E('KP','min(max(0.72 + 0.26*min(max(ws, 0), 1.5) + 0.24*min(max(wt, 0), 1.5) - 0.18*min(max(we, 0), 1.5)*ls - 0.08*min(max(abs(tr*w)/1000/pl - 0.85, 0), 1.5), 0.35), 1.15)','tr, w, ls',
+  if(v2)E('KP','min(max(1 - 0.3*we*ls - 0.08*min(max(abs(tr*w)/1000/pl - 0.85, 0), 1.5), 0.35), 1)','tr, w, ls',`we = ${f(wen)}, pl = ${f(pl)}`);
+  else E('KP','min(max(0.72 + 0.26*min(max(ws, 0), 1.5) + 0.24*min(max(wt, 0), 1.5) - 0.18*min(max(we, 0), 1.5)*ls - 0.08*min(max(abs(tr*w)/1000/pl - 0.85, 0), 1.5), 0.35), 1.15)','tr, w, ls',
    `ws = ${f(ws)}, wt = ${f(wt)}, we = ${f(we)}, pl = ${f(pl)}`);B.wire(['TR','y'],['KP','tr']);B.wire([y,'y'],['KP','w']);B.wire(['LS','y'],['KP','ls']);
   B.comp('TS','MUL',{});B.wire(['TR','y'],['TS','a']);B.wire(['KP','y'],['TS','b']);
-  B.comp('SL','RLIM',{up:num(p.slew,420),dn:num(p.slew,420),y0:0});B.wire(['TS','y'],['SL','u']);
+  const sr=num(p.slew,420)*(v2?cl(wtn/0.75,0.3,2.5):1);B.comp('SL','RLIM',{up:sr,dn:sr,y0:0});B.wire(['TS','y'],['SL','u']);
   E('TQ','min(max(x, tn), tp)','x, tp','tn = '+f(tn));B.wire(['SL','y'],['TQ','x']);B.wire(['TP','y'],['TQ','tp']);
   // as in the workbench: 1 when the torque given differs from the torque needed (the allocation keep ≠ 1, the slew rate or a limit)
-  E('LIM','abs(a - b) > 1e-5*(1 + abs(b)) ? 1 : 0','a, b');B.wire(['TQ','y'],['LIM','a']);B.wire(['TR','y'],['LIM','b']);
+  // moevc2: 1 only while a limit, the slew rate or a derating (keep < 1) changes the torque asked for
+  if(v2){E('LIM','abs(a - b) > 0.02*(1 + abs(b)) || k < 0.999 ? 1 : 0','a, b, k');B.wire(['TQ','y'],['LIM','a']);B.wire(['TS','y'],['LIM','b']);B.wire(['KP','y'],['LIM','k']);}
+  else{E('LIM','abs(a - b) > 1e-5*(1 + abs(b)) ? 1 : 0','a, b');B.wire(['TQ','y'],['LIM','a']);B.wire(['TR','y'],['LIM','b']);}
   }
   // the current loop with the back-EMF and the R·i feedforward
   B.comp('IR','GAIN',{K:1/kt});B.wire(['TQ','y'],['IR','u']);
@@ -772,22 +787,22 @@
  // release of 20 ms. Integrators held while blocked.
  function mmccDef(c){const p=prm(c),B=builder(c.label||c.id);
   const S=Math.max(num(p.S,1059e6),1),Vac=Math.max(num(p.Vac,333e3),1),Vdc=Math.max(num(p.Vdc,640e3),1),w0=2*Math.PI*Math.max(num(p.f0,50),1e-9);
-  const Vb=Vac*Math.SQRT2/Math.sqrt(3),Ib=S/(1.5*Vb),Idb=S/Vdc,mode=['p','vdc','droop','vf'].includes(p.mode)?p.mode:'p',qm=p.qmode==='vac'?'vac':'q';
+  const Vb=Vac*Math.SQRT2/Math.sqrt(3),Ib=S/(1.5*Vb),Idb=S/Vdc,mode=['p','vdc','droop','vf','gfm'].includes(p.mode)?p.mode:'p',qm=p.qmode==='vac'?'vac':'q';
   const sin=n=>[B.comp('$'+n,'SIN',{name:n}),'y'],out=(n,src)=>{const o=B.comp('$'+n,'SOUT',{name:n});B.wire(src,[o,'u']);};
   const w=(a,b)=>B.wire(a,b),E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''});const ref=(id,v,d)=>{const t=String(v??'').trim();B.comp(id,'CONST',{v:t===''?String(d):t});return [id,'y'];};
   const pos=x=>Math.max(num(x,0.1),1e-6);
   // per unit and the measurement filters
   const fm=s(Math.max(num(p.fm,2000),1)),base={va:Vb,vb:Vb,vc:Vb,ia:Ib,ib:Ib,ic:Ib,vdc:Vdc,idc:Idb,vs:Vdc},F={};
-  for(const n of Object.keys(base)){const i=sin(n);E('K'+n,'u*k','u','k = '+s(1/base[n]));w(i,['K'+n,'u']);B.comp('F'+n,'LPF',{fc:fm,y0:n==='vdc'||n==='vs'?'1':'0'});w(['K'+n,'y'],['F'+n,'u']);F[n]=['F'+n,'y'];}
+  const RAW={};for(const n of Object.keys(base)){const i=sin(n);RAW[n]=i;E('K'+n,'u*k','u','k = '+s(1/base[n]));w(i,['K'+n,'u']);B.comp('F'+n,'LPF',{fc:fm,y0:n==='vdc'||n==='vs'?'1':'0'});w(['K'+n,'y'],['F'+n,'u']);F[n]=['F'+n,'y'];}
   B.comp('PLL','PLL',{f0:s(w0/(2*Math.PI)),bw:s(pos(p.bw)),th0:s(num(p.th0,0)),conn:'sep'});w(F.va,['PLL','a']);w(F.vb,['PLL','b']);w(F.vc,['PLL','c']);
   if(mode==='vf'){E('TH','om*t + t0','',`om = ${s(w0)}, t0 = ${s(num(p.th0,0)*Math.PI/180)}`);}else E('TH','x','x');if(mode!=='vf')w(['PLL','th'],['TH','x']);
-  const th=['TH','y'];out('th',th);
+  const th=['TH','y'];if(mode!=='gfm')out('th',th);
   const dq=(id,a,b,c)=>{E(id+'D','2/3*(a*cos(th) + b*cos(th - 2*pi/3) + c*cos(th + 2*pi/3))','a, b, c, th');E(id+'Q','-2/3*(a*sin(th) + b*sin(th - 2*pi/3) + c*sin(th + 2*pi/3))','a, b, c, th');
    for(const q of ['D','Q']){w(a,[id+q,'a']);w(b,[id+q,'b']);w(c,[id+q,'c']);w(th,[id+q,'th']);}};
   dq('V',F.va,F.vb,F.vc);dq('I',F.ia,F.ib,F.ic);
   E('PP','vd*id + vq*iq','vd, vq, id, iq');E('QQ','-vd*iq + vq*id','vd, vq, id, iq');E('VG','hypot(vd, vq)','vd, vq');E('VDN','max(vd, 0.1)','vd');
   for(const id of ['PP','QQ']){w(['VD','y'],[id,'vd']);w(['VQ','y'],[id,'vq']);w(['ID','y'],[id,'id']);w(['IQ','y'],[id,'iq']);}w(['VD','y'],['VG','vd']);w(['VQ','y'],['VG','vq']);w(['VD','y'],['VDN','vd']);
-  out('p',['PP','y']);out('q',['QQ','y']);
+  if(mode!=='gfm'){out('p',['PP','y']);out('q',['QQ','y']);}
   // blocking, protection, breaker
   const tp=s(Math.max(num(p.tprot,0.3),0)),on=p.prot!=='off'?1:0;
   E('PLU',`${on} > 0.5 && t > tp && abs(i) > im ? 1e9 : 0`,'i',`tp = ${tp}, im = ${s(pos(p.Idcmax))}`);w(F.idc,['PLU','i']);B.comp('PL','INT',{y0:'0',lo:'0',hi:'1'});w(['PLU','y'],['PL','u']);
@@ -799,11 +814,51 @@
   const X=Math.max(num(p.X,0.255),0),R=Math.max(num(p.R,0.003),0),tau=Math.max(num(p.Ti,0.01),1e-6)/3,kpi=X/(w0*tau),kii=Math.max(R/tau,kpi/(4*tau)),vmax=pos(p.vmax);
   const integ=(id,expr,ins,pars,lim)=>{E(id+'U',expr,ins,pars);B.comp(id,'INT',{y0:'0',lo:s(-lim),hi:s(lim)});w([id+'U','y'],[id,'u']);return [id,'y'];};
   const Il=pos(p.Ilim);
+  // 4.18.1 (§58): the station as a grid-forming converter: the control law of GFMC (droop, VSM, PSC; direct voltage with
+  // the current limit of Zhang et al. (54)–(55) on the reactance X of the station) inside, as a library part. The station's
+  // conventions stay: P_ref, Q_ref and the outputs p, q into the converter, the currents measured into it (negated for
+  // the GFMC, which takes them out of the converter); its v_dc is the valve-side voltage v_s when connected, as the
+  // modulation of the other modes; the PLL of the GFMC follows the voltage until the deblocking (t_db)
+  if(mode==='gfm'){const neg=(v,d)=>{const t=String(v??'').trim(),sc=P.parseSched(t===''?String(d):t);return sc?sc.map(([a,b])=>`${s(a)}:${s(-b)}`).join(', '):String(-d);};
+   const law=['droop','vsm','psc'].includes(p.law)?p.law:'droop',gp={law,inner:'direct',S:s(S),Vac:s(Vac),Vdc:s(Vdc),f0:s(w0/(2*Math.PI)),Pref:neg(p.Pref,0),Qref:neg(p.Qref,0),Vref:String(p.Vref??'1'),
+    mp:p.mp??2,nq:p.nq??5,fp:p.fp??5,H:p.Hv??2,tv:p.tv??0.01,tdr:p.tdr??0,kp:p.kp??50,avc:p.avc??'vac',Uref:String(p.Vacref??'1'),KE:p.KE??5,TE:p.TE??0.05,kv:p.kv??0,av:p.av??40,
+    Rv:p.Rv??0,Xv:p.Xv??0,Xc:s(X),Imax:s(Il),Ufd:p.Ufd??0.6,tsoft:p.tsoft??0.05,ac:p.ac??600,vmax:s(vmax),bw:s(pos(p.bw)),tsync:s(Math.max(num(p.tdb,0),0)),th0:s(num(p.th0,0)),fm,conn:'sep'};
+   B.comp('G','GFMC',gp);
+   for(const x of PH){E('N'+x,'-u','u');w(RAW['i'+x],['N'+x,'u']);w(['N'+x,'y'],['G','i'+x]);w(RAW['v'+x],['G','v'+x]);}
+   E('VSV','s > k/10 ? s : v','s, v','k = '+s(Vdc));w(RAW.vs,['VSV','s']);w(RAW.vdc,['VSV','v']);w(['VSV','y'],['G','vdc']);
+   for(const n of ['ma','mb','mc'])out(n,['G',n]);
+   E('GP','-x','x');w(['G','p'],['GP','x']);E('GQ','-x','x');w(['G','q'],['GQ','x']);out('th',['G','th']);out('p',['GP','y']);out('q',['GQ','y']);
+   return B.def();}
   if(mode==='vf'){const kv=3/pos(p.Tvf);ref('VFR',p.Vfref,1);
    integ('XV','b > 0.5 ? 0 : k*(r - v)','r, v, b','k = '+s(kv),1);w(['VFR','y'],['XVU','r']);w(['VG','y'],['XVU','v']);w(blk,['XVU','b']);
    B.comp('IDL','LPF',{fc:'10',y0:'0'});w(['ID','y'],['IDL','u']);
    E('VCD','min(max(v0 + x + kd*(i - il), -vm), vm)','v0, x, i, il',`kd = 0.2, vm = ${s(vmax)}`);w(['VFR','y'],['VCD','v0']);w(['XV','y'],['VCD','x']);w(['ID','y'],['VCD','i']);w(['IDL','y'],['VCD','il']);
    B.comp('VCQ','CONST',{v:'0'});}
+  // 4.18.1: the robust vector current control of Harnefors et al. (2021) for any grid strength (mode P): no integral in the
+  // current controller, v = R_a·(i_ref − i) + jX·i + H(s)·E + R·i_ref with R_a = α_c·X and the PCC voltage fed forward
+  // through H(s) = α_c/(s + α_c) (their (3)–(4)); i_ref = SAT{P_ref/E_ref + Y_v(s)·(E_ref − E) − j·F_v(s)·(E_ref − Re E)}
+  // with Y_v = H/R_a and F_v = (ω₁/R_a)·H/s (their (8), (28), (32), α_a = 0): the d path of the AC-voltage control is a
+  // proportional one that makes the converter voltage stiff (E_ref in place of H·E), the q path an integral one that brings
+  // Re E to E_ref. Written here with the station's currents into the converter (i_in = −i_out). THEORY §8Ε
+  else if(p.cc==='robust'&&mode==='p'){const acp=Math.max(num(p.acc,4),0.05),Ra=Math.max(acp*X,1e-4),fh=s(acp*w0/(2*Math.PI)),Kv=w0/Ra;
+   B.comp('HED','LPF',{fc:fh,y0:'1'});w(['VD','y'],['HED','u']);B.comp('HEQ','LPF',{fc:fh,y0:'0'});w(['VQ','y'],['HEQ','u']);
+   ref('AR',p.Vacref,1);ref('PR',p.Pref,1);
+   const fr=p.frq==='droop';if(fr){E('WPU','w/k','w','k = '+s(w0));w(['PLL','w'],['WPU','w']);B.comp('WFL','LPF',{fc:s(1/(2*Math.PI*Math.max(num(p.Tf,0.05),1e-4))),y0:'1'});w(['WPU','y'],['WFL','u']);
+    E('DPF','(z - 1)/mf','z','mf = '+s(Math.max(num(p.mf,5),1e-3)/100));w(['WFL','y'],['DPF','z']);}
+   const ov=p.ovl!=='off',vov=s(Math.max(num(p.Vdcmax,1.1),0.5)),kov=s(Math.max(num(p.kov,10),0));E('OVL',ov?'max(v - vm, 0)':'0',ov?'v':'',ov?'vm = '+vov:'');if(ov)w(F.vdc,['OVL','v']);
+   // the integral of the q path, held while blocked or while the saturation holds the reference and the error would push it further
+   integ('XF','b > 0.5 || (k < 1 && (er - h)*q > 0) ? 0 : kv*(er - h)','er, h, b, k, q','kv = '+s(Kv),2*Il);w(['AR','y'],['XFU','er']);w(['HED','y'],['XFU','h']);w(blk,['XFU','b']);
+   E('RDU',fr?'(r + df)/max(er, 0.1) - (er - h)/ra - kov*o':'r/max(er, 0.1) - (er - h)/ra - kov*o',fr?'r, df, er, h, o':'r, er, h, o',`ra = ${s(Ra)}, kov = ${kov}`);w(['PR','y'],['RDU','r']);if(fr)w(['DPF','y'],['RDU','df']);w(['AR','y'],['RDU','er']);w(['HED','y'],['RDU','h']);w(['OVL','y'],['RDU','o']);
+   E('RQU','hq/ra + x','hq, x','ra = '+s(Ra));w(['HEQ','y'],['RQU','hq']);w(['XF','y'],['RQU','x']);
+   E('SK','min(1, il/max(hypot(d, q), 1e-9))','d, q','il = '+s(Il));w(['RDU','y'],['SK','d']);w(['RQU','y'],['SK','q']);w(['SK','y'],['XFU','k']);w(['RQU','y'],['XFU','q']);
+   E('IDL','k*d','k, d');w(['SK','y'],['IDL','k']);w(['RDU','y'],['IDL','d']);E('IQL','k*q','k, q');w(['SK','y'],['IQL','k']);w(['RQU','y'],['IQL','q']);
+   // a low-gain integral of the current error (time constant T_ii, Harnefors et al.: «a low-gain integral part can be added»)
+   // against the static error of the proportional law (the delay of the modulation, the filter and R not quite known)
+   const kii=Ra/Math.max(num(p.Tii,0.05),1e-4);for(const a of ['D','Q'])integ('XI'+a,'b > 0.5 ? 0 : ki*(r - i)','r, i, b','ki = '+s(kii),vmax);w(['IDL','y'],['XIDU','r']);w(['ID','y'],['XIDU','i']);w(['IQL','y'],['XIQU','r']);w(['IQ','y'],['XIQU','i']);w(blk,['XIDU','b']);w(blk,['XIQU','b']);
+   E('VAD','h + X*iq - ra*(r - i) - R*r - x','h, iq, r, i, x',`X = ${s(X)}, ra = ${s(Ra)}, R = ${s(R)}`);E('VAQ','h - X*id - ra*(r - i) - R*r - x','h, id, r, i, x',`X = ${s(X)}, ra = ${s(Ra)}, R = ${s(R)}`);
+   w(['HED','y'],['VAD','h']);w(['IQ','y'],['VAD','iq']);w(['IDL','y'],['VAD','r']);w(['ID','y'],['VAD','i']);w(['XID','y'],['VAD','x']);
+   w(['HEQ','y'],['VAQ','h']);w(['ID','y'],['VAQ','id']);w(['IQL','y'],['VAQ','r']);w(['IQ','y'],['VAQ','i']);w(['XIQ','y'],['VAQ','x']);
+   E('VCD','b > 0.5 ? v : a','v, a, b');w(['VD','y'],['VCD','v']);w(['VAD','y'],['VCD','a']);w(blk,['VCD','b']);E('VCQ','b > 0.5 ? v : a','v, a, b');w(['VQ','y'],['VCQ','v']);w(['VAQ','y'],['VCQ','a']);w(blk,['VCQ','b']);}
   else{
    // outer d: P, V_dc or droop
    let idr;
@@ -811,10 +866,14 @@
     integ('XP','b > 0.5 || (d - dl)*(r - v) > 0 ? 0 : ki*(r - v)','r, v, b, d, dl','ki = '+s(ki),2*Il);w(['VR','y'],['XPU','r']);w(F.vdc,['XPU','v']);w(blk,['XPU','b']);
     E('IDR','kp*(r - v) + x','r, v, x','kp = '+s(kp));w(['VR','y'],['IDR','r']);w(F.vdc,['IDR','v']);w(['XP','y'],['IDR','x']);idr=['IDR','y'];}
    else{const ki=3/pos(p.Tp);ref('PR',p.Pref,1);
+    // 4.18.1: the frequency response of the grid-following station (mode P): P_ref += (ω_PLL,f − 1)/m_f, the frequency of
+    // the PLL through a low-pass T_f (into the converter: a falling frequency lowers the power taken, raises the power given)
+    const fr=p.frq==='droop'&&mode==='p';if(fr){E('WPU','w/k','w','k = '+s(w0));w(['PLL','w'],['WPU','w']);B.comp('WFL','LPF',{fc:s(1/(2*Math.PI*Math.max(num(p.Tf,0.05),1e-4))),y0:'1'});w(['WPU','y'],['WFL','u']);
+     E('DPF','(z - 1)/mf','z','mf = '+s(Math.max(num(p.mf,5),1e-3)/100));w(['WFL','y'],['DPF','z']);}
     // the error of P (with the droop on V_dc), and (4.15) the limiter of the DC overvoltage: above V_dc,max the current is
     // cut by k_ov·(v_dc − V_dc,max) (the station that controls the voltage may have blocked: its AC voltage collapsed) and
     // the integrator holds
-    E('PER',mode==='droop'?'r + (vr - v)/kd - pm':'r - pm',mode==='droop'?'r, pm, vr, v':'r, pm',mode==='droop'?'kd = '+s(pos(p.kdr)):'');w(['PR','y'],['PER','r']);w(['PP','y'],['PER','pm']);
+    E('PER',mode==='droop'?'r + (vr - v)/kd - pm':fr?'r + df - pm':'r - pm',mode==='droop'?'r, pm, vr, v':fr?'r, pm, df':'r, pm',mode==='droop'?'kd = '+s(pos(p.kdr)):'');w(['PR','y'],['PER','r']);w(['PP','y'],['PER','pm']);if(fr)w(['DPF','y'],['PER','df']);
     if(mode==='droop'){ref('VR',p.Vdcref,1);w(['VR','y'],['PER','vr']);w(F.vdc,['PER','v']);}
     const ov=p.ovl!=='off',vov=s(Math.max(num(p.Vdcmax,1.1),0.5)),kov=s(Math.max(num(p.kov,10),0));
     E('OVL',ov?'max(v - vm, 0)':'0',ov?'v':'',ov?'vm = '+vov:'');if(ov)w(F.vdc,['OVL','v']);
@@ -1044,7 +1103,10 @@
   out('vdc',vdc);
   PH.forEach((x,k)=>{E('M'+x,'min(max(m, -k), k)','m','k = '+mm);w(M[k],['M'+x,'m']);
    E('U'+x,pins?'(1 + m)*v/2':'m*v/2','m, v');w(['M'+x,'y'],['U'+x,'m']);w(vdc,['U'+x,'v']);
-   B.comp('V'+x,'VDC',{ctl:'sig',Rs:'0'});w(['U'+x,'y'],['V'+x,'u']);w(pins?Np:B.gnd(),['V'+x,'n']);
+   // 4.18.1: from a load flow (init = 'lf', ideal DC): the phasor E0∠θ0 of each source in the steady start (θ0 of phase a as a
+   // cosine, as GFMC and MMCC: v_a = E0·cos(ωt + θ0) = E0·sin(ωt + θ0 + 90°))
+   const ac0=p.init==='lf'&&!pins&&num(p.E0,0)>0?{acpk:s(num(p.E0,0)),acph:s(num(p.th0,0)+90-120*k)}:{};
+   B.comp('V'+x,'VDC',{ctl:'sig',Rs:'0',...ac0});w(['U'+x,'y'],['V'+x,'u']);w(pins?Np:B.gnd(),['V'+x,'n']);
    const am=B.comp('I'+x,'AM',{});w(['V'+x,'p'],[am,'a']);out('i'+x,[am,'y']);let at=[am,'b'];
    if(filt!=='none'){B.comp('L'+x,'L',{L:s(Math.max(num(p.Lf,5e-3),1e-12)),Rs:s(Math.max(num(p.Rf,0.05),0))});w(at,['L'+x,'a']);at=['L'+x,'b'];}
    if(filt==='lc'){B.comp('C'+x,'C',{C:s(Math.max(num(p.Cf,20e-6),1e-15))});w(at,['C'+x,'p']);w(['C'+x,'n'],B.gnd());}
@@ -1090,6 +1152,9 @@
   dq('V',F.va,F.vb,F.vc);dq('I',F.ia,F.ib,F.ic);if(cas)dq('O',F.oa,F.ob,F.oc);
   E('VG','hypot(d, q)','d, q');w(Y('VD'),['VG','d']);w(Y('VQ'),['VG','q']);E('IG','hypot(d, q)','d, q');w(Y('ID'),['IG','d']);w(Y('IQ'),['IG','q']);
   const PR=ref('PR',p.Pref,0),QR=ref('QR',p.Qref,0),VR=ref('VR',p.Vref,1),mp=pos(p.mp,2)/100,nq=pos(p.nq,5)/100;
+  // 4.18.1: the filters of P and Q (droop) and the flux of the VSM from the references at t = 0 (fi = 'ref', a start from the
+  // load flow, e.g. in a network) or from 0 and 1 (as in 4.18)
+  const at0=(v,d)=>{const sc=P.parseSched(String(v??'').trim()===''?String(d):String(v));return sc?sc[0][1]:d;},fi=p.fi==='ref',P0=fi?at0(p.Pref,0):0,Q0=fi?at0(p.Qref,0):0,V0=fi?at0(p.Vref,1):1;
   // LF: the current limit (from the inner control, below) latched 20 ms; in it the integrator of the VSM flux only unwinds.
   // FD: a fault, |v| < U_fd, latched 50 ms: the PSC follows its backup PLL and holds its voltage control (Zhang et al.: the
   // switch by a fault detection logic; a switch by the limit itself locked after the fault, the limit holding the PSL off).
@@ -1105,7 +1170,7 @@
   else{E('PP','vd*xd + vq*xq','vd, vq, xd, xq');E('QQ','vq*xd - vd*xq','vd, vq, xd, xq');for(const id of ['PP','QQ']){w(Y('VD'),[id,'vd']);w(Y('VQ'),[id,'vq']);w(Y(X+'D'),[id,'xd']);w(Y(X+'Q'),[id,'xq']);}}
   // the law: WL (ω, pu) and EE (E, pu)
   if(law==='droop'){const wf=s(2*Math.PI*pos(p.fp,5));
-   integ('PF','wf*(x - z)',{x:Y('PP'),z:'self'},'wf = '+wf,0,-10,10);integ('QF','wf*(x - z)',{x:Y('QQ'),z:'self'},'wf = '+wf,0,-10,10);
+   integ('PF','wf*(x - z)',{x:Y('PP'),z:'self'},'wf = '+wf,P0,-10,10);integ('QF','wf*(x - z)',{x:Y('QQ'),z:'self'},'wf = '+wf,Q0,-10,10);
    E('WL','1 - mp*(f - r)','f, r','mp = '+s(mp));w(Y('PF'),['WL','f']);w(PR,['WL','r']);
    E('EE','v - nq*(f - r)','f, r, v','nq = '+s(nq));w(Y('QF'),['EE','f']);w(QR,['EE','r']);w(VR,['EE','v']);}
   else if(law==='vsm'){const h2=s(2*pos(p.H,2)),td=s(Math.max(num(p.tdr,0),0)),Dq=1/nq;
@@ -1113,7 +1178,7 @@
    E('YE','(r - x + (t < td ? 0 : dq)*(v - m))/k','r, x, v, m',`dq = ${s(Dq)}, td = ${td}, k = ${s(Dq*pos(p.tv,0.01))}`);w(QR,['YE','r']);w(Y('QQ'),['YE','x']);w(VR,['YE','v']);w(Y('VG'),['YE','m']);
    // ψ: while synchronizing it follows the amplitude of the PLL's voltage (E = |v_g| when the breaker closes), held during the
    // soft start, and in the current limit it only unwinds
-   integ('YS','s > 0.5 ? 50*(a - z) : t < ts ? 0 : l > 0 && g > 0 ? 0 : g',{s:Y('SY'),a:['PLL','amp'],l:Y('LF'),g:Y('YE'),z:'self'},'ts = '+s(ts),1,0,2);
+   integ('YS','s > 0.5 ? 50*(a - z) : t < ts ? 0 : l > 0 && g > 0 ? 0 : g',{s:Y('SY'),a:['PLL','amp'],l:Y('LF'),g:Y('YE'),z:'self'},'ts = '+s(ts),V0,0,2);
    E('WL','z','z');w(Y('WS'),['WL','z']);E('EE','w*z','w, z');w(Y('WS'),['EE','w']);w(Y('YS'),['EE','z']);}
   else{E('WL','1 + kp*(r - x)/w0','r, x',`kp = ${s(pos(p.kp,50))}, w0 = ${s(w0)}`);w(PR,['WL','r']);w(Y('PP'),['WL','x']);
    if(p.avc==='fixed'){E('EE','v','v');w(VR,['EE','v']);}

@@ -27,6 +27,9 @@
 | weights, biases | βάρη, πολώσεις | | 4.7 |
 | multiplexer / demultiplexer | πολυπλέκτης (Mux) / αποπολυπλέκτης (Demux) | | 4.6 |
 | grid-forming / grid-following | μετατροπέας που σχηματίζει την τάση (grid-forming) / που ακολουθεί το δίκτυο (grid-following)· στους τίτλους και στην ομάδα των tutorials ο αγγλικός όρος, όπως στη βιβλιογραφία | «διαμόρφωσης δικτύου» (μπερδεύεται με τη διαμόρφωση PWM) | 4.18 |
+| frequency nadir | βύθισμα της συχνότητας (η μεγαλύτερη απόκλιση μετά από διαταραχή) | «ναδίρ» | 4.18.1 |
+| RoCoF (rate of change of frequency) | ρυθμός μεταβολής της συχνότητας (RoCoF), σε παράθυρο T | — | 4.18.1 |
+| robust vector current control | στιβαρός έλεγχος ρεύματος (για κάθε ισχύ δικτύου) | «εύρωστος» | 4.18.1 |
 | droop (P–f, Q–V) | στατικότητα P–f, Q–V | «πτώση», droop σκέτο | 4.18 |
 | virtual synchronous machine (VSM), synchronverter | εικονική σύγχρονη μηχανή (VSM)· synchronverter το σχήμα των Zhong & Weiss | «εικονική γεννήτρια» για το σχήμα των Zhong & Weiss | 4.18 |
 | power-synchronization control (PSC) | συγχρονισμός μέσω ισχύος (PSC) | «έλεγχος συγχρονισμού ισχύος» | 4.18 |

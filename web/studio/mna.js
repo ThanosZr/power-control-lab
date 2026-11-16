@@ -146,7 +146,8 @@
     case 'MG':for(let k=0;k<e.N;k++)for(let j=0;j<e.N;j++){const g=e.Gm[k*e.N+j],[ak,bk]=e.ports[k],[aj,bj]=e.ports[j];ad(ak,aj,g,0);ad(bk,bj,g,0);ad(ak,bj,-g,0);ad(bk,aj,-g,0);}break;
     case 'F':if(e.gen||e.sm||e.srm)break;for(let k=0;k<e.N;k++)for(let j=0;j<e.N;j++){const g=-e.Gam[k*e.N+j]/w,[ak,bk]=e.ports[k],[aj,bj]=e.ports[j];ad(ak,aj,0,g);ad(bk,bj,0,g);ad(ak,bj,0,-g);ad(bk,aj,0,-g);}break;
     case 'V':{const r=e.row;ad(e.a,r,1,0);ad(r,e.a,1,0);ad(e.b,r,-1,0);ad(r,e.b,-1,0);
-     const s=e.src;if(!e.gen&&!(e.sigIn>=0)&&s&&s.kind==='ac'&&Math.abs(s.f-f0)<=1e-6*f0){br[r]=s.Vpk*Math.cos(s.ph-Math.PI/2);bi[r]=s.Vpk*Math.sin(s.ph-Math.PI/2);}break;}
+     const s=e.src;if(!e.gen&&!(e.sigIn>=0)&&s&&s.kind==='ac'&&Math.abs(s.f-f0)<=1e-6*f0){br[r]=s.Vpk*Math.cos(s.ph-Math.PI/2);bi[r]=s.Vpk*Math.sin(s.ph-Math.PI/2);}
+     else if(e.sigIn>=0&&s&&s.ac0){br[r]=s.ac0.Vpk*Math.cos(s.ac0.ph-Math.PI/2);bi[r]=s.ac0.Vpk*Math.sin(s.ac0.ph-Math.PI/2);}break;}
     case 'X':{const r=e.row,N=e.n;ad(e.s1,r,1,0);ad(r,e.s1,1,0);ad(e.s2,r,-1,0);ad(r,e.s2,-1,0);ad(e.p1,r,-N,0);ad(r,e.p1,-N,0);ad(e.p2,r,N,0);ad(r,e.p2,N,0);break;}
     // 4.10: an arm at t = 0 as its cells' insertion states give it: with every cell bypassed (s = 0) the arm resistance only
     case 'CHB':{const r=e.row;ad(e.a,r,1,0);ad(r,e.a,1,0);ad(e.b,r,-1,0);ad(r,e.b,-1,0);ad(r,r,-e.Rarm,0);if(e.s.some(q=>q))left.add('CHB');break;}
@@ -700,6 +701,9 @@
     if(T==='VAC'&&num(p.Ls,0)>0){const m=internal();add({k:'L',a:m,b:top,L:num(p.Ls,0),i:0,key:c.id+'#Ls'});top=m;}
     const s=series(top,top,0);let srcTop=top;if(num(p.Rs,0)>0){const m=internal();add({k:'G',a:m,b:top,R:num(p.Rs,0)});srcTop=m;}
     const v=T==='VDC'?{kind:'dc',V:num(p.V,12),sched:P.parseSched(p.sched)}:{kind:'ac',Vpk:num(p.Vpk,325),f:num(p.f,50),ph:num(p.phase,0)*Math.PI/180,off:num(p.off,0)};
+    // 4.18.1: a source driven by a signal may carry the phasor that it has in the steady start (acInit): the internal
+    // parameters acpk (peak) and acph (°, as phase of VAC: v = acpk·sin(ωt + acph)), set by VSC2 when it starts from a load flow
+    if(T==='VDC'&&p.ctl==='sig'&&num(p.acpk,0)>0)v.ac0={Vpk:num(p.acpk,0),ph:num(p.acph,0)*Math.PI/180};
     info.main=add({k:'V',a:srcTop,b,row:row(),src:v,sigIn:T==='VDC'&&p.ctl==='sig'?sn(c.id,'u'):undefined});}
    else if(T==='VIMP'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];const w=P.impulseWave(p);
     if(!(w.eta>1e-6&&w.tau1>0&&w.tau2>0))throw new NetlistError(`${c.label||c.id}: δεν βρέθηκαν τ₁, τ₂ για T1 = ${P.eng(w.T1,'s')}, T2 = ${P.eng(w.T2,'s')}.`);

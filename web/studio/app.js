@@ -229,7 +229,10 @@ function chanLabel(key){const [pre,id0,pin]=key.split(':'),vb=vecBase(id0);if(vb
  if(/^PSI\d$/.test(pre))return 'ψ'+'₀₁₂₃₄₅₆₇₈₉'[+pre[3]]+'('+name+')';
  const pm=pre.match(/^([IV])([1-9])$/);if(pm)return (pm[1]==='I'?'i':'v')+'₀₁₂₃₄₅₆₇₈₉'[+pm[2]]+'('+name+')';if((pre==='I'||pre==='V')&&(c?.type==='KL'||c?.type==='KG'||c?.type==='SRM'||c?.type==='TL'))return (pre==='I'?'i₁':'v₁')+'('+name+')';
  const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',GS:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold',Y:c?.type==='VM'?'v':c?.type==='AM'?'i':c?.type==='SR'?'Q':'y'}[pre]||pre)+'('+name+')';}
-function addProbe(key,label){if(!S.sim)return;const ok=scope.addChannel(key,label||chanLabel(key));renderChannels();if(!ok)flash('#chan-list');else{flash('#scope-card');}draw(true);}
+// 4.18.1 (ζήτημα του Θάνου): where a trace comes from: the automatic name of the signal (element, pin, quantity) and its key,
+// under the free name that a tutorial or the user gave it
+function chanSrc(key){let a='';try{a=chanLabel(key);}catch(e){}return `πηγή: ${a&&a!==key?a+' · ':''}${key}`;}
+function addProbe(key,label){if(!S.sim)return;const np=scope.nextPane,to=np!=null&&scope.cfg.panes[np]&&!scope.cfg.panes[np].ch.length?np:null;scope.nextPane=null;const ok=scope.addChannel(key,label||chanLabel(key),to);renderChannels();if(!ok)flash('#chan-list');else{flash('#scope-card');}draw(true);}
 function flash(sel){const e=$(sel);if(!e)return;e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash');}
 // 4.8: the signals of an AI controller are those of its inner blocks (channels <id>/SAT, <id>/E, …)
 const EVC_SIGS=[['/SAT','εντολή τάσης u'],['/GOV','ω* μετά τον ρυθμιστή αναφοράς'],['/TR','ροπή που χρειάζεται'],['/TQ','ροπή που ζητείται τ*'],['/KP','κράτηση ροπής (keep)'],['/LIM','όριο ενεργό (1)'],['/TP','μέγιστη ροπή (όρια, SOC)'],['/AC','επιτάχυνση που ζητείται'],['/IR','ρεύμα που ζητείται'],['/PW','ισχύς άξονα (kW)'],['/LS','χαμηλό SOC (0 … 1)']];
@@ -310,7 +313,7 @@ function renderChannels(){
  const panes=scope.cfg.panes;
  {const k=JSON.stringify(panes);if(k===chanKey&&$('#chan-list').childElementCount)return;chanKey=k;}
  $('#chan-list').innerHTML=panes.map((p,pi)=>`<div class="pane-row"><div class="pane-head"><b>Παράθυρο ${pi+1}</b><label class="mini"><input type="checkbox" data-pauto="${pi}" ${p.y?.auto===false?'':'checked'}> auto</label>${p.y?.auto===false?'':`<select class="ymode" data-pymode="${pi}" title="Αυτόματη κλίμακα: σταθερή (ανοίγει αμέσως, κλείνει μετά από 2 s) ή σε κάθε καρέ (όπως πριν από την 4.17.2)"><option value="">σταθερή</option><option value="frame" ${p.y?.mode==='frame'?'selected':''}>ανά καρέ</option></select>`}${p.y?.auto===false?`<input class="ymin" data-pmin="${pi}" value="${p.y.min??''}" placeholder="min"><input class="ymax" data-pmax="${pi}" value="${p.y.max??''}" placeholder="max">`:''}<label class="mini"><input type="checkbox" data-pzero="${pi}" ${p.zero?'checked':''}> 0</label></div>
-  ${p.ch.map(ch=>`<div class="chan" data-key="${esc(ch.key)}"><label class="sw"><input type="checkbox" data-on="${esc(ch.key)}" ${ch.on?'checked':''}><i style="background:${ch.color}"></i></label><input class="clabel" data-label="${esc(ch.key)}" value="${esc(ch.label)}"><select data-pane="${esc(ch.key)}">${Array.from({length:Math.min(12,panes.length+1)},(_,i)=>i).map(i=>`<option value="${i}" ${i===pi?'selected':''}>Π${i+1}</option>`).join('')}</select><button class="x" data-rm="${esc(ch.key)}" title="Αφαίρεση">✕</button></div>`).join('')||'<div class="muted small">Κανένα σήμα. Δεξί κλικ σε στοιχείο → Scope, ή επίλεξε από τη λίστα.</div>'}</div>`).join('');
+  ${p.ch.map(ch=>{const src=chanSrc(ch.key);return `<div class="chan" data-key="${esc(ch.key)}" title="${esc(src)}"><label class="sw"><input type="checkbox" data-on="${esc(ch.key)}" ${ch.on?'checked':''}><i style="background:${ch.color}"></i></label><input class="clabel" data-label="${esc(ch.key)}" value="${esc(ch.label)}" title="Όνομα στο γράφημα (αλλάζει ελεύθερα)· ${esc(src)}"><select data-pane="${esc(ch.key)}">${Array.from({length:Math.min(12,panes.length+1)},(_,i)=>i).map(i=>`<option value="${i}" ${i===pi?'selected':''}>Π${i+1}</option>`).join('')}</select><button class="x" data-rm="${esc(ch.key)}" title="Αφαίρεση">✕</button></div><div class="csrc" data-src="${esc(ch.key)}">${esc(src)}</div>`;}).join('')||(pi===scope.nextPane?'<div class="muted small">Κενό παράθυρο: το επόμενο σήμα από τη λίστα (ή «⌁ I/V επιλεγμένων») πάει εδώ.</div>':'<div class="muted small">Κανένα σήμα. Δεξί κλικ σε στοιχείο → Scope, ή επίλεξε από τη λίστα.</div>')}</div>`).join('');
  $$('#chan-list [data-rm]').forEach(b=>b.onclick=()=>{scope.removeChannel(b.dataset.rm);renderChannels();draw(true);});
  $$('#chan-list [data-on]').forEach(b=>b.onchange=()=>{const ch=scope.channels().find(c=>c.key===b.dataset.on);for(const p of scope.cfg.panes)for(const c of p.ch)if(c.key===b.dataset.on)c.on=b.checked;void ch;draw(true);});
  $$('#chan-list [data-pane]').forEach(b=>b.onchange=()=>{scope.moveChannel(b.dataset.pane,+b.value);renderChannels();draw(true);});
@@ -1801,16 +1804,54 @@ function gfmTheory(){const s=S.sim,m=(S.tutMeta||{}).gfm;if(!s||!m)return '';con
   const ps=s.t>=m.tps?m.Pset:0,qs=s.t>=m.tqs?m.Qset:0,dr=s.t>=m.tdr,vm=g('Y:CT/VG'),P=g('Y:CT/PP'),Q=g('Y:CT/QQ');
   const pt=dr?gg*(ps+(1-gg)/m.mp):gg*ps,qt=dr?qs+(1-vm)/m.nq:qs;
   return h+cmpRows([['P (W)',100*pt,100*P,'W'],['Q (var)',100*qt,100*Q,'var'],['θ̇/ω₀ = f_δικτύου/f₀',gg,g('Y:CT/WW'),'']])+`<p class="small">${dr?'Στατικότητες ενεργές':'Set mode'}· V_m = ${fmt(vm,4)} pu${s.t>=m.tdip?' (δίκτυο −5 %)':''}.</p>`;}
- if(m.kind==='weak'){const psc=m.ctl==='psc',X=m.Xc+m.Xtr+m.Xg;
-  let h=`<div class="tm"><span class="badge">${psc?'PSC':'Έλεγχος ρεύματος'}</span> Zhang, Harnefors & Nee 2010, Πίν. I: 350 MVA, 195 kV, X_c = 0,15 pu, μετασχηματιστής ${fmt(m.Xtr,3)} pu · SCR ${m.scr} (X_g = ${fmt(m.Xg,3)} pu)${psc?` · k_p = ${fmt(m.kp,3)} rad/s`:''}</div><ul class="eqs">
-   <li>${psc?'dθ/dt = ω₀ + k_p·(P_ref − P) (4)· v_ref = V₀ − k_v·s/(s + α_v)·i (36)–(37), k_v = 0,477, α_v = 40 rad/s· V₀ = V_ref + K_E/(1 + T_E·s)·(U_ref − |u|) (Σχ. 11)':'PLL στην τάση του σημείου σύνδεσης, P και V_ac στους άξονες d και q, ρεύμα σε dq με αποσύζευξη και πρόσθια τροφοδότηση της τάσης'}</li>
-   <li>Γωνία φορτίου ανάμεσα στην τάση του μετατροπέα και στο δίκτυο: P = E·V_g·sin δ/X, X = X_c + X_T + X_g = ${fmt(X,3)} pu (πάνω από 70° το περιθώριο μικραίνει πολύ, κάτω από 0,06 pu κέρδος ως τις 90°)</li>
-   <li>Στο σφάλμα: i_ref = (v_ref − u_f − jX_c·i)/(α_c·L_c) + i με |i_ref| ≤ I_max = ${fmt(m.Imax,3)} pu (54)–(55)· το εφεδρικό PLL αντί για τον βρόχο συγχρονισμού</li></ul>`;
+ if(m.kind==='weak'){const psc=m.ctl==='psc',rob=m.ctl==='gflw',X=m.Xc+m.Xtr+m.Xg,Xp=m.Xtr+m.Xg;
+  // 4.18.1: the static limit seen from the PCC (|u| held at 1 by either control, grid EMF 1): P_max = 1/(X_T + X_g), for the SCR of the options
+  const lim=[1,1.5,2,3,5].map(k=>[k,1/(m.Xtr+1/k)]);
+  let h=`<div class="tm"><span class="badge">${psc?'PSC':rob?'Στιβαρός έλεγχος ρεύματος':'Έλεγχος ρεύματος (4.18)'}</span> Zhang, Harnefors & Nee 2010, Πίν. I: 350 MVA, 195 kV, X_c = 0,15 pu, μετασχηματιστής ${fmt(m.Xtr,3)} pu · SCR ${m.scr} (X_g = ${fmt(m.Xg,3)} pu)${psc?` · k_p = ${fmt(m.kp,3)} rad/s`:` · PLL ${fmt(m.pll,2)} Hz`}</div><ul class="eqs">
+   <li>${psc?'dθ/dt = ω₀ + k_p·(P_ref − P) (4)· v_ref = V₀ − k_v·s/(s + α_v)·i (36)–(37), k_v = 0,477, α_v = 40 rad/s· V₀ = V_ref + K_E/(1 + T_E·s)·(U_ref − |u|) (Σχ. 11)'
+    :rob?`Harnefors κ.ά. 2021: v = R_a·(i_ref − i) + jX_c·i + H(s)·E, R_a = α_c·X_c = ${fmt(m.acc*m.Xc,3)} pu, H(s) = α_c/(s + α_c), α_c = ${fmt(m.acc,2)} pu (εξ. (3)–(4)), χωρίς ολοκληρωτή (μόνο ένας αργός, 50 ms, για το στατικό σφάλμα)· i_ref = SAT{P_ref/E_ref + H·(E_ref − E)/R_a − j·(ω₁/R_a)·(H/s)·(E_ref − Re E)} (εξ. (8), (28), (32)): στο d αναλογική ρύθμιση της τάσης (η τάση του μετατροπέα «σκληραίνει»), στο q ολοκληρωτική`
+    :'PLL στην τάση του σημείου σύνδεσης, P και V_ac στους άξονες d και q, ρεύμα σε dq με PI (10 ms), αποσύζευξη και πρόσθια τροφοδότηση της τάσης'}</li>
+   <li>${psc?`Γωνία φορτίου ανάμεσα στην τάση του μετατροπέα και στο δίκτυο: P = E·V_g·sin δ/X, X = X_c + X_T + X_g = ${fmt(X,3)} pu (πάνω από 70° το περιθώριο μικραίνει πολύ, κάτω από 0,06 pu κέρδος ως τις 90°)`
+    :`Από το σημείο σύνδεσης, με |u| = 1: P = |u|·V_g·sin δ/(X_T + X_g), X_T + X_g = ${fmt(Xp,3)} pu· στατικό όριο P_max = ${fmt(1/Xp,3)} pu στις 90°. Κοντά του το PLL (που βλέπει τη γωνία του u να αλλάζει με το ίδιο το ρεύμα) πρέπει να είναι αργό (Zhou κ.ά. 2014)`}</li>
+   <li>${psc?`Στο σφάλμα: i_ref = (v_ref − u_f − jX_c·i)/(α_c·L_c) + i με |i_ref| ≤ I_max = ${fmt(m.Imax,3)} pu (54)–(55)· το εφεδρικό PLL αντί για τον βρόχο συγχρονισμού`
+    :'Ο έλεγχος της 4.18 στο SCR 1 ταλαντώνεται ήδη χωρίς ισχύ (~400 Hz στο dq): ο βρόχος ρεύματος των 10 ms είναι αργός απέναντι στην καθυστέρηση της μέτρησης (φίλτρο 2 kHz, ένα βήμα) και στο PLL· με 3–5 ms ή με τον στιβαρό έλεγχο σταθεροποιείται'}</li></ul>
+   <table class="cmp"><thead><tr><th>SCR</th>${lim.map(([k])=>`<th>${fmt(k,2)}</th>`).join('')}</tr></thead><tbody><tr><td>P_max από το σημείο σύνδεσης (pu)</td>${lim.map(([,q])=>`<td>${fmt(q,3)}</td>`).join('')}</tr></tbody></table>`;
   if(s.t<0.3)return h+'<p class="muted small">Τρέξε την προσομοίωση.</p>';
-  if(!psc){const P=g('Y:CT/PP');return h+cmpRows([['P προς τον μετατροπέα (pu)',NaN,P,''],['|u_pcc| (pu)',1,g('Y:CT/VG'),'']]);}
-  const P=g('Y:CT/PP'),E=g('Y:CT/EE'),u=g('Y:CT/VG'),ref=(s.t>=1.2&&m.ev==='step')?m.p0+0.1:(s.t>=0.1*Math.round(m.p0*10)?m.p0:NaN),sd=P*X/Math.max(E,1e-6);
+  const ref=(s.t>=1.2&&m.ev==='step')?m.p0+0.1:(s.t>=0.1*Math.round(m.p0*10)?m.p0:NaN);
+  if(!psc){const P=-g('Y:CT/PP'),u=g('Y:CT/VG'),sd=P*Xp/Math.max(u,1e-6);return h+cmpRows([['P προς το δίκτυο (pu)',ref,P,''],['|u_pcc| (pu)',1,u,'']])+`<p class="small">Γωνία ανάμεσα στο σημείο σύνδεσης και στο δίκτυο δ = asin(P·(X_T + X_g)/|u|) = ${sd<1?fmt(Math.asin(sd)/D,3)+'°':'—'}.</p>`;}
+  const P=g('Y:CT/PP'),E=g('Y:CT/EE'),u=g('Y:CT/VG'),sd=P*X/Math.max(E,1e-6);
   return h+cmpRows([['P (pu)',ref,P,''],['|u_pcc| (pu)',1,u,''],['|i| (pu) ≤ I_max',NaN,g('Y:CT/IG'),'']])+`<p class="small">Γωνία φορτίου δ = asin(P·X/(E·V_g)) = ${sd<1?fmt(Math.asin(sd)/D,3)+'°':'—'} με E ≈ V₀ = ${fmt(E,4)} pu.</p>`;}
  return '';}
+// 4.18.1: IEEE 9 with a converter at bus 3. The metrics of Tayyebi et al. (2020) (23): the nadir max|ω₀ − ω(t)| after the
+// step and the RoCoF |ω(t₀ + T) − ω(t₀)|/T with T = 250 ms, on the speed of G1 (its mean per cycle, from the period ring)
+function ieee9GfmTheory(){const s=S.sim,m=(S.tutMeta||{}).ieee9gfm;if(!s||!m)return '';const f=m.f,K=m.K,un=m.unit,D=Math.PI/180;
+ const Kt=K.G1+K.G2+(un==='gfl0'?0:K.G3),dfs=m.dp*1e6*1.0159**2/(Kt*m.Sb);
+ const names={sm:'σύγχρονη γεννήτρια G3',droop:'grid-forming με στατικότητα 5 %',vsm:'grid-forming VSM (H = 3,01 s)',gfl:'grid-following με απόκριση στη συχνότητα 5 %',gfl0:'grid-following, σταθερή P'};
+ let h=`<div class="tm"><span class="badge">IEEE 9 · ζυγός 3: ${esc(names[un]||un)}</span> 128 MVA · βήμα +${m.dp} MW στον ζυγό 7 στο ${m.te} s · ρυθμιστές: G1 νερό (R_P 4 %), G2 ατμός (R 5 %)</div><ul class="eqs">
+  <li>Μετρικές (Tayyebi κ.ά. 2020, (23)): βύθισμα ‖ω‖<sub>∞</sub> = max|ω₀ − ω(t)| μετά το βήμα και RoCoF = |ω(t₀ + T) − ω(t₀)|/T με T = 250 ms, στην ταχύτητα της G1 (μέση τιμή ανά περίοδο)</li>
+  <li>Μόνιμη απόκλιση με στατικότητες: Δf/f₀ = ΔP/ΣK, K = P_r/R (G1 ${fmt(K.G1,4)}, G2 ${fmt(K.G2,4)}, ζυγός 3 ${un==='gfl0'?'0':fmt(K.G3,4)} pu/pu σε 100 MVA)· με ΔP = ${m.dp} MW·V₇² ⇒ Δf ≈ ${fmt(dfs*f,3)} Hz. Οι ρυθμιστές νερού και ατμού φτάνουν εκεί σε δεκάδες δευτερόλεπτα</li>
+  <li>${un==='sm'?'Η G3 δίνει αμέσως μόνο από την αδράνειά της (H = 3,01 s) και τη ρύθμιση μέσω του ατμού (δευτερόλεπτα)':un==='droop'?'Ο grid-forming αλλάζει την ισχύ του σε δεκάδες ms: ΔP = −(Δω/ω₀)/m_p·S· με φίλτρο 5 Hz έχει αδράνεια 2H = 1/(m_p·ω_f) ≈ 0,64 s':un==='vsm'?'Η VSM δίνει αδράνεια όση η G3 (H = 3,01 s) και τη στατικότητά της αμέσως, χωρίς στρόβιλο':un==='gfl'?'Ο grid-following δίνει ΔP = −(ω_PLL − 1)/m_f μετά το PLL (5 Hz) και το φίλτρο 50 ms· χωρίς αδράνεια':'Ο grid-following με σταθερή P: ούτε αδράνεια ούτε ρύθμιση από τον ζυγό 3'}</li></ul>`;
+ const p=s.per,i=s.chIndex.get('Y:G1');if(i===undefined||!p.n||s.t<m.te+0.3)return h+'<p class="muted small">Τρέξε την προσομοίωση ως μετά το βήμα (μετρήσεις ανά περίοδο της ταχύτητας της G1).</p>';
+ const rows=[];for(let k=Math.min(p.n,p.cap);k>=1;k--){const j=(p.head-k+p.cap)%p.cap;rows.push([p.t[j],p.avg[j*p.nch+i]]);}
+ const pre=rows.filter(r=>r[0]>m.te-0.1&&r[0]<=m.te),w0=pre.length?pre.reduce((a,r)=>a+r[1],0)/pre.length:1,post=rows.filter(r=>r[0]>m.te);
+ let nad=0,tn=NaN;for(const r of post)if(w0-r[1]>nad){nad=w0-r[1];tn=r[0]-m.te;}const at=t=>{let b=null;for(const r of rows)if(!b||Math.abs(r[0]-t)<Math.abs(b[0]-t))b=r;return b?b[1]:NaN;};
+ const rc=s.t>=m.te+m.Twin?Math.abs(at(m.te+m.Twin)-w0)/m.Twin:NaN,wn=rows[rows.length-1][1],end=post.length&&nad>0&&tn<post[post.length-1][0]-m.te-0.5;
+ return h+`<table class="tbl"><tr><th>Μετρική</th><th>Τιμή</th></tr><tr><td>Βύθισμα ‖Δf‖<sub>∞</sub>${end?'':' (ως τώρα· δεν έχει ακόμη γυρίσει)'}</td><td>${fmt(nad*f,4)} Hz στα ${fmt(tn,3)} s μετά το βήμα</td></tr>
+  <tr><td>RoCoF σε 250 ms</td><td>${Number.isFinite(rc)?fmt(rc*f,4)+' Hz/s':'—'}</td></tr><tr><td>Συχνότητα τώρα</td><td>${fmt(wn*f,6)} Hz (Δf ${fmt((wn-w0)*f,4)} Hz· μόνιμη ≈ ${fmt(-dfs*f,3)} Hz)</td></tr></table>
+  <p class="small muted">Σύγκρινε τις επιλογές του ζυγού 3 με το ίδιο βήμα. Οι τιμές που βρήκε η επαλήθευση για +50 MW είναι στο THEORY §8Ε.</p>`;}
+// 4.18.1: the MMC station as a grid-forming converter (MMCC mode 'gfm'). Island: one frequency, ω = 1 − m_p·(P − P_ref) of
+// station 2 (P out of it, pu of 1059 MVA); with unit B the same ω for both, so P₂ − P_ref,2 = P_B − P_ref,B (same pu);
+// weak grid: P against its reference and the angle across X_T + X_g
+function hvdcGfmTheory(){const s=S.sim,m=(S.tutMeta||{}).hvdcgfm;if(!s||!m)return '';const g=k=>avgOver(k,2)?.avg,D=Math.PI/180,L={droop:'στατικότητα P–f 2 %, Q–V 5 %',vsm:'VSM (H = 2 s, D_p = 1/m_p)',psc:'PSC (k_p = 50 rad/s)'};
+ let h=`<div class="tm"><span class="badge">MMC grid-forming</span> σταθμός 2: ${esc(L[m.law]||m.law)} · άμεσα η τάση, όριο ρεύματος 1,1 pu · σταθμός 1: τάση DC</div><ul class="eqs">
+  <li>Ο νόμος του «Έλεγχος grid-forming» μέσα στον έλεγχο του σταθμού (MMCC, τρόπος «grid-forming»): ω και E από τον νόμο, v_ref = E − Z_v·i, όριο με το διάνυσμα αναφοράς ρεύματος (Zhang κ.ά. (54)–(55)) πάνω στην X του σταθμού· η ενέργεια των βραχιόνων και η τάση DC από τον σταθμό 1</li>
+  ${m.ac==='weak'?`<li>Ασθενές δίκτυο SCR ${fmt(m.scr,2)}: P = E·V_g·sin δ/X με X = X_σταθμού + X_T + X_g</li>`:`<li>Νησίδα: μία συχνότητα, ${m.law==='psc'?'ω = 1 + k_p·(P_ref − P)/ω₀ (χωρίς στατικότητα στη μόνιμη, το PSC δεν ορίζει συχνότητα νησίδας: η P δεν μπορεί να ακολουθήσει το P_ref όταν το φορτίο είναι άλλο)':'1 − ω = m_p·(P − P_ref)'}${m.ac==='par'?'· με τη μονάδα B (στατικότητα 2 % στα 500 MVA) ίδια συχνότητα ⇒ P₂ − P_ref,2 = P_B − P_ref,B (ίδιο pu, χωρίς επικοινωνία)':''}</li>`}</ul>`;
+ if(s.t<0.3)return h+'<p class="muted small">Τρέξε την προσομοίωση.</p>';
+ const P2=g('Y:CT2/G/PP'),w2=g('Y:CT2/G/WW');
+ if(m.ac==='weak'){const ref=s.t>=m.te?0.9:0.5;return h+cmpRows([['P σταθμού 2 προς το AC (pu)',ref,P2,''],['|v| (pu)',NaN,g('Y:CT2/G/VG'),''],['|i| (pu) ≤ 1,1',NaN,g('Y:CT2/G/IG'),'']]);}
+ const rows=m.law==='psc'?[['f σταθμού 2 (pu)',NaN,w2,'']]:[['f σταθμού 2 = 1 − m_p·(P₂ − P_ref)',1-m.mp*(P2-m.Pr2),w2,'']];
+ if(m.ac==='par'){const PB=g('Y:CTB/PP');rows.push(['P_B − P_ref,B = P₂ − P_ref,2 (pu)',P2-m.Pr2,PB-m.PrB,''],['f_B − f₂ (pu)',0,g('Y:CTB/WW')-w2,''],['P₂·S₂ (MW)',NaN,P2*m.S/1e6,'MW'],['P_B·S_B (MW)',NaN,PB*m.SB/1e6,'MW']);}
+ return h+cmpRows(rows)+`<p class="small">Φορτίο ${s.t>=m.te?'900':'600'} MW (σταθερής εμπέδησης) από τα ${fmt(m.te,2)} s.</p>`;}
 // 4.16: the CIGRE HVDC benchmark (LCC). Kundur ch. 10 with the measured bus voltage, I_d and α (γ at the inverter): V_d of each
 // station, μ, the α of the inverter that the measured γ implies; then the run against the PSCAD results of the benchmark
 // (Faruque et al. 2006, Tables I–II). Twelve pulses: two bridges in series, each with E_LL = √(3/2)·V̂·U₂/U₁ and X_c = u_k·U₂²/S_n
@@ -2536,6 +2577,8 @@ function formulaTheory(t){
  if(t.topology==='ieee9_sssc')return ieee9ssscTheory();
  if(t.topology==='hvdc_mmc')return hvdcTheory();
  if(t.topology==='gfm_island'||t.topology==='gfm_sync'||t.topology==='gfm_weak')return gfmTheory();
+ if(t.topology==='ieee9_gfm')return ieee9GfmTheory();
+ if(t.topology==='hvdc_gfm')return hvdcGfmTheory();
  if(t.topology==='hvdc_lcc')return lccTheory();
  const W=paramsOf('PWM1'),V=paramsOf('V1');let rows=[],eqs=[];
  if(t.topology==='cuk'||t.topology==='sepic'){const cl=W.mode==='pi',refS=cl?(P.parseSched(String(W.ref))||[[0,0]]):null,vf=cl?refS[refS.length-1][1]:0,Vin=+V.V,D=cl?Math.abs(vf)/(Vin+Math.abs(vf)):+W.D,R=+paramsOf('R1').R,L1=+paramsOf('L1').L,L2=+paramsOf('L2').L,Ts=1/+W.fs;const Vo=(t.topology==='cuk'?-1:1)*Vin*D/(1-D),Io=Vo/R,IL1=Math.abs(Io)*D/(1-D);
@@ -2791,6 +2834,11 @@ function boot(){
  const METHOD_NOTE={TR:'2ης τάξης, χωρίς απόσβεση',BDF2:'2ης τάξης, απόσβεση στις υψηλές συχνότητες',BE:'1ης τάξης, ισχυρή απόσβεση'};
  $('#method').onchange=e=>{S.sim?.setMethod(e.target.value);scheduleStepCheck();$('#method-note').textContent=METHOD_NOTE[e.target.value];saveLocal();};
  $('#add-signal').onchange=e=>{if(e.target.value)addProbe(e.target.value);e.target.value='';};
+ // 4.18.1: a new, empty pane; the next signal added goes there (the panes that stay empty go away with the next change)
+ // 4.18.1: the sources of the traces under their names (off by default: the list keeps its height), remembered
+ {const on=v=>{document.body.classList.toggle('show-src',v);$('#chan-src').classList.toggle('on',v);};let v0=false;try{v0=localStorage.getItem('pcl.chanSrc')==='1';}catch(e){}on(v0);
+  $('#chan-src').onclick=()=>{const v=!document.body.classList.contains('show-src');on(v);try{localStorage.setItem('pcl.chanSrc',v?'1':'0');}catch(e){}};}
+ $('#pane-add').onclick=()=>{const P=scope.cfg.panes;if(P.length>=12){flash('#chan-list');return;}const last=P.length-1;if(P[last]&&!P[last].ch.length&&last>0){scope.nextPane=last;renderChannels();return;}P.push({ch:[]});scope.nextPane=P.length-1;chanKey='';renderChannels();draw(true);};
  $('#sig-search').oninput=()=>fillSignals();
  // 4.4: the add-ons card from the top bar (it sits below the scope and the scenarios)
  $('#open-addons').onclick=()=>{const d=$('#addons-block');if(!d)return;d.open=true;$('#addons-card').scrollIntoView({behavior:'smooth',block:'start'});};
