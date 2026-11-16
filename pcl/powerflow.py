@@ -117,10 +117,10 @@ class Case:
         return V * np.conj(I) - ((self.Sg if Sg is None else Sg) - self.zip(np.abs(V))), I
 
     def err(self, V, typ=None, Sg=None):
+        """The largest mismatch (pu): P at the PV and PQ buses, Q at the PQ buses. Every method stops on it."""
         pv, pq, _ = self.sets(typ)
         m, _ = self.mismatch(V, Sg)
-        return max(np.max(np.abs(m[pv].real), initial=0.0), np.max(np.abs(m[pq]), initial=0.0) if len(pq) else 0.0,
-                   np.max(np.abs(m[pq].real), initial=0.0), np.max(np.abs(m[pq].imag), initial=0.0))
+        return max(np.max(np.abs(m[pv].real), initial=0.0), np.max(np.abs(m[pq].real), initial=0.0), np.max(np.abs(m[pq].imag), initial=0.0))
 
     def jac(self, typ=None):
         typ = self.typ if typ is None else typ

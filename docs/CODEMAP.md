@@ -75,7 +75,7 @@
 | `pcl/formats.py` | 222 |
 | `pcl/gui.py` | 409 |
 | `pcl/impulse.py` | 858 |
-| `pcl/ipm.py` | 170 |
+| `pcl/ipm.py` | 200 |
 | `pcl/lineconst.py` | 2400 |
 | `pcl/linereport.py` | 836 |
 | `pcl/link.py` | 150 |
@@ -125,9 +125,11 @@
 | `tests/test_netlib.py` | 209 |
 | `tests/test_network.py` | 272 |
 | `tests/test_nn.py` | 130 |
+| `tests/test_opf.py` | 262 |
 | `tests/test_pcl.py` | 312 |
 | `tests/test_plotcore.py` | 74 |
 | `tests/test_plotting.py` | 113 |
+| `tests/test_powerflow.py` | 303 |
 | `tests/test_recording.py` | 211 |
 | `tests/test_refac.py` | 78 |
 | `tests/test_sparse.py` | 53 |

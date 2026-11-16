@@ -32,15 +32,29 @@ class IpmError(ValueError):
 
 
 def ipm(f, x0, gh=None, hess=None, A=None, l=None, u=None, xmin=None, xmax=None, tol=1e-6, max_iter=150, cost_mult=1.0,
-        xi=0.99995, sigma=0.1, z0=1.0, record=False):
+        xi=0.99995, sigma=0.1, z0=1.0, record=False, step_control='auto'):
     """f(x) → (value, gradient); gh(x) → (g, G, h, H): the nonlinear equalities and inequalities with their Jacobians (rows =
     constraints; None when there are none); hess(x, lam, mu, cost_mult) → the Hessian of cost_mult·f + lamᵀ·g + muᵀ·h (for a
     problem without gh: of cost_mult·f, or None for a linear cost). A, l, u: linear constraints (a row with l = u is an
     equality; ±inf for a missing side); xmin, xmax: bounds (equal bounds fix the variable).
+    step_control: False = the steps as the method gives them (enough for the optimal power flow and for convex problems);
+    True = a line search on a merit function (the barrier cost plus a penalty on the violation of the constraints) cuts a
+    step that would leave the feasible region far behind; 'auto' = first without and, if that fails, again with it (the
+    result then says so in 'message'). There is no further globalization: on a strongly non-convex problem from a poor
+    start the iteration can still fail, and the result says so (converged False, with the reason).
 
     Returns {'x', 'f', 'converged', 'iterations', 'message', 'lam': {'g', 'A_eq', 'x_eq'}, 'mu': {'h', 'A_u', 'A_l', 'x_u',
     'x_l'} (multipliers of the original problem, ≥ 0 for the inequalities), 'cond': the four measures at the end, 'time',
     'history' (with record)}."""
+    if step_control == 'auto':
+        r = ipm(f, x0, gh, hess, A, l, u, xmin, xmax, tol, max_iter, cost_mult, xi, sigma, z0, record, False)
+        if not r['converged']:
+            r2 = ipm(f, x0, gh, hess, A, l, u, xmin, xmax, tol, max_iter, cost_mult, xi, sigma, z0, record, True)
+            if r2['converged']:
+                r2['message'] += ' (with step control, after full steps failed)'
+                r2['time'] += r['time']
+                return r2
+        return r
     t0 = time.perf_counter()
     x = np.array(x0, float)
     nx = len(x)
@@ -83,7 +97,7 @@ def ipm(f, x0, gh=None, hess=None, A=None, l=None, u=None, xmin=None, xmax=None,
     fv, df = fv * cost_mult, np.asarray(df, float) * cost_mult
     g, G, h, H, ngn, nhn = cons(x)
     neq, niq = len(g), len(h)
-    gamma = 1.0
+    gamma, nu = 1.0, 1.0
     lam = np.zeros(neq)
     z = np.full(niq, z0)
     mu = np.full(niq, z0)
@@ -133,6 +147,22 @@ def ipm(f, x0, gh=None, hess=None, A=None, l=None, u=None, xmin=None, xmax=None,
         ap = min(xi * np.min(z[k] / -dz[k]), 1.0) if k.any() else 1.0
         k = dmu < 0
         ad = min(xi * np.min(mu[k] / -dmu[k]), 1.0) if k.any() else 1.0
+        if step_control:
+            # a line search on a merit function: the barrier cost plus ν times the violation of the constraints (ν above the
+            # multipliers). The primal step is halved until the merit function decreases enough (Armijo), so a step that would
+            # throw the iterate far out of the feasible region is cut instead of taken
+            nu = max(nu, 1.5 * max(np.max(np.abs(lam + dlam), initial=0.0), np.max(np.abs(mu + dmu), initial=0.0)), 1.0)
+            viol = np.sum(np.abs(g)) + np.sum(np.abs(h + z))
+            phi0 = fv - gamma * np.sum(np.log(z)) + nu * viol
+            D = df @ dx - gamma * np.sum(dz / z) - nu * viol
+            for _ in range(30):
+                x1, z1 = x + ap * dx, z + ap * dz
+                f1, _ = f(x1)
+                g1, _, h1, _, _, _ = cons(x1)
+                phi1 = f1 * cost_mult - gamma * np.sum(np.log(z1)) + nu * (np.sum(np.abs(g1)) + np.sum(np.abs(h1 + z1)))
+                if np.isfinite(phi1) and phi1 <= phi0 + 1e-4 * ap * min(D, 0.0):
+                    break
+                ap /= 2
         x = x + ap * dx
         z = z + ap * dz
         lam = lam + ad * dlam
@@ -148,7 +178,7 @@ def ipm(f, x0, gh=None, hess=None, A=None, l=None, u=None, xmin=None, xmax=None,
             hist.append({'it': it, 'f': fv / cost_mult, 'feas': c[0], 'grad': c[1], 'comp': c[2], 'cost': c[3], 'gamma': gamma, 'alpha_p': ap, 'alpha_d': ad})
         if c[0] < tol and c[1] < tol and c[2] < tol and c[3] < tol:
             ok, msg = True, 'converged'
-        elif not np.all(np.isfinite(x)) or ap < 1e-8 or ad < 1e-8 or gamma < np.finfo(float).eps or gamma > 1 / np.finfo(float).eps:
+        elif not np.all(np.isfinite(x)) or ap < 1e-10 or ad < 1e-10 or gamma < np.finfo(float).eps ** 1.5 or gamma > 1 / np.finfo(float).eps:
             msg = 'numerically failed (a step length or the barrier parameter out of range)'
             break
     if not ok and not msg:
