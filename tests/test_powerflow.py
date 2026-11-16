@@ -284,7 +284,7 @@ class Batch(unittest.TestCase):
         self.assertEqual(one['outages'][0]['overloads'][0][0], o['branch'])
 
     def test_the_batches_are_faster_than_one_by_one(self):
-        # ratios of two paths on problems of some size (measured: ×12 for the batch, ×20 for N−1 on 118 buses)
+        # ratios of two paths on problems of some size (measured: ×12 for the batch, ×17 for N−1 on 118 buses)
         rng = np.random.default_rng(1)
         case = N.case_data('ieee118').case()
         V0 = PF.newton(case, case.start(True), tol=1e-11)[0]
