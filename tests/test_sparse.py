@@ -37,10 +37,15 @@ class SparseLU(unittest.TestCase):
     def test_refactorization(self):
         # 4.19 (§68): the factors again with the same pivots, without the search of the pattern: the same numbers bit for
         # bit, several times faster than a factorization from scratch (measured ~9 times at 1000 unknowns)
+        # The same numbers from 200 unknowns; the time only from 1000 (a ratio of two paths on a large matrix: under some
+        # tens of microseconds per call the state of the JIT and the clock decide, not the algorithm)
         rows = [b for b in self.r['bench'] if b['n'] >= 200]
         self.assertTrue(rows)
         for b in rows:
             self.assertTrue(b['sparse']['reSame'], b)
+        big = [b for b in rows if b['n'] >= 1000]
+        self.assertTrue(big)
+        for b in big:
             self.assertLess(b['sparse']['msRefactor'] * 3, b['sparse']['msFactor'], b)
 
 

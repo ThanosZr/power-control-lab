@@ -127,7 +127,7 @@
 | `tests/test_plotting.py` | 113 |
 | `tests/test_recording.py` | 211 |
 | `tests/test_refac.py` | 78 |
-| `tests/test_sparse.py` | 48 |
+| `tests/test_sparse.py` | 53 |
 | `tests/test_sssc.py` | 444 |
 | `tests/test_step.py` | 109 |
 | `tests/test_stream.py` | 136 |
@@ -170,7 +170,7 @@
 | `tests/js/refac_cases.js` | 68 |
 | `tests/js/sim_cases.js` | 356 |
 | `tests/js/snapshot_cases.js` | 22 |
-| `tests/js/sparse_cases.js` | 53 |
+| `tests/js/sparse_cases.js` | 55 |
 | `tests/js/sssc_cases.js` | 85 |
 | `tests/js/step_cases.js` | 89 |
 | `tests/js/subcircuit_cases.js` | 87 |
