@@ -8,6 +8,12 @@
 //   column, with the reach found by depth-first search), the diagonal kept when |a_jj| ≥ tol·max of the column
 //   (threshold pivoting, as KLU does): P·A·Q = L·U.
 // * solve(F, b): b ← A⁻¹·b with the factors (in place).
+// 4.19 (ROADMAP §68): when the matrix changes and its pattern does not (a machine, a nonlinear element, a switch):
+// * refactor(F, P, Ax, tol, flags): the factors with the pattern and the pivots of F, without the depth-first search (as
+//   the refactorization of KLU); the operations in the order lu() made them, so the numbers are those of lu(), bit for
+//   bit; it stops (−1) where lu() would choose another pivot. With flags only some columns (partial refactorization).
+// * diffCols(P, F, Ax, Aold, chg): the columns of the matrix that changed; affected(F, chg): those and every column on
+//   their factorization path (Chan & Brandwajn 1986, method PR1); clone(F): factors with their own values, to keep.
 //
 // The classic references are in docs/THEORY.md (sparse elimination and ordering; the EMTP's own sparsity methods).
 (function(root){
@@ -67,7 +73,7 @@
   const n=P.n,Ap=P.Ap,Ai=P.Ai;
   let Lp=new Int32Array(n+1),Up=new Int32Array(n+1),cap=Math.max(4*P.nnz+n,16);
   let Li=new Int32Array(cap),Lx=new Float64Array(cap),Ui=new Int32Array(cap),Ux=new Float64Array(cap);
-  const pinv=new Int32Array(n).fill(-1),x=new Float64Array(n),xi=new Int32Array(2*n),mark=new Int32Array(n);
+  const pinv=new Int32Array(n).fill(-1),x=new Float64Array(n),xi=new Int32Array(2*n),mark=new Int32Array(n),ppos=new Int32Array(n);
   let lnz=0,unz=0;
   for(let k=0;k<n;k++){
    Lp[k]=lnz;Up[k]=unz;
@@ -83,19 +89,65 @@
     const xj=x[j];                                         // the diagonal of L is 1 (first entry of the column)
     for(let p=Lp[J]+1;p<Lp[J+1];p++)x[Li[p]]-=Lx[p]*xj;}            // J < k: column J is complete
    // pivot: the largest among the rows not yet pivotal; the diagonal when it is within tol of it
-   let ipiv=-1,a=-1;
+   // (4.19: ppos = how many candidates come before the pivot in this order, for refactor() to choose as here)
+   let ipiv=-1,a=-1,nc=0,apos=0,cpos=0;
    for(let p=top;p<n;p++){const i=xi[p];
-    if(pinv[i]<0){const t=Math.abs(x[i]);if(t>a){a=t;ipiv=i;}}
+    if(pinv[i]<0){const t=Math.abs(x[i]);if(t>a){a=t;ipiv=i;apos=nc;}if(i===col)cpos=nc;nc++;}
     else{Ui[unz]=pinv[i];Ux[unz++]=x[i];}}
    if(ipiv<0||!(a>1e-300))throw new SparseError('singular');
-   if(pinv[col]<0&&Math.abs(x[col])>=a*tol)ipiv=col;
+   if(pinv[col]<0&&Math.abs(x[col])>=a*tol){ipiv=col;apos=cpos;}
+   ppos[k]=apos;
    const piv=x[ipiv];Ui[unz]=k;Ux[unz++]=piv;pinv[ipiv]=k;Li[lnz]=ipiv;Lx[lnz++]=1;
    for(let p=top;p<n;p++){const i=xi[p];if(pinv[i]<0){Li[lnz]=i;Lx[lnz++]=x[i]/piv;}x[i]=0;}
   }
   Lp[n]=lnz;Up[n]=unz;
   for(let p=0;p<lnz;p++)Li[p]=pinv[Li[p]];
-  return {n,Lp,Li:Li.slice(0,lnz),Lx:Lx.slice(0,lnz),Up,Ui:Ui.slice(0,unz),Ux:Ux.slice(0,unz),pinv,q:Int32Array.from(q),nnz:lnz+unz};
+  return {n,Lp,Li:Li.slice(0,lnz),Lx:Lx.slice(0,lnz),Up,Ui:Ui.slice(0,unz),Ux:Ux.slice(0,unz),pinv,q:Int32Array.from(q),nnz:lnz+unz,ppos};
  }
+
+ // ---------------------------------------------------------------- refactorization (4.19)
+ // The factors of a matrix with the pattern P and the values Ax, with the pattern and the pivots of F (overwritten). Column
+ // k: x = A(:, q[k]) in the rows of the pivots, then the columns of L of its U part in the order lu() took them (the stored
+ // order of U is that topological order), then the same choice of pivot: the first largest among the candidates in the
+ // order of lu() (ppos), or the diagonal within tol of it. Every operation is the one lu() makes, in its order: the same
+ // numbers bit for bit. flags (Uint8Array by pivot position): only these columns; the others must be unchanged (their
+ // column of A and every column of L they use). Returns the number of columns computed, or −1 when lu() would choose
+ // another pivot (or finds the matrix singular): F is then partly overwritten and the caller factors from scratch.
+ function refactor(F,P,Ax,tol=0.1,flags=null){
+  const n=F.n,Ap=P.Ap,Ai=P.Ai,Lp=F.Lp,Li=F.Li,Lx=F.Lx,Up=F.Up,Ui=F.Ui,Ux=F.Ux,pinv=F.pinv,q=F.q,ppos=F.ppos,x=F.w||(F.w=new Float64Array(n));let cnt=0;
+  for(let k=0;k<n;k++){if(flags&&!flags[k])continue;cnt++;
+   const col=q[k],l0=Lp[k],l1=Lp[k+1],u0=Up[k],u1=Up[k+1]-1;
+   for(let p=Ap[col],e=Ap[col+1];p<e;p++)x[pinv[Ai[p]]]+=Ax[p];
+   for(let p=u0;p<u1;p++){const J=Ui[p],xj=x[J];Ux[p]=xj;for(let s=Lp[J]+1,e=Lp[J+1];s<e;s++)x[Li[s]]-=Lx[s]*xj;}
+   let a=-1,arg=-1;const m=l0+1+ppos[k];
+   for(let p=l0+1;p<m;p++){const r=Li[p],t=Math.abs(x[r]);if(t>a){a=t;arg=r;}}
+   {const t=Math.abs(x[k]);if(t>a){a=t;arg=k;}}
+   for(let p=m;p<l1;p++){const r=Li[p],t=Math.abs(x[r]);if(t>a){a=t;arg=r;}}
+   const dr=pinv[col];if(dr>=k&&Math.abs(x[dr])>=a*tol)arg=dr;
+   if(arg!==k||!(a>1e-300)){for(let p=l0;p<l1;p++)x[Li[p]]=0;for(let p=u0;p<u1;p++)x[Ui[p]]=0;return -1;}
+   const piv=x[k];Ux[u1]=piv;x[k]=0;
+   for(let p=l0+1;p<l1;p++){const r=Li[p];Lx[p]=x[r]/piv;x[r]=0;}
+   for(let p=u0;p<u1;p++)x[Ui[p]]=0;
+  }
+  return cnt;
+ }
+ // the columns (by pivot position) where the values Ax differ from Aold, flagged in chg (cleared first) and copied into
+ // Aold; returns the first of them, or −1 when nothing changed
+ function diffCols(P,F,Ax,Aold,chg){
+  const n=P.n,Ap=P.Ap,q=F.q;let first=-1;
+  for(let k=0;k<n;k++){const j=q[k],e=Ap[j+1];let p=Ap[j];while(p<e&&Ax[p]===Aold[p])p++;
+   if(p<e){chg[k]=1;if(first<0)first=k;for(;p<e;p++)Aold[p]=Ax[p];}else chg[k]=0;}
+  return first;
+ }
+ // the factorization path: every column whose U part has a flagged column is flagged too (ascending, so the flags of the
+ // columns it uses are final); from: the first flagged column. Returns how many columns are flagged
+ function affected(F,chg,from=0){
+  const n=F.n,Up=F.Up,Ui=F.Ui;let c=0;
+  for(let k=Math.max(0,from);k<n;k++){if(!chg[k]){for(let p=Up[k],e=Up[k+1]-1;p<e;p++)if(chg[Ui[p]]){chg[k]=1;break;}}if(chg[k])c++;}
+  return c;
+ }
+ // factors with their own values (the structure is shared: refactor() changes values only)
+ function clone(F){return {n:F.n,Lp:F.Lp,Li:F.Li,Lx:F.Lx.slice(),Up:F.Up,Ui:F.Ui,Ux:F.Ux.slice(),pinv:F.pinv,q:F.q,nnz:F.nnz,ppos:F.ppos};}
 
  // b ← A⁻¹·b: y = P·b, L·z = y, U·w = z, x = Q·w
  function solve(F,b,w){
@@ -107,7 +159,7 @@
   return b;
  }
 
- const api={pattern,order,lu,solve,SparseError};
+ const api={pattern,order,lu,solve,refactor,diffCols,affected,clone,SparseError};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;
  root.Sparse=api;
 })(typeof window!=='undefined'?window:globalThis);

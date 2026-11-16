@@ -63,7 +63,8 @@
   else s.run(tEnd);
   const meas={};for(const m of q.measure||[]){const j=keys.indexOf(m.key);if(j<0)throw new Error(`Η μέτρηση «${m.name||m.key}» θέλει το κανάλι ${m.key} στα channels.`);meas[m.name||`${m.key}:${m.stat}`]=measure(t,Y[j],m,s.T);}
   const out={keys,meta:{T:s.T,h:s.h,hDiv:opts.hDiv,method:s.method,step:s.var?'var':'fixed',rtol:s.var?s.rtol:null,hMin:s.var?s.hMin:null,hMax:s.var?(s.hCap||s.hMax):null,
-    steps:s.steps,rejected:s.nRej||0,t_end:s.t,points:t.length,wall_s:(Date.now()-w0)/1000,warnings:s.net.warnings},
+    steps:s.steps,rejected:s.nRej||0,t_end:s.t,points:t.length,wall_s:(Date.now()-w0)/1000,warnings:s.net.warnings,
+    ...(s.solverInfo?{solver:(q=>({kind:q.kind,refac:q.refac,n:q.n,blocks:q.blocks,asProposed:q.asProposed,...q.stats}))(s.solverInfo())}:{})},   // 4.19: the linear solver of the run and its counts
    measure:meas,diag:s.diagnostics().map(d=>({sev:d.sev,grp:d.grp,id:d.id||null,t:d.t,n:d.n,msg:d.msg,fix:d.fix||''}))};
   // 3.19: the event log, when asked (events: true or a list of kinds)
   if(q.events){const E=s.events(),kinds=Array.isArray(q.events)?new Set(q.events):null;out.events={list:kinds?E.list.filter(e=>kinds.has(e.kind)):E.list,n:E.n,kinds:E.kinds,max:E.max};}

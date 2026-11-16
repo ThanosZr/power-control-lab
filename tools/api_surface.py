@@ -214,7 +214,7 @@ process.stdout.write(JSON.stringify(out));"""
     out['file.component'] = {'params': ['id', 'type', 'x', 'y', 'rot', 'flip', 'label', 'params', 'live', 'liveBase', 'liveRate']}
     # 3.19: the program of parameter changes and the options of the solution that it adds
     out['file.program'] = {'params': ['t', 'id', 'k', 'v', 'rate']}
-    out['file.solve'] = {'params': ['unconn', 'island', 'rleak', 'tbase', 'step', 'rtol', 'hmax', 'units']}
+    out['file.solve'] = {'params': ['unconn', 'island', 'rleak', 'tbase', 'step', 'rtol', 'hmax', 'units', 'solver', 'refac']}   # 4.19: the linear solver
     out['file.wire'] = {'params': ['id', 'a', 'b', 'pts', 'name', 'color', 'width']}
     out['file.subcircuit'] = {'params': ['title', 'desc', 'version', 'components', 'wires', 'params']}
     return out

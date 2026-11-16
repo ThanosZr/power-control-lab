@@ -1,5 +1,5 @@
 {
- "version": "4.18.1",
+ "version": "4.19",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -3549,7 +3549,9 @@
      "step",
      "rtol",
      "hmax",
-     "units"
+     "units",
+     "solver",
+     "refac"
     ],
     "since": "3.19"
    },

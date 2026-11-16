@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.18.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (585 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.19: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (585 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.18.1.
+Κανένα στην 4.19.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -553,7 +553,7 @@
 | `file.component` | id, type, x, y, rot, flip, label, params, live, liveBase, liveRate | — | 3.18 |
 | `file.program` | t, id, k, v, rate | — | 3.19 |
 | `file.sim` | hDiv, speed, stopT, method, rec | — | 4.8 |
-| `file.solve` | unconn, island, rleak, tbase, step, rtol, hmax, units | — | 3.19 |
+| `file.solve` | unconn, island, rleak, tbase, step, rtol, hmax, units, solver, refac | — | 3.19 |
 | `file.subcircuit` | title, desc, version, components, wires, params | — | 3.18 |
 | `file.watch` | show, tiles, panel | — | 4.8 |
 | `file.watch.tile` | id, key, ctl, label, at, al, rng, steps, span | — | 4.8 |

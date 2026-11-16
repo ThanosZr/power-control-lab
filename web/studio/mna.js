@@ -25,6 +25,10 @@
  const INP=root.Inputs||(typeof require!=='undefined'?require('./inputs.js'):null);   // 4.17.1: inputs and parameters from expressions
  // 4.2 (§32): the sparse LU above this many unknowns ('auto'); below it the dense LU, as before
  const SPARSE_MIN=120;
+ // 4.19 (§68): a matrix that changes at every step (a machine with Γ(θ), a nonlinear element, a constant-power load, a
+ // footing R(I)) is factored at every step: sparse from fewer unknowns, where the refactorization costs less than the
+ // dense O(n³) (measured: tests/js/sparse_cases.js)
+ const SPARSE_CHG=40;
  const UNITS=root.Units||(typeof require!=='undefined'?require('./units.js'):null);
  const GMIN=1e-9;
  // 4.7: the neural network block (nn.js). Its weights live in the state (st.net, and the moments of Adam in st.opt), so they
@@ -63,7 +67,7 @@
  // so the run continues with the same numbers. Objects met twice are kept once ($ref); typed arrays as base64 of their
  // bytes (exact); NaN, ±Infinity and −0 by name; an object with getState/setState (a Python block) keeps its own state.
  // Left out: the project (rebuilt), the LU cache and the sparse pattern (rebuilt the same) and the scope's buffers (ring, per).
- const SNAP_SKIP=new Set(['project','cache','ring','per','sp','spq','spw','rec']);   // 4.2: the sparse pattern is rebuilt the same
+ const SNAP_SKIP=new Set(['project','cache','ring','per','sp','spq','spw','rec','spF','spA','spChg','cvL']);   // 4.2: the sparse pattern is rebuilt the same; 4.19: the working factors too
  const SNAP_TA={Float64Array,Float32Array,Int32Array,Uint32Array,Int16Array,Uint16Array,Int8Array,Uint8Array,Uint8ClampedArray};
  function b64of(ta){const u=new Uint8Array(ta.buffer,ta.byteOffset,ta.byteLength);if(typeof Buffer!=='undefined')return Buffer.from(u).toString('base64');
   let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s);}
@@ -334,7 +338,11 @@
  function wbSet(P,M){const MM=M*M,N=P.p.length,pr=new Float64Array(N),pi=new Float64Array(N),w=new Float64Array(N),Rr=new Float64Array(N*MM),Ri=new Float64Array(N*MM);
   for(let k=0;k<N;k++){pr[k]=+P.p[k][0];pi[k]=+P.p[k][1];w[k]=pi[k]>0?2:1;for(let r=0;r<M;r++)for(let c=0;c<M;c++){Rr[k*MM+r*M+c]=+P.rr[k][r][c];Ri[k*MM+r*M+c]=+((P.ri&&P.ri[k])?P.ri[k][r][c]:0);}}
   return {N,pr,pi,w,Rr,Ri,co:new Float64Array(6*N),hC:NaN};}
- function wbCo(S,h){if(S.hC===h)return S.co;for(let k=0;k<S.N;k++){if(h>0)rcCoefC(S.pr[k],S.pi[k],h,S.co,6*k);else{const j=6*k;S.co[j]=1;S.co[j+1]=0;S.co[j+2]=S.co[j+3]=S.co[j+4]=S.co[j+5]=0;}}S.hC=h;return S.co;}
+ // 4.19: two sets kept (the last two steps asked): the history sources ask with t − t₀ and the record with h, which differ in
+ // the last bit, so one set was computed twice in every step
+ function wbCo(S,h){if(S.hC===h)return S.co;if(S.hC2===h){const c=S.co;S.co=S.co2;S.co2=c;S.hC2=S.hC;S.hC=h;return S.co;}
+  const co=S.co2||new Float64Array(6*S.N);S.co2=S.co;S.hC2=S.hC;S.co=co;
+  for(let k=0;k<S.N;k++){if(h>0)rcCoefC(S.pr[k],S.pi[k],h,co,6*k);else{const j=6*k;co[j]=1;co[j+1]=0;co[j+2]=co[j+3]=co[j+4]=co[j+5]=0;}}S.hC=h;return co;}
  // the response of one pole to a sinusoid of ω (the recursive convolution of step h, or 1/(jω − q) for h = 0)
  function wbPoleG(S,k,w,h){if(!(h>0))return cx.d([1,0],[-S.pr[k],w-S.pi[k]]);const c=wbCo(S,h),j=6*k,z=cx.e(w*h);
   return cx.d(cx.a(cx.m(z,[c[j+2],c[j+3]]),cx.m(cx.s([1,0],z),[c[j+4],c[j+5]])),cx.s(z,[c[j],c[j+1]]));}
@@ -408,6 +416,17 @@
  // (E = e^(−ph), a₀ = ∫₀ʰ e^(−ps) ds, a₁/h = ∫₀ʰ s·e^(−ps) ds / h) of one real pole p over a step h, without cancellation for small ph
  function rcCoef(p,h){const x=p*h;if(x<1e-4){const x2=x*x;return [Math.exp(-x),h*(1-x/2+x2/6-x*x2/24),h*(0.5-x/3+x2/8-x*x2/30)];}
   const E=Math.exp(-x),em=-Math.expm1(-x);return [E,em/p,(em-x*E)/(p*x)];}
+ // 4.19: the coefficients of the recursive convolutions of an FD mode for a step (rcCoef of every pole of Z_c and of the
+ // propagation), kept for the last two steps asked: the history sources ask with t − t₀ and the record with h, which
+ // differ in the last bit. The numbers are those of rcCoef. Outside the element (not part of a saved state)
+ const FDCO=new WeakMap();
+ function fdCo(m,h){let c=FDCO.get(m);const nk=m.kp.length,na=m.ap.length;
+  if(!c||c.a.kE.length!==nk||c.a.aE.length!==na){const mk=()=>({h:NaN,kE:new Float64Array(nk),k0:new Float64Array(nk),k1:new Float64Array(nk),aE:new Float64Array(na),a0:new Float64Array(na),a1:new Float64Array(na)});c={a:mk(),b:mk()};FDCO.set(m,c);}
+  if(c.a.h===h)return c.a;if(c.b.h===h){const t=c.a;c.a=c.b;c.b=t;return c.a;}
+  const o=c.b;c.b=c.a;c.a=o;
+  for(let i=0;i<nk;i++){const q=rcCoef(m.kp[i],h);o.kE[i]=q[0];o.k0[i]=q[1];o.k1[i]=q[2];}
+  for(let i=0;i<na;i++){const q=rcCoef(m.ap[i],h);o.aE[i]=q[0];o.a0[i]=q[1];o.a1[i]=q[2];}
+  o.h=h;return o;}
  // 4.9 (ROADMAP §31, THEORY §Arc): one section of a black-box arc, dg/dt = (g^λ·u²/Π − g)/τ with τ = τ₀·g^α and
  // Π = (P₀ + P₁·g·u²)·g^β (Mayr: λ = 2, Π = P₀· Cassie: λ = 1, Π = U_c²· improved Mayr: P₁· Schwarz: α, β· a section of the
  // three-Mayr model: λ = 1,4, 1,9, 2). The state is x = ln g: dx/dt = F = (q − 1)/τ, q = g^(λ−1)·u²/Π.
@@ -659,7 +678,9 @@
   // wire names label their net
   for(const w of project.wires||[])if(w.name){const n=pinNet.get(w.a.c+':'+w.a.p);if(n&&!n.name)n.name=w.name;}
   // pins that touch nothing else
-  const open=[];for(const c of comps){if(c.type==='JUNC'||c.type==='TL'||c.type==='TLM'||skip.has(c.id)||!Object.keys(P.elPins(c)).length)continue;for(const p of Object.keys(P.elPins(c))){const n=pinNet.get(c.id+':'+p);if(n&&n.keys.filter(k=>!isJ(k)).length===1&&c.type!=='GND')open.push(c.id+':'+p);}}
+  // (4.19: the pins of a net that are not junctions counted once per net: the ground net of a large network was counted for each of its pins)
+  const njc=new Map(),nonJ=n=>{let c=njc.get(n);if(c===undefined){c=0;for(const k of n.keys)if(!isJ(k))c++;njc.set(n,c);}return c;};
+  const open=[];for(const c of comps){if(c.type==='JUNC'||c.type==='TL'||c.type==='TLM'||skip.has(c.id)||!Object.keys(P.elPins(c)).length)continue;for(const p of Object.keys(P.elPins(c))){const n=pinNet.get(c.id+':'+p);if(n&&nonJ(n)===1&&c.type!=='GND')open.push(c.id+':'+p);}}
   const lbl=id=>byId.get(id)?.label||id,unc=[...skip].filter(([,r])=>r==='unconn').map(([id])=>lbl(id)),oi=[...skip].filter(([,r])=>r==='openI').map(([id])=>lbl(id)),cut=(l,n=6)=>l.slice(0,n).join(', ')+(l.length>n?` και ${l.length-n} ακόμη`:'');
   if(unconn==='error'&&(unc.length||oi.length||open.length))throw new NetlistError([unc.length?'ασύνδετα στοιχεία: '+cut(unc):'',oi.length?'πηγή ρεύματος σε ανοιχτό κύκλωμα: '+cut(oi):'',open.length?'ανοιχτοί ακροδέκτες: '+cut(open):''].filter(Boolean).join('· ')+'. Σύνδεσέ τα ή άλλαξε την επιλογή «Ασύνδετα» στο πάνελ παραμέτρων.');
   if(unconn==='warn'){if(unc.length)warnings.push('Ασύνδετα στοιχεία, εκτός επίλυσης: '+cut(unc)+'.');if(oi.length)warnings.push('Πηγή ρεύματος σε ανοιχτό κύκλωμα, εκτός επίλυσης: '+cut(oi)+'.');
@@ -1011,7 +1032,7 @@
 
  // ---------------------------------------------------------------- simulator
  class Sim{
-  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,mem:+opts.mem>0?+opts.mem:0,eventsMax:+opts.eventsMax>0?+opts.eventsMax:0,...(opts.events===false?{events:false}:{}),step:opts.step||null,solver:opts.solver||null,recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
+  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,mem:+opts.mem>0?+opts.mem:0,eventsMax:+opts.eventsMax>0?+opts.eventsMax:0,...(opts.events===false?{events:false}:{}),step:opts.step||null,solver:opts.solver||null,refac:opts.refac||null,recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
   // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
   // (4.14: the sampling clock inside an MMC, Model 1, does not set the step)
   basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>(b.type==='CLK'||b.type==='RAMP')&&!/\/MCLK$/.test(b.id));if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
@@ -1156,7 +1177,8 @@
     const ob=new Map(old.sig.blocks.map(b=>[b.id,b]));for(const b of net.sig.blocks){const o=ob.get(b.id);if(o&&o.type===b.type&&b.type!=='SH'){const nw=b.type==='NN'&&o.st.wsig!==b.wsig?{net:b.st.net,opt:b.st.opt,wsig:b.wsig,n:0,m2:0,L:0}:null;b.st={...b.st,...o.st,...(nw||{})};if(b.clock!==o.clock||b.trig!==o.trig)b.st.last=null;}}
    }
    this.net=net;this.jsc=null;this.swl=null;this.topo=new Map();this.topoSig=null;this.jumpNow=false;this.leftAt=null;const nb=net.sig.blocks.length;this.sv=new Float64Array(net.sig.n);this.svT=new Float64Array(net.sig.n);this.yb=new Float64Array(nb);this.ybT=new Float64Array(nb);
-   this.yo=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.yoT=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.ctrlById=new Map(net.ctrls.map(k=>[k.id,k]));this.clkById=new Map(net.sig.blocks.filter(b=>b.type==='CLK').map(b=>[b.id,b]));this.shById=new Map(net.shs.map(q=>[q.id,q]));this.n=net.size;{const sv=this.opts.solver||project?.sim?.solver||'auto';this.sparse=!!SPM&&(sv==='sparse'||(sv!=='dense'&&this.n>=SPARSE_MIN));}this.sp=null;this.spq=null;this.rec=null;this.A=this.sparse?null:new Float64Array(this.n*this.n);this.lustat={fact:0,hit:0,miss:0};this.piv=new Int32Array(this.n);this.b=new Float64Array(this.n);this.cache=new Map();
+   this.yo=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.yoT=net.sig.blocks.map(b=>new Float64Array(b.outList.length));this.ctrlById=new Map(net.ctrls.map(k=>[k.id,k]));this.clkById=new Map(net.sig.blocks.filter(b=>b.type==='CLK').map(b=>[b.id,b]));this.shById=new Map(net.shs.map(q=>[q.id,q]));this.n=net.size;this.sparse=false;this.A=null;         // (the choice of the solver below, once the kinds of the elements are known)
+   this.sp=null;this.spq=null;this.spF=null;this.spA=null;this.spChg=null;this.rec=null;this.lustat={fact:0,hit:0,miss:0,full:0,re:0,part:0,cols:0};this.piv=new Int32Array(this.n);this.b=new Float64Array(this.n);this.cache=new Map();
    if(!this.x||this.x.length!==this.n||fresh)this.x=new Float64Array(this.n);
    this.pyBlocks(old&&!fresh?old:null);
    this.ims=[...net.compInfo.values()].filter(c=>c.im).map(c=>c.im);for(const m of this.ims)this.imSources(m);
@@ -1164,6 +1186,14 @@
    this.srms=[...net.compInfo.values()].filter(c=>c.srm).map(c=>c.srm);for(const m of this.srms)this.srmOutputs(m);
    this.gens=[...net.compInfo.values()].filter(c=>c.gen).map(c=>c.gen);this.hasTV=this.sms.length+this.srms.length+this.gens.length>0;
    this.hasCPL=net.els.some(e=>e.k==='CPL');this.hasNL=net.els.some(e=>e.k==='NL');this.arcEls=net.els.filter(e=>e.arc);this.saiEls=net.els.filter(e=>e.sai);this.chbEls=net.els.filter(e=>e.k==='CHB');for(const e of this.chbEls)if(e.sKey===undefined)e.sKey=e.mmc?'':'0'.repeat(e.N);this.footEls=net.els.filter(e=>e.foot);footLink(net,this.footEls);
+   // 4.19 (§68): one flag for a matrix that changes at every step (a machine with Γ(θ), a nonlinear element, a constant-power
+   // load, a footing R(I)): the cache of factorizations and the choice of the sparse solver read it. A new kind of element
+   // that changes its stamp at every step sets one of these flags (ARCHITECTURE §3)
+   this.everyStep=this.hasCPL||this.hasTV||this.hasNL||this.footEls.length>0;
+   {const sv=this.opts.solver||project?.sim?.solver||project?.solve?.solver||'auto',rf=this.opts.refac||project?.sim?.refac||project?.solve?.refac||'auto';this.solverAsk=[sv,rf];
+    this.sparse=!!SPM&&(sv==='sparse'||(sv!=='dense'&&(this.n>=SPARSE_MIN||(this.n>=SPARSE_CHG&&this.everyStep))));
+    this.refac=['off','full','partial'].includes(rf)?rf:'partial';       // 'auto' = partial refactorization; 'full': every column; 'off': from scratch, as before 4.19 (the reference)
+    this.A=this.sparse?null:new Float64Array(this.n*this.n);}
    if(old&&!fresh)for(const e of net.els)if(e.k==='NL'){const o=old.els.find(x=>x.k==='NL'&&x.cid===e.cid);if(o){e.v0=o.v0;if(o.sai&&e.sai)for(const k of SAI_ST)e.sai[k]=o.sai[k];}}this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.hUser=this.opts.h||this.T/this.opts.hDiv;this.h=Math.min(this.hUser,this.tlMaxStep());
    if(fresh){this.hv=null;this.dg=new Map();this.dgPre=[];this.nRej=0;this.nRejRow=0;this.nTiny=0;}this.stIndex();this.varSetup();this.lteH=null;this.rx=null;
@@ -1309,16 +1339,21 @@
   portI(e,k){if(e.k==='F')return e.i[k];if(e.k==='PIL')return -this.x[e.vs[k].row];
    if(e.k==='TLS'){const M=e.M,x=k<M?e.first:e.last,ph=k%M,pos=x.o.indexOf(ph),j=k<M?pos:M+pos;return this.portI(x.e,j);}if(e.k==='TL'||e.k==='TLM')return e.iE[k];let s=0;for(let j=0;j<e.N;j++)s+=e.Gm[k*e.N+j]*(this.V(e.ports[j][0])-this.V(e.ports[j][1]));return s;}
   // values of all channels at the current solution
+  // (4.19: the list of the parts with channels and the kind of each one once per netlist, cvL; the values as before)
   computeVals(){
    const out=this.vals;let j=0;const x=this.x;if(this.net.sig.blocks.length){if(this.blkFresh)this.blkCopy();else this.evalBlocks('trial');}
-   for(const n of this.net.nets)out[j++]=x[n.index];
-   for(const c of this.net.compInfo.values()){
-    if(c.type==='GND'||c.type==='JUNC'||c.type==='TAGO'||c.type==='TAGI')continue;
-    if(c.type==='PWM'){const k=c.ctrl;out[j++]=k.d;out[j++]=this.gateOf(k,'a',this.t)?1:0;out[j++]=k.refNow;out[j++]=k.meas;out[j++]=this.carrier(k,this.t);continue;}
-    if(c.type==='SH'){out[j++]=c.sh.h;continue;}
-    if(P.BLOCKS.has(c.type)){out[j++]=this.ybT[c.blk.i];const yo=this.yoT[c.blk.i];for(let q=1;q<yo.length;q++)out[j++]=yo[q];continue;}
-    if(c.type==='VAC3'){const vn=this.V(c.n),ph=c.phases.map(q=>({v:this.V(q.pin)-vn,i:-this.x[q.e.row]}));
-     out[j++]=ph[0].v;out[j++]=ph[0].i;out[j++]=ph[0].v*ph[0].i+ph[1].v*ph[1].i+ph[2].v*ph[2].i;out[j++]=ph[1].v;out[j++]=ph[2].v;out[j++]=ph[1].i;out[j++]=ph[2].i;out[j++]=ph[0].v-ph[1].v;continue;}
+   let L=this.cvL;
+   if(!L||L.net!==this.net){const list=[],kind=[];for(const c of this.net.compInfo.values()){const t=c.type;if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI')continue;
+     list.push(c);kind.push(t==='PWM'?1:t==='SH'?2:P.BLOCKS.has(t)?3:t==='VAC3'?4:0);}
+    L=this.cvL={net:this.net,ni:Int32Array.from(this.net.nets,n=>n.index),list,kind:Uint8Array.from(kind)};}
+   const ni=L.ni,list=L.list,kind=L.kind,ybT=this.ybT,yoT=this.yoT;
+   for(let k=0;k<ni.length;k++)out[j++]=x[ni[k]];
+   for(let z=0;z<list.length;z++){const c=list[z],kd=kind[z];
+    if(kd===3){out[j++]=ybT[c.blk.i];const yo=yoT[c.blk.i];for(let q=1;q<yo.length;q++)out[j++]=yo[q];continue;}
+    if(kd===1){const k=c.ctrl;out[j++]=k.d;out[j++]=this.gateOf(k,'a',this.t)?1:0;out[j++]=k.refNow;out[j++]=k.meas;out[j++]=this.carrier(k,this.t);continue;}
+    if(kd===2){out[j++]=c.sh.h;continue;}
+    if(kd===4){const vn=this.V(c.n),p=c.phases,v0=this.V(p[0].pin)-vn,v1=this.V(p[1].pin)-vn,v2=this.V(p[2].pin)-vn,i0=-x[p[0].e.row],i1=-x[p[1].e.row],i2=-x[p[2].e.row];
+     out[j++]=v0;out[j++]=i0;out[j++]=v0*i0+v1*i1+v2*i2;out[j++]=v1;out[j++]=v2;out[j++]=i1;out[j++]=i2;out[j++]=v0-v1;continue;}
     const v=this.V(c.pins[0])-this.V(c.pins[1]);let i;
     if(c.type==='XFMR'){const is=this.x[c.main.row];i=-c.main.n*is+c.mag.i;}
     else if(c.type==='SW')i=this.elCurrent(c.main)-(c.body?this.elCurrent(c.body):0);
@@ -1341,13 +1376,14 @@
   // more time; the values, the statistics and everything the solver computes are those of every step.
   setRecord(o={}){const dt=+o.dt>0?+o.dt:0,n=Math.max(1,Math.round(+o.n||1));this.opts.recDt=dt;this.opts.perN=n;}
   recordNow(){
-   const r=this.ring,v=this.computeVals(),nch=r.nch,dt=this.opts.recDt||0;
-   const lr=this._recT??-Infinity;if(!dt||this.t<lr||!(this.t-lr<dt*(1-1e-9))){this._recT=this.t;const j=r.head;r.t[j]=this.t;const off=j*nch;for(let i=0;i<nch;i++)r.d[off+i]=v[i];
+   const r=this.ring,v=this.computeVals(),nch=r.nch,dt=this.opts.recDt||0,t=this.t;
+   const lr=this._recT??-Infinity;if(!dt||t<lr||!(t-lr<dt*(1-1e-9))){this._recT=t;const j=r.head;r.t[j]=t;const off=j*nch,d=r.d;for(let i=0;i<nch;i++)d[off+i]=v[i];
     r.head=(j+1)%r.cap;r.n=Math.min(r.n+1,r.cap);}
-   // period statistics (trapezoidal in time)
-   const a=this.acc;if(this.prevVals){const h=this.t-this.prevT;if(h>0){for(let i=0;i<nch;i++){const y0=this.prevVals[i],y1=v[i];a.s[i]+=h*(y0+y1)/2;a.q[i]+=h*(y0*y0+y0*y1+y1*y1)/3;}a.dur+=h;}}
-   for(let i=0;i<nch;i++){const y=v[i];if(y<a.mn[i])a.mn[i]=y;if(y>a.mx[i])a.mx[i]=y;}
-   if(!this.prevVals)this.prevVals=new Float64Array(nch);this.prevVals.set(v);this.prevT=this.t;
+   // period statistics (trapezoidal in time); 4.19: the arrays in locals, the same operations
+   const a=this.acc,mn=a.mn,mx=a.mx;let pv=this.prevVals;
+   if(pv){const h=t-this.prevT;if(h>0){const s=a.s,q=a.q;for(let i=0;i<nch;i++){const y0=pv[i],y1=v[i];s[i]+=h*(y0+y1)/2;q[i]+=h*(y0*y0+y0*y1+y1*y1)/3;}a.dur+=h;}}
+   for(let i=0;i<nch;i++){const y=v[i];if(y<mn[i])mn[i]=y;if(y>mx[i])mx[i]=y;}
+   if(!pv)pv=this.prevVals=new Float64Array(nch);pv.set(v);this.prevT=t;
   }
   closePeriod(){
    const a=this.acc,p=this.per,nch=p.nch;if(a.dur<=0)return;
@@ -1532,7 +1568,11 @@
       y=q.h;break;}
     }
     // outputs: the first one is the block's main value (channel Y:id), the others are Y:id:pin
-    const ol=b.outList,yo=(trial?this.yoT:this.yo)[b.i];if(ol.length){if(!ys)ys={[ol[0]]:y};y=ys[ol[0]]??0;}
+    const ol=b.outList,yo=(trial?this.yoT:this.yo)[b.i];
+    // 4.19: one value (no object of outputs): the same writes without building {name: value} for every block at every pass
+    if(ys===null){if(ol.length){if(y===undefined||y===null)y=0;const on=b.osv||(b.osv=ol.map(q=>b.outs[q]));yb[b.i]=y;yo[0]=y;if(on[0]>=0)sv[on[0]]=y;
+      for(let k=1;k<ol.length;k++){yo[k]=0;if(on[k]>=0)sv[on[k]]=0;}}else yb[b.i]=y;continue;}
+    if(ol.length)y=ys[ol[0]]??0;
     yb[b.i]=y;for(let k=0;k<ol.length;k++){const v=ys[ol[k]]??0;yo[k]=v;const n=b.outs[ol[k]];if(n>=0)sv[n]=v;}
    }
    if(sampled&&!trial&&this.ev?.on&&mode==='sample')for(const b of G.blocks)if((b.type==='PIB'||b.type==='UD'||b.type==='RT'||b.type==='PY'||b.type==='NN')&&b.st.last!==null&&b.st.evN!==b.st.last){b.st.evN=b.st.last;this.logEv('sample',b.label,b.type==='PY'?(b.st.ys?b.st.ys[0]:b.y0):b.st.y,{id:b.id,clk:b.clock,n:b.st.last});}
@@ -1611,11 +1651,21 @@
    if(this.footEls)for(const e of this.footEls){const F=e.foot,tl=F.tl;if(!tl)continue;const v=nlSolve(1/tl.Ze+GMIN,tl.Ih[1],F.ch,F.v),q=F.ch.cur(v);F.v=v;e.Rnow=Math.abs(q.i)>1e-300&&Math.abs(v)>1e-300?v/q.i:e.R;}
   }
   assemble(h,mode){
-   const n=this.n;let ad;
+   const n=this.n;let ad,fin=null;
    // 4.2: every stamp goes through ad(row, col, value): the dense matrix, or the slots of the sparse pattern
    // (a position outside the pattern is collected and the pattern grows, see spAssemble)
    if(this.rec)ad=(r,q,v)=>{this.rec.push(r*n+q);};
-   else if(this.sp){const S=this.sp,M=S.map,X=S.Ax;X.fill(0);ad=(r,q,v)=>{const k=M.get(r*n+q);if(k===undefined)S.miss.push(r*n+q);else X[k]+=v;};}
+   else if(this.sp){const S=this.sp,M=S.map,X=S.Ax;X.fill(0);
+    // 4.19: the stamps come in the same order at every assembly: the slot of each one from the order of the last assembly
+    // (sk: its position, ss: its slot) instead of a search in the map; a stamp out of order (a value that was zero and
+    // is not stamped) takes the rest through the map and the order is written again at the next assembly
+    if(S.sk&&!S.redo){const sk=S.sk,ss=S.ss,ns=sk.length;let c=0;
+     ad=(r,q,v)=>{const key=r*n+q;if(c<ns&&sk[c]===key){X[ss[c++]]+=v;return;}c=ns;S.redo=true;const k=M.get(key);if(k===undefined)S.miss.push(key);else X[k]+=v;};
+     fin=()=>{if(c!==ns)S.redo=true;};}
+    else if((S.nseq||0)<16){const K=[],L=[];let ok=true;
+     ad=(r,q,v)=>{const key=r*n+q,k=M.get(key);if(k===undefined){S.miss.push(key);ok=false;}else{X[k]+=v;K.push(key);L.push(k);}};
+     fin=()=>{if(ok){S.sk=Float64Array.from(K);S.ss=Int32Array.from(L);S.redo=false;S.nseq=(S.nseq||0)+1;}};}
+    else ad=(r,q,v)=>{const k=M.get(r*n+q);if(k===undefined)S.miss.push(r*n+q);else X[k]+=v;};}
    else{const A=this.A;A.fill(0);ad=(r,q,v)=>{A[r*n+q]+=v;};}
    const g=(a,b,G)=>{if(a>=0)ad(a,a,G);if(b>=0)ad(b,b,G);if(a>=0&&b>=0){ad(a,b,-G);ad(b,a,-G);}};
    for(let i=0;i<this.net.nNodes;i++)ad(i,i,GMIN);
@@ -1640,6 +1690,7 @@
       if(e.p1>=0){ad(e.p1,r,-N);ad(r,e.p1,-N);}if(e.p2>=0){ad(e.p2,r,N);ad(r,e.p2,N);}break;}
     }
    }
+   if(fin)fin();
   }
   rhs(h,mode){
    const b=this.b;b.fill(0);const tr=mode==='TR';
@@ -1666,28 +1717,54 @@
    if(Math.abs(v)<e.Vmin){e.g=P/(e.Vmin*e.Vmin);e.J=0;}else{e.g=-P/(v*v);e.J=2*P/v;}}}
   // 4.2 (§32): one factorization of the present matrix, dense (luFactor) or sparse (sparse.js: fixed pattern from the
   // stamps, minimum-degree ordering once, LU with threshold pivoting); {A, piv} or {sp}
-  factor(h,mode){
-   if(!this.sparse){this.assemble(h,mode);luFactor(this.A,this.n,this.piv);return {A:this.A.slice(),piv:this.piv.slice()};}
+  // 4.19 (§68, decision 226): what the linear solver does with this circuit and why, and what the engine proposes («Αυτόματα»):
+  // dense below SPARSE_MIN unknowns (SPARSE_CHG when the matrix changes at every step), sparse above, with partial
+  // refactorization. blocks: the independent parts of the matrix (subnetworks that travelling-wave lines separate): a
+  // change refactors only its own. For the parameters of the circuit (app.js), the scenarios (meta.solver) and pcl
+  solverInfo(){
+   const n=this.n,st=this.lustat,why=[];if(this.hasTV)why.push('μηχανές με Γ(θ)');if(this.hasNL)why.push('μη γραμμικά στοιχεία');if(this.hasCPL)why.push('φορτία σταθερής ισχύος');if(this.footEls&&this.footEls.length)why.push('γείωση R(I)');
+   const sw=this.net.els.filter(e=>e.k==='S'||e.k==='D').length+(this.chbEls?this.chbEls.length:0),prop=!!SPM&&(n>=SPARSE_MIN||(n>=SPARSE_CHG&&this.everyStep));
+   let blocks=null;if(this.sp){const S=this.sp,par=new Int32Array(n);for(let i=0;i<n;i++)par[i]=i;const f=i=>{while(par[i]!==i){par[i]=par[par[i]];i=par[i];}return i;};
+    for(let j=0;j<n;j++)for(let p=S.Ap[j];p<S.Ap[j+1];p++){const a=f(S.Ai[p]),b=f(j);if(a!==b)par[a]=b;}blocks=0;for(let i=0;i<n;i++)if(f(i)===i)blocks++;}
+   const txt=prop?`Αραιός LU με μερική επαναπαραγοντοποίηση: ${n} άγνωστοι${this.everyStep?', ο πίνακας αλλάζει σε κάθε βήμα ('+why.join(', ')+')':sw?', '+sw+' διακόπτες και δίοδοι':''}. Ξαναϋπολογίζονται μόνο οι στήλες που αλλάζουν και όσες εξαρτώνται από αυτές, με τους ίδιους αριθμούς.`
+    :`Πυκνός LU: ${n} άγνωστοι${this.everyStep?', ο πίνακας αλλάζει σε κάθε βήμα ('+why.join(', ')+')':''}. Κάτω από ${this.everyStep?SPARSE_CHG:SPARSE_MIN} αγνώστους ο πυκνός είναι ταχύτερος${this.everyStep?'':' (η παραγοντοποίηση κρατιέται ανά κατάσταση διακοπτών)'}.`;
+   return {n,kind:this.sparse?'sparse':'dense',refac:this.sparse?this.refac:null,ask:this.solverAsk||['auto','auto'],everyStep:!!this.everyStep,why,switches:sw,blocks,nnzA:this.sp?this.sp.nnz:null,nnzLU:this.spF?this.spF.nnz:null,
+    proposal:{solver:prop?'sparse':'dense',refac:prop?'partial':null,text:txt},asProposed:this.sparse===prop&&(!this.sparse||this.refac==='partial'),
+    stats:{fact:st.fact,hit:st.hit,miss:st.miss,full:st.full,re:st.re,part:st.part,cols:st.cols,colsPerRefac:st.re?st.cols/st.re:null}};
+  }
+  // 4.19 (§68): keep = false when the caller uses the factors at once and does not keep them (a matrix that changes at every
+  // step): no copy. Sparse: the working factors (spF) follow the matrix by refactorization with the same pivots, only on
+  // the columns on the factorization path of what changed since they were computed (sparse.js refactor, affected); where
+  // lu() would choose another pivot, from scratch. The numbers are those of lu() bit for bit (tests/js/sparse_cases.js)
+  factor(h,mode,keep=true){
+   if(!this.sparse){this.assemble(h,mode);luFactor(this.A,this.n,this.piv);return keep?{A:this.A.slice(),piv:this.piv.slice()}:{A:this.A,piv:this.piv};}
    this.spAssemble(h,mode);
-   try{return {sp:SPM.lu(this.sp,this.sp.Ax,this.spq,0.1)};}
-   catch(e){if(e instanceof SPM.SparseError)throw new NetlistError('Ιδιόμορφο σύστημα: βρόχος ιδανικών πηγών τάσης ή κόμβος χωρίς διαδρομή. Πρόσθεσε μικρή αντίσταση ή γείωση.');throw e;}
+   const S=this.sp,st=this.lustat,rf=this.refac;let F=rf==='off'?null:this.spF;
+   if(F){const chg=this.spChg,first=SPM.diffCols(S,F,S.Ax,this.spA,chg);
+    if(first>=0){if(rf!=='full')SPM.affected(F,chg,first);const c=SPM.refactor(F,S,S.Ax,0.1,rf!=='full'?chg:null);
+     if(c<0)F=this.spF=null;else{st.re++;st.cols+=c;if(c<this.n)st.part++;}}}
+   if(!F){
+    try{F=SPM.lu(S,S.Ax,this.spq,0.1);}
+    catch(e){if(e instanceof SPM.SparseError)throw new NetlistError('Ιδιόμορφο σύστημα: βρόχος ιδανικών πηγών τάσης ή κόμβος χωρίς διαδρομή. Πρόσθεσε μικρή αντίσταση ή γείωση.');throw e;}
+    st.full++;if(rf!=='off'){this.spF=F;this.spA=S.Ax.slice();if(!this.spChg||this.spChg.length!==this.n)this.spChg=new Uint8Array(this.n);}}
+   return {sp:keep&&rf!=='off'?SPM.clone(F):F};
   }
   spAssemble(h,mode){
    const n=this.n;
    if(!this.sp){this.rec=[];try{this.assemble(h,mode);}finally{}const keys=this.rec;this.rec=null;for(let i=0;i<n;i++)keys.push(i*n+i);
-    this.sp={...SPM.pattern(n,keys),miss:[]};this.sp.Ax=new Float64Array(this.sp.nnz);this.spq=SPM.order(this.sp);this.spw=new Float64Array(n);}
+    this.sp={...SPM.pattern(n,keys),miss:[]};this.sp.Ax=new Float64Array(this.sp.nnz);this.spq=SPM.order(this.sp);this.spw=new Float64Array(n);this.spF=null;}
    this.assemble(h,mode);
-   if(this.sp.miss.length){const keys=[...this.sp.map.keys(),...this.sp.miss];this.sp={...SPM.pattern(n,keys),miss:[]};this.sp.Ax=new Float64Array(this.sp.nnz);this.spq=SPM.order(this.sp);this.cache.clear();this.assemble(h,mode);}
+   if(this.sp.miss.length){const keys=[...this.sp.map.keys(),...this.sp.miss];this.sp={...SPM.pattern(n,keys),miss:[]};this.sp.Ax=new Float64Array(this.sp.nnz);this.spq=SPM.order(this.sp);this.cache.clear();this.spF=null;this.assemble(h,mode);}
   }
   solveOnce(h,mode){
    let key=null;
    // (a fast tower footing changes its resistance every step: no cached factorization then, 4.9.1)
-   if(!this.hasCPL&&!this.hasTV&&!this.hasNL&&!(this.footEls&&this.footEls.length)){key=mode+(h/this.h).toPrecision(17)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of this.net.els)if(e.k==='S'||e.k==='D')key+=e.on?'1':'0';
+   if(!this.everyStep){key=mode+(h/this.h).toPrecision(17)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of this.net.els)if(e.k==='S'||e.k==='D')key+=e.on?'1':'0';
     for(const e of this.net.els)if(e.k==='G'&&e.sched)key+='|'+e.Rnow;
     for(const e of this.chbEls)key+='|'+(e.mmc?e.mmc.cnt:chbCount(e));}
    let f=key&&this.cache.get(key);
    const st=this.lustat;if(f)st.hit++;
-   if(!f){st.fact++;if(key)st.miss++;f=this.factor(h,mode);if(key){if(this.cache.size>256)this.cache.clear();this.cache.set(key,f);}}
+   if(!f){st.fact++;if(key)st.miss++;f=this.factor(h,mode,!!key);if(key){if(this.cache.size>256)this.cache.clear();this.cache.set(key,f);}}
    this.rhs(h,mode);const sol=this.b.slice();if(f.sp)SPM.solve(f.sp,sol,this.spw);else luSolve(f.A,this.n,f.piv,sol);return sol;
   }
   solve(h,mode){
@@ -1781,7 +1858,7 @@
   // ------------------------------------------------------------ line from geometry (4.4)
   // the phase conductance at each end for the step h: T_i·diag(1/Z_e or 1/Z_eq(h))·T_iᵀ (the same at both ends)
   tlmG(e,h){if(e.gH===h)return e.Gp;if(e.wb)return this.tlwG(e,h);const M=e.M,Ti=e.Ti,G=e.Gp,gk=new Float64Array(M);
-   for(let k=0;k<M;k++){const m=e.modes[k];if(m.cp)gk[k]=1/m.Ze;else{let Z=m.d;for(let i=0;i<m.kp.length;i++){const c=rcCoef(m.kp[i],h);Z+=m.kr[i]*(c[1]-c[2]);}m.Zeq=Z;gk[k]=1/Z;}}
+   for(let k=0;k<M;k++){const m=e.modes[k];if(m.cp)gk[k]=1/m.Ze;else{let Z=m.d;const co=fdCo(m,h),k0=co.k0,k1=co.k1,kr=m.kr;for(let i=0;i<k0.length;i++)Z+=kr[i]*(k0[i]-k1[i]);m.Zeq=Z;gk[k]=1/Z;}}
    for(let r=0;r<M;r++)for(let q=0;q<M;q++){let s=0;for(let k=0;k<M;k++)s+=Ti[r*M+k]*gk[k]*Ti[q*M+k];G[r*M+q]=s;}e.gH=h;return G;}
   // history sources at t (the end of the step that starts at this.t): per mode, then to the phases with T_i
   tlmSources(e,t){if(e.wb)return this.tlwSources(e,t);const M=e.M,h=Math.max(0,t-this.t),Ihm=e.Ihm;if(e.fd)this.tlmG(e,h);
@@ -1791,8 +1868,10 @@
     // inputs of the propagation convolutions: f of the other end at t − τ and t − h − τ
     let q=this.tlmHist(e,t-m.tau);const u1=q[2*k+1],u2=q[2*k];q=this.tlmHist(e,t-h-m.tau);const u1p=q[2*k+1],u2p=q[2*k];
     m.u[0]=u1;m.u[1]=u1p;m.u[2]=u2;m.u[3]=u2p;let b1=0,b2=0;
-    for(let i=0;i<m.ap.length;i++){const [E,a0,a1]=rcCoef(m.ap[i],h),c=m.ar[i];b1+=E*m.y1[i]+c*(a0*u1+a1*(u1p-u1));b2+=E*m.y2[i]+c*(a0*u2+a1*(u2p-u2));}
-    let hz1=0,hz2=0;for(let i=0;i<m.kp.length;i++){const [E,,a1]=rcCoef(m.kp[i],h),c=m.kr[i];hz1+=c*(E*m.z1[i]+a1*m.i1);hz2+=c*(E*m.z2[i]+a1*m.i2);}
+    const co=fdCo(m,h),aE=co.aE,a0=co.a0,a1=co.a1,ar=m.ar,y1=m.y1,y2=m.y2;
+    for(let i=0;i<aE.length;i++){const E=aE[i],c=ar[i];b1+=E*y1[i]+c*(a0[i]*u1+a1[i]*(u1p-u1));b2+=E*y2[i]+c*(a0[i]*u2+a1[i]*(u2p-u2));}
+    const kE=co.kE,k1=co.k1,kr=m.kr,z1=m.z1,z2=m.z2,mi1=m.i1,mi2=m.i2;
+    let hz1=0,hz2=0;for(let i=0;i<kE.length;i++){const c=kr[i];hz1+=c*(kE[i]*z1[i]+k1[i]*mi1);hz2+=c*(kE[i]*z2[i]+k1[i]*mi2);}
     m.b1=b1;m.b2=b2;m.hz1=hz1;m.hz2=hz2;Ihm[k]=-(hz1+b1)/m.Zeq;Ihm[M+k]=-(hz2+b2)/m.Zeq;}
    const Ti=e.Ti,Ih=e.Ih;for(let r=0;r<M;r++){let s1=0,s2=0;for(let k=0;k<M;k++){s1+=Ti[r*M+k]*Ihm[k];s2+=Ti[r*M+k]*Ihm[M+k];}Ih[r]=s1;Ih[M+r]=s2;}}
   // after a step: modal voltages and currents at both ends, the states of the convolutions, the record for t + τ
@@ -1802,8 +1881,10 @@
    for(let k=0;k<M;k++){const m=e.modes[k];
     if(m.cp){const i1=vm[k]/m.Ze+e.Ihm[k],i2=vm[M+k]/m.Ze+e.Ihm[M+k];im[k]=i1;im[M+k]=i2;C[4*k].push(vm[k]);C[4*k+1].push(vm[M+k]);C[4*k+2].push(i1);C[4*k+3].push(i2);continue;}
     const Zeq=h>0?m.Zeq:m.d,i1=(vm[k]-m.hz1-m.b1)/Zeq,i2=(vm[M+k]-m.hz2-m.b2)/Zeq;let s1=m.d*i1,s2=m.d*i2;
-    for(let i=0;i<m.kp.length;i++){const [E,a0,a1]=rcCoef(m.kp[i],h);m.z1[i]=E*m.z1[i]+a0*i1+a1*(m.i1-i1);m.z2[i]=E*m.z2[i]+a0*i2+a1*(m.i2-i2);s1+=m.kr[i]*m.z1[i];s2+=m.kr[i]*m.z2[i];}
-    const u=m.u;for(let i=0;i<m.ap.length;i++){const [E,a0,a1]=rcCoef(m.ap[i],h),c=m.ar[i];m.y1[i]=E*m.y1[i]+c*(a0*u[0]+a1*(u[1]-u[0]));m.y2[i]=E*m.y2[i]+c*(a0*u[2]+a1*(u[3]-u[2]));}
+    {const co=fdCo(m,h),kE=co.kE,k0=co.k0,k1=co.k1,kr=m.kr,z1=m.z1,z2=m.z2,d1=m.i1-i1,d2=m.i2-i2;
+     for(let i=0;i<kE.length;i++){const E=kE[i],a=z1[i]=E*z1[i]+k0[i]*i1+k1[i]*d1,b=z2[i]=E*z2[i]+k0[i]*i2+k1[i]*d2;s1+=kr[i]*a;s2+=kr[i]*b;}
+     const u=m.u,aE=co.aE,a0=co.a0,a1=co.a1,ar=m.ar,y1=m.y1,y2=m.y2,u0=u[0],du1=u[1]-u[0],u2=u[2],du2=u[3]-u[2];
+     for(let i=0;i<aE.length;i++){const E=aE[i],c=ar[i];y1[i]=E*y1[i]+c*(a0[i]*u0+a1[i]*du1);y2[i]=E*y2[i]+c*(a0[i]*u2+a1[i]*du2);}}
     m.i1=i1;m.i2=i2;im[k]=i1;im[M+k]=i2;C[2*k].push(vm[k]+s1);C[2*k+1].push(vm[M+k]+s2);}
    for(let r=0;r<M;r++){let s1=0,s2=0;for(let k=0;k<M;k++){s1+=Ti[r*M+k]*im[k];s2+=Ti[r*M+k]*im[M+k];}e.iE[r]=s1;e.iE[M+r]=s2;}
    const keep=t-2.5*e.tauMax-4*(this.hUser||0);while(H.s+2<H.t.length&&H.t[H.s+1]<keep)H.s++;
@@ -1814,31 +1895,34 @@
    e.gH=h;return G;}
   // history currents at t: Y_c's part from its states and the voltages of the step before, minus H ⊛ w of the other end
   // (the propagation states advanced to t with w at t − τ and t − h − τ from the record, kept for tlwRecord)
+  // (4.19: the same operations in the same order, with the arrays in locals and the indices advanced by addition)
   tlwSources(e,t){const M=e.M,MM=M*M,h=Math.max(0,t-this.t),S=e.yc,c=wbCo(S,h),hy=e.hy,cv=e.cv;this.tlmG(e,h);hy.fill(0);cv.fill(0);
-   for(let end=0;end<2;end++){const o=end*M;for(let k=0;k<S.N;k++){const j=6*k,Er=c[j],Ei=c[j+1],a1r=c[j+4],a1i=c[j+5],w=S.w[k];
-     for(let q=0;q<M;q++){const x=(end*S.N+k)*M+q,yr=Er*e.Xr[x]-Ei*e.Xi[x]+a1r*e.vp[o+q],yi=Er*e.Xi[x]+Ei*e.Xr[x]+a1i*e.vp[o+q];
-      for(let r=0;r<M;r++)hy[o+r]+=w*(S.Rr[k*MM+r*M+q]*yr-S.Ri[k*MM+r*M+q]*yi);}}}
-   let i0=0;const uq=e.qq;
-   for(const g of e.grp){const gc=wbCo(g,h);let q=this.tlmHist(e,t-g.tau);uq.set(q);q=this.tlmHist(e,t-h-g.tau);
+   {const N=S.N,Rr=S.Rr,Ri=S.Ri,W=S.w,Xr=e.Xr,Xi=e.Xi,vp=e.vp;
+    for(let end=0;end<2;end++){const o=end*M;for(let k=0;k<N;k++){const j=6*k,Er=c[j],Ei=c[j+1],a1r=c[j+4],a1i=c[j+5],w=W[k],kb=k*MM;let x=(end*N+k)*M;
+      for(let q=0;q<M;q++,x++){const xr=Xr[x],xi=Xi[x],vq=vp[o+q],yr=Er*xr-Ei*xi+a1r*vq,yi=Er*xi+Ei*xr+a1i*vq;
+       for(let r=0,ix=kb+q;r<M;r++,ix+=M)hy[o+r]+=w*(Rr[ix]*yr-Ri[ix]*yi);}}}}
+   let i0=0;const uq=e.qq,Zr=e.Zr,Zi=e.Zi,ZNr=e.ZNr,ZNi=e.ZNi,nz=e.nz;
+   for(const g of e.grp){const gc=wbCo(g,h);let q=this.tlmHist(e,t-g.tau);uq.set(q);q=this.tlmHist(e,t-h-g.tau);const gN=g.N,Rr=g.Rr,Ri=g.Ri,W=g.w;
     for(let end=0;end<2;end++){const o=end*M,om=(1-end)*M;   // the input of end 1 is the wave of end 2 and the reverse
-     for(let k=0;k<g.N;k++){const j=6*k,Er=gc[j],Ei=gc[j+1],a0r=gc[j+2],a0i=gc[j+3],a1r=gc[j+4],a1i=gc[j+5],w=g.w[k];
-      for(let p=0;p<M;p++){const x=(end*e.nz+i0+k)*M+p,u=uq[om+p],du=q[om+p]-u;
-       const zr=Er*e.Zr[x]-Ei*e.Zi[x]+a0r*u+a1r*du,zi=Er*e.Zi[x]+Ei*e.Zr[x]+a0i*u+a1i*du;e.ZNr[x]=zr;e.ZNi[x]=zi;
-       for(let r=0;r<M;r++)cv[o+r]+=w*(g.Rr[k*MM+r*M+p]*zr-g.Ri[k*MM+r*M+p]*zi);}}}
-    i0+=g.N;}
-   for(let i=0;i<2*M;i++)e.Ih[i]=hy[i]-cv[i];}
+     for(let k=0;k<gN;k++){const j=6*k,Er=gc[j],Ei=gc[j+1],a0r=gc[j+2],a0i=gc[j+3],a1r=gc[j+4],a1i=gc[j+5],w=W[k],kb=k*MM;let x=(end*nz+i0+k)*M;
+      for(let p=0;p<M;p++,x++){const u=uq[om+p],du=q[om+p]-u,sr=Zr[x],si=Zi[x];
+       const zr=Er*sr-Ei*si+a0r*u+a1r*du,zi=Er*si+Ei*sr+a0i*u+a1i*du;ZNr[x]=zr;ZNi[x]=zi;
+       for(let r=0,ix=kb+p;r<M;r++,ix+=M)cv[o+r]+=w*(Rr[ix]*zr-Ri[ix]*zi);}}}
+    i0+=gN;}
+   const Ih=e.Ih;for(let i=0;i<2*M;i++)Ih[i]=hy[i]-cv[i];}
   // after a step: the currents into the line, the states of Y_c (with the new voltages) and of H, the waves for t + τ
   tlwRecord(e,t,h){const M=e.M,MM=M*M,H=e.H,C=H.c,S=e.yc,v=e.vm;for(let r=0;r<M;r++){v[r]=this.V(e.n1[r]);v[M+r]=this.V(e.n2[r]);}
-   const i=new Float64Array(2*M);
-   if(h>0){const G=this.tlmG(e,h);for(let end=0;end<2;end++){const o=end*M;for(let r=0;r<M;r++){let s=e.Ih[o+r];for(let q=0;q<M;q++)s+=G[r*M+q]*v[o+q];i[o+r]=s;}}
-    const c=wbCo(S,h);for(let end=0;end<2;end++){const o=end*M;for(let k=0;k<S.N;k++){const j=6*k;for(let q=0;q<M;q++){const x=(end*S.N+k)*M+q,xr=e.Xr[x],xi=e.Xi[x],vn=v[o+q],dv=e.vp[o+q]-vn;
-      e.Xr[x]=c[j]*xr-c[j+1]*xi+c[j+2]*vn+c[j+4]*dv;e.Xi[x]=c[j]*xi+c[j+1]*xr+c[j+3]*vn+c[j+5]*dv;}}}
+   const i=new Float64Array(2*M),N=S.N,Xr=e.Xr,Xi=e.Xi,vp=e.vp,Rr=S.Rr,Ri=S.Ri,W=S.w,G0=e.G0;
+   if(h>0){const G=this.tlmG(e,h),Ih=e.Ih;for(let end=0;end<2;end++){const o=end*M;for(let r=0;r<M;r++){let s=Ih[o+r];for(let q=0,ix=r*M;q<M;q++,ix++)s+=G[ix]*v[o+q];i[o+r]=s;}}
+    const c=wbCo(S,h);for(let end=0;end<2;end++){const o=end*M;for(let k=0;k<N;k++){const j=6*k,c0=c[j],c1=c[j+1],c2=c[j+2],c3=c[j+3],c4=c[j+4],c5=c[j+5];let x=(end*N+k)*M;
+      for(let q=0;q<M;q++,x++){const xr=Xr[x],xi=Xi[x],vn=v[o+q],dv=vp[o+q]-vn;
+       Xr[x]=c0*xr-c1*xi+c2*vn+c4*dv;Xi[x]=c0*xi+c1*xr+c3*vn+c5*dv;}}}
     e.Zr.set(e.ZNr);e.Zi.set(e.ZNi);}
    else i.set(e.iE);
    // w = i + Y_c ⊛ v = i + G₀·v + Σ w·Re(R·x)
    H.t.push(t);
-   for(let end=0;end<2;end++){const o=end*M;for(let r=0;r<M;r++){let s=i[o+r];for(let q=0;q<M;q++)s+=e.G0[r*M+q]*v[o+q];
-     for(let k=0;k<S.N;k++){const w=S.w[k];for(let q=0;q<M;q++){const x=(end*S.N+k)*M+q;s+=w*(S.Rr[k*MM+r*M+q]*e.Xr[x]-S.Ri[k*MM+r*M+q]*e.Xi[x]);}}
+   for(let end=0;end<2;end++){const o=end*M;for(let r=0;r<M;r++){let s=i[o+r];for(let q=0,ix=r*M;q<M;q++,ix++)s+=G0[ix]*v[o+q];
+     for(let k=0;k<N;k++){const w=W[k];let x=(end*N+k)*M;for(let q=0,ix=k*MM+r*M;q<M;q++,ix++,x++)s+=w*(Rr[ix]*Xr[x]-Ri[ix]*Xi[x]);}
      C[o+r].push(h>0||!e.w0?s:e.w0[o+r]);}}
    e.vp.set(v);e.iE.set(i);
    const keep=t-2.5*e.tauMax-4*(this.hUser||0);while(H.s+2<H.t.length&&H.t[H.s+1]<keep)H.s++;

@@ -34,6 +34,15 @@ class SparseLU(unittest.TestCase):
             self.assertLess(b['sparse']['msFactor'] * 3, b['dense']['msFactor'], b)
             self.assertLess(b['sparse']['nnzLU'], 6 * b['n'], b)        # ladders and chains: almost no fill-in
 
+    def test_refactorization(self):
+        # 4.19 (§68): the factors again with the same pivots, without the search of the pattern: the same numbers bit for
+        # bit, several times faster than a factorization from scratch (measured ~9 times at 1000 unknowns)
+        rows = [b for b in self.r['bench'] if b['n'] >= 200]
+        self.assertTrue(rows)
+        for b in rows:
+            self.assertTrue(b['sparse']['reSame'], b)
+            self.assertLess(b['sparse']['msRefactor'] * 3, b['sparse']['msFactor'], b)
+
 
 if __name__ == '__main__':
     unittest.main()

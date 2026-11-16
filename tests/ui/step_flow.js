@@ -37,5 +37,17 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
  const srv=await p.$$eval('.dg-item',x=>x.map(e=>e.textContent));ok(srv.length>0&&srv.every(t=>/server \(SciPy\)/.test(t)),'μηνύματα του server: '+srv.length);
  await p.selectOption('#diag-src','');
  await (await p.$('#scope-card')).screenshot({path:OUT+'/step_console.png'});
+ // 4.19 (§68): the linear solver in the circuit parameters: the proposal of the engine with its reason, the counters of
+ // the running simulation, and a choice other than the proposal that the panel reports
+ await p.evaluate(()=>PCL.loadTutorial('ieee9_emt'));await p.waitForTimeout(900);await p.click('#play');await p.waitForTimeout(1200);await p.click('#play');await p.waitForTimeout(200);
+ const lin=await p.evaluate(()=>{PCL.editor.sel.c.clear();PCL.renderProps();const d=document.querySelector('details[data-sec="c-lin"]');if(d)d.open=true;const q=x=>document.querySelector(x)?.textContent||'';
+  return {adv:q('#lin-advice'),stats:q('#lin-stats'),info:PCL.S.sim.solverInfo()};});
+ ok(/Αραιός LU με μερική επαναπαραγοντοποίηση/.test(lin.adv)&&/μηχανές/.test(lin.adv),'γραμμικός λύτης: η πρόταση του engine με τον λόγο της');
+ ok(lin.info.kind==='sparse'&&lin.info.asProposed&&lin.info.stats.re>100&&lin.info.stats.full<=3&&/επαναπαραγοντοποιήσεις/.test(lin.stats),'γραμμικός λύτης: αραιός με επαναπαραγοντοποίηση, '+lin.info.stats.re+' φορές, '+lin.info.stats.full+' από την αρχή');
+ await p.selectOption('[data-solve="solver"]','dense');await p.waitForTimeout(700);
+ const lin2=await p.evaluate(()=>{PCL.renderProps();const d=document.querySelector('details[data-sec="c-lin"]');if(d)d.open=true;return {kind:PCL.S.sim.solverInfo().kind,now:document.querySelector('#lin-now')?.textContent||'',solve:PCL.editor.doc.solve};});
+ ok(lin2.kind==='dense'&&/διαφέρει από την πρόταση/.test(lin2.now)&&lin2.solve.solver==='dense','γραμμικός λύτης: η επιλογή «πυκνός» εφαρμόζεται και φαίνεται ότι διαφέρει από την πρόταση');
+ await p.selectOption('[data-solve="solver"]','');await p.waitForTimeout(500);
+ ok(await p.evaluate(()=>PCL.S.sim.solverInfo().kind==='sparse'&&!PCL.editor.doc.solve?.solver),'γραμμικός λύτης: «Αυτόματα» επιστρέφει στην πρόταση');
  ok(errs.length===0,'χωρίς σφάλματα JavaScript '+errs.join(' | '));
  await b.close();})();

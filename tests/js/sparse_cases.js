@@ -29,9 +29,15 @@ function three(N,sw){const c=[{id:'G1',type:'GRID3',params:{Un:20e3,Sk:500e6,XR:
  return project(c,w,2e-6);}
 function run(pr,solver,steps){const s=new MNA.Sim(JSON.parse(JSON.stringify(pr)),{h:2e-6,solver});const t0=process.hrtime.bigint();s.run(2e-6*steps);const ms=Number(process.hrtime.bigint()-t0)/1e6;
  // one factorization alone (no cache): the median of 7 after one for the JIT, so a busy machine does not decide
- let F=s.factor(2e-6,'TR');const ts=[];for(let k=0;k<7;k++){const t1=process.hrtime.bigint();F=s.factor(2e-6,'TR');ts.push(Number(process.hrtime.bigint()-t1)/1e6);}
+ // (4.19: spF = null asks for a factorization from scratch; otherwise the solver would only find that nothing changed)
+ let F=s.factor(2e-6,'TR');const ts=[];for(let k=0;k<7;k++){s.spF=null;const t1=process.hrtime.bigint();F=s.factor(2e-6,'TR');ts.push(Number(process.hrtime.bigint()-t1)/1e6);}
  ts.sort((a,b)=>a-b);const fms=ts[3];
- return {n:s.n,sparse:s.sparse,msStep:ms/steps,msFactor:fms,nnzLU:F.sp?F.sp.nnz:s.n*s.n,stats:s.lustat,x:Array.from(s.x)};}
+ // 4.19 (§68): the refactorization of every column of the same matrix (same pivots, no search of the pattern), median of 7,
+ // and the same factors bit for bit
+ let rms=null,reSame=null;if(F.sp){s.spF=null;const F0=s.factor(2e-6,'TR').sp,G=SP.clone(F0),tr=[];SP.refactor(G,s.sp,s.sp.Ax,0.1);
+  for(let k=0;k<7;k++){const t1=process.hrtime.bigint();SP.refactor(G,s.sp,s.sp.Ax,0.1);tr.push(Number(process.hrtime.bigint()-t1)/1e6);}
+  tr.sort((a,b)=>a-b);rms=tr[3];reSame=G.Lx.every((v,i)=>Object.is(v,F0.Lx[i]))&&G.Ux.every((v,i)=>Object.is(v,F0.Ux[i]));}
+ return {n:s.n,sparse:s.sparse,msStep:ms/steps,msFactor:fms,msRefactor:rms,reSame,nnzLU:F.sp?F.sp.nnz:s.n*s.n,stats:s.lustat,x:Array.from(s.x)};}
 const out={same:{},bench:[]};
 // same numbers: every node voltage and branch current after the run, relative to the largest
 for(const [name,pr] of [['ladder200_sw',ladder(200,true)],['three60_sw',three(60,true)],['ladder50',ladder(50,false)]]){
@@ -41,7 +47,7 @@ for(const [name,pr] of [['ladder200_sw',ladder(200,true)],['three60_sw',three(60
 const sizes=quick?[10,50,200,1000]:[10,50,200,1000,5000];
 for(const kind of ['ladder','three'])for(const sw of (quick?[true]:[false,true]))for(const N of sizes){
  const NN=kind==='three'?Math.max(1,Math.round(N/6)):Math.max(1,Math.round(N/2));const pr=kind==='three'?three(NN,sw):ladder(NN,sw);
- const steps=N>=1000?400:2000;const S=run(pr,'sparse',steps);const row={kind,sw,n:S.n,steps,sparse:{msStep:S.msStep,msFactor:S.msFactor,nnzLU:S.nnzLU,fact:S.stats.fact}};
+ const steps=N>=1000?400:2000;const S=run(pr,'sparse',steps);const row={kind,sw,n:S.n,steps,sparse:{msStep:S.msStep,msFactor:S.msFactor,msRefactor:S.msRefactor,reSame:S.reSame,nnzLU:S.nnzLU,fact:S.stats.fact}};
  if(S.n<=1100){const D=run(pr,'dense',Math.min(steps,S.n>500?200:steps));row.dense={msStep:D.msStep,msFactor:D.msFactor};}
  out.bench.push(row);}
 console.log(JSON.stringify(out));
