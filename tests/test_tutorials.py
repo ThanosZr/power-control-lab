@@ -92,6 +92,43 @@ class Tutorials(unittest.TestCase):
         self.assertAlmostEqual(o['smp_pi_tri1']['avg'], -400, delta=0.3)
         self.assertAlmostEqual(o['smp_pi_saw']['d'], .375, delta=1e-4)          # feedforward from the measured voltages
 
+    def test_current_ctl(self):
+        """4.19.4: the current loop of the third exercise from plain blocks. Gains from the two poles, the sample against the
+        mean for the two carriers, the response against the targets of the exercise, the step of the storage voltage."""
+        o = self.o
+        r = o['cc_a_tri']
+        self.assertAlmostEqual(r['kp'], r['L'] * (r['a'] + r['b']), delta=1e-6)       # K_p = L(a + b)
+        self.assertAlmostEqual(r['ki'], r['L'] * r['a'] * r['b'], delta=1e-6)         # K_i = L·a·b
+        self.assertAlmostEqual(r['a'], math.log(9) / 1e-3, delta=50)                  # a rise of 1 ms
+        for key in ('cc_a_tri', 'cc_a_saw', 'cc_b_tri', 'cc_c_tri', 'cc_a_raw'):
+            self.assertEqual(o[key]['warn'], [], msg=key)
+            self.assertEqual(o[key]['n'], 320, msg=key)                               # 16 ms of a 20 kHz carrier
+            self.assertAlmostEqual(o[key]['d'], o[key]['D0'], delta=1.5e-3, msg=key)  # D returns to V_st/V_dc
+            self.assertAlmostEqual(o[key]['pp'], o[key]['dI'], delta=0.1, msg=key)    # Δi = V_st(1 − D)/(L f_s) = 30 A
+        # triangle, sample at the maximum of the carrier: the sample is the mean
+        self.assertAlmostEqual(r['hold'], r['mean'], delta=0.01)
+        self.assertAlmostEqual(r['hold2'], r['mean2'], delta=0.01)
+        self.assertAlmostEqual(r['mean2'], r['In'], delta=0.01 * r['In'])             # inside 1 % of I_n, 6 ms after the step
+        # sawtooth, sample at the start of the period: the sample is the peak, the mean lies Δi/2 lower
+        w = o['cc_a_saw']
+        self.assertAlmostEqual(w['hold'] - w['mean'], w['dI'] / 2, delta=0.1)
+        self.assertAlmostEqual(w['hold2'] - w['mean2'], w['dI'] / 2, delta=0.1)
+        self.assertAlmostEqual(w['hold2'], w['In'], delta=0.01 * w['In'])
+        # the targets of the exercise: rise about 1 ms, overshoot up to 10 %, inside ±2 % of I_n in 2 ms
+        for key in ('cc_a_tri', 'cc_a_saw', 'cc_a_raw', 'cc_b_tri'):
+            for step in ('up', 'dn'):
+                q = o[key][step]
+                self.assertAlmostEqual(q['rise'], 1e-3, delta=0.15e-3, msg=(key, step))
+                self.assertLess(q['os'], 1.5, msg=(key, step))                        # about b/(a − b) = 1,1 % of the step
+                self.assertLessEqual(q['ts'], 2.0e-3 + 1e-9, msg=(key, step))
+        self.assertLess(abs(o['cc_a_tri']['up']['ess']), 0.01 * r['In'])
+        # the measured V_dc straight into the division: the fixed step goes through, the same response
+        self.assertAlmostEqual(o['cc_a_raw']['mean'], r['mean'], delta=0.05)
+        # a step of V_st reaches the duty one sample later: the current moves by about ΔV·T/L
+        c = o['cc_c_tri']
+        self.assertAlmostEqual(c['dev'], c['dV'] * c['T'] / c['L'], delta=0.2)
+        self.assertAlmostEqual(c['mean'], 0.5 * c['In'], delta=0.005 * c['In'])
+
     def test_blocks_loop(self):
         o = self.o
         ref = o['bl_builtin_pwm_none']

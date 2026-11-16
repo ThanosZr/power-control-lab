@@ -37,6 +37,13 @@ for(const upd of ['single','double']){const pr=build('sampling',{case:'tri2',ctr
 for(const [ctrl,mod,delay] of [['builtin','pwm','none'],['blocks','pwm','none'],['blocks','cmp','none'],['blocks','pwm','z1'],['blocks','cmp','z1']]){const pr=build('blocks_loop',{ctrl,mod,delay});const s=sim(pr,.004);
  const key=ctrl==='builtin'?'I:L1':'Y:AM1',p=s.per,i=s.chIndex.get(key);const rows=[];for(let k=0;k<p.n;k++){const j=(p.head-p.n+k+p.cap)%p.cap;rows.push({t:p.t[j],mn:p.min[j*p.nch+i]});}
  const after=rows.filter(r=>r.t>.002+2e-5&&r.t<.0028);out[`bl_${ctrl}_${mod}_${delay}`]={valley:last(s,key,5).min,avg:last(s,key,5).avg,d:mod==='cmp'?last(s,'GS:S1',5).avg:last(s,'D:PWM1',5).avg,vpk:Math.max(...after.map(r=>r.mn)),warn:s.net.warnings,err:null};}
+// 4.19.4: the current loop of the third exercise from plain blocks (carrier and comparator, three S&H, PI in volts, (V_st − u)/V_dc)
+for(const [name,o] of [['a_tri',{}],['a_saw',{carrier:'saw'}],['b_tri',{test:'B'}],['c_tri',{test:'C'}],['a_raw',{vdc:'raw'}]]){const pr=build('current_ctl',o),m=pr.meta,s=sim(pr,m.stopT);
+ const {t,y}=per(s,m.saw?'H:SHi':'I:L1'),mean=per(s,'I:L1').y,hold=per(s,'H:SHi').y,ref=x=>x<m.t1?m.lev[0]:x<=m.t2?m.lev[1]:m.lev[2],k2=t.findIndex(x=>x>m.t2-1e-9);
+ const R=(a,b)=>{const r=M.responseMetrics({t,y,tStep:a,tEnd:b,ref,band:.02*m.In/Math.max(Math.abs(ref(b)),1e-9)}),r0=ref(a-1e-12),r1=ref(b),d=Math.sign(r1-r0);let pk=0;
+  for(let i=0;i<t.length;i++)if(t[i]>a&&t[i]<=b+1e-12)pk=Math.max(pk,d*(y[i]-r1));return {rise:r.rise,os:100*pk/Math.abs(r1-r0),ts:r.ts,ess:r.ess};};
+ out['cc_'+name]={kp:m.kp,ki:m.ki,a:m.a,b:m.b,D0:m.D0,dI:m.dI,In:m.In,dV:m.dV,T:1/m.fs,L:m.L,warn:s.net.warnings,n:t.length,mean2:mean[k2],hold2:hold[k2],mean:last(s,'I:L1',5).avg,hold:s.now('H:SHi'),d:last(s,'Y:SAT1',5).avg,pp:last(s,'I:L1',1).max-last(s,'I:L1',1).min,
+  ...(m.test==='C'?{dev:Math.max(...y.filter((v,i)=>t[i]>m.t1).map(v=>Math.abs(v-m.lev[0])))}:{up:R(m.t1,m.t2),dn:R(m.t2,m.stopT)})};}
 for(const [D,ramp] of [['0.4','none'],['0.6','none'],['0.6','half'],['0.7','full']]){const pr=build('peak_cm',{D,ramp});const s=sim(pr,2e-3);const pk=[],dd=[];const p=s.per,i=s.chIndex.get('Y:AM1'),g=s.chIndex.get('GS:S1');
  for(let k=6;k>=1;k--){const j=(p.head-k+p.cap)%p.cap;pk.push(p.max[j*p.nch+i]);dd.push(p.avg[j*p.nch+g]);}out[`pcm_${D}_${ramp}`]={pk,dd,meta:pr.meta,warn:s.net.warnings};}
 // 3.1: DC machine drive (speed loop with active damping or IMC, current loop, open loop)

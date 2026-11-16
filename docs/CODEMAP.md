@@ -9,7 +9,7 @@
 |---|---:|
 | `web/studio/addon_client.js` | 30 |
 | `web/studio/addons.js` | 116 |
-| `web/studio/app.js` | 3041 |
+| `web/studio/app.js` | 3071 |
 | `web/studio/bus.js` | 197 |
 | `web/studio/ctlwin.js` | 78 |
 | `web/studio/editor.js` | 684 |
@@ -43,7 +43,7 @@
 | `web/studio/templates.js` | 32 |
 | `web/studio/trv.js` | 56 |
 | `web/studio/tune.js` | 237 |
-| `web/studio/tutorials.js` | 1923 |
+| `web/studio/tutorials.js` | 1977 |
 | `web/studio/units.js` | 156 |
 | `web/studio/watch.js` | 339 |
 | `web/studio/winframe.js` | 63 |
@@ -74,6 +74,7 @@
 | `pcl/backend.py` | 270 |
 | `pcl/control.py` | 953 |
 | `pcl/core.py` | 1353 |
+| `pcl/cpf.py` | 242 |
 | `pcl/designer.py` | 791 |
 | `pcl/formats.py` | 222 |
 | `pcl/gui.py` | 409 |
@@ -87,11 +88,12 @@
 | `pcl/network.py` | 1483 |
 | `pcl/nnstart.py` | 388 |
 | `pcl/onnxio.py` | 355 |
-| `pcl/opf.py` | 394 |
+| `pcl/opf.py` | 417 |
 | `pcl/plotting.py` | 340 |
 | `pcl/powerflow.py` | 985 |
 | `pcl/psse.py` | 433 |
 | `pcl/report.py` | 577 |
+| `pcl/scopf.py` | 208 |
 | `pcl/study.py` | 244 |
 | `pcl/trv.py` | 433 |
 | `pcl/wideband.py` | 1279 |
@@ -161,7 +163,7 @@
 | `tests/test_trstart.py` | 26 |
 | `tests/test_trv.py` | 248 |
 | `tests/test_tune.py` | 277 |
-| `tests/test_tutorials.py` | 703 |
+| `tests/test_tutorials.py` | 740 |
 | `tests/test_units.py` | 78 |
 | `tests/test_watch.py` | 87 |
 | `tests/test_wb.py` | 489 |
@@ -205,7 +207,7 @@
 | `tests/js/trv_cases.js` | 8 |
 | `tests/js/trv_tutorial_cases.js` | 30 |
 | `tests/js/tune_cases.js` | 39 |
-| `tests/js/tutorial_cases.js` | 137 |
+| `tests/js/tutorial_cases.js` | 144 |
 | `tests/js/units_cases.js` | 52 |
 | `tests/js/watch_cases.js` | 41 |
 | `tests/js/wb_cases.js` | 21 |
@@ -362,60 +364,61 @@
 | 179 | `battery` | Αμφίδρομος · μπαταρία (PE2) | Αμφίδρομος μετατροπέας μπαταρίας |
 | 229 | `sampling` | Αμφίδρομος · μπαταρία (PE2) | Άσκηση 2 · Επίδραση δειγματοληψίας |
 | 264 | `polyphase` | Αμφίδρομος · μπαταρία (PE2) | Άσκηση 2 · Πολυφασική σχεδίαση |
-| 298 | `blocks_loop` | Μπλοκ σημάτων (3.0) | Βρόχος ρεύματος από μπλοκ |
-| 326 | `code_loop` | Μπλοκ κώδικα (3.3) | PI σε Python και πρόσθια τροφοδότηση με έκφραση |
-| 351 | `cell_eis` | Μπαταρίες και EIS (3.3.1) | Δοκιμή κυψέλης: EIS με μετατροπέα |
-| 394 | `im_vf` | Ηλεκτρική κίνηση (3.4) | Μηχανή επαγωγής: V/f και διαμόρφωση SPWM, SVPWM, τετραγωνική |
-| 407 | `im_foc` | Ηλεκτρική κίνηση (3.4) | Μηχανή επαγωγής: διανυσματικός έλεγχος, εξασθένιση πεδίου, R̂_R |
-| 462 | `synrm` | Ηλεκτρική κίνηση (3.5) | Σύγχρονη μηχανή μαγνητικής αντίστασης (SynRM): ευθυγράμμιση, έλεγχος dq, MTPA |
-| 488 | `pmsm` | Ηλεκτρική κίνηση (3.5) | Σύγχρονη μηχανή μόνιμων μαγνητών (PMSM / IPMSM): i_d = 0 και MTPA |
-| 504 | `srm` | Ηλεκτρική κίνηση (3.6) | Μηχανή μεταβλητής μαγνητικής αντίστασης (SRM 8/6): γωνίες, υστέρηση, βρόχος ψ–i |
-| 535 | `lightning` | Κεραυνικά (3.5) | Κεραυνικό ρεύμα Heidler: 10/350, 1/200, 0,25/100 μs |
-| 547 | `twave` | Υψηλές τάσεις (3.8) | Οδεύοντα κύματα: ανάκλαση σε ανοιχτό, βραχυκυκλωμένο ή ωμικό άκρο, διάγραμμα Bewley |
-| 570 | `arrester` | Υψηλές τάσεις (3.9) | Αλεξικέραυνο: παραμένουσα τάση και απόσταση προστασίας |
-| 586 | `marx` | Υψηλές τάσεις (3.10) | Γεννήτρια Marx: πολυβάθμια κρουστική γεννήτρια με σπινθηριστές |
-| 616 | `chop` | Υψηλές τάσεις (3.10) | Αποκομμένη κρουστική τάση: σπινθηριστής αποκοπής |
-| 650 | `hv153` | Υψηλές τάσεις (3.11) | Ασκήσεις 15.3: γεννήτριες κρουστικών τάσεων (βιβλίο, ακριβής λύση, προσομοίωση) |
-| 671 | `lossline` | Υψηλές τάσεις (3.11) | Γραμμή με απώλειες: απόσβεση και παραμόρφωση οδεύοντος κύματος |
-| 688 | `voltime` | Υψηλές τάσεις (3.11) | Καμπύλη τάσης–χρόνου διακένου (κριτήριο ενέργειας διάσπασης) |
-| 704 | `hvdiv` | Υψηλές τάσεις (3.12) | Μέτρηση εναλλασσόμενης υψηλής τάσης: καταμεριστές (ασκήσεις 15.1.3, 15.1.5) |
-| 721 | `schering` | Υψηλές τάσεις (3.12) | Γέφυρα Schering: χωρητικότητα και συντελεστής απωλειών (άσκηση 15.5.12) |
-| 736 | `peak_cm` | Μπλοκ σημάτων (3.0) | Peak current-mode και υποαρμονική |
-| 758 | `pcm_chaos` | Μπλοκ σημάτων (3.0) | Διακλαδώσεις και χάος στο peak current-mode (boost) |
-| 772 | `dc_drive` | Ηλεκτρική κίνηση (3.1) | Μηχανή ΣΡ: βρόχοι ρεύματος και ταχύτητας |
-| 882 | `nn_compare` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Έλεγχος με νευρωνικό δίκτυο: σύγκριση |
-| 888 | `nn_online` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Νευρωνικό που μαθαίνει αμέσως |
-| 913 | `ai_block` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Ελεγκτής AI με πρόσοψη |
-| 1001 | `ev_drive` | Ηλεκτρικό όχημα (4.8) | Ηλεκτρικό όχημα: πολυκριτηριακός έλεγχος |
-| 1008 | `nn_gui` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Σύνθεση ελέγχου από Python: κάθε μηχανή, στόχοι με βάρη |
-| 1015 | `sub_legs` | Υποκυκλώματα (3.17) | Πολυφασικός buck από ένα υποκύκλωμα σκέλους |
-| 1048 | `bus_dq` | Δίαυλοι (3.18) | Βρόχος ρεύματος dq με διαύλους: τριφασικός μετατροπέας προς δίκτυο |
-| 1087 | `net_fault` | Δίκτυο (4.1) | Βραχυκύκλωμα σε δίκτυο: IEC 60909 και συμμετρικές συνιστώσες |
-| 1107 | `gen_sc` | Συστήματα ισχύος (4.3) | Τριφασικό βραχυκύκλωμα στα άκρα σύγχρονης γεννήτριας |
-| 1123 | `fbm` | Συστήματα ισχύος (4.3) | IEEE First Benchmark Model: υποσύγχρονος συντονισμός (SSR) |
-| 1171 | `gen_ctl` | Συστήματα ισχύος (4.8.1) | Γεννήτρια με AVR, PSS και ρυθμιστή στροφών |
-| 1221 | `ieee9_emt` | Συστήματα ισχύος (4.3) | IEEE 9 ζυγών σε EMT, από τη ροή φορτίου |
-| 1252 | `big_grid` | Μεγάλα δίκτυα (4.19.3) | Πλέγμα k × k ζυγών σε EMT: ο γραμμικός λύτης σε μεγάλο δίκτυο |
-| 1267 | `pf_study` | Ροή φορτίου και OPF (4.19.1) | Ροή φορτίου και N−1 σε δίκτυα IEEE |
-| 1278 | `opf_study` | Ροή φορτίου και OPF (4.19.1) | Βέλτιστη ροή φορτίου (OPF) σε δίκτυα IEEE |
-| 1300 | `ieee9_sssc` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | IEEE 9 ζυγών σε EMT με τριφασικό m-SSSC (κεντρικός έλεγχος) |
-| 1330 | `trv_terminal` | Διακόπτες ισχύος (4.9) | TRV σε σφάλμα ακροδεκτών: IEC 62271-100 |
-| 1351 | `trv_slf` | Διακόπτες ισχύος (4.9) | Σφάλμα κοντινής γραμμής και τόξο του διακόπτη |
-| 1382 | `lightning_gis` | Κεραυνοί και συντονισμός μόνωσης (4.9) | Κεραυνός σε γραμμή 400 kV δίπλα σε υποσταθμό GIS: συντονισμός μόνωσης |
-| 1445 | `line_fd` | Γραμμές (4.4) | Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD) |
-| 1466 | `cable_fd` | Καλώδια (4.5) | Ζεύξη υποβρύχιου καλωδίου 220 kV: CP και FD |
-| 1515 | `cable_xb` | Καλώδια: wideband και cross-bonding (4.13) | Υπόγειο καλώδιο 150 kV με cross-bonding: αναλυτικό και ομογενές μοντέλο |
-| 1558 | `sssc_1ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε γραμμή (μονοφασικό) |
-| 1578 | `sssc_3ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε δίκτυο 150 kV (τριφασικό, 4 ζυγοί) |
-| 1616 | `ccsc_1ph` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | CCSC: πυκνωτής σειράς ελεγχόμενος από μετατροπέα (μονοφασικό) |
-| 1644 | `hvdc_mmc` | HVDC: MMC (4.14) | Σύνδεση HVDC με MMC σημείο προς σημείο (±320 kV, 1000 MW) |
-| 1687 | `hvdc_gfm` | Grid-forming (4.18.1) | Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα |
-| 1735 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
-| 1789 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
-| 1816 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
-| 1844 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
-| 1881 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
-| 1911 | `empty` | Νέο | Κενό κύκλωμα |
+| 302 | `current_ctl` | Αμφίδρομος · μπαταρία (PE2) | Άσκηση 3 · Έλεγχος ρεύματος από μπλοκ |
+| 352 | `blocks_loop` | Μπλοκ σημάτων (3.0) | Βρόχος ρεύματος από μπλοκ |
+| 380 | `code_loop` | Μπλοκ κώδικα (3.3) | PI σε Python και πρόσθια τροφοδότηση με έκφραση |
+| 405 | `cell_eis` | Μπαταρίες και EIS (3.3.1) | Δοκιμή κυψέλης: EIS με μετατροπέα |
+| 448 | `im_vf` | Ηλεκτρική κίνηση (3.4) | Μηχανή επαγωγής: V/f και διαμόρφωση SPWM, SVPWM, τετραγωνική |
+| 461 | `im_foc` | Ηλεκτρική κίνηση (3.4) | Μηχανή επαγωγής: διανυσματικός έλεγχος, εξασθένιση πεδίου, R̂_R |
+| 516 | `synrm` | Ηλεκτρική κίνηση (3.5) | Σύγχρονη μηχανή μαγνητικής αντίστασης (SynRM): ευθυγράμμιση, έλεγχος dq, MTPA |
+| 542 | `pmsm` | Ηλεκτρική κίνηση (3.5) | Σύγχρονη μηχανή μόνιμων μαγνητών (PMSM / IPMSM): i_d = 0 και MTPA |
+| 558 | `srm` | Ηλεκτρική κίνηση (3.6) | Μηχανή μεταβλητής μαγνητικής αντίστασης (SRM 8/6): γωνίες, υστέρηση, βρόχος ψ–i |
+| 589 | `lightning` | Κεραυνικά (3.5) | Κεραυνικό ρεύμα Heidler: 10/350, 1/200, 0,25/100 μs |
+| 601 | `twave` | Υψηλές τάσεις (3.8) | Οδεύοντα κύματα: ανάκλαση σε ανοιχτό, βραχυκυκλωμένο ή ωμικό άκρο, διάγραμμα Bewley |
+| 624 | `arrester` | Υψηλές τάσεις (3.9) | Αλεξικέραυνο: παραμένουσα τάση και απόσταση προστασίας |
+| 640 | `marx` | Υψηλές τάσεις (3.10) | Γεννήτρια Marx: πολυβάθμια κρουστική γεννήτρια με σπινθηριστές |
+| 670 | `chop` | Υψηλές τάσεις (3.10) | Αποκομμένη κρουστική τάση: σπινθηριστής αποκοπής |
+| 704 | `hv153` | Υψηλές τάσεις (3.11) | Ασκήσεις 15.3: γεννήτριες κρουστικών τάσεων (βιβλίο, ακριβής λύση, προσομοίωση) |
+| 725 | `lossline` | Υψηλές τάσεις (3.11) | Γραμμή με απώλειες: απόσβεση και παραμόρφωση οδεύοντος κύματος |
+| 742 | `voltime` | Υψηλές τάσεις (3.11) | Καμπύλη τάσης–χρόνου διακένου (κριτήριο ενέργειας διάσπασης) |
+| 758 | `hvdiv` | Υψηλές τάσεις (3.12) | Μέτρηση εναλλασσόμενης υψηλής τάσης: καταμεριστές (ασκήσεις 15.1.3, 15.1.5) |
+| 775 | `schering` | Υψηλές τάσεις (3.12) | Γέφυρα Schering: χωρητικότητα και συντελεστής απωλειών (άσκηση 15.5.12) |
+| 790 | `peak_cm` | Μπλοκ σημάτων (3.0) | Peak current-mode και υποαρμονική |
+| 812 | `pcm_chaos` | Μπλοκ σημάτων (3.0) | Διακλαδώσεις και χάος στο peak current-mode (boost) |
+| 826 | `dc_drive` | Ηλεκτρική κίνηση (3.1) | Μηχανή ΣΡ: βρόχοι ρεύματος και ταχύτητας |
+| 936 | `nn_compare` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Έλεγχος με νευρωνικό δίκτυο: σύγκριση |
+| 942 | `nn_online` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Νευρωνικό που μαθαίνει αμέσως |
+| 967 | `ai_block` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Ελεγκτής AI με πρόσοψη |
+| 1055 | `ev_drive` | Ηλεκτρικό όχημα (4.8) | Ηλεκτρικό όχημα: πολυκριτηριακός έλεγχος |
+| 1062 | `nn_gui` | Έλεγχος με νευρωνικά δίκτυα (4.7) | Σύνθεση ελέγχου από Python: κάθε μηχανή, στόχοι με βάρη |
+| 1069 | `sub_legs` | Υποκυκλώματα (3.17) | Πολυφασικός buck από ένα υποκύκλωμα σκέλους |
+| 1102 | `bus_dq` | Δίαυλοι (3.18) | Βρόχος ρεύματος dq με διαύλους: τριφασικός μετατροπέας προς δίκτυο |
+| 1141 | `net_fault` | Δίκτυο (4.1) | Βραχυκύκλωμα σε δίκτυο: IEC 60909 και συμμετρικές συνιστώσες |
+| 1161 | `gen_sc` | Συστήματα ισχύος (4.3) | Τριφασικό βραχυκύκλωμα στα άκρα σύγχρονης γεννήτριας |
+| 1177 | `fbm` | Συστήματα ισχύος (4.3) | IEEE First Benchmark Model: υποσύγχρονος συντονισμός (SSR) |
+| 1225 | `gen_ctl` | Συστήματα ισχύος (4.8.1) | Γεννήτρια με AVR, PSS και ρυθμιστή στροφών |
+| 1275 | `ieee9_emt` | Συστήματα ισχύος (4.3) | IEEE 9 ζυγών σε EMT, από τη ροή φορτίου |
+| 1306 | `big_grid` | Μεγάλα δίκτυα (4.19.3) | Πλέγμα k × k ζυγών σε EMT: ο γραμμικός λύτης σε μεγάλο δίκτυο |
+| 1321 | `pf_study` | Ροή φορτίου και OPF (4.19.1) | Ροή φορτίου και N−1 σε δίκτυα IEEE |
+| 1332 | `opf_study` | Ροή φορτίου και OPF (4.19.1) | Βέλτιστη ροή φορτίου (OPF) σε δίκτυα IEEE |
+| 1354 | `ieee9_sssc` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | IEEE 9 ζυγών σε EMT με τριφασικό m-SSSC (κεντρικός έλεγχος) |
+| 1384 | `trv_terminal` | Διακόπτες ισχύος (4.9) | TRV σε σφάλμα ακροδεκτών: IEC 62271-100 |
+| 1405 | `trv_slf` | Διακόπτες ισχύος (4.9) | Σφάλμα κοντινής γραμμής και τόξο του διακόπτη |
+| 1436 | `lightning_gis` | Κεραυνοί και συντονισμός μόνωσης (4.9) | Κεραυνός σε γραμμή 400 kV δίπλα σε υποσταθμό GIS: συντονισμός μόνωσης |
+| 1499 | `line_fd` | Γραμμές (4.4) | Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD) |
+| 1520 | `cable_fd` | Καλώδια (4.5) | Ζεύξη υποβρύχιου καλωδίου 220 kV: CP και FD |
+| 1569 | `cable_xb` | Καλώδια: wideband και cross-bonding (4.13) | Υπόγειο καλώδιο 150 kV με cross-bonding: αναλυτικό και ομογενές μοντέλο |
+| 1612 | `sssc_1ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε γραμμή (μονοφασικό) |
+| 1632 | `sssc_3ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε δίκτυο 150 kV (τριφασικό, 4 ζυγοί) |
+| 1670 | `ccsc_1ph` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | CCSC: πυκνωτής σειράς ελεγχόμενος από μετατροπέα (μονοφασικό) |
+| 1698 | `hvdc_mmc` | HVDC: MMC (4.14) | Σύνδεση HVDC με MMC σημείο προς σημείο (±320 kV, 1000 MW) |
+| 1741 | `hvdc_gfm` | Grid-forming (4.18.1) | Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα |
+| 1789 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
+| 1843 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
+| 1870 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
+| 1898 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
+| 1935 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
+| 1965 | `empty` | Νέο | Κενό κύκλωμα |
 
 ## API του server (`run.py`, `/api/<action>`)
 
@@ -768,98 +771,102 @@
 | 2016 | function | `netFaultTheory` |
 | 2029 | function | `busDqTheory` |
 | 2037 | function | `subLegsTheory` |
-| 2046 | function | `blocksTheory` |
-| 2061 | function | `pcmTheory` |
-| 2087 | function | `codeTheory` |
-| 2097 | function | `eisTheory` |
-| 2099 | const fn | `ser` |
-| 2112 | function | `imSteady` |
-| 2115 | function | `imPar` |
-| 2116 | function | `phaseRms` |
-| 2117 | function | `vfTheory` |
-| 2130 | function | `focTheory` |
-| 2147 | function | `synTheory` |
-| 2166 | const fn | `need` |
-| 2186 | function | `pmTheory` |
-| 2188 | const fn | `mtpa` |
-| 2204 | function | `srmTheory` |
-| 2219 | const fn | `curve` |
-| 2230 | function | `lgTheory` |
-| 2241 | const fn | `cr` |
-| 2248 | function | `chaosTheory` |
-| 2263 | function | `nnCycles` |
-| 2266 | function | `genCtlTheory` |
-| 2279 | function | `evTheory` |
-| 2293 | function | `nnTheory` |
-| 2310 | function | `nnGuiCode` |
-| 2316 | function | `runNNCompare` |
-| 2324 | function | `dcDriveTheory` |
-| 2325 | const fn | `per` |
-| 2326 | const fn | `cross` |
-| 2356 | function | `twModel` |
-| 2359 | const fn | `g` |
-| 2362 | function | `twLattice` |
-| 2369 | const fn | `marks` |
-| 2372 | function | `twTheory` |
-| 2380 | const fn | `at` |
-| 2397 | function | `arTheory` |
-| 2417 | function | `impulseMeasure` |
-| 2419 | const fn | `cross` |
-| 2422 | function | `marxTheory` |
-| 2440 | function | `chopModel` |
-| 2443 | const fn | `f` |
-| 2446 | function | `chopTheory` |
-| 2460 | function | `cmp3` |
-| 2464 | function | `hvExact` |
-| 2465 | function | `hv153Theory` |
-| 2491 | function | `besI1e` |
-| 2493 | function | `heaviside` |
-| 2495 | function | `lossTheory` |
-| 2514 | function | `vtBreak` |
-| 2515 | function | `vtTheory` |
-| 2535 | function | `hvdivTheory` |
-| 2537 | const fn | `r` |
-| 2549 | function | `scheringTheory` |
-| 2550 | const fn | `inv` |
-| 2559 | const fn | `sr` |
-| 2571 | const fn | `studyNet` |
-| 2572 | function | `studyQ` |
-| 2574 | const fn | `studyKey` |
-| 2575 | function | `studyOpen` |
-| 2582 | function | `studyAct` |
-| 2597 | function | `netViewOpen` |
-| 2601 | const fn | `legend` |
-| 2616 | function | `nvEdit` |
-| 2625 | function | `nvApply` |
-| 2626 | const fn | `same` |
-| 2627 | const fn | `put` |
-| 2639 | function | `studyTheory` |
-| 2663 | function | `formulaTheory` |
-| 2762 | function | `nodeAvg` |
-| 2768 | function | `circuitForMath` |
-| 2804 | function | `scheduleMath` |
-| 2805 | function | `batteryKey` |
-| 2807 | function | `mathChoices` |
-| 2808 | const fn | `prim` |
-| 2810 | function | `renderMathChoices` |
-| 2812 | function | `runTemplate` |
-| 2818 | function | `runMath` |
-| 2840 | function | `saveLocal` |
-| 2841 | function | `saveLocalSoon` |
-| 2843 | function | `download` |
-| 2844 | function | `exportCSV` |
-| 2850 | function | `syncScopeInputs` |
-| 2851 | function | `setSpeed` |
-| 2854 | function | `openSettings` |
-| 2855 | const fn | `sel` |
-| 2856 | const fn | `chk` |
-| 2882 | function | `applyLook` |
-| 2886 | function | `boot` |
-| 2957 | const fn | `mv` |
-| 2958 | const fn | `up` |
-| 2959 | const fn | `navOpen` |
-| 2975 | const fn | `probeSel` |
-| 3037 | function | `renderTheoryLive` |
+| 2049 | function | `currentCtlTheory` |
+| 2056 | const fn | `R` |
+| 2059 | const fn | `over` |
+| 2069 | const fn | `row` |
+| 2075 | function | `blocksTheory` |
+| 2090 | function | `pcmTheory` |
+| 2116 | function | `codeTheory` |
+| 2126 | function | `eisTheory` |
+| 2128 | const fn | `ser` |
+| 2141 | function | `imSteady` |
+| 2144 | function | `imPar` |
+| 2145 | function | `phaseRms` |
+| 2146 | function | `vfTheory` |
+| 2159 | function | `focTheory` |
+| 2176 | function | `synTheory` |
+| 2195 | const fn | `need` |
+| 2215 | function | `pmTheory` |
+| 2217 | const fn | `mtpa` |
+| 2233 | function | `srmTheory` |
+| 2248 | const fn | `curve` |
+| 2259 | function | `lgTheory` |
+| 2270 | const fn | `cr` |
+| 2277 | function | `chaosTheory` |
+| 2292 | function | `nnCycles` |
+| 2295 | function | `genCtlTheory` |
+| 2308 | function | `evTheory` |
+| 2322 | function | `nnTheory` |
+| 2339 | function | `nnGuiCode` |
+| 2345 | function | `runNNCompare` |
+| 2353 | function | `dcDriveTheory` |
+| 2354 | const fn | `per` |
+| 2355 | const fn | `cross` |
+| 2385 | function | `twModel` |
+| 2388 | const fn | `g` |
+| 2391 | function | `twLattice` |
+| 2398 | const fn | `marks` |
+| 2401 | function | `twTheory` |
+| 2409 | const fn | `at` |
+| 2426 | function | `arTheory` |
+| 2446 | function | `impulseMeasure` |
+| 2448 | const fn | `cross` |
+| 2451 | function | `marxTheory` |
+| 2469 | function | `chopModel` |
+| 2472 | const fn | `f` |
+| 2475 | function | `chopTheory` |
+| 2489 | function | `cmp3` |
+| 2493 | function | `hvExact` |
+| 2494 | function | `hv153Theory` |
+| 2520 | function | `besI1e` |
+| 2522 | function | `heaviside` |
+| 2524 | function | `lossTheory` |
+| 2543 | function | `vtBreak` |
+| 2544 | function | `vtTheory` |
+| 2564 | function | `hvdivTheory` |
+| 2566 | const fn | `r` |
+| 2578 | function | `scheringTheory` |
+| 2579 | const fn | `inv` |
+| 2588 | const fn | `sr` |
+| 2600 | const fn | `studyNet` |
+| 2601 | function | `studyQ` |
+| 2603 | const fn | `studyKey` |
+| 2604 | function | `studyOpen` |
+| 2611 | function | `studyAct` |
+| 2626 | function | `netViewOpen` |
+| 2630 | const fn | `legend` |
+| 2645 | function | `nvEdit` |
+| 2654 | function | `nvApply` |
+| 2655 | const fn | `same` |
+| 2656 | const fn | `put` |
+| 2668 | function | `studyTheory` |
+| 2692 | function | `formulaTheory` |
+| 2792 | function | `nodeAvg` |
+| 2798 | function | `circuitForMath` |
+| 2834 | function | `scheduleMath` |
+| 2835 | function | `batteryKey` |
+| 2837 | function | `mathChoices` |
+| 2838 | const fn | `prim` |
+| 2840 | function | `renderMathChoices` |
+| 2842 | function | `runTemplate` |
+| 2848 | function | `runMath` |
+| 2870 | function | `saveLocal` |
+| 2871 | function | `saveLocalSoon` |
+| 2873 | function | `download` |
+| 2874 | function | `exportCSV` |
+| 2880 | function | `syncScopeInputs` |
+| 2881 | function | `setSpeed` |
+| 2884 | function | `openSettings` |
+| 2885 | const fn | `sel` |
+| 2886 | const fn | `chk` |
+| 2912 | function | `applyLook` |
+| 2916 | function | `boot` |
+| 2987 | const fn | `mv` |
+| 2988 | const fn | `up` |
+| 2989 | const fn | `navOpen` |
+| 3005 | const fn | `probeSel` |
+| 3067 | function | `renderTheoryLive` |
 
 ### `web/studio/bus.js`
 
@@ -2235,104 +2242,106 @@ _(χωρίς συναρτήσεις)_
 | 261 | function | `polyDesign` |
 | 263 | function | `polyCancel` |
 | 275 | method | `build` |
-| 304 | method | `build` |
-| 331 | method | `build` |
-| 356 | method | `build` |
-| 383 | function | `invIM` |
-| 398 | method | `build` |
-| 412 | method | `build` |
-| 439 | const fn | `r4` |
-| 443 | function | `smFoc` |
-| 469 | method | `build` |
-| 493 | method | `build` |
-| 509 | method | `build` |
-| 539 | method | `build` |
-| 555 | method | `build` |
-| 576 | method | `build` |
-| 592 | method | `build` |
-| 603 | function | `marxCircuit` |
-| 622 | method | `build` |
-| 654 | method | `build` |
-| 661 | const fn | `down` |
-| 678 | method | `build` |
-| 695 | method | `build` |
+| 301 | function | `ccDesign` |
+| 309 | method | `build` |
+| 358 | method | `build` |
+| 385 | method | `build` |
+| 410 | method | `build` |
+| 437 | function | `invIM` |
+| 452 | method | `build` |
+| 466 | method | `build` |
+| 493 | const fn | `r4` |
+| 497 | function | `smFoc` |
+| 523 | method | `build` |
+| 547 | method | `build` |
+| 563 | method | `build` |
+| 593 | method | `build` |
+| 609 | method | `build` |
+| 630 | method | `build` |
+| 646 | method | `build` |
+| 657 | function | `marxCircuit` |
+| 676 | method | `build` |
 | 708 | method | `build` |
-| 725 | method | `build` |
-| 742 | method | `build` |
+| 715 | const fn | `down` |
+| 732 | method | `build` |
+| 749 | method | `build` |
 | 762 | method | `build` |
-| 777 | method | `build` |
-| 823 | function | `nnSched` |
-| 824 | function | `nnDrive` |
-| 887 | method | `build` |
-| 894 | method | `build` |
-| 900 | function | `aiBlock` |
-| 919 | method | `build` |
-| 930 | function | `evDrive` |
-| 937 | const fn | `IN` |
-| 976 | const fn | `fix` |
-| 1007 | method | `build` |
-| 1012 | method | `build` |
-| 1021 | method | `build` |
-| 1031 | const fn | `y` |
-| 1054 | method | `build` |
-| 1055 | const fn | `ws` |
-| 1094 | method | `build` |
-| 1112 | method | `build` |
-| 1120 | function | `fbmPoint` |
-| 1127 | method | `build` |
-| 1146 | function | `smibPoint` |
-| 1147 | function | `genCtl` |
-| 1149 | const fn | `L` |
-| 1177 | method | `build` |
-| 1187 | function | `ieee9Build` |
-| 1189 | const fn | `GD` |
-| 1190 | const fn | `L` |
-| 1192 | const fn | `G` |
-| 1193 | const fn | `Ld` |
-| 1226 | method | `build` |
-| 1234 | function | `bigGrid` |
-| 1235 | const fn | `B` |
-| 1237 | const fn | `w` |
-| 1257 | method | `build` |
-| 1277 | method | `build` |
-| 1288 | method | `build` |
-| 1305 | method | `build` |
-| 1321 | const fn | `LM` |
-| 1324 | function | `tlmPart` |
-| 1338 | method | `build` |
-| 1357 | method | `build` |
-| 1377 | function | `tlmGW` |
-| 1381 | const fn | `note` |
-| 1393 | method | `build` |
-| 1411 | const fn | `tl` |
-| 1439 | const fn | `PANE` |
-| 1450 | method | `build` |
-| 1452 | const fn | `rig` |
-| 1471 | method | `build` |
-| 1473 | const fn | `rig` |
-| 1493 | function | `xbRig` |
-| 1495 | const fn | `bond` |
-| 1522 | method | `build` |
-| 1557 | function | `ssscChannels` |
-| 1566 | method | `build` |
-| 1586 | method | `build` |
-| 1588 | const fn | `ln` |
-| 1622 | method | `build` |
-| 1624 | const fn | `sw` |
-| 1651 | method | `build` |
-| 1655 | const fn | `station` |
-| 1691 | method | `build` |
-| 1695 | const fn | `station` |
-| 1742 | method | `build` |
-| 1779 | const fn | `gfmWire` |
-| 1783 | const fn | `busMeter` |
+| 779 | method | `build` |
+| 796 | method | `build` |
+| 816 | method | `build` |
+| 831 | method | `build` |
+| 877 | function | `nnSched` |
+| 878 | function | `nnDrive` |
+| 941 | method | `build` |
+| 948 | method | `build` |
+| 954 | function | `aiBlock` |
+| 973 | method | `build` |
+| 984 | function | `evDrive` |
+| 991 | const fn | `IN` |
+| 1030 | const fn | `fix` |
+| 1061 | method | `build` |
+| 1066 | method | `build` |
+| 1075 | method | `build` |
+| 1085 | const fn | `y` |
+| 1108 | method | `build` |
+| 1109 | const fn | `ws` |
+| 1148 | method | `build` |
+| 1166 | method | `build` |
+| 1174 | function | `fbmPoint` |
+| 1181 | method | `build` |
+| 1200 | function | `smibPoint` |
+| 1201 | function | `genCtl` |
+| 1203 | const fn | `L` |
+| 1231 | method | `build` |
+| 1241 | function | `ieee9Build` |
+| 1243 | const fn | `GD` |
+| 1244 | const fn | `L` |
+| 1246 | const fn | `G` |
+| 1247 | const fn | `Ld` |
+| 1280 | method | `build` |
+| 1288 | function | `bigGrid` |
+| 1289 | const fn | `B` |
+| 1291 | const fn | `w` |
+| 1311 | method | `build` |
+| 1331 | method | `build` |
+| 1342 | method | `build` |
+| 1359 | method | `build` |
+| 1375 | const fn | `LM` |
+| 1378 | function | `tlmPart` |
+| 1392 | method | `build` |
+| 1411 | method | `build` |
+| 1431 | function | `tlmGW` |
+| 1435 | const fn | `note` |
+| 1447 | method | `build` |
+| 1465 | const fn | `tl` |
+| 1493 | const fn | `PANE` |
+| 1504 | method | `build` |
+| 1506 | const fn | `rig` |
+| 1525 | method | `build` |
+| 1527 | const fn | `rig` |
+| 1547 | function | `xbRig` |
+| 1549 | const fn | `bond` |
+| 1576 | method | `build` |
+| 1611 | function | `ssscChannels` |
+| 1620 | method | `build` |
+| 1640 | method | `build` |
+| 1642 | const fn | `ln` |
+| 1676 | method | `build` |
+| 1678 | const fn | `sw` |
+| 1705 | method | `build` |
+| 1709 | const fn | `station` |
+| 1745 | method | `build` |
+| 1749 | const fn | `station` |
 | 1796 | method | `build` |
-| 1798 | const fn | `unit` |
-| 1821 | method | `build` |
-| 1852 | method | `build` |
-| 1885 | method | `build` |
-| 1912 | method | `build` |
-| 1917 | function | `dcdcInputs` |
+| 1833 | const fn | `gfmWire` |
+| 1837 | const fn | `busMeter` |
+| 1850 | method | `build` |
+| 1852 | const fn | `unit` |
+| 1875 | method | `build` |
+| 1906 | method | `build` |
+| 1939 | method | `build` |
+| 1966 | method | `build` |
+| 1971 | function | `dcdcInputs` |
 
 ### `web/studio/units.js`
 
@@ -3015,6 +3024,22 @@ _(χωρίς συναρτήσεις)_
 | 1332 | function | `_mat_value` |
 | 1345 | function | `_savemat` |
 
+### `pcl/cpf.py`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 33 | class | `CpfError` |
+| 37 | class | `_Sys` |
+| 40 | method | `_Sys.__init__` |
+| 45 | method | `_Sys.load` |
+| 48 | method | `_Sys.F` |
+| 56 | method | `_Sys.Fl` |
+| 62 | method | `_Sys.aug` |
+| 69 | method | `_Sys.x` |
+| 72 | method | `_Sys.put` |
+| 79 | function | `_correct` |
+| 101 | function | `run` |
+
 ### `pcl/designer.py`
 
 | Γραμμή | Είδος | Όνομα |
@@ -3666,6 +3691,15 @@ _(χωρίς συναρτήσεις)_
 | 311 | method | `Report._chart` |
 | 429 | function | `network_report` |
 | 565 | function | `_branches` |
+
+### `pcl/scopf.py`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 41 | class | `ScopfError` |
+| 45 | function | `screen` |
+| 55 | function | `solve` |
+| 188 | function | `_ac` |
 
 ### `pcl/study.py`
 

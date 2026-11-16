@@ -2043,6 +2043,35 @@ function subLegsTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.N)return '';con
   <li>Μέσο ρεύμα ανά σκέλος (προσομοίωση): ${legs.map((x,j)=>`σκέλος ${j+1} ${eng(x,'A')}`).join(' · ')}</li></ul>`+
   cmpRows([['V_o (μέση)',Vo,vo?.avg,'V'],['Δi σκέλους 1 p-p',dI,lastPP('I:X1/L1'),'A'],['Δi_Σ p-p (A_o)',dS,lastPP('Y:AM1'),'A'],['⟨i_o⟩',Vo/R,io?.avg,'A']])+
   `<p class="muted small">Κάθε σκέλος είναι instance του ίδιου ορισμού «${esc(defsOf().leg?.title||'leg')}»: ίδια στοιχεία, δική του φάση και αρχική τιμή (δημόσιες παράμετροι), δική του κατάσταση.</p>`;}
+// 4.19.4: the current loop of the third exercise, made of plain blocks. Theory from the values of the parts as they stand,
+// the response measured on the mean of every carrier period (on the held sample with the sawtooth, where the loop holds the peak).
+// The settling band is ±2 % of I_n around the final value, whatever the size of the step.
+function currentCtlTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('PI1')||!paramsOf('L1'))return '';
+ const L=+paramsOf('L1').L,Kp=+paramsOf('PI1').Kp,Ki=+paramsOf('PI1').Ki,fs=m.fs,T=1/fs,Vdc=+paramsOf('VB').V,Vst=+paramsOf('VS').V;
+ const sum=Kp/L,prod=Ki/L,disc=sum*sum-4*prod,a=disc>=0?(sum+Math.sqrt(disc))/2:NaN,b=disc>=0?(sum-Math.sqrt(disc))/2:NaN;
+ const R2=+paramsOf('R2').R,esr=+paramsOf('C1').esr||0,D0=Vst/Vdc,dI=Vst*(1-D0)/(L*fs),Rpar=R2+esr>0?R2*esr/(R2+esr):0;
+ // the step response of ((a+b)s + ab)/((s+a)(s+b)): y = 1 − (a·e^(−at) − b·e^(−bt))/(a − b); its largest value at t* = 2·ln(a/b)/(a − b)
+ const tp=2*Math.log(a/b)/(a-b),mp=100*(b*Math.exp(-b*tp)-a*Math.exp(-a*tp))/(a-b);
+ const key=m.saw?'H:SHi':'I:L1',rows=lastPeriods(key,100000),t=rows.map(q=>q.t),y=rows.map(q=>q.avg),ref=x=>x<m.t1?m.lev[0]:x<=m.t2?m.lev[1]:m.lev[2];
+ const R=(t0,t1)=>t.length&&t[t.length-1]>=t1-T?Metrics.responseMetrics({t,y,tStep:t0,tEnd:t1,ref,band:.02*m.In/Math.max(Math.abs(ref(t1)),1e-9)}):null;
+ const up=m.test!=='C'?R(m.t1,m.t2):null,dn=m.test!=='C'?R(m.t2,m.stopT):null;
+ // the overshoot against the reference (the metrics measure it against the end of the window, where the slow pole still lives)
+ const over=(t0,t1)=>{const r0=ref(t0-1e-12),r1=ref(t1),d=Math.sign(r1-r0);let pk=0;for(let i=0;i<t.length;i++)if(t[i]>t0&&t[i]<=t1+1e-12)pk=Math.max(pk,d*(y[i]-r1));return 100*pk/Math.abs(r1-r0);};
+ const ia=avgOver('I:L1',5),hs=s.now('H:SHi'),ir=s.now('Y:KREF'),dm=avgOver('Y:SAT1',5),vb=avgOver('Y:VM2',5);
+ let h=`<div class="tm"><span class="badge">δοκιμή ${({A:'Α',B:'Β',C:'Γ'})[m.test]||''}</span>${m.saw?'πριονωτό φέρον · δείγμα στην αρχή της περιόδου':'τριγωνικό φέρον · δείγμα στο μέγιστο'}${m.raw?' · V_dc χωρίς S&H':''}</div>`;
+ h+=`<ul class="eqs"><li>L·di/dt = V_st − D·V_dc. Με D = (V_st − u)/V_dc το πηνίο βλέπει u (έξοδος του PI σε V) και ο βρόχος τον ολοκληρωτή 1/(sL)</li>
+  <li>Κλειστός βρόχος (s + a)(s + b): K_p = L(a + b) = <b>${eng(Kp,'V/A')}</b>, K_i = L·a·b = <b>${eng(Ki,'V/(A·s)')}</b>${Number.isFinite(a)?`, άρα a = <b>${fmt(a,4)}</b> s⁻¹ και b = <b>${fmt(b,3)}</b> s⁻¹`:': μιγαδικοί πόλοι'}</li>
+  ${Number.isFinite(a)?`<li>Άνοδος 10–90 % ≈ ln 9/a = <b>${eng(Math.log(9)/a,'s')}</b>. Το μηδενικό K_i/K_p = ${fmt(Ki/Kp,3)} s⁻¹ σχεδόν απλοποιεί τον αργό πόλο· η υπερύψωση της θεωρίας είναι <b>${fmt(mp,3)} %</b> και σβήνει με 1/b = ${eng(1/b,'s')}</li>`:''}
+  <li>D₀ = V_st/V_dc = <b>${fmt(D0,4)}</b>, Δi = V_st·(1 − D₀)/(L·f_s) = <b>${eng(dI,'A')}</b></li>
+  <li>${m.saw?'Το δείγμα στην αρχή της περιόδου είναι η <b>κορυφή</b> του i_L: ο βρόχος κρατά εκεί την αναφορά και η μέση τιμή μένει Δi/2 πιο κάτω':'Το δείγμα στο μέγιστο του τριγώνου πέφτει στο μέσο της κυμάτωσης: δείγμα = <b>μέση τιμή</b> του i_L'}</li>
+  <li>Η V_dc πηδά κατά i_L·(R₂∥ESR) = <b>${eng(Math.abs(Number.isFinite(ir)?ir:m.In)*Rpar,'V')}</b> όταν αλλάζει ο S1. ${m.raw?'Χωρίς S&H το D την ακολουθεί μέσα στην περίοδο και γυρίζει στον συγκριτή χωρίς καμία κατάσταση στον δρόμο: εδώ το σταθερό βήμα το περνά, λύτης μεταβλητού βήματος μπορεί να κολλήσει σε συνεχόμενες διελεύσεις.':'Με S&H το D αλλάζει μία φορά ανά περίοδο, μακριά από τις τομές με το φέρον.'}</li></ul>`;
+ h+=cmpRows([[m.saw?'δείγμα i_L (κορυφή)':'δείγμα i_L',ir,hs,'A'],['⟨i_L⟩ (τελευταίες 5 T)',m.saw?ir-dI/2:ir,ia?.avg,'A'],['D',D0,dm?.avg,''],['Δi',dI,ia?.pp,'A']]);
+ const row=(n,r,os)=>r&&r.ok?`<tr><td>${n}</td><td>${Number.isFinite(r.rise)?eng(r.rise,'s'):'–'}</td><td>${fmt(os,3)} %</td><td>${Number.isFinite(r.ts)?eng(r.ts,'s'):'δεν έκλεισε'}</td><td>${fmt(100*Math.abs(r.ess)/m.In,3)} %</td></tr>`:'';
+ if(up||dn)h+=`<table class="cmp"><thead><tr><th>Βήμα</th><th>Άνοδος 10–90 %</th><th>Υπερύψωση (% του βήματος)</th><th>Αποκατάσταση (±2 % του I_n)</th><th>Σφάλμα στο τέλος (% I_n)</th></tr></thead><tbody>${row(`${eng(m.lev[0],'A')} → ${eng(m.lev[1],'A')}`,up,over(m.t1,m.t2))}${row(`${eng(m.lev[1],'A')} → ${eng(m.lev[2],'A')}`,dn,over(m.t2,m.stopT))}</tbody></table><p class="small muted">Μετρημένα στη ${m.saw?'δειγματισμένη τιμή':'μέση τιμή κάθε περιόδου'}. Στόχοι της άσκησης: άνοδος περίπου 1 ms, υπερύψωση έως 10 %, αποκατάσταση έως 2 ms, μόνιμο σφάλμα έως 1 %.</p>`;
+ if(m.test==='C'){const seg=rows.filter(q=>q.t>m.t1),dev=seg.length?Math.max(...seg.map(q=>Math.abs(q.avg-m.lev[0]))):NaN;
+  h+=`<p class="small">Βήμα V_st +${eng(m.dV,'V')} στα ${eng(m.t1,'s')} και πίσω στα ${eng(m.t2,'s')}: μέγιστη απόκλιση ${m.saw?'του δείγματος':'της μέσης τιμής'} από την αναφορά <b>${Number.isFinite(dev)?eng(dev,'A'):'–'}</b>${Number.isFinite(dev)?` (${fmt(100*dev/m.lev[0],3)} %)`:''}.</p>`;}
+ h+=evalOrderHTML();
+ return h+`<p class="small muted">Τάση ζυγού ⟨V_dc⟩ = ${vb?eng(vb.avg,'V'):'–'}. Οι τιμές είναι παράδειγμα: με δικά σου L, f_s, I_n και παράθυρο τάσης άλλαξε τα στοιχεία και τα κέρδη, η κάρτα ξαναϋπολογίζει από ό,τι έχει το σχέδιο.</p>`;}
 function blocksTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('AM1')||!paramsOf('VO'))return '';const T=1/m.fs,key=m.blk?'Y:AM1':'I:L1';
  const iref=m.blk?s.now('Y:K1'):s.now('REF:PWM1'),i=Number.isFinite(iref)?iref:m.i1,Vin=+paramsOf('V1').V,Vo=+paramsOf('VO').V,D=Vo/Vin,dI=(Vin-Vo)*D*T/+paramsOf('L1').L;
  const ia=avgOver(key,5),dsim=m.cmp?avgOver('GS:S1',5)?.avg:avgOver('D:PWM1',5)?.avg;
@@ -2666,6 +2695,7 @@ function formulaTheory(t){
  if(t.topology==='ev_drive')return evTheory();
  if(t.topology==='gen_ctl')return genCtlTheory();
  if(t.topology==='nn_compare'||t.topology==='nn_online'||t.topology==='nn_gui')return nnTheory(t)+(t.topology==='nn_gui'?nnGuiCode():'');
+ if(t.topology==='current_ctl')return currentCtlTheory();
  if(t.topology==='blocks_loop')return blocksTheory();
  if(t.topology==='peak_cm')return pcmTheory();
  if(t.topology==='pcm_chaos')return chaosTheory();

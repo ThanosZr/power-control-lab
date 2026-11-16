@@ -293,6 +293,60 @@
    const slow=mis!=='none'||pi;
    return project(comps,wires,{sim:{hDiv:slow?200:400,speed:slow?400:20,stopT:slow?.02:0},scope:{panes,window:slow?{unit:'T',n:400}:{unit:'T',n:3}},
     meta:{N,vbus,vst,P,fs,T:Tsw,L,D,Ik,dI,shift,phases,canc,vmin:60,vmax:100,Lmin:dd.L,L20:d20.L,Ipk:dd.Ipk,k:.3,pi,mis,Rs,R2:Rk(1),L2:Lk(1)}});}});
+ // ------------------------------------------------------------------ 4.19.4: current control from plain blocks (PE2, exercise 3)
+ // One branch: storage source, inductor, half bridge on the DC bus (a source behind 1 mΩ beside 100 mF with 0,2 mΩ in series).
+ // The duty of the upper switch is D = (V_st − u)/V_dc with u the output of the PI in volts: the inductor then sees u, and the
+ // loop sees 1/(sL). Closed loop (s + a)(s + b): K_p = L(a + b), K_i = L·a·b; a = ln 9/t_r for a rise of t_r, and b so small
+ // that the overshoot, about b/(a − b), is 1 % of the step: a reversal of 2·I_n then stays inside ±2 % of I_n. Example values.
+ function ccDesign(L,tr=1e-3,b=25){const a=Math.round(Math.log(9)/tr/100)*100;return {a,b,kp:+(L*(a+b)).toPrecision(4),ki:+(L*a*b).toPrecision(4)};}
+ T.push({id:'current_ctl',group:'Αμφίδρομος · μπαταρία (PE2)',title:'Άσκηση 3 · Έλεγχος ρεύματος από μπλοκ',theory:'formula',topology:'current_ctl',
+  options:[{k:'test',label:'Δοκιμή',options:[['A','Α · 0,25 I_n → I_n → 0,25 I_n'],['B','Β · +I_n → −I_n → +I_n'],['C','Γ · 0,5 I_n και βήμα V_st ±0,1·(V_max − V_min)']],def:'A'},
+   {k:'vst',label:'V_st',options:[['min','24 V'],['mid','30 V'],['max','36 V']],def:'mid'},
+   {k:'carrier',label:'Φέρον και δείγμα',options:[['tri','Συμμετρικό τρίγωνο · δείγμα στο μέγιστο'],['saw','Πριονωτό, trailing-edge · δείγμα στην αρχή της περιόδου']],def:'tri'},
+   {k:'vdc',label:'V_dc στη διαίρεση',options:[['sh','Με S&H, μαζί με το ρεύμα'],['raw','Κατευθείαν από το βολτόμετρο']],def:'sh'}],
+  desc:'Ένας κλάδος αμφίδρομου μετατροπέα: αποθήκευση 24–36 V, πηνίο 20 μH, ημιγέφυρα στον ζυγό των 50 V, 20 kHz, I_n = 100 A. Ο ζυγός είναι πηγή 50 V πίσω από 1 mΩ, παράλληλα με πυκνωτή 100 mF με ESR 0,2 mΩ. Ο ελεγκτής είναι μόνο απλά μπλοκ ενωμένα με σύρματα σημάτων: ρολόι, S&H στο i_L, στο V_st και στο V_dc, αναφορά, άθροισμα, PI με όρια, δεύτερο άθροισμα, διαίρεση, κορεσμός, φέρον, συγκριτής και NOT. Ο PI βγάζει τάση u και ο λόγος κατάτμησης του πάνω διακόπτη είναι D = (V_st − u)/V_dc: το πηνίο βλέπει τότε u και ο βρόχος μόνο τον ολοκληρωτή 1/(sL). Οι τιμές είναι παράδειγμα· βάλε τις δικές σου από τις Ασκήσεις 1 και 2. Πρόταση σχεδιασμού, όχι λύση.',
+  tasks:['Δοκιμή Α με τρίγωνο: τρέξε έως το τέλος (⏩). Το δείγμα στο μέγιστο του φέροντος πέφτει στο μέσο της κυμάτωσης, άρα ισούται με τη μέση τιμή του i_L. Άνοδος, υπερύψωση και αποκατάσταση μετριούνται στην κάρτα θεωρίας.','Πριονωτό: το δείγμα στην αρχή της περιόδου είναι η κορυφή του ρεύματος. Ο βρόχος κρατά το δείγμα στην αναφορά και η μέση τιμή μένει Δi/2 πιο κάτω.','Δοκιμή Β: αναστροφή του ρεύματος. Στο βήμα το u πηδά κατά K_p·2·I_n = 8,9 V, το D φεύγει από το V_st/V_dc και γυρίζει πίσω. Μετά το βήμα μένει μια μικρή ουρά που σβήνει με 1/b = 40 ms: γι\' αυτό το b είναι μικρό.','Δοκιμή Γ: βήμα στο V_st. Η πρόσθια τροφοδότηση το βλέπει στο επόμενο δείγμα, άρα η απόκλιση κρατά λίγες περιόδους.','«Κατευθείαν από το βολτόμετρο»: η V_dc πηδά κάθε φορά που αλλάζει ο S1 και το D την ακολουθεί μέσα στην περίοδο. Ο βρόχος V_dc → D → συγκριτής → διακόπτης → V_dc δεν έχει τότε καμία κατάσταση. Εδώ ο λύτης έχει σταθερό βήμα και τον περνά· λύτης μεταβλητού βήματος με ανίχνευση διελεύσεων μπορεί να κολλήσει εκεί. Γι\' αυτό το S&H.','Άλλαξε K_p, K_i ή τα όρια του PI από τις ζωντανές παραμέτρους και ξανατρέξε.'],
+  build(o){
+   const Vdc=50,Rs=1e-3,Cb=0.1,esr=0.2e-3,fs=20e3,L=20e-6,In=100,Vmin=24,Vmax=36,Vst=({min:Vmin,mid:30,max:Vmax})[o.vst]||30;
+   const test=['A','B','C'].includes(o.test)?o.test:'A',saw=o.carrier==='saw',raw=o.vdc==='raw',g=ccDesign(L),t1=4e-3,t2=10e-3,stopT=16e-3,dV=+(0.1*(Vmax-Vmin)).toFixed(3);
+   const lev=test==='B'?[In,-In,In]:test==='C'?[.5*In,.5*In,.5*In]:[.25*In,In,.25*In],i0=lev[0];
+   const ref=test==='C'?`0:${i0}`:`0:${lev[0]}, ${t1}:${lev[1]}, ${t2}:${lev[2]}`,vs=test==='C'?[Vst,Vst+dV,Vst]:[Vst,Vst,Vst];
+   const sw={gate:'sig',model:'mos',Ron:1e-6,body:true};
+   const comps=[
+    // power stage
+    C('VS','VDC',100,330,{V:Vst,sched:test==='C'?`0:${vs[0]}, ${t1}:${vs[1]}, ${t2}:${vs[2]}`:''},{label:'V_st'}),C('VM1','VM',30,330,{},{label:'V_st μέτρηση'}),gnd(100,420),
+    C('AM1','AM',200,250,{},{label:'A (i_L)'}),C('L1','L',290,250,{L,i0}),J('JM',370,250),
+    C('S1','SW',370,180,{...sw},{label:'S1 (πάνω)'}),C('S2','SW',370,330,{...sw},{label:'S2 (κάτω)'}),
+    J('JT1',370,110),J('JT2',480,110),J('JT3',590,110),J('JT4',680,110),J('JB0',100,410),J('JB1',370,410),J('JB2',480,410),J('JB3',590,410),J('JB4',680,410),J('JS',100,250),J('JS2',30,250),J('JS3',30,410),
+    C('C1','C',480,260,{C:Cb,v0:Vdc,esr},{label:'C1'}),C('R2','R',590,180,{R:Rs},{rot:1,label:'R2'}),C('VB','VDC',590,330,{V:Vdc},{label:'V_dc'}),
+    C('VM2','VM',680,260,{},{label:'V_dc μέτρηση'}),
+    // control from plain blocks
+    C('CLK1','CLK',-140,-250,{f:fs,duty:.5,phase:0},{label:'ρολόι δειγμάτων'}),
+    C('TFi','TAGI',-140,-60,{name:'i_L'}),C('SHi','SH',-40,-60,{in:'sig',clock:'CLK1',trig:'start',init:'value',h0:i0},{label:'S&H i_L'}),
+    C('KREF','CONST',-140,-130,{v:ref,unit:'A'},{label:'I_ref'}),C('SUM1','SUM',70,-120,{signs:'+-'},{label:'e'}),
+    C('PI1','PIB',170,-120,{Kp:g.kp,Ki:g.ki,clock:'CLK1',trig:'start',y0:0,aw:'clamp',ymin:-Vdc,ymax:Vdc},{label:'PI (u σε V)'}),
+    C('TFvs','TAGI',170,-200,{name:'V_st'}),C('SHvs','SH',270,-200,{in:'sig',clock:'CLK1',trig:'start',init:'value',h0:Vst},{label:'S&H V_st'}),
+    C('SUM2','SUM',370,-130,{signs:'+-'},{label:'V_st − u'}),
+    C('TFvd','TAGI',370,-40,{name:'V_dc'}),...(raw?[]:[C('SHvd','SH',470,-40,{in:'sig',clock:'CLK1',trig:'start',init:'value',h0:Vdc},{label:'S&H V_dc'})]),
+    C('DIV1','DIV',580,-120,{},{label:'÷ V_dc'}),C('SAT1','SAT',680,-120,{lo:.02,hi:.98},{label:'όρια D'}),C('TGd','TAGO',770,-120,{name:'D'}),
+    C('TFd','TAGI',370,-250,{name:'D'}),C('RMP1','RAMP',370,-320,{f:fs,shape:saw?'saw':'tri',lo:0,hi:1,phase:0},{label:saw?'πριονωτό φέρον':'τριγωνικό φέρον'}),
+    C('CMP1','CMP',480,-260,{},{label:'D > φέρον'}),C('TGg1','TAGO',570,-260,{name:'g_S1'}),C('NOT1','LOGIC',570,-330,{op:'not'},{label:'NOT'}),C('TGg2','TAGO',660,-330,{name:'g_S2'}),
+    C('TFg1','TAGI',270,180,{name:'g_S1'}),C('TFg2','TAGI',270,330,{name:'g_S2'}),
+    C('TGi','TAGO',200,170,{name:'i_L'}),C('TGvs','TAGO',-50,330,{name:'V_st'},{flip:true}),C('TGvd','TAGO',770,260,{name:'V_dc'})];
+   const wires=[['VS:p','JS',[[100,250]]],['JS','AM1:a'],['AM1:b','L1:a'],['L1:b','JM'],['S1:s','JM'],['JM','S2:d'],['S1:d','JT1'],['JT1','JT2'],['JT2','JT3'],['JT3','JT4'],
+    ['VS:n','JB0'],['JB0','G1:g'],['JB0','JB1'],['S2:s','JB1'],['JB1','JB2'],['JB2','JB3'],['JB3','JB4'],
+    ['JT2','C1:p'],['C1:n','JB2'],['JT3','R2:a'],['R2:b','VB:p'],['VB:n','JB3'],['JT4','VM2:p'],['VM2:n','JB4'],
+    ['JS','JS2'],['JS2','VM1:p'],['VM1:n','JS3'],['JS3','JB0'],
+    ['AM1:y','TGi:u'],['VM1:y','TGvs:u'],['VM2:y','TGvd:u'],
+    ['TFi:y','SHi:u'],['KREF:y','SUM1:a'],['SHi:y','SUM1:b'],['SUM1:y','PI1:u'],
+    ['TFvs:y','SHvs:u'],['SHvs:y','SUM2:a'],['PI1:y','SUM2:b'],['SUM2:y','DIV1:a'],
+    ...(raw?[['TFvd:y','DIV1:b']]:[['TFvd:y','SHvd:u'],['SHvd:y','DIV1:b']]),
+    ['DIV1:y','SAT1:u'],['SAT1:y','TGd:u'],
+    ['TFd:y','CMP1:p'],['RMP1:y','CMP1:n'],['CMP1:y','TGg1:u'],['CMP1:y','NOT1:a'],['NOT1:y','TGg2:u'],
+    ['TFg1:y','S1:g'],['TFg2:y','S2:g']];
+   const panes=[[['I:L1','i_L'],['H:SHi','i_L δείγμα'],['Y:KREF','I_ref']],[['Y:SAT1','D'],['Y:PI1','u (V)']],[['Y:VM2','V_dc'],['Y:VM1','V_st']]];
+   return project(comps,wires,{sim:{hDiv:saw?1000:200,speed:200,stopT},scope:{panes,window:{unit:'T',n:Math.round(stopT*fs)}},
+    meta:{Vdc,Vst,Vmin,Vmax,dV,In,L,fs,a:g.a,b:g.b,kp:g.kp,ki:g.ki,D0:Vst/Vdc,dI:Vst*(1-Vst/Vdc)/(L*fs),Rpar:Rs*esr/(Rs+esr),saw:saw?1:0,raw:raw?1:0,test,t1,t2,stopT,lev,vs}});}});
  // ------------------------------------------------------------------ empty
  // ------------------------------------------------------------------ 3.0: current loop from signal blocks
  T.push({id:'blocks_loop',group:'Μπλοκ σημάτων (3.0)',title:'Βρόχος ρεύματος από μπλοκ',theory:'formula',topology:'blocks_loop',
