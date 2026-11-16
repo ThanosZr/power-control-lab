@@ -9,7 +9,8 @@ The batches of pcl.powerflow (batch, contingency_ac) are written with matrix ope
     by `python -m pcl accel` on a machine that has a card (the script compares every solution with that of the CPU).
     A missing or failing GPU never stops a study: the choice falls back to the CPU and says why (Backend.why).
 
-CuPy is optional (it is not in requirements.txt):  pip install cupy-cuda12x   (Windows and Linux).
+CuPy is optional (it is not in requirements.txt):  pip install "cupy-cuda12x[ctk]"   (Windows and Linux; [ctk] brings the
+CUDA libraries and headers with it: without them a machine with no CUDA Toolkit answers «Failed to find CUDA headers»).
 
 The solve of many right-hand sides with the factors of one Jacobian, in three ways (`how`):
 
@@ -179,7 +180,7 @@ def probe(fresh=False):
         import cupy
         out['cupy'] = getattr(cupy, '__version__', '?')
     except Exception as e:
-        out['reason'] = f'το CuPy δεν είναι εγκατεστημένο (pip install cupy-cuda12x): {type(e).__name__}'
+        out['reason'] = f'το CuPy δεν είναι εγκατεστημένο (pip install "cupy-cuda12x[ctk]"): {type(e).__name__}'
         _GPU['info'] = out
         return out
     try:

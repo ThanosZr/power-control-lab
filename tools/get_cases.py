@@ -4,8 +4,8 @@
 
 Without a folder the files are downloaded from the public MATPOWER repository. The case files are data converted from
 public sources (the IEEE Common Data Format archive of the University of Washington; Baran & Wu for the radial feeders;
-Alsac & Stott for the 30-bus case with line ratings); the licence of MATPOWER says that they are not covered by its
-BSD licence. Only the numbers go into pcl/data, with their source in each file; the .m files do not enter the repo.
+Alsac & Stott for the 30-bus case with line ratings; the PEGASE project for the 1354-bus case, whose file is licensed
+CC BY 4.0); the licence of MATPOWER says that they are not covered by its BSD licence. Only the numbers go into pcl/data, with their source in each file; the .m files do not enter the repo.
 
 What is written per case: buses (U_n = base kV, type, the voltages of the file = the published load-flow solution),
 loads, shunts, generators (P, V, reactive limits, P limits and the polynomial cost for the optimal power flow) and
@@ -43,6 +43,18 @@ CASES = {
     'case69': ('case69', 50.0, '69-bus radial distribution feeder (Baran & Wu)',
                'Data of M. E. Baran, F. F. Wu, «Optimal capacitor placement on radial distribution systems», IEEE Trans. Power '
                'Delivery 4(1), 1989, as distributed with MATPOWER ({m}.m). ' + GEN),
+    # 4.19.3 (decision 264): a large network with an open licence (the case file states it: CC BY 4.0)
+    'pegase1354': ('case1354pegase', 50.0, 'PEGASE 1354-bus case (part of the European high-voltage network, fictitious data)',
+                   'Data of the PEGASE project (Pan European Grid Advanced Simulation and State Estimation, 7th Framework '
+                   'Programme of the European Union): C. Josz, S. Fliscounakis, J. Maeght, P. Panciatici, «AC power flow data in '
+                   'MATPOWER and QCQP format: iTesla, RTE snapshots, and PEGASE», arXiv:1603.01533, 2016; S. Fliscounakis, '
+                   'P. Panciatici, F. Capitanescu, L. Wehenkel, «Contingency ranking with respect to overloads in very large power '
+                   'systems taking into account uncertainty, preventive and corrective actions», IEEE Trans. Power Systems 28(4), '
+                   '2013. As distributed with MATPOWER ({m}.m), © 2015, 2016 by the authors of the first reference, licensed under '
+                   'the Creative Commons Attribution 4.0 International licence (https://creativecommons.org/licenses/by/4.0/). '
+                   'Changes here: converted to the format of this project (elements in per unit); no value was changed. The data '
+                   'are fictitious: they have the size and the complexity of a part of the European 380 and 220 kV network and do '
+                   'not describe the real one. ' + GEN),
 }
 
 
@@ -85,7 +97,9 @@ def main(folder=None):
         d.pop('solution', None)
         if solved:
             d['solution'] = sol
-        path.write_text(json.dumps(d, indent=1, ensure_ascii=False) + '\n', encoding='utf-8')
+        # (4.19.3: a network of over a thousand buses in one line per file, a third smaller)
+        big = len(d['buses']) > 1000
+        path.write_text(json.dumps(d, ensure_ascii=False, **({'separators': (',', ':')} if big else {'indent': 1})) + '\n', encoding='utf-8')
         print(f'{name}: {len(d["buses"])} ζυγοί, {sum(e["kind"] == "branch" for e in d["elements"])} κλάδοι, '
               f'{sum(e["kind"] == "generator" for e in d["elements"])} γεννήτριες → {path.relative_to(ROOT)}')
     return 0

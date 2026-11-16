@@ -1,6 +1,8 @@
 """Load flow on sparse matrices (4.19.1, ROADMAP §68 point 3, pcl/powerflow.py): every method ends on the same solution,
 the fast paths give the numbers of the reference path, the choice of the engine follows the network, and the test
 networks reproduce the published voltages of their files."""
+import json
+import math
 import time
 import unittest
 
@@ -51,7 +53,8 @@ class Model(unittest.TestCase):
             self.assertEqual(case.nl, sum(e['kind'] == 'branch' for e in net.elements))
 
     def test_test_networks(self):
-        sizes = {'ieee9': 9, 'ieee14': 14, 'ieee30': 30, 'ieee57': 57, 'ieee118': 118, 'ieee300': 300, 'case30': 30, 'case33bw': 33, 'case69': 69}
+        sizes = {'ieee9': 9, 'ieee14': 14, 'ieee30': 30, 'ieee57': 57, 'ieee118': 118, 'ieee300': 300, 'case30': 30, 'case33bw': 33, 'case69': 69,
+                 'pegase1354': 1354}
         self.assertEqual(set(N.CASES), set(sizes))
         for c, n in sizes.items():
             self.assertEqual(len(N.case_data(c).buses), n)
@@ -140,6 +143,29 @@ class Methods(unittest.TestCase):
             self.assertLess(np.median(dv), 3e-4, c)
             self.assertGreater(np.mean(dv < 2e-3), 0.95, c)
             self.assertLess(np.median(da), 0.3, c)
+        # 4.19.3: the 1354-bus case of PEGASE. Its file follows the MATPOWER format (phase shifts in degrees) and so do we; the
+        # bus voltages of the file agree with that almost everywhere (median 3·10⁻⁶ pu, 0,04°), but near its three phase
+        # shifters they differ by up to 5,5°: they fit the six shifts read as radians with the opposite sign (then 0,44°)
+        net = N.case_data('pegase1354')
+        sol, r = N.case_solution('pegase1354'), net.power_flow('nr')
+        self.assertTrue(r['converged'])
+        self.assertLessEqual(r['iterations'], 6)
+        dv = np.array([abs(r['buses'][b]['V'] - sol[b][0]) for b in net.buses])
+        da = np.array([r['buses'][b]['angle'] - sol[b][1] for b in net.buses])
+        da = np.abs(da - np.median(da))
+        self.assertLess(np.median(dv), 1e-5)
+        self.assertGreater(np.mean(dv < 1e-3), 0.97)
+        self.assertLess(np.median(da), 0.1)
+        self.assertTrue(4.0 < da.max() < 7.0, da.max())
+        self.assertAlmostEqual(r['losses'] / 1e6, 1663.5, delta=0.5)
+        d = N.to_dict(net)
+        for e in d['elements']:
+            if e['kind'] == 'branch' and e.get('angle'):
+                e['angle'] = -math.degrees(e['angle'])
+        r2 = N.from_dict(d).power_flow('nr')
+        da2 = np.array([r2['buses'][b]['angle'] - sol[b][1] for b in net.buses])
+        self.assertLess(np.abs(da2 - np.median(da2)).max(), 0.6)
+        self.assertIn('Creative Commons Attribution 4.0', json.loads((N.DATA / 'pegase1354.json').read_text(encoding='utf-8'))['source'])
         # the feeder of Baran & Wu: losses 202,7 kW and the lowest voltage 0,9131 pu at bus 18 (the values of the paper)
         r = N.case_data('case33bw').power_flow('sweep')
         self.assertAlmostEqual(r['losses'] / 1e3, 202.68, delta=0.05)

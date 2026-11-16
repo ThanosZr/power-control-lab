@@ -147,5 +147,21 @@ const {chromium}=require('playwright');
  await p.click('#play');await p.waitForTimeout(1500);await p.click('#play');
  const pg=await p.evaluate(()=>['G1','G2','G3'].map(g=>window.PCL.S.sim.now('Y:'+g+':pe')));
  ok(Math.abs(pg[0]-0.898)<2e-3&&Math.abs(pg[1]-1.3432)<2e-3&&Math.abs(pg[2]-0.9419)<2e-3,'study: the EMT starts from the optimal dispatch '+pg.map(x=>x.toFixed(4)).join(' '));
+ // 4.19.3 (ROADMAP §68, decision 264): a large network in the time domain. The 8 × 8 mesh (573 unknowns, over 4000 channels): the
+ // sparse solver and the sparse phasor start, the record buffers sized by memory, a steady start, the two new settings in the
+ // panel; and the 1354-bus case in the list of the studies
+ await p.evaluate(()=>window.PCL.loadTutorial('big_grid',{k:'8',ev:'none'}));await p.waitForTimeout(1500);
+ const bg0=await p.evaluate(()=>{const s=window.PCL.S.sim,q=s.solverInfo();return {n:q.n,kind:q.kind,keys:s.keys.length,init:s.initSolver,cap:s.ring.cap,per:s.per.cap,err:window.PCL.S.error||null,note:s.memNote||''};});
+ ok(!bg0.err&&bg0.n===564&&bg0.kind==='sparse'&&bg0.init==='sparse'&&bg0.keys>4000&&bg0.cap<20000&&bg0.cap>=500&&/κανάλια/.test(bg0.note),
+  'big network: the 8 × 8 mesh, '+bg0.n+' unknowns, sparse solver and sparse start, '+bg0.keys+' channels with '+bg0.cap+' points each');
+ await p.click('#play');await p.waitForFunction(()=>window.PCL.S.sim.t>0.045,null,{timeout:120000});await p.click('#play');
+ const bg1=await p.evaluate(()=>{const s=window.PCL.S.sim,k=s.keys.filter(q=>/^V:H\d+_\d+\/Ca1$/.test(q)),Vb=150e3*Math.SQRT2/Math.sqrt(3);let mn=Infinity,mx=0;
+  for(const q of k){const m=s.lastPeriod(q);if(!m)continue;const pk=Math.max(Math.abs(m.min),Math.abs(m.max))/Vb;mn=Math.min(mn,pk);mx=Math.max(mx,pk);}return {mn,mx,t:s.t,st:s.solverInfo().stats};});
+ ok(bg1.mn>0.95&&bg1.mx<1.02&&bg1.st.full>=1,'big network: after '+(bg1.t*1e3).toFixed(0)+' ms every bus between '+bg1.mn.toFixed(3)+' and '+bg1.mx.toFixed(3)+' pu');
+ await p.click('#canvas',{position:{x:6,y:6}});await p.waitForTimeout(400);
+ const bg2=await p.evaluate(()=>{const q=k=>!!document.querySelector('[data-solve="'+k+'"]');return {mv:q('modeVec'),is:q('initSolver')};});
+ ok(bg2.mv&&bg2.is,'big network: the settings «Ιδιοδιανύσματα του ελέγχου βήματος» and «Αρχικοποίηση με φασιθέτες» are in the panel');
+ const bg3=await p.evaluate(()=>{const t=window.Tutorials.get('pf_study'),u=window.Tutorials.get('opf_study'),has=x=>x.options.find(o=>o.k==='net').options.some(o=>o[0]==='pegase1354');return has(t)&&has(u);});
+ ok(bg3,'big network: the 1354-bus case is in the lists of the load flow and of the optimal power flow');
  console.log(JSON.stringify({rm:rm.split('\n').slice(0,4),bt:bt.split('\n').slice(0,4),imp},null,1));
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

@@ -1,5 +1,5 @@
 {
- "version": "4.19.2",
+ "version": "4.19.3",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -4590,7 +4590,9 @@
      "units",
      "solver",
      "refac",
-     "hmin"
+     "hmin",
+     "modeVec",
+     "initSolver"
     ],
     "since": "3.19"
    },

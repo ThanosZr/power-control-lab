@@ -1360,13 +1360,14 @@ def ieee(case):
     return case_data(f'ieee{int(case)}')
 
 
-CASES = ('ieee9', 'ieee14', 'ieee30', 'ieee57', 'ieee118', 'ieee300', 'case30', 'case33bw', 'case69')
+CASES = ('ieee9', 'ieee14', 'ieee30', 'ieee57', 'ieee118', 'ieee300', 'case30', 'case33bw', 'case69', 'pegase1354')
 
 
 def case_data(name):
     """A test network of pcl/data by its name (CASES): the IEEE cases, 'case30' (the 30-bus case with line ratings of Alsac &
-    Stott, for the optimal power flow) and the radial feeders 'case33bw' (Baran & Wu) and 'case69'. The bus voltages of each
-    file are the published solution of its load flow."""
+    Stott, for the optimal power flow), the radial feeders 'case33bw' (Baran & Wu) and 'case69', and 'pegase1354' (4.19.3: the
+    1354-bus case of the PEGASE project, fictitious data of the size of a part of the European network, CC BY 4.0: the source
+    and the licence are in the file). The bus voltages of each file are the published solution of its load flow."""
     f = DATA / f'{name}.json'
     if name not in CASES or not f.exists():
         raise NetworkError(f'unknown case {name!r}: one of {", ".join(CASES)}')

@@ -1225,12 +1225,45 @@
   tasks:['Χωρίς διαταραχή: P, Q και δ των γεννητριών μένουν σταθερά· η κάρτα δείχνει τις τιμές της ροής φορτίου και του Anderson & Fouad.','Σφάλμα με κλασικό μοντέλο: η δ₂ − δ₁ ανεβαίνει περίπου 70° και επιστρέφει, όπως στο Σχ. 2.22 του Anderson & Fouad (85° από 17,5°).','Με τα πλήρη δεδομένα και σταθερή E_fd οι γεννήτριες 2 και 3 χάνουν τον συγχρονισμό: η ροή του άξονα q σβήνει γρήγορα (T′_q0 ≈ 0,5 s) και χωρίς AVR η E_fd δεν βοηθά.','Με τα πλήρη δεδομένα και «AVR ST1A σε κάθε γεννήτρια» (4.8.1) οι γεννήτριες μένουν σε συγχρονισμό: η E_fd ανεβαίνει στο όριο κατά το σφάλμα και κρατά τη ροή. Με PSS και ρυθμιστές στροφών σβήνουν και οι ταλαντώσεις. Με κλασικό μοντέλο ο έλεγχος δεν εφαρμόζεται (σταθερή E′).'],
   build(o){return ieee9Build(o);}});
 
+ // 4.19.3 (ROADMAP §68, decision 264): a large network in the time domain, to see and to measure the linear solver. A k × k
+ // mesh of 150 kV buses, like a sub-transmission network: a π section of about 30 km between neighbours (0,13 Ω/km,
+ // 0,4 Ω/km, 9 nF/km), a load of about 10 MW on every bus, an infeed from the transmission grid (a grid equivalent, 5 GVA)
+ // every fourth bus in each direction, and a three-phase fault in the middle that clears by itself. Every part of the
+ // mesh is fed from near, so the voltages stay close to 1 pu at any size; only the linear algebra grows with k.
+ // bigGrid(k, ev) is also what the measurements and the checks use (tests/js/big_cases.js, tools/verify.py)
+ function bigGrid(k,ev){const Un=150e3,Sb=100e6,f=50,c={conn:'bus'},dx=200,dy=200,x0=260,y0=160,comps=[],wires=[];
+   const B=(r,q)=>'B'+r+'_'+q,X=q=>x0+q*dx,Y=r=>y0+r*dy,quiet={label:'',lbl:'none'};
+   // loads and line lengths vary a little from place to place (a fixed rule, no random numbers), so that no two buses are alike
+   const w=(r,q)=>1+0.3*Math.sin(1.7*r+0.9*q),line=(id,x,y,s,rot)=>C(id,'LINE3',x,y,{unit:'pu',Un,Sb,f,R1:+(0.0173*s).toFixed(6),X1:+(0.0533*s).toFixed(6),B1:+(0.0191*s).toFixed(6),z0:'same',...c},{rot:rot||0,...quiet});
+   const grid={Un,f,Sk:5e9,XR:10,cf:1,z0:'ratio',Z0Z1:1.5,XR0:5,...c};let ng=0;
+   // around a bus: the line to the right, the line below, the load below and to the right, an infeed above and to the left;
+   // the many lines and loads carry no text in the drawing (their values are in their panels)
+   for(let r=0;r<k;r++)for(let q=0;q<k;q++){comps.push(J(B(r,q),X(q),Y(r)));
+    comps.push(C('LD'+r+'_'+q,'LOAD3',X(q)+60,Y(r)+80,{cn:'yn',Un,f,P:+(10e6*w(r,q)).toFixed(0),Q:+(3e6*w(r,q)).toFixed(0),model:'z',...c},quiet));wires.push([B(r,q),'LD'+r+'_'+q+':abc',[[X(q)+60,Y(r)]]]);
+    if(q<k-1){const id='H'+r+'_'+q;comps.push(line(id,X(q)+dx/2,Y(r),w(q,r)));wires.push([B(r,q),id+':abc1'],[id+':abc2',B(r,q+1)]);}
+    if(r<k-1){const id='V'+r+'_'+q;comps.push(line(id,X(q),Y(r)+dy/2,w(q+1,r+2),1));wires.push([B(r,q),id+':abc1'],[id+':abc2',B(r+1,q)]);}
+    if(r%4===1&&q%4===1){const id='NET'+(++ng);comps.push(C(id,'GRID3',X(q)-100,Y(r)-60,grid,{label:'τροφοδότηση '+ng}));wires.push([id+':abc',B(r,q),[[X(q)-40,Y(r)-60],[X(q)-40,Y(r)]]]);}}
+   const m=k>>1;
+   if(ev==='fault'){comps.push(C('F1','FLT3',X(m)-60,Y(m)+90,{kind:'abcg',ton:0.04,toff:0.14,Rf:0.5,Rg:0,...c},{lbl:'below',label:'σφάλμα'}));wires.push([B(m,m),'F1:abc',[[X(m)-60,Y(m)]]]);}
+   // the voltage of a bus = the voltage of the shunt capacitor of a line that starts there (phase a)
+   const panes=[[['V:H'+m+'_'+Math.min(m,k-2)+'/Ca'+(m<k-1?1:2),'v_a στη μέση'],['V:H'+(k-1)+'_0/Ca1','v_a στη γωνία']],[['I:NET1/E','i_a της τροφοδότησης 1'],...(ng>1?[['I:NET'+ng+'/E','i_a της τροφοδότησης '+ng]]:[])],
+    ...(ev==='fault'?[[['Y:F1/Ia','i_a του σφάλματος']]]:[])];
+   return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:400,method:'TR',speed:0.2,stopT:0.2},scope:{panes,window:{unit:'s',n:0.2}},meta:{big:{k,buses:k*k,lines:2*k*(k-1),infeeds:ng,ev}}});}
+ T.push({id:'big_grid',group:'Μεγάλα δίκτυα (4.19.3)',title:'Πλέγμα k × k ζυγών σε EMT: ο γραμμικός λύτης σε μεγάλο δίκτυο',theory:'formula',topology:'big_grid',
+  options:[{k:'k',label:'Μέγεθος',options:[['4','4 × 4: 16 ζυγοί'],['8','8 × 8: 64 ζυγοί'],['12','12 × 12: 144 ζυγοί'],['16','16 × 16: 256 ζυγοί'],['24','24 × 24: 576 ζυγοί']],def:'4'},
+   {k:'ev',label:'Γεγονός',options:[['fault','Τριφασικό σφάλμα στη μέση (40 ms, καθαρίζει στα 140 ms)'],['none','Καμία διαταραχή']],def:'fault'}],
+  desc:'Ένα πλέγμα ζυγών 150 kV, σαν δίκτυο υπομεταφοράς: τμήμα π περίπου 30 km ανάμεσα σε γειτονικούς ζυγούς, φορτίο περίπου 10 MW σε κάθε ζυγό, τροφοδότηση από το δίκτυο μεταφοράς (ισοδύναμο 5 GVA) κάθε τέταρτο ζυγό. Το κύκλωμα δεν έχει τίποτα δύσκολο για το βήμα· μεγαλώνει μόνο η γραμμική άλγεβρα. Έτσι φαίνεται τι κάνει ο αραιός λύτης: η διάταξη των αγνώστων κρατά τους παράγοντες L και U αραιούς, και ο χρόνος ανά βήμα μεγαλώνει σχεδόν ανάλογα με τους ζυγούς, όχι με το τετράγωνο ή τον κύβο τους.',
+  tasks:['Άνοιξε «Ρυθμίσεις επίλυσης → Γραμμικός λύτης»: πόσους αγνώστους έχει το δίκτυο, ποιον λύτη προτείνει το engine και γιατί.','Το 4 × 4 ανοίγει αμέσως. Τρέξε μετά το 8 × 8 και το 16 × 16: οι ζυγοί τετραπλασιάζονται κάθε φορά. Σύγκρινε τον χρόνο εκτέλεσης.','Βάλε «Πυκνός LU» στο 12 × 12 και σύγκρινε: ο πυκνός λύνει n² πράξεις ανά βήμα, ο αραιός όσα είναι τα μη μηδενικά των παραγόντων.','Στο σφάλμα ο πίνακας αλλάζει δύο φορές (έναρξη και καθαρισμός): η μερική επαναπαραγοντοποίηση ξαναϋπολογίζει μόνο τις στήλες που εξαρτώνται από τον ζυγό του σφάλματος. Ο μετρητής είναι στην ίδια καρτέλα.'],
+  build(o){return bigGrid(+o.k||4,o.ev||'fault');}});
+
  // 4.19.1 (ROADMAP §68 point 6): load flow, N−1 and optimal power flow as studies of the engine (pcl.network on the local server), next to
  // the 9-bus network in EMT with instruments at two points. The card runs the study on the chosen network and exports its report.
  // IEEE9_OPF: |V| (pu) and angle (°) of the AC optimal power flow of pcl.network.ieee9() (cost 5296,69 per hour; tests/test_report.py checks it)
  const IEEE9_OPF={1:[1.1,0],2:[1.097355,4.893644],3:[1.08662,3.249542],5:[1.084448,-3.981982],7:[1.089489,-1.196272],9:[1.071755,-4.615239]};
  const NETS_PF=[['ieee9','IEEE 9 ζυγών (το δίκτυο του σχεδίου)'],['ieee14','IEEE 14 ζυγών'],['ieee30','IEEE 30 ζυγών'],['ieee57','IEEE 57 ζυγών'],['ieee118','IEEE 118 ζυγών'],['ieee300','IEEE 300 ζυγών'],
-  ['case33bw','Ακτινικό 33 ζυγών (Baran & Wu)'],['case69','Ακτινικό 69 ζυγών (Baran & Wu)']];
+  ['case33bw','Ακτινικό 33 ζυγών (Baran & Wu)'],['case69','Ακτινικό 69 ζυγών (Baran & Wu)'],
+  // 4.19.3 (decision 264): a large network (PEGASE, fictitious data of the size of a part of the European network, CC BY 4.0)
+  ['pegase1354','PEGASE 1354 ζυγών (μέγεθος μέρους του ευρωπαϊκού δικτύου, πλασματικά δεδομένα)']];
  T.push({id:'pf_study',group:'Ροή φορτίου και OPF (4.19.1)',title:'Ροή φορτίου και N−1 σε δίκτυα IEEE',theory:'formula',topology:'pf_study',
   options:[{k:'net',label:'Δίκτυο της μελέτης',options:NETS_PF,def:'ieee9'},
    {k:'study',label:'Μελέτη',options:[['pf','Ροή φορτίου'],['n1','N−1 σε AC: η απώλεια κάθε κλάδου'],['n1dc','N−1, σάρωση DC (LODF)']],def:'pf'},
@@ -1243,7 +1276,7 @@
    'N−1 σε AC με «GPU*»: χωρίς κάρτα η μελέτη τρέχει στη CPU και η κάρτα γράφει τον λόγο. Τι βρίσκει το μηχάνημά σου: python -m pcl accel'],
   build(o){const pr=ieee9Build({ev:'none',ctl:'none',meter:true});pr.meta={...pr.meta,study:{net:o.net,study:o.study,options:o.study==='pf'?{method:o.method}:o.study==='n1'?{backend:o.backend||'auto'}:{}}};return pr;}});
  T.push({id:'opf_study',group:'Ροή φορτίου και OPF (4.19.1)',title:'Βέλτιστη ροή φορτίου (OPF) σε δίκτυα IEEE',theory:'formula',topology:'opf_study',
-  options:[{k:'net',label:'Δίκτυο της μελέτης',options:[...NETS_PF.slice(0,6),['case30','30 ζυγών με όρια γραμμών (Alsac & Stott)']],def:'ieee9'},
+  options:[{k:'net',label:'Δίκτυο της μελέτης',options:[...NETS_PF.slice(0,6),['case30','30 ζυγών με όρια γραμμών (Alsac & Stott)'],NETS_PF[NETS_PF.length-1]],def:'ieee9'},
    {k:'kind',label:'Μοντέλο',options:[['opf','AC: πλήρεις εξισώσεις, εσωτερικό σημείο'],['dcopf','DC: γραμμικό δίκτυο']],def:'opf'},
    {k:'limits',label:'Όρια ροής των κλάδων',options:[['yes','Ναι, όπου υπάρχει ονομαστική ισχύς'],['no','Όχι']],def:'yes'},
    {k:'start',label:'Εκκίνηση του λύτη (AC)',options:[['auto','Κανονική: το μέσο των ορίων'],['nn','Νευρωνικό αρχικό σημείο, όπου υπάρχει μοντέλο του δικτύου· ο λύτης επαληθεύει']],def:'auto'},
@@ -1886,5 +1919,5 @@
     c.inp=[...(c.inp||[]),k];c.inpName={...(c.inpName||{}),[k]:name};c.inpDesc={...(c.inpDesc||{}),[k]:desc};}}
   return pr;}
  for(const id of ['buck','boost','buck_boost','cuk','sepic','buck_vloop']){const t=T.find(q=>q.id===id);if(t){const b=t.build;t.build=o=>dcdcInputs(b.call(t,o));}}
- root.Tutorials={list:T,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};
+ root.Tutorials={list:T,bigGrid,piGains,steadyStart,samplingPhase,rippleDev,polyDesign,polyCancel,get:id=>T.find(t=>t.id===id)};
 })(window);

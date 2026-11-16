@@ -11,12 +11,13 @@
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
  // ---------------------------------------------------------------- eigenvalues
  // real n×n matrix (array of rows): balance, reduce to Hessenberg, shifted QR (EISPACK balanc/elmhes/hqr)
- function balance(a,n){const R=2,R2=4;let done=false;
+ function balance(a,n,sc){const R=2,R2=4;let done=false;
   while(!done){done=true;for(let i=0;i<n;i++){let r=0,c=0;for(let j=0;j<n;j++)if(j!==i){c+=Math.abs(a[j][i]);r+=Math.abs(a[i][j]);}
    if(c&&r){let g=r/R,f=1;const s=c+r;while(c<g){f*=R;c*=R2;}g=r*R;while(c>g){f/=R;c/=R2;}
-    if((c+r)/f<.95*s){done=false;g=1/f;for(let j=0;j<n;j++)a[i][j]*=g;for(let j=0;j<n;j++)a[j][i]*=f;}}}}}
- function hessenberg(a,n){
+    if((c+r)/f<.95*s){done=false;g=1/f;if(sc)sc[i]*=f;for(let j=0;j<n;j++)a[i][j]*=g;for(let j=0;j<n;j++)a[j][i]*=f;}}}}}
+ function hessenberg(a,n,perm){
   for(let m=1;m<n-1;m++){let x=0,i=m;for(let j=m;j<n;j++)if(Math.abs(a[j][m-1])>Math.abs(x)){x=a[j][m-1];i=j;}
+   if(perm)perm[m]=i;
    if(i!==m){for(let j=m-1;j<n;j++){const t=a[i][j];a[i][j]=a[m][j];a[m][j]=t;}for(let j=0;j<n;j++){const t=a[j][i];a[j][i]=a[j][m];a[j][m]=t;}}
    if(x)for(let i2=m+1;i2<n;i2++){let y=a[i2][m-1];if(y!==0){y/=x;a[i2][m-1]=y;for(let j=m;j<n;j++)a[i2][j]-=y*a[m][j];for(let j=0;j<n;j++)a[j][m]+=y*a[j][i2];}}}}
  function hqr(a,n){
@@ -55,9 +56,67 @@
  // eigenvalues of M (row-major Float64Array n×n); M is not changed
  function eig(M,n){if(!n)return {re:new Float64Array(0),im:new Float64Array(0)};const a=[];for(let i=0;i<n;i++)a.push(Float64Array.from(M.subarray(i*n,i*n+n)));
   if(n===1)return {re:Float64Array.of(a[0][0]),im:Float64Array.of(0)};balance(a,n);hessenberg(a,n);return hqr(a,n);}
+ // 4.19.3: the same eigenvalues (the same operations), and with them what an eigenvector needs later (eigvecHess): the
+ // scales of the balancing, the row exchanges and the multipliers of the reduction, and the Hessenberg matrix itself
+ function eigKeep(M,n){if(n<3)return {...eig(M,n),keep:null};const a=[];for(let i=0;i<n;i++)a.push(Float64Array.from(M.subarray(i*n,i*n+n)));
+  const sc=new Float64Array(n).fill(1),perm=new Int32Array(n);balance(a,n,sc);hessenberg(a,n,perm);
+  const H=new Float64Array(n*n);for(let i=0;i<n;i++)H.set(a[i],i*n);
+  const r=hqr(a,n);return {re:r.re,im:r.im,keep:{n,sc,perm,H}};}
+ // eigenvector for μ = (mr, mi) from the Hessenberg form of the matrix: M − σI = D·N·(H − σI)·N⁻¹·D⁻¹ (D the balancing,
+ // N the reduction), so the same inverse iteration from the same start costs n² per eigenvalue, not n³: the factors of an
+ // upper Hessenberg matrix need one row operation per column. The same vector as eigvecAbs up to rounding
+ function eigvecHess(K,mr,mi){const n=K.n,H=K.H,sc=K.sc,perm=K.perm;
+  const s0=Math.max(1e-300,Math.hypot(mr,mi)),er=mr+1e-7*s0,ei=mi+1e-7*s0*(mi?1:0);
+  const Ar=new Float64Array(n*n),Ai=new Float64Array(n*n),fr=new Float64Array(n),fi=new Float64Array(n),sw=new Uint8Array(n);
+  for(let i=0;i<n;i++){const io=i*n;for(let j=i?i-1:0;j<n;j++)Ar[io+j]=H[io+j];Ar[io+i]-=er;Ai[io+i]=-ei;}
+  for(let k=0;k<n;k++){const ko=k*n;
+   if(k<n-1){const lo=ko+n;
+    if(Math.hypot(Ar[lo+k],Ai[lo+k])>Math.hypot(Ar[ko+k],Ai[ko+k])){sw[k]=1;for(let j=k;j<n;j++){let t=Ar[ko+j];Ar[ko+j]=Ar[lo+j];Ar[lo+j]=t;t=Ai[ko+j];Ai[ko+j]=Ai[lo+j];Ai[lo+j]=t;}}}
+   let dr=Ar[ko+k],di=Ai[ko+k];if(dr===0&&di===0){dr=1e-300;Ar[ko+k]=dr;}
+   if(k<n-1){const lo=ko+n,xr=Ar[lo+k],xi=Ai[lo+k];if(xr||xi){const dd=dr*dr+di*di,pr=(xr*dr+xi*di)/dd,pi=(xi*dr-xr*di)/dd;fr[k]=pr;fi[k]=pi;
+     for(let j=k+1;j<n;j++){const ur=Ar[ko+j],ui=Ai[ko+j];Ar[lo+j]-=pr*ur-pi*ui;Ai[lo+j]-=pr*ui+pi*ur;}}}}
+  // the start: all ones in the states, taken to the coordinates of H (D⁻¹, then N⁻¹)
+  const yr=new Float64Array(n),yi=new Float64Array(n);for(let i=0;i<n;i++)yr[i]=1/sc[i];
+  for(let m=1;m<n-1;m++){const p=perm[m];if(p!==m){const t=yr[m];yr[m]=yr[p];yr[p]=t;}const v=yr[m];if(v)for(let i=m+1;i<n;i++)yr[i]-=H[i*n+m-1]*v;}
+  for(let it=0;it<3;it++){
+   for(let k=0;k<n-1;k++){if(sw[k]){let t=yr[k];yr[k]=yr[k+1];yr[k+1]=t;t=yi[k];yi[k]=yi[k+1];yi[k+1]=t;}
+    const pr=fr[k],pi=fi[k];if(pr||pi){yr[k+1]-=pr*yr[k]-pi*yi[k];yi[k+1]-=pr*yi[k]+pi*yr[k];}}
+   for(let i=n-1;i>=0;i--){const io=i*n;let sr=yr[i],si=yi[i];for(let j=i+1;j<n;j++){const ur=Ar[io+j],ui=Ai[io+j];sr-=ur*yr[j]-ui*yi[j];si-=ur*yi[j]+ui*yr[j];}
+    const dr=Ar[io+i],di=Ai[io+i],dd=dr*dr+di*di;yr[i]=(sr*dr+si*di)/dd;yi[i]=(si*dr-sr*di)/dd;}
+   let nm=0;for(let i=0;i<n;i++)nm=Math.max(nm,Math.hypot(yr[i],yi[i]));if(!(nm>0)||!Number.isFinite(nm))return null;for(let i=0;i<n;i++){yr[i]/=nm;yi[i]/=nm;}}
+  // back to the states: N, then D
+  for(let m=n-2;m>=1;m--){const vr=yr[m],vi=yi[m];if(vr||vi)for(let i=m+1;i<n;i++){const y=H[i*n+m-1];if(y){yr[i]+=y*vr;yi[i]+=y*vi;}}
+   const p=perm[m];if(p!==m){let t=yr[m];yr[m]=yr[p];yr[p]=t;t=yi[m];yi[m]=yi[p];yi[p]=t;}}
+  const out=new Float64Array(n);let mx=0;for(let i=0;i<n;i++){out[i]=Math.hypot(yr[i],yi[i])*sc[i];if(!Number.isFinite(out[i]))return null;if(out[i]>mx)mx=out[i];}
+  if(!(mx>0))return null;for(let i=0;i<n;i++)out[i]/=mx;return out;}
+ // the real case of eigvecAbs: every expression is that of the complex code with the zero imaginary parts dropped
+ // ((x_r·d_r)/(d_r·d_r), not x_r/d_r), so the result is the same to the last bit. Where the complex code would meet 0/0 or
+ // ∞·0 in an imaginary part (a pivot whose square underflows, an overflow), the two would differ: null, and the caller
+ // goes on with the complex code
+ function eigvecAbsReal(M,n,er){
+  const A=new Float64Array(n*n);for(let i=0;i<n*n;i++)A[i]=M[i];for(let i=0;i<n;i++)A[i*n+i]-=er;
+  const piv=new Int32Array(n);
+  for(let k=0;k<n;k++){const ko=k*n;let p=k,mx=-1;for(let i=k,q=ko+k;i<n;i++,q+=n){const v=Math.abs(A[q]);if(v>mx){mx=v;p=i;}}piv[k]=p;
+   if(p!==k){const po=p*n;for(let j=0;j<n;j++){const t=A[ko+j];A[ko+j]=A[po+j];A[po+j]=t;}}
+   let dr=A[ko+k];if(dr===0){dr=1e-300;A[ko+k]=dr;}const dd=dr*dr;if(!(dd>0)||dd===Infinity)return null;
+   for(let i=k+1;i<n;i++){const io=i*n,xr=A[io+k];if(!xr)continue;const fr=(xr*dr)/dd;A[io+k]=fr;
+    for(let j=k+1;j<n;j++)A[io+j]-=fr*A[ko+j];}}
+  const z=new Float64Array(n).fill(1);
+  for(let it=0;it<3;it++){
+   for(let k=0;k<n;k++){const p=piv[k];if(p!==k){const t=z[k];z[k]=z[p];z[p]=t;}}
+   for(let i=0;i<n;i++){const io=i*n;let s=z[i];for(let j=0;j<i;j++)s-=A[io+j]*z[j];z[i]=s;}
+   for(let i=n-1;i>=0;i--){const io=i*n;let s=z[i];for(let j=i+1;j<n;j++)s-=A[io+j]*z[j];const dr=A[io+i];z[i]=(s*dr)/(dr*dr);}
+   let nm=0;for(let i=0;i<n;i++)nm=Math.max(nm,Math.abs(z[i]));if(!(nm>0)||!Number.isFinite(nm))break;for(let i=0;i<n;i++)z[i]/=nm;}
+  const out=new Float64Array(n);for(let i=0;i<n;i++){out[i]=Math.abs(z[i]);if(!Number.isFinite(out[i]))return null;}
+  for(let i=0;i<n*n;i++)if(!Number.isFinite(A[i]))return null;
+  return out;}
  // eigenvector for an eigenvalue μ = (mr, mi) by inverse iteration in complex arithmetic: |z_k| per state
- function eigvecAbs(M,n,mr,mi){
+ function eigvecAbs(M,n,mr,mi,cx){   // cx: the complex code also for a real eigenvalue (the check of the real one)
   const sc=Math.max(1e-300,Math.hypot(mr,mi)),er=mr+1e-7*sc,ei=mi+1e-7*sc*(mi?1:0); // a shift just off μ, so the system is solvable
+  // 4.19.3 (ROADMAP §68): a real eigenvalue needs no complex arithmetic. The same operations in the same order with the
+  // imaginary parts (all zero) left out give the same |z_k| bit for bit, at a quarter of the cost: the per-topology step
+  // check of a circuit with many switches spends its time here (hvdc_lcc: 53 % of the first 6000 steps)
+  if(ei===0&&!cx){const v=eigvecAbsReal(M,n,er);if(v)return v;}
   const Ar=new Float64Array(n*n),Ai=new Float64Array(n*n);for(let i=0;i<n*n;i++)Ar[i]=M[i];for(let i=0;i<n;i++){Ar[i*n+i]-=er;Ai[i*n+i]-=ei;}
   const piv=new Int32Array(n); // LU with partial pivoting (complex)
   for(let k=0;k<n;k++){let p=k,mx=-1;for(let i=k;i<n;i++){const v=Math.hypot(Ar[i*n+k],Ai[i*n+k]);if(v>mx){mx=v;p=i;}}piv[k]=p;
@@ -93,7 +152,9 @@
     if(d<MU_NUM*MU_NUM){out.push({re:-1/(h*Math.sqrt(d)),im:0,mr,mi,num:true});continue;}
     // 1/μ = conj(μ)/|μ|²
     out.push({re:(1-mr/d)/h,im:(mi/d)/h,mr,mi});}return out;};
-  const e0=eig(M.m,n),L0=lam(e0);
+  // 4.19.3: with «Γρήγορα» (sim.modeVec === 'hess') the Hessenberg form of the map is kept for the eigenvectors, beside the
+  // map and not in it (KEEP), so that a saved state stays as small as before; otherwise the routine of before
+  const hs=sim.modeVec==='hess',e0=hs?eigKeep(M.m,n):eig(M.m,n),L0=lam(e0);if(hs)KEEP.set(M,e0.keep);
   const sw=sim.net.els.filter(e=>e.k==='S'||e.k==='D');let L1=null;
   if(sw.length){const keep=sw.map(e=>[e.Ron,e.Roff]);for(const e of sw){e.Ron*=10;e.Roff/=10;}
    try{const M1=sim.stateMap(h);L1=lam(eig(M1.m,n));}finally{sw.forEach((e,i)=>{e.Ron=keep[i][0];e.Roff=keep[i][1];});}}
@@ -103,7 +164,15 @@
   return {list:L0,M,n};}
 
  // which elements carry a mode: energy-weighted eigenvector of the BE map
- function owners(sim,M,q){const v=eigvecAbs(M.m,M.n,q.mr,q.mi),S=sim.stEls,w=new Float64Array(v.length);
+ // 4.19.3: «Αυτόματα» is the factorization per mode (n³; from 4.19.3 in real arithmetic for a real eigenvalue, the same
+ // numbers bit for bit). sim.modeVec === 'hess' takes the eigenvector from the Hessenberg form kept beside the map by modes() (n² per mode):
+ // the same vector up to rounding (10⁻¹¹), but where several states carry a mode equally (the three phases of a balanced
+ // circuit) or the eigenvalue is multiple, the vector is one of many and rounding picks it, so the elements named in a
+ // message can come in another order and the count of the «instantaneous» time constants can differ; the waveforms never
+ const KEEP=new WeakMap();   // state map → its Hessenberg form (eigKeep); a map that came back from a saved state gets it again here
+ function vecFor(sim,M,q){if(sim.modeVec==='hess'){let K=KEEP.get(M);if(K===undefined){K=eigKeep(M.m,M.n).keep;KEEP.set(M,K);}if(K){const v=eigvecHess(K,q.mr,q.mi);if(v)return v;}}
+  return eigvecAbs(M.m,M.n,q.mr,q.mi);}
+ function owners(sim,M,q){const v=vecFor(sim,M,q),S=sim.stEls,w=new Float64Array(v.length);
   for(let i=0;i<v.length;i++){const s=S[i],e=s.e;w[i]=v[i]*Math.sqrt(s.k==='C'?e.C:s.k==='L'?e.L:1/Math.max(1e-30,Math.abs(e.Gnow?e.Gnow[s.j*e.N+s.j]:1)));}
   let mx=0;for(const x of w)mx=Math.max(mx,x);const ids=[];
   const ord=[...w.keys()].sort((a,b)=>w[b]-w[a]);for(const i of ord){if(w[i]<.3*mx||ids.length>=3)break;const id=S[i].e.cid;if(id&&!ids.includes(id))ids.push(id);}
@@ -241,6 +310,6 @@
     fix:`Βήμα ≤ ${eng(lim.h,'s')}${d?` (T/${d})`:' (κάτω από T/5000: μεταβλητό βήμα)'}, ή μεταβλητό βήμα.`});}
   return head.length?[...head,...out]:out;}
 
- const api={eig,eigvecAbs,check,modes,divFor,limit,hmaxFor,LIM};
+ const api={eig,eigKeep,eigvecAbs,eigvecHess,check,modes,divFor,limit,hmaxFor,LIM};
  root.StepCheck=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

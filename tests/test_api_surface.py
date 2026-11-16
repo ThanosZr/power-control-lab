@@ -67,6 +67,12 @@ class ApiSurface(unittest.TestCase):
         self.assertIn('unit', self.now['project']['part:CONST']['params'])
         self.assertIn('frame', self.now['project']['part:MUX']['params'])
 
+    def test_the_surface_of_4_19_3(self):
+        # the two settings of the solver are in the file format (stable); the large network is one more name of the test networks
+        self.assertEqual(self.now['project']['file.solve']['params'][-2:], ['modeVec', 'initSolver'])
+        from pcl import network
+        self.assertIn('pegase1354', network.CASES)
+
     def test_the_surface_of_4_19_2(self):
         # the choices of a study are stable additions to the methods of the network (backend, start, a change of the loads); the
         # backends with their GPU path, the script of the accelerator, the start models and the ONNX files are experimental

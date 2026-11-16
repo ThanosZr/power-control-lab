@@ -54,6 +54,7 @@
  // 4.7: records in shared memory in a cross-origin isolated page (allocRecord)
  const shared=typeof window!=='undefined'&&typeof SharedArrayBuffer!=='undefined'&&!!root.crossOriginIsolated;
  // program t:value at t; left = the value just before t (the end of a step that lands on a jump, 3.15)
+ const REC_BIG=1000;   // 4.19.3: channels above which the record buffers are sized by memory (allocRecord)
  const schedAt=(s,t,dflt,left)=>{if(!s)return dflt;let v=s[0][1];const tl=left?t-1e-15-4e-16*Math.abs(t):0;if(left?s[0][0]>=tl:t<s[0][0])return dflt;for(const [ts,val] of s){if(left?ts<tl:ts<=t+1e-15)v=val;else break;}return v;};
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
  // "1, 2, 3" → N numbers (one value = the same for all)
@@ -67,7 +68,7 @@
  // so the run continues with the same numbers. Objects met twice are kept once ($ref); typed arrays as base64 of their
  // bytes (exact); NaN, ±Infinity and −0 by name; an object with getState/setState (a Python block) keeps its own state.
  // Left out: the project (rebuilt), the LU cache and the sparse pattern (rebuilt the same) and the scope's buffers (ring, per).
- const SNAP_SKIP=new Set(['project','cache','ring','per','sp','spq','spw','rec','spF','spA','spChg','cvL','hLim']);   // 4.2: the sparse pattern is rebuilt the same; 4.19: the working factors too
+ const SNAP_SKIP=new Set(['project','cache','ring','per','sp','spq','spw','rec','spF','spA','spChg','cvL','hLim','valEls','keyEls']);   // 4.2: the sparse pattern is rebuilt the same; 4.19: the working factors too
  const SNAP_TA={Float64Array,Float32Array,Int32Array,Uint32Array,Int16Array,Uint16Array,Int8Array,Uint8Array,Uint8ClampedArray};
  function b64of(ta){const u=new Uint8Array(ta.buffer,ta.byteOffset,ta.byteLength);if(typeof Buffer!=='undefined')return Buffer.from(u).toString('base64');
   let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s);}
@@ -108,6 +109,29 @@
  // generator state (4.3): masses' angles and speeds as arrays, the rest numbers
  const genCopy=st=>({...st,ph:st.ph.slice(),w:st.w.slice(),wo:st.wo.slice(),ts:st.ts.slice()});
  // complex dense solve (4.3): A as re/im arrays n×n, b as re/im; partial pivoting; returns [xr, xi] or null when singular
+ // 4.19.3 (ROADMAP §68): the same system for a large network, with the sparse LU. The complex system (A_r + jA_i)(x_r + jx_i) = b
+ // is the real one of twice the size, [A_r −A_i; A_i A_r]·[x_r; x_i] = [b_r; b_i], with the real and the imaginary part of
+ // every unknown next to each other (2i, 2i + 1), so that the ordering sees the pattern of the network. A: Map key
+ // (r·n + q) → [re, im]. Returns [xr, xi], or null when the matrix is singular. csolveSp(n, A, br): the real case
+ const AC_SPARSE=400;   // unknowns from which «Αυτόματα» takes the sparse solve (below it the dense one, as before 4.19.3)
+ function csolveSp(n,A,br,bi){
+  if(!SPM)return null;const cx=!!bi,m=cx?2*n:n,keys=[];
+  for(const [k,v] of A){const q=k%n,r=(k-q)/n;if(!cx){keys.push(r*m+q);continue;}
+   keys.push((2*r)*m+2*q,(2*r+1)*m+2*q+1);if(v[1]!==0)keys.push((2*r)*m+2*q+1,(2*r+1)*m+2*q);}
+  try{const P=SPM.pattern(m,keys),Ax=new Float64Array(P.nnz);
+   for(const [k,v] of A){const q=k%n,r=(k-q)/n;if(!cx){Ax[P.map.get(r*m+q)]+=v[0];continue;}
+    Ax[P.map.get((2*r)*m+2*q)]+=v[0];Ax[P.map.get((2*r+1)*m+2*q+1)]+=v[0];
+    if(v[1]!==0){Ax[P.map.get((2*r)*m+2*q+1)]-=v[1];Ax[P.map.get((2*r+1)*m+2*q)]+=v[1];}}
+   const F=SPM.lu(P,Ax,SPM.order(P)),b=new Float64Array(m);
+   if(cx)for(let i=0;i<n;i++){b[2*i]=br[i];b[2*i+1]=bi[i];}else b.set(br);
+   const b0=b.slice();SPM.solve(F,b);for(let i=0;i<m;i++)if(!Number.isFinite(b[i]))return null;
+   // one step of iterative refinement (the residual with the entries as they were stamped): the threshold pivoting of the
+   // sparse factors keeps the diagonal where it can, so the first solution can be a few digits behind the dense one
+   {const r=b0.slice(),{Ap,Ai:Ri}=P;for(let j=0;j<m;j++){const xj=b[j];if(xj!==0)for(let s=Ap[j];s<Ap[j+1];s++)r[Ri[s]]-=Ax[s]*xj;}
+    SPM.solve(F,r);let ok=true;for(let i=0;i<m;i++)if(!Number.isFinite(r[i])){ok=false;break;}if(ok)for(let i=0;i<m;i++)b[i]+=r[i];}
+   if(!cx)return [b,new Float64Array(n)];
+   const xr=new Float64Array(n),xi=new Float64Array(n);for(let i=0;i<n;i++){xr[i]=b[2*i];xi[i]=b[2*i+1];}return [xr,xi];
+  }catch(e){return null;}}
  function csolve(n,Ar,Ai,br,bi){
   for(let k=0;k<n;k++){let p=k,mx=Ar[k*n+k]**2+Ai[k*n+k]**2;for(let i=k+1;i<n;i++){const v=Ar[i*n+k]**2+Ai[i*n+k]**2;if(v>mx){mx=v;p=i;}}
    if(!(mx>0))return null;
@@ -131,12 +155,17 @@
   let f0=gens.length?gens[0].g.f:NaN;if(!(f0>0)){const v=net.els.find(e=>e.k==='V'&&e.src?.kind==='ac');f0=v?v.src.f:50;}
   // with the trapezoidal rule at a fixed step the discrete steady state is the phasor one with ω_e = (2/h)·tan(ωh/2) in every
   // v = dψ/dt (inductors, capacitors, flux elements, the machine): the start is then exact for the step, not only for h → 0
-  const w0=2*Math.PI*f0,w=sim.method==='TR'&&!sim.var&&sim.h>0?2/sim.h*Math.tan(w0*sim.h/2):w0,n0=net.size,n=n0+3*gens.length,Ar=new Float64Array(n*n),Ai=new Float64Array(n*n),br=new Float64Array(n),bi=new Float64Array(n);
+  const w0=2*Math.PI*f0,w=sim.method==='TR'&&!sim.var&&sim.h>0?2/sim.h*Math.tan(w0*sim.h/2):w0,n0=net.size,n=n0+3*gens.length,br=new Float64Array(n),bi=new Float64Array(n);
+  // 4.19.3: from AC_SPARSE unknowns the phasor system is kept and solved sparse (the dense one costs n² memory and n³ time:
+  // 5000 unknowns took 400 MB and seconds); below it dense as before, bit for bit. solve.initSolver: 'dense' | 'sparse'
+  const ask=sim.opts.initSolver||sim.project?.solve?.initSolver||'',sp=!!SPM&&(ask==='sparse'||(ask!=='dense'&&n>=AC_SPARSE)),SA=sp?new Map():null;
+  const Ar=sp?null:new Float64Array(n*n),Ai=sp?null:new Float64Array(n*n);sim.initSolver=sp?'sparse':'dense';
   sim.values(0);sim.gateSig(0);
   // 4.10: a capacitor with an initial voltage (a cell or DC-link capacitor) keeps it as the DC part of its start: a stiff
   // source v₀ in the DC solution below (the others stay open there, as before)
   const vC0=new Map();for(const e of net.els)if(e.k==='C'&&e.v)vC0.set(e,e.v);
-  const ad=(r,q,re,im)=>{if(r<0||q<0)return;Ar[r*n+q]+=re;Ai[r*n+q]+=im;};
+  const ad=sp?(r,q,re,im)=>{if(r<0||q<0)return;const k=r*n+q,v=SA.get(k);if(v){v[0]+=re;v[1]+=im;}else SA.set(k,[re,im]);}
+   :(r,q,re,im)=>{if(r<0||q<0)return;Ar[r*n+q]+=re;Ai[r*n+q]+=im;};
   const y=(a,b,re,im)=>{ad(a,a,re,im);ad(b,b,re,im);ad(a,b,-re,-im);ad(b,a,-re,-im);};
   for(let i=0;i<net.nNodes;i++)ad(i,i,GMIN,0);
   const left=new Set();
@@ -169,7 +198,7 @@
   }
   gens.forEach((m,q)=>{const Vp=m.V0*m.g.Un*Math.SQRT2/Math.sqrt(3);
    for(let k=0;k<3;k++){const r=n0+3*q+k,a=m.ang0-Math.PI/2-k*2*Math.PI/3;ad(m.term[k],r,1,0);ad(r,m.term[k],1,0);ad(m.nN,r,-1,0);ad(r,m.nN,-1,0);br[r]=Vp*Math.cos(a);bi[r]=Vp*Math.sin(a);}});
-  const sol=csolve(n,Ar,Ai,br,bi);if(!sol){net.warnings.push('Αρχικοποίηση από ροή φορτίου: το κύκλωμα δεν λύνεται με φασιθέτες· ξεκινά από μηδέν.');return null;}
+  const sol=sp?csolveSp(n,SA,br,bi):csolve(n,Ar,Ai,br,bi);if(!sol){net.warnings.push('Αρχικοποίηση από ροή φορτίου: το κύκλωμα δεν λύνεται με φασιθέτες· ξεκινά από μηδέν.');return null;}
   const [xr,xi]=sol,Vr=i=>i<0?0:xr[i],Vi=i=>i<0?0:xi[i];
   // 4.8.1: BDF2 also needs the step before t = 0 (i, v, ψ at −h, from the same phasors) and starts with h/h_last = 1, so
   // that the first step is not a backward-Euler one (which leaves a start transient of the order of h)
@@ -200,8 +229,8 @@
   // the DC part (field circuits, DC sources): inductors and flux ports as near-shorts (10⁻⁹ of their reactance, so that
   // loops of inductors and ideal transformers stay solvable), capacitors open; the start vector of the circuit is DC + the
   // real part of the phasors (the voltage of an inductive node is not defined by the vanishing-step start of initialSolve)
-  const Dr=new Float64Array(n0*n0),Di=new Float64Array(n0*n0),dr=new Float64Array(n0),di=new Float64Array(n0);
-  const dad=(r,q,v)=>{if(r>=0&&q>=0)Dr[r*n0+q]+=v;},dy=(a,b,g)=>{dad(a,a,g);dad(b,b,g);dad(a,b,-g);dad(b,a,-g);},gs=x=>1/(1e-9*w0*x);
+  const Dr=sp?null:new Float64Array(n0*n0),Di=sp?null:new Float64Array(n0*n0),dr=new Float64Array(n0),di=new Float64Array(n0),SD=sp?new Map():null;
+  const dad=sp?(r,q,v)=>{if(r<0||q<0)return;const k=r*n0+q,u=SD.get(k);if(u)u[0]+=v;else SD.set(k,[v,0]);}:(r,q,v)=>{if(r>=0&&q>=0)Dr[r*n0+q]+=v;},dy=(a,b,g)=>{dad(a,a,g);dad(b,b,g);dad(a,b,-g);dad(b,a,-g);},gs=x=>1/(1e-9*w0*x);
   const sh=[];for(const e of net.els){if(e.k==='L')sh.push([e,-1,e.a,e.b,gs(e.L)]);else if(e.k==='F'&&!e.sm&&!e.srm){const G=e.gen?e.Gnow:e.Gam;for(let k=0;k<e.N;k++)sh.push([e,k,e.ports[k][0],e.ports[k][1],gs(1/G[k*e.N+k])]);}}
   for(let i=0;i<net.nNodes;i++)dad(i,i,GMIN);
   for(const e of net.els){switch(e.k){
@@ -220,7 +249,7 @@
      dad(e.n1[r],e.n1[q],ys);dad(e.n2[r],e.n2[q],ys);dad(e.n1[r],e.n2[q],ym);dad(e.n2[r],e.n1[q],ym);}break;}}}
   for(const [,,a,b,g] of sh)dy(a,b,g);
   for(const [e,v] of vC0){const g=1e9*w0*e.C;dy(e.a,e.b,g);if(e.a>=0)dr[e.a]+=g*v;if(e.b>=0)dr[e.b]-=g*v;}
-  const dsol=csolve(n0,Dr,Di,dr,di),x0=new Float64Array(n0),Xd=dsol?dsol[0]:new Float64Array(n0);
+  const dsol=sp?csolveSp(n0,SD,dr):csolve(n0,Dr,Di,dr,di),x0=new Float64Array(n0),Xd=dsol?dsol[0]:new Float64Array(n0);
   if(!dsol)net.warnings.push('Αρχικοποίηση από ροή φορτίου: το μέρος DC δεν λύνεται· οι πηγές DC ξεκινούν από μηδέν.');
   for(let i=0;i<n0;i++)x0[i]=xr[i]+Xd[i];
   for(const [e,k,a,b,g] of sh){if(e.gen)continue;const I=g*((a<0?0:Xd[a])-(b<0?0:Xd[b]));if(k<0){e.i+=I;e.i1=bdf?e.i1+I:e.i;}else e.i[k]+=I;}   // the DC part: the same in the step before
@@ -1033,7 +1062,7 @@
 
  // ---------------------------------------------------------------- simulator
  class Sim{
-  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,mem:+opts.mem>0?+opts.mem:0,eventsMax:+opts.eventsMax>0?+opts.eventsMax:0,...(opts.events===false?{events:false}:{}),step:opts.step||null,solver:opts.solver||null,refac:opts.refac||null,recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
+  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,mem:+opts.mem>0?+opts.mem:0,eventsMax:+opts.eventsMax>0?+opts.eventsMax:0,...(opts.events===false?{events:false}:{}),step:opts.step||null,solver:opts.solver||null,refac:opts.refac||null,modeVec:opts.modeVec||null,initSolver:opts.initSolver||null,recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
   // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
   // (4.14: the sampling clock inside an MMC, Model 1, does not set the step)
   basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>(b.type==='CLK'||b.type==='RAMP')&&!/\/MCLK$/.test(b.id));if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
@@ -1205,6 +1234,8 @@
    {const sv=this.opts.solver||project?.sim?.solver||project?.solve?.solver||'auto',rf=this.opts.refac||project?.sim?.refac||project?.solve?.refac||'auto';this.solverAsk=[sv,rf];
     this.sparse=!!SPM&&(sv==='sparse'||(sv!=='dense'&&(this.n>=SPARSE_MIN||(this.n>=SPARSE_CHG&&this.everyStep))));
     this.refac=['off','full','partial'].includes(rf)?rf:'partial';       // 'auto' = partial refactorization; 'full': every column; 'off': from scratch, as before 4.19 (the reference)
+    // 4.19.3: the eigenvectors of the step check: 'lu' (auto, as before) or 'hess' (from the Hessenberg form, n² per mode: stepcheck.js)
+    this.modeVec=(this.opts.modeVec||project?.sim?.modeVec||project?.solve?.modeVec)==='hess'?'hess':'lu';
     this.A=this.sparse?null:new Float64Array(this.n*this.n);}
    if(old&&!fresh)for(const e of net.els)if(e.k==='NL'){const o=old.els.find(x=>x.k==='NL'&&x.cid===e.cid);if(o){e.v0=o.v0;if(o.sai&&e.sai)for(const k of SAI_ST)e.sai[k]=o.sai[k];}}this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.hUser=this.opts.h||this.T/this.opts.hDiv;this.h=Math.min(this.hUser,this.tlMaxStep());
@@ -1331,15 +1362,19 @@
   }
   allocRecord(){
    // 4.11: the memory of the scope in MB (opts.mem, the user's setting); the default keeps the 24 MB of before
-   const nch=this.keys.length,mem=+this.opts.mem>0?+this.opts.mem:0;let cap=this.opts.cap||(mem?Math.max(20000,Math.floor(mem*1048576/(4*nch+9))):Math.max(20000,Math.min(200000,Math.floor(24e6/(4*nch+8)))));this.memNote=null;
+   // 4.19.3: over REC_BIG channels (a network of hundreds of buses) the buffers would need gigabytes at 20000 points per
+   // channel: the scope keeps about 96 MB (fewer points) and the statistics per period 5 × 16 MB. Up to REC_BIG as before
+   const nch=this.keys.length,mem=+this.opts.mem>0?+this.opts.mem:0,big=nch>REC_BIG,capMin=big?500:20000;
+   let cap=this.opts.cap||(mem?Math.max(capMin,Math.floor(mem*1048576/(4*nch+9))):big?Math.max(capMin,Math.floor(96e6/(4*nch))):Math.max(20000,Math.min(200000,Math.floor(24e6/(4*nch+8)))));this.memNote=null;
+   if(big&&!this.opts.cap&&cap<20000)this.memNote=`${nch} κανάλια: το scope κρατά τα τελευταία ${cap} σημεία ανά κανάλι`;
    if(!this.opts.cap&&mem){const lim=Math.floor(2**31/Math.max(1,nch));if(cap>lim){cap=lim;this.memNote='η μνήμη περιορίστηκε στο όριο ενός buffer';}}
    // 4.7: in a cross-origin isolated page the buffers are shared memory from the start, so that the live worker (live.js)
    // uses them as they are: copying them at ▶ cost one frame of 80 ms in a circuit of 300 channels (≈ 140 MB)
    const A=(C,n)=>shared?new C(new SharedArrayBuffer(n*C.BYTES_PER_ELEMENT)):new C(n);
    try{this.ring={t:A(Float64Array,cap),d:A(Float32Array,cap*nch),g:A(Uint8Array,cap),nch,cap,head:0,n:0};}
-   catch(e){cap=Math.max(20000,Math.min(200000,Math.floor(24e6/(4*nch+8))));this.memNote=`δεν δόθηκαν ${Math.round(mem)} MB από τον browser: ${Math.round(cap*(4*nch+9)/1048576)} MB`;
+   catch(e){cap=big?Math.max(capMin,Math.floor(96e6/(4*nch))):Math.max(20000,Math.min(200000,Math.floor(24e6/(4*nch+8))));this.memNote=`δεν δόθηκαν ${Math.round(mem)} MB από τον browser: ${Math.round(cap*(4*nch+9)/1048576)} MB`;
     this.ring={t:A(Float64Array,cap),d:A(Float32Array,cap*nch),g:A(Uint8Array,cap),nch,cap,head:0,n:0};}
-   const pc=20000;this.per={t:A(Float64Array,pc),avg:A(Float32Array,pc*nch),min:A(Float32Array,pc*nch),max:A(Float32Array,pc*nch),rms:A(Float32Array,pc*nch),end:A(Float32Array,pc*nch),nch,cap:pc,head:0,n:0};
+   const pc=big?Math.max(200,Math.floor(16e6/(4*nch))):20000;this.per={t:A(Float64Array,pc),avg:A(Float32Array,pc*nch),min:A(Float32Array,pc*nch),max:A(Float32Array,pc*nch),rms:A(Float32Array,pc*nch),end:A(Float32Array,pc*nch),nch,cap:pc,head:0,n:0};
    this.acc={t0:this.t,dur:0,s:new Float64Array(nch),q:new Float64Array(nch),mn:new Float64Array(nch).fill(Infinity),mx:new Float64Array(nch).fill(-Infinity)};
    this.vals=new Float64Array(nch);this.prevVals=null;
   }
@@ -1641,7 +1676,12 @@
    this.tChk=t; // the time of the trial solution (spark-gap triggers in check)
    // a step that ends on a programmed jump sees the value before it (3.15): the jump belongs to the next step
    const L=this.leftAt!=null&&Math.abs(t-this.leftAt)<=this.h*1e-7;
-   for(const e of this.net.els){
+   // 4.19.3: the loop passes only over the elements that have a value to set (the kinds of the branches below), in the
+   // order of the netlist: the same operations, without the other elements (L, C, switches…) of a large network
+   let W=this.valEls;
+   if(!W||W.els!==this.net.els||W.n!==this.net.els.length){const list=this.net.els.filter(e=>e.k==='G'||e.k==='I'||e.k==='V'||e.k==='TL'||e.k==='TLM'||e.k==='CPL'||(e.k==='F'&&(e.sm||e.gen||e.srm)));
+    W=this.valEls={els:this.net.els,n:this.net.els.length,list};}
+   for(const e of W.list){
     if(e.k==='G')e.Rnow=Math.max(schedAt(e.sched,t,e.R,L),1e-9);
     else if(e.k==='I')e.Inow=e.wave?P.waveAt(e.wave,t):e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):schedAt(e.sched,t,e.I,L);
     else if(e.k==='F'&&e.sm){const m=e.sm,th=m.st.the+(t-this.t)*m.p*m.st.w;let q;
@@ -1771,8 +1811,11 @@
   solveOnce(h,mode){
    let key=null;
    // (a fast tower footing changes its resistance every step: no cached factorization then, 4.9.1)
-   if(!this.everyStep){key=mode+(h/this.h).toPrecision(17)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of this.net.els)if(e.k==='S'||e.k==='D')key+=e.on?'1':'0';
-    for(const e of this.net.els)if(e.k==='G'&&e.sched)key+='|'+e.Rnow;
+   // (4.19.3: the switches, the diodes and the scheduled resistances from lists made once per netlist, in its order: the
+   // same key without two passes over every element of a large network at every step)
+   if(!this.everyStep){let K=this.keyEls;if(!K||K.els!==this.net.els||K.n!==this.net.els.length)K=this.keyEls={els:this.net.els,n:this.net.els.length,sw:this.net.els.filter(e=>e.k==='S'||e.k==='D'),gs:this.net.els.filter(e=>e.k==='G'&&e.sched)};
+    key=mode+(h/this.h).toPrecision(17)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of K.sw)key+=e.on?'1':'0';
+    for(const e of K.gs)key+='|'+e.Rnow;
     for(const e of this.chbEls)key+='|'+(e.mmc?e.mmc.cnt:chbCount(e));}
    let f=key&&this.cache.get(key);
    const st=this.lustat;if(f)st.hit++;
