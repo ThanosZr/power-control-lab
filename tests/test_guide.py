@@ -27,7 +27,7 @@ def blocks(version):
 class Guide(unittest.TestCase):
     def test_the_python_example_of_4_19_4_runs_as_written(self):
         bl = blocks('4.19.4')
-        self.assertEqual(len(bl), 1)
+        self.assertEqual(len(bl), 2)                         # §15, and the security study of §16 (its own test below)
         with tempfile.TemporaryDirectory() as d:
             env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING='utf-8')
             r = subprocess.run([sys.executable, '-c', bl[0][1]], cwd=d, env=env, capture_output=True, text=True, encoding='utf-8', timeout=300)
@@ -47,6 +47,19 @@ class Guide(unittest.TestCase):
             from pcl import netfile
             back = netfile.read_file(os.path.join(d, 'case30_changed.m'))
             self.assertEqual((netfile.describe(back)['load']['8'], sum(e['kind'] == 'branch' for e in back.elements)), ([40.0, 30.0], 40))
+
+    def test_the_security_example_of_4_19_4_runs_as_written(self):
+        head, code = blocks('4.19.4')[1]
+        self.assertIn('ασφάλεια', head)
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING='utf-8')
+            r = subprocess.run([sys.executable, '-c', code], cwd=d, env=env, capture_output=True, text=True, encoding='utf-8', timeout=300)
+            self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+            self.assertEqual(r.stdout.strip().split('\n'), ['κόστος 565.35 ανά ώρα · χωρίς ασφάλεια 565.21 · διαφορά 0.147', '38 διαταραχές · 1 γύρος · 1 περιορισμός · ασφαλής: True',
+                                                            'δεσμεύει: br35 όταν χάνεται ο br36 · μ = 0.0882 ανά MWh', 'ασφαλής: False · 6 ζεύγη μένουν πάνω από το όριο',
+                                                            'το χειρότερο: 4.4 MW πάνω από το όριο'])           # the lines the guide prints
+            self.assertEqual(os.listdir(d), ['scopf.html'])
+            self.assertIn('Ασφάλεια N−1', pathlib.Path(d, 'scopf.html').read_text(encoding='utf-8'))
 
     def test_the_other_ways_the_guide_names(self):
         from pcl import network as N, study

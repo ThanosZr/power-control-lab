@@ -246,5 +246,25 @@ const {chromium}=require('playwright');
  ok(bg2.mv&&bg2.is,'big network: the settings «Ιδιοδιανύσματα του ελέγχου βήματος» and «Αρχικοποίηση με φασιθέτες» are in the panel');
  const bg3=await p.evaluate(()=>{const t=window.Tutorials.get('pf_study'),u=window.Tutorials.get('opf_study'),has=x=>x.options.find(o=>o.k==='net').options.some(o=>o[0]==='pegase1354');return has(t)&&has(u);});
  ok(bg3,'big network: the 1354-bus case is in the lists of the load flow and of the optimal power flow');
+ // 4.19.4 (ROADMAP §75): the optimal power flow with security against every single outage, from the card to the picture
+ await p.evaluate(()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('opf_study',{net:'case30',kind:'scopf'});});await p.waitForTimeout(700);
+ await p.click('#theory [data-study="run"]');await p.waitForSelector('#study-sec',{timeout:60000});
+ const sc1=await p.evaluate(()=>{const z=window.PCL.STUDY.r.summary.security;return {txt:document.querySelector('#study-sec').parentElement.innerText,z};});
+ ok(sc1.z.secure&&sc1.z.outages===38&&sc1.z.rounds===1&&sc1.z.constraints===1&&Math.abs(sc1.z.cost_security-0.1468)<5e-4&&/ασφαλής κατανομή/.test(sc1.txt)&&/br35 όταν χάνεται ο br36/.test(sc1.txt),
+  'secure dispatch: the 30-bus case, one constraint (br35 at the loss of br36), '+sc1.z.cost_security.toFixed(4)+' per hour more');
+ ok(/Έλεγχος με ροή φορτίου AC/.test(sc1.txt)&&sc1.z.ac.overloads===1,'secure dispatch: the card says what the AC load flow of the dispatch finds ('+sc1.z.ac.worst_branch+' at '+(100*sc1.z.ac.worst_loading).toFixed(1)+' %)');
+ await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.layer==='security'&&window.PCL.NV.v.state.frames>0,null,{timeout:60000});
+ const sc2=await p.evaluate(()=>({layer:document.querySelector('#nv-layer').value,legend:document.querySelector('#nv-legend').textContent,title:document.querySelector('#nv-title').textContent}));
+ ok(sc2.layer==='security'&&/%/.test(sc2.legend),'secure dispatch: the picture opens on the layer of the security ('+sc2.legend.slice(0,50)+')');
+ await p.evaluate(()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('opf_study',{net:'ieee14',kind:'scopf'});});await p.waitForTimeout(700);
+ await p.click('#theory [data-study="run"]');await p.waitForSelector('#study-error',{timeout:60000});
+ ok(/ονομαστική ισχύ/.test(await p.evaluate(()=>document.querySelector('#study-error').textContent)),'secure dispatch: a network without ratings is refused with the reason');
+ for(let i=errs.length-1;i>=0;i--)if(/status of 400/.test(errs[i]))errs.splice(i,1);   // the refusal asked for just above
+ // 4.19.4 (ROADMAP §74): the third exercise from plain blocks
+ await p.evaluate(()=>window.PCL.loadTutorial('current_ctl',{}));await p.waitForTimeout(700);await p.click('#toend');
+ await p.waitForFunction(()=>window.PCL.S.sim&&window.PCL.S.sim.t>=0.01599,null,{timeout:120000});await p.waitForTimeout(600);
+ const cc=await p.evaluate(()=>{const s=window.PCL.S.sim;return {hold:s.now('H:SHi'),mean:s.lastPeriod('I:L1').avg,warn:s.net.warnings.length,card:document.querySelector('#theory').innerText};});
+ ok(cc.warn===0&&Math.abs(cc.hold-cc.mean)<0.02&&Math.abs(cc.mean-25)<0.5&&/Κλειστός βρόχος/.test(cc.card)&&/Αποκατάσταση/.test(cc.card),
+  'exercise 3 from blocks: the sample is the mean with the triangle ('+cc.hold.toFixed(3)+' and '+cc.mean.toFixed(3)+' A), the card measures the response');
  console.log(JSON.stringify({rm:rm.split('\n').slice(0,4),bt:bt.split('\n').slice(0,4),imp},null,1));
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

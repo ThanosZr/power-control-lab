@@ -21,9 +21,10 @@ import numpy as np
 UNIT = 100.0            # the length of a typical branch in drawing units
 FULL = 2500             # buses up to which the stress uses every pair of buses (memory n², time n² per sweep)
 PIVOTS = 200            # above it: distances to this many buses only (pivot scaling, Brandes & Pich 2007)
-LAYERS = ('base', 'voltage', 'angle', 'loading', 'flow', 'violations', 'n1', 'lmp')
+LAYERS = ('base', 'voltage', 'angle', 'loading', 'flow', 'violations', 'n1', 'security', 'lmp')
 TITLES = {'base': 'Επίπεδα τάσης', 'voltage': 'Τάσεις ζυγών', 'angle': 'Γωνίες τάσης', 'loading': 'Φόρτιση κλάδων', 'flow': 'Ροές ενεργού ισχύος',
-          'violations': 'Παραβιάσεις', 'n1': 'N−1: τι προκαλεί η απώλεια κάθε κλάδου', 'lmp': 'Οριακές τιμές κόμβων'}
+          'violations': 'Παραβιάσεις', 'n1': 'N−1: τι προκαλεί η απώλεια κάθε κλάδου', 'security': 'Ασφάλεια N−1: η χειρότερη φόρτιση κάθε κλάδου μετά από διαταραχή',
+          'lmp': 'Οριακές τιμές κόμβων'}
 # colours: a diverging scale for a quantity around a centre, a sequential one for a quantity from zero, and the voltage levels
 DIVERGING = ['#2166ac', '#67a9cf', '#d1e5f0', '#bdbdbd', '#fddbc7', '#ef8a62', '#b2182b']
 SEQUENTIAL = ['#bdbdbd', '#fee08b', '#fdae61', '#f46d43', '#d73027', '#7f0000']
@@ -448,6 +449,26 @@ def values(v, result=None, layer='base', study=None):
         out['legend'] = [(BAD, f'τάση έξω από {vmin:g}–{vmax:g} pu ({nb} ζυγοί) · φόρτιση πάνω από 100 % ({nbr} κλάδοι)'.replace('.', ',')), (GREY, 'μέσα στα όρια')]
         out['count'] = {'buses': int(nb), 'branches': int(nbr)}
         return out
+    if layer == 'security':
+        # 4.19.4 (the optimal power flow with security): every rated branch by its highest loading after the loss of any other
+        # branch, at the dispatch that was found; 100 % is the rating a branch may carry after an outage
+        sec = res.get('security') or {}
+        post = sec.get('post') or {}
+        if not post:
+            return missing('Η στρώση ασφάλειας θέλει βέλτιστη ροή φορτίου με ασφάλεια N−1.')
+        bind = {str(q.get('branch')) for q in sec.get('binding') or []}
+        left = {str(q.get('branch')) for q in sec.get('unsecured') or []}
+        vals = {str(k): 100.0 * float(x[0]) for k, x in post.items() if _num(x[0]) is not None}
+        col = _scale(SEQUENTIAL, 0.0, 120.0)
+        out['branch'], out['unit_branch'] = vals, '%'
+        out['branch_color'] = {e['name']: BAD if e['name'] in left else col(vals.get(e['name'])) for e in v['branches']}
+        out['bus_color'] = {b['id']: GREY for b in v['buses']}
+        out['worst'] = {str(k): str(x[1]) for k, x in post.items()}
+        out['count'] = {'binding': len(bind), 'unsecured': len(left)}
+        out['legend'] = [(col(s), f'{int(s - 10)}–{int(s + 10)} %') for s in (10, 30, 50, 70, 90)] + [
+            (BAD, f'πάνω από το όριο μετά από διαταραχή: καμία κατανομή δεν το καλύπτει ({len(left)} κλάδοι)')]
+        out['note_base'] = f'Στο όριο μετά από διαταραχή (περιορισμοί ασφάλειας που δεσμεύουν): {len(bind)} κλάδοι.'
+        return out
     # N−1: every branch coloured by what its loss does ('name' of an outage is the branch that is lost; 'branch' the most
     # loaded one after it). A low voltage counts only when the outage makes it lower than in the base case
     outs = res.get('outages') or []
@@ -492,7 +513,7 @@ def _maybe_int(s):
         return s
 
 
-DEFAULT = {'pf': 'voltage', 'n1': 'n1', 'n1dc': 'n1', 'opf': 'lmp', 'dcopf': 'lmp'}     # the layer a study opens with
+DEFAULT = {'pf': 'voltage', 'n1': 'n1', 'n1dc': 'n1', 'opf': 'lmp', 'dcopf': 'lmp', 'scopf': 'security'}     # the layer a study opens with
 
 
 def pack(v, result=None, layers=None):

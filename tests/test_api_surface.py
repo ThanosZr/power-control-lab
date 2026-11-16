@@ -82,6 +82,14 @@ class ApiSurface(unittest.TestCase):
         import run
         for a in ('network_view', 'network_open', 'network_save'):
             self.assertIn(a, run.ACTIONS)
+        # the optimal power flow with security: the module is experimental, the method of the network and the study are there
+        for k in ('pcl.scopf.solve', 'pcl.scopf.screen'):
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+            self.assertIn(k, self.now['pcl'], k)
+        self.assertIn('pcl.network.Network.scopf', self.now['pcl'])
+        self.assertEqual(self.now['pcl']['pcl.opf.solve']['params'][-1], 'extra')
+        from pcl import study
+        self.assertIn('scopf', study.STUDIES)
 
     def test_the_surface_of_4_19_3(self):
         # the two settings of the solver are in the file format (stable); the large network is one more name of the test networks

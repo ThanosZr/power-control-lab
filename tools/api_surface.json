@@ -15,7 +15,8 @@
    "pcl.onnxio.",
    "pcl.netview.",
    "pcl.netfile.",
-   "pcl.psse."
+   "pcl.psse.",
+   "pcl.scopf."
   ],
   "cli": [
    "workbench",
@@ -2342,6 +2343,12 @@
     ],
     "since": "4.19.1"
    },
+   "pcl.network.Network.scopf": {
+    "params": [
+     "**kw"
+    ],
+    "since": "4.19.4"
+   },
    "pcl.network.Network.short_circuit": {
     "params": [
      "bus",
@@ -2838,7 +2845,8 @@
      "ratings",
      "v_default",
      "record",
-     "dS"
+     "dS",
+     "extra"
     ],
     "since": "4.19.1"
    },
@@ -3387,6 +3395,38 @@
      "**kw"
     ],
     "since": "3.18"
+   },
+   "pcl.scopf.ScopfError": {
+    "params": [],
+    "since": "4.19.4"
+   },
+   "pcl.scopf.screen": {
+    "params": [
+     "case",
+     "Pf",
+     "rate",
+     "L",
+     "mon",
+     "out",
+     "emergency"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.scopf.solve": {
+    "params": [
+     "net",
+     "emergency",
+     "outages",
+     "max_rounds",
+     "per_round",
+     "tol",
+     "max_iter",
+     "ratings",
+     "margin",
+     "check",
+     "penalty"
+    ],
+    "since": "4.19.4"
    },
    "pcl.set": {
     "params": [

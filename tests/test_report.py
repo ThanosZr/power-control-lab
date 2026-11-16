@@ -474,7 +474,8 @@ class Studies(unittest.TestCase):
         a, b = S.run({'network': d, 'study': 'pf'}), S.run({'case': 'ieee30', 'study': 'pf'})
         self.assertEqual({k: v['V'] for k, v in a['result']['buses'].items()}, {k: v['V'] for k, v in b['result']['buses'].items()})
         self.assertEqual((a['network']['case'], a['network']['buses']), (None, 30))
-        self.assertEqual(S.report({'network': d, 'study': 'pf'})['name'], 'report_network_pf.html')
+        self.assertEqual(S.report({'network': d, 'study': 'pf'})['name'], 'report_IEEE_30-bus_test_case_pf.html')      # 4.19.4: the file is named after the network
+        self.assertEqual(S.report({'network': dict(d, name=''), 'study': 'pf'})['name'], 'report_network_pf.html')    # a network that has no name
 
     def test_errors_have_a_message(self):
         for data, part in (({'study': 'pf'}, 'Δώσε case'), ({'case': 'nope'}, 'Δώσε case'), ({'case': 'ieee9', 'study': 'xx'}, 'study: ένα από'),

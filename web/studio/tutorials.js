@@ -1331,15 +1331,16 @@
   build(o){const pr=ieee9Build({ev:'none',ctl:'none',meter:true});pr.meta={...pr.meta,study:{net:o.net,study:o.study,options:o.study==='pf'?{method:o.method}:o.study==='n1'?{backend:o.backend||'auto'}:{}}};return pr;}});
  T.push({id:'opf_study',group:'Ροή φορτίου και OPF (4.19.1)',title:'Βέλτιστη ροή φορτίου (OPF) σε δίκτυα IEEE',theory:'formula',topology:'opf_study',
   options:[{k:'net',label:'Δίκτυο της μελέτης',options:[...NETS_PF.slice(0,6),['case30','30 ζυγών με όρια γραμμών (Alsac & Stott)'],NETS_PF[NETS_PF.length-1]],def:'ieee9'},
-   {k:'kind',label:'Μοντέλο',options:[['opf','AC: πλήρεις εξισώσεις, εσωτερικό σημείο'],['dcopf','DC: γραμμικό δίκτυο']],def:'opf'},
+   {k:'kind',label:'Μοντέλο',options:[['opf','AC: πλήρεις εξισώσεις, εσωτερικό σημείο'],['dcopf','DC: γραμμικό δίκτυο'],['scopf','DC με ασφάλεια N−1: καμία απώλεια κλάδου δεν υπερφορτίζει άλλον']],def:'opf'},
    {k:'limits',label:'Όρια ροής των κλάδων',options:[['yes','Ναι, όπου υπάρχει ονομαστική ισχύς'],['no','Όχι']],def:'yes'},
    {k:'start',label:'Εκκίνηση του λύτη (AC)',options:[['auto','Κανονική: το μέσο των ορίων'],['nn','Νευρωνικό αρχικό σημείο, όπου υπάρχει μοντέλο του δικτύου· ο λύτης επαληθεύει']],def:'auto'},
    {k:'emt',label:'Το EMT του σχεδίου ξεκινά από',options:[['lf','Τη ροή φορτίου του IEEE 9'],['opf','Τη βέλτιστη κατανομή (AC-OPF) του IEEE 9']],def:'lf'}],
   desc:'Η φθηνότερη κατανομή της παραγωγής που αντέχει το δίκτυο: ελαχιστοποίηση του κόστους με τις εξισώσεις ισχύος ως ισότητες και τα όρια τάσης, παραγωγής και ροής ως ανισότητες, με μέθοδο εσωτερικού σημείου στο engine (pcl.opf). Η κάρτα δείχνει κόστος, οριακές τιμές και τους περιορισμούς που δεσμεύουν. Με «βέλτιστη κατανομή» το EMT του σχεδίου ξεκινά από το σημείο που βρήκε ο OPF για το δίκτυο των 9 ζυγών.',
   tasks:['IEEE 9: κόστος 5296,69 ανά ώρα, όπως στη βιβλιογραφία. Ποιες τάσεις κάθονται στο όριο 1,1 pu;','Το δίκτυο των 30 ζυγών με και χωρίς όρια ροής: πόσο ακριβαίνει η λύση, και σε ποιους ζυγούς ανεβαίνει η οριακή τιμή;',
    'AC απέναντι σε DC: το DC δεν έχει απώλειες, άρα βγαίνει φθηνότερο κατά λίγα τοις εκατό.','Ξεκίνα το EMT από τη βέλτιστη κατανομή: οι ισχείς των γεννητριών στο scope είναι αυτές του OPF.','«Εξαγωγή αναφοράς» για την κατανομή, τις οριακές τιμές και τους περιορισμούς.',
+   'Δίκτυο των 30 ζυγών με «DC με ασφάλεια N−1» (4.19.4): η κατανομή ακριβαίνει κατά 0,147 ανά ώρα και καμία απώλεια κλάδου δεν υπερφορτίζει πια άλλον. Το διάγραμμα ανοίγει στη στρώση της ασφάλειας. Τα όρια ροής είναι τότε πάντα μέσα στο πρόβλημα· δίκτυο χωρίς ονομαστικές ισχείς δεν έχει τι να ασφαλίσει.',
    'Στα IEEE 9, IEEE 14 και στο δίκτυο των 30 ζυγών βάλε «Νευρωνικό αρχικό σημείο»: ίδιο κόστος, λιγότερες επαναλήψεις. Στα άλλα δίκτυα δεν υπάρχει μοντέλο και η κάρτα το λέει (εκπαίδευση: python -m pcl nnstart ieee118).'],
-  build(o){const pr=ieee9Build({ev:'none',ctl:'none',meter:true,lf:o.emt==='opf'?IEEE9_OPF:null});pr.meta={...pr.meta,study:{net:o.net,study:o.kind,options:o.kind==='opf'?{flow_limits:o.limits!=='no',start:o.start||'auto'}:{flow_limits:o.limits!=='no'}},emtFrom:o.emt,noAF:o.emt==='opf'};return pr;}});
+  build(o){const pr=ieee9Build({ev:'none',ctl:'none',meter:true,lf:o.emt==='opf'?IEEE9_OPF:null});pr.meta={...pr.meta,study:{net:o.net,study:o.kind,options:o.kind==='opf'?{flow_limits:o.limits!=='no',start:o.start||'auto'}:o.kind==='scopf'?{}:{flow_limits:o.limits!=='no'}},emtFrom:o.emt,noAF:o.emt==='opf'};return pr;}});
 
  // 4.17 (§50): the IEEE 9 case in EMT with a three-phase m-SSSC (one arm per phase and the central controller) in series
  // with the line 7–6 at bus 7 (branch br5 of pcl.network, 6–7: the choice of pcl.network.sssc_placement), through a

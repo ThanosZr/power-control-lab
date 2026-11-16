@@ -21,10 +21,10 @@ import numpy as np
 from . import network as N
 from .report import Report, network_report
 
-STUDIES = ('advice', 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf')
+STUDIES = ('advice', 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf')
 STARTS = ('auto', 'mid', 'pf', 'nn')
 OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n1': ('tol', 'q_limits', 'backend', 'how'), 'n1dc': (), 'opf': ('flow_limits', 'start', 'tol', 'max_iter'),
-           'dcopf': ('flow_limits', 'tol', 'max_iter'), 'advice': ()}
+           'dcopf': ('flow_limits', 'tol', 'max_iter'), 'scopf': ('emergency', 'tol', 'max_iter', 'max_rounds'), 'advice': ()}
 MAX_BUSES = 20000
 
 
@@ -136,6 +136,8 @@ def _study(net, study, opt):
             return net.dc_flow()
         if study in ('n1', 'n1dc'):
             return net.contingency('ac' if study == 'n1' else 'dc', **opt)
+        if study == 'scopf':                               # 4.19.4: the DC optimal power flow with security against every single outage
+            return net.scopf(**opt)
         return net.opf('ac' if study == 'opf' else 'dc', **opt)
     except (N.NetworkError, ValueError) as e:              # the errors of the solvers are ValueErrors with a message
         raise StudyError(str(e)) from e
@@ -155,12 +157,18 @@ def summary(study, res):
                 'worst_branch': w and w['branch'], 'worst_MVA': w and w['Smax'] / 1e6, 'worst_loading': w and w['loading'], 'overloads': sum(bool(o['overloads']) for o in ok),
                 'chord': res.get('chord'), 'newton': res.get('newton'), 'why': res['advice']['why'], 'time_ms': res['time'] * 1e3,
                 'backend': res.get('backend'), 'how': res.get('how'), 'backend_why': res.get('backend_why')}
-    if study in ('opf', 'dcopf'):
+    if study in ('opf', 'dcopf', 'scopf'):
         lmp = [d['lmp'] for d in res['buses'].values()]
-        return {'converged': res['converged'], 'iterations': res['iterations'], 'cost': res['cost'], 'losses_MW': res['losses'] / 1e6, 'binding': len(res['binding']),
+        out = {'converged': res['converged'], 'iterations': res['iterations'], 'cost': res['cost'], 'losses_MW': res['losses'] / 1e6, 'binding': len(res['binding']),
                 'flow_limits': res.get('flow_limits'), 'lmp_min': min(lmp), 'lmp_max': max(lmp), 'why': res['advice']['why'], 'message': res.get('message'),
                 'start': res.get('start'), 'start_path': res.get('start_path') or [],
                 'sources': [{'name': s['name'], 'bus': s['bus'], 'P_MW': s['P'] / 1e6, 'Q_Mvar': s['Q'] / 1e6} for s in res['sources'][:12]], 'time_ms': res['time'] * 1e3}
+        if study == 'scopf':                               # what the security costs, what binds, what no dispatch covers
+            s = res['security']
+            out['security'] = {k: s.get(k) for k in ('secure', 'outages', 'monitored', 'rounds', 'constraints', 'emergency', 'cost_base', 'cost_security', 'insecure_before',
+                                                     'worst_before', 'worst_after', 'ac')}
+            out['security'].update(islands=len(s['islands']), binding=s['binding'][:8], n_binding=len(s['binding']), unsecured=s['unsecured'][:8], n_unsecured=len(s['unsecured']))
+        return out
     return {}
 
 

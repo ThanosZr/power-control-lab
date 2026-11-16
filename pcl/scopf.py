@@ -1,4 +1,4 @@
-"""Security-constrained optimal power flow (4.19.4, ROADMAP §73): the cheapest dispatch with which no branch goes over its
+"""Security-constrained optimal power flow (4.19.4, ROADMAP §75): the cheapest dispatch with which no branch goes over its
 rating when any one branch is lost. Preventive: the dispatch is not changed after the outage.
 
     solve(net)      → the result of the DC optimal power flow with its security constraints, and what they cost
@@ -66,11 +66,13 @@ def solve(net, emergency=1.0, outages=None, max_rounds=30, per_round=None, tol=1
     'outage', 'mu' (per MW), 'loading'}], 'cost_base' (the cost without security), 'cost_security' (the difference),
     'worst_before', 'worst_after': {'outage', 'branch', 'loading'} (the worst outage of the dispatch without and with security),
     'insecure_before' (outages that overload a branch at the dispatch without security), 'secure', 'unsecured': [{'branch',
-    'outage', 'overload' (MW above the emergency rating), 'loading'}] (what no dispatch covers), 'history': [(round, constraints,
-    worst loading, cost)], 'ac': what the AC load flow of the dispatch says (with check)}."""
+    'outage', 'overload' (MW above the emergency rating), 'loading'}] (what no dispatch covers; such a pair is not in 'binding'),
+    'post': {branch: [its highest loading after any outage, as a fraction of the emergency rating, the outage]} at the dispatch
+    that was found, 'history': [(round, constraints, worst loading, cost)], 'ac': what the AC load flow of the dispatch says
+    (with check)}."""
     t0 = time.perf_counter()
     if not emergency > 0:
-        raise ScopfError('emergency: a positive multiple of the rating')
+        raise ScopfError('emergency: θετικό πολλαπλάσιο της ονομαστικής ισχύος')
     case = net.case()
     nb, nl = case.n, case.nl
     rate = case.rate.copy()
@@ -78,7 +80,7 @@ def solve(net, emergency=1.0, outages=None, max_rounds=30, per_round=None, tol=1
         rate[case.br_name.index(k)] = v / net.S_base
     mon = np.flatnonzero(np.isfinite(rate) & (rate > 0))
     if not len(mon):
-        raise ScopfError('the security-constrained optimal power flow needs a rating on at least one branch')
+        raise ScopfError('η βέλτιστη ροή φορτίου με ασφάλεια θέλει ονομαστική ισχύ σε έναν τουλάχιστον κλάδο: το δίκτυο αυτό δεν έχει καμία')
     Bbus, Bf, Pbi, Pfi = PF.dc_model(case)
     L = PF.lodf(case)
     bridge = np.flatnonzero(np.isnan(L).any(axis=0))
@@ -92,7 +94,7 @@ def solve(net, emergency=1.0, outages=None, max_rounds=30, per_round=None, tol=1
         out = np.setdiff1d(want, bridge)
         bridge = np.intersect1d(want, bridge)
     if not len(out):
-        raise ScopfError('every outage asked for splits the network: there is nothing to secure')
+        raise ScopfError('κάθε διαταραχή που ζητήθηκε χωρίζει το δίκτυο: δεν υπάρχει τι να ασφαλιστεί')
     Lz = np.nan_to_num(L, nan=0.0)
     Bfd = Bf.tocsr()
     G = OPF.sources(net, case)
@@ -121,7 +123,7 @@ def solve(net, emergency=1.0, outages=None, max_rounds=30, per_round=None, tol=1
 
     base, Pf = run()
     if Pf is None:
-        raise ScopfError('the optimal power flow without security constraints has no solution: ' + str(base.get('message')))
+        raise ScopfError('η βέλτιστη ροή φορτίου χωρίς περιορισμούς ασφάλειας δεν έχει λύση: ' + str(base.get('message')))
     w0, b0, load0, _ = screen(case, Pf, rate, Lz, mon, out, emergency)
     k0 = int(np.argmax(w0))
     worst_before = {'outage': case.br_name[out[k0]], 'branch': case.br_name[b0[k0]], 'loading': float(w0[k0])}
@@ -167,10 +169,13 @@ def solve(net, emergency=1.0, outages=None, max_rounds=30, per_round=None, tol=1
         scale = max(1e-6, float(np.median(np.abs([b['lmp'] for b in res['buses'].values()]))))
         Pfn = np.array([q['Pa'] for q in res['branches']]) / net.S_base
         ld = lambda l, k: float(abs(Pfn[l] + Lz[l, k] * Pfn[k]) / (emergency * rate[l]))      # noqa: E731
-        sec['binding'] = sorted(({'branch': case.br_name[l], 'outage': case.br_name[k], 'mu': float(x), 'loading': ld(l, k)}
-                                 for (l, k), x in zip(pairs, mu) if x > 1e-4 * scale), key=lambda q: -q['mu'])
         sec['unsecured'] = sorted(({'branch': case.br_name[l], 'outage': case.br_name[k], 'overload': float(x * net.S_base), 'loading': ld(l, k)}
                                    for (l, k), x in zip(pairs, sl) if x > 1e-6 and ld(l, k) > 1 + margin), key=lambda q: -q['overload'])
+        left = {(q['branch'], q['outage']) for q in sec['unsecured']}          # their multiplier is the price of the slack, not a price of security
+        sec['binding'] = sorted(({'branch': case.br_name[l], 'outage': case.br_name[k], 'mu': float(x), 'loading': ld(l, k)}
+                                 for (l, k), x in zip(pairs, mu) if x > 1e-4 * scale and (case.br_name[l], case.br_name[k]) not in left), key=lambda q: -q['mu'])
+        jm = np.argmax(load, axis=1)
+        sec['post'] = {case.br_name[l]: [float(load[i, jm[i]]), case.br_name[out[jm[i]]]] for i, l in enumerate(mon)}
         sec['penalty'] = float(penalty)
         if not sec['secure']:
             res['message'] = (f"{len(sec['unsecured'])} ζεύγη κλάδου και διαταραχής μένουν πάνω από το όριο: καμία κατανομή δεν τα καλύπτει" if sec['unsecured']

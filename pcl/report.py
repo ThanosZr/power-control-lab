@@ -428,7 +428,7 @@ document.addEventListener('click',function(ev){var b=ev.target.closest('button[d
 # -------------------------------------------------------------------- reports of the network studies
 def network_report(net, study='pf', result=None, title=None, **kw):
     """A report for a study of a pcl.network.Network: study 'pf' (load flow), 'n1' / 'n1dc' (N−1 in AC / with the DC screening),
-    'opf' / 'dcopf' (optimal power flow). result: the result of the study if it has run already (else it runs here with kw).
+    'opf' / 'dcopf' (optimal power flow), 'scopf' (4.19.4: the DC optimal power flow with security against every single outage). result: the result of the study if it has run already (else it runs here with kw).
     The sections can be extended or re-ordered afterwards as with any Report. picture (4.19.4): a view of pcl.netview.view to
     draw on instead of the view of this network (the same places when the network is a changed copy of another)."""
     MW = 1e6
@@ -436,7 +436,8 @@ def network_report(net, study='pf', result=None, title=None, **kw):
     name = net.name or 'δίκτυο'
     gens = sum(e['kind'] in ('generator', 'unit') for e in net.elements)
     nbr = sum(e['kind'] in ('line', 'branch', 'transformer') for e in net.elements)
-    head = {'pf': 'Ροή φορτίου', 'n1': 'Ανάλυση N−1 (AC)', 'n1dc': 'Ανάλυση N−1 (σάρωση DC)', 'opf': 'Βέλτιστη ροή φορτίου (AC)', 'dcopf': 'Βέλτιστη ροή φορτίου (DC)'}
+    head = {'pf': 'Ροή φορτίου', 'n1': 'Ανάλυση N−1 (AC)', 'n1dc': 'Ανάλυση N−1 (σάρωση DC)', 'opf': 'Βέλτιστη ροή φορτίου (AC)', 'dcopf': 'Βέλτιστη ροή φορτίου (DC)',
+            'scopf': 'Βέλτιστη ροή φορτίου με ασφάλεια N−1 (DC)'}
     if study not in head:
         raise ReportError(f'network_report: study one of {", ".join(head)}')
     r = Report(title or head[study], name, meta={'Ζυγοί': len(net.buses), 'Κλάδοι': nbr, 'Γεννήτριες': gens, 'S βάσης (MVA)': net.S_base / MW})
@@ -523,8 +524,8 @@ def network_report(net, study='pf', result=None, title=None, **kw):
                 mark[i] = 'critical'
         r.table(cols, rows, 'Όλες οι διαταραχές', [None, None, None, 5, 4] + ([5, None] if res['kind'] == 'ac' else []), mark)
     else:
-        res = result or net.opf('ac' if study == 'opf' else 'dc', **kw)
-        advice(res.get('advice') or net.advice(study))
+        res = result or (net.scopf(**kw) if study == 'scopf' else net.opf('ac' if study == 'opf' else 'dc', **kw))
+        advice(res.get('advice') or net.advice('dcopf' if study == 'scopf' else study))
         r.facts([('Κόστος (ανά ώρα)', round(res['cost'], 2)), ('Σύγκλιση', bool(res['converged'])), ('Επαναλήψεις', int(res['iterations'])), ('Απώλειες (MW)', round(res['losses'] / MW, 3)),
                  ('Περιορισμοί που δεσμεύουν', len(res['binding'])), ('Όρια ροής στο πρόβλημα', res.get('flow_limits', 0)), ('Χρόνος (ms)', round(res['time'] * 1e3, 1))])
         if not res['converged']:
@@ -535,7 +536,9 @@ def network_report(net, study='pf', result=None, title=None, **kw):
         for n in res.get('notes', []):
             r.note(n, 'info')
         src = res['sources']
-        picture(res, 'loading', 'lmp')
+        if study == 'scopf':
+            _security(r, res, MW)
+        picture(res, *(('security', 'loading', 'lmp') if study == 'scopf' else ('loading', 'lmp')))
         r.heading('Κατανομή της παραγωγής')
         if len(src) <= 60:
             r.chart('bar', [s['name'] for s in src], [{'name': 'P', 'y': [s['P'] / MW for s in src]}], 'Ενεργός ισχύς ανά πηγή', 'Πηγή', 'MW')
@@ -560,6 +563,41 @@ def network_report(net, study='pf', result=None, title=None, **kw):
         _branches(r, net, res['branches'], MW)
     r.data('study', {'study': study, 'network': name})
     return r
+
+
+def _security(r, res, MW):
+    """4.19.4: what the security against every single outage costs, which pairs bind, and what no dispatch covers."""
+    s = res['security']
+    pct = lambda x: None if x is None else round(100 * x, 2)      # noqa: E731
+    wb, wa = s.get('worst_before') or {}, s.get('worst_after') or {}
+    r.heading('Ασφάλεια N−1')
+    r.facts([('Ασφαλής κατανομή', bool(s.get('secure'))), ('Διαταραχές που ελέγχθηκαν', int(s['outages'])), ('Διαταραχές που χωρίζουν το δίκτυο (εκτός ελέγχου)', len(s['islands'])),
+             ('Όριο μετά από διαταραχή (× ονομαστική)', s['emergency']), ('Κόστος χωρίς ασφάλεια (ανά ώρα)', round(s['cost_base'], 2)),
+             ('Κόστος της ασφάλειας (ανά ώρα)', None if s.get('cost_security') is None else round(s['cost_security'], 3)),
+             ('Γύροι', int(s['rounds'])), ('Περιορισμοί που προστέθηκαν', int(s['constraints'])), ('Διαταραχές με υπερφόρτιση πριν', int(s['insecure_before'])),
+             ('Χειρότερη φόρτιση πριν (%)', pct(wb.get('loading'))), ('Χειρότερη φόρτιση μετά (%)', pct(wa.get('loading')))])
+    r.text('Το μοντέλο είναι το γραμμικό (DC) και για τη βασική κατάσταση και για κάθε διαταραχή, και η κατανομή δεν αλλάζει μετά τη διαταραχή (προληπτική ασφάλεια). '
+           'Οι φορτίσεις «μετά από διαταραχή» είναι ποσοστό του ορίου που επιτρέπεται τότε.')
+    if wb:
+        r.note(f'Χωρίς ασφάλεια, η απώλεια του {wb["outage"]} φορτίζει τον {wb["branch"]} στο {pct(wb["loading"])} %'.replace('.', ',')
+               + (f'· με ασφάλεια, η χειρότερη διαταραχή ({wa["outage"]}) φορτίζει τον {wa["branch"]} στο {pct(wa["loading"])} %.'.replace('.', ',', 1) if wa else '.'),
+               'info' if s.get('secure') else 'warning')
+    if s['binding']:
+        r.table(['Κλάδος', 'Διαταραχή (απώλεια του)', 'Πολλαπλασιαστής (ανά MWh)', 'Φόρτιση μετά (%)'], [[q['branch'], q['outage'], q['mu'], 100 * q['loading']] for q in s['binding'][:40]],
+                'Περιορισμοί ασφάλειας που δεσμεύουν' + (f' (οι 40 από {len(s["binding"])})' if len(s['binding']) > 40 else ''), [None, None, 5, 5])
+    if s['unsecured']:
+        r.note(f'{len(s["unsecured"])} ζεύγη κλάδου και διαταραχής μένουν πάνω από το όριο: καμία κατανομή της παραγωγής δεν τα καλύπτει. Θέλουν αλλαγή στο δίκτυο ή διορθωτικές κινήσεις μετά τη διαταραχή.', 'critical')
+        r.table(['Κλάδος', 'Διαταραχή (απώλεια του)', 'Υπερφόρτιση που μένει (MW)', 'Φόρτιση μετά (%)'],
+                [[q['branch'], q['outage'], q['overload'] / MW, 100 * q['loading']] for q in s['unsecured'][:40]], 'Τι δεν καλύπτεται', [None, None, 5, 5], {i: 'critical' for i in range(40)})
+    ac = s.get('ac')
+    if ac:
+        if ac.get('converged'):
+            r.note(f'Έλεγχος με ροή φορτίου AC της κατανομής: απώλειες {ac["losses"] / MW:.3f} MW, τάσεις {ac["Vmin"]:.4f}–{ac["Vmax"]:.4f} pu, '.replace('.', ',')
+                   + (f'{ac["overloads"]} κλάδοι πάνω από την ονομαστική στη βασική κατάσταση (ο χειρότερος: {ac["worst_branch"]}, {100 * ac["worst_loading"]:.1f} %).'.replace('.', ',', 1)
+                      if ac['overloads'] else f'κανένας κλάδος πάνω από την ονομαστική (ο πιο φορτισμένος: {ac["worst_branch"]}, {100 * ac["worst_loading"]:.1f} %).'.replace('.', ',', 1))
+                   + ' Το γραμμικό μοντέλο δεν βλέπει απώλειες και άεργο.', 'warning' if ac['overloads'] else 'info')
+        else:
+            r.note('Έλεγχος με ροή φορτίου AC της κατανομής: ' + str(ac.get('message')), 'warning')
 
 
 def _branches(r, net, branches, MW):

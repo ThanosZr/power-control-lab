@@ -2606,7 +2606,7 @@ async function studyOpen(f){const m=S.tutMeta?.study;if(!f||!m||STUDY.busy)retur
   STUDY.file={name:r.summary.name,fileName:f.name,network:r.network,summary:r.summary};STUDY.r=null;STUDY.last=null;STUDY.view=null;$('#netview').hidden=true;NV.v?.destroy();NV.v=null;}
  catch(e){STUDY.openError=/fetch|NetworkError|Load failed/i.test(e.message)?'Το αρχείο διαβάζεται στο engine: ξεκίνα τον τοπικό server (python run.py) και δοκίμασε ξανά.':e.message;}
  STUDY.busy=null;renderTheory();}
-const STUDY_LAB={pf:'Ροή φορτίου',n1:'N−1 σε AC',n1dc:'N−1, σάρωση DC',opf:'Βέλτιστη ροή φορτίου (AC)',dcopf:'Βέλτιστη ροή φορτίου (DC)'};
+const STUDY_LAB={pf:'Ροή φορτίου',n1:'N−1 σε AC',n1dc:'N−1, σάρωση DC',opf:'Βέλτιστη ροή φορτίου (AC)',dcopf:'Βέλτιστη ροή φορτίου (DC)',scopf:'Βέλτιστη ροή φορτίου με ασφάλεια N−1 (DC)'};
 const STUDY_METHOD={nr:'αραιός Newton–Raphson',nr_dense:'πυκνός Newton–Raphson',nr_ci:'Newton με εγχύσεις ρεύματος',fdxb:'fast-decoupled XB',fdbx:'fast-decoupled BX',sweep:'εμπρός–πίσω σάρωση',gs:'Gauss–Seidel',dc:'DC (γραμμική προσέγγιση)'};
 async function studyAct(what){const m=S.tutMeta?.study;if(!m||STUDY.busy)return;
  if(what==='open'){const i=$('#study-open');i.value='';i.click();return;}
@@ -2685,6 +2685,13 @@ function studyTheory(){const m=S.tutMeta?.study;if(!m)return '';const key=studyK
    <li id="study-start">Εκκίνηση: <b>${q.start==='warm'?'από την πρόταση του νευρωνικού':'κανονική'}</b>${(q.start_path||[]).length?' ('+esc(q.start_path.join(' · '))+')':''}</li>`:''}
    <li>Οριακή τιμή από <b>${f(q.lmp_min,5)}</b> ως <b>${f(q.lmp_max,5)}</b> ανά MWh · περιορισμοί που δεσμεύουν: <b>${q.binding}</b> · όρια ροής στο πρόβλημα: ${q.flow_limits}</li>
    <li>Κατανομή: ${q.sources.map(g=>`${esc(g.name)} ${f(g.P_MW,4)} MW`).join(' · ')}${q.sources.length>=12?' …':''}</li>`;
+  // 4.19.4: the optimal power flow with security against every single outage (pcl.scopf): what it costs, what binds, what is left
+  if(st.r.study==='scopf'&&q.security){const z=q.security,wb=z.worst_before,wa=z.worst_after,pc=x=>f(100*x,4)+' %';
+   h+=`<li id="study-sec">Ασφάλεια N−1: <b>${z.secure?'ασφαλής κατανομή':'<span class="bad">όχι ασφαλής</span>'}</b> · ${z.outages} διαταραχές ελέγχθηκαν${z.islands?` (${z.islands} χωρίζουν το δίκτυο και μένουν έξω)`:''} · ${z.rounds} ${z.rounds===1?'γύρος':'γύροι'}, ${z.constraints} ${z.constraints===1?'περιορισμός':'περιορισμοί'} · κόστος της ασφάλειας <b>${z.cost_security===null?'—':f(z.cost_security,4)}</b> ανά ώρα (χωρίς ασφάλεια: ${f(z.cost_base,7)})</li>
+   ${wb?`<li>Χωρίς ασφάλεια η απώλεια του <b>${esc(wb.outage)}</b> φορτίζει τον ${esc(wb.branch)} στο <b>${pc(wb.loading)}</b>${wa?` · με ασφάλεια η χειρότερη διαταραχή (${esc(wa.outage)}) φορτίζει τον ${esc(wa.branch)} στο <b>${pc(wa.loading)}</b>`:''} του ορίου</li>`:''}
+   ${z.n_binding?`<li>Δεσμεύουν: ${z.binding.map(b=>`${esc(b.branch)} όταν χάνεται ο ${esc(b.outage)} (μ = ${f(b.mu,4)} ανά MWh)`).join(' · ')}${z.n_binding>z.binding.length?' …':''}</li>`:''}
+   ${z.n_unsecured?`<li><b class="bad">${z.n_unsecured} ζεύγη κλάδου και διαταραχής μένουν πάνω από το όριο</b>: καμία κατανομή δεν τα καλύπτει. Το χειρότερο: ${esc(z.unsecured[0].branch)} όταν χάνεται ο ${esc(z.unsecured[0].outage)} (${pc(z.unsecured[0].loading)})</li>`:''}
+   ${z.ac?`<li>Έλεγχος με ροή φορτίου AC της κατανομής: ${z.ac.converged?`απώλειες ${f(z.ac.losses/1e6,4)} MW · ${z.ac.overloads?`<b>${z.ac.overloads} ${z.ac.overloads===1?'κλάδος':'κλάδοι'} πάνω από την ονομαστική</b> (${esc(z.ac.worst_branch)}, ${pc(z.ac.worst_loading)})`:`κανένας κλάδος πάνω από την ονομαστική (${esc(z.ac.worst_branch)}, ${pc(z.ac.worst_loading)})`}: το γραμμικό μοντέλο δεν βλέπει απώλειες και άεργο`:esc(z.ac.message||'δεν συνέκλινε')}</li>`:''}`;}
   h+=`</ul>${m.options?.backend==='gpu'||q.backend==='gpu'?'<p class="muted small" id="study-gpu">* GPU: πειραματικό. Ο δρόμος GPU δεν ελέγχεται στον CI του έργου· ελέγχεται μόνο με το <code>python -m pcl accel</code> σε μηχάνημα με κάρτα. Χωρίς κάρτα ή CuPy η μελέτη τρέχει στη CPU.</p>':''}${st.last?`<p class="muted small" id="study-file">Αναφορά: ${esc(st.last)} (στις λήψεις του browser). ${F||STUDY.edits.length?'':`Την ίδια αναφορά από κώδικα: <code>pcl.network.case_data('${esc(m.net)}').report('${esc(m.study)}').save('αναφορά.html')</code>`}</p>`:''}`;}
  else if(!st.busy&&!st.error)h+='<p class="muted small">Πάτησε «Τρέξε τη μελέτη»: τρέχει στο engine (τοπικός server) και δείχνει τι πρότεινε και γιατί.</p>';
  let emt='';try{emt=ieee9Theory();}catch(e){}

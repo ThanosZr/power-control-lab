@@ -1049,6 +1049,12 @@ class Network:
         from . import report
         return report.network_report(self, study, result, title, **kw)
 
+    def scopf(self, **kw):
+        """The optimal power flow that stays within the ratings when any one branch is lost (pcl.scopf.solve, 4.19.4): the linear
+        network, preventive (the dispatch does not change after the outage). See pcl.scopf.solve for the options and the result."""
+        from . import scopf
+        return scopf.solve(self, **kw)
+
     def opf(self, kind='ac', **kw):
         """The optimal power flow (pcl.opf): kind='ac' (interior point on the full equations) or 'dc' (the linear network).
         See pcl.opf.solve for the options and the result. 4.19.2: dS (a change of the injections, VA per bus) and start='nn' or

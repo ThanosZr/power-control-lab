@@ -45,7 +45,7 @@ STABLE_FROM = '4.0'           # the major version from which the surface is stab
 # 4.19.2: the array backends (pcl.backend; its GPU path is not covered by the CI), the script of the accelerator (pcl.accel), the
 # start models (pcl.nnstart) and the ONNX files (pcl.onnxio) are new: experimental, with their commands of the command line.
 EXPERIMENTAL = {'pcl': ('pcl.control.', 'pcl.workbench.', 'pcl.wideband.', 'pcl.powerflow.', 'pcl.opf.', 'pcl.ipm.', 'pcl.backend.', 'pcl.accel.', 'pcl.nnstart.',
-                        'pcl.onnxio.', 'pcl.netview.', 'pcl.netfile.', 'pcl.psse.'), 'cli': ('workbench', 'python -m pcl accel', 'python -m pcl nnstart')}
+                        'pcl.onnxio.', 'pcl.netview.', 'pcl.netfile.', 'pcl.psse.', 'pcl.scopf.'), 'cli': ('workbench', 'python -m pcl accel', 'python -m pcl nnstart')}
 # 4.0: the first of the two steps of a removal. {surface: {key: (version, what instead)}}: the point keeps working (with a
 # message where it runs) to the end of its major version and may go in the next one. A point that is gone leaves this list.
 DEPRECATED = {}
@@ -100,6 +100,7 @@ def surface_pcl():
     import pcl.netfile
     import pcl.netview
     import pcl.psse
+    import pcl.scopf
     import pcl.linereport
     import pcl.link
     import pcl.network
@@ -123,7 +124,7 @@ def surface_pcl():
         elif callable(obj):
             out['pcl.' + name] = {'params': sig(obj)}
     for mod in (pcl.link, pcl.control, pcl.workbench, pcl.plotting, pcl.formats, pcl.impulse, pcl.network, pcl.lineconst, pcl.linereport, pcl.trv, pcl.wideband,
-                pcl.powerflow, pcl.opf, pcl.ipm, pcl.report, pcl.study, pcl.backend, pcl.accel, pcl.nnstart, pcl.onnxio, pcl.netview, pcl.netfile, pcl.psse):
+                pcl.powerflow, pcl.opf, pcl.ipm, pcl.report, pcl.study, pcl.backend, pcl.accel, pcl.nnstart, pcl.onnxio, pcl.netview, pcl.netfile, pcl.psse, pcl.scopf):
         short = mod.__name__
         for name, obj in vars(mod).items():
             if name.startswith('_') or getattr(obj, '__module__', None) != mod.__name__ or not (inspect.isfunction(obj) or inspect.isclass(obj)):
