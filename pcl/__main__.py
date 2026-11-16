@@ -116,6 +116,7 @@ def main(argv=None):
         a.add_argument('--step', choices=('fixed', 'var'), help='σταθερό ή μεταβλητό βήμα (browser)')
         a.add_argument('--rtol', help='ανοχή του μεταβλητού βήματος (browser) ή του solve_ivp (scipy)')
         a.add_argument('--hmax', help='μέγιστο βήμα: T/N με N (browser) ή σε s (scipy)')
+        a.add_argument('--hmin', help='ελάχιστο βήμα του μεταβλητού βήματος σε s, π.χ. 1n (browser· προεπιλογή: Αυτόματα)')
         a.add_argument('--channels', help='κανάλια με κόμμα, π.χ. V:C1,I:L1')
         a.add_argument('--from', dest='t_from', default='0', help='γράφει από αυτή τη στιγμή και μετά')
         a.add_argument('--measure', action='append', help='[όνομα=]<κανάλι>:<avg|rms|min|max|pp|end|thd>[:περίοδοι] ή <κανάλι>:at:<t>')
@@ -330,6 +331,8 @@ def main(argv=None):
             kw['hmax'] = parse_value(args.hmax) if args.hmax else None
         elif args.hmax:
             kw['hmax'] = float(args.hmax)
+        if args.solver == 'browser' and getattr(args, 'hmin', None):
+            kw['hmin'] = parse_value(args.hmin)
         meas = {(m.split('=', 1)[0] if '=' in m else m): (m.split('=', 1)[1] if '=' in m else m) for m in args.measure} if args.measure else None
         t_end = parse_value(args.t_end) if args.t_end else None
         if args.cmd == 'run' and (args.chunk or args.state or args.resume):      # 3.16: chunks, saved state, continuation

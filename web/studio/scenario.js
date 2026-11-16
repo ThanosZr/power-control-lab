@@ -62,7 +62,7 @@
     if(limit&&(Date.now()-w0)/1000>limit)throw new Error(`Σταμάτησε στο t = ${P.eng(s.t,'s',4)}: όριο ${limit} s.`);}}
   else s.run(tEnd);
   const meas={};for(const m of q.measure||[]){const j=keys.indexOf(m.key);if(j<0)throw new Error(`Η μέτρηση «${m.name||m.key}» θέλει το κανάλι ${m.key} στα channels.`);meas[m.name||`${m.key}:${m.stat}`]=measure(t,Y[j],m,s.T);}
-  const out={keys,meta:{T:s.T,h:s.h,hDiv:opts.hDiv,method:s.method,step:s.var?'var':'fixed',rtol:s.var?s.rtol:null,hMin:s.var?s.hMin:null,hMax:s.var?(s.hCap||s.hMax):null,
+  const out={keys,meta:{T:s.T,h:s.h,hDiv:opts.hDiv,method:s.method,step:s.var?'var':'fixed',rtol:s.var?s.rtol:null,hMin:s.var?s.hMin:null,hMax:s.var?(s.hCap||s.hMax):null,hLim:s.hLim?{h:s.hLim.h,why:s.hLim.why,hVar:s.hLim.hVar,whyVar:s.hLim.whyVar}:null,
     steps:s.steps,rejected:s.nRej||0,t_end:s.t,points:t.length,wall_s:(Date.now()-w0)/1000,warnings:s.net.warnings,
     ...(s.solverInfo?{solver:(q=>({kind:q.kind,refac:q.refac,n:q.n,blocks:q.blocks,asProposed:q.asProposed,...q.stats}))(s.solverInfo())}:{})},   // 4.19: the linear solver of the run and its counts
    measure:meas,diag:s.diagnostics().map(d=>({sev:d.sev,grp:d.grp,id:d.id||null,t:d.t,n:d.n,msg:d.msg,fix:d.fix||''}))};
@@ -134,7 +134,8 @@
   if(q.action==='close')return closeSession(q);
   // 4.7: the step check (eigenvalues of the state map) off the page: the same circuit, at the same switch states (snapshot)
   if(q.action==='tune')return MNA.tuneInfo(q.project,q.id,q.gains||null,q.opt||{}); // 4.17.4
-  if(q.action==='stepcheck'){const sm=new MNA.Sim(q.project,q.opts||{});if(q.state)sm.restoreSnapshot(q.state);return sm.stepCheck();}
+  // 4.19.1: with q.lim the largest step of the circuit comes back too ({list, lim}); without it the list alone, as before
+  if(q.action==='stepcheck'){const sm=new MNA.Sim(q.project,q.opts||{});if(q.state)sm.restoreSnapshot(q.state);const list=sm.stepCheck();return q.lim?{list,lim:sm.hLim||null}:list;}
   throw new Error('Άγνωστη ενέργεια: '+q.action);}
 
  // the bifurcation diagram as a sweep (3.15): one value = MNA.sweepPoint (transient, then one sample per base period:

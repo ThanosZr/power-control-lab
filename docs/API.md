@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.19: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (585 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.19.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (585 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.19.
+Κανένα στην 4.19.1.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -65,10 +65,10 @@
 | `pcl.Project.hash` | — | 3.18 |
 | `pcl.Project.inputs` | — | 4.17.1 |
 | `pcl.Project.params` | — | 3.18 |
-| `pcl.Project.run` | `t_end`, `solver`, `channels`, `hdiv`, `method`, `step`, `rtol`, `hmax`, `t_from`, `max_points`, `measure`, `timeout`, `scipy_method`, `waveforms`, `save_state`, `resume`, `events` | 3.18 |
+| `pcl.Project.run` | `t_end`, `solver`, `channels`, `hdiv`, `method`, `step`, `rtol`, `hmax`, `t_from`, `max_points`, `measure`, `timeout`, `scipy_method`, `waveforms`, `save_state`, `resume`, `events`, `hmin` | 3.18 |
 | `pcl.Project.save` | `path` | 3.18 |
 | `pcl.Project.set` | `key`, `value` | 3.18 |
-| `pcl.Project.stream` | `t_end`, `chunk`, `channels`, `hdiv`, `method`, `step`, `rtol`, `hmax`, `t_from`, `max_points`, `measure`, `state`, `resume`, `to`, `timeout`, `waveforms`, `set` | 3.18 |
+| `pcl.Project.stream` | `t_end`, `chunk`, `channels`, `hdiv`, `method`, `step`, `rtol`, `hmax`, `t_from`, `max_points`, `measure`, `state`, `resume`, `to`, `timeout`, `waveforms`, `set`, `hmin` | 3.18 |
 | `pcl.Project.sweep` | `grid`, `points`, `t_end`, `measure`, `workers`, `solver`, `mode`, `progress`, `to`, `resume`, `**run_kw` | 3.18 |
 | `pcl.Project.tune` | `pwm`, `Kp`, `Ki`, `Kd`, `Tf`, `ff`, `kc`, `convN`, `step` | 4.17.4 |
 | `pcl.Result` | `t`, `keys`, `ch`, `meta`, `project`, `measured`, `diag` | 3.18 |
@@ -403,8 +403,8 @@
 | `python -m pcl net` | `<network>`, `--lf`, `--sc`, `--bus`, `--mode`, `--tmin`, `--out`, `--emt` | 4.2 |
 | `python -m pcl plant` | — | 4.8.1 |
 | `python -m pcl plot` | `<spec>`, `--preset`, `--mapping`, `--kind`, `--signal`, `--table`, `--out` | 3.18 |
-| `python -m pcl run` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--chunk`, `--state`, `--resume`, `--events` | 3.18 |
-| `python -m pcl sweep` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--resume`, `--grid`, `--zip`, `--workers` | 3.18 |
+| `python -m pcl run` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--hmin`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--chunk`, `--state`, `--resume`, `--events` | 3.18 |
+| `python -m pcl sweep` | `<project>`, `--set`, `--t-end`, `--solver`, `--hdiv`, `--method`, `--step`, `--rtol`, `--hmax`, `--hmin`, `--channels`, `--from`, `--measure`, `--sep`, `--decimal`, `--out`, `--resume`, `--grid`, `--zip`, `--workers` | 3.18 |
 | `python -m pcl tutorial` | `<id>`, `--opt`, `--out` | 3.18 |
 | `python -m pcl tutorials` | — | 3.18 |
 | `python -m pcl workbench` | `--path`, `<project>`, `--link`, `--live`, `--set`, `--input`, `--measure`, `--state`, `--state-scale`, `--u`, `--y`, `--hdiv`, `--settle`, `--headless`, `--dt` | 3.18 |
@@ -553,7 +553,7 @@
 | `file.component` | id, type, x, y, rot, flip, label, params, live, liveBase, liveRate | — | 3.18 |
 | `file.program` | t, id, k, v, rate | — | 3.19 |
 | `file.sim` | hDiv, speed, stopT, method, rec | — | 4.8 |
-| `file.solve` | unconn, island, rleak, tbase, step, rtol, hmax, units, solver, refac | — | 3.19 |
+| `file.solve` | unconn, island, rleak, tbase, step, rtol, hmax, units, solver, refac, hmin | — | 3.19 |
 | `file.subcircuit` | title, desc, version, components, wires, params | — | 3.18 |
 | `file.watch` | show, tiles, panel | — | 4.8 |
 | `file.watch.tile` | id, key, ctl, label, at, al, rng, steps, span | — | 4.8 |

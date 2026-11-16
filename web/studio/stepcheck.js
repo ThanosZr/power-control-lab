@@ -83,9 +83,14 @@
  // ---------------------------------------------------------------- the step check
  // modes: λ = (1 − 1/μ)/h from the BE map of the states, with the switch resistances as they are,
  // and again with R_on ×10 and R_off ÷10 (modes that move are set by the switch models)
+ const MU_NUM=1e-6;
  function modes(sim,h){
   const M=sim.stateMap(h);if(!M)return null;const n=M.n;
   const lam=(e)=>{const out=[];for(let i=0;i<n;i++){const mr=e.re[i],mi=e.im[i],d=mr*mr+mi*mi;if(!(d>0))continue;
+    // 4.19.1: |μ| under 10⁻⁶ is a zero of the map within the accuracy of the eigenvalues (an algebraic relation between the
+    // states, e.g. a loop of capacitors or the windings of a transformer; a multiple zero is known only to ε^(1/k)): its
+    // phase is noise, so it is a real, stable mode a million times faster than the step, not an «oscillation» at 10²⁰ Hz
+    if(d<MU_NUM*MU_NUM){out.push({re:-1/(h*Math.sqrt(d)),im:0,mr,mi,num:true});continue;}
     // 1/μ = conj(μ)/|μ|²
     out.push({re:(1-mr/d)/h,im:(mi/d)/h,mr,mi});}return out;};
   const e0=eig(M.m,n),L0=lam(e0);
@@ -93,7 +98,7 @@
   if(sw.length){const keep=sw.map(e=>[e.Ron,e.Roff]);for(const e of sw){e.Ron*=10;e.Roff/=10;}
    try{const M1=sim.stateMap(h);L1=lam(eig(M1.m,n));}finally{sw.forEach((e,i)=>{e.Ron=keep[i][0];e.Roff=keep[i][1];});}}
   for(const q of L0){q.abs=Math.hypot(q.re,q.im);
-   if(L1){let best=Infinity;for(const r of L1){const a=Math.hypot(r.re,r.im);const d=Math.abs(Math.log((a+1e-300)/(q.abs+1e-300)))+Math.abs(Math.atan2(Math.abs(r.im),-r.re)-Math.atan2(Math.abs(q.im),-q.re));if(d<best)best=d;}
+   if(L1&&!q.num){let best=Infinity;for(const r of L1){const a=Math.hypot(r.re,r.im);const d=Math.abs(Math.log((a+1e-300)/(q.abs+1e-300)))+Math.abs(Math.atan2(Math.abs(r.im),-r.re)-Math.atan2(Math.abs(q.im),-q.re));if(d<best)best=d;}
     q.parasitic=best>Math.log(1.5);}}
   return {list:L0,M,n};}
 
@@ -105,7 +110,8 @@
   return ids;}
 
  // opt.modesOnly (3.15): only the natural modes, for a topology met during the run (opt.md its modes, opt.cap its 2τ cap)
- function check(sim,opt={}){
+ // box (4.19.1): the modes found (box.md) or why there are none (box.skip), for the largest step of the circuit
+ function check0(sim,opt={},box={}){
   const out=[],lab=id=>{const c=sim.net.compInfo.get(id);return c?c.label:id;};
   if(!opt.modesOnly&&sim.var&&sim.capDirty)sim.modeCap();
   const cap=opt.modesOnly?opt.cap:sim.hCap;
@@ -127,9 +133,10 @@
   }
   // natural modes
   if(!sim.stEls||!sim.stEls.length)return out;
-  if(sim.stEls.length>200){out.push({sev:'info',grp:'step',id:null,key:'big',msg:`${sim.stEls.length} καταστάσεις: η ανάλυση των σταθερών χρόνου παραλείπεται (όριο 200).`,fix:'Οι έλεγχοι κατά την προσομοίωση (ταλάντωση δύο βημάτων, μεταβλητό βήμα) ισχύουν κανονικά.'});return out;}
-  let md=opt.md;if(!md)try{md=modes(sim,hRef);}catch(e){out.push({sev:'info',grp:'step',id:null,key:'eig',msg:'Η ανάλυση των σταθερών χρόνου δεν ολοκληρώθηκε: '+e.message,fix:''});return out;}
+  if(sim.stEls.length>200){box.skip=`${sim.stEls.length} καταστάσεις: χωρίς ανάλυση των σταθερών χρόνου`;out.push({sev:'info',grp:'step',id:null,key:'big',msg:`${sim.stEls.length} καταστάσεις: η ανάλυση των σταθερών χρόνου παραλείπεται (όριο 200).`,fix:'Οι έλεγχοι κατά την προσομοίωση (ταλάντωση δύο βημάτων, μεταβλητό βήμα) ισχύουν κανονικά.'});return out;}
+  let md=opt.md;if(!md)try{md=modes(sim,hRef);}catch(e){box.skip='η ανάλυση των σταθερών χρόνου δεν ολοκληρώθηκε';out.push({sev:'info',grp:'step',id:null,key:'eig',msg:'Η ανάλυση των σταθερών χρόνου δεν ολοκληρώθηκε: '+e.message,fix:''});return out;}
   if(!md)return out;
+  box.md=md;
   const fast=md.list.filter(q=>q.abs*hRef>.25&&Number.isFinite(q.abs)).sort((a,b)=>b.abs-a.abs);
   const seen=new Set(),alg=[];let par=0,parMin=Infinity;
   for(const q of fast){
@@ -162,6 +169,78 @@
    fix:'Δεν αλλάζουν τις μέσες τιμές· οι αιχμές ρεύματος στις μεταγωγές θέλουν R σε σειρά (π.χ. ESR) ή μικρότερο βήμα. Τα δύο βήματα Backward Euler μετά από κάθε μεταγωγή τις αποσβένουν.'});
   return out;}
 
- const api={eig,eigvecAbs,check,modes,divFor};
+ // ---------------------------------------------------------------- the largest step from the circuit (4.19.1, decision 243)
+ // Each time scale of the circuit gives a ceiling for the step, at the level where the checks above warn:
+ //   a line: its shortest travel time (the solver cuts the step there itself); an AC source or a generator: 8 steps per period;
+ //   an impulse front: 5 steps; a PWM: 4 steps per switching period; a sampling clock: one step per sample;
+ //   an oscillation of the circuit: 10 steps per period; a real time constant τ: 2τ (beyond it the trapezoidal rule rings);
+ //   and the time base T itself. Switch parasitics (modes set by R_on/R_off) do not count.
+ // A real time constant more than 1000 times below the step that runs now is practically instantaneous at that step (the
+ // solution through it is algebraic: the same rule as in the check above) and does not count; so the ceiling says the same
+ // as the messages of the check at the step asked for. A smaller step can bring such a mode back (between 2τ and 1000τ the
+ // trapezoidal rule rings there), and then the ceiling drops to its 2τ: the panel says which modes were taken as instantaneous.
+ // md: the modes of the present topology (modes()), or null (then only the sources, the lines and the clocks count).
+ // Returns {h, why, kind, id, hVar, whyVar, kindVar, parts, alg, algTau, modes, skip}: hVar is the ceiling without the
+ // modes of the circuit, which the error control of the variable step follows by itself; alg the number of time constants
+ // taken as instantaneous at the present step and algTau the slowest of them.
+ const LIM={src:8,front:5,pwm:4,osc:10};
+ function limit(sim,md,skip){
+  const lab=id=>{const c=sim.net.compInfo.get(id);return c?c.label:id;},parts=[],T=sim.T,hNow=sim.var?Math.min(sim.hMax,sim.hCap||Infinity):sim.h;
+  const put=(k,h,id,text)=>{if(!(h>0)||!Number.isFinite(h))return;const o=parts.find(q=>q.k===k);if(!o)parts.push({k,h,id,text});else if(h<o.h){o.h=h;o.id=id;o.text=text;}};
+  put('base',T,null,`βάση χρόνου T = ${eng(T,'s')}`);
+  const tl=sim.tlMaxStep();
+  if(Number.isFinite(tl)){let e=null;for(const x of sim.net.els)if((x.k==='TL'&&x.ts===tl)||(x.k==='TLM'&&x.tauMin===tl)){e=x;break;}
+   put('line',tl,e?.cid||null,`ο μικρότερος χρόνος διάδοσης γραμμής${e?' ('+lab(e.cid)+')':''}, ${eng(tl,'s')}: ο λύτης κόβει εκεί το βήμα`);}
+  for(const c of sim.net.compInfo.values()){
+   const src=c.main?.src,f=(c.type==='VAC'||c.type==='VAC3')&&src?.f>0?src.f:c.gen?.g?.f>0?c.gen.g.f:0;
+   if(f>0)put('src',1/(LIM.src*f),c.id,`${c.gen?'γεννήτρια':'πηγή'} ${c.label} (${eng(f,'Hz')}): ${LIM.src} βήματα ανά περίοδο`);
+   if(c.wave&&c.wave.T1>0)put('front',c.wave.T1/LIM.front,c.id,`μέτωπο της ${c.label} (T1 = ${eng(c.wave.T1,'s')}): ${LIM.front} βήματα στο μέτωπο`);}
+  for(const k of sim.net.ctrls)if(k.T>0)put('pwm',k.T/LIM.pwm,k.id,`περίοδος μεταγωγής του PWM ${lab(k.id)} (${eng(1/k.T,'Hz')}): ${LIM.pwm} βήματα ανά περίοδο`);
+  if(sim.shGrid)for(const q of sim.net.shs||[]){if(q.sig)continue;let g=null;try{g=sim.shGrid(q);}catch(e){}
+   if(g&&g.d>0)put('samp',g.d,q.id,`βήμα δειγματοληψίας του ελέγχου (${q.label||q.id}), ${eng(g.d,'s')}: ένα βήμα ανά δείγμα`);}
+  const min=L=>L.reduce((a,b)=>b.h<a.h?b:a);
+  const bv=min(parts);let b=bv,alg=0,algTau=0;
+  if(md){const cand=[];
+   for(const q of md.list){if(q.parasitic||!(q.abs>0)||!Number.isFinite(q.abs)||q.im<0)continue;
+    const osc=Math.abs(q.im)>.1*Math.abs(q.re)&&Math.abs(q.im)>0,f=Math.abs(q.im)/(2*Math.PI),tau=1/q.abs;cand.push({q,osc,f,tau,h:osc?1/(LIM.osc*f):2*tau});}
+   // the owners of a mode cost an LU each: only for the fastest oscillation and the fastest time constant that count
+   let bo=null,bt=null;
+   for(const c of cand){
+    if(!c.osc&&hNow>1000*c.tau){alg++;if(c.tau>algTau)algTau=c.tau;continue;}
+    if(c.osc){if(!bo||c.h<bo.h)bo=c;}else if(!bt||c.h<bt.h)bt=c;}
+   for(const c of [bo,bt]){if(!c)continue;
+    let ids=[];try{ids=owners(sim,md.M,c.q);}catch(e){}
+    const who=ids.length?' ('+ids.map(lab).join(', ')+')':'';
+    const o=c.osc?{k:'osc',h:c.h,id:ids[0]||null,text:`ταλάντωση του κυκλώματος ${eng(c.f,'Hz')}${who}: ${LIM.osc} βήματα ανά περίοδο`}
+     :{k:'tau',h:c.h,id:ids[0]||null,text:`ταχύτερη σταθερά χρόνου του κυκλώματος τ = ${eng(c.tau,'s')}${who}: πάνω από 2τ ο τραπεζοειδής ταλαντώνεται`};
+    parts.push(o);if(o.h<b.h)b=o;}}
+  parts.sort((x,y)=>x.h-y.h);
+  return {h:b.h,why:b.text,kind:b.k,id:b.id||null,hVar:bv.h,whyVar:bv.text,kindVar:bv.k,idVar:bv.id||null,parts,alg,algTau,modes:!!md,skip:md?null:(skip||null)};}
+ // the smallest «Μέγιστο βήμα» of the variable-step menu that gives a step ≤ h
+ const HMAXS=[5,10,20,50,100,200];
+ function hmaxFor(T,h){for(const d of HMAXS)if(T/d<=h*(1+1e-9))return d;return null;}
+ // the step check, and from 4.19.1 the largest step of the circuit (kept on the solver as hLim) with a warning when the
+ // step asked for passes it: the fixed step against every time scale, the largest step of the variable step against the
+ // sources, the lines and the clocks (the error control follows the modes of the circuit), and a smallest step set by
+ // the user above the ceiling
+ function check(sim,opt={}){
+  const box={},out=check0(sim,opt,box);
+  if(opt.modesOnly)return out;
+  let lim=null;try{lim=limit(sim,box.md||null,box.skip);}catch(e){lim=null;}
+  sim.hLim=lim;if(!lim)return out;
+  const varStep=!!sim.var,T=sim.T,head=[];
+  if(varStep){const hNow=Math.min(sim.hMax,sim.hCap||Infinity);
+   if(hNow>lim.hVar*(1+1e-9)){const d=hmaxFor(T,lim.hVar);
+    head.push({sev:'warn',grp:'step',id:lim.idVar,key:'hlim',lim:lim.hVar,msg:`Το μέγιστο βήμα ${eng(hNow,'s')} ξεπερνά το μέγιστο που δίνει το κύκλωμα, ${eng(lim.hVar,'s')}: ${lim.whyVar}.`,
+     fix:`Μέγιστο βήμα ≤ ${eng(lim.hVar,'s')}${d?` (T/${d})`:''}.`});}
+   if(sim.hMinUser>0&&sim.hMin>lim.h*(1+1e-9))
+    head.push({sev:'warn',grp:'step',id:lim.id,key:'hminlim',lim:lim.h,msg:`Το ελάχιστο βήμα που όρισες (${eng(sim.hMin,'s')}) είναι μεγαλύτερο από το μέγιστο που δίνει το κύκλωμα, ${eng(lim.h,'s')}: ${lim.why}.`,
+     fix:`Ελάχιστο βήμα κάτω από ${eng(lim.h,'s')}, ή κενό για «Αυτόματα» (${eng(sim.hMinAuto,'s')}).`});}
+  else if(sim.h>lim.h*(1+1e-9)){const d=divFor(T,lim.h);
+   head.push({sev:'warn',grp:'step',id:lim.id,key:'hlim',lim:lim.h,msg:`Το βήμα Δt = ${eng(sim.h,'s')} (T/${Math.round(T/sim.h)}) ξεπερνά το μέγιστο που δίνει το κύκλωμα, ${eng(lim.h,'s')}: ${lim.why}.`,
+    fix:`Βήμα ≤ ${eng(lim.h,'s')}${d?` (T/${d})`:' (κάτω από T/5000: μεταβλητό βήμα)'}, ή μεταβλητό βήμα.`});}
+  return head.length?[...head,...out]:out;}
+
+ const api={eig,eigvecAbs,check,modes,divFor,limit,hmaxFor,LIM};
  root.StepCheck=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

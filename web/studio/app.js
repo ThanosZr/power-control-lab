@@ -944,11 +944,12 @@ function propsCircuit(){const d=S.sim?.net?.diag,doc=editor.doc,so=doc.solve||{}
   <small>Ένα αβ σε είσοδο dq (ή dq σε Clarke) σταματά την προσομοίωση. Άλλη μονάδα (A σε είσοδο V, άθροισμα V με A) ή άλλη συνιστώσα (β στο α) είναι προειδοποίηση. Το γινόμενο και η διαίρεση πολλαπλασιάζουν μονάδες (V·A = W, V/V = 1). Μονάδα σε σταθερά ή κέρδος: στις παραμέτρους τους.</small></div>
   <small class="muted">Αποθηκεύονται με το κύκλωμα και ισχύουν και στον λύτη του server.</small>`,{cnt:(so.unconn||so.island||so.rleak||so.tbase||so.units)?'αλλαγμένες':''});
  const sv=k=>so[k]===undefined?'':String(so[k]);
- h+=psec('c-step','Βήμα του λύτη',`<div class="prow"><span>Βήμα</span><span class="pin-in">${opt('step',[['','Σταθερό T/N (επιλογή «Βήμα Δt»)'],['var','Μεταβλητό, με έλεγχο σφάλματος']],sv('step'))}</span>
-  <small>Μεταβλητό: σε κάθε βήμα εκτιμάται το τοπικό σφάλμα των καταστάσεων (ρεύματα πηνίων, τάσεις πυκνωτών, ροές) από διαιρεμένες διαφορές· αν περνά την ανοχή, το βήμα ξαναγίνεται μικρότερο, αλλιώς μεγαλώνει. Οι μεταγωγές και τα συμβάντα βρίσκονται όπως και με το σταθερό. Το T/N της επιλογής «Βήμα Δt» είναι το αρχικό βήμα, και το ελάχιστο είναι T/N·10⁻³.</small></div>
+ h+=psec('c-step','Βήμα του λύτη',`<div id="step-advice">${stepAdvice()}</div><div class="prow"><span>Βήμα</span><span class="pin-in">${opt('step',[['','Σταθερό T/N (επιλογή «Βήμα Δt»)'],['var','Μεταβλητό, με έλεγχο σφάλματος']],sv('step'))}</span>
+  <small>Μεταβλητό: σε κάθε βήμα εκτιμάται το τοπικό σφάλμα των καταστάσεων (ρεύματα πηνίων, τάσεις πυκνωτών, ροές) από διαιρεμένες διαφορές· αν περνά την ανοχή, το βήμα ξαναγίνεται μικρότερο, αλλιώς μεγαλώνει. Οι μεταγωγές και τα συμβάντα βρίσκονται όπως και με το σταθερό. Το T/N της επιλογής «Βήμα Δt» είναι το αρχικό βήμα· το ελάχιστο είναι η ρύθμιση «Ελάχιστο βήμα» παρακάτω.</small></div>
   <div class="prow"><span>Ανοχή (σχετικό σφάλμα ανά βήμα)</span><span class="pin-in">${opt('rtol',[['0.001','10⁻³'],['0.0001','10⁻⁴'],['','10⁻⁵ (προεπιλογή)'],['0.000001','10⁻⁶']],sv('rtol'))}</span><small>Ως προς το μέγιστο |x| κάθε κατάστασης. Σε ταλάντωση με μικρή απόσβεση το συνολικό σφάλμα μεγαλώνει με τον αριθμό των περιόδων.</small></div>
   <div class="prow"><span>Μέγιστο βήμα</span><span class="pin-in">${opt('hmax',[['5','T/5'],['10','T/10'],['20','T/20'],['','T/50 (προεπιλογή)'],['100','T/100'],['200','T/200']],sv('hmax'))}</span><small>Μικρότερο μέγιστο βήμα δίνει πυκνότερα σημεία στο scope. Με τον τραπεζοειδή το βήμα δεν ξεπερνά και το 2τ της ταχύτερης σταθεράς χρόνου του κυκλώματος (όχι των R_on/R_off), αλλιώς ταλαντώνεται εκεί.</small></div>
-  <div class="prow"><button data-stepcheck>↻ Έλεγχος βήματος</button><small>Σταθερές χρόνου και ταλαντώσεις του κυκλώματος με τις τωρινές καταστάσεις των διακοπτών, πηγές και γραμμές, απέναντι στο βήμα. Τα μηνύματα είναι στην κονσόλα διαγνωστικών κάτω από το scope.</small></div>`,{cnt:so.step==='var'?'μεταβλητό':'σταθερό'});
+  <div class="prow"><span>Ελάχιστο βήμα <em>s</em></span><span class="pin-in"><input data-solve="hmin" value="${so.hmin?esc(P.eng(+so.hmin,'',4).replace(/\s/g,'')):''}" placeholder="κενό: Αυτόματα${S.sim&&!S.error&&S.sim.hMinAuto>0?' ('+eng(S.sim.hMinAuto,'s',3)+')':''}" inputmode="decimal"></span><small>Το μικρότερο βήμα του μεταβλητού βήματος, π.χ. <code>1n</code>, <code>50n</code>, <code>2u</code>. «Αυτόματα»: το μεγαλύτερο από T/N·10⁻³ και T·10⁻¹⁰. Όταν το βήμα μένει στο ελάχιστο χωρίς να πιάνει την ανοχή, η κονσόλα το γράφει. Το σταθερό βήμα δεν αλλάζει.</small></div>
+  <div class="prow"><button data-stepcheck>↻ Έλεγχος βήματος</button><small>Σταθερές χρόνου και ταλαντώσεις του κυκλώματος με τις τωρινές καταστάσεις των διακοπτών, πηγές και γραμμές, απέναντι στο βήμα. Τα μηνύματα είναι στην κονσόλα διαγνωστικών κάτω από το scope.</small></div>`,{cnt:(so.step==='var'?'μεταβλητό':'σταθερό')+(so.hmin?' · ελάχιστο '+eng(+so.hmin,'s'):''),bad:!!(S.sim&&!S.error&&S.sim.hLim&&S.sim.stepInfo(false).over)});
  // 4.19 (§68, decision 226): the linear solver: the choice of the engine from the circuit («Αυτόματα») with its reason, and the settings
  {const q=S.sim&&!S.error&&S.sim.solverInfo?S.sim.solverInfo():null,st=q?.stats,fx=x=>String(+x.toPrecision(3)).replace('.',',');
   const now=q?(q.kind==='sparse'?'αραιός LU'+(q.refac==='partial'?', μερική επαναπαραγοντοποίηση':q.refac==='full'?', πλήρης επαναπαραγοντοποίηση':', παραγοντοποίηση από την αρχή'):'πυκνός LU'):'';
@@ -975,7 +976,7 @@ function bindProps(box,c){
  box.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>Addons.open(b.dataset.tool,{target:c.id}));
  box.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>focusComp(b.dataset.focus));
  box.querySelector('[data-group]')?.addEventListener('click',()=>groupSel());
- box.querySelectorAll('[data-solve]').forEach(el=>el.onchange=()=>{const k=el.dataset.solve;let v=el.value;if(k==='rleak'||k==='tbase'){v=v.trim()?P.parseEng(v):'';if(v!==''&&!(v>0)){el.classList.add('bad');return;}}if((k==='rtol'||k==='hmax')&&v!=='')v=+v;editor.setSolve({[k]:v});});
+ box.querySelectorAll('[data-solve]').forEach(el=>el.onchange=()=>{const k=el.dataset.solve;let v=el.value;if(k==='rleak'||k==='tbase'||k==='hmin'){v=v.trim()?P.parseEng(v):'';if(v!==''&&!(v>0)){el.classList.add('bad');return;}}if((k==='rtol'||k==='hmax')&&v!=='')v=+v;editor.setSolve({[k]:v});});
  box.querySelector('[data-progclear]')?.addEventListener('click',()=>{editor.setProgram([]);renderProps();});
  box.querySelectorAll('[data-inval]').forEach(el=>el.onchange=()=>{const [id,k]=el.dataset.inval.split('|'),raw=el.value.trim(),v=/^=/.test(raw)?raw:P.parseEng(raw);
   if(typeof v==='number'&&!Number.isFinite(v)){el.classList.add('bad');return;}el.classList.remove('bad');editor.setParams(id,{[k]:v});renderProps();});
@@ -1032,15 +1033,30 @@ let stepCheckTimer=0,stepCheckSeq=0,stepCheckPool=null;
 // (the eigenvalues and eigenvectors took 20–70 ms of the page on every change of a large circuit): the circuit and, after a
 // run, the solver's state (snapshot) go there, the messages come back to the same solver. Python blocks: in the page when
 // it has Python already, else in the pool. Without workers, or if the worker fails: in the page, as before.
+// 4.19.1 (decision 243): the largest step that the circuit allows, with its reason (stepcheck.js limit, kept on the solver by the
+// step check), against the step that runs now; the smallest step (the setting or «Αυτόματα»)
+function stepAdvice(){const sim=S.sim;if(!sim||S.error||!sim.stepInfo)return '';const q=sim.stepInfo(false),L=q.limit;
+ if(!L)return '<p class="muted small" id="step-lim">Το μέγιστο βήμα από το κύκλωμα: υπολογίζεται με τον έλεγχο βήματος…</p>';
+ const v=q.mode==='var',h=v?L.hVar:L.h,why=v?L.whyVar:L.why;
+ let t=`<p class="small" id="step-lim"><b>Πρόταση του engine:</b> μέγιστο βήμα ${esc(eng(h,'s',3))} · ${esc(why)}.`;
+ if(v&&L.h<L.hVar)t+=` Τις σταθερές χρόνου και τις ταλαντώσεις του κυκλώματος (ως ${esc(eng(L.h,'s',3))}) τις ακολουθεί ο έλεγχος σφάλματος.`;
+ if(L.alg)t+=` ${L.alg===1?'Μία σταθερά χρόνου':L.alg+' σταθερές χρόνου'} (ως ${esc(eng(L.algTau,'s',3))}) είναι πάνω από 1000 φορές ταχύτερες από το τωρινό βήμα και θεωρούνται στιγμιαίες.`;
+ if(L.skip)t+=` <span class="muted">(${esc(L.skip)}: μόνο πηγές, γραμμές και ρολόγια.)</span>`;
+ t+='</p>';
+ const now=v?`μέγιστο βήμα ${eng(q.now,'s',3)}`:`Δt = ${eng(q.h,'s',3)} (T/${q.hDiv})`,mn=v?` · ελάχιστο ${eng(q.hMin,'s',3)} (${q.hMinSet?'δική σου ρύθμιση':'Αυτόματα'})`:'';
+ t+=q.over?`<p class="small bad" id="step-now">Τώρα: ${esc(now)}: ξεπερνά το μέγιστο που δίνει το κύκλωμα${esc(mn)}.</p>`:q.minOver?`<p class="small bad" id="step-now">Τώρα: ${esc(now)}${esc(mn)}: το ελάχιστο βήμα είναι πάνω από το μέγιστο που δίνει το κύκλωμα.</p>`
+  :`<p class="muted small" id="step-now">Τώρα: ${esc(now)}${esc(mn)}.</p>`;
+ return t;}
+function stepAdviceShow(){const b=$('#step-advice');if(b)b.innerHTML=stepAdvice();}
 function scheduleStepCheck(){clearTimeout(stepCheckTimer);stepCheckTimer=setTimeout(runStepCheck,250);renderDiag();}
 function runStepCheck(){const sim=S.sim;if(!sim||S.error)return renderDiag();const seq=++stepCheckSeq;
- const inPage=()=>{if(seq!==stepCheckSeq||sim!==S.sim)return;try{sim.stepCheck();}catch(e){}renderDiag();};
+ const inPage=()=>{if(seq!==stepCheckSeq||sim!==S.sim)return;try{sim.stepCheck();}catch(e){}renderDiag();stepAdviceShow();};
  // (4.8: Python blocks with stand-ins on the page go to the pool, whose worker loads Python itself)
  if(!window.Worker||!window.Pool||S.noStepWorker||sim.net.sig.blocks.some(b=>b.type==='PY'&&!b.rt?.lazy))return inPage();
- let q;try{q={action:'stepcheck',project:fullDoc(),opts:{...sim.opts,method:sim.method},state:sim.steps>0?sim.snapshot():null};}catch(e){return inPage();}
+ let q;try{q={action:'stepcheck',lim:true,project:fullDoc(),opts:{...sim.opts,method:sim.method},state:sim.steps>0?sim.snapshot():null};}catch(e){return inPage();}
  stepCheckPool=stepCheckPool||new Pool.SimPool(1);
- stepCheckPool.map([q]).then(([list])=>{if(seq!==stepCheckSeq||sim!==S.sim)return;
-   sim.dgPre=list||[];sim.dgVer=(sim.dgVer||0)+1;renderDiag();},inPage);}
+ stepCheckPool.map([q]).then(([res])=>{if(seq!==stepCheckSeq||sim!==S.sim)return;const list=Array.isArray(res)?res:res?.list;
+   sim.dgPre=list||[];sim.hLim=(res&&!Array.isArray(res)&&res.lim)||null;sim.dgVer=(sim.dgVer||0)+1;renderDiag();stepAdviceShow();},inPage);}
 function syncStepMode(){const m=$('#step-mode');if(m)m.value=editor.doc.solve?.step==='var'?'var':'fixed';}
 // ------------------------------------------------------------------ scenarios (3.14, ROADMAP §30)
 // Python in a worker (scenario_worker.js): the pcl package with the app's solver, on a copy of the circuit on the screen

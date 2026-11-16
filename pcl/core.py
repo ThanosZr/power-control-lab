@@ -364,7 +364,7 @@ def job(spec, allow_paths=True):
         o = dict(spec['sweep'] or {})
         grid = _pairs(o.pop('grid', None), 'key', 'values')
         grid = {k: (v if isinstance(v, (list, tuple)) else _as_list(v) if isinstance(v, str) else [v]) for k, v in grid} or None
-        sw = p.sweep(grid=grid, **{k: v for k, v in o.items() if k in ('points', 't_end', 'measure', 'workers', 'solver', 'mode', 'hdiv', 'method', 'step', 'rtol', 'hmax', 'channels', 'scipy_method', 'timeout')
+        sw = p.sweep(grid=grid, **{k: v for k, v in o.items() if k in ('points', 't_end', 'measure', 'workers', 'solver', 'mode', 'hdiv', 'method', 'step', 'rtol', 'hmax', 'hmin', 'channels', 'scipy_method', 'timeout')
                                    or (allow_paths and k in ('to', 'resume'))})
         return _clean({'kind': 'sweep', 'meta': sw.meta, 'params': sw.params, 'measure': sw.names, 'vars': [_matname(c) for c in sw.params + sw.names], 'rows': sw.rows})
     if 'bifurcation' in spec:          # 3.15
@@ -375,7 +375,7 @@ def job(spec, allow_paths=True):
     o = dict(spec.get('run') or {})
     if 'from' in o:
         o['t_from'] = o.pop('from')
-    r = p.run(**{k: v for k, v in o.items() if k in ('t_end', 'solver', 'channels', 'hdiv', 'method', 'step', 'rtol', 'hmax', 't_from', 'max_points', 'measure', 'timeout', 'scipy_method', 'waveforms')
+    r = p.run(**{k: v for k, v in o.items() if k in ('t_end', 'solver', 'channels', 'hdiv', 'method', 'step', 'rtol', 'hmax', 'hmin', 't_from', 'max_points', 'measure', 'timeout', 'scipy_method', 'waveforms')
                  or (allow_paths and k in ('save_state', 'resume'))})
     return _clean(r.as_dict())
 
@@ -456,7 +456,7 @@ class Project:
 
     def set(self, key, value):
         """'<id>.<parameter>' (e.g. 'L1.L', 'PWM1.fs', 'V1.sched'), or 'solve.<k>' / 'sim.<k>' for the solver
-        (solve.step = 'var', solve.rtol, solve.hmax; sim.hDiv, sim.method). Values: numbers, '47u', or programs 't:value'.
+        (solve.step = 'var', solve.rtol, solve.hmax, solve.hmin; sim.hDiv, sim.method). Values: numbers, '47u', or programs 't:value'.
         A list gives one value per element of a block on a bus (3.18): p.set('KD.K', [-1.57, 1.57]) = 'KD.K' = '-1.57; 1.57'."""
         head, dot, prm = key.partition('.')
         if not dot and key in {q['name'] for q in self.inputs()}:
@@ -535,22 +535,26 @@ class Project:
         return _node({'action': 'channels', 'project': self.data})
 
     # ------------------------------------------------------------- running
-    def _settings(self, hdiv, method, step, rtol, hmax):
+    def _settings(self, hdiv, method, step, rtol, hmax, hmin=None):
         sim = self.data.get('sim') or {}
         st = None
-        if step or rtol or hmax:
+        if step or rtol or hmax or hmin:
             st = {'mode': step or (self.data.get('solve') or {}).get('step') or 'fixed'}
             if rtol:
                 st['rtol'] = float(rtol)
             if hmax:
                 st['hmax'] = float(hmax)
+            if hmin:                    # 4.19.1: the smallest step of the variable step, in s ('1n', 5e-8); None: «Αυτόματα»
+                st['hmin'] = float(parse_value(hmin))
         return int(hdiv or sim.get('hDiv') or 200), method or sim.get('method') or 'TR', st
 
     def run(self, t_end=None, solver='browser', channels=None, hdiv=None, method=None, step=None, rtol=None, hmax=None,
             t_from=0.0, max_points=200000, measure=None, timeout=None, scipy_method='Radau', waveforms=True, save_state=None, resume=None,
-            events=False):
+            events=False, hmin=None):
         """One simulation. t_end: duration in s (default the tutorial's stopT). channels: keys as in the app's scope
         (default the project's scope, else V and I of every element). step='var' for the variable step (§40).
+        4.19.1: hmin = the smallest step of the variable step in s (e.g. '1n'; default «Αυτόματα», the larger of h/1000 and
+        T·10⁻¹⁰). Result.meta['hLim'] is the largest step that the circuit allows, with its reason (browser solver).
         solver='scipy' runs engine.batch.simulate on the same netlist (method scipy_method, rtol, max step hmax in s).
         3.16: save_state='file' keeps the end state; resume='file' continues from a saved state up to the time t_end
         (the end time, not a duration), with the same numbers as one run. Browser solver only.
@@ -558,7 +562,7 @@ class Project:
         if save_state is not None or resume is not None:
             if solver != 'browser':
                 raise PclError('Η αποθήκευση και η συνέχεια της κατάστασης γίνονται με τον λύτη του browser (solver="browser").')
-            res = list(self.stream(t_end, chunk='all', channels=channels, hdiv=hdiv, method=method, step=step, rtol=rtol, hmax=hmax,
+            res = list(self.stream(t_end, chunk='all', channels=channels, hdiv=hdiv, method=method, step=step, rtol=rtol, hmax=hmax, hmin=hmin,
                                    t_from=t_from, max_points=max_points, measure=measure, state=save_state, resume=resume, timeout=timeout,
                                    waveforms=waveforms))
             return res[-1]
@@ -570,7 +574,7 @@ class Project:
         if meas and keys is not None:
             keys += [m['key'] for m in meas if m['key'] not in keys]
         if solver == 'browser':
-            hd, mt, st = self._settings(hdiv, method, step, rtol, hmax)
+            hd, mt, st = self._settings(hdiv, method, step, rtol, hmax, hmin)
             out = _node({'action': 'run', 'project': self.data, 't_end': t_end, 'channels': keys, 'hdiv': hd, 'method': mt,
                          'step': st, 'from': t_from, 'max_points': max_points, 'measure': meas, 'waveforms': bool(waveforms),
                          'events': events or False}, timeout=timeout)
@@ -580,7 +584,8 @@ class Project:
         raise PclError(f'Άγνωστος λύτης «{solver}»: browser ή scipy.')
 
     def stream(self, t_end=None, chunk=None, channels=None, hdiv=None, method=None, step=None, rtol=None, hmax=None, t_from=0.0,
-               max_points=200000, measure=None, state=None, resume=None, to=None, timeout=None, waveforms=True, set=None):  # noqa: A002
+               max_points=200000, measure=None, state=None, resume=None, to=None, timeout=None, waveforms=True, set=None,  # noqa: A002
+               hmin=None):
         """Results in chunks (3.16, ROADMAP §41.1): a generator of Results, one per chunk of whole base periods, each one as
         soon as it is solved. The solver stays open between chunks, so the numbers are those of one run(t_end).
           chunk     seconds per chunk (rounded to whole base periods T), default a tenth of the run; 'all' = one chunk
@@ -603,7 +608,7 @@ class Project:
                 o = sess({'action': 'open', 'project': self.data, 'saved': saved['project'], 'state': saved['sim'],
                           'channels': list(channels) if channels else saved.get('channels'), 'measure': meas})
             else:
-                hd, mt, st = self._settings(hdiv, method, step, rtol, hmax)
+                hd, mt, st = self._settings(hdiv, method, step, rtol, hmax, hmin)
                 o = sess({'action': 'open', 'project': self.data, 'channels': list(channels) if channels else None,
                           'hdiv': hd, 'method': mt, 'step': st, 'measure': meas})
             sid, keys, T, t = o['sid'], o['keys'], float(o['T']), float(o['t'])
@@ -668,14 +673,14 @@ class Project:
         return res
 
     def _query(self, t_end=None, channels=None, hdiv=None, method=None, step=None, rtol=None, hmax=None, t_from=0.0, max_points=200000,
-               measure=None, **_):
+               measure=None, hmin=None, **_):
         """The request of run() for the browser's solver, without running it (a sweep sends many at once to the pool, 3.15)."""
         t_end = float(parse_value(t_end if t_end is not None else (self.data.get('sim') or {}).get('stopT') or 0))
         if not t_end > 0:
             raise PclError('Δώσε διάρκεια t_end > 0 (σε s, π.χ. 5e-3 ή "5m").')
         meas = _measures(measure)
         keys = list(channels) if channels else ([m['key'] for m in meas] if meas else None)
-        hd, mt, st = self._settings(hdiv, method, step, rtol, hmax)
+        hd, mt, st = self._settings(hdiv, method, step, rtol, hmax, hmin)
         return {'action': 'run', 'project': self.data, 't_end': t_end, 'channels': keys, 'hdiv': hd, 'method': mt, 'step': st,
                 'from': t_from, 'max_points': max_points, 'measure': meas, 'waveforms': False, 'check': False}
 

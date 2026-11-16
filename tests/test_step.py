@@ -51,7 +51,9 @@ class SolverStep(unittest.TestCase):
 
     def test_step_checks(self):
         c = self.o['check']
-        w = [d for d in c['rc_coarse'] if d['sev'] == 'warn']
+        # (4.19.1: with the warning of the mode comes the summary 'hlim', the step against the largest step of the circuit)
+        self.assertEqual([d['key'] for d in c['rc_coarse'] if d['sev'] == 'warn'][0], 'hlim')
+        w = [d for d in c['rc_coarse'] if d['sev'] == 'warn' and d['key'] != 'hlim']
         self.assertEqual(len(w), 1)
         self.assertAlmostEqual(w[0]['tau'], 1e-6, delta=1e-11)       # R₁C₁ ∥ R₂ ≈ 1 µs
         self.assertEqual(w[0]['id'], 'C1')
@@ -62,6 +64,62 @@ class SolverStep(unittest.TestCase):
         self.assertEqual(len(s), 1)
         self.assertEqual(sorted(s[0]['ids']), ['C4', 'CX'])
         self.assertFalse([d for d in c['schering'] if d['sev'] != 'info'])
+
+    def test_largest_step_from_the_circuit(self):
+        # 4.19.1 (decision 243): the engine gives the largest step with its reason, and warns when the step passes it
+        o = self.o['limits']
+        a, b = o['tau_ok'], o['tau_over']
+        self.assertEqual((a['kind'], a['kindVar']), ('tau', 'src'))
+        self.assertAlmostEqual(a['lim'], 2e-3, delta=1e-8)           # 2τ, τ = R·C = 1 ms
+        self.assertAlmostEqual(a['hVar'], 0.02 / 8, delta=1e-12)     # the source alone: 8 steps per period
+        self.assertIn('C1', a['why'])
+        self.assertFalse(a['over'])
+        self.assertEqual(a['warn'], [])
+        self.assertTrue(b['over'])
+        self.assertEqual(b['warn'][0], 'hlim')
+        self.assertIn('mode', b['warn'])                             # the summary never stands alone: the check of the modes says why
+        # a time constant 1000 times under the step is instantaneous there: the source decides; with a smaller step it counts again
+        self.assertEqual((o['alg']['kind'], o['alg']['alg'], o['alg']['over']), ('src', 1, True))
+        self.assertEqual((o['back']['kind'], o['back']['alg'], o['back']['over']), ('tau', 0, True))
+        self.assertAlmostEqual(o['back']['lim'], 2e-6, delta=1e-11)
+        # a PWM: 4 steps per switching period; a line: its shortest travel time (the solver cuts the step there itself)
+        self.assertEqual(o['buck']['kind'], 'pwm')
+        self.assertAlmostEqual(o['buck']['lim'], o['buck']['T'] / 4, delta=1e-15)
+        self.assertEqual((o['line']['kind'], o['line']['over']), ('line', False))
+        self.assertLessEqual(o['line']['h'], o['line']['lim'])
+        # a network with algebraic relations between its states: zeros of the map are not «oscillations» at 10²⁰ Hz
+        i9 = o['ieee9']
+        self.assertEqual((i9['kind'], i9['warn'], i9['over']), ('osc', [], False))
+        self.assertGreater(i9['alg'], 10)
+        self.assertTrue(50e-6 < i9['lim'] < 500e-6, i9['lim'])       # the π sections of the lines, about 1 kHz
+        self.assertLess(i9['fmax'], 1e6)
+        # variable step: the largest step of the user against the sources, the lines and the clocks
+        self.assertFalse(o['var_ok']['over'])
+        self.assertEqual((o['var_over']['over'], o['var_over']['warn'][0], o['var_over']['kindVar']), (True, 'hlim', 'src'))
+
+    def test_smallest_step_setting(self):
+        # 4.19.1: solve.hmin. «Αυτόματα» is the rule up to 4.19 (the same run, step for step); a value down to ns and below
+        o = self.o['limits']
+        a, u, v = o['hmin_auto'], o['hmin_user'], o['hmin_over']
+        self.assertAlmostEqual(a['hMin'], max(a['h'] * 1e-3, a['T'] * 1e-10), delta=1e-20)
+        self.assertEqual((a['hMinSet'], u['hMinSet'], u['hMin']), (False, True, 1e-9))
+        self.assertEqual(o['hmin_opt'], {'hMin': 2e-8, 'set': True})                 # the option of the solver, as from pcl
+        self.assertTrue(v['minOver'])
+        self.assertIn('hminlim', v['warn'])
+        r = o['rlc']
+        self.assertTrue(r['same'])
+        self.assertEqual((r['auto']['atMin'], r['auto']['note']), (0, []))
+        # held at a smallest step equal to the first step: the console says so, as a warning once the step stays there
+        c, f = r['coarse'], r['fine']
+        self.assertGreater(c['atMin'], 100)
+        self.assertTrue(c['note'] and all(n['sev'] == 'warn' and 'Ελάχιστο βήμα' in n['fix'] for n in c['note']))
+        self.assertGreater(c['err'], 20 * r['auto']['err'])
+        self.assertEqual((f['atMin'], f['note']), (0, []))
+        self.assertLess(f['err'], 1.5 * r['auto']['err'])
+        # off the page: the list alone as before, and the largest step with it when asked
+        w = o['worker']
+        self.assertTrue(w['list'] and w['same'])
+        self.assertEqual(w['lim']['kind'], 'tau')
 
     def test_runtime_messages(self):
         # a clock signal driving the source is not a program: the trapezoidal rule rings there and the console says so

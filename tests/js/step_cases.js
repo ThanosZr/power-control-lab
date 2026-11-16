@@ -86,4 +86,35 @@ const out={};
 //    the mode on a running simulation carries on from the same state
 {const pr=build('buck',{start:'steady'});const a=new MNA.Sim(pr,{hDiv:200});a.run(1e-3);const v1=a.now('V:C1');a.setStepMode({mode:'var'});a.run(1e-3);
  const b=new MNA.Sim(pr,{hDiv:200});b.run(2e-3);out.mode_switch={fixed_then_var:a.now('V:C1'),fixed:b.now('V:C1'),at1ms:v1,var:a.var};}
+// 8) 4.19.1 (decision 243): the smallest step as a setting (solve.hmin), the largest step from the circuit with its reason
+//    (stepInfo, stepcheck.js limit) and the warnings when the step asked for passes it
+{const rc=(C,solve)=>project([{id:'V1',type:'VAC',params:{Vpk:10,f:50}},{id:'R1',type:'R',params:{R:1000}},{id:'C1',type:'C',params:{C}},{id:'G',type:'GND'}],
+  [['V1:p','R1:a'],['R1:b','C1:p'],['C1:n','G:g'],['V1:n','G:g']],solve||{});
+ const lim=(pr,opts)=>{const s=new MNA.Sim(pr,opts||{hDiv:pr.sim?.hDiv||200,method:pr.sim?.method}),q=s.stepInfo(),L=q.limit;
+  return {h:q.h,now:q.now,over:q.over,minOver:q.minOver,kind:L.kind,lim:L.h,hVar:L.hVar,kindVar:L.kindVar,alg:L.alg,why:L.why,T:q.T,hMin:q.hMin,hMinAuto:q.hMinAuto,hMinSet:q.hMinSet,
+   warn:s.dgPre.filter(d=>d.sev==='warn').map(d=>d.key.split(':')[0]),fmax:Math.max(0,...s.dgPre.filter(d=>d.f).map(d=>d.f))};};
+ const o={};
+ // τ = 1 ms on a 50 Hz source: the ceiling is 2τ = 2 ms (the source alone: T/8 = 2,5 ms); T/50 is under it, T/5 over it
+ o.tau_ok=lim(rc(1e-6),{hDiv:50});o.tau_over=lim(rc(1e-6),{hDiv:5});
+ // τ = 1 µs: instantaneous at T/5 = 4 ms (the source decides, and the step passes it); at T/50 = 0,4 ms it counts again (2τ = 2 µs)
+ o.alg=lim(rc(1e-9),{hDiv:5});o.back=lim(rc(1e-9),{hDiv:50});
+ // a PWM (4 steps per switching period), a line (its travel time), a network with algebraic relations (no «oscillation» at 10²⁰ Hz)
+ o.buck=lim(build('buck',{}),{hDiv:200});o.line=lim(build('cable_xb',{}));o.ieee9=lim(build('ieee9_emt',{}));
+ // variable step: the largest step T/5 against the source (τ = 10 ms, so the 2τ cap of the trapezoidal rule is above it); T/50 is fine
+ o.var_ok=lim(rc(1e-5,{step:'var'}),{hDiv:200});o.var_over=lim(rc(1e-5,{step:'var',hmax:5}),{hDiv:200});
+ // the smallest step: «Αυτόματα» = max(h/1000, T·10⁻¹⁰); a value of the user; a value above the ceiling of the circuit
+ o.hmin_auto=lim(rc(1e-6,{step:'var'}),{hDiv:200});o.hmin_user=lim(rc(1e-6,{step:'var',hmin:1e-9}),{hDiv:200});o.hmin_over=lim(rc(1e-6,{step:'var',hmax:5,hmin:3e-3}),{hDiv:200});
+ o.hmin_opt=(()=>{const s=new MNA.Sim(rc(1e-6),{hDiv:200,step:{mode:'var',hmin:2e-8}});return {hMin:s.hMin,set:s.stepInfo(false).hMinSet};})();
+ // the RLC discharge of 1) with the variable step at rtol 10⁻⁶: «Αυτόματα» and its value written out give the same run; a smallest
+ // step equal to the first step holds the step there (the note becomes a warning after 50 times); 1 ns lets it through
+ {const R=.5,L=10e-6,C=1e-6,a=R/(2*L),wd=Math.sqrt(1/(L*C)-a*a),vex=t=>10*Math.exp(-a*t)*(Math.cos(wd*t)+a/wd*Math.sin(wd*t));
+  const mk=solve=>project([{id:'C1',type:'C',params:{C,v0:10}},{id:'L1',type:'L',params:{L}},{id:'R1',type:'R',params:{R}},{id:'G',type:'GND'}],[['C1:p','L1:a'],['L1:b','R1:a'],['R1:b','G:g'],['C1:n','G:g']],{tbase:1e-4,step:'var',rtol:1e-6,...solve});
+  const go=solve=>{const s=new MNA.Sim(mk(solve),{hDiv:200});s.run(1e-4);const ms=s.diagnostics().filter(d=>d.key.startsWith('minstep'));
+   return {steps:s.steps,rej:s.nRej||0,v:s.now('V:C1'),err:maxErr(s,'V:C1',vex),hMin:s.hMin,auto:s.hMinAuto,atMin:s.stepInfo(false).atMin,note:ms.map(d=>({sev:d.sev,n:d.n,fix:d.fix}))};};
+  const A=go({}),B=go({hmin:A.auto}),Cc=go({hmin:5e-7}),D=go({hmin:1e-9});
+  o.rlc={auto:A,same:A.steps===B.steps&&Object.is(A.v,B.v)&&A.rej===B.rej,coarse:Cc,fine:D};}
+ // the step check off the page (scenario.js): the list alone as before, and with lim the largest step too
+ {const SCN=require(W+'/scenario.js'),pr=rc(1e-6);const a=SCN.handle({action:'stepcheck',project:pr,opts:{hDiv:5}}),b=SCN.handle({action:'stepcheck',lim:true,project:pr,opts:{hDiv:5}});
+  o.worker={list:Array.isArray(a),keys:a.map(d=>d.key.split(':')[0]),lim:b.lim?{h:b.lim.h,kind:b.lim.kind}:null,same:JSON.stringify(a)===JSON.stringify(b.list)};}
+ out.limits=o;}
 console.log(JSON.stringify(out));

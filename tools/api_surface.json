@@ -1,5 +1,5 @@
 {
- "version": "4.19",
+ "version": "4.19.1",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -165,7 +165,8 @@
      "waveforms",
      "save_state",
      "resume",
-     "events"
+     "events",
+     "hmin"
     ],
     "since": "3.18"
    },
@@ -200,7 +201,8 @@
      "to",
      "timeout",
      "waveforms",
-     "set"
+     "set",
+     "hmin"
     ],
     "since": "3.18"
    },
@@ -2888,6 +2890,7 @@
      "--step",
      "--rtol",
      "--hmax",
+     "--hmin",
      "--channels",
      "--from",
      "--measure",
@@ -2912,6 +2915,7 @@
      "--step",
      "--rtol",
      "--hmax",
+     "--hmin",
      "--channels",
      "--from",
      "--measure",
@@ -3551,7 +3555,8 @@
      "hmax",
      "units",
      "solver",
-     "refac"
+     "refac",
+     "hmin"
     ],
     "since": "3.19"
    },

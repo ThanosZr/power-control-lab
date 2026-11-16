@@ -49,5 +49,21 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
  ok(lin2.kind==='dense'&&/διαφέρει από την πρόταση/.test(lin2.now)&&lin2.solve.solver==='dense','γραμμικός λύτης: η επιλογή «πυκνός» εφαρμόζεται και φαίνεται ότι διαφέρει από την πρόταση');
  await p.selectOption('[data-solve="solver"]','');await p.waitForTimeout(500);
  ok(await p.evaluate(()=>PCL.S.sim.solverInfo().kind==='sparse'&&!PCL.editor.doc.solve?.solver),'γραμμικός λύτης: «Αυτόματα» επιστρέφει στην πρόταση');
+ // 4.19.1 (decision 243): the largest step from the circuit with its reason, the warning when the step passes it, and the
+ // smallest step as a setting of the circuit (saved with it)
+ await p.evaluate(()=>PCL.loadTutorial('schering'));await p.waitForTimeout(900);
+ const sec=async()=>{await p.waitForFunction(()=>!!PCL.S.sim?.hLim,null,{timeout:10000});return p.evaluate(()=>{PCL.editor.sel.c.clear();PCL.renderProps();const d=document.querySelector('details[data-sec="c-step"]');if(d)d.open=true;
+  const q=x=>document.querySelector(x)?.textContent||'';return {lim:q('#step-lim'),now:q('#step-now'),bad:!!document.querySelector('#step-now.bad'),info:PCL.S.sim.stepInfo(false)};});};
+ const st=await sec();
+ ok(/Πρόταση του engine: μέγιστο βήμα 64,2 μs/.test(st.lim)&&/C₄/.test(st.lim)&&!st.bad&&!st.info.over,'βήμα: το μέγιστο από το κύκλωμα με τον λόγο του ('+st.lim.slice(0,90)+')');
+ await p.selectOption('#sim-step','50');await p.waitForFunction(()=>PCL.S.sim?.hLim&&PCL.S.sim.stepInfo(false).over,null,{timeout:10000});
+ const st2=await sec(),w2=await p.$$eval('.dg-item.warn',x=>x.map(e=>e.textContent));
+ ok(st2.bad&&/ξεπερνά το μέγιστο/.test(st2.now)&&w2.some(t=>/ξεπερνά το μέγιστο που δίνει το κύκλωμα/.test(t)),'βήμα: προειδοποίηση όταν το βήμα ξεπερνά το μέγιστο του κυκλώματος');
+ await p.selectOption('#sim-step','400');await p.selectOption('#step-mode','var');await p.waitForTimeout(500);
+ const st3=await sec();await p.fill('[data-solve="hmin"]','20n');await p.dispatchEvent('[data-solve="hmin"]','change');await p.waitForTimeout(500);
+ const st4=await p.evaluate(()=>({hMin:PCL.S.sim.hMin,set:PCL.S.sim.stepInfo(false).hMinSet,doc:PCL.editor.doc.solve?.hmin}));
+ ok(!st3.info.hMinSet&&/Αυτόματα/.test(st3.now)&&st4.set&&Math.abs(st4.hMin-2e-8)<1e-15&&Math.abs(st4.doc-2e-8)<1e-15,'βήμα: ελάχιστο βήμα 20 ns ως ρύθμιση του κυκλώματος (πριν: Αυτόματα)');
+ await p.evaluate(()=>{PCL.editor.sel.c.clear();PCL.renderProps();});await p.fill('[data-solve="hmin"]','');await p.dispatchEvent('[data-solve="hmin"]','change');await p.waitForTimeout(400);
+ ok(await p.evaluate(()=>!PCL.S.sim.stepInfo(false).hMinSet&&PCL.editor.doc.solve?.hmin===undefined),'βήμα: κενό = «Αυτόματα»');
  ok(errs.length===0,'χωρίς σφάλματα JavaScript '+errs.join(' | '));
  await b.close();})();

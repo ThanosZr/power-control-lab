@@ -67,7 +67,7 @@
  // so the run continues with the same numbers. Objects met twice are kept once ($ref); typed arrays as base64 of their
  // bytes (exact); NaN, ±Infinity and −0 by name; an object with getState/setState (a Python block) keeps its own state.
  // Left out: the project (rebuilt), the LU cache and the sparse pattern (rebuilt the same) and the scope's buffers (ring, per).
- const SNAP_SKIP=new Set(['project','cache','ring','per','sp','spq','spw','rec','spF','spA','spChg','cvL']);   // 4.2: the sparse pattern is rebuilt the same; 4.19: the working factors too
+ const SNAP_SKIP=new Set(['project','cache','ring','per','sp','spq','spw','rec','spF','spA','spChg','cvL','hLim']);   // 4.2: the sparse pattern is rebuilt the same; 4.19: the working factors too
  const SNAP_TA={Float64Array,Float32Array,Int32Array,Uint32Array,Int16Array,Uint16Array,Int8Array,Uint8Array,Uint8ClampedArray};
  function b64of(ta){const u=new Uint8Array(ta.buffer,ta.byteOffset,ta.byteLength);if(typeof Buffer!=='undefined')return Buffer.from(u).toString('base64');
   let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s);}
@@ -963,7 +963,8 @@
     else if(rleak>0)for(const i of q.nodes)els.push({k:'G',a:i,b:-1,R:rleak,cid:'#island',role:'leak'});}}
   const tbase=num(SO.tbase,0)>0?num(SO.tbase,0):0; // time base when no source sets one (3.10), e.g. a Marx generator with charged capacitors
   // step (3.13): fixed T/N, or variable with error control (relative tolerance, largest step T/hmax)
-  const step={mode:SO.step==='var'?'var':'fixed',rtol:Math.min(1e-2,Math.max(1e-7,num(SO.rtol,1e-5))),hmax:Math.max(1,num(SO.hmax,50)),trStart:SO.trStart==='be'?'be':'state'};
+  // 4.19.1 (decision 243): hmin = the smallest step of the variable step in s (0: «Αυτόματα», the rule up to 4.19)
+  const step={mode:SO.step==='var'?'var':'fixed',rtol:Math.min(1e-2,Math.max(1e-7,num(SO.rtol,1e-5))),hmax:Math.max(1,num(SO.hmax,50)),hmin:num(SO.hmin,0)>0?num(SO.hmin,0):0,trStart:SO.trStart==='be'?'be':'state'};
   const diag={unconn,island,rleak,skipped:[...skip].map(([id,why])=>({id,why})),open,freeEnds,freeNets,islands};
   const rowBase=nNodes;for(const e of els)if(e.row!==undefined)e.row+=rowBase;
   const sig=compileSignals(blocks,sigNets,ctrls,els,compInfo,warnings);
@@ -1061,7 +1062,10 @@
   stVec(){const S=this.stAll,x=new Float64Array(S.length);for(let i=0;i<S.length;i++){const q=S[i],e=q.e;x[i]=q.k==='L'?e.i:q.k==='C'?e.v:q.k==='B'?e.vc[q.j]:q.k==='XI'||q.k==='XV'?e.sai[q.s]:q.k==='T'?e.iE[q.j]:q.k==='M'?q.m.st[q.f]:q.k==='W'?q.m.st.w:q.k==='Wg'?q.m.st.w[q.j]:e.psi[q.j];}return x;}
   stepCfg(){return {...this.net.step,...(this.opts.step||{})};}
   varSetup(){const c=this.stepCfg();this.var=c.mode==='var';this.rtol=c.rtol;const tl=this.tlMaxStep();
-   this.hMax=Math.min(Math.max(this.T/c.hmax,this.h),tl);this.hMin=Math.min(this.hMax,Math.max(this.h*1e-3,this.T*1e-10));
+   // 4.19.1 (decision 243): the smallest step is a setting (solve.hmin in s, down to ns and below); «Αυτόματα» is the rule
+   // up to 4.19, the larger of h/1000 and T·10⁻¹⁰, with the same numbers bit for bit. hTiny: under it a step counts as «tiny»
+   this.hMax=Math.min(Math.max(this.T/c.hmax,this.h),tl);this.hMinAuto=Math.max(this.h*1e-3,this.T*1e-10);this.hMinUser=+c.hmin>0?Math.max(+c.hmin,1e-15):0;
+   this.hMin=Math.min(this.hMax,this.hMinUser||this.hMinAuto);this.hTiny=this.hMinUser>0?Math.min(this.h*1e-6,.5*this.hMin):this.h*1e-6;this.hLim=null;
    if(!(this.hv>0))this.hv=this.h;this.hv=Math.min(this.hMax,Math.max(this.hMin,this.hv));}
   setStepMode(patch){this.opts.step={...(this.opts.step||{}),...patch};this.hv=null;this.capDirty=true;this.varSetup();if(this.var)this.hv=this.hGrid(Math.max(this.hMin,this.h/64));this.lteH=null;}
   // variable steps on the grid h·2^(k/4), so the factorizations are reused
@@ -1079,7 +1083,8 @@
    r={key,md:null,cap:null,noted:false};this.topo.set(key,r);
    const h=this.var?this.hMax:this.h;
    try{r.md=SC.modes(this,h);}catch(e){r.err=e.message;return r;}
-   if(r.md&&this.var&&this.method==='TR'){let c=Infinity;for(const q of r.md.list){if(q.parasitic||!(q.abs>0)||Math.abs(q.im)>.1*Math.abs(q.re))continue;const tau=1/q.abs;if(tau>=this.hMin/2)c=Math.min(c,2*tau);}
+   // (4.19.1: with a smallest step set by the user, far below h/1000, a zero of the map within the accuracy of the eigenvalues, q.num, must not cap the step)
+   if(r.md&&this.var&&this.method==='TR'){let c=Infinity;for(const q of r.md.list){if(q.parasitic||!(q.abs>0)||Math.abs(q.im)>.1*Math.abs(q.re)||(q.num&&this.hMinUser>0))continue;const tau=1/q.abs;if(tau>=this.hMin/2)c=Math.min(c,2*tau);}
     if(Number.isFinite(c))r.cap=Math.max(this.hMin,c);}
    return r;}
   // after a switching: the step check of the new topology (its messages once, those not in the check before the run),
@@ -1122,8 +1127,9 @@
      if(r.err>1&&h>this.hMin*(1+1e-9)&&this.nRejRow<40){this.restoreState(snap);this.beLeft=be;this.nRej++;this.nRejRow++;
       this.hv=this.hGrid(Math.max(this.hMin,h*Math.max(.2,.9*Math.pow(r.err,-1/r.q))));return true;}
      if(r.err>1){const q=this.stAll[r.arg],id=q?.e.cid||null,lb=id?(this.net.compInfo.get(id)?.label||id):'';
+      this.nAtMin=(this.nAtMin||0)+1;
       this.note('minstep:'+id,{sev:'info',up:50,grp:'step',id,msg:`Το μεταβλητό βήμα έφτασε στο ελάχιστο (${P.eng(this.hMin,'s',3)}) χωρίς να πιάσει την ανοχή ${this.rtol}${lb?' ('+lb+')':''}.`,
-       fix:'Μικρότερο βήμα T/N (το ελάχιστο είναι T/N·10⁻³) ή χαλαρότερη ανοχή. Συχνά σημαίνει ασυνέχεια που δεν είναι συμβάν, π.χ. σήμα που αλλάζει απότομα.'});}
+       fix:(this.hMinUser>0?'Μικρότερο «Ελάχιστο βήμα» στις ρυθμίσεις του κυκλώματος (τώρα δική σου τιμή), ':'Μικρότερο «Ελάχιστο βήμα» στις ρυθμίσεις του κυκλώματος (τώρα «Αυτόματα»: το μεγαλύτερο από T/N·10⁻³ και T·10⁻¹⁰), μικρότερο βήμα T/N, ')+'ή χαλαρότερη ανοχή. Συχνά σημαίνει ασυνέχεια που δεν είναι συμβάν, π.χ. σήμα που αλλάζει απότομα. Όταν το βήμα μένει εκεί (50 φορές στο ίδιο στοιχείο) το μήνυμα γίνεται προειδοποίηση.'});}
      const p=h*Math.min(4,.9*Math.pow(Math.max(r.err,1e-12),-1/r.q));
      this.hv=this.hGrid(p<this.hv?p:h>=.5*this.hv?Math.min(p,2*this.hv):this.hv);}}
    this.nRejRow=0;
@@ -1135,6 +1141,12 @@
    const r={key,src:'browser',t:this.t,n:1,...rec};d.set(key,r);this.dgVer=(this.dgVer||0)+1;return r;}
   // checks before the run: modes against the step, sources, lines (stepcheck.js); kept until the next check
   stepCheck(){this.dgPre=SC?SC.check(this).map(r=>({src:'browser',pre:true,t:null,n:1,...r})):[];this.dgVer=(this.dgVer||0)+1;return this.dgPre;}
+  // 4.19.1 (decision 243): the step and its limits as the engine sees them: what runs now, the smallest step (the setting
+  // or «Αυτόματα»), and the largest step that the circuit allows with its reason (stepcheck.js limit; the step check runs
+  // when it has not run yet, unless run = false). over: the step asked for passes the largest step of the circuit
+  stepInfo(run=true){if(run&&!this.hLim&&SC)this.stepCheck();const L=this.hLim||null,v=!!this.var,now=v?Math.min(this.hMax,this.hCap||Infinity):this.h,lim=L?(v?L.hVar:L.h):null;
+   return {mode:v?'var':'fixed',T:this.T,h:this.h,hUser:this.hUser,hDiv:Math.round(this.T/this.h),hMin:this.hMin,hMinAuto:this.hMinAuto,hMinUser:this.hMinUser||null,hMinSet:this.hMinUser>0,
+    hMax:v?this.hMax:null,hCap:v?(this.hCap||null):null,atMin:this.nAtMin||0,limit:L,now,over:lim!==null&&now>lim*(1+1e-9),minOver:!!(L&&v&&this.hMinUser>0&&this.hMin>L.h*(1+1e-9))};}
   diagnostics(){const pre=this.dgPre||[],keys=new Set(pre.map(r=>r.key));
    return [...pre,...(this.dg?[...this.dg.values()].filter(r=>!(r.base&&keys.has(r.base))):[])];}
   // trapezoidal two-step ringing: the change of a state alternates in sign, step after step, around a slower trend
@@ -1196,7 +1208,7 @@
     this.A=this.sparse?null:new Float64Array(this.n*this.n);}
    if(old&&!fresh)for(const e of net.els)if(e.k==='NL'){const o=old.els.find(x=>x.k==='NL'&&x.cid===e.cid);if(o){e.v0=o.v0;if(o.sai&&e.sai)for(const k of SAI_ST)e.sai[k]=o.sai[k];}}this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.hUser=this.opts.h||this.T/this.opts.hDiv;this.h=Math.min(this.hUser,this.tlMaxStep());
-   if(fresh){this.hv=null;this.dg=new Map();this.dgPre=[];this.nRej=0;this.nRejRow=0;this.nTiny=0;}this.stIndex();this.varSetup();this.lteH=null;this.rx=null;
+   if(fresh){this.hv=null;this.dg=new Map();this.dgPre=[];this.nRej=0;this.nRejRow=0;this.nTiny=0;this.nAtMin=0;}this.stIndex();this.varSetup();this.lteH=null;this.rx=null;
    if(fresh&&this.var)this.hv=this.hGrid(Math.max(this.hMin,this.h/64)); // the first steps (backward Euler, no history yet) start small and grow ×2 per step
    const keys=this.channelKeys();const same=!fresh&&this.keys&&keys.join('|')===this.keys.join('|');
    this.keys=keys;this.chIndex=new Map(keys.map((k,i)=>[k,i]));
@@ -1259,7 +1271,7 @@
   // (at t = 0 the circuit is built again: the stand-ins gave zeros for the first sample)
   pyUpgrade(){const R=root.PyRT;if(!R||!R.ready)return false;if(!(this.t>0)){if(this.pyLazy())this.load(this.project,true);return true;}for(const b of this.net.sig.blocks){if(b.type!=='PY'||!b.rt?.lazy)continue;const st=b.rt.state,o=b.rt.o;
     try{b.rt=R.make(b.code,o);b.rt.setState(st);}catch(e){const ne=new NetlistError(e.message);ne.py=true;throw ne;}}return true;}
-  setMethod(m){this.method=['TR','BE','BDF2'].includes(m)?m:'TR';this.cache.clear();this.beLeft=Math.max(this.beLeft,1);this.capDirty=true;}
+  setMethod(m){this.method=['TR','BE','BDF2'].includes(m)?m:'TR';this.cache.clear();this.beLeft=Math.max(this.beLeft,1);this.capDirty=true;this.hLim=null;}
   setControl(id,patch){const k=this.net.ctrls.find(c=>c.id===id);if(!k)return false;Object.assign(k,patch);return true;}
   // a block on a bus (3.18) is one block per element, <id>[k]: a live change reaches every element
   setBlock(id,patch){const n=this.net.vec?.[id],bs=n?this.net.sig.blocks.filter(q=>q.id.startsWith(id+'[')):this.net.sig.blocks.filter(q=>q.id===id);if(!bs.length)return false;
@@ -2074,7 +2086,7 @@
     // variable step (3.13): a step whose local error is above the tolerance is taken again, smaller
     if(this.var){if(this.varCheck(hst,snap,be,!stat&&Math.abs(this.t-tn)<eps)){this.jumpNow=jn;continue;}this.endFlipPrev=this.endFlip;}
     steps++;
-    if(hst<this.h*1e-6&&++this.nTiny===2000)this.note('tiny',{sev:'warn',grp:'step',id:null,msg:`Πολλά βήματα κάτω από 10⁻⁶·Δt (συμβάντα πολύ κοντά το ένα στο άλλο, από t = ${P.eng(this.t,'s',4)}).`,fix:'Συνήθως διακόπτης ή συγκριτής που αλλάζει κατάσταση συνεχώς (chattering): έλεγξε την υστέρηση ή τον νεκρό χρόνο.'});
+    if(hst<this.hTiny&&++this.nTiny===2000)this.note('tiny',{sev:'warn',grp:'step',id:null,msg:`Πολλά βήματα κάτω από 10⁻⁶·Δt (συμβάντα πολύ κοντά το ένα στο άλλο, από t = ${P.eng(this.t,'s',4)}).`,fix:'Συνήθως διακόπτης ή συγκριτής που αλλάζει κατάσταση συνεχώς (chattering): έλεγξε την υστέρηση ή τον νεκρό χρόνο.'});
     if(this.method==='TR'&&this.lastSmooth&&!this.lastDisc&&this.stEls.length<=4000)this.ringCheck();else if(this.lastDisc)this.rx=null;
     // land exactly on event times; a programmed jump there makes the next step start like a switching (3.15)
     if(Math.abs(this.t-tn)<eps){this.t=tn;if(this.evJump&&this.jumpAt(tn)){this.jumpNow=true;if(this.ev?.on)for(const [sc,d,id] of this.jumpScheds()){const a=schedAt(sc,tn,d,true),b=schedAt(sc,tn,d);if(a!==b)this.logEv('jump',id,b,{from:a});}}}
