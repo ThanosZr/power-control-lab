@@ -260,7 +260,9 @@ class Report:
                     body.append(f'<details class="chart-data"><summary>{e(_T[L]["numbers"])}</summary>' +
                                 self._table(cols, rows, [None] + [5] * len(s['series']), '', {}, '', ntab) + '</details>')
         css = _CSS.replace('/*LIGHT*/', ''.join(f'--{k}:{v};' for k, v in LIGHT.items())).replace('/*DARK*/', ''.join(f'--{k}:{v};' for k, v in DARK.items()))
-        data = json.dumps(self.to_dict(), ensure_ascii=False).replace('</', '<\\/')
+        # the data inside a script element: no «<» at all (a text with «</script>», or with «<!--» and «<script», would end or
+        # swallow the element), written as the JSON escape \u003c, which reads back as the same character
+        data = json.dumps(self.to_dict(), ensure_ascii=False).replace('<', '\\u003c')
         sub = f'<p class="sub">{e(self.subtitle)}</p>' if self.subtitle else ''
         meta = ' · '.join(f'{e(str(a))}: {e(num(b, 6, L, True))}' for a, b in self.meta.items())
         return (f'<!DOCTYPE html>\n<html lang="{e(L)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'

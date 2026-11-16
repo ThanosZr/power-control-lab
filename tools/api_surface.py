@@ -38,7 +38,11 @@ STABLE_FROM = '4.0'           # the major version from which the surface is stab
 # Workbench (§19) still change; they are listed but marked experimental, and a change there needs no --allow-removal.
 # When they settle they become stable, which is an addition. Prefixes of keys per surface.
 # 4.13: pcl.wideband (the wideband fit) is new: experimental until its options settle
-EXPERIMENTAL = {'pcl': ('pcl.control.', 'pcl.workbench.', 'pcl.wideband.'), 'cli': ('workbench',)}
+# 4.19.1: the kernels of the steady-state solvers (pcl.powerflow, pcl.opf, pcl.ipm) are new and the next steps of ROADMAP §68 still
+# shape their options (accelerator backends and learned starting points, security-constrained optimum): experimental. What a
+# study needs is stable from the start: the methods of pcl.network.Network, the report object (pcl.report), the studies as data
+# (pcl.study) and the two actions of the server.
+EXPERIMENTAL = {'pcl': ('pcl.control.', 'pcl.workbench.', 'pcl.wideband.', 'pcl.powerflow.', 'pcl.opf.', 'pcl.ipm.'), 'cli': ('workbench',)}
 # 4.0: the first of the two steps of a removal. {surface: {key: (version, what instead)}}: the point keeps working (with a
 # message where it runs) to the end of its major version and may go in the next one. A point that is gone leaves this list.
 DEPRECATED = {}
@@ -84,10 +88,15 @@ def surface_pcl():
     import pcl.control
     import pcl.formats
     import pcl.impulse
+    import pcl.ipm
     import pcl.lineconst
     import pcl.linereport
     import pcl.link
     import pcl.network
+    import pcl.opf
+    import pcl.powerflow
+    import pcl.report
+    import pcl.study
     import pcl.trv
     import pcl.wideband
     import pcl.plotting
@@ -103,7 +112,8 @@ def surface_pcl():
                 out[f'pcl.{name}.{m}'] = {'params': sig(f) if inspect.isfunction(f) else ['(property)']}
         elif callable(obj):
             out['pcl.' + name] = {'params': sig(obj)}
-    for mod in (pcl.link, pcl.control, pcl.workbench, pcl.plotting, pcl.formats, pcl.impulse, pcl.network, pcl.lineconst, pcl.linereport, pcl.trv, pcl.wideband):
+    for mod in (pcl.link, pcl.control, pcl.workbench, pcl.plotting, pcl.formats, pcl.impulse, pcl.network, pcl.lineconst, pcl.linereport, pcl.trv, pcl.wideband,
+                pcl.powerflow, pcl.opf, pcl.ipm, pcl.report, pcl.study):
         short = mod.__name__
         for name, obj in vars(mod).items():
             if name.startswith('_') or getattr(obj, '__module__', None) != mod.__name__ or not (inspect.isfunction(obj) or inspect.isclass(obj)):
@@ -111,6 +121,8 @@ def surface_pcl():
             out[f'{short}.{name}'] = {'params': sig(obj)}
             if inspect.isclass(obj):
                 for m, f in vars(obj).items():
+                    if isinstance(f, (classmethod, staticmethod)):       # 4.19.1: Report.from_dict, Report.load (and the two of pcl.control)
+                        f = f.__func__
                     if not m.startswith('_') and inspect.isfunction(f):
                         out[f'{short}.{name}.{m}'] = {'params': sig(f)}
     return out
@@ -318,9 +330,12 @@ def report(snap):
         '`--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 μέσα στην ίδια κύρια έκδοση δεν περνά ούτε με `--allow-removal`· '
         'στην επόμενη κύρια περνά μόνο για ό,τι ήταν παρωχημένο. Ένα παρωχημένο σημείο πρέπει να υπάρχει ακόμη στον κώδικα.',
         '',
-        '- **Πειραματικά (3.19):** ' + ', '.join(f'`{p}…`' for v in EXPERIMENTAL.values() for p in v) + ' (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13). '
+        '- **Πειραματικά (3.19):** ' + ', '.join(f'`{p}…`' for v in EXPERIMENTAL.values() for p in v) + ' (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, '
+        'οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο). '
         'Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). '
-        'Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του), και η μετάβαση είναι προσθήκη. Στους πίνακες: «πειρ.».',
+        'Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα '
+        'του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, '
+        'το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».',
         '',
         'Στους πίνακες, «Από» είναι η έκδοση της πρώτης καταγραφής: η 3.18 για ό,τι υπήρχε ήδη.',
         '',

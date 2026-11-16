@@ -83,7 +83,7 @@
 | `pcl/opf.py` | 344 |
 | `pcl/plotting.py` | 340 |
 | `pcl/powerflow.py` | 931 |
-| `pcl/report.py` | 522 |
+| `pcl/report.py` | 524 |
 | `pcl/study.py` | 133 |
 | `pcl/trv.py` | 433 |
 | `pcl/wideband.py` | 1279 |
@@ -91,7 +91,7 @@
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_api_surface.py` | 106 |
+| `tests/test_api_surface.py` | 122 |
 | `tests/test_arc.py` | 189 |
 | `tests/test_batch.py` | 255 |
 | `tests/test_bidir_engine.py` | 103 |
@@ -134,6 +134,7 @@
 | `tests/test_powerflow.py` | 303 |
 | `tests/test_recording.py` | 211 |
 | `tests/test_refac.py` | 78 |
+| `tests/test_report.py` | 647 |
 | `tests/test_sparse.py` | 53 |
 | `tests/test_sssc.py` | 444 |
 | `tests/test_step.py` | 167 |
@@ -180,6 +181,7 @@
 | `tests/js/sparse_cases.js` | 57 |
 | `tests/js/sssc_cases.js` | 85 |
 | `tests/js/step_cases.js` | 120 |
+| `tests/js/study_cases.js` | 22 |
 | `tests/js/subcircuit_cases.js` | 87 |
 | `tests/js/tlm_ss_cases.js` | 18 |
 | `tests/js/trstart_cases.js` | 11 |
@@ -3426,10 +3428,10 @@ _(χωρίς συναρτήσεις)_
 | 200 | method | `Report.load` |
 | 204 | method | `Report.markdown` |
 | 235 | method | `Report.html` |
-| 272 | method | `Report._table` |
-| 286 | method | `Report._chart` |
-| 404 | function | `network_report` |
-| 510 | function | `_branches` |
+| 274 | method | `Report._table` |
+| 288 | method | `Report._chart` |
+| 406 | function | `network_report` |
+| 512 | function | `_branches` |
 
 ### `pcl/study.py`
 

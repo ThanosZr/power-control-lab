@@ -67,6 +67,22 @@ class ApiSurface(unittest.TestCase):
         self.assertIn('unit', self.now['project']['part:CONST']['params'])
         self.assertIn('frame', self.now['project']['part:MUX']['params'])
 
+    def test_the_surface_of_4_19_1(self):
+        # the studies are stable from the start: the methods of the network, the report object, the studies as data, the two actions
+        # of the server, the smallest step in the file; the kernels of the steady-state solvers are listed as experimental
+        for k in ('pcl.network.Network.power_flow', 'pcl.network.Network.opf', 'pcl.network.Network.contingency', 'pcl.network.Network.report',
+                  'pcl.report.Report', 'pcl.report.Report.chart', 'pcl.report.Report.from_dict', 'pcl.report.Report.load', 'pcl.report.network_report',
+                  'pcl.study.run', 'pcl.study.report'):
+            self.assertIn(k, self.now['pcl'])
+            self.assertFalse(api_surface.experimental('pcl', k), k)
+        for k in ('pcl.powerflow.newton', 'pcl.powerflow.batch', 'pcl.opf.solve', 'pcl.ipm.ipm'):
+            self.assertIn(k, self.now['pcl'])
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+        self.assertEqual(self.now['pcl']['pcl.report.Report.chart']['params'][:3], ['kind', 'x', 'series'])
+        self.assertIn('/api/network_study', self.now['server'])
+        self.assertIn('/api/network_report', self.now['server'])
+        self.assertIn('hmin', self.now['project']['file.solve']['params'])
+
     def test_the_rule_is_active_from_4_0(self):
         # 4.0: STABLE_FROM is active. A removal within 4.x does not pass, not even with --allow-removal; in 5.0 only what
         # was deprecated in 4.x may go; experimental points change freely; up to 4.0 a reason was enough

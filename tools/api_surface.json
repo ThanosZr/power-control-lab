@@ -5,7 +5,10 @@
   "pcl": [
    "pcl.control.",
    "pcl.workbench.",
-   "pcl.wideband."
+   "pcl.wideband.",
+   "pcl.powerflow.",
+   "pcl.opf.",
+   "pcl.ipm."
   ],
   "cli": [
    "workbench"
@@ -429,6 +432,12 @@
     "params": [],
     "since": "3.18"
    },
+   "pcl.control.InverseTrainer.from_dict": {
+    "params": [
+     "d"
+    ],
+    "since": "4.19.1"
+   },
    "pcl.control.InverseTrainer.nets": {
     "params": [],
     "since": "3.18"
@@ -481,6 +490,12 @@
      "flat"
     ],
     "since": "3.18"
+   },
+   "pcl.control.RLTrainer.from_dict": {
+    "params": [
+     "d"
+    ],
+    "since": "4.19.1"
    },
    "pcl.control.RLTrainer.iterate": {
     "params": [
@@ -884,6 +899,32 @@
      "i"
     ],
     "since": "4.1.1"
+   },
+   "pcl.ipm.IpmError": {
+    "params": [],
+    "since": "4.19.1"
+   },
+   "pcl.ipm.ipm": {
+    "params": [
+     "f",
+     "x0",
+     "gh",
+     "hess",
+     "A",
+     "l",
+     "u",
+     "xmin",
+     "xmax",
+     "tol",
+     "max_iter",
+     "cost_mult",
+     "xi",
+     "sigma",
+     "z0",
+     "record",
+     "step_control"
+    ],
+    "since": "4.19.1"
    },
    "pcl.job": {
     "params": [
@@ -2235,6 +2276,91 @@
     ],
     "since": "4.2"
    },
+   "pcl.opf.OpfError": {
+    "params": [],
+    "since": "4.19.1"
+   },
+   "pcl.opf.advise": {
+    "params": [
+     "case",
+     "kind",
+     "net"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.opf.d2ASbr_dV2": {
+    "params": [
+     "dSa",
+     "dSm",
+     "S",
+     "Cbr",
+     "Ybr",
+     "V",
+     "mu"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.opf.d2Sbr_dV2": {
+    "params": [
+     "Cbr",
+     "Ybr",
+     "V",
+     "lam"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.opf.d2Sbus_dV2": {
+    "params": [
+     "Y",
+     "V",
+     "lam"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.opf.dSbr_dV": {
+    "params": [
+     "Ybr",
+     "Cbr",
+     "V"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.opf.dSbus_dV": {
+    "params": [
+     "Y",
+     "V"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.opf.solve": {
+    "params": [
+     "net",
+     "kind",
+     "flow_limits",
+     "start",
+     "tol",
+     "max_iter",
+     "ratings",
+     "v_default",
+     "record"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.opf.sources": {
+    "params": [
+     "net",
+     "case"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.opf.vlimits": {
+    "params": [
+     "net",
+     "case",
+     "default"
+    ],
+    "since": "4.19.1"
+   },
    "pcl.params": {
     "params": [],
     "since": "3.18"
@@ -2332,6 +2458,392 @@
     ],
     "since": "3.18"
    },
+   "pcl.powerflow.Case": {
+    "params": [
+     "net"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.Case.err": {
+    "params": [
+     "V",
+     "typ",
+     "Sg"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.Case.graph": {
+    "params": [],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.Case.jac": {
+    "params": [
+     "typ"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.Case.mismatch": {
+    "params": [
+     "V",
+     "Sg"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.Case.sets": {
+    "params": [
+     "typ"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.Case.start": {
+    "params": [
+     "flat"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.Case.tree": {
+    "params": [],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.Case.zip": {
+    "params": [
+     "Vm",
+     "load"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.Jacobian": {
+    "params": [
+     "case",
+     "typ"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.Jacobian.apply": {
+    "params": [
+     "V",
+     "dx"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.Jacobian.factor": {
+    "params": [
+     "reuse"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.Jacobian.fill": {
+    "params": [
+     "V",
+     "I",
+     "load",
+     "J"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.Jacobian.rhs": {
+    "params": [
+     "mis"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.PowerFlowError": {
+    "params": [],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.advise": {
+    "params": [
+     "case",
+     "study",
+     "scenarios"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.batch": {
+    "params": [
+     "case",
+     "dS",
+     "V0",
+     "tol",
+     "max_it",
+     "typ",
+     "lu",
+     "fallback",
+     "chunk"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.branch_flows": {
+    "params": [
+     "case",
+     "V",
+     "Y"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.bridges": {
+    "params": [
+     "case"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.contingency_ac": {
+    "params": [
+     "case",
+     "V0",
+     "outages",
+     "tol",
+     "max_it",
+     "typ",
+     "chunk",
+     "fallback"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.dc_flow": {
+    "params": [
+     "case",
+     "P"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.dc_model": {
+    "params": [
+     "case"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.fast_decoupled": {
+    "params": [
+     "case",
+     "V",
+     "scheme",
+     "tol",
+     "max_iter",
+     "typ",
+     "Sg"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.gauss_seidel": {
+    "params": [
+     "case",
+     "V",
+     "tol",
+     "max_iter",
+     "typ",
+     "Sg",
+     "accel"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.lodf": {
+    "params": [
+     "case",
+     "H"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.newton": {
+    "params": [
+     "case",
+     "V",
+     "tol",
+     "max_iter",
+     "typ",
+     "Sg",
+     "reuse",
+     "damp"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.newton_ci": {
+    "params": [
+     "case",
+     "V",
+     "tol",
+     "max_iter",
+     "typ",
+     "Sg"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.newton_dense": {
+    "params": [
+     "case",
+     "V",
+     "tol",
+     "max_iter",
+     "typ",
+     "Sg"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.ptdf": {
+    "params": [
+     "case"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.solve": {
+    "params": [
+     "case",
+     "method",
+     "tol",
+     "max_iter",
+     "q_limits",
+     "flat",
+     "V0",
+     "typ"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.sweep": {
+    "params": [
+     "case",
+     "V",
+     "tol",
+     "max_iter",
+     "typ",
+     "Sg"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.powerflow.without": {
+    "params": [
+     "case",
+     "k"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report": {
+    "params": [
+     "title",
+     "subtitle",
+     "lang",
+     "meta"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.chart": {
+    "params": [
+     "kind",
+     "x",
+     "series",
+     "title",
+     "xlabel",
+     "ylabel",
+     "limits",
+     "ymin",
+     "ymax",
+     "table"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.data": {
+    "params": [
+     "name",
+     "obj"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.extend": {
+    "params": [
+     "other"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.facts": {
+    "params": [
+     "pairs",
+     "title"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.from_dict": {
+    "params": [
+     "d"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.heading": {
+    "params": [
+     "text",
+     "level"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.html": {
+    "params": [],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.load": {
+    "params": [
+     "path"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.markdown": {
+    "params": [],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.note": {
+    "params": [
+     "body",
+     "status"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.save": {
+    "params": [
+     "path"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.table": {
+    "params": [
+     "columns",
+     "rows",
+     "title",
+     "digits",
+     "mark",
+     "note"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.text": {
+    "params": [
+     "body"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.Report.to_dict": {
+    "params": [],
+    "since": "4.19.1"
+   },
+   "pcl.report.ReportError": {
+    "params": [],
+    "since": "4.19.1"
+   },
+   "pcl.report.network_report": {
+    "params": [
+     "net",
+     "study",
+     "result",
+     "title",
+     "**kw"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.report.num": {
+    "params": [
+     "v",
+     "digits",
+     "lang",
+     "strip"
+    ],
+    "since": "4.19.1"
+   },
    "pcl.run": {
     "params": [
      "**kw"
@@ -2351,6 +2863,35 @@
      "title"
     ],
     "since": "3.18"
+   },
+   "pcl.study.StudyError": {
+    "params": [],
+    "since": "4.19.1"
+   },
+   "pcl.study.network_of": {
+    "params": [
+     "data"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.study.report": {
+    "params": [
+     "data"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.study.run": {
+    "params": [
+     "data"
+    ],
+    "since": "4.19.1"
+   },
+   "pcl.study.summary": {
+    "params": [
+     "study",
+     "res"
+    ],
+    "since": "4.19.1"
    },
    "pcl.sweep": {
     "params": [
