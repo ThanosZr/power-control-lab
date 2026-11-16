@@ -281,11 +281,14 @@ def _layout(case, names, f, t):
 
 
 # ---------------------------------------------------------------- the view as data
-def view(net):
+def view(net, off=None):
     """Buses, branches and their places as plain data: what the browser draws and what svg() and dxf() take.
 
     {'unit', 'bounds': [x0, y0, x1, y1], 'levels': [U_n…], 'buses': [{id, x, y, Un, type, gen, load, shunt}],
-     'branches': [{name, a, b, trafo, k, of}]}: k of `of` parallel branches between the same two buses."""
+     'branches': [{name, a, b, trafo, k, of}]}: k of `of` parallel branches between the same two buses.
+    off: names of branches that a change of the network took out of service (pcl.netfile.apply): they stay in the picture
+    at their places, marked 'off' and drawn dashed, so that the picture does not move when a branch goes out."""
+    off = {str(q) for q in (off or ())}
     case, names, f, t = _graph(net)
     xy = layout(net)
     typ = np.asarray(case.typ)
@@ -314,6 +317,8 @@ def view(net):
         ua, ub = buses[a]['Un'], buses[b]['Un']
         trafo = bool(abs(complex(tap[j]) - 1.0) > 1e-9 or (ua > 0 and ub > 0 and abs(ua - ub) > 1e-6 * max(ua, ub)))
         branches.append({'name': str(case.br_name[j]), 'a': names[a], 'b': names[b], 'trafo': trafo, 'k': seen[key], 'of': count[key]})
+        if off and (branches[-1]['name'] in off or branches[-1]['name'].split('#')[0] in off):
+            branches[-1]['off'] = True
     xs, ys = [q['x'] for q in buses], [q['y'] for q in buses]
     levels = sorted({q['Un'] for q in buses if q['Un'] > 0}, reverse=True)
     return {'unit': UNIT, 'bounds': [min(xs), min(ys), max(xs), max(ys)] if buses else [0, 0, 0, 0], 'levels': levels, 'buses': buses, 'branches': branches}
@@ -578,6 +583,10 @@ def svg(v, result=None, layer='base', width=900, labels=None, title=None, L=None
         c = _col(brc.get(e['name'], GREY))
         hot = c != GREY and layer != 'base'
         tip = f'{_esc(e["name"])}: {_esc(e["a"])} – {_esc(e["b"])}' + (fmt(brv[e['name']], L.get('unit_branch', '')) if _num(brv.get(e['name'])) is not None else '')
+        if e.get('off'):                                     # out of service: dashed, at its place, without a value
+            o.append(f'<line x1="{ax:.1f}" y1="{ay:.1f}" x2="{bx:.1f}" y2="{by:.1f}" stroke="#7a7a7a" stroke-width="{lw:.2f}" stroke-dasharray="{4 * lw:.2f} {4 * lw:.2f}">'
+                     f'<title>{_esc(e["name"])}: {_esc(e["a"])} – {_esc(e["b"])} · εκτός λειτουργίας</title></line>')
+            continue
         o.append(f'<line x1="{ax:.1f}" y1="{ay:.1f}" x2="{bx:.1f}" y2="{by:.1f}" stroke="{c}" stroke-width="{lw * (2.2 if hot else 1):.2f}" stroke-linecap="round"><title>{tip}</title></line>')
         if e.get('trafo'):
             o.append(f'<circle cx="{(ax + bx) / 2:.1f}" cy="{(ay + by) / 2:.1f}" r="{0.6 * r:.2f}" fill="#ffffff" stroke="{c}" stroke-width="{lw:.2f}"/>')
@@ -637,6 +646,9 @@ def dxf(v, result=None, layers=('voltage', 'flow')):
     lb, lbn, lbr, lt, lg, ll = lay('BUSES', 7), lay('BUS_NAMES', 8), lay('BRANCHES', 5), lay('TRANSFORMERS', 6), lay('GENERATORS', 3), lay('LOADS', 2)
     mid = {}
     for e, ax, ay, bx, by in _segments(v):
+        if e.get('off'):                                     # out of service: on a CAD layer of its own
+            line(lay('OUT_OF_SERVICE', 8), ax, ay, bx, by)
+            continue
         line(lbr, ax, ay, bx, by)
         mid[e['name']] = ((ax + bx) / 2, (ay + by) / 2)
         if e['trafo']:
@@ -665,7 +677,7 @@ def dxf(v, result=None, layers=('voltage', 'flow')):
                 text(nm, b['x'] + 1.3 * r, b['y'] - 1.3 * r + dy, fmt.format(L['bus'][b['id']]), 0.8 * th)
         dyb = 1.1 * th * len([q for q in drawn if q in ('flow', 'loading')])
         for e in v['branches']:
-            if e['name'] in L['branch']:
+            if e['name'] in L['branch'] and e['name'] in mid:
                 text(nm, mid[e['name']][0] + 0.5 * r, mid[e['name']][1] + dyb, fmt.format(L['branch'][e['name']]), 0.8 * th)
     x0, y0, x1, y1 = v['bounds']
     head = ['0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1009', '9', '$EXTMIN', '10', f'{x0 - u:.3f}', '20', f'{-y1 - u:.3f}', '9', '$EXTMAX', '10', f'{x1 + u:.3f}', '20',

@@ -7,6 +7,12 @@ tutorials of the app and its button «Εξαγωγή αναφοράς») and for
 
 The network: 'case' (a name of pcl.network.CASES) or 'network' (a network as written by pcl.network.to_dict).
 Studies: 'advice' (what the engine proposes, for every study), 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf'.
+
+4.19.4 (ROADMAP §73): 'edits' = a list of changes of the network (pcl.netfile.apply: a load, a generator, a rating, an element
+out of service), made on a copy before the study; and a network from a file:
+
+    open_file({'name': 'case118.m', 'text': …})     → {'network' (as data, to send back as 'network'), 'summary'}
+    save_file({'case': 'ieee14', 'edits': […], 'format': 'matpower'})   → {'name', 'text', 'mime'}: the changed network as a file
 """
 import math
 
@@ -45,7 +51,8 @@ def _clean(o):
     return o
 
 
-def network_of(data):
+def base_network(data):
+    """The network of a request before its changes: a case by its name, or a network as data."""
     if data.get('network') is not None:
         if not isinstance(data['network'], dict):
             raise StudyError('network: ένα δίκτυο όπως το γράφει το pcl.network.to_dict')
@@ -61,6 +68,57 @@ def network_of(data):
     if len(net.buses) > MAX_BUSES:
         raise StudyError(f'Πάνω από {MAX_BUSES} ζυγούς.')
     return net
+
+
+def networks_of(data):
+    """(the network as given, the network with the changes of 'edits', one sentence per change)."""
+    from . import netfile
+    net0 = base_network(data)
+    try:
+        net, done = netfile.apply(net0, data.get('edits'))
+    except N.NetworkError as e:
+        raise StudyError(str(e)) from e
+    return net0, net, done
+
+
+def network_of(data):
+    """The network a study runs on: 'case' or 'network', with the changes of 'edits' (4.19.4)."""
+    return networks_of(data)[1]
+
+
+def open_file(data):
+    """A network from the text of a file (MATPOWER .m, PSS/E RAW, our JSON): {'name', 'text'} → {'network': the network as data
+    (pcl.network.to_dict), 'summary': what it holds and what was left out of the file}."""
+    from . import netfile
+    try:
+        net = netfile.read(data.get('text'), str(data.get('name') or ''), data.get('format') or None)
+    except N.NetworkError as e:
+        raise StudyError(str(e)) from e
+    if len(net.buses) > MAX_BUSES:
+        raise StudyError(f'Πάνω από {MAX_BUSES} ζυγούς.')
+    return {'network': _clean(N.to_dict(net)), 'summary': _clean(netfile.summary(net))}
+
+
+def save_file(data):
+    """The network of a request, with its changes, as the text of a file: {'case' | 'network', 'edits', 'format': 'pcl' (JSON),
+    'matpower' or 'raw'} → {'name', 'text', 'mime'}."""
+    from . import netfile
+    net = network_of(data)
+    fmt = data.get('format') or 'pcl'
+    if fmt not in netfile.FORMATS:
+        raise StudyError('format: ' + ', '.join(netfile.FORMATS))
+    try:
+        text = netfile.write(net, fmt)
+    except N.NetworkError as e:
+        raise StudyError(str(e)) from e
+    return {'name': _stem(data, net) + {'pcl': '.json', 'matpower': '.m', 'raw': '.raw'}[fmt], 'text': text, 'mime': 'application/json' if fmt == 'pcl' else 'text/plain'}
+
+
+def _picture(net0, net, data):
+    """The view of a request: the places come from the network as given, so that a change does not move the picture; what
+    the changes took out of service is marked."""
+    from . import netfile, netview
+    return netview.view(net0, off=netfile.out_of_service(data.get('edits')))
 
 
 def _study(net, study, opt):
@@ -109,16 +167,21 @@ def summary(study, res):
 def run(data):
     """{'case' | 'network', 'study', 'options'} → {'study', 'network': {name, buses, branches}, 'result', 'summary'}.
     With 'view': True (4.19.4) also the picture of the network as data: 'view' (buses, branches and their places,
-    pcl.netview.view) and 'layers' (what every layer shows from this result, pcl.netview.pack), 'layer' (the one to open)."""
-    net = network_of(data)
+    pcl.netview.view) and 'layers' (what every layer shows from this result, pcl.netview.pack), 'layer' (the one to open),
+    and 'edit' (what can be changed from the picture, as it is now: pcl.netfile.describe). With 'edits' the study runs on
+    the changed network and 'network' says what was changed ('edits': one sentence each)."""
+    net0, net, done = networks_of(data)
     study = data.get('study') or 'pf'
     res = _study(net, study, data.get('options'))
     out = {'study': study, 'network': {'name': net.name, 'case': data.get('case'), 'buses': len(net.buses),
                                        'branches': sum(e['kind'] in ('line', 'branch', 'transformer') for e in net.elements)},
            'result': _clean(res), 'summary': _clean(summary(study, res))}
+    if done:
+        out['network']['edits'] = done
     if data.get('view'):
-        from . import netview
-        v = netview.view(net)
+        from . import netfile, netview
+        v = _picture(net0, net, data)
+        out['edit'] = netfile.describe(net)
         out['view'], out['layers'] = v, netview.pack(v, out['result'])
         have = [q['layer'] for q in out['layers']]
         out['layer'] = netview.DEFAULT.get(study) if netview.DEFAULT.get(study) in have else ('voltage' if 'voltage' in have else 'base')
@@ -131,14 +194,14 @@ def view(data):
     """The picture of the network of a study as a file: {'case' | 'network', 'study', 'options', 'format': 'dxf' | 'svg',
     'layer' (SVG) or 'layers' (DXF)} → {'name', 'text', 'mime'}."""
     from . import netview
-    net = network_of(data)
+    net0, net, _ = networks_of(data)
     study = data.get('study') or 'pf'
     fmt = data.get('format') or 'dxf'
     if fmt not in ('dxf', 'svg'):
         raise StudyError('format: dxf ή svg')
     res = _clean(_study(net, study, data.get('options')))
-    v = netview.view(net)
-    stem = f'network_{data.get("case") or "network"}_{study}'
+    v = _picture(net0, net, data)
+    stem = f'network_{_stem(data, net)}_{study}'
     try:
         if fmt == 'svg':
             layer = data.get('layer') or netview.DEFAULT.get(study, 'voltage')
@@ -150,6 +213,12 @@ def view(data):
         raise StudyError(str(e)) from e
 
 
+def _stem(data, net):
+    """The part of a file name that says which network: the case, or the name of the network of a file (letters, digits, _ and -)."""
+    import re
+    return data.get('case') or re.sub(r'[^0-9A-Za-z_-]+', '_', str(net.name or 'network')).strip('_')[:40] or 'network'
+
+
 def report(data):
     """A report as one HTML file: of a study ({'case' | 'network', 'study', 'options', 'title'}), or of a report object composed
     elsewhere ({'report': dict}). Returns {'html', 'name' (a file name), 'report' (the object as a dict), 'summary'}."""
@@ -159,14 +228,17 @@ def report(data):
         except (KeyError, TypeError, ValueError) as e:
             raise StudyError(f'Η αναφορά δεν διαβάζεται: {e}') from e
         return {'html': r.html(), 'name': 'report.html', 'report': r.to_dict(), 'summary': {}}
-    net = network_of(data)
+    net0, net, done = networks_of(data)
     study = data.get('study') or 'pf'
     if study in ('advice', 'dc'):
         raise StudyError('Αναφορά για: pf, n1, n1dc, opf, dcopf.')
     res = _study(net, study, data.get('options'))
-    r = network_report(net, study, res, data.get('title') or None)
-    name = f'report_{data.get("case") or "network"}_{study}.html'
+    r = network_report(net, study, res, data.get('title') or None, picture=_picture(net0, net, data) if done else None)
+    if done:                                               # what was changed, right after the title of the report
+        r.note('Αλλαγές στο δίκτυο πριν από τη μελέτη (' + str(len(done)) + '): ' + ' '.join(done), 'warning')
+        r.sections.insert(0, r.sections.pop())
+    name = f'report_{_stem(data, net)}_{study}.html'
     return {'html': r.html(), 'name': name, 'report': _clean(r.to_dict()), 'summary': _clean(summary(study, res))}
 
 
-__all__ = ['run', 'report', 'view', 'summary', 'network_of', 'StudyError', 'STUDIES']
+__all__ = ['run', 'report', 'view', 'open_file', 'save_file', 'summary', 'network_of', 'networks_of', 'base_network', 'StudyError', 'STUDIES']

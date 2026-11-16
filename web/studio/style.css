@@ -647,4 +647,6 @@ body.look-tech .wire.ph-a .wl{stroke:var(--ph-a)}body.look-tech .wire.ph-b .wl{s
 .nv-modal .modal-box{width:min(1240px,96vw);height:min(840px,92vh)}.nv-modal .modal-body{display:flex;flex-direction:column;gap:6px;flex:1 1 auto;min-height:0;overflow:hidden}
 .nv-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12.5px}.nv-bar label{display:flex;gap:5px;align-items:center}.nv-bar .nv-grow{flex:1}
 #nv-canvas{flex:1 1 auto;min-height:260px;width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+.nv-edit{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:8px}.nv-edit label,.nv-edit .nv-gen{display:flex;gap:5px;align-items:center}.nv-edit input[type=number]{width:7.5em}
+.nv-chip{display:inline-block;padding:1px 6px;margin:1px 0;border:1px solid var(--line);border-radius:10px}.nv-chip button{border:0;background:none;cursor:pointer;padding:0 2px}
 #nv-legend i{display:inline-block;width:.9em;height:.9em;margin:0 .3em 0 .9em;vertical-align:-.1em;border-radius:2px}#nv-info{min-height:1.4em}

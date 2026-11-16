@@ -13,7 +13,8 @@
 //   NetView.pick(model, tr, w, h, x, y) the bus or the branch under a point of the canvas, or null
 //   NetView.detail(tr, model)          what the zoom has room for: {dots, rings, trafo, names, values}
 //   NetView.draw(ctx, model, tr, w, h, layer, opt)  one frame; returns what it drew {buses, branches, names}
-//   NetView.create(canvas, data, opt)  the interactive viewer: setLayer, fit, zoom, setNames, info(cb), destroy
+//   NetView.create(canvas, data, opt)  the interactive viewer: setLayer, fit, zoom, setNames, info(cb), destroy;
+//                                      opt: info(text, hit), pick(hit) on a click, layer, tr (the transform to open with)
 (function(root){
  const GREY='#9e9e9e';
  function model(data){
@@ -53,19 +54,24 @@
    return `Ζυγός ${b.id}`+(b.Un?` · ${num(b.Un/1e3)} kV`:'')+(b.type==='slack'?' · ζυγός ταλάντωσης':b.type==='PV'?' · PV':'')+(b.gen&&b.type==='PQ'?' · παραγωγή':'')+(b.load?' · φορτίο':'')+(b.shunt?' · εγκάρσιο στοιχείο':'')
     +(val!==null&&val!==undefined?` · ${num(val,L.unit_bus)}`:'');}
   const e=hit.branch,val=L&&L.branch_v?L.branch_v[hit.j]:null;
-  return `${e.trafo?'Μετασχηματιστής':'Κλάδος'} ${e.name}: ${e.a} – ${e.b}`+(e.of>1?` (${e.k} από ${e.of} παράλληλους)`:'')+(val!==null&&val!==undefined?` · ${num(val,L.unit_branch)}`:'');}
+  return `${e.trafo?'Μετασχηματιστής':'Κλάδος'} ${e.name}: ${e.a} – ${e.b}`+(e.of>1?` (${e.k} από ${e.of} παράλληλους)`:'')+(e.off?' · εκτός λειτουργίας':'')+(val!==null&&val!==undefined?` · ${num(val,L.unit_branch)}`:'');}
  function draw(ctx,m,tr,w,h,layer,opt={}){
   const L=m.layers.get(layer)||m.layers.get('base')||{palette:[GREY],bus_c:null,branch_c:null},pal=L.palette||[GREY],D=detail(tr,m),hot=layer!=='base';
   ctx.clearRect(0,0,w,h);ctx.fillStyle=opt.bg||'#ffffff';ctx.fillRect(0,0,w,h);
   const wl=(0-w/2)/tr.s+tr.cx,wr=(w-w/2)/tr.s+tr.cx,wt=(0-h/2)/tr.s+tr.cy,wb=(h-h/2)/tr.s+tr.cy,out={buses:0,branches:0,names:0,values:0};
   // branches: one path per colour, the grey ones first so that the coloured stay on top
   const byc=pal.map(()=>[]);
-  for(let j=0;j<m.ne;j++){if(Math.max(m.x1[j],m.x2[j])<wl||Math.min(m.x1[j],m.x2[j])>wr||Math.max(m.y1[j],m.y2[j])<wt||Math.min(m.y1[j],m.y2[j])>wb)continue;byc[L.branch_c?L.branch_c[j]:0].push(j);out.branches++;}
+  const offs=[];
+  for(let j=0;j<m.ne;j++){if(Math.max(m.x1[j],m.x2[j])<wl||Math.min(m.x1[j],m.x2[j])>wr||Math.max(m.y1[j],m.y2[j])<wt||Math.min(m.y1[j],m.y2[j])>wb)continue;out.branches++;
+   if(m.v.branches[j].off)offs.push(j);else byc[L.branch_c?L.branch_c[j]:0].push(j);}
   const order=pal.map((c,i)=>i).sort((p,q)=>(pal[p]===GREY?0:1)-(pal[q]===GREY?0:1));
   ctx.lineCap='round';
   for(const ci of order){const js=byc[ci];if(!js.length)continue;const col=pal[ci],strong=hot&&col!==GREY;ctx.strokeStyle=col;ctx.lineWidth=Math.max(1,Math.min(3,D.px*0.03))*(strong?2:1);ctx.beginPath();
    for(const j of js){ctx.moveTo(sx(tr,w,m.x1[j]),sy(tr,h,m.y1[j]));ctx.lineTo(sx(tr,w,m.x2[j]),sy(tr,h,m.y2[j]));}ctx.stroke();
    if(D.trafo){ctx.fillStyle='#ffffff';for(const j of js){if(!m.v.branches[j].trafo)continue;const X=sx(tr,w,(m.x1[j]+m.x2[j])/2),Y=sy(tr,h,(m.y1[j]+m.y2[j])/2);ctx.beginPath();ctx.arc(X,Y,D.r*0.7,0,6.2832);ctx.fill();ctx.stroke();}}}
+  // 4.19.4: a branch that a change took out of service stays at its place, dashed and without a value
+  if(offs.length){out.off=offs.length;ctx.strokeStyle='#7a7a7a';ctx.lineWidth=Math.max(1,Math.min(2,D.px*0.02));ctx.setLineDash?.([5,5]);ctx.beginPath();
+   for(const j of offs){ctx.moveTo(sx(tr,w,m.x1[j]),sy(tr,h,m.y1[j]));ctx.lineTo(sx(tr,w,m.x2[j]),sy(tr,h,m.y2[j]));}ctx.stroke();ctx.setLineDash?.([]);}
   // buses
   const vis=[];for(let i=0;i<m.nb;i++){if(m.x[i]<wl-m.cell||m.x[i]>wr+m.cell||m.y[i]<wt-m.cell||m.y[i]>wb+m.cell)continue;vis.push(i);}
   out.buses=vis.length;
@@ -93,14 +99,16 @@
   const ctx=canvas.getContext('2d');let raf=0,info=opt.info||null,dead=false;
   const size=()=>{const r=canvas.getBoundingClientRect(),dpr=root.devicePixelRatio||1,w=Math.max(50,Math.round(r.width)),h=Math.max(50,Math.round(r.height));
    if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
-   ctx.setTransform(dpr,0,0,dpr,0,0);const first=!st.tr;st.w=w;st.h=h;if(first)st.tr=fit(m,w,h);};
+   ctx.setTransform(dpr,0,0,dpr,0,0);const first=!st.tr,changed=st.w!==w||st.h!==h;st.w=w;st.h=h;
+   // the first frame shows everything (or what the caller was showing); while nobody has moved or zoomed, a new size of the canvas shows everything again
+   if(first){const given=opt.tr&&Number.isFinite(opt.tr.s)&&opt.tr.s>0;st.tr=given?{s:opt.tr.s,cx:opt.tr.cx,cy:opt.tr.cy}:fit(m,w,h);st.fitted=!given;}else if(changed&&st.fitted)st.tr=fit(m,w,h);};
   const paint=()=>{raf=0;if(dead)return;size();st.drawn=draw(ctx,m,st.tr,st.w,st.h,st.layer,{names:st.names,hit:st.hit});st.frames++;};
   const ask=()=>{if(!raf)raf=(root.requestAnimationFrame||(f=>setTimeout(f,16)))(paint);};
   const at=e=>{const r=canvas.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];};
   let drag=null;
   const down=e=>{const [X,Y]=at(e);drag={X,Y,cx:st.tr.cx,cy:st.tr.cy,moved:false};canvas.setPointerCapture?.(e.pointerId);};
   const move=e=>{const [X,Y]=at(e);
-   if(drag){if(Math.abs(X-drag.X)+Math.abs(Y-drag.Y)>3)drag.moved=true;st.tr={s:st.tr.s,cx:drag.cx-(X-drag.X)/st.tr.s,cy:drag.cy-(Y-drag.Y)/st.tr.s};ask();return;}
+   if(drag){if(Math.abs(X-drag.X)+Math.abs(Y-drag.Y)>3){drag.moved=true;st.fitted=false;}st.tr={s:st.tr.s,cx:drag.cx-(X-drag.X)/st.tr.s,cy:drag.cy-(Y-drag.Y)/st.tr.s};ask();return;}
    const q=pick(m,st.tr,st.w,st.h,X,Y),same=(q&&st.hit&&q.kind===st.hit.kind&&q.i===st.hit.i&&q.j===st.hit.j)||(!q&&!st.hit);
    if(!same){st.hit=q;canvas.style.cursor=q?'pointer':'grab';if(info)info(describe(m,q,st.layer),q);ask();}};
   const up=e=>{if(drag&&!drag.moved&&opt.pick){const [X,Y]=at(e);opt.pick(pick(m,st.tr,st.w,st.h,X,Y));}drag=null;};
@@ -114,12 +122,12 @@
    legend:()=>{const L=m.layers.get(st.layer);return L?{title:L.title,items:L.legend||[]}:{title:'',items:[]};},
    setLayer(l){if(m.layers.has(l)){st.layer=l;if(info)info(describe(m,st.hit,st.layer),st.hit);ask();}return st.layer;},
    setNames(v){st.names=['auto','on','off'].includes(v)?v:'auto';ask();},
-   fit(){size();st.tr=fit(m,st.w,st.h);ask();},
+   fit(){size();st.tr=fit(m,st.w,st.h);st.fitted=true;ask();},
    // zoom by a factor around a point of the canvas (the middle when none is given), within sensible limits
    zoom(f,X,Y){size();if(X===undefined){X=st.w/2;Y=st.h/2;}const f0=fit(m,st.w,st.h).s,s=Math.max(f0*0.5,Math.min(st.tr.s*f,40/m.v.unit*10)),wx=(X-st.w/2)/st.tr.s+st.tr.cx,wy=(Y-st.h/2)/st.tr.s+st.tr.cy;
-    st.tr={s,cx:wx-(X-st.w/2)/s,cy:wy-(Y-st.h/2)/s};ask();},
+    st.tr={s,cx:wx-(X-st.w/2)/s,cy:wy-(Y-st.h/2)/s};st.fitted=false;ask();},
    // show a bus in the middle, close enough to read its neighbours
-   goto(id){const i=m.ix.get(String(id));if(i===undefined)return false;size();st.tr={s:Math.max(st.tr.s,70/m.v.unit),cx:m.x[i],cy:m.y[i]};st.hit={kind:'bus',i,bus:m.v.buses[i]};if(info)info(describe(m,st.hit,st.layer),st.hit);ask();return true;},
+   goto(id){const i=m.ix.get(String(id));if(i===undefined)return false;size();st.tr={s:Math.max(st.tr.s,70/m.v.unit),cx:m.x[i],cy:m.y[i]};st.fitted=false;st.hit={kind:'bus',i,bus:m.v.buses[i]};if(info)info(describe(m,st.hit,st.layer),st.hit);ask();return true;},
    info(cb){info=cb;},redraw:ask,paint,
    destroy(){dead=true;ro?.disconnect();canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerup',up);canvas.removeEventListener('pointercancel',up);
     canvas.removeEventListener('wheel',wheel);canvas.removeEventListener('dblclick',dbl);}};

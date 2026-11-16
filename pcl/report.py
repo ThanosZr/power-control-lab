@@ -429,8 +429,10 @@ document.addEventListener('click',function(ev){var b=ev.target.closest('button[d
 def network_report(net, study='pf', result=None, title=None, **kw):
     """A report for a study of a pcl.network.Network: study 'pf' (load flow), 'n1' / 'n1dc' (N−1 in AC / with the DC screening),
     'opf' / 'dcopf' (optimal power flow). result: the result of the study if it has run already (else it runs here with kw).
-    The sections can be extended or re-ordered afterwards as with any Report."""
+    The sections can be extended or re-ordered afterwards as with any Report. picture (4.19.4): a view of pcl.netview.view to
+    draw on instead of the view of this network (the same places when the network is a changed copy of another)."""
     MW = 1e6
+    given = kw.pop('picture', None)
     name = net.name or 'δίκτυο'
     gens = sum(e['kind'] in ('generator', 'unit') for e in net.elements)
     nbr = sum(e['kind'] in ('line', 'branch', 'transformer') for e in net.elements)
@@ -444,7 +446,7 @@ def network_report(net, study='pf', result=None, title=None, **kw):
         # 4.19.4: the network that was studied, with what the study found on it (pcl.netview); a layer the result cannot feed is left out
         from . import netview
         try:
-            v = netview.view(net)
+            v = given or netview.view(net)
         except Exception:                                    # a network that has no load-flow case draws nothing; the report goes on
             return
         shown = False

@@ -147,6 +147,88 @@ const {chromium}=require('playwright');
  await p.click('#play');await p.waitForTimeout(1500);await p.click('#play');
  const pg=await p.evaluate(()=>['G1','G2','G3'].map(g=>window.PCL.S.sim.now('Y:'+g+':pe')));
  ok(Math.abs(pg[0]-0.898)<2e-3&&Math.abs(pg[1]-1.3432)<2e-3&&Math.abs(pg[2]-0.9419)<2e-3,'study: the EMT starts from the optimal dispatch '+pg.map(x=>x.toFixed(4)).join(' '));
+ // 4.19.4 (ROADMAP §72): «Διάγραμμα του δικτύου» shows the network that is studied, with layers from the result of the study
+ await p.evaluate(()=>window.PCL.loadTutorial('pf_study',{net:'ieee300',study:'pf',method:'auto'}));await p.waitForTimeout(900);
+ const tv0=Date.now();await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.frames>0,null,{timeout:60000});const tv=Date.now()-tv0;
+ const ink=()=>p.evaluate(()=>{const c=document.querySelector('#nv-canvas'),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i]<235||d[i+1]<235||d[i+2]<235)n++;return n/(d.length/4);});
+ const nv1=await p.evaluate(()=>{const v=window.PCL.NV.v;return {title:document.querySelector('#nv-title').textContent,layers:[...document.querySelectorAll('#nv-layer option')].map(o=>o.value),layer:v.state.layer,sel:document.querySelector('#nv-layer').value,
+   drawn:v.state.drawn,legend:document.querySelectorAll('#nv-legend i').length,summary:!!document.querySelector('#study-result'),r:window.PCL.STUDY.r?.study};}),ink1=await ink();
+ ok(/ieee300/.test(nv1.title)&&/300 ζυγοί, 411 κλάδοι/.test(nv1.title)&&nv1.layer==='voltage'&&nv1.sel==='voltage'&&nv1.layers.join()==='base,voltage,angle,flow,violations'&&nv1.drawn.buses===300&&nv1.drawn.branches===411&&nv1.legend===7&&nv1.summary&&nv1.r==='pf',
+  'network view: the button runs the study and opens the 300-bus network on its voltages ('+tv+' ms, '+JSON.stringify(nv1.drawn)+')');
+ ok(ink1>0.01&&ink1<0.6,'network view: the canvas has a picture ('+(100*ink1).toFixed(1)+' % of its pixels)');
+ await p.selectOption('#nv-layer','flow');await p.waitForTimeout(150);
+ const nv2=await p.evaluate(()=>({layer:window.PCL.NV.v.state.layer,legend:document.querySelector('#nv-legend').textContent}));
+ ok(nv2.layer==='flow'&&/MW/.test(nv2.legend),'network view: the layer of the flows, with its legend ('+nv2.legend.slice(0,60)+')');
+ await p.fill('#nv-find','9533');await p.press('#nv-find','Enter');await p.waitForTimeout(200);
+ const nv3=await p.evaluate(()=>{const v=window.PCL.NV.v;return {hit:v.state.hit?.bus?.id,px:v.state.tr.s*v.model.v.unit,info:document.querySelector('#nv-info').textContent,names:v.state.drawn.names,buses:v.state.drawn.buses,bad:document.querySelector('#nv-find').classList.contains('bad')};});
+ ok(nv3.hit==='9533'&&nv3.px>=70-1e-9&&/^Ζυγός 9533/.test(nv3.info)&&nv3.names>0&&nv3.names===nv3.buses&&nv3.buses<300&&!nv3.bad,'network view: a bus by its name, close enough for the names of its neighbours ('+nv3.buses+' buses in the window): '+nv3.info);
+ await p.fill('#nv-find','no such bus');await p.press('#nv-find','Enter');
+ ok(await p.evaluate(()=>document.querySelector('#nv-find').classList.contains('bad')),'network view: a name that is not a bus is marked');
+ const cb=await p.evaluate(()=>{const r=document.querySelector('#nv-canvas').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2,r.width,r.height];});
+ await p.mouse.move(cb[0]+cb[2]*0.45,cb[1]+cb[3]*0.45);await p.mouse.move(cb[0],cb[1]);await p.waitForTimeout(150);
+ const s0=await p.evaluate(()=>window.PCL.NV.v.state.tr.s);await p.mouse.wheel(0,-300);await p.waitForTimeout(150);
+ const nv4=await p.evaluate(()=>({s:window.PCL.NV.v.state.tr.s,info:document.querySelector('#nv-info').textContent,cur:document.querySelector('#nv-canvas').style.cursor}));
+ ok(/^Ζυγός 9533/.test(nv4.info)&&nv4.cur==='pointer'&&nv4.s>s0*1.5,'network view: the pointer over a bus gives its values, the wheel zooms in ('+(nv4.s/s0).toFixed(2)+' times)');
+ await p.mouse.down();await p.mouse.move(cb[0]+80,cb[1]+40,{steps:4});await p.mouse.up();await p.waitForTimeout(150);
+ const nv5=await p.evaluate(()=>{const v=window.PCL.NV.v,i=v.model.ix.get('9533');return [(v.model.x[i]-v.state.tr.cx)*v.state.tr.s,(v.model.y[i]-v.state.tr.cy)*v.state.tr.s];});
+ ok(Math.abs(nv5[0]-80)<2&&Math.abs(nv5[1]-40)<2,'network view: dragging moves the network with the pointer ('+nv5.map(x=>x.toFixed(1)).join(', ')+' px)');
+ await p.click('#nv-fit');await p.selectOption('#nv-names','on');await p.waitForTimeout(150);
+ ok(await p.evaluate(()=>{const d=window.PCL.NV.v.state.drawn;return d.buses===300&&d.names===300;}),'network view: «Όλο το δίκτυο» and the names of all 300 buses when asked');
+ const [dsv]=await Promise.all([p.waitForEvent('download',{timeout:60000}),p.click('#nv-svg')]),svgT=require('fs').readFileSync(await dsv.path(),'utf8');
+ ok(dsv.suggestedFilename()==='network_ieee300_pf_flow.svg'&&/^<\?xml/.test(svgT)&&(svgT.match(/<line /g)||[]).length>=411&&/MW/.test(svgT),'network view: the layer on the screen as an SVG file ('+svgT.length+' bytes)');
+ const [ddx]=await Promise.all([p.waitForEvent('download',{timeout:60000}),p.click('#nv-dxf')]),dxfT=require('fs').readFileSync(await ddx.path(),'utf8');
+ ok(ddx.suggestedFilename()==='network_ieee300_pf.dxf'&&/^0\nSECTION/.test(dxfT)&&/\n0\nEOF\n$/.test(dxfT)&&/\nBUSES\n/.test(dxfT)&&/\nFLOW_MW\n/.test(dxfT),'network view: the drawing as a DXF file with its CAD layers ('+dxfT.length+' bytes)');
+ await p.click('#nv-close');
+ ok(await p.evaluate(()=>document.querySelector('#netview').hidden&&window.PCL.NV.v===null),'network view: the window closes and the viewer is released');
+ // 4.19.4 (ROADMAP §73, decision 273): a network from a file instead of the list of the tutorial, and changes of it from the picture.
+ // The file is written by the engine from one of its own networks (the 30-bus case with ratings), as a MATPOWER case
+ await p.evaluate(()=>window.PCL.loadTutorial('pf_study',{net:'ieee14',study:'pf',method:'auto'}));await p.waitForTimeout(900);
+ const mtxt=await p.evaluate(async()=>{const r=await fetch('/api/network_save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({case:'case30',format:'matpower'})});return (await r.json()).text;});
+ await p.setInputFiles('#study-open',{name:'my grid 30.m',mimeType:'text/plain',buffer:Buffer.from(mtxt)});
+ await p.waitForSelector('#study-filenet',{timeout:30000});
+ const nf1=await p.evaluate(()=>({t:document.querySelector('#study-filenet').textContent,badge:document.querySelector('#theory .tm').textContent,s:window.PCL.STUDY.file.summary}));
+ ok(/my grid 30\.m/.test(nf1.t)&&/30 ζυγοί, 41 κλάδοι, 6 γεννήτριες/.test(nf1.t)&&/όρια σε 41 κλάδους/.test(nf1.t)&&/my grid 30 \(από αρχείο\)/.test(nf1.badge)&&nf1.s.warnings.length===0,'network file: a MATPOWER case opens in the study card ('+nf1.t.trim().slice(0,90)+')');
+ await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>!window.PCL.STUDY.busy&&window.PCL.STUDY.r?.study==='pf',null,{timeout:60000});
+ const nf2=await p.evaluate(()=>window.PCL.STUDY.r);
+ ok(nf2.summary.converged&&nf2.network.buses===30&&nf2.network.name==='my grid 30'&&Math.abs(nf2.summary.losses_MW-2.4438)<1e-3,'network file: the load flow runs on the network of the file (losses '+nf2.summary.losses_MW.toFixed(4)+' MW)');
+ await p.setInputFiles('#study-open',{name:'broken.m',mimeType:'text/plain',buffer:Buffer.from('this is not a network')});await p.waitForSelector('#study-error',{timeout:30000});
+ ok(/mpc\.bus/.test(await p.textContent('#study-error'))&&await p.evaluate(()=>window.PCL.STUDY.file.fileName==='my grid 30.m'),'network file: a file that is not a network is refused with the reason, and the open network stays');
+ await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.frames>0,null,{timeout:60000});
+ const nvAt=(kind,name)=>p.evaluate(([kind,name])=>{const v=window.PCL.NV.v,m=v.model,r=document.querySelector('#nv-canvas').getBoundingClientRect(),t=v.state.tr;
+   if(kind==='bus'){const i=m.ix.get(name);return [r.left+(m.x[i]-t.cx)*t.s+v.state.w/2,r.top+(m.y[i]-t.cy)*t.s+v.state.h/2];}
+   const j=m.v.branches.findIndex(e=>e.name===name);return [r.left+((m.x1[j]+m.x2[j])/2-t.cx)*t.s+v.state.w/2,r.top+((m.y1[j]+m.y2[j])/2-t.cy)*t.s+v.state.h/2];},[kind,name]);
+ const nvDone=n=>p.waitForFunction(n=>!window.PCL.STUDY.busy&&window.PCL.STUDY.view&&window.PCL.STUDY.view.done.length===n&&window.PCL.NV.v&&window.PCL.NV.v.state.frames>0,n,{timeout:60000});
+ let xy=await nvAt('bus','8');await p.mouse.click(xy[0],xy[1]);await p.waitForSelector('#nv-edit [data-nv="P"]');
+ const ed1=[await p.inputValue('#nv-edit [data-nv="P"]'),await p.inputValue('#nv-edit [data-nv="Q"]')],v8a=await p.evaluate(()=>{const d=window.PCL.STUDY.view,L=d.layers.find(q=>q.layer==='voltage');return L.bus_v[d.view.buses.findIndex(b=>b.id==='8')];});
+ await p.fill('#nv-edit [data-nv="P"]','45');await p.click('#nv-apply');await nvDone(1);
+ const ed2=await p.evaluate(()=>({chips:document.querySelector('#nv-edits').textContent,P:document.querySelector('#nv-edit [data-nv="P"]')?.value,edits:JSON.stringify(window.PCL.STUDY.edits)}));
+ ok(ed1.join()==='30,30'&&/Αλλαγές στο δίκτυο \(1\)/.test(ed2.chips)&&/30 MW και 30 Mvar → 45 MW και 30 Mvar/.test(ed2.chips)&&ed2.P==='45'&&ed2.edits==='[{"op":"load","bus":"8","P_MW":45,"Q_Mvar":30}]','network changes: the load of a bus from its panel, and the study runs again ('+ed2.chips.trim().slice(0,80)+')');
+ const tr0=await p.evaluate(()=>{const v=window.PCL.NV.v;v.zoom(1.7,200,150);return JSON.stringify(v.state.tr);});
+ xy=await nvAt('branch','br10');await p.mouse.click(xy[0],xy[1]);await p.waitForSelector('#nv-edit [data-nv="off"]');
+ const ed3=await p.inputValue('#nv-edit [data-nv="rating"]');await p.check('#nv-edit [data-nv="off"]');await p.click('#nv-apply');await nvDone(2);
+ const ed4=await p.evaluate(()=>{const d=window.PCL.STUDY.view,L=d.layers.find(q=>q.layer==='voltage'),v=window.PCL.NV.v;return {v8:L.bus_v[d.view.buses.findIndex(b=>b.id==='8')],drawn:v.state.drawn,tr:JSON.stringify(v.state.tr),off:d.view.branches.filter(e=>e.off).map(e=>e.name).join(),
+   checked:document.querySelector('#nv-edit [data-nv="off"]')?.checked,losses:window.PCL.STUDY.r.summary.losses_MW};});
+ ok(ed3==='32'&&ed4.off==='br10'&&ed4.drawn.off===1&&ed4.drawn.branches===41&&ed4.checked===true&&ed4.v8<v8a-0.05,'network changes: a branch out of service stays in the picture, dashed; the voltage of bus 8 falls from '+v8a+' to '+ed4.v8+' pu ('+ed3+', '+ed4.off+', '+JSON.stringify(ed4.drawn)+', '+ed4.checked+')');
+ ok(ed4.tr===tr0,'network changes: the picture stays where it was (the same zoom and place after the study runs again)');
+ await p.fill('#nv-edit [data-nv="rating"]','abc').catch(()=>{});xy=await nvAt('bus','1');await p.mouse.click(xy[0],xy[1]);await p.waitForSelector('#nv-edit .nv-gen');
+ const ed5=await p.evaluate(()=>({t:document.querySelector('#nv-edit').textContent,gP:!!document.querySelector('#nv-edit [data-nv="gP"]'),gV:document.querySelector('#nv-edit [data-nv="gV"]')?.value}));
+ ok(/ζυγός ταλάντωσης/.test(ed5.t)&&!ed5.gP&&ed5.gV==='1','network changes: the slack bus offers its voltage, not its active power');
+ await p.click('[data-nv-drop="1"]');await nvDone(1);
+ const ed6=await p.evaluate(()=>({off:window.PCL.STUDY.view.view.branches.filter(e=>e.off).length,n:window.PCL.STUDY.edits.length,dash:window.PCL.NV.v.state.drawn.off||0}));
+ ok(ed6.off===0&&ed6.n===1&&ed6.dash===0,'network changes: one change is undone by its own ✕, the branch is back');
+ const [dnet]=await Promise.all([p.waitForEvent('download',{timeout:60000}),(async()=>{await p.selectOption('#nv-savefmt','matpower');await p.click('#nv-save');})()]),netT=require('fs').readFileSync(await dnet.path(),'utf8');
+ ok(dnet.suggestedFilename()==='my_grid_30.m'&&/mpc\.bus = \[/.test(netT)&&/\n\t8\t1\t45\.0\t30\.0\t/.test(netT),'network changes: «Δίκτυο» saves the changed network as a file (bus 8 with 45 MW)');
+ await p.click('#nv-close');
+ const [drep2]=await Promise.all([p.waitForEvent('download',{timeout:60000}),p.click('#theory [data-study="report"]')]),rep2=require('fs').readFileSync(await drep2.path(),'utf8');
+ ok(drep2.suggestedFilename()==='report_my_grid_30_pf.html'&&/Αλλαγές στο δίκτυο πριν από τη μελέτη \(1\)/.test(rep2)&&/45 MW και 30 Mvar/.test(rep2),'network changes: the report of the study says what was changed');
+ ok(/1<\/b> αλλαγή από το διάγραμμα/.test(await p.innerHTML('#study-edits')),'network changes: the card says that the network is studied with a change');
+ await p.click('#theory [data-study="noedits"]');await p.click('#theory [data-study="close"]');await p.waitForTimeout(200);
+ ok(await p.evaluate(()=>window.PCL.STUDY.file===null&&window.PCL.STUDY.edits.length===0&&!document.querySelector('#study-filenet')&&/ieee14/.test(document.querySelector('#theory .tm').textContent)),'network file: «✕» goes back to the network of the tutorial, without changes');
+ await p.evaluate(()=>window.PCL.loadTutorial('pf_study',{net:'ieee118',study:'n1',method:'auto'}));await p.waitForTimeout(900);
+ await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.frames>0,null,{timeout:60000});
+ const nv6=await p.evaluate(()=>({layer:window.PCL.NV.v.state.layer,layers:window.PCL.NV.v.layers().map(q=>q.layer).join(),title:document.querySelector('#nv-title').textContent,legend:document.querySelector('#nv-legend').textContent}));
+ ok(nv6.layer==='n1'&&nv6.layers==='base,n1'&&/N−1 σε AC/.test(nv6.title)&&/118 ζυγοί, 186 κλάδοι/.test(nv6.title),'network view: the outages of N−1 on the 118-bus network ('+nv6.legend.slice(0,70)+')');
+ await p.click('#nv-close');
  // 4.19.3 (ROADMAP §68, decision 264): a large network in the time domain. The 8 × 8 mesh (573 unknowns, over 4000 channels): the
  // sparse solver and the sparse phasor start, the record buffers sized by memory, a steady start, the two new settings in the
  // panel; and the 1354-bus case in the list of the studies

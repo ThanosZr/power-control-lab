@@ -23,8 +23,8 @@ jobs:
         with:
           node-version: '22'
       - run: pip install -r requirements.txt
-      - name: Προαιρετικά πακέτα (έλεγχος Parquet, HDF5 και γραφικών, 3.15· ONNX με τον ελεγκτή αναφοράς και το ONNX Runtime, 4.19.2)
-        run: pip install pyarrow h5py matplotlib onnx onnxruntime
+      - name: Προαιρετικά πακέτα (έλεγχος Parquet, HDF5 και γραφικών, 3.15· ONNX με τον ελεγκτή αναφοράς και το ONNX Runtime, 4.19.2· ανάγνωση του σχεδίου DXF με το ezdxf, 4.19.4)
+        run: pip install pyarrow h5py matplotlib onnx onnxruntime ezdxf
       - name: Python στον browser (Pyodide) για το μπλοκ Python
         run: npm install --no-save pyodide@0.26.4
       - name: Χάρτης κώδικα ενημερωμένος

@@ -393,6 +393,53 @@ def big_rows(add):
         'οι τάσεις του αρχείου', 0.0, float(np.abs(da - np.median(da)).max()), 0.6, '°')
 
 
+def view_rows(add):
+    """4.19.4: the picture of the network of a study (pcl/netview.py, web/studio/netview.js). The reference of every row is the
+    network or the result the picture is made from."""
+    import os
+    import tempfile
+    import numpy as np
+    from pcl import netview as NV, network as NW, study as ST
+    A = 'Διάγραμμα του δικτύου (4.19.4)'
+    v = NV.view(NW.case_data('case33bw'))
+    pos = {b['id']: (b['x'], b['y']) for b in v['buses']}
+    add(A, 'ακτινικός τροφοδότης 33 ζυγών: κάθε κλάδος πηγαίνει ένα επίπεδο πιο μακριά από τον ζυγό ταλάντωσης (μέγιστη απόκλιση του |Δx| από τη μονάδα)', 'το δέντρο του δικτύου', 0.0,
+        max(abs(abs(pos[e['a']][0] - pos[e['b']][0]) - NV.UNIT) for e in v['branches']), 1e-6, '')
+    for c in ('ieee118', 'ieee300'):
+        v = NV.view(NW.case_data(c))
+        pos = {b['id']: (b['x'], b['y']) for b in v['buses']}
+        L = np.array([np.hypot(pos[e['a']][0] - pos[e['b']][0], pos[e['a']][1] - pos[e['b']][1]) for e in v['branches']])
+        add(A, f'{c}: διάμεσο μήκος κλάδου στο σχέδιο, σε μονάδες του σχεδίου', 'η μονάδα του σχεδίου (ένας τυπικός κλάδος)', 1.0, float(np.median(L)) / NV.UNIT, 0.05, '')
+    P = np.array([[b['x'], b['y']] for b in v['buses']])
+    d = np.sqrt(((P[:, None, :] - P[None, :, :]) ** 2).sum(axis=2)) + 1e9 * np.eye(len(P))
+    add(A, 'ieee300: ζεύγη ζυγών πιο κοντά από 0,2 μονάδες (ζυγοί ο ένας πάνω στον άλλο)', 'κανένα', 0, int((d < 0.2 * NV.UNIT).sum() // 2), 0, '')
+    add(A, 'ieee300: η διάταξη δύο φορές από την αρχή (θέσεις που διαφέρουν)', 'ίδιο δίκτυο, ίδια εικόνα', 0,
+        sum(a != b for a, b in zip(v['buses'], NV.view(NW.case_data('ieee300'))['buses'])), 0, '')
+    r = ST.run({'case': 'ieee118', 'study': 'pf', 'view': True})
+    Lv = next(q for q in r['layers'] if q['layer'] == 'voltage')
+    add(A, 'στρώση «Τάσεις ζυγών» του ieee118: μέγιστη διαφορά της τιμής που πηγαίνει στη σελίδα (έξι σημαντικά ψηφία) από το |V| της ροής φορτίου', 'το αποτέλεσμα της ροής φορτίου', 0.0,
+        max(abs(Lv['bus_v'][i] - r['result']['buses'][b['id']]['V']) for i, b in enumerate(r['view']['buses'])), 5.5e-6, 'pu')
+    r30 = ST.run({'case': 'case30', 'study': 'n1'})['result']
+    base = {k: x for k, x in r30['base']['overloads']}        # the branches over their rating before any outage, with their loading
+    L30 = NV.values(NV.view(NW.case_data('case30')), r30, 'n1')
+    more = sum(1 for o in r30['outages'] if o['converged'] and not o['island'] and any(x > base.get(k, 1.0) + (0.02 if k in base else 0.0) for k, x in (o.get('overloads') or [])))
+    add(A, 'στρώση N−1 του case30: διαταραχές με υπερφόρτιση που τη φέρνει η διαταραχή (κλάδος που ήταν μέσα στο όριό του, ή ήδη πάνω και ανεβαίνει δύο μονάδες φόρτισης)', 'οι διαταραχές του N−1 μετρημένες από το αποτέλεσμα, με τη φόρτιση της βάσης', more, L30['count']['overload'], 0, '')
+    data = {'big': ST.run({'case': 'ieee300', 'study': 'pf', 'view': 'only'})}
+    fd, name = tempfile.mkstemp(suffix='.json')
+    with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        json.dump(data, f)
+    try:
+        q = json.loads(subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'netview_cases.js'), name], capture_output=True, text=True, timeout=300, check=True).stdout)['big']
+    finally:
+        os.unlink(name)
+    add(A, 'προβολέας της σελίδας, ieee300: ζυγοί που βρίσκει ένα κλικ πάνω στη θέση τους', 'όλοι οι ζυγοί', 300, q['pick']['busOk'], 0, '')
+    add(A, 'προβολέας, ieee300: ζυγοί και κλάδοι που σχεδιάζονται όταν το δίκτυο είναι έξω από το παράθυρο', 'τίποτα', 0, q['away']['out']['buses'] + q['away']['out']['branches'], 0, '')
+    add(A, 'προβολέας: το σημείο του δικτύου κάτω από τον δείκτη μετά από μεγέθυνση με τη ροδέλα (μετακίνηση σε pixel)', 'μένει κάτω από τον δείκτη', 0.0, abs(q['viewer']['wheel'][1]) + abs(q['viewer']['wheel'][2]), 1e-9, '')
+    f = ST.view({'case': 'ieee118', 'study': 'pf', 'format': 'dxf'})['text'].split('\n')
+    add(A, 'σχέδιο DXF του ieee118: οντότητες LINE', '186 κλάδοι και μία γραμμή για καθέναν από τους 99 ζυγούς με φορτίο', 186 + 99,
+        sum(1 for a, b in zip(f[0:-1:2], f[1:-1:2]) if a.strip() == '0' and b == 'LINE'), 0, '')
+
+
 def checks(o):
     """Rows: (area, quantity, reference, expected, simulated, tolerance (absolute), unit)."""
     rows = []
@@ -698,6 +745,7 @@ def checks(o):
     pf_rows(add)
     start_rows(add)
     big_rows(add)
+    view_rows(add)
     gen_rows(o['gen'], add)
     trv_rows(add)
     line_rows(add)

@@ -1,6 +1,11 @@
 """The picture of the network of a study (4.19.4, ROADMAP §72, pcl/netview.py): the layout is ours, deterministic and without
-coordinates in the data; the layers show what a study found; the same data draw the SVG of the report and a DXF drawing."""
+coordinates in the data; the layers show what a study found; the same data draw the SVG of the report and a DXF drawing.
+The viewer of the page (web/studio/netview.js) headless, on the data the engine gives it (tests/js/netview_cases.js)."""
 import json
+import os
+import pathlib
+import subprocess
+import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -129,6 +134,129 @@ class Files(unittest.TestCase):
             S.view({'case': 'ieee14', 'study': 'pf', 'format': 'dwg'})
         with self.assertRaises(S.StudyError):
             S.view({'case': 'ieee7', 'study': 'pf'})
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+class Viewer(unittest.TestCase):
+    """netview.js in Node: the model, the fit, the picking, the detail by zoom, a frame on a canvas that records its calls, and
+    the interactive viewer on an element that keeps its listeners."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.data = {'small': S.run({'case': 'ieee14', 'study': 'pf', 'view': 'only'}), 'big': S.run({'case': 'ieee300', 'study': 'n1dc', 'view': 'only'}),
+                    'opf': S.run({'case': 'case30', 'study': 'opf', 'view': 'only'}), 'radial': S.run({'case': 'case33bw', 'study': 'pf', 'view': 'only'}),
+                    'out': S.run({'case': 'case30', 'study': 'pf', 'view': 'only', 'edits': [{'op': 'outage', 'element': 'br10'}, {'op': 'outage', 'element': 'br5'}]})}
+        fd, name = tempfile.mkstemp(suffix='.json')
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(cls.data, f)
+        try:
+            out = subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'netview_cases.js'), name], capture_output=True, text=True, timeout=300, cwd=ROOT)
+        finally:
+            os.unlink(name)
+        if out.returncode:
+            raise RuntimeError(out.stderr[-2000:])
+        cls.r = json.loads(out.stdout)
+
+    def test_the_model_is_the_data_of_the_engine(self):
+        self.assertTrue(self.r['pure'])                                                           # the viewer only reads
+        for k, d in self.data.items():
+            m = self.r[k]['model']
+            self.assertEqual((m['nb'], m['ne'], m['ends']), (len(d['view']['buses']), len(d['view']['branches']), len(d['view']['branches'])), k)
+            self.assertEqual(m['layers'], [q['layer'] for q in d['layers']], k)
+            self.assertEqual(m['inCells'], m['nb'], k)                                            # every bus in one cell of the grid
+        big = self.r['big']['model']
+        self.assertEqual(big['parallel'], 4)                                                      # two pairs of parallel branches in the 300-bus network
+        self.assertAlmostEqual(big['apart'], 0.12, places=9)                                      # drawn side by side, 0.12 of a unit apart
+
+    def test_the_fit_shows_everything(self):
+        for k in self.data:
+            f = self.r[k]['fit']
+            x0, y0, x1, y1 = f['box']
+            self.assertGreaterEqual(min(x0, y0), 24 - 1e-9, k)
+            self.assertLessEqual(x1, f['w'] - 24 + 1e-9, k)
+            self.assertLessEqual(y1, f['h'] - 24 + 1e-9, k)
+            self.assertTrue(abs(x0 - 24) < 1e-6 or abs(y0 - 24) < 1e-6, k)                         # one of the two directions is filled
+            self.assertAlmostEqual((x0 + x1) / 2, f['w'] / 2, places=6, msg=k)
+            self.assertAlmostEqual((y0 + y1) / 2, f['h'] / 2, places=6, msg=k)
+
+    def test_a_point_picks_what_is_under_it(self):
+        for k, d in self.data.items():
+            p, nb, ne = self.r[k]['pick'], len(d['view']['buses']), len(d['view']['branches'])
+            self.assertEqual(p['busOk'], nb, k)                                                   # every bus at its own place
+            self.assertEqual(p['brOk'] + p['brBus'], ne, k)                                       # the middle of a branch: the branch, or a bus that is nearer
+            self.assertIsNone(p['far'], k)
+            self.assertEqual(p['farOut'], 'bus', k)                                               # far out the grid is not used: the plain pass finds the same
+        self.assertEqual(self.r['small']['pick']['brOk'], 20)
+        self.assertGreater(self.r['big']['pick']['brOk'], 250)
+
+    def test_the_zoom_decides_the_detail(self):
+        want = [[5, True, False, False, False, False], [20, False, True, False, False, False], [30, False, True, True, False, False],
+                [60, False, True, True, True, False], [120, False, True, True, True, True]]            # pixels per unit: dots, rings, transformers, names, values
+        for k in self.data:
+            self.assertEqual(self.r[k]['detail'], want, k)
+
+    def test_a_frame_draws_what_is_in_the_window(self):
+        for k, d in self.data.items():
+            r, nb, ne = self.r[k], len(d['view']['buses']), len(d['view']['branches'])
+            self.assertEqual((r['all']['out']['buses'], r['all']['out']['branches']), (nb, ne), k)
+            self.assertEqual(r['all']['bg'], 1, k)
+            self.assertEqual(r['away']['out'], {'buses': 0, 'branches': 0, 'names': 0, 'values': 0}, k)
+            self.assertEqual((r['away']['segs'], r['away']['arcs'], r['away']['texts']), (0, 0, 0), k)   # outside the window nothing is drawn
+            self.assertLess(r['close']['out']['buses'], nb, k)
+            self.assertEqual(r['close']['out']['names'], r['close']['out']['buses'], k)           # close enough: a name at every bus in the window
+            self.assertEqual(r['closeOn']['texts'], 0, k)                                         # names off
+            self.assertEqual(r['allNames']['out']['names'], nb, k)                                # names on, with the buses of the window few enough
+            self.assertEqual(r['unknown'], r['base'], k)                                          # a layer the study did not feed: the plain picture
+            self.assertEqual(r['hit'], 1, k)                                                      # the ring around the bus under the pointer
+            self.assertTrue(set(r['all']['stroke']) | set(r['all']['fill']) <= set(r['layer']['palette']) | {'#ffffff', '#5f6b6d', '#7a7a7a'}, k)
+            self.assertLess(max(r['layer']['busC'], r['layer']['branchC']), len(r['layer']['palette']), k)
+        s = self.r['small']
+        self.assertEqual((s['all']['arcs'], s['all']['segs']), (14 + 3, 20 + 3 * 11))             # 14 buses and 3 transformers; 20 branches and an arrow at each of the 11 loads
+        self.assertEqual(s['all']['someTexts'][:2], ['1', '1,06 pu'])                             # the name and the voltage of the slack bus
+        self.assertEqual((self.r['big']['all']['segs'], self.r['big']['all']['arcs']), (411, 300 + 128))   # 300 buses as rings, 128 transformers, no arrows yet
+        self.assertEqual(self.r['big']['all']['texts'], 0)                                        # 300 buses in 900 pixels: no names until asked or zoomed
+        self.assertEqual(self.r['opf']['all']['someTexts'][1], '3,66 ανά MWh')
+        self.assertEqual(s['num'], ['1235 MW', '12,3', '1,23 pu', '0,012', '', ''])
+        self.assertEqual(s['text'], {'bus': 'Ζυγός 1 · 1,00 kV · ζυγός ταλάντωσης · 1,06 pu', 'branch': 'Κλάδος br1: 1 – 2', 'none': ''})
+        self.assertTrue(self.r['big']['text']['branch'].startswith('Μετασχηματιστής br1: 37 – 9001'))
+
+    def test_a_branch_out_of_service_stays_in_the_picture(self):
+        r = self.r['out']
+        self.assertEqual(r['all']['out'], {'buses': 30, 'branches': 41, 'names': 30, 'values': 30, 'off': 2})
+        self.assertEqual((r['all']['dashes'], r['all']['dashLeft']), (1, 0))                       # one dashed pass, and the dash is put back
+        self.assertEqual(r['off']['text'], 'Κλάδος br5: 2 – 5 · εκτός λειτουργίας')
+        self.assertTrue(r['off']['pick'])                                                         # it can be picked, to put it back
+        self.assertEqual(r['all']['segs'], 41 + 3 * 20)                                           # every branch once, and the arrows of the 20 loads
+        for k in ('small', 'big', 'opf', 'radial'):
+            self.assertEqual((self.r[k]['all']['dashes'], self.r[k]['off']), (0, None), k)
+
+    def test_the_interactive_viewer(self):
+        for k, d in self.data.items():
+            v = self.r[k]['viewer']
+            self.assertEqual(v['listeners'], ['dblclick', 'pointercancel', 'pointerdown', 'pointermove', 'pointerup', 'wheel'], k)
+            self.assertEqual((v['layer0'], v['frames0'], v['size']), (d['layer'], 1, [800, 500]), k)      # opens on the layer of the study, one frame
+            self.assertEqual(v['layers'], [q['layer'] for q in d['layers']], k)
+            self.assertTrue(v['hover'].startswith('Ζυγός ' + d['view']['buses'][1]['id']), k)
+            self.assertEqual((v['cursor'], v['leave'], v['cursor2']), ('pointer', '', 'grab'), k)
+            self.assertAlmostEqual(v['drag'][0], 60, places=9, msg=k)                             # the network follows the pointer
+            self.assertAlmostEqual(v['drag'][1], 30, places=9, msg=k)
+            self.assertEqual(v['drag'][2:], [True, 0], k)                                         # a drag is not a click
+            self.assertEqual(v['click'], ['bus'], k)
+            self.assertAlmostEqual(v['wheel'][0], 1.8221188003905089, places=12, msg=k)           # exp(0.6)
+            self.assertLess(abs(v['wheel'][1]) + abs(v['wheel'][2]), 1e-9, k)                     # the point under the pointer stays there
+            self.assertEqual(v['wheel'][3], 1, k)                                                 # and the page does not scroll
+            self.assertAlmostEqual(v['limits'][0], 400, places=9, msg=k)                          # at most 400 pixels per unit
+            self.assertAlmostEqual(v['limits'][1], 0.5, places=9, msg=k)                          # at least half of the fit
+            self.assertEqual(v['goto'][:4], [True, 0, True, False], k)
+            self.assertTrue(v['goto'][4].startswith('Ζυγός ' + d['view']['buses'][-1]['id']), k)
+            self.assertEqual(v['setLayer'], ['base', 'base', 'Επίπεδα τάσης'], k)                 # a layer that does not exist changes nothing
+            self.assertEqual(v['names'], ['on', 'auto'], k)
+            self.assertTrue(v['dbl'], k)                                                          # double click: everything again
+            self.assertEqual(v['dead'], [0, True], k)                                             # destroyed: no listeners, no frames
+            self.assertEqual(v['again'], [2.5, 10, 20, 'base', False], k)                         # opened again where the last one was looking
+            self.assertEqual(v['resize'], [True, True, False], k)                                 # a new size: everything again, unless the user has zoomed
 
 
 if __name__ == '__main__':
