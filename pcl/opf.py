@@ -152,7 +152,7 @@ def advise(case, kind='ac', net=None):
 
 
 # -------------------------------------------------------------------- the solution
-def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150, ratings=None, v_default=(0.9, 1.1), record=False, dS=None):
+def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150, ratings=None, v_default=(0.9, 1.1), record=False, dS=None, extra=None):
     """kind: 'ac' or 'dc'. flow_limits: use the ratings of the branches (ratings: {branch: VA} adds or replaces some).
     start: 'auto' (= 'mid', the middle of the limits), or 'pf' (the voltages and the dispatch of the network as given).
     v_default: the limits of |V| for buses that have none (AC).
@@ -164,6 +164,10 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
     than that of the normal start, and if the iteration from it does not converge the problem is solved again from the
     normal start. The result is the same optimum within tol; a bad proposal costs time only. 'start' in the result says
     what was used ('warm' or 'mid'), 'start_path' how it went, and 'iterations' counts every iteration that was made.
+    4.19.4 — extra (DC only): more linear constraints, and more unknowns with a linear cost, for the security constraints of
+    pcl.scopf: {'A': rows (m × (n_b + n_g + n_s): θ of every bus in rad, P of every source in pu, then n_s further unknowns),
+    'l', 'u', and for the further unknowns 'xmin', 'xmax', 'cost' (per pu)}. The result then has 'mu_extra' (the multipliers of
+    the rows, per MW as those of the flow limits) and 'x_extra'; 'cost' is the cost of the generation alone.
 
     Returns {'converged', 'iterations', 'message', 'cost' (per hour), 'kind', 'buses': {bus: V, angle, P, Q (sources), Pload,
     Qload, 'lmp' and 'lmp_Q' (cost per MWh and per Mvar·h), 'mu_Vmin', 'mu_Vmax'}, 'sources': [{name, bus, P, Q (W, var), 'mu_Pmin',
@@ -171,6 +175,8 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
     'binding': [{'kind', 'name', 'mu'}], 'advice', 'notes', 'time', 'cond', 'history' (with record)}."""
     if kind not in ('ac', 'dc'):
         raise OpfError("kind: 'ac' or 'dc'")
+    if extra is not None and kind != 'dc':
+        raise OpfError('extra: for the DC problem only')
     t0 = time.perf_counter()
     case = net.case()
     if dS is not None:
@@ -209,14 +215,28 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
         A = sp.vstack([sp.hstack([Bbus, -Cg]), sp.hstack([Bf[il], sp.csr_matrix((len(il), ng))])], format='csr')
         lo = np.r_[-(Pd + Pbi), -rate[il] - Pfi[il]]
         up = np.r_[-(Pd + Pbi), rate[il] - Pfi[il]]
+        nx = ns = 0
+        cs = np.zeros(0)
+        if extra is not None and extra['A'].shape[0]:
+            Ax = sp.csr_matrix(extra['A'])
+            ns = Ax.shape[1] - (nb + ng)
+            if ns < 0:
+                raise OpfError(f'extra: at least {nb + ng} columns (θ of every bus, P of every source)')
+            nx = Ax.shape[0]
+            A = sp.vstack([sp.hstack([A, sp.csr_matrix((A.shape[0], ns))]), Ax], format='csr')
+            lo, up = np.r_[lo, np.asarray(extra['l'], float)], np.r_[up, np.asarray(extra['u'], float)]
+            cs = np.asarray(extra.get('cost', np.zeros(ns)), float)
+            xmin, xmax = np.r_[xmin, np.asarray(extra.get('xmin', np.zeros(ns)), float)], np.r_[xmax, np.asarray(extra.get('xmax', np.full(ns, np.inf)), float)]
+            x0 = np.r_[x0, np.asarray(extra.get('x0', np.zeros(ns)), float)]
 
         def f(x):
-            v, d = cost(x[nb:])
-            return v, np.r_[np.zeros(nb), d]
-        Hc = sp.diags(np.r_[np.zeros(nb), d2c], format='csr')
+            v, d = cost(x[nb:nb + ng])
+            return v + float(cs @ x[nb + ng:]), np.r_[np.zeros(nb), d, cs]
+        Hc = sp.diags(np.r_[np.zeros(nb), d2c, np.zeros(ns)], format='csr')
         r = ipm(f, x0, None, lambda x, lam, mu, cm: Hc * cm, A, lo, up, xmin, xmax, tol=tol, max_iter=max_iter, cost_mult=1e-4, record=record)
         x = r['x']
-        th, Pg = x[:nb], x[nb:]
+        th, Pg = x[:nb], x[nb:nb + ng]
+        r['f'] = r['f'] - float(cs @ x[nb + ng:])            # the cost of the generation alone
         Pf = Bf @ th + Pfi
         res = {'converged': r['converged'], 'iterations': r['iterations'], 'message': r['message'], 'cost': r['f'], 'kind': 'dc', 'buses': {}, 'sources': [],
                'branches': [], 'binding': []}
@@ -226,13 +246,16 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
             res['buses'][b] = {'V': 1.0, 'angle': float(np.degrees(th[i])), 'P': float(Pgb[i] * net.S_base), 'Q': 0.0, 'Pload': float(Pd[i] * net.S_base),
                                'Qload': 0.0, 'lmp': float(lamP[i]), 'lmp_Q': 0.0, 'mu_Vmin': 0.0, 'mu_Vmax': 0.0}
         muF = np.zeros(nl)
-        muF[il] = (r['mu']['A_u'][nb:] + r['mu']['A_l'][nb:]) / base
+        muF[il] = (r['mu']['A_u'][nb:nb + len(il)] + r['mu']['A_l'][nb:nb + len(il)]) / base
+        if nx:
+            res['mu_extra'] = ((r['mu']['A_u'][nb + len(il):] + r['mu']['A_l'][nb + len(il):]) / base).tolist()
+            res['x_extra'] = x[nb + ng:].tolist()
         for k in range(nl):
             res['branches'].append({'name': case.br_name[k], 'a': case.names[case.f[k]], 'b': case.names[case.t[k]], 'Pa': float(Pf[k] * net.S_base),
                                     'Pb': float(-Pf[k] * net.S_base), 'Qa': 0.0, 'Qb': 0.0, 'S': float(abs(Pf[k]) * net.S_base), 'loss': 0.0,
                                     'loading': float(abs(Pf[k]) / rate[k]) if np.isfinite(rate[k]) else None, 'mu': float(muF[k])})
         res['losses'] = 0.0
-        mPu, mPl = r['mu']['x_u'][nb:] / base, r['mu']['x_l'][nb:] / base
+        mPu, mPl = r['mu']['x_u'][nb:nb + ng] / base, r['mu']['x_l'][nb:nb + ng] / base
         Qg = np.zeros(ng)
         mQu = mQl = np.zeros(ng)
         mVu = mVl = np.zeros(nb)
