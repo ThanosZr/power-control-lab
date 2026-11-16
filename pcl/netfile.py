@@ -91,13 +91,46 @@ def read(text, name='', fmt=None):
             raise FileError('Μορφή: pcl, matpower ή raw.')
     except FileError:
         raise
-    except (N.NetworkError, KeyError, IndexError, TypeError, ValueError) as e:
+    except N.NetworkError as e:
+        if type(e).__name__ == 'RawError':                # the messages of the RAW reader are already for the user
+            raise FileError(str(e)) from e
+        raise FileError(f'Το αρχείο δεν διαβάζεται ως {fmt}: {e}') from e
+    except (KeyError, IndexError, TypeError, ValueError) as e:
         raise FileError(f'Το αρχείο δεν διαβάζεται ως {fmt}: {e}') from e
     if not net.buses:
         raise FileError('Το αρχείο δεν έχει ζυγούς.')
     if not any(d['type'] == 'slack' for d in net.buses.values()) and not any(e.get('slack') for e in net.elements):
         raise FileError('Το δίκτυο δεν έχει ζυγό ταλάντωσης.')
+    if fmt != 'pcl':
+        _drop_islands(net)
     return net
+
+
+def _drop_islands(net):
+    """A file from another program may leave buses that no branch in service ties to a slack bus (a winding out of service, a
+    line open at both ends): a load flow has no solution for them. They are left out with what is connected to them, and
+    net.warnings says how many."""
+    adj = {b: [] for b in net.buses}
+    for e in net.elements:
+        if e['kind'] in SERIES:
+            ends = [e[k] for k in ('a', 'b', 'c', 'hv', 'lv') if e.get(k) is not None]
+            for p in ends:
+                adj[p].extend(q for q in ends if q != p)
+    seen = {b for b, d in net.buses.items() if d['type'] == 'slack'} | {e['bus'] for e in net.elements if e.get('slack')}
+    todo = list(seen)
+    while todo:
+        for q in adj[todo.pop()]:
+            if q not in seen:
+                seen.add(q)
+                todo.append(q)
+    lost = [b for b, d in net.buses.items() if b not in seen and d['type'] != 'internal']
+    if not lost:
+        return
+    gone = set(lost)
+    net.elements = [e for e in net.elements if not any(e.get(k) in gone for k in ('bus', 'a', 'b', 'c', 'hv', 'lv'))]
+    for b in lost:
+        del net.buses[b]
+    net.warnings = list(net.warnings) + [f'{len(lost)} ζυγοί δεν συνδέονται με ζυγό ταλάντωσης μέσα από κλάδους σε λειτουργία: δεν διαβάστηκαν, ούτε ό,τι συνδέεται σε αυτούς.']
 
 
 def read_file(path, fmt=None):

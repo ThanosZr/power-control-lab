@@ -67,6 +67,22 @@ class ApiSurface(unittest.TestCase):
         self.assertIn('unit', self.now['project']['part:CONST']['params'])
         self.assertIn('frame', self.now['project']['part:MUX']['params'])
 
+    def test_the_surface_of_4_19_4(self):
+        # the picture of a network, the network files and the RAW reader are experimental; what a study request can carry (a file, the
+        # changes, the picture) and the label of a bus are stable additions
+        for k in ('pcl.netview.view', 'pcl.netview.svg', 'pcl.netview.dxf', 'pcl.netfile.read', 'pcl.netfile.read_file', 'pcl.netfile.write', 'pcl.netfile.apply',
+                  'pcl.netfile.describe', 'pcl.netfile.summary', 'pcl.psse.read', 'pcl.psse.write'):
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+            self.assertIn(k, self.now['pcl'], k)
+        for k in ('pcl.study.open_file', 'pcl.study.save_file', 'pcl.study.view', 'pcl.study.run', 'pcl.network.Network.bus'):
+            self.assertFalse(api_surface.experimental('pcl', k), k)
+            self.assertIn(k, self.now['pcl'], k)
+        self.assertEqual(self.now['pcl']['pcl.network.Network.bus']['params'][-1], 'label')
+        self.assertEqual(self.now['pcl']['pcl.netview.view']['params'], ['net', 'off'])
+        import run
+        for a in ('network_view', 'network_open', 'network_save'):
+            self.assertIn(a, run.ACTIONS)
+
     def test_the_surface_of_4_19_3(self):
         # the two settings of the solver are in the file format (stable); the large network is one more name of the test networks
         self.assertEqual(self.now['project']['file.solve']['params'][-2:], ['modeVec', 'initSolver'])

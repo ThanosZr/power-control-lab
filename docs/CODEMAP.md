@@ -9,7 +9,7 @@
 |---|---:|
 | `web/studio/addon_client.js` | 30 |
 | `web/studio/addons.js` | 116 |
-| `web/studio/app.js` | 2989 |
+| `web/studio/app.js` | 3041 |
 | `web/studio/bus.js` | 197 |
 | `web/studio/ctlwin.js` | 78 |
 | `web/studio/editor.js` | 684 |
@@ -26,7 +26,7 @@
 | `web/studio/metrics.js` | 89 |
 | `web/studio/mna.js` | 2275 |
 | `web/studio/netlib.js` | 1355 |
-| `web/studio/netview.js` | 130 |
+| `web/studio/netview.js` | 138 |
 | `web/studio/nn.js` | 57 |
 | `web/studio/parts.js` | 1492 |
 | `web/studio/plotcore.js` | 133 |
@@ -48,7 +48,7 @@
 | `web/studio/watch.js` | 339 |
 | `web/studio/winframe.js` | 63 |
 | `pcl/runner.js` | 27 |
-| `run.py` | 322 |
+| `run.py` | 324 |
 | `engine/__init__.py` | 1 |
 | `engine/addons.py` | 322 |
 | `engine/analysis.py` | 307 |
@@ -82,22 +82,24 @@
 | `pcl/lineconst.py` | 2400 |
 | `pcl/linereport.py` | 836 |
 | `pcl/link.py` | 150 |
-| `pcl/netview.py` | 678 |
-| `pcl/network.py` | 1472 |
+| `pcl/netfile.py` | 490 |
+| `pcl/netview.py` | 692 |
+| `pcl/network.py` | 1483 |
 | `pcl/nnstart.py` | 388 |
 | `pcl/onnxio.py` | 355 |
 | `pcl/opf.py` | 394 |
 | `pcl/plotting.py` | 340 |
 | `pcl/powerflow.py` | 985 |
-| `pcl/report.py` | 575 |
-| `pcl/study.py` | 172 |
+| `pcl/psse.py` | 433 |
+| `pcl/report.py` | 577 |
+| `pcl/study.py` | 244 |
 | `pcl/trv.py` | 433 |
 | `pcl/wideband.py` | 1279 |
 | `pcl/workbench.py` | 485 |
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_api_surface.py` | 145 |
+| `tests/test_api_surface.py` | 161 |
 | `tests/test_arc.py` | 189 |
 | `tests/test_backend.py` | 238 |
 | `tests/test_batch.py` | 255 |
@@ -117,6 +119,7 @@
 | `tests/test_generator.py` | 223 |
 | `tests/test_gfm.py` | 222 |
 | `tests/test_gfm2.py` | 167 |
+| `tests/test_guide.py` | 65 |
 | `tests/test_impl.py` | 138 |
 | `tests/test_impulse_tools.py` | 150 |
 | `tests/test_inputs.py` | 147 |
@@ -132,7 +135,9 @@
 | `tests/test_look.py` | 41 |
 | `tests/test_matlab.py` | 213 |
 | `tests/test_mmc.py` | 203 |
+| `tests/test_netfile.py` | 236 |
 | `tests/test_netlib.py` | 209 |
+| `tests/test_netview.py` | 263 |
 | `tests/test_network.py` | 272 |
 | `tests/test_nn.py` | 130 |
 | `tests/test_nnstart.py` | 315 |
@@ -141,6 +146,7 @@
 | `tests/test_plotcore.py` | 74 |
 | `tests/test_plotting.py` | 113 |
 | `tests/test_powerflow.py` | 329 |
+| `tests/test_psse.py` | 305 |
 | `tests/test_recording.py` | 211 |
 | `tests/test_refac.py` | 78 |
 | `tests/test_report.py` | 666 |
@@ -183,6 +189,7 @@
 | `tests/js/mmc_cases.js` | 56 |
 | `tests/js/netlib42_cases.js` | 50 |
 | `tests/js/netlib_cases.js` | 93 |
+| `tests/js/netview_cases.js` | 77 |
 | `tests/js/nn_cases.js` | 48 |
 | `tests/js/plotcore_cases.js` | 25 |
 | `tests/js/refac_cases.js` | 68 |
@@ -209,7 +216,7 @@
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/ev_flow.js` | 112 |
 | `tests/ui/facts_flow.js` | 93 |
-| `tests/ui/features_flow.js` | 167 |
+| `tests/ui/features_flow.js` | 250 |
 | `tests/ui/line_flow.js` | 166 |
 | `tests/ui/live_flow.js` | 41 |
 | `tests/ui/perf_flow.js` | 68 |
@@ -412,7 +419,7 @@
 
 ## API του server (`run.py`, `/api/<action>`)
 
-`analyze`, `batch_sim`, `bidir`, `boundary`, `capacitance`, `curves`, `derivation`, `design`, `envelope`, `inverse`, `line_export`, `line_load`, `line_model`, `line_scan`, `line_sens`, `linearize`, `model_proof`, `network_report`, `network_study`, `network_view`, `problem`, `scenario_run`, `scenario_sweep`, `solve`, `studio_math`, `sweep`, `switching`, `template_solve`, `validate_circuit`
+`analyze`, `batch_sim`, `bidir`, `boundary`, `capacitance`, `curves`, `derivation`, `design`, `envelope`, `inverse`, `line_export`, `line_load`, `line_model`, `line_scan`, `line_sens`, `linearize`, `model_proof`, `network_open`, `network_report`, `network_save`, `network_study`, `network_view`, `problem`, `scenario_run`, `scenario_sweep`, `solve`, `studio_math`, `sweep`, `switching`, `template_solve`, `validate_circuit`
 
 ## Templates δεδομένων (`web/studio/exercises/`)
 
@@ -815,36 +822,44 @@
 | 2549 | function | `scheringTheory` |
 | 2550 | const fn | `inv` |
 | 2559 | const fn | `sr` |
-| 2570 | function | `studyAct` |
-| 2581 | function | `netViewOpen` |
-| 2584 | const fn | `legend` |
-| 2591 | function | `studyTheory` |
-| 2611 | function | `formulaTheory` |
-| 2710 | function | `nodeAvg` |
-| 2716 | function | `circuitForMath` |
-| 2752 | function | `scheduleMath` |
-| 2753 | function | `batteryKey` |
-| 2755 | function | `mathChoices` |
-| 2756 | const fn | `prim` |
-| 2758 | function | `renderMathChoices` |
-| 2760 | function | `runTemplate` |
-| 2766 | function | `runMath` |
-| 2788 | function | `saveLocal` |
-| 2789 | function | `saveLocalSoon` |
-| 2791 | function | `download` |
-| 2792 | function | `exportCSV` |
-| 2798 | function | `syncScopeInputs` |
-| 2799 | function | `setSpeed` |
-| 2802 | function | `openSettings` |
-| 2803 | const fn | `sel` |
-| 2804 | const fn | `chk` |
-| 2830 | function | `applyLook` |
-| 2834 | function | `boot` |
-| 2905 | const fn | `mv` |
-| 2906 | const fn | `up` |
-| 2907 | const fn | `navOpen` |
-| 2923 | const fn | `probeSel` |
-| 2985 | function | `renderTheoryLive` |
+| 2571 | const fn | `studyNet` |
+| 2572 | function | `studyQ` |
+| 2574 | const fn | `studyKey` |
+| 2575 | function | `studyOpen` |
+| 2582 | function | `studyAct` |
+| 2597 | function | `netViewOpen` |
+| 2601 | const fn | `legend` |
+| 2616 | function | `nvEdit` |
+| 2625 | function | `nvApply` |
+| 2626 | const fn | `same` |
+| 2627 | const fn | `put` |
+| 2639 | function | `studyTheory` |
+| 2663 | function | `formulaTheory` |
+| 2762 | function | `nodeAvg` |
+| 2768 | function | `circuitForMath` |
+| 2804 | function | `scheduleMath` |
+| 2805 | function | `batteryKey` |
+| 2807 | function | `mathChoices` |
+| 2808 | const fn | `prim` |
+| 2810 | function | `renderMathChoices` |
+| 2812 | function | `runTemplate` |
+| 2818 | function | `runMath` |
+| 2840 | function | `saveLocal` |
+| 2841 | function | `saveLocalSoon` |
+| 2843 | function | `download` |
+| 2844 | function | `exportCSV` |
+| 2850 | function | `syncScopeInputs` |
+| 2851 | function | `setSpeed` |
+| 2854 | function | `openSettings` |
+| 2855 | const fn | `sel` |
+| 2856 | const fn | `chk` |
+| 2882 | function | `applyLook` |
+| 2886 | function | `boot` |
+| 2957 | const fn | `mv` |
+| 2958 | const fn | `up` |
+| 2959 | const fn | `navOpen` |
+| 2975 | const fn | `probeSel` |
+| 3037 | function | `renderTheoryLive` |
 
 ### `web/studio/bus.js`
 
@@ -1711,31 +1726,31 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 19 | function | `model` |
-| 32 | function | `fit` |
-| 34 | const fn | `sx` |
-| 36 | function | `detail` |
-| 37 | function | `pick` |
-| 49 | const fn | `num` |
-| 51 | function | `describe` |
-| 57 | function | `draw` |
-| 91 | function | `create` |
-| 94 | const fn | `size` |
-| 97 | const fn | `paint` |
-| 98 | const fn | `ask` |
-| 99 | const fn | `at` |
-| 101 | const fn | `down` |
-| 102 | const fn | `move` |
-| 106 | const fn | `up` |
-| 107 | const fn | `wheel` |
-| 108 | const fn | `dbl` |
-| 115 | method | `setLayer` |
-| 116 | method | `setNames` |
-| 117 | method | `fit` |
-| 119 | method | `zoom` |
-| 122 | method | `goto` |
-| 123 | method | `info` |
-| 124 | method | `destroy` |
+| 20 | function | `model` |
+| 33 | function | `fit` |
+| 35 | const fn | `sx` |
+| 37 | function | `detail` |
+| 38 | function | `pick` |
+| 50 | const fn | `num` |
+| 52 | function | `describe` |
+| 58 | function | `draw` |
+| 97 | function | `create` |
+| 100 | const fn | `size` |
+| 105 | const fn | `paint` |
+| 106 | const fn | `ask` |
+| 107 | const fn | `at` |
+| 109 | const fn | `down` |
+| 110 | const fn | `move` |
+| 114 | const fn | `up` |
+| 115 | const fn | `wheel` |
+| 116 | const fn | `dbl` |
+| 123 | method | `setLayer` |
+| 124 | method | `setNames` |
+| 125 | method | `fit` |
+| 127 | method | `zoom` |
+| 130 | method | `goto` |
+| 131 | method | `info` |
+| 132 | method | `destroy` |
 
 ### `web/studio/nn.js`
 
@@ -2442,17 +2457,17 @@ _(χωρίς συναρτήσεις)_
 | 55 | function | `line_model` |
 | 63 | function | `line_action` |
 | 76 | function | `study_action` |
-| 91 | function | `scenario` |
-| 120 | class | `Handler` |
-| 122 | method | `Handler.local` |
-| 126 | method | `Handler.alive` |
-| 136 | method | `Handler.body` |
-| 145 | method | `Handler.addon_get` |
-| 175 | method | `Handler.addon_post` |
-| 202 | method | `Handler.send` |
-| 218 | method | `Handler.do_GET` |
-| 249 | method | `Handler.do_POST` |
-| 297 | function | `main` |
+| 93 | function | `scenario` |
+| 122 | class | `Handler` |
+| 124 | method | `Handler.local` |
+| 128 | method | `Handler.alive` |
+| 138 | method | `Handler.body` |
+| 147 | method | `Handler.addon_get` |
+| 177 | method | `Handler.addon_post` |
+| 204 | method | `Handler.send` |
+| 220 | method | `Handler.do_GET` |
+| 251 | method | `Handler.do_POST` |
+| 299 | function | `main` |
 
 ### `engine/__init__.py`
 
@@ -3330,6 +3345,39 @@ _(χωρίς συναρτήσεις)_
 | 138 | method | `App.notify` |
 | 142 | function | `connect` |
 
+### `pcl/netfile.py`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 36 | class | `FileError` |
+| 40 | function | `sniff` |
+| 64 | function | `read` |
+| 109 | function | `_drop_islands` |
+| 136 | function | `read_file` |
+| 141 | function | `_matpower` |
+| 169 | function | `_matpower_loose` |
+| 193 | function | `_mw` |
+| 197 | function | `_types` |
+| 209 | function | `_numbers` |
+| 217 | function | `_only_pu` |
+| 227 | function | `to_matpower` |
+| 269 | function | `write` |
+| 281 | function | `summary` |
+| 294 | function | `describe` |
+| 313 | function | `_f` |
+| 328 | function | `_n` |
+| 333 | function | `apply` |
+| 350 | function | `_bus` |
+| 357 | function | `_op_load` |
+| 377 | function | `_shares` |
+| 383 | function | `_free` |
+| 391 | function | `_op_scale` |
+| 410 | function | `_gen` |
+| 424 | function | `_op_gen` |
+| 446 | function | `_op_rating` |
+| 460 | function | `_op_outage` |
+| 485 | function | `out_of_service` |
+
 ### `pcl/netview.py`
 
 | Γραμμή | Είδος | Όνομα |
@@ -3347,16 +3395,16 @@ _(χωρίς συναρτήσεις)_
 | 237 | function | `layout` |
 | 254 | function | `_layout` |
 | 284 | function | `view` |
-| 323 | function | `_scale` |
-| 334 | function | `_num` |
-| 342 | function | `values` |
-| 481 | function | `_maybe_int` |
-| 491 | function | `pack` |
-| 514 | function | `_esc` |
-| 518 | function | `_segments` |
-| 534 | function | `_col` |
-| 539 | function | `svg` |
-| 610 | function | `dxf` |
+| 330 | function | `_scale` |
+| 341 | function | `_num` |
+| 349 | function | `values` |
+| 488 | function | `_maybe_int` |
+| 498 | function | `pack` |
+| 521 | function | `_esc` |
+| 525 | function | `_segments` |
+| 541 | function | `_col` |
+| 546 | function | `svg` |
+| 621 | function | `dxf` |
 
 ### `pcl/network.py`
 
@@ -3375,68 +3423,68 @@ _(χωρίς συναρτήσεις)_
 | 114 | class | `Network` |
 | 118 | method | `Network.__init__` |
 | 126 | method | `Network.bus` |
-| 131 | method | `Network._add` |
-| 143 | method | `Network.feeder` |
-| 150 | method | `Network.line` |
-| 158 | method | `Network.transformer` |
-| 166 | method | `Network.transformer3` |
-| 183 | method | `Network.generator` |
-| 195 | method | `Network.unit` |
-| 202 | method | `Network.motor` |
-| 208 | method | `Network.reactor` |
-| 212 | method | `Network.load` |
-| 220 | method | `Network.shunt` |
-| 224 | method | `Network.branch_pu` |
-| 230 | method | `Network.sssc` |
-| 245 | method | `Network.remove` |
-| 248 | method | `Network.element` |
-| 255 | method | `Network._zb` |
-| 259 | method | `Network._ib` |
-| 263 | method | `Network._sc_parts` |
-| 398 | method | `Network._t3` |
-| 433 | method | `Network.impedances` |
-| 441 | method | `Network._index` |
-| 445 | method | `Network._ybus` |
-| 469 | method | `Network._ratios` |
-| 504 | method | `Network.short_circuit` |
-| 588 | method | `Network._breaking` |
-| 620 | method | `Network.iec60909` |
-| 625 | method | `Network._lf_model` |
-| 729 | method | `Network._sssc_x` |
-| 736 | method | `Network.load_flow` |
-| 747 | method | `Network._lf_sssc` |
-| 776 | method | `Network._lf` |
-| 807 | method | `Network._lf_result` |
-| 831 | method | `Network._flows` |
-| 856 | method | `Network.case` |
-| 866 | method | `Network.advice` |
-| 875 | method | `Network.power_flow` |
-| 896 | method | `Network.dc_flow` |
-| 904 | method | `Network.ptdf` |
-| 910 | method | `Network.lodf` |
-| 917 | method | `Network.contingency` |
-| 995 | method | `Network.batch_flow` |
-| 1035 | method | `Network.report` |
-| 1041 | method | `Network.opf` |
-| 1063 | method | `Network.to_emt` |
-| 1143 | function | `_coo` |
-| 1149 | function | `_zip` |
-| 1154 | function | `_solve` |
-| 1165 | function | `_nr` |
-| 1201 | function | `sssc_placement` |
-| 1258 | function | `superposition` |
-| 1282 | function | `trv` |
-| 1316 | function | `_matrix` |
-| 1328 | function | `read_matpower` |
-| 1365 | function | `ieee` |
-| 1374 | function | `case_data` |
-| 1385 | function | `case_solution` |
-| 1394 | function | `ieee9` |
-| 1421 | function | `ieee14` |
-| 1434 | function | `to_dict` |
-| 1447 | function | `from_dict` |
-| 1467 | function | `save` |
-| 1471 | function | `load` |
+| 135 | method | `Network._add` |
+| 154 | method | `Network.feeder` |
+| 161 | method | `Network.line` |
+| 169 | method | `Network.transformer` |
+| 177 | method | `Network.transformer3` |
+| 194 | method | `Network.generator` |
+| 206 | method | `Network.unit` |
+| 213 | method | `Network.motor` |
+| 219 | method | `Network.reactor` |
+| 223 | method | `Network.load` |
+| 231 | method | `Network.shunt` |
+| 235 | method | `Network.branch_pu` |
+| 241 | method | `Network.sssc` |
+| 256 | method | `Network.remove` |
+| 259 | method | `Network.element` |
+| 266 | method | `Network._zb` |
+| 270 | method | `Network._ib` |
+| 274 | method | `Network._sc_parts` |
+| 409 | method | `Network._t3` |
+| 444 | method | `Network.impedances` |
+| 452 | method | `Network._index` |
+| 456 | method | `Network._ybus` |
+| 480 | method | `Network._ratios` |
+| 515 | method | `Network.short_circuit` |
+| 599 | method | `Network._breaking` |
+| 631 | method | `Network.iec60909` |
+| 636 | method | `Network._lf_model` |
+| 740 | method | `Network._sssc_x` |
+| 747 | method | `Network.load_flow` |
+| 758 | method | `Network._lf_sssc` |
+| 787 | method | `Network._lf` |
+| 818 | method | `Network._lf_result` |
+| 842 | method | `Network._flows` |
+| 867 | method | `Network.case` |
+| 877 | method | `Network.advice` |
+| 886 | method | `Network.power_flow` |
+| 907 | method | `Network.dc_flow` |
+| 915 | method | `Network.ptdf` |
+| 921 | method | `Network.lodf` |
+| 928 | method | `Network.contingency` |
+| 1006 | method | `Network.batch_flow` |
+| 1046 | method | `Network.report` |
+| 1052 | method | `Network.opf` |
+| 1074 | method | `Network.to_emt` |
+| 1154 | function | `_coo` |
+| 1160 | function | `_zip` |
+| 1165 | function | `_solve` |
+| 1176 | function | `_nr` |
+| 1212 | function | `sssc_placement` |
+| 1269 | function | `superposition` |
+| 1293 | function | `trv` |
+| 1327 | function | `_matrix` |
+| 1339 | function | `read_matpower` |
+| 1376 | function | `ieee` |
+| 1385 | function | `case_data` |
+| 1396 | function | `case_solution` |
+| 1405 | function | `ieee9` |
+| 1432 | function | `ieee14` |
+| 1445 | function | `to_dict` |
+| 1458 | function | `from_dict` |
+| 1478 | function | `save` |
+| 1482 | function | `load` |
 
 ### `pcl/nnstart.py`
 
@@ -3572,6 +3620,23 @@ _(χωρίς συναρτήσεις)_
 | 963 | function | `without` |
 | 975 | function | `branch_flows` |
 
+### `pcl/psse.py`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 41 | class | `RawError` |
+| 48 | function | `fields` |
+| 70 | function | `_split` |
+| 84 | class | `_Rec` |
+| 89 | method | `_Rec.f` |
+| 103 | method | `_Rec.i` |
+| 106 | method | `_Rec.s` |
+| 110 | function | `_sections` |
+| 138 | function | `_version` |
+| 150 | function | `read` |
+| 359 | function | `read_file` |
+| 364 | function | `write` |
+
 ### `pcl/report.py`
 
 | Γραμμή | Είδος | Όνομα |
@@ -3600,20 +3665,26 @@ _(χωρίς συναρτήσεις)_
 | 297 | method | `Report._table` |
 | 311 | method | `Report._chart` |
 | 429 | function | `network_report` |
-| 563 | function | `_branches` |
+| 565 | function | `_branches` |
 
 ### `pcl/study.py`
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 25 | class | `StudyError` |
-| 29 | function | `_clean` |
-| 48 | function | `network_of` |
-| 66 | function | `_study` |
-| 86 | function | `summary` |
-| 109 | function | `run` |
-| 130 | function | `view` |
-| 153 | function | `report` |
+| 31 | class | `StudyError` |
+| 35 | function | `_clean` |
+| 54 | function | `_base_network` |
+| 73 | function | `_networks_of` |
+| 84 | function | `network_of` |
+| 89 | function | `open_file` |
+| 102 | function | `save_file` |
+| 117 | function | `_picture` |
+| 124 | function | `_study` |
+| 144 | function | `summary` |
+| 167 | function | `run` |
+| 193 | function | `view` |
+| 216 | function | `_stem` |
+| 222 | function | `report` |
 
 ### `pcl/trv.py`
 

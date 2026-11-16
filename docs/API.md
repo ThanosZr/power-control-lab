@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.19.4: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (731 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.19.4: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (750 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -10,7 +10,7 @@
 - **Αρχεία project:** ένα παλιό αρχείο ανοίγει πάντα (ARCHITECTURE §4). Νέα πεδία είναι προαιρετικά. Όταν χρειάζεται μετατροπή, αυξάνεται το `version` του αρχείου και η μετατροπή γίνεται στο άνοιγμα, με test. Το `version` 3 (3.18): τα σύρματα με το ίδιο όνομα είναι ένας κόμβος· ένα παλιότερο αρχείο ανοίγει ίδιο (`Bus.migrateNames`: όπου ένα όνομα ήταν ετικέτα σε δύο κόμβους, το δεύτερο γίνεται «όνομα·2»).
 - **Ο έλεγχος:** το `python tools/api_surface.py` σταματά όταν κάτι λείπει ή έχασε όρισμα. Ως την 4.0 περνούσε με `--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 μέσα στην ίδια κύρια έκδοση δεν περνά ούτε με `--allow-removal`· στην επόμενη κύρια περνά μόνο για ό,τι ήταν παρωχημένο. Ένα παρωχημένο σημείο πρέπει να υπάρχει ακόμη στον κώδικα.
 
-- **Πειραματικά (3.19):** `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `pcl.backend.…`, `pcl.accel.…`, `pcl.nnstart.…`, `pcl.onnxio.…`, `pcl.netview.…`, `workbench…`, `python -m pcl accel…`, `python -m pcl nnstart…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο· και της 4.19.2: τα backends των παρτίδων με τον δρόμο GPU*, το script του επιταχυντή, τα μοντέλα εκκίνησης και τα αρχεία ONNX). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
+- **Πειραματικά (3.19):** `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `pcl.backend.…`, `pcl.accel.…`, `pcl.nnstart.…`, `pcl.onnxio.…`, `pcl.netview.…`, `pcl.netfile.…`, `pcl.psse.…`, `workbench…`, `python -m pcl accel…`, `python -m pcl nnstart…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο· και της 4.19.2: τα backends των παρτίδων με τον δρόμο GPU*, το script του επιταχυντή, τα μοντέλα εκκίνησης και τα αρχεία ONNX). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
 
 Στους πίνακες, «Από» είναι η έκδοση της πρώτης καταγραφής: η 3.18 για ό,τι υπήρχε ήδη.
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-484 σημεία.
+501 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -292,18 +292,28 @@
 | `pcl.link.App.show` | `obj`, `title` | 3.18 |
 | `pcl.link.connect` | `url`, `token`, `timeout`, `client` | 3.18 |
 | `pcl.load` | `path` | 3.18 |
+| `pcl.netfile.FileError` | — | 4.19.4 · πειρ. |
+| `pcl.netfile.apply` | `net`, `edits` | 4.19.4 · πειρ. |
+| `pcl.netfile.describe` | `net` | 4.19.4 · πειρ. |
+| `pcl.netfile.out_of_service` | `edits` | 4.19.4 · πειρ. |
+| `pcl.netfile.read` | `text`, `name`, `fmt` | 4.19.4 · πειρ. |
+| `pcl.netfile.read_file` | `path`, `fmt` | 4.19.4 · πειρ. |
+| `pcl.netfile.sniff` | `text`, `name` | 4.19.4 · πειρ. |
+| `pcl.netfile.summary` | `net` | 4.19.4 · πειρ. |
+| `pcl.netfile.to_matpower` | `net` | 4.19.4 · πειρ. |
+| `pcl.netfile.write` | `net`, `fmt` | 4.19.4 · πειρ. |
 | `pcl.netview.ViewError` | — | 4.19.4 · πειρ. |
 | `pcl.netview.dxf` | `v`, `result`, `layers` | 4.19.4 · πειρ. |
 | `pcl.netview.layout` | `net` | 4.19.4 · πειρ. |
 | `pcl.netview.pack` | `v`, `result`, `layers` | 4.19.4 · πειρ. |
 | `pcl.netview.svg` | `v`, `result`, `layer`, `width`, `labels`, `title`, `L`, `standalone` | 4.19.4 · πειρ. |
 | `pcl.netview.values` | `v`, `result`, `layer`, `study` | 4.19.4 · πειρ. |
-| `pcl.netview.view` | `net` | 4.19.4 · πειρ. |
+| `pcl.netview.view` | `net`, `off` | 4.19.4 · πειρ. |
 | `pcl.network.Network` | `f`, `S_base`, `name` | 4.2 |
 | `pcl.network.Network.advice` | `study`, `scenarios` | 4.19.1 |
 | `pcl.network.Network.batch_flow` | `load_scale`, `gen_scale`, `dS`, `tol`, `backend`, `how`, `start` | 4.19.1 |
 | `pcl.network.Network.branch_pu` | `a`, `b`, `r`, `x`, `bc`, `ratio`, `angle`, `name`, `rating` | 4.2 |
-| `pcl.network.Network.bus` | `name`, `Un`, `kind`, `V`, `angle`, `Vmin`, `Vmax` | 4.2 |
+| `pcl.network.Network.bus` | `name`, `Un`, `kind`, `V`, `angle`, `Vmin`, `Vmax`, `label` | 4.2 |
 | `pcl.network.Network.case` | — | 4.19.1 |
 | `pcl.network.Network.contingency` | `kind`, `branches`, `ratings`, `tol`, `q_limits`, `backend`, `how` | 4.19.1 |
 | `pcl.network.Network.dc_flow` | — | 4.19.1 |
@@ -432,6 +442,11 @@
 | `pcl.powerflow.solve` | `case`, `method`, `tol`, `max_iter`, `q_limits`, `flat`, `V0`, `typ` | 4.19.1 · πειρ. |
 | `pcl.powerflow.sweep` | `case`, `V`, `tol`, `max_iter`, `typ`, `Sg` | 4.19.1 · πειρ. |
 | `pcl.powerflow.without` | `case`, `k` | 4.19.1 · πειρ. |
+| `pcl.psse.RawError` | — | 4.19.4 · πειρ. |
+| `pcl.psse.fields` | `line` | 4.19.4 · πειρ. |
+| `pcl.psse.read` | `text` | 4.19.4 · πειρ. |
+| `pcl.psse.read_file` | `path` | 4.19.4 · πειρ. |
+| `pcl.psse.write` | `net`, `version` | 4.19.4 · πειρ. |
 | `pcl.report.Report` | `title`, `subtitle`, `lang`, `meta` | 4.19.1 |
 | `pcl.report.Report.chart` | `kind`, `x`, `series`, `title`, `xlabel`, `ylabel`, `limits`, `ymin`, `ymax`, `table` | 4.19.1 |
 | `pcl.report.Report.data` | `name`, `obj` | 4.19.1 |
@@ -456,8 +471,10 @@
 | `pcl.show` | `obj`, `title` | 3.18 |
 | `pcl.study.StudyError` | — | 4.19.1 |
 | `pcl.study.network_of` | `data` | 4.19.1 |
+| `pcl.study.open_file` | `data` | 4.19.4 |
 | `pcl.study.report` | `data` | 4.19.1 |
 | `pcl.study.run` | `data` | 4.19.1 |
+| `pcl.study.save_file` | `data` | 4.19.4 |
 | `pcl.study.summary` | `study`, `res` | 4.19.1 |
 | `pcl.study.view` | `data` | 4.19.4 |
 | `pcl.sweep` | `grid`, `**kw` | 3.18 |
@@ -554,7 +571,7 @@
 
 ## Server: `/api/<ενέργεια>` και διαδρομές
 
-43 σημεία.
+45 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -587,7 +604,9 @@
 | `/api/link/reply` | — | 3.18 |
 | `/api/link/token` | — | 3.18 |
 | `/api/model_proof` | — | 3.18 |
+| `/api/network_open` | — | 4.19.4 |
 | `/api/network_report` | — | 4.19.1 |
+| `/api/network_save` | — | 4.19.4 |
 | `/api/network_study` | — | 4.19.1 |
 | `/api/network_view` | — | 4.19.4 |
 | `/api/presets` | — | 3.18 |

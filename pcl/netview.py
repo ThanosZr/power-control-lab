@@ -1,4 +1,4 @@
-"""A light single-line view of the network of a study (4.19.4, ROADMAP §72; decisions 271, 272).
+"""A light single-line view of the network of a study (4.19.4, ROADMAP §73; decisions 271, 272).
 
 The study tutorials draw the 9-bus network in EMT whatever network the study runs on; a load flow of 300 or 1354 buses
 without a picture says little. This module gives the picture as data, so that the browser, the report and a CAD file all
@@ -306,6 +306,8 @@ def view(net, off=None):
         info = net.buses.get(b, net.buses.get(case.names[i], {})) if isinstance(net.buses, dict) else {}
         buses.append({'id': b, 'x': round(xy[b][0], 2), 'y': round(xy[b][1], 2), 'Un': float(info.get('Un', 0.0) or 0.0),
                       'type': {2: 'slack', 1: 'PV'}.get(int(typ[i]), 'PQ'), 'gen': b in gen or int(typ[i]) in (1, 2), 'load': b in load, 'shunt': b in shunt})
+        if info.get('label'):                                # 4.19.4: the name of the bus in the file it came from
+            buses[-1]['label'] = str(info['label'])
     tap = np.asarray(case.tap) if getattr(case, 'tap', None) is not None else np.ones(len(f), complex)
     count, seen, branches = {}, {}, []
     for a, b in zip(f.tolist(), t.tolist()):

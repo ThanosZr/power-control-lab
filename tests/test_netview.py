@@ -1,4 +1,4 @@
-"""The picture of the network of a study (4.19.4, ROADMAP §72, pcl/netview.py): the layout is ours, deterministic and without
+"""The picture of the network of a study (4.19.4, ROADMAP §73, pcl/netview.py): the layout is ours, deterministic and without
 coordinates in the data; the layers show what a study found; the same data draw the SVG of the report and a DXF drawing.
 The viewer of the page (web/studio/netview.js) headless, on the data the engine gives it (tests/js/netview_cases.js)."""
 import json

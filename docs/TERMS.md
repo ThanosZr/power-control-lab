@@ -257,6 +257,24 @@
 | phase shifter | μετατοπιστής φάσης (4.19.3) |
 | profile (of a program) | προφίλ (4.19.3) |
 | channel (recorded quantity) | κανάλι (4.19.3) |
+| single-line view (of a studied network) | διάγραμμα του δικτύου (4.19.4· όχι «γράφημα», που είναι το διάγραμμα μεγεθών) |
+| layout (of a graph) | διάταξη (4.19.4) |
+| layer (of the picture, of a CAD drawing) | στρώση (4.19.4) |
+| viewer | προβολέας (4.19.4) |
+| stress majorization | ελαχιστοποίηση της τάσης (stress) με διαδοχικές μεγιστοποιήσεις (4.19.4· η «τάση» εδώ είναι του γράφου, όχι ηλεκτρική: την πρώτη φορά με τον αγγλικό όρο) |
+| classical scaling (MDS) | κλασική κλιμάκωση (4.19.4) |
+| pivot (of the layout) | ζυγός-οδηγός (4.19.4· ο «οδηγός» της παραγοντοποίησης είναι άλλο πράγμα) |
+| out of service | εκτός λειτουργίας (4.19.4) |
+| rating (of a branch) | όριο, ονομαστική ισχύς του κλάδου (4.19.4) |
+| outage (as a change of the network) | στοιχείο εκτός λειτουργίας (4.19.4· «διαταραχή» μόνο στο N−1) |
+| winding (of a transformer) | τύλιγμα (4.19.4) |
+| turns ratio | λόγος μετασχηματισμού (4.19.4) |
+| magnetising admittance | αγωγιμότητα μαγνήτισης (4.19.4) |
+| switched shunt | εγκάρσιο στοιχείο με βαθμίδες (4.19.4) |
+| fixed shunt | σταθερό εγκάρσιο στοιχείο (4.19.4) |
+| remote voltage regulation | ρύθμιση της τάσης άλλου ζυγού, απομακρυσμένη ρύθμιση (4.19.4) |
+| star bus (of a three-winding transformer) | ζυγός-άστρο (4.19.4) |
+| record, field (of a data file) | εγγραφή, πεδίο (4.19.4) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 

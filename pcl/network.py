@@ -123,15 +123,26 @@ class Network:
         self._imp = {}
 
     # ------------------------------------------------------------ buses and elements
-    def bus(self, name, Un, kind='PQ', V=1.0, angle=0.0, Vmin=None, Vmax=None):
+    def bus(self, name, Un, kind='PQ', V=1.0, angle=0.0, Vmin=None, Vmax=None, label=None):
+        """4.19.4: label = a name to show beside the bus (the bus names of a file whose buses are numbers); it is kept only
+        when given, so a network without labels is written as before."""
         name = str(name)
         self.buses[name] = {'Un': float(Un), 'type': kind, 'V': float(V), 'angle': float(angle), 'Vmin': Vmin, 'Vmax': Vmax}
+        if label:
+            self.buses[name]['label'] = str(label)
         return name
 
     def _add(self, kind, name, **kw):
         name = str(name or f'{kind}{sum(e["kind"] == kind for e in self.elements) + 1}')
-        if any(e['name'] == name for e in self.elements):
+        # 4.19.4: the names in a set that follows the list (a file of thousands of elements was read in time that grew with
+        # the square of their number); the set is made again whenever the list is another one or has another length
+        c = self.__dict__.get('_names')
+        if c is None or c[0] is not self.elements or c[1] != len(self.elements):
+            c = self.__dict__['_names'] = [self.elements, len(self.elements), {e['name'] for e in self.elements}]
+        if name in c[2]:
             raise NetworkError(f'element {name} exists')
+        c[2].add(name)
+        c[1] += 1
         for k in ('bus', 'a', 'b', 'c', 'hv', 'lv'):
             if kw.get(k) is not None:
                 kw[k] = str(kw[k])
@@ -1447,7 +1458,7 @@ def to_dict(net):
 def from_dict(d):
     net = Network(d.get('f', 50.0), d.get('S_base', 100e6), d.get('name', ''))
     for b, v in d['buses'].items():
-        net.bus(b, v['Un'], v.get('type', 'PQ'), v.get('V', 1.0), v.get('angle', 0.0), v.get('Vmin'), v.get('Vmax'))
+        net.bus(b, v['Un'], v.get('type', 'PQ'), v.get('V', 1.0), v.get('angle', 0.0), v.get('Vmin'), v.get('Vmax'), v.get('label'))
     cplx = {'Zn_hv', 'Zn_lv', 'Zn'}
     for e in d['elements']:
         e = dict(e)

@@ -1,5 +1,5 @@
 'use strict';
-// 4.19.4 (ROADMAP §72, decisions 271, 272): a light viewer of the network of a study. The study tutorials draw the 9-bus
+// 4.19.4 (ROADMAP §73, decisions 271, 272): a light viewer of the network of a study. The study tutorials draw the 9-bus
 // network in EMT whatever network the study runs on; this shows the network that is studied, with what the study found.
 //
 // The data come from the engine (pcl.netview through the study, {view, layers}): the places of the buses, the branches, and
@@ -51,7 +51,7 @@
  // the text of a bus or a branch for the info line
  function describe(m,hit,layer){if(!hit)return '';const L=m.layers.get(layer);
   if(hit.kind==='bus'){const b=hit.bus,val=L&&L.bus_v?L.bus_v[hit.i]:null;
-   return `Ζυγός ${b.id}`+(b.Un?` · ${num(b.Un/1e3)} kV`:'')+(b.type==='slack'?' · ζυγός ταλάντωσης':b.type==='PV'?' · PV':'')+(b.gen&&b.type==='PQ'?' · παραγωγή':'')+(b.load?' · φορτίο':'')+(b.shunt?' · εγκάρσιο στοιχείο':'')
+   return `Ζυγός ${b.id}`+(b.label?` «${b.label}»`:'')+(b.Un?` · ${num(b.Un/1e3)} kV`:'')+(b.type==='slack'?' · ζυγός ταλάντωσης':b.type==='PV'?' · PV':'')+(b.gen&&b.type==='PQ'?' · παραγωγή':'')+(b.load?' · φορτίο':'')+(b.shunt?' · εγκάρσιο στοιχείο':'')
     +(val!==null&&val!==undefined?` · ${num(val,L.unit_bus)}`:'');}
   const e=hit.branch,val=L&&L.branch_v?L.branch_v[hit.j]:null;
   return `${e.trafo?'Μετασχηματιστής':'Κλάδος'} ${e.name}: ${e.a} – ${e.b}`+(e.of>1?` (${e.k} από ${e.of} παράλληλους)`:'')+(e.off?' · εκτός λειτουργίας':'')+(val!==null&&val!==undefined?` · ${num(val,L.unit_branch)}`:'');}
@@ -127,7 +127,7 @@
    zoom(f,X,Y){size();if(X===undefined){X=st.w/2;Y=st.h/2;}const f0=fit(m,st.w,st.h).s,s=Math.max(f0*0.5,Math.min(st.tr.s*f,40/m.v.unit*10)),wx=(X-st.w/2)/st.tr.s+st.tr.cx,wy=(Y-st.h/2)/st.tr.s+st.tr.cy;
     st.tr={s,cx:wx-(X-st.w/2)/s,cy:wy-(Y-st.h/2)/s};st.fitted=false;ask();},
    // show a bus in the middle, close enough to read its neighbours
-   goto(id){const i=m.ix.get(String(id));if(i===undefined)return false;size();st.tr={s:Math.max(st.tr.s,70/m.v.unit),cx:m.x[i],cy:m.y[i]};st.fitted=false;st.hit={kind:'bus',i,bus:m.v.buses[i]};if(info)info(describe(m,st.hit,st.layer),st.hit);ask();return true;},
+   goto(id){let i=m.ix.get(String(id));if(i===undefined){const t=String(id).trim().toLowerCase(),k=t?m.v.buses.findIndex(b=>b.label&&b.label.toLowerCase()===t):-1;i=k<0?undefined:k;}if(i===undefined)return false;size();st.tr={s:Math.max(st.tr.s,70/m.v.unit),cx:m.x[i],cy:m.y[i]};st.fitted=false;st.hit={kind:'bus',i,bus:m.v.buses[i]};if(info)info(describe(m,st.hit,st.layer),st.hit);ask();return true;},
    info(cb){info=cb;},redraw:ask,paint,
    destroy(){dead=true;ro?.disconnect();canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerup',up);canvas.removeEventListener('pointercancel',up);
     canvas.removeEventListener('wheel',wheel);canvas.removeEventListener('dblclick',dbl);}};

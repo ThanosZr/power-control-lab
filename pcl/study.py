@@ -51,7 +51,7 @@ def _clean(o):
     return o
 
 
-def base_network(data):
+def _base_network(data):
     """The network of a request before its changes: a case by its name, or a network as data."""
     if data.get('network') is not None:
         if not isinstance(data['network'], dict):
@@ -70,10 +70,10 @@ def base_network(data):
     return net
 
 
-def networks_of(data):
+def _networks_of(data):
     """(the network as given, the network with the changes of 'edits', one sentence per change)."""
     from . import netfile
-    net0 = base_network(data)
+    net0 = _base_network(data)
     try:
         net, done = netfile.apply(net0, data.get('edits'))
     except N.NetworkError as e:
@@ -83,7 +83,7 @@ def networks_of(data):
 
 def network_of(data):
     """The network a study runs on: 'case' or 'network', with the changes of 'edits' (4.19.4)."""
-    return networks_of(data)[1]
+    return _networks_of(data)[1]
 
 
 def open_file(data):
@@ -170,7 +170,7 @@ def run(data):
     pcl.netview.view) and 'layers' (what every layer shows from this result, pcl.netview.pack), 'layer' (the one to open),
     and 'edit' (what can be changed from the picture, as it is now: pcl.netfile.describe). With 'edits' the study runs on
     the changed network and 'network' says what was changed ('edits': one sentence each)."""
-    net0, net, done = networks_of(data)
+    net0, net, done = _networks_of(data)
     study = data.get('study') or 'pf'
     res = _study(net, study, data.get('options'))
     out = {'study': study, 'network': {'name': net.name, 'case': data.get('case'), 'buses': len(net.buses),
@@ -194,7 +194,7 @@ def view(data):
     """The picture of the network of a study as a file: {'case' | 'network', 'study', 'options', 'format': 'dxf' | 'svg',
     'layer' (SVG) or 'layers' (DXF)} → {'name', 'text', 'mime'}."""
     from . import netview
-    net0, net, _ = networks_of(data)
+    net0, net, _ = _networks_of(data)
     study = data.get('study') or 'pf'
     fmt = data.get('format') or 'dxf'
     if fmt not in ('dxf', 'svg'):
@@ -228,7 +228,7 @@ def report(data):
         except (KeyError, TypeError, ValueError) as e:
             raise StudyError(f'Η αναφορά δεν διαβάζεται: {e}') from e
         return {'html': r.html(), 'name': 'report.html', 'report': r.to_dict(), 'summary': {}}
-    net0, net, done = networks_of(data)
+    net0, net, done = _networks_of(data)
     study = data.get('study') or 'pf'
     if study in ('advice', 'dc'):
         raise StudyError('Αναφορά για: pf, n1, n1dc, opf, dcopf.')
@@ -241,4 +241,4 @@ def report(data):
     return {'html': r.html(), 'name': name, 'report': _clean(r.to_dict()), 'summary': _clean(summary(study, res))}
 
 
-__all__ = ['run', 'report', 'view', 'open_file', 'save_file', 'summary', 'network_of', 'networks_of', 'base_network', 'StudyError', 'STUDIES']
+__all__ = ['run', 'report', 'view', 'open_file', 'save_file', 'summary', 'network_of', 'StudyError', 'STUDIES']

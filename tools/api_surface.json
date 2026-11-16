@@ -13,7 +13,9 @@
    "pcl.accel.",
    "pcl.nnstart.",
    "pcl.onnxio.",
-   "pcl.netview."
+   "pcl.netview.",
+   "pcl.netfile.",
+   "pcl.psse."
   ],
   "cli": [
    "workbench",
@@ -1982,6 +1984,70 @@
     ],
     "since": "3.18"
    },
+   "pcl.netfile.FileError": {
+    "params": [],
+    "since": "4.19.4"
+   },
+   "pcl.netfile.apply": {
+    "params": [
+     "net",
+     "edits"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.netfile.describe": {
+    "params": [
+     "net"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.netfile.out_of_service": {
+    "params": [
+     "edits"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.netfile.read": {
+    "params": [
+     "text",
+     "name",
+     "fmt"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.netfile.read_file": {
+    "params": [
+     "path",
+     "fmt"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.netfile.sniff": {
+    "params": [
+     "text",
+     "name"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.netfile.summary": {
+    "params": [
+     "net"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.netfile.to_matpower": {
+    "params": [
+     "net"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.netfile.write": {
+    "params": [
+     "net",
+     "fmt"
+    ],
+    "since": "4.19.4"
+   },
    "pcl.netview.ViewError": {
     "params": [],
     "since": "4.19.4"
@@ -2032,7 +2098,8 @@
    },
    "pcl.netview.view": {
     "params": [
-     "net"
+     "net",
+     "off"
     ],
     "since": "4.19.4"
    },
@@ -2085,7 +2152,8 @@
      "V",
      "angle",
      "Vmin",
-     "Vmax"
+     "Vmax",
+     "label"
     ],
     "since": "4.2"
    },
@@ -3149,6 +3217,35 @@
     ],
     "since": "4.19.1"
    },
+   "pcl.psse.RawError": {
+    "params": [],
+    "since": "4.19.4"
+   },
+   "pcl.psse.fields": {
+    "params": [
+     "line"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.psse.read": {
+    "params": [
+     "text"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.psse.read_file": {
+    "params": [
+     "path"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.psse.write": {
+    "params": [
+     "net",
+     "version"
+    ],
+    "since": "4.19.4"
+   },
    "pcl.report.Report": {
     "params": [
      "title",
@@ -3315,6 +3412,12 @@
     ],
     "since": "4.19.1"
    },
+   "pcl.study.open_file": {
+    "params": [
+     "data"
+    ],
+    "since": "4.19.4"
+   },
    "pcl.study.report": {
     "params": [
      "data"
@@ -3326,6 +3429,12 @@
      "data"
     ],
     "since": "4.19.1"
+   },
+   "pcl.study.save_file": {
+    "params": [
+     "data"
+    ],
+    "since": "4.19.4"
    },
    "pcl.study.summary": {
     "params": [
@@ -4174,9 +4283,17 @@
     "params": [],
     "since": "3.18"
    },
+   "/api/network_open": {
+    "params": [],
+    "since": "4.19.4"
+   },
    "/api/network_report": {
     "params": [],
     "since": "4.19.1"
+   },
+   "/api/network_save": {
+    "params": [],
+    "since": "4.19.4"
    },
    "/api/network_study": {
     "params": [],

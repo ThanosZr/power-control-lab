@@ -147,7 +147,7 @@ const {chromium}=require('playwright');
  await p.click('#play');await p.waitForTimeout(1500);await p.click('#play');
  const pg=await p.evaluate(()=>['G1','G2','G3'].map(g=>window.PCL.S.sim.now('Y:'+g+':pe')));
  ok(Math.abs(pg[0]-0.898)<2e-3&&Math.abs(pg[1]-1.3432)<2e-3&&Math.abs(pg[2]-0.9419)<2e-3,'study: the EMT starts from the optimal dispatch '+pg.map(x=>x.toFixed(4)).join(' '));
- // 4.19.4 (ROADMAP §72): «Διάγραμμα του δικτύου» shows the network that is studied, with layers from the result of the study
+ // 4.19.4 (ROADMAP §73): «Διάγραμμα του δικτύου» shows the network that is studied, with layers from the result of the study
  await p.evaluate(()=>window.PCL.loadTutorial('pf_study',{net:'ieee300',study:'pf',method:'auto'}));await p.waitForTimeout(900);
  const tv0=Date.now();await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.frames>0,null,{timeout:60000});const tv=Date.now()-tv0;
  const ink=()=>p.evaluate(()=>{const c=document.querySelector('#nv-canvas'),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i]<235||d[i+1]<235||d[i+2]<235)n++;return n/(d.length/4);});
@@ -192,6 +192,7 @@ const {chromium}=require('playwright');
  const nf2=await p.evaluate(()=>window.PCL.STUDY.r);
  ok(nf2.summary.converged&&nf2.network.buses===30&&nf2.network.name==='my grid 30'&&Math.abs(nf2.summary.losses_MW-2.4438)<1e-3,'network file: the load flow runs on the network of the file (losses '+nf2.summary.losses_MW.toFixed(4)+' MW)');
  await p.setInputFiles('#study-open',{name:'broken.m',mimeType:'text/plain',buffer:Buffer.from('this is not a network')});await p.waitForSelector('#study-error',{timeout:30000});
+ for(let i=errs.length-1;i>=0;i--)if(/status of 400/.test(errs[i]))errs.splice(i,1);   // the refusal asked for just above is a 400 of the server, which the browser also writes on its console
  ok(/mpc\.bus/.test(await p.textContent('#study-error'))&&await p.evaluate(()=>window.PCL.STUDY.file.fileName==='my grid 30.m'),'network file: a file that is not a network is refused with the reason, and the open network stays');
  await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.frames>0,null,{timeout:60000});
  const nvAt=(kind,name)=>p.evaluate(([kind,name])=>{const v=window.PCL.NV.v,m=v.model,r=document.querySelector('#nv-canvas').getBoundingClientRect(),t=v.state.tr;
@@ -206,9 +207,9 @@ const {chromium}=require('playwright');
  const tr0=await p.evaluate(()=>{const v=window.PCL.NV.v;v.zoom(1.7,200,150);return JSON.stringify(v.state.tr);});
  xy=await nvAt('branch','br10');await p.mouse.click(xy[0],xy[1]);await p.waitForSelector('#nv-edit [data-nv="off"]');
  const ed3=await p.inputValue('#nv-edit [data-nv="rating"]');await p.check('#nv-edit [data-nv="off"]');await p.click('#nv-apply');await nvDone(2);
- const ed4=await p.evaluate(()=>{const d=window.PCL.STUDY.view,L=d.layers.find(q=>q.layer==='voltage'),v=window.PCL.NV.v;return {v8:L.bus_v[d.view.buses.findIndex(b=>b.id==='8')],drawn:v.state.drawn,tr:JSON.stringify(v.state.tr),off:d.view.branches.filter(e=>e.off).map(e=>e.name).join(),
+ const ed4=await p.evaluate(()=>{const d=window.PCL.STUDY.view,L=d.layers.find(q=>q.layer==='voltage'),v=window.PCL.NV.v;return {v8:L.bus_v[d.view.buses.findIndex(b=>b.id==='8')],drawn:v.state.drawn,nbr:d.view.branches.length,tr:JSON.stringify(v.state.tr),off:d.view.branches.filter(e=>e.off).map(e=>e.name).join(),
    checked:document.querySelector('#nv-edit [data-nv="off"]')?.checked,losses:window.PCL.STUDY.r.summary.losses_MW};});
- ok(ed3==='32'&&ed4.off==='br10'&&ed4.drawn.off===1&&ed4.drawn.branches===41&&ed4.checked===true&&ed4.v8<v8a-0.05,'network changes: a branch out of service stays in the picture, dashed; the voltage of bus 8 falls from '+v8a+' to '+ed4.v8+' pu ('+ed3+', '+ed4.off+', '+JSON.stringify(ed4.drawn)+', '+ed4.checked+')');
+ ok(ed3==='32'&&ed4.off==='br10'&&ed4.drawn.off===1&&ed4.nbr===41&&ed4.checked===true&&ed4.v8<v8a-0.05,'network changes: a branch out of service stays in the picture, dashed; the voltage of bus 8 falls from '+v8a+' to '+ed4.v8+' pu ('+ed3+', '+ed4.off+', '+JSON.stringify(ed4.drawn)+', '+ed4.checked+')');
  ok(ed4.tr===tr0,'network changes: the picture stays where it was (the same zoom and place after the study runs again)');
  await p.fill('#nv-edit [data-nv="rating"]','abc').catch(()=>{});xy=await nvAt('bus','1');await p.mouse.click(xy[0],xy[1]);await p.waitForSelector('#nv-edit .nv-gen');
  const ed5=await p.evaluate(()=>({t:document.querySelector('#nv-edit').textContent,gP:!!document.querySelector('#nv-edit [data-nv="gP"]'),gV:document.querySelector('#nv-edit [data-nv="gV"]')?.value}));
