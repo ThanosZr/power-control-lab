@@ -30,8 +30,10 @@ function three(N,sw){const c=[{id:'G1',type:'GRID3',params:{Un:20e3,Sk:500e6,XR:
 function run(pr,solver,steps){const s=new MNA.Sim(JSON.parse(JSON.stringify(pr)),{h:2e-6,solver});const t0=process.hrtime.bigint();s.run(2e-6*steps);const ms=Number(process.hrtime.bigint()-t0)/1e6;
  // one factorization alone (no cache): the median of 7 after one for the JIT, so a busy machine does not decide
  // (4.19: spF = null asks for a factorization from scratch; otherwise the solver would only find that nothing changed)
- let F=s.factor(2e-6,'TR');const ts=[];for(let k=0;k<7;k++){s.spF=null;const t1=process.hrtime.bigint();F=s.factor(2e-6,'TR');ts.push(Number(process.hrtime.bigint()-t1)/1e6);}
- ts.sort((a,b)=>a-b);const fms=ts[3];
+ // (the CI of 4.19 ran once on a machine so busy that the median of 7 gave 3 ms for a factorization of 0,3 ms: the best of 15
+ // is what the algorithm costs, whatever else the machine does)
+ let F=s.factor(2e-6,'TR');const ts=[];for(let k=0;k<15;k++){s.spF=null;const t1=process.hrtime.bigint();F=s.factor(2e-6,'TR');ts.push(Number(process.hrtime.bigint()-t1)/1e6);}
+ ts.sort((a,b)=>a-b);const fms=ts[0];
  // 4.19 (§68): the refactorization of every column of the same matrix (same pivots, no search of the pattern), median of 7,
  // and the same factors bit for bit
  // (the CI of 4.19 measured it once slower than the factorization at 219 unknowns: seven calls right after the first one
