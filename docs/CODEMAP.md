@@ -150,7 +150,7 @@
 | `tests/test_psse.py` | 305 |
 | `tests/test_recording.py` | 211 |
 | `tests/test_refac.py` | 78 |
-| `tests/test_report.py` | 666 |
+| `tests/test_report.py` | 667 |
 | `tests/test_scopf.py` | 263 |
 | `tests/test_sparse.py` | 53 |
 | `tests/test_sssc.py` | 444 |
@@ -218,7 +218,7 @@
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/ev_flow.js` | 112 |
 | `tests/ui/facts_flow.js` | 93 |
-| `tests/ui/features_flow.js` | 250 |
+| `tests/ui/features_flow.js` | 270 |
 | `tests/ui/line_flow.js` | 166 |
 | `tests/ui/live_flow.js` | 41 |
 | `tests/ui/perf_flow.js` | 68 |
