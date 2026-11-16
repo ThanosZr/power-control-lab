@@ -1,0 +1,678 @@
+"""A light single-line view of the network of a study (4.19.4, ROADMAP §72; decisions 271, 272).
+
+The study tutorials draw the 9-bus network in EMT whatever network the study runs on; a load flow of 300 or 1354 buses
+without a picture says little. This module gives the picture as data, so that the browser, the report and a CAD file all
+show the same thing:
+
+    layout(net)                  the place of every bus, {bus: (x, y)}; no coordinates are needed in the data
+    view(net)                    buses, branches and their places, as plain data (what the browser draws)
+    values(view, result, layer)  what a layer shows: a number per bus or per branch, its unit, its scale and its legend
+    svg(view, result, layer)     the picture as SVG (the report)
+    dxf(view, result, layers)    the picture as a DXF file with one CAD layer per kind of thing (opens in any CAD)
+
+The layout is ours and deterministic (no random numbers): a radial network as a tree from its slack bus; a meshed one from
+the graph distances between its buses (classical scaling for the start, stress majorization after it: Gansner, Koren &
+North 2004), each island by itself. It shows who is connected to whom, not geography.
+"""
+import math
+
+import numpy as np
+
+UNIT = 100.0            # the length of a typical branch in drawing units
+FULL = 2500             # buses up to which the stress uses every pair of buses (memory n², time n² per sweep)
+PIVOTS = 200            # above it: distances to this many buses only (pivot scaling, Brandes & Pich 2007)
+LAYERS = ('base', 'voltage', 'angle', 'loading', 'flow', 'violations', 'n1', 'lmp')
+TITLES = {'base': 'Επίπεδα τάσης', 'voltage': 'Τάσεις ζυγών', 'angle': 'Γωνίες τάσης', 'loading': 'Φόρτιση κλάδων', 'flow': 'Ροές ενεργού ισχύος',
+          'violations': 'Παραβιάσεις', 'n1': 'N−1: τι προκαλεί η απώλεια κάθε κλάδου', 'lmp': 'Οριακές τιμές κόμβων'}
+# colours: a diverging scale for a quantity around a centre, a sequential one for a quantity from zero, and the voltage levels
+DIVERGING = ['#2166ac', '#67a9cf', '#d1e5f0', '#bdbdbd', '#fddbc7', '#ef8a62', '#b2182b']
+SEQUENTIAL = ['#bdbdbd', '#fee08b', '#fdae61', '#f46d43', '#d73027', '#7f0000']
+LEVELS = ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e', '#e6ab02', '#a6761d', '#666666']
+GREY, BAD, WARN = '#9e9e9e', '#b2182b', '#ef8a62'
+
+
+class ViewError(ValueError):
+    pass
+
+
+# ---------------------------------------------------------------- the graph
+def _graph(net):
+    """Buses in the order of the load-flow case, the branches as index pairs, and what hangs on every bus."""
+    case = net.case()
+    names = [str(b) for b in case.names]
+    f, t = np.asarray(case.f, int), np.asarray(case.t, int)
+    return case, names, f, t
+
+
+def _components(n, f, t):
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    A = coo_matrix((np.ones(len(f)), (f, t)), shape=(n, n))
+    k, lab = connected_components(A, directed=False)
+    return [np.flatnonzero(lab == i) for i in range(k)]
+
+
+def _hops(n, f, t, sources=None):
+    """Graph distances in branches: all pairs, or from some buses (rows)."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import shortest_path
+    A = coo_matrix((np.ones(len(f)), (f, t)), shape=(n, n)).tocsr()
+    return shortest_path(A, method='D', directed=False, unweighted=True, indices=sources)
+
+
+def _tree(n, f, t, root):
+    """A radial network: depth to the right, every subtree in its own band, the larger subtrees first (a tidy feeder)."""
+    nb = [[] for _ in range(n)]
+    for a, b in zip(f, t):
+        nb[a].append(int(b))
+        nb[b].append(int(a))
+    parent, order, depth = [-1] * n, [], [0] * n
+    seen, stack = [False] * n, [root]
+    seen[root] = True
+    while stack:
+        u = stack.pop()
+        order.append(u)
+        for v in sorted(nb[u], reverse=True):
+            if not seen[v]:
+                seen[v] = True
+                parent[v], depth[v] = u, depth[u] + 1
+                stack.append(v)
+    size = [1] * n
+    for u in reversed(order):
+        if parent[u] >= 0:
+            size[parent[u]] += size[u]
+    kids = [[] for _ in range(n)]
+    for u in order:
+        if parent[u] >= 0:
+            kids[parent[u]].append(u)
+    y, nxt = [0.0] * n, [0.0]
+
+    def place(u):
+        # iterative post-order: a leaf takes the next free row, a parent the row of its largest subtree (the main feeder stays straight)
+        st = [(u, 0)]
+        while st:
+            v, i = st.pop()
+            ch = sorted(kids[v], key=lambda c: (-size[c], c))
+            if i < len(ch):
+                st.append((v, i + 1))
+                st.append((ch[i], 0))
+            elif not ch:
+                y[v] = nxt[0]
+                nxt[0] += 1.0
+            else:
+                y[v] = y[ch[0]]
+    place(root)
+    return np.array([[depth[u], y[u]] for u in range(n)], float)
+
+
+def _classical(D, dim=2):
+    """Classical scaling of a distance matrix (rows: pivots or all buses): the start of the stress iteration."""
+    D2 = D.astype(float) ** 2
+    C = D2 - D2.mean(axis=0)[None, :] - D2.mean(axis=1)[:, None] + D2.mean()
+    C = -0.5 * C.T                                         # n × k
+    # the largest directions of C·Cᵀ from the small k × k problem
+    w, V = np.linalg.eigh(C.T @ C)
+    X = C @ V[:, ::-1][:, :dim]
+    for j in range(X.shape[1]):                            # a fixed sign: the first bus that is not at zero looks right and up
+        nz = np.flatnonzero(np.abs(X[:, j]) > 1e-9 * (np.abs(X[:, j]).max() or 1.0))
+        if len(nz) and X[nz[0], j] < 0:
+            X[:, j] = -X[:, j]
+    s = np.abs(X).max() or 1.0
+    return X / s
+
+
+def _stress(X, D, sweeps=60, tol=1e-4):
+    """Stress majorization with the weights 1/d² (Gansner, Koren & North 2004): every sweep moves each bus to the weighted
+    mean of where the others want it. D: all pairs (n × n)."""
+    n = len(X)
+    with np.errstate(divide='ignore'):
+        W = np.where(D > 0, 1.0 / (D * D), 0.0)
+    wsum = W.sum(axis=1)
+    wsum[wsum == 0] = 1.0
+    last = None
+    for _ in range(sweeps):
+        diff = X[:, None, :] - X[None, :, :]
+        dist = np.sqrt((diff * diff).sum(axis=2))
+        np.fill_diagonal(dist, 1.0)
+        # two buses at the same place (twins: the same neighbours) pull nothing from each other here; _spread parts them later
+        B = np.where(dist > 1e-9, W * D / np.maximum(dist, 1e-9), 0.0)
+        np.fill_diagonal(B, 0.0)
+        Xn = (W @ X + (B.sum(axis=1)[:, None] * X - B @ X)) / wsum[:, None]
+        s = float((W * (dist - D) ** 2).sum())
+        X = Xn
+        if last is not None and abs(last - s) <= tol * max(last, 1e-30):
+            break
+        last = s
+    return X
+
+
+def _stress_sparse(X, f, t, P, Dp, sweeps=40):
+    """A network above FULL buses: the same iteration with the pairs that matter only: every branch (distance 1) and the
+    distances to the pivots."""
+    n = len(X)
+    nbr_w = np.zeros(n)
+    np.add.at(nbr_w, f, 1.0)
+    np.add.at(nbr_w, t, 1.0)
+    with np.errstate(divide='ignore'):
+        Wp = np.where(Dp > 0, 1.0 / (Dp * Dp), 0.0)        # k × n
+    wsum = nbr_w + Wp.sum(axis=0)
+    wsum[wsum == 0] = 1.0
+    for _ in range(sweeps):
+        num = np.zeros_like(X)
+        d = X[f] - X[t]
+        L = np.sqrt((d * d).sum(axis=1))
+        L[L == 0] = 1.0
+        u = d / L[:, None]
+        np.add.at(num, f, X[t] + u)
+        np.add.at(num, t, X[f] - u)
+        dp = X[None, :, :] - X[P][:, None, :]             # k × n × 2
+        Lp = np.sqrt((dp * dp).sum(axis=2))
+        Lp[Lp == 0] = 1.0
+        num += ((Wp[:, :, None]) * (X[P][:, None, :] + dp / Lp[:, :, None] * Dp[:, :, None])).sum(axis=0)
+        X = num / wsum[:, None]
+    return X
+
+
+def _spread(X, dmin, sweeps=8):
+    """Buses that fell on top of each other move apart (a short pass; the picture keeps its shape)."""
+    from scipy.spatial import cKDTree
+    X = X.copy()
+    for _ in range(sweeps):
+        pairs = cKDTree(X).query_pairs(dmin, output_type='ndarray')
+        if not len(pairs):
+            break
+        a, b = pairs[:, 0], pairs[:, 1]
+        d = X[a] - X[b]
+        L = np.sqrt((d * d).sum(axis=1))
+        same = L < 1e-9
+        # two buses at one point: apart along a direction fixed by their indices
+        ang = (a[same] * 0.7548776662 + b[same] * 0.5698402910) * 2 * math.pi
+        d[same] = np.c_[np.cos(ang), np.sin(ang)]
+        L[same] = 1.0
+        push = 0.5 * (dmin - np.where(same, 0.0, L))[:, None] * d / L[:, None]
+        mv = np.zeros_like(X)
+        np.add.at(mv, a, push)
+        np.add.at(mv, b, -push)
+        X += mv
+    return X
+
+
+def _island(n, f, t, root):
+    """The places of one connected part: n buses, branches f → t (local indices), root = its slack or first bus."""
+    if n == 1:
+        return np.zeros((1, 2))
+    if n == 2:
+        return np.array([[0.0, 0.0], [1.0, 0.0]])
+    if len(set(map(lambda p: (min(p), max(p)), zip(f.tolist(), t.tolist())))) == n - 1:
+        return _tree(n, f, t, root)
+    if n <= FULL:
+        D = _hops(n, f, t)
+        X = _stress(_classical(D) * (D.max() / 2.0), D)
+    else:
+        # pivots far from each other (the farthest-first rule from the root): deterministic
+        P, far = [root], _hops(n, f, t, sources=[root])[0]
+        while len(P) < min(PIVOTS, n):
+            nxt = int(np.argmax(far))
+            P.append(nxt)
+            far = np.minimum(far, _hops(n, f, t, sources=[nxt])[0])
+        P = np.array(P)
+        Dp = _hops(n, f, t, sources=P)                     # k × n
+        X = _stress_sparse(_classical(Dp) * (Dp.max() / 2.0), f, t, P, Dp)
+    # the long direction horizontal, the root on the left
+    Xc = X - X.mean(axis=0)
+    w, V = np.linalg.eigh(Xc.T @ Xc)
+    X = Xc @ V[:, ::-1]
+    if X[root, 0] > 0:
+        X[:, 0] = -X[:, 0]
+    if X[root, 1] > 0:
+        X[:, 1] = -X[:, 1]
+    L = np.sqrt(((X[f] - X[t]) ** 2).sum(axis=1))
+    med = float(np.median(L[L > 0])) if (L > 0).any() else 1.0
+    return _spread(X / med, 0.45)
+
+
+_PLACES = {}            # the places of the graphs laid out in this process (a study of the same network asks again and again)
+
+
+def layout(net):
+    """The place of every bus of a network, {bus: (x, y)} in drawing units (a typical branch is UNIT long; y grows downwards).
+    Deterministic: the same network gives the same places."""
+    case, names, f, t = _graph(net)
+    n = len(names)
+    if n == 0:
+        return {}
+    key = hash((tuple(names), f.tobytes(), t.tobytes(), np.asarray(case.typ).tobytes()))
+    if key in _PLACES:
+        return dict(_PLACES[key])
+    xy = _layout(case, names, f, t)
+    if len(_PLACES) > 16:
+        _PLACES.clear()
+    _PLACES[key] = xy
+    return dict(xy)
+
+
+def _layout(case, names, f, t):
+    n = len(names)
+    typ = np.asarray(case.typ)
+    out, x0 = np.zeros((n, 2)), 0.0
+    comps = sorted(_components(n, f, t), key=lambda c: (-len(c), int(c[0])))
+    row_h, y0, row_w = 0.0, 0.0, 0.0
+    width = None
+    for c in comps:
+        loc = {int(g): i for i, g in enumerate(c)}
+        m = np.array([a in loc and b in loc for a, b in zip(f.tolist(), t.tolist())], bool)
+        fl = np.array([loc[int(a)] for a in f[m]], int)
+        tl = np.array([loc[int(b)] for b in t[m]], int)
+        ref = [i for i, g in enumerate(c) if typ[g] == 2]
+        X = _island(len(c), fl, tl, ref[0] if ref else 0)
+        X = X - X.min(axis=0)
+        w, h = X.max(axis=0) if len(X) else (0.0, 0.0)
+        if width is None:
+            width = max(w, 1.0)                              # the largest part sets the width; the others in rows under it
+            out[c] = X
+            y0, x0, row_h = h + 2.0, 0.0, 0.0
+            continue
+        if x0 > 0 and x0 + w > width:
+            x0, y0, row_h = 0.0, y0 + row_h + 2.0, 0.0
+        out[c] = X + np.array([x0, y0])
+        x0, row_h = x0 + w + 2.0, max(row_h, h)
+    out *= UNIT
+    return {names[i]: (float(out[i, 0]), float(out[i, 1])) for i in range(n)}
+
+
+# ---------------------------------------------------------------- the view as data
+def view(net):
+    """Buses, branches and their places as plain data: what the browser draws and what svg() and dxf() take.
+
+    {'unit', 'bounds': [x0, y0, x1, y1], 'levels': [U_n…], 'buses': [{id, x, y, Un, type, gen, load, shunt}],
+     'branches': [{name, a, b, trafo, k, of}]}: k of `of` parallel branches between the same two buses."""
+    case, names, f, t = _graph(net)
+    xy = layout(net)
+    typ = np.asarray(case.typ)
+    gen, load, shunt = set(), set(), set()
+    for e in net.elements:
+        k = e.get('kind')
+        if k in ('generator', 'gen', 'source', 'slack', 'grid'):
+            gen.add(str(e.get('bus')))
+        elif k == 'load':
+            load.add(str(e.get('bus')))
+        elif k == 'shunt':
+            shunt.add(str(e.get('bus')))
+    buses = []
+    for i, b in enumerate(names):
+        info = net.buses.get(b, net.buses.get(case.names[i], {})) if isinstance(net.buses, dict) else {}
+        buses.append({'id': b, 'x': round(xy[b][0], 2), 'y': round(xy[b][1], 2), 'Un': float(info.get('Un', 0.0) or 0.0),
+                      'type': {2: 'slack', 1: 'PV'}.get(int(typ[i]), 'PQ'), 'gen': b in gen or int(typ[i]) in (1, 2), 'load': b in load, 'shunt': b in shunt})
+    tap = np.asarray(case.tap) if getattr(case, 'tap', None) is not None else np.ones(len(f), complex)
+    count, seen, branches = {}, {}, []
+    for a, b in zip(f.tolist(), t.tolist()):
+        key = (min(a, b), max(a, b))
+        count[key] = count.get(key, 0) + 1
+    for j, (a, b) in enumerate(zip(f.tolist(), t.tolist())):
+        key = (min(a, b), max(a, b))
+        seen[key] = seen.get(key, 0) + 1
+        ua, ub = buses[a]['Un'], buses[b]['Un']
+        trafo = bool(abs(complex(tap[j]) - 1.0) > 1e-9 or (ua > 0 and ub > 0 and abs(ua - ub) > 1e-6 * max(ua, ub)))
+        branches.append({'name': str(case.br_name[j]), 'a': names[a], 'b': names[b], 'trafo': trafo, 'k': seen[key], 'of': count[key]})
+    xs, ys = [q['x'] for q in buses], [q['y'] for q in buses]
+    levels = sorted({q['Un'] for q in buses if q['Un'] > 0}, reverse=True)
+    return {'unit': UNIT, 'bounds': [min(xs), min(ys), max(xs), max(ys)] if buses else [0, 0, 0, 0], 'levels': levels, 'buses': buses, 'branches': branches}
+
+
+# ---------------------------------------------------------------- what a layer shows
+def _scale(colors, lo, hi):
+    def col(v):
+        if v is None or not math.isfinite(v):
+            return GREY
+        if hi <= lo:
+            return colors[len(colors) // 2]
+        q = (v - lo) / (hi - lo)
+        return colors[max(0, min(len(colors) - 1, int(q * len(colors))))]
+    return col
+
+
+def _num(x):
+    try:
+        v = float(x)
+        return v if math.isfinite(v) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def values(v, result=None, layer='base', study=None):
+    """What a layer shows on a view: {'layer', 'title', 'bus': {id: value}, 'branch': {name: value}, 'bus_color': {…},
+    'branch_color': {…}, 'unit_bus', 'unit_branch', 'legend': [(colour, text)…], 'note'}. result: the result of a study as
+    pcl.study gives it (load flow or optimal power flow: 'buses', 'branches'; N−1: 'outages'). A layer the result cannot feed
+    (no ratings, no prices, no outages) says so in 'note' and draws the base layer."""
+    if layer not in LAYERS:
+        raise ViewError(f'άγνωστη στρώση {layer!r}: μία από {", ".join(LAYERS)}')
+    res = result or {}
+    rb, rbr = res.get('buses') or {}, res.get('branches') or []
+    out = {'layer': layer, 'title': TITLES[layer], 'bus': {}, 'branch': {}, 'bus_color': {}, 'branch_color': {}, 'unit_bus': '', 'unit_branch': '', 'legend': [], 'note': ''}
+    lev = {u: LEVELS[i % len(LEVELS)] for i, u in enumerate(v['levels'])}
+
+    def base():
+        for b in v['buses']:
+            out['bus_color'][b['id']] = lev.get(b['Un'], GREY)
+        un = {b['id']: b['Un'] for b in v['buses']}
+        for e in v['branches']:
+            out['branch_color'][e['name']] = lev.get(max(un.get(e['a'], 0), un.get(e['b'], 0)), GREY)
+        out['legend'] = [(lev[u], f'{u / 1e3:g} kV') for u in v['levels']] or [(GREY, 'χωρίς ονομαστική τάση')]
+
+    def missing(what):
+        out['note'] = what
+        base()
+        return out
+
+    if layer == 'base':
+        base()
+        return out
+    if layer in ('voltage', 'angle', 'lmp'):
+        key = {'voltage': 'V', 'angle': 'angle', 'lmp': 'lmp'}[layer]
+        vals = {str(b): _num(q.get(key)) for b, q in rb.items() if isinstance(q, dict)}
+        vals = {b: x for b, x in vals.items() if x is not None}
+        if not vals:
+            return missing({'voltage': 'Η μελέτη δεν έχει τάσεις ζυγών.', 'angle': 'Η μελέτη δεν έχει γωνίες.', 'lmp': 'Οριακές τιμές κόμβων δίνει μόνο η βέλτιστη ροή φορτίου.'}[layer])
+        if layer == 'voltage':
+            lo, hi, unit, fmt = 0.9, 1.1, 'pu', '{:.2f}'
+            lo, hi = min(lo, min(vals.values())), max(hi, max(vals.values()))
+            col = _scale(DIVERGING, 1 - max(1 - lo, hi - 1), 1 + max(1 - lo, hi - 1))
+        elif layer == 'angle':
+            a = max(abs(x) for x in vals.values()) or 1.0
+            lo, hi, unit, fmt = -a, a, '°', '{:.1f}'
+            col = _scale(DIVERGING, lo, hi)
+        else:
+            lo, hi, unit, fmt = min(vals.values()), max(vals.values()), 'ανά MWh', '{:.2f}'
+            col = _scale(SEQUENTIAL, lo, hi if hi > lo else lo + 1.0)
+        out['bus'], out['unit_bus'] = vals, unit
+        out['bus_color'] = {b['id']: col(vals.get(b['id'])) for b in v['buses']}
+        out['branch_color'] = {e['name']: GREY for e in v['branches']}
+        a0, a1 = (1 - max(1 - lo, hi - 1), 1 + max(1 - lo, hi - 1)) if layer == 'voltage' else (lo, hi)
+        steps = [a0 + (a1 - a0) * (i + 0.5) / 7 for i in range(7)] if layer != 'lmp' else [a0 + (a1 - a0) * (i + 0.5) / 6 for i in range(6)]
+        out['legend'] = [(col(s), fmt.format(s).replace('.', ',') + ' ' + unit) for s in steps]
+        return out
+    if layer in ('loading', 'flow'):
+        if not rbr:
+            return missing('Η μελέτη δεν έχει ροές κλάδων.')
+        if layer == 'loading':
+            vals = {str(e.get('name')): _num(e.get('loading')) for e in rbr}
+            vals = {k: x for k, x in vals.items() if x is not None}
+            if not vals:
+                return missing('Φόρτιση υπάρχει μόνο όπου οι κλάδοι έχουν ονομαστική ισχύ και η μελέτη την υπολογίζει (βέλτιστη ροή φορτίου).')
+            vals = {k: 100.0 * x for k, x in vals.items()}       # the studies give the loading as a fraction of the rating
+            col = _scale(SEQUENTIAL, 0.0, 120.0)
+            out['branch'], out['unit_branch'] = vals, '%'
+            out['legend'] = [(col(s), f'{int(s - 10)}–{int(s + 10)} %') for s in (10, 30, 50, 70, 90)] + [(col(110), 'πάνω από 100 %')]
+        else:
+            vals = {str(e.get('name')): _num(e.get('Pa')) for e in rbr}
+            vals = {k: x / 1e6 for k, x in vals.items() if x is not None}
+            top = max((abs(x) for x in vals.values()), default=1.0) or 1.0
+            col = _scale(SEQUENTIAL, 0.0, top)
+            out['branch'], out['unit_branch'] = vals, 'MW'
+            out['legend'] = [(col(top * (i + 0.5) / 6), f'{top * i / 6:.3g}–{top * (i + 1) / 6:.3g} MW'.replace('.', ',')) for i in range(6)]
+            col0 = col
+            col = lambda x: col0(abs(x)) if x is not None else GREY     # noqa: E731
+        out['branch_color'] = {e['name']: col(vals.get(e['name'])) for e in v['branches']}
+        out['bus_color'] = {b['id']: GREY for b in v['buses']}
+        return out
+    if layer == 'violations':
+        if not rb and not rbr:
+            return missing('Η μελέτη δεν έχει τάσεις ή ροές.')
+        lim = res.get('limits') or {}
+        vmin, vmax = float(lim.get('Vmin', 0.95)), float(lim.get('Vmax', 1.05))
+        nb = nbr = 0
+        for b in v['buses']:
+            x = _num((rb.get(b['id']) or rb.get(_maybe_int(b['id'])) or {}).get('V')) if rb else None
+            bad = x is not None and (x < vmin - 1e-9 or x > vmax + 1e-9)
+            nb += bad
+            out['bus_color'][b['id']] = BAD if bad else GREY
+            if x is not None:
+                out['bus'][b['id']] = x
+        ld = {str(e.get('name')): _num(e.get('loading')) for e in rbr}
+        for e in v['branches']:
+            x = ld.get(e['name'])
+            x = None if x is None else 100.0 * x
+            bad = x is not None and x > 100.0 + 1e-6
+            nbr += bad
+            out['branch_color'][e['name']] = BAD if bad else GREY
+            if x is not None:
+                out['branch'][e['name']] = x
+        out['unit_bus'], out['unit_branch'] = 'pu', '%'
+        out['legend'] = [(BAD, f'τάση έξω από {vmin:g}–{vmax:g} pu ({nb} ζυγοί) · φόρτιση πάνω από 100 % ({nbr} κλάδοι)'.replace('.', ',')), (GREY, 'μέσα στα όρια')]
+        out['count'] = {'buses': int(nb), 'branches': int(nbr)}
+        return out
+    # N−1: every branch coloured by what its loss does ('name' of an outage is the branch that is lost; 'branch' the most
+    # loaded one after it). A low voltage counts only when the outage makes it lower than in the base case
+    outs = res.get('outages') or []
+    if not outs:
+        return missing('Η στρώση N−1 θέλει μελέτη N−1.')
+    base = res.get('base') or {}
+    base_v = _num(base.get('Vmin'))
+    # an overload counts when the outage makes it: a branch that was within its rating, or one already over it that goes
+    # two points of loading higher (a network whose base case has overloads would otherwise be red everywhere)
+    base_ov = {str(q[0]): float(q[1]) for q in (base.get('overloads') or []) if isinstance(q, (list, tuple)) and len(q) == 2}
+    by = {}
+    for o in outs:
+        nm = str(o.get('name'))
+        ov, vm = o.get('overloads') or [], _num(o.get('Vmin'))
+        new = [q for q in ov if isinstance(q, (list, tuple)) and len(q) == 2 and float(q[1]) > base_ov.get(str(q[0]), 1.0) + (0.02 if str(q[0]) in base_ov else 0.0)]
+        if o.get('island'):
+            by[nm] = (3.0, '#7570b3')
+        elif o.get('converged') is False:
+            by[nm] = (4.0, '#000000')
+        elif new:
+            by[nm] = (2.0, BAD)
+        elif vm is not None and vm < 0.95 and (base_v is None or vm < base_v - 0.005):
+            by[nm] = (1.0, WARN)
+        else:
+            by[nm] = (0.0, GREY)
+    out['branch'] = {k: x[0] for k, x in by.items()}
+    out['branch_color'] = {e['name']: by.get(e['name'], (0.0, GREY))[1] for e in v['branches']}
+    out['bus_color'] = {b['id']: GREY for b in v['buses']}
+    cnt = lambda s: sum(1 for x in by.values() if x[0] == s)     # noqa: E731
+    out['count'] = {'failed': cnt(4.0), 'island': cnt(3.0), 'overload': cnt(2.0), 'voltage': cnt(1.0), 'clear': cnt(0.0)}
+    if base_ov:
+        out['note_base'] = (f'{len(base_ov)} κλάδοι είναι' if len(base_ov) > 1 else 'Ένας κλάδος είναι') + ' πάνω από την ονομαστική του ισχύ ήδη πριν από κάθε διαταραχή· μετρά ό,τι προσθέτει η διαταραχή.'
+    out['legend'] = [('#000000', f'δεν συγκλίνει ({cnt(4.0)})'), ('#7570b3', f'αφήνει νησίδα ({cnt(3.0)})'), (BAD, f'υπερφορτίζει άλλον κλάδο ({cnt(2.0)})'),
+                     (WARN, f'ρίχνει τάση κάτω από 0,95 pu ({cnt(1.0)})'), (GREY, f'χωρίς παραβίαση ({cnt(0.0)})')]
+    return out
+
+
+def _maybe_int(s):
+    try:
+        return int(s)
+    except (TypeError, ValueError):
+        return s
+
+
+DEFAULT = {'pf': 'voltage', 'n1': 'n1', 'n1dc': 'n1', 'opf': 'lmp', 'dcopf': 'lmp'}     # the layer a study opens with
+
+
+def pack(v, result=None, layers=None):
+    """The layers that a result can feed, in a compact form for the browser: per layer the colours as indices into a small
+    palette and the values as lists in the order of the buses and of the branches of the view.
+
+    [{'layer', 'title', 'unit_bus', 'unit_branch', 'legend': [[colour, text]…], 'palette': [colour…], 'bus_c': [i…],
+      'branch_c': [i…], 'bus_v': [x | None…] or None, 'branch_v': […] or None}]. The base layer is always there."""
+    out = []
+    for layer in (layers or LAYERS):
+        L = values(v, result, layer)
+        if L['note'] and layer != 'base':
+            continue
+        pal = sorted(set(L['bus_color'].values()) | set(L['branch_color'].values()))
+        ix = {c: i for i, c in enumerate(pal)}
+        rnd = lambda x: None if x is None else float(f'{x:.6g}')      # noqa: E731
+        out.append({'layer': layer, 'title': L['title'], 'unit_bus': L['unit_bus'], 'unit_branch': L['unit_branch'], 'legend': [list(q) for q in L['legend']], 'palette': pal,
+                    'bus_c': [ix[L['bus_color'].get(b['id'], GREY)] if L['bus_color'].get(b['id'], GREY) in ix else 0 for b in v['buses']],
+                    'branch_c': [ix[L['branch_color'].get(e['name'], GREY)] if L['branch_color'].get(e['name'], GREY) in ix else 0 for e in v['branches']],
+                    'bus_v': [rnd(L['bus'].get(b['id'])) for b in v['buses']] if L['bus'] else None,
+                    'branch_v': [rnd(L['branch'].get(e['name'])) for e in v['branches']] if L['branch'] else None})
+    return out
+
+
+# ---------------------------------------------------------------- SVG
+def _esc(s):
+    return str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+
+def _segments(v):
+    """The line of every branch: parallel branches side by side, 0,12 of a unit apart."""
+    pos = {b['id']: (b['x'], b['y']) for b in v['buses']}
+    for e in v['branches']:
+        (x1, y1), (x2, y2) = pos[e['a']], pos[e['b']]
+        if e['of'] > 1:
+            dx, dy = x2 - x1, y2 - y1
+            L = math.hypot(dx, dy) or 1.0
+            off = (e['k'] - (e['of'] + 1) / 2) * 0.12 * v['unit']
+            x1, y1, x2, y2 = x1 - dy / L * off, y1 + dx / L * off, x2 - dy / L * off, y2 + dx / L * off
+        yield e, x1, y1, x2, y2
+
+
+_HEX = __import__('re').compile(r'^#[0-9a-fA-F]{6}$')
+
+
+def _col(c):
+    """A colour as it goes into the picture: only #rrggbb (a view or a layer may come from a file)."""
+    return c if isinstance(c, str) and _HEX.match(c) else GREY
+
+
+def svg(v, result=None, layer='base', width=900, labels=None, title=None, L=None, standalone=False):
+    """The view as an SVG picture (a string): branches, buses (a generator bus as a ring, the slack bus larger), transformers
+    with a mark at their middle, and the legend under the drawing. labels: None (names where the buses are few), True or
+    False. L: the layer as values() gave it (then result and layer are not used). standalone: with the XML namespace, for a
+    file of its own; without it the picture goes inside an HTML page."""
+    L = L if L is not None else values(v, result, layer)
+    layer = L.get('layer', layer)
+    x0, y0, x1, y1 = [float(q) for q in v['bounds']]
+    u = float(v['unit'])
+    pad = 0.6 * u
+    w, h = (x1 - x0) + 2 * pad, (y1 - y0) + 2 * pad
+    k = w / max(width, 1)                                    # drawing units per pixel
+    n = len(v['buses'])
+    r = max(0.05 * u, min(0.16 * u, 2.9 * k))                # a bus at least a few pixels wide
+    lw = max(0.02 * u, 1.1 * k)
+    labels = n <= 120 if labels is None else labels
+    fs = max(0.16 * u, 9 * k)
+    # the legend under the drawing, in rows that fit the width
+    lf, items, rows, cur, used = 12 * k, [(_col(c), str(s)) for c, s in (L.get('legend') or [])], [[]], 0.0, 0.0
+    head = str(title or L.get('title') or '')
+    cur = (len(head) * 0.62 + 1.5) * lf
+    for c, s in items:
+        wi = (len(s) * 0.58 + 2.6) * lf
+        if cur + wi > w - pad and rows[-1]:
+            rows.append([])
+            cur = 0.0
+        rows[-1].append((cur, c, s))
+        cur += wi
+    note = str(L.get('note') or L.get('note_base') or '')
+    lh = 1.7 * lf
+    leg_h = lh * (len(rows) + (1 if note else 0)) + 0.6 * lf
+    H = h + leg_h
+    ns = ' xmlns="http://www.w3.org/2000/svg"' if standalone else ''
+    o = [f'<svg{ns} class="netview" viewBox="{x0 - pad:.1f} {y0 - pad:.1f} {w:.1f} {H:.1f}" width="{width:g}" height="{max(120.0, width * H / w):.0f}" role="img" aria-label="{_esc(head)}">',
+         f'<rect x="{x0 - pad:.1f}" y="{y0 - pad:.1f}" width="{w:.1f}" height="{H:.1f}" fill="#ffffff"/>']
+    bv, brv = L.get('bus') or {}, L.get('branch') or {}
+    bc, brc = L.get('bus_color') or {}, L.get('branch_color') or {}
+    fmt = lambda x, unit: (f' · {float(x):.4g} {_esc(unit)}'.replace('.', ',') if unit else f' · {float(x):.4g}'.replace('.', ','))     # noqa: E731
+    for e, ax, ay, bx, by in _segments(v):
+        c = _col(brc.get(e['name'], GREY))
+        hot = c != GREY and layer != 'base'
+        tip = f'{_esc(e["name"])}: {_esc(e["a"])} – {_esc(e["b"])}' + (fmt(brv[e['name']], L.get('unit_branch', '')) if _num(brv.get(e['name'])) is not None else '')
+        o.append(f'<line x1="{ax:.1f}" y1="{ay:.1f}" x2="{bx:.1f}" y2="{by:.1f}" stroke="{c}" stroke-width="{lw * (2.2 if hot else 1):.2f}" stroke-linecap="round"><title>{tip}</title></line>')
+        if e.get('trafo'):
+            o.append(f'<circle cx="{(ax + bx) / 2:.1f}" cy="{(ay + by) / 2:.1f}" r="{0.6 * r:.2f}" fill="#ffffff" stroke="{c}" stroke-width="{lw:.2f}"/>')
+    for b in v['buses']:
+        c = _col(bc.get(b['id'], GREY))
+        rr = r * (1.5 if b.get('type') == 'slack' else 1.0)
+        un = _num(b.get('Un')) or 0.0
+        tip = _esc(b['id']) + (f' · {un / 1e3:g} kV' if un else '') + (fmt(bv[b['id']], L.get('unit_bus', '')) if _num(bv.get(b['id'])) is not None else '')
+        if b.get('gen'):
+            o.append(f'<circle cx="{float(b["x"]):.1f}" cy="{float(b["y"]):.1f}" r="{rr:.2f}" fill="#ffffff" stroke="{c}" stroke-width="{0.45 * rr:.2f}"><title>{tip}</title></circle>')
+        else:
+            o.append(f'<circle cx="{float(b["x"]):.1f}" cy="{float(b["y"]):.1f}" r="{0.8 * rr:.2f}" fill="{c}" stroke="#5f6b6d" stroke-width="{0.25 * lw:.2f}"><title>{tip}</title></circle>')
+        if labels:
+            o.append(f'<text x="{float(b["x"]) + 1.2 * rr:.1f}" y="{float(b["y"]) - 1.2 * rr:.1f}" font-size="{fs:.1f}" font-family="sans-serif" fill="#333333">{_esc(b["id"])}</text>')
+    ly = y1 + pad + 1.1 * lf
+    o.append(f'<text x="{x0 - pad + 0.6 * lf:.1f}" y="{ly:.1f}" font-size="{lf:.1f}" font-family="sans-serif" font-weight="bold" fill="#222222">{_esc(head)}</text>')
+    xl = x0 - pad + 0.6 * lf
+    for q, row in enumerate(rows):
+        for cx_, c, s in row:
+            xx = xl + ((len(head) * 0.62 + 1.5) * lf if q == 0 else 0.0) + (cx_ - ((len(head) * 0.62 + 1.5) * lf if q == 0 else 0.0))
+            o.append(f'<rect x="{xx:.1f}" y="{ly + q * lh - 0.8 * lf:.1f}" width="{0.9 * lf:.1f}" height="{0.9 * lf:.1f}" fill="{c}"/>'
+                     f'<text x="{xx + 1.3 * lf:.1f}" y="{ly + q * lh:.1f}" font-size="{lf:.1f}" font-family="sans-serif" fill="#333333">{_esc(s)}</text>')
+    if note:
+        o.append(f'<text x="{xl:.1f}" y="{ly + len(rows) * lh:.1f}" font-size="{0.92 * lf:.1f}" font-family="sans-serif" fill="#666666">{_esc(note)}</text>')
+    o.append('</svg>')
+    return ''.join(o)
+
+
+# ---------------------------------------------------------------- DXF
+def dxf(v, result=None, layers=('voltage', 'flow')):
+    """The view as a DXF drawing (ASCII, the R12 subset that every CAD program reads; from there it saves as DWG).
+
+    CAD layers: BUSES (circles), BUS_NAMES (text), BRANCHES (lines), TRANSFORMERS (a circle at the middle of the branch),
+    GENERATORS (a ring around the bus), LOADS (a short tick), and for every layer asked a text layer with its values
+    (V_PU, ANGLE_DEG, LMP on the buses; FLOW_MW, LOADING_PCT on the branches), so that the user switches on what the drawing
+    should show. y grows upwards in a CAD drawing, so the picture is mirrored to look as on the screen."""
+    u = v['unit']
+    r = 0.14 * u
+    th = 0.16 * u
+    ent, used = [], []
+
+    def lay(name, color):
+        if name not in [q[0] for q in used]:
+            used.append((name, color))
+        return name
+
+    def line(layer, x1, y1, x2, y2):
+        ent.extend(['0', 'LINE', '8', layer, '10', f'{x1:.3f}', '20', f'{-y1:.3f}', '30', '0.0', '11', f'{x2:.3f}', '21', f'{-y2:.3f}', '31', '0.0'])
+
+    def circle(layer, x, y, rad):
+        ent.extend(['0', 'CIRCLE', '8', layer, '10', f'{x:.3f}', '20', f'{-y:.3f}', '30', '0.0', '40', f'{rad:.3f}'])
+
+    def text(layer, x, y, s, hgt=th):
+        s = ''.join(ch if 31 < ord(ch) < 127 else '?' for ch in str(s))      # R12 text is ASCII
+        ent.extend(['0', 'TEXT', '8', layer, '10', f'{x:.3f}', '20', f'{-y:.3f}', '30', '0.0', '40', f'{hgt:.3f}', '1', s])
+
+    lb, lbn, lbr, lt, lg, ll = lay('BUSES', 7), lay('BUS_NAMES', 8), lay('BRANCHES', 5), lay('TRANSFORMERS', 6), lay('GENERATORS', 3), lay('LOADS', 2)
+    mid = {}
+    for e, ax, ay, bx, by in _segments(v):
+        line(lbr, ax, ay, bx, by)
+        mid[e['name']] = ((ax + bx) / 2, (ay + by) / 2)
+        if e['trafo']:
+            circle(lt, *mid[e['name']], 0.6 * r)
+    for b in v['buses']:
+        circle(lb, b['x'], b['y'], r * (1.5 if b['type'] == 'slack' else 1.0))
+        text(lbn, b['x'] + 1.3 * r, b['y'] - 1.3 * r, b['id'])
+        if b['gen']:
+            circle(lg, b['x'], b['y'], 1.9 * r)
+        if b['load']:
+            line(ll, b['x'], b['y'] + r, b['x'], b['y'] + 2.6 * r)
+    names = {'voltage': ('V_PU', 1, '{:.3f}'), 'angle': ('ANGLE_DEG', 4, '{:.2f}'), 'lmp': ('LMP', 30, '{:.2f}'), 'flow': ('FLOW_MW', 1, '{:.1f}'), 'loading': ('LOADING_PCT', 30, '{:.0f}')}
+    drawn = []
+    for k, layer in enumerate(layers or ()):
+        if layer not in names:
+            continue
+        L = values(v, result, layer)
+        nm, col, fmt = names[layer]
+        if not L['bus'] and not L['branch']:
+            continue
+        lay(nm, col)
+        drawn.append(layer)
+        dy = (1.6 + 1.3 * len([q for q in drawn if q in ('voltage', 'angle', 'lmp')])) * th if L['bus'] else 0.0
+        for b in v['buses']:
+            if b['id'] in L['bus']:
+                text(nm, b['x'] + 1.3 * r, b['y'] - 1.3 * r + dy, fmt.format(L['bus'][b['id']]), 0.8 * th)
+        dyb = 1.1 * th * len([q for q in drawn if q in ('flow', 'loading')])
+        for e in v['branches']:
+            if e['name'] in L['branch']:
+                text(nm, mid[e['name']][0] + 0.5 * r, mid[e['name']][1] + dyb, fmt.format(L['branch'][e['name']]), 0.8 * th)
+    x0, y0, x1, y1 = v['bounds']
+    head = ['0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1009', '9', '$EXTMIN', '10', f'{x0 - u:.3f}', '20', f'{-y1 - u:.3f}', '9', '$EXTMAX', '10', f'{x1 + u:.3f}', '20',
+            f'{-y0 + u:.3f}', '0', 'ENDSEC']
+    tab = ['0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LTYPE', '70', '1', '0', 'LTYPE', '2', 'CONTINUOUS', '70', '0', '3', 'Solid line', '72', '65', '73', '0', '40', '0.0', '0', 'ENDTAB',
+           '0', 'TABLE', '2', 'LAYER', '70', str(len(used))]
+    for nm, col in used:
+        tab.extend(['0', 'LAYER', '2', nm, '70', '0', '62', str(col), '6', 'CONTINUOUS'])
+    tab.extend(['0', 'ENDTAB', '0', 'ENDSEC'])
+    return '\n'.join(head + tab + ['0', 'SECTION', '2', 'ENTITIES'] + ent + ['0', 'ENDSEC', '0', 'EOF']) + '\n'

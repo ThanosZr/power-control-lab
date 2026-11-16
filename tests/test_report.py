@@ -78,13 +78,21 @@ def sample():
     r.chart('bar', ['br1', 'br2', 'br3'], [{'name': 'φόρτιση', 'y': [80.0, 120.0, None]}], 'Φόρτιση', 'Κλάδος', '%', [{'value': 100.0, 'label': 'ονομαστική', 'status': 'critical'}])
     r.chart('dot', ['1', '2', '3'], [{'name': '|V|', 'y': [1.06, 1.045, 1.01]}], 'Τάσεις', 'Ζυγός', 'pu', table=False)
     r.chart('line', [0.0, 0.5, 1.0, 1.5], [{'name': 'a', 'y': [0, 1, 4, 9]}, {'name': 'b', 'y': [0, -1, -2, -3]}], 'Δύο σειρές', 't (s)', 'pu', ymin=-4, ymax=10)
+    # 4.19.4: the picture of a network from its data (a view and a layer, as pcl.netview gives them)
+    view = {'unit': 100.0, 'bounds': [0, 0, 100, 100], 'levels': [150e3], 'buses': [{'id': '1', 'x': 0, 'y': 0, 'Un': 150e3, 'type': 'slack', 'gen': True, 'load': False, 'shunt': False},
+                                                                             {'id': '2', 'x': 100, 'y': 0, 'Un': 150e3, 'type': 'PQ', 'gen': False, 'load': True, 'shunt': False},
+                                                                             {'id': '3 <b>', 'x': 50, 'y': 100, 'Un': 150e3, 'type': 'PQ', 'gen': False, 'load': True, 'shunt': False}],
+            'branches': [{'name': 'br1', 'a': '1', 'b': '2', 'trafo': False, 'k': 1, 'of': 1}, {'name': 'br2', 'a': '2', 'b': '3 <b>', 'trafo': True, 'k': 1, 'of': 1}]}
+    layer = {'layer': 'voltage', 'title': 'Τάσεις ζυγών', 'bus': {'1': 1.06, '2': 1.01}, 'branch': {}, 'bus_color': {'1': '#b2182b', '2': '#bdbdbd', '3 <b>': 'red" onload="x'},
+             'branch_color': {}, 'unit_bus': 'pu', 'unit_branch': '', 'legend': [['#b2182b', '1,06 pu'], ['#bdbdbd', '1,00 pu']], 'note': ''}
+    r.network(view, layer, 'Δίκτυο')
     return r.data('raw', {'x': [1, 2, 3], 'note': 'κλείνει </script> εδώ'})
 
 
 class ReportObject(unittest.TestCase):
     def test_sections_and_forms_as_data(self):
         r = sample()
-        self.assertEqual([s['kind'] for s in r.sections], ['heading', 'text', 'note', 'facts', 'table', 'heading', 'chart', 'chart', 'chart', 'data'])
+        self.assertEqual([s['kind'] for s in r.sections], ['heading', 'text', 'note', 'facts', 'table', 'heading', 'chart', 'chart', 'chart', 'network', 'data'])
         self.assertEqual(set(s['kind'] for s in r.sections), set(RP.KINDS))                      # every kind of section is in the sample
         d = r.to_dict()
         self.assertEqual((d['format'], d['version'], d['title'], d['lang']), ('pcl-report', 1, 'Δοκιμή', 'el'))
@@ -173,7 +181,7 @@ class ReportObject(unittest.TestCase):
         self.assertEqual(embedded(tricky.html()), tricky.to_dict())
         self.assertEqual((parsed(tricky.html()).count['script'], tricky.html().count('<script')), (2, 2))
         # one drawing per chart, one table per table and per chart that keeps its numbers (the second chart does not)
-        self.assertEqual(p.count['svg'], 3)
+        self.assertEqual(p.count['svg'], 4)                                           # three charts and the picture of the network (4.19.4)
         self.assertEqual(p.count['table'], 1 + 2)
         self.assertEqual(h.count('data-dl="csv"'), 3)
         self.assertEqual(h.count('data-dl="json"'), 1)
@@ -197,7 +205,12 @@ class ReportObject(unittest.TestCase):
         r = sample()
         h = r.html()
         svgs = [ET.fromstring(s) for s in re.findall(r'<svg.*?</svg>', h, re.S)]                 # every drawing is well-formed XML
-        bar, dot, line = svgs
+        bar, dot, line, net = svgs                                                               # 4.19.4: and the picture of the network
+        self.assertEqual(net.get('class'), 'netview')
+        # a colour that is not #rrggbb is not written into the picture (the data of the report keep it as text)
+        self.assertTrue(all('onload' not in e.attrib and all('onload' not in str(x) for x in e.attrib.values()) for e in net.iter()))
+        self.assertIn('3 &lt;b&gt;', h)
+        self.assertEqual(sum(1 for e in net.iter() if e.tag == 'line'), 2)
         cls = lambda g, c: [e for e in g.iter() if e.get('class') == c]                          # noqa: E731
         # bars: one mark per value that exists, from the zero line, heights in proportion; the limit as a dashed line with its name
         marks = cls(bar, 'mark')
@@ -275,7 +288,7 @@ class NetworkReports(unittest.TestCase):
         self.assertEqual((p.stack, p.bad), ([], []))
         self.assertNotIn('http', h)
         self.assertEqual(embedded(h), json.loads(json.dumps(r.to_dict())))
-        self.assertEqual(p.count['svg'], sum(s['kind'] == 'chart' for s in r.sections))
+        self.assertEqual(p.count['svg'], sum(s['kind'] in ('chart', 'network') for s in r.sections))      # 4.19.4: and the pictures of the network
         for s in re.findall(r'<svg.*?</svg>', h, re.S):
             ET.fromstring(s)
         self.assertEqual(Report.from_dict(json.loads(json.dumps(r.to_dict()))).html(), h)
@@ -289,7 +302,7 @@ class NetworkReports(unittest.TestCase):
             r = net.report('pf', res)
             self.check_file(r)
             self.assertEqual((r.title, r.subtitle), ('Ροή φορτίου', net.name))
-            self.assertEqual(headings(r), ['Η επιλογή του engine', 'Τάσεις των ζυγών', 'Κλάδοι'])
+            self.assertEqual(headings(r), ['Η επιλογή του engine', 'Διάγραμμα του δικτύου', 'Τάσεις των ζυγών', 'Κλάδοι'])
             self.assertEqual(r.meta['Ζυγοί'], len(net.buses))
             f = facts(r)
             self.assertEqual((f['Σύγκλιση'], f['Επαναλήψεις']), (True, res['iterations']))
@@ -347,7 +360,7 @@ class NetworkReports(unittest.TestCase):
             res = net.contingency(kind)
             r = net.report(study, res)
             self.check_file(r)
-            self.assertEqual(headings(r), ['Η επιλογή του engine', 'Οι βαρύτερες διαταραχές'])
+            self.assertEqual(headings(r), ['Η επιλογή του engine', 'Διάγραμμα του δικτύου', 'Οι βαρύτερες διαταραχές'])
             f = facts(r)
             self.assertEqual((f['Διαταραχές'], f['Λύθηκαν'], f['Χωρίζουν το δίκτυο'], f['Δεν συγκλίνουν'], f['Χειρότερη διαταραχή']), (20, 19, 1, 0, res['worst']))
             self.assertEqual('Στους παράγοντες της βάσης' in f, kind == 'ac')
@@ -395,7 +408,7 @@ class NetworkReports(unittest.TestCase):
                 self.assertEqual(f['Απώλειες (MW)'], 0.0)                                             # the DC network has no losses
                 self.assertLess(f['Κόστος (ανά ώρα)'], PUBLISHED[case])
             self.assertEqual((f['Σύγκλιση'], f['Περιορισμοί που δεσμεύουν'], f['Όρια ροής στο πρόβλημα']), (True, len(res['binding']), res['flow_limits']))
-            self.assertEqual(headings(r), ['Η επιλογή του engine', 'Κατανομή της παραγωγής', 'Οριακές τιμές'] + (['Περιορισμοί που δεσμεύουν'] if res['binding'] else []) + ['Κλάδοι'])
+            self.assertEqual(headings(r), ['Η επιλογή του engine', 'Διάγραμμα του δικτύου', 'Κατανομή της παραγωγής', 'Οριακές τιμές'] + (['Περιορισμοί που δεσμεύουν'] if res['binding'] else []) + ['Κλάδοι'])
             t = tables(r)
             src = t['Πηγές']
             self.assertEqual([q[:4] for q in src['rows']], [[s['name'], s['bus'], s['P'] / MW, s['Q'] / MW] for s in res['sources']])

@@ -923,6 +923,7 @@ class Network:
         ratings: {branch: VA} (default the 'rating' of each branch); without any rating the loading is not judged.
         Returns {'kind', 'base', 'outages': [{'name', 'island', 'converged', 'Smax' (VA) and 'branch' (the most loaded one, by
         loading where ratings exist), 'loading', 'overloads': [(branch, loading)], 'Vmin', 'Vmax' (pu, AC)}], 'worst', 'time',
+        'base': {…, 'overloads': the branches over their rating before any outage (4.19.4)},
         'advice', 'chord', 'newton', 'backend', 'how', 'backend_why'}.
         4.19.2, kind 'ac': backend 'auto' (pcl.backend.choose: the CPU, unless the measurement of this machine found the GPU*
         faster for a batch of this size), 'cpu' or 'gpu' (experimental*: falls back to the CPU with the reason in
@@ -955,6 +956,10 @@ class Network:
             th, Pf = powerflow.dc_flow(c)
             Lm = powerflow.lodf(c)
             out['base'] = {'P': {c.br_name[k]: float(Pf[k] * self.S_base) for k in range(c.nl)}}
+            # 4.19.4: the branches already over their rating before any outage, so that an outage can be judged by what it adds
+            with np.errstate(invalid='ignore'):
+                ld0 = np.abs(Pf) / rate
+            out['base']['overloads'] = sorted(((c.br_name[i], float(ld0[i])) for i in np.flatnonzero(ld0 > 1 + 1e-9)), key=lambda q: -q[1])
             for k in sel:
                 if isl[k]:
                     out['outages'].append({'name': c.br_name[k], 'island': True, 'converged': False})
@@ -965,6 +970,9 @@ class Network:
             Sf, St = powerflow.branch_flows(c, V0)
             out['base'] = {'S': {c.br_name[k]: float(max(abs(Sf[k]), abs(St[k])) * self.S_base) for k in range(c.nl)},
                            'Vmin': float(np.abs(V0).min()), 'Vmax': float(np.abs(V0).max())}
+            with np.errstate(invalid='ignore'):
+                ld0 = np.maximum(np.abs(Sf), np.abs(St)) / rate
+            out['base']['overloads'] = sorted(((c.br_name[i], float(ld0[i])) for i in np.flatnonzero(ld0 > 1 + 1e-9)), key=lambda q: -q[1])
             r = powerflow.contingency_ac(c, V0, sel, tol=tol, typ=typ, backend=backend, how=how)
             for j, k in enumerate(sel):
                 if r['island'][j] or not r['converged'][j]:

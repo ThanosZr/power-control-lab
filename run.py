@@ -83,6 +83,7 @@ def study_action(name):
     return act
 ACTIONS['network_study']=study_action('run')
 ACTIONS['network_report']=study_action('report')
+ACTIONS['network_view']=study_action('view')        # 4.19.4: the picture of the network of a study as a DXF or SVG file
 
 
 # scripted scenarios (3.14, ROADMAP §30): the pcl package's job() for MATLAB/Octave (webwrite) and other tools,

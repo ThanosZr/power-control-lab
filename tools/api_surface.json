@@ -1,5 +1,5 @@
 {
- "version": "4.19.3",
+ "version": "4.19.4",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -12,7 +12,8 @@
    "pcl.backend.",
    "pcl.accel.",
    "pcl.nnstart.",
-   "pcl.onnxio."
+   "pcl.onnxio.",
+   "pcl.netview."
   ],
   "cli": [
    "workbench",
@@ -1981,6 +1982,60 @@
     ],
     "since": "3.18"
    },
+   "pcl.netview.ViewError": {
+    "params": [],
+    "since": "4.19.4"
+   },
+   "pcl.netview.dxf": {
+    "params": [
+     "v",
+     "result",
+     "layers"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.netview.layout": {
+    "params": [
+     "net"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.netview.pack": {
+    "params": [
+     "v",
+     "result",
+     "layers"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.netview.svg": {
+    "params": [
+     "v",
+     "result",
+     "layer",
+     "width",
+     "labels",
+     "title",
+     "L",
+     "standalone"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.netview.values": {
+    "params": [
+     "v",
+     "result",
+     "layer",
+     "study"
+    ],
+    "since": "4.19.4"
+   },
+   "pcl.netview.view": {
+    "params": [
+     "net"
+    ],
+    "since": "4.19.4"
+   },
    "pcl.network.Network": {
     "params": [
      "f",
@@ -3165,6 +3220,14 @@
     "params": [],
     "since": "4.19.1"
    },
+   "pcl.report.Report.network": {
+    "params": [
+     "view",
+     "layer",
+     "title"
+    ],
+    "since": "4.19.4"
+   },
    "pcl.report.Report.note": {
     "params": [
      "body",
@@ -3270,6 +3333,12 @@
      "res"
     ],
     "since": "4.19.1"
+   },
+   "pcl.study.view": {
+    "params": [
+     "data"
+    ],
+    "since": "4.19.4"
    },
    "pcl.sweep": {
     "params": [
@@ -4112,6 +4181,10 @@
    "/api/network_study": {
     "params": [],
     "since": "4.19.1"
+   },
+   "/api/network_view": {
+    "params": [],
+    "since": "4.19.4"
    },
    "/api/presets": {
     "params": [],

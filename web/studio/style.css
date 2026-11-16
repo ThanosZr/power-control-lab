@@ -643,4 +643,8 @@ body.look-tech .wire.ph-a .wl{stroke:var(--ph-a)}body.look-tech .wire.ph-b .wl{s
 .ctl-right{display:grid;grid-template-rows:1fr 1fr 1fr .8fr;gap:8px;min-height:0}
 .ctl-cv{width:100%;height:100%;min-height:110px;border:1px solid var(--line);border-radius:4px;background:#fff;display:block}
 @media (max-width:900px){.ctl-body{grid-template-columns:1fr}.ctl-right{grid-template-rows:repeat(4,200px)}}
-
+/* 4.19.4 (ROADMAP §72): the viewer of the network of a study */
+.nv-modal .modal-box{width:min(1240px,96vw);height:min(840px,92vh)}.nv-modal .modal-body{display:flex;flex-direction:column;gap:6px;flex:1 1 auto;min-height:0;overflow:hidden}
+.nv-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12.5px}.nv-bar label{display:flex;gap:5px;align-items:center}.nv-bar .nv-grow{flex:1}
+#nv-canvas{flex:1 1 auto;min-height:260px;width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+#nv-legend i{display:inline-block;width:.9em;height:.9em;margin:0 .3em 0 .9em;vertical-align:-.1em;border-radius:2px}#nv-info{min-height:1.4em}

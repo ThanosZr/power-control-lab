@@ -24,7 +24,7 @@ import math
 from pathlib import Path
 
 VERSION = 1
-KINDS = ('heading', 'text', 'note', 'facts', 'table', 'chart', 'data')
+KINDS = ('heading', 'text', 'note', 'facts', 'table', 'chart', 'network', 'data')
 SERIES = 4                                    # series per chart (more: split the chart)
 BAR = 44                                      # the widest bar (px of the 760 px drawing)
 LIGHT = {'surface': '#fcfcfb', 'page': '#f9f9f7', 'ink': '#0b0b0b', 'ink2': '#52514e', 'muted': '#898781', 'grid': '#e1e0d9', 'axis': '#c3c2b7',
@@ -141,6 +141,15 @@ class Report:
         return self._add('chart', chart=kind, x=x, series=series, title=str(title), xlabel=str(xlabel), ylabel=str(ylabel), limits=lim,
                          ymin=ymin, ymax=ymax, table=bool(table))
 
+    def network(self, view, layer, title=''):
+        """The picture of a network (4.19.4): view = the places of the buses and the branches (pcl.netview.view), layer = what
+        the picture shows (pcl.netview.values: colours, values, legend). The section keeps the data; the picture is drawn
+        from them when the report is written."""
+        if not isinstance(view, dict) or not isinstance(layer, dict) or 'buses' not in view or 'branches' not in view:
+            raise ReportError('network: a view of pcl.netview.view and a layer of pcl.netview.values')
+        json.dumps([view, layer])
+        return self._add('network', view=view, layer=layer, title=str(title))
+
     def data(self, name, obj):
         """Data kept inside the file under a name (anything JSON can hold): for whoever reads the report with a program."""
         json.dumps(obj)
@@ -176,6 +185,8 @@ class Report:
             elif k == 'chart':
                 r.chart(s['chart'], s['x'], s['series'], s.get('title', ''), s.get('xlabel', ''), s.get('ylabel', ''), s.get('limits'), s.get('ymin'),
                         s.get('ymax'), s.get('table', True))
+            elif k == 'network':
+                r.network(s['view'], s['layer'], s.get('title', ''))
             elif k == 'data':
                 r.data(s['name'], s['obj'])
             else:
@@ -229,6 +240,11 @@ class Report:
                 rows = [[x] + [q['y'][i] for q in s['series']] for i, x in enumerate(s['x'])]
                 out += ([f'**{s["title"]}**', ''] if s['title'] else []) + tab(cols, rows, [None] + [5] * len(s['series']))
                 out += [f'- {q["label"]}: {num(q["value"], 5, L)}' for q in s['limits']] + ['']
+            elif k == 'network':
+                # Markdown holds no picture: what the picture shows, in words (the HTML file has it)
+                v, q = s['view'], s['layer']
+                out += [f'**{s["title"] or q.get("title", "")}**', '', f'*Διάγραμμα του δικτύου ({len(v["buses"])} ζυγοί, {len(v["branches"])} κλάδοι): στο αρχείο HTML της αναφοράς.*', '']
+                out += [f'- {text}' for _, text in (q.get('legend') or [])] + ['']
         return '\n'.join(out).rstrip() + '\n'
 
     # ---------------------------------------------------------------- HTML
@@ -251,6 +267,13 @@ class Report:
             elif k == 'table':
                 ntab += 1
                 body.append(self._table(s['columns'], s['rows'], s['digits'], s['title'], s['mark'], s['note'], ntab))
+            elif k == 'network':
+                from . import netview
+                try:
+                    pic = netview.svg(s['view'], L=s['layer'], width=980, title=s['title'] or None)
+                except (KeyError, TypeError, ValueError) as err:
+                    raise ReportError(f'network: the view does not draw ({err})') from err
+                body.append(f'<figure class="network">{pic}</figure>')
             elif k == 'chart':
                 body.append(self._chart(s))
                 if s['table']:
@@ -417,6 +440,23 @@ def network_report(net, study='pf', result=None, title=None, **kw):
     r = Report(title or head[study], name, meta={'Ζυγοί': len(net.buses), 'Κλάδοι': nbr, 'Γεννήτριες': gens, 'S βάσης (MVA)': net.S_base / MW})
     order = list(net.buses)
 
+    def picture(res, *layers):
+        # 4.19.4: the network that was studied, with what the study found on it (pcl.netview); a layer the result cannot feed is left out
+        from . import netview
+        try:
+            v = netview.view(net)
+        except Exception:                                    # a network that has no load-flow case draws nothing; the report goes on
+            return
+        shown = False
+        for layer in layers:
+            q = netview.values(v, res, layer)
+            if q['note']:
+                continue
+            if not shown:
+                r.heading('Διάγραμμα του δικτύου')
+                shown = True
+            r.network(v, q, q['title'])
+
     def advice(a):
         r.heading('Η επιλογή του engine')
         r.text(f'{a["why"][0].upper()}{a["why"][1:]}.')
@@ -437,6 +477,7 @@ def network_report(net, study='pf', result=None, title=None, **kw):
         vmax = [net.buses[b].get('Vmax') for b in order if net.buses[b].get('Vmax') is not None]
         if vmax and vmin:
             lim = [{'value': max(vmax), 'label': 'όριο V max', 'status': 'warning'}, {'value': min(vmin), 'label': 'όριο V min', 'status': 'warning'}]
+        picture(res, 'voltage', 'flow')
         r.heading('Τάσεις των ζυγών').chart('dot', order, [{'name': '|V|', 'y': V}], 'Μέτρο τάσης ανά ζυγό', 'Ζυγός', 'pu', lim)
         mark = {i: 'warning' for i, b in enumerate(order) if (net.buses[b].get('Vmax') is not None and V[i] > net.buses[b]['Vmax'] + 1e-6) or
                 (net.buses[b].get('Vmin') is not None and V[i] < net.buses[b]['Vmin'] - 1e-6)}
@@ -462,6 +503,7 @@ def network_report(net, study='pf', result=None, title=None, **kw):
             r.note('Η παρτίδα έτρεξε στη ' + res['backend_why'] + '.', 'info')
         rated = any(o.get('loading') is not None for o in ok)
         top = sorted(ok, key=lambda o: -(o['loading'] if rated and o['loading'] is not None else o['Smax'] if not rated else 0.0))[:20]
+        picture(res, 'n1')
         r.heading('Οι βαρύτερες διαταραχές')
         r.chart('bar', [o['name'] for o in top], [{'name': 'φόρτιση' if rated else 'μέγιστη ροή', 'y': [(100 * o['loading']) if rated else o['Smax'] / MW for o in top]}],
                 'Ο πιο φορτισμένος κλάδος μετά από κάθε διαταραχή (οι 20 βαρύτερες)', 'Κλάδος που βγαίνει', '%' if rated else 'MVA',
@@ -491,6 +533,7 @@ def network_report(net, study='pf', result=None, title=None, **kw):
         for n in res.get('notes', []):
             r.note(n, 'info')
         src = res['sources']
+        picture(res, 'loading', 'lmp')
         r.heading('Κατανομή της παραγωγής')
         if len(src) <= 60:
             r.chart('bar', [s['name'] for s in src], [{'name': 'P', 'y': [s['P'] / MW for s in src]}], 'Ενεργός ισχύς ανά πηγή', 'Πηγή', 'MW')

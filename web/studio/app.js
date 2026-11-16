@@ -2564,18 +2564,34 @@ function scheringTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.C2)return '';c
  return h;}
 // 4.19.1 (ROADMAP §68 point 6): a study of a network on the engine (pcl.network through the local server): what the engine proposes and
 // why, the result in a few numbers, and its report as one HTML file («Εξαγωγή αναφοράς», from the report object of pcl.report)
-const STUDY={key:null,busy:null,r:null,error:null,last:null};
+const STUDY={key:null,busy:null,r:null,error:null,last:null,view:null};
 const STUDY_LAB={pf:'Ροή φορτίου',n1:'N−1 σε AC',n1dc:'N−1, σάρωση DC',opf:'Βέλτιστη ροή φορτίου (AC)',dcopf:'Βέλτιστη ροή φορτίου (DC)'};
 const STUDY_METHOD={nr:'αραιός Newton–Raphson',nr_dense:'πυκνός Newton–Raphson',nr_ci:'Newton με εγχύσεις ρεύματος',fdxb:'fast-decoupled XB',fdbx:'fast-decoupled BX',sweep:'εμπρός–πίσω σάρωση',gs:'Gauss–Seidel',dc:'DC (γραμμική προσέγγιση)'};
-async function studyAct(what){const m=S.tutMeta?.study;if(!m||STUDY.busy)return;const key=JSON.stringify(m);if(STUDY.key!==key){STUDY.r=null;STUDY.last=null;}STUDY.key=key;STUDY.busy=what;STUDY.error=null;renderTheory();
+async function studyAct(what){const m=S.tutMeta?.study;if(!m||STUDY.busy)return;const key=JSON.stringify(m);if(STUDY.key!==key){STUDY.r=null;STUDY.last=null;STUDY.view=null;}STUDY.key=key;
+ // 4.19.4: «Διάγραμμα του δικτύου» shows the network that was studied; if the study has not run yet, it runs first
+ if(what==='view'&&STUDY.view){netViewOpen();return;}
+ STUDY.busy=what;STUDY.error=null;renderTheory();
  try{const q={case:m.net,study:m.study,options:m.options||{}};
   if(what==='report'){const r=await api('network_report',q);STUDY.r={summary:r.summary,study:m.study};STUDY.last=r.name;download(r.name,r.html,'text/html');}
-  else{const r=await api('network_study',q);STUDY.r={summary:r.summary,study:r.study,network:r.network};}}
+  else{const r=await api('network_study',{...q,view:'only'});STUDY.r={summary:r.summary,study:r.study,network:r.network};STUDY.view=r.view?{view:r.view,layers:r.layers,layer:r.layer,q}:null;}}
  catch(e){STUDY.r=null;STUDY.error=/fetch|NetworkError|Load failed/i.test(e.message)?'Η μελέτη τρέχει στο engine: ξεκίνα τον τοπικό server (python run.py) και δοκίμασε ξανά.':e.message;}
- STUDY.busy=null;if(STUDY.key===key)renderTheory();}
+ STUDY.busy=null;if(STUDY.key===key){renderTheory();if(what==='view'&&STUDY.view)netViewOpen();else if(STUDY.view&&!$('#netview').hidden)netViewOpen();}}
+// the window of the viewer (netview.js): the layers the study can feed, names, a bus by its name, the picture as SVG or DXF
+const NV={v:null};
+function netViewOpen(){const d=STUDY.view;if(!d||!window.NetView)return;const box=$('#netview');box.hidden=false;NV.v?.destroy();
+ $('#nv-title').textContent=`Δίκτυο της μελέτης: ${d.q.case} · ${STUDY_LAB[d.q.study]||d.q.study} · ${d.view.buses.length} ζυγοί, ${d.view.branches.length} κλάδοι`;
+ const v=NV.v=NetView.create($('#nv-canvas'),d,{info:t=>{$('#nv-info').textContent=t||'Σύρε για μετακίνηση, ροδέλα για μεγέθυνση, δείξε έναν ζυγό ή έναν κλάδο για τα μεγέθη του.';}});
+ const legend=()=>{const L=v.legend();$('#nv-legend').innerHTML=`<b>${esc(L.title)}</b>`+L.items.map(([c,t])=>`<i style="background:${esc(c)}"></i>${esc(t)}`).join('');};
+ $('#nv-layer').innerHTML=v.layers().map(L=>`<option value="${esc(L.layer)}" ${L.layer===v.state.layer?'selected':''}>${esc(L.title)}</option>`).join('');$('#nv-names').value='auto';$('#nv-find').value='';legend();
+ $('#nv-layer').onchange=e=>{v.setLayer(e.target.value);legend();};$('#nv-names').onchange=e=>v.setNames(e.target.value);
+ $('#nv-fit').onclick=()=>v.fit();$('#nv-in').onclick=()=>v.zoom(1.5);$('#nv-out').onclick=()=>v.zoom(1/1.5);
+ $('#nv-find').onchange=e=>{const ok=v.goto(e.target.value.trim());e.target.classList.toggle('bad',!ok&&!!e.target.value.trim());};
+ const file=async(format)=>{try{const r=await api('network_view',{...d.q,format,layer:v.state.layer});download(r.name,r.text,r.mime);}catch(e){$('#nv-info').textContent=e.message;}};
+ $('#nv-svg').onclick=()=>file('svg');$('#nv-dxf').onclick=()=>file('dxf');$('#nv-close').onclick=()=>{box.hidden=true;NV.v?.destroy();NV.v=null;};}
 function studyTheory(){const m=S.tutMeta?.study;if(!m)return '';const key=JSON.stringify(m),st=STUDY.key===key?STUDY:{},q=st.r?.summary,f=(x,d=4)=>x===null||x===undefined?'—':fmt(x,d);
  let h=`<div class="tm"><span class="badge">${STUDY_LAB[m.study]||esc(m.study)}</span> δίκτυο <b>${esc(m.net)}</b>${m.options?.method?' · μέθοδος: '+esc(m.options.method==='auto'?'Αυτόματα':STUDY_METHOD[m.options.method]||m.options.method):''}${m.options?.flow_limits===false?' · χωρίς όρια ροής':''}${m.options?.start==='nn'?' · εκκίνηση: νευρωνικό':''}${m.options?.backend&&m.options.backend!=='auto'?' · παρτίδα σε '+(m.options.backend==='gpu'?'GPU*':'CPU'):''}</div>
   <p><button data-study="run" ${st.busy?'disabled':''}>▶ Τρέξε τη μελέτη</button> <button data-study="report" ${st.busy?'disabled':''} title="Ένα αρχείο HTML με γραφήματα, πίνακες και τα δεδομένα της μελέτης, από το αντικείμενο αναφοράς του engine (pcl.report)">⬇ Εξαγωγή αναφοράς</button>
+  <button data-study="view" ${st.busy?'disabled':''} title="Το δίκτυο που μελετιέται ως μονογραμμικό διάγραμμα, με στρώσεις από το αποτέλεσμα της μελέτης (τάσεις, ροές, παραβιάσεις, N−1, τιμές κόμβων)· εξαγωγή σε SVG και σε DXF για CAD. Το σχέδιο από κάτω είναι πάντα το δίκτυο των 9 ζυγών σε EMT">🗺 Διάγραμμα του δικτύου</button>
   <span class="muted small" id="study-status">${st.busy?(st.busy==='report'?'Γράφεται η αναφορά…':'Τρέχει στο engine…'):st.last&&st.r?'':''}</span></p>`;
  if(st.error)h+=`<p class="bad" id="study-error">${esc(st.error)}</p>`;
  if(q){h+=`<p class="small" id="study-advice"><b>Πρόταση του engine:</b> ${esc(q.why||'')}.</p><ul class="eqs" id="study-result">`;

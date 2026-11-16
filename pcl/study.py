@@ -107,13 +107,47 @@ def summary(study, res):
 
 
 def run(data):
-    """{'case' | 'network', 'study', 'options'} → {'study', 'network': {name, buses, branches}, 'result', 'summary'}."""
+    """{'case' | 'network', 'study', 'options'} → {'study', 'network': {name, buses, branches}, 'result', 'summary'}.
+    With 'view': True (4.19.4) also the picture of the network as data: 'view' (buses, branches and their places,
+    pcl.netview.view) and 'layers' (what every layer shows from this result, pcl.netview.pack), 'layer' (the one to open)."""
     net = network_of(data)
     study = data.get('study') or 'pf'
     res = _study(net, study, data.get('options'))
-    return {'study': study, 'network': {'name': net.name, 'case': data.get('case'), 'buses': len(net.buses),
-                                        'branches': sum(e['kind'] in ('line', 'branch', 'transformer') for e in net.elements)},
-            'result': _clean(res), 'summary': _clean(summary(study, res))}
+    out = {'study': study, 'network': {'name': net.name, 'case': data.get('case'), 'buses': len(net.buses),
+                                       'branches': sum(e['kind'] in ('line', 'branch', 'transformer') for e in net.elements)},
+           'result': _clean(res), 'summary': _clean(summary(study, res))}
+    if data.get('view'):
+        from . import netview
+        v = netview.view(net)
+        out['view'], out['layers'] = v, netview.pack(v, out['result'])
+        have = [q['layer'] for q in out['layers']]
+        out['layer'] = netview.DEFAULT.get(study) if netview.DEFAULT.get(study) in have else ('voltage' if 'voltage' in have else 'base')
+        if data.get('view') == 'only':
+            out.pop('result')
+    return out
+
+
+def view(data):
+    """The picture of the network of a study as a file: {'case' | 'network', 'study', 'options', 'format': 'dxf' | 'svg',
+    'layer' (SVG) or 'layers' (DXF)} → {'name', 'text', 'mime'}."""
+    from . import netview
+    net = network_of(data)
+    study = data.get('study') or 'pf'
+    fmt = data.get('format') or 'dxf'
+    if fmt not in ('dxf', 'svg'):
+        raise StudyError('format: dxf ή svg')
+    res = _clean(_study(net, study, data.get('options')))
+    v = netview.view(net)
+    stem = f'network_{data.get("case") or "network"}_{study}'
+    try:
+        if fmt == 'svg':
+            layer = data.get('layer') or netview.DEFAULT.get(study, 'voltage')
+            body = netview.svg(v, res, layer, width=1600, labels=len(v['buses']) <= 400, standalone=True)
+            return {'name': f'{stem}_{layer}.svg', 'mime': 'image/svg+xml', 'text': '<?xml version="1.0" encoding="UTF-8"?>\n' + body + '\n'}
+        layers = data.get('layers') or ['voltage', 'angle', 'flow', 'loading', 'lmp']
+        return {'name': f'{stem}.dxf', 'mime': 'application/dxf', 'text': netview.dxf(v, res, layers)}
+    except netview.ViewError as e:
+        raise StudyError(str(e)) from e
 
 
 def report(data):
@@ -135,4 +169,4 @@ def report(data):
     return {'html': r.html(), 'name': name, 'report': _clean(r.to_dict()), 'summary': _clean(summary(study, res))}
 
 
-__all__ = ['run', 'report', 'summary', 'network_of', 'StudyError', 'STUDIES']
+__all__ = ['run', 'report', 'view', 'summary', 'network_of', 'StudyError', 'STUDIES']
