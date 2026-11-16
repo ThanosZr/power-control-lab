@@ -150,7 +150,7 @@
 | `tests/test_psse.py` | 305 |
 | `tests/test_recording.py` | 211 |
 | `tests/test_refac.py` | 78 |
-| `tests/test_report.py` | 667 |
+| `tests/test_report.py` | 676 |
 | `tests/test_scopf.py` | 263 |
 | `tests/test_sparse.py` | 53 |
 | `tests/test_sssc.py` | 444 |

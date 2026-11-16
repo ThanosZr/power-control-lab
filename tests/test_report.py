@@ -435,11 +435,20 @@ class NetworkReports(unittest.TestCase):
 class Studies(unittest.TestCase):
     def test_every_study_as_data(self):
         for study in S.STUDIES:
+            if study == 'scopf':                                                                  # 4.19.4: it needs ratings, and the 14-bus network has none (below)
+                continue
             q = S.run({'case': 'ieee14', 'study': study})
             json.dumps(q, allow_nan=False)                                                        # plain JSON: no NumPy, no NaN
             self.assertEqual((q['study'], q['network']), (study, {'name': 'IEEE 14-bus test case', 'case': 'ieee14', 'buses': 14, 'branches': 20}))
             self.assertFalse([k for k in q['result'] if k.startswith('_')])                       # the private arrays of the solver stay inside
         self.assertEqual(S.run({'case': 'ieee14'})['study'], 'pf')                                # the study by default
+        with self.assertRaises(S.StudyError) as e:                                                # the security study says why it refuses
+            S.run({'case': 'ieee14', 'study': 'scopf'})
+        self.assertIn('ονομαστική ισχύ', str(e.exception))
+        q = S.run({'case': 'case30', 'study': 'scopf'})                                           # and on a network with ratings it is plain data too
+        json.dumps(q, allow_nan=False)
+        self.assertEqual((q['study'], q['network']['buses']), ('scopf', 30))
+        self.assertFalse([k for k in q['result'] if k.startswith('_')])
         net = N.ieee14()
         lf = net.power_flow()
         q = S.run({'case': 'ieee14', 'study': 'pf'})
@@ -560,7 +569,7 @@ class Tutorials(unittest.TestCase):
 
     def test_the_cards_ask_only_what_the_engine_has(self):
         T = tutorials()
-        for k, studies in (('pf', ('pf', 'n1', 'n1dc')), ('opf', ('opf', 'dcopf'))):
+        for k, studies in (('pf', ('pf', 'n1', 'n1dc')), ('opf', ('opf', 'dcopf', 'scopf'))):
             opt = {o['k']: o for o in T[k]['options']}
             self.assertEqual(T[k]['group'], 'Ροή φορτίου και OPF (4.19.1)')
             self.assertEqual(set(opt['net']['values']) - set(N.CASES), set())                       # every network of the list exists in pcl.network
