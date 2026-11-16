@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.19.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (596 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.19.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (599 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-354 σημεία.
+355 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -287,6 +287,7 @@
 | `pcl.network.Network.ptdf` | — | 4.19.1 |
 | `pcl.network.Network.reactor` | `a`, `X`, `R`, `b`, `X0`, `R0`, `name` | 4.2 |
 | `pcl.network.Network.remove` | `name` | 4.2 |
+| `pcl.network.Network.report` | `study`, `result`, `title`, `**kw` | 4.19.1 |
 | `pcl.network.Network.short_circuit` | `bus`, `fault`, `mode`, `f115`, `tmin`, `temp`, `lv_tol`, `fc`, `breaking`, `rgf` | 4.2 |
 | `pcl.network.Network.shunt` | `bus`, `P`, `Q`, `name` | 4.2 |
 | `pcl.network.Network.sssc` | `line`, `X`, `Vq`, `P`, `Xmax`, `name` | 4.10 |
@@ -422,7 +423,7 @@
 
 ## Server: `/api/<ενέργεια>` και διαδρομές
 
-40 σημεία.
+42 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -455,6 +456,8 @@
 | `/api/link/reply` | — | 3.18 |
 | `/api/link/token` | — | 3.18 |
 | `/api/model_proof` | — | 3.18 |
+| `/api/network_report` | — | 4.19.1 |
+| `/api/network_study` | — | 4.19.1 |
 | `/api/presets` | — | 3.18 |
 | `/api/problem` | — | 3.18 |
 | `/api/record` | — | 4.8 |

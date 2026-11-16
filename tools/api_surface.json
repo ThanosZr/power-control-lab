@@ -2002,6 +2002,15 @@
     ],
     "since": "4.2"
    },
+   "pcl.network.Network.report": {
+    "params": [
+     "study",
+     "result",
+     "title",
+     "**kw"
+    ],
+    "since": "4.19.1"
+   },
    "pcl.network.Network.short_circuit": {
     "params": [
      "bus",
@@ -3154,6 +3163,14 @@
    "/api/model_proof": {
     "params": [],
     "since": "3.18"
+   },
+   "/api/network_report": {
+    "params": [],
+    "since": "4.19.1"
+   },
+   "/api/network_study": {
+    "params": [],
+    "since": "4.19.1"
    },
    "/api/presets": {
     "params": [],

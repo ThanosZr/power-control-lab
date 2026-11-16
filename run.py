@@ -72,6 +72,17 @@ ACTIONS['line_scan']=line_action('api_scan')
 ACTIONS['line_export']=line_action('api_export')
 ACTIONS['line_load']=line_action('api_load')
 ACTIONS['line_sens']=line_action('api_sens')      # 4.12: sensitivity of the sequence parameters
+# 4.19.1 (ROADMAP §68): studies of a network (load flow, N−1, optimal power flow) and reports of the engine (pcl/study.py)
+def study_action(name):
+    def act(data):
+        from pcl import study
+        try:
+            return getattr(study,name)(data)
+        except study.StudyError as e:
+            raise InputError(str(e)) from e
+    return act
+ACTIONS['network_study']=study_action('run')
+ACTIONS['network_report']=study_action('report')
 
 
 # scripted scenarios (3.14, ROADMAP §30): the pcl package's job() for MATLAB/Octave (webwrite) and other tools,

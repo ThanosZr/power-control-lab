@@ -1012,6 +1012,12 @@ class Network:
         r['V'] = np.abs(r['V'])
         return r
 
+    def report(self, study='pf', result=None, title=None, **kw):
+        """A report of a study of this network (pcl.report.Report): study 'pf', 'n1', 'n1dc', 'opf' or 'dcopf'; result: the result
+        of the study if it has run already (else it runs here with the options kw). net.report('opf').save('report.html')."""
+        from . import report
+        return report.network_report(self, study, result, title, **kw)
+
     def opf(self, kind='ac', **kw):
         """The optimal power flow (pcl.opf): kind='ac' (interior point on the full equations) or 'dc' (the linear network).
         See pcl.opf.solve for the options and the result."""

@@ -1681,7 +1681,7 @@ const IEEE9_AF={G2:61.0975,G3:54.1431};
 function ieee9Theory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.lf)return '';
  const rows=[];for(const [g,b] of [['G1',1],['G2',2],['G3',3]]){const q=s.lastPeriod('Y:'+g+':vt');rows.push([`|V| ζυγού ${b} (${g})`,m.lf[b][0],q?.avg,'pu']);}
  for(const [ld,b] of [['LD5',5],['LD7',7],['LD9',9]]){const q=s.lastPeriod('V:'+ld+'/Ra');rows.push([`|V| ζυγού ${b}`,m.lf[b][0],q?q.rms/(345e3/Math.sqrt(3)):NaN,'pu']);}
- if(!m.fault)for(const g of ['G2','G3']){const q=s.lastPeriod('Y:'+g+':d');rows.push([`δ ${g} (Anderson & Fouad, Πίν. 9.1)`,IEEE9_AF[g],q?.avg,'°']);}
+ if(!m.fault&&!m.noAF)for(const g of ['G2','G3']){const q=s.lastPeriod('Y:'+g+':d');rows.push([`δ ${g} (Anderson & Fouad, Πίν. 9.1)`,IEEE9_AF[g],q?.avg,'°']);}
  return `<ul class="eqs"><li>Ροή φορτίου (pcl.network, Newton–Raphson): οι γεννήτριες ξεκινούν από |V|∠θ του ζυγού τους· τα φορτία ως σταθερή εμπέδηση στην τάση της ροής φορτίου</li>
   <li>Αρχικοποίηση: το κύκλωμα λύνεται με φασιθέτες στα ${fmt(60,3)} Hz (ω_e = (2/h)·tan(ωh/2) για τον τραπεζοειδή), οι μηχανές από τη μόνιμη κατάστασή τους (δ, i_d, i_q, i_fd, E_fd, T_m)</li></ul>`+(m.fault?'':cmpRows(rows));}
 // 4.10: the modular SSSC. Single phase: two sources and a line with the compensator as −jX in series (or a constant
@@ -2559,6 +2559,34 @@ function scheringTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.C2)return '';c
  h+=`<p class="${bal?'good':'bad'}">${bal?'✓ Η γέφυρα ισορροπεί: ο ανιχνευτής δείχνει '+fmt(100*cx.abs(VD)/cx.abs(VA),2)+' % της τάσης του κόμβου A.':'✗ Η γέφυρα δεν ισορροπεί: ο ανιχνευτής δείχνει '+fmt(100*cx.abs(VD)/cx.abs(VA),3)+' % της τάσης του κόμβου A.'}</p>`;
  if(m.set==='book')h+=`<p class="bad">Με τις τιμές του βιβλίου ο λόγος R₄/R₃ δίνει σωστά C_x = 2 nF, αλλά tan δ = ω·R₄·C₄ = ${fmt(tr,3)}: δέκα φορές μικρότερο. Το λάθος είναι η R_x = 1,59 kΩ αντί για 15,9 kΩ, που περνά στις R₃, R₄.</p>`;
  return h;}
+// 4.19.1 (ROADMAP §68 point 6): a study of a network on the engine (pcl.network through the local server): what the engine proposes and
+// why, the result in a few numbers, and its report as one HTML file («Εξαγωγή αναφοράς», from the report object of pcl.report)
+const STUDY={key:null,busy:null,r:null,error:null,last:null};
+const STUDY_LAB={pf:'Ροή φορτίου',n1:'N−1 σε AC',n1dc:'N−1, σάρωση DC',opf:'Βέλτιστη ροή φορτίου (AC)',dcopf:'Βέλτιστη ροή φορτίου (DC)'};
+const STUDY_METHOD={nr:'αραιός Newton–Raphson',nr_dense:'πυκνός Newton–Raphson',nr_ci:'Newton με εγχύσεις ρεύματος',fdxb:'fast-decoupled XB',fdbx:'fast-decoupled BX',sweep:'εμπρός–πίσω σάρωση',gs:'Gauss–Seidel',dc:'DC (γραμμική προσέγγιση)'};
+async function studyAct(what){const m=S.tutMeta?.study;if(!m||STUDY.busy)return;const key=JSON.stringify(m);if(STUDY.key!==key){STUDY.r=null;STUDY.last=null;}STUDY.key=key;STUDY.busy=what;STUDY.error=null;renderTheory();
+ try{const q={case:m.net,study:m.study,options:m.options||{}};
+  if(what==='report'){const r=await api('network_report',q);STUDY.r={summary:r.summary,study:m.study};STUDY.last=r.name;download(r.name,r.html,'text/html');}
+  else{const r=await api('network_study',q);STUDY.r={summary:r.summary,study:r.study,network:r.network};}}
+ catch(e){STUDY.r=null;STUDY.error=/fetch|NetworkError|Load failed/i.test(e.message)?'Η μελέτη τρέχει στο engine: ξεκίνα τον τοπικό server (python run.py) και δοκίμασε ξανά.':e.message;}
+ STUDY.busy=null;if(STUDY.key===key)renderTheory();}
+function studyTheory(){const m=S.tutMeta?.study;if(!m)return '';const key=JSON.stringify(m),st=STUDY.key===key?STUDY:{},q=st.r?.summary,f=(x,d=4)=>x===null||x===undefined?'—':fmt(x,d);
+ let h=`<div class="tm"><span class="badge">${STUDY_LAB[m.study]||esc(m.study)}</span> δίκτυο <b>${esc(m.net)}</b>${m.options?.method?' · μέθοδος: '+esc(m.options.method==='auto'?'Αυτόματα':STUDY_METHOD[m.options.method]||m.options.method):''}${m.options?.flow_limits===false?' · χωρίς όρια ροής':''}</div>
+  <p><button data-study="run" ${st.busy?'disabled':''}>▶ Τρέξε τη μελέτη</button> <button data-study="report" ${st.busy?'disabled':''} title="Ένα αρχείο HTML με γραφήματα, πίνακες και τα δεδομένα της μελέτης, από το αντικείμενο αναφοράς του engine (pcl.report)">⬇ Εξαγωγή αναφοράς</button>
+  <span class="muted small" id="study-status">${st.busy?(st.busy==='report'?'Γράφεται η αναφορά…':'Τρέχει στο engine…'):st.last&&st.r?'':''}</span></p>`;
+ if(st.error)h+=`<p class="bad" id="study-error">${esc(st.error)}</p>`;
+ if(q){h+=`<p class="small" id="study-advice"><b>Πρόταση του engine:</b> ${esc(q.why||'')}.</p><ul class="eqs" id="study-result">`;
+  if(st.r.study==='pf')h+=`<li>${q.converged?'Σύγκλιση':'<b class="bad">Δεν συνέκλινε</b>'} σε <b>${q.iterations}</b> επαναλήψεις με ${esc(STUDY_METHOD[q.method]||q.method||'')}${q.path&&q.path.length>1?' (διαδρομή: '+esc(q.path.join(' → '))+')':''} · ${f(q.time_ms,3)} ms</li>
+   <li>Απώλειες <b>${f(q.losses_MW,5)} MW</b> · |V| από <b>${f(q.Vmin,4)}</b> pu (ζυγός ${esc(q.Vmin_bus)}) ως <b>${f(q.Vmax,4)}</b> pu (ζυγός ${esc(q.Vmax_bus)})</li>`;
+  else if(st.r.study==='n1'||st.r.study==='n1dc')h+=`<li><b>${q.outages}</b> διαταραχές: λύθηκαν ${q.solved}, χωρίζουν το δίκτυο ${q.islands}, δεν συγκλίνουν ${q.failed} · ${f(q.time_ms,3)} ms${st.r.study==='n1'?` (στους παράγοντες της βάσης ${q.chord}, με πλήρη Newton ${q.newton})`:''}</li>
+   <li>Χειρότερη: η απώλεια του <b>${esc(q.worst||'—')}</b> φορτίζει τον ${esc(q.worst_branch||'—')} με <b>${f(q.worst_MVA,4)} MVA</b>${q.worst_loading!==null&&q.worst_loading!==undefined?' ('+f(100*q.worst_loading,3)+' % της ονομαστικής)':''} · με υπερφόρτιση: ${q.overloads}</li>`;
+  else h+=`<li>${q.converged?'Βέλτιστο':'<b class="bad">Δεν λύθηκε</b> ('+esc(q.message||'')+')'} σε <b>${q.iterations}</b> επαναλήψεις · κόστος <b>${f(q.cost,7)}</b> ανά ώρα · απώλειες ${f(q.losses_MW,4)} MW · ${f(q.time_ms,3)} ms</li>
+   <li>Οριακή τιμή από <b>${f(q.lmp_min,5)}</b> ως <b>${f(q.lmp_max,5)}</b> ανά MWh · περιορισμοί που δεσμεύουν: <b>${q.binding}</b> · όρια ροής στο πρόβλημα: ${q.flow_limits}</li>
+   <li>Κατανομή: ${q.sources.map(g=>`${esc(g.name)} ${f(g.P_MW,4)} MW`).join(' · ')}${q.sources.length>=12?' …':''}</li>`;
+  h+=`</ul>${st.last?`<p class="muted small" id="study-file">Αναφορά: ${esc(st.last)} (στις λήψεις του browser). Την ίδια αναφορά από κώδικα: <code>pcl.network.case_data('${esc(m.net)}').report('${esc(m.study)}').save('αναφορά.html')</code></p>`:''}`;}
+ else if(!st.busy&&!st.error)h+='<p class="muted small">Πάτησε «Τρέξε τη μελέτη»: τρέχει στο engine (τοπικός server) και δείχνει τι πρότεινε και γιατί.</p>';
+ let emt='';try{emt=ieee9Theory();}catch(e){}
+ return h+(emt?`<p class="muted small">Το δίκτυο των 9 ζυγών του σχεδίου σε EMT${S.tutMeta?.emtFrom==='opf'?', από τη βέλτιστη κατανομή':''}:</p>`+emt:'');}
 function formulaTheory(t){
  if(t.topology==='sampling')return samplingTheory();
  if(t.topology==='dc_drive')return dcDriveTheory();
@@ -2597,6 +2625,7 @@ function formulaTheory(t){
  if(t.topology==='gen_sc')return genScTheory();
  if(t.topology==='fbm')return fbmTheory();
  if(t.topology==='ieee9_emt')return ieee9Theory();
+ if(t.topology==='pf_study'||t.topology==='opf_study')return studyTheory();
  if(t.topology==='sssc')return ssscTheory();
  if(t.topology==='ccsc')return ccscTheory();
  if(t.topology==='ieee9_sssc')return ieee9ssscTheory();
@@ -2826,6 +2855,7 @@ function boot(){
  $('#play').onclick=()=>S.running?pause():play();$('#reset').onclick=reset;$('#step1').onclick=()=>stepT(1);$('#step10').onclick=()=>stepT(10);$('#toend').onclick=runToEnd;
  $('#speed').onchange=e=>setSpeed(e.target.value);
  $('#step-mode').onchange=e=>{editor.setSolve({step:e.target.value==='var'?'var':''});};
+ $('#theory').addEventListener('click',e=>{const b=e.target.closest('[data-study]');if(b)studyAct(b.dataset.study);});   // 4.19.1: the buttons of a study card (the card is redrawn while the simulation runs)
  document.querySelectorAll('[data-dsev]').forEach(x=>x.onchange=renderDiag);$('#diag-src').onchange=renderDiag;$('#diag-q').oninput=renderDiag;
  $('#diag-check').onclick=()=>{if(S.sim&&!S.error)S.sim.stepCheck();renderDiag();};
  $('#diag-clear').onclick=()=>{if(S.sim){S.sim.dg=new Map();S.sim.dgVer=(S.sim.dgVer||0)+1;window.Live?.call('dgClear');}S.batchDiag=[];renderDiag();};
@@ -2934,5 +2964,5 @@ function boot(){
 function renderTheoryLive(){if(!atTop()||document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
 window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,libToSub,enterSub,leaveSub,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
- renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush,draw,closeInspector,openCtlWin}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare; 4.17.2: scope_flow
+ renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,studyAct,get STUDY(){return STUDY;},runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush,draw,closeInspector,openCtlWin}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare; 4.17.2: scope_flow
 })();

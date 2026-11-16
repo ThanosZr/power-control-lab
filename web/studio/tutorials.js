@@ -1184,15 +1184,15 @@
  // with P_r = 1 the valve of G2 (163 MW) was at its limit from the start and the case drifted (governors since 4.8.1)
  const IEEE9_PR={G1:2.475,G2:1.92,G3:1.28};
  // 4.17: the build of the IEEE 9 case as a function, so that the m-SSSC case (ieee9_sssc) can insert its arms (ext)
- function ieee9Build(o,ext){const F=o.ev==='fault'||o.ev==='full',cl=o.ev==='fault',Un=345e3,Sb=100e6,f=60,c={conn:'bus'};
+ function ieee9Build(o,ext){const F=o.ev==='fault'||o.ev==='full',cl=o.ev==='fault',Un=345e3,Sb=100e6,f=60,c={conn:'bus'},LF=o.lf||IEEE9_LF;   // 4.19.1: o.lf = another operating point (the optimal power flow)
    // the classical model of the example: E′ behind X′_d constant (X′_q = X′_d, very long T′_d0 and T′_q0)
    const GD=id=>cl?{...IEEE9_GEN[id],Xqp:IEEE9_GEN[id].Xdp,Xqpp:IEEE9_GEN[id].Xdp,Td0p:1000,Tq0p:1000}:IEEE9_GEN[id];
    const L=(id,x,y,r,xx,b,rot)=>C(id,'LINE3',x,y,{unit:'pu',Un,Sb,f,R1:r,X1:xx,B1:b,z0:'same',...c},{rot:rot||0,label:id});
    const avr=o.ctl&&o.ctl!=='none'&&!cl,pss=avr&&(o.ctl==='avr_pss'||o.ctl==='full'),gov=avr&&o.ctl==='full',xc={...(avr?{exc:'sig'}:{}),...(gov?{mech:'sig'}:{})};
-   const G=(id,bus,x,y)=>C(id,'GEN3',x,y,{Sn:Sb,Un,f,pp:1,data:'std',...GD(id),Ra:0,shaft:'one',D:0,V0:IEEE9_LF[bus][0],ang0:IEEE9_LF[bus][1],...xc,...c},{label:id+' (ζυγός '+bus+')'});
-   const Ld=(id,bus,x,y,P,Q)=>{const V=IEEE9_LF[bus][0];return C(id,'LOAD3',x,y,{cn:'yn',Un,f,P:P/(V*V),Q:Q/(V*V),model:'z',...c},{label:id,lbl:'below'});};
+   const G=(id,bus,x,y)=>C(id,'GEN3',x,y,{Sn:Sb,Un,f,pp:1,data:'std',...GD(id),Ra:0,shaft:'one',D:0,V0:LF[bus][0],ang0:LF[bus][1],...xc,...c},{label:id+' (ζυγός '+bus+')'});
+   const Ld=(id,bus,x,y,P,Q)=>{const V=LF[bus][0];return C(id,'LOAD3',x,y,{cn:'yn',Un,f,P:P/(V*V),Q:Q/(V*V),model:'z',...c},{label:id,lbl:'below'});};
    const comps=[G('G2',2,100,160),J('B2',220,160),L('T28',320,160,0,0.0625,0),J('B8',440,160),L('L87',580,160,0.0085,0.072,0.149),J('B7',720,160),L('L76',860,160,0.0119,0.1008,0.209),J('B6',1000,160),
-    L('T63',1120,160,0,0.0586,0),J('B3',1220,160),C('G3','GEN3',1360,160,{Sn:Sb,Un,f,pp:1,data:'std',...GD('G3'),Ra:0,shaft:'one',D:0,V0:IEEE9_LF[3][0],ang0:IEEE9_LF[3][1],...xc,...c},{flip:true,label:'G3 (ζυγός 3)'}),
+    L('T63',1120,160,0,0.0586,0),J('B3',1220,160),C('G3','GEN3',1360,160,{Sn:Sb,Un,f,pp:1,data:'std',...GD('G3'),Ra:0,shaft:'one',D:0,V0:LF[3][0],ang0:LF[3][1],...xc,...c},{flip:true,label:'G3 (ζυγός 3)'}),
     Ld('LD7',7,720,280,100e6,35e6),L('L89',440,320,0.032,0.161,0.306,1),J('B9',440,480),Ld('LD9',9,320,600,125e6,50e6),L('L65',1000,320,0.039,0.17,0.358,1),J('B5',1000,480),Ld('LD5',5,1120,600,90e6,30e6),
     L('L94',580,560,0.01,0.085,0.176),J('B4',720,640),L('L54',860,560,0.017,0.092,0.158),L('T41',720,760,0,0.0576,0,1),J('B1',720,880),G('G1',1,560,880)];
    const wires=[['G2:abc','B2'],['B2','T28:abc1'],['T28:abc2','B8'],['B8','L87:abc1'],['L87:abc2','B7'],...(ext?[]:[['B7','L76:abc1']]),['L76:abc2','B6'],['B6','T63:abc1'],['T63:abc2','B3'],['B3','G3:abc'],
@@ -1200,22 +1200,55 @@
    if(F){comps.push(C('CB8','CB3',440,250,{cmd:'0:1, 0.183333:0',...c},{rot:1,label:'CB 8'}),J('FP',440,300),C('CB9','CB3',440,400,{cmd:'0:1, 0.183333:0',...c},{rot:1,label:'CB 9'}),C('F1','FLT3',540,300,{kind:'abcg',ton:0.1,Rf:0,Rg:0,...c},{lbl:'below'}));
     comps.find(q=>q.id==='L89').y=340;wires.push(['B8','CB8:abc1'],['CB8:abc2','FP'],['FP','F1:abc'],['FP','L89:abc1'],['L89:abc2','CB9:abc1'],['CB9:abc2','B9']);}
    else wires.push(['B8','L89:abc1'],['L89:abc2','B9']);
+   // 4.19.1 (decision 220): instruments at two points for the tutorials of the load flow: the current of the line 8–7 with the voltage of
+   // bus 8, and the current into the load of bus 5 with its voltage
+   const mpanes=[];
+   if(o.meter){let i=wires.findIndex(w=>w[0]==='B8'&&w[1]==='L87:abc1');wires.splice(i,1);
+    {const [mL,mR]=busMeter(comps,wires,'M87',500,100,{i:'i_a γραμμής 8–7',v:'v_a ζυγού 8'});wires.push(['B8',mL],[mR,'L87:abc1']);}
+    i=wires.findIndex(w=>w[0]==='B5'&&w[1]==='LD5:abc');wires.splice(i,1);
+    {const [mL,mR]=busMeter(comps,wires,'M5',1180,480,{i:'i_a φορτίου 5',v:'v_a ζυγού 5'});wires.push(['B5',mL],[mR,'LD5:abc']);}
+    mpanes.push([['Y:M87A','i_a γραμμής 8–7'],['Y:M5A','i_a φορτίου 5']],[['Y:M87V','v_a ζυγού 8'],['Y:M5V','v_a ζυγού 5']]);}
    // 4.8.1: AVR (and PSS, governor) next to each generator, from its steady state (e0, v0, m0)
    if(avr)for(const [g,x,y,hy] of [['G1',560,1000,true],['G2',100,40,false],['G3',1360,40,false]]){const n=g.slice(1);
     comps.push(C('AV'+n,'AVR',x-150,y,{type:'st1a'},{label:'AVR '+n}));wires.push([g+':vt','AV'+n+':vt'],[g+':v0','AV'+n+':v0'],[g+':e0','AV'+n+':e0'],[g+':ifd','AV'+n+':ifd'],['AV'+n+':efd',g+':efd']);
     if(pss){comps.push(C('PS'+n,'PSS',x-300,y,{},{label:'PSS '+n}));wires.push([g+':w','PS'+n+':w'],['PS'+n+':vs','AV'+n+':vs']);}
     if(gov){comps.push(C('GV'+n,'GOV',x+150,y,{type:hy?'hydro':'steam',Pr:IEEE9_PR[g]},{label:(hy?'ρυθμιστής (νερό) ':'ρυθμιστής (ατμός) ')+n}));wires.push([g+':w','GV'+n+':w'],[g+':m0','GV'+n+':m0'],['GV'+n+':tm',g+':tm']);}}
    const panes=[[['Y:G1:d','δ₁ (°)'],['Y:G2:d','δ₂ (°)'],['Y:G3:d','δ₃ (°)']],[['Y:G1:pe','P₁'],['Y:G2:pe','P₂'],['Y:G3:pe','P₃']],[['Y:G1','ω₁'],['Y:G2','ω₂'],['Y:G3','ω₃']],
-    ...(avr?[[['Y:AV1/EFD','E_fd1'],['Y:AV2/EFD','E_fd2'],['Y:AV3/EFD','E_fd3']],[['Y:G1:vt','|V₁|'],['Y:G2:vt','|V₂|'],['Y:G3:vt','|V₃|']]]:[])];
+    ...(avr?[[['Y:AV1/EFD','E_fd1'],['Y:AV2/EFD','E_fd2'],['Y:AV3/EFD','E_fd3']],[['Y:G1:vt','|V₁|'],['Y:G2:vt','|V₂|'],['Y:G3:vt','|V₃|']]]:[]),...mpanes];
    const Tf=avr?5:2;
-   if(ext){ext.add(comps,wires,panes);return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:10,method:'TR',speed:0.05,stopT:ext.T},scope:{panes,window:{unit:'s',n:0.5}},meta:{lf:IEEE9_LF,fault:false,classical:false,ctl:o.ctl,...ext.meta}});}
-   return project(comps,wires,{version:4,sim:{hDiv:400,...(avr?{method:'TR'}:{}),speed:F?(avr?10:5):2,stopT:F?Tf:0.5},scope:{panes,window:{unit:'s',n:F?Tf:0.5}},meta:{lf:IEEE9_LF,fault:F,classical:cl,ctl:avr?o.ctl:'none',...(ext?ext.meta:{})}});}
+   if(ext){ext.add(comps,wires,panes);return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:10,method:'TR',speed:0.05,stopT:ext.T},scope:{panes,window:{unit:'s',n:0.5}},meta:{lf:LF,fault:false,classical:false,ctl:o.ctl,...ext.meta}});}
+   return project(comps,wires,{version:4,sim:{hDiv:400,...(avr?{method:'TR'}:{}),speed:F?(avr?10:5):2,stopT:F?Tf:0.5},scope:{panes,window:{unit:'s',n:F?Tf:0.5}},meta:{lf:LF,fault:F,classical:cl,ctl:avr?o.ctl:'none',...(ext?ext.meta:{})}});}
  T.push({id:'ieee9_emt',group:'Συστήματα ισχύος (4.3)',title:'IEEE 9 ζυγών σε EMT, από τη ροή φορτίου',theory:'formula',topology:'ieee9_emt',
   options:[{k:'ev',label:'Γεγονός',options:[['none','Καμία διαταραχή: η μόνιμη κατάσταση της ροής φορτίου'],['fault','Σφάλμα 5 κύκλων (A&F, Παρ. 2.7), μηχανές ως κλασικό μοντέλο'],['full','Το ίδιο σφάλμα με τα πλήρη δεδομένα']],def:'none'},
    {k:'ctl',label:'Έλεγχος γεννητριών (4.8.1)',options:[['none','Σταθερά E_fd και T_m'],['avr','AVR ST1A σε κάθε γεννήτρια'],['avr_pss','AVR ST1A και PSS'],['full','AVR, PSS και ρυθμιστές στροφών (G1 νερό, G2 και G3 ατμός)']],def:'none'}],
   desc:'Το δίκτυο WSCC των 9 ζυγών (αρίθμηση του MATPOWER, 345 kV, 100 MVA, 60 Hz). Οι γεννήτριες έχουν τα δεδομένα του Anderson & Fouad (Πίν. 2.1) και ξεκινούν από την τάση |V|∠θ της ροής φορτίου του pcl.network· τα φορτία είναι σταθερές εμπεδήσεις ίσες με το φορτίο στην τάση της ροής φορτίου. Οι μετασχηματιστές είναι κλάδοι σε ανά μονάδα, όπως στη ροή φορτίου. Χωρίς διαταραχή το EMT μένει στη ροή φορτίου.',
   tasks:['Χωρίς διαταραχή: P, Q και δ των γεννητριών μένουν σταθερά· η κάρτα δείχνει τις τιμές της ροής φορτίου και του Anderson & Fouad.','Σφάλμα με κλασικό μοντέλο: η δ₂ − δ₁ ανεβαίνει περίπου 70° και επιστρέφει, όπως στο Σχ. 2.22 του Anderson & Fouad (85° από 17,5°).','Με τα πλήρη δεδομένα και σταθερή E_fd οι γεννήτριες 2 και 3 χάνουν τον συγχρονισμό: η ροή του άξονα q σβήνει γρήγορα (T′_q0 ≈ 0,5 s) και χωρίς AVR η E_fd δεν βοηθά.','Με τα πλήρη δεδομένα και «AVR ST1A σε κάθε γεννήτρια» (4.8.1) οι γεννήτριες μένουν σε συγχρονισμό: η E_fd ανεβαίνει στο όριο κατά το σφάλμα και κρατά τη ροή. Με PSS και ρυθμιστές στροφών σβήνουν και οι ταλαντώσεις. Με κλασικό μοντέλο ο έλεγχος δεν εφαρμόζεται (σταθερή E′).'],
   build(o){return ieee9Build(o);}});
+
+ // 4.19.1 (ROADMAP §68 point 6): load flow, N−1 and optimal power flow as studies of the engine (pcl.network on the local server), next to
+ // the 9-bus network in EMT with instruments at two points. The card runs the study on the chosen network and exports its report.
+ // IEEE9_OPF: |V| (pu) and angle (°) of the AC optimal power flow of pcl.network.ieee9() (cost 5296,69 per hour; tests/test_report.py checks it)
+ const IEEE9_OPF={1:[1.1,0],2:[1.097355,4.893644],3:[1.08662,3.249542],5:[1.084448,-3.981982],7:[1.089489,-1.196272],9:[1.071755,-4.615239]};
+ const NETS_PF=[['ieee9','IEEE 9 ζυγών (το δίκτυο του σχεδίου)'],['ieee14','IEEE 14 ζυγών'],['ieee30','IEEE 30 ζυγών'],['ieee57','IEEE 57 ζυγών'],['ieee118','IEEE 118 ζυγών'],['ieee300','IEEE 300 ζυγών'],
+  ['case33bw','Ακτινικό 33 ζυγών (Baran & Wu)'],['case69','Ακτινικό 69 ζυγών (Baran & Wu)']];
+ T.push({id:'pf_study',group:'Ροή φορτίου και OPF (4.19.1)',title:'Ροή φορτίου και N−1 σε δίκτυα IEEE',theory:'formula',topology:'pf_study',
+  options:[{k:'net',label:'Δίκτυο της μελέτης',options:NETS_PF,def:'ieee9'},
+   {k:'study',label:'Μελέτη',options:[['pf','Ροή φορτίου'],['n1','N−1 σε AC: η απώλεια κάθε κλάδου'],['n1dc','N−1, σάρωση DC (LODF)']],def:'pf'},
+   {k:'method',label:'Μέθοδος ροής φορτίου',options:[['auto','Αυτόματα: η πρόταση του engine από το δίκτυο'],['nr','Αραιός Newton–Raphson'],['nr_dense','Πυκνός Newton–Raphson (ως την 4.19)'],['nr_ci','Newton με εγχύσεις ρεύματος'],
+    ['fdxb','Fast-decoupled XB'],['fdbx','Fast-decoupled BX'],['sweep','Εμπρός–πίσω σάρωση (ακτινικά, χωρίς ζυγούς PV)'],['gs','Gauss–Seidel (αργό, για διδασκαλία)'],['dc','DC (γραμμική προσέγγιση)']],def:'auto'}],
+  desc:'Η μελέτη τρέχει στο engine (pcl.network, στον τοπικό server) πάνω στο δίκτυο που διαλέγεις, και η κάρτα δείχνει τι πρότεινε το engine και γιατί. Κάθε μέθοδος σταματά στο ίδιο υπόλοιπο, άρα δίνει την ίδια λύση· αλλάζουν οι επαναλήψεις και ο χρόνος. Το σχέδιο είναι το δίκτυο των 9 ζυγών σε EMT από τη ροή φορτίου του, με όργανα στη γραμμή 8–7 και στο φορτίο του ζυγού 5: χωρίς διαταραχή μένει στη μόνιμη κατάσταση που βρήκε η μελέτη.',
+  tasks:['Τρέξε τη ροή φορτίου στο IEEE 118 με «Αυτόματα» και μετά με fast-decoupled XB: ίδιες τάσεις, περισσότερες επαναλήψεις.','Στο ακτινικό των 33 ζυγών δοκίμασε τη σάρωση και τον Newton: το engine εξηγεί γιατί εδώ προτείνει τον Newton (βαθύ δίκτυο).',
+   'N−1 σε AC στο IEEE 118: ποια απώλεια φορτίζει περισσότερο το δίκτυο, και ποιοι κλάδοι το χωρίζουν;','Σύγκρινε τη σάρωση DC με το N−1 σε AC: ίδια χειρότερη διαταραχή;','«Εξαγωγή αναφοράς»: ένα αρχείο HTML με γραφήματα, πίνακες και τα δεδομένα μέσα.'],
+  build(o){const pr=ieee9Build({ev:'none',ctl:'none',meter:true});pr.meta={...pr.meta,study:{net:o.net,study:o.study,options:{method:o.method}}};return pr;}});
+ T.push({id:'opf_study',group:'Ροή φορτίου και OPF (4.19.1)',title:'Βέλτιστη ροή φορτίου (OPF) σε δίκτυα IEEE',theory:'formula',topology:'opf_study',
+  options:[{k:'net',label:'Δίκτυο της μελέτης',options:[...NETS_PF.slice(0,6),['case30','30 ζυγών με όρια γραμμών (Alsac & Stott)']],def:'ieee9'},
+   {k:'kind',label:'Μοντέλο',options:[['opf','AC: πλήρεις εξισώσεις, εσωτερικό σημείο'],['dcopf','DC: γραμμικό δίκτυο']],def:'opf'},
+   {k:'limits',label:'Όρια ροής των κλάδων',options:[['yes','Ναι, όπου υπάρχει ονομαστική ισχύς'],['no','Όχι']],def:'yes'},
+   {k:'emt',label:'Το EMT του σχεδίου ξεκινά από',options:[['lf','Τη ροή φορτίου του IEEE 9'],['opf','Τη βέλτιστη κατανομή (AC-OPF) του IEEE 9']],def:'lf'}],
+  desc:'Η φθηνότερη κατανομή της παραγωγής που αντέχει το δίκτυο: ελαχιστοποίηση του κόστους με τις εξισώσεις ισχύος ως ισότητες και τα όρια τάσης, παραγωγής και ροής ως ανισότητες, με μέθοδο εσωτερικού σημείου στο engine (pcl.opf). Η κάρτα δείχνει κόστος, οριακές τιμές και τους περιορισμούς που δεσμεύουν. Με «βέλτιστη κατανομή» το EMT του σχεδίου ξεκινά από το σημείο που βρήκε ο OPF για το δίκτυο των 9 ζυγών.',
+  tasks:['IEEE 9: κόστος 5296,69 ανά ώρα, όπως στη βιβλιογραφία. Ποιες τάσεις κάθονται στο όριο 1,1 pu;','Το δίκτυο των 30 ζυγών με και χωρίς όρια ροής: πόσο ακριβαίνει η λύση, και σε ποιους ζυγούς ανεβαίνει η οριακή τιμή;',
+   'AC απέναντι σε DC: το DC δεν έχει απώλειες, άρα βγαίνει φθηνότερο κατά λίγα τοις εκατό.','Ξεκίνα το EMT από τη βέλτιστη κατανομή: οι ισχείς των γεννητριών στο scope είναι αυτές του OPF.','«Εξαγωγή αναφοράς» για την κατανομή, τις οριακές τιμές και τους περιορισμούς.'],
+  build(o){const pr=ieee9Build({ev:'none',ctl:'none',meter:true,lf:o.emt==='opf'?IEEE9_OPF:null});pr.meta={...pr.meta,study:{net:o.net,study:o.kind,options:{flow_limits:o.limits!=='no'}},emtFrom:o.emt,noAF:o.emt==='opf'};return pr;}});
 
  // 4.17 (§50): the IEEE 9 case in EMT with a three-phase m-SSSC (one arm per phase and the central controller) in series
  // with the line 7–6 at bus 7 (branch br5 of pcl.network, 6–7: the choice of pcl.network.sssc_placement), through a

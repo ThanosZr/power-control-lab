@@ -114,5 +114,27 @@ const {chromium}=require('playwright');
  ok(/= 96/.test(rp.txt)&&rp.on,'the value of R = 2·V_in and the toggle in the panel of R1 '+JSON.stringify({on:rp.on}));
  await p.evaluate(()=>document.querySelector('#props-body [data-inp-k="R"]').click());await p.waitForTimeout(500);
  ok(await p.evaluate(()=>!(window.PCL.editor.comp('R1').inp||[]).includes('R')),'the toggle removes the input');
+ // 4.19.1 (ROADMAP §68 point 6): a study of a network on the engine from its tutorial (load flow, N−1, optimal power flow), what the engine
+ // proposed and why, and the report as one HTML file («Εξαγωγή αναφοράς»)
+ await p.evaluate(()=>window.PCL.loadTutorial('pf_study'));await p.waitForTimeout(900);
+ ok(await p.evaluate(()=>!!document.querySelector('#theory [data-study="run"]')&&!!document.querySelector('#theory [data-study="report"]')&&!!window.PCL.editor.comp('M87A')&&!!window.PCL.editor.comp('M5V')),
+  'study: the card with its two buttons, and instruments at two points of the drawing');
+ await p.click('#theory [data-study="run"]');await p.waitForSelector('#study-result',{timeout:30000});
+ const st1=await p.evaluate(()=>({adv:document.querySelector('#study-advice').textContent,sum:window.PCL.STUDY.r.summary}));
+ ok(/πυκνός Newton–Raphson/.test(st1.adv)&&st1.sum.converged&&st1.sum.method==='nr_dense'&&Math.abs(st1.sum.losses_MW-4.641)<0.01,'study: load flow of IEEE 9 on the engine, with the proposal and its reason '+JSON.stringify(st1.sum).slice(0,160));
+ await p.evaluate(()=>window.PCL.loadTutorial('pf_study',{net:'ieee118',study:'n1',method:'auto'}));await p.waitForTimeout(900);
+ await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>!window.PCL.STUDY.busy&&window.PCL.STUDY.r?.study==='n1',null,{timeout:60000});
+ const st2=await p.evaluate(()=>window.PCL.STUDY.r.summary);
+ ok(st2.outages===186&&st2.islands===9&&st2.failed===0&&st2.solved===177&&st2.chord===177&&st2.newton===0&&/LODF/.test(st2.why),'study: N−1 in AC on IEEE 118, every outage on the factors of the base case '+JSON.stringify(st2).slice(0,200));
+ await p.evaluate(()=>window.PCL.loadTutorial('opf_study',{net:'case30',kind:'opf',limits:'yes',emt:'opf'}));await p.waitForTimeout(900);
+ const [dlr]=await Promise.all([p.waitForEvent("download",{timeout:60000}),p.click("#theory [data-study=\"report\"]")]);
+ const rep=require("fs").readFileSync(await dlr.path(),"utf8"),st3=await p.evaluate(()=>window.PCL.STUDY.r.summary);
+ ok(dlr.suggestedFilename()==="report_case30_opf.html"&&/<svg/.test(rep)&&/id="pcl-report"/.test(rep)&&/Βέλτιστη ροή φορτίου \(AC\)/.test(rep)&&/Περιορισμοί που δεσμεύουν/.test(rep)&&!/<script src|https?:\/\//.test(rep),
+  'study: «Εξαγωγή αναφοράς» gives one self-contained HTML file ('+rep.length+' bytes)');
+ ok(Math.abs(st3.cost-576.89)<0.01&&st3.flow_limits===41&&st3.binding>=3&&await p.evaluate(()=>/report_case30_opf\.html/.test(document.querySelector('#study-file')?.textContent||'')),'study: optimal power flow of the 30-bus case, cost '+st3.cost);
+ // the EMT of the drawing from the optimal dispatch of IEEE 9: the generators give the powers of the OPF (89,80 / 134,32 / 94,19 MW)
+ await p.click('#play');await p.waitForTimeout(1500);await p.click('#play');
+ const pg=await p.evaluate(()=>['G1','G2','G3'].map(g=>window.PCL.S.sim.now('Y:'+g+':pe')));
+ ok(Math.abs(pg[0]-0.898)<2e-3&&Math.abs(pg[1]-1.3432)<2e-3&&Math.abs(pg[2]-0.9419)<2e-3,'study: the EMT starts from the optimal dispatch '+pg.map(x=>x.toFixed(4)).join(' '));
  console.log(JSON.stringify({rm:rm.split('\n').slice(0,4),bt:bt.split('\n').slice(0,4),imp},null,1));
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();
