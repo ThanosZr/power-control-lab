@@ -170,7 +170,7 @@
 | `tests/js/refac_cases.js` | 68 |
 | `tests/js/sim_cases.js` | 356 |
 | `tests/js/snapshot_cases.js` | 22 |
-| `tests/js/sparse_cases.js` | 55 |
+| `tests/js/sparse_cases.js` | 57 |
 | `tests/js/sssc_cases.js` | 85 |
 | `tests/js/step_cases.js` | 89 |
 | `tests/js/subcircuit_cases.js` | 87 |
