@@ -299,9 +299,14 @@ class Unbalanced(unittest.TestCase):
         fd13 = U.case_data('feeder13')
         r = U.run(fd13)
         reg = next(s for s in r['sections'] if s['name'] == 'RG60')
-        for p, t in PUB['taps'].items():
+        for j, (p, t) in enumerate(PUB['taps'].items()):
             self.assertAlmostEqual(reg['I'][p] / reg['I_b'][p], 1 + 0.00625 * t, delta=1e-9)
             self.assertAlmostEqual(r['buses']['RG60']['phases'][p]['V'], 1 + 0.00625 * t, delta=5e-6)
+            # the document prints this relation (type A): 1,0625, 1,0500, 1,0687 pu for the taps 10, 8, 11. The relation of the type
+            # B regulator, 1/(1 − 0,00625 per tap), would give 1,0667 pu at tap 10
+            self.assertAlmostEqual(PUB['V']['RG60'][j][0], 1 + 0.00625 * t, delta=6e-5)
+        self.assertAlmostEqual(1 / (1 - 0.00625 * 10), 1.0667, delta=5e-5)
+        self.assertGreater(abs(1 / (1 - 0.00625 * 10) - PUB['V']['RG60'][0][0]), 4e-3)
         # the relay: the regulated voltage through the potential transformer less the drop of the compensator, written out here
         e = fd13.regulators[0]
         for p in 'abc':

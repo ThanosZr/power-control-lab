@@ -2,9 +2,10 @@
 node on its own, with lines of one, two and three phases, loads between a phase and the neutral or between two phases, and
 step voltage regulators.
 
-- The feeder is written in the phase frame (Kersting 2002): a line section is its phase impedance matrix and its shunt
+- The feeder is written in the phase frame (Kersting 2006): a line section is its phase impedance matrix and its shunt
   admittance matrix over the phases it has; a transformer (grounded star – grounded star) is a series impedance per phase with
-  its ratio; a regulator is an ideal ratio per phase, 1 + 0,00625 per tap; a capacitor is a susceptance.
+  its ratio; a regulator is an ideal ratio per phase, 1 + 0,00625 per tap (the relation of the type A regulator, the one that
+  gives the published voltages of the test feeder; type B, 1/(1 − 0,00625 per tap), is not written); a capacitor is a susceptance.
 - A load is of constant power, constant current or constant impedance, in star (phase to neutral) or in delta (phase to phase);
   a load spread along a section is put, exactly for the voltage drop and for the losses, as two thirds at a quarter of the
   section and one third at its end.

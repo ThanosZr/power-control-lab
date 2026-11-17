@@ -98,7 +98,7 @@
 | `pcl/se.py` | 563 |
 | `pcl/study.py` | 411 |
 | `pcl/trv.py` | 433 |
-| `pcl/unbalanced.py` | 511 |
+| `pcl/unbalanced.py` | 512 |
 | `pcl/wideband.py` | 1279 |
 | `pcl/workbench.py` | 485 |
 | `tests/test_addons.py` | 258 |
@@ -173,7 +173,7 @@
 | `tests/test_trv.py` | 248 |
 | `tests/test_tune.py` | 277 |
 | `tests/test_tutorials.py` | 751 |
-| `tests/test_unbalanced.py` | 435 |
+| `tests/test_unbalanced.py` | 440 |
 | `tests/test_units.py` | 78 |
 | `tests/test_watch.py` | 87 |
 | `tests/test_wb.py` | 489 |
@@ -3834,37 +3834,37 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 33 | class | `FeederError` |
-| 37 | function | `_phases` |
-| 44 | class | `Feeder` |
-| 48 | method | `Feeder.__init__` |
-| 54 | method | `Feeder.bus` |
-| 58 | method | `Feeder._bus` |
-| 63 | method | `Feeder.set_source` |
-| 67 | method | `Feeder.config` |
-| 78 | method | `Feeder.line` |
-| 83 | method | `Feeder.switch` |
-| 86 | method | `Feeder.transformer` |
-| 90 | method | `Feeder.regulator` |
-| 99 | method | `Feeder.load` |
-| 107 | method | `Feeder.distributed` |
-| 114 | method | `Feeder.capacitor` |
-| 119 | method | `Feeder.to_dict` |
-| 126 | method | `Feeder.from_dict` |
-| 154 | method | `Feeder.run` |
-| 157 | method | `Feeder.report` |
-| 167 | function | `case_data` |
-| 176 | function | `case_solution` |
-| 182 | class | `_Net` |
-| 185 | method | `_Net.__init__` |
-| 286 | method | `_Net.load_currents` |
-| 305 | method | `_Net.solve` |
-| 324 | method | `_Net.flows` |
-| 329 | function | `_relay` |
-| 340 | function | `as_network` |
-| 378 | function | `against` |
-| 395 | function | `sequence` |
-| 401 | function | `run` |
+| 34 | class | `FeederError` |
+| 38 | function | `_phases` |
+| 45 | class | `Feeder` |
+| 49 | method | `Feeder.__init__` |
+| 55 | method | `Feeder.bus` |
+| 59 | method | `Feeder._bus` |
+| 64 | method | `Feeder.set_source` |
+| 68 | method | `Feeder.config` |
+| 79 | method | `Feeder.line` |
+| 84 | method | `Feeder.switch` |
+| 87 | method | `Feeder.transformer` |
+| 91 | method | `Feeder.regulator` |
+| 100 | method | `Feeder.load` |
+| 108 | method | `Feeder.distributed` |
+| 115 | method | `Feeder.capacitor` |
+| 120 | method | `Feeder.to_dict` |
+| 127 | method | `Feeder.from_dict` |
+| 155 | method | `Feeder.run` |
+| 158 | method | `Feeder.report` |
+| 168 | function | `case_data` |
+| 177 | function | `case_solution` |
+| 183 | class | `_Net` |
+| 186 | method | `_Net.__init__` |
+| 287 | method | `_Net.load_currents` |
+| 306 | method | `_Net.solve` |
+| 325 | method | `_Net.flows` |
+| 330 | function | `_relay` |
+| 341 | function | `as_network` |
+| 379 | function | `against` |
+| 396 | function | `sequence` |
+| 402 | function | `run` |
 
 ### `pcl/wideband.py`
 
