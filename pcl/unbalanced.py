@@ -311,16 +311,25 @@ class _Net:
             b, p = self.nodes[i]
             V[i] = self.vln[b] * A120[PH.index(p)]
         base = np.array([self.vln[b] for b, _ in self.nodes])
+        prev, stalls = math.inf, 0
         for it in range(1, max_iter + 1):
             I, _ = self.load_currents(V)
             new = self.lu.solve(I[self.free] - self.Yfs @ self.Vs)
             d = np.max(np.abs(new - V[self.free]) / base[self.free])
             V[self.free] = new
             if not np.all(np.isfinite(new)):
-                return V, it, False
+                return V, it, False, None
             if d < tol:
-                return V, it, True
-        return V, max_iter, False
+                return V, it, True, None
+            # the rounding of the solve: below it the change of the voltages stops falling and wanders. Three iterations without a
+            # fall, below 1e-9 pu, and the iteration has given what the arithmetic can give (the matrix is ill-conditioned by the
+            # small impedances of the regulators and of the switches: 1e6 on the 13 node feeder, a floor near 1e-12 pu)
+            if d < 1e-9 and d >= prev:
+                stalls += 1
+                if stalls >= 3:
+                    return V, it, True, float(d)
+            prev = d
+        return V, max_iter, False, None
 
     def flows(self, V):
         """The currents into every section at its two ends (A, complex)."""
@@ -409,7 +418,8 @@ def run(feeder, regulators='given', spread='exact', tol=1e-9, max_iter=200):
     Returns {'converged', 'iterations', 'buses' {bus: {phase: {V (pu), angle (°), volts}}, with 'unbalance' (%, negative over
     positive sequence) at the buses of three phases}, 'sections' [{name, kind, a, b, phases, I (A, at a) and angle per phase,
     loss_kW per phase and total}], 'loads' [{name, bus, where, kW, kvar}], 'capacitors', 'input' {kW, kvar per phase and total},
-    'losses_kW', 'taps' {regulator: {phase: tap}}, 'relay' {regulator: {phase: volts the relay sees}}, 'band' {regulator: [lowest, highest volts of its band]}, 'settled', 'worst' (lowest
+    'losses_kW', 'taps' {regulator: {phase: tap}}, 'relay' {regulator: {phase: volts the relay sees}}, 'band' {regulator: [lowest, highest volts of its band]}, 'settled', 'floor'
+    (None, or the change of the voltages where the iteration stopped because tol is below the rounding of the solution), 'worst' (lowest
     and highest phase voltage, largest unbalance), 'message', 'time'}."""
     t0 = time.perf_counter()
     if not isinstance(feeder, Feeder):
@@ -430,7 +440,7 @@ def run(feeder, regulators='given', spread='exact', tol=1e-9, max_iter=200):
     relay = {}
     while True:
         net = _Net(feeder, taps, spread)
-        V, it, ok = net.solve(tol, max_iter)
+        V, it, ok, floor = net.solve(tol, max_iter)
         its += it
         rounds += 1
         if not ok:
@@ -452,6 +462,9 @@ def run(feeder, regulators='given', spread='exact', tol=1e-9, max_iter=200):
         for (k, p), new in move.items():
             taps[k][p] = new
     out = {'converged': bool(ok), 'iterations': its, 'rounds': rounds, 'taps': taps, 'relay': relay, 'band': {e['name']: [e['level'] - e['band'] / 2, e['level'] + e['band'] / 2] for e in feeder.regulators}, 'settled': settled, 'regulators': regulators, 'message': '', 'name': feeder.name}
+    out['floor'] = floor
+    if floor is not None:
+        out['message'] = f'the tolerance {tol:g} pu is below the rounding of the solution: the iteration stopped where the voltages change no more ({floor:.1e} pu)'
     if not settled:
         out['message'] = 'the taps of the regulators did not settle: the band of a regulator is narrower than the voltage of one tap'
     if not ok:

@@ -98,7 +98,7 @@
 | `pcl/se.py` | 563 |
 | `pcl/study.py` | 411 |
 | `pcl/trv.py` | 433 |
-| `pcl/unbalanced.py` | 512 |
+| `pcl/unbalanced.py` | 525 |
 | `pcl/wideband.py` | 1279 |
 | `pcl/workbench.py` | 485 |
 | `tests/test_addons.py` | 258 |
@@ -173,7 +173,7 @@
 | `tests/test_trv.py` | 248 |
 | `tests/test_tune.py` | 277 |
 | `tests/test_tutorials.py` | 751 |
-| `tests/test_unbalanced.py` | 440 |
+| `tests/test_unbalanced.py` | 451 |
 | `tests/test_units.py` | 78 |
 | `tests/test_watch.py` | 87 |
 | `tests/test_wb.py` | 489 |
@@ -3859,12 +3859,12 @@ _(χωρίς συναρτήσεις)_
 | 186 | method | `_Net.__init__` |
 | 287 | method | `_Net.load_currents` |
 | 306 | method | `_Net.solve` |
-| 325 | method | `_Net.flows` |
-| 330 | function | `_relay` |
-| 341 | function | `as_network` |
-| 379 | function | `against` |
-| 396 | function | `sequence` |
-| 402 | function | `run` |
+| 334 | method | `_Net.flows` |
+| 339 | function | `_relay` |
+| 350 | function | `as_network` |
+| 388 | function | `against` |
+| 405 | function | `sequence` |
+| 411 | function | `run` |
 
 ### `pcl/wideband.py`
 

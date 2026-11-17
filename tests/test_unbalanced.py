@@ -94,8 +94,19 @@ class Unbalanced(unittest.TestCase):
         self.assertEqual((len(fd.buses), len(fd.lines), len(fd.loads), len(fd.spread), len(fd.caps), fd.regulators[0]['taps']), (14, 10, 8, 1, 2, {'a': 10, 'b': 8, 'c': 11}))
         r = U.run(fd)
         self.assertEqual((r['converged'], r['nodes'], r['settled']), (True, 38, True))
-        for tol, n in ((1e-6, 7), (1e-9, 10), (1e-12, 14)):     # the convergence is linear: about three iterations for a thousand times less
-            self.assertLessEqual(abs(U.run(fd, tol=tol)['iterations'] - n), 1)
+        for tol, n in ((1e-6, 7), (1e-9, 10), (1e-11, 12)):     # the convergence is linear: about one iteration for ten times less
+            q = U.run(fd, tol=tol)
+            self.assertLessEqual(abs(q['iterations'] - n), 1)
+            self.assertEqual((q['converged'], q['floor'], q['message']), (True, None, ''))
+        # near 1e-12 pu the change of the voltages stops falling: the rounding of the solve (the small impedances of the regulator and
+        # of the switch make the matrix ill-conditioned). How many iterations a tolerance of 1e-12 takes depends on the machine (14
+        # here, 17 on the CI), so it is not counted; with a tolerance below the rounding the iteration stops there and says so
+        low = U.run(fd, tol=1e-14)
+        self.assertEqual((low['converged'], low['floor'] is not None), (True, True))
+        self.assertTrue(1e-14 < low['floor'] < 1e-10)
+        self.assertLess(low['iterations'], 40)
+        self.assertIn('below the rounding', low['message'])
+        self.assertLess(max(abs(low['buses'][b]['phases'][p]['V'] - x['V']) for b, d in r['buses'].items() for p, x in d['phases'].items()), 1e-8)
         B = r['buses']
         # the voltage profile: every published value (35 of them), to the four decimals and the two decimals of a degree of the document
         pairs = [(B[b]['phases'][p], q) for b, rows in PUB['V'].items() for p, q in zip('abc', rows) if q]
@@ -300,7 +311,7 @@ class Unbalanced(unittest.TestCase):
         r = U.run(fd13)
         reg = next(s for s in r['sections'] if s['name'] == 'RG60')
         for j, (p, t) in enumerate(PUB['taps'].items()):
-            self.assertAlmostEqual(reg['I'][p] / reg['I_b'][p], 1 + 0.00625 * t, delta=1e-9)
+            self.assertAlmostEqual(reg['I'][p] / reg['I_b'][p], 1 + 0.00625 * t, delta=1e-8)
             self.assertAlmostEqual(r['buses']['RG60']['phases'][p]['V'], 1 + 0.00625 * t, delta=5e-6)
             # the document prints this relation (type A): 1,0625, 1,0500, 1,0687 pu for the taps 10, 8, 11. The relation of the type
             # B regulator, 1/(1 − 0,00625 per tap), would give 1,0667 pu at tap 10
@@ -311,7 +322,7 @@ class Unbalanced(unittest.TestCase):
         e = fd13.regulators[0]
         for p in 'abc':
             Ib = reg['I_b'][p] * np.exp(1j * np.radians(reg['angle_b'][p]))
-            self.assertAlmostEqual(r['relay']['RG60'][p], abs(phasor(r, 'RG60', p) / e['pt'] - complex(e['R'], e['X']) * Ib / e['ct']), delta=1e-9)
+            self.assertAlmostEqual(r['relay']['RG60'][p], abs(phasor(r, 'RG60', p) / e['pt'] - complex(e['R'], e['X']) * Ib / e['ct']), delta=1e-8)
         # the taps of the document hold the relay within its band of 121 to 123 V
         self.assertEqual(r['band']['RG60'], [121.0, 123.0])
         self.assertTrue(all(121.0 <= v <= 123.0 for v in r['relay']['RG60'].values()))
