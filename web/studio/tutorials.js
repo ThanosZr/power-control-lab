@@ -1803,6 +1803,7 @@
   options:[{k:'model',label:'Μοντέλο MMC',options:[['m2','Model 2: ισοδύναμο βραχίονα (κάθε πυκνωτής)'],['m3','Model 3: συνάρτηση μεταγωγής βραχίονα'],['m4','Model 4: μέσο μοντέλο (AVM)'],['m1','Model 1: κάθε υπομονάδα από IGBT (N = 20, αργό)']],def:'m4'},
    {k:'N',label:'Υπομονάδες ανά βραχίονα',options:[['400','400 (401 επίπεδα)'],['100','100'],['20','20']],def:'400'},
    {k:'ectl',label:'Ενέργεια των βραχιόνων (Model 1–3)',options:[['energy','Έλεγχος ενέργειας (4.15): ίδια απόκριση με το Model 4'],['direct','Άμεση διαμόρφωση (4.14)']],def:'energy'},
+   {k:'cc',label:'Έλεγχος ρεύματος των σταθμών (4.20)',options:[['pi','PI με αποσύζευξη και πρόσθια τροφοδότηση της τάσης'],['robust','Στιβαρός (VCC): ο σταθμός 1 σε P, ο σταθμός 2 σε V_dc']],def:'pi'},
    {k:'ev',label:'Γεγονός',options:[['pstep','Βήμα P του σταθμού 1: 1 → 0,5 pu στα 0,5 s'],['acf','Τριφασικό σφάλμα AC στον σταθμό 2 (0,5–0,65 s)'],['dcf','Σφάλμα DC πόλου–πόλου στον σταθμό 2 (0,5 s)'],['rev','Αντιστροφή ροής: 1 → 0 → −0,5 pu (0,5–0,6 s)']],def:'pstep'}],
   desc:'Δύο σταθμοί MMC όπως ο σταθμός MMC του EMTP-RV: δίκτυα AC 400 kV με S″k 10 GVA, μετασχηματιστές 400/333 kV YNd1 με u_k 18 %, αντιδραστήρες αστέρα για αναφορά γης στο τρίγωνο, μετατροπείς με N υπομονάδες ανά βραχίονα (C = 10 mF για N = 400, ίδια ενέργεια για τα άλλα N, 30 kJ/MVA), αυτεπαγωγή βραχίονα 50 mH, και ζεύγος καλωδίων ±320 kV 70 km ως μοντέλο wideband (1 mHz – 10 MHz, με διόρθωση DC). Ο σταθμός 1 ρυθμίζει P και Q, ο σταθμός 2 την τάση DC και Q. Οι πυκνωτές και τα καλώδια ξεκινούν φορτισμένα· οι μετατροπείς απεμπλέκονται στα 50 ms (ώσπου να κλειδώσουν τα PLL).',
   tasks:['Μετά το βήμα του P στα 0,5 s: πόσο αλλάζει η V_dc του σταθμού 2 και σε πόσο χρόνο επανέρχεται; Σύγκρινε τα μοντέλα 2, 3 και 4.','Με την άμεση διαμόρφωση (4.14) η κυμάτωση των πυκνωτών περνά στην τάση AC και τα Model 2 και 3 απομακρύνονται από το Model 4. Πόσο; Με τον έλεγχο ενέργειας ξανά ίδια: δες τις Σv_C του άνω και του κάτω βραχίονα (εξισορρόπηση).','Στο σφάλμα AC ο σταθμός 2 μπλοκάρει: τι κρατά τη V_dc κάτω από 1,2 pu; (Το όριο υπέρτασης DC του σταθμού 1.)','Στο σφάλμα DC: πόσο φτάνει το ρεύμα DC πριν και μετά το μπλοκάρισμα; Από πού έρχεται το ρεύμα μετά το μπλοκάρισμα;','Με N = 20 οι τάσεις των πυκνωτών και το ρεύμα AC έχουν σκαλοπάτια: πόσο μεγάλα; Πόση είναι η κυμάτωση των πυκνωτών στη σταθερή κατάσταση;'],
@@ -1821,8 +1822,10 @@
     for(const s of ['va','vb','vc','ia','ib','ic','vdc','idc','vs'])wires.push([id('MMC')+':'+s,id('CT')+':'+s]);
     for(const s of ['ma','mb','mc','blk'])wires.push([id('CT')+':'+s,id('MMC')+':'+s]);
     wires.push([id('CT')+':brk',id('CB')+':cmd']);};
-   station(1,60,1,{mode:'p',Pref:HVDC_P[ev],Tp:0.1,qmode:'q',Qref:'0',Tq:0.1});
-   station(2,1740,-1,{mode:'vdc',Vdcref:'1',Tvdc:0.05,H:0.03,qmode:'q',Qref:'0',Tq:0.1});
+   // 4.20 (decision 221 (a)): the robust current control in both stations, the station of V_dc too
+   const rob=o.cc==='robust'?{cc:'robust',acc:4,Tii:0.05,bw:5}:{};          // with the PLL of 5 Hz, as in gfm_weak (decision 209): at 20 Hz the station of V_dc swings at ~30 Hz
+   station(1,60,1,{mode:'p',Pref:HVDC_P[ev],Tp:0.1,qmode:'q',Qref:'0',Tq:0.1,...rob});
+   station(2,1740,-1,{mode:'vdc',Vdcref:'1',Tvdc:0.05,H:0.03,qmode:'q',Qref:'0',Tq:0.1,...rob});
    // the cable pair: conductor 1 the + pole, conductor 2 the − pole, charged to ±320 kV
    const Pp=root.Parts,d=JSON.parse(JSON.stringify(Pp.TLM_TYPICAL['320kV-dc']));
    const pc={...Pp.defaults('TLM'),model:'wb',len:70,fmin:1e-3,dec:10,wdc:'1',wpas:'enforce',vtrap:'320e3, -320e3',data:JSON.stringify(d)};

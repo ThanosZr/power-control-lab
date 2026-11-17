@@ -389,5 +389,40 @@ class Tutorial(unittest.TestCase):
         self.assertEqual(self.js['card']['group'], 'Δίκτυα DC πολλών τερματικών (4.20)')
 
 
+@unittest.skipUnless(shutil.which('node'), 'node not installed')
+class RobustStation(unittest.TestCase):
+    """4.20 (decision 221 (a)): the robust current control of the MMC station in the modes V_dc and droop P/V_dc, on the link of
+    hvdc_mmc (Model 4, tests/js/robust_cases.js): the station of V_dc holds it as the PI current control does, the droop station
+    sits on its law P = P_ref + (V_ref − v_dc)/k_d, and the power of both swings less than 0.2 % of the rating."""
+
+    @classmethod
+    def setUpClass(cls):
+        out = subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'robust_cases.js')], capture_output=True, text=True, timeout=900, cwd=ROOT)
+        if out.returncode:
+            raise RuntimeError(out.stderr)
+        cls.js = json.loads(out.stdout)
+
+    def test_vdc_mode(self):
+        pi, rb = self.js['pi'], self.js['vdc']
+        for w in range(2):
+            self.assertAlmostEqual(rb['win'][w][2]['mean'], 1.0, delta=1e-4)                       # V_dc of the station 2
+            self.assertLess(rb['win'][w][1]['max'] - rb['win'][w][1]['min'], 2e-3)                 # its power does not swing
+            self.assertAlmostEqual(rb['win'][w][0]['mean'], pi['win'][w][0]['mean'], delta=1e-3)    # the station 1 gives its P
+            self.assertAlmostEqual(rb['win'][w][1]['mean'], pi['win'][w][1]['mean'], delta=3e-3)    # the other station takes it (Q differs)
+        self.assertEqual(rb['warn'], [])
+
+    def test_droop_mode(self):
+        d = self.js['droop']
+        for w in range(2):
+            P, v = d['win'][w][1]['mean'], d['win'][w][2]['mean']
+            self.assertAlmostEqual(P, -1 + (1 - v) / 0.05, delta=5e-4)
+            self.assertLess(d['win'][w][1]['max'] - d['win'][w][1]['min'], 2e-3)
+        self.assertAlmostEqual(d['win'][1][2]['mean'], 0.975, delta=1e-3)                          # 0.5 pu less: V_dc 2.5 % lower
+
+    def test_parameters_shown(self):
+        """«Έλεγχος ρεύματος», α_c, T_ii: in the modes P, V_dc and droop, not in V/f and grid-forming."""
+        self.assertEqual(self.js['parts']['show'], [[True] * 3] * 3 + [[False] * 3] * 2)
+
+
 if __name__ == '__main__':
     unittest.main()

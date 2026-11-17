@@ -25,7 +25,7 @@
 | `web/studio/math.js` | 144 |
 | `web/studio/metrics.js` | 89 |
 | `web/studio/mna.js` | 2432 |
-| `web/studio/netlib.js` | 1355 |
+| `web/studio/netlib.js` | 1364 |
 | `web/studio/netview.js` | 138 |
 | `web/studio/nn.js` | 57 |
 | `web/studio/parts.js` | 1569 |
@@ -43,7 +43,7 @@
 | `web/studio/templates.js` | 32 |
 | `web/studio/trv.js` | 56 |
 | `web/studio/tune.js` | 237 |
-| `web/studio/tutorials.js` | 2125 |
+| `web/studio/tutorials.js` | 2128 |
 | `web/studio/units.js` | 164 |
 | `web/studio/watch.js` | 339 |
 | `web/studio/winframe.js` | 63 |
@@ -117,7 +117,7 @@
 | `tests/test_control.py` | 213 |
 | `tests/test_cpf.py` | 401 |
 | `tests/test_ctlwin.py` | 147 |
-| `tests/test_dcgrid.py` | 393 |
+| `tests/test_dcgrid.py` | 428 |
 | `tests/test_derivation.py` | 93 |
 | `tests/test_designer.py` | 200 |
 | `tests/test_engine.py` | 276 |
@@ -211,6 +211,7 @@
 | `tests/js/pieces_cases.js` | 45 |
 | `tests/js/plotcore_cases.js` | 25 |
 | `tests/js/refac_cases.js` | 68 |
+| `tests/js/robust_cases.js` | 17 |
 | `tests/js/sim_cases.js` | 356 |
 | `tests/js/snapshot_cases.js` | 22 |
 | `tests/js/sparse_cases.js` | 57 |
@@ -443,14 +444,14 @@
 | 1736 | `sssc_3ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε δίκτυο 150 kV (τριφασικό, 4 ζυγοί) |
 | 1774 | `ccsc_1ph` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | CCSC: πυκνωτής σειράς ελεγχόμενος από μετατροπέα (μονοφασικό) |
 | 1802 | `hvdc_mmc` | HVDC: MMC (4.14) | Σύνδεση HVDC με MMC σημείο προς σημείο (±320 kV, 1000 MW) |
-| 1855 | `mtdc5` | Δίκτυα DC πολλών τερματικών (4.20) | Δίκτυο DC πέντε τερματικών με στατικότητα τάσης (EMT και ροή φορτίου AC/DC) |
-| 1889 | `hvdc_gfm` | Grid-forming (4.18.1) | Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα |
-| 1937 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
-| 1991 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
-| 2018 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
-| 2046 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
-| 2083 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
-| 2113 | `empty` | Νέο | Κενό κύκλωμα |
+| 1858 | `mtdc5` | Δίκτυα DC πολλών τερματικών (4.20) | Δίκτυο DC πέντε τερματικών με στατικότητα τάσης (EMT και ροή φορτίου AC/DC) |
+| 1892 | `hvdc_gfm` | Grid-forming (4.18.1) | Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα |
+| 1940 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
+| 1994 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
+| 2021 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
+| 2049 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
+| 2086 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
+| 2116 | `empty` | Νέο | Κενό κύκλωμα |
 
 ## API του server (`run.py`, `/api/<action>`)
 
@@ -1723,54 +1724,54 @@ _(χωρίς συναρτήσεις)_
 | 793 | const fn | `pos` |
 | 800 | const fn | `dq` |
 | 815 | const fn | `integ` |
-| 912 | function | `lcc6Def` |
-| 913 | const fn | `sin` |
-| 941 | function | `lccsDef` |
-| 942 | const fn | `sin` |
-| 948 | const fn | `xf` |
-| 950 | const fn | `br` |
-| 1008 | function | `lcccDef` |
-| 1009 | const fn | `sin` |
-| 1010 | const fn | `pos` |
-| 1023 | const fn | `pi` |
-| 1053 | function | `filtDef` |
-| 1054 | const fn | `pos` |
-| 1065 | function | `zserDef` |
-| 1082 | function | `sigPorts` |
-| 1083 | const fn | `sin` |
-| 1085 | const fn | `out` |
-| 1087 | const fn | `close` |
-| 1091 | const fn | `busMap` |
-| 1096 | function | `vsc2Def` |
-| 1098 | const fn | `w` |
-| 1132 | function | `gfmcDef` |
-| 1136 | const fn | `w` |
-| 1137 | const fn | `pos` |
-| 1139 | const fn | `integ` |
-| 1150 | const fn | `dq` |
-| 1157 | const fn | `at0` |
-| 1230 | function | `defOf` |
-| 1236 | function | `forceImpl` |
-| 1238 | const fn | `fix` |
-| 1242 | const fn | `hasLib` |
-| 1243 | function | `needs` |
-| 1245 | function | `expand` |
-| 1247 | const fn | `conv` |
-| 1255 | function | `warnings` |
-| 1261 | const fn | `cx` |
-| 1263 | function | `csolve` |
-| 1268 | function | `faultCurrents` |
-| 1287 | function | `behindXF` |
-| 1296 | function | `layoutDef` |
-| 1299 | const fn | `isG` |
-| 1300 | const fn | `isJ` |
-| 1309 | const fn | `side` |
-| 1313 | const fn | `bfs` |
-| 1322 | const fn | `bary` |
-| 1328 | const fn | `ctr` |
-| 1329 | const fn | `target` |
-| 1345 | function | `placedDef` |
-| 1350 | function | `sidesOf` |
+| 921 | function | `lcc6Def` |
+| 922 | const fn | `sin` |
+| 950 | function | `lccsDef` |
+| 951 | const fn | `sin` |
+| 957 | const fn | `xf` |
+| 959 | const fn | `br` |
+| 1017 | function | `lcccDef` |
+| 1018 | const fn | `sin` |
+| 1019 | const fn | `pos` |
+| 1032 | const fn | `pi` |
+| 1062 | function | `filtDef` |
+| 1063 | const fn | `pos` |
+| 1074 | function | `zserDef` |
+| 1091 | function | `sigPorts` |
+| 1092 | const fn | `sin` |
+| 1094 | const fn | `out` |
+| 1096 | const fn | `close` |
+| 1100 | const fn | `busMap` |
+| 1105 | function | `vsc2Def` |
+| 1107 | const fn | `w` |
+| 1141 | function | `gfmcDef` |
+| 1145 | const fn | `w` |
+| 1146 | const fn | `pos` |
+| 1148 | const fn | `integ` |
+| 1159 | const fn | `dq` |
+| 1166 | const fn | `at0` |
+| 1239 | function | `defOf` |
+| 1245 | function | `forceImpl` |
+| 1247 | const fn | `fix` |
+| 1251 | const fn | `hasLib` |
+| 1252 | function | `needs` |
+| 1254 | function | `expand` |
+| 1256 | const fn | `conv` |
+| 1264 | function | `warnings` |
+| 1270 | const fn | `cx` |
+| 1272 | function | `csolve` |
+| 1277 | function | `faultCurrents` |
+| 1296 | function | `behindXF` |
+| 1305 | function | `layoutDef` |
+| 1308 | const fn | `isG` |
+| 1309 | const fn | `isJ` |
+| 1318 | const fn | `side` |
+| 1322 | const fn | `bfs` |
+| 1331 | const fn | `bary` |
+| 1337 | const fn | `ctr` |
+| 1338 | const fn | `target` |
+| 1354 | function | `placedDef` |
+| 1359 | function | `sidesOf` |
 
 ### `web/studio/netview.js`
 
@@ -2378,21 +2379,21 @@ _(χωρίς συναρτήσεις)_
 | 1746 | const fn | `ln` |
 | 1780 | method | `build` |
 | 1782 | const fn | `sw` |
-| 1809 | method | `build` |
-| 1813 | const fn | `station` |
-| 1864 | method | `build` |
-| 1893 | method | `build` |
-| 1897 | const fn | `station` |
-| 1944 | method | `build` |
-| 1981 | const fn | `gfmWire` |
-| 1985 | const fn | `busMeter` |
-| 1998 | method | `build` |
-| 2000 | const fn | `unit` |
-| 2023 | method | `build` |
-| 2054 | method | `build` |
-| 2087 | method | `build` |
-| 2114 | method | `build` |
-| 2119 | function | `dcdcInputs` |
+| 1810 | method | `build` |
+| 1814 | const fn | `station` |
+| 1867 | method | `build` |
+| 1896 | method | `build` |
+| 1900 | const fn | `station` |
+| 1947 | method | `build` |
+| 1984 | const fn | `gfmWire` |
+| 1988 | const fn | `busMeter` |
+| 2001 | method | `build` |
+| 2003 | const fn | `unit` |
+| 2026 | method | `build` |
+| 2057 | method | `build` |
+| 2090 | method | `build` |
+| 2117 | method | `build` |
+| 2122 | function | `dcdcInputs` |
 
 ### `web/studio/units.js`
 

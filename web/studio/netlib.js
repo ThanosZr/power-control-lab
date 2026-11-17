@@ -840,17 +840,26 @@
   // with Y_v = H/R_a and F_v = (ω₁/R_a)·H/s (their (8), (28), (32), α_a = 0): the d path of the AC-voltage control is a
   // proportional one that makes the converter voltage stiff (E_ref in place of H·E), the q path an integral one that brings
   // Re E to E_ref. Written here with the station's currents into the converter (i_in = −i_out). THEORY §8Ε
-  else if(p.cc==='robust'&&mode==='p'){const acp=Math.max(num(p.acc,4),0.05),Ra=Math.max(acp*X,1e-4),fh=s(acp*w0/(2*Math.PI)),Kv=w0/Ra;
+  // 4.20 (decision 221 (a)): the same current control in the modes V_dc and droop P/V_dc: the power reference P_ref of the
+  // law is then the output of the PI of V_dc (the gains of the mode V_dc, its integral held while the saturation holds the
+  // current and the error would push it further), or P_ref + (V_dc,ref − v_dc)/k_d; the rest as in the mode P
+  else if(p.cc==='robust'&&(mode==='p'||mode==='vdc'||mode==='droop')){const acp=Math.max(num(p.acc,4),0.05),Ra=Math.max(acp*X,1e-4),fh=s(acp*w0/(2*Math.PI)),Kv=w0/Ra;
    B.comp('HED','LPF',{fc:fh,y0:'1'});w(['VD','y'],['HED','u']);B.comp('HEQ','LPF',{fc:fh,y0:'0'});w(['VQ','y'],['HEQ','u']);
-   ref('AR',p.Vacref,1);ref('PR',p.Pref,1);
-   const fr=p.frq==='droop';if(fr){E('WPU','w/k','w','k = '+s(w0));w(['PLL','w'],['WPU','w']);B.comp('WFL','LPF',{fc:s(1/(2*Math.PI*Math.max(num(p.Tf,0.05),1e-4))),y0:'1'});w(['WPU','y'],['WFL','u']);
+   ref('AR',p.Vacref,1);let rsrc=['PR','y'],vpi=null;
+   if(mode==='vdc'){const H=pos(p.H),zt=0.8,wn=3/(zt*pos(p.Tvdc)),kp=2*zt*wn*2*H,ki=2*H*wn*wn;ref('VR',p.Vdcref,1);
+    integ('XP','b > 0.5 || (k < 1 && (r - v)*d > 0) ? 0 : ki*(r - v)','r, v, b, k, d','ki = '+s(ki),2*Il);w(['VR','y'],['XPU','r']);w(F.vdc,['XPU','v']);w(blk,['XPU','b']);
+    E('PRV','kp*(r - v) + x','r, v, x','kp = '+s(kp));w(['VR','y'],['PRV','r']);w(F.vdc,['PRV','v']);w(['XP','y'],['PRV','x']);rsrc=['PRV','y'];vpi=true;}
+   else{ref('PR',p.Pref,1);
+    if(mode==='droop'){ref('VR',p.Vdcref,1);E('PRD','r + (vr - v)/kd','r, vr, v','kd = '+s(pos(p.kdr)));w(['PR','y'],['PRD','r']);w(['VR','y'],['PRD','vr']);w(F.vdc,['PRD','v']);rsrc=['PRD','y'];}}
+   const fr=p.frq==='droop'&&mode==='p';if(fr){E('WPU','w/k','w','k = '+s(w0));w(['PLL','w'],['WPU','w']);B.comp('WFL','LPF',{fc:s(1/(2*Math.PI*Math.max(num(p.Tf,0.05),1e-4))),y0:'1'});w(['WPU','y'],['WFL','u']);
     E('DPF','(z - 1)/mf','z','mf = '+s(Math.max(num(p.mf,5),1e-3)/100));w(['WFL','y'],['DPF','z']);}
    const ov=p.ovl!=='off',vov=s(Math.max(num(p.Vdcmax,1.1),0.5)),kov=s(Math.max(num(p.kov,10),0));E('OVL',ov?'max(v - vm, 0)':'0',ov?'v':'',ov?'vm = '+vov:'');if(ov)w(F.vdc,['OVL','v']);
    // the integral of the q path, held while blocked or while the saturation holds the reference and the error would push it further
    integ('XF','b > 0.5 || (k < 1 && (er - h)*q > 0) ? 0 : kv*(er - h)','er, h, b, k, q','kv = '+s(Kv),2*Il);w(['AR','y'],['XFU','er']);w(['HED','y'],['XFU','h']);w(blk,['XFU','b']);
-   E('RDU',fr?'(r + df)/max(er, 0.1) - (er - h)/ra - kov*o':'r/max(er, 0.1) - (er - h)/ra - kov*o',fr?'r, df, er, h, o':'r, er, h, o',`ra = ${s(Ra)}, kov = ${kov}`);w(['PR','y'],['RDU','r']);if(fr)w(['DPF','y'],['RDU','df']);w(['AR','y'],['RDU','er']);w(['HED','y'],['RDU','h']);w(['OVL','y'],['RDU','o']);
+   E('RDU',fr?'(r + df)/max(er, 0.1) - (er - h)/ra - kov*o':'r/max(er, 0.1) - (er - h)/ra - kov*o',fr?'r, df, er, h, o':'r, er, h, o',`ra = ${s(Ra)}, kov = ${kov}`);w(rsrc,['RDU','r']);if(fr)w(['DPF','y'],['RDU','df']);w(['AR','y'],['RDU','er']);w(['HED','y'],['RDU','h']);w(['OVL','y'],['RDU','o']);
    E('RQU','hq/ra + x','hq, x','ra = '+s(Ra));w(['HEQ','y'],['RQU','hq']);w(['XF','y'],['RQU','x']);
    E('SK','min(1, il/max(hypot(d, q), 1e-9))','d, q','il = '+s(Il));w(['RDU','y'],['SK','d']);w(['RQU','y'],['SK','q']);w(['SK','y'],['XFU','k']);w(['RQU','y'],['XFU','q']);
+   if(vpi){w(['SK','y'],['XPU','k']);w(['RDU','y'],['XPU','d']);}
    E('IDL','k*d','k, d');w(['SK','y'],['IDL','k']);w(['RDU','y'],['IDL','d']);E('IQL','k*q','k, q');w(['SK','y'],['IQL','k']);w(['RQU','y'],['IQL','q']);
    // a low-gain integral of the current error (time constant T_ii, Harnefors et al.: «a low-gain integral part can be added»)
    // against the static error of the proportional law (the delay of the modulation, the filter and R not quite known)

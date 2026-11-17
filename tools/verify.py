@@ -988,6 +988,10 @@ def dcgrid_rows(add):
     for k in (1, 3, 5):
         add(A, f'tutorial mtdc5 (EMT), ΔP*₃ = −50 MW: τάση του τερματικού {k} στα 0,6 s', 'ροή φορτίου AC/DC της κάρτας', lf[str(k)]['U_kV'] * 1e3, run['rows'][-1]['U'][k - 1], 0.2, 'V')
     add(A, 'tutorial mtdc5 (EMT): ισχύς του τερματικού 5 στα 0,6 s', 'ροή φορτίου AC/DC της κάρτας', lf['5']['P_MW'] * 1e6, run['rows'][-1]['P'][4] * 1e6, 2e3, 'W')
+    rb = json.loads(subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'robust_cases.js')], capture_output=True, text=True, timeout=900, cwd=ROOT).stdout)
+    add(A, 'σταθμός MMC με στιβαρό έλεγχο ρεύματος στον τρόπο V_dc (hvdc_mmc, Model 4): V_dc του σταθμού 2 μετά το βήμα P', 'V_dc,ref', 1.0, rb['vdc']['win'][1][2]['mean'], 1e-4, '')
+    d = rb['droop']['win'][1]
+    add(A, 'σταθμός MMC με στιβαρό έλεγχο ρεύματος σε στατικότητα (k_d = 0,05): P του σταθμού 2 μετά το βήμα', 'P_ref + (V_ref − v_dc)/k_d', -1 + (1 - d[2]['mean']) / 0.05, d[1]['mean'], 5e-4, '')
 
 
 def checks(o):
@@ -1455,7 +1459,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 894 tests (Python και Node) και 19 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 897 tests (Python και Node) και 19 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',
