@@ -315,6 +315,36 @@ const {chromium}=require('playwright');
  await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>!window.PCL.STUDY.busy&&window.PCL.STUDY.r?.summary?.pulse===6,null,{timeout:60000});
  const hm3=await p.evaluate(()=>window.PCL.STUDY.r.summary);
  ok(hm3.over===15&&hm3.at.worst===5&&Math.abs(hm3.at.Vh['5']-9.486)<0.01,'harmonic load flow: as six-pulse the fifth at bus 3 is '+hm3.at.Vh['5'].toFixed(2)+' % and 15 buses are above their limit');
+ // 4.19.5 (ROADMAP §81): the three-phase load flow of a feeder: the card with the published profile and the voltage of every phase, the
+ // layer of the unbalance with the buses of one and two phases in grey, the regulator by its control, and the feeder as a file
+ await p.evaluate(()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('unb_study',{});});await p.waitForTimeout(700);
+ await p.click('#theory [data-study="run"]');await p.waitForSelector('#study-unb',{timeout:60000});
+ const ub1=await p.evaluate(()=>({txt:document.querySelector('#study-result').innerText,pub:document.querySelector('#study-unb-pub').innerText,z:window.PCL.STUDY.r.summary,dots:['a','b','c'].map(q=>document.querySelectorAll('#study-profile circle[data-ph="'+q+'"]').length),
+  adv:document.querySelector('#study-advice').innerText,head:document.querySelector('#theory .tm').innerText}));
+ ok(ub1.z.converged&&ub1.z.nodes===38&&ub1.z.low.bus==='611'&&ub1.z.low.phase==='c'&&Math.abs(ub1.z.low.V-0.9739)<1e-4&&ub1.z.published.values===35&&ub1.z.published.dV<2e-4&&/35 τάσεις φάσης/.test(ub1.pub)&&/δημοσιευμένες 111,063 kW/.test(ub1.pub)
+  &&/Η μέθοδος: 38 κόμβοι φάσης/.test(ub1.adv)&&/δοσμένες λήψεις/.test(ub1.head),'three-phase load flow: the 13 node feeder, 35 phase voltages within '+ub1.z.published.dV.toExponential(1)+' pu of the published ones, the lowest '+ub1.z.low.V.toFixed(4)+' pu at 611 c');
+ ok(ub1.dots.join()==='11,11,13'&&/Ρυθμιστής RG60/.test(ub1.txt)&&/ζώνη 121–123 V/.test(ub1.txt),'three-phase load flow: the card draws the voltage of every phase at every bus ('+ub1.dots.join(', ')+' points of a, b, c) and the regulator with its relay');
+ await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.layer==='unbalance'&&window.PCL.NV.v.state.frames>0,null,{timeout:60000});
+ const ub2=await p.evaluate(()=>({layers:[...document.querySelectorAll('#nv-layer option')].map(o=>o.value),legend:document.querySelector('#nv-legend').textContent,title:document.querySelector('#nv-title').textContent,edit:document.querySelector('#nv-edit').hidden}));
+ ok(ub2.layers.join()==='base,voltage,angle,violations,unbalance'&&/μία ή δύο φάσεις/.test(ub2.legend)&&/14 ζυγοί, 13 κλάδοι/.test(ub2.title)&&ub2.edit,'three-phase load flow: the picture opens on the layer of the unbalance ('+ub2.legend.slice(0,70)+')');
+ await p.evaluate(()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('unb_study',{reg:'control'});});await p.waitForTimeout(700);
+ await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>!window.PCL.STUDY.busy&&window.PCL.STUDY.r?.summary?.regulators==='control',null,{timeout:60000});
+ const ub3=await p.evaluate(()=>({z:window.PCL.STUDY.r.summary,pub:document.querySelector('#study-unb-pub').innerText}));
+ ok(Object.values(ub3.z.taps.RG60).join()==='9,6,9'&&ub3.z.settled&&!ub3.z.published&&/δεν συγκρίνονται/.test(ub3.pub)&&Object.values(ub3.z.relay.RG60).every(v=>v>=121&&v<=123),
+  'three-phase load flow: the control stops at the taps 9, 6, 9 with the relay inside its band, and the card does not compare another operating point with the publication');
+ // the feeder as a file: what the engine writes opens again as a feeder and gives the same losses
+ const ubf=await p.evaluate(async()=>{const r=await (await fetch('/api/network_save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({case:'feeder13',study:'unbalanced'})})).json();return r;});
+ const ubt=require('path').join(require('os').tmpdir(),'pcl_feeder13.json');require('fs').writeFileSync(ubt,ubf.text);
+ await p.evaluate(()=>window.PCL.loadTutorial('unb_study',{}));await p.waitForTimeout(500);
+ await p.setInputFiles('#study-open',ubt);await p.waitForSelector('#study-filenet',{timeout:60000});
+ const ub4t=await p.$eval('#study-filenet',e=>e.textContent);
+ await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>!window.PCL.STUDY.busy&&window.PCL.STUDY.r?.summary?.converged,null,{timeout:60000});
+ const ub4=await p.evaluate(()=>window.PCL.STUDY.r.summary);
+ ok(/τροφοδότης τριών φάσεων, 14 ζυγοί, 13 τμήματα/.test(ub4t)&&Math.abs(ub4.losses_kW-110.997)<1e-3&&!ub4.published,'three-phase load flow: the feeder saved as a file opens again ('+ub4t.slice(0,90)+') and gives the same losses');
+ await p.evaluate(()=>window.PCL.loadTutorial('pf_study',{}));await p.waitForTimeout(500);
+ await p.click('#theory [data-study="run"]');await p.waitForSelector('#study-error',{timeout:60000});
+ ok(/τροφοδότης τριών φάσεων/.test(await p.$eval('#study-error',e=>e.textContent)),'three-phase load flow: a feeder file under a study of a positive-sequence network is refused with its reason');
+ await p.click('#theory [data-study="close"]');await p.waitForTimeout(300);errs.length=0;
  // 4.19.4 (ROADMAP §74): the third exercise from plain blocks
  await p.evaluate(()=>window.PCL.loadTutorial('current_ctl',{}));await p.waitForTimeout(700);await p.click('#toend');
  await p.waitForFunction(()=>window.PCL.S.sim&&window.PCL.S.sim.t>=0.01599,null,{timeout:120000});await p.waitForTimeout(600);

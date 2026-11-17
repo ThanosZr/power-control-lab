@@ -524,8 +524,14 @@ def values(v, result=None, layer='base', study=None):
         vmin, vmax = float(lim.get('Vmin', 0.95)), float(lim.get('Vmax', 1.05))
         nb = nbr = 0
         for b in v['buses']:
-            x = _num((rb.get(b['id']) or rb.get(_maybe_int(b['id'])) or {}).get('V')) if rb else None
-            bad = x is not None and (x < vmin - 1e-9 or x > vmax + 1e-9)
+            q = (rb.get(b['id']) or rb.get(_maybe_int(b['id'])) or {}) if rb else {}
+            x = _num(q.get('V')) if rb else None
+            if x is not None and 'phases' in q:                 # 4.19.5, a bus of a three-phase feeder: every phase against the limits, and the one farthest from 1 pu shown
+                lo_, hi_ = _num(q.get('Vmin')), _num(q.get('Vmax'))
+                bad = lo_ < vmin - 1e-9 or hi_ > vmax + 1e-9
+                x = hi_ if hi_ - 1 > 1 - lo_ else lo_
+            else:
+                bad = x is not None and (x < vmin - 1e-9 or x > vmax + 1e-9)
             nb += bad
             out['bus_color'][b['id']] = BAD if bad else GREY
             if x is not None:

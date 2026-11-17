@@ -730,6 +730,65 @@ class Tutorials(unittest.TestCase):
         kinds = [s['kind'] for s in rep.to_dict()['sections']]
         self.assertEqual((kinds.count('network'), kinds.count('chart'), kinds.count('table')), (2, 3, 4))
 
+    def test_the_card_of_the_three_phase_load_flow(self):
+        """4.19.5, unb_study: what the card asks is a request of pcl.study for every combination of its options, and every number in
+        the text of its tasks is what the engine gives (or what the document of the feeder prints)."""
+        from pcl import unbalanced as U
+        T = tutorials()['unb']
+        opt = {o['k']: o for o in T['options']}
+        self.assertEqual((T['group'], opt['net']['values'], opt['reg']['values'], opt['spread']['values'], T['drawing']),
+                         ('Ροή φορτίου και OPF (4.19.1)', ['feeder13'], ['given', 'control', 'neutral'], ['exact', 'middle'], True))
+        self.assertEqual(set(opt['net']['values']) - set(U.CASES), set())
+        self.assertEqual(len(T['variants']), 6)
+        for st in T['variants']:                                                                  # every combination runs
+            self.assertEqual((st['net'], st['study'], set(st['options']) - set(S.OPTIONS['unbalanced'])), ('feeder13', 'unbalanced', set()))
+            self.assertTrue(S.run({'case': st['net'], 'study': 'unbalanced', 'options': st['options']})['summary']['converged'], st)
+        run = lambda **o: S.run({'case': 'feeder13', 'study': 'unbalanced', 'options': o})['summary']      # noqa: E731
+        el = lambda x, d: f'{x:.{d}f}'.replace('.', ',')                                               # noqa: E731
+        t = T['tasks']
+        a, pub = run(), U.case_solution('feeder13')
+        prof = {q['bus']: q for q in a['profile']}
+        self.assertEqual((a['low']['bus'], a['low']['phase'], a['high']['bus'], a['high']['phase'], a['unbalance']['bus'], a['taps']['RG60']), ('611', 'c', 'RG60', 'c', '675', pub['taps']))
+        for part in (f'{el(a["low"]["V"], 4)} pu στη φάση c του ζυγού 611', f'{el(a["high"]["V"], 4)} pu στη φάση c', f'{a["published"]["values"]} τάσεις φάσης', f'{el(a["published"]["dV"], 5)} pu',
+                     f'{el(a["published"]["dangle"], 3)}°'):
+            self.assertIn(part, t[0])
+        self.assertIn("['given','Οι λήψεις της δημοσίευσης (a {a}, b {b}, c {c})']".format(**pub['taps']), (ROOT / 'web' / 'studio' / 'tutorials.js').read_text(encoding='utf-8'))
+        for part in (f'{el(prof["RG60"]["b"], 4)} pu μετά τον ρυθμιστή', f'{el(prof["675"]["b"], 4)} pu στο τέλος', f'({el(a["input"]["kW"]["b"], 0)} kW',
+                     f'{el(a["input"]["kW"]["a"], 0)} και {el(a["input"]["kW"]["c"], 0)} kW'):
+            self.assertIn(part, t[1])
+        self.assertEqual(min(a['input']['kW'], key=a['input']['kW'].get), 'b')
+        few = sorted(b for b, q in prof.items() if q['unbalance'] is None)
+        for part in (f'{el(a["unbalance"]["value"], 2)} % στον ζυγό 675', 'Πέντε ζυγοί (' + ', '.join(few) + ')'):
+            self.assertIn(part, t[2])
+        self.assertEqual(len(few), 5)
+        res = U.run(U.case_data('feeder13'))
+        loss_b = sum(q['loss_kW'].get('b', 0.0) for q in res['sections'])
+        for part in (f'{el(a["losses_kW"], 1)} kW', f'{el(100 * a["losses_kW"] / a["input"]["kW_total"], 2)} % της εισόδου', f'{el(pub["losses_kW"], 3)} kW', f'(−{el(-loss_b, 1)} kW)'):
+            self.assertIn(part, t[3])
+        c = run(regulators='control')
+        tc, rc, ra = c['taps']['RG60'], c['relay']['RG60'], a['relay']['RG60']
+        for part in (f'ζώνη {el(c["band"]["RG60"][0], 0)}–{el(c["band"]["RG60"][1], 0)} V', f'λήψεις {tc["a"]}, {tc["b"]}, {tc["c"]}', 'ρελέ ' + ' / '.join(el(rc[p], 1) for p in 'abc') + ' V',
+                     f'({pub["taps"]["a"]}, {pub["taps"]["b"]}, {pub["taps"]["c"]})', '(' + ' / '.join(el(ra[p], 1) for p in 'abc') + ' V)', f'{el(c["low"]["V"], 4)} pu'):
+            self.assertIn(part, t[4])
+        self.assertTrue(all(c['band']['RG60'][0] <= v <= c['band']['RG60'][1] for v in list(rc.values()) + list(ra.values())))
+        self.assertNotIn('published', c)                                                          # other taps: another operating point, not compared
+        self.assertEqual(c['published_taps'], pub['taps'])
+        n = run(regulators='neutral')
+        pn = {q['bus']: q for q in n['profile']}
+        for part in (f'{el(n["low"]["V"], 4)} pu', f'{el(n["losses_kW"], 1)} kW', f'{el(pn["675"]["b"], 4)} pu'):
+            self.assertIn(part, t[5])
+        self.assertEqual((n['low']['bus'], n['low']['phase'], n['high']['bus'], n['high']['phase']), ('611', 'c', '675', 'b'))
+        self.assertGreater(pn['675']['b'], 1.0)                                                   # «πάνω από την τάση της πηγής»
+        m = run(spread='middle')
+        fd = U.case_data('feeder13')
+        for part in (f'{el(sum(fd.spread[0]["kW"]), 0)} kW από τα {el(a["load_kW"], 0)} kW', f'{el(m["losses_kW"], 2)} αντί για {el(a["losses_kW"], 2)} kW'):
+            self.assertIn(part, t[6])
+        pm = {q['bus']: q for q in m['profile']}
+        self.assertLess(max(abs(pm[b][p] - prof[b][p]) for b in prof for p in 'abc' if prof[b][p] is not None), 5e-4)       # «ίδιες στα τρία δεκαδικά»
+        rep = S.report({'case': 'feeder13', 'study': 'unbalanced'})['report']
+        kinds = [x['kind'] for x in rep['sections']]
+        self.assertEqual((kinds.count('network'), kinds.count('chart'), kinds.count('table')), (2, 1, 7))
+
     def test_the_card_of_the_continuation_load_flow(self):
         """4.19.5, cpf_study: what the card asks is a request of pcl.study for every network and every option, and every number in
         the text of its tasks is what the engine gives."""

@@ -47,6 +47,7 @@ class Feeder:
     def __init__(self, name='', f=60.0):
         self.name, self.f = name, f
         self.buses, self.source, self.configs = {}, None, {}
+        self.published = None                                 # what the file of a test feeder publishes (case_data); it is not written back
         self.lines, self.switches, self.transformers, self.regulators, self.loads, self.spread, self.caps = [], [], [], [], [], [], []
 
     def bus(self, name, kV):
@@ -145,10 +146,17 @@ class Feeder:
             fd.capacitor(e['bus'], e['kvar'], e.get('name'))
         if d.get('source'):
             fd.set_source(d['source']['bus'], d['source'].get('V', 1.0))
+        fd.published = d.get('published')
         return fd
 
     def run(self, **kw):
         return run(self, **kw)
+
+    def report(self, title=None, **kw):
+        """The report of the load flow (pcl.report.Report): the voltage of every phase, the unbalance, the regulators, the sections,
+        and the published results where the feeder carries them. kw: the options of run."""
+        from .report import network_report
+        return network_report(as_network(self), 'unbalanced', dict(run(self, **kw), published=self.published), title)
 
 
 CASES = ('feeder13',)
@@ -165,10 +173,7 @@ def case_data(name):
 
 def case_solution(name):
     """The published results that the file of a test feeder carries (its key 'published')."""
-    from .network import DATA
-    if name not in CASES:
-        raise FeederError(f'unknown feeder {name!r}: one of {", ".join(CASES)}')
-    return json.loads((DATA / f'{name}.json').read_text(encoding='utf-8')).get('published')
+    return case_data(name).published
 
 
 # -------------------------------------------------------------------- the network of the nodes
@@ -319,23 +324,38 @@ class _Net:
         return [(blk[:len(ia)] @ np.r_[V[ia], V[ib]], blk[len(ia):] @ np.r_[V[ia], V[ib]]) for ia, ib, blk in self.el]
 
 
+def _relay(net, V):
+    """What the relay of every regulator sees (volts on the 120 V base): the regulated voltage through the potential transformer
+    less the drop of the compensator, (R + jX) volts at the rated current of the current transformer."""
+    fl, out = net.flows(V), {}
+    for e in net.fd.regulators:
+        k = next(i for i, s in enumerate(net.sections) if s[0] == e['name'])
+        _, ib, _ = net.el[k]
+        out[e['name']] = {p: float(abs(V[ib[j]] / e['pt'] - complex(e['R'], e['X']) * (-fl[k][1][j]) / e['ct'])) for j, p in enumerate(e['phases'])}
+    return out
+
+
 def as_network(fd):
-    """The feeder as a positive-sequence pcl.network.Network of the same buses and sections (the impedance of a section is the mean
-    of its own impedances less the mean of its mutual ones): for the picture of the feeder, and for a first look with the other
-    studies. It is not what the three-phase load flow solves."""
+    """The feeder as a positive-sequence pcl.network.Network of the same buses and sections (the impedance and the susceptance of
+    a section: the mean of its own values less the mean of its mutual ones; the loads with their totals and their model): for
+    the picture of the feeder, and for a first look with the other studies. For a balanced feeder it is the same load flow; for
+    any other it is not what the three-phase load flow solves."""
     from . import network as N
     Sb = 1e6
     net = N.Network(fd.f, Sb, name=fd.name)
     for b, q in fd.buses.items():
         net.bus(b, q['kV'] * 1e3)
-    net.feeder(fd.source['bus'], Sk=1e9, V=fd.source['V'], slack=True, name='source')
+    net.feeder(fd.source['bus'], Sk=1e15, V=fd.source['V'], slack=True, name='source')
+
+    def pos(M):
+        k = len(M)
+        return np.trace(M) / k - ((M.sum() - np.trace(M)) / (k * (k - 1)) if k > 1 else 0.0)
+
     for e in fd.lines:
         c = fd.configs[e['config']]
-        Z = c['Z'] * e['length'] / FT_PER_MILE
-        k = len(c['phases'])
-        z1 = np.trace(Z) / k - ((Z.sum() - np.trace(Z)) / (k * (k - 1)) if k > 1 else 0.0)
+        z1, b1 = pos(c['Z']) * e['length'] / FT_PER_MILE, pos(c['B']) * 1e-6 * e['length'] / FT_PER_MILE
         zb = (fd.buses[e['a']]['kV'] * 1e3) ** 2 / Sb
-        net.branch_pu(e['a'], e['b'], z1.real / zb, max(z1.imag / zb, 1e-9), float(np.trace(c['B']) / k * 1e-6 * e['length'] / FT_PER_MILE * zb), name=e['name'])
+        net.branch_pu(e['a'], e['b'], z1.real / zb, max(z1.imag / zb, 1e-9), float(b1 * zb), name=e['name'])
     for e in fd.switches:
         net.branch_pu(e['a'], e['b'], 0.0, 1e-6, name=e['name'])
     for e in fd.transformers:
@@ -343,13 +363,31 @@ def as_network(fd):
     for e in fd.regulators:
         t = 0.0 if e['taps'] is None else sum(e['taps'].values()) / len(e['taps'])
         net.branch_pu(e['a'], e['b'], 0.0, 1e-6, ratio=1 / (1 + STEP * t), name=e['name'])
+    zip_of = {'Z': (1.0, 0.0, 0.0), 'I': (0.0, 1.0, 0.0), 'PQ': (0.0, 0.0, 1.0)}
     for e in fd.loads:
-        net.load(e['bus'], sum(e['kW']) * 1e3, sum(e['kvar']) * 1e3, name=e['name'])
+        net.load(e['bus'], sum(e['kW']) * 1e3, sum(e['kvar']) * 1e3, zip=zip_of[e['model']], name=e['name'])
     for e in fd.spread:
-        net.load(e['b'], sum(e['kW']) * 1e3, sum(e['kvar']) * 1e3, name=e['name'])
+        net.load(e['b'], sum(e['kW']) * 1e3, sum(e['kvar']) * 1e3, zip=zip_of[e['model']], name=e['name'])
     for e in fd.caps:
         net.shunt(e['bus'], Q=-sum(e['kvar']) * 1e3, name=e['name'])
     return net
+
+
+def against(res, published):
+    """A result against what the file of its feeder publishes: {'values' (how many phase voltages), 'dV' (pu) and 'dangle' (°),
+    the largest differences, 'losses_kW' and 'taps' as published}. None when nothing is published, when the load flow did not
+    converge, or when the taps of the result are not those of the published solution: the two are then different operating
+    points."""
+    if not published or not published.get('V') or not res.get('converged'):
+        return None
+    if published.get('taps') and not any(t == published['taps'] for t in res['taps'].values()):
+        return None
+    B = res['buses']
+    pairs = [(B[b]['phases'][p], q) for b, rows in published['V'].items() if b in B for p, q in zip(PH, rows) if q and p in B[b]['phases']]
+    if not pairs:
+        return None
+    return {'values': len(pairs), 'dV': max(abs(x['V'] - q[0]) for x, q in pairs), 'dangle': max(abs(x['angle'] - q[1]) for x, q in pairs), 'losses_kW': published.get('losses_kW'),
+            'taps': published.get('taps')}
 
 
 def sequence(Va, Vb, Vc):
@@ -360,14 +398,16 @@ def sequence(Va, Vb, Vc):
 
 def run(feeder, regulators='given', spread='exact', tol=1e-9, max_iter=200):
     """The load flow of a three-phase feeder. regulators: 'given' (the taps written in the feeder; a regulator without taps is
-    found by its control), 'control' (every tap found by its line-drop compensator, from the neutral position) or 'neutral'
-    (every tap at zero).
+    found by its control), 'control' (every tap found by its line-drop compensator: from the neutral position, one tap at a time
+    on every phase whose relay voltage is outside its band, as the device moves) or 'neutral' (every tap at zero). spread: a load
+    spread along a section as 'exact' (two thirds at a quarter of the section, one third at its end) or 'middle' (all of it at
+    the middle: the same voltage drop, half as much again in losses).
 
     Returns {'converged', 'iterations', 'buses' {bus: {phase: {V (pu), angle (°), volts}}, with 'unbalance' (%, negative over
     positive sequence) at the buses of three phases}, 'sections' [{name, kind, a, b, phases, I (A, at a) and angle per phase,
     loss_kW per phase and total}], 'loads' [{name, bus, where, kW, kvar}], 'capacitors', 'input' {kW, kvar per phase and total},
-    'losses_kW', 'taps' {regulator: {phase: tap}}, 'relay' (volts of the compensator), 'worst' (lowest and highest phase voltage),
-    'message', 'time'}."""
+    'losses_kW', 'taps' {regulator: {phase: tap}}, 'relay' {regulator: {phase: volts the relay sees}}, 'band' {regulator: [lowest, highest volts of its band]}, 'settled', 'worst' (lowest
+    and highest phase voltage, largest unbalance), 'message', 'time'}."""
     t0 = time.perf_counter()
     if not isinstance(feeder, Feeder):
         raise FeederError('a Feeder is needed (pcl.unbalanced.Feeder, or case_data)')
@@ -383,37 +423,34 @@ def run(feeder, regulators='given', spread='exact', tol=1e-9, max_iter=200):
                 auto.append(e)
         else:
             taps[e['name']] = dict(e['taps'])
-    rounds, its = 0, 0
+    rounds, its, settled = 0, 0, True
     relay = {}
     while True:
         net = _Net(feeder, taps, spread)
         V, it, ok = net.solve(tol, max_iter)
         its += it
         rounds += 1
-        if not ok or not auto or rounds > 40:
+        if not ok:
             break
-        moved = False
-        fl = net.flows(V)
-        for e in auto:                                       # the relay sees the regulated voltage less the drop of the compensator
-            k = next(i for i, s in enumerate(net.sections) if s[0] == e['name'])
-            ia, ib, _ = net.el[k]
-            for j, p in enumerate(e['phases']):
-                vr = V[ib[j]] / e['pt'] - complex(e['R'], e['X']) * (-fl[k][1][j]) / e['ct']
-                relay.setdefault(e['name'], {})[p] = float(abs(vr))
-                lo, hi = e['level'] - e['band'] / 2, e['level'] + e['band'] / 2
-                step = STEP * 120.0                          # volts of the relay per tap
-                t = taps[e['name']][p]
-                if abs(vr) < lo:
-                    new = min(TAPS, t + max(1, math.ceil((lo - abs(vr)) / step - 1e-9)))
-                elif abs(vr) > hi:
-                    new = max(-TAPS, t - max(1, math.ceil((abs(vr) - hi) / step - 1e-9)))
-                else:
-                    new = t
+        relay = _relay(net, V)
+        move = {}
+        for e in auto:                                       # one tap at a time on every phase whose relay is outside its band, as the device does
+            lo, hi = e['level'] - e['band'] / 2, e['level'] + e['band'] / 2
+            for p in e['phases']:
+                t, vr = taps[e['name']][p], relay[e['name']][p]
+                new = min(TAPS, t + 1) if vr < lo else max(-TAPS, t - 1) if vr > hi else t
                 if new != t:
-                    taps[e['name']][p], moved = new, True
-        if not moved:
+                    move[(e['name'], p)] = new
+        if not move:
             break
-    out = {'converged': bool(ok), 'iterations': its, 'rounds': rounds, 'taps': taps, 'relay': relay, 'regulators': regulators, 'message': '', 'name': feeder.name}
+        if rounds > 2 * TAPS + 2:                            # a band narrower than one tap: the regulator hunts; the result is the last position solved
+            settled = False
+            break
+        for (k, p), new in move.items():
+            taps[k][p] = new
+    out = {'converged': bool(ok), 'iterations': its, 'rounds': rounds, 'taps': taps, 'relay': relay, 'band': {e['name']: [e['level'] - e['band'] / 2, e['level'] + e['band'] / 2] for e in feeder.regulators}, 'settled': settled, 'regulators': regulators, 'message': '', 'name': feeder.name}
+    if not settled:
+        out['message'] = 'the taps of the regulators did not settle: the band of a regulator is narrower than the voltage of one tap'
     if not ok:
         out.update(message=f'the load flow did not converge in {max_iter} iterations', time=time.perf_counter() - t0)
         return out
@@ -463,10 +500,10 @@ def run(feeder, regulators='given', spread='exact', tol=1e-9, max_iter=200):
                cap_kvar=sum(q['kvar'] for q in caps), worst={'low': {'V': lo[0], 'bus': lo[1], 'phase': lo[2]}, 'high': {'V': hi[0], 'bus': hi[1], 'phase': hi[2]},
                                                               'unbalance': {'value': ub[0], 'bus': ub[1]}}, nodes=len(net.nodes), _V=V, _net=net)
     out['spread'] = spread
-    out['advice'] = {'why': f'{len(net.nodes)} κόμβοι φάσης σε {len(buses)} ζυγούς: ο πίνακας αγωγιμοτήτων των φάσεων παραγοντοποιείται μία φορά και τα ρεύματα των φορτίων '
+    out['advice'] = {'why': f'{len(net.nodes)} κόμβοι φάσης σε {len(feeder.buses)} ζυγούς: ο πίνακας αγωγιμοτήτων των φάσεων παραγοντοποιείται μία φορά και τα ρεύματα των φορτίων '
                             f'επαναλαμβάνονται ως το σταθερό σημείο ({its} επαναλήψεις' + (f', {rounds} γύροι για τις λήψεις των ρυθμιστών' if auto else '') + ')'}
     out['time'] = time.perf_counter() - t0
     return out
 
 
-__all__ = ['FeederError', 'Feeder', 'CASES', 'case_data', 'case_solution', 'as_network', 'sequence', 'run', 'STEP', 'MODELS']
+__all__ = ['FeederError', 'Feeder', 'CASES', 'case_data', 'case_solution', 'as_network', 'against', 'sequence', 'run', 'STEP', 'MODELS']

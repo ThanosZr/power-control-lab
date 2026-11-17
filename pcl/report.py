@@ -853,11 +853,14 @@ def _unbalanced(r, net, res, picture):
            'τάσεων ως προς τη θετική.')
     if res['spread'] == 'middle':
         r.note('Τα κατανεμημένα φορτία μπήκαν ολόκληρα στο μέσο του τμήματός τους (όχι με το ακριβές ισοδύναμο δύο τρίτα στο ένα τέταρτο, ένα τρίτο στο άκρο).', 'info')
-    if pub.get('V'):
-        dv = max(abs(B[b]['phases'][p]['V'] - q[0]) for b, rows in pub['V'].items() if b in B for p, q in zip('abc', rows) if q and p in B[b]['phases'])
-        da = max(abs(B[b]['phases'][p]['angle'] - q[1]) for b, rows in pub['V'].items() if b in B for p, q in zip('abc', rows) if q and p in B[b]['phases'])
-        r.note(f'Απέναντι στο δημοσιευμένο προφίλ τάσεων του τροφοδότη: μέγιστη διαφορά {f(dv, 5)} pu και {f(da, 3)}°' + (f'· απώλειες {f(res["losses_kW"], 3)} kW, δημοσιευμένες {f(pub["losses_kW"], 3)} kW'
-               if pub.get('losses_kW') is not None else '') + '. Οι δημοσιευμένες τιμές έχουν τέσσερα δεκαδικά.', 'good' if dv < 5e-4 else 'warning')
+    from . import unbalanced as U
+    cmp = U.against(res, pub)
+    if cmp:
+        r.note(f'Απέναντι στα δημοσιευμένα αποτελέσματα του τροφοδότη ({cmp["values"]} τάσεις φάσης): μέγιστη διαφορά {f(cmp["dV"], 5)} pu και {f(cmp["dangle"], 3)}°'
+               + (f'· απώλειες {f(res["losses_kW"], 3)} kW, δημοσιευμένες {f(cmp["losses_kW"], 3)} kW' if cmp.get('losses_kW') is not None else '') + '. Οι δημοσιευμένες τάσεις έχουν τέσσερα δεκαδικά.',
+               'good' if cmp['dV'] < 5e-4 else 'warning')
+    elif pub.get('taps'):
+        r.note('Τα δημοσιευμένα αποτελέσματα του τροφοδότη είναι για τις λήψεις ' + ', '.join(f'{p} {t}' for p, t in pub['taps'].items()) + ' του ρυθμιστή του: με άλλες λήψεις είναι άλλο σημείο λειτουργίας και δεν συγκρίνονται.', 'info')
     picture(res, 'unbalance', 'voltage')
     r.heading('Τάση ανά φάση')
     r.chart('dot', names, [{'name': f'φάση {p}', 'y': [B[b]['phases'][p]['V'] if p in B[b]['phases'] else None for b in names]} for p in 'abc'],
@@ -869,7 +872,7 @@ def _unbalanced(r, net, res, picture):
         rows.append([b, d['kV']] + [x for p in 'abc' for x in ((d['phases'][p]['V'], d['phases'][p]['angle']) if p in d['phases'] else (None, None))] + [d.get('unbalance')])
     r.table(cols, rows, '', [None, 3, 5, 4, 5, 4, 5, 4, 3], {i: 'warning' for i, b in enumerate(names) if B[b]['Vmin'] < 0.95 or B[b]['Vmax'] > 1.05},
             note='Τάσεις φάσης προς ουδέτερο, ως προς την ονομαστική του ζυγού. Η ασυμμετρία δίνεται στους ζυγούς τριών φάσεων.')
-    if pub.get('V'):
+    if cmp:
         r.heading('Απέναντι στη δημοσίευση', 3)
         prow = []
         for b, vals in pub['V'].items():
@@ -882,10 +885,15 @@ def _unbalanced(r, net, res, picture):
         r.table(['Ζυγός', 'Φάση', '|V| εδώ (pu)', '|V| δημοσίευση (pu)', 'Διαφορά (pu)', 'Γωνία εδώ (°)', 'Γωνία δημοσίευση (°)', 'Διαφορά (°)'], prow, '', [None, None, 5, 5, 2, 4, 5, 2])
     if res['taps']:
         r.heading('Ρυθμιστές τάσης')
-        how = {'given': 'οι λήψεις είναι δοσμένες', 'control': 'οι λήψεις βρέθηκαν από τον αντισταθμιστή πτώσης γραμμής', 'neutral': 'όλες οι λήψεις στο μηδέν'}[res['regulators']]
-        r.table(['Ρυθμιστής', 'Φάση', 'Λήψη', 'Λόγος', 'Τάση ρελέ (V)'],
-                [[k, p, t, 1 + 0.00625 * t, (res['relay'].get(k) or {}).get(p)] for k, tp in res['taps'].items() for p, t in tp.items()], how[0].upper() + how[1:], [None, None, None, 5, 5],
-                note='Κάθε λήψη είναι 0,625 %. Η τάση του ρελέ δίνεται όταν οι λήψεις βρίσκονται από τον έλεγχο.')
+        how = {'given': 'οι λήψεις είναι δοσμένες', 'control': 'οι λήψεις βρέθηκαν από τον αντισταθμιστή πτώσης γραμμής, μία λήψη τη φορά από την ουδέτερη θέση', 'neutral': 'όλες οι λήψεις στο μηδέν'}[res['regulators']]
+        band = res.get('band') or {}
+        rows = [[k, p, t, 1 + 0.00625 * t, (res['relay'].get(k) or {}).get(p), ' – '.join(f(x, 1) for x in band[k]) if k in band else None] for k, tp in res['taps'].items() for p, t in tp.items()]
+        out = {i: 'warning' for i, q in enumerate(rows) if q[4] is not None and q[0] in band and not band[q[0]][0] <= q[4] <= band[q[0]][1]}
+        r.table(['Ρυθμιστής', 'Φάση', 'Λήψη', 'Λόγος', 'Τάση ρελέ (V)', 'Ζώνη (V)'], rows, how[0].upper() + how[1:], [None, None, None, 5, 5, None], out,
+                note='Κάθε λήψη είναι 0,625 %. Το ρελέ βλέπει τη ρυθμιζόμενη τάση (στη βάση των 120 V) μείον την πτώση του αντισταθμιστή· ο ρυθμιστής κινείται όσο η τάση αυτή είναι έξω από τη ζώνη του. '
+                     'Μέσα στη ζώνη χωρούν συνήθως δύο ή τρεις θέσεις λήψης: ποια βγαίνει εξαρτάται από πού ξεκίνησε ο ρυθμιστής.')
+        if not res.get('settled', True):
+            r.note('Οι λήψεις δεν ισορρόπησαν: η ζώνη ενός ρυθμιστή είναι στενότερη από την τάση μιας λήψης και ο ρυθμιστής ταλαντεύεται ανάμεσα σε δύο θέσεις.', 'warning')
     r.heading('Είσοδος ανά φάση')
     ph = list(inp['kW'])
     r.table(['Φάση', 'kW', 'kvar', 'A'], [[p, inp['kW'][p], inp['kvar'][p], inp['A'][p]] for p in ph] + [['σύνολο', inp['kW_total'], inp['kvar_total'], None]], '', [None, 6, 6, 5])

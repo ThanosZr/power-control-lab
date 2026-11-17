@@ -71,6 +71,8 @@ def _base_network(data):
             raise StudyError(f'Το δίκτυο δεν διαβάζεται: {e}') from e
     else:
         name = data.get('case')
+        if data.get('feeder') is not None:
+            raise StudyError('Το δίκτυο είναι τροφοδότης τριών φάσεων: μελετιέται με την ασύμμετρη ροή φορτίου (study «unbalanced»).')
         if name not in N.CASES + N.MORE:
             raise StudyError('Δώσε case (ένα από: ' + ', '.join(N.CASES + N.MORE) + ') ή network.')
         net = N.case_data(name)
@@ -99,6 +101,10 @@ def open_file(data):
     """A network from the text of a file (MATPOWER .m, PSS/E RAW, our JSON): {'name', 'text'} → {'network': the network as data
     (pcl.network.to_dict), 'summary': what it holds and what was left out of the file}."""
     from . import netfile
+    fd = _feeder_text(data.get('text'))
+    if fd is not None:                                     # 4.19.5: the JSON of a three-phase feeder (pcl.unbalanced), for the study 'unbalanced'
+        return {'feeder': _clean(fd.to_dict()), 'summary': {'name': fd.name or 'feeder', 'feeder': True, 'buses': len(fd.buses), 'branches': len(fd.lines) + len(fd.switches) + len(fd.transformers) + len(fd.regulators),
+                                                            'generators': 0, 'load_MW': (sum(sum(e['kW']) for e in fd.loads) + sum(sum(e['kW']) for e in fd.spread)) / 1e3, 'rated': 0, 'costs': False, 'warnings': []}}
     try:
         net = netfile.read(data.get('text'), str(data.get('name') or ''), data.get('format') or None)
     except N.NetworkError as e:
@@ -108,10 +114,34 @@ def open_file(data):
     return {'network': _clean(N.to_dict(net)), 'summary': _clean(netfile.summary(net))}
 
 
+def _feeder_text(text):
+    """The feeder of a file when the text is the JSON of one (format 'pcl-feeder'), else None."""
+    import json
+    if not isinstance(text, str) or '"pcl-feeder"' not in text[:400000]:
+        return None
+    from . import unbalanced as U
+    try:
+        d = json.loads(text)
+        if not isinstance(d, dict) or d.get('format') != 'pcl-feeder':
+            return None
+        fd = U.Feeder.from_dict(d)
+    except (KeyError, TypeError, ValueError) as e:
+        raise StudyError(f'Ο τροφοδότης δεν διαβάζεται: {e}') from e
+    if len(fd.buses) > MAX_BUSES:
+        raise StudyError(f'Πάνω από {MAX_BUSES} ζυγούς.')
+    return fd
+
+
 def save_file(data):
     """The network of a request, with its changes, as the text of a file: {'case' | 'network', 'edits', 'format': 'pcl' (JSON),
     'matpower' or 'raw'} → {'name', 'text', 'mime'}."""
     from . import netfile
+    if data.get('study') in FEEDER_STUDIES:                # 4.19.5: a feeder has one format, its own JSON
+        import json
+        if (data.get('format') or 'pcl') != 'pcl':
+            raise StudyError('Ένας τροφοδότης τριών φάσεων σώζεται μόνο ως JSON (pcl).')
+        fd = _feeder(data, solve=False)[0]
+        return {'name': (data.get('case') or 'feeder') + '.json', 'text': json.dumps(fd.to_dict(), ensure_ascii=False, indent=1), 'mime': 'application/json'}
     net = network_of(data)
     fmt = data.get('format') or 'pcl'
     if fmt not in netfile.FORMATS:
@@ -228,20 +258,24 @@ def summary(study, res):
     return {}
 
 
-def _feeder(data):
+def _feeder(data, solve=True):
     """The feeder of a request, its load flow and what its file publishes: (feeder, result, published or None)."""
     from . import unbalanced as U
     opt = {k: v for k, v in (data.get('options') or {}).items() if k in OPTIONS['unbalanced'] and v is not None and v != ''}
     try:
         if data.get('feeder') is not None:
-            fd, pub = U.Feeder.from_dict(data['feeder']), (data['feeder'].get('published') if isinstance(data['feeder'], dict) else None)
+            if not isinstance(data['feeder'], dict):
+                raise StudyError('feeder: ένας τροφοδότης όπως τον γράφει το pcl.unbalanced.Feeder.to_dict')
+            fd, pub = U.Feeder.from_dict(data['feeder']), data['feeder'].get('published')
         else:
+            if data.get('network') is not None:
+                raise StudyError('Η ασύμμετρη ροή φορτίου θέλει τροφοδότη τριών φάσεων (το JSON του pcl.unbalanced), όχι δίκτυο θετικής ακολουθίας.')
             if data.get('case') not in U.CASES:
                 raise StudyError('Δώσε case (ένα από: ' + ', '.join(U.CASES) + ') ή feeder.')
             fd, pub = U.case_data(data['case']), U.case_solution(data['case'])
         if len(fd.buses) > MAX_BUSES:
             raise StudyError(f'Πάνω από {MAX_BUSES} ζυγούς.')
-        return fd, U.run(fd, **opt), pub
+        return fd, (U.run(fd, **opt) if solve else None), pub
     except (KeyError, TypeError, ValueError) as e:
         if isinstance(e, StudyError):
             raise
@@ -255,12 +289,14 @@ def _feeder_summary(fd, res, pub):
     prof = [{'bus': b, **{p: (d['phases'][p]['V'] if p in d['phases'] else None) for p in 'abc'}, 'unbalance': d.get('unbalance')} for b, d in B.items() if not d['made']]
     out = {'converged': True, 'iterations': res['iterations'], 'rounds': res['rounds'], 'nodes': res['nodes'], 'buses': len(prof), 'low': res['worst']['low'], 'high': res['worst']['high'],
            'unbalance': res['worst']['unbalance'], 'losses_kW': res['losses_kW'], 'input': res['input'], 'load_kW': res['load_kW'], 'load_kvar': res['load_kvar'], 'cap_kvar': res['cap_kvar'],
-           'taps': res['taps'], 'relay': res['relay'], 'regulators': res['regulators'], 'spread': res['spread'], 'profile': prof, 'why': res['advice']['why'], 'message': res['message'],
+           'taps': res['taps'], 'relay': res['relay'], 'band': res['band'], 'settled': res['settled'], 'regulators': res['regulators'], 'spread': res['spread'], 'profile': prof, 'why': res['advice']['why'], 'message': res['message'],
            'time_ms': res['time'] * 1e3}
-    if pub and pub.get('V'):                               # against what the file of the feeder publishes
-        dv = [abs(B[b]['phases'][p]['V'] - q[0]) for b, rows in pub['V'].items() if b in B for p, q in zip('abc', rows) if q and p in B[b]['phases']]
-        da = [abs(B[b]['phases'][p]['angle'] - q[1]) for b, rows in pub['V'].items() if b in B for p, q in zip('abc', rows) if q and p in B[b]['phases']]
-        out['published'] = {'dV': max(dv), 'dangle': max(da), 'values': len(dv), 'losses_kW': pub.get('losses_kW'), 'taps': pub.get('taps')}
+    from . import unbalanced as U
+    cmp = U.against(res, pub)                              # against what the file of the feeder publishes, when the taps are the published ones
+    if cmp:
+        out['published'] = cmp
+    elif pub and pub.get('taps'):
+        out['published_taps'] = pub['taps']
     return out
 
 
@@ -316,12 +352,19 @@ def view(data):
     """The picture of the network of a study as a file: {'case' | 'network', 'study', 'options', 'format': 'dxf' | 'svg',
     'layer' (SVG) or 'layers' (DXF)} → {'name', 'text', 'mime'}."""
     from . import netview
-    net0, net, _ = _networks_of(data)
     study = data.get('study') or 'pf'
     fmt = data.get('format') or 'dxf'
     if fmt not in ('dxf', 'svg'):
         raise StudyError('format: dxf ή svg')
-    res = _clean(_study(net, study, data.get('options')))
+    if study in FEEDER_STUDIES:                            # 4.19.5: the picture of a feeder is that of its positive-sequence network
+        from . import unbalanced as U
+        fd, res, _ = _feeder(data)
+        net0 = net = U.as_network(fd)
+        res = _clean(res)
+        data = dict(data, layers=data.get('layers') or ['voltage', 'angle', 'unbalance'])
+    else:
+        net0, net, _ = _networks_of(data)
+        res = _clean(_study(net, study, data.get('options')))
     v = _picture(net0, net, data)
     stem = f'network_{_stem(data, net)}_{study}'
     try:

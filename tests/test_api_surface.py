@@ -126,6 +126,17 @@ class ApiSurface(unittest.TestCase):
         self.assertEqual((study.STUDIES[-1], netview.DEFAULT['harmonic']), ('harmonic', 'thd'))
         from pcl import network
         self.assertEqual((network.MORE, len(network.CASES)), (('harmonic14',), 10))
+        # the three-phase load flow of a feeder: the module is experimental, the study is a stable addition with its own list (its
+        # network is a feeder and not a Network); every option of the routine is an option of the study
+        from pcl import unbalanced
+        self.assertTrue(api_surface.experimental('pcl', 'pcl.unbalanced.run'))
+        self.assertEqual(self.now['pcl']['pcl.unbalanced.run']['params'], ['feeder', 'regulators', 'spread', 'tol', 'max_iter'])
+        self.assertEqual(set(study.OPTIONS['unbalanced']), set(self.now['pcl']['pcl.unbalanced.run']['params'][1:]))
+        for k in ('Feeder', 'Feeder.bus', 'Feeder.set_source', 'Feeder.config', 'Feeder.line', 'Feeder.switch', 'Feeder.transformer', 'Feeder.regulator', 'Feeder.load', 'Feeder.distributed',
+                  'Feeder.capacitor', 'Feeder.to_dict', 'Feeder.from_dict', 'Feeder.run', 'case_data', 'case_solution', 'as_network', 'sequence'):
+            self.assertIn('pcl.unbalanced.' + k, self.now['pcl'])
+        self.assertEqual((study.FEEDER_STUDIES, netview.DEFAULT['unbalanced'], unbalanced.CASES), (('unbalanced',), 'unbalance', ('feeder13',)))
+        self.assertIn('unbalance', netview.LAYERS)
 
     def test_the_surface_of_4_19_3(self):
         # the two settings of the solver are in the file format (stable); the large network is one more name of the test networks

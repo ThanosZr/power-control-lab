@@ -1,7 +1,7 @@
 // 4.19.1 (ROADMAP §68 point 6): the two study tutorials (pf_study, opf_study) headless. For each: its options, the study that its
 // project asks from the engine (meta.study) with the defaults and with every network of its list, the operating point from which its
 // EMT starts (meta.lf), and a run of 0.3 s: the mean and the fundamental (peak, last 4 cycles of 60 Hz) of the generator powers and
-// of the instruments on the drawing. Usage: node study_cases.js -> JSON {pf, opf, opfEmt, cpf, se, harm}
+// of the instruments on the drawing. Usage: node study_cases.js -> JSON {pf, opf, opfEmt, cpf, se, harm, unb}
 const path=require('path');const W=path.resolve(__dirname,'../../web/studio');
 global.window=globalThis;global.Parts=require(W+'/parts.js');global.Expr=require(W+'/expr.js');global.StepCheck=require(W+'/stepcheck.js');
 global.LineModels=require(W+'/linemodels.js');
@@ -30,4 +30,8 @@ const se=(()=>{const t=Tutorials.get('se_study'),d=defaults(t),o=k=>t.options.fi
 const harm=(()=>{const t=Tutorials.get('harm_study'),d=defaults(t),o=k=>t.options.find(q=>q.k===k).options.map(q=>q[0]);return {...card('harm_study'),title:t.title,
   variants:o('pulse').flatMap(pulse=>o('filters').flatMap(filters=>o('lines').flatMap(lines=>o('load').map(load=>t.build({...d,pulse,filters,lines,load}).meta.study)))),
   drawing:t.build(d).components.length===Tutorials.get('pf_study').build(defaults(Tutorials.get('pf_study'))).components.length};})();
-console.log(JSON.stringify({pf:{...card('pf_study'),...run('pf_study',{},0.3)},opf:{...card('opf_study'),...run('opf_study',{},0.05)},opfEmt:run('opf_study',{emt:'opf'},0.3),cpf,se,harm}));
+// 4.19.5: the tutorial of the three-phase load flow of a feeder (unb_study): its options and the request of every combination of them
+const unb=(()=>{const t=Tutorials.get('unb_study'),d=defaults(t),o=k=>t.options.find(q=>q.k===k).options.map(q=>q[0]);return {...card('unb_study'),title:t.title,
+  variants:o('reg').flatMap(reg=>o('spread').map(spread=>t.build({...d,reg,spread}).meta.study)),
+  drawing:t.build(d).components.length===Tutorials.get('pf_study').build(defaults(Tutorials.get('pf_study'))).components.length};})();
+console.log(JSON.stringify({pf:{...card('pf_study'),...run('pf_study',{},0.3)},opf:{...card('opf_study'),...run('opf_study',{},0.05)},opfEmt:run('opf_study',{emt:'opf'},0.3),cpf,se,harm,unb}));

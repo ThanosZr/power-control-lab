@@ -19,7 +19,8 @@
    "pcl.scopf.",
    "pcl.cpf.",
    "pcl.se.",
-   "pcl.harmonic."
+   "pcl.harmonic.",
+   "pcl.unbalanced."
   ],
   "cli": [
    "workbench",
@@ -3840,6 +3841,177 @@
    "pcl.tutorials": {
     "params": [],
     "since": "3.18"
+   },
+   "pcl.unbalanced.Feeder": {
+    "params": [
+     "name",
+     "f"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.bus": {
+    "params": [
+     "name",
+     "kV"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.capacitor": {
+    "params": [
+     "bus",
+     "kvar",
+     "name"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.config": {
+    "params": [
+     "name",
+     "phases",
+     "Z",
+     "B"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.distributed": {
+    "params": [
+     "a",
+     "b",
+     "connection",
+     "model",
+     "kW",
+     "kvar",
+     "name"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.from_dict": {
+    "params": [
+     "d"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.line": {
+    "params": [
+     "a",
+     "b",
+     "length",
+     "config",
+     "name"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.load": {
+    "params": [
+     "bus",
+     "connection",
+     "model",
+     "kW",
+     "kvar",
+     "name"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.regulator": {
+    "params": [
+     "a",
+     "b",
+     "taps",
+     "phases",
+     "pt",
+     "ct",
+     "R",
+     "X",
+     "level",
+     "band",
+     "name"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.report": {
+    "params": [
+     "title",
+     "**kw"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.run": {
+    "params": [
+     "**kw"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.set_source": {
+    "params": [
+     "bus",
+     "V"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.switch": {
+    "params": [
+     "a",
+     "b",
+     "phases",
+     "name"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.to_dict": {
+    "params": [],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.Feeder.transformer": {
+    "params": [
+     "hv",
+     "lv",
+     "kVA",
+     "R",
+     "X",
+     "phases",
+     "name"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.FeederError": {
+    "params": [],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.as_network": {
+    "params": [
+     "fd"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.case_data": {
+    "params": [
+     "name"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.case_solution": {
+    "params": [
+     "name"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.run": {
+    "params": [
+     "feeder",
+     "regulators",
+     "spread",
+     "tol",
+     "max_iter"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.unbalanced.sequence": {
+    "params": [
+     "Va",
+     "Vb",
+     "Vc"
+    ],
+    "since": "4.19.5"
    },
    "pcl.use": {
     "params": [
