@@ -189,6 +189,31 @@ class Closed(unittest.TestCase):
         self.assertAlmostEqual(sum(c['P'] for c in r['converters'].values()), r['losses'], delta=1e-3)
 
 
+class Jovcic(unittest.TestCase):
+    """Jovcic, High Voltage Direct Current Transmission, 2nd ed. (2019), Example 26.1 (§26.3, printed p. 394–395): the grid of
+    Fig. 26.4 with constant-current terminals (linear), terminal 1 at 400 kV, 3 MΩ to ground at every bus, one conductor per
+    line (the voltages and resistances of one pole); Tables 26.1–26.2 to their last digit (0.01 kV, 0.1 A)."""
+
+    def test_example_26_1(self):
+        g = D.DCGrid()
+        for b in '12345':
+            g.bus(b, 400 * kV, R=3e6)
+        R = {('1', '2'): 5, ('1', '4'): 2, ('1', '5'): 2, ('2', '3'): 2, ('2', '5'): 2, ('3', '4'): 5, ('3', '5'): 2, ('4', '5'): 1.8}
+        for (a, b), r in R.items():
+            g.line(a, b, R=r, poles=1, name=a + b)
+        g.converter('1', 'V', V=1.0, name='1')
+        for b, i in (('2', -650.0), ('3', -1200.0), ('4', 900.0)):
+            g.converter(b, 'I', I=i, name=b)
+        r = g.flow(tol=1e-12)
+        for b, u in zip('12345', (400.00, 398.09, 397.75, 399.90, 398.96)):
+            self.assertAlmostEqual(r['buses'][b]['U'] / kV, u, delta=0.0065)       # the book's last digit (397.756 printed 397.75)
+        self.assertAlmostEqual(r['converters']['1']['I'], 950.66, delta=0.006)
+        I = {q['name']: q['I'] for q in r['lines']}
+        for k, v in (('12', 381.8), ('14', 49.9), ('15', 518.7), ('23', 167.6), ('25', -435.9), ('34', -428.9), ('35', -603.6), ('45', 520.8)):
+            self.assertAlmostEqual(I[k], v, delta=0.1)
+        self.assertAlmostEqual(sum(c['P'] for c in r['converters'].values()), r['losses'], delta=1e-3)     # with the leakage
+
+
 class FourTerminal(unittest.TestCase):
     def test_conductance_40(self):
         """Beerten & Belmans (2013), Table I and (40): the bus admittance matrix in pu (1200 MW, 320 kV pole to ground) of the

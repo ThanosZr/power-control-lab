@@ -75,7 +75,7 @@
 | `pcl/control.py` | 953 |
 | `pcl/core.py` | 1353 |
 | `pcl/cpf.py` | 561 |
-| `pcl/dcgrid.py` | 408 |
+| `pcl/dcgrid.py` | 421 |
 | `pcl/designer.py` | 791 |
 | `pcl/formats.py` | 222 |
 | `pcl/gui.py` | 409 |
@@ -87,7 +87,7 @@
 | `pcl/link.py` | 150 |
 | `pcl/netfile.py` | 490 |
 | `pcl/netview.py` | 813 |
-| `pcl/network.py` | 1604 |
+| `pcl/network.py` | 1606 |
 | `pcl/nnstart.py` | 388 |
 | `pcl/onnxio.py` | 355 |
 | `pcl/opf.py` | 417 |
@@ -117,7 +117,7 @@
 | `tests/test_control.py` | 213 |
 | `tests/test_cpf.py` | 401 |
 | `tests/test_ctlwin.py` | 147 |
-| `tests/test_dcgrid.py` | 428 |
+| `tests/test_dcgrid.py` | 453 |
 | `tests/test_derivation.py` | 93 |
 | `tests/test_designer.py` | 200 |
 | `tests/test_engine.py` | 276 |
@@ -3105,23 +3105,23 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 41 | class | `DCGridError` |
-| 45 | class | `DCGrid` |
-| 48 | method | `DCGrid.__init__` |
-| 54 | method | `DCGrid.bus` |
-| 61 | method | `DCGrid._bus` |
-| 67 | method | `DCGrid.line` |
-| 85 | method | `DCGrid.converter` |
-| 106 | method | `DCGrid.remove` |
-| 115 | method | `DCGrid.conductance` |
-| 129 | method | `DCGrid._parts` |
-| 147 | method | `DCGrid.flow` |
-| 256 | function | `sensitivity` |
-| 281 | function | `station` |
-| 298 | function | `station_inverse` |
-| 318 | function | `grid_of` |
-| 337 | function | `_st` |
-| 344 | function | `acdc_flow` |
+| 43 | class | `DCGridError` |
+| 47 | class | `DCGrid` |
+| 50 | method | `DCGrid.__init__` |
+| 56 | method | `DCGrid.bus` |
+| 64 | method | `DCGrid._bus` |
+| 70 | method | `DCGrid.line` |
+| 88 | method | `DCGrid.converter` |
+| 109 | method | `DCGrid.remove` |
+| 118 | method | `DCGrid.conductance` |
+| 135 | method | `DCGrid._parts` |
+| 153 | method | `DCGrid.flow` |
+| 269 | function | `sensitivity` |
+| 294 | function | `station` |
+| 311 | function | `station_inverse` |
+| 331 | function | `grid_of` |
+| 350 | function | `_st` |
+| 357 | function | `acdc_flow` |
 
 ### `pcl/designer.py`
 
@@ -3563,64 +3563,64 @@ _(χωρίς συναρτήσεις)_
 | 247 | method | `Network.branch_pu` |
 | 253 | method | `Network.sssc` |
 | 269 | method | `Network.dc_bus` |
-| 278 | method | `Network._dc` |
-| 284 | method | `Network.dc_line` |
-| 297 | method | `Network.vsc` |
-| 318 | method | `Network.dc_grid` |
-| 323 | method | `Network.acdc_flow` |
-| 332 | method | `Network.remove` |
-| 335 | method | `Network.element` |
-| 342 | method | `Network._zb` |
-| 346 | method | `Network._ib` |
-| 350 | method | `Network._sc_parts` |
-| 485 | method | `Network._t3` |
-| 520 | method | `Network.impedances` |
-| 528 | method | `Network._index` |
-| 532 | method | `Network._ybus` |
-| 556 | method | `Network._ratios` |
-| 591 | method | `Network.short_circuit` |
-| 675 | method | `Network._breaking` |
-| 707 | method | `Network.iec60909` |
-| 712 | method | `Network._lf_model` |
-| 827 | method | `Network._sssc_x` |
-| 834 | method | `Network.load_flow` |
-| 845 | method | `Network._lf_sssc` |
-| 874 | method | `Network._lf` |
-| 905 | method | `Network._lf_result` |
-| 929 | method | `Network._flows` |
-| 954 | method | `Network.case` |
-| 964 | method | `Network.advice` |
-| 973 | method | `Network.power_flow` |
-| 995 | method | `Network.dc_flow` |
-| 1003 | method | `Network.ptdf` |
-| 1009 | method | `Network.lodf` |
-| 1016 | method | `Network.contingency` |
-| 1094 | method | `Network.batch_flow` |
-| 1134 | method | `Network.report` |
-| 1140 | method | `Network.scopf` |
-| 1146 | method | `Network.cpf` |
-| 1153 | method | `Network.estimate` |
-| 1160 | method | `Network.harmonics` |
-| 1167 | method | `Network.opf` |
-| 1189 | method | `Network.to_emt` |
-| 1269 | function | `_coo` |
-| 1275 | function | `_zip` |
-| 1280 | function | `_solve` |
-| 1291 | function | `_nr` |
-| 1327 | function | `sssc_placement` |
-| 1384 | function | `superposition` |
-| 1408 | function | `trv` |
-| 1442 | function | `_matrix` |
-| 1454 | function | `read_matpower` |
-| 1491 | function | `ieee` |
-| 1501 | function | `case_data` |
-| 1512 | function | `case_solution` |
-| 1521 | function | `ieee9` |
-| 1548 | function | `ieee14` |
-| 1561 | function | `to_dict` |
-| 1577 | function | `from_dict` |
-| 1599 | function | `save` |
-| 1603 | function | `load` |
+| 279 | method | `Network._dc` |
+| 285 | method | `Network.dc_line` |
+| 298 | method | `Network.vsc` |
+| 320 | method | `Network.dc_grid` |
+| 325 | method | `Network.acdc_flow` |
+| 334 | method | `Network.remove` |
+| 337 | method | `Network.element` |
+| 344 | method | `Network._zb` |
+| 348 | method | `Network._ib` |
+| 352 | method | `Network._sc_parts` |
+| 487 | method | `Network._t3` |
+| 522 | method | `Network.impedances` |
+| 530 | method | `Network._index` |
+| 534 | method | `Network._ybus` |
+| 558 | method | `Network._ratios` |
+| 593 | method | `Network.short_circuit` |
+| 677 | method | `Network._breaking` |
+| 709 | method | `Network.iec60909` |
+| 714 | method | `Network._lf_model` |
+| 829 | method | `Network._sssc_x` |
+| 836 | method | `Network.load_flow` |
+| 847 | method | `Network._lf_sssc` |
+| 876 | method | `Network._lf` |
+| 907 | method | `Network._lf_result` |
+| 931 | method | `Network._flows` |
+| 956 | method | `Network.case` |
+| 966 | method | `Network.advice` |
+| 975 | method | `Network.power_flow` |
+| 997 | method | `Network.dc_flow` |
+| 1005 | method | `Network.ptdf` |
+| 1011 | method | `Network.lodf` |
+| 1018 | method | `Network.contingency` |
+| 1096 | method | `Network.batch_flow` |
+| 1136 | method | `Network.report` |
+| 1142 | method | `Network.scopf` |
+| 1148 | method | `Network.cpf` |
+| 1155 | method | `Network.estimate` |
+| 1162 | method | `Network.harmonics` |
+| 1169 | method | `Network.opf` |
+| 1191 | method | `Network.to_emt` |
+| 1271 | function | `_coo` |
+| 1277 | function | `_zip` |
+| 1282 | function | `_solve` |
+| 1293 | function | `_nr` |
+| 1329 | function | `sssc_placement` |
+| 1386 | function | `superposition` |
+| 1410 | function | `trv` |
+| 1444 | function | `_matrix` |
+| 1456 | function | `read_matpower` |
+| 1493 | function | `ieee` |
+| 1503 | function | `case_data` |
+| 1514 | function | `case_solution` |
+| 1523 | function | `ieee9` |
+| 1550 | function | `ieee14` |
+| 1563 | function | `to_dict` |
+| 1579 | function | `from_dict` |
+| 1601 | function | `save` |
+| 1605 | function | `load` |
 
 ### `pcl/nnstart.py`
 

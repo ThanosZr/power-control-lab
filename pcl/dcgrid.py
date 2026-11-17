@@ -14,7 +14,9 @@ poles = 1). A converter fixes, at its bus:
     'P'      the power into the DC grid (W; negative: taken out, an inverter);
     'V'      the voltage (pu of the bus's U_n): the DC slack, its power follows from the grid;
     'droop'  the power–voltage droop P = P_0 − R·(U − U_0), with R (W/V) given, or R = P_rated/(ρ·U_n) from the droop ρ (pu);
-    'idroop' the current–voltage droop I = I_0 − g·(U − U_0) (Beerten & Belmans 2013, (6)), g (S) or from ρ as I_rated/(ρ·U_n).
+    'idroop' the current–voltage droop I = I_0 − g·(U − U_0) (Beerten & Belmans 2013, (6)), g (S) or from ρ as I_rated/(ρ·U_n);
+    'I'      a constant current into the grid (A; Jovcic 2019, §26.3: the grid is then linear).
+A bus may have a resistance R to ground (the leakage of (26.2) in Jovcic 2019).
 At least one converter of every connected part holds the voltage ('V', 'droop' or 'idroop'), or the part has no solution.
 
 The converter station on its AC side (Beerten, Cole & Belmans 2012, §II, Fig. 2): the AC bus s, the transformer Z_tr, the
@@ -35,7 +37,7 @@ import time
 import numpy as np
 
 SQ3 = math.sqrt(3.0)
-CONTROLS = ('P', 'V', 'droop', 'idroop')
+CONTROLS = ('P', 'V', 'droop', 'idroop', 'I')
 
 
 class DCGridError(ValueError):
@@ -47,15 +49,16 @@ class DCGrid:
 
     def __init__(self, P_base=100e6, name=''):
         self.P_base, self.name = float(P_base), name
-        self.buses = {}            # name -> {'Un': V, 'V': pu (start)}
+        self.buses = {}            # name -> {'Un': V, 'V': pu (start), 'R': Ω to ground or None}
         self.lines = []            # {'name', 'a', 'b', 'R' (Ω per conductor), 'poles', 'rating' (A) or None}
         self.converters = []       # {'name', 'bus', 'control', 'P', 'V', 'R' (W/V), 'g' (S), 'I'}
 
-    def bus(self, name, Un, V=1.0):
+    def bus(self, name, Un, V=1.0, R=None):
+        """A DC bus: U_n (V), V (pu) the start, R (Ω) a resistance to ground (leakage), or None."""
         name = str(name)
-        if Un <= 0:
-            raise DCGridError(f'DC bus {name}: U_n > 0')
-        self.buses[name] = {'Un': float(Un), 'V': float(V)}
+        if Un <= 0 or (R is not None and R <= 0):
+            raise DCGridError(f'DC bus {name}: U_n > 0, R > 0')
+        self.buses[name] = {'Un': float(Un), 'V': float(V), 'R': None if R is None else float(R)}
         return name
 
     def _bus(self, b, who):
@@ -82,9 +85,9 @@ class DCGrid:
         self.lines.append({'name': name, 'a': a, 'b': b, 'R': Rt, 'poles': int(poles), 'rating': rating})
         return name
 
-    def converter(self, bus, control='P', P=0.0, V=1.0, droop=None, Prated=None, R=None, name=None):
+    def converter(self, bus, control='P', P=0.0, V=1.0, droop=None, Prated=None, R=None, I=0.0, name=None):
         """control 'P' (P in W into the grid), 'V' (V in pu), 'droop' (P_0 = P, U_0 = V·U_n; R in W/V, or droop ρ in pu with
-        P_rated in W), 'idroop' (I_0 = P/U_0; g = R in S, or from ρ: g = (P_rated/U_n)/(ρ·U_n))."""
+        P_rated in W), 'idroop' (I_0 = P/U_0; g = R in S, or from ρ: g = (P_rated/U_n)/(ρ·U_n)), 'I' (I in A into the grid)."""
         name = str(name or f'C{len(self.converters) + 1}')
         bus = self._bus(bus, name)
         if control not in CONTROLS:
@@ -100,7 +103,7 @@ class DCGrid:
                 raise DCGridError(f'{name}: a droop needs R, or droop and Prated')
             if k <= 0:
                 raise DCGridError(f'{name}: the droop gain > 0')
-        self.converters.append({'name': name, 'bus': bus, 'control': control, 'P': float(P), 'V': float(V), 'k': k})
+        self.converters.append({'name': name, 'bus': bus, 'control': control, 'P': float(P), 'V': float(V), 'k': k, 'I': float(I)})
         return name
 
     def remove(self, name):
@@ -124,6 +127,9 @@ class DCGrid:
             G[j, j] += g
             G[i, j] -= g
             G[j, i] -= g
+        for b, d in self.buses.items():
+            if d.get('R'):
+                G[idx[b], idx[b]] += 1.0 / d['R']
         return names, G
 
     def _parts(self, G):
@@ -173,6 +179,8 @@ class DCGrid:
                     raise DCGridError(f'{c["name"]}: two converters hold bus {c["bus"]} at different voltages')
                 fixed[i] = True
                 U[i] = c['V'] * Un[i]
+            elif c['control'] == 'I':
+                I0[i] += c['I']
             elif c['control'] == 'droop':
                 Kp[i] += c['k']
                 Pd[i] += c['P'] + c['k'] * c['V'] * Un[i]
@@ -182,7 +190,7 @@ class DCGrid:
                 I0[i] += c['P'] / U0 + c['k'] * U0
         if start is None:                      # the free buses start at the voltage of a converter that holds or droops them
             for c in self.converters:
-                if c['control'] != 'P' and not fixed[idx[c['bus']]]:
+                if c['control'] not in ('P', 'I') and not fixed[idx[c['bus']]]:
                     U[idx[c['bus']]] = c['V'] * Un[idx[c['bus']]]
         for comp in self._parts(G):
             if not any(fixed[i] or Kp[i] > 0 or Kg[i] > 0 for i in comp):
@@ -222,6 +230,9 @@ class DCGrid:
                  'loss': float((ua - ub) * I), 'rating': ln['rating'], 'loading': (abs(I) / ln['rating']) if ln['rating'] else None}
             loss += q['loss']
             res['lines'].append(q)
+        for b, d in self.buses.items():           # the leakage to ground
+            if d.get('R'):
+                loss += U[idx[b]] ** 2 / d['R']
         res['losses'] = loss
         # the power of each converter: a 'P' gives its P; what is left at the bus goes to the converters that hold or droop it
         left = Pg - P0
@@ -235,13 +246,15 @@ class DCGrid:
             elif c['control'] == 'idroop':
                 u0 = c['V'] * Un[i]
                 p = u * (c['P'] / u0 - c['k'] * (u - u0))
+            elif c['control'] == 'I':
+                p = u * c['I']
             else:
                 p = None
             res['converters'][c['name']] = {'bus': c['bus'], 'control': c['control'], 'P': p, 'U': float(u), 'I': None}
         for b in names:                        # the slack converters share what is left at their bus equally
             i = idx[b]
             cs = [c for c in self.converters if c['bus'] == b and c['control'] == 'V']
-            rest = left[i] - sum(res['converters'][c['name']]['P'] for c in self.converters if c['bus'] == b and c['control'] in ('droop', 'idroop'))
+            rest = left[i] - sum(res['converters'][c['name']]['P'] for c in self.converters if c['bus'] == b and c['control'] in ('droop', 'idroop', 'I'))
             for c in cs:
                 res['converters'][c['name']]['P'] = float(rest / len(cs))
         for q in res['converters'].values():
@@ -320,14 +333,14 @@ def grid_of(net):
     last AC/DC iteration when they have one)."""
     g = DCGrid(net.S_base, net.name)
     for b, d in getattr(net, 'dc_buses', {}).items():
-        g.bus(b, d['Un'], d.get('V', 1.0))
+        g.bus(b, d['Un'], d.get('V', 1.0), d.get('R'))
     for e in net.elements:
         if e['kind'] == 'dc_line':
             g.line(e['a'], e['b'], R=e['R'], poles=e['poles'], name=e['name'], rating=e.get('rating'))
     for e in net.elements:
         if e['kind'] == 'vsc':
             g.converter(e['dc'], e['control'], P=e['P'], V=e['V'], droop=e.get('droop'), Prated=e.get('Prated'),
-                        R=e.get('R'), name=e['name'])
+                        R=e.get('R'), I=e.get('I', 0.0), name=e['name'])
     return g
 
 

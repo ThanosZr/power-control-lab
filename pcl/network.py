@@ -266,13 +266,14 @@ class Network:
                          P=None if P is None else float(P), Xmax=None if Xmax is None else float(Xmax))
 
     # ------------------------------------------------------------ 4.20: multi-terminal DC grids (pcl.dcgrid, ROADMAP §82)
-    def dc_bus(self, name, Un, V=1.0):
-        """A bus of a DC grid: U_n (V, pole to pole for a bipole or a symmetric monopole), V (pu) the start of the load flow.
+    def dc_bus(self, name, Un, V=1.0, R=None):
+        """A bus of a DC grid: U_n (V, pole to pole for a bipole or a symmetric monopole), V (pu) the start of the load flow,
+        R (Ω) a resistance to ground (leakage) or None.
         The DC buses are kept apart from the AC buses (self.dc_buses), so that the AC studies do not see them."""
         name = str(name)
         if name in self.buses:
             raise NetworkError(f'DC bus {name}: there is an AC bus with this name')
-        self.__dict__.setdefault('dc_buses', {})[name] = {'Un': float(Un), 'V': float(V)}
+        self.__dict__.setdefault('dc_buses', {})[name] = {'Un': float(Un), 'V': float(V), **({} if R is None else {'R': float(R)})}
         return name
 
     def _dc(self, b, who):
@@ -294,23 +295,24 @@ class Network:
         self.elements[-1].update(a=a, b=b)                 # (DC buses: not the AC buses that _add checks)
         return nm
 
-    def vsc(self, bus, dc, control='P', P=0.0, V=1.0, droop=None, Prated=None, R=None, Q=0.0, Vac=None, side='dc',
+    def vsc(self, bus, dc, control='P', P=0.0, V=1.0, droop=None, Prated=None, R=None, Q=0.0, Vac=None, side='dc', I=None,
             Rtr=0.0, Xtr=0.0, Bf=0.0, Rc=0.0, Xc=0.0, a_loss=0.0, b_loss=0.0, crec=0.0, cinv=0.0, name=None):
         """A converter station between the AC bus `bus` and the DC bus `dc` (4.20, pcl.dcgrid). DC side: control 'P' (P in W
         into the DC grid; with side = 'ac' P is the power it gives to the AC bus), 'V' (the DC slack at V pu), 'droop'
-        (P = P_0 − R·(U − U_0), P_0 = P, U_0 = V·U_n, R in W/V or droop ρ in pu with P_rated in W), 'idroop' (current droop).
+        (P = P_0 − R·(U − U_0), P_0 = P, U_0 = V·U_n, R in W/V or droop ρ in pu with P_rated in W), 'idroop' (current droop),
+        'I' (a constant DC current I in A into the DC grid).
         AC side: Q (var, given to the AC bus) or Vac (pu: the station holds the voltage of its bus, a PV bus; then no other
         source may hold that bus). The station: Rtr + jXtr, the filter Bf, the reactor Rc + jXc (pu on S_base and the AC
         bus base), the losses a_loss (W) + b_loss (V)·I + c (Ω)·I² (I in A), c = crec while it takes power from the AC grid, cinv while it
         gives. In the AC solvers it is a fixed injection: the one of its last AC/DC load flow (acdc_flow), or before that
         −P (side 'dc') or P (side 'ac') for control 'P' and nothing for the others."""
-        if control not in ('P', 'V', 'droop', 'idroop'):
-            raise NetworkError('vsc: control one of P, V, droop, idroop')
+        if control not in ('P', 'V', 'droop', 'idroop', 'I'):
+            raise NetworkError('vsc: control one of P, V, droop, idroop, I')
         if control in ('droop', 'idroop') and R is None and (droop is None or Prated is None):
             raise NetworkError('vsc: a droop needs R, or droop and Prated')
         nm = str(name or f'vsc{sum(e["kind"] == "vsc" for e in self.elements) + 1}')
         dc = self._dc(dc, nm)
-        opt = {k: float(v) for k, v in (('droop', droop), ('Prated', Prated), ('R', R), ('Vac', Vac)) if v is not None}
+        opt = {k: float(v) for k, v in (('droop', droop), ('Prated', Prated), ('R', R), ('Vac', Vac), ('I', I)) if v is not None}
         self._add('vsc', nm, bus=bus, dc=dc, control=control, P=float(P), V=float(V), Q=float(Q), side=side, Rtr=float(Rtr), Xtr=float(Xtr),
                   Bf=float(Bf), Rc=float(Rc), Xc=float(Xc), a_loss=float(a_loss), b_loss=float(b_loss), crec=float(crec), cinv=float(cinv), **opt)
         return nm
@@ -1579,7 +1581,7 @@ def from_dict(d):
     for b, v in d['buses'].items():
         net.bus(b, v['Un'], v.get('type', 'PQ'), v.get('V', 1.0), v.get('angle', 0.0), v.get('Vmin'), v.get('Vmax'), v.get('label'))
     for b, v in (d.get('dc_buses') or {}).items():
-        net.dc_bus(b, v['Un'], v.get('V', 1.0))
+        net.dc_bus(b, v['Un'], v.get('V', 1.0), v.get('R'))
     cplx = {'Zn_hv', 'Zn_lv', 'Zn'}
     for e in d['elements']:
         e = dict(e)

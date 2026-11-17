@@ -802,7 +802,8 @@
     "params": [
      "name",
      "Un",
-     "V"
+     "V",
+     "R"
     ],
     "since": "4.20"
    },
@@ -819,6 +820,7 @@
      "droop",
      "Prated",
      "R",
+     "I",
      "name"
     ],
     "since": "4.20"
@@ -2405,7 +2407,8 @@
     "params": [
      "name",
      "Un",
-     "V"
+     "V",
+     "R"
     ],
     "since": "4.20"
    },
@@ -2734,6 +2737,7 @@
      "Q",
      "Vac",
      "side",
+     "I",
      "Rtr",
      "Xtr",
      "Bf",

@@ -146,9 +146,9 @@
 | `pcl.cpf.run` | `net`, `direction`, `q_limits`, `step`, `dV`, `lower`, `stop`, `V_stop`, `max_points`, `tol` | 4.19.5 · πειρ. |
 | `pcl.current` | — | 3.18 |
 | `pcl.dcgrid.DCGrid` | `P_base`, `name` | 4.20 · πειρ. |
-| `pcl.dcgrid.DCGrid.bus` | `name`, `Un`, `V` | 4.20 · πειρ. |
+| `pcl.dcgrid.DCGrid.bus` | `name`, `Un`, `V`, `R` | 4.20 · πειρ. |
 | `pcl.dcgrid.DCGrid.conductance` | — | 4.20 · πειρ. |
-| `pcl.dcgrid.DCGrid.converter` | `bus`, `control`, `P`, `V`, `droop`, `Prated`, `R`, `name` | 4.20 · πειρ. |
+| `pcl.dcgrid.DCGrid.converter` | `bus`, `control`, `P`, `V`, `droop`, `Prated`, `R`, `I`, `name` | 4.20 · πειρ. |
 | `pcl.dcgrid.DCGrid.flow` | `tol`, `max_iter`, `start` | 4.20 · πειρ. |
 | `pcl.dcgrid.DCGrid.line` | `a`, `b`, `R`, `r`, `length`, `poles`, `name`, `rating` | 4.20 · πειρ. |
 | `pcl.dcgrid.DCGrid.remove` | `name` | 4.20 · πειρ. |
@@ -343,7 +343,7 @@
 | `pcl.network.Network.case` | — | 4.19.1 |
 | `pcl.network.Network.contingency` | `kind`, `branches`, `ratings`, `tol`, `q_limits`, `backend`, `how` | 4.19.1 |
 | `pcl.network.Network.cpf` | `**kw` | 4.19.5 |
-| `pcl.network.Network.dc_bus` | `name`, `Un`, `V` | 4.20 |
+| `pcl.network.Network.dc_bus` | `name`, `Un`, `V`, `R` | 4.20 |
 | `pcl.network.Network.dc_flow` | — | 4.19.1 |
 | `pcl.network.Network.dc_grid` | — | 4.20 |
 | `pcl.network.Network.dc_line` | `a`, `b`, `R`, `r`, `length`, `poles`, `name`, `rating` | 4.20 |
@@ -373,7 +373,7 @@
 | `pcl.network.Network.transformer` | `hv`, `lv`, `Sr`, `Uhv`, `Ulv`, `uk`, `ur`, `group`, `X0X`, `R0R`, `Zn_hv`, `Zn_lv`, `tap`, `KT`, `shift`, `name` | 4.2 |
 | `pcl.network.Network.transformer3` | `a`, `b`, `c`, `Sr`, `Ur`, `uk`, `ur`, `group`, `ref`, `z0`, `KT`, `name` | 4.2 |
 | `pcl.network.Network.unit` | `bus`, `gen`, `trafo`, `oltc`, `pT`, `Zn`, `earthed`, `name`, `P`, `V`, `Qmin`, `Qmax`, `slack` | 4.2 |
-| `pcl.network.Network.vsc` | `bus`, `dc`, `control`, `P`, `V`, `droop`, `Prated`, `R`, `Q`, `Vac`, `side`, `Rtr`, `Xtr`, `Bf`, `Rc`, `Xc`, `a_loss`, `b_loss`, `crec`, `cinv`, `name` | 4.20 |
+| `pcl.network.Network.vsc` | `bus`, `dc`, `control`, `P`, `V`, `droop`, `Prated`, `R`, `Q`, `Vac`, `side`, `I`, `Rtr`, `Xtr`, `Bf`, `Rc`, `Xc`, `a_loss`, `b_loss`, `crec`, `cinv`, `name` | 4.20 |
 | `pcl.network.NetworkError` | — | 4.2 |
 | `pcl.network.c_factor` | `Un`, `which`, `lv_tol` | 4.2 |
 | `pcl.network.case_data` | `name` | 4.19.1 |
