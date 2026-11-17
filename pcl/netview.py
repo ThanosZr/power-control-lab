@@ -21,11 +21,12 @@ import numpy as np
 UNIT = 100.0            # the length of a typical branch in drawing units
 FULL = 2500             # buses up to which the stress uses every pair of buses (memory n², time n² per sweep)
 PIVOTS = 200            # above it: distances to this many buses only (pivot scaling, Brandes & Pich 2007)
-LAYERS = ('base', 'voltage', 'angle', 'loading', 'flow', 'violations', 'n1', 'security', 'collapse', 'residual', 'thd', 'lmp')
+LAYERS = ('base', 'voltage', 'angle', 'loading', 'flow', 'violations', 'n1', 'security', 'collapse', 'residual', 'thd', 'unbalance', 'lmp')
 TITLES = {'base': 'Επίπεδα τάσης', 'voltage': 'Τάσεις ζυγών', 'angle': 'Γωνίες τάσης', 'loading': 'Φόρτιση κλάδων', 'flow': 'Ροές ενεργού ισχύος',
           'violations': 'Παραβιάσεις', 'n1': 'N−1: τι προκαλεί η απώλεια κάθε κλάδου', 'security': 'Ασφάλεια N−1: η χειρότερη φόρτιση κάθε κλάδου μετά από διαταραχή',
           'collapse': 'Ευστάθεια τάσης: πτώση της τάσης κάθε ζυγού ως το όριο φόρτισης', 'residual': 'Εκτίμηση κατάστασης: το μεγαλύτερο κανονικοποιημένο υπόλοιπο των μετρήσεων κάθε ζυγού και κάθε κλάδου',
-          'thd': 'Αρμονική παραμόρφωση τάσης (THD) κάθε ζυγού ως προς το όριό του', 'lmp': 'Οριακές τιμές κόμβων'}
+          'thd': 'Αρμονική παραμόρφωση τάσης (THD) κάθε ζυγού ως προς το όριό του', 'unbalance': 'Ασυμμετρία τάσης: αρνητική ως προς θετική ακολουθία σε κάθε τριφασικό ζυγό',
+          'lmp': 'Οριακές τιμές κόμβων'}
 # colours: a diverging scale for a quantity around a centre, a sequential one for a quantity from zero, and the voltage levels
 DIVERGING = ['#2166ac', '#67a9cf', '#d1e5f0', '#bdbdbd', '#fddbc7', '#ef8a62', '#b2182b']
 SEQUENTIAL = ['#bdbdbd', '#fee08b', '#fdae61', '#f46d43', '#d73027', '#7f0000']
@@ -440,6 +441,24 @@ def values(v, result=None, layer='base', study=None):
         out['note_base'] = ((f'Μεγαλύτερη παραμόρφωση: {gr(w["THD"])} % στον ζυγό {w["bus"]}. ' if w.get('bus') is not None else '')
                             + ('Κανένας ζυγός πάνω από το όριό του.' if not over else f'Πάνω από το όριό τους: {len(over)} ζυγοί.' if len(over) > 1 else f'Πάνω από το όριό του: ο ζυγός {over[0]}.'))
         return out
+    if layer == 'unbalance':
+        # 4.19.5, three-phase load flow: the voltage unbalance of every bus of three phases; a bus of one or two phases stays grey
+        feeder = any(isinstance(q, dict) and 'phases' in q for q in rb.values())
+        if not feeder:
+            return missing('Η στρώση της ασυμμετρίας θέλει τριφασική ροή φορτίου.')
+        vals = {str(b): _num(q.get('unbalance')) for b, q in rb.items() if isinstance(q, dict) and q.get('unbalance') is not None}
+        top = max(3.0, max(vals.values(), default=0.0))
+        col = _scale(RESIDUAL, 0.0, top)
+        out['bus'], out['unit_bus'] = vals, '%'
+        out['bus_color'] = {b['id']: (col(vals[b['id']]) if b['id'] in vals else GREY) for b in v['buses']}
+        out['branch_color'] = {e['name']: GREY for e in v['branches']}
+        gr = lambda x, d=1: f'{float(x):.{d}f}'.replace('.', ',')      # noqa: E731
+        out['legend'] = [(col(top * (i + 0.5) / 6), f'{gr(top * i / 6)}–{gr(top * (i + 1) / 6)} %') for i in range(6)] + [(GREY, 'μία ή δύο φάσεις')]
+        w = (res.get('worst') or {}).get('unbalance') or {}
+        lo = (res.get('worst') or {}).get('low') or {}
+        out['note_base'] = ((f'Μεγαλύτερη ασυμμετρία: {gr(w["value"], 2)} % στον ζυγό {w["bus"]}. ' if w.get('value') is not None else '')
+                            + (f'Χαμηλότερη τάση φάσης: {gr(lo["V"], 4)} pu στη φάση {lo["phase"]} του ζυγού {lo["bus"]}.' if lo.get('bus') is not None else ''))
+        return out
     if layer == 'violations' and cpf:                         # (the voltages at the loading limit are not an operating state to check against limits)
         return missing('Στη συνεχιζόμενη ροή φορτίου οι τάσεις είναι του ορίου φόρτισης: δες τη στρώση της ευστάθειας τάσης.')
     if layer in ('voltage', 'angle', 'lmp'):
@@ -466,6 +485,8 @@ def values(v, result=None, layer='base', study=None):
             out['title'] += ' (εκτίμηση από τις μετρήσεις)'
         elif isinstance(res.get('harmonics'), list) and layer != 'lmp':
             out['title'] += ' (θεμελιώδης συχνότητα)'
+        elif any(isinstance(q, dict) and 'phases' in q for q in rb.values()) and layer == 'voltage':
+            out['title'] += ' (η χαμηλότερη φάση κάθε ζυγού)'
         out['bus_color'] = {b['id']: col(vals.get(b['id'])) for b in v['buses']}
         out['branch_color'] = {e['name']: GREY for e in v['branches']}
         a0, a1 = (1 - max(1 - lo, hi - 1), 1 + max(1 - lo, hi - 1)) if layer == 'voltage' else (lo, hi)
@@ -586,7 +607,7 @@ def _maybe_int(s):
         return s
 
 
-DEFAULT = {'pf': 'voltage', 'n1': 'n1', 'n1dc': 'n1', 'opf': 'lmp', 'dcopf': 'lmp', 'scopf': 'security', 'cpf': 'collapse', 'se': 'residual', 'harmonic': 'thd'}     # the layer a study opens with
+DEFAULT = {'pf': 'voltage', 'n1': 'n1', 'n1dc': 'n1', 'opf': 'lmp', 'dcopf': 'lmp', 'scopf': 'security', 'cpf': 'collapse', 'se': 'residual', 'harmonic': 'thd', 'unbalanced': 'unbalance'}     # the layer a study opens with
 
 
 def pack(v, result=None, layers=None):

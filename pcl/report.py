@@ -429,7 +429,8 @@ document.addEventListener('click',function(ev){var b=ev.target.closest('button[d
 def network_report(net, study='pf', result=None, title=None, **kw):
     """A report for a study of a pcl.network.Network: study 'pf' (load flow), 'n1' / 'n1dc' (N−1 in AC / with the DC screening),
     'opf' / 'dcopf' (optimal power flow), 'scopf' (4.19.4: the DC optimal power flow with security against every single outage),
-    'cpf' (4.19.5: the continuation load flow, the P–V curve and the loading margin), 'se' (4.19.5: state estimation), 'harmonic' (4.19.5: the harmonic load flow). result: the result of the study if it has run already (else it runs here with kw).
+    'cpf' (4.19.5: the continuation load flow, the P–V curve and the loading margin), 'se' (4.19.5: state estimation), 'harmonic' (4.19.5: the harmonic load flow), 'unbalanced' (4.19.5: the three-phase load flow of a feeder; net is then
+    pcl.unbalanced.as_network of the feeder and result the result of pcl.unbalanced.run). result: the result of the study if it has run already (else it runs here with kw).
     The sections can be extended or re-ordered afterwards as with any Report. picture (4.19.4): a view of pcl.netview.view to
     draw on instead of the view of this network (the same places when the network is a changed copy of another)."""
     MW = 1e6
@@ -440,7 +441,7 @@ def network_report(net, study='pf', result=None, title=None, **kw):
     head = {'pf': 'Ροή φορτίου', 'n1': 'Ανάλυση N−1 (AC)', 'n1dc': 'Ανάλυση N−1 (σάρωση DC)', 'opf': 'Βέλτιστη ροή φορτίου (AC)', 'dcopf': 'Βέλτιστη ροή φορτίου (DC)',
             'scopf': 'Βέλτιστη ροή φορτίου με ασφάλεια N−1 (DC)', 'cpf': 'Συνεχιζόμενη ροή φορτίου: καμπύλη P–V και περιθώριο φόρτισης',
             'se': 'Εκτίμηση κατάστασης: ελάχιστα τετράγωνα με βάρη και εντοπισμός λανθασμένων μετρήσεων',
-            'harmonic': 'Αρμονική ροή φορτίου: παραμόρφωση τάσης και συντονισμοί'}
+            'harmonic': 'Αρμονική ροή φορτίου: παραμόρφωση τάσης και συντονισμοί', 'unbalanced': 'Ασύμμετρη (τριφασική) ροή φορτίου τροφοδότη'}
     if study not in head:
         raise ReportError(f'network_report: study one of {", ".join(head)}')
     r = Report(title or head[study], name, meta={'Ζυγοί': len(net.buses), 'Κλάδοι': nbr, 'Γεννήτριες': gens, 'S βάσης (MVA)': net.S_base / MW})
@@ -541,6 +542,14 @@ def network_report(net, study='pf', result=None, title=None, **kw):
             r.heading('Η μέθοδος')
             r.text(f'{res["advice"]["why"][0].upper()}{res["advice"]["why"][1:]}.')
         _harmonic(r, net, res, MW, picture)
+    elif study == 'unbalanced':
+        if result is None:
+            raise ReportError('network_report: the three-phase load flow needs its result (pcl.unbalanced.run of the feeder)')
+        res = result
+        if res.get('advice'):
+            r.heading('Η μέθοδος')
+            r.text(f'{res["advice"]["why"][0].upper()}{res["advice"]["why"][1:]}.')
+        _unbalanced(r, net, res, picture)
     else:
         res = result or (net.scopf(**kw) if study == 'scopf' else net.opf('ac' if study == 'opf' else 'dc', **kw))
         advice(res.get('advice') or net.advice('dcopf' if study == 'scopf' else study))
@@ -823,6 +832,75 @@ def _harmonic(r, net, res, MW, picture):
         r.heading('Κλάδοι με το πιο παραμορφωμένο ρεύμα')
         r.table(['Κλάδος', 'Από', 'Προς', 'Ρεύμα θεμελιώδους (pu)', 'THD ρεύματος (%)', 'Ενεργός τιμή (pu)', 'Μεγαλύτερη αρμονική'],
                 [[q['name'], q['a'], q['b'], q['I1'], q['THD'], q['Irms'], f'{max(q["Ih"], key=q["Ih"].get)}η'] for q in br], '', [None, None, None, 4, 4, 4, None])
+
+
+def _unbalanced(r, net, res, picture):
+    """4.19.5: the three-phase load flow of a feeder: the voltage of every phase, the unbalance, the sections, the regulators, and
+    the published profile where the feeder carries one."""
+    f = lambda x, d=2: '—' if x is None else f'{x:.{d}f}'.replace('.', ',')             # noqa: E731
+    if not res['converged']:
+        r.note('Η ροή φορτίου δεν συνέκλινε: ' + res['message'] + '.', 'critical')
+        return
+    B, w, inp, pub = res['buses'], res['worst'], res['input'], res.get('published') or {}
+    names = [b for b, d in B.items() if not d['made']]
+    r.facts([('Σύγκλιση', True), ('Επαναλήψεις', int(res['iterations'])), ('Κόμβοι φάσης', int(res['nodes'])), ('Ζυγοί', len(names)),
+             ('Χαμηλότερη τάση φάσης (pu)', round(w['low']['V'], 4)), ('στον ζυγό, φάση', f'{w["low"]["bus"]}, {w["low"]["phase"]}'), ('Ψηλότερη τάση φάσης (pu)', round(w['high']['V'], 4)),
+             ('στον ζυγό, φάση ', f'{w["high"]["bus"]}, {w["high"]["phase"]}'), ('Μεγαλύτερη ασυμμετρία τάσης (%)', None if w['unbalance']['value'] is None else round(w['unbalance']['value'], 3)),
+             ('στον ζυγό', w['unbalance']['bus']), ('Ισχύς εισόδου (kW)', round(inp['kW_total'], 2)), ('Φορτίο (kW)', round(res['load_kW'], 2)), ('Απώλειες (kW)', round(res['losses_kW'], 3)),
+             ('Πυκνωτές (kvar)', round(res['cap_kvar'], 2)), ('Χρόνος (ms)', round(res['time'] * 1e3, 1))])
+    r.text('Κάθε φάση κάθε κόμβου λύνεται χωριστά. Οι γραμμές δεν είναι αντιμετατεθειμένες και τα φορτία δεν είναι ίσα στις τρεις φάσεις, άρα οι τάσεις των φάσεων διαφέρουν, '
+           'και μια φάση μπορεί να έχει ψηλότερη τάση στο τέλος του τροφοδότη από ό,τι στην αρχή του, από τη σύζευξη με τις άλλες δύο. Ασυμμετρία τάσης: η αρνητική ακολουθία των τριών '
+           'τάσεων ως προς τη θετική.')
+    if res['spread'] == 'middle':
+        r.note('Τα κατανεμημένα φορτία μπήκαν ολόκληρα στο μέσο του τμήματός τους (όχι με το ακριβές ισοδύναμο δύο τρίτα στο ένα τέταρτο, ένα τρίτο στο άκρο).', 'info')
+    if pub.get('V'):
+        dv = max(abs(B[b]['phases'][p]['V'] - q[0]) for b, rows in pub['V'].items() if b in B for p, q in zip('abc', rows) if q and p in B[b]['phases'])
+        da = max(abs(B[b]['phases'][p]['angle'] - q[1]) for b, rows in pub['V'].items() if b in B for p, q in zip('abc', rows) if q and p in B[b]['phases'])
+        r.note(f'Απέναντι στο δημοσιευμένο προφίλ τάσεων του τροφοδότη: μέγιστη διαφορά {f(dv, 5)} pu και {f(da, 3)}°' + (f'· απώλειες {f(res["losses_kW"], 3)} kW, δημοσιευμένες {f(pub["losses_kW"], 3)} kW'
+               if pub.get('losses_kW') is not None else '') + '. Οι δημοσιευμένες τιμές έχουν τέσσερα δεκαδικά.', 'good' if dv < 5e-4 else 'warning')
+    picture(res, 'unbalance', 'voltage')
+    r.heading('Τάση ανά φάση')
+    r.chart('dot', names, [{'name': f'φάση {p}', 'y': [B[b]['phases'][p]['V'] if p in B[b]['phases'] else None for b in names]} for p in 'abc'],
+            'Μέτρο της τάσης κάθε φάσης σε κάθε ζυγό (κενό: ο ζυγός δεν έχει τη φάση)', 'ζυγός', 'pu', limits=[{'value': 0.95, 'label': '0,95 pu', 'status': 'warning'}, {'value': 1.05, 'label': '1,05 pu', 'status': 'warning'}])
+    cols = ['Ζυγός', 'kV', '|V_a| (pu)', '∠a (°)', '|V_b| (pu)', '∠b (°)', '|V_c| (pu)', '∠c (°)', 'Ασυμμετρία (%)']
+    rows = []
+    for b in names:
+        d = B[b]
+        rows.append([b, d['kV']] + [x for p in 'abc' for x in ((d['phases'][p]['V'], d['phases'][p]['angle']) if p in d['phases'] else (None, None))] + [d.get('unbalance')])
+    r.table(cols, rows, '', [None, 3, 5, 4, 5, 4, 5, 4, 3], {i: 'warning' for i, b in enumerate(names) if B[b]['Vmin'] < 0.95 or B[b]['Vmax'] > 1.05},
+            note='Τάσεις φάσης προς ουδέτερο, ως προς την ονομαστική του ζυγού. Η ασυμμετρία δίνεται στους ζυγούς τριών φάσεων.')
+    if pub.get('V'):
+        r.heading('Απέναντι στη δημοσίευση', 3)
+        prow = []
+        for b, vals in pub['V'].items():
+            if b not in B:
+                continue
+            for p, q in zip('abc', vals):
+                if q and p in B[b]['phases']:
+                    x = B[b]['phases'][p]
+                    prow.append([b, p, x['V'], q[0], x['V'] - q[0], x['angle'], q[1], x['angle'] - q[1]])
+        r.table(['Ζυγός', 'Φάση', '|V| εδώ (pu)', '|V| δημοσίευση (pu)', 'Διαφορά (pu)', 'Γωνία εδώ (°)', 'Γωνία δημοσίευση (°)', 'Διαφορά (°)'], prow, '', [None, None, 5, 5, 2, 4, 5, 2])
+    if res['taps']:
+        r.heading('Ρυθμιστές τάσης')
+        how = {'given': 'οι λήψεις είναι δοσμένες', 'control': 'οι λήψεις βρέθηκαν από τον αντισταθμιστή πτώσης γραμμής', 'neutral': 'όλες οι λήψεις στο μηδέν'}[res['regulators']]
+        r.table(['Ρυθμιστής', 'Φάση', 'Λήψη', 'Λόγος', 'Τάση ρελέ (V)'],
+                [[k, p, t, 1 + 0.00625 * t, (res['relay'].get(k) or {}).get(p)] for k, tp in res['taps'].items() for p, t in tp.items()], how[0].upper() + how[1:], [None, None, None, 5, 5],
+                note='Κάθε λήψη είναι 0,625 %. Η τάση του ρελέ δίνεται όταν οι λήψεις βρίσκονται από τον έλεγχο.')
+    r.heading('Είσοδος ανά φάση')
+    ph = list(inp['kW'])
+    r.table(['Φάση', 'kW', 'kvar', 'A'], [[p, inp['kW'][p], inp['kvar'][p], inp['A'][p]] for p in ph] + [['σύνολο', inp['kW_total'], inp['kvar_total'], None]], '', [None, 6, 6, 5])
+    r.heading('Τμήματα')
+    srow = []
+    for s in res['sections']:
+        srow.append([s['name'], {'line': 'γραμμή', 'switch': 'διακόπτης', 'transformer': 'μετασχηματιστής', 'regulator': 'ρυθμιστής'}[s['kind']], s['a'], s['b']]
+                    + [s['I'].get(p) for p in 'abc'] + [s['loss']] + [s['loss_kW'].get(p) for p in 'abc'])
+    r.table(['Τμήμα', 'Είδος', 'Από', 'Προς', 'I_a (A)', 'I_b (A)', 'I_c (A)', 'Απώλειες (kW)', 'φάση a', 'φάση b', 'φάση c'], srow, '', [None, None, None, None, 5, 5, 5, 4, 4, 4, 4],
+            note='Οι απώλειες ανά φάση είναι ό,τι μπαίνει στη φάση μείον ό,τι βγαίνει από αυτήν: μια φάση μπορεί να βγάζει αρνητικό αριθμό, γιατί παίρνει ισχύ από τις άλλες μέσω της σύζευξης. Το άθροισμα είναι οι απώλειες του τμήματος.')
+    r.heading('Φορτία και πυκνωτές')
+    r.table(['Φορτίο', 'Ζυγός', 'Ανάμεσα', 'Μοντέλο', 'kW', 'kvar', 'A'], [[q['name'], q['bus'], q['where'], {'PQ': 'σταθερή ισχύς', 'I': 'σταθερό ρεύμα', 'Z': 'σταθερή εμπέδηση'}[q['model']], q['kW'], q['kvar'], q['A']]
+                                                                       for q in res['loads']], '', [None, None, None, None, 5, 5, 5])
+    if res['capacitors']:
+        r.table(['Πυκνωτής', 'Ζυγός', 'Φάση', 'kvar'], [[q['name'], q['bus'], q['phase'], q['kvar']] for q in res['capacitors']], '', [None, None, None, 5])
 
 
 def _branches(r, net, branches, MW):
