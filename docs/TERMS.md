@@ -253,6 +253,18 @@
 | long-line (distributed-parameter) model, lumped π | μοντέλο μακριάς γραμμής (κατανεμημένες παράμετροι), συγκεντρωμένο π (4.19.5) |
 | positive / negative / zero sequence (of a harmonic order) | θετική / αρνητική / μηδενική ακολουθία (μιας τάξης)· ομοπολική (4.19.5) |
 | point of common coupling (PCC) | σημείο κοινής σύνδεσης (4.19.5) |
+| unbalanced (three-phase) load flow | ασύμμετρη (τριφασική) ροή φορτίου (4.19.5) |
+| (distribution) feeder, lateral | τροφοδότης (διανομής), κλάδος (πλευρική γραμμή) (4.19.5) |
+| phase frame, phase impedance matrix | πλαίσιο των φάσεων, πίνακας εμπεδήσεων των φάσεων (4.19.5) |
+| untransposed line, mutual impedance | μη αντιμετατεθειμένη γραμμή, αμοιβαία εμπέδηση (4.19.5) |
+| voltage unbalance (negative over positive sequence) | ασυμμετρία τάσης (αρνητική ως προς θετική ακολουθία) (4.19.5) |
+| step voltage regulator, tap | ρυθμιστής τάσης (με βήματα), λήψη (4.19.5) |
+| line-drop compensator, voltage level, bandwidth | αντισταθμιστής πτώσης γραμμής, στάθμη τάσης, ζώνη (εύρος ζώνης) (4.19.5) |
+| regulator hunting | ταλάντωση του ρυθμιστή (ανάμεσα σε δύο λήψεις) (4.19.5) |
+| spot load, distributed load, exact lumped load model | σημειακό φορτίο, κατανεμημένο φορτίο, ακριβές ισοδύναμο (δύο σημειακών φορτίων) (4.19.5) |
+| constant power / current / impedance load | φορτίο σταθερής ισχύος / σταθερού ρεύματος / σταθερής εμπέδησης (4.19.5) |
+| wye (star) / delta connected load | φορτίο σε αστέρα / σε τρίγωνο (4.19.5) |
+| Kron reduction (of the neutral) | αναγωγή Kron (απαλοιφή του ουδετέρου) (4.19.5) |
 | P–V (nose) curve, nose (fold, saddle-node bifurcation) | καμπύλη P–V, μύτη της καμπύλης (διακλάδωση σάγματος–κόμβου) (4.19.5) |
 | loadability limit (maximum loading point), loading margin | όριο φόρτισης, περιθώριο φόρτισης (4.19.5) |
 | limit-induced bifurcation | άμεση αστάθεια στο όριο αέργου (γωνία της καμπύλης, όχι μύτη) (4.19.5) |
