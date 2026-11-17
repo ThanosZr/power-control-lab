@@ -91,9 +91,14 @@ class ApiSurface(unittest.TestCase):
         from pcl import study
         self.assertIn('scopf', study.STUDIES)
 
+    def test_the_surface_of_4_19_5(self):
+        # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it
+        # ('off': the path of before 4.19.5, for comparison)
+        self.assertEqual(self.now['project']['file.solve']['params'][-1], 'evSnap')
+
     def test_the_surface_of_4_19_3(self):
         # the two settings of the solver are in the file format (stable); the large network is one more name of the test networks
-        self.assertEqual(self.now['project']['file.solve']['params'][-2:], ['modeVec', 'initSolver'])
+        self.assertEqual(self.now['project']['file.solve']['params'][11:13], ['modeVec', 'initSolver'])
         from pcl import network
         self.assertIn('pegase1354', network.CASES)
 

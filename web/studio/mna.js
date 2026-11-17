@@ -1062,7 +1062,7 @@
 
  // ---------------------------------------------------------------- simulator
  class Sim{
-  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,mem:+opts.mem>0?+opts.mem:0,eventsMax:+opts.eventsMax>0?+opts.eventsMax:0,...(opts.events===false?{events:false}:{}),step:opts.step||null,solver:opts.solver||null,refac:opts.refac||null,modeVec:opts.modeVec||null,initSolver:opts.initSolver||null,recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
+  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,mem:+opts.mem>0?+opts.mem:0,eventsMax:+opts.eventsMax>0?+opts.eventsMax:0,...(opts.events===false?{events:false}:{}),step:opts.step||null,solver:opts.solver||null,refac:opts.refac||null,modeVec:opts.modeVec||null,initSolver:opts.initSolver||null,evSnap:opts.evSnap||null,recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
   // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
   // (4.14: the sampling clock inside an MMC, Model 1, does not set the step)
   basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>(b.type==='CLK'||b.type==='RAMP')&&!/\/MCLK$/.test(b.id));if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
@@ -1236,6 +1236,7 @@
     this.refac=['off','full','partial'].includes(rf)?rf:'partial';       // 'auto' = partial refactorization; 'full': every column; 'off': from scratch, as before 4.19 (the reference)
     // 4.19.3: the eigenvectors of the step check: 'lu' (auto, as before) or 'hess' (from the Hessenberg form, n² per mode: stepcheck.js)
     this.modeVec=(this.opts.modeVec||project?.sim?.modeVec||project?.solve?.modeVec)==='hess'?'hess':'lu';
+    this.evSnap=(this.opts.evSnap||project?.sim?.evSnap||project?.solve?.evSnap)!=='off';   // 4.19.5: the end of a piece of run() on the event that lies within eps after it
     this.A=this.sparse?null:new Float64Array(this.n*this.n);}
    if(old&&!fresh)for(const e of net.els)if(e.k==='NL'){const o=old.els.find(x=>x.k==='NL'&&x.cid===e.cid);if(o){e.v0=o.v0;if(o.sai&&e.sai)for(const k of SAI_ST)e.sai[k]=o.sai[k];}}this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.hUser=this.opts.h||this.T/this.opts.hDiv;this.h=Math.min(this.hUser,this.tlMaxStep());
@@ -2076,8 +2077,12 @@
    for(const e of this.net.els)if(e.k==='C')e.i=(V(e.a)-V(e.b)-e.v)*e.C/hs;
    for(const e of this.saiEls||[]){const S=e.sai,v=V(e.a)-V(e.b);saiCur(S,v);S.ic=(S.ug[0]-S.vc)*S.C/hs;S.v=v;S.u0=S.ug[0];S.u1=S.ug[1];S.h=0;S.ug=null;}
    this.x=sol;this.cMode='TR';}
+  // 4.19.5: an event that lies within eps after tMax is the answer, not tMax. run() ends its pieces on tMax, and a piece that
+  // ended a few rounding errors before an edge left the time inside the eps of that edge: the edge was then never a step
+  // boundary, and a gate changed one step late or a comparator at a wrong instant after a carrier reset (solve.evSnap 'off':
+  // as before)
   nextEvent(tMax){
-   let t=tMax;const eps=this.h*1e-6;
+   const eps=this.h*1e-6,tLim=this.evSnap?tMax+eps:tMax;let t=tLim;
    for(const k of this.net.ctrls){if(k.mode==='spwm'){continue;}for(const e of this.ctrlEdges(k))if(e>this.t+eps&&e<t)t=e;
     const tv=k.tk+k.T/2;if(k.mode!=='pp'&&k.carrier!=='saw'&&tv>this.t+eps&&tv<t)t=tv; // carrier minimum
     const tn=(Math.floor((this.t+eps)/k.T-k.phase)+1+k.phase)*k.T;if(tn>this.t+eps&&tn<t)t=tn;} // next period start (after a live phase change)
@@ -2100,7 +2105,8 @@
    {const tp=this.progNext();if(tp>this.t+eps&&tp<t)t=tp;} // program of parameter changes (3.19)
    // base-period boundary for statistics
    const Tb=this.T,kb=Math.floor((this.t+eps)/Tb)+1,tb=kb*Tb,tO=t;if(tb>this.t+eps&&tb<t)t=tb;
-   this.evStat=t<tO; // only the statistics boundary: not a discontinuity for the variable step
+   this.evStat=t<tO&&t!==tMax; // only the statistics boundary: not a discontinuity for the variable step
+   if(t===tLim)t=tMax;         // nothing before tMax nor within eps after it
    // a programmed jump of a source, a resistance or a constant block at t: the step ends on its left value (3.15)
    this.evJump=false;if(!this.evStat)out:for(const [sc] of this.jumpScheds())for(const [ts] of sc)if(Math.abs(ts-t)<=eps){this.evJump=true;break out;}
    return t;
@@ -2131,8 +2137,9 @@
     steps++;
     if(hst<this.hTiny&&++this.nTiny===2000)this.note('tiny',{sev:'warn',grp:'step',id:null,msg:`Πολλά βήματα κάτω από 10⁻⁶·Δt (συμβάντα πολύ κοντά το ένα στο άλλο, από t = ${P.eng(this.t,'s',4)}).`,fix:'Συνήθως διακόπτης ή συγκριτής που αλλάζει κατάσταση συνεχώς (chattering): έλεγξε την υστέρηση ή τον νεκρό χρόνο.'});
     if(this.method==='TR'&&this.lastSmooth&&!this.lastDisc&&this.stEls.length<=4000)this.ringCheck();else if(this.lastDisc)this.rx=null;
-    // land exactly on event times; a programmed jump there makes the next step start like a switching (3.15)
-    if(Math.abs(this.t-tn)<eps){this.t=tn;if(this.evJump&&this.jumpAt(tn)){this.jumpNow=true;if(this.ev?.on)for(const [sc,d,id] of this.jumpScheds()){const a=schedAt(sc,tn,d,true),b=schedAt(sc,tn,d);if(a!==b)this.logEv('jump',id,b,{from:a});}}}
+    // land exactly on event times; a programmed jump there makes the next step start like a switching (3.15). 4.19.5: also when a
+    // step that was cut short (a comparator, a diode) ended inside the eps of nextEvent before tn, where tn would no longer be found
+    if(Math.abs(this.t-tn)<eps||(this.evSnap&&tn>this.t&&tn-this.t<this.h*1e-6)){this.t=tn;if(this.evJump&&this.jumpAt(tn)){this.jumpNow=true;if(this.ev?.on)for(const [sc,d,id] of this.jumpScheds()){const a=schedAt(sc,tn,d,true),b=schedAt(sc,tn,d);if(a!==b)this.logEv('jump',id,b,{from:a});}}}
     this.leftAt=null;
     if(this.lastDisc||this.topoSig===null)this.topoCheck();
     this.started=true;

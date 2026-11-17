@@ -24,7 +24,7 @@
 | `web/studio/live_worker.js` | 88 |
 | `web/studio/math.js` | 144 |
 | `web/studio/metrics.js` | 89 |
-| `web/studio/mna.js` | 2275 |
+| `web/studio/mna.js` | 2282 |
 | `web/studio/netlib.js` | 1355 |
 | `web/studio/netview.js` | 138 |
 | `web/studio/nn.js` | 57 |
@@ -100,7 +100,7 @@
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_api_surface.py` | 169 |
+| `tests/test_api_surface.py` | 174 |
 | `tests/test_arc.py` | 189 |
 | `tests/test_backend.py` | 238 |
 | `tests/test_batch.py` | 255 |
@@ -144,6 +144,7 @@
 | `tests/test_nnstart.py` | 315 |
 | `tests/test_opf.py` | 262 |
 | `tests/test_pcl.py` | 312 |
+| `tests/test_pieces.py` | 58 |
 | `tests/test_plotcore.py` | 74 |
 | `tests/test_plotting.py` | 113 |
 | `tests/test_powerflow.py` | 329 |
@@ -193,6 +194,7 @@
 | `tests/js/netlib_cases.js` | 93 |
 | `tests/js/netview_cases.js` | 77 |
 | `tests/js/nn_cases.js` | 48 |
+| `tests/js/pieces_cases.js` | 45 |
 | `tests/js/plotcore_cases.js` | 25 |
 | `tests/js/refac_cases.js` | 68 |
 | `tests/js/sim_cases.js` | 356 |
@@ -1460,128 +1462,128 @@ _(χωρίς συναρτήσεις)_
 | 1191 | method | `stateMap` |
 | 1193 | method | `stateMap0` |
 | 1204 | method | `load` |
-| 1258 | method | `reset` |
-| 1261 | method | `imStep` |
-| 1268 | method | `smStep` |
-| 1270 | method | `srmStep` |
-| 1271 | method | `srmOutputs` |
-| 1272 | method | `smOutputs` |
-| 1276 | method | `genStep` |
-| 1283 | method | `genOutputs` |
-| 1288 | method | `genTm` |
-| 1289 | method | `genEfd` |
-| 1290 | method | `imSources` |
-| 1291 | method | `pyBlocks` |
-| 1301 | method | `pyLazy` |
-| 1303 | method | `pyUpgrade` |
-| 1305 | method | `setMethod` |
-| 1306 | method | `setControl` |
-| 1308 | method | `setBlock` |
-| 1310 | method | `setHold` |
-| 1312 | method | `markChange` |
-| 1317 | method | `progInit` |
-| 1318 | method | `addProgram` |
-| 1320 | method | `progNext` |
-| 1321 | method | `progDue` |
-| 1322 | method | `progApply` |
-| 1337 | method | `evInit` |
-| 1338 | method | `logEv` |
-| 1340 | method | `events` |
-| 1342 | method | `evSwitches` |
-| 1344 | method | `channelKeys` |
-| 1363 | method | `allocRecord` |
-| 1373 | const fn | `A` |
-| 1381 | method | `V` |
-| 1382 | method | `elCurrent` |
-| 1386 | method | `portI` |
-| 1390 | method | `computeVals` |
-| 1424 | method | `setRecord` |
-| 1425 | method | `recordNow` |
-| 1435 | method | `closePeriod` |
-| 1446 | method | `lastPeriod` |
-| 1447 | method | `now` |
-| 1452 | method | `gateOf` |
-| 1458 | method | `rawGate` |
-| 1469 | method | `carrier` |
-| 1472 | method | `shGrid` |
-| 1473 | method | `shNext` |
-| 1475 | method | `sampleHolds` |
-| 1480 | method | `samples` |
-| 1481 | method | `ctrlEdges` |
-| 1487 | method | `scrU` |
-| 1488 | method | `scrGate` |
-| 1489 | method | `scrEdges` |
-| 1490 | method | `setFiring` |
-| 1491 | method | `compV` |
-| 1492 | method | `compI` |
-| 1494 | method | `dbl` |
-| 1495 | method | `sampleControllers` |
-| 1529 | method | `evalBlocks` |
-| 1633 | method | `blkCopy` |
-| 1636 | method | `blkAnyDue` |
-| 1639 | method | `blkDue` |
-| 1641 | method | `zcFrac` |
-| 1644 | method | `saveState` |
-| 1646 | method | `restoreState` |
-| 1655 | method | `snapshot` |
-| 1657 | method | `restoreSnapshot` |
-| 1659 | method | `gateSigPeek` |
-| 1662 | method | `gateSig` |
-| 1667 | method | `jumpScheds` |
-| 1674 | method | `jumpAt` |
-| 1675 | method | `values` |
-| 1705 | method | `assemble` |
-| 1722 | const fn | `g` |
-| 1747 | method | `rhs` |
-| 1749 | const fn | `J` |
-| 1768 | method | `cplLinearize` |
-| 1776 | method | `solverInfo` |
-| 1791 | method | `factor` |
-| 1804 | method | `spAssemble` |
-| 1811 | method | `solveOnce` |
-| 1825 | method | `solve` |
-| 1843 | method | `nlLinearize` |
-| 1846 | method | `check` |
-| 1862 | method | `commit` |
-| 1887 | method | `initialSolve` |
-| 1899 | method | `tlSources` |
-| 1903 | method | `tlRecord` |
-| 1909 | method | `tlHist` |
-| 1915 | method | `tlmG` |
-| 1919 | method | `tlmSources` |
-| 1933 | method | `tlmRecord` |
-| 1948 | method | `tlwG` |
-| 1954 | method | `tlwSources` |
-| 1969 | method | `tlwRecord` |
-| 1986 | method | `tlmHist` |
-| 1993 | method | `step` |
-| 1995 | const fn | `gs` |
-| 2001 | method | `stepCore` |
-| 2060 | method | `edgeSolve` |
-| 2063 | method | `edgePoint` |
-| 2064 | method | `mmcMoved` |
-| 2067 | method | `arcGate` |
-| 2075 | method | `trRestart` |
-| 2079 | method | `nextEvent` |
-| 2085 | const fn | `sch` |
-| 2108 | method | `spwmCut` |
-| 2111 | const fn | `sig` |
-| 2116 | method | `run` |
-| 2161 | function | `tuneInfo` |
-| 2164 | function | `exportForBatch` |
-| 2185 | const fn | `hist` |
-| 2200 | const fn | `ci` |
-| 2201 | const fn | `vd` |
-| 2202 | const fn | `V` |
-| 2205 | const fn | `linePort` |
-| 2207 | const fn | `I` |
-| 2208 | const fn | `portRec` |
-| 2209 | const fn | `rec` |
-| 2226 | const fn | `clkOf` |
-| 2252 | function | `sweepPoint` |
-| 2257 | function | `setPath` |
-| 2263 | function | `eisPoint` |
-| 2271 | function | `resume` |
+| 1259 | method | `reset` |
+| 1262 | method | `imStep` |
+| 1269 | method | `smStep` |
+| 1271 | method | `srmStep` |
+| 1272 | method | `srmOutputs` |
+| 1273 | method | `smOutputs` |
+| 1277 | method | `genStep` |
+| 1284 | method | `genOutputs` |
+| 1289 | method | `genTm` |
+| 1290 | method | `genEfd` |
+| 1291 | method | `imSources` |
+| 1292 | method | `pyBlocks` |
+| 1302 | method | `pyLazy` |
+| 1304 | method | `pyUpgrade` |
+| 1306 | method | `setMethod` |
+| 1307 | method | `setControl` |
+| 1309 | method | `setBlock` |
+| 1311 | method | `setHold` |
+| 1313 | method | `markChange` |
+| 1318 | method | `progInit` |
+| 1319 | method | `addProgram` |
+| 1321 | method | `progNext` |
+| 1322 | method | `progDue` |
+| 1323 | method | `progApply` |
+| 1338 | method | `evInit` |
+| 1339 | method | `logEv` |
+| 1341 | method | `events` |
+| 1343 | method | `evSwitches` |
+| 1345 | method | `channelKeys` |
+| 1364 | method | `allocRecord` |
+| 1374 | const fn | `A` |
+| 1382 | method | `V` |
+| 1383 | method | `elCurrent` |
+| 1387 | method | `portI` |
+| 1391 | method | `computeVals` |
+| 1425 | method | `setRecord` |
+| 1426 | method | `recordNow` |
+| 1436 | method | `closePeriod` |
+| 1447 | method | `lastPeriod` |
+| 1448 | method | `now` |
+| 1453 | method | `gateOf` |
+| 1459 | method | `rawGate` |
+| 1470 | method | `carrier` |
+| 1473 | method | `shGrid` |
+| 1474 | method | `shNext` |
+| 1476 | method | `sampleHolds` |
+| 1481 | method | `samples` |
+| 1482 | method | `ctrlEdges` |
+| 1488 | method | `scrU` |
+| 1489 | method | `scrGate` |
+| 1490 | method | `scrEdges` |
+| 1491 | method | `setFiring` |
+| 1492 | method | `compV` |
+| 1493 | method | `compI` |
+| 1495 | method | `dbl` |
+| 1496 | method | `sampleControllers` |
+| 1530 | method | `evalBlocks` |
+| 1634 | method | `blkCopy` |
+| 1637 | method | `blkAnyDue` |
+| 1640 | method | `blkDue` |
+| 1642 | method | `zcFrac` |
+| 1645 | method | `saveState` |
+| 1647 | method | `restoreState` |
+| 1656 | method | `snapshot` |
+| 1658 | method | `restoreSnapshot` |
+| 1660 | method | `gateSigPeek` |
+| 1663 | method | `gateSig` |
+| 1668 | method | `jumpScheds` |
+| 1675 | method | `jumpAt` |
+| 1676 | method | `values` |
+| 1706 | method | `assemble` |
+| 1723 | const fn | `g` |
+| 1748 | method | `rhs` |
+| 1750 | const fn | `J` |
+| 1769 | method | `cplLinearize` |
+| 1777 | method | `solverInfo` |
+| 1792 | method | `factor` |
+| 1805 | method | `spAssemble` |
+| 1812 | method | `solveOnce` |
+| 1826 | method | `solve` |
+| 1844 | method | `nlLinearize` |
+| 1847 | method | `check` |
+| 1863 | method | `commit` |
+| 1888 | method | `initialSolve` |
+| 1900 | method | `tlSources` |
+| 1904 | method | `tlRecord` |
+| 1910 | method | `tlHist` |
+| 1916 | method | `tlmG` |
+| 1920 | method | `tlmSources` |
+| 1934 | method | `tlmRecord` |
+| 1949 | method | `tlwG` |
+| 1955 | method | `tlwSources` |
+| 1970 | method | `tlwRecord` |
+| 1987 | method | `tlmHist` |
+| 1994 | method | `step` |
+| 1996 | const fn | `gs` |
+| 2002 | method | `stepCore` |
+| 2061 | method | `edgeSolve` |
+| 2064 | method | `edgePoint` |
+| 2065 | method | `mmcMoved` |
+| 2068 | method | `arcGate` |
+| 2076 | method | `trRestart` |
+| 2084 | method | `nextEvent` |
+| 2090 | const fn | `sch` |
+| 2114 | method | `spwmCut` |
+| 2117 | const fn | `sig` |
+| 2122 | method | `run` |
+| 2168 | function | `tuneInfo` |
+| 2171 | function | `exportForBatch` |
+| 2192 | const fn | `hist` |
+| 2207 | const fn | `ci` |
+| 2208 | const fn | `vd` |
+| 2209 | const fn | `V` |
+| 2212 | const fn | `linePort` |
+| 2214 | const fn | `I` |
+| 2215 | const fn | `portRec` |
+| 2216 | const fn | `rec` |
+| 2233 | const fn | `clkOf` |
+| 2259 | function | `sweepPoint` |
+| 2264 | function | `setPath` |
+| 2270 | function | `eisPoint` |
+| 2278 | function | `resume` |
 
 ### `web/studio/netlib.js`
 
