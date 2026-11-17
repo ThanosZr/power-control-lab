@@ -159,6 +159,35 @@
    if(rl){comps.push(C('R1','R',600,170,{R:10},{rot:1,label:'R'}),C('L1','L',600,260,{L:.5,i0:+Id.toFixed(4)},{rot:1,label:'L'}));wires.push(['JPR','R1:a',[[600,110]]],['R1:b','L1:a'],['L1:b','JNR',[[600,310]]]);}
    else{comps.push(C('R1','R',600,210,{R:10},{rot:1,label:'R'}));wires.push(['JPR','R1:a',[[600,110]]],['R1:b','JNR',[[600,310]]]);}
    return project(comps,wires,{sim:{hDiv:2000,speed:2,stopT:0},scope:{panes:[[['V:V1','v_s'],['VN:JPR:j','v_d']],[['I:R1','i_d'],['I:V1','i_s']],[['I:Q2','i_Q2'],['I:Q1','i_Q1']]],window:{unit:'T',n:2}}});}});
+ // ------------------------------------------------------------------ 4.19.6 (ROADMAP §76): the measuring blocks on a rectifier with a capacitor
+ // The line current of a diode bridge with a capacitor is pulses near the peaks of the voltage: its THD, its third harmonic, and the
+ // power at the source (P, Q₁, S, PF, PF₁) from the blocks, and the mean of the DC voltage. The voltmeter is on the source itself (an
+ // ideal sine), so PF = PF₁·I₁/I = PF₁/√(1 + THD²) with the THD of IEEE Std 1459 (the card shows both)
+ T.push({id:'pq_rect',group:'Ανορθωτές',title:'Ανορθωτής με πυκνωτή · αρμονικές και συντελεστής ισχύος',theory:'formula',topology:'pq_rect',
+  options:[{k:'Ls',label:'Αυτεπαγωγή πηγής',options:[['0.0002','L_s = 0,2 mH'],['0.002','L_s = 2 mH'],['0.01','L_s = 10 mH']],def:'0.002'},
+   {k:'R',label:'Φορτίο',options:[['100','R = 100 Ω'],['30','R = 30 Ω']],def:'100'},
+   {k:'win',label:'Παράθυρο των μπλοκ',options:[['per','Ανά περίοδο'],['run','Κυλιόμενο']],def:'per'}],
+  desc:'Πηγή 230 V / 50 Hz με αυτεπαγωγή L_s, μονοφασική γέφυρα διόδων, πυκνωτής 1 mF και φορτίο R. Το ρεύμα της πηγής είναι παλμοί γύρω από τις κορυφές της τάσης. Τα μπλοκ μέτρησης δίνουν ως σήματα το THD του ρεύματος, την 3η αρμονική του, την ισχύ στην πηγή (P, Q₁, S, PF, PF₁) και τη μέση τάση στον πυκνωτή.',
+  tasks:['Τρέξε μερικές περιόδους: οι τιμές των μπλοκ γράφονται πάνω στο σχέδιο. Το PF είναι μικρότερο από το PF₁: η διαφορά είναι η παραμόρφωση του ρεύματος, PF = PF₁/√(1 + THD²) με την τάση ημιτονική (η κάρτα θεωρίας δείχνει και τα δύο).',
+   'Άλλαξε το L_s: με μεγαλύτερο L_s οι παλμοί απλώνουν, το THD πέφτει και το PF ανεβαίνει, ενώ το PF₁ πέφτει λίγο (το ρεύμα καθυστερεί).',
+   'Με «Κυλιόμενο» παράθυρο οι έξοδοι αλλάζουν συνεχώς και φτάνουν στις ίδιες τιμές με το «Ανά περίοδο» όταν η λειτουργία είναι περιοδική.'],
+  build(o){const Vpk=230*Math.SQRT2,R=+o.R,w={win:o.win==='run'?'run':'per',f:50},sg=(id,x,y,name)=>C(id,'TAGI',x,y,{name},{label:'',lbl:'none'});
+   const comps=[C('D1','D',200,160,{},{rot:3}),C('D3','D',200,260,{},{rot:3}),J('JA',200,210),C('D2','D',480,160,{},{rot:3}),C('D4','D',480,260,{},{rot:3}),J('JB',480,210),
+    J('JP',200,110),J('JPR',480,110),J('JN',200,310),J('JNR',480,310),gnd(200,340),
+    C('AM1','AM',250,210,{},{label:'i_s'}),C('V1','VAC',340,210,{Vpk,f:50},{rot:1,label:'v_s',lbl:'above'}),C('L1','L',430,210,{L:+o.Ls},{label:'L_s',lbl:'above'}),
+    C('VM1','VM',340,260,{},{label:'v_s',lbl:'none'}),J('JC1',560,110),J('JC2',560,310),C('C1','C',560,210,{C:1e-3,v0:300},{label:'C'}),J('JR1',640,110),J('JR2',640,310),
+    C('R1','R',640,210,{R},{rot:1,label:'R'}),C('VM2','VM',720,210,{},{label:'v_d'}),
+    C('TS','TAGO',290,140,{name:'i_s'},{label:'',lbl:'none'}),C('TV','TAGO',420,260,{name:'v_s'},{label:'',lbl:'none'}),
+    sg('GI1',150,470,'i_s'),sg('GV1',150,430,'v_s'),C('PW','PQ1',260,450,w,{label:'Ισχύς'}),
+    sg('GI2',420,450,'i_s'),C('TH','THD',510,450,{...w,dc:'out',scale:'%'},{label:'THD(i_s)'}),
+    sg('GI3',650,450,'i_s'),C('F3','FOUR',740,450,{...w,nu:3},{label:'i_s, 3η'}),C('AV','AVG',820,210,w,{label:'V_d'})];
+   const wires=[['JA','AM1:a'],['AM1:b','V1:n'],['V1:p','L1:a'],['L1:b','JB'],['D1:a','JA'],['JA','D3:k'],['D2:a','JB'],['JB','D4:k'],
+    ['D1:k','JP'],['JP','JPR',[],{name:'v_d+'}],['JPR','D2:k'],['D3:a','JN'],['JN','JNR'],['JNR','D4:a'],['JN','G1:g'],
+    ['JPR','JC1'],['JC1','C1:p'],['C1:n','JC2'],['JC2','JNR'],['JC1','JR1'],['JR1','R1:a'],['R1:b','JR2'],['JR2','JC2'],['JR1','VM2:p',[[720,110]]],['VM2:n','JR2',[[720,310]]],
+    ['VM1:p','V1:p',[[380,230]]],['VM1:n','V1:n',[[300,290]]],
+    ['AM1:y','TS:u',[[250,140]]],['VM1:y','TV:u'],['GV1:y','PW:v',[[220,430],[220,440]]],['GI1:y','PW:i',[[220,470],[220,460]]],['GI2:y','TH:u'],['GI3:y','F3:u'],['VM2:y','AV:u']];
+   return project(comps,wires,{sim:{hDiv:400,speed:2,stopT:0},scope:{panes:[[['V:V1','v_s']],[['Y:AM1','i_s']],[['Y:PW:pf','PF'],['Y:PW:pf1','PF₁']],[['Y:TH','THD(i_s) %']]],window:{unit:'T',n:2}},
+    meta:{Vpk,R,Ls:+o.Ls,win:w.win}});}});
  // ------------------------------------------------------------------ three-phase bridge
  T.push({id:'bridge3',group:'Ανορθωτές',title:'Τριφασική γέφυρα 6 παλμών',theory:'formula',topology:'bridge3',
   options:[{k:'dev',label:'Στοιχεία',options:[['diode','Δίοδοι'],['30','Θυρίστορ α = 30°'],['60','Θυρίστορ α = 60°']],def:'diode'},{k:'load',label:'Φορτίο',options:[['r','R = 20 Ω'],['rl','R = 20 Ω + L = 50 mH']],def:'r'}],

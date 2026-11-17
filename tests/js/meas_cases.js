@@ -121,4 +121,11 @@ const out={};
  for(const k of [20,40,41,60]){s.run(k*T0+.3*T0-s.t);rows.push({t:s.t,pa:s.now('Y:PA'),pr:s.now('Y:PR'),psw:s.now('PSW:S1'),E:s.now('Y:ME'),n:s.net.compInfo.get('S1').loss.n,mb:s.now('Y:MB')});}
  let err=null;try{MNA.exportForBatch(pr,['Y:PA']);}catch(e){err=String(e.message||e);}
  out.sw_loss={rows,T:T0,warn:s.net.warnings,batch_error:err};}
+// 10. the tutorial pq_rect (a diode bridge with a capacitor): the blocks against the harmonics of the scope on the same current, the
+//     running window against the per-period one in periodic operation, and the card's identity PF = PF₁/√(1 + THD²)
+{require(W+'/tutorials.js');const T=globalThis.Tutorials,M=require(W+'/metrics.js'),keys=['Y:PW','Y:PW:q1','Y:PW:s','Y:PW:pf','Y:PW:p1','Y:PW:pf1','Y:TH','Y:TH:h1','Y:TH:rms','Y:F3','Y:F3:ph','Y:AV'];
+ for(const win of ['per','run']){const pr=T.get('pq_rect').build({Ls:'0.002',R:'100',win}),s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv,method:'TR'});s.run(.3);
+  const r=s.ring,i=s.chIndex.get('Y:AM1'),tt=[],yy=[];for(let q=0;q<r.n;q++){const j=(r.head-r.n+q+r.cap)%r.cap;tt.push(r.t[j]);yy.push(r.d[j*r.nch+i]);}
+  const H=M.harmonics({t:tt,y:yy,f1:50,periods:1,H:50,tEnd:s.t});
+  out['tut_'+win]={keys,at:[[s.t,...keys.map(k=>s.now(k))]],warn:s.net.warnings,scope:{thdAll:H.thdAll,A1:H.A1,A3:H.A[3],rms:H.rms,dc:H.dc},vd:s.lastPeriod('Y:VM2').avg};}}
 console.log(JSON.stringify(out));

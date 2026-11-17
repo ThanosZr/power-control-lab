@@ -141,4 +141,15 @@ const {chromium}=require('playwright');
  await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.stopT-S.sim.t);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(500);
  th=await p.$eval('#theory',e=>e.textContent);ok(/ταχύτητα ω_m153,1 rad\/s153,1 rad\/s/.test(th),'V/f speed = equivalent circuit');ok(/ρεύμα φάσης \(RMS, 4 περίοδοι\)\d,\d+ A\d,\d+ A/.test(th),'phase current RMS');
  ok(/ω 15\d/.test(await p.evaluate(()=>document.querySelector('[data-l="M1"] .lv')?.textContent||'')),'machine live text');await p.screenshot({path:'im_vf.png'});
+ // 4.19.6 (ROADMAP §76): the measuring blocks in the library, and the tutorial of the rectifier with a capacitor: the values of the
+ // blocks on the drawing, PF below PF₁, the card with PF = PF₁/√(1 + THD²) next to the PF of the block
+ for(const k of ['AVG','RMS','MNMX','FOUR','THD','PQ1','PQ3','PPOS','SEQ','PIA'])ok(await p.$(`.pal-item[data-part="${k}"]`),'library: '+k);
+ await p.evaluate(()=>window.PCL.loadTutorial('pq_rect',{}));await p.waitForTimeout(800);
+ ok(await p.$eval('#sim-step',e=>e.value)==='400','step of the tutorial kept (T/400)');
+ await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(.2-S.sim.t);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(600);
+ const mv=await p.evaluate(()=>{const s=window.PCL.S.sim;return {P:s.now('Y:PW'),pf:s.now('Y:PW:pf'),pf1:s.now('Y:PW:pf1'),thd:s.now('Y:TH'),vd:s.now('Y:AV'),lv:document.querySelector('[data-l="PW"] .lv')?.textContent||''};});
+ ok(mv.P>900&&mv.P<1000&&mv.pf<mv.pf1&&mv.thd>100&&mv.thd<115&&mv.vd>300&&mv.vd<320,'block values of the tutorial '+JSON.stringify(mv));
+ ok(/^P \d.* · Q₁ .* · PF /.test(mv.lv),'values on the drawing: '+mv.lv);
+ th=await p.$eval('#theory',e=>e.textContent);ok(/PF = PF₁\/√\(1 \+ THD²\)66\d,\d m66\d,\d m/.test(th)&&/PF = P\/S = 0,66\d+/.test(th),'card: PF from PF₁ and THD next to the block');
+ await p.screenshot({path:'pq_rect.png'});
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

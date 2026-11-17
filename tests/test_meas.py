@@ -388,6 +388,30 @@ class MeasuringBlocks(unittest.TestCase):
             for k, v in zip(q['keys'], row[1:]):
                 self.assertAlmostEqual(r['ch'][k][i], v, delta=1e-6 * max(1.0, abs(v)), msg=(row[0], k))
 
+    def test_the_tutorial(self):
+        # pq_rect: a diode bridge with a capacitor, 230 V through 2 mH, R = 100 Ω, after 15 periods. The THD, the fundamental and the
+        # third harmonic of the current against the harmonics of the scope over the same period (another code, the same rule); the
+        # mean of the DC voltage against the period statistics of the scope; the running window equal to the per-period one in
+        # periodic operation; and PF = PF₁/√(1 + THD²), exact for a sinusoidal voltage up to the straight line between the points
+        o = {}
+        for win in ('per', 'run'):
+            c = self.o['tut_' + win]
+            self.assertEqual(c['warn'], [])
+            r = dict(zip((k.split(':', 1)[1] for k in c['keys']), c['at'][0][1:]))
+            sc = c['scope']                                                   # the scope keeps its points in single precision
+            self.assertAlmostEqual(r['TH'] / sc['thdAll'], 1, delta=1e-6, msg=win)
+            self.assertAlmostEqual(r['TH:h1'] / (sc['A1'] / math.sqrt(2)), 1, delta=1e-6)
+            self.assertAlmostEqual(r['F3'] / sc['A3'], 1, delta=1e-6)
+            self.assertAlmostEqual(r['TH:rms'] / sc['rms'], 1, delta=1e-6)
+            self.assertAlmostEqual(r['AV'] / c['vd'], 1, delta=1e-7)
+            thd = r['TH'] / 100
+            self.assertAlmostEqual(r['PW:pf'] / (r['PW:pf1'] / math.sqrt(1 + thd * thd)), 1, delta=1e-4)
+            self.assertLess(r['PW:pf'], r['PW:pf1'])
+            self.assertGreater(r['PW'], 0)
+            o[win] = r
+        for k, v in o['per'].items():                                         # the same numbers, running and per period
+            self.assertAlmostEqual(o['run'][k], v, delta=1e-6 * max(1.0, abs(v)), msg=k)
+
     def test_scipy_gives_the_same_harmonics(self):
         # the same operations in engine/batch.py (_wm_inc, _wm_out). The voltage has fewer points per period there (about 230 on the
         # sine): the fundamental 6e-5 lower and the fifth harmonic (5π/N)²/3 = 1,5e-3 lower, as the straight line between the points gives;

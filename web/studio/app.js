@@ -2834,6 +2834,14 @@ function formulaTheory(t){
   eqs=[`α = arcsin(E/V̂_s) = <b>${fmt(a*180/Math.PI,4)}°</b>, αγωγή από α έως π − α (${fmt((180-2*a*180/Math.PI),4)}°)`,`I_avg = [2V̂_s·cos α − E(π − 2α)]/(πR) = <b>${eng(Iavg,'A')}</b>`,`Î = (V̂_s − E)/R = <b>${eng((Vpk-E)/R,'A')}</b>`,`I_rms = <b>${eng(Irms,'A')}</b> · P_μπαταρίας = E·I_avg = <b>${eng(E*Iavg,'W')}</b> · P_R = R·I_rms² = <b>${eng(R*Irms*Irms,'W')}</b>`];
   const st=avgOver('I:R1',1);rows=[['I_avg',Iavg,st?.avg,'A'],['I_rms',Irms,st?.rms,'A'],['Î',(Vpk-E)/R,st?.max,'A']];
   if(+vs.Ls>0)eqs.push('<i>Οι τύποι ισχύουν για L_s = 0· με L_s η προσομοίωση δίνει μικρότερα ρεύματα.</i>');}
+ // 4.19.6: the measuring blocks on a rectifier with a capacitor: what they give, and PF = PF₁/√(1 + THD²) with the voltage a sine
+ else if(t.topology==='pq_rect'){const y=k=>S.sim?S.sim.now(k):NaN,P1=y('Y:PW:p1'),Q1=y('Y:PW:q1'),PF=y('Y:PW:pf'),PF1=y('Y:PW:pf1'),thd=y('Y:TH')/100,I1=y('Y:TH:h1'),I3=y('Y:F3');
+  const pfx=PF1/Math.sqrt(1+thd*thd),st=avgOver('Y:AM1',1);
+  eqs=[`Ενεργός ισχύς P = (1/T)∫v·i dt = <b>${eng(y('Y:PW'),'W')}</b>, φαινόμενη S = V·I = <b>${eng(y('Y:PW:s'),'VA')}</b>, συντελεστής ισχύος PF = P/S = <b>${fmt(PF,4)}</b>`,
+   `Θεμελιώδης: P₁ = <b>${eng(P1,'W')}</b>, Q₁ = <b>${eng(Q1,'var')}</b>, PF₁ = P₁/S₁ = <b>${fmt(PF1,4)}</b> (συντελεστής μετατόπισης)`,
+   `THD του ρεύματος I_H/I₁ = <b>${fmt(100*thd,4)} %</b> (I₁ = ${eng(I1,'A')}). Με ημιτονική τάση P = P₁ και S = V·I = V·I₁·√(1 + THD²), άρα PF = PF₁/√(1 + THD²) = <b>${fmt(pfx,4)}</b>`,
+   `3η αρμονική του ρεύματος (κορυφή): <b>${eng(I3,'A')}</b> = ${fmt(100*I3/(I1*Math.SQRT2),3)} % της θεμελιώδους · μέση τάση στον πυκνωτή V_d = <b>${eng(y('Y:AV'),'V')}</b>`];
+  rows=[['PF = PF₁/√(1 + THD²)',pfx,PF,''],['I_s,rms = I₁·√(1 + THD²)',I1*Math.sqrt(1+thd*thd),st?.rms,'A']];}
  else if(t.topology==='buck_vloop'){const Vin=+V.V,L=+paramsOf('L1').L,Cc=+paramsOf('C1').C,Rp=paramsOf('R1'),R=+Rp.R,fs=+W.fs,w0=1/Math.sqrt(L*Cc),f0=w0/2/Math.PI,Q=R*Math.sqrt(Cc/L);
   const Kp=+W.Kp,Ki=+W.Ki,Kd=+W.Kd,refS=P.parseSched(W.ref)||[[0,0]],vref=refS[refS.length-1][1],Rs=P.parseSched(Rp.sched),Rend=Rs?Rs[Rs.length-1][1]:R;
   eqs=[`G_vd(s) = V_in/(LC·s² + (L/R)·s + 1): f₀ = 1/(2π√(LC)) = <b>${eng(f0,'Hz')}</b>, Q = R·√(C/L) = <b>${fmt(Q,3)}</b>, G_vd(0) = V_in = ${eng(Vin,'V')}`,
