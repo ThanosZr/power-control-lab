@@ -1063,6 +1063,13 @@ class Network:
         from . import cpf
         return cpf.run(self, **kw)
 
+    def estimate(self, measurements=None, **kw):
+        """State estimation (pcl.se.run, 4.19.5): the voltages of the network from measurements with errors by weighted least
+        squares, with the χ² test and the largest normalized residual test for bad data. Without measurements a set is made
+        from the load flow of the network (plan, noise, seed, bad). See pcl.se.run for the options and the result."""
+        from . import se
+        return se.run(self, measurements, **kw)
+
     def opf(self, kind='ac', **kw):
         """The optimal power flow (pcl.opf): kind='ac' (interior point on the full equations) or 'dc' (the linear network).
         See pcl.opf.solve for the options and the result. 4.19.2: dS (a change of the injections, VA per bus) and start='nn' or

@@ -283,6 +283,23 @@ const {chromium}=require('playwright');
  await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>!window.PCL.STUDY.busy&&window.PCL.STUDY.r?.summary?.method==='sweepc'&&window.PCL.STUDY.r.summary.converged===false,null,{timeout:60000});
  const sw2=await p.evaluate(()=>document.querySelector('#study-result').innerText);
  ok(/Δεν συνέκλινε/.test(sw2)&&/σάρωση με αντιστάθμιση/.test(sw2),'sweep with compensation: IEEE 118 does not converge and the card says so');
+ // 4.19.5 (ROADMAP §79): state estimation: the card with the two tests and what was taken out, the layer of the residuals, a plan
+ // without redundancy, and a combination of options that the engine refuses with its reason
+ await p.evaluate(()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('se_study',{});});await p.waitForTimeout(700);
+ await p.click('#theory [data-study="run"]');await p.waitForSelector('#study-se',{timeout:60000});
+ const se1=await p.evaluate(()=>({txt:document.querySelector('#study-result').innerText,z:window.PCL.STUDY.r.summary,adv:document.querySelector('#study-advice').innerText}));
+ ok(se1.z.converged&&se1.z.n_bad===1&&se1.z.bad[0].at==='br1'&&se1.z.found===1&&Math.abs(se1.z.J_first-244.3)<0.1&&/υπάρχει λανθασμένη μέτρηση/.test(se1.txt)&&/ροή P στο br1/.test(se1.txt)&&/Το πρόβλημα: 71 μετρήσεις/.test(se1.adv),
+  'state estimation: IEEE 14 with one gross error, J = '+se1.z.J_first.toFixed(1)+' above its threshold and the flow of br1 taken out ('+se1.z.bad[0].rN.toFixed(1)+')');
+ await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.layer==='residual'&&window.PCL.NV.v.state.frames>0,null,{timeout:60000});
+ const se2=await p.evaluate(()=>({layers:[...document.querySelectorAll('#nv-layer option')].map(o=>o.value),legend:document.querySelector('#nv-legend').textContent}));
+ ok(se2.layers.includes('residual')&&se2.layers.includes('voltage')&&/χωρίς μέτρηση/.test(se2.legend)&&/πάνω από το κατώφλι/.test(se2.legend),'state estimation: the picture opens on the layer of the normalized residuals ('+se2.legend.slice(0,60)+')');
+ await p.evaluate(()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('se_study',{plan:'tree',bad:'flow'});});await p.waitForTimeout(700);
+ await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>!window.PCL.STUDY.busy&&window.PCL.STUDY.r?.summary?.plan==='tree',null,{timeout:60000});
+ const se3=await p.evaluate(()=>({txt:document.querySelector('#study-result').innerText,z:window.PCL.STUDY.r.summary}));
+ ok(se3.z.n_bad===0&&se3.z.found===0&&se3.z.critical===16&&/δεν βρέθηκε καμία/.test(se3.txt)&&/κρίσιμες μετρήσεις[^:]*: 16/.test(se3.txt),'state estimation: without redundancy the gross error is not seen (16 critical measurements)');
+ await p.evaluate(()=>window.PCL.loadTutorial('se_study',{plan:'flows',bad:'injection'}));await p.waitForTimeout(700);
+ await p.click('#theory [data-study="run"]');await p.waitForSelector('#study-error',{timeout:60000});
+ ok(/δεν έχει μέτρηση/.test(await p.$eval('#study-error',e=>e.textContent)),'state estimation: a plan without injections says that it has no injection to spoil');errs.length=0;
  // 4.19.4 (ROADMAP §74): the third exercise from plain blocks
  await p.evaluate(()=>window.PCL.loadTutorial('current_ctl',{}));await p.waitForTimeout(700);await p.click('#toend');
  await p.waitForFunction(()=>window.PCL.S.sim&&window.PCL.S.sim.t>=0.01599,null,{timeout:120000});await p.waitForTimeout(600);

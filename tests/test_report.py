@@ -608,6 +608,69 @@ class Tutorials(unittest.TestCase):
         self.assertIn('μικρό δίκτυο', a33['why'])
         self.assertIn('βαθύ δίκτυο (69 ζυγοί σε 26 επίπεδα)', a69['why'])
 
+    def test_the_card_of_the_state_estimation(self):
+        """4.19.5, se_study: what the card asks is a request of pcl.study for every network, plan and gross error, and every number in
+        the text of its tasks is what the engine gives."""
+        from pcl import se
+        T = tutorials()['se']
+        opt = {o['k']: o for o in T['options']}
+        self.assertEqual((T['group'], opt['net']['def'], opt['plan']['def'], opt['bad']['def'], T['drawing']), ('Ροή φορτίου και OPF (4.19.1)', 'ieee14', 'scada', 'flow', True))
+        self.assertEqual((opt['plan']['values'], set(opt['plan']['values']), opt['bad']['values']), (['scada', 'all', 'flows', 'tree'], set(se.PLANS), ['none', 'flow', 'injection', 'voltage', 'two']))
+        self.assertEqual(set(opt['net']['values']) - set(N.CASES), set())
+        self.assertEqual(len(T['variants']), 20)
+        refused = 0
+        for st in T['variants']:                                                                  # every plan with every gross error: it runs, or says why not
+            self.assertEqual((st['study'], set(st['options']) - set(S.OPTIONS['se'])), ('se', set()))
+            try:
+                q = S.run({'case': st['net'], 'study': 'se', 'options': st['options']})['summary']
+                self.assertTrue(q['converged'] and q['observable'], st)
+            except S.StudyError as e:                                                             # a plan without injections has no injection to spoil
+                self.assertIn('δεν έχει μέτρηση', str(e))
+                self.assertIn(st['options']['plan'], ('flows', 'tree'))
+                refused += 1
+        self.assertEqual(refused, 4)
+        for st in T['studies']:                                                                   # every network of the list, with the defaults
+            if st['net'] == 'pegase1354':                                                         # (some seconds: it runs in tests/test_se.py's exact case of IEEE 300 and in the verification report)
+                continue
+            q = S.run({'case': st['net'], 'study': 'se', 'options': st['options']})['summary']
+            self.assertEqual((q['converged'], q['found'], q['planted']), (True, 1, 1), st)
+        run = lambda net, **o: S.run({'case': net, 'study': 'se', 'options': o})['summary']      # noqa: E731
+        el = lambda x, d: f'{x:.{d}f}'.replace('.', ',').replace('-', '−')                        # noqa: E731
+        t = T['tasks']
+        a = run('ieee14', plan='scada', bad='flow')
+        for part in (f'{a["m"]} μετρήσεις για {a["n"]} αγνώστους', el(a['J_first'], 1), f'({el(a["chi2_first"], 1)})', f'({el(a["bad"][0]["rN"], 1)})', f'κλάδου {a["bad"][0]["at"]}', el(a['J'], 1)):
+            self.assertIn(part, t[0])
+        self.assertEqual((a['bad'][0]['type'], a['bad'][0]['planted'], a['n_bad']), ('Pf', True, 1))
+        self.assertIn(f'{el(a["bad"][0]["sigmas"], 1)}σ', t[1])
+        b = run('ieee14', plan='scada')
+        for part in (f'J = {el(b["J"], 1)} με {b["dof"]} βαθμούς', f'{el(b["error"]["V_max"], 4)} pu', f'σ = {el(se.SIGMA["V"], 3)} pu'):
+            self.assertIn(part, t[2])
+        self.assertEqual((b['n_bad'], b['suspect_first']), (0, False))
+        c = run('ieee14', plan='scada', bad='two')
+        self.assertEqual(([x['type'] for x in c['bad']], [x['planted'] for x in c['bad']]), (['P', 'Pf'], [True, True]))        # «πρώτα η έγχυση»
+        self.assertIn(f'({el(c["bad"][0]["sigmas"], 1)}σ αντί για −20σ)', t[3])
+        d = run('ieee14', plan='flows', bad='flow')
+        self.assertIn(f'({el(d["J_first"], 1)} πάνω από {el(d["chi2_first"], 1)})', t[4])
+        self.assertEqual((d['bad'][0]['at'], d['bad'][0]['planted'], d['found'], d['suspect_first']), ('br2', False, 0, True))   # «βγαίνει η ροή του br2 αντί του br1»
+        first = se.run(N.case_data('ieee14'), plan='flows', bad='flow', detect=False)
+        rn = {m['branch']: m['rN'] for m in first['measurements'] if m['type'] == 'Pf'}
+        self.assertEqual((first['measurements'][first['planted'][0]]['branch'], sorted(rn, key=rn.get)[-2:]), ('br1', ['br1', 'br2']))
+        self.assertIn(f'({el(rn["br2"], 2)} και {el(rn["br1"], 2)})', t[4])
+        e, e0 = run('ieee14', plan='tree', bad='flow'), run('ieee14', plan='tree')
+        for part in (f'{e["m"]} μετρήσεις για {e["n"]} αγνώστους', f'J = {el(e["J"], 1)} με ή χωρίς', f'{e["critical"]} μετρήσεις είναι κρίσιμες'):
+            self.assertIn(part, t[5])
+        self.assertEqual((el(e0['J'], 1), e['n_bad'], e['found']), (el(e['J'], 1), 0, 0))
+        self.assertGreater(e['error']['angle_max'], 3 * e0['error']['angle_max'])                  # «περνά ολόκληρο στην εκτίμηση»
+        g = run('ieee118', plan='scada')
+        self.assertEqual((g['n_bad'], g['planted'], g['m']), (1, 0, 642))
+        for part in (el(g['bad'][0]['rN'], 1), f'{g["m"]} μετρήσεις', 'κατώφλι 3,0'):
+            self.assertIn(part, t[7])
+        from pcl import report as R
+        rep = R.network_report(N.case_data('ieee14'), 'se', plan='scada', bad='flow')
+        kinds = [s['kind'] for s in rep.to_dict()['sections']]
+        self.assertEqual((kinds.count('network'), kinds.count('chart'), kinds.count('table')), (2, 2, 4))
+        self.assertIn('Μετρήσεις που βγήκαν', rep.html())
+
     def test_the_card_of_the_continuation_load_flow(self):
         """4.19.5, cpf_study: what the card asks is a request of pcl.study for every network and every option, and every number in
         the text of its tasks is what the engine gives."""

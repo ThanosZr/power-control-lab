@@ -237,6 +237,14 @@
 | continuation power flow, continuation method | συνεχιζόμενη ροή φορτίου, μέθοδος συνέχισης (4.19.5) |
 | predictor, corrector, tangent | πρόβλεψη, διόρθωση, εφαπτομένη (4.19.5) |
 | local parametrisation, continuation parameter | τοπική παραμετροποίηση, παράμετρος συνέχισης (ο άγνωστος που κρατιέται σταθερός) (4.19.5) |
+| state estimation, state (of the network) | εκτίμηση κατάστασης, κατάσταση (του δικτύου) (4.19.5) |
+| weighted least squares (WLS), gain matrix | ελάχιστα τετράγωνα με βάρη, πίνακας κέρδους (4.19.5) |
+| redundancy (of measurements), degrees of freedom | περίσσεια (μετρήσεων), βαθμοί ελευθερίας (4.19.5) |
+| observability, observable island | παρατηρησιμότητα, παρατηρήσιμη νησίδα (4.19.5) |
+| bad data, gross error | λανθασμένα δεδομένα (λανθασμένη μέτρηση), χονδρικό σφάλμα (4.19.5) |
+| (normalized) residual, largest normalized residual test | (κανονικοποιημένο) υπόλοιπο, έλεγχος του μεγαλύτερου κανονικοποιημένου υπολοίπου (4.19.5) |
+| critical measurement, critical pair | κρίσιμη μέτρηση, κρίσιμο ζεύγος (4.19.5) |
+| zero-injection bus, equality constraint | ζυγός μηδενικής έγχυσης, ισότητα (περιορισμός ισότητας) (4.19.5) |
 | P–V (nose) curve, nose (fold, saddle-node bifurcation) | καμπύλη P–V, μύτη της καμπύλης (διακλάδωση σάγματος–κόμβου) (4.19.5) |
 | loadability limit (maximum loading point), loading margin | όριο φόρτισης, περιθώριο φόρτισης (4.19.5) |
 | limit-induced bifurcation | άμεση αστάθεια στο όριο αέργου (γωνία της καμπύλης, όχι μύτη) (4.19.5) |

@@ -104,6 +104,18 @@ class ApiSurface(unittest.TestCase):
         self.assertIn('cpf', study.STUDIES)
         self.assertEqual(set(study.OPTIONS['cpf']), set(self.now['pcl']['pcl.cpf.run']['params'][1:]))      # every option of the routine is an option of the study
         self.assertIn('collapse', netview.LAYERS)
+        # the sweep with compensation: six points of pcl.powerflow, a method by its name and not a proposal of the engine
+        from pcl import powerflow
+        for k in ('Tree', 'Tree.solve', 'Tree.patterns', 'Case.link_tree', 'sweep_comp', 'breakpoint_matrix'):
+            self.assertIn('pcl.powerflow.' + k, self.now['pcl'])
+        self.assertIn('sweepc', powerflow.METHODS)
+        # state estimation: the module is experimental, Network.estimate and the study 'se' are stable additions
+        self.assertTrue(api_surface.experimental('pcl', 'pcl.se.run'))
+        self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.estimate'))
+        self.assertEqual(self.now['pcl']['pcl.se.run']['params'][:2], ['net', 'measurements'])
+        self.assertEqual(set(study.OPTIONS['se']), set(self.now['pcl']['pcl.se.run']['params'][1:]))        # every option of the routine is an option of the study
+        self.assertEqual((study.STUDIES[-1], netview.DEFAULT['se']), ('se', 'residual'))
+        self.assertIn('residual', netview.LAYERS)
 
     def test_the_surface_of_4_19_3(self):
         # the two settings of the solver are in the file format (stable); the large network is one more name of the test networks

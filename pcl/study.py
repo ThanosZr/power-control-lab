@@ -7,7 +7,7 @@ tutorials of the app and its button «Εξαγωγή αναφοράς») and for
 
 The network: 'case' (a name of pcl.network.CASES) or 'network' (a network as written by pcl.network.to_dict).
 Studies: 'advice' (what the engine proposes, for every study), 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf' (4.19.4), 'cpf' (4.19.5:
-the continuation load flow).
+the continuation load flow), 'se' (4.19.5: state estimation from measurements).
 
 4.19.4 (ROADMAP §73): 'edits' = a list of changes of the network (pcl.netfile.apply: a load, a generator, a rating, an element
 out of service), made on a copy before the study; and a network from a file:
@@ -22,11 +22,12 @@ import numpy as np
 from . import network as N
 from .report import Report, network_report
 
-STUDIES = ('advice', 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf', 'cpf')
+STUDIES = ('advice', 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf', 'cpf', 'se')
 STARTS = ('auto', 'mid', 'pf', 'nn')
 OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n1': ('tol', 'q_limits', 'backend', 'how'), 'n1dc': (), 'opf': ('flow_limits', 'start', 'tol', 'max_iter'),
            'dcopf': ('flow_limits', 'tol', 'max_iter'), 'scopf': ('emergency', 'tol', 'max_iter', 'max_rounds'),
-           'cpf': ('direction', 'q_limits', 'step', 'dV', 'lower', 'stop', 'V_stop', 'max_points', 'tol'), 'advice': ()}
+           'cpf': ('direction', 'q_limits', 'step', 'dV', 'lower', 'stop', 'V_stop', 'max_points', 'tol'),
+           'se': ('measurements', 'plan', 'noise', 'seed', 'sigma', 'bad', 'zero_injections', 'detect', 'threshold', 'confidence', 'max_bad', 'tol', 'max_iter', 'start'), 'advice': ()}
 MAX_BUSES = 20000
 
 
@@ -142,6 +143,8 @@ def _study(net, study, opt):
             return net.scopf(**opt)
         if study == 'cpf':                                 # 4.19.5: the continuation load flow (the P–V curve and the loading margin)
             return net.cpf(**opt)
+        if study == 'se':                                  # 4.19.5: state estimation (weighted least squares, bad data)
+            return net.estimate(**opt)
         return net.opf('ac' if study == 'opf' else 'dc', **opt)
     except (N.NetworkError, ValueError) as e:              # the errors of the solvers are ValueErrors with a message
         raise StudyError(str(e)) from e
@@ -185,6 +188,16 @@ def summary(study, res):
                 'weak': [q['bus'] for q in res['weak'][:5]], 'growth': res['growth'], 'steps': res['steps'], 'why': res['advice']['why'], 'message': res['message'],
                 'curve': {'bus': wk, 'lambda': [res['lambda'][j] for j in keep], 'V': [res['V'][wk][j] for j in keep], 'nose': keep.index(ns['point'])},
                 'time_ms': res['time'] * 1e3}
+    if study == 'se':                                      # 4.19.5: how many measurements, the tests, what was taken out, how far from the load flow
+        fi, sg = res.get('first') or {}, lambda b: b['error'] / b['sigma']      # noqa: E731
+        return {'converged': res['converged'], 'observable': res['observable'], 'iterations': res['iterations'], 'rounds': res['rounds'], 'm': res['m'], 'n': res['n'],
+                'constraints': res['constraints'], 'redundancy': res['redundancy'], 'plan': res.get('plan'), 'counts': res.get('counts'), 'J': res.get('J'), 'dof': res.get('dof'),
+                'chi2': res.get('chi2'), 'suspect': res.get('suspect'), 'largest': res.get('largest'), 'J_first': fi.get('J'), 'chi2_first': fi.get('chi2'),
+                'suspect_first': fi.get('suspect'), 'largest_first': fi.get('largest'), 'dof_first': fi.get('dof'), 'threshold': res['threshold'], 'confidence': res['confidence'],
+                'bad': [{'type': b['type'], 'at': b['at'], 'rN': b['rN'], 'sigmas': sg(b), 'value': b['value'], 'corrected': b['corrected'], 'planted': b['index'] in res['planted']} for b in res['bad'][:8]],
+                'n_bad': len(res['bad']), 'planted': len(res['planted']), 'found': sum(b['index'] in res['planted'] for b in res['bad']), 'critical': len(res['critical']),
+                'error': res.get('error'), 'islands': len(res.get('islands') or []), 'uncovered': (res.get('uncovered') or [])[:8], 'losses_MW': None if res.get('losses') is None else res['losses'] / 1e6,
+                'why': res['advice']['why'], 'message': res['message'], 'time_ms': res['time'] * 1e3}
     return {}
 
 
@@ -255,7 +268,7 @@ def report(data):
     net0, net, done = _networks_of(data)
     study = data.get('study') or 'pf'
     if study in ('advice', 'dc'):
-        raise StudyError('Αναφορά για: pf, n1, n1dc, opf, dcopf, scopf, cpf.')
+        raise StudyError('Αναφορά για: pf, n1, n1dc, opf, dcopf, scopf, cpf, se.')
     res = _study(net, study, data.get('options'))
     r = network_report(net, study, res, data.get('title') or None, picture=_picture(net0, net, data) if done else None)
     if done:                                               # what was changed, right after the title of the report

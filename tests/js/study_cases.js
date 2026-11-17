@@ -1,7 +1,7 @@
 // 4.19.1 (ROADMAP §68 point 6): the two study tutorials (pf_study, opf_study) headless. For each: its options, the study that its
 // project asks from the engine (meta.study) with the defaults and with every network of its list, the operating point from which its
 // EMT starts (meta.lf), and a run of 0.3 s: the mean and the fundamental (peak, last 4 cycles of 60 Hz) of the generator powers and
-// of the instruments on the drawing. Usage: node study_cases.js -> JSON {pf, opf, opfEmt, cpf}
+// of the instruments on the drawing. Usage: node study_cases.js -> JSON {pf, opf, opfEmt, cpf, se}
 const path=require('path');const W=path.resolve(__dirname,'../../web/studio');
 global.window=globalThis;global.Parts=require(W+'/parts.js');global.Expr=require(W+'/expr.js');global.StepCheck=require(W+'/stepcheck.js');
 global.LineModels=require(W+'/linemodels.js');
@@ -23,4 +23,7 @@ function card(id){const t=Tutorials.get(id);
 // option, and the text of its tasks (the numbers in it are checked against the engine)
 const cpf=(()=>{const t=Tutorials.get('cpf_study'),d=defaults(t);return {...card('cpf_study'),tasks:t.tasks,title:t.title,
   variants:[['yes','all'],['no','all'],['yes','load'],['no','load']].map(([qlim,grow])=>t.build({...d,qlim,grow}).meta.study),drawing:t.build(d).components.length===Tutorials.get('pf_study').build(defaults(Tutorials.get('pf_study'))).components.length};})();
-console.log(JSON.stringify({pf:{...card('pf_study'),...run('pf_study',{},0.3)},opf:{...card('opf_study'),...run('opf_study',{},0.05)},opfEmt:run('opf_study',{emt:'opf'},0.3),cpf}));
+// 4.19.5: the tutorial of the state estimation (se_study): its options, the request of every network and of every plan and gross error
+const se=(()=>{const t=Tutorials.get('se_study'),d=defaults(t),o=k=>t.options.find(q=>q.k===k).options.map(q=>q[0]);return {...card('se_study'),title:t.title,
+  variants:o('plan').flatMap(plan=>o('bad').map(bad=>t.build({...d,plan,bad}).meta.study)),drawing:t.build(d).components.length===Tutorials.get('pf_study').build(defaults(Tutorials.get('pf_study'))).components.length};})();
+console.log(JSON.stringify({pf:{...card('pf_study'),...run('pf_study',{},0.3)},opf:{...card('opf_study'),...run('opf_study',{},0.05)},opfEmt:run('opf_study',{emt:'opf'},0.3),cpf,se}));

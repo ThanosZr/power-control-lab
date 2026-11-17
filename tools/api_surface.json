@@ -17,7 +17,8 @@
    "pcl.netfile.",
    "pcl.psse.",
    "pcl.scopf.",
-   "pcl.cpf."
+   "pcl.cpf.",
+   "pcl.se."
   ],
   "cli": [
    "workbench",
@@ -2210,6 +2211,13 @@
     ],
     "since": "4.2"
    },
+   "pcl.network.Network.estimate": {
+    "params": [
+     "measurements",
+     "**kw"
+    ],
+    "since": "4.19.5"
+   },
    "pcl.network.Network.feeder": {
     "params": [
      "bus",
@@ -3499,6 +3507,78 @@
      "penalty"
     ],
     "since": "4.19.4"
+   },
+   "pcl.se.SeError": {
+    "params": [],
+    "since": "4.19.5"
+   },
+   "pcl.se.measure": {
+    "params": [
+     "net",
+     "plan",
+     "noise",
+     "seed",
+     "sigma",
+     "bad",
+     "zero_injections"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.se.observability": {
+    "params": [
+     "net",
+     "measurements",
+     "zero_injections"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.se.quantities": {
+    "params": [
+     "case",
+     "V",
+     "deriv"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.se.residual_covariance": {
+    "params": [
+     "H",
+     "sigma"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.se.run": {
+    "params": [
+     "net",
+     "measurements",
+     "plan",
+     "noise",
+     "seed",
+     "sigma",
+     "bad",
+     "zero_injections",
+     "detect",
+     "threshold",
+     "confidence",
+     "max_bad",
+     "tol",
+     "max_iter",
+     "start"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.se.uncovered": {
+    "params": [
+     "case",
+     "meas"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.se.zero_injection": {
+    "params": [
+     "case"
+    ],
+    "since": "4.19.5"
    },
    "pcl.set": {
     "params": [

@@ -429,7 +429,7 @@ document.addEventListener('click',function(ev){var b=ev.target.closest('button[d
 def network_report(net, study='pf', result=None, title=None, **kw):
     """A report for a study of a pcl.network.Network: study 'pf' (load flow), 'n1' / 'n1dc' (N−1 in AC / with the DC screening),
     'opf' / 'dcopf' (optimal power flow), 'scopf' (4.19.4: the DC optimal power flow with security against every single outage),
-    'cpf' (4.19.5: the continuation load flow, the P–V curve and the loading margin). result: the result of the study if it has run already (else it runs here with kw).
+    'cpf' (4.19.5: the continuation load flow, the P–V curve and the loading margin), 'se' (4.19.5: state estimation). result: the result of the study if it has run already (else it runs here with kw).
     The sections can be extended or re-ordered afterwards as with any Report. picture (4.19.4): a view of pcl.netview.view to
     draw on instead of the view of this network (the same places when the network is a changed copy of another)."""
     MW = 1e6
@@ -438,7 +438,8 @@ def network_report(net, study='pf', result=None, title=None, **kw):
     gens = sum(e['kind'] in ('generator', 'unit') for e in net.elements)
     nbr = sum(e['kind'] in ('line', 'branch', 'transformer') for e in net.elements)
     head = {'pf': 'Ροή φορτίου', 'n1': 'Ανάλυση N−1 (AC)', 'n1dc': 'Ανάλυση N−1 (σάρωση DC)', 'opf': 'Βέλτιστη ροή φορτίου (AC)', 'dcopf': 'Βέλτιστη ροή φορτίου (DC)',
-            'scopf': 'Βέλτιστη ροή φορτίου με ασφάλεια N−1 (DC)', 'cpf': 'Συνεχιζόμενη ροή φορτίου: καμπύλη P–V και περιθώριο φόρτισης'}
+            'scopf': 'Βέλτιστη ροή φορτίου με ασφάλεια N−1 (DC)', 'cpf': 'Συνεχιζόμενη ροή φορτίου: καμπύλη P–V και περιθώριο φόρτισης',
+            'se': 'Εκτίμηση κατάστασης: ελάχιστα τετράγωνα με βάρη και εντοπισμός λανθασμένων μετρήσεων'}
     if study not in head:
         raise ReportError(f'network_report: study one of {", ".join(head)}')
     r = Report(title or head[study], name, meta={'Ζυγοί': len(net.buses), 'Κλάδοι': nbr, 'Γεννήτριες': gens, 'S βάσης (MVA)': net.S_base / MW})
@@ -528,6 +529,11 @@ def network_report(net, study='pf', result=None, title=None, **kw):
         res = result or net.cpf(**kw)
         advice(res.get('advice') or net.advice('pf'))
         _cpf(r, net, res, MW, picture)
+    elif study == 'se':
+        res = result or net.estimate(**kw)
+        r.heading('Το πρόβλημα')
+        r.text(f'{res["advice"]["why"][0].upper()}{res["advice"]["why"][1:]}.')
+        _se(r, net, res, MW, picture)
     else:
         res = result or (net.scopf(**kw) if study == 'scopf' else net.opf('ac' if study == 'opf' else 'dc', **kw))
         advice(res.get('advice') or net.advice('dcopf' if study == 'scopf' else study))
@@ -662,6 +668,94 @@ def _cpf(r, net, res, MW, picture):
     r.table(['Ζυγός', 'Τύπος στο όριο', 'Όριο αέργου', '|V| σήμερα (pu)', '|V| στο όριο (pu)', 'Γωνία στο όριο (°)', 'Πτώση (pu)', 'Μερίδιο'],
             [[b, d['type'], {'max': 'άνω', 'min': 'κάτω'}.get(d['limit'], ''), d['V0'], d['V'], d['angle'], d['drop'], d['share']] for b, d in ((b, res['buses'][b]) for b in order)],
             '', [None, None, None, 5, 5, 5, 5, 4])
+
+
+def _se(r, net, res, MW, picture):
+    """4.19.5: state estimation: the measurements, the tests, what was taken out, the estimate against the load flow."""
+    from .se import TXT as KIND, PLAN_TXT
+    f = lambda x, d=2: '—' if x is None else f'{x:.{d}f}'.replace('.', ',')             # noqa: E731
+    meas, bad, fi = res['measurements'], res['bad'], res.get('first') or {}
+    where = lambda m: m.get('bus', m.get('branch'))                                     # noqa: E731
+    r.facts([('Η εκτίμηση συνέκλινε', bool(res['converged'])), ('Οι μετρήσεις ορίζουν την κατάσταση', bool(res['observable'])), ('Μετρήσεις', int(res['m'])),
+             ('Άγνωστοι (γωνίες και μέτρα τάσης)', int(res['n'])), ('Ισότητες μηδενικής έγχυσης', int(res['constraints'])), ('Περίσσεια (εξισώσεις ανά άγνωστο)', round(res['redundancy'], 2)),
+             ('Επαναλήψεις', int(res['iterations'])), ('Εκτιμήσεις (μία ανά μέτρηση που βγήκε, και η πρώτη)', int(res['rounds'])),
+             ('J στην πρώτη εκτίμηση', None if fi.get('J') is None else round(fi['J'], 2)), ('J στην τελική', None if res.get('J') is None else round(res['J'], 2)),
+             ('Βαθμοί ελευθερίας', res.get('dof')), (f'Κατώφλι χ² ({f(100 * res["confidence"], 0)} %)', None if res.get('chi2') is None else round(res['chi2'], 2)),
+             ('Μεγαλύτερο κανονικοποιημένο υπόλοιπο που μένει', None if res.get('largest') is None else round(res['largest'], 2)), ('Κατώφλι του', res['threshold']),
+             ('Μετρήσεις που βγήκαν ως λανθασμένες', len(bad)), ('Κρίσιμες μετρήσεις', len(res['critical'])), ('Χρόνος (ms)', round(res['time'] * 1e3, 1))])
+    if res.get('plan'):
+        r.text(f'Οι μετρήσεις φτιάχτηκαν από τη ροή φορτίου του δικτύου με τυχαία σφάλματα: {PLAN_TXT[res["plan"]]}. Η εκτίμηση δεν ξέρει τη ροή φορτίου· ξέρει μόνο τις μετρήσεις, '
+               'την τυπική απόκλιση καθεμιάς και το δίκτυο.')
+    r.text('Η εκτίμηση είναι οι τάσεις που ελαχιστοποιούν το J = Σ (μέτρηση − εκτίμηση)²/σ². Αν τα σφάλματα είναι τυχαία με τις σ που δηλώθηκαν, το J ακολουθεί κατανομή χ² με '
+           'βαθμούς ελευθερίας τις εξισώσεις που περισσεύουν: J πάνω από το κατώφλι σημαίνει ότι κάποια μέτρηση είναι λανθασμένη. Ποια, το λέει το κανονικοποιημένο υπόλοιπο: '
+           'το υπόλοιπο κάθε μέτρησης διαιρεμένο με την τυπική απόκλιση που θα είχε αν όλα ήταν σωστά. Η μέτρηση με το μεγαλύτερο, αν περνά το κατώφλι, βγαίνει και η εκτίμηση επαναλαμβάνεται.')
+    if not res['observable']:
+        isl = res.get('islands') or []
+        r.note('Οι μετρήσεις δεν ορίζουν την κατάσταση του δικτύου: ' + res['message'] + '.', 'critical')
+        if len(isl) > 1:
+            r.table(['Νησίδα', 'Ζυγοί', 'Ποιοι'], [[i + 1, len(q), ', '.join(q[:25]) + (' …' if len(q) > 25 else '')] for i, q in enumerate(isl[:40])],
+                    'Παρατηρήσιμες νησίδες: μέσα σε καθεμιά οι ροές βρίσκονται, ανάμεσά τους όχι', [None, None, None])
+        return
+    if not res['converged']:
+        r.note('Η εκτίμηση δεν συνέκλινε: ' + res['message'] + '.', 'critical')
+        return
+    if fi.get('suspect') and not bad:
+        r.note(f'Ο έλεγχος χ² δείχνει λανθασμένα δεδομένα (J = {f(fi["J"])} πάνω από {f(fi["chi2"])}), αλλά κανένα κανονικοποιημένο υπόλοιπο δεν περνά το κατώφλι {f(res["threshold"], 1)}: '
+               'το σφάλμα μπορεί να είναι σε κρίσιμη μέτρηση ή μοιρασμένο σε πολλές.', 'warning')
+    if bad:
+        hit = sum(b['index'] in res['planted'] for b in bad)
+        r.note((f'Ο έλεγχος χ² της πρώτης εκτίμησης: J = {f(fi["J"])} απέναντι σε κατώφλι {f(fi["chi2"])}' + (' (λανθασμένα δεδομένα)' if fi.get('suspect') else ' (δεν τα έδειξε)') + '. '
+                if fi.get('J') is not None else '') + (f'Βγήκαν {len(bad)} μετρήσεις' if len(bad) > 1 else 'Βγήκε μία μέτρηση') + ' με τον έλεγχο του μεγαλύτερου κανονικοποιημένου υπολοίπου'
+               + (f'· από τα {len(res["planted"])} σφάλματα που μπήκαν επίτηδες βρέθηκαν τα {hit}' if res['planted'] else '') + '.', 'warning')
+    if res['planted'] and not all(i in [b['index'] for b in bad] for i in res['planted']):
+        miss = [meas[i] for i in res['planted'] if i not in [b['index'] for b in bad]]
+        r.note('Σφάλμα που μπήκε επίτηδες και δεν βρέθηκε: ' + ', '.join(f'{m["type"]} στο {where(m)}' + (' (κρίσιμη μέτρηση: το σφάλμα της δεν φαίνεται)' if m.get('critical') else '') for m in miss) + '.', 'critical')
+    if res['message']:
+        r.note(res['message'] + '.', 'warning')
+    if res['critical']:
+        r.note(f'{len(res["critical"])} μετρήσεις είναι κρίσιμες: χωρίς καθεμιά η κατάσταση δεν ορίζεται, το υπόλοιπό τους είναι πάντα μηδέν και ένα σφάλμα τους περνά στην εκτίμηση χωρίς να φαίνεται.', 'info')
+    picture(res, 'residual', 'voltage')
+    if bad:
+        r.heading('Μετρήσεις που βγήκαν')
+        r.table(['Μέτρηση', 'Πού', 'Τιμή (pu)', 'σ (pu)', 'Κανον. υπόλοιπο', 'Σφάλμα, εκτίμηση (σ)', 'Διορθωμένη (pu)', 'Μπήκε (σ)'],
+                [[KIND[b['type']], b['at'], b['value'], b['sigma'], b['rN'], b['error'] / b['sigma'], b['corrected'], meas[b['index']].get('gross')] for b in bad], '',
+                [None, None, 5, 4, 3, 3, 5, 3], {i: 'critical' for i in range(len(bad))},
+                note='Με τη σειρά που βγήκαν. Η εκτίμηση του σφάλματος είναι το υπόλοιπο επί σ²/Ω, όπου Ω η διακύμανση του υπολοίπου· η διορθωμένη τιμή είναι η μέτρηση μείον αυτό. «Μπήκε»: το χονδρικό σφάλμα που προστέθηκε επίτηδες, όπου υπάρχει.')
+    used = [m for m in meas if m['used'] and m['rN'] is not None]
+    edges = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+    cnt = [sum(a <= m['rN'] < b for m in used) for a, b in zip(edges, edges[1:])] + [sum(m['rN'] >= 3.0 for m in used)]
+    from math import erf, sqrt
+    cdf = lambda x: erf(x / sqrt(2))                                                    # noqa: E731
+    exp = [len(used) * (cdf(b) - cdf(a)) for a, b in zip(edges, edges[1:])] + [len(used) * (1 - cdf(3.0))]
+    r.heading('Κανονικοποιημένα υπόλοιπα')
+    r.chart('bar', [f'{f(a, 1)}–{f(b, 1)}' for a, b in zip(edges, edges[1:])] + ['πάνω από 3,0'], [{'name': 'μετρήσεις', 'y': cnt}, {'name': 'αναμενόμενες αν όλα τα σφάλματα είναι τυχαία', 'y': exp}],
+            'Πόσες μετρήσεις έχουν κανονικοποιημένο υπόλοιπο σε κάθε περιοχή (τελική εκτίμηση)', 'κανονικοποιημένο υπόλοιπο', 'μετρήσεις')
+    top = sorted(used, key=lambda m: -m['rN'])[:15]
+    r.table(['Μέτρηση', 'Πού', 'Τιμή (pu)', 'Εκτίμηση (pu)', 'Υπόλοιπο (pu)', 'σ (pu)', 'Κανονικοποιημένο υπόλοιπο'],
+            [[KIND[m['type']], where(m), m['value'], m['estimate'], m['residual'], m['sigma'], m['rN']] for m in top], 'Οι 15 μετρήσεις με το μεγαλύτερο', [None, None, 5, 5, 4, 4, 3],
+            {i: 'warning' for i, m in enumerate(top) if m['rN'] > res['threshold']})
+    r.heading('Οι μετρήσεις ανά είδος')
+    rows = []
+    for t, c in (res.get('counts') or {}).items():
+        mm = [m for m in meas if m['type'] == t]
+        us = [m for m in mm if m['used'] and m['residual'] is not None]
+        rows.append([KIND[t], c, len(mm) - sum(m['used'] for m in mm), sum(m['critical'] for m in mm), mm[0]['sigma'],
+                     None if not us else (sum((m['residual'] / m['sigma']) ** 2 for m in us) / len(us)) ** 0.5])
+    r.table(['Είδος', 'Πλήθος', 'Βγήκαν', 'Κρίσιμες', 'σ (pu)', 'RMS υπολοίπου (σ)'], rows, '', [None, None, None, None, 4, 3])
+    er = res.get('error')
+    order = list(res['buses'])
+    if er:
+        r.heading('Η εκτίμηση απέναντι στη ροή φορτίου')
+        r.facts([('Μεγαλύτερη διαφορά |V| (pu)', round(er['V_max'], 5)), ('στον ζυγό', er['V_bus']), ('Μεγαλύτερη διαφορά γωνίας (°)', round(er['angle_max'], 4)), ('στον ζυγό ', er['angle_bus']),
+                 ('RMS διαφοράς |V| (pu)', round(er['V_rms'], 5)), ('Μεγαλύτερη διαφορά |V| στην πρώτη εκτίμηση (pu)', round(er['first_V_max'], 5)),
+                 ('Μεγαλύτερο σφάλμα μέτρησης (σ)', round(er['measured_max_sigma'], 2))])
+        r.text('Η ροή φορτίου είναι η «αλήθεια» από την οποία βγήκαν οι μετρήσεις. Σε πραγματικό δίκτυο δεν υπάρχει: εκεί η εκτίμηση είναι ό,τι καλύτερο ξέρουμε για την κατάσταση.')
+        r.chart('dot', order, [{'name': 'εκτίμηση − ροή φορτίου', 'y': [res['buses'][b].get('dV') for b in order]}], 'Διαφορά του μέτρου τάσης ανά ζυγό', 'ζυγός', 'pu', table=False)
+    r.heading('Ζυγοί')
+    r.table(['Ζυγός', '|V| εκτίμηση (pu)', 'Γωνία (°)'] + (['|V| ροής φορτίου (pu)', 'Γωνία ροής φορτίου (°)', 'Διαφορά |V| (pu)'] if er else []) + ['P (MW)', 'Q (Mvar)'],
+            [[b, d['V'], d['angle']] + ([d.get('V_true'), d.get('angle_true'), d.get('dV')] if er else []) + [(d['P'] - d['Pload']) / MW, (d['Q'] - d['Qload']) / MW]
+             for b, d in ((b, res['buses'][b]) for b in order)], '', [None, 5, 4] + ([5, 4, 5] if er else []) + [4, 4],
+            note='P και Q: η έγχυση του ζυγού προς το δίκτυο (παραγωγή μείον φορτίο) όπως βγαίνει από την εκτίμηση.')
 
 
 def _branches(r, net, branches, MW):
