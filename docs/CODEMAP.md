@@ -12,7 +12,7 @@
 | `web/studio/app.js` | 3078 |
 | `web/studio/bus.js` | 197 |
 | `web/studio/ctlwin.js` | 78 |
-| `web/studio/editor.js` | 684 |
+| `web/studio/editor.js` | 692 |
 | `web/studio/expr.js` | 73 |
 | `web/studio/inputs.js` | 62 |
 | `web/studio/inside.js` | 143 |
@@ -228,7 +228,7 @@
 | `tests/ui/scope_flow.js` | 169 |
 | `tests/ui/speed_flow.js` | 104 |
 | `tests/ui/step_flow.js` | 69 |
-| `tests/ui/studio_flow.js` | 39 |
+| `tests/ui/studio_flow.js` | 45 |
 | `tests/ui/subcircuit_flow.js` | 79 |
 | `tests/ui/ux_flow.js` | 87 |
 | `tests/ui/watch_flow.js` | 113 |
@@ -981,83 +981,85 @@
 | 201 | method | `captureWires` |
 | 202 | method | `refitWires` |
 | 203 | method | `copySel` |
-| 204 | method | `paste` |
-| 214 | method | `astar` |
-| 222 | const fn | `idx` |
-| 224 | const fn | `dirIndex` |
-| 227 | const fn | `h` |
-| 241 | method | `simpleRoute` |
-| 244 | method | `route` |
-| 248 | method | `adjustEnd` |
-| 256 | method | `areaSize` |
-| 263 | method | `requestView` |
-| 264 | method | `viewFrame` |
-| 271 | method | `applyView` |
-| 280 | method | `gridBg` |
-| 289 | method | `fit` |
-| 291 | method | `extent` |
-| 298 | method | `render` |
-| 300 | method | `partEls` |
-| 301 | method | `partSVG` |
-| 307 | method | `renderPart` |
-| 308 | method | `valueText` |
-| 310 | const fn | `fn` |
-| 346 | method | `noteHTML` |
-| 351 | method | `lblMeasure` |
-| 358 | method | `lvChars` |
-| 364 | method | `renderLabels` |
-| 370 | const fn | `r1` |
-| 371 | const fn | `line` |
-| 383 | method | `relabelSoon` |
-| 384 | method | `renderWires` |
-| 403 | method | `wireSVG` |
-| 415 | method | `redrawWire` |
-| 416 | method | `pathD` |
-| 421 | method | `segDir` |
-| 422 | method | `midLabel` |
-| 423 | method | `renderPins` |
-| 433 | method | `renderSel` |
-| 437 | method | `setLive` |
-| 439 | method | `updateLive` |
-| 451 | method | `drawArrows` |
-| 462 | method | `world` |
-| 464 | method | `hitAt` |
-| 465 | method | `hitOf` |
-| 467 | method | `down` |
-| 493 | method | `move` |
-| 506 | method | `up` |
-| 520 | method | `cancelDrag` |
-| 521 | method | `hoverPin` |
-| 523 | method | `dbl` |
-| 524 | method | `menu` |
-| 527 | method | `worldNow` |
-| 528 | method | `wheel` |
-| 535 | method | `letter` |
-| 536 | method | `key` |
-| 560 | method | `beginDrag` |
-| 571 | method | `dragMove` |
-| 583 | method | `endDrag` |
-| 593 | method | `bakeMove` |
-| 598 | method | `dragSeg` |
-| 601 | const fn | `stub` |
-| 610 | method | `drawMarquee` |
-| 613 | method | `marqueeSelect` |
-| 616 | const fn | `inside` |
-| 623 | method | `escape` |
-| 626 | method | `beginPlace` |
-| 627 | method | `ghost` |
-| 629 | method | `finishPlace` |
-| 630 | method | `cancelPlace` |
-| 632 | method | `startWire` |
-| 633 | method | `startWireFrom` |
-| 634 | method | `previewWire` |
-| 643 | method | `wireClick` |
-| 649 | method | `orthoNext` |
-| 650 | method | `finishWire` |
-| 666 | method | `cancelWire` |
-| 668 | method | `splitWire` |
-| 678 | method | `wireNetPin` |
-| 680 | method | `canScroll` |
+| 206 | method | `cutSel` |
+| 207 | method | `beginPaste` |
+| 210 | method | `paste` |
+| 220 | method | `astar` |
+| 228 | const fn | `idx` |
+| 230 | const fn | `dirIndex` |
+| 233 | const fn | `h` |
+| 247 | method | `simpleRoute` |
+| 250 | method | `route` |
+| 254 | method | `adjustEnd` |
+| 262 | method | `areaSize` |
+| 269 | method | `requestView` |
+| 270 | method | `viewFrame` |
+| 277 | method | `applyView` |
+| 286 | method | `gridBg` |
+| 295 | method | `fit` |
+| 297 | method | `extent` |
+| 304 | method | `render` |
+| 306 | method | `partEls` |
+| 307 | method | `partSVG` |
+| 313 | method | `renderPart` |
+| 314 | method | `valueText` |
+| 316 | const fn | `fn` |
+| 352 | method | `noteHTML` |
+| 357 | method | `lblMeasure` |
+| 364 | method | `lvChars` |
+| 370 | method | `renderLabels` |
+| 376 | const fn | `r1` |
+| 377 | const fn | `line` |
+| 389 | method | `relabelSoon` |
+| 390 | method | `renderWires` |
+| 409 | method | `wireSVG` |
+| 421 | method | `redrawWire` |
+| 422 | method | `pathD` |
+| 427 | method | `segDir` |
+| 428 | method | `midLabel` |
+| 429 | method | `renderPins` |
+| 439 | method | `renderSel` |
+| 443 | method | `setLive` |
+| 445 | method | `updateLive` |
+| 457 | method | `drawArrows` |
+| 468 | method | `world` |
+| 470 | method | `hitAt` |
+| 471 | method | `hitOf` |
+| 473 | method | `down` |
+| 499 | method | `move` |
+| 512 | method | `up` |
+| 526 | method | `cancelDrag` |
+| 527 | method | `hoverPin` |
+| 529 | method | `dbl` |
+| 530 | method | `menu` |
+| 533 | method | `worldNow` |
+| 534 | method | `wheel` |
+| 541 | method | `letter` |
+| 542 | method | `key` |
+| 567 | method | `beginDrag` |
+| 578 | method | `dragMove` |
+| 590 | method | `endDrag` |
+| 600 | method | `bakeMove` |
+| 605 | method | `dragSeg` |
+| 608 | const fn | `stub` |
+| 617 | method | `drawMarquee` |
+| 620 | method | `marqueeSelect` |
+| 623 | const fn | `inside` |
+| 630 | method | `escape` |
+| 633 | method | `beginPlace` |
+| 634 | method | `ghost` |
+| 637 | method | `finishPlace` |
+| 638 | method | `cancelPlace` |
+| 640 | method | `startWire` |
+| 641 | method | `startWireFrom` |
+| 642 | method | `previewWire` |
+| 651 | method | `wireClick` |
+| 657 | method | `orthoNext` |
+| 658 | method | `finishWire` |
+| 674 | method | `cancelWire` |
+| 676 | method | `splitWire` |
+| 686 | method | `wireNetPin` |
+| 688 | method | `canScroll` |
 
 ### `web/studio/expr.js`
 

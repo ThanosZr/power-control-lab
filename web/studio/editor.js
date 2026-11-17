@@ -201,6 +201,12 @@
   captureWires(cs){const ids=new Set(cs.map(c=>c.id));return this.doc.wires.filter(w=>ids.has(w.a.c)||ids.has(w.b.c)).map(w=>({w,pts:this.wirePts(w)}));}
   refitWires(cs,before){for(const {w} of before)this.route(w);}
   copySel(){const ids=new Set(this.sel.c);if(!ids.size)return null;const comps=this.doc.components.filter(c=>ids.has(c.id));const wires=this.doc.wires.filter(w=>ids.has(w.a.c)&&ids.has(w.b.c));this.clip=JSON.parse(JSON.stringify({comps,wires}));return this.clip;}
+  // 4.19.5: cut = copy and delete (one undo step); a paste is placed like a new part: the copy follows the pointer as a ghost
+  // and lands where the user clicks (Esc cancels, Shift+click keeps it for another one). paste(dx, dy) stays: the copy at an offset
+  cutSel(){if(!this.copySel())return false;this.deleteSel();return true;}
+  beginPaste(){if(!this.clip||!this.clip.comps.length)return false;this.cancelWire();let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+   for(const c of this.clip.comps){x0=Math.min(x0,c.x);y0=Math.min(y0,c.y);x1=Math.max(x1,c.x);y1=Math.max(y1,c.y);}
+   this.placing={paste:true,rot:0,ax:snap((x0+x1)/2),ay:snap((y0+y1)/2)};this.svg.classList.add('placing');this.svg.focus({preventScroll:true});if(this.hover)this.ghost(this.hover);return true;}
   paste(dx=40,dy=40){if(!this.clip)return;this.remember();const map=new Map();const nc=[],nw=[];
    for(const c of this.clip.comps){const id=this.newId(P.PARTS[c.type].prefix);map.set(c.id,id);const k={...JSON.parse(JSON.stringify(c)),id,label:c.type==='JUNC'?id:id,x:c.x+dx,y:c.y+dy};this.doc.components.push(k);nc.push(id);}
    for(const w of this.clip.wires){const id=this.newId('w');const k={...JSON.parse(JSON.stringify(w)),id,a:{c:map.get(w.a.c),p:w.a.p},b:{c:map.get(w.b.c),p:w.b.p},pts:(w.pts||[]).map(p=>[p[0]+dx,p[1]+dy])};this.doc.wires.push(k);nw.push(id);}
@@ -547,8 +553,9 @@
    if(fromPage)return false;
    if(ctrl&&k==='a'){e.preventDefault();this.select(this.doc.components.map(c=>c.id),this.doc.wires.map(w=>w.id));return;}
    if(ctrl&&k==='c'){this.copySel();return;}
-   if(ctrl&&k==='v'){e.preventDefault();this.paste();return;}
-   if(ctrl&&k==='d'){e.preventDefault();this.copySel();this.paste(20,20);return;}
+   if(ctrl&&k==='x'){e.preventDefault();this.cutSel();return;}
+   if(ctrl&&k==='v'){e.preventDefault();this.beginPaste();return;}
+   if(ctrl&&k==='d'){e.preventDefault();if(this.copySel())this.beginPaste();return;}
    if(ctrl&&k==='g'){e.preventDefault();this.opt.ongroup?.(e.shiftKey);return;}
    if(!ctrl&&k==='r'){if(this.placing){this.placing.rot=(this.placing.rot+1)%4;this.ghost(this.hover||[0,0]);}else this.rotateSel(e.shiftKey?-1:1);return;}
    if(!ctrl&&k==='m'){this.mirrorSel();return;}
@@ -625,8 +632,9 @@
   // ---------------------------------------------------------- placing
   beginPlace(type,params){this.cancelWire();this.placing={type,rot:0,params};this.svg.classList.add('placing');this.svg.focus({preventScroll:true});if(this.hover)this.ghost(this.hover);}
   ghost(p){let g=this.L.over.querySelector('.ghost');if(!g){g=document.createElementNS(NS,'g');g.setAttribute('class','ghost');this.L.over.appendChild(g);}
+   if(this.placing.paste){const dx=snap(p[0])-this.placing.ax,dy=snap(p[1])-this.placing.ay;g.innerHTML=this.clip.comps.map((c,i)=>this.partSVG({...c,id:'ghost'+i,x:c.x+dx,y:c.y+dy})).join('');return;}
    const c={type:this.placing.type,x:snap(p[0]),y:snap(p[1]),rot:this.placing.rot,flip:false,params:{...P.defaults(this.placing.type),...(this.placing.params||{})}};g.innerHTML=this.partSVG({...c,id:'ghost'});}
-  finishPlace(p,shift){const t=this.placing;if(this.opt.canPlace&&!this.opt.canPlace(t)){this.cancelPlace();return;}const c=this.addPart(t.type,snap(p[0]),snap(p[1]),t.params&&JSON.parse(JSON.stringify(t.params)));if(c&&t.rot){c.rot=t.rot;this.render();}if(c&&!shift&&this.autoConnect([c.id]))this.changed('struct');if(!this.keepPlacing)this.cancelPlace();}
+  finishPlace(p,shift){const t=this.placing;if(t.paste){this.paste(snap(p[0])-t.ax,snap(p[1])-t.ay);if(shift&&this.placing)this.ghost(p);else this.cancelPlace();return;}if(this.opt.canPlace&&!this.opt.canPlace(t)){this.cancelPlace();return;}const c=this.addPart(t.type,snap(p[0]),snap(p[1]),t.params&&JSON.parse(JSON.stringify(t.params)));if(c&&t.rot){c.rot=t.rot;this.render();}if(c&&!shift&&this.autoConnect([c.id]))this.changed('struct');if(!this.keepPlacing)this.cancelPlace();}
   cancelPlace(){this.placing=null;this.svg.classList.remove('placing');this.L.over.querySelector('.ghost')?.remove();}
   // ---------------------------------------------------------- wiring
   startWire(pin,click){const [c,p]=pin.split(':');this.wiring={from:{c,p},via:[],click};this.svg.classList.add('wiring');}

@@ -24,8 +24,14 @@ const {chromium}=require('playwright');const fs=require('fs');const OUT=process.
  const v0=await p.evaluate(()=>({...PCL.editor.view}));let a=await scr(620,60);await p.mouse.move(...a);await p.mouse.down();await p.mouse.move(a[0]+60,a[1]+30,{steps:5});await p.mouse.up();
  R.leftPan=await p.evaluate(v0=>Math.abs(PCL.editor.view.cx-v0.cx)>1,v0);
  await p.click('#open-settings');await p.selectOption('#settings [data-set="leftDrag"]','select');await p.click('#settings-close');
- // copy / paste
+ // copy / paste. 4.19.5: the copy follows the pointer as a ghost and lands on a click; Esc cancels; cut is copy and delete in one undo step
  await p.evaluate(()=>PCL.editor.fit());await p.mouse.click(...await scr(520,210));await p.keyboard.press('Control+c');await p.keyboard.press('Control+v');
+ const nR=()=>p.evaluate(()=>PCL.editor.doc.components.filter(c=>c.type==='R').length);await p.mouse.move(...await scr(600,290));
+ R.paste={ghost:await p.evaluate(()=>document.querySelectorAll('.ghost .part').length),before:await nR()};
+ await p.keyboard.press('Escape');R.paste.esc=[await p.evaluate(()=>!!document.querySelector('.ghost')),await nR()];
+ await p.mouse.click(...await scr(520,210));await p.keyboard.press('Control+x');R.paste.cut=await nR();await p.keyboard.press('Control+z');R.paste.undo=await nR();
+ await p.keyboard.press('Control+v');await p.mouse.move(...await scr(560,250));await p.mouse.click(...await scr(560,250));
+ R.paste.at=await p.evaluate(()=>{const c=PCL.editor.comp('R2');return c?[c.x,c.y]:null;});R.paste.placing=await p.evaluate(()=>!!PCL.editor.placing);
  R.pasted=await p.evaluate(()=>PCL.editor.doc.components.filter(c=>c.type==='R').map(c=>c.id));
  // save and reopen
  const [dl]=await Promise.all([p.waitForEvent('download'),p.click('#save')]);const file=OUT+'/saved.pcl.json';await dl.saveAs(file);const saved=JSON.parse(fs.readFileSync(file,'utf8'));
@@ -35,5 +41,5 @@ const {chromium}=require('playwright');const fs=require('fs');const OUT=process.
  // gallery
  await p.click('#tutorials');await p.click('#gallery [data-tut="sepic"]');await p.waitForTimeout(500);R.gallery=await p.locator('#tut-title').innerText();
  console.log(JSON.stringify(R,null,1));console.log('ERR',JSON.stringify(errs.slice(0,5)));
- const ok=R.inspector&&Math.abs(R.Lsim-200e-6)<1e-12&&R.chan.includes('V:C1')&&Math.abs(R.vo1-12)<.2&&Math.abs(R.vo2-6)<.3&&R.leftPan&&R.pasted.length===2&&R.reopen.hasR2&&R.gallery==='SEPIC'&&!errs.length;
+ const ok=R.inspector&&Math.abs(R.Lsim-200e-6)<1e-12&&R.chan.includes('V:C1')&&Math.abs(R.vo1-12)<.2&&Math.abs(R.vo2-6)<.3&&R.leftPan&&R.pasted.length===2&&R.paste.ghost===1&&R.paste.before===1&&!R.paste.esc[0]&&R.paste.esc[1]===1&&R.paste.cut===0&&R.paste.undo===1&&R.paste.at&&Math.abs(R.paste.at[0]-560)<=10&&Math.abs(R.paste.at[1]-250)<=10&&!R.paste.placing&&R.reopen.hasR2&&R.gallery==='SEPIC'&&!errs.length;
  console.log(ok?'PASS':'FAIL');await b.close();process.exit(ok?0:1);})().catch(e=>{console.error('FAILED',e);process.exit(1);});
