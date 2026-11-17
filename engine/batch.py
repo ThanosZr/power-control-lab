@@ -177,6 +177,73 @@ def f2_phi(w0, z, dt):
     return eC + a, c, -c, eC - a
 
 
+def _wm_w(x):
+    """4.19.6 (ROADMAP §76, THEORY §8Σ): the weights of the two ends in the integral of (1 − τ, τ)·e^{jxτ} over [0, 1], by their series
+    for |x| < 1 (as wmW in web/studio/mna.js): [Re w0, Im w0, Re w1, Im w1]."""
+    if abs(x) < 1:
+        tr, ti, a, b, c, d = 1.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        for k in range(40):
+            e = (k + 1) * (k + 2)
+            c += tr / (k + 2)
+            d += ti / (k + 2)
+            a += tr / e
+            b += ti / e
+            tr, ti = -ti * x / (k + 1), tr * x / (k + 1)
+            if abs(tr) + abs(ti) < 1e-18:
+                break
+        return a, b, c, d
+    co, si, x2 = math.cos(x), math.sin(x), x * x
+    c, d = si / x + (co - 1) / x2, -co / x + si / x2
+    return si / x - c, (1 - co) / x - d, c, d
+
+
+def _wm_inc(k, ua, ub, q0, q1, h):
+    """The increments of the terms of a windowed measure over a step of length h (as wmInc): S = ∫u, Q = ∫u², E = ∫u·e^{jνθ} (two
+    numbers), X = ∫u·v, each input straight from ua (after the first point) to ub (before the second), θ (cycles) from q0 to q1."""
+    out = []
+    w, cr, ci = None, 1.0, 0.0
+    if k.get('E'):
+        q = k['nu'] * q0
+        p0 = 2 * math.pi * (q - math.floor(q))
+        w = _wm_w(2 * math.pi * k['nu'] * (q1 - q0))
+        cr, ci = math.cos(p0), math.sin(p0)
+    for tm in k['terms']:
+        j = tm[1]
+        a, c = ua[j], ub[j]
+        if tm[0] == 'S':
+            out.append(h * (a + c) / 2)
+        elif tm[0] == 'Q':
+            out.append(h * (a * a + a * c + c * c) / 3)
+        elif tm[0] == 'X':
+            d, e = ua[tm[2]], ub[tm[2]]
+            out.append(h * (2 * a * d + a * e + c * d + 2 * c * e) / 6)
+        else:
+            er, ei = h * (a * w[0] + c * w[2]), h * (a * w[1] + c * w[3])
+            out.append(er * cr - ei * ci)
+            out.append(er * ci + ei * cr)
+    return out
+
+
+def _wm_out(k, W, D):
+    """The outputs of a windowed measure (in the order of its pins) from the integrals W over a window of length D (as wmOut)."""
+    D2, deg = 2 / D, 180 / math.pi
+    if k['kind'] == 'FOUR':
+        if k['nu'] > 0:
+            a, b = W[0] * D2, W[1] * D2
+            m = math.hypot(a, b)
+            ph = (math.atan2(-b, a) if k.get('cos') else math.atan2(a, b)) * deg
+        else:
+            a, b = W[0] / D, 0.0
+            m = abs(a)
+            ph = 180.0 if a < 0 else 0.0
+        return [m, ph, m / math.sqrt(2) if k['nu'] > 0 else m, a, b]
+    U2, U0 = W[1] / D, W[0] / D
+    a1, b1 = W[2] * D2, W[3] * D2
+    U1 = math.hypot(a1, b1) / math.sqrt(2)
+    UH = math.sqrt(max(0.0, U2 - U1 * U1 - (U0 * U0 if k.get('dcOut') else 0.0)))
+    return [UH / U1 * k['sc'] if U1 > 0 else 0.0, U1, UH, math.sqrt(max(0.0, U2))]
+
+
 def _f(v, d=0.0):
     try:
         v = float(v)
@@ -651,8 +718,8 @@ class Circuit:
                 b['_src'] = s if ok else None
         self.zc = [b for b in self.blocks if b['type'] == 'CMP']
         # continuous in time: integrators, filters, the PLL, and expressions of t (e.g. I_dc + I_ac·sin(2πft))
-        self.meas = [b for b in self.blocks if b['type'] in ('AVG', 'RMS', 'MNMX')]     # 4.19.6: blocks that measure a signal over a window
-        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL', 'FEST', 'F2', 'RLIM', 'SPLX', 'AVG', 'RMS', 'MNMX') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
+        self.meas = [b for b in self.blocks if b['type'] in ('AVG', 'RMS', 'MNMX') or b.get('wm')]     # 4.19.6: blocks that measure a signal over a window
+        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL', 'FEST', 'F2', 'RLIM', 'SPLX', 'AVG', 'RMS', 'MNMX') or b.get('wm') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
         # 3.19 (question 5 of 3.18): with sources driven by signals (a controlled source, a PWM with its duty from a signal, a
         # gate from a signal) the continuous blocks are integrated over T/1000 instead of T/200, close to the browser's step,
         # so a control loop through them has the same transients; data['cont_div'] sets it
@@ -2073,9 +2140,14 @@ class Circuit:
         if (mode == 'commit' or (trial and not left)) and self.meas and any(t > b['st']['t'] for b in self.meas):
             # 4.19.6 (ROADMAP §76): a measuring block closes a step with the value its input has before this instant (as Sim.evalBlocks)
             self.eval_blocks(t, x, z, 'trial', left=True)
+            lv = lambda n: self.sv_t[n] if isinstance(n, int) and n >= 0 else 0.0
             for b in self.meas:
-                n = b['ins'].get('u')
-                uleft[b['id']] = self.sv_t[n] if isinstance(n, int) and n >= 0 else 0.0
+                if b.get('wm'):
+                    uleft[b['id']] = [lv(b['ins'].get(q)) for q in b['wm']['ins']]
+                    if b.get('fin'):
+                        uleft[b['id'] + '/f'] = lv(b['ins'].get('f'))
+                else:
+                    uleft[b['id']] = lv(b['ins'].get('u'))
         sv = [0.0] * self.nsig
         yb = [0.0] * len(self.blocks)
         yo = [[0.0] * len(b.get('outList') or []) for b in self.blocks]
@@ -2295,6 +2367,92 @@ class Circuit:
                                 r['k'] = max(0, r['k'] - d)
                         else:
                             ra[n - 1] = u
+            elif ty in ('FOUR', 'THD'):
+                # 4.19.6 (§76, THEORY §8Σ): Fourier and THD over a window, the same operations as Sim.evalBlocks (wmInc, wmOut)
+                k = b['wm']
+                m, L = k['m'], k['L']
+                dt = max(0.0, t - st['t'])
+                lvok = not disc and dt > 0 and b['id'] in uleft
+                u = [rd(I.get(q)) for q in k['ins']]
+                uL = uleft[b['id']] if lvok else list(u)
+                fe = 0.0
+                if b.get('fin'):
+                    fe = max(rd(I.get('f')), b['fmin'])
+                    fl = max(uleft[b['id'] + '/f'], b['fmin']) if lvok and (b['id'] + '/f') in uleft else fe
+                    q1 = st['th'] + dt * (st['fi'] + fl) / 2
+                elif b.get('per') and b.get('gT') is None and self.sh_grid(b) is not None:
+                    g = self.sh_grid(b)
+                    q1 = (t - g[0]) / g[1]
+                else:
+                    q1 = b['f'] * t
+                g = _wm_inc(k, st['ua'], uL, st['th'], q1, dt)
+                G1 = [v + w for v, w in zip(st['G'], g)]
+                if b.get('per'):
+                    if not trial:
+                        st['G'], st['ua'], st['t'], st['th'] = G1, u, t, q1
+                        st['D'] += dt
+                        if disc and self.blk_due(b, t, force):
+                            if st['D'] > 0:
+                                st['y'] = _wm_out(k, st['G'], st['D'])
+                                sampled = True
+                            st['G'], st['D'] = [0.0] * L, 0.0
+                    yv = st['y']
+                else:
+                    r = st['r']
+                    rt, rth, rG, ra, rb = r['t'], r['th'], r['G'], r['a'], r['b']
+                    n = len(rt)
+                    Tw = b['np'] / fe if b.get('fin') else b['Tw']
+                    ts = t - Tw
+                    i0 = r['i']
+                    if ts < rt[i0] - 1e-9 * Tw:
+                        el = t - rt[i0]
+                        yv = _wm_out(k, [v - rG[i0 * L + i] for i, v in enumerate(G1)], el) if b.get('grow') and el > 0 else k['y0']
+                    else:
+                        q = min(r['k'], n - 1)
+                        while q + 1 < n and rt[q + 1] <= ts:
+                            q += 1
+                        while q > i0 and rt[q] > ts:
+                            q -= 1
+                        if not trial:
+                            r['k'] = q
+                        xw = max(0.0, ts - rt[q])
+                        h = (rt[q + 1] if q + 1 < n else t) - rt[q]
+                        sx = xw / h if h > 0 else 0.0
+                        ua = ra[q * m:q * m + m]
+                        ub = rb[(q + 1) * m:(q + 1) * m + m] if q + 1 < n else uL
+                        ux = [v + (ub[j] - v) * sx for j, v in enumerate(ua)]
+                        qa = rth[q]
+                        qx = qa + ((rth[q + 1] if q + 1 < n else q1) - qa) * sx
+                        gp = _wm_inc(k, ua, ux, qa, qx, xw)
+                        yv = _wm_out(k, [v - rG[q * L + i] - gp[i] for i, v in enumerate(G1)], Tw)
+                    if not trial:
+                        st['G'], st['ua'], st['t'], st['th'] = G1, u, t, q1
+                        if b.get('fin'):
+                            st['fi'] = fe
+                        if dt > 0:
+                            rt.append(t)
+                            rth.append(q1)
+                            rG.extend(G1)
+                            ra.extend(u)
+                            rb.extend(uL)
+                            tm = t - (b['np'] / b['fmin'] if b.get('fin') else b['Tw'])
+                            while r['i'] + 1 < len(rt) and rt[r['i'] + 1] <= tm:
+                                r['i'] += 1
+                            if r['i'] > 512 and r['i'] > len(rt) / 2:
+                                d = r['i']
+                                g0 = rG[d * L:d * L + L]
+                                del rt[:d], rth[:d], rG[:d * L], ra[:d * m], rb[:d * m]
+                                for jj in range(len(rG)):
+                                    rG[jj] -= g0[jj % L]
+                                for jj in range(L):
+                                    st['G'][jj] -= g0[jj]
+                                r['i'] = 0
+                                r['k'] = max(0, r['k'] - d)
+                        else:
+                            for jj in range(m):
+                                ra[(n - 1) * m + jj] = u[jj]
+                            rth[n - 1] = q1
+                ys = dict(zip(b['outList'], yv))
             elif ty == 'MNMX':          # 4.19.6 (§76): the lowest and the highest value of the input in each period
                 u = rd(I.get('u'))
                 if not trial:

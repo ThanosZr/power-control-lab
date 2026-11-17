@@ -5858,6 +5858,31 @@
     ],
     "since": "4.1"
    },
+   "part:FOUR": {
+    "params": [
+     "nu",
+     "ref",
+     "win",
+     "f",
+     "np",
+     "fsrc",
+     "fmin",
+     "t0",
+     "clock",
+     "first",
+     "y0"
+    ],
+    "pins": [
+     "a",
+     "b",
+     "f",
+     "mag",
+     "ph",
+     "rms",
+     "u"
+    ],
+    "since": "4.19.6"
+   },
    "part:GAIN": {
     "params": [
      "K",
@@ -7453,6 +7478,30 @@
      "u"
     ],
     "since": "3.18"
+   },
+   "part:THD": {
+    "params": [
+     "dc",
+     "scale",
+     "win",
+     "f",
+     "np",
+     "fsrc",
+     "fmin",
+     "t0",
+     "clock",
+     "first",
+     "y0"
+    ],
+    "pins": [
+     "f",
+     "h1",
+     "hh",
+     "rms",
+     "thd",
+     "u"
+    ],
+    "since": "4.19.6"
    },
    "part:TL": {
     "params": [

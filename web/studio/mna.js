@@ -57,6 +57,29 @@
  const REC_BIG=1000;   // 4.19.3: channels above which the record buffers are sized by memory (allocRecord)
  const schedAt=(s,t,dflt,left)=>{if(!s)return dflt;let v=s[0][1];const tl=left?t-1e-15-4e-16*Math.abs(t):0;if(left?s[0][0]>=tl:t<s[0][0])return dflt;for(const [ts,val] of s){if(left?ts<tl:ts<=t+1e-15)v=val;else break;}return v;};
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
+ // 4.19.6 (ROADMAP §76, THEORY §8Σ): the windowed measures beyond the mean and the RMS (Fourier, THD). Each keeps integrals of its
+ // inputs over the steps of the solver, as terms: S = ∫u dt, Q = ∫u² dt, E = ∫u·e^{jνθ} dt (two numbers), X = ∫u·v dt. Between two
+ // points each input goes straight from its value after the first to its value before the second, and θ (cycles of the fundamental)
+ // straight too: then every term is exact. The weights of the two ends in ∫₀¹ (1 − τ, τ)·e^{jxτ} dτ, by their series for |x| < 1
+ function wmW(x){if(Math.abs(x)<1){let tr=1,ti=0,a=0,b=0,c=0,d=0;
+   for(let k=0;k<40;k++){const e=(k+1)*(k+2);c+=tr/(k+2);d+=ti/(k+2);a+=tr/e;b+=ti/e;const nr=-ti*x/(k+1),ni=tr*x/(k+1);tr=nr;ti=ni;if(Math.abs(tr)+Math.abs(ti)<1e-18)break;}
+   return [a,b,c,d];}
+  const co=Math.cos(x),si=Math.sin(x),x2=x*x,c=si/x+(co-1)/x2,d=-co/x+si/x2;return [si/x-c,(1-co)/x-d,c,d];}
+ // the increments of the terms of block b over a step of length h: inputs ua (after the first point) → ub (before the second), θ q0 → q1
+ function wmInc(k,ua,ub,q0,q1,h){const out=new Array(k.L);let o=0,w=null,cr=1,ci=0;
+  if(k.E){const q=k.nu*q0,p0=2*Math.PI*(q-Math.floor(q));w=wmW(2*Math.PI*k.nu*(q1-q0));cr=Math.cos(p0);ci=Math.sin(p0);}
+  for(const tm of k.terms){const j=tm[1],a=ua[j],c=ub[j];
+   if(tm[0]==='S')out[o++]=h*(a+c)/2;else if(tm[0]==='Q')out[o++]=h*(a*a+a*c+c*c)/3;
+   else if(tm[0]==='X'){const d=ua[tm[2]],e=ub[tm[2]];out[o++]=h*(2*a*d+a*e+c*d+2*c*e)/6;}
+   else{const er=h*(a*w[0]+c*w[2]),ei=h*(a*w[1]+c*w[3]);out[o++]=er*cr-ei*ci;out[o++]=er*ci+ei*cr;}}
+  return out;}
+ // the outputs (in the order of the pins) from the integrals W over a window of length D
+ function wmOut(k,W,D){const D2=2/D,deg=180/Math.PI;
+  if(k.kind==='FOUR'){let a,b,m,ph;if(k.nu>0){a=W[0]*D2;b=W[1]*D2;m=Math.hypot(a,b);ph=(k.cos?Math.atan2(-b,a):Math.atan2(a,b))*deg;}else{a=W[0]/D;b=0;m=Math.abs(a);ph=a<0?180:0;}
+   return [m,ph,k.nu>0?m/Math.SQRT2:m,a,b];}
+  // THD: U² = Q/D, U₀ = S/D, U₁ from the components of the fundamental; U_H² = U² − U₁² (− U₀²)
+  const U2=W[1]/D,U0=W[0]/D,a1=W[2]*D2,b1=W[3]*D2,U1=Math.hypot(a1,b1)/Math.SQRT2,H2=U2-U1*U1-(k.dcOut?U0*U0:0),UH=Math.sqrt(Math.max(0,H2));
+  return [U1>0?UH/U1*k.sc:0,U1,UH,Math.sqrt(Math.max(0,U2))];}
  // "1, 2, 3" → N numbers (one value = the same for all)
  const numList=(s,N,d=0)=>{const a=String(s??'').split(/[,;\s]+/).filter(Boolean).map(v=>num(v,d));return Array.from({length:N},(_,k)=>a.length===1?a[0]:a[k]??d);};
  // synchronous machine (3.5): two ports a→c and b→c (no star point), with currents i_a, i_b. Port fluxes ψ_p = Kv·ψ_αβ,
@@ -966,6 +989,15 @@
      if(b.per){b.trig='start';st.last=null;if(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type))b.clock=p.clock;else{b.gT=b.Tw;b.gB=num(p.t0,0);}
       if(T==='MNMX'){st.mn=null;st.mx=null;st.y2=b.y0;}}
      else{b.fin=p.fsrc==='in';b.fmin=Math.max(Math.min(num(p.fmin,b.f/2),b.f),1e-9);st.r={t:[0],S:[0],Q:[0],a:[0],b:[0],i:0,k:0};}}
+    // 4.19.6 (§76, THEORY §8Σ): the harmonic ν of a signal (FOUR) and its THD, over the window of the mean and the RMS, from the terms
+    // of wmInc (b.wm: inputs, terms, outputs at the start). The same ring as AVG, with every term at every point
+    else if(T==='FOUR'||T==='THD'){b.f=Math.max(num(p.f,50),1e-9);b.np=Math.max(1,Math.round(num(p.np,1)));b.Tw=b.np/b.f;b.per=p.win==='per';b.grow=p.first==='grow';
+     const y0=num(p.y0,0),nu=T==='FOUR'?Math.max(0,num(p.nu,1)):1,cs=p.ref==='cos';
+     const k={kind:T,ins:['u'],m:1,nu,E:true,cos:cs,dcOut:p.dc==='out',sc:p.scale==='%'?100:1,terms:T==='FOUR'?[['E',0]]:[['S',0],['Q',0],['E',0]]};
+     k.L=k.terms.reduce((n,q)=>n+(q[0]==='E'?2:1),0);k.y0=T==='FOUR'?[y0,0,nu>0?y0/Math.SQRT2:y0,cs||nu===0?y0:0,cs||nu===0?0:y0]:[y0,0,0,0];b.wm=k;
+     st.t=0;st.th=0;st.fi=0;st.D=0;st.ua=new Array(k.m).fill(0);st.G=new Array(k.L).fill(0);st.y=k.y0.slice();
+     if(b.per){b.trig='start';st.last=null;if(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type))b.clock=p.clock;else{b.gT=b.Tw;b.gB=num(p.t0,0);}}
+     else{b.fin=p.fsrc==='in';b.fmin=Math.max(Math.min(num(p.fmin,b.f/2),b.f),1e-9);st.r={t:[0],th:[0],G:new Array(k.L).fill(0),a:new Array(k.m).fill(0),b:new Array(k.m).fill(0),i:0,k:0};}}
     else if(T==='LPF'){b.tau=1/(2*Math.PI*Math.max(num(p.fc,1e3),1e-9));st.s=num(p.y0,0);st.u=0;st.t=0;}
     // 3.19: second-order filter (states: low-pass output and its derivative/ω₀), rate limiter, rate transition, edge detector
     else if(T==='F2'){b.kind=['lp','hp','bp','notch'].includes(p.kind)?p.kind:'lp';b.w0=2*Math.PI*Math.max(num(p.f0,1e3),1e-9);b.z=Math.max(num(p.zeta,.7071),1e-9);
@@ -1479,6 +1511,8 @@
   // Sample & Hold triggers sit on the carrier of the clock PWM: b + n·Δ
   shGrid(q){if(q.gT)return {b:q.gB,d:q.gT}; // 4.19.6: a measuring block with its own period
    const k=this.ctrlById.get(q.clock);let T,b0;if(k){T=k.T;b0=k.phase*T;}else{const c=this.clkById.get(q.clock);if(!c)return null;T=1/c.f;b0=c.ph*T;}return {b:b0+(q.trig==='mid'?T/2:0),d:q.trig==='both'?T/2:T};}
+  // 4.19.6: the angle of the fundamental of a windowed measure, in cycles: f₁·t, or the periods of its clock since the start of its grid
+  wmCyc(b){if(b.clock){const g=this.shGrid(b);if(g)return (this.t-g.b)/g.d;}return b.f*this.t;}
   shNext(q){const g=this.shGrid(q);if(!g)return Infinity;const n=Math.floor((this.t-g.b)/g.d+1e-7)+1;return g.b+n*g.d;}
   // take the samples due at the current instant (left value: the state before any switching at t)
   sampleHolds(){let any=false;for(const q of this.net.shs){if(q.sig)continue;const g=this.shGrid(q);if(!g)continue;const u=(this.t-g.b)/g.d,n=Math.round(u);
@@ -1540,8 +1574,9 @@
    // 4.19.6 (§76): a measuring block closes a step with the value its input has before this instant: a clock edge, a carrier reset or a
    // programmed jump at t would otherwise be counted from the start of the step. One pass at t⁻ gives that value (only with such blocks)
    const trial=mode==='trial',disc=mode==='sample'||mode==='init';
-   if(mode==='commit'||(trial&&!left)){const M=G.meas||(G.meas=G.blocks.filter(b=>b.type==='AVG'||b.type==='RMS'||b.type==='MNMX'));
-    if(M.length&&M.some(b=>this.t>b.st.t)){this.evalBlocks('trial',false,true);for(const b of M){const n=b.ins.u;b.uL=n>=0&&n!==undefined?this.svT[n]:0;}}}
+   if(mode==='commit'||(trial&&!left)){const M=G.meas||(G.meas=G.blocks.filter(b=>b.type==='AVG'||b.type==='RMS'||b.type==='MNMX'||b.wm!==undefined));
+    if(M.length&&M.some(b=>this.t>b.st.t)){this.evalBlocks('trial',false,true);const lv=n=>n>=0&&n!==undefined?this.svT[n]:0;
+     for(const b of M){if(b.wm){b.uLv=b.wm.ins.map(q=>lv(b.ins[q]));if(b.fin)b.fL=lv(b.ins.f);}else b.uL=lv(b.ins.u);}}}
    const sv=trial?this.svT:this.sv,yb=trial?this.ybT:this.yb;sv.fill(0);const t=left?this.t-1e-6*this.h:this.t;const rd=n=>n>=0&&n!==undefined?sv[n]:0;let sampled=false;const pend=[];
    const cont=[],Q3=Math.sqrt(3);
    for(const b of G.order){const st=b.st,I=b.ins;let y=0,ys=null;
@@ -1596,6 +1631,30 @@
         if(r.i>512&&r.i>r.t.length/2){const d=r.i,s0=r.S[d],q0=r.Q[d];for(const a of [r.t,r.S,r.Q,r.a,r.b])a.splice(0,d);for(let j=0;j<r.S.length;j++){r.S[j]-=s0;r.Q[j]-=q0;}st.S-=s0;st.Q-=q0;r.i=0;r.k=Math.max(0,r.k-d);}}
        else r.a[n-1]=u;}
       break;}
+     // 4.19.6 (§76, THEORY §8Σ): Fourier and THD over a window, from the terms of wmInc. θ is in cycles of the fundamental: f₁·t, the
+     // grid of a clock, or ∫f dt from a frequency input (the trapezoid, with the value of f before the instant)
+     case 'FOUR':case 'THD':{const k=b.wm,m=k.m,dt=Math.max(0,this.t-st.t),lv=!disc&&dt>0&&b.uLv!==undefined,u=new Array(m),uL=new Array(m);
+      for(let j=0;j<m;j++){u[j]=rd(I[k.ins[j]]);uL[j]=lv?b.uLv[j]:u[j];}
+      let fe=0,q1;if(b.fin){fe=Math.max(rd(I.f),b.fmin);const fl=lv&&b.fL!==undefined?Math.max(b.fL,b.fmin):fe;q1=st.th+dt*(st.fi+fl)/2;}else q1=this.wmCyc(b);
+      if(!trial){b.uLv=undefined;b.fL=undefined;}
+      const g=wmInc(k,st.ua,uL,st.th,q1,dt),G1=st.G.map((v,i)=>v+g[i]);let yv;
+      if(b.per){if(!trial){st.G=G1;st.ua=u;st.t=this.t;st.th=q1;st.D+=dt; // per period: the window closes on the grid, the outputs are held
+        if(disc&&this.blkDue(b,force)){if(st.D>0){st.y=wmOut(k,st.G,st.D);sampled=true;}st.G=new Array(k.L).fill(0);st.D=0;}}
+       yv=st.y;}
+      else{const r=st.r,n=r.t.length,L=k.L,Tw=b.fin?b.np/fe:b.Tw,ts=this.t-Tw; // running: the terms at t minus those at t − Tw
+       if(ts<r.t[r.i]-1e-9*Tw){const el=this.t-r.t[r.i];yv=b.grow&&el>0?wmOut(k,G1.map((v,i)=>v-r.G[r.i*L+i]),el):k.y0;}
+       else{let q=Math.min(r.k,n-1);while(q+1<n&&r.t[q+1]<=ts)q++;while(q>r.i&&r.t[q]>ts)q--;if(!trial)r.k=q;
+        const x=Math.max(0,ts-r.t[q]),h=(q+1<n?r.t[q+1]:this.t)-r.t[q],sx=h>0?x/h:0,ua=r.a.slice(q*m,q*m+m),ub=q+1<n?r.b.slice((q+1)*m,(q+1)*m+m):uL,
+         ux=ua.map((v,j)=>v+(ub[j]-v)*sx),qa=r.th[q],qx=qa+((q+1<n?r.th[q+1]:q1)-qa)*sx,gp=wmInc(k,ua,ux,qa,qx,x);
+        yv=wmOut(k,G1.map((v,i)=>v-r.G[q*L+i]-gp[i]),Tw);}
+       if(!trial){st.G=G1;st.ua=u;st.t=this.t;st.th=q1;if(b.fin)st.fi=fe;
+        if(dt>0){r.t.push(this.t);r.th.push(q1);for(const v of G1)r.G.push(v);for(const v of u)r.a.push(v);for(const v of uL)r.b.push(v);
+         const tm=this.t-(b.fin?b.np/b.fmin:b.Tw);while(r.i+1<r.t.length&&r.t[r.i+1]<=tm)r.i++;
+         // the points before the longest window are dropped, and the terms start again from the first one kept
+         if(r.i>512&&r.i>r.t.length/2){const d=r.i,g0=r.G.slice(d*L,d*L+L);r.t.splice(0,d);r.th.splice(0,d);r.G.splice(0,d*L);r.a.splice(0,d*m);r.b.splice(0,d*m);
+          for(let j=0;j<r.G.length;j++)r.G[j]-=g0[j%L];for(let j=0;j<L;j++)st.G[j]-=g0[j];r.i=0;r.k=Math.max(0,r.k-d);}}
+        else{for(let j=0;j<m;j++)r.a[(n-1)*m+j]=u[j];r.th[n-1]=q1;}}}
+      ys={};b.outList.forEach((o,i)=>{ys[o]=yv[i];});break;}
      // 4.19.6 (§76): the lowest and the highest value of the input in each period, on the points of the solver. At an instant with a jump
      // both sides count, except on the boundary of the period: there the value before it closes the period and the value after it opens the next
      case 'MNMX':{const u=rd(I.u);
@@ -2278,7 +2337,7 @@
   const ims=imList.map(m=>({ph:m.ph.map(q=>({L:idx.get(q.L),V:idx.get(q.V)})),RR:m.RR,LM:m.LM,p:m.p,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{...m.st}}));
   const bix=new Map(net.sig.order.map((b,i)=>[b,i]));
   const blocks=net.sig.order.map(b=>{const o={id:b.id,type:b.type,ins:b.ins,outs:b.outs,st:JSON.parse(JSON.stringify(b.st))};
-   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw','xs','ys','train','learn','opt','lr','clip','l2','nl','jac','share','k','k0','N','hb','Vdc','avg','red','trg','band','inV','ini','sh','Ith','np','Tw','per','grow','fin','fmin','gT','gB'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
+   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw','xs','ys','train','learn','opt','lr','clip','l2','nl','jac','share','k','k0','N','hb','Vdc','avg','red','trg','band','inV','ini','sh','Ith','np','Tw','per','grow','fin','fmin','gT','gB','wm'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
    if(b.type==='DCM')o.recs={w:{v:[[b.m,1]]},te:{i:[[idx.get(b.gy),b.psi]]}};
    if(b.type==='IM')o.im=imx.get(b.im);
    if(b.type==='SM')o.sm=smx.get(b.sm);

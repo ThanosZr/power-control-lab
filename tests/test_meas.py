@@ -1,7 +1,8 @@
-"""4.19.6 (ROADMAP §76, THEORY §8Ρ): the blocks that measure a signal inside the simulation and give the result as a signal: mean value
-(AVG), RMS, lowest and highest value per period (MNMX), over a window of periods that runs with the time or closes once per period
-(web/studio/mna.js evalBlocks, engine/batch.py eval_blocks). The numbers come from tests/js/meas_cases.js; every expected value here is a
-closed form, the period statistics of the scope, or the other solver."""
+"""4.19.6 (ROADMAP §76, THEORY §8Ρ and §8Σ): the blocks that measure a signal inside the simulation and give the result as a signal: mean
+value (AVG), RMS, lowest and highest value per period (MNMX), one harmonic (FOUR) and the total harmonic distortion (THD), over a window of
+periods that runs with the time or closes once per period (web/studio/mna.js evalBlocks, engine/batch.py eval_blocks). The numbers come
+from tests/js/meas_cases.js; every expected value here is a closed form, the period statistics or the harmonics of the scope, or the
+other solver."""
 import json
 import math
 import shutil
@@ -124,6 +125,147 @@ class MeasuringBlocks(unittest.TestCase):
                 for k, v in zip(q['keys'], row[1:]):
                     d = tol.get(k.split(':')[1][0], 1e-6)
                     self.assertAlmostEqual(r['ch'][k][i], v, delta=d * max(1.0, abs(v)), msg=(name, row[0], k))
+
+    # ---- Fourier and THD (THEORY §8Σ)
+    @staticmethod
+    def wrap(d):
+        return (d + 180) % 360 - 180
+
+    def check_harmonic(self, r, k, a, b, msg, tol=1e-9, cos=False, nu=1, pt=1e-6):
+        """The five outputs of a FOUR block against the coefficients a, b of u ≈ a·cos(νω₁t) + b·sin(νω₁t)."""
+        m = math.hypot(a, b) if nu > 0 else abs(a)
+        self.assertAlmostEqual(r[k], m, delta=tol, msg=msg)
+        self.assertAlmostEqual(r[k + ':a'], a, delta=tol, msg=msg)
+        self.assertAlmostEqual(r[k + ':b'], b, delta=tol, msg=msg)
+        self.assertAlmostEqual(r[k + ':rms'], m / math.sqrt(2) if nu > 0 else m, delta=tol, msg=msg)
+        if m > 1e-6:
+            ph = math.degrees(math.atan2(-b, a) if cos else math.atan2(a, b)) if nu > 0 else (180.0 if a < 0 else 0.0)
+            self.assertAlmostEqual(self.wrap(r[k + ':ph'] - ph), 0, delta=pt, msg=msg)
+
+    def test_fourier_and_thd_of_straight_segments(self):
+        # A clock with duty d = 0,3: a_ν = sin(2πνd)/(πν), b_ν = (1 − cos(2πνd))/(πν), the mean d. A triangle that starts at 1: 1/2 plus
+        # 4/(π²ν²)·cos(νω₁t) for odd ν. A sawtooth 0…1: 1/2 − sin(νω₁t)/(πν) (the value before a corner or a reset is read a millionth
+        # of a step early: the 1e-8 and the 1e-5° below). All exact over the steps of the solver, with the fixed and with the variable step
+        d = .3
+        ab = lambda n: (math.sin(2 * math.pi * n * d) / (math.pi * n), (1 - math.cos(2 * math.pi * n * d)) / (math.pi * n)) if n else (d, 0.0)
+        V1 = math.hypot(*ab(1)) / math.sqrt(2)
+        tri1 = 4 / math.pi ** 2 / math.sqrt(2)
+        saw1 = 1 / math.pi / math.sqrt(2)
+        for name in ('four', 'four_var'):
+            self.assertEqual(self.o[name]['warn'], [])
+            t = self.table(name)
+            for tt in (.001, .00237, .004, .0103):
+                r, msg = t[tt], (name, tt)
+                for n in (0, 1, 2, 3, 5):
+                    self.check_harmonic(r, 'Fq%d' % n, *ab(n), msg=msg + (n,), nu=n)
+                self.check_harmonic(r, 'Fc3', *ab(3), msg=msg, cos=True, nu=3)              # the phase from cos(νω₁t)
+                self.check_harmonic(r, 'Fp1', *ab(1), msg=msg)                              # per period
+                self.check_harmonic(r, 'Fk2', *ab(2), msg=msg, nu=2)                        # per period, the period from a clock
+                self.check_harmonic(r, 'Fi1', *ab(1), msg=msg)                              # 2 kHz from the frequency input
+                if tt >= .003:
+                    self.check_harmonic(r, 'F3w', *ab(2), msg=msg, nu=2)                    # three periods per window
+                self.check_harmonic(r, 'Ft1', 4 / math.pi ** 2, 0, msg=msg, tol=1e-8, cos=True, pt=1e-5)
+                self.check_harmonic(r, 'Ft3', 4 / (9 * math.pi ** 2), 0, msg=msg, tol=1e-8, cos=True, nu=3, pt=1e-5)
+                self.assertAlmostEqual(r['Ft2'], 0, delta=1e-8)                              # no even harmonics in the triangle
+                self.check_harmonic(r, 'Fs1', 0, -1 / math.pi, msg=msg, tol=1e-8, pt=1e-5)
+                self.check_harmonic(r, 'Fs4', 0, -1 / (4 * math.pi), msg=msg, tol=1e-8, nu=4, pt=1e-5)
+                self.check_harmonic(r, 'Fg', 0, 2 / math.pi, msg=msg)                      # a clock of duty 0,5 once the first window is full
+                self.check_harmonic(r, 'Fy', *ab(1), msg=msg)
+                # THD: U_H² = U² − U₁² (IEEE Std 1459, with the DC component), or without it, as a ratio or in per cent
+                self.assertAlmostEqual(r['Hq'], math.sqrt(d - V1 ** 2) / V1, delta=1e-9, msg=msg)
+                self.assertAlmostEqual(r['Hq:h1'], V1, delta=1e-12)
+                self.assertAlmostEqual(r['Hq:hh'], math.sqrt(d - V1 ** 2), delta=1e-9)
+                self.assertAlmostEqual(r['Hq:rms'], math.sqrt(d), delta=1e-12)
+                self.assertAlmostEqual(r['Ho'], 100 * math.sqrt(d - d * d - V1 ** 2) / V1, delta=1e-7, msg=msg)
+                self.assertAlmostEqual(r['Hp'], math.sqrt(d - d * d - V1 ** 2) / V1, delta=1e-9, msg=msg)
+                self.assertAlmostEqual(r['Ht'], math.sqrt(1 / 12 - tri1 ** 2) / tri1, delta=1e-7, msg=msg)   # triangle: 12,1 %
+                self.assertAlmostEqual(r['Hk'], math.sqrt(1 / 12 - saw1 ** 2) / saw1, delta=1e-7, msg=msg)   # sawtooth: 80,3 %
+            # before the first window: the initial output (a harmonic of magnitude y0 at the phase 0), or the window from the start
+            r = t[.0005]
+            self.assertEqual([r['Fq1'], r['Fq1:ph'], r['Fp1'], r['Hq'], r['Hq:h1'], r['Hp']], [0, 0, 0, 0, 0, 0])
+            self.assertEqual([r['Fy'], r['Fy:ph'], r['Fy:a'], r['Fy:b']], [2, 0, 0, 2])
+            self.assertAlmostEqual(r['Fy:rms'], math.sqrt(2), delta=1e-15)
+            self.check_harmonic(r, 'Fg', 0, 4 / math.pi, msg=name)                         # half a period of 1: b = 4/π
+            ring = self.o[name]['ring']
+            self.assertLess(ring[0], 512 + 2 * 200)                                         # the ring keeps a window, not the run (2060 points)
+            self.assertEqual(ring[1], 2 * ring[0])                                          # two terms per point
+        self.assertEqual(self.o['four_resume']['diff'], 0)                                  # a saved state, bit for bit
+
+    def test_fourier_and_thd_of_a_voltage(self):
+        # v = 50 + 325·sin(ω₁t + 30°) + 30·sin(5ω₁t − 60°) across a resistor. Between the points of the solver the input is a straight
+        # line: its harmonic ν is that of the sine times sinc²(πν/N) with N points per period, at the same phase, and its mean square is
+        # 50² + Σ (A²/2)·(2 + cos(2πν/N))/3. The harmonics of the scope (Metrics.harmonics on the recorded points) are another code
+        for N in (400, 1600):
+            c = self.o['harm%d' % N]
+            self.assertEqual(c['warn'], [])
+            sc = lambda n: (math.sin(math.pi * n / N) / (math.pi * n / N)) ** 2
+            A1, A5 = 325 * sc(1), 30 * sc(5)
+            V2 = 2500 + 325 ** 2 / 2 * (2 + math.cos(2 * math.pi / N)) / 3 + 30 ** 2 / 2 * (2 + math.cos(10 * math.pi / N)) / 3
+            V1 = A1 / math.sqrt(2)
+            for row in c['at']:
+                r = dict(zip((k.split(':', 1)[1] for k in c['keys']), row[1:]))
+                self.assertAlmostEqual(r['A1'] / A1, 1, delta=1e-10, msg=(N, row[0]))
+                self.assertAlmostEqual(r['A5'] / A5, 1, delta=1e-10)
+                self.assertAlmostEqual(r['C5'] / A5, 1, delta=1e-10)
+                self.assertAlmostEqual(self.wrap(r['A1:ph'] - 30), 0, delta=1e-9)
+                self.assertAlmostEqual(self.wrap(r['A5:ph'] + 60), 0, delta=1e-9)
+                self.assertAlmostEqual(self.wrap(r['C5:ph'] + 150), 0, delta=1e-9)       # cos: the phase of sin minus 90°
+                self.assertAlmostEqual(r['A0'], 50, delta=1e-9)
+                self.assertAlmostEqual(r['T1:rms'] / math.sqrt(V2), 1, delta=1e-10)
+                self.assertAlmostEqual(r['T1:h1'] / V1, 1, delta=1e-10)
+                self.assertAlmostEqual(r['T1'], math.sqrt(V2 - V1 * V1) / V1, delta=1e-9)
+                self.assertAlmostEqual(r['T0'], math.sqrt(V2 - V1 * V1 - 2500) / V1, delta=1e-8)
+                self.assertAlmostEqual(r['TP'], r['T1'], delta=1e-9)
+            # 30/325 = 0,0923 for the sine itself; the straight line between the points gives 0,09226 at N = 400
+            self.assertAlmostEqual(r['T0'], 30 / 325, delta=(5e-5 if N == 400 else 4e-6))
+            s, r = c['scope'], dict(zip((k.split(':', 1)[1] for k in c['keys']), c['at'][-1][1:]))
+            self.assertAlmostEqual(r['A1'] / s['A1'], 1, delta=1e-8)
+            self.assertAlmostEqual(r['A5'] / s['A5'], 1, delta=1e-7)
+            w = 360 * 50 * s['ta']                                                           # the scope: cos, from the start of its window
+            self.assertAlmostEqual(self.wrap(r['A1:ph'] - 90 + s['ph1'] + w), 0, delta=1e-6)
+            self.assertAlmostEqual(self.wrap(r['A5:ph'] - 90 + s['ph5'] + 5 * w), 0, delta=1e-5)
+
+    def test_interharmonic(self):
+        # 325·sin(ω₁t) + 20·sin(2,5·ω₁t + 10°): with two periods per window the 125 Hz line is ν = 2,5, at 20·sinc²(2,5π/N) and 10°
+        c = self.o['inter']
+        self.assertEqual(c['warn'], [])
+        N = c['N']
+        sc = lambda n: (math.sin(math.pi * n / N) / (math.pi * n / N)) ** 2
+        for row in c['at']:
+            r = dict(zip((k.split(':', 1)[1] for k in c['keys']), row[1:]))
+            self.assertAlmostEqual(r['F'] / (20 * sc(2.5)), 1, delta=1e-10)
+            self.assertAlmostEqual(self.wrap(r['F:ph'] - 10), 0, delta=1e-9)
+            self.assertAlmostEqual(r['F1'] / (325 * sc(1)), 1, delta=1e-10)
+            self.assertAlmostEqual(self.wrap(r['F1:ph']), 0, delta=1e-9)
+
+    def test_scipy_gives_the_same_harmonics(self):
+        # the same operations in engine/batch.py (_wm_inc, _wm_out). The voltage has fewer points per period there (about 230 on the
+        # sine): the fundamental 6e-5 lower and the fifth harmonic (5π/N)²/3 = 1,5e-3 lower, as the straight line between the points gives;
+        # the phases are the same
+        for name, tol in (('batch_four', {}), ('batch_harm', {'A': 3e-4, 'T': 3e-4, 'A5': 2e-3, 'C5': 2e-3})):
+            q = self.o[name]
+            got = {}
+            items = list(q['channels'].items())
+            for c0 in range(0, len(items), 40):                                             # the solver takes 40 channels per run
+                # a fresh copy of the request each time: the solver keeps the states of the blocks in it (the rings grow)
+                net = json.loads(json.dumps(q['net']))
+                rr = simulate({'net': net, 'channels': dict(items[c0:c0 + 40]), 't_end': q['at'][-1][0], 'method': 'Radau'})
+                self.assertEqual(rr['status'], 'ok')
+                t = np.array(rr['t'])
+                for k, ys in rr['ch'].items():
+                    got[k] = {row[0]: ys[int(np.where(t <= row[0] + 1e-12)[0][-1])] for row in q['at']}
+            for row in q['at']:
+                vals = dict(zip(q['keys'], row[1:]))
+                for k, v in vals.items():
+                    w = got[k][row[0]]
+                    if k.endswith(':ph'):
+                        if vals[k[:-3]] < 1e-6:
+                            continue                                                         # no phase without a magnitude
+                        self.assertAlmostEqual(self.wrap(w - v), 0, delta=1e-5, msg=(name, row[0], k))   # the corners: 1e-6 of a step
+                    else:
+                        id_ = k.split(':')[1]
+                        d = tol.get(id_, tol.get(id_[0], 1e-6))
+                        self.assertAlmostEqual(w, v, delta=d * max(1.0, abs(v)), msg=(name, row[0], k))
 
 
 if __name__ == '__main__':
