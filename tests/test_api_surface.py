@@ -95,6 +95,15 @@ class ApiSurface(unittest.TestCase):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it
         # ('off': the path of before 4.19.5, for comparison)
         self.assertEqual(self.now['project']['file.solve']['params'][-1], 'evSnap')
+        # the continuation load flow: the module is experimental, the method of the network and the study are stable additions
+        self.assertTrue(api_surface.experimental('pcl', 'pcl.cpf.run'))
+        self.assertEqual(self.now['pcl']['pcl.cpf.run']['params'], ['net', 'direction', 'q_limits', 'step', 'dV', 'lower', 'stop', 'V_stop', 'max_points', 'tol'])
+        self.assertIn('pcl.network.Network.cpf', self.now['pcl'])
+        self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.cpf'))
+        from pcl import netview, study
+        self.assertIn('cpf', study.STUDIES)
+        self.assertEqual(set(study.OPTIONS['cpf']), set(self.now['pcl']['pcl.cpf.run']['params'][1:]))      # every option of the routine is an option of the study
+        self.assertIn('collapse', netview.LAYERS)
 
     def test_the_surface_of_4_19_3(self):
         # the two settings of the solver are in the file format (stable); the large network is one more name of the test networks

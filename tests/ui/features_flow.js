@@ -260,6 +260,20 @@ const {chromium}=require('playwright');
  await p.click('#theory [data-study="run"]');await p.waitForSelector('#study-error',{timeout:60000});
  ok(/ονομαστική ισχύ/.test(await p.evaluate(()=>document.querySelector('#study-error').textContent)),'secure dispatch: a network without ratings is refused with the reason');
  for(let i=errs.length-1;i>=0;i--)if(/status of 400/.test(errs[i]))errs.splice(i,1);   // the refusal asked for just above
+ // 4.19.5 (ROADMAP §77): the continuation load flow, from the card to the picture
+ await p.evaluate(()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('cpf_study',{});});await p.waitForTimeout(700);
+ await p.click('#theory [data-study="run"]');await p.waitForSelector('#study-cpf',{timeout:60000});
+ const cp1=await p.evaluate(()=>{const z=window.PCL.STUDY.r.summary;return {txt:document.querySelector('#study-result').innerText,z,pv:!!document.querySelector('#study-pv path.map'),dot:document.querySelectorAll('#study-pv circle').length};});
+ ok(cp1.z.converged&&cp1.z.kind==='fold'&&Math.abs(cp1.z.lambda-0.777995)<1e-5&&Math.abs(cp1.z.margin_MW-201.5)<0.01&&cp1.z.bus==='14'&&/λ = 0,778/.test(cp1.txt)&&/μύτη/.test(cp1.txt)&&/ζυγός 2 στο λ = 0,0769/.test(cp1.txt),
+  'continuation load flow: IEEE 14 with reactive limits, the nose at λ = '+cp1.z.lambda.toFixed(4)+', '+cp1.z.margin_MW.toFixed(1)+' MW of margin, weakest bus '+cp1.z.bus);
+ ok(cp1.pv&&cp1.dot===1,'continuation load flow: the card draws the P–V curve of the weakest bus with the nose marked');
+ await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.layer==='collapse'&&window.PCL.NV.v.state.frames>0,null,{timeout:60000});
+ const cp2=await p.evaluate(()=>({layers:[...document.querySelectorAll('#nv-layer option')].map(o=>o.value),legend:document.querySelector('#nv-legend').textContent}));
+ ok(cp2.layers.join()==='base,voltage,angle,collapse'&&/pu/.test(cp2.legend)&&/Ευστάθεια τάσης/.test(cp2.legend),'continuation load flow: the picture opens on the layer of the voltage stability ('+cp2.legend.slice(0,60)+')');
+ await p.evaluate(()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('cpf_study',{net:'ieee9',qlim:'yes',grow:'all'});});await p.waitForTimeout(700);
+ await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>window.PCL.STUDY.r&&window.PCL.STUDY.r.summary&&window.PCL.STUDY.r.summary.kind==='limit',null,{timeout:60000});
+ const cp3=await p.evaluate(()=>({txt:document.querySelector('#study-result').innerText,z:window.PCL.STUDY.r.summary}));
+ ok(Math.abs(cp3.z.lambda-1.565583)<1e-5&&cp3.z.last==='2'&&/γωνία, όχι μύτη/.test(cp3.txt)&&/άμεση αστάθεια/.test(cp3.txt),'continuation load flow: IEEE 9 with reactive limits ends on a corner at the limit of bus 2 (λ = '+cp3.z.lambda.toFixed(4)+')');
  // 4.19.4 (ROADMAP §74): the third exercise from plain blocks
  await p.evaluate(()=>window.PCL.loadTutorial('current_ctl',{}));await p.waitForTimeout(700);await p.click('#toend');
  await p.waitForFunction(()=>window.PCL.S.sim&&window.PCL.S.sim.t>=0.01599,null,{timeout:120000});await p.waitForTimeout(600);

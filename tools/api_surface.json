@@ -16,7 +16,8 @@
    "pcl.netview.",
    "pcl.netfile.",
    "pcl.psse.",
-   "pcl.scopf."
+   "pcl.scopf.",
+   "pcl.cpf."
   ],
   "cli": [
    "workbench",
@@ -762,6 +763,25 @@
      "scale"
     ],
     "since": "3.18"
+   },
+   "pcl.cpf.CpfError": {
+    "params": [],
+    "since": "4.19.5"
+   },
+   "pcl.cpf.run": {
+    "params": [
+     "net",
+     "direction",
+     "q_limits",
+     "step",
+     "dV",
+     "lower",
+     "stop",
+     "V_stop",
+     "max_points",
+     "tol"
+    ],
+    "since": "4.19.5"
    },
    "pcl.current": {
     "params": [],
@@ -2173,6 +2193,12 @@
      "how"
     ],
     "since": "4.19.1"
+   },
+   "pcl.network.Network.cpf": {
+    "params": [
+     "**kw"
+    ],
+    "since": "4.19.5"
    },
    "pcl.network.Network.dc_flow": {
     "params": [],

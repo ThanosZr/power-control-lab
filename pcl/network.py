@@ -1055,6 +1055,13 @@ class Network:
         from . import scopf
         return scopf.solve(self, **kw)
 
+    def cpf(self, **kw):
+        """The continuation load flow (pcl.cpf.run, 4.19.5): the curve of the load-flow solutions as the load grows, its nose (the
+        loading margin) and the weakest buses, with or without the reactive limits of the generators. See pcl.cpf.run for the
+        options and the result."""
+        from . import cpf
+        return cpf.run(self, **kw)
+
     def opf(self, kind='ac', **kw):
         """The optimal power flow (pcl.opf): kind='ac' (interior point on the full equations) or 'dc' (the linear network).
         See pcl.opf.solve for the options and the result. 4.19.2: dS (a change of the injections, VA per bus) and start='nn' or

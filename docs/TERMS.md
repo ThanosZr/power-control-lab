@@ -28,6 +28,7 @@
 | multiplexer / demultiplexer | πολυπλέκτης (Mux) / αποπολυπλέκτης (Demux) | | 4.6 |
 | grid-forming / grid-following | μετατροπέας που σχηματίζει την τάση (grid-forming) / που ακολουθεί το δίκτυο (grid-following)· στους τίτλους και στην ομάδα των tutorials ο αγγλικός όρος, όπως στη βιβλιογραφία | «διαμόρφωσης δικτύου» (μπερδεύεται με τη διαμόρφωση PWM) | 4.18 |
 | frequency nadir | βύθισμα της συχνότητας (η μεγαλύτερη απόκλιση μετά από διαταραχή) | «ναδίρ» | 4.18.1 |
+| continuation power flow | συνεχιζόμενη ροή φορτίου | «ροή φορτίου συνεχούς παραμέτρου», «ροή συνεχούς παραμέτρου» (έτσι γράφτηκε στην 4.19.1) | 4.19.5 |
 | RoCoF (rate of change of frequency) | ρυθμός μεταβολής της συχνότητας (RoCoF), σε παράθυρο T | — | 4.18.1 |
 | robust vector current control | στιβαρός έλεγχος ρεύματος (για κάθε ισχύ δικτύου) | «εύρωστος» | 4.18.1 |
 | droop (P–f, Q–V) | στατικότητα P–f, Q–V | «πτώση», droop σκέτο | 4.18 |
@@ -228,7 +229,15 @@
 | locational marginal price (LMP) | οριακή τιμή ανά ζυγό (LMP) (4.19.1) |
 | marginal cost | οριακό κόστος (4.19.1) |
 | (branch) rating, loading | ονομαστική ισχύς (κλάδου), φόρτιση (4.19.1) |
-| holomorphic embedding, continuation power flow | ολομορφική εμφύτευση, ροή φορτίου συνεχούς παραμέτρου (4.19.1) |
+| holomorphic embedding | ολομορφική εμφύτευση (4.19.1) |
+| continuation power flow, continuation method | συνεχιζόμενη ροή φορτίου, μέθοδος συνέχισης (4.19.5) |
+| predictor, corrector, tangent | πρόβλεψη, διόρθωση, εφαπτομένη (4.19.5) |
+| local parametrisation, continuation parameter | τοπική παραμετροποίηση, παράμετρος συνέχισης (ο άγνωστος που κρατιέται σταθερός) (4.19.5) |
+| P–V (nose) curve, nose (fold, saddle-node bifurcation) | καμπύλη P–V, μύτη της καμπύλης (διακλάδωση σάγματος–κόμβου) (4.19.5) |
+| loadability limit (maximum loading point), loading margin | όριο φόρτισης, περιθώριο φόρτισης (4.19.5) |
+| limit-induced bifurcation | άμεση αστάθεια στο όριο αέργου (γωνία της καμπύλης, όχι μύτη) (4.19.5) |
+| voltage stability, voltage collapse, weakest bus | ευστάθεια τάσης, κατάρρευση τάσης, ο πιο αδύναμος ζυγός (4.19.5) |
+| voltage set point (of a PV bus) | τάση ρύθμισης (ζυγού PV) (4.19.5) |
 | security-constrained OPF (SCOPF) | βέλτιστη ροή φορτίου με περιορισμούς ασφαλείας (SCOPF) (4.19.1) |
 | largest / smallest step (of the solver) | μέγιστο / ελάχιστο βήμα (του λύτη) (4.19.1) |
 | RMS (electromechanical) simulation, transient stability | προσομοίωση RMS (ηλεκτρομηχανικά μεταβατικά), μεταβατική ευστάθεια (4.19.1, ROADMAP §71) |

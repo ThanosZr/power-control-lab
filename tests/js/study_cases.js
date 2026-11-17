@@ -1,7 +1,7 @@
 // 4.19.1 (ROADMAP §68 point 6): the two study tutorials (pf_study, opf_study) headless. For each: its options, the study that its
 // project asks from the engine (meta.study) with the defaults and with every network of its list, the operating point from which its
 // EMT starts (meta.lf), and a run of 0.3 s: the mean and the fundamental (peak, last 4 cycles of 60 Hz) of the generator powers and
-// of the instruments on the drawing. Usage: node study_cases.js -> JSON {pf, opf, opfEmt}
+// of the instruments on the drawing. Usage: node study_cases.js -> JSON {pf, opf, opfEmt, cpf}
 const path=require('path');const W=path.resolve(__dirname,'../../web/studio');
 global.window=globalThis;global.Parts=require(W+'/parts.js');global.Expr=require(W+'/expr.js');global.StepCheck=require(W+'/stepcheck.js');
 global.LineModels=require(W+'/linemodels.js');
@@ -19,4 +19,8 @@ function run(id,over,T){const t=Tutorials.get(id),opts={...defaults(t),...over},
 function card(id){const t=Tutorials.get(id);
  return {group:t.group,options:t.options.map(o=>({k:o.k,def:o.def,values:o.options.map(q=>q[0])})),
   studies:t.options.find(o=>o.k==='net').options.map(q=>t.build({...defaults(t),net:q[0]}).meta.study)};}
-console.log(JSON.stringify({pf:{...card('pf_study'),...run('pf_study',{},0.3)},opf:{...card('opf_study'),...run('opf_study',{},0.05)},opfEmt:run('opf_study',{emt:'opf'},0.3)}));
+// 4.19.5: the tutorial of the continuation load flow (cpf_study): its options, the request of every network of its list and of every
+// option, and the text of its tasks (the numbers in it are checked against the engine)
+const cpf=(()=>{const t=Tutorials.get('cpf_study'),d=defaults(t);return {...card('cpf_study'),tasks:t.tasks,title:t.title,
+  variants:[['yes','all'],['no','all'],['yes','load'],['no','load']].map(([qlim,grow])=>t.build({...d,qlim,grow}).meta.study),drawing:t.build(d).components.length===Tutorials.get('pf_study').build(defaults(Tutorials.get('pf_study'))).components.length};})();
+console.log(JSON.stringify({pf:{...card('pf_study'),...run('pf_study',{},0.3)},opf:{...card('opf_study'),...run('opf_study',{},0.05)},opfEmt:run('opf_study',{emt:'opf'},0.3),cpf}));

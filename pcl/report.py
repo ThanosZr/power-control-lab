@@ -428,7 +428,8 @@ document.addEventListener('click',function(ev){var b=ev.target.closest('button[d
 # -------------------------------------------------------------------- reports of the network studies
 def network_report(net, study='pf', result=None, title=None, **kw):
     """A report for a study of a pcl.network.Network: study 'pf' (load flow), 'n1' / 'n1dc' (N−1 in AC / with the DC screening),
-    'opf' / 'dcopf' (optimal power flow), 'scopf' (4.19.4: the DC optimal power flow with security against every single outage). result: the result of the study if it has run already (else it runs here with kw).
+    'opf' / 'dcopf' (optimal power flow), 'scopf' (4.19.4: the DC optimal power flow with security against every single outage),
+    'cpf' (4.19.5: the continuation load flow, the P–V curve and the loading margin). result: the result of the study if it has run already (else it runs here with kw).
     The sections can be extended or re-ordered afterwards as with any Report. picture (4.19.4): a view of pcl.netview.view to
     draw on instead of the view of this network (the same places when the network is a changed copy of another)."""
     MW = 1e6
@@ -437,7 +438,7 @@ def network_report(net, study='pf', result=None, title=None, **kw):
     gens = sum(e['kind'] in ('generator', 'unit') for e in net.elements)
     nbr = sum(e['kind'] in ('line', 'branch', 'transformer') for e in net.elements)
     head = {'pf': 'Ροή φορτίου', 'n1': 'Ανάλυση N−1 (AC)', 'n1dc': 'Ανάλυση N−1 (σάρωση DC)', 'opf': 'Βέλτιστη ροή φορτίου (AC)', 'dcopf': 'Βέλτιστη ροή φορτίου (DC)',
-            'scopf': 'Βέλτιστη ροή φορτίου με ασφάλεια N−1 (DC)'}
+            'scopf': 'Βέλτιστη ροή φορτίου με ασφάλεια N−1 (DC)', 'cpf': 'Συνεχιζόμενη ροή φορτίου: καμπύλη P–V και περιθώριο φόρτισης'}
     if study not in head:
         raise ReportError(f'network_report: study one of {", ".join(head)}')
     r = Report(title or head[study], name, meta={'Ζυγοί': len(net.buses), 'Κλάδοι': nbr, 'Γεννήτριες': gens, 'S βάσης (MVA)': net.S_base / MW})
@@ -523,6 +524,10 @@ def network_report(net, study='pf', result=None, title=None, **kw):
             if o['overloads']:
                 mark[i] = 'critical'
         r.table(cols, rows, 'Όλες οι διαταραχές', [None, None, None, 5, 4] + ([5, None] if res['kind'] == 'ac' else []), mark)
+    elif study == 'cpf':
+        res = result or net.cpf(**kw)
+        advice(res.get('advice') or net.advice('pf'))
+        _cpf(r, net, res, MW, picture)
     else:
         res = result or (net.scopf(**kw) if study == 'scopf' else net.opf('ac' if study == 'opf' else 'dc', **kw))
         advice(res.get('advice') or net.advice('dcopf' if study == 'scopf' else study))
@@ -598,6 +603,65 @@ def _security(r, res, MW):
                    + ' Το γραμμικό μοντέλο δεν βλέπει απώλειες και άεργο.', 'warning' if ac['overloads'] else 'info')
         else:
             r.note('Έλεγχος με ροή φορτίου AC της κατανομής: ' + str(ac.get('message')), 'warning')
+
+
+def _cpf(r, net, res, MW, picture):
+    """4.19.5: the continuation load flow: the loading margin, the curve of the weakest buses, the index, what the generators did."""
+    ns, gr, ev = res['nose'], res['growth'], res['events']
+    kind = {'fold': 'μύτη της καμπύλης (ιδιόμορφος πίνακας της ροής φορτίου)', 'limit': 'αλλαγή τύπου ζυγού σε όριο αέργου (άμεση αστάθεια)'}.get(ns['kind'], '—')
+    r.facts([('Το όριο φόρτισης βρέθηκε', bool(res['converged'])), ('Είδος του ορίου', kind), ('λ στο όριο', round(ns['lambda'], 5)),
+             ('Φορτίο σήμερα (MW)', round(res['base']['load_MW'], 2)), ('Φορτίο στο όριο (MW)', round(ns['load_MW'], 2)), ('Περιθώριο φόρτισης (MW)', round(ns['margin_MW'], 2)),
+             ('Περιθώριο (% του σημερινού φορτίου)', None if ns['margin'] is None else round(100 * ns['margin'], 2)), ('Πιο αδύναμος ζυγός', ns['bus']),
+             ('Τάση του στο όριο (pu)', round(ns['V'], 4)), ('Χαμηλότερη τάση στο όριο (pu)', round(ns['Vmin'], 4)), ('στον ζυγό', ns['Vmin_bus']),
+             ('Όρια αέργου των γεννητριών', bool(res['q_limits'])), ('Αλλαγές τύπου ζυγού στη διαδρομή', sum(e['point'] > 0 for e in ev)),
+             ('Σημεία της καμπύλης', int(res['points'])), ('Χρόνος (ms)', round(res['time'] * 1e3, 1))])
+    f = lambda x, d=1: f'{x:.{d}f}'.replace('.', ',')             # noqa: E731
+    r.text(f'Το φορτίο του δικτύου μεγαλώνει με την παράμετρο λ από τη σημερινή του τιμή (λ = 0): ανά μονάδα του λ, {f(gr["load_MW"])} MW και {f(gr["load_Mvar"])} Mvar φορτίου '
+           f'και {f(gr["gen_MW"])} MW παραγωγής εκτός του ζυγού ταλάντωσης, που καλύπτει τα υπόλοιπα. Το όριο φόρτισης είναι το μεγαλύτερο λ για το οποίο η ροή φορτίου έχει λύση.')
+    if not res['converged']:
+        r.note('Το όριο φόρτισης δεν βρέθηκε: ' + res['message'] + '.', 'critical')
+    elif ns['kind'] == 'limit':
+        r.note('Το όριο δεν είναι μύτη της καμπύλης: τη στιγμή που ο ζυγός ' + str(next((e['bus'] for e in ev if e['point'] == ns['point']), ns['bus'])) + ' αλλάζει τύπο σε όριο αέργου, '
+               'οι λύσεις με περισσότερο φορτίο παύουν να υπάρχουν (άμεση αστάθεια στο όριο). Η απλή ροή φορτίου με όρια αέργου μπορεί να δώσει «λύση» και λίγο πιο πάνω, '
+               'με τη γεννήτρια στο άνω όριό της και την τάση πάνω από την τιμή ρύθμισης: τέτοιο σημείο δεν είναι κατάσταση λειτουργίας.', 'warning')
+    elif not ns['refined']:
+        r.note(res['message'] + '.', 'warning')
+    has = any(e.get('Qmax') is not None or e.get('Qmin') is not None for e in net.elements if e['kind'] in ('generator', 'unit'))
+    if has and not res['q_limits']:
+        r.note('Τα όρια αέργου των γεννητριών δεν εφαρμόστηκαν (q_limits): με αυτά το όριο φόρτισης έρχεται συνήθως νωρίτερα.', 'info')
+    start = [e['bus'] for e in ev if e['point'] == 0]
+    if start:
+        r.note('Σε όριο αέργου ήδη στο σημερινό φορτίο: ' + ', '.join(start[:30]) + (' …' if len(start) > 30 else '') + '.', 'info')
+    picture(res, 'collapse', 'voltage')
+    # the curve: the voltage of the weakest buses against the load of the network (against λ when only reactive load grows)
+    byP = abs(gr['load_MW']) > 1e-9
+    x = res['load_MW'] if byP else res['lambda']
+    xl = 'Φορτίο του δικτύου (MW)' if byP else 'λ'
+    top = [q['bus'] for q in res['weak'][:SERIES]] or [ns['Vmin_bus']]
+    r.heading('Καμπύλη P–V')
+    r.chart('line', x, [{'name': f'ζυγός {b}', 'y': res['V'][b]} for b in top], 'Τάση των πιο αδύναμων ζυγών καθώς μεγαλώνει το φορτίο (πάνω και κάτω μέρος της καμπύλης)', xl, 'pu')
+    j = ns['point'] + 1
+    if any(v is not None for v in res['index'][:j]):
+        r.heading('Δείκτης ευστάθειας τάσης', 3)
+        r.chart('line', x[:j], [{'name': 'δείκτης', 'y': res['index'][:j]}], 'Πόσο φορτίο αντιστοιχεί σε πτώση τάσης 1 pu του πιο αδύναμου ζυγού: μηδενίζεται στη μύτη', xl,
+                res.get('index_unit', 'MW/pu'), ymin=0.0, table=False)
+    r.heading('Οι πιο αδύναμοι ζυγοί')
+    r.table(['Ζυγός', '|V| σήμερα (pu)', '|V| στο όριο (pu)', 'Πτώση (pu)', 'Μερίδιο στην εφαπτομένη'], [[q['bus'], q['V0'], q['V'], q['drop'], q['share']] for q in res['weak']], '',
+            [None, 5, 5, 5, 4], note='Μερίδιο: η μεταβολή της τάσης του ζυγού στην εφαπτομένη της καμπύλης στο όριο, ως προς τη μεγαλύτερη (1 = ο πιο αδύναμος ζυγός).')
+    moved = [e for e in ev if e['point'] > 0]
+    if moved:
+        r.heading('Γεννήτριες και όρια αέργου στη διαδρομή')
+        lim = {'max': 'άνω', 'min': 'κάτω'}
+        mark = {i: ('critical' if e['point'] == ns['point'] and ns['kind'] == 'limit' else 'warning') for i, e in enumerate(moved[:200]) if e['point'] <= ns['point'] and e['to'] == 'PQ'}
+        r.table(['λ', 'Φορτίο (MW)', 'Ζυγός', 'Όριο', 'Τι έγινε', 'Μέρος της καμπύλης'],
+                [[e['lambda'], res['load_MW'][e['point']], e['bus'], lim[e['limit']], 'δεν κρατά πια την τάση του' if e['to'] == 'PQ' else 'κρατά ξανά την τάση του',
+                  'πάνω' if e['point'] <= ns['point'] else 'κάτω'] for e in moved[:200]],
+                'Αλλαγές τύπου ζυγού' + (f' (οι 200 από {len(moved)})' if len(moved) > 200 else ''), [5, 5, None, None, None, None], mark)
+    r.heading('Ζυγοί')
+    order = list(res['buses'])
+    r.table(['Ζυγός', 'Τύπος στο όριο', 'Όριο αέργου', '|V| σήμερα (pu)', '|V| στο όριο (pu)', 'Γωνία στο όριο (°)', 'Πτώση (pu)', 'Μερίδιο'],
+            [[b, d['type'], {'max': 'άνω', 'min': 'κάτω'}.get(d['limit'], ''), d['V0'], d['V'], d['angle'], d['drop'], d['share']] for b, d in ((b, res['buses'][b]) for b in order)],
+            '', [None, None, None, 5, 5, 5, 5, 4])
 
 
 def _branches(r, net, branches, MW):

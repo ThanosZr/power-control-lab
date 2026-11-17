@@ -600,6 +600,48 @@ class Tutorials(unittest.TestCase):
         self.assertIn('μικρό δίκτυο', a33['why'])
         self.assertIn('βαθύ δίκτυο (69 ζυγοί σε 26 επίπεδα)', a69['why'])
 
+    def test_the_card_of_the_continuation_load_flow(self):
+        """4.19.5, cpf_study: what the card asks is a request of pcl.study for every network and every option, and every number in
+        the text of its tasks is what the engine gives."""
+        T = tutorials()['cpf']
+        opt = {o['k']: o for o in T['options']}
+        self.assertEqual((T['group'], opt['net']['def'], opt['qlim']['values'], opt['grow']['values'], T['drawing']), ('Ροή φορτίου και OPF (4.19.1)', 'ieee14', ['yes', 'no'], ['all', 'load'], True))
+        self.assertEqual(set(opt['net']['values']) - set(N.CASES), set())
+        self.assertEqual(T['variants'], [{'net': 'ieee14', 'study': 'cpf', 'options': {'q_limits': q, 'direction': d}} for q, d in ((True, 'all'), (False, 'all'), (True, 'load'), (False, 'load'))])
+        for st in T['studies']:                                                                   # every network of the list, with the defaults
+            self.assertEqual(set(st['options']) - set(S.OPTIONS['cpf']), set())
+            if st['net'] == 'pegase1354':                                                         # (four seconds: the largest network runs in tests/test_cpf.py without the limits)
+                continue
+            self.assertTrue(S.run({'case': st['net'], 'study': 'cpf', 'options': st['options']})['summary']['converged'], st)
+        run = lambda net, q, d='all': S.run({'case': net, 'study': 'cpf', 'options': {'q_limits': q, 'direction': d}})      # noqa: E731
+        el = lambda x, d: f'{x:.{d}f}'.replace('.', ',')                                               # noqa: E731
+        t = T['tasks']
+        a, b = run('ieee14', True), run('ieee14', False)
+        s = a['summary']
+        for part in (f'λ = {el(s["lambda"], 3)}', f'{el(s["margin_MW"], 1)} MW', f'{el(s["load_MW"], 0)} MW', f'ο {s["bus"]}:', f'{el(s["V0"], 3)} pu', f'{el(s["V"], 3)} pu'):
+            self.assertIn(part, t[0])
+        self.assertIn(f'λ = {el(b["summary"]["lambda"], 2)}', t[1])
+        ev = [e for e in a['result']['events'] if e['point'] <= a['result']['nose']['point']]
+        self.assertEqual(([e['bus'] for e in ev], [e['to'] for e in ev]), (['2', '3', '6', '8'], ['PQ'] * 4))
+        self.assertIn('ζυγοί 2, 3, 6, 8', t[1])
+        self.assertLess(max(e['lambda'] for e in ev), 0.23)
+        self.assertAlmostEqual(s['lambda'] / b['summary']['lambda'], 0.25, delta=0.01)             # «στο ένα τέταρτο»
+        c, d = run('ieee9', True)['summary'], run('ieee9', False)['summary']
+        self.assertEqual((c['kind'], c['last'], d['kind']), ('limit', '2', 'fold'))
+        for part in (f'λ = {el(c["lambda"], 3)}', 'ζυγού 2', el(d['lambda'], 3)):
+            self.assertIn(part, t[2])
+        e = run('ieee14', True, 'load')['summary']
+        self.assertIn(f'από {el(s["lambda"], 3)} σε {el(e["lambda"], 3)}', t[4])
+        g = run('ieee118', True)
+        gs, gr = g['summary'], g['result']
+        back = [x for x in gr['events'] if 0 < x['point'] <= gr['nose']['point'] and x['to'] == 'PV']
+        self.assertEqual((len(back), {x['limit'] for x in back}, gs['kind'], gs['last']), (5, {'min'}, 'limit', '10'))
+        for part in ('πέντε γεννήτριες', f'λ = {el(gs["lambda"], 3)}', 'στον ζυγό 10'):
+            self.assertIn(part, t[5])
+        self.assertIn('τεσσάρων', t[6])                                                             # the report draws four curves (pcl.report.SERIES)
+        from pcl import report as R
+        self.assertEqual(R.SERIES, 4)
+
     def test_operating_point_of_the_optimal_power_flow(self):
         """IEEE9_OPF of tutorials.js (the point from which the EMT of opf_study starts) is the AC optimal power flow of
         pcl.network.ieee9(): the six buses of the generators and of the loads, to the six decimals that the file keeps."""

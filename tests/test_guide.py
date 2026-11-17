@@ -1,4 +1,4 @@
-"""The code of the guide runs as it is written (docs/GUIDE.md): every Python block of the sections of 4.19.4 is run here in an
+"""The code of the guide runs as it is written (docs/GUIDE.md): every Python block of the sections of 4.19.4 and 4.19.5 is run here in an
 empty folder, and what it says it writes is there afterwards. A block that stops working with a change of the engine fails
 this test, not the reader of the guide."""
 import os
@@ -60,6 +60,23 @@ class Guide(unittest.TestCase):
                                                             'το χειρότερο: 4.4 MW πάνω από το όριο'])           # the lines the guide prints
             self.assertEqual(os.listdir(d), ['scopf.html'])
             self.assertIn('Ασφάλεια N−1', pathlib.Path(d, 'scopf.html').read_text(encoding='utf-8'))
+
+    def test_the_continuation_example_of_4_19_5_runs_as_written(self):
+        bl = blocks('4.19.5')
+        self.assertEqual(len(bl), 1)                         # §17
+        head, code = bl[0]
+        self.assertIn('Συνεχιζόμενη ροή φορτίου', head)
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING='utf-8')
+            r = subprocess.run([sys.executable, '-c', code], cwd=d, env=env, capture_output=True, text=True, encoding='utf-8', timeout=300)
+            self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+            text = (ROOT / 'docs' / 'GUIDE.md').read_text(encoding='utf-8')
+            sec = next(s for s in re.split(r'(?m)^## ', text) if s.startswith('17.'))
+            said = [ln[4:] for ln in sec.split('Γράφει:')[1].split('\n- **')[0].split('\n') if ln.startswith('    ')]
+            self.assertEqual(r.stdout.strip().split('\n'), said)                                     # the lines the guide prints, as it prints them
+            self.assertEqual(len(said), 9)
+            self.assertEqual(os.listdir(d), ['cpf.html'])
+            self.assertIn('Καμπύλη P–V', pathlib.Path(d, 'cpf.html').read_text(encoding='utf-8'))
 
     def test_the_other_ways_the_guide_names(self):
         from pcl import network as N, study
