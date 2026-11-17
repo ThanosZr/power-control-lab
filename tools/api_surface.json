@@ -18,7 +18,8 @@
    "pcl.psse.",
    "pcl.scopf.",
    "pcl.cpf.",
-   "pcl.se."
+   "pcl.se.",
+   "pcl.harmonic."
   ],
   "cli": [
    "workbench",
@@ -812,6 +813,81 @@
      "key"
     ],
     "since": "3.18"
+   },
+   "pcl.harmonic.HarmonicError": {
+    "params": [],
+    "since": "4.19.5"
+   },
+   "pcl.harmonic.Model": {
+    "params": [
+     "net",
+     "lf",
+     "load_model",
+     "line_model",
+     "sources"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.harmonic.Model.Y": {
+    "params": [
+     "h"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.harmonic.Model.branches": {
+    "params": [
+     "h"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.harmonic.limits": {
+    "params": [
+     "Un"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.harmonic.run": {
+    "params": [
+     "net",
+     "sources",
+     "harmonics",
+     "load_model",
+     "line_model",
+     "pulse",
+     "filters",
+     "scan_bus",
+     "scan_to",
+     "scan_step",
+     "tol"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.harmonic.scan": {
+    "params": [
+     "model",
+     "bus",
+     "to",
+     "step"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.harmonic.six_pulse": {
+    "params": [
+     "hmax"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.harmonic.sources_of": {
+    "params": [
+     "net"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.harmonic.spectrum": {
+    "params": [
+     "s"
+    ],
+    "since": "4.19.5"
    },
    "pcl.impulse.auto_H": {
     "params": [
@@ -2260,6 +2336,13 @@
     ],
     "since": "4.2"
    },
+   "pcl.network.Network.harmonics": {
+    "params": [
+     "sources",
+     "**kw"
+    ],
+    "since": "4.19.5"
+   },
    "pcl.network.Network.iec60909": {
     "params": [
      "fault",
@@ -2297,7 +2380,9 @@
      "P",
      "Q",
      "zip",
-     "name"
+     "name",
+     "spectrum",
+     "delta"
     ],
     "since": "4.2"
    },
@@ -2403,7 +2488,10 @@
      "bus",
      "P",
      "Q",
-     "name"
+     "name",
+     "R",
+     "X",
+     "B"
     ],
     "since": "4.2"
    },

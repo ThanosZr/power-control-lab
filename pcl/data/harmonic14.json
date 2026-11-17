@@ -1,0 +1,731 @@
+{
+ "format": "pcl-network",
+ "version": 1,
+ "f": 60.0,
+ "S_base": 100000000.0,
+ "name": "Harmonic test system 1: 14-bus balanced transmission system",
+ "buses": {
+  "1": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "2": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "3": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "301": {
+   "Un": 35400.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "302": {
+   "Un": 35400.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "4": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "5": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "6": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "7": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "8": {
+   "Un": 13800.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "9": {
+   "Un": 115000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "10": {
+   "Un": 115000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "11": {
+   "Un": 115000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "12": {
+   "Un": 115000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "13": {
+   "Un": 115000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "14": {
+   "Un": 115000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  }
+ },
+ "elements": [
+  {
+   "kind": "generator",
+   "name": "G1",
+   "bus": "1",
+   "Sr": 100000000.0,
+   "Ur": 230000.0,
+   "xd2": 0.25,
+   "cosphi": 0.85,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": null,
+   "V": 1.06,
+   "Qmin": null,
+   "Qmax": null,
+   "slack": true
+  },
+  {
+   "kind": "generator",
+   "name": "G2",
+   "bus": "2",
+   "Sr": 100000000.0,
+   "Ur": 230000.0,
+   "xd2": 0.25,
+   "cosphi": 0.85,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 18300000.0,
+   "V": 1.045,
+   "Qmin": null,
+   "Qmax": null,
+   "slack": false
+  },
+  {
+   "kind": "generator",
+   "name": "G6",
+   "bus": "6",
+   "Sr": 100000000.0,
+   "Ur": 230000.0,
+   "xd2": 0.25,
+   "cosphi": 0.85,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": -11200000.0,
+   "V": 1.07,
+   "Qmin": null,
+   "Qmax": null,
+   "slack": false
+  },
+  {
+   "kind": "load",
+   "name": "hvdc1",
+   "bus": "301",
+   "P": 59505000.0,
+   "Q": 3363000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "spectrum": "hvdc",
+   "delta": false
+  },
+  {
+   "kind": "load",
+   "name": "hvdc2",
+   "bus": "302",
+   "P": 59505000.0,
+   "Q": 3363000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "spectrum": "hvdc",
+   "delta": true
+  },
+  {
+   "kind": "load",
+   "name": "load4",
+   "bus": "4",
+   "P": 47790000.0,
+   "Q": -3900000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load5",
+   "bus": "5",
+   "P": 7599000.0,
+   "Q": 1599000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "tcr",
+   "bus": "8",
+   "P": 0.0,
+   "Q": 12900000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "spectrum": "tcr",
+   "delta": true
+  },
+  {
+   "kind": "load",
+   "name": "load9",
+   "bus": "9",
+   "P": 29499000.0,
+   "Q": 16599000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load10",
+   "bus": "10",
+   "P": 9000000.0,
+   "Q": 5799000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load11",
+   "bus": "11",
+   "P": 3501000.0,
+   "Q": 1800000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load12",
+   "bus": "12",
+   "P": 6099000.0,
+   "Q": 1599000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load13",
+   "bus": "13",
+   "P": 13500000.0,
+   "Q": 5799000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load14",
+   "bus": "14",
+   "P": 14901000.0,
+   "Q": 5001000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "branch",
+   "name": "T4-7",
+   "a": "4",
+   "b": "7",
+   "r": 0.0,
+   "x": 0.209,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "T4-9",
+   "a": "4",
+   "b": "9",
+   "r": 0.0,
+   "x": 0.55618,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "T5-6",
+   "a": "5",
+   "b": "6",
+   "r": 0.0,
+   "x": 0.2502,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L6-11",
+   "a": "6",
+   "b": "11",
+   "r": 0.09495,
+   "x": 0.19887,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L6-12",
+   "a": "6",
+   "b": "12",
+   "r": 0.12285,
+   "x": 0.25575,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L6-13",
+   "a": "6",
+   "b": "13",
+   "r": 0.06613,
+   "x": 0.13024,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "T7-8",
+   "a": "7",
+   "b": "8",
+   "r": 0.0,
+   "x": 0.17615,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "T7-9",
+   "a": "7",
+   "b": "9",
+   "r": 0.0,
+   "x": 0.11,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L9-10",
+   "a": "9",
+   "b": "10",
+   "r": 0.03181,
+   "x": 0.08448,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L9-14",
+   "a": "9",
+   "b": "14",
+   "r": 0.0127,
+   "x": 0.27033,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L10-11",
+   "a": "10",
+   "b": "11",
+   "r": 0.08203,
+   "x": 0.19202,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L12-13",
+   "a": "12",
+   "b": "13",
+   "r": 0.22087,
+   "x": 0.19985,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L13-14",
+   "a": "13",
+   "b": "14",
+   "r": 0.17089,
+   "x": 0.34795,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L1-2",
+   "a": "1",
+   "b": "2",
+   "r": 0.01937,
+   "x": 0.05916,
+   "bc": 0.05279,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L1-5",
+   "a": "1",
+   "b": "5",
+   "r": 0.05402,
+   "x": 0.223,
+   "bc": 0.0492,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L2-3",
+   "a": "2",
+   "b": "3",
+   "r": 0.04697,
+   "x": 0.19794,
+   "bc": 0.0438,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L2-4",
+   "a": "2",
+   "b": "4",
+   "r": 0.0581,
+   "x": 0.17628,
+   "bc": 0.0374,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L2-5",
+   "a": "2",
+   "b": "5",
+   "r": 0.05693,
+   "x": 0.17384,
+   "bc": 0.03386,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L3-4",
+   "a": "3",
+   "b": "4",
+   "r": 0.067,
+   "x": 0.17099,
+   "bc": 0.0346,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L4-5",
+   "a": "4",
+   "b": "5",
+   "r": 0.01335,
+   "x": 0.04209,
+   "bc": 0.0128,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "T3-301",
+   "a": "3",
+   "b": "301",
+   "r": 0.0,
+   "x": 0.028,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "T3-302",
+   "a": "3",
+   "b": "302",
+   "r": 0.0,
+   "x": 0.028,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "shunt",
+   "name": "C9",
+   "bus": "9",
+   "P": -0.0,
+   "Q": -6329999.999999999,
+   "R": 0.0,
+   "X": 0.0,
+   "B": 0.0633
+  },
+  {
+   "kind": "shunt",
+   "name": "F8-2",
+   "bus": "8",
+   "P": 84960.0764176852,
+   "Q": -4021513.598048817,
+   "R": 0.5251,
+   "X": 8.31233,
+   "B": 0.03015
+  },
+  {
+   "kind": "shunt",
+   "name": "F8-5",
+   "bus": "8",
+   "P": 51778.152100507505,
+   "Q": -3139736.608429097,
+   "R": 0.5251,
+   "X": 1.32635,
+   "B": 0.03015
+  },
+  {
+   "kind": "shunt",
+   "name": "F8-7",
+   "bus": "8",
+   "P": 49717.68377126403,
+   "Q": -3076647.4746545255,
+   "R": 0.5251,
+   "X": 0.67307,
+   "B": 0.03015
+  },
+  {
+   "kind": "shunt",
+   "name": "F8-11",
+   "bus": "8",
+   "P": 48522.330740826794,
+   "Q": -3039446.361402607,
+   "R": 0.5251,
+   "X": 0.27515,
+   "B": 0.03015
+  },
+  {
+   "kind": "shunt",
+   "name": "F3-11a",
+   "bus": "3",
+   "P": 8560.82090798893,
+   "Q": -25089281.62183538,
+   "R": 0.00136,
+   "X": 0.02772,
+   "B": 0.24916
+  },
+  {
+   "kind": "shunt",
+   "name": "F3-11b",
+   "bus": "3",
+   "P": 8560.82090798893,
+   "Q": -25089281.62183538,
+   "R": 0.00136,
+   "X": 0.02772,
+   "B": 0.24916
+  }
+ ],
+ "source": "Task Force on Harmonics Modeling and Simulation, «Test systems for harmonics modeling and simulation», IEEE Trans. Power Delivery 14(2), 579–587, 1999: Test System 1 (Tables 1.1–1.4). The loads hvdc1 and hvdc2 are the two six-pulse bridges of the HVDC terminal (star–star and star–delta transformers), tcr is the delta-connected thyristor-controlled reactor of the SVC; their spectra are in pcl.harmonic.SPECTRA. The generators carry the net injection of their bus (Table 1.3) and the subtransient reactance 0,25 pu. solution: the published load flow; thd: the published voltage distortion (%).",
+ "solution": {
+  "1": [
+   1.06,
+   0.0
+  ],
+  "2": [
+   1.045,
+   -5.68
+  ],
+  "3": [
+   1.0427,
+   -15.3
+  ],
+  "301": [
+   1.0417,
+   -16.18
+  ],
+  "302": [
+   1.0417,
+   -16.18
+  ],
+  "4": [
+   1.0282,
+   -11.41
+  ],
+  "5": [
+   1.0337,
+   -9.82
+  ],
+  "6": [
+   1.07,
+   -15.87
+  ],
+  "7": [
+   1.0193,
+   -14.47
+  ],
+  "8": [
+   1.0209,
+   -14.49
+  ],
+  "9": [
+   1.0147,
+   -16.09
+  ],
+  "10": [
+   1.0168,
+   -16.33
+  ],
+  "11": [
+   1.0394,
+   -16.21
+  ],
+  "12": [
+   1.0528,
+   -16.72
+  ],
+  "13": [
+   1.0458,
+   -16.73
+  ],
+  "14": [
+   1.0154,
+   -17.39
+  ]
+ },
+ "thd": {
+  "1": 1.767,
+  "2": 2.177,
+  "3": 1.516,
+  "301": 9.169,
+  "302": 9.169,
+  "4": 0.755,
+  "5": 1.462,
+  "6": 0.468,
+  "7": 0.423,
+  "8": 0.522,
+  "9": 0.482,
+  "10": 0.421,
+  "11": 0.394,
+  "12": 0.391,
+  "13": 0.376,
+  "14": 0.343
+ }
+}

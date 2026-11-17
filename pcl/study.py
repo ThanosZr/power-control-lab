@@ -7,7 +7,7 @@ tutorials of the app and its button «Εξαγωγή αναφοράς») and for
 
 The network: 'case' (a name of pcl.network.CASES) or 'network' (a network as written by pcl.network.to_dict).
 Studies: 'advice' (what the engine proposes, for every study), 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf' (4.19.4), 'cpf' (4.19.5:
-the continuation load flow), 'se' (4.19.5: state estimation from measurements).
+the continuation load flow), 'se' (4.19.5: state estimation from measurements), 'harmonic' (4.19.5: the harmonic load flow).
 
 4.19.4 (ROADMAP §73): 'edits' = a list of changes of the network (pcl.netfile.apply: a load, a generator, a rating, an element
 out of service), made on a copy before the study; and a network from a file:
@@ -22,12 +22,13 @@ import numpy as np
 from . import network as N
 from .report import Report, network_report
 
-STUDIES = ('advice', 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf', 'cpf', 'se')
+STUDIES = ('advice', 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf', 'cpf', 'se', 'harmonic')
 STARTS = ('auto', 'mid', 'pf', 'nn')
 OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n1': ('tol', 'q_limits', 'backend', 'how'), 'n1dc': (), 'opf': ('flow_limits', 'start', 'tol', 'max_iter'),
            'dcopf': ('flow_limits', 'tol', 'max_iter'), 'scopf': ('emergency', 'tol', 'max_iter', 'max_rounds'),
            'cpf': ('direction', 'q_limits', 'step', 'dV', 'lower', 'stop', 'V_stop', 'max_points', 'tol'),
-           'se': ('measurements', 'plan', 'noise', 'seed', 'sigma', 'bad', 'zero_injections', 'detect', 'threshold', 'confidence', 'max_bad', 'tol', 'max_iter', 'start'), 'advice': ()}
+           'se': ('measurements', 'plan', 'noise', 'seed', 'sigma', 'bad', 'zero_injections', 'detect', 'threshold', 'confidence', 'max_bad', 'tol', 'max_iter', 'start'),
+           'harmonic': ('sources', 'harmonics', 'load_model', 'line_model', 'pulse', 'filters', 'scan_bus', 'scan_to', 'scan_step', 'tol'), 'advice': ()}
 MAX_BUSES = 20000
 
 
@@ -65,8 +66,8 @@ def _base_network(data):
             raise StudyError(f'Το δίκτυο δεν διαβάζεται: {e}') from e
     else:
         name = data.get('case')
-        if name not in N.CASES:
-            raise StudyError('Δώσε case (ένα από: ' + ', '.join(N.CASES) + ') ή network.')
+        if name not in N.CASES + N.MORE:
+            raise StudyError('Δώσε case (ένα από: ' + ', '.join(N.CASES + N.MORE) + ') ή network.')
         net = N.case_data(name)
     if len(net.buses) > MAX_BUSES:
         raise StudyError(f'Πάνω από {MAX_BUSES} ζυγούς.')
@@ -128,6 +129,8 @@ def _study(net, study, opt):
     if study not in STUDIES:
         raise StudyError('study: ένα από ' + ', '.join(STUDIES))
     opt = {k: v for k, v in (opt or {}).items() if k in OPTIONS[study] and v is not None and v != ''}
+    if study == 'harmonic' and opt.get('scan_bus') is None and '3' in net.buses and net.name.startswith('Harmonic test system 1'):
+        opt['scan_bus'] = '3'                              # the test system is looked at from its HVDC bus, as in the paper
     if 'start' in opt and opt['start'] not in STARTS:      # 4.19.2: 'nn' = the start model of this network, if there is one
         raise StudyError('start: ένα από ' + ', '.join(STARTS))
     try:
@@ -145,6 +148,8 @@ def _study(net, study, opt):
             return net.cpf(**opt)
         if study == 'se':                                  # 4.19.5: state estimation (weighted least squares, bad data)
             return net.estimate(**opt)
+        if study == 'harmonic':                            # 4.19.5: the harmonic load flow (current injection, frequency scan)
+            return net.harmonics(**opt)
         return net.opf('ac' if study == 'opf' else 'dc', **opt)
     except (N.NetworkError, ValueError) as e:              # the errors of the solvers are ValueErrors with a message
         raise StudyError(str(e)) from e
@@ -198,6 +203,23 @@ def summary(study, res):
                 'n_bad': len(res['bad']), 'planted': len(res['planted']), 'found': sum(b['index'] in res['planted'] for b in res['bad']), 'critical': len(res['critical']),
                 'error': res.get('error'), 'islands': len(res.get('islands') or []), 'uncovered': (res.get('uncovered') or [])[:8], 'losses_MW': None if res.get('losses') is None else res['losses'] / 1e6,
                 'why': res['advice']['why'], 'message': res['message'], 'time_ms': res['time'] * 1e3}
+    if study == 'harmonic':                                # 4.19.5: the worst distortion, what is above its limit, the scan to draw
+        if not res['converged']:
+            return {'converged': False, 'message': res['message'], 'why': '', 'time_ms': res['time'] * 1e3}
+        B, sc = res['buses'], res.get('scan')
+        top = sorted(B, key=lambda b: -B[b]['THD'])[:6]
+        row = lambda b: {'bus': b, 'THD': B[b]['THD'], 'limit_thd': B[b]['limit_thd'], 'limit': B[b]['limit'], 'worst': B[b]['worst'], 'worst_pct': B[b]['worst_pct'],      # noqa: E731
+                         'kV': B[b]['Un'] / 1e3, 'over': B[b]['over']}
+        out = {'converged': True, 'sources': [{'load': q['load'], 'bus': q['bus'], 'I1': q['I1'], 'delta': q['delta']} for q in res['sources']], 'orders': res['harmonics'],
+               'skipped': res['skipped'], 'worst': row(res['worst']['bus']), 'top': [row(b) for b in top], 'over': len(res['over']), 'over_buses': res['over'][:10], 'buses': len(B),
+               'load_model': res['load_model'], 'line_model': res['line_model'], 'pulse': res['pulse'], 'filters': res['filters'], 'losses_MW': res['lf']['losses'] / 1e6,
+               'why': res['advice']['why'], 'message': res['message'], 'time_ms': res['time'] * 1e3}
+        if sc:
+            every = max(1, -(-len(sc['h']) // 400))        # the scan thinned to 400 points at most, with its peaks kept
+            keep = sorted(set(range(0, len(sc['h']), every)) | {sc['h'].index(h) for h, _ in sc['peaks']} | {len(sc['h']) - 1})
+            out['scan'] = {'bus': sc['bus'], 'h': [sc['h'][j] for j in keep], 'Z': [sc['Z'][j] for j in keep], 'peaks': sorted(sc['peaks'], key=lambda q: -q[1])[:6]}
+            out['at'] = dict(row(sc['bus']), Vh={str(h): 100 * v / B[sc['bus']]['V'] for h, v in B[sc['bus']]['Vh'].items()})
+        return out
     return {}
 
 
@@ -268,7 +290,7 @@ def report(data):
     net0, net, done = _networks_of(data)
     study = data.get('study') or 'pf'
     if study in ('advice', 'dc'):
-        raise StudyError('Αναφορά για: pf, n1, n1dc, opf, dcopf, scopf, cpf, se.')
+        raise StudyError('Αναφορά για: pf, n1, n1dc, opf, dcopf, scopf, cpf, se, harmonic.')
     res = _study(net, study, data.get('options'))
     r = network_report(net, study, res, data.get('title') or None, picture=_picture(net0, net, data) if done else None)
     if done:                                               # what was changed, right after the title of the report

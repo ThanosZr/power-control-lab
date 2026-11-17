@@ -300,6 +300,21 @@ const {chromium}=require('playwright');
  await p.evaluate(()=>window.PCL.loadTutorial('se_study',{plan:'flows',bad:'injection'}));await p.waitForTimeout(700);
  await p.click('#theory [data-study="run"]');await p.waitForSelector('#study-error',{timeout:60000});
  ok(/δεν έχει μέτρηση/.test(await p.$eval('#study-error',e=>e.textContent)),'state estimation: a plan without injections says that it has no injection to spoil');errs.length=0;
+ // 4.19.5 (ROADMAP §80): the harmonic load flow on the test system of the Task Force: the card with the limits and the scan, the layer
+ // of the distortion, and what the second bridge behind a delta is worth
+ await p.evaluate(()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('harm_study',{});});await p.waitForTimeout(700);
+ await p.click('#theory [data-study="run"]');await p.waitForSelector('#study-harm',{timeout:60000});
+ const hm1=await p.evaluate(()=>({txt:document.querySelector('#study-result').innerText,z:window.PCL.STUDY.r.summary,scan:!!document.querySelector('#study-scan path.map'),marks:document.querySelectorAll('#study-scan line.diag').length,adv:document.querySelector('#study-advice').innerText}));
+ ok(hm1.z.converged&&hm1.z.over===4&&hm1.z.at.bus==='3'&&hm1.z.at.worst===25&&Math.abs(hm1.z.at.THD-1.5125)<1e-3&&/Πάνω από το όριο του IEEE 519: 4 από 16 ζυγούς/.test(hm1.txt)&&/μεγαλύτερη η 25η/.test(hm1.txt)&&/Η μέθοδος: 3 πηγές/.test(hm1.adv),
+  'harmonic load flow: the test system, THD of bus 3 '+hm1.z.at.THD.toFixed(3)+' %, the 25th the largest, four buses above their limit');
+ ok(hm1.scan&&hm1.marks===9&&hm1.z.scan.peaks.some(q=>Math.abs(q[0]-25.25)<1e-6),'harmonic load flow: the card draws the frequency scan seen from bus 3 with the orders of the sources marked');
+ await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.layer==='thd'&&window.PCL.NV.v.state.frames>0,null,{timeout:60000});
+ const hm2=await p.evaluate(()=>({layers:[...document.querySelectorAll('#nv-layer option')].map(o=>o.value),legend:document.querySelector('#nv-legend').textContent}));
+ ok(hm2.layers.includes('thd')&&/του ορίου/.test(hm2.legend)&&/Αρμονική παραμόρφωση/.test(hm2.legend),'harmonic load flow: the picture opens on the layer of the distortion against the limits ('+hm2.legend.slice(0,60)+')');
+ await p.evaluate(()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('harm_study',{pulse:'6'});});await p.waitForTimeout(700);
+ await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>!window.PCL.STUDY.busy&&window.PCL.STUDY.r?.summary?.pulse===6,null,{timeout:60000});
+ const hm3=await p.evaluate(()=>window.PCL.STUDY.r.summary);
+ ok(hm3.over===15&&hm3.at.worst===5&&Math.abs(hm3.at.Vh['5']-9.486)<0.01,'harmonic load flow: as six-pulse the fifth at bus 3 is '+hm3.at.Vh['5'].toFixed(2)+' % and 15 buses are above their limit');
  // 4.19.4 (ROADMAP §74): the third exercise from plain blocks
  await p.evaluate(()=>window.PCL.loadTutorial('current_ctl',{}));await p.waitForTimeout(700);await p.click('#toend');
  await p.waitForFunction(()=>window.PCL.S.sim&&window.PCL.S.sim.t>=0.01599,null,{timeout:120000});await p.waitForTimeout(600);

@@ -435,7 +435,7 @@ class NetworkReports(unittest.TestCase):
 class Studies(unittest.TestCase):
     def test_every_study_as_data(self):
         for study in S.STUDIES:
-            if study == 'scopf':                                                                  # 4.19.4: it needs ratings, and the 14-bus network has none (below)
+            if study in ('scopf', 'harmonic'):                                                    # 4.19.4: it needs ratings, and the 14-bus network has none (below); 4.19.5: it needs a source
                 continue
             q = S.run({'case': 'ieee14', 'study': study})
             json.dumps(q, allow_nan=False)                                                        # plain JSON: no NumPy, no NaN
@@ -448,6 +448,10 @@ class Studies(unittest.TestCase):
         q = S.run({'case': 'case30', 'study': 'scopf'})                                           # and on a network with ratings it is plain data too
         json.dumps(q, allow_nan=False)
         self.assertEqual((q['study'], q['network']['buses']), ('scopf', 30))
+        self.assertFalse([k for k in q['result'] if k.startswith('_')])
+        q = S.run({'case': 'harmonic14', 'study': 'harmonic'})                                    # 4.19.5: the harmonic load flow on its test network
+        json.dumps(q, allow_nan=False)
+        self.assertEqual((q['study'], q['network']['buses'], q['result']['buses']['3']['worst']), ('harmonic', 16, 25))
         self.assertFalse([k for k in q['result'] if k.startswith('_')])
         net = N.ieee14()
         lf = net.power_flow()
@@ -670,6 +674,61 @@ class Tutorials(unittest.TestCase):
         kinds = [s['kind'] for s in rep.to_dict()['sections']]
         self.assertEqual((kinds.count('network'), kinds.count('chart'), kinds.count('table')), (2, 2, 4))
         self.assertIn('Μετρήσεις που βγήκαν', rep.html())
+
+    def test_the_card_of_the_harmonic_load_flow(self):
+        """4.19.5, harm_study: what the card asks is a request of pcl.study for every combination of its options, and every number in
+        the text of its tasks is what the engine gives (or what the paper prints)."""
+        import json
+        from pcl import harmonic as H
+        T = tutorials()['harm']
+        opt = {o['k']: o for o in T['options']}
+        self.assertEqual((T['group'], opt['net']['values'], opt['pulse']['values'], opt['filters']['values'], opt['lines']['values'], opt['load']['values'], T['drawing']),
+                         ('Ροή φορτίου και OPF (4.19.1)', ['harmonic14'], ['12', '6'], ['yes', 'no'], ['distributed', 'pi'], ['C', 'A', 'none'], True))
+        self.assertEqual((set(opt['lines']['values']) - set(H.LINE_MODELS), set(opt['load']['values']) - set(H.LOAD_MODELS)), (set(), set()))
+        self.assertEqual(len(T['variants']), 24)
+        for st in T['variants']:                                                                  # every combination runs
+            self.assertEqual((st['net'], st['study'], set(st['options']) - set(S.OPTIONS['harmonic'])), ('harmonic14', 'harmonic', set()))
+            self.assertTrue(S.run({'case': st['net'], 'study': 'harmonic', 'options': st['options']})['summary']['converged'], st)
+        run = lambda **o: S.run({'case': 'harmonic14', 'study': 'harmonic', 'options': o})['summary']     # noqa: E731
+        el = lambda x, d: f'{x:.{d}f}'.replace('.', ',')                                               # noqa: E731
+        t = T['tasks']
+        a = run()
+        at = a['at']
+        self.assertEqual((at['bus'], at['kV'], at['worst'], a['over'], a['over_buses'], a['worst']['bus'], a['worst']['kV']), ('3', 230.0, 25, 4, ['1', '2', '3', '5'], '301', 35.4))
+        for part in (f'THD είναι {el(at["THD"], 2)} %', f'5η είναι μόλις {el(at["Vh"]["5"], 2)} %'):
+            self.assertIn(part, t[0])
+        self.assertLess(max(at['Vh']['17'], at['Vh']['19']), 1e-3)                                    # «η 17η και η 19η μηδέν»
+        only = S.run({'case': 'harmonic14', 'study': 'harmonic', 'options': {'sources': [dict(s, spectrum={'1': [1.0, 0.0]}) if s['load'] != 'tcr' else s for s in H.sources_of(N.case_data('harmonic14'))],
+                                                                              'harmonics': [5]}})['summary']
+        self.assertAlmostEqual(only['at']['Vh']['5'], at['Vh']['5'], delta=1e-9)                       # «το 0,06 % της 5ης είναι του TCR»
+        for part in (f'25η ({el(at["worst_pct"], 2)} %)', f'11η ({el(at["Vh"]["11"], 2)} %)', 'τάξη 25,25'):
+            self.assertIn(part, t[1])
+        self.assertAlmostEqual(H.SPECTRA['hvdc'][25][0] / H.SPECTRA['hvdc'][11][0], 1 / 3, delta=0.02)   # «το ένα τρίτο»
+        self.assertTrue(any(abs(h - 25.25) < 1e-9 for h, _ in a['scan']['peaks']))
+        for part in ('Τέσσερις ζυγοί', '(1, 2, 3, 5)', f'όριο {el(at["limit_thd"], 1)} %', f'{el(a["worst"]["THD"], 2)} % με όριο {el(a["worst"]["limit_thd"], 0)} %'):
+            self.assertIn(part, t[2])
+        b = run(pulse=6)
+        for part in (f'{el(b["at"]["Vh"]["5"], 2)} %', f'THD {el(b["at"]["THD"], 2)} %', f'{b["over"]} ζυγοί'):
+            self.assertIn(part, t[3])
+        c = run(filters=False)
+        top = max(c['scan']['peaks'], key=lambda q: q[1])
+        for part in (f'τάξη {el(top[0], 2)}', f'{el(top[1], 1)} pu', f'{el(c["at"]["THD"], 2)} %'):
+            self.assertIn(part, t[4])
+        d = run(line_model='pi')
+        near = min(d['scan']['peaks'], key=lambda q: abs(q[0] - 25.25))
+        for part in (f'{el(d["at"]["Vh"]["25"], 2)} % αντί για {el(at["Vh"]["25"], 2)} %', f'τάξη {el(near[0], 1)}', 'κανένας ζυγός'):
+            self.assertIn(part, t[5])
+        self.assertEqual(d['over'], 0)
+        pub = json.loads((N.DATA / 'harmonic14.json').read_text(encoding='utf-8'))['thd']
+        full = S.run({'case': 'harmonic14', 'study': 'harmonic'})['result']['buses']
+        for part in (f'{el(pub["3"], 3)} %', f'{el(full["3"]["THD"], 3)} %', f'{el(pub["301"], 2)} % αντί για {el(full["301"]["THD"], 2)} %'):
+            self.assertIn(part, t[7])
+        worst115 = max(abs(full[k]['THD'] / pub[k] - 1) for k in ('9', '10', '11', '12', '13', '14'))
+        self.assertTrue(0.13 < worst115 < 0.15)                                                        # «φτάνει το 15 %»
+        from pcl import report as R
+        rep = R.network_report(N.case_data('harmonic14'), 'harmonic', scan_bus='3')
+        kinds = [s['kind'] for s in rep.to_dict()['sections']]
+        self.assertEqual((kinds.count('network'), kinds.count('chart'), kinds.count('table')), (2, 3, 4))
 
     def test_the_card_of_the_continuation_load_flow(self):
         """4.19.5, cpf_study: what the card asks is a request of pcl.study for every network and every option, and every number in

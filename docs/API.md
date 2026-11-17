@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.19.5: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (772 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.19.5: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (783 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -10,7 +10,7 @@
 - **Αρχεία project:** ένα παλιό αρχείο ανοίγει πάντα (ARCHITECTURE §4). Νέα πεδία είναι προαιρετικά. Όταν χρειάζεται μετατροπή, αυξάνεται το `version` του αρχείου και η μετατροπή γίνεται στο άνοιγμα, με test. Το `version` 3 (3.18): τα σύρματα με το ίδιο όνομα είναι ένας κόμβος· ένα παλιότερο αρχείο ανοίγει ίδιο (`Bus.migrateNames`: όπου ένα όνομα ήταν ετικέτα σε δύο κόμβους, το δεύτερο γίνεται «όνομα·2»).
 - **Ο έλεγχος:** το `python tools/api_surface.py` σταματά όταν κάτι λείπει ή έχασε όρισμα. Ως την 4.0 περνούσε με `--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 μέσα στην ίδια κύρια έκδοση δεν περνά ούτε με `--allow-removal`· στην επόμενη κύρια περνά μόνο για ό,τι ήταν παρωχημένο. Ένα παρωχημένο σημείο πρέπει να υπάρχει ακόμη στον κώδικα.
 
-- **Πειραματικά (3.19):** `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `pcl.backend.…`, `pcl.accel.…`, `pcl.nnstart.…`, `pcl.onnxio.…`, `pcl.netview.…`, `pcl.netfile.…`, `pcl.psse.…`, `pcl.scopf.…`, `pcl.cpf.…`, `pcl.se.…`, `workbench…`, `python -m pcl accel…`, `python -m pcl nnstart…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο· και της 4.19.2: τα backends των παρτίδων με τον δρόμο GPU*, το script του επιταχυντή, τα μοντέλα εκκίνησης και τα αρχεία ONNX). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
+- **Πειραματικά (3.19):** `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `pcl.backend.…`, `pcl.accel.…`, `pcl.nnstart.…`, `pcl.onnxio.…`, `pcl.netview.…`, `pcl.netfile.…`, `pcl.psse.…`, `pcl.scopf.…`, `pcl.cpf.…`, `pcl.se.…`, `pcl.harmonic.…`, `workbench…`, `python -m pcl accel…`, `python -m pcl nnstart…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο· και της 4.19.2: τα backends των παρτίδων με τον δρόμο GPU*, το script του επιταχυντή, τα μοντέλα εκκίνησης και τα αρχεία ONNX). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
 
 Στους πίνακες, «Από» είναι η έκδοση της πρώτης καταγραφής: η 3.18 για ό,τι υπήρχε ήδη.
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-523 σημεία.
+534 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -148,6 +148,16 @@
 | `pcl.formats.write_hdf5` | `path`, `columns`, `meta`, `matrices` | 3.18 |
 | `pcl.formats.write_parquet` | `path`, `columns`, `meta`, `compression`, `created_by` | 3.18 |
 | `pcl.get` | `key` | 3.18 |
+| `pcl.harmonic.HarmonicError` | — | 4.19.5 · πειρ. |
+| `pcl.harmonic.Model` | `net`, `lf`, `load_model`, `line_model`, `sources` | 4.19.5 · πειρ. |
+| `pcl.harmonic.Model.Y` | `h` | 4.19.5 · πειρ. |
+| `pcl.harmonic.Model.branches` | `h` | 4.19.5 · πειρ. |
+| `pcl.harmonic.limits` | `Un` | 4.19.5 · πειρ. |
+| `pcl.harmonic.run` | `net`, `sources`, `harmonics`, `load_model`, `line_model`, `pulse`, `filters`, `scan_bus`, `scan_to`, `scan_step`, `tol` | 4.19.5 · πειρ. |
+| `pcl.harmonic.scan` | `model`, `bus`, `to`, `step` | 4.19.5 · πειρ. |
+| `pcl.harmonic.six_pulse` | `hmax` | 4.19.5 · πειρ. |
+| `pcl.harmonic.sources_of` | `net` | 4.19.5 · πειρ. |
+| `pcl.harmonic.spectrum` | `s` | 4.19.5 · πειρ. |
 | `pcl.impulse.auto_H` | `tau1_us`, `tau2_us`, `n`, `t` | 4.1.1 |
 | `pcl.impulse.check_voltage` | `alpha`, `beta`, `K`, `Vp`, `profile`, `X`, `Y`, `method`, `Vpeak` | 3.18 |
 | `pcl.impulse.compare_current` | `row`, `time`, `signal`, `unit`, `shift`, `normalize` | 4.1.1 |
@@ -324,10 +334,11 @@
 | `pcl.network.Network.estimate` | `measurements`, `**kw` | 4.19.5 |
 | `pcl.network.Network.feeder` | `bus`, `Ik`, `Sk`, `RX`, `X0X`, `R0X0`, `c`, `Ik_min`, `Un`, `name`, `V`, `angle`, `slack` | 4.2 |
 | `pcl.network.Network.generator` | `bus`, `Sr`, `Ur`, `xd2`, `cosphi`, `RG`, `xdsat`, `pG`, `X0`, `earthed`, `P`, `V`, `Qmin`, `Qmax`, `slack`, `name`, `Pmin`, `Pmax`, `cost` | 4.2 |
+| `pcl.network.Network.harmonics` | `sources`, `**kw` | 4.19.5 |
 | `pcl.network.Network.iec60909` | `fault`, `buses`, `**kw` | 4.2 |
 | `pcl.network.Network.impedances` | `mode` | 4.2 |
 | `pcl.network.Network.line` | `a`, `b`, `R`, `X`, `length`, `B`, `R0`, `X0`, `parallel`, `name`, `alpha`, `rating` | 4.2 |
-| `pcl.network.Network.load` | `bus`, `P`, `Q`, `zip`, `name` | 4.2 |
+| `pcl.network.Network.load` | `bus`, `P`, `Q`, `zip`, `name`, `spectrum`, `delta` | 4.2 |
 | `pcl.network.Network.load_flow` | `tol`, `max_iter`, `q_limits`, `flat` | 4.2 |
 | `pcl.network.Network.lodf` | — | 4.19.1 |
 | `pcl.network.Network.motor` | `bus`, `Pr`, `Ur`, `cosphi`, `eta`, `ILR`, `p`, `n`, `RX`, `name` | 4.2 |
@@ -339,7 +350,7 @@
 | `pcl.network.Network.report` | `study`, `result`, `title`, `**kw` | 4.19.1 |
 | `pcl.network.Network.scopf` | `**kw` | 4.19.4 |
 | `pcl.network.Network.short_circuit` | `bus`, `fault`, `mode`, `f115`, `tmin`, `temp`, `lv_tol`, `fc`, `breaking`, `rgf` | 4.2 |
-| `pcl.network.Network.shunt` | `bus`, `P`, `Q`, `name` | 4.2 |
+| `pcl.network.Network.shunt` | `bus`, `P`, `Q`, `name`, `R`, `X`, `B` | 4.2 |
 | `pcl.network.Network.sssc` | `line`, `X`, `Vq`, `P`, `Xmax`, `name` | 4.10 |
 | `pcl.network.Network.to_emt` | `lf`, `machines`, `name`, `t_end`, `hdiv` | 4.3 |
 | `pcl.network.Network.transformer` | `hv`, `lv`, `Sr`, `Uhv`, `Ulv`, `uk`, `ur`, `group`, `X0X`, `R0R`, `Zn_hv`, `Zn_lv`, `tap`, `KT`, `shift`, `name` | 4.2 |

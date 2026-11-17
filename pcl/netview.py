@@ -21,11 +21,11 @@ import numpy as np
 UNIT = 100.0            # the length of a typical branch in drawing units
 FULL = 2500             # buses up to which the stress uses every pair of buses (memory n², time n² per sweep)
 PIVOTS = 200            # above it: distances to this many buses only (pivot scaling, Brandes & Pich 2007)
-LAYERS = ('base', 'voltage', 'angle', 'loading', 'flow', 'violations', 'n1', 'security', 'collapse', 'residual', 'lmp')
+LAYERS = ('base', 'voltage', 'angle', 'loading', 'flow', 'violations', 'n1', 'security', 'collapse', 'residual', 'thd', 'lmp')
 TITLES = {'base': 'Επίπεδα τάσης', 'voltage': 'Τάσεις ζυγών', 'angle': 'Γωνίες τάσης', 'loading': 'Φόρτιση κλάδων', 'flow': 'Ροές ενεργού ισχύος',
           'violations': 'Παραβιάσεις', 'n1': 'N−1: τι προκαλεί η απώλεια κάθε κλάδου', 'security': 'Ασφάλεια N−1: η χειρότερη φόρτιση κάθε κλάδου μετά από διαταραχή',
           'collapse': 'Ευστάθεια τάσης: πτώση της τάσης κάθε ζυγού ως το όριο φόρτισης', 'residual': 'Εκτίμηση κατάστασης: το μεγαλύτερο κανονικοποιημένο υπόλοιπο των μετρήσεων κάθε ζυγού και κάθε κλάδου',
-          'lmp': 'Οριακές τιμές κόμβων'}
+          'thd': 'Αρμονική παραμόρφωση τάσης (THD) κάθε ζυγού ως προς το όριό του', 'lmp': 'Οριακές τιμές κόμβων'}
 # colours: a diverging scale for a quantity around a centre, a sequential one for a quantity from zero, and the voltage levels
 DIVERGING = ['#2166ac', '#67a9cf', '#d1e5f0', '#bdbdbd', '#fddbc7', '#ef8a62', '#b2182b']
 SEQUENTIAL = ['#bdbdbd', '#fee08b', '#fdae61', '#f46d43', '#d73027', '#7f0000']
@@ -421,6 +421,25 @@ def values(v, result=None, layer='base', study=None):
         out['note_base'] = (f'{res.get("m")} μετρήσεις. ' + ('Καμία δεν βγήκε ως λανθασμένη.' if not bad else
                             ('Βγήκε ως λανθασμένη: ' if len(bad) == 1 else f'Βγήκαν ως λανθασμένες {len(bad)}: ') + ', '.join(f'{b["type"]} στο {b["at"]}' for b in bad[:6]) + (' …' if len(bad) > 6 else '') + '.'))
         return out
+    if layer == 'thd':
+        # 4.19.5, harmonic load flow: every bus by its voltage distortion against the limit of its voltage level (IEEE Std 519)
+        vals = {str(b): (_num(q.get('THD')), _num(q.get('limit_thd'))) for b, q in rb.items() if isinstance(q, dict) and q.get('THD') is not None}
+        vals = {b: x for b, x in vals.items() if x[0] is not None and x[1]}
+        if not vals:
+            return missing('Η στρώση της αρμονικής παραμόρφωσης θέλει αρμονική ροή φορτίου.')
+        col = _scale(RESIDUAL, 0.0, 2.0)                          # the ratio to the limit: green below it, red above
+        out['bus'], out['unit_bus'] = {b: x[0] for b, x in vals.items()}, '%'
+        out['bus_color'] = {b['id']: (col(min(vals[b['id']][0] / vals[b['id']][1], 2.0)) if b['id'] in vals else GREY) for b in v['buses']}
+        out['branch_color'] = {e['name']: GREY for e in v['branches']}
+        pc = lambda a: f'{round(100 * a)} %'                      # noqa: E731
+        out['legend'] = [(col((i + 0.5) / 3), f'{pc(i / 3)}–{pc((i + 1) / 3)} του ορίου' + (' (πάνω από το όριο)' if i >= 3 else '')) for i in range(5)] + [(col(2.0), 'πάνω από 167 % του ορίου')]
+        over = res.get('over') or []
+        w = res.get('worst') or {}
+        gr = lambda x, d=2: f'{float(x):.{d}f}'.replace('.', ',')      # noqa: E731
+        out['count'] = {'over': len(over)}
+        out['note_base'] = ((f'Μεγαλύτερη παραμόρφωση: {gr(w["THD"])} % στον ζυγό {w["bus"]}. ' if w.get('bus') is not None else '')
+                            + ('Κανένας ζυγός πάνω από το όριό του.' if not over else f'Πάνω από το όριό τους: {len(over)} ζυγοί.' if len(over) > 1 else f'Πάνω από το όριό του: ο ζυγός {over[0]}.'))
+        return out
     if layer == 'violations' and cpf:                         # (the voltages at the loading limit are not an operating state to check against limits)
         return missing('Στη συνεχιζόμενη ροή φορτίου οι τάσεις είναι του ορίου φόρτισης: δες τη στρώση της ευστάθειας τάσης.')
     if layer in ('voltage', 'angle', 'lmp'):
@@ -445,6 +464,8 @@ def values(v, result=None, layer='base', study=None):
             out['title'] += ' στο όριο φόρτισης'
         elif isinstance(res.get('map'), dict) and layer != 'lmp':
             out['title'] += ' (εκτίμηση από τις μετρήσεις)'
+        elif isinstance(res.get('harmonics'), list) and layer != 'lmp':
+            out['title'] += ' (θεμελιώδης συχνότητα)'
         out['bus_color'] = {b['id']: col(vals.get(b['id'])) for b in v['buses']}
         out['branch_color'] = {e['name']: GREY for e in v['branches']}
         a0, a1 = (1 - max(1 - lo, hi - 1), 1 + max(1 - lo, hi - 1)) if layer == 'voltage' else (lo, hi)
@@ -565,7 +586,7 @@ def _maybe_int(s):
         return s
 
 
-DEFAULT = {'pf': 'voltage', 'n1': 'n1', 'n1dc': 'n1', 'opf': 'lmp', 'dcopf': 'lmp', 'scopf': 'security', 'cpf': 'collapse', 'se': 'residual'}     # the layer a study opens with
+DEFAULT = {'pf': 'voltage', 'n1': 'n1', 'n1dc': 'n1', 'opf': 'lmp', 'dcopf': 'lmp', 'scopf': 'security', 'cpf': 'collapse', 'se': 'residual', 'harmonic': 'thd'}     # the layer a study opens with
 
 
 def pack(v, result=None, layers=None):

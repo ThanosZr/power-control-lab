@@ -429,7 +429,7 @@ document.addEventListener('click',function(ev){var b=ev.target.closest('button[d
 def network_report(net, study='pf', result=None, title=None, **kw):
     """A report for a study of a pcl.network.Network: study 'pf' (load flow), 'n1' / 'n1dc' (N−1 in AC / with the DC screening),
     'opf' / 'dcopf' (optimal power flow), 'scopf' (4.19.4: the DC optimal power flow with security against every single outage),
-    'cpf' (4.19.5: the continuation load flow, the P–V curve and the loading margin), 'se' (4.19.5: state estimation). result: the result of the study if it has run already (else it runs here with kw).
+    'cpf' (4.19.5: the continuation load flow, the P–V curve and the loading margin), 'se' (4.19.5: state estimation), 'harmonic' (4.19.5: the harmonic load flow). result: the result of the study if it has run already (else it runs here with kw).
     The sections can be extended or re-ordered afterwards as with any Report. picture (4.19.4): a view of pcl.netview.view to
     draw on instead of the view of this network (the same places when the network is a changed copy of another)."""
     MW = 1e6
@@ -439,7 +439,8 @@ def network_report(net, study='pf', result=None, title=None, **kw):
     nbr = sum(e['kind'] in ('line', 'branch', 'transformer') for e in net.elements)
     head = {'pf': 'Ροή φορτίου', 'n1': 'Ανάλυση N−1 (AC)', 'n1dc': 'Ανάλυση N−1 (σάρωση DC)', 'opf': 'Βέλτιστη ροή φορτίου (AC)', 'dcopf': 'Βέλτιστη ροή φορτίου (DC)',
             'scopf': 'Βέλτιστη ροή φορτίου με ασφάλεια N−1 (DC)', 'cpf': 'Συνεχιζόμενη ροή φορτίου: καμπύλη P–V και περιθώριο φόρτισης',
-            'se': 'Εκτίμηση κατάστασης: ελάχιστα τετράγωνα με βάρη και εντοπισμός λανθασμένων μετρήσεων'}
+            'se': 'Εκτίμηση κατάστασης: ελάχιστα τετράγωνα με βάρη και εντοπισμός λανθασμένων μετρήσεων',
+            'harmonic': 'Αρμονική ροή φορτίου: παραμόρφωση τάσης και συντονισμοί'}
     if study not in head:
         raise ReportError(f'network_report: study one of {", ".join(head)}')
     r = Report(title or head[study], name, meta={'Ζυγοί': len(net.buses), 'Κλάδοι': nbr, 'Γεννήτριες': gens, 'S βάσης (MVA)': net.S_base / MW})
@@ -534,6 +535,12 @@ def network_report(net, study='pf', result=None, title=None, **kw):
         r.heading('Το πρόβλημα')
         r.text(f'{res["advice"]["why"][0].upper()}{res["advice"]["why"][1:]}.')
         _se(r, net, res, MW, picture)
+    elif study == 'harmonic':
+        res = result or net.harmonics(**kw)
+        if res.get('advice'):
+            r.heading('Η μέθοδος')
+            r.text(f'{res["advice"]["why"][0].upper()}{res["advice"]["why"][1:]}.')
+        _harmonic(r, net, res, MW, picture)
     else:
         res = result or (net.scopf(**kw) if study == 'scopf' else net.opf('ac' if study == 'opf' else 'dc', **kw))
         advice(res.get('advice') or net.advice('dcopf' if study == 'scopf' else study))
@@ -756,6 +763,66 @@ def _se(r, net, res, MW, picture):
             [[b, d['V'], d['angle']] + ([d.get('V_true'), d.get('angle_true'), d.get('dV')] if er else []) + [(d['P'] - d['Pload']) / MW, (d['Q'] - d['Qload']) / MW]
              for b, d in ((b, res['buses'][b]) for b in order)], '', [None, 5, 4] + ([5, 4, 5] if er else []) + [4, 4],
             note='P και Q: η έγχυση του ζυγού προς το δίκτυο (παραγωγή μείον φορτίο) όπως βγαίνει από την εκτίμηση.')
+
+
+def _harmonic(r, net, res, MW, picture):
+    """4.19.5: the harmonic load flow: the distortion of every bus against its limit, the spectrum where it is worst, the scan."""
+    from .harmonic import LOAD_TXT, LINE_TXT, SPECTRUM_TXT
+    f = lambda x, d=2: '—' if x is None else f'{x:.{d}f}'.replace('.', ',')             # noqa: E731
+    if not res['converged']:
+        r.note('Η αρμονική ροή φορτίου δεν έγινε: ' + res['message'] + '.', 'critical')
+        return
+    B, orders, sc = res['buses'], res['harmonics'], res.get('scan')
+    w = res['worst']['bus']
+    r.facts([('Πηγές αρμονικών', len(res['sources'])), ('Τάξεις που λύθηκαν', ', '.join(str(h) for h in orders)), ('Μεγαλύτερη παραμόρφωση τάσης, THD (%)', round(res['worst']['THD'], 3)),
+             ('στον ζυγό', w), ('Όριο του ζυγού αυτού (%)', B[w]['limit_thd']), ('Ζυγοί πάνω από το όριό τους', len(res['over'])), ('από', len(B)),
+             ('Γραμμές', LINE_TXT[res['line_model']]), ('Φορτία', LOAD_TXT[res['load_model']]), ('Απώλειες της θεμελιώδους (MW)', round(res['lf']['losses'] / MW, 3)),
+             ('Χρόνος (ms)', round(res['time'] * 1e3, 1))])
+    r.text('Κάθε μη γραμμικό φορτίο τραβά ρεύμα που δεν είναι ημιτονικό. Η ροή φορτίου δίνει τη θεμελιώδη του· οι αρμονικές του βγαίνουν από το φάσμα του, με μέτρο ανάλογο της θεμελιώδους '
+           'και γωνία μετατοπισμένη μαζί της. Για κάθε τάξη το δίκτυο είναι γραμμικό κύκλωμα: οι επαγωγικές αντιδράσεις μεγαλώνουν με την τάξη, οι χωρητικές μικραίνουν, και όπου '
+           'οι δύο αναιρούνται η εμπέδηση που βλέπει η πηγή γίνεται μεγάλη (παράλληλος συντονισμός). THD ενός ζυγού: η ενεργός τιμή των αρμονικών της τάσης του ως προς τη θεμελιώδη.')
+    if res['skipped']:
+        r.note('Δεν λύθηκαν οι τάξεις ' + ', '.join(str(h) for h in res['skipped']) + ': σε συμμετρικό δίκτυο είναι ομοπολικές και θέλουν το δίκτυο μηδενικής ακολουθίας.', 'info')
+    if not res['filters']:
+        r.note('Χωρίς τα συντονισμένα φίλτρα του δικτύου: η ροή φορτίου έτρεξε και αυτή χωρίς την άεργό τους.', 'info')
+    if res['pulse'] == 6:
+        r.note('Κάθε πηγή λογίστηκε πίσω από μετασχηματιστή αστέρα–αστέρα: οι αρμονικές δύο γεφυρών προστίθενται και στις τάξεις 5, 7, 17, 19.', 'info')
+    if res['over']:
+        r.note((f'{len(res["over"])} ζυγοί είναι' if len(res['over']) > 1 else 'Ένας ζυγός είναι') + ' πάνω από το όριο παραμόρφωσης τάσης του IEEE Std 519-2014 για την τάση του: '
+               + ', '.join(res['over'][:30]) + (' …' if len(res['over']) > 30 else '') + '.', 'warning')
+    else:
+        r.note('Κανένας ζυγός δεν περνά το όριο παραμόρφωσης τάσης του IEEE Std 519-2014 για την τάση του.', 'good')
+    picture(res, 'thd', 'voltage')
+    r.heading('Παραμόρφωση τάσης ανά ζυγό')
+    order = list(B)
+    r.chart('bar', order, [{'name': 'THD', 'y': [B[b]['THD'] for b in order]}, {'name': 'όριο του ζυγού', 'y': [B[b]['limit_thd'] for b in order]}],
+            'Ολική αρμονική παραμόρφωση της τάσης κάθε ζυγού και το όριό της', 'ζυγός', '%')
+    mark = {i: 'warning' for i, b in enumerate(order) if B[b]['over']}
+    r.table(['Ζυγός', 'U_n (kV)', '|V| θεμελιώδους (pu)', 'THD (%)', 'Όριο THD (%)', 'Μεγαλύτερη αρμονική', 'Τιμή της (%)', 'Όριο ανά αρμονική (%)'],
+            [[b, B[b]['Un'] / 1e3, B[b]['V'], B[b]['THD'], B[b]['limit_thd'], f'{B[b]["worst"]}η', B[b]['worst_pct'], B[b]['limit']] for b in order], '', [None, 4, 5, 4, 3, None, 4, 3], mark,
+            note='Όρια: IEEE Std 519-2014, Πίνακας 1, κατά την ονομαστική τάση του ζυγού.')
+    at = [w] + ([sc['bus']] if sc and sc['bus'] != w else [])
+    r.heading('Φάσμα της τάσης')
+    r.chart('bar', [f'{h}η' for h in orders], [{'name': f'ζυγός {b}', 'y': [100 * B[b]['Vh'][h] / B[b]['V'] for h in orders]} for b in at],
+            'Κάθε αρμονική της τάσης ως ποσοστό της θεμελιώδους', 'τάξη', '%')
+    if sc:
+        r.heading('Σάρωση συχνότητας')
+        r.chart('line', sc['h'], [{'name': f'|Z| από τον ζυγό {sc["bus"]}', 'y': sc['Z']}], f'Η εμπέδηση που φαίνεται από τον ζυγό {sc["bus"]} ως προς την τάξη', 'τάξη αρμονικής', 'pu', table=False)
+        pk = sorted(sc['peaks'], key=lambda q: -q[1])[:8]
+        if pk:
+            near = lambda h: min(orders, key=lambda o: abs(o - h))        # noqa: E731
+            r.table(['Τάξη συντονισμού', '|Z| (pu)', 'Πλησιέστερη αρμονική των πηγών', 'Απόσταση (τάξεις)'], [[h, z, f'{near(h)}η', abs(near(h) - h)] for h, z in sorted(pk)],
+                    'Παράλληλοι συντονισμοί (κορυφές της σάρωσης)', [4, 4, None, 3], note='Ένας συντονισμός κοντά σε τάξη που εγχέουν οι πηγές μεγαλώνει την αρμονική αυτή της τάσης.')
+    r.heading('Πηγές αρμονικών')
+    spec = {e['name']: e.get('spectrum') for e in net.elements if e['kind'] == 'load'}
+    r.table(['Φορτίο', 'Ζυγός', 'Ρεύμα θεμελιώδους (pu)', 'Φάσμα', 'Πίσω από Y–Δ', 'Μεγαλύτερη αρμονική (pu)'],
+            [[q['load'], q['bus'], q['I1'], SPECTRUM_TXT.get(spec.get(q['load']), 'δοσμένο') if isinstance(spec.get(q['load']), str) or spec.get(q['load']) is None else 'δοσμένο',
+              'ναι' if q['delta'] else 'όχι', max(q['Ih'].values(), default=0.0)] for q in res['sources']], '', [None, None, 4, None, None, 4])
+    br = sorted((q for q in res['branches'] if q['THD'] is not None), key=lambda q: -q['THD'])[:15]
+    if br:
+        r.heading('Κλάδοι με το πιο παραμορφωμένο ρεύμα')
+        r.table(['Κλάδος', 'Από', 'Προς', 'Ρεύμα θεμελιώδους (pu)', 'THD ρεύματος (%)', 'Ενεργός τιμή (pu)', 'Μεγαλύτερη αρμονική'],
+                [[q['name'], q['a'], q['b'], q['I1'], q['THD'], q['Irms'], f'{max(q["Ih"], key=q["Ih"].get)}η'] for q in br], '', [None, None, None, 4, 4, 4, None])
 
 
 def _branches(r, net, branches, MW):

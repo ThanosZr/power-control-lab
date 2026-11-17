@@ -245,6 +245,14 @@
 | (normalized) residual, largest normalized residual test | (κανονικοποιημένο) υπόλοιπο, έλεγχος του μεγαλύτερου κανονικοποιημένου υπολοίπου (4.19.5) |
 | critical measurement, critical pair | κρίσιμη μέτρηση, κρίσιμο ζεύγος (4.19.5) |
 | zero-injection bus, equality constraint | ζυγός μηδενικής έγχυσης, ισότητα (περιορισμός ισότητας) (4.19.5) |
+| harmonic load flow (harmonic penetration, current injection) | αρμονική ροή φορτίου (έγχυση ρεύματος) (4.19.5) |
+| harmonic (order), spectrum, total harmonic distortion (THD) | αρμονική (τάξη), φάσμα, ολική αρμονική παραμόρφωση (THD) (4.19.5) |
+| frequency scan, driving-point impedance | σάρωση συχνότητας, εμπέδηση που φαίνεται από τον ζυγό (4.19.5) |
+| parallel / series resonance, tuned filter | παράλληλος συντονισμός / συντονισμός σειράς, συντονισμένο φίλτρο (4.19.5) |
+| six-pulse / twelve-pulse (bridge, converter) | εξαπαλμική / δωδεκαπαλμική (γέφυρα, μετατροπέας) (4.19.5) |
+| long-line (distributed-parameter) model, lumped π | μοντέλο μακριάς γραμμής (κατανεμημένες παράμετροι), συγκεντρωμένο π (4.19.5) |
+| positive / negative / zero sequence (of a harmonic order) | θετική / αρνητική / μηδενική ακολουθία (μιας τάξης)· ομοπολική (4.19.5) |
+| point of common coupling (PCC) | σημείο κοινής σύνδεσης (4.19.5) |
 | P–V (nose) curve, nose (fold, saddle-node bifurcation) | καμπύλη P–V, μύτη της καμπύλης (διακλάδωση σάγματος–κόμβου) (4.19.5) |
 | loadability limit (maximum loading point), loading margin | όριο φόρτισης, περιθώριο φόρτισης (4.19.5) |
 | limit-induced bifurcation | άμεση αστάθεια στο όριο αέργου (γωνία της καμπύλης, όχι μύτη) (4.19.5) |

@@ -220,16 +220,28 @@ class Network:
         """Short-circuit limiting reactor between a and b (or a shunt to earth at a when b is None), Ω."""
         return self._add('reactor', name, a=a, b=b, X=float(X), R=float(R), X0=X0, R0=R0)
 
-    def load(self, bus, P, Q, zip=(0.0, 0.0, 1.0), name=None):
+    def load(self, bus, P, Q, zip=(0.0, 0.0, 1.0), name=None, spectrum=None, delta=False):
         """Load for the load flow (W, var at V = 1 pu) with the ZIP fractions (constant impedance, current, power).
-        Not in the short circuit (IEC 60909-0 neglects non-rotating loads)."""
+        Not in the short circuit (IEC 60909-0 neglects non-rotating loads).
+        4.19.5, harmonic load flow (pcl.harmonic): spectrum makes the load a source of harmonic currents: a name of
+        pcl.harmonic.SPECTRA or {order: (magnitude as a part of the fundamental, angle in degrees)} with the order 1 in it;
+        delta: the load is behind a star–delta transformer that the network does not show as a phase shift."""
         z = tuple(float(x) for x in zip)
         if abs(sum(z) - 1) > 1e-9:
             raise NetworkError('ZIP fractions must add up to 1')
-        return self._add('load', name, bus=bus, P=float(P), Q=float(Q), zip=z)
+        more = {} if spectrum is None else {'spectrum': spectrum, 'delta': bool(delta)}
+        return self._add('load', name, bus=bus, P=float(P), Q=float(Q), zip=z, **more)
 
-    def shunt(self, bus, P=0.0, Q=0.0, name=None):
-        """Shunt admittance given by its power at V = 1 pu (W, var; Q > 0 absorbs, as MATPOWER's Gs, −Bs)."""
+    def shunt(self, bus, P=0.0, Q=0.0, name=None, R=None, X=None, B=None):
+        """Shunt admittance given by its power at V = 1 pu (W, var; Q > 0 absorbs, as MATPOWER's Gs, −Bs).
+        4.19.5: or by what it is made of, in per unit of S_base at the fundamental: a capacitor B alone, or a tuned filter, R and X
+        in series with the capacitor B (tuned at the order 1/√(X·B)). P and Q follow from them; the harmonic load flow uses R, X, B."""
+        if B is not None:
+            R, X, B = float(R or 0.0), float(X or 0.0), float(B)
+            if B <= 0 or R < 0 or X < 0:
+                raise NetworkError('shunt: B above zero, R and X not below zero (per unit)')
+            y = 1 / complex(R, X - 1 / B)
+            return self._add('shunt', name, bus=bus, P=y.real * self.S_base, Q=-y.imag * self.S_base, R=R, X=X, B=B)
         return self._add('shunt', name, bus=bus, P=float(P), Q=float(Q))
 
     def branch_pu(self, a, b, r, x, bc=0.0, ratio=0.0, angle=0.0, name=None, rating=None):
@@ -1070,6 +1082,13 @@ class Network:
         from . import se
         return se.run(self, measurements, **kw)
 
+    def harmonics(self, sources=None, **kw):
+        """The harmonic load flow (pcl.harmonic.run, 4.19.5): the voltage distortion that the harmonic currents of the nonlinear
+        loads make, order by order on the linear network, and the frequency scan seen from a bus. The sources are the loads with a
+        spectrum, or the list given. See pcl.harmonic.run for the options and the result."""
+        from . import harmonic
+        return harmonic.run(self, sources, **kw)
+
     def opf(self, kind='ac', **kw):
         """The optimal power flow (pcl.opf): kind='ac' (interior point on the full equations) or 'dc' (the linear network).
         See pcl.opf.solve for the options and the result. 4.19.2: dS (a change of the injections, VA per bus) and start='nn' or
@@ -1401,6 +1420,7 @@ def ieee(case):
 
 
 CASES = ('ieee9', 'ieee14', 'ieee30', 'ieee57', 'ieee118', 'ieee300', 'case30', 'case33bw', 'case69', 'pegase1354')
+MORE = ('harmonic14',)      # 4.19.5: networks made for one study (they are not in the lists of the other studies)
 
 
 def case_data(name):
@@ -1409,16 +1429,16 @@ def case_data(name):
     1354-bus case of the PEGASE project, fictitious data of the size of a part of the European network, CC BY 4.0: the source
     and the licence are in the file). The bus voltages of each file are the published solution of its load flow."""
     f = DATA / f'{name}.json'
-    if name not in CASES or not f.exists():
-        raise NetworkError(f'unknown case {name!r}: one of {", ".join(CASES)}')
+    if name not in CASES + MORE or not f.exists():
+        raise NetworkError(f'unknown case {name!r}: one of {", ".join(CASES + MORE)}')
     return from_dict(json.loads(f.read_text(encoding='utf-8')))
 
 
 def case_solution(name):
     """The published load-flow solution of a test network, {bus: (|V| in pu, angle in degrees)}: the bus voltages of the case
     file (3–4 digits). None for the cases whose file has no solved voltages (ieee9, case30)."""
-    if name not in CASES:
-        raise NetworkError(f'unknown case {name!r}: one of {", ".join(CASES)}')
+    if name not in CASES + MORE:
+        raise NetworkError(f'unknown case {name!r}: one of {", ".join(CASES + MORE)}')
     sol = json.loads((DATA / f'{name}.json').read_text(encoding='utf-8')).get('solution')
     return {b: (v[0], v[1]) for b, v in sol.items()} if sol else None
 

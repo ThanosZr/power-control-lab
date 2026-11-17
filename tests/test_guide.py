@@ -87,8 +87,11 @@ class Guide(unittest.TestCase):
     def test_the_estimation_example_of_4_19_5_runs_as_written(self):
         self.assertIn('Μετρήσεις που βγήκαν', self.as_written(19, 'Εκτίμηση κατάστασης', 7, ['se.html'])['se.html'])
 
+    def test_the_harmonic_example_of_4_19_5_runs_as_written(self):
+        self.assertIn('Σάρωση συχνότητας', self.as_written(20, 'Αρμονικές', 7, ['harmonics.html'])['harmonics.html'])
+
     def test_every_python_block_of_4_19_5_has_its_test(self):
-        self.assertEqual([h.split('.')[0] for h, _ in blocks('4.19.5')], ['17', '18', '19'])
+        self.assertEqual([h.split('.')[0] for h, _ in blocks('4.19.5')], ['17', '18', '19', '20'])
 
     def test_the_other_ways_the_guide_names(self):
         from pcl import network as N, study

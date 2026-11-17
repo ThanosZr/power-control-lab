@@ -114,8 +114,18 @@ class ApiSurface(unittest.TestCase):
         self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.estimate'))
         self.assertEqual(self.now['pcl']['pcl.se.run']['params'][:2], ['net', 'measurements'])
         self.assertEqual(set(study.OPTIONS['se']), set(self.now['pcl']['pcl.se.run']['params'][1:]))        # every option of the routine is an option of the study
-        self.assertEqual((study.STUDIES[-1], netview.DEFAULT['se']), ('se', 'residual'))
+        self.assertEqual((study.STUDIES[-2], netview.DEFAULT['se']), ('se', 'residual'))
         self.assertIn('residual', netview.LAYERS)
+        # the harmonic load flow: the module is experimental, Network.harmonics and the study are stable; a load may carry a spectrum
+        # and a shunt may be a capacitor or a tuned filter (two parameters and three more on methods that were there)
+        self.assertTrue(api_surface.experimental('pcl', 'pcl.harmonic.run'))
+        self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.harmonics'))
+        self.assertEqual(set(study.OPTIONS['harmonic']), set(self.now['pcl']['pcl.harmonic.run']['params'][1:]))
+        self.assertEqual(self.now['pcl']['pcl.network.Network.load']['params'][-2:], ['spectrum', 'delta'])
+        self.assertEqual(self.now['pcl']['pcl.network.Network.shunt']['params'][-3:], ['R', 'X', 'B'])
+        self.assertEqual((study.STUDIES[-1], netview.DEFAULT['harmonic']), ('harmonic', 'thd'))
+        from pcl import network
+        self.assertEqual((network.MORE, len(network.CASES)), (('harmonic14',), 10))
 
     def test_the_surface_of_4_19_3(self):
         # the two settings of the solver are in the file format (stable); the large network is one more name of the test networks
