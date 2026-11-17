@@ -1,5 +1,5 @@
 {
- "version": "4.19.5",
+ "version": "4.19.6",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -5385,6 +5385,25 @@
     ],
     "since": "4.8.1"
    },
+   "part:AVG": {
+    "params": [
+     "win",
+     "f",
+     "np",
+     "fsrc",
+     "fmin",
+     "t0",
+     "clock",
+     "first",
+     "y0"
+    ],
+    "pins": [
+     "f",
+     "u",
+     "y"
+    ],
+    "since": "4.19.6"
+   },
    "part:AVR": {
     "params": [
      "type",
@@ -6663,6 +6682,22 @@
     ],
     "since": "4.14"
    },
+   "part:MNMX": {
+    "params": [
+     "f",
+     "np",
+     "t0",
+     "clock",
+     "y0"
+    ],
+    "pins": [
+     "max",
+     "min",
+     "pp",
+     "u"
+    ],
+    "since": "4.19.6"
+   },
    "part:MOD3": {
     "params": [
      "mode",
@@ -6991,6 +7026,25 @@
      "y"
     ],
     "since": "3.19"
+   },
+   "part:RMS": {
+    "params": [
+     "win",
+     "f",
+     "np",
+     "fsrc",
+     "fmin",
+     "t0",
+     "clock",
+     "first",
+     "y0"
+    ],
+    "pins": [
+     "f",
+     "u",
+     "y"
+    ],
+    "since": "4.19.6"
    },
    "part:RT": {
     "params": [

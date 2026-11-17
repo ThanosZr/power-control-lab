@@ -96,6 +96,17 @@
  const IMPL=(def='blocks',hint='')=>sel('impl','Υλοποίηση',[['blocks','Αναλυτική από στοιχεία (φαίνεται, αναπτύσσεται)'],['fast','Γρήγορη (συμπαγές στοιχείο του λύτη)']],def,{hint:'Ίδιο μοντέλο, ίδια αποτελέσματα (test ισοδυναμίας). Η αναλυτική είναι φτιαγμένη από βασικά στοιχεία: «⧉ Τι έχει μέσα» τη δείχνει, «▣ Ανάπτυξη σε υποκύκλωμα» την κάνει υποκύκλωμα για αλλαγές. Η γρήγορη λύνει τα εσωτερικά μέσα σε ένα στοιχείο του λύτη.'+(hint?' '+hint:'')});
  const CLOCK=(extra={})=>ref('clock','Ρολόι (PWM ή μπλοκ Ρολόι)',['PWM','CLK'],{hint:'Ενημέρωση σε σημεία του φέροντος του PWM (ή στην ανερχόμενη ακμή του μπλοκ Ρολόι), όπως στο S&H.',...extra});
  const TRIG=sel('trig','Πότε ενημερώνεται',[['start','Αρχή περιόδου του φέροντος (1 ανά T)'],['mid','Μέσο περιόδου (1 ανά T)'],['both','Και τα δύο (2 ανά T)']],'start');
+ // 4.19.6 (ROADMAP §76): the window of the blocks that measure a signal (mean, RMS): np periods of 1/f, running with the time or closed once per period
+ const MWIN=()=>[sel('win','Παράθυρο',[['run','Κυλιόμενο: οι τελευταίες περίοδοι ως τώρα'],['per','Ανά περίοδο: η έξοδος αλλάζει στο τέλος κάθε περιόδου']],'run',
+   {hint:'Κυλιόμενο: η έξοδος σε κάθε στιγμή είναι το μέγεθος πάνω στο διάστημα [t − παράθυρο, t]. Ανά περίοδο: το μέγεθος της περιόδου που μόλις τελείωσε, κρατημένο ως το τέλος της επόμενης (όπως τα στατιστικά ανά περίοδο του scope).'}),
+  num('f','Συχνότητα','Hz',50,{hint:'Το παράθυρο είναι «Περίοδοι ανά παράθυρο» φορές 1/f.'}),num('np','Περίοδοι ανά παράθυρο','',1,{hint:'Ακέραιος, τουλάχιστον 1.'}),
+  sel('fsrc','Συχνότητα από',[['par','Την παράμετρο'],['in','Την είσοδο f (Hz)']],'par',{show:p=>p.win!=='per',hint:'Με είσοδο f το παράθυρο ακολουθεί τη συχνότητα σε κάθε στιγμή (π.χ. από ένα PLL: ω/2π).'}),
+  num('fmin','Ελάχιστη συχνότητα','Hz',25,{show:p=>p.win!=='per'&&p.fsrc==='in',hint:'Κάτω από αυτήν το παράθυρο δεν μεγαλώνει άλλο: το μπλοκ κρατά ιστορικό ως «Περίοδοι ανά παράθυρο»/f_min.'}),
+  num('t0','Αρχή της πρώτης περιόδου','s',0,{signed:true,zero:true,show:p=>p.win==='per'}),
+  CLOCK({show:p=>p.win==='per',hint:'Προαιρετικό. Με ρολόι η περίοδος είναι η περίοδος του φέροντος του PWM (ή του μπλοκ Ρολόι) και η συχνότητα δεν χρησιμοποιείται.'}),
+  sel('first','Πριν γεμίσει το πρώτο παράθυρο',[['hold','Η αρχική έξοδος'],['grow','Το μέγεθος από την αρχή ως τώρα']],'hold',{show:p=>p.win!=='per'}),
+  num('y0','Αρχική έξοδος','',0,{signed:true,zero:true,hint:'Η έξοδος ως το τέλος του πρώτου παραθύρου.'})];
+ const mwinF=p=>p.win!=='per'&&p.fsrc==='in';
  const SCHED='Πρόγραμμα: ζεύγη «t:τιμή» χωρισμένα με κόμμα, π.χ. 0:60000, 0.005:30000. Κενό = σταθερή τιμή.';
  const SRM_TBL=srmTableText({Lu:.008,La:.06,Lsat:.008,psik:.35});
  // subcircuit symbol (3.17): ports on four sides, 20 apart, ordered as drawn inside (SubCircuit.portsOf)
@@ -607,6 +618,19 @@
   TAGI:{name:'Ετικέτα: από (From)',prefix:'TF',group:'Σήματα',pins:{},spins:{y:O(30,0)},box:[-22,-10,44,20],
    params:[txt('name','Όνομα σήματος','g',{hint:'Βγάζει το σήμα της ετικέτας «προς» με το ίδιο όνομα.'})],value:()=>null,
    draw:p=>'<path class="block sblk" d="M-22,-10 L-12,0 L-22,10 H20 V-10 Z"/>'+tx(xe(String(p.name||'').slice(0,7)),1,4,'bsm')+sl('M20,0 H30')},
+  // 4.19.6 (ROADMAP §76): blocks that measure a signal inside the simulation and give the result as a signal: mean value, RMS, lowest and highest value
+  AVG:{name:'Μέση τιμή',prefix:'AVG',group:'Σήματα',pins:{},spins:p=>mwinF(p)?{u:I(-30,-8),f:I(-30,8),y:O(30,0)}:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
+   params:MWIN(),value:p=>p.f,unit:'Hz',
+   draw:p=>sb(40,30)+tx('x̄',0,6,'btxt big')+sl(mwinF(p)?'M-30,-8 H-20 M-30,8 H-20 M20,0 H30':'M-30,0 H-20 M20,0 H30')},
+  RMS:{name:'Ενεργός τιμή (RMS)',prefix:'RMS',group:'Σήματα',pins:{},spins:p=>mwinF(p)?{u:I(-30,-8),f:I(-30,8),y:O(30,0)}:{u:I(-30,0),y:O(30,0)},box:[-20,-15,40,30],blk:true,
+   params:MWIN(),value:p=>p.f,unit:'Hz',
+   draw:p=>sb(40,30)+tx('RMS',0,4,'bsm')+sl(mwinF(p)?'M-30,-8 H-20 M-30,8 H-20 M20,0 H30':'M-30,0 H-20 M20,0 H30')},
+  MNMX:{name:'Ελάχιστο και μέγιστο ανά περίοδο',prefix:'MM',group:'Σήματα',pins:{},spins:{u:I(-30,0),min:O(30,-10),max:O(30,0),pp:O(30,10)},box:[-20,-18,40,36],blk:true,
+   params:[num('f','Συχνότητα','Hz',50,{hint:'Η περίοδος είναι «Περίοδοι ανά παράθυρο» φορές 1/f.'}),num('np','Περίοδοι ανά παράθυρο','',1,{hint:'Ακέραιος, τουλάχιστον 1.'}),
+    num('t0','Αρχή της πρώτης περιόδου','s',0,{signed:true,zero:true}),
+    CLOCK({hint:'Προαιρετικό. Με ρολόι η περίοδος είναι η περίοδος του φέροντος του PWM (ή του μπλοκ Ρολόι) και η συχνότητα δεν χρησιμοποιείται.'}),
+    num('y0','Αρχική έξοδος','',0,{signed:true,zero:true,hint:'Το ελάχιστο και το μέγιστο ως το τέλος της πρώτης περιόδου.'})],value:p=>p.f,unit:'Hz',
+   draw:()=>sb(40,36)+tx('min',10,-6,'bsm')+tx('max',10,4,'bsm')+tx('p-p',10,14,'bsm')+sl('M-30,0 H-20 M20,-10 H30 M20,0 H30 M20,10 H30')},
   DISP:{name:'Ένδειξη',prefix:'DSP',group:'Σήματα',pins:{},spins:{u:I(-40,0)},box:[-30,-13,60,26],blk:true,params:[num('dig','Σημαντικά ψηφία','',4)],value:()=>null,
    draw:()=>'<rect class="block sblk" x="-30" y="-13" width="60" height="26" rx="3"/><rect class="thin" x="-24" y="-8" width="48" height="16" rx="2"/>'+tx('—',0,4,'bsm')+sl('M-40,0 H-30')},
   // subcircuits (3.17, ROADMAP §9): an instance draws the ports of its definition ($ports, copied by SubCircuit.sync);

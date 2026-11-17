@@ -664,6 +664,47 @@ def unbalanced_rows(add):
     add(A, 'το ίδιο: ρεύμα στην πλευρά της πηγής προς ρεύμα στη ρυθμιζόμενη πλευρά, φάση c (λήψη 11)', '1 + 0,00625 ανά λήψη', 1 + 0.00625 * 11, reg['I']['c'] / reg['I_b']['c'], 1e-8, '')
 
 
+def meas_rows(add):
+    """4.19.6: the blocks that measure a signal inside the simulation (AVG, RMS, MNMX; web/studio/mna.js evalBlocks). References
+    that are not the blocks: closed forms of signals made of straight segments, the closed form of a sine, the period statistics of
+    the scope, and the SciPy solver on the same circuit (tests/test_meas.py)."""
+    import numpy as np
+    from engine.batch import simulate
+    o = json.loads(subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'meas_cases.js')], capture_output=True, text=True, timeout=900,
+                                  check=True).stdout)
+    tab = lambda name: {row[0]: dict(zip((k.split(':', 1)[1] for k in o[name]['keys']), row[1:])) for row in o[name]['at']}
+    A = 'Μπλοκ μέτρησης σήματος (4.19.6)'
+    C = 'κλειστός τύπος'
+    sh, st, si = tab('shapes')[.01], tab('step'), tab('sine400')[.1]
+    add(A, 'τρίγωνο 0…1 στο 1 kHz, ανά περίοδο: μέση τιμή', C + ' 1/2', .5, sh['At'], 1e-9, '')
+    add(A, 'το ίδιο: RMS', C + ' 1/√3', 1 / math.sqrt(3), sh['Qt'], 1e-8, '')
+    add(A, 'πριονωτό 0…1, κυλιόμενο παράθυρο μίας περιόδου: μέση τιμή (άλμα σε κάθε μηδενισμό)', C + ' 1/2', .5, sh['As'], 1e-7, '')
+    add(A, 'το ίδιο: RMS', C + ' 1/√3', 1 / math.sqrt(3), sh['Qs'], 1e-7, '')
+    add(A, 'ρολόι με ποσοστό 0,3 σε 1, κυλιόμενο: μέση τιμή', C + ' 0,3', .3, sh['Aq'], 1e-10, '')
+    add(A, 'το ίδιο: RMS', C + ' √0,3', math.sqrt(.3), sh['Qq'], 1e-10, '')
+    add(A, 'πριονωτό με την περίοδο από μπλοκ Ρολόι: RMS', C + ' 1/√3', 1 / math.sqrt(3), sh['Qc'], 1e-7, '')
+    add(A, 'τρίγωνο, τρεις περίοδοι ανά παράθυρο: RMS', C + ' 1/√3', 1 / math.sqrt(3), sh['Q3'], 1e-8, '')
+    add(A, 'βήμα εισόδου 0 → 1, κυλιόμενη μέση τιμή στο 20 % του παραθύρου', C + ' 0,2', .2, st[.0035]['A1'], 1e-10, '')
+    add(A, 'το ίδιο στο 50 % του παραθύρου: RMS', C + ' √0,5', math.sqrt(.5), st[.0038]['Q1'], 1e-10, '')
+    add(A, 'παράθυρο από είσοδο συχνότητας (2 kHz): βήμα 1 → 3 στο 20 % του παραθύρου', C + ' 1,4', 1.4, st[.0081]['A2'], 1e-10, '')
+    exact = math.sqrt(50 ** 2 + 325 ** 2 / 2)
+    line = math.sqrt(50 ** 2 + 325 ** 2 / 2 * (2 + math.cos(2 * math.pi / 400)) / 3)
+    add(A, 'ημίτονο 50 + 325·sin(ωt) V, 400 σημεία ανά περίοδο: μέση τιμή', C, 50.0, si['A1'], 1e-9, 'V')
+    add(A, 'το ίδιο: RMS απέναντι στην ευθεία ανάμεσα στα σημεία', C + ' (A²/2)(2 + cos(2π/N))/3', line, si['Q1'], 1e-7, 'V')
+    add(A, 'το ίδιο: RMS απέναντι στο ημίτονο (το σφάλμα της ευθείας, −2,0·10⁻⁵)', C + ' √(50² + 325²/2)', exact, si['Q1'], .006, 'V')
+    add(A, 'το ίδιο: ελάχιστο ανά περίοδο', C, -275.0, si['M1'], 1e-9, 'V')
+    add(A, 'το ίδιο: μέγιστο ανά περίοδο', C, 375.0, si['M1:max'], 1e-9, 'V')
+    worst = max(abs(r[k][0] - r[k][1]) / max(1.0, abs(r[k][1])) for n in ('scope_fixed', 'scope_var') for r in o[n] for k in ('avg', 'rms', 'min', 'max'))
+    add(A, 'ανά περίοδο απέναντι στα στατιστικά περιόδου του scope (σταθερό και μεταβλητό βήμα): μέγιστη σχετική διαφορά',
+        'στατιστικά του scope (απλή ακρίβεια)', 0.0, worst, 4e-7, '')
+    q = o['batch_shapes']
+    r = simulate({'net': q['net'], 'channels': q['channels'], 't_end': q['at'][-1][0], 'method': 'Radau'})
+    t = np.array(r['t'])
+    d = max(abs(r['ch'][k][int(np.where(t <= row[0] + 1e-12)[0][-1])] - v) for row in q['at'] for k, v in zip(q['keys'], row[1:]))
+    add(A, 'λύτης SciPy στα ίδια σήματα (τρίγωνο, πριονωτό, ρολόι): μέγιστη διαφορά από τον λύτη της εφαρμογής', 'engine/batch.py', 0.0, d, 1e-6, '')
+    add(A, 'συνέχεια από αποθηκευμένη κατάσταση: διαφορά από το τρέξιμο που δεν σταμάτησε', 'το ίδιο τρέξιμο', 0.0, o['resume']['diff'], 0.0, '')
+
+
 def harmonic_rows(add):
     """4.19.5: the harmonic load flow (pcl/harmonic.py). Published: the first test system of the Task Force on Harmonics Modeling
     and Simulation (1999), its load flow and its voltage distortion. The others: closed forms, a line in many sections, the Fourier
@@ -1146,6 +1187,7 @@ def checks(o):
     se_rows(add)
     harmonic_rows(add)
     unbalanced_rows(add)
+    meas_rows(add)
     gen_rows(o['gen'], add)
     trv_rows(add)
     line_rows(add)
@@ -1224,6 +1266,7 @@ TESTS = [
     ('tests/test_recording.py', 'καταγραφή σε αρχείο (4.8)', 'όνομα από τον server, μόνο αριθμοί, κανένα όνομα έξω από τον φάκελο, όριο μεγέθους· 4.11: ανάγνωση διαστήματος (γραμμές, ή πρώτη/min/max/τελευταία ανά στήλη) απέναντι σε numpy, ευρετήριο που μεγαλώνει, φάκελος του χρήστη, καθαρισμός των προσωρινών, γεγονότα δίπλα στο αρχείο· 4.12: λίστα με μεγέθη, γεγονότα που ξαναδιαβάζονται, συμπίεση σε .gz'),
     ('tests/test_pcl.py', 'σενάρια από κώδικα, πακέτο pcl (3.13)', 'κυμάτωση ΔI = V_o(1 − D)/(L·f_s) σε σάρωση, ίδια αριθμοί με τον λύτη της εφαρμογής, SciPy, CSV/JSON/.mat, γραμμή εντολών'),
     ('tests/test_matlab.py', 'MATLAB/Octave (3.14, PclPlant 4.8.1)', 'ελεγκτής στο Octave γύρω από κύκλωμα (PclPlant): ίδια νούμερα με την Python σε 10⁻¹², ζωντανή αλλαγή και επαναφορά, το πρότυπο παράθυρο· pcl_run, pcl_sweep, pcl_read στο Octave: ίδιοι αριθμοί με την Python, κυμάτωση ΔI = V_o(1 − D)/(L·f_s), CSV/JSON/.mat'),
+    ('tests/test_meas.py', 'μπλοκ μέτρησης σήματος (4.19.6)', 'μέση τιμή, RMS, ελάχιστο και μέγιστο απέναντι σε κλειστούς τύπους (τρίγωνο, πριονωτό, ρολόι, βήμα, ημίτονο με την ευθεία ανάμεσα στα σημεία), στα στατιστικά περιόδου του scope και στον λύτη SciPy· πρώτο παράθυρο, περίοδος από ρολόι, παράθυρο από είσοδο συχνότητας, αποθηκευμένη κατάσταση'),
     ('tests/ui/*.js', 'περιβάλλον (Playwright)', 'σχέδιο, scopes, πάνελ, εργαλείο σύρματος, ζωντανές παράμετροι, κονσόλα διαγνωστικών, πάνελ «Σενάρια» (κυμάτωση στο 3 % της θεωρίας, μπλοκ Python ίδιο με το μπλοκ PI)· 4.6: χρόνος ανά καρέ σε zoom, μετακίνηση, σύρσιμο και επιλογή σε μικρό κύκλωμα και σε 200 στοιχεία, με και χωρίς προσομοίωση (`perf_flow`), Ctrl+Z/Ctrl+Y με ελληνικό πληκτρολόγιο και από παντού, ένα βήμα αναίρεσης ανά ενέργεια, βιβλιοθήκη, ροδέλα χωρίς κύλιση της σελίδας, προσομοίωση στον Worker με τα ίδια αποτελέσματα με τη σελίδα (`ux_flow`)'),
 ]
 
@@ -1295,7 +1338,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 853 tests (Python και Node) και 19 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 859 tests (Python και Node) και 19 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',

@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.19.5: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (805 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.19.6: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (808 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.19.5.
+Κανένα στην 4.19.6.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -765,7 +765,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-121 σημεία.
+124 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -782,6 +782,7 @@
 | `part:AM` | — | a, b, y | 3.18 |
 | `part:ARC` | ctl, cmd, arc, tau, P0, P1, alpha, beta, tauc, Uc, taum, Pm, tau1, Pi1, Pi2, k1, k2, k3, gmin, Ron, vm | a, b, cmd | 4.8.1 |
 | `part:ARCX` | lam, tau0, alpha, P0, P1, beta, Ron, gmin | a, b, g | 4.8.1 |
+| `part:AVG` | win, f, np, fsrc, fmin, t0, clock, first, y0 | f, u, y | 4.19.6 |
 | `part:AVR` | type, Vref, dV, TR, KA, TA, TC, TB, TC1, TB1, KF, TF, VRMAX, VRMIN, KC, KLR, ILR, KE, TE, AEX, BEX | e0, efd, ifd, v0, vs, vt | 4.8.1 |
 | `part:BSEL` | idx | u, y | 3.18 |
 | `part:C` | C, v0, esr | n, p | 3.18 |
@@ -837,6 +838,7 @@
 | `part:MMC` | impl, model, N, C, Vdc, vc0, Larm, Ron, fs, sel, band, ectl, norm, kh, kv, fe, Rd, fd, ccsc, tcc, f0, disc, conn | a, abc, b, blk, c, ia, ib, ic, idc, ma, mb, mc, n, p, va, vb, vc, vdc, vs | 4.14 |
 | `part:MMCA` | N, model, C, Vc, v0, Ron, fs, sel, band, norm, disc | a, b, blk, i, n, ref, v, vav, vs | 4.14 |
 | `part:MMCC` | mode, qmode, law, S, Vac, Vdc, f0, Pref, Tp, frq, mf, Tf, Vdcref, Tvdc, kdr, H, Vfref, Tvf, Qref, Tq, Vacref, Tvac, Xpcc, Vref, mp, nq, fp, Hv, tv, kp, avc, KE, TE, kv, av, Rv, Xv, Ufd, tsoft, ac, Ti, cc, acc, Tii, X, R, ovl, Vdcmax, kov, prio, Ilim, Idlim, Iqlim, vmax, bw, th0, fm, prot, Idcmax, tprot, tdb, tbrk | blk, brk, ia, ib, ic, idc, ma, mb, mc, p, q, th, va, vb, vc, vdc, vs | 4.14 |
+| `part:MNMX` | f, np, t0, clock, y0 | max, min, pp, u | 4.19.6 |
 | `part:MOD3` | mode, conn | d, da, db, dc, v, va, vb, vc, vdc | 3.18 |
 | `part:MOV` | model, Uref, Iref, alpha, tbl | a, b | 3.18 |
 | `part:MUL` | — | a, b, y | 3.18 |
@@ -855,6 +857,7 @@
 | `part:RAMP` | f, shape, lo, hi, phase | y | 3.18 |
 | `part:RFX` | R0, tbl, line | a, b | 4.9.1 |
 | `part:RLIM` | up, dn, y0 | u, y | 3.19 |
+| `part:RMS` | win, f, np, fsrc, fmin, t0, clock, first, y0 | f, u, y | 4.19.6 |
 | `part:RT` | clock, trig, mode, y0 | u, y | 3.19 |
 | `part:SAI` | U10, d, n, kL1, L1fit, Llead, A0, A1, impl, meas | a, b | 4.9 |
 | `part:SAIX` | L0, R0, L1, R1, C, tbl0, tbl1 | a, b | 4.9.1 |

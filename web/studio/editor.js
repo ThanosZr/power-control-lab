@@ -342,6 +342,9 @@
     // 4.17.5: the whole expression (the layout of the labels cuts it to its block, lblplace.js; whole in the tooltip)
     case 'EXPR':return String(p.expr||'').slice(0,400);case 'PY':return (p.pars?String(p.pars).slice(0,400):'Python');
     case 'INT':return p.wrap==='2pi'?'mod 2π':(+p.lo>-1e8||+p.hi<1e8)?'['+e(+p.lo)+', '+e(+p.hi)+']':'';case 'LPF':return 'f_c = '+e(+p.fc,'Hz');
+    // 4.19.6: the window of a measuring block: its periods, and how it moves
+    case 'AVG':case 'RMS':case 'MNMX':{const per=c.type==='MNMX'||p.win==='per',n=Math.max(1,Math.round(+p.np||1));
+     return (n>1?n+' × ':'')+(per&&p.clock?'T('+p.clock+')':p.win!=='per'&&p.fsrc==='in'?'1/f':'1/'+e(+p.f,'Hz'))+(per?' · ανά περίοδο':'');}
     case 'F2':return ({lp:'LP',hp:'HP',bp:'BP',notch:'notch'}[p.kind]||'LP')+' · '+e(+p.f0,'Hz')+' · ζ '+fn(+p.zeta,{maximumFractionDigits:3});case 'RLIM':return '↑ '+e(+p.up,'/s')+(+p.dn!==+p.up?' · ↓ '+e(+p.dn,'/s'):'');
     case 'RT':return p.mode==='delay'?'z⁻¹':'ZOH';case 'EDGE':return ({rise:'↑',fall:'↓',both:'↕'}[p.edge]||'↑')+(+p.tw>0?' · '+e(+p.tw,'s'):'');
     case 'CLARKE':case 'ICLARKE':return p.inv==='pow'?'ισχύς':'πλάτος';case 'PARK':case 'IPARK':return '';case 'PLL':return e(+p.f0,'Hz')+' · BW '+e(+p.bw,'Hz');

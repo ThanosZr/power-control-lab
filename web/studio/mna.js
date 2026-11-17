@@ -959,6 +959,13 @@
      if(!(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type)))warnings.push(`${b.label}: διάλεξε μπλοκ PWM ή Ρολόι (αλλιώς η έξοδος μένει ${b.y0}).`);}
     else if(T==='SR'){st.q=p.q0==='1'?1:0;st.sp=0;}
     else if(T==='INT'){b.y0=num(p.y0,0);b.lo=num(p.lo,-1e9);b.hi=num(p.hi,1e9);b.wrap=p.wrap==='2pi';st.s=b.y0;st.u=0;st.t=0;}
+    // 4.19.6 (ROADMAP §76): blocks that measure a signal over a window of np periods. per: the window closes on the grid of the block
+    // (its own frequency from t0, or a clock, as the discrete blocks do); otherwise the window runs with the time (a ring of the integrals)
+    else if(T==='AVG'||T==='RMS'||T==='MNMX'){b.f=Math.max(num(p.f,50),1e-9);b.np=Math.max(1,Math.round(num(p.np,1)));b.Tw=b.np/b.f;b.y0=num(p.y0,0);b.per=T==='MNMX'||p.win==='per';b.grow=p.first==='grow';
+     st.t=0;st.u=0;st.S=0;st.Q=0;st.D=0;st.y=b.y0;
+     if(b.per){b.trig='start';st.last=null;if(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type))b.clock=p.clock;else{b.gT=b.Tw;b.gB=num(p.t0,0);}
+      if(T==='MNMX'){st.mn=null;st.mx=null;st.y2=b.y0;}}
+     else{b.fin=p.fsrc==='in';b.fmin=Math.max(Math.min(num(p.fmin,b.f/2),b.f),1e-9);st.r={t:[0],S:[0],Q:[0],a:[0],b:[0],i:0,k:0};}}
     else if(T==='LPF'){b.tau=1/(2*Math.PI*Math.max(num(p.fc,1e3),1e-9));st.s=num(p.y0,0);st.u=0;st.t=0;}
     // 3.19: second-order filter (states: low-pass output and its derivative/ω₀), rate limiter, rate transition, edge detector
     else if(T==='F2'){b.kind=['lp','hp','bp','notch'].includes(p.kind)?p.kind:'lp';b.w0=2*Math.PI*Math.max(num(p.f0,1e3),1e-9);b.z=Math.max(num(p.zeta,.7071),1e-9);
@@ -1470,7 +1477,8 @@
   carrier(k,t){const T=k.T;if(k.mode==='spwm'){const ph=((t/T-k.phase)%1+1)%1;return ph<.5?1-4*ph:-3+4*ph;}
    const u=Math.min(1,Math.max(0,(t-k.tk)/T));if(k.mode==='pp')return (2*u)%1;return k.carrier==='saw'?u:Math.abs(1-2*u);}
   // Sample & Hold triggers sit on the carrier of the clock PWM: b + n·Δ
-  shGrid(q){const k=this.ctrlById.get(q.clock);let T,b0;if(k){T=k.T;b0=k.phase*T;}else{const c=this.clkById.get(q.clock);if(!c)return null;T=1/c.f;b0=c.ph*T;}return {b:b0+(q.trig==='mid'?T/2:0),d:q.trig==='both'?T/2:T};}
+  shGrid(q){if(q.gT)return {b:q.gB,d:q.gT}; // 4.19.6: a measuring block with its own period
+   const k=this.ctrlById.get(q.clock);let T,b0;if(k){T=k.T;b0=k.phase*T;}else{const c=this.clkById.get(q.clock);if(!c)return null;T=1/c.f;b0=c.ph*T;}return {b:b0+(q.trig==='mid'?T/2:0),d:q.trig==='both'?T/2:T};}
   shNext(q){const g=this.shGrid(q);if(!g)return Infinity;const n=Math.floor((this.t-g.b)/g.d+1e-7)+1;return g.b+n*g.d;}
   // take the samples due at the current instant (left value: the state before any switching at t)
   sampleHolds(){let any=false;for(const q of this.net.shs){if(q.sig)continue;const g=this.shGrid(q);if(!g)continue;const u=(this.t-g.b)/g.d,n=Math.round(u);
@@ -1528,7 +1536,12 @@
   // nothing is logged). left: time sources take their value just before t (used when looking for a
   // comparator crossing that ends exactly at a ramp reset). Returns true if a discrete block updated.
   evalBlocks(mode,force=false,left=false){
-   const G=this.net.sig;this.blkFresh=false;if(!G.blocks.length)return false;const trial=mode==='trial',disc=mode==='sample'||mode==='init';
+   const G=this.net.sig;this.blkFresh=false;if(!G.blocks.length)return false;
+   // 4.19.6 (§76): a measuring block closes a step with the value its input has before this instant: a clock edge, a carrier reset or a
+   // programmed jump at t would otherwise be counted from the start of the step. One pass at t⁻ gives that value (only with such blocks)
+   const trial=mode==='trial',disc=mode==='sample'||mode==='init';
+   if(mode==='commit'||(trial&&!left)){const M=G.meas||(G.meas=G.blocks.filter(b=>b.type==='AVG'||b.type==='RMS'||b.type==='MNMX'));
+    if(M.length&&M.some(b=>this.t>b.st.t)){this.evalBlocks('trial',false,true);for(const b of M){const n=b.ins.u;b.uL=n>=0&&n!==undefined?this.svT[n]:0;}}}
    const sv=trial?this.svT:this.sv,yb=trial?this.ybT:this.yb;sv.fill(0);const t=left?this.t-1e-6*this.h:this.t;const rd=n=>n>=0&&n!==undefined?sv[n]:0;let sampled=false;const pend=[];
    const cont=[],Q3=Math.sqrt(3);
    for(const b of G.order){const st=b.st,I=b.ins;let y=0,ys=null;
@@ -1563,6 +1576,33 @@
       ys={y:st.y,L:st.L,dy:st.dy||0};break;}
      case 'SR':{const S=rd(I.s)>=.5,Rr=rd(I.r)>=.5;let q=st.q;if(S&&!st.sp)q=1;if(Rr)q=0;if(!trial){if(q!==st.q)this.logEv('latch',b.label,q,{id:b.id});st.q=q;st.sp=S;}ys={q,nq:1-q};break;}
      // continuous states: input held since the previous evaluation (the solver steps are short), state written after the pass
+     // 4.19.6 (§76): mean and RMS of the input over a window of np periods. The two integrals run over the steps of the solver as the period
+     // statistics of the scope do (recordNow): the trapezoid for ∫u dt and the exact integral of a straight segment for ∫u² dt. Between two
+     // points the input goes straight from its value after the first (a: the last pass at that instant) to its value before the second (b)
+     case 'AVG':case 'RMS':{const u=rd(I.u),dt=Math.max(0,this.t-st.t),uL=!disc&&dt>0&&b.uL!==undefined?b.uL:u,u0=st.u,S1=st.S+dt*(u0+uL)/2,Q1=st.Q+dt*(u0*u0+u0*uL+uL*uL)/3,rms=b.type==='RMS';
+      if(!trial)b.uL=undefined;
+      if(b.per){if(!trial){st.S=S1;st.Q=Q1;st.D+=dt;st.u=u;st.t=this.t; // per period: the window closes on the grid, the output is held
+        if(disc&&this.blkDue(b,force)){if(st.D>0){st.y=rms?Math.sqrt(Math.max(0,st.Q/st.D)):st.S/st.D;sampled=true;}st.S=0;st.Q=0;st.D=0;}}
+       y=st.y;break;}
+      const r=st.r,n=r.t.length,Tw=b.fin?b.np/Math.max(rd(I.f),b.fmin):b.Tw,ts=this.t-Tw; // running window: the integrals at t minus those at t − Tw
+      if(ts<r.t[r.i]-1e-9*Tw){const el=this.t-r.t[r.i];y=b.grow&&el>0?(rms?Math.sqrt(Math.max(0,(Q1-r.Q[r.i])/el)):(S1-r.S[r.i])/el):b.y0;} // before the first window is full
+      else{let k=Math.min(r.k,n-1);while(k+1<n&&r.t[k+1]<=ts)k++;while(k>r.i&&r.t[k]>ts)k--;if(!trial)r.k=k;
+       const x=Math.max(0,ts-r.t[k]),h=(k+1<n?r.t[k+1]:this.t)-r.t[k],ua=r.a[k],ux=h>0?ua+((k+1<n?r.b[k+1]:uL)-ua)*x/h:ua,Sa=r.S[k]+x*(ua+ux)/2,Qa=r.Q[k]+x*(ua*ua+ua*ux+ux*ux)/3;
+       y=rms?Math.sqrt(Math.max(0,(Q1-Qa)/Tw)):(S1-Sa)/Tw;}
+      if(!trial){st.S=S1;st.Q=Q1;st.u=u;st.t=this.t;
+       if(dt>0){r.t.push(this.t);r.S.push(S1);r.Q.push(Q1);r.a.push(u);r.b.push(uL);
+        const tm=this.t-(b.fin?b.np/b.fmin:b.Tw);while(r.i+1<r.t.length&&r.t[r.i+1]<=tm)r.i++;
+        // the points before the longest window are dropped, and the integrals start again from the first one kept (no growth with the time)
+        if(r.i>512&&r.i>r.t.length/2){const d=r.i,s0=r.S[d],q0=r.Q[d];for(const a of [r.t,r.S,r.Q,r.a,r.b])a.splice(0,d);for(let j=0;j<r.S.length;j++){r.S[j]-=s0;r.Q[j]-=q0;}st.S-=s0;st.Q-=q0;r.i=0;r.k=Math.max(0,r.k-d);}}
+       else r.a[n-1]=u;}
+      break;}
+     // 4.19.6 (§76): the lowest and the highest value of the input in each period, on the points of the solver. At an instant with a jump
+     // both sides count, except on the boundary of the period: there the value before it closes the period and the value after it opens the next
+     case 'MNMX':{const u=rd(I.u);
+      if(!trial){const g=this.shGrid(b),q=g?(this.t-g.b)/g.d:NaN,edge=g!==null&&Math.abs(q-Math.round(q))<=1e-7&&st.last!==Math.round(q),up=v=>{if(st.mn===null||v<st.mn)st.mn=v;if(st.mx===null||v>st.mx)st.mx=v;};
+       if(mode==='commit'&&b.uL!==undefined)up(b.uL);if(!edge)up(u);b.uL=undefined;st.D+=Math.max(0,this.t-st.t);st.t=this.t;
+       if(disc&&this.blkDue(b,force)){if(st.D>0&&st.mn!==null){st.y=st.mn;st.y2=st.mx;sampled=true;}st.mn=u;st.mx=u;st.D=0;}}
+      ys={min:st.y,max:st.y2,pp:st.y2-st.y};break;}
      case 'INT':{const dt=Math.max(0,this.t-st.t);let v=Math.min(b.hi,Math.max(b.lo,st.s+dt*st.u));if(b.wrap)v-=2*Math.PI*Math.floor(v/(2*Math.PI));y=v;if(!trial)cont.push([b,v]);break;}
      case 'LPF':{const dt=Math.max(0,this.t-st.t),v=st.u+(st.s-st.u)*Math.exp(-dt/b.tau);y=v;if(!trial)cont.push([b,v]);break;}
      // 3.19: exact solution with the input held since the previous evaluation, as LPF (Φ = e^{A·dt}, f2Phi)
@@ -1634,7 +1674,7 @@
   blkCopy(){this.blkFresh=false;this.svT.set(this.sv);this.ybT.set(this.yb);const a=this.yo,b=this.yoT;for(let i=0;i<a.length;i++){const p=a[i],q=b[i];for(let k=0;k<p.length;k++)q[k]=p[k];}}
   // 4.8.1: is a discrete block (PI, z⁻¹, rate transition, Python, NN, S&H with a signal input) due now? Without one the
   // 'sample' pass would only repeat the 'commit' pass (continuous states with dt = 0, the same comparators and latches)
-  blkAnyDue(){const G=this.net.sig;const D=G.disc||(G.disc=G.blocks.filter(b=>['PIB','UD','RT','PY','NN','NLC'].includes(b.type)||(b.type==='SH'&&b.sig===true)));
+  blkAnyDue(){const G=this.net.sig;const D=G.disc||(G.disc=G.blocks.filter(b=>['PIB','UD','RT','PY','NN','NLC'].includes(b.type)||b.per===true||(b.type==='SH'&&b.sig===true)));
    for(const b of D){const sh=b.type==='SH',q=sh?b.sh:b,g=this.shGrid(q);if(!g)continue;const u=(this.t-g.b)/g.d,n=Math.round(u);if(Math.abs(u-n)<=1e-7&&(sh?q.last:b.st.last)!==n)return true;}return false;}
   // a discrete block (PI, z⁻¹) is due when t sits on the grid of its clock carrier, once per grid point
   blkDue(b,force){const g=this.shGrid(b);if(!g)return false;const u=(this.t-g.b)/g.d,n=Math.round(u);if(Math.abs(u-n)>1e-7)return false;if(!force&&b.st.last===n)return false;b.st.last=n;return true;}
@@ -2099,7 +2139,7 @@
      if(b.type==='CLK'&&b.duty>0&&b.duty<1)c.push(nx(Math.floor(u-b.duty+1e-9)+1,b.duty));if(b.type==='RAMP'&&b.shape==='tri')c.push(nx(Math.floor(u-.5+1e-9)+1,.5));
      for(const te of c)if(te>this.t+eps&&te<t)t=te;}
     else if(b.type==='CONST')sch(b.sched);
-    else if(b.type==='PIB'||b.type==='UD'||b.type==='PY'||b.type==='RT'||b.type==='NN'||b.type==='NLC'){const ts=this.shNext(b);if(ts>this.t+eps&&ts<t)t=ts;}
+    else if(b.type==='PIB'||b.type==='UD'||b.type==='PY'||b.type==='RT'||b.type==='NN'||b.type==='NLC'||b.per===true){const ts=this.shNext(b);if(ts>this.t+eps&&ts<t)t=ts;}
     else if(b.type==='EDGE'&&b.tw>0&&b.st.tOn!==null){const te=b.st.tOn+b.tw;if(te>this.t+eps&&te<t)t=te;} // end of the edge pulse (3.19)
    }
    {const tp=this.progNext();if(tp>this.t+eps&&tp<t)t=tp;} // program of parameter changes (3.19)
@@ -2238,13 +2278,13 @@
   const ims=imList.map(m=>({ph:m.ph.map(q=>({L:idx.get(q.L),V:idx.get(q.V)})),RR:m.RR,LM:m.LM,p:m.p,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{...m.st}}));
   const bix=new Map(net.sig.order.map((b,i)=>[b,i]));
   const blocks=net.sig.order.map(b=>{const o={id:b.id,type:b.type,ins:b.ins,outs:b.outs,st:JSON.parse(JSON.stringify(b.st))};
-   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw','xs','ys','train','learn','opt','lr','clip','l2','nl','jac','share','k','k0','N','hb','Vdc','avg','red','trg','band','inV','ini','sh','Ith'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
+   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw','xs','ys','train','learn','opt','lr','clip','l2','nl','jac','share','k','k0','N','hb','Vdc','avg','red','trg','band','inV','ini','sh','Ith','np','Tw','per','grow','fin','fmin','gT','gB'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
    if(b.type==='DCM')o.recs={w:{v:[[b.m,1]]},te:{i:[[idx.get(b.gy),b.psi]]}};
    if(b.type==='IM')o.im=imx.get(b.im);
    if(b.type==='SM')o.sm=smx.get(b.sm);
    if(b.type==='GEN3')o.gen=genx.get(b.gen);
    if(b.type==='SRM')o.srm=srmx.get(b.srm);
-   if(b.type==='PIB'||b.type==='UD'||b.type==='PY'||b.type==='RT'||b.type==='NN'||b.type==='NLC'){o.clock=cix.get(b.clock)??null;o.clk=clkOf(b.clock);}
+   if(b.type==='PIB'||b.type==='UD'||b.type==='PY'||b.type==='RT'||b.type==='NN'||b.type==='NLC'||b.per===true){o.clock=cix.get(b.clock)??null;o.clk=clkOf(b.clock);}
    if(b.type==='VM')o.rec=vd(b.np,b.nn);else if(b.type==='AM')o.rec={i:[[idx.get(b.el),-1]]};else if(b.type==='MEAS'){const c=ci(b.src);o.rec=(b.qty==='V'?V(c):I(c))||null;}
    if(b.type==='SH'){o.sh=shx.get(b.id);o.sig=!!b.sig;}return o;});
   const ctrls=net.ctrls.map(k=>{const o={};for(const f of ['id','fs','T','mode','D','dsched','carrier','phase','dt','qty','ref','Kp','Ki','Kd','Tf','ff','D0','dmin','dmax','m','fref','refphase','upd','dIn','kc','convN','convKey','convVin'])o[f]=k[f];

@@ -651,7 +651,8 @@ class Circuit:
                 b['_src'] = s if ok else None
         self.zc = [b for b in self.blocks if b['type'] == 'CMP']
         # continuous in time: integrators, filters, the PLL, and expressions of t (e.g. I_dc + I_ac·sin(2πft))
-        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL', 'FEST', 'F2', 'RLIM', 'SPLX') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
+        self.meas = [b for b in self.blocks if b['type'] in ('AVG', 'RMS', 'MNMX')]     # 4.19.6: blocks that measure a signal over a window
+        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL', 'FEST', 'F2', 'RLIM', 'SPLX', 'AVG', 'RMS', 'MNMX') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
         # 3.19 (question 5 of 3.18): with sources driven by signals (a controlled source, a PWM with its duty from a signal, a
         # gate from a signal) the continuous blocks are integrated over T/1000 instead of T/200, close to the browser's step,
         # so a control loop through them has the same transients; data['cont_div'] sets it
@@ -1915,6 +1916,8 @@ class Circuit:
         return v if math.isfinite(v) else 0.0
 
     def sh_grid(self, q):
+        if q.get('gT'):                 # 4.19.6: a measuring block with its own period
+            return (_f(q.get('gB')), q['gT'])
         clk = q.get('clk')
         if clk:                         # a clock block: its rising edges
             T = 1 / max(_f(clk.get('f'), 1e5), 1e-6)
@@ -2066,6 +2069,13 @@ class Circuit:
         if not self.blocks:
             return ([], []) if outs else [], False
         trial, disc = mode == 'trial', mode in ('sample', 'init')
+        uleft = {}
+        if (mode == 'commit' or (trial and not left)) and self.meas and any(t > b['st']['t'] for b in self.meas):
+            # 4.19.6 (ROADMAP §76): a measuring block closes a step with the value its input has before this instant (as Sim.evalBlocks)
+            self.eval_blocks(t, x, z, 'trial', left=True)
+            for b in self.meas:
+                n = b['ins'].get('u')
+                uleft[b['id']] = self.sv_t[n] if isinstance(n, int) and n >= 0 else 0.0
         sv = [0.0] * self.nsig
         yb = [0.0] * len(self.blocks)
         yo = [[0.0] * len(b.get('outList') or []) for b in self.blocks]
@@ -2212,6 +2222,98 @@ class Circuit:
                     sampled = True
                 ys = {'n': st['n'], 'vav': st['vav'], 'sw': st['sw']}
                 ys.update({'s%d' % (k + 1): st['s'][k] for k in range(b['N'])})
+            elif ty in ('AVG', 'RMS'):
+                # 4.19.6 (ROADMAP §76): mean and RMS of the input over a window of np periods, the same operations as Sim.evalBlocks:
+                # the trapezoid for the integral of u and the exact integral of a straight segment for that of u squared
+                u = rd(I.get('u'))
+                dt = max(0.0, t - st['t'])
+                uL = uleft.get(b['id'], u) if dt > 0 else u
+                u0 = st['u']
+                S1 = st['S'] + dt * (u0 + uL) / 2
+                Q1 = st['Q'] + dt * (u0 * u0 + u0 * uL + uL * uL) / 3
+                rms = ty == 'RMS'
+                if b.get('per'):
+                    if not trial:
+                        st['S'], st['Q'], st['u'], st['t'] = S1, Q1, u, t
+                        st['D'] += dt
+                        if disc and self.blk_due(b, t, force):
+                            if st['D'] > 0:
+                                st['y'] = math.sqrt(max(0.0, st['Q'] / st['D'])) if rms else st['S'] / st['D']
+                                sampled = True
+                            st['S'], st['Q'], st['D'] = 0.0, 0.0, 0.0
+                    y = st['y']
+                else:
+                    r = st['r']
+                    rt, rS, rQ, ra, rb = r['t'], r['S'], r['Q'], r['a'], r['b']
+                    n = len(rt)
+                    Tw = b['np'] / max(rd(I.get('f')), b['fmin']) if b.get('fin') else b['Tw']
+                    ts = t - Tw
+                    i0 = r['i']
+                    if ts < rt[i0] - 1e-9 * Tw:
+                        el = t - rt[i0]
+                        if b.get('grow') and el > 0:
+                            y = math.sqrt(max(0.0, (Q1 - rQ[i0]) / el)) if rms else (S1 - rS[i0]) / el
+                        else:
+                            y = b['y0']
+                    else:
+                        k = min(r['k'], n - 1)
+                        while k + 1 < n and rt[k + 1] <= ts:
+                            k += 1
+                        while k > i0 and rt[k] > ts:
+                            k -= 1
+                        if not trial:
+                            r['k'] = k
+                        xw = max(0.0, ts - rt[k])
+                        h = (rt[k + 1] if k + 1 < n else t) - rt[k]
+                        ua = ra[k]
+                        ux = ua + ((rb[k + 1] if k + 1 < n else uL) - ua) * xw / h if h > 0 else ua
+                        Sa = rS[k] + xw * (ua + ux) / 2
+                        Qa = rQ[k] + xw * (ua * ua + ua * ux + ux * ux) / 3
+                        y = math.sqrt(max(0.0, (Q1 - Qa) / Tw)) if rms else (S1 - Sa) / Tw
+                    if not trial:
+                        st['S'], st['Q'], st['u'], st['t'] = S1, Q1, u, t
+                        if dt > 0:
+                            rt.append(t)
+                            rS.append(S1)
+                            rQ.append(Q1)
+                            ra.append(u)
+                            rb.append(uL)
+                            tm = t - (b['np'] / b['fmin'] if b.get('fin') else b['Tw'])
+                            while r['i'] + 1 < len(rt) and rt[r['i'] + 1] <= tm:
+                                r['i'] += 1
+                            if r['i'] > 512 and r['i'] > len(rt) / 2:
+                                d = r['i']
+                                s0, q0 = rS[d], rQ[d]
+                                for arr in (rt, rS, rQ, ra, rb):
+                                    del arr[:d]
+                                for jj in range(len(rS)):
+                                    rS[jj] -= s0
+                                    rQ[jj] -= q0
+                                st['S'] -= s0
+                                st['Q'] -= q0
+                                r['i'] = 0
+                                r['k'] = max(0, r['k'] - d)
+                        else:
+                            ra[n - 1] = u
+            elif ty == 'MNMX':          # 4.19.6 (§76): the lowest and the highest value of the input in each period
+                u = rd(I.get('u'))
+                if not trial:
+                    g = self.sh_grid(b)
+                    qg = (t - g[0]) / g[1] if g else math.nan
+                    edge = g is not None and abs(qg - round(qg)) <= 1e-7 and st.get('last') != round(qg)
+                    for v in ([uleft[b['id']]] if mode == 'commit' and b['id'] in uleft else []) + ([] if edge else [u]):
+                        if st['mn'] is None or v < st['mn']:
+                            st['mn'] = v
+                        if st['mx'] is None or v > st['mx']:
+                            st['mx'] = v
+                    st['D'] += max(0.0, t - st['t'])
+                    st['t'] = t
+                    if disc and self.blk_due(b, t, force):
+                        if st['D'] > 0 and st['mn'] is not None:
+                            st['y'], st['y2'] = st['mn'], st['mx']
+                            sampled = True
+                        st['mn'], st['mx'], st['D'] = u, u, 0.0
+                ys = {'min': st['y'], 'max': st['y2'], 'pp': st['y2'] - st['y']}
             elif ty == 'INT':
                 dt = max(0.0, t - st['t'])
                 v = min(b['hi'], max(b['lo'], st['s'] + dt * st['u']))
@@ -2378,6 +2480,8 @@ class Circuit:
                 b['st']['s'], b['st']['u'], b['st']['t'] = v, rd(b['ins'].get('u')), t
         if not trial:
             self.sv, self.yb, self.yo = sv, yb, yo
+        else:
+            self.sv_t = sv
         return ((yb, yo) if outs else yb), sampled
 
     def block_events(self, t, tn, eps):
@@ -2398,7 +2502,7 @@ class Circuit:
                 for ts, _ in b['sched'] or []:
                     if t + eps < ts < tn:
                         tn = ts
-            elif ty in ('PIB', 'UD', 'PY', 'RT', 'NN', 'NLC'):
+            elif ty in ('PIB', 'UD', 'PY', 'RT', 'NN', 'NLC') or b.get('per') is True:
                 ts = self.sh_next(b, t)
                 if t + eps < ts < tn:
                     tn = ts
