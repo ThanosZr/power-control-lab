@@ -6926,6 +6926,79 @@
     ],
     "since": "3.18"
    },
+   "part:PPOS": {
+    "params": [
+     "win",
+     "f",
+     "np",
+     "fsrc",
+     "fmin",
+     "t0",
+     "clock",
+     "first",
+     "y0",
+     "conn"
+    ],
+    "pins": [
+     "f",
+     "i",
+     "ia",
+     "ib",
+     "ic",
+     "p",
+     "q",
+     "v",
+     "va",
+     "vb",
+     "vc"
+    ],
+    "since": "4.19.6"
+   },
+   "part:PQ1": {
+    "params": [
+     "win",
+     "f",
+     "np",
+     "fsrc",
+     "fmin",
+     "t0",
+     "clock",
+     "first",
+     "y0"
+    ],
+    "pins": [
+     "f",
+     "i",
+     "p",
+     "p1",
+     "pf",
+     "pf1",
+     "q1",
+     "s",
+     "v"
+    ],
+    "since": "4.19.6"
+   },
+   "part:PQ3": {
+    "params": [
+     "qsign",
+     "conn"
+    ],
+    "pins": [
+     "i",
+     "ia",
+     "ib",
+     "ic",
+     "p",
+     "p0",
+     "q",
+     "v",
+     "va",
+     "vb",
+     "vc"
+    ],
+    "since": "4.19.6"
+   },
    "part:PSS": {
     "params": [
      "KS",
@@ -7151,6 +7224,36 @@
      "k"
     ],
     "since": "3.18"
+   },
+   "part:SEQ": {
+    "params": [
+     "amp",
+     "win",
+     "f",
+     "np",
+     "fsrc",
+     "fmin",
+     "t0",
+     "clock",
+     "first",
+     "y0",
+     "conn"
+    ],
+    "pins": [
+     "a",
+     "abc",
+     "b",
+     "c",
+     "f",
+     "neg",
+     "phneg",
+     "phpos",
+     "phzero",
+     "pos",
+     "unb",
+     "zero"
+    ],
+    "since": "4.19.6"
    },
    "part:SG": {
     "params": [

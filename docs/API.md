@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.19.6: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (810 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.19.6: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (814 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -765,7 +765,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-126 σημεία.
+130 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -851,6 +851,9 @@
 | `part:PIB` | Kp, Ki, clock, trig, y0, aw, ymin, ymax | tr, u, y | 3.18 |
 | `part:PLL` | f0, bw, th0, ini, conn | a, abc, amp, b, c, th, w | 3.18 |
 | `part:PORT` | name, side, width | p | 3.18 |
+| `part:PPOS` | win, f, np, fsrc, fmin, t0, clock, first, y0, conn | f, i, ia, ib, ic, p, q, v, va, vb, vc | 4.19.6 |
+| `part:PQ1` | win, f, np, fsrc, fmin, t0, clock, first, y0 | f, i, p, p1, pf, pf1, q1, s, v | 4.19.6 |
+| `part:PQ3` | qsign, conn | i, ia, ib, ic, p, p0, q, v, va, vb, vc | 4.19.6 |
 | `part:PSS` | KS, TW, T1, T2, T3, T4, VSMAX, VSMIN | vs, w | 4.8.1 |
 | `part:PWM` | fs, mode, D, dsched, carrier, phase, upd, dt, sensor, qty, ref, gain, ctl, topo, rVin, rL1, rC1, rL2, rC2, rR, fc, pm, Kp, Ki, Kd, Tf, ff, kc, convN, ffA, ffB, D0, dmin, dmax, m, fref, refphase | d | 3.18 |
 | `part:PY` | code, ins, outs, pars, clock, trig, y0 | e, y | 3.18 |
@@ -864,6 +867,7 @@
 | `part:SAIX` | L0, R0, L1, R1, C, tbl0, tbl1 | a, b | 4.9.1 |
 | `part:SAT` | lo, hi | u, y | 3.18 |
 | `part:SCR` | fire, refsrc, alpha, shift, pw, fref, pwm, out, Ron, Vf, Roff, tq | a, g, k | 3.18 |
+| `part:SEQ` | amp, win, f, np, fsrc, fmin, t0, clock, first, y0, conn | a, abc, b, c, f, neg, phneg, phpos, phzero, pos, unb, zero | 4.19.6 |
 | `part:SG` | vt, Ub, U0, kde, Dde, trig, Rarc, ext, Iext, Roff | a, b | 3.18 |
 | `part:SH` | in, src, qty, clock, trig, init, h0 | u, y | 3.18 |
 | `part:SIN` | name, side, width | y | 3.18 |

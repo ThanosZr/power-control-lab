@@ -238,6 +238,112 @@ class MeasuringBlocks(unittest.TestCase):
             self.assertAlmostEqual(r['F1'] / (325 * sc(1)), 1, delta=1e-10)
             self.assertAlmostEqual(self.wrap(r['F1:ph']), 0, delta=1e-9)
 
+    # ---- power and sequences (THEORY §8Τ)
+    def power_table(self):
+        c = self.o['power']
+        self.assertEqual(c['warn'], [])
+        N = c['N']
+        s2 = (math.sin(math.pi / N) / (math.pi / N)) ** 2                      # a sine sampled N times per period, straight between
+        ln = lambda n: (2 + math.cos(2 * math.pi * n / N)) / 3                  # the mean square of the straight line, per A²/2
+        return c, N, s2, ln, {row[0]: dict(zip((k.split(':', 1)[1] for k in c['keys']), row[1:])) for row in c['at']}
+
+    def test_single_phase_power(self):
+        # v = 325·sin(ω₁t), i = 20·sin(ω₁t − 30°) + 5·sin(3ω₁t + 10°) + 2 (IEEE Std 1459 §3.1.2): P = (1/T)∫v·i, P₁ + jQ₁ = V₁·I₁*
+        # (Q₁ > 0: the current lags), S = V·I, PF = P/S, PF₁ = P₁/S₁ = cos 30°. Over the straight lines between the points of the
+        # solver: P = 3250·cos 30°·(2 + cos(2π/N))/3, and the fundamentals times sinc²(π/N) each (1e-9: the value before the instant
+        # of an expression of t is read a millionth of a step early)
+        c, N, s2, ln, t = self.power_table()
+        V = 325 / math.sqrt(2) * math.sqrt(ln(1))
+        I = math.sqrt(4 + 20 ** 2 / 2 * ln(1) + 5 ** 2 / 2 * ln(3))
+        P = 3250 * math.cos(math.pi / 6) * ln(1)
+        for tt in (.02, .0313, .06, .1):
+            for k in ('W1', 'W2'):                                             # running and per period
+                r, msg = t[tt], (tt, k)
+                self.assertAlmostEqual(r[k] / P, 1, delta=1e-9, msg=msg)
+                self.assertAlmostEqual(r[k + ':p1'] / (3250 * math.cos(math.pi / 6) * s2 * s2), 1, delta=1e-9, msg=msg)
+                self.assertAlmostEqual(r[k + ':q1'] / (3250 * .5 * s2 * s2), 1, delta=1e-9, msg=msg)
+                self.assertAlmostEqual(r[k + ':s'] / (V * I), 1, delta=1e-9, msg=msg)
+                self.assertAlmostEqual(r[k + ':pf'], P / (V * I), delta=1e-9, msg=msg)
+                self.assertAlmostEqual(r[k + ':pf1'], math.cos(math.pi / 6), delta=1e-9, msg=msg)
+        self.assertEqual([t[.01]['W1'], t[.01]['W1:q1'], t[.01]['W2']], [0, 0, 0])            # before the first window
+        # a known load: 325 V on R = 10 Ω and L = 31,83 mH. The trapezoidal rule sees the reactance (2L/h)·tan(ω₁h/2) at the step h,
+        # and the solver puts 1e-9 S from every node to ground (GMIN, web/studio/mna.js): the admittance after the ammeter is
+        # Y = G + 1/(R + 1/(1/(jX_d) + G)), and P₁ + jQ₁ = (V̂²/2)·Y*·sinc⁴(π/N)
+        R, L, w, G = 10.0, .03183, 2 * math.pi * 50, 1e-9
+        c = self.o['rl']
+        self.assertEqual(c['warn'], [])
+        h = c['h']
+        Xd = 2 * L / h * math.tan(w * h / 2)
+        Y = G + 1 / (R + 1 / (1 / (1j * Xd) + G))
+        f4 = ((math.sin(math.pi / 400) / (math.pi / 400)) ** 2) ** 2
+        for row in c['at']:
+            r = dict(zip((k.split(':', 1)[1] for k in c['keys']), row[1:]))
+            self.assertAlmostEqual(r['W:p1'] / (325 ** 2 / 2 * Y.real * f4), 1, delta=1e-10)
+            self.assertAlmostEqual(r['W:q1'] / (-325 ** 2 / 2 * Y.imag * f4), 1, delta=1e-10)
+            self.assertAlmostEqual(r['W:pf1'], Y.real / abs(Y), delta=1e-10)
+        # with the variable step, against the continuous load (ω₁L): within 1e-3
+        c = self.o['rl_var']
+        self.assertEqual(c['warn'], [])
+        Z2 = R * R + (w * L) ** 2
+        for row in c['at']:
+            r = dict(zip((k.split(':', 1)[1] for k in c['keys']), row[1:]))
+            self.assertAlmostEqual(r['W:p1'] / (325 ** 2 / 2 * R / Z2), 1, delta=1e-3)
+            self.assertAlmostEqual(r['W:q1'] / (325 ** 2 / 2 * w * L / Z2), 1, delta=1e-3)
+
+    def test_sequences(self):
+        # v: 325∠30° positive, 20∠−45° negative, 10∠60° zero sequence; i: 30∠−20°, 4∠15°, 3∠−70° (peak, phase from sin). Fortescue:
+        # X⁺ = (Xa + α·Xb + α²·Xc)/3, X⁻ = (Xa + α²·Xb + α·Xc)/3, X⁰ = (Xa + Xb + Xc)/3. Magnitudes times sinc²(π/N); the unbalance
+        # |X⁻|/|X⁺| without it. The phases: the value before the instant of an expression of t is read a millionth of a step early, 5e-7°
+        c, N, s2, ln, t = self.power_table()
+        for tt in (.02, .0313, .06, .1):
+            r = t[tt]
+            for k, sc, want in (('S1', 1, ((325, 30), (20, -45), (10, 60))), ('S2', 1 / math.sqrt(2), ((325, 30), (20, -45), (10, 60))),
+                                ('SI', 1, ((30, -20), (4, 15), (3, -70)))):
+                for (m, ph), o, po in zip(want, ('', ':neg', ':zero'), (':phpos', ':phneg', ':phzero')):
+                    self.assertAlmostEqual(r[k + o] / (sc * m * s2), 1, delta=1e-10, msg=(tt, k, o))
+                    self.assertAlmostEqual(self.wrap(r[k + po] - ph), 0, delta=1e-6, msg=(tt, k, po))
+                self.assertAlmostEqual(r[k + ':unb'], want[1][0] / want[0][0], delta=1e-12)
+        self.assertEqual(t[.01]['S1'], 0)
+
+    def test_positive_sequence_and_instantaneous_power(self):
+        # P⁺ + jQ⁺ = 3·V⁺·I⁺* with RMS phasors (IEEE Std 1459 §3.2.2.2.1, §3.2.2.3.1): 3·(325/√2)·(30/√2)·e^{j50°}, times sinc⁴(π/N).
+        # The p-q theory: p + p₀ = va·ia + vb·ib + vc·ic at every instant; over a period the mean of p is (3/2)·(V⁺I⁺·cos 50° +
+        # V⁻I⁻·cos(−60°)), of q (3/2)·(V⁺I⁺·sin 50° − V⁻I⁻·sin(−60°)) and of p₀ 3·(V⁰I⁰/2)·cos 130° (peak values; through AVG blocks)
+        c, N, s2, ln, t = self.power_table()
+        for tt in (.02, .0313, .06, .1):
+            r = t[tt]
+            self.assertAlmostEqual(r['PP'] / (1.5 * 325 * 30 * math.cos(math.radians(50)) * s2 * s2), 1, delta=1e-9, msg=tt)
+            self.assertAlmostEqual(r['PP:q'] / (1.5 * 325 * 30 * math.sin(math.radians(50)) * s2 * s2), 1, delta=1e-9, msg=tt)
+            self.assertAlmostEqual(r['PP:v'] / (325 / math.sqrt(2) * s2), 1, delta=1e-10)
+            self.assertAlmostEqual(r['PP:i'] / (30 / math.sqrt(2) * s2), 1, delta=1e-10)
+            self.assertAlmostEqual(r['Ap'] / (1.5 * (325 * 30 * math.cos(math.radians(50)) + 20 * 4 * math.cos(math.radians(-60)))), 1, delta=1e-9)
+            self.assertAlmostEqual(r['Aq'] / (1.5 * (325 * 30 * math.sin(math.radians(50)) - 20 * 4 * math.sin(math.radians(-60)))), 1, delta=1e-9)
+            self.assertAlmostEqual(r['A0'] / (3 * 10 * 3 / 2 * math.cos(math.radians(130))), 1, delta=1e-8)
+        for tt, r in t.items():
+            p3 = r['VA'] * r['IA'] + r['VB'] * r['IB'] + r['VC'] * r['IC']
+            self.assertAlmostEqual(r['PQ'] + r['PQ:p0'], p3, delta=1e-9 * 1e4, msg=tt)
+            self.assertEqual(r['PO:q'], -r['PQ:q'])                             # the original sign of q
+        self.assertEqual(self.o['power_resume']['diff'], 0)
+
+    def test_scipy_gives_the_same_power(self):
+        # the same operations in engine/batch.py; the expressions of t are straight between the points there as well
+        q = self.o['batch_power']
+        got = {}
+        items = list(q['channels'].items())
+        for c0 in range(0, len(items), 40):
+            rr = simulate({'net': json.loads(json.dumps(q['net'])), 'channels': dict(items[c0:c0 + 40]), 't_end': q['at'][-1][0], 'method': 'Radau'})
+            self.assertEqual(rr['status'], 'ok')
+            t = np.array(rr['t'])
+            for k, ys in rr['ch'].items():
+                got[k] = {row[0]: ys[int(np.where(t <= row[0] + 1e-12)[0][-1])] for row in q['at']}
+        for row in q['at']:
+            for k, v in zip(q['keys'], row[1:]):
+                w = got[k][row[0]]
+                if ':ph' in k:
+                    self.assertAlmostEqual(self.wrap(w - v), 0, delta=1e-5, msg=(row[0], k))
+                else:
+                    self.assertAlmostEqual(w, v, delta=3e-4 * max(1.0, abs(v)), msg=(row[0], k))
+
     def test_scipy_gives_the_same_harmonics(self):
         # the same operations in engine/batch.py (_wm_inc, _wm_out). The voltage has fewer points per period there (about 230 on the
         # sine): the fundamental 6e-5 lower and the fifth harmonic (5π/N)²/3 = 1,5e-3 lower, as the straight line between the points gives;

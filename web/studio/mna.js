@@ -73,10 +73,34 @@
    else if(tm[0]==='X'){const d=ua[tm[2]],e=ub[tm[2]];out[o++]=h*(2*a*d+a*e+c*d+2*c*e)/6;}
    else{const er=h*(a*w[0]+c*w[2]),ei=h*(a*w[1]+c*w[3]);out[o++]=er*cr-ei*ci;out[o++]=er*ci+ei*cr;}}
   return out;}
+ // the inputs, terms and outputs at the start of each windowed block (b.wm, set in buildNetlist)
+ const WMB={
+  FOUR:p=>{const nu=Math.max(0,num(p.nu,1)),cs=p.ref==='cos',y0=num(p.y0,0);return {ins:['u'],nu,cos:cs,terms:[['E',0]],y0:[y0,0,nu>0?y0/Math.SQRT2:y0,cs||nu===0?y0:0,cs||nu===0?0:y0]};},
+  THD:p=>({ins:['u'],nu:1,dcOut:p.dc==='out',sc:p.scale==='%'?100:1,terms:[['S',0],['Q',0],['E',0]],y0:[num(p.y0,0),0,0,0]}),
+  // power (THEORY §8Τ): ∫v·i, ∫v², ∫i² and the fundamentals of v and i; the fundamentals of three voltages and three currents; of three phases
+  PQ1:p=>({ins:['v','i'],nu:1,terms:[['X',0,1],['Q',0],['Q',1],['E',0],['E',1]],y0:[num(p.y0,0),0,0,0,0,0]}),
+  PPOS:p=>({ins:['va','vb','vc','ia','ib','ic'],nu:1,terms:[0,1,2,3,4,5].map(j=>['E',j]),y0:[num(p.y0,0),0,0,0]}),
+  SEQ:p=>({ins:['a','b','c'],nu:1,rms:p.amp==='rms',terms:[0,1,2].map(j=>['E',j]),y0:[num(p.y0,0),0,0,0,0,0,0]})};
+ // the phasor (b + j·a)/√2 of input j, as in Fourier with the phase from sin: x = |X|·sin(ω₁t + φ) ↔ X = |X|/√2·e^{jφ}, from E_j = W[2j], W[2j + 1]
+ const ALF=[-.5,Math.sqrt(3)/2];
+ const cmul=(a,b)=>[a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]];
+ // the symmetrical components of three phasors: X⁰ = (Xa + Xb + Xc)/3, X⁺ = (Xa + α·Xb + α²·Xc)/3, X⁻ = (Xa + α²·Xb + α·Xc)/3
+ function symc(x){const A2=cmul(ALF,ALF),s=(u,v,w)=>[(x[0][0]+u[0]+v[0])/3,(x[0][1]+u[1]+v[1])/3],b=x[1],c=x[2];
+  return [s(b,c,null),s(cmul(ALF,b),cmul(A2,c)),s(cmul(A2,b),cmul(ALF,c))];}
  // the outputs (in the order of the pins) from the integrals W over a window of length D
  function wmOut(k,W,D){const D2=2/D,deg=180/Math.PI;
   if(k.kind==='FOUR'){let a,b,m,ph;if(k.nu>0){a=W[0]*D2;b=W[1]*D2;m=Math.hypot(a,b);ph=(k.cos?Math.atan2(-b,a):Math.atan2(a,b))*deg;}else{a=W[0]/D;b=0;m=Math.abs(a);ph=a<0?180:0;}
    return [m,ph,k.nu>0?m/Math.SQRT2:m,a,b];}
+  // phasors of the fundamental of input j (RMS, phase from sin)
+  const ph=j=>[W[2*j+1]*D2/Math.SQRT2,W[2*j]*D2/Math.SQRT2];
+  // single phase (IEEE Std 1459 §3.1.2): P = (1/D)∫v·i, P₁ + jQ₁ = V₁·I₁*, S = V·I, PF = P/S, PF₁ = P₁/S₁
+  if(k.kind==='PQ1'){const P=W[0]/D,V=Math.sqrt(Math.max(0,W[1]/D)),Ii=Math.sqrt(Math.max(0,W[2]/D)),v=[W[4]*D2/Math.SQRT2,W[3]*D2/Math.SQRT2],i=[W[6]*D2/Math.SQRT2,W[5]*D2/Math.SQRT2];
+   const P1=v[0]*i[0]+v[1]*i[1],Q1=v[1]*i[0]-v[0]*i[1],S=V*Ii,S1=Math.hypot(P1,Q1);return [P,Q1,S,S>0?P/S:0,P1,S1>0?P1/S1:0];}
+  // positive sequence (§3.2.2.2.1, §3.2.2.3.1): P⁺ + jQ⁺ = 3·V⁺·I⁺*
+  if(k.kind==='PPOS'){const V=symc([ph(0),ph(1),ph(2)])[1],Ip=symc([ph(3),ph(4),ph(5)])[1];return [3*(V[0]*Ip[0]+V[1]*Ip[1]),3*(V[1]*Ip[0]-V[0]*Ip[1]),Math.hypot(V[0],V[1]),Math.hypot(Ip[0],Ip[1])];}
+  // the three sequences of one quantity: magnitude (peak or RMS), phase from sin, and |X⁻|/|X⁺|
+  if(k.kind==='SEQ'){const [z,pp,n]=symc([ph(0),ph(1),ph(2)]),sc=k.rms?1:Math.SQRT2,m=x=>sc*Math.hypot(x[0],x[1]),a=x=>Math.hypot(x[0],x[1])>0?Math.atan2(x[1],x[0])*deg:0;
+   return [m(pp),a(pp),m(n),a(n),m(z),a(z),m(pp)>0?m(n)/m(pp):0];}
   // THD: U² = Q/D, U₀ = S/D, U₁ from the components of the fundamental; U_H² = U² − U₁² (− U₀²)
   const U2=W[1]/D,U0=W[0]/D,a1=W[2]*D2,b1=W[3]*D2,U1=Math.hypot(a1,b1)/Math.SQRT2,H2=U2-U1*U1-(k.dcOut?U0*U0:0),UH=Math.sqrt(Math.max(0,H2));
   return [U1>0?UH/U1*k.sc:0,U1,UH,Math.sqrt(Math.max(0,U2))];}
@@ -991,10 +1015,8 @@
      else{b.fin=p.fsrc==='in';b.fmin=Math.max(Math.min(num(p.fmin,b.f/2),b.f),1e-9);st.r={t:[0],S:[0],Q:[0],a:[0],b:[0],i:0,k:0};}}
     // 4.19.6 (§76, THEORY §8Σ): the harmonic ν of a signal (FOUR) and its THD, over the window of the mean and the RMS, from the terms
     // of wmInc (b.wm: inputs, terms, outputs at the start). The same ring as AVG, with every term at every point
-    else if(T==='FOUR'||T==='THD'){b.f=Math.max(num(p.f,50),1e-9);b.np=Math.max(1,Math.round(num(p.np,1)));b.Tw=b.np/b.f;b.per=p.win==='per';b.grow=p.first==='grow';
-     const y0=num(p.y0,0),nu=T==='FOUR'?Math.max(0,num(p.nu,1)):1,cs=p.ref==='cos';
-     const k={kind:T,ins:['u'],m:1,nu,E:true,cos:cs,dcOut:p.dc==='out',sc:p.scale==='%'?100:1,terms:T==='FOUR'?[['E',0]]:[['S',0],['Q',0],['E',0]]};
-     k.L=k.terms.reduce((n,q)=>n+(q[0]==='E'?2:1),0);k.y0=T==='FOUR'?[y0,0,nu>0?y0/Math.SQRT2:y0,cs||nu===0?y0:0,cs||nu===0?0:y0]:[y0,0,0,0];b.wm=k;
+    else if(WMB[T]){b.f=Math.max(num(p.f,50),1e-9);b.np=Math.max(1,Math.round(num(p.np,1)));b.Tw=b.np/b.f;b.per=p.win==='per';b.grow=p.first==='grow';
+     const k={kind:T,...WMB[T](p)};k.m=k.ins.length;k.E=k.terms.some(q=>q[0]==='E');k.L=k.terms.reduce((n,q)=>n+(q[0]==='E'?2:1),0);b.wm=k;
      st.t=0;st.th=0;st.fi=0;st.D=0;st.ua=new Array(k.m).fill(0);st.G=new Array(k.L).fill(0);st.y=k.y0.slice();
      if(b.per){b.trig='start';st.last=null;if(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type))b.clock=p.clock;else{b.gT=b.Tw;b.gB=num(p.t0,0);}}
      else{b.fin=p.fsrc==='in';b.fmin=Math.max(Math.min(num(p.fmin,b.f/2),b.f),1e-9);st.r={t:[0],th:[0],G:new Array(k.L).fill(0),a:new Array(k.m).fill(0),b:new Array(k.m).fill(0),i:0,k:0};}}
@@ -1007,6 +1029,7 @@
      if(!(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type)))warnings.push(`${b.label}: διάλεξε μπλοκ PWM ή Ρολόι (αλλιώς η έξοδος μένει ${b.y0}).`);}
     else if(T==='EDGE'){b.edge=['rise','fall','both'].includes(p.edge)?p.edge:'rise';b.tw=Math.max(0,num(p.tw,0));st.p=0;st.n=0;st.tOn=null;}
     else if(T==='CLARKE'||T==='ICLARKE')b.pw=p.inv==='pow';
+    else if(T==='PQ3')b.qOrig=p.qsign==='orig'; // 4.19.6: q with the sign of the original definition
     else if(T==='PLL'){const wn=2*Math.PI*Math.max(num(p.bw,20),1e-6);b.Kp=2*.7071*wn;b.Ki=wn*wn;b.w0=2*Math.PI*num(p.f0,50);b.ini=p.ini==='v';b.lead=p.lead==='1';st.th=num(p.th0,0)*Math.PI/180;st.w=b.w0;st.xi=0;st.t=0;st.ok=false;}
     // 4.10: nearest-level modulation with sorting (a discrete block on a clock), and the single-phase SOGI-PLL
     else if(T==='NLC'){b.N=Math.max(1,Math.min(64,Math.round(num(p.N,10))));b.hb=p.cell==='hb';b.Vdc=Math.max(num(p.Vdc,1000),1e-9);b.avg=p.norm!=='nom';b.red=p.sel==='reduced';b.trg=p.sel==='trigger'?1:0;b.band=Math.max(num(p.band,20),0);
@@ -1633,7 +1656,7 @@
       break;}
      // 4.19.6 (§76, THEORY §8Σ): Fourier and THD over a window, from the terms of wmInc. θ is in cycles of the fundamental: f₁·t, the
      // grid of a clock, or ∫f dt from a frequency input (the trapezoid, with the value of f before the instant)
-     case 'FOUR':case 'THD':{const k=b.wm,m=k.m,dt=Math.max(0,this.t-st.t),lv=!disc&&dt>0&&b.uLv!==undefined,u=new Array(m),uL=new Array(m);
+     case 'FOUR':case 'THD':case 'PQ1':case 'PPOS':case 'SEQ':{const k=b.wm,m=k.m,dt=Math.max(0,this.t-st.t),lv=!disc&&dt>0&&b.uLv!==undefined,u=new Array(m),uL=new Array(m);
       for(let j=0;j<m;j++){u[j]=rd(I[k.ins[j]]);uL[j]=lv?b.uLv[j]:u[j];}
       let fe=0,q1;if(b.fin){fe=Math.max(rd(I.f),b.fmin);const fl=lv&&b.fL!==undefined?Math.max(b.fL,b.fmin):fe;q1=st.th+dt*(st.fi+fl)/2;}else q1=this.wmCyc(b);
       if(!trial){b.uLv=undefined;b.fL=undefined;}
@@ -1655,6 +1678,11 @@
           for(let j=0;j<r.G.length;j++)r.G[j]-=g0[j%L];for(let j=0;j<L;j++)st.G[j]-=g0[j];r.i=0;r.k=Math.max(0,r.k-d);}}
         else{for(let j=0;j<m;j++)r.a[(n-1)*m+j]=u[j];r.th[n-1]=q1;}}}
       ys={};b.outList.forEach((o,i)=>{ys[o]=yv[i];});break;}
+     // 4.19.6 (§76, THEORY §8Τ.2): the instantaneous powers of the p-q theory, with the Clarke transformation that keeps the power
+     // (v₀ = (va + vb + vc)/√3, v_α = √(2/3)·(va − (vb + vc)/2), v_β = (vb − vc)/√2): p = v_α·i_α + v_β·i_β, q = v_β·i_α − v_α·i_β, p₀ = v₀·i₀
+     case 'PQ3':{const k=Math.sqrt(2/3),va=rd(I.va),vb=rd(I.vb),vc=rd(I.vc),ia=rd(I.ia),ib=rd(I.ib),ic=rd(I.ic),
+      val=k*(va-(vb+vc)/2),vbe=(vb-vc)/Math.SQRT2,ial=k*(ia-(ib+ic)/2),ibe=(ib-ic)/Math.SQRT2,q=vbe*ial-val*ibe;
+      ys={p:val*ial+vbe*ibe,q:b.qOrig?-q:q,p0:(va+vb+vc)*(ia+ib+ic)/3};break;}
      // 4.19.6 (§76): the lowest and the highest value of the input in each period, on the points of the solver. At an instant with a jump
      // both sides count, except on the boundary of the period: there the value before it closes the period and the value after it opens the next
      case 'MNMX':{const u=rd(I.u);
@@ -2337,7 +2365,7 @@
   const ims=imList.map(m=>({ph:m.ph.map(q=>({L:idx.get(q.L),V:idx.get(q.V)})),RR:m.RR,LM:m.LM,p:m.p,J:m.J,b:m.b,sched:m.sched,tl:m.tl,st:{...m.st}}));
   const bix=new Map(net.sig.order.map((b,i)=>[b,i]));
   const blocks=net.sig.order.map(b=>{const o={id:b.id,type:b.type,ins:b.ins,outs:b.outs,st:JSON.parse(JSON.stringify(b.st))};
-   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw','xs','ys','train','learn','opt','lr','clip','l2','nl','jac','share','k','k0','N','hb','Vdc','avg','red','trg','band','inV','ini','sh','Ith','np','Tw','per','grow','fin','fmin','gT','gB','wm'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
+   for(const f of ['K','sg','eps','lo','hi','hys','op','Kp','Ki','y0','ymin','ymax','f','ph','duty','shape','sched','trig','outList','wrap','tau','pw','w0','track','ast','parVals','inNames','outNames','pars','code','mode','RR','LM','kind','z','up','dn','edge','tw','xs','ys','train','learn','opt','lr','clip','l2','nl','jac','share','k','k0','N','hb','Vdc','avg','red','trg','band','inV','ini','sh','Ith','np','Tw','per','grow','fin','fmin','gT','gB','wm','qOrig'])if(b[f]!==undefined)o[f]=Number.isFinite(b[f])||typeof b[f]!=='number'?b[f]:(b[f]>0?1e300:-1e300);
    if(b.type==='DCM')o.recs={w:{v:[[b.m,1]]},te:{i:[[idx.get(b.gy),b.psi]]}};
    if(b.type==='IM')o.im=imx.get(b.im);
    if(b.type==='SM')o.sm=smx.get(b.sm);

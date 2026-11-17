@@ -224,9 +224,35 @@ def _wm_inc(k, ua, ub, q0, q1, h):
     return out
 
 
+_ALF = complex(-.5, math.sqrt(3) / 2)
+
+
+def _symc(x):
+    """The symmetrical components of three phasors (zero, positive, negative), as symc in web/studio/mna.js."""
+    a, b, c = x
+    return (a + b + c) / 3, (a + _ALF * b + _ALF * _ALF * c) / 3, (a + _ALF * _ALF * b + _ALF * c) / 3
+
+
 def _wm_out(k, W, D):
     """The outputs of a windowed measure (in the order of its pins) from the integrals W over a window of length D (as wmOut)."""
     D2, deg = 2 / D, 180 / math.pi
+    ph = lambda j: complex(W[2 * j + 1] * D2 / math.sqrt(2), W[2 * j] * D2 / math.sqrt(2))   # RMS phasor, phase from sin
+    if k['kind'] == 'PQ1':
+        P = W[0] / D
+        V, I = math.sqrt(max(0.0, W[1] / D)), math.sqrt(max(0.0, W[2] / D))
+        v = complex(W[4] * D2 / math.sqrt(2), W[3] * D2 / math.sqrt(2))
+        i = complex(W[6] * D2 / math.sqrt(2), W[5] * D2 / math.sqrt(2))
+        P1, Q1 = v.real * i.real + v.imag * i.imag, v.imag * i.real - v.real * i.imag
+        S, S1 = V * I, math.hypot(P1, Q1)
+        return [P, Q1, S, P / S if S > 0 else 0.0, P1, P1 / S1 if S1 > 0 else 0.0]
+    if k['kind'] == 'PPOS':
+        V, I = _symc([ph(0), ph(1), ph(2)])[1], _symc([ph(3), ph(4), ph(5)])[1]
+        return [3 * (V.real * I.real + V.imag * I.imag), 3 * (V.imag * I.real - V.real * I.imag), abs(V), abs(I)]
+    if k['kind'] == 'SEQ':
+        z, p, n = _symc([ph(0), ph(1), ph(2)])
+        sc = 1.0 if k.get('rms') else math.sqrt(2)
+        ang = lambda x: math.atan2(x.imag, x.real) * deg if abs(x) > 0 else 0.0
+        return [sc * abs(p), ang(p), sc * abs(n), ang(n), sc * abs(z), ang(z), abs(n) / abs(p) if abs(p) > 0 else 0.0]
     if k['kind'] == 'FOUR':
         if k['nu'] > 0:
             a, b = W[0] * D2, W[1] * D2
@@ -2367,7 +2393,7 @@ class Circuit:
                                 r['k'] = max(0, r['k'] - d)
                         else:
                             ra[n - 1] = u
-            elif ty in ('FOUR', 'THD'):
+            elif ty in ('FOUR', 'THD', 'PQ1', 'PPOS', 'SEQ'):
                 # 4.19.6 (§76, THEORY §8Σ): Fourier and THD over a window, the same operations as Sim.evalBlocks (wmInc, wmOut)
                 k = b['wm']
                 m, L = k['m'], k['L']
@@ -2453,6 +2479,12 @@ class Circuit:
                                 ra[(n - 1) * m + jj] = u[jj]
                             rth[n - 1] = q1
                 ys = dict(zip(b['outList'], yv))
+            elif ty == 'PQ3':           # 4.19.6 (§76, THEORY §8Τ.2): the instantaneous powers of the p-q theory (as Sim.evalBlocks)
+                va, vb, vc, ia, ib, ic = (rd(I.get(q)) for q in ('va', 'vb', 'vc', 'ia', 'ib', 'ic'))
+                kk = math.sqrt(2 / 3)
+                val, vbe, ial, ibe = kk * (va - (vb + vc) / 2), (vb - vc) / math.sqrt(2), kk * (ia - (ib + ic) / 2), (ib - ic) / math.sqrt(2)
+                q = vbe * ial - val * ibe
+                ys = {'p': val * ial + vbe * ibe, 'q': -q if b.get('qOrig') else q, 'p0': (va + vb + vc) * (ia + ib + ic) / 3}
             elif ty == 'MNMX':          # 4.19.6 (§76): the lowest and the highest value of the input in each period
                 u = rd(I.get('u'))
                 if not trial:

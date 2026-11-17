@@ -77,4 +77,29 @@ const out={};
 {const N=400,p=blocks([['V1','VAC',{Vpk:325,f:50}],['V2','VAC',{Vpk:20,f:125,phase:10}],['R1','R',{R:10}],['G1','GND',{}],['VM1','VM',{}],['F','FOUR',{nu:2.5,np:2,f:50}],['F1','FOUR',{nu:1,np:2,f:50}]],
   [['V1:p','R1:a'],['V1:n','V2:p'],['V2:n','G1:g'],['R1:b','G1:g'],['VM1:p','R1:a'],['VM1:n','R1:b'],['VM1:y','F:u'],['VM1:y','F1:u']],N);
  const s=new MNA.Sim(p,{hDiv:N}),keys=['Y:F','Y:F:ph','Y:F1','Y:F1:ph'];out.inter={keys,at:at(s,[.05,.1],keys),warn:s.net.warnings,N};}
+// 7. power and sequences (THEORY §8Τ). Signals with known phasors from expressions of t (a clock of 50 Hz sets the step, T/N):
+//    v = 325∠30° positive + 20∠−45° negative + 10∠60° zero sequence, i = 30∠−20° + 4∠15° + 3∠−70° (phases from sin, peak values);
+//    single phase v = 325·sin(ω₁t), i = 20·sin(ω₁t − 30°) + 5·sin(3ω₁t + 10°) + 2
+{const N=400,w='2*pi*50*t',d=x=>x*Math.PI/180,sq=(A,ph,k)=>`${A}*sin(${w} + ${d(ph)} + ${k}*2*pi/3)`;
+ const ph3=(P,Ng,Z)=>[0,1,2].map(k=>`${sq(P[0],P[1],-k)} + ${sq(Ng[0],Ng[1],k)} + ${sq(Z[0],Z[1],0)}`);
+ const vs=ph3([325,30],[20,-45],[10,60]),is=ph3([30,-20],[4,15],[3,-70]),E=(id,expr)=>[id,'EXPR',{expr,ins:'',pars:''}];
+ const p=blocks([['CK','CLK',{f:50,duty:.5}],E('VA',vs[0]),E('VB',vs[1]),E('VC',vs[2]),E('IA',is[0]),E('IB',is[1]),E('IC',is[2]),
+   E('V1',`325*sin(${w})`),E('I1',`20*sin(${w} - ${d(30)}) + 5*sin(3*${w} + ${d(10)}) + 2`),
+   ['W1','PQ1',{f:50}],['W2','PQ1',{f:50,win:'per'}],['S1','SEQ',{f:50}],['S2','SEQ',{f:50,amp:'rms',win:'per'}],['SI','SEQ',{f:50}],['PP','PPOS',{f:50}],['PQ','PQ3',{}],['PO','PQ3',{qsign:'orig'}],
+   ['Ap','AVG',{f:50}],['Aq','AVG',{f:50}],['A0','AVG',{f:50}]],
+  [['V1:y','W1:v'],['I1:y','W1:i'],['V1:y','W2:v'],['I1:y','W2:i'],['VA:y','S1:a'],['VB:y','S1:b'],['VC:y','S1:c'],['VA:y','S2:a'],['VB:y','S2:b'],['VC:y','S2:c'],['IA:y','SI:a'],['IB:y','SI:b'],['IC:y','SI:c'],
+   ...['PP','PQ','PO'].flatMap(id=>[['VA:y',id+':va'],['VB:y',id+':vb'],['VC:y',id+':vc'],['IA:y',id+':ia'],['IB:y',id+':ib'],['IC:y',id+':ic']]),['PQ:p','Ap:u'],['PQ:q','Aq:u'],['PQ:p0','A0:u']],N);
+ const keys=[];for(const id of ['W1','W2'])keys.push('Y:'+id,...['q1','s','pf','p1','pf1'].map(o=>'Y:'+id+':'+o));
+ for(const id of ['S1','S2','SI'])keys.push('Y:'+id,...['phpos','neg','phneg','zero','phzero','unb'].map(o=>'Y:'+id+':'+o));
+ keys.push('Y:PP','Y:PP:q','Y:PP:v','Y:PP:i','Y:PQ','Y:PQ:q','Y:PQ:p0','Y:PO:q','Y:Ap','Y:Aq','Y:A0','Y:VA','Y:VB','Y:VC','Y:IA','Y:IB','Y:IC');
+ const s=new MNA.Sim(p,{hDiv:N});out.power={keys,at:at(s,[.01,.02,.0313,.06,.1],keys),warn:s.net.warnings,N,T:s.T};
+ const r=MNA.exportForBatch(p,keys);out.batch_power={net:r.net,channels:r.channels,keys,at:out.power.at};
+ const A=new MNA.Sim(p,{hDiv:N});A.run(.0333);const snap=JSON.stringify(A.snapshot());const a=at(A,[.05,.0777],keys);
+ const B=MNA.resume(p,JSON.parse(snap)),b=at(B,[.05,.0777],keys);let dd=0;a.forEach((row,i)=>row.forEach((v,j)=>{if(!(v===b[i][j]))dd=Math.max(dd,Math.abs(v-b[i][j])||Infinity);}));out.power_resume={diff:dd};}
+// 8. a known load: 325 V, 50 Hz on R = 10 Ω in series with L = 31,83 mH, voltage and current to the single-phase power block; and the
+//    same with the variable step
+{const rl=N=>blocks([['V1','VAC',{Vpk:325,f:50}],['AM1','AM',{}],['R1','R',{R:10}],['L1','L',{L:.03183}],['G1','GND',{}],['VM1','VM',{}],['W','PQ1',{f:50}]],
+   [['V1:p','AM1:a'],['AM1:b','R1:a'],['R1:b','L1:a'],['L1:b','G1:g'],['V1:n','G1:g'],['VM1:p','AM1:b'],['VM1:n','G1:g'],['VM1:y','W:v'],['AM1:y','W:i']],N);
+ const keys=['Y:W','Y:W:q1','Y:W:s','Y:W:pf','Y:W:p1','Y:W:pf1'];
+ for(const [name,step] of [['rl',null],['rl_var',{mode:'var'}]]){const s=new MNA.Sim(rl(400),{hDiv:400,...(step?{step}:{})});out[name]={keys,at:at(s,[.2,.3],keys),warn:s.net.warnings,h:s.h};}}
 console.log(JSON.stringify(out));

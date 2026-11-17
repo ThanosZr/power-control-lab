@@ -82,6 +82,11 @@
    case 'SAT':case 'LPF':case 'F2':case 'RLIM':case 'UD':case 'RT':case 'AVG':case 'RMS':case 'MNMX':return pass('u'); // 4.19.6: a measure of a signal has its unit
    case 'FOUR':return pin==='ph'?T('°'):T(inp('u').u); // 4.19.6: a harmonic has the unit of the signal, its phase is in degrees
    case 'THD':return pin==='thd'?T(p.scale==='%'?'%':'1'):T(inp('u').u);
+   // 4.19.6: power: the unit of v times that of i (W from V and A), and var, VA for the reactive and the apparent; ratios; phases
+   case 'PQ1':case 'PQ3':case 'PPOS':{const vi=t==='PQ1'?mulU(inp('v').u,inp('i').u):mulU(inp('va').u,inp('ia').u),w=vi==='W';
+    if(['pf','pf1'].includes(pin))return T('1');if(pin==='v')return T(inp('va').u);if(pin==='i')return T(inp('ia').u);
+    return T((pin==='q1'||pin==='q')&&w?'var':pin==='s'&&w?'VA':vi);}
+   case 'SEQ':return pin==='unb'?T('1'):/^ph/.test(pin)?T('°'):T(inp('a').u);
    case 'INT':{const i=inp('u');return T(p.wrap==='2pi'?'rad':intU(i.u),i.f,i.c);}
    case 'PIB':{const i=inp('u');return T(null,i.f,i.c);}
    case 'NN':return NONE; // 4.7: whatever the network was trained to give (its scales hold the units)

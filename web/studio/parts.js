@@ -649,6 +649,34 @@
     ...MWIN({...F1W,y0Hint:'Το THD ως το τέλος του πρώτου παραθύρου (οι άλλες έξοδοι 0).'})],value:p=>p.f,unit:'Hz',
    draw:p=>sb(40,40)+tx('THD',8,-12,'bsm')+tx('U₁',11,-2,'bsm')+tx('U_H',10,8,'bsm')+tx('U',13,18,'bsm')
     +sl((mwinF(p)?'M-30,-10 H-20 M-30,10 H-20':'M-30,0 H-20')+' M20,-15 H30 M20,-5 H30 M20,5 H30 M20,15 H30')},
+  // 4.19.6 (§76, THEORY §8Τ): power from a voltage and a current. PQ1: single phase over a window (IEEE Std 1459: P, and P₁, Q₁ of the
+  // fundamental); PQ3: the instantaneous powers of the p-q theory (no window); PPOS: positive-sequence power over a window; SEQ: the
+  // symmetrical components of a three-phase quantity over a window
+  PQ1:{name:'Ισχύς (μονοφασική)',prefix:'PW',group:'Σήματα',pins:{},
+   spins:p=>({v:I(-30,-10),i:I(-30,10),...(mwinF(p)?{f:I(-30,20)}:{}),p:O(30,-25),q1:O(30,-15),s:O(30,-5),pf:O(30,5),p1:O(30,15),pf1:O(30,25)}),box:[-20,-30,40,60],blk:true,
+   params:[...MWIN({...F1W,y0Hint:'Το P ως το τέλος του πρώτου παραθύρου (οι άλλες έξοδοι 0).'})],value:p=>p.f,unit:'Hz',
+   draw:p=>sb(40,60)+tx('v',-13,-7,'bsm')+tx('i',-13,13,'bsm')+tx('P',13,-22,'bsm')+tx('Q₁',11,-12,'bsm')+tx('S',13,-2,'bsm')+tx('PF',11,8,'bsm')+tx('P₁',11,18,'bsm')+tx('PF₁',9,28,'bsm')
+    +sl('M-30,-10 H-20 M-30,10 H-20'+(mwinF(p)?' M-30,20 H-20':'')+' M20,-25 H30 M20,-15 H30 M20,-5 H30 M20,5 H30 M20,15 H30 M20,25 H30')},
+  PQ3:{name:'Στιγμιαία ισχύς p, q (τριφασική)',prefix:'PQ',group:'Σήματα',pins:{},
+   spins:p=>isBus(p)?{v:I(-30,-10),i:I(-30,10),p:O(30,-10),q:O(30,0),p0:O(30,10)}:{va:I(-30,-25),vb:I(-30,-15),vc:I(-30,-5),ia:I(-30,5),ib:I(-30,15),ic:I(-30,25),p:O(30,-10),q:O(30,0),p0:O(30,10)},
+   box:p=>isBus(p)?[-20,-20,40,40]:[-20,-30,40,60],blk:true,bus:p=>isBus(p)?{v:['va','vb','vc'],i:['ia','ib','ic']}:{},
+   params:[sel('qsign','Πρόσημο του q',[['lag','q > 0 για ρεύμα που καθυστερεί (επαγωγικό): q = v_β·i_α − v_α·i_β'],['orig','Ο αρχικός ορισμός: q = v_α·i_β − v_β·i_α']],'lag',
+     {hint:'p = v_α·i_α + v_β·i_β, p₀ = v₀·i₀, με τον μετασχηματισμό Clarke που διατηρεί την ισχύ: p + p₀ = v_a·i_a + v_b·i_b + v_c·i_c σε κάθε στιγμή.'}),CONN('v abc και i abc')],value:()=>null,
+   draw:p=>sb(40,isBus(p)?40:60)+tx('p',12,-7,'bsm')+tx('q',12,3,'bsm')+tx('p₀',11,13,'bsm')+tx('pq',-6,isBus(p)?4:4,'bsm')
+    +(isBus(p)?sbl('M-30,-10 H-20 M-30,10 H-20')+sl('M20,-10 H30 M20,0 H30 M20,10 H30'):sl('M-30,-25 H-20 M-30,-15 H-20 M-30,-5 H-20 M-30,5 H-20 M-30,15 H-20 M-30,25 H-20 M20,-10 H30 M20,0 H30 M20,10 H30'))},
+  PPOS:{name:'Ισχύς θετικής ακολουθίας',prefix:'PP',group:'Σήματα',pins:{},
+   spins:p=>({...(isBus(p)?{v:I(-30,-10),i:I(-30,10)}:{va:I(-30,-25),vb:I(-30,-15),vc:I(-30,-5),ia:I(-30,5),ib:I(-30,15),ic:I(-30,25)}),...(mwinF(p)?{f:I(-30,isBus(p)?20:35)}:{}),
+    p:O(30,-15),q:O(30,-5),v:O(30,5),i:O(30,15)}),box:p=>isBus(p)?[-20,-25,40,50]:[-20,-35,40,70],blk:true,bus:p=>isBus(p)?{v:['va','vb','vc'],i:['ia','ib','ic']}:{},
+   params:[...MWIN({...F1W,y0Hint:'Το P⁺ ως το τέλος του πρώτου παραθύρου (οι άλλες έξοδοι 0).'}),CONN('v abc και i abc')],value:p=>p.f,unit:'Hz',
+   draw:p=>sb(40,isBus(p)?50:70)+tx('P⁺',11,-12,'bsm')+tx('Q⁺',11,-2,'bsm')+tx('V⁺',11,8,'bsm')+tx('I⁺',11,18,'bsm')
+    +(isBus(p)?sbl('M-30,-10 H-20 M-30,10 H-20'):sl('M-30,-25 H-20 M-30,-15 H-20 M-30,-5 H-20 M-30,5 H-20 M-30,15 H-20 M-30,25 H-20'))+sl((mwinF(p)?'M-30,'+(isBus(p)?20:35)+' H-20 ':'')+'M20,-15 H30 M20,-5 H30 M20,5 H30 M20,15 H30')},
+  SEQ:{name:'Αναλυτής ακολουθιών',prefix:'SQ',group:'Σήματα',pins:{},
+   spins:p=>({...(isBus(p)?{abc:I(-30,0)}:{a:I(-30,-10),b:I(-30,0),c:I(-30,10)}),...(mwinF(p)?{f:I(-30,20)}:{}),pos:O(30,-30),phpos:O(30,-20),neg:O(30,-10),phneg:O(30,0),zero:O(30,10),phzero:O(30,20),unb:O(30,30)}),
+   box:[-20,-35,40,70],blk:true,bus:p=>isBus(p)?{abc:['a','b','c']}:{},
+   params:[sel('amp','Μέτρο',[['pk','Πλάτος (κορυφή), όπως το Fourier'],['rms','Ενεργός τιμή']],'pk',{hint:'Οι φάσεις ως προς sin(ω₁t) από το t = 0, όπως στο Fourier: μια θετική ακολουθία με v_a = V̂·sin(ω₁t + φ) δίνει μέτρο V̂ και φάση φ.'}),
+    ...MWIN({...F1W,y0Hint:'Το μέτρο της θετικής ακολουθίας ως το τέλος του πρώτου παραθύρου (οι άλλες έξοδοι 0).'}),CONN('abc')],value:p=>p.f,unit:'Hz',
+   draw:p=>sb(40,70)+tx('+',12,-27,'bsm')+tx('∠+',11,-17,'bsm')+tx('−',12,-7,'bsm')+tx('∠−',11,3,'bsm')+tx('0',12,13,'bsm')+tx('∠0',11,23,'bsm')+tx('u₂',11,33,'bsm')
+    +(isBus(p)?sbl('M-30,0 H-20'):sl('M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20'))+sl((mwinF(p)?'M-30,20 H-20 ':'')+'M20,-30 H30 M20,-20 H30 M20,-10 H30 M20,0 H30 M20,10 H30 M20,20 H30 M20,30 H30')},
   DISP:{name:'Ένδειξη',prefix:'DSP',group:'Σήματα',pins:{},spins:{u:I(-40,0)},box:[-30,-13,60,26],blk:true,params:[num('dig','Σημαντικά ψηφία','',4)],value:()=>null,
    draw:()=>'<rect class="block sblk" x="-30" y="-13" width="60" height="26" rx="3"/><rect class="thin" x="-24" y="-8" width="48" height="16" rx="2"/>'+tx('—',0,4,'bsm')+sl('M-40,0 H-30')},
   // subcircuits (3.17, ROADMAP §9): an instance draws the ports of its definition ($ports, copied by SubCircuit.sync);
