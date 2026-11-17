@@ -102,4 +102,23 @@ const out={};
    [['V1:p','AM1:a'],['AM1:b','R1:a'],['R1:b','L1:a'],['L1:b','G1:g'],['V1:n','G1:g'],['VM1:p','AM1:b'],['VM1:n','G1:g'],['VM1:y','W:v'],['AM1:y','W:i']],N);
  const keys=['Y:W','Y:W:q1','Y:W:s','Y:W:pf','Y:W:p1','Y:W:pf1'];
  for(const [name,step] of [['rl',null],['rl_var',{mode:'var'}]]){const s=new MNA.Sim(rl(400),{hDiv:400,...(step?{step}:{})});out[name]={keys,at:at(s,[.2,.3],keys),warn:s.net.warnings,h:s.h};}}
+// 9. the periodic average of impulses (THEORY §8Υ). A staircase that rises by 2 at 1,3 ms, 3 at 4,2 ms, 0,5 at 6 ms (on a boundary of
+//    the 1 ms periods) and 0,5 at 8,1 ms; a straight line 3·t; and the switching energy of a switch with E_on, E_off in a converter
+//    against the switching losses of the scope (PSW, per period)
+{const p=blocks([['U','CONST',{v:'0:0, 0.0013:2, 0.0042:5, 0.006:5.5, 0.0081:6'}],['L','EXPR',{expr:'3*t',ins:'',pars:''}],
+   ['P1','PIA',{f:1000}],['R1','PIA',{f:1000,win:'run'}],['P2','PIA',{f:1000,np:2}],['G1','PIA',{f:1000,win:'run',first:'grow'}],['PL','PIA',{f:1000}],['RL','PIA',{f:1000,win:'run'}]],
+  [['U:y','P1:u'],['U:y','R1:u'],['U:y','P2:u'],['U:y','G1:u'],['L:y','PL:u'],['L:y','RL:u']],200);
+ const keys=['Y:P1','Y:R1','Y:P2','Y:G1','Y:PL','Y:RL'],ts=[.0005,.0019,.002,.0025,.003,.0045,.005,.0061,.007,.0085,.009,.0095,.0123];
+ for(const [name,step] of [['pia',null],['pia_var',{mode:'var'}]]){const s=new MNA.Sim(p,{hDiv:200,...(step?{step}:{})});out[name]={keys,at:at(s,ts,keys),warn:s.net.warnings};}
+ const r=MNA.exportForBatch(p,keys);out.batch_pia={net:r.net,channels:r.channels,keys,at:out.pia.at};
+ const A=new MNA.Sim(p,{hDiv:200});A.run(.0047);const snap=JSON.stringify(A.snapshot());const a=at(A,[.0061,.0085,.0123],keys);
+ const B=MNA.resume(p,JSON.parse(snap)),b=at(B,[.0061,.0085,.0123],keys);let dd=0;a.forEach((row,i)=>row.forEach((v,j)=>{if(!(v===b[i][j]))dd=Math.max(dd,Math.abs(v-b[i][j])||Infinity);}));out.pia_resume={diff:dd};}
+{require(W+'/tutorials.js');const T=globalThis.Tutorials,t=T.get('battery'),o={};for(const op of t.options)o[op.k]=op.def;o.sw='real';o.ctrl='fixed';const pr=t.build(o);
+ pr.components.push({id:'ME',type:'MEAS',x:0,y:-300,rot:0,params:{src:'S1',qty:'E'}},{id:'PA',type:'PIA',x:100,y:-300,rot:0,params:{win:'per',clock:'PWM1'}},
+  {id:'PR',type:'PIA',x:200,y:-300,rot:0,params:{win:'run',f:20000}},{id:'MB',type:'MEAS',x:300,y:-300,rot:0,params:{src:'L1',qty:'E'}});
+ pr.wires.push(Wr('wme1',['ME','y'],['PA','u']),Wr('wme2',['ME','y'],['PR','u']));
+ const s=new MNA.Sim(pr,{hDiv:pr.sim.hDiv,method:pr.sim.method||'TR'}),rows=[];const T0=s.T;
+ for(const k of [20,40,41,60]){s.run(k*T0+.3*T0-s.t);rows.push({t:s.t,pa:s.now('Y:PA'),pr:s.now('Y:PR'),psw:s.now('PSW:S1'),E:s.now('Y:ME'),n:s.net.compInfo.get('S1').loss.n,mb:s.now('Y:MB')});}
+ let err=null;try{MNA.exportForBatch(pr,['Y:PA']);}catch(e){err=String(e.message||e);}
+ out.sw_loss={rows,T:T0,warn:s.net.warnings,batch_error:err};}
 console.log(JSON.stringify(out));

@@ -24,7 +24,7 @@
   switch(t){
    case 'SIN':return 'είσοδος '+p.name;case 'SOUT':return 'έξοδος '+p.name;
    case 'EXPR':return p.expr;case 'GAIN':return 'K = '+p.K;case 'CONST':return 'v = '+short(p.v,26);
-   case 'LPF':return 'f_c = '+p.fc+' Hz';case 'AVG':return 'μέση τιμή'+(p.win==='per'?' ανά περίοδο':'');case 'RMS':return 'RMS'+(p.win==='per'?' ανά περίοδο':'');case 'MNMX':return 'min, max ανά περίοδο';case 'FOUR':return 'αρμονική ν = '+(p.nu??1);case 'THD':return 'THD';case 'PQ1':return 'P, Q₁, S';case 'PQ3':return 'p, q, p₀';case 'PPOS':return 'P⁺, Q⁺';case 'SEQ':return 'ακολουθίες +, −, 0';case 'INT':return '∫ dt'+(p.lo!==undefined||p.hi!==undefined?' (με όρια)':'');case 'SUM':return 'Σ '+(p.signs||'++');
+   case 'LPF':return 'f_c = '+p.fc+' Hz';case 'AVG':return 'μέση τιμή'+(p.win==='per'?' ανά περίοδο':'');case 'RMS':return 'RMS'+(p.win==='per'?' ανά περίοδο':'');case 'MNMX':return 'min, max ανά περίοδο';case 'FOUR':return 'αρμονική ν = '+(p.nu??1);case 'THD':return 'THD';case 'PQ1':return 'P, Q₁, S';case 'PQ3':return 'p, q, p₀';case 'PPOS':return 'P⁺, Q⁺';case 'SEQ':return 'ακολουθίες +, −, 0';case 'PIA':return 'Δ(είσοδος)/T'+(p.win==='run'?'':' ανά περίοδο');case 'INT':return '∫ dt'+(p.lo!==undefined||p.hi!==undefined?' (με όρια)':'');case 'SUM':return 'Σ '+(p.signs||'++');
    case 'PIB':return `PI: K_p = ${p.Kp}, K_i = ${p.Ki}`;case 'NN':return `νευρωνικό ${p.ins||''} → y, ${p.hidden||8} κρυφοί`;
    case 'SAT':return `όρια ${p.lo} … ${p.hi}`;case 'CLK':return 'ρολόι '+p.f+' Hz';case 'MUL':return 'a · b';case 'DIV':return 'a / b';
    case 'RLIM':return 'όριο ρυθμού';case 'UD':return 'z⁻¹';case 'F2':return 'φίλτρο 2ης τάξης';

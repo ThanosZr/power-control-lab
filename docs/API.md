@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.19.6: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (814 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.19.6: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (815 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -765,7 +765,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-130 σημεία.
+131 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -848,6 +848,7 @@
 | `part:NN` | ins, xs, hidden, ys, ymin, ymax, train, learn, opt, lr, clip, l2, nl, share, jac, init, seed, w, clock, trig, y0 | L, e, fz, tgt, x1, x2, y | 4.7 |
 | `part:NOTE` | text, size, bold, color, frame | — | 4.9 |
 | `part:PARK` | conn | ab, al, be, d, dq, q, th | 3.18 |
+| `part:PIA` | win, f, np, fsrc, fmin, t0, clock, first, y0 | u, y | 4.19.6 |
 | `part:PIB` | Kp, Ki, clock, trig, y0, aw, ymin, ymax | tr, u, y | 3.18 |
 | `part:PLL` | f0, bw, th0, ini, conn | a, abc, amp, b, c, th, w | 3.18 |
 | `part:PORT` | name, side, width | p | 3.18 |

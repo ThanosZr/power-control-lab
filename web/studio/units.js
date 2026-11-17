@@ -73,7 +73,7 @@
   const pass=k=>inp(k),comb=ks=>{const ts=ks.map(inp);return T(agreeU(ts.map(x=>x.u)),agree(ts.map(x=>x.f)),agree(ts.map(x=>x.c)));};
   const sepU=ks=>agreeU(ks.map(k=>inp(k).u));
   switch(t){
-   case 'VM':case 'VP':return T('V');case 'AM':case 'IP':return T('A');case 'MEAS':return T(p.qty==='V'?'V':'A');
+   case 'VM':case 'VP':return T('V');case 'AM':case 'IP':return T('A');case 'MEAS':return T(p.qty==='V'?'V':p.qty==='E'?'J':'A');
    case 'SH':return p.in==='sig'?pass('u'):T(p.qty==='V'?'V':'A');
    case 'CONST':return T(unitParam(p.unit));
    case 'GAIN':{const i=inp('u'),s=unitParam(p.unit);return T(s==='='?i.u:s&&/^[·*⋅]/.test(s)?mulU(i.u,s.slice(1)):s&&s[0]==='/'?mulU(i.u,s.slice(1),-1):s,i.f,i.c);}
@@ -87,6 +87,7 @@
     if(['pf','pf1'].includes(pin))return T('1');if(pin==='v')return T(inp('va').u);if(pin==='i')return T(inp('ia').u);
     return T((pin==='q1'||pin==='q')&&w?'var':pin==='s'&&w?'VA':vi);}
    case 'SEQ':return pin==='unb'?T('1'):/^ph/.test(pin)?T('°'):T(inp('a').u);
+   case 'PIA':{const i=inp('u');return T(mulU(i.u,'s',-1));} // 4.19.6: the rise of the input per second (J → W)
    case 'INT':{const i=inp('u');return T(p.wrap==='2pi'?'rad':intU(i.u),i.f,i.c);}
    case 'PIB':{const i=inp('u');return T(null,i.f,i.c);}
    case 'NN':return NONE; // 4.7: whatever the network was trained to give (its scales hold the units)

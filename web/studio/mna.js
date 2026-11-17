@@ -983,7 +983,14 @@
    else if(P.BLOCKS.has(T)){const b=mkBlock(c,p,T==='VP'?'VM':T==='IP'?'AM':T);info.blk=b;const st=b.st; // the probes (3.7) are a voltmeter to ground and an ammeter
     if(T==='VM'||T==='VP'){b.np=node(c.id,'p');b.nn=T==='VP'?-1:node(c.id,'n');info.pins=[b.np,b.nn];}
     else if(T==='AM'||T==='IP'){const a=node(c.id,'a'),bb=node(c.id,'b');info.pins=[a,bb];b.el=info.main=add({k:'V',a,b:bb,row:row(),src:{kind:'dc',V:0}});}
-    else if(T==='MEAS'){b.src=p.src;b.qty=p.qty==='V'?'V':'I';if(!(p.src&&byId.get(p.src)))warnings.push(`${b.label}: διάλεξε το στοιχείο που μετρά.`);}
+    else if(T==='MEAS'){b.src=p.src;b.qty=p.qty==='V'?'V':p.qty==='E'?'E':'I';if(!(p.src&&byId.get(p.src)))warnings.push(`${b.label}: διάλεξε το στοιχείο που μετρά.`);
+     // 4.19.6: the switching energy of a switch with E_on, E_off (the sum since t = 0, compInfo.loss.Etot)
+     else if(b.qty==='E'){const q={...P.defaults(byId.get(p.src).type),...byId.get(p.src).params};if(byId.get(p.src).type!=='SW'||!(num(q.Eon,0)>0||num(q.Eoff,0)>0))warnings.push(`${b.label}: το ${p.src} δεν έχει ενέργεια μεταγωγής (E_on, E_off σε διακόπτη)· η έξοδος μένει 0.`);}}
+    // 4.19.6 (§76, THEORY §8Υ): the periodic average of impulses: the rise of the input over a window of np periods divided by the window
+    else if(T==='PIA'){b.f=Math.max(num(p.f,50),1e-9);b.np=Math.max(1,Math.round(num(p.np,1)));b.Tw=b.np/b.f;b.y0=num(p.y0,0);b.per=p.win!=='run';b.grow=p.first==='grow';
+     st.t=0;st.u=0;st.D=0;st.e0=null;st.y=b.y0;
+     if(b.per){b.trig='start';st.last=null;if(p.clock&&['PWM','CLK'].includes(byId.get(p.clock)?.type))b.clock=p.clock;else{b.gT=b.Tw;b.gB=num(p.t0,0);}}
+     else{b.fin=p.fsrc==='in';b.fmin=Math.max(Math.min(num(p.fmin,b.f/2),b.f),1e-9);st.r={t:[0],a:[0],b:[0],i:0,k:0};}}
     else if(T==='CONST'){b.sched=P.parseSched(p.v);if(!b.sched){warnings.push(`${b.label}: μη έγκυρη τιμή «${p.v}», χρησιμοποιείται 0.`);b.sched=[[0,0]];}}
     else if(T==='GAIN')b.K=num(p.K,1);
     else if(T==='SUM'){const g=String(p.signs||'+-');b.sg=[0,1,2].map(i=>g[i]==='-'?-1:1);}
@@ -1597,7 +1604,7 @@
    // 4.19.6 (§76): a measuring block closes a step with the value its input has before this instant: a clock edge, a carrier reset or a
    // programmed jump at t would otherwise be counted from the start of the step. One pass at t⁻ gives that value (only with such blocks)
    const trial=mode==='trial',disc=mode==='sample'||mode==='init';
-   if(mode==='commit'||(trial&&!left)){const M=G.meas||(G.meas=G.blocks.filter(b=>b.type==='AVG'||b.type==='RMS'||b.type==='MNMX'||b.wm!==undefined));
+   if(mode==='commit'||(trial&&!left)){const M=G.meas||(G.meas=G.blocks.filter(b=>b.type==='AVG'||b.type==='RMS'||b.type==='MNMX'||b.type==='PIA'||b.wm!==undefined));
     if(M.length&&M.some(b=>this.t>b.st.t)){this.evalBlocks('trial',false,true);const lv=n=>n>=0&&n!==undefined?this.svT[n]:0;
      for(const b of M){if(b.wm){b.uLv=b.wm.ins.map(q=>lv(b.ins[q]));if(b.fin)b.fL=lv(b.ins.f);}else b.uL=lv(b.ins.u);}}}
    const sv=trial?this.svT:this.sv,yb=trial?this.ybT:this.yb;sv.fill(0);const t=left?this.t-1e-6*this.h:this.t;const rd=n=>n>=0&&n!==undefined?sv[n]:0;let sampled=false;const pend=[];
@@ -1606,7 +1613,7 @@
     switch(b.type){
      case 'VM':y=this.V(b.np)-this.V(b.nn);break;
      case 'AM':y=this.x[b.el.row];break;                       // current a → b through the meter
-     case 'MEAS':y=b.qty==='V'?this.compV(b.src):this.compI(b.src);if(!Number.isFinite(y))y=0;break;
+     case 'MEAS':y=b.qty==='V'?this.compV(b.src):b.qty==='E'?(this.net.compInfo.get(b.src)?.loss?.Etot??0):this.compI(b.src);if(!Number.isFinite(y))y=0;break;
      case 'CONST':y=schedAt(b.sched,t,b.sched[0][1]);break;
      case 'GAIN':y=b.K*rd(I.u);break;
      case 'SUM':y=b.sg[0]*rd(I.a)+b.sg[1]*rd(I.b)+(I.c!==undefined?b.sg[2]*rd(I.c):0);break;
@@ -1683,6 +1690,20 @@
      case 'PQ3':{const k=Math.sqrt(2/3),va=rd(I.va),vb=rd(I.vb),vc=rd(I.vc),ia=rd(I.ia),ib=rd(I.ib),ic=rd(I.ic),
       val=k*(va-(vb+vc)/2),vbe=(vb-vc)/Math.SQRT2,ial=k*(ia-(ib+ic)/2),ibe=(ib-ic)/Math.SQRT2,q=vbe*ial-val*ibe;
       ys={p:val*ial+vbe*ibe,q:b.qOrig?-q:q,p0:(va+vb+vc)*(ia+ib+ic)/3};break;}
+     // 4.19.6 (§76, THEORY §8Υ): the periodic average of impulses. Per period: (u at the end − u at the start)/(the period), with u
+     // after the instant at both ends, so an impulse on a boundary counts in the period it ends. Running: (u(t) − u(t − Tw))/Tw, with u
+     // straight inside the step that holds t − Tw (a staircase stays flat there: its value before the next point is the one after this)
+     case 'PIA':{const u=rd(I.u),dt=Math.max(0,this.t-st.t),uL=!disc&&dt>0&&b.uL!==undefined?b.uL:u;if(!trial){b.uL=undefined;if(st.e0===null)st.e0=u;}
+      if(b.per){if(!trial){st.D+=dt;st.u=u;st.t=this.t;if(disc&&this.blkDue(b,force)){if(st.D>0){st.y=(u-st.e0)/st.D;sampled=true;}st.e0=u;st.D=0;}}y=st.y;break;}
+      const r=st.r,n=r.t.length,Tw=b.fin?b.np/Math.max(rd(I.f),b.fmin):b.Tw,ts=this.t-Tw;
+      if(ts<r.t[r.i]-1e-9*Tw){const el=this.t-r.t[r.i];y=b.grow&&el>0?(u-r.a[r.i])/el:b.y0;}
+      else{const tz=ts+1e-9*Tw;let k=Math.min(r.k,n-1);while(k+1<n&&r.t[k+1]<=tz)k++;while(k>r.i&&r.t[k]>tz)k--;if(!trial)r.k=k; // a point within 1e-9 of t − Tw is t − Tw
+       const x=Math.max(0,ts-r.t[k]),h=(k+1<n?r.t[k+1]:this.t)-r.t[k],ua=r.a[k];y=(u-(h>0?ua+((k+1<n?r.b[k+1]:uL)-ua)*x/h:ua))/Tw;}
+      if(!trial){st.u=u;st.t=this.t;
+       if(dt>0){r.t.push(this.t);r.a.push(u);r.b.push(uL);const tm=this.t-(b.fin?b.np/b.fmin:b.Tw);while(r.i+1<r.t.length&&r.t[r.i+1]<=tm)r.i++;
+        if(r.i>512&&r.i>r.t.length/2){const d=r.i;for(const a of [r.t,r.a,r.b])a.splice(0,d);r.i=0;r.k=Math.max(0,r.k-d);}}
+       else r.a[n-1]=u;}
+      break;}
      // 4.19.6 (§76): the lowest and the highest value of the input in each period, on the points of the solver. At an instant with a jump
      // both sides count, except on the boundary of the period: there the value before it closes the period and the value after it opens the next
      case 'MNMX':{const u=rd(I.u);
@@ -2307,6 +2328,8 @@
   if(net.hasPi)throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη το π ονομαστικό των γραμμών από γεωμετρία (οι χωρητικότητες ανάμεσα στις φάσεις κάνουν βρόχους πυκνωτών): τρέχει μόνο ο λύτης της εφαρμογής. Τα μοντέλα CP και FD τρέχουν και στον SciPy (4.12).');
   if(net.els.some(e=>e.sai||e.foot||e.k==='CHB'||e.gate==='lcc'))throw new NetlistError('Εσωτερικό σφάλμα: συμπαγές στοιχείο (SAIX, RFX, CHBX, LCCX) στην εξαγωγή για τον SciPy.');
   if(net.sig.blocks.some(b=>b.lead))throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη το μέσο μοντέλο του σταθμού LCC (4.16): τρέχει μόνο ο λύτης της εφαρμογής, ή διάλεξε το λεπτομερές.');
+  // 4.19.6: the switching energy (E_on, E_off) is counted by the solver of the application only
+  if(net.sig.blocks.some(b=>b.type==='MEAS'&&b.qty==='E'))throw new NetlistError('Ο λύτης SciPy δεν έχει τις απώλειες μεταγωγής των διακοπτών (E_on, E_off): η «Μέτρηση στοιχείου» με «Ενέργεια μεταγωγής» τρέχει μόνο στον λύτη της εφαρμογής.');
   if(net.els.some(e=>e.tq>0))throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη τον χρόνο σβέσης t_q των θυρίστορ (4.16): τρέχει μόνο ο λύτης της εφαρμογής, ή βάλε t_q = 0.');
   const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm','gap','a1','b1','a2','b2','Z','tau','Rl','pts'];
   // synchronous machines (3.5): parameters and initial states; the server integrates ψ_α, ψ_β, ω, θ

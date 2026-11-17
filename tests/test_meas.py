@@ -344,6 +344,50 @@ class MeasuringBlocks(unittest.TestCase):
                 else:
                     self.assertAlmostEqual(w, v, delta=3e-4 * max(1.0, abs(v)), msg=(row[0], k))
 
+    # ---- the periodic average of impulses (THEORY §8Υ)
+    def test_periodic_impulse_average(self):
+        # a staircase: +2 at 1,3 ms, +3 at 4,2 ms, +0,5 at 6 ms (a boundary of the 1 ms periods: it counts in the period that ends
+        # there) and +0,5 at 8,1 ms. Per period: the rise in the period that just ended over 1 ms; with two periods per window over
+        # 2 ms; running: the rise in (t − 1 ms, t]. A straight line 3·t gives 3 (the running one reads the value before an instant a
+        # millionth of a step early: 5e-9)
+        want = {.0005: (0, 0, 0, 0), .0019: (0, 2000, 0, 2000), .002: (2000, 2000, 1000, 2000), .0025: (2000, 0, 1000, 0), .003: (0, 0, 1000, 0),
+                .0045: (0, 3000, 0, 3000), .005: (3000, 3000, 0, 3000), .0061: (500, 500, 1750, 500), .007: (0, 0, 1750, 0),
+                .0085: (0, 500, 0, 500), .009: (500, 500, 0, 500), .0095: (500, 0, 0, 0), .0123: (0, 0, 0, 0)}
+        for name in ('pia', 'pia_var'):
+            self.assertEqual(self.o[name]['warn'], [])
+            t = self.table(name)
+            for tt, (p1, r1, p2, g1) in want.items():
+                r = t[tt]
+                self.assertAlmostEqual(r['P1'], p1, delta=1e-9, msg=(name, tt))
+                self.assertAlmostEqual(r['R1'], r1, delta=1e-9, msg=(name, tt))
+                self.assertAlmostEqual(r['P2'], p2, delta=1e-9, msg=(name, tt))
+                self.assertAlmostEqual(r['G1'], g1, delta=1e-9, msg=(name, tt))
+                if tt > .001:
+                    self.assertAlmostEqual(r['PL'], 3, delta=1e-9, msg=(name, tt))
+                    self.assertAlmostEqual(r['RL'], 3, delta=1e-7, msg=(name, tt))
+        self.assertEqual(self.o['pia_resume']['diff'], 0)
+        # the switching energy of a switch (E_on, E_off scaled with |v|·|i|) per period of the PWM: the switching losses of the scope
+        c = self.o['sw_loss']
+        self.assertEqual(len(c['warn']), 1)                                   # «Μέτρηση στοιχείου» on an inductor: no switching energy
+        prev = 0
+        for r in c['rows']:
+            self.assertAlmostEqual(r['pa'] / r['psw'], 1, delta=1e-12, msg=r['t'])
+            self.assertGreater(r['E'], prev)
+            self.assertGreater(r['n'], 0)
+            self.assertEqual(r['mb'], 0)
+            prev = r['E']
+        self.assertIn('E_on, E_off', c['batch_error'])                          # the SciPy solver says it has no switching losses
+
+    def test_scipy_gives_the_same_impulse_average(self):
+        q = self.o['batch_pia']
+        r = simulate({'net': json.loads(json.dumps(q['net'])), 'channels': q['channels'], 't_end': q['at'][-1][0], 'method': 'Radau'})
+        self.assertEqual(r['status'], 'ok')
+        t = np.array(r['t'])
+        for row in q['at']:
+            i = int(np.where(t <= row[0] + 1e-12)[0][-1])
+            for k, v in zip(q['keys'], row[1:]):
+                self.assertAlmostEqual(r['ch'][k][i], v, delta=1e-6 * max(1.0, abs(v)), msg=(row[0], k))
+
     def test_scipy_gives_the_same_harmonics(self):
         # the same operations in engine/batch.py (_wm_inc, _wm_out). The voltage has fewer points per period there (about 230 on the
         # sine): the fundamental 6e-5 lower and the fifth harmonic (5π/N)²/3 = 1,5e-3 lower, as the straight line between the points gives;

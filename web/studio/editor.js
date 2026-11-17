@@ -343,7 +343,7 @@
     case 'EXPR':return String(p.expr||'').slice(0,400);case 'PY':return (p.pars?String(p.pars).slice(0,400):'Python');
     case 'INT':return p.wrap==='2pi'?'mod 2π':(+p.lo>-1e8||+p.hi<1e8)?'['+e(+p.lo)+', '+e(+p.hi)+']':'';case 'LPF':return 'f_c = '+e(+p.fc,'Hz');
     // 4.19.6: the window of a measuring block: its periods, and how it moves
-    case 'AVG':case 'RMS':case 'MNMX':case 'FOUR':case 'THD':case 'PQ1':case 'PPOS':case 'SEQ':{const per=c.type==='MNMX'||p.win==='per',n=Math.max(1,Math.round(+p.np||1));
+    case 'AVG':case 'RMS':case 'MNMX':case 'FOUR':case 'THD':case 'PQ1':case 'PPOS':case 'SEQ':case 'PIA':{const per=c.type==='MNMX'||p.win==='per',n=Math.max(1,Math.round(+p.np||1));
      const w=(n>1?n+' × ':'')+(per&&p.clock?'T('+p.clock+')':p.win!=='per'&&p.fsrc==='in'?'1/f':'1/'+e(+p.f,'Hz'))+(per?' · ανά περίοδο':'');
      return c.type==='FOUR'?'ν = '+fn(+(p.nu??1),{maximumFractionDigits:3})+' · '+w:w;} // 4.19.6: the harmonic of a Fourier block
     case 'PQ3':return p.qsign==='orig'?'q: αρχικός ορισμός':'';

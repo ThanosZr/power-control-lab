@@ -744,8 +744,8 @@ class Circuit:
                 b['_src'] = s if ok else None
         self.zc = [b for b in self.blocks if b['type'] == 'CMP']
         # continuous in time: integrators, filters, the PLL, and expressions of t (e.g. I_dc + I_ac·sin(2πft))
-        self.meas = [b for b in self.blocks if b['type'] in ('AVG', 'RMS', 'MNMX') or b.get('wm')]     # 4.19.6: blocks that measure a signal over a window
-        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL', 'FEST', 'F2', 'RLIM', 'SPLX', 'AVG', 'RMS', 'MNMX') or b.get('wm') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
+        self.meas = [b for b in self.blocks if b['type'] in ('AVG', 'RMS', 'MNMX', 'PIA') or b.get('wm')]     # 4.19.6: blocks that measure a signal over a window
+        self.has_cont = any(b['type'] in ('INT', 'LPF', 'PLL', 'FEST', 'F2', 'RLIM', 'SPLX', 'AVG', 'RMS', 'MNMX', 'PIA') or b.get('wm') or (b['type'] == 'EXPR' and '["t"]' in json.dumps(b.get('ast'))) for b in self.blocks)
         # 3.19 (question 5 of 3.18): with sources driven by signals (a controlled source, a PWM with its duty from a signal, a
         # gate from a signal) the continuous blocks are integrated over T/1000 instead of T/200, close to the browser's step,
         # so a control loop through them has the same transients; data['cont_div'] sets it
@@ -2479,6 +2479,61 @@ class Circuit:
                                 ra[(n - 1) * m + jj] = u[jj]
                             rth[n - 1] = q1
                 ys = dict(zip(b['outList'], yv))
+            elif ty == 'PIA':           # 4.19.6 (§76, THEORY §8Υ): the periodic average of impulses (as Sim.evalBlocks)
+                u = rd(I.get('u'))
+                dt = max(0.0, t - st['t'])
+                uL = uleft.get(b['id'], u) if (dt > 0 and not disc) else u
+                if not trial and st.get('e0') is None:
+                    st['e0'] = u
+                if b.get('per'):
+                    if not trial:
+                        st['D'] += dt
+                        st['u'], st['t'] = u, t
+                        if disc and self.blk_due(b, t, force):
+                            if st['D'] > 0:
+                                st['y'] = (u - st['e0']) / st['D']
+                                sampled = True
+                            st['e0'], st['D'] = u, 0.0
+                    y = st['y']
+                else:
+                    r = st['r']
+                    rt, ra, rb = r['t'], r['a'], r['b']
+                    n = len(rt)
+                    Tw = b['np'] / max(rd(I.get('f')), b['fmin']) if b.get('fin') else b['Tw']
+                    ts = t - Tw
+                    i0 = r['i']
+                    if ts < rt[i0] - 1e-9 * Tw:
+                        el = t - rt[i0]
+                        y = (u - ra[i0]) / el if b.get('grow') and el > 0 else b['y0']
+                    else:
+                        tz = ts + 1e-9 * Tw                  # a point within 1e-9 of t − Tw is t − Tw
+                        k = min(r['k'], n - 1)
+                        while k + 1 < n and rt[k + 1] <= tz:
+                            k += 1
+                        while k > i0 and rt[k] > tz:
+                            k -= 1
+                        if not trial:
+                            r['k'] = k
+                        xw = max(0.0, ts - rt[k])
+                        h = (rt[k + 1] if k + 1 < n else t) - rt[k]
+                        ua = ra[k]
+                        y = (u - (ua + ((rb[k + 1] if k + 1 < n else uL) - ua) * xw / h if h > 0 else ua)) / Tw
+                    if not trial:
+                        st['u'], st['t'] = u, t
+                        if dt > 0:
+                            rt.append(t)
+                            ra.append(u)
+                            rb.append(uL)
+                            tm = t - (b['np'] / b['fmin'] if b.get('fin') else b['Tw'])
+                            while r['i'] + 1 < len(rt) and rt[r['i'] + 1] <= tm:
+                                r['i'] += 1
+                            if r['i'] > 512 and r['i'] > len(rt) / 2:
+                                d = r['i']
+                                del rt[:d], ra[:d], rb[:d]
+                                r['i'] = 0
+                                r['k'] = max(0, r['k'] - d)
+                        else:
+                            ra[n - 1] = u
             elif ty == 'PQ3':           # 4.19.6 (§76, THEORY §8Τ.2): the instantaneous powers of the p-q theory (as Sim.evalBlocks)
                 va, vb, vc, ia, ib, ic = (rd(I.get(q)) for q in ('va', 'vb', 'vc', 'ia', 'ib', 'ic'))
                 kk = math.sqrt(2 / 3)

@@ -6878,6 +6878,24 @@
     ],
     "since": "3.18"
    },
+   "part:PIA": {
+    "params": [
+     "win",
+     "f",
+     "np",
+     "fsrc",
+     "fmin",
+     "t0",
+     "clock",
+     "first",
+     "y0"
+    ],
+    "pins": [
+     "u",
+     "y"
+    ],
+    "since": "4.19.6"
+   },
    "part:PIB": {
     "params": [
      "Kp",

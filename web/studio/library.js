@@ -19,7 +19,7 @@
   {title:'Μετρήσεις',sub:[S('',['VM','AM','VP','IP','MEAS','DISP'])]},
   {title:'Έλεγχος',sub:[S('Διαμόρφωση',['PWM','MOD3','SH','NLC']),S('Ρυθμιστές',['PIB','NN','AIC','EVC']),S('Εκτιμητές και συγχρονισμός',['FEST','PLL','SPLL'])]},
   {title:'Σήματα και μαθηματικά',sub:[S('Πηγές σήματος',['CONST','CLK','RAMP']),S('Πράξεις',['GAIN','SUM','MUL','DIV','SAT']),S('Δυναμικά και φίλτρα',['INT','LPF','F2','RLIM','UD','RT']),
-   S('Λογική',['CMP','LOGIC','SR','EDGE']),S('Μετασχηματισμοί abc, αβ, dq',['CLARKE','ICLARKE','PARK','IPARK']),S('Μέτρηση σήματος',['AVG','RMS','MNMX','FOUR','THD','PQ1','PQ3','PPOS','SEQ'])]},
+   S('Λογική',['CMP','LOGIC','SR','EDGE']),S('Μετασχηματισμοί abc, αβ, dq',['CLARKE','ICLARKE','PARK','IPARK']),S('Μέτρηση σήματος',['AVG','RMS','MNMX','FOUR','THD','PQ1','PQ3','PPOS','SEQ','PIA'])]},
   {title:'Δίαυλοι',sub:[S('',['MUX','DEMUX','BSEL','EBUS'])]},
   {title:'Κώδικας',sub:[S('',['EXPR','PY'])]},
   {title:'Υποκυκλώματα',sub:[S('',['PORT','SIN','SOUT'])],subs:true},
@@ -27,7 +27,7 @@
  // by course or exercise: where a part is used (a part may be in more than one course)
  const COURSE=[
   {title:'Ηλεκτρικά κυκλώματα',sub:[S('',['R','L','C','VDC','VAC','IDC','VM','AM','VP','IP','GND','XFMR','KL','KG'])]},
-  {title:'Ηλεκτρονική ισχύος',sub:[S('Διακόπτες και έλεγχος',['SW','D','SCR','PWM','MOD3','SH','CHB','NLC','SPLL','MMC','LCC6','VSC2','GFMC']),S('Κύκλωμα',['L','C','R','VDC','VAC','VAC3','CPL','XFMR','KL','CPE']),S('Μετρήσεις',['VM','AM','MEAS','DISP','AVG','RMS','MNMX','FOUR','THD','PQ1','PQ3'])]},
+  {title:'Ηλεκτρονική ισχύος',sub:[S('Διακόπτες και έλεγχος',['SW','D','SCR','PWM','MOD3','SH','CHB','NLC','SPLL','MMC','LCC6','VSC2','GFMC']),S('Κύκλωμα',['L','C','R','VDC','VAC','VAC3','CPL','XFMR','KL','CPE']),S('Μετρήσεις',['VM','AM','MEAS','DISP','AVG','RMS','MNMX','FOUR','THD','PQ1','PQ3','PIA'])]},
   {title:'Ηλεκτρικές μηχανές και κινητήρια',sub:[S('Μηχανές',['DCM','IM','SM','SRM']),S('Έλεγχος',['CLARKE','ICLARKE','PARK','IPARK','PLL','FEST','PIB','NN','AIC','EVC','MOD3'])]},
   {title:'Συστήματα ηλεκτρικής ενέργειας',sub:[S('',['GRID3','GEN3','XF3','LOAD3','LINE3','TLM','TOWER','SAI','FLT3','CB3','ARC','VAC3','EBUS','AVR','PSS','GOV','SSSC','SSSC3','CHB','SPLL','MMC','MMCC','VSC2','GFMC','LCC6','LCCS','LCCC','FILT3','ZSER3','PPOS','SEQ','PQ3'])]},
   {title:'Υψηλές τάσεις',sub:[S('',['VIMP','ILG','TL','MOV','SG','SAI','TOWER','C','R'])]},
