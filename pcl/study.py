@@ -25,7 +25,7 @@ import numpy as np
 from . import network as N
 from .report import Report, network_report
 
-STUDIES = ('advice', 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf', 'cpf', 'se', 'harmonic')
+STUDIES = ('advice', 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf', 'cpf', 'se', 'harmonic', 'acdc')
 FEEDER_STUDIES = ('unbalanced',)                          # 4.19.5: studies of a three-phase feeder (pcl.unbalanced), not of a Network
 STARTS = ('auto', 'mid', 'pf', 'nn')
 OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n1': ('tol', 'q_limits', 'backend', 'how'), 'n1dc': (), 'opf': ('flow_limits', 'start', 'tol', 'max_iter'),
@@ -33,7 +33,7 @@ OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n
            'cpf': ('direction', 'q_limits', 'step', 'dV', 'lower', 'stop', 'V_stop', 'max_points', 'tol'),
            'se': ('measurements', 'plan', 'noise', 'seed', 'sigma', 'bad', 'zero_injections', 'detect', 'threshold', 'confidence', 'max_bad', 'tol', 'max_iter', 'start'),
            'harmonic': ('sources', 'harmonics', 'load_model', 'line_model', 'pulse', 'filters', 'scan_bus', 'scan_to', 'scan_step', 'tol'),
-           'unbalanced': ('regulators', 'spread', 'tol', 'max_iter'), 'advice': ()}
+           'unbalanced': ('regulators', 'spread', 'tol', 'max_iter'), 'advice': (), 'acdc': ('method', 'tol', 'max_iter', 'flat', 'q_limits', 'set', 'out')}
 MAX_BUSES = 20000
 
 
@@ -185,6 +185,25 @@ def _study(net, study, opt):
             return net.estimate(**opt)
         if study == 'harmonic':                            # 4.19.5: the harmonic load flow (current injection, frequency scan)
             return net.harmonics(**opt)
+        if study == 'acdc':                                # 4.20: the sequential AC/DC load flow with the DC grids of the network
+            chg = {k: opt.pop(k) for k in ('set', 'out') if k in opt}
+            if chg:                                        # a new power of converters ('set': {name: W}), converters or DC lines out ('out')
+                net = N.from_dict(N.to_dict(net))
+                for name, v in (chg.get('set') or {}).items():
+                    e = net.element(name)
+                    if e['kind'] != 'vsc':
+                        raise StudyError(f'set: {name} δεν είναι μετατροπέας')
+                    for k, x in (v.items() if isinstance(v, dict) else (('P', v),)):
+                        if k not in ('P', 'V', 'droop', 'R', 'Q', 'Vac'):
+                            raise StudyError(f'set: {name}.{k}: ένα από P, V, droop, R, Q, Vac')
+                        e[k] = float(x)
+                        if k == 'droop':                   # a new droop replaces a gain given directly
+                            e.pop('R', None)
+                for name in chg.get('out') or []:
+                    if net.element(name)['kind'] not in ('vsc', 'dc_line'):
+                        raise StudyError(f'out: {name} δεν είναι μετατροπέας ή γραμμή DC')
+                    net.remove(name)
+            return net.acdc_flow(**opt)
         return net.opf('ac' if study == 'opf' else 'dc', **opt)
     except (N.NetworkError, ValueError) as e:              # the errors of the solvers are ValueErrors with a message
         raise StudyError(str(e)) from e
@@ -255,6 +274,18 @@ def summary(study, res):
             out['scan'] = {'bus': sc['bus'], 'h': [sc['h'][j] for j in keep], 'Z': [sc['Z'][j] for j in keep], 'peaks': sorted(sc['peaks'], key=lambda q: -q[1])[:6]}
             out['at'] = dict(row(sc['bus']), Vh={str(h): 100 * v / B[sc['bus']]['V'] for h, v in B[sc['bus']]['Vh'].items()})
         return out
+    if study == 'acdc':                                    # 4.20: the AC/DC iterations, the DC grid, every converter
+        dc, C = res['dc'] or {}, res['converters']
+        Vd = [(b, d['V']) for b, d in (dc.get('buses') or {}).items()]
+        V = [(b, d['V']) for b, d in res['buses'].items()]
+        return {'converged': res['converged'], 'outer': res['outer'], 'method': res.get('method'), 'why': (res.get('advice') or {}).get('why'),
+                'losses_MW': res['losses'] / 1e6, 'losses_dc_MW': (res['losses_dc'] or 0.0) / 1e6, 'losses_conv_MW': res['losses_conv'] / 1e6,
+                'converters': len(C), 'dc_buses': len(Vd), 'Vdc_min': min(Vd, key=lambda q: q[1]) if Vd else None, 'Vdc_max': max(Vd, key=lambda q: q[1]) if Vd else None,
+                'Vmin': min(V, key=lambda q: q[1]), 'Vmax': max(V, key=lambda q: q[1]),
+                'dc': [{'bus': b, 'U_kV': d['U'] / 1e3, 'V': d['V'], 'P_MW': d['P'] / 1e6} for b, d in (dc.get('buses') or {}).items()],
+                'stations': [{'name': n, 'bus': c['bus'], 'dc': c['dc'], 'control': c['control'], 'Ps_MW': c['Ps'] / 1e6, 'Qs_Mvar': c['Qs'] / 1e6,
+                              'Pdc_MW': c['Pdc'] / 1e6, 'Udc_kV': (c['Udc'] or 0.0) / 1e3, 'loss_MW': c['loss'] / 1e6, 'Ic_kA': c['Ic'] / 1e3} for n, c in C.items()],
+                'time_ms': res['time'] * 1e3}
     return {}
 
 

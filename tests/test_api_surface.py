@@ -91,6 +91,18 @@ class ApiSurface(unittest.TestCase):
         from pcl import study
         self.assertIn('scopf', study.STUDIES)
 
+    def test_the_surface_of_4_20(self):
+        """4.20: the DC grids: the module pcl.dcgrid is experimental; the DC buses, lines and converters of a Network, its AC/DC
+        load flow and the study 'acdc' are stable additions; every option of the routine is an option of the study."""
+        from pcl import study
+        self.assertTrue(api_surface.experimental('pcl', 'pcl.dcgrid.acdc_flow'))
+        self.assertTrue(api_surface.experimental('pcl', 'pcl.dcgrid.DCGrid.flow'))
+        for m in ('dc_bus', 'dc_line', 'vsc', 'dc_grid', 'acdc_flow'):
+            self.assertIn('pcl.network.Network.' + m, self.now['pcl'])
+            self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.' + m))
+        self.assertEqual(study.STUDIES[-1], 'acdc')
+        self.assertEqual(set(study.OPTIONS['acdc']) - {'set', 'out'}, set(self.now['pcl']['pcl.network.Network.acdc_flow']['params']))
+
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it
         # ('off': the path of before 4.19.5, for comparison)
@@ -114,7 +126,7 @@ class ApiSurface(unittest.TestCase):
         self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.estimate'))
         self.assertEqual(self.now['pcl']['pcl.se.run']['params'][:2], ['net', 'measurements'])
         self.assertEqual(set(study.OPTIONS['se']), set(self.now['pcl']['pcl.se.run']['params'][1:]))        # every option of the routine is an option of the study
-        self.assertEqual((study.STUDIES[-2], netview.DEFAULT['se']), ('se', 'residual'))
+        self.assertEqual((study.STUDIES[-3], netview.DEFAULT['se']), ('se', 'residual'))          # (4.20: 'acdc' after them)
         self.assertIn('residual', netview.LAYERS)
         # the harmonic load flow: the module is experimental, Network.harmonics and the study are stable; a load may carry a spectrum
         # and a shunt may be a capacitor or a tuned filter (two parameters and three more on methods that were there)
@@ -123,9 +135,9 @@ class ApiSurface(unittest.TestCase):
         self.assertEqual(set(study.OPTIONS['harmonic']), set(self.now['pcl']['pcl.harmonic.run']['params'][1:]))
         self.assertEqual(self.now['pcl']['pcl.network.Network.load']['params'][-2:], ['spectrum', 'delta'])
         self.assertEqual(self.now['pcl']['pcl.network.Network.shunt']['params'][-3:], ['R', 'X', 'B'])
-        self.assertEqual((study.STUDIES[-1], netview.DEFAULT['harmonic']), ('harmonic', 'thd'))
+        self.assertEqual((study.STUDIES[-2], netview.DEFAULT['harmonic']), ('harmonic', 'thd'))
         from pcl import network
-        self.assertEqual((network.MORE, len(network.CASES)), (('harmonic14',), 10))
+        self.assertEqual((network.MORE, len(network.CASES)), (('harmonic14', 'mtdc5'), 10))
         # the three-phase load flow of a feeder: the module is experimental, the study is a stable addition with its own list (its
         # network is a feeder and not a Network); every option of the routine is an option of the study
         from pcl import unbalanced

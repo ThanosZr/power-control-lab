@@ -265,6 +265,70 @@ class Network:
         return self._add('sssc', name, line=str(line), X=None if X is None else float(X), Vq=None if Vq is None else float(Vq),
                          P=None if P is None else float(P), Xmax=None if Xmax is None else float(Xmax))
 
+    # ------------------------------------------------------------ 4.20: multi-terminal DC grids (pcl.dcgrid, ROADMAP §82)
+    def dc_bus(self, name, Un, V=1.0):
+        """A bus of a DC grid: U_n (V, pole to pole for a bipole or a symmetric monopole), V (pu) the start of the load flow.
+        The DC buses are kept apart from the AC buses (self.dc_buses), so that the AC studies do not see them."""
+        name = str(name)
+        if name in self.buses:
+            raise NetworkError(f'DC bus {name}: there is an AC bus with this name')
+        self.__dict__.setdefault('dc_buses', {})[name] = {'Un': float(Un), 'V': float(V)}
+        return name
+
+    def _dc(self, b, who):
+        b = str(b)
+        if b not in self.__dict__.get('dc_buses', {}):
+            raise NetworkError(f'{who}: unknown DC bus {b}')
+        return b
+
+    def dc_line(self, a, b, R=None, r=None, length=1.0, poles=2, name=None, rating=None):
+        """A DC line or cable between two DC buses: R (Ω, one conductor) or r (Ω/km) × length (km); poles = 2 the loop of
+        two conductors, 1 one conductor with a return of no resistance; rating (A) for the report (pcl.dcgrid.DCGrid.line)."""
+        if (R is None) == (r is None):
+            raise NetworkError('dc_line: give R or r')
+        Rt = float(R) if R is not None else float(r) * float(length)
+        nm = str(name or f'dc_line{sum(e["kind"] == "dc_line" for e in self.elements) + 1}')
+        a, b = self._dc(a, nm), self._dc(b, nm)
+        kw = {} if rating is None else {'rating': float(rating)}
+        self._add('dc_line', nm, R=Rt, poles=int(poles), **kw)
+        self.elements[-1].update(a=a, b=b)                 # (DC buses: not the AC buses that _add checks)
+        return nm
+
+    def vsc(self, bus, dc, control='P', P=0.0, V=1.0, droop=None, Prated=None, R=None, Q=0.0, Vac=None, side='dc',
+            Rtr=0.0, Xtr=0.0, Bf=0.0, Rc=0.0, Xc=0.0, a_loss=0.0, b_loss=0.0, crec=0.0, cinv=0.0, name=None):
+        """A converter station between the AC bus `bus` and the DC bus `dc` (4.20, pcl.dcgrid). DC side: control 'P' (P in W
+        into the DC grid; with side = 'ac' P is the power it gives to the AC bus), 'V' (the DC slack at V pu), 'droop'
+        (P = P_0 − R·(U − U_0), P_0 = P, U_0 = V·U_n, R in W/V or droop ρ in pu with P_rated in W), 'idroop' (current droop).
+        AC side: Q (var, given to the AC bus) or Vac (pu: the station holds the voltage of its bus, a PV bus; then no other
+        source may hold that bus). The station: Rtr + jXtr, the filter Bf, the reactor Rc + jXc (pu on S_base and the AC
+        bus base), the losses a_loss (W) + b_loss (V)·I + c (Ω)·I² (I in A), c = crec while it takes power from the AC grid, cinv while it
+        gives. In the AC solvers it is a fixed injection: the one of its last AC/DC load flow (acdc_flow), or before that
+        −P (side 'dc') or P (side 'ac') for control 'P' and nothing for the others."""
+        if control not in ('P', 'V', 'droop', 'idroop'):
+            raise NetworkError('vsc: control one of P, V, droop, idroop')
+        if control in ('droop', 'idroop') and R is None and (droop is None or Prated is None):
+            raise NetworkError('vsc: a droop needs R, or droop and Prated')
+        nm = str(name or f'vsc{sum(e["kind"] == "vsc" for e in self.elements) + 1}')
+        dc = self._dc(dc, nm)
+        opt = {k: float(v) for k, v in (('droop', droop), ('Prated', Prated), ('R', R), ('Vac', Vac)) if v is not None}
+        self._add('vsc', nm, bus=bus, dc=dc, control=control, P=float(P), V=float(V), Q=float(Q), side=side, Rtr=float(Rtr), Xtr=float(Xtr),
+                  Bf=float(Bf), Rc=float(Rc), Xc=float(Xc), a_loss=float(a_loss), b_loss=float(b_loss), crec=float(crec), cinv=float(cinv), **opt)
+        return nm
+
+    def dc_grid(self):
+        """The DC part as a pcl.dcgrid.DCGrid (for the DC load flow alone, with the converters' DC-side controls)."""
+        from . import dcgrid
+        return dcgrid.grid_of(self)
+
+    def acdc_flow(self, method='auto', tol=1e-8, max_iter=None, flat=False, q_limits=False):
+        """4.20: the sequential AC/DC load flow (pcl.dcgrid.acdc_flow): the result of power_flow for the AC part with 'dc',
+        'converters', 'outer' (the AC/DC iterations)."""
+        from . import dcgrid
+        try:
+            return dcgrid.acdc_flow(self, method=method, tol=tol, max_iter=max_iter, flat=flat, q_limits=q_limits)
+        except dcgrid.DCGridError as e:
+            raise NetworkError(str(e)) from e
+
     def remove(self, name):
         self.elements = [e for e in self.elements if e['name'] != name]
 
@@ -723,6 +787,17 @@ class Network:
                 i = idx[e['bus']]
                 S = complex(e['P'], e['Q']) / self.S_base
                 load[i] += np.array(e['zip']) * S
+            elif k == 'vsc':                                 # 4.20: a converter station is the injection of its last AC/DC flow
+                b, i = e['bus'], idx[e['bus']]
+                ps = e.get('_Ps')
+                if ps is None:
+                    ps = (e['P'] if e.get('side') == 'ac' else -e['P']) / self.S_base if e['control'] == 'P' else 0.0
+                Sbus[i] += complex(ps, 0.0 if e.get('Vac') is not None else (e['_Qs'] if e.get('_Qs') is not None else e['Q'] / self.S_base))
+                if e.get('Vac') is not None:
+                    if types[b] != 'PQ' or any(q['kind'] in ('generator', 'unit', 'feeder') and q.get('bus') == b for q in self.elements):
+                        raise NetworkError(f'{e["name"]}: holds the AC voltage of bus {b}, where another source is; only one source may hold a bus')
+                    types[b] = 'PV'
+                    Vset[b] = e['Vac']
             elif k in ('generator', 'unit', 'feeder'):
                 b = e['bus']
                 i = idx[b]
@@ -1420,7 +1495,7 @@ def ieee(case):
 
 
 CASES = ('ieee9', 'ieee14', 'ieee30', 'ieee57', 'ieee118', 'ieee300', 'case30', 'case33bw', 'case69', 'pegase1354')
-MORE = ('harmonic14',)      # 4.19.5: networks made for one study (they are not in the lists of the other studies)
+MORE = ('harmonic14', 'mtdc5')      # 4.19.5: networks made for one study (they are not in the lists of the other studies); 4.20: mtdc5 (AC/DC)
 
 
 def case_data(name):
@@ -1492,14 +1567,19 @@ def to_dict(net):
                 continue
             d[k] = [v.real, v.imag] if isinstance(v, complex) else v
         els.append(d)
-    return {'format': 'pcl-network', 'version': 1, 'f': net.f, 'S_base': net.S_base, 'name': net.name,
-            'buses': {b: d for b, d in net.buses.items() if d['type'] != 'internal'}, 'elements': els}
+    out = {'format': 'pcl-network', 'version': 1, 'f': net.f, 'S_base': net.S_base, 'name': net.name,
+           'buses': {b: d for b, d in net.buses.items() if d['type'] != 'internal'}, 'elements': els}
+    if net.__dict__.get('dc_buses'):                   # 4.20: only a network with a DC grid writes them
+        out['dc_buses'] = dict(net.dc_buses)
+    return out
 
 
 def from_dict(d):
     net = Network(d.get('f', 50.0), d.get('S_base', 100e6), d.get('name', ''))
     for b, v in d['buses'].items():
         net.bus(b, v['Un'], v.get('type', 'PQ'), v.get('V', 1.0), v.get('angle', 0.0), v.get('Vmin'), v.get('Vmax'), v.get('label'))
+    for b, v in (d.get('dc_buses') or {}).items():
+        net.dc_bus(b, v['Un'], v.get('V', 1.0))
     cplx = {'Zn_hv', 'Zn_lv', 'Zn'}
     for e in d['elements']:
         e = dict(e)

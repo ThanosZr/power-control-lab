@@ -49,7 +49,7 @@ STABLE_FROM = '4.0'           # the major version from which the surface is stab
 # Network.harmonics, the study 'harmonic'). The three-phase load flow of a feeder (pcl.unbalanced) is experimental too; its
 # study 'unbalanced' is a stable addition.
 EXPERIMENTAL = {'pcl': ('pcl.control.', 'pcl.workbench.', 'pcl.wideband.', 'pcl.powerflow.', 'pcl.opf.', 'pcl.ipm.', 'pcl.backend.', 'pcl.accel.', 'pcl.nnstart.',
-                        'pcl.onnxio.', 'pcl.netview.', 'pcl.netfile.', 'pcl.psse.', 'pcl.scopf.', 'pcl.cpf.', 'pcl.se.', 'pcl.harmonic.', 'pcl.unbalanced.'), 'cli': ('workbench', 'python -m pcl accel', 'python -m pcl nnstart')}
+                        'pcl.onnxio.', 'pcl.netview.', 'pcl.netfile.', 'pcl.psse.', 'pcl.scopf.', 'pcl.cpf.', 'pcl.se.', 'pcl.harmonic.', 'pcl.unbalanced.', 'pcl.dcgrid.'), 'cli': ('workbench', 'python -m pcl accel', 'python -m pcl nnstart')}
 # 4.0: the first of the two steps of a removal. {surface: {key: (version, what instead)}}: the point keeps working (with a
 # message where it runs) to the end of its major version and may go in the next one. A point that is gone leaves this list.
 DEPRECATED = {}
@@ -109,6 +109,7 @@ def surface_pcl():
     import pcl.se
     import pcl.harmonic
     import pcl.unbalanced
+    import pcl.dcgrid
     import pcl.linereport
     import pcl.link
     import pcl.network
@@ -132,7 +133,7 @@ def surface_pcl():
         elif callable(obj):
             out['pcl.' + name] = {'params': sig(obj)}
     for mod in (pcl.link, pcl.control, pcl.workbench, pcl.plotting, pcl.formats, pcl.impulse, pcl.network, pcl.lineconst, pcl.linereport, pcl.trv, pcl.wideband,
-                pcl.powerflow, pcl.opf, pcl.ipm, pcl.report, pcl.study, pcl.backend, pcl.accel, pcl.nnstart, pcl.onnxio, pcl.netview, pcl.netfile, pcl.psse, pcl.scopf, pcl.cpf, pcl.se, pcl.harmonic, pcl.unbalanced):
+                pcl.powerflow, pcl.opf, pcl.ipm, pcl.report, pcl.study, pcl.backend, pcl.accel, pcl.nnstart, pcl.onnxio, pcl.netview, pcl.netfile, pcl.psse, pcl.scopf, pcl.cpf, pcl.se, pcl.harmonic, pcl.unbalanced, pcl.dcgrid):
         short = mod.__name__
         for name, obj in vars(mod).items():
             if name.startswith('_') or getattr(obj, '__module__', None) != mod.__name__ or not (inspect.isfunction(obj) or inspect.isclass(obj)):

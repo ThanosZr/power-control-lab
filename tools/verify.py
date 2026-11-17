@@ -959,6 +959,37 @@ def file_rows(add):
         len(v0['branches']) - len(r['view']['branches']) + (1 - sum(bool(q.get('off')) for q in r['view']['branches'])), 0, '')
 
 
+def dcgrid_rows(add):
+    """4.20: multi-terminal DC grids (pcl/dcgrid.py): the DC load flow against the published five-terminal grid (Haileselassie &
+    Uhlen 2012, Tables IV, VI), the converter station against Beerten, Cole & Belmans (2012, Table II), and the EMT of the tutorial
+    mtdc5 against the AC/DC load flow of its card (tests/test_dcgrid.py)."""
+    import cmath as cm
+    from pcl import dcgrid as D
+    from pcl import study as S
+    sys.path.insert(0, str(ROOT / 'tests'))
+    import test_dcgrid as TD
+    A = 'Δίκτυα DC πολλών τερματικών (4.20)'
+    base = TD.hu_table4().flow(tol=1e-12)
+    for b, u in zip('1345', (399.550, 396.613, 396.928, 385.247)):
+        add(A, f'πέντε τερματικά (Haileselassie & Uhlen 2012), ροή φορτίου DC: τάση του τερματικού {b}', 'Πίν. IV', u * 1e3, base['buses'][b]['U'], 0.5, 'V')
+    add(A, 'πέντε τερματικά: ισχύς του τερματικού 2 (ζυγός ταλάντωσης DC)', 'Πίν. IV', 535.938e6, base['converters']['2']['P'], 500, 'W')
+    r = TD.hu_droop(base, P3=-800e6).flow(tol=1e-12)
+    for b, p in zip('1245', (614.820, 549.651, 561.746, -890.33)):
+        add(A, f'ΔP*₃ = −50 MW με στατικότητα ρ = 0,04: ισχύς του τερματικού {b}', 'PSCAD της δημοσίευσης, Πίν. VI', p * 1e6, r['converters'][b]['P'], 0.02e6, 'W')
+    st = TD.Station().st('12', 0)
+    f = D.station(1.025 * cm.exp(1j * math.radians(-8.93)), complex(66.84, 0) / 100, st, 100e6, 138e3)
+    add(A, 'σταθμός μετατροπέα (Beerten, Cole & Belmans 2012), μετατροπέας 1: P_c', 'Πίν. II', 66.91e6, f['Sc'].real * 100e6, 0.011e6, 'W')
+    add(A, 'σταθμός μετατροπέα, μετατροπέας 1: |U_c|', 'Πίν. II', 1.042, abs(f['Uc']), 6e-4, '')
+    add(A, 'σταθμός μετατροπέα, μετατροπέας 1: P_dc', 'Πίν. II', -68.47e6, f['Pdc'], 0.025e6, 'W')
+    out = subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'mtdc_cases.js')], capture_output=True, text=True, timeout=600, cwd=ROOT)
+    js = json.loads(out.stdout)
+    run = next(q for q in js['runs'] if q['step'] == 'm50' and q['rho'] == '0.04')
+    lf = {d['bus']: d for d in S.run({'case': 'mtdc5', 'study': 'acdc', 'options': run['study']['options']})['summary']['dc']}
+    for k in (1, 3, 5):
+        add(A, f'tutorial mtdc5 (EMT), ΔP*₃ = −50 MW: τάση του τερματικού {k} στα 0,6 s', 'ροή φορτίου AC/DC της κάρτας', lf[str(k)]['U_kV'] * 1e3, run['rows'][-1]['U'][k - 1], 0.2, 'V')
+    add(A, 'tutorial mtdc5 (EMT): ισχύς του τερματικού 5 στα 0,6 s', 'ροή φορτίου AC/DC της κάρτας', lf['5']['P_MW'] * 1e6, run['rows'][-1]['P'][4] * 1e6, 2e3, 'W')
+
+
 def checks(o):
     """Rows: (area, quantity, reference, expected, simulated, tolerance (absolute), unit)."""
     rows = []
@@ -1267,6 +1298,7 @@ def checks(o):
     view_rows(add)
     file_rows(add)
     scopf_rows(add)
+    dcgrid_rows(add)
     cpf_rows(add)
     sweepc_rows(add)
     se_rows(add)
@@ -1423,7 +1455,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 870 tests (Python και Node) και 19 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 894 tests (Python και Node) και 19 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',

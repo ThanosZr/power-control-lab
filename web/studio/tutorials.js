@@ -1842,6 +1842,50 @@
  // (load step), of a weak grid (SCR 1,5, step of P) or of an island together with a second grid-forming unit (VSC2 + GFMC
  // 500 MVA, droop: the load shared in proportion to the ratings)
  const HVDC_G={island:'Νησίδα: μόνο φορτία, +300 MW στα 0,6 s',weak:'Ασθενές δίκτυο (SCR 1,5): P 0,5 → 0,9 pu στα 0,6 s',par:'Νησίδα με δεύτερη μονάδα grid-forming 500 MVA: +300 MW στα 0,6 s'};
+ // ------------------------------------------------------------------ 4.20 (ROADMAP §82): a multi-terminal DC grid in EMT
+ // The five-terminal grid of Haileselassie & Uhlen (2012, Fig. 3, Tables II–IV): 400 kV pole to pole, r = 0.01 Ω/km and
+ // c = 5 μF/km per conductor (the paper gives no inductance: 0.2 mH/km here, a value of an example). One line per pole
+ // pair: R = 2·r·l and L = 2·L′·l in series, and the capacitance between the poles c·l/2 split at the two ends. Each
+ // converter as its DC side only: a current source I = P(u)/u through a lag of 5 ms (the current control), with
+ // P = P₀ − R·(u − U₀) on the droop (R = P_rated/(ρ·U_n)) and a schedule of P at terminal 3; 50 μF of its own. The start is
+ // the load flow of Table IV (the capacitors at its voltages, the lines at its currents); the card runs the AC/DC load
+ // flow of the same grid in the engine (pcl.dcgrid, the case mtdc5), so the two can be compared after the step.
+ const MTDC5={U:{1:399.550e3,2:400e3,3:396.613e3,4:396.928e3,5:385.247e3},P:{1:600e6,2:535.938e6,3:-750e6,4:550e6,5:-900e6},rated:{1:900e6,2:800e6,3:1000e6,4:750e6,5:1200e6},
+  lines:[['1','2',80],['1','4',125],['1','3',200],['2','3',160],['3','4',160],['4','5',250]]};
+ T.push({id:'mtdc5',group:'Δίκτυα DC πολλών τερματικών (4.20)',title:'Δίκτυο DC πέντε τερματικών με στατικότητα τάσης (EMT και ροή φορτίου AC/DC)',theory:'formula',topology:'mtdc5',
+  options:[{k:'step',label:'Συμβάν στα 0,1 s',options:[['m50','Ο σταθμός 3 παίρνει 50 MW περισσότερα (−750 → −800 MW)'],['p250','Ο σταθμός 3 παίρνει 250 MW λιγότερα (−750 → −500 MW)'],['trip5','Ο σταθμός 5 βγαίνει (−900 MW → 0)'],['none','Κανένα']],def:'m50'},
+   {k:'rho',label:'Στατικότητα ρ των σταθμών 1, 2, 4, 5',options:[['0.04','ρ = 0,04'],['0.08','ρ = 0,08'],['0.02','ρ = 0,02']],def:'0.04'}],
+  desc:'Πέντε σταθμοί μετατροπέων σε ένα δίκτυο DC 400 kV (πόλος–πόλος) με έξι καλώδια. Οι σταθμοί 1, 2, 4, 5 μοιράζονται κάθε αλλαγή ισχύος με στατικότητα τάσης: P = P₀ − R·(U − U₀), με R = P_ονομ/(ρ·U_n). Ο σταθμός 3 κρατά σταθερή ισχύ. Κάθε σταθμός είναι εδώ μόνο η πλευρά DC του: πηγή ρεύματος I = P(U)/U με καθυστέρηση 5 ms. Το δίκτυο ξεκινά στη ροή φορτίου της δημοσίευσης. Η κάρτα τρέχει στο engine τη ροή φορτίου AC/DC του ίδιου δικτύου μετά το συμβάν, για σύγκριση με τις τιμές του EMT όταν ηρεμήσει. Δεδομένα: Haileselassie & Uhlen (2012), Σχ. 3 και Πίν. II–IV.',
+  tasks:['Τρέξε ως τα 0,6 s με «−750 → −800 MW»: στα 0,6 s οι τάσεις είναι 399,287 / 399,726 / 396,204 / 396,677 / 385,118 kV και οι ισχείς 614,82 / 549,65 / −800 / 561,75 / −890,33 MW. Είναι οι τιμές της ροής φορτίου στην κάρτα, και του PSCAD της δημοσίευσης (Πίν. VI) μέσα σε 0,01 MW.',
+   'Η αλλαγή δεν μοιράζεται ανάλογα με τα R: ο σταθμός 5, ο πιο μακρινός από τον 3, παίρνει 9,7 MW αντί για 16,4 MW που θα έδινε ένα δίκτυο χωρίς αντιστάσεις. Οι πτώσεις τάσης στις γραμμές αλλάζουν τη μοιρασιά.',
+   'Με ρ = 0,02 οι τάσεις αλλάζουν λιγότερο και ο σταθμός 5 παίρνει ακόμη λιγότερο από τα +250 MW (−34,5 MW). Με ρ = 0,08 οι τάσεις αλλάζουν περισσότερο και η μοιρασιά πλησιάζει την αναλογία των R.',
+   '«Ο σταθμός 5 βγαίνει»: οι σταθμοί 1, 2, 4 παίρνουν τα 900 MW που έδινε με τις στατικότητές τους, και οι τάσεις ανεβαίνουν ως τα 405 kV. Η ροή φορτίου της κάρτας δίνει τις ίδιες τιμές.',
+   'Η κάρτα: «▶ Τρέξε τη μελέτη» και «⬇ Εξαγωγή αναφοράς». Από κώδικα: pcl.network.case_data(\'mtdc5\').acdc_flow().'],
+  build(o){const D=MTDC5,rho=+o.rho||0.04,lp=0.2e-3,cpk=5e-6,Cc=50e-6,tau=5e-3,ts=0.1,X={2:120,1:300,3:480,4:660,5:840},Y0=230;
+   const comps=[],wires=[],Cend={1:Cc,2:Cc,3:Cc,4:Cc,5:Cc};
+   for(const [a,b,l] of D.lines){Cend[a]+=cpk*l/4;Cend[b]+=cpk*l/4;}
+   const P3=o.step==='m50'?-800e6:o.step==='p250'?-500e6:-750e6;
+   for(const k of [1,2,3,4,5]){const x=X[k],U0=D.U[k],I0=D.P[k]/U0;
+    comps.push(J('N'+k,x,Y0),C('C'+k,'C',x-50,Y0+80,{C:+Cend[k].toPrecision(6),v0:U0},{label:'',lbl:'none'}),C('I'+k,'IDC',x+10,Y0+80,{ctl:'sig'},{label:'',lbl:'none'}),
+     C('VM'+k,'VM',x+70,Y0+80,{},{label:'U'+k}),J('A'+k,x+10,Y0),J('B'+k,x+70,Y0),J('Z'+k,x+10,Y0+150),J('Q'+k,x-50,Y0+150),J('W'+k,x+70,Y0+150),C('G'+k,'GND',x+10,Y0+180,{},{label:'',lbl:'none'}),
+     C('F'+k,'LPF',x+10,Y0+300,{fc:+(1/(2*Math.PI*tau)).toPrecision(6),y0:String(+I0.toPrecision(10))},{label:'',lbl:'none'}),
+     C('PW'+k,'EXPR',x+20,Y0+380,{expr:'u*i/1e6',ins:'u, i',pars:''},{label:'P'+k+' (MW)',lbl:'below'}));
+    const R=D.rated[k]/(rho*400e3),trip=o.step==='trip5'&&k===5;
+    if(k===3){comps.push(C('PR3','CONST',x-80,Y0+240,{v:o.step==='m50'||o.step==='p250'?`0:${D.P[3]}, ${ts}:${P3}`:String(D.P[3]),unit:'W'},{label:'P₃',lbl:'above'}),
+      C('K3','EXPR',x-60,Y0+300,{expr:'p/max(u, 1e5)',ins:'u, p',pars:''},{label:'',lbl:'none'}));wires.push(['PR3:y','K3:p',[[x-40,Y0+240],[x-40,Y0+290],[x-95,Y0+290],[x-95,Y0+310]]]);}
+    else comps.push(C('K'+k,'EXPR',x-60,Y0+300,{expr:trip?`t < ${ts} ? (p0 - r*(u - u0))/max(u, 1e5) : 0`:'(p0 - r*(u - u0))/max(u, 1e5)',ins:'u',pars:`p0 = ${+D.P[k].toPrecision(10)}, r = ${+R.toPrecision(10)}, u0 = ${U0}`},{label:'',lbl:'none'}));
+    wires.push(['N'+k,'A'+k],['A'+k,'B'+k],['A'+k,'I'+k+':p'],['B'+k,'VM'+k+':p'],['N'+k,'C'+k+':p',[[x-50,Y0]]],['C'+k+':n','Q'+k],['Q'+k,'Z'+k],['I'+k+':n','Z'+k],['VM'+k+':n','W'+k],['W'+k,'Z'+k],['Z'+k,'G'+k+':g'],
+     ['VM'+k+':y','K'+k+':u',[[x+120,Y0+80],[x+120,Y0+230],[x-110,Y0+230],[x-110,Y0+300]]],['K'+k+':y','F'+k+':u'],['F'+k+':y','I'+k+':u',[[x+60,Y0+300],[x+60,Y0+200],[x-20,Y0+200],[x-20,Y0+80]]],
+     ['VM'+k+':y','PW'+k+':u',[[x+120,Y0+80],[x+120,Y0+360],[x-30,Y0+360],[x-30,Y0+370]]],['F'+k+':y','PW'+k+':i',[[x+60,Y0+300],[x+60,Y0+340],[x-25,Y0+340],[x-25,Y0+390]]]);}
+   // the six lines above the buses: the neighbours on one level, the two that skip a bus higher up
+   const lv={'2-1':0,'1-3':0,'3-4':0,'4-5':0,'2-3':1,'1-4':2};
+   for(const [a,b,l] of D.lines){const key=lv[`${a}-${b}`]!==undefined?`${a}-${b}`:`${b}-${a}`,[p,q]=key.split('-'),h=Y0-50-55*lv[key],xm=(X[p]+X[q])/2,R=2*0.01*l,Lh=2*lp*l,i0=(D.U[p]-D.U[q])/R;
+    comps.push(C('L'+a+b,'L',xm,h,{L:+Lh.toPrecision(6),Rs:R,i0:+i0.toPrecision(10)},{label:`${a}–${b} · ${l} km`,lbl:'above'}));
+    wires.push(['N'+p,'L'+a+b+':a',[[X[p],h]]],['L'+a+b+':b','N'+q,[[X[q],h]]]);}
+   const ms=o.step==='none'?0.3:0.6;
+   return project(comps,wires,{sim:{hDiv:10,speed:300,stopT:ms},scope:{panes:[[...[1,2,3,4,5].map(k=>['Y:VM'+k,'U'+k])],[...[1,2,3,4,5].map(k=>['Y:PW'+k,'P'+k+' (MW)'])]],window:{unit:'T',n:Math.round(ms/1e-3)}},
+    meta:{rho,step:o.step,study:{net:'mtdc5',study:'acdc',options:o.step==='trip5'?{out:['C5'],...(rho!==0.04?{set:Object.fromEntries(['C1','C2','C4'].map(c=>[c,{droop:rho}]))}:{})}:
+     {set:{...(P3!==-750e6?{C3:P3}:{}),...(rho!==0.04?Object.fromEntries(['C1','C2','C4','C5'].map(c=>[c,{droop:rho}])):{})}}}}});}});
  T.push({id:'hvdc_gfm',group:'Grid-forming (4.18.1)',title:'Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα',theory:'formula',topology:'hvdc_gfm',
   options:[{k:'ac',label:'Δίκτυο του σταθμού 2',options:Object.entries(HVDC_G),def:'island'},{k:'law',label:'Νόμος του σταθμού 2',options:[['droop','Στατικότητα P–f 2 %, Q–V 5 % (φίλτρο 5 Hz)'],['vsm','VSM (H = 2 s)'],['psc','PSC (k_p = 50 rad/s, ρύθμιση V_ac)']],def:'droop'}],
   desc:'Η σύνδεση HVDC του tutorial MMC (σταθμοί 1059 MVA, Model 4, καλώδια ±320 kV 70 km wideband). Ο σταθμός 1 κρατά την τάση DC από ένα ισχυρό δίκτυο. Ο σταθμός 2 είναι grid-forming: σχηματίζει την τάση AC του δικτύου του με τον νόμο του στοιχείου «Έλεγχος grid-forming» (στατικότητα, VSM ή PSC) μέσα στον έλεγχο του σταθμού, άμεσα η τάση με όριο ρεύματος στο 1,1 pu. Στη νησίδα δεν υπάρχει άλλη πηγή: ο σταθμός ορίζει και τη συχνότητα.',

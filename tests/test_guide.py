@@ -25,6 +25,23 @@ def blocks(version):
 
 
 class Guide(unittest.TestCase):
+    def test_the_python_example_of_4_20_runs_as_written(self):
+        bl = blocks('4.20')
+        self.assertEqual(len(bl), 1)
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING='utf-8')
+            r = subprocess.run([sys.executable, '-c', bl[0][1]], cwd=d, env=env, capture_output=True, text=True, encoding='utf-8', timeout=300)
+            self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+            out = r.stdout.strip().split('\n')
+            self.assertEqual(out[0], 'επαναλήψεις AC/DC: 2')
+            self.assertEqual([q.split(': ')[1].split(' kV')[0] for q in out[1:6]], ['399.550', '400.000', '396.613', '396.928', '385.247'])
+            self.assertEqual(out[6], 'μετά: C1 614.82, C2 549.65, C3 -800.00, C4 561.75, C5 -890.33 MW')
+            self.assertEqual(out[7], 'χωρίς τον 5: C1 306.6, C2 298.4, C3 -800.0, C4 199.6 MW')
+            self.assertTrue((pathlib.Path(d) / 'acdc.html').stat().st_size > 10000)
+        text = (ROOT / 'docs' / 'GUIDE.md').read_text(encoding='utf-8')            # what the guide says it prints
+        for part in ('399,550 / 400,000 / 396,613 / 396,928 / 385,247 kV', '614,82 / 549,65 / −800,00 / 561,75 / −890,33 MW', '306,6 / 298,4 / −800,0 / 199,6 MW'):
+            self.assertIn(part, text)
+
     def test_the_python_example_of_4_19_4_runs_as_written(self):
         bl = blocks('4.19.4')
         self.assertEqual(len(bl), 2)                         # §15, and the security study of §16 (its own test below)

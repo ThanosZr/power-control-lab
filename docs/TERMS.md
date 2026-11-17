@@ -58,6 +58,8 @@
 | fingerprint (of a network) | αποτύπωμα | υπογραφή, hash, δακτυλικό αποτύπωμα | 4.19.2 |
 | explicit inverse | ρητός αντίστροφος | άμεσος αντίστροφος, πλήρης αντίστροφος | 4.19.2 |
 | level scheduling | τριγωνικές λύσεις ανά επίπεδο | χρονοπρογραμματισμός επιπέδων | 4.19.2 |
+| DC load flow (of a DC grid) | ροή φορτίου του δικτύου DC· μαζί με το AC: ροή φορτίου AC/DC | «ροή φορτίου DC» σκέτο: είναι η γραμμική προσέγγιση της ροής AC (`dc_flow`, μελέτη `dc`) | 4.20 |
+| DC voltage droop (control) | στατικότητα τάσης DC (droop): P–U ή I–U | πτώση τάσης, «droop» σκέτο σε ελληνικό κείμενο | 4.20 |
 
 ## Καθιερωμένοι όροι που ήδη χρησιμοποιούνται
 
@@ -326,7 +328,12 @@
 | (voltage) unbalance factor | ασυμμετρία (τάσης): |V⁻|/|V⁺| (4.19.6) |
 | switching loss, switching energy | απώλειες μεταγωγής, ενέργεια μεταγωγής (4.19.6) |
 | periodic impulse average | περιοδικός μέσος παλμών: η ενέργεια των παλμών μιας περιόδου διά την περίοδο (4.19.6) |
+| multi-terminal DC grid (MTDC) | δίκτυο DC πολλών τερματικών (4.20) |
+| DC slack bus | ζυγός ταλάντωσης DC: ο σταθμός που κρατά την τάση DC (4.20) |
+| converter station | σταθμός μετατροπέα: μετασχηματιστής, φίλτρο, αντιδραστήρας, μετατροπέας (4.20) |
+| sequential AC/DC load flow | ακολουθιακή ροή φορτίου AC/DC: οι δύο ροές εναλλάξ ως να συμφωνήσουν (4.20) |
+| power sharing | μοιρασιά ισχύος (4.20) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
-PWM, SPWM, SVPWM, PLL, PLO, FACTS, SSSC, CHB, MMC, HVDC, LCC, CEA, VDCOL, AVM, CCSC, NLC, ULM, FDCM, OPF, SCOPF, PTDF, LODF, LMP, KKT, fast-decoupled (XB, BX), ZIP, ONNX, GPU, CUDA, CuPy, backend, MLP, Adam, RMS, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.
+PWM, SPWM, SVPWM, PLL, PLO, FACTS, SSSC, CHB, MMC, HVDC, MTDC, LCC, CEA, VDCOL, AVM, CCSC, NLC, ULM, FDCM, OPF, SCOPF, PTDF, LODF, LMP, KKT, fast-decoupled (XB, BX), ZIP, ONNX, GPU, CUDA, CuPy, backend, MLP, Adam, RMS, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.

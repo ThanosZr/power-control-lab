@@ -1,0 +1,332 @@
+{
+ "format": "pcl-network",
+ "version": 1,
+ "f": 50.0,
+ "S_base": 100000000.0,
+ "name": "Five-terminal DC grid with droop control (Haileselassie & Uhlen 2012)",
+ "buses": {
+  "T1": {
+   "Un": 400000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "T2": {
+   "Un": 400000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "T3": {
+   "Un": 400000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "T4": {
+   "Un": 400000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "T5": {
+   "Un": 400000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  }
+ },
+ "elements": [
+  {
+   "kind": "feeder",
+   "name": "Q1",
+   "bus": "T1",
+   "Ik": null,
+   "Sk": 9000000000.0,
+   "RX": 0.1,
+   "X0X": null,
+   "R0X0": null,
+   "c": null,
+   "Ik_min": null,
+   "Un": null,
+   "V": 1.0,
+   "angle": 0.0,
+   "slack": true
+  },
+  {
+   "kind": "feeder",
+   "name": "Q2",
+   "bus": "T2",
+   "Ik": null,
+   "Sk": 8000000000.0,
+   "RX": 0.1,
+   "X0X": null,
+   "R0X0": null,
+   "c": null,
+   "Ik_min": null,
+   "Un": null,
+   "V": 1.0,
+   "angle": 0.0,
+   "slack": true
+  },
+  {
+   "kind": "feeder",
+   "name": "Q3",
+   "bus": "T3",
+   "Ik": null,
+   "Sk": 10000000000.0,
+   "RX": 0.1,
+   "X0X": null,
+   "R0X0": null,
+   "c": null,
+   "Ik_min": null,
+   "Un": null,
+   "V": 1.0,
+   "angle": 0.0,
+   "slack": true
+  },
+  {
+   "kind": "feeder",
+   "name": "Q4",
+   "bus": "T4",
+   "Ik": null,
+   "Sk": 7500000000.0,
+   "RX": 0.1,
+   "X0X": null,
+   "R0X0": null,
+   "c": null,
+   "Ik_min": null,
+   "Un": null,
+   "V": 1.0,
+   "angle": 0.0,
+   "slack": true
+  },
+  {
+   "kind": "feeder",
+   "name": "Q5",
+   "bus": "T5",
+   "Ik": null,
+   "Sk": 12000000000.0,
+   "RX": 0.1,
+   "X0X": null,
+   "R0X0": null,
+   "c": null,
+   "Ik_min": null,
+   "Un": null,
+   "V": 1.0,
+   "angle": 0.0,
+   "slack": true
+  },
+  {
+   "kind": "dc_line",
+   "name": "L12",
+   "R": 0.8,
+   "poles": 2,
+   "a": "1",
+   "b": "2"
+  },
+  {
+   "kind": "dc_line",
+   "name": "L14",
+   "R": 1.25,
+   "poles": 2,
+   "a": "1",
+   "b": "4"
+  },
+  {
+   "kind": "dc_line",
+   "name": "L13",
+   "R": 2.0,
+   "poles": 2,
+   "a": "1",
+   "b": "3"
+  },
+  {
+   "kind": "dc_line",
+   "name": "L23",
+   "R": 1.6,
+   "poles": 2,
+   "a": "2",
+   "b": "3"
+  },
+  {
+   "kind": "dc_line",
+   "name": "L34",
+   "R": 1.6,
+   "poles": 2,
+   "a": "3",
+   "b": "4"
+  },
+  {
+   "kind": "dc_line",
+   "name": "L45",
+   "R": 2.5,
+   "poles": 2,
+   "a": "4",
+   "b": "5"
+  },
+  {
+   "kind": "vsc",
+   "name": "C1",
+   "bus": "T1",
+   "dc": "1",
+   "control": "droop",
+   "P": 600000000.0,
+   "V": 0.9988750000000001,
+   "Q": 0.0,
+   "side": "dc",
+   "Rtr": 0.0,
+   "Xtr": 0.016666666666666666,
+   "Bf": 0.0,
+   "Rc": 0.0,
+   "Xc": 0.016666666666666666,
+   "a_loss": 0.0,
+   "b_loss": 0.0,
+   "crec": 0.0,
+   "cinv": 0.0,
+   "droop": 0.04,
+   "Prated": 900000000.0
+  },
+  {
+   "kind": "vsc",
+   "name": "C2",
+   "bus": "T2",
+   "dc": "2",
+   "control": "droop",
+   "P": 535938000.0,
+   "V": 1.0,
+   "Q": 0.0,
+   "side": "dc",
+   "Rtr": 0.0,
+   "Xtr": 0.01875,
+   "Bf": 0.0,
+   "Rc": 0.0,
+   "Xc": 0.01875,
+   "a_loss": 0.0,
+   "b_loss": 0.0,
+   "crec": 0.0,
+   "cinv": 0.0,
+   "droop": 0.04,
+   "Prated": 800000000.0
+  },
+  {
+   "kind": "vsc",
+   "name": "C3",
+   "bus": "T3",
+   "dc": "3",
+   "control": "P",
+   "P": -750000000.0,
+   "V": 1.0,
+   "Q": 0.0,
+   "side": "dc",
+   "Rtr": 0.0,
+   "Xtr": 0.015,
+   "Bf": 0.0,
+   "Rc": 0.0,
+   "Xc": 0.015,
+   "a_loss": 0.0,
+   "b_loss": 0.0,
+   "crec": 0.0,
+   "cinv": 0.0
+  },
+  {
+   "kind": "vsc",
+   "name": "C4",
+   "bus": "T4",
+   "dc": "4",
+   "control": "droop",
+   "P": 550000000.0,
+   "V": 0.99232,
+   "Q": 0.0,
+   "side": "dc",
+   "Rtr": 0.0,
+   "Xtr": 0.02,
+   "Bf": 0.0,
+   "Rc": 0.0,
+   "Xc": 0.02,
+   "a_loss": 0.0,
+   "b_loss": 0.0,
+   "crec": 0.0,
+   "cinv": 0.0,
+   "droop": 0.04,
+   "Prated": 750000000.0
+  },
+  {
+   "kind": "vsc",
+   "name": "C5",
+   "bus": "T5",
+   "dc": "5",
+   "control": "droop",
+   "P": -900000000.0,
+   "V": 0.9631175000000001,
+   "Q": 0.0,
+   "side": "dc",
+   "Rtr": 0.0,
+   "Xtr": 0.0125,
+   "Bf": 0.0,
+   "Rc": 0.0,
+   "Xc": 0.0125,
+   "a_loss": 0.0,
+   "b_loss": 0.0,
+   "crec": 0.0,
+   "cinv": 0.0,
+   "droop": 0.04,
+   "Prated": 1200000000.0
+  }
+ ],
+ "dc_buses": {
+  "1": {
+   "Un": 400000.0,
+   "V": 1.0
+  },
+  "2": {
+   "Un": 400000.0,
+   "V": 1.0
+  },
+  "3": {
+   "Un": 400000.0,
+   "V": 1.0
+  },
+  "4": {
+   "Un": 400000.0,
+   "V": 1.0
+  },
+  "5": {
+   "Un": 400000.0,
+   "V": 1.0
+  }
+ },
+ "source": "T. M. Haileselassie, K. Uhlen, «Impact of DC line voltage drops on power flow of MTDC using droop control», IEEE Trans. Power Systems 27(3), 1441–1449, 2012: Fig. 3 and Tables II–IV (400 kV pole to pole, r = 0.01 Ω/km per conductor, the line lengths, the rated powers, the droop ρ = 0.04 at terminals 1, 2, 4, 5, the powers and voltages of the load flow of Table IV as the references of the droops, terminal 3 at constant power). The AC side is not in the paper (aggregated AC grids): each terminal on its own 400 kV bus with a feeder of S″k ten times its rating and a lossless station of reactances 0.15 + 0.15 pu on its rating: values of an example. dc_solution: Table IV (kV, MW into the DC grid).",
+ "dc_solution": {
+  "1": [
+   399.55,
+   600.0
+  ],
+  "2": [
+   400.0,
+   535.938
+  ],
+  "3": [
+   396.613,
+   -750.0
+  ],
+  "4": [
+   396.928,
+   550.0
+  ],
+  "5": [
+   385.247,
+   -900.0
+  ]
+ }
+}

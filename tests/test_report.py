@@ -435,7 +435,7 @@ class NetworkReports(unittest.TestCase):
 class Studies(unittest.TestCase):
     def test_every_study_as_data(self):
         for study in S.STUDIES:
-            if study in ('scopf', 'harmonic'):                                                    # 4.19.4: it needs ratings, and the 14-bus network has none (below); 4.19.5: it needs a source
+            if study in ('scopf', 'harmonic', 'acdc'):                                            # 4.19.4: it needs ratings, and the 14-bus network has none (below); 4.19.5: it needs a source; 4.20: converters
                 continue
             q = S.run({'case': 'ieee14', 'study': study})
             json.dumps(q, allow_nan=False)                                                        # plain JSON: no NumPy, no NaN
@@ -449,6 +449,13 @@ class Studies(unittest.TestCase):
         json.dumps(q, allow_nan=False)
         self.assertEqual((q['study'], q['network']['buses']), ('scopf', 30))
         self.assertFalse([k for k in q['result'] if k.startswith('_')])
+        q = S.run({'case': 'mtdc5', 'study': 'acdc'})                                             # 4.20: the AC/DC load flow on its test network, plain data
+        json.dumps(q, allow_nan=False)
+        self.assertEqual((q['study'], q['network']['buses'], len(q['result']['converters'])), ('acdc', 5, 5))
+        self.assertFalse([k for k in q['result'] if k.startswith('_')] + [k for k in q['result']['dc'] if k.startswith('_')])
+        with self.assertRaises(S.StudyError) as e:                                                # a network without converters says so
+            S.run({'case': 'ieee14', 'study': 'acdc'})
+        self.assertIn('vsc', str(e.exception))
         q = S.run({'case': 'harmonic14', 'study': 'harmonic'})                                    # 4.19.5: the harmonic load flow on its test network
         json.dumps(q, allow_nan=False)
         self.assertEqual((q['study'], q['network']['buses'], q['result']['buses']['3']['worst']), ('harmonic', 16, 25))

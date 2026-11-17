@@ -426,6 +426,39 @@ document.addEventListener('click',function(ev){var b=ev.target.closest('button[d
 
 
 # -------------------------------------------------------------------- reports of the network studies
+def _acdc(r, net, res, MW, picture, order):
+    """4.20: the sequential AC/DC load flow: the iterations, the stations, the DC buses and lines, then the AC buses."""
+    dc = res.get('dc') or {}
+    r.heading('Η μέθοδος')
+    r.text('Ακολουθιακή ροή φορτίου AC/DC: η ροή φορτίου AC με κάθε μετατροπέα ως σταθερή έγχυση, η ροή φορτίου του δικτύου DC με '
+           'τους ελέγχους των μετατροπέων (ισχύς, τάση, στατικότητα), και η ισχύς AC των σταθμών που ορίζει το δίκτυο DC, ως να μην '
+           'αλλάζει τίποτα (Beerten, Cole & Belmans 2012).')
+    r.facts([('Σύγκλιση', bool(res['converged'])), ('Επαναλήψεις AC/DC', int(res['outer'])), ('Μέθοδος AC', res.get('method') or '—'),
+             ('Απώλειες AC (MW)', round(res['losses'] / MW, 3)), ('Απώλειες DC (MW)', round((res.get('losses_dc') or 0.0) / MW, 3)),
+             ('Απώλειες σταθμών (MW)', round(res['losses_conv'] / MW, 3)), ('Χρόνος (ms)', round(res['time'] * 1e3, 2))])
+    if not res['converged']:
+        r.note('Η ροή φορτίου AC/DC δεν συνέκλινε: οι τιμές είναι της τελευταίας επανάληψης.', 'critical')
+    C = res['converters']
+    ctl = {'P': 'ισχύς', 'V': 'τάση DC', 'droop': 'στατικότητα P–U', 'idroop': 'στατικότητα I–U'}
+    r.heading('Σταθμοί μετατροπέων')
+    r.table(['Σταθμός', 'Ζυγός AC', 'Ζυγός DC', 'Έλεγχος', 'P_s (MW)', 'Q_s (Mvar)', '|U_s| (pu)', '|U_c| (pu)', 'I_c (kA)', 'Απώλειες (MW)', 'P_dc (MW)', 'U_dc (kV)'],
+            [[n, c['bus'], c['dc'], ctl.get(c['control'], c['control']), c['Ps'] / MW, c['Qs'] / MW, c['Us'], c['Uc'], c['Ic'] / 1e3, c['loss'] / MW, c['Pdc'] / MW,
+              (c['Udc'] or 0.0) / 1e3] for n, c in C.items()], 'P_s, Q_s: προς το δίκτυο AC· P_dc: προς το δίκτυο DC', [None, None, None, None, 4, 4, 5, 5, 4, 4, 4, 4])
+    if dc.get('buses'):
+        names = list(dc['buses'])
+        r.heading('Δίκτυο DC').chart('dot', names, [{'name': 'U', 'y': [dc['buses'][b]['V'] for b in names]}], 'Τάση των ζυγών DC', 'Ζυγός DC', 'pu')
+        r.table(['Ζυγός DC', 'U (pu)', 'U (kV)', 'P (MW)'], [[b, d['V'], d['U'] / 1e3, d['P'] / MW] for b, d in dc['buses'].items()], 'Ζυγοί DC', [None, 5, 4, 4])
+        r.table(['Γραμμή DC', 'Από', 'Προς', 'I (kA)', 'P από (MW)', 'P προς (MW)', 'Απώλειες (MW)', 'Φόρτιση (%)'],
+                [[q['name'], q['a'], q['b'], q['I'] / 1e3, q['Pa'] / MW, q['Pb'] / MW, q['loss'] / MW, None if q['loading'] is None else 100 * q['loading']] for q in dc['lines']],
+                'Γραμμές DC', [None, None, None, 4, 4, 4, 4, 3])
+    picture(res, 'voltage', 'flow')
+    r.heading('Ζυγοί AC')
+    r.table(['Ζυγός', 'Τύπος', '|V| (pu)', 'Γωνία (°)', 'P παραγωγής (MW)', 'Q παραγωγής (Mvar)', 'P φορτίου (MW)', 'Q φορτίου (Mvar)'],
+            [[b, res['types'][b], d['V'], d['angle'], d['P'] / MW, d['Q'] / MW, d['Pload'] / MW, d['Qload'] / MW] for b, d in ((b, res['buses'][b]) for b in order)],
+            'Οι μετατροπείς μετρούν στην παραγωγή του ζυγού τους', [None, None, 5, 5, 5, 5, 5, 5])
+    _branches(r, net, res['branches'], MW)
+
+
 def network_report(net, study='pf', result=None, title=None, **kw):
     """A report for a study of a pcl.network.Network: study 'pf' (load flow), 'n1' / 'n1dc' (N−1 in AC / with the DC screening),
     'opf' / 'dcopf' (optimal power flow), 'scopf' (4.19.4: the DC optimal power flow with security against every single outage),
@@ -441,7 +474,8 @@ def network_report(net, study='pf', result=None, title=None, **kw):
     head = {'pf': 'Ροή φορτίου', 'n1': 'Ανάλυση N−1 (AC)', 'n1dc': 'Ανάλυση N−1 (σάρωση DC)', 'opf': 'Βέλτιστη ροή φορτίου (AC)', 'dcopf': 'Βέλτιστη ροή φορτίου (DC)',
             'scopf': 'Βέλτιστη ροή φορτίου με ασφάλεια N−1 (DC)', 'cpf': 'Συνεχιζόμενη ροή φορτίου: καμπύλη P–V και περιθώριο φόρτισης',
             'se': 'Εκτίμηση κατάστασης: ελάχιστα τετράγωνα με βάρη και εντοπισμός λανθασμένων μετρήσεων',
-            'harmonic': 'Αρμονική ροή φορτίου: παραμόρφωση τάσης και συντονισμοί', 'unbalanced': 'Ασύμμετρη (τριφασική) ροή φορτίου τροφοδότη'}
+            'harmonic': 'Αρμονική ροή φορτίου: παραμόρφωση τάσης και συντονισμοί', 'unbalanced': 'Ασύμμετρη (τριφασική) ροή φορτίου τροφοδότη',
+            'acdc': 'Ροή φορτίου AC/DC με δίκτυα συνεχούς πολλών τερματικών'}
     if study not in head:
         raise ReportError(f'network_report: study one of {", ".join(head)}')
     r = Report(title or head[study], name, meta={'Ζυγοί': len(net.buses), 'Κλάδοι': nbr, 'Γεννήτριες': gens, 'S βάσης (MVA)': net.S_base / MW})
@@ -542,6 +576,9 @@ def network_report(net, study='pf', result=None, title=None, **kw):
             r.heading('Η μέθοδος')
             r.text(f'{res["advice"]["why"][0].upper()}{res["advice"]["why"][1:]}.')
         _harmonic(r, net, res, MW, picture)
+    elif study == 'acdc':                                  # 4.20: the AC part as a load flow, then the DC grid and its stations
+        res = result or net.acdc_flow(**kw)
+        _acdc(r, net, res, MW, picture, order)
     elif study == 'unbalanced':
         if result is None:
             raise ReportError('network_report: the three-phase load flow needs its result (pcl.unbalanced.run of the feeder)')

@@ -1,5 +1,5 @@
 {
- "version": "4.19.6",
+ "version": "4.20",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -20,7 +20,8 @@
    "pcl.cpf.",
    "pcl.se.",
    "pcl.harmonic.",
-   "pcl.unbalanced."
+   "pcl.unbalanced.",
+   "pcl.dcgrid."
   ],
   "cli": [
    "workbench",
@@ -789,6 +790,118 @@
    "pcl.current": {
     "params": [],
     "since": "3.18"
+   },
+   "pcl.dcgrid.DCGrid": {
+    "params": [
+     "P_base",
+     "name"
+    ],
+    "since": "4.20"
+   },
+   "pcl.dcgrid.DCGrid.bus": {
+    "params": [
+     "name",
+     "Un",
+     "V"
+    ],
+    "since": "4.20"
+   },
+   "pcl.dcgrid.DCGrid.conductance": {
+    "params": [],
+    "since": "4.20"
+   },
+   "pcl.dcgrid.DCGrid.converter": {
+    "params": [
+     "bus",
+     "control",
+     "P",
+     "V",
+     "droop",
+     "Prated",
+     "R",
+     "name"
+    ],
+    "since": "4.20"
+   },
+   "pcl.dcgrid.DCGrid.flow": {
+    "params": [
+     "tol",
+     "max_iter",
+     "start"
+    ],
+    "since": "4.20"
+   },
+   "pcl.dcgrid.DCGrid.line": {
+    "params": [
+     "a",
+     "b",
+     "R",
+     "r",
+     "length",
+     "poles",
+     "name",
+     "rating"
+    ],
+    "since": "4.20"
+   },
+   "pcl.dcgrid.DCGrid.remove": {
+    "params": [
+     "name"
+    ],
+    "since": "4.20"
+   },
+   "pcl.dcgrid.DCGridError": {
+    "params": [],
+    "since": "4.20"
+   },
+   "pcl.dcgrid.acdc_flow": {
+    "params": [
+     "net",
+     "method",
+     "tol",
+     "max_iter",
+     "flat",
+     "outer",
+     "q_limits"
+    ],
+    "since": "4.20"
+   },
+   "pcl.dcgrid.grid_of": {
+    "params": [
+     "net"
+    ],
+    "since": "4.20"
+   },
+   "pcl.dcgrid.sensitivity": {
+    "params": [
+     "grid",
+     "res"
+    ],
+    "since": "4.20"
+   },
+   "pcl.dcgrid.station": {
+    "params": [
+     "Us",
+     "Ss",
+     "st",
+     "S_base",
+     "U_base"
+    ],
+    "since": "4.20"
+   },
+   "pcl.dcgrid.station_inverse": {
+    "params": [
+     "Us",
+     "Qs",
+     "Pdc",
+     "st",
+     "S_base",
+     "U_base",
+     "Ps0",
+     "tol",
+     "max_iter"
+    ],
+    "since": "4.20"
    },
    "pcl.formats.write_hdf5": {
     "params": [
@@ -2210,6 +2323,16 @@
     ],
     "since": "4.2"
    },
+   "pcl.network.Network.acdc_flow": {
+    "params": [
+     "method",
+     "tol",
+     "max_iter",
+     "flat",
+     "q_limits"
+    ],
+    "since": "4.20"
+   },
    "pcl.network.Network.advice": {
     "params": [
      "study",
@@ -2278,9 +2401,34 @@
     ],
     "since": "4.19.5"
    },
+   "pcl.network.Network.dc_bus": {
+    "params": [
+     "name",
+     "Un",
+     "V"
+    ],
+    "since": "4.20"
+   },
    "pcl.network.Network.dc_flow": {
     "params": [],
     "since": "4.19.1"
+   },
+   "pcl.network.Network.dc_grid": {
+    "params": [],
+    "since": "4.20"
+   },
+   "pcl.network.Network.dc_line": {
+    "params": [
+     "a",
+     "b",
+     "R",
+     "r",
+     "length",
+     "poles",
+     "name",
+     "rating"
+    ],
+    "since": "4.20"
    },
    "pcl.network.Network.element": {
     "params": [
@@ -2572,6 +2720,32 @@
      "slack"
     ],
     "since": "4.2"
+   },
+   "pcl.network.Network.vsc": {
+    "params": [
+     "bus",
+     "dc",
+     "control",
+     "P",
+     "V",
+     "droop",
+     "Prated",
+     "R",
+     "Q",
+     "Vac",
+     "side",
+     "Rtr",
+     "Xtr",
+     "Bf",
+     "Rc",
+     "Xc",
+     "a_loss",
+     "b_loss",
+     "crec",
+     "cinv",
+     "name"
+    ],
+    "since": "4.20"
    },
    "pcl.network.NetworkError": {
     "params": [],
