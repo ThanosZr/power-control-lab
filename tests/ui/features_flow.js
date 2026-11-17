@@ -274,6 +274,15 @@ const {chromium}=require('playwright');
  await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>window.PCL.STUDY.r&&window.PCL.STUDY.r.summary&&window.PCL.STUDY.r.summary.kind==='limit',null,{timeout:60000});
  const cp3=await p.evaluate(()=>({txt:document.querySelector('#study-result').innerText,z:window.PCL.STUDY.r.summary}));
  ok(Math.abs(cp3.z.lambda-1.565583)<1e-5&&cp3.z.last==='2'&&/γωνία, όχι μύτη/.test(cp3.txt)&&/άμεση αστάθεια/.test(cp3.txt),'continuation load flow: IEEE 9 with reactive limits ends on a corner at the limit of bus 2 (λ = '+cp3.z.lambda.toFixed(4)+')');
+ // 4.19.5 (ROADMAP §78): the sweep with compensation in the list of methods; where it does not converge the card says so
+ await p.evaluate(()=>window.PCL.loadTutorial('pf_study',{net:'ieee14',study:'pf',method:'sweepc'}));await p.waitForTimeout(900);
+ await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>!window.PCL.STUDY.busy&&window.PCL.STUDY.r?.summary?.method==='sweepc',null,{timeout:60000});
+ const sw1=await p.evaluate(()=>({txt:document.querySelector('#study-result').innerText,z:window.PCL.STUDY.r.summary}));
+ ok(sw1.z.converged&&sw1.z.iterations===18&&Math.abs(sw1.z.losses_MW-13.393)<0.01&&/Σύγκλιση σε 18 επαναλήψεις με εμπρός–πίσω σάρωση με αντιστάθμιση/.test(sw1.txt),'sweep with compensation: IEEE 14 in '+sw1.z.iterations+' iterations, losses '+sw1.z.losses_MW.toFixed(3)+' MW');
+ await p.evaluate(()=>window.PCL.loadTutorial('pf_study',{net:'ieee118',study:'pf',method:'sweepc'}));await p.waitForTimeout(900);
+ await p.click('#theory [data-study="run"]');await p.waitForFunction(()=>!window.PCL.STUDY.busy&&window.PCL.STUDY.r?.summary?.method==='sweepc'&&window.PCL.STUDY.r.summary.converged===false,null,{timeout:60000});
+ const sw2=await p.evaluate(()=>document.querySelector('#study-result').innerText);
+ ok(/Δεν συνέκλινε/.test(sw2)&&/σάρωση με αντιστάθμιση/.test(sw2),'sweep with compensation: IEEE 118 does not converge and the card says so');
  // 4.19.4 (ROADMAP §74): the third exercise from plain blocks
  await p.evaluate(()=>window.PCL.loadTutorial('current_ctl',{}));await p.waitForTimeout(700);await p.click('#toend');
  await p.waitForFunction(()=>window.PCL.S.sim&&window.PCL.S.sim.t>=0.01599,null,{timeout:120000});await p.waitForTimeout(600);

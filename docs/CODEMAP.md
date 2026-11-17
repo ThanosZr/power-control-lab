@@ -43,7 +43,7 @@
 | `web/studio/templates.js` | 32 |
 | `web/studio/trv.js` | 56 |
 | `web/studio/tune.js` | 237 |
-| `web/studio/tutorials.js` | 1994 |
+| `web/studio/tutorials.js` | 1995 |
 | `web/studio/units.js` | 156 |
 | `web/studio/watch.js` | 339 |
 | `web/studio/winframe.js` | 63 |
@@ -85,12 +85,12 @@
 | `pcl/link.py` | 150 |
 | `pcl/netfile.py` | 490 |
 | `pcl/netview.py` | 739 |
-| `pcl/network.py` | 1496 |
+| `pcl/network.py` | 1497 |
 | `pcl/nnstart.py` | 388 |
 | `pcl/onnxio.py` | 355 |
 | `pcl/opf.py` | 417 |
 | `pcl/plotting.py` | 340 |
-| `pcl/powerflow.py` | 985 |
+| `pcl/powerflow.py` | 1169 |
 | `pcl/psse.py` | 433 |
 | `pcl/report.py` | 679 |
 | `pcl/scopf.py` | 213 |
@@ -122,7 +122,7 @@
 | `tests/test_generator.py` | 223 |
 | `tests/test_gfm.py` | 222 |
 | `tests/test_gfm2.py` | 167 |
-| `tests/test_guide.py` | 95 |
+| `tests/test_guide.py` | 104 |
 | `tests/test_impl.py` | 138 |
 | `tests/test_impulse_tools.py` | 150 |
 | `tests/test_inputs.py` | 147 |
@@ -149,11 +149,11 @@
 | `tests/test_pieces.py` | 58 |
 | `tests/test_plotcore.py` | 74 |
 | `tests/test_plotting.py` | 113 |
-| `tests/test_powerflow.py` | 329 |
+| `tests/test_powerflow.py` | 334 |
 | `tests/test_psse.py` | 305 |
 | `tests/test_recording.py` | 211 |
 | `tests/test_refac.py` | 78 |
-| `tests/test_report.py` | 718 |
+| `tests/test_report.py` | 726 |
 | `tests/test_scopf.py` | 263 |
 | `tests/test_sparse.py` | 53 |
 | `tests/test_sssc.py` | 444 |
@@ -162,6 +162,7 @@
 | `tests/test_studio_math.py` | 50 |
 | `tests/test_studio_sim.py` | 609 |
 | `tests/test_subcircuit.py` | 149 |
+| `tests/test_sweepc.py` | 181 |
 | `tests/test_templates.py` | 237 |
 | `tests/test_trstart.py` | 26 |
 | `tests/test_trv.py` | 248 |
@@ -222,7 +223,7 @@
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/ev_flow.js` | 112 |
 | `tests/ui/facts_flow.js` | 93 |
-| `tests/ui/features_flow.js` | 284 |
+| `tests/ui/features_flow.js` | 293 |
 | `tests/ui/line_flow.js` | 166 |
 | `tests/ui/live_flow.js` | 41 |
 | `tests/ui/perf_flow.js` | 68 |
@@ -404,26 +405,26 @@
 | 1276 | `ieee9_emt` | Συστήματα ισχύος (4.3) | IEEE 9 ζυγών σε EMT, από τη ροή φορτίου |
 | 1307 | `big_grid` | Μεγάλα δίκτυα (4.19.3) | Πλέγμα k × k ζυγών σε EMT: ο γραμμικός λύτης σε μεγάλο δίκτυο |
 | 1322 | `pf_study` | Ροή φορτίου και OPF (4.19.1) | Ροή φορτίου και N−1 σε δίκτυα IEEE |
-| 1333 | `opf_study` | Ροή φορτίου και OPF (4.19.1) | Βέλτιστη ροή φορτίου (OPF) σε δίκτυα IEEE |
-| 1347 | `cpf_study` | Ροή φορτίου και OPF (4.19.1) | Ευστάθεια τάσης: καμπύλη P–V και περιθώριο φόρτισης (συνεχιζόμενη ροή φορτίου) |
-| 1371 | `ieee9_sssc` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | IEEE 9 ζυγών σε EMT με τριφασικό m-SSSC (κεντρικός έλεγχος) |
-| 1401 | `trv_terminal` | Διακόπτες ισχύος (4.9) | TRV σε σφάλμα ακροδεκτών: IEC 62271-100 |
-| 1422 | `trv_slf` | Διακόπτες ισχύος (4.9) | Σφάλμα κοντινής γραμμής και τόξο του διακόπτη |
-| 1453 | `lightning_gis` | Κεραυνοί και συντονισμός μόνωσης (4.9) | Κεραυνός σε γραμμή 400 kV δίπλα σε υποσταθμό GIS: συντονισμός μόνωσης |
-| 1516 | `line_fd` | Γραμμές (4.4) | Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD) |
-| 1537 | `cable_fd` | Καλώδια (4.5) | Ζεύξη υποβρύχιου καλωδίου 220 kV: CP και FD |
-| 1586 | `cable_xb` | Καλώδια: wideband και cross-bonding (4.13) | Υπόγειο καλώδιο 150 kV με cross-bonding: αναλυτικό και ομογενές μοντέλο |
-| 1629 | `sssc_1ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε γραμμή (μονοφασικό) |
-| 1649 | `sssc_3ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε δίκτυο 150 kV (τριφασικό, 4 ζυγοί) |
-| 1687 | `ccsc_1ph` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | CCSC: πυκνωτής σειράς ελεγχόμενος από μετατροπέα (μονοφασικό) |
-| 1715 | `hvdc_mmc` | HVDC: MMC (4.14) | Σύνδεση HVDC με MMC σημείο προς σημείο (±320 kV, 1000 MW) |
-| 1758 | `hvdc_gfm` | Grid-forming (4.18.1) | Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα |
-| 1806 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
-| 1860 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
-| 1887 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
-| 1915 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
-| 1952 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
-| 1982 | `empty` | Νέο | Κενό κύκλωμα |
+| 1334 | `opf_study` | Ροή φορτίου και OPF (4.19.1) | Βέλτιστη ροή φορτίου (OPF) σε δίκτυα IEEE |
+| 1348 | `cpf_study` | Ροή φορτίου και OPF (4.19.1) | Ευστάθεια τάσης: καμπύλη P–V και περιθώριο φόρτισης (συνεχιζόμενη ροή φορτίου) |
+| 1372 | `ieee9_sssc` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | IEEE 9 ζυγών σε EMT με τριφασικό m-SSSC (κεντρικός έλεγχος) |
+| 1402 | `trv_terminal` | Διακόπτες ισχύος (4.9) | TRV σε σφάλμα ακροδεκτών: IEC 62271-100 |
+| 1423 | `trv_slf` | Διακόπτες ισχύος (4.9) | Σφάλμα κοντινής γραμμής και τόξο του διακόπτη |
+| 1454 | `lightning_gis` | Κεραυνοί και συντονισμός μόνωσης (4.9) | Κεραυνός σε γραμμή 400 kV δίπλα σε υποσταθμό GIS: συντονισμός μόνωσης |
+| 1517 | `line_fd` | Γραμμές (4.4) | Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD) |
+| 1538 | `cable_fd` | Καλώδια (4.5) | Ζεύξη υποβρύχιου καλωδίου 220 kV: CP και FD |
+| 1587 | `cable_xb` | Καλώδια: wideband και cross-bonding (4.13) | Υπόγειο καλώδιο 150 kV με cross-bonding: αναλυτικό και ομογενές μοντέλο |
+| 1630 | `sssc_1ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε γραμμή (μονοφασικό) |
+| 1650 | `sssc_3ph` | FACTS: αρθρωτός SSSC (4.10) | Αρθρωτός SSSC σε δίκτυο 150 kV (τριφασικό, 4 ζυγοί) |
+| 1688 | `ccsc_1ph` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | CCSC: πυκνωτής σειράς ελεγχόμενος από μετατροπέα (μονοφασικό) |
+| 1716 | `hvdc_mmc` | HVDC: MMC (4.14) | Σύνδεση HVDC με MMC σημείο προς σημείο (±320 kV, 1000 MW) |
+| 1759 | `hvdc_gfm` | Grid-forming (4.18.1) | Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα |
+| 1807 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
+| 1861 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
+| 1888 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
+| 1916 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
+| 1953 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
+| 1983 | `empty` | Νέο | Κενό κύκλωμα |
 
 ## API του server (`run.py`, `/api/<action>`)
 
@@ -2311,46 +2312,46 @@ _(χωρίς συναρτήσεις)_
 | 1290 | const fn | `B` |
 | 1292 | const fn | `w` |
 | 1312 | method | `build` |
-| 1332 | method | `build` |
-| 1344 | method | `build` |
-| 1359 | method | `build` |
-| 1376 | method | `build` |
-| 1392 | const fn | `LM` |
-| 1395 | function | `tlmPart` |
-| 1409 | method | `build` |
-| 1428 | method | `build` |
-| 1448 | function | `tlmGW` |
-| 1452 | const fn | `note` |
-| 1464 | method | `build` |
-| 1482 | const fn | `tl` |
-| 1510 | const fn | `PANE` |
-| 1521 | method | `build` |
-| 1523 | const fn | `rig` |
-| 1542 | method | `build` |
-| 1544 | const fn | `rig` |
-| 1564 | function | `xbRig` |
-| 1566 | const fn | `bond` |
-| 1593 | method | `build` |
-| 1628 | function | `ssscChannels` |
-| 1637 | method | `build` |
-| 1657 | method | `build` |
-| 1659 | const fn | `ln` |
-| 1693 | method | `build` |
-| 1695 | const fn | `sw` |
-| 1722 | method | `build` |
-| 1726 | const fn | `station` |
-| 1762 | method | `build` |
-| 1766 | const fn | `station` |
-| 1813 | method | `build` |
-| 1850 | const fn | `gfmWire` |
-| 1854 | const fn | `busMeter` |
-| 1867 | method | `build` |
-| 1869 | const fn | `unit` |
-| 1892 | method | `build` |
-| 1923 | method | `build` |
-| 1956 | method | `build` |
-| 1983 | method | `build` |
-| 1988 | function | `dcdcInputs` |
+| 1333 | method | `build` |
+| 1345 | method | `build` |
+| 1360 | method | `build` |
+| 1377 | method | `build` |
+| 1393 | const fn | `LM` |
+| 1396 | function | `tlmPart` |
+| 1410 | method | `build` |
+| 1429 | method | `build` |
+| 1449 | function | `tlmGW` |
+| 1453 | const fn | `note` |
+| 1465 | method | `build` |
+| 1483 | const fn | `tl` |
+| 1511 | const fn | `PANE` |
+| 1522 | method | `build` |
+| 1524 | const fn | `rig` |
+| 1543 | method | `build` |
+| 1545 | const fn | `rig` |
+| 1565 | function | `xbRig` |
+| 1567 | const fn | `bond` |
+| 1594 | method | `build` |
+| 1629 | function | `ssscChannels` |
+| 1638 | method | `build` |
+| 1658 | method | `build` |
+| 1660 | const fn | `ln` |
+| 1694 | method | `build` |
+| 1696 | const fn | `sw` |
+| 1723 | method | `build` |
+| 1727 | const fn | `station` |
+| 1763 | method | `build` |
+| 1767 | const fn | `station` |
+| 1814 | method | `build` |
+| 1851 | const fn | `gfmWire` |
+| 1855 | const fn | `busMeter` |
+| 1868 | method | `build` |
+| 1870 | const fn | `unit` |
+| 1893 | method | `build` |
+| 1924 | method | `build` |
+| 1957 | method | `build` |
+| 1984 | method | `build` |
+| 1989 | function | `dcdcInputs` |
 
 ### `web/studio/units.js`
 
@@ -3498,34 +3499,34 @@ _(χωρίς συναρτήσεις)_
 | 867 | method | `Network.case` |
 | 877 | method | `Network.advice` |
 | 886 | method | `Network.power_flow` |
-| 907 | method | `Network.dc_flow` |
-| 915 | method | `Network.ptdf` |
-| 921 | method | `Network.lodf` |
-| 928 | method | `Network.contingency` |
-| 1006 | method | `Network.batch_flow` |
-| 1046 | method | `Network.report` |
-| 1052 | method | `Network.scopf` |
-| 1058 | method | `Network.cpf` |
-| 1065 | method | `Network.opf` |
-| 1087 | method | `Network.to_emt` |
-| 1167 | function | `_coo` |
-| 1173 | function | `_zip` |
-| 1178 | function | `_solve` |
-| 1189 | function | `_nr` |
-| 1225 | function | `sssc_placement` |
-| 1282 | function | `superposition` |
-| 1306 | function | `trv` |
-| 1340 | function | `_matrix` |
-| 1352 | function | `read_matpower` |
-| 1389 | function | `ieee` |
-| 1398 | function | `case_data` |
-| 1409 | function | `case_solution` |
-| 1418 | function | `ieee9` |
-| 1445 | function | `ieee14` |
-| 1458 | function | `to_dict` |
-| 1471 | function | `from_dict` |
-| 1491 | function | `save` |
-| 1495 | function | `load` |
+| 908 | method | `Network.dc_flow` |
+| 916 | method | `Network.ptdf` |
+| 922 | method | `Network.lodf` |
+| 929 | method | `Network.contingency` |
+| 1007 | method | `Network.batch_flow` |
+| 1047 | method | `Network.report` |
+| 1053 | method | `Network.scopf` |
+| 1059 | method | `Network.cpf` |
+| 1066 | method | `Network.opf` |
+| 1088 | method | `Network.to_emt` |
+| 1168 | function | `_coo` |
+| 1174 | function | `_zip` |
+| 1179 | function | `_solve` |
+| 1190 | function | `_nr` |
+| 1226 | function | `sssc_placement` |
+| 1283 | function | `superposition` |
+| 1307 | function | `trv` |
+| 1341 | function | `_matrix` |
+| 1353 | function | `read_matpower` |
+| 1390 | function | `ieee` |
+| 1399 | function | `case_data` |
+| 1410 | function | `case_solution` |
+| 1419 | function | `ieee9` |
+| 1446 | function | `ieee14` |
+| 1459 | function | `to_dict` |
+| 1472 | function | `from_dict` |
+| 1492 | function | `save` |
+| 1496 | function | `load` |
 
 ### `pcl/nnstart.py`
 
@@ -3622,44 +3623,51 @@ _(χωρίς συναρτήσεις)_
 | 45 | function | `_csr` |
 | 52 | class | `Case` |
 | 56 | method | `Case.__init__` |
-| 101 | method | `Case.sets` |
-| 105 | method | `Case.start` |
-| 112 | method | `Case.zip` |
-| 116 | method | `Case.mismatch` |
-| 121 | method | `Case.err` |
-| 127 | method | `Case.jac` |
-| 138 | method | `Case.graph` |
-| 157 | method | `Case.tree` |
-| 189 | class | `Jacobian` |
-| 195 | method | `Jacobian.__init__` |
-| 221 | method | `Jacobian.fill` |
-| 234 | method | `Jacobian.factor` |
-| 250 | method | `Jacobian.rhs` |
-| 253 | method | `Jacobian.apply` |
-| 260 | class | `_LU` |
-| 263 | method | `_LU.__init__` |
-| 267 | method | `_LU.solve` |
-| 277 | function | `newton` |
-| 310 | function | `newton_dense` |
-| 320 | function | `_b_matrices` |
-| 338 | function | `fast_decoupled` |
-| 370 | function | `newton_ci` |
-| 450 | function | `sweep` |
-| 491 | function | `gauss_seidel` |
-| 524 | function | `dc_model` |
-| 537 | function | `dc_flow` |
-| 552 | function | `ptdf` |
-| 563 | function | `lodf` |
-| 576 | function | `bridges` |
-| 612 | function | `advise` |
-| 642 | function | `solve` |
-| 690 | function | `_iterate` |
-| 753 | function | `_on` |
-| 766 | function | `batch` |
-| 841 | function | `_branch_jac` |
-| 857 | function | `contingency_ac` |
-| 963 | function | `without` |
-| 975 | function | `branch_flows` |
+| 102 | method | `Case.sets` |
+| 106 | method | `Case.start` |
+| 113 | method | `Case.zip` |
+| 117 | method | `Case.mismatch` |
+| 122 | method | `Case.err` |
+| 128 | method | `Case.jac` |
+| 139 | method | `Case.graph` |
+| 158 | method | `Case.link_tree` |
+| 167 | method | `Case.tree` |
+| 199 | class | `Jacobian` |
+| 205 | method | `Jacobian.__init__` |
+| 231 | method | `Jacobian.fill` |
+| 244 | method | `Jacobian.factor` |
+| 260 | method | `Jacobian.rhs` |
+| 263 | method | `Jacobian.apply` |
+| 270 | class | `_LU` |
+| 273 | method | `_LU.__init__` |
+| 277 | method | `_LU.solve` |
+| 287 | function | `newton` |
+| 320 | function | `newton_dense` |
+| 330 | function | `_b_matrices` |
+| 348 | function | `fast_decoupled` |
+| 380 | function | `newton_ci` |
+| 460 | function | `sweep` |
+| 501 | class | `Tree` |
+| 507 | method | `Tree.__init__` |
+| 560 | method | `Tree.solve` |
+| 573 | method | `Tree.patterns` |
+| 585 | function | `breakpoint_matrix` |
+| 605 | function | `sweep_comp` |
+| 674 | function | `gauss_seidel` |
+| 707 | function | `dc_model` |
+| 720 | function | `dc_flow` |
+| 735 | function | `ptdf` |
+| 746 | function | `lodf` |
+| 759 | function | `bridges` |
+| 795 | function | `advise` |
+| 826 | function | `solve` |
+| 874 | function | `_iterate` |
+| 937 | function | `_on` |
+| 950 | function | `batch` |
+| 1025 | function | `_branch_jac` |
+| 1041 | function | `contingency_ac` |
+| 1147 | function | `without` |
+| 1159 | function | `branch_flows` |
 
 ### `pcl/psse.py`
 

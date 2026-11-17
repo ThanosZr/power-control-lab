@@ -887,7 +887,8 @@ class Network:
         """The load flow with the sparse solvers (4.19.1, ROADMAP §68). method: 'auto' (the proposal of the engine from the
         network, in the result with its reason), 'nr' (Newton–Raphson on a sparse Jacobian), 'nr_dense' (the path of load_flow),
         'nr_ci' (current injections), 'fdxb' / 'fdbx' (fast decoupled), 'sweep' (backward/forward, radial networks without PV
-        buses), 'gs' (Gauss–Seidel, for teaching), 'dc' (the linear DC approximation: angles only).
+        buses), 'sweepc' (the sweep with compensation: radial and weakly meshed networks, PV buses; never chosen by 'auto'),
+        'gs' (Gauss–Seidel, for teaching), 'dc' (the linear DC approximation: angles only).
         Every method but 'dc' ends on the same mismatch tolerance tol (pu), so the result is the same within it.
         Returns the dict of load_flow, and 'method', 'path' (what ran, with fallbacks), 'advice', 'time' (s)."""
         from . import powerflow

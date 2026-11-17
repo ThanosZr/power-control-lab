@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.19.5: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (757 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.19.5: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (763 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-508 σημεία.
+514 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -418,6 +418,7 @@
 | `pcl.powerflow.Case.err` | `V`, `typ`, `Sg` | 4.19.1 · πειρ. |
 | `pcl.powerflow.Case.graph` | — | 4.19.1 · πειρ. |
 | `pcl.powerflow.Case.jac` | `typ` | 4.19.1 · πειρ. |
+| `pcl.powerflow.Case.link_tree` | `typ` | 4.19.5 · πειρ. |
 | `pcl.powerflow.Case.mismatch` | `V`, `Sg` | 4.19.1 · πειρ. |
 | `pcl.powerflow.Case.sets` | `typ` | 4.19.1 · πειρ. |
 | `pcl.powerflow.Case.start` | `flat` | 4.19.1 · πειρ. |
@@ -429,9 +430,13 @@
 | `pcl.powerflow.Jacobian.fill` | `V`, `I`, `load`, `J` | 4.19.1 · πειρ. |
 | `pcl.powerflow.Jacobian.rhs` | `mis` | 4.19.1 · πειρ. |
 | `pcl.powerflow.PowerFlowError` | — | 4.19.1 · πειρ. |
+| `pcl.powerflow.Tree` | `case`, `typ` | 4.19.5 · πειρ. |
+| `pcl.powerflow.Tree.patterns` | `pv`, `V` | 4.19.5 · πειρ. |
+| `pcl.powerflow.Tree.solve` | `J`, `Vroot` | 4.19.5 · πειρ. |
 | `pcl.powerflow.advise` | `case`, `study`, `scenarios` | 4.19.1 · πειρ. |
 | `pcl.powerflow.batch` | `case`, `dS`, `V0`, `tol`, `max_it`, `typ`, `lu`, `fallback`, `chunk`, `backend`, `how`, `Vstart` | 4.19.1 · πειρ. |
 | `pcl.powerflow.branch_flows` | `case`, `V`, `Y` | 4.19.1 · πειρ. |
+| `pcl.powerflow.breakpoint_matrix` | `case`, `typ` | 4.19.5 · πειρ. |
 | `pcl.powerflow.bridges` | `case` | 4.19.1 · πειρ. |
 | `pcl.powerflow.contingency_ac` | `case`, `V0`, `outages`, `tol`, `max_it`, `typ`, `chunk`, `fallback`, `backend`, `how` | 4.19.1 · πειρ. |
 | `pcl.powerflow.dc_flow` | `case`, `P` | 4.19.1 · πειρ. |
@@ -445,6 +450,7 @@
 | `pcl.powerflow.ptdf` | `case` | 4.19.1 · πειρ. |
 | `pcl.powerflow.solve` | `case`, `method`, `tol`, `max_iter`, `q_limits`, `flat`, `V0`, `typ` | 4.19.1 · πειρ. |
 | `pcl.powerflow.sweep` | `case`, `V`, `tol`, `max_iter`, `typ`, `Sg` | 4.19.1 · πειρ. |
+| `pcl.powerflow.sweep_comp` | `case`, `V`, `tol`, `max_iter`, `typ`, `Sg`, `inner` | 4.19.5 · πειρ. |
 | `pcl.powerflow.without` | `case`, `k` | 4.19.1 · πειρ. |
 | `pcl.psse.RawError` | — | 4.19.4 · πειρ. |
 | `pcl.psse.fields` | `line` | 4.19.4 · πειρ. |

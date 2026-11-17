@@ -17,7 +17,7 @@ function run(id,over,T){const t=Tutorials.get(id),opts={...defaults(t),...over},
   out[k]={amp:2*Math.hypot(a,b)/Tw,mean:m/Tw};});
  return {out,t:s.t,warn:s.net.warnings,meta:pr.meta,opts,panes:pr.scope.panes.map(p=>p.map(q=>q[0])),keys:KEYS.filter(k=>s.keys.includes(k))};}
 function card(id){const t=Tutorials.get(id);
- return {group:t.group,options:t.options.map(o=>({k:o.k,def:o.def,values:o.options.map(q=>q[0])})),
+ return {group:t.group,tasks:t.tasks,options:t.options.map(o=>({k:o.k,def:o.def,values:o.options.map(q=>q[0])})),
   studies:t.options.find(o=>o.k==='net').options.map(q=>t.build({...defaults(t),net:q[0]}).meta.study)};}
 // 4.19.5: the tutorial of the continuation load flow (cpf_study): its options, the request of every network of its list and of every
 // option, and the text of its tasks (the numbers in it are checked against the engine)

@@ -3012,6 +3012,12 @@
     ],
     "since": "4.19.1"
    },
+   "pcl.powerflow.Case.link_tree": {
+    "params": [
+     "typ"
+    ],
+    "since": "4.19.5"
+   },
    "pcl.powerflow.Case.mismatch": {
     "params": [
      "V",
@@ -3081,6 +3087,27 @@
     "params": [],
     "since": "4.19.1"
    },
+   "pcl.powerflow.Tree": {
+    "params": [
+     "case",
+     "typ"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.powerflow.Tree.patterns": {
+    "params": [
+     "pv",
+     "V"
+    ],
+    "since": "4.19.5"
+   },
+   "pcl.powerflow.Tree.solve": {
+    "params": [
+     "J",
+     "Vroot"
+    ],
+    "since": "4.19.5"
+   },
    "pcl.powerflow.advise": {
     "params": [
      "case",
@@ -3113,6 +3140,13 @@
      "Y"
     ],
     "since": "4.19.1"
+   },
+   "pcl.powerflow.breakpoint_matrix": {
+    "params": [
+     "case",
+     "typ"
+    ],
+    "since": "4.19.5"
    },
    "pcl.powerflow.bridges": {
     "params": [
@@ -3243,6 +3277,18 @@
      "Sg"
     ],
     "since": "4.19.1"
+   },
+   "pcl.powerflow.sweep_comp": {
+    "params": [
+     "case",
+     "V",
+     "tol",
+     "max_iter",
+     "typ",
+     "Sg",
+     "inner"
+    ],
+    "since": "4.19.5"
    },
    "pcl.powerflow.without": {
     "params": [

@@ -213,6 +213,10 @@
 | current-injection Newton method | Newton με εγχύσεις ρεύματος (4.19.1) |
 | backward/forward sweep | εμπρός–πίσω σάρωση (4.19.1) |
 | radial / meshed network, weakly meshed | ακτινικό / βροχοειδές δίκτυο, ασθενώς βροχοειδές (4.19.1) |
+| compensation (of a sweep), compensation-based power flow | αντιστάθμιση (της σάρωσης), σάρωση με αντιστάθμιση (4.19.5) |
+| tree, link (branch out of the tree) | δέντρο, κλάδος εκτός δέντρου (4.19.5) |
+| breakpoint, breakpoint impedance (sensitivity) matrix | σημείο διακοπής, πίνακας εμπεδήσεων των σημείων διακοπής (πίνακας ευαισθησίας) (4.19.5) |
+| tie (line) of a feeder | κλάδος σύνδεσης (τροφοδότη) (4.19.5) |
 | flat start, warm start | επίπεδη εκκίνηση, θερμή εκκίνηση (4.19.1) |
 | reactive power limits (PV → PQ switching) | όρια Q (ο ζυγός PV γίνεται PQ στο όριο) (4.19.1) |
 | tap ratio, phase shifter | λόγος (λήψη) μετασχηματιστή, μετατοπιστής φάσης (4.19.1) |

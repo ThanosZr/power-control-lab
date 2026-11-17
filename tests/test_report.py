@@ -593,6 +593,14 @@ class Tutorials(unittest.TestCase):
             self.assertTrue(a['summary']['converged'], m)
             self.assertAlmostEqual(a['result']['buses']['14']['V'], 1.0355, places=4, msg=m)        # bus 14 of the IEEE 14 case: 1,036 pu in its file
         self.assertTrue(S.run({'case': 'case33bw', 'study': 'pf', 'options': {'method': 'sweep'}})['summary']['converged'])
+        # 4.19.5: what the task of the sweep with compensation says is what the engine gives
+        task = next(t for t in T['pf']['tasks'] if 'Σάρωση με αντιστάθμιση' in t)
+        a14, a118 = N.case_data('ieee14').advice('pf')['facts'], N.case_data('ieee118').advice('pf')['facts']
+        s14 = S.run({'case': 'ieee14', 'study': 'pf', 'options': {'method': 'sweepc'}})['summary']
+        self.assertIn(f'IEEE 14 ({a14["loops"]} βρόχοι, {a14["pv"]} ζυγοί PV)', task)
+        self.assertIn(f'σε {s14["iterations"]} επαναλήψεις', task)
+        self.assertIn(f'IEEE 118 ({a118["loops"]} βρόχοι, {a118["pv"]} ζυγοί PV) δεν συγκλίνει', task)
+        self.assertFalse(S.run({'case': 'ieee118', 'study': 'pf', 'options': {'method': 'sweepc'}})['summary']['converged'])
         # what the tasks of the tutorial say about the two feeders is what the engine says: the 69-bus one is deep (the sparse
         # Newton), the 33-bus one is small (the dense one)
         a33, a69 = N.case_data('case33bw').advice('pf'), N.case_data('case69').advice('pf')

@@ -2607,7 +2607,7 @@ async function studyOpen(f){const m=S.tutMeta?.study;if(!f||!m||STUDY.busy)retur
  catch(e){STUDY.openError=/fetch|NetworkError|Load failed/i.test(e.message)?'Το αρχείο διαβάζεται στο engine: ξεκίνα τον τοπικό server (python run.py) και δοκίμασε ξανά.':e.message;}
  STUDY.busy=null;renderTheory();}
 const STUDY_LAB={pf:'Ροή φορτίου',n1:'N−1 σε AC',n1dc:'N−1, σάρωση DC',opf:'Βέλτιστη ροή φορτίου (AC)',dcopf:'Βέλτιστη ροή φορτίου (DC)',scopf:'Βέλτιστη ροή φορτίου με ασφάλεια N−1 (DC)',cpf:'Συνεχιζόμενη ροή φορτίου (καμπύλη P–V)'};
-const STUDY_METHOD={nr:'αραιός Newton–Raphson',nr_dense:'πυκνός Newton–Raphson',nr_ci:'Newton με εγχύσεις ρεύματος',fdxb:'fast-decoupled XB',fdbx:'fast-decoupled BX',sweep:'εμπρός–πίσω σάρωση',gs:'Gauss–Seidel',dc:'DC (γραμμική προσέγγιση)'};
+const STUDY_METHOD={nr:'αραιός Newton–Raphson',nr_dense:'πυκνός Newton–Raphson',nr_ci:'Newton με εγχύσεις ρεύματος',fdxb:'fast-decoupled XB',fdbx:'fast-decoupled BX',sweep:'εμπρός–πίσω σάρωση',sweepc:'εμπρός–πίσω σάρωση με αντιστάθμιση',gs:'Gauss–Seidel',dc:'DC (γραμμική προσέγγιση)'};
 async function studyAct(what){const m=S.tutMeta?.study;if(!m||STUDY.busy)return;
  if(what==='open'){const i=$('#study-open');i.value='';i.click();return;}
  if(what==='close'){STUDY.file=null;STUDY.error=null;STUDY.openError=null;$('#netview').hidden=true;NV.v?.destroy();NV.v=null;renderTheory();return;}

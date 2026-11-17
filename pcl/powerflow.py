@@ -5,8 +5,8 @@ One kernel, three scales:
 
 * one load flow: Newton–Raphson in polar coordinates on a sparse Jacobian with a fixed pattern (the values are written
   straight into their places; no sparse algebra inside the iteration), the reference of everything else; fast decoupled
-  (XB, BX); Newton with current injections in rectangular coordinates; the backward/forward sweep for radial networks;
-  Gauss–Seidel (for teaching); the DC load flow;
+  (XB, BX); Newton with current injections in rectangular coordinates; the backward/forward sweep for radial networks,
+  and (4.19.5) with compensation for a few loops and PV buses; Gauss–Seidel (for teaching); the DC load flow;
 * many load flows of the same topology (time series, Monte Carlo, training data): Newton with common factors in a batch,
   one factorization at the base point and every scenario as one more right-hand side of the same solve; each scenario
   is verified with its true mismatch and whatever does not converge goes to the reference path;
@@ -19,7 +19,7 @@ solve, so that a GPU backend (CuPy, double precision) can take them over without
 
 Sources (THEORY §8Ζ): Tinney & Hart 1967; the Jacobian in complex matrix notation as in Zimmerman, MATPOWER Technical
 Note 2; Stott & Alsaç 1974 (fast decoupled); da Costa, Martins & Pereira 1999 (current injections); Shirmohammadi, Hong,
-Semlyen & Luo 1988 (sweep); Wang, Wende-von Berg & Braun 2021 (batches with one pattern); Chan & Brandwajn 1986 and the
+Semlyen & Luo 1988 (sweep, compensation), Luo & Semlyen 1990 (PV buses as breakpoints: THEORY §8Ν); Wang, Wende-von Berg & Braun 2021 (batches with one pattern); Chan & Brandwajn 1986 and the
 matrix inversion lemma for the outages.
 """
 import math
@@ -32,10 +32,10 @@ from scipy.sparse.linalg import splu
 from . import backend as BK
 
 PQ, PV, REF = 0, 1, 2
-METHODS = ('auto', 'nr', 'nr_dense', 'nr_ci', 'fdxb', 'fdbx', 'sweep', 'gs', 'dc')
+METHODS = ('auto', 'nr', 'nr_dense', 'nr_ci', 'fdxb', 'fdbx', 'sweep', 'sweepc', 'gs', 'dc')
 TXT = {'nr': 'αραιός Newton–Raphson (πολικές συντεταγμένες, σταθερό μοτίβο)', 'nr_dense': 'πυκνός Newton–Raphson (ο δρόμος αναφοράς ως την 4.19)',
        'nr_ci': 'Newton με εγχύσεις ρεύματος (ορθογώνιες συντεταγμένες)', 'fdxb': 'fast-decoupled XB', 'fdbx': 'fast-decoupled BX',
-       'sweep': 'εμπρός–πίσω σάρωση', 'gs': 'Gauss–Seidel', 'dc': 'ροή φορτίου DC (γραμμική προσέγγιση)'}
+       'sweep': 'εμπρός–πίσω σάρωση', 'sweepc': 'εμπρός–πίσω σάρωση με αντιστάθμιση (βρόχοι και ζυγοί PV)', 'gs': 'Gauss–Seidel', 'dc': 'ροή φορτίου DC (γραμμική προσέγγιση)'}
 
 
 class PowerFlowError(ValueError):
@@ -96,6 +96,7 @@ class Case:
         self.has_qlim = bool(qlim)
         self._jac = {}
         self._tree = None
+        self._ctree = {}                                         # 4.19.5: the tree with links of the sweep with compensation, per root
 
     # ---------------------------------------------------------------- sets, start, mismatch
     def sets(self, typ=None):
@@ -153,6 +154,15 @@ class Case:
         if out['radial']:
             out['depth'] = int(self.tree()['depth'].max())
         return out
+
+    def link_tree(self, typ=None):
+        """4.19.5: the tree from the slack bus with the branches left out of it (a Tree), for the sweep with compensation; found
+        once per slack bus."""
+        typ = self.typ if typ is None else typ
+        root = int(np.flatnonzero(typ == REF)[0])
+        if root not in self._ctree:
+            self._ctree[root] = Tree(self, typ)
+        return self._ctree[root]
 
     def tree(self):
         """The radial network as a tree from the slack: for every bus its parent branch and its depth, the buses by level."""
@@ -487,6 +497,179 @@ def sweep(case, V, tol=1e-8, max_iter=200, typ=None, Sg=None):
     return V, it, bool(e < tol), {'fact': 0}
 
 
+# -------------------------------------------------------------------- the sweep with compensation: loops and PV buses (4.19.5)
+class Tree:
+    """The network as a tree from the slack bus and the branches left out of it (links). The tree is the one of the shortest
+    impedance paths, so that a radial network is its own tree and a loop is opened far from the slack bus. For given
+    currents that the buses draw the tree is a linear network that two passes solve exactly: to the root the admittance and the
+    current of everything below each bus, to the leaves the voltages (no matrix is stored or factorized)."""
+
+    def __init__(self, case, typ=None):
+        import heapq
+        typ = case.typ if typ is None else typ
+        n, nl = case.n, case.nl
+        root = int(np.flatnonzero(typ == REF)[0])
+        adj = [[] for _ in range(n)]
+        for k in range(nl):
+            adj[case.f[k]].append((int(case.t[k]), k))
+            adj[case.t[k]].append((int(case.f[k]), k))
+        w = 1 / np.abs(case.y)
+        parent, pbr, depth = np.full(n, -1), np.full(n, -1), np.full(n, -1)
+        dist, done, used = np.full(n, np.inf), np.zeros(n, bool), np.zeros(nl, bool)
+        dist[root] = 0.0
+        heap, order = [(0.0, root, -1, -1)], []
+        while heap:
+            d0, u, p, k = heapq.heappop(heap)
+            if done[u]:
+                continue
+            done[u] = True
+            order.append(u)
+            if p >= 0:
+                parent[u], pbr[u], depth[u] = p, k, depth[p] + 1
+                used[k] = True
+            else:
+                depth[u] = 0
+            for v, kk in adj[u]:
+                if not done[v] and d0 + w[kk] < dist[v]:
+                    dist[v] = d0 + w[kk]
+                    heapq.heappush(heap, (dist[v], v, u, kk))
+        if len(order) != n:
+            raise PowerFlowError('the sweep needs a network in one piece (every bus tied to the slack bus)')
+        child = np.array(order[1:], int)
+        self.case, self.root, self.par, self.depth = case, root, parent, depth
+        self.lev = [child[depth[child] == d] for d in range(1, int(depth.max(initial=0)) + 1)]
+        self.links = L = np.flatnonzero(~used)
+        k, d = pbr[child], np.zeros(n, bool)
+        d[child] = case.f[k] == parent[child]
+        dc = d[child]
+        # per bus: the four admittances of the branch to its parent, seen from the bus (c) and from the parent (p)
+        self.Ycc, self.Ycp, self.Ypp, self.Ypc = (np.zeros(n, complex) for _ in range(4))
+        self.Ycc[child], self.Ycp[child] = np.where(dc, case.Ytt[k], case.Yff[k]), np.where(dc, case.Ytf[k], case.Yft[k])
+        self.Ypp[child], self.Ypc[child] = np.where(dc, case.Yff[k], case.Ytt[k]), np.where(dc, case.Yft[k], case.Ytf[k])
+        # a link is its series admittance behind its ratio; its shunt parts stay at its two buses
+        self.f, self.t, self.y, self.tap = case.f[L], case.t[L], case.y[L], case.tap[L]
+        self.ysh = case.ysh.copy()
+        np.add.at(self.ysh, self.f, 0.5j * case.bsh[L] / np.abs(self.tap) ** 2)
+        np.add.at(self.ysh, self.t, 0.5j * case.bsh[L])
+        Yacc = self.ysh.copy()                                   # the pass of the admittances, once
+        self.den = np.ones(n, complex)
+        for c in reversed(self.lev):
+            self.den[c] = self.Ycc[c] + Yacc[c]
+            np.add.at(Yacc, parent[c], self.Ypp[c] - self.Ypc[c] * self.Ycp[c] / self.den[c])
+
+    def solve(self, J, Vroot):
+        """The voltages of the tree for the currents J that the buses draw (a vector, or one column per case) and the
+        voltage of the root."""
+        J = J.copy()
+        ex = (slice(None),) + (None,) * (J.ndim - 1)
+        for c in reversed(self.lev):
+            np.add.at(J, self.par[c], (-self.Ypc[c] / self.den[c])[ex] * J[c])
+        V = np.zeros_like(J)
+        V[self.root] = Vroot
+        for c in self.lev:
+            V[c] = (-self.Ycp[c][ex] * V[self.par[c]] - J[c]) / self.den[c][ex]
+        return V
+
+    def patterns(self, pv, V):
+        """The voltages of the tree (root at zero) for a unit current through every link (out of its «from» bus, into its «to»
+        bus) and a unit of reactive power into every PV bus at the voltages V: n × (links + PV buses)."""
+        m, npv = len(self.links), len(pv)
+        P = np.zeros((self.case.n, m + npv), complex)
+        col = np.arange(m)
+        np.add.at(P, (self.f, col), 1 / np.conj(self.tap))
+        np.add.at(P, (self.t, col), -1.0)
+        P[pv, m + np.arange(npv)] = 1j / np.conj(V[pv])          # the current a bus draws for one unit of reactive power less
+        return self.solve(P, 0.0)
+
+
+def breakpoint_matrix(case, typ=None):
+    """The impedances seen from the breakpoints of the sweep with compensation, as Luo & Semlyen (1990) define them: for a link
+    the impedance around its loop (its own, and the tree path between its two buses), for a PV bus the impedance of its path
+    to the slack bus, and between two of them the impedance of what their paths share (the sign from their directions).
+    Returns {'links': [branch names], 'pv': [bus names], 'Z': complex matrix, links first}."""
+    typ = case.typ if typ is None else typ
+    T = case.link_tree(typ)
+    pv = np.flatnonzero(typ == PV)
+    m = len(T.links)
+    P = np.zeros((case.n, m + len(pv)), complex)                 # unit currents: through each link, and into each PV bus
+    col = np.arange(m)
+    np.add.at(P, (T.f, col), 1 / np.conj(T.tap))
+    np.add.at(P, (T.t, col), -1.0)
+    P[pv, m + np.arange(len(pv))] = -1.0
+    dV = T.solve(P, 0.0)
+    Z = np.vstack([dV[T.t] - dV[T.f] / T.tap[:, None], dV[pv]])
+    Z[col, col] += 1 / T.y
+    return {'links': [case.br_name[k] for k in T.links], 'pv': [case.names[i] for i in pv], 'Z': Z}
+
+
+def sweep_comp(case, V, tol=1e-8, max_iter=100, typ=None, Sg=None, inner=2):
+    """The backward/forward sweep on the tree from the slack bus, with compensation for what a tree does not have (Shirmohammadi,
+    Hong, Semlyen & Luo 1988; Luo & Semlyen 1990): the series current of every link and the reactive power of every PV bus are
+    unknowns of their own, found from the mismatch they leave (the equation of the link, |V| − V_set) with a tangent that
+    comes from the linear tree with the loads left out and is kept while the iteration converges. Every iteration is `inner`
+    exact solves of the tree and one solve with the small dense tangent. It ends on the common mismatch of the methods, and on
+    the set voltage of the PV buses within the same tolerance. Made for radial and weakly meshed networks: with many loops
+    and a heavily loaded tree it does not converge, and says so. Returns (V, iterations, converged, info)."""
+    typ = case.typ if typ is None else typ
+    Sg = (case.Sg if Sg is None else Sg).copy()
+    T = case.link_tree(typ)
+    pv = np.flatnonzero(typ == PV)
+    m, npv = len(T.links), len(pv)
+    if 2 * m + npv > COMP_MAX:
+        raise PowerFlowError(f'the sweep with compensation is for radial and weakly meshed networks: here {m} branches close loops and {npv} buses '
+                             'hold their voltage; use Newton–Raphson')
+    f, t, y, tap, Vset = T.f, T.t, T.y, T.tap, case.Vset
+    V = V.copy()
+    Vr = V[T.root]
+    # the unknowns start on what the starting voltages give: the current of every link, the reactive power every PV bus needs
+    js = y * (V[f] / tap - V[t])
+    q = (V[pv] * np.conj(case.Y[pv] @ V) + case.zip(np.abs(V))[pv]).imag
+    S = Sg.copy()
+    col = np.arange(m)
+
+    def tangent(V):
+        dV = T.patterns(pv, V)
+        A = -(y[:, None] * (dV[f] / tap[:, None] - dV[t]))       # the mismatch of every link per unit of every unknown
+        A[col, col] += 1.0
+        B = np.conj(V[pv] / np.abs(V[pv]))[:, None] * dV[pv]     # d|V| of every PV bus = Re(B · unknown)
+        M = np.empty((2 * m + npv, 2 * m + npv))
+        M[:m, :m], M[:m, m:2 * m], M[:m, 2 * m:] = A[:, :m].real, -A[:, :m].imag, A[:, m:].real
+        M[m:2 * m, :m], M[m:2 * m, m:2 * m], M[m:2 * m, 2 * m:] = A[:, :m].imag, A[:, :m].real, A[:, m:].imag
+        M[2 * m:, :m], M[2 * m:, m:2 * m], M[2 * m:, 2 * m:] = B[:, :m].real, -B[:, :m].imag, B[:, m:].real
+        return M
+
+    it, nt, e, e_old, Minv = 0, 0, np.inf, np.inf, None
+    S[pv] = Sg[pv].real + 1j * q
+    best = (max(case.err(V, typ, S), np.max(np.abs(np.abs(V[pv]) - Vset[pv]), initial=0.0)), V)      # the smallest mismatch: what is returned when it does not converge
+    with np.errstate(over='ignore', invalid='ignore', divide='ignore'):
+        while it < max_iter:
+            it += 1
+            S[pv] = Sg[pv].real + 1j * q
+            for _ in range(max(1, int(inner))):
+                J = np.conj((case.zip(np.abs(V)) - S) / V)       # what every bus draws: load minus generation (the shunts are in the tree)
+                np.add.at(J, f, js / np.conj(tap))
+                np.add.at(J, t, -js)
+                V = T.solve(J, Vr)
+            e = max(case.err(V, typ, S), np.max(np.abs(np.abs(V[pv]) - Vset[pv]), initial=0.0)) if np.all(np.isfinite(V)) else np.inf
+            if e < best[0]:
+                best = (e, V)
+            if e < tol or not np.isfinite(e) or e > 1e6 * best[0]:      # done, or running away
+                break
+            if not (m + npv):
+                continue
+            if Minv is None or (it > 3 and e > 0.7 * e_old and nt < 6):  # the tangent again where the iteration slows down
+                try:
+                    Minv = np.linalg.inv(tangent(V))
+                except np.linalg.LinAlgError:
+                    break
+                nt += 1
+            g = js - y * (V[f] / tap - V[t])
+            dx = Minv @ np.r_[g.real, g.imag, np.abs(V[pv]) - Vset[pv]]
+            js, q, e_old = js - (dx[:m] + 1j * dx[m:2 * m]), q - dx[2 * m:], e
+    e, V = best
+    return V, it, bool(e < tol), {'fact': nt, 'links': m, 'pv': npv, 'levels': len(T.lev)}
+
+
 # -------------------------------------------------------------------- Gauss–Seidel (for teaching)
 def gauss_seidel(case, V, tol=1e-8, max_iter=20000, typ=None, Sg=None, accel=1.0):
     """V_k ← (conj(S_k/V_k) − Σ_{m≠k} Y_km·V_m)/Y_kk bus by bus, a PV bus with its reactive power from the present voltages and
@@ -636,6 +819,7 @@ def advise(case, study='pf', scenarios=1):
 
 DENSE_MAX = 40          # buses up to which «Αυτόματα» keeps the dense reference path (measured: the sparse path wins above)
 SWEEP_WIDTH = 12        # buses per level of the tree above which the sweep is faster than the sparse Newton (measured)
+COMP_MAX = 2000         # unknowns of the compensation (two per link, one per PV bus) above which the sweep with compensation refuses
 
 
 # -------------------------------------------------------------------- one load flow, with reactive limits and fallbacks
@@ -652,7 +836,7 @@ def solve(case, method='auto', tol=1e-8, max_iter=None, q_limits=False, flat=Fal
     Sg = case.Sg.copy()
     t0 = time.perf_counter()
     path, it_total, info = [], 0, {}
-    run = {'nr': newton, 'nr_dense': newton_dense, 'nr_ci': newton_ci, 'sweep': sweep, 'gs': gauss_seidel,
+    run = {'nr': newton, 'nr_dense': newton_dense, 'nr_ci': newton_ci, 'sweep': sweep, 'sweepc': sweep_comp, 'gs': gauss_seidel,
            'fdxb': lambda *a, **k: fast_decoupled(*a, scheme='xb', **k), 'fdbx': lambda *a, **k: fast_decoupled(*a, scheme='bx', **k)}
     if m == 'dc':
         th, Pf = dc_flow(case)
@@ -979,7 +1163,7 @@ def branch_flows(case, V, Y=None):
     return Vf * np.conj(case.Yff * Vf + case.Yft * Vt), Vt * np.conj(case.Ytf * Vf + case.Ytt * Vt)
 
 
-__all__ = ['Case', 'Jacobian', 'PowerFlowError', 'METHODS', 'TXT', 'newton', 'newton_dense', 'newton_ci', 'fast_decoupled', 'sweep',
+__all__ = ['Case', 'Jacobian', 'PowerFlowError', 'METHODS', 'TXT', 'newton', 'newton_dense', 'newton_ci', 'fast_decoupled', 'sweep', 'Tree', 'sweep_comp', 'breakpoint_matrix',
            'gauss_seidel', 'dc_model', 'dc_flow', 'ptdf', 'lodf', 'bridges', 'advise', 'solve', 'batch', 'contingency_ac', 'without',
            'branch_flows', 'PQ', 'PV', 'REF', 'DENSE_MAX', 'SWEEP_WIDTH']
 _ = math

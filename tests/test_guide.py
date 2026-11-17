@@ -61,22 +61,31 @@ class Guide(unittest.TestCase):
             self.assertEqual(os.listdir(d), ['scopf.html'])
             self.assertIn('Ασφάλεια N−1', pathlib.Path(d, 'scopf.html').read_text(encoding='utf-8'))
 
-    def test_the_continuation_example_of_4_19_5_runs_as_written(self):
-        bl = blocks('4.19.5')
-        self.assertEqual(len(bl), 1)                         # §17
-        head, code = bl[0]
-        self.assertIn('Συνεχιζόμενη ροή φορτίου', head)
+    def as_written(self, number, title, lines, files=()):
+        """Runs the Python block of section `number` of 4.19.5 in an empty folder: it prints the lines the guide says it prints
+        («Γράφει:»), `lines` of them, and leaves `files`. Returns the folder's texts {name: text}."""
+        head, code = next((h, c) for h, c in blocks('4.19.5') if h.startswith(f'{number}.'))
+        self.assertIn(title, head)
         with tempfile.TemporaryDirectory() as d:
             env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING='utf-8')
             r = subprocess.run([sys.executable, '-c', code], cwd=d, env=env, capture_output=True, text=True, encoding='utf-8', timeout=300)
             self.assertEqual(r.returncode, 0, r.stderr[-2000:])
             text = (ROOT / 'docs' / 'GUIDE.md').read_text(encoding='utf-8')
-            sec = next(s for s in re.split(r'(?m)^## ', text) if s.startswith('17.'))
+            sec = next(s for s in re.split(r'(?m)^## ', text) if s.startswith(f'{number}.'))
             said = [ln[4:] for ln in sec.split('Γράφει:')[1].split('\n- **')[0].split('\n') if ln.startswith('    ')]
             self.assertEqual(r.stdout.strip().split('\n'), said)                                     # the lines the guide prints, as it prints them
-            self.assertEqual(len(said), 9)
-            self.assertEqual(os.listdir(d), ['cpf.html'])
-            self.assertIn('Καμπύλη P–V', pathlib.Path(d, 'cpf.html').read_text(encoding='utf-8'))
+            self.assertEqual(len(said), lines)
+            self.assertEqual(sorted(os.listdir(d)), sorted(files))
+            return {f: pathlib.Path(d, f).read_text(encoding='utf-8') for f in files}
+
+    def test_the_continuation_example_of_4_19_5_runs_as_written(self):
+        self.assertIn('Καμπύλη P–V', self.as_written(17, 'Συνεχιζόμενη ροή φορτίου', 9, ['cpf.html'])['cpf.html'])
+
+    def test_the_compensation_example_of_4_19_5_runs_as_written(self):
+        self.as_written(18, 'Σάρωση με αντιστάθμιση', 6)
+
+    def test_every_python_block_of_4_19_5_has_its_test(self):
+        self.assertEqual([h.split('.')[0] for h, _ in blocks('4.19.5')], ['17', '18'])
 
     def test_the_other_ways_the_guide_names(self):
         from pcl import network as N, study
