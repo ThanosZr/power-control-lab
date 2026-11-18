@@ -174,14 +174,22 @@
   // samples, so the mean) of every channel, fed with the ring's new samples; when the run passes B·w the buckets merge in
   // pairs and w doubles. 4.17.2: B from the memory of the scope (a quarter of the ring, 4096 … 65 536)
   envReset(){const s=this.sim,nch=s.ring.nch,rb=s.ring.cap*(4*nch+9);let B=ENV_B;while(B<ENV_MAX&&2*B*(16*nch+9)<=Math.max(4*1048576,rb/4))B*=2;
-   this.env={sim:s,nch,cap:s.ring.cap,B,w:0,mn:new Float32Array(B*nch).fill(Infinity),mx:new Float32Array(B*nch).fill(-Infinity),sm:new Float64Array(B*nch),nn:new Float64Array(B),has:new Uint8Array(B),lastT:-Infinity,lost:0};return this.env;}
+   // 4.20.2: a bucket gets its starting values (min +∞, max −∞, sum and count 0) when its first sample comes, not all of
+   // them here: the same numbers in every bucket that holds samples (has), and the others are never read; the fill of
+   // 30–60 MB took 6–13 ms at every opening of a large tutorial
+   this.env={sim:s,nch,cap:s.ring.cap,B,w:0,mn:new Float32Array(B*nch),mx:new Float32Array(B*nch),sm:new Float64Array(B*nch),nn:new Float64Array(B),has:new Uint8Array(B),lastT:-Infinity,lost:0};return this.env;}
   ingest(){const s=this.sim;if(!s?.ring?.n)return;const r=s.ring;let E=this.env;if(!E||E.sim!==s||E.nch!==r.nch||E.cap!==r.cap||s.t<E.lastT)E=this.envReset();
    const start=(r.head-r.n+r.cap)%r.cap,nch=r.nch,B=E.B;if(r.n===r.cap&&Number.isFinite(E.lastT)&&r.t[start]>E.lastT)E.lost++;
    let i=Number.isFinite(E.lastT)?Math.max(0,this.ringIndex(E.lastT)-1):0;while(i<r.n&&r.t[(start+i)%r.cap]<=E.lastT)i++;
    for(;i<r.n;i++){const j=(start+i)%r.cap,t=r.t[j];if(!(t>=0))continue;if(!(E.w>0))E.w=Math.max(s.h||1e-9,1e-12)*4;let k=Math.floor(t/E.w);
-    while(k>=B){const M=E.mn,X=E.mx,S=E.sm,N=E.nn,H=E.has;for(let b=0;b<B/2;b++){const o=b*nch,o1=2*b*nch,o2=(2*b+1)*nch;for(let q=0;q<nch;q++){M[o+q]=Math.min(M[o1+q],M[o2+q]);X[o+q]=Math.max(X[o1+q],X[o2+q]);S[o+q]=S[o1+q]+S[o2+q];}N[b]=N[2*b]+N[2*b+1];H[b]=H[2*b]|H[2*b+1];}
-     M.fill(Infinity,B/2*nch);X.fill(-Infinity,B/2*nch);S.fill(0,B/2*nch);N.fill(0,B/2);H.fill(0,B/2);E.w*=2;k=Math.floor(t/E.w);}
-    const o=k*nch,ro=j*nch;for(let q=0;q<nch;q++){const v=r.d[ro+q];if(v<E.mn[o+q])E.mn[o+q]=v;if(v>E.mx[o+q])E.mx[o+q]=v;E.sm[o+q]+=v;}E.nn[k]++;E.has[k]=1;E.lastT=t;}}
+    // two buckets into one: with both holding samples as before; with one, its values (the empty one had +∞, −∞, 0)
+    while(k>=B){const M=E.mn,X=E.mx,S=E.sm,N=E.nn,H=E.has;for(let b=0;b<B/2;b++){const o=b*nch,o1=2*b*nch,o2=(2*b+1)*nch,h1=H[2*b],h2=H[2*b+1];
+      if(h1&&h2){for(let q=0;q<nch;q++){M[o+q]=Math.min(M[o1+q],M[o2+q]);X[o+q]=Math.max(X[o1+q],X[o2+q]);S[o+q]=S[o1+q]+S[o2+q];}N[b]=N[2*b]+N[2*b+1];}
+      else if(h1||h2){const oi=h1?o1:o2;if(oi!==o){M.copyWithin(o,oi,oi+nch);X.copyWithin(o,oi,oi+nch);S.copyWithin(o,oi,oi+nch);}N[b]=N[h1?2*b:2*b+1];}
+      H[b]=h1|h2;}
+     H.fill(0,B/2);E.w*=2;k=Math.floor(t/E.w);}
+    const o=k*nch,ro=j*nch;if(!E.has[k]){E.mn.fill(Infinity,o,o+nch);E.mx.fill(-Infinity,o,o+nch);E.sm.fill(0,o,o+nch);E.nn[k]=0;}
+    for(let q=0;q<nch;q++){const v=r.d[ro+q];if(v<E.mn[o+q])E.mn[o+q]=v;if(v>E.mx[o+q])E.mx[o+q]=v;E.sm[o+q]+=v;}E.nn[k]++;E.has[k]=1;E.lastT=t;}}
   // columns {fi, mn, mx, la, sm, nn, has} of W2 pixels over [t0, t1] for channel ci (sm/nn: the mean of the column): from
   // the envelope (or a file), then the ring's own samples over the part it still holds (from rs; Infinity: none of them)
   colsOf(ci,t0,t1,W2,f,src,rsAt){const fi=new Float64Array(W2),mn=new Float64Array(W2).fill(Infinity),mx=new Float64Array(W2).fill(-Infinity),la=new Float64Array(W2),sm=new Float64Array(W2),nn=new Float64Array(W2),has=new Uint8Array(W2),k=W2/(t1-t0);

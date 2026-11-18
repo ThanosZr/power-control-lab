@@ -1978,11 +1978,14 @@
     scope:{panes:[K.filter(k=>k!=='B5').map(k=>['Y:PW'+k,'P '+k+' (MW)']).concat([['Y:PWCD','P Cd-E1 (MW)']]),K.map(k=>['Y:VM'+k,'U '+k])],window:{unit:'s',n:ms}},
     meta:{b4:{ev,ctl:dr?'droop':'vdc',kd,te},study:{net:'b4',study:'acdc',options:b4Study(ev,dr,kd)}}});}});
  T.push({id:'hvdc_gfm',group:'Grid-forming (4.18.1)',title:'Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα',theory:'formula',topology:'hvdc_gfm',
-  options:[{k:'ac',label:'Δίκτυο του σταθμού 2',options:Object.entries(HVDC_G),def:'island'},{k:'law',label:'Νόμος του σταθμού 2',options:[['droop','Στατικότητα P–f 2 %, Q–V 5 % (φίλτρο 5 Hz)'],['vsm','VSM (H = 2 s)'],['psc','PSC (k_p = 50 rad/s, ρύθμιση V_ac)']],def:'droop'}],
-  desc:'Η σύνδεση HVDC του tutorial MMC (σταθμοί 1059 MVA, Model 4, καλώδια ±320 kV 70 km wideband). Ο σταθμός 1 κρατά την τάση DC από ένα ισχυρό δίκτυο. Ο σταθμός 2 είναι grid-forming: σχηματίζει την τάση AC του δικτύου του με τον νόμο του στοιχείου «Έλεγχος grid-forming» (στατικότητα, VSM ή PSC) μέσα στον έλεγχο του σταθμού, άμεσα η τάση με όριο ρεύματος στο 1,1 pu. Στη νησίδα δεν υπάρχει άλλη πηγή: ο σταθμός ορίζει και τη συχνότητα.',
-  tasks:['Νησίδα: μετά το βήμα φορτίου η συχνότητα πέφτει κατά m_p·ΔP (κάρτα) και η ενέργεια έρχεται από τον σταθμό 1 μέσω της τάσης DC.','Με δεύτερη μονάδα: το φορτίο μοιράζεται ανάλογα με τα 1059 και 500 MVA (ίδιο pu στις δύο), χωρίς επικοινωνία.','Ασθενές δίκτυο: ο σταθμός φτάνει τα 0,9 pu στο SCR 1,5 (ο έλεγχος ρεύματος του σταθμού της 4.18 ήταν ασταθής στο SCR 1).','Σύγκρινε στατικότητα, VSM και PSC στην πτώση της συχνότητας αμέσως μετά το βήμα.'],
-  build(o){const ac=HVDC_G[o.ac]?o.ac:'island',law=['droop','vsm','psc'].includes(o.law)?o.law:'droop',f=50,S=1059e6,N=400,te=0.6,r=x=>+x.toPrecision(6);
-   const mmc={impl:'fast',model:'m4',N,C:10e-3,Vdc:640e3,Larm:0.05,Ron:1e-3,ectl:'energy',conn:'bus'};
+  options:[{k:'ac',label:'Δίκτυο του σταθμού 2',options:Object.entries(HVDC_G),def:'island'},{k:'law',label:'Νόμος του σταθμού 2',options:[['droop','Στατικότητα P–f 2 %, Q–V 5 % (φίλτρο 5 Hz)'],['vsm','VSM (H = 2 s)'],['psc','PSC (k_p = 50 rad/s, ρύθμιση V_ac)']],def:'droop'},
+   // 4.20.2: the four models of the MMC as in hvdc_mmc (Model 1 with N = 20, the others with N = 400), with the energy control of the arms (4.15)
+   {k:'model',label:'Μοντέλο MMC (4.20.2)',options:[['m4','Model 4: μέσο μοντέλο (AVM)'],['m3','Model 3: συνάρτηση μεταγωγής βραχίονα (≈ 4 φορές πιο αργό)'],['m2','Model 2: ισοδύναμο βραχίονα, κάθε πυκνωτής (≈ 7 φορές πιο αργό)'],['m1','Model 1: κάθε υπομονάδα από IGBT (N = 20, πολύ αργό)']],def:'m4'}],
+  desc:'Η σύνδεση HVDC του tutorial MMC (σταθμοί 1059 MVA, Model 4 ή όποιο μοντέλο διαλέξεις, καλώδια ±320 kV 70 km wideband). Ο σταθμός 1 κρατά την τάση DC από ένα ισχυρό δίκτυο. Ο σταθμός 2 είναι grid-forming: σχηματίζει την τάση AC του δικτύου του με τον νόμο του στοιχείου «Έλεγχος grid-forming» (στατικότητα, VSM ή PSC) μέσα στον έλεγχο του σταθμού, άμεσα η τάση με όριο ρεύματος στο 1,1 pu. Στη νησίδα δεν υπάρχει άλλη πηγή: ο σταθμός ορίζει και τη συχνότητα.',
+  tasks:['Νησίδα: μετά το βήμα φορτίου η συχνότητα πέφτει κατά m_p·ΔP (κάρτα) και η ενέργεια έρχεται από τον σταθμό 1 μέσω της τάσης DC.','Με δεύτερη μονάδα: το φορτίο μοιράζεται ανάλογα με τα 1059 και 500 MVA (ίδιο pu στις δύο), χωρίς επικοινωνία.','Ασθενές δίκτυο: ο σταθμός φτάνει τα 0,9 pu στο SCR 1,5 (ο έλεγχος ρεύματος του σταθμού της 4.18 ήταν ασταθής στο SCR 1).','Σύγκρινε στατικότητα, VSM και PSC στην πτώση της συχνότητας αμέσως μετά το βήμα.','Άλλαξε το μοντέλο του MMC: με τον έλεγχο ενέργειας των βραχιόνων τα Model 2 και 3 δίνουν την P, τη συχνότητα και τη V_dc του Model 4 (κάρτα). Τι προσθέτουν; (Κυμάτωση των πυκνωτών, σκαλοπάτια της τάσης με N = 20 στο Model 1.)'],
+  build(o){const ac=HVDC_G[o.ac]?o.ac:'island',law=['droop','vsm','psc'].includes(o.law)?o.law:'droop',f=50,S=1059e6,te=0.6,r=x=>+x.toPrecision(6);
+   const model=['m1','m2','m3','m4'].includes(o.model)?o.model:'m4',N=model==='m1'?20:400;
+   const mmc={impl:model==='m1'?'blocks':'fast',model:model==='m1'?'m2':model,N,C:+(10e-3*N/400).toPrecision(6),Vdc:640e3,Larm:0.05,Ron:1e-3,ectl:'energy',conn:'bus'};
    const ctl={S,Vac:333e3,Vdc:640e3,f0:f,X:0.075,R:0.002,th0:-120,tdb:0.05,tbrk:0,prot:'on',Idcmax:2,tprot:0.3};
    const comps=[],wires=[],isl=ac!=='weak';
    const station=(k,x0,dir,ctlp,grid,gap=0)=>{const X=d=>x0+dir*(d<200?d:d+gap),id=q=>q+k;       // gap: room between the transformer and the grid side (4.19: the instruments)
@@ -2017,10 +2020,12 @@
      C('ZB','ZSER3',1880,60,{Rs:r(0.01*Zb),Ls:r(0.1*Zb/w0),Rp1:0,Lp:0,Rp2:0,conn:'bus'},{label:'γραμμή B'}));
     wires.push(['VSB:abc','ZB:abc2'],['ZB:abc1','JL2:j'],...gfmWire('CTB','VSB',2020,80,2200,-20,-100));}
    const pB=ac==='par'?[['Y:CTB/PP','P μονάδας B (pu των 500 MVA)']]:[],wB=ac==='par'?[['Y:CTB/WW','f B (pu)']]:[];
+   // 4.20.2: the arms of station 2 in the detailed models (with Model 4 the scope of before)
+   const arm=model==='m4'?[]:[model==='m1'?[['Y:MMC2/UaN:vav','μέση V_C άνω a 2'],['Y:MMC2/LaN:vav','μέση V_C κάτω a 2']]:[['Y:MMC2/AUa','Σv_C άνω a 2'],['Y:MMC2/ALa','Σv_C κάτω a 2']]];
    return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:1000,method:'TR',speed:0.02,stopT:1.2},
     scope:{panes:[[['Y:CT2/G/PP','P σταθμού 2 προς το AC (pu)'],...pB],[['Y:CT2/G/WW','f σταθμού 2 (pu)'],...wB],[['Y:CT2/G/VG','|v| σταθμού 2 (pu)'],['Y:CT2/G/IG','|i| (pu)'],['Y:CT2/G/LR','όριο ρεύματος']],[['Y:CT1/Fvdc','V_dc 1 (pu)'],['Y:CT2/Fvdc','V_dc 2 (pu)']],
-     [['Y:ADC','I_dc του θετικού πόλου (αμπερόμετρο, A)']],[['Y:VDC','V_dc ανάμεσα στους πόλους (βολτόμετρο, V)']],[['Y:M2A','i_a του σταθμού 2 προς το AC (αμπερόμετρο, A)']],[['Y:M2V','v_a στα 400 kV του σταθμού 2 (probe, V)']]],window:{unit:'s',n:1.2}},
-    meta:{hvdcgfm:{ac,law,te,S,SB:500e6,mp:0.02,Pload:600e6,dP:300e6,Pr2:0.55,PrB:0.55,scr:1.5}}});}});
+     [['Y:ADC','I_dc του θετικού πόλου (αμπερόμετρο, A)']],[['Y:VDC','V_dc ανάμεσα στους πόλους (βολτόμετρο, V)']],[['Y:M2A','i_a του σταθμού 2 προς το AC (αμπερόμετρο, A)']],[['Y:M2V','v_a στα 400 kV του σταθμού 2 (probe, V)']],...arm],window:{unit:'s',n:1.2}},
+    meta:{hvdcgfm:{ac,law,model,N,te,S,SB:500e6,mp:0.02,Pload:600e6,dP:300e6,Pr2:0.55,PrB:0.55,scr:1.5}}});}});
  // ------------------------------------------------------------------ 4.16 (§42): the first CIGRE HVDC benchmark (LCC)
  // The network of the benchmark at 50 Hz (Faruque et al. 2006 Fig. 1 and Table V, Watson & Arrillaga App. D), the transformers
  // and the controls of the example of the benchmark in PSCAD; the events of Faruque et al. (at 1,0 s for 0,15 s, 0,1 Ω)

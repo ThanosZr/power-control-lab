@@ -12,7 +12,7 @@
 | `web/studio/app.js` | 3172 |
 | `web/studio/bus.js` | 197 |
 | `web/studio/ctlwin.js` | 78 |
-| `web/studio/editor.js` | 697 |
+| `web/studio/editor.js` | 717 |
 | `web/studio/expr.js` | 73 |
 | `web/studio/inputs.js` | 62 |
 | `web/studio/inside.js` | 143 |
@@ -35,7 +35,7 @@
 | `web/studio/recview.js` | 84 |
 | `web/studio/scenario.js` | 156 |
 | `web/studio/scenario_worker.js` | 122 |
-| `web/studio/scope.js` | 331 |
+| `web/studio/scope.js` | 339 |
 | `web/studio/sim_worker.js` | 17 |
 | `web/studio/sparse.js` | 165 |
 | `web/studio/stepcheck.js` | 315 |
@@ -43,7 +43,7 @@
 | `web/studio/templates.js` | 32 |
 | `web/studio/trv.js` | 56 |
 | `web/studio/tune.js` | 237 |
-| `web/studio/tutorials.js` | 2216 |
+| `web/studio/tutorials.js` | 2221 |
 | `web/studio/units.js` | 164 |
 | `web/studio/watch.js` | 339 |
 | `web/studio/winframe.js` | 63 |
@@ -128,6 +128,7 @@
 | `tests/test_generator.py` | 223 |
 | `tests/test_gfm.py` | 222 |
 | `tests/test_gfm2.py` | 167 |
+| `tests/test_gfm3.py` | 57 |
 | `tests/test_guide.py` | 144 |
 | `tests/test_harmonic.py` | 312 |
 | `tests/test_impl.py` | 138 |
@@ -450,12 +451,12 @@
 | 1858 | `mtdc5` | Δίκτυα DC πολλών τερματικών (4.20) | Δίκτυο DC πέντε τερματικών με στατικότητα τάσης (EMT και ροή φορτίου AC/DC) |
 | 1913 | `b4dcs2` | Δίκτυα DC πολλών τερματικών (4.20) | Το DCS2 του B4 της CIGRE: πέντε τερματικά ±200 kV με σταθμούς MMC (EMT και ροή φορτίου) |
 | 1980 | `hvdc_gfm` | Grid-forming (4.18.1) | Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα |
-| 2028 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
-| 2082 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
-| 2109 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
-| 2137 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
-| 2174 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
-| 2204 | `empty` | Νέο | Κενό κύκλωμα |
+| 2033 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
+| 2087 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
+| 2114 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
+| 2142 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
+| 2179 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
+| 2209 | `empty` | Νέο | Κενό κύκλωμα |
 
 ## API του server (`run.py`, `/api/<action>`)
 
@@ -972,132 +973,136 @@
 | 18 | const fn | `esc` |
 | 20 | function | `normalize` |
 | 25 | const fn | `orth` |
-| 26 | class | `MinHeap` |
-| 27 | method | `pop` |
-| 30 | class | `Editor` |
-| 31 | method | `constructor` |
-| 66 | method | `comp` |
-| 68 | method | `wire` |
-| 71 | method | `busy` |
-| 72 | method | `newId` |
-| 73 | method | `pin` |
-| 74 | method | `wirePts` |
-| 75 | method | `setWirePts` |
-| 76 | method | `snapshot` |
-| 79 | method | `remember` |
-| 81 | method | `undo` |
-| 82 | method | `redo` |
-| 83 | method | `cleanSel` |
-| 84 | method | `load` |
-| 93 | method | `export` |
-| 95 | method | `replaceDoc` |
-| 99 | method | `changed` |
-| 100 | method | `selection` |
-| 101 | method | `select` |
-| 102 | method | `addPart` |
-| 108 | method | `setParams` |
-| 112 | method | `dropDangling` |
-| 114 | method | `netKinds` |
-| 120 | method | `setProgram` |
-| 121 | method | `setSolve` |
-| 123 | method | `setDiag` |
-| 124 | method | `renderDiag` |
-| 126 | method | `kindsOk` |
-| 127 | method | `wiresAt` |
-| 148 | method | `autoConnect` |
-| 165 | method | `insertSeries` |
-| 166 | const fn | `pos` |
-| 171 | method | `setWireTool` |
-| 172 | method | `startFreeWire` |
-| 173 | method | `newJunction` |
-| 175 | method | `finishFree` |
-| 180 | method | `setWireProps` |
-| 181 | method | `deleteSel` |
-| 187 | method | `tidyJunctions` |
-| 197 | method | `rotateSel` |
-| 199 | method | `mirrorSel` |
-| 201 | method | `captureWires` |
-| 202 | method | `refitWires` |
-| 203 | method | `copySel` |
-| 206 | method | `cutSel` |
-| 207 | method | `beginPaste` |
-| 210 | method | `paste` |
-| 220 | method | `astar` |
-| 228 | const fn | `idx` |
-| 230 | const fn | `dirIndex` |
-| 233 | const fn | `h` |
-| 247 | method | `simpleRoute` |
-| 250 | method | `route` |
-| 254 | method | `adjustEnd` |
-| 262 | method | `areaSize` |
-| 269 | method | `requestView` |
-| 270 | method | `viewFrame` |
-| 277 | method | `applyView` |
-| 286 | method | `gridBg` |
-| 295 | method | `fit` |
-| 297 | method | `extent` |
-| 304 | method | `render` |
-| 306 | method | `partEls` |
-| 307 | method | `partSVG` |
-| 313 | method | `renderPart` |
-| 314 | method | `valueText` |
-| 316 | const fn | `fn` |
-| 357 | method | `noteHTML` |
-| 362 | method | `lblMeasure` |
-| 369 | method | `lvChars` |
-| 375 | method | `renderLabels` |
-| 381 | const fn | `r1` |
-| 382 | const fn | `line` |
-| 394 | method | `relabelSoon` |
-| 395 | method | `renderWires` |
-| 414 | method | `wireSVG` |
-| 426 | method | `redrawWire` |
-| 427 | method | `pathD` |
-| 432 | method | `segDir` |
-| 433 | method | `midLabel` |
-| 434 | method | `renderPins` |
-| 444 | method | `renderSel` |
-| 448 | method | `setLive` |
-| 450 | method | `updateLive` |
-| 462 | method | `drawArrows` |
-| 473 | method | `world` |
-| 475 | method | `hitAt` |
-| 476 | method | `hitOf` |
-| 478 | method | `down` |
-| 504 | method | `move` |
-| 517 | method | `up` |
-| 531 | method | `cancelDrag` |
-| 532 | method | `hoverPin` |
-| 534 | method | `dbl` |
-| 535 | method | `menu` |
-| 538 | method | `worldNow` |
-| 539 | method | `wheel` |
-| 546 | method | `letter` |
-| 547 | method | `key` |
-| 572 | method | `beginDrag` |
-| 583 | method | `dragMove` |
-| 595 | method | `endDrag` |
-| 605 | method | `bakeMove` |
-| 610 | method | `dragSeg` |
-| 613 | const fn | `stub` |
-| 622 | method | `drawMarquee` |
-| 625 | method | `marqueeSelect` |
-| 628 | const fn | `inside` |
-| 635 | method | `escape` |
-| 638 | method | `beginPlace` |
-| 639 | method | `ghost` |
-| 642 | method | `finishPlace` |
-| 643 | method | `cancelPlace` |
-| 645 | method | `startWire` |
-| 646 | method | `startWireFrom` |
-| 647 | method | `previewWire` |
-| 656 | method | `wireClick` |
-| 662 | method | `orthoNext` |
-| 663 | method | `finishWire` |
-| 679 | method | `cancelWire` |
-| 681 | method | `splitWire` |
-| 691 | method | `wireNetPin` |
-| 693 | method | `canScroll` |
+| 29 | class | `MinHeap` |
+| 30 | method | `clear` |
+| 31 | method | `push` |
+| 34 | method | `pop` |
+| 38 | function | `rtArrays` |
+| 43 | class | `Editor` |
+| 44 | method | `constructor` |
+| 79 | method | `comp` |
+| 81 | method | `wire` |
+| 84 | method | `busy` |
+| 85 | method | `newId` |
+| 86 | method | `pin` |
+| 88 | method | `wirePts` |
+| 89 | method | `setWirePts` |
+| 90 | method | `snapshot` |
+| 93 | method | `remember` |
+| 95 | method | `undo` |
+| 96 | method | `redo` |
+| 97 | method | `cleanSel` |
+| 98 | method | `load` |
+| 107 | method | `export` |
+| 109 | method | `replaceDoc` |
+| 113 | method | `changed` |
+| 114 | method | `selection` |
+| 115 | method | `select` |
+| 116 | method | `addPart` |
+| 122 | method | `setParams` |
+| 126 | method | `dropDangling` |
+| 128 | method | `netKinds` |
+| 134 | method | `setProgram` |
+| 135 | method | `setSolve` |
+| 137 | method | `setDiag` |
+| 138 | method | `renderDiag` |
+| 140 | method | `kindsOk` |
+| 141 | method | `wiresAt` |
+| 162 | method | `autoConnect` |
+| 179 | method | `insertSeries` |
+| 180 | const fn | `pos` |
+| 185 | method | `setWireTool` |
+| 186 | method | `startFreeWire` |
+| 187 | method | `newJunction` |
+| 189 | method | `finishFree` |
+| 194 | method | `setWireProps` |
+| 195 | method | `deleteSel` |
+| 201 | method | `tidyJunctions` |
+| 211 | method | `rotateSel` |
+| 213 | method | `mirrorSel` |
+| 215 | method | `captureWires` |
+| 216 | method | `refitWires` |
+| 217 | method | `copySel` |
+| 220 | method | `cutSel` |
+| 221 | method | `beginPaste` |
+| 224 | method | `paste` |
+| 237 | method | `routeAll` |
+| 239 | method | `astar` |
+| 247 | const fn | `idx` |
+| 249 | const fn | `dirIndex` |
+| 251 | const fn | `h` |
+| 267 | method | `simpleRoute` |
+| 270 | method | `route` |
+| 274 | method | `adjustEnd` |
+| 282 | method | `areaSize` |
+| 289 | method | `requestView` |
+| 290 | method | `viewFrame` |
+| 297 | method | `applyView` |
+| 306 | method | `gridBg` |
+| 315 | method | `fit` |
+| 317 | method | `extent` |
+| 324 | method | `render` |
+| 326 | method | `partEls` |
+| 327 | method | `partSVG` |
+| 333 | method | `renderPart` |
+| 334 | method | `valueText` |
+| 336 | const fn | `fn` |
+| 377 | method | `noteHTML` |
+| 382 | method | `lblMeasure` |
+| 389 | method | `lvChars` |
+| 395 | method | `renderLabels` |
+| 401 | const fn | `r1` |
+| 402 | const fn | `line` |
+| 414 | method | `relabelSoon` |
+| 415 | method | `renderWires` |
+| 434 | method | `wireSVG` |
+| 446 | method | `redrawWire` |
+| 447 | method | `pathD` |
+| 452 | method | `segDir` |
+| 453 | method | `midLabel` |
+| 454 | method | `renderPins` |
+| 464 | method | `renderSel` |
+| 468 | method | `setLive` |
+| 470 | method | `updateLive` |
+| 482 | method | `drawArrows` |
+| 493 | method | `world` |
+| 495 | method | `hitAt` |
+| 496 | method | `hitOf` |
+| 498 | method | `down` |
+| 524 | method | `move` |
+| 537 | method | `up` |
+| 551 | method | `cancelDrag` |
+| 552 | method | `hoverPin` |
+| 554 | method | `dbl` |
+| 555 | method | `menu` |
+| 558 | method | `worldNow` |
+| 559 | method | `wheel` |
+| 566 | method | `letter` |
+| 567 | method | `key` |
+| 592 | method | `beginDrag` |
+| 603 | method | `dragMove` |
+| 615 | method | `endDrag` |
+| 625 | method | `bakeMove` |
+| 630 | method | `dragSeg` |
+| 633 | const fn | `stub` |
+| 642 | method | `drawMarquee` |
+| 645 | method | `marqueeSelect` |
+| 648 | const fn | `inside` |
+| 655 | method | `escape` |
+| 658 | method | `beginPlace` |
+| 659 | method | `ghost` |
+| 662 | method | `finishPlace` |
+| 663 | method | `cancelPlace` |
+| 665 | method | `startWire` |
+| 666 | method | `startWireFrom` |
+| 667 | method | `previewWire` |
+| 676 | method | `wireClick` |
+| 682 | method | `orthoNext` |
+| 683 | method | `finishWire` |
+| 699 | method | `cancelWire` |
+| 701 | method | `splitWire` |
+| 711 | method | `wireNetPin` |
+| 713 | method | `canScroll` |
 
 ### `web/studio/expr.js`
 
@@ -2117,14 +2122,14 @@ _(χωρίς συναρτήσεις)_
 | 168 | method | `plotW` |
 | 169 | method | `drawSamples` |
 | 176 | method | `envReset` |
-| 178 | method | `ingest` |
-| 187 | method | `colsOf` |
-| 188 | const fn | `put` |
-| 197 | method | `archiveFor` |
-| 206 | method | `yAuto` |
-| 211 | method | `draw` |
-| 254 | const fn | `Y` |
-| 282 | const fn | `flush` |
+| 181 | method | `ingest` |
+| 195 | method | `colsOf` |
+| 196 | const fn | `put` |
+| 205 | method | `archiveFor` |
+| 214 | method | `yAuto` |
+| 219 | method | `draw` |
+| 262 | const fn | `Y` |
+| 290 | const fn | `flush` |
 
 ### `web/studio/sim_worker.js`
 
@@ -2401,18 +2406,18 @@ _(χωρίς συναρτήσεις)_
 | 1922 | const fn | `dcbus` |
 | 1928 | const fn | `mmcp` |
 | 1929 | const fn | `station` |
-| 1984 | method | `build` |
-| 1988 | const fn | `station` |
-| 2035 | method | `build` |
-| 2072 | const fn | `gfmWire` |
-| 2076 | const fn | `busMeter` |
-| 2089 | method | `build` |
-| 2091 | const fn | `unit` |
-| 2114 | method | `build` |
-| 2145 | method | `build` |
-| 2178 | method | `build` |
-| 2205 | method | `build` |
-| 2210 | function | `dcdcInputs` |
+| 1986 | method | `build` |
+| 1991 | const fn | `station` |
+| 2040 | method | `build` |
+| 2077 | const fn | `gfmWire` |
+| 2081 | const fn | `busMeter` |
+| 2094 | method | `build` |
+| 2096 | const fn | `unit` |
+| 2119 | method | `build` |
+| 2150 | method | `build` |
+| 2183 | method | `build` |
+| 2210 | method | `build` |
+| 2215 | function | `dcdcInputs` |
 
 ### `web/studio/units.js`
 

@@ -23,9 +23,22 @@
   let changed=true;while(changed&&out.length>2){changed=false;for(let i=1;i<out.length-1;i++){const a=out[i-1],b=out[i],c=out[i+1];if((a[0]===b[0]&&b[0]===c[0])||(a[1]===b[1]&&b[1]===c[1])){out.splice(i,1);changed=true;break;}}}
   return out;}
  const orth=pts=>pts.every((p,i)=>!i||p[0]===pts[i-1][0]||p[1]===pts[i-1][1]);
- class MinHeap{constructor(){this.a=[];}push(x){const a=this.a;a.push(x);let i=a.length-1;while(i>0){const p=(i-1)>>1;if(a[p][0]<=a[i][0])break;[a[p],a[i]]=[a[i],a[p]];i=p;}}
-  pop(){const a=this.a,top=a[0],last=a.pop();if(a.length){a[0]=last;let i=0;for(;;){const l=2*i+1,r=l+1;let m=i;if(l<a.length&&a[l][0]<a[m][0])m=l;if(r<a.length&&a[r][0]<a[m][0])m=r;if(m===i)break;[a[m],a[i]]=[a[i],a[m]];i=m;}}return top;}get size(){return this.a.length;}}
- const DIRS=[[1,0],[0,1],[-1,0],[0,-1]];
+ // 4.20.2: the heap of the router keeps its keys and its states in two typed arrays, with the comparisons and the moves of
+ // the heap of pairs it replaces, so that equal keys come out in the same order and every route is the same; no array is
+ // made per entry (the garbage collector took a fifth of the routing of a large tutorial)
+ class MinHeap{constructor(n=4096){this.f=new Float64Array(n);this.s=new Int32Array(n);this.n=0;this.topF=0;}
+  clear(){this.n=0;}
+  push(f,s){if(this.n===this.f.length){const F=new Float64Array(2*this.n),S=new Int32Array(2*this.n);F.set(this.f);S.set(this.s);this.f=F;this.s=S;}
+   const a=this.f,b=this.s;let i=this.n++;a[i]=f;b[i]=s;while(i>0){const p=(i-1)>>1;if(a[p]<=a[i])break;const tf=a[p],ts=b[p];a[p]=a[i];b[p]=b[i];a[i]=tf;b[i]=ts;i=p;}}
+  // the state with the smallest key; the key in topF
+  pop(){const a=this.f,b=this.s,tf=a[0],ts=b[0],n=--this.n;if(n){a[0]=a[n];b[0]=b[n];let i=0;for(;;){const l=2*i+1,r=l+1;let m=i;if(l<n&&a[l]<a[m])m=l;if(r<n&&a[r]<a[m])m=r;if(m===i)break;const xf=a[m],xs=b[m];a[m]=a[i];b[m]=b[i];a[i]=xf;b[i]=xs;i=m;}}this.topF=tf;return ts;}
+  get size(){return this.n;}}
+ // the arrays of one search, kept between searches (a search of 300 × 300 cells needs 4.3 MB)
+ const RT={heap:new MinHeap(),cost:new Float64Array(0),prev:new Int32Array(0),grid:new Uint8Array(0)};
+ function rtArrays(N,M){if(RT.cost.length<N){RT.cost=new Float64Array(N);RT.prev=new Int32Array(N);}RT.cost.fill(Infinity,0,N);RT.prev.fill(-1,0,N);
+  if(RT.grid.length<3*M)RT.grid=new Uint8Array(3*M);RT.grid.fill(0,0,3*M);
+  return [RT.cost,RT.prev,RT.grid.subarray(0,M),RT.grid.subarray(M,2*M),RT.grid.subarray(2*M,3*M)];}
+ const DIRS=[[1,0],[0,1],[-1,0],[0,-1]],DX=Int8Array.from(DIRS,q=>q[0]),DY=Int8Array.from(DIRS,q=>q[1]);
 
  class Editor{
   constructor(holder,opt={}){
@@ -70,7 +83,8 @@
   // the user is zooming, panning, dragging or drawing a selection now (or did within the last 150 ms)
   busy(){return !!(this.press&&this.press.moved)||!!this.drag||performance.now()-(this.lastGesture||0)<150;}
   newId(prefix){let i=1;const ids=new Set(this.doc.components.map(c=>c.id).concat(this.doc.wires.map(w=>w.id)));while(ids.has(prefix+i))i++;return prefix+i;}
-  pin(c,p){const comp=typeof c==='string'?this.comp(c):c;return P.pinPos(comp,p);}
+  pin(c,p){const comp=typeof c==='string'?this.comp(c):c;const m=this._rtMemo;if(!m||!comp)return P.pinPos(comp,p);
+   const k=comp.id+'\u0000'+p;let q;if(m.pin.has(k))q=m.pin.get(k);else{q=P.pinPos(comp,p);m.pin.set(k,q);}return q?[q[0],q[1]]:q;}
   wirePts(w){const a=this.pin(w.a.c,w.a.p),b=this.pin(w.b.c,w.b.p);return [a,...(w.pts||[]),b];}
   setWirePts(w,full){const n=normalize(full);w.pts=n.slice(1,-1);}
   snapshot(){return JSON.stringify(this.doc);}
@@ -88,13 +102,13 @@
    if(Array.isArray(doc.program)&&doc.program.length)this.doc.program=JSON.parse(JSON.stringify(doc.program)); // program of parameter changes (3.19)
    if(doc.watch)this.doc.watch=JSON.parse(JSON.stringify(doc.watch)); // the tiles of the control signals over the drawing (4.8, watch.js)
    this.dropDangling();
-   for(const w of this.doc.wires)if(!w.pts.length&&!w.fixed){const full=this.wirePts(w);if(!orth(full))this.route(w);}
+   this.routeAll(()=>{for(const w of this.doc.wires)if(!w.pts.length&&!w.fixed){const full=this.wirePts(w);if(!orth(full))this.route(w);}});
    this.sel.c.clear();this.sel.w.clear();this.undoStack=[];this.redoStack=[];this.render();if(!keepView){this.userView=false;this.fit();}}
   export(){return JSON.parse(this.snapshot());}
   // the whole document in one undoable step (3.17: subcircuit from a selection, expand): new wires are routed
   replaceDoc(doc,sel=[]){this.remember();const keep=new Map(this.doc.wires.map(w=>[w.id,w]));
    this.doc={...doc,components:doc.components.map(c=>({rot:0,flip:false,...c,params:{...(c.params||{})}})),wires:doc.wires.map(w=>({...w,pts:(w.pts||[]).map(p=>[...p])}))};
-   this.dropDangling();for(const w of this.doc.wires){const o=keep.get(w.id);if(!w.pts.length&&!w.fixed&&!(o&&o.a.c===w.a.c&&o.b.c===w.b.c)){const full=this.wirePts(w);if(!orth(full))this.route(w);}}
+   this.dropDangling();this.routeAll(()=>{for(const w of this.doc.wires){const o=keep.get(w.id);if(!w.pts.length&&!w.fixed&&!(o&&o.a.c===w.a.c&&o.b.c===w.b.c)){const full=this.wirePts(w);if(!orth(full))this.route(w);}}});
    this.sel.c.clear();this.sel.w.clear();for(const id of sel)if(this.comp(id))this.sel.c.add(id);this.render();this.changed('struct');}
   changed(kind,sel=true){this.opt.onchange?.(kind);if(sel)this.opt.onselect?.(this.selection());}
   selection(){return {c:[...this.sel.c],w:[...this.sel.w]};}
@@ -215,30 +229,36 @@
     for(const k of Object.keys(c.params||{}))if(k.startsWith('in_')&&c.params[k]){const [sc,sp]=String(c.params[k]).split(':');if(map.has(sc))c.params[k]=map.get(sc)+':'+sp;}}
    this.render();this.select(nc,nw);this.changed('struct');}
   // ---------------------------------------------------------- routing
-  obstacles(skip=new Set()){const out=[];for(const c of this.doc.components){if(c.type==='JUNC'||skip.has(c.id))continue;const b=P.bbox(c);out.push([b[0]-2,b[1]-2,b[2]+2,b[3]+2]);}return out;}
+  obstacles(skip=new Set()){const out=[];const m=this._rtMemo;
+   for(const c of this.doc.components){if(c.type==='JUNC'||skip.has(c.id))continue;let o=m&&m.box.get(c.id);if(!o){const b=P.bbox(c);o=[b[0]-2,b[1]-2,b[2]+2,b[3]+2];if(m)m.box.set(c.id,o);}out.push(o);}return out;}
+  // 4.20.2: while a whole document is routed (load, replaceDoc) no part moves: the boxes of the parts and the points of
+  // their pins are kept for all the wires of it (the same numbers; the routing of a large tutorial computed them again for
+  // every wire)
+  routeAll(fn){const keep=this._rtMemo;this._rtMemo={box:new Map(),pin:new Map()};try{fn();}finally{this._rtMemo=keep;}}
   // orthogonal A* from pin a (leaving along its outward direction) to point/pin b
   astar(a,da,b,db,skip){
    const obs=this.obstacles(skip),pad=160;
    const x0=Math.min(a[0],b[0])-pad,y0=Math.min(a[1],b[1])-pad,x1=Math.max(a[0],b[0])+pad,y1=Math.max(a[1],b[1])+pad;
    const W=Math.round((x1-x0)/G)+1,H=Math.round((y1-y0)/G)+1;if(W*H>90000)return null;
-   const blocked=new Uint8Array(W*H);
+   const N=W*H*4,[cost,prev,blocked,used,near]=rtArrays(N,W*H);
    for(const [bx0,by0,bx1,by1] of obs){for(let gx=Math.ceil((bx0-x0)/G);gx<=Math.floor((bx1-x0)/G);gx++)for(let gy=Math.ceil((by0-y0)/G);gy<=Math.floor((by1-y0)/G);gy++)if(gx>=0&&gy>=0&&gx<W&&gy<H)blocked[gy*W+gx]=1;}
-   const used=new Uint8Array(W*H);for(const w of this.doc.wires){if(skip.has('w:'+w.id))continue;const pts=this.wirePts(w);for(let i=1;i<pts.length;i++){const [ax,ay]=pts[i-1],[bx,by]=pts[i];const n=Math.max(Math.abs(bx-ax),Math.abs(by-ay))/G;for(let s=0;s<=n;s++){const gx=Math.round((ax+(bx-ax)*s/(n||1)-x0)/G),gy=Math.round((ay+(by-ay)*s/(n||1)-y0)/G);if(gx>=0&&gy>=0&&gx<W&&gy<H)used[gy*W+gx]=1;}}}
-   const near=new Uint8Array(W*H);for(let i=0;i<W*H;i++)if(used[i]){const x=i%W,y=(i/W)|0;for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(nx>=0&&ny>=0&&nx<W&&ny<H)near[ny*W+nx]=1;}}
+   for(const w of this.doc.wires){if(skip.has('w:'+w.id))continue;const pts=this.wirePts(w);for(let i=1;i<pts.length;i++){const [ax,ay]=pts[i-1],[bx,by]=pts[i];const n=Math.max(Math.abs(bx-ax),Math.abs(by-ay))/G;for(let s=0;s<=n;s++){const gx=Math.round((ax+(bx-ax)*s/(n||1)-x0)/G),gy=Math.round((ay+(by-ay)*s/(n||1)-y0)/G);if(gx>=0&&gy>=0&&gx<W&&gy<H)used[gy*W+gx]=1;}}}
+   for(let i=0;i<W*H;i++)if(used[i]){const x=i%W,y=(i/W)|0;for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(nx>=0&&ny>=0&&nx<W&&ny<H)near[ny*W+nx]=1;}}
    const idx=(x,y)=>y*W+x;const sx=Math.round((a[0]-x0)/G),sy=Math.round((a[1]-y0)/G),tx=Math.round((b[0]-x0)/G),ty=Math.round((b[1]-y0)/G);
    blocked[idx(sx,sy)]=0;blocked[idx(tx,ty)]=0;
    const dirIndex=d=>DIRS.findIndex(q=>q[0]===d[0]&&q[1]===d[1]);
    const sd=da?dirIndex(da):-1,tdIn=db&&(db[0]||db[1])?dirIndex([-db[0],-db[1]]):-1;
-   const N=W*H*4,cost=new Float64Array(N).fill(Infinity),prev=new Int32Array(N).fill(-1);
-   const h=(x,y)=>Math.abs(x-tx)+Math.abs(y-ty);const heap=new MinHeap();
+   const h=(x,y)=>Math.abs(x-tx)+Math.abs(y-ty);const heap=RT.heap;heap.clear();
    const starts=sd>=0?[sd]:[0,1,2,3];const startCell=idx(sx,sy);
-   for(const d of starts){const s=idx(sx,sy)*4+d;cost[s]=0;heap.push([h(sx,sy),s]);}
+   for(const d of starts){const s=idx(sx,sy)*4+d;cost[s]=0;heap.push(h(sx,sy),s);}
    let found=-1;let iter=0;
-   while(heap.size&&iter++<200000){const [f,s]=heap.pop();const cell=s>>2,d=s&3,x=cell%W,y=(cell/W)|0;
-    if(f-h(x,y)>cost[s]+1e-9)continue;
+   // (4.20.2: the same search with the directions and the distance written out, without a closure per neighbour)
+   while(heap.size&&iter++<200000){const s=heap.pop(),f=heap.topF;const cell=s>>2,d=s&3,x=cell%W,y=(cell/W)|0;
+    if(f-(Math.abs(x-tx)+Math.abs(y-ty))>cost[s]+1e-9)continue;
     if(x===tx&&y===ty&&(tdIn<0||d===tdIn)){found=s;break;}
-    for(let nd=0;nd<4;nd++){if(nd===((d+2)&3))continue;const nx=x+DIRS[nd][0],ny=y+DIRS[nd][1];if(nx<0||ny<0||nx>=W||ny>=H)continue;const nc=idx(nx,ny);if(blocked[nc])continue;
-     const step=1+(nd!==d?(cell===startCell?8:3):0)+(used[nc]?4:near[nc]?2:0);const ns=nc*4+nd;const c2=cost[s]+step;if(c2<cost[ns]){cost[ns]=c2;prev[ns]=s;heap.push([c2+h(nx,ny),ns]);}}}
+    const cs=cost[s],back=(d+2)&3,turn=cell===startCell?8:3;
+    for(let nd=0;nd<4;nd++){if(nd===back)continue;const nx=x+DX[nd],ny=y+DY[nd];if(nx<0||ny<0||nx>=W||ny>=H)continue;const nc=ny*W+nx;if(blocked[nc])continue;
+     const step=1+(nd!==d?turn:0)+(used[nc]?4:near[nc]?2:0);const ns=nc*4+nd;const c2=cs+step;if(c2<cost[ns]){cost[ns]=c2;prev[ns]=s;heap.push(c2+(Math.abs(nx-tx)+Math.abs(ny-ty)),ns);}}}
    if(found<0)return null;
    const cells=[];for(let s=found;s>=0;s=prev[s])cells.push(s>>2);cells.reverse();
    const pts=cells.map(c=>[x0+(c%W)*G,y0+((c/W)|0)*G]);return normalize([a,...pts,b]);
