@@ -91,6 +91,13 @@ class ApiSurface(unittest.TestCase):
         from pcl import study
         self.assertIn('scopf', study.STUDIES)
 
+    def test_the_surface_of_4_20_1(self):
+        """4.20.1: the B4 data and its builder are experimental (in pcl.dcgrid); VSC2 has the DC voltage of its start (Vdc0)."""
+        for f in ('cigre_b4', 'b4_line_data'):
+            self.assertIn('pcl.dcgrid.' + f, self.now['pcl'])
+            self.assertTrue(api_surface.experimental('pcl', 'pcl.dcgrid.' + f))
+        self.assertIn('Vdc0', self.now['project']['part:VSC2']['params'])
+
     def test_the_surface_of_4_20(self):
         """4.20: the DC grids: the module pcl.dcgrid is experimental; the DC buses, lines and converters of a Network, its AC/DC
         load flow and the study 'acdc' are stable additions; every option of the routine is an option of the study."""

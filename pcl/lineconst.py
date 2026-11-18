@@ -2253,6 +2253,17 @@ TYPICAL.update({
     '320kV-dc': {'name': 'Τυπικά καλώδια ±320 kV DC (2 μονοπολικά XLPE 2000 mm², υπόγεια)', 'medium': 'earth', 'rho': 100,
                  'length': 70, 'cables': [_sc(x, 1.3, [k + 1, 0], 0.0265, 0.0535, 0.0565, 0.0625, 1.90e-8, 2.8e-8, 2.3, 2.3)
                                           for k, x in enumerate((-0.25, 0.25))]},
+    # 4.20.1: the 320 kV XLPE cable of the four-terminal HVDC grid test system (Leterme et al. 2015, Table 2): copper core,
+    # semiconducting screens of 1.7 and 1.9 mm inside the insulation radius, lead sheath, steel armour (μ_r 10), soil of
+    # 1 Ω·m; sheath and armour grounded (eliminated). One pole; the depth is not given (1 m: it does not change the core mode)
+    '320kV-xlpe': {'name': 'Καλώδιο ±320 kV XLPE με μανδύα και οπλισμό (δίκτυο δοκιμής τεσσάρων τερματικών)', 'medium': 'earth',
+                   'rho': 1, 'length': 100,
+                   'cables': [{'x': 0, 'y': 1, 'ph': [1, 0, 0],
+                               'layers': [{'t': 'c', 'rin': 0, 'rout': 0.0195, 'rho': 1.7e-8}, {'t': 's', 'rout': 0.0212},
+                                          {'t': 'i', 'rout': 0.0468, 'epsr': 2.3}, {'t': 's', 'rout': 0.0487},
+                                          {'t': 'c', 'rin': 0.0487, 'rout': 0.0517, 'rho': 2.2e-7}, {'t': 'i', 'rout': 0.0547, 'epsr': 2.3},
+                                          {'t': 'c', 'rin': 0.0547, 'rout': 0.0587, 'rho': 1.8e-7, 'mur': 10},
+                                          {'t': 'i', 'rout': 0.0637, 'epsr': 2.3}]}]},
 })
 
 # 4.9: the same 400 kV line with its two ground wires kept as conductors 4 and 5 (they end at the tower tops of a lightning

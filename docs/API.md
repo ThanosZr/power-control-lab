@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.20: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (833 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.20.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (835 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.20.
+Κανένα στην 4.20.1.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-574 σημεία.
+576 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -154,6 +154,8 @@
 | `pcl.dcgrid.DCGrid.remove` | `name` | 4.20 · πειρ. |
 | `pcl.dcgrid.DCGridError` | — | 4.20 · πειρ. |
 | `pcl.dcgrid.acdc_flow` | `net`, `method`, `tol`, `max_iter`, `flat`, `outer`, `q_limits` | 4.20 · πειρ. |
+| `pcl.dcgrid.b4_line_data` | `a`, `km`, `kind` | 4.20.1 · πειρ. |
+| `pcl.dcgrid.cigre_b4` | `hold`, `out` | 4.20.1 · πειρ. |
 | `pcl.dcgrid.grid_of` | `net` | 4.20 · πειρ. |
 | `pcl.dcgrid.sensitivity` | `grid`, `res` | 4.20 · πειρ. |
 | `pcl.dcgrid.station` | `Us`, `Ss`, `st`, `S_base`, `U_base` | 4.20 · πειρ. |
@@ -914,7 +916,7 @@
 | `part:VIMP` | shape, Vpk, basis, T1, T2, S, alpha, beta, K, Rs, t0 | n, p | 3.18 |
 | `part:VM` | — | n, p, y | 3.18 |
 | `part:VP` | — | p, y | 3.18 |
-| `part:VSC2` | dc, Vdc, mmax, filt, init, E0, th0, Lf, Rf, Cf, conn | a, abc, b, c, ia, ib, ic, m, ma, mb, mc, meas, n, oa, ob, oc, p, va, vb, vc, vdc | 4.18 |
+| `part:VSC2` | dc, Vdc, mmax, filt, init, E0, th0, Vdc0, Lf, Rf, Cf, conn | a, abc, b, c, ia, ib, ic, m, ma, mb, mc, meas, n, oa, ob, oc, p, va, vb, vc, vdc | 4.18 |
 | `part:XF3` | grp, Sn, U1, U2, f, uk, Pk, i0, P0, tap, core, i00, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.1 |
 | `part:XFMR` | n, Lm, im0, Llk1, Llk2, R1, R2, pol | p1, p2, s1, s2 | 3.18 |
 | `part:ZSER3` | Rs, Ls, Rp1, Lp, Rp2, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.16 |

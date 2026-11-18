@@ -1,5 +1,5 @@
 {
- "version": "4.20",
+ "version": "4.20.1",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -867,6 +867,21 @@
      "q_limits"
     ],
     "since": "4.20"
+   },
+   "pcl.dcgrid.b4_line_data": {
+    "params": [
+     "a",
+     "km",
+     "kind"
+    ],
+    "since": "4.20.1"
+   },
+   "pcl.dcgrid.cigre_b4": {
+    "params": [
+     "hold",
+     "out"
+    ],
+    "since": "4.20.1"
    },
    "pcl.dcgrid.grid_of": {
     "params": [
@@ -8003,6 +8018,7 @@
      "init",
      "E0",
      "th0",
+     "Vdc0",
      "Lf",
      "Rf",
      "Cf",

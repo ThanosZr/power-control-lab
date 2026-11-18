@@ -191,6 +191,8 @@
   for(let i=n-1;i>=0;i--){let sr=br[i],si=bi[i];for(let j=i+1;j<n;j++){const ar=Ar[i*n+j],ai=Ai[i*n+j];sr-=ar*xr[j]-ai*xi[j];si-=ar*xi[j]+ai*xr[j];}
    const dr=Ar[i*n+i],di=Ai[i*n+i],dd=dr*dr+di*di;xr[i]=(sr*dr+si*di)/dd;xi[i]=(si*dr-sr*di)/dd;}
   return [xr,xi];}
+ // 4.20.1: the group of the sources of one converter in the flat circuit: the instance prefix of the part (X1/…/) and its name
+ const grpKey=(id,g)=>String(id).slice(0,String(id).lastIndexOf('/')+1)+String(g);
  // 4.3 (§31.7): steady start from a load flow. When a generator starts from the voltage at its terminals (init 'lf') or the
  // circuit asks for it (solve.init 'ac'), the circuit is solved with phasors at the frequency of the generators (else of the first
  // AC source), each generator replaced by ideal sources |V|∠θ (sine reference, as the sources of the app) at its terminals; the
@@ -280,12 +282,18 @@
   const dad=sp?(r,q,v)=>{if(r<0||q<0)return;const k=r*n0+q,u=SD.get(k);if(u)u[0]+=v;else SD.set(k,[v,0]);}:(r,q,v)=>{if(r>=0&&q>=0)Dr[r*n0+q]+=v;},dy=(a,b,g)=>{dad(a,a,g);dad(b,b,g);dad(a,b,-g);dad(b,a,-g);},gs=x=>1/(1e-9*w0*x);
   const sh=[];for(const e of net.els){if(e.k==='L')sh.push([e,-1,e.a,e.b,gs(e.L)]);else if(e.k==='F'&&!e.sm&&!e.srm){const G=e.gen?e.Gnow:e.Gam;for(let k=0;k<e.N;k++)sh.push([e,k,e.ports[k][0],e.ports[k][1],gs(1/G[k*e.N+k])]);}}
   for(let i=0;i<net.nNodes;i++)dad(i,i,GMIN);
+  // 4.20.1: the power that the sources of a converter group take from the circuit in the phasor solution, ½·Re(V·I*) with I
+  // into the source at a (the row current of a V element)
+  const pAbs=g=>{let s=0;for(const e of net.els)if(e.k==='V'&&e.src?.ac0?.pg===g){const r=e.row;s+=0.5*((Vr(e.a)-Vr(e.b))*xr[r]+(Vi(e.a)-Vi(e.b))*xi[r]);}return s;};
   for(const e of net.els){switch(e.k){
    case 'G':dy(e.a,e.b,1/e.Rnow);break;case 'S':dy(e.a,e.b,e.on?1/e.Ron:1/e.Roff);break;case 'D':dy(e.a,e.b,e.gk&&e.gon?1/e.Ron:1/e.Roff);break;
    case 'MG':for(let k=0;k<e.N;k++)for(let j=0;j<e.N;j++){const g=e.Gm[k*e.N+j],[ak,bk]=e.ports[k],[aj,bj]=e.ports[j];dad(ak,aj,g);dad(bk,bj,g);dad(ak,bj,-g);dad(bk,aj,-g);}break;
    case 'V':{const r=e.row;dad(e.a,r,1);dad(r,e.a,1);dad(e.b,r,-1);dad(r,e.b,-1);const q=e.src;
-    dr[r]=e.gen?sim.genEfd(e.gen,0)*e.gen.g.vfK:e.sigIn>=0?0:q&&q.kind==='dc'?e.Vnow:q&&q.kind==='ac'?(q.off||0):0;break;}
-   case 'I':if(!(e.sigIn>=0)&&!e.wave){if(e.a>=0)dr[e.a]-=e.Inow;if(e.b>=0)dr[e.b]+=e.Inow;}break;
+    dr[r]=e.gen?sim.genEfd(e.gen,0)*e.gen.g.vfK:e.sigIn>=0?(q?.ac0?.dc||0):q&&q.kind==='dc'?e.Vnow:q&&q.kind==='ac'?(q.off||0):0;break;}
+   // a current source drives I out of its pin a, as in the solver (J(a, b, −I)); 4.20.1: before, the start had it into b.
+   // A converter's DC side: I = k·P with P the power its group of sources takes in the phasor solution
+   case 'I':if(!(e.sigIn>=0)&&!e.wave){if(e.a>=0)dr[e.a]+=e.Inow;if(e.b>=0)dr[e.b]-=e.Inow;}
+    else if(e.p0){const I0=e.p0.k*pAbs(e.p0.g);if(e.a>=0)dr[e.a]+=I0;if(e.b>=0)dr[e.b]-=I0;}break;
    case 'X':{const r=e.row,N=e.n;dad(e.s1,r,1);dad(r,e.s1,1);dad(e.s2,r,-1);dad(r,e.s2,-1);dad(e.p1,r,-N);dad(r,e.p1,-N);dad(e.p2,r,N);dad(r,e.p2,N);break;}
    case 'GY':{const r=e.row,Y=e.psi;dad(e.a,r,1);dad(r,e.a,1);dad(e.b,r,-1);dad(r,e.b,-1);dad(r,e.m,-Y);dad(e.m,r,-Y);break;}
    case 'CHB':{const r=e.row;dad(e.a,r,1);dad(r,e.a,1);dad(e.b,r,-1);dad(r,e.b,-1);dad(r,r,-e.Rarm);break;}
@@ -304,6 +312,9 @@
   // a generator's stator ports: the voltage behind R_a (the phasor solution had the machine replaced by sources)
   gens.forEach((m,q)=>{for(let k=0;k<3;k++){const pn=m.F.ports[k][0];if(pn!==m.term[k])x0[pn]=xr[m.term[k]]-m.g.Ra*m.g.Zb*xr[n0+3*q+k];}});
   for(const e of vC0.keys()){const d=(e.a<0?0:Xd[e.a])-(e.b<0?0:Xd[e.b]);e.v+=d;e.v1+=d;}
+  // 4.20.1: every other capacitor too carries the DC voltage of the DC part across it (before, only the AC part: a capacitor
+  // in a DC circuit started empty beside nodes at their DC voltages, and the first step pulled them towards it)
+  for(const e of net.els)if(e.k==='C'&&!vC0.has(e)){const d=(e.a<0?0:Xd[e.a])-(e.b<0?0:Xd[e.b]);if(d!==0){e.v+=d;e.v1+=d;}}
   for(const e of net.els)if(e.k==='CHB')e.i=x0[e.row];
   if(left.has('CHB'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: οι αρθρωτοί βραχίονες μπαίνουν στη λύση με φασιθέτες σε παράκαμψη (R_arm), όχι με τις υπομονάδες που έχουν μέσα στο t = 0.');
   if(left.has('TLMQ'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: οι γραμμές από γεωμετρία με παγιδευμένο φορτίο ξεκινούν από αυτό, όχι από τη μόνιμη κατάσταση.');
@@ -801,6 +812,9 @@
     // 4.18.1: a source driven by a signal may carry the phasor that it has in the steady start (acInit): the internal
     // parameters acpk (peak) and acph (°, as phase of VAC: v = acpk·sin(ωt + acph)), set by VSC2 when it starts from a load flow
     if(T==='VDC'&&p.ctl==='sig'&&num(p.acpk,0)>0)v.ac0={Vpk:num(p.acpk,0),ph:num(p.acph,0)*Math.PI/180};
+    // 4.20.1: with DC pins the source also carries the DC part of its start (dc0: v_dc,0/2 for VSC2 on its n pin) and the
+    // group pg of its converter, whose DC current source takes k·P of the phasor solution (acInit)
+    if(v.ac0&&(p.dc0!==undefined||p.pg)){v.ac0.dc=num(p.dc0,0);if(p.pg)v.ac0.pg=grpKey(c.id,p.pg);}
     info.main=add({k:'V',a:srcTop,b,row:row(),src:v,sigIn:T==='VDC'&&p.ctl==='sig'?sn(c.id,'u'):undefined});}
    else if(T==='VIMP'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];const w=P.impulseWave(p);
     if(!(w.eta>1e-6&&w.tau1>0&&w.tau2>0))throw new NetlistError(`${c.label||c.id}: δεν βρέθηκαν τ₁, τ₂ για T1 = ${P.eng(w.T1,'s')}, T2 = ${P.eng(w.T2,'s')}.`);
@@ -876,7 +890,8 @@
      V.push(add({k:'D',a,b,Ron,Roff,Vf,on:false,key:c.id+'#v'+(k+1),gk:'scr',gon:false,gate:'lcc',lccB:blk.i,lccK:k,tq}));
      if(Rs>0&&Cs>0){const m=internal();add({k:'G',a,b:m,R:Rs,role:'Rsn'});add({k:'C',a:m,b,C:Cs,v:0,i:0,key:c.id+'#s'+(k+1)});}}
     info.main=V[0];info.valves=V;info.blk=blk;blk.valves=V;lccSetup(blk,p);}
-   else if(T==='IDC'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'I',a,b,I:num(p.I,1),sched:P.parseSched(p.sched),sigIn:p.ctl==='sig'?sn(c.id,'u'):undefined});}
+   else if(T==='IDC'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];info.main=add({k:'I',a,b,I:num(p.I,1),sched:P.parseSched(p.sched),sigIn:p.ctl==='sig'?sn(c.id,'u'):undefined});
+    if(p.ctl==='sig'&&p.pg)info.main.p0={g:grpKey(c.id,p.pg),k:num(p.pk,0)};}   // 4.20.1: the DC side of a converter in the steady start (acInit)
    else if(T==='ILG'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];const w=P.lightningWave(p);
     if(!(w.eta>1e-6&&w.tau1>0&&w.tau2>0))throw new NetlistError(`${c.label||c.id}: δεν βρέθηκαν τ₁, τ₂ για T1 = ${P.eng(w.T1,'s')}, T2 = ${P.eng(w.T2,'s')} (το διπλοεκθετικό θέλει T2/T1 πάνω από περίπου 3).`);
     if(w.fitOk===false)warnings.push(`${c.label||c.id}: η προσαρμογή στα T1/T2 δεν συνέκλινε πλήρως.`);

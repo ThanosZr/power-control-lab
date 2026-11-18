@@ -419,3 +419,68 @@ def acdc_flow(net, method='auto', tol=1e-8, max_iter=None, flat=False, outer=30,
     out['losses_dc'] = dres['losses'] if dres else None
     out['losses_conv'] = sum(c['loss'] for c in conv.values())
     return out
+
+
+# ---------------------------------------------------------------------- the CIGRE B4 DC grid test system (4.20.1)
+# As the book of Jovcic (2019, §27.8) gives it: the topology, the lengths and the cable or overhead line of every DC link from
+# Fig. 27.6 (A1–B1 and B4–B2 are double lines), the per-km data of Table 7.3 (§7.7.1: DC OHL ±400 kV 0.0114, ±200 kV 0.0133,
+# DC cable ±400 and ±200 kV 0.0095 Ω/km; L and C too, for EMT), the ratings and the power references of Table 27.11. Three DC
+# grids: DCS1 (±200 kV, A1–C1), DCS2 (±200 kV, five terminals), DCS3 (±400 kV bipole, eight buses); two DC/DC converters (Cd-E1
+# from Bb-E1 into DCS2, Cd-B1 in series with the cable E1–B1). Voltages pole to pole. The book does not give the gains of the
+# three-level control nor the dispatcher's; here every converter holds its power reference and one converter per grid holds
+# its DC voltage (Cm-A1 by Table 27.11; in DCS2 and DCS3 the station that the figure shows taking the rest, Cm-B3 and Cb-A1).
+B4_UN = {'DCS1': 400e3, 'DCS2': 400e3, 'DCS3': 800e3}
+B4_BUSES = {'Bm-A1': 'DCS1', 'Bm-C1': 'DCS1',
+            'Bm-B2': 'DCS2', 'Bm-B3': 'DCS2', 'Bm-B5': 'DCS2', 'Bm-E1': 'DCS2', 'Bm-F1': 'DCS2',
+            'Bb-A1': 'DCS3', 'Bb-C2': 'DCS3', 'Bb-D1': 'DCS3', 'Bb-E1': 'DCS3', 'Bb-B1s': 'DCS3', 'Bb-B1': 'DCS3', 'Bb-B4': 'DCS3',
+            'Bb-B2': 'DCS3'}
+B4_DATA = {   # Table 7.3: (R Ω/km, L mH/km, C μF/km, G μS/km) per conductor
+    ('ohl', 800e3): (0.0114, 0.9356, 0.0123, 0.0), ('ohl', 400e3): (0.0133, 0.8273, 0.0139, 0.0),
+    ('cable', 800e3): (0.0095, 2.1120, 0.1906, 0.048), ('cable', 400e3): (0.0095, 2.1110, 0.2104, 0.062)}
+B4_LINES = [   # (from, to, km, kind, circuits) of Fig. 27.6
+    ('Bm-C1', 'Bm-A1', 200, 'cable', 1),
+    ('Bm-B2', 'Bm-B3', 200, 'cable', 1), ('Bm-B5', 'Bm-B3', 100, 'ohl', 1), ('Bm-F1', 'Bm-B5', 100, 'cable', 1),
+    ('Bm-E1', 'Bm-F1', 200, 'cable', 1),
+    ('Bb-C2', 'Bb-A1', 200, 'cable', 1), ('Bb-D1', 'Bb-C2', 300, 'cable', 1), ('Bb-D1', 'Bb-E1', 200, 'cable', 1),
+    ('Bb-E1', 'Bb-B1s', 200, 'cable', 1), ('Bb-A1', 'Bb-B1', 400, 'ohl', 2), ('Bb-A1', 'Bb-B4', 500, 'ohl', 1),
+    ('Bb-B1', 'Bb-B4', 200, 'ohl', 1), ('Bb-B4', 'Bb-B2', 300, 'ohl', 2)]
+B4_STATIONS = [   # (name, DC bus, rating MVA, power reference MW into the DC grid, or None: holds the voltage) of Table 27.11
+    ('Cm-A1', 'Bm-A1', 800, None), ('Cm-C1', 'Bm-C1', 800, 500), ('Cm-B2', 'Bm-B2', 800, 150), ('Cm-B3', 'Bm-B3', 1200, -900),
+    ('Cm-E1', 'Bm-E1', 200, -100), ('Cm-F1', 'Bm-F1', 800, 500), ('Cb-A1', 'Bb-A1', 2400, 2000), ('Cb-B1', 'Bb-B1', 2400, -1500),
+    ('Cb-B2', 'Bb-B2', 2400, -1700), ('Cb-C2', 'Bb-C2', 800, 500), ('Cb-D1', 'Bb-D1', 1600, 1000)]
+B4_DCDC = [('Cd-E1', 'Bb-E1', 'Bm-E1', 1000, 300), ('Cd-B1', 'Bb-B1s', 'Bb-B1', 2000, 600)]   # (name, from, to, MVA, MW)
+
+
+def b4_line_data(a, km, kind):
+    """R (Ω), L (H), C (F), G (S) of one conductor of a B4 link of km km and kind 'cable' or 'ohl' at the bus a (Table 7.3)."""
+    r, l, c, g = B4_DATA[(kind, B4_UN[B4_BUSES[a]])]
+    return r * km, l * km * 1e-3, c * km * 1e-6, g * km * 1e-6
+
+
+def cigre_b4(hold=None, out=()):
+    """The CIGRE B4 DC grid test system as a DCGrid (Jovcic 2019, §27.8, Fig. 27.6, Tables 7.3 and 27.11). hold: {grid: (station,
+    V in pu)} the converter that holds the voltage of DCS2 and DCS3 (default Cm-B3 and Cb-A1 at 1 pu; Cm-A1 holds DCS1 at
+    1 pu); every other converter holds its power reference; the DC/DC converters move their power, without losses. out: names
+    of converters (AC/DC or DC/DC) or lines (a–b, with '#2' for the second of a double line) taken out."""
+    hold = {'DCS1': ('Cm-A1', 1.0), 'DCS2': ('Cm-B3', 1.0), 'DCS3': ('Cb-A1', 1.0), **(hold or {})}
+    g = DCGrid(P_base=100e6, name='CIGRE B4')
+    for b, grid in B4_BUSES.items():
+        g.bus(b, B4_UN[grid])
+    for a, b, km, kind, n in B4_LINES:
+        for k in range(n):
+            name = f'{a}–{b}' + (f'#{k + 1}' if n > 1 else '')
+            if name not in out:
+                g.line(a, b, R=b4_line_data(a, km, kind)[0], poles=2, name=name)
+    held = {st: v for st, v in hold.values()}
+    for name, bus, S, P in B4_STATIONS:
+        if name in out:
+            continue
+        if name in held:
+            g.converter(bus, 'V', V=held[name], name=name)
+        else:
+            g.converter(bus, 'P', P=(P or 0.0) * 1e6, name=name)
+    for name, a, b, S, P in B4_DCDC:
+        if name not in out:
+            g.converter(a, 'P', P=-P * 1e6, name=name + '/' + a)
+            g.converter(b, 'P', P=P * 1e6, name=name + '/' + b)
+    return g

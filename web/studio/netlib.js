@@ -1106,15 +1106,18 @@
   const SP=sigPorts(B,isBus(p),busMap('m',['ma','mb','mc']),busMap('meas',GFM_MEAS)),sin=SP.sin,out=SP.out;
   const w=(a,b)=>B.wire(a,b),E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''});
   const M=PH.map(x=>sin('m'+x)),mm=s(Math.max(num(p.mmax,1),1e-3));let vdc,Np=null;
+  // 4.20.1 (decision 221 (b)): from a load flow with DC pins the sources also carry v_dc,0/2 above n in the DC part of the
+  // start, and the DC side the current P/v_dc,0 of the power that the sources give in the phasor solution (group 'dc')
+  const lf=p.init==='lf'&&num(p.E0,0)>0,Vd0=Math.max(num(p.Vdc0,num(p.Vdc,800)),1e-6);
   if(pins){const Pp=[B.comp('$p','PORT',{name:'p'}),'p'];Np=[B.comp('$n','PORT',{name:'n'}),'p'];const vm=B.comp('VD','VM',{});w(Pp,[vm,'p']);w(Np,[vm,'n']);vdc=[vm,'y'];
-   E('IDS','((1 + a)*ia + (1 + b)*ib + (1 + c)*ic)/2','a, b, c, ia, ib, ic');B.comp('ID','IDC',{ctl:'sig'});w(Np,['ID','p']);w(['ID','n'],Pp);w(['IDS','y'],['ID','u']);}
+   E('IDS','((1 + a)*ia + (1 + b)*ib + (1 + c)*ic)/2','a, b, c, ia, ib, ic');B.comp('ID','IDC',{ctl:'sig',...(lf?{pg:'dc',pk:s(-1/Vd0)}:{})});w(Np,['ID','p']);w(['ID','n'],Pp);w(['IDS','y'],['ID','u']);}
   else{B.comp('VD','CONST',{v:s(Math.max(num(p.Vdc,800),0))});vdc=['VD','y'];}
   out('vdc',vdc);
   PH.forEach((x,k)=>{E('M'+x,'min(max(m, -k), k)','m','k = '+mm);w(M[k],['M'+x,'m']);
    E('U'+x,pins?'(1 + m)*v/2':'m*v/2','m, v');w(['M'+x,'y'],['U'+x,'m']);w(vdc,['U'+x,'v']);
    // 4.18.1: from a load flow (init = 'lf', ideal DC): the phasor E0∠θ0 of each source in the steady start (θ0 of phase a as a
    // cosine, as GFMC and MMCC: v_a = E0·cos(ωt + θ0) = E0·sin(ωt + θ0 + 90°))
-   const ac0=p.init==='lf'&&!pins&&num(p.E0,0)>0?{acpk:s(num(p.E0,0)),acph:s(num(p.th0,0)+90-120*k)}:{};
+   const ac0=lf?{acpk:s(num(p.E0,0)),acph:s(num(p.th0,0)+90-120*k),...(pins?{dc0:s(Vd0/2),pg:'dc'}:{})}:{};
    B.comp('V'+x,'VDC',{ctl:'sig',Rs:'0',...ac0});w(['U'+x,'y'],['V'+x,'u']);w(pins?Np:B.gnd(),['V'+x,'n']);
    const am=B.comp('I'+x,'AM',{});w(['V'+x,'p'],[am,'a']);out('i'+x,[am,'y']);let at=[am,'b'];
    if(filt!=='none'){B.comp('L'+x,'L',{L:s(Math.max(num(p.Lf,5e-3),1e-12)),Rs:s(Math.max(num(p.Rf,0.05),0))});w(at,['L'+x,'a']);at=['L'+x,'b'];}
