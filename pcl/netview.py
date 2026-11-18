@@ -13,8 +13,14 @@ show the same thing:
 The layout is ours and deterministic (no random numbers): a radial network as a tree from its slack bus; a meshed one from
 the graph distances between its buses (classical scaling for the start, stress majorization after it: Gansner, Koren &
 North 2004), each island by itself. It shows who is connected to whom, not geography.
+
+4.20.1: a network with DC grids (dc_bus, dc_line, vsc) has them in the same picture. The DC buses are laid out in the same
+graph, joined by their lines and by every converter station to its AC bus, so that a DC grid sits among the AC buses it
+connects; the view has them apart ('dc': buses, lines, stations), and so do the layers (dc_bus, dc_line, dc_station). A
+network without DC parts gives the picture it gave before, bit for bit.
 """
 import math
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -33,6 +39,9 @@ SEQUENTIAL = ['#bdbdbd', '#fee08b', '#fdae61', '#f46d43', '#d73027', '#7f0000']
 RESIDUAL = ['#1a9850', '#a6d96a', '#fee08b', '#f46d43', '#d73027', '#7f0000']      # from «agrees» to «far off»; grey is «no measurement»
 LEVELS = ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e', '#e6ab02', '#a6761d', '#666666']
 GREY, BAD, WARN = '#9e9e9e', '#b2182b', '#ef8a62'
+DC_LEVELS = ['#6a3d9a', '#1f78b4', '#b15928', '#33a02c']     # 4.20.1: the DC voltages (pole to pole), apart from the AC levels
+STATION = '#5f6b6d'                                         # a converter station and its link to its AC bus
+CONTROL = {'P': 'σταθερή ισχύς', 'V': 'κρατά την τάση DC', 'droop': 'στατικότητα', 'idroop': 'στατικότητα ρεύματος', 'I': 'σταθερό ρεύμα'}
 
 
 class ViewError(ValueError):
@@ -238,10 +247,35 @@ def _island(n, f, t, root):
 _PLACES = {}            # the places of the graphs laid out in this process (a study of the same network asks again and again)
 
 
+def _dc_parts(net):
+    """4.20.1: the DC buses {name: {Un…}}, the DC lines and the converter stations of a network (all empty when it has none)."""
+    db = net.__dict__.get('dc_buses') or {}
+    return db, [e for e in net.elements if e.get('kind') == 'dc_line'], [e for e in net.elements if e.get('kind') == 'vsc']
+
+
+def _with_dc(case, names, f, t, net):
+    """The graph of the layout with the DC buses after the AC buses: a DC line joins two DC buses, a station its AC bus and its
+    DC bus. None when the network has no DC buses (then the layout is the one of before 4.20.1)."""
+    db, dl, st = _dc_parts(net)
+    if not db:
+        return None
+    ix = {b: i for i, b in enumerate(names)}
+    for i, b in enumerate(db):
+        ix.setdefault(str(b), len(names) + i)              # (pcl.network.dc_bus refuses the name of an AC bus)
+    ends = [(ix[str(e['a'])], ix[str(e['b'])]) for e in dl] + [(ix[str(e['bus'])], ix[str(e['dc'])]) for e in st if str(e['bus']) in ix]
+    fe = np.concatenate([f, np.array([a for a, _ in ends], int)])
+    te = np.concatenate([t, np.array([b for _, b in ends], int)])
+    typ = np.concatenate([np.asarray(case.typ), np.zeros(len(db), int)])
+    return SimpleNamespace(typ=typ), names + [str(b) for b in db], fe, te
+
+
 def layout(net):
-    """The place of every bus of a network, {bus: (x, y)} in drawing units (a typical branch is UNIT long; y grows downwards).
-    Deterministic: the same network gives the same places."""
+    """The place of every bus of a network, {bus: (x, y)} in drawing units (a typical branch is UNIT long; y grows downwards),
+    the DC buses too (4.20.1). Deterministic: the same network gives the same places."""
     case, names, f, t = _graph(net)
+    g = _with_dc(case, names, f, t, net)
+    if g is not None:
+        case, names, f, t = g
     n = len(names)
     if n == 0:
         return {}
@@ -327,7 +361,23 @@ def view(net, off=None):
             branches[-1]['off'] = True
     xs, ys = [q['x'] for q in buses], [q['y'] for q in buses]
     levels = sorted({q['Un'] for q in buses if q['Un'] > 0}, reverse=True)
-    return {'unit': UNIT, 'bounds': [min(xs), min(ys), max(xs), max(ys)] if buses else [0, 0, 0, 0], 'levels': levels, 'buses': buses, 'branches': branches}
+    out = {'unit': UNIT, 'bounds': [min(xs), min(ys), max(xs), max(ys)] if buses else [0, 0, 0, 0], 'levels': levels, 'buses': buses, 'branches': branches}
+    db, dl, st = _dc_parts(net)
+    if db:                                               # 4.20.1: the DC grids, apart from the AC buses and branches
+        dcb = [{'id': str(b), 'x': round(xy[str(b)][0], 2), 'y': round(xy[str(b)][1], 2), 'Un': float(d.get('Un', 0.0) or 0.0)} for b, d in db.items()]
+        count, seen, lines = {}, {}, []
+        for e in dl:
+            key = tuple(sorted((str(e['a']), str(e['b']))))
+            count[key] = count.get(key, 0) + 1
+        for e in dl:
+            key = tuple(sorted((str(e['a']), str(e['b']))))
+            seen[key] = seen.get(key, 0) + 1
+            lines.append({'name': str(e['name']), 'a': str(e['a']), 'b': str(e['b']), 'poles': int(e.get('poles', 2)), 'k': seen[key], 'of': count[key]})
+        stations = [{'name': str(e['name']), 'ac': str(e['bus']), 'dc': str(e['dc']), 'control': str(e.get('control', 'P'))} for e in st if str(e['bus']) in xy]
+        out['dc'] = {'levels': sorted({q['Un'] for q in dcb if q['Un'] > 0}, reverse=True), 'buses': dcb, 'lines': lines, 'stations': stations}
+        xs, ys = xs + [q['x'] for q in dcb], ys + [q['y'] for q in dcb]
+        out['bounds'] = [min(xs), min(ys), max(xs), max(ys)]
+    return out
 
 
 # ---------------------------------------------------------------- what a layer shows
@@ -361,6 +411,14 @@ def values(v, result=None, layer='base', study=None):
     rb, rbr = res.get('buses') or {}, res.get('branches') or []
     out = {'layer': layer, 'title': TITLES[layer], 'bus': {}, 'branch': {}, 'bus_color': {}, 'branch_color': {}, 'unit_bus': '', 'unit_branch': '', 'legend': [], 'note': ''}
     lev = {u: LEVELS[i % len(LEVELS)] for i, u in enumerate(v['levels'])}
+    dc = v.get('dc')
+    rdc = res.get('dc') if isinstance(res.get('dc'), dict) else {}
+    if dc:                                                    # 4.20.1: the DC grid, grey unless the layer has something for it
+        out.update({'dc_bus': {}, 'dc_line': {}, 'dc_station': {}, 'unit_dc_bus': '', 'unit_dc_line': '', 'unit_dc_station': '',
+                    'dc_bus_color': {b['id']: GREY for b in dc['buses']}, 'dc_line_color': {e['name']: GREY for e in dc['lines']},
+                    'dc_station_color': {q['name']: STATION for q in dc['stations']}})
+        dlev = {u: DC_LEVELS[i % len(DC_LEVELS)] for i, u in enumerate(dc['levels'])}
+        dun = {b['id']: b['Un'] for b in dc['buses']}
 
     def base():
         for b in v['buses']:
@@ -369,6 +427,10 @@ def values(v, result=None, layer='base', study=None):
         for e in v['branches']:
             out['branch_color'][e['name']] = lev.get(max(un.get(e['a'], 0), un.get(e['b'], 0)), GREY)
         out['legend'] = [(lev[u], f'{u / 1e3:g} kV') for u in v['levels']] or [(GREY, 'χωρίς ονομαστική τάση')]
+        if dc:                                                # a DC voltage as ± half of the pole-to-pole one
+            out['dc_bus_color'] = {b['id']: dlev.get(b['Un'], GREY) for b in dc['buses']}
+            out['dc_line_color'] = {e['name']: dlev.get(max(dun.get(e['a'], 0), dun.get(e['b'], 0)), GREY) for e in dc['lines']}
+            out['legend'] += [(dlev[u], f'±{u / 2e3:g} kV DC') for u in dc['levels']] + [(STATION, 'σταθμός μετατροπέα')]
 
     def missing(what):
         out['note'] = what
@@ -467,9 +529,13 @@ def values(v, result=None, layer='base', study=None):
         vals = {b: x for b, x in vals.items() if x is not None}
         if not vals:
             return missing({'voltage': 'Η μελέτη δεν έχει τάσεις ζυγών.', 'angle': 'Η μελέτη δεν έχει γωνίες.', 'lmp': 'Οριακές τιμές κόμβων δίνει μόνο η βέλτιστη ροή φορτίου.'}[layer])
+        dvals = {}
+        if layer == 'voltage' and dc:                         # 4.20.1: the DC voltages in pu of their U_n, on the same scale
+            dvals = {str(b): _num(q.get('V')) for b, q in (rdc.get('buses') or {}).items() if isinstance(q, dict)}
+            dvals = {b: x for b, x in dvals.items() if x is not None}
         if layer == 'voltage':
             lo, hi, unit, fmt = 0.9, 1.1, 'pu', '{:.2f}'
-            lo, hi = min(lo, min(vals.values())), max(hi, max(vals.values()))
+            lo, hi = min([lo] + list(vals.values()) + list(dvals.values())), max([hi] + list(vals.values()) + list(dvals.values()))
             col = _scale(DIVERGING, 1 - max(1 - lo, hi - 1), 1 + max(1 - lo, hi - 1))
         elif layer == 'angle':
             a = max(abs(x) for x in vals.values()) or 1.0
@@ -489,12 +555,16 @@ def values(v, result=None, layer='base', study=None):
             out['title'] += ' (η χαμηλότερη φάση κάθε ζυγού)'
         out['bus_color'] = {b['id']: col(vals.get(b['id'])) for b in v['buses']}
         out['branch_color'] = {e['name']: GREY for e in v['branches']}
+        if dvals:
+            out['dc_bus'], out['unit_dc_bus'] = dvals, 'pu'
+            out['dc_bus_color'] = {b['id']: col(dvals.get(b['id'])) for b in dc['buses']}
         a0, a1 = (1 - max(1 - lo, hi - 1), 1 + max(1 - lo, hi - 1)) if layer == 'voltage' else (lo, hi)
         steps = [a0 + (a1 - a0) * (i + 0.5) / 7 for i in range(7)] if layer != 'lmp' else [a0 + (a1 - a0) * (i + 0.5) / 6 for i in range(6)]
         out['legend'] = [(col(s), fmt.format(s).replace('.', ',') + ' ' + unit) for s in steps]
         return out
+    dl = [e for e in (rdc.get('lines') or []) if isinstance(e, dict)] if dc else []
     if layer in ('loading', 'flow'):
-        if not rbr:
+        if not rbr and not (layer == 'flow' and dl):
             return missing('Η μελέτη δεν έχει ροές κλάδων.')
         if layer == 'loading':
             vals = {str(e.get('name')): _num(e.get('loading')) for e in rbr}
@@ -508,12 +578,22 @@ def values(v, result=None, layer='base', study=None):
         else:
             vals = {str(e.get('name')): _num(e.get('Pa')) for e in rbr}
             vals = {k: x / 1e6 for k, x in vals.items() if x is not None}
-            top = max((abs(x) for x in vals.values()), default=1.0) or 1.0
+            dlv, dsv = {}, {}
+            if dl:                                            # 4.20.1: a DC line by the power at its end a, a station by the power it gives the DC grid
+                dlv = {str(e.get('name')): _num(e.get('Pa')) for e in dl}
+                dlv = {k: x / 1e6 for k, x in dlv.items() if x is not None}
+                dsv = {str(k): _num(q.get('Pdc')) for k, q in (res.get('converters') or {}).items() if isinstance(q, dict)}
+                dsv = {k: x / 1e6 for k, x in dsv.items() if x is not None}
+            top = max((abs(x) for x in list(vals.values()) + list(dlv.values()) + list(dsv.values())), default=1.0) or 1.0
             col = _scale(SEQUENTIAL, 0.0, top)
             out['branch'], out['unit_branch'] = vals, 'MW'
             out['legend'] = [(col(top * (i + 0.5) / 6), f'{top * i / 6:.3g}–{top * (i + 1) / 6:.3g} MW'.replace('.', ',')) for i in range(6)]
             col0 = col
             col = lambda x: col0(abs(x)) if x is not None else GREY     # noqa: E731
+            if dlv or dsv:
+                out['dc_line'], out['dc_station'], out['unit_dc_line'], out['unit_dc_station'] = dlv, dsv, 'MW', 'MW'
+                out['dc_line_color'] = {e['name']: col(dlv.get(e['name'])) for e in dc['lines']}
+                out['dc_station_color'] = {q['name']: (col(dsv[q['name']]) if q['name'] in dsv else STATION) for q in dc['stations']}
         out['branch_color'] = {e['name']: col(vals.get(e['name'])) for e in v['branches']}
         out['bus_color'] = {b['id']: GREY for b in v['buses']}
         return out
@@ -628,6 +708,9 @@ def pack(v, result=None, layers=None):
         if L['note'] and layer != 'base':
             continue
         pal = sorted(set(L['bus_color'].values()) | set(L['branch_color'].values()))
+        dc = v.get('dc')
+        if dc:                                                # 4.20.1: the colours of the DC grid in the same palette
+            pal = sorted(set(pal) | set(L['dc_bus_color'].values()) | set(L['dc_line_color'].values()) | set(L['dc_station_color'].values()))
         ix = {c: i for i, c in enumerate(pal)}
         rnd = lambda x: None if x is None else float(f'{x:.6g}')      # noqa: E731
         out.append({'layer': layer, 'title': L['title'], 'unit_bus': L['unit_bus'], 'unit_branch': L['unit_branch'], 'legend': [list(q) for q in L['legend']], 'palette': pal,
@@ -635,6 +718,14 @@ def pack(v, result=None, layers=None):
                     'branch_c': [ix[L['branch_color'].get(e['name'], GREY)] if L['branch_color'].get(e['name'], GREY) in ix else 0 for e in v['branches']],
                     'bus_v': [rnd(L['bus'].get(b['id'])) for b in v['buses']] if L['bus'] else None,
                     'branch_v': [rnd(L['branch'].get(e['name'])) for e in v['branches']] if L['branch'] else None})
+        if dc:
+            c = lambda d, k: ix.get(_col(d.get(k, GREY)), ix.get(GREY, 0))     # noqa: E731
+            out[-1]['dc'] = {'unit_bus': L['unit_dc_bus'], 'unit_line': L['unit_dc_line'], 'unit_station': L['unit_dc_station'],
+                             'bus_c': [c(L['dc_bus_color'], b['id']) for b in dc['buses']], 'line_c': [c(L['dc_line_color'], e['name']) for e in dc['lines']],
+                             'station_c': [c(L['dc_station_color'], q['name']) for q in dc['stations']],
+                             'bus_v': [rnd(L['dc_bus'].get(b['id'])) for b in dc['buses']] if L['dc_bus'] else None,
+                             'line_v': [rnd(L['dc_line'].get(e['name'])) for e in dc['lines']] if L['dc_line'] else None,
+                             'station_v': [rnd(L['dc_station'].get(q['name'])) for q in dc['stations']] if L['dc_station'] else None}
     return out
 
 
@@ -656,6 +747,32 @@ def _segments(v):
         yield e, x1, y1, x2, y2
 
 
+def _dc_segments(v):
+    """4.20.1: the line of every DC line, parallel ones side by side as the AC branches."""
+    dc = v.get('dc') or {}
+    pos = {b['id']: (b['x'], b['y']) for b in dc.get('buses', [])}
+    for e in dc.get('lines', []):
+        if e['a'] not in pos or e['b'] not in pos:
+            continue
+        (x1, y1), (x2, y2) = pos[e['a']], pos[e['b']]
+        if e.get('of', 1) > 1:
+            dx, dy = x2 - x1, y2 - y1
+            L = math.hypot(dx, dy) or 1.0
+            off = (e['k'] - (e['of'] + 1) / 2) * 0.12 * v['unit']
+            x1, y1, x2, y2 = x1 - dy / L * off, y1 + dx / L * off, x2 - dy / L * off, y2 + dx / L * off
+        yield e, x1, y1, x2, y2
+
+
+def _dc_stations(v):
+    """4.20.1: every converter station as the link from its AC bus to its DC bus (the station is drawn at its middle)."""
+    dc = v.get('dc') or {}
+    pos = {b['id']: (b['x'], b['y']) for b in dc.get('buses', [])}
+    apos = {b['id']: (b['x'], b['y']) for b in v['buses']}
+    for q in dc.get('stations', []):
+        if q['ac'] in apos and q['dc'] in pos:
+            yield (q,) + tuple(apos[q['ac']]) + tuple(pos[q['dc']])
+
+
 _HEX = __import__('re').compile(r'^#[0-9a-fA-F]{6}$')
 
 
@@ -666,7 +783,8 @@ def _col(c):
 
 def svg(v, result=None, layer='base', width=900, labels=None, title=None, L=None, standalone=False):
     """The view as an SVG picture (a string): branches, buses (a generator bus as a ring, the slack bus larger), transformers
-    with a mark at their middle, and the legend under the drawing. labels: None (names where the buses are few), True or
+    with a mark at their middle, a DC grid (4.20.1: DC buses as squares, DC lines thicker, every converter station as a square
+    with a diagonal on the link to its AC bus), and the legend under the drawing. labels: None (names where the buses are few), True or
     False. L: the layer as values() gave it (then result and layer are not used). standalone: with the XML namespace, for a
     file of its own; without it the picture goes inside an HTML page."""
     L = L if L is not None else values(v, result, layer)
@@ -713,6 +831,33 @@ def svg(v, result=None, layer='base', width=900, labels=None, title=None, L=None
         o.append(f'<line x1="{ax:.1f}" y1="{ay:.1f}" x2="{bx:.1f}" y2="{by:.1f}" stroke="{c}" stroke-width="{lw * (2.2 if hot else 1):.2f}" stroke-linecap="round"><title>{tip}</title></line>')
         if e.get('trafo'):
             o.append(f'<circle cx="{(ax + bx) / 2:.1f}" cy="{(ay + by) / 2:.1f}" r="{0.6 * r:.2f}" fill="#ffffff" stroke="{c}" stroke-width="{lw:.2f}"/>')
+    dc = v.get('dc')
+    if dc:                                                   # 4.20.1: the DC grid: stations on their links, DC lines, DC buses as squares
+        dv, dlv, dsv = L.get('dc_bus') or {}, L.get('dc_line') or {}, L.get('dc_station') or {}
+        dbc, dlc, dsc = L.get('dc_bus_color') or {}, L.get('dc_line_color') or {}, L.get('dc_station_color') or {}
+        st = list(_dc_stations(v))
+        for q, ax, ay, bx, by in st:
+            o.append(f'<line x1="{ax:.1f}" y1="{ay:.1f}" x2="{bx:.1f}" y2="{by:.1f}" stroke="{STATION}" stroke-width="{lw:.2f}"/>')
+        for e, ax, ay, bx, by in _dc_segments(v):
+            c = _col(dlc.get(e['name'], GREY))
+            hot = c != GREY and layer != 'base'
+            tip = f'{_esc(e["name"])}: {_esc(e["a"])} – {_esc(e["b"])} (DC)' + (fmt(dlv[e['name']], L.get('unit_dc_line', '')) if _num(dlv.get(e['name'])) is not None else '')
+            o.append(f'<line class="dc" x1="{ax:.1f}" y1="{ay:.1f}" x2="{bx:.1f}" y2="{by:.1f}" stroke="{c}" stroke-width="{lw * (2.2 if hot else 1.6):.2f}" stroke-linecap="round"><title>{tip}</title></line>')
+        for q, ax, ay, bx, by in st:
+            c = _col(dsc.get(q['name'], STATION))
+            mx, my, hs = (ax + bx) / 2, (ay + by) / 2, 0.75 * r
+            tip = (f'{_esc(q["name"])}: {_esc(q["ac"])} – {_esc(q["dc"])} · {_esc(CONTROL.get(q.get("control"), q.get("control", "")))}'
+                   + (fmt(dsv[q['name']], L.get('unit_dc_station', '')) if _num(dsv.get(q['name'])) is not None else ''))
+            o.append(f'<g class="station"><title>{tip}</title><rect x="{mx - hs:.1f}" y="{my - hs:.1f}" width="{2 * hs:.2f}" height="{2 * hs:.2f}" fill="#ffffff" stroke="{c}" stroke-width="{lw:.2f}"/>'
+                     f'<line x1="{mx - hs:.1f}" y1="{my + hs:.1f}" x2="{mx + hs:.1f}" y2="{my - hs:.1f}" stroke="{c}" stroke-width="{lw:.2f}"/></g>')
+        for b in dc['buses']:
+            c = _col(dbc.get(b['id'], GREY))
+            un = _num(b.get('Un')) or 0.0
+            tip = _esc(b['id']) + (f' · ±{un / 2e3:g} kV DC' if un else ' · DC') + (fmt(dv[b['id']], L.get('unit_dc_bus', '')) if _num(dv.get(b['id'])) is not None else '')
+            hs = 0.8 * r
+            o.append(f'<rect class="dc" x="{float(b["x"]) - hs:.1f}" y="{float(b["y"]) - hs:.1f}" width="{2 * hs:.2f}" height="{2 * hs:.2f}" fill="{c}" stroke="#5f6b6d" stroke-width="{0.25 * lw:.2f}"><title>{tip}</title></rect>')
+            if labels:
+                o.append(f'<text x="{float(b["x"]) + 1.2 * r:.1f}" y="{float(b["y"]) - 1.2 * r:.1f}" font-size="{fs:.1f}" font-family="sans-serif" fill="#333333">{_esc(b["id"])}</text>')
     for b in v['buses']:
         c = _col(bc.get(b['id'], GREY))
         rr = r * (1.5 if b.get('type') == 'slack' else 1.0)
@@ -743,7 +888,9 @@ def dxf(v, result=None, layers=('voltage', 'flow')):
     """The view as a DXF drawing (ASCII, the R12 subset that every CAD program reads; from there it saves as DWG).
 
     CAD layers: BUSES (circles), BUS_NAMES (text), BRANCHES (lines), TRANSFORMERS (a circle at the middle of the branch),
-    GENERATORS (a ring around the bus), LOADS (a short tick), and for every layer asked a text layer with its values
+    GENERATORS (a ring around the bus), LOADS (a short tick), with a DC grid (4.20.1) also DC_BUSES (squares), DC_BUS_NAMES,
+    DC_LINES and STATIONS (the link of a station to its AC bus, the station as a square with a diagonal at its middle),
+    and for every layer asked a text layer with its values
     (V_PU, ANGLE_DEG, LMP on the buses; FLOW_MW, LOADING_PCT on the branches), so that the user switches on what the drawing
     should show. y grows upwards in a CAD drawing, so the picture is mirrored to look as on the screen."""
     u = v['unit']
@@ -783,6 +930,25 @@ def dxf(v, result=None, layers=('voltage', 'flow')):
             circle(lg, b['x'], b['y'], 1.9 * r)
         if b['load']:
             line(ll, b['x'], b['y'] + r, b['x'], b['y'] + 2.6 * r)
+    dc = v.get('dc')
+    dmid, smid = {}, {}
+    if dc:                                                   # 4.20.1: the DC grid on CAD layers of its own
+
+        def square(layer, x, y, hw):
+            for (p, q), (p2, q2) in (((-1, -1), (1, -1)), ((1, -1), (1, 1)), ((1, 1), (-1, 1)), ((-1, 1), (-1, -1))):
+                line(layer, x + p * hw, y + q * hw, x + p2 * hw, y + q2 * hw)
+        lst, ldl, ldb, ldn = lay('STATIONS', 8), lay('DC_LINES', 6), lay('DC_BUSES', 6), lay('DC_BUS_NAMES', 8)
+        for q, ax, ay, bx, by in _dc_stations(v):
+            line(lst, ax, ay, bx, by)
+            mx, my = smid[q['name']] = ((ax + bx) / 2, (ay + by) / 2)
+            square(lst, mx, my, 0.75 * r)
+            line(lst, mx - 0.75 * r, my + 0.75 * r, mx + 0.75 * r, my - 0.75 * r)
+        for e, ax, ay, bx, by in _dc_segments(v):
+            line(ldl, ax, ay, bx, by)
+            dmid[e['name']] = ((ax + bx) / 2, (ay + by) / 2)
+        for b in dc['buses']:
+            square(ldb, b['x'], b['y'], 0.8 * r)
+            text(ldn, b['x'] + 1.3 * r, b['y'] - 1.3 * r, b['id'])
     names = {'voltage': ('V_PU', 1, '{:.3f}'), 'angle': ('ANGLE_DEG', 4, '{:.2f}'), 'lmp': ('LMP', 30, '{:.2f}'), 'flow': ('FLOW_MW', 1, '{:.1f}'), 'loading': ('LOADING_PCT', 30, '{:.0f}')}
     drawn = []
     for k, layer in enumerate(layers or ()):
@@ -790,11 +956,12 @@ def dxf(v, result=None, layers=('voltage', 'flow')):
             continue
         L = values(v, result, layer)
         nm, col, fmt = names[layer]
-        if not L['bus'] and not L['branch']:
+        dcs = L.get('dc_bus') or {}, L.get('dc_line') or {}, L.get('dc_station') or {}
+        if not L['bus'] and not L['branch'] and not any(dcs):
             continue
         lay(nm, col)
         drawn.append(layer)
-        dy = (1.6 + 1.3 * len([q for q in drawn if q in ('voltage', 'angle', 'lmp')])) * th if L['bus'] else 0.0
+        dy = (1.6 + 1.3 * len([q for q in drawn if q in ('voltage', 'angle', 'lmp')])) * th if (L['bus'] or dcs[0]) else 0.0
         for b in v['buses']:
             if b['id'] in L['bus']:
                 text(nm, b['x'] + 1.3 * r, b['y'] - 1.3 * r + dy, fmt.format(L['bus'][b['id']]), 0.8 * th)
@@ -802,6 +969,14 @@ def dxf(v, result=None, layers=('voltage', 'flow')):
         for e in v['branches']:
             if e['name'] in L['branch'] and e['name'] in mid:
                 text(nm, mid[e['name']][0] + 0.5 * r, mid[e['name']][1] + dyb, fmt.format(L['branch'][e['name']]), 0.8 * th)
+        if dc:                                               # the values of the DC grid on the same CAD layer
+            for b in dc['buses']:
+                if b['id'] in dcs[0]:
+                    text(nm, b['x'] + 1.3 * r, b['y'] - 1.3 * r + dy, fmt.format(dcs[0][b['id']]), 0.8 * th)
+            for k, at in ((1, dmid), (2, smid)):
+                for q, x in dcs[k].items():
+                    if q in at:
+                        text(nm, at[q][0] + 0.9 * r, at[q][1] + dyb, fmt.format(x), 0.8 * th)
     x0, y0, x1, y1 = v['bounds']
     head = ['0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1009', '9', '$EXTMIN', '10', f'{x0 - u:.3f}', '20', f'{-y1 - u:.3f}', '9', '$EXTMAX', '10', f'{x1 + u:.3f}', '20',
             f'{-y0 + u:.3f}', '0', 'ENDSEC']

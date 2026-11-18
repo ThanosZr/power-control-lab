@@ -261,3 +261,134 @@ class Viewer(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class DCGrids(unittest.TestCase):
+    """4.20.1: a network with DC grids has them in its picture: the DC buses in the same layout as the AC buses (joined by their
+    lines and by every station to its AC bus), apart in the view and in the layers; a network without them is drawn as before."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.nets = {c: N.case_data(c) for c in ('mtdc5', 'b4')}
+        cls.runs = {c: S.run({'case': c, 'study': 'acdc', 'view': True}) for c in cls.nets}
+
+    def test_the_dc_grid_is_in_the_picture(self):
+        for c, net in self.nets.items():
+            v = NV.view(net)
+            dc = v['dc']
+            el = lambda k: [e for e in net.elements if e['kind'] == k]     # noqa: E731
+            self.assertEqual([b['id'] for b in dc['buses']], list(net.dc_buses), c)
+            self.assertEqual([e['name'] for e in dc['lines']], [e['name'] for e in el('dc_line')], c)
+            self.assertEqual([(q['name'], q['ac'], q['dc']) for q in dc['stations']], [(e['name'], e['bus'], e['dc']) for e in el('vsc')], c)
+            pos = {**{b['id']: (b['x'], b['y']) for b in v['buses']}, **{b['id']: (b['x'], b['y']) for b in dc['buses']}}
+            P = np.array(list(pos.values()))
+            self.assertTrue(np.isfinite(P).all(), c)
+            d = np.sqrt(((P[:, None, :] - P[None, :, :]) ** 2).sum(axis=2)) + 1e9 * np.eye(len(P))
+            self.assertGreater(d.min(), 0.2 * NV.UNIT, c)                                          # no two buses, AC or DC, on top of each other
+            edges = [(e['a'], e['b']) for e in v['branches'] + dc['lines']] + [(q['ac'], q['dc']) for q in dc['stations']]
+            L = [np.hypot(pos[a][0] - pos[b][0], pos[a][1] - pos[b][1]) for a, b in edges]
+            self.assertAlmostEqual(float(np.median(L)), NV.UNIT, delta=0.05 * NV.UNIT, msg=c)       # a DC line and a station link are one unit long as a branch
+            x0, y0, x1, y1 = v['bounds']
+            self.assertEqual((x0, y0, x1, y1), (P[:, 0].min(), P[:, 1].min(), P[:, 0].max(), P[:, 1].max()), c)
+            self.assertEqual(json.dumps(v), json.dumps(NV.view(N.case_data(c))), c)
+        par = [e for e in NV.view(self.nets['b4'])['dc']['lines'] if e['of'] > 1]
+        self.assertEqual(sorted(e['name'] for e in par), ['Bb-A1–Bb-B1#1', 'Bb-A1–Bb-B1#2', 'Bb-B4–Bb-B2#1', 'Bb-B4–Bb-B2#2'])
+
+    def test_a_network_without_dc_parts_is_drawn_as_before(self):
+        # the places of the AC graph alone, and nothing of DC in the view or in its layers (all the files of the picture
+        # were compared bit for bit with the ones of before 4.20.1, for every network and study)
+        for c in N.CASES:
+            if c == 'pegase1354':
+                continue
+            net = N.case_data(c)
+            case, names, f, t = NV._graph(net)
+            self.assertIsNone(NV._with_dc(case, names, f, t, net), c)
+            self.assertEqual(NV.layout(net), NV._layout(case, names, f, t), c)
+            v = NV.view(net)
+            self.assertNotIn('dc', v, c)
+            self.assertFalse(any('dc' in L for L in NV.pack(v, S.run({'case': c, 'study': 'pf'})['result'])), c)
+
+    def test_the_layers_of_an_ac_dc_load_flow(self):
+        for c, q in self.runs.items():
+            res, v = q['result'], q['view']
+            dc = v['dc']
+            self.assertEqual(q['layer'], 'voltage', c)
+            self.assertIn('flow', [L['layer'] for L in q['layers']], c)                           # the DC lines feed the flows (b4 has no AC branches)
+            L = NV.values(v, res, 'voltage')
+            self.assertEqual(L['dc_bus'], {b: x['V'] for b, x in res['dc']['buses'].items()}, c)
+            self.assertEqual(L['unit_dc_bus'], 'pu', c)
+            F = NV.values(v, res, 'flow')
+            self.assertEqual(F['dc_line'], {e['name']: e['Pa'] / 1e6 for e in res['dc']['lines']}, c)
+            self.assertEqual(F['dc_station'], {n: x['Pdc'] / 1e6 for n, x in res['converters'].items()}, c)
+            B = NV.values(v, res, 'base')
+            self.assertTrue(all(L['dc_line_color'][e['name']] == NV.GREY for e in dc['lines']), c)  # the voltages leave the DC lines grey
+            for layer in ('voltage', 'flow', 'base', 'violations'):
+                pk = [x for x in q['layers'] if x['layer'] == layer][0]
+                self.assertEqual((len(pk['dc']['bus_c']), len(pk['dc']['line_c']), len(pk['dc']['station_c'])), (len(dc['buses']), len(dc['lines']), len(dc['stations'])), c)
+                self.assertLess(max(pk['dc']['bus_c'] + pk['dc']['line_c'] + pk['dc']['station_c']), len(pk['palette']), c)
+            pk = [x for x in q['layers'] if x['layer'] == 'flow'][0]
+            self.assertEqual(pk['dc']['line_v'], [float(f"{e['Pa'] / 1e6:.6g}") for e in res['dc']['lines']], c)
+            self.assertIsNone(pk['dc']['bus_v'], c)
+        B = NV.values(self.runs['b4']['view'], self.runs['b4']['result'], 'base')
+        self.assertEqual([t for _, t in B['legend']], ['400 kV', '±400 kV DC', '±200 kV DC', 'σταθμός μετατροπέα'])
+        self.assertEqual(len(set(B['dc_line_color'].values())), 2)                                # two DC voltages, two colours
+
+    def test_svg_and_dxf_draw_the_dc_grid(self):
+        q = self.runs['b4']
+        v, res = q['view'], q['result']
+        nd, nl, ns = len(v['dc']['buses']), len(v['dc']['lines']), len(v['dc']['stations'])
+        root = ET.fromstring(NV.svg(v, res, 'flow'))
+        it = list(root.iter())
+        self.assertEqual(sum(1 for e in it if e.tag == 'rect' and e.get('class') == 'dc'), nd)
+        self.assertEqual(sum(1 for e in it if e.tag == 'line' and e.get('class') == 'dc'), nl)
+        self.assertEqual(sum(1 for e in it if e.tag == 'g' and e.get('class') == 'station'), ns)
+        tips = [e.text for e in it if e.tag == 'title']
+        self.assertIn('Bm-B3 · ±200 kV DC', tips)
+        self.assertIn('Cm-B3: AC Cm-B3 – Bm-B3 · κρατά την τάση DC · -835,2 MW', tips)
+        f = S.view({'case': 'b4', 'study': 'acdc', 'format': 'dxf'})
+        d = f['text'].split('\n')
+        pairs = list(zip(d[0:-1:2], d[1:-1:2]))
+        ent = [b for a, b in pairs if a == '0']
+        self.assertEqual(ent.count('LINE'), nl + 4 * nd + ns * 6)                                 # DC lines, squares, and each station: its link, a square and a diagonal
+        layers = [b for (a, b), (c, _) in zip(pairs, pairs[1:] + [('', '')]) if a == '2' and c == '70' and b.isupper() and b not in ('LTYPE', 'LAYER')]
+        self.assertTrue({'DC_BUSES', 'DC_BUS_NAMES', 'DC_LINES', 'STATIONS', 'V_PU', 'FLOW_MW'} <= set(layers))
+        txt = [b for (a, b) in pairs if a == '1']
+        self.assertEqual(sum(1 for t in txt if t.startswith('Bm-') or t.startswith('Bb-')), nd)
+        try:
+            import ezdxf
+        except ImportError:
+            self.skipTest('ezdxf is not installed: the drawing is read here only by the checks above')
+        import io
+        self.assertEqual(len(ezdxf.read(io.StringIO(f['text'])).audit().errors), 0)
+
+    def test_the_viewer_draws_and_picks_the_dc_grid(self):
+        data = {'dc': S.run({'case': 'b4', 'study': 'acdc', 'view': 'only'})}
+        fd, name = tempfile.mkstemp(suffix='.json')
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+        try:
+            out = subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'netview_cases.js'), name], capture_output=True, text=True, timeout=300, cwd=ROOT)
+        finally:
+            os.unlink(name)
+        if out.returncode:
+            raise RuntimeError(out.stderr[-2000:])
+        r = json.loads(out.stdout)['dc']['dc']
+        nd, nl, ns = r['nd'], r['nl'], r['ns']
+        self.assertEqual((nd, nl, ns), (15, 15, 15))
+        self.assertEqual((r['busOk'], r['stOk'], r['ends'], r['inside']), (nd, ns, ns, nd))      # every DC bus and station at its place; all inside when fitted
+        self.assertEqual(r['lineOk'] + r['lineOther'], nl)                                        # the middle of a DC line: the line, or something nearer
+        self.assertGreaterEqual(r['lineOk'], nl - 2)
+        a = r['all']['out']
+        self.assertEqual((a['dcbuses'], a['dclines'], a['stations']), (nd, nl, ns))
+        self.assertEqual(r['all']['rects'], nd + ns)                                              # the DC buses and the stations as squares
+        self.assertEqual((r['away']['out'].get('dcbuses'), r['away']['out'].get('dclines'), r['away']['out'].get('stations'), r['away']['rects']), (0, 0, 0, 0))
+        self.assertGreater(r['close']['out']['values'], 0)                                        # close: the flows of the DC lines and stations
+        self.assertEqual(r['closeOff']['texts'], 0)
+        self.assertEqual((r['hit'], r['hitLine']), (1, 1))
+        self.assertLessEqual(r['maxC'], len(r['palette']) - 1)
+        self.assertTrue(set(r['all']['stroke']) | set(r['all']['fill']) <= set(r['palette']) | {'#ffffff', '#5f6b6d', '#7a7a7a'})
+        self.assertTrue(set(r['base']['fill']) >= {'#6a3d9a', '#1f78b4'})                          # the two DC voltages of the B4 in their colours
+        t = r['text']
+        self.assertEqual((t['plain'], t['bus']), ('Ζυγός DC Bm-A1 · ±200 kV', 'Ζυγός DC Bm-A1 · ±200 kV'))     # the flows leave the DC buses without a value
+        self.assertEqual(t['line'], 'Γραμμή DC Bm-C1–Bm-A1: Bm-C1 – Bm-A1 · 500 MW στο Bm-C1')
+        self.assertEqual(t['station'], 'Σταθμός μετατροπέα Cm-A1: AC Cm-A1 (AC) – Bm-A1 (DC) · κρατά την τάση DC · -494 MW προς το DC')

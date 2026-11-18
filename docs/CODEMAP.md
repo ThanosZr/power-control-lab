@@ -26,7 +26,7 @@
 | `web/studio/metrics.js` | 89 |
 | `web/studio/mna.js` | 2455 |
 | `web/studio/netlib.js` | 1367 |
-| `web/studio/netview.js` | 138 |
+| `web/studio/netview.js` | 193 |
 | `web/studio/nn.js` | 57 |
 | `web/studio/parts.js` | 1574 |
 | `web/studio/plotcore.js` | 133 |
@@ -86,7 +86,7 @@
 | `pcl/linereport.py` | 836 |
 | `pcl/link.py` | 150 |
 | `pcl/netfile.py` | 490 |
-| `pcl/netview.py` | 813 |
+| `pcl/netview.py` | 988 |
 | `pcl/network.py` | 1606 |
 | `pcl/nnstart.py` | 388 |
 | `pcl/onnxio.py` | 355 |
@@ -105,7 +105,7 @@
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_api_surface.py` | 235 |
+| `tests/test_api_surface.py` | 238 |
 | `tests/test_arc.py` | 189 |
 | `tests/test_b4.py` | 298 |
 | `tests/test_backend.py` | 238 |
@@ -148,7 +148,7 @@
 | `tests/test_mmc.py` | 203 |
 | `tests/test_netfile.py` | 236 |
 | `tests/test_netlib.py` | 209 |
-| `tests/test_netview.py` | 263 |
+| `tests/test_netview.py` | 394 |
 | `tests/test_network.py` | 272 |
 | `tests/test_nn.py` | 130 |
 | `tests/test_nnstart.py` | 315 |
@@ -208,7 +208,7 @@
 | `tests/js/mtdc_cases.js` | 13 |
 | `tests/js/netlib42_cases.js` | 50 |
 | `tests/js/netlib_cases.js` | 93 |
-| `tests/js/netview_cases.js` | 77 |
+| `tests/js/netview_cases.js` | 91 |
 | `tests/js/nn_cases.js` | 48 |
 | `tests/js/pieces_cases.js` | 45 |
 | `tests/js/plotcore_cases.js` | 25 |
@@ -238,7 +238,7 @@
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/ev_flow.js` | 112 |
 | `tests/ui/facts_flow.js` | 93 |
-| `tests/ui/features_flow.js` | 355 |
+| `tests/ui/features_flow.js` | 365 |
 | `tests/ui/line_flow.js` | 166 |
 | `tests/ui/live_flow.js` | 41 |
 | `tests/ui/perf_flow.js` | 68 |
@@ -1787,31 +1787,35 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 20 | function | `model` |
-| 33 | function | `fit` |
-| 35 | const fn | `sx` |
-| 37 | function | `detail` |
-| 38 | function | `pick` |
-| 50 | const fn | `num` |
-| 52 | function | `describe` |
-| 58 | function | `draw` |
-| 97 | function | `create` |
-| 100 | const fn | `size` |
-| 105 | const fn | `paint` |
-| 106 | const fn | `ask` |
-| 107 | const fn | `at` |
-| 109 | const fn | `down` |
-| 110 | const fn | `move` |
-| 114 | const fn | `up` |
-| 115 | const fn | `wheel` |
-| 116 | const fn | `dbl` |
-| 123 | method | `setLayer` |
-| 124 | method | `setNames` |
-| 125 | method | `fit` |
-| 127 | method | `zoom` |
-| 130 | method | `goto` |
-| 131 | method | `info` |
-| 132 | method | `destroy` |
+| 25 | function | `model` |
+| 39 | function | `dcModel` |
+| 50 | function | `fit` |
+| 52 | const fn | `sx` |
+| 54 | function | `detail` |
+| 55 | function | `pick` |
+| 67 | const fn | `near` |
+| 76 | const fn | `num` |
+| 78 | function | `describe` |
+| 91 | function | `draw` |
+| 115 | const fn | `lines` |
+| 141 | const fn | `put` |
+| 152 | function | `create` |
+| 155 | const fn | `size` |
+| 160 | const fn | `paint` |
+| 161 | const fn | `ask` |
+| 162 | const fn | `at` |
+| 164 | const fn | `down` |
+| 165 | const fn | `move` |
+| 169 | const fn | `up` |
+| 170 | const fn | `wheel` |
+| 171 | const fn | `dbl` |
+| 178 | method | `setLayer` |
+| 179 | method | `setNames` |
+| 180 | method | `fit` |
+| 182 | method | `zoom` |
+| 185 | method | `goto` |
+| 186 | method | `info` |
+| 187 | method | `destroy` |
 
 ### `web/studio/nn.js`
 
@@ -3526,29 +3530,33 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 38 | class | `ViewError` |
-| 43 | function | `_graph` |
-| 51 | function | `_components` |
-| 59 | function | `_hops` |
-| 67 | function | `_tree` |
-| 112 | function | `_classical` |
-| 128 | function | `_stress` |
-| 153 | function | `_stress_sparse` |
-| 180 | function | `_spread` |
-| 204 | function | `_island` |
-| 241 | function | `layout` |
-| 258 | function | `_layout` |
-| 288 | function | `view` |
-| 334 | function | `_scale` |
-| 345 | function | `_num` |
-| 353 | function | `values` |
-| 609 | function | `_maybe_int` |
-| 619 | function | `pack` |
-| 642 | function | `_esc` |
-| 646 | function | `_segments` |
-| 662 | function | `_col` |
-| 667 | function | `svg` |
-| 742 | function | `dxf` |
+| 47 | class | `ViewError` |
+| 52 | function | `_graph` |
+| 60 | function | `_components` |
+| 68 | function | `_hops` |
+| 76 | function | `_tree` |
+| 121 | function | `_classical` |
+| 137 | function | `_stress` |
+| 162 | function | `_stress_sparse` |
+| 189 | function | `_spread` |
+| 213 | function | `_island` |
+| 250 | function | `_dc_parts` |
+| 256 | function | `_with_dc` |
+| 272 | function | `layout` |
+| 292 | function | `_layout` |
+| 322 | function | `view` |
+| 384 | function | `_scale` |
+| 395 | function | `_num` |
+| 403 | function | `values` |
+| 689 | function | `_maybe_int` |
+| 699 | function | `pack` |
+| 733 | function | `_esc` |
+| 737 | function | `_segments` |
+| 750 | function | `_dc_segments` |
+| 766 | function | `_dc_stations` |
+| 779 | function | `_col` |
+| 784 | function | `svg` |
+| 887 | function | `dxf` |
 
 ### `pcl/network.py`
 

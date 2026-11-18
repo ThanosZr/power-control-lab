@@ -43,8 +43,22 @@ function one(data){const m=NV.model(data),w=900,h=600,tr=NV.fit(m,w,h),sx=x=>(x-
  r.away=frame(m,{s:tr.s,cx:tr.cx+1e6,cy:tr.cy},w,h,layer,{});
  r.base=frame(m,tr,w,h,'base',{});r.unknown=frame(m,tr,w,h,'no-such-layer',{});
  r.hit=frame(m,tr,w,h,layer,{hit:{kind:'bus',i:0}}).arcs-r.all.arcs;
- r.text={bus:NV.describe(m,{kind:'bus',i:0,bus:m.v.buses[0]},layer),branch:NV.describe(m,{kind:'branch',j:0,branch:m.v.branches[0]},layer),none:NV.describe(m,null,layer)};
+ r.text={bus:NV.describe(m,{kind:'bus',i:0,bus:m.v.buses[0]},layer),branch:m.ne?NV.describe(m,{kind:'branch',j:0,branch:m.v.branches[0]},layer):'',none:NV.describe(m,null,layer)};
  const jo=m.v.branches.findIndex(e=>e.off);r.off=jo<0?null:{j:jo,text:NV.describe(m,{kind:'branch',j:jo,branch:m.v.branches[jo]},layer),pick:(q=>q&&q.kind==='branch'&&q.j===jo)(NV.pick(m,tr,w,h,sx((m.x1[jo]+m.x2[jo])/2),sy((m.y1[jo]+m.y2[jo])/2)))};
+ // 4.20.1: the DC grid: every DC bus, station and DC line picked at its place, the segments of the stations from their buses,
+ // what a frame draws of it (all of it, and nothing far away), its texts, the values close to a DC bus, the ring of a pick
+ if(m.dc){const D=m.dc,dl=m.layers.has('flow')?'flow':layer,ins=(X,Y)=>X>=0&&X<=w&&Y>=0&&Y<=h;let busOk=0,stOk=0,lineOk=0,lineOther=0,ends=0,inside=0;
+  for(let i=0;i<D.nd;i++){const q=NV.pick(m,tr,w,h,sx(D.x[i]),sy(D.y[i]));if(q&&q.kind==='dcbus'&&q.i===i)busOk++;if(ins(sx(D.x[i]),sy(D.y[i])))inside++;}
+  for(let j=0;j<D.ns;j++){const q=NV.pick(m,tr,w,h,sx((D.s1[j]+D.s2[j])/2),sy((D.t1[j]+D.t2[j])/2));if(q&&q.kind==='station'&&q.j===j)stOk++;
+   const st=D.v.stations[j],a=m.ix.get(st.ac),b=D.dix.get(st.dc);if(D.s1[j]===m.x[a]&&D.t1[j]===m.y[a]&&D.s2[j]===D.x[b]&&D.t2[j]===D.y[b])ends++;}
+  for(let j=0;j<D.nl;j++){const q=NV.pick(m,tr,w,h,sx((D.x1[j]+D.x2[j])/2),sy((D.y1[j]+D.y2[j])/2));if(q&&q.kind==='dcline'&&q.j===j)lineOk++;else if(q)lineOther++;}
+  const near={s:130/m.v.unit,cx:D.x[0],cy:D.y[0]},Lf=m.layers.get(dl);
+  r.dc={nd:D.nd,nl:D.nl,ns:D.ns,busOk,stOk,lineOk,lineOther,ends,inside,layer:dl,
+   all:frame(m,tr,w,h,dl,{}),away:frame(m,{s:tr.s,cx:tr.cx+1e6,cy:tr.cy},w,h,dl,{}),close:frame(m,near,w,h,dl,{}),closeOff:frame(m,near,w,h,dl,{names:'off'}),base:frame(m,tr,w,h,'base',{}),
+   hit:frame(m,tr,w,h,dl,{hit:{kind:'dcbus',i:0}}).arcs-frame(m,tr,w,h,dl,{}).arcs,hitLine:frame(m,tr,w,h,dl,{hit:{kind:'dcline',j:0}}).segs-frame(m,tr,w,h,dl,{}).segs,
+   text:{bus:NV.describe(m,{kind:'dcbus',i:0,bus:D.v.buses[0]},dl),line:NV.describe(m,{kind:'dcline',j:0,line:D.v.lines[0]},dl),station:NV.describe(m,{kind:'station',j:0,station:D.v.stations[0]},dl),
+    plain:NV.describe(m,{kind:'dcbus',i:0,bus:D.v.buses[0]},'base')},
+   palette:Lf.palette,maxC:Math.max(...Lf.dc.bus_c,...Lf.dc.line_c,...Lf.dc.station_c)};}
  r.num=[NV.num(1234.5,'MW'),NV.num(12.345),NV.num(1.2345,'pu'),NV.num(0.01234),NV.num(null),NV.num(NaN)];
  // the interactive viewer: an element that keeps its listeners, frames asked through a timer we drive
  const ls={},{ctx,c}=fake();c.W=800;c.H=500;let pending=[];globalThis.requestAnimationFrame=f=>{pending.push(f);return pending.length;};

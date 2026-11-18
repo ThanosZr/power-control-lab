@@ -230,6 +230,16 @@ const {chromium}=require('playwright');
  const nv6=await p.evaluate(()=>({layer:window.PCL.NV.v.state.layer,layers:window.PCL.NV.v.layers().map(q=>q.layer).join(),title:document.querySelector('#nv-title').textContent,legend:document.querySelector('#nv-legend').textContent}));
  ok(nv6.layer==='n1'&&nv6.layers==='base,n1'&&/N−1 σε AC/.test(nv6.title)&&/118 ζυγοί, 186 κλάδοι/.test(nv6.title),'network view: the outages of N−1 on the 118-bus network ('+nv6.legend.slice(0,70)+')');
  await p.click('#nv-close');
+ // 4.20.1 (decision 321): the DC grids of the B4 in the diagram; a DC bus is described in the info line and has no panel to change
+ await p.evaluate(()=>window.PCL.loadTutorial('b4dcs2',{}));await p.waitForTimeout(1200);
+ await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.frames>0,null,{timeout:60000});
+ const dcp=await p.evaluate(()=>{const v=window.PCL.NV.v,D=v.model.dc,tr=v.state.tr,r=document.querySelector('#nv-canvas').getBoundingClientRect();
+  return {title:document.querySelector('#nv-title').textContent,drawn:v.state.drawn,X:r.left+(D.x[1]-tr.cx)*tr.s+v.state.w/2,Y:r.top+(D.y[1]-tr.cy)*tr.s+v.state.h/2,id:D.v.buses[1].id};});
+ await p.mouse.move(dcp.X,dcp.Y);await p.waitForTimeout(150);await p.mouse.down();await p.mouse.up();await p.waitForTimeout(150);
+ const dci=await p.evaluate(()=>({info:document.querySelector('#nv-info').textContent,edit:document.querySelector('#nv-edit').hidden}));
+ ok(/15 ζυγοί DC, 15 γραμμές DC, 15 σταθμοί μετατροπέα/.test(dcp.title)&&dcp.drawn.dcbuses===15&&dcp.drawn.dclines===15&&dcp.drawn.stations===15&&dci.info.startsWith('Ζυγός DC '+dcp.id)&&dci.edit,
+  'network view: the DC grids of the B4 ('+dcp.title.slice(-60)+'; '+dci.info+')');
+ await p.click('#nv-close');
  // 4.19.3 (ROADMAP §68, decision 264): a large network in the time domain. The 8 × 8 mesh (573 unknowns, over 4000 channels): the
  // sparse solver and the sparse phasor start, the record buffers sized by memory, a steady start, the two new settings in the
  // panel; and the 1354-bus case in the list of the studies

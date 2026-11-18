@@ -2640,7 +2640,7 @@ async function studyAct(what){const m=S.tutMeta?.study;if(!m||STUDY.busy)return;
 const NV={v:null,id:null,sel:null};
 function netViewOpen(){const d=STUDY.view;if(!d||!window.NetView)return;const box=$('#netview');box.hidden=false;
  const keep=NV.v&&NV.id===d.id?{tr:NV.v.state.fitted?null:NV.v.state.tr,layer:NV.v.state.layer,names:NV.v.state.names}:null;NV.v?.destroy();NV.id=d.id;
- $('#nv-title').textContent=`Δίκτυο της μελέτης: ${d.name} · ${STUDY_LAB[d.q.study]||d.q.study} · ${d.view.buses.length} ζυγοί, ${d.view.branches.length} κλάδοι`;
+ $('#nv-title').textContent=`Δίκτυο της μελέτης: ${d.name} · ${STUDY_LAB[d.q.study]||d.q.study} · ${d.view.buses.length} ζυγοί, ${d.view.branches.length} κλάδοι${d.view.dc?`, ${d.view.dc.buses.length} ζυγοί DC, ${d.view.dc.lines.length} γραμμές DC, ${d.view.dc.stations.length} σταθμοί μετατροπέα`:''}`;
  const v=NV.v=NetView.create($('#nv-canvas'),d,{tr:keep?.tr,layer:keep?.layer,pick:q=>nvEdit(q),info:t=>{$('#nv-info').textContent=t||'Σύρε για μετακίνηση, ροδέλα για μεγέθυνση, δείξε έναν ζυγό ή έναν κλάδο για τα μεγέθη του, κάνε κλικ για να τον αλλάξεις.';}});
  const legend=()=>{const L=v.legend();$('#nv-legend').innerHTML=`<b>${esc(L.title)}</b>`+L.items.map(([c,t])=>`<i style="background:${esc(c)}"></i>${esc(t)}`).join('');};
  $('#nv-layer').innerHTML=v.layers().map(L=>`<option value="${esc(L.layer)}" ${L.layer===v.state.layer?'selected':''}>${esc(L.title)}</option>`).join('');$('#nv-names').value=keep?.names||'auto';if(keep)v.setNames(keep.names);else $('#nv-find').value='';legend();
@@ -2655,9 +2655,9 @@ function netViewOpen(){const d=STUDY.view;if(!d||!window.NetView)return;const bo
  $('#nv-edits').innerHTML=d.done.length?`<b>Αλλαγές στο δίκτυο (${d.done.length}):</b> `+d.done.map((t,i)=>`<span class="nv-chip">${esc(t)} <button data-nv-drop="${i}" title="Αναίρεση αυτής της αλλαγής">✕</button></span>`).join(' ')+' <button id="nv-noedits">Αναίρεση όλων</button>':'';
  $('#nv-edits').hidden=!d.done.length;$('#nv-edits').onclick=e=>{const b=e.target.closest('[data-nv-drop]');if(b){STUDY.edits=STUDY.edits.filter((x,i)=>i!==+b.dataset.nvDrop);studyAct('view');}else if(e.target.id==='nv-noedits')studyAct('noedits');};
  // the bus or the branch that was being changed stays selected, with its new values
- const sel=NV.sel&&keep?(NV.sel.kind==='bus'?(i=>i===undefined?null:{kind:'bus',i,bus:d.view.buses[i]})(v.model.ix.get(NV.sel.bus.id)):(j=>j<0?null:{kind:'branch',j,branch:d.view.branches[j]})(d.view.branches.findIndex(e=>e.name===NV.sel.branch.name))):null;nvEdit(sel);}
+ const sel=NV.sel&&keep?(NV.sel.kind==='bus'?(i=>i===undefined?null:{kind:'bus',i,bus:d.view.buses[i]})(v.model.ix.get(NV.sel.bus.id)):NV.sel.kind==='branch'?(j=>j<0?null:{kind:'branch',j,branch:d.view.branches[j]})(d.view.branches.findIndex(e=>e.name===NV.sel.branch.name)):null):null;nvEdit(sel);}
 // the panel of a bus (its load, its generators) or of a branch (its rating, out of service); only what was changed becomes a change
-function nvEdit(q){const box=$('#nv-edit'),d=STUDY.view;NV.sel=q;if(!q||!d||!d.edit){box.hidden=true;box.innerHTML='';return;}
+function nvEdit(q){const box=$('#nv-edit'),d=STUDY.view;NV.sel=q;if(!q||!d||!d.edit||(q.kind!=='bus'&&q.kind!=='branch')){box.hidden=true;box.innerHTML='';return;}   // (4.20.1: the DC grid only in the info line)
  const E=d.edit,n=x=>x===null||x===undefined?'':String(x);let h;
  if(q.kind==='bus'){const id=q.bus.id,L=E.load[id]||[0,0],G=E.gen[id]||[];
   h=`<b>Ζυγός ${esc(id)}</b><label>Φορτίο P <input data-nv="P" type="number" step="any" value="${n(L[0])}"> MW</label><label>Q <input data-nv="Q" type="number" step="any" value="${n(L[1])}"> Mvar</label>`
