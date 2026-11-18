@@ -823,6 +823,8 @@
    const law=['droop','vsm','psc','dvoc'].includes(p.law)?p.law:'droop',gp={law,inner:'direct',S:s(S),Vac:s(Vac),Vdc:s(Vdc),f0:s(w0/(2*Math.PI)),Pref:neg(p.Pref,0),Qref:neg(p.Qref,0),Vref:String(p.Vref??'1'),
     mp:p.mp??2,nq:p.nq??5,fp:p.fp??5,H:p.Hv??2,tv:p.tv??0.01,tdr:p.tdr??0,kp:p.kp??50,avc:p.avc??'vac',Uref:String(p.Vacref??'1'),KE:p.KE??5,TE:p.TE??0.05,kv:p.kv??0,av:p.av??40,
     Rv:p.Rv??0,Xv:p.Xv??0,Xc:s(X),Imax:s(Il),Ufd:p.Ufd??0.6,tsoft:p.tsoft??0.05,ac:p.ac??600,vmax:s(vmax),bw:s(pos(p.bw)),tsync:s(Math.max(num(p.tdb,0),0)),th0:s(num(p.th0,0)),fm,conn:'sep'};
+   // 4.20.4: the angle κ and the oscillator's amplitude at t = 0 of dVOC, as in GFMC (only for dVOC: the other laws unchanged)
+   if(law==='dvoc'){gp.kap=p.kap??90;gp.E0=String(p.E0??'');}
    B.comp('G','GFMC',gp);
    for(const x of PH){E('N'+x,'-u','u');w(RAW['i'+x],['N'+x,'u']);w(['N'+x,'y'],['G','i'+x]);w(RAW['v'+x],['G','v'+x]);}
    E('VSV','s > k/10 ? s : v','s, v','k = '+s(Vdc));w(RAW.vs,['VSV','s']);w(RAW.vdc,['VSV','v']);w(['VSV','y'],['G','vdc']);
@@ -1169,8 +1171,11 @@
   // the DC current reference (10). (24) writes Δp* as added to p*; the set-point is lowered here, so that the injection is
   // steered away from the limit as the paper describes. The DC current reference (10) for every law (dcc), not only for
   // matching control
-  const plim=p.plim==='on',dcc=law==='match'||p.dcc==='on';let PR=PR0;
-  if(plim){E('PRL','r - gp*max(0, i - ith)','r, i',`gp = ${s(Math.max(num(p.gp,2.3),0))}, ith = ${s(Math.max(num(p.ith,0.9),0))}`);w(PR0,['PRL','r']);w(Y('IG'),['PRL','i']);PR=Y('PRL');}
+  // (the sign of (24): our reading, approved (decision 326))
+  // 4.20.4: a first-order filter on |i| before (24) (fpl, Hz; 0 = none, as in 4.20.3): our addition, not in the paper
+  const plim=p.plim==='on',dcc=law==='match'||p.dcc==='on',fpl=Math.max(num(p.fpl,0),0);let PR=PR0;
+  if(plim){let IGx=Y('IG');if(fpl>0){B.comp('IGF','LPF',{fc:s(fpl),y0:'0'});w(IGx,['IGF','u']);IGx=Y('IGF');}
+   E('PRL','r - gp*max(0, i - ith)','r, i',`gp = ${s(Math.max(num(p.gp,2.3),0))}, ith = ${s(Math.max(num(p.ith,0.9),0))}`);w(PR0,['PRL','r']);w(IGx,['PRL','i']);PR=Y('PRL');}
   // 4.18.1: the filters of P and Q (droop) and the flux of the VSM from the references at t = 0 (fi = 'ref', a start from the
   // load flow, e.g. in a network) or from 0 and 1 (as in 4.18)
   const at0=(v,d)=>{const sc=P.parseSched(String(v??'').trim()===''?String(d):String(v));return sc?sc[0][1]:d;},fi=p.fi==='ref',P0=fi?at0(p.Pref,0):0,Q0=fi?at0(p.Qref,0):0,V0=fi?at0(p.Vref,1):1;
@@ -1280,12 +1285,15 @@
   // 4.20.3: the DC current reference (10) for the laws other than matching (dcc): the same i*_dc = k_dc·(1 − v_dc) + P_ref +
   // G_dc·v_dc + (v_dc·i_x − P)/V_dc*, with k_dc = 1/m_p (for the PSC 1/0,02, it has no m_p); their modulation divides by the
   // measured v_dc, so the power at the switching node is v_c·i without the factor v_dc of matching
-  if(dcc&&law!=='match'){E('PSW','cd*id + cq*iq - x','cd, cq, id, iq, x');w(Y('VCD'),['PSW','cd']);w(Y('VCQ'),['PSW','cq']);w(Y('ID'),['PSW','id']);w(Y('IQ'),['PSW','iq']);w(Y('PP'),['PSW','x']);
+  // 4.20.4: with the modulation (9) on the nominal V_dc* (mdc = 'nom') the power at the switching node is v_dc·v_c·i, as in
+  // matching
+  const nom=law==='match'||p.mdc==='nom';
+  if(dcc&&law!=='match'){E('PSW',nom?'v*(cd*id + cq*iq) - x':'cd*id + cq*iq - x',nom?'v, cd, cq, id, iq, x':'cd, cq, id, iq, x');if(nom)w(F.vdc,['PSW','v']);w(Y('VCD'),['PSW','cd']);w(Y('VCQ'),['PSW','cq']);w(Y('ID'),['PSW','id']);w(Y('IQ'),['PSW','iq']);w(Y('PP'),['PSW','x']);
    E('IDC','kd*(1 - v) + r + gd*v + l','v, r, l',`kd = ${s(1/(law==='psc'?0.02:mp))}, gd = ${s(Math.max(num(p.Gdc,0),0))}`);w(F.vdc,['IDC','v']);w(PR,['IDC','r']);w(Y('PSW'),['IDC','l']);}
   // modulation: |v_c| ≤ v_max, m = v_c·V̂/(v_dc/2), dq → abc
   // (matching: the modulation magnitude on the nominal v_dc, as Arghir et al. (6a) and Tayyebi et al. (9): the AC voltage
-  // follows v_dc, as the EMF of a machine follows its speed)
-  const km=s(Vb/(Vdc/2)),vmax=s(pos(p.vmax,1.3));if(law==='match')B.comp('VSU','CONST',{v:'1'});else{E('VSU','v > 0.1 ? v : 1','v');w(F.vdc,['VSU','v']);}
+  // follows v_dc, as the EMF of a machine follows its speed; 4.20.4: the same for every law with mdc = 'nom')
+  const km=s(Vb/(Vdc/2)),vmax=s(pos(p.vmax,1.3));if(nom)B.comp('VSU','CONST',{v:'1'});else{E('VSU','v > 0.1 ? v : 1','v');w(F.vdc,['VSU','v']);}
   E('MD','k*d*min(1, vm/max(hypot(d, q), 1e-9))/u','d, q, u',`k = ${km}, vm = ${vmax}`);E('MQ','k*q*min(1, vm/max(hypot(d, q), 1e-9))/u','d, q, u',`k = ${km}, vm = ${vmax}`);
   for(const id of ['MD','MQ']){w(Y('VCD'),[id,'d']);w(Y('VCQ'),[id,'q']);w(Y('VSU'),[id,'u']);}
   [['ma',0],['mb',-2*Math.PI/3],['mc',2*Math.PI/3]].forEach(([n,f])=>{const id='M'+n[1].toUpperCase();E(id,'d*cos(th + f) - q*sin(th + f)','d, q, th','f = '+s(f));w(Y('MD'),[id,'d']);w(Y('MQ'),[id,'q']);w(TH,[id,'th']);out(n,Y(id));});

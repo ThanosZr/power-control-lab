@@ -1,5 +1,5 @@
 {
- "version": "4.20.3",
+ "version": "4.20.4",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -6185,6 +6185,8 @@
      "plim",
      "ith",
      "gp",
+     "fpl",
+     "mdc",
      "kap",
      "E0",
      "fp",
@@ -6868,6 +6870,8 @@
      "av",
      "Rv",
      "Xv",
+     "kap",
+     "E0",
      "Ufd",
      "tsoft",
      "ac",

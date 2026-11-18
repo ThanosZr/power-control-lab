@@ -25,10 +25,10 @@
 | `web/studio/math.js` | 144 |
 | `web/studio/metrics.js` | 89 |
 | `web/studio/mna.js` | 2455 |
-| `web/studio/netlib.js` | 1421 |
+| `web/studio/netlib.js` | 1429 |
 | `web/studio/netview.js` | 193 |
 | `web/studio/nn.js` | 57 |
-| `web/studio/parts.js` | 1582 |
+| `web/studio/parts.js` | 1585 |
 | `web/studio/plotcore.js` | 133 |
 | `web/studio/pool.js` | 29 |
 | `web/studio/pyrt.js` | 87 |
@@ -43,7 +43,7 @@
 | `web/studio/templates.js` | 32 |
 | `web/studio/trv.js` | 56 |
 | `web/studio/tune.js` | 237 |
-| `web/studio/tutorials.js` | 2244 |
+| `web/studio/tutorials.js` | 2250 |
 | `web/studio/units.js` | 164 |
 | `web/studio/watch.js` | 339 |
 | `web/studio/winframe.js` | 63 |
@@ -130,6 +130,7 @@
 | `tests/test_gfm2.py` | 167 |
 | `tests/test_gfm3.py` | 219 |
 | `tests/test_gfm4.py` | 153 |
+| `tests/test_gfm5.py` | 133 |
 | `tests/test_guide.py` | 144 |
 | `tests/test_harmonic.py` | 312 |
 | `tests/test_impl.py` | 138 |
@@ -363,19 +364,19 @@
 | 954 | `SSSC3` | Κεντρικός έλεγχος τριφασικού m-SSSC |
 | 978 | `MMC` | Μετατροπέας MMC (HVDC, μοντέλα 1–4) |
 | 1007 | `MMCC` | Έλεγχος σταθμού MMC (HVDC) |
-| 1054 | `VSC2` | Μετατροπέας VSC δύο επιπέδων (μέσο μοντέλο, φίλτρο L ή LC) |
-| 1068 | `GFMC` | Έλεγχος grid-forming (στατικότητα, VSM, PSC, dVOC, matching) |
-| 1116 | `LCC6` | Γέφυρα θυρίστορ 6 παλμών (LCC) |
-| 1132 | `LCCS` | Σταθμός LCC 12 παλμών (HVDC) |
-| 1147 | `LCCC` | Έλεγχος σταθμού LCC (HVDC) |
-| 1172 | `FILT3` | Φίλτρο AC τριφασικό |
-| 1178 | `ZSER3` | Τριφασική εμπέδηση σειράς (R + L + (R + L) ∥ R) |
-| 1184 | `LCCX` | Γέφυρα 6 παλμών (συμπαγής) |
-| 1189 | `LCCM` | Μέτρηση α και γ (γέφυρα 6 παλμών) |
-| 1194 | `MMCA` | Βραχίονας MMC (συμπαγής) |
-| 1199 | `CHBX` | Αρθρωτός βραχίονας (συμπαγής) |
-| 1202 | `SPLX` | PLL μονοφασικό (SOGI, συμπαγές) |
-| 1206 | `NOTE` | Σημείωση (κείμενο στο σχέδιο) |
+| 1055 | `VSC2` | Μετατροπέας VSC δύο επιπέδων (μέσο μοντέλο, φίλτρο L ή LC) |
+| 1069 | `GFMC` | Έλεγχος grid-forming (στατικότητα, VSM, PSC, dVOC, matching) |
+| 1119 | `LCC6` | Γέφυρα θυρίστορ 6 παλμών (LCC) |
+| 1135 | `LCCS` | Σταθμός LCC 12 παλμών (HVDC) |
+| 1150 | `LCCC` | Έλεγχος σταθμού LCC (HVDC) |
+| 1175 | `FILT3` | Φίλτρο AC τριφασικό |
+| 1181 | `ZSER3` | Τριφασική εμπέδηση σειράς (R + L + (R + L) ∥ R) |
+| 1187 | `LCCX` | Γέφυρα 6 παλμών (συμπαγής) |
+| 1192 | `LCCM` | Μέτρηση α και γ (γέφυρα 6 παλμών) |
+| 1197 | `MMCA` | Βραχίονας MMC (συμπαγής) |
+| 1202 | `CHBX` | Αρθρωτός βραχίονας (συμπαγής) |
+| 1205 | `SPLX` | PLL μονοφασικό (SOGI, συμπαγές) |
+| 1209 | `NOTE` | Σημείωση (κείμενο στο σχέδιο) |
 
 ## Tutorials (`web/studio/tutorials.js`)
 
@@ -452,12 +453,12 @@
 | 1858 | `mtdc5` | Δίκτυα DC πολλών τερματικών (4.20) | Δίκτυο DC πέντε τερματικών με στατικότητα τάσης (EMT και ροή φορτίου AC/DC) |
 | 1913 | `b4dcs2` | Δίκτυα DC πολλών τερματικών (4.20) | Το DCS2 του B4 της CIGRE: πέντε τερματικά ±200 kV με σταθμούς MMC (EMT και ροή φορτίου) |
 | 1980 | `hvdc_gfm` | Grid-forming (4.18.1) | Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα |
-| 2033 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
-| 2087 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
-| 2118 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
-| 2146 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
-| 2185 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
-| 2232 | `empty` | Νέο | Κενό κύκλωμα |
+| 2035 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
+| 2089 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
+| 2120 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
+| 2148 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
+| 2187 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
+| 2238 | `empty` | Νέο | Κενό κύκλωμα |
 
 ## API του server (`run.py`, `/api/<action>`)
 
@@ -1741,54 +1742,54 @@ _(χωρίς συναρτήσεις)_
 | 793 | const fn | `pos` |
 | 800 | const fn | `dq` |
 | 815 | const fn | `integ` |
-| 921 | function | `lcc6Def` |
-| 922 | const fn | `sin` |
-| 950 | function | `lccsDef` |
-| 951 | const fn | `sin` |
-| 957 | const fn | `xf` |
-| 959 | const fn | `br` |
-| 1017 | function | `lcccDef` |
-| 1018 | const fn | `sin` |
-| 1019 | const fn | `pos` |
-| 1032 | const fn | `pi` |
-| 1062 | function | `filtDef` |
-| 1063 | const fn | `pos` |
-| 1074 | function | `zserDef` |
-| 1091 | function | `sigPorts` |
-| 1092 | const fn | `sin` |
-| 1094 | const fn | `out` |
-| 1096 | const fn | `close` |
-| 1100 | const fn | `busMap` |
-| 1105 | function | `vsc2Def` |
-| 1107 | const fn | `w` |
-| 1144 | function | `gfmcDef` |
-| 1148 | const fn | `w` |
-| 1149 | const fn | `pos` |
-| 1151 | const fn | `integ` |
-| 1162 | const fn | `dq` |
-| 1176 | const fn | `at0` |
-| 1296 | function | `defOf` |
-| 1302 | function | `forceImpl` |
-| 1304 | const fn | `fix` |
-| 1308 | const fn | `hasLib` |
-| 1309 | function | `needs` |
-| 1311 | function | `expand` |
-| 1313 | const fn | `conv` |
-| 1321 | function | `warnings` |
-| 1327 | const fn | `cx` |
-| 1329 | function | `csolve` |
-| 1334 | function | `faultCurrents` |
-| 1353 | function | `behindXF` |
-| 1362 | function | `layoutDef` |
-| 1365 | const fn | `isG` |
-| 1366 | const fn | `isJ` |
-| 1375 | const fn | `side` |
-| 1379 | const fn | `bfs` |
-| 1388 | const fn | `bary` |
-| 1394 | const fn | `ctr` |
-| 1395 | const fn | `target` |
-| 1411 | function | `placedDef` |
-| 1416 | function | `sidesOf` |
+| 923 | function | `lcc6Def` |
+| 924 | const fn | `sin` |
+| 952 | function | `lccsDef` |
+| 953 | const fn | `sin` |
+| 959 | const fn | `xf` |
+| 961 | const fn | `br` |
+| 1019 | function | `lcccDef` |
+| 1020 | const fn | `sin` |
+| 1021 | const fn | `pos` |
+| 1034 | const fn | `pi` |
+| 1064 | function | `filtDef` |
+| 1065 | const fn | `pos` |
+| 1076 | function | `zserDef` |
+| 1093 | function | `sigPorts` |
+| 1094 | const fn | `sin` |
+| 1096 | const fn | `out` |
+| 1098 | const fn | `close` |
+| 1102 | const fn | `busMap` |
+| 1107 | function | `vsc2Def` |
+| 1109 | const fn | `w` |
+| 1146 | function | `gfmcDef` |
+| 1150 | const fn | `w` |
+| 1151 | const fn | `pos` |
+| 1153 | const fn | `integ` |
+| 1164 | const fn | `dq` |
+| 1181 | const fn | `at0` |
+| 1304 | function | `defOf` |
+| 1310 | function | `forceImpl` |
+| 1312 | const fn | `fix` |
+| 1316 | const fn | `hasLib` |
+| 1317 | function | `needs` |
+| 1319 | function | `expand` |
+| 1321 | const fn | `conv` |
+| 1329 | function | `warnings` |
+| 1335 | const fn | `cx` |
+| 1337 | function | `csolve` |
+| 1342 | function | `faultCurrents` |
+| 1361 | function | `behindXF` |
+| 1370 | function | `layoutDef` |
+| 1373 | const fn | `isG` |
+| 1374 | const fn | `isJ` |
+| 1383 | const fn | `side` |
+| 1387 | const fn | `bfs` |
+| 1396 | const fn | `bary` |
+| 1402 | const fn | `ctr` |
+| 1403 | const fn | `target` |
+| 1419 | function | `placedDef` |
+| 1424 | function | `sidesOf` |
 
 ### `web/studio/netview.js`
 
@@ -1881,92 +1882,92 @@ _(χωρίς συναρτήσεις)_
 | 116 | function | `subLayout` |
 | 118 | const fn | `len` |
 | 124 | function | `subDraw` |
-| 1212 | function | `noteBox` |
-| 1215 | function | `defaults` |
-| 1217 | function | `elPins` |
-| 1218 | function | `sigPins` |
-| 1219 | function | `pinsOf` |
-| 1222 | function | `parseMat` |
-| 1224 | function | `nPorts` |
-| 1225 | function | `portY` |
-| 1226 | function | `portPins` |
-| 1227 | function | `portBox` |
-| 1229 | function | `posDef` |
-| 1231 | function | `symmetric` |
-| 1232 | function | `matInv` |
-| 1237 | function | `klMatrix` |
-| 1248 | function | `kgMatrix` |
-| 1256 | function | `srmGeo` |
-| 1258 | function | `srmSpins` |
-| 1260 | function | `srmPins` |
-| 1262 | function | `satD` |
-| 1263 | function | `satDinv` |
-| 1265 | function | `genSpins` |
-| 1276 | function | `genTsc` |
-| 1281 | function | `genCirc2` |
-| 1282 | const fn | `Fn` |
-| 1290 | function | `genAxis` |
-| 1298 | const fn | `classic` |
-| 1304 | const fn | `plist` |
-| 1308 | function | `genModel` |
-| 1314 | const fn | `w` |
-| 1323 | const fn | `grp` |
-| 1340 | function | `genGamma` |
-| 1348 | function | `genDQ` |
-| 1352 | function | `genSteady` |
-| 1354 | const fn | `rot` |
-| 1361 | function | `srmAlignedPsi` |
-| 1362 | function | `srmModelPsi` |
-| 1363 | function | `srmTableText` |
-| 1366 | function | `srmMag` |
-| 1382 | function | `chkMag` |
-| 1384 | function | `srmA` |
-| 1387 | function | `seg` |
-| 1388 | function | `srmPsi` |
-| 1390 | function | `srmCur` |
-| 1392 | function | `srmTorque` |
-| 1395 | function | `srmCoenergy` |
-| 1399 | function | `waveShape` |
-| 1400 | function | `waveAt` |
-| 1403 | function | `waveMeasure` |
-| 1406 | const fn | `cross` |
-| 1412 | function | `waveFit` |
-| 1413 | const fn | `res` |
-| 1424 | function | `directWave` |
-| 1427 | function | `impulseWave` |
-| 1438 | function | `bewley` |
-| 1441 | const fn | `at` |
-| 1447 | function | `movChar` |
-| 1452 | const fn | `pick` |
-| 1453 | const fn | `cur` |
-| 1454 | const fn | `inv` |
-| 1458 | function | `impulseDesign` |
-| 1463 | function | `impulseRoots` |
-| 1466 | function | `tlParams` |
-| 1475 | function | `tlmData` |
-| 1477 | function | `tlmM` |
-| 1484 | function | `tlmPin` |
-| 1485 | function | `tlmPins` |
-| 1487 | function | `tlmKey` |
-| 1498 | function | `tlmModel` |
-| 1506 | function | `lightningWave` |
-| 1513 | function | `pinKind` |
-| 1524 | function | `structural` |
-| 1531 | function | `pinWidth` |
-| 1534 | function | `xf` |
-| 1535 | function | `pinPos` |
-| 1537 | function | `pinDir` |
-| 1542 | function | `cpeParams` |
-| 1543 | function | `cpeBank` |
-| 1547 | function | `cpeZ` |
-| 1548 | function | `cpeZbank` |
-| 1549 | function | `boxOf` |
-| 1550 | function | `bbox` |
-| 1555 | function | `fmtNum` |
-| 1559 | function | `eng` |
-| 1563 | function | `parseEng` |
-| 1566 | function | `parseSched` |
-| 1574 | function | `machines` |
+| 1215 | function | `noteBox` |
+| 1218 | function | `defaults` |
+| 1220 | function | `elPins` |
+| 1221 | function | `sigPins` |
+| 1222 | function | `pinsOf` |
+| 1225 | function | `parseMat` |
+| 1227 | function | `nPorts` |
+| 1228 | function | `portY` |
+| 1229 | function | `portPins` |
+| 1230 | function | `portBox` |
+| 1232 | function | `posDef` |
+| 1234 | function | `symmetric` |
+| 1235 | function | `matInv` |
+| 1240 | function | `klMatrix` |
+| 1251 | function | `kgMatrix` |
+| 1259 | function | `srmGeo` |
+| 1261 | function | `srmSpins` |
+| 1263 | function | `srmPins` |
+| 1265 | function | `satD` |
+| 1266 | function | `satDinv` |
+| 1268 | function | `genSpins` |
+| 1279 | function | `genTsc` |
+| 1284 | function | `genCirc2` |
+| 1285 | const fn | `Fn` |
+| 1293 | function | `genAxis` |
+| 1301 | const fn | `classic` |
+| 1307 | const fn | `plist` |
+| 1311 | function | `genModel` |
+| 1317 | const fn | `w` |
+| 1326 | const fn | `grp` |
+| 1343 | function | `genGamma` |
+| 1351 | function | `genDQ` |
+| 1355 | function | `genSteady` |
+| 1357 | const fn | `rot` |
+| 1364 | function | `srmAlignedPsi` |
+| 1365 | function | `srmModelPsi` |
+| 1366 | function | `srmTableText` |
+| 1369 | function | `srmMag` |
+| 1385 | function | `chkMag` |
+| 1387 | function | `srmA` |
+| 1390 | function | `seg` |
+| 1391 | function | `srmPsi` |
+| 1393 | function | `srmCur` |
+| 1395 | function | `srmTorque` |
+| 1398 | function | `srmCoenergy` |
+| 1402 | function | `waveShape` |
+| 1403 | function | `waveAt` |
+| 1406 | function | `waveMeasure` |
+| 1409 | const fn | `cross` |
+| 1415 | function | `waveFit` |
+| 1416 | const fn | `res` |
+| 1427 | function | `directWave` |
+| 1430 | function | `impulseWave` |
+| 1441 | function | `bewley` |
+| 1444 | const fn | `at` |
+| 1450 | function | `movChar` |
+| 1455 | const fn | `pick` |
+| 1456 | const fn | `cur` |
+| 1457 | const fn | `inv` |
+| 1461 | function | `impulseDesign` |
+| 1466 | function | `impulseRoots` |
+| 1469 | function | `tlParams` |
+| 1478 | function | `tlmData` |
+| 1480 | function | `tlmM` |
+| 1487 | function | `tlmPin` |
+| 1488 | function | `tlmPins` |
+| 1490 | function | `tlmKey` |
+| 1501 | function | `tlmModel` |
+| 1509 | function | `lightningWave` |
+| 1516 | function | `pinKind` |
+| 1527 | function | `structural` |
+| 1534 | function | `pinWidth` |
+| 1537 | function | `xf` |
+| 1538 | function | `pinPos` |
+| 1540 | function | `pinDir` |
+| 1545 | function | `cpeParams` |
+| 1546 | function | `cpeBank` |
+| 1550 | function | `cpeZ` |
+| 1551 | function | `cpeZbank` |
+| 1552 | function | `boxOf` |
+| 1553 | function | `bbox` |
+| 1558 | function | `fmtNum` |
+| 1562 | function | `eng` |
+| 1566 | function | `parseEng` |
+| 1569 | function | `parseSched` |
+| 1577 | function | `machines` |
 
 ### `web/studio/plotcore.js`
 
@@ -2408,18 +2409,18 @@ _(χωρίς συναρτήσεις)_
 | 1922 | const fn | `dcbus` |
 | 1928 | const fn | `mmcp` |
 | 1929 | const fn | `station` |
-| 1986 | method | `build` |
-| 1991 | const fn | `station` |
-| 2040 | method | `build` |
-| 2077 | const fn | `gfmWire` |
-| 2081 | const fn | `busMeter` |
-| 2095 | method | `build` |
-| 2100 | const fn | `unit` |
-| 2123 | method | `build` |
-| 2154 | method | `build` |
-| 2191 | method | `build` |
-| 2233 | method | `build` |
-| 2238 | function | `dcdcInputs` |
+| 1987 | method | `build` |
+| 1992 | const fn | `station` |
+| 2042 | method | `build` |
+| 2079 | const fn | `gfmWire` |
+| 2083 | const fn | `busMeter` |
+| 2097 | method | `build` |
+| 2102 | const fn | `unit` |
+| 2125 | method | `build` |
+| 2156 | method | `build` |
+| 2194 | method | `build` |
+| 2239 | method | `build` |
+| 2244 | function | `dcdcInputs` |
 
 ### `web/studio/units.js`
 

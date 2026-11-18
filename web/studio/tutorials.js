@@ -1980,7 +1980,8 @@
  T.push({id:'hvdc_gfm',group:'Grid-forming (4.18.1)',title:'Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα',theory:'formula',topology:'hvdc_gfm',
   options:[{k:'ac',label:'Δίκτυο του σταθμού 2',options:Object.entries(HVDC_G),def:'island'},{k:'law',label:'Νόμος του σταθμού 2',options:[['droop','Στατικότητα P–f 2 %, Q–V 5 % (φίλτρο 5 Hz)'],['vsm','VSM (H = 2 s)'],['psc','PSC (k_p = 50 rad/s, ρύθμιση V_ac)'],['dvoc','dVOC (η, α για 2 % και 5 %, 4.20.2)']],def:'droop'},
    // 4.20.2: the four models of the MMC as in hvdc_mmc (Model 1 with N = 20, the others with N = 400), with the energy control of the arms (4.15)
-   {k:'model',label:'Μοντέλο MMC (4.20.2)',options:[['m4','Model 4: μέσο μοντέλο (AVM)'],['m3','Model 3: συνάρτηση μεταγωγής βραχίονα (≈ 4 φορές πιο αργό)'],['m2','Model 2: ισοδύναμο βραχίονα, κάθε πυκνωτής (≈ 7 φορές πιο αργό)'],['m1','Model 1: κάθε υπομονάδα από IGBT (N = 20, πολύ αργό)']],def:'m4'}],
+   {k:'model',label:'Μοντέλο MMC (4.20.2)',options:[['m4','Model 4: μέσο μοντέλο (AVM)'],['m3','Model 3: συνάρτηση μεταγωγής βραχίονα (≈ 4 φορές πιο αργό)'],['m2','Model 2: ισοδύναμο βραχίονα, κάθε πυκνωτής (≈ 7 φορές πιο αργό)'],['m1','Model 1: κάθε υπομονάδα από IGBT (N = 20, πολύ αργό)']],def:'m4'},
+   {k:'e0',label:'dVOC: αρχικό πλάτος του ταλαντωτή (4.20.4)',options:[['vs','V_ref (ως την απεμπλοκή ακολουθεί την τάση του PLL)'],['small','E₀ = 0,01 pu (η νησίδα ξεκινά από σχεδόν μηδενική τάση)']],def:'vs'}],
   desc:'Η σύνδεση HVDC του tutorial MMC (σταθμοί 1059 MVA, Model 4 ή όποιο μοντέλο διαλέξεις, καλώδια ±320 kV 70 km wideband). Ο σταθμός 1 κρατά την τάση DC από ένα ισχυρό δίκτυο. Ο σταθμός 2 είναι grid-forming: σχηματίζει την τάση AC του δικτύου του με τον νόμο του στοιχείου «Έλεγχος grid-forming» (στατικότητα, VSM ή PSC) μέσα στον έλεγχο του σταθμού, άμεσα η τάση με όριο ρεύματος στο 1,1 pu. Στη νησίδα δεν υπάρχει άλλη πηγή: ο σταθμός ορίζει και τη συχνότητα.',
   tasks:['Νησίδα: μετά το βήμα φορτίου η συχνότητα πέφτει κατά m_p·ΔP (κάρτα) και η ενέργεια έρχεται από τον σταθμό 1 μέσω της τάσης DC.','Με δεύτερη μονάδα: το φορτίο μοιράζεται ανάλογα με τα 1059 και 500 MVA (ίδιο pu στις δύο), χωρίς επικοινωνία.','Ασθενές δίκτυο: ο σταθμός φτάνει τα 0,9 pu στο SCR 1,5 (ο έλεγχος ρεύματος του σταθμού της 4.18 ήταν ασταθής στο SCR 1).','Σύγκρινε στατικότητα, VSM και PSC στην πτώση της συχνότητας αμέσως μετά το βήμα.','Άλλαξε το μοντέλο του MMC: με τον έλεγχο ενέργειας των βραχιόνων τα Model 2 και 3 δίνουν την P, τη συχνότητα και τη V_dc του Model 4 (κάρτα). Τι προσθέτουν; (Κυμάτωση των πυκνωτών, σκαλοπάτια της τάσης με N = 20 στο Model 1.)'],
   build(o){const ac=HVDC_G[o.ac]?o.ac:'island',law=['droop','vsm','psc','dvoc'].includes(o.law)?o.law:'droop',f=50,S=1059e6,te=0.6,r=x=>+x.toPrecision(6);
@@ -2003,7 +2004,8 @@
     for(const q of ['ma','mb','mc','blk'])wires.push([id('CT')+':'+q,id('MMC')+':'+q]);};
    station(1,60,1,{mode:'vdc',Vdcref:'1',Tvdc:0.05,H:0.03,qmode:'q',Qref:'0',Tq:0.1},10e9);
    // station 2: P_ref into the converter (−: to the AC side); in the island its share comes from the droop
-   const g2={mode:'gfm',law,Pref:ac==='weak'?`0:-0.5, ${te}:-0.9`:'-0.55',Qref:'0',Vref:'1',mp:2,nq:5,fp:5,Hv:2,tv:0.02,kp:50,avc:'vac',Vacref:'1',KE:5,TE:0.05,kv:law==='psc'?0.3:0,av:40,Xv:0,Ilim:1.1,Idlim:1.1,vmax:1.3,bw:20,tsoft:0.05,ac:600,Ufd:0.6};
+   const e0=law==='dvoc'&&o.e0==='small'?'small':'vs';
+   const g2={mode:'gfm',law,Pref:ac==='weak'?`0:-0.5, ${te}:-0.9`:'-0.55',Qref:'0',Vref:'1',mp:2,nq:5,fp:5,Hv:2,tv:0.02,kp:50,avc:'vac',Vacref:'1',KE:5,TE:0.05,kv:law==='psc'?0.3:0,av:40,Xv:0,Ilim:1.1,Idlim:1.1,vmax:1.3,bw:20,tsoft:0.05,ac:600,Ufd:0.6,...(e0==='small'?{E0:'0.01'}:{})};
    station(2,1940,-1,g2,ac==='weak'?r(1.5*S):0,200);
    const Pp=root.Parts,d=JSON.parse(JSON.stringify(Pp.TLM_TYPICAL['320kV-dc']));
    const pc={...Pp.defaults('TLM'),model:'wb',len:70,fmin:1e-3,dec:10,wdc:'1',wpas:'enforce',vtrap:'320e3, -320e3',data:JSON.stringify(d)};
@@ -2025,7 +2027,7 @@
    return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:1000,method:'TR',speed:0.02,stopT:1.2},
     scope:{panes:[[['Y:CT2/G/PP','P σταθμού 2 προς το AC (pu)'],...pB],[['Y:CT2/G/WW','f σταθμού 2 (pu)'],...wB],[['Y:CT2/G/VG','|v| σταθμού 2 (pu)'],['Y:CT2/G/IG','|i| (pu)'],['Y:CT2/G/LR','όριο ρεύματος']],[['Y:CT1/Fvdc','V_dc 1 (pu)'],['Y:CT2/Fvdc','V_dc 2 (pu)']],
      [['Y:ADC','I_dc του θετικού πόλου (αμπερόμετρο, A)']],[['Y:VDC','V_dc ανάμεσα στους πόλους (βολτόμετρο, V)']],[['Y:M2A','i_a του σταθμού 2 προς το AC (αμπερόμετρο, A)']],[['Y:M2V','v_a στα 400 kV του σταθμού 2 (probe, V)']],...arm],window:{unit:'s',n:1.2}},
-    meta:{hvdcgfm:{ac,law,model,N,te,S,SB:500e6,mp:0.02,Pload:600e6,dP:300e6,Pr2:0.55,PrB:0.55,scr:1.5}}});}});
+    meta:{hvdcgfm:{ac,law,model,N,te,S,SB:500e6,mp:0.02,Pload:600e6,dP:300e6,Pr2:0.55,PrB:0.55,scr:1.5,e0}}});}});
  // ------------------------------------------------------------------ 4.16 (§42): the first CIGRE HVDC benchmark (LCC)
  // The network of the benchmark at 50 Hz (Faruque et al. 2006 Fig. 1 and Table V, Watson & Arrillaga App. D), the transformers
  // and the controls of the example of the benchmark in PSCAD; the events of Faruque et al. (at 1,0 s for 0,15 s, 0,1 Ω)
@@ -2185,7 +2187,8 @@
  T.push({id:'ieee9_gfm',group:'Grid-forming (4.18.1)',title:'IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF)',theory:'formula',topology:'ieee9_gfm',
   options:[{k:'unit',label:'Στον ζυγό 3',options:Object.entries(IEEE9_GFM_U),def:'droop'},{k:'dp',label:'Βήμα φορτίου στον ζυγό 7 στο 1 s',options:[['50','+50 MW'],['25','+25 MW'],['90','+90 MW'],['150','+150 MW (μεγάλη διαταραχή, 4.20.3)']],def:'50'},
    {k:'dc',label:'Πλευρά DC του μετατροπέα (4.20.3)',options:[['ideal','Ιδανική (το matching έχει πάντα πηγή DC ±1,2 pu)'],['source','Πηγή DC ±1,2 pu για κάθε νόμο'],['low','Πηγή DC ±0,8 pu (μικρό περιθώριο) για κάθε νόμο']],def:'ideal'},
-   {k:'lim',label:'Όριο ρεύματος μέσω της P_ref (4.20.3)',options:[['off','Όχι'],['p24','Ναι: i_th 0,9 pu, γ_p 2,3']],def:'off'}],
+   {k:'lim',label:'Όριο ρεύματος μέσω της P_ref (4.20.3)',options:[['off','Όχι'],['p24','Ναι: i_th 0,9 pu, γ_p 2,3'],['p24f','Ναι, με φίλτρο 20 Hz στο |i| (δική μας προσθήκη, 4.20.4)']],def:'off'},
+   {k:'mod',label:'Διαμόρφωση εκτός matching (4.20.4)',options:[['meas','Με τη μετρημένη v_dc (4.18)'],['nom','Με την ονομαστική V_dc, όπως η (9) των Tayyebi κ.ά.']],def:'meas'}],
   desc:'Το δίκτυο των 9 ζυγών σε EMT (ροή φορτίου του pcl.network, AVR, PSS και ρυθμιστές στροφών στις G1, G2) με τη μονάδα του ζυγού 3 ως μετατροπέα 128 MVA (όση η G3, μέσο μοντέλο VSC με πηνίο 0,15 pu) που δίνει τα 85 MW και −10,9 Mvar της ροής φορτίου. Grid-forming: σχηματίζει την τάση του και αλλάζει τη συχνότητά του με την ισχύ (στατικότητα ή εικονική αδράνεια). Grid-following: ακολουθεί τη γωνία του δικτύου με PLL και δίνει ρεύμα· η απόκριση στη συχνότητα έρχεται μετά το PLL. Στο 1 s κλείνει ένα φορτίο στον ζυγό 7.',
   tasks:['Σύγκρινε στην κάρτα το βύθισμα (nadir) και το RoCoF (σε 250 ms, όπως οι Tayyebi κ.ά. 2020) της ταχύτητας της G1 για κάθε επιλογή του ζυγού 3, με το ίδιο βήμα φορτίου.','Ο grid-forming με στατικότητα δίνει ισχύ αμέσως (σε δεκάδες ms)· η G3 μέσω του ρυθμιστή ατμού (δευτερόλεπτα)· η VSM με H = 3,01 s κάνει ό,τι η αδράνεια της G3, χωρίς τον αργό στρόβιλο.','Ο grid-following χωρίς απόκριση στη συχνότητα αφαιρεί την αδράνεια και τη ρύθμιση της G3: το βύθισμα είναι το μεγαλύτερο. Με απόκριση 5 % πλησιάζει τον grid-forming, αλλά μετά την καθυστέρηση του PLL και του φίλτρου.','Η μόνιμη απόκλιση της συχνότητας (κάρτα) είναι ίδια όταν η στατικότητα είναι ίδια (5 % σε 128 MVA), αλλά οι ρυθμιστές νερού και ατμού φτάνουν εκεί σε δεκάδες δευτερόλεπτα.','dVOC και matching (4.20.2): το dVOC κάνει ό,τι η στατικότητα χωρίς το φίλτρο της· στο matching η συχνότητα είναι η τάση DC (δες τη v_dc στο scope) και η αδράνεια η ενέργεια του πυκνωτή DC (0,0476 s). Ποιο έχει μικρότερο RoCoF, και γιατί;'],
   build(o){const unit=IEEE9_GFM_U[o.unit]?o.unit:'droop',dp=+o.dp||50,S=128e6,Un=345e3,f=60,w0=2*Math.PI*f,te=1,T=12,r=x=>+x.toPrecision(6);
@@ -2195,7 +2198,10 @@
    // 4.20.3: the DC side of matching for every grid-forming law (dc = 'source': the control gives the DC current reference
    // (10), dcc), and the current limitation through the power set-point (24) with the threshold and gain of Tayyebi et al.
    // 2020 §IV-E
-   const dcs=mt||(gfm&&(o.dc==='source'||o.dc==='low')),p24=gfm&&o.lim==='p24',dcLim=dcs&&o.dc==='low'?0.8:1.2;
+   const dcs=mt||(gfm&&(o.dc==='source'||o.dc==='low')),p24=gfm&&(o.lim==='p24'||o.lim==='p24f'),dcLim=dcs&&o.dc==='low'?0.8:1.2;
+   // 4.20.4: a filter of 20 Hz on |i| before (24) (our addition: without it droop and dVOC swing at the limit), and the
+   // modulation (9) on the nominal V_dc for the laws other than matching
+   const fpl=p24&&o.lim==='p24f'?20:0,mdc=gfm&&!mt&&o.mod==='nom'?'nom':'meas';
    // 4.20.2: matching control has the DC side of Tayyebi et al. (2020): the DC capacitor with the energy of their Table I
    // (H_dc = C·V_dc²/(2S) = 0,0476 s) and a DC current source from the output idc of the control through a first-order lag
    // and ±1,2 pu ((2)–(3)); the lag 5 ms, not their 50 ms (THEORY §8Ψ.3)
@@ -2203,7 +2209,7 @@
    // dVOC with the virtual resistance R_v: the oscillator's voltage is E + R_v·I, and its set-points are the power at it (P and Q
    // at the internal EMF), so that the start is the load flow
    const dv=unit==='dvoc',Rv=dv?DVOC_RV:0,Eor=Er+Rv*Ir,Eoi=Ei+Rv*Ii,Eo=Math.hypot(Eor,Eoi),dlo=Math.atan2(Eoi,Eor)*180/Math.PI,Po=Eor*Ir+Eoi*Ii,Qo=Eoi*Ir-Eor*Ii;
-   const ext={T,meta:{ieee9gfm:{unit,dp,S,te,mp:0.05,H:3.01,P3,Q3,E,V3,Hdc,tdc,Rv,Po,Qo,Eo,dcs,p24,dcLim,K:{G1:2.475/0.04,G2:1.92/0.05,G3:1.28/0.05},Sb:100e6,f,Twin:0.25}},
+   const ext={T,meta:{ieee9gfm:{unit,dp,S,te,mp:0.05,H:3.01,P3,Q3,E,V3,Hdc,tdc,Rv,Po,Qo,Eo,dcs,p24,dcLim,fpl,mdc,K:{G1:2.475/0.04,G2:1.92/0.05,G3:1.28/0.05},Sb:100e6,f,Twin:0.25}},
     add(comps,wires,panes){wires.push(['B7','L76:abc1']);
      if(unit!=='sm'){const gone=new Set(['G3','AV3','PS3','GV3']),own=q=>typeof q==='string'&&gone.has(q.split(':')[0]);
       for(let k=comps.length-1;k>=0;k--)if(gone.has(comps[k].id))comps.splice(k,1);for(let k=wires.length-1;k>=0;k--)if(own(wires[k][0])||own(wires[k][1]))wires.splice(k,1);
@@ -2213,7 +2219,7 @@
        wires.push(['VS3:p','CD3:p'],['VS3:n','CD3:n'],['ID3:p','VS3:p'],['ID3:n','VS3:n'],['CT3:idc','LD3:u'],['LD3:y','SD3:u'],['SD3:y','KD3:u'],['KD3:y','ID3:u']);}
       {const [mL,mR]=busMeter(comps,wires,'M3',1300,140,{i:'i_a προς τον ζυγό 3',v:'v_a ζυγού 3',rev:true});wires.push(['B3',mL],[mR,'VS3:abc']);}
       if(gfm){comps.push(C('CT3','GFMC',1180,300,{law:unit,inner:'direct',S,Vac:Un,Vdc,f0:f,Pref:String(r(dv?Po:P3)),Qref:String(r(dv?Qo:Q3)),Vref:String(r(mt?V3:dv?Eo:E)),mp:5,nq:5,fp:5,H:3.01,tv:0.02,kv:0,Rv,Xv:0,Xc:X,Imax:1.2,
-        ac:600,vmax:1.3,bw:20,th0:r(a3-90+(dv?dlo:dl)),tsoft:0,fi:'ref',...(mt?{kpm:0.001,kim:0.5,mu0:String(r(E))}:dcs?{dcc:'on'}:{}),...(p24?{plim:'on',ith:0.9,gp:2.3}:{}),conn:'bus'},{label:{vsm:'VSM',dvoc:'dVOC',match:'matching control'}[unit]||'grid-forming (στατικότητα)'}));wires.push(...gfmWire('CT3','VS3',1560,160,1180,300,420));}
+        ac:600,vmax:1.3,bw:20,th0:r(a3-90+(dv?dlo:dl)),tsoft:0,fi:'ref',...(mt?{kpm:0.001,kim:0.5,mu0:String(r(E))}:dcs?{dcc:'on'}:{}),...(p24?{plim:'on',ith:0.9,gp:2.3,...(fpl?{fpl}:{})}:{}),...(mdc==='nom'?{mdc}:{}),conn:'bus'},{label:{vsm:'VSM',dvoc:'dVOC',match:'matching control'}[unit]||'grid-forming (στατικότητα)'}));wires.push(...gfmWire('CT3','VS3',1560,160,1180,300,420));}
       else{comps.push(C('CT3','MMCC',1180,300,{mode:'p',cc:'robust',acc:4,Tii:0.05,S,Vac:Un,Vdc,f0:f,Pref:String(r(-P3)),Vacref:String(V3),frq:unit==='gfl'?'droop':'off',mf:5,Tf:0.05,X,R:0.003,Ilim:1.2,vmax:1.3,bw:5,th0:r(a3-90),prot:'off',tdb:0,tbrk:0},
          {label:unit==='gfl'?'grid-following με απόκριση στη συχνότητα':'grid-following, σταθερή P'}),
         C('SI3','BSEL',1260,420,{idx:'1, 2, 3'},{label:'i_abc'}),C('NI3','GAIN',1220,460,{K:-1},{label:'−1'}),C('DI3','DEMUX',1140,460,{n:3}),C('SV3','BSEL',1260,500,{idx:'4, 5, 6'},{label:'v_abc'}),C('DV3','DEMUX',1140,520,{n:3}),
