@@ -1067,6 +1067,27 @@ def b4_rows(add):
     add(A, 'B4 με τις αναφορές του Πίν. 27.11: ισχύς του Cb-A1 (κρατά την τάση του DCS3)', 'αναφορές του DCS3 + απώλειες', 2000e6 + loss, r['converters']['Cb-A1']['P'], 1e3, 'W')
 
 
+def gfm3_rows(add):
+    """4.20.2: the grid-forming MMC station in Model 3 against Model 4, dVOC and matching control against the closed forms of
+    their steady state (Tayyebi et al. 2020 (16)–(22)) on a stiff grid (tests/test_gfm3.py)."""
+    sys.path.insert(0, str(ROOT / 'tests'))
+    from test_gfm2 import cases, mean
+    A = 'Grid-forming, μέρος 3 (4.20.2)'
+    m4, m3 = cases([{'kind': 'tut', 'id': 'hvdc_gfm', 'opts': {'ac': 'island', 'law': 'droop', 'model': m}, 'at': [0.59], 'keys': ['Y:CT2/G/PP', 'Y:CT2/G/WW'], 'win': 0.04} for m in ('m4', 'm3')], timeout=3000)
+    add(A, 'σταθμός MMC σε grid-forming (hvdc_gfm, νησίδα, στατικότητα): P στα 0,59 s με το Model 3', 'το Model 4', mean(m4, 0.59, 'Y:CT2/G/PP'), mean(m3, 0.59, 'Y:CT2/G/PP'), 1e-3, 'pu')
+    add(A, 'το ίδιο με το Model 3: συχνότητα', 'ω = 1 − m_p·(P − P_ref)', 1 - 0.02 * (mean(m3, 0.59, 'Y:CT2/G/PP') - 0.55), mean(m3, 0.59, 'Y:CT2/G/WW'), 3e-4, 'pu')
+    K = ['Y:CT/PP', 'Y:CT/QQ', 'Y:CT/WW', 'Y:CT/EE']
+    q = cases([{'kind': 'grid', 'law': 'dvoc', 'Pref': '0.3', 'fg': 49.9, 'T': 1.0, 'dt': 0.2, 't0': 0.6, 'ct': {'Rv': 0.05}, 'keys': K}])[0]
+    P, Q, w, E = q['out'][-1][1:]
+    add(A, 'dVOC απέναντι σε άκαμπτο δίκτυο 49,9 Hz (η για 2 %, α για 5 %, R_v 0,05 pu): P', '(22a) στη μόνιμη: P = E²·(P*/V*² + (1 − ω)/η)', E * E * (0.3 + (1 - w) / 0.02), P, 1e-4, 'pu')
+    add(A, 'dVOC, το ίδιο: Q', '(22b) στη μόνιμη: Q = E²·(Q* + α·(V*² − E²))/V*²', E * E * 10 * (1 - E * E), Q, 1e-4, 'pu')
+    K = ['Y:CT/PP', 'Y:CT/WW', 'Y:VS/VD']
+    q = cases([{'kind': 'match1', 'Pref': '0.3', 'fg': 49.9, 'T': 1.2, 'dt': 0.1, 't0': 0.4, 'tdc': 0.005, 'keys': K}])[0]
+    P, w, vd = q['out'][-1][1:]
+    add(A, 'matching control απέναντι σε άκαμπτο δίκτυο 49,9 Hz (πηγή DC 5 ms): συχνότητα', '(16): ω = k_θ·v_dc, k_θ = ω₀/V_dc*', vd / 800, w, 1e-5, 'pu')
+    add(A, 'matching control, το ίδιο: P', '(10) με k_dc = 1/m_p: P = P* + (1 − ω)/m_p', 0.3 + (1 - w) / 0.02, P, 1e-3, 'pu')
+
+
 def checks(o):
     """Rows: (area, quantity, reference, expected, simulated, tolerance (absolute), unit)."""
     rows = []
@@ -1377,6 +1398,7 @@ def checks(o):
     scopf_rows(add)
     dcgrid_rows(add)
     b4_rows(add)
+    gfm3_rows(add)
     cpf_rows(add)
     sweepc_rows(add)
     se_rows(add)
@@ -1451,7 +1473,7 @@ TESTS = [
     ('tests/test_lblplace.py', 'ετικέτες των στοιχείων σε πυκνό σχέδιο (4.17.5, ROADMAP §66)', 'σε κάθε tutorial καμία ετικέτα πάνω σε άλλη ή σε στοιχείο (πριν: δεκάδες και εκατοντάδες, ίδιο μέτρο), η πλευρά του αραιού σχεδίου ίδια, μια στήλη εισόδων με μία πλευρά, μακριά έκφραση κομμένη στο μπλοκ της, σύρμα και ακροδέκτες απωθούν, ίδια διάταξη για το ίδιο σχέδιο, αριθμοί για τα «= …»· στον browser με τις γραμματοσειρές: scope_flow μπλοκ 11'),
     ('tests/test_gfm.py', 'μετατροπείς grid-forming (4.18, ROADMAP §58): VSC δύο επιπέδων (μέσο μοντέλο) και έλεγχος στατικότητας, VSM, PSC', 'απέναντι σε άκαμπτο δίκτυο ο αργός πόλος της στατικότητας (s² + ω_f·s + ω_f·ω₀·m_p·K_s) και της VSM (2H·s² + D_p·s + ω₀·K_s): ω_d 4 %, ζ 0,03 (μετρήθηκαν 1,5 % και 0,7 %, 0,1 % και 0,003)· P = P_ref + (1 − f_g/f₀)/m_p· νησίδα: |i| = I_max σε υπερφόρτιση, ισχύς DC = P (1 %)· tutorial gfm_island: μία συχνότητα, 1 − ω = m_p·(P_φ − S₁·P_ref,1)/ΣS (2·10⁻⁴), P₁ − P₂ = P_ref,1, 2:1 με 10 και 5 kVA· gfm_sync (Zhong & Weiss 2011, Σχ. 5): P = θ̇·P_set, Q = Q_set, +20 W στα 49,95 Hz, Q = Q_set + D_q·(V_r − V_m)· gfm_weak (Zhang κ.ά. 2010): PSC σε SCR 1 στα 0,8 και 0,9 pu, σφάλμα με |i| ≤ 1,07·I_max και επαναφορά (SCR 1 και 5)· SciPy: η διαφορά πέφτει με το βήμα (πρώτη τάξη, καθυστέρηση των ελεγχόμενων πηγών)'),
     ('tests/test_gfm2.py', 'grid-forming στο δίκτυο (4.18.1, ROADMAP §58): στιβαρός έλεγχος ρεύματος, σταθμός MMC σε grid-forming, IEEE 9 με μετατροπέα', 'ο έλεγχος του σταθμού της 4.18 ταλαντώνεται στο SCR 1· ο στιβαρός (Harnefors κ.ά. 2021) στα 0,8 pu στο SCR 1, 2, 5 (3·10⁻³) και 0,9 pu στο SCR 1 με PLL 2 Hz· ο σταθμός σε grid-forming ίδιος με το GFMC (10⁻⁹), νησίδα 1 − ω = m_p·(P − P_ref) (3·10⁻⁴), VSM (10⁻³), δύο μονάδες σε ίδιο pu (3·10⁻³), ασθενές δίκτυο· IEEE 9 χωρίς μεταβατικό από τη ροή φορτίου, σειρά του RoCoF και της απόκλισης της συχνότητας (Tayyebi κ.ά. 2020)· SciPy με σύγκλιση στο βήμα'),
-    ('tests/test_gfm3.py', 'grid-forming, μέρος 3 (4.20.2, ROADMAP §84, §58): ο σταθμός MMC σε grid-forming στα Model 1–3', 'το hvdc_gfm με Model 4 το ίδιο κύκλωμα με πριν· στη νησίδα με στατικότητα τα Model 3 και 2 δίνουν την P του Model 4 σε 10⁻³ pu, τη συχνότητα σε 10⁻⁴, τη |v| σε 2·10⁻³, τη V_dc σε 5·10⁻⁴, και ω = 1 − m_p·(P − P_ref) σε 3·10⁻⁴'),
+    ('tests/test_gfm3.py', 'grid-forming, μέρος 3 (4.20.2, ROADMAP §84, §58): ο σταθμός MMC σε grid-forming στα Model 1–3, dVOC και matching control', 'το hvdc_gfm με Model 4 το ίδιο κύκλωμα με πριν· στη νησίδα τα Model 3 και 2 δίνουν την P του Model 4 σε 10⁻³ pu και τη συχνότητα σε 10⁻⁴· dVOC απέναντι σε άκαμπτο δίκτυο στους κλειστούς τύπους της μόνιμης του (22) σε 10⁻⁴, χάνει το βήμα με η για 2 % χωρίς αντίσταση στη σύνδεση (Groß κ.ά. 2019) και το κρατά με η για 0,5 %· στο ieee9_gfm από τη ροή φορτίου (με R_v 0,05 pu· χωρίς αυτήν ταλαντώνεται), νησίδα με δύο μονάδες, σταθμός MMC· matching: ω = v_dc/V_dc σε 10⁻⁵ και P = P* + (1 − ω)/m_p σε 10⁻³ με πηγή DC 5 ms, ταλάντωση με τα 50 ms της πηγής του paper, ieee9_gfm με ω = v_dc/V_dc σε κάθε περίοδο· μετρικές συχνότητας στο ieee9_gfm (dVOC όσο η στατικότητα, καλύτερα από τον grid-following)· SciPy (πρώτης τάξης στο βήμα)'),
     ('tests/test_ev_weights.py', 'τα βάρη του πολυκριτηριακού του οχήματος (4.18.1)', 'moevc2: w_s↑ ⇒ IAE↓, w_e↑ ⇒ Wh/km↓ και IAE↑, eco < ισορροπημένος < performance στα Wh/km και αντίστροφα στο IAE, keep ≤ 1· το moevc της 4.8 με keep 1,15 και w_s χωρίς επίδραση'),
     ('tests/test_look.py', 'τεχνική όψη του σχεδίου (4.17.3, ROADMAP §65)', 'διαδρομές μόνο οριζόντιες/κατακόρυφες (χωρίς εξομάλυνση) απέναντι σε γνωστές μορφές, σήμανση χωρίς αλλαγή των υπολοίπων, αντίσταση IEC και ANSI, όλα τα σύμβολα της βιβλιοθήκης· `scope_flow.js` στον browser'),
     ('tests/test_plotcore.py', 'πυρήνας των γραφημάτων (4.17.2, ROADMAP §63)', 'ticks χωρίς επικάλυψη για 28 συνδυασμούς διαστήματος και πλάτους, βήματα 1–2–5, ετικέτες με τα δεκαδικά του βήματος και ένα πρόθεμα ανά άξονα, όρια που κρατούν το 0, σταθερή αυτόματη κλίμακα (ανοίγει αμέσως με περιθώριο, κλείνει μετά από 2 s, σταθερή στην παύση)· και `tests/ui/scope_flow.js` στον browser'),
@@ -1535,7 +1557,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 923 tests (Python και Node) και 19 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 933 tests (Python και Node) και 19 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',

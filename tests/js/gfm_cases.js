@@ -6,9 +6,13 @@
 //                                                        through a breaker, a second load: means over 20 ms before each t
 //  {kind:'dcpins', at}                                   a converter with its DC terminals on a source: AC and DC powers
 //  {kind:'tut', id, opts, set, at, keys, win}            a tutorial as the app builds it: mean, min, max over win before t
-//  {kind:'scipy', T, keys}                               the 'grid' case in the browser solver and its SciPy export
+//  {kind:'scipy', T, keys, match}                        the 'grid' case (match: the 'match1' case) in the browser solver and its SciPy export
 //  {kind:'cyc', id, opts, T, Tc, keys}                   4.18.1: a tutorial, the mean of each key over each period Tc
 //  {kind:'scipyTut', id, opts, set, T, keys, hDiv}       4.18.1: a tutorial in the browser solver and its SciPy export
+//  {kind:'match1', ct, Pref, Xg, fg, Hdc, T, dt, keys}   4.20.2: the 'grid' case with the DC side of matching control: VSC2
+//                                                        with DC pins, its capacitor (H_dc = C·V_dc²/(2S)) and a DC current
+//                                                        source driven by the output idc of GFMC through τ_dc = 50 ms and ±1,2
+//                                                        pu (Tayyebi et al. 2020 (2)–(3)); samples every dt from t0 to T
 const path=require('path');const W=path.resolve(__dirname,'../../web/studio');
 global.window=globalThis;global.Parts=require(W+'/parts.js');global.Expr=require(W+'/expr.js');global.StepCheck=require(W+'/stepcheck.js');
 global.LineModels=require(W+'/linemodels.js');
@@ -25,6 +29,17 @@ function gridProject(o){const Xf=o.Xf??0.1,Xg=o.Xg??0.1,cas=(o.ct||{}).inner==='
   C('Z','ZSER3',{Rs:o.Rg??0.01*Zb,Ls:Xg*Zb/w0,Rp1:0,Lp:0,Rp2:0,conn:'bus'}),C('G','VAC3',{Vpk:Vll*Math.SQRT2/Math.sqrt(3),f:o.fg??50,phase:0,seq:'abc',Rs:0,Ls:0,conn:'bus'}),C('G0','GND')];
  const wires=[Wr('w1',['VS','abc'],['Z','abc1']),Wr('w2',['Z','abc2'],['G','abc']),Wr('w3',['G','n'],['G0','g'])];link(wires,'CT','VS');
  return {version:4,components:comps,wires,solve:{tbase:0.02}};}
+function matchProject(o){const Xf=o.Xf??0.1,Xg=o.Xg??0.1,Vdc=800,Idb=S/Vdc,Cdc=2*(o.Hdc??0.05)*S/(Vdc*Vdc),P0=+(o.Pref??0.3);
+ const comps=[C('VS','VSC2',{dc:'pins',filt:'l',Lf:Xf*Zb/w0,Rf:0.005*Zb,conn:'bus'}),
+  C('CT','GFMC',{S,Vac:Vll,Vdc,law:'match',inner:'direct',Pref:String(P0),Xc:Xf,kv:0,th0:-90,tsoft:0,conn:'bus',...(o.ct||{})}),
+  C('CD','C',{C:Cdc,v0:Vdc}),C('ID','IDC',{ctl:'sig'}),C('LP','LPF',{fc:1/(2*Math.PI*(o.tdc??0.05)),y0:String(P0)}),C('SA','SAT',{lo:-1.2,hi:1.2}),C('GA','GAIN',{K:Idb}),
+  C('Z','ZSER3',{Rs:o.Rg??0.01*Zb,Ls:Xg*Zb/w0,Rp1:0,Lp:0,Rp2:0,conn:'bus'}),C('G','VAC3',{Vpk:Vll*Math.SQRT2/Math.sqrt(3),f:o.fg??50,phase:0,seq:'abc',Rs:0,Ls:0,conn:'bus'}),C('G0','GND')];
+ const wires=[Wr('w1',['VS','abc'],['Z','abc1']),Wr('w2',['Z','abc2'],['G','abc']),Wr('w3',['G','n'],['G0','g']),Wr('w4',['VS','p'],['CD','p']),Wr('w5',['VS','n'],['CD','n']),
+  Wr('w6',['ID','p'],['VS','p']),Wr('w7',['ID','n'],['VS','n']),Wr('w8',['CT','idc'],['LP','u']),Wr('w9',['LP','y'],['SA','u']),Wr('w10',['SA','y'],['GA','u']),Wr('w11',['GA','y'],['ID','u'])];link(wires,'CT','VS');
+ return {version:4,components:comps,wires,solve:{tbase:0.02}};}
+function match1(o){const s=new MNA.Sim(matchProject(o),{hDiv:o.hDiv||400,method:'TR'}),keys=o.keys||['Y:CT/PP'],t0=o.t0??0.3,dt=o.dt||5e-4,T=o.T||1.1,out=[];const c0=Date.now();
+ while(s.t<t0-1e-12)s.run(Math.min(s.h,t0-s.t));for(let t=t0;t<=T+1e-9;t+=dt){while(s.t<t-1e-12)s.run(Math.min(s.h,t-s.t));out.push([s.t,...keys.map(k=>s.now(k))]);}
+ return {out,keys,ms:Date.now()-c0,warn:s.net.warnings};}
 function grid(o){const s=new MNA.Sim(gridProject(o),{hDiv:o.hDiv||400,method:'TR'}),keys=o.keys||['Y:CT/PP'],t0=o.t0??0.3,dt=o.dt||5e-4,T=o.T||1.1,out=[];const c0=Date.now();
  while(s.t<t0-1e-12)s.run(Math.min(s.h,t0-s.t));for(let t=t0;t<=T+1e-9;t+=dt){while(s.t<t-1e-12)s.run(Math.min(s.h,t-s.t));out.push([s.t,...keys.map(k=>s.now(k))]);}
  return {out,keys,ms:Date.now()-c0,warn:s.net.warnings};}
@@ -47,7 +62,7 @@ function means(s,at,keys,win,extra){const out=[],c0=Date.now();for(const T of at
 function tut(o){require(W+'/tutorials.js');const t=Tutorials.get(o.id),opts={};for(const q of t.options||[])opts[q.k]=q.def;Object.assign(opts,o.opts||{});
  const pr=t.build(opts);for(const [id,ps] of Object.entries(o.set||{}))Object.assign(pr.components.find(c=>c.id===id).params,ps);const sv=pr.sim||{};
  const r=means(new MNA.Sim(pr,{hDiv:o.hDiv||sv.hDiv||400,method:sv.method||'TR'}),o.at,o.keys,o.win||0.02);return {...r,meta:pr.meta};}
-function scipy(o){const pr=gridProject({...o,Pref:o.Pref||'0:0, 0.005:0.2'}),s=new MNA.Sim(pr,{hDiv:o.hDiv||400,method:'TR'}),T=o.T||0.02,ch=o.keys||['Y:CT/PP','Y:CT/WW','I:VS/La'],rec=[];
+function scipy(o){const pr=(o.match?matchProject:gridProject)({...o,Pref:o.Pref||'0:0, 0.005:0.2'}),s=new MNA.Sim(pr,{hDiv:o.hDiv||400,method:'TR'}),T=o.T||0.02,ch=o.keys||['Y:CT/PP','Y:CT/WW','I:VS/La'],rec=[];
  while(s.t<T-1e-12){s.run(Math.min(s.h,T-s.t));rec.push([s.t,...ch.map(k=>s.now(k))]);}
  return {rec,ch,batch:MNA.exportForBatch(pr,ch),h:s.h,warn:s.net.warnings};}
 function cyc(o){require(W+'/tutorials.js');const t=Tutorials.get(o.id),opts={};for(const q of t.options||[])opts[q.k]=q.def;Object.assign(opts,o.opts||{});
@@ -59,5 +74,5 @@ function scipyTut(o){require(W+'/tutorials.js');const t=Tutorials.get(o.id),opts
  const s=new MNA.Sim(pr,{hDiv:o.hDiv||400,method:'TR'}),ch=o.keys,rec=[];while(s.t<o.T-1e-12){s.run(Math.min(s.h,o.T-s.t));rec.push([s.t,...ch.map(k=>s.now(k))]);}
  return {rec,ch,batch:MNA.exportForBatch(pr,ch),h:s.h,warn:s.net.warnings};}
 const cases=JSON.parse(process.argv[2]||'[]');const res=[];
-for(const o of cases){try{res.push(o.kind==='grid'?grid(o):o.kind==='island1'?island1(o):o.kind==='dcpins'?dcpins(o):o.kind==='tut'?tut(o):o.kind==='scipy'?scipy(o):o.kind==='cyc'?cyc(o):o.kind==='scipyTut'?scipyTut(o):{error:'kind'});}catch(e){res.push({error:String(e&&e.stack||e)});}}
+for(const o of cases){try{res.push(o.kind==='grid'?grid(o):o.kind==='island1'?island1(o):o.kind==='dcpins'?dcpins(o):o.kind==='tut'?tut(o):o.kind==='scipy'?scipy(o):o.kind==='cyc'?cyc(o):o.kind==='scipyTut'?scipyTut(o):o.kind==='match1'?match1(o):{error:'kind'});}catch(e){res.push({error:String(e&&e.stack||e)});}}
 process.stdout.write(JSON.stringify(res));

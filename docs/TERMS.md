@@ -338,7 +338,11 @@
 | semiconducting screen | ημιαγώγιμο στρώμα: ανάμεσα στον αγωγό ή τον μανδύα και τη μόνωση ενός καλωδίου (4.20.1) |
 | binary heap | δυαδικός σωρός (heap): δίνει κάθε φορά το μικρότερο στοιχείο χωρίς ταξινόμηση όλης της λίστας (σειρά των μπλοκ, 4.20.1) |
 | offshore converter station | υπεράκτιος σταθμός μετατροπέα: σχηματίζει την τάση και τη συχνότητα του δικτύου AC ενός αιολικού ή φορτίου (4.20.1) |
+| dispatchable virtual oscillator control (dVOC) | ταλαντωτής dVOC: ο μετατροπέας σχηματίζει την τάση ενός εικονικού ταλαντωτή που συγχρονίζεται μέσω του ρεύματός του, με σημεία λειτουργίας P*, Q*, V* (4.20.2) |
+| matching control | matching control: η συχνότητα του μετατροπέα από την τάση DC του (ω = k_θ·v_dc), όπως η συχνότητα μιας μηχανής από την ταχύτητά της (4.20.2) |
+| time-scale separation | διαχωρισμός χρονικών κλιμάκων: ο έλεγχος αρκετά πιο αργός από τη δυναμική των γραμμών (4.20.2) |
+| loss feed-forward | πρόσθια τροφοδότηση των απωλειών (4.20.2) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
-PWM, SPWM, SVPWM, PLL, PLO, FACTS, SSSC, CHB, MMC, HVDC, MTDC, LCC, CEA, VDCOL, AVM, CCSC, NLC, ULM, FDCM, OPF, SCOPF, PTDF, LODF, LMP, KKT, fast-decoupled (XB, BX), ZIP, ONNX, GPU, CUDA, CuPy, backend, MLP, Adam, RMS, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.
+PWM, SPWM, SVPWM, PLL, PLO, dVOC, FACTS, SSSC, CHB, MMC, HVDC, MTDC, LCC, CEA, VDCOL, AVM, CCSC, NLC, ULM, FDCM, OPF, SCOPF, PTDF, LODF, LMP, KKT, fast-decoupled (XB, BX), ZIP, ONNX, GPU, CUDA, CuPy, backend, MLP, Adam, RMS, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.

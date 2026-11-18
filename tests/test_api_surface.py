@@ -91,6 +91,15 @@ class ApiSurface(unittest.TestCase):
         from pcl import study
         self.assertIn('scopf', study.STUDIES)
 
+    def test_the_surface_of_4_20_2(self):
+        """4.20.2: the grid-forming control has two more laws, dVOC and matching control, with the gains of the amplitude of the
+        matching (kpm, kim, mu0), its DC losses (Gdc) and its output idc (the DC current reference); no new point of the API."""
+        g = self.now['project']['part:GFMC']
+        for k in ('kpm', 'kim', 'mu0', 'Gdc'):
+            self.assertIn(k, g['params'])
+        self.assertIn('idc', g['pins'])
+        self.assertEqual(sum(len(v) for v in self.now.values()), 836)
+
     def test_the_surface_of_4_20_1(self):
         """4.20.1: the B4 data and its builder are experimental (in pcl.dcgrid); VSC2 has the DC voltage of its start (Vdc0)."""
         from pcl import network

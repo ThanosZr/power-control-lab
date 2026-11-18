@@ -820,7 +820,7 @@
   // the GFMC, which takes them out of the converter); its v_dc is the valve-side voltage v_s when connected, as the
   // modulation of the other modes; the PLL of the GFMC follows the voltage until the deblocking (t_db)
   if(mode==='gfm'){const neg=(v,d)=>{const t=String(v??'').trim(),sc=P.parseSched(t===''?String(d):t);return sc?sc.map(([a,b])=>`${s(a)}:${s(-b)}`).join(', '):String(-d);};
-   const law=['droop','vsm','psc'].includes(p.law)?p.law:'droop',gp={law,inner:'direct',S:s(S),Vac:s(Vac),Vdc:s(Vdc),f0:s(w0/(2*Math.PI)),Pref:neg(p.Pref,0),Qref:neg(p.Qref,0),Vref:String(p.Vref??'1'),
+   const law=['droop','vsm','psc','dvoc'].includes(p.law)?p.law:'droop',gp={law,inner:'direct',S:s(S),Vac:s(Vac),Vdc:s(Vdc),f0:s(w0/(2*Math.PI)),Pref:neg(p.Pref,0),Qref:neg(p.Qref,0),Vref:String(p.Vref??'1'),
     mp:p.mp??2,nq:p.nq??5,fp:p.fp??5,H:p.Hv??2,tv:p.tv??0.01,tdr:p.tdr??0,kp:p.kp??50,avc:p.avc??'vac',Uref:String(p.Vacref??'1'),KE:p.KE??5,TE:p.TE??0.05,kv:p.kv??0,av:p.av??40,
     Rv:p.Rv??0,Xv:p.Xv??0,Xc:s(X),Imax:s(Il),Ufd:p.Ufd??0.6,tsoft:p.tsoft??0.05,ac:p.ac??600,vmax:s(vmax),bw:s(pos(p.bw)),tsync:s(Math.max(num(p.tdb,0),0)),th0:s(num(p.th0,0)),fm,conn:'sep'};
    B.comp('G','GFMC',gp);
@@ -1143,7 +1143,7 @@
  // the voltage loop against a network of small impedance. k_ff = 0,8, T_v 3 ms, T_i 0,5 ms by default.
  function gfmcDef(c){const p=prm(c),B=builder(c.label||c.id);
   const S=Math.max(num(p.S,10e3),1),Vac=Math.max(num(p.Vac,400),1e-6),Vdc=Math.max(num(p.Vdc,800),1e-6),f0=Math.max(num(p.f0,50),1e-6),w0=2*Math.PI*f0;
-  const Vb=Vac*Math.SQRT2/Math.sqrt(3),Ib=S/(1.5*Vb),law=['droop','vsm','psc'].includes(p.law)?p.law:'droop',cas=p.inner==='cascade',sg=p.sync==='g';
+  const Vb=Vac*Math.SQRT2/Math.sqrt(3),Ib=S/(1.5*Vb),law=['droop','vsm','psc','dvoc','match'].includes(p.law)?p.law:'droop',cas=p.inner==='cascade',sg=p.sync==='g';
   const SP=sigPorts(B,isBus(p),busMap('meas',GFM_MEAS),busMap('m',['ma','mb','mc'])),sin=SP.sin,out=SP.out;
   const w=(a,b)=>B.wire(a,b),E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''});const ref=(id,v,d)=>{const t=String(v??'').trim();B.comp(id,'CONST',{v:t===''?String(d):t});return [id,'y'];};
   const pos=(x,d)=>Math.max(num(x,d),1e-9),Y=id=>[id,'y'];
@@ -1178,7 +1178,15 @@
   E('SL',law==='psc'?'z > 0 || s > 0.5 ? 1 : 0':'s > 0.5 ? 1 : 0',law==='psc'?'z, s':'s');if(law==='psc')w(Y('FD'),['SL','z']);w(Y('SY'),['SL','s']);
   // powers: at the internal EMF (VSM with the direct control) or at the measured voltage
   const X=cas?'O':'I',atE=law==='vsm'&&!cas;
-  if(atE){E('PP','ee*d','ee, d');E('QQ','-ee*q','ee, q');for(const id of ['PP','QQ'])w(Y('EE'),[id,'ee']);w(Y('ID'),['PP','d']);w(Y('IQ'),['QQ','q']);}
+  // 4.20.2: dVOC: P and Q at the oscillator's voltage from the measured v and current: v̂ = v + (R_v + j(X_c + X_v))·i with
+  // the direct control (the converter's inductor and the virtual impedance), v̂ = v + (R_v + jX_v)·o with the cascade (the
+  // virtual impedance), S = v·i* + (R + jX)·|i|². (With the direct control E·i_d and −E·i_q would compare the unfiltered E
+  // with the measured current, which lags it: 1.7° of the filter of the measurements and a step of the modulation gave Q
+  // 0.04 pu off in ieee9_gfm.)
+  if(law==='dvoc'){const rv0=s(Math.max(num(p.Rv,0),0)),xx0=s(Math.max(num(p.Xv,0),0)+(cas?0:Math.max(num(p.Xc,0.15),1e-6)));
+   E('PP','vd*xd + vq*xq + rv*(xd*xd + xq*xq)','vd, vq, xd, xq','rv = '+rv0);E('QQ','vq*xd - vd*xq + xx*(xd*xd + xq*xq)','vd, vq, xd, xq','xx = '+xx0);
+   for(const id of ['PP','QQ']){w(Y('VD'),[id,'vd']);w(Y('VQ'),[id,'vq']);w(Y(X+'D'),[id,'xd']);w(Y(X+'Q'),[id,'xq']);}}
+  else if(atE){E('PP','ee*d','ee, d');E('QQ','-ee*q','ee, q');for(const id of ['PP','QQ'])w(Y('EE'),[id,'ee']);w(Y('ID'),['PP','d']);w(Y('IQ'),['QQ','q']);}
   else{E('PP','vd*xd + vq*xq','vd, vq, xd, xq');E('QQ','vq*xd - vd*xq','vd, vq, xd, xq');for(const id of ['PP','QQ']){w(Y('VD'),[id,'vd']);w(Y('VQ'),[id,'vq']);w(Y(X+'D'),[id,'xd']);w(Y(X+'Q'),[id,'xq']);}}
   // the law: WL (ω, pu) and EE (E, pu)
   if(law==='droop'){const wf=s(2*Math.PI*pos(p.fp,5));
@@ -1192,6 +1200,30 @@
    // soft start, and in the current limit it only unwinds
    integ('YS','s > 0.5 ? 50*(a - z) : t < ts ? 0 : l > 0 && g > 0 ? 0 : g',{s:Y('SY'),a:['PLL','amp'],l:Y('LF'),g:Y('YE'),z:'self'},'ts = '+s(ts),V0,0,2);
    E('WL','z','z');w(Y('WS'),['WL','z']);E('EE','w*z','w, z');w(Y('WS'),['EE','w']);w(Y('YS'),['EE','z']);}
+  // 4.20.2: dVOC, the polar form of the oscillator for an inductive network (Tayyebi et al. 2020 (21)–(22), κ = π/2), per unit:
+  // dθ/dt = ω₀·(1 + η·(P_ref/V*² − P/E²)), dE/dt = ω₀·η·((Q_ref/V*² − Q/E²)·E + α·(V*² − E²)·E/V*²), with P and Q at the
+  // oscillator's voltage E (the internal EMF with the direct control); η = m_p·V*² and α = 1/(2·n_q·V*) give near the
+  // set-point the slopes of the droop (ω = 1 − m_p·ΔP, E = V* − n_q·ΔQ), as the paper chooses its gains. E: as the flux of
+  // the VSM, it follows the PLL's amplitude while synchronizing, is held in the soft start, and in the current limit only
+  // unwinds
+  else if(law==='dvoc'){const V0d=Math.max(at0(p.Vref,1),1e-3),eta=mp*V0d*V0d,al=1/(2*nq*V0d);
+   E('WL','1 + eta*(r/(v*v) - x/max(em*em, 1e-4))','r, x, v, em','eta = '+s(eta));w(PR,['WL','r']);w(Y('PP'),['WL','x']);w(VR,['WL','v']);w(Y('EV'),['WL','em']);
+   E('EG','wo*eta*((qr/(v*v) - x/max(z*z, 1e-4))*z + al*(v*v - z*z)*z/(v*v))','qr, x, v, z',`wo = ${s(w0)}, eta = ${s(eta)}, al = ${s(al)}`);w(QR,['EG','qr']);w(Y('QQ'),['EG','x']);w(VR,['EG','v']);w(Y('EV'),['EG','z']);
+   integ('EV','s > 0.5 ? 50*(a - z) : t < ts ? 0 : l > 0 && g > 0 ? 0 : g',{s:Y('SY'),a:['PLL','amp'],l:Y('LF'),g:Y('EG'),z:'self'},'ts = '+s(ts),V0,0,2);
+   E('EE','z','z');w(Y('EV'),['EE','z']);}
+  // 4.20.2: matching control (Tayyebi et al. 2020 (16)–(19), Arghir et al.): dθ/dt = k_θ·v_dc with k_θ = ω₀/V_dc*, so ω = v_dc in
+  // pu, and the amplitude μ = k_p·(V* − |v|) + k_i·∫(V* − |v|) from μ₀; the DC current of the source (10) without the
+  // feed-forward of the losses, i*_dc = k_dc·(1 − v_dc) + P_ref (+ G_dc·v_dc), k_dc = 1/m_p for the slope of the droop,
+  // in pu of S/V_dc at the output idc (the source with its time constant and limit is in the circuit)
+  else if(law==='match'){const kpm=Math.max(num(p.kpm,0.001),0),kim=Math.max(num(p.kim,0.5),0),mu0=String(p.mu0??'').trim()===''?V0:num(p.mu0,V0);
+   E('WL','v','v');w(F.vdc,['WL','v']);
+   integ('XM','l > 0 && (r - u) > 0 ? 0 : ki*(r - u)',{l:Y('LF'),r:VR,u:Y('VG')},'ki = '+s(kim),mu0,0,2);
+   E('EE','x + kp*(r - u)','x, r, u','kp = '+s(kpm));w(Y('XM'),['EE','x']);w(VR,['EE','r']);w(Y('VG'),['EE','u']);
+   // the loss feed-forward of (10): (v_dc·i_x − p)/v_dc* = the power at the switching node (v_c·i, times v_dc: the modulation of
+   // the matching does not divide by the measured v_dc) less the power p at the terminals, so that the steady state is exactly
+   // ω = 1 − m_p·(P − P_ref)
+   E('PSW','v*(cd*id + cq*iq) - x','v, cd, cq, id, iq, x');w(F.vdc,['PSW','v']);w(Y('VCD'),['PSW','cd']);w(Y('VCQ'),['PSW','cq']);w(Y('ID'),['PSW','id']);w(Y('IQ'),['PSW','iq']);w(Y('PP'),['PSW','x']);
+   E('IDC','kd*(1 - v) + r + gd*v + l','v, r, l',`kd = ${s(1/mp)}, gd = ${s(Math.max(num(p.Gdc,0),0))}`);w(F.vdc,['IDC','v']);w(PR,['IDC','r']);w(Y('PSW'),['IDC','l']);}
   else{E('WL','1 + kp*(r - x)/w0','r, x',`kp = ${s(pos(p.kp,50))}, w0 = ${s(w0)}`);w(PR,['WL','r']);w(Y('PP'),['WL','x']);
    if(p.avc==='fixed'){E('EE','v','v');w(VR,['EE','v']);}
    else{const UR=ref('UR',p.Uref,1);integ('XE','l > 0 ? 0 : (ke*(r - u) - z)/te',{l:Y('FD'),r:UR,u:Y('VG'),z:'self'},`ke = ${s(Math.max(num(p.KE,5),0))}, te = ${s(pos(p.TE,0.05))}`,0,-0.5,0.5);
@@ -1231,11 +1263,13 @@
    for(const [id,a] of [['VCD','D'],['VCQ','Q']]){w(Y('VD'),[id,'vd']);w(Y('VQ'),[id,'vq']);w(Y('ID'),[id,'id']);w(Y('IQ'),[id,'iq']);w(Y('IS'+a),[id,'r']);w(Y('XI'+a),[id,'x']);}}
   w(Y('LR'),['LFU','l']);
   // modulation: |v_c| ≤ v_max, m = v_c·V̂/(v_dc/2), dq → abc
-  const km=s(Vb/(Vdc/2)),vmax=s(pos(p.vmax,1.3));E('VSU','v > 0.1 ? v : 1','v');w(F.vdc,['VSU','v']);
+  // (matching: the modulation magnitude on the nominal v_dc, as Arghir et al. (6a) and Tayyebi et al. (9): the AC voltage
+  // follows v_dc, as the EMF of a machine follows its speed)
+  const km=s(Vb/(Vdc/2)),vmax=s(pos(p.vmax,1.3));if(law==='match')B.comp('VSU','CONST',{v:'1'});else{E('VSU','v > 0.1 ? v : 1','v');w(F.vdc,['VSU','v']);}
   E('MD','k*d*min(1, vm/max(hypot(d, q), 1e-9))/u','d, q, u',`k = ${km}, vm = ${vmax}`);E('MQ','k*q*min(1, vm/max(hypot(d, q), 1e-9))/u','d, q, u',`k = ${km}, vm = ${vmax}`);
   for(const id of ['MD','MQ']){w(Y('VCD'),[id,'d']);w(Y('VCQ'),[id,'q']);w(Y('VSU'),[id,'u']);}
   [['ma',0],['mb',-2*Math.PI/3],['mc',2*Math.PI/3]].forEach(([n,f])=>{const id='M'+n[1].toUpperCase();E(id,'d*cos(th + f) - q*sin(th + f)','d, q, th','f = '+s(f));w(Y('MD'),[id,'d']);w(Y('MQ'),[id,'q']);w(TH,[id,'th']);out(n,Y(id));});
-  out('th',TH);out('w',Y('WW'));out('p',Y('PP'));out('q',Y('QQ'));out('e',Y('EE'));out('lim',Y('LR'));
+  out('th',TH);out('w',Y('WW'));out('p',Y('PP'));out('q',Y('QQ'));out('e',Y('EE'));out('lim',Y('LR'));if(law==='match')out('idc',Y('IDC'));
   SP.close();return B.def();}
 
  const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef,CHB:chbDef,SPLL:spllDef,SSSC:ssscDef,SSSC3:sssc3Def,MMC:mmcDef,MMCC:mmccDef,VSC2:vsc2Def,GFMC:gfmcDef,LCC6:lcc6Def,LCCS:lccsDef,LCCC:lcccDef,FILT3:filtDef,ZSER3:zserDef};
