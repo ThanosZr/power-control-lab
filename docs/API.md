@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.20.2: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (836 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.20.3: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (836 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.20.2.
+Κανένα στην 4.20.3.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -832,7 +832,7 @@
 | `part:FOUR` | nu, ref, win, f, np, fsrc, fmin, t0, clock, first, y0 | a, b, f, mag, ph, rms, u | 4.19.6 |
 | `part:GAIN` | K, unit | u, y | 3.18 |
 | `part:GEN3` | Sn, Un, f, pp, data, conv, Ra, Xl, X0, Xd, Xdp, Xdpp, Xq, Xqp, Xqpp, Td0p, Td0pp, Tq0p, Tq0pp, cXad, cXfd, cRfd, cXkd, cRkd, cXaq, cX1q, cR1q, cX2q, cR2q, shaft, H, D, Hm, Km, Dm, Dmu, Tfr, gm, exc, Efd, mech, Tm, init, V0, ang0, neut, conn | a, abc, b, c, d, e0, efd, ifd, m0, n, pe, qe, te, tm, ts1, ts2, v0, vt, w | 4.3 |
-| `part:GFMC` | law, inner, S, Vac, Vdc, f0, Pref, Qref, Vref, mp, nq, kpm, kim, mu0, Gdc, fp, H, tv, tdr, kp, avc, Uref, KE, TE, kv, av, Rv, Xv, Xc, Bf, Tvl, Til, kff, Imax, Ufd, tsoft, fi, ac, vmax, sync, bw, tsync, th0, fm, conn | e, ga, gb, gc, ia, ib, ic, idc, lim, m, ma, mb, mc, meas, oa, ob, oc, p, q, th, va, vb, vc, vdc, w | 4.18 |
+| `part:GFMC` | law, inner, S, Vac, Vdc, f0, Pref, Qref, Vref, mp, nq, kpm, kim, mu0, dcc, Gdc, plim, ith, gp, kap, E0, fp, H, tv, tdr, kp, avc, Uref, KE, TE, kv, av, Rv, Xv, Xc, Bf, Tvl, Til, kff, Imax, Ufd, tsoft, fi, ac, vmax, sync, bw, tsync, th0, fm, conn | e, ga, gb, gc, ia, ib, ic, idc, lim, m, ma, mb, mc, meas, oa, ob, oc, p, q, th, va, vb, vc, vdc, w | 4.18 |
 | `part:GND` | — | g | 3.18 |
 | `part:GOV` | type, dP, Pr, R, TSR, TSM, LC1, LC2, V1, KAX, FHP, FIP, FLP, TCH, TRH, TCO, RP, RT, TR, TP, KS, TG, Ropen, Rclose, Tw, gFL, gNL | g, m0, pm, tm, w | 4.8.1 |
 | `part:GRID3` | Un, f, phase, cf, emf, Sk, XR, z0, Z0Z1, Sk1, XR0, Rn, conn | a, abc, b, c | 4.1 |

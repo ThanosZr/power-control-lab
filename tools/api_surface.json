@@ -1,5 +1,5 @@
 {
- "version": "4.20.2",
+ "version": "4.20.3",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -6180,7 +6180,13 @@
      "kpm",
      "kim",
      "mu0",
+     "dcc",
      "Gdc",
+     "plim",
+     "ith",
+     "gp",
+     "kap",
+     "E0",
      "fp",
      "H",
      "tv",

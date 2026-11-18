@@ -2088,14 +2088,18 @@
   options:[{k:'law',label:'Νόμος',options:[['droop','Στατικότητα P–f, Q–V (φίλτρο 5 Hz)'],['vsm','Εικονική σύγχρονη μηχανή (H = 1 s)'],['dvoc','Ταλαντωτής dVOC (η, α για 2 % και 5 %, R_v 0,1 pu, 4.20.2)']],def:'droop'},
    {k:'inner',label:'Εσωτερικός έλεγχος',options:[['cascade','Καταρράκτης: βρόχος τάσης πυκνωτή και ρεύματος'],['direct','Άμεσα η τάση (με υψιπερατή ανάδραση ρεύματος)']],def:'cascade'},
    {k:'size',label:'Ονομαστικές ισχείς',options:[['eq','10 kVA και 10 kVA'],['21','10 kVA και 5 kVA']],def:'eq'},
-   {k:'xv',label:'Εικονική αντίδραση X_v',options:[['0.1','0,1 pu'],['0','Χωρίς']],def:'0.1'}],
+   {k:'xv',label:'Εικονική αντίδραση X_v',options:[['0.1','0,1 pu'],['0','Χωρίς']],def:'0.1'},
+   {k:'dvs',label:'dVOC: μορφή και εκκίνηση (4.20.3)',options:[['polar','κ = 90°, από V* (4.20.2)'],['kappa','κ από τη σύζευξη κάθε μονάδας'],['black','κ = 90°, από E₀ = 0,01 pu (εκκίνηση χωρίς τάση)']],def:'polar'}],
   desc:'Δύο μετατροπείς 400 V (μέσο μοντέλο, φίλτρο LC) τροφοδοτούν ένα κοινό φορτίο μέσα από γραμμές με διαφορετική εμπέδηση, χωρίς δίκτυο και χωρίς επικοινωνία. Καθένας σχηματίζει την τάση του (grid-forming): η συχνότητα πέφτει με την ενεργό ισχύ του και το πλάτος με την άεργο (στατικότητα 2 % και 5 % στη δική του βάση). Στα 0,5 s κλείνει ένα δεύτερο φορτίο· στα 1,0 s η μονάδα 1 παίρνει εντολή P_ref = 0,2 pu (δευτερεύουσα ρύθμιση).',
   tasks:['Σύγκρινε στην κάρτα τη συχνότητα της μόνιμης κατάστασης με τον τύπο ω = 1 − m_p·(P_φορτίου − S₁·P_ref,1)/(S₁ + S₂): δεν εξαρτάται από τις γραμμές.','Με 10 και 5 kVA: η ενεργός ισχύς μοιράζεται 2:1 (ίδιο pu σε κάθε μονάδα). Η άεργος όχι: εξαρτάται από τις πτώσεις τάσης στις γραμμές. Βάλε X_v = 0,1 pu και δες τη διαφορά των Q να μικραίνει.','Η VSM δίνει την ίδια μόνιμη κατάσταση με τη στατικότητα (D_p = 1/m_p) αλλά άλλη μεταβατική: σύγκρινε την πτώση της συχνότητας στα 0,5 s.','Με dVOC η συχνότητα αλλάζει χωρίς φίλτρο: 1 − ω = η·(P/E² − P_ref/V*²) σε κάθε μονάδα (κάρτα), δηλαδή σχεδόν η στατικότητα των 2 % όταν E ≈ V*. Χωρίς την εικονική αντίσταση R_v οι δύο ταλαντωτές δεν ησυχάζουν πάνω στις γραμμές.'],
   build(o){const law=['vsm','dvoc'].includes(o.law)?o.law:'droop',cas=o.inner!=='direct',rv=law==='dvoc'?0.1:0,S1=10e3,S2=o.size==='21'?5e3:10e3,St=S1+S2,xv=o.xv==null?0.1:+o.xv||0,Vll=400,f=50,w0=2*Math.PI*f,r=x=>+x.toPrecision(6);
+   // 4.20.3: dVOC with the angle κ of each unit's coupling (the virtual impedance and its line, κ = atan(X/R)), or started
+   // from an oscillator amplitude of 0,01 pu without the soft start (a start without voltage: E = 0 is a rest point)
+   const dvs=law==='dvoc'&&['kappa','black'].includes(o.dvs)?o.dvs:'polar',kap={};
    const comps=[],wires=[];
-   const unit=(k,y0,S,Rl,Ll)=>{const Zb=Vll*Vll/S,Lf=r(0.06*Zb/w0),Cf=r(0.1/(w0*Zb)),id=q=>q+k;
+   const unit=(k,y0,S,Rl,Ll)=>{const Zb=Vll*Vll/S,Lf=r(0.06*Zb/w0),Cf=r(0.1/(w0*Zb)),id=q=>q+k;kap[k]=r(Math.atan2(xv+w0*Ll/Zb,rv+Rl/Zb)*180/Math.PI);
     comps.push(C(id('CT'),'GFMC',60,y0+60,{law,inner:cas?'cascade':'direct',S,Vac:Vll,Vdc:800,f0:f,Pref:k===1?'0:0, 1:0.2':'0',Qref:'0',Vref:'1',mp:2,nq:5,fp:5,H:1,tv:0.01,
-      kv:0,Rv:rv,Xv:xv,Xc:0.06,Bf:0.1,Tvl:0.003,Til:0.0005,kff:0.8,Imax:1.2,conn:'bus'},{label:'έλεγχος '+k}),
+      kv:0,Rv:rv,Xv:xv,Xc:0.06,Bf:0.1,Tvl:0.003,Til:0.0005,kff:0.8,Imax:1.2,...(dvs==='kappa'?{kap:kap[k]}:dvs==='black'?{E0:'0.01',tsoft:0}:{}),conn:'bus'},{label:'έλεγχος '+k}),
      C(id('VS'),'VSC2',260,y0,{dc:'ideal',Vdc:800,mmax:1,filt:'lc',Lf,Rf:r(0.005*Zb),Cf,conn:'bus'},{label:`μετατροπέας ${k} (${S/1e3} kVA)`}),
      C(id('Z'),'ZSER3',680,y0-20,{Rs:Rl,Ls:Ll,Rp1:0,Lp:0,Rp2:0,conn:'bus'},{label:'γραμμή '+k}));
     const [mL,mR]=busMeter(comps,wires,'M'+k,380,y0-20,{i:'i_a'+k,v:'v_a'+k});
@@ -2107,7 +2111,7 @@
    return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:400,method:'TR',speed:0.2,stopT:1.5},
     scope:{panes:[[['Y:CT1/PP','P₁ (pu της μονάδας 1)'],['Y:CT2/PP','P₂ (pu της μονάδας 2)']],[['Y:CT1/WW','f₁ (pu)'],['Y:CT2/WW','f₂ (pu)']],[['Y:CT1/QQ','Q₁ (pu)'],['Y:CT2/QQ','Q₂ (pu)']],[['Y:CT1/VG','|v₁| (pu)'],['Y:CT2/VG','|v₂| (pu)']],
      [['Y:M1A','i_a της μονάδας 1 (αμπερόμετρο, A)'],['Y:M2A','i_a της μονάδας 2 (A)']],[['Y:M1V','v_a της μονάδας 1 (probe, V)'],['Y:M2V','v_a της μονάδας 2 (V)']]],window:{unit:'s',n:1.5}},
-    meta:{gfm:{kind:'island',law,inner:cas?'cascade':'direct',S1,S2,mp:0.02,nq:0.05,xv,rv,tstep:0.5,tpref:1,pref1:0.2,Vll,f}}});}});
+    meta:{gfm:{kind:'island',law,inner:cas?'cascade':'direct',S1,S2,mp:0.02,nq:0.05,xv,rv,tstep:0.5,tpref:1,pref1:0.2,Vll,f,dvs,kap}}});}});
  // The synchronverter of Zhong & Weiss (2011): the inverter of their Table I (100 W, 20,78 V, L_s = L_g = 0,45 mH, C = 22 μF,
  // R ∥ C 1 kΩ), D_p for 100 % P at −0,5 % frequency, D_q for 100 % Q at −5 % voltage, τ_f = τ_v = 2 ms; the sequence of their
  // Fig. 5 every 0,3 s (breaker, P_set, Q_set, droops, grid −5 %), with the grid at 50 or 49,95 Hz
@@ -2179,13 +2183,19 @@
   vsm:'Grid-forming: VSM με H = 3,01 s (όση η G3) και D_p για 5 %',gfl:'Grid-following: στιβαρός έλεγχος ρεύματος, απόκριση στη συχνότητα 5 % (PLL 5 Hz)',gfl0:'Grid-following χωρίς απόκριση στη συχνότητα (σταθερή P)',
   dvoc:'Grid-forming: dVOC με η και α για 5 % και 5 % (4.20.2)',match:'Grid-forming: matching control, ω από την τάση DC, k_dc για 5 % (4.20.2)'};
  T.push({id:'ieee9_gfm',group:'Grid-forming (4.18.1)',title:'IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF)',theory:'formula',topology:'ieee9_gfm',
-  options:[{k:'unit',label:'Στον ζυγό 3',options:Object.entries(IEEE9_GFM_U),def:'droop'},{k:'dp',label:'Βήμα φορτίου στον ζυγό 7 στο 1 s',options:[['50','+50 MW'],['25','+25 MW'],['90','+90 MW']],def:'50'}],
+  options:[{k:'unit',label:'Στον ζυγό 3',options:Object.entries(IEEE9_GFM_U),def:'droop'},{k:'dp',label:'Βήμα φορτίου στον ζυγό 7 στο 1 s',options:[['50','+50 MW'],['25','+25 MW'],['90','+90 MW'],['150','+150 MW (μεγάλη διαταραχή, 4.20.3)']],def:'50'},
+   {k:'dc',label:'Πλευρά DC του μετατροπέα (4.20.3)',options:[['ideal','Ιδανική (το matching έχει πάντα πηγή DC ±1,2 pu)'],['source','Πηγή DC ±1,2 pu για κάθε νόμο'],['low','Πηγή DC ±0,8 pu (μικρό περιθώριο) για κάθε νόμο']],def:'ideal'},
+   {k:'lim',label:'Όριο ρεύματος μέσω της P_ref (4.20.3)',options:[['off','Όχι'],['p24','Ναι: i_th 0,9 pu, γ_p 2,3']],def:'off'}],
   desc:'Το δίκτυο των 9 ζυγών σε EMT (ροή φορτίου του pcl.network, AVR, PSS και ρυθμιστές στροφών στις G1, G2) με τη μονάδα του ζυγού 3 ως μετατροπέα 128 MVA (όση η G3, μέσο μοντέλο VSC με πηνίο 0,15 pu) που δίνει τα 85 MW και −10,9 Mvar της ροής φορτίου. Grid-forming: σχηματίζει την τάση του και αλλάζει τη συχνότητά του με την ισχύ (στατικότητα ή εικονική αδράνεια). Grid-following: ακολουθεί τη γωνία του δικτύου με PLL και δίνει ρεύμα· η απόκριση στη συχνότητα έρχεται μετά το PLL. Στο 1 s κλείνει ένα φορτίο στον ζυγό 7.',
   tasks:['Σύγκρινε στην κάρτα το βύθισμα (nadir) και το RoCoF (σε 250 ms, όπως οι Tayyebi κ.ά. 2020) της ταχύτητας της G1 για κάθε επιλογή του ζυγού 3, με το ίδιο βήμα φορτίου.','Ο grid-forming με στατικότητα δίνει ισχύ αμέσως (σε δεκάδες ms)· η G3 μέσω του ρυθμιστή ατμού (δευτερόλεπτα)· η VSM με H = 3,01 s κάνει ό,τι η αδράνεια της G3, χωρίς τον αργό στρόβιλο.','Ο grid-following χωρίς απόκριση στη συχνότητα αφαιρεί την αδράνεια και τη ρύθμιση της G3: το βύθισμα είναι το μεγαλύτερο. Με απόκριση 5 % πλησιάζει τον grid-forming, αλλά μετά την καθυστέρηση του PLL και του φίλτρου.','Η μόνιμη απόκλιση της συχνότητας (κάρτα) είναι ίδια όταν η στατικότητα είναι ίδια (5 % σε 128 MVA), αλλά οι ρυθμιστές νερού και ατμού φτάνουν εκεί σε δεκάδες δευτερόλεπτα.','dVOC και matching (4.20.2): το dVOC κάνει ό,τι η στατικότητα χωρίς το φίλτρο της· στο matching η συχνότητα είναι η τάση DC (δες τη v_dc στο scope) και η αδράνεια η ενέργεια του πυκνωτή DC (0,0476 s). Ποιο έχει μικρότερο RoCoF, και γιατί;'],
   build(o){const unit=IEEE9_GFM_U[o.unit]?o.unit:'droop',dp=+o.dp||50,S=128e6,Un=345e3,f=60,w0=2*Math.PI*f,te=1,T=12,r=x=>+x.toPrecision(6);
    const Zb=Un*Un/S,X=0.15,Lf=r(X*Zb/w0),Rf=r(0.003*Zb),Vdc=r(2*Un*Math.SQRT2/Math.sqrt(3)*1.3),V3=1.025,a3=4.664751,P3=85e6/S,Q3=-10.859709e6/S;
    // the EMF of the grid-forming converter behind X for the load flow at bus 3 (pu on S): E = V + jX·conj(S/V)
    const Ir=P3/V3,Ii=-Q3/V3,Er=V3-X*Ii,Ei=X*Ir,E=Math.hypot(Er,Ei),dl=Math.atan2(Ei,Er)*180/Math.PI,gfm=['droop','vsm','dvoc','match'].includes(unit),gfl=unit==='gfl'||unit==='gfl0',mt=unit==='match';
+   // 4.20.3: the DC side of matching for every grid-forming law (dc = 'source': the control gives the DC current reference
+   // (10), dcc), and the current limitation through the power set-point (24) with the threshold and gain of Tayyebi et al.
+   // 2020 §IV-E
+   const dcs=mt||(gfm&&(o.dc==='source'||o.dc==='low')),p24=gfm&&o.lim==='p24',dcLim=dcs&&o.dc==='low'?0.8:1.2;
    // 4.20.2: matching control has the DC side of Tayyebi et al. (2020): the DC capacitor with the energy of their Table I
    // (H_dc = C·V_dc²/(2S) = 0,0476 s) and a DC current source from the output idc of the control through a first-order lag
    // and ±1,2 pu ((2)–(3)); the lag 5 ms, not their 50 ms (THEORY §8Ψ.3)
@@ -2193,17 +2203,17 @@
    // dVOC with the virtual resistance R_v: the oscillator's voltage is E + R_v·I, and its set-points are the power at it (P and Q
    // at the internal EMF), so that the start is the load flow
    const dv=unit==='dvoc',Rv=dv?DVOC_RV:0,Eor=Er+Rv*Ir,Eoi=Ei+Rv*Ii,Eo=Math.hypot(Eor,Eoi),dlo=Math.atan2(Eoi,Eor)*180/Math.PI,Po=Eor*Ir+Eoi*Ii,Qo=Eoi*Ir-Eor*Ii;
-   const ext={T,meta:{ieee9gfm:{unit,dp,S,te,mp:0.05,H:3.01,P3,Q3,E,V3,Hdc,tdc,Rv,Po,Qo,Eo,K:{G1:2.475/0.04,G2:1.92/0.05,G3:1.28/0.05},Sb:100e6,f,Twin:0.25}},
+   const ext={T,meta:{ieee9gfm:{unit,dp,S,te,mp:0.05,H:3.01,P3,Q3,E,V3,Hdc,tdc,Rv,Po,Qo,Eo,dcs,p24,dcLim,K:{G1:2.475/0.04,G2:1.92/0.05,G3:1.28/0.05},Sb:100e6,f,Twin:0.25}},
     add(comps,wires,panes){wires.push(['B7','L76:abc1']);
      if(unit!=='sm'){const gone=new Set(['G3','AV3','PS3','GV3']),own=q=>typeof q==='string'&&gone.has(q.split(':')[0]);
       for(let k=comps.length-1;k>=0;k--)if(gone.has(comps[k].id))comps.splice(k,1);for(let k=wires.length-1;k>=0;k--)if(own(wires[k][0])||own(wires[k][1]))wires.splice(k,1);
-      comps.push(C('VS3','VSC2',1560,160,{...(mt?{dc:'pins',Vdc0:Vdc}:{dc:'ideal',Vdc}),mmax:1.155,filt:'l',Lf,Rf,init:'lf',E0:r(E*Un*Math.SQRT2/Math.sqrt(3)),th0:r(a3-90+dl),conn:'bus'},{label:'μετατροπέας 128 MVA',flip:true}));
-      if(mt){comps.push(C('CD3','C',1700,150,{C:Cdc,v0:Vdc},{label:'C_dc (H_dc 0,0476 s)'}),C('ID3','IDC',1800,150,{ctl:'sig'},{label:'πηγή DC'}),
-        C('LD3','LPF',1600,400,{fc:r(1/(2*Math.PI*tdc)),y0:String(r(P3))},{label:'τ_dc 5 ms'}),C('SD3','SAT',1680,400,{lo:-1.2,hi:1.2},{label:'±1,2 pu'}),C('KD3','GAIN',1760,400,{K:Idb},{label:'× S/V_dc'}));
+      comps.push(C('VS3','VSC2',1560,160,{...(dcs?{dc:'pins',Vdc0:Vdc}:{dc:'ideal',Vdc}),mmax:1.155,filt:'l',Lf,Rf,init:'lf',E0:r(E*Un*Math.SQRT2/Math.sqrt(3)),th0:r(a3-90+dl),conn:'bus'},{label:'μετατροπέας 128 MVA',flip:true}));
+      if(dcs){comps.push(C('CD3','C',1700,150,{C:Cdc,v0:Vdc},{label:'C_dc (H_dc 0,0476 s)'}),C('ID3','IDC',1800,150,{ctl:'sig'},{label:'πηγή DC'}),
+        C('LD3','LPF',1600,400,{fc:r(1/(2*Math.PI*tdc)),y0:String(r(P3))},{label:'τ_dc 5 ms'}),C('SD3','SAT',1680,400,{lo:-dcLim,hi:dcLim},{label:dcLim===1.2?'±1,2 pu':'±0,8 pu'}),C('KD3','GAIN',1760,400,{K:Idb},{label:'× S/V_dc'}));
        wires.push(['VS3:p','CD3:p'],['VS3:n','CD3:n'],['ID3:p','VS3:p'],['ID3:n','VS3:n'],['CT3:idc','LD3:u'],['LD3:y','SD3:u'],['SD3:y','KD3:u'],['KD3:y','ID3:u']);}
       {const [mL,mR]=busMeter(comps,wires,'M3',1300,140,{i:'i_a προς τον ζυγό 3',v:'v_a ζυγού 3',rev:true});wires.push(['B3',mL],[mR,'VS3:abc']);}
       if(gfm){comps.push(C('CT3','GFMC',1180,300,{law:unit,inner:'direct',S,Vac:Un,Vdc,f0:f,Pref:String(r(dv?Po:P3)),Qref:String(r(dv?Qo:Q3)),Vref:String(r(mt?V3:dv?Eo:E)),mp:5,nq:5,fp:5,H:3.01,tv:0.02,kv:0,Rv,Xv:0,Xc:X,Imax:1.2,
-        ac:600,vmax:1.3,bw:20,th0:r(a3-90+(dv?dlo:dl)),tsoft:0,fi:'ref',...(mt?{kpm:0.001,kim:0.5,mu0:String(r(E))}:{}),conn:'bus'},{label:{vsm:'VSM',dvoc:'dVOC',match:'matching control'}[unit]||'grid-forming (στατικότητα)'}));wires.push(...gfmWire('CT3','VS3',1560,160,1180,300,420));}
+        ac:600,vmax:1.3,bw:20,th0:r(a3-90+(dv?dlo:dl)),tsoft:0,fi:'ref',...(mt?{kpm:0.001,kim:0.5,mu0:String(r(E))}:dcs?{dcc:'on'}:{}),...(p24?{plim:'on',ith:0.9,gp:2.3}:{}),conn:'bus'},{label:{vsm:'VSM',dvoc:'dVOC',match:'matching control'}[unit]||'grid-forming (στατικότητα)'}));wires.push(...gfmWire('CT3','VS3',1560,160,1180,300,420));}
       else{comps.push(C('CT3','MMCC',1180,300,{mode:'p',cc:'robust',acc:4,Tii:0.05,S,Vac:Un,Vdc,f0:f,Pref:String(r(-P3)),Vacref:String(V3),frq:unit==='gfl'?'droop':'off',mf:5,Tf:0.05,X,R:0.003,Ilim:1.2,vmax:1.3,bw:5,th0:r(a3-90),prot:'off',tdb:0,tbrk:0},
          {label:unit==='gfl'?'grid-following με απόκριση στη συχνότητα':'grid-following, σταθερή P'}),
         C('SI3','BSEL',1260,420,{idx:'1, 2, 3'},{label:'i_abc'}),C('NI3','GAIN',1220,460,{K:-1},{label:'−1'}),C('DI3','DEMUX',1140,460,{n:3}),C('SV3','BSEL',1260,500,{idx:'4, 5, 6'},{label:'v_abc'}),C('DV3','DEMUX',1140,520,{n:3}),
@@ -2217,7 +2227,7 @@
      const p3=unit==='sm'?[['Y:G3:pe','P₃ (pu των 100 MVA)']]:gfm?[['Y:CT3/PP','P του μετατροπέα (pu των 128 MVA)']]:[['Y:CT3/PP','P προς τον μετατροπέα (pu των 128 MVA)']];
      panes.length=0;panes.push([['Y:G1','ω₁ (G1)'],['Y:G2','ω₂ (G2)'],...w3],[['Y:G1:pe','P₁ (pu των 100 MVA)'],['Y:G2:pe','P₂'],...p3],[['Y:G1:vt','|V₁|'],['Y:G2:vt','|V₂|'],...(unit==='sm'?[['Y:G3:vt','|V₃|']]:[['Y:CT3/VG','|V₃| (μετατροπέας)']])]);
      if(unit!=='sm')panes.push([['Y:M3A','i_a του μετατροπέα προς τον ζυγό 3 (αμπερόμετρο, A)']],[['Y:M3V','v_a του ζυγού 3 (probe, V)']]);
-     if(mt)panes.push([['Y:VS3/VD','v_dc του μετατροπέα (V)']]);}};
+     if(dcs)panes.push([['Y:VS3/VD','v_dc του μετατροπέα (V)']]);}};
    const pr=ieee9Build({ev:'none',ctl:'full'},ext);pr.sim={...pr.sim,hDiv:200,speed:0.5,stopT:T};pr.scope={...pr.scope,window:{unit:'s',n:T}};return pr;}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
