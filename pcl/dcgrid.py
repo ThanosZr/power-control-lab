@@ -484,3 +484,32 @@ def cigre_b4(hold=None, out=()):
             g.converter(a, 'P', P=-P * 1e6, name=name + '/' + a)
             g.converter(b, 'P', P=P * 1e6, name=name + '/' + b)
     return g
+
+
+def b4_network():
+    """The CIGRE B4 of cigre_b4() as a pcl.network.Network (the case 'b4' of pcl/data, for the study 'acdc' and the diagram): every
+    converter on an AC bus of its own with a feeder of 10 GVA as its slack (the book gives only the lengths and flows of the AC
+    systems), the stations without losses (side 'dc'), P_rated = the rating of Table 27.11; each DC/DC converter as two
+    converters 'P' on AC buses of their own (−P and +P)."""
+    from . import network as N
+    net = N.Network(f=50.0, S_base=100e6, name='CIGRE B4 DC grid test system (Jovcic 2019, §27.8, Fig. 27.6, Tables 7.3 and 27.11)')
+    held = {'Cm-A1', 'Cm-B3', 'Cb-A1'}
+    for b, grid in B4_BUSES.items():
+        net.dc_bus(b, B4_UN[grid])
+    for a, b, km, kind, n in B4_LINES:
+        for k in range(n):
+            net.dc_line(a, b, R=b4_line_data(a, km, kind)[0], poles=2, name=f'{a}–{b}' + (f'#{k + 1}' if n > 1 else ''))
+
+    def ac(name):
+        bus = 'AC ' + name
+        net.bus(bus, 400e3)
+        net.feeder(bus, Sk=10e9, RX=0.1, name='Q ' + name)
+        return bus
+    for name, bus, S, P in B4_STATIONS:
+        P = (-900 if name == 'Cm-B3' else 0) if P is None else P          # the reference of a station that holds the voltage
+        net.vsc(ac(name), bus, control='V' if name in held else 'P', P=P * 1e6, V=1.0, Prated=S * 1e6, name=name)
+    for name, a, b, S, P in B4_DCDC:
+        net.vsc(ac(name + '/' + a), a, control='P', P=-P * 1e6, Prated=S * 1e6, name=name + '/' + a)
+        net.vsc(ac(name + '/' + b), b, control='P', P=P * 1e6, Prated=S * 1e6, name=name + '/' + b)
+    return net
+

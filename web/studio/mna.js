@@ -191,6 +191,8 @@
   for(let i=n-1;i>=0;i--){let sr=br[i],si=bi[i];for(let j=i+1;j<n;j++){const ar=Ar[i*n+j],ai=Ai[i*n+j];sr-=ar*xr[j]-ai*xi[j];si-=ar*xi[j]+ai*xr[j];}
    const dr=Ar[i*n+i],di=Ai[i*n+i],dd=dr*dr+di*di;xr[i]=(sr*dr+si*di)/dd;xi[i]=(si*dr-sr*di)/dd;}
   return [xr,xi];}
+ // 4.20.1: the order of the blocks by id, as String.prototype.localeCompare(b, undefined, {numeric: true}) (ECMA-402: the same collator)
+ const ID_ORDER=new Intl.Collator(undefined,{numeric:true});
  // 4.20.1: the group of the sources of one converter in the flat circuit: the instance prefix of the part (X1/…/) and its name
  const grpKey=(id,g)=>String(id).slice(0,String(id).lastIndexOf('/')+1)+String(g);
  // 4.3 (§31.7): steady start from a load flow. When a generator starts from the voltage at its terminals (init 'lf') or the
@@ -1107,8 +1109,14 @@
   // its valve currents, but its firing order only at the gates, after the pass): it follows the blocks that drive those inputs
   const deps=blocks.map(b=>b.ft||b.ftIns?[...new Set(Object.entries(b.ins).filter(([k,n])=>k!=='tr'&&n>=0&&drv.has(n)&&(b.ft||b.ftIns.includes(k))).map(([,n])=>drv.get(n)))]:[]);
   const indeg=blocks.map((b,i)=>deps[i].length),users=blocks.map(()=>[]);deps.forEach((d,i)=>d.forEach(p=>users[p.i].push(blocks[i])));
-  const ready=blocks.filter((b,i)=>!indeg[i]),order=[];
-  while(ready.length){ready.sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));const b=ready.shift();order.push(b);for(const u of users[b.i])if(--indeg[u.i]===0)ready.push(u);}
+  // the ready blocks by their id (numeric collation), the first ready first among equal ids: 4.20.1, a binary heap with the same
+  // comparison instead of sorting the whole list again at every block (the order is the same; 96 ms of 400 in b4dcs2)
+  const cmp=ID_ORDER.compare,heap=[],seq=new Map(),order=[];let nseq=0;
+  const less=(a,b)=>{const c=cmp(a.id,b.id);return c<0||(c===0&&seq.get(a)<seq.get(b));};
+  const push=b=>{seq.set(b,nseq++);heap.push(b);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(!less(heap[i],heap[p]))break;const t=heap[i];heap[i]=heap[p];heap[p]=t;i=p;}};
+  const pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let i=0;for(;;){const l=2*i+1,r=l+1;let m=i;if(l<heap.length&&less(heap[l],heap[m]))m=l;if(r<heap.length&&less(heap[r],heap[m]))m=r;if(m===i)break;const t=heap[i];heap[i]=heap[m];heap[m]=t;i=m;}}return top;};
+  blocks.forEach((b,i)=>{if(!indeg[i])push(b);});
+  while(heap.length){const b=pop();order.push(b);for(const u of users[b.i])if(--indeg[u.i]===0)push(u);}
   if(order.length<blocks.length){const left=new Set(blocks.filter(b=>!order.includes(b)));
    // walk back along dependencies inside the remaining set until a block repeats
    let b=[...left][0];const path=[];while(!path.includes(b)){path.push(b);b=deps[b.i].find(p=>left.has(p));}

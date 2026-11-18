@@ -1497,7 +1497,7 @@ def ieee(case):
 
 
 CASES = ('ieee9', 'ieee14', 'ieee30', 'ieee57', 'ieee118', 'ieee300', 'case30', 'case33bw', 'case69', 'pegase1354')
-MORE = ('harmonic14', 'mtdc5')      # 4.19.5: networks made for one study (they are not in the lists of the other studies); 4.20: mtdc5 (AC/DC)
+MORE = ('harmonic14', 'mtdc5', 'b4')   # 4.19.5: networks made for one study (they are not in the lists of the other studies); 4.20: mtdc5 (AC/DC); 4.20.1: b4 (pcl.dcgrid.b4_network)
 
 
 def case_data(name):

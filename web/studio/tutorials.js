@@ -1889,6 +1889,94 @@
    return project(comps,wires,{sim:{hDiv:10,speed:300,stopT:ms},scope:{panes:[[...[1,2,3,4,5].map(k=>['Y:VM'+k,'U'+k])],[...[1,2,3,4,5].map(k=>['Y:PW'+k,'P'+k+' (MW)'])]],window:{unit:'T',n:Math.round(ms/1e-3)}},
     meta:{rho,step:o.step,study:{net:'mtdc5',study:'acdc',options:o.step==='trip5'?{out:['C5'],...(rho!==0.04?{set:Object.fromEntries(['C1','C2','C4'].map(c=>[c,{droop:rho}]))}:{})}:
      {set:{...(P3!==-750e6?{C3:P3}:{}),...(rho!==0.04?Object.fromEntries(['C1','C2','C4','C5'].map(c=>[c,{droop:rho}])):{})}}}}});}});
+ // ------------------------------------------------------------------ 4.20.1 (ROADMAP §83, decision 320): DCS2 of the CIGRE B4 in EMT
+ // The five-terminal ±200 kV grid DCS2 of the CIGRE B4 as the book of Jovcic gives it (2019, §27.8, Fig. 27.6, Tables 7.3 and
+ // 27.11; pcl.dcgrid.cigre_b4): B2–B3 cable 200 km, B5–B3 overhead line 100 km, F1–B5 cable 100 km, E1–F1 cable 200 km, one
+ // line per pole pair as in mtdc5 (R = 2·r·l and L = 2·L′·l in series, the capacitance between the poles c·l/2 split at the
+ // two ends; the conductance G of the cables left out). Four MMC stations (Model 4) with their AC side through a YNd1
+ // transformer (u_k 18 %): Cm-B3 (1200 MVA) holds V_dc, or droops; Cm-B2 (800 MVA) gives 150 MW, or droops; Cm-E1 (200 MVA)
+ // forms the voltage and frequency of the offshore load of 100 MW; Cm-F1 (800 MVA) forms those of an offshore wind farm of
+ // 500 MW (a two-level converter with current control, an average model). The DC/DC converter Cd-E1 as its DC side: a current
+ // source P/u at E1 through a lag of 5 ms. The station data (the voltages on the AC side, the arm, the cells, the gains) are
+ // the per-unit values of hvdc_mmc, values of an example: the book gives only the ratings. The DC buses and lines start on
+ // the load flow of pcl.dcgrid.cigre_b4() (B4_DCS2 below, checked in tests/test_b4.py); the card runs the AC/DC load flow
+ // of the case b4 in the engine after the same event, for comparison.
+ const B4_DCS2={U:{B2:401419.9592890437,B3:400000,B5:404559.8670495563,F1:407816.9149420965,E1:409672.05733317713},
+  lines:[['B2','B3',200,'cable',373.6734971167569],['B5','B3',100,'ohl',1714.2357329158963],['F1','B5',100,'cable',1714.2357329158963],['E1','F1',200,'cable',488.1953660738471]],
+  data:{cable:[0.0095,2.111e-3,0.2104e-6],ohl:[0.0133,0.8273e-3,0.0139e-6]}};
+ // the AC/DC load flow of the case b4 (pcl.network.case_data('b4')) after the same event, with the same laws of the onshore stations
+ function b4Study(ev,dr,kd){const set={};
+  if(ev==='cd55'){set['Cd-E1/Bb-E1']=-55e6;set['Cd-E1/Bm-E1']=55e6;}else if(ev==='wind')set['Cm-F1']=250e6;else if(ev==='load')set['Cm-E1']=-150e6;
+  if(dr){set['Cm-B3']={control:'droop',droop:kd,P:-900e6,V:1};set['Cm-B2']={control:'droop',droop:kd,P:150e6,V:1};}
+  return Object.keys(set).length?{set}:{};}
+ const B4_EV={cd55:'Ο Cd-E1 ρίχνει την ισχύ του 300 → 55 MW στο 1 s (όπως στο Σχ. 27.7)',wind:'Το αιολικό του F1 πέφτει 500 → 250 MW στο 1 s',load:'Το υπεράκτιο φορτίο του E1 ανεβαίνει 100 → 150 MW στο 1 s',none:'Κανένα'};
+ T.push({id:'b4dcs2',group:'Δίκτυα DC πολλών τερματικών (4.20)',title:'Το DCS2 του B4 της CIGRE: πέντε τερματικά ±200 kV με σταθμούς MMC (EMT και ροή φορτίου)',theory:'formula',topology:'b4dcs2',
+  options:[{k:'ev',label:'Συμβάν',options:Object.entries(B4_EV),def:'cd55'},
+   {k:'ctl',label:'Οι σταθμοί της ξηράς',options:[['vdc','Cm-B3 κρατά τη V_dc, Cm-B2 δίνει 150 MW (όπως το cigre_b4)'],['droop','Και οι δύο με στατικότητα k_d = 0,05 γύρω από τις αναφορές τους']],def:'vdc'}],
+  desc:'Το DCS2 του δικτύου δοκιμής B4 της CIGRE όπως το δίνει το βιβλίο του Jovcic (§27.8): πέντε ζυγοί ±200 kV, τρία καλώδια και μία εναέρια γραμμή με τα δεδομένα του Πίν. 7.3, τέσσερις σταθμοί MMC (Model 4) με την πλευρά AC τους και ο μετατροπέας DC/DC Cd-E1 που φέρνει 300 MW από το DCS3. Οι σταθμοί της ξηράς Cm-B3 και Cm-B2 κρατούν την τάση DC και τα 150 MW του Πίν. 27.11, ή μοιράζονται κάθε αλλαγή με στατικότητα. Οι υπεράκτιοι Cm-E1 και Cm-F1 σχηματίζουν την τάση και τη συχνότητα των δικτύων τους (V/f): ένα φορτίο 100 MW και ένα αιολικό 500 MW. Οι γραμμές ξεκινούν στη ροή φορτίου του δικτύου DC· οι σταθμοί ξεκλειδώνουν στα 20 ms, το αιολικό και ο Cd-E1 ανεβαίνουν από τα 0,1 s. Η κάρτα τρέχει τη ροή φορτίου AC/DC του B4 μετά το ίδιο συμβάν και δείχνει δίπλα τις τιμές του EMT.',
+  tasks:['Στα 0,95 s (πριν από το συμβάν): οι τάσεις DC είναι της ροής φορτίου της κάρτας στο 0,1 % περίπου. Η διαφορά είναι οι απώλειες των σταθμών, που η ροή φορτίου του B4 δεν έχει.','«Ο Cd-E1 ρίχνει την ισχύ του»: τα 245 MW που λείπουν τα παίρνει ο Cm-B3, που κρατά την τάση. Με στατικότητα τα παίρνουν οι δύο σταθμοί της ξηράς, αλλά όχι 2:3 όπως οι ονομαστικές τους ισχείς: η τάση του B3 πέφτει περισσότερο από του B2, και ο Cm-B2 παίρνει περίπου 77 MW, ο Cm-B3 160 MW, όσο και στη ροή φορτίου. Σύγκρινε με το Σχ. 27.7, όπου τα μοιράζει και ο κεντρικός ελεγκτής.','Οι υπεράκτιοι σταθμοί δεν βλέπουν το συμβάν: κρατούν την τάση και τη συχνότητα των δικτύων τους, και η ισχύς τους είναι όση ζητούν το φορτίο και το αιολικό.','Η κάρτα: «▶ Τρέξε τη μελέτη» για τη ροή φορτίου AC/DC όλου του B4 μετά το συμβάν. Από κώδικα: pcl.network.case_data(\'b4\').acdc_flow() ή pcl.dcgrid.cigre_b4().flow().'],
+  build(o){const ev=B4_EV[o.ev]?o.ev:'cd55',dr=o.ctl==='droop',f=50,Vdc=400e3,Vac=208e3,N=400,te=1,kd=0.05,ms=2,D=B4_DCS2,r=x=>+x.toPrecision(10);
+   const comps=[],wires=[],X={B2:520,B3:1120,B5:1460,F1:2240,E1:2840},Y0=200,Cend={B2:0,B3:0,B5:0,F1:0,E1:0};
+   for(const [a,b,l,k] of D.lines){const c=D.data[k][2]*l/4;Cend[a]+=c;Cend[b]+=c;}
+   // a DC bus: its node, the capacitance of its lines to ground and a voltmeter
+   const dcbus=k=>{const x=X[k],id=s=>s+k;
+    comps.push(J(id('N'),x,Y0),C(id('CB'),'C',x-60,Y0+70,{C:r(Cend[k]),v0:r(D.U[k])},{label:'',lbl:'none'}),J(id('Q'),x-60,Y0+140),C(id('GB'),'GND',x-60,Y0+170,{},{label:'',lbl:'none'}),
+     C(id('VM'),'VM',x+60,Y0+70,{},{label:'U '+k,lbl:'right'}),J(id('W'),x+60,Y0+140),C(id('GW'),'GND',x+60,Y0+170,{},{label:'',lbl:'none'}));
+    wires.push([id('N'),id('CB')+':p',[[x-60,Y0]]],[id('CB')+':n',id('Q')],[id('Q'),id('GB')+':g'],[id('N'),id('VM')+':p',[[x+60,Y0]]],[id('VM')+':n',id('W')],[id('W'),id('GW')+':g']);};
+   // a station: the MMC (Model 4) below and left of its bus (AC on the left, DC on the right), its transformer left of it,
+   // its control below it; returns the AC pin of the transformer and where it is
+   const mmcp=S=>({impl:'fast',model:'m4',N,C:r(2*30e3*S/1e6/(6*N*(Vdc/N)**2)),Vdc,Larm:r(0.15*Vac*Vac/S/(2*Math.PI*f)),Ron:1e-3,ectl:'energy',conn:'bus'});
+   const station=(k,S,U1,ctl,label)=>{const x=X[k],id=s=>s+k,xm=x-140,ym=Y0+320;dcbus(k);
+    comps.push(C(id('MMC'),'MMC',xm,ym,{...mmcp(S),vc0:r(D.U[k]/Vdc)},{label,lbl:'above'}),C(id('GN'),'GND',xm+80,ym+30,{},{label:'',lbl:'none'}),
+     C(id('TR'),'XF3',xm-170,ym-30,{grp:'YNd1',Sn:S,U1,U2:Vac,f,uk:18,i0:0,conn:'bus'},{label:'',lbl:'none'}),
+     C(id('CT'),'MMCC',xm,ym+230,{S,Vac,Vdc,f0:f,X:0.075,R:0.002,th0:-120,tdb:0.02,tbrk:0,prot:'off',...ctl},{label:'',lbl:'none'}),
+     C(id('PW'),'EXPR',x+170,Y0+130,{expr:'u*i/1e6',ins:'u, i',pars:''},{label:'P '+k+' (MW)',lbl:'above'}));
+    wires.push([id('N'),id('MMC')+':p',[[x,ym-40]]],[id('MMC')+':n',id('GN')+':g',[[xm+80,ym-20]]],[id('TR')+':abc2',id('MMC')+':abc']);
+    // the signals in channels 8 apart (no routing at load): the measurements down the right of the MMC, across between the
+    // two, up the left into the control; the modulation from the right of the control around both into the left of the MMC
+    const yo={va:0,vb:10,vc:20,ia:30,ib:40,ic:50,vdc:60,idc:70,vs:80},yi={va:-40,vb:-30,vc:-20,ia:0,ib:10,ic:20,vdc:40,idc:50,vs:60},yc=ym+230;
+    Object.keys(yo).forEach((s,j)=>{const xr=xm+62+8*j,xl=xm-62-8*(8-j),h=ym+128+6*j;wires.push([id('MMC')+':'+s,id('CT')+':'+s,[[xr,ym+yo[s]],[xr,h],[xl,h],[xl,yc+yi[s]]]]);});
+    [['ma',-40,0],['mb',-30,10],['mc',-20,20],['blk',10,40]].forEach(([s,a,b],j)=>{const xr=xm+150+8*j,xl=xm-150-8*j,h=ym+100+6*j;
+     wires.push([id('CT')+':'+s,id('MMC')+':'+s,[[xr,yc+a],[xr,yc+90+8*j],[xl,yc+90+8*j],[xl,ym+b]]]);});
+    wires.push([id('VM')+':y',id('PW')+':u'],[id('MMC')+':idc',id('PW')+':i']);
+    return [id('TR')+':abc1',xm-170,ym-30];};
+   dcbus('B5');
+   // the onshore stations: a network of 400 kV, S″k 10 GVA
+   const sB3=dr?{mode:'droop',Pref:'-0.75',Vdcref:'1',kdr:kd,Tp:0.1,qmode:'q',Qref:'0',Tq:0.1}:{mode:'vdc',Vdcref:'1',Tvdc:0.1,H:0.03,qmode:'q',Qref:'0',Tq:0.1};
+   const sB2=dr?{mode:'droop',Pref:'0.1875',Vdcref:'1',kdr:kd,Tp:0.1,qmode:'q',Qref:'0',Tq:0.1}:{mode:'p',Pref:'0.1875',Tp:0.1,qmode:'q',Qref:'0',Tq:0.1};
+   for(const [k,S,ctl] of [['B3',1200e6,sB3],['B2',800e6,sB2]]){const [pin,x,y]=station(k,S,400e3,ctl,'Cm-'+k);
+    comps.push(C('NET'+k,'GRID3',x-150,y,{Un:400e3,f,Sk:10e9,XR:10,cf:1,emf:'un',conn:'bus'},{label:'δίκτυο '+k,lbl:'below'}));wires.push(['NET'+k+':abc',pin]);}
+   // the offshore stations form their AC voltage (V/f) on 145 kV: E1 a load, F1 a wind farm
+   {const [pin,x,y]=station('E1',200e6,145e3,{mode:'vf',Vfref:'1',Tvf:0.05,Xpcc:0.18},'Cm-E1');
+    comps.push(J('JE1',x-90,y),C('LDE1','LOAD3',x-90,y+80,{cn:'yn',Un:145e3,f,P:100e6,Q:0,model:'z',conn:'bus'},{label:'φορτίο 100 MW',lbl:'below'}));wires.push(['JE1',pin],['JE1','LDE1:abc']);
+    if(ev==='load'){comps.push(C('CBL','CB3',x-200,y,{cmd:`0:0, ${te}:1`,model:'ideal',conn:'bus'},{label:'',lbl:'none'}),C('LDL','LOAD3',x-280,y+80,{cn:'yn',Un:145e3,f,P:50e6,Q:0,model:'z',conn:'bus'},{label:'+50 MW',lbl:'below'}));
+     wires.push(['JE1','CBL:abc2'],['CBL:abc1','LDL:abc',[[x-280,y]]]);}}
+   {const [pin,x,y]=station('F1',800e6,145e3,{mode:'vf',Vfref:'1',Tvf:0.05,Xpcc:0.18},'Cm-F1'),Sw=600e6,Zb=145e3*145e3/Sw,Pw=ev==='wind'?`0:0, 0.1:-0.8333333333, ${te}:-0.4166666667`:'0:0, 0.1:-0.8333333333',xv=x-230;
+    comps.push(C('WBS','EBUS',x-90,y,{n:3},{label:'',lbl:'none',flip:true}),
+     C('WF','VSC2',xv,y+20,{dc:'ideal',Vdc:300e3,mmax:1.155,filt:'l',Lf:r(0.15*Zb/(2*Math.PI*f)),Rf:r(0.003*Zb),conn:'sep'},{label:'αιολικό 500 MW',lbl:'above'}),
+     C('WCT','MMCC',xv-200,y+60,{mode:'p',Pref:Pw,Tp:0.1,qmode:'q',Qref:'0',Tq:0.1,S:Sw,Vac:145e3,Vdc:300e3,f0:f,X:0.15,R:0.003,th0:-120,tdb:0.02,tbrk:0,prot:'off',bw:20},{label:'',lbl:'none'}),
+     C('WK0','CONST',xv-330,y+170,{v:'0'},{label:'',lbl:'none'}));
+    wires.push(['WBS:bus',pin],['WBS:a','WF:a'],['WBS:b','WF:b'],['WBS:c','WF:c'],['WF:vdc','WCT:vdc'],['WK0:y','WCT:idc'],['WK0:y','WCT:vs']);
+    ['a','b','c'].forEach((q,j)=>{comps.push(C('WN'+q,'GAIN',xv+110,y+150+30*j,{K:-1},{label:'',lbl:'none'}));
+     wires.push(['WF:i'+q,'WN'+q+':u'],['WN'+q+':y','WCT:i'+q],['WF:v'+q,'WCT:v'+q],['WCT:m'+q,'WF:m'+q]);});}
+   // the DC/DC converter Cd-E1 as its DC side at E1: 300 MW from 0.1 s to 0.3 s, then the event
+   {const x=X.E1+180,Pc=ev==='cd55'?`min(1, max(0, (t - 0.1)/0.2))*(t < ${te} ? 300e6 : 55e6)`:'min(1, max(0, (t - 0.1)/0.2))*300e6';
+    comps.push(C('ICD','IDC',x,Y0+70,{ctl:'sig'},{label:'Cd-E1',lbl:'right'}),C('GCD','GND',x,Y0+140,{},{label:'',lbl:'none'}),
+     C('KCD','EXPR',x+120,Y0+250,{expr:`(${Pc})/max(u, 1e5)`,ins:'u',pars:''},{label:'',lbl:'none'}),C('FCD','LPF',x+120,Y0+320,{fc:r(1/(2*Math.PI*5e-3)),y0:'0'},{label:'',lbl:'none'}),
+     C('PWCD','EXPR',x+170,Y0+130,{expr:'u*i/1e6',ins:'u, i',pars:''},{label:'P Cd-E1 (MW)',lbl:'above'}));
+    wires.push(['NE1','ICD:p',[[x,Y0]]],['ICD:n','GCD:g'],['VME1:y','KCD:u'],['KCD:y','FCD:u'],['FCD:y','ICD:u'],['VME1:y','PWCD:u'],['FCD:y','PWCD:i']);}
+   // the lines above the buses
+   for(const [a,b,l,k,i0] of D.lines){const [p,q]=X[a]<X[b]?[a,b]:[b,a],h=Y0-60,xm=(X[p]+X[q])/2,[rr,lp]=D.data[k];
+    comps.push(C('L'+a+b,'L',xm,h,{L:r(2*lp*l),Rs:r(2*rr*l),i0:r(X[a]<X[b]?i0:-i0)},{label:`${a}–${b} · ${l} km ${k==='ohl'?'εναέρια':'καλώδιο'}`,lbl:'above'}));
+    wires.push(['N'+p,'L'+a+b+':a',[[X[p],h]]],['L'+a+b+':b','N'+q,[[X[q],h]]]);}
+   // the other wires that are not straight: a Z in the direction their first pin leaves (no routing at load)
+   {const Pp=root.Parts,byId=new Map(comps.map(c=>[c.id,c])),at=q=>{const [c,pn]=q.includes(':')?q.split(':'):[q,'j'];return [byId.get(c),pn];},sn=v=>Math.round(v/10)*10;
+    for(const w of wires){if(w[2]&&w[2].length)continue;const [ca,pa]=at(w[0]),[cb,pb]=at(w[1]),a=Pp.pinPos(ca,pa),b=Pp.pinPos(cb,pb);if(a[0]===b[0]||a[1]===b[1])continue;
+     const d=Pp.pinDir(ca,pa);w[2]=d[0]?[[sn((a[0]+b[0])/2),a[1]],[sn((a[0]+b[0])/2),b[1]]]:[[a[0],sn((a[1]+b[1])/2)],[b[0],sn((a[1]+b[1])/2)]];}}
+   const K=['B2','B3','B5','F1','E1'];
+   return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:1000,method:'TR',speed:0.02,stopT:ms},
+    scope:{panes:[K.filter(k=>k!=='B5').map(k=>['Y:PW'+k,'P '+k+' (MW)']).concat([['Y:PWCD','P Cd-E1 (MW)']]),K.map(k=>['Y:VM'+k,'U '+k])],window:{unit:'s',n:ms}},
+    meta:{b4:{ev,ctl:dr?'droop':'vdc',kd,te},study:{net:'b4',study:'acdc',options:b4Study(ev,dr,kd)}}});}});
  T.push({id:'hvdc_gfm',group:'Grid-forming (4.18.1)',title:'Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα',theory:'formula',topology:'hvdc_gfm',
   options:[{k:'ac',label:'Δίκτυο του σταθμού 2',options:Object.entries(HVDC_G),def:'island'},{k:'law',label:'Νόμος του σταθμού 2',options:[['droop','Στατικότητα P–f 2 %, Q–V 5 % (φίλτρο 5 Hz)'],['vsm','VSM (H = 2 s)'],['psc','PSC (k_p = 50 rad/s, ρύθμιση V_ac)']],def:'droop'}],
   desc:'Η σύνδεση HVDC του tutorial MMC (σταθμοί 1059 MVA, Model 4, καλώδια ±320 kV 70 km wideband). Ο σταθμός 1 κρατά την τάση DC από ένα ισχυρό δίκτυο. Ο σταθμός 2 είναι grid-forming: σχηματίζει την τάση AC του δικτύου του με τον νόμο του στοιχείου «Έλεγχος grid-forming» (στατικότητα, VSM ή PSC) μέσα στον έλεγχο του σταθμού, άμεσα η τάση με όριο ρεύματος στο 1,1 pu. Στη νησίδα δεν υπάρχει άλλη πηγή: ο σταθμός ορίζει και τη συχνότητα.',

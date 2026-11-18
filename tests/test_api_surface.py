@@ -93,10 +93,13 @@ class ApiSurface(unittest.TestCase):
 
     def test_the_surface_of_4_20_1(self):
         """4.20.1: the B4 data and its builder are experimental (in pcl.dcgrid); VSC2 has the DC voltage of its start (Vdc0)."""
-        for f in ('cigre_b4', 'b4_line_data'):
+        from pcl import network
+        for f in ('cigre_b4', 'b4_line_data', 'b4_network'):
             self.assertIn('pcl.dcgrid.' + f, self.now['pcl'])
             self.assertTrue(api_surface.experimental('pcl', 'pcl.dcgrid.' + f))
         self.assertIn('Vdc0', self.now['project']['part:VSC2']['params'])
+        # one more case among the ones that are not in CASES (it is the B4 of the book, not an IEEE network)
+        self.assertEqual((network.MORE, len(network.CASES)), (('harmonic14', 'mtdc5', 'b4'), 10))
 
     def test_the_surface_of_4_20(self):
         """4.20: the DC grids: the module pcl.dcgrid is experimental; the DC buses, lines and converters of a Network, its AC/DC
@@ -144,7 +147,7 @@ class ApiSurface(unittest.TestCase):
         self.assertEqual(self.now['pcl']['pcl.network.Network.shunt']['params'][-3:], ['R', 'X', 'B'])
         self.assertEqual((study.STUDIES[-2], netview.DEFAULT['harmonic']), ('harmonic', 'thd'))
         from pcl import network
-        self.assertEqual((network.MORE, len(network.CASES)), (('harmonic14', 'mtdc5'), 10))
+        self.assertEqual((network.MORE[:2], len(network.CASES)), (('harmonic14', 'mtdc5'), 10))
         # the three-phase load flow of a feeder: the module is experimental, the study is a stable addition with its own list (its
         # network is a feeder and not a Network); every option of the routine is an option of the study
         from pcl import unbalanced

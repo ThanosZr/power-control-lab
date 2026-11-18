@@ -9,7 +9,7 @@
 |---|---:|
 | `web/studio/addon_client.js` | 30 |
 | `web/studio/addons.js` | 116 |
-| `web/studio/app.js` | 3165 |
+| `web/studio/app.js` | 3172 |
 | `web/studio/bus.js` | 197 |
 | `web/studio/ctlwin.js` | 78 |
 | `web/studio/editor.js` | 697 |
@@ -24,7 +24,7 @@
 | `web/studio/live_worker.js` | 88 |
 | `web/studio/math.js` | 144 |
 | `web/studio/metrics.js` | 89 |
-| `web/studio/mna.js` | 2447 |
+| `web/studio/mna.js` | 2455 |
 | `web/studio/netlib.js` | 1367 |
 | `web/studio/netview.js` | 138 |
 | `web/studio/nn.js` | 57 |
@@ -43,7 +43,7 @@
 | `web/studio/templates.js` | 32 |
 | `web/studio/trv.js` | 56 |
 | `web/studio/tune.js` | 237 |
-| `web/studio/tutorials.js` | 2128 |
+| `web/studio/tutorials.js` | 2216 |
 | `web/studio/units.js` | 164 |
 | `web/studio/watch.js` | 339 |
 | `web/studio/winframe.js` | 63 |
@@ -75,7 +75,7 @@
 | `pcl/control.py` | 953 |
 | `pcl/core.py` | 1353 |
 | `pcl/cpf.py` | 561 |
-| `pcl/dcgrid.py` | 486 |
+| `pcl/dcgrid.py` | 515 |
 | `pcl/designer.py` | 791 |
 | `pcl/formats.py` | 222 |
 | `pcl/gui.py` | 409 |
@@ -97,7 +97,7 @@
 | `pcl/report.py` | 963 |
 | `pcl/scopf.py` | 213 |
 | `pcl/se.py` | 563 |
-| `pcl/study.py` | 442 |
+| `pcl/study.py` | 447 |
 | `pcl/trv.py` | 433 |
 | `pcl/unbalanced.py` | 525 |
 | `pcl/wideband.py` | 1279 |
@@ -107,7 +107,7 @@
 | `tests/test_api.py` | 73 |
 | `tests/test_api_surface.py` | 235 |
 | `tests/test_arc.py` | 189 |
-| `tests/test_b4.py` | 192 |
+| `tests/test_b4.py` | 298 |
 | `tests/test_backend.py` | 238 |
 | `tests/test_batch.py` | 255 |
 | `tests/test_bidir_engine.py` | 103 |
@@ -183,6 +183,7 @@
 | `tests/test_wb.py` | 489 |
 | `tests/test_workbench.py` | 215 |
 | `tests/js/arc_cases.js` | 43 |
+| `tests/js/b4_cases.js` | 20 |
 | `tests/js/batch_requests.js` | 116 |
 | `tests/js/big_cases.js` | 53 |
 | `tests/js/bus_cases.js` | 127 |
@@ -447,13 +448,14 @@
 | 1774 | `ccsc_1ph` | FACTS: CCSC και IEEE 9 με m-SSSC (4.17) | CCSC: πυκνωτής σειράς ελεγχόμενος από μετατροπέα (μονοφασικό) |
 | 1802 | `hvdc_mmc` | HVDC: MMC (4.14) | Σύνδεση HVDC με MMC σημείο προς σημείο (±320 kV, 1000 MW) |
 | 1858 | `mtdc5` | Δίκτυα DC πολλών τερματικών (4.20) | Δίκτυο DC πέντε τερματικών με στατικότητα τάσης (EMT και ροή φορτίου AC/DC) |
-| 1892 | `hvdc_gfm` | Grid-forming (4.18.1) | Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα |
-| 1940 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
-| 1994 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
-| 2021 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
-| 2049 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
-| 2086 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
-| 2116 | `empty` | Νέο | Κενό κύκλωμα |
+| 1913 | `b4dcs2` | Δίκτυα DC πολλών τερματικών (4.20) | Το DCS2 του B4 της CIGRE: πέντε τερματικά ±200 kV με σταθμούς MMC (EMT και ροή φορτίου) |
+| 1980 | `hvdc_gfm` | Grid-forming (4.18.1) | Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα |
+| 2028 | `hvdc_lcc` | HVDC: LCC (4.16) | Το πρώτο benchmark HVDC της CIGRE (LCC 12 παλμών, 500 kV, 1000 MW) |
+| 2082 | `gfm_island` | Grid-forming (4.18) | Νησίδα με δύο μετατροπείς grid-forming: μοιρασιά του φορτίου με τη στατικότητα |
+| 2109 | `gfm_sync` | Grid-forming (4.18) | Synchronverter: αντιστροφέας που μιμείται σύγχρονη γεννήτρια (Zhong & Weiss 2011) |
+| 2137 | `gfm_weak` | Grid-forming (4.18) | Συγχρονισμός μέσω ισχύος (PSC) σε ασθενές δίκτυο, απέναντι στον έλεγχο ρεύματος με PLL |
+| 2174 | `ieee9_gfm` | Grid-forming (4.18.1) | IEEE 9 με μετατροπέα στη θέση της G3: grid-forming ή grid-following (nadir, RoCoF) |
+| 2204 | `empty` | Νέο | Κενό κύκλωμα |
 
 ## API του server (`run.py`, `/api/<action>`)
 
@@ -876,34 +878,35 @@
 | 2670 | const fn | `same` |
 | 2671 | const fn | `put` |
 | 2685 | function | `mtdcTheory` |
-| 2688 | function | `studyTheory` |
-| 2706 | const fn | `X` |
-| 2777 | function | `formulaTheory` |
-| 2886 | function | `nodeAvg` |
-| 2892 | function | `circuitForMath` |
-| 2928 | function | `scheduleMath` |
-| 2929 | function | `batteryKey` |
-| 2931 | function | `mathChoices` |
-| 2932 | const fn | `prim` |
-| 2934 | function | `renderMathChoices` |
-| 2936 | function | `runTemplate` |
-| 2942 | function | `runMath` |
-| 2964 | function | `saveLocal` |
-| 2965 | function | `saveLocalSoon` |
-| 2967 | function | `download` |
-| 2968 | function | `exportCSV` |
-| 2974 | function | `syncScopeInputs` |
-| 2975 | function | `setSpeed` |
-| 2978 | function | `openSettings` |
-| 2979 | const fn | `sel` |
-| 2980 | const fn | `chk` |
-| 3006 | function | `applyLook` |
-| 3010 | function | `boot` |
-| 3081 | const fn | `mv` |
-| 3082 | const fn | `up` |
-| 3083 | const fn | `navOpen` |
-| 3099 | const fn | `probeSel` |
-| 3161 | function | `renderTheoryLive` |
+| 2689 | function | `b4Theory` |
+| 2694 | function | `studyTheory` |
+| 2712 | const fn | `X` |
+| 2783 | function | `formulaTheory` |
+| 2893 | function | `nodeAvg` |
+| 2899 | function | `circuitForMath` |
+| 2935 | function | `scheduleMath` |
+| 2936 | function | `batteryKey` |
+| 2938 | function | `mathChoices` |
+| 2939 | const fn | `prim` |
+| 2941 | function | `renderMathChoices` |
+| 2943 | function | `runTemplate` |
+| 2949 | function | `runMath` |
+| 2971 | function | `saveLocal` |
+| 2972 | function | `saveLocalSoon` |
+| 2974 | function | `download` |
+| 2975 | function | `exportCSV` |
+| 2981 | function | `syncScopeInputs` |
+| 2982 | function | `setSpeed` |
+| 2985 | function | `openSettings` |
+| 2986 | const fn | `sel` |
+| 2987 | const fn | `chk` |
+| 3013 | function | `applyLook` |
+| 3017 | function | `boot` |
+| 3088 | const fn | `mv` |
+| 3089 | const fn | `up` |
+| 3090 | const fn | `navOpen` |
+| 3106 | const fn | `probeSel` |
+| 3168 | function | `renderTheoryLive` |
 
 ### `web/studio/bus.js`
 
@@ -1393,243 +1396,246 @@ _(χωρίς συναρτήσεις)_
 | 157 | const fn | `genCopy` |
 | 164 | function | `csolveSp` |
 | 182 | function | `csolve` |
-| 195 | const fn | `grpKey` |
-| 202 | function | `acInit` |
-| 218 | const fn | `y` |
-| 267 | const fn | `seq` |
-| 287 | const fn | `pAbs` |
-| 325 | class | `NetlistError` |
-| 330 | function | `dePiece` |
-| 332 | const fn | `F` |
-| 333 | function | `deInt` |
-| 335 | function | `deFrac` |
-| 341 | function | `tlSteady` |
-| 343 | const fn | `at` |
-| 345 | const fn | `re` |
-| 356 | function | `poleG` |
-| 357 | function | `tlmModeY` |
-| 362 | const fn | `mm` |
-| 369 | function | `tlmAcY` |
-| 375 | function | `tlmSteady` |
-| 376 | const fn | `vm` |
-| 390 | function | `tlElement` |
-| 397 | function | `tlmElement` |
-| 418 | function | `rcCoefC` |
-| 420 | const fn | `mul` |
-| 425 | function | `wbSet` |
-| 430 | function | `wbCo` |
-| 434 | function | `wbPoleG` |
-| 437 | function | `wbSum` |
-| 439 | function | `tlwElement` |
-| 458 | function | `tlwAcY` |
-| 473 | function | `tlwSteady` |
-| 474 | const fn | `mv` |
-| 481 | const fn | `st` |
-| 491 | function | `piLine` |
-| 496 | const fn | `shunt` |
-| 504 | function | `rcCoef` |
-| 510 | function | `fdCo` |
-| 520 | function | `arcF` |
-| 526 | function | `arcStep` |
-| 533 | function | `arcCur` |
-| 538 | function | `nlLimit` |
-| 539 | function | `nlSolve` |
-| 546 | function | `saiSetup` |
-| 547 | const fn | `Lc` |
-| 551 | function | `saiCur` |
-| 559 | function | `saiCommit` |
-| 569 | function | `chbCoef` |
-| 574 | function | `chbCommit` |
-| 581 | function | `chbStates` |
-| 583 | function | `chbCount` |
-| 592 | function | `mmcSample` |
-| 602 | const fn | `full` |
-| 611 | function | `mmcSave` |
-| 612 | function | `mmcLoad` |
-| 619 | function | `lccCom` |
-| 622 | function | `lccMeasInit` |
-| 628 | function | `lccMeasure` |
-| 645 | function | `lccPlo` |
-| 650 | function | `lccU` |
-| 652 | function | `lccIn` |
-| 655 | function | `lccSetup` |
-| 658 | function | `lccEdge` |
-| 660 | function | `lccGate` |
-| 665 | function | `nlcStep` |
-| 668 | const fn | `full` |
-| 685 | function | `footLink` |
-| 693 | function | `arcStart` |
-| 694 | const fn | `r` |
-| 697 | function | `buildNetlist` |
-| 710 | const fn | `union` |
-| 725 | const fn | `nm` |
-| 744 | const fn | `sn` |
-| 748 | const fn | `isJ` |
-| 771 | const fn | `lbl` |
-| 776 | const fn | `node` |
-| 780 | const fn | `nodeKey` |
-| 781 | const fn | `tunePwm` |
-| 791 | const fn | `internal` |
-| 794 | const fn | `mkBlock` |
-| 801 | const fn | `add` |
-| 802 | const fn | `series` |
-| 1091 | function | `compileSignals` |
-| 1124 | function | `f2Phi` |
-| 1129 | function | `cmpF` |
-| 1133 | function | `stampM` |
-| 1135 | function | `luFactor` |
-| 1141 | function | `luSolve` |
-| 1148 | class | `Sim` |
-| 1149 | method | `constructor` |
-| 1152 | method | `basePeriod` |
-| 1156 | method | `tlMaxStep` |
-| 1157 | method | `setStep` |
-| 1160 | method | `stIndex` |
-| 1175 | method | `stVec` |
-| 1176 | method | `stepCfg` |
-| 1177 | method | `varSetup` |
-| 1183 | method | `setStepMode` |
-| 1185 | method | `hGrid` |
-| 1189 | method | `modeCap` |
-| 1193 | method | `swEls` |
-| 1194 | method | `topoKey` |
-| 1195 | method | `topoInfo` |
-| 1205 | method | `topoCheck` |
-| 1222 | method | `lteReset` |
-| 1223 | method | `ltePush` |
-| 1227 | method | `lteErr` |
-| 1237 | method | `varCheck` |
-| 1253 | method | `note` |
-| 1256 | method | `stepCheck` |
-| 1260 | method | `stepInfo` |
-| 1263 | method | `diagnostics` |
-| 1266 | method | `ringCheck` |
-| 1275 | method | `stateMap` |
-| 1277 | method | `stateMap0` |
-| 1288 | method | `load` |
-| 1343 | method | `reset` |
-| 1346 | method | `imStep` |
-| 1353 | method | `smStep` |
-| 1355 | method | `srmStep` |
-| 1356 | method | `srmOutputs` |
-| 1357 | method | `smOutputs` |
-| 1361 | method | `genStep` |
-| 1368 | method | `genOutputs` |
-| 1373 | method | `genTm` |
-| 1374 | method | `genEfd` |
-| 1375 | method | `imSources` |
-| 1376 | method | `pyBlocks` |
-| 1386 | method | `pyLazy` |
-| 1388 | method | `pyUpgrade` |
-| 1390 | method | `setMethod` |
-| 1391 | method | `setControl` |
-| 1393 | method | `setBlock` |
-| 1395 | method | `setHold` |
-| 1397 | method | `markChange` |
-| 1402 | method | `progInit` |
-| 1403 | method | `addProgram` |
-| 1405 | method | `progNext` |
-| 1406 | method | `progDue` |
-| 1407 | method | `progApply` |
-| 1422 | method | `evInit` |
-| 1423 | method | `logEv` |
-| 1425 | method | `events` |
-| 1427 | method | `evSwitches` |
-| 1429 | method | `channelKeys` |
-| 1448 | method | `allocRecord` |
-| 1458 | const fn | `A` |
-| 1466 | method | `V` |
-| 1467 | method | `elCurrent` |
-| 1471 | method | `portI` |
-| 1475 | method | `computeVals` |
-| 1509 | method | `setRecord` |
-| 1510 | method | `recordNow` |
-| 1520 | method | `closePeriod` |
-| 1531 | method | `lastPeriod` |
-| 1532 | method | `now` |
-| 1537 | method | `gateOf` |
-| 1543 | method | `rawGate` |
-| 1554 | method | `carrier` |
-| 1557 | method | `shGrid` |
-| 1560 | method | `wmCyc` |
-| 1561 | method | `shNext` |
-| 1563 | method | `sampleHolds` |
-| 1568 | method | `samples` |
-| 1569 | method | `ctrlEdges` |
-| 1575 | method | `scrU` |
-| 1576 | method | `scrGate` |
-| 1577 | method | `scrEdges` |
-| 1578 | method | `setFiring` |
-| 1579 | method | `compV` |
-| 1580 | method | `compI` |
-| 1582 | method | `dbl` |
-| 1583 | method | `sampleControllers` |
-| 1617 | method | `evalBlocks` |
-| 1797 | method | `blkCopy` |
-| 1800 | method | `blkAnyDue` |
-| 1803 | method | `blkDue` |
-| 1805 | method | `zcFrac` |
-| 1808 | method | `saveState` |
-| 1810 | method | `restoreState` |
-| 1819 | method | `snapshot` |
-| 1821 | method | `restoreSnapshot` |
-| 1823 | method | `gateSigPeek` |
-| 1826 | method | `gateSig` |
-| 1831 | method | `jumpScheds` |
-| 1838 | method | `jumpAt` |
-| 1839 | method | `values` |
-| 1869 | method | `assemble` |
-| 1886 | const fn | `g` |
-| 1911 | method | `rhs` |
-| 1913 | const fn | `J` |
-| 1932 | method | `cplLinearize` |
-| 1940 | method | `solverInfo` |
-| 1955 | method | `factor` |
-| 1968 | method | `spAssemble` |
-| 1975 | method | `solveOnce` |
-| 1989 | method | `solve` |
-| 2007 | method | `nlLinearize` |
-| 2010 | method | `check` |
-| 2026 | method | `commit` |
-| 2051 | method | `initialSolve` |
-| 2063 | method | `tlSources` |
-| 2067 | method | `tlRecord` |
-| 2073 | method | `tlHist` |
-| 2079 | method | `tlmG` |
-| 2083 | method | `tlmSources` |
-| 2097 | method | `tlmRecord` |
-| 2112 | method | `tlwG` |
-| 2118 | method | `tlwSources` |
-| 2133 | method | `tlwRecord` |
-| 2150 | method | `tlmHist` |
-| 2157 | method | `step` |
-| 2159 | const fn | `gs` |
-| 2165 | method | `stepCore` |
-| 2224 | method | `edgeSolve` |
-| 2227 | method | `edgePoint` |
-| 2228 | method | `mmcMoved` |
-| 2231 | method | `arcGate` |
-| 2239 | method | `trRestart` |
-| 2247 | method | `nextEvent` |
-| 2253 | const fn | `sch` |
-| 2277 | method | `spwmCut` |
-| 2280 | const fn | `sig` |
-| 2285 | method | `run` |
-| 2331 | function | `tuneInfo` |
-| 2334 | function | `exportForBatch` |
-| 2357 | const fn | `hist` |
-| 2372 | const fn | `ci` |
-| 2373 | const fn | `vd` |
-| 2374 | const fn | `V` |
-| 2377 | const fn | `linePort` |
-| 2379 | const fn | `I` |
-| 2380 | const fn | `portRec` |
-| 2381 | const fn | `rec` |
-| 2398 | const fn | `clkOf` |
-| 2424 | function | `sweepPoint` |
-| 2429 | function | `setPath` |
-| 2435 | function | `eisPoint` |
-| 2443 | function | `resume` |
+| 197 | const fn | `grpKey` |
+| 204 | function | `acInit` |
+| 220 | const fn | `y` |
+| 269 | const fn | `seq` |
+| 289 | const fn | `pAbs` |
+| 327 | class | `NetlistError` |
+| 332 | function | `dePiece` |
+| 334 | const fn | `F` |
+| 335 | function | `deInt` |
+| 337 | function | `deFrac` |
+| 343 | function | `tlSteady` |
+| 345 | const fn | `at` |
+| 347 | const fn | `re` |
+| 358 | function | `poleG` |
+| 359 | function | `tlmModeY` |
+| 364 | const fn | `mm` |
+| 371 | function | `tlmAcY` |
+| 377 | function | `tlmSteady` |
+| 378 | const fn | `vm` |
+| 392 | function | `tlElement` |
+| 399 | function | `tlmElement` |
+| 420 | function | `rcCoefC` |
+| 422 | const fn | `mul` |
+| 427 | function | `wbSet` |
+| 432 | function | `wbCo` |
+| 436 | function | `wbPoleG` |
+| 439 | function | `wbSum` |
+| 441 | function | `tlwElement` |
+| 460 | function | `tlwAcY` |
+| 475 | function | `tlwSteady` |
+| 476 | const fn | `mv` |
+| 483 | const fn | `st` |
+| 493 | function | `piLine` |
+| 498 | const fn | `shunt` |
+| 506 | function | `rcCoef` |
+| 512 | function | `fdCo` |
+| 522 | function | `arcF` |
+| 528 | function | `arcStep` |
+| 535 | function | `arcCur` |
+| 540 | function | `nlLimit` |
+| 541 | function | `nlSolve` |
+| 548 | function | `saiSetup` |
+| 549 | const fn | `Lc` |
+| 553 | function | `saiCur` |
+| 561 | function | `saiCommit` |
+| 571 | function | `chbCoef` |
+| 576 | function | `chbCommit` |
+| 583 | function | `chbStates` |
+| 585 | function | `chbCount` |
+| 594 | function | `mmcSample` |
+| 604 | const fn | `full` |
+| 613 | function | `mmcSave` |
+| 614 | function | `mmcLoad` |
+| 621 | function | `lccCom` |
+| 624 | function | `lccMeasInit` |
+| 630 | function | `lccMeasure` |
+| 647 | function | `lccPlo` |
+| 652 | function | `lccU` |
+| 654 | function | `lccIn` |
+| 657 | function | `lccSetup` |
+| 660 | function | `lccEdge` |
+| 662 | function | `lccGate` |
+| 667 | function | `nlcStep` |
+| 670 | const fn | `full` |
+| 687 | function | `footLink` |
+| 695 | function | `arcStart` |
+| 696 | const fn | `r` |
+| 699 | function | `buildNetlist` |
+| 712 | const fn | `union` |
+| 727 | const fn | `nm` |
+| 746 | const fn | `sn` |
+| 750 | const fn | `isJ` |
+| 773 | const fn | `lbl` |
+| 778 | const fn | `node` |
+| 782 | const fn | `nodeKey` |
+| 783 | const fn | `tunePwm` |
+| 793 | const fn | `internal` |
+| 796 | const fn | `mkBlock` |
+| 803 | const fn | `add` |
+| 804 | const fn | `series` |
+| 1093 | function | `compileSignals` |
+| 1115 | const fn | `less` |
+| 1116 | const fn | `push` |
+| 1117 | const fn | `pop` |
+| 1132 | function | `f2Phi` |
+| 1137 | function | `cmpF` |
+| 1141 | function | `stampM` |
+| 1143 | function | `luFactor` |
+| 1149 | function | `luSolve` |
+| 1156 | class | `Sim` |
+| 1157 | method | `constructor` |
+| 1160 | method | `basePeriod` |
+| 1164 | method | `tlMaxStep` |
+| 1165 | method | `setStep` |
+| 1168 | method | `stIndex` |
+| 1183 | method | `stVec` |
+| 1184 | method | `stepCfg` |
+| 1185 | method | `varSetup` |
+| 1191 | method | `setStepMode` |
+| 1193 | method | `hGrid` |
+| 1197 | method | `modeCap` |
+| 1201 | method | `swEls` |
+| 1202 | method | `topoKey` |
+| 1203 | method | `topoInfo` |
+| 1213 | method | `topoCheck` |
+| 1230 | method | `lteReset` |
+| 1231 | method | `ltePush` |
+| 1235 | method | `lteErr` |
+| 1245 | method | `varCheck` |
+| 1261 | method | `note` |
+| 1264 | method | `stepCheck` |
+| 1268 | method | `stepInfo` |
+| 1271 | method | `diagnostics` |
+| 1274 | method | `ringCheck` |
+| 1283 | method | `stateMap` |
+| 1285 | method | `stateMap0` |
+| 1296 | method | `load` |
+| 1351 | method | `reset` |
+| 1354 | method | `imStep` |
+| 1361 | method | `smStep` |
+| 1363 | method | `srmStep` |
+| 1364 | method | `srmOutputs` |
+| 1365 | method | `smOutputs` |
+| 1369 | method | `genStep` |
+| 1376 | method | `genOutputs` |
+| 1381 | method | `genTm` |
+| 1382 | method | `genEfd` |
+| 1383 | method | `imSources` |
+| 1384 | method | `pyBlocks` |
+| 1394 | method | `pyLazy` |
+| 1396 | method | `pyUpgrade` |
+| 1398 | method | `setMethod` |
+| 1399 | method | `setControl` |
+| 1401 | method | `setBlock` |
+| 1403 | method | `setHold` |
+| 1405 | method | `markChange` |
+| 1410 | method | `progInit` |
+| 1411 | method | `addProgram` |
+| 1413 | method | `progNext` |
+| 1414 | method | `progDue` |
+| 1415 | method | `progApply` |
+| 1430 | method | `evInit` |
+| 1431 | method | `logEv` |
+| 1433 | method | `events` |
+| 1435 | method | `evSwitches` |
+| 1437 | method | `channelKeys` |
+| 1456 | method | `allocRecord` |
+| 1466 | const fn | `A` |
+| 1474 | method | `V` |
+| 1475 | method | `elCurrent` |
+| 1479 | method | `portI` |
+| 1483 | method | `computeVals` |
+| 1517 | method | `setRecord` |
+| 1518 | method | `recordNow` |
+| 1528 | method | `closePeriod` |
+| 1539 | method | `lastPeriod` |
+| 1540 | method | `now` |
+| 1545 | method | `gateOf` |
+| 1551 | method | `rawGate` |
+| 1562 | method | `carrier` |
+| 1565 | method | `shGrid` |
+| 1568 | method | `wmCyc` |
+| 1569 | method | `shNext` |
+| 1571 | method | `sampleHolds` |
+| 1576 | method | `samples` |
+| 1577 | method | `ctrlEdges` |
+| 1583 | method | `scrU` |
+| 1584 | method | `scrGate` |
+| 1585 | method | `scrEdges` |
+| 1586 | method | `setFiring` |
+| 1587 | method | `compV` |
+| 1588 | method | `compI` |
+| 1590 | method | `dbl` |
+| 1591 | method | `sampleControllers` |
+| 1625 | method | `evalBlocks` |
+| 1805 | method | `blkCopy` |
+| 1808 | method | `blkAnyDue` |
+| 1811 | method | `blkDue` |
+| 1813 | method | `zcFrac` |
+| 1816 | method | `saveState` |
+| 1818 | method | `restoreState` |
+| 1827 | method | `snapshot` |
+| 1829 | method | `restoreSnapshot` |
+| 1831 | method | `gateSigPeek` |
+| 1834 | method | `gateSig` |
+| 1839 | method | `jumpScheds` |
+| 1846 | method | `jumpAt` |
+| 1847 | method | `values` |
+| 1877 | method | `assemble` |
+| 1894 | const fn | `g` |
+| 1919 | method | `rhs` |
+| 1921 | const fn | `J` |
+| 1940 | method | `cplLinearize` |
+| 1948 | method | `solverInfo` |
+| 1963 | method | `factor` |
+| 1976 | method | `spAssemble` |
+| 1983 | method | `solveOnce` |
+| 1997 | method | `solve` |
+| 2015 | method | `nlLinearize` |
+| 2018 | method | `check` |
+| 2034 | method | `commit` |
+| 2059 | method | `initialSolve` |
+| 2071 | method | `tlSources` |
+| 2075 | method | `tlRecord` |
+| 2081 | method | `tlHist` |
+| 2087 | method | `tlmG` |
+| 2091 | method | `tlmSources` |
+| 2105 | method | `tlmRecord` |
+| 2120 | method | `tlwG` |
+| 2126 | method | `tlwSources` |
+| 2141 | method | `tlwRecord` |
+| 2158 | method | `tlmHist` |
+| 2165 | method | `step` |
+| 2167 | const fn | `gs` |
+| 2173 | method | `stepCore` |
+| 2232 | method | `edgeSolve` |
+| 2235 | method | `edgePoint` |
+| 2236 | method | `mmcMoved` |
+| 2239 | method | `arcGate` |
+| 2247 | method | `trRestart` |
+| 2255 | method | `nextEvent` |
+| 2261 | const fn | `sch` |
+| 2285 | method | `spwmCut` |
+| 2288 | const fn | `sig` |
+| 2293 | method | `run` |
+| 2339 | function | `tuneInfo` |
+| 2342 | function | `exportForBatch` |
+| 2365 | const fn | `hist` |
+| 2380 | const fn | `ci` |
+| 2381 | const fn | `vd` |
+| 2382 | const fn | `V` |
+| 2385 | const fn | `linePort` |
+| 2387 | const fn | `I` |
+| 2388 | const fn | `portRec` |
+| 2389 | const fn | `rec` |
+| 2406 | const fn | `clkOf` |
+| 2432 | function | `sweepPoint` |
+| 2437 | function | `setPath` |
+| 2443 | function | `eisPoint` |
+| 2451 | function | `resume` |
 
 ### `web/studio/netlib.js`
 
@@ -2386,18 +2392,23 @@ _(χωρίς συναρτήσεις)_
 | 1810 | method | `build` |
 | 1814 | const fn | `station` |
 | 1867 | method | `build` |
-| 1896 | method | `build` |
-| 1900 | const fn | `station` |
-| 1947 | method | `build` |
-| 1984 | const fn | `gfmWire` |
-| 1988 | const fn | `busMeter` |
-| 2001 | method | `build` |
-| 2003 | const fn | `unit` |
-| 2026 | method | `build` |
-| 2057 | method | `build` |
-| 2090 | method | `build` |
-| 2117 | method | `build` |
-| 2122 | function | `dcdcInputs` |
+| 1908 | function | `b4Study` |
+| 1918 | method | `build` |
+| 1922 | const fn | `dcbus` |
+| 1928 | const fn | `mmcp` |
+| 1929 | const fn | `station` |
+| 1984 | method | `build` |
+| 1988 | const fn | `station` |
+| 2035 | method | `build` |
+| 2072 | const fn | `gfmWire` |
+| 2076 | const fn | `busMeter` |
+| 2089 | method | `build` |
+| 2091 | const fn | `unit` |
+| 2114 | method | `build` |
+| 2145 | method | `build` |
+| 2178 | method | `build` |
+| 2205 | method | `build` |
+| 2210 | function | `dcdcInputs` |
 
 ### `web/studio/units.js`
 
@@ -3128,6 +3139,7 @@ _(χωρίς συναρτήσεις)_
 | 357 | function | `acdc_flow` |
 | 454 | function | `b4_line_data` |
 | 460 | function | `cigre_b4` |
+| 489 | function | `b4_network` |
 
 ### `pcl/designer.py`
 
@@ -3870,14 +3882,14 @@ _(χωρίς συναρτήσεις)_
 | 135 | function | `save_file` |
 | 156 | function | `_picture` |
 | 163 | function | `_study` |
-| 212 | function | `summary` |
-| 292 | function | `_feeder` |
-| 316 | function | `_feeder_summary` |
-| 334 | function | `_feeder_run` |
-| 354 | function | `run` |
-| 382 | function | `view` |
-| 412 | function | `_stem` |
-| 418 | function | `report` |
+| 217 | function | `summary` |
+| 297 | function | `_feeder` |
+| 321 | function | `_feeder_summary` |
+| 339 | function | `_feeder_run` |
+| 359 | function | `run` |
+| 387 | function | `view` |
+| 417 | function | `_stem` |
+| 423 | function | `report` |
 
 ### `pcl/trv.py`
 

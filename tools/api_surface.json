@@ -876,6 +876,10 @@
     ],
     "since": "4.20.1"
    },
+   "pcl.dcgrid.b4_network": {
+    "params": [],
+    "since": "4.20.1"
+   },
    "pcl.dcgrid.cigre_b4": {
     "params": [
      "hold",

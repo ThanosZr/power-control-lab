@@ -194,8 +194,13 @@ def _study(net, study, opt):
                     if e['kind'] != 'vsc':
                         raise StudyError(f'set: {name} δεν είναι μετατροπέας')
                     for k, x in (v.items() if isinstance(v, dict) else (('P', v),)):
-                        if k not in ('P', 'V', 'droop', 'R', 'Q', 'Vac'):
-                            raise StudyError(f'set: {name}.{k}: ένα από P, V, droop, R, Q, Vac')
+                        if k not in ('P', 'V', 'droop', 'R', 'Q', 'Vac', 'control'):
+                            raise StudyError(f'set: {name}.{k}: ένα από P, V, droop, R, Q, Vac, control')
+                        if k == 'control':                 # 4.20.1: the law of the station (a droop needs droop or R, and P_rated)
+                            if x not in ('P', 'V', 'droop', 'idroop', 'I'):
+                                raise StudyError(f'set: {name}.control: ένα από P, V, droop, idroop, I')
+                            e[k] = x
+                            continue
                         e[k] = float(x)
                         if k == 'droop':                   # a new droop replaces a gain given directly
                             e.pop('R', None)

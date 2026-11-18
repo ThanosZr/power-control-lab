@@ -176,6 +176,15 @@ class B4Grid(unittest.TestCase):
         self.assertGreater(c['Cb-A1']['P'], 2000e6)                          # it takes the losses of DCS3
         self.assertGreater(c['Cm-B3']['P'], -900e6)                          # DCS2 is short of 50 MW and its losses
 
+    def test_the_study_sets_a_law(self):
+        # 4.20.1: the option set of the study acdc also changes the law of a station (control), as the tutorial b4dcs2 needs
+        from pcl import study as S
+        r = S.run({'case': 'b4', 'study': 'acdc', 'options': {'set': {'Cm-B3': {'control': 'droop', 'droop': 0.05, 'P': -900e6}}}})['summary']
+        st = {x['name']: x for x in r['stations']}
+        self.assertEqual(st['Cm-B3']['control'], 'droop')
+        with self.assertRaises(S.StudyError):
+            S.run({'case': 'b4', 'study': 'acdc', 'options': {'set': {'Cm-B3': {'control': 'X'}}}})
+
     def test_an_outage(self):
         from pcl import dcgrid as D
         g = D.cigre_b4(out=('Cb-A1',), hold={'DCS3': ('Cb-B1', 1.0)})
@@ -186,6 +195,103 @@ class B4Grid(unittest.TestCase):
         # to +540 MW (the losses fall with the flows)
         self.assertGreater(r['converters']['Cb-B1']['P'], 500e6)
         self.assertLess(r['converters']['Cb-B1']['P'], 600e6)
+
+
+@unittest.skipUnless(shutil.which('node'), 'node not installed')
+class B4Tutorial(unittest.TestCase):
+    """The tutorial b4dcs2 (DCS2 of the B4 in EMT, four MMC stations of Model 4 with their AC side, Cd-E1 as a DC current source;
+    tests/js/b4_cases.js) against the AC/DC load flow of the case b4 that its card runs, before the event (0.90–0.95 s) and at
+    the end (1.95–2.0 s)."""
+
+    @classmethod
+    def setUpClass(cls):
+        out = subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'b4_cases.js')], capture_output=True, text=True, timeout=1500, cwd=ROOT)
+        if out.returncode:
+            raise RuntimeError(out.stderr)
+        cls.js = json.loads(out.stdout)
+
+    @staticmethod
+    def lf(options):
+        from pcl import study as S
+        q = S.run({'case': 'b4', 'study': 'acdc', 'options': options})['summary']
+        return ({x['bus'][3:]: x['U_kV'] * 1e3 for x in q['dc'] if x['bus'].startswith('Bm-')},
+                {x['name']: x['Pdc_MW'] for x in q['stations']})
+
+    def test_the_lines_start_on_the_load_flow(self):
+        from pcl import dcgrid as D
+        r = D.cigre_b4().flow(tol=1e-12)
+        st = self.js['runs'][0]['start']
+        for k, U in st['U'].items():
+            self.assertAlmostEqual(U, r['buses']['Bm-' + k]['U'], delta=1e-4)          # ten significant digits
+        I = {ln['name']: ln['I'] for ln in r['lines']}
+        self.assertEqual(len(st['I']), 4)
+        for q in st['I']:                                                     # from the pin a of the element to its pin b
+            a, b = 'Bm-' + q['from'], 'Bm-' + q['to']
+            self.assertAlmostEqual(q['i0'], I[f'{a}–{b}'] if f'{a}–{b}' in I else -I[f'{b}–{a}'], delta=1e-6)
+
+    def test_the_card_case_is_the_dc_grid(self):
+        # the case b4 of the engine (pcl/data/b4.json) is pcl.dcgrid.b4_network(), and its AC/DC load flow that of cigre_b4()
+        from pcl import dcgrid as D
+        from pcl import network as N
+        self.assertEqual(N.to_dict(N.case_data('b4')), N.to_dict(D.b4_network()))
+        U, _ = self.lf({})
+        r = D.cigre_b4().flow(tol=1e-12)
+        for k, u in U.items():
+            self.assertAlmostEqual(u, r['buses']['Bm-' + k]['U'], delta=1e-3)
+
+    def test_the_emt_ends_on_the_load_flow(self):
+        # the DC voltages within 0.07 kV (1.75e-4 pu; measured 0.058); the DC powers of the stations within the losses of the
+        # stations, which the load flow of the B4 has not (1 MW; with the droop on the AC side 2 MW; the offshore load is a
+        # constant impedance behind its transformer, 3 MW after its step)
+        for r in self.js['runs']:
+            self.assertEqual(r['warn'], [])
+            sets = r['study']['options'].get('set', {})
+            before = {k: v for k, v in sets.items() if k.startswith('Cm-B')}
+            for w, opt in zip(r['win'], ({'set': before} if before else {}, r['study']['options'])):
+                U, P = self.lf(opt)
+                for k, u in w['U'].items():
+                    self.assertAlmostEqual(u, U[k], delta=70, msg=f"{r['ev']} {r['ctl']} U {k}")
+                tol = 3.0 if r['ev'] == 'load' and w is r['win'][1] else 2.0 if r['ctl'] == 'droop' else 1.0
+                for k in ('B2', 'B3', 'F1', 'E1'):
+                    self.assertAlmostEqual(w['P'][k], P['Cm-' + k], delta=tol, msg=f"{r['ev']} {r['ctl']} P {k}")
+
+    def test_the_emt_network_is_the_b4(self):
+        # with the DC powers of the EMT itself and the voltage of Cm-B3, the DC load flow of DCS2 gives the EMT voltages within
+        # 0.02 kV and the power of Cm-B3 within 0.05 MW: the lines of the EMT are the data of the B4
+        from pcl import dcgrid as D
+        for r in self.js['runs']:
+            for w in r['win']:
+                g = D.DCGrid()
+                for b in ('B2', 'B3', 'B5', 'F1', 'E1'):
+                    g.bus('Bm-' + b, 400e3)
+                for a, b, km, kind, n in D.B4_LINES:
+                    if a in g.buses and b in g.buses:
+                        g.line(a, b, R=D.b4_line_data(a, km, kind)[0], poles=2)
+                g.converter('Bm-B3', 'V', V=w['U']['B3'] / 400e3, name='B3')
+                for k in ('B2', 'F1', 'E1'):
+                    g.converter('Bm-' + k, 'P', P=w['P'][k] * 1e6)
+                g.converter('Bm-E1', 'P', P=w['P']['CD'] * 1e6)
+                q = g.flow(tol=1e-12)
+                for k in ('B2', 'B5', 'F1', 'E1'):
+                    self.assertAlmostEqual(q['buses']['Bm-' + k]['U'], w['U'][k], delta=20)
+                self.assertAlmostEqual(q['converters']['B3']['P'] / 1e6, w['P']['B3'], delta=0.05)
+
+    def test_who_takes_the_event(self):
+        runs = {(r['ev'], r['ctl']): r for r in self.js['runs']}
+        v = runs[('cd55', 'vdc')]['win']
+        self.assertAlmostEqual(v[1]['P']['CD'] - v[0]['P']['CD'], -245, delta=0.1)
+        self.assertAlmostEqual(v[1]['P']['B2'], v[0]['P']['B2'], delta=0.5)            # Cm-B2 keeps its 150 MW
+        self.assertGreater(v[1]['P']['B3'] - v[0]['P']['B3'], 230)                    # Cm-B3 takes the rest
+        # with the droops not as the ratings (2:3) but as the load flow: the voltage of B3 falls more than that of B2 (77 and
+        # 160 MW in the load flow; the voltage drops of the lines change the sharing, as in mtdc5)
+        d = runs[('cd55', 'droop')]['win']
+        dB2, dB3 = d[1]['P']['B2'] - d[0]['P']['B2'], d[1]['P']['B3'] - d[0]['P']['B3']
+        o = runs[('cd55', 'droop')]['study']['options']
+        P0, P1 = self.lf({'set': {k: v for k, v in o['set'].items() if k.startswith('Cm-B')}})[1], self.lf(o)[1]
+        lB2, lB3 = P1['Cm-B2'] - P0['Cm-B2'], P1['Cm-B3'] - P0['Cm-B3']
+        self.assertAlmostEqual(dB2 / dB3, lB2 / lB3, delta=0.02)
+        self.assertLess(dB2 / dB3, 0.55)
+        self.assertAlmostEqual(dB2 + dB3, lB2 + lB3, delta=3)
 
 
 if __name__ == '__main__':

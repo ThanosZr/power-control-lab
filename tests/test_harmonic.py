@@ -304,7 +304,7 @@ class Harmonics(unittest.TestCase):
         self.assertIn('πηγή αρμονικών', str(err.exception))
         # the test network is not in the lists of the other studies, and it is still a network like the others
         self.assertNotIn('harmonic14', N.CASES)
-        self.assertEqual(N.MORE, ('harmonic14', 'mtdc5'))
+        self.assertEqual(N.MORE[0], 'harmonic14')                 # (4.20 and 4.20.1 put the DC test networks after it)
         self.assertTrue(S.run({'case': 'harmonic14', 'study': 'pf'})['summary']['converged'])
 
 
