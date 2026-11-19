@@ -307,6 +307,7 @@ function signalsFor(c,full){const t=c.type,nv=vecN(full||(S.pfx?pid(c.id):c.id))
  if(t==='SH')return [['H:','κρατημένη τιμή (δείγματα)']];
  if(t==='MOV')return [['I:','ρεύμα αλεξικέραυνου'],['V:','τάση αλεξικέραυνου'],['P:','ισχύς']];
  if(t==='SG')return [['I:','ρεύμα σπινθηριστή'],['V:','τάση στο διάκενο'],['P:','ισχύς στο τόξο']];
+ if(t==='DS')return [['I:','ρεύμα του σπινθήρα'],['V:','τάση ανάμεσα στις επαφές'],['P:','ισχύς στον σπινθήρα']];
  if(t==='TL')return [['V:','τάση στην αρχή (a1 − b1)'],['V2:','τάση στο τέλος (a2 − b2)'],['I:','ρεύμα που μπαίνει στην αρχή'],['I2:','ρεύμα που μπαίνει στο τέλος']];
  if(t==='TLM'){const M=P.tlmM({...P.defaults(t),...c.params}),out=[];for(let j=0;j<2*M;j++){const pin=P.tlmPin(j%M,j<M?1:2),pre=j?String(j+1):'';out.push([`V${pre}:`,`τάση ${pin} (προς γη)`],[`I${pre}:`,`ρεύμα που μπαίνει στο ${pin}`]);}return out;}
  if(t==='KL'||t==='KG'){const n=P.nPorts({...P.defaults(t),...c.params}),w=t==='KL'?'τυλίγματος':'θύρας';return Array.from({length:n},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα ${w} ${k+1} (a → b)`],[(k?'V'+(k+1):'V')+':',`τάση ${w} ${k+1}`]]).flat();}
@@ -419,11 +420,12 @@ function renderFFT(){const box=$('#ff-out');if(!box||!S.sim||!$('#ff-block').ope
  const u=MeasureUnit(key),A1=r.A1,rel=h=>A1>0?100*r.A[h]/A1:NaN;
  const top=[...Array(r.H+1).keys()].slice(2).sort((a,b)=>r.A[b]-r.A[a]).slice(0,8).filter(h=>r.A[h]>1e-9*Math.max(A1,1e-30)).sort((a,b)=>a-b);
  // bar chart: harmonics in % of the fundamental, scaled to the largest one (the fundamental bar is clipped)
- const W=260,Hh=110,pl=28,pb=16,n=r.H,bw=(W-pl-4)/n,mx=Math.max(1e-9,...[...Array(n+1).keys()].slice(2).map(rel).filter(Number.isFinite)),ns=niceTop(mx);
+ const W=260,Hh=110,pl=34,pb=18,n=r.H,bw=(W-pl-6)/n,mx=Math.max(1e-9,...[...Array(n+1).keys()].slice(2).map(rel).filter(Number.isFinite)),ns=niceTop(mx);
  const bars=[...Array(n).keys()].map(k=>{const h=k+1,v=h===1?ns:Math.min(rel(h),ns),y=Hh-pb-(Hh-pb-6)*v/ns;return `<rect class="${h===1?'f1':'hb'}" x="${pl+k*bw+bw*.15}" y="${y}" width="${Math.max(bw*.7,.6)}" height="${Hh-pb-y}"><title>h = ${h} · ${eng(h*f1,'Hz')} · ${fmt(rel(h),3)} %</title></rect>`;}).join('');
- const ticks=[0,.5,1].map(f=>`<text x="${pl-3}" y="${Hh-pb-(Hh-pb-6)*f+3}" text-anchor="end">${fmt(ns*f,2)}%</text>`).join('')+[1,...[5,10,20,50,100,200,500].filter(h=>h<=n)].filter((h,i,a)=>a.length<7||h!==a[1]).map(h=>`<text x="${pl+(h-.5)*bw}" y="${Hh-3}" text-anchor="${h===n?'end':'middle'}">${h}</text>`).join('');
+ // 4.22 (§63 part 2): the frame and the ticks of the core (PlotCore.svgFrame), the same margins as the bars
+ const ticks=PlotCore.svgFrame({W,H:Hh,ml:pl,mr:6,mt:6,mb:pb,x:[.5,n+.5],y:[0,ns],xPlain:true,yPlain:true,yUnit:'%',xfmt:(v,st)=>Number.isInteger(v)?String(v):'',cw:5}).svg;
  box.innerHTML=`<p class="muted small">f₁ = ${eng(f1,'Hz')} (${Number.isFinite(fv)&&fv>0?'χειροκίνητα':esc(fsrc)}) · ${r.periods} ${r.periods>1?'περίοδοι':'περίοδος'}, ${eng(r.window[0],'s')} … ${eng(r.window[1],'s')} · ${r.n} σημεία</p>
-  <svg class="ffchart" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Αρμονικές σε % της θεμελιώδους">${bars}<line x1="${pl}" y1="${Hh-pb}" x2="${W-2}" y2="${Hh-pb}"/>${ticks}</svg>
+  <svg class="ffchart" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Αρμονικές σε % της θεμελιώδους">${ticks}${bars}</svg>
   <table class="kv"><tbody><tr><td>DC</td><td>${eng(r.dc,u)}</td></tr><tr><td>Θεμελιώδης: πλάτος / RMS</td><td>${eng(A1,u)} / ${eng(r.rms1,u)}</td></tr><tr><td>Φάση θεμελιώδους (cos, από την αρχή του παραθύρου)</td><td>${fmt(-r.ph[1],4)}°</td></tr><tr><td>RMS (όλο το σήμα)</td><td>${eng(r.rms,u)}</td></tr>
   <tr><td>THD (h = 2 … ${r.H})</td><td><b>${fmt(r.thd,4)} %</b></td></tr><tr><td>THD (όλο το φάσμα, από την RMS)</td><td>${fmt(r.thdAll,4)} %</td></tr></tbody></table>
   ${top.length?`<table class="kv ff-top"><tbody><tr><td>h</td><td>f</td><td>πλάτος</td><td>% A₁</td><td>φάση</td></tr>${top.map(h=>`<tr><td>${h}</td><td>${eng(h*f1,'Hz')}</td><td>${eng(r.A[h],u)}</td><td>${fmt(rel(h),3)}</td><td>${fmt(-r.ph[h],3)}°</td></tr>`).join('')}</tbody></table>`:''}
@@ -450,15 +452,15 @@ function drawEIS(status){const out=$('#eis-out');if(!out||!EIS.pts.length)return
  const th=mo?pts.map(p=>({f:p.f,z:cellZ(p.f,false)})).filter(q=>q.z):[];const fine=mo?[...Array(60).keys()].map(k=>{const f=pts[0].f*Math.pow(pts[pts.length-1].f/pts[0].f,k/59);return cellZ(f,false);}).filter(Boolean):[];
  // Nyquist: −Im(Z) up, same scale on both axes
  const re=[...pts.map(p=>p.re),...fine.map(z=>z[0])],im=[...pts.map(p=>-p.im),...fine.map(z=>-z[1])];let x0=Math.min(...re),x1=Math.max(...re),y0=Math.min(0,...im),y1=Math.max(...im);const span=Math.max(x1-x0,y1-y0)*1.1||1;x0-=span*.05;x1=x0+span;y1=y0+span*(H-28)/(W-40);
- const ny=`<svg class="bfchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Διάγραμμα Nyquist"><rect x="34" y="6" width="${W-40}" height="${H-28}" class="frame"/>${fine.length?`<path class="map" d="M${fine.map(z=>`${Pp.X(z[0],x0,x1).toFixed(1)},${Pp.Y(-z[1],y0,y1).toFixed(1)}`).join(' L')}"/>`:''}
+ const ny=`<svg class="bfchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Διάγραμμα Nyquist">${PlotCore.svgFrame({W,H,x:[x0,x1],y:[y0,y1],xUnit:'Ω',yUnit:'Ω'}).svg}${fine.length?`<path class="map" d="M${fine.map(z=>`${Pp.X(z[0],x0,x1).toFixed(1)},${Pp.Y(-z[1],y0,y1).toFixed(1)}`).join(' L')}"/>`:''}
   ${pts.map(p=>`<circle cx="${Pp.X(p.re,x0,x1).toFixed(1)}" cy="${Pp.Y(-p.im,y0,y1).toFixed(1)}" r="2.2"><title>${eng(p.f,'Hz')}: ${eng(p.re,'Ω')} − j${eng(-p.im,'Ω')}</title></circle>`).join('')}
-  <text x="${(W+34)/2}" y="${H-1}" text-anchor="middle">Re Z (${eng(x0,'Ω',3)} … ${eng(x1,'Ω',3)})</text><text x="8" y="${H/2}" transform="rotate(-90 8 ${H/2})" text-anchor="middle">−Im Z</text></svg>`;
+  <text x="${(W+34)/2}" y="${H-1}" text-anchor="middle">Re Z</text><text x="6" y="${H/2}" transform="rotate(-90 6 ${H/2})" text-anchor="middle">−Im Z</text></svg>`;
  // Bode: |Z| and phase against log f
  const lf=pts.map(p=>Math.log10(p.f)),la=Math.min(...lf),lb=Math.max(...lf)+1e-9,mags=pts.map(p=>p.mag),ma=Math.min(...mags),mb=Math.max(...mags),phs=pts.map(p=>p.phase),pa=Math.min(...phs,0),pb=Math.max(...phs,0);
- const bo=`<svg class="bfchart" viewBox="0 0 ${W} 120" role="img" aria-label="Διάγραμμα Bode"><rect x="34" y="6" width="${W-40}" height="92" class="frame"/>
+ const bo=`<svg class="bfchart" viewBox="0 0 ${W} 120" role="img" aria-label="Διάγραμμα Bode">${PlotCore.svgFrame({W,H:120,ml:34,mr:6,mt:10,mb:22,x:[pts[0].f,pts[pts.length-1].f*(1+1e-9)],xlog:true,xUnit:'Hz',y:[ma,mb>ma?mb:ma+1],yUnit:'Ω'}).svg}
   <path class="map" d="M${pts.map((p,k)=>`${(34+(W-40)*(lf[k]-la)/(lb-la)).toFixed(1)},${(98-88*(p.mag-ma)/((mb-ma)||1)).toFixed(1)}`).join(' L')}"/>
   <path class="cob" d="M${pts.map((p,k)=>`${(34+(W-40)*(lf[k]-la)/(lb-la)).toFixed(1)},${(98-88*(p.phase-pa)/((pb-pa)||1)).toFixed(1)}`).join(' L')}"/>
-  <text x="30" y="12" text-anchor="end">${eng(mb,'Ω',3)}</text><text x="30" y="98" text-anchor="end">${eng(ma,'Ω',3)}</text><text x="${(W+34)/2}" y="116" text-anchor="middle">${eng(pts[0].f,'Hz')} … ${eng(pts[pts.length-1].f,'Hz')} (log) · |Z| κόκκινο, φάση πράσινο (${fmt(pa,3)}° … ${fmt(pb,3)}°)</text></svg>`;
+  <text x="${(W+34)/2}" y="8" text-anchor="middle">|Z| κόκκινο, φάση πράσινο (${fmt(pa,3)}° … ${fmt(pb,3)}°)</text></svg>`;
  const rows=pts.map(p=>{const z=th.find(q=>q.f===p.f)?.z;const e=z?100*Math.hypot(p.re-z[0],p.im-z[1])/Math.hypot(z[0],z[1]):NaN;return `<tr><td>${eng(p.f,'Hz',3)}</td><td>${eng(p.mag,'Ω',4)}</td><td>${fmt(p.phase,3)}°</td>${mo?`<td>${z?eng(Math.hypot(...z),'Ω',4):''}</td><td>${Number.isFinite(e)?fmt(e,2)+' %':''}</td>`:''}</tr>`;}).join('');
  out.innerHTML=ny+bo+`<p class="muted small">${esc(status)} · Z = V₁/I₁ στη θεμελιώδη, από μέσες τιμές ανά περίοδο μεταγωγής, με αφαίρεση γραμμικής ολίσθησης${mo?' · καμπύλη: θεωρητικό Z του μοντέλου της κυψέλης':''}</p>
   <table class="kv ff-top"><tbody><tr><td>f</td><td>|Z|</td><td>φάση</td>${mo?'<td>|Z| θεωρία</td><td>διαφορά</td>':''}</tr>${rows}</tbody></table>`;}
@@ -484,8 +486,8 @@ function renderPoincare(){const box=$('#bf-map');if(!box||!S.sim||!$('#bf-block'
  const pts=x.slice(1).map((v,k)=>`<circle cx="${P.X(x[k],lo,hi).toFixed(1)}" cy="${P.Y(v,lo,hi).toFixed(1)}" r="1.6"/>`).join('');
  const cob=x.slice(-17);let cw=`M${P.X(cob[0],lo,hi).toFixed(1)},${P.Y(cob[0],lo,hi).toFixed(1)}`;for(let k=1;k<cob.length;k++)cw+=` V${P.Y(cob[k],lo,hi).toFixed(1)} H${P.X(cob[k],lo,hi).toFixed(1)}`;
  let curve='';if(fn){const n=120;curve='M'+[...Array(n+1).keys()].map(k=>{const v=lo+(hi-lo)*k/n;return `${P.X(v,lo,hi).toFixed(1)},${P.Y(fn(v),lo,hi).toFixed(1)}`;}).join(' L');}
- const tk=[lo+pd,hi-pd].map(v=>`<text x="${P.X(v,lo,hi)}" y="${H-8}" text-anchor="middle">${fmt(v,3)}</text><text x="30" y="${P.Y(v,lo,hi)+3}" text-anchor="end">${fmt(v,3)}</text>`).join('');
- box.innerHTML=`<svg class="bfchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Χάρτης Poincaré"><rect x="34" y="6" width="${W-40}" height="${H-28}" class="frame"/>
+ const tk='';const FR=PlotCore.svgFrame({W,H,x:[lo,hi],y:[lo,hi],xUnit:u,yUnit:u}).svg; // 4.22 (§63 part 2): the ticks of the core
+ box.innerHTML=`<svg class="bfchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Χάρτης Poincaré">${FR}
   <line class="diag" x1="${P.X(lo,lo,hi)}" y1="${P.Y(lo,lo,hi)}" x2="${P.X(hi,lo,hi)}" y2="${P.Y(hi,lo,hi)}"/>${curve?`<path class="map" d="${curve}"/>`:''}<path class="cob" d="${cw}"/>${pts}${tk}
   <text x="${(W+34)/2}" y="${H-1}" text-anchor="middle">x[n]</text><text x="8" y="${H/2}" transform="rotate(-90 8 ${H/2})" text-anchor="middle">x[n+1]</text></svg>
   <p class="small">Περίοδος: <b>${esc(periodText(q))}</b>${q.period>0?` · τιμές ${q.distinct.map(v=>eng(v,u,4)).join(', ')}`:''}</p>
@@ -519,8 +521,8 @@ function drawBifurcation(status){const out=$('#bf-out'),m=BF.meta;if(!out||!m||!
  const dots=BF.pts.map(p=>p.y.map(y=>`<circle cx="${P.X(p.v,m.a,m.b).toFixed(1)}" cy="${P.Y(y,lo,hi).toFixed(1)}" r="1"/>`).join('')).join('');
  // first value of each new period (1T → 2T → 4T …) along the sweep
  const ch=[];for(let k=1;k<BF.pts.length;k++){const p0=BF.pts[k-1].q.period,p1=BF.pts[k].q.period;if(p1!==p0&&p1!==0||p1===0&&p0>0)ch.push([BF.pts[k].v,p1]);}
- const tk=[m.a,m.b].map(v=>`<text x="${P.X(v,m.a,m.b)}" y="${H-8}" text-anchor="middle">${fmt(v,3)}</text>`).join('')+[lo+pd,hi-pd].map(v=>`<text x="30" y="${P.Y(v,lo,hi)+3}" text-anchor="end">${fmt(v,3)}</text>`).join('');
- out.innerHTML=`<svg class="bfchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Διάγραμμα διακλάδωσης"><rect x="34" y="6" width="${W-40}" height="${H-28}" class="frame"/>${dots}${tk}<text x="${(W+34)/2}" y="${H-1}" text-anchor="middle">${esc(m.label)}</text></svg>
+ const tk=PlotCore.svgFrame({W,H,x:[m.a,m.b],y:[lo,hi],xPlain:true,yPlain:true}).svg; // 4.22 (§63 part 2): the ticks of the core
+ out.innerHTML=`<svg class="bfchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Διάγραμμα διακλάδωσης">${tk}${dots}<text x="${(W+34)/2}" y="${H-1}" text-anchor="middle">${esc(m.label)}</text></svg>
   <p class="muted small">${esc(status)} · ${BF.pts[0].y.length} δείγματα ανά τιμή μετά από μεταβατικό</p>
   ${ch.length?`<table class="kv"><tbody>${ch.map(([v,p])=>`<tr><td>από ${fmt(v,4)}</td><td>${p===0?'χωρίς περίοδο (χάος ή αργό μεταβατικό)':p+'T'}</td></tr>`).join('')}</tbody></table>`:''}`;}
 
@@ -1273,11 +1275,14 @@ function openMenu(ev){
    {t:'▣ Ανάπτυξη σε υποκύκλωμα (για αλλαγές)',f:()=>libToSub(c.id)});
   {const n=editor.selection().c.filter(id=>editor.comp(id)?.type!=='JUNC').length;if(n&&editor.selection().c.includes(c.id))items.push({t:'▣ Υποκύκλωμα από την επιλογή'+(n>1?` (${n})`:''),k:'Ctrl+G',f:()=>groupSel()});}
   if(c.type!=='JUNC')items.push('-',{t:'Ρυθμίσεις…',k:window.Inside?.canDbl(c)?'':'διπλό κλικ',f:()=>openInspector(c.id,ev.x,ev.y)},{t:'Περιστροφή',k:'R',f:()=>editor.rotateSel()},{t:'Καθρέφτης',k:'M',f:()=>editor.mirrorSel()},{t:'Αντιγραφή',k:'Ctrl+C',f:()=>editor.copySel()},{t:'Αποκοπή',k:'Ctrl+X',f:()=>editor.cutSel()},{t:'Διπλότυπο',k:'Ctrl+D',f:()=>{if(editor.copySel())editor.beginPaste();}});
+  // 4.22 (ROADMAP §66): a label moved by hand goes back to its automatic place
+  {const ids=editor.selection().c.includes(c.id)?editor.selection().c:[c.id],n=ids.filter(id=>editor.comp(id)?.lblAt).length;if(n)items.push({t:'↺ Αυτόματη θέση ετικέτας'+(n>1?` (${n})`:''),f:()=>editor.resetLabels(ids)});}
   items.push({t:'Διαγραφή',k:'Del',f:()=>editor.deleteSel(),cls:'danger'});}
  else if(ev.kind==='wire'){const w=editor.wire(ev.id);if(!w)return;if(S.pfx!==null&&wireWidth(w)===1)items.push({t:'⌁ Scope: τάση κόμβου',f:()=>addProbe('VN:'+pid(w.a.c)+':'+w.a.p,w.name||undefined)},'-');items.push({t:'Όνομα / χρώμα…',k:'διπλό κλικ',f:()=>openWireInspector(w.id,ev.x,ev.y)},{t:'Αυτόματη δρομολόγηση',f:()=>{editor.remember();editor.route(w);editor.render();}},{t:'Διαγραφή',k:'Del',f:()=>editor.deleteSel(),cls:'danger'});}
  else items.push({t:'Επικόλληση',k:'Ctrl+V',f:()=>editor.beginPaste(),dis:!editor.clip},{t:'Επιλογή όλων',k:'Ctrl+A',f:()=>editor.select(editor.doc.components.map(c=>c.id),editor.doc.wires.map(w=>w.id))},{t:'Προσαρμογή προβολής',k:'F',f:()=>editor.fit()},'-',
   ...['R','L','C','D','SW','VDC'].map(t=>({t:'+ '+P.PARTS[t].name,f:()=>{const c=editor.addPart(t,Math.round(ev.world[0]/10)*10,Math.round(ev.world[1]/10)*10);void c;}})),'-',
-  {t:'╱ Σύρμα από εδώ',k:'W',f:()=>{editor.setWireTool(true);editor.startFreeWire(ev.world);}},{t:'Επιλογές επίλυσης (ασύνδετα, αιωρούμενα)…',f:()=>{editor.select([],[]);PS['c-solve']=true;setProps(true);}});
+  {t:'╱ Σύρμα από εδώ',k:'W',f:()=>{editor.setWireTool(true);editor.startFreeWire(ev.world);}},
+  ...(editor.doc.components.some(c=>c.lblAt)?[{t:'↺ Αυτόματη θέση όλων των ετικετών',f:()=>editor.resetLabels()}]:[]),{t:'Επιλογές επίλυσης (ασύνδετα, αιωρούμενα)…',f:()=>{editor.select([],[]);PS['c-solve']=true;setProps(true);}});
  m.innerHTML=items.map((it,i)=>it==='-'?'<hr>':`<button data-i="${i}" class="${it.cls||''}" ${it.dis?'disabled':''}><span>${esc(it.t)}</span>${it.k?`<kbd>${esc(it.k)}</kbd>`:''}</button>`).join('');
  m.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{closeMenu();items[+b.dataset.i].f();});placePopup(m,ev.x-12,ev.y-12);}
 
@@ -2035,7 +2040,7 @@ function lightningTheory(){const s=S.sim,m=(S.tutMeta||{}).lg;if(!s||!m)return '
  const pk=key=>{const r=rawSeries(key);if(!r)return null;let v=0,t=0;for(let j=0;j<r.y.length;j++)if(Math.abs(r.y[j])>v){v=Math.abs(r.y[j]);t=r.t[j];}return {v,t,r};};
  const If=pk('Y:T2/If'),lim=m.LIWL/m.Ks;
  let h=`<ul class="eqs"><li>Γείωση ${m.foot==='ion'?`με ιονισμό: R(I) = R₀/√(1 + I/I_g), I_g = E₀·ρ/(2π·R₀²) = <b>${eng(Ig,'A')}</b> (R₀ = ${eng(m.R0,'Ω')}, ρ = ${fmt(m.rho,3)} Ω·m, E₀ = 400 kV/m)${If&&If.v>1?`· στο ρεύμα κορυφής της βάσης του T2 (${eng(If.v,'A')}) R = <b>${eng(Ri(If.v),'Ω')}</b>`:''}`:`σταθερή R₀ = ${eng(m.R0,'Ω')}`}</li>
-  <li>Πύργος: γραμμή χωρίς απώλειες Z_t = ${eng(m.Zt,'Ω')}, τ = h/c = ${eng(m.h/3e8,'s')}· αλυσίδες μονωτήρων: διάσπαση στα <b>${eng(m.Ub,'V')}</b> (≈ 700 kV/m × 3,2 m)</li>
+  <li>${m.tm==='ms'?`Πύργος πολλών ορόφων (4.22): τέσσερα τμήματα, Z_t1 = 220 Ω, Z_t2 = 150 Ω, γ = 0,8, R_i = 2·Z_ti·ln(1/γ)·h_i/H, L_i = 2·(H/c)·R_i, οι φάσεις στον βραχίονα των 20 m`:`Πύργος: γραμμή χωρίς απώλειες Z_t = ${eng(m.Zt,'Ω')}, τ = h/c = ${eng(m.h/3e8,'s')}`}· αλυσίδες μονωτήρων: ${m.ins==='lpm'?'πρόοδος οχετού (LPM, 4.22): streamers ως 1/t_s = 1,25·E/E₅₀ − 0,95, μετά dL/dt = K·|u|·(|u|/(g − L) − E₀), g = 3,2 m, E₅₀ = 560 kV/m':m.ins==='de'?'καμπύλη τάσης–χρόνου ∫(|u| − U₀)dt = D, U₀ = 1,7 MV, D = 0,5 V·s':`διάσπαση στα <b>${eng(m.Ub,'V')}</b> (≈ 700 kV/m × 3,2 m)`}</li>
   ${k?`<li>Αλεξικέραυνο IEEE (U₁₀ = ${eng(m.U10,'V')}, d = 3,216 m): L₀ = ${eng(k.L0,'H')}, R₀ = ${eng(k.R0,'Ω')}, L₁ = ${eng(k.L1,'H')}, R₁ = ${eng(k.R1,'Ω')}, C = ${eng(k.C,'F')}</li>`:''}
   <li>Αντοχή του εξοπλισμού 420 kV σε κεραυνό (LIWL) ${eng(m.LIWL,'V')}· με συντελεστή ασφαλείας K_s = ${fmt(m.Ks,3)}: <b>${eng(lim,'V')}</b> (IEC 60071-2)</li></ul>`;
  if(s.t<m.stop-1e-9)return h+'<p class="muted small">Τρέξε ως τα 50 μs για τις κορυφές και τις διασπάσεις.</p>';
@@ -2046,10 +2051,77 @@ function lightningTheory(){const s=S.sim,m=(S.tutMeta||{}).lg;if(!s||!m)return '
  h+=`<table class="cmp"><thead><tr><th>Θέση</th><th>Κορυφή</th><th>Στιγμή</th><th>Περιθώριο ως ${eng(lim,'V')}</th></tr></thead><tbody>${rows.map(([n,v,t])=>`<tr><td>${esc(n)}</td><td>${eng(v,'V')}</td><td>${eng(t,'s',3)}</td><td class="${v>lim?'warn-text':'good'}">${v>0?fmt((lim/v-1)*100,3)+' %':'—'}${v>m.LIWL?' (πάνω από το LIWL)':v>lim?' (πάνω από LIWL/K_s)':''}</td></tr>`).join('')}</tbody></table>`;
  if(m.sa!=='none'){const r=rawSeries('Y:VEa'),e=pk('Y:VEa'),g=pk('Y:VGa');if(r&&e&&g&&e.v>50e3){let S1=0;for(let j=1;j<r.y.length;j++){if(r.t[j]>e.t)break;const d=Math.abs(r.y[j]-r.y[j-1])/((r.t[j]-r.t[j-1])||1);if(d>S1)S1=d;}
   h+=cmpRows([['φάση a: U_G ≈ U_E + 2·S·d/v (d = 56 m, S = μέγιστη du/dt στην είσοδο)',e.v+2*S1*m.dist/m.v,g.v,'V']])+'<p class="muted small">Ο κανόνας της απόστασης προστασίας υποθέτει μέτωπο ράμπας και ανοιχτό άκρο πίσω από το αλεξικέραυνο· είναι εκτίμηση, όχι ακριβής τύπος.</p>';}}
+ // 4.22: the largest peak in the substation as the representative fast-front overvoltage (IEC 60071-2, 420 kV)
+ const pkSub=rows.reduce((a,r)=>Math.max(a,r[1]),0);if(pkSub>0)h+=inscoHTML({Us:420,Um:420,H:0,tov:{k:1.4,lr:1.1},slow:{Ue2:2.5,Up2:3.8,Ups:800},peaks:{fast:+(pkSub/1e3).toFixed(1)},insulations:['external','gis']},'ταχέος μετώπου: η μεγαλύτερη κορυφή στον υποσταθμό');
  // 4.12: with the 50 Hz voltage the lines start from the steady state; the voltage of each insulator adds the phase voltage
  if(m.u50){const ph={peak:'στο θετικό μέγιστο',zero:'στο μηδέν',neg:'στο αρνητικό μέγιστο'}[m.u50];
   return h+`<p class="muted small">Τάση λειτουργίας 420 kV, 50 Hz (κορυφή φάσης ${eng(m.Vs,'V')}), η φάση a ${ph} τη στιγμή του κεραυνού· οι γραμμές ξεκινούν από τη μόνιμη κατάσταση (4.12). Η τάση κάθε μονωτήρα είναι u_φάσης − u_πύργου: με αρνητικό κεραυνό στον πύργο, η φάση στο θετικό μέγιστο διασπάται πιο εύκολα.</p>`;}
  return h+'<p class="muted small">Χωρίς τάση 50 Hz των φάσεων (μόνο ο κεραυνός)· η επιλογή «Τάση λειτουργίας» τη βάζει, με τις γραμμές από τη μόνιμη κατάσταση (4.12).</p>';}
+// 4.22: the GIS of IEC TR 60071-4 (gis765_lv, gis_vfto) and the restrikes of a disconnector (ds_restrike)
+function gisPeaks(keys){const out=[];for(const [k,lab] of keys){const r=rawSeries(k);if(!r)continue;let v=0,t=0;for(let j=0;j<r.y.length;j++)if(Math.abs(r.y[j])>Math.abs(v)){v=r.y[j];t=r.t[j];}out.push({k,lab,v,t,r});}return out;}
+function atT(r,T){if(!r)return NaN;let j=0;while(j<r.t.length-1&&r.t[j+1]<=T)j++;return r.y[j];}
+// the travel time along the fastest path between two nodes of the drawing (Dijkstra over the lines of the tutorial)
+function gisPath(from,to){const pr=editor?.doc;if(!pr)return null;const adj=new Map(),add=(a,b,w)=>{if(!adj.has(a))adj.set(a,[]);adj.get(a).push([b,w]);};
+ for(const c of pr.components)if(c.type==='TL'){const lab=String(c.label||'').split('–');if(lab.length!==2)continue;const tau=P.tlParams(c.params).tau;add(lab[0],lab[1],tau);add(lab[1],lab[0],tau);}
+ const d=new Map([[from,0]]),q=[from],seen=new Set();while(q.length){q.sort((a,b)=>d.get(a)-d.get(b));const u=q.shift();if(seen.has(u))continue;seen.add(u);for(const [v,w] of adj.get(u)||[]){const nd=d.get(u)+w;if(!(d.get(v)<=nd)){d.set(v,nd);q.push(v);}}}
+ return d.has(to)?d.get(to):null;}
+function gis765Theory(){const s=S.sim,m=(S.tutMeta||{}).gis;if(!s||!m)return '';
+ const tUK=gisPath('UC1','UK'),Vi=m.E*m.Rs/(m.Rs+m.Rs),G=(75/2-75)/(75/2+75);
+ let h=`<ul class="eqs"><li>Κάθε κομμάτι του GIS: γραμμή χωρίς απώλειες με Z και τ του Πίνακα 29 του IEC TR 60071-4 (περίπτωση 4)· πηγή ${m.src==='switch'?'ράμπα ως το μέγιστο και μετά διακόπτης':'ράμπα 4 ns'}, E = ${eng(m.E,'V')} πίσω από ${eng(m.Rs,'Ω')}</li>
+  <li>Κύμα που μπαίνει στον ζυγό 75 Ω: E·Z/(R_s + Z) = <b>${eng(Vi,'V')}</b>· στο J3 τρεις ζυγοί 75 Ω: συντελεστής ανάκλασης Γ = (37,5 − 75)/(37,5 + 75) = ${fmt(G,3)}, άρα στο UC1 μετά από 2·6,4 ns: ${eng(Vi*(1+G),'V')}</li>
+  ${tUK!=null?`<li>Το πιο γρήγορο μονοπάτι UC1 → UK (άθροισμα των τ): <b>${eng(tUK,'s',4)}</b></li>`:''}
+  <li>Μόνιμη κατάσταση: E·75/(75 + 75) = ${eng(m.E/2,'V')} παντού (οι γραμμές χωρίς απώλειες, το UK σε 75 Ω)</li></ul>`;
+ if(s.t<m.stop-1e-12)return h+'<p class="muted small">Τρέξε ως τα 0,5 μs για τη σύγκριση.</p>';
+ const uc=rawSeries('Y:VUC'),uk=rawSeries('Y:VUK');if(!uc||!uk)return h;
+ const j=uk.y.findIndex(v=>Math.abs(v)>.01*m.E),tA=j>=0?uk.t[j]:NaN;
+ h+=cmpRows([['u_UC1 στα 10 ns',Vi,atT(uc,10e-9),'V'],['u_UC1 στα 16,8 ns (μετά την ανάκλαση από το J3)',Vi*(1+G),atT(uc,16.6e-9),'V'],...(tUK!=null?[['άφιξη στο UK (1 % του E)',tUK+(m.src==='switch'?4e-9:2e-9),tA,'s']]:[]),['u_UK στα 0,5 μs (προς τη μόνιμη κατάσταση)',m.E/2,atT(uk,m.stop),'V']]);
+ return h+'<p class="muted small">Ως τα 0,15 μs οι κυματομορφές συμφωνούν με τα Σχήματα 41 και 42 του TR (άφιξη στο UK στα 0,056 μs, πρώτο σκαλί περίπου 22 V, περίπου 80 V στα 0,13 μs). Αργότερα το σχήμα μένει περίπου 10 % χαμηλότερα: οι απώλειες ή οι χωρητικότητες που δεν δίνει ο πίνακας. Η ανεξάρτητη λύση με οδεύοντα κύματα (pcl.surge, μέθοδος των χαρακτηριστικών) δίνει τις ίδιες κορυφές με τον λύτη (tests/test_gis.py).</p>';}
+function gisVftoTheory(){const s=S.sim,m=(S.tutMeta||{}).gis;if(!s||!m)return '';const pu=m.Vs,dU=m.Vs-m.tc,lim=m.LIWL/m.Ks;
+ let h=`<ul class="eqs"><li>Βάση: 1 pu = √2·U_s/√3 = <b>${eng(pu,'V')}</b> (U_s = ${eng(m.Us,'V')})· πλευρά του διαπεραστή +1 pu, ζυγός ${fmt(m.tc/pu,3)} pu· τάση στις επαφές πριν από τη διάσπαση ΔU = <b>${fmt(dU/pu,3)} pu</b></li>
+  <li>Στη διάσπαση ξεκινούν κύματα ΔU·Z/(Z + Z) = ΔU/2 προς κάθε πλευρά (ζυγοί 75 Ω)· στα ανοιχτά άκρα διπλασιάζονται, οπότε η πρώτη κορυφή φτάνει ${fmt(m.tc/pu,3)} + ΔU = ${fmt((m.tc+dU)/pu,3)} pu και οι επόμενες ανακλάσεις την ανεβάζουν (IEC 60071-2: τυπικά 1,5–2,5 pu, ως 3 pu)</li>
+  <li>Αντοχή: LIWL ${eng(m.LIWL,'V')} για U_m = 800 kV, με K_s = ${fmt(m.Ks,3)}: <b>${eng(lim,'V')}</b> (εσωτερική μόνωση· το πρότυπο συγκρίνει τις VFFO με την αντοχή σε κεραυνό για U_m ≤ 800 kV)</li></ul>`;
+ if(s.t<m.stop-1e-12)return h+'<p class="muted small">Τρέξε ως τα 2 μs για τις κορυφές.</p>';
+ const P=gisPeaks([['Y:VUK','UK'],['Y:VT18','T18 (ανοιχτό άκρο)'],['Y:VT29','T29 (ανοιχτό άκρο)'],['Y:VJ7','J7'],['Y:VDSL','στον αποζεύκτη (πλευρά ζυγού)']]);
+ h+=`<table class="cmp"><thead><tr><th>Θέση</th><th>Κορυφή</th><th>pu</th><th>Στιγμή</th><th>Περιθώριο ως ${eng(lim,'V')}</th></tr></thead><tbody>${P.map(q=>`<tr><td>${esc(q.lab)}</td><td>${eng(Math.abs(q.v),'V')}</td><td>${fmt(q.v/pu,3)}</td><td>${eng(q.t,'s',3)}</td><td class="${Math.abs(q.v)>lim?'warn-text':'good'}">${fmt((lim/Math.abs(q.v)-1)*100,3)} %</td></tr>`).join('')}</tbody></table>`;
+ const mx=P.reduce((a,q)=>Math.abs(q.v)>Math.abs(a.v)?q:a,{v:0});
+ return h+`<p>Η μεγαλύτερη VFFO: <b>${fmt(Math.abs(mx.v)/pu,3)} pu</b> στο ${esc(mx.lab||'—')}. Παρακάτω ο συντονισμός μόνωσης την παίρνει ως αντιπροσωπευτική υπέρταση πολύ ταχέος μετώπου.</p>`+inscoHTML({Us:800,Um:800,H:0,tov:{k:1.4,lr:1.1},slow:{Ue2:2.0,Up2:3.0,Ups:1300},peaks:{vffo:+(Math.abs(mx.v)/1e3).toFixed(1)},insulations:['gis']},'VFFO από αυτήν την προσομοίωση');}
+function dsRestrikeTheory(){const s=S.sim,m=(S.tutMeta||{}).gis;if(!s||!m)return '';const pu=m.Vp;
+ let h=`<ul class="eqs"><li>Τάση διάσπασης των επαφών: ${m.op==='open'?'U_b(t) = U_m·(t − t₀)/T_s μετά το t₀ (οι επαφές ανοίγουν)':'U_b(t) = U_m·(1 − (t − t₀)/T_s) (οι επαφές πλησιάζουν, ακουμπούν στο t₀ + T_s)'}, U_m = ${fmt(m.Um/pu,3)} pu, T_s = ${eng(m.Ts,'s')}</li>
+  <li>Διάσπαση όταν |u_s − u_ζυγού| ≥ U_b(t)· ο σπινθήρας σβήνει όταν το ρεύμα του πέσει κάτω από I_ext, και ο ζυγός μένει στην τάση της πηγής εκείνης της στιγμής</li></ul>`;
+ if(s.t<m.stop-1e-9)return h+'<p class="muted small">Τρέξε ως το τέλος για τον κατάλογο των διασπάσεων.</p>';
+ const ev=(s.events?.().list||[]).filter(e=>e.kind==='gap'&&e.v===1),r=rawSeries('V:DS1'),u=rawSeries('Y:VLB');
+ const rows=ev.map(e=>{let k=0;if(r)while(k<r.t.length-1&&r.t[k+1]<e.t)k++;return {t:e.t,dU:r?Math.abs(r.y[k]):NaN};});
+ const mx=rows.reduce((a,q)=>q.dU>a.dU?q:a,{dU:0,t:NaN}),end=u?u.y[u.y.length-1]:NaN;
+ h+=`<p>Διασπάσεις: <b>${rows.length}</b>· η μεγαλύτερη τάση στις επαφές τη στιγμή μιας διάσπασης: <b>${fmt(mx.dU/pu,3)} pu</b> (${eng(mx.dU,'V')}) στα ${eng(mx.t,'s',4)}.${m.op==='open'?` Παγιδευμένο φορτίο στον ζυγό στο τέλος: <b>${fmt(end/pu,3)} pu</b>.`:''}</p>`;
+ if(rows.length)h+=`<table class="cmp"><thead><tr><th>#</th><th>Στιγμή</th><th>ΔU (pu)</th><th>U_b(t) (pu)</th></tr></thead><tbody>${rows.slice(0,40).map((q,i)=>{const f=Math.min(1,Math.max(0,(q.t-m.t0)/m.Ts)),ub=m.op==='open'?m.Um*f:m.Um*(1-f);return `<tr><td>${i+1}</td><td>${eng(q.t,'s',5)}</td><td>${fmt(q.dU/pu,3)}</td><td>${fmt(ub/pu,3)}</td></tr>`;}).join('')}</tbody></table>`;
+ return h+'<p class="muted small">Η μεγαλύτερη ΔU είναι αυτή που ξεκινά τα πολύ γρήγορα μεταβατικά στον ζυγό (tutorial gis_vfto: ΔU = 2 pu με παγιδευμένο φορτίο −1 pu).</p>';}
+// 4.22 (ROADMAP §51): the insulation co-ordination of a station on the engine (pcl.insulation through the local server, study
+// 'insulation'): the options of the tutorial and, where the tutorial has a simulation, its peaks as the representative
+// fast-front or very-fast-front overvoltage; the table of the levels and the report as one HTML file
+const INSCO={key:null,busy:null,r:null,error:null,last:null};
+let inscoOpts=null;
+function inscoHTML(o,lead){inscoOpts=o;const key=JSON.stringify(o),st=INSCO.key===key?INSCO:{},q=st.r,f=(x,d=4)=>x===null||x===undefined?'—':fmt(x,d),INS={external:'εξωτερική',gis:'GIS (SF6)',liquid:'σε υγρό',solid:'στερεή'};
+ let h=`<div class="tm" id="insco"><span class="badge">Συντονισμός μόνωσης (IEC 60071-2)</span> U_s = <b>${f(o.Us)} kV</b>, U_m = ${f(o.Um||o.Us)} kV${o.H?`, υψόμετρο ${f(o.H)} m`:''}${lead?' · '+lead:''}
+  <p><button data-insco="run" ${INSCO.busy?'disabled':''}>▶ Συντονισμός μόνωσης</button> <button data-insco="report" ${INSCO.busy?'disabled':''} title="Ένα αρχείο HTML με τα βήματα του IEC 60071-2, τους πίνακες και τα δεδομένα">⬇ Αναφορά συντονισμού</button>
+  <span class="muted small">${INSCO.busy?'Τρέχει στο engine…':''}</span></p>`;
+ if(st.error)h+=`<p class="bad" id="insco-error">${esc(st.error)}</p>`;
+ if(q){h+=`<table class="cmp" id="insco-table"><thead><tr><th>Μόνωση</th><th>Απαιτούμενες (kV)</th><th>Τυποποιημένο επίπεδο</th><th>Περιθώρια</th></tr></thead><tbody>${Object.entries(q.insulation).map(([k,x])=>{
+   const nd=Object.entries(x.need).filter(([,v])=>v).map(([n,v])=>`${{sd:'SDWV',si:'SIWV',li:'LIWV'}[n]||n} ${f(v,4)}`).join(', '),lv=Object.entries(x.level).map(([n,v])=>`${{sd:'SDWV',si:'SIWV',sipp:'SIWV φ–φ',silong:'SIWV διαμ.',li:'LIWV'}[n]||n} ${f(v,5)}`).join(', ');
+   const mg=Object.entries(x.margin||{}).filter(([,v])=>v!==null).map(([n,v])=>`${{sd:'SDWV',si:'SIWV',li:'LIWV'}[n]||n} ${f(100*v,3)} %`).join(', ');
+   return `<tr><td>${esc(INS[k]||k)}</td><td>${nd}</td><td class="${x.covered?'good':'warn-text'}">${lv}${x.covered?'':' (δεν καλύπτεται)'}</td><td>${mg}</td></tr>`;}).join('')}</tbody></table>`;
+  if(q.k)h+=`<p class="small">Συντελεστής σφάλματος προς γη από το δίκτυο: k = <b>${f(q.k,4)}</b>.</p>`;}
+ return h+'</div>';}
+async function inscoAct(what){const o=inscoOpts;if(!o||INSCO.busy)return;const key=JSON.stringify(o);if(INSCO.key!==key){INSCO.r=null;INSCO.last=null;}INSCO.key=key;INSCO.busy=what;INSCO.error=null;renderTheory();
+ try{const q={study:'insulation',options:o};if(what==='report'){const r=await api('network_report',q);INSCO.r=r.summary;INSCO.last=r.name;download(r.name,r.html,'text/html');}else{const r=await api('network_study',q);INSCO.r=r.summary;}}
+ catch(e){INSCO.r=null;INSCO.error=/fetch|NetworkError|Load failed/i.test(e.message)?'Ο συντονισμός τρέχει στο engine: ξεκίνα τον τοπικό server (python run.py) και δοκίμασε ξανά.':e.message;}
+ INSCO.busy=null;renderTheory();}
+// the tutorial of the procedure itself (insco_study): the worked example of a 245 kV station, or a 420 / 800 kV station
+function inscoTheory(){const m=(S.tutMeta||{}).insco;if(!m)return '';
+ let o=m.options;if(m.emt){const r=rawSeries('Y:VT');if(!r||!S.sim||S.sim.t<m.stop-1e-9)return '<p class="muted small">Τρέξε ως τα 20 μs: η κορυφή στον μετασχηματιστή γίνεται η υπέρταση ταχέος μετώπου του συντονισμού.</p>';
+  const pk=r.y.reduce((a,v)=>Math.max(a,Math.abs(v)),0);o={...o,peaks:{...(o.peaks||{}),fast:+(pk/1e3).toFixed(1)}};}
+ return `<ul class="eqs"><li>Βήμα 1: αντιπροσωπευτικές υπερτάσεις: προσωρινές από τον συντελεστή σφάλματος k και την απόρριψη φορτίου, βραδέος μετώπου από τις τιμές 2 % U_e2, U_p2 με αποκοπή 1,25·U_e2 − 0,25 και 1,25·U_p2 − 0,43 και τα αλεξικέραυνα (U_ps), ταχέος μετώπου από την απλοποιημένη στατιστική μέθοδο U_cw = U_pl + (A/n)·L/(L_sp + L_a), L_a = R_a/r</li>
+  <li>Βήμα 2: U_cw = K_c·U_rp, με το K_cd του Σχήματος 7 για τα αλεξικέραυνα· βήμα 3: U_rw = U_cw·K_s·K_a, K_s = 1,15 (εσωτερική) ή 1,05 (εξωτερική), K_a = e^(m·H/8150)</li>
+  <li>Βήμα 4: μετατροπή με τους συντελεστές των Πινάκων 1 (περιοχή I) και 2 (περιοχή II)· βήμα 5: το μικρότερο τυποποιημένο επίπεδο του IEC 60071-1 που τα καλύπτει</li></ul>`+inscoHTML(o,m.emt?'ταχέος μετώπου από την προσομοίωση':m.lead);}
 function netFaultTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.grid||!window.NetLib)return '';
  const g=m.xf?NetLib.behindXF(m.grid,m.xfp):{seq:NetLib.gridZ(m.grid)},z=g.seq,ref=NetLib.faultCurrents(g,{kind:m.kind}),Un=m.xf?m.xfp.U2:m.grid.Un;
  const Z1=Math.hypot(z.R1,z.X1),c2=(a,b)=>Math.hypot(a,b);
@@ -2284,10 +2356,10 @@ function srmTheory(){const s=S.sim,m=S.tutMeta||{},srm=s?.net.compInfo.get('M1')
  const Wd=440,Hd=220,Im=Math.max(1.25*imx,5),Pm=1.08*P.srmPsi(g,Math.PI,Im),X=i=>40+(Wd-50)*i/Im,Y=v=>Hd-24-(Hd-32)*v/Pm;
  const curve=th=>'M'+[...Array(61).keys()].map(k=>{const i=Im*k/60;return X(i).toFixed(1)+','+Y(P.srmPsi(g,th,i)).toFixed(1);}).join(' L');
  const step=Math.max(1,Math.floor(pts.length/600)),loop='M'+pts.filter((_,k)=>k%step===0).map(([i,v])=>X(i).toFixed(1)+','+Y(v).toFixed(1)).join(' L')+' Z';
- h+=`<svg class="bfchart" viewBox="0 0 ${Wd} ${Hd}" role="img" aria-label="Καμπύλες μαγνήτισης και βρόχος ψ–i της φάσης 1"><rect x="40" y="8" width="${Wd-50}" height="${Hd-32}" class="frame"/>
+ h+=`<svg class="bfchart" viewBox="0 0 ${Wd} ${Hd}" role="img" aria-label="Καμπύλες μαγνήτισης και βρόχος ψ–i της φάσης 1">${PlotCore.svgFrame({W:Wd,H:Hd,ml:40,mr:10,mt:8,mb:24,x:[0,Im],y:[0,Pm],xPlain:true,yPlain:true}).svg}
   ${[[0,'0° (μη ευθυγρ.)'],[Math.PI/2,'90°'],[Math.PI,'180° (ευθυγρ.)']].map(([th,l])=>`<path d="${curve(th)}" fill="none" stroke="#8a9a94" stroke-width="1"/><text x="${X(Im)-4}" y="${Y(P.srmPsi(g,th,Im))-4}" text-anchor="end">${l}</text>`).join('')}
   <path d="${loop}" fill="#0f766e" fill-opacity=".18" stroke="#0f766e" stroke-width="1.4"/>
-  <text x="${(Wd+40)/2}" y="${Hd-4}" text-anchor="middle">i₁ (A), ως ${eng(Im,'A',3)}</text><text x="10" y="${Hd/2}" transform="rotate(-90 10 ${Hd/2})" text-anchor="middle">ψ₁ (V·s)</text></svg>`;
+  <text x="${(Wd+40)/2}" y="${Hd-1}" text-anchor="middle">i₁ (A)</text><text x="10" y="${Hd/2}" transform="rotate(-90 10 ${Hd/2})" text-anchor="middle">ψ₁ (V·s)</text></svg>`;
  h+=cmpRows([['μέση ροπή: από τον βρόχο N·N_r·W/(2π) ↔ μέση τ_e',tl,ta,'N·m'],['μέση ροπή: τ_L + b·ω ↔ μέση τ_e',m.TL+b*w,ta,'N·m'],['ταχύτητα ω',m.wref,w,'rad/s']]);
  return h+`<p class="small">Ενέργεια ανά παλμό W = ∮ i dψ = <b>${eng(W,'J',4)}</b> (περίοδος ${eng(Te,'s',3)}). Κυμάτωση ροπής ${eng(tmin,'N·m',3)} … ${eng(tmax,'N·m',3)}. i_ref = ${eng(iref,'A',3)}: με ιδανικό σταθερό ρεύμα από 0° ως 180° θα έδινε ${eng(tb,'N·m',3)}.</p>
   <p class="small muted">Ο βρόχος είναι η φάση 1 στην τελευταία ηλεκτρική περίοδο. Ξεκινά κοντά στην καμπύλη της μη ευθυγραμμισμένης θέσης όσο η φάση άγει με +V_dc, το ρεύμα κρατιέται στη ζώνη υστέρησης καθώς η L μεγαλώνει, και μετά το θ_off η ροή πέφτει με −V_dc. Οι τιμές της μηχανής είναι τυπικές.</p>`+evalOrderHTML();}
@@ -2591,8 +2663,9 @@ function vtTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.U0)return '';const e
  if(pts.length>1){const W=560,H=200,x0=Math.log10(Math.min(...pts.map(p=>p[0]))),x1=Math.log10(Math.max(...pts.map(p=>p[0]))),y1=Math.max(...pts.map(p=>p[1]))*1.05,y0=.9*U0,X=t=>34+(W-40)*(Math.log10(t)-x0)/((x1-x0)||1),Y=v=>6+(H-28)*(1-(v-y0)/(y1-y0));
   const cur='M'+pts.map(p=>`${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' L'),u0=`<line class="diag" x1="34" x2="${W-6}" y1="${Y(U0).toFixed(1)}" y2="${Y(U0).toFixed(1)}"/>`;
   const dot=Number.isFinite(tOn)?`<circle cx="${X(tOn).toFixed(1)}" cy="${Y(ramp||tOn<P.waveMeasure({kind:'dexp',n:1,tau1:w.tau1,tau2:w.tau2,eta:1,I0:1,t0:0},'tp').tp?uOn:m.Vpk).toFixed(1)}" r="3"/>`:'';
-  const tk=[x0,x1].map((lx,i)=>`<text x="${X(10**lx)}" y="${H-8}" text-anchor="${i?'end':'start'}">${eng(10**lx,'s',2)}</text>`).join('')+`<text x="30" y="${Y(U0)+3}" text-anchor="end">U₀</text><text x="30" y="${Y(y1/1.05)+3}" text-anchor="end">${eng(y1/1.05,'V',2)}</text>`;
-  h+=`<svg class="bfchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Καμπύλη τάσης–χρόνου"><rect x="34" y="6" width="${W-40}" height="${H-28}" class="frame"/>${u0}<path class="map" d="${cur}"/>${dot}${tk}<text x="${(W+34)/2}" y="${H-1}" text-anchor="middle">χρόνος ως τη διάσπαση (λογαριθμικά)</text></svg>
+  // 4.22 (§63 part 2): the frame and the ticks of the core (log time, the voltage in V), the same mapping as X, Y
+  const tk=`<text x="${W-8}" y="${Y(U0)-3}" text-anchor="end">U₀</text>`,FR=PlotCore.svgFrame({W,H,x:[10**x0,10**x1],xlog:true,xUnit:'s',y:[y0,y1],yUnit:'V'}).svg;
+  h+=`<svg class="bfchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Καμπύλη τάσης–χρόνου">${FR}${u0}<path class="map" d="${cur}"/>${dot}${tk}<text x="${(W+34)/2}" y="${H-1}" text-anchor="middle">χρόνος ως τη διάσπαση (λογαριθμικά)</text></svg>
    <p class="muted small">Η καμπύλη: ${ramp?'ράμπες από 50 ως 50 000 kV/μs':'κρουστικές 1,2/50 από 1,02 ως 5 × U₀: η τάση τη στιγμή της διάσπασης στο μέτωπο, η κορυφή στην ουρά'}. Η κουκκίδα είναι η προσομοίωση.</p>`;}
  if(!done)return h+'<p class="muted small">Τρέξε ως το τέλος για τη σύγκριση.</p>';
  if(!Number.isFinite(tOn))return h+`<p class="${Number.isFinite(tbE)?'bad':'good'}">Το διάκενο δεν διασπάστηκε.${Number.isFinite(tbE)?' Το κριτήριο δίνει διάσπαση στο '+eng(tbE,'s',4)+'.':' Ούτε το κριτήριο δίνει διάσπαση: η τάση δεν μένει αρκετά πάνω από το U₀.'}</p>`;
@@ -2637,6 +2710,8 @@ const STUDY={key:null,busy:null,r:null,error:null,last:null,view:null,file:null,
 const studyNet=m=>STUDY.file?STUDY.file.name:m.net;
 function studyQ(m){const id=STUDY.file?'file:'+STUDY.file.name:'case:'+m.net;if(STUDY.netId!==id){STUDY.netId=id;STUDY.edits=[];}
  const q=STUDY.file?{...(STUDY.file.feeder?{feeder:STUDY.file.feeder}:{network:STUDY.file.network}),study:m.study,options:m.options||{}}:{case:m.net,study:m.study,options:m.options||{}};if(STUDY.edits.length)q.edits=STUDY.edits;
+ // 4.22 (ROADMAP §69): the places of a GeoJSON that was opened for this network, and the map
+ if(STUDY.geo&&STUDY.geo.id===id){q.geojson=STUDY.geo.gj;if(STUDY.geo.len)q.geo_lengths=true;}else if(STUDY.geo)STUDY.geo=null;if(STUDY.map&&!STUDY.file?.feeder)q.map=true;
  if(m.emt)q.options=m.emt.kind==='spectrum'?{...q.options,spectra:emtSpectra(m.emt)}:{...q.options,emt:emtReadings(m.emt)};      // 4.21: what the run gives now (pcl.se.from_emt, pcl.harmonic.spectrum_from)
  return q;}
 // 4.21: the Fourier blocks of the running simulation (magnitude, phase on sin from t = 0) as the spectrum of the loads that pcl.harmonic takes
@@ -2672,7 +2747,7 @@ async function studyAct(what){const m=S.tutMeta?.study;if(!m||STUDY.busy)return;
  try{const q=studyQ(m);
   // 4.21: m.layer, the layer the picture opens with
   if(what==='report'){const r=await api('network_report',q);STUDY.r={summary:r.summary,study:m.study};STUDY.last=r.name;download(r.name,r.html,'text/html');}
-  else{const r=await api('network_study',{...q,view:'only',...(m.layer?{layer:m.layer}:{})});STUDY.r={summary:r.summary,study:r.study,network:r.network};STUDY.view=r.view?{view:r.view,layers:r.layers,layer:r.layer,q,edit:r.edit,done:r.network.edits||[],name:studyNet(m),id:STUDY.netId}:null;}}
+  else{const r=await api('network_study',{...q,view:'only',...(m.layer?{layer:m.layer}:{})});STUDY.r={summary:r.summary,study:r.study,network:r.network};STUDY.view=r.view?{view:r.view,layers:r.layers,layer:r.layer,q,edit:r.edit,done:r.network.edits||[],name:studyNet(m),id:STUDY.netId+(q.map?':map':''),geo:r.geo||null,geoIn:r.network.geo||null}:null;}}
  catch(e){STUDY.r=null;STUDY.error=/fetch|NetworkError|Load failed/i.test(e.message)?'Η μελέτη τρέχει στο engine: ξεκίνα τον τοπικό server (python run.py) και δοκίμασε ξανά.':e.message;}
  STUDY.busy=null;if(STUDY.key===key){renderTheory();if(what==='view'&&STUDY.view)netViewOpen();else if(STUDY.view&&!$('#netview').hidden)netViewOpen();}}
 // the window of the viewer (netview.js): the layers the study can feed, names, a bus by its name, the picture as SVG or DXF
@@ -2687,6 +2762,15 @@ function netViewOpen(){const d=STUDY.view;if(!d||!window.NetView)return;const bo
  $('#nv-fit').onclick=()=>v.fit();$('#nv-in').onclick=()=>v.zoom(1.5);$('#nv-out').onclick=()=>v.zoom(1/1.5);
  $('#nv-find').onchange=e=>{const ok=v.goto(e.target.value.trim());e.target.classList.toggle('bad',!ok&&!!e.target.value.trim());};
  const file=async(action,extra)=>{try{const r=await api(action,{...d.q,...extra});download(r.name,r.text,r.mime);}catch(e){$('#nv-info').textContent=e.message;}};
+ // 4.22 (ROADMAP §69): the map when every bus has a place; the places from a GeoJSON; the network as GeoJSON with the results
+ const G=d.geo||{};$('#nv-maplab').hidden=!G.map;$('#nv-map').checked=!!d.q.map;$('#nv-geojson').hidden=!(G.buses>0);$('#nv-geolen').checked=!!STUDY.geo?.len;
+ $('#nv-map').onchange=e=>{STUDY.map=e.target.checked;STUDY.view=null;studyAct('view');};
+ $('#nv-geojson').onclick=()=>file('network_view',{format:'geojson'});
+ $('#nv-geoin').onclick=()=>{const i=$('#nv-geofile');i.value='';i.click();};
+ $('#nv-geofile').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;let gj;try{gj=JSON.parse(await f.text());}catch(x){$('#nv-info').textContent='Το αρχείο δεν είναι JSON.';return;}
+  STUDY.geo={id:STUDY.netId,gj,len:$('#nv-geolen').checked,name:f.name};STUDY.view=null;studyAct('view');};
+ if(d.geoIn){const g=d.geoIn,L=g.lengths||[];$('#nv-info').textContent=`GeoJSON${STUDY.geo?.name?' «'+STUDY.geo.name+'»':''}: θέσεις ${g.buses} ζυγών, ${g.routes} διαδρομές`+(L.length?`, ${L.length} γραμμές με το μήκος της διαδρομής τους`:'')+(g.unknown?.length?` · χωρίς αντιστοίχιση: ${g.unknown.slice(0,6).join(', ')}${g.unknown.length>6?'…':''}`:'')+'.';}
+ if(d.view.geo)$('#nv-title').textContent+=` · χάρτης (Web Mercator, σφάλμα κλίμακας ως ${fmt(100*d.view.geo.scale_err,2)} % στις άκρες)`;
  $('#nv-svg').onclick=()=>file('network_view',{format:'svg',layer:v.state.layer});$('#nv-dxf').onclick=()=>file('network_view',{format:'dxf',layer:v.state.layer});
  $('#nv-save').onclick=()=>file('network_save',{format:$('#nv-savefmt').value});
  $('#nv-close').onclick=()=>{box.hidden=true;NV.v?.destroy();NV.v=null;NV.sel=null;};
@@ -2766,9 +2850,8 @@ function studyTheory(){const m=S.tutMeta?.study;if(!m)return '';const key=studyK
    <li>Πιο αδύναμος ζυγός <b>${esc(q.bus)}</b>: |V| από <b>${f(q.V0,4)}</b> σε <b>${f(q.V,4)} pu</b> στο όριο${q.weak.length>1?' · μετά: '+q.weak.slice(1).map(esc).join(', '):''} · χαμηλότερη τάση στο όριο ${f(q.Vmin,4)} pu (ζυγός ${esc(q.Vmin_bus)})</li>
    <li id="study-cpf-q">${q.q_limits?`Όρια αέργου: <b>${q.events-q.at_start}</b> αλλαγές τύπου ζυγού στη διαδρομή${q.at_start?`, ${q.at_start} ${q.at_start===1?'γεννήτρια':'γεννήτριες'} σε όριο ήδη στο σημερινό φορτίο`:''}${q.first.length?' · οι πρώτες: '+q.first.map(e=>`ζυγός ${esc(e.bus)} στο λ = ${f(e.lambda,3)} (${e.to==='PQ'?'φτάνει το '+lim[e.limit]+' όριο':'κρατά ξανά την τάση του'})`).join(' · ')+(q.events-q.at_start>q.first.length?' …':''):''}`:(m.options?.q_limits?'Το δίκτυο δεν έχει όρια αέργου στις γεννήτριές του':'Χωρίς όρια αέργου: κάθε γεννήτρια κρατά την τάση της ως το τέλος')}</li>
    <li>${q.points} σημεία της καμπύλης · ${q.steps.iterations} επαναλήψεις του διορθωτή · ${q.steps.factorizations} παραγοντοποιήσεις · βήματα που κόπηκαν: ${q.steps.cut}</li></ul>
-   <svg class="bfchart" id="study-pv" viewBox="0 0 ${W} ${H}" role="img" aria-label="Καμπύλη P–V του πιο αδύναμου ζυγού" style="max-width:520px"><rect x="${X0}" y="${Y0}" width="${pw}" height="${ph}" class="frame"/>
+   <svg class="bfchart" id="study-pv" viewBox="0 0 ${W} ${H}" role="img" aria-label="Καμπύλη P–V του πιο αδύναμου ζυγού" style="max-width:520px">${PlotCore.svgFrame({W,H,ml:X0,mr:W-X0-pw,mt:Y0,mb:H-Y0-ph,x:[ln,lx],y:[0,vy],xPlain:true,yPlain:true}).svg}
     <line class="diag" x1="${X(C.lambda[C.nose]).toFixed(1)}" x2="${X(C.lambda[C.nose]).toFixed(1)}" y1="${Y0}" y2="${Y0+ph}"/><path class="map" d="${pth}"/><circle cx="${X(C.lambda[C.nose]).toFixed(1)}" cy="${Y(C.V[C.nose]).toFixed(1)}" r="3"/>
-    <text x="${X0-4}" y="${Y(vy/1.05)+3}" text-anchor="end">${f(vy/1.05,3)}</text><text x="${X0-4}" y="${Y0+ph}" text-anchor="end">0</text><text x="${X0}" y="${H-12}" text-anchor="start">λ = ${f(ln,2)}</text><text x="${X0+pw}" y="${H-12}" text-anchor="end">${f(lx,4)}</text>
     <text x="${X0+pw/2}" y="${H-2}" text-anchor="middle">|V| του ζυγού ${esc(C.bus)} (pu) ως προς το λ · η κουκκίδα είναι το όριο φόρτισης</text></svg><ul class="eqs">`;}
   // 4.19.5: state estimation (pcl.se): the two tests, what was taken out, how far the estimate is from the load flow the measurements came from
   else if(st.r.study==='se'){const e=q.error,pl=q.planted>0;
@@ -2793,9 +2876,8 @@ function studyTheory(){const m=S.tutMeta?.study;if(!m)return '';const key=studyK
     ${C?`<li id="study-harm-res">Παράλληλοι συντονισμοί όπως φαίνονται από τον ζυγό ${esc(C.bus)}: ${C.peaks.length?C.peaks.map(p=>`τάξη <b>${f(p[0],4)}</b> (${f(p[1],3)} pu)`).join(' · '):'κανένας ως την τάξη '+f(C.h[C.h.length-1],3)}</li>`:''}
     ${q.message?`<li>${esc(q.message)}</li>`:''}`;
     if(C){const W=420,H=170,X0=38,Y0=8,pw=W-X0-8,ph=H-Y0-24,hx=C.h[C.h.length-1],zy=Math.max(...C.Z)*1.05,X=v=>X0+pw*(v-1)/(hx-1),Y=v=>Y0+ph*(1-v/zy);
-     h+=`</ul><svg class="bfchart" id="study-scan" viewBox="0 0 ${W} ${H}" role="img" aria-label="Σάρωση συχνότητας από τον ζυγό ${esc(C.bus)}" style="max-width:520px"><rect x="${X0}" y="${Y0}" width="${pw}" height="${ph}" class="frame"/>
+     h+=`</ul><svg class="bfchart" id="study-scan" viewBox="0 0 ${W} ${H}" role="img" aria-label="Σάρωση συχνότητας από τον ζυγό ${esc(C.bus)}" style="max-width:520px">${PlotCore.svgFrame({W,H,ml:X0,mr:W-X0-pw,mt:Y0,mb:H-Y0-ph,x:[1,hx],y:[0,zy],xPlain:true,yPlain:true}).svg}
       ${ord.map(o=>`<line class="diag" x1="${X(o).toFixed(1)}" x2="${X(o).toFixed(1)}" y1="${Y0}" y2="${Y0+ph}"/>`).join('')}<path class="map" d="M${C.h.map((v,i)=>`${X(v).toFixed(1)},${Y(C.Z[i]).toFixed(1)}`).join(' L')}"/>
-      <text x="${X0-4}" y="${Y(zy/1.05)+3}" text-anchor="end">${f(zy/1.05,3)}</text><text x="${X0-4}" y="${Y0+ph}" text-anchor="end">0</text><text x="${X0}" y="${H-12}" text-anchor="start">τάξη 1</text><text x="${X0+pw}" y="${H-12}" text-anchor="end">${f(hx,3)}</text>
       <text x="${X0+pw/2}" y="${H-2}" text-anchor="middle">|Z| από τον ζυγό ${esc(C.bus)} (pu) ως προς την τάξη · οι διακεκομμένες είναι οι τάξεις των πηγών</text></svg><ul class="eqs">`;}}}
   // 4.19.5: the three-phase load flow of a feeder (pcl.unbalanced): the voltage of every phase, the unbalance, the regulators, the
   // published results of the feeder, and the profile of the three phases along the buses
@@ -2829,8 +2911,8 @@ function studyTheory(){const m=S.tutMeta?.study;if(!m)return '';const key=studyK
     ${q.settled===false?`<li id="study-unb-hunt"><b class="bad">Οι λήψεις δεν ισορρόπησαν</b>: η ζώνη ενός ρυθμιστή είναι στενότερη από την τάση μιας λήψης</li>`:''}
     ${P?`<li id="study-unb-pub">Απέναντι στα δημοσιευμένα αποτελέσματα του τροφοδότη: ${P.values} τάσεις φάσης με μέγιστη διαφορά <b>${f(P.dV,2)} pu</b> και ${f(P.dangle,2)}°${P.losses_kW!==null&&P.losses_kW!==undefined?` · απώλειες ${f(q.losses_kW,6)} kW, δημοσιευμένες ${f(P.losses_kW,6)} kW`:''}${P.taps?` · δημοσιευμένες λήψεις: ${Object.entries(P.taps).map(([p,t])=>p+' '+t).join(', ')}`:''}</li>`:q.published_taps?`<li id="study-unb-pub">Τα δημοσιευμένα αποτελέσματα του τροφοδότη είναι για τις λήψεις ${Object.entries(q.published_taps).map(([p,t])=>p+' '+t).join(', ')}: με άλλες λήψεις είναι άλλο σημείο λειτουργίας και δεν συγκρίνονται</li>`:''}`;
     if(pr&&pr.length>1&&pr.length<=60){const W=420,H=182,X0=38,Y0=8,pw=W-X0-8,ph=H-Y0-42,lo=Math.min(0.94,q.low.V-0.005),hi=Math.max(1.06,q.high.V+0.005),X=i=>X0+pw*(i+0.5)/pr.length,Y=v=>Y0+ph*(1-(v-lo)/(hi-lo)),COL={a:'#c2410c',b:'#0f766e',c:'#5b4fb0'};
-     h+=`</ul><svg class="bfchart" id="study-profile" viewBox="0 0 ${W} ${H}" role="img" aria-label="Τάση κάθε φάσης σε κάθε ζυγό" style="max-width:520px"><rect x="${X0}" y="${Y0}" width="${pw}" height="${ph}" class="frame"/>
-      ${[0.95,1.05].map(v=>`<line class="diag" x1="${X0}" x2="${X0+pw}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text x="${X0-4}" y="${(Y(v)+3).toFixed(1)}" text-anchor="end">${f(v,3)}</text>`).join('')}
+     h+=`</ul><svg class="bfchart" id="study-profile" viewBox="0 0 ${W} ${H}" role="img" aria-label="Τάση κάθε φάσης σε κάθε ζυγό" style="max-width:520px">${PlotCore.svgFrame({W,H,ml:X0,mr:W-X0-pw,mt:Y0,mb:H-Y0-ph,x:[0,1],y:[lo,hi],xTicks:false,yPlain:true}).svg}
+      ${[0.95,1.05].map(v=>`<line class="diag" x1="${X0}" x2="${X0+pw}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/>`).join('')}
       ${pr.map((b,i)=>`<text x="${X(i).toFixed(1)}" y="${Y0+ph+9}" text-anchor="middle">${esc(b.bus)}</text>`+['a','b','c'].map(p=>b[p]===null||b[p]===undefined?'':`<circle data-ph="${p}" cx="${X(i).toFixed(1)}" cy="${Y(b[p]).toFixed(1)}" r="2.2" style="fill:${COL[p]}"/>`).join('')).join('')}
       ${['a','b','c'].map((p,i)=>`<circle cx="${X0+8+i*46}" cy="${H-19}" r="2.2" style="fill:${COL[p]}"/><text x="${X0+13+i*46}" y="${H-16}" text-anchor="start">φάση ${p}</text>`).join('')}
       <text x="${X0+pw}" y="${H-2}" text-anchor="end">|V| κάθε φάσης (pu) σε κάθε ζυγό · οι διακεκομμένες είναι τα 0,95 και 1,05 pu</text></svg><ul class="eqs">`;}}}
@@ -2883,6 +2965,10 @@ function formulaTheory(t){
  if(t.topology==='trv_terminal')return trvTerminalTheory();
  if(t.topology==='trv_slf')return trvSlfTheory();
  if(t.topology==='lightning_gis')return lightningTheory();
+ if(t.topology==='gis765_lv')return gis765Theory();
+ if(t.topology==='gis_vfto')return gisVftoTheory();
+ if(t.topology==='ds_restrike')return dsRestrikeTheory();
+ if(t.topology==='insco_study')return inscoTheory();
  if(t.topology==='line_fd'||t.topology==='cable_fd')return lineFdTheory();
  if(t.topology==='cable_xb')return cableXbTheory();
  if(t.topology==='gen_sc')return genScTheory();
@@ -3129,7 +3215,7 @@ function boot(){
  $('#play').onclick=()=>S.running?pause():play();$('#reset').onclick=reset;$('#step1').onclick=()=>stepT(1);$('#step10').onclick=()=>stepT(10);$('#toend').onclick=runToEnd;
  $('#speed').onchange=e=>setSpeed(e.target.value);
  $('#step-mode').onchange=e=>{editor.setSolve({step:e.target.value==='var'?'var':''});};
- $('#theory').addEventListener('click',e=>{const b=e.target.closest('[data-study]');if(b)studyAct(b.dataset.study);});$('#study-open').addEventListener('change',e=>studyOpen(e.target.files[0]));   // 4.19.1: the buttons of a study card (the card is redrawn while the simulation runs)
+ $('#theory').addEventListener('click',e=>{const b=e.target.closest('[data-study]');if(b)studyAct(b.dataset.study);const c=e.target.closest('[data-insco]');if(c)inscoAct(c.dataset.insco);});$('#study-open').addEventListener('change',e=>studyOpen(e.target.files[0]));   // 4.19.1: the buttons of a study card (the card is redrawn while the simulation runs)
  document.querySelectorAll('[data-dsev]').forEach(x=>x.onchange=renderDiag);$('#diag-src').onchange=renderDiag;$('#diag-q').oninput=renderDiag;
  $('#diag-check').onclick=()=>{if(S.sim&&!S.error)S.sim.stepCheck();renderDiag();};
  $('#diag-clear').onclick=()=>{if(S.sim){S.sim.dg=new Map();S.sim.dgVer=(S.sim.dgVer||0)+1;window.Live?.call('dgClear');}S.batchDiag=[];renderDiag();};

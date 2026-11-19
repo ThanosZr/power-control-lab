@@ -1162,6 +1162,59 @@ def v421_rows(add):
         add(A, f'γέφυρα 6 παλμών χωρίς L_s, από το EMT: τάξη {k}', 'ιδανική γέφυρα 1/h', 1 / k, sp[k][0], 1.5e-3, '')
 
 
+def v422_rows(add):
+    """4.22: the GIS substation and its very fast transients (the 765 kV GIS of IEC TR 60071-4 against the method of
+    characteristics of pcl.surge and the closed forms), the leader progression model against an independent integration,
+    the coaxial data of a line, the multistory tower against its paper, the insulation co-ordination against the worked
+    example of IEC 60071-2 and Table 4 of IEC 60099-5, and the distances on the earth of pcl.geo (tests/test_gis.py,
+    tests/test_insulation.py, tests/test_geo.py)."""
+    import json
+    import math
+    import subprocess
+    import numpy as np
+    sys.path.insert(0, str(ROOT / 'tests'))
+    from test_gis import lpm_reference
+    from pcl import geo as G
+    from pcl import insulation as I
+    from pcl import surge
+    A = 'Υποσταθμός GIS, VFTO και συντονισμός μόνωσης (4.22)'
+    js = lambda w: json.loads(subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'gis_cases.js'), w], capture_output=True, text=True, timeout=1800, cwd=ROOT).stdout)
+    tl = js('tl')
+    add(A, 'ομοαξονική γραμμή D = 0,5 m, d = 0,15 m: Z', 'Z = 60·ln(D/d)/√ε_r', 60 * math.log(0.5 / 0.15), tl['coax']['Z'], 1e-9, 'Ω')
+    ms = js('ms')['ms']
+    add(A, 'πολυώροφος πύργος: R₁ (πάνω όροφος)', 'Ishii κ.ά. 1991, Πίν. I: 8,32 Ω', 8.32, ms['R'][0], 0.02, 'Ω')
+    add(A, 'πολυώροφος πύργος: R₄ (κάτω όροφος)', 'Ishii κ.ά. 1991, Πίν. I: 33,47 Ω', 33.47, ms['R'][3], 0.07, 'Ω')
+    add(A, 'πολυώροφος πύργος: L₄', 'Ishii κ.ά. 1991, Πίν. I: 14,01 μH', 14.01, ms['L'][3] * 1e6, 0.06, 'μH')
+    lp = js('lpm')['lpm_1000000000000']
+    ref = lpm_reference(1e12)
+    add(A, 'LPM, διάκενο 1 m, ράμπα 1 MV/μs: χρόνος διάσπασης', 'ανεξάρτητη ολοκλήρωση (solve_ivp) των εξισώσεων των οχετών και του οχετού', ref * 1e6, lp['h1e-10'] * 1e6, 2e-3 * ref * 1e6, 'μs')
+    tut = js('tut')
+    c = tut['gis765']
+    add(A, 'GIS 765 kV χαμηλής τάσης (TR 60071-4, περ. 4): U_C1, πρώτο σκαλί', '100 V στον προσαρμοσμένο ζυγό (200 V πίσω από 75 Ω, Z = 75 Ω)', 100.0, c['uc'][0], 0.5, 'V')
+    add(A, 'το ίδιο, μετά την ανάκλαση στο J3', '100·(1 + Γ), Γ = −1/3', 200 / 3, c['uc'][1], 2.5, 'V')
+    nw = surge.from_project(c['project'])
+    r = surge.solve(nw, max(c['t']) + 2e-12, 2e-12, {'UK': nw['probes']['VUK']})
+    T = c['t'][-1]
+    add(A, f'το ίδιο: U_UK στα {T * 1e9:.0f} ns', 'μέθοδος των χαρακτηριστικών (pcl.surge)', float(np.interp(T, r['t'], r['UK'])), c['uk'][-1], 2.5, 'V')
+    v = tut['vfto']
+    nw = surge.from_project(v['project'], t_close=v['closes'])
+    r = surge.solve(nw, 2e-6, 4e-12, {'VT29': nw['probes']['VT29']})
+    add(A, 'VFTO στο GIS 800 kV, φορτίο −1 pu: κορυφή στο T29', 'μέθοδος των χαρακτηριστικών (pcl.surge)', float(np.max(np.abs(r['VT29']))) / 1e3, abs(v['peaks']['Y:VT29'][0]) / 1e3, 0.05 * float(np.max(np.abs(r['VT29']))) / 1e3, 'kV')
+    co = I.coordinate(245, H=1000, tov={'k': 1.5, 'lr': 1.4, 'polluted': True}, slow={'Ue2': 1.9, 'Up2': 2.9, 'Ups': 410},
+                      fast={'Upl': 500, 'A': 4500, 'n': 2, 'Lsp': 300, 'Ra': 1 / 400, 'r': 1e-5, 'L': {'external': 60, 'liquid': 30}}, insulations=('external', 'liquid'))
+    ext = co['insulation']['external']
+    add(A, 'IEC 60071-2 G.2 (245 kV, 1000 m): U_rw κρουστικής, εξωτερική φάση–γη', 'το παράδειγμα του προτύπου: 884 kV', 884, ext['required']['li']['pe'], 1.0, 'kV')
+    add(A, 'το ίδιο: U_rw χειρισμών, φάση–φάση', 'το παράδειγμα του προτύπου: 383 kV', 383, ext['required']['sd']['pp'], 1.0, 'kV')
+    add(A, 'το ίδιο: η στάθμη που διαλέγεται (LIWV)', 'το παράδειγμα του προτύπου: 950 kV', 950, ext['level']['li'], 0, 'kV')
+    z = I.protective_zone(1425, 800, 11000, 2, 400, 0.0025, 0.5 / 100 / 1000)
+    add(A, 'IEC 60099-5 Πίν. 4 (420 kV, N = 2, R_t = 0,5 %/100 km/έτος): ζώνη προστασίας', 'ο πίνακας του προτύπου: 72 m', 72, z, 0.5, 'm')
+    p, q = [23.7275, 37.9838], [22.9444, 40.6401]
+    l1, f1, l2, f2 = map(math.radians, (p[0], p[1], q[0], q[1]))
+    cos_law = G.R_EARTH * math.acos(math.sin(f1) * math.sin(f2) + math.cos(f1) * math.cos(f2) * math.cos(l2 - l1))
+    add(A, 'απόσταση δύο σημείων στη σφαίρα (pcl.geo.haversine)', 'νόμος των συνημιτόνων στην ίδια σφαίρα', cos_law, G.haversine(p, q), 1e-6, 'km')
+    add(A, 'Web Mercator, πλάτος 45°: y', 'R·asinh(tan φ), EPSG:3857', G.R_WM * math.asinh(1.0), G.mercator(0, 45)[1], 1e-3, 'm')
+
+
 def checks(o):
     """Rows: (area, quantity, reference, expected, simulated, tolerance (absolute), unit)."""
     rows = []
@@ -1476,6 +1529,7 @@ def checks(o):
     gfm4_rows(add)
     gfm5_rows(add)
     v421_rows(add)
+    v422_rows(add)
     cpf_rows(add)
     sweepc_rows(add)
     se_rows(add)
@@ -1559,6 +1613,9 @@ TESTS = [
     ('tests/test_pmu.py', 'φασιθέτες (PMU) και μέτρα |I| στην εκτίμηση κατάστασης (4.21, ROADMAP §87)', 'οι νέες παράγωγοι απέναντι σε πεπερασμένες διαφορές· ακριβείς μετρήσεις δίνουν τη ροή φορτίου (10⁻⁹)· γωνίες στον χρόνο αναφοράς των PMU· τέσσερις PMU (2, 6, 7, 9) βλέπουν όλο το IEEE 14, τρεις όχι· μόνο PMU = το γραμμικό πρόβλημα των ορθογώνιων τάσεων· λανθασμένος φασιθέτης και |I| βρίσκονται'),
     ('tests/test_emt_se.py', 'εκτίμηση κατάστασης από μετρήσεις του EMT (4.21, ROADMAP §87): η μονάδα PMU3 στο se_emt', 'φασιθέτες όπως τους ορίζει το IEC/IEEE 60255-118-1 (ενεργός τιμή, συνημίτονο, κοινός χρόνος)· TVE της μονάδας (ωh)²/12 = 2,06·10⁻⁵ απέναντι στο ημίτονο των δειγμάτων· το EMT απέχει από τη ροή φορτίου < 4·10⁻⁶· κάθε σχέδιο μετρήσεων βρίσκει τη ροή φορτίου σε 2,5·10⁻⁵, κάθε λάθος βρίσκεται, ο μόνος φασιθέτης τάσης σχεδόν δεν φαίνεται'),
     ('tests/test_emt_harmonic.py', 'φάσμα από το EMT για την αρμονική ροή φορτίου (4.21, ROADMAP §87): γέφυρα 6 παλμών του harm_emt', 'η σύμβαση φάσης (μετατόπιση στον χρόνο, ημίτονο ή συνημίτονο)· χωρίς L_s η ιδανική γέφυρα (1/h με τα πρόσημά της), με L_s η κυματομορφή της μετάβασης με σταθερό ρεύμα DC (0,0014 της θεμελιώδους, 0,32°)· η μελέτη με το φάσμα του EMT όπως με το ιδανικό ως την 25η τάξη'),
+    ('tests/test_gis.py', 'υποσταθμός GIS και πολύ γρήγορα μεταβατικά (4.22, ROADMAP §51, §53, §61): αποζεύκτης με επανεναύσεις, μοντέλο προόδου οχετού (LPM), αρχική τάση γραμμής, ομοαξονικά δεδομένα, πολυώροφος πύργος (`web/studio/mna.js`, `engine/batch.py`, `pcl/surge.py`, `tests/js/gis_cases.js`)', 'επανεναύσεις κλεισίματος απέναντι στον λύτη SciPy· παγιδευμένο φορτίο στο άνοιγμα· LPM απέναντι σε ανεξάρτητη ολοκλήρωση και στον SciPy· Πίν. I του Ishii· το GIS 765 kV του TR 60071-4 και οι κορυφές VFTO απέναντι στη μέθοδο των χαρακτηριστικών'),
+    ('tests/test_insulation.py', 'συντονισμός μόνωσης (4.22, ROADMAP §51, `pcl/insulation.py`)', 'το παράδειγμα G.2 του IEC 60071-2 ολόκληρο (U_cw, K_a, U_rw, μετατροπές, στάθμη 395/950 kV)· οι ζώνες προστασίας του Πίν. 4 του IEC 60099-5· ο συντελεστής σφάλματος γης από τις συμμετρικές συνιστώσες'),
+    ('tests/test_geo.py', 'θέσεις του δικτύου στη γη (4.22, ROADMAP §69, `pcl/geo.py`, `tests/js/geo_cases.js`)', 'haversine απέναντι στον νόμο των συνημιτόνων· Web Mercator απέναντι στο asinh(tan φ)· GeoJSON έξω και πάλι μέσα· μήκος γραμμής από τη διαδρομή της (και η ροή φορτίου το βλέπει)· ο χάρτης δεν αλλάζει τις τιμές των στρώσεων'),
     ('tests/test_ev_weights.py', 'τα βάρη του πολυκριτηριακού του οχήματος (4.18.1)', 'moevc2: w_s↑ ⇒ IAE↓, w_e↑ ⇒ Wh/km↓ και IAE↑, eco < ισορροπημένος < performance στα Wh/km και αντίστροφα στο IAE, keep ≤ 1· το moevc της 4.8 με keep 1,15 και w_s χωρίς επίδραση'),
     ('tests/test_look.py', 'τεχνική όψη του σχεδίου (4.17.3, ROADMAP §65)', 'διαδρομές μόνο οριζόντιες/κατακόρυφες (χωρίς εξομάλυνση) απέναντι σε γνωστές μορφές, σήμανση χωρίς αλλαγή των υπολοίπων, αντίσταση IEC και ANSI, όλα τα σύμβολα της βιβλιοθήκης· `scope_flow.js` στον browser'),
     ('tests/test_plotcore.py', 'πυρήνας των γραφημάτων (4.17.2, ROADMAP §63)', 'ticks χωρίς επικάλυψη για 28 συνδυασμούς διαστήματος και πλάτους, βήματα 1–2–5, ετικέτες με τα δεκαδικά του βήματος και ένα πρόθεμα ανά άξονα, όρια που κρατούν το 0, σταθερή αυτόματη κλίμακα (ανοίγει αμέσως με περιθώριο, κλείνει μετά από 2 s, σταθερή στην παύση)· και `tests/ui/scope_flow.js` στον browser'),
@@ -1642,7 +1699,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 992 tests (Python και Node) και 19 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 1036 tests (Python και Node) και 20 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»· από την 4.22 το `gis_flow.js` τα tutorials του υποσταθμού GIS, τους άξονες των γραφημάτων SVG, το σύρσιμο των ετικετών και τον χάρτη του δικτύου). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',

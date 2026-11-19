@@ -154,7 +154,24 @@ class ApiSurface(unittest.TestCase):
             self.assertIn(k, study.OPTIONS['se'])
         self.assertIn('spectra', study.OPTIONS['harmonic'])
         self.assertEqual(network.MORE[-1], 'case5_acdc')
-        self.assertEqual(sum(len(v) for v in self.now.values()), 851)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 851)        # 851 then; 4.22 adds points
+
+    def test_the_surface_of_4_22(self):
+        """4.22: the insulation co-ordination (pcl.insulation), the method of characteristics (pcl.surge) and the places on the
+        earth (pcl.geo) are experimental, as new modules; the study 'insulation' and the formats of a request are stable
+        additions; one part, the disconnector, and new parameters of the line, the gap and the tower."""
+        from pcl import study
+        for k in ('pcl.insulation.coordinate', 'pcl.insulation.protective_zone', 'pcl.surge.solve', 'pcl.surge.from_project', 'pcl.geo.to_geojson',
+                  'pcl.geo.from_geojson', 'pcl.geo.project', 'pcl.geo.haversine'):
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+            self.assertIn(k, self.now['pcl'], k)
+        self.assertIn('insulation', study.STATION_STUDIES)
+        self.assertEqual(set(self.now['project']['part:DS']['params']), {'op', 't0', 'Ts', 'Um', 'Rarc', 'ext', 'Iext', 'Roff'})
+        for p in ('Dco', 'dco', 'erco', 'kv', 'v0'):
+            self.assertIn(p, self.now['project']['part:TL']['params'])
+        for p in ('model', 'Zt1', 'Zt2', 'gam', 'arms', 'h1', 'h2', 'h3', 'Kp', 'E0p', 'Kn', 'E0n'):
+            self.assertIn(p, self.now['project']['part:TOWER']['params'])
+        self.assertEqual(sum(len(v) for v in self.now.values()), 886)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

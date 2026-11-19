@@ -70,5 +70,27 @@ class AutoRange(unittest.TestCase):
         self.assertEqual([round(x, 9) for x in A['p4']], [4.8, 6.2])  # other channels fit at once
 
 
+class SvgFrame(unittest.TestCase):
+    # 4.22 (ROADMAP §63 part 2): the SVG charts of the app (harmonics, Nyquist, Bode, Poincaré, bifurcation, the cards)
+    def test_ticks_and_mapping(self):
+        F = cases()['svgFrame']
+        self.assertEqual(F['x1'], ['0,0 ms', '0,5 ms', '1,0 ms'])
+        self.assertEqual(F['y1'], ['-1,0 V', '-0,5 V', '0,0 V', '0,5 V', '1,0 V'])
+        self.assertEqual(F['X'], [34, 254, 144])
+        self.assertEqual(F['Y'], [168, 6, 87])
+        self.assertTrue(F['frame'])
+        self.assertTrue(F['inside'])
+        self.assertGreaterEqual(F['gap1'], 6)
+
+    def test_log_axis(self):
+        F = cases()['svgFrame']
+        self.assertEqual(F['X2'], [34, 254, 122])                  # 1 kHz in the middle of 10 Hz … 1 MHz
+        self.assertEqual(F['x2'], ['10 Hz', '1 kHz', '100 kHz'])   # every second decade: no two labels closer than 6 px
+        self.assertGreaterEqual(F['gap2'], 6)
+
+    def test_bars_in_percent(self):
+        self.assertGreaterEqual(cases()['svgFrame']['bars'], 3)
+
+
 if __name__ == '__main__':
     unittest.main()

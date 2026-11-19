@@ -268,6 +268,8 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .side-block.fold>summary::before{content:'▸';color:var(--muted);width:10px}.side-block.fold[open]>summary::before{content:'▾'}
 .side-block.fold[open]>summary{margin-bottom:8px}
 .bfchart{width:100%;height:auto;margin:6px 0;display:block}.bfchart circle{fill:var(--sig,#5b4fb0)}.bfchart .frame{fill:none;stroke:var(--line)}.bfchart .diag{stroke:#b9c6c0;stroke-dasharray:3 3}.bfchart .map{fill:none;stroke:#c2410c;stroke-width:1.2}.bfchart .cob{fill:none;stroke:#0f766e;stroke-width:.8;opacity:.7}.bfchart text{font-size:8px;fill:var(--muted)}
+/* 4.22 (ROADMAP §63 part 2): the grid and the tick labels of PlotCore.svgFrame in the SVG charts */
+.bfchart line.grid,.ffchart line.grid,.cmpchart line.grid{stroke:var(--scope-grid,#e8ecea);stroke-width:1}.bfchart text.tick,.ffchart text.tick,.cmpchart text.tick{font:8.5px ui-monospace,Menlo,Consolas,monospace;fill:var(--muted,#5f6b66)}.ffchart .frame{fill:none;stroke:var(--line)}
 .ffchart{width:100%;height:auto;margin:6px 0;display:block}.ffchart rect.hb{fill:var(--sig,#5b4fb0)}.ffchart rect.f1{fill:#cfd8d4}.ffchart line{stroke:var(--line);stroke-width:1}.ffchart text{font-size:8px;fill:var(--muted)}
 .rm-out table.ff-top td{text-align:right}.rm-out table.ff-top tr:first-child td{color:var(--muted);font-size:10px}
 .rm-out table.kv,.bt-out table{width:100%;border-collapse:collapse;font-size:11px}
@@ -471,6 +473,8 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 /* 4.17.5: labels on dense drawings (lblplace.js): a piece of a line with two texts (as), a value hidden (hid) or cut (max-width
    with «…»); the label of a selected part shows it whole, over what is beneath */
 .livel .lbls>div.as{transform:translate(0,-.8em)}.livel .lbls>.hid{display:none}
+/* 4.22 (ROADMAP §66): a label can be dragged (editor.lblHit); one kept by hand, its leader to the part */
+.schem .leads line.lead{stroke:#8aa39c;stroke-width:.8;stroke-dasharray:3 2;fill:none}
 .livel .lbls.sel{z-index:2}.livel .lbls.sel>.hid:not(:empty){display:block}.livel .lbls.sel>div{max-width:none!important}.livel .lbls.sel>div:not(:empty){background:#ffffffe0}
 /* 4.6: the library in categories (library.js) */
 .palette select{width:100%;margin-bottom:6px;font-size:12px}

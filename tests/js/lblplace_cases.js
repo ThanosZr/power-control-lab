@@ -41,4 +41,20 @@ all.wire=Math.round(all.wire);R.all=all;
 {const t=T.get('ev_drive'),o={};for(const q of t.options)o[q.k]=q.def;const pr=t.build(o),r=Inputs.resolve(pr),m=new Map(r.project.components.map(c=>[c.id,c]));
  const M1=pr.components.find(c=>c.id==='M1'),GV=pr.components.find(c=>c.id==='GV'),REF=pr.components.find(c=>c.id==='REF');
  R.values={m1:vt(m.get('M1')),m1raw:vt(M1),gv:vt(m.get('GV')),gvraw:vt(GV),ref:vt(REF),refExpr:REF.params.expr};}
+// 9. 4.22 (ROADMAP §66): a label moved by hand (c.lblAt) stays where it was put, the others keep off it, it follows the part
+// (moved, turned), a leader line when it is far, an invalid value is the automatic place
+{const base=()=>[C('R1','R',100,100,{R:10}),C('R2','R',100,160,{R:22}),C('C1','C',220,100,{C:1e-6})];
+ const auto=LP.layout({components:base(),wires:[]},opt),a1=auto.items.find(i=>i.id==='R1');
+ const a2=auto.items.find(i=>i.id==='R2'),b0=auto.g.items.find(i=>i.id==='R1').b,c0=[(b0[0]+b0[2])/2,(b0[1]+b0[3])/2];
+ // R1 put where R2 had its label: R2 takes another side
+ const cs=base();cs[0].lblAt=[a2.ax-c0[0],a2.ay-c0[1],a2.a];const lay=LP.layout({components:cs,wires:[]},opt),p1=lay.items.find(i=>i.id==='R1'),p2=lay.items.find(i=>i.id==='R2'),ch=LP.check(lay);
+ const b1=lay.g.items.find(i=>i.id==='R1').b,cx=(b1[0]+b1[2])/2,cy=(b1[1]+b1[3])/2;
+ const mv=base();mv[0].lblAt=cs[0].lblAt;mv[0].x+=40;mv[0].y+=20;const l2=LP.layout({components:mv,wires:[]},opt).items.find(i=>i.id==='R1');
+ const rt=base();rt[0].lblAt=[30,-4,'s'];rt[0].rot=1;const l3=LP.layout({components:rt,wires:[]},opt),g3=l3.g.items.find(i=>i.id==='R1').b;
+ const near=base();near[0].lblAt=[a1.ax-cx,a1.ay-cy,a1.a];const l4=LP.layout({components:near,wires:[]},opt).items.find(i=>i.id==='R1');
+ const bad=base();bad[0].lblAt=['x',null];const l5=LP.layout({components:bad,wires:[]},opt).items.find(i=>i.id==='R1');
+ R.pinned={auto:{side:a1.side,ax:a1.ax,ay:a1.ay,a:a1.a,pinned:!!a1.pinned},at:[p1.ax-cx,p1.ay-cy,p1.a],pinned:p1.pinned,lead:p1.lead||null,side:p1.side,
+  r2:{side:p2.side,auto:auto.items.find(i=>i.id==='R2').side},check:ch,moved:[l2.ax-p1.ax,l2.ay-p1.ay],
+  rot:{at:[l3.items.find(i=>i.id==='R1').ax-(g3[0]+g3[2])/2,l3.items.find(i=>i.id==='R1').ay-(g3[1]+g3[3])/2]},near:{same:[l4.ax,l4.ay].join()===[a1.ax,a1.ay].join(),lead:l4.lead||null},
+  invalid:{pinned:!!l5.pinned,side:l5.side,same:l5.side===a1.side&&l5.ax===a1.ax&&l5.ay===a1.ay},pinOf:[LP.pinOf([1,2]),LP.pinOf([1,2,'e']),LP.pinOf([1e9,0]),LP.pinOf('a'),LP.pinOf([3,4,'zz'])]};}
 process.stdout.write(JSON.stringify(R));

@@ -839,13 +839,25 @@ def svg(v, result=None, layer='base', width=900, labels=None, title=None, L=None
     ns = ' xmlns="http://www.w3.org/2000/svg"' if standalone else ''
     o = [f'<svg{ns} class="netview" viewBox="{x0 - pad:.1f} {y0 - pad:.1f} {w:.1f} {H:.1f}" width="{width:g}" height="{max(120.0, width * H / w):.0f}" role="img" aria-label="{_esc(head)}">',
          f'<rect x="{x0 - pad:.1f}" y="{y0 - pad:.1f}" width="{w:.1f}" height="{H:.1f}" fill="#ffffff"/>']
+    geo = v.get('geo')
+    if geo:                                                  # 4.22 (pcl.geo): on the map, the graticule under everything
+        o.extend(_graticule(geo, x0 - pad, y0 - pad, w, h, lw, fs))
+    routes = (geo or {}).get('routes') or {}
     bv, brv = L.get('bus') or {}, L.get('branch') or {}
     bc, brc = L.get('bus_color') or {}, L.get('branch_color') or {}
     fmt = lambda x, unit: (f' · {float(x):.4g} {_esc(unit)}'.replace('.', ',') if unit else f' · {float(x):.4g}'.replace('.', ','))     # noqa: E731
-    for e, ax, ay, bx, by in _segments(v):
+    for j, (e, ax, ay, bx, by) in enumerate(_segments(v)):
         c = _col(brc.get(e['name'], GREY))
         hot = c != GREY and layer != 'base'
         tip = f'{_esc(e["name"])}: {_esc(e["a"])} – {_esc(e["b"])}' + (fmt(brv[e['name']], L.get('unit_branch', '')) if _num(brv.get(e['name'])) is not None else '')
+        rt = routes.get(str(j))
+        if rt and not e.get('off'):                          # 4.22: a branch with a route, along its route
+            pts = ' '.join(f'{float(p[0]):.2f},{float(p[1]):.2f}' for p in rt)
+            o.append(f'<polyline points="{pts}" fill="none" stroke="{c}" stroke-width="{lw * (2.2 if hot else 1):.2f}" stroke-linecap="round" stroke-linejoin="round"><title>{tip}</title></polyline>')
+            if e.get('trafo'):
+                mx, my = route_mid(rt)
+                o.append(f'<circle cx="{mx:.1f}" cy="{my:.1f}" r="{0.6 * r:.2f}" fill="#ffffff" stroke="{c}" stroke-width="{lw:.2f}"/>')
+            continue
         if e.get('off'):                                     # out of service: dashed, at its place, without a value
             o.append(f'<line x1="{ax:.1f}" y1="{ay:.1f}" x2="{bx:.1f}" y2="{by:.1f}" stroke="#7a7a7a" stroke-width="{lw:.2f}" stroke-dasharray="{4 * lw:.2f} {4 * lw:.2f}">'
                      f'<title>{_esc(e["name"])}: {_esc(e["a"])} – {_esc(e["b"])} · εκτός λειτουργίας</title></line>')
@@ -898,6 +910,8 @@ def svg(v, result=None, layer='base', width=900, labels=None, title=None, L=None
             o.append(f'<circle cx="{float(b["x"]):.1f}" cy="{float(b["y"]):.1f}" r="{0.8 * rr:.2f}" fill="{c}" stroke="#5f6b6d" stroke-width="{0.25 * lw:.2f}"><title>{tip}</title></circle>')
         if labels:
             o.append(f'<text x="{float(b["x"]) + 1.2 * rr:.1f}" y="{float(b["y"]) - 1.2 * rr:.1f}" font-size="{fs:.1f}" font-family="sans-serif" fill="#333333">{_esc(b["id"])}</text>')
+    if geo:                                                  # 4.22: the scale bar, at the bottom left of the map
+        o.extend(_scalebar(x0 - pad, y1 + pad, w, lw, fs))
     ly = y1 + pad + 1.1 * lf
     o.append(f'<text x="{x0 - pad + 0.6 * lf:.1f}" y="{ly:.1f}" font-size="{lf:.1f}" font-family="sans-serif" font-weight="bold" fill="#222222">{_esc(head)}</text>')
     xl = x0 - pad + 0.6 * lf
@@ -910,6 +924,54 @@ def svg(v, result=None, layer='base', width=900, labels=None, title=None, L=None
         o.append(f'<text x="{xl:.1f}" y="{ly + len(rows) * lh:.1f}" font-size="{0.92 * lf:.1f}" font-family="sans-serif" fill="#666666">{_esc(note)}</text>')
     o.append('</svg>')
     return ''.join(o)
+
+
+def _graticule(geo, X0, Y0, W, H, lw, fs):
+    """4.22: the meridians and parallels of a map view (pcl.geo.project), cut to the frame, with their degrees at its edge."""
+    o, last = [], -math.inf
+    for g in geo.get('grid') or ():
+        (ax, ay), (bx, by) = g['pts']
+        if g['k'] == 'lon':
+            if not X0 <= ax <= X0 + W:
+                continue
+            o.append(f'<line class="grat" x1="{ax:.2f}" y1="{Y0:.2f}" x2="{bx:.2f}" y2="{Y0 + H:.2f}" stroke="#e3e9e7" stroke-width="{0.6 * lw:.2f}"/>')
+            tw = len(g['t']) * 0.58 * 0.8 * fs                # a label where it does not run into the one before
+            if ax + 0.3 * fs > last + 0.6 * fs:
+                o.append(f'<text x="{ax + 0.3 * fs:.2f}" y="{Y0 + 1.1 * fs:.2f}" font-size="{0.8 * fs:.2f}" font-family="sans-serif" fill="#8a9a96">{_esc(g["t"])}</text>')
+                last = ax + 0.3 * fs + tw
+        else:
+            if not Y0 <= ay <= Y0 + H:
+                continue
+            o.append(f'<line class="grat" x1="{X0:.2f}" y1="{ay:.2f}" x2="{X0 + W:.2f}" y2="{by:.2f}" stroke="#e3e9e7" stroke-width="{0.6 * lw:.2f}"/>'
+                     f'<text x="{X0 + 0.3 * fs:.2f}" y="{ay - 0.3 * fs:.2f}" font-size="{0.8 * fs:.2f}" font-family="sans-serif" fill="#8a9a96">{_esc(g["t"])}</text>')
+    return o
+
+
+def route_mid(pts):
+    """4.22: the point half way along a polyline."""
+    d = [math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]) for i in range(1, len(pts))]
+    h, acc = sum(d) / 2, 0.0
+    for i, q in enumerate(d):
+        if acc + q >= h and q > 0:
+            t = (h - acc) / q
+            return pts[i][0] + t * (pts[i + 1][0] - pts[i][0]), pts[i][1] + t * (pts[i + 1][1] - pts[i][1])
+        acc += q
+    return tuple(pts[0])
+
+
+def scale_bar(width_km):
+    """4.22: a round length for a scale bar about a fifth of a map width_km wide: 1, 2 or 5 × 10ⁿ km."""
+    t = max(width_km, 1e-9) / 5
+    e = 10 ** math.floor(math.log10(t))
+    return next(k * e for k in (5, 2, 1) if k * e <= t * 1.0000001)
+
+
+def _scalebar(X0, Yb, W, lw, fs):
+    L = scale_bar(W)
+    x, y = X0 + 0.6 * fs, Yb - 0.8 * fs
+    t = (f'{L:g} km' if L >= 1 else f'{L * 1e3:g} m').replace('.', ',')
+    return [f'<g class="scalebar"><path d="M{x:.2f},{y - 0.4 * fs:.2f}V{y:.2f}H{x + L:.2f}V{y - 0.4 * fs:.2f}" fill="none" stroke="#5f6b6d" stroke-width="{lw:.2f}"/>'
+            f'<text x="{x + L / 2:.2f}" y="{y - 0.6 * fs:.2f}" font-size="{0.85 * fs:.2f}" font-family="sans-serif" text-anchor="middle" fill="#5f6b6d">{t}</text></g>']
 
 
 # ---------------------------------------------------------------- DXF

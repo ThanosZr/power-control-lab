@@ -1610,11 +1610,15 @@
    {k:'cb',label:'Διακόπτης στο GIS',options:[['open','Ανοιχτός'],['closed','Κλειστός']],def:'open'},
    {k:'impl',label:'Υλοποίηση πύργων και αλεξικέραυνων (4.9.1)',options:[['blocks','Αναλυτική από στοιχεία'],['fast','Γρήγορη (συμπαγή στοιχεία του λύτη)']],def:'blocks'},
    {k:'u50',label:'Τάση λειτουργίας 50 Hz (4.12)',options:[['0','Χωρίς (μόνο ο κεραυνός)'],['peak','420 kV, η φάση a στο θετικό μέγιστο'],['zero','420 kV, η φάση a στο μηδέν'],['neg','420 kV, η φάση a στο αρνητικό μέγιστο']],def:'0'},
-   {k:'lm',label:'Μοντέλο γραμμών (4.13)',options:[['fd','FD (J. Marti, T_i στα 500 kHz)'],['wb','WB: wideband στο πεδίο των φάσεων (0,01 Hz – 10 MHz)']],def:'fd'}],
+   {k:'lm',label:'Μοντέλο γραμμών (4.13)',options:[['fd','FD (J. Marti, T_i στα 500 kHz)'],['wb','WB: wideband στο πεδίο των φάσεων (0,01 Hz – 10 MHz)']],def:'fd'},
+   {k:'tm',label:'Μοντέλο πύργων (4.22)',options:[['line','Μία γραμμή (Z_t = 200 Ω)'],['ms','Πολλών ορόφων (Z_t1 = 220 Ω, Z_t2 = 150 Ω, γ = 0,8, ένας βραχίονας)']],def:'line'},
+   {k:'ins',label:'Αλυσίδες μονωτήρων (4.22)',options:[['ub','Διάσπαση στα 2,24 MV'],['de','Καμπύλη τάσης–χρόνου (U₀ = 1,7 MV, D = 0,5 V·s)'],['lpm','Πρόοδος οχετού (LPM, g = 3,2 m)']],def:'ub'}],
   desc:'Κεραυνός 3/100 μs πέφτει στον πύργο T2 μιας γραμμής 400 kV (ή στη φάση a, αν περάσει τη θωράκιση). Η γραμμή είναι η τυπική 400 kV από τη γεωμετρία με τους δύο αγωγούς προστασίας ως αγωγούς 4 και 5, σε μοντέλο FD: ανοίγματα 300 m και ένα τμήμα 30 km προς το δίκτυο, ώστε οι ανακλάσεις να μη γυρίσουν μέσα στα 50 μs. Κάθε πύργος είναι μια γραμμή χωρίς απώλειες (Z_t = 200 Ω, 27 m) με γείωση R(I) και αλυσίδες μονωτήρων που διασπώνται στα 2,24 MV. Το κύμα μπαίνει στον υποσταθμό: αλεξικέραυνο ZnO (μοντέλο IEEE, U₁₀ = 819 kV) και CVT στην είσοδο, διαπεραστής, ζυγοί GIS (Z = 73 Ω), μετασχηματιστής τάσης, ανοιχτός διακόπτης, και στην άλλη πλευρά ο μετασχηματιστής ισχύος (4 nF) με το δικό του αλεξικέραυνο. Οι τάσεις συγκρίνονται με το επίπεδο αντοχής σε κεραυνό του εξοπλισμού 420 kV (1425 kV) και με τον συντελεστή ασφαλείας 1,15 (IEC 60071-2).',
   tasks:['200 kA στον πύργο: ποιες αλυσίδες διασπώνται και πότε; Δες στην κάρτα την τάση της κορυφής του T2 και τις τάσεις των μονωτήρων.','Γείωση 50 Ω αντί για R(I): η κορυφή ανεβαίνει και η διάσπαση γίνεται νωρίτερα και με μικρότερο ρεύμα. Από ποιο ρεύμα και πάνω υπάρχει ανάστροφη υπερπήδηση;','Πλήγμα στη φάση με 10–20 kA (αστοχία θωράκισης): η υπέρταση φτάνει απευθείας στον υποσταθμό.','Χωρίς αλεξικέραυνα: πόσο ξεπερνά η τάση στον ανοιχτό διακόπτη το 1425 kV; Με αλεξικέραυνο μόνο στην είσοδο: πόση είναι η απόσταση προστασίας (σύγκρινε με U ≈ U_res + 2·S·d/v της κάρτας);','Κλειστός διακόπτης: το κύμα φτάνει στον μετασχηματιστή. Χρειάζεται εκεί δεύτερο αλεξικέραυνο;','Άνοιξε τον πύργο ή το αλεξικέραυνο (διπλό κλικ): δες τι έχουν μέσα. Τα κείμενα στο σχέδιο είναι στοιχεία «Σημείωση».'],
   build(o){const I=(+o.I||200)*1e3,ion=o.foot==='ion',R0=o.foot==='r50'?50:15,sa=o.sa||'both',open=o.cb!=='closed',Y0=200,PHS=['a','b','c'],rowY=[160,360,560];
-   const impl=o.impl==='fast'?'fast':'blocks',tw=(id,x,lab,r0)=>C(id,'TOWER',x,Y0,{h:27.15,Zt:200,vt:3e8,foot:ion?'ion':'r',R0:r0,rho:100,E0:400e3,ins:'ub',Ub:2.24e6,meas:true,impl},{label:lab});
+   const impl=o.impl==='fast'?'fast':'blocks',tw=(id,x,lab,r0)=>C(id,'TOWER',x,Y0,{h:27.15,Zt:200,vt:3e8,foot:ion?'ion':'r',R0:r0,rho:100,E0:400e3,ins:'ub',Ub:2.24e6,meas:true,impl,
+     // 4.22: the multistory tower (one crossarm at 20 m for the three phases) and the other models of the strings
+     ...(o.tm==='ms'?{model:'ms',Zt1:220,Zt2:150,gam:.8,arms:'one',h1:7.15,h2:6,h3:6}:{}),...(o.ins==='de'?{ins:'de',U0:1.7e6,kde:1,Dde:.5}:o.ins==='lpm'?{ins:'lpm',gl:3.2}:{})},{label:lab});
    const WBL=o.lm==='wb',comps=[tlmGW('L30',260,Y0,30,'30 km',WBL),tw('T1',400,'T1',R0),tlmGW('S1',540,Y0,0.3,'300 m',WBL),tw('T2',680,'T2',R0),tlmGW('S2',820,Y0,0.3,'300 m',WBL),tw('T3',960,'T3',o.foot==='r50'?R0:1),
     C('I1','ILG',620,60,{shape:'custom',model:'heidler',T1:3e-6,T2:100e-6,n:10,Ipk:-I,t0:1e-6},{label:'κεραυνός'}),C('GI','GND',620,110),
     C('RTa','R',110,290,{R:400},{rot:1,label:'R_a'}),C('RTb','R',140,290,{R:400},{rot:1,label:'R_b'}),C('RTc','R',170,290,{R:400},{rot:1,label:'R_c'}),
@@ -1664,7 +1668,112 @@
     [['I:I1','κεραυνός'],['Y:T2/If','βάση T2'],...(sa!=='none'?[['Y:SEa/I','ZnO είσοδος a']]:[])]];
    const stopT=50e-6;
    return project(comps,wires,{version:4,...(u50?{solve:{init:'ac'}}:{}),sim:{hDiv:u50?1.5e6:2,method:'TR',speed:400,stopT},scope:{panes,window:{unit:'s',n:stopT}},
-    meta:{lg:{I,u50,Vs,strike:o.strike||'tower',foot:o.foot||'ion',R0,rho:100,E0:400e3,sa,open,Zt:200,h:27.15,Ub:2.24e6,U10:819e3,LIWL:1425e3,Ks:1.15,dist:56,v:3e8,t0:1e-6,stop:stopT}}});}});
+    meta:{lg:{I,u50,Vs,strike:o.strike||'tower',foot:o.foot||'ion',R0,rho:100,E0:400e3,sa,open,Zt:200,h:27.15,Ub:2.24e6,U10:819e3,LIWL:1425e3,Ks:1.15,dist:56,v:3e8,t0:1e-6,stop:stopT,
+     ...(o.tm==='ms'?{tm:'ms'}:{}),...(o.ins&&o.ins!=='ub'?{ins:o.ins}:{})}}});}});
+ // 4.22: the 765 kV GIS of IEC TR 60071-4 (test case 4, Table 29: surge impedance and travel time of each part; the table's
+ // «J7 – T25» is J7 – T26 in its Figure 40). Each part a lossless line, its outer conductor (the enclosure) earthed.
+ const GIS765=[['UC1','J3',75,6.4],['J3','J4',75,48],['J4','T22',75,2.2],['T22','T23',51,1.9],['J4','D9',78,2.2],['D9','D88',68,1.8],['D88','D66',59,4.2],['D44','D22',33,5.8],
+  ['D22','D1',330,9.1],['J3','T21',75,2.2],['T21','T20',51,1.9],['T20','T19',160,.67],['T19','T18',65,1.7],['T19','T17',75,6.8],['T17','T16',65,1.7],['T17','J7',75,8.5],['J7','T24',75,2.2],
+  ['T24','T25',51,1.9],['J7','T26',75,2.2],['T26','T27',51,1.9],['T17','T14',160,.67],['T14','T13',51,1.9],['T13','T11',75,9.9],['T11','T12',65,1.7],['T11','J2',75,7.5],['J2','T9',75,2.2],
+  ['T9','T10',51,1.9],['T10','T28',160,.67],['T28','J6',75,7.1],['J6','UK',75,6.4],['T28','T29',65,1.7],['T28','J5',75,8.8],['J5','T30',75,2.2],['T30','T32',51,1.9],['J2','J1',75,6.7],
+  ['J1','T4',75,2.2],['T4','T3',51,1.9],['J1','T5',75,2.2],['T5','T6',51,1.9]];
+ // the nodes in the drawing (our layout of the connectivity of Figure 40)
+ const GIS765_XY={T23:[200,400],T22:[400,400],J4:[600,400],J3:[800,400],T21:[1000,400],T20:[1300,400],T19:[1600,400],T18:[1800,400],UC1:[800,600],
+  D9:[600,200],D88:[600,0],D66:[600,-200],D44:[600,-400],D22:[600,-600],D1:[600,-800],
+  T25:[1200,0],T24:[1400,0],J7:[1600,0],T26:[1800,0],T27:[2000,0],T12:[2700,0],T4:[3200,0],T3:[3200,-200],
+  T16:[1400,200],T17:[1600,200],T14:[1800,200],T13:[2000,200],T11:[2700,200],J2:[2950,200],J1:[3200,200],T5:[3200,400],T6:[3200,600],
+  T9:[2950,400],T10:[2950,600],T28:[2950,800],UK:[2450,800],J6:[2700,800],J5:[3150,800],T30:[3350,800],T32:[3550,800],T29:[2950,1000],DSL:[900,400]};
+ // the parts of the GIS as lines between the nodes (horizontal or vertical); v0(node pair) the initial voltage of each part
+ function gisLines(list,v0,comps,wires){const nodes=new Set();for(const [a,b] of list){nodes.add(a);nodes.add(b);}
+  for(const n of nodes){const [x,y]=GIS765_XY[n];comps.push(J('N_'+n,x,y));}
+  list.forEach(([a,b,Z,tau],i)=>{let [xa,ya]=GIS765_XY[a],[xb,yb]=GIS765_XY[b],A=a,B=b;
+   if(ya===yb&&xa>xb||xa===xb&&ya>yb){[xa,ya,xb,yb,A,B]=[xb,yb,xa,ya,b,a];}const id='L'+(i+1),v=v0?v0(a,b):0,p={spec:'zt',Z,tau:+(tau*1e-9).toPrecision(6),...(v?{v0:+v.toPrecision(8)}:{})};
+   if(ya===yb){const xm=(xa+xb)/2;comps.push(C(id,'TL',xm,ya+20,p,{label:a+'–'+b,lbl:'none'}),C('G'+id,'GND',xm,ya+70,{},{label:''}));
+    wires.push(['N_'+A+':j',id+':a1'],[id+':a2','N_'+B+':j'],[id+':b1',id+':b2'],[id+':b2','G'+id+':g',[[xm,ya+40]]]);}
+   else{const ym=(ya+yb)/2;comps.push(C(id,'TL',xa-20,ym,p,{rot:1,label:a+'–'+b,lbl:'none'}),C('G'+id,'GND',xa-80,ym+70,{},{label:''}));
+    wires.push(['N_'+A+':j',id+':a1'],[id+':a2','N_'+B+':j'],[id+':b1',id+':b2'],[id+':b2','G'+id+':g',[[xa-80,ym+60]]]);}});}
+ T.push({id:'gis765_lv',group:'Υποσταθμός GIS και πολύ γρήγορα μεταβατικά (4.22)',title:'GIS 765 kV: δοκιμή με βηματική τάση 100 V (IEC TR 60071-4, περίπτωση 4)',theory:'formula',topology:'gis765_lv',
+  options:[{k:'src',label:'Πηγή',options:[['ramp','Ράμπα 4 ns ως τα 100 V στο UC1 (πίσω από 75 Ω)'],['switch','Ράμπα ως το μέγιστο και μετά διακόπτης (Σχήμα 42)']],def:'ramp'}],
+  desc:'Το τμήμα του GIS 765 kV της περίπτωσης δοκιμής 4 του IEC TR 60071-4: 39 κομμάτια ζυγών, γωνιών, διακοπτών και μετασχηματιστών οργάνων, το καθένα γραμμή χωρίς απώλειες με την κυματική αντίσταση και τον χρόνο διάδοσης του Πίνακα 29, μια αντίσταση 100 Ω και μια χωρητικότητα 10 pF. Στο UC1 μπαίνει βηματική τάση 100 V με μέτωπο 4 ns μέσα από αντίσταση 75 Ω που ταιριάζει με τον ζυγό, και στο UK η γραμμή κλείνει σε 75 Ω. Η κάρτα συγκρίνει τις τάσεις στο UC1 και στο UK με μια ανεξάρτητη λύση με οδεύοντα κύματα (μέθοδος των χαρακτηριστικών, pcl.surge) και με όσα δείχνουν τα Σχήματα 41 και 42 του TR.',
+  tasks:['Πότε φτάνει το κύμα στο UK; Βρες τη διαδρομή από το UC1 και πρόσθεσε τους χρόνους διάδοσης του πίνακα.','Γιατί η τάση στο UC1 πέφτει από τα 100 V σε περίπου 67 V μετά από 12,8 ns; (τρεις ζυγοί 75 Ω στο J3)','Σύγκρινε ράμπα και διακόπτη: μόνο τα πρώτα ns κοντά στο UC1 διαφέρουν.'],
+  build(o){const sw=o.src==='switch',comps=[],wires=[];gisLines(GIS765,null,comps,wires);
+   comps.push(C('RD','R',600,-300,{R:100},{rot:1,label:'100 Ω'}),C('CD1','C',720,-800,{C:10e-12},{rot:0,label:'10 pF'}),C('GCD','GND',720,-720,{},{label:''}),
+    C('RS','R',800,720,{R:75},{rot:1,label:'75 Ω'}),C('VS','VIMP',800,880,{shape:'ramp',S:5e10,Vpk:200},{label:'ράμπα 4 ns'}),C('GVS','GND',800,960,{},{label:''}),
+    C('RK','R',2450,900,{R:75},{rot:1,label:'75 Ω'}),C('GRK','GND',2450,980,{},{label:''}),C('VUC','VP',880,560,{},{label:'u_UC1'}),C('VUK','VP',2380,760,{},{label:'u_UK'}));
+   wires.push(['N_D66:j','RD:a'],['RD:b','N_D44:j'],['N_D1:j','CD1:p',[[720,-830]]],['CD1:n','GCD:g'],['N_UC1:j','VUC:p',[[880,600]]],['N_UK:j','VUK:p',[[2380,800]]],['N_UK:j','RK:a',[[2450,840]]],['RK:b','GRK:g']);
+   if(sw){comps.push(C('SW1','SG',800,650,{Ub:1e9,trig:'4n',Rarc:1e-6,ext:'never'},{rot:1,label:'διακόπτης στα 4 ns'}));wires.push(['N_UC1:j','SW1:a'],['SW1:b','RS:a'],['RS:b','VS:p'],['VS:n','GVS:g']);}
+   else wires.push(['N_UC1:j','RS:a'],['RS:b','VS:p'],['VS:n','GVS:g']);
+   comps.push(note('N1',150,-1000,'GIS 765 kV: βηματική 100 V με μέτωπο 4 ns (IEC TR 60071-4, περίπτωση δοκιμής 4)',{size:26,bold:true,frame:true}),
+    note('N2',150,-930,'Κάθε κομμάτι του GIS είναι γραμμή χωρίς απώλειες (Z, τ του Πίνακα 29)· το περίβλημα γειωμένο.',{size:15,color:'muted'}));
+   const stopT=0.5e-6;
+   return project(comps,wires,{version:4,sim:{hDiv:4,method:'TR',speed:200,stopT},scope:{panes:[[['Y:VUC','u_UC1']],[['Y:VUK','u_UK']]],window:{unit:'s',n:stopT}},
+    meta:{gis:{kind:'lv',src:sw?'switch':'ramp',E:200,Rs:75,Rk:75,tr:4e-9,stop:stopT}}});}});
+ // 4.22: very-fast-front overvoltages: the same GIS at 800 kV with a disconnector that strikes between the side of the bushing
+ // (at the source voltage) and a bus with a trapped charge; every part of the bus starts at its voltage (TL v₀)
+ T.push({id:'gis_vfto',group:'Υποσταθμός GIS και πολύ γρήγορα μεταβατικά (4.22)',title:'Πολύ γρήγορα μεταβατικά (VFTO) από τον αποζεύκτη ενός GIS 800 kV',theory:'formula',topology:'gis_vfto',
+  options:[{k:'tc',label:'Παγιδευμένο φορτίο στον ζυγό',options:[['-1','−1 pu (το χειρότερο)'],['-0.5','−0,5 pu'],['0','Χωρίς']],def:'-1'},
+   {k:'rs',label:'Πλευρά του διαπεραστή',options:[['75','75 Ω (ταιριαστή, όπως η περίπτωση δοκιμής)'],['350','350 Ω (εναέρια γραμμή)']],def:'75'},
+   {k:'uk',label:'Στο UK',options:[['c','Χωρητικότητα 500 pF (διαπεραστής, CVT)'],['open','Ανοιχτό']],def:'c'},
+   {k:'rarc',label:'Αντίσταση του σπινθήρα',options:[['0.5','0,5 Ω'],['5','5 Ω'],['20','20 Ω']],def:'0.5'}],
+  desc:'Ο ίδιος υποσταθμός GIS της περίπτωσης δοκιμής 4, στα 800 kV. Ο αποζεύκτης ανάμεσα στο J3 (πλευρά του διαπεραστή, στην τάση πηγής +1 pu = √2·800/√3 kV) και στο T21 κλείνει με διάσπαση στο 1 ns, ενώ ο ζυγός πίσω του έχει παγιδευμένο φορτίο. Κάθε κομμάτι ξεκινά με την τάση του (αρχική τάση της γραμμής). Τα κύματα που ξεκινούν από τον σπινθήρα ανακλώνται στα ανοιχτά άκρα (T18, T29, T3, T6, …) και δίνουν υπερτάσεις πολύ ταχέος μετώπου ως 2–3 pu. Η κάρτα δείχνει τις κορυφές, τη σύγκριση με την ανεξάρτητη λύση με οδεύοντα κύματα και τον έλεγχο απέναντι στην αντοχή.',
+  tasks:['Με −1 pu: σε ποιο σημείο η κορυφή είναι μεγαλύτερη; Γιατί σε ανοιχτό άκρο;','Χωρίς παγιδευμένο φορτίο: πόσο πέφτει η κορυφή; (ΔU από 2 σε 1 pu)','Αντίσταση σπινθήρα 20 Ω: πόσο αποσβένει τις ταλαντώσεις;'],
+  build(o){const Vs=800e3*Math.SQRT2/Math.sqrt(3),tc=(+o.tc||0)*Vs,src=new Set(['UC1','J3','J4','T22','T23','D9','D88','D66','D44','D22','D1']),rs=+o.rs||75,rarc=+o.rarc||.5;
+   // the branch J3 – T21 split by the disconnector: J3 –[DS]– DSL –[line 2,2 ns]– T21
+   const list=GIS765.map(r=>r[0]==='J3'&&r[1]==='T21'?['DSL','T21',r[2],r[3]]:r),comps=[],wires=[];
+   gisLines(list,(a,b)=>src.has(a)&&src.has(b)?Vs:tc,comps,wires);
+   comps.push(C('DS1','SG',850,400,{Ub:1e9,trig:'1n',Rarc:rarc,ext:'never'},{label:'αποζεύκτης'}),C('RD','R',600,-300,{R:100},{rot:1,label:'100 Ω'}),
+    C('CD1','C',720,-800,{C:10e-12,v0:+Vs.toPrecision(8)},{label:'10 pF'}),C('GCD','GND',720,-720,{},{label:''}),
+    C('RS','R',800,720,{R:rs},{rot:1,label:rs+' Ω'}),C('VS','VDC',800,880,{V:+Vs.toPrecision(8)},{label:'+1 pu'}),C('GVS','GND',800,960,{},{label:''}),
+    C('VUK','VP',2380,760,{},{label:'u_UK'}),C('VT18','VP',1880,360,{},{label:'u_T18'}),C('VT29','VP',3030,1000,{},{label:'u_T29'}),C('VJ7','VP',1680,-40,{},{label:'u_J7'}),C('VDSL','VP',900,330,{},{label:'u_DS'}));
+   wires.push(['N_J3:j','DS1:a',[[820,400]]],['DS1:b','N_DSL:j'],['N_D66:j','RD:a'],['RD:b','N_D44:j'],['N_D1:j','CD1:p',[[720,-830]]],['CD1:n','GCD:g'],['N_UC1:j','RS:a'],['RS:b','VS:p'],['VS:n','GVS:g'],
+    ['N_UK:j','VUK:p',[[2380,800]]],['N_T18:j','VT18:p',[[1880,400]]],['N_T29:j','VT29:p',[[3030,1000]]],['N_J7:j','VJ7:p',[[1680,0]]],['N_DSL:j','VDSL:p',[[900,330]]]);
+   if(o.uk!=='open'){comps.push(C('CK','C',2450,900,{C:500e-12,v0:+tc.toPrecision(8)},{label:'500 pF'}),C('GCK','GND',2450,980,{},{label:''}));wires.push(['N_UK:j','CK:p',[[2450,840]]],['CK:n','GCK:g']);}
+   comps.push(note('N1',150,-1000,'VFTO: διάσπαση στον αποζεύκτη ενός GIS 800 kV με παγιδευμένο φορτίο',{size:26,bold:true,frame:true}),
+    note('N2',150,-930,`Πλευρά του διαπεραστή στο +1 pu (${(Vs/1e3).toFixed(0)} kV), ζυγός πίσω από τον αποζεύκτη στο ${(+o.tc||0)} pu· σπινθήρας ${rarc} Ω στο 1 ns.`,{size:15,color:'muted'}));
+   const stopT=2e-6;
+   return project(comps,wires,{version:4,sim:{hDiv:4,method:'TR',speed:200,stopT},scope:{panes:[[['Y:VUK','u_UK'],['Y:VT18','u_T18']],[['Y:VT29','u_T29'],['Y:VJ7','u_J7']],[['Y:VDSL','u_DS'],['I:DS1','i σπινθήρα']]],window:{unit:'s',n:stopT}},
+    meta:{gis:{kind:'vfto',Vs,tc,Us:800e3,rs,rarc,uk:o.uk||'c',LIWL:2100e3,Ks:1.15,stop:stopT}}});}});
+ // 4.22: the restrikes of a disconnector at 50 Hz (lumped): every strike equalises the bus to the source through the damping
+ // of the circuit, the spark goes out when its current falls below I_ext, the next strike when |u_s − u_bus| reaches U_b(t)
+ T.push({id:'ds_restrike',group:'Υποσταθμός GIS και πολύ γρήγορα μεταβατικά (4.22)',title:'Αποζεύκτης GIS 420 kV: επαναναύσεις στο κλείσιμο και στο άνοιγμα',theory:'formula',topology:'ds_restrike',
+  options:[{k:'op',label:'Χειρισμός',options:[['close','Κλείσιμο (ζυγός με παγιδευμένο φορτίο −1 pu)'],['close0','Κλείσιμο (ζυγός χωρίς φορτίο)'],['open','Άνοιγμα']],def:'close'},
+   {k:'ts',label:'Χρόνος κίνησης των επαφών',options:[['60m','60 ms'],['200m','200 ms']],def:'60m'},
+   {k:'um',label:'Τάση διάσπασης στην πλήρη απόσταση',options:[['3','3 pu'],['2','2 pu']],def:'3'}],
+  desc:'Ένας αποζεύκτης GIS 420 kV ανάμεσα στον ζυγό της πηγής (C_s = 1 nF, με το δίκτυο πίσω από 5 mH) και σε έναν ζυγό χωρίς φορτίο (C_L = 0,5 nF). Οι επαφές κινούνται για T_s, και η τάση διάσπασης του διακένου πέφτει (κλείσιμο) ή ανεβαίνει (άνοιγμα) γραμμικά. Σε κάθε διάσπαση ο σπινθήρας φέρνει τον ζυγό στην τάση της πηγής μέσα από την απόσβεση του κυκλώματος (400 Ω) και σβήνει όταν το ρεύμα του πέσει κάτω από 0,5 A. Η τάση του ζυγού γίνεται σκάλα, και η μεγαλύτερη τάση ανάμεσα στις επαφές τη στιγμή μιας διάσπασης (ΔU) είναι αυτή που ξεκινά τα πολύ γρήγορα μεταβατικά του gis_vfto.',
+  tasks:['Στο κλείσιμο με −1 pu: πόσες διασπάσεις, και ποια είναι η μεγαλύτερη ΔU;','Στο άνοιγμα: ποιο φορτίο μένει παγιδευμένο στον ζυγό στο τέλος;','Με 200 ms οι επαφές κινούνται πιο αργά: τι γίνεται με το πλήθος των διασπάσεων;'],
+  build(o){const Vp=420e3*Math.SQRT2/Math.sqrt(3),op=o.op==='open'?'open':'close',Ts=o.ts==='200m'?.2:.06,Um=(+o.um||3)*Vp,v0=o.op==='close'?-Vp:0,stopT=Ts+0.03;
+   const comps=[C('VS','VAC',100,240,{Vpk:+Vp.toPrecision(8),f:50,phase:0},{label:'δίκτυο 420 kV'}),gnd(100,330),C('LS','L',220,150,{L:5e-3},{label:'5 mH'}),J('JS',320,150),
+    C('CS','C',320,230,{C:1e-9},{label:'C_s 1 nF'}),C('GS','GND',320,310,{},{label:''}),C('RD','R',420,150,{R:400},{label:'απόσβεση 400 Ω'}),
+    C('DS1','DS',540,150,{op,t0:'2m',Ts:String(Ts),Um:+Um.toPrecision(8),Rarc:1,ext:'iext',Iext:.5},{label:'αποζεύκτης'}),J('JL',660,150),
+    C('CL','C',660,230,{C:.5e-9,v0:+v0.toPrecision(8)},{label:'C_L 0,5 nF'}),C('GL','GND',660,310,{},{label:''}),C('VSB','VP',320,80,{},{label:'u_s'}),C('VLB','VP',660,80,{},{label:'u_ζυγού'})];
+   const wires=[['VS:p','LS:a',[[100,150]]],['VS:n','G1:g'],['LS:b','JS:j'],['JS:j','CS:p'],['CS:n','GS:g'],['JS:j','RD:a'],['RD:b','DS1:a'],['DS1:b','JL:j'],['JL:j','CL:p'],['CL:n','GL:g'],['JS:j','VSB:p'],['JL:j','VLB:p']];
+   comps.push(note('N1',60,-40,'Αποζεύκτης GIS 420 kV: '+(op==='open'?'άνοιγμα':'κλείσιμο')+', επαφές σε '+(Ts*1e3)+' ms',{size:22,bold:true,frame:true}));
+   return project(comps,wires,{version:4,sim:{hDiv:20000,method:'TR',speed:2,stopT},scope:{panes:[[['Y:VSB','u_s'],['Y:VLB','u_ζυγού']],[['V:DS1','u επαφών'],['I:DS1','i σπινθήρα']]],window:{unit:'s',n:stopT}},
+    meta:{gis:{kind:'ds',op,Vp,Ts,Um,t0:2e-3,v0,stop:stopT}}});}});
+ // 4.22: the procedure of insulation co-ordination itself (pcl.insulation, study 'insulation'), with a small circuit of the
+ // line entrance (an incoming surge, the arrester, the separation to the transformer) whose peak can be the fast-front
+ // overvoltage of the procedure
+ const INSCO_CASES={
+  g2:{Us:245,Um:245,H:1000,tov:{k:1.5,lr:1.4,polluted:true},slow:{Ue2:1.9,Up2:2.9,Ups:410},fast:{Upl:500,A:4500,n:2,Lsp:300,Ra:1/400,r:1e-5,L:{external:60,liquid:30}},insulations:['external','liquid'],U10:500e3,d:2,Vin:1.6e6,L:30},
+  '420':{Us:420,Um:420,H:0,tov:{k:1.3,lr:1.2},slow:{Ue2:2.2,Up2:3.4,Ups:700},fast:{Upl:820,A:11000,n:2,Lsp:400,Ra:1/400,r:5e-6,L:{external:60,gis:40}},insulations:['external','gis'],U10:820e3,d:3.216,Vin:2.4e6,L:40},
+  '800':{Us:800,Um:800,H:0,tov:{k:1.3,lr:1.1},slow:{Ue2:1.8,Up2:2.9,Ups:1300},fast:{Upl:1474,A:11000,n:2,Lsp:400,Ra:1/400,r:5e-6,L:{external:60,gis:40}},vffo:{peak:1050,K:1.0},insulations:['external','gis'],U10:1474e3,d:6,Vin:4.2e6,L:40}};
+ T.push({id:'insco_study',group:'Υποσταθμός GIS και πολύ γρήγορα μεταβατικά (4.22)',title:'Συντονισμός μόνωσης υποσταθμού κατά IEC 60071-2 (με αναφορά)',theory:'formula',topology:'insco_study',
+  options:[{k:'case',label:'Υποσταθμός',options:[['g2','245 kV, υψόμετρο 1000 m (το αριθμητικό παράδειγμα του IEC 60071-2, Παράρτημα G.2)'],['420','GIS 420 kV (περιοχή II)'],['800','GIS 800 kV (περιοχή II, με VFFO από το gis_vfto)']],def:'g2'},
+   {k:'fast',label:'Υπερτάσεις ταχέος μετώπου',options:[['simplified','Απλοποιημένη στατιστική μέθοδος (Παράρτημα E)'],['emt','Η κορυφή στον μετασχηματιστή από αυτήν την προσομοίωση']],def:'simplified'}],
+  desc:'Τα πέντε βήματα του IEC 60071-2 τρέχουν στο engine (pcl.insulation): αντιπροσωπευτικές υπερτάσεις (προσωρινές, βραδέος, ταχέος και πολύ ταχέος μετώπου), τάσεις αντοχής συντονισμού, απαιτούμενες τάσεις αντοχής με τους συντελεστές ασφαλείας και υψομέτρου, μετατροπή στις κυματομορφές της περιοχής και επιλογή του τυποποιημένου επιπέδου του IEC 60071-1, με τα περιθώρια. Το κύκλωμα είναι η είσοδος του υποσταθμού: ένα κύμα 1,2/50 μs πάνω σε γραμμή 400 Ω, το αλεξικέραυνο στην είσοδο και ο μετασχηματιστής (3 nF) σε απόσταση L. Με «από αυτήν την προσομοίωση» η κορυφή στον μετασχηματιστή γίνεται η αντιπροσωπευτική υπέρταση ταχέος μετώπου. Η «Αναφορά συντονισμού» είναι ένα αρχείο HTML με όλα τα βήματα.',
+  tasks:['Στο παράδειγμα των 245 kV τρέξε τον συντονισμό: βγαίνει το επίπεδο 395 kV / 950 kV όπως στο πρότυπο;','Άλλαξε σε «από αυτήν την προσομοίωση»: πόσο διαφέρει η κορυφή στον μετασχηματιστή από την απλοποιημένη μέθοδο;','Στο GIS 800 kV: ποιο από τα LIWV, SIWV και VFFO ορίζει το επίπεδο;'],
+  build(o){const c=INSCO_CASES[o.case]||INSCO_CASES.g2,emt=o.fast==='emt';
+   const comps=[C('VS','VIMP',100,240,{shape:'1.2/50',Vpk:c.Vin},{label:'κύμα 1,2/50'}),gnd(100,330),C('RS','R',190,150,{R:400},{label:'400 Ω'}),
+    C('TLL','TL',330,170,{spec:'zl',Z:400,len:300,vel:3e8},{label:'γραμμή 300 m'}),C('GLL','GND',330,240,{},{label:''}),J('JE',460,150),
+    C('SA','SAI',460,230,{U10:c.U10,d:c.d,n:1,kL1:1,Llead:5e-6,meas:true,impl:'blocks'},{label:'ZnO'}),C('GSA','GND',460,300,{},{label:''}),
+    C('TLG','TL',600,170,{spec:'zl',Z:75,len:c.L,vel:2.88e8},{label:`${c.L} m`}),C('GLG','GND',600,240,{},{label:''}),J('JT',740,150),
+    C('CT','C',740,230,{C:3e-9},{label:'μετασχ. 3 nF'}),C('GCT','GND',740,300,{},{label:''}),C('VE','VP',460,80,{},{label:'u_E'}),C('VT','VP',740,80,{},{label:'u_T'})];
+   const wires=[['VS:p','RS:a',[[100,150]]],['VS:n','G1:g'],['RS:b','TLL:a1'],['TLL:a2','JE:j'],['TLL:b1','TLL:b2'],['TLL:b2','GLL:g'],['JE:j','SA:a'],['SA:b','GSA:g'],
+    ['JE:j','TLG:a1'],['TLG:a2','JT:j'],['TLG:b1','TLG:b2'],['TLG:b2','GLG:g'],['JT:j','CT:p'],['CT:n','GCT:g'],['JE:j','VE:p'],['JT:j','VT:p']];
+   comps.push(note('N1',60,-40,`Συντονισμός μόνωσης: υποσταθμός ${c.Us} kV`,{size:22,bold:true,frame:true}));
+   const stopT=20e-6,{U10,d,Vin,L,...opts}=c;
+   return project(comps,wires,{version:4,sim:{hDiv:10,method:'TR',speed:200,stopT},scope:{panes:[[['Y:VE','u_E (είσοδος)'],['Y:VT','u_T (μετασχηματιστής)']],[['Y:SA/I','i αλεξικέραυνου']]],window:{unit:'s',n:stopT}},
+    meta:{insco:{options:emt?{...opts,fast:undefined}:opts,emt,stop:stopT,lead:o.case==='g2'?'το παράδειγμα του Παραρτήματος G.2':''}}});}});
  T.push({id:'line_fd',group:'Γραμμές (4.4)',title:'Ζεύξη γραμμής 400 kV: σταθερές παράμετροι (CP) και εξάρτηση από τη συχνότητα (FD)',theory:'formula',topology:'line_fd',
   options:[{k:'cmp',label:'Γραμμές',options:[['cp50','CP στα 50 Hz και FD, δίπλα δίπλα'],['cp5k','CP στα 5 kHz και FD'],['fd','Μόνο FD'],['wbfd','WB (wideband, 4.13) και FD, δίπλα δίπλα']],def:'cp50'},
    {k:'src',label:'Ζεύξη',options:[['step','Μία φάση (a), βηματική 1 kV πίσω από 10 Ω'],['ac3','Τριφασική 400 kV, στην κορυφή της v_a']],def:'step'}],

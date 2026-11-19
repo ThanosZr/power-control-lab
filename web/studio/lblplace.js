@@ -27,7 +27,8 @@
   right:{right:0,'right-t':6,'right-b':6,left:16,'left-t':20,'left-b':20,above:26,below:30,ne:30,se:30,'above-s':32,'above-e':32,'below-s':36,'below-e':36,nw:46,sw:46},
   left:{left:0,'left-t':6,'left-b':6,right:16,'right-t':20,'right-b':20,above:26,below:30,nw:30,sw:30,'above-s':32,'above-e':32,'below-s':36,'below-e':36,ne:46,se:46}};
  const SIDES=Object.keys(PREF.above);
- const CAP_SIDE=170,CUT_MIN=44;                    // the widest value at the side; the narrowest cut
+ const CAP_SIDE=170,CUT_MIN=44;
+ const LEAD=10;                                    // 4.22: a label moved by hand this far from its part has a leader line                    // the widest value at the side; the narrowest cut
  // the width of a text without a canvas (Node, tests): monospace 0.6 em; the name in the proportional font, by kind of letter
  function est(text,kind){const s=String(text??'');if(!s)return 0;if(kind!=='lbl')return [...s].length*.6*FS[kind];
   let w=0;for(const ch of s)w+=/[ilI.,:;'|!1j()\[\] ]/.test(ch)?.33:/[mwMWΩΜΨ]/.test(ch)?.86:/[A-ZΑ-Ω0-9]/.test(ch)?.66:.56;return w*FS.lbl;}
@@ -52,6 +53,10 @@
  // parts, wires and the other texts of the drawing (pin tags, names of wires, tiles), and the parts with a label
  //  o.measure(text, kind) → px (default est), o.valueText(c), o.lvChars(c) → characters kept for the live value,
  //  o.arrows: the arrows of the current are shown
+ // 4.22 (ROADMAP §66): a label moved by hand. c.lblAt = [dx, dy, a]: the anchor of its first line (x as the anchor a = s / m
+ // / e, y its baseline) from the centre of the box of the part, in the units of the drawing; it moves and turns with the part
+ function pinOf(v){if(!Array.isArray(v)||v.length<2)return null;const dx=+v[0],dy=+v[1];if(!Number.isFinite(dx)||!Number.isFinite(dy)||Math.abs(dx)>5000||Math.abs(dy)>5000)return null;
+  return [dx,dy,v[2]==='s'||v[2]==='e'?v[2]:'m'];}
  function gather(doc,o){o=o||{};const ms=o.measure||est,vt=o.valueText||(()=>''),lvc=o.lvChars||(()=>0),cw=ms('0000000000','lv')/10;
   const parts=[],segs=[],misc=[],items=[],byId=new Map();for(const c of doc.components||[])byId.set(c.id,c);
   for(const c of doc.components||[]){const def=P.PARTS[c.type];if(!def)continue;let b;try{b=P.bbox(c);}catch(e){continue;}if(!b.every(Number.isFinite))continue;
@@ -66,7 +71,8 @@
     if(Math.abs(a[1]-z[1])<1)misc.push([mx-14,b[3]+7,mx+14,b[3]+17]);else misc.push([b[0]-17,my-14,b[0]-7,my+14]);}}
    if(NOLBL.has(c.type))continue;const lb=c.lbl||def.lbl;if(lb==='none')continue;
    const name=String(c.label||c.id),val=String(vt(c)??''),nl=Math.max(0,+lvc(c)||0);
-   items.push({id:c.id,t:c.type,code:CODE.has(c.type),b,o,side:sideOf(c),name,nw:ms(name,'lbl'),val,vw:ms(val,'val'),lw:nl*cw});}
+   const at=pinOf(c.lblAt);
+   items.push({id:c.id,t:c.type,code:CODE.has(c.type),b,o,side:sideOf(c),name,nw:ms(name,'lbl'),val,vw:ms(val,'val'),lw:nl*cw,...(at?{at}:{})});}
   for(const w of doc.wires||[]){const a=byId.get(w.a?.c),z=byId.get(w.b?.c);if(!a||!z)continue;const pa=P.pinPos(a,w.a.p),pz=P.pinPos(z,w.b.p);if(!pa||!pz)continue;
    const pts=[pa,...(w.pts||[]),pz];for(let i=1;i<pts.length;i++)segs.push([pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]]);
    if(w.name){const m=midLabel(pts),t=String(w.name),wd=[...t].length*.6*11+12;misc.push([m[0]-wd/2,m[1]-15,m[0]+wd/2,m[1]-4]);}}
@@ -77,19 +83,21 @@
  // (15 characters) for a narrow box: a long expression does not run over its neighbours («…», whole in the tooltip and
  // when selected); other values up to 140 px; at the side or at a corner up to 170 px.
  //  form 0: name, value, live · 1: the value cut to the box · 2: the value hidden · 3: name and live on one line
- function stack(it,side,form){const b=it.b,cx=(b[0]+b[2])/2,cy=(b[1]+b[3])/2,bw=b[2]-b[0],base=side.split('-')[0],sub=side.split('-')[1]||'';
-  const ab=base==='above'||base==='below',hasV=!!it.val,hasL=it.lw>0,cap=ab?(it.code?Math.max(bw+24,96):Math.max(bw+24,140)):CAP_SIDE,cut=Math.max(Math.min(bw,120),CUT_MIN);
+ function stack(it,side,form){const b=it.b,cx=(b[0]+b[2])/2,cy=(b[1]+b[3])/2,bw=b[2]-b[0],base=side.split('-')[0],sub=side.split('-')[1]||'',pin=side==='pin'&&it.at;
+  if(side==='pin'&&!pin)return null;if(pin&&form!==0)return null;
+  const ab=!pin&&(base==='above'||base==='below'),hasV=!!it.val,hasL=it.lw>0,cap=ab?(it.code?Math.max(bw+24,96):Math.max(bw+24,140)):CAP_SIDE,cut=Math.max(Math.min(bw,120),CUT_MIN);
   if(form===1&&!(hasV&&Math.min(it.vw,cap)>cut+2))return null;if(form===2&&!hasV)return null;if(form===3&&!hasL)return null;
   const vw=form===1?cut:Math.min(it.vw,cap),mw=form===1||it.vw>cap+.5?vw:0;
   // rows top to bottom: each row is one or two pieces {k, w}
   const rows=[];if(form===3)rows.push([{k:'lbl',w:it.nw},{k:'lv',w:it.lw}]);else{rows.push([{k:'lbl',w:it.nw}]);if(hasV&&form<2)rows.push([{k:'val',w:vw}]);if(hasL)rows.push([{k:'lv',w:it.lw}]);}
   // away from the box with its pins (o), along the box itself (b): above, a block with a pin on top keeps its lead free
   const o=it.o||b,n=rows.length,k0=rows[0][0].k,kn=rows[n-1][0].k,ys=new Array(n),up=base==='above'||base==='ne'||base==='nw';
-  if(up){let y=o[1]-(base==='above'?GAP:2)-dsc(kn);for(let i=n-1;i>=0;i--){ys[i]=y;y-=PITCH;}}
+  if(pin){for(let i=0;i<n;i++)ys[i]=cy+it.at[1]+i*PITCH;}
+  else if(up){let y=o[1]-(base==='above'?GAP:2)-dsc(kn);for(let i=n-1;i>=0;i--){ys[i]=y;y-=PITCH;}}
   else if(base==='below'||base==='se'||base==='sw'){let y=o[3]+(base==='below'?GAP:2)+asc(k0);for(let i=0;i<n;i++){ys[i]=y;y+=PITCH;}}
   else{const H=(n-1)*PITCH+asc(k0)+dsc(kn);let y=sub==='t'?b[1]+asc(k0):sub==='b'?b[3]-H+asc(k0):cy-H/2+asc(k0);for(let i=0;i<n;i++){ys[i]=y;y+=PITCH;}}
-  const a=base==='right'||base==='ne'||base==='se'?'s':base==='left'||base==='nw'||base==='sw'?'e':sub||'m';
-  const x=base==='right'?o[2]+SGAP:base==='left'?o[0]-SGAP:base==='ne'||base==='se'?o[2]+5:base==='nw'||base==='sw'?o[0]-5:a==='s'?b[0]:a==='e'?b[2]:cx;
+  const a=pin?it.at[2]:base==='right'||base==='ne'||base==='se'?'s':base==='left'||base==='nw'||base==='sw'?'e':sub||'m';
+  const x=pin?cx+it.at[0]:base==='right'?o[2]+SGAP:base==='left'?o[0]-SGAP:base==='ne'||base==='se'?o[2]+5:base==='nw'||base==='sw'?o[0]-5:a==='s'?b[0]:a==='e'?b[2]:cx;
   const L={},R=[];
   rows.forEach((row,i)=>{const W=row.reduce((s,q)=>s+q.w,0)+(row.length-1)*ILGAP,x0=a==='s'?x:a==='e'?x-W:x-W/2;let xx=x0;
    for(const q of row){const r=[xx-AIR,ys[i]-asc(q.k)-AIR,xx+q.w+AIR,ys[i]+dsc(q.k)+AIR];if(q.w>0)R.push(r);
@@ -98,10 +106,10 @@
   // part is selected): one row further from the box
   const far=up?ys[0]-PITCH:ys[n-1]+PITCH;
   if(!L.lv)L.lv={x,y:far};if(!L.val)L.val={x,y:up?far-(L.lv.y===far?PITCH:0):far+(L.lv.y===far?PITCH:0),hid:hasV};
-  return {side,form,a,L,R,cut:!!(hasV&&form<2&&mw),pen:(PREF[it.side][side]??40)+(form===1?30+.25*(Math.min(it.vw,cap)-cut):form===2?70+.15*it.vw:form===3?40+(hasV?45+.15*it.vw:0):0)};}
+  return {side,form,a,L,R,ax:x,ay:ys[0],cut:!!(hasV&&form<2&&mw),pen:pin?0:(PREF[it.side][side]??40)+(form===1?30+.25*(Math.min(it.vw,cap)-cut):form===2?70+.15*it.vw:form===3?40+(hasV?45+.15*it.vw:0):0)};}
  // the candidates by their price: a search can stop at the first whose price alone is above the best cost found (the cost
  // is never below the price)
- function cands(it){const out=[];for(const s of SIDES)for(let f=0;f<4;f++){const c=stack(it,s,f);if(c)out.push(c);}return out.sort((a,b)=>a.pen-b.pen);}
+ function cands(it){if(it.at){const c=stack(it,'pin',0);return c?[c]:[];}const out=[];for(const s of SIDES)for(let f=0;f<4;f++){const c=stack(it,s,f);if(c)out.push(c);}return out.sort((a,b)=>a.pen-b.pen);}
  // the cost of a candidate against the parts, wires, texts and the labels already placed (G: grid of the labels)
  // (what does not move, the parts, wires and texts, is counted once per candidate)
  function cost(it,c,S,G,skip){if(c.sk===undefined){let k=c.pen;
@@ -114,7 +122,8 @@
   // the hardest first: the cost of the best candidate without the other labels
   const best0=(i,G,skip)=>{let bc=null,bk=Infinity;for(const c of C[i]){if(c.pen>=bk)break;const k=cost(g.items[i],c,S,G,skip);if(k<bk-1e-9){bk=k;bc=c;}}return [bc,bk];};
   const hard=g.items.map((_,i)=>best0(i,null)[1]);
-  const order=g.items.map((_,i)=>i).sort((i,j)=>hard[j]-hard[i]||g.items[i].b[1]-g.items[j].b[1]||g.items[i].b[0]-g.items[j].b[0]);
+  // the labels kept by hand first (4.22): they do not move, the others keep off them
+  const order=g.items.map((_,i)=>i).sort((i,j)=>(g.items[j].at?1:0)-(g.items[i].at?1:0)||hard[j]-hard[i]||g.items[i].b[1]-g.items[j].b[1]||g.items[i].b[0]-g.items[j].b[0]);
   const put=(i,c)=>{best[i]=c;for(const r of c.R)G.add(r,{id:i,r});},take=i=>{const c=best[i];if(!c)return;for(const r of c.R)for(const o of G.near(r))if(o.id===i&&o.r===r)G.del(r,o);best[i]=null;};
   const pick=i=>{const [bc,bk]=best0(i,G,i);if(bc)bc.k=bk;return bc;};
   for(const i of order){const c=pick(i);if(c)put(i,c);}
@@ -123,14 +132,22 @@
   // a column or a row of parts of the same type (the inputs of a circuit, a bank of integrators): the side that most of
   // its neighbours took, where it is free here too, so that the column reads the same way
   const ctr=it=>[(it.b[0]+it.b[2])/2,(it.b[1]+it.b[3])/2];
-  for(const i of order){const it=g.items[i],c=best[i];if(!c)continue;const [x,y]=ctr(it),h=it.b[3]-it.b[1],w=it.b[2]-it.b[0],cnt=new Map();
-   g.items.forEach((jt,j)=>{if(j===i||jt.t!==it.t||!best[j])return;const [xj,yj]=ctr(jt);if((Math.abs(xj-x)<1&&Math.abs(yj-y)<4*h+60)||(Math.abs(yj-y)<1&&Math.abs(xj-x)<4*w+60))cnt.set(best[j].side,(cnt.get(best[j].side)||0)+1);});
+  for(const i of order){const it=g.items[i],c=best[i];if(!c||it.at)continue;const [x,y]=ctr(it),h=it.b[3]-it.b[1],w=it.b[2]-it.b[0],cnt=new Map();
+   g.items.forEach((jt,j)=>{if(j===i||jt.t!==it.t||!best[j]||jt.at)return;const [xj,yj]=ctr(jt);if((Math.abs(xj-x)<1&&Math.abs(yj-y)<4*h+60)||(Math.abs(yj-y)<1&&Math.abs(xj-x)<4*w+60))cnt.set(best[j].side,(cnt.get(best[j].side)||0)+1);});
    let s0=null,n0=1;for(const [sd,n] of cnt)if(n>n0||(n===n0&&s0===null&&n>=2)){s0=sd;n0=n;}if(!s0||s0===c.side||n0<2)continue;
    take(i);let sw=null;for(const q of C[i])if(q.side===s0&&q.form<=c.form){const k=cost(it,q,S,G,i);if(k-q.pen<1e-6&&(!sw||k<sw.k)){q.k=k;sw=q;}}put(i,sw||c);}
   const items=g.items.map((it,i)=>{const c=best[i];if(!c)return {id:it.id,a:'m',L:{lbl:{x:(it.b[0]+it.b[2])/2,y:it.b[1]-GAP},val:{x:0,y:0},lv:{x:0,y:0}},form:0,side:it.side,cost:0};
-   return {id:it.id,a:c.a,L:c.L,form:c.form,side:c.side,cost:+(c.k-c.pen).toFixed(3),cut:c.cut,hidden:c.form>=2&&!!it.val,full:it.val};});
+   const R=c.R.map(r=>[r[0]+AIR,r[1]+AIR,r[2]-AIR,r[3]-AIR]),out={id:it.id,a:c.a,L:c.L,form:c.form,side:c.side,cost:+(c.k-c.pen).toFixed(3),cut:c.cut,hidden:c.form>=2&&!!it.val,full:it.val,ax:c.ax,ay:c.ay,R};
+   if(it.at){out.pinned=true;const ld=lead(R,it.o||it.b);if(ld)out.lead=ld;}
+   return out;});
   const boxes=[];best.forEach(c=>{if(c)for(const r of c.R)boxes.push(r);});
   return {items,boxes};}
+ // the leader of a label kept by hand: the shortest segment between the box of its lines and the box of its part (with
+ // its pins), when it is longer than LEAD
+ function lead(R,o){if(!R.length)return null;const U=[Math.min(...R.map(r=>r[0])),Math.min(...R.map(r=>r[1])),Math.max(...R.map(r=>r[2])),Math.max(...R.map(r=>r[3]))];
+  const near=(a0,a1,b0,b1)=>a1<b0?[a1,b0]:b1<a0?[a0,b1]:[(Math.max(a0,b0)+Math.min(a1,b1))/2,(Math.max(a0,b0)+Math.min(a1,b1))/2];
+  const [x1,x2]=near(U[0],U[2],o[0],o[2]),[y1,y2]=near(U[1],U[3],o[1],o[3]),r1=v=>Math.round(v*10)/10;
+  return Math.hypot(x2-x1,y2-y1)>LEAD?[r1(x1),r1(y1),r1(x2),r1(y2)]:null;}
  function layout(doc,o){const g=gather(doc,o);const r=place(g);r.g=g;return r;}
  // for the tests: what still collides in a layout (pairs of labels, label and part, wire length under labels)
  function check(lay){const g=lay.g,byI=new Map(),boxes=[];lay.items.forEach((it,i)=>{const c=g.items[i];byI.set(it.id,c);});
@@ -140,6 +157,6 @@
    for(const p of g.parts){const a=ov(own[i].r,p.b);if(a>1){lp++;bad.push(['lp',own[i].id,p.id,+a.toFixed(1)]);}}
    for(const s of g.segs)wire+=clipLen(s,own[i].r);}
   void boxes;void byI;return {ll,lp,wire:+wire.toFixed(1),bad};}
- const api={est,gather,stack,place,layout,check,sideOf,clipLen,FS,PITCH};
+ const api={est,gather,stack,place,layout,check,sideOf,clipLen,pinOf,lead,FS,PITCH,LEAD};
  root.LblPlace=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

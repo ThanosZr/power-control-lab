@@ -16,6 +16,10 @@
 //   NetView.create(canvas, data, opt)  the interactive viewer: setLayer, fit, zoom, setNames, info(cb), destroy;
 //                                      opt: info(text, hit), pick(hit) on a click, layer, tr (the transform to open with)
 //
+// 4.22 (ROADMAP §69, pcl.geo): a view on the map (view.geo: the units are km of Web Mercator about the middle of the network)
+// has a graticule under it (view.geo.grid, with the degrees at the edges), the routes of the branches that have one
+// (view.geo.routes: index of the branch → points), and a scale bar at the bottom left. No tiles: it works offline.
+//
 // 4.20.1: a network with DC grids has them in view.dc (buses, lines, stations) and every layer in L.dc (colours and values in
 // the same palette). DC buses are squares, DC lines thicker, a converter station a square with a diagonal on the link from
 // its AC bus to its DC bus; a pick may also be {kind:'dcbus', i}, {kind:'dcline', j} or {kind:'station', j}.
@@ -33,7 +37,9 @@
   // a grid of cells one unit wide, for picking and for the names (which bus is where, without a pass over all of them)
   const cell=v.unit,gx0=v.bounds[0],gy0=v.bounds[1],gw=Math.max(1,Math.ceil((v.bounds[2]-gx0)/cell)+1),gh=Math.max(1,Math.ceil((v.bounds[3]-gy0)/cell)+1),grid=new Map();
   for(let i=0;i<nb;i++){const k=Math.floor((y[i]-gy0)/cell)*gw+Math.floor((x[i]-gx0)/cell);let g=grid.get(k);if(!g)grid.set(k,g=[]);g.push(i);}
-  return {v,nb,ne,x,y,a,b,x1,y1,x2,y2,ix,cell,gx0,gy0,gw,gh,grid,layers:new Map((data.layers||[]).map(L=>[L.layer,L])),dc:dcModel(v,ix,x,y)};
+  // 4.22: the routes of the branches on the map (index → [[x, y]…])
+  const rt=v.geo&&v.geo.routes?new Map(Object.entries(v.geo.routes).filter(([k,p])=>Array.isArray(p)&&p.length>=2&&+k>=0&&+k<ne).map(([k,p])=>[+k,p])):null;
+  return {v,nb,ne,x,y,a,b,x1,y1,x2,y2,ix,cell,gx0,gy0,gw,gh,grid,rt,layers:new Map((data.layers||[]).map(L=>[L.layer,L])),dc:dcModel(v,ix,x,y)};
  }
  // 4.20.1: the DC grid of a view: places of the DC buses, segments of the DC lines (parallel ones side by side), and every
  // station as the segment from its AC bus to its DC bus with its middle; null for a network without DC parts
@@ -67,7 +73,8 @@
   const re=6/tr.s;let be=-1,de=re*re;
   const near=(ax,ay,bx,by)=>{const dx=bx-ax,dy=by-ay;if(wx<Math.min(ax,bx)-re||wx>Math.max(ax,bx)+re||wy<Math.min(ay,by)-re||wy>Math.max(ay,by)+re)return Infinity;
    const L2=dx*dx+dy*dy,t=L2?Math.max(0,Math.min(1,((wx-ax)*dx+(wy-ay)*dy)/L2)):0;return (ax+t*dx-wx)**2+(ay+t*dy-wy)**2;};
-  for(let j=0;j<m.ne;j++){const ax=m.x1[j],ay=m.y1[j],dx=m.x2[j]-ax,dy=m.y2[j]-ay;
+  if(m.rt)for(const [j,p] of m.rt)for(let k=1;k<p.length;k++){const d=near(p[k-1][0],p[k-1][1],p[k][0],p[k][1]);if(d<de){de=d;be=j;}}
+  for(let j=0;j<m.ne;j++){if(m.rt&&m.rt.has(j))continue;const ax=m.x1[j],ay=m.y1[j],dx=m.x2[j]-ax,dy=m.y2[j]-ay;
    if(wx<Math.min(ax,ax+dx)-re||wx>Math.max(ax,ax+dx)+re||wy<Math.min(ay,ay+dy)-re||wy>Math.max(ay,ay+dy)+re)continue;
    const L2=dx*dx+dy*dy,t=L2?Math.max(0,Math.min(1,((wx-ax)*dx+(wy-ay)*dy)/L2)):0,d=(ax+t*dx-wx)**2+(ay+t*dy-wy)**2;if(d<de){de=d;be=j;}}
   if(D){let dj=-1;for(let j=0;j<D.nl;j++){const d=near(D.x1[j],D.y1[j],D.x2[j],D.y2[j]);if(d<de){de=d;dj=j;}}
@@ -95,6 +102,11 @@
   const L=m.layers.get(layer)||m.layers.get('base')||{palette:[GREY],bus_c:null,branch_c:null},pal=L.palette||[GREY],D=detail(tr,m),hot=layer!=='base';
   ctx.clearRect(0,0,w,h);ctx.fillStyle=opt.bg||'#ffffff';ctx.fillRect(0,0,w,h);
   const wl=(0-w/2)/tr.s+tr.cx,wr=(w-w/2)/tr.s+tr.cx,wt=(0-h/2)/tr.s+tr.cy,wb=(h-h/2)/tr.s+tr.cy,out={buses:0,branches:0,names:0,values:0};
+  if(m.v.geo)out.grid=graticule(ctx,m.v.geo,tr,w,h);
+  // a branch: its route when it has one (4.22), else the segment between its buses
+  const seg=j=>{const p=m.rt&&m.rt.get(j);if(p){ctx.moveTo(sx(tr,w,p[0][0]),sy(tr,h,p[0][1]));for(let k=1;k<p.length;k++)ctx.lineTo(sx(tr,w,p[k][0]),sy(tr,h,p[k][1]));return;}
+   ctx.moveTo(sx(tr,w,m.x1[j]),sy(tr,h,m.y1[j]));ctx.lineTo(sx(tr,w,m.x2[j]),sy(tr,h,m.y2[j]));};
+  const mid=j=>{const p=m.rt&&m.rt.get(j);return p?routeMid(p):[(m.x1[j]+m.x2[j])/2,(m.y1[j]+m.y2[j])/2];};
   // branches: one path per colour, the grey ones first so that the coloured stay on top
   const byc=pal.map(()=>[]);
   const offs=[];
@@ -103,11 +115,11 @@
   const order=pal.map((c,i)=>i).sort((p,q)=>(pal[p]===GREY?0:1)-(pal[q]===GREY?0:1));
   ctx.lineCap='round';
   for(const ci of order){const js=byc[ci];if(!js.length)continue;const col=pal[ci],strong=hot&&col!==GREY;ctx.strokeStyle=col;ctx.lineWidth=Math.max(1,Math.min(3,D.px*0.03))*(strong?2:1);ctx.beginPath();
-   for(const j of js){ctx.moveTo(sx(tr,w,m.x1[j]),sy(tr,h,m.y1[j]));ctx.lineTo(sx(tr,w,m.x2[j]),sy(tr,h,m.y2[j]));}ctx.stroke();
-   if(D.trafo){ctx.fillStyle='#ffffff';for(const j of js){if(!m.v.branches[j].trafo)continue;const X=sx(tr,w,(m.x1[j]+m.x2[j])/2),Y=sy(tr,h,(m.y1[j]+m.y2[j])/2);ctx.beginPath();ctx.arc(X,Y,D.r*0.7,0,6.2832);ctx.fill();ctx.stroke();}}}
+   for(const j of js)seg(j);ctx.stroke();
+   if(D.trafo){ctx.fillStyle='#ffffff';for(const j of js){if(!m.v.branches[j].trafo)continue;const q=mid(j),X=sx(tr,w,q[0]),Y=sy(tr,h,q[1]);ctx.beginPath();ctx.arc(X,Y,D.r*0.7,0,6.2832);ctx.fill();ctx.stroke();}}}
   // 4.19.4: a branch that a change took out of service stays at its place, dashed and without a value
   if(offs.length){out.off=offs.length;ctx.strokeStyle='#7a7a7a';ctx.lineWidth=Math.max(1,Math.min(2,D.px*0.02));ctx.setLineDash?.([5,5]);ctx.beginPath();
-   for(const j of offs){ctx.moveTo(sx(tr,w,m.x1[j]),sy(tr,h,m.y1[j]));ctx.lineTo(sx(tr,w,m.x2[j]),sy(tr,h,m.y2[j]));}ctx.stroke();ctx.setLineDash?.([]);}
+   for(const j of offs)seg(j);ctx.stroke();ctx.setLineDash?.([]);}
   // 4.20.1: the DC grid: the links of the stations, the DC lines by colour, the stations, the DC buses
   const Dm=m.dc,Ld=L.dc||null;
   if(Dm){const lw=Math.max(1,Math.min(3,D.px*0.03)),inWin=(ax,ay,bx,by)=>!(Math.max(ax,bx)<wl||Math.min(ax,bx)>wr||Math.max(ay,by)<wt||Math.min(ay,by)>wb);
@@ -141,7 +153,7 @@
    const vals=D.values&&L.bus_v;for(const i of vis){const X=sx(tr,w,m.x[i])+D.r+2,Y=sy(tr,h,m.y[i])-D.r;ctx.fillText(m.v.buses[i].id,X,Y);out.names++;
     if(vals&&L.bus_v[i]!==null&&L.bus_v[i]!==undefined){ctx.fillStyle='#5f6b6d';ctx.fillText(num(L.bus_v[i],L.unit_bus),X,Y+13);ctx.fillStyle='#22313a';out.values++;}}
    if(D.values&&L.branch_v){ctx.fillStyle='#5f6b6d';ctx.textBaseline='middle';for(const js of byc)for(const j of js){const x=L.branch_v[j];if(x===null||x===undefined)continue;
-     ctx.fillText(num(x,L.unit_branch),sx(tr,w,(m.x1[j]+m.x2[j])/2)+4,sy(tr,h,(m.y1[j]+m.y2[j])/2));out.values++;}}
+     const q=mid(j);ctx.fillText(num(x,L.unit_branch),sx(tr,w,q[0])+4,sy(tr,h,q[1]));out.values++;}}
    if(Dm){ctx.textBaseline='bottom';for(let i=0;i<Dm.nd;i++){const X=sx(tr,w,Dm.x[i])+D.r+2,Y=sy(tr,h,Dm.y[i])-D.r;if(X<-200||X>w+20||Y<-20||Y>h+20)continue;
      ctx.fillStyle='#22313a';ctx.fillText(Dm.v.buses[i].id,X,Y);out.names++;const x=Ld&&Ld.bus_v&&D.values?Ld.bus_v[i]:null;if(x!==null&&x!==undefined){ctx.fillStyle='#5f6b6d';ctx.fillText(num(x,Ld.unit_bus),X,Y+13);out.values++;}}
     if(D.values&&Ld){ctx.fillStyle='#5f6b6d';ctx.textBaseline='middle';
@@ -152,9 +164,24 @@
    else if(q.kind==='dcbus'&&Dm)ctx.arc(sx(tr,w,Dm.x[q.i]),sy(tr,h,Dm.y[q.i]),D.r+4,0,6.2832);
    else if(q.kind==='station'&&Dm)ctx.arc(sx(tr,w,(Dm.s1[q.j]+Dm.s2[q.j])/2),sy(tr,h,(Dm.t1[q.j]+Dm.t2[q.j])/2),D.r+4,0,6.2832);
    else if(q.kind==='dcline'&&Dm){ctx.moveTo(sx(tr,w,Dm.x1[q.j]),sy(tr,h,Dm.y1[q.j]));ctx.lineTo(sx(tr,w,Dm.x2[q.j]),sy(tr,h,Dm.y2[q.j]));}
-   else if(q.kind==='branch'){ctx.moveTo(sx(tr,w,m.x1[q.j]),sy(tr,h,m.y1[q.j]));ctx.lineTo(sx(tr,w,m.x2[q.j]),sy(tr,h,m.y2[q.j]));}ctx.stroke();}
+   else if(q.kind==='branch')seg(q.j);ctx.stroke();}
+  if(m.v.geo)out.scale=scaleBar(ctx,tr,w,h);
   return out;
  }
+ // 4.22: the point half way along a route
+ function routeMid(p){let L=0;for(let k=1;k<p.length;k++)L+=Math.hypot(p[k][0]-p[k-1][0],p[k][1]-p[k-1][1]);let h=L/2;
+  for(let k=1;k<p.length;k++){const d=Math.hypot(p[k][0]-p[k-1][0],p[k][1]-p[k-1][1]);if(d>0&&h<=d){const t=h/d;return [p[k-1][0]+t*(p[k][0]-p[k-1][0]),p[k-1][1]+t*(p[k][1]-p[k-1][1])];}h-=d;}return [p[0][0],p[0][1]];}
+ // 4.22: the meridians and parallels that cross the window, with their degrees at the top and at the left (the labels
+ // that would run into the one before are left out); → how many lines were drawn
+ function graticule(ctx,g,tr,w,h){let n=0,last=-Infinity;ctx.save();ctx.strokeStyle='#e6ecea';ctx.lineWidth=1;ctx.fillStyle='#8a9a96';ctx.font='10px sans-serif';ctx.textBaseline='top';
+  for(const q of g.grid||[]){if(!Array.isArray(q.pts)||q.pts.length<2)continue;
+   if(q.k==='lon'){const X=sx(tr,w,q.pts[0][0]);if(X<0||X>w)continue;ctx.beginPath();ctx.moveTo(X,0);ctx.lineTo(X,h);ctx.stroke();n++;const t=String(q.t||''),tw=t.length*5.6;if(X+3>last+8){ctx.fillText(t,X+3,3);last=X+3+tw;}}
+   else{const Y=sy(tr,h,q.pts[0][1]);if(Y<0||Y>h)continue;ctx.beginPath();ctx.moveTo(0,Y);ctx.lineTo(w,Y);ctx.stroke();n++;if(Y>16)ctx.fillText(String(q.t||''),3,Y-12);}}
+  ctx.restore();return n;}
+ // 4.22: a scale bar at the bottom left: 1, 2 or 5 × 10ⁿ km about a fifth of the width (the units of a map view are km)
+ function scaleLen(kmWide){const t=Math.max(kmWide,1e-9)/5,e=Math.pow(10,Math.floor(Math.log10(t)));for(const k of [5,2,1])if(k*e<=t*1.0000001)return k*e;return e;}
+ function scaleBar(ctx,tr,w,h){const L=scaleLen(w/tr.s),px=L*tr.s,x=12,y=h-12;ctx.save();ctx.strokeStyle='#5f6b6d';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x,y-5);ctx.lineTo(x,y);ctx.lineTo(x+px,y);ctx.lineTo(x+px,y-5);ctx.stroke();
+  ctx.fillStyle='#5f6b6d';ctx.font='10px sans-serif';ctx.textBaseline='bottom';ctx.textAlign='center';const t=(L>=1?`${+L.toPrecision(3)} km`:`${+(L*1e3).toPrecision(3)} m`).replace('.',',');ctx.fillText(t,x+px/2,y-6);ctx.restore();return {km:L,px};}
  // the interactive viewer on a canvas element
  function create(canvas,data,opt={}){
   const m=model(data),st={layer:opt.layer&&m.layers.has(opt.layer)?opt.layer:(data.layer&&m.layers.has(data.layer)?data.layer:'base'),names:'auto',hit:null,tr:null,w:0,h:0,drawn:null,frames:0};
@@ -195,6 +222,6 @@
     canvas.removeEventListener('wheel',wheel);canvas.removeEventListener('dblclick',dbl);}};
   ask();return api;
  }
- const api={model,fit,detail,pick,draw,describe,create,num};
+ const api={model,fit,detail,pick,draw,describe,create,num,routeMid,scaleLen};
  root.NetView=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

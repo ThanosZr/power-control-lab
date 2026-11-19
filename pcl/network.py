@@ -1637,6 +1637,10 @@ def to_dict(net):
            'buses': {b: d for b, d in net.buses.items() if d['type'] != 'internal'}, 'elements': els}
     if net.__dict__.get('dc_buses'):                   # 4.20: only a network with a DC grid writes them
         out['dc_buses'] = dict(net.dc_buses)
+    g = net.__dict__.get('geo')
+    if g and (g.get('buses') or g.get('routes')):      # 4.22 (pcl.geo): only a network with places writes them
+        out['geo'] = {'buses': {b: list(p) for b, p in (g.get('buses') or {}).items()},
+                      'routes': {n: [list(p) for p in r] for n, r in (g.get('routes') or {}).items()}}
     return out
 
 
@@ -1659,6 +1663,12 @@ def from_dict(d):
             net.branch_pu(e['a'], e['b'], e['r'], e['x'], e.get('bc', 0), e.get('ratio', 0), e.get('angle', 0), name=name, rating=e.get('rating'))
             continue
         getattr(net, kind)(name=name, **e)
+    if isinstance(d.get('geo'), dict):                 # 4.22: the places of the buses and the routes (checked by pcl.geo)
+        from . import geo
+        try:
+            geo.attach(net, d['geo'].get('buses'), d['geo'].get('routes'))
+        except geo.GeoError as e:
+            raise NetworkError(str(e)) from e
     return net
 
 

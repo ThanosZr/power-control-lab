@@ -238,6 +238,7 @@
     case 'GY':{const r=e.row,Y=e.psi;ad(e.a,r,1,0);ad(r,e.a,1,0);ad(e.b,r,-1,0);ad(r,e.b,-1,0);ad(r,e.m,-Y,0);ad(e.m,r,-Y,0);break;}
     case 'NL':if(e.arc&&e.arc.closed){y(e.a,e.b,1/e.arc.Ron,0);break;}left.add(e.k);break;
     case 'TL':{// 4.9: a distributed line at ω₀ as its exact two-port (lossless; R adds only a small start transient)
+     if(e.v0){left.add('TLQ');break;} // 4.22: a line with an initial voltage starts from it, not from the steady state
      const th=w0*e.tau,y11=-1/(e.Z*Math.tan(th)),y12=1/(e.Z*Math.sin(th)),P=[[e.a1,e.b1],[e.a2,e.b2]];
      for(let k=0;k<2;k++)for(let j=0;j<2;j++){const g=k===j?y11:y12,[ak,bk]=P[k],[aj,bj]=P[j];ad(ak,aj,0,g);ad(bk,bj,0,g);ad(ak,bj,0,-g);ad(bk,aj,0,-g);}break;}
     // 4.12: a line from geometry as the two-port of its model at ω₀ (trapped charge and a steady start do not go together: cpline σ. 11)
@@ -260,7 +261,7 @@
    else if(e.k==='F'&&!e.gen&&!e.sm&&!e.srm){const N=e.N;for(let k=0;k<N;k++){const [a,b]=e.ports[k];e.psi[k]=(Vi(a)-Vi(b))/w;}e.psi1.set(e.psi);
     if(bdf)for(let k=0;k<N;k++){const [a,b]=e.ports[k];e.psi1[k]=((Vi(a)-Vi(b))*cb-(Vr(a)-Vr(b))*sb)/w;}
     for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=e.Gam[k*N+j]*e.psi[j];e.i[k]=s;}}
-   else if(e.k==='TL')tlSteady(e,w0,sim.h,[Vr(e.a1)-Vr(e.b1),Vi(e.a1)-Vi(e.b1)],[Vr(e.a2)-Vr(e.b2),Vi(e.a2)-Vi(e.b2)]);
+   else if(e.k==='TL'&&!e.v0)tlSteady(e,w0,sim.h,[Vr(e.a1)-Vr(e.b1),Vi(e.a1)-Vi(e.b1)],[Vr(e.a2)-Vr(e.b2),Vi(e.a2)-Vi(e.b2)]);
    else if(e.k==='TLM'&&e.acY){tlmSteady(e,w0,sim.var?0:sim.h,e.n1.map(a=>[Vr(a),Vi(a)]),e.n2.map(a=>[Vr(a),Vi(a)]),e.acY.Y);delete e.acY;}}
   // each generator: positive sequence of the terminal phasors, the voltage behind R_a, the steady state, the twisted shaft
   const A=[Math.cos(2*Math.PI/3),Math.sin(2*Math.PI/3)],cm=(a,b)=>[a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]];
@@ -319,6 +320,7 @@
   for(const e of net.els)if(e.k==='C'&&!vC0.has(e)){const d=(e.a<0?0:Xd[e.a])-(e.b<0?0:Xd[e.b]);if(d!==0){e.v+=d;e.v1+=d;}}
   for(const e of net.els)if(e.k==='CHB')e.i=x0[e.row];
   if(left.has('CHB'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: οι αρθρωτοί βραχίονες μπαίνουν στη λύση με φασιθέτες σε παράκαμψη (R_arm), όχι με τις υπομονάδες που έχουν μέσα στο t = 0.');
+  if(left.has('TLQ'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: οι γραμμές με αρχική τάση (παγιδευμένο φορτίο) ξεκινούν από αυτήν, όχι από τη μόνιμη κατάσταση.');
   if(left.has('TLMQ'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: οι γραμμές από γεωμετρία με παγιδευμένο φορτίο ξεκινούν από αυτό, όχι από τη μόνιμη κατάσταση.');
   if(left.has('TL'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: οι γραμμές με κατανεμημένες παραμέτρους (Bergeron) ξεκινούν χωρίς φορτίο.');
   if(left.has('CPL')||left.has('NL'))net.warnings.push('Αρχικοποίηση από ροή φορτίου: τα φορτία σταθερής ισχύος και τα αλεξικέραυνα μένουν έξω από τη λύση με φασιθέτες.');
@@ -335,6 +337,23 @@
  function deInt(v0,v1,th,U0,k){if(v0*v1<0){const sc=v0/(v0-v1);return dePiece(Math.abs(v0),0,0,sc,th,U0,k)+dePiece(0,Math.abs(v1),sc,1,th,U0,k);}return dePiece(Math.abs(v0),Math.abs(v1),0,1,th,U0,k);}
  // the fraction θ of the step where the accumulated effect reaches D (bisection; the integral grows with θ)
  function deFrac(v0,v1,need,U0,k){let lo=0,hi=1;for(let i=0;i<50;i++){const m=(lo+hi)/2;if(deInt(v0,v1,m,U0,k)<need)lo=m;else hi=m;}return hi;}
+ // 4.22: the leader progression model (LPM) of a gap g. First the streamers: S = ∫ max(0, 1,25·E/E₅₀ − 0,95) dt / 1 μs up to 1,
+ // with E = |v|/g; then the leader dL/dt = K·|v|·(|v|/(g − L) − E₀) while the bracket is positive, K and E₀ by the polarity of v;
+ // breakdown at L = g. Over a step v is linear from v0 to v1: m equal pieces with the voltage at the middle of each, the same
+ // pieces in the check and in the commit. With stop, the fraction of the step where L reaches g (linear inside its piece).
+ function lpmRun(q,S,L,v0,v1,dt,stop){const m=16,d=dt/m;
+  for(let j=0;j<m;j++){const v=v0+(v1-v0)*(j+.5)/m,x=Math.abs(v);
+   if(S<1){const r=1.25*(x/q.g)/q.E50-.95;if(r>0)S=Math.min(1,S+d*r/1e-6);continue;}
+   const pos=v>=0,K=pos?q.Kp:q.Kn,E0=pos?q.E0p:q.E0n,r=x/(q.g-L)-E0;if(!(r>0))continue;const dl=d*K*x*r;
+   if(L+dl>=q.g){if(stop)return {S,L:q.g,frac:(j+(q.g-L)/dl)/m};return {S,L:q.g,frac:null};}L+=dl;}
+  return {S,L,frac:null};}
+ // 4.22: the breakdown voltage of a gap at time t; a disconnector (ds) moves its contacts from t₀ for T_s: closing from U_m to
+ // zero (the contacts touch at t₀ + T_s), opening from zero to U_m (closed before t₀)
+ // the LPM data of a spark gap (parts.js SG with vt = 'lpm'): K in m²/(V²·s), E₀ and E₅₀ in V/m, g in m
+ function lpmParams(p,c){const n=v=>P.parseEng(v),q={g:n(p.gl),E50:n(p.E50),Kp:n(p.Kp),E0p:n(p.E0p),Kn:n(p.Kn),E0n:n(p.E0n)},nm=c.label||c.id;
+  if(!(q.g>0))throw new NetlistError(`${nm}: το διάκενο g πρέπει να είναι θετικό.`);if(!(q.E50>0))throw new NetlistError(`${nm}: το E₅₀ πρέπει να είναι θετικό.`);
+  for(const k of ['Kp','Kn','E0p','E0n'])if(!(q[k]>0))throw new NetlistError(`${nm}: τα K και E₀ πρέπει να είναι θετικά.`);return q;}
+ function gapUb(g,t){const d=g.ds;if(!d)return g.Ub;if(t<=d.t0)return d.op==='open'?0:d.Um;const f=Math.min(1,(t-d.t0)/d.Ts);return d.op==='open'?d.Um*f:d.Um*(1-f);}
  // line element (3.8; losses and sections 3.11): N sections of τ/N, each with R/N lumped as R/4 at its ends and R/2 inside (Dommel),
  // which gives Z_e = Z + R/(4N) and h = (Z − R/(4N))/(Z + R/(4N)); lossless when R = 0 (h = 1)
  // 4.9: the history of a distributed line in a sinusoidal steady state (phasors of the end voltages, ω₀): junction
@@ -825,7 +844,8 @@
     info.wave=w;info.main=add({k:'V',a:top,b,row:row(),src:{kind:'wave',w}});}
    else if(T==='TL'){const g=P.tlParams(p);if(g.err)throw new NetlistError(`${c.label||c.id}: ${g.err}`);
     const a1=node(c.id,'a1'),b1=node(c.id,'b1'),a2=node(c.id,'a2'),b2=node(c.id,'b2');info.pins=[a1,b1];info.ports=[[a1,b1],[a2,b2]];info.line=g;
-    info.main=add(tlElement({a:a1,b:b1,a1,b1,a2,b2,key:c.id},g));}
+    const v0=num(p.v0,0)||0; // 4.22: an initial voltage of the line (trapped charge), only on the element when it is not zero
+    info.main=add(tlElement({a:a1,b:b1,a1,b1,a2,b2,key:c.id,...(v0?{v0}:{})},g));}
    else if(T==='TLM'){const g=P.tlmModel(p);if(g.err)throw new NetlistError(`${c.label||c.id}: ${g.err}`);const M=g.M;
     if(M!==P.tlmM(p))throw new NetlistError(`${c.label||c.id}: το μοντέλο έχει ${M} φάσεις, τα δεδομένα ${P.tlmM(p)}. Υπολόγισε ξανά.`);
     const n1=[],n2=[];for(let k=0;k<M;k++){n1.push(node(c.id,P.tlmPin(k,1)));n2.push(node(c.id,P.tlmPin(k,2)));}
@@ -847,10 +867,16 @@
     else{info.tlm=g;info.main=add(tlmElement({a:n1[0],b:-1,key:c.id,vtrap},n1,n2,g));}}
    else if(T==='SG'){const a=node(c.id,'a'),b=node(c.id,'b');info.pins=[a,b];const Ub=p.vt==='de'?1:num(p.Ub,0),tr=String(p.trig??'').trim()===''?Infinity:P.parseEng(p.trig);
     if(!(Ub>0))throw new NetlistError(`${c.label||c.id}: η τάση διάσπασης πρέπει να είναι θετική.`);if(Number.isNaN(tr))throw new NetlistError(`${c.label||c.id}: μη έγκυρος χρόνος έναυσης.`);
-    const ext=['zero','iext','never'].includes(p.ext)?p.ext:'zero';let de=null;
+    const ext=['zero','iext','never'].includes(p.ext)?p.ext:'zero';let de=null,lpm=null;
     if(p.vt==='de'){de={U0:num(p.U0,0),k:num(p.kde,1),D:num(p.Dde,0)};if(!(de.U0>0))throw new NetlistError(`${c.label||c.id}: η τάση έναρξης U₀ πρέπει να είναι θετική.`);
      if(!(de.k>=0&&de.k<=10))throw new NetlistError(`${c.label||c.id}: ο εκθέτης k πρέπει να είναι από 0 ως 10.`);if(!(de.D>0))throw new NetlistError(`${c.label||c.id}: η σταθερά D πρέπει να είναι θετική.`);}
-    info.main=add({k:'D',a,b,Ron:Math.max(num(p.Rarc,.1),1e-7),Roff:Math.max(num(p.Roff,1e10),1),Vf:0,on:false,key:c.id,Dacc:0,gap:{Ub:de?de.U0:Ub,trig:tr,ext,Iext:ext==='iext'?Math.max(0,num(p.Iext,1)):0,de}});}
+    if(p.vt==='lpm'){lpm=lpmParams(p,c);}
+    info.main=add({k:'D',a,b,Ron:Math.max(num(p.Rarc,.1),1e-7),Roff:Math.max(num(p.Roff,1e10),1),Vf:0,on:false,key:c.id,Dacc:0,gap:{Ub:de?de.U0:lpm?Infinity:Ub,trig:tr,ext,Iext:ext==='iext'?Math.max(0,num(p.Iext,1)):0,de,...(lpm?{lpm}:{})}});}
+   else if(T==='DS'){const a=node(c.id,'a'),b=node(c.id,'b');info.pins=[a,b];const op=p.op==='open'?'open':'close',t0=num(p.t0,0),Ts=num(p.Ts,0),Um=num(p.Um,0);
+    if(!(t0>=0))throw new NetlistError(`${c.label||c.id}: η έναρξη t₀ δεν μπορεί να είναι αρνητική.`);if(!(Ts>0))throw new NetlistError(`${c.label||c.id}: ο χρόνος κίνησης T_s πρέπει να είναι θετικός.`);
+    if(!(Um>0))throw new NetlistError(`${c.label||c.id}: η τάση διάσπασης U_m πρέπει να είναι θετική.`);const ext=['zero','iext'].includes(p.ext)?p.ext:'iext';
+    info.main=add({k:'D',a,b,Ron:Math.max(num(p.Rarc,1),1e-7),Roff:Math.max(num(p.Roff,1e10),1),Vf:0,on:op==='open',key:c.id,Dacc:0,
+     gap:{Ub:Um,trig:op==='close'?t0+Ts:Infinity,ext,Iext:ext==='iext'?Math.max(0,num(p.Iext,1)):0,de:null,ds:{op,t0,Ts,Um}}});}
    else if(T==='ARCX'){const a=node(c.id,'a'),b=node(c.id,'b');info.pins=[a,b];const Ron=Math.max(num(p.Ron,1e-4),1e-7),gmin=Math.max(num(p.gmin,1e-12),1e-30);
     const A={lam:num(p.lam,2),tau0:Math.max(num(p.tau0,0.27e-6),1e-15),alpha:num(p.alpha,0),P0:Math.max(num(p.P0,15917),1e-30),P1:Math.min(Math.max(num(p.P1,0),0),0.999999),beta:num(p.beta,0),
      Ron,gmin,xmin:Math.log(gmin),xmax:Math.log(1/Ron),closed:true,x:Math.log(1/Ron),u:0,h:0,th:1,F0:0,xg:null,tsep:null};
@@ -1297,7 +1323,7 @@
    const old=this.net;const net=buildNetlist(project);
    if(old&&!fresh){ // carry states by key
     const st=new Map();for(const e of old.els)if(e.key)st.set(e.k+e.key,e);
-    for(const e of net.els)if(e.key&&st.has(e.k+e.key)){const o=st.get(e.k+e.key);if(e.k==='L')e.i=o.i;if(e.k==='C'){e.v=o.v;e.i=o.i;}if(e.k==='D'){e.on=o.on;if(e.gap){e.trigDone=o.trigDone;e.Dacc=o.Dacc||0;}}if(e.k==='CHB'&&o.N===e.N&&!!o.mmc===!!e.mmc){e.vc.set(o.vc);e.vc1.set(o.vc1);e.i=o.i;e.s.set(o.s);e.sKey=o.sKey;if(e.mmc&&o.mmc&&o.mmc.N===e.mmc.N)mmcLoad(e.mmc,mmcSave(o.mmc));}
+    for(const e of net.els)if(e.key&&st.has(e.k+e.key)){const o=st.get(e.k+e.key);if(e.k==='L')e.i=o.i;if(e.k==='C'){e.v=o.v;e.i=o.i;}if(e.k==='D'){e.on=o.on;if(e.gap){e.trigDone=o.trigDone;e.Dacc=o.Dacc||0;if(e.gap.lpm){e.Slp=o.Slp||0;e.Llp=o.Llp||0;}}}if(e.k==='CHB'&&o.N===e.N&&!!o.mmc===!!e.mmc){e.vc.set(o.vc);e.vc1.set(o.vc1);e.i=o.i;e.s.set(o.s);e.sKey=o.sKey;if(e.mmc&&o.mmc&&o.mmc.N===e.mmc.N)mmcLoad(e.mmc,mmcSave(o.mmc));}
      if(e.k==='F'&&o.N===e.N&&!e.sm===!o.sm&&!e.srm===!o.srm&&!e.gen===!o.gen){e.i.set(o.i);if(e.sm||e.srm||e.gen){e.psi.set(o.psi);e.psi1.set(o.psi1);}else{for(let k=0;k<e.N;k++){let s=0;for(let j=0;j<e.N;j++)s+=e.Lm[k*e.N+j]*e.i[j];e.psi[k]=s;}e.psi1.set(e.psi);}}}
     const oc=new Map(old.ctrls.map(c=>[c.id,c]));for(const c of net.ctrls){const o=oc.get(c.id);if(o&&o.mode===c.mode&&o.T===c.T){c.xi=o.xi;c.d=o.d;c.k=o.k;c.tk=o.tk;c.tkPrev=o.tkPrev;c.dPrev=o.dPrev;c.dPrevOff=o.dPrevOff;c.dOn=o.dOn;c.dOff=o.dOff;c.h=c.upd===o.upd?o.h:null;c.meas=o.meas;c.refNow=o.refNow;c.ePrev=o.ePrev;c.dF=o.dF;}}
     for(const e of net.els)if(e.k==='CPL'){const o=old.els.find(x=>x.k==='CPL'&&x.cid===e.cid);if(o)e.v0=o.v0;}
@@ -1813,12 +1839,12 @@
   zcFrac(){this.evalBlocks('trial',false,true);let th=null;
    for(const b of this.net.sig.zc){const s=b.st.s,f0=b.st.f0,f1=b.f1;if(!(s?f1<0:f1>0))continue;const d=f0-f1;const q=Math.min(1,Math.max(0,d!==0?f0/d:0));if(th===null||q<th)th=q;}
    return th;}
-  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0,e.arc?{...e.arc}:e.sai?{...e.sai}:null]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='TLM')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut,e.modes.map(m=>m.fd?[m.z1.slice(),m.z2.slice(),m.y1.slice(),m.y2.slice(),m.i1,m.i2]:null),e.wb?[e.Xr.slice(),e.Xi.slice(),e.Zr.slice(),e.Zi.slice(),e.vp.slice()]:null]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);else if(e.k==='CHB')el.push([e,e.vc.slice(),e.vc1.slice(),e.i,e.s.slice(),e.sKey,e.mmc?mmcSave(e.mmc):null]);}
+  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0,e.arc?{...e.arc}:e.sai?{...e.sai}:null]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='TLM')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut,e.modes.map(m=>m.fd?[m.z1.slice(),m.z2.slice(),m.y1.slice(),m.y2.slice(),m.i1,m.i2]:null),e.wb?[e.Xr.slice(),e.Xi.slice(),e.Zr.slice(),e.Zi.slice(),e.vp.slice()]:null]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc,e.Slp,e.Llp]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);else if(e.k==='CHB')el.push([e,e.vc.slice(),e.vc1.slice(),e.i,e.s.slice(),e.sKey,e.mmc?mmcSave(e.mmc):null]);}
    return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el,ms:[...(this.ims||[]),...(this.sms||[]),...(this.srms||[])].map(m=>[m,{...m.st}]),gs:(this.gens||[]).map(m=>[m,genCopy(m.st),m.Efd0,m.Tm0])};}
   restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
    for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];if(r[2])Object.assign(e.arc||e.sai,r[2]);}else if(e.k==='TL'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);}else if(e.k==='TLM'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);
     r[5].forEach((q,k)=>{if(!q)return;const m=e.modes[k];m.z1.set(q[0]);m.z2.set(q[1]);m.y1.set(q[2]);m.y2.set(q[3]);m.i1=q[4];m.i2=q[5];});
-    if(e.wb&&r[6]){e.Xr.set(r[6][0]);e.Xi.set(r[6][1]);e.Zr.set(r[6][2]);e.Zi.set(r[6][3]);e.vp.set(r[6][4]);}}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];e.trigDone=r[3];e.Dacc=r[4];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else if(e.k==='CHB'){e.vc.set(r[1]);e.vc1.set(r[2]);e.i=r[3];e.s.set(r[4]);e.sKey=r[5];if(r[6])mmcLoad(e.mmc,r[6]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
+    if(e.wb&&r[6]){e.Xr.set(r[6][0]);e.Xi.set(r[6][1]);e.Zr.set(r[6][2]);e.Zi.set(r[6][3]);e.vp.set(r[6][4]);}}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];e.trigDone=r[3];e.Dacc=r[4];e.Slp=r[5];e.Llp=r[6];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else if(e.k==='CHB'){e.vc.set(r[1]);e.vc1.set(r[2]);e.i=r[3];e.s.set(r[4]);e.sKey=r[5];if(r[6])mmcLoad(e.mmc,r[6]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
    for(const [m,st] of S.ms||[]){m.st={...st};if(m.ph)this.imSources(m);}
    for(const [m,st,e,t] of S.gs||[]){m.st=genCopy(st);m.Efd0=e;m.Tm0=t;}}
   // the whole state for a later continuation (3.16): {format, version, t, opts, method, state}. JSON-able, so it goes to a file
@@ -2020,11 +2046,15 @@
    for(const e of this.net.els)if(e.k==='D'){const v=V(e.a)-V(e.b);
     // spark gap (3.10): closes at |v| = U_b or at its trigger time; opens when the current crosses zero (or I_ext) after flowing
     if(e.gap){const g=e.gap;
-     if(e.on){if(g.ext==='never')continue;const i0=e.iPrev||0,sg=Math.sign(i0);if(!sg)continue;const lim=g.ext==='iext'&&Math.abs(i0)>=g.Iext?g.Iext:0,i=v/e.Ron;
+     if(e.on){if(g.ext==='never')continue;if(g.ds&&(g.ds.op==='close'?e.trigDone:this.tChk<=g.ds.t0+1e-9*this.h))continue; // 4.22: the contacts are closed
+      const i0=e.iPrev||0,sg=Math.sign(i0);if(!sg)continue;const lim=g.ext==='iext'&&Math.abs(i0)>=g.Iext?g.Iext:0,i=v/e.Ron;
       if(sg*i<lim-1e-9*(1+Math.abs(i0)))bad.push({e,frac:(sg*i0-lim)/(sg*i0-sg*i)});}
      else if(!e.trigDone&&this.t>=g.trig-1e-9*this.h)bad.push({e,frac:0}); // trigger: from the start of the step that begins at t_trig
      // right after a current-zero extinction the inductor currents are held: the residual current through R_off is not a breakdown
      else if(e.tOff!==this.tChk){if(g.de){const q=g.de,dt=this.tChk-this.t,need=q.D-(e.Dacc||0),v0=e.vPrev??0;if(dt>0&&dt*deInt(v0,v,1,q.U0,q.k)>=need*(1-1e-9))bad.push({e,frac:need>0?deFrac(v0,v,need/dt,q.U0,q.k):0});}
+      else if(g.lpm){const dt=this.tChk-this.t;if(dt>0){const r=lpmRun(g.lpm,e.Slp||0,e.Llp||0,e.vPrev??0,v,dt,true);if(r.frac!==null)bad.push({e,frac:r.frac});}}
+      else if(g.ds){const x=Math.abs(v),x0=Math.abs(e.vPrev??0),U0=gapUb(g,this.t),U1=gapUb(g,this.tChk); // 4.22: U_b moves with the contacts
+       if(x>U1*(1+1e-9)+1e-12*g.ds.Um)bad.push({e,frac:x0<U0?(U0-x0)/((x-x0)-(U1-U0)):0});}
       else{const x=Math.abs(v),x0=Math.abs(e.vPrev??0);if(x>g.Ub*(1+1e-9))bad.push({e,frac:x0<g.Ub?(g.Ub-x0)/(x-x0):0});}}
      continue;}
     if(e.on){const i=(v-e.Vf)/e.Ron;if(i<-1e-9*(1+Math.abs(e.iPrev||0))){const i0=e.iPrev??0;bad.push({e,frac:i0>0?i0/(i0-i):0});}}
@@ -2037,6 +2067,7 @@
     if(e.k==='L'){const v=this.V(e.a)-this.V(e.b);e.i1=e.i;e.i=e.g*v+e.J;}
     else if(e.k==='C'){const v=this.V(e.a)-this.V(e.b);e.v1=e.v;e.i=e.g*v+e.J;e.v=v;}
     else if(e.k==='D'){const v=this.V(e.a)-this.V(e.b),q=e.gap?.de;if(q)e.Dacc=e.on||Math.abs(v)<=q.U0?0:(e.Dacc||0)+h*deInt(e.vPrev??0,v,1,q.U0,q.k); // the effect builds only above U₀
+     const ql=e.gap?.lpm;if(ql){if(e.on){e.Slp=0;e.Llp=0;}else{const r=lpmRun(ql,e.Slp||0,e.Llp||0,e.vPrev??0,v,h,false);e.Slp=r.S;e.Llp=r.L;}} // 4.22: streamers and leader
      e.vPrev=v;e.iPrev=e.on?(v-e.Vf)/e.Ron:v/e.Roff;if(e.gap&&e.on&&this.t+h>=e.gap.trig)e.trigDone=true;
      if(e.tq>0){if(e.wasOn&&!e.on)e.tOffQ=this.t;e.wasOn=e.on;}} // 4.16: a thyristor with t_q: the instant of its extinction
     else if(e.k==='CPL'){const v=this.V(e.a)-this.V(e.b);e.v0=v;if(Math.abs(v)<e.Vmin){e.g=e.Pnow/(e.Vmin*e.Vmin);e.J=0;}else{e.g=e.Pnow/(v*v);e.J=0;}}
@@ -2077,8 +2108,9 @@
    for(let j=0;j<N;j++){C[N+1+j].push(C[j][C[j].length-1]/Ze+S[2*j]);C[2*N+1+j].push(C[j+1][C[j+1].length-1]/Ze+S[2*j+1]);}
    e.iE[0]=C[N+1][C[N+1].length-1];e.iE[1]=C[3*N][C[3*N].length-1];
    while(H.s+2<H.t.length&&H.t[H.s+1]<t-1.5*e.ts)H.s++;if(H.s>4096){H.t.splice(0,H.s);for(const c of C)c.splice(0,H.s);H.cut+=H.s;H.s=0;}}
-  // all columns at time tq by linear interpolation; zero before t = 0 (the line starts de-energized)
-  tlHist(e,tq){const H=e.H,n=H.t.length,C=H.c,out=e.q;if(!n||tq<Math.min(0,H.t[0])-1e-18){out.fill(0);return out;}let j=n-1;
+  // all columns at time tq by linear interpolation; zero before t = 0 (the line starts de-energized), or 4.22 the voltage v₀
+  // along the line and no current (a trapped charge)
+  tlHist(e,tq){const H=e.H,n=H.t.length,C=H.c,out=e.q;if(!n||tq<Math.min(0,H.t[0])-1e-18){out.fill(0);if(e.v0)for(let k=0;k<=e.N;k++)out[k]=e.v0;return out;}let j=n-1;
    if(tq>=H.t[j]){for(let k=0;k<C.length;k++)out[k]=C[k][j];return out;}let lo=H.s,hi=j;if(tq<=H.t[lo]){for(let k=0;k<C.length;k++)out[k]=C[k][lo];return out;}
    while(hi-lo>1){const m=(lo+hi)>>1;if(H.t[m]<=tq)lo=m;else hi=m;}const f=(tq-H.t[lo])/((H.t[hi]-H.t[lo])||1);
    for(let k=0;k<C.length;k++){const c=C[k];out[k]=c[lo]+(c[hi]-c[lo])*f;}return out;}
@@ -2209,12 +2241,14 @@
    if(cands.length){
     const frac=Math.min(...cands.map(b=>b.frac));
     // a gap on its volt–time curve may close right at the end of the step (frac up to 1): it is cut there, not at the start of the step
-    if(frac>1e-4&&frac<(cands.every(b=>b.e.gap?.de&&!b.e.on)?1+1e-12:.999)&&frac*h>this.h*1e-4){
+    if(frac>1e-4&&frac<(cands.every(b=>(b.e.gap?.de||b.e.gap?.lpm)&&!b.e.on)?1+1e-12:.999)&&frac*h>this.h*1e-4){
      const hh=h*frac;if(mode==='BDF2'){const w=hh/this.hLast;if(w>.2)this.bdf={w,a0:(1+2*w)/(1+w),a1:-(1+w),a2:w*w/(1+w)};else mode='BE';}this.values(t0+hh);const s2=this.solve(hh,mode);const V=i=>i<0?0:s2[i];
      const flip=cands.filter(b=>b.frac<=frac*(1+1e-6)+1e-9);
      const ok=flip.every(b=>{const e=b.e,v=V(e.a)-V(e.b);
        if(e.gap){const g=e.gap;if(e.on){const i0=e.iPrev||0,sg=Math.sign(i0),lim=g.ext==='iext'&&Math.abs(i0)>=g.Iext?g.Iext:0;return Math.abs(sg*v/e.Ron-lim)<=.02*Math.abs(sg*i0-lim)+1e-9;}
         if(g.de){const q=g.de,need=q.D-(e.Dacc||0);return Math.abs(hh*deInt(e.vPrev??0,v,1,q.U0,q.k)-need)<=.02*need+1e-12*q.D;}
+        if(g.lpm){const r=lpmRun(g.lpm,e.Slp||0,e.Llp||0,e.vPrev??0,v,hh,true);return (r.frac!==null&&r.frac>.5)||r.L>=.98*g.lpm.g;}
+        if(g.ds){const U=gapUb(g,t0+hh),U0=gapUb(g,t0);return Math.abs(Math.abs(v)-U)<=.02*Math.abs(U0-Math.abs(e.vPrev??0))+1e-9*g.ds.Um;}
         return Math.abs(Math.abs(v)-g.Ub)<=.02*Math.abs(g.Ub-Math.abs(e.vPrev??0))+1e-9*g.Ub;}
        if(e.on){const i=(v-e.Vf)/e.Ron,i0=Math.abs(e.iPrev||0);return Math.abs(i)<=.02*i0+1e-9;}
        const v0=Math.abs((e.vPrev??0)-e.Vf);return Math.abs(v-e.Vf)<=.02*v0+1e-6;})&&this.check(s2).every(b=>flip.some(f=>f.e===b.e));
@@ -2264,6 +2298,7 @@
    for(const e of this.net.els)if(e.fire)for(const te of this.scrEdges(e))if(te>this.t+eps&&te<t)t=te;
    for(const b of this.net.sig.blocks)if(b.type==='LCCX'){const te=lccEdge(b,b.st,this.t,this.sv);if(te>this.t+eps&&te<t)t=te;} // 4.16: the start and end of each gate pulse
    for(const e of this.net.els)if(e.gap&&!e.trigDone&&e.gap.trig>this.t+eps&&e.gap.trig<t)t=e.gap.trig; // spark-gap trigger
+   for(const e of this.net.els)if(e.gap&&e.gap.ds){const d=e.gap.ds;for(const q of [d.t0,d.t0+d.Ts])if(q>this.t+eps&&q<t)t=q;} // 4.22: a disconnector's contacts
    // signal blocks: clock edges, ramp resets / extremes, programs, discrete updates
    for(const b of this.net.sig.blocks){
     if(b.type==='CLK'||b.type==='RAMP'){const u=b.f*this.t-b.ph,nx=(k,o=0)=>(k+o+b.ph)/b.f,c=[nx(Math.floor(u+1e-9)+1)];
@@ -2364,6 +2399,7 @@
    if(e.arc){const A=e.arc;o.arc={lam:A.lam,tau0:A.tau0,alpha:A.alpha,P0:A.P0,P1:A.P1,beta:A.beta,Ron:A.Ron,xmin:A.xmin,xmax:A.xmax,closed:A.closed,x:A.x};}
    const hist=H=>H&&H.t.length?{t:H.t.slice(H.s),c:H.c.map(c=>c.slice(H.s))}:null;
    if(e.k==='TL'&&e.H.t.length)o.H=hist(e.H);
+   if(e.k==='TL'&&e.v0)o.vinit=e.v0; // 4.22: a line that starts at a voltage (trapped charge)
    // 4.13: a wideband line: its poles and residues, its states and the record of its waves (engine/batch.py tlw_*)
    if(e.k==='TLM'&&e.wb){const A=x=>Array.from(x),set=S=>({N:S.N,pr:A(S.pr),pi:A(S.pi),w:A(S.w),Rr:A(S.Rr),Ri:A(S.Ri)});
     Object.assign(o,{wb:true,n1:e.n1.slice(),n2:e.n2.slice(),M:e.M,G0:A(e.G0),yc:set(e.yc),grp:e.grp.map(g=>({...set(g),tau:g.tau})),nz:e.nz,

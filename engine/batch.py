@@ -704,6 +704,30 @@ def make_python_block(code, ins, outs, pars, Ts, label):
     return call
 
 
+
+def gap_ub(gp, t):
+    """4.22: the breakdown voltage of a gap at t; a disconnector moves its contacts from t₀ for T_s (as mna.js gapUb)."""
+    d = gp.get('ds')
+    if not d:
+        return gp['Ub']
+    if t <= d['t0']:
+        return 0.0 if d['op'] == 'open' else d['Um']
+    f = min(1.0, (t - d['t0']) / d['Ts'])
+    return d['Um'] * f if d['op'] == 'open' else d['Um'] * (1 - f)
+
+
+def lpm_rates(q, S, L, v):
+    """4.22: dS/dt and dL/dt of the leader progression model (as mna.js lpmRun): the streamers
+    1/t_s = 1,25·E/E₅₀ − 0,95 (μs) with E = |v|/g up to S = 1, then dL/dt = K·|v|·(|v|/(g − L) − E₀)."""
+    x = abs(v)
+    if S < 1.0:
+        r = 1.25 * (x / q['g']) / q['E50'] - 0.95
+        return (r / 1e-6 if r > 0 else 0.0), 0.0
+    K, E0 = (q['Kp'], q['E0p']) if v >= 0 else (q['Kn'], q['E0n'])
+    gap = max(q['g'] - L, 1e-9 * q['g'])
+    r = x / gap - E0
+    return 0.0, (K * x * r if r > 0 else 0.0)
+
 class Circuit:
     def __init__(self, net):
         self.els = net['els']
@@ -768,6 +792,11 @@ class Circuit:
             gp['Iext'] = _f(gp.get('Iext'), 0)
             if gp.get('de'):            # volt–time curve (3.11): D = ∫ (|v| − U₀)^k dt over |v| > U₀, closes at D
                 gp['de'] = {q: _f(gp['de'].get(q)) for q in ('U0', 'k', 'D')}
+            if gp.get('lpm'):           # 4.22: the leader progression model, two states (streamers S, leader L)
+                gp['lpm'] = {q: _f(gp['lpm'].get(q)) for q in ('g', 'E50', 'Kp', 'E0p', 'Kn', 'E0n')}
+            if gp.get('ds'):            # 4.22: a disconnector, U_b(t) with its contacts
+                d = gp['ds']
+                gp['ds'] = {'op': 'open' if d.get('op') == 'open' else 'close', 't0': _f(d.get('t0'), 0), 'Ts': _f(d.get('Ts'), 1), 'Um': _f(d.get('Um'), math.inf)}
             E[i]['trig_done'] = False
         self.just_off = {}
         self.iT = [i for i, e in enumerate(E) if e['k'] == 'TL']       # lines (3.8), with lumped losses in N sections (3.11)
@@ -776,6 +805,7 @@ class Circuit:
             N = int(e.get('N') or 1)
             r = _f(e.get('Rl'), 0) / (4 * N)
             e['N'], e['ts'], e['Ze'] = N, e['tau'] / N, e['Z'] + r
+            e['vinit'] = _f(e.get('vinit'), 0.0)
             e['hh'] = (e['Z'] - r) / e['Ze']
             H = e.get('H')          # 4.12: the record before t = 0 of a steady start (the browser's tlSteady)
             e['H'] = {'t': list(H['t']), 'c': [list(c) for c in H['c']]} if H else {'t': [], 'c': [[] for _ in range(3 * N + 1)]}
@@ -808,6 +838,9 @@ class Circuit:
         self.crow = {ci: size + j for j, ci in enumerate(self.iC)}
         self.ns = self.nI + len(self.iC)
         self.on = {i: False for i in self.iD + self.iS + self.iSG}
+        for i in self.iSG:              # 4.22: a disconnector that opens starts closed
+            if (E[i]['gap'].get('ds') or {}).get('op') == 'open':
+                self.on[i] = True
         self.ev, self.ev_n, self._evon, self.ev_max = [], 0, {}, 20000      # 3.19: the event log, as Sim.logEv in the browser
         self.gon = {i: False for i in self.iD if E[i].get('gk')}
         self.cap_rs = 0.0
@@ -913,6 +946,16 @@ class Circuit:
             for q, i in enumerate(self.iDE):
                 E[i]['kD'] = self.ns + q
             m = len(self.iDE)
+            self.Bx = np.hstack([self.Bx, np.zeros((n, m))])
+            self.Dm = np.vstack([self.Dm, np.zeros((m, n))])
+            self.x0 = np.concatenate([self.x0, np.zeros(m)])
+            self.ns += m
+        # 4.22: gaps with the leader progression model: the streamer progress S (to 1) and the leader length L (to g)
+        self.iLP = [i for i in self.iSG if E[i]['gap'].get('lpm')]
+        if self.iLP:
+            for q, i in enumerate(self.iLP):
+                E[i]['kS'], E[i]['kL'] = self.ns + 2 * q, self.ns + 2 * q + 1
+            m = 2 * len(self.iLP)
             self.Bx = np.hstack([self.Bx, np.zeros((n, m))])
             self.Dm = np.vstack([self.Dm, np.zeros((m, n))])
             self.x0 = np.concatenate([self.x0, np.zeros(m)])
@@ -1442,6 +1485,10 @@ class Circuit:
         H = e['H']
         T, C = H['t'], H['c']
         if not T or (tq < 0 and tq < T[0]):
+            v0 = e.get('vinit') or 0.0  # 4.22: a line that starts at a voltage v₀ (trapped charge) and no current
+            if v0:
+                N = e['N']
+                return [v0] * (N + 1) + [0.0] * (2 * N)
             return [0.0] * len(C)
         j = bisect.bisect_right(T, tq)
         if j >= len(T):
@@ -1883,10 +1930,14 @@ class Circuit:
                 if not e['trig_done'] and t >= gp['trig'] - 1e-9 * self.base_T:
                     bad.append((math.inf, i))
                     continue
-                if gp.get('de') or abs(t - self.just_off.get(i, -math.inf)) <= 1e-12 * self.base_T:
-                    continue            # volt–time gap: closes by its event. Or just opened at a current zero: the residual current through R_off is not a breakdown
+                if gp.get('de') or gp.get('lpm') or abs(t - self.just_off.get(i, -math.inf)) <= 1e-12 * self.base_T:
+                    continue            # volt–time or LPM gap: closes by its event. Or just opened at a current zero: the residual current through R_off is not a breakdown
                 v = (z[e['a']] if e['a'] >= 0 else 0) - (z[e['b']] if e['b'] >= 0 else 0)
-                if abs(v) > gp['Ub'] * (1 + 1e-9):
+                if gp.get('ds'):        # 4.22: a disconnector, U_b(t)
+                    ub = gap_ub(gp, t)
+                    if abs(v) > ub * (1 + 1e-9) + 1e-12 * gp['ds']['Um']:
+                        bad.append((abs(v) - ub, i))
+                elif abs(v) > gp['Ub'] * (1 + 1e-9):
                     bad.append((abs(v) - gp['Ub'], i))
             if not bad:
                 return tp, z
@@ -2797,6 +2848,10 @@ class Circuit:
             gp = self.els[i]['gap']
             if not self.els[i]['trig_done'] and t + eps < gp['trig'] < tn:
                 tn = gp['trig']
+            if gp.get('ds'):            # 4.22: the start and the end of the travel of a disconnector's contacts
+                for q in (gp['ds']['t0'], gp['ds']['t0'] + gp['ds']['Ts']):
+                    if t + eps < q < tn:
+                        tn = q
         if self.iT or self.iTM:         # method of steps: the history at t − τ must already be recorded
             tn = min(tn, t + self.tau_min)
         tn = self.block_events(t, tn, eps)
@@ -3006,6 +3061,15 @@ def simulate(data):
                     zz = zof(tt, yy)
                     u = abs((zz[e['a']] if e['a'] >= 0 else 0) - (zz[e['b']] if e['b'] >= 0 else 0)) - q['U0']
                     d[e['kD']] = u ** q['k'] if u > 0 else 0.0
+            for i in ckt.iLP:                  # 4.22: LPM gaps, the streamers to S = 1 and then the leader, while open
+                e = ckt.els[i]
+                q = e['gap']['lpm']
+                if ckt.on[i]:
+                    d[e['kS']] = d[e['kL']] = 0.0
+                    continue
+                zz = zof(tt, yy)
+                v = (zz[e['a']] if e['a'] >= 0 else 0) - (zz[e['b']] if e['b'] >= 0 else 0)
+                d[e['kS']], d[e['kL']] = lpm_rates(q, yy[e['kS']], yy[e['kL']], v)
             for i in ckt.iA:                   # arcs: d ln g/dt = F(ln g, v), held at the bounds of g; closed: held at R_on
                 e = ckt.els[i]
                 k = e['kA']
@@ -3047,6 +3111,9 @@ def simulate(data):
                 i0 = ckt.current(i, t, x, z)
                 if gp.get('ext') == 'never' or i0 == 0:
                     continue
+                ds = gp.get('ds')
+                if ds and (e['trig_done'] if ds['op'] == 'close' else t + 1e-12 * ckt.base_T < ds['t0']):
+                    continue            # 4.22: the contacts of a disconnector are closed
                 sg = 1.0 if i0 > 0 else -1.0
                 lim = gp['Iext'] if gp.get('ext') == 'iext' and abs(i0) >= gp['Iext'] else 0.0
                 def ev(tt, yy, vab=vab, sg=sg, lim=lim, e=e):
@@ -3063,6 +3130,22 @@ def simulate(data):
                 ev0.terminal = True
                 events.append(ev0)
                 owners.append(('de', i))
+            elif gp.get('lpm'):         # 4.22: LPM: breakdown when the leader crosses the gap; the streamers end at S = 1
+                q, kS, kL = gp['lpm'], e['kS'], e['kL']
+                def ev(tt, yy, q=q, kL=kL):
+                    return yy[kL] - q['g'] * (1 - 1e-6)
+                ev.direction = 1
+                if x[kS] < 1.0:
+                    def ev1(tt, yy, kS=kS):
+                        return yy[kS] - 1.0
+                    ev1.direction = 1
+                    ev1.terminal = True
+                    events.append(ev1)
+                    owners.append(('lps', i))
+            elif gp.get('ds'):          # 4.22: a disconnector, |v| up through U_b(t)
+                def ev(tt, yy, vab=vab, gp=gp):
+                    return abs(vab(tt, yy)) - gap_ub(gp, tt)
+                ev.direction = 1
             else:
                 def ev(tt, yy, vab=vab, gp=gp):
                     return abs(vab(tt, yy)) - gp['Ub']
@@ -3121,6 +3204,8 @@ def simulate(data):
                     if isinstance(owners[q], dict):
                         flip.add(owners[q]['id'])
                         stats['cmp_events'] += 1
+                    elif isinstance(owners[q], tuple) and owners[q][0] == 'lps':   # 4.22: the streamers have crossed
+                        x[ckt.els[owners[q][1]]['kS']] = 1.0
                     elif isinstance(owners[q], tuple):  # a volt–time gap below U₀ again: its effect restarts
                         x[ckt.els[owners[q][1]]['kD']] = 0.0
                     else:
@@ -3141,6 +3226,10 @@ def simulate(data):
                     gp = e['gap']
                     if gp.get('de'):
                         near = x[e['kD']] >= gp['de']['D'] * (1 - 1e-9)
+                    elif gp.get('lpm'):
+                        near = x[e['kL']] >= gp['lpm']['g'] * (1 - 1e-6) * (1 - 1e-9)
+                    elif gp.get('ds'):
+                        near = abs((zp[e['a']] if e['a'] >= 0 else 0) - (zp[e['b']] if e['b'] >= 0 else 0)) >= gap_ub(gp, te) * (1 - 1e-9)
                     else:
                         near = abs((zp[e['a']] if e['a'] >= 0 else 0) - (zp[e['b']] if e['b'] >= 0 else 0)) >= gp['Ub'] * (1 - 1e-9)
                     if near:
@@ -3153,6 +3242,9 @@ def simulate(data):
             for i in ckt.iDE:                   # a gap that conducts starts from zero effect when it opens again
                 if ckt.on[i]:
                     x[ckt.els[i]['kD']] = 0.0
+            for i in ckt.iLP:                   # 4.22: and an LPM gap from no streamers and no leader
+                if ckt.on[i]:
+                    x[ckt.els[i]['kS']] = x[ckt.els[i]['kL']] = 0.0
             tp, z = ckt.consistent(t, x)
             ckt.eval_blocks(t, x, z, 'commit', flip=flip)
             ckt.tl_record(t, z, x)

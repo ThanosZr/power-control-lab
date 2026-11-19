@@ -82,10 +82,28 @@ def _base_network(data):
     return net
 
 
+def _geo_of(net, data):
+    """4.22 (pcl.geo): the network with its places: its own, those of a GeoJSON of the request ('geojson', an object or its
+    text; with 'geo_lengths' the lines take the lengths of their routes), or those of a test network of ours (its case).
+    → (net, what the GeoJSON gave or None)."""
+    from . import geo
+    gj = data.get('geojson')
+    try:
+        if gj is not None:
+            return geo.from_geojson(net, gj, set_lengths=bool(data.get('geo_lengths')))
+        if geo.of(net) is None and data.get('network') is None and geo.builtin(data.get('case')) is not None:
+            return geo.from_geojson(net, geo.builtin(data.get('case')))[0], None
+    except geo.GeoError as e:
+        raise StudyError(str(e)) from e
+    return net, None
+
+
 def _networks_of(data):
     """(the network as given, the network with the changes of 'edits', one sentence per change)."""
     from . import netfile
     net0 = _base_network(data)
+    if data.get('geojson') is not None:                    # 4.22: the places (and with geo_lengths the lengths) of a GeoJSON
+        net0 = _geo_of(net0, data)[0]
     try:
         net, done = netfile.apply(net0, data.get('edits'))
     except N.NetworkError as e:
@@ -158,7 +176,25 @@ def _picture(net0, net, data):
     """The view of a request: the places come from the network as given, so that a change does not move the picture; what
     the changes took out of service is marked."""
     from . import netfile, netview
-    return netview.view(net0, off=netfile.out_of_service(data.get('edits')))
+    v = netview.view(net0, off=netfile.out_of_service(data.get('edits')))
+    if data.get('map'):                                    # 4.22 (pcl.geo): the picture on the map, where every bus has a place
+        from . import geo
+        g, _ = _geo_of(net0, {k: data.get(k) for k in ('case', 'network')})
+        m = geo.project(v, g)
+        if m is None:
+            c = geo.coverage(g)
+            raise StudyError(f'Ο χάρτης θέλει θέσεις για όλους τους ζυγούς: έχουν {c["buses"]} από {c["of"]}'
+                             + (f' (λείπουν: {", ".join(c["missing"][:8])}{"…" if len(c["missing"]) > 8 else ""})' if c['missing'] else '') + '.')
+        return m
+    return v
+
+
+def _geo_summary(net0, data):
+    """4.22: how much of the network has places, for the page (the map is offered when every bus has one)."""
+    from . import geo
+    g, _ = _geo_of(net0, {k: data.get(k) for k in ('case', 'network')})
+    c = geo.coverage(g)
+    return {'buses': c['buses'], 'of': c['of'], 'routes': c['routes'], 'map': c['of'] > 0 and c['buses'] == c['of']}
 
 
 def _study(net, study, opt):
@@ -400,6 +436,126 @@ def _feeder_run(data, with_report=False):
     return out
 
 
+# ---------------------------------------------------------------- 4.22: the insulation co-ordination of a station
+STATION_STUDIES = ('insulation',)                         # studies of a station (pcl.insulation), not of a Network
+INS_LAB = {'external': 'εξωτερική (αέρας, μονωτήρες)', 'gis': 'GIS (SF6)', 'liquid': 'σε υγρό (μετασχηματιστής)', 'solid': 'στερεή'}
+
+
+def _station(data):
+    """The procedure of pcl.insulation.coordinate from the options of a request: Us, Um, H, tov ({'k'} or {'bus'} of the
+    'case' with its sequence impedances, 'lr'), slow, fast (or 'peaks' from a simulation: {'fast': kV, 'vffo': kV}),
+    vffo, arrester ({'Upl', 'Ups', 'tov': [[U, t], …], 'T10'}), zone ({'A', 'N', 'Lsp', 'Ra', 'r', 'fs'}), insulations."""
+    from . import insulation as IC
+    o = dict(data.get('options') or {})
+    try:
+        Us = float(o.get('Us', 420))
+        Um = float(o.get('Um', Us))
+        H = float(o.get('H', 0))
+    except (TypeError, ValueError) as e:
+        raise StudyError(f'Us, Um, H: αριθμοί σε kV και m ({e})') from e
+    if not 1 < Us <= 1200:
+        raise StudyError('Us: η ψηλότερη τάση του συστήματος σε kV (1 – 1200)')
+    tov = dict(o.get('tov') or {}) or None
+    if tov and tov.get('bus') is not None:                 # k from the sequence impedances of a bus of the network
+        net, _, _ = _networks_of(data)
+        sc = net.short_circuit(str(tov['bus']), '1ph')
+        Z1, Z0 = complex(sc['Z1']), complex(sc['Z0'])
+        tov['k_from'] = IC.earth_fault_factor(Z0.real, Z0.imag, Z1.real, Z1.imag)
+        tov['k'] = tov['k_from']['k']
+    peaks = o.get('peaks') or {}
+    fast = o.get('fast')
+    if peaks.get('fast'):
+        fast = {'peak': {'external': float(peaks['fast']), 'internal': float(peaks['fast'])}}
+    vffo = o.get('vffo')
+    if peaks.get('vffo'):
+        vffo = {'peak': float(peaks['vffo']), 'K': float((vffo or {}).get('K', 1.0))}
+    ins = tuple(o.get('insulations') or ('external', 'gis'))
+    for q in ins:
+        if q not in INS_LAB:
+            raise StudyError('insulations: ' + ', '.join(INS_LAB))
+    try:
+        res = IC.coordinate(Us, H=H, tov=tov, slow=o.get('slow'), fast=fast, vffo=vffo, Um=Um, insulations=ins)
+    except (KeyError, TypeError, ValueError, ZeroDivisionError) as e:
+        raise StudyError(f'Συντονισμός μόνωσης: {e}') from e
+    if tov and tov.get('k_from'):
+        res['k_from'] = dict(tov['k_from'], bus=str(tov['bus']))
+    if o.get('arrester'):
+        a = o['arrester']
+        res['arrester'] = IC.arrester(Us, tov=[tuple(x) for x in a.get('tov') or []], T10=float(a.get('T10', 1.0)))
+        res['arrester'].update({'Upl': a.get('Upl'), 'Ups': a.get('Ups')})
+    if o.get('zone'):
+        z = o['zone']
+        res['zone'] = {}
+        for q, r in res['insulation'].items():
+            li = r['level'].get('li')
+            if li and z.get('Upl'):
+                res['zone'][q] = IC.protective_zone(li, float(z['Upl']), float(z['A']), float(z.get('N', 1)), float(z['Lsp']), float(z['Ra']), float(z['r']),
+                                                    fs=float(z.get('fs', 1.0)), Ks=IC.KS['internal' if q in IC.INTERNAL else 'external'])
+    return res
+
+
+def _station_summary(res):
+    rows = {}
+    for q, r in res['insulation'].items():
+        lv = r['level']
+        rows[q] = {'level': {k: lv.get(k) for k in ('sd', 'si', 'sipp', 'silong', 'li') if lv.get(k) is not None}, 'covered': lv['covered'],
+                   'need': r['need'], 'margin': r['margin']}
+    return {'why': 'IEC 60071-2: αντιπροσωπευτικές υπερτάσεις → τάσεις αντοχής συντονισμού → απαιτούμενες τάσεις αντοχής → τυποποιημένο επίπεδο του IEC 60071-1',
+            'Us': res['Us'], 'Um': res['Um'], 'H': res['H'], 'insulation': rows, 'k': (res.get('k_from') or {}).get('k'),
+            'vffo': (res['insulation'].get('gis') or {}).get('required', {}).get('vf')}
+
+
+def _station_run(data, with_report=False):
+    res = _station(data)
+    out = {'study': 'insulation', 'network': {'name': data.get('name') or 'υποσταθμός', 'case': data.get('case')},
+           'result': _clean(res), 'summary': _clean(_station_summary(res))}
+    if not with_report:
+        return out
+    r = _station_report(res, data.get('title') or None)
+    return {'html': r.html(), 'name': 'report_insulation_' + str(int(res['Us'])) + 'kV.html', 'report': _clean(r.to_dict()), 'summary': out['summary']}
+
+
+def _station_report(res, title=None):
+    r = Report(title or 'Συντονισμός μόνωσης (IEC 60071-1, IEC 60071-2)', f"U_s = {res['Us']:g} kV, U_m = {res['Um']:g} kV, υψόμετρο {res['H']:g} m",
+               meta={'1 pu (kV)': res['pu'], 'U_m (kV)': res['Um'], 'Υψόμετρο (m)': res['H']})
+    rep, cw = res['representative'], res['coordination']
+    r.heading('Βήμα 1–2: αντιπροσωπευτικές υπερτάσεις και τάσεις αντοχής συντονισμού')
+    rows = []
+    if 'tov' in rep:
+        rows += [['Προσωρινές (TOV)', 'φάση–γη', rep['tov']['pe'], cw['tov']['pe']], ['Προσωρινές (TOV)', 'φάση–φάση', rep['tov']['pp'], cw['tov']['pp']]]
+    if 'slow' in rep:
+        s = rep['slow']
+        rows += [['Βραδέος μετώπου', 'φάση–γη (K_cd = %.3f)' % s['Kcd_pe'], s['pe'], cw['slow']['pe']], ['Βραδέος μετώπου', 'φάση–φάση (K_cd = %.3f)' % s['Kcd_pp'], s['pp'], cw['slow']['pp']]]
+    for q, v in (cw.get('fast') or {}).items():
+        rows.append(['Ταχέος μετώπου (κεραυνός)', INS_LAB.get(q, q), None, v['pe']])
+    r.table(['Κατηγορία', 'Μόνωση', 'U_rp (kV)', 'U_cw (kV)'], rows, digits=[None, None, 4, 4])
+    if res.get('k_from'):
+        k = res['k_from']
+        r.note(f"Συντελεστής σφάλματος προς γη από τις εμπεδήσεις ακολουθίας του ζυγού {k['bus']}: k = {k['k']:.4f} (μονοφασικό {k['slg']:.4f}, διφασικό προς γη {k['dlg']:.4f}).")
+    r.heading('Βήματα 3–5: απαιτούμενες τάσεις αντοχής, μετατροπή και τυποποιημένο επίπεδο')
+    for q, x in res['insulation'].items():
+        rows, lv = [], x['level']
+        for kind, lab in (('sd', 'βιομηχανικής συχνότητας (RMS)'), ('si', 'κρουστική χειρισμών'), ('li', 'κρουστική κεραυνού'), ('vf', 'πολύ ταχέος μετώπου (VFFO)')):
+            for ph, v in (x['required'].get(kind) or {}).items():
+                rows.append([lab, 'φάση–γη' if ph == 'pe' else 'φάση–φάση', v])
+        for kind, lab in (('sd', 'μετατροπή σε βιομηχανικής συχνότητας'), ('li', 'μετατροπή σε κρουστική κεραυνού'), ('si', 'μετατροπή σε κρουστική χειρισμών')):
+            for ph, v in (x['converted'].get(kind) or {}).items():
+                rows.append([lab, 'φάση–γη' if ph == 'pe' else 'φάση–φάση', v])
+        r.table(['Τάση αντοχής', 'Μόνωση', 'U_rw (kV)'], rows, title='Μόνωση ' + INS_LAB.get(q, q), digits=[None, None, 4])
+        lev = ', '.join(f"{n} {lv[k]:g} kV" for k, n in (('sd', 'SDWV'), ('si', 'SIWV'), ('sipp', 'SIWV φ–φ'), ('silong', 'SIWV διαμήκης'), ('li', 'LIWV')) if lv.get(k))
+        mg = ', '.join(f"{k}: {100 * v:.1f} %" for k, v in x['margin'].items() if v is not None)
+        r.note(f"Τυποποιημένο επίπεδο (IEC 60071-1, U_m = {lv['Um']:g} kV): {lev}. Περιθώρια: {mg}.", 'good' if lv['covered'] else 'critical')
+        if res.get('zone') and q in res['zone']:
+            r.note(f"Ζώνη προστασίας του αλεξικέραυνου για το LIWV {lv['li']:g} kV (IEC 60099-5, (16)): {res['zone'][q]:.1f} m.")
+    if res.get('arrester'):
+        a = res['arrester']
+        r.heading('Αλεξικέραυνα (IEC 60099-5)')
+        r.facts([('U_c ελάχιστη (kV RMS)', a['Uc']), ('U_r ελάχιστη (kV RMS)', a['Ur'])] + [(f"TOV {t['U']:g} kV για {t['t']:g} s: T = {t['T']:.3f} → U_r ≥ (kV)", t['Ur']) for t in a['tov']])
+    r.note('Οι αριθμοί των προτύπων που χρησιμοποιούνται (πίνακες επιπέδων, συντελεστές μετατροπής, A των γραμμών, οι καμπύλες του K_cd και του m) είναι στο pcl.insulation με παραπομπές· το κείμενο της μεθόδου με δικά μας λόγια (THEORY §8ΩΓ).')
+    r.data('insulation', _clean(res))
+    return r
+
+
 def run(data):
     """{'case' | 'network', 'study', 'options'} → {'study', 'network': {name, buses, branches}, 'result', 'summary'}.
     With 'view': True (4.19.4) also the picture of the network as data: 'view' (buses, branches and their places,
@@ -409,6 +565,8 @@ def run(data):
     open with (when the result feeds it)."""
     if data.get('study') in FEEDER_STUDIES:                # 4.19.5: a three-phase feeder has its own network and its own load flow
         return _feeder_run(data)
+    if data.get('study') in STATION_STUDIES:               # 4.22: the insulation co-ordination of a station (pcl.insulation)
+        return _station_run(data)
     net0, net, done = _networks_of(data)
     study = data.get('study') or 'pf'
     res = _study(net, study, data.get('options'))
@@ -417,9 +575,12 @@ def run(data):
            'result': _clean(res), 'summary': _clean(summary(study, res))}
     if done:
         out['network']['edits'] = done
+    if data.get('geojson') is not None:                    # 4.22: what the GeoJSON of the request gave
+        out['network']['geo'] = _clean(_geo_of(_base_network(data), data)[1])
     if data.get('view'):
         from . import netfile, netview
         v = _picture(net0, net, data)
+        out['geo'] = _geo_summary(net0, data)
         out['edit'] = netfile.describe(net)
         out['view'], out['layers'] = v, netview.pack(v, out['result'])
         have = [q['layer'] for q in out['layers']]
@@ -440,8 +601,8 @@ def view(data):
     from . import netview
     study = data.get('study') or 'pf'
     fmt = data.get('format') or 'dxf'
-    if fmt not in ('dxf', 'svg'):
-        raise StudyError('format: dxf ή svg')
+    if fmt not in ('dxf', 'svg', 'geojson'):
+        raise StudyError('format: dxf, svg ή geojson')
     if study in FEEDER_STUDIES:                            # 4.19.5: the picture of a feeder is that of its positive-sequence network
         from . import unbalanced as U
         fd, res, _ = _feeder(data)
@@ -451,8 +612,18 @@ def view(data):
     else:
         net0, net, _ = _networks_of(data)
         res = _clean(_study(net, study, data.get('options')))
-    v = _picture(net0, net, data)
     stem = f'network_{_stem(data, net)}_{study}'
+    if fmt == 'geojson':                                   # 4.22 (pcl.geo): the network on the earth with what the study found
+        import json
+        from . import geo, netfile
+        g, _ = _geo_of(net0, {k: data.get(k) for k in ('case', 'network')})
+        v0 = netview.view(net0, off=netfile.out_of_service(data.get('edits')))
+        try:
+            gj = geo.to_geojson(g, v0, res, data.get('layers') or ('voltage', 'angle', 'flow', 'loading'))
+        except (geo.GeoError, netview.ViewError) as e:
+            raise StudyError(str(e)) from e
+        return {'name': f'{stem}.geojson', 'mime': 'application/geo+json', 'text': json.dumps(gj, ensure_ascii=False, indent=1) + '\n'}
+    v = _picture(net0, net, data)
     try:
         if fmt == 'svg':
             layer = data.get('layer') or netview.DEFAULT.get(study, 'voltage')
@@ -481,6 +652,8 @@ def report(data):
         return {'html': r.html(), 'name': 'report.html', 'report': r.to_dict(), 'summary': {}}
     if data.get('study') in FEEDER_STUDIES:
         return _feeder_run(data, with_report=True)
+    if data.get('study') in STATION_STUDIES:
+        return _station_run(data, with_report=True)
     net0, net, done = _networks_of(data)
     study = data.get('study') or 'pf'
     if study in ('advice', 'dc'):
@@ -494,4 +667,4 @@ def report(data):
     return {'html': r.html(), 'name': name, 'report': _clean(r.to_dict()), 'summary': _clean(summary(study, res))}
 
 
-__all__ = ['run', 'report', 'view', 'open_file', 'save_file', 'summary', 'network_of', 'StudyError', 'STUDIES', 'FEEDER_STUDIES']
+__all__ = ['run', 'report', 'view', 'open_file', 'save_file', 'summary', 'network_of', 'StudyError', 'STUDIES', 'FEEDER_STUDIES', 'STATION_STUDIES']

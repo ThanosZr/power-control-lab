@@ -90,7 +90,7 @@ const {chromium}=require('playwright');
  const ff=await p.$eval('#ff-out',e=>e.textContent);ok(/αναφορά SPWM/.test(ff)&&/THD \(h = 2 … 500\)/.test(ff),'harmonics panel: '+ff.slice(0,120));
  const a1=await p.evaluate(()=>{const th=document.querySelector('#theory').textContent.match(/Î₁ = V̂₁\/\|Z\| = ([\d,]+) A/);return th?+th[1].replace(',','.'):NaN;});
  const a1s=+(ff.match(/πλάτος \/ RMS([\d,]+) A/)||[])[1]?.replace(',','.');ok(Math.abs(a1s-a1)<.02*a1,'fundamental = theory '+a1s+' '+a1);
- ok(await p.$$eval('.ffchart rect',r=>r.length)===500,'500 bars');
+ ok(await p.$$eval('.ffchart rect:not(.frame)',r=>r.length)===500,'500 bars');
  // 3.2: Poincaré map and bifurcation diagram (boost with R–C load), valley current-mode
  await p.evaluate(()=>window.PCL.loadTutorial('pcm_chaos',{ic:'2'}));await p.waitForTimeout(800);
  await p.evaluate(()=>{const S=window.PCL.S;S.sim.run(S.sim.T*300);window.PCL.pause();window.PCL.renderTheory();});await p.waitForTimeout(400);

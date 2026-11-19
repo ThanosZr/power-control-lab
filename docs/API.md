@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.20.4: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (851 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.22: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (886 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -10,13 +10,13 @@
 - **Αρχεία project:** ένα παλιό αρχείο ανοίγει πάντα (ARCHITECTURE §4). Νέα πεδία είναι προαιρετικά. Όταν χρειάζεται μετατροπή, αυξάνεται το `version` του αρχείου και η μετατροπή γίνεται στο άνοιγμα, με test. Το `version` 3 (3.18): τα σύρματα με το ίδιο όνομα είναι ένας κόμβος· ένα παλιότερο αρχείο ανοίγει ίδιο (`Bus.migrateNames`: όπου ένα όνομα ήταν ετικέτα σε δύο κόμβους, το δεύτερο γίνεται «όνομα·2»).
 - **Ο έλεγχος:** το `python tools/api_surface.py` σταματά όταν κάτι λείπει ή έχασε όρισμα. Ως την 4.0 περνούσε με `--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 μέσα στην ίδια κύρια έκδοση δεν περνά ούτε με `--allow-removal`· στην επόμενη κύρια περνά μόνο για ό,τι ήταν παρωχημένο. Ένα παρωχημένο σημείο πρέπει να υπάρχει ακόμη στον κώδικα.
 
-- **Πειραματικά (3.19):** `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `pcl.backend.…`, `pcl.accel.…`, `pcl.nnstart.…`, `pcl.onnxio.…`, `pcl.netview.…`, `pcl.netfile.…`, `pcl.psse.…`, `pcl.scopf.…`, `pcl.cpf.…`, `pcl.se.…`, `pcl.harmonic.…`, `pcl.unbalanced.…`, `pcl.dcgrid.…`, `workbench…`, `python -m pcl accel…`, `python -m pcl nnstart…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο· και της 4.19.2: τα backends των παρτίδων με τον δρόμο GPU*, το script του επιταχυντή, τα μοντέλα εκκίνησης και τα αρχεία ONNX). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
+- **Πειραματικά (3.19):** `pcl.insulation.…`, `pcl.surge.…`, `pcl.geo.…`, `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `pcl.backend.…`, `pcl.accel.…`, `pcl.nnstart.…`, `pcl.onnxio.…`, `pcl.netview.…`, `pcl.netfile.…`, `pcl.psse.…`, `pcl.scopf.…`, `pcl.cpf.…`, `pcl.se.…`, `pcl.harmonic.…`, `pcl.unbalanced.…`, `pcl.dcgrid.…`, `workbench…`, `python -m pcl accel…`, `python -m pcl nnstart…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο· και της 4.19.2: τα backends των παρτίδων με τον δρόμο GPU*, το script του επιταχυντή, τα μοντέλα εκκίνησης και τα αρχεία ONNX). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
 
 Στους πίνακες, «Από» είναι η έκδοση της πρώτης καταγραφής: η 3.18 για ό,τι υπήρχε ήδη.
 
 ## Παρωχημένα
 
-Κανένα στην 4.20.4.
+Κανένα στην 4.22.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-590 σημεία.
+624 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -168,6 +168,18 @@
 | `pcl.dcgrid.station_inverse` | `Us`, `Qs`, `Pdc`, `st`, `S_base`, `U_base`, `Ps0`, `tol`, `max_iter` | 4.20 · πειρ. |
 | `pcl.formats.write_hdf5` | `path`, `columns`, `meta`, `matrices` | 3.18 |
 | `pcl.formats.write_parquet` | `path`, `columns`, `meta`, `compression`, `created_by` | 3.18 |
+| `pcl.geo.GeoError` | — | 4.22 · πειρ. |
+| `pcl.geo.attach` | `net`, `buses`, `routes` | 4.22 · πειρ. |
+| `pcl.geo.builtin` | `case` | 4.22 · πειρ. |
+| `pcl.geo.coverage` | `net` | 4.22 · πειρ. |
+| `pcl.geo.from_geojson` | `net`, `gj`, `set_lengths` | 4.22 · πειρ. |
+| `pcl.geo.haversine` | `p`, `q` | 4.22 · πειρ. |
+| `pcl.geo.lengths` | `net` | 4.22 · πειρ. |
+| `pcl.geo.mercator` | `lon`, `lat` | 4.22 · πειρ. |
+| `pcl.geo.of` | `net` | 4.22 · πειρ. |
+| `pcl.geo.project` | `view`, `net` | 4.22 · πειρ. |
+| `pcl.geo.route_length` | `points` | 4.22 · πειρ. |
+| `pcl.geo.to_geojson` | `net`, `view`, `result`, `layers` | 4.22 · πειρ. |
 | `pcl.get` | `key` | 3.18 |
 | `pcl.harmonic.HarmonicError` | — | 4.19.5 · πειρ. |
 | `pcl.harmonic.Model` | `net`, `lf`, `load_model`, `line_model`, `sources` | 4.19.5 · πειρ. |
@@ -211,6 +223,22 @@
 | `pcl.impulse.voltage_row` | `X_us`, `Y_us`, `Vp_kV`, `method`, `profile`, `polarity`, `dt`, `tend`, `tol_peak`, `tol_X`, `tol_Y`, `created_at` | 4.1.1 |
 | `pcl.impulse.voltage_times` | `m` | 3.18 |
 | `pcl.impulse.waveform_characteristics` | `t`, `i` | 4.1.1 |
+| `pcl.insulation.arrester` | `Us`, `tov`, `T10`, `m`, `Uc_Ur`, `factor` | 4.22 · πειρ. |
+| `pcl.insulation.convert_range_I` | `Urw_si`, `insulation`, `phase` | 4.22 · πειρ. |
+| `pcl.insulation.convert_range_II` | `Urw_sd`, `insulation` | 4.22 · πειρ. |
+| `pcl.insulation.coordinate` | `Us`, `H`, `tov`, `slow`, `fast`, `vffo`, `Um`, `insulations` | 4.22 · πειρ. |
+| `pcl.insulation.earth_fault_factor` | `R0`, `X0`, `R1`, `X1`, `R2`, `X2` | 4.22 · πειρ. |
+| `pcl.insulation.ka` | `H`, `m` | 4.22 · πειρ. |
+| `pcl.insulation.kcd` | `ratio`, `phase` | 4.22 · πειρ. |
+| `pcl.insulation.lightning_ucw` | `Upl`, `A`, `n`, `L`, `Lsp`, `Ra`, `r` | 4.22 · πειρ. |
+| `pcl.insulation.m_si` | `Ucw`, `kind` | 4.22 · πειρ. |
+| `pcl.insulation.protective_zone` | `Urw`, `Upl`, `A`, `N`, `Lsp`, `Ra`, `r`, `fs`, `Ks` | 4.22 · πειρ. |
+| `pcl.insulation.required` | `Ucw`, `insulation`, `H`, `m` | 4.22 · πειρ. |
+| `pcl.insulation.risk` | `Ue2`, `sig_e`, `U50`, `Z`, `Ut`, `n` | 4.22 · πειρ. |
+| `pcl.insulation.select_level` | `Um`, `need` | 4.22 · πειρ. |
+| `pcl.insulation.statistical_ucw` | `Ue2`, `sig_e`, `R`, `Ut`, `cv` | 4.22 · πειρ. |
+| `pcl.insulation.truncation` | `U2`, `phase` | 4.22 · πειρ. |
+| `pcl.insulation.weibull_p` | `U`, `U50`, `Z` | 4.22 · πειρ. |
 | `pcl.ipm.IpmError` | — | 4.19.1 · πειρ. |
 | `pcl.ipm.ipm` | `f`, `x0`, `gh`, `hess`, `A`, `l`, `u`, `xmin`, `xmax`, `tol`, `max_iter`, `cost_mult`, `xi`, `sigma`, `z0`, `record`, `step_control`, `warm` | 4.19.1 · πειρ. |
 | `pcl.job` | `spec`, `allow_paths` | 3.18 |
@@ -340,6 +368,8 @@
 | `pcl.netview.dxf` | `v`, `result`, `layers` | 4.19.4 · πειρ. |
 | `pcl.netview.layout` | `net` | 4.19.4 · πειρ. |
 | `pcl.netview.pack` | `v`, `result`, `layers` | 4.19.4 · πειρ. |
+| `pcl.netview.route_mid` | `pts` | 4.22 · πειρ. |
+| `pcl.netview.scale_bar` | `width_km` | 4.22 · πειρ. |
 | `pcl.netview.svg` | `v`, `result`, `layer`, `width`, `labels`, `title`, `L`, `standalone` | 4.19.4 · πειρ. |
 | `pcl.netview.values` | `v`, `result`, `layer`, `study` | 4.19.4 · πειρ. |
 | `pcl.netview.view` | `net`, `off` | 4.19.4 · πειρ. |
@@ -544,6 +574,10 @@
 | `pcl.study.save_file` | `data` | 4.19.4 |
 | `pcl.study.summary` | `study`, `res` | 4.19.1 |
 | `pcl.study.view` | `data` | 4.19.4 |
+| `pcl.surge.eng` | `v` | 4.22 · πειρ. |
+| `pcl.surge.from_project` | `pr`, `t_close` | 4.22 · πειρ. |
+| `pcl.surge.solve` | `nw`, `t_end`, `dt`, `probes` | 4.22 · πειρ. |
+| `pcl.surge.tl_params` | `p` | 4.22 · πειρ. |
 | `pcl.sweep` | `grid`, `**kw` | 3.18 |
 | `pcl.trv.TRVError` | — | 4.9 |
 | `pcl.trv.compare` | `t`, `u`, `spec`, `t0` | 4.9 |
@@ -799,7 +833,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-133 σημεία.
+134 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -835,6 +869,7 @@
 | `part:DEMUX` | n | u, y1, y2, y3 | 3.18 |
 | `part:DISP` | dig | u | 3.18 |
 | `part:DIV` | eps | a, b, y | 3.18 |
+| `part:DS` | op, t0, Ts, Um, Rarc, ext, Iext, Roff | a, b | 4.22 |
 | `part:EBUS` | n | a, b, bus, c | 3.18 |
 | `part:EDGE` | edge, tw | n, u, y | 3.19 |
 | `part:EVC` | scheme, mode, ws, wt, we, Kt, Ke, R, J, B, kpw, kiw, atl, kpa, kia, alim, aff, fr, H, ffg, taulim, ilim, plim, regen, slew, kpi, kii, umin, umax, fs | i, keep, lim, pw, r, rg, soc, tau, tl, u, y | 4.8 |
@@ -905,7 +940,7 @@
 | `part:SAT` | lo, hi | u, y | 3.18 |
 | `part:SCR` | fire, refsrc, alpha, shift, pw, fref, pwm, out, Ron, Vf, Roff, tq | a, g, k | 3.18 |
 | `part:SEQ` | amp, win, f, np, fsrc, fmin, t0, clock, first, y0, conn | a, abc, b, c, f, neg, phneg, phpos, phzero, pos, unb, zero | 4.19.6 |
-| `part:SG` | vt, Ub, U0, kde, Dde, trig, Rarc, ext, Iext, Roff | a, b | 3.18 |
+| `part:SG` | vt, Ub, U0, kde, Dde, gl, E50, Kp, E0p, Kn, E0n, trig, Rarc, ext, Iext, Roff | a, b | 3.18 |
 | `part:SH` | in, src, qty, clock, trig, init, h0 | u, y | 3.18 |
 | `part:SIN` | name, side, width | y | 3.18 |
 | `part:SM` | Rs, Ld, Lq, sat, Ldsat, psikd, psim, pp, J, bm, load, TL, w0, th0, conn | a, abc, b, c, id, iq, te, th, tl, w | 3.18 |
@@ -922,9 +957,9 @@
 | `part:TAGI` | name | y | 3.18 |
 | `part:TAGO` | name | u | 3.18 |
 | `part:THD` | dc, scale, win, f, np, fsrc, fmin, t0, clock, first, y0 | f, h1, hh, rms, thd, u | 4.19.6 |
-| `part:TL` | spec, Z, tau, len, vel, Lp, Cp, Rt, Rp, nsec | a1, a2, b1, b2 | 3.18 |
+| `part:TL` | spec, Z, Dco, dco, erco, kv, tau, len, vel, Lp, Cp, Rt, Rp, nsec, v0 | a1, a2, b1, b2 | 3.18 |
 | `part:TLM` | model, len, f, cp, npi, fmin, dec, ppd, fti, tiauto, nmax, ti, wsrc, wtol, wgrp, wfdcm, wdc, wlfw, wopt, wpas, wgd, wbref, wbtxt, vtrap, data, mdl, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.4 |
-| `part:TOWER` | h, Zt, vt, foot, R0, rho, E0, ins, Ub, U0, kde, Dde, impl, meas | a1, a2, b1, b2, c1, c2, d1, d2, e1, e2 | 4.9 |
+| `part:TOWER` | model, h, Zt1, Zt2, gam, arms, h1, h2, h3, Zt, vt, foot, R0, rho, E0, ins, Ub, U0, kde, Dde, gl, E50, Kp, E0p, Kn, E0n, impl, meas | a1, a2, b1, b2, c1, c2, d1, d2, e1, e2 | 4.9 |
 | `part:UD` | clock, trig, y0 | u, y | 3.18 |
 | `part:VAC` | Vpk, f, phase, off, Rs, Ls | n, p | 3.18 |
 | `part:VAC3` | Vpk, f, phase, seq, Rs, Ls, conn | a, abc, b, c, n | 3.18 |

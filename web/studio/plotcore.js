@@ -128,6 +128,23 @@
   for(const h of o.hl||[])if(h.label){g.fillStyle=h.color||ink;g.textAlign='right';g.fillText(h.label,W-MR-4,Y(h.y)+3);}
   for(const q of o.pts||[])if(q.label){g.fillStyle=q.color||ink;g.textAlign='left';g.fillText(q.label,X(q.x)+5,Y(q.y)-13);}
   return {X,Y,x0,x1,y0,y1,ML,MT,pw,ph};}
- const api={niceStep,nextStep,niceRange,ticks,fmtTime,fmtEng,fmtPlain,AutoRange,bandPath,meanPath,Readout,lineChart};
+ // 4.22 (ROADMAP §63, part 2): the same ticks and labels for the SVG charts of the app (harmonics, Nyquist and Bode, Poincaré,
+ // bifurcation, the line data, the cards): the grid, the tick labels and the frame as SVG text, and X, Y for the caller's
+ // marks. o = {W, H, ml, mr, mt, mb (the margins), x: [x0, x1], y: [y0, y1], xlog, xUnit, yUnit, xPlain, yPlain, xfmt, yfmt,
+ // cw (the width of a character of the labels, for their spacing), xTicks: false, yTicks: false}
+ function svgFrame(o){const W=o.W||260,H=o.H||190,ML=o.ml??34,MR=o.mr??6,MT=o.mt??6,MB=o.mb??22,pw=W-ML-MR,ph=H-MT-MB,cw=o.cw||5.2,[x0,x1]=o.x,[y0,y1]=o.y;
+  const fx=o.xlog?(v=>Math.log10(v)):(v=>v),X=v=>ML+(fx(v)-fx(x0))/((fx(x1)-fx(x0))||1)*pw,Y=v=>MT+(y1-v)/((y1-y0)||1)*ph,r1=v=>Math.round(v*10)/10,esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  let svg='';const yref=Math.max(Math.abs(y0),Math.abs(y1)),xref=Math.max(Math.abs(x0),Math.abs(x1));
+  if(o.yTicks!==false){const yt=ticks(y0,y1,ph,(v,st)=>o.yfmt?o.yfmt(v,st):o.yPlain?fmtPlain(v,st,o.yUnit):fmtEng(v,st,o.yUnit,yref),()=>9,12);
+   yt.vals.forEach((v,i)=>{const y=r1(Y(v));svg+=`<line class="grid" x1="${ML}" x2="${W-MR}" y1="${y}" y2="${y}"/><text class="tick" x="${ML-3}" y="${r1(y+3)}" text-anchor="end">${esc(yt.labels[i])}</text>`;});}
+  if(o.xTicks!==false){if(o.xlog&&x0>0){const k0=Math.ceil(Math.log10(x0)-1e-9),k1=Math.floor(Math.log10(x1)+1e-9),D=[];
+    for(let k=k0;k<=k1;k++){const v=Math.pow(10,k),x=r1(X(v)),lb=o.xPlain?fmtPlain(v,v,o.xUnit):fmtEng(v,v,o.xUnit,v),w=lb.length*cw;svg+=`<line class="grid" x1="${x}" x2="${x}" y1="${MT}" y2="${MT+ph}"/>`;D.push({k,lb,w,x:r1(Math.min(Math.max(x,ML+w/2),W-MR-w/2))});}
+    // the labels of every decade, or of every second, third… one: the first step where no two of them come closer than 6 px
+    for(let st=1;st<=Math.max(1,D.length);st++){const L=D.filter(d=>(d.k-k0)%st===0);if(L.every((d,i)=>!i||d.x-d.w/2>=L[i-1].x+L[i-1].w/2+6)){for(const d of L)svg+=`<text class="tick" x="${d.x}" y="${H-MB+11}" text-anchor="middle">${esc(d.lb)}</text>`;break;}}}
+   else{const xt=ticks(x0,x1,pw,(v,st)=>o.xfmt?o.xfmt(v,st):o.xPlain?fmtPlain(v,st,o.xUnit):fmtEng(v,st,o.xUnit,xref),q=>q.length*cw,14);
+    xt.vals.forEach((v,i)=>{const x=r1(X(v)),w=xt.labels[i].length*cw;svg+=`<line class="grid" x1="${x}" x2="${x}" y1="${MT}" y2="${MT+ph}"/><text class="tick" x="${r1(Math.min(Math.max(x,ML+w/2),W-MR-w/2))}" y="${H-MB+11}" text-anchor="middle">${esc(xt.labels[i])}</text>`;});}}
+  svg+=`<rect x="${ML}" y="${MT}" width="${pw}" height="${ph}" class="frame"/>`;
+  return {X,Y,svg,ML,MT,pw,ph,W,H};}
+ const api={niceStep,nextStep,niceRange,ticks,fmtTime,fmtEng,fmtPlain,AutoRange,bandPath,meanPath,Readout,lineChart,svgFrame};
  root.PlotCore=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

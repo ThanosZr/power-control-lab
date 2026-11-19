@@ -65,6 +65,25 @@ class Labels(unittest.TestCase):
         self.assertEqual(v['gvraw'], 'K = —')
         self.assertEqual(v['ref'], v['refExpr'])            # the whole expression: the layout cuts it, not valueText
 
+    def test_label_moved_by_hand(self):
+        # 4.22 (ROADMAP §66): c.lblAt = [dx, dy, anchor] from the centre of the part; where R2 had its label, R2 moves
+        P = self.R['pinned']
+        self.assertTrue(P['pinned'])
+        self.assertEqual(P['side'], 'pin')
+        self.assertFalse(P['auto']['pinned'])
+        self.assertEqual(P['r2']['auto'], 'below')
+        self.assertNotEqual(P['r2']['side'], 'below')                  # the others keep off a label kept by hand
+        self.assertEqual((P['check']['ll'], P['check']['lp']), (0, 0))
+        self.assertEqual(P['moved'], [40, 20])                           # it follows its part
+        self.assertEqual([round(v, 6) for v in P['rot']['at']], [30, -4])  # and keeps its offset when the part turns
+        self.assertIsNotNone(P['lead'])                                  # far from the part: a leader to its box
+        self.assertEqual(P['lead'][0], P['lead'][2])
+        self.assertTrue(P['near']['same'])                               # put where the automatic place was: the same, no leader
+        self.assertIsNone(P['near']['lead'])
+        self.assertTrue(P['invalid']['same'])                            # an invalid value: the automatic place
+        self.assertFalse(P['invalid']['pinned'])
+        self.assertEqual(P['pinOf'], [[1, 2, 'm'], [1, 2, 'e'], None, None, [3, 4, 'm']])
+
 
 if __name__ == '__main__':
     unittest.main()

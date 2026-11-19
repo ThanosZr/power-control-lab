@@ -49,7 +49,7 @@
    svg.setAttribute('aria-label','Κύκλωμα. Διπλό κλικ σε στοιχείο για ρυθμίσεις, δεξί κλικ για scope.');
    svg.innerHTML=`<defs><marker id="flowArr" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="flowhead"/></marker>
     <marker id="sigArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L10,5 L0,9 z" class="sighead"/></marker></defs>
-    <g class="viewport"><g class="wires"></g><g class="parts"></g><g class="dots"></g><g class="pins"></g><g class="over"></g></g>`;
+    <g class="viewport"><g class="wires"></g><g class="leads"></g><g class="parts"></g><g class="dots"></g><g class="pins"></g><g class="over"></g></g>`;
    // the layer that carries the pending view during a gesture (4.6): a CSS transform on an HTML element moves the drawn
    // picture without layout; on the svg itself it would lay out every text again (their size depends on the screen scale)
    const xf=this.xf=document.createElement('div');xf.className='schem-xf';xf.appendChild(svg);holder.replaceChildren(xf);
@@ -58,7 +58,7 @@
    const lab=document.createElement('div');lab.className='livel';lab.setAttribute('aria-hidden','true');xf.appendChild(lab);
    // the tiles of the control signals (4.8, ROADMAP §47, watch.js): HTML in the same units, above the labels
    const sig=document.createElement('div');sig.className='wtl';sig.hidden=true;xf.appendChild(sig);
-   this.vp=svg.querySelector('.viewport');this.L={wires:svg.querySelector('.wires'),parts:svg.querySelector('.parts'),dots:svg.querySelector('.dots'),pins:svg.querySelector('.pins'),live:lab,sig,over:svg.querySelector('.over')};
+   this.vp=svg.querySelector('.viewport');this.L={wires:svg.querySelector('.wires'),leads:svg.querySelector('.leads'),parts:svg.querySelector('.parts'),dots:svg.querySelector('.dots'),pins:svg.querySelector('.pins'),live:lab,sig,over:svg.querySelector('.over')};
    svg.addEventListener('pointerdown',e=>this.down(e));svg.addEventListener('pointermove',e=>this.move(e));svg.addEventListener('pointerup',e=>this.up(e));
    svg.addEventListener('pointercancel',()=>this.cancelDrag());svg.addEventListener('contextmenu',e=>e.preventDefault());
    svg.addEventListener('dblclick',e=>this.dbl(e));
@@ -355,7 +355,8 @@
     case 'KL':{const m=P.klMatrix(p);return m.err?'⚠ πίνακας L':m.L.length+'×'+m.L.length+(String(p.Lmat||'').trim()?' · πίνακας L':' · k '+fn(+p.k));}
     case 'KG':{const m=P.parseMat(p.mat);return m?m.length+'×'+m.length+' '+(p.kind==='G'?'G':'R'):'⚠ πίνακας';}
     case 'VIMP':return (p.shape==='ramp'?'ράμπα '+e(+p.S*1e-6,'V/μs'):p.shape==='custom'?e(+p.T1,'s')+'/'+e(+p.T2,'s'):p.shape==='direct'?'α, β, K':p.shape+' μs')+' · '+e(+p.Vpk,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');
-    case 'SG':return (p.vt==='de'?'U₀ '+e(P.parseEng(p.U0),'V')+' · k '+fn(+p.kde):e(+p.Ub,'V'))+(String(p.trig??'').trim()?' · έναυση '+e(P.parseEng(p.trig),'s'):'');
+    case 'DS':return (p.op==='open'?'άνοιγμα':'κλείσιμο')+' · U_m '+e(P.parseEng(p.Um),'V')+' · T_s '+e(P.parseEng(p.Ts),'s');
+    case 'SG':return (p.vt==='de'?'U₀ '+e(P.parseEng(p.U0),'V')+' · k '+fn(+p.kde):p.vt==='lpm'?'LPM · g '+e(P.parseEng(p.gl),'m'):e(+p.Ub,'V'))+(String(p.trig??'').trim()?' · έναυση '+e(P.parseEng(p.trig),'s'):'');
     case 'MOV':return p.model==='table'?'πίνακας i–v':e(+p.Uref,'V')+' @ '+e(+p.Iref,'A')+' · α '+fn(+p.alpha);
     case 'TL':{const g=P.tlParams(p);return g.err?'⚠ '+g.err:'Z '+e(g.Z,'Ω')+' · τ '+e(g.tau,'s')+(g.R>0?' · R '+e(g.R,'Ω')+(g.N>1?' ×'+g.N:''):'');}
     case 'ILG':return (p.shape==='custom'?e(+p.T1,'s')+'/'+e(+p.T2,'s'):p.shape==='direct'?'τ₁, τ₂, η':p.shape+' μs')+' · '+e(+p.Ipk,'A');case 'MOD3':return {spwm:'SPWM',svpwm:'SVPWM',square:'six-step'}[p.mode]||'';case 'FEST':return 'R̂_R '+e(+p.RR,'Ω');
@@ -406,12 +407,27 @@
     const it=at.get(c.id);if(!it)return `<div class="lbls a-m" data-l="${esc(c.id)}" hidden><div class="lv"></div></div>`;
     // HTML: each line at its baseline (x, y) in the units of the drawing, aligned like text-anchor (class a-s / a-m / a-e;
     // a piece of a line with two texts: class as)
-    return `<div class="lbls a-${it.a}${this.sel.c.has(c.id)?' sel':''}" data-l="${esc(c.id)}">${line('lbl',it.L.lbl,c.label||c.id)}${line('val',it.L.val,valOf(c))}${line('lv',it.L.lv,'')}</div>`;}).join('');
+    return `<div class="lbls a-${it.a}${this.sel.c.has(c.id)?' sel':''}${it.pinned?' pinned':''}" data-l="${esc(c.id)}">${line('lbl',it.L.lbl,c.label||c.id)}${line('val',it.L.val,valOf(c))}${line('lv',it.L.lv,'')}</div>`;}).join('');
+   // 4.22 (ROADMAP §66): the leader of a label moved by hand far from its part
+   if(this.L.leads)this.L.leads.innerHTML=lay.items.filter(it=>it.lead).map(it=>`<line class="lead" data-ld="${esc(it.id)}" x1="${it.lead[0]}" y1="${it.lead[1]}" x2="${it.lead[2]}" y2="${it.lead[3]}"/>`).join('');
    this.liveRefs=new Map();for(const g of this.L.live.querySelectorAll('[data-l]'))this.liveRefs.set(g.dataset.l,g.querySelector('.lv'));this._lv=new Map();
    // the whole value in the tooltip of a part whose value is cut or hidden
    const els=this.partEl||this.partEls();for(const it of lay.items){const g=els.get(it.id);if(!g)continue;let tt=g.querySelector(':scope>title');
     if(it.cut||it.hidden&&it.full){const c=this.comp(it.id),t=(c?.label||it.id)+': '+it.full;if(!tt){tt=document.createElementNS(NS,'title');g.prepend(tt);}tt.textContent=t;}else if(tt)tt.remove();}
   }
+  // 4.22 (ROADMAP §66): the label under a point of the drawing (the boxes of its lines with 2 px of air), the last drawn first
+  lblHit(p){const L=this.lbl;if(!L?.items||this.settings.lblDrag===false)return null;
+   for(let i=L.items.length-1;i>=0;i--){const it=L.items[i];if(!it.R)continue;for(const r of it.R)if(p[0]>=r[0]-2&&p[0]<=r[2]+2&&p[1]>=r[1]-2&&p[1]<=r[3]+2)return it.id;}return null;}
+  // a label dragged: the HTML of its lines moves with the pointer, the leader waits for the drop
+  dragLbl(pr,p){const el=this.L.live.querySelector(`[data-l="${CSS.escape(pr.lid)}"]`),dx=p[0]-pr.p[0],dy=p[1]-pr.p[1];if(el)el.style.transform=`translate(${dx}px,${dy}px)`;
+   const ld=this.L.leads?.querySelector(`[data-ld="${CSS.escape(pr.lid)}"]`);if(ld)ld.style.display='none';}
+  // dropped: c.lblAt = the anchor of its first line from the centre of the box of the part (lblplace.pinOf), one undo step
+  dropLbl(pr,p){const c=this.comp(pr.lid),it=this.lbl?.items?.find(q=>q.id===pr.lid);if(!c||!it||!Number.isFinite(it.ax)){this.renderLabels();return;}
+   let b;try{b=P.bbox(c);}catch(e){b=null;}if(!b){this.renderLabels();return;}const cx=(b[0]+b[2])/2,cy=(b[1]+b[3])/2;
+   this.remember();c.lblAt=[Math.round(it.ax+p[0]-pr.p[0]-cx),Math.round(it.ay+p[1]-pr.p[1]-cy),it.a];this.renderLabels();this.updateLive(true);this.changed('geom',false);}
+  // the automatic place again for these parts (all when none is given); → how many labels were kept by hand
+  resetLabels(ids){const set=ids&&ids.length?new Set(ids):null,cs=this.doc.components.filter(c=>c.lblAt&&(!set||set.has(c.id)));if(!cs.length)return 0;
+   this.remember();for(const c of cs)delete c.lblAt;this.renderLabels();this.updateLive(true);this.changed('geom',false);return cs.length;}
   // lay the labels out again a moment later (after a move, or when a live value grew past the room kept for it)
   relabelSoon(ms=120){clearTimeout(this._rlT);this._rlT=setTimeout(()=>{if(this.drag){this.relabelSoon(ms);return;}this.renderLabels();this.updateLive(true);},ms);}
   renderWires(){
@@ -500,7 +516,8 @@
   down(e){
    this.svg.focus({preventScroll:true});e.preventDefault();const p=this.world(e),h=this.hitOf(e);
    this.press={x:e.clientX,y:e.clientY,p,h,button:e.button,shift:e.shiftKey||e.ctrlKey||e.metaKey,alt:e.altKey,moved:false,id:e.pointerId};
-   const pan=(e.button===1&&this.settings.middleDrag==='pan')||(e.button===0&&(this.space||this.settings.leftDrag==='pan'&&!h.c&&!h.w&&!h.pin))||(e.button===2&&this.settings.rightButton==='pan');
+   const lh=e.button===0&&!this.space&&!h.pin&&!h.c&&!this.placing&&!this.wiring&&!this.wireTool?this.lblHit(p):null;
+   const pan=(e.button===1&&this.settings.middleDrag==='pan')||(e.button===0&&(this.space||this.settings.leftDrag==='pan'&&!h.c&&!h.w&&!h.pin&&!lh))||(e.button===2&&this.settings.rightButton==='pan');
    if(this.placing&&e.button===0){this.finishPlace(p,e.shiftKey);this.press=null;return;}
    if(this.wiring&&e.button===0){this.wireClick(p,h);this.press=null;return;}
    if(this.wiring&&e.button===2){this.cancelWire();this.press=null;return;}
@@ -514,6 +531,7 @@
    if(pan){this.userView=true;this.press.kind='pan';this.press.view={...this.view};this.svg.setPointerCapture(e.pointerId);this.svg.classList.add('panning');return;}
    if(e.button===2){this.press.kind='menu';return;}
    if(e.button!==0)return;
+   if(lh){this.press.kind='lbl';this.press.lid=lh;this.svg.setPointerCapture(e.pointerId);return;}
    if(h.pin){const [pc]=h.pin.split(':');const pcomp=this.comp(pc);
     if(pcomp?.type==='JUNC'){if(this.press.shift){this.press.h.c=pc;this.press.kind='toggle';return;}if(this.sel.c.has(pc)||e.altKey||this.wiresAt(pc).length===1){if(!this.sel.c.has(pc))this.select([pc],[]);this.press.h.c=pc;this.press.kind='move';this.svg.setPointerCapture(e.pointerId);return;}this.press.kind='wire';this.press.junc=pc;this.svg.setPointerCapture(e.pointerId);return;}
     this.press.kind='wire';this.svg.setPointerCapture(e.pointerId);return;}
@@ -533,6 +551,7 @@
    if(pr.kind==='pan'){const k=this.view.k;this.view.cx=pr.view.cx-(e.clientX-pr.x)/k;this.view.cy=pr.view.cy-(e.clientY-pr.y)/k;this.requestView();return;}
    if(pr.kind==='marquee'){this.lastGesture=performance.now();this.drawMarquee(pr.p,p);return;}
    if(pr.kind==='move'){this.dragMove(snap(p[0]-pr.p[0]),snap(p[1]-pr.p[1]));return;}
+   if(pr.kind==='lbl'){this.dragLbl(pr,p);return;}
    if(pr.kind==='seg'&&pr.seg){this.dragSeg(p);return;}
    if(pr.kind==='wire'||pr.kind==='wirefromwire'){this.previewWire(p,this.hitAt(e));return;}
   }
@@ -546,15 +565,17 @@
    if(pr.kind==='marquee'){this.L.over.querySelector('.marquee')?.remove();if(!pr.moved){if(!pr.shift)this.select([],[]);return;}this.marqueeSelect(pr.p,p,pr.shift);return;}
    if(pr.kind==='move'){if(pr.moved){this.endDrag(true,!e.shiftKey);}else if(!pr.fresh&&(this.sel.c.size>1||this.sel.w.size)){this.select([pr.h.c],[]);}return;}
    if(pr.kind==='seg'){if(pr.moved)this.endDrag();return;}
+   if(pr.kind==='lbl'){if(pr.moved)this.dropLbl(pr,p);else if(pr.shift){this.sel.c.has(pr.lid)?this.sel.c.delete(pr.lid):this.sel.c.add(pr.lid);this.renderSel();this.opt.onselect?.(this.selection());}else this.select([pr.lid],[]);return;}
    if(pr.kind==='wire'||pr.kind==='wirefromwire'){
     if(!pr.moved){if(pr.junc){this.select([pr.junc],[]);return;}if(pr.kind==='wire'){this.remember();this.startWire(pr.h.pin,true);}return;}
     this.finishWire(p,h);return;}
   }
-  cancelDrag(){this.press=null;this.svg.classList.remove('panning');this.L.over.querySelector('.marquee')?.remove();if(this.drag){this.drag=null;this.svg.classList.remove('dragging');this.render();}}
+  cancelDrag(){if(this.press?.kind==='lbl'&&this.press.moved)setTimeout(()=>this.renderLabels(),0);this.press=null;this.svg.classList.remove('panning');this.L.over.querySelector('.marquee')?.remove();if(this.drag){this.drag=null;this.svg.classList.remove('dragging');this.render();}}
   hoverPin(e){const pin=e.target.dataset?.pin;this.svg.classList.toggle('over-pin',!!pin);const id=e.target.closest?.('[data-c]')?.dataset.c||(pin&&pin.split(':')[0])||null;
    if(id!==this.hotPart){this.hotPart=id;for(const el of this.L.pins.querySelectorAll('.pin.hot'))el.classList.remove('hot');if(id)for(const el of this.L.pins.querySelectorAll(`[data-pin^="${CSS.escape(id)}:"]`))el.classList.add('hot');}}
   dbl(e){if(this.wiring){this.finishFree();return;}const h=this.hitAt(e);if(h.c&&this.comp(h.c)?.type!=='JUNC'){this.opt.onedit?.({kind:'comp',id:h.c,x:e.clientX,y:e.clientY,dbl:true});}else if(h.w)this.opt.onedit?.({kind:'wire',id:h.w,x:e.clientX,y:e.clientY,dbl:true});}
-  menu(e,h){if(h.c&&!this.sel.c.has(h.c))this.select([h.c],[]);else if(!h.c&&h.w&&!this.sel.w.has(h.w))this.select([],[h.w]);
+  menu(e,h){if(!h.c&&!h.pin){const id=this.lblHit(this.world(e));if(id)h={...h,c:id,w:null};}   // 4.22: the menu of a label is the menu of its part
+   if(h.c&&!this.sel.c.has(h.c))this.select([h.c],[]);else if(!h.c&&h.w&&!this.sel.w.has(h.w))this.select([],[h.w]);
    this.opt.oncontext?.({kind:h.c?'comp':h.w?'wire':'empty',id:h.c||h.w,pin:h.pin,x:e.clientX,y:e.clientY,world:this.world(e)});}
   // the point of the drawing under the pointer from the pending view (not from the screen matrix, which lags one frame)
   worldNow(e){const r=this.holder.getBoundingClientRect(),[w,h]=this.areaSize(),k=this.view.k;return [this.view.cx+(e.clientX-r.left-w/2)/k,this.view.cy+(e.clientY-r.top-h/2)/k];}
@@ -597,6 +618,8 @@
     // what moves with a translation: the pins, pin tags, labels and dots of the dragged parts
     const tr=[];for(const el of this.svg.querySelectorAll('.pins [data-pc],.dots [data-pc]'))if(ids.has(el.dataset.pc))tr.push(el);
     for(const id of ids){const l=this.L.live.querySelector(`[data-l="${CSS.escape(id)}"]`);if(l)tr.push(l);}
+    // 4.22: the leader of a label kept by hand waits for the drop (the label moves with the part, the leader is drawn again)
+    for(const el of this.L.leads?.querySelectorAll('[data-ld]')||[])if(ids.has(el.dataset.ld))el.style.display='none';
     this.drag.tr=tr;this.svg.classList.add('dragging');}
    if(pr.kind==='seg'){const w=this.wire(pr.h.w);if(!w||pr.h.seg===null){pr.seg=null;return;}this.remember();pr.seg={w,k:pr.h.seg,pts:this.wirePts(w)};}
    if(pr.kind==='marquee')this.drawMarquee(pr.p,pr.p);

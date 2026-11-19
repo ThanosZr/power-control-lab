@@ -350,7 +350,17 @@
 | total vector error (TVE) | ολικό διανυσματικό σφάλμα (TVE) (4.21) |
 | capability chart (P–Q) | διάγραμμα P–Q (δυνατοτήτων) του σταθμού (4.21) |
 | commutation overlap | επικάλυψη (διάρκεια) της μετάβασης, μ (4.21) |
+| disconnector, restrike, trapped charge | αποζεύκτης, επανέναυση (σπινθήρας), παγιδευμένο φορτίο (4.22) |
+| very fast transient overvoltage (VFTO, VFFO) | υπέρταση πολύ ταχέος μετώπου (VFTO) (4.22) |
+| streamer, leader | οχετός (streamer), οχετός ηγέτης (leader)· στα κείμενα «οι οχετοί» και «ο οχετός» (4.22) |
+| multistory tower model | πολυώροφος πύργος (μοντέλο) (4.22) |
+| coordination / required withstand voltage, atmospheric correction factor | τάση αντοχής συντονισμού / απαιτούμενη τάση αντοχής, συντελεστής υψομέτρου K_a (4.22) |
+| protective zone (of an arrester), continuous operating voltage U_c | ζώνη προστασίας (του απαγωγέα), τάση συνεχούς λειτουργίας U_c (4.22) |
+| earth fault factor | συντελεστής σφάλματος γης (4.22) |
+| method of characteristics | μέθοδος των χαρακτηριστικών (4.22) |
+| graticule, scale bar, route (of a line) | κάνναβος (μεσημβρινοί και παράλληλοι), κλίμακα, διαδρομή (της γραμμής) (4.22) |
+| leader line (of a label) | γραμμή οδηγός (της ετικέτας) (4.22) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
-PWM, SPWM, SVPWM, PLL, PLO, dVOC, FACTS, SSSC, CHB, MMC, HVDC, MTDC, LCC, CEA, VDCOL, AVM, CCSC, NLC, ULM, FDCM, OPF, SCOPF, PTDF, LODF, LMP, KKT, fast-decoupled (XB, BX), ZIP, ONNX, GPU, CUDA, CuPy, backend, MLP, Adam, RMS, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.
+PWM, SPWM, SVPWM, PLL, PLO, dVOC, GeoJSON, Web Mercator, WGS 84, haversine, FACTS, SSSC, CHB, MMC, HVDC, MTDC, LCC, CEA, VDCOL, AVM, CCSC, NLC, ULM, FDCM, OPF, SCOPF, PTDF, LODF, LMP, KKT, fast-decoupled (XB, BX), ZIP, ONNX, GPU, CUDA, CuPy, backend, MLP, Adam, RMS, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.

@@ -79,6 +79,7 @@
  function valOf(s,form){if(!s.im)return s.re;const n=s.re.length,y=new Array(n);for(let i=0;i<n;i++){const a=s.re[i],b=s.im[i];y[i]=form==='ang'?Math.atan2(b,a)*180/Math.PI:form==='re'?a:form==='im'?b:Math.hypot(a,b);}return y;}
 
  // ---------------------------------------------------------------- an interactive chart (SVG, inline styles so that it exports)
+ const PCore=()=>(typeof window!=='undefined'&&window.PlotCore)||(typeof globalThis!=='undefined'&&globalThis.PlotCore)||null;   // 4.22: the core of the charts, when loaded
  function niceStep(r){const e=Math.floor(Math.log10(r/5)),b=10**e,m=r/5/b;return (m<1.5?1:m<3.5?2:m<7.5?5:10)*b;}
  function chartSVG(st){const W=st.W||640,H=st.H||290,ML=62,MR=14,MT=20,MB=34,xs=st.x,on=st.series.filter(s=>!s.off);
   const xl=st.xlog!==false,tx=v=>xl?Math.log10(v):v;let x0=st.x0??Math.min(...xs),x1=st.x1??Math.max(...xs);if(x1<=x0)x1=x0+1;
@@ -96,9 +97,13 @@
   // x grid
   if(xl){for(let e=Math.floor(tx(x0));e<=Math.ceil(tx(x1));e++){for(let m=1;m<10;m++){const v=m*10**e;if(v<x0||v>x1)continue;const px=X(v).toFixed(1);
     s+=`<line x1="${px}" x2="${px}" y1="${MT}" y2="${H-MB}" stroke="${m===1?'#d7e2de':'#eef3f1'}"/>`;if(m===1)s+=`<text x="${px}" y="${H-MB+14}" text-anchor="middle" fill="#4a5c58">${pow10(e)}</text>`;}}}
+  else if(PCore()){const t=PCore().ticks(x0,x1,W-ML-MR,(v,st)=>PCore().fmtPlain(v,st,''),q=>q.length*6,16); // 4.22 (§63 part 2): the ticks of the core, labels that do not overlap
+   t.vals.forEach((v,i)=>{const px=X(v).toFixed(1);s+=`<line x1="${px}" x2="${px}" y1="${MT}" y2="${H-MB}" stroke="#e6eeea"/><text x="${px}" y="${H-MB+14}" text-anchor="middle" fill="#4a5c58">${esc(t.labels[i])}</text>`;});}
   else{const stp=niceStep(x1-x0);for(let v=Math.ceil(x0/stp)*stp;v<=x1+1e-9*stp;v+=stp){const px=X(v).toFixed(1);s+=`<line x1="${px}" x2="${px}" y1="${MT}" y2="${H-MB}" stroke="#e6eeea"/><text x="${px}" y="${H-MB+14}" text-anchor="middle" fill="#4a5c58">${fmt(v,4)}</text>`;}}
   // y grid
   if(ylog){const sp=Math.max(1,Math.ceil((y1-y0)/7));for(let e=Math.ceil(y0);e<=Math.floor(y1);e+=sp){const py=Y(10**e).toFixed(1);s+=`<line x1="${ML}" x2="${W-MR}" y1="${py}" y2="${py}" stroke="#e1e9e6"/><text x="${ML-4}" y="${+py+3.5}" text-anchor="end" fill="#4a5c58">${pow10(e)}</text>`;}}
+  else if(PCore()){const t=PCore().ticks(y0,y1,H-MB-MT,(v,st)=>PCore().fmtPlain(v,st,''),()=>11,16);
+   t.vals.forEach((v,i)=>{const py=Y(v).toFixed(1);s+=`<line x1="${ML}" x2="${W-MR}" y1="${py}" y2="${py}" stroke="#e6eeea"/><text x="${ML-4}" y="${+py+3.5}" text-anchor="end" fill="#4a5c58">${esc(t.labels[i])}</text>`;});}
   else{const stp=niceStep(y1-y0);for(let v=Math.ceil(y0/stp)*stp;v<=y1+1e-9*stp;v+=stp){const py=Y(v).toFixed(1);s+=`<line x1="${ML}" x2="${W-MR}" y1="${py}" y2="${py}" stroke="#e6eeea"/><text x="${ML-4}" y="${+py+3.5}" text-anchor="end" fill="#4a5c58">${fmt(Math.abs(v)<stp*1e-9?0:v,4)}</text>`;}}
   s+=`<rect x="${ML}" y="${MT}" width="${W-ML-MR}" height="${H-MB-MT}" fill="none" stroke="#9fb2ad"/>`;
   s+=`<text x="${W-MR}" y="${H-6}" text-anchor="end" fill="#4a5c58">${esc(st.xlab||'f (Hz)')}</text><text x="12" y="${(MT+H-MB)/2}" fill="#4a5c58" transform="rotate(-90 12 ${(MT+H-MB)/2})" text-anchor="middle">${esc(st.ylab||'')}</text>`;

@@ -22,4 +22,13 @@ R.range=[PC.niceRange(0.12,0.87),PC.niceRange(-3.3,12.6),PC.niceRange(5,5)];
  const p1=a.update(0,0.41,{sig:'A',running:false,view:'v1',now:2600}),p2=a.update(0,0.2,{sig:'A',running:false,view:'v1',now:2700}),p3=a.update(0,0.2,{sig:'A',running:false,view:'v2',now:2800}),
   p4=a.update(5,6,{sig:'B',running:true,now:2900});
  R.auto={log,p1,p2,p3,p4};}
+// 4.22 (ROADMAP §63 part 2): the frame of the SVG charts: the same ticks as the canvas, labels that do not overlap, the
+// mapping of the caller (linear and log), the frame and grid inside the box
+{const cwf=5.2,lab=svg=>[...svg.matchAll(/<text class="tick" x="([-\d.]+)" y="([-\d.]+)"[^>]*>([^<]*)<\/text>/g)].map(m=>({x:+m[1],y:+m[2],t:m[3]}));
+ const f1=PC.svgFrame({W:260,H:190,x:[0,1e-3],y:[-1.2,1.2],xUnit:'s',yUnit:'V'}),f2=PC.svgFrame({W:260,H:120,mt:10,x:[10,1e6],xlog:true,xUnit:'Hz',y:[0.5,120],yUnit:'Ω'});
+ const xl=f=>lab(f.svg).filter(q=>Math.abs(q.y-(f.H-22+11))<.01),yl=f=>lab(f.svg).filter(q=>Math.abs(q.y-(f.H-22+11))>=.01);
+ const gap=(L,cw)=>{let m=Infinity;for(let i=1;i<L.length;i++)m=Math.min(m,(L[i].x-L[i].t.length*cw/2)-(L[i-1].x+L[i-1].t.length*cw/2));return m;};
+ R.svgFrame={x1:xl(f1).map(q=>q.t),y1:yl(f1).map(q=>q.t),gap1:gap(xl(f1),cwf),X:[f1.X(0),f1.X(1e-3),f1.X(5e-4)],Y:[f1.Y(-1.2),f1.Y(1.2),f1.Y(0)],
+  x2:xl(f2).map(q=>q.t),gap2:gap(xl(f2),cwf),X2:[f2.X(10),f2.X(1e6),f2.X(1e3)],frame:/<rect x="34" y="6" width="220" height="162" class="frame"\/>/.test(f1.svg),
+  inside:lab(f1.svg).concat(lab(f2.svg)).every(q=>q.x>=0&&q.x<=260),bars:PC.svgFrame({W:260,H:110,ml:34,mr:6,mt:6,mb:18,x:[.5,40.5],y:[0,12],xPlain:true,yPlain:true,yUnit:'%',xfmt:v=>Number.isInteger(v)?String(v):'',cw:5}).svg.match(/class="tick"[^>]*>[^<]*%/g)?.length||0};}
 process.stdout.write(JSON.stringify(R));

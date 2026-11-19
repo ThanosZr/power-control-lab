@@ -438,22 +438,46 @@
   for(let e=-2;e<=6.0001;e+=0.25){const I=Math.pow(10,e);out.push(`${s(I)}: ${s(I*R0/Math.sqrt(1+I/Ig))}`);}return {tbl:out.join(', '),Ig};}
  // a tower: the phases pass through (in ≡ out), the ground wires end at the top; the tower is a lossless line from the top
  // to the foot (ground as return), the footing R₀ or R(I), an insulator string (spark gap) from each phase to the top
- function towerDef(c){const p=prm(c),B=builder('Πύργος γραμμής'),meas=p.meas===true||p.meas==='true',fast=p.impl==='fast'&&p.foot!=='r';
+ // 4.22: the LPM data of the strings (parts.js LPM_PARAMS, in the tower's parameters)
+ function lpmOf(p){const o={};for(const [k,d] of [['gl',3.2],['E50',560e3],['Kp',1.2e-6],['E0p',520e3],['Kn',1.3e-6],['E0n',600e3]])o[k]=s(num(p[k],d));return o;}
+ // the four sections of the multistory tower (Ishii et al. 1991), top to the node above the footing; the crossarm nodes
+ function msTower(p,B,top,foot,meas){const H=Math.max(num(p.h,27.15),1e-3),v=num(p.vt,3e8),Z1=num(p.Zt1,220),Z2=num(p.Zt2,150),gm=Math.min(Math.max(num(p.gam,.8),1e-6),1),
+   h1=num(p.h1,H*.1),h2=num(p.h2,H*.2),h3=num(p.h3,H*.2),h4=H-h1-h2-h3,hs=[h1,h2,h3,h4],tau=H/v,lg=Math.log(1/gm);
+  if(!(h1>0&&h2>0&&h3>0&&h4>0))throw new Error('Πύργος πολλών ορόφων: τα ύψη h₁ + h₂ + h₃ πρέπει να είναι μικρότερα από το ύψος του πύργου.');
+  const Y=[-240,-120,0,120,240],X0=820,arms=[];let up=top;
+  for(let k=0;k<4;k++){const Z=k<3?Z1:Z2,R=2*Z*lg*hs[k]/H,L=2*tau*R,y=Y[k];
+   const t=B.comp('T'+(k+1),'TL',{spec:'zl',Z:s(Z),len:s(hs[k]),vel:s(v)},[X0,y+20,1]);B.wire(up,[t,'a1'],[[X0+80,y],[X0+80,y-20]]);
+   B.wire([t,'b1'],B.gnd([X0-60,y-20]));B.wire([t,'b2'],B.gnd([X0-60,y+60]));
+   const n=k<3?B.node('x'+(k+1),[X0+80,y+110]):foot;
+   if(lg>0){const r=B.comp('R'+(k+1),'R',{R:s(R)},[X0+60,y+80,1]),l=B.comp('L'+(k+1),'L',{L:s(L)},[X0+100,y+80,1]);
+    B.wire([t,'a2'],[r,'a']);B.wire([t,'a2'],[l,'a']);B.wire([r,'b'],n);B.wire([l,'b'],n);}else B.wire([t,'a2'],n);
+   if(k<3)arms.push(n);up=n;}
+  return p.arms==='one'?[arms[0],arms[0],arms[0]]:arms;}
+ // the footing of the multistory tower (the detailed implementation: R₀ or R(I)), after the fourth section
+ function msFoot(p,B,foot,meas){const R0=Math.max(num(p.R0,15),1e-3),yr=meas?460:380;
+  const rf=p.foot==='r'?B.comp('RF','R',{R:s(R0)},[820,yr-10,1]):B.comp('RF','MOV',{model:'table',tbl:footTable(R0,num(p.rho,100),num(p.E0,400e3)).tbl},[820,yr,0]);
+  if(meas){const a=B.comp('If','AM',{},[820,370,1]);B.wire(foot,[a,'a']);B.wire([a,'b'],[rf,'a']);}else B.wire(foot,[rf,'a']);
+  B.wire([rf,'b'],B.gnd([820,yr+40]));return B.def();}
+ function towerDef(c){const p=prm(c),B=builder('Πύργος γραμμής'),meas=p.meas===true||p.meas==='true',ms=p.model==='ms',fast=p.impl==='fast'&&p.foot!=='r'&&!ms;
   // drawing (4.9.1): the phases left to right at y = 0, 60, 120, the top of the tower a bus at y = −240 with the ground wires
   // (d, e) brought up to it, one column per phase with the string (and the voltmeter beside it), the tower's line and its
   // footing on the right under the phases
   const PY=[0,60,120,180,240],TOP=-240,XK=[260,400,540];
   const L=['a1','b1','c1','d1','e1'].map((n,k)=>[B.comp('$'+n,'PORT',{name:n},[0,PY[k],2]),'p']),R=['a2','b2','c2','d2','e2'].map((n,k)=>[B.comp('$'+n,'PORT',{name:n},[1000,PY[k],0]),'p']);
   const top=B.node('top',[680,TOP]),foot=B.node('foot',[820,320]);
+  // 4.22: the multistory tower: four lossless sections (Z_t1 for the three upper, Z_t2 for the lowest) with R_i ∥ L_i after
+  // each, R_i = 2·Z_ti·ln(1/γ)·h_i/H and L_i = 2·(H/v)·R_i; the strings of the phases a, b, c end at the three crossarms
+  const arm=ms?msTower(p,B,top,foot,meas):null;
   for(const k of [3,4]){B.wire(L[k],top,[[60,PY[k]],[60,TOP]]);B.wire(R[k],top,[[940,PY[k]],[940,TOP]]);}
   if(meas){const v=B.comp('Vtop','VP',{},[720,TOP-50,0]);B.wire(top,[v,'p'],[[720,TOP]]);}
   PH.forEach((x,k)=>{const X=XK[k],ph=B.node('p'+x,[X,PY[k]]);B.wire(L[k],ph);B.wire(R[k],ph);
-   if(meas){const u=B.comp('U'+x,'VM',{},[X+60,-105,2]);B.wire(ph,[u,'p'],[[X+60,PY[k]]]);B.wire(top,[u,'n'],[[X+60,TOP]]);}
+   if(meas){const u=B.comp('U'+x,'VM',{},[X+60,-105,2]);B.wire(ph,[u,'p'],[[X+60,PY[k]]]);B.wire(arm?arm[k]:top,[u,'n'],[[X+60,TOP]]);}
    if(p.ins==='none')return;
-   const q=p.ins==='de'?{vt:'de',U0:s(num(p.U0,1.7e6)),kde:s(num(p.kde,1)),Dde:s(num(p.Dde,.5))}:{vt:'inst',Ub:s(num(p.Ub,2.24e6))};
+   const q=p.ins==='de'?{vt:'de',U0:s(num(p.U0,1.7e6)),kde:s(num(p.kde,1)),Dde:s(num(p.Dde,.5))}:p.ins==='lpm'?{vt:'lpm',...lpmOf(p)}:{vt:'inst',Ub:s(num(p.Ub,2.24e6))};
    const g=B.comp('S'+x,'SG',{...q,Rarc:'0.1',ext:'never'},[X,-150,3]);
    if(meas){const a=B.comp('I'+x,'AM',{},[X,-60,3]);B.wire(ph,[a,'a']);B.wire([a,'b'],[g,'a']);}else B.wire(ph,[g,'a']);
-   B.wire([g,'b'],top);});
+   B.wire([g,'b'],arm?arm[k]:top);});
+  if(ms)return msFoot(p,B,foot,meas);
   const t=B.comp('T','TL',{spec:'zl',Z:s(num(p.Zt,200)),len:s(num(p.h,27.15)),vel:s(num(p.vt,3e8))},[800,220,1]);
   B.wire(top,[t,'a1'],[[880,TOP],[880,160]]);B.wire([t,'a2'],foot);B.wire([t,'b1'],B.gnd([740,180]),[[740,160]]);B.wire([t,'b2'],B.gnd([740,300]),[[740,280]]);
   const R0=Math.max(num(p.R0,15),1e-3);let rf;
