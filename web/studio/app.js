@@ -50,7 +50,7 @@ function linkAdvance(a){if(!S.sim||S.error)throw new Error('Δεν υπάρχε�
   else if(!liveParam(id,p,v,false)){editor.setParams(id,{[p]:typeof v==='object'?JSON.stringify(v):v});}}
  const dt=+a.dt;if(!(dt>0&&dt<1e3))throw new Error('Το dt πρέπει να είναι θετικό (s).');S.sim.run(dt);
  const now=performance.now();if(!S.advT||now-S.advT>40||a.draw){S.advT=now;draw(true);}
- const v={};for(const k of a.keys||[])if(S.sim.chIndex.has(k))v[k]=S.sim.now(k);return {t:S.sim.t,values:v};}
+ const v={};for(const k of a.keys||[])if(S.sim.hasKey(k))v[k]=S.sim.now(k);return {t:S.sim.t,values:v};}
 function linkReset(){reset();return {t:S.sim?S.sim.t:null};}
 function stepT(n=1){if(!S.sim||S.error)return;pause();
  // 4.8: Python blocks without Python on the page: the periods in the worker of the live simulation, else Python here first
@@ -979,6 +979,12 @@ function propsCircuit(){const d=S.sim?.net?.diag,doc=editor.doc,so=doc.solve||{}
    <small>Πυκνός: κόστος n³ ανά παραγοντοποίηση και n² ανά βήμα. Αραιός: ανάλογο με τα μη μηδενικά του πίνακα. Τα αποτελέσματα διαφέρουν μόνο στη στρογγύλευση (~10⁻¹²).</small></div>
    <div class="prow"><span>Όταν αλλάζει ο πίνακας (αραιός)</span><span class="pin-in">${opt('refac',[['','Αυτόματα: μερική επαναπαραγοντοποίηση'],['full','Επαναπαραγοντοποίηση όλων των στηλών'],['off','Παραγοντοποίηση από την αρχή (όπως ως την 4.18)']],sv('refac'))}</span>
    <small>Η επαναπαραγοντοποίηση κρατά τους ίδιους οδηγούς και δίνει τους ίδιους αριθμούς bit προς bit με την παραγοντοποίηση από την αρχή· όπου θα άλλαζε οδηγός, παραγοντοποιεί από την αρχή μόνη της. Η «μερική» ξαναϋπολογίζει μόνο τις στήλες που άλλαξαν και όσες εξαρτώνται από αυτές.</small></div>
+   <div class="prow"><span>Βάση της επαναπαραγοντοποίησης (αραιός)</span><span class="pin-in">${opt('refBase',[['','Αυτόματα: από τη μνήμη, η παραγοντοποίηση με τον ίδιο κανόνα και βήμα που θέλει τις λιγότερες στήλες'],['last','Οι τελευταίοι παράγοντες (όπως ως την 4.22)']],sv('refBase'))}</span>
+   <small>Μια νέα κατάσταση διακοπτών ξαναϋπολογίζει μόνο τις στήλες που αλλάζουν. Ως την 4.22 η βάση ήταν οι τελευταίοι παράγοντες, που μετά από μια μεταγωγή ανήκουν συχνά σε άλλον κανόνα ολοκλήρωσης (backward Euler) και διαφέρουν σε κάθε στήλη πηνίου ή πυκνωτή. Οι αριθμοί είναι ίδιοι bit προς bit με κάθε βάση· αλλάζει μόνο ο χρόνος.${q&&st&&st.base?` Ως τώρα: ${st.base} φορές από τη μνήμη.`:''}</small></div>
+   <div class="prow"><span>Πυρήνας της λύσης (αραιός)</span><span class="pin-in">${opt('kernel',[['','Αυτόματα: WebAssembly από 4000 αγνώστους'],['js','JavaScript'],['wasm','WebAssembly']],sv('kernel'))}</span>
+   <small>Η λύση εμπρός–πίσω με τους παράγοντες σε WebAssembly, με τις ίδιες πράξεις με την ίδια σειρά: ίδιοι αριθμοί bit προς bit. Χωρίς WebAssembly, JavaScript.${q?` Τώρα: ${q.kernel==='wasm'?'WebAssembly':'JavaScript'}.`:''}</small></div>
+   <div class="prow"><span>Καταγραφή καναλιών</span><span class="pin-in">${opt('rec',[['','Όλα τα κανάλια (όπως ως την 4.22)'],['watched','Μόνο όσα δείχνει το scope']],sv('rec'))}</span>
+   <small>Σε μεγάλο δίκτυο τα περισσότερα κανάλια δεν τα κοιτά κανείς, αλλά υπολογίζονται και γράφονται σε κάθε βήμα. «Μόνο όσα δείχνει το scope»: υπολογίζονται και γράφονται μόνο αυτά, με τους ίδιους αριθμούς, και το scope κρατά περισσότερα σημεία. Ένα κανάλι που προστίθεται καταγράφεται από εκείνη τη στιγμή. Οι τιμές πάνω στο σχέδιο και οι τρέχουσες τιμές δουλεύουν για κάθε κανάλι· τα στατιστικά ανά περίοδο και το ιστορικό, μόνο για όσα καταγράφονται.${S.sim&&!S.error&&S.sim.recKeys&&S.sim.recKeys!==S.sim.keys?` Τώρα: ${S.sim.recKeys.length} από ${S.sim.keys.length} κανάλια.`:''}</small></div>
    <div class="prow"><span>Αρχικοποίηση με φασιθέτες</span><span class="pin-in">${opt('initSolver',[['','Αυτόματα: πυκνός ως 400 αγνώστους, αραιός από εκεί και πάνω'],['dense','Πυκνός LU'],['sparse','Αραιός LU']],sv('initSolver'))}</span>
    <small>Όπου το κύκλωμα ξεκινά από τη μόνιμη κατάσταση με φασιθέτες (γεννήτριες, «αρχικοποίηση AC»), λύνεται ένα μιγαδικό σύστημα μία φορά. Ο πυκνός λύτης θέλει μνήμη n² και χρόνο n³· ο αραιός λύνει το ίδιο σύστημα ως πραγματικό διπλάσιου μεγέθους με μία επαναληπτική βελτίωση. Τα δύο διαφέρουν μόνο στη στρογγύλευση. «Αυτόματα»: ως 400 αγνώστους ο πυκνός, όπως ως την 4.19.2.</small></div>`,{cnt:(so.solver||so.refac)?'αλλαγμένες':''});}
  const chk=(k,t)=>`<label class="frow check"><input type="checkbox" data-eset="${k}" ${editor.settings[k]?'checked':''}><span>${t}</span></label>`;
@@ -3187,7 +3193,7 @@ function boot(){
   canPlace:placeOk,subParams:name=>subParams(name),
   oncontext:openMenu,onwarn:t=>{notice(t,'error');setTimeout(()=>notice(''),5000);}});
  editor.setLive(liveOf);
- scope=new Scope($('#scope-canvas'),{scroller:$('#scope-scroll'),axis:$('#scope-axis'),status:$('#scope-status'),onfreeze:()=>{$('#live-btn').hidden=false;},onchange:()=>{requestMeasure();$('#nav-box')?.classList.toggle('on',!!scope.cfg.box);},onhover:()=>{},archive:recArchive});
+ scope=new Scope($('#scope-canvas'),{scroller:$('#scope-scroll'),axis:$('#scope-axis'),status:$('#scope-status'),onfreeze:()=>{$('#live-btn').hidden=false;},onchange:()=>{requestMeasure();$('#nav-box')?.classList.toggle('on',!!scope.cfg.box);if(S.sim&&S.sim.recKeys&&S.sim.recKeys!==S.sim.keys&&!window.Live?.active)S.sim.watchAdd(scope.channels().map(c=>c.key));},onhover:()=>{},archive:recArchive});
  // the tiles of the control signals over the drawing (4.8, ROADMAP §47)
  window.Inside?.init({comp:id=>editor.comp(id),pid,wires:()=>editor.doc.wires,sim:()=>S.error?null:S.sim,eng,holder:()=>editor.holder,notice});
  window.Watch?.init({get S(){return S;},get editor(){return editor;},get scope(){return scope;},eng,fmt,esc,topDoc,atTop,compAt,partDef,numOf,chanLabel,

@@ -20,6 +20,8 @@
  const NLIB=()=>root.NetLib||(typeof require!=='undefined'?require('./netlib.js'):null);
  const BUS=root.Bus||(typeof require!=='undefined'?require('./bus.js'):null);
  const SPM=root.Sparse||(typeof require!=='undefined'?require('./sparse.js'):null);
+ // 4.23: the WebAssembly kernels (kernels.js); without them (or without WebAssembly) the JavaScript of sparse.js, the same numbers
+ const KRN=root.Kernels||(typeof require!=='undefined'?(()=>{try{return require('./kernels.js');}catch(e){return null;}})():null);
  const NNET=root.NNet||(typeof require!=='undefined'?require('./nn.js'):null);
  const TUNE=root.Tune||(typeof require!=='undefined'?require('./tune.js'):null);   // 4.17: PI/PID gains from the circuit
  const INP=root.Inputs||(typeof require!=='undefined'?require('./inputs.js'):null);   // 4.17.1: inputs and parameters from expressions
@@ -55,6 +57,8 @@
  const shared=typeof window!=='undefined'&&typeof SharedArrayBuffer!=='undefined'&&!!root.crossOriginIsolated;
  // program t:value at t; left = the value just before t (the end of a step that lands on a jump, 3.15)
  const REC_BIG=1000;   // 4.19.3: channels above which the record buffers are sized by memory (allocRecord)
+ // 4.23: the channel keys of the scope of a project (panes as [[key, label], …] or {ch: [{key}, …]})
+ function scopeKeysOf(pr){const out=[];for(const pane of pr?.scope?.panes||[]){const L=Array.isArray(pane)?pane:pane?.ch||[];for(const c of L){const k=Array.isArray(c)?c[0]:typeof c==='string'?c:c?.key;if(typeof k==='string')out.push(k);}}return out;}
  const schedAt=(s,t,dflt,left)=>{if(!s)return dflt;let v=s[0][1];const tl=left?t-1e-15-4e-16*Math.abs(t):0;if(left?s[0][0]>=tl:t<s[0][0])return dflt;for(const [ts,val] of s){if(left?ts<tl:ts<=t+1e-15)v=val;else break;}return v;};
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
  // 4.19.6 (ROADMAP §76, THEORY §8Σ): the windowed measures beyond the mean and the RMS (Fourier, THD). Each keeps integrals of its
@@ -115,7 +119,7 @@
  // so the run continues with the same numbers. Objects met twice are kept once ($ref); typed arrays as base64 of their
  // bytes (exact); NaN, ±Infinity and −0 by name; an object with getState/setState (a Python block) keeps its own state.
  // Left out: the project (rebuilt), the LU cache and the sparse pattern (rebuilt the same) and the scope's buffers (ring, per).
- const SNAP_SKIP=new Set(['project','cache','ring','per','sp','spq','spw','rec','spF','spA','spChg','cvL','hLim','valEls','keyEls']);   // 4.2: the sparse pattern is rebuilt the same; 4.19: the working factors too
+ const SNAP_SKIP=new Set(['project','cache','ring','per','sp','spq','spw','rec','spF','spA','spChg','cvL','hLim','valEls','keyEls','cvW','valsAll','fv','spBc','kern','spFb']);   // 4.2: the sparse pattern is rebuilt the same; 4.19: the working factors too
  const SNAP_TA={Float64Array,Float32Array,Int32Array,Uint32Array,Int16Array,Uint16Array,Int8Array,Uint8Array,Uint8ClampedArray};
  function b64of(ta){const u=new Uint8Array(ta.buffer,ta.byteOffset,ta.byteLength);if(typeof Buffer!=='undefined')return Buffer.from(u).toString('base64');
   let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s);}
@@ -160,6 +164,7 @@
  // is the real one of twice the size, [A_r −A_i; A_i A_r]·[x_r; x_i] = [b_r; b_i], with the real and the imaginary part of
  // every unknown next to each other (2i, 2i + 1), so that the ordering sees the pattern of the network. A: Map key
  // (r·n + q) → [re, im]. Returns [xr, xi], or null when the matrix is singular. csolveSp(n, A, br): the real case
+ const KERNEL_MIN=4000; // 4.23: unknowns from which «Αυτόματα» solves with the WebAssembly kernel (the same numbers; measured: none at 1314 and 2361 unknowns, 4 % at 5373)
  const AC_SPARSE=400;   // unknowns from which «Αυτόματα» takes the sparse solve (below it the dense one, as before 4.19.3)
  function csolveSp(n,A,br,bi){
   if(!SPM)return null;const cx=!!bi,m=cx?2*n:n,keys=[];
@@ -1180,7 +1185,7 @@
 
  // ---------------------------------------------------------------- simulator
  class Sim{
-  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,mem:+opts.mem>0?+opts.mem:0,eventsMax:+opts.eventsMax>0?+opts.eventsMax:0,...(opts.events===false?{events:false}:{}),step:opts.step||null,solver:opts.solver||null,refac:opts.refac||null,modeVec:opts.modeVec||null,initSolver:opts.initSolver||null,evSnap:opts.evSnap||null,recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
+  constructor(project,opts={}){this.opts={h:opts.h||null,hDiv:opts.hDiv||500,cap:opts.cap||0,mem:+opts.mem>0?+opts.mem:0,eventsMax:+opts.eventsMax>0?+opts.eventsMax:0,...(opts.events===false?{events:false}:{}),step:opts.step||null,solver:opts.solver||null,refac:opts.refac||null,modeVec:opts.modeVec||null,initSolver:opts.initSolver||null,evSnap:opts.evSnap||null,...(Array.isArray(opts.watch)?{watch:opts.watch.slice()}:{}),...(opts.kernel?{kernel:opts.kernel}:{}),recDt:+opts.recDt>0?+opts.recDt:0,perN:Math.max(1,Math.round(+opts.perN||1))};this.method=opts.method||'TR';this.t=0;this.load(project,true);}
   // base period: first PWM, else first clock / ramp block, else first AC source, else 1 ms
   // (4.14: the sampling clock inside an MMC, Model 1, does not set the step)
   basePeriod(){if(this.net.ctrls.length)return this.net.ctrls[0].T;const ck=this.net.sig.blocks.find(b=>(b.type==='CLK'||b.type==='RAMP')&&!/\/MCLK$/.test(b.id));if(ck)return 1/ck.f;for(const c of this.net.compInfo.values())if(c.type==='VAC'||c.type==='VAC3')return 1/Math.max(1e-6,c.main.src.f);
@@ -1351,7 +1356,7 @@
    this.everyStep=this.hasCPL||this.hasTV||this.hasNL||this.footEls.length>0;
    {const sv=this.opts.solver||project?.sim?.solver||project?.solve?.solver||'auto',rf=this.opts.refac||project?.sim?.refac||project?.solve?.refac||'auto';this.solverAsk=[sv,rf];
     this.sparse=!!SPM&&(sv==='sparse'||(sv!=='dense'&&(this.n>=SPARSE_MIN||(this.n>=SPARSE_CHG&&this.everyStep))));
-    this.refac=['off','full','partial'].includes(rf)?rf:'partial';       // 'auto' = partial refactorization; 'full': every column; 'off': from scratch, as before 4.19 (the reference)
+    this.refac=['off','full','partial'].includes(rf)?rf:'partial';this.refBase=project?.solve?.refBase==='last'?'last':'cache';{const ka=this.opts.kernel||project?.solve?.kernel||'auto';this.kernAsk=ka;this.kern=this.sparse&&ka!=='js'&&(ka==='wasm'||this.n>=KERNEL_MIN)&&KRN&&KRN.available()?new KRN.Solver():null;}       // 'auto' = partial refactorization; 'full': every column; 'off': from scratch, as before 4.19 (the reference)
     // 4.19.3: the eigenvectors of the step check: 'lu' (auto, as before) or 'hess' (from the Hessenberg form, n² per mode: stepcheck.js)
     this.modeVec=(this.opts.modeVec||project?.sim?.modeVec||project?.solve?.modeVec)==='hess'?'hess':'lu';
     this.evSnap=(this.opts.evSnap||project?.sim?.evSnap||project?.solve?.evSnap)!=='off';   // 4.19.5: the end of a piece of run() on the event that lies within eps after it
@@ -1360,8 +1365,9 @@
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.hUser=this.opts.h||this.T/this.opts.hDiv;this.h=Math.min(this.hUser,this.tlMaxStep());
    if(fresh){this.hv=null;this.dg=new Map();this.dgPre=[];this.nRej=0;this.nRejRow=0;this.nTiny=0;this.nAtMin=0;}this.stIndex();this.varSetup();this.lteH=null;this.rx=null;
    if(fresh&&this.var)this.hv=this.hGrid(Math.max(this.hMin,this.h/64)); // the first steps (backward Euler, no history yet) start small and grow ×2 per step
-   const keys=this.channelKeys();const same=!fresh&&this.keys&&keys.join('|')===this.keys.join('|');
-   this.keys=keys;this.chIndex=new Map(keys.map((k,i)=>[k,i]));
+   const keys=this.channelKeys();this.project=project;const wl=this.watchList(),rk=wl?keys.filter(k=>wl.has(k)):keys;
+   const same=!fresh&&this.keys&&keys.join('|')===this.keys.join('|')&&(rk===keys)===(this.recKeys===this.keys)&&rk.join('|')===this.recKeys.join('|');
+   this.keys=keys;this.recKeys=rk;this.chIndex=new Map(rk.map((k,i)=>[k,i]));this.allIndex=rk===keys?this.chIndex:new Map(keys.map((k,i)=>[k,i]));this.cvW=null;this.fv=null;
    if(!same)this.allocRecord();
    this.project=project;
    if(fresh){this.progInit(project.program);this.evInit();}
@@ -1462,30 +1468,62 @@
   // ------------------------------------------------------------ channels
   channelKeys(){
    const k=[];for(const n of this.net.nets)k.push('N:'+n.canon);
-   for(const c of this.net.compInfo.values()){
-    if(['GND','JUNC','TAGO','TAGI'].includes(c.type))continue;
-    if(c.type==='PWM'){k.push('D:'+c.id,'G:'+c.id,'REF:'+c.id,'MEAS:'+c.id,'CAR:'+c.id);continue;}
-    if(c.type==='SH'){k.push('H:'+c.id);continue;}
-    if(P.BLOCKS.has(c.type)){k.push('Y:'+c.id,...c.blk.outList.slice(1).map(q=>'Y:'+c.id+':'+q));continue;}
-    k.push('V:'+c.id,'I:'+c.id,'P:'+c.id);
-    if(c.type==='XFMR')k.push('V2:'+c.id,'I2:'+c.id,'Im:'+c.id);
-    if(c.ports)for(let q=2;q<=c.ports.length;q++)k.push('V'+q+':'+c.id,'I'+q+':'+c.id);
-    if(c.srm)for(let q=1;q<=c.srm.N;q++)k.push('PSI'+q+':'+c.id);
-    if(c.type==='VAC3')k.push('Vb:'+c.id,'Vc:'+c.id,'Ib:'+c.id,'Ic:'+c.id,'Vab:'+c.id);
-    if(c.loss)k.push('PSW:'+c.id);
-    if(c.type==='SW'||c.type==='SCR')k.push('GS:'+c.id);
-    if(c.type==='ARCX')k.push('Garc:'+c.id);
-    if(c.blk)k.push('Y:'+c.id,...c.blk.outList.slice(1).map(q=>'Y:'+c.id+':'+q)); // signal outputs of an electrical part (machine)
-   }
+   for(const c of this.net.compInfo.values()){if(['GND','JUNC','TAGO','TAGI'].includes(c.type))continue;k.push(...this.compKeys(c));}
    return k;
+  }
+  // 4.23: the channels of one part, in the order computeVals gives their values (channelKeys is their concatenation)
+  compKeys(c){const k=[];
+   if(c.type==='PWM'){k.push('D:'+c.id,'G:'+c.id,'REF:'+c.id,'MEAS:'+c.id,'CAR:'+c.id);return k;}
+   if(c.type==='SH'){k.push('H:'+c.id);return k;}
+   if(P.BLOCKS.has(c.type)){k.push('Y:'+c.id,...c.blk.outList.slice(1).map(q=>'Y:'+c.id+':'+q));return k;}
+   k.push('V:'+c.id,'I:'+c.id,'P:'+c.id);
+   if(c.type==='XFMR')k.push('V2:'+c.id,'I2:'+c.id,'Im:'+c.id);
+   if(c.ports)for(let q=2;q<=c.ports.length;q++)k.push('V'+q+':'+c.id,'I'+q+':'+c.id);
+   if(c.srm)for(let q=1;q<=c.srm.N;q++)k.push('PSI'+q+':'+c.id);
+   if(c.type==='VAC3')k.push('Vb:'+c.id,'Vc:'+c.id,'Ib:'+c.id,'Ic:'+c.id,'Vab:'+c.id);
+   if(c.loss)k.push('PSW:'+c.id);
+   if(c.type==='SW'||c.type==='SCR')k.push('GS:'+c.id);
+   if(c.type==='ARCX')k.push('Garc:'+c.id);
+   if(c.blk)k.push('Y:'+c.id,...c.blk.outList.slice(1).map(q=>'Y:'+c.id+':'+q)); // signal outputs of an electrical part (machine)
+   return k;
+  }
+  // 4.23 (THEORY §8Ι.5, «χρόνος, μέρος 3»): the channels to record. null = every channel (as before, the default). With
+  // opts.watch (a list of keys) or solve.rec = 'watched' (the channels of the scope of the project and solve.recKeys) only
+  // those go to the record buffers and the period statistics, and only the parts that give them are computed at every
+  // step; the value of any other channel is computed when asked (now), from the same solution. A key of the scope
+  // «VN:<pin>» is the channel of the net of the pin.
+  watchList(){
+   const SO=this.project?.solve||{},w=Array.isArray(this.opts.watch)?this.opts.watch:SO.rec==='watched'?[...scopeKeysOf(this.project),...(Array.isArray(SO.recKeys)?SO.recKeys:[])]:null;
+   if(!w)return null;const out=new Set();
+   for(const k of w){if(typeof k!=='string')continue;if(k.startsWith('VN:')){const n=this.net.pinNet.get(k.slice(3));if(n&&!n.ground)out.add('N:'+n.canon);}else out.add(k);}
+   return out;
+  }
+  // 4.23: add channels to the record while running (a channel added to the scope with solve.rec = 'watched'); the record of
+  // the channels kept stays, the new ones start now (NaN before). Returns the keys added.
+  watchAdd(keys){
+   if(this.recKeys===this.keys)return [];const want=new Set(this.recKeys),add=[];
+   for(let k of keys||[]){if(typeof k!=='string')continue;if(k.startsWith('VN:')){const n=this.net.pinNet.get(k.slice(3));if(!n||n.ground)continue;k='N:'+n.canon;}if(this.allIndex.has(k)&&!want.has(k)){want.add(k);add.push(k);}}
+   if(!add.length)return add;
+   const nk=this.keys.filter(k=>want.has(k)),oldIx=this.chIndex,r=this.ring,p=this.per,a=this.acc,pv=this.prevVals,nn=nk.length,on=r.nch;
+   const map=Int32Array.from(nk,k=>{const i=oldIx.get(k);return i===undefined?-1:i;});
+   const R={t:r.t,d:new Float32Array(r.cap*nn),g:r.g,nch:nn,cap:r.cap,head:r.head,n:r.n};
+   for(let j=0;j<r.cap;j++)for(let i=0;i<nn;i++)R.d[j*nn+i]=map[i]<0?NaN:r.d[j*on+map[i]];
+   const Q={t:p.t,nch:nn,cap:p.cap,head:p.head,n:p.n};
+   for(const f of ['avg','min','max','rms','end']){const A=new Float32Array(p.cap*nn),B=p[f];for(let j=0;j<p.cap;j++)for(let i=0;i<nn;i++)A[j*nn+i]=map[i]<0?NaN:B[j*on+map[i]];Q[f]=A;}
+   const g=(A,fill)=>{const B=new Float64Array(nn);for(let i=0;i<nn;i++)B[i]=map[i]<0?fill:A[i];return B;};
+   const full=this.fullVals();
+   this.acc={t0:a.t0,dur:a.dur,s:g(a.s,0),q:g(a.q,0),mn:g(a.mn,Infinity),mx:g(a.mx,-Infinity)};
+   this.ring=R;this.per=Q;this.recKeys=nk;this.chIndex=new Map(nk.map((k,i)=>[k,i]));this.opts.watch=nk.slice();
+   this.vals=Float64Array.from(nk,k=>full[this.allIndex.get(k)]);this.prevVals=pv?Float64Array.from(map,(m,i)=>m<0?this.vals[i]:pv[m]):null;this.cvW=null;
+   return add;
   }
   allocRecord(){
    // 4.11: the memory of the scope in MB (opts.mem, the user's setting); the default keeps the 24 MB of before
    // 4.19.3: over REC_BIG channels (a network of hundreds of buses) the buffers would need gigabytes at 20000 points per
    // channel: the scope keeps about 96 MB (fewer points) and the statistics per period 5 × 16 MB. Up to REC_BIG as before
-   const nch=this.keys.length,mem=+this.opts.mem>0?+this.opts.mem:0,big=nch>REC_BIG,capMin=big?500:20000;
+   const nch=this.recKeys.length,mem=+this.opts.mem>0?+this.opts.mem:0,big=nch>REC_BIG,capMin=big?500:20000;
    let cap=this.opts.cap||(mem?Math.max(capMin,Math.floor(mem*1048576/(4*nch+9))):big?Math.max(capMin,Math.floor(96e6/(4*nch))):Math.max(20000,Math.min(200000,Math.floor(24e6/(4*nch+8)))));this.memNote=null;
-   if(big&&!this.opts.cap&&cap<20000)this.memNote=`${nch} κανάλια: το scope κρατά τα τελευταία ${cap} σημεία ανά κανάλι`;
+   if(big&&!this.opts.cap&&cap<20000)this.memNote=`${nch} κανάλια: το scope κρατά τα τελευταία ${cap} σημεία ανά κανάλι`+(this.recKeys===this.keys?' (με «Καταγραφή καναλιών: μόνο όσα δείχνει το scope» στις ρυθμίσεις επίλυσης κρατά περισσότερα, και κάθε βήμα είναι ταχύτερο)':'');
    if(!this.opts.cap&&mem){const lim=Math.floor(2**31/Math.max(1,nch));if(cap>lim){cap=lim;this.memNote='η μνήμη περιορίστηκε στο όριο ενός buffer';}}
    // 4.7: in a cross-origin isolated page the buffers are shared memory from the start, so that the live worker (live.js)
    // uses them as they are: copying them at ▶ cost one frame of 80 ms in a circuit of 300 channels (≈ 140 MB)
@@ -1507,6 +1545,7 @@
   // values of all channels at the current solution
   // (4.19: the list of the parts with channels and the kind of each one once per netlist, cvL; the values as before)
   computeVals(){
+   if(this.recKeys!==this.keys)return this.computeWatched();
    const out=this.vals;let j=0;const x=this.x;if(this.net.sig.blocks.length){if(this.blkFresh)this.blkCopy();else this.evalBlocks('trial');}
    let L=this.cvL;
    if(!L||L.net!==this.net){const list=[],kind=[];for(const c of this.net.compInfo.values()){const t=c.type;if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI')continue;
@@ -1537,6 +1576,56 @@
    }
    return out;
   }
+  // 4.23: the values of one part from j on (the statements of computeVals, for the watched record); returns the next j
+  partVals(c,kd,out,j){const x=this.x,ybT=this.ybT,yoT=this.yoT;
+    if(kd===3){out[j++]=ybT[c.blk.i];const yo=yoT[c.blk.i];for(let q=1;q<yo.length;q++)out[j++]=yo[q];return j;}
+    if(kd===1){const k=c.ctrl;out[j++]=k.d;out[j++]=this.gateOf(k,'a',this.t)?1:0;out[j++]=k.refNow;out[j++]=k.meas;out[j++]=this.carrier(k,this.t);return j;}
+    if(kd===2){out[j++]=c.sh.h;return j;}
+    if(kd===4){const vn=this.V(c.n),p=c.phases,v0=this.V(p[0].pin)-vn,v1=this.V(p[1].pin)-vn,v2=this.V(p[2].pin)-vn,i0=-x[p[0].e.row],i1=-x[p[1].e.row],i2=-x[p[2].e.row];
+     out[j++]=v0;out[j++]=i0;out[j++]=v0*i0+v1*i1+v2*i2;out[j++]=v1;out[j++]=v2;out[j++]=i1;out[j++]=i2;out[j++]=v0-v1;return j;}
+    const v=this.V(c.pins[0])-this.V(c.pins[1]);let i;
+    if(c.type==='XFMR'){const is=this.x[c.main.row];i=-c.main.n*is+c.mag.i;}
+    else if(c.type==='SW')i=this.elCurrent(c.main)-(c.body?this.elCurrent(c.body):0);
+    else if(c.type==='GEN3')i=-c.main.i[0]; // a generator: the current it delivers (phase a)
+    else i=this.elCurrent(c.main);
+    const src=c.type==='VDC'||c.type==='VAC'||c.type==='IDC';
+    out[j++]=v;out[j++]=i;out[j++]=src?v*i:v*i;
+    if(c.type==='XFMR'){const v2=this.V(c.pins2[0])-this.V(c.pins2[1]);const is=this.x[c.main.row]*(c.opp?-1:1);out[j++]=v2;out[j++]=is;out[j++]=c.mag.i;}
+    if(c.ports)for(let q=1;q<c.ports.length;q++){out[j++]=this.V(c.ports[q][0])-this.V(c.ports[q][1]);out[j++]=this.portI(c.main,q);}
+    if(c.srm)for(let q=0;q<c.srm.N;q++)out[j++]=c.main.psi[q];
+    if(c.loss)out[j++]=c.loss.P;
+    if(c.type==='SW'||c.type==='SCR'){const e=c.main;out[j++]=(e.k==='S'?e.on:e.gon)?1:0;} // the gate pulse this switch receives (after dead time)
+    if(c.type==='ARCX'){const A=c.arc.arc;out[j++]=A.closed?1/A.Ron:Math.exp(A.x);}
+    if(c.blk){out[j++]=this.ybT[c.blk.i];const yo=this.yoT[c.blk.i];for(let q=1;q<yo.length;q++)out[j++]=yo[q];}
+      return j;
+  }
+  // 4.23: computeVals with a watched record: the blocks as computeVals, the nets, and only the parts with a watched channel,
+  // into the full vector valsAll; the watched values gathered into vals (the same numbers as computeVals)
+  watchLists(){let L=this.cvW;if(L&&L.net===this.net)return L;
+   const list=[],kind=[],off=[],sel=[],nN=this.net.nets.length;let j=nN;
+   for(const c of this.net.compInfo.values()){const t=c.type;if(t==='GND'||t==='JUNC'||t==='TAGO'||t==='TAGI')continue;
+    const ks=this.compKeys(c);list.push(c);kind.push(t==='PWM'?1:t==='SH'?2:P.BLOCKS.has(t)?3:t==='VAC3'?4:0);off.push(j);sel.push(ks.some(k=>this.chIndex.has(k))?1:0);j+=ks.length;}
+   const ws=[];for(let z=0;z<list.length;z++)if(sel[z])ws.push(z);
+   L=this.cvW={net:this.net,ni:Int32Array.from(this.net.nets,n=>n.index),list,kind:Uint8Array.from(kind),off:Int32Array.from(off),ws:Int32Array.from(ws),
+    gi:Int32Array.from(this.recKeys,k=>this.allIndex.get(k))};
+   if(!this.valsAll||this.valsAll.length!==this.keys.length)this.valsAll=new Float64Array(this.keys.length);
+   return L;}
+  computeWatched(){
+   if(this.net.sig.blocks.length){if(this.blkFresh)this.blkCopy();else this.evalBlocks('trial');}
+   const L=this.watchLists(),A=this.valsAll,x=this.x,ni=L.ni;
+   for(let k=0;k<ni.length;k++)A[k]=x[ni[k]];
+   for(let q=0;q<L.ws.length;q++){const z=L.ws[q];this.partVals(L.list[z],L.kind[z],A,L.off[z]);}
+   const out=this.vals,gi=L.gi;for(let i=0;i<gi.length;i++)out[i]=A[gi[i]];this.fv=null;
+   return out;
+  }
+  // 4.23: every channel at the current solution (now() of a channel that is not recorded); no block is evaluated again
+  fullVals(){
+   if(this.recKeys===this.keys)return this.vals;
+   const st=this.steps+'|'+this.t;if(this.fv===st)return this.valsAll;
+   const L=this.watchLists(),A=this.valsAll,x=this.x,ni=L.ni;for(let k=0;k<ni.length;k++)A[k]=x[ni[k]];
+   for(let z=0;z<L.list.length;z++)this.partVals(L.list[z],L.kind[z],A,L.off[z]);
+   this.fv=st;return A;
+  }
   // 4.8: the resolution of the record for long runs: a point in the buffer at most every opts.recDt seconds (0 = every
   // step), and one statistic per opts.perN periods. The buffers stay the same size, so they cover recDt/h and perN times
   // more time; the values, the statistics and everything the solver computes are those of every step.
@@ -1563,7 +1652,9 @@
    this.periodsDone=(this.periodsDone||0)+1;
   }
   lastPeriod(key){const i=this.chIndex.get(key),p=this.per;if(i===undefined||!p.n)return null;const j=(p.head-1+p.cap)%p.cap,o=j*p.nch+i;return {t:p.t[j],avg:p.avg[o],rms:p.rms[o],min:p.min[o],max:p.max[o]};}
-  now(key){const i=this.chIndex.get(key);if(i===undefined)return NaN;return this.vals[i];}
+  now(key){const i=this.chIndex.get(key);if(i!==undefined)return this.vals[i];const a=this.allIndex?.get(key);if(a===undefined)return NaN;return this.fullVals()[a];}
+  // 4.23: a channel that exists (recorded or not: now() gives its value)
+  hasKey(key){return (this.allIndex||this.chIndex).has(key);}
   // ------------------------------------------------------------ control
   // gate of one PWM output; with dead time an output turns on k.dt after its raw signal does
   // dOn sets the turn-on edge of the period, dOff the turn-off edge (they differ only with a
@@ -1980,7 +2071,7 @@
     :`Πυκνός LU: ${n} άγνωστοι${this.everyStep?', ο πίνακας αλλάζει σε κάθε βήμα ('+why.join(', ')+')':''}. Κάτω από ${this.everyStep?SPARSE_CHG:SPARSE_MIN} αγνώστους ο πυκνός είναι ταχύτερος${this.everyStep?'':' (η παραγοντοποίηση κρατιέται ανά κατάσταση διακοπτών)'}.`;
    return {n,kind:this.sparse?'sparse':'dense',refac:this.sparse?this.refac:null,ask:this.solverAsk||['auto','auto'],everyStep:!!this.everyStep,why,switches:sw,blocks,nnzA:this.sp?this.sp.nnz:null,nnzLU:this.spF?this.spF.nnz:null,
     proposal:{solver:prop?'sparse':'dense',refac:prop?'partial':null,text:txt},asProposed:this.sparse===prop&&(!this.sparse||this.refac==='partial'),
-    stats:{fact:st.fact,hit:st.hit,miss:st.miss,full:st.full,re:st.re,part:st.part,cols:st.cols,colsPerRefac:st.re?st.cols/st.re:null}};
+    kernel:this.kern?'wasm':'js',kernelAsk:this.kernAsk||'auto',stats:{fact:st.fact,hit:st.hit,miss:st.miss,full:st.full,re:st.re,part:st.part,cols:st.cols,base:st.base||0,back:st.back||0,colsPerRefac:st.re?st.cols/st.re:null}};
   }
   // 4.19 (§68): keep = false when the caller uses the factors at once and does not keep them (a matrix that changes at every
   // step): no copy. Sparse: the working factors (spF) follow the matrix by refactorization with the same pivots, only on
@@ -1990,14 +2081,34 @@
    if(!this.sparse){this.assemble(h,mode);luFactor(this.A,this.n,this.piv);return keep?{A:this.A.slice(),piv:this.piv.slice()}:{A:this.A,piv:this.piv};}
    this.spAssemble(h,mode);
    const S=this.sp,st=this.lustat,rf=this.refac;let F=rf==='off'?null:this.spF;
-   if(F){const chg=this.spChg,first=SPM.diffCols(S,F,S.Ax,this.spA,chg);
-    if(first>=0){if(rf!=='full')SPM.affected(F,chg,first);const c=SPM.refactor(F,S,S.Ax,0.1,rf!=='full'?chg:null);
-     if(c<0)F=this.spF=null;else{st.re++;st.cols+=c;if(c<this.n)st.part++;}}}
+   // (4.23: a base from the memory whose pivots do not fit: once more from the working factors, then from scratch)
+   for(let pass=0;F&&pass<2;pass++){const chg=this.spChg,first=SPM.diffCols(S,F,S.Ax,this.spA,chg);let c=0;
+    if(first>=0){if(rf!=='full')SPM.affected(F,chg,first);c=SPM.refactor(F,S,S.Ax,0.1,rf!=='full'?chg:null);
+     if(c>=0){st.re++;st.cols+=c;if(c<this.n)st.part++;F.kv=(F.kv||0)+1;}}
+    if(c>=0)break;const fb=this.spFb;F=this.spF=null;if(fb&&pass===0){[F,this.spA]=fb;this.spF=F;st.back=(st.back||0)+1;}}
+   this.spFb=null;
    if(!F){
     try{F=SPM.lu(S,S.Ax,this.spq,0.1);}
     catch(e){if(e instanceof SPM.SparseError)throw new NetlistError('Ιδιόμορφο σύστημα: βρόχος ιδανικών πηγών τάσης ή κόμβος χωρίς διαδρομή. Πρόσθεσε μικρή αντίσταση ή γείωση.');throw e;}
     st.full++;if(rf!=='off'){this.spF=F;this.spA=S.Ax.slice();if(!this.spChg||this.spChg.length!==this.n)this.spChg=new Uint8Array(this.n);}}
-   return {sp:keep&&rf!=='off'?SPM.clone(F):F};
+   return keep&&rf!=='off'?{sp:SPM.clone(F),Ax:S.Ax.slice()}:{sp:F};
+  }
+  // 4.23 (THEORY §8Ι.5, «χρόνος, μέρος 3»): the base of a partial refactorization from the memory of factors. A new state of
+  // the switches is refactored from the working factors (the last ones), which may belong to another rule of integration
+  // (backward Euler after a switching) and then differ in every column of an L or a C. Here the base is the factorization
+  // in memory with the same rule and step whose matrix gives the fewest columns to compute again (usually another state of
+  // the same switches); the working factors only if none is better. The numbers are those of lu() whichever the base
+  // (sparse.js refactor), so this changes the time, not the results. solve.refBase = 'last': as up to 4.22.
+  baseFromCache(h,mode,key){
+   const S=this.sp;if(!S||!this.spF||!this.cache.size)return;
+   this.spAssemble(h,mode);if(this.sp!==S||!this.spF||!this.cache.size)return;const pre=key.slice(0,this.keyPre),Ax=S.Ax,n=this.n,Ap=S.Ap;
+   const cnt=(F,Aold)=>{const q=F.q,chg=this.spBc||(this.spBc=new Uint8Array(n));let first=-1;
+    for(let k=0;k<n;k++){const j=q[k],e=Ap[j+1];let p=Ap[j];while(p<e&&Ax[p]===Aold[p])p++;chg[k]=p<e?1:0;if(p<e&&first<0)first=k;}
+    return first<0?0:SPM.affected(F,chg,first);};
+   let best=null,bc=cnt(this.spF,this.spA),seen=0;
+   for(const [k,f] of this.cache){if(!f.sp||!f.Ax||f.pre!==pre||f.Ax.length!==Ax.length||f.sp.n!==n)continue;
+    if(++seen>64)break;const c=cnt(f.sp,f.Ax);if(c<bc){bc=c;best=f;}}
+   if(best){this.spFb=[this.spF,this.spA];this.spF=SPM.clone(best.sp);this.spA=best.Ax.slice();this.lustat.base=(this.lustat.base||0)+1;}
   }
   spAssemble(h,mode){
    const n=this.n;
@@ -2012,13 +2123,14 @@
    // (4.19.3: the switches, the diodes and the scheduled resistances from lists made once per netlist, in its order: the
    // same key without two passes over every element of a large network at every step)
    if(!this.everyStep){let K=this.keyEls;if(!K||K.els!==this.net.els||K.n!==this.net.els.length)K=this.keyEls={els:this.net.els,n:this.net.els.length,sw:this.net.els.filter(e=>e.k==='S'||e.k==='D'),gs:this.net.els.filter(e=>e.k==='G'&&e.sched)};
-    key=mode+(h/this.h).toPrecision(17)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');for(const e of K.sw)key+=e.on?'1':'0';
+    key=mode+(h/this.h).toPrecision(17)+(mode==='BDF2'?'w'+this.bdf.w.toPrecision(8):'');this.keyPre=key.length;for(const e of K.sw)key+=e.on?'1':'0';
     for(const e of K.gs)key+='|'+e.Rnow;
     for(const e of this.chbEls)key+='|'+(e.mmc?e.mmc.cnt:chbCount(e));}
    let f=key&&this.cache.get(key);
    const st=this.lustat;if(f)st.hit++;
-   if(!f){st.fact++;if(key)st.miss++;f=this.factor(h,mode,!!key);if(key){if(this.cache.size>256)this.cache.clear();this.cache.set(key,f);}}
-   this.rhs(h,mode);const sol=this.b.slice();if(f.sp)SPM.solve(f.sp,sol,this.spw);else luSolve(f.A,this.n,f.piv,sol);return sol;
+   if(!f){st.fact++;if(key){st.miss++;if(this.sparse&&this.refac!=='off'&&this.refac!=='full'&&this.refBase!=='last')this.baseFromCache(h,mode,key);}
+    f=this.factor(h,mode,!!key);if(key){f.pre=key.slice(0,this.keyPre);if(this.cache.size>256)this.cache.clear();this.cache.set(key,f);}}
+   this.rhs(h,mode);const sol=this.b.slice();if(f.sp){if(this.kern)this.kern.solve(f.sp,sol);else SPM.solve(f.sp,sol,this.spw);}else luSolve(f.A,this.n,f.piv,sol);return sol;
   }
   solve(h,mode){
    if(!this.hasCPL&&!this.hasNL)return this.solveOnce(h,mode);

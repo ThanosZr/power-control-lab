@@ -1,8 +1,9 @@
 {
- "version": "4.22",
+ "version": "4.23",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
+   "pcl.rms.",
    "pcl.insulation.",
    "pcl.surge.",
    "pcl.geo.",
@@ -4119,6 +4120,262 @@
     ],
     "since": "4.19.1"
    },
+   "pcl.rms.Classical": {
+    "params": [
+     "names",
+     "bus",
+     "p"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.Classical.eval": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi",
+     "t"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.Classical.init": {
+    "params": [
+     "V",
+     "S",
+     "wb"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.Classical.power": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.Kind": {
+    "params": [
+     "names",
+     "bus",
+     "p"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.Kind.eval": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi",
+     "t"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.RMSError": {
+    "params": [],
+    "since": "4.23"
+   },
+   "pcl.rms.Source": {
+    "params": [
+     "names",
+     "bus",
+     "p"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.Source.eval": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi",
+     "t"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.Source.init": {
+    "params": [
+     "V",
+     "S",
+     "wb"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.System": {
+    "params": [
+     "net",
+     "machines",
+     "default",
+     "loads",
+     "f",
+     "pf",
+     "vmin"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.System.batch": {
+    "params": [
+     "scenarios",
+     "t_end",
+     "**kw"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.System.cct": {
+    "params": [
+     "fault",
+     "clear",
+     "t_fault",
+     "lo",
+     "hi",
+     "t_end",
+     "tol",
+     "**kw"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.System.eigen": {
+    "params": [
+     "method",
+     "sigma",
+     "k",
+     "x",
+     "y"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.System.fg": {
+    "params": [
+     "x",
+     "y",
+     "t"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.System.init": {
+    "params": [],
+    "since": "4.23"
+   },
+   "pcl.rms.System.internal_emf": {
+    "params": [],
+    "since": "4.23"
+   },
+   "pcl.rms.System.jac": {
+    "params": [
+     "x",
+     "y",
+     "t"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.System.linearize": {
+    "params": [
+     "x",
+     "y"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.System.reduced_y": {
+    "params": [
+     "which",
+     "events"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.System.simulate": {
+    "params": [
+     "t_end",
+     "events",
+     "h",
+     "method",
+     "step",
+     "rtol",
+     "atol",
+     "hmin",
+     "hmax",
+     "tol",
+     "record_every"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.System.stable": {
+    "params": [
+     "r",
+     "limit"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.System.state": {
+    "params": [
+     "name",
+     "which"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.TwoAxis": {
+    "params": [
+     "names",
+     "bus",
+     "p"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.TwoAxis.currents": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.TwoAxis.eval": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi",
+     "t"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.TwoAxis.init": {
+    "params": [
+     "V",
+     "S",
+     "wb"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.TwoAxis.power": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.ZIPLoad": {
+    "params": [
+     "names",
+     "bus",
+     "p"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.ZIPLoad.eval": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi",
+     "t"
+    ],
+    "since": "4.23"
+   },
+   "pcl.rms.ZIPLoad.init": {
+    "params": [
+     "V",
+     "S",
+     "wb"
+    ],
+    "since": "4.23"
+   },
    "pcl.run": {
     "params": [
      "**kw"
@@ -5862,7 +6119,11 @@
      "hmin",
      "modeVec",
      "initSolver",
-     "evSnap"
+     "evSnap",
+     "rec",
+     "recKeys",
+     "refBase",
+     "kernel"
     ],
     "since": "3.19"
    },

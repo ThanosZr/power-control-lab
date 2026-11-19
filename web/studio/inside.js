@@ -122,7 +122,7 @@
   return {svg:`<svg class="in-svg in-el" width="${W0}" height="${H0}" data-w="${W0}" viewBox="0 0 ${W0} ${H0}" role="img" aria-label="${esc('Τα στοιχεία μέσα στο '+(c.label||c.id))}">${s}</svg>`,n,ne:lay.wires.length,nb:0,title:d.title,el:true};}
 
  function update(){const x=C(),el=I.el;if(!el||el.hidden||!I.g)return;const s=x.sim();
-  for(const [id,key] of I.g.keys){const t=el.querySelector(`[data-iv="${CSS.escape(id)}"]`);if(!t)continue;let v=NaN;if(s&&s.chIndex?.has(key))v=s.now(key);
+  for(const [id,key] of I.g.keys){const t=el.querySelector(`[data-iv="${CSS.escape(id)}"]`);if(!t)continue;let v=NaN;if(s&&(s.hasKey?s.hasKey(key):s.chIndex?.has(key)))v=s.now(key);
    const tx=Number.isFinite(v)?(key.startsWith('I:')?'i = '+x.eng(v,'A',3):'= '+x.eng(v,'',4)):'—';if(t.textContent!==tx)t.textContent=tx;}
   const tt=el.querySelector('[data-it]');if(tt&&s)tt.textContent='t = '+x.eng(s.t,'s',4);}
 

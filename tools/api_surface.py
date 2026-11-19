@@ -51,7 +51,9 @@ STABLE_FROM = '4.0'           # the major version from which the surface is stab
 # 4.22: the insulation co-ordination (pcl.insulation), the surges of a station by the method of characteristics (pcl.surge)
 # and the places of a network on the earth (pcl.geo) are new: experimental; the study 'insulation' and the formats of a
 # request (map, geojson, geo_lengths; the format 'geojson' of the picture) are stable additions.
-EXPERIMENTAL = {'pcl': ('pcl.insulation.', 'pcl.surge.', 'pcl.geo.', 'pcl.control.', 'pcl.workbench.', 'pcl.wideband.', 'pcl.powerflow.', 'pcl.opf.', 'pcl.ipm.', 'pcl.backend.', 'pcl.accel.', 'pcl.nnstart.',
+# 4.23: the numerical core of RMS dynamics and small-signal stability (pcl.rms) is new: experimental; the four settings of
+# the solver in time (solve.rec, solve.recKeys, solve.refBase, solve.kernel) are stable additions.
+EXPERIMENTAL = {'pcl': ('pcl.rms.', 'pcl.insulation.', 'pcl.surge.', 'pcl.geo.', 'pcl.control.', 'pcl.workbench.', 'pcl.wideband.', 'pcl.powerflow.', 'pcl.opf.', 'pcl.ipm.', 'pcl.backend.', 'pcl.accel.', 'pcl.nnstart.',
                         'pcl.onnxio.', 'pcl.netview.', 'pcl.netfile.', 'pcl.psse.', 'pcl.scopf.', 'pcl.cpf.', 'pcl.se.', 'pcl.harmonic.', 'pcl.unbalanced.', 'pcl.dcgrid.'), 'cli': ('workbench', 'python -m pcl accel', 'python -m pcl nnstart')}
 # 4.0: the first of the two steps of a removal. {surface: {key: (version, what instead)}}: the point keeps working (with a
 # message where it runs) to the end of its major version and may go in the next one. A point that is gone leaves this list.
@@ -116,6 +118,7 @@ def surface_pcl():
     import pcl.geo
     import pcl.insulation
     import pcl.surge
+    import pcl.rms
     import pcl.linereport
     import pcl.link
     import pcl.network
@@ -140,7 +143,7 @@ def surface_pcl():
             out['pcl.' + name] = {'params': sig(obj)}
     for mod in (pcl.link, pcl.control, pcl.workbench, pcl.plotting, pcl.formats, pcl.impulse, pcl.network, pcl.lineconst, pcl.linereport, pcl.trv, pcl.wideband,
                 pcl.powerflow, pcl.opf, pcl.ipm, pcl.report, pcl.study, pcl.backend, pcl.accel, pcl.nnstart, pcl.onnxio, pcl.netview, pcl.netfile, pcl.psse, pcl.scopf, pcl.cpf, pcl.se, pcl.harmonic, pcl.unbalanced, pcl.dcgrid,
-                pcl.insulation, pcl.surge, pcl.geo):
+                pcl.insulation, pcl.surge, pcl.geo, pcl.rms):
         short = mod.__name__
         for name, obj in vars(mod).items():
             if name.startswith('_') or getattr(obj, '__module__', None) != mod.__name__ or not (inspect.isfunction(obj) or inspect.isclass(obj)):
@@ -253,7 +256,7 @@ process.stdout.write(JSON.stringify(out));"""
     out['file.component'] = {'params': ['id', 'type', 'x', 'y', 'rot', 'flip', 'label', 'params', 'live', 'liveBase', 'liveRate']}
     # 3.19: the program of parameter changes and the options of the solution that it adds
     out['file.program'] = {'params': ['t', 'id', 'k', 'v', 'rate']}
-    out['file.solve'] = {'params': ['unconn', 'island', 'rleak', 'tbase', 'step', 'rtol', 'hmax', 'units', 'solver', 'refac', 'hmin', 'modeVec', 'initSolver', 'evSnap']}   # 4.19: the linear solver; 4.19.1: the smallest step; 4.19.5: the end of a piece of run() on the event next to it
+    out['file.solve'] = {'params': ['unconn', 'island', 'rleak', 'tbase', 'step', 'rtol', 'hmax', 'units', 'solver', 'refac', 'hmin', 'modeVec', 'initSolver', 'evSnap', 'rec', 'recKeys', 'refBase', 'kernel']}   # 4.19: the linear solver; 4.19.1: the smallest step; 4.19.5: the end of a piece of run() on the event next to it; 4.23: the watched record, the base of a refactorization, the kernel of the solve
     out['file.wire'] = {'params': ['id', 'a', 'b', 'pts', 'name', 'color', 'width']}
     out['file.subcircuit'] = {'params': ['title', 'desc', 'version', 'components', 'wires', 'params']}
     return out

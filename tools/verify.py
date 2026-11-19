@@ -1215,6 +1215,73 @@ def v422_rows(add):
     add(A, 'Web Mercator, πλάτος 45°: y', 'R·asinh(tan φ), EPSG:3857', G.R_WM * math.asinh(1.0), G.mercator(0, 45)[1], 1e-3, 'm')
 
 
+def v423_rows(add):
+    """4.23: the numerical core of RMS dynamics (ROADMAP §71): the three-machine, nine-bus study of the reference book (the
+    start, the reduced networks, the modes of the classical model, the eigenvalues of the two-axis model), the trapezoidal
+    rule against SciPy on the reduced network, Arnoldi against QR, and the first swing against our EMT (tests/test_rms.py)."""
+    import json
+    import subprocess
+    import numpy as np
+    from scipy.integrate import solve_ivp
+    from pcl import network as N
+    from pcl import rms
+    A = 'Δυναμική RMS και ευστάθεια μικρών διαταραχών (4.23)'
+    keys = ('Xd', 'Xdp', 'Xq', 'Xqp', 'Td0p', 'Tq0p', 'Ra', 'H', 'D', 'Sn')
+    base = {g: {k: v for k, v in d.items() if k in keys} for g, d in N.IEEE9_MACHINES.items()}
+    wr = 2 * math.pi * 60
+    s = rms.System(N.ieee9(), machines={g: {'model': 'classical', **d} for g, d in base.items()}, f=60)
+    s.init()
+    E = s.internal_emf()
+    add(A, 'IEEE 9 ζυγών, κλασικό μοντέλο: |E′₂| από τη ροή φορτίου', 'βιβλίο αναφοράς, Παράδειγμα 2.6: 1,0502', 1.0502, abs(E['G2']), 1e-4, 'pu')
+    add(A, 'το ίδιο: γωνία της E′₂', 'Παράδειγμα 2.6: 19,7315°', 19.7315, math.degrees(np.angle(E['G2'])), 1e-3, '°')
+    Yp = s.reduced_y(events=[{'kind': 'trip', 'branch': 'br8', 'shunts': 'keep'}])
+    add(A, 'ανηγμένος Y μετά την εκκαθάριση (η σειριακή αγωγιμότητα της 5–7 έξω): Y₁₁', 'Πίν. 2.6: 1,181 − j2,229', abs(1.181 - 2.229j), abs(Yp[0, 0]), 1.5e-3, 'pu')
+    Ev, Y, H = np.array([E[k] for k in ('G1', 'G2', 'G3')]), s.reduced_y(), (23.64, 6.40, 3.01)
+    Ps = lambda i, j: abs(Ev[i]) * abs(Ev[j]) * Y[i, j].imag * math.cos(np.angle(Ev[i]) - np.angle(Ev[j]))
+    P12, P13, P23 = Ps(0, 1), Ps(0, 2), Ps(1, 2)
+    a11, a12 = wr / 2 * (P12 / H[0] + P13 / H[0] + P13 / H[2]), wr / 2 * (P23 / H[2] - P12 / H[0])
+    a21, a22 = wr / 2 * (P13 / H[2] - P12 / H[1]), wr / 2 * (P12 / H[1] + P23 / H[1] + P23 / H[2])
+    w = sorted(np.sqrt(-np.roots([1, a11 + a22, a11 * a22 - a12 * a21])).real)
+    add(A, 'κλασικό μοντέλο, οι δύο ταλαντώσεις (χωρίς τα G_ij, όπως το βιβλίο)', 'Παράδειγμα 3.2: 13,416 rad/s', 13.416, w[1], 2e-3, 'rad/s')
+    add(A, 'το ίδιο: η δεύτερη', 'Παράδειγμα 3.2: 8,807 rad/s', 8.807, w[0], 2e-3, 'rad/s')
+    m = {'G1': {'model': 'classical', **base['G1'], 'D': 1.0}}
+    for g in ('G2', 'G3'):
+        m[g] = {'model': 'two_axis', **base[g], 'Xqp': base[g]['Xdp'], 'D': 1.0}
+    s2 = rms.System(N.ieee9(), machines=m, f=60)
+    s2.init()
+    lam = s2.eigen('qr')['lambda'] / wr
+    for re, im in ((-0.002664, 0.034648), (-0.000622, 0.022984)):
+        l = min(lam, key=lambda q: abs(q.real - re) + abs(abs(q.imag) - im))
+        add(A, f'μοντέλο δύο αξόνων (G2, G3), D = 1: Im λ, χρόνος ανά μονάδα', f'§9.12 του βιβλίου: {im}'.replace('.', ','), im, abs(l.imag), 3e-6, '')
+        add(A, f'το ίδιο: Re λ', f'§9.12: {re}'.replace('.', ','), re, l.real, 3e-6, '')
+    # the trapezoidal rule against SciPy (DOP853) on the network reduced to the internal nodes, h = 1 ms
+    tc = 5 / 60
+    fault = [{'t': 0.0, 'kind': 'fault', 'bus': '8'}, {'t': tc, 'kind': 'clear', 'bus': '8'}, {'t': tc, 'kind': 'trip', 'branch': 'br8'}]
+    Em, d0, Hh = np.abs(Ev), np.angle(Ev), np.array(H)
+    Yf, Yc = s.reduced_y(events=fault[:1]), s.reduced_y(events=fault[2:])
+    Pm = np.array([np.real(Ev[i] * np.conj(Y[i] @ Ev)) for i in range(3)])
+    f = lambda t, z, Yx: np.r_[wr * (z[3:] - 1), (Pm - np.real(Em * np.exp(1j * z[:3]) * np.conj(Yx @ (Em * np.exp(1j * z[:3]))))) / (2 * Hh)]
+    a = solve_ivp(f, [0, tc], np.r_[d0, 1, 1, 1], args=(Yf,), method='DOP853', rtol=1e-12, atol=1e-12)
+    b = solve_ivp(f, [tc, 2.0], a.y[:, -1], args=(Yc,), method='DOP853', rtol=1e-12, atol=1e-12, dense_output=True)
+    r = s.simulate(2.0, events=fault, h=0.001)
+    ix = [s.state(k, 'delta') for k in ('G1', 'G2', 'G3')]
+    k = r['t'] > tc + 1e-9
+    add(A, 'σφάλμα 5 κύκλων, τραπεζοειδής h = 1 ms: μέγιστη διαφορά των γωνιών σε 2 s', 'SciPy DOP853 στο ανηγμένο δίκτυο (10⁻¹²)', 0.0, float(np.max(np.abs(r['x'][k][:, ix].T - b.sol(r['t'][k])[:3]))), 4e-5, 'rad')
+    q = rms.System(N.ieee(118))
+    q.init()
+    sig = 2j * math.pi * 1.2
+    near = sorted(q.eigen('qr')['lambda'], key=lambda l: abs(l - sig))[:6]
+    ar = q.eigen('arnoldi', sigma=sig, k=6)['lambda']
+    add(A, 'IEEE 118, 54 μηχανές δύο αξόνων: Arnoldi με μετατόπιση γύρω από 1,2 Hz', 'QR σε όλο τον πίνακα A', 0.0, max(min(abs(l - n) for n in near) for l in ar), 1e-8, 'rad/s')
+    js = json.loads(subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'rms_emt_cases.js'), '2.1'], capture_output=True, text=True, timeout=900, cwd=ROOT).stdout)
+    te, De = np.array(js['t']), np.degrees(np.unwrap(np.radians(np.array(js['d'])), axis=0))
+    ev = [{'t': 0.1, 'kind': 'fault', 'bus': '8'}, {'t': 0.183333, 'kind': 'clear', 'bus': '8'}, {'t': 0.183333, 'kind': 'trip', 'branch': 'br8'}]
+    r = s.simulate(2.1, events=ev, h=0.0005)
+    Dr = np.degrees(r['x'][:, ix])
+    add(A, 'το ίδιο σφάλμα: η πρώτη ταλάντωση του δ₂₁', 'το EMT του ieee9_emt (στάτης και δίκτυο με τα μεταβατικά τους)', float(np.max((De[:, 1] - De[:, 0]) - (De[0, 1] - De[0, 0]))),
+        float(np.max((Dr[:, 1] - Dr[:, 0]) - (Dr[0, 1] - Dr[0, 0]))), 3.0, '°')
+
+
 def checks(o):
     """Rows: (area, quantity, reference, expected, simulated, tolerance (absolute), unit)."""
     rows = []
@@ -1530,6 +1597,7 @@ def checks(o):
     gfm5_rows(add)
     v421_rows(add)
     v422_rows(add)
+    v423_rows(add)
     cpf_rows(add)
     sweepc_rows(add)
     se_rows(add)
@@ -1616,6 +1684,8 @@ TESTS = [
     ('tests/test_gis.py', 'υποσταθμός GIS και πολύ γρήγορα μεταβατικά (4.22, ROADMAP §51, §53, §61): αποζεύκτης με επανεναύσεις, μοντέλο προόδου οχετού (LPM), αρχική τάση γραμμής, ομοαξονικά δεδομένα, πολυώροφος πύργος (`web/studio/mna.js`, `engine/batch.py`, `pcl/surge.py`, `tests/js/gis_cases.js`)', 'επανεναύσεις κλεισίματος απέναντι στον λύτη SciPy· παγιδευμένο φορτίο στο άνοιγμα· LPM απέναντι σε ανεξάρτητη ολοκλήρωση και στον SciPy· Πίν. I του Ishii· το GIS 765 kV του TR 60071-4 και οι κορυφές VFTO απέναντι στη μέθοδο των χαρακτηριστικών'),
     ('tests/test_insulation.py', 'συντονισμός μόνωσης (4.22, ROADMAP §51, `pcl/insulation.py`)', 'το παράδειγμα G.2 του IEC 60071-2 ολόκληρο (U_cw, K_a, U_rw, μετατροπές, στάθμη 395/950 kV)· οι ζώνες προστασίας του Πίν. 4 του IEC 60099-5· ο συντελεστής σφάλματος γης από τις συμμετρικές συνιστώσες'),
     ('tests/test_geo.py', 'θέσεις του δικτύου στη γη (4.22, ROADMAP §69, `pcl/geo.py`, `tests/js/geo_cases.js`)', 'haversine απέναντι στον νόμο των συνημιτόνων· Web Mercator απέναντι στο asinh(tan φ)· GeoJSON έξω και πάλι μέσα· μήκος γραμμής από τη διαδρομή της (και η ροή φορτίου το βλέπει)· ο χάρτης δεν αλλάζει τις τιμές των στρώσεων'),
+    ('tests/test_time3.py', 'ο λύτης στον χρόνο, μέρος 3 (4.23, THEORY §8Ι.5): καταγραφή μόνο όσων παρακολουθούνται, βάση της επαναπαραγοντοποίησης από τη μνήμη, πυρήνας WebAssembly', 'σε έξι tutorials τα ίδια bit στην καταγραφή και στα στατιστικά κάθε καναλιού που καταγράφεται, η τιμή των άλλων ίδια όταν ζητηθεί, ένα κανάλι που προστίθεται στη μέση καταγράφεται από εκεί· με βάση από τη μνήμη τα ίδια bit και 41–58 % λιγότερες στήλες στα hvdc_lcc, b4dcs2, hvdc_gfm· ο πυρήνας WebAssembly με τα ίδια bit σε 16 συστήματα και σε τρία tutorials, «Αυτόματα» από 4000 αγνώστους (μετρημένο)'),
+    ('tests/test_rms.py', 'ο αριθμητικός πυρήνας της δυναμικής RMS και της ευστάθειας μικρών διαταραχών (4.23, ROADMAP §71, `pcl/rms.py`)', 'IEEE 9 ζυγών όπως στο βιβλίο αναφοράς: E′ και φορτία (Παρ. 2.6), οι ανηγμένοι πίνακες πριν, κατά και μετά το σφάλμα (Πίν. 2.6), οι δύο ταλαντώσεις (Παρ. 3.2), οι ιδιοτιμές του μοντέλου δύο αξόνων με D = 0 και 1 (§9.12) στο έκτο δεκαδικό· ο τραπεζοειδής με τάξη 2 απέναντι στο SciPy· η εναλλασσόμενη λύση ίδια· μεταβλητό βήμα· κρίσιμος χρόνος εκκαθάρισης· Arnoldi = QR (και στο IEEE 118)· η πρώτη ταλάντωση απέναντι στο EMT· χωρίς διαταραχή τίποτα δεν κινείται· στοιχείο χωρίς μοντέλο RMS: άρνηση με το όνομά του'),
     ('tests/test_ev_weights.py', 'τα βάρη του πολυκριτηριακού του οχήματος (4.18.1)', 'moevc2: w_s↑ ⇒ IAE↓, w_e↑ ⇒ Wh/km↓ και IAE↑, eco < ισορροπημένος < performance στα Wh/km και αντίστροφα στο IAE, keep ≤ 1· το moevc της 4.8 με keep 1,15 και w_s χωρίς επίδραση'),
     ('tests/test_look.py', 'τεχνική όψη του σχεδίου (4.17.3, ROADMAP §65)', 'διαδρομές μόνο οριζόντιες/κατακόρυφες (χωρίς εξομάλυνση) απέναντι σε γνωστές μορφές, σήμανση χωρίς αλλαγή των υπολοίπων, αντίσταση IEC και ANSI, όλα τα σύμβολα της βιβλιοθήκης· `scope_flow.js` στον browser'),
     ('tests/test_plotcore.py', 'πυρήνας των γραφημάτων (4.17.2, ROADMAP §63)', 'ticks χωρίς επικάλυψη για 28 συνδυασμούς διαστήματος και πλάτους, βήματα 1–2–5, ετικέτες με τα δεκαδικά του βήματος και ένα πρόθεμα ανά άξονα, όρια που κρατούν το 0, σταθερή αυτόματη κλίμακα (ανοίγει αμέσως με περιθώριο, κλείνει μετά από 2 s, σταθερή στην παύση)· και `tests/ui/scope_flow.js` στον browser'),
@@ -1699,7 +1769,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 1036 tests (Python και Node) και 20 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»· από την 4.22 το `gis_flow.js` τα tutorials του υποσταθμού GIS, τους άξονες των γραφημάτων SVG, το σύρσιμο των ετικετών και τον χάρτη του δικτύου). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 1058 tests (Python και Node) και 20 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»· από την 4.22 το `gis_flow.js` τα tutorials του υποσταθμού GIS, τους άξονες των γραφημάτων SVG, το σύρσιμο των ετικετών και τον χάρτη του δικτύου). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',

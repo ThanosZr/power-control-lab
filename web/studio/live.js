@@ -53,7 +53,7 @@
  function flush(){if(!L.q.length)return;const list=L.q;L.q=[];if(!L.active)return;const seq=++L.seq;L.out.push({seq,list});L.w.postMessage({type:'calls',epoch:L.epoch,seq,list});}
  // a live change of parameters (load without fresh, the channels the same): the page loads its mirror and the worker loads
  // its own state, so the run goes on while a slider moves; anything that changes the channels stops the worker first
- function sameKeys(sim,project){try{const net=MNA.buildNetlist(project);return Object.getPrototypeOf(sim).channelKeys.call({net}).join('|')===sim.keys.join('|');}catch(e){return false;}}
+ function sameKeys(sim,project){try{const net=MNA.buildNetlist(project),pr=Object.getPrototypeOf(sim);return pr.channelKeys.call({net,compKeys:pr.compKeys}).join('|')===sim.keys.join('|');}catch(e){return false;}}
  function wrap(sim){for(const k of PULL)sim[k]=function(...a){
    if(k==='load'&&!a[1]&&L.active&&L.sim===sim&&sameKeys(sim,a[0])){const r=Object.getPrototypeOf(sim).load.apply(sim,a);send('load',[a[0],false]);return r;}
    L.stop();return Object.getPrototypeOf(sim)[k].apply(sim,a);};

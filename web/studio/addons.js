@@ -54,7 +54,7 @@
    return {id:a.id,data,opts,mdl};},
   machines:()=>root.Parts.machines(), // 4.7: the machines of the app, with their pins and parameters (pcl.gui reads them)
   advance:a=>A.ctx.advance(a),reset:()=>A.ctx.reset(),   // 4.9.1: an external controller steps the circuit of the screen (pcl.workbench live)
-  values:a=>{const s=A.ctx.sim();if(!s)return {t:null,values:{}};const v={};for(const k of a.keys||[])if(s.chIndex.has(k))v[k]=s.now(k);return {t:s.t,values:v};},
+  values:a=>{const s=A.ctx.sim();if(!s)return {t:null,values:{}};const v={};for(const k of a.keys||[])if(s.hasKey(k))v[k]=s.now(k);return {t:s.t,values:v};},
   scope:a=>scopeData(a),
   run:async a=>solve({...query(a),action:'run'}),
   batch:async a=>{const qs=(a.queries||[]).map(q=>({...query(q),action:q.action||'run'}));return poolOf().map(qs,null,true);}, // 3.16: Python blocks too, in the workers

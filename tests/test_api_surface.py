@@ -171,12 +171,24 @@ class ApiSurface(unittest.TestCase):
             self.assertIn(p, self.now['project']['part:TL']['params'])
         for p in ('model', 'Zt1', 'Zt2', 'gam', 'arms', 'h1', 'h2', 'h3', 'Kp', 'E0p', 'Kn', 'E0n'):
             self.assertIn(p, self.now['project']['part:TOWER']['params'])
-        self.assertEqual(sum(len(v) for v in self.now.values()), 886)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 886)        # 886 then; 4.23 adds points
+
+    def test_the_surface_of_4_23(self):
+        """4.23: the numerical core of RMS dynamics and small-signal stability (pcl.rms) is experimental, as a new module; the
+        four settings of the solver in time (the watched record, the base of a refactorization, the kernel) are stable
+        additions of the file."""
+        for k in ('pcl.rms.System', 'pcl.rms.System.simulate', 'pcl.rms.System.eigen', 'pcl.rms.System.cct', 'pcl.rms.System.batch',
+                  'pcl.rms.System.reduced_y', 'pcl.rms.Classical', 'pcl.rms.TwoAxis'):
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+            self.assertIn(k, self.now['pcl'], k)
+        for k in ('rec', 'recKeys', 'refBase', 'kernel'):
+            self.assertIn(k, self.now['project']['file.solve']['params'])
+        self.assertEqual(sum(len(v) for v in self.now.values()), 917)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it
         # ('off': the path of before 4.19.5, for comparison)
-        self.assertEqual(self.now['project']['file.solve']['params'][-1], 'evSnap')
+        self.assertIn('evSnap', self.now['project']['file.solve']['params'])   # (4.23 adds settings after it)
         # the continuation load flow: the module is experimental, the method of the network and the study are stable additions
         self.assertTrue(api_surface.experimental('pcl', 'pcl.cpf.run'))
         self.assertEqual(self.now['pcl']['pcl.cpf.run']['params'], ['net', 'direction', 'q_limits', 'step', 'dV', 'lower', 'stop', 'V_stop', 'max_points', 'tol'])

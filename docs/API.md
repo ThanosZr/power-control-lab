@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.22: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (886 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.23: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (917 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -10,13 +10,13 @@
 - **Αρχεία project:** ένα παλιό αρχείο ανοίγει πάντα (ARCHITECTURE §4). Νέα πεδία είναι προαιρετικά. Όταν χρειάζεται μετατροπή, αυξάνεται το `version` του αρχείου και η μετατροπή γίνεται στο άνοιγμα, με test. Το `version` 3 (3.18): τα σύρματα με το ίδιο όνομα είναι ένας κόμβος· ένα παλιότερο αρχείο ανοίγει ίδιο (`Bus.migrateNames`: όπου ένα όνομα ήταν ετικέτα σε δύο κόμβους, το δεύτερο γίνεται «όνομα·2»).
 - **Ο έλεγχος:** το `python tools/api_surface.py` σταματά όταν κάτι λείπει ή έχασε όρισμα. Ως την 4.0 περνούσε με `--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 μέσα στην ίδια κύρια έκδοση δεν περνά ούτε με `--allow-removal`· στην επόμενη κύρια περνά μόνο για ό,τι ήταν παρωχημένο. Ένα παρωχημένο σημείο πρέπει να υπάρχει ακόμη στον κώδικα.
 
-- **Πειραματικά (3.19):** `pcl.insulation.…`, `pcl.surge.…`, `pcl.geo.…`, `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `pcl.backend.…`, `pcl.accel.…`, `pcl.nnstart.…`, `pcl.onnxio.…`, `pcl.netview.…`, `pcl.netfile.…`, `pcl.psse.…`, `pcl.scopf.…`, `pcl.cpf.…`, `pcl.se.…`, `pcl.harmonic.…`, `pcl.unbalanced.…`, `pcl.dcgrid.…`, `workbench…`, `python -m pcl accel…`, `python -m pcl nnstart…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο· και της 4.19.2: τα backends των παρτίδων με τον δρόμο GPU*, το script του επιταχυντή, τα μοντέλα εκκίνησης και τα αρχεία ONNX). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
+- **Πειραματικά (3.19):** `pcl.rms.…`, `pcl.insulation.…`, `pcl.surge.…`, `pcl.geo.…`, `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `pcl.backend.…`, `pcl.accel.…`, `pcl.nnstart.…`, `pcl.onnxio.…`, `pcl.netview.…`, `pcl.netfile.…`, `pcl.psse.…`, `pcl.scopf.…`, `pcl.cpf.…`, `pcl.se.…`, `pcl.harmonic.…`, `pcl.unbalanced.…`, `pcl.dcgrid.…`, `workbench…`, `python -m pcl accel…`, `python -m pcl nnstart…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο· και της 4.19.2: τα backends των παρτίδων με τον δρόμο GPU*, το script του επιταχυντή, τα μοντέλα εκκίνησης και τα αρχεία ONNX). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
 
 Στους πίνακες, «Από» είναι η έκδοση της πρώτης καταγραφής: η 3.18 για ό,τι υπήρχε ήδη.
 
 ## Παρωχημένα
 
-Κανένα στην 4.22.
+Κανένα στην 4.23.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-624 σημεία.
+655 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -549,6 +549,37 @@
 | `pcl.report.ReportError` | — | 4.19.1 |
 | `pcl.report.network_report` | `net`, `study`, `result`, `title`, `**kw` | 4.19.1 |
 | `pcl.report.num` | `v`, `digits`, `lang`, `strip` | 4.19.1 |
+| `pcl.rms.Classical` | `names`, `bus`, `p` | 4.23 · πειρ. |
+| `pcl.rms.Classical.eval` | `X`, `Vr`, `Vi`, `t` | 4.23 · πειρ. |
+| `pcl.rms.Classical.init` | `V`, `S`, `wb` | 4.23 · πειρ. |
+| `pcl.rms.Classical.power` | `X`, `Vr`, `Vi` | 4.23 · πειρ. |
+| `pcl.rms.Kind` | `names`, `bus`, `p` | 4.23 · πειρ. |
+| `pcl.rms.Kind.eval` | `X`, `Vr`, `Vi`, `t` | 4.23 · πειρ. |
+| `pcl.rms.RMSError` | — | 4.23 · πειρ. |
+| `pcl.rms.Source` | `names`, `bus`, `p` | 4.23 · πειρ. |
+| `pcl.rms.Source.eval` | `X`, `Vr`, `Vi`, `t` | 4.23 · πειρ. |
+| `pcl.rms.Source.init` | `V`, `S`, `wb` | 4.23 · πειρ. |
+| `pcl.rms.System` | `net`, `machines`, `default`, `loads`, `f`, `pf`, `vmin` | 4.23 · πειρ. |
+| `pcl.rms.System.batch` | `scenarios`, `t_end`, `**kw` | 4.23 · πειρ. |
+| `pcl.rms.System.cct` | `fault`, `clear`, `t_fault`, `lo`, `hi`, `t_end`, `tol`, `**kw` | 4.23 · πειρ. |
+| `pcl.rms.System.eigen` | `method`, `sigma`, `k`, `x`, `y` | 4.23 · πειρ. |
+| `pcl.rms.System.fg` | `x`, `y`, `t` | 4.23 · πειρ. |
+| `pcl.rms.System.init` | — | 4.23 · πειρ. |
+| `pcl.rms.System.internal_emf` | — | 4.23 · πειρ. |
+| `pcl.rms.System.jac` | `x`, `y`, `t` | 4.23 · πειρ. |
+| `pcl.rms.System.linearize` | `x`, `y` | 4.23 · πειρ. |
+| `pcl.rms.System.reduced_y` | `which`, `events` | 4.23 · πειρ. |
+| `pcl.rms.System.simulate` | `t_end`, `events`, `h`, `method`, `step`, `rtol`, `atol`, `hmin`, `hmax`, `tol`, `record_every` | 4.23 · πειρ. |
+| `pcl.rms.System.stable` | `r`, `limit` | 4.23 · πειρ. |
+| `pcl.rms.System.state` | `name`, `which` | 4.23 · πειρ. |
+| `pcl.rms.TwoAxis` | `names`, `bus`, `p` | 4.23 · πειρ. |
+| `pcl.rms.TwoAxis.currents` | `X`, `Vr`, `Vi` | 4.23 · πειρ. |
+| `pcl.rms.TwoAxis.eval` | `X`, `Vr`, `Vi`, `t` | 4.23 · πειρ. |
+| `pcl.rms.TwoAxis.init` | `V`, `S`, `wb` | 4.23 · πειρ. |
+| `pcl.rms.TwoAxis.power` | `X`, `Vr`, `Vi` | 4.23 · πειρ. |
+| `pcl.rms.ZIPLoad` | `names`, `bus`, `p` | 4.23 · πειρ. |
+| `pcl.rms.ZIPLoad.eval` | `X`, `Vr`, `Vi`, `t` | 4.23 · πειρ. |
+| `pcl.rms.ZIPLoad.init` | `V`, `S`, `wb` | 4.23 · πειρ. |
 | `pcl.run` | `**kw` | 3.18 |
 | `pcl.scopf.ScopfError` | — | 4.19.4 · πειρ. |
 | `pcl.scopf.screen` | `case`, `Pf`, `rate`, `L`, `mon`, `out`, `emergency` | 4.19.4 · πειρ. |
@@ -841,7 +872,7 @@
 | `file.component` | id, type, x, y, rot, flip, label, params, live, liveBase, liveRate | — | 3.18 |
 | `file.program` | t, id, k, v, rate | — | 3.19 |
 | `file.sim` | hDiv, speed, stopT, method, rec | — | 4.8 |
-| `file.solve` | unconn, island, rleak, tbase, step, rtol, hmax, units, solver, refac, hmin, modeVec, initSolver, evSnap | — | 3.19 |
+| `file.solve` | unconn, island, rleak, tbase, step, rtol, hmax, units, solver, refac, hmin, modeVec, initSolver, evSnap, rec, recKeys, refBase, kernel | — | 3.19 |
 | `file.subcircuit` | title, desc, version, components, wires, params | — | 3.18 |
 | `file.watch` | show, tiles, panel | — | 4.8 |
 | `file.watch.tile` | id, key, ctl, label, at, al, rng, steps, span | — | 4.8 |

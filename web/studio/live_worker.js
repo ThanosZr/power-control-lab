@@ -16,7 +16,7 @@
 //  [3] = the last batch of calls applied (4.8), also sent in every tick (ack).
 //  The page waits for [1] = 2 by spinning (a few ms: the solver works in slices of 4 ms and looks at [0] after each).
 self.window=self;
-importScripts('expr.js','parts.js','stepcheck.js','netlib.js','subcircuit.js','bus.js','units.js','pyrt.js','sparse.js','nn.js','tune.js','inputs.js','mna.js','linemodels.js');
+importScripts('expr.js','parts.js','stepcheck.js','netlib.js','subcircuit.js','bus.js','units.js','pyrt.js','sparse.js','kernels.js','nn.js','tune.js','inputs.js','mna.js','linemodels.js');
 let sim=null,R=null;
 // 4.8: Python (Pyodide) in this thread for the circuits with Python blocks: loaded the first time one runs, never on the page
 const PYV='0.26.4';let booting=null,early=null;
@@ -61,7 +61,7 @@ function start(m){if(R)R.running=false;const r={id:++runs,epoch:m.epoch,ctl:m.ct
  sim=null;sim=new MNA.Sim(m.project,{...m.snap.opts});sim.method=m.snap.method||sim.method;
  // 4.8: Python blocks that never ran on the page (stand-ins, t = 0): this build is the start, with the real first sample
  if(!m.snap.pyFresh)sim.restoreSnapshot(m.snap);
- const A=m.rec.ring,Q=m.rec.per;if(sim.keys.length!==A.nch||sim.per.nch!==Q.nch)throw new Error('Άλλα κανάλια στον worker ('+sim.keys.length+' αντί για '+A.nch+').');
+ const A=m.rec.ring,Q=m.rec.per;if((sim.recKeys||sim.keys).length!==A.nch||sim.per.nch!==Q.nch)throw new Error('Άλλα κανάλια στον worker ('+(sim.recKeys||sim.keys).length+' αντί για '+A.nch+').');
  sim.ring={t:A.t,d:A.d,g:A.g,nch:A.nch,cap:A.cap,head:A.head,n:A.n};sim.per={t:Q.t,avg:Q.avg,min:Q.min,max:Q.max,rms:Q.rms,end:Q.end,nch:Q.nch,cap:Q.cap,head:Q.head,n:Q.n};
  if(m.snap.pyFresh&&sim.ring.n>0){sim.ring.head=(sim.ring.head-1+sim.ring.cap)%sim.ring.cap;sim.ring.n--;sim.recordNow();} // the point at t = 0 again, with the outputs of Python
  r.sent={sh:sim.net.shs.map(q=>q.n),ev:sim.ev?sim.ev.n:0,chN:(sim.changes||[]).length,chLast:(sim.changes||[]).slice(-1)[0],dgVer:sim.dgVer,dgT:0};

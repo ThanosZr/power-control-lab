@@ -360,7 +360,22 @@
 | method of characteristics | μέθοδος των χαρακτηριστικών (4.22) |
 | graticule, scale bar, route (of a line) | κάνναβος (μεσημβρινοί και παράλληλοι), κλίμακα, διαδρομή (της γραμμής) (4.22) |
 | leader line (of a label) | γραμμή οδηγός (της ετικέτας) (4.22) |
+| RMS dynamics, transient stability simulation | δυναμική RMS, προσομοίωση μεταβατικής ευστάθειας |
+| small-signal stability | ευστάθεια μικρών διαταραχών |
+| differential-algebraic equations (DAE) | διαφορικές–αλγεβρικές εξισώσεις (DAE) |
+| simultaneous / alternating (partitioned) solution | ταυτόχρονη / εναλλασσόμενη λύση |
+| state matrix | πίνακας κατάστασης |
+| participation factor | συντελεστής συμμετοχής |
+| mode shape | μορφή της ταλάντωσης |
+| damping ratio | λόγος απόσβεσης |
+| shift-and-invert | μετατόπιση και αντιστροφή |
+| critical clearing time | κρίσιμος χρόνος εκκαθάρισης |
+| centre of inertia | κέντρο αδράνειας |
+| two-axis model | μοντέλο δύο αξόνων |
+| complex-step differentiation | παραγώγιση με μιγαδικό βήμα |
+| watched channels | κανάλια που παρακολουθούνται |
+| kernel (of a solver) | πυρήνας (του λύτη) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 
-PWM, SPWM, SVPWM, PLL, PLO, dVOC, GeoJSON, Web Mercator, WGS 84, haversine, FACTS, SSSC, CHB, MMC, HVDC, MTDC, LCC, CEA, VDCOL, AVM, CCSC, NLC, ULM, FDCM, OPF, SCOPF, PTDF, LODF, LMP, KKT, fast-decoupled (XB, BX), ZIP, ONNX, GPU, CUDA, CuPy, backend, MLP, Adam, RMS, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.
+PWM, SPWM, SVPWM, PLL, PLO, dVOC, Arnoldi, WebAssembly, GeoJSON, Web Mercator, WGS 84, haversine, FACTS, SSSC, CHB, MMC, HVDC, MTDC, LCC, CEA, VDCOL, AVM, CCSC, NLC, ULM, FDCM, OPF, SCOPF, PTDF, LODF, LMP, KKT, fast-decoupled (XB, BX), ZIP, ONNX, GPU, CUDA, CuPy, backend, MLP, Adam, RMS, cross-bonding, solid bonding, link box, vector fitting, PI, PID, scope, probe, workbench, anti-windup, back-calculation, clamp (RCD clamp), notch, ZOH, MOSFET, IGBT, CPE, MOV, FEM, tutorial, template, add-on στο όνομα αρχείων, Worker, thread.
