@@ -22,6 +22,7 @@
 (function(root){
  const GREY='#9e9e9e',DCC='#6a3d9a',STATION='#5f6b6d';
  const CONTROL={P:'σταθερή ισχύς',V:'κρατά την τάση DC',droop:'στατικότητα',idroop:'στατικότητα ρεύματος',I:'σταθερό ρεύμα'};
+ const DCDC_CONTROL={P:'σταθερή ισχύς a → b',V:'κρατά την τάση της πλευράς b',droop:'στατικότητα στην πλευρά b'};   // 4.21
  function model(data){
   const v=data.view,nb=v.buses.length,ne=v.branches.length,ix=new Map(v.buses.map((b,i)=>[b.id,i]));
   const x=new Float64Array(nb),y=new Float64Array(nb);for(let i=0;i<nb;i++){x[i]=v.buses[i].x;y[i]=v.buses[i].y;}
@@ -82,6 +83,8 @@
   const Ld=L&&L.dc;
   if(hit.kind==='dcbus'){const b=hit.bus,val=Ld&&Ld.bus_v?Ld.bus_v[hit.i]:null;
    return `Ζυγός DC ${b.id}`+(b.Un?` · ±${num(b.Un/2e3)} kV`:'')+(val!==null&&val!==undefined?` · ${num(val,Ld.unit_bus)}`:'');}
+  if(hit.kind==='dcline'&&hit.line.kind==='dcdc'){const e=hit.line,val=Ld&&Ld.line_v?Ld.line_v[hit.j]:null;      // 4.21
+   return `Μετατροπέας DC/DC ${e.name}: ${e.a} → ${e.b} · ${DCDC_CONTROL[e.control]||e.control}`+(val!==null&&val!==undefined?` · ${num(val,Ld.unit_line)} από το ${e.a} στο ${e.b}`:'');}
   if(hit.kind==='dcline'){const e=hit.line,val=Ld&&Ld.line_v?Ld.line_v[hit.j]:null;
    return `Γραμμή DC ${e.name}: ${e.a} – ${e.b}`+(e.of>1?` (${e.k} από ${e.of} παράλληλες)`:'')+(val!==null&&val!==undefined?` · ${num(val,Ld.unit_line)} στο ${e.a}`:'');}
   if(hit.kind==='station'){const q=hit.station,val=Ld&&Ld.station_v?Ld.station_v[hit.j]:null;
@@ -116,6 +119,10 @@
    for(const ci of order)lines(byl[ci],pal[ci],hot&&pal[ci]!==GREY?2:1.6);lines(own,DCC,1.6);
    if(D.trafo){const hs=D.r*0.8;ctx.lineWidth=1;for(let j=0;j<Dm.ns;j++){const X=sx(tr,w,(Dm.s1[j]+Dm.s2[j])/2),Y=sy(tr,h,(Dm.t1[j]+Dm.t2[j])/2);if(X<-hs||X>w+hs||Y<-hs||Y>h+hs)continue;
      ctx.fillStyle='#ffffff';ctx.fillRect(X-hs,Y-hs,2*hs,2*hs);ctx.strokeStyle=Ld?pal[Ld.station_c[j]]:STATION;ctx.strokeRect?.(X-hs,Y-hs,2*hs,2*hs);ctx.beginPath();ctx.moveTo(X-hs,Y+hs);ctx.lineTo(X+hs,Y-hs);ctx.stroke();}}
+   // 4.21: a DC/DC converter is a DC link (kind 'dcdc') with a square and both diagonals at its middle
+   if(D.trafo){const hs=D.r*0.8;ctx.lineWidth=1;for(let j=0;j<Dm.nl;j++){if(Dm.v.lines[j].kind!=='dcdc')continue;const X=sx(tr,w,(Dm.x1[j]+Dm.x2[j])/2),Y=sy(tr,h,(Dm.y1[j]+Dm.y2[j])/2);if(X<-hs||X>w+hs||Y<-hs||Y>h+hs)continue;
+     const c=Ld&&hot&&pal[Ld.line_c[j]]!==GREY?pal[Ld.line_c[j]]:STATION;ctx.fillStyle='#ffffff';ctx.fillRect(X-hs,Y-hs,2*hs,2*hs);ctx.strokeStyle=c;ctx.strokeRect?.(X-hs,Y-hs,2*hs,2*hs);
+     ctx.beginPath();ctx.moveTo(X-hs,Y+hs);ctx.lineTo(X+hs,Y-hs);ctx.moveTo(X-hs,Y-hs);ctx.lineTo(X+hs,Y+hs);ctx.stroke();}}
    out.dcbuses=0;const hb=D.dots?D.r:D.r*0.9;
    for(let i=0;i<Dm.nd;i++){const X=sx(tr,w,Dm.x[i]),Y=sy(tr,h,Dm.y[i]);if(X<-hb||X>w+hb||Y<-hb||Y>h+hb)continue;out.dcbuses++;ctx.fillStyle=Ld?pal[Ld.bus_c[i]]:DCC;ctx.fillRect(X-hb,Y-hb,2*hb,2*hb);}}
   // buses

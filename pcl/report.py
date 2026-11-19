@@ -426,6 +426,48 @@ document.addEventListener('click',function(ev){var b=ev.target.closest('button[d
 
 
 # -------------------------------------------------------------------- reports of the network studies
+def _acdc_opf(r, net, res, MW, picture, order):
+    """4.21: the optimal power flow AC/DC: the cost, the stations as the optimum chose them, the DC grid with its prices."""
+    r.heading('Η μέθοδος')
+    r.text('Βέλτιστη ροή φορτίου AC/DC με το μη γραμμικό μοντέλο εγχύσεων ζυγών (Ergun κ.ά. 2019): ο μετασχηματιστής, το φίλτρο και το '
+           'πηνίο κάθε σταθμού ως στοιχεία του δικτύου AC, ο μετατροπέας ως πηγή στον δικό του ζυγό με το ρεύμα και τις απώλειές του, '
+           'οι τάσεις του δικτύου DC άγνωστες μέσα στα όριά τους. Η λύση με τη μέθοδο εσωτερικού σημείου του OPF AC.')
+    r.facts([('Σύγκλιση', bool(res['converged'])), ('Επαναλήψεις', int(res['iterations'])), ('Κόστος (ανά ώρα)', round(res['cost'], 4)),
+             ('Απώλειες AC (MW)', round(res['losses'] / MW, 3)), ('Απώλειες DC (MW)', round(res['losses_dc'] / MW, 3)), ('Απώλειες σταθμών (MW)', round(res['losses_conv'] / MW, 3)),
+             ('Περιορισμοί που δεσμεύουν', len(res['binding'])), ('Χρόνος (ms)', round(res['time'] * 1e3, 2))])
+    if not res['converged']:
+        r.note(f"Η βέλτιστη ροή φορτίου δεν συνέκλινε: {res.get('message')}.", 'critical')
+    r.heading('Πηγές')
+    r.table(['Πηγή', 'Ζυγός', 'P (MW)', 'Q (Mvar)'], [[q['name'], q['bus'], q['P'] / MW, q['Q'] / MW] for q in res['sources']], None, [None, None, 4, 4])
+    r.heading('Σταθμοί μετατροπέων')
+    r.table(['Σταθμός', 'Ζυγός AC', 'Ζυγός DC', 'P_s (MW)', 'Q_s (Mvar)', '|U_c| (pu)', 'I_c (kA)', 'Απώλειες (MW)', 'P_dc (MW)', 'U_dc (kV)'],
+            [[n, c['bus'], c['dc'], c['Ps'] / MW, c['Qs'] / MW, c['Uc'], c['Ic'] / 1e3, c['loss'] / MW, c['Pdc'] / MW, c['Udc'] / 1e3] for n, c in res['converters'].items()],
+            'P_s, Q_s: προς το δίκτυο AC· P_dc: προς το δίκτυο DC', [None, None, None, 4, 4, 5, 4, 4, 4, 4])
+    dc = res['dc']
+    r.heading('Δίκτυο DC')
+    r.table(['Ζυγός DC', 'U (pu)', 'U (kV)', 'P (MW)', 'Οριακή τιμή'], [[b, d['V'], d['U'] / 1e3, d['P'] / MW, d['lmp']] for b, d in dc['buses'].items()], 'Ζυγοί DC', [None, 5, 4, 4, 4])
+    r.table(['Γραμμή DC', 'Από', 'Προς', 'I (kA)', 'Απώλειες (MW)', 'Φόρτιση (%)'],
+            [[q['name'], q['a'], q['b'], q['I'] / 1e3, q['loss'] / MW, None if q['loading'] is None else 100 * q['loading']] for q in dc['lines']], 'Γραμμές DC', [None, None, None, 4, 4, 3])
+    picture(res, 'lmp', 'flow')
+    _branches(r, net, res['branches'], MW)
+
+
+def _acdc_n1(r, net, res, MW, picture):
+    """4.21: N−1 AC/DC: every outage with the sequential AC/DC load flow after it."""
+    r.heading('Η μέθοδος')
+    r.text('Για κάθε κλάδο AC, γραμμή DC, σταθμό και μετατροπέα DC/DC: η ακολουθιακή ροή φορτίου AC/DC χωρίς αυτόν, με τα όρια των '
+           'σταθμών. Οι σταθμοί δεν είναι σταθερές εγχύσεις: ο ζυγός ταλάντωσης DC, οι στατικότητες και ο κεντρικός ελεγκτής παίρνουν '
+           'ό,τι μετακινεί η διαταραχή.')
+    ok = [o for o in res['outages'] if o['converged']]
+    r.facts([('Διαταραχές', len(res['outages'])), ('Λύθηκαν', len(ok)), ('Χωρίς λύση', len(res['failed'])), ('Χειρότερη', res['worst'] or '—'),
+             ('Φόρτιση πριν (%)', None if res['base']['loading'] is None else round(100 * res['base']['loading'], 1)), ('Χρόνος (ms)', round(res['time'] * 1e3, 1))])
+    r.table(['Διαταραχή', 'Είδος', 'Λύθηκε', 'Μέγιστη φόρτιση (%)', 'Πού', 'V_min AC (pu)', 'V_DC min (pu)', 'V_DC max (pu)', 'Σταθμοί σε όριο', 'Σημείωση'],
+            [[o['name'], o['kind'], bool(o['converged']), None if o['loading'] is None else 100 * o['loading'], o['where'] or '—', o['Vmin'], o['Vdc_min'], o['Vdc_max'],
+              ', '.join(o['limits']) or '—', o['message'] or ''] for o in res['outages']], None, [None, None, None, 3, None, 4, 4, 4, None, None])
+    if res.get('flow'):
+        picture(res, 'n1')
+
+
 def _acdc(r, net, res, MW, picture, order):
     """4.20: the sequential AC/DC load flow: the iterations, the stations, the DC buses and lines, then the AC buses."""
     dc = res.get('dc') or {}
@@ -451,6 +493,15 @@ def _acdc(r, net, res, MW, picture, order):
         r.table(['Γραμμή DC', 'Από', 'Προς', 'I (kA)', 'P από (MW)', 'P προς (MW)', 'Απώλειες (MW)', 'Φόρτιση (%)'],
                 [[q['name'], q['a'], q['b'], q['I'] / 1e3, q['Pa'] / MW, q['Pb'] / MW, q['loss'] / MW, None if q['loading'] is None else 100 * q['loading']] for q in dc['lines']],
                 'Γραμμές DC', [None, None, None, 4, 4, 4, 4, 3])
+    if dc.get('dcdc'):                                       # 4.21: the DC/DC converters (lossless, Jovcic 2019, §30.3.3)
+        lw = {'P': 'ισχύς', 'V': 'τάση της πλευράς b', 'droop': 'στατικότητα P–U'}
+        r.table(['Μετατροπέας DC/DC', 'Από (a)', 'Προς (b)', 'Έλεγχος', 'P a → b (MW)', 'U_a (kV)', 'U_b (kV)', 'Φόρτιση (%)'],
+                [[n, d['a'], d['b'], lw.get(d['control'], d['control']), d['P'] / MW, d['Ua'] / 1e3, d['Ub'] / 1e3, None if d['loading'] is None else 100 * d['loading']]
+                 for n, d in dc['dcdc'].items()], 'Χωρίς απώλειες: U_a·I_a = U_b·I_b', [None, None, None, None, 4, 4, 4, 3])
+    if dc.get('dispatchers'):                                # 4.21: the dispatchers (Jovcic 2019, §27.6.2, in steady state)
+        for n, d in dc['dispatchers'].items():
+            r.facts([('Κεντρικός ελεγκτής', n), ('Μέση τάση DC (pu)', round(d['V'], 6)), ('Αναφορά (pu)', d['Vref']), ('Διόρθωση x (MW)', round(d['x'] / MW, 4))]
+                    + [(f'P {m} (MW)', round(p / MW, 3)) for m, p in d['members'].items()])
     picture(res, 'voltage', 'flow')
     r.heading('Ζυγοί AC')
     r.table(['Ζυγός', 'Τύπος', '|V| (pu)', 'Γωνία (°)', 'P παραγωγής (MW)', 'Q παραγωγής (Mvar)', 'P φορτίου (MW)', 'Q φορτίου (Mvar)'],
@@ -577,8 +628,17 @@ def network_report(net, study='pf', result=None, title=None, **kw):
             r.text(f'{res["advice"]["why"][0].upper()}{res["advice"]["why"][1:]}.')
         _harmonic(r, net, res, MW, picture)
     elif study == 'acdc':                                  # 4.20: the AC part as a load flow, then the DC grid and its stations
-        res = result or net.acdc_flow(**kw)
-        _acdc(r, net, res, MW, picture, order)
+        mode = kw.pop('mode', 'flow')
+        if result is None:                                 # 4.21: the optimal power flow AC/DC, or N−1 AC/DC
+            res = net.acdc_opf(**kw) if mode == 'opf' else net.acdc_contingency(**kw) if mode == 'n1' else net.acdc_flow(**kw)
+        else:
+            res = result
+        if 'outages' in res:
+            _acdc_n1(r, net, res, MW, picture)
+        elif res.get('kind') == 'acdc':
+            _acdc_opf(r, net, res, MW, picture, order)
+        else:
+            _acdc(r, net, res, MW, picture, order)
     elif study == 'unbalanced':
         if result is None:
             raise ReportError('network_report: the three-phase load flow needs its result (pcl.unbalanced.run of the feeder)')
@@ -736,9 +796,20 @@ def _se(r, net, res, MW, picture):
              ('Βαθμοί ελευθερίας', res.get('dof')), (f'Κατώφλι χ² ({f(100 * res["confidence"], 0)} %)', None if res.get('chi2') is None else round(res['chi2'], 2)),
              ('Μεγαλύτερο κανονικοποιημένο υπόλοιπο που μένει', None if res.get('largest') is None else round(res['largest'], 2)), ('Κατώφλι του', res['threshold']),
              ('Μετρήσεις που βγήκαν ως λανθασμένες', len(bad)), ('Κρίσιμες μετρήσεις', len(res['critical'])), ('Χρόνος (ms)', round(res['time'] * 1e3, 1))])
-    if res.get('plan'):
+    if (res.get('plan') or '').startswith('emt-'):         # 4.21: the points of an EMT run
+        tv = res.get('tve') or {}
+        r.text(f'Οι μετρήσεις ήρθαν από μια προσομοίωση EMT του δικτύου, από τη ροή φορτίου του: {PLAN_TXT[res["plan"]]}. Κάθε σημείο δίνει τους φασιθέτες θετικής ακολουθίας της τάσης και '
+               'του ρεύματος μίας περιόδου, με τον κοινό χρόνο αναφοράς της προσομοίωσης. Η εκτίμηση δεν ξέρει τη ροή φορτίου· ξέρει μόνο τις μετρήσεις, την τυπική απόκλιση καθεμιάς και το δίκτυο.')
+        if tv:
+            r.facts([('TVE των φασιθετών τάσης απέναντι στη ροή φορτίου (μέγιστο)', float(f'{tv["V"]:.3g}')), ('Ζυγός', tv['V_at']),
+                     ('TVE των φασιθετών ρεύματος (μέγιστο)', None if tv.get('I') is None else float(f'{tv["I"]:.3g}')), ('Κλάδος', tv.get('I_at') or '—')])
+    elif res.get('plan'):
         r.text(f'Οι μετρήσεις φτιάχτηκαν από τη ροή φορτίου του δικτύου με τυχαία σφάλματα: {PLAN_TXT[res["plan"]]}. Η εκτίμηση δεν ξέρει τη ροή φορτίου· ξέρει μόνο τις μετρήσεις, '
                'την τυπική απόκλιση καθεμιάς και το δίκτυο.')
+    if 'absolute' in res:                                  # 4.21: phasors and |I|
+        r.text(('Με φασιθέτη τάσης οι γωνίες είναι μετρημένες στον κοινό χρόνο αναφοράς: κανένας ζυγός δεν είναι αναφορά, και άγνωστοι είναι όλες οι γωνίες και όλα τα μέτρα.' if res['absolute']
+                else 'Χωρίς φασιθέτη τάσης η αναφορά των γωνιών είναι ο ζυγός ταλάντωσης.')
+               + {'pmu': ' Με μέτρα |I| η εκτίμηση ξεκινά από τους φασιθέτες τάσης.', 'staged': ' Με μέτρα |I| η εκτίμηση ξεκινά από την εκτίμηση χωρίς αυτά.'}.get(res.get('start'), ''))
     r.text('Η εκτίμηση είναι οι τάσεις που ελαχιστοποιούν το J = Σ (μέτρηση − εκτίμηση)²/σ². Αν τα σφάλματα είναι τυχαία με τις σ που δηλώθηκαν, το J ακολουθεί κατανομή χ² με '
            'βαθμούς ελευθερίας τις εξισώσεις που περισσεύουν: J πάνω από το κατώφλι σημαίνει ότι κάποια μέτρηση είναι λανθασμένη. Ποια, το λέει το κανονικοποιημένο υπόλοιπο: '
            'το υπόλοιπο κάθε μέτρησης διαιρεμένο με την τυπική απόκλιση που θα είχε αν όλα ήταν σωστά. Η μέτρηση με το μεγαλύτερο, αν περνά το κατώφλι, βγαίνει και η εκτίμηση επαναλαμβάνεται.')

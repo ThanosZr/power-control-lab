@@ -296,7 +296,8 @@ class Network:
         return nm
 
     def vsc(self, bus, dc, control='P', P=0.0, V=1.0, droop=None, Prated=None, R=None, Q=0.0, Vac=None, side='dc', I=None,
-            Rtr=0.0, Xtr=0.0, Bf=0.0, Rc=0.0, Xc=0.0, a_loss=0.0, b_loss=0.0, crec=0.0, cinv=0.0, name=None):
+            Rtr=0.0, Xtr=0.0, Bf=0.0, Rc=0.0, Xc=0.0, a_loss=0.0, b_loss=0.0, crec=0.0, cinv=0.0, name=None, Imax=None, Ucmax=None, Ucmin=None,
+            Qmin=None, Qmax=None):
         """A converter station between the AC bus `bus` and the DC bus `dc` (4.20, pcl.dcgrid). DC side: control 'P' (P in W
         into the DC grid; with side = 'ac' P is the power it gives to the AC bus), 'V' (the DC slack at V pu), 'droop'
         (P = P_0 − R·(U − U_0), P_0 = P, U_0 = V·U_n, R in W/V or droop ρ in pu with P_rated in W), 'idroop' (current droop),
@@ -305,16 +306,55 @@ class Network:
         source may hold that bus). The station: Rtr + jXtr, the filter Bf, the reactor Rc + jXc (pu on S_base and the AC
         bus base), the losses a_loss (W) + b_loss (V)·I + c (Ω)·I² (I in A), c = crec while it takes power from the AC grid, cinv while it
         gives. In the AC solvers it is a fixed injection: the one of its last AC/DC load flow (acdc_flow), or before that
-        −P (side 'dc') or P (side 'ac') for control 'P' and nothing for the others."""
+        −P (side 'dc') or P (side 'ac') for control 'P' and nothing for the others.
+        4.21, the limits of the station (Beerten, Cole & Belmans 2012, §II-B, Fig. 3; only where given): Imax (A) the current of
+        the converter, Ucmax, Ucmin (pu of the AC bus base) its voltage; acdc_flow(limits=True) holds them. Qmin, Qmax (var, at
+        the converter) and ±P_rated (at the converter) bound it in the optimal power flow AC/DC (acdc_opf)."""
         if control not in ('P', 'V', 'droop', 'idroop', 'I'):
             raise NetworkError('vsc: control one of P, V, droop, idroop, I')
         if control in ('droop', 'idroop') and R is None and (droop is None or Prated is None):
             raise NetworkError('vsc: a droop needs R, or droop and Prated')
         nm = str(name or f'vsc{sum(e["kind"] == "vsc" for e in self.elements) + 1}')
         dc = self._dc(dc, nm)
-        opt = {k: float(v) for k, v in (('droop', droop), ('Prated', Prated), ('R', R), ('Vac', Vac), ('I', I)) if v is not None}
+        opt = {k: float(v) for k, v in (('droop', droop), ('Prated', Prated), ('R', R), ('Vac', Vac), ('I', I), ('Imax', Imax), ('Ucmax', Ucmax), ('Ucmin', Ucmin), ('Qmin', Qmin), ('Qmax', Qmax)) if v is not None}
         self._add('vsc', nm, bus=bus, dc=dc, control=control, P=float(P), V=float(V), Q=float(Q), side=side, Rtr=float(Rtr), Xtr=float(Xtr),
                   Bf=float(Bf), Rc=float(Rc), Xc=float(Xc), a_loss=float(a_loss), b_loss=float(b_loss), crec=float(crec), cinv=float(cinv), **opt)
+        return nm
+
+    def dcdc(self, a, b, control='P', P=0.0, V=1.0, droop=None, Prated=None, R=None, name=None):
+        """4.21: a DC/DC converter from the DC bus a to the DC bus b (pcl.dcgrid.DCGrid.dcdc; Jovcic 2019, §30.3.3, lossless):
+        control 'P' (P in W from a to b), 'V' (holds the voltage of b at V pu), 'droop' (P = P_0 − R·(U_b − U_0), R in W/V or
+        droop ρ in pu with P_rated in W). The buses may be of two DC grids with different U_n. It has no AC side, so the AC
+        studies do not see it."""
+        if control not in ('P', 'V', 'droop'):
+            raise NetworkError('dcdc: control one of P, V, droop')
+        if control == 'droop' and R is None and (droop is None or Prated is None):
+            raise NetworkError('dcdc: a droop needs R, or droop and Prated')
+        nm = str(name or f'dcdc{sum(e["kind"] == "dcdc" for e in self.elements) + 1}')
+        a, b = self._dc(a, nm), self._dc(b, nm)
+        if a == b:
+            raise NetworkError(f'{nm}: a DC/DC converter needs two DC buses')
+        opt = {k: float(v) for k, v in (('droop', droop), ('Prated', Prated), ('R', R)) if v is not None}
+        self._add('dcdc', nm, control=control, P=float(P), V=float(V), **opt)
+        self.elements[-1].update(a=a, b=b)                 # (DC buses: not the AC buses that _add checks)
+        return nm
+
+    def dc_dispatcher(self, members, V=1.0, weights=None, buses=None, name=None):
+        """4.21: the dispatcher of a DC grid (pcl.dcgrid.DCGrid.dispatcher; Jovcic 2019, §27.6.2, Fig. 27.5, in steady state): the
+        converters `members` (vsc with control P or droop, side 'dc') share x in the shares `weights` (equal by default), so
+        that the average DC voltage of their buses (or of `buses`) is V (pu)."""
+        nm = str(name or f'dc_dispatcher{sum(e["kind"] == "dc_dispatcher" for e in self.elements) + 1}')
+        members = [str(m) for m in members]
+        for m in members:
+            e = self.element(m)
+            if e['kind'] != 'vsc' or e['control'] not in ('P', 'droop') or e.get('side', 'dc') != 'dc':
+                raise NetworkError(f'{nm}: {m} is not a converter (vsc) with control P or droop on its DC side')
+        opt = {}
+        if weights is not None:
+            opt['weights'] = [float(x) for x in weights]
+        if buses is not None:
+            opt['buses'] = [self._dc(x, nm) for x in buses]
+        self._add('dc_dispatcher', nm, members=members, V=float(V), **opt)
         return nm
 
     def dc_grid(self):
@@ -322,14 +362,29 @@ class Network:
         from . import dcgrid
         return dcgrid.grid_of(self)
 
-    def acdc_flow(self, method='auto', tol=1e-8, max_iter=None, flat=False, q_limits=False):
+    def acdc_flow(self, method='auto', tol=1e-8, max_iter=None, flat=False, q_limits=False, limits=False):
         """4.20: the sequential AC/DC load flow (pcl.dcgrid.acdc_flow): the result of power_flow for the AC part with 'dc',
-        'converters', 'outer' (the AC/DC iterations)."""
+        'converters', 'outer' (the AC/DC iterations). 4.21 — limits: hold the limits of the stations (vsc Imax, Ucmax, Ucmin)."""
         from . import dcgrid
         try:
-            return dcgrid.acdc_flow(self, method=method, tol=tol, max_iter=max_iter, flat=flat, q_limits=q_limits)
+            return dcgrid.acdc_flow(self, method=method, tol=tol, max_iter=max_iter, flat=flat, q_limits=q_limits, limits=limits)
         except dcgrid.DCGridError as e:
             raise NetworkError(str(e)) from e
+
+    def acdc_opf(self, flow_limits=True, tol=1e-6, max_iter=150, start='auto', dc_limits=(0.9, 1.1)):
+        """4.21: the optimal power flow AC/DC (pcl.dcgrid.acdc_opf): every converter station's power is chosen with the
+        generation, within the limits of the stations, of the DC voltages (dc_limits, pu) and of the DC lines."""
+        from . import dcgrid
+        try:
+            return dcgrid.acdc_opf(self, flow_limits=flow_limits, tol=tol, max_iter=max_iter, start=start, dc_limits=dc_limits)
+        except dcgrid.DCGridError as e:
+            raise NetworkError(str(e)) from e
+
+    def acdc_contingency(self, outages=None, limits=True, tol=1e-8, method='auto'):
+        """4.21: N−1 with the sequential AC/DC load flow after every outage of an AC branch, DC line, station or DC/DC
+        converter (pcl.dcgrid.acdc_contingency)."""
+        from . import dcgrid
+        return dcgrid.acdc_contingency(self, outages=outages, limits=limits, tol=tol, method=method)
 
     def remove(self, name):
         self.elements = [e for e in self.elements if e['name'] != name]
@@ -794,8 +849,9 @@ class Network:
                 ps = e.get('_Ps')
                 if ps is None:
                     ps = (e['P'] if e.get('side') == 'ac' else -e['P']) / self.S_base if e['control'] == 'P' else 0.0
-                Sbus[i] += complex(ps, 0.0 if e.get('Vac') is not None else (e['_Qs'] if e.get('_Qs') is not None else e['Q'] / self.S_base))
-                if e.get('Vac') is not None:
+                vac = e.get('Vac') if e.get('_Qfix') is None else None   # 4.21: a station that holds its AC voltage, at a limit of Q
+                Sbus[i] += complex(ps, 0.0 if vac is not None else (e['_Qfix'] if e.get('_Qfix') is not None else e['_Qs'] if e.get('_Qs') is not None else e['Q'] / self.S_base))
+                if vac is not None:
                     if types[b] != 'PQ' or any(q['kind'] in ('generator', 'unit', 'feeder') and q.get('bus') == b for q in self.elements):
                         raise NetworkError(f'{e["name"]}: holds the AC voltage of bus {b}, where another source is; only one source may hold a bus')
                     types[b] = 'PV'
@@ -836,7 +892,9 @@ class Network:
     def load_flow(self, tol=1e-10, max_iter=30, q_limits=False, flat=False):
         """Newton–Raphson in polar coordinates. Returns a dict: V (pu) and angle (deg) per bus, P, Q injected by the
         sources (W, var), branch flows (4.10: lines and branches, both ends), losses, iterations, converged; with series
-        compensators (sssc) also 'sssc': X, V_q, I, Q per compensator."""
+        compensators (sssc) also 'sssc': X, V_q, I, Q per compensator. (q_limits 'side', 4.21: only in power_flow.)"""
+        if q_limits == 'side':
+            raise NetworkError("load_flow: q_limits='side' is in power_flow (pcl.powerflow.solve)")
         sc = [e for e in self.elements if e['kind'] == 'sssc']
         for e in sc:
             e['_X'] = e['X'] if e['X'] is not None else 0.0
@@ -979,7 +1037,10 @@ class Network:
         buses), 'sweepc' (the sweep with compensation: radial and weakly meshed networks, PV buses; never chosen by 'auto'),
         'gs' (Gauss–Seidel, for teaching), 'dc' (the linear DC approximation: angles only).
         Every method but 'dc' ends on the same mismatch tolerance tol (pu), so the result is the same within it.
-        Returns the dict of load_flow, and 'method', 'path' (what ran, with fallbacks), 'advice', 'time' (s)."""
+        q_limits: False, True (a PV bus past a reactive limit becomes PQ at it), or 'side' (4.21: and a bus at a limit on the
+        wrong side of its set voltage holds it again; pcl.powerflow.solve).
+        Returns the dict of load_flow, and 'method', 'path' (what ran, with fallbacks), 'advice', 'time' (s); with 'side' also
+        'q_side': {'back', 'cycle', 'wrong'}."""
         from . import powerflow
         c = self.case()
         r = powerflow.solve(c, method, tol=tol, max_iter=max_iter, q_limits=q_limits, flat=flat)
@@ -992,6 +1053,9 @@ class Network:
         res.update(method=r['method'], path=r['path'], advice=r['advice'], time=r['time'])
         if r['method'] == 'dc':
             res['dc'] = True
+        if 'side' in r:                        # 4.21: q_limits='side': the buses that held their voltage again, and why it stopped
+            q = r['side']
+            res['q_side'] = {'back': [c.names[i] for i in q['back']], 'cycle': q['cycle'], 'wrong': [c.names[i] for i in q['wrong']]}
         return res
 
     def dc_flow(self):
@@ -1497,7 +1561,7 @@ def ieee(case):
 
 
 CASES = ('ieee9', 'ieee14', 'ieee30', 'ieee57', 'ieee118', 'ieee300', 'case30', 'case33bw', 'case69', 'pegase1354')
-MORE = ('harmonic14', 'mtdc5', 'b4')   # 4.19.5: networks made for one study (they are not in the lists of the other studies); 4.20: mtdc5 (AC/DC); 4.20.1: b4 (pcl.dcgrid.b4_network)
+MORE = ('harmonic14', 'mtdc5', 'b4', 'case5_acdc')   # 4.19.5: networks made for one study (they are not in the lists of the other studies); 4.20: mtdc5 (AC/DC); 4.20.1: b4 (pcl.dcgrid.b4_network); 4.21: case5_acdc (the AC/DC OPF)
 
 
 def case_data(name):

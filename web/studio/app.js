@@ -284,6 +284,8 @@ const MOD_SIGS={CHB:p=>{const f=p.impl!=='blocks',N=Math.max(1,Math.min(64,Math.
   if(p.law==='match'||p.dcc==='on')L.push(['/IDC','αναφορά ρεύματος της πηγής DC i*_dc (pu του S/V_dc)'],['/PSW','v_dc·i_x − P: απώλειες στην αναφορά DC (pu)']);if(p.plim==='on')L.push(['/PRL','P_ref μετά το όριο ρεύματος (24) (pu)']);if(p.plim==='on'&&parseFloat(p.fpl)>0)L.push(['/IGF','|i| μετά το φίλτρο της (24) (pu)']);
   if(p.inner==='cascade')L.push(['/OD','o_d ρεύμα εξόδου (pu)'],['/OQ','o_q (pu)'],['/ISD','i_d,ref μετά το όριο (pu)'],['/ISQ','i_q,ref μετά το όριο (pu)']);else L.push(['/IRD','i_d,ref (pu)'],['/IRQ','i_q,ref (pu)']);
   return L;},
+ PMU3:p=>[['/SV','|V⁺| (RMS φάσης)'],['/TV','∠V⁺ (° ως προς '+(p.ref==='sin'?'sin':'cos')+')'],['/SI','|I⁺| (RMS)'],['/TI','∠I⁺ (° ως προς '+(p.ref==='sin'?'sin':'cos')+')'],['/PP','P⁺ (W)'],['/QQ','Q⁺ (var)']],   // 4.21
+ DCDC:()=>[['/PS','ισχύς από το a στο b (W)'],['/IA','ρεύμα i_a της πλευράς a'],['/IBU','ρεύμα i_b προς την πλευρά b'],['/VA','τάση v_a'],['/VB','τάση v_b'],['/IR','αναφορά i_ref']],   // 4.21
  VSC2:p=>[['/Ia','i_a του μετατροπέα'],['/Ib','i_b'],['/Ic','i_c'],['/Oa','o_a στους ακροδέκτες'],['/Pa','v_a στους ακροδέκτες'],['/VD','v_dc'],['/Ma','m_a (μετά τον κορεσμό)']],
  SSSC:p=>[['/VR','αναφορά τάσης v_ref'],['/VQ','εντολή V_q (θετική: χωρητική)'],['/XM','μετρημένη αντίδραση X'],['/DTH','διόρθωση γωνίας Δθ (rad)'],['/VAF','μέση τάση πυκνωτών (φιλτραρισμένη)'],['/PLI/X','γωνία του ρεύματος θ_i − 90°'],['/PLI/X:amp','πλάτος του ρεύματος Î']],
  // 4.17 (§50): the central controller of the three-phase m-SSSC
@@ -2634,7 +2636,16 @@ const STUDY={key:null,busy:null,r:null,error:null,last:null,view:null,file:null,
 // the changes are data of the request: the engine studies a copy of the network with the changes, and the picture keeps its places.
 const studyNet=m=>STUDY.file?STUDY.file.name:m.net;
 function studyQ(m){const id=STUDY.file?'file:'+STUDY.file.name:'case:'+m.net;if(STUDY.netId!==id){STUDY.netId=id;STUDY.edits=[];}
- const q=STUDY.file?{...(STUDY.file.feeder?{feeder:STUDY.file.feeder}:{network:STUDY.file.network}),study:m.study,options:m.options||{}}:{case:m.net,study:m.study,options:m.options||{}};if(STUDY.edits.length)q.edits=STUDY.edits;return q;}
+ const q=STUDY.file?{...(STUDY.file.feeder?{feeder:STUDY.file.feeder}:{network:STUDY.file.network}),study:m.study,options:m.options||{}}:{case:m.net,study:m.study,options:m.options||{}};if(STUDY.edits.length)q.edits=STUDY.edits;
+ if(m.emt)q.options=m.emt.kind==='spectrum'?{...q.options,spectra:emtSpectra(m.emt)}:{...q.options,emt:emtReadings(m.emt)};      // 4.21: what the run gives now (pcl.se.from_emt, pcl.harmonic.spectrum_from)
+ return q;}
+// 4.21: the Fourier blocks of the running simulation (magnitude, phase on sin from t = 0) as the spectrum of the loads that pcl.harmonic takes
+function emtSpectra(e){const g=k=>S.sim?S.sim.now(k):NaN,n=x=>Number.isFinite(x)?x:null,four={};
+ for(const [h,id] of Object.entries(e.orders))four[h]=[n(g('Y:'+id)),n(g('Y:'+id+':ph'))];return Object.fromEntries(e.loads.map(l=>[l,{fourier:four,ref:'sin'}]));}
+// 4.21: the points of measurement of the running simulation (PMU3: the phasors of positive sequence, P⁺, Q⁺), as pcl.se.from_emt takes them
+function emtReadings(e){const g=k=>S.sim?S.sim.now(k):NaN,n=x=>Number.isFinite(x)?x:null;
+ return {plan:e.plan,ref:e.ref||'cos',...(e.bad&&e.bad!=='none'?{bad:e.bad}:{}),points:e.points.map(p=>({branch:p.branch,end:p.end,V:n(g('Y:'+p.id+'/SV')),thV:n(g('Y:'+p.id+'/TV')),
+  I:n(g('Y:'+p.id+'/SI')),thI:n(g('Y:'+p.id+'/TI')),P:n(g('Y:'+p.id+'/PP')),Q:n(g('Y:'+p.id+'/QQ'))}))};}
 const studyKey=m=>{studyQ(m);return JSON.stringify([m,STUDY.netId,STUDY.edits]);};
 async function studyOpen(f){const m=S.tutMeta?.study;if(!f||!m||STUDY.busy)return;STUDY.busy='open';STUDY.openError=null;renderTheory();
  try{if(f.size>60e6)throw Error('Το αρχείο είναι πολύ μεγάλο.');const r=await api('network_open',{name:f.name,text:await f.text()});
@@ -2643,27 +2654,32 @@ async function studyOpen(f){const m=S.tutMeta?.study;if(!f||!m||STUDY.busy)retur
  STUDY.busy=null;renderTheory();}
 const STUDY_LAB={pf:'Ροή φορτίου',n1:'N−1 σε AC',n1dc:'N−1, σάρωση DC',opf:'Βέλτιστη ροή φορτίου (AC)',dcopf:'Βέλτιστη ροή φορτίου (DC)',scopf:'Βέλτιστη ροή φορτίου με ασφάλεια N−1 (DC)',cpf:'Συνεχιζόμενη ροή φορτίου (καμπύλη P–V)',se:'Εκτίμηση κατάστασης',harmonic:'Αρμονική ροή φορτίου',unbalanced:'Ασύμμετρη (τριφασική) ροή φορτίου',acdc:'Ροή φορτίου AC/DC'};
 const UNB_REG={given:'δοσμένες λήψεις',control:'λήψεις από τον έλεγχο',neutral:'λήψεις στο μηδέν'};
-const SE_KIND={V:'τάση',P:'έγχυση P',Q:'έγχυση Q',Pf:'ροή P',Qf:'ροή Q',Pt:'ροή P (άκρο «προς»)',Qt:'ροή Q (άκρο «προς»)'},SE_PLAN={scada:'τάση στις γεννήτριες, εγχύσεις, ροές στο ένα άκρο',all:'παντού',flows:'μόνο ροές',tree:'ροές ενός δέντρου'},
- SE_BAD={flow:'μία ροή 20σ πάνω',injection:'μία έγχυση 20σ κάτω',voltage:'μία τάση 20σ πάνω',two:'ροή και έγχυση μαζί'};
+const SE_KIND={V:'τάση',P:'έγχυση P',Q:'έγχυση Q',Pf:'ροή P',Qf:'ροή Q',Pt:'ροή P (άκρο «προς»)',Qt:'ροή Q (άκρο «προς»)',Vr:'φασιθέτης τάσης (Re)',Vi:'φασιθέτης τάσης (Im)',
+  Ifr:'φασιθέτης ρεύματος (Re)',Ifi:'φασιθέτης ρεύματος (Im)',Itr:'φασιθέτης ρεύματος, «προς» (Re)',Iti:'φασιθέτης ρεύματος, «προς» (Im)',If:'|I|',It:'|I| (άκρο «προς»)'},
+ SE_PLAN={scada:'τάση στις γεννήτριες, εγχύσεις, ροές στο ένα άκρο',all:'παντού',flows:'μόνο ροές',tree:'ροές ενός δέντρου','emt-pmu':'από το EMT, φασιθέτες (PMU)','emt-scada':'από το EMT, |V|, P, Q',
+  'emt-mixed':'από το EMT, |V|, P, Q και ένας φασιθέτης τάσης','emt-current':'από το EMT, |V|, P, |I| και φασιθέτες τάσης'},
+ SE_BAD={flow:'μία ροή 20σ πάνω',injection:'μία έγχυση 20σ κάτω',voltage:'μία τάση 20σ πάνω',two:'ροή και έγχυση μαζί',phasor:'ένας φασιθέτης τάσης 20σ πάνω',current:'ένα |I| 20σ πάνω'};
 const STUDY_METHOD={nr:'αραιός Newton–Raphson',nr_dense:'πυκνός Newton–Raphson',nr_ci:'Newton με εγχύσεις ρεύματος',fdxb:'fast-decoupled XB',fdbx:'fast-decoupled BX',sweep:'εμπρός–πίσω σάρωση',sweepc:'εμπρός–πίσω σάρωση με αντιστάθμιση',gs:'Gauss–Seidel',dc:'DC (γραμμική προσέγγιση)'};
 async function studyAct(what){const m=S.tutMeta?.study;if(!m||STUDY.busy)return;
  if(what==='open'){const i=$('#study-open');i.value='';i.click();return;}
  if(what==='close'){STUDY.file=null;STUDY.error=null;STUDY.openError=null;$('#netview').hidden=true;NV.v?.destroy();NV.v=null;renderTheory();return;}
  if(what==='noedits'){STUDY.edits=[];STUDY.error=null;if(!$('#netview').hidden)what='view';else{renderTheory();return;}}
+ if(m.emt&&!(S.sim&&S.sim.t>=2/(m.emt.f||50)-1e-9)&&what!=='view'){STUDY.error='Τρέξε πρώτα την προσομοίωση για δύο περιόδους τουλάχιστον: τα σημεία μέτρησης δίνουν τους φασιθέτες στο τέλος κάθε περιόδου, και η μελέτη παίρνει ό,τι δίνουν εκείνη τη στιγμή.';renderTheory();return;}
  const key=studyKey(m);if(STUDY.key!==key){STUDY.r=null;STUDY.last=null;STUDY.view=null;}STUDY.key=key;
  // 4.19.4: «Διάγραμμα του δικτύου» shows the network that was studied; if the study has not run yet, it runs first
  if(what==='view'&&STUDY.view){netViewOpen();return;}
  STUDY.busy=what;STUDY.error=null;renderTheory();
  try{const q=studyQ(m);
+  // 4.21: m.layer, the layer the picture opens with
   if(what==='report'){const r=await api('network_report',q);STUDY.r={summary:r.summary,study:m.study};STUDY.last=r.name;download(r.name,r.html,'text/html');}
-  else{const r=await api('network_study',{...q,view:'only'});STUDY.r={summary:r.summary,study:r.study,network:r.network};STUDY.view=r.view?{view:r.view,layers:r.layers,layer:r.layer,q,edit:r.edit,done:r.network.edits||[],name:studyNet(m),id:STUDY.netId}:null;}}
+  else{const r=await api('network_study',{...q,view:'only',...(m.layer?{layer:m.layer}:{})});STUDY.r={summary:r.summary,study:r.study,network:r.network};STUDY.view=r.view?{view:r.view,layers:r.layers,layer:r.layer,q,edit:r.edit,done:r.network.edits||[],name:studyNet(m),id:STUDY.netId}:null;}}
  catch(e){STUDY.r=null;STUDY.error=/fetch|NetworkError|Load failed/i.test(e.message)?'Η μελέτη τρέχει στο engine: ξεκίνα τον τοπικό server (python run.py) και δοκίμασε ξανά.':e.message;}
  STUDY.busy=null;if(STUDY.key===key){renderTheory();if(what==='view'&&STUDY.view)netViewOpen();else if(STUDY.view&&!$('#netview').hidden)netViewOpen();}}
 // the window of the viewer (netview.js): the layers the study can feed, names, a bus by its name, the picture as SVG or DXF
 const NV={v:null,id:null,sel:null};
 function netViewOpen(){const d=STUDY.view;if(!d||!window.NetView)return;const box=$('#netview');box.hidden=false;
  const keep=NV.v&&NV.id===d.id?{tr:NV.v.state.fitted?null:NV.v.state.tr,layer:NV.v.state.layer,names:NV.v.state.names}:null;NV.v?.destroy();NV.id=d.id;
- $('#nv-title').textContent=`Δίκτυο της μελέτης: ${d.name} · ${STUDY_LAB[d.q.study]||d.q.study} · ${d.view.buses.length} ζυγοί, ${d.view.branches.length} κλάδοι${d.view.dc?`, ${d.view.dc.buses.length} ζυγοί DC, ${d.view.dc.lines.length} γραμμές DC, ${d.view.dc.stations.length} σταθμοί μετατροπέα`:''}`;
+ $('#nv-title').textContent=`Δίκτυο της μελέτης: ${d.name} · ${STUDY_LAB[d.q.study]||d.q.study} · ${d.view.buses.length} ζυγοί, ${d.view.branches.length} κλάδοι${d.view.dc?(()=>{const dd=d.view.dc.lines.filter(e=>e.kind==='dcdc').length;return `, ${d.view.dc.buses.length} ζυγοί DC, ${d.view.dc.lines.length-dd} γραμμές DC${dd?`, ${dd} ${dd===1?'μετατροπέας':'μετατροπείς'} DC/DC`:''}, ${d.view.dc.stations.length} σταθμοί μετατροπέα`;})():''}`;      // 4.21: the DC/DC converters apart
  const v=NV.v=NetView.create($('#nv-canvas'),d,{tr:keep?.tr,layer:keep?.layer,pick:q=>nvEdit(q),info:t=>{$('#nv-info').textContent=t||'Σύρε για μετακίνηση, ροδέλα για μεγέθυνση, δείξε έναν ζυγό ή έναν κλάδο για τα μεγέθη του, κάνε κλικ για να τον αλλάξεις.';}});
  const legend=()=>{const L=v.legend();$('#nv-legend').innerHTML=`<b>${esc(L.title)}</b>`+L.items.map(([c,t])=>`<i style="background:${esc(c)}"></i>${esc(t)}`).join('');};
  $('#nv-layer').innerHTML=v.layers().map(L=>`<option value="${esc(L.layer)}" ${L.layer===v.state.layer?'selected':''}>${esc(L.title)}</option>`).join('');$('#nv-names').value=keep?.names||'auto';if(keep)v.setNames(keep.names);else $('#nv-find').value='';legend();
@@ -2708,6 +2724,18 @@ function nvApply(q){const box=$('#nv-edit'),E=STUDY.view.edit,num=el=>{if(!el)re
 function mtdcTheory(){const m=S.tutMeta?.study,q=m&&STUDY.key===studyKey(m)?STUDY.r?.summary:null,y=k=>S.sim?S.sim.now(k):NaN;
  return studyTheory()+`<div class="small" id="mtdc-emt"><b>EMT τώρα</b> (t = ${fmt(S.sim?S.sim.t:0,4)} s)${q?' και ροή φορτίου AC/DC μετά το συμβάν':' · «▶ Τρέξε τη μελέτη» για τη ροή φορτίου'}:<ul class="eqs">${[1,2,3,4,5].map(k=>{const d=q?.dc?.find(z=>z.bus===String(k));
   return `<li class="mtdc-row">Σταθμός ${k}: U = <b>${fmt(y('Y:VM'+k)/1e3,7)}</b> kV, P = <b>${fmt(y('Y:PW'+k),6)}</b> MW${d?` · ροή φορτίου ${fmt(d.U_kV,7)} kV, ${fmt(d.P_MW,6)} MW`:''}</li>`;}).join('')}</ul></div>`;}
+// 4.21: the DC/DC converter of Example 30.3 (tutorial dcdc_ex303): the steady states of the DC load flow (pcl.dcgrid with the
+// DC/DC converter as one element) in closed form, before and after the event, beside the EMT now. Side a: 370 kV behind 1 Ω,
+// side b: E_b (400, or 395 kV after the event) behind 2 Ω; the power P from a to b: P = −v_b·(E_b − v_b)/2 and v_a·(v_a − 370 kV)/1 = −P.
+function dcdcSteady(ctl,Eb){const P0=-595.5e6,U0=397e3,R=2e5;let vb=U0;
+ if(ctl==='P')vb=(Eb+Math.sqrt(Eb*Eb+8*P0))/2;                                                     // v_b·(E_b − v_b)/2 = −P0
+ else if(ctl==='droop'){const f=v=>v*(Eb-v)/2+P0-R*(v-U0);let lo=Eb/2,hi=Eb;                       // −P = −P0 + R·(v_b − U0)
+  for(let k=0;k<200;k++){const m=(lo+hi)/2;if(f(lo)*f(m)<=0)hi=m;else lo=m;}vb=(lo+hi)/2;}
+ const P=-vb*(Eb-vb)/2,va=(370e3+Math.sqrt(370e3*370e3-4*P))/2;return {P,va,vb};}
+function dcdcTheory(){const m=S.tutMeta?.dcdc||{ctl:'V',drop:true,te:1},y=k=>S.sim?S.sim.now(k):NaN,b=dcdcSteady(m.ctl,400e3),a=m.drop?dcdcSteady(m.ctl,395e3):null;
+ const row=(t,q)=>`<li class="dcdc-row">${t}: P = <b>${fmt(q.P/1e6,6)}</b> MW, v_a = ${fmt(q.va/1e3,7)} kV, v_b = ${fmt(q.vb/1e3,7)} kV</li>`;
+ return `<div class="small" id="dcdc-emt"><b>Ροή φορτίου του δικτύου DC</b> (κλειστός τύπος· ο ίδιος με το pcl.dcgrid):<ul class="eqs">${row('Πριν από το συμβάν',b)}${a?row('Μετά το συμβάν (395 kV)',a):''}</ul>
+  <b>EMT τώρα</b> (t = ${fmt(S.sim?S.sim.t:0,4)} s): P = <b>${fmt(y('Y:PW'),6)}</b> MW, v_a = <b>${fmt(y('Y:UA'),7)}</b> kV, v_b = <b>${fmt(y('Y:UB'),7)}</b> kV</div>`;}
 // 4.20.1: DCS2 of the CIGRE B4 in EMT (tutorial b4dcs2) beside the AC/DC load flow of the case b4 after the same event
 function b4Theory(){const m=S.tutMeta?.study,b=S.tutMeta?.b4,q=m&&STUDY.key===studyKey(m)?STUDY.r?.summary:null,y=k=>S.sim?S.sim.now(k):NaN,cv=q?.stations||[];
  const st={B2:'Cm-B2',B3:'Cm-B3',F1:'Cm-F1',E1:'Cm-E1'};
@@ -2715,7 +2743,7 @@ function b4Theory(){const m=S.tutMeta?.study,b=S.tutMeta?.b4,q=m&&STUDY.key===st
   return `<li class="b4-row">Ζυγός Bm-${k}: U = <b>${fmt(y('Y:VM'+k)/1e3,7)}</b> kV${st[k]?`, ${st[k]} P = <b>${fmt(y('Y:PW'+k),5)}</b> MW`:''}${d?` · ροή φορτίου ${fmt(d.U_kV,7)} kV${c&&c.Pdc_MW!==undefined?`, ${fmt(c.Pdc_MW,5)} MW`:''}`:''}</li>`;}).join('')}
   <li class="b4-row">Cd-E1 (από το DCS3): P = <b>${fmt(y('Y:PWCD'),5)}</b> MW</li></ul><p class="muted">Η ροή φορτίου του B4 δεν έχει απώλειες σταθμών: οι υπεράκτιοι σταθμοί δίνουν στο EMT λίγο λιγότερα από το αιολικό και λίγο περισσότερα στο φορτίο, και ο σταθμός της τάσης τα παίρνει.</p></div>`;}
 function studyTheory(){const m=S.tutMeta?.study;if(!m)return '';const key=studyKey(m),st=STUDY.key===key?STUDY:{busy:STUDY.busy==='open'?'open':null},F=STUDY.file,q=st.r?.summary,f=(x,d=4)=>x===null||x===undefined?'—':fmt(x,d);
- let h=`<div class="tm"><span class="badge">${STUDY_LAB[m.study]||esc(m.study)}</span> δίκτυο <b>${esc(studyNet(m))}</b>${F?' (από αρχείο)':''}${m.options?.method?' · μέθοδος: '+esc(m.options.method==='auto'?'Αυτόματα':STUDY_METHOD[m.options.method]||m.options.method):''}${m.options?.flow_limits===false?' · χωρίς όρια ροής':''}${m.options?.start==='nn'?' · εκκίνηση: νευρωνικό':''}${m.options?.backend&&m.options.backend!=='auto'?' · παρτίδα σε '+(m.options.backend==='gpu'?'GPU*':'CPU'):''}${m.study==='cpf'?(m.options?.q_limits?' · με όρια αέργου':' · χωρίς όρια αέργου')+(m.options?.direction==='load'?' · μεγαλώνουν μόνο τα φορτία':''):''}${m.study==='se'?' · μετρήσεις: '+esc(SE_PLAN[m.options?.plan]||m.options?.plan||'')+(m.options?.bad?' · λανθασμένη: '+esc(SE_BAD[m.options.bad]||m.options.bad):' · χωρίς λανθασμένη'):''}${m.study==='harmonic'?(m.options?.pulse===6?' · σαν εξαπαλμικό':' · δωδεκαπαλμικό')+(m.options?.filters===false?' · χωρίς φίλτρα':' · με φίλτρα')+(m.options?.line_model==='pi'?' · γραμμές: π':' · γραμμές: κατανεμημένες')+' · φορτία: '+(m.options?.load_model==='none'?'χωρίς':'μοντέλο '+esc(m.options?.load_model||'C')):''}${m.study==='unbalanced'?' · ρυθμιστές: '+(UNB_REG[m.options?.regulators]||UNB_REG.given)+(m.options?.spread==='middle'?' · κατανεμημένο φορτίο στο μέσο του τμήματος':' · κατανεμημένο φορτίο: ακριβές ισοδύναμο'):''}</div>
+ let h=`<div class="tm"><span class="badge">${STUDY_LAB[m.study]||esc(m.study)}</span> δίκτυο <b>${esc(studyNet(m))}</b>${F?' (από αρχείο)':''}${m.options?.method?' · μέθοδος: '+esc(m.options.method==='auto'?'Αυτόματα':STUDY_METHOD[m.options.method]||m.options.method):''}${m.options?.flow_limits===false?' · χωρίς όρια ροής':''}${m.options?.start==='nn'?' · εκκίνηση: νευρωνικό':''}${m.options?.backend&&m.options.backend!=='auto'?' · παρτίδα σε '+(m.options.backend==='gpu'?'GPU*':'CPU'):''}${m.study==='cpf'?(m.options?.q_limits?' · με όρια αέργου':' · χωρίς όρια αέργου')+(m.options?.direction==='load'?' · μεγαλώνουν μόνο τα φορτία':''):''}${m.study==='se'&&m.emt?' · μετρήσεις: '+esc(SE_PLAN['emt-'+m.emt.plan]||m.emt.plan)+' τη στιγμή που πατάς «Τρέξε»'+(m.emt.bad&&m.emt.bad!=='none'?' · λανθασμένη: '+esc(SE_BAD[m.emt.bad]||m.emt.bad):' · χωρίς λανθασμένη'):''}${m.study==='se'&&!m.emt?' · μετρήσεις: '+esc(SE_PLAN[m.options?.plan]||m.options?.plan||'')+(m.options?.bad?' · λανθασμένη: '+esc(SE_BAD[m.options.bad]||m.options.bad):' · χωρίς λανθασμένη'):''}${m.study==='harmonic'?(m.emt?' · φάσμα των γεφυρών HVDC από το EMT τη στιγμή που πατάς «Τρέξε»':'')+(m.options?.pulse===6?' · σαν εξαπαλμικό':' · δωδεκαπαλμικό')+(m.options?.filters===false?' · χωρίς φίλτρα':' · με φίλτρα')+(m.options?.line_model==='pi'?' · γραμμές: π':' · γραμμές: κατανεμημένες')+' · φορτία: '+(m.options?.load_model==='none'?'χωρίς':'μοντέλο '+esc(m.options?.load_model||'C')):''}${m.study==='unbalanced'?' · ρυθμιστές: '+(UNB_REG[m.options?.regulators]||UNB_REG.given)+(m.options?.spread==='middle'?' · κατανεμημένο φορτίο στο μέσο του τμήματος':' · κατανεμημένο φορτίο: ακριβές ισοδύναμο'):''}</div>
   <p><button data-study="run" ${st.busy?'disabled':''}>▶ Τρέξε τη μελέτη</button> <button data-study="report" ${st.busy?'disabled':''} title="Ένα αρχείο HTML με γραφήματα, πίνακες και τα δεδομένα της μελέτης, από το αντικείμενο αναφοράς του engine (pcl.report)">⬇ Εξαγωγή αναφοράς</button>
   <button data-study="view" ${st.busy?'disabled':''} title="Το δίκτυο που μελετιέται ως μονογραμμικό διάγραμμα, με στρώσεις από το αποτέλεσμα της μελέτης (τάσεις, ροές, παραβιάσεις, N−1, τιμές κόμβων)· εξαγωγή σε SVG και σε DXF για CAD. Το σχέδιο από κάτω είναι πάντα το δίκτυο των 9 ζυγών σε EMT">🗺 Διάγραμμα του δικτύου</button>
   <span class="muted small" id="study-status">${st.busy?(st.busy==='report'?'Γράφεται η αναφορά…':st.busy==='open'?'Διαβάζεται το αρχείο…':'Τρέχει στο engine…'):st.last&&st.r?'':''}</span></p>
@@ -2750,12 +2778,16 @@ function studyTheory(){const m=S.tutMeta?.study;if(!m)return '';const key=studyK
    <li id="study-se-chi">Έλεγχος χ² (${f(100*q.confidence,3)} %): στην πρώτη εκτίμηση J = <b>${f(q.J_first,4)}</b> απέναντι σε κατώφλι ${f(q.chi2_first,4)} (${q.dof_first} βαθμοί ελευθερίας): ${q.suspect_first?'<b class="bad">υπάρχει λανθασμένη μέτρηση</b>':'κανένα σημάδι λανθασμένης μέτρησης'}${q.n_bad?` · στην τελική J = <b>${f(q.J,4)}</b> (κατώφλι ${f(q.chi2,4)})`:''}</li>
    <li id="study-se-bad">${q.n_bad?`Βγήκαν με τον έλεγχο του μεγαλύτερου κανονικοποιημένου υπολοίπου (κατώφλι ${f(q.threshold,2)}): `+q.bad.map(b=>`<b>${SE_KIND[b.type]||esc(b.type)} στο ${esc(b.at)}</b> (${f(b.rN,3)}· εκτίμηση σφάλματος ${f(b.sigmas,3)}σ${b.planted?'':pl||!q.plan?'· <span class="bad">δεν ήταν από τις λανθασμένες</span>':'· <span class="bad">σωστή μέτρηση που πέρασε το κατώφλι</span>'})`).join(' · ')+(q.n_bad>q.bad.length?' …':''):`Καμία μέτρηση πάνω από το κατώφλι ${f(q.threshold,2)}: το μεγαλύτερο κανονικοποιημένο υπόλοιπο είναι <b>${f(q.largest,3)}</b>`}${pl?` · από ${q.planted===1?'τη λανθασμένη που μπήκε':'τις '+q.planted+' λανθασμένες που μπήκαν'} ${q.found===q.planted?(q.planted===1?'βρέθηκε':'βρέθηκαν όλες'):`<b class="bad">${q.found?'βρέθηκαν '+q.found:'δεν βρέθηκε καμία'}</b>`}`:''}</li>
    <li>Μένει μεγαλύτερο κανονικοποιημένο υπόλοιπο ${f(q.largest,3)} · κρίσιμες μετρήσεις (το σφάλμα τους δεν φαίνεται): <b>${q.critical}</b>${q.message?' · '+esc(q.message):''}</li>
-   ${e?`<li id="study-se-err">Απέναντι στη ροή φορτίου από την οποία βγήκαν οι μετρήσεις: |V| ως <b>${f(e.V_max,3)} pu</b> (ζυγός ${esc(e.V_bus)}), γωνία ως <b>${f(e.angle_max,3)}°</b> (ζυγός ${esc(e.angle_bus)})${q.n_bad?` · πριν βγουν οι λανθασμένες: |V| ως ${f(e.first_V_max,3)} pu`:''}</li>`:''}`;}
+   ${e?`<li id="study-se-err">Απέναντι στη ροή φορτίου ${q.tve?'από την οποία ξεκίνησε το EMT':'από την οποία βγήκαν οι μετρήσεις'}: |V| ως <b>${f(e.V_max,3)} pu</b> (ζυγός ${esc(e.V_bus)}), γωνία ως <b>${f(e.angle_max,3)}°</b> (ζυγός ${esc(e.angle_bus)})${q.n_bad?` · πριν βγουν οι λανθασμένες: |V| ως ${f(e.first_V_max,3)} pu`:''}</li>`:''}
+   ${q.absolute!==undefined?`<li id="study-se-pmu">${q.absolute?'Γωνίες μετρημένες (φασιθέτης τάσης στον κοινό χρόνο αναφοράς): κανένας ζυγός δεν είναι αναφορά, '+q.n+' άγνωστοι':'Χωρίς φασιθέτη τάσης: αναφορά ο ζυγός ταλάντωσης, '+q.n+' άγνωστοι'}${q.start==='pmu'?' · αρχή από τους φασιθέτες τάσης (με μέτρα |I|)':q.start==='staged'?' · αρχή από την εκτίμηση χωρίς τα |I|':''}</li>`:''}
+   ${q.tve?`<li id="study-se-tve">TVE των φασιθετών του EMT απέναντι στη ροή φορτίου: τάση ως <b>${f(q.tve.V,3)}</b> (ζυγός ${esc(q.tve.V_at)}), ρεύμα ως <b>${f(q.tve.I,3)}</b> (${esc(q.tve.I_at)})</li>`:''}`;}
   // 4.19.5: the harmonic load flow (pcl.harmonic): the distortion against the limits, the spectrum at the bus of the scan, the scan itself
   else if(st.r.study==='harmonic'){
    if(!q.converged)h+=`<li id="study-harm"><b class="bad">Η αρμονική ροή φορτίου δεν έγινε</b>: ${esc(q.message||'')}</li>`;
    else{const w=q.worst,a=q.at,C=q.scan,ord=q.orders,pc=x=>f(x,3)+' %';
-    h+=`<li id="study-harm">Μεγαλύτερη παραμόρφωση τάσης: ζυγός <b>${esc(w.bus)}</b> (${f(w.kV,4)} kV), <b>THD = ${pc(w.THD)}</b> με όριο ${f(w.limit_thd,2)} % · ${q.sources.length} ${q.sources.length===1?'πηγή':'πηγές'}, τάξεις ${ord[0]}η ως ${ord[ord.length-1]}η · ${f(q.time_ms,3)} ms</li>
+    h+=`<li id="study-harm">Μεγαλύτερη παραμόρφωση τάσης: ζυγός <b>${esc(w.bus)}</b> (${f(w.kV,4)} kV), <b>THD = ${pc(w.THD)}</b> με όριο ${f(w.limit_thd,2)} % · ${q.sources.length} ${q.sources.length===1?'πηγή':'πηγές'}, τάξεις ${ord[0]}η ως ${ord[ord.length-1]}η · ${f(q.time_ms,3)} ms</li>`;
+    {const e=q.sources.find(s=>s.spec);if(e)h+=`<li id="study-harm-emt">Φάσμα από το EMT (λόγος προς τη θεμελιώδη ∠ γωνία στο συνημίτονο της μελέτης): ${Object.entries(e.spec).filter(([k])=>k!=='1').map(([k,v])=>k+'η '+f(v[0],3)+'∠'+f(v[1],3)+'°').join(' · ')}</li>`;}
+    h+=`
     <li id="study-harm-over">${q.over?`<b class="bad">Πάνω από το όριο του IEEE 519: ${q.over} από ${q.buses} ζυγούς</b> (${q.over_buses.map(esc).join(', ')}${q.over>q.over_buses.length?' …':''})`:`Κανένας από τους ${q.buses} ζυγούς δεν περνά το όριο του IEEE 519 για την τάση του`}</li>
     ${a?`<li id="study-harm-at">Ζυγός <b>${esc(a.bus)}</b> (${f(a.kV,4)} kV): THD <b>${pc(a.THD)}</b> με όριο ${f(a.limit_thd,2)} % · μεγαλύτερη η <b>${a.worst}η</b> (${pc(a.worst_pct)}) · ${ord.filter(o=>o<=13).map(o=>`${o}η ${f(a.Vh[o],2)} %`).join(' · ')}</li>`:''}
     ${C?`<li id="study-harm-res">Παράλληλοι συντονισμοί όπως φαίνονται από τον ζυγό ${esc(C.bus)}: ${C.peaks.length?C.peaks.map(p=>`τάξη <b>${f(p[0],4)}</b> (${f(p[1],3)} pu)`).join(' · '):'κανένας ως την τάξη '+f(C.h[C.h.length-1],3)}</li>`:''}
@@ -2768,11 +2800,25 @@ function studyTheory(){const m=S.tutMeta?.study;if(!m)return '';const key=studyK
   // 4.19.5: the three-phase load flow of a feeder (pcl.unbalanced): the voltage of every phase, the unbalance, the regulators, the
   // published results of the feeder, and the profile of the three phases along the buses
   // 4.20: the sequential AC/DC load flow (pcl.dcgrid): the iterations, the voltage and power of every DC bus, every station
+  else if(st.r.study==='acdc'&&q.mode==='opf'){      // 4.21: the optimal power flow AC/DC
+   h+=`<li id="study-acdc">${q.converged?'Βέλτιστο':'<b class="bad">Δεν λύθηκε</b> ('+esc(q.message||'')+')'} σε <b>${q.iterations}</b> επαναλήψεις · κόστος <b>${f(q.cost,7)}</b> ανά ώρα · περιορισμοί που δεσμεύουν: ${q.binding} · ${f(q.time_ms,3)} ms</li>
+    <li id="study-acdc-loss">Απώλειες: AC <b>${f(q.losses_MW,4)} MW</b> · γραμμές DC <b>${f(q.losses_dc_MW,4)} MW</b> · σταθμοί ${f(q.losses_conv_MW,4)} MW</li>
+    <li id="study-acdc-dc">Ζυγοί DC: ${q.dc.map(d=>`${esc(d.bus)} <b>${f(d.V,5)}</b> pu, οριακή τιμή ${f(d.lmp,5)}`).join(' · ')}</li>
+    ${q.stations.map(c=>`<li class="study-acdc-st">Σταθμός <b>${esc(c.name)}</b> (${esc(c.bus)} → ${esc(c.dc)}): P_s ${f(c.Ps_MW,5)} MW, Q_s ${f(c.Qs_Mvar,4)} Mvar, |U_c| ${f(c.Uc,4)} pu, I_c ${f(c.Ic_kA,4)} kA · απώλειες ${f(c.loss_MW,4)} MW</li>`).join('')}
+    <li id="study-acdc-gen">Πηγές: ${q.sources.map(g=>`${esc(g.name)} <b>${f(g.P_MW,5)}</b> MW`).join(' · ')}</li>`;}
+  else if(st.r.study==='acdc'&&q.mode==='n1'){        // 4.21: N−1 AC/DC
+   const KD={line:'γραμμή',branch:'κλάδος',transformer:'μετασχηματιστής',dc_line:'γραμμή DC',vsc:'σταθμός',dcdc:'μετατροπέας DC/DC'};
+   h+=`<li id="study-acdc">${q.outages} διαταραχές · λύθηκαν <b>${q.solved}</b>${q.failed.length?' · <b class="bad">χωρίς λύση: '+q.failed.map(esc).join(', ')+'</b>':''} · ${f(q.time_ms,3)} ms</li>
+    <li id="study-acdc-worst">Χειρότερη: <b>${esc(q.worst||'—')}</b>${q.worst_loading!=null?` (φόρτιση ${f(100*q.worst_loading,3)} % στο ${esc(q.worst_where||'')})`:''}${q.base_loading!=null?' · πριν: '+f(100*q.base_loading,3)+' %':''} · με υπερφόρτιση: ${q.overloads}${q.limits.length?' · σταθμοί σε όριο: '+q.limits.map(esc).join(', '):''}</li>
+    ${q.list.slice(0,12).map(o=>`<li class="study-acdc-out">Χωρίς ${KD[o.kind]||esc(o.kind)} <b>${esc(o.name)}</b>: ${o.converged?`φόρτιση ${o.loading==null?'—':f(100*o.loading,3)+' %'} · V_min ${f(o.Vmin,4)} pu${o.Vdc_min!=null?' · V_DC '+f(o.Vdc_min,4)+'–'+f(o.Vdc_max,4)+' pu':''}`:'<b class="bad">χωρίς λύση</b>'+(o.message?' ('+esc(o.message)+')':'')}</li>`).join('')}${q.list.length>12?'<li>…</li>':''}`;}
   else if(st.r.study==='acdc'){const CT={P:'ισχύς',V:'τάση DC',droop:'στατικότητα P–U',idroop:'στατικότητα I–U'};
    h+=`<li id="study-acdc">${q.converged?'Σύγκλιση':'<b class="bad">Δεν συνέκλινε</b>'} σε <b>${q.outer}</b> επαναλήψεις AC/DC · μέθοδος AC: ${esc(STUDY_METHOD[q.method]||q.method||'')} · ${f(q.time_ms,3)} ms</li>
     <li id="study-acdc-loss">Απώλειες: AC <b>${f(q.losses_MW,4)} MW</b> · γραμμές DC <b>${f(q.losses_dc_MW,4)} MW</b> · σταθμοί ${f(q.losses_conv_MW,4)} MW</li>
     <li id="study-acdc-dc">Ζυγοί DC: ${q.dc.map(d=>`${esc(d.bus)} <b>${f(d.U_kV,6)}</b> kV / ${f(d.P_MW,6)} MW`).join(' · ')}</li>
-    ${q.stations.map(c=>`<li class="study-acdc-st">Σταθμός <b>${esc(c.name)}</b> (${esc(c.bus)} → ${esc(c.dc)}, ${CT[c.control]||esc(c.control)}): P_s ${f(c.Ps_MW,5)} MW, Q_s ${f(c.Qs_Mvar,4)} Mvar προς το AC · P_dc <b>${f(c.Pdc_MW,6)} MW</b> προς το DC · απώλειες ${f(c.loss_MW,4)} MW</li>`).join('')}`;}
+    ${q.stations.map(c=>`<li class="study-acdc-st">Σταθμός <b>${esc(c.name)}</b> (${esc(c.bus)} → ${esc(c.dc)}, ${CT[c.control]||esc(c.control)}): P_s ${f(c.Ps_MW,5)} MW, Q_s ${f(c.Qs_Mvar,4)} Mvar προς το AC · P_dc <b>${f(c.Pdc_MW,6)} MW</b> προς το DC · απώλειες ${f(c.loss_MW,4)} MW</li>`).join('')}
+    ${(q.dcdc||[]).map(d=>`<li class="study-acdc-dd">Μετατροπέας DC/DC <b>${esc(d.name)}</b> (${esc(d.a)} → ${esc(d.b)}, ${CT[d.control]||esc(d.control)}): <b>${f(d.P_MW,5)} MW</b> · U_a ${f(d.Ua_kV,5)} kV, U_b ${f(d.Ub_kV,5)} kV${d.loading!=null?' · φόρτιση '+f(100*d.loading,3)+' %':''}</li>`).join('')}
+    ${(q.dispatchers||[]).map(d=>`<li class="study-acdc-disp">Κεντρικός ελεγκτής <b>${esc(d.name)}</b>: x = ${f(d.x_MW,5)} MW · μέση τάση ${f(d.V,5)} pu (αναφορά ${f(d.Vref,5)}) · ${Object.entries(d.members).map(([m,p])=>esc(m)+' '+f(p,5)+' MW').join(' · ')}</li>`).join('')}
+    ${q.limits?`<li id="study-acdc-lim">Όρια σταθμών (διάγραμμα P–Q, ρεύμα, τάση): ${q.limits.length?q.limits.map(c=>`<b>${esc(c.name)}</b> ${c.held==='Q'?'στο όριο αέργου':c.held==='P'?'με μειωμένη P':c.held==='V'?'χωρίς τη ρύθμιση της τάσης AC':''}${c.over?' <b class="bad">έξω από το διάγραμμα</b>':''}`).join(' · '):'κανένας σταθμός στο όριό του'}</li>`:''}`;}
   else if(st.r.study==='unbalanced'){
    if(!q.converged)h+=`<li id="study-unb"><b class="bad">Η ροή φορτίου δεν συνέκλινε</b>: ${esc(q.message||'')}</li>`;
    else{const P=q.published,inp=q.input,phs=Object.keys(inp.kW),pr=q.profile;
@@ -2844,6 +2890,7 @@ function formulaTheory(t){
  if(t.topology==='ieee9_emt')return ieee9Theory();
  if(t.topology==='pf_study'||t.topology==='opf_study'||t.topology==='cpf_study'||t.topology==='se_study'||t.topology==='harm_study'||t.topology==='unb_study')return studyTheory();
  if(t.topology==='mtdc5')return mtdcTheory();
+ if(t.topology==='dcdc_ex303')return dcdcTheory();
  if(t.topology==='b4dcs2')return b4Theory();
  if(t.topology==='sssc')return ssscTheory();
  if(t.topology==='ccsc')return ccscTheory();

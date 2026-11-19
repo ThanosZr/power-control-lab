@@ -278,7 +278,8 @@ class DCGrids(unittest.TestCase):
             dc = v['dc']
             el = lambda k: [e for e in net.elements if e['kind'] == k]     # noqa: E731
             self.assertEqual([b['id'] for b in dc['buses']], list(net.dc_buses), c)
-            self.assertEqual([e['name'] for e in dc['lines']], [e['name'] for e in el('dc_line')], c)
+            self.assertEqual([e['name'] for e in dc['lines']], [e['name'] for e in el('dc_line') + el('dcdc')], c)        # 4.21: a DC/DC as a DC link
+            self.assertEqual([e['name'] for e in dc['lines'] if e.get('kind') == 'dcdc'], [e['name'] for e in el('dcdc')], c)
             self.assertEqual([(q['name'], q['ac'], q['dc']) for q in dc['stations']], [(e['name'], e['bus'], e['dc']) for e in el('vsc')], c)
             pos = {**{b['id']: (b['x'], b['y']) for b in v['buses']}, **{b['id']: (b['x'], b['y']) for b in dc['buses']}}
             P = np.array(list(pos.values()))
@@ -318,7 +319,7 @@ class DCGrids(unittest.TestCase):
             self.assertEqual(L['dc_bus'], {b: x['V'] for b, x in res['dc']['buses'].items()}, c)
             self.assertEqual(L['unit_dc_bus'], 'pu', c)
             F = NV.values(v, res, 'flow')
-            self.assertEqual(F['dc_line'], {e['name']: e['Pa'] / 1e6 for e in res['dc']['lines']}, c)
+            self.assertEqual(F['dc_line'], {**{e['name']: e['Pa'] / 1e6 for e in res['dc']['lines']}, **{n: d['P'] / 1e6 for n, d in (res['dc'].get('dcdc') or {}).items()}}, c)
             self.assertEqual(F['dc_station'], {n: x['Pdc'] / 1e6 for n, x in res['converters'].items()}, c)
             B = NV.values(v, res, 'base')
             self.assertTrue(all(L['dc_line_color'][e['name']] == NV.GREY for e in dc['lines']), c)  # the voltages leave the DC lines grey
@@ -327,10 +328,11 @@ class DCGrids(unittest.TestCase):
                 self.assertEqual((len(pk['dc']['bus_c']), len(pk['dc']['line_c']), len(pk['dc']['station_c'])), (len(dc['buses']), len(dc['lines']), len(dc['stations'])), c)
                 self.assertLess(max(pk['dc']['bus_c'] + pk['dc']['line_c'] + pk['dc']['station_c']), len(pk['palette']), c)
             pk = [x for x in q['layers'] if x['layer'] == 'flow'][0]
-            self.assertEqual(pk['dc']['line_v'], [float(f"{e['Pa'] / 1e6:.6g}") for e in res['dc']['lines']], c)
+            self.assertEqual(pk['dc']['line_v'], [float(f"{e['Pa'] / 1e6:.6g}") for e in res['dc']['lines']]
+                             + [float(f"{d['P'] / 1e6:.6g}") for d in (res['dc'].get('dcdc') or {}).values()], c)
             self.assertIsNone(pk['dc']['bus_v'], c)
         B = NV.values(self.runs['b4']['view'], self.runs['b4']['result'], 'base')
-        self.assertEqual([t for _, t in B['legend']], ['400 kV', '±400 kV DC', '±200 kV DC', 'σταθμός μετατροπέα'])
+        self.assertEqual([t for _, t in B['legend']], ['400 kV', '±400 kV DC', '±200 kV DC', 'σταθμός μετατροπέα', 'μετατροπέας DC/DC'])
         self.assertEqual(len(set(B['dc_line_color'].values())), 2)                                # two DC voltages, two colours
 
     def test_svg_and_dxf_draw_the_dc_grid(self):
@@ -349,7 +351,11 @@ class DCGrids(unittest.TestCase):
         d = f['text'].split('\n')
         pairs = list(zip(d[0:-1:2], d[1:-1:2]))
         ent = [b for a, b in pairs if a == '0']
-        self.assertEqual(ent.count('LINE'), nl + 4 * nd + ns * 6)                                 # DC lines, squares, and each station: its link, a square and a diagonal
+        ndd = sum(e.get('kind') == 'dcdc' for e in v['dc']['lines'])
+        self.assertEqual(ndd, 2)
+        self.assertEqual(ent.count('LINE'), nl + 4 * nd + ns * 6 + ndd * 6)                       # DC lines, squares, each station: its link, a square and a diagonal; each DC/DC a square and two diagonals
+        self.assertEqual(sum(1 for e in it if e.tag == 'g' and e.get('class') == 'dcdc'), ndd)
+        self.assertIn('Μετατροπέας DC/DC Cd-E1: Bb-E1 → Bm-E1 · σταθερή ισχύς a → b · 300 MW', tips)
         layers = [b for (a, b), (c, _) in zip(pairs, pairs[1:] + [('', '')]) if a == '2' and c == '70' and b.isupper() and b not in ('LTYPE', 'LAYER')]
         self.assertTrue({'DC_BUSES', 'DC_BUS_NAMES', 'DC_LINES', 'STATIONS', 'V_PU', 'FLOW_MW'} <= set(layers))
         txt = [b for (a, b) in pairs if a == '1']
@@ -374,13 +380,13 @@ class DCGrids(unittest.TestCase):
             raise RuntimeError(out.stderr[-2000:])
         r = json.loads(out.stdout)['dc']['dc']
         nd, nl, ns = r['nd'], r['nl'], r['ns']
-        self.assertEqual((nd, nl, ns), (15, 15, 15))
+        self.assertEqual((nd, nl, ns), (15, 17, 11))                                             # 4.21: 15 DC lines and the two DC/DC converters; 11 stations
         self.assertEqual((r['busOk'], r['stOk'], r['ends'], r['inside']), (nd, ns, ns, nd))      # every DC bus and station at its place; all inside when fitted
         self.assertEqual(r['lineOk'] + r['lineOther'], nl)                                        # the middle of a DC line: the line, or something nearer
         self.assertGreaterEqual(r['lineOk'], nl - 2)
         a = r['all']['out']
         self.assertEqual((a['dcbuses'], a['dclines'], a['stations']), (nd, nl, ns))
-        self.assertEqual(r['all']['rects'], nd + ns)                                              # the DC buses and the stations as squares
+        self.assertEqual(r['all']['rects'], nd + ns + 2)                                          # the DC buses, the stations and (4.21) the two DC/DC converters as squares
         self.assertEqual((r['away']['out'].get('dcbuses'), r['away']['out'].get('dclines'), r['away']['out'].get('stations'), r['away']['rects']), (0, 0, 0, 0))
         self.assertGreater(r['close']['out']['values'], 0)                                        # close: the flows of the DC lines and stations
         self.assertEqual(r['closeOff']['texts'], 0)

@@ -370,6 +370,8 @@
     case 'F2':return ({lp:'LP',hp:'HP',bp:'BP',notch:'notch'}[p.kind]||'LP')+' · '+e(+p.f0,'Hz')+' · ζ '+fn(+p.zeta,{maximumFractionDigits:3});case 'RLIM':return '↑ '+e(+p.up,'/s')+(+p.dn!==+p.up?' · ↓ '+e(+p.dn,'/s'):'');
     case 'RT':return p.mode==='delay'?'z⁻¹':'ZOH';case 'EDGE':return ({rise:'↑',fall:'↓',both:'↕'}[p.edge]||'↑')+(+p.tw>0?' · '+e(+p.tw,'s'):'');
     case 'CLARKE':case 'ICLARKE':return p.inv==='pow'?'ισχύς':'πλάτος';case 'PARK':case 'IPARK':return '';case 'PLL':return e(+p.f0,'Hz')+' · BW '+e(+p.bw,'Hz');
+    case 'PMU3':return 'PMU · '+e(+p.f,'Hz')+(+p.np>1?' · '+(+p.np)+' περίοδοι':'')+(p.ref==='sin'?' · sin':'');      // 4.21
+    case 'DCDC':return p.ctl==='P'?'P '+e(+p.P,'W')+' (a → b)':(p.ctl==='droop'?'στατικότητα · U₀ ':'V_b ')+e(+p.Vref,'V');      // 4.21
     case 'DCM':return 'ψ '+fn(+p.psi)+' · J '+fn(+p.J)+(p.load==='sig'?' · τ_L σήμα':'');
     case 'CLK':return e(+p.f,'Hz')+' · '+fn(+p.duty);case 'RAMP':return e(+p.f,'Hz')+' · '+e(+p.lo)+'…'+e(+p.hi);
     case 'PWM':return e(+p.fs,'Hz')+(+p.phase&&p.mode!=='spwm'?' · φ '+fn(+p.phase,{maximumFractionDigits:2})+'°':'')+(+p.dt>0?' · t_d '+e(+p.dt,'s'):'')+' · '+(p.mode==='fixed'?'D = '+fn(+p.D):p.mode==='pi'?'PI':p.mode==='spwm'?'SPWM m = '+p.m:p.mode==='ext'?'D από σήμα':'2 έξοδοι');default:return '';}}

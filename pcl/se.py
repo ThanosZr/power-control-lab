@@ -11,6 +11,13 @@ errors, and which of the measurements are wrong.
 - Bad data (ch. 5): the χ² test on the objective function, the normalized residuals r_i/√Ω_ii with Ω = R − H·Σ_x·Hᵀ, and the
   largest normalized residual test: the measurement with the largest one above the threshold is taken out and the estimate is
   made again. A measurement with Ω_ii = 0 is critical: its error cannot be seen.
+- 4.21 (our own formulation, ROADMAP §87): phasor measurements (PMU) as the real and imaginary parts of a bus voltage and of the
+  current into a branch at either end, all on one common time reference; with a voltage phasor the angles are measured, so
+  every angle is a state and no bus is the reference, and the estimate starts from the voltage phasors. Current magnitudes |I|
+  at either end of a branch; without voltage phasors a set with |I| starts from the estimate without them, since at a flat
+  start the current of a branch without charging is zero and its magnitude has no direction. The measurements from an EMT run
+  (from_emt): the synchrophasors of positive sequence at points of the network (as IEC/IEEE 60255-118-1 defines them), in SI,
+  made per unit; their total vector error (TVE, (9) of the standard).
 
 Everything is in per unit on the base of the network. Only NumPy and SciPy."""
 import math
@@ -22,13 +29,23 @@ import scipy.sparse.linalg as spla
 
 from . import powerflow as PF
 
-TYPES = ('V', 'P', 'Q', 'Pf', 'Qf', 'Pt', 'Qt')
+TYPES = ('V', 'P', 'Q', 'Pf', 'Qf', 'Pt', 'Qt', 'Vr', 'Vi', 'Ifr', 'Ifi', 'Itr', 'Iti', 'If', 'It')
+BASIC = TYPES[:7]                                          # the types of 4.19.5: without them nothing of 4.21 is computed
+PHASOR = ('Vr', 'Vi', 'Ifr', 'Ifi', 'Itr', 'Iti')         # 4.21: PMU, the real and imaginary parts on the common time reference
 TXT = {'V': 'τάση ζυγού', 'P': 'έγχυση P', 'Q': 'έγχυση Q', 'Pf': 'ροή P (άκρο «από»)', 'Qf': 'ροή Q (άκρο «από»)',
-       'Pt': 'ροή P (άκρο «προς»)', 'Qt': 'ροή Q (άκρο «προς»)'}
-SIGMA = {'V': 0.004, 'flow': 0.008, 'inj': 0.010}          # pu: the standard deviations of the examples of the book
+       'Pt': 'ροή P (άκρο «προς»)', 'Qt': 'ροή Q (άκρο «προς»)', 'Vr': 'φασιθέτης τάσης (πραγματικό)', 'Vi': 'φασιθέτης τάσης (φανταστικό)',
+       'Ifr': 'φασιθέτης ρεύματος, άκρο «από» (πραγματικό)', 'Ifi': 'φασιθέτης ρεύματος, άκρο «από» (φανταστικό)',
+       'Itr': 'φασιθέτης ρεύματος, άκρο «προς» (πραγματικό)', 'Iti': 'φασιθέτης ρεύματος, άκρο «προς» (φανταστικό)',
+       'If': '|I| κλάδου (άκρο «από»)', 'It': '|I| κλάδου (άκρο «προς»)'}
+SIGMA = {'V': 0.004, 'flow': 0.008, 'inj': 0.010, 'pmu': 0.002, 'I': 0.008}   # pu: the first three those of the examples of the book;
+                                                           # 4.21: each part of a phasor, and |I|, are our example values
 PLANS = ('all', 'scada', 'flows', 'tree')
+EMT_PLANS = ('scada', 'pmu', 'mixed', 'current')          # 4.21: what is made of the points of an EMT run (from_emt)
+BAD = {'flow': ['Pf'], 'injection': ['P'], 'voltage': ['V'], 'two': ['Pf', 'P'], 'current': ['If'], 'phasor': ['Vi']}
 PLAN_TXT = {'all': 'τάση και εγχύσεις σε κάθε ζυγό, ροές στα δύο άκρα κάθε κλάδου', 'scada': 'τάση στους ζυγούς με γεννήτρια, εγχύσεις σε κάθε ζυγό, ροές στο ένα άκρο κάθε κλάδου',
-            'flows': 'τάση στον ζυγό ταλάντωσης και ροές στο ένα άκρο κάθε κλάδου', 'tree': 'τάση στον ζυγό ταλάντωσης και ροές μόνο στους κλάδους ενός δέντρου (καμία περίσσεια)'}
+            'flows': 'τάση στον ζυγό ταλάντωσης και ροές στο ένα άκρο κάθε κλάδου', 'tree': 'τάση στον ζυγό ταλάντωσης και ροές μόνο στους κλάδους ενός δέντρου (καμία περίσσεια)',
+            'emt-scada': 'από το EMT: |V| και ροές P, Q σε κάθε σημείο μέτρησης', 'emt-pmu': 'από το EMT: φασιθέτες τάσης και ρεύματος (PMU) σε κάθε σημείο μέτρησης',
+            'emt-mixed': 'από το EMT: |V| και ροές P, Q, και ένας φασιθέτης τάσης', 'emt-current': 'από το EMT: |V|, ροές P και |I| σε κάθε σημείο, με τους φασιθέτες τάσης'}
 CRITICAL = 1e-8                                            # Ω_ii below this part of σ²: the measurement is critical
 SINGULAR = 1e-13                                           # smallest pivot against the largest of the scaled matrix: singular
 
@@ -38,7 +55,11 @@ class SeError(ValueError):
 
 
 def _class(kind):
-    return 'V' if kind == 'V' else 'inj' if kind in ('P', 'Q') else 'flow'
+    return 'V' if kind == 'V' else 'inj' if kind in ('P', 'Q') else 'pmu' if kind in PHASOR else 'I' if kind in ('If', 'It') else 'flow'
+
+
+def _at_bus(kind):
+    return kind in ('V', 'P', 'Q', 'Vr', 'Vi')
 
 
 def _chi2(p, k):
@@ -48,11 +69,13 @@ def _chi2(p, k):
 
 
 # -------------------------------------------------------------------- the measured quantities and their derivatives
-def quantities(case, V, deriv=True):
+def quantities(case, V, deriv=True, extra=False):
     """Every quantity that can be measured, at the voltages V, in the order: |V| of every bus, P and Q injected at every
     bus (generation minus load, what the bus gives to the network), P and Q into every branch at its «from» end and at its
     «to» end. Returns (h, A): the values (3·n + 4·nl) and, with deriv, their derivatives as a sparse matrix whose columns
-    are the angle of every bus and then the magnitude of every bus."""
+    are the angle of every bus and then the magnitude of every bus. With extra (4.21) also: the real and the imaginary part of
+    every bus voltage, of the current into every branch at its «from» end and at its «to» end, and the magnitudes of those
+    currents (5·n + 10·nl in all)."""
     n, nl = case.n, case.nl
     Vm = np.abs(V)
     I = case.Y @ V
@@ -60,6 +83,8 @@ def quantities(case, V, deriv=True):
     If, It = case.Yf @ V, case.Yt @ V
     Sf, St = V[case.f] * np.conj(If), V[case.t] * np.conj(It)
     h = np.r_[Vm, Sb.real, Sb.imag, Sf.real, Sf.imag, St.real, St.imag]
+    if extra:
+        h = np.r_[h, V.real, V.imag, If.real, If.imag, It.real, It.imag, np.abs(If), np.abs(It)]
     if not deriv:
         return h, None
     dV, dE = sp.diags(V), sp.diags(V / Vm)
@@ -73,20 +98,31 @@ def quantities(case, V, deriv=True):
         da = 1j * (dIc @ C @ dV - dVe @ (Yb @ dV).conj())
         dm = dVe @ (Yb @ dE).conj() + dIc @ C @ dE
         rows += [sp.hstack([da.real, dm.real]), sp.hstack([da.imag, dm.imag])]
+    if extra:
+        jV, eV = sp.diags(1j * V), sp.diags(V / Vm)                             # ∂V/∂θ and ∂V/∂|V|
+        rows += [sp.hstack([jV.real, eV.real]), sp.hstack([jV.imag, eV.imag])]
+        dI = [(Yb @ jV, Yb @ eV) for Yb in (case.Yf, case.Yt)]
+        for da, dm in dI:
+            rows += [sp.hstack([da.real, dm.real]), sp.hstack([da.imag, dm.imag])]
+        for (da, dm), Ib in zip(dI, (If, It)):                                    # ∂|I| = Re(conj(I)·∂I)/|I|
+            u = sp.diags(np.conj(Ib) / np.maximum(np.abs(Ib), 1e-12))
+            rows += [sp.hstack([(u @ da).real, (u @ dm).real])]
     return h, sp.vstack(rows, format='csr')
 
 
 def _rows(case, meas):
     """The row of every measurement in the list of quantities, its value and its standard deviation."""
     n, nl = case.n, case.nl
-    off = {'V': 0, 'P': n, 'Q': 2 * n, 'Pf': 3 * n, 'Qf': 3 * n + nl, 'Pt': 3 * n + 2 * nl, 'Qt': 3 * n + 3 * nl}
+    off = {'V': 0, 'P': n, 'Q': 2 * n, 'Pf': 3 * n, 'Qf': 3 * n + nl, 'Pt': 3 * n + 2 * nl, 'Qt': 3 * n + 3 * nl,
+           'Vr': 3 * n + 4 * nl, 'Vi': 4 * n + 4 * nl, 'Ifr': 5 * n + 4 * nl, 'Ifi': 5 * n + 5 * nl, 'Itr': 5 * n + 6 * nl, 'Iti': 5 * n + 7 * nl,
+           'If': 5 * n + 8 * nl, 'It': 5 * n + 9 * nl}
     bri = {b: i for i, b in enumerate(case.br_name)}
     row, z, s = [], [], []
     for i, m in enumerate(meas):
         kind = m.get('type')
         if kind not in TYPES:
             raise SeError(f'measurement {i}: type one of {", ".join(TYPES)}')
-        if kind in ('V', 'P', 'Q'):
+        if _at_bus(kind):
             if m.get('bus') not in case.idx:
                 raise SeError(f'measurement {i} ({kind}): no bus {m.get("bus")!r}')
             row.append(off[kind] + case.idx[m['bus']])
@@ -109,12 +145,14 @@ def zero_injection(case):
 
 
 # -------------------------------------------------------------------- the measurements of a study
-def measure(net, plan='scada', noise=1.0, seed=1, sigma=None, bad=None, zero_injections=True):
+def measure(net, plan='scada', noise=1.0, seed=1, sigma=None, bad=None, zero_injections=True, pmu=None, currents=False):
     """A set of measurements from the load flow of the network (for studies and tests): the plan says where the meters are,
     noise scales the Gaussian errors (0: exact values, the standard deviations stay), seed makes them repeatable, and bad
     puts gross errors: a list of {'type', 'bus' or 'branch', 'error' (in standard deviations, default 20)}, or 'flow',
     'injection', 'voltage', 'two' for the usual cases. With zero_injections the buses without load and generation are
-    not measured (the estimator knows that they inject nothing).
+    not measured (the estimator knows that they inject nothing). 4.21: pmu, a list of buses (or 'all') with a phasor
+    measurement unit: the voltage phasor of the bus and the current phasor of every branch at it, at the end on that bus;
+    currents: the magnitude |I| at the «from» end of every branch whose flow is measured.
     Returns {'measurements': [...], 'truth': the load flow, 'plan', 'bad': the indices of the gross errors}."""
     if plan not in PLANS:
         raise SeError(f'plan: one of {", ".join(PLANS)}')
@@ -124,14 +162,18 @@ def measure(net, plan='scada', noise=1.0, seed=1, sigma=None, bad=None, zero_inj
         raise SeError('the load flow of the network does not converge: no measurements to take')
     case = net.case()
     V = lf['_V']
-    h, _ = quantities(case, V, deriv=False)
+    pmus = list(case.names) if pmu == 'all' else list(pmu or [])
+    for b in pmus:
+        if b not in case.idx:
+            raise SeError(f'pmu: no bus {b!r}')
+    h, _ = quantities(case, V, deriv=False, extra=bool(pmus or currents))
     n, nl = case.n, case.nl
     zi = set(zero_injection(case).tolist()) if zero_injections else set()
     ref = np.flatnonzero(case.typ == PF.REF)
     meas = []
 
     def add(kind, where, row):
-        key = 'bus' if kind in ('V', 'P', 'Q') else 'branch'
+        key = 'bus' if _at_bus(kind) else 'branch'
         meas.append({'type': kind, key: where, 'value': float(h[row]), 'sigma': sg[_class(kind)]})
 
     vb = range(n) if plan == 'all' else np.flatnonzero(case.typ != PF.PQ) if plan == 'scada' else ref[:1]
@@ -152,18 +194,34 @@ def measure(net, plan='scada', noise=1.0, seed=1, sigma=None, bad=None, zero_inj
         if plan == 'all':
             add('Pt', case.br_name[k], 3 * n + 2 * nl + k)
             add('Qt', case.br_name[k], 3 * n + 3 * nl + k)
+        if currents:
+            add('If', case.br_name[k], 5 * n + 8 * nl + k)
+    for b in pmus:                                           # 4.21: the voltage phasor, and the current phasor of every branch at the bus
+        i = case.idx[b]
+        add('Vr', b, 3 * n + 4 * nl + i)
+        add('Vi', b, 4 * n + 4 * nl + i)
+        for k in np.flatnonzero((case.f == i) | (case.t == i)):
+            o = 4 * nl if case.f[k] == i else 6 * nl
+            add('Ifr' if case.f[k] == i else 'Itr', case.br_name[k], 5 * n + o + k)
+            add('Ifi' if case.f[k] == i else 'Iti', case.br_name[k], 5 * n + o + nl + k)
     rng = np.random.default_rng(seed)
     e = rng.standard_normal(len(meas)) * float(noise)
     for m, ei in zip(meas, e):
         m['true'] = m['value']
         m['value'] = m['value'] + ei * m['sigma']
+    return {'measurements': meas, 'truth': lf, 'plan': plan, 'bad': _plant(meas, bad, plan)}
+
+
+def _plant(meas, bad, plan):
+    """The gross errors of measure() and from_emt(): a list of {'type', 'bus' or 'branch', 'error' (σ, default 20)}, or one of
+    BAD; returns the indices of the measurements that got one."""
     hit = []
     if bad:
         if isinstance(bad, str):
             val = lambda kind: [(abs(m['true']), i) for i, m in enumerate(meas) if m['type'] == kind]
-            pick = {'flow': ['Pf'], 'injection': ['P'], 'voltage': ['V'], 'two': ['Pf', 'P']}.get(bad)
+            pick = BAD.get(bad)
             if pick is None:
-                raise SeError("bad: 'flow', 'injection', 'voltage', 'two' or a list of measurements")
+                raise SeError(f"bad: {', '.join(repr(b) for b in BAD)} or a list of measurements")
             bad = []
             for kind in pick:
                 c = val(kind)
@@ -172,30 +230,122 @@ def measure(net, plan='scada', noise=1.0, seed=1, sigma=None, bad=None, zero_inj
                 i = max(c)[1] if kind != 'V' else min(c)[1]                    # the largest flow, the largest injection, the lowest voltage
                 bad.append(dict({k: meas[i][k] for k in ('type', 'bus', 'branch') if k in meas[i]}, error=20.0 if kind != 'P' else -20.0))
         for b in bad:
-            key = 'bus' if b['type'] in ('V', 'P', 'Q') else 'branch'
+            key = 'bus' if _at_bus(b['type']) else 'branch'
             i = next((i for i, m in enumerate(meas) if m['type'] == b['type'] and m.get(key) == b.get(key)), None)
             if i is None:
                 raise SeError(f'bad: no measurement {b["type"]} at {b.get(key)!r} in the plan {plan!r}')
             meas[i]['value'] += float(b.get('error', 20.0)) * meas[i]['sigma']
             meas[i]['gross'] = float(b.get('error', 20.0))
             hit.append(i)
-    return {'measurements': meas, 'truth': lf, 'plan': plan, 'bad': hit}
+    return hit
+
+
+def tve(X, ref):
+    """The total vector error of a phasor against the one it should be: |X − X_ref|/|X_ref| (a ratio; IEC/IEEE 60255-118-1 (9)
+    on the real and imaginary parts)."""
+    return float(abs(complex(X) - complex(ref)) / abs(complex(ref)))
+
+
+def from_emt(net, points, plan='scada', sigma=None, bad=None, ref='cos'):
+    """4.21: the measurements of the network from points of an EMT run of it (the PMU3 element of the studio, or anything that
+    gives the same): points [{'branch', 'end' ('f' or 't': the current into the branch at that end, the voltage of its bus),
+    'V' (V, the RMS phase voltage of positive sequence), 'thV' (°), 'I' (A, RMS of positive sequence), 'thI' (°), and, when
+    the point gives them, 'P' (W), 'Q' (var) of positive sequence into the branch}]. The angles on the common time reference of
+    the run: ref 'cos' as IEC/IEEE 60255-118-1 defines a synchrophasor (§4.2–4.3: the phase of cos(2πf₀t + φ), t = 0 at a UTC
+    second, the RMS value), or 'sin' (the phase of sin(ω₁t + φ)). The sources of the studio are written on the sine, so a load
+    flow angle θ is a synchrophasor θ − 90°: with 'cos' the 90° are added back (the state on the frame of the load flow). Per unit on the
+    voltage of each bus and S_base. plan (EMT_PLANS): 'scada' |V| of every bus with a point, P and Q of every point; 'pmu' the
+    voltage phasor of every bus with a point and the current phasor of every point; 'mixed' scada and the voltage phasor of the
+    first point's bus; 'current' |V|, P and |I| of every point with the voltage phasors of its buses. bad as in measure().
+    Returns as measure(), with the load flow of the network as the 'truth' (every 'true' its value there) and 'tve' {'V', 'I':
+    the largest total vector error of a point against the load flow, 'V_at', 'I_at', 'points': [{branch, end, bus, V, I}]}."""
+    if plan not in EMT_PLANS:
+        raise SeError(f'plan: one of {", ".join(EMT_PLANS)}')
+    if ref not in ('cos', 'sin'):
+        raise SeError("ref: 'cos' (IEC/IEEE 60255-118-1) or 'sin'")
+    turn = 90.0 if ref == 'cos' else 0.0
+    if not points:
+        raise SeError('no points of the EMT run')
+    sg = dict(SIGMA, **(sigma or {}))
+    lf = net.power_flow('nr', tol=1e-10)
+    if not lf['converged']:
+        raise SeError('the load flow of the network does not converge: no truth to compare with')
+    case = net.case()
+    V = lf['_V']
+    h, _ = quantities(case, V, deriv=False, extra=True)
+    n, nl = case.n, case.nl
+    bri = {b: i for i, b in enumerate(case.br_name)}
+    off = lambda kind: {'V': 0, 'Pf': 3 * n, 'Qf': 3 * n + nl, 'Pt': 3 * n + 2 * nl, 'Qt': 3 * n + 3 * nl, 'Vr': 3 * n + 4 * nl, 'Vi': 4 * n + 4 * nl,      # noqa: E731
+                        'Ifr': 5 * n + 4 * nl, 'Ifi': 5 * n + 5 * nl, 'Itr': 5 * n + 6 * nl, 'Iti': 5 * n + 7 * nl, 'If': 5 * n + 8 * nl, 'It': 5 * n + 9 * nl}[kind]
+    meas, seen, pts = [], set(), []
+    Sb = float(net.S_base)
+
+    def add(kind, where, value):
+        at = case.idx[where] if _at_bus(kind) else bri[where]
+        meas.append({'type': kind, 'bus' if _at_bus(kind) else 'branch': where, 'value': float(value), 'sigma': sg[_class(kind)], 'true': float(h[off(kind) + at])})
+
+    for j, q in enumerate(points):
+        if q.get('branch') not in bri:
+            raise SeError(f'point {j}: no branch {q.get("branch")!r}')
+        k, e = bri[q['branch']], q.get('end', 'f')
+        if e not in ('f', 't'):
+            raise SeError(f"point {j}: end 'f' or 't'")
+        try:
+            Vm, Im, a, b = float(q['V']), float(q['I']), math.radians(float(q['thV']) + turn), math.radians(float(q['thI']) + turn)
+        except (KeyError, TypeError, ValueError) as err:
+            raise SeError(f'point {j}: V, thV, I and thI as numbers') from err
+        if not all(map(math.isfinite, (Vm, Im, a, b))) or Vm <= 0:
+            raise SeError(f'point {j}: a voltage above zero (has the run reached the end of its first window?)')
+        i = int(case.f[k] if e == 'f' else case.t[k])
+        bus = case.names[i]
+        Un = float(net.buses[bus]['Un'])
+        Vp = Vm / (Un / math.sqrt(3)) * complex(math.cos(a), math.sin(a))
+        Ip = Im / (Sb / (math.sqrt(3) * Un)) * complex(math.cos(b), math.sin(b))
+        S = complex(float(q['P']), float(q['Q'])) / Sb if q.get('P') is not None and q.get('Q') is not None else Vp * Ip.conjugate()
+        Il = complex(h[off('Ifr' if e == 'f' else 'Itr') + k], h[off('Ifi' if e == 'f' else 'Iti') + k])
+        pts.append({'branch': q['branch'], 'end': e, 'bus': bus, 'V': tve(Vp, V[i]), 'I': tve(Ip, Il) if abs(Il) > 0 else None, '_V': Vp, '_I': Ip, '_S': S})
+    for q in pts:
+        b, k, e = q['bus'], q['branch'], q['end']
+        if b not in seen:
+            seen.add(b)
+            if plan in ('scada', 'mixed', 'current'):
+                add('V', b, abs(q['_V']))
+            if plan in ('pmu', 'current') or (plan == 'mixed' and len(seen) == 1):
+                add('Vr', b, q['_V'].real)
+                add('Vi', b, q['_V'].imag)
+        if plan in ('scada', 'mixed', 'current'):
+            add('Pf' if e == 'f' else 'Pt', k, q['_S'].real)
+        if plan in ('scada', 'mixed'):
+            add('Qf' if e == 'f' else 'Qt', k, q['_S'].imag)
+        if plan == 'current':
+            add('If' if e == 'f' else 'It', k, abs(q['_I']))
+        if plan == 'pmu':
+            add('Ifr' if e == 'f' else 'Itr', k, q['_I'].real)
+            add('Ifi' if e == 'f' else 'Iti', k, q['_I'].imag)
+    hit = _plant(meas, bad, 'emt-' + plan)
+    iv = [q for q in pts if q['I'] is not None]
+    worst_v, worst_i = max(pts, key=lambda q: q['V']), (max(iv, key=lambda q: q['I']) if iv else None)
+    return {'measurements': meas, 'truth': lf, 'plan': 'emt-' + plan, 'bad': hit,
+            'tve': {'V': worst_v['V'], 'V_at': worst_v['bus'], 'I': None if worst_i is None else worst_i['I'], 'I_at': None if worst_i is None else worst_i['branch'],
+                    'points': [{k: q[k] for k in ('branch', 'end', 'bus', 'V', 'I')} for q in pts]}}
 
 
 # -------------------------------------------------------------------- the estimator
 class _Problem:
     """One weighted least squares problem: the measurements in use, the equality constraints, the reference."""
 
-    def __init__(self, case, row, z, s, crow, V0):
+    def __init__(self, case, row, z, s, crow, V0, extra=False, absolute=False):
         self.case, self.row, self.z, self.s, self.crow = case, row, z, s, crow
         n = case.n
         self.ref = int(np.flatnonzero(case.typ == PF.REF)[0])
-        self.cols = np.r_[np.delete(np.arange(n), self.ref), n + np.arange(n)]        # the state: angles but the reference, magnitudes
-        self.ns, self.nc, self.m = 2 * n - 1, len(crow), len(row)
+        self.extra, self.absolute = extra, absolute
+        self.na = n if absolute else n - 1                                            # 4.21: with a voltage phasor every angle is a state
+        self.cols = np.r_[np.arange(n) if absolute else np.delete(np.arange(n), self.ref), n + np.arange(n)]   # the state: angles (but the reference), magnitudes
+        self.ns, self.nc, self.m = self.na + n, len(crow), len(row)
         self.V0 = V0
 
     def system(self, V):
-        h, A = quantities(self.case, V)
+        h, A = quantities(self.case, V, extra=self.extra)
         H = A[self.row][:, self.cols].tocsr()
         r = self.z - h[self.row]
         w = 1 / self.s ** 2
@@ -240,8 +390,8 @@ class _Problem:
             dx = self.d * lu.solve(rhs)[:self.ns]
             if not np.all(np.isfinite(dx)):
                 return {'V': V, 'iterations': it, 'converged': False, 'observable': True, 'lu': None, 'H': H, 'r': r}
-            da = np.insert(dx[:n - 1], ref, 0.0)
-            ang, Vm = ang + da, Vm + dx[n - 1:]
+            da = dx[:n] if self.absolute else np.insert(dx[:n - 1], ref, 0.0)
+            ang, Vm = ang + da, Vm + dx[self.na:]
             V = Vm * np.exp(1j * ang)
             if np.max(np.abs(dx)) < tol:
                 K, rhs, H, r = self.system(V)
@@ -294,10 +444,10 @@ def _decoupled(case, meas, zi, part):
         t = m['type']
         if t == part:
             rows.append(('inj', case.idx[m['bus']], inj(case.idx[m['bus']])))
-        elif t in (part + 'f', part + 't'):
+        elif t in (part + 'f', part + 't') or t in ('Ifr', 'Ifi', 'Itr', 'Iti'):          # 4.21: a current phasor as a flow of both parts
             k = bri[m['branch']]
             rows.append(('flow', k, {int(case.f[k]): 1.0, int(case.t[k]): -1.0}))
-        elif t == 'V' and part == 'Q':
+        elif (t == 'V' and part == 'Q') or t in ('Vr', 'Vi'):                             # 4.21: a voltage phasor fixes the angle and the magnitude
             rows.append(('V', case.idx[m['bus']], {case.idx[m['bus']]: 1.0}))
     for i in zi:
         rows.append(('inj', int(i), inj(int(i))))
@@ -327,7 +477,9 @@ def _regular(G):
 def observability(net, measurements, zero_injections=True):
     """Whether the measurements fix the state, by the numerical method on the decoupled model with unit reactances (Abur &
     Gómez Expósito 2004, ch. 4.6; Monticelli & Wu 1985): the angles from the flows and injections of active power, the
-    magnitudes from those of reactive power and the voltage measurements. When the angles are not fixed, the branches whose
+    magnitudes from those of reactive power and the voltage measurements. 4.21: a voltage phasor fixes the angle of its bus
+    (then no angle is the reference) and its magnitude, a current phasor counts as a flow in both parts, and a current
+    magnitude |I| counts in neither (it does not say which way the power goes). When the angles are not fixed, the branches whose
     flow cannot be found are taken out with the injections next to them, again and again, and what is left are the observable
     islands. Returns {'observable', 'angles', 'magnitudes' (the two parts), 'islands': [[bus, ...], ...] (largest first),
     'branches': the names of the unobservable branches, 'dropped': the injections that give nothing}."""
@@ -337,7 +489,7 @@ def observability(net, measurements, zero_injections=True):
     n = case.n
     zi = zero_injection(case) if zero_injections else np.zeros(0, int)
     ref = int(np.flatnonzero(case.typ == PF.REF)[0])
-    keep = np.delete(np.arange(n), ref)
+    keep = np.arange(n) if _absolute(meas) else np.delete(np.arange(n), ref)
     rp = _decoupled(case, meas, zi, 'P')
     Hp = _matrix(rp, n)
     ang = _regular((Hp.T @ Hp)[keep][:, keep])
@@ -392,6 +544,44 @@ def observability(net, measurements, zero_injections=True):
     return out
 
 
+def _absolute(meas):
+    """4.21: whether the angles are measured (a voltage phasor on the common time reference); a current phasor needs one."""
+    v = any(m['type'] in ('Vr', 'Vi') for m in meas)
+    if not v and any(m['type'] in ('Ifr', 'Ifi', 'Itr', 'Iti') for m in meas):
+        raise SeError('a current phasor needs a voltage phasor too: the angle of a phasor is on the common time reference, and only a voltage phasor gives it to the state')
+    return v
+
+
+def pmu_start(case, meas, ang_ref=0.0):
+    """4.21: a start from the voltage phasors: every bus with one takes it (the mean of its real and imaginary parts, as
+    measured); every other bus the voltage of the nearest bus with one (over the branches), or 1 pu at ang_ref without any."""
+    n = case.n
+    re, im = {}, {}
+    for m in meas:
+        if m['type'] in ('Vr', 'Vi'):
+            (re if m['type'] == 'Vr' else im).setdefault(case.idx[m['bus']], []).append(float(m['value']))
+    have = {i: complex(np.mean(re[i]), np.mean(im[i])) for i in re if i in im}
+    V = np.full(n, np.exp(1j * ang_ref), complex)
+    if not have:
+        return V
+    nb = [[] for _ in range(n)]
+    for a, b in zip(case.f.tolist(), case.t.tolist()):
+        nb[a].append(b)
+        nb[b].append(a)
+    seen, todo = dict(have), list(have)
+    while todo:                                                              # breadth first from every bus with a phasor
+        nxt = []
+        for i in todo:
+            for j in nb[i]:
+                if j not in seen:
+                    seen[j] = seen[i]
+                    nxt.append(j)
+        todo = nxt
+    for i, v in seen.items():
+        V[i] = v
+    return V
+
+
 def uncovered(case, meas):
     """The buses that no measurement touches: neither their voltage, nor their injection or that of a neighbour, nor a flow
     of one of their branches."""
@@ -402,10 +592,10 @@ def uncovered(case, meas):
         nb[a].append(b)
         nb[b].append(a)
     for m in meas:
-        if m['type'] in ('V', 'P', 'Q'):
+        if _at_bus(m['type']):
             i = case.idx[m['bus']]
             seen[i] = True
-            if m['type'] != 'V':
+            if m['type'] in ('P', 'Q'):
                 seen[nb[i]] = True
         else:
             k = bri[m['branch']]
@@ -414,13 +604,17 @@ def uncovered(case, meas):
 
 
 def run(net, measurements=None, plan='scada', noise=1.0, seed=1, sigma=None, bad=None, zero_injections=True, detect=True,
-        threshold=3.0, confidence=0.99, max_bad=10, tol=1e-8, max_iter=30, start='flat'):
+        threshold=3.0, confidence=0.99, max_bad=10, tol=1e-8, max_iter=30, start='flat', pmu=None, currents=False, emt=None):
     """The state of the network from measurements. measurements: a list of {'type': 'V', 'P', 'Q' (at a 'bus'), 'Pf', 'Qf',
     'Pt', 'Qt' (of a 'branch', at its «from» or «to» end), 'value' (pu), 'sigma' (pu)}, or the output of measure(); without it a
-    set is made from the load flow of the network (plan, noise, seed, sigma, bad: see measure). zero_injections: the buses
-    without load and generation as equality constraints. detect: the χ² test at `confidence` and the largest normalized
-    residual test with `threshold`, taking out up to max_bad measurements. start: 'flat' (1 pu, zero angles) or 'given' (the
-    voltages of the network data).
+    set is made from the load flow of the network (plan, noise, seed, sigma, bad, pmu, currents: see measure), or (4.21) from
+    the points of an EMT run (emt: the arguments of from_emt). 4.21 types: 'Vr', 'Vi' (a voltage phasor at a 'bus'), 'Ifr',
+    'Ifi', 'Itr', 'Iti' (a current phasor of a 'branch', into it at its «from» or «to» end), 'If', 'It' (|I| there).
+    zero_injections: the buses without load and generation as equality constraints. detect: the χ² test at `confidence` and
+    the largest normalized residual test with `threshold`, taking out up to max_bad measurements. start: 'flat' (1 pu, zero
+    angles), 'given' (the voltages of the network data) or 'pmu' (4.21: from the voltage phasors, pmu_start); a flat start with
+    voltage phasors becomes 'pmu' (their angles are on the time reference of the PMUs, which may be far from the angle of the
+    slack), and with |I| measurements and no voltage phasor 'staged': the estimate without the |I| first.
 
     Returns {'converged', 'observable', 'iterations', 'rounds', 'buses' {bus: V, angle, P, Q (as a load flow gives them, from
     the estimate)}, 'branches', 'measurements' [{type, bus/branch, value, sigma, estimate, residual, rN, critical, used}],
@@ -429,12 +623,19 @@ def run(net, measurements=None, plan='scada', noise=1.0, seed=1, sigma=None, bad
     the measurements were made from it), 'first' (the estimate before any measurement was taken out), 'message', 'time'}."""
     t0 = time.perf_counter()
     truth, made, planted = None, None, []
+    if measurements is None and emt is not None:
+        if not isinstance(emt, dict) or set(emt) - {'points', 'plan', 'sigma', 'bad', 'ref'}:
+            raise SeError("emt: {'points', 'plan', 'sigma', 'bad', 'ref'} (see from_emt)")
+        measurements = from_emt(net, emt.get('points'), emt.get('plan', 'scada'), sigma=dict(sigma or {}, **(emt.get('sigma') or {})), bad=emt.get('bad', bad),
+                                ref=emt.get('ref', 'cos'))
     if measurements is None:
-        made = measure(net, plan=plan, noise=noise, seed=seed, sigma=sigma, bad=bad, zero_injections=zero_injections)
+        made = measure(net, plan=plan, noise=noise, seed=seed, sigma=sigma, bad=bad, zero_injections=zero_injections, pmu=pmu, currents=currents)
         measurements = made
+    tv = None
     if isinstance(measurements, dict):
         truth, planted = measurements.get('truth'), list(measurements.get('bad') or [])
         plan = measurements.get('plan', plan)
+        tv = measurements.get('tve')                                           # 4.21: of the phasors of an EMT run
         measurements = measurements['measurements']
     else:
         plan = None
@@ -443,25 +644,48 @@ def run(net, measurements=None, plan='scada', noise=1.0, seed=1, sigma=None, bad
         raise SeError('no measurements')
     if not 0 < confidence < 1:
         raise SeError('confidence: between 0 and 1')
-    if start not in ('flat', 'given'):
-        raise SeError("start: 'flat' or 'given'")
+    if start not in ('flat', 'given', 'pmu'):
+        raise SeError("start: 'flat', 'given' or 'pmu'")
     case = net.case()
     n, nl = case.n, case.nl
     row, z, s = _rows(case, meas)
+    extra = any(m['type'] not in BASIC for m in meas)                         # 4.21: phasors or |I| (else the work of 4.19.5, as it was)
+    absolute = _absolute(meas)
+    if start == 'flat' and absolute:                                          # the angles of the PMUs may be anywhere: start from them
+        start = 'pmu'
+    elif start == 'flat' and any(m['type'] in ('If', 'It') for m in meas):
+        start = 'staged'
     zi = zero_injection(case) if zero_injections else np.zeros(0, int)
     crow = np.r_[n + zi, 2 * n + zi].astype(int)
-    V0 = case.start(start == 'flat')
-    if start == 'flat':
-        V0 = np.full(n, np.exp(1j * case.ang0[np.flatnonzero(case.typ == PF.REF)[0]]))                # 1 pu at the angle of the reference
-    ns = 2 * n - 1
+    ang_ref = case.ang0[np.flatnonzero(case.typ == PF.REF)[0]]
+    if start == 'pmu':
+        V0 = pmu_start(case, meas, ang_ref)
+    elif start == 'staged':                                                   # the estimate without the |I| as the start
+        rest = [m for m in meas if m['type'] not in ('If', 'It')]
+        if not rest or not observability(case, rest, zero_injections)['observable']:
+            raise SeError('|I| measurements without voltage phasors need the others to fix the state alone: the estimate starts from them (at a flat start the current of a branch has no direction)')
+        pre = run(net, rest, zero_injections=zero_injections, detect=False, tol=tol, max_iter=max_iter)
+        if not pre['converged']:
+            raise SeError('the estimate without the |I| measurements, the start of the one with them, did not converge')
+        V0, its0 = pre['_V'], pre['iterations']
+    else:
+        V0 = case.start(start == 'flat')
+        if start == 'flat':
+            V0 = np.full(n, np.exp(1j * ang_ref))                                                     # 1 pu at the angle of the reference
+    ns = (2 * n) if absolute else (2 * n - 1)
+    its0 = locals().get('its0', 0)
     out = {'converged': False, 'observable': True, 'iterations': 0, 'rounds': 0, 'm': len(meas), 'n': ns, 'constraints': len(crow),
            'redundancy': (len(meas) + len(crow)) / ns, 'plan': plan, 'bad': [], 'critical': [], 'message': '', 'S_base': net.S_base,
            'threshold': float(threshold), 'confidence': float(confidence), 'planted': planted, 'zero_buses': [case.names[i] for i in zi]}
+    if extra:
+        out.update(start=start, absolute=absolute)
+    if tv is not None:
+        out['tve'] = tv
     used = np.ones(len(meas), bool)
     first, sol, om, rN = None, None, None, None
-    its = 0
+    its = its0                                                               # 4.21: with the iterations of a staged start
     for rnd in range(max_bad + 1):
-        P = _Problem(case, row[used], z[used], s[used], crow, V0)
+        P = _Problem(case, row[used], z[used], s[used], crow, V0, extra, absolute)
         if P.m + P.nc < ns:
             out.update(observable=False, message=f'{P.m} measurements and {P.nc} constraints for {ns} unknowns: the state cannot be found')
             sol = None
@@ -512,7 +736,7 @@ def run(net, measurements=None, plan='scada', noise=1.0, seed=1, sigma=None, bad
         m.update(used=bool(used[i]), estimate=None, residual=None, rN=None, critical=False)
     if sol is not None and sol['converged']:
         V = state['V']
-        h, _ = quantities(case, V, deriv=False)
+        h, _ = quantities(case, V, deriv=False, extra=extra)
         for j, i in enumerate(state['idx']):
             meas[i].update(estimate=float(h[row[i]]), residual=float(state['r'][j]), rN=float(state['rN'][j]), critical=bool(state['crit'][j]))
         for i in np.flatnonzero(~used):
@@ -560,4 +784,5 @@ def run(net, measurements=None, plan='scada', noise=1.0, seed=1, sigma=None, bad
     return out
 
 
-__all__ = ['SeError', 'TYPES', 'PLANS', 'SIGMA', 'quantities', 'zero_injection', 'measure', 'residual_covariance', 'observability', 'uncovered', 'run']
+__all__ = ['SeError', 'TYPES', 'PLANS', 'EMT_PLANS', 'SIGMA', 'quantities', 'zero_injection', 'measure', 'residual_covariance', 'observability', 'uncovered', 'run',
+           'from_emt', 'tve', 'pmu_start']

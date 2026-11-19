@@ -1,0 +1,355 @@
+{
+ "format": "pcl-network",
+ "version": 1,
+ "f": 50.0,
+ "S_base": 100000000.0,
+ "name": "case5_acdc (Ergun et al. 2019; the 5-bus system of Stagg & El-Abiad with a three-terminal DC grid)",
+ "buses": {
+  "1": {
+   "Un": 345000.0,
+   "type": "slack",
+   "V": 1.06,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  },
+  "2": {
+   "Un": 345000.0,
+   "type": "PV",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  },
+  "3": {
+   "Un": 345000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  },
+  "4": {
+   "Un": 345000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  },
+  "5": {
+   "Un": 345000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": 0.9,
+   "Vmax": 1.1
+  }
+ },
+ "elements": [
+  {
+   "kind": "load",
+   "name": "load2",
+   "bus": "2",
+   "P": 20000000.0,
+   "Q": 10000000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load3",
+   "bus": "3",
+   "P": 45000000.0,
+   "Q": 15000000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load4",
+   "bus": "4",
+   "P": 40000000.0,
+   "Q": 5000000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "load5",
+   "bus": "5",
+   "P": 60000000.0,
+   "Q": 10000000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "generator",
+   "name": "G1",
+   "bus": "1",
+   "Sr": 100000000.0,
+   "Ur": 345000.0,
+   "xd2": 0.2,
+   "cosphi": 0.85,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 0.0,
+   "V": 1.06,
+   "Qmin": -500000000.0,
+   "Qmax": 500000000.0,
+   "slack": true,
+   "Pmin": 10000000.0,
+   "Pmax": 250000000.0,
+   "cost": [
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "kind": "generator",
+   "name": "G2",
+   "bus": "2",
+   "Sr": 100000000.0,
+   "Ur": 345000.0,
+   "xd2": 0.2,
+   "cosphi": 0.85,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 40000000.0,
+   "V": 1.0,
+   "Qmin": -300000000.0,
+   "Qmax": 300000000.0,
+   "slack": false,
+   "Pmin": 10000000.0,
+   "Pmax": 300000000.0,
+   "cost": [
+    0.0,
+    2.0,
+    0.0
+   ]
+  },
+  {
+   "kind": "branch",
+   "name": "br1",
+   "a": "1",
+   "b": "2",
+   "r": 0.02,
+   "x": 0.06,
+   "bc": 0.06,
+   "ratio": 0.0,
+   "angle": 0.0,
+   "rating": 100000000.0
+  },
+  {
+   "kind": "branch",
+   "name": "br2",
+   "a": "1",
+   "b": "3",
+   "r": 0.08,
+   "x": 0.24,
+   "bc": 0.05,
+   "ratio": 0.0,
+   "angle": 0.0,
+   "rating": 100000000.0
+  },
+  {
+   "kind": "branch",
+   "name": "br3",
+   "a": "2",
+   "b": "3",
+   "r": 0.06,
+   "x": 0.18,
+   "bc": 0.04,
+   "ratio": 0.0,
+   "angle": 0.0,
+   "rating": 100000000.0
+  },
+  {
+   "kind": "branch",
+   "name": "br4",
+   "a": "2",
+   "b": "4",
+   "r": 0.06,
+   "x": 0.18,
+   "bc": 0.04,
+   "ratio": 0.0,
+   "angle": 0.0,
+   "rating": 100000000.0
+  },
+  {
+   "kind": "branch",
+   "name": "br5",
+   "a": "2",
+   "b": "5",
+   "r": 0.04,
+   "x": 0.12,
+   "bc": 0.03,
+   "ratio": 0.0,
+   "angle": 0.0,
+   "rating": 100000000.0
+  },
+  {
+   "kind": "branch",
+   "name": "br6",
+   "a": "3",
+   "b": "4",
+   "r": 0.01,
+   "x": 0.03,
+   "bc": 0.02,
+   "ratio": 0.0,
+   "angle": 0.0,
+   "rating": 100000000.0
+  },
+  {
+   "kind": "branch",
+   "name": "br7",
+   "a": "4",
+   "b": "5",
+   "r": 0.08,
+   "x": 0.24,
+   "bc": 0.05,
+   "ratio": 0.0,
+   "angle": 0.0,
+   "rating": 100000000.0
+  },
+  {
+   "kind": "dc_line",
+   "name": "d12",
+   "R": 61.893,
+   "poles": 2,
+   "rating": 144.92753623188406,
+   "a": "d1",
+   "b": "d2"
+  },
+  {
+   "kind": "dc_line",
+   "name": "d23",
+   "R": 61.893,
+   "poles": 2,
+   "rating": 144.92753623188406,
+   "a": "d2",
+   "b": "d3"
+  },
+  {
+   "kind": "dc_line",
+   "name": "d13",
+   "R": 86.88825,
+   "poles": 2,
+   "rating": 144.92753623188406,
+   "a": "d1",
+   "b": "d3"
+  },
+  {
+   "kind": "vsc",
+   "name": "C1",
+   "bus": "2",
+   "dc": "d1",
+   "control": "P",
+   "P": -60000000.0,
+   "V": 1.0,
+   "Q": -40000000.0,
+   "side": "ac",
+   "Rtr": 0.01,
+   "Xtr": 0.01,
+   "Bf": 0.01,
+   "Rc": 0.01,
+   "Xc": 0.01,
+   "a_loss": 1103000.0,
+   "b_loss": 887.0,
+   "crec": 2.885,
+   "cinv": 2.885,
+   "Prated": 100000000.0,
+   "Imax": 187.10064474431965,
+   "Ucmax": 1.1,
+   "Ucmin": 0.9,
+   "Qmin": -50000000.0,
+   "Qmax": 50000000.0
+  },
+  {
+   "kind": "vsc",
+   "name": "C2",
+   "bus": "3",
+   "dc": "d2",
+   "control": "V",
+   "P": 0.0,
+   "V": 1.0,
+   "Q": 0.0,
+   "side": "dc",
+   "Rtr": 0.01,
+   "Xtr": 0.01,
+   "Bf": 0.01,
+   "Rc": 0.01,
+   "Xc": 0.01,
+   "a_loss": 1103000.0,
+   "b_loss": 887.0,
+   "crec": 2.885,
+   "cinv": 2.885,
+   "Prated": 100000000.0,
+   "Imax": 187.10064474431965,
+   "Ucmax": 1.1,
+   "Ucmin": 0.9,
+   "Qmin": -50000000.0,
+   "Qmax": 50000000.0
+  },
+  {
+   "kind": "vsc",
+   "name": "C3",
+   "bus": "5",
+   "dc": "d3",
+   "control": "P",
+   "P": 35000000.0,
+   "V": 1.0,
+   "Q": 5000000.0,
+   "side": "ac",
+   "Rtr": 0.01,
+   "Xtr": 0.01,
+   "Bf": 0.01,
+   "Rc": 0.01,
+   "Xc": 0.01,
+   "a_loss": 1103000.0,
+   "b_loss": 887.0,
+   "crec": 2.885,
+   "cinv": 2.885,
+   "Prated": 100000000.0,
+   "Imax": 187.10064474431965,
+   "Ucmax": 1.1,
+   "Ucmin": 0.9,
+   "Qmin": -50000000.0,
+   "Qmax": 50000000.0
+  }
+ ],
+ "dc_buses": {
+  "d1": {
+   "Un": 690000.0,
+   "V": 1.0
+  },
+  "d2": {
+   "Un": 690000.0,
+   "V": 1.0
+  },
+  "d3": {
+   "Un": 690000.0,
+   "V": 1.0
+  }
+ },
+ "source": "case5_acdc of PowerModelsACDC (the reference implementation of H. Ergun, J. Dave, D. Van Hertem, F. Geth, «Optimal Power Flow for AC/DC Grids: Formulation, Convex Relaxation, Linear Approximation and Implementation», IEEE Trans. Power Systems 34(4), 2019; the AC part from G. W. Stagg, A. H. El-Abiad, «Computer methods in power system analysis», 1968). The numbers of its file in the units of the engine, nothing changed: the DC buses at 2 × 345 kV pole to pole (a bipole), each DC line R = r·(345 kV)²/100 MVA a conductor and its rating 100 MW / 690 kV; every station with the transformer, filter and reactor of the file (pu of 100 MVA), the losses LossA (W), LossB (V), LossC (Ω), P within ±Pacmax, Q within Qacmin…Qacmax, I_max = √(Pacrated² + Qacrated²) pu as the reference implementation sets it, U_c within Vmmin…Vmmax; the controls of the stations for the AC/DC load flow from type_dc (1: P, 2: the DC slack) and P_g, Q_g. Licence of the data file (BSD 3-Clause License): Copyright (c) 2017, frederikgeth, hakanergun. All rights reserved. Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer. * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution. * Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+}

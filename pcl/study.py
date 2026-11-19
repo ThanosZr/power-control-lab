@@ -31,9 +31,10 @@ STARTS = ('auto', 'mid', 'pf', 'nn')
 OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n1': ('tol', 'q_limits', 'backend', 'how'), 'n1dc': (), 'opf': ('flow_limits', 'start', 'tol', 'max_iter'),
            'dcopf': ('flow_limits', 'tol', 'max_iter'), 'scopf': ('emergency', 'tol', 'max_iter', 'max_rounds'),
            'cpf': ('direction', 'q_limits', 'step', 'dV', 'lower', 'stop', 'V_stop', 'max_points', 'tol'),
-           'se': ('measurements', 'plan', 'noise', 'seed', 'sigma', 'bad', 'zero_injections', 'detect', 'threshold', 'confidence', 'max_bad', 'tol', 'max_iter', 'start'),
-           'harmonic': ('sources', 'harmonics', 'load_model', 'line_model', 'pulse', 'filters', 'scan_bus', 'scan_to', 'scan_step', 'tol'),
-           'unbalanced': ('regulators', 'spread', 'tol', 'max_iter'), 'advice': (), 'acdc': ('method', 'tol', 'max_iter', 'flat', 'q_limits', 'set', 'out')}
+           'se': ('measurements', 'plan', 'noise', 'seed', 'sigma', 'bad', 'zero_injections', 'detect', 'threshold', 'confidence', 'max_bad', 'tol', 'max_iter', 'start',
+                  'pmu', 'currents', 'emt'),
+           'harmonic': ('sources', 'harmonics', 'load_model', 'line_model', 'pulse', 'filters', 'scan_bus', 'scan_to', 'scan_step', 'tol', 'spectra'),
+           'unbalanced': ('regulators', 'spread', 'tol', 'max_iter'), 'advice': (), 'acdc': ('method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits', 'set', 'out', 'mode', 'flow_limits', 'start', 'outages')}
 MAX_BUSES = 20000
 
 
@@ -191,24 +192,41 @@ def _study(net, study, opt):
                 net = N.from_dict(N.to_dict(net))
                 for name, v in (chg.get('set') or {}).items():
                     e = net.element(name)
+                    if e['kind'] == 'dcdc':                # 4.21: a DC/DC converter: its power, voltage, droop or law
+                        for k, x in (v.items() if isinstance(v, dict) else (('P', v),)):
+                            if k not in ('P', 'V', 'droop', 'R', 'control'):
+                                raise StudyError(f'set: {name}.{k}: ένα από P, V, droop, R, control')
+                            if k == 'control' and x not in ('P', 'V', 'droop'):
+                                raise StudyError(f'set: {name}.control: ένα από P, V, droop')
+                            e[k] = x if k == 'control' else float(x)
+                            if k == 'droop':
+                                e.pop('R', None)
+                        continue
                     if e['kind'] != 'vsc':
                         raise StudyError(f'set: {name} δεν είναι μετατροπέας')
                     for k, x in (v.items() if isinstance(v, dict) else (('P', v),)):
-                        if k not in ('P', 'V', 'droop', 'R', 'Q', 'Vac', 'control'):
-                            raise StudyError(f'set: {name}.{k}: ένα από P, V, droop, R, Q, Vac, control')
+                        if k not in ('P', 'V', 'droop', 'R', 'Q', 'Vac', 'control', 'Imax', 'Ucmax', 'Ucmin', 'Qmin', 'Qmax'):
+                            raise StudyError(f'set: {name}.{k}: ένα από P, V, droop, R, Q, Vac, control, Imax, Ucmax, Ucmin, Qmin, Qmax')
                         if k == 'control':                 # 4.20.1: the law of the station (a droop needs droop or R, and P_rated)
                             if x not in ('P', 'V', 'droop', 'idroop', 'I'):
                                 raise StudyError(f'set: {name}.control: ένα από P, V, droop, idroop, I')
                             e[k] = x
                             continue
-                        e[k] = float(x)
+                        e[k] = None if x is None and k in ('Imax', 'Ucmax', 'Ucmin', 'Qmin', 'Qmax') else float(x)     # 4.21: a limit of the station, or none
                         if k == 'droop':                   # a new droop replaces a gain given directly
                             e.pop('R', None)
                 for name in chg.get('out') or []:
-                    if net.element(name)['kind'] not in ('vsc', 'dc_line'):
-                        raise StudyError(f'out: {name} δεν είναι μετατροπέας ή γραμμή DC')
+                    if net.element(name)['kind'] not in ('vsc', 'dc_line', 'dcdc', 'dc_dispatcher'):
+                        raise StudyError(f'out: {name} δεν είναι μετατροπέας, μετατροπέας DC/DC, κεντρικός ελεγκτής ή γραμμή DC')
                     net.remove(name)
-            return net.acdc_flow(**opt)
+            mode = opt.pop('mode', 'flow')                 # 4.21: the optimal power flow AC/DC, or N−1 AC/DC, on the same network
+            if mode == 'opf':
+                return net.acdc_opf(**{k: v for k, v in opt.items() if k in ('flow_limits', 'start', 'tol', 'max_iter')})
+            if mode == 'n1':
+                return net.acdc_contingency(**{k: v for k, v in opt.items() if k in ('outages', 'limits', 'tol', 'method')})
+            if mode != 'flow':
+                raise StudyError("mode: ένα από 'flow', 'opf', 'n1'")
+            return net.acdc_flow(**{k: v for k, v in opt.items() if k not in ('flow_limits', 'start', 'outages')})
         return net.opf('ac' if study == 'opf' else 'dc', **opt)
     except (N.NetworkError, ValueError) as e:              # the errors of the solvers are ValueErrors with a message
         raise StudyError(str(e)) from e
@@ -220,7 +238,8 @@ def summary(study, res):
         V = [(b, d['V']) for b, d in res['buses'].items()]
         lo, hi = min(V, key=lambda q: q[1]), max(V, key=lambda q: q[1])
         return {'converged': res['converged'], 'iterations': res['iterations'], 'method': res.get('method'), 'path': res.get('path'), 'why': res['advice']['why'],
-                'losses_MW': res['losses'] / 1e6, 'Vmin': lo[1], 'Vmin_bus': lo[0], 'Vmax': hi[1], 'Vmax_bus': hi[0], 'time_ms': res['time'] * 1e3}
+                'losses_MW': res['losses'] / 1e6, 'Vmin': lo[1], 'Vmin_bus': lo[0], 'Vmax': hi[1], 'Vmax_bus': hi[0], 'time_ms': res['time'] * 1e3,
+                **({'q_side': res['q_side']} if 'q_side' in res else {})}          # 4.21: q_limits 'side'
     if study in ('n1', 'n1dc'):
         ok = [o for o in res['outages'] if o['converged']]
         w = next((o for o in ok if o['name'] == res['worst']), None)
@@ -261,7 +280,9 @@ def summary(study, res):
                 'bad': [{'type': b['type'], 'at': b['at'], 'rN': b['rN'], 'sigmas': sg(b), 'value': b['value'], 'corrected': b['corrected'], 'planted': b['index'] in res['planted']} for b in res['bad'][:8]],
                 'n_bad': len(res['bad']), 'planted': len(res['planted']), 'found': sum(b['index'] in res['planted'] for b in res['bad']), 'critical': len(res['critical']),
                 'error': res.get('error'), 'islands': len(res.get('islands') or []), 'uncovered': (res.get('uncovered') or [])[:8], 'losses_MW': None if res.get('losses') is None else res['losses'] / 1e6,
-                'why': res['advice']['why'], 'message': res['message'], 'time_ms': res['time'] * 1e3}
+                'why': res['advice']['why'], 'message': res['message'], 'time_ms': res['time'] * 1e3,
+                **({'start': res.get('start'), 'absolute': res.get('absolute')} if 'absolute' in res else {}),          # 4.21: phasors and |I|
+                **({'tve': {k: v for k, v in res['tve'].items() if k != 'points'}} if res.get('tve') else {})}
     if study == 'harmonic':                                # 4.19.5: the worst distortion, what is above its limit, the scan to draw
         if not res['converged']:
             return {'converged': False, 'message': res['message'], 'why': '', 'time_ms': res['time'] * 1e3}
@@ -269,7 +290,7 @@ def summary(study, res):
         top = sorted(B, key=lambda b: -B[b]['THD'])[:6]
         row = lambda b: {'bus': b, 'THD': B[b]['THD'], 'limit_thd': B[b]['limit_thd'], 'limit': B[b]['limit'], 'worst': B[b]['worst'], 'worst_pct': B[b]['worst_pct'],      # noqa: E731
                          'kV': B[b]['Un'] / 1e3, 'over': B[b]['over']}
-        out = {'converged': True, 'sources': [{'load': q['load'], 'bus': q['bus'], 'I1': q['I1'], 'delta': q['delta']} for q in res['sources']], 'orders': res['harmonics'],
+        out = {'converged': True, 'sources': [{'load': q['load'], 'bus': q['bus'], 'I1': q['I1'], 'delta': q['delta'], **({'spec': q['spec']} if 'spec' in q else {})} for q in res['sources']], 'orders': res['harmonics'],
                'skipped': res['skipped'], 'worst': row(res['worst']['bus']), 'top': [row(b) for b in top], 'over': len(res['over']), 'over_buses': res['over'][:10], 'buses': len(B),
                'load_model': res['load_model'], 'line_model': res['line_model'], 'pulse': res['pulse'], 'filters': res['filters'], 'losses_MW': res['lf']['losses'] / 1e6,
                'why': res['advice']['why'], 'message': res['message'], 'time_ms': res['time'] * 1e3}
@@ -279,6 +300,21 @@ def summary(study, res):
             out['scan'] = {'bus': sc['bus'], 'h': [sc['h'][j] for j in keep], 'Z': [sc['Z'][j] for j in keep], 'peaks': sorted(sc['peaks'], key=lambda q: -q[1])[:6]}
             out['at'] = dict(row(sc['bus']), Vh={str(h): 100 * v / B[sc['bus']]['V'] for h, v in B[sc['bus']]['Vh'].items()})
         return out
+    if study == 'acdc' and 'outages' in res:               # 4.21: N−1 AC/DC
+        ok = [o for o in res['outages'] if o['converged']]
+        w = next((o for o in ok if o['name'] == res['worst']), None)
+        return {'mode': 'n1', 'outages': len(res['outages']), 'solved': len(ok), 'failed': res['failed'], 'worst': res['worst'], 'worst_where': w and w['where'],
+                'worst_loading': w and w['loading'], 'base_loading': res['base']['loading'], 'overloads': sum(bool(o['overloads']) for o in ok),
+                'limits': sorted({n for o in ok for n in o['limits']}), 'time_ms': res['time'] * 1e3,
+                'list': [{k: o[k] for k in ('name', 'kind', 'converged', 'loading', 'where', 'Vmin', 'Vdc_min', 'Vdc_max', 'message')} for o in res['outages']]}
+    if study == 'acdc' and res.get('kind') == 'acdc':      # 4.21: the optimal power flow AC/DC
+        dc = res['dc']
+        return {'mode': 'opf', 'converged': res['converged'], 'iterations': res['iterations'], 'cost': res['cost'], 'message': res.get('message'),
+                'losses_MW': res['losses'] / 1e6, 'losses_dc_MW': res['losses_dc'] / 1e6, 'losses_conv_MW': res['losses_conv'] / 1e6, 'binding': len(res['binding']),
+                'sources': [{'name': q['name'], 'bus': q['bus'], 'P_MW': q['P'] / 1e6, 'Q_Mvar': q['Q'] / 1e6} for q in res['sources']],
+                'stations': [{'name': n, 'bus': c['bus'], 'dc': c['dc'], 'Ps_MW': c['Ps'] / 1e6, 'Qs_Mvar': c['Qs'] / 1e6, 'Pdc_MW': c['Pdc'] / 1e6,
+                              'Udc_kV': c['Udc'] / 1e3, 'Uc': c['Uc'], 'Ic_kA': c['Ic'] / 1e3, 'loss_MW': c['loss'] / 1e6} for n, c in res['converters'].items()],
+                'dc': [{'bus': b, 'U_kV': d['U'] / 1e3, 'V': d['V'], 'P_MW': d['P'] / 1e6, 'lmp': d['lmp']} for b, d in dc['buses'].items()], 'time_ms': res['time'] * 1e3}
     if study == 'acdc':                                    # 4.20: the AC/DC iterations, the DC grid, every converter
         dc, C = res['dc'] or {}, res['converters']
         Vd = [(b, d['V']) for b, d in (dc.get('buses') or {}).items()]
@@ -290,6 +326,14 @@ def summary(study, res):
                 'dc': [{'bus': b, 'U_kV': d['U'] / 1e3, 'V': d['V'], 'P_MW': d['P'] / 1e6} for b, d in (dc.get('buses') or {}).items()],
                 'stations': [{'name': n, 'bus': c['bus'], 'dc': c['dc'], 'control': c['control'], 'Ps_MW': c['Ps'] / 1e6, 'Qs_Mvar': c['Qs'] / 1e6,
                               'Pdc_MW': c['Pdc'] / 1e6, 'Udc_kV': (c['Udc'] or 0.0) / 1e3, 'loss_MW': c['loss'] / 1e6, 'Ic_kA': c['Ic'] / 1e3} for n, c in C.items()],
+                # 4.21: the DC/DC converters and the dispatchers (only when the network has them)
+                **({'dcdc': [{'name': n, 'a': d['a'], 'b': d['b'], 'control': d['control'], 'P_MW': d['P'] / 1e6, 'Ua_kV': d['Ua'] / 1e3, 'Ub_kV': d['Ub'] / 1e3,
+                              'loading': d['loading']} for n, d in dc['dcdc'].items()]} if dc.get('dcdc') else {}),
+                **({'dispatchers': [{'name': n, 'x_MW': d['x'] / 1e6, 'V': d['V'], 'Vref': d['Vref'], 'members': {m: p / 1e6 for m, p in d['members'].items()}}
+                                    for n, d in dc['dispatchers'].items()]} if dc.get('dispatchers') else {}),
+                # 4.21: the limits of the stations (only when they were checked): which one a limit holds, and how
+                **({'limits': [{'name': n, 'held': C[n].get('held'), 'over': C[n].get('over'), 'Qmin_Mvar': None if C[n].get('Qmin') is None else C[n]['Qmin'] / 1e6,
+                                'Qmax_Mvar': None if C[n].get('Qmax') is None else C[n]['Qmax'] / 1e6} for n in res['limits']]} if 'limits' in res else {}),
                 'time_ms': res['time'] * 1e3}
     return {}
 
@@ -361,7 +405,8 @@ def run(data):
     With 'view': True (4.19.4) also the picture of the network as data: 'view' (buses, branches and their places,
     pcl.netview.view) and 'layers' (what every layer shows from this result, pcl.netview.pack), 'layer' (the one to open),
     and 'edit' (what can be changed from the picture, as it is now: pcl.netfile.describe). With 'edits' the study runs on
-    the changed network and 'network' says what was changed ('edits': one sentence each)."""
+    the changed network and 'network' says what was changed ('edits': one sentence each). 4.21: 'layer' names the layer to
+    open with (when the result feeds it)."""
     if data.get('study') in FEEDER_STUDIES:                # 4.19.5: a three-phase feeder has its own network and its own load flow
         return _feeder_run(data)
     net0, net, done = _networks_of(data)
@@ -378,7 +423,12 @@ def run(data):
         out['edit'] = netfile.describe(net)
         out['view'], out['layers'] = v, netview.pack(v, out['result'])
         have = [q['layer'] for q in out['layers']]
-        out['layer'] = netview.DEFAULT.get(study) if netview.DEFAULT.get(study) in have else ('voltage' if 'voltage' in have else 'base')
+        first = netview.DEFAULT.get(study)
+        if study == 'acdc':                                # 4.21: the modes of the AC/DC study open on their own layer
+            first = {'n1': 'n1', 'opf': 'lmp'}.get((data.get('options') or {}).get('mode'), first)
+        if data.get('layer') in have:                      # 4.21: the layer to open with, when the request names one
+            first = data['layer']
+        out['layer'] = first if first in have else ('voltage' if 'voltage' in have else 'base')
         if data.get('view') == 'only':
             out.pop('result')
     return out

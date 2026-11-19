@@ -87,7 +87,7 @@ class ApiSurface(unittest.TestCase):
             self.assertTrue(api_surface.experimental('pcl', k), k)
             self.assertIn(k, self.now['pcl'], k)
         self.assertIn('pcl.network.Network.scopf', self.now['pcl'])
-        self.assertEqual(self.now['pcl']['pcl.opf.solve']['params'][-1], 'extra')
+        self.assertEqual(self.now['pcl']['pcl.opf.solve']['params'][-2:], ['extra', 'acdc'])           # (4.21: the stations of the OPF AC/DC after it)
         from pcl import study
         self.assertIn('scopf', study.STUDIES)
 
@@ -99,7 +99,7 @@ class ApiSurface(unittest.TestCase):
         for k in ('dcc', 'plim', 'ith', 'gp', 'kap', 'E0'):
             self.assertIn(k, g['params'])
         self.assertIn('idc', g['pins'])
-        self.assertEqual(sum(len(v) for v in self.now.values()), 836)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 836)        # 836 then; 4.21 adds points
 
     def test_the_surface_of_4_20_2(self):
         """4.20.2: the grid-forming control has two more laws, dVOC and matching control, with the gains of the amplitude of the
@@ -108,7 +108,7 @@ class ApiSurface(unittest.TestCase):
         for k in ('kpm', 'kim', 'mu0', 'Gdc'):
             self.assertIn(k, g['params'])
         self.assertIn('idc', g['pins'])
-        self.assertEqual(sum(len(v) for v in self.now.values()), 836)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 836)
 
     def test_the_surface_of_4_20_1(self):
         """4.20.1: the B4 data and its builder are experimental (in pcl.dcgrid); VSC2 has the DC voltage of its start (Vdc0)."""
@@ -118,7 +118,7 @@ class ApiSurface(unittest.TestCase):
             self.assertTrue(api_surface.experimental('pcl', 'pcl.dcgrid.' + f))
         self.assertIn('Vdc0', self.now['project']['part:VSC2']['params'])
         # one more case among the ones that are not in CASES (it is the B4 of the book, not an IEEE network)
-        self.assertEqual((network.MORE, len(network.CASES)), (('harmonic14', 'mtdc5', 'b4'), 10))
+        self.assertEqual((network.MORE[:3], len(network.CASES)), (('harmonic14', 'mtdc5', 'b4'), 10))          # (4.21: case5_acdc after them)
 
     def test_the_surface_of_4_20(self):
         """4.20: the DC grids: the module pcl.dcgrid is experimental; the DC buses, lines and converters of a Network, its AC/DC
@@ -130,7 +130,31 @@ class ApiSurface(unittest.TestCase):
             self.assertIn('pcl.network.Network.' + m, self.now['pcl'])
             self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.' + m))
         self.assertEqual(study.STUDIES[-1], 'acdc')
-        self.assertEqual(set(study.OPTIONS['acdc']) - {'set', 'out'}, set(self.now['pcl']['pcl.network.Network.acdc_flow']['params']))
+        # (4.21: the modes of the study: the OPF AC/DC and N−1 AC/DC have their own options)
+        self.assertEqual(set(study.OPTIONS['acdc']) - {'set', 'out', 'mode', 'flow_limits', 'start', 'outages'}, set(self.now['pcl']['pcl.network.Network.acdc_flow']['params']))
+
+    def test_the_surface_of_4_21(self):
+        """4.21: the DC/DC converter and the dispatcher, the OPF AC/DC and N−1 AC/DC are stable additions of the Network (their
+        routines in pcl.dcgrid experimental, as the module); the phasors and the measurements from EMT of the state estimation and
+        the spectrum from EMT of the harmonic load flow are experimental, as their modules; two parts, the DC/DC converter and
+        the phasor measurement unit; the plain load flow has q_limits='side'."""
+        from pcl import network, study
+        for m in ('dcdc', 'dc_dispatcher', 'acdc_opf', 'acdc_contingency'):
+            self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.' + m), m)
+        for k in ('pcl.dcgrid.DCGrid.dcdc', 'pcl.dcgrid.DCGrid.dispatcher', 'pcl.dcgrid.q_range', 'pcl.dcgrid.acdc_opf', 'pcl.dcgrid.acdc_contingency',
+                  'pcl.se.from_emt', 'pcl.se.tve', 'pcl.se.pmu_start', 'pcl.harmonic.spectrum_from'):
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+            self.assertIn(k, self.now['pcl'], k)
+        for t in ('DCDC', 'PMU3'):
+            self.assertIn('part:' + t, self.now['project'])
+        self.assertEqual(set(self.now['project']['part:PMU3']['params']), {'f', 'np', 'ref', 'conn'})
+        self.assertIn('limits', self.now['pcl']['pcl.network.Network.acdc_flow']['params'])
+        for k in ('pmu', 'currents', 'emt'):
+            self.assertIn(k, self.now['pcl']['pcl.se.run']['params'])
+            self.assertIn(k, study.OPTIONS['se'])
+        self.assertIn('spectra', study.OPTIONS['harmonic'])
+        self.assertEqual(network.MORE[-1], 'case5_acdc')
+        self.assertEqual(sum(len(v) for v in self.now.values()), 851)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

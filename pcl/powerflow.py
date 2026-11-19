@@ -826,7 +826,14 @@ COMP_MAX = 2000         # unknowns of the compensation (two per link, one per PV
 def solve(case, method='auto', tol=1e-8, max_iter=None, q_limits=False, flat=False, V0=None, typ=None):
     """One load flow. Returns {'V', 'typ', 'converged', 'iterations', 'method', 'advice', 'path', 'time', 'info'}: path lists
     what ran (a fallback adds a line). With «auto» a Newton–Raphson that fails starts again from a flat start with step
-    control before the result is «not converged»."""
+    control before the result is «not converged».
+    q_limits: True turns a bus that holds its voltage (PV) past a reactive limit into a PQ bus at that limit, as before 4.21.
+    4.21: 'side' also checks on which side of its set voltage such a bus ends up, as the complementarity conditions of
+    Pirnia, Cañizares & Bhattacharya (2013, (10)–(12), (22)) ask: at Q_max its voltage may only be below the set voltage, at
+    Q_min only above. A bus on the wrong side holds its voltage again (PV), and the load flow runs again. Without the check
+    the load flow can «converge» where no operating point exists (above the loading limit of the P–V curve; THEORY §8Μ):
+    with 'side' it does not, and the result says why ('side': the buses that went back, 'cycle': a set of bus types that came
+    back, so that the switching cannot settle)."""
     if method not in METHODS:
         raise PowerFlowError(f'method: one of {", ".join(METHODS)}')
     adv = advise(case)
@@ -835,7 +842,7 @@ def solve(case, method='auto', tol=1e-8, max_iter=None, q_limits=False, flat=Fal
     typ = (case.typ if typ is None else typ).copy()
     Sg = case.Sg.copy()
     t0 = time.perf_counter()
-    path, it_total, info = [], 0, {}
+    path, it_total, info, side = [], 0, {}, {}
     run = {'nr': newton, 'nr_dense': newton_dense, 'nr_ci': newton_ci, 'sweep': sweep, 'sweepc': sweep_comp, 'gs': gauss_seidel,
            'fdxb': lambda *a, **k: fast_decoupled(*a, scheme='xb', **k), 'fdbx': lambda *a, **k: fast_decoupled(*a, scheme='bx', **k)}
     if m == 'dc':
@@ -860,14 +867,41 @@ def solve(case, method='auto', tol=1e-8, max_iter=None, q_limits=False, flat=Fal
         S = V * np.conj(case.Y @ V) + case.zip(np.abs(V))
         Q = S.imag
         over = (typ == PV) & ((Q > case.qmax + 1e-9) | (Q < case.qmin - 1e-9))
+        if q_limits == 'side':                 # 4.21: a bus at a limit on the wrong side of its set voltage holds it again
+            back = _wrong_side(case, typ, V, Sg)
+            if back.any() and not over.any():
+                key = typ.tobytes()
+                seen = side.setdefault('_seen', set())
+                if key in seen:                # the same set of types again: the switching cannot settle
+                    side['cycle'] = True
+                    ok = False
+                    break
+                seen.add(key)
+                side.setdefault('back', []).extend(int(i) for i in np.flatnonzero(back))
+                typ[back] = PV
+                V = V.copy()                   # (a PV bus starts at its set voltage: the solvers keep the magnitude they get)
+                V[back] = case.Vset[back] * np.exp(1j * np.angle(V[back]))
+                continue
         if not over.any():
             break
         typ[over] = PQ
         Sg[over] = Sg.real[over] + 1j * np.clip(Q[over], case.qmin[over], case.qmax[over])
         if m == 'sweep':
             m = 'nr'
-    return {'V': V, 'typ': typ, 'converged': bool(ok), 'iterations': it_total, 'method': m, 'advice': adv, 'path': path,
-            'time': time.perf_counter() - t0, 'info': info, 'Sg': Sg}
+    out = {'V': V, 'typ': typ, 'converged': bool(ok), 'iterations': it_total, 'method': m, 'advice': adv, 'path': path,
+           'time': time.perf_counter() - t0, 'info': info, 'Sg': Sg}
+    if q_limits == 'side':
+        out['side'] = {'back': sorted(set(side.get('back', []))), 'cycle': bool(side.get('cycle')), 'wrong': [int(i) for i in np.flatnonzero(_wrong_side(case, typ, V, Sg))]}
+    return out
+
+
+def _wrong_side(case, typ, V, Sg, tol=1e-7):
+    """4.21: the buses that held their voltage (PV in the case) and are now PQ at a reactive limit on the wrong side of the
+    set voltage: |V| > V_set at Q_max, or |V| < V_set at Q_min (Pirnia, Cañizares & Bhattacharya 2013, (22))."""
+    was = (case.typ == PV) & (typ == PQ)
+    Vm = np.abs(V)
+    up = Sg.imag >= case.qmax - 1e-9
+    return was & ((up & (Vm > case.Vset + tol)) | (~up & (Vm < case.Vset - tol)))
 
 
 # -------------------------------------------------------------------- many load flows of one topology (batch)

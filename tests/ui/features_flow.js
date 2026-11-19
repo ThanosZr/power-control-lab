@@ -237,7 +237,8 @@ const {chromium}=require('playwright');
   return {title:document.querySelector('#nv-title').textContent,drawn:v.state.drawn,X:r.left+(D.x[1]-tr.cx)*tr.s+v.state.w/2,Y:r.top+(D.y[1]-tr.cy)*tr.s+v.state.h/2,id:D.v.buses[1].id};});
  await p.mouse.move(dcp.X,dcp.Y);await p.waitForTimeout(150);await p.mouse.down();await p.mouse.up();await p.waitForTimeout(150);
  const dci=await p.evaluate(()=>({info:document.querySelector('#nv-info').textContent,edit:document.querySelector('#nv-edit').hidden}));
- ok(/15 ζυγοί DC, 15 γραμμές DC, 15 σταθμοί μετατροπέα/.test(dcp.title)&&dcp.drawn.dcbuses===15&&dcp.drawn.dclines===15&&dcp.drawn.stations===15&&dci.info.startsWith('Ζυγός DC '+dcp.id)&&dci.edit,
+ // (4.21: the two DC/DC converters are one element each, drawn with the DC lines, and no longer two stations each)
+ ok(/15 ζυγοί DC, 15 γραμμές DC, 2 μετατροπείς DC\/DC, 11 σταθμοί μετατροπέα/.test(dcp.title)&&dcp.drawn.dcbuses===15&&dcp.drawn.dclines===17&&dcp.drawn.stations===11&&dci.info.startsWith('Ζυγός DC '+dcp.id)&&dci.edit,
   'network view: the DC grids of the B4 ('+dcp.title.slice(-60)+'; '+dci.info+')');
  await p.click('#nv-close');
  // 4.19.3 (ROADMAP §68, decision 264): a large network in the time domain. The 8 × 8 mesh (573 unknowns, over 4000 channels): the

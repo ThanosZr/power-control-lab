@@ -825,6 +825,30 @@
     ],
     "since": "4.20"
    },
+   "pcl.dcgrid.DCGrid.dcdc": {
+    "params": [
+     "a",
+     "b",
+     "control",
+     "P",
+     "V",
+     "droop",
+     "Prated",
+     "R",
+     "name"
+    ],
+    "since": "4.20.4"
+   },
+   "pcl.dcgrid.DCGrid.dispatcher": {
+    "params": [
+     "members",
+     "V",
+     "weights",
+     "buses",
+     "name"
+    ],
+    "since": "4.20.4"
+   },
    "pcl.dcgrid.DCGrid.flow": {
     "params": [
      "tol",
@@ -856,6 +880,16 @@
     "params": [],
     "since": "4.20"
    },
+   "pcl.dcgrid.acdc_contingency": {
+    "params": [
+     "net",
+     "outages",
+     "limits",
+     "tol",
+     "method"
+    ],
+    "since": "4.20.4"
+   },
    "pcl.dcgrid.acdc_flow": {
     "params": [
      "net",
@@ -864,9 +898,21 @@
      "max_iter",
      "flat",
      "outer",
-     "q_limits"
+     "q_limits",
+     "limits"
     ],
     "since": "4.20"
+   },
+   "pcl.dcgrid.acdc_opf": {
+    "params": [
+     "net",
+     "flow_limits",
+     "tol",
+     "max_iter",
+     "start",
+     "dc_limits"
+    ],
+    "since": "4.20.4"
    },
    "pcl.dcgrid.b4_line_data": {
     "params": [
@@ -892,6 +938,21 @@
      "net"
     ],
     "since": "4.20"
+   },
+   "pcl.dcgrid.q_range": {
+    "params": [
+     "Us",
+     "Ps",
+     "st",
+     "S_base",
+     "U_base",
+     "Imax",
+     "Ucmax",
+     "Ucmin",
+     "Qmin",
+     "Qmax"
+    ],
+    "since": "4.20.4"
    },
    "pcl.dcgrid.sensitivity": {
     "params": [
@@ -993,7 +1054,8 @@
      "scan_bus",
      "scan_to",
      "scan_step",
-     "tol"
+     "tol",
+     "spectra"
     ],
     "since": "4.19.5"
    },
@@ -1023,6 +1085,13 @@
      "s"
     ],
     "since": "4.19.5"
+   },
+   "pcl.harmonic.spectrum_from": {
+    "params": [
+     "fourier",
+     "ref"
+    ],
+    "since": "4.20.4"
    },
    "pcl.impulse.auto_H": {
     "params": [
@@ -2344,15 +2413,35 @@
     ],
     "since": "4.2"
    },
+   "pcl.network.Network.acdc_contingency": {
+    "params": [
+     "outages",
+     "limits",
+     "tol",
+     "method"
+    ],
+    "since": "4.20.4"
+   },
    "pcl.network.Network.acdc_flow": {
     "params": [
      "method",
      "tol",
      "max_iter",
      "flat",
-     "q_limits"
+     "q_limits",
+     "limits"
     ],
     "since": "4.20"
+   },
+   "pcl.network.Network.acdc_opf": {
+    "params": [
+     "flow_limits",
+     "tol",
+     "max_iter",
+     "start",
+     "dc_limits"
+    ],
+    "since": "4.20.4"
    },
    "pcl.network.Network.advice": {
     "params": [
@@ -2431,6 +2520,16 @@
     ],
     "since": "4.20"
    },
+   "pcl.network.Network.dc_dispatcher": {
+    "params": [
+     "members",
+     "V",
+     "weights",
+     "buses",
+     "name"
+    ],
+    "since": "4.20.4"
+   },
    "pcl.network.Network.dc_flow": {
     "params": [],
     "since": "4.19.1"
@@ -2451,6 +2550,20 @@
      "rating"
     ],
     "since": "4.20"
+   },
+   "pcl.network.Network.dcdc": {
+    "params": [
+     "a",
+     "b",
+     "control",
+     "P",
+     "V",
+     "droop",
+     "Prated",
+     "R",
+     "name"
+    ],
+    "since": "4.20.4"
    },
    "pcl.network.Network.element": {
     "params": [
@@ -2766,7 +2879,12 @@
      "b_loss",
      "crec",
      "cinv",
-     "name"
+     "name",
+     "Imax",
+     "Ucmax",
+     "Ucmin",
+     "Qmin",
+     "Qmax"
     ],
     "since": "4.20"
    },
@@ -3166,7 +3284,8 @@
      "v_default",
      "record",
      "dS",
-     "extra"
+     "extra",
+     "acdc"
     ],
     "since": "4.19.1"
    },
@@ -3798,6 +3917,17 @@
     "params": [],
     "since": "4.19.5"
    },
+   "pcl.se.from_emt": {
+    "params": [
+     "net",
+     "points",
+     "plan",
+     "sigma",
+     "bad",
+     "ref"
+    ],
+    "since": "4.20.4"
+   },
    "pcl.se.measure": {
     "params": [
      "net",
@@ -3806,7 +3936,9 @@
      "seed",
      "sigma",
      "bad",
-     "zero_injections"
+     "zero_injections",
+     "pmu",
+     "currents"
     ],
     "since": "4.19.5"
    },
@@ -3818,11 +3950,20 @@
     ],
     "since": "4.19.5"
    },
+   "pcl.se.pmu_start": {
+    "params": [
+     "case",
+     "meas",
+     "ang_ref"
+    ],
+    "since": "4.20.4"
+   },
    "pcl.se.quantities": {
     "params": [
      "case",
      "V",
-     "deriv"
+     "deriv",
+     "extra"
     ],
     "since": "4.19.5"
    },
@@ -3849,9 +3990,19 @@
      "max_bad",
      "tol",
      "max_iter",
-     "start"
+     "start",
+     "pmu",
+     "currents",
+     "emt"
     ],
     "since": "4.19.5"
+   },
+   "pcl.se.tve": {
+    "params": [
+     "X",
+     "ref"
+    ],
+    "since": "4.20.4"
    },
    "pcl.se.uncovered": {
     "params": [
@@ -5849,6 +6000,35 @@
     ],
     "since": "3.18"
    },
+   "part:DCDC": {
+    "params": [
+     "ctl",
+     "Vref",
+     "P",
+     "tr",
+     "Rd",
+     "kpv",
+     "kiv",
+     "Imax",
+     "L",
+     "R",
+     "C",
+     "Vb0",
+     "bwi"
+    ],
+    "pins": [
+     "ia",
+     "ib",
+     "na",
+     "nb",
+     "p",
+     "pa",
+     "pb",
+     "va",
+     "vb"
+    ],
+    "since": "4.20.4"
+   },
    "part:DCM": {
     "params": [
      "Ra",
@@ -7144,6 +7324,31 @@
      "w"
     ],
     "since": "3.18"
+   },
+   "part:PMU3": {
+    "params": [
+     "f",
+     "np",
+     "ref",
+     "conn"
+    ],
+    "pins": [
+     "a1",
+     "a2",
+     "abc1",
+     "abc2",
+     "b1",
+     "b2",
+     "c1",
+     "c2",
+     "i",
+     "p",
+     "q",
+     "thi",
+     "thv",
+     "v"
+    ],
+    "since": "4.20.4"
    },
    "part:PORT": {
     "params": [

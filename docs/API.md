@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.20.4: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (836 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.20.4: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (851 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-577 σημεία.
+590 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -149,15 +149,20 @@
 | `pcl.dcgrid.DCGrid.bus` | `name`, `Un`, `V`, `R` | 4.20 · πειρ. |
 | `pcl.dcgrid.DCGrid.conductance` | — | 4.20 · πειρ. |
 | `pcl.dcgrid.DCGrid.converter` | `bus`, `control`, `P`, `V`, `droop`, `Prated`, `R`, `I`, `name` | 4.20 · πειρ. |
+| `pcl.dcgrid.DCGrid.dcdc` | `a`, `b`, `control`, `P`, `V`, `droop`, `Prated`, `R`, `name` | 4.20.4 · πειρ. |
+| `pcl.dcgrid.DCGrid.dispatcher` | `members`, `V`, `weights`, `buses`, `name` | 4.20.4 · πειρ. |
 | `pcl.dcgrid.DCGrid.flow` | `tol`, `max_iter`, `start` | 4.20 · πειρ. |
 | `pcl.dcgrid.DCGrid.line` | `a`, `b`, `R`, `r`, `length`, `poles`, `name`, `rating` | 4.20 · πειρ. |
 | `pcl.dcgrid.DCGrid.remove` | `name` | 4.20 · πειρ. |
 | `pcl.dcgrid.DCGridError` | — | 4.20 · πειρ. |
-| `pcl.dcgrid.acdc_flow` | `net`, `method`, `tol`, `max_iter`, `flat`, `outer`, `q_limits` | 4.20 · πειρ. |
+| `pcl.dcgrid.acdc_contingency` | `net`, `outages`, `limits`, `tol`, `method` | 4.20.4 · πειρ. |
+| `pcl.dcgrid.acdc_flow` | `net`, `method`, `tol`, `max_iter`, `flat`, `outer`, `q_limits`, `limits` | 4.20 · πειρ. |
+| `pcl.dcgrid.acdc_opf` | `net`, `flow_limits`, `tol`, `max_iter`, `start`, `dc_limits` | 4.20.4 · πειρ. |
 | `pcl.dcgrid.b4_line_data` | `a`, `km`, `kind` | 4.20.1 · πειρ. |
 | `pcl.dcgrid.b4_network` | — | 4.20.1 · πειρ. |
 | `pcl.dcgrid.cigre_b4` | `hold`, `out` | 4.20.1 · πειρ. |
 | `pcl.dcgrid.grid_of` | `net` | 4.20 · πειρ. |
+| `pcl.dcgrid.q_range` | `Us`, `Ps`, `st`, `S_base`, `U_base`, `Imax`, `Ucmax`, `Ucmin`, `Qmin`, `Qmax` | 4.20.4 · πειρ. |
 | `pcl.dcgrid.sensitivity` | `grid`, `res` | 4.20 · πειρ. |
 | `pcl.dcgrid.station` | `Us`, `Ss`, `st`, `S_base`, `U_base` | 4.20 · πειρ. |
 | `pcl.dcgrid.station_inverse` | `Us`, `Qs`, `Pdc`, `st`, `S_base`, `U_base`, `Ps0`, `tol`, `max_iter` | 4.20 · πειρ. |
@@ -169,11 +174,12 @@
 | `pcl.harmonic.Model.Y` | `h` | 4.19.5 · πειρ. |
 | `pcl.harmonic.Model.branches` | `h` | 4.19.5 · πειρ. |
 | `pcl.harmonic.limits` | `Un` | 4.19.5 · πειρ. |
-| `pcl.harmonic.run` | `net`, `sources`, `harmonics`, `load_model`, `line_model`, `pulse`, `filters`, `scan_bus`, `scan_to`, `scan_step`, `tol` | 4.19.5 · πειρ. |
+| `pcl.harmonic.run` | `net`, `sources`, `harmonics`, `load_model`, `line_model`, `pulse`, `filters`, `scan_bus`, `scan_to`, `scan_step`, `tol`, `spectra` | 4.19.5 · πειρ. |
 | `pcl.harmonic.scan` | `model`, `bus`, `to`, `step` | 4.19.5 · πειρ. |
 | `pcl.harmonic.six_pulse` | `hmax` | 4.19.5 · πειρ. |
 | `pcl.harmonic.sources_of` | `net` | 4.19.5 · πειρ. |
 | `pcl.harmonic.spectrum` | `s` | 4.19.5 · πειρ. |
+| `pcl.harmonic.spectrum_from` | `fourier`, `ref` | 4.20.4 · πειρ. |
 | `pcl.impulse.auto_H` | `tau1_us`, `tau2_us`, `n`, `t` | 4.1.1 |
 | `pcl.impulse.check_voltage` | `alpha`, `beta`, `K`, `Vp`, `profile`, `X`, `Y`, `method`, `Vpeak` | 3.18 |
 | `pcl.impulse.compare_current` | `row`, `time`, `signal`, `unit`, `shift`, `normalize` | 4.1.1 |
@@ -338,7 +344,9 @@
 | `pcl.netview.values` | `v`, `result`, `layer`, `study` | 4.19.4 · πειρ. |
 | `pcl.netview.view` | `net`, `off` | 4.19.4 · πειρ. |
 | `pcl.network.Network` | `f`, `S_base`, `name` | 4.2 |
-| `pcl.network.Network.acdc_flow` | `method`, `tol`, `max_iter`, `flat`, `q_limits` | 4.20 |
+| `pcl.network.Network.acdc_contingency` | `outages`, `limits`, `tol`, `method` | 4.20.4 |
+| `pcl.network.Network.acdc_flow` | `method`, `tol`, `max_iter`, `flat`, `q_limits`, `limits` | 4.20 |
+| `pcl.network.Network.acdc_opf` | `flow_limits`, `tol`, `max_iter`, `start`, `dc_limits` | 4.20.4 |
 | `pcl.network.Network.advice` | `study`, `scenarios` | 4.19.1 |
 | `pcl.network.Network.batch_flow` | `load_scale`, `gen_scale`, `dS`, `tol`, `backend`, `how`, `start` | 4.19.1 |
 | `pcl.network.Network.branch_pu` | `a`, `b`, `r`, `x`, `bc`, `ratio`, `angle`, `name`, `rating` | 4.2 |
@@ -347,9 +355,11 @@
 | `pcl.network.Network.contingency` | `kind`, `branches`, `ratings`, `tol`, `q_limits`, `backend`, `how` | 4.19.1 |
 | `pcl.network.Network.cpf` | `**kw` | 4.19.5 |
 | `pcl.network.Network.dc_bus` | `name`, `Un`, `V`, `R` | 4.20 |
+| `pcl.network.Network.dc_dispatcher` | `members`, `V`, `weights`, `buses`, `name` | 4.20.4 |
 | `pcl.network.Network.dc_flow` | — | 4.19.1 |
 | `pcl.network.Network.dc_grid` | — | 4.20 |
 | `pcl.network.Network.dc_line` | `a`, `b`, `R`, `r`, `length`, `poles`, `name`, `rating` | 4.20 |
+| `pcl.network.Network.dcdc` | `a`, `b`, `control`, `P`, `V`, `droop`, `Prated`, `R`, `name` | 4.20.4 |
 | `pcl.network.Network.element` | `name` | 4.2 |
 | `pcl.network.Network.estimate` | `measurements`, `**kw` | 4.19.5 |
 | `pcl.network.Network.feeder` | `bus`, `Ik`, `Sk`, `RX`, `X0X`, `R0X0`, `c`, `Ik_min`, `Un`, `name`, `V`, `angle`, `slack` | 4.2 |
@@ -376,7 +386,7 @@
 | `pcl.network.Network.transformer` | `hv`, `lv`, `Sr`, `Uhv`, `Ulv`, `uk`, `ur`, `group`, `X0X`, `R0R`, `Zn_hv`, `Zn_lv`, `tap`, `KT`, `shift`, `name` | 4.2 |
 | `pcl.network.Network.transformer3` | `a`, `b`, `c`, `Sr`, `Ur`, `uk`, `ur`, `group`, `ref`, `z0`, `KT`, `name` | 4.2 |
 | `pcl.network.Network.unit` | `bus`, `gen`, `trafo`, `oltc`, `pT`, `Zn`, `earthed`, `name`, `P`, `V`, `Qmin`, `Qmax`, `slack` | 4.2 |
-| `pcl.network.Network.vsc` | `bus`, `dc`, `control`, `P`, `V`, `droop`, `Prated`, `R`, `Q`, `Vac`, `side`, `I`, `Rtr`, `Xtr`, `Bf`, `Rc`, `Xc`, `a_loss`, `b_loss`, `crec`, `cinv`, `name` | 4.20 |
+| `pcl.network.Network.vsc` | `bus`, `dc`, `control`, `P`, `V`, `droop`, `Prated`, `R`, `Q`, `Vac`, `side`, `I`, `Rtr`, `Xtr`, `Bf`, `Rc`, `Xc`, `a_loss`, `b_loss`, `crec`, `cinv`, `name`, `Imax`, `Ucmax`, `Ucmin`, `Qmin`, `Qmax` | 4.20 |
 | `pcl.network.NetworkError` | — | 4.2 |
 | `pcl.network.c_factor` | `Un`, `which`, `lv_tol` | 4.2 |
 | `pcl.network.case_data` | `name` | 4.19.1 |
@@ -429,7 +439,7 @@
 | `pcl.opf.d2Sbus_dV2` | `Y`, `V`, `lam` | 4.19.1 · πειρ. |
 | `pcl.opf.dSbr_dV` | `Ybr`, `Cbr`, `V` | 4.19.1 · πειρ. |
 | `pcl.opf.dSbus_dV` | `Y`, `V` | 4.19.1 · πειρ. |
-| `pcl.opf.solve` | `net`, `kind`, `flow_limits`, `start`, `tol`, `max_iter`, `ratings`, `v_default`, `record`, `dS`, `extra` | 4.19.1 · πειρ. |
+| `pcl.opf.solve` | `net`, `kind`, `flow_limits`, `start`, `tol`, `max_iter`, `ratings`, `v_default`, `record`, `dS`, `extra`, `acdc` | 4.19.1 · πειρ. |
 | `pcl.opf.sources` | `net`, `case` | 4.19.1 · πειρ. |
 | `pcl.opf.vlimits` | `net`, `case`, `default` | 4.19.1 · πειρ. |
 | `pcl.params` | — | 3.18 |
@@ -514,11 +524,14 @@
 | `pcl.scopf.screen` | `case`, `Pf`, `rate`, `L`, `mon`, `out`, `emergency` | 4.19.4 · πειρ. |
 | `pcl.scopf.solve` | `net`, `emergency`, `outages`, `max_rounds`, `per_round`, `tol`, `max_iter`, `ratings`, `margin`, `check`, `penalty` | 4.19.4 · πειρ. |
 | `pcl.se.SeError` | — | 4.19.5 · πειρ. |
-| `pcl.se.measure` | `net`, `plan`, `noise`, `seed`, `sigma`, `bad`, `zero_injections` | 4.19.5 · πειρ. |
+| `pcl.se.from_emt` | `net`, `points`, `plan`, `sigma`, `bad`, `ref` | 4.20.4 · πειρ. |
+| `pcl.se.measure` | `net`, `plan`, `noise`, `seed`, `sigma`, `bad`, `zero_injections`, `pmu`, `currents` | 4.19.5 · πειρ. |
 | `pcl.se.observability` | `net`, `measurements`, `zero_injections` | 4.19.5 · πειρ. |
-| `pcl.se.quantities` | `case`, `V`, `deriv` | 4.19.5 · πειρ. |
+| `pcl.se.pmu_start` | `case`, `meas`, `ang_ref` | 4.20.4 · πειρ. |
+| `pcl.se.quantities` | `case`, `V`, `deriv`, `extra` | 4.19.5 · πειρ. |
 | `pcl.se.residual_covariance` | `H`, `sigma` | 4.19.5 · πειρ. |
-| `pcl.se.run` | `net`, `measurements`, `plan`, `noise`, `seed`, `sigma`, `bad`, `zero_injections`, `detect`, `threshold`, `confidence`, `max_bad`, `tol`, `max_iter`, `start` | 4.19.5 · πειρ. |
+| `pcl.se.run` | `net`, `measurements`, `plan`, `noise`, `seed`, `sigma`, `bad`, `zero_injections`, `detect`, `threshold`, `confidence`, `max_bad`, `tol`, `max_iter`, `start`, `pmu`, `currents`, `emt` | 4.19.5 · πειρ. |
+| `pcl.se.tve` | `X`, `ref` | 4.20.4 · πειρ. |
 | `pcl.se.uncovered` | `case`, `meas` | 4.19.5 · πειρ. |
 | `pcl.se.zero_injection` | `case` | 4.19.5 · πειρ. |
 | `pcl.set` | `key`, `value` | 3.18 |
@@ -786,7 +799,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-131 σημεία.
+133 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -817,6 +830,7 @@
 | `part:CPE` | kind, sigma, Q, alpha, fmin, fmax, N | a, b | 3.18 |
 | `part:CPL` | P, Vmin, sched | n, p | 3.18 |
 | `part:D` | Ron, Vf, Roff | a, k | 3.18 |
+| `part:DCDC` | ctl, Vref, P, tr, Rd, kpv, kiv, Imax, L, R, C, Vb0, bwi | ia, ib, na, nb, p, pa, pb, va, vb | 4.20.4 |
 | `part:DCM` | Ra, La, psi, J, bm, load, TL, w0, ia0 | a, b, te, tl, w | 3.18 |
 | `part:DEMUX` | n | u, y1, y2, y3 | 3.18 |
 | `part:DISP` | dig | u | 3.18 |
@@ -872,6 +886,7 @@
 | `part:PIA` | win, f, np, fsrc, fmin, t0, clock, first, y0 | u, y | 4.19.6 |
 | `part:PIB` | Kp, Ki, clock, trig, y0, aw, ymin, ymax | tr, u, y | 3.18 |
 | `part:PLL` | f0, bw, th0, ini, conn | a, abc, amp, b, c, th, w | 3.18 |
+| `part:PMU3` | f, np, ref, conn | a1, a2, abc1, abc2, b1, b2, c1, c2, i, p, q, thi, thv, v | 4.20.4 |
 | `part:PORT` | name, side, width | p | 3.18 |
 | `part:PPOS` | win, f, np, fsrc, fmin, t0, clock, first, y0, conn | f, i, ia, ib, ic, p, q, v, va, vb, vc | 4.19.6 |
 | `part:PQ1` | win, f, np, fsrc, fmin, t0, clock, first, y0 | f, i, p, p1, pf, pf1, q1, s, v | 4.19.6 |

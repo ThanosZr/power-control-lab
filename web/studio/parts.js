@@ -1066,6 +1066,35 @@
     num('Lf','L του φίλτρου','H',5e-3,{show:p=>p.filt!=='none'}),num('Rf','R του πηνίου','Ω',0.05,{zero:true,show:p=>p.filt!=='none'}),num('Cf','C του φίλτρου','F',20e-6,{show:p=>p.filt==='lc'}),sel('conn','Ακροδέκτες',[['sep','Χωριστοί'],['bus','Δίαυλοι: abc, m (m_a, m_b, m_c) και meas (i_abc, v_abc, o_abc, v_dc)']],'sep',{hint:'Δίαυλος (3.18): ένα σύρμα για τις τρεις φάσεις, ένα για τη διαμόρφωση και ένα για τις μετρήσεις, ώστε ο έλεγχος grid-forming να συνδέεται με δύο σύρματα.'})],
    value:p=>p.dc==='pins'?null:p.Vdc,unit:'V',
    draw:p=>'<rect x="-30" y="-40" width="60" height="180" rx="4"/><path class="thin" d="M-30,40 L30,-40"/>'+tx('=',-14,-14,'bsm')+tx('~',14,26,'bsm')+tx(p.filt==='lc'?'LC':p.filt==='none'?'':'L',0,80,'bsm')+(isBus(p)?bl('M30,-20 H50'):'<path d="M30,-30 H50 M30,-20 H50 M30,-10 H50"/>')+(p.dc==='pins'?'<path d="M-50,-30 H-30 M-50,-10 H-30"/>':'')+(isBus(p)?sbl('M-50,20 H-30 M30,60 H50'):sl('M-50,10 H-30 M-50,20 H-30 M-50,30 H-30 M30,10 H50 M30,20 H50 M30,30 H50 M30,50 H50 M30,60 H50 M30,70 H50 M30,90 H50 M30,100 H50 M30,110 H50 M30,130 H50'))},
+  // 4.21 (ROADMAP §87): a DC/DC converter as the averaged model of Jovcic (2019), §30.3.3, Fig. 30.7 (netlib.js dcdcDef)
+  DCDC:{name:'Μετατροπέας DC/DC (μέσο μοντέλο, χωρίς απώλειες)',prefix:'DD',group:'Δίκτυο',
+   pins:{pa:[-50,-30],na:[-50,-10],pb:[50,-30],nb:[50,-10]},spins:{p:O(50,20),ia:O(50,30),ib:O(50,40),va:O(50,50),vb:O(50,60)},box:[-40,-40,80,110],
+   params:[sel('ctl','Έλεγχος',[['V','Τάση της πλευράς b (V_ref)'],['P','Ισχύς από το a στο b (P)'],['droop','Στατικότητα P–U στην πλευρά b']],'V',{hint:'Ο Jovcic (2019, §30.3.2): ένας μετατροπέας DC/DC ελέγχει μία μεταβλητή του δικτύου DC· η τάση στον εξωτερικό βρόχο, ή σταθερή ισχύς στο καλώδιο με στατικότητα τάσης. Ο εσωτερικός βρόχος κρατά το ρεύμα της πλευράς a.'}),
+    num('Vref','V_ref (τάση της πλευράς b)','V',397e3,{show:p=>p.ctl!=='P',hint:'Για «Στατικότητα»: η τάση U₀ γύρω από την οποία P = P₀ − R·(v_b − U₀).'}),
+    num('P','P (από το a στο b)','W',0,{signed:true,zero:true,show:p=>p.ctl!=='V',hint:'Για «Στατικότητα»: το P₀. Αρνητικό: η ισχύς πηγαίνει από το b στο a.'}),
+    num('tr','Ράμπα της P στην αρχή','s',0.05,{zero:true,show:p=>p.ctl==='P'}),num('Rd','R της στατικότητας','W/V',1e3,{show:p=>p.ctl==='droop'}),
+    num('kpv','k_p του βρόχου τάσης','A/V',1,{zero:true,show:p=>p.ctl==='V'}),num('kiv','k_i του βρόχου τάσης','A/(V·s)',100,{zero:true,show:p=>p.ctl==='V'}),
+    num('Imax','Μέγιστο ρεύμα της πλευράς a','A',1800),num('L','L της πλευράς a','H',0.2,{hint:'Ο Jovcic, Παράδειγμα 30.3, (30.2): L = ΔV·d/(f·ΔI) = 0,2 H για 1500 Hz και κυμάτωση 6 %.'}),num('R','R του πηνίου','Ω',0,{zero:true}),
+    num('C','C της πλευράς b','F',200e-6),num('Vb0','Αρχική τάση του C','V',397e3,{zero:true}),num('bwi','Εύρος ζώνης του βρόχου ρεύματος','Hz',100)],
+   value:p=>p.ctl==='P'?null:p.Vref,unit:'V',
+   draw:()=>'<rect x="-40" y="-40" width="80" height="110" rx="4"/><path class="thin" d="M-40,70 L40,-40"/>'+tx('=',-20,-12,'bsm')+tx('=',20,40,'bsm')+'<path d="M-50,-30 H-40 M-50,-10 H-40 M40,-30 H50 M40,-10 H50"/>'+tx('a',-30,-26,'bsm')+tx('b',30,-26,'bsm')
+    +sl('M40,20 H50 M40,30 H50 M40,40 H50 M40,50 H50 M40,60 H50')},
+  // 4.21 (§87): a phasor measurement unit at a point of a three-phase network, in series: the voltage at its side 1 and the current
+  // from side 1 to side 2, as synchrophasors of positive sequence over one window of periods of f (RMS; the phase on cos(2πf₀t) with
+  // t = 0 as the rollover of a UTC second, the definition of IEC/IEEE 60255-118-1 §4.2–4.3, or on sin(ω₁t) as the blocks of the
+  // studio), and P, Q of positive sequence. The estimate itself is our own (one-cycle windows, no compliance claimed)
+  PMU3:{name:'Μονάδα μέτρησης φασιθετών (PMU, θετική ακολουθία)',prefix:'PMU',group:'Δίκτυο',
+   pins:p=>isBus(p)?{abc1:[-30,0],abc2:[30,0]}:{a1:[-30,-10],b1:[-30,0],c1:[-30,10],a2:[30,-10],b2:[30,0],c2:[30,10]},
+   spins:{v:O(-10,-25),thv:O(0,-25),p:O(10,-25),i:O(-10,25),thi:O(0,25),q:O(10,25)},box:[-20,-15,40,30],
+   bus:p=>isBus(p)?{abc1:['a1','b1','c1'],abc2:['a2','b2','c2']}:{},
+   params:[num('f','Ονομαστική συχνότητα f₀','Hz',50,{hint:'Το παράθυρο είναι «Περίοδοι ανά παράθυρο» φορές 1/f₀, ανά περίοδο: οι έξοδοι αλλάζουν στο τέλος κάθε περιόδου, την ίδια στιγμή σε όλες τις μονάδες. Ο κοινός χρόνος αναφοράς είναι ο χρόνος της προσομοίωσης.'}),
+    num('np','Περίοδοι ανά παράθυρο','',1,{hint:'Ακέραιος, τουλάχιστον 1.'}),
+    sel('ref','Φάση ως προς',[['cos','cos(2πf₀t), με το t = 0 ως αρχή δευτερολέπτου UTC (ο ορισμός του IEC/IEEE 60255-118-1)'],['sin','sin(ω₁t) από το t = 0, όπως τα μπλοκ μέτρησης και οι πηγές του εργαλείου']],'cos',
+     {hint:'Ο φασιθέτης είναι η ενεργός τιμή με τη φάση ως προς το συνημίτονο της ονομαστικής συχνότητας. Οι πηγές του εργαλείου γράφονται με ημίτονο: μια πηγή με φάση φ δίνει φασιθέτη φ − 90°. Ο έλεγχος συμμόρφωσης με το πρότυπο (κλάσεις P και M) δεν έχει γίνει.'}),
+    CONN('abc1 και abc2')],
+   value:p=>p.f,unit:'Hz',
+   draw:p=>'<rect x="-20" y="-15" width="40" height="30" rx="3"/>'+tx('PMU',0,4,'bsm')+(isBus(p)?sbl('M-30,0 H-20 M20,0 H30'):'<path d="M-30,-10 H-20 M-30,0 H-20 M-30,10 H-20 M20,-10 H30 M20,0 H30 M20,10 H30"/>')
+    +sl('M-10,-15 V-25 M0,-15 V-25 M10,-15 V-25 M-10,15 V25 M0,15 V25 M10,15 V25')},
   GFMC:{name:'Έλεγχος grid-forming (στατικότητα, VSM, PSC, dVOC, matching)',prefix:'GFM',group:'Δίκτυο',pins:{},
    spins:p=>({...(isBus(p)?{meas:I(-50,0)}:{vdc:I(-50,-60),va:I(-50,-40),vb:I(-50,-30),vc:I(-50,-20),ia:I(-50,0),ib:I(-50,10),ic:I(-50,20),
     ...(p.inner==='cascade'?{oa:I(-50,40),ob:I(-50,50),oc:I(-50,60)}:{})}),...(p.sync==='g'?(isBus(p)?{ga:I(-50,40),gb:I(-50,60),gc:I(-50,80)}:{ga:I(-50,80),gb:I(-50,90),gc:I(-50,100)}):{}),

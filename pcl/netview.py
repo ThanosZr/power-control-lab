@@ -42,6 +42,7 @@ GREY, BAD, WARN = '#9e9e9e', '#b2182b', '#ef8a62'
 DC_LEVELS = ['#6a3d9a', '#1f78b4', '#b15928', '#33a02c']     # 4.20.1: the DC voltages (pole to pole), apart from the AC levels
 STATION = '#5f6b6d'                                         # a converter station and its link to its AC bus
 CONTROL = {'P': 'σταθερή ισχύς', 'V': 'κρατά την τάση DC', 'droop': 'στατικότητα', 'idroop': 'στατικότητα ρεύματος', 'I': 'σταθερό ρεύμα'}
+DCDC_CONTROL = {'P': 'σταθερή ισχύς a → b', 'V': 'κρατά την τάση της πλευράς b', 'droop': 'στατικότητα στην πλευρά b'}   # 4.21
 
 
 class ViewError(ValueError):
@@ -253,6 +254,11 @@ def _dc_parts(net):
     return db, [e for e in net.elements if e.get('kind') == 'dc_line'], [e for e in net.elements if e.get('kind') == 'vsc']
 
 
+def _dcdc(net):
+    """4.21: the DC/DC converters of a network (none in a network of before 4.21)."""
+    return [e for e in net.elements if e.get('kind') == 'dcdc']
+
+
 def _with_dc(case, names, f, t, net):
     """The graph of the layout with the DC buses after the AC buses: a DC line joins two DC buses, a station its AC bus and its
     DC bus. None when the network has no DC buses (then the layout is the one of before 4.20.1)."""
@@ -263,6 +269,7 @@ def _with_dc(case, names, f, t, net):
     for i, b in enumerate(db):
         ix.setdefault(str(b), len(names) + i)              # (pcl.network.dc_bus refuses the name of an AC bus)
     ends = [(ix[str(e['a'])], ix[str(e['b'])]) for e in dl] + [(ix[str(e['bus'])], ix[str(e['dc'])]) for e in st if str(e['bus']) in ix]
+    ends += [(ix[str(e['a'])], ix[str(e['b'])]) for e in _dcdc(net)]       # 4.21: a DC/DC converter joins its two DC buses
     fe = np.concatenate([f, np.array([a for a, _ in ends], int)])
     te = np.concatenate([t, np.array([b for _, b in ends], int)])
     typ = np.concatenate([np.asarray(case.typ), np.zeros(len(db), int)])
@@ -366,13 +373,16 @@ def view(net, off=None):
     if db:                                               # 4.20.1: the DC grids, apart from the AC buses and branches
         dcb = [{'id': str(b), 'x': round(xy[str(b)][0], 2), 'y': round(xy[str(b)][1], 2), 'Un': float(d.get('Un', 0.0) or 0.0)} for b, d in db.items()]
         count, seen, lines = {}, {}, []
-        for e in dl:
+        dd = _dcdc(net)                                  # 4.21: a DC/DC converter is drawn as a DC link with its mark (kind 'dcdc')
+        for e in dl + dd:
             key = tuple(sorted((str(e['a']), str(e['b']))))
             count[key] = count.get(key, 0) + 1
-        for e in dl:
+        for e in dl + dd:
             key = tuple(sorted((str(e['a']), str(e['b']))))
             seen[key] = seen.get(key, 0) + 1
             lines.append({'name': str(e['name']), 'a': str(e['a']), 'b': str(e['b']), 'poles': int(e.get('poles', 2)), 'k': seen[key], 'of': count[key]})
+            if e.get('kind') == 'dcdc':
+                lines[-1].update(kind='dcdc', control=str(e.get('control', 'P')))
         stations = [{'name': str(e['name']), 'ac': str(e['bus']), 'dc': str(e['dc']), 'control': str(e.get('control', 'P'))} for e in st if str(e['bus']) in xy]
         out['dc'] = {'levels': sorted({q['Un'] for q in dcb if q['Un'] > 0}, reverse=True), 'buses': dcb, 'lines': lines, 'stations': stations}
         xs, ys = xs + [q['x'] for q in dcb], ys + [q['y'] for q in dcb]
@@ -408,6 +418,8 @@ def values(v, result=None, layer='base', study=None):
     if layer not in LAYERS:
         raise ViewError(f'άγνωστη στρώση {layer!r}: μία από {", ".join(LAYERS)}')
     res = result or {}
+    if layer != 'n1' and res.get('outages') is not None and 'buses' not in res and isinstance(res.get('flow'), dict):
+        res = res['flow']                                     # 4.21: N−1 AC/DC: the other layers from its load flow before any outage
     rb, rbr = res.get('buses') or {}, res.get('branches') or []
     out = {'layer': layer, 'title': TITLES[layer], 'bus': {}, 'branch': {}, 'bus_color': {}, 'branch_color': {}, 'unit_bus': '', 'unit_branch': '', 'legend': [], 'note': ''}
     lev = {u: LEVELS[i % len(LEVELS)] for i, u in enumerate(v['levels'])}
@@ -431,6 +443,8 @@ def values(v, result=None, layer='base', study=None):
             out['dc_bus_color'] = {b['id']: dlev.get(b['Un'], GREY) for b in dc['buses']}
             out['dc_line_color'] = {e['name']: dlev.get(max(dun.get(e['a'], 0), dun.get(e['b'], 0)), GREY) for e in dc['lines']}
             out['legend'] += [(dlev[u], f'±{u / 2e3:g} kV DC') for u in dc['levels']] + [(STATION, 'σταθμός μετατροπέα')]
+            if any(e.get('kind') == 'dcdc' for e in dc['lines']):
+                out['legend'] += [(STATION, 'μετατροπέας DC/DC')]
 
     def missing(what):
         out['note'] = what
@@ -581,6 +595,7 @@ def values(v, result=None, layer='base', study=None):
             dlv, dsv = {}, {}
             if dl:                                            # 4.20.1: a DC line by the power at its end a, a station by the power it gives the DC grid
                 dlv = {str(e.get('name')): _num(e.get('Pa')) for e in dl}
+                dlv.update({str(k): _num(q.get('P')) for k, q in (rdc.get('dcdc') or {}).items() if isinstance(q, dict)})   # 4.21: a DC/DC, a → b
                 dlv = {k: x / 1e6 for k, x in dlv.items() if x is not None}
                 dsv = {str(k): _num(q.get('Pdc')) for k, q in (res.get('converters') or {}).items() if isinstance(q, dict)}
                 dsv = {k: x / 1e6 for k, x in dsv.items() if x is not None}
@@ -677,6 +692,13 @@ def values(v, result=None, layer='base', study=None):
     out['branch'] = {k: x[0] for k, x in by.items()}
     out['branch_color'] = {e['name']: by.get(e['name'], (0.0, GREY))[1] for e in v['branches']}
     out['bus_color'] = {b['id']: GREY for b in v['buses']}
+    if dc:                                                    # 4.21: N−1 AC/DC: a DC line, a station, a DC/DC converter lost
+        for e in dc['lines']:
+            if e['name'] in by:
+                out['dc_line_color'][e['name']], out['dc_line'][e['name']] = by[e['name']][1], by[e['name']][0]
+        for q in dc['stations']:
+            if q['name'] in by:
+                out['dc_station_color'][q['name']], out['dc_station'][q['name']] = by[q['name']][1], by[q['name']][0]
     cnt = lambda s: sum(1 for x in by.values() if x[0] == s)     # noqa: E731
     out['count'] = {'failed': cnt(4.0), 'island': cnt(3.0), 'overload': cnt(2.0), 'voltage': cnt(1.0), 'clear': cnt(0.0)}
     if base_ov:
@@ -842,7 +864,14 @@ def svg(v, result=None, layer='base', width=900, labels=None, title=None, L=None
             c = _col(dlc.get(e['name'], GREY))
             hot = c != GREY and layer != 'base'
             tip = f'{_esc(e["name"])}: {_esc(e["a"])} – {_esc(e["b"])} (DC)' + (fmt(dlv[e['name']], L.get('unit_dc_line', '')) if _num(dlv.get(e['name'])) is not None else '')
+            if e.get('kind') == 'dcdc':                  # 4.21: a DC/DC converter: its link and a square with both diagonals at its middle
+                tip = f'Μετατροπέας DC/DC {_esc(e["name"])}: {_esc(e["a"])} → {_esc(e["b"])} · {_esc(DCDC_CONTROL.get(e.get("control"), e.get("control", "")))}' + (
+                    fmt(dlv[e['name']], L.get('unit_dc_line', '')) if _num(dlv.get(e['name'])) is not None else '')
             o.append(f'<line class="dc" x1="{ax:.1f}" y1="{ay:.1f}" x2="{bx:.1f}" y2="{by:.1f}" stroke="{c}" stroke-width="{lw * (2.2 if hot else 1.6):.2f}" stroke-linecap="round"><title>{tip}</title></line>')
+            if e.get('kind') == 'dcdc':
+                mx, my, hs = (ax + bx) / 2, (ay + by) / 2, 0.75 * r
+                o.append(f'<g class="dcdc"><title>{tip}</title><rect x="{mx - hs:.1f}" y="{my - hs:.1f}" width="{2 * hs:.2f}" height="{2 * hs:.2f}" fill="#ffffff" stroke="{c if hot else STATION}" stroke-width="{lw:.2f}"/>'
+                         f'<path d="M{mx - hs:.1f},{my + hs:.1f}L{mx + hs:.1f},{my - hs:.1f}M{mx - hs:.1f},{my - hs:.1f}L{mx + hs:.1f},{my + hs:.1f}" stroke="{c if hot else STATION}" stroke-width="{lw:.2f}" fill="none"/></g>')
         for q, ax, ay, bx, by in st:
             c = _col(dsc.get(q['name'], STATION))
             mx, my, hs = (ax + bx) / 2, (ay + by) / 2, 0.75 * r
@@ -946,6 +975,11 @@ def dxf(v, result=None, layers=('voltage', 'flow')):
         for e, ax, ay, bx, by in _dc_segments(v):
             line(ldl, ax, ay, bx, by)
             dmid[e['name']] = ((ax + bx) / 2, (ay + by) / 2)
+            if e.get('kind') == 'dcdc':                  # 4.21: the mark of a DC/DC converter on the layer of the stations
+                mx, my = dmid[e['name']]
+                square(lst, mx, my, 0.75 * r)
+                line(lst, mx - 0.75 * r, my + 0.75 * r, mx + 0.75 * r, my - 0.75 * r)
+                line(lst, mx - 0.75 * r, my - 0.75 * r, mx + 0.75 * r, my + 0.75 * r)
         for b in dc['buses']:
             square(ldb, b['x'], b['y'], 0.8 * r)
             text(ldn, b['x'] + 1.3 * r, b['y'] - 1.3 * r, b['id'])

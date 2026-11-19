@@ -109,7 +109,7 @@ KH = ['Y:CT2/G/PP', 'Y:CT2/G/QQ', 'Y:CT2/G/WW', 'Y:CT2/G/EE']
 
 class MmcDvoc(unittest.TestCase):
     def test_kappa_and_the_start_of_the_island(self):
-        o = cases([{'kind': 'tut', 'id': 'hvdc_gfm', 'opts': {'ac': 'island', 'law': 'dvoc', 'e0': e}, 'set': st, 'at': [0.1, 0.55, 1.2], 'keys': KH, 'win': 0.1}
+        o = cases([{'kind': 'tut', 'id': 'hvdc_gfm', 'opts': {'ac': 'island', 'law': 'dvoc', 'e0': e, 'rv': '0'}, 'set': st, 'at': [0.1, 0.55, 1.2], 'keys': KH, 'win': 0.1}
                    for e, st in (('vs', {}), ('small', {}), ('vs', {'CT2': {'kap': 60}}))], timeout=3000)
         vs, sm, kp = o
         for q in o:
@@ -131,3 +131,49 @@ class MmcDvoc(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def dc_part(q, key, t0, span=0.1):
+    """The DC part, the fundamental and the second harmonic of a channel over [t0, t0 + span), by least squares at the frequency
+    of the station's law (exact periods are not needed)."""
+    import numpy as np
+    o = np.array(q['out'])
+    t = o[:, 0]
+    m = (t >= t0) & (t < t0 + span)
+    f1 = 50 * float(np.mean(o[m, 1 + q['keys'].index('Y:CT2/G/WW')]))
+    tt = t[m]
+    A = np.column_stack([np.ones(m.sum())] + [g(2 * np.pi * k * f1 * tt) for k in (1, 2) for g in (np.cos, np.sin)])
+    c = np.linalg.lstsq(A, o[m, 1 + q['keys'].index(key)], rcond=None)[0]
+    return float(c[0]), float(np.hypot(c[1], c[2]))
+
+
+class IslandRipple(unittest.TestCase):
+    """4.21 (ROADMAP §87): the 50 Hz ripple of P in the island of hvdc_gfm with dVOC (found in 4.20.4). In the dq frame of the law
+    it is the DC part of the AC currents and voltages: it grows without a virtual resistance (the oscillator has no filter on P
+    and Q, and the island's network a long L/R: Groß et al. 2019, Condition 2, a longer ρ asks a smaller η), and dies out with
+    R_v = 0.05 pu, the option that the tutorial now takes by default."""
+
+    def test_the_dc_part_grows_without_rv_and_dies_out_with_it(self):
+        K = ['Y:M2A', 'Y:CT2/G/PP', 'Y:CT2/G/WW']
+        o = cases([{'kind': 'ts', 'id': 'hvdc_gfm', 'opts': {'ac': 'island', 'law': 'dvoc', 'rv': rv}, 'T': 2.95, 'dt': 2e-4, 't1': 0.55, 'keys': K}
+                   for rv in ('0', '0.05')], timeout=3000)
+        r0, r5 = o
+        self.assertEqual((r0['meta']['hvdcgfm']['rv'], r5['meta']['hvdcgfm']['rv']), ('0', '0.05'))
+        for q in o:
+            self.assertEqual(q['warn'], [])
+        d0 = [dc_part(r0, 'Y:M2A', t)[0] for t in (0.6, 1.5, 2.85)]
+        d5 = [dc_part(r5, 'Y:M2A', t)[0] for t in (0.6, 1.5, 2.85)]
+        # measured: 6.3, 14.8, 22.7 A without R_v; 0.48, 1.53, 0.45 A with 0.05 pu (beside a fundamental of some 1700 A)
+        self.assertGreater(d0[2], 3 * d0[0])
+        self.assertGreater(d0[2], 15.0)
+        self.assertLess(abs(d5[2]), 1.0)
+        self.assertLess(abs(d5[2]), abs(d5[1]))
+        # the ripple of P: it grows from 1.2 to 2.9 s without R_v, falls with it (peak to peak over 0.1 s)
+        import numpy as np
+        def swing_at(q, t0):
+            x = np.array(q['out'])
+            m = (x[:, 0] >= t0) & (x[:, 0] < t0 + 0.1)
+            return float(np.ptp(x[m, 1 + K.index('Y:CT2/G/PP')]))
+        self.assertGreater(swing_at(r0, 2.85), 1.5 * swing_at(r0, 1.2))
+        self.assertLess(swing_at(r5, 2.85), 0.5 * swing_at(r5, 1.2))
+        self.assertLess(swing_at(r5, 2.85), 0.05 * swing_at(r0, 2.85))

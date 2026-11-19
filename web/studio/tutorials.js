@@ -1268,6 +1268,11 @@
  // with P_r = 1 the valve of G2 (163 MW) was at its limit from the start and the case drifted (governors since 4.8.1)
  const IEEE9_PR={G1:2.475,G2:1.92,G3:1.28};
  // 4.17: the build of the IEEE 9 case as a function, so that the m-SSSC case (ieee9_sssc) can insert its arms (ext)
+ // 4.21: the points of measurement of se_emt: id, bus, the pin of the branch at it, place, orientation; the branch of the load flow and
+ // its end (all «from»)
+ const IEEE9_PMU=[['PM1','B1','T41:abc2',720,840,{rot:3}],['PM2','B4','L54:abc2',780,640,{}],['PM3','B5','L65:abc2',1000,420,{rot:3}],['PM4','B3','T63:abc2',1210,160,{flip:true}],
+  ['PM5','B6','L76:abc2',950,160,{flip:true}],['PM6','B7','L87:abc2',670,160,{flip:true}],['PM7','B8','T28:abc2',400,160,{flip:true}],['PM8','B8','L89:abc1',440,220,{rot:1}],['PM9','B9','L94:abc1',490,560,{}]];
+ const IEEE9_PMU_BR={PM1:'br1',PM2:'br2',PM3:'br3',PM4:'br4',PM5:'br5',PM6:'br6',PM7:'br7',PM8:'br8',PM9:'br9'};
  function ieee9Build(o,ext){const F=o.ev==='fault'||o.ev==='full',cl=o.ev==='fault',Un=345e3,Sb=100e6,f=60,c={conn:'bus'},LF=o.lf||IEEE9_LF;   // 4.19.1: o.lf = another operating point (the optimal power flow)
    // the classical model of the example: E′ behind X′_d constant (X′_q = X′_d, very long T′_d0 and T′_q0)
    const GD=id=>cl?{...IEEE9_GEN[id],Xqp:IEEE9_GEN[id].Xdp,Xqpp:IEEE9_GEN[id].Xdp,Td0p:1000,Tq0p:1000}:IEEE9_GEN[id];
@@ -1292,6 +1297,11 @@
     i=wires.findIndex(w=>w[0]==='B5'&&w[1]==='LD5:abc');wires.splice(i,1);
     {const [mL,mR]=busMeter(comps,wires,'M5',1180,480,{i:'i_a φορτίου 5',v:'v_a ζυγού 5'});wires.push(['B5',mL],[mR,'LD5:abc']);}
     mpanes.push([['Y:M87A','i_a γραμμής 8–7'],['Y:M5A','i_a φορτίου 5']],[['Y:M87V','v_a ζυγού 8'],['Y:M5V','v_a ζυγού 5']]);}
+   // 4.21 (§87): a phasor measurement unit (PMU3) at the «from» end of every branch of the load flow (MATPOWER numbering), on the side
+   // of the bus: the points of the tutorial of the state estimation from the EMT (B3 and G3 move 60 px right to make room)
+   if(o.pmu){for(const q of comps)if(q.id==='B3'||q.id==='G3')q.x+=60;
+    for(const [id,bus,pin,x,y,lo] of IEEE9_PMU){const i=wires.findIndex(w=>(w[0]===bus&&w[1]===pin)||(w[0]===pin&&w[1]===bus));wires.splice(i,1);
+     comps.push(C(id,'PMU3',x,y,{f,np:1,...c},{label:id,lbl:'none',...lo}));wires.push([bus,id+':abc1'],[id+':abc2',pin]);}}
    // 4.8.1: AVR (and PSS, governor) next to each generator, from its steady state (e0, v0, m0)
    if(avr)for(const [g,x,y,hy] of [['G1',560,1000,true],['G2',100,40,false],['G3',1360,40,false]]){const n=g.slice(1);
     comps.push(C('AV'+n,'AVR',x-150,y,{type:'st1a'},{label:'AVR '+n}));wires.push([g+':vt','AV'+n+':vt'],[g+':v0','AV'+n+':v0'],[g+':e0','AV'+n+':e0'],[g+':ifd','AV'+n+':ifd'],['AV'+n+':efd',g+':efd']);
@@ -1302,6 +1312,23 @@
    const Tf=avr?5:2;
    if(ext){ext.add(comps,wires,panes);return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:10,method:'TR',speed:0.05,stopT:ext.T},scope:{panes,window:{unit:'s',n:0.5}},meta:{lf:LF,fault:false,classical:false,ctl:o.ctl,...ext.meta}});}
    return project(comps,wires,{version:4,sim:{hDiv:400,...(avr?{method:'TR'}:{}),speed:F?(avr?10:5):2,stopT:F?Tf:0.5},scope:{panes,window:{unit:'s',n:F?Tf:0.5}},meta:{lf:LF,fault:F,classical:cl,ctl:avr?o.ctl:'none',...(ext?ext.meta:{})}});}
+ T.push({id:'se_emt',group:'Ροή φορτίου και OPF (4.19.1)',title:'Εκτίμηση κατάστασης από μετρήσεις του EMT: φασιθέτες (PMU), SCADA και μέτρα ρεύματος',theory:'formula',topology:'se_emt',
+  options:[{k:'plan',label:'Τι στέλνουν τα σημεία μέτρησης',options:[['pmu','Φασιθέτες τάσης και ρεύματος (PMU) από κάθε σημείο'],['scada','|V|, P και Q (SCADA) από κάθε σημείο'],
+    ['mixed','SCADA, και ένας φασιθέτης τάσης (στον ζυγό 1)'],['current','|V|, P και |I| από κάθε σημείο, με τους φασιθέτες τάσης']],def:'pmu'},
+   {k:'bad',label:'Λανθασμένη μέτρηση',options:[['none','Καμία'],['flow','Η μεγαλύτερη ροή P, 20σ πάνω (όχι με PMU)'],['phasor','Το φανταστικό μέρος του φασιθέτη τάσης με τη μεγαλύτερη τιμή, 20σ πάνω (όχι με SCADA)'],
+    ['current','Το μεγαλύτερο |I|, 20σ πάνω (μόνο με |I|)']],def:'none'}],
+  desc:'Το δίκτυο των 9 ζυγών σε EMT, από τη ροή φορτίου του (όπως το «IEEE 9 ζυγών σε EMT»), με μια μονάδα μέτρησης φασιθετών (PMU) στο άκρο «από» κάθε κλάδου, στην πλευρά του ζυγού. Κάθε μονάδα μετρά τις τρεις τάσεις και τα τρία ρεύματα και δίνει, στο τέλος κάθε περιόδου των 60 Hz, τον φασιθέτη θετικής ακολουθίας της τάσης και του ρεύματος όπως τον ορίζει το IEC/IEEE 60255-118-1: ενεργός τιμή, φάση ως προς cos(2πf₀t), με το t = 0 της προσομοίωσης ως αρχή δευτερολέπτου UTC. Όλες οι μονάδες έχουν τον ίδιο χρόνο αναφοράς, όπως με GPS. Οι πηγές του εργαλείου γράφονται με ημίτονο, άρα μια γωνία θ της ροής φορτίου φαίνεται στη μονάδα ως θ − 90°· το engine το ξέρει. Ο έλεγχος συμμόρφωσης με τις κλάσεις P και M του προτύπου δεν έχει γίνει. Η κάρτα στέλνει στο engine (pcl.se, στον τοπικό server) ό,τι δίνουν τα σημεία τη στιγμή που πατάς το κουμπί, και η εκτίμηση κατάστασης βρίσκει τις τάσεις των ζυγών· τις συγκρίνει με τη ροή φορτίου από την οποία ξεκίνησε το EMT.',
+  tasks:['Τρέξε δύο περιόδους τουλάχιστον και πάτα «Εκτίμηση κατάστασης»: με PMU οι γωνίες είναι μετρημένες, άρα κανένας ζυγός δεν είναι αναφορά (18 άγνωστοι αντί για 17), και η εκτίμηση απέχει από τη ροή φορτίου όσο το EMT από αυτήν.',
+   'Το TVE (ολικό διανυσματικό σφάλμα) των φασιθετών απέναντι στη ροή φορτίου είναι γραμμένο στην κάρτα: 2,06·10⁻⁵ στην τάση. Είναι σχεδόν όλο της μονάδας: ολοκληρώνει τις ευθείες ανάμεσα στα βήματα του λύτη, και με 400 βήματα ανά περίοδο ο φασιθέτης βγαίνει μικρότερος κατά (ωh)²/12. Το ίδιο το EMT απέχει από τη ροή φορτίου λιγότερο από 4·10⁻⁶ στις τάσεις.',
+   '«SCADA»: χωρίς φασιθέτη, ο ζυγός ταλάντωσης γίνεται ξανά αναφορά. «Ένας φασιθέτης τάσης» φέρνει τις γωνίες στον κοινό χρόνο αναφοράς.',
+   '«|I|»: το μέτρο του ρεύματος δεν λέει προς τα πού πηγαίνει η ισχύς· η εκτίμηση ξεκινά από τις γωνίες των φασιθετών τάσης, και όχι από επίπεδη αρχή.',
+   'Λανθασμένη μέτρηση: ο έλεγχος του μεγαλύτερου κανονικοποιημένου υπολοίπου τη βρίσκει και τη βγάζει, όπως στο «Εκτίμηση κατάστασης» με μετρήσεις από τη ροή φορτίου.',
+   '«Ένας φασιθέτης τάσης» με λάθος στον φασιθέτη: είναι η μόνη γωνία στον κοινό χρόνο αναφοράς, άρα το λάθος του γυρίζει όλες τις γωνίες (2,2°) και σχεδόν δεν φαίνεται (κανονικοποιημένο υπόλοιπο 0,31).'],
+  build(o){const pr=ieee9Build({ev:'none',ctl:'none',pmu:true});
+   pr.scope.panes=[[['Y:PM1/SV','|V⁺| ζυγός 1'],['Y:PM2/SV','|V⁺| ζυγός 4'],['Y:PM6/SV','|V⁺| ζυγός 7']],[['Y:PM1/TV','∠V⁺ ζυγός 1'],['Y:PM2/TV','∠V⁺ ζυγός 4'],['Y:PM6/TV','∠V⁺ ζυγός 7']],
+    [['Y:PM1/PP','P⁺ κλάδος 1–4'],['Y:PM6/PP','P⁺ κλάδος 7–8'],['Y:PM8/PP','P⁺ κλάδος 8–9']]];
+   pr.meta.study={net:'ieee9',study:'se',emt:{f:60,ref:'cos',plan:o.plan,bad:o.bad,points:IEEE9_PMU.map(q=>({id:q[0],branch:IEEE9_PMU_BR[q[0]],end:'f'}))},options:{}};
+   pr.meta.pmu={plan:o.plan,bad:o.bad};return pr;}});
  T.push({id:'ieee9_emt',group:'Συστήματα ισχύος (4.3)',title:'IEEE 9 ζυγών σε EMT, από τη ροή φορτίου',theory:'formula',topology:'ieee9_emt',
   options:[{k:'ev',label:'Γεγονός',options:[['none','Καμία διαταραχή: η μόνιμη κατάσταση της ροής φορτίου'],['fault','Σφάλμα 5 κύκλων (A&F, Παρ. 2.7), μηχανές ως κλασικό μοντέλο'],['full','Το ίδιο σφάλμα με τα πλήρη δεδομένα']],def:'none'},
    {k:'ctl',label:'Έλεγχος γεννητριών (4.8.1)',options:[['none','Σταθερά E_fd και T_m'],['avr','AVR ST1A σε κάθε γεννήτρια'],['avr_pss','AVR ST1A και PSS'],['full','AVR, PSS και ρυθμιστές στροφών (G1 νερό, G2 και G3 ατμός)']],def:'none'}],
@@ -1409,6 +1436,44 @@
 
  // 4.19.5 (ROADMAP §80): the harmonic load flow as a study of the engine (pcl.harmonic) on the first test system of the Task Force
  // on Harmonics Modeling and Simulation (1999): a twelve-pulse HVDC terminal at bus 3 and an SVC at bus 8
+ // 4.21 (§87): the AC/DC study of the five-bus network of the AC/DC optimal power flow: the load flow with the limits of the stations,
+ // the optimal power flow AC/DC, N−1 AC/DC (the drawing below is the 9-bus network in EMT, as in the other study tutorials)
+ T.push({id:'acdc_study',group:'Ροή φορτίου και OPF (4.19.1)',title:'Δίκτυο AC/DC: όρια σταθμών, βέλτιστη ροή φορτίου AC/DC, N−1 AC/DC',theory:'formula',topology:'acdc_study',
+  options:[{k:'mode',label:'Μελέτη',options:[['flow','Ροή φορτίου AC/DC'],['opf','Βέλτιστη ροή φορτίου AC/DC'],['n1','N−1 AC/DC']],def:'flow'},
+   {k:'lim',label:'Όρια των σταθμών (ροή φορτίου)',options:[['data','Των δεδομένων: I_max 187 A, |U_c| 0,9–1,1 pu, Q ±50 Mvar'],['110','Ο C1 με I_max = 110 A'],['100','Ο C1 με I_max = 100 A'],['off','Χωρίς όρια']],def:'data'}],
+  desc:'Δίκτυο πέντε ζυγών AC με τρεις σταθμούς VSC και τρεις ζυγούς DC, από τα δεδομένα της υλοποίησης αναφοράς της βέλτιστης ροής φορτίου AC/DC (άδεια BSD 3-Clause, μέσα στο αρχείο). Κάθε σταθμός έχει μετασχηματιστή, φίλτρο και πηνίο, απώλειες a + b·I + c·I², και όρια: ρεύμα του μετατροπέα, τάση του μετατροπέα, άεργο. Το engine (pcl.dcgrid, στον τοπικό server) λύνει τη ροή φορτίου AC/DC με τα όρια (προτεραιότητα στην ενεργό ισχύ), τη βέλτιστη ροή φορτίου με το μη γραμμικό μοντέλο εγχύσεων ζυγών, ή N−1 για κάθε κλάδο AC, γραμμή DC και σταθμό.',
+  tasks:['Βέλτιστη ροή φορτίου AC/DC: κόστος 194,1388 ανά ώρα σε 20 επαναλήψεις, όπως το 194,139 του πίνακα της δημοσίευσης για το ίδιο μοντέλο. Η απλή βέλτιστη ροή φορτίου AC, με τους σταθμούς ως σταθερές εγχύσεις, κοστίζει περισσότερο.',
+   'Ροή φορτίου με «Ο C1 με I_max = 110 A»: ο C1 κρατά τα −60 MW και η άεργός του πέφτει από −40 σε −25,86 Mvar, στο όριο του ρεύματος. Με 100 A δεν χωρά ούτε η P: πέφτει στα −59,76 MW.',
+   'N−1 AC/DC: 13 διαταραχές, 12 με λύση. Χωρίς τον C2 το δίκτυο DC μένει χωρίς σταθμό που κρατά την τάση του, και η μελέτη το λέει. Η χειρότερη είναι ο κλάδος br2 (φόρτιση 149 % απέναντι σε 122 % πριν).'],
+  build(o){const pr=ieee9Build({ev:'none',ctl:'none'});const opt={mode:o.mode};
+   if(o.mode==='flow'){opt.limits=o.lim!=='off';if(o.lim==='110'||o.lim==='100')opt.set={C1:{Imax:+o.lim}};}
+   pr.meta={...pr.meta,study:{net:'case5_acdc',study:'acdc',layer:{flow:'flow',opf:'lmp',n1:'n1'}[o.mode],options:opt}};return pr;}});
+ // 4.21 (§87): the spectrum of a six-pulse bridge from the EMT, for the harmonic load flow: the Fourier blocks of 4.19.6 on the current
+ // that the bridge draws from phase a (sin(hω₁t) from t = 0, per period), pcl.harmonic.spectrum_from on the engine
+ const HARM_EMT_H=[1,5,7,11,13,17,19,23,25];
+ T.push({id:'harm_emt',group:'Ροή φορτίου και OPF (4.19.1)',title:'Φάσμα από το EMT για την αρμονική ροή φορτίου: γέφυρα 6 παλμών με μετάβαση',theory:'formula',topology:'harm_emt',
+  options:[{k:'Ls',label:'Αυτεπαγωγή μετάβασης L_s (ανά φάση)',options:[['0','Καμία: ακαριαία μετάβαση (η ιδανική γέφυρα)'],['0.0005','L_s = 0,5 mH'],['0.002','L_s = 2 mH']],def:'0'},
+   {k:'dev',label:'Στοιχεία',options:[['diode','Δίοδοι'],['15','Θυρίστορ, α = 15°'],['40','Θυρίστορ, α = 40°']],def:'diode'}],
+  desc:'Πηγή 400 V πολική, 60 Hz, με αυτεπαγωγή L_s ανά φάση, γέφυρα 6 παλμών και στην πλευρά DC πηνίο 1 H με αντίσταση 20 Ω: το ρεύμα DC είναι σχεδόν σταθερό. Εννέα μπλοκ Fourier μετρούν στο ρεύμα της φάσης a, ανά περίοδο, το πλάτος και τη φάση των τάξεων 1, 5, 7, 11, 13, 17, 19, 23 και 25 ως προς sin(hω₁t) από το t = 0. Η κάρτα στέλνει ό,τι δίνουν τη στιγμή που πατάς το κουμπί στο engine (pcl.harmonic, στον τοπικό server): το φάσμα γίνεται λόγος προς τη θεμελιώδη και γωνία ως προς h φορές τη γωνία της, στο συνημίτονο της μελέτης, και μπαίνει στις δύο γέφυρες του τερματικού HVDC του συστήματος δοκιμής αρμονικών των 14 ζυγών, στη θέση του φάσματος του πίνακα της δημοσίευσης.',
+  tasks:['Χωρίς L_s: το φάσμα είναι της ιδανικής γέφυρας, 1/h, με τις τάξεις 6k − 1 απέναντι στη θεμελιώδη και τις 6k + 1 μαζί της, για κάθε α μέσα σε 0,0014 της θεμελιώδους και 0,3°. Η καθυστέρηση α μετακινεί κάθε τάξη κατά h·α, και η μετατροπή το αφαιρεί· το 0,0014 είναι η κυμάτωση του ρεύματος DC.',
+   'Με L_s: η μετάβαση (μ = 21,5° με διόδους και L_s = 2 mH) στρογγυλεύει τους παλμούς του ρεύματος, και οι υψηλές τάξεις πέφτουν πιο πολύ: η 25η από 0,040 σε 0,009 της θεμελιώδους. Με α = 40° η μετάβαση είναι πιο σύντομη (4,5°) και το φάσμα μένει πιο κοντά στο ιδανικό.',
+   'Πάτα «Τρέξε τη μελέτη» μετά από δύο περιόδους τουλάχιστον. Με το ιδανικό φάσμα (ως την 25η) το THD του ζυγού 301 βγαίνει 6,00 %, με διόδους και L_s = 2 mH 2,54 %, και με το φάσμα του πίνακα της δημοσίευσης 4,13 % (το «Αρμονικές: παραμόρφωση τάσης και συντονισμοί»).'],
+  build(o){const Vpk=400*Math.SQRT2/Math.sqrt(3),f=60,Ls=+o.Ls,scr=o.dev!=='diode',a=scr?+o.dev:0,R=20,Ld=1,w={win:'per',f},sg=(id,x,y,name)=>C(id,'TAGI',x,y,{name},{label:'',lbl:'none'});
+   const dev=(id,x,y,shift)=>scr?C(id,'SCR',x,y,{refsrc:'V1',alpha:a,shift,pw:120},{rot:3}):C(id,'D',x,y,{},{rot:3});
+   const Id=(3*Math.sqrt(3)/Math.PI*Vpk*Math.cos(a*Math.PI/180))/(R+3*2*Math.PI*f*Ls/Math.PI);
+   const comps=[C('V1','VAC3',60,210,{Vpk,f},{label:'v_abc'}),C('G1','GND',60,280,{},{label:'0 V'}),C('AMA','AM',130,190,{},{label:'i_a'}),C('TA','TAGO',130,140,{name:'i_a'},{label:'',lbl:'none'}),
+    dev('Q1',260,130,30),dev('Q3',380,130,150),dev('Q5',500,130,270),dev('Q4',260,290,210),dev('Q6',380,290,330),dev('Q2',500,290,90),
+    J('JA',260,190),J('JB',380,210),J('JC',500,230),J('JP1',260,70),J('JP3',380,70),J('JP5',500,70),J('JN1',260,350),J('JN3',380,350),J('JN5',500,350),
+    C('LD','L',640,170,{L:Ld,i0:+Id.toFixed(4)},{rot:1,label:'L_d'}),C('RD','R',640,260,{R},{rot:1,label:'R'})];
+   const wires=[['V1:n','G1:g'],['V1:a','AMA:a'],['Q1:a','JA'],['JA','Q4:k'],['Q3:a','JB'],['JB','Q6:k'],['Q5:a','JC'],['JC','Q2:k'],
+    ['Q1:k','JP1'],['JP1','JP3',[],{name:'P'}],['JP3','Q3:k'],['JP3','JP5'],['JP5','Q5:k'],['Q4:a','JN1'],['JN1','JN3',[],{name:'N'}],['JN3','Q6:a'],['JN3','JN5'],['JN5','Q2:a'],
+    ['JP5','LD:a',[[640,70]]],['LD:b','RD:a'],['RD:b','JN5',[[640,350]]],['AMA:y','TA:u']];
+   if(Ls>0){comps.push(C('LA','L',200,190,{L:Ls},{label:'L_s'}),C('LB','L',200,210,{L:Ls},{label:'',lbl:'none'}),C('LC','L',200,230,{L:Ls},{label:'',lbl:'none'}));
+    wires.push(['AMA:b','LA:a'],['LA:b','JA'],['V1:b','LB:a'],['LB:b','JB'],['V1:c','LC:a'],['LC:b','JC']);}
+   else wires.push(['AMA:b','JA'],['V1:b','JB'],['V1:c','JC']);
+   HARM_EMT_H.forEach((h,k)=>{const x=120+150*(k%5),y=k<5?460:560;comps.push(sg('GF'+h,x,y,'i_a'),C('F'+h,'FOUR',x+80,y,{...w,nu:h},{label:'i_a, '+h+(h===1?'η (θεμελιώδης)':'η')}));wires.push(['GF'+h+':y','F'+h+':u']);});
+   return project(comps,wires,{sim:{hDiv:3000,speed:2,stopT:0.25},scope:{panes:[[['Y:AMA','i_a']],[['V:RD','v_R']],[['Y:F1','|I₁|'],['Y:F5','|I₅|'],['Y:F7','|I₇|'],['Y:F11','|I₁₁|']]],window:{unit:'T',n:2}},
+    meta:{Vpk,f,Ls,alpha:a,Id,study:{net:'harmonic14',study:'harmonic',emt:{kind:'spectrum',f,orders:Object.fromEntries(HARM_EMT_H.map(h=>[h,'F'+h])),loads:['hvdc1','hvdc2']},options:{}}}});}});
  T.push({id:'harm_study',group:'Ροή φορτίου και OPF (4.19.1)',title:'Αρμονικές: παραμόρφωση τάσης και συντονισμοί (αρμονική ροή φορτίου)',theory:'formula',topology:'harm_study',
   options:[{k:'net',label:'Δίκτυο της μελέτης',options:[['harmonic14','Σύστημα δοκιμής αρμονικών: 14 ζυγοί μεταφοράς με τερματικό HVDC και SVC (Task Force 1999)']],def:'harmonic14'},
    {k:'pulse',label:'Τερματικό HVDC',options:[['12','Δωδεκαπαλμικό: η μία γέφυρα πίσω από αστέρα–αστέρα, η άλλη πίσω από αστέρα–τρίγωνο'],['6','Σαν εξαπαλμικό: και οι δύο γέφυρες πίσω από αστέρα–αστέρα']],def:'12'},
@@ -1887,7 +1952,7 @@
     wires.push(['N'+p,'L'+a+b+':a',[[X[p],h]]],['L'+a+b+':b','N'+q,[[X[q],h]]]);}
    const ms=o.step==='none'?0.3:0.6;
    return project(comps,wires,{sim:{hDiv:10,speed:300,stopT:ms},scope:{panes:[[...[1,2,3,4,5].map(k=>['Y:VM'+k,'U'+k])],[...[1,2,3,4,5].map(k=>['Y:PW'+k,'P'+k+' (MW)'])]],window:{unit:'T',n:Math.round(ms/1e-3)}},
-    meta:{rho,step:o.step,study:{net:'mtdc5',study:'acdc',options:o.step==='trip5'?{out:['C5'],...(rho!==0.04?{set:Object.fromEntries(['C1','C2','C4'].map(c=>[c,{droop:rho}]))}:{})}:
+    meta:{rho,step:o.step,study:{net:'mtdc5',study:'acdc',layer:'flow',options:o.step==='trip5'?{out:['C5'],...(rho!==0.04?{set:Object.fromEntries(['C1','C2','C4'].map(c=>[c,{droop:rho}]))}:{})}:
      {set:{...(P3!==-750e6?{C3:P3}:{}),...(rho!==0.04?Object.fromEntries(['C1','C2','C4','C5'].map(c=>[c,{droop:rho}])):{})}}}}});}});
  // ------------------------------------------------------------------ 4.20.1 (ROADMAP §83, decision 320): DCS2 of the CIGRE B4 in EMT
  // The five-terminal ±200 kV grid DCS2 of the CIGRE B4 as the book of Jovcic gives it (2019, §27.8, Fig. 27.6, Tables 7.3 and
@@ -1906,7 +1971,7 @@
   data:{cable:[0.0095,2.111e-3,0.2104e-6],ohl:[0.0133,0.8273e-3,0.0139e-6]}};
  // the AC/DC load flow of the case b4 (pcl.network.case_data('b4')) after the same event, with the same laws of the onshore stations
  function b4Study(ev,dr,kd){const set={};
-  if(ev==='cd55'){set['Cd-E1/Bb-E1']=-55e6;set['Cd-E1/Bm-E1']=55e6;}else if(ev==='wind')set['Cm-F1']=250e6;else if(ev==='load')set['Cm-E1']=-150e6;
+  if(ev==='cd55')set['Cd-E1']=55e6;else if(ev==='wind')set['Cm-F1']=250e6;else if(ev==='load')set['Cm-E1']=-150e6;
   if(dr){set['Cm-B3']={control:'droop',droop:kd,P:-900e6,V:1};set['Cm-B2']={control:'droop',droop:kd,P:150e6,V:1};}
   return Object.keys(set).length?{set}:{};}
  const B4_EV={cd55:'Ο Cd-E1 ρίχνει την ισχύ του 300 → 55 MW στο 1 s (όπως στο Σχ. 27.7)',wind:'Το αιολικό του F1 πέφτει 500 → 250 MW στο 1 s',load:'Το υπεράκτιο φορτίο του E1 ανεβαίνει 100 → 150 MW στο 1 s',none:'Κανένα'};
@@ -1976,14 +2041,42 @@
    const K=['B2','B3','B5','F1','E1'];
    return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:1000,method:'TR',speed:0.02,stopT:ms},
     scope:{panes:[K.filter(k=>k!=='B5').map(k=>['Y:PW'+k,'P '+k+' (MW)']).concat([['Y:PWCD','P Cd-E1 (MW)']]),K.map(k=>['Y:VM'+k,'U '+k])],window:{unit:'s',n:ms}},
-    meta:{b4:{ev,ctl:dr?'droop':'vdc',kd,te},study:{net:'b4',study:'acdc',options:b4Study(ev,dr,kd)}}});}});
+    meta:{b4:{ev,ctl:dr?'droop':'vdc',kd,te},study:{net:'b4',study:'acdc',layer:'flow',options:b4Study(ev,dr,kd)}}});}});
+ // ------------------------------------------------------------------ 4.21 (ROADMAP §87): the DC/DC converter as one element
+ // Example 30.3 of Jovcic (2019, printed p. 470–471): a 370 kV DC grid (1 Ω) and a 400 kV DC grid (2 Ω), one pole each, joined by a
+ // DC/DC converter (the averaged model of §30.3.3, DCDC) that holds 397 kV on the 400 kV side: (400 − 397)/2 = 1.5 kA and
+ // 595.5 MW towards the 370 kV grid; when grid 2 falls to 395 kV at 1 s the converter holds 397 kV by reversing the power:
+ // (397 − 395)/2 = 1 kA, 397 MW into grid 2. The sources are ideal behind their resistances (the cables of the example).
+ T.push({id:'dcdc_ex303',group:'Δίκτυα DC πολλών τερματικών (4.20)',title:'Μετατροπέας DC/DC ανάμεσα σε δύο δίκτυα DC 370 και 400 kV (Παράδειγμα 30.3)',theory:'formula',topology:'dcdc_ex303',
+  options:[{k:'ctl',label:'Έλεγχος του μετατροπέα',options:[['V','Κρατά 397 kV στην πλευρά των 400 kV'],['P','Σταθερή ισχύς: 595,5 MW από τα 400 προς τα 370 kV'],['droop','Στατικότητα: 595,5 MW στα 397 kV, R = 200 MW/kV']],def:'V'},
+   {k:'ev',label:'Συμβάν στο 1 s',options:[['drop','Το δίκτυο των 400 kV πέφτει στα 395 kV'],['none','Κανένα']],def:'drop'}],
+  desc:'Δύο δίκτυα DC ενός πόλου, 370 kV με καλώδιο 1 Ω και 400 kV με καλώδιο 2 Ω, και ένας μετατροπέας DC/DC ανάμεσά τους ως ένα στοιχείο: το μέσο μοντέλο του Jovcic (2019, §30.3.3, Σχ. 30.7), με ελεγχόμενη πηγή τάσης πίσω από το πηνίο L = 0,2 H στην πλευρά a (370 kV) και ελεγχόμενη πηγή ρεύματος με πυκνωτή στην πλευρά b (400 kV), χωρίς απώλειες. Ο εσωτερικός βρόχος κρατά το ρεύμα της πλευράς a· ο εξωτερικός την τάση της πλευράς b, ή την ισχύ, ή μια στατικότητα. Δεδομένα: Παράδειγμα 30.3. Η κάρτα δίνει τη μόνιμη κατάσταση της ροής φορτίου του δικτύου DC (pcl.dcgrid, με τον μετατροπέα DC/DC ως ένα στοιχείο) δίπλα στις τιμές του EMT.',
+  tasks:['Πριν από το συμβάν: ο μετατροπέας κρατά 397 kV, το ρεύμα από το δίκτυο των 400 kV είναι (400 − 397)/2 = 1,5 kA, και 595,5 MW πηγαίνουν προς τα 370 kV (στο βιβλίο «600 MW»). Η πλευρά a είναι στα 371,6 kV: τα 595,5 MW περνούν από το καλώδιο του 1 Ω.',
+   'Στο 1 s το δίκτυο των 400 kV πέφτει στα 395 kV. Με έλεγχο τάσης ο μετατροπέας κρατά τα 397 kV αντιστρέφοντας την ισχύ: (397 − 395)/2 = 1 kA, 397 MW προς τα 395 kV («400 MW» στο βιβλίο).',
+   'Με σταθερή ισχύ ο μετατροπέας δεν στηρίζει την τάση: παίρνει πάντα 595,5 MW, και η τάση της πλευράς b πέφτει μαζί με το δίκτυο, στα 391,96 kV. Με στατικότητα βρίσκει ένα σημείο ανάμεσα, με R = 200 MW/kV γύρω από τα 397 kV: η ισχύς προς τα 370 kV πέφτει από 595,5 σε 97,1 MW, και η τάση μένει στα 394,51 kV.',
+   'Από κώδικα: g = pcl.dcgrid.DCGrid(); … g.dcdc(\'B1\', \'B2\', \'V\', V=397/400); g.flow()[\'dcdc\'] (ο οδηγός, §31).'],
+  build(o){const ctl=['V','P','droop'].includes(o.ctl)?o.ctl:'V',drop=o.ev!=='none',te=1,ms=drop?1.6:1;
+   const pr={ctl,Vref:'397e3',P:ctl==='V'?'0':'-595.5e6',tr:'0.05',Rd:'2e5',kpv:'1',kiv:'100',Imax:'1800',L:'0.2',R:'0',C:'200e-6',Vb0:'397e3',bwi:'100'};
+   const comps=[C('G1','VDC',120,260,{V:370e3,Rs:1},{label:'370 kV · 1 Ω',lbl:'left'}),C('G2','VDC',700,260,{V:400e3,Rs:2,...(drop?{sched:`0:400e3, ${te}:395e3`}:{})},{label:drop?'400 → 395 kV · 2 Ω':'400 kV · 2 Ω',lbl:'right'}),
+    C('DD','DCDC',410,240,pr,{label:'DC/DC',lbl:'above'}),J('A1',120,210),J('A2',120,330),J('B1',700,210),J('B2',700,330),
+    C('GA','GND',260,380,{},{label:'',lbl:'none'}),C('GB','GND',560,380,{},{label:'',lbl:'none'}),
+    C('PW','EXPR',560,470,{expr:'p/1e6',ins:'p',pars:''},{label:'P a → b (MW)',lbl:'below'}),
+    C('UA','EXPR',560,520,{expr:'u/1e3',ins:'u',pars:''},{label:'v_a (kV)',lbl:'below'}),C('UB','EXPR',560,570,{expr:'u/1e3',ins:'u',pars:''},{label:'v_b (kV)',lbl:'below'})];
+   const wires=[['G1:p','A1'],['A1','DD:pa',[[300,210],[300,210]]],['G1:n','A2'],['A2','DD:na',[[330,330],[330,230]]],['G2:p','B1'],['B1','DD:pb',[[520,210]]],['G2:n','B2'],['B2','DD:nb',[[490,330],[490,230]]],
+    ['A2','GA:g',[[260,330]]],['B2','GB:g',[[560,330]]],['DD:p','PW:p',[[480,260],[480,470]]],['DD:va','UA:u',[[470,290],[470,520]]],['DD:vb','UB:u',[[465,300],[465,570]]]];
+   return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:400,method:'TR',speed:0.05,stopT:ms},
+    scope:{panes:[[['Y:PW','P a → b (MW)']],[['Y:UB','v_b (kV)'],['Y:UA','v_a (kV)']],[['Y:DD/IA','i_a (A)'],['Y:DD/IBU','i_b (A)']]],window:{unit:'s',n:ms}},
+    meta:{dcdc:{ctl,drop,te}}});}});
  T.push({id:'hvdc_gfm',group:'Grid-forming (4.18.1)',title:'Σταθμός MMC ως grid-forming: νησίδα, ασθενές δίκτυο, παράλληλα με άλλη μονάδα',theory:'formula',topology:'hvdc_gfm',
   options:[{k:'ac',label:'Δίκτυο του σταθμού 2',options:Object.entries(HVDC_G),def:'island'},{k:'law',label:'Νόμος του σταθμού 2',options:[['droop','Στατικότητα P–f 2 %, Q–V 5 % (φίλτρο 5 Hz)'],['vsm','VSM (H = 2 s)'],['psc','PSC (k_p = 50 rad/s, ρύθμιση V_ac)'],['dvoc','dVOC (η, α για 2 % και 5 %, 4.20.2)']],def:'droop'},
    // 4.20.2: the four models of the MMC as in hvdc_mmc (Model 1 with N = 20, the others with N = 400), with the energy control of the arms (4.15)
    {k:'model',label:'Μοντέλο MMC (4.20.2)',options:[['m4','Model 4: μέσο μοντέλο (AVM)'],['m3','Model 3: συνάρτηση μεταγωγής βραχίονα (≈ 4 φορές πιο αργό)'],['m2','Model 2: ισοδύναμο βραχίονα, κάθε πυκνωτής (≈ 7 φορές πιο αργό)'],['m1','Model 1: κάθε υπομονάδα από IGBT (N = 20, πολύ αργό)']],def:'m4'},
-   {k:'e0',label:'dVOC: αρχικό πλάτος του ταλαντωτή (4.20.4)',options:[['vs','V_ref (ως την απεμπλοκή ακολουθεί την τάση του PLL)'],['small','E₀ = 0,01 pu (η νησίδα ξεκινά από σχεδόν μηδενική τάση)']],def:'vs'}],
+   {k:'e0',label:'dVOC: αρχικό πλάτος του ταλαντωτή (4.20.4)',options:[['vs','V_ref (ως την απεμπλοκή ακολουθεί την τάση του PLL)'],['small','E₀ = 0,01 pu (η νησίδα ξεκινά από σχεδόν μηδενική τάση)']],def:'vs'},
+   // 4.21 (ROADMAP §87): the virtual resistance of dVOC; without it the DC part of the island's currents grows (a 50 Hz ripple of P)
+   {k:'rv',label:'dVOC: εικονική αντίσταση R_v (4.21)',options:[['0.05','R_v = 0,05 pu (όπως στο ieee9_gfm): η συνεχής συνιστώσα των ρευμάτων σβήνει'],['0','R_v = 0 (όπως ως την 4.20.4): η συνεχής συνιστώσα μεγαλώνει, κυμάτωση 50 Hz στην P']],def:'0.05'}],
   desc:'Η σύνδεση HVDC του tutorial MMC (σταθμοί 1059 MVA, Model 4 ή όποιο μοντέλο διαλέξεις, καλώδια ±320 kV 70 km wideband). Ο σταθμός 1 κρατά την τάση DC από ένα ισχυρό δίκτυο. Ο σταθμός 2 είναι grid-forming: σχηματίζει την τάση AC του δικτύου του με τον νόμο του στοιχείου «Έλεγχος grid-forming» (στατικότητα, VSM ή PSC) μέσα στον έλεγχο του σταθμού, άμεσα η τάση με όριο ρεύματος στο 1,1 pu. Στη νησίδα δεν υπάρχει άλλη πηγή: ο σταθμός ορίζει και τη συχνότητα.',
-  tasks:['Νησίδα: μετά το βήμα φορτίου η συχνότητα πέφτει κατά m_p·ΔP (κάρτα) και η ενέργεια έρχεται από τον σταθμό 1 μέσω της τάσης DC.','Με δεύτερη μονάδα: το φορτίο μοιράζεται ανάλογα με τα 1059 και 500 MVA (ίδιο pu στις δύο), χωρίς επικοινωνία.','Ασθενές δίκτυο: ο σταθμός φτάνει τα 0,9 pu στο SCR 1,5 (ο έλεγχος ρεύματος του σταθμού της 4.18 ήταν ασταθής στο SCR 1).','Σύγκρινε στατικότητα, VSM και PSC στην πτώση της συχνότητας αμέσως μετά το βήμα.','Άλλαξε το μοντέλο του MMC: με τον έλεγχο ενέργειας των βραχιόνων τα Model 2 και 3 δίνουν την P, τη συχνότητα και τη V_dc του Model 4 (κάρτα). Τι προσθέτουν; (Κυμάτωση των πυκνωτών, σκαλοπάτια της τάσης με N = 20 στο Model 1.)'],
+  tasks:['Νησίδα: μετά το βήμα φορτίου η συχνότητα πέφτει κατά m_p·ΔP (κάρτα) και η ενέργεια έρχεται από τον σταθμό 1 μέσω της τάσης DC.','Με δεύτερη μονάδα: το φορτίο μοιράζεται ανάλογα με τα 1059 και 500 MVA (ίδιο pu στις δύο), χωρίς επικοινωνία.','Ασθενές δίκτυο: ο σταθμός φτάνει τα 0,9 pu στο SCR 1,5 (ο έλεγχος ρεύματος του σταθμού της 4.18 ήταν ασταθής στο SCR 1).','Σύγκρινε στατικότητα, VSM και PSC στην πτώση της συχνότητας αμέσως μετά το βήμα.','Άλλαξε το μοντέλο του MMC: με τον έλεγχο ενέργειας των βραχιόνων τα Model 2 και 3 δίνουν την P, τη συχνότητα και τη V_dc του Model 4 (κάρτα). Τι προσθέτουν; (Κυμάτωση των πυκνωτών, σκαλοπάτια της τάσης με N = 20 στο Model 1.)',
+   'dVOC στη νησίδα με R_v = 0 (4.21): η συνεχής συνιστώσα των ρευμάτων AC μεγαλώνει (6 A στα 0,6 s, 23 A στα 2,85 s), και στο πλαίσιο dq φαίνεται ως κυμάτωση 50 Hz της P. Ο ταλαντωτής δεν έχει φίλτρο στις P και Q, και το δίκτυο της νησίδας έχει μεγάλη σταθερά χρόνου L/R. Με R_v = 0,05 pu σβήνει (0,45 A στα 2,85 s), με τίμημα μια πτώση στην εικονική αντίσταση: |v| 0,933 αντί 0,968 pu.'],
   build(o){const ac=HVDC_G[o.ac]?o.ac:'island',law=['droop','vsm','psc','dvoc'].includes(o.law)?o.law:'droop',f=50,S=1059e6,te=0.6,r=x=>+x.toPrecision(6);
    const model=['m1','m2','m3','m4'].includes(o.model)?o.model:'m4',N=model==='m1'?20:400;
    const mmc={impl:model==='m1'?'blocks':'fast',model:model==='m1'?'m2':model,N,C:+(10e-3*N/400).toPrecision(6),Vdc:640e3,Larm:0.05,Ron:1e-3,ectl:'energy',conn:'bus'};
@@ -2004,8 +2097,8 @@
     for(const q of ['ma','mb','mc','blk'])wires.push([id('CT')+':'+q,id('MMC')+':'+q]);};
    station(1,60,1,{mode:'vdc',Vdcref:'1',Tvdc:0.05,H:0.03,qmode:'q',Qref:'0',Tq:0.1},10e9);
    // station 2: P_ref into the converter (−: to the AC side); in the island its share comes from the droop
-   const e0=law==='dvoc'&&o.e0==='small'?'small':'vs';
-   const g2={mode:'gfm',law,Pref:ac==='weak'?`0:-0.5, ${te}:-0.9`:'-0.55',Qref:'0',Vref:'1',mp:2,nq:5,fp:5,Hv:2,tv:0.02,kp:50,avc:'vac',Vacref:'1',KE:5,TE:0.05,kv:law==='psc'?0.3:0,av:40,Xv:0,Ilim:1.1,Idlim:1.1,vmax:1.3,bw:20,tsoft:0.05,ac:600,Ufd:0.6,...(e0==='small'?{E0:'0.01'}:{})};
+   const e0=law==='dvoc'&&o.e0==='small'?'small':'vs',rv=law==='dvoc'&&o.rv!=='0'?'0.05':'0';
+   const g2={mode:'gfm',law,Pref:ac==='weak'?`0:-0.5, ${te}:-0.9`:'-0.55',Qref:'0',Vref:'1',mp:2,nq:5,fp:5,Hv:2,tv:0.02,kp:50,avc:'vac',Vacref:'1',KE:5,TE:0.05,kv:law==='psc'?0.3:0,av:40,Xv:0,Ilim:1.1,Idlim:1.1,vmax:1.3,bw:20,tsoft:0.05,ac:600,Ufd:0.6,...(e0==='small'?{E0:'0.01'}:{}),...(rv!=='0'?{Rv:rv}:{})};
    station(2,1940,-1,g2,ac==='weak'?r(1.5*S):0,200);
    const Pp=root.Parts,d=JSON.parse(JSON.stringify(Pp.TLM_TYPICAL['320kV-dc']));
    const pc={...Pp.defaults('TLM'),model:'wb',len:70,fmin:1e-3,dec:10,wdc:'1',wpas:'enforce',vtrap:'320e3, -320e3',data:JSON.stringify(d)};
@@ -2027,7 +2120,7 @@
    return project(comps,wires,{version:4,solve:{tbase:0.02},sim:{hDiv:1000,method:'TR',speed:0.02,stopT:1.2},
     scope:{panes:[[['Y:CT2/G/PP','P σταθμού 2 προς το AC (pu)'],...pB],[['Y:CT2/G/WW','f σταθμού 2 (pu)'],...wB],[['Y:CT2/G/VG','|v| σταθμού 2 (pu)'],['Y:CT2/G/IG','|i| (pu)'],['Y:CT2/G/LR','όριο ρεύματος']],[['Y:CT1/Fvdc','V_dc 1 (pu)'],['Y:CT2/Fvdc','V_dc 2 (pu)']],
      [['Y:ADC','I_dc του θετικού πόλου (αμπερόμετρο, A)']],[['Y:VDC','V_dc ανάμεσα στους πόλους (βολτόμετρο, V)']],[['Y:M2A','i_a του σταθμού 2 προς το AC (αμπερόμετρο, A)']],[['Y:M2V','v_a στα 400 kV του σταθμού 2 (probe, V)']],...arm],window:{unit:'s',n:1.2}},
-    meta:{hvdcgfm:{ac,law,model,N,te,S,SB:500e6,mp:0.02,Pload:600e6,dP:300e6,Pr2:0.55,PrB:0.55,scr:1.5,e0}}});}});
+    meta:{hvdcgfm:{ac,law,model,N,te,S,SB:500e6,mp:0.02,Pload:600e6,dP:300e6,Pr2:0.55,PrB:0.55,scr:1.5,e0,rv}}});}});
  // ------------------------------------------------------------------ 4.16 (§42): the first CIGRE HVDC benchmark (LCC)
  // The network of the benchmark at 50 Hz (Faruque et al. 2006 Fig. 1 and Table V, Watson & Arrillaga App. D), the transformers
  // and the controls of the example of the benchmark in PSCAD; the events of Faruque et al. (at 1,0 s for 0,15 s, 0,1 Ω)

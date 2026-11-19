@@ -11,6 +11,9 @@ make in a balanced network.
 - A phase shift of a transformer turns the other way for the orders of negative sequence (3k − 1) than for those of positive
   sequence (3k + 1). The orders 3k are zero sequence in a balanced network and are left out.
 - The frequency scan is the impedance seen from a bus against the order; its peaks are the parallel resonances.
+- 4.21 (ROADMAP §87): the spectrum of a source from an EMT run (spectrum_from): the Fourier phasors of the current a load draws,
+  on sin or on cos of hω₁t from one time origin, as magnitudes against the fundamental and angles against h times its angle, on
+  the cosine of the study.
 
 Only NumPy and SciPy. Per unit on the base of the network."""
 import math
@@ -72,6 +75,31 @@ def spectrum(s):
         raise HarmonicError('spectrum: the order 1 (the fundamental, with a magnitude above zero) is the reference of the others')
     if any(h < 1 for h in out):
         raise HarmonicError('spectrum: orders from 1 up')
+    return out
+
+
+def spectrum_from(fourier, ref='sin'):
+    """4.21: a spectrum as the study takes it ({order: (magnitude, angle in degrees)}, the order 1 at (1, 0)) from the Fourier
+    phasors of the current that a load draws, measured on one time origin: {order: (magnitude, phase in degrees)} of
+    x = Σ M_h·sin(hω₁t + φ_h) (ref 'sin', the FOUR block of the studio by default) or of x = Σ M_h·cos(hω₁t + φ_h) (ref 'cos').
+    The study writes every waveform on the cosine and moves the order h by h times the angle of the fundamental, so the angle of
+    the order h is φ_h − h·φ₁, and on the sine (h − 1)·90° more. The magnitudes in any unit, the same for every order."""
+    if ref not in ('sin', 'cos'):
+        raise HarmonicError("ref: 'sin' or 'cos'")
+    try:
+        f = {int(h): (float(v[0]), float(v[1])) for h, v in dict(fourier).items()}
+    except (TypeError, ValueError, IndexError, KeyError) as e:
+        raise HarmonicError('fourier: {order: (magnitude, phase in degrees)}') from e
+    if 1 not in f or not f[1][0] > 0 or not all(math.isfinite(m) and math.isfinite(a) for m, a in f.values()):
+        raise HarmonicError('fourier: the order 1 (the fundamental, with a magnitude above zero) and finite numbers (has the run reached the end of its first window?)')
+    if any(h < 1 for h in f):
+        raise HarmonicError('fourier: orders from 1 up')
+    m1, p1 = f[1]
+    out = {}
+    for h, (m, p) in sorted(f.items()):
+        a = p - h * p1 + ((h - 1) * 90.0 if ref == 'sin' else 0.0)
+        out[h] = (m / m1, (a + 180.0) % 360.0 - 180.0)
+    out[1] = (1.0, 0.0)
     return out
 
 
@@ -213,14 +241,16 @@ def scan(model, bus, to=40.0, step=0.05):
 
 
 def run(net, sources=None, harmonics=None, load_model='C', line_model='distributed', pulse=None, filters=True, scan_bus=None, scan_to=None,
-        scan_step=0.05, tol=1e-10):
+        scan_step=0.05, tol=1e-10, spectra=None):
     """The harmonic load flow of a network. sources: [{'load': the name of a load, 'spectrum': a name of SPECTRA or {order:
     (magnitude, angle)}, 'delta': behind a star–delta transformer}]; without it, the loads of the network that carry a spectrum.
     harmonics: the orders to solve (default: every order of the spectra). load_model: 'C', 'A', 'B' (Task Force 1996) or
     'none'. line_model: 'distributed' or 'pi'. pulse: 6 takes every source as if behind a star–star transformer (no
     cancellation between two bridges), 12 leaves the sources as given. filters: False takes the tuned filters out (their
     reactive power too: the load flow runs without them). scan_bus: the bus of the frequency scan (default: the bus of the
-    largest source; False: no scan), up to the order scan_to with the step scan_step.
+    largest source; False: no scan), up to the order scan_to with the step scan_step. A source may give 'fourier' and 'ref'
+    (4.21: spectrum_from) in place of 'spectrum'. spectra (4.21): {load: a spectrum, or {'fourier', 'ref'}} in place of the
+    spectrum of those sources (an EMT measurement of a bridge for the bridges of the network, say).
 
     Returns {'converged', 'buses' {bus: V, angle (the fundamental), THD (%), Vh {order: pu}, worst (order), limit, limit_thd,
     over}, 'branches' [{name, a, b, I1 (pu), Ih {order: pu}, THD (%)}], 'sources' [{load, bus, I1, delta, Ih}], 'harmonics',
@@ -238,10 +268,17 @@ def run(net, sources=None, harmonics=None, load_model='C', line_model='distribut
     if not src:
         raise HarmonicError('Το δίκτυο δεν έχει πηγή αρμονικών: δώσε sources ή ένα φορτίο με spectrum.')
     loads = {e['name']: e for e in net.elements if e['kind'] == 'load'}
+    for name in (spectra or {}):
+        if name not in {s.get('load') for s in src}:
+            raise HarmonicError(f'spectra: {name!r} is not a source of harmonics of the study')
     for s in src:
         if s.get('load') not in loads:
             raise HarmonicError(f'source: no load {s.get("load")!r} in the network')
-        s['spec'] = spectrum(s.get('spectrum'))
+        g = (spectra or {}).get(s['load'])
+        if g is not None:
+            s.pop('fourier', None)
+            s.update(g if isinstance(g, dict) and 'fourier' in g else {'spectrum': g})
+        s['spec'] = spectrum_from(s['fourier'], s.get('ref', 'sin')) if s.get('fourier') is not None else spectrum(s.get('spectrum'))
         s['delta'] = bool(s.get('delta')) and pulse != 6
     lf = net.power_flow('nr', tol=tol)
     out = {'converged': False, 'load_model': load_model, 'line_model': line_model, 'pulse': pulse, 'filters': bool(filters), 'message': '', 'S_base': net.S_base}
@@ -270,6 +307,8 @@ def run(net, sources=None, harmonics=None, load_model='C', line_model='distribut
             raise HarmonicError(f'source {s["load"]}: the load draws no current at the fundamental')
         s.update(i=i, I1=I1)
         info.append({'load': s['load'], 'bus': e['bus'], 'I1': float(abs(I1)), 'delta': s['delta'], 'Ih': {}})
+        if s.get('fourier') is not None:                         # 4.21: the spectrum made from an EMT measurement
+            info[-1]['spec'] = {h: [float(m), float(a)] for h, (m, a) in s['spec'].items()}
     Vh, Ih = {}, {}
     for h in orders:
         I = np.zeros(c.n, complex)
@@ -319,4 +358,4 @@ def run(net, sources=None, harmonics=None, load_model='C', line_model='distribut
     return out
 
 
-__all__ = ['HarmonicError', 'SPECTRA', 'LIMITS', 'LOAD_MODELS', 'LINE_MODELS', 'six_pulse', 'spectrum', 'limits', 'Model', 'sources_of', 'scan', 'run']
+__all__ = ['HarmonicError', 'SPECTRA', 'LIMITS', 'LOAD_MODELS', 'LINE_MODELS', 'six_pulse', 'spectrum', 'spectrum_from', 'limits', 'Model', 'sources_of', 'scan', 'run']

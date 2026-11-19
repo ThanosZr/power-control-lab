@@ -73,6 +73,12 @@ function scipyTut(o){require(W+'/tutorials.js');const t=Tutorials.get(o.id),opts
  const pr=t.build(opts);for(const [id,ps] of Object.entries(o.set||{}))Object.assign(pr.components.find(c=>c.id===id).params,ps);
  const s=new MNA.Sim(pr,{hDiv:o.hDiv||400,method:'TR'}),ch=o.keys,rec=[];while(s.t<o.T-1e-12){s.run(Math.min(s.h,o.T-s.t));rec.push([s.t,...ch.map(k=>s.now(k))]);}
  return {rec,ch,batch:MNA.exportForBatch(pr,ch),h:s.h,warn:s.net.warnings};}
+// 4.21: {kind:'ts', id, opts, set, T, dt, t1, keys}: the channels of a tutorial every dt from t1 to T (for a fit in Python)
+function ts(o){require(W+'/tutorials.js');const t=Tutorials.get(o.id),opts={};for(const q of t.options||[])opts[q.k]=q.def;Object.assign(opts,o.opts||{});
+ const pr=t.build(opts);for(const [id,ps] of Object.entries(o.set||{}))Object.assign(pr.components.find(c=>c.id===id).params,ps);const sv=pr.sim||{};
+ const s=new MNA.Sim(pr,{hDiv:o.hDiv||sv.hDiv||400,method:sv.method||'TR'}),out=[];let next=o.t1||0;
+ while(s.t<o.T-1e-12){s.run(s.h);if(s.t>=next-1e-12){out.push([s.t,...o.keys.map(k=>s.now(k))]);next+=o.dt;}}
+ return {out,keys:o.keys,h:s.h,warn:s.net.warnings,meta:pr.meta};}
 const cases=JSON.parse(process.argv[2]||'[]');const res=[];
-for(const o of cases){try{res.push(o.kind==='grid'?grid(o):o.kind==='island1'?island1(o):o.kind==='dcpins'?dcpins(o):o.kind==='tut'?tut(o):o.kind==='scipy'?scipy(o):o.kind==='cyc'?cyc(o):o.kind==='scipyTut'?scipyTut(o):o.kind==='match1'?match1(o):{error:'kind'});}catch(e){res.push({error:String(e&&e.stack||e)});}}
+for(const o of cases){try{res.push(o.kind==='grid'?grid(o):o.kind==='island1'?island1(o):o.kind==='dcpins'?dcpins(o):o.kind==='tut'?tut(o):o.kind==='scipy'?scipy(o):o.kind==='cyc'?cyc(o):o.kind==='scipyTut'?scipyTut(o):o.kind==='match1'?match1(o):o.kind==='ts'?ts(o):{error:'kind'});}catch(e){res.push({error:String(e&&e.stack||e)});}}
 process.stdout.write(JSON.stringify(res));

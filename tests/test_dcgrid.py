@@ -451,3 +451,285 @@ class RobustStation(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def jovcic_27(out=()):
+    """Jovcic (2019), Examples 27.1–27.2: the four-terminal ±400 kV grid of Example 26.1 (one pole: R of Fig. 26.4, 3 MΩ to ground)."""
+    g = D.DCGrid()
+    for b in '12345':
+        g.bus(b, 400 * kV, R=3e6)
+    R = {('1', '2'): 5, ('1', '4'): 2, ('1', '5'): 2, ('2', '3'): 2, ('2', '5'): 2, ('3', '4'): 5, ('3', '5'): 2, ('4', '5'): 1.8}
+    for (a, b), r in R.items():
+        if a + b not in out:
+            g.line(a, b, R=r, poles=1, name=a + b)
+    return g
+
+
+class Dispatcher(unittest.TestCase):
+    """4.21: the DC grid dispatcher (Jovcic 2019, §27.6.2, Fig. 27.5) in steady state, and the power flow when the DC powers are
+    regulated (§27.7, Examples 27.1, Tables 27.1–27.5, printed p. 406–409). The book's tables come from a time simulation whose
+    dispatcher had not settled (the average of the four terminal voltages is 399.95, 398.88, 399.25, 400.05, 400.13 kV, not
+    400): with the book's terminal powers (both poles: P/2 per pole here) the network gives its voltages around their average
+    and its cable currents to their rounding, and the dispatcher puts the average at 400 kV with a correction under 0.2 MW."""
+
+    TABLES = {   # table: (P of terminals 1–4 in MW, cables out, V of buses 1–5 in kV, cable currents in A)
+        '27.1': ((761.6, -518.3, -956.4, 721.3), (), (401.0, 399.1, 398.8, 400.9, 399.9),
+                 {'12': 381.5, '14': 49.7, '15': 518.2, '23': 167.6, '25': -435.5, '34': -428.6, '35': -603.1, '45': 520.5}),
+        '27.2': ((930.6, -302.9, -737.0, 114.6), (), (399.9, 398.4, 397.9, 399.3, 398.9),
+                 {'12': 314.1, '14': 329.6, '15': 519.6, '23': 199.3, '25': -265.6, '34': -261.9, '35': -464.9, '45': 211.1}),
+        '27.3': ((0.0, -266.1, -700.1, 970.8), (), (399.6, 398.7, 398.5, 400.2, 399.3),
+                 {'12': 173.8, '14': -326.7, '15': 152.8, '23': 121.8, '25': -281.8, '34': -353.2, '35': -403.6, '45': 532.8}),
+        '27.4': ((761.5, -516.8, -955.4, 721.1), ('12',), (401.6, 398.7, 398.7, 401.2, 400.1),
+                 {'14': 201.0, '15': 747.0, '23': 19.1, '25': -667.2, '34': -492.9, '35': -686.3, '45': 606.7}),
+        '27.5': ((762.7, -514.8, -952.9, 721.4), ('12', '15'), (403.2, 398.0, 398.0, 401.3, 399.2),
+                 {'14': 945.6, '23': -35.7, '25': -611.2, '34': -657.4, '35': -575.5, '45': 1186.8})}
+
+    def test_tables_27_1_to_27_5(self):
+        for tab, (P, out, V, I) in self.TABLES.items():
+            g = jovcic_27(out)
+            mem = []
+            for b, p in zip('1234', P):
+                if p:                                              # (Table 27.3: terminal 1 tripped)
+                    g.converter(b, 'P', P=p * MW / 2, name=b)
+                    mem.append(b)
+            g.dispatcher(mem, V=1.0, weights=[1.0 if m == mem[-1] else 0.0 for m in mem], buses='1234', name='D')
+            r = g.flow(tol=1e-12)
+            self.assertTrue(r['converged'], tab)
+            self.assertLessEqual(r['iterations'], 4, tab)
+            U = [r['buses'][b]['U'] / kV for b in '12345']
+            self.assertAlmostEqual(sum(U[:4]) / 4, 400.0, delta=1e-8, msg=tab)                 # the dispatcher: the average at 1 pu
+            for u, v in zip(U, V):                                                             # around the average, to the rounding (0.1 kV)
+                self.assertAlmostEqual(u - sum(U[:4]) / 4, v - sum(V[:4]) / 4, delta=0.1, msg=tab)
+            Il = {q['name']: q['I'] for q in r['lines']}
+            for k, v in I.items():                                                             # measured: at most 1.47 A (Table 27.2)
+                self.assertAlmostEqual(Il[k], v, delta=1.6, msg=f'{tab} {k}')
+            self.assertLess(abs(r['dispatchers']['D']['x']) * 2 / MW, 0.2, tab)               # the book's powers: balanced with the losses
+            self.assertAlmostEqual(r['dispatchers']['D']['V'], 1.0, delta=1e-12, msg=tab)
+
+    def test_shares_and_balance(self):
+        """Unbalanced references (Example 27.1b: P4 = −100 MW): the dispatcher shares the unbalance in its weights and holds the
+        average; the sum of the powers is the losses."""
+        g = jovcic_27()
+        for b, p in zip('1234', (760, -520, -960, -100)):
+            g.converter(b, 'P', P=p * MW / 2, name=b)
+        g.dispatcher('1234', V=1.0, weights=(1, 2, 1, 0), name='D')
+        r = g.flow(tol=1e-12)
+        c, x = r['converters'], r['dispatchers']['D']['x']
+        self.assertTrue(r['converged'])
+        for b, p, w in zip('1234', (760, -520, -960, -100), (0.25, 0.5, 0.25, 0.0)):
+            self.assertAlmostEqual(c[b]['P'], p * MW / 2 + w * x, delta=1e-6)
+        self.assertAlmostEqual(sum(q['P'] for q in c.values()), r['losses'], delta=1e-3)
+        self.assertAlmostEqual(sum(r['buses'][b]['V'] for b in '1234') / 4, 1.0, delta=1e-12)
+        self.assertAlmostEqual(x * 2 / MW, 820.0 + 2 * r['losses'] / MW, delta=1e-6)           # the 820 MW of unbalance and the losses
+
+    def test_with_droops_and_an_outage(self):
+        """Droop members (the 4.20.1 question for b4dcs2): the references move by x and the average holds; a member taken out
+        leaves the dispatcher, and the others share its power."""
+        g = jovcic_27()
+        for b, p in zip('1234', (760, -520, -960, 720)):
+            g.converter(b, 'droop', P=p * MW / 2, V=1.0, droop=0.05, Prated=600 * MW, name=b)
+        g.dispatcher('1234', V=1.0, name='D')
+        r = g.flow(tol=1e-12)
+        self.assertAlmostEqual(sum(r['buses'][b]['V'] for b in '1234') / 4, 1.0, delta=1e-12)
+        g.remove('1')
+        self.assertEqual(g.dispatchers[0]['members'], ['2', '3', '4'])
+        self.assertAlmostEqual(sum(g.dispatchers[0]['w']), 1.0, delta=1e-15)
+        r = g.flow(tol=1e-12)
+        self.assertTrue(r['converged'])
+        self.assertAlmostEqual(sum(r['buses'][b]['V'] for b in '234') / 3, 1.0, delta=1e-12)
+        self.assertAlmostEqual(sum(q['P'] for q in r['converters'].values()), r['losses'], delta=1e-3)
+
+    def test_errors(self):
+        g = jovcic_27()
+        g.converter('1', 'V', V=1.0, name='1')
+        g.converter('2', 'P', P=-100e6, name='2')
+        g.dispatcher(['1'], name='D')
+        with self.assertRaises(D.DCGridError):                     # a member that holds the voltage
+            g.flow()
+        with self.assertRaises(D.DCGridError):
+            D.DCGrid().dispatcher([], name='E')
+        with self.assertRaises(D.DCGridError):
+            g.dispatcher(['2'], weights=(0,), name='F')
+
+
+class DCDC(unittest.TestCase):
+    """4.21: the DC/DC converter as one element (Jovcic 2019, §30.3.3, the averaged model of Fig. 30.7: U_a·I_a = U_b·I_b)."""
+
+    def ex30_3(self, control='V'):
+        """Example 30.3 (printed p. 470–471): a 370 kV grid (1 Ω) and a 400 kV grid (2 Ω), the converter holding 397 kV on the
+        400 kV side: (400 − 397)/2 = 1.5 kA and 595.5 MW towards the 370 kV grid (the book: '600 MW')."""
+        g = D.DCGrid()
+        for b, u in (('S2', 400), ('B2', 400), ('B1', 370), ('S1', 370)):
+            g.bus(b, u * kV)
+        g.line('S2', 'B2', R=2, poles=1, name='c2')
+        g.line('B1', 'S1', R=1, poles=1, name='c1')
+        g.converter('S2', 'V', V=1.0, name='G2')
+        g.converter('S1', 'V', V=1.0, name='G1')
+        if control == 'V':
+            g.dcdc('B1', 'B2', 'V', V=397 / 400, Prated=1800 * 400 * kV, name='DD')
+        else:
+            g.dcdc('B1', 'B2', 'P', P=-595.5 * MW, name='DD')
+        return g
+
+    def test_example_30_3(self):
+        r = self.ex30_3().flow(tol=1e-12)
+        d = r['dcdc']['DD']
+        self.assertTrue(r['converged'])
+        self.assertAlmostEqual(d['Ub'], 397e3, delta=1e-9)
+        self.assertAlmostEqual(d['Ib'], -1500.0, delta=1e-9)                                  # into b: −1.5 kA, the power goes b → a
+        self.assertAlmostEqual(d['P'], -595.5 * MW, delta=1e-3)
+        Ia = (-370e3 + math.sqrt(370e3 ** 2 + 4 * 595.5e6)) / 2                                 # U_a·I_a = 595.5 MW, U_a = 370 kV + 1 Ω·I_a
+        self.assertAlmostEqual(-d['Ia'], Ia, delta=1e-6)
+        self.assertAlmostEqual(d['Ua'], 370e3 + Ia, delta=1e-6)
+        self.assertAlmostEqual(d['loading'], 595.5 / 720, delta=1e-12)
+        # with that power given ('P') the same state
+        q = self.ex30_3('P').flow(tol=1e-12)['dcdc']['DD']
+        self.assertAlmostEqual(q['Ub'], 397e3, delta=1e-4)
+        # 'the voltage drop in grid 2 to 395 kV': the power reverses, (397 − 395)/2 = 1 kA into grid 2
+        g = self.ex30_3()
+        g.converters[0]['V'] = 395 / 400
+        d = g.flow(tol=1e-12)['dcdc']['DD']
+        self.assertAlmostEqual(d['Ib'], 1000.0, delta=1e-9)
+        self.assertAlmostEqual(d['P'], 397 * MW, delta=1e-3)
+
+    def test_droop_and_balance(self):
+        g = D.DCGrid()
+        g.bus('A', 640 * kV)
+        g.bus('B', 400 * kV)
+        g.bus('C', 400 * kV)
+        g.line('B', 'C', R=2.0, name='BC')
+        g.converter('A', 'V', V=1.0, name='GA')
+        g.converter('C', 'P', P=-500 * MW, name='LC')
+        g.dcdc('A', 'B', 'droop', P=400 * MW, V=1.0, droop=0.05, Prated=1000 * MW, name='DD')
+        r = g.flow(tol=1e-12)
+        d = r['dcdc']['DD']
+        k = 1000 * MW / (0.05 * 400 * kV)
+        self.assertTrue(r['converged'])
+        self.assertAlmostEqual(d['P'], 400 * MW - k * (d['Ub'] - 400 * kV), delta=1e-3)       # its droop on the side b
+        self.assertAlmostEqual(d['P'], 500 * MW + r['lines'][0]['loss'], delta=1e-3)          # the grid of B, C has only it
+        self.assertAlmostEqual(r['converters']['GA']['P'], d['P'], delta=1e-3)                # lossless: A gives what B gets
+
+    def test_same_numbers_as_two_converters(self):
+        """The B4 of 4.20.1 had each DC/DC converter as two converters 'P'; as one element the DC load flow is the same bit
+        for bit (the powers are added in the same order)."""
+        g1, g2 = D.cigre_b4(), D.cigre_b4()
+        for name, a, b, S, P in D.B4_DCDC:
+            g2.remove(name)
+            g2.converter(a, 'P', P=-P * 1e6, name=name + '/' + a)
+            g2.converter(b, 'P', P=P * 1e6, name=name + '/' + b)
+        r1, r2 = g1.flow(tol=1e-12), g2.flow(tol=1e-12)
+        self.assertEqual([r1['buses'][b]['U'] for b in r1['buses']], [r2['buses'][b]['U'] for b in r2['buses']])
+        self.assertEqual(r1['dcdc']['Cd-E1']['P'], 300e6)
+
+    def test_network_and_study(self):
+        net = N.Network(S_base=100e6, name='DC/DC')
+        for b in ('A2', 'B2'):
+            net.bus(b, 220e3)
+        net.feeder('A2', Sk=5e9, name='QA')
+        net.feeder('B2', Sk=5e9, name='QB')
+        net.dc_bus('d1', 640e3)
+        net.dc_bus('d2', 400e3)
+        net.dc_bus('d3', 400e3)
+        net.dc_line('d2', 'd3', R=2.0, name='L23')
+        net.vsc('A2', 'd1', 'V', V=1.0, name='CA')
+        net.vsc('B2', 'd3', 'P', P=-300e6, name='CB')
+        net.dcdc('d1', 'd2', 'V', V=1.0, Prated=600e6, name='DD')
+        r = net.acdc_flow(tol=1e-10)
+        self.assertTrue(r['converged'])
+        self.assertAlmostEqual(r['dc']['buses']['d2']['V'], 1.0, delta=1e-12)
+        self.assertAlmostEqual(r['dc']['dcdc']['DD']['P'], 300e6 + r['dc']['lines'][0]['loss'], delta=1e-2)
+        net2 = N.from_dict(N.to_dict(net))
+        self.assertEqual(net2.element('DD'), net.element('DD'))
+        out = S.run({'network': N.to_dict(net), 'study': 'acdc', 'options': {'set': {'DD': {'V': 0.99}}}})['summary']
+        self.assertEqual(out['dcdc'][0]['control'], 'V')
+        self.assertAlmostEqual(out['dcdc'][0]['Ub_kV'], 396.0, delta=1e-9)
+        with self.assertRaises(S.StudyError):                       # without it the grid of d2, d3 holds no voltage
+            S.run({'network': N.to_dict(net), 'study': 'acdc', 'options': {'out': ['DD']}})
+        with self.assertRaises(S.StudyError):
+            S.run({'network': N.to_dict(net), 'study': 'acdc', 'options': {'set': {'DD': {'control': 'I'}}}})
+        with self.assertRaises(N.NetworkError):
+            net.dcdc('d1', 'd1', name='X')
+        with self.assertRaises(N.NetworkError):
+            net.dcdc('d1', 'd2', 'droop', name='Y')
+
+
+def limits_net(Q=0.0, P=150e6, vac=None, **lim):
+    """Two AC buses of 220 kV, each with a strong feeder; a station that holds the DC voltage on A, one of given power on B, with
+    only its reactor (X_c 0.15 pu on 100 MVA), so that the capability of Fig. 3 of Beerten, Cole & Belmans (2012) is a pair of
+    circles in closed form: the current |S|/|U_s| ≤ I_max and the voltage |U_s + jX_c·conj(S/U_s)| ≤ U_c,max."""
+    net = N.Network(S_base=100e6, name='limits')
+    for b in ('A', 'B'):
+        net.bus(b, 220e3)
+        net.feeder(b, Sk=50e9, name='Q' + b)
+    net.dc_bus('d1', 400e3)
+    net.dc_bus('d2', 400e3)
+    net.dc_line('d1', 'd2', R=1.0, name='L')
+    net.vsc('A', 'd1', 'V', V=1.0, Xc=0.15, name='CA')
+    net.vsc('B', 'd2', 'P', P=P, Q=Q, Vac=vac, Xc=0.15, name='CB', **lim)
+    return net
+
+
+class Limits(unittest.TestCase):
+    """4.21: the limits of a station in the sequential AC/DC load flow (Beerten, Cole & Belmans 2012, §II-B and §III-C), against the
+    closed forms of a station with its reactor alone."""
+
+    def test_the_current_and_the_voltage_limit(self):
+        X, Us = 0.15, 1.0
+        Ib = 100e6 / (math.sqrt(3) * 220e3)
+        r0 = limits_net(Q=80e6).acdc_flow(tol=1e-11)
+        self.assertNotIn('limits', r0)                                                          # without the option: as before
+        # the current: I_max 1.0 pu of the base (262.4 A); P_s = −1.5 pu would need 1.5 pu: P is reduced to the circle, Q to 0
+        r = limits_net(Q=80e6, Imax=1.0 * Ib).acdc_flow(tol=1e-11, limits=True)
+        c = r['converters']['CB']
+        self.assertTrue(r['converged'])
+        self.assertEqual((c['held'], r['limits']), ('P', ['CB']))
+        self.assertAlmostEqual(c['Ic'], Ib, delta=1e-6 * Ib)
+        # with room for P: I_max 2 pu, Q asked 1.6 pu, the circle gives Q_max = √(4 − 1.5²) (U_s = 1 within the feeder's drop)
+        r = limits_net(Q=160e6, Imax=2.0 * Ib).acdc_flow(tol=1e-11, limits=True)
+        c = r['converters']['CB']
+        u = c['Us']
+        self.assertEqual(c['held'], 'Q')
+        self.assertAlmostEqual(c['Qs'] / 100e6, math.sqrt((2.0 * u) ** 2 - (c['Ps'] / 100e6) ** 2), delta=1e-7)
+        self.assertAlmostEqual(c['Ic'], 2.0 * Ib, delta=1e-6 * Ib)
+        self.assertAlmostEqual(c['Ps'], -150e6, delta=1.0)                                       # the priority to P
+        # the voltage of the converter: U_c,max 1.1 pu, Q_max = −U_s²/X + √((U_s·U_c,max/X)² − P²)
+        r = limits_net(Q=160e6, Ucmax=1.1).acdc_flow(tol=1e-11, limits=True)
+        c = r['converters']['CB']
+        u, p = c['Us'], c['Ps'] / 100e6
+        self.assertAlmostEqual(c['Qs'] / 100e6, -u * u / X + math.sqrt((u * 1.1 / X) ** 2 - p * p), delta=1e-7)
+        self.assertAlmostEqual(c['Uc'], 1.1, delta=1e-9)
+        self.assertAlmostEqual(c['Qmax'], c['Qs'], delta=1e-3)
+        # the lower voltage limit holds Q from below (U_c,min 0.95 pu, Q asked −1 pu)
+        r = limits_net(Q=-100e6, Ucmin=0.95).acdc_flow(tol=1e-11, limits=True)
+        self.assertAlmostEqual(r['converters']['CB']['Uc'], 0.95, delta=1e-9)
+
+    def test_a_station_that_holds_its_ac_voltage(self):
+        # Vac 1.05 pu against a strong feeder needs much Q: at the current limit it gives up the voltage and stays at Q_max
+        Ib = 100e6 / (math.sqrt(3) * 220e3)
+        net = limits_net(P=50e6, vac=1.05, Imax=1.2 * Ib)
+        net.remove('QB')
+        net.bus('C', 220e3)
+        net.line('B', 'C', R=1.0, X=20.0, name='BC')
+        net.feeder('C', Sk=5e9, name='QC')
+        free = net.acdc_flow(tol=1e-11)
+        self.assertAlmostEqual(free['buses']['B']['V'], 1.05, delta=1e-9)
+        r = net.acdc_flow(tol=1e-11, limits=True, flat=True)
+        c = r['converters']['CB']
+        self.assertTrue(r['converged'])
+        self.assertEqual(c['held'], 'V')
+        self.assertLess(r['buses']['B']['V'], 1.05)                                             # at Q_max below its set voltage
+        self.assertAlmostEqual(c['Ic'], 1.2 * Ib, delta=1e-5 * Ib)
+        self.assertGreater(free['converters']['CB']['Ic'], 1.2 * Ib)
+        # the limits are gone in the next run without them
+        self.assertAlmostEqual(net.acdc_flow(tol=1e-11)['buses']['B']['V'], 1.05, delta=1e-9)
+
+    def test_q_range_closed_form(self):
+        st = {'Xc': 0.15}
+        Ib = 100e6 / (math.sqrt(3) * 220e3)
+        lo, hi = D.q_range(1.0 + 0j, 0.6, st, 100e6, 220e3, Imax=Ib)
+        self.assertAlmostEqual(hi, math.sqrt(1 - 0.36), delta=1e-9)
+        self.assertAlmostEqual(lo, -math.sqrt(1 - 0.36), delta=1e-9)
+        self.assertIsNone(D.q_range(1.0 + 0j, 1.2, st, 100e6, 220e3, Imax=Ib))
+        lo, hi = D.q_range(1.0 + 0j, 0.6, st, 100e6, 220e3, Ucmax=1.1, Ucmin=0.9)
+        self.assertAlmostEqual(hi, -1 / 0.15 + math.sqrt((1.1 / 0.15) ** 2 - 0.36), delta=1e-9)
+        self.assertAlmostEqual(lo, -1 / 0.15 + math.sqrt((0.9 / 0.15) ** 2 - 0.36), delta=1e-9)

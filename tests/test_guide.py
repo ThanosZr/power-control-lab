@@ -25,6 +25,19 @@ def blocks(version):
 
 
 class Guide(unittest.TestCase):
+    def test_the_python_example_of_4_21_runs_as_written(self):
+        bl = blocks('4.21')
+        self.assertEqual(len(bl), 1)
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING='utf-8')
+            r = subprocess.run([sys.executable, '-c', bl[0][1]], cwd=d, env=env, capture_output=True, text=True, encoding='utf-8', timeout=600)
+            self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+            text = (ROOT / 'docs' / 'GUIDE.md').read_text(encoding='utf-8')            # what the guide says it prints
+            sec = [q for q in re.split(r'(?m)^## ', text) if q.startswith('31. ')][0]
+            said = re.search(r'Τυπώνει:\n\n```\n(.*?)```', sec, re.S).group(1).strip()
+            self.assertEqual(r.stdout.strip(), said)
+            self.assertTrue((pathlib.Path(d) / 'acdc_opf.html').stat().st_size > 10000)
+
     def test_the_python_example_of_4_20_runs_as_written(self):
         bl = blocks('4.20')
         self.assertEqual(len(bl), 1)

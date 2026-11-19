@@ -9,7 +9,7 @@
 // (gridZ) and the fault currents of a fault at its terminals in the phase domain (faultCurrents), for the analysis.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
- const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC','TOWER','SAI','CHB','SPLL','SSSC','SSSC3','MMC','MMCC','VSC2','GFMC','LCC6','LCCS','LCCC','FILT3','ZSER3'];
+ const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC','TOWER','SAI','CHB','SPLL','SSSC','SSSC3','MMC','MMCC','VSC2','GFMC','LCC6','LCCS','LCCC','FILT3','ZSER3','DCDC','PMU3'];
  const isLib=t=>TYPES.includes(t);
  const RMIN=1e-4;               // a bolted fault or a closed pole: 0,1 mΩ inside the circuit
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -1128,6 +1128,53 @@
    const vp=B.comp('P'+x,'VP',{});w(T[k],[vp,'p']);out('v'+x,[vp,'y']);
    if(pins){w(['M'+x,'y'],['IDS','abc'[k]]);w([am,'y'],['IDS','i'+x]);}});
   SP.close();return B.def();}
+ // 4.21 (ROADMAP §87): a DC/DC converter as the averaged model of Jovcic (2019), §30.3.3, Fig. 30.7 (the low-stepping-ratio
+ // chopper; the same two-port for every DC/DC of ch. 30 in the frequency range of its controls): side a a controlled voltage
+ // source v_s behind the inductor L (R), side b a controlled current source i_b = v_s·i_a/v_b beside the capacitor C, lossless
+ // (v_s·i_a = v_b·i_b). The inner loop holds i_a, the current from the pin pa into the converter (PI with k_p = ω_c·L, k_i = ω_c·R:
+ // i_a/i_ref = ω_c/(s + ω_c)); the outer loop gives i_ref (§30.3.2, Fig. 30.5): 'P' P_ref/v_a (P from a to b, ramped from 0 over
+ // t_r), 'V' a PI on V_ref − v_b, 'droop' (P_0 − R·(v_b − U_0))/v_a; |i_ref| ≤ I_max, and the PI of 'V' stops winding up there.
+ function dcdcDef(c){const p=prm(c),B=builder(c.label||c.id),ctl=['P','V','droop'].includes(p.ctl)?p.ctl:'V';
+  const w=(a,b)=>B.wire(a,b),E=(id,expr,ins,pars)=>B.comp(id,'EXPR',{expr,ins,pars:pars||''}),Y=id=>[id,'y'],pos=(x,d)=>Math.max(num(x,d),1e-12);
+  const out=(n,src)=>{const o=B.comp('$'+n,'SOUT',{name:n});w(src,[o,'u']);};
+  const [Pa,Na,Pb,Nb]=['pa','na','pb','nb'].map(n=>[B.comp('$'+n,'PORT',{name:n}),'p']);
+  const L=pos(p.L,0.2),R=Math.max(num(p.R,0),0),wc=2*Math.PI*pos(p.bwi,100),Imax=pos(p.Imax,1800),kp=wc*L,ki=wc*R;
+  // the two sides: v_a and v_b measured at the pins; a: pa → ammeter → L → source v_s → na; b: the current source into pb, C across
+  B.comp('VA','VM',{});w(Pa,['VA','p']);w(Na,['VA','n']);B.comp('VB','VM',{});w(Pb,['VB','p']);w(Nb,['VB','n']);
+  B.comp('IA','AM',{});w(Pa,['IA','a']);B.comp('L','L',{L:s(L),Rs:s(R)});w(['IA','b'],['L','a']);
+  B.comp('VS','VDC',{ctl:'sig',Rs:'0'});w(['L','b'],['VS','p']);w(['VS','n'],Na);
+  B.comp('IB','IDC',{ctl:'sig'});w(['IB','p'],Pb);w(['IB','n'],Nb);B.comp('C','C',{C:s(pos(p.C,200e-6)),v0:s(Math.max(num(p.Vb0,num(p.Vref,397e3)),0))});w(Pb,['C','p']);w(['C','n'],Nb);
+  // the outer loop: the reference of i_a
+  if(ctl==='V'){const kpv=Math.max(num(p.kpv,1),0),kiv=Math.max(num(p.kiv,100),0),lim=kiv>0?Imax/kiv:0;
+   E('EV','vr - v','v','vr = '+s(num(p.Vref,397e3)));w(Y('VB'),['EV','v']);B.comp('IV','INT',{y0:'0',lo:s(-lim),hi:s(lim)});w(Y('EV'),['IV','u']);
+   E('IR','min(max(kp*ev + ki*z, -im), im)','ev, z','kp = '+s(kpv)+', ki = '+s(kiv)+', im = '+s(Imax));w(Y('EV'),['IR','ev']);w(Y('IV'),['IR','z']);}
+  else if(ctl==='P'){const tr=Math.max(num(p.tr,0.05),0);
+   E('IR','min(max(pr*(tr > 0 ? min(t/tr, 1) : 1)/max(v, 1), -im), im)','v','pr = '+s(num(p.P,0))+', tr = '+s(tr)+', im = '+s(Imax));w(Y('VA'),['IR','v']);}
+  else{E('IR','min(max((p0 - r*(v - u0))/max(va, 1), -im), im)','v, va','p0 = '+s(num(p.P,0))+', r = '+s(Math.max(num(p.Rd,1e3),0))+', u0 = '+s(num(p.Vref,397e3))+', im = '+s(Imax));
+   w(Y('VB'),['IR','v']);w(Y('VA'),['IR','va']);}
+  // the inner loop and the power balance
+  E('EI','r - i','r, i');w(Y('IR'),['EI','r']);w(Y('IA'),['EI','i']);B.comp('II','INT',{y0:'0'});w(Y('EI'),['II','u']);
+  E('US','va - (kp*er + ki*z)','va, er, z','kp = '+s(kp)+', ki = '+s(ki));w(Y('VA'),['US','va']);w(Y('EI'),['US','er']);w(Y('II'),['US','z']);w(Y('US'),['VS','u']);   // (no input named e or y)
+  E('PS','u*i','u, i');w(Y('US'),['PS','u']);w(Y('IA'),['PS','i']);
+  E('IBU','q/max(v, 1)','q, v');w(Y('PS'),['IBU','q']);w(Y('VB'),['IBU','v']);w(Y('IBU'),['IB','u']);
+  out('p',Y('PS'));out('ia',Y('IA'));out('ib',Y('IBU'));out('va',Y('VA'));out('vb',Y('VB'));
+  return B.def();}
+ // 4.21 (§87): the phasor measurement unit. Per phase an ammeter from side 1 to side 2 and a probe of the voltage of side 1 to the
+ // ground; the analyzers of sequences of 4.19.6 (SEQ) on the three voltages and on the three currents, per period of f₀, RMS, phases
+ // on sin(ω₁t) from t = 0, made phases on cos(2πf₀t) (−90°, wrapped; IEC/IEEE 60255-118-1 §4.3) unless ref = 'sin';
+ // P⁺ = 3·V·I·cos(θ_v − θ_i) and Q⁺ = 3·V·I·sin(θ_v − θ_i) of the two phasors (positive sequence)
+ function pmuDef(c){const p=prm(c),B=builder(c.label||c.id),T1=B.terms(p,['a1','b1','c1'],'abc1'),T2=B.terms(p,['a2','b2','c2'],'abc2');
+  const f=Math.max(num(p.f,50),1e-6),np=Math.max(1,Math.round(num(p.np,1))),win={amp:'rms',win:'per',f:s(f),np:s(np),t0:'0',y0:'0'};
+  const out=(n,src)=>{const o=B.comp('$'+n,'SOUT',{name:n});B.wire(src,[o,'u']);};
+  B.comp('SV','SEQ',win);B.comp('SI','SEQ',win);
+  PH.forEach((x,k)=>{B.comp('A'+x,'AM',{});B.wire(T1[k],['A'+x,'a']);B.wire(['A'+x,'b'],T2[k]);B.comp('V'+x,'VP',{});B.wire(T1[k],['V'+x,'p']);
+   B.wire(['V'+x,'y'],['SV',x]);B.wire(['A'+x,'y'],['SI',x]);});
+  for(const [id,fn] of [['PP','cos'],['QQ','sin']]){B.comp(id,'EXPR',{expr:'3*v*i*'+fn+'((a - b)*pi/180)',ins:'v, i, a, b',pars:''});
+   B.wire(['SV','pos'],[id,'v']);B.wire(['SI','pos'],[id,'i']);B.wire(['SV','phpos'],[id,'a']);B.wire(['SI','phpos'],[id,'b']);}
+  const d=p.ref==='sin'?0:90;
+  for(const [id,src] of [['TV','SV'],['TI','SI']]){B.comp(id,'EXPR',{expr:'atan2(sin((a - d)*pi/180), cos((a - d)*pi/180))*180/pi',ins:'a',pars:'d = '+d});B.wire([src,'phpos'],[id,'a']);}
+  out('v',['SV','pos']);out('thv',['TV','y']);out('i',['SI','pos']);out('thi',['TI','y']);out('p',['PP','y']);out('q',['QQ','y']);
+  return B.def();}
  // The grid-forming control. Per unit on S, V̂ = √2·V_ac/√3, Î = S/(1.5·V̂); currents and powers out of the converter. dq on
  // the internal angle θ (v_a = V·cos θ, d on the voltage that the control forms). The law gives the frequency ω (pu) and the
  // amplitude E: droop ω = 1 − m_p·(P_f − P_ref), E = V_ref − n_q·(Q_f − Q_ref) (P_f, Q_f through ω_f); VSM 2H·dω/dt = P_ref −
@@ -1300,7 +1347,7 @@
   out('th',TH);out('w',Y('WW'));out('p',Y('PP'));out('q',Y('QQ'));out('e',Y('EE'));out('lim',Y('LR'));if(dcc)out('idc',Y('IDC'));
   SP.close();return B.def();}
 
- const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef,CHB:chbDef,SPLL:spllDef,SSSC:ssscDef,SSSC3:sssc3Def,MMC:mmcDef,MMCC:mmccDef,VSC2:vsc2Def,GFMC:gfmcDef,LCC6:lcc6Def,LCCS:lccsDef,LCCC:lcccDef,FILT3:filtDef,ZSER3:zserDef};
+ const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef,CHB:chbDef,SPLL:spllDef,SSSC:ssscDef,SSSC3:sssc3Def,MMC:mmcDef,MMCC:mmccDef,VSC2:vsc2Def,GFMC:gfmcDef,LCC6:lcc6Def,LCCS:lccsDef,LCCC:lcccDef,FILT3:filtDef,ZSER3:zserDef,DCDC:dcdcDef,PMU3:pmuDef};
  function defOf(c){return DEFS[c.type](c);}
 
  // 4.9.1 (ROADMAP §52): the parts with two implementations, and a copy of a project with one implementation everywhere

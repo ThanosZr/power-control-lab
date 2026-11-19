@@ -152,7 +152,8 @@ def advise(case, kind='ac', net=None):
 
 
 # -------------------------------------------------------------------- the solution
-def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150, ratings=None, v_default=(0.9, 1.1), record=False, dS=None, extra=None):
+def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150, ratings=None, v_default=(0.9, 1.1), record=False, dS=None, extra=None,
+          acdc=None):
     """kind: 'ac' or 'dc'. flow_limits: use the ratings of the branches (ratings: {branch: VA} adds or replaces some).
     start: 'auto' (= 'mid', the middle of the limits), or 'pf' (the voltages and the dispatch of the network as given).
     v_default: the limits of |V| for buses that have none (AC).
@@ -168,6 +169,12 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
     pcl.scopf: {'A': rows (m × (n_b + n_g + n_s): θ of every bus in rad, P of every source in pu, then n_s further unknowns),
     'l', 'u', and for the further unknowns 'xmin', 'xmax', 'cost' (per pu)}. The result then has 'mu_extra' (the multipliers of
     the rows, per MW as those of the flow limits) and 'x_extra'; 'cost' is the cost of the generation alone.
+    4.21 — acdc (AC only; pcl.dcgrid.acdc_opf builds it): the DC grids and the converters of the stations (Ergun et al. 2019, the
+    nonlinear bus-injection form): one more unknown per DC bus (its voltage u, pu) and per converter (its current I, pu), the
+    converter a source of the AC problem at its own bus c, and the equalities P_c² + Q_c² = |V_c|²·I² and, per DC bus,
+    Σ(−P_c − a − b·I − c·I²) = u·(G′u); the DC lines as linear limits of their current. {'G' (nd × nd, pu), 'Umin', 'Umax' (pu),
+    'stations': [{'g' (its source), 'c' (its AC bus), 'd' (its DC bus), 'a', 'b', 'c2' (pu), 'Imax' (pu)}], 'lines': [{'a', 'b',
+    'k' (pu of current per pu of voltage), 'Irat' (pu)}]}. The result then has 'acdc': {'u', 'I', 'lam_dc', 'mu_lines'}.
 
     Returns {'converged', 'iterations', 'message', 'cost' (per hour), 'kind', 'buses': {bus: V, angle, P, Q (sources), Pload,
     Qload, 'lmp' and 'lmp_Q' (cost per MWh and per Mvar·h), 'mu_Vmin', 'mu_Vmax'}, 'sources': [{name, bus, P, Q (W, var), 'mu_Pmin',
@@ -177,6 +184,8 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
         raise OpfError("kind: 'ac' or 'dc'")
     if extra is not None and kind != 'dc':
         raise OpfError('extra: for the DC problem only')
+    if acdc is not None and kind != 'ac':
+        raise OpfError('acdc: for the AC problem only')
     t0 = time.perf_counter()
     case = net.case()
     if dS is not None:
@@ -319,6 +328,8 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
         xmin = np.r_[np.full(nb, -np.inf), Vlo, G['Pmin'], G['Qmin']]
         xmax = np.r_[np.full(nb, np.inf), Vhi, G['Pmax'], G['Qmax']]
         xmin[ref] = xmax[ref] = case.ang0[ref]
+        if acdc is not None:                                 # 4.21: the DC grids and the converters (Ergun et al. 2019, NLP)
+            f, gh, hess, xmin, xmax = _with_acdc(acdc, nb, ng, iPg, iQg, nx, len(il), f, gh, hess, xmin, xmax)
         warm, path = (start if isinstance(start, dict) else None), []
         if warm is not None:
             start = 'mid'
@@ -331,9 +342,13 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
             x0[k2] = xmin[k2] + 1
             x0[~np.isfinite(xmin) & ~np.isfinite(xmax)] = 0.0
             x0[:nb] = case.ang0[ref[0]]
+            if acdc is not None:                             # the DC voltages at 1 pu, the currents of the converters at half their limit
+                x0[nx:nx + acdc['nd']] = np.clip(1.0, xmin[nx:nx + acdc['nd']], xmax[nx:nx + acdc['nd']])
         elif start == 'pf':
             Qb = np.clip(0.0, np.where(np.isfinite(G['Qmin']), G['Qmin'], -big), np.where(np.isfinite(G['Qmax']), G['Qmax'], big))
             x0 = np.r_[case.ang0, np.clip(case.Vset, Vlo, Vhi), np.clip(G['P0'], np.where(np.isfinite(G['Pmin']), G['Pmin'], -big), np.where(np.isfinite(G['Pmax']), G['Pmax'], big)), Qb]
+            if acdc is not None:
+                x0 = np.r_[x0, np.clip(1.0, xmin[nx:nx + acdc['nd']], xmax[nx:nx + acdc['nd']]), 0.5 * xmax[nx + acdc['nd']:]]
         else:
             raise OpfError("start: 'auto', 'mid' or 'pf'")
         r, extra = None, 0
@@ -363,6 +378,13 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
         x = r['x']
         V = x[nb:2 * nb] * np.exp(1j * x[:nb])
         Pg, Qg = x[iPg], x[iQg]
+        if acdc is not None:                                 # 4.21: what the DC part found; the AC multipliers stay the first 2·n_b
+            nd = acdc['nd']
+            mh = r['mu']['h'] if r['mu']['h'] is not None else np.zeros(0)
+            acdc_out = {'u': x[nx:nx + nd].copy(), 'I': x[nx + nd:].copy(), 'lam_dc': r['lam']['g'][2 * nb + acdc['ns']:].copy() / base,
+                        'mu_lines': np.asarray(mh[2 * len(il):], float).copy() / base}
+            r['lam']['g'] = r['lam']['g'][:2 * nb]
+            r['mu']['h'] = mh[:2 * len(il)]
         code = {PF.PQ: 'PQ', PF.PV: 'PV', PF.REF: 'slack'}
         res = net._lf_result(case.names, case.idx, V, Y @ V, L, {b: code[int(case.typ[i])] for i, b in enumerate(case.names)}, r['converged'], r['iterations'])
         res.update(message=r['message'], cost=r['f'], kind='ac', sources=[], binding=[])
@@ -405,6 +427,8 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
             res['binding'].append({'kind': 'flow', 'name': q['name'], 'mu': q['mu']})
     res.update(advice=adv, notes=notes, time=time.perf_counter() - t0, cond=r['cond'], method='ipm', start=('mid' if start == 'auto' else start),
                flow_limits=int(len(il)))
+    if acdc is not None:
+        res['acdc'] = acdc_out
     if kind == 'ac':
         res.update(start=(used if used == 'warm' else res['start']), start_path=path)
     elif isinstance(start, dict):
@@ -412,6 +436,80 @@ def solve(net, kind='ac', flow_limits=True, start='auto', tol=1e-6, max_iter=150
     if record:
         res['history'] = r['history']
     return res
+
+
+def _with_acdc(acdc, nb, ng, iPg, iQg, nx, nli, f, gh, hess, xmin, xmax):
+    """4.21: the AC problem with its DC grids (see solve, acdc): x grows by the DC voltages u and the currents I of the
+    converters; g by one equality per converter and one per DC bus; h by two rows per rated DC line. The functions of the AC
+    problem are used as they are on the first 2·n_b + 2·n_g unknowns, with their own multipliers."""
+    nd, ns = acdc['nd'], len(acdc['stations'])
+    acdc['ns'] = ns
+    Gd = np.asarray(acdc['G'], float)
+    iu, iI = slice(nx, nx + nd), slice(nx + nd, nx + nd + ns)
+    N = nx + nd + ns
+    st = acdc['stations']
+    sg = np.array([q['g'] for q in st], int)
+    sc = np.array([q['c'] for q in st], int)
+    sd = np.array([q['d'] for q in st], int)
+    a = np.array([q['a'] for q in st], float)
+    b = np.array([q['b'] for q in st], float)
+    c2 = np.array([q['c2'] for q in st], float)
+    ln = acdc.get('lines') or []
+    La = np.array([q['a'] for q in ln], int)
+    Lb = np.array([q['b'] for q in ln], int)
+    k = np.array([q['k'] / q['Irat'] for q in ln], float)
+    nh = 2 * len(ln)
+    Hl = sp.csr_matrix((np.r_[k, -k, -k, k], (np.r_[np.arange(len(ln)), np.arange(len(ln)), len(ln) + np.arange(len(ln)), len(ln) + np.arange(len(ln))],
+                                               np.r_[nx + La, nx + Lb, nx + La, nx + Lb])), shape=(nh, N)) if nh else None
+    Cs = sp.csr_matrix((np.ones(ns), (sd, np.arange(ns))), shape=(nd, ns))       # converters → their DC bus
+    xmin = np.r_[xmin, np.asarray(acdc['Umin'], float), np.zeros(ns)]
+    xmax = np.r_[xmax, np.asarray(acdc['Umax'], float), np.array([q['Imax'] for q in st], float)]
+
+    def pad(M, rows=None):
+        return sp.hstack([M, sp.csr_matrix((M.shape[0], N - M.shape[1]))], format='csr')
+
+    def f2(x):
+        v, d = f(x)
+        return v, np.r_[d, np.zeros(N - len(d))]
+
+    def gh2(x):
+        g0, G0, h0, H0 = gh(x)
+        Vm, Pg, Qg, u, I = x[nb:2 * nb], x[iPg], x[iQg], x[iu], x[iI]
+        P, Q, Vc = Pg[sg], Qg[sg], Vm[sc]
+        gs = P * P + Q * Q - Vc * Vc * I * I                                      # P_c² + Q_c² = |V_c|²·I²
+        Gu = Gd @ u
+        gd = Cs @ (-P - a - b * I - c2 * I * I) - u * Gu                         # the power balance of every DC bus
+        r = np.arange(ns)
+        Js = sp.csr_matrix((np.r_[2 * P, 2 * Q, -2 * Vc * I * I, -2 * Vc * Vc * I], (np.r_[r, r, r, r], np.r_[iPg.start + sg, iQg.start + sg, nb + sc, nx + nd + r])), shape=(ns, N))
+        Ju = -(sp.diags(Gu) + sp.diags(u) @ sp.csr_matrix(Gd))                   # ∂(−u·(G′u))/∂u
+        Jd = sp.csr_matrix((np.r_[-np.ones(ns), -(b + 2 * c2 * I)], (np.r_[sd, sd], np.r_[iPg.start + sg, nx + nd + r])), shape=(nd, N)) \
+            + sp.hstack([sp.csr_matrix((nd, nx)), Ju, sp.csr_matrix((nd, ns))], format='csr')
+        g = np.r_[g0, gs, gd]
+        Gm = sp.vstack([pad(G0), Js, Jd], format='csr')
+        if not nh and h0 is None:
+            return g, Gm, None, None
+        hl = np.r_[k * (u[La] - u[Lb]) - 1.0, -k * (u[La] - u[Lb]) - 1.0] if nh else np.zeros(0)
+        hs = [pad(H0)] if h0 is not None else []
+        return g, Gm, np.r_[h0 if h0 is not None else np.zeros(0), hl], sp.vstack(hs + ([Hl] if nh else []), format='csr')
+
+    def hess2(x, lam, mu, cm):
+        n0 = 2 * nb
+        H0 = hess(x, lam[:n0], mu[:2 * nli] if mu is not None else mu, cm)
+        H = sp.block_diag([H0, sp.csr_matrix((N - H0.shape[0], N - H0.shape[0]))], format='lil')
+        ls, ld = lam[n0:n0 + ns], lam[n0 + ns:]
+        Vm, I, u = x[nb:2 * nb], x[iI], x[iu]
+        for j in range(ns):
+            p, q, vc, ii = iPg.start + sg[j], iQg.start + sg[j], nb + sc[j], nx + nd + j
+            H[p, p] += 2 * ls[j]
+            H[q, q] += 2 * ls[j]
+            H[vc, vc] += -2 * I[j] * I[j] * ls[j]
+            H[ii, ii] += -2 * Vm[sc[j]] ** 2 * ls[j] - 2 * c2[j] * ld[sd[j]]
+            H[vc, ii] += -4 * Vm[sc[j]] * I[j] * ls[j]
+            H[ii, vc] += -4 * Vm[sc[j]] * I[j] * ls[j]
+        Huu = -(np.diag(ld) @ Gd + Gd @ np.diag(ld))
+        H[iu, iu] = H[iu, iu].toarray() + Huu
+        return H.tocsr()
+    return f2, gh2, hess2, xmin, xmax
 
 
 __all__ = ['solve', 'advise', 'sources', 'OpfError', 'GAMMA0', 'dSbus_dV', 'd2Sbus_dV2', 'dSbr_dV', 'd2Sbr_dV2', 'd2ASbr_dV2']

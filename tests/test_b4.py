@@ -154,7 +154,8 @@ class B4Grid(unittest.TestCase):
         g = D.cigre_b4()
         self.assertEqual(len(g.buses), 15)
         self.assertEqual(len(g.lines), 15)                                   # 13 links, two of them double
-        self.assertEqual(len(g.converters), 11 + 4)
+        self.assertEqual(len(g.converters), 11)
+        self.assertEqual([d['name'] for d in g.dcdcs], ['Cd-E1', 'Cd-B1'])                 # 4.21: one element each, not two converters
 
     def test_the_load_flow_of_the_references(self):
         # Table 27.11: every converter on its reference, Cm-A1, Cm-B3 and Cb-A1 holding 1 pu; the DC/DC converters move their
@@ -167,10 +168,11 @@ class B4Grid(unittest.TestCase):
         for grid in ('DCS1', 'DCS2', 'DCS3'):
             buses = {b for b, x in D.B4_BUSES.items() if x == grid}
             P = sum(q['P'] for q in c.values() if q['bus'] in buses)
+            P += sum(d['P'] * ((d['b'] in buses) - (d['a'] in buses)) for d in r['dcdc'].values())   # 4.21: what the DC/DC converters move
             loss = sum(ln['loss'] for ln in r['lines'] if ln['a'] in buses)
             self.assertAlmostEqual(P, loss, delta=1e-3)
-        self.assertAlmostEqual(c['Cd-E1/Bb-E1']['P'], -300e6, delta=1e-3)
-        self.assertAlmostEqual(c['Cd-E1/Bm-E1']['P'], 300e6, delta=1e-3)
+        self.assertAlmostEqual(r['dcdc']['Cd-E1']['P'], 300e6, delta=1e-3)
+        self.assertEqual((r['dcdc']['Cd-E1']['a'], r['dcdc']['Cd-E1']['b']), ('Bb-E1', 'Bm-E1'))
         for name in ('Cm-A1', 'Cm-B3', 'Cb-A1'):
             self.assertAlmostEqual(r['buses'][c[name]['bus']]['V'], 1.0, delta=1e-12)
         self.assertGreater(c['Cb-A1']['P'], 2000e6)                          # it takes the losses of DCS3
