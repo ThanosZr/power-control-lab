@@ -25,6 +25,21 @@ def blocks(version):
 
 
 class Guide(unittest.TestCase):
+    def test_the_python_examples_of_4_24_run_as_written(self):
+        # §34 (subnetworks and multirate) and §35 (the neutral of the three-phase parts)
+        bl = blocks('4.24')
+        self.assertEqual(len(bl), 2)
+        text = (ROOT / 'docs' / 'GUIDE.md').read_text(encoding='utf-8')
+        for (head, code), n in zip(bl, ('34. ', '35. ')):
+            self.assertTrue(head.startswith(n), head)
+            with tempfile.TemporaryDirectory() as d:
+                env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING='utf-8')
+                r = subprocess.run([sys.executable, '-c', code], cwd=d, env=env, capture_output=True, text=True, encoding='utf-8', timeout=600)
+                self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+                sec = [q for q in re.split(r'(?m)^## ', text) if q.startswith(n)][0]
+                said = re.search(r'Τυπώνει:\n\n```\n(.*?)```', sec, re.S).group(1).strip()
+                self.assertEqual(r.stdout.strip(), said, n)
+
     def test_the_python_example_of_4_23_runs_as_written(self):
         bl = blocks('4.23')
         self.assertEqual(len(bl), 1)

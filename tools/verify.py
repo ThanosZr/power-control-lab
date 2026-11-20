@@ -1282,6 +1282,43 @@ def v423_rows(add):
         float(np.max((Dr[:, 1] - Dr[:, 0]) - (Dr[0, 1] - Dr[0, 0]))), 3.0, '°')
 
 
+def v424_rows(add):
+    """4.24: the network split in subnetworks at its lines and multirate (THEORY §8Ι.7): the wave at the open end of a
+    line split in two groups, and in multirate_lines without losses the fast area (1 μs) and a slow one (15 μs) against
+    closed forms, up to the return of the first reflection (tests/js/split_ref.js, tests/test_split.py). And the option
+    «Ουδέτερος» of the three-phase parts: a line-to-earth fault with Z_n against IEC 60909-0 (tests/js/neut_cases.js)."""
+    import json
+    import subprocess
+    import numpy as np
+    from scipy.linalg import expm
+    A = 'Υποδίκτυα και πολλαπλοί ρυθμοί (4.24)'
+    r = json.loads(subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'split_ref.js')], capture_output=True, text=True, timeout=900, cwd=ROOT).stdout)
+    t, v = np.array(r['twave']['t']), np.array(r['twave']['v'])
+    k = (t > 12e-6) & (t < 25e-6)
+    add(A, 'γραμμή 3 km σε δύο υποδίκτυα, βηματική 100 kV: τάση στο ανοιχτό άκρο (τ < t < 3τ)', 'ανάκλαση με Γ = +1: 2U', 200e3, float(np.min(v[k])), 1.0, 'V')
+    m = r['mr']
+    C, L3, R3, Rl = 1e-6, 25e-6, 1.0, 200.0   # the fast area sees the two lines as Z_c/2 until the first reflection returns
+    Af = np.array([[-1 / (Rl * C), -1 / C], [1 / L3, -R3 / L3]])
+    tc, vc = np.array(m['vC']['t']), np.array(m['vC']['v'])
+    ex = np.array([(expm(Af * x) @ np.array([1.0, 0.0]))[0] for x in tc])
+    add(A, 'πολλαπλοί ρυθμοί, γρήγορη περιοχή (1 μs): τάση του πυκνωτή ως 0,95 ms, μέγιστη διαφορά', 'κλειστή μορφή: C ∥ (R₃ + L₃) ∥ Z_c/2', 0.0, float(np.max(np.abs(vc - ex))), 0.035, 'V')
+    R, L, w = 1 + 200.0, 25e-3, 2 * math.pi * 60
+    tl, il = np.array(m['iL1']['t']), np.array(m['iL1']['v'])
+    Z, phi = math.hypot(R, w * L), math.atan2(w * L, R)
+    ie = (np.sin(w * tl - phi) + math.sin(phi) * np.exp(-tl * R / L)) / Z
+    add(A, 'πολλαπλοί ρυθμοί, αργή περιοχή 1 (15 μs): ρεύμα του L₁ ως 0,48 ms, μέγιστη διαφορά', 'κλειστή μορφή: πηγή, R₁ + L₁ και Z_c/2 σε σειρά', 0.0, float(np.max(np.abs(il - ie))), 5e-6, 'A')
+
+    # the option «Ουδέτερος» (decisions 208, 345): a line-to-earth fault at a network equivalent with R_n + jX_n at its
+    # star point, against the symmetrical components of IEC 60909-0: I″k1 = 3E/|2Z₁ + Z₀ + 3Z_n| (tests/js/neut_cases.js)
+    q = json.loads(subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'neut_cases.js')], capture_output=True, text=True, timeout=900, cwd=ROOT).stdout)
+    Un, Sk, XR, ZZ, XR0, cf = 20e3, 500e6, 10.0, 1.5, 5.0, 1.1
+    Z1 = cf * Un * Un / Sk
+    z1 = complex(Z1 / math.sqrt(1 + XR * XR), Z1 * XR / math.sqrt(1 + XR * XR))
+    z0 = complex(ZZ * Z1 / math.sqrt(1 + XR0 * XR0), ZZ * Z1 * XR0 / math.sqrt(1 + XR0 * XR0))
+    E = cf * Un / math.sqrt(3)
+    Ik1 = 3 * E / abs(2 * z1 + z0 + 3 * complex(10, 20) + 3e-4)
+    add(A, 'ουδέτερος μέσω R_n + jX_n = 10 + j20 Ω: ρεύμα μονοφασικού σφάλματος I″k1 (ενεργός τιμή)', 'I″k1 = 3E/|2Z₁ + Z₀ + 3Z_n| (IEC 60909-0)', Ik1, q['grid']['z']['sim'], 0.5, 'A')
+
 def checks(o):
     """Rows: (area, quantity, reference, expected, simulated, tolerance (absolute), unit)."""
     rows = []
@@ -1598,6 +1635,7 @@ def checks(o):
     v421_rows(add)
     v422_rows(add)
     v423_rows(add)
+    v424_rows(add)
     cpf_rows(add)
     sweepc_rows(add)
     se_rows(add)
@@ -1685,6 +1723,8 @@ TESTS = [
     ('tests/test_insulation.py', 'συντονισμός μόνωσης (4.22, ROADMAP §51, `pcl/insulation.py`)', 'το παράδειγμα G.2 του IEC 60071-2 ολόκληρο (U_cw, K_a, U_rw, μετατροπές, στάθμη 395/950 kV)· οι ζώνες προστασίας του Πίν. 4 του IEC 60099-5· ο συντελεστής σφάλματος γης από τις συμμετρικές συνιστώσες'),
     ('tests/test_geo.py', 'θέσεις του δικτύου στη γη (4.22, ROADMAP §69, `pcl/geo.py`, `tests/js/geo_cases.js`)', 'haversine απέναντι στον νόμο των συνημιτόνων· Web Mercator απέναντι στο asinh(tan φ)· GeoJSON έξω και πάλι μέσα· μήκος γραμμής από τη διαδρομή της (και η ροή φορτίου το βλέπει)· ο χάρτης δεν αλλάζει τις τιμές των στρώσεων'),
     ('tests/test_time3.py', 'ο λύτης στον χρόνο, μέρος 3 (4.23, THEORY §8Ι.5): καταγραφή μόνο όσων παρακολουθούνται, βάση της επαναπαραγοντοποίησης από τη μνήμη, πυρήνας WebAssembly', 'σε έξι tutorials τα ίδια bit στην καταγραφή και στα στατιστικά κάθε καναλιού που καταγράφεται, η τιμή των άλλων ίδια όταν ζητηθεί, ένα κανάλι που προστίθεται στη μέση καταγράφεται από εκεί· με βάση από τη μνήμη τα ίδια bit και 41–58 % λιγότερες στήλες στα hvdc_lcc, b4dcs2, hvdc_gfm· ο πυρήνας WebAssembly με τα ίδια bit σε 16 συστήματα και σε τρία tutorials, «Αυτόματα» από 4000 αγνώστους (μετρημένο)'),
+    ('tests/test_split.py', 'υποδίκτυα στις γραμμές σε Workers και πολλαπλοί ρυθμοί (4.24, THEORY §8Ι.7, `web/studio/split.js`)', 'σε 11 tutorials τα ίδια bit με έναν λύτη σε κάθε κανάλι, σε δύο ομάδες και σε μία ομάδα ανά υποδίκτυο (ως 44), και σε Workers· οι άγνωστοι των άλλων μερών NaN σε κάθε λύτη· μια μεταγωγή αλλάζει μόνο τα βήματα της ομάδας της, με διαφορά μικρότερη από το σφάλμα της ολοκλήρωσης· πολλαπλοί ρυθμοί στο multirate_lines (1 και 15 μs) με σφάλμα κάτω από το βήμα των 15 μs παντού, και η εξομάλυνση ίσου εμβαδού χειρότερη εδώ· η διέγερση του βιβλίου στη G2 του ieee9_emt· το ισοδύναμο δικτύου στην αναζήτηση με «πηγή»'),
+    ('tests/test_neutral.py', 'η επιλογή «Ουδέτερος» των τριφασικών στοιχείων (4.24, αποφάσεις 208, 345)', 'ο ακροδέκτης n μόνο με «Ακροδέκτης n»· η προεπιλογή δίνει το netlist της 4.23· ακροδέκτης n στη γη = στερεά γείωση σε κάθε στοιχείο· μονοφασικό σφάλμα με R_n + jX_n στο ισοδύναμο δικτύου και πίσω από Dyn11 απέναντι στη λύση στο πεδίο των φάσεων με 3Z_n (κάτω από 0,1 %)· πηγή με Z_n σε άνισο αστέρα απέναντι στην κλειστή μορφή'),
     ('tests/test_rms.py', 'ο αριθμητικός πυρήνας της δυναμικής RMS και της ευστάθειας μικρών διαταραχών (4.23, ROADMAP §71, `pcl/rms.py`)', 'IEEE 9 ζυγών όπως στο βιβλίο αναφοράς: E′ και φορτία (Παρ. 2.6), οι ανηγμένοι πίνακες πριν, κατά και μετά το σφάλμα (Πίν. 2.6), οι δύο ταλαντώσεις (Παρ. 3.2), οι ιδιοτιμές του μοντέλου δύο αξόνων με D = 0 και 1 (§9.12) στο έκτο δεκαδικό· ο τραπεζοειδής με τάξη 2 απέναντι στο SciPy· η εναλλασσόμενη λύση ίδια· μεταβλητό βήμα· κρίσιμος χρόνος εκκαθάρισης· Arnoldi = QR (και στο IEEE 118)· η πρώτη ταλάντωση απέναντι στο EMT· χωρίς διαταραχή τίποτα δεν κινείται· στοιχείο χωρίς μοντέλο RMS: άρνηση με το όνομά του'),
     ('tests/test_ev_weights.py', 'τα βάρη του πολυκριτηριακού του οχήματος (4.18.1)', 'moevc2: w_s↑ ⇒ IAE↓, w_e↑ ⇒ Wh/km↓ και IAE↑, eco < ισορροπημένος < performance στα Wh/km και αντίστροφα στο IAE, keep ≤ 1· το moevc της 4.8 με keep 1,15 και w_s χωρίς επίδραση'),
     ('tests/test_look.py', 'τεχνική όψη του σχεδίου (4.17.3, ROADMAP §65)', 'διαδρομές μόνο οριζόντιες/κατακόρυφες (χωρίς εξομάλυνση) απέναντι σε γνωστές μορφές, σήμανση χωρίς αλλαγή των υπολοίπων, αντίσταση IEC και ANSI, όλα τα σύμβολα της βιβλιοθήκης· `scope_flow.js` στον browser'),
@@ -1769,7 +1809,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 1058 tests (Python και Node) και 20 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»· από την 4.22 το `gis_flow.js` τα tutorials του υποσταθμού GIS, τους άξονες των γραφημάτων SVG, το σύρσιμο των ετικετών και τον χάρτη του δικτύου). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 1074 tests (Python και Node) και 20 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»· από την 4.22 το `gis_flow.js` τα tutorials του υποσταθμού GIS, τους άξονες των γραφημάτων SVG, το σύρσιμο των ετικετών και τον χάρτη του δικτύου). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',

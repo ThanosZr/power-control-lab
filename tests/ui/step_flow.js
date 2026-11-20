@@ -1,5 +1,6 @@
 // Browser check of the solver step (3.13, ROADMAP §40): the diagnostics console, the step check, the variable step
-// and the server's messages. Usage: python run.py --no-browser --port 8765  then  node tests/ui/step_flow.js http://127.0.0.1:8765/ <out-dir>
+// and the server's messages. 4.24: the subnetworks and multirate in the circuit panel, the run in its window, and the
+// search of the library for the network equivalent. Usage: python run.py --no-browser --port 8765  then  node tests/ui/step_flow.js http://127.0.0.1:8765/ <out-dir>
 const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
 (async()=>{const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:1500,height:1100}});const p=await ctx.newPage();const errs=[];
  p.on('pageerror',e=>errs.push(String(e.stack||e)));p.on('console',m=>{if(m.type()==='error')errs.push(m.text());});
@@ -65,5 +66,26 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
  ok(!st3.info.hMinSet&&/Αυτόματα/.test(st3.now)&&st4.set&&Math.abs(st4.hMin-2e-8)<1e-15&&Math.abs(st4.doc-2e-8)<1e-15,'βήμα: ελάχιστο βήμα 20 ns ως ρύθμιση του κυκλώματος (πριν: Αυτόματα)');
  await p.evaluate(()=>{PCL.editor.sel.c.clear();PCL.renderProps();});await p.fill('[data-solve="hmin"]','');await p.dispatchEvent('[data-solve="hmin"]','change');await p.waitForTimeout(400);
  ok(await p.evaluate(()=>!PCL.S.sim.stepInfo(false).hMinSet&&PCL.editor.doc.solve?.hmin===undefined),'βήμα: κενό = «Αυτόματα»');
+ // 4.24 (THEORY §8Ι.7): subnetworks and multirate. The proposal of the engine (one solver), «Αυτόματα» for the rates, the
+ // run in a worker of its own with its table and the difference from the run of the page at the same end
+ await p.evaluate(()=>PCL.loadTutorial('multirate_lines'));await p.waitForTimeout(900);
+ await p.click('#toend');await p.waitForFunction(()=>PCL.S.sim.t>=0.00199,null,{timeout:60000});await p.waitForTimeout(500);
+ const spl=await p.evaluate(()=>{PCL.editor.sel.c.clear();PCL.renderProps();const d=document.querySelector('details[data-sec="c-split"]');if(d)d.open=true;return document.querySelector('#split-advice')?.textContent||'';});
+ ok(/Πρόταση του engine: ένας λύτης/.test(spl)&&/3 υποδίκτυα/.test(spl),'υποδίκτυα: η πρόταση του engine ('+spl.slice(0,120)+')');
+ await p.selectOption('[data-solve="rates"]','auto');await p.waitForTimeout(400);
+ ok(await p.evaluate(()=>PCL.editor.doc.solve?.rates==='auto'),'πολλαπλοί ρυθμοί: «Αυτόματα» στο αρχείο');
+ await p.evaluate(()=>{const d=document.querySelector('details[data-sec="c-split"]');if(d)d.open=true;});
+ await p.click('[data-splitrun]');await p.waitForFunction(()=>/Έγινε|⚠/.test(document.querySelector('.split-box [data-swstat]')?.textContent||''),null,{timeout:120000});
+ const sw=await p.evaluate(()=>({stat:document.querySelector('.split-box [data-swstat]').textContent,rows:[...document.querySelectorAll('.split-box .split-tab tbody tr')].map(r=>[...r.cells].map(c=>c.textContent)),
+  notes:[...document.querySelectorAll('.split-box .split-plots p')].map(e=>e.textContent),cv:document.querySelectorAll('.split-box canvas').length}));
+ ok(/Έγινε/.test(sw.stat)&&/3 υποδίκτυα/.test(sw.stat)&&/2 ομάδες/.test(sw.stat),'υποδίκτυα: το τρέξιμο σε worker ('+sw.stat+')');
+ ok(sw.rows.length===2&&sw.rows[0][3]==='h'&&/^15·h$/.test(sw.rows[1][3])&&+sw.rows[1][5]<+sw.rows[0][5]/10,'πολλαπλοί ρυθμοί: η αργή ομάδα με 15·h και λιγότερα βήματα '+JSON.stringify(sw.rows));
+ ok(sw.cv>=1&&sw.notes.some(t=>/μέγιστη διαφορά από τον έναν λύτη/.test(t)),'υποδίκτυα: τα κανάλια με τον έναν λύτη και η διαφορά τους '+sw.notes.join(' / ').slice(0,200));
+ await (await p.$('.split-box')).screenshot({path:OUT+'/split_window.png'});
+ await p.click('.split-box [data-swclose]');await p.selectOption('[data-solve="rates"]','');await p.waitForTimeout(300);
+ // 4.24: the three-phase source with a short-circuit level is found by the search of the library with «πηγή»
+ const lib=await p.evaluate(()=>{const s=document.querySelector('#pal-search'),get=q=>{s.value=q;s.dispatchEvent(new Event('input'));return [...document.querySelectorAll('#palette-list .pal-item[data-part]')].map(b=>b.dataset.part);};
+  const r={a:get('πηγή βραχυκύκλωσης'),b:get('Sk')};s.value='';s.dispatchEvent(new Event('input'));return r;});
+ ok(lib.a.includes('GRID3')&&lib.b.includes('GRID3'),'βιβλιοθήκη: το ισοδύναμο δικτύου με «πηγή βραχυκύκλωσης» και «Sk» '+JSON.stringify(lib));
  ok(errs.length===0,'χωρίς σφάλματα JavaScript '+errs.join(' | '));
  await b.close();})();

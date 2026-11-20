@@ -183,7 +183,15 @@ class ApiSurface(unittest.TestCase):
             self.assertIn(k, self.now['pcl'], k)
         for k in ('rec', 'recKeys', 'refBase', 'kernel'):
             self.assertIn(k, self.now['project']['file.solve']['params'])
-        self.assertEqual(sum(len(v) for v in self.now.values()), 917)
+
+    def test_the_surface_of_4_24(self):
+        """4.24: subnetworks at the lines and multirate: Project.split and its result, and the four settings of the file
+        (split, groups, rates, rateMax, smooth), all stable additions."""
+        self.assertIn('pcl.Project.split', self.now['pcl'])
+        self.assertIn('pcl.SplitResult', self.now['pcl'])
+        for k in ('split', 'groups', 'rates', 'rateMax', 'smooth'):
+            self.assertIn(k, self.now['project']['file.solve']['params'])
+        self.assertEqual(sum(len(v) for v in self.now.values()), 922)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

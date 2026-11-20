@@ -654,3 +654,6 @@ body.look-tech .wire.ph-a .wl{stroke:var(--ph-a)}body.look-tech .wire.ph-b .wl{s
 .nv-edit{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:8px}.nv-edit label,.nv-edit .nv-gen{display:flex;gap:5px;align-items:center}.nv-edit input[type=number]{width:7.5em}
 .nv-chip{display:inline-block;padding:1px 6px;margin:1px 0;border:1px solid var(--line);border-radius:10px}.nv-chip button{border:0;background:none;cursor:pointer;padding:0 2px}
 #nv-legend i{display:inline-block;width:.9em;height:.9em;margin:0 .3em 0 .9em;vertical-align:-.1em;border-radius:2px}#nv-info{min-height:1.4em}
+/* 4.24: the window «Τρέξιμο σε υποδίκτυα» (splitwin.js) */
+.split-modal .modal-box{width:min(980px,96vw);height:min(760px,92vh)}.split-body{overflow:auto}.split-plots section{margin:8px 0}
+.split-cv{width:100%;height:210px;display:block}.split-tab{border-collapse:collapse;font-size:.85em;margin:6px 0}.split-tab th,.split-tab td{border-bottom:1px solid var(--line);padding:2px 8px;text-align:right}

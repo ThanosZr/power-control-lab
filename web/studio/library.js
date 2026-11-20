@@ -5,7 +5,8 @@
 //  Library.view(tax, parts, opt)   the groups to draw: every visible part exactly once per taxonomy (those a taxonomy does
 //                                  not name go to «Άλλα»); with opt.q only the parts that match, in the same groups;
 //                                  'abc' is one group sorted by name (Greek order); 'mine' is favourites and recent ones
-//  Library.match(type, def, q)     the search (name, type, group, and words without accents)
+//  Library.match(type, def, q)     the search (name, type, group, the other names of the part (def.alias, 4.24), and words
+//                                  without accents)
 (function(root){
  const S=(title,items)=>({title,items});
  // by field: what a part is
@@ -36,7 +37,7 @@
  const BASIC=new Set(['R','L','C','VDC','VAC','IDC','GND','SW','D','VM','AM','VP','PWM','CONST','GAIN','SUM','XFMR','DISP']);
  const TAX=[{id:'field',title:'Κατά πεδίο',groups:FIELD},{id:'course',title:'Κατά μάθημα',groups:COURSE,multi:true},{id:'level',title:'Κατά επίπεδο'},{id:'abc',title:'Αλφαβητικά'},{id:'mine',title:'Αγαπημένα και πρόσφατα'}];
  const strip=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
- function match(k,d,q){if(!q)return true;const w=strip(q).split(/\s+/).filter(Boolean),h=strip(k+' '+d.name+' '+(d.group||''));return w.every(x=>h.includes(x));}
+ function match(k,d,q){if(!q)return true;const w=strip(q).split(/\s+/).filter(Boolean),h=strip(k+' '+d.name+' '+(d.group||'')+' '+(d.alias||[]).join(' '));return w.every(x=>h.includes(x));}
  const coll=typeof Intl!=='undefined'?new Intl.Collator('el',{sensitivity:'base'}):null;
  function view(tax,parts,opt={}){const q=opt.q||'',vis=Object.entries(parts).filter(([k,d])=>!d.hidden),ok=new Set(vis.filter(([k,d])=>match(k,d,q)).map(([k])=>k));
   const T=TAX.find(t=>t.id===tax)||TAX[0];const pick=items=>items.filter(k=>parts[k]&&!parts[k].hidden&&ok.has(k));let out=[];

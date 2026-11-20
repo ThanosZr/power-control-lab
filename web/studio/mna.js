@@ -119,7 +119,7 @@
  // so the run continues with the same numbers. Objects met twice are kept once ($ref); typed arrays as base64 of their
  // bytes (exact); NaN, ±Infinity and −0 by name; an object with getState/setState (a Python block) keeps its own state.
  // Left out: the project (rebuilt), the LU cache and the sparse pattern (rebuilt the same) and the scope's buffers (ring, per).
- const SNAP_SKIP=new Set(['project','cache','ring','per','sp','spq','spw','rec','spF','spA','spChg','cvL','hLim','valEls','keyEls','cvW','valsAll','fv','spBc','kern','spFb']);   // 4.2: the sparse pattern is rebuilt the same; 4.19: the working factors too
+ const SNAP_SKIP=new Set(['project','cache','ring','per','sp','spq','spw','rec','spF','spA','spChg','cvL','hLim','valEls','keyEls','cvW','valsAll','fv','spBc','kern','spFb','part','splitForeign','splitCuts','splitGroup','splitBlock','splitWait','splitWaitMs']);   // 4.2: the sparse pattern is rebuilt the same; 4.19: the working factors too; 4.24: a part of a split network
  const SNAP_TA={Float64Array,Float32Array,Int32Array,Uint32Array,Int16Array,Uint16Array,Int8Array,Uint8Array,Uint8ClampedArray};
  function b64of(ta){const u=new Uint8Array(ta.buffer,ta.byteOffset,ta.byteLength);if(typeof Buffer!=='undefined')return Buffer.from(u).toString('base64');
   let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s);}
@@ -756,7 +756,7 @@
   const grounds=comps.filter(c=>c.type==='GND');
   for(let i=1;i<grounds.length;i++)union(grounds[0].id+':g',grounds[i].id+':g');
   let groundRoot=grounds.length?find(grounds[0].id+':g'):null;
-  if(!groundRoot){const s=comps.find(c=>['VDC','VAC','IDC','VAC3'].includes(c.type));
+  if(!groundRoot){const s=comps.find(c=>['VDC','VAC','IDC'].includes(c.type)||c.type==='VAC3'&&P.neutOf(c.params,'neut','pin')==='pin');
    if(s){groundRoot=find(s.id+':n');warnings.push('Δεν υπάρχει γείωση: ως 0 V λαμβάνεται ο αρνητικός ακροδέκτης της '+(s.label||s.id)+'.');}}
   // group pins into nets; canonical key = smallest pin key (stable). Signal pins form their own
   // nets and never join an electrical node.
@@ -815,6 +815,12 @@
     k.Kp=r.Kp;k.Ki=r.Ki;k.Kd=r.Kd;k.Tf=r.Tf;if(k.ff!=='ratio'&&k.ff!=='conv'){k.ff='const';k.D0=r.D0;}k.design=r;for(const w of r.warn)warnings.push(`${lbl}: ${w}.`);}
    else if(r.ok){const g=k.Ki||k.Kp;if(g&&Math.sign(g)!==r.sg)warnings.push(`${lbl}: στο ${r.name} ∂(μέτρηση)/∂D ${r.sg<0?'< 0 (αντιστρέφει)':'> 0'}, ενώ τα κέρδη έχουν ${g>0?'θετικό':'αρνητικό'} πρόσημο: ο βρόχος έχει θετική ανάδραση. Άλλαξε το πρόσημο των K_p, K_i${k.Kd?', K_d':''} ή διάλεξε «Κέρδη: από το κύκλωμα».`);}};
   const internal=()=>nNodes++;
+  // 4.24 (decisions 208, 345): the star point of a VAC3 or a GEN3: the terminal n, the ground (-1), an inner node (isolated),
+  // or an inner node with R_n and X_n (at the part's frequency) to the ground
+  const neutNode=(c,p,def,add)=>{const v=P.neutOf(p,'neut',def);if(v==='pin')return node(c.id,'n');if(v==='iso')return internal();if(v!=='z')return -1;
+   const Rn=Math.max(num(p.Rng,0),0),Xn=Math.max(num(p.Xng,0),0),f=Math.max(num(p.f,50),1e-9);if(!(Rn>0)&&!(Xn>0))return -1;
+   const n0=internal();let a=n0;if(Rn>0){const m=Xn>0?internal():-1;add({k:'G',a,b:m,R:Rn});a=m;}
+   if(Xn>0)add({k:'L',a,b:-1,L:Xn/(2*Math.PI*f),i:0,key:c.id+'#Ln'});return n0;};
   const els=[],ctrls=[],shs=[],blocks=[],compInfo=new Map();
   // a signal block: inputs/outputs -> signal net index (−1 = not connected)
   const mkBlock=(c,p,T,extra={})=>{const ins={},outs={};for(const [k,v] of Object.entries(P.sigPins(c)))(v.dir==='in'?ins:outs)[k]=sn(c.id,k);
@@ -964,7 +970,7 @@
     if(num(p.R2,0)>0){const m=internal();add({k:'G',a:S1,b:m,R:num(p.R2,0)});S1=m;}
     if(num(p.Llk2,0)>0){const m=internal();info.lk2=add({k:'L',a:S1,b:m,L:num(p.Llk2,0),i:0,key:c.id+'#lk2'});S1=m;}
     info.main=add({k:'X',p1:P1,p2,s1:S1,s2,n:num(p.n,1)||1,row:row()});info.mag=add({k:'L',a:P1,b:p2,L:Math.max(num(p.Lm,1e-3),1e-12),i:im0,key:c.id+'#m'});}
-   else if(T==='VAC3'){const nN=node(c.id,'n'),ph0=num(p.phase,0)*Math.PI/180,seq=p.seq==='acb'?-1:1;info.phases=[];info.n=nN;
+   else if(T==='VAC3'){const nN=neutNode(c,p,'pin',add),ph0=num(p.phase,0)*Math.PI/180,seq=p.seq==='acb'?-1:1;info.phases=[];info.n=nN;
     ['a','b','c'].forEach((q,k)=>{const pin=node(c.id,q);let top=pin;
      if(num(p.Ls,0)>0){const m=internal();add({k:'L',a:m,b:top,L:num(p.Ls,0),i:0,key:c.id+'#Ls'+q});top=m;}
      if(num(p.Rs,0)>0){const m=internal();add({k:'G',a:m,b:top,R:num(p.Rs,0)});top=m;}
@@ -996,7 +1002,7 @@
     // whose Γ(θ) follows the rotor (power-invariant Park, rotor referred to the stator, Parts.genModel); the field is fed through R_fd by a
     // source E_fd·(R_fd/X_ad)·U_n, each damper is closed on its resistance; the masses of the shaft advance after each committed step (genStep)
     const g=P.genModel(p);if(g.err)throw new NetlistError(`${c.label||c.id}: ${g.err}`);if(g.note)warnings.push(`${c.label||c.id}: ${g.note}`);
-    const term=['a','b','c'].map(k=>node(c.id,k)),nN=p.neut==='pin'?node(c.id,'n'):p.neut==='iso'?internal():-1;
+    const term=['a','b','c'].map(k=>node(c.id,k)),nN=neutNode(c,p,'gnd',add);
     const ports=term.map(t=>[series(t,-1,g.Ra*g.Zb),nN]),xf=internal(),mf=internal(),NM=g.sh.N;
     const m={g,term,nN,init:p.init==='zero'?'zero':'lf',V0:num(p.V0,1),ang0:num(p.ang0,0)*Math.PI/180,exc:['sched','sig'].includes(p.exc)?p.exc:'init',mech:['sched','sig'].includes(p.mech)?p.mech:'init',
      efdS:P.parseSched(p.Efd)||[[0,1]],tmS:P.parseSched(p.Tm)||[[0,0]],Efd0:num(p.V0,1),Tm0:0,V0:p.init==='zero'?1:num(p.V0,1),
@@ -1381,6 +1387,32 @@
    return net.warnings;
   }
   reset(project){this.load(project||this.project,true);}
+  // 4.24 (THEORY §8Ι.7): this simulator keeps one part of a network split in subnetworks (split.js). p: {els, blocks, ctrls,
+  // shs: Sets of what the part keeps (the elements in the order of the netlist, a cut line with one end here included),
+  // comps: the ids of its parts, pad: the branch rows of the other parts (a 1 on their diagonal; their nodes keep G_min),
+  // keys: its channels}. Every list that load() derives from the netlist is made again from what is left; h, T, the step,
+  // the solver and every state stay as load() made them (the whole network started together, from the same solution).
+  // A new list derived in load() from the elements, blocks or parts is made again here too (ARCHITECTURE §3).
+  restrict(p){
+   const net=this.net,G=net.sig,inB=b=>p.blocks.has(b);
+   const els=net.els.filter(e=>p.els.has(e));for(const r of p.pad)els.push({k:'PAD',r});
+   const sig={...G,blocks:G.blocks.filter(inB),order:G.order.filter(inB),zc:G.zc.filter(inB),meas:null};
+   this.net={...net,els,sig,ctrls:net.ctrls.filter(k=>p.ctrls.has(k)),shs:net.shs.filter(q=>p.shs.has(q))};
+   this.part=p;this.jsc=null;this.swl=null;this.topo=new Map();this.topoSig=null;this.keyEls=null;this.valEls=null;this.cvW=null;this.fv=null;
+   this.ctrlById=new Map(this.net.ctrls.map(k=>[k.id,k]));this.clkById=new Map(sig.blocks.filter(b=>b.type==='CLK').map(b=>[b.id,b]));this.shById=new Map(this.net.shs.map(q=>[q.id,q]));
+   this.sp=null;this.spq=null;this.spF=null;this.spA=null;this.spChg=null;this.spFb=null;this.cache=new Map();this.lustat={fact:0,hit:0,miss:0,full:0,re:0,part:0,cols:0};
+   const own=c=>p.comps.has(c.id);
+   this.ims=[...net.compInfo.values()].filter(c=>c.im&&own(c)).map(c=>c.im);this.sms=[...net.compInfo.values()].filter(c=>c.sm&&own(c)).map(c=>c.sm);
+   this.srms=[...net.compInfo.values()].filter(c=>c.srm&&own(c)).map(c=>c.srm);this.gens=[...net.compInfo.values()].filter(c=>c.gen&&own(c)).map(c=>c.gen);
+   this.hasTV=this.sms.length+this.srms.length+this.gens.length>0;this.hasCPL=els.some(e=>e.k==='CPL');this.hasNL=els.some(e=>e.k==='NL');
+   this.arcEls=els.filter(e=>e.arc);this.saiEls=els.filter(e=>e.sai);this.chbEls=els.filter(e=>e.k==='CHB');this.footEls=els.filter(e=>e.foot);
+   this.everyStep=this.hasCPL||this.hasTV||this.hasNL||this.footEls.length>0;this.lossList=[...net.compInfo.values()].filter(c=>c.loss&&own(c));
+   this.stIndex();
+   // the signature of the gates is that of this part's switches (the start from a load flow takes it at h/2, as load())
+   if(this.prevSig!=='')this.prevSig=this.gateSigPeek(this.h/2);
+   const want=new Set(p.keys);this.opts.watch=this.keys.filter(k=>want.has(k));this.recKeys=this.opts.watch.slice();
+   this.chIndex=new Map(this.recKeys.map((k,i)=>[k,i]));this.allIndex=new Map(this.keys.map((k,i)=>[k,i]));this.allocRecord();this.recordNow();
+  }
   // induction machine: ψ_R by the trapezoidal rule with ω held over the step (ψ enters linearly), then the mechanics;
   // the sources e = −(R_R/L_M − jω_r)ψ_R are set for the next step (one step behind: h ≪ L_M/R_R and h·ω_r ≪ 1)
   imStep(m,h){const s=m.st,ia=m.ph[0].L.i,ib=m.ph[1].L.i,ic=m.ph[2].L.i,al=(2*ia-ib-ic)/3,be=(ib-ic)/Math.sqrt(3);
@@ -2029,6 +2061,7 @@
      case 'GY':{const r=e.row,Y=e.psi;if(e.a>=0){ad(e.a,r,1);ad(r,e.a,1);}if(e.b>=0){ad(e.b,r,-1);ad(r,e.b,-1);}if(e.m>=0){ad(r,e.m,-Y);ad(e.m,r,-Y);}break;} // gyrator: v_ab = ψ·ω, τ = ψ·i into node ω
      case 'X':{const r=e.row,N=e.n;if(e.s1>=0){ad(e.s1,r,1);ad(r,e.s1,1);}if(e.s2>=0){ad(e.s2,r,-1);ad(r,e.s2,-1);}
       if(e.p1>=0){ad(e.p1,r,-N);ad(r,e.p1,-N);}if(e.p2>=0){ad(e.p2,r,N);ad(r,e.p2,N);}break;}
+     case 'PAD':ad(e.r,e.r,1);break; // 4.24: a branch row of another part of the network (restrict)
     }
    }
    if(fin)fin();
@@ -2437,8 +2470,11 @@
    let lo=0,hi=h;for(let i=0;i<40;i++){const m=(lo+hi)/2;if(sig(this.t+m)===s0)lo=m;else hi=m;}
    return Math.max(hi,this.h*1e-6);
   }
-  run(duration,maxSteps=Infinity,deadline=Infinity){
-   const tEnd=this.t+duration;let steps=0;const eps=this.h*1e-7,hasDl=deadline!==Infinity;if(this.var&&this.capDirty)this.modeCap();
+  run(duration,maxSteps=Infinity,deadline=Infinity){return this.runUntil(this.t+duration,maxSteps,deadline);}
+  // 4.24: the same loop to an absolute end time (a part of a network split in subnetworks steps one step at a time towards
+  // the end of the whole run, so its steps are those of one run() to that end); fin = false: without computeVals at the end
+  runUntil(tEnd,maxSteps=Infinity,deadline=Infinity,fin=true){
+   let steps=0;const eps=this.h*1e-7,hasDl=deadline!==Infinity;if(this.var&&this.capDirty)this.modeCap();
    while(this.t<tEnd-eps&&steps<maxSteps){
     if(this.progNext()<=this.t+eps){this.progDue(eps);continue;}
     const tn=this.nextEvent(tEnd),stat=this.evStat;let hs=this.var?this.hv:this.h;
@@ -2473,7 +2509,7 @@
     // the time limit of the frame after every step (4.6; it was every 256 steps, ~10 ms late on a large circuit)
     if(hasDl&&performance.now()>deadline)break;
    }
-   this.computeVals();
+   if(fin)this.computeVals();
    return steps;
   }
  }

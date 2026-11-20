@@ -67,6 +67,18 @@
   num('gmin','Ελάχιστη αγωγιμότητα','S',1e-12,{show:on,hint:'Κάτω όριο της αγωγιμότητας μετά τη διακοπή (ρεύμα μετά το τόξο σε S × V).'})];};
 
  const CONN=what=>sel('conn','Ακροδέκτες',[['sep','Χωριστοί'],['bus',`Δίαυλος ${what} (ένας ακροδέκτης)`]],'sep',{hint:'Δίαυλος (3.18): ένα σύρμα μεταφέρει όλες τις φάσεις ή συνιστώσες, στη σειρά που γράφεται. Το ίδιο κύκλωμα με χωριστά σύρματα δίνει τα ίδια αποτελέσματα.'});
+ // 4.24 (decisions 208, 345): one option «Ουδέτερος» in every three-phase part with a star point: solidly grounded, through
+ // R_n + jX_n, isolated, or a terminal n outside. The default of each part is what it did before 4.24 (the same netlist).
+ const NEUT_LBL={gnd:'Στερεά γειωμένος',z:'Μέσω R_n + jX_n',iso:'Μονωμένος',pin:'Ακροδέκτης n'};
+ const NEUT=(k,def,o={})=>{const vals=o.vals||['gnd','z','iso','pin'],sfx=o.sfx||'',vis=o.show||(()=>true),isZ=p=>vis(p)&&(p[k]||def)==='z';
+  return [sel(k,o.label||'Ουδέτερος',vals.map(v=>[v,v==='auto'?o.auto:NEUT_LBL[v]]),def,{show:o.show,struct:true,hint:(o.hint?o.hint+' ':'')+'«Μέσω R_n + jX_n»: εμπέδηση από το κέντρο του αστέρα στη γη, 3Z_n στη μηδενική ακολουθία. «Ακροδέκτης n»: το κέντρο του αστέρα έξω, για σύνδεση με το χέρι (4.24).'}),
+   num('Rng'+sfx,'R_n'+(sfx?' (πλευρά '+sfx+')':'')+' του ουδετέρου','Ω',0,{zero:true,show:isZ}),
+   num('Xng'+sfx,'X_n'+(sfx?' (πλευρά '+sfx+')':'')+' του ουδετέρου','Ω',0,{zero:true,show:isZ,hint:'Επαγωγική αντίδραση στη συχνότητα του στοιχείου, ή στα 50 Hz αν δεν έχει (πηνίο Petersen ή περιορισμού).'})];};
+ const neutOf=(p,k,def)=>{const v=p?.[k];return v==='gnd'||v==='z'||v==='iso'||v==='pin'||v==='auto'?v:def;};
+ // the two sides of a transformer group (YN/Y/D, yn/y/d), whether a side is a star, and the neutral a side has (null: delta)
+ const xfGrp=p=>{const m=/^(YN|Y|D)(yn|y|d)/.exec(String(p?.grp||'Dyn11'));return m?[m[1],m[2]]:['D','yn'];};
+ const xfStar=(p,side)=>xfGrp(p)[side-1][0].toUpperCase()==='Y';
+ const xfNeut=(p,side)=>{if(!xfStar(p,side))return null;const v=neutOf(p,'neut'+side,'auto');return v==='auto'?(xfGrp(p)[side-1].length===2?'gnd':'iso'):v;};
  const isBus=p=>p.conn==='bus';
  const WIDTH=sel('width','Πλάτος (δίαυλος)',[['1','1: ένα σήμα ή ό,τι συνδεθεί'],['2','2 (π.χ. αβ, dq)'],['3','3 (π.χ. abc)'],['4','4'],['5','5'],['6','6']],'1',{hint:'Πλάτος > 1: ο ακροδέκτης του συμβόλου είναι δίαυλος με τόσα σήματα ή αγωγούς (3.18). Με 1 περνά ό,τι συνδεθεί, και δίαυλος.'});
  const nIO=p=>Math.max(2,Math.min(8,Math.round(+p.n)||3)),nEL=p=>Math.max(2,Math.min(6,Math.round(+p.n)||3));
@@ -189,12 +201,13 @@
    params:[num('Vpk','Πλάτος','V',325),num('f','Συχνότητα','Hz',50),num('phase','Φάση','°',0,{signed:true,zero:true}),num('off','Συνεχής συνιστώσα (DC offset)','V',0,{signed:true,zero:true}),num('Rs','Εσωτερική αντίσταση','Ω',0,{zero:true}),num('Ls','Εσωτερική αυτεπαγωγή','H',0,{zero:true})],
    value:p=>p.Vpk,unit:'V',
    draw:()=>'<path d="M0,-40 V-16 M0,16 V40"/><circle r="16"/><path class="thin" d="M-9,0 c3,-10 6,-10 9,0 c3,10 6,10 9,0"/>'},
-  VAC3:{name:'Τριφασική πηγή (Y)',prefix:'V',group:'Πηγές',pins:p=>isBus(p)?{abc:[40,0],n:[0,40]}:{a:[40,-20],b:[40,0],c:[40,20],n:[0,40]},box:[-20,-30,40,60],
+  VAC3:{name:'Τριφασική πηγή (Y)',prefix:'V',group:'Πηγές',pins:p=>{const n=neutOf(p,'neut','pin')==='pin'?{n:[0,40]}:{};return isBus(p)?{abc:[40,0],...n}:{a:[40,-20],b:[40,0],c:[40,20],...n};},box:[-20,-30,40,60],
    bus:p=>isBus(p)?{abc:['a','b','c']}:{},
-   params:[num('Vpk','Πλάτος φασικής τάσης','V',325),num('f','Συχνότητα','Hz',50),num('phase','Φάση της a','°',0,{signed:true,zero:true}),
-    sel('seq','Διαδοχή φάσεων',[['abc','a → b → c'],['acb','a → c → b']],'abc'),num('Rs','Αντίσταση ανά φάση','Ω',0,{zero:true}),num('Ls','Αυτεπαγωγή ανά φάση','H',0,{zero:true}),CONN('abc')],
+   params:[num('Vpk','Πλάτος φασικής τάσης','V',325,{hint:'Ιδανική πηγή με R και L ανά φάση. Για πηγή με στάθμη βραχυκύκλωσης (S″k, X/R, μηδενική ακολουθία, συντελεστής c του IEC 60909): «Ισοδύναμο δικτύου» στη βιβλιοθήκη, «Δίκτυο και γραμμές» (4.24).'}),num('f','Συχνότητα','Hz',50),num('phase','Φάση της a','°',0,{signed:true,zero:true}),
+    sel('seq','Διαδοχή φάσεων',[['abc','a → b → c'],['acb','a → c → b']],'abc'),num('Rs','Αντίσταση ανά φάση','Ω',0,{zero:true}),num('Ls','Αυτεπαγωγή ανά φάση','H',0,{zero:true}),
+    ...NEUT('neut','pin',{hint:'Ως την 4.23 πάντα ακροδέκτης n, όπως η πηγή του EMTP.'}),CONN('abc')],
    value:p=>p.Vpk,unit:'V',
-   draw:p=>'<rect class="block" x="-20" y="-30" width="40" height="60" rx="6"/>'+(isBus(p)?bl('M20,0 H40')+'<path d="M0,30 V40"/>':'<path d="M20,-20 H40 M20,0 H40 M20,20 H40 M0,30 V40"/>')+'<path class="thin" d="M-11,-20 c2,-7 5,-7 7,0 c2,7 5,7 7,0 M-11,0 c2,-7 5,-7 7,0 c2,7 5,7 7,0 M-11,20 c2,-7 5,-7 7,0 c2,7 5,7 7,0"/>'},
+   draw:p=>'<rect class="block" x="-20" y="-30" width="40" height="60" rx="6"/>'+(isBus(p)?bl('M20,0 H40'):'<path d="M20,-20 H40 M20,0 H40 M20,20 H40"/>')+(neutOf(p,'neut','pin')==='pin'?'<path d="M0,30 V40"/>':'')+'<path class="thin" d="M-11,-20 c2,-7 5,-7 7,0 c2,7 5,7 7,0 M-11,0 c2,-7 5,-7 7,0 c2,7 5,7 7,0 M-11,20 c2,-7 5,-7 7,0 c2,7 5,7 7,0"/>'},
   IDC:{name:'Πηγή ρεύματος',prefix:'I',group:'Πηγές',pins:{p:[0,-40],n:[0,40]},box:[-17,-17,34,34],
    spins:p=>p.ctl==='sig'?{u:I(-30,0)}:{},
    params:[sel('ctl','Τιμή',[['val','Σταθερή ή πρόγραμμα'],['sig','Από σήμα (ακροδέκτης u)']],'val',{hint:'«Από σήμα»: π.χ. ρεύμα διέγερσης I_dc + I_ac·sin(2πft) από μπλοκ έκφρασης, ή κεραυνικό ρεύμα Heidler.'}),
@@ -744,7 +757,8 @@
    draw:p=>{const n=nEL(p);return `<rect class="block busbar" x="-4" y="${-10*n}" width="8" height="${20*n}" rx="2"/>`+`<path d="${Array.from({length:n},(_,k)=>`M-20,${ioY(n,k)} H-4`).join(' ')}"/>`+bl('M4,0 H20')+Array.from({length:n},(_,k)=>tx('abcdef'[k],-13,ioY(n,k)-3,'bsm')).join('');}},
   // network library (4.1, ROADMAP §31): each of these is a subcircuit made from its parameters by netlib.js
   // (NetLib.defOf), out of the primitive parts above, so both solvers, the buses and the channels see it as such
-  GRID3:{name:'Ισοδύναμο δικτύου (S″k, X/R, Z₀)',prefix:'NET',group:'Δίκτυο',pins:p=>isBus(p)?{abc:[40,0]}:{a:[40,-20],b:[40,0],c:[40,20]},box:[-20,-30,40,60],
+  // 4.24: other names in the search of the library (a three-phase source with a short-circuit level is this part)
+  GRID3:{name:'Ισοδύναμο δικτύου (S″k, X/R, Z₀)',prefix:'NET',group:'Δίκτυο',alias:['τριφασική πηγή με στάθμη βραχυκύκλωσης','πηγή τάσης δικτύου','ισχύς βραχυκύκλωσης','Sk','S″k','IEC 60909'],pins:p=>{const n=neutOf(p,'neut','gnd')==='pin'?{n:[0,40]}:{};return isBus(p)?{abc:[40,0],...n}:{a:[40,-20],b:[40,0],c:[40,20],...n};},box:[-20,-30,40,60],
    bus:p=>isBus(p)?{abc:['a','b','c']}:{},
    params:[num('Un','Ονομαστική πολική τάση U_n','V',20e3),num('f','Συχνότητα','Hz',50),num('phase','Φάση της a','°',0,{signed:true,zero:true}),
     num('cf','Συντελεστής τάσης c (IEC 60909)','',1.1,{hint:'Η ΗΕΔ είναι c·U_n/√3 και Z₁ = c·U_n²/S″k, οπότε ένα τριφασικό βραχυκύκλωμα στα άκρα δίνει I″k3 = S″k/(√3·U_n). c = 1 για ΗΕΔ ίση με την ονομαστική.'}),
@@ -752,9 +766,10 @@
     num('Sk','S″k τριφασικό','VA',500e6),num('XR','X/R θετικής ακολουθίας','',10),
     sel('z0','Μηδενική ακολουθία',[['ratio','Z₀/Z₁ και X₀/R₀'],['sk1','S″k1 μονοφασικό και X₀/R₀'],['iso','Μονωμένος ουδέτερος']],'ratio',{hint:'Μέσα είναι εμπέδηση 3×3 με Z_s = (2Z₁ + Z₀)/3 και Z_m = (Z₀ − Z₁)/3: δίνει σωστά ρεύματα σε κάθε είδος σφάλματος χωρίς να «ξέρει» το σφάλμα.'}),
     num('Z0Z1','|Z₀|/|Z₁|','',1,{show:p=>(p.z0||'ratio')==='ratio'}),num('Sk1','S″k1 μονοφασικό','VA',400e6,{show:p=>p.z0==='sk1',hint:'I″k1 = √3·c·U_n/|2Z₁ + Z₀|, με S″k1 = √3·U_n·I″k1.'}),
-    num('XR0','X₀/R₀','',10,{show:p=>p.z0!=='iso'}),num('Rn','Αντίσταση γείωσης ουδετέρου R_n','Ω',0,{zero:true,show:p=>(p.z0||'ratio')==='ratio',hint:'Προστίθεται 3R_n στη μηδενική ακολουθία.'}),CONN('abc')],
+    num('XR0','X₀/R₀','',10,{show:p=>p.z0!=='iso'}),num('Rn','Αντίσταση γείωσης ουδετέρου R_n','Ω',0,{zero:true,show:p=>(p.z0||'ratio')==='ratio'&&neutOf(p,'neut','gnd')==='gnd',hint:'Προστίθεται 3R_n στη μηδενική ακολουθία (μέσα στο Z₀, χωρίς κόμβο ουδετέρου).'}),
+    ...NEUT('neut','gnd',{show:p=>p.z0!=='iso',hint:'«Στερεά γειωμένος»: όπως ως την 4.23, το Z₀ του δικτύου (με το R_n παραπάνω).'}),CONN('abc')],
    value:p=>p.Sk,unit:'VA',
-   draw:p=>'<rect class="block" x="-20" y="-30" width="40" height="60" rx="6"/>'+(isBus(p)?bl('M20,0 H40'):'<path d="M20,-20 H40 M20,0 H40 M20,20 H40"/>')+'<path class="thin" d="M-12,-14 c3,-8 6,-8 8,0 c2,8 5,8 8,0 M-12,8 H12 M-12,16 H12 M-6,24 H6"/>'+tx('S″k',0,-20,'bsm')},
+   draw:p=>'<rect class="block" x="-20" y="-30" width="40" height="60" rx="6"/>'+(isBus(p)?bl('M20,0 H40'):'<path d="M20,-20 H40 M20,0 H40 M20,20 H40"/>')+(p.z0!=='iso'&&neutOf(p,'neut','gnd')==='pin'?'<path d="M0,30 V40"/>':'')+'<path class="thin" d="M-12,-14 c3,-8 6,-8 8,0 c2,8 5,8 8,0 M-12,8 H12 M-12,16 H12 M-6,24 H6"/>'+tx('S″k',0,-20,'bsm')},
   FLT3:{name:'Σφάλμα (βραχυκύκλωμα)',prefix:'F',group:'Δίκτυο',pins:p=>isBus(p)?{abc:[0,-40]}:{a:[-20,-40],b:[0,-40],c:[20,-40]},box:[-25,-30,50,50],
    bus:p=>isBus(p)?{abc:['a','b','c']}:{},spins:p=>p.ctl==='sig'?{f:I(-40,0)}:{},
    params:[sel('kind','Είδος',[['ag','a–γη'],['bg','b–γη'],['cg','c–γη'],['ab','a–b'],['bc','b–c'],['ca','c–a'],['abg','a–b–γη'],['bcg','b–c–γη'],['cag','c–a–γη'],['abc','a–b–c'],['abcg','a–b–c–γη']],'abc'),
@@ -785,7 +800,8 @@
     bool('vm','Μέτρηση τάσης (TRV)',true,{hint:'Κανάλι V:<id>/V: η τάση ανάμεσα στους ακροδέκτες (a − b).'})],
    value:p=>(ARC_MODELS.find(m=>m[0]===(p.arc||'imayr'))||ARC_MODELS[0])[0],
    draw:p=>'<rect class="block" x="-25" y="-16" width="50" height="32" rx="4"/><path d="M-40,0 H-25 M25,0 H40"/><path class="thin" d="M-14,4 H-6 L8,-6 M8,4 H14"/><path class="thin" d="M-4,-1 C-2,-5 0,1 2,-3 S5,-2 6,-4"/>'+tx('CB~',0,13,'bsm')+(p.ctl==='sig'?sl('M0,30 V16'):'')},
-  XF3:{name:'Μετασχηματιστής τριφασικός (ομάδα σύνδεσης)',prefix:'TR',group:'Δίκτυο',pins:p=>isBus(p)?{abc1:[-40,0],abc2:[40,0]}:{a1:[-40,-20],b1:[-40,0],c1:[-40,20],a2:[40,-20],b2:[40,0],c2:[40,20]},box:[-25,-30,50,60],
+  XF3:{name:'Μετασχηματιστής τριφασικός (ομάδα σύνδεσης)',prefix:'TR',group:'Δίκτυο',pins:p=>{const n={...(xfNeut(p,1)==='pin'?{n1:[-10,40]}:{}),...(xfNeut(p,2)==='pin'?{n2:[10,40]}:{})};
+    return isBus(p)?{abc1:[-40,0],abc2:[40,0],...n}:{a1:[-40,-20],b1:[-40,0],c1:[-40,20],a2:[40,-20],b2:[40,0],c2:[40,20],...n};},box:[-25,-30,50,60],
    bus:p=>isBus(p)?{abc1:['a1','b1','c1'],abc2:['a2','b2','c2']}:{},
    params:[sel('grp','Ομάδα σύνδεσης',[['Yy0','Yy0'],['YNyn0','YNyn0'],['Yyn0','Yyn0'],['YNy0','YNy0'],['Yd1','Yd1'],['Yd11','Yd11'],['YNd1','YNd1'],['YNd11','YNd11'],['Dy1','Dy1'],['Dy11','Dy11'],['Dyn1','Dyn1'],['Dyn11','Dyn11'],['Dd0','Dd0']],'Dyn11',
      {hint:'Κεφαλαίο: πλευρά 1 (a1, b1, c1), μικρό: πλευρά 2. N/n: ουδέτερος γειωμένος. Ο αριθμός × 30° είναι η καθυστέρηση της πλευράς 2 (11 = προπορεία 30°).'}),
@@ -793,16 +809,19 @@
     num('uk','Τάση βραχυκύκλωσης u_k','%',10),num('Pk','Απώλειες χαλκού P_k','W',0,{zero:true}),num('i0','Ρεύμα κενού i_0','%',0.5,{zero:true,hint:'0 = χωρίς ρεύμα μαγνήτισης (πολύ μεγάλη L_m).'}),num('P0','Απώλειες σιδήρου P_0','W',0,{zero:true}),
     num('tap','Τάπ στην πλευρά 1','%',0,{signed:true,zero:true,hint:'+2,5 % = 2,5 % περισσότερες σπείρες στην πλευρά 1 (χαμηλότερη τάση στην πλευρά 2).'}),
     sel('core','Πυρήνας',[['3x1','Τρεις μονοφασικοί (όπως ως τώρα)'],['5leg','Πέντε σκελών ή shell'],['3leg','Τριών σκελών']],'3x1',{hint:'Τριών σκελών: η ροή μηδενικής ακολουθίας κλείνει από τον αέρα και το δοχείο, οπότε η μαγνήτιση μηδενικής ακολουθίας είναι μικρή και γραμμική, στην πλευρά 1 (Dommel, EMTP Theory Book, κεφ. 6). Πέντε σκελών και shell: ίδια με τη θετική, όπως οι τρεις μονοφασικοί (4.2).'}),
-    num('i00','Ρεύμα κενού μηδενικής ακολουθίας i₀₀','%',100,{show:p=>p.core==='3leg',hint:'Ρεύμα μαγνήτισης με τάση μηδενικής ακολουθίας ίση με την ονομαστική φασική, στην πλευρά 1. 100 % = X₀m ίση με την εμπέδηση βάσης.'}),CONN('abc')],
+    num('i00','Ρεύμα κενού μηδενικής ακολουθίας i₀₀','%',100,{show:p=>p.core==='3leg',hint:'Ρεύμα μαγνήτισης με τάση μηδενικής ακολουθίας ίση με την ονομαστική φασική, στην πλευρά 1. 100 % = X₀m ίση με την εμπέδηση βάσης.'}),
+    ...NEUT('neut1','auto',{sfx:'1',label:'Ουδέτερος πλευράς 1',vals:['auto','gnd','z','iso','pin'],auto:'Όπως η ομάδα (N: στερεά, χωρίς N: μονωμένος)',show:p=>xfStar(p,1)}),
+    ...NEUT('neut2','auto',{sfx:'2',label:'Ουδέτερος πλευράς 2',vals:['auto','gnd','z','iso','pin'],auto:'Όπως η ομάδα (n: στερεά, χωρίς n: μονωμένος)',show:p=>xfStar(p,2)}),CONN('abc')],
    value:p=>p.grp,unit:'',
-   draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="60" rx="4"/>'+(isBus(p)?bl('M-40,0 H-25 M25,0 H40'):'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25 M25,-20 H40 M25,0 H40 M25,20 H40"/>')+'<circle class="thin" cx="-6" cy="-4" r="11"/><circle class="thin" cx="6" cy="-4" r="11"/>'+tx(xe(String(p.grp||'')),0,22,'bsm')},
-  LOAD3:{name:'Τριφασικό φορτίο (P, Q)',prefix:'LD',group:'Δίκτυο',pins:p=>isBus(p)?{abc:[0,-40]}:{a:[-20,-40],b:[0,-40],c:[20,-40]},box:[-25,-30,50,50],
+   draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="60" rx="4"/>'+(isBus(p)?bl('M-40,0 H-25 M25,0 H40'):'<path d="M-40,-20 H-25 M-40,0 H-25 M-40,20 H-25 M25,-20 H40 M25,0 H40 M25,20 H40"/>')+(xfNeut(p,1)==='pin'?'<path d="M-10,30 V40"/>':'')+(xfNeut(p,2)==='pin'?'<path d="M10,30 V40"/>':'')+'<circle class="thin" cx="-6" cy="-4" r="11"/><circle class="thin" cx="6" cy="-4" r="11"/>'+tx(xe(String(p.grp||'')),0,22,'bsm')},
+  LOAD3:{name:'Τριφασικό φορτίο (P, Q)',prefix:'LD',group:'Δίκτυο',pins:p=>{const n=p&&p.cn!=='d'&&neutOf(p,'neut','auto')==='pin'?{n:[0,30]}:{};return isBus(p)?{abc:[0,-40],...n}:{a:[-20,-40],b:[0,-40],c:[20,-40],...n};},box:[-25,-30,50,50],
    bus:p=>isBus(p)?{abc:['a','b','c']}:{},
    params:[sel('cn','Σύνδεση',[['yn','Y με γειωμένο ουδέτερο'],['y','Y χωρίς γείωση'],['d','Δ']],'yn'),num('Un','Ονομαστική πολική τάση U_n','V',20e3),num('f','Συχνότητα','Hz',50),
     num('P','Ενεργός ισχύς P (στην U_n)','W',10e6,{zero:true}),num('Q','Άεργος ισχύς Q (στην U_n)','var',3e6,{signed:true,zero:true,hint:'Θετική: επαγωγική (L), αρνητική: χωρητική (C). Σταθερή εμπέδηση: R ∥ X ανά φάση.'}),
     sel('model','Μοντέλο',[['z','Σταθερή εμπέδηση (όπως ως τώρα)'],['zip','ZIP (εμπέδηση, ρεύμα, ισχύς)']],'z',{hint:'ZIP: P(V) = P·(z·V² + i·V + p), το ίδιο το Q, με V = |V|/U_n από το διάνυσμα αβ των τάσεων (4.2). Τα μέρη i και p είναι πηγές ρεύματος από σήμα.'}),
     num('kz','z (σταθερή εμπέδηση)','%',0,{zero:true,show:p=>p.model==='zip'}),num('ki','i (σταθερό ρεύμα)','%',0,{zero:true,show:p=>p.model==='zip'}),num('kp','p (σταθερή ισχύς)','%',100,{zero:true,show:p=>p.model==='zip'}),
-    num('Vmin','Κάτω από V_min: σταθερή εμπέδηση','%',70,{show:p=>p.model==='zip',hint:'Τα μέρη i και p γίνονται σταθερή εμπέδηση κάτω από αυτή την τάση (π.χ. σε σφάλμα), όπως στα προγράμματα ροής φορτίου.'}),CONN('abc')],
+    num('Vmin','Κάτω από V_min: σταθερή εμπέδηση','%',70,{show:p=>p.model==='zip',hint:'Τα μέρη i και p γίνονται σταθερή εμπέδηση κάτω από αυτή την τάση (π.χ. σε σφάλμα), όπως στα προγράμματα ροής φορτίου.'}),
+    ...NEUT('neut','auto',{vals:['auto','gnd','z','iso','pin'],auto:'Όπως η σύνδεση (Y με γείωση: στερεά, Y χωρίς γείωση: μονωμένος)',show:p=>p.cn!=='d'}),CONN('abc')],
    value:p=>p.P,unit:'W',
    draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="50" rx="4"/>'+(isBus(p)?bl('M0,-40 V-30'):'<path d="M-20,-40 V-30 M0,-40 V-30 M20,-40 V-30"/>')+'<path class="thin" d="M-12,-18 V8 M0,-18 V8 M12,-18 V8 M-16,8 H16"/>'+tx('P,Q',0,17,'bsm')},
   // 4.3 (§31.6, §25): synchronous generator with field and dampers, a shaft of one or more masses, steady start from the
@@ -834,7 +853,7 @@
     txt('Tm','T_m(t)','0',{show:p=>p.mech==='sched',hint:'Σταθερή τιμή ή «t:τιμή» σε pu, μοιρασμένη στις μάζες κατά τα μερίδια.'}),
     sel('init','Αρχική κατάσταση',[['lf','Μόνιμη κατάσταση από την τάση ακροδεκτών (ροή φορτίου)'],['zero','Από την αρχή (ροές 0, ω = 1)']],'lf',{hint:'Ροή φορτίου: το κύκλωμα λύνεται πρώτα με φασιθέτες, με τη γεννήτρια ως πηγή |V|∠θ, και η μηχανή, ο άξονας και το δίκτυο ξεκινούν από αυτή τη μόνιμη κατάσταση.'}),
     num('V0','Τάση ακροδεκτών |V|','pu',1,{show:p=>p.init!=='zero'}),num('ang0','Γωνία τάσης θ (φάση a)','°',0,{signed:true,zero:true,show:p=>p.init!=='zero',hint:'v_a = √2·|V|·U_n/√3·sin(ωt + θ), όπως οι πηγές της εφαρμογής.'}),
-    sel('neut','Ουδέτερος στάτη',[['gnd','Γειωμένος'],['iso','Μονωμένος'],['pin','Ακροδέκτης n']],'gnd'),CONN('abc')],
+    ...NEUT('neut','gnd',{label:'Ουδέτερος στάτη'}),CONN('abc')],
    value:p=>p.Sn,unit:'VA',
    draw:p=>{const sp=genSpins(p),L=Object.entries(sp);let h='<rect class="block" x="-30" y="-35" width="60" height="'+(p.shaft==='multi'?80:70)+'" rx="6"/><circle r="15" cy="-5"/><path class="thin" d="M-8,-5 c3,-7 5,-7 8,0 c3,7 5,7 8,0"/>'+tx('SG',0,22,'bsm');
     h+=isBus(p)?bl('M30,0 H40'):'<path d="M30,-20 H40 M30,0 H40 M30,20 H40"/>';if(p.neut==='pin')h+='<path d="M30,40 H40"/>';
@@ -847,7 +866,8 @@
     num('Sb','Ισχύς βάσης S_b','VA',100e6,{show:p=>p.unit==='pu'}),num('f','Συχνότητα','Hz',50),
     num('R1','R₁ (θετική ακολουθία, Ω ή pu)','',5,{zero:true}),num('X1','X₁ (Ω ή pu)','',40),num('B1','B₁ (εγκάρσια, όλη η γραμμή, S ή pu)','',3e-4,{zero:true,hint:'Μισή σε κάθε άκρο (τμήμα π). 0: χωρίς χωρητικότητα.'}),
     sel('z0','Μηδενική ακολουθία',[['same','Ίδια με τη θετική'],['given','R₀, X₀, B₀']],'same'),
-    num('R0','R₀ (Ω ή pu)','',15,{zero:true,show:p=>p.z0==='given'}),num('X0','X₀ (Ω ή pu)','',120,{show:p=>p.z0==='given'}),num('B0','B₀ (S ή pu)','',2e-4,{zero:true,show:p=>p.z0==='given',hint:'B₀ ≤ B₁ (η χωρητικότητα μεταξύ φάσεων είναι (C₁ − C₀)/3).'}),CONN('abc')],
+    num('R0','R₀ (Ω ή pu)','',15,{zero:true,show:p=>p.z0==='given'}),num('X0','X₀ (Ω ή pu)','',120,{show:p=>p.z0==='given'}),num('B0','B₀ (S ή pu)','',2e-4,{zero:true,show:p=>p.z0==='given',hint:'B₀ ≤ B₁ (η χωρητικότητα μεταξύ φάσεων είναι (C₁ − C₀)/3).'}),
+    sel('model','Μοντέλο στον χρόνο',[['pi','Τμήμα π (συγκεντρωμένες παράμετροι)'],['tl','Κατανεμημένες παράμετροι (Bergeron ανά φάση)']],'pi',{show:p=>p.z0!=='given',hint:'4.24: Bergeron ανά φάση, Z_c = √(L/C), τ = √(L·C), η R συγκεντρωμένη R/4, R/2, R/4. Μόνο με ίδια μηδενική ακολουθία (φάσεις χωρίς σύζευξη). Ο χρόνος διάδοσης χωρίζει το δίκτυο σε υποδίκτυα («Ρυθμίσεις επίλυσης → Υποδίκτυα»), και το βήμα μένει ≤ τ.'}),CONN('abc')],
    value:p=>p.X1,unit:'',
    draw:p=>'<rect class="block" x="-30" y="-25" width="60" height="50" rx="4"/>'+(isBus(p)?bl('M-40,0 H-30 M30,0 H40'):'<path d="M-40,-20 H-30 M-40,0 H-30 M-40,20 H-30 M30,-20 H40 M30,0 H40 M30,20 H40"/>')
     +'<path class="thin" d="M-18,-4 h6 c2,-6 4,-6 6,0 c2,-6 4,-6 6,0 c2,-6 4,-6 6,0 h6 M-18,-4 v10 M18,-4 v10 M-22,6 h8 M14,6 h8 M-22,10 h8 M14,10 h8"/>'+tx('π',0,-12,'bsm')},
@@ -1229,12 +1249,12 @@
     num('Vfr','V_fr','pu',0.3,{show:p=>p.mode!=='inv'&&p.fr==='on'}),num('tdet','t_det','s',0.005,{show:p=>p.mode!=='inv'&&p.fr==='on'}),num('afr','α_fr','°',140,{show:p=>p.mode!=='inv'&&p.fr==='on'}),
     num('tfr','t_fr','s',0.1,{show:p=>p.mode!=='inv'&&p.fr==='on'}),num('tprot','t_prot','s',0.3,{zero:true,show:p=>p.mode!=='inv'&&p.fr==='on'})],value:()=>null,
    draw:p=>sb(80,70)+tx('LCC',0,-6,'bsm')+tx(p.mode==='inv'?'αντιστροφέας':'ανορθωτής',0,10,'bsm')+sl('M-50,-30 H-40 M-50,-20 H-40'+(p.mode==='inv'||p.iext==='sig'?' M-50,-10 H-40':'')+' M40,-30 H50 M40,-20 H50 M40,-10 H50 M40,0 H50 M40,10 H50')},
-  FILT3:{name:'Φίλτρο AC τριφασικό',prefix:'FL',group:'Δίκτυο',pins:p=>isBus(p)?{abc:[0,-40]}:{a:[-20,-40],b:[0,-40],c:[20,-40]},box:[-25,-30,50,60],
+  FILT3:{name:'Φίλτρο AC τριφασικό',prefix:'FL',group:'Δίκτυο',pins:p=>{const n=neutOf(p,'neut','gnd')==='pin'?{n:[0,40]}:{};return isBus(p)?{abc:[0,-40],...n}:{a:[-20,-40],b:[0,-40],c:[20,-40],...n};},box:[-25,-30,50,60],
    bus:p=>isBus(p)?{abc:['a','b','c']}:{},
    params:[sel('kind','Είδος',[['c','Πυκνωτής'],['st','Συντονισμένο: C, L, R σε σειρά'],['hp','Υψιπερατό 2ης τάξης: C σε σειρά με (L ∥ R)'],['cig','Διπλό της CIGRE: C₁ σε σειρά με [(L + R + C₂) ∥ R_p]']],'c',{hint:'Ανά φάση, σε αστέρα με γειωμένο ουδέτερο. Συντονισμός του συντονισμένου στο 1/(2π√(LC₁)).'}),
     num('C1','C₁','F',1e-6),num('L','L','H',0.1,{show:p=>p.kind!=='c'}),num('R','R','Ω',10,{zero:true,show:p=>p.kind!=='c'}),
-    num('C2','C₂','F',10e-6,{show:p=>p.kind==='cig'}),num('Rp','R_p','Ω',100,{show:p=>p.kind==='cig'}),CONN('abc')],value:p=>p.C1,unit:'F',
-   draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="60" rx="4"/>'+(isBus(p)?bl('M0,-40 V-30'):'<path d="M-20,-40 V-30 M0,-40 V-30 M20,-40 V-30"/>')+'<path class="thin" d="M0,-22 V-10 M-9,-10 H9 M-9,-5 H9 M0,-5 V4"/>'+(p.kind!=='c'?'<path class="thin" d="M0,4 c5,0 5,4 0,4 c5,0 5,4 0,4 c5,0 5,4 0,4"/>':'')+'<path class="thin" d="M-7,22 H7 M-4,25 H4"/>'},
+    num('C2','C₂','F',10e-6,{show:p=>p.kind==='cig'}),num('Rp','R_p','Ω',100,{show:p=>p.kind==='cig'}),...NEUT('neut','gnd',{hint:'«Στερεά γειωμένος»: όπως ως την 4.23.'}),CONN('abc')],value:p=>p.C1,unit:'F',
+   draw:p=>'<rect class="block" x="-25" y="-30" width="50" height="60" rx="4"/>'+(isBus(p)?bl('M0,-40 V-30'):'<path d="M-20,-40 V-30 M0,-40 V-30 M20,-40 V-30"/>')+'<path class="thin" d="M0,-22 V-10 M-9,-10 H9 M-9,-5 H9 M0,-5 V4"/>'+(p.kind!=='c'?'<path class="thin" d="M0,4 c5,0 5,4 0,4 c5,0 5,4 0,4 c5,0 5,4 0,4"/>':'')+(neutOf(p,'neut','gnd')==='pin'?'<path d="M0,30 V40"/>':'<path class="thin" d="M-7,22 H7 M-4,25 H4"/>')},
   ZSER3:{name:'Τριφασική εμπέδηση σειράς (R + L + (R + L) ∥ R)',prefix:'Z',group:'Δίκτυο',pins:p=>isBus(p)?{abc1:[-40,0],abc2:[40,0]}:{a1:[-40,-20],b1:[-40,0],c1:[-40,20],a2:[40,-20],b2:[40,0],c2:[40,20]},box:[-25,-30,50,60],
    bus:p=>isBus(p)?{abc1:['a1','b1','c1'],abc2:['a2','b2','c2']}:{},
    params:[num('Rs','R σε σειρά','Ω',1,{zero:true}),num('Ls','L σε σειρά','H',0,{zero:true}),
@@ -1577,11 +1597,11 @@
  // 3.19 (§4): a structural parameter changes the graph (the pins of the part) or what the solver is built around (the
  // carrier, the mode of a PWM): its change during a run asks for a restart, and it cannot be pinned (📌). Everything else
  // is live: applied at the boundary of a solver step (a discrete block uses it at its next sample).
- const STRUCT={PWM:new Set(['mode','carrier','upd']),SW:new Set(['gate','model']),VAC3:new Set(['conn'])};
+ const STRUCT={PWM:new Set(['mode','carrier','upd']),SW:new Set(['gate','model']),VAC3:new Set(['conn','neut'])};
  // the network library: a change rebuilds its definition (4.1); from 4.2 a value that keeps the inner circuit the same is
  // live (the reload carries the states by the inner ids), and only what changes the inner circuit is structural
- Object.assign(STRUCT,{AIC:new Set(['scheme']),GRID3:new Set(['z0','conn']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn','model','arc']),ARC:new Set(['ctl','vm','arc']),
-  XF3:new Set(['grp','P0','core','conn']),LOAD3:new Set(['cn','model','conn']),
+ Object.assign(STRUCT,{AIC:new Set(['scheme']),GRID3:new Set(['z0','conn','neut']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn','model','arc']),ARC:new Set(['ctl','vm','arc']),
+  XF3:new Set(['grp','P0','core','conn','neut1','neut2']),LOAD3:new Set(['cn','model','conn','neut']),
   GEN3:new Set(['data','conv','shaft','Hm','exc','mech','init','neut','conn']),LINE3:new Set(['unit','z0','conn']),TLM:new Set(['model','data','mdl','len','f','fmin','dec','ppd','fti','conn','cp','npi','tiauto','nmax','ti','vtrap'])});
  const structCache=new Map();
  function structural(type,k){const key=type+'|'+k;if(structCache.has(key))return structCache.get(key);let r=!!STRUCT[type]?.has(k);
@@ -1640,6 +1660,6 @@
  const api={setSym,symStyle,symHV,hvPath,phaseSplit,machines,structural,PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,fmtNum,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
   parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,bewley,movChar,TLM_TYPICAL,tlmData,tlmM,tlmPin,tlmPins,tlmKey,tlmModel,
   srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv,
-  genModel,genAxis,genTsc,genGamma,genDQ,genSteady,plist};
+  genModel,genAxis,genTsc,genGamma,genDQ,genSteady,plist,neutOf,xfNeut,xfStar};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

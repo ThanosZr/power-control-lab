@@ -35,6 +35,19 @@
   return {comp,wire,node,gnd,terms,def:()=>placed?{title,components,wires,placed:true}:{title,components,wires}};}
 
  // ---------------------------------------------------------------- network equivalent
+ // 4.24 (decisions 208, 345): the star point of a library part from its option «Ουδέτερος» (Parts.neutOf): 'gnd' the
+ // ground, 'z' R_n then L_n = X_n/ω to the ground, 'iso' nothing, 'pin' a terminal (port) of the part. Returns the node
+ // and, for 'gnd', a function that gives a new ground each time (as the parts did before 4.24: the same netlist).
+ function starPoint(B,mode,name,port,Rn,Xn,w){const N=B.node(name);
+  if(mode==='gnd'){B.wire(N,B.gnd());return N;}
+  if(mode==='pin'){B.wire(N,[B.comp('$'+port,'PORT',{name:port}),'p']);return N;}
+  if(mode==='z'){Rn=Math.max(num(Rn,0),0);Xn=Math.max(num(Xn,0),0);
+   if(!(Rn>0)&&!(Xn>0)){B.wire(N,B.gnd());return N;}
+   let a=N;if(Rn>0){const r=B.comp('Rn'+name,'R',{R:Rn});B.wire(a,[r,'a']);a=[r,'b'];}
+   if(Xn>0){const l=B.comp('Ln'+name,'L',{L:Xn/w,i0:0,Rs:0});B.wire(a,[l,'a']);a=[l,'b'];}
+   B.wire(a,B.gnd());}
+  return N;}
+
  // sequence impedances (Ω) and the EMF (RMS, phase) of a GRID3: Z₁ = c·U_n²/S″k, E = c·U_n/√3
  function gridZ(p0){const p={...P.defaults('GRID3'),...(p0||{})};
   const Un=Math.max(num(p.Un,20e3),1e-9),cf=Math.max(num(p.cf,1.1),1e-9),Sk=Math.max(num(p.Sk,500e6),1e-9),XR=Math.max(num(p.XR,10),0),f=Math.max(num(p.f,50),1e-9);
@@ -44,14 +57,18 @@
   else if(mode==='sk1'){const K=3*cf*Un*Un/Math.max(num(p.Sk1,400e6),1e-9),Ar=2*R1,Ai=2*X1,b=Ar*c0+Ai*s0,d=b*b-(Ar*Ar+Ai*Ai-K*K);
    const r=d>=0?-b+Math.sqrt(d):NaN;if(!(r>0)){warn='Το S″k1 δεν ταιριάζει με το S″k και τα X/R (θα χρειαζόταν |Z₀| ≤ 0): μηδενική ακολουθία ίση με τη θετική.';R0=R1;X0=X1;}else{R0=r*c0;X0=r*s0;}}
   else{const Z0=Math.max(num(p.Z0Z1,1),1e-9)*Z1;R0=Z0*c0+3*Math.max(num(p.Rn,0),0);X0=Z0*s0;}
-  // 4.2: EMF c·U_n/√3 (as in 4.1) or U_n/√3 with c only in Z₁
-  return {E:(p.emf==='un'?1:cf)*Un/Math.sqrt(3),Un,cf,w,f,R1,X1,R0,X0,iso:mode==='iso',warn};}
+  // 4.2: EMF c·U_n/√3 (as in 4.1) or U_n/√3 with c only in Z₁. 4.24: the option «Ουδέτερος» (neut) with R_n + jX_n of the
+  // star point (outside Z₀: the circuit has it as a branch, the fault currents add 3Z_n), isolated, or a terminal n
+  const neut=mode==='iso'?'iso':P.neutOf(p,'neut','gnd');
+  return {E:(p.emf==='un'?1:cf)*Un/Math.sqrt(3),Un,cf,w,f,R1,X1,R0,X0,iso:neut==='iso',neut,Rng:neut==='z'?Math.max(num(p.Rng,0),0):0,Xng:neut==='z'?Math.max(num(p.Xng,0),0):0,warn};}
 
  function gridDef(c){const p=prm(c),z=gridZ(p),B=builder('Ισοδύναμο δικτύου'),T=B.terms(p,PH,'abc');
   const Rs=(2*z.R1+z.R0)/3,Rm=(z.R0-z.R1)/3,Ls=(2*z.X1+z.X0)/(3*z.w),Lm=(z.X0-z.X1)/(3*z.w);
   const mat=(d,o)=>`${s(d)}, ${s(o)}, ${s(o)}; ${s(o)}, ${s(d)}, ${s(o)}; ${s(o)}, ${s(o)}, ${s(d)}`;
   const E=B.comp('E','VAC3',{Vpk:z.E*Math.SQRT2,f:z.f,phase:num(p.phase,0),seq:'abc',Rs:0,Ls:0,conn:'sep'});
-  if(z.iso){const r=B.comp('Rn','R',{R:1e6});B.wire([E,'n'],[r,'a']);B.wire([r,'b'],B.gnd());}else B.wire([E,'n'],B.gnd());
+  if(z.iso){const r=B.comp('Rn','R',{R:1e6});B.wire([E,'n'],[r,'a']);B.wire([r,'b'],B.gnd());}
+  else if(z.neut==='z'||z.neut==='pin')B.wire([E,'n'],starPoint(B,z.neut,'N','n',z.Rng,z.Xng,z.w));
+  else B.wire([E,'n'],B.gnd());
   const hasR=z.R1>0&&z.R0>0,K=B.comp('Z','KL',{Lmat:mat(Ls,Lm),Rw:0,i0:'0'});let Rk=null;
   if(hasR)Rk=B.comp('R','KG',{kind:'R',mat:mat(Rs,Rm)});
   PH.forEach((x,k)=>{const q=k+1;if(Rk){B.wire([E,x],[Rk,'a'+q]);B.wire([Rk,'b'+q],[K,'a'+q]);}else B.wire([E,x],[K,'a'+q]);B.wire([K,'b'+q],T[k]);});
@@ -119,7 +136,11 @@
   const Zk=Math.max(num(p.uk,10),0)/100*Zb1,Rk=Math.max(num(p.Pk,0),0)/3*(Uw1/Su)**2,Xk=Math.sqrt(Math.max(Zk*Zk-Rk*Rk,0)),i0=Math.max(num(p.i0,0.5),0),P0=Math.max(num(p.P0,0),0);
   return {G,n,Uw1,Uw2,Zb1,Rk,Xk,w,Lm:(i0>0?Zb1/(i0/100):Zb1*1e6)/w,Rfe:P0>0?Uw1*Uw1/(P0/3):0};}
  function xfDef(c){const p=prm(c),d=xfData(p),B=builder('Μετασχηματιστής τριφασικός'),A=B.terms(p,['a1','b1','c1'],'abc1'),Z=B.terms(p,['a2','b2','c2'],'abc2');
-  const star=(side,grounded)=>{const N=B.node('N'+side);if(grounded)B.wire(N,B.gnd());return N;};
+  // 4.24: the neutral of each star side (neut1, neut2): 'auto' as the group (N/n solid, as before 4.24: a ground at each
+  // winding), or solid, R_n + jX_n, isolated, a terminal n1/n2 (one connection per side)
+  const nm=[null,P.neutOf(p,'neut1','auto'),P.neutOf(p,'neut2','auto')],done=[false,false,false];
+  const star=(side,grounded)=>{const m=nm[side];if(m==='auto'){const N=B.node('N'+side);if(grounded)B.wire(N,B.gnd());return N;}
+   if(done[side]||m==='iso'){done[side]=true;return B.node('N'+side);}done[side]=true;return starPoint(B,m,'N'+side,'n'+side,p['Rng'+side],p['Xng'+side],d.w);};
   const ends=(cn,T,k,side,grounded)=>cn==='Y'?[T[k],star(side,grounded)]:[T[k],T[cn==='ab'?(k+1)%3:(k+2)%3]];
   for(let k=0;k<3;k++){const [p1,p2]=ends(d.G[0],A,k,1,d.G[2]),[s1,s2]=ends(d.G[1],Z,k,2,d.G[3]);
    const u=B.comp('T'+PH[k],'XFMR',{n:d.n,Lm:d.Lm,im0:0,Llk1:d.Xk/2/d.w,Llk2:d.Xk/2/d.w*d.n*d.n,R1:d.Rk/2,R2:d.Rk/2*d.n*d.n,pol:'same'});
@@ -139,6 +160,9 @@
 
  // ---------------------------------------------------------------- three-phase load (constant impedance, R ∥ X per phase)
  function loadDef(c){const p=prm(c),B=builder('Τριφασικό φορτίο'),T=B.terms(p,PH,'abc'),cn=p.cn||'yn',k=cn==='d'?3:1;
+  // 4.24: the neutral of a star ('auto': as the connection, the netlist of before 4.24); one star node for all the branches
+  const nmode=cn==='d'?'auto':P.neutOf(p,'neut','auto');let NS=null;
+  const starN=()=>NS||(NS=starPoint(B,nmode,'N','n',p.Rng,p.Xng,2*Math.PI*Math.max(num(p.f,50),1e-9)));
   const zip=p.model==='zip',kz=zip?Math.max(num(p.kz,0),0)/100:1,ki=zip?Math.max(num(p.ki,0),0)/100:0,kp=zip?Math.max(num(p.kp,100),0)/100:0;
   const Un=Math.max(num(p.Un,20e3),1e-9),Pw=num(p.P,0)*kz,Q=num(p.Q,0)*kz,w=2*Math.PI*Math.max(num(p.f,50),1e-9);
   // 4.2: the current and power parts of a ZIP load: current sources from signals, i_d = (2/3)·P_t/|v|, i_q = −(2/3)·Q_t/|v|
@@ -151,7 +175,7 @@
    const V='(max(amp,1e-6*Vp)/Vp)',g=`(${V}>=vm ? ki*${V}+kp : (ki*vm+kp)*${V}*${V}/(vm*vm))`,pars=`P0 = ${s(P0)}, Q0 = ${s(Q0)}, ki = ${s(ki)}, kp = ${s(kp)}, vm = ${s(vm)}, Vp = ${s(Vp)}`;
    // a damping resistor in star (20 % of |S| at U_n): the sources never drive the network's inductance alone (the
    // trapezoidal rule would chatter); its power, from the same smoothed |v|, is taken off the P source
-   const S0=Math.max(Math.hypot(P0,Q0),1),Rsh=Un*Un/(0.2*S0),Nst=cn==='yn'?null:B.node('Nsh');
+   const S0=Math.max(Math.hypot(P0,Q0),1),Rsh=Un*Un/(0.2*S0),Nst=nmode==='auto'?(cn==='yn'?null:B.node('Nsh')):cn==='d'||nmode==='gnd'?null:starN();
    PH.forEach((x,j)=>{const r=B.comp('Rd'+x,'R',{R:Rsh});B.wire(T[j],[r,'a']);B.wire([r,'b'],Nst||B.gnd());});
    const pd=`(1.5*max(amp,0)*max(amp,0)/${s(Rsh)})`;
    const xd=B.comp('Xd','EXPR',{expr:`(2/3)*(${g}*P0-${pd})/max(amp,1e-6*Vp)`,ins:'amp',pars}),xq=B.comp('Xq','EXPR',{expr:`-(2/3)*${g}*Q0/max(amp,1e-6*Vp)`,ins:'amp',pars});
@@ -160,8 +184,8 @@
    B.wire([xd,'y'],[ip,'d']);B.wire([xq,'y'],[ip,'q']);B.wire([pll,'th'],[ip,'th']);B.wire([ip,'al'],[ic,'al']);B.wire([ip,'be'],[ic,'be']);
    PH.forEach((x,j)=>{const I=B.comp('I'+x,'IDC',{ctl:'sig'});B.wire([ic,x],[I,'u']);B.wire([I,'p'],B.gnd());B.wire([I,'n'],T[j]);});
    if(!(kz>0))return B.def();}
-  const N=cn==='yn'?null:cn==='y'?B.node('N'):null;
-  for(let j=0;j<3;j++){const a=T[j],b=cn==='d'?T[(j+1)%3]:cn==='y'?N:B.gnd();
+  const N=nmode==='auto'?(cn==='y'?B.node('N'):null):cn==='d'||nmode==='gnd'?null:starN(),star=nmode==='auto'?cn==='y':!!N;
+  for(let j=0;j<3;j++){const a=T[j],b=cn==='d'?T[(j+1)%3]:star?N:B.gnd();
    if(Pw>0){const r=B.comp('R'+PH[j],'R',{R:k*Un*Un/Pw});B.wire(a,[r,'a']);B.wire([r,'b'],b);}
    if(Q>0){const l=B.comp('L'+PH[j],'L',{L:k*Un*Un/Q/w,i0:0,Rs:0});B.wire(a,[l,'a']);B.wire([l,'b'],b);}
    else if(Q<0){const q=B.comp('C'+PH[j],'C',{C:1/(w*k*Un*Un/-Q),v0:0,esr:0});B.wire(a,[q,'p']);B.wire([q,'n'],b);}
@@ -178,6 +202,11 @@
  function lineDef(c){const p=prm(c),d=lineData(p),B=builder('Γραμμή'),A=B.terms(p,['a1','b1','c1'],'abc1'),Z=B.terms(p,['a2','b2','c2'],'abc2');
   const Rs=(2*d.R1+d.R0)/3,Rm=(d.R0-d.R1)/3,Ls=(2*d.X1+d.X0)/(3*d.w),Lm=(d.X0-d.X1)/(3*d.w);
   const mat=(dg,o)=>`${s(dg)}, ${s(o)}, ${s(o)}; ${s(o)}, ${s(dg)}, ${s(o)}; ${s(o)}, ${s(o)}, ${s(dg)}`;
+  // 4.24: distributed parameters, one Bergeron line per phase (the phases are not coupled when the zero sequence is the positive)
+  if(p.model==='tl'&&p.z0!=='given'){const Zc=Math.sqrt(Ls/Math.max(d.C0,1e-30)),tau=Math.sqrt(Ls*d.C0);
+   if(!(d.C0>0))throw new Error(`${c.label||c.id}: οι κατανεμημένες παράμετροι θέλουν εγκάρσια χωρητικότητα (B₁ > 0).`);
+   PH.forEach((x,k)=>{const t=B.comp('T'+x,'TL',{spec:'zt',Z:Zc,tau,Rt:Rs,nsec:1});B.wire(A[k],[t,'a1']);B.wire(Z[k],[t,'a2']);B.wire([t,'b1'],B.gnd());B.wire([t,'b2'],B.gnd());});
+   return B.def();}
   let mid;
   if(Math.abs(Lm)<=1e-12*Ls&&Math.abs(Rm)<=1e-12*(Rs||1)){mid=PH.map((x,k)=>{const l=B.comp('L'+x,'L',{L:Ls,i0:0,Rs:Rs});B.wire(A[k],[l,'a']);return [l,'b'];});}
   else{const K=B.comp('Z','KL',{Lmat:mat(Ls,Lm),Rw:0,i0:'0'});let Rk=null;if(Rs>0)Rk=B.comp('R','KG',{kind:'R',mat:mat(Rs,Rm)});
@@ -1087,13 +1116,16 @@
  // (C in series with L ∥ R); the double filter of the CIGRE benchmark (C₁ in series with (L + R + C₂) ∥ R_p)
  function filtDef(c){const p=prm(c),B=builder(c.label||c.id),T=B.terms(p,PH,'abc'),k=['c','st','hp','cig'].includes(p.kind)?p.kind:'c';
   const pos=(x,d)=>Math.max(num(x,d),1e-15),C1=pos(p.C1,1e-6),L=pos(p.L,0.1),R=Math.max(num(p.R,10),0),C2=pos(p.C2,10e-6),Rp=pos(p.Rp,100);
+  // 4.24: the star point ('gnd': a ground at each branch, as before 4.24)
+  const nmode=P.neutOf(p,'neut','gnd');let NS=null;
+  const G=()=>nmode==='gnd'?B.gnd():NS||(NS=nmode==='iso'?B.node('NS'):starPoint(B,nmode,'NS','n',p.Rng,p.Xng,2*Math.PI*Math.max(num(p.f,50),1e-9)));
   PH.forEach((x,i)=>{const cap=(id,C,a,b)=>{B.comp(id,'C',{C:s(C),v0:'0'});B.wire(a,[id,'p']);B.wire([id,'n'],b);};
-   if(k==='c'){cap('C'+x,C1,T[i],B.gnd());return;}
+   if(k==='c'){cap('C'+x,C1,T[i],G());return;}
    const m=B.node('M'+x);cap('C'+x,C1,T[i],m);
-   if(k==='st'){B.comp('L'+x,'L',{L:s(L),Rs:s(R)});B.wire(m,['L'+x,'a']);B.wire(['L'+x,'b'],B.gnd());}
-   else if(k==='hp'){B.comp('L'+x,'L',{L:s(L)});B.wire(m,['L'+x,'a']);B.wire(['L'+x,'b'],B.gnd());if(R>0){B.comp('R'+x,'R',{R:s(R)});B.wire(m,['R'+x,'a']);B.wire(['R'+x,'b'],B.gnd());}}
-   else{const q=B.node('N'+x);B.comp('L'+x,'L',{L:s(L),Rs:s(R)});B.wire(m,['L'+x,'a']);B.wire(['L'+x,'b'],q);cap('D'+x,C2,q,B.gnd());
-    B.comp('R'+x,'R',{R:s(Rp)});B.wire(m,['R'+x,'a']);B.wire(['R'+x,'b'],B.gnd());}});
+   if(k==='st'){B.comp('L'+x,'L',{L:s(L),Rs:s(R)});B.wire(m,['L'+x,'a']);B.wire(['L'+x,'b'],G());}
+   else if(k==='hp'){B.comp('L'+x,'L',{L:s(L)});B.wire(m,['L'+x,'a']);B.wire(['L'+x,'b'],G());if(R>0){B.comp('R'+x,'R',{R:s(R)});B.wire(m,['R'+x,'a']);B.wire(['R'+x,'b'],G());}}
+   else{const q=B.node('N'+x);B.comp('L'+x,'L',{L:s(L),Rs:s(R)});B.wire(m,['L'+x,'a']);B.wire(['L'+x,'b'],q);cap('D'+x,C2,q,G());
+    B.comp('R'+x,'R',{R:s(Rp)});B.wire(m,['R'+x,'a']);B.wire(['R'+x,'b'],G());}});
   return B.def();}
 
  // 4.16: a three-phase series impedance, per phase R_s + L_s in series with (R_p1 + L_p) ∥ R_p2 (the AC systems of the benchmark)
@@ -1411,8 +1443,9 @@
   const x=Array(n);for(let i=n-1;i>=0;i--){let v=M[i][n];for(let j=i+1;j<n;j++)v=csub(v,cmul(M[i][j],x[j]));x[i]=cdiv(v,M[i][i]);}return x;}
  // grid: the parameters of a GRID3, or {seq:{R1, X1, R0, X0, E}} (e.g. a network behind a transformer)
  function faultCurrents(grid,fault){const z0=grid&&grid.seq?grid.seq:gridZ(grid),f={...P.defaults('FLT3'),...(fault||{})},kind=String(f.kind||'abc');
-  // isolated neutral: the 1 MΩ of the circuit in the zero sequence (3R_n)
-  const z=z0.iso?{...z0,R0:z0.R0+3e6}:z0;
+  // isolated neutral: the 1 MΩ of the circuit in the zero sequence (3R_n); 4.24: the neutral impedance Z_n adds 3Z_n
+  // (IEC 60909-0: Z₀ of the network feeder with the impedance between its star point and earth)
+  const z=z0.iso?{...z0,R0:z0.R0+3e6}:(z0.Rng||z0.Xng)?{...z0,R0:z0.R0+3*(z0.Rng||0),X0:z0.X0+3*(z0.Xng||0)}:z0;
   const Zs=cx((2*z.R1+z.R0)/3,(2*z.X1+z.X0)/3),Zm=cx((z.R0-z.R1)/3,(z.X0-z.X1)/3);
   const Zabc=[[Zs,Zm,Zm],[Zm,Zs,Zm],[Zm,Zm,Zs]];
   // Y_s = Z⁻¹ column by column
@@ -1432,7 +1465,9 @@
  function behindXF(grid,xf){const g=gridZ(grid),d=xfData(xf),U1=num(xf.U1,150e3),U2=num(xf.U2,20e3),r=(U2/U1)**2;
   // the transformer's impedance per phase of an equivalent star at side 2 (Ω): u_k·U₂²/S_n
   const Sn=num(xf.Sn,40e6),Zk=num(xf.uk,10)/100*U2*U2/Sn,Rk=num(xf.Pk,0)*(U2/Sn)**2,Xk=Math.sqrt(Math.max(Zk*Zk-Rk*Rk,0));
-  return {seq:{R1:g.R1*r+Rk,X1:g.X1*r+Xk,R0:Rk,X0:Xk,E:g.E*U2/U1},n:d.n};}
+  // 4.24: the neutral of side 2 through R_n + jX_n adds 3Z_n to Z₀ (isolated: no zero sequence)
+  const n2=P.xfNeut({...P.defaults('XF3'),...xf},2),zn=n2==='z'?[3*Math.max(num(xf.Rng2,0),0),3*Math.max(num(xf.Xng2,0),0)]:[0,0];
+  return {seq:{R1:g.R1*r+Rk,X1:g.X1*r+Xk,R0:Rk+zn[0],X0:Xk+zn[1],E:g.E*U2/U1,iso:n2==='iso'},n:d.n};}
  // ---------------------------------------------------------------- 4.9.1 (ROADMAP §52): a drawing of a definition
  // Positions for the parts of a generated definition, for «⧉ Τι έχει μέσα» and for «Ανάπτυξη σε υποκύκλωμα» (the editor
  // routes the wires itself). Layers by distance from the ports on the left of the part's symbol (inputs, side 1), the ports

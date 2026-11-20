@@ -1,5 +1,5 @@
 {
- "version": "4.23",
+ "version": "4.24",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -205,6 +205,20 @@
     ],
     "since": "3.18"
    },
+   "pcl.Project.split": {
+    "params": [
+     "t_end",
+     "channels",
+     "mode",
+     "groups",
+     "rates",
+     "rate_max",
+     "smooth",
+     "hdiv",
+     "timeout"
+    ],
+    "since": "4.24"
+   },
    "pcl.Project.stream": {
     "params": [
      "t_end",
@@ -335,6 +349,25 @@
      "compression"
     ],
     "since": "3.18"
+   },
+   "pcl.SplitResult": {
+    "params": [
+     "out"
+    ],
+    "since": "4.24"
+   },
+   "pcl.SplitResult.at": {
+    "params": [
+     "key",
+     "t"
+    ],
+    "since": "4.24"
+   },
+   "pcl.SplitResult.series": {
+    "params": [
+     "key"
+    ],
+    "since": "4.24"
    },
    "pcl.SweepResult": {
     "params": [
@@ -6030,6 +6063,10 @@
     "params": [],
     "since": "3.18"
    },
+   "action:split": {
+    "params": [],
+    "since": "4.24"
+   },
    "action:state": {
     "params": [],
     "since": "3.18"
@@ -6123,7 +6160,12 @@
      "rec",
      "recKeys",
      "refBase",
-     "kernel"
+     "kernel",
+     "split",
+     "groups",
+     "rates",
+     "rateMax",
+     "smooth"
     ],
     "since": "3.19"
    },
@@ -6755,13 +6797,17 @@
      "R",
      "C2",
      "Rp",
+     "neut",
+     "Rng",
+     "Xng",
      "conn"
     ],
     "pins": [
      "a",
      "abc",
      "b",
-     "c"
+     "c",
+     "n"
     ],
     "since": "4.16"
    },
@@ -6869,6 +6915,8 @@
      "V0",
      "ang0",
      "neut",
+     "Rng",
+     "Xng",
      "conn"
     ],
     "pins": [
@@ -7039,13 +7087,17 @@
      "Sk1",
      "XR0",
      "Rn",
+     "neut",
+     "Rng",
+     "Xng",
      "conn"
     ],
     "pins": [
      "a",
      "abc",
      "b",
-     "c"
+     "c",
+     "n"
     ],
     "since": "4.1"
    },
@@ -7417,6 +7469,7 @@
      "R0",
      "X0",
      "B0",
+     "model",
      "conn"
     ],
     "pins": [
@@ -7443,13 +7496,17 @@
      "ki",
      "kp",
      "Vmin",
+     "neut",
+     "Rng",
+     "Xng",
      "conn"
     ],
     "pins": [
      "a",
      "abc",
      "b",
-     "c"
+     "c",
+     "n"
     ],
     "since": "4.1"
    },
@@ -8745,6 +8802,9 @@
      "seq",
      "Rs",
      "Ls",
+     "neut",
+     "Rng",
+     "Xng",
      "conn"
     ],
     "pins": [
@@ -8862,6 +8922,12 @@
      "tap",
      "core",
      "i00",
+     "neut1",
+     "Rng1",
+     "Xng1",
+     "neut2",
+     "Rng2",
+     "Xng2",
      "conn"
     ],
     "pins": [
@@ -8872,7 +8938,8 @@
      "b1",
      "b2",
      "c1",
-     "c2"
+     "c2",
+     "n2"
     ],
     "since": "4.1"
    },

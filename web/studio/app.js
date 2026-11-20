@@ -859,6 +859,17 @@ function ctlCtx(){return {comp:id=>editor.comp(id),params:id=>{const c=editor.co
  args:(id,over)=>{const k=S.sim?.net?.ctrls?.find(q=>q.id===(S.pfx?S.pfx+id:id));if(!k||!k.tuneArgs)return null;return {...k.tuneArgs,p:{...k.tuneArgs.p,...(over||{})}};},
  apply:(id,v)=>{editor.setParams(id,v);notice(`Τα κέρδη γράφτηκαν στο ${esc(id)} (χειροκίνητα).`,'info');setTimeout(()=>notice(''),3000);},
  code:(id,st)=>`import pcl\np = pcl.load('κύκλωμα.json')            # ή pcl.tutorial('buck_vloop')\nd = p.tune('${id}')                        # G(s), πόλοι, μηδενικά, περιθώρια, κέρδη από το κύκλωμα\nprint(d['tf'], d['poles'], d['auto'])\nd = p.tune('${id}', Kp=${+(+st.Kp).toPrecision(5)}, Ki=${+(+st.Ki).toPrecision(5)}${st.ctl==='pid'?`, Kd=${+(+st.Kd).toPrecision(5)}, Tf=${+(+st.Tf).toPrecision(5)}`:''}, ff='${st.ff}'${st.ff==='conv'?`, kc=${st.kc}, convN=${st.convN}`:''})\nprint(d['margins'])                       # wc (rad/s), pm (°), gm, ms\np.set('${id}.gain', 'manual').set('${id}.Kp', ${+(+st.Kp).toPrecision(5)}).set('${id}.Ki', ${+(+st.Ki).toPrecision(5)})${st.ctl==='pid'?`.set('${id}.ctl', 'pid').set('${id}.Kd', ${+(+st.Kd).toPrecision(5)}).set('${id}.Tf', ${+(+st.Tf).toPrecision(5)})`:''}.set('${id}.ff', '${st.ff}')\nr = p.run(t_end=0.02, channels=['V:C1'])`};}
+// 4.24: the analysis of the subnetworks once per netlist (the panel of the circuit is drawn often)
+// (in a WeakMap by netlist: what goes into the solver object is saved with its state)
+const SPLIT_PROP=new WeakMap();
+function splitProposal(sim){const n=sim.net;if(!n)return null;if(!SPLIT_PROP.has(n)){let r=null;try{r=Split.proposal(sim);}catch(e){}SPLIT_PROP.set(n,r);}return SPLIT_PROP.get(n);}
+// 4.24: the run split in subnetworks (splitwin.js); the run of the page as the one simulator to compare with
+function openSplitWin(){if(!window.SplitWin)return null;const doc=editor.doc,sim=S.sim&&!S.error?S.sim:null;
+ // the panes of the scope on the page, the step and method of the page and its stop time (as the run of the page)
+ const panes=(scope.cfg.panes||[]).map(p=>(p.ch||[]).filter(c=>c.on!==false).map(c=>[c.key,c.label||c.key])).filter(p=>p.length);
+ const single=k=>{const s=S.sim;if(!s||!s.ring||!s.chIndex)return null;const i=s.chIndex.get(k);if(i===undefined)return null;const R=s.ring,t=[],v=[];for(let q=0;q<R.n;q++){const a=(R.head-R.n+q+R.cap)%R.cap;t.push(R.t[a]);v.push(R.d[a*R.nch+i]);}return {t,v};};
+ const pr=sim&&window.Split?splitProposal(sim):null;
+ return SplitWin.open({project:doc,title:tutorial().title||'Κύκλωμα',panes,stopT:S.stopT>0?S.stopT:(sim?10*sim.T:0.02),hDiv:+$('#sim-step').value,method:$('#method').value,auto:!!pr?.use,single});}
 function openCtlWin(id){if(!window.CtlWin)return null;if(!S.sim){notice('Δεν υπάρχει λύτης για το κύκλωμα.','error');return null;}return CtlWin.open(ctlCtx(),id);}
 const WIRE_COLORS=['','#147966','#c47a1c','#2f5fa0','#b03a5b','#6b4fa0','#203a3f'];
 // a named wire can join every wire with the same name (3.18, like Goto/From, for electrical nodes too); a bus has no single node voltage
@@ -987,6 +998,17 @@ function propsCircuit(){const d=S.sim?.net?.diag,doc=editor.doc,so=doc.solve||{}
    <small>Σε μεγάλο δίκτυο τα περισσότερα κανάλια δεν τα κοιτά κανείς, αλλά υπολογίζονται και γράφονται σε κάθε βήμα. «Μόνο όσα δείχνει το scope»: υπολογίζονται και γράφονται μόνο αυτά, με τους ίδιους αριθμούς, και το scope κρατά περισσότερα σημεία. Ένα κανάλι που προστίθεται καταγράφεται από εκείνη τη στιγμή. Οι τιμές πάνω στο σχέδιο και οι τρέχουσες τιμές δουλεύουν για κάθε κανάλι· τα στατιστικά ανά περίοδο και το ιστορικό, μόνο για όσα καταγράφονται.${S.sim&&!S.error&&S.sim.recKeys&&S.sim.recKeys!==S.sim.keys?` Τώρα: ${S.sim.recKeys.length} από ${S.sim.keys.length} κανάλια.`:''}</small></div>
    <div class="prow"><span>Αρχικοποίηση με φασιθέτες</span><span class="pin-in">${opt('initSolver',[['','Αυτόματα: πυκνός ως 400 αγνώστους, αραιός από εκεί και πάνω'],['dense','Πυκνός LU'],['sparse','Αραιός LU']],sv('initSolver'))}</span>
    <small>Όπου το κύκλωμα ξεκινά από τη μόνιμη κατάσταση με φασιθέτες (γεννήτριες, «αρχικοποίηση AC»), λύνεται ένα μιγαδικό σύστημα μία φορά. Ο πυκνός λύτης θέλει μνήμη n² και χρόνο n³· ο αραιός λύνει το ίδιο σύστημα ως πραγματικό διπλάσιου μεγέθους με μία επαναληπτική βελτίωση. Τα δύο διαφέρουν μόνο στη στρογγύλευση. «Αυτόματα»: ως 400 αγνώστους ο πυκνός, όπως ως την 4.19.2.</small></div>`,{cnt:(so.solver||so.refac)?'αλλαγμένες':''});}
+ // 4.24 (THEORY §8Ι.7, decision 341): the network split in subnetworks at its lines, and multirate; a run to the end in a worker of its own
+ {const pr=S.sim&&!S.error&&window.Split?splitProposal(S.sim):null;
+  h+=psec('c-split','Υποδίκτυα και πολλαπλοί ρυθμοί',`${pr?`<p class="small" id="split-advice"><b>Πρόταση του engine:</b> ${pr.use?'σε Workers':'ένας λύτης'}: ${esc(pr.why)}.</p>`:''}
+   <div class="prow"><span>Υποδίκτυα</span><span class="pin-in">${opt('split',[['','Αυτόματα (η πρόταση)'],['serial','Στο ίδιο νήμα'],['workers','Σε Workers']],sv('split'))}</span>
+   <small>Μια γραμμή με χρόνο διάδοσης τ ≥ Δt δεν δίνει όρο του πίνακα ανάμεσα στα δύο άκρα της: τα μέρη που ενώνει είναι χωριστά υποδίκτυα. Κάθε ομάδα υποδικτύων τρέχει στον δικό της λύτη (σε Workers, παράλληλα) και παίρνει από τις άλλες μόνο τα κύματα των γραμμών. Με τα ίδια βήματα οι αριθμοί είναι ίδιοι bit προς bit· κάθε ομάδα αντιδρά μόνο στα δικά της συμβάντα. Τρέχει ως το τέλος, όχι ζωντανά.</small></div>
+   <div class="prow"><span>Πολλαπλοί ρυθμοί</span><span class="pin-in">${opt('rates',[['','Όχι: το ίδιο βήμα παντού'],['auto','Αυτόματα: τα αργά υποδίκτυα με m·Δt']],sv('rates'))}</span>
+   <small>Αργό: χωρίς διακόπτες, μη γραμμικά, μηχανές ή σήματα. Το m είναι το μικρότερο από τ/Δt των γραμμών του, T/(40·Δt), το 1/20 του 2π√(LC) των στοιχείων του και το «μέγιστο m».</small></div>
+   <div class="prow"><span>Μέγιστο m</span><span class="pin-in">${opt('rateMax',[['','16'],['4','4'],['8','8'],['15','15']],sv('rateMax'))}</span></div>
+   <div class="prow"><span>Το γρήγορο υποδίκτυο όπως το βλέπει το αργό</span><span class="pin-in">${opt('smooth',[['','Γραμμική παρεμβολή'],['avg','Μέση τιμή στο βήμα του αργού'],['area','Ίσο εμβαδόν (εξομάλυνση της μελέτης αναφοράς)']],sv('smooth'))}</span>
+   <small>Το αργό υποδίκτυο διαβάζει τα κύματα του γρήγορου στον δικό του χρόνο. Η εξομάλυνση ίσου εμβαδού, σε δίκτυο με ταλάντωση κοντά στο μισό του αργού ρυθμού, μεγαλώνει το σφάλμα (THEORY §8Ι.7).</small></div>
+   <div class="prow"><button data-splitrun>▶ Τρέξιμο σε υποδίκτυα ως το τέλος</button><small>Σε worker, με τις ρυθμίσεις αυτές. Το παράθυρο δείχνει τα κανάλια του scope, τα βήματα κάθε ομάδας, και τη διαφορά από το τρέξιμο της σελίδας αν έχει φτάσει στο ίδιο τέλος.</small></div>`,{cnt:(so.split||so.rates)?'αλλαγμένες':''});}
  const chk=(k,t)=>`<label class="frow check"><input type="checkbox" data-eset="${k}" ${editor.settings[k]?'checked':''}><span>${t}</span></label>`;
  h+=psec('c-draw','Σχεδίαση συρμάτων',`${chk('freeEnds','Ελεύθερα άκρα: σύρμα που αφήνεις στο κενό κρατά ελεύθερο άκρο')}${chk('autoConnect','Στοιχείο που αφήνεις πάνω σε σύρμα ή ακροδέκτη συνδέεται (Shift: χωρίς σύνδεση)')}
   <ul class="kbd-list"><li><b>W</b>: εργαλείο σύρματος. Κλικ οπουδήποτε για αρχή, κλικ για γωνίες, διπλό κλικ ή Enter για ελεύθερο άκρο, Backspace για μία γωνία πίσω, Esc για έξοδο.</li>
@@ -1004,13 +1026,14 @@ function bindProps(box,c){
  box.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>Addons.open(b.dataset.tool,{target:c.id}));
  box.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>focusComp(b.dataset.focus));
  box.querySelector('[data-group]')?.addEventListener('click',()=>groupSel());
- box.querySelectorAll('[data-solve]').forEach(el=>el.onchange=()=>{const k=el.dataset.solve;let v=el.value;if(k==='rleak'||k==='tbase'||k==='hmin'){v=v.trim()?P.parseEng(v):'';if(v!==''&&!(v>0)){el.classList.add('bad');return;}}if((k==='rtol'||k==='hmax')&&v!=='')v=+v;editor.setSolve({[k]:v});});
+ box.querySelectorAll('[data-solve]').forEach(el=>el.onchange=()=>{const k=el.dataset.solve;let v=el.value;if(k==='rleak'||k==='tbase'||k==='hmin'){v=v.trim()?P.parseEng(v):'';if(v!==''&&!(v>0)){el.classList.add('bad');return;}}if((k==='rtol'||k==='hmax'||k==='rateMax')&&v!=='')v=+v;editor.setSolve({[k]:v});});
  box.querySelector('[data-progclear]')?.addEventListener('click',()=>{editor.setProgram([]);renderProps();});
  box.querySelectorAll('[data-inval]').forEach(el=>el.onchange=()=>{const [id,k]=el.dataset.inval.split('|'),raw=el.value.trim(),v=/^=/.test(raw)?raw:P.parseEng(raw);
   if(typeof v==='number'&&!Number.isFinite(v)){el.classList.add('bad');return;}el.classList.remove('bad');editor.setParams(id,{[k]:v});renderProps();});
  box.querySelectorAll('[data-inname]').forEach(el=>el.onchange=()=>{const [id,k]=el.dataset.inname.split('|');setInputMeta(id,k,{name:el.value.trim()});renderProps();});
  box.querySelectorAll('[data-indesc]').forEach(el=>el.onchange=()=>{const [id,k]=el.dataset.indesc.split('|');setInputMeta(id,k,{desc:el.value});});
  box.querySelectorAll('[data-stepcheck]').forEach(b=>b.onclick=()=>{if(S.sim&&!S.error)S.sim.stepCheck();renderDiag();openDiag();});
+ box.querySelector('[data-splitrun]')?.addEventListener('click',()=>openSplitWin());
  box.querySelectorAll('[data-eset]').forEach(el=>el.onchange=()=>{editor.settings[el.dataset.eset]=el.checked;saveSettings();});
  if(!c&&!atTop())bindDef(box);
  if(c&&c.type!=='JUNC'){const id=c.id;
@@ -2129,10 +2152,12 @@ function inscoTheory(){const m=(S.tutMeta||{}).insco;if(!m)return '';
   <li>Βήμα 2: U_cw = K_c·U_rp, με το K_cd του Σχήματος 7 για τα αλεξικέραυνα· βήμα 3: U_rw = U_cw·K_s·K_a, K_s = 1,15 (εσωτερική) ή 1,05 (εξωτερική), K_a = e^(m·H/8150)</li>
   <li>Βήμα 4: μετατροπή με τους συντελεστές των Πινάκων 1 (περιοχή I) και 2 (περιοχή II)· βήμα 5: το μικρότερο τυποποιημένο επίπεδο του IEC 60071-1 που τα καλύπτει</li></ul>`+inscoHTML(o,m.emt?'ταχέος μετώπου από την προσομοίωση':m.lead);}
 function netFaultTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.grid||!window.NetLib)return '';
- const g=m.xf?NetLib.behindXF(m.grid,m.xfp):{seq:NetLib.gridZ(m.grid)},z=g.seq,ref=NetLib.faultCurrents(g,{kind:m.kind}),Un=m.xf?m.xfp.U2:m.grid.Un;
+ const g=m.xf?NetLib.behindXF(m.grid,m.xfp):{seq:NetLib.gridZ(m.grid)},ref=NetLib.faultCurrents(g,{kind:m.kind}),Un=m.xf?m.xfp.U2:m.grid.Un;
+ // 4.24: a neutral through R_n + jX_n adds 3Z_n to the zero sequence (IEC 60909-0)
+ const zn=(g.seq.Rng||g.seq.Xng)?[3*(g.seq.Rng||0),3*(g.seq.Xng||0)]:null,z=zn?{...g.seq,R0:g.seq.R0+zn[0],X0:g.seq.X0+zn[1]}:g.seq;
  const Z1=Math.hypot(z.R1,z.X1),c2=(a,b)=>Math.hypot(a,b);
- let h=`<ul class="eqs"><li>${m.xf?'Δίκτυο ανηγμένο στα 20 kV και μετασχηματιστής: Z₁ = Z_Q·(U₂/U₁)² + Z_T, Z₀ = Z_T (το τρίγωνο κόβει τη μηδενική του δικτύου)':'Ισοδύναμο δικτύου (IEC 60909): Z₁ = c·U_n²/S″k'}: Z₁ = ${eng(z.R1,'Ω',3)} + j${eng(z.X1,'Ω',3)}, Z₀ = ${eng(z.R0,'Ω',3)} + j${eng(z.X0,'Ω',3)}, E = c·U_n/√3 = <b>${eng(z.E,'V')}</b></li>
-  <li>I″k3 = E/|Z₁| = <b>${eng(z.E/Z1,'A')}</b>, I″k2 = √3·E/|2Z₁| = <b>${eng(Math.sqrt(3)*z.E/(2*Z1),'A')}</b>, I″k1 = 3E/|2Z₁ + Z₀| = <b>${eng(3*z.E/c2(2*z.R1+z.R0,2*z.X1+z.X0),'A')}</b>, I″kE2E = 3E/|Z₁ + 2Z₀| = <b>${eng(3*z.E/c2(z.R1+2*z.R0,z.X1+2*z.X0),'A')}</b></li>
+ let h=`<ul class="eqs"><li>${m.xf?'Δίκτυο ανηγμένο στα 20 kV και μετασχηματιστής: Z₁ = Z_Q·(U₂/U₁)² + Z_T, Z₀ = Z_T (το τρίγωνο κόβει τη μηδενική του δικτύου)':'Ισοδύναμο δικτύου (IEC 60909): Z₁ = c·U_n²/S″k'}: Z₁ = ${eng(z.R1,'Ω',3)} + j${eng(z.X1,'Ω',3)}, ${z.iso?'Z₀: μονωμένος ουδέτερος (1 MΩ)':`Z₀ = ${eng(z.R0,'Ω',3)} + j${eng(z.X0,'Ω',3)}`}${zn?` (με 3Z_n = ${eng(zn[0],'Ω',3)} + j${eng(zn[1],'Ω',3)} του ουδετέρου)`:''}, E = c·U_n/√3 = <b>${eng(z.E,'V')}</b></li>
+  <li>I″k3 = E/|Z₁| = <b>${eng(z.E/Z1,'A')}</b>, I″k2 = √3·E/|2Z₁| = <b>${eng(Math.sqrt(3)*z.E/(2*Z1),'A')}</b>, ${z.iso?'μονωμένος ουδέτερος: I″k1 και I″kE2E σχεδόν μηδέν (το ρεύμα προς γη κλείνει μόνο από το 1 MΩ και τις χωρητικότητες)':`I″k1 = 3E/|2Z₁ + Z₀| = <b>${eng(3*z.E/c2(2*z.R1+z.R0,2*z.X1+z.X0),'A')}</b>, I″kE2E = 3E/|Z₁ + 2Z₀| = <b>${eng(3*z.E/c2(z.R1+2*z.R0,z.X1+2*z.X0),'A')}</b>`}</li>
   <li>Κρουστικό ρεύμα: i_p = κ·√2·I″k3, κ = 1,02 + 0,98·e^(−3R/X) = <b>${fmt(1.02+.98*Math.exp(-3*z.R1/z.X1),4)}</b>, σταθερά της DC τ = X/(ωR) = ${eng(z.X1/(z.R1*2*Math.PI*50),'s')}</li></ul>`;
  const done=s.t>=Math.min(m.dur,.2)-1e-9;
  if(!done)return h+'<p class="muted small">Τρέξε ως τα 200 ms για τη σύγκριση (η DC συνιστώσα σβήνει πρώτα).</p>';

@@ -583,6 +583,25 @@ class Project:
             return self._run_scipy(t_end, keys, scipy_method, rtol, hmax, max_points, meas, t_from, events, timeout)
         raise PclError(f'Άγνωστος λύτης «{solver}»: browser ή scipy.')
 
+    def split(self, t_end=None, channels=None, mode='serial', groups=None, rates=None, rate_max=None, smooth=None, hdiv=None, timeout=None):
+        """4.24 (THEORY §8Ι.7): the run split in subnetworks at the lines (τ ≥ h), each group of subnetworks in its own
+        simulator: mode='serial' in one thread, 'workers' each group in a Worker (Node worker_threads). With the same steps
+        the numbers are those of run(), bit for bit; each group reacts only to its own events.
+          groups    how many groups (default 1 per rate; 2 or more for Workers)
+          rates     None (the step h everywhere) or 'auto' (a slow subnetwork, without switches, nonlinear elements, machines
+                    or signals, takes m·h; our proposal), at most rate_max (default 16)
+          smooth    what a slow subnetwork sees of a faster one: None (linear interpolation), 'avg' (the mean over its step)
+                    or 'area' (equal area, Eq. (10) of the dual time step paper)
+        Returns a SplitResult (each channel with the times of its group). Browser solver only."""
+        t_end = float(parse_value(t_end if t_end is not None else (self.data.get('sim') or {}).get('stopT') or 0))
+        if not t_end > 0:
+            raise PclError('Δώσε διάρκεια t_end > 0 (σε s, π.χ. 5e-3 ή "5m").')
+        if mode not in ('serial', 'workers'):
+            raise PclError(f'Άγνωστος τρόπος «{mode}»: serial ή workers.')
+        q = {'action': 'split', 'project': self.data, 't_end': t_end, 'channels': list(channels) if channels else None, 'mode': mode,
+             'groups': groups, 'rates': rates, 'rate_max': rate_max, 'smooth': smooth, 'hdiv': hdiv}
+        return SplitResult(_node({k: v for k, v in q.items() if v is not None}, timeout=timeout))
+
     def stream(self, t_end=None, chunk=None, channels=None, hdiv=None, method=None, step=None, rtol=None, hmax=None, t_from=0.0,
                max_points=200000, measure=None, state=None, resume=None, to=None, timeout=None, waveforms=True, set=None,  # noqa: A002
                hmin=None):
@@ -1158,6 +1177,41 @@ def _save(res, path, **kw):
     f = {'.csv': res.to_csv, '.json': res.to_json, '.mat': res.to_mat, '.parquet': res.to_parquet, '.pq': res.to_parquet,
          '.h5': res.to_hdf5, '.hdf5': res.to_hdf5}.get(ext, res.to_csv)
     return f(path, **kw)
+
+
+class SplitResult:
+    """4.24: a run split in subnetworks (Project.split): every channel with the times of its group (the groups may take
+    other steps), the subnetworks, the lines between them and the steps of every group."""
+
+    def __init__(self, out):
+        self.keys = [q['k'] for q in out['series']]
+        self._s = {q['k']: q for q in out['series']}
+        P, S = out['plan'], out['stats']
+        self.parts, self.cuts, self.lines = P['parts'], P['cuts'], P['allCuts']
+        self.groups = [{'m': g['m'], 'parts': g['parts'], 'unknowns': g['n'], 'h': S['h'][i], 'steps': S['steps'][i]} for i, g in enumerate(P['groups'])]
+        self.meta = {'pcl': version(), 'ms': S.get('ms'), 'h': P['h']}
+
+    def series(self, key):
+        """(t, values) of a channel, at the steps of its group."""
+        q = self._s[key]
+        return list(q['t']), list(q['v'])
+
+    def __getitem__(self, key):
+        return self.series(key)[1]
+
+    def at(self, key, t):
+        """The value of a channel at the time t (linear between the steps of its group)."""
+        T, V = self.series(key)
+        if t <= T[0]:
+            return V[0]
+        for i in range(1, len(T)):
+            if T[i] >= t:
+                w = (t - T[i - 1]) / ((T[i] - T[i - 1]) or 1)
+                return V[i - 1] + (V[i] - V[i - 1]) * w
+        return V[-1]
+
+    def __repr__(self):
+        return f'<pcl.SplitResult {self.parts} υποδίκτυα, {len(self.groups)} ομάδες, {len(self.keys)} κανάλια>'
 
 
 class SweepResult:

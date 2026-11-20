@@ -1171,12 +1171,12 @@
  T.push({id:'net_fault',group:'Δίκτυο (4.1)',title:'Βραχυκύκλωμα σε δίκτυο: IEC 60909 και συμμετρικές συνιστώσες',theory:'formula',topology:'net_fault',
   options:[{k:'kind',label:'Σφάλμα στα 40 ms',options:[['abc','Τριφασικό'],['ag','Μονοφασικό a–γη'],['ab','Διφασικό a–b'],['abg','Διφασικό με γη a–b–γη']],def:'abc'},
    {k:'xf',label:'Θέση',options:[['none','Στα άκρα του δικτύου 20 kV'],['dyn11','Πίσω από μετασχηματιστή 150/20 kV Dyn11']],def:'none'},
-   {k:'z0',label:'Μηδενική ακολουθία του δικτύου',options:[['1.5','Z₀ = 1,5·Z₁'],['3','Z₀ = 3·Z₁'],['iso','Μονωμένος ουδέτερος']],def:'1.5'},
+   {k:'z0',label:'Μηδενική ακολουθία του δικτύου',options:[['1.5','Z₀ = 1,5·Z₁'],['3','Z₀ = 3·Z₁'],['iso','Μονωμένος ουδέτερος'],['zn','Z₀ = 1,5·Z₁, ουδέτερος μέσω R_n + jX_n = 10 + j20 Ω (4.24)']],def:'1.5'},
    {k:'cb',label:'Διακόπτης ισχύος',options:[['none','Μένει κλειστός'],['open','Ανοίγει στα 200 ms']],def:'none'}],
   desc:'Ένα ισοδύναμο δικτύου (S″k, X/R, Z₀) τροφοδοτεί μέσω διακόπτη ισχύος (και, αν θέλεις, μετασχηματιστή Dyn11) ένα φορτίο. Στα 40 ms γίνεται σφάλμα. Όλα τα σύρματα είναι τριφασικοί δίαυλοι. Κάθε στοιχείο της βιβλιοθήκης «Δίκτυο» είναι υποκύκλωμα από απλά στοιχεία, οπότε τα ρεύματα φαίνονται ως F1/Ia, CB1/Ia κ.λπ.',
-  tasks:['Σύγκρινε το I″k κάθε φάσης στην κάρτα με τον τύπο της IEC 60909 (μόνιμη τιμή, όταν σβήσει η συνιστώσα DC με τ = X/(ωR)).','Μονοφασικό με μονωμένο ουδέτερο: σχεδόν μηδέν ρεύμα. Πίσω από το Dyn11 όμως ρέει, γιατί το αστέρι 20 kV είναι γειωμένο.','Με «Ανοίγει στα 200 ms»: κάθε πόλος σβήνει στο δικό του μηδέν ρεύματος (δες και το αρχείο συμβάντων).'],
+  tasks:['Σύγκρινε το I″k κάθε φάσης στην κάρτα με τον τύπο της IEC 60909 (μόνιμη τιμή, όταν σβήσει η συνιστώσα DC με τ = X/(ωR)).','Μονοφασικό με μονωμένο ουδέτερο: σχεδόν μηδέν ρεύμα. Πίσω από το Dyn11 όμως ρέει, γιατί το αστέρι 20 kV είναι γειωμένο.','Μονοφασικό με ουδέτερο μέσω R_n + jX_n: η μηδενική ακολουθία βλέπει Z₀ + 3Z_n, και το ρεύμα πέφτει από 12,4 kA σε 0,54 kA (4.24). Η επιλογή «Ουδέτερος» υπάρχει σε κάθε τριφασικό στοιχείο με κέντρο αστέρα.','Με «Ανοίγει στα 200 ms»: κάθε πόλος σβήνει στο δικό του μηδέν ρεύματος (δες και το αρχείο συμβάντων).'],
   build(o){const xf=o.xf==='dyn11',kind=o.kind||'abc',iso=o.z0==='iso',dur=o.cb==='open'?.26:.2;
-   const grid=xf?{Un:150e3,Sk:5e9,XR:10}:{Un:20e3,Sk:500e6,XR:10};Object.assign(grid,iso?{z0:'iso'}:{z0:'ratio',Z0Z1:+o.z0||1.5,XR0:5},{conn:'bus'});
+   const grid=xf?{Un:150e3,Sk:5e9,XR:10}:{Un:20e3,Sk:500e6,XR:10};Object.assign(grid,iso?{z0:'iso'}:{z0:'ratio',Z0Z1:+o.z0||1.5,XR0:5},o.z0==='zn'?{neut:'z',Rng:10,Xng:20}:{},{conn:'bus'});
    const comps=[C('G1','GRID3',220,200,grid,{label:'δίκτυο'}),C('CB1','CB3',360,200,{cmd:o.cb==='open'?'0:1, 0.2:0':'0:1',conn:'bus'}),
     C('J1','JUNC',660,200),C('F1','FLT3',660,340,{kind,ton:.04,conn:'bus'},{lbl:'below'}),C('L1','LOAD3',820,340,{Un:20e3,P:5e6,Q:2e6,cn:'y',conn:'bus'},{lbl:'below'})];
    const wires=[['G1:abc','CB1:abc1'],['J1:j','F1:abc'],['J1:j','L1:abc']];
@@ -1278,10 +1278,13 @@
    const GD=id=>cl?{...IEEE9_GEN[id],Xqp:IEEE9_GEN[id].Xdp,Xqpp:IEEE9_GEN[id].Xdp,Td0p:1000,Tq0p:1000}:IEEE9_GEN[id];
    const L=(id,x,y,r,xx,b,rot)=>C(id,'LINE3',x,y,{unit:'pu',Un,Sb,f,R1:r,X1:xx,B1:b,z0:'same',...c},{rot:rot||0,label:id});
    const avr=o.ctl&&o.ctl!=='none'&&!cl,pss=avr&&(o.ctl==='avr_pss'||o.ctl==='full'),gov=avr&&o.ctl==='full',xc={...(avr?{exc:'sig'}:{}),...(gov?{mech:'sig'}:{})};
-   const G=(id,bus,x,y)=>C(id,'GEN3',x,y,{Sn:Sb,Un,f,pp:1,data:'std',...GD(id),Ra:0,shaft:'one',D:0,V0:LF[bus][0],ang0:LF[bus][1],...xc,...c},{label:id+' (ζυγός '+bus+')'});
+   // 4.24 (decision 343): the exciter of the reference book on generator 2 only (an IEEE Type 1, here DC1A, with the data of the
+   // Mag-A-Stat of its table of excitation systems), generators 1 and 3 with a constant E_fd, as in the study of the book
+   const book=avr&&o.ctl==='book',xg=id=>book?(id==='G2'?{exc:'sig'}:{}):xc;
+   const G=(id,bus,x,y)=>C(id,'GEN3',x,y,{Sn:Sb,Un,f,pp:1,data:'std',...GD(id),Ra:0,shaft:'one',D:0,V0:LF[bus][0],ang0:LF[bus][1],...xg(id),...c},{label:id+' (ζυγός '+bus+')'});
    const Ld=(id,bus,x,y,P,Q)=>{const V=LF[bus][0];return C(id,'LOAD3',x,y,{cn:'yn',Un,f,P:P/(V*V),Q:Q/(V*V),model:'z',...c},{label:id,lbl:'below'});};
    const comps=[G('G2',2,100,160),J('B2',220,160),L('T28',320,160,0,0.0625,0),J('B8',440,160),L('L87',580,160,0.0085,0.072,0.149),J('B7',720,160),L('L76',860,160,0.0119,0.1008,0.209),J('B6',1000,160),
-    L('T63',1120,160,0,0.0586,0),J('B3',1220,160),C('G3','GEN3',1360,160,{Sn:Sb,Un,f,pp:1,data:'std',...GD('G3'),Ra:0,shaft:'one',D:0,V0:LF[3][0],ang0:LF[3][1],...xc,...c},{flip:true,label:'G3 (ζυγός 3)'}),
+    L('T63',1120,160,0,0.0586,0),J('B3',1220,160),C('G3','GEN3',1360,160,{Sn:Sb,Un,f,pp:1,data:'std',...GD('G3'),Ra:0,shaft:'one',D:0,V0:LF[3][0],ang0:LF[3][1],...xg('G3'),...c},{flip:true,label:'G3 (ζυγός 3)'}),
     Ld('LD7',7,720,280,100e6,35e6),L('L89',440,320,0.032,0.161,0.306,1),J('B9',440,480),Ld('LD9',9,320,600,125e6,50e6),L('L65',1000,320,0.039,0.17,0.358,1),J('B5',1000,480),Ld('LD5',5,1120,600,90e6,30e6),
     L('L94',580,560,0.01,0.085,0.176),J('B4',720,640),L('L54',860,560,0.017,0.092,0.158),L('T41',720,760,0,0.0576,0,1),J('B1',720,880),G('G1',1,560,880)];
    const wires=[['G2:abc','B2'],['B2','T28:abc1'],['T28:abc2','B8'],['B8','L87:abc1'],['L87:abc2','B7'],...(ext?[]:[['B7','L76:abc1']]),['L76:abc2','B6'],['B6','T63:abc1'],['T63:abc2','B3'],['B3','G3:abc'],
@@ -1303,12 +1306,12 @@
     for(const [id,bus,pin,x,y,lo] of IEEE9_PMU){const i=wires.findIndex(w=>(w[0]===bus&&w[1]===pin)||(w[0]===pin&&w[1]===bus));wires.splice(i,1);
      comps.push(C(id,'PMU3',x,y,{f,np:1,...c},{label:id,lbl:'none',...lo}));wires.push([bus,id+':abc1'],[id+':abc2',pin]);}}
    // 4.8.1: AVR (and PSS, governor) next to each generator, from its steady state (e0, v0, m0)
-   if(avr)for(const [g,x,y,hy] of [['G1',560,1000,true],['G2',100,40,false],['G3',1360,40,false]]){const n=g.slice(1);
-    comps.push(C('AV'+n,'AVR',x-150,y,{type:'st1a'},{label:'AVR '+n}));wires.push([g+':vt','AV'+n+':vt'],[g+':v0','AV'+n+':v0'],[g+':e0','AV'+n+':e0'],[g+':ifd','AV'+n+':ifd'],['AV'+n+':efd',g+':efd']);
+   if(avr)for(const [g,x,y,hy] of [['G1',560,1000,true],['G2',100,40,false],['G3',1360,40,false]]){const n=g.slice(1);if(book&&g!=='G2')continue;
+    comps.push(C('AV'+n,'AVR',x-150,y,book?{type:'dc1a',TR:0,KA:400,TA:0.05,KE:'-0.17',TE:0.95,KF:0.04,TF:1,VRMAX:3.5,VRMIN:-3.5,AEX:0.0039,BEX:1.555}:{type:'st1a'},{label:'AVR '+n}));wires.push([g+':vt','AV'+n+':vt'],[g+':v0','AV'+n+':v0'],[g+':e0','AV'+n+':e0'],[g+':ifd','AV'+n+':ifd'],['AV'+n+':efd',g+':efd']);
     if(pss){comps.push(C('PS'+n,'PSS',x-300,y,{},{label:'PSS '+n}));wires.push([g+':w','PS'+n+':w'],['PS'+n+':vs','AV'+n+':vs']);}
     if(gov){comps.push(C('GV'+n,'GOV',x+150,y,{type:hy?'hydro':'steam',Pr:IEEE9_PR[g]},{label:(hy?'ρυθμιστής (νερό) ':'ρυθμιστής (ατμός) ')+n}));wires.push([g+':w','GV'+n+':w'],[g+':m0','GV'+n+':m0'],['GV'+n+':tm',g+':tm']);}}
    const panes=[[['Y:G1:d','δ₁ (°)'],['Y:G2:d','δ₂ (°)'],['Y:G3:d','δ₃ (°)']],[['Y:G1:pe','P₁'],['Y:G2:pe','P₂'],['Y:G3:pe','P₃']],[['Y:G1','ω₁'],['Y:G2','ω₂'],['Y:G3','ω₃']],
-    ...(avr?[[['Y:AV1/EFD','E_fd1'],['Y:AV2/EFD','E_fd2'],['Y:AV3/EFD','E_fd3']],[['Y:G1:vt','|V₁|'],['Y:G2:vt','|V₂|'],['Y:G3:vt','|V₃|']]]:[]),...mpanes];
+    ...(avr?[book?[['Y:AV2/EFD','E_fd2']]:[['Y:AV1/EFD','E_fd1'],['Y:AV2/EFD','E_fd2'],['Y:AV3/EFD','E_fd3']],[['Y:G1:vt','|V₁|'],['Y:G2:vt','|V₂|'],['Y:G3:vt','|V₃|']]]:[]),...mpanes];
    const Tf=avr?5:2;
    if(ext){ext.add(comps,wires,panes);return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:10,method:'TR',speed:0.05,stopT:ext.T},scope:{panes,window:{unit:'s',n:0.5}},meta:{lf:LF,fault:false,classical:false,ctl:o.ctl,...ext.meta}});}
    return project(comps,wires,{version:4,sim:{hDiv:400,...(avr?{method:'TR'}:{}),speed:F?(avr?10:5):2,stopT:F?Tf:0.5},scope:{panes,window:{unit:'s',n:F?Tf:0.5}},meta:{lf:LF,fault:F,classical:cl,ctl:avr?o.ctl:'none',...(ext?ext.meta:{})}});}
@@ -1331,7 +1334,7 @@
    pr.meta.pmu={plan:o.plan,bad:o.bad};return pr;}});
  T.push({id:'ieee9_emt',group:'Συστήματα ισχύος (4.3)',title:'IEEE 9 ζυγών σε EMT, από τη ροή φορτίου',theory:'formula',topology:'ieee9_emt',
   options:[{k:'ev',label:'Γεγονός',options:[['none','Καμία διαταραχή: η μόνιμη κατάσταση της ροής φορτίου'],['fault','Σφάλμα 5 κύκλων (A&F, Παρ. 2.7), μηχανές ως κλασικό μοντέλο'],['full','Το ίδιο σφάλμα με τα πλήρη δεδομένα']],def:'none'},
-   {k:'ctl',label:'Έλεγχος γεννητριών (4.8.1)',options:[['none','Σταθερά E_fd και T_m'],['avr','AVR ST1A σε κάθε γεννήτρια'],['avr_pss','AVR ST1A και PSS'],['full','AVR, PSS και ρυθμιστές στροφών (G1 νερό, G2 και G3 ατμός)']],def:'none'}],
+   {k:'ctl',label:'Έλεγχος γεννητριών (4.8.1)',options:[['none','Σταθερά E_fd και T_m'],['avr','AVR ST1A σε κάθε γεννήτρια'],['avr_pss','AVR ST1A και PSS'],['full','AVR, PSS και ρυθμιστές στροφών (G1 νερό, G2 και G3 ατμός)'],['book','AVR του βιβλίου αναφοράς μόνο στη G2 (IEEE Τύπος 1 ως DC1A, Mag-A-Stat), οι άλλες με σταθερή E_fd (4.24)']],def:'none'}],
   desc:'Το δίκτυο WSCC των 9 ζυγών (αρίθμηση του MATPOWER, 345 kV, 100 MVA, 60 Hz). Οι γεννήτριες έχουν τα δεδομένα του Anderson & Fouad (Πίν. 2.1) και ξεκινούν από την τάση |V|∠θ της ροής φορτίου του pcl.network· τα φορτία είναι σταθερές εμπεδήσεις ίσες με το φορτίο στην τάση της ροής φορτίου. Οι μετασχηματιστές είναι κλάδοι σε ανά μονάδα, όπως στη ροή φορτίου. Χωρίς διαταραχή το EMT μένει στη ροή φορτίου.',
   tasks:['Χωρίς διαταραχή: P, Q και δ των γεννητριών μένουν σταθερά· η κάρτα δείχνει τις τιμές της ροής φορτίου και του Anderson & Fouad.','Σφάλμα με κλασικό μοντέλο: η δ₂ − δ₁ ανεβαίνει περίπου 70° και επιστρέφει, όπως στο Σχ. 2.22 του Anderson & Fouad (85° από 17,5°).','Με τα πλήρη δεδομένα και σταθερή E_fd οι γεννήτριες 2 και 3 χάνουν τον συγχρονισμό: η ροή του άξονα q σβήνει γρήγορα (T′_q0 ≈ 0,5 s) και χωρίς AVR η E_fd δεν βοηθά.','Με τα πλήρη δεδομένα και «AVR ST1A σε κάθε γεννήτρια» (4.8.1) οι γεννήτριες μένουν σε συγχρονισμό: η E_fd ανεβαίνει στο όριο κατά το σφάλμα και κρατά τη ροή. Με PSS και ρυθμιστές στροφών σβήνουν και οι ταλαντώσεις. Με κλασικό μοντέλο ο έλεγχος δεν εφαρμόζεται (σταθερή E′).'],
   build(o){return ieee9Build(o);}});
@@ -1342,10 +1345,10 @@
  // every fourth bus in each direction, and a three-phase fault in the middle that clears by itself. Every part of the
  // mesh is fed from near, so the voltages stay close to 1 pu at any size; only the linear algebra grows with k.
  // bigGrid(k, ev) is also what the measurements and the checks use (tests/js/big_cases.js, tools/verify.py)
- function bigGrid(k,ev){const Un=150e3,Sb=100e6,f=50,c={conn:'bus'},dx=200,dy=200,x0=260,y0=160,comps=[],wires=[];
+ function bigGrid(k,ev,lm){const Un=150e3,Sb=100e6,f=50,c={conn:'bus'},dx=200,dy=200,x0=260,y0=160,comps=[],wires=[],tl=lm==='tl';
    const B=(r,q)=>'B'+r+'_'+q,X=q=>x0+q*dx,Y=r=>y0+r*dy,quiet={label:'',lbl:'none'};
    // loads and line lengths vary a little from place to place (a fixed rule, no random numbers), so that no two buses are alike
-   const w=(r,q)=>1+0.3*Math.sin(1.7*r+0.9*q),line=(id,x,y,s,rot)=>C(id,'LINE3',x,y,{unit:'pu',Un,Sb,f,R1:+(0.0173*s).toFixed(6),X1:+(0.0533*s).toFixed(6),B1:+(0.0191*s).toFixed(6),z0:'same',...c},{rot:rot||0,...quiet});
+   const w=(r,q)=>1+0.3*Math.sin(1.7*r+0.9*q),line=(id,x,y,s,rot)=>C(id,'LINE3',x,y,{unit:'pu',Un,Sb,f,R1:+(0.0173*s).toFixed(6),X1:+(0.0533*s).toFixed(6),B1:+(0.0191*s).toFixed(6),z0:'same',...(tl?{model:'tl'}:{}),...c},{rot:rot||0,...quiet});
    const grid={Un,f,Sk:5e9,XR:10,cf:1,z0:'ratio',Z0Z1:1.5,XR0:5,...c};let ng=0;
    // around a bus: the line to the right, the line below, the load below and to the right, an infeed above and to the left;
    // the many lines and loads carry no text in the drawing (their values are in their panels)
@@ -1357,15 +1360,41 @@
    const m=k>>1;
    if(ev==='fault'){comps.push(C('F1','FLT3',X(m)-60,Y(m)+90,{kind:'abcg',ton:0.04,toff:0.14,Rf:0.5,Rg:0,...c},{lbl:'below',label:'σφάλμα'}));wires.push([B(m,m),'F1:abc',[[X(m)-60,Y(m)]]]);}
    // the voltage of a bus = the voltage of the shunt capacitor of a line that starts there (phase a)
-   const panes=[[['V:H'+m+'_'+Math.min(m,k-2)+'/Ca'+(m<k-1?1:2),'v_a στη μέση'],['V:H'+(k-1)+'_0/Ca1','v_a στη γωνία']],[['I:NET1/E','i_a της τροφοδότησης 1'],...(ng>1?[['I:NET'+ng+'/E','i_a της τροφοδότησης '+ng]]:[])],
+   // (4.24: with distributed lines, the voltage at the first end of the phase-a line that starts at the bus)
+   const panes=[[[tl?'V:H'+m+'_'+m+'/Ta':'V:H'+m+'_'+Math.min(m,k-2)+'/Ca'+(m<k-1?1:2),'v_a στη μέση'],[tl?'V:H'+(k-1)+'_0/Ta':'V:H'+(k-1)+'_0/Ca1','v_a στη γωνία']],[['I:NET1/E','i_a της τροφοδότησης 1'],...(ng>1?[['I:NET'+ng+'/E','i_a της τροφοδότησης '+ng]]:[])],
     ...(ev==='fault'?[[['Y:F1/Ia','i_a του σφάλματος']]]:[])];
-   return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:400,method:'TR',speed:0.2,stopT:0.2},scope:{panes,window:{unit:'s',n:0.2}},meta:{big:{k,buses:k*k,lines:2*k*(k-1),infeeds:ng,ev}}});}
+   return project(comps,wires,{version:4,solve:{init:'ac'},sim:{hDiv:400,method:'TR',speed:0.2,stopT:0.2},scope:{panes,window:{unit:'s',n:0.2}},meta:{big:{k,buses:k*k,lines:2*k*(k-1),infeeds:ng,ev,...(tl?{line:'tl'}:{})}}});}
  T.push({id:'big_grid',group:'Μεγάλα δίκτυα (4.19.3)',title:'Πλέγμα k × k ζυγών σε EMT: ο γραμμικός λύτης σε μεγάλο δίκτυο',theory:'formula',topology:'big_grid',
   options:[{k:'k',label:'Μέγεθος',options:[['4','4 × 4: 16 ζυγοί'],['8','8 × 8: 64 ζυγοί'],['12','12 × 12: 144 ζυγοί'],['16','16 × 16: 256 ζυγοί'],['24','24 × 24: 576 ζυγοί']],def:'4'},
-   {k:'ev',label:'Γεγονός',options:[['fault','Τριφασικό σφάλμα στη μέση (40 ms, καθαρίζει στα 140 ms)'],['none','Καμία διαταραχή']],def:'fault'}],
+   {k:'ev',label:'Γεγονός',options:[['fault','Τριφασικό σφάλμα στη μέση (40 ms, καθαρίζει στα 140 ms)'],['none','Καμία διαταραχή']],def:'fault'},
+   {k:'line',label:'Γραμμές',options:[['pi','Τμήματα π'],['tl','Κατανεμημένες παράμετροι (4.24): κάθε ζυγός ένα υποδίκτυο']],def:'pi'}],
   desc:'Ένα πλέγμα ζυγών 150 kV, σαν δίκτυο υπομεταφοράς: τμήμα π περίπου 30 km ανάμεσα σε γειτονικούς ζυγούς, φορτίο περίπου 10 MW σε κάθε ζυγό, τροφοδότηση από το δίκτυο μεταφοράς (ισοδύναμο 5 GVA) κάθε τέταρτο ζυγό. Το κύκλωμα δεν έχει τίποτα δύσκολο για το βήμα· μεγαλώνει μόνο η γραμμική άλγεβρα. Έτσι φαίνεται τι κάνει ο αραιός λύτης: η διάταξη των αγνώστων κρατά τους παράγοντες L και U αραιούς, και ο χρόνος ανά βήμα μεγαλώνει σχεδόν ανάλογα με τους ζυγούς, όχι με το τετράγωνο ή τον κύβο τους.',
   tasks:['Άνοιξε «Ρυθμίσεις επίλυσης → Γραμμικός λύτης»: πόσους αγνώστους έχει το δίκτυο, ποιον λύτη προτείνει το engine και γιατί.','Το 4 × 4 ανοίγει αμέσως. Τρέξε μετά το 8 × 8 και το 16 × 16: οι ζυγοί τετραπλασιάζονται κάθε φορά. Σύγκρινε τον χρόνο εκτέλεσης.','Βάλε «Πυκνός LU» στο 12 × 12 και σύγκρινε: ο πυκνός λύνει n² πράξεις ανά βήμα, ο αραιός όσα είναι τα μη μηδενικά των παραγόντων.','Στο σφάλμα ο πίνακας αλλάζει δύο φορές (έναρξη και καθαρισμός): η μερική επαναπαραγοντοποίηση ξαναϋπολογίζει μόνο τις στήλες που εξαρτώνται από τον ζυγό του σφάλματος. Ο μετρητής είναι στην ίδια καρτέλα.'],
-  build(o){return bigGrid(+o.k||4,o.ev||'fault');}});
+  build(o){return bigGrid(+o.k||4,o.ev||'fault',o.line||'pi');}});
+
+ // 4.24 (THEORY §8Ι.7, ROADMAP §90): multirate. Two slow areas and one fast one joined by three lines, the network of the example
+ // of the multirate paper (Fig. 10: the elements and the lengths of the lines; the line data Z = 400 Ω, v = 3·10⁸ m/s and the
+ // losses are our choice). The fast area (a 1 μF capacitor charged to 1 V, 25 μH and 1 Ω) rings at about 30 kHz and needs a
+ // step of 1 μs; the slow areas (1 Ω and 25 mH) need much less. With «Υποδίκτυα» each area is a subnetwork, and with
+ // «πολλαπλοί ρυθμοί» the slow ones take m·h.
+ T.push({id:'multirate_lines',group:'Μεγάλα δίκτυα (4.24)',title:'Πολλαπλοί ρυθμοί: γρήγορο και αργά υποδίκτυα με γραμμές ανάμεσα',theory:'formula',topology:'multirate_lines',
+  options:[{k:'step',label:'Βήμα (στον ζωντανό λύτη)',options:[['fine','1 μs σε όλο το δίκτυο'],['coarse','15 μs σε όλο το δίκτυο']],def:'fine'},
+   {k:'loss',label:'Γραμμές',options:[['lossy','Με απώλειες (R′ = 0,05 Ω/km)'],['lossless','Χωρίς απώλειες']],def:'lossy'}],
+  desc:'Το δίκτυο του παραδείγματος μιας μελέτης αναφοράς για τους πολλαπλούς ρυθμούς: μια πηγή 1 V στα 60 Hz με 1 Ω και 25 mH (αργή περιοχή 1), φορτίο 1 Ω και 25 mH (αργή περιοχή 2), και μια γρήγορη περιοχή με πυκνωτή 1 μF φορτισμένο στο 1 V και κλάδο 1 Ω, 25 μH. Τρεις γραμμές τις ενώνουν: 150 km (αργή 1 με γρήγορη), 210 km (αργή 1 με αργή 2), 180 km (αργή 2 με γρήγορη). Οι γραμμές (Z = 400 Ω, v = 3·10⁸ m/s, τ = 0,5 / 0,7 / 0,6 ms) χωρίζουν το δίκτυο σε τρία υποδίκτυα. Η γρήγορη περιοχή ταλαντώνεται στα 30 kHz περίπου και θέλει βήμα 1 μs· οι αργές όχι. Με «Ρυθμίσεις επίλυσης → Υποδίκτυα» και πολλαπλούς ρυθμούς, οι αργές περιοχές παίρνουν 15 μs και η γρήγορη 1 μs.',
+  tasks:['Τρέξε με βήμα 1 μs σε όλο το δίκτυο: η τάση του πυκνωτή ταλαντώνεται και σβήνει σε περίπου 0,3 ms. Αυτή είναι η αναφορά.','Άλλαξε σε 15 μs σε όλο το δίκτυο: η ταλάντωση των 30 kHz χάνεται (δύο βήματα ανά περίοδο). Η τάση στο πηνίο της αργής περιοχής 1 μένει σωστή.','Άνοιξε «Ρυθμίσεις επίλυσης → Υποδίκτυα και πολλαπλοί ρυθμοί», διάλεξε «Αυτόματα» στους ρυθμούς, και πάτα «Τρέξιμο σε υποδίκτυα»: η γρήγορη περιοχή με 1 μs, οι αργές με 15 μs. Το παράθυρο δίνει τη μέγιστη διαφορά από το τρέξιμο με 1 μs.','Χωρίς απώλειες στις γραμμές: τα γρήγορα κύματα φτάνουν στις αργές περιοχές χωρίς απόσβεση. Με 15 μs εκεί, η αργή πλευρά τα βλέπει εξομαλυμένα (ίδιο εμβαδόν σε κάθε βήμα της).'],
+  build(o){const lossy=o.loss!=='lossless',Rp=lossy?0.05e-3:0,Z=400,vel=3e8;
+   const tl=(id,x,y,len,lab)=>C(id,'TL',x,y,{spec:'zl',Z,len,vel,Rp,nsec:1},{label:lab});
+   const comps=[C('V1','VAC',100,280,{Vpk:1,f:60,ph:0},{label:'1 V, 60 Hz'}),C('R1','R',170,200,{R:1},{label:'1 Ω'}),C('L1','L',260,200,{L:25e-3,i0:0},{label:'25 mH'}),J('S1',360,200),
+    tl('TA',500,180,150e3,'150 km'),J('F',640,160),C('C1','C',640,250,{C:1e-6,v0:1,esr:0},{label:'1 μF'}),C('R3','R',720,160,{R:1},{label:'1 Ω'}),C('L3','L',800,160,{L:25e-6,i0:0},{label:'25 μH'}),
+    tl('TB',500,380,210e3,'210 km'),J('S2',640,360),C('R2','R',720,360,{R:1},{label:'1 Ω'}),C('L2','L',800,360,{L:25e-3,i0:0},{label:'25 mH'}),
+    tl('TC',500,540,180e3,'180 km'),C('G1','GND',100,620,{},{label:'0 V'})];
+   const wires=[['V1:p','R1:a',[[100,200]]],['R1:b','L1:a'],['L1:b','S1'],['S1','TA:a1',[[360,160]]],['TA:a2','F'],['F','C1:p',[[640,160]]],['F','R3:a'],['R3:b','L3:a'],
+    ['S1','TB:a1',[[360,360]]],['TB:a2','S2'],['S2','R2:a'],['R2:b','L2:a'],['S2','TC:a1',[[600,460],[420,460],[420,520]]],['TC:a2','F',[[880,520],[880,100],[640,100]]],
+    ['V1:n','G1:g',[[100,620]]],['TA:b1','G1:g',[[440,600],[100,600]]],['TA:b2','G1:g',[[560,600],[100,600]]],['C1:n','G1:g',[[640,600],[100,600]]],
+    ['L3:b','G1:g',[[860,160],[860,600],[100,600]]],['TB:b1','G1:g',[[440,600],[100,600]]],['TB:b2','G1:g',[[560,600],[100,600]]],['L2:b','G1:g',[[840,360],[840,600],[100,600]]],
+    ['TC:b1','G1:g',[[440,600],[100,600]]],['TC:b2','G1:g',[[560,600],[100,600]]]];
+   const h=o.step==='coarse'?16667/15:16667,stopT=2e-3;
+   return project(comps,wires,{solve:{rateMax:15},sim:{hDiv:Math.round(h),method:'TR',speed:0.05,stopT},scope:{panes:[[['V:C1','v_C (γρήγορη περιοχή)']],[['V:L1','v_L1 (αργή περιοχή 1)']],[['V:L2','v_L2 (αργή περιοχή 2)']]],window:{unit:'s',n:stopT}},meta:{multirate:{fast:['C1','R3','L3'],slow:['V1','R1','L1','R2','L2'],m:15}}});}});
 
  // 4.19.1 (ROADMAP §68 point 6): load flow, N−1 and optimal power flow as studies of the engine (pcl.network on the local server), next to
  // the 9-bus network in EMT with instruments at two points. The card runs the study on the chosen network and exports its report.

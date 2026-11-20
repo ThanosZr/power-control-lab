@@ -136,6 +136,14 @@
   if(q.action==='tune')return MNA.tuneInfo(q.project,q.id,q.gains||null,q.opt||{}); // 4.17.4
   // 4.19.1: with q.lim the largest step of the circuit comes back too ({list, lim}); without it the list alone, as before
   if(q.action==='stepcheck'){const sm=new MNA.Sim(q.project,q.opts||{});if(q.state)sm.restoreSnapshot(q.state);const list=sm.stepCheck();return q.lim?{list,lim:sm.hLim||null}:list;}
+  // 4.24 (THEORY §8Ι.7): the network split in subnetworks to t_end, in this thread ('serial') or each group in a Worker ('workers', Node);
+  // the channels asked (default those of the scope) with the times of their group, the groups and their steps
+  if(q.action==='split'){const SP=root.Split||(typeof require==='function'?require('./split.js'):null);if(!SP)throw new Error('split.js λείπει');
+   const sk=pr=>{const ks=[];for(const p of pr.scope?.panes||[])for(const c of (Array.isArray(p)?p:p.ch||[]))ks.push(Array.isArray(c)?c[0]:c.key||c);return ks;};
+   const keys=q.channels&&q.channels.length?q.channels:sk(q.project),t1=+q.t_end||+(q.project.sim||{}).stopT||0.02;
+   const opt={sim:{hDiv:+q.hdiv||(q.project.sim||{}).hDiv},tEnd:t1,groups:q.groups,rates:q.rates,rateMax:q.rate_max,smooth:q.smooth};for(const k of Object.keys(opt))if(opt[k]===undefined||opt[k]===null)delete opt[k];
+   if(q.mode==='workers')return SP.workers(q.project,opt).then(r=>SP.summary(r,keys));
+   return SP.summary(SP.serial(q.project,opt),keys);}
   throw new Error('Άγνωστη ενέργεια: '+q.action);}
 
  // the bifurcation diagram as a sweep (3.15): one value = MNA.sweepPoint (transient, then one sample per base period:

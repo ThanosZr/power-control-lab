@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.23: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (917 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 4.24: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (922 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 4.23.
+Κανένα στην 4.24.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-655 σημεία.
+659 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -68,6 +68,7 @@
 | `pcl.Project.run` | `t_end`, `solver`, `channels`, `hdiv`, `method`, `step`, `rtol`, `hmax`, `t_from`, `max_points`, `measure`, `timeout`, `scipy_method`, `waveforms`, `save_state`, `resume`, `events`, `hmin` | 3.18 |
 | `pcl.Project.save` | `path` | 3.18 |
 | `pcl.Project.set` | `key`, `value` | 3.18 |
+| `pcl.Project.split` | `t_end`, `channels`, `mode`, `groups`, `rates`, `rate_max`, `smooth`, `hdiv`, `timeout` | 4.24 |
 | `pcl.Project.stream` | `t_end`, `chunk`, `channels`, `hdiv`, `method`, `step`, `rtol`, `hmax`, `t_from`, `max_points`, `measure`, `state`, `resume`, `to`, `timeout`, `waveforms`, `set`, `hmin` | 3.18 |
 | `pcl.Project.sweep` | `grid`, `points`, `t_end`, `measure`, `workers`, `solver`, `mode`, `progress`, `to`, `resume`, `**run_kw` | 3.18 |
 | `pcl.Project.tune` | `pwm`, `Kp`, `Ki`, `Kd`, `Tf`, `ff`, `kc`, `convN`, `step` | 4.17.4 |
@@ -82,6 +83,9 @@
 | `pcl.Result.to_json` | `path` | 3.18 |
 | `pcl.Result.to_mat` | `path` | 3.18 |
 | `pcl.Result.to_parquet` | `path`, `compression` | 3.18 |
+| `pcl.SplitResult` | `out` | 4.24 |
+| `pcl.SplitResult.at` | `key`, `t` | 4.24 |
+| `pcl.SplitResult.series` | `key` | 4.24 |
 | `pcl.SweepResult` | `rows`, `params`, `names`, `meta` | 3.18 |
 | `pcl.SweepResult.column` | `name` | 3.18 |
 | `pcl.SweepResult.frame` | — | 3.18 |
@@ -844,7 +848,7 @@
 
 ## Αιτήματα σεναρίων (`web/studio/scenario.js`)
 
-13 σημεία.
+14 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -856,6 +860,7 @@
 | `action:machines` | — | 4.7 |
 | `action:open` | — | 3.18 |
 | `action:run` | — | 3.18 |
+| `action:split` | — | 4.24 |
 | `action:state` | — | 3.18 |
 | `action:stepcheck` | — | 4.7 |
 | `action:tune` | — | 4.17.4 |
@@ -872,7 +877,7 @@
 | `file.component` | id, type, x, y, rot, flip, label, params, live, liveBase, liveRate | — | 3.18 |
 | `file.program` | t, id, k, v, rate | — | 3.19 |
 | `file.sim` | hDiv, speed, stopT, method, rec | — | 4.8 |
-| `file.solve` | unconn, island, rleak, tbase, step, rtol, hmax, units, solver, refac, hmin, modeVec, initSolver, evSnap, rec, recKeys, refBase, kernel | — | 3.19 |
+| `file.solve` | unconn, island, rleak, tbase, step, rtol, hmax, units, solver, refac, hmin, modeVec, initSolver, evSnap, rec, recKeys, refBase, kernel, split, groups, rates, rateMax, smooth | — | 3.19 |
 | `file.subcircuit` | title, desc, version, components, wires, params | — | 3.18 |
 | `file.watch` | show, tiles, panel | — | 4.8 |
 | `file.watch.tile` | id, key, ctl, label, at, al, rng, steps, span | — | 4.8 |
@@ -907,15 +912,15 @@
 | `part:EXPR` | expr, ins, pars | u1, u2, y | 3.18 |
 | `part:F2` | kind, f0, zeta, u0 | u, y | 3.19 |
 | `part:FEST` | mode, RR, LM, psi0 | al, be, psi, th, w1, wr | 3.18 |
-| `part:FILT3` | kind, C1, L, R, C2, Rp, conn | a, abc, b, c | 4.16 |
+| `part:FILT3` | kind, C1, L, R, C2, Rp, neut, Rng, Xng, conn | a, abc, b, c, n | 4.16 |
 | `part:FLT3` | kind, Rf, Rg, ctl, ton, toff, clr, conn | a, abc, b, c, f | 4.1 |
 | `part:FOUR` | nu, ref, win, f, np, fsrc, fmin, t0, clock, first, y0 | a, b, f, mag, ph, rms, u | 4.19.6 |
 | `part:GAIN` | K, unit | u, y | 3.18 |
-| `part:GEN3` | Sn, Un, f, pp, data, conv, Ra, Xl, X0, Xd, Xdp, Xdpp, Xq, Xqp, Xqpp, Td0p, Td0pp, Tq0p, Tq0pp, cXad, cXfd, cRfd, cXkd, cRkd, cXaq, cX1q, cR1q, cX2q, cR2q, shaft, H, D, Hm, Km, Dm, Dmu, Tfr, gm, exc, Efd, mech, Tm, init, V0, ang0, neut, conn | a, abc, b, c, d, e0, efd, ifd, m0, n, pe, qe, te, tm, ts1, ts2, v0, vt, w | 4.3 |
+| `part:GEN3` | Sn, Un, f, pp, data, conv, Ra, Xl, X0, Xd, Xdp, Xdpp, Xq, Xqp, Xqpp, Td0p, Td0pp, Tq0p, Tq0pp, cXad, cXfd, cRfd, cXkd, cRkd, cXaq, cX1q, cR1q, cX2q, cR2q, shaft, H, D, Hm, Km, Dm, Dmu, Tfr, gm, exc, Efd, mech, Tm, init, V0, ang0, neut, Rng, Xng, conn | a, abc, b, c, d, e0, efd, ifd, m0, n, pe, qe, te, tm, ts1, ts2, v0, vt, w | 4.3 |
 | `part:GFMC` | law, inner, S, Vac, Vdc, f0, Pref, Qref, Vref, mp, nq, kpm, kim, mu0, dcc, Gdc, plim, ith, gp, fpl, mdc, kap, E0, fp, H, tv, tdr, kp, avc, Uref, KE, TE, kv, av, Rv, Xv, Xc, Bf, Tvl, Til, kff, Imax, Ufd, tsoft, fi, ac, vmax, sync, bw, tsync, th0, fm, conn | e, ga, gb, gc, ia, ib, ic, idc, lim, m, ma, mb, mc, meas, oa, ob, oc, p, q, th, va, vb, vc, vdc, w | 4.18 |
 | `part:GND` | — | g | 3.18 |
 | `part:GOV` | type, dP, Pr, R, TSR, TSM, LC1, LC2, V1, KAX, FHP, FIP, FLP, TCH, TRH, TCO, RP, RT, TR, TP, KS, TG, Ropen, Rclose, Tw, gFL, gNL | g, m0, pm, tm, w | 4.8.1 |
-| `part:GRID3` | Un, f, phase, cf, emf, Sk, XR, z0, Z0Z1, Sk1, XR0, Rn, conn | a, abc, b, c | 4.1 |
+| `part:GRID3` | Un, f, phase, cf, emf, Sk, XR, z0, Z0Z1, Sk1, XR0, Rn, neut, Rng, Xng, conn | a, abc, b, c, n | 4.1 |
 | `part:ICLARKE` | inv, conn | a, ab, abc, al, b, be, c | 3.18 |
 | `part:IDC` | ctl, I, sched | n, p, u | 3.18 |
 | `part:ILG` | shape, Ipk, model, tau1, tau2, eta, T1, T2, n, t0 | n, p | 3.18 |
@@ -932,8 +937,8 @@
 | `part:LCCM` | shift, f0, Ith | am, cf, gl, gm, i1, i2, i3, i4, i5, i6, va, vb, vc, w | 4.16 |
 | `part:LCCS` | model, impl, Sn, U1, U2, f, uk, tap, bw, pw, Ron, Vf, Rsn, Csn, tq, fm, conn | a, abc, am, ao, b, blk, c, cf, gm, id, n, p, vd | 4.16 |
 | `part:LCCX` | shift, f0, bw, ini, th0, pw, Ron, Vf, Roff, Rsn, Csn, tq | a, am, ao, b, blk, c, cf, gl, gm, n, p, th, va, vb, vc | 4.16 |
-| `part:LINE3` | unit, Un, Sb, f, R1, X1, B1, z0, R0, X0, B0, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.3 |
-| `part:LOAD3` | cn, Un, f, P, Q, model, kz, ki, kp, Vmin, conn | a, abc, b, c | 4.1 |
+| `part:LINE3` | unit, Un, Sb, f, R1, X1, B1, z0, R0, X0, B0, model, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.3 |
+| `part:LOAD3` | cn, Un, f, P, Q, model, kz, ki, kp, Vmin, neut, Rng, Xng, conn | a, abc, b, c, n | 4.1 |
 | `part:LOGIC` | op | a, b, y | 3.18 |
 | `part:LPF` | fc, y0 | u, y | 3.18 |
 | `part:MEAS` | src, qty | y | 3.18 |
@@ -993,12 +998,12 @@
 | `part:TOWER` | model, h, Zt1, Zt2, gam, arms, h1, h2, h3, Zt, vt, foot, R0, rho, E0, ins, Ub, U0, kde, Dde, gl, E50, Kp, E0p, Kn, E0n, impl, meas | a1, a2, b1, b2, c1, c2, d1, d2, e1, e2 | 4.9 |
 | `part:UD` | clock, trig, y0 | u, y | 3.18 |
 | `part:VAC` | Vpk, f, phase, off, Rs, Ls | n, p | 3.18 |
-| `part:VAC3` | Vpk, f, phase, seq, Rs, Ls, conn | a, abc, b, c, n | 3.18 |
+| `part:VAC3` | Vpk, f, phase, seq, Rs, Ls, neut, Rng, Xng, conn | a, abc, b, c, n | 3.18 |
 | `part:VDC` | ctl, V, Rs, uni, sched | n, p, u | 3.18 |
 | `part:VIMP` | shape, Vpk, basis, T1, T2, S, alpha, beta, K, Rs, t0 | n, p | 3.18 |
 | `part:VM` | — | n, p, y | 3.18 |
 | `part:VP` | — | p, y | 3.18 |
 | `part:VSC2` | dc, Vdc, mmax, filt, init, E0, th0, Vdc0, Lf, Rf, Cf, conn | a, abc, b, c, ia, ib, ic, m, ma, mb, mc, meas, n, oa, ob, oc, p, va, vb, vc, vdc | 4.18 |
-| `part:XF3` | grp, Sn, U1, U2, f, uk, Pk, i0, P0, tap, core, i00, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.1 |
+| `part:XF3` | grp, Sn, U1, U2, f, uk, Pk, i0, P0, tap, core, i00, neut1, Rng1, Xng1, neut2, Rng2, Xng2, conn | a1, a2, abc1, abc2, b1, b2, c1, c2, n2 | 4.1 |
 | `part:XFMR` | n, Lm, im0, Llk1, Llk2, R1, R2, pol | p1, p2, s1, s2 | 3.18 |
 | `part:ZSER3` | Rs, Ls, Rp1, Lp, Rp2, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.16 |
