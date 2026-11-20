@@ -60,6 +60,11 @@ class BigNetworks(unittest.TestCase):
         self.assertTrue(500 <= g['cap8'] < 20000 and 200 <= g['perCap8'] < 20000)
         self.assertLess(g['mb8'], 200)                    # 20000 points per channel would be 356 MB and five times 356 MB
         self.assertTrue(g['finite8'])
+        # 5.0 (343.4): «Αυτόματα» records only the channels of the scope over 1000, with the same numbers
+        self.assertTrue(g['recAuto8'])
+        self.assertLess(g['rec8'], 50)
+        self.assertGreaterEqual(g['capA8'], 20000)
+        self.assertTrue(g['sameA8'])
 
 
 if __name__ == '__main__':

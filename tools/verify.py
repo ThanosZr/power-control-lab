@@ -10,6 +10,7 @@ each test to its reference.
 """
 import json
 import math
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -1319,6 +1320,43 @@ def v424_rows(add):
     Ik1 = 3 * E / abs(2 * z1 + z0 + 3 * complex(10, 20) + 3e-4)
     add(A, 'ουδέτερος μέσω R_n + jX_n = 10 + j20 Ω: ρεύμα μονοφασικού σφάλματος I″k1 (ενεργός τιμή)', 'I″k1 = 3E/|2Z₁ + Z₀ + 3Z_n| (IEC 60909-0)', Ik1, q['grid']['z']['sim'], 0.5, 'A')
 
+def v50_rows(add):
+    """5.0: the study folder (THEORY §8ΩΕ, decision 344): a run from Python written to the folder against its Result, a
+    plot file of the EMTP and the output of PSCAD written here by their documented formats and read back, and the
+    automatic record of decision 343.4 (the numbers of a channel that is not recorded, against every channel recorded)."""
+    import json
+    import struct
+    import subprocess
+    import tempfile
+    import numpy as np
+    from pathlib import Path
+    from engine import studyfolder as sf
+    import pcl
+    A = 'Φάκελος μελέτης (5.0)'
+    with tempfile.TemporaryDirectory() as d:
+        os.environ['PCL_HOME'] = d
+        r = pcl.tutorial('buck').run(t_end=2e-4, folder=str(Path(d) / 'μελέτη'))
+        t, col, get = sf.source(r.meta['folder']['path']).arrays()
+        add(A, 'buck από την Python, i_L1 στα 0,2 ms από τον φάκελο', 'το Result του ίδιου τρεξίματος', float(r['I:L1'][-1]), float(get(col['I:L1'])[-1]), 0.0, 'A')
+        tt = np.linspace(0, 1e-3, 201)
+        (Path(d) / 'casem.m').write_text("filn='case.mda';\nt=1;\nprecision='float64';\nn_scopes=3;\nNvn='BUS1';\nNvn=strvcat(Nvn,'BUS2');\nvn=2:1:3;\n", encoding='latin-1')
+        with open(Path(d) / 'case.mda', 'wb') as f:
+            for x in tt:
+                f.write(struct.pack('<i', 24) + np.array([x, math.sin(2e4 * x), math.cos(2e4 * x)], '<f8').tobytes() + struct.pack('<i', 24))
+        e = sf.source(str(Path(d) / 'casem.m'))
+        _, ce, ge = e.arrays()
+        add(A, 'αρχείο του EMTP (<όνομα>m.m και .mda): BUS2 στο 1 ms', 'η τιμή που γράφτηκε σε εγγραφές Fortran', math.cos(2e4 * 1e-3), float(ge(ce['vn:BUS2'])[-1]), 0.0, 'V')
+        (Path(d) / 'pr.inf').write_text('\n'.join(f'PGB({k})  Output  Desc="c{k}"  Group="Main"  Max=1  Min=-1  Units="kV"' for k in range(1, 13)), encoding='latin-1')
+        for n, ks in ((1, range(1, 11)), (2, range(11, 13))):
+            (Path(d) / f'pr_{n:02d}.out').write_text(' Project\n' + '\n'.join(' '.join(repr(float(v)) for v in [x] + [k * x for k in ks]) for x in tt), encoding='latin-1')
+        q = sf.source(str(Path(d) / 'pr.inf'))
+        _, cq, gq = q.arrays()
+        add(A, 'έξοδος του PSCAD (.inf και δύο .out): κανάλι 12 στο 1 ms', 'η τιμή που γράφτηκε (στήλη 2 του δεύτερου αρχείου)', 12e-3, float(gq(cq['PGB12:c12'])[-1]), 1e-15, 'kV')
+        os.environ.pop('PCL_HOME', None)
+    s = json.loads(subprocess.run(['node', '--max-old-space-size=6000', str(ROOT / 'tests' / 'js' / 'folder_cases.js')], capture_output=True, text=True, timeout=1800, cwd=ROOT).stdout)
+    add(A, f'big_grid (1038 κανάλια), «Αυτόματα» (343.4): {s["ref"]["key"]} μετά από 40 βήματα, χωρίς καταγραφή', 'το ίδιο με όλα τα κανάλια καταγραμμένα', s['ref']['all'], s['ref']['auto'], 0.0, 'A')
+
+
 def checks(o):
     """Rows: (area, quantity, reference, expected, simulated, tolerance (absolute), unit)."""
     rows = []
@@ -1636,6 +1674,7 @@ def checks(o):
     v422_rows(add)
     v423_rows(add)
     v424_rows(add)
+    v50_rows(add)
     cpf_rows(add)
     sweepc_rows(add)
     se_rows(add)
@@ -1725,6 +1764,7 @@ TESTS = [
     ('tests/test_time3.py', 'ο λύτης στον χρόνο, μέρος 3 (4.23, THEORY §8Ι.5): καταγραφή μόνο όσων παρακολουθούνται, βάση της επαναπαραγοντοποίησης από τη μνήμη, πυρήνας WebAssembly', 'σε έξι tutorials τα ίδια bit στην καταγραφή και στα στατιστικά κάθε καναλιού που καταγράφεται, η τιμή των άλλων ίδια όταν ζητηθεί, ένα κανάλι που προστίθεται στη μέση καταγράφεται από εκεί· με βάση από τη μνήμη τα ίδια bit και 41–58 % λιγότερες στήλες στα hvdc_lcc, b4dcs2, hvdc_gfm· ο πυρήνας WebAssembly με τα ίδια bit σε 16 συστήματα και σε τρία tutorials, «Αυτόματα» από 4000 αγνώστους (μετρημένο)'),
     ('tests/test_split.py', 'υποδίκτυα στις γραμμές σε Workers και πολλαπλοί ρυθμοί (4.24, THEORY §8Ι.7, `web/studio/split.js`)', 'σε 11 tutorials τα ίδια bit με έναν λύτη σε κάθε κανάλι, σε δύο ομάδες και σε μία ομάδα ανά υποδίκτυο (ως 44), και σε Workers· οι άγνωστοι των άλλων μερών NaN σε κάθε λύτη· μια μεταγωγή αλλάζει μόνο τα βήματα της ομάδας της, με διαφορά μικρότερη από το σφάλμα της ολοκλήρωσης· πολλαπλοί ρυθμοί στο multirate_lines (1 και 15 μs) με σφάλμα κάτω από το βήμα των 15 μs παντού, και η εξομάλυνση ίσου εμβαδού χειρότερη εδώ· η διέγερση του βιβλίου στη G2 του ieee9_emt· το ισοδύναμο δικτύου στην αναζήτηση με «πηγή»'),
     ('tests/test_neutral.py', 'η επιλογή «Ουδέτερος» των τριφασικών στοιχείων (4.24, αποφάσεις 208, 345)', 'ο ακροδέκτης n μόνο με «Ακροδέκτης n»· η προεπιλογή δίνει το netlist της 4.23· ακροδέκτης n στη γη = στερεά γείωση σε κάθε στοιχείο· μονοφασικό σφάλμα με R_n + jX_n στο ισοδύναμο δικτύου και πίσω από Dyn11 απέναντι στη λύση στο πεδίο των φάσεων με 3Z_n (κάτω από 0,1 %)· πηγή με Z_n σε άνισο αστέρα απέναντι στην κλειστή μορφή'),
+    ('tests/test_study.py', 'ο φάκελος μελέτης και η αυτόματη καταγραφή (5.0, απόφαση 344 και 343.4, THEORY §8ΩΕ, `engine/studyfolder.py`, `web/studio/study.js`)', 'οι γραμμές ενός τρεξίματος είναι η καταγραφή της προσομοίωσης: στρογγυλεμένες σε float32 οι τιμές του scope bit προς bit, η τελευταία το now() κάθε καναλιού, και σε κομμάτια τα ίδια· οι μονάδες ίδιες με του scope σε κάθε κανάλι κάθε tutorial· το netlist χωρίς την κατάσταση του τρεξίματος· ένα τρέξιμο από την Python με τα ίδια bit με το Result, αριθμοί τρεξιμάτων που δεν ξαναδίνονται και ετικέτα που κρατά ένα τρέξιμο· οι αναγνώστες του EMTP, του PSCAD και των CSV σε αρχεία γραμμένα κατά τη μορφή τους· τα μοντέλα γραμμής με το κλειδί τους (ίδια bit από τον φάκελο)· ο server δέχεται μόνο ολόκληρες γραμμές σε τρέξιμο που τρέχει· η αυτόματη καταγραφή πάνω από 1000 κανάλια με τους ίδιους αριθμούς'),
     ('tests/test_rms.py', 'ο αριθμητικός πυρήνας της δυναμικής RMS και της ευστάθειας μικρών διαταραχών (4.23, ROADMAP §71, `pcl/rms.py`)', 'IEEE 9 ζυγών όπως στο βιβλίο αναφοράς: E′ και φορτία (Παρ. 2.6), οι ανηγμένοι πίνακες πριν, κατά και μετά το σφάλμα (Πίν. 2.6), οι δύο ταλαντώσεις (Παρ. 3.2), οι ιδιοτιμές του μοντέλου δύο αξόνων με D = 0 και 1 (§9.12) στο έκτο δεκαδικό· ο τραπεζοειδής με τάξη 2 απέναντι στο SciPy· η εναλλασσόμενη λύση ίδια· μεταβλητό βήμα· κρίσιμος χρόνος εκκαθάρισης· Arnoldi = QR (και στο IEEE 118)· η πρώτη ταλάντωση απέναντι στο EMT· χωρίς διαταραχή τίποτα δεν κινείται· στοιχείο χωρίς μοντέλο RMS: άρνηση με το όνομά του'),
     ('tests/test_ev_weights.py', 'τα βάρη του πολυκριτηριακού του οχήματος (4.18.1)', 'moevc2: w_s↑ ⇒ IAE↓, w_e↑ ⇒ Wh/km↓ και IAE↑, eco < ισορροπημένος < performance στα Wh/km και αντίστροφα στο IAE, keep ≤ 1· το moevc της 4.8 με keep 1,15 και w_s χωρίς επίδραση'),
     ('tests/test_look.py', 'τεχνική όψη του σχεδίου (4.17.3, ROADMAP §65)', 'διαδρομές μόνο οριζόντιες/κατακόρυφες (χωρίς εξομάλυνση) απέναντι σε γνωστές μορφές, σήμανση χωρίς αλλαγή των υπολοίπων, αντίσταση IEC και ANSI, όλα τα σύμβολα της βιβλιοθήκης· `scope_flow.js` στον browser'),
@@ -1809,7 +1849,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 1074 tests (Python και Node) και 20 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»· από την 4.22 το `gis_flow.js` τα tutorials του υποσταθμού GIS, τους άξονες των γραφημάτων SVG, το σύρσιμο των ετικετών και τον χάρτη του δικτύου). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 1089 tests (Python και Node) και 21 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»· από την 4.22 το `gis_flow.js` τα tutorials του υποσταθμού GIS, τους άξονες των γραφημάτων SVG, το σύρσιμο των ετικετών και τον χάρτη του δικτύου· από την 5.0 το `study_flow.js` το τρέξιμο της σελίδας στον φάκελο μελέτης, το εργαλείο προβολής με ανανέωση όσο γράφεται, τη διαφορά δύο τρεξιμάτων και ένα αρχείο του EMTP). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',

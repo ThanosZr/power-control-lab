@@ -191,7 +191,18 @@ class ApiSurface(unittest.TestCase):
         self.assertIn('pcl.SplitResult', self.now['pcl'])
         for k in ('split', 'groups', 'rates', 'rateMax', 'smooth'):
             self.assertIn(k, self.now['project']['file.solve']['params'])
-        self.assertEqual(sum(len(v) for v in self.now.values()), 922)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 922)
+
+    def test_the_surface_of_5_0(self):
+        """5.0: the study folder. Project.run(folder=…) is a stable addition, the reader pcl.results is experimental (the
+        format may grow with the infrastructure of the digital twins), and the server has /api/study and /api/study_data."""
+        self.assertIn('folder', self.now['pcl']['pcl.Project.run']['params'])
+        for k in ('pcl.results.open', 'pcl.results.runs', 'pcl.results.diff', 'pcl.results.Source', 'pcl.results.Source.read'):
+            self.assertIn(k, self.now['pcl'], k)
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+        for k in ('/api/study', '/api/study_data'):
+            self.assertIn(k, self.now['server'])
+        self.assertEqual(sum(len(v) for v in self.now.values()), 932)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

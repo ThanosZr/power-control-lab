@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 4.24: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (922 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 5.0: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (932 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -10,13 +10,13 @@
 - **Αρχεία project:** ένα παλιό αρχείο ανοίγει πάντα (ARCHITECTURE §4). Νέα πεδία είναι προαιρετικά. Όταν χρειάζεται μετατροπή, αυξάνεται το `version` του αρχείου και η μετατροπή γίνεται στο άνοιγμα, με test. Το `version` 3 (3.18): τα σύρματα με το ίδιο όνομα είναι ένας κόμβος· ένα παλιότερο αρχείο ανοίγει ίδιο (`Bus.migrateNames`: όπου ένα όνομα ήταν ετικέτα σε δύο κόμβους, το δεύτερο γίνεται «όνομα·2»).
 - **Ο έλεγχος:** το `python tools/api_surface.py` σταματά όταν κάτι λείπει ή έχασε όρισμα. Ως την 4.0 περνούσε με `--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 μέσα στην ίδια κύρια έκδοση δεν περνά ούτε με `--allow-removal`· στην επόμενη κύρια περνά μόνο για ό,τι ήταν παρωχημένο. Ένα παρωχημένο σημείο πρέπει να υπάρχει ακόμη στον κώδικα.
 
-- **Πειραματικά (3.19):** `pcl.rms.…`, `pcl.insulation.…`, `pcl.surge.…`, `pcl.geo.…`, `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `pcl.backend.…`, `pcl.accel.…`, `pcl.nnstart.…`, `pcl.onnxio.…`, `pcl.netview.…`, `pcl.netfile.…`, `pcl.psse.…`, `pcl.scopf.…`, `pcl.cpf.…`, `pcl.se.…`, `pcl.harmonic.…`, `pcl.unbalanced.…`, `pcl.dcgrid.…`, `workbench…`, `python -m pcl accel…`, `python -m pcl nnstart…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο· και της 4.19.2: τα backends των παρτίδων με τον δρόμο GPU*, το script του επιταχυντή, τα μοντέλα εκκίνησης και τα αρχεία ONNX). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
+- **Πειραματικά (3.19):** `pcl.rms.…`, `pcl.insulation.…`, `pcl.surge.…`, `pcl.geo.…`, `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `pcl.backend.…`, `pcl.accel.…`, `pcl.nnstart.…`, `pcl.onnxio.…`, `pcl.netview.…`, `pcl.netfile.…`, `pcl.psse.…`, `pcl.scopf.…`, `pcl.cpf.…`, `pcl.se.…`, `pcl.harmonic.…`, `pcl.unbalanced.…`, `pcl.dcgrid.…`, `pcl.results.…`, `workbench…`, `python -m pcl accel…`, `python -m pcl nnstart…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο· και της 4.19.2: τα backends των παρτίδων με τον δρόμο GPU*, το script του επιταχυντή, τα μοντέλα εκκίνησης και τα αρχεία ONNX). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
 
 Στους πίνακες, «Από» είναι η έκδοση της πρώτης καταγραφής: η 3.18 για ό,τι υπήρχε ήδη.
 
 ## Παρωχημένα
 
-Κανένα στην 4.24.
+Κανένα στην 5.0.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-659 σημεία.
+667 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -65,7 +65,7 @@
 | `pcl.Project.hash` | — | 3.18 |
 | `pcl.Project.inputs` | — | 4.17.1 |
 | `pcl.Project.params` | — | 3.18 |
-| `pcl.Project.run` | `t_end`, `solver`, `channels`, `hdiv`, `method`, `step`, `rtol`, `hmax`, `t_from`, `max_points`, `measure`, `timeout`, `scipy_method`, `waveforms`, `save_state`, `resume`, `events`, `hmin` | 3.18 |
+| `pcl.Project.run` | `t_end`, `solver`, `channels`, `hdiv`, `method`, `step`, `rtol`, `hmax`, `t_from`, `max_points`, `measure`, `timeout`, `scipy_method`, `waveforms`, `save_state`, `resume`, `events`, `hmin`, `folder` | 3.18 |
 | `pcl.Project.save` | `path` | 3.18 |
 | `pcl.Project.set` | `key`, `value` | 3.18 |
 | `pcl.Project.split` | `t_end`, `channels`, `mode`, `groups`, `rates`, `rate_max`, `smooth`, `hdiv`, `timeout` | 4.24 |
@@ -553,6 +553,14 @@
 | `pcl.report.ReportError` | — | 4.19.1 |
 | `pcl.report.network_report` | `net`, `study`, `result`, `title`, `**kw` | 4.19.1 |
 | `pcl.report.num` | `v`, `digits`, `lang`, `strip` | 4.19.1 |
+| `pcl.results.Source` | `path` | 5.0 · πειρ. |
+| `pcl.results.Source.events` | — | 5.0 · πειρ. |
+| `pcl.results.Source.range` | `t0`, `t1`, `keys`, `n` | 5.0 · πειρ. |
+| `pcl.results.Source.read` | `keys`, `t0`, `t1` | 5.0 · πειρ. |
+| `pcl.results.Source.to_csv` | `path`, `keys`, `t0`, `t1`, `sep` | 5.0 · πειρ. |
+| `pcl.results.diff` | `a`, `ka`, `b`, `kb`, `t0`, `t1`, `n` | 5.0 · πειρ. |
+| `pcl.results.open` | `path` | 5.0 · πειρ. |
+| `pcl.results.runs` | `study` | 5.0 · πειρ. |
 | `pcl.rms.Classical` | `names`, `bus`, `p` | 4.23 · πειρ. |
 | `pcl.rms.Classical.eval` | `X`, `Vr`, `Vi`, `t` | 4.23 · πειρ. |
 | `pcl.rms.Classical.init` | `V`, `S`, `wb` | 4.23 · πειρ. |
@@ -729,7 +737,7 @@
 
 ## Server: `/api/<ενέργεια>` και διαδρομές
 
-45 σημεία.
+47 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -774,6 +782,8 @@
 | `/api/scenario_sweep` | — | 3.18 |
 | `/api/solve` | — | 3.18 |
 | `/api/studio_math` | — | 3.18 |
+| `/api/study` | — | 5.0 |
+| `/api/study_data` | — | 5.0 |
 | `/api/sweep` | — | 3.18 |
 | `/api/switching` | — | 3.18 |
 | `/api/template_solve` | — | 3.18 |

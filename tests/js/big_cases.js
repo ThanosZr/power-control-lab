@@ -44,10 +44,13 @@ const sim=(pr,o)=>{const sv=pr.sim||{};return new MNA.Sim(pr,{hDiv:sv.hDiv||10,m
  const kC=pr.scope.panes[0][1][0],Vb=150e3*Math.SQRT2/Math.sqrt(3);let p1=0,p2=0,c1=0;while(a.t<0.02){a.run(a.h);p1=Math.max(p1,Math.abs(a.now(kV)));c1=Math.max(c1,Math.abs(a.now(kC)));}while(a.t<0.039){a.run(a.h);p2=Math.max(p2,Math.abs(a.now(kV)));}
  while(a.t<0.039)a.run(a.h);for(let i=0;i<20;i++){a.run(a.h);iPre=Math.max(iPre,Math.abs(a.now(kI)));vPre=Math.max(vPre,Math.abs(a.now(kV)));}
  while(a.t<0.06)a.run(a.h);for(let i=0;i<400;i++){a.run(a.h);iF=Math.max(iF,Math.abs(a.now(kI)));vF=Math.max(vF,Math.abs(a.now(kV)));}
- const big=sim(Tutorials.bigGrid(8,'none'));for(let i=0;i<20;i++)big.run(big.h);
+ // 5.0 (343.4): the buffers sized by memory are those of a record of every channel (solve.rec = 'all'); with the default of
+ // a file of version 4 the grid records only the channels of its scope and keeps the 20000 points and more
+ const g8=Tutorials.bigGrid(8,'none');g8.solve={...(g8.solve||{}),rec:'all'};const big=sim(g8);for(let i=0;i<20;i++)big.run(big.h);
+ const bigA=sim(Tutorials.bigGrid(8,'none'));for(let i=0;i<20;i++)bigA.run(bigA.h);
  out.grid={n:q.n,kind:q.kind,keys:a.keys.length,auto:a.initSolver,forced:[d.initSolver,s.initSolver],startDiff:worst,cap:a.ring.cap,perCap:a.per.cap,memNote:a.memNote||'',
   iPre,iF,vPre,vF,vMid:p1/Vb,vMid2:p2/Vb,vCorner:c1/Vb,warnings:(a.net.warnings||[]).length,
-  n8:big.n,keys8:big.keys.length,auto8:big.initSolver,cap8:big.ring.cap,perCap8:big.per.cap,mb8:Math.round((big.ring.d.byteLength+5*big.per.avg.byteLength)/1048576),finite8:big.keys.every(k=>Number.isFinite(big.now(k)))};}
+  n8:big.n,keys8:big.keys.length,auto8:big.initSolver,cap8:big.ring.cap,perCap8:big.per.cap,mb8:Math.round((big.ring.d.byteLength+5*big.per.avg.byteLength)/1048576),finite8:big.keys.every(k=>Number.isFinite(big.now(k))),recAuto8:!!bigA.recAuto,rec8:bigA.recKeys.length,capA8:bigA.ring.cap,sameA8:big.keys.every(k=>Object.is(big.now(k),bigA.now(k)))};}
 // ---- up to the limits nothing changed: buffers and start of a circuit of the existing tutorials
 {const s=sim(build('ieee9_emt'));out.small={keys:s.keys.length,cap:s.ring.cap,perCap:s.per.cap,init:s.initSolver,memNote:s.memNote||''};}
 console.log(JSON.stringify(out));

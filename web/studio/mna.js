@@ -119,7 +119,7 @@
  // so the run continues with the same numbers. Objects met twice are kept once ($ref); typed arrays as base64 of their
  // bytes (exact); NaN, ±Infinity and −0 by name; an object with getState/setState (a Python block) keeps its own state.
  // Left out: the project (rebuilt), the LU cache and the sparse pattern (rebuilt the same) and the scope's buffers (ring, per).
- const SNAP_SKIP=new Set(['project','cache','ring','per','sp','spq','spw','rec','spF','spA','spChg','cvL','hLim','valEls','keyEls','cvW','valsAll','fv','spBc','kern','spFb','part','splitForeign','splitCuts','splitGroup','splitBlock','splitWait','splitWaitMs']);   // 4.2: the sparse pattern is rebuilt the same; 4.19: the working factors too; 4.24: a part of a split network
+ const SNAP_SKIP=new Set(['project','cache','ring','per','sp','spq','spw','rec','spF','spA','spChg','cvL','hLim','valEls','keyEls','cvW','valsAll','fv','spBc','kern','spFb','part','splitForeign','splitCuts','splitGroup','splitBlock','splitWait','splitWaitMs','tap','watchMore']);   // 4.2: the sparse pattern is rebuilt the same; 4.19: the working factors too; 4.24: a part of a split network
  const SNAP_TA={Float64Array,Float32Array,Int32Array,Uint32Array,Int16Array,Uint16Array,Int8Array,Uint8Array,Uint8ClampedArray};
  function b64of(ta){const u=new Uint8Array(ta.buffer,ta.byteOffset,ta.byteLength);if(typeof Buffer!=='undefined')return Buffer.from(u).toString('base64');
   let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s);}
@@ -1371,7 +1371,7 @@
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.hUser=this.opts.h||this.T/this.opts.hDiv;this.h=Math.min(this.hUser,this.tlMaxStep());
    if(fresh){this.hv=null;this.dg=new Map();this.dgPre=[];this.nRej=0;this.nRejRow=0;this.nTiny=0;this.nAtMin=0;}this.stIndex();this.varSetup();this.lteH=null;this.rx=null;
    if(fresh&&this.var)this.hv=this.hGrid(Math.max(this.hMin,this.h/64)); // the first steps (backward Euler, no history yet) start small and grow ×2 per step
-   const keys=this.channelKeys();this.project=project;const wl=this.watchList(),rk=wl?keys.filter(k=>wl.has(k)):keys;
+   const keys=this.channelKeys();this.project=project;const wl=this.watchList(keys.length),rk=wl?keys.filter(k=>wl.has(k)):keys;
    const same=!fresh&&this.keys&&keys.join('|')===this.keys.join('|')&&(rk===keys)===(this.recKeys===this.keys)&&rk.join('|')===this.recKeys.join('|');
    this.keys=keys;this.recKeys=rk;this.chIndex=new Map(rk.map((k,i)=>[k,i]));this.allIndex=rk===keys?this.chIndex:new Map(keys.map((k,i)=>[k,i]));this.cvW=null;this.fv=null;
    if(!same)this.allocRecord();
@@ -1524,8 +1524,15 @@
   // those go to the record buffers and the period statistics, and only the parts that give them are computed at every
   // step; the value of any other channel is computed when asked (now), from the same solution. A key of the scope
   // «VN:<pin>» is the channel of the net of the pin.
-  watchList(){
-   const SO=this.project?.solve||{},w=Array.isArray(this.opts.watch)?this.opts.watch:SO.rec==='watched'?[...scopeKeysOf(this.project),...(Array.isArray(SO.recKeys)?SO.recKeys:[])]:null;
+  // 5.0 (decision 343.4): solve.rec = 'auto' records only the watched channels over REC_BIG (1000) channels and every
+  // channel up to it; 'all' every channel; 'watched' only the watched ones. A file of version 4 (from the 5.0) without a
+  // choice is 'auto'; an older file keeps every channel, as up to the 4.24. The numbers are the same in every mode.
+  recMode(){const m=this.project?.solve?.rec;if(m==='all'||m==='watched'||m==='auto')return m;return (+this.project?.version||0)>=4?'auto':'all';}
+  watchList(n){
+   const SO=this.project?.solve||{},mode=this.recMode(),auto=mode==='auto'&&n>REC_BIG;this.recAuto=auto;
+   // (5.0: the channels the scope added while running, watchMore, count only in 'watched' and 'auto', so that a change to
+   // 'all' in the page takes effect; an explicit opts.watch is the caller's list and wins, as before)
+   const w=Array.isArray(this.opts.watch)?this.opts.watch:(mode==='watched'||auto)?[...scopeKeysOf(this.project),...(Array.isArray(SO.recKeys)?SO.recKeys:[]),...(this.watchMore||[])]:null;
    if(!w)return null;const out=new Set();
    for(const k of w){if(typeof k!=='string')continue;if(k.startsWith('VN:')){const n=this.net.pinNet.get(k.slice(3));if(n&&!n.ground)out.add('N:'+n.canon);}else out.add(k);}
    return out;
@@ -1538,14 +1545,20 @@
    if(!add.length)return add;
    const nk=this.keys.filter(k=>want.has(k)),oldIx=this.chIndex,r=this.ring,p=this.per,a=this.acc,pv=this.prevVals,nn=nk.length,on=r.nch;
    const map=Int32Array.from(nk,k=>{const i=oldIx.get(k);return i===undefined?-1:i;});
-   const R={t:r.t,d:new Float32Array(r.cap*nn),g:r.g,nch:nn,cap:r.cap,head:r.head,n:r.n};
-   for(let j=0;j<r.cap;j++)for(let i=0;i<nn;i++)R.d[j*nn+i]=map[i]<0?NaN:r.d[j*on+map[i]];
+   // 5.0: a record sized by memory for fewer channels (in the page the scope adds its channels after the build, to a record
+   // of none) keeps within the memory of the scope: the last cap2 points, as allocRecord would size them for nn channels
+   const mem=+this.opts.mem>0&&!this.opts.cap?+this.opts.mem:0,cap2=mem?Math.min(r.cap,Math.max(nn>REC_BIG?500:20000,Math.floor(mem*1048576/(4*nn+9)),1)):r.cap;
+   let R;
+   if(cap2<r.cap){const m=Math.min(r.n,cap2);R={t:new Float64Array(cap2),d:new Float32Array(cap2*nn),g:new Uint8Array(cap2),nch:nn,cap:cap2,head:m%cap2,n:m};
+    for(let j=0;j<m;j++){const q=(r.head-m+j+r.cap)%r.cap;R.t[j]=r.t[q];R.g[j]=r.g[q];for(let i=0;i<nn;i++)R.d[j*nn+i]=map[i]<0?NaN:r.d[q*on+map[i]];}}
+   else{R={t:r.t,d:new Float32Array(r.cap*nn),g:r.g,nch:nn,cap:r.cap,head:r.head,n:r.n};
+    for(let j=0;j<r.cap;j++)for(let i=0;i<nn;i++)R.d[j*nn+i]=map[i]<0?NaN:r.d[j*on+map[i]];}
    const Q={t:p.t,nch:nn,cap:p.cap,head:p.head,n:p.n};
    for(const f of ['avg','min','max','rms','end']){const A=new Float32Array(p.cap*nn),B=p[f];for(let j=0;j<p.cap;j++)for(let i=0;i<nn;i++)A[j*nn+i]=map[i]<0?NaN:B[j*on+map[i]];Q[f]=A;}
    const g=(A,fill)=>{const B=new Float64Array(nn);for(let i=0;i<nn;i++)B[i]=map[i]<0?fill:A[i];return B;};
    const full=this.fullVals();
    this.acc={t0:a.t0,dur:a.dur,s:g(a.s,0),q:g(a.q,0),mn:g(a.mn,Infinity),mx:g(a.mx,-Infinity)};
-   this.ring=R;this.per=Q;this.recKeys=nk;this.chIndex=new Map(nk.map((k,i)=>[k,i]));this.opts.watch=nk.slice();
+   this.ring=R;this.per=Q;this.recKeys=nk;this.chIndex=new Map(nk.map((k,i)=>[k,i]));if(Array.isArray(this.opts.watch))this.opts.watch=nk.slice();else this.watchMore=nk.slice();
    this.vals=Float64Array.from(nk,k=>full[this.allIndex.get(k)]);this.prevVals=pv?Float64Array.from(map,(m,i)=>m<0?this.vals[i]:pv[m]):null;this.cvW=null;
    return add;
   }
@@ -1671,6 +1684,7 @@
    if(pv){const h=t-this.prevT;if(h>0){const s=a.s,q=a.q;for(let i=0;i<nch;i++){const y0=pv[i],y1=v[i];s[i]+=h*(y0+y1)/2;q[i]+=h*(y0*y0+y0*y1+y1*y1)/3;}a.dur+=h;}}
    for(let i=0;i<nch;i++){const y=v[i];if(y<mn[i])mn[i]=y;if(y>mx[i])mx[i]=y;}
    if(!pv)pv=this.prevVals=new Float64Array(nch);pv.set(v);this.prevT=t;
+   if(this.tap)this.tap();   // 5.0: the recorder of a study folder (study.js Recorder) takes the row of this point
   }
   closePeriod(){
    const a=this.acc,p=this.per,nch=p.nch;if(a.dur<=0)return;

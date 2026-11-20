@@ -4,7 +4,7 @@
 // (shared with the "Σενάρια" panel of the app, 3.14): run, export, tutorial, tutorials, channels, and the sessions of 3.16.
 const path=require('path');const W=path.resolve(__dirname,'../web/studio');
 global.window=globalThis;global.Parts=require(W+'/parts.js');global.Expr=require(W+'/expr.js');global.StepCheck=require(W+'/stepcheck.js');
-global.MNA=require(W+'/mna.js');require(W+'/tutorials.js');global.Metrics=require(W+'/metrics.js');
+global.MNA=require(W+'/mna.js');require(W+'/tutorials.js');global.Study=require(W+'/study.js');global.Metrics=require(W+'/metrics.js');
 const Scenario=require(W+'/scenario.js');
 
 async function answer(q){

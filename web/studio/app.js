@@ -36,7 +36,7 @@ function buildSim(fresh){
   else notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');editor.setDiag(null);}
  refreshControls();renderChannels();updateClock();renderProps();syncStepMode();scheduleStepCheck();
 }
-function lineCtx(){return {editor,api,changed:()=>{}};}
+function lineCtx(){return {editor,api,changed:()=>{},study:()=>SFOLD.path||null};}
 function play(keep){if(!keep)S.stepTo=0;if(!S.sim||S.error)return;if(REC.set.auto&&!REC.on&&S.sim.t===0&&scope.channels().length)recToggle();if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;requestAnimationFrame(loop);}
 function pause(){if(window.Live?.active)Live.stop();S.stepTo=0;S.running=false;if(REC.on)recFlush();scope.running=false;$('#play')?.classList.remove('running');if($('#play'))$('#play').innerHTML='▶ Προσομοίωση';draw(true);}
 function reset(){pause();buildSim(true);scope.cfg.frozen=null;draw(true);}
@@ -86,6 +86,7 @@ function renderRecPanel(){const P=$('#rec-panel');if(!P||P.hidden)return;const e
   <div class="rp-row"><label><input type="checkbox" id="rp-auto" ${REC.set.auto?'checked':''}> πάντα καταγραφή (ξεκινά μόνη της σε κάθε ▶ από την αρχή)</label></div>
   <div class="rp-row"><b>Καταγραφές:</b><button id="rp-view" ${REC.name?'':'disabled'} title="Η καταγραφή αυτής της προσομοίωσης σε παράθυρο προβολής (διαβάζει μόνο ό,τι σχεδιάζει)">Προβολή της τρέχουσας</button><button id="rp-list" title="Οι καταγραφές του προσωρινού φακέλου και του φακέλου σου: άνοιγμα ή συμπίεση (4.12)">Παλαιότερες…</button></div><div id="rp-items"></div>
   <div class="rp-row small">${d&&!d.error?`ελεύθερα ${eng(d.free,'B',3)} στο ${esc(d.folder)}`:d?.error?'<span class="bad">'+esc(d.error)+'</span>':''}${e?` · ≈ ${eng(e.rate,'B',3)} ανά δευτερόλεπτο προσομοίωσης${d&&!d.error&&e.rate>0?` (χωρούν ≈ ${fmtDur(d.free/e.rate)} προσομοίωσης)`:''}`:''}${REC.err?' · <span class="bad">'+esc(REC.err)+'</span>':''}</div>`;
+ P.insertAdjacentHTML('beforeend','<div id="study-box" class="rp-study"></div>');renderStudy();   // 5.0: the study folder
  P.querySelectorAll('[name="rp-dest"]').forEach(r=>r.onchange=()=>{if(r.value==='dir'&&!$('#rp-dir').value.trim()){REC.set.dest='dir';renderRecPanel();return;}recSettings({dest:r.value,...(r.value==='dir'?{dir:$('#rp-dir').value.trim(),create:$('#rp-create').checked}:{})});});
  $('#rp-save').onclick=()=>recSettings({dir:$('#rp-dir').value.trim(),dest:'dir',create:$('#rp-create').checked});
  $('#rp-auto').onchange=e=>recSettings({auto:e.target.checked});
@@ -117,6 +118,50 @@ async function recFlush(){if(!REC.on)return;REC.pend+=recCollect();if(REC.busy)r
  try{const r=await (await fetch('/api/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'append',name:REC.name,rows:body})})).json();
   if(r.error)throw new Error(r.error);REC.bytes=r.bytes;if(r.full){REC.on=false;notice('Η καταγραφή έφτασε τα 4 GB και σταμάτησε.','info');}}
  catch(e){REC.on=false;notice('Καταγραφή σε αρχείο: '+esc(e.message),'error');}finally{REC.busy=false;done();renderRec();}}
+// 5.0 (ROADMAP §91, THEORY §8ΩΕ, decision 344): the study folder. «▶ στον φάκελο» runs the circuit from t = 0 to the end
+// time in a worker of its own (study_worker.js) and writes into the folder every channel (or those chosen) at every
+// recorded point, the project, the events, the log, the summary and, when asked, the netlist (engine/studyfolder.py).
+// The viewer (viewer/) opens the run and reads it again while it is written; the page keeps its own simulation and scope.
+const SFOLD={path:'',set:null,w:null,run:null,runPath:'',status:'',t:0,rows:0,bytes:0,err:null};
+async function studySettings(upd){try{const r=await (await fetch('/api/study',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'settings',...(upd||{})})})).json();if(r.error)throw new Error(r.error);
+  SFOLD.set=r;SFOLD.path=r.dir||'';SFOLD.err=null;}catch(e){SFOLD.err=e.message;}renderStudy();}
+function studyEstimate(){const s=S.sim;if(!s||!SFOLD.set)return null;const mode=SFOLD.set.mode,n=mode==='sim'?s.recKeys.length:mode==='scope'?scope.channels().length:s.keys.length,
+  h=s.var?(s.hv||s.h):s.h,dt=SFOLD.set.dt||0,tEnd=S.stopT>0?S.stopT:0,rows=tEnd?Math.ceil(tEnd/Math.max(h,dt))+1:0,bw=SFOLD.set.dtype==='float32'?4:8;return {n,rows,bytes:rows*(n+1)*bw};}
+function renderStudy(){const box=$('#study-box');if(!box)return;const st=SFOLD.set,e=studyEstimate();
+ if(!st){box.innerHTML='<small class="muted">Ο φάκελος μελέτης χρειάζεται τον server της εφαρμογής (python run.py).</small>'+(SFOLD.err?' <small class="bad">'+esc(SFOLD.err)+'</small>':'');return;}
+ const o=(v,l,c)=>`<option value="${v}" ${c?'selected':''}>${l}</option>`;
+ box.innerHTML=`<div class="rp-row"><b>Φάκελος μελέτης:</b><input id="st-dir" placeholder="πλήρης διαδρομή, π.χ. D:\\Μελέτες\\γραμμή" value="${esc(SFOLD.path)}" list="st-recent"><datalist id="st-recent">${(st.recent||[]).map(x=>`<option value="${esc(x)}">`).join('')}</datalist><label><input type="checkbox" id="st-create"> δημιουργία</label><button id="st-save">Ορισμός</button>${SFOLD.path?'<button id="st-clear" title="Χωρίς φάκελο μελέτης">✕</button>':''}</div>
+  <div class="rp-row"><label>Κανάλια <select id="st-mode">${o('all','όλα',st.mode==='all')}${o('sim','όσα καταγράφει η προσομοίωση',st.mode==='sim')}${o('scope','μόνο του scope',st.mode==='scope')}</select></label>
+   <label>Κάθε <select id="st-dt">${[0,1e-6,1e-5,1e-4,1e-3].map(v=>o(v,v?eng(v,'s'):'βήμα',+st.dt===v)).join('')}</select></label>
+   <label>Ακρίβεια <select id="st-dtype">${o('float64','float64 (όπως ο λύτης)',st.dtype!=='float32')}${o('float32','float32 (μισό μέγεθος)',st.dtype==='float32')}</select></label>
+   <label title="Το netlist όπως το βλέπει ο λύτης (κόμβοι, στοιχεία, μπλοκ, μοντέλα γραμμής), σε JSON και σε κείμενο"><input type="checkbox" id="st-net" ${st.netlist?'checked':''}> netlist</label>
+   <label title="Τα παλαιότερα τρεξίματα χωρίς ετικέτα σβήνονται όταν ξεκινά νέο">κρατά <input id="st-keep" type="number" min="1" max="1000" value="${st.keep}" style="width:4.5em"> τρεξίματα</label></div>
+  <div class="rp-row small">${e?`≈ ${e.n} κανάλια × ${e.rows||'—'} γραμμές${e.bytes?' = '+eng(e.bytes,'B',3):''}${S.stopT>0?'':' · <span class="bad">δώσε διάρκεια</span>'}`:''}${SFOLD.path?'':' · <span class="muted">χωρίς φάκελο: ~/.pcl/studies/&lt;τίτλος&gt;</span>'}
+   ${SFOLD.run?` · τρέξιμο ${esc(SFOLD.run)}: ${esc(SFOLD.status)} t = ${eng(SFOLD.t,'s',4)}, ${SFOLD.rows} γραμμές${SFOLD.bytes?', '+eng(SFOLD.bytes,'B',3):''} <button id="st-view">Εργαλείο προβολής</button>`:''}${SFOLD.err?' · <span class="bad">'+esc(SFOLD.err)+'</span>':''}</div>`;
+ const g=id=>box.querySelector(id),upd=k=>v=>studySettings({[k]:v});
+ g('#st-save').onclick=()=>{const v=g('#st-dir').value.trim();studySettings({dir:v||null,create:g('#st-create').checked});};
+ if(g('#st-clear'))g('#st-clear').onclick=()=>studySettings({dir:null});
+ g('#st-mode').onchange=e=>upd('mode')(e.target.value);g('#st-dt').onchange=e=>upd('dt')(+e.target.value);g('#st-dtype').onchange=e=>upd('dtype')(e.target.value);
+ g('#st-net').onchange=e=>upd('netlist')(e.target.checked);g('#st-keep').onchange=e=>{const v=Math.round(+e.target.value);if(v>=1)upd('keep')(v);};
+ if(g('#st-view'))g('#st-view').onclick=()=>studyView();renderStudyBtn();}
+function renderStudyBtn(){const b=$('#study-run');if(!b)return;b.classList.toggle('on',!!SFOLD.w);b.textContent=SFOLD.w?`■ φάκελος · ${eng(SFOLD.t,'s',3)}`:'▶ στον φάκελο';}
+function studyView(){const p=SFOLD.runPath||SFOLD.path;if(p)window.open('viewer/?source='+encodeURIComponent(p)+(SFOLD.w?'&follow=1':''),'_blank');}
+async function studyRun(){if(SFOLD.w){SFOLD.w.postMessage({stop:true});return;}
+ if(!S.sim||S.error){notice('Το κύκλωμα δεν χτίζεται ακόμη.','error');return;}if(!(S.stopT>0)){notice('Δώσε «Διάρκεια»: το τρέξιμο στον φάκελο πάει από t = 0 ως εκεί.','info');return;}
+ if(!SFOLD.set)await studySettings();if(!SFOLD.set)return;
+ let path=SFOLD.path;try{const o=await (await fetch('/api/study',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'open',path:path||null,title:tutorial()?.id||'study',create:!path})})).json();if(o.error)throw new Error(o.error);path=o.path;}
+ catch(e){SFOLD.err=e.message;renderStudy();notice('Φάκελος μελέτης: '+esc(e.message),'error');return;}
+ let w;try{w=new Worker('studio/study_worker.js');}catch(e){notice('Δεν ξεκινά worker: '+esc(e.message),'error');return;}
+ Object.assign(SFOLD,{w,run:null,runPath:'',status:'ξεκινά',t:0,rows:0,bytes:0,err:null});renderStudy();
+ w.onmessage=e=>{const m=e.data;if(m.type==='begin'){SFOLD.run=m.run;SFOLD.runPath=m.path;SFOLD.status='τρέχει';notice(`Τρέξιμο στον φάκελο: ${esc(m.path)} (${m.channels} κανάλια${m.models?.length?', '+m.models.length+' μοντέλα γραμμής':''}).`,'info');setTimeout(()=>notice(''),5000);}
+  else if(m.type==='progress'){Object.assign(SFOLD,{t:m.t,rows:m.rows,bytes:m.bytes});}
+  else if(m.type==='end'){Object.assign(SFOLD,{status:m.status==='stopped'?'σταμάτησε':'τελείωσε',t:m.stats.t_end,rows:m.stats.rows,bytes:m.stats.bytes});w.terminate();SFOLD.w=null;notice(`Το τρέξιμο ${esc(m.run)} ${m.status==='stopped'?'σταμάτησε':'τελείωσε'}: ${m.stats.rows} γραμμές σε ${(m.stats.run_ms/1000).toFixed(2).replace('.',',')} s.`,'info');}
+  else if(m.type==='error'){SFOLD.status='σφάλμα';SFOLD.err=m.message;w.terminate();SFOLD.w=null;notice('Τρέξιμο στον φάκελο: '+esc(m.message),'error');}
+  renderStudy();renderStudyBtn();};
+ w.onerror=e=>{SFOLD.err=e.message||'σφάλμα στον worker';SFOLD.w=null;renderStudy();};
+ const doc=fullDoc(),t=tutorial();
+ w.postMessage({project:JSON.parse(JSON.stringify(doc)),sim:{hDiv:+$('#sim-step').value,method:$('#method').value,eventsMax:evMaxSetting()},stopT:S.stopT,title:t?.title||'',tutorial:S.tut?{id:S.tut.id,options:S.tut.options}:null,
+  study:{path,mode:SFOLD.set.mode,dtype:SFOLD.set.dtype,dt:SFOLD.set.dt,netlist:SFOLD.set.netlist,scope:scope.channels().map(c=>c.key)}});}
 // 4.8: Python on the page, only when the page itself must run a circuit with Python blocks (no worker): loaded once, and the
 // stand-ins of the blocks become the real ones with the state they carry
 async function pyPage(){if(!window.PyRT)return false;const was=PyRT.ready;if(!was)notice('Φορτώνεται η Python στη σελίδα (μία φορά)…','info');
@@ -994,8 +1039,8 @@ function propsCircuit(){const d=S.sim?.net?.diag,doc=editor.doc,so=doc.solve||{}
    <small>Μια νέα κατάσταση διακοπτών ξαναϋπολογίζει μόνο τις στήλες που αλλάζουν. Ως την 4.22 η βάση ήταν οι τελευταίοι παράγοντες, που μετά από μια μεταγωγή ανήκουν συχνά σε άλλον κανόνα ολοκλήρωσης (backward Euler) και διαφέρουν σε κάθε στήλη πηνίου ή πυκνωτή. Οι αριθμοί είναι ίδιοι bit προς bit με κάθε βάση· αλλάζει μόνο ο χρόνος.${q&&st&&st.base?` Ως τώρα: ${st.base} φορές από τη μνήμη.`:''}</small></div>
    <div class="prow"><span>Πυρήνας της λύσης (αραιός)</span><span class="pin-in">${opt('kernel',[['','Αυτόματα: WebAssembly από 4000 αγνώστους'],['js','JavaScript'],['wasm','WebAssembly']],sv('kernel'))}</span>
    <small>Η λύση εμπρός–πίσω με τους παράγοντες σε WebAssembly, με τις ίδιες πράξεις με την ίδια σειρά: ίδιοι αριθμοί bit προς bit. Χωρίς WebAssembly, JavaScript.${q?` Τώρα: ${q.kernel==='wasm'?'WebAssembly':'JavaScript'}.`:''}</small></div>
-   <div class="prow"><span>Καταγραφή καναλιών</span><span class="pin-in">${opt('rec',[['','Όλα τα κανάλια (όπως ως την 4.22)'],['watched','Μόνο όσα δείχνει το scope']],sv('rec'))}</span>
-   <small>Σε μεγάλο δίκτυο τα περισσότερα κανάλια δεν τα κοιτά κανείς, αλλά υπολογίζονται και γράφονται σε κάθε βήμα. «Μόνο όσα δείχνει το scope»: υπολογίζονται και γράφονται μόνο αυτά, με τους ίδιους αριθμούς, και το scope κρατά περισσότερα σημεία. Ένα κανάλι που προστίθεται καταγράφεται από εκείνη τη στιγμή. Οι τιμές πάνω στο σχέδιο και οι τρέχουσες τιμές δουλεύουν για κάθε κανάλι· τα στατιστικά ανά περίοδο και το ιστορικό, μόνο για όσα καταγράφονται.${S.sim&&!S.error&&S.sim.recKeys&&S.sim.recKeys!==S.sim.keys?` Τώρα: ${S.sim.recKeys.length} από ${S.sim.keys.length} κανάλια.`:''}</small></div>
+   <div class="prow"><span>Καταγραφή καναλιών</span><span class="pin-in">${opt('rec',[['',(+fullDoc().version||0)>=4?'Αυτόματα: μόνο όσα δείχνει το scope πάνω από 1000 κανάλια (5.0)':'Όλα τα κανάλια (αρχείο πριν από την 5.0)'],['all','Όλα τα κανάλια (όπως ως την 4.22)'],['watched','Μόνο όσα δείχνει το scope'],['auto','Αυτόματα: μόνο όσα δείχνει το scope πάνω από 1000 κανάλια']],sv('rec'))}</span>
+   <small>Σε μεγάλο δίκτυο τα περισσότερα κανάλια δεν τα κοιτά κανείς, αλλά υπολογίζονται και γράφονται σε κάθε βήμα. «Μόνο όσα δείχνει το scope»: υπολογίζονται και γράφονται μόνο αυτά, με τους ίδιους αριθμούς, και το scope κρατά περισσότερα σημεία. Ένα κανάλι που προστίθεται καταγράφεται από εκείνη τη στιγμή. Οι τιμές πάνω στο σχέδιο και οι τρέχουσες τιμές δουλεύουν για κάθε κανάλι· τα στατιστικά ανά περίοδο και το ιστορικό, μόνο για όσα καταγράφονται. «Αυτόματα» (η προεπιλογή των αρχείων της 5.0): όλα ως 1000 κανάλια, πάνω από εκεί μόνο όσα δείχνει το scope. Ο φάκελος μελέτης γράφει όλα τα κανάλια ό,τι κι αν διαλέξεις εδώ.${S.sim&&!S.error&&S.sim.recKeys&&S.sim.recKeys!==S.sim.keys?` Τώρα: ${S.sim.recKeys.length} από ${S.sim.keys.length} κανάλια${S.sim.recAuto?' (αυτόματα)':''}.`:''}</small></div>
    <div class="prow"><span>Αρχικοποίηση με φασιθέτες</span><span class="pin-in">${opt('initSolver',[['','Αυτόματα: πυκνός ως 400 αγνώστους, αραιός από εκεί και πάνω'],['dense','Πυκνός LU'],['sparse','Αραιός LU']],sv('initSolver'))}</span>
    <small>Όπου το κύκλωμα ξεκινά από τη μόνιμη κατάσταση με φασιθέτες (γεννήτριες, «αρχικοποίηση AC»), λύνεται ένα μιγαδικό σύστημα μία φορά. Ο πυκνός λύτης θέλει μνήμη n² και χρόνο n³· ο αραιός λύνει το ίδιο σύστημα ως πραγματικό διπλάσιου μεγέθους με μία επαναληπτική βελτίωση. Τα δύο διαφέρουν μόνο στη στρογγύλευση. «Αυτόματα»: ως 400 αγνώστους ο πυκνός, όπως ως την 4.19.2.</small></div>`,{cnt:(so.solver||so.refac)?'αλλαγμένες':''});}
  // 4.24 (THEORY §8Ι.7, decision 341): the network split in subnetworks at its lines, and multirate; a run to the end in a worker of its own
@@ -3229,7 +3274,7 @@ function boot(){
  $('#watch-btn')?.addEventListener('click',()=>Watch.show());
  $('#rec-res')?.addEventListener('change',()=>{applyRec();saveLocal();});$('#rec-file')?.addEventListener('click',recToggle);
  // 4.11: the memory of the scope (remembered), the panel of the recordings, the zoom axes
- $('#rec-opts')?.addEventListener('click',()=>{const P=$('#rec-panel');P.hidden=!P.hidden;if(!P.hidden)recSettings();});
+ $('#rec-opts')?.addEventListener('click',()=>{const P=$('#rec-panel');P.hidden=!P.hidden;if(!P.hidden){recSettings();studySettings();}});$('#study-run')?.addEventListener('click',studyRun);
  $('#zoom-axes')?.addEventListener('change',e=>{scope.cfg.zoomAxes=e.target.value;});
  // 4.17.2 (ROADMAP §63): how dense data look; the graphs in the whole window (Esc: back); the height of the box of the
  // panes (its corner) kept for the next time
@@ -3355,5 +3400,5 @@ function boot(){
 function renderTheoryLive(){if(!atTop()||document.querySelector('#theory details[open]'))return;renderTheory();}
 window.addEventListener('DOMContentLoaded',boot);
 window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,libToSub,enterSub,leaveSub,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
- renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,studyAct,get STUDY(){return STUDY;},get NV(){return NV;},studyOpen,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush,draw,closeInspector,openCtlWin}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare; 4.17.2: scope_flow
+ renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,studyAct,get STUDY(){return STUDY;},folderRun:studyRun,folderSettings:studySettings,folderView:studyView,get SFOLD(){return SFOLD;},get NV(){return NV;},studyOpen,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush,draw,closeInspector,openCtlWin}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare; 4.17.2: scope_flow
 })();

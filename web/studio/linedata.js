@@ -655,7 +655,9 @@ lr.plot(sc, [('modes', 'Zc'), ('modes', 'alpha')], preset='ieee', out='modes.pdf
   const wb=p.model==='wb'?{tol:num(p.wtol)??0.2,group:p.wgrp!=='0',fdcm:p.wfdcm||'auto',dc:p.wdc==='1',opt:p.wopt==='1',passive:p.wpas||'check',lfw:num(p.wlfw)??100,guard:p.wgd||'auto'}:{};
   if(p.model==='wb'&&p.wsrc==='emtp'){if(!p.wbtxt)throw new Error('Διάλεξε το αρχείο _WB.mod του EMTP (καρτέλα «Μοντέλο»).');Object.assign(wb,{wbmod:p.wbtxt,wbref:p.wbref||''});}
   const r=await ctx.api('line_model',{data:d,model:p.model,len:num(p.len),f:num(p.f),fmin:num(p.fmin),dec:num(p.dec),ppd:num(p.ppd),fti:num(p.fti),
-   ti:p.ti||'gm0',tiauto:p.tiauto==='1',cp:p.cp||'lumped',npi:num(p.npi)||1,nmax:num(p.nmax)||30,...wb,src});
+   ti:p.ti||'gm0',tiauto:p.tiauto==='1',cp:p.cp||'lumped',npi:num(p.npi)||1,nmax:num(p.nmax)||30,...wb,src,
+   // 5.0 (decision 344): with a study folder the server reads a model of the same key from there, or keeps the new one there
+   ...(ctx.study&&ctx.study()?{study:ctx.study(),cid:id,label:ctx.editor.comp(id).label||id}:{})});
   ctx.editor.setParams(id,{mdl:JSON.stringify(r.mdl)});ctx.changed();return r;}
  // every line part whose model is missing or old: computed again (for a run, or after a change of the length)
  async function refresh(ctx,comps){const need=comps.filter(c=>c.type==='TLM'&&P.tlmModel({...P.defaults('TLM'),...c.params}).need&&(()=>{try{JSON.parse(c.params?.data??P.defaults('TLM').data);return true;}catch(e){return false;}})());

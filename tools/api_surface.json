@@ -1,5 +1,5 @@
 {
- "version": "4.24",
+ "version": "5.0",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -25,7 +25,8 @@
    "pcl.se.",
    "pcl.harmonic.",
    "pcl.unbalanced.",
-   "pcl.dcgrid."
+   "pcl.dcgrid.",
+   "pcl.results."
   ],
   "cli": [
    "workbench",
@@ -188,7 +189,8 @@
      "save_state",
      "resume",
      "events",
-     "hmin"
+     "hmin",
+     "folder"
     ],
     "since": "3.18"
    },
@@ -4153,6 +4155,67 @@
     ],
     "since": "4.19.1"
    },
+   "pcl.results.Source": {
+    "params": [
+     "path"
+    ],
+    "since": "5.0"
+   },
+   "pcl.results.Source.events": {
+    "params": [],
+    "since": "5.0"
+   },
+   "pcl.results.Source.range": {
+    "params": [
+     "t0",
+     "t1",
+     "keys",
+     "n"
+    ],
+    "since": "5.0"
+   },
+   "pcl.results.Source.read": {
+    "params": [
+     "keys",
+     "t0",
+     "t1"
+    ],
+    "since": "5.0"
+   },
+   "pcl.results.Source.to_csv": {
+    "params": [
+     "path",
+     "keys",
+     "t0",
+     "t1",
+     "sep"
+    ],
+    "since": "5.0"
+   },
+   "pcl.results.diff": {
+    "params": [
+     "a",
+     "ka",
+     "b",
+     "kb",
+     "t0",
+     "t1",
+     "n"
+    ],
+    "since": "5.0"
+   },
+   "pcl.results.open": {
+    "params": [
+     "path"
+    ],
+    "since": "5.0"
+   },
+   "pcl.results.runs": {
+    "params": [
+     "study"
+    ],
+    "since": "5.0"
+   },
    "pcl.rms.Classical": {
     "params": [
      "names",
@@ -5699,6 +5762,14 @@
    "/api/studio_math": {
     "params": [],
     "since": "3.18"
+   },
+   "/api/study": {
+    "params": [],
+    "since": "5.0"
+   },
+   "/api/study_data": {
+    "params": [],
+    "since": "5.0"
    },
    "/api/sweep": {
     "params": [],

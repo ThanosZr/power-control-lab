@@ -245,6 +245,14 @@ const {chromium}=require('playwright');
  // sparse solver and the sparse phasor start, the record buffers sized by memory, a steady start, the two new settings in the
  // panel; and the 1354-bus case in the list of the studies
  await p.evaluate(()=>window.PCL.loadTutorial('big_grid',{k:'8',ev:'none'}));await p.waitForTimeout(1500);
+ // 5.0 (decision 343.4): a file of version 4 records only the channels of the scope over 1000 («Αυτόματα»), with the
+ // buffers of before (20000 points and more); the buffers sized by memory are those of «Όλα τα κανάλια»
+ // (the scope adds its channels after the build: the record stays within the memory of the scope, and a change to «Όλα τα
+ // κανάλια» takes effect)
+ const bgA=await p.evaluate(()=>{const s=window.PCL.S.sim;return {auto:!!s.recAuto,rec:s.recKeys.length,keys:s.keys.length,cap:s.ring.cap,mem:+s.opts.mem||0,note:s.memNote||''};});
+ ok(bgA.auto&&bgA.keys>4000&&bgA.rec>0&&bgA.rec<50&&bgA.cap>=20000&&bgA.note===''&&bgA.mem>0&&bgA.cap*(4*bgA.rec+9)<=bgA.mem*1048576,
+  'big network: «Αυτόματα» records '+bgA.rec+' of '+bgA.keys+' channels, '+bgA.cap+' points each in '+bgA.mem+' MB');
+ await p.evaluate(()=>{window.PCL.editor.setSolve({rec:'all'});window.PCL.reset();});await p.waitForTimeout(1500);   // a fresh start, as when the tutorial opens
  const bg0=await p.evaluate(()=>{const s=window.PCL.S.sim,q=s.solverInfo();return {n:q.n,kind:q.kind,keys:s.keys.length,init:s.initSolver,cap:s.ring.cap,per:s.per.cap,err:window.PCL.S.error||null,note:s.memNote||''};});
  ok(!bg0.err&&bg0.n===564&&bg0.kind==='sparse'&&bg0.init==='sparse'&&bg0.keys>4000&&bg0.cap<20000&&bg0.cap>=500&&/κανάλια/.test(bg0.note),
   'big network: the 8 × 8 mesh, '+bg0.n+' unknowns, sparse solver and sparse start, '+bg0.keys+' channels with '+bg0.cap+' points each');

@@ -18,6 +18,28 @@
  const MNA=root.MNA||(typeof require!=='undefined'?require('./mna.js'):null);
  const Metrics=root.Metrics||(typeof require!=='undefined'?require('./metrics.js'):null);
  const tut=()=>root.Tutorials||null;
+ const Study=()=>root.Study||(typeof require!=='undefined'?require('./study.js'):null);
+
+ // 5.0 (ROADMAP §91, THEORY §8ΩΕ): a run into a study folder, from Node (pcl Project.run(folder=…)): Python made the run
+ // folder (engine/studyfolder.py begin_run) and sends {dir, mode, dtype, dt, netlist, models}; here the channels, the
+ // summary, the netlist when asked, every recorded row (data.f64 or data.f32, written as the buffer fills), the events and
+ // the messages go into it. Python ends the run (end_run) with the statistics this returns.
+ function folderStart(s,F,pr,scopeKeys){if(typeof require!=='function')throw new Error('Ο φάκελος μελέτης γράφεται από την Python (Node) ή από τη σελίδα με τον server.');
+  const fs=require('fs'),path=require('path'),St=Study(),dir=String(F.dir||'');if(!dir||!fs.existsSync(path.join(dir,'run.json')))throw new Error('Λείπει ο φάκελος του τρεξίματος.');
+  const keys=St.keysFor(s,F.mode||'all',scopeKeys),o={dtype:F.dtype,dt:F.dt},di=St.dataInfo(keys,o),refs={};for(const m of F.models||[])refs[m.cid]={hash:m.hash,dir:m.dir};
+  const put=(n,x)=>fs.writeFileSync(path.join(dir,n),typeof x==='string'?x:JSON.stringify(x,null,n==='netlist.json'?0:1));
+  {const rj=path.join(dir,'run.json'),j=JSON.parse(fs.readFileSync(rj,'utf8'));j.data={...di,mode:F.mode||'all'};const tmp=rj+'.tmp'+process.pid;fs.writeFileSync(tmp,JSON.stringify(j,null,1));fs.renameSync(tmp,rj);}
+  put('channels.json',St.channels(s,keys));put('summary.json',St.summary(s));
+  if(F.netlist){const nl=St.netlist(s,refs);put('netlist.json',nl);put('netlist.txt',St.netlistText(nl,F.title||''));}
+  const lines=(n,rows)=>{if(rows.length)fs.appendFileSync(path.join(dir,n),rows.map(r=>JSON.stringify(r)).join('\n')+'\n');};
+  const si=s.solverInfo();lines('log.jsonl',[{level:'info',msg:si.proposal?.text||''},...(s.net.warnings||[]).map(w=>({level:'warn',msg:String(w)}))].filter(x=>x.msg));
+  const fd=fs.openSync(path.join(dir,di.file),'a');let bytes=0;
+  const R=new St.Recorder(s,keys,o);const flush=()=>{const A=R.take();if(A){fs.writeSync(fd,Buffer.from(A.buffer,A.byteOffset,A.byteLength));bytes+=A.byteLength;}lines('events.jsonl',R.events());};
+  const tap=s.tap;s.tap=()=>{tap();if(R.out.length)flush();};   // a full buffer goes to the file at once (the run is synchronous)
+  R.push();return {R,fd,fs,flush,lines,keys,di,get bytes(){return bytes;}};}
+ function folderEnd(f,s){f.flush();f.R.stop();f.fs.closeSync(f.fd);
+  f.lines('log.jsonl',(s.diagnostics?s.diagnostics():[]).map(n=>({level:n.sev||'info',msg:String(n.msg||n.key||''),t:n.t,n:n.n})));
+  return {rows:f.R.rows,bytes:f.bytes,channels:f.keys.length,data:f.di};}
 
  // default channels: the project's scope, else voltage and current of every element
  function defaultKeys(s,pr){const sc=(pr.scope&&pr.scope.cfg)||null,keys=[];
@@ -53,6 +75,7 @@
   const push=()=>{if(s.t<from-1e-15)return;const v=s.vals;t.push(s.t);for(let j=0;j<idx.length;j++)Y[j].push(v[idx[j]]);};
   push(); // t = 0 (recorded by the constructor)
   const rec=s.recordNow.bind(s);s.recordNow=function(){rec();push();};
+  const fol=q.folder?folderStart(s,q.folder,pr,defaultKeys(s,pr)):null;   // 5.0: the study folder
   if(q.check!==false)s.stepCheck(); // the step check (3.13): its messages come back with the results
   const tEnd=+q.t_end;if(!(tEnd>0))throw new Error('Η διάρκεια t_end πρέπει να είναι > 0.');
   const w0=Date.now(),limit=+q.wall_s||0;
@@ -66,6 +89,7 @@
     steps:s.steps,rejected:s.nRej||0,t_end:s.t,points:t.length,wall_s:(Date.now()-w0)/1000,warnings:s.net.warnings,
     ...(s.solverInfo?{solver:(q=>({kind:q.kind,refac:q.refac,n:q.n,blocks:q.blocks,asProposed:q.asProposed,...q.stats}))(s.solverInfo())}:{})},   // 4.19: the linear solver of the run and its counts
    measure:meas,diag:s.diagnostics().map(d=>({sev:d.sev,grp:d.grp,id:d.id||null,t:d.t,n:d.n,msg:d.msg,fix:d.fix||''}))};
+  if(fol)out.folder=folderEnd(fol,s);
   // 3.19: the event log, when asked (events: true or a list of kinds)
   if(q.events){const E=s.events(),kinds=Array.isArray(q.events)?new Set(q.events):null;out.events={list:kinds?E.list.filter(e=>kinds.has(e.kind)):E.list,n:E.n,kinds:E.kinds,max:E.max};}
   // 4.8: the weights of network blocks at the end (e.g. ['C1/NN1']), as the text of their parameter (the façade's offline training)

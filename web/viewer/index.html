@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Εργαλείο προβολής · Power &amp; Control Lab</title>
+<link rel="stylesheet" href="viewer.css">
+<script src="../studio/parts.js" defer></script><script src="../studio/plotcore.js" defer></script><script src="viewer.js" defer></script>
+</head>
+<body>
+<header class="vw-head">
+ <b>Εργαλείο προβολής</b>
+ <span class="vw-src"><input id="vw-path" list="vw-recent" placeholder="φάκελος μελέτης, τρέξιμο, <όνομα>m.m του EMTP, .inf του PSCAD ή CSV (πλήρης διαδρομή)"><datalist id="vw-recent"></datalist><button id="vw-open">Άνοιγμα</button></span>
+ <span class="vw-tools"><button id="vw-refresh" title="Ξαναδιαβάζει τα αρχεία (και ό,τι γράφτηκε από την τελευταία φορά)">↻ Ανανέωση</button><label title="Ανανέωση κάθε δευτερόλεπτο όσο ένα τρέξιμο γράφεται· η όψη ακολουθεί το τέλος του"><input type="checkbox" id="vw-follow"> ακολούθηση</label>
+  <button id="vw-back" title="Το προηγούμενο ζουμ">↶</button><button id="vw-all" title="Όλο το τρέξιμο">Όλο</button><button id="vw-pane" title="Ένα ακόμη παράθυρο γραφήματος">+ παράθυρο</button><button id="vw-diff" title="Δύο επιλεγμένα σήματα: η διαφορά τους A − B στους χρόνους του A, σε πλήρη ανάλυση">A − B</button><button id="vw-csv" title="Τα ορατά σήματα του ενεργού παραθύρου σε CSV">CSV</button></span>
+</header>
+<main class="vw-main">
+ <aside class="vw-side">
+  <div id="vw-sources"></div>
+  <input id="vw-search" placeholder="αναζήτηση σημάτων (π.χ. «ρεύμα L1», «v_o»)">
+  <div id="vw-tree"></div>
+ </aside>
+ <section class="vw-plots" id="vw-plots"></section>
+</main>
+<footer class="vw-foot" id="vw-status">Άνοιξε έναν φάκελο μελέτης ή ένα αρχείο αποτελεσμάτων.</footer>
+</body>
+</html>

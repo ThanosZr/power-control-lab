@@ -9,7 +9,7 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import BoundedSemaphore, Timer
 import traceback
-from urllib.parse import urlsplit, parse_qs
+from urllib.parse import urlsplit, parse_qs, unquote
 import webbrowser
 
 from engine import __version__
@@ -54,10 +54,28 @@ ACTIONS['template_solve']=template_solve
 # 4.4: overhead line constants and the CP / FD line models (pcl/lineconst.py) for the part 'TLM'
 def line_model(data):
     from pcl import lineconst
+    # 5.0 (decision 344): with a study folder, a model already fitted from the same key is read from there, and a new one
+    # is kept there (engine/studyfolder.py, models/lines/<label>_<hash>)
+    study=data.pop('study',None)
+    study=study if isinstance(study,str) and study else None
+    if study:
+        from engine import studyfolder
+        hit=studyfolder.lookup_line_model(study,data.get('src'))
+        if hit:
+            return hit
     try:
-        return lineconst.api(data)
+        r=lineconst.api(data)
     except lineconst.LineError as e:
         raise InputError(str(e)) from e
+    if study and isinstance(r,dict) and isinstance(r.get('mdl'),dict) and r['mdl'].get('src'):
+        from engine import studyfolder
+        try:
+            kept=studyfolder.store_line_model(studyfolder._study_dir(study),{'cid':data.get('cid'),'label':data.get('label') or data.get('cid'),
+                'src':r['mdl']['src'],'data':json.dumps(data.get('data')) if not isinstance(data.get('data'),str) else data.get('data'),'len':data.get('len'),'f':data.get('f')},r)
+            r={**r,'kept':kept}
+        except (ValueError,OSError) as e:
+            r={**r,'kept_error':str(e)}
+    return r
 ACTIONS['line_model']=line_model
 # 4.11: every parameter against frequency, and the exports of the «Δεδομένα γραμμής» window (pcl/linereport.py)
 def line_action(name):
@@ -254,6 +272,25 @@ class Handler(BaseHTTPRequestHandler):
             if self.headers.get_content_type()!='application/json':
                 self.send(415,{'error':'Απαιτείται application/json.'}); return
             self.addon_post(action); return
+        if action in ('study','study_data'):  # 5.0: the study folder (engine/studyfolder.py), only for this computer
+            if not self.local():
+                self.send(403,{'error':'Μόνο από αυτόν τον υπολογιστή.'}); return
+            try:
+                from engine import studyfolder
+                if action=='study_data':
+                    if self.headers.get_content_type()!='application/octet-stream':
+                        self.send(415,{'error':'Απαιτείται application/octet-stream.'}); return
+                    size=int(self.headers.get('Content-Length','0'))
+                    if not 0<size<=studyfolder.MAX_APPEND:
+                        raise InputError('Μη έγκυρο μέγεθος δεδομένων.')
+                    self.send(200,studyfolder.append(unquote(self.headers.get('X-PCL-Study','')),self.headers.get('X-PCL-Run',''),self.rfile.read(size)))
+                    return
+                if self.headers.get_content_type()!='application/json':
+                    self.send(415,{'error':'Απαιτείται application/json.'}); return
+                self.send(200,studyfolder.handle(self.body(studyfolder.MAX_PUT+65536)))
+            except (InputError,ValueError,TypeError,OSError) as e:
+                self.send(400,{'error':str(e) or 'Μη έγκυρα δεδομένα.'})
+            return
         if action=='record':               # 4.8: recording a long run to a file, only for this computer
             if not self.local():
                 self.send(403,{'error':'Μόνο από αυτόν τον υπολογιστή.'}); return

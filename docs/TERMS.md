@@ -388,6 +388,11 @@
 | impedance-grounded neutral | ουδέτερος γειωμένος μέσω εμπέδησης (R_n + jX_n) |
 | isolated (ungrounded) neutral | μονωμένος ουδέτερος |
 | Petersen coil, arc-suppression coil | πηνίο Petersen (πηνίο σβέσης τόξου) |
+| study folder, project folder (EMTP, PSCAD) | φάκελος μελέτης (5.0) |
+| run (of a simulation) | τρέξιμο |
+| viewer (ScopeView, PSOUT Reader, Livewire) | εργαλείο προβολής (5.0) |
+| netlist | netlist (ο πίνακας των στοιχείων και των κόμβων όπως τον βλέπει ο λύτης) |
+| digital twin | ψηφιακό δίδυμο |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 

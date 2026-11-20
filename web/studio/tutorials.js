@@ -6,7 +6,7 @@
  const J=(id,x,y)=>C(id,'JUNC',x,y,{},{label:''});
  const pin=s=>{const [c,p]=s.split(':');return {c,p:p||'j'};};
  // version 3 (3.18): wire names join (Bus.namesJoin); no tutorial has one name on two different nets
- const project=(comps,wires,extra={})=>({version:3,components:comps,wires:wires.map((w,i)=>({id:'w'+(i+1),a:pin(w[0]),b:pin(w[1]),pts:w[2]||[],...(w[3]||{})})),...extra});
+ const project=(comps,wires,extra={})=>({version:4,components:comps,wires:wires.map((w,i)=>({id:'w'+(i+1),a:pin(w[0]),b:pin(w[1]),pts:w[2]||[],...(w[3]||{})})),...extra});
  const gnd=(x,y)=>C('G1','GND',x,y,{},{label:'0 V'});
  // PE2 PI design (same as the bidirectional tutorial app): crossover fs/20, PM 60°, ZOH delay Ts
  function piGains(L,vhi,fs,fcRatio=.05,pm=60){const wc=2*Math.PI*fcRatio*fs,phid=wc/fs;let th=Math.PI/2-pm*Math.PI/180-phid;if(th<=0)th=5*Math.PI/180;const wz=wc*Math.tan(th),kp=wc*L*Math.cos(th)/vhi;return {kp,ki:kp*wz,fc:wc/2/Math.PI};}

@@ -58,6 +58,7 @@ const {chromium}=require('playwright');const fs=require('fs');const OUT=process.
  R.group=await p.evaluate(()=>{const E=PCL.editor,x=E.doc.components.find(c=>c.type==='SUB');return {ports:(x?.params.$ports||[]).map(q=>q.name+':'+(q.w||1)),buspin:document.querySelectorAll('.pin.buspin').length,err:PCL.S.error};});
  R.group.run=await p.evaluate(()=>{PCL.reset();PCL.S.sim.run(0.04);const k=[...PCL.S.sim.chIndex.keys()].find(k=>/^I:X\d+\/R/.test(k));const q=PCL.S.sim.lastPeriod(k);return {k,amp:q?(q.max-q.min)/2:null};});
  await p.screenshot({path:OUT+'/bus_scratch.png'});
+ // (5.0: the drawing above comes from a tutorial, a file of version 4; the names join from version 3 on, as before)
  // 7. an older file (no version) where «v» labels two different nodes: it opens the same, the second becomes «v·2»
  const oldFile=OUT+'/bus_old.pcl.json';fs.writeFileSync(oldFile,JSON.stringify({components:[{id:'V1',type:'VDC',x:100,y:200,params:{V:10}},{id:'R1',type:'R',x:200,y:160,params:{R:10}},
   {id:'V2',type:'VDC',x:300,y:200,params:{V:4}},{id:'R2',type:'R',x:400,y:160,params:{R:2}},{id:'G1',type:'GND',x:250,y:300,params:{}}],
@@ -82,7 +83,7 @@ const {chromium}=require('playwright');const fs=require('fs');const OUT=process.
   &&R.liveRef.same&&near(R.liveRef.id,6,.1)
   &&R.inside.pfx==='XL/'&&R.inside.bus.split(',').includes('3')
   &&R.scratch.before-R.scratch.after===3&&R.scratch.pins==='abc,n'&&!R.scratch.run.err&&near(R.scratch.run.amp,100/10,.01)&&R.scratch.bus>=1
-  &&R.named.link===2&&R.named.mark===2&&R.named.version===3&&near(R.named.run.amp,10,.01)
+  &&R.named.link===2&&R.named.mark===2&&R.named.version===4&&near(R.named.run.amp,10,.01)
   &&R.old.version===3&&R.old.names.join()==='v,v·2'&&/v·2/.test(R.old.notice)&&!R.old.err&&near(R.old.i[0],1,1e-9)&&near(R.old.i[1],2,1e-9)
   &&/πλάτος 2/.test(R.mismatch.err)&&/πλάτος 2/.test(R.mismatch.notice)
   &&R.group.ports.includes('e1:3')&&R.group.buspin>=2&&!R.group.err&&near(R.group.run.amp,10,.01)

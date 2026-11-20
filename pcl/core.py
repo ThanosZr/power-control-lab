@@ -550,7 +550,7 @@ class Project:
 
     def run(self, t_end=None, solver='browser', channels=None, hdiv=None, method=None, step=None, rtol=None, hmax=None,
             t_from=0.0, max_points=200000, measure=None, timeout=None, scipy_method='Radau', waveforms=True, save_state=None, resume=None,
-            events=False, hmin=None):
+            events=False, hmin=None, folder=None):
         """One simulation. t_end: duration in s (default the tutorial's stopT). channels: keys as in the app's scope
         (default the project's scope, else V and I of every element). step='var' for the variable step (§40).
         4.19.1: hmin = the smallest step of the variable step in s (e.g. '1n'; default «Αυτόματα», the larger of h/1000 and
@@ -558,7 +558,12 @@ class Project:
         solver='scipy' runs engine.batch.simulate on the same netlist (method scipy_method, rtol, max step hmax in s).
         3.16: save_state='file' keeps the end state; resume='file' continues from a saved state up to the time t_end
         (the end time, not a duration), with the same numbers as one run. Browser solver only.
-        3.19: events=True (or a list of kinds, e.g. ['switch', 'cmp']) keeps the event log in Result.events (both solvers)."""
+        3.19: events=True (or a list of kinds, e.g. ['switch', 'cmp']) keeps the event log in Result.events (both solvers).
+        5.0: folder = a study folder (a path, or a dict {'path', 'mode': 'all' | 'sim' | 'scope', 'dtype': 'float64' |
+        'float32', 'dt', 'netlist': True, 'create': True, 'title'}): the run also writes there every channel (or those of
+        the mode) at every recorded point, the project, the events, the log, the summary and, when asked, the netlist,
+        and keeps the line models (engine/studyfolder.py; pcl.results reads it). Result.meta['folder'] says where.
+        Browser solver only."""
         if save_state is not None or resume is not None:
             if solver != 'browser':
                 raise PclError('Η αποθήκευση και η συνέχεια της κατάστασης γίνονται με τον λύτη του browser (solver="browser").')
@@ -573,15 +578,54 @@ class Project:
         keys = list(channels) if channels else None
         if meas and keys is not None:
             keys += [m['key'] for m in meas if m['key'] not in keys]
+        if folder is not None and solver != 'browser':
+            raise PclError('Ο φάκελος μελέτης γράφεται με τον λύτη του browser (solver="browser").')
         if solver == 'browser':
             hd, mt, st = self._settings(hdiv, method, step, rtol, hmax, hmin)
-            out = _node({'action': 'run', 'project': self.data, 't_end': t_end, 'channels': keys, 'hdiv': hd, 'method': mt,
-                         'step': st, 'from': t_from, 'max_points': max_points, 'measure': meas, 'waveforms': bool(waveforms),
-                         'events': events or False}, timeout=timeout)
-            return self._result(out)
+            q = {'action': 'run', 'project': self.data, 't_end': t_end, 'channels': keys, 'hdiv': hd, 'method': mt,
+                 'step': st, 'from': t_from, 'max_points': max_points, 'measure': meas, 'waveforms': bool(waveforms),
+                 'events': events or False}
+            fol = self._folder_begin(folder, hd, mt, st, t_end) if folder is not None else None
+            if fol:
+                q['folder'] = fol['req']
+            try:
+                out = _node(q, timeout=timeout)
+            except Exception as e:
+                if fol:
+                    fol['sf'].end_run(fol['study'], fol['run'], 'error', None, str(e))
+                raise
+            res = self._result(out)
+            if fol:
+                fi = (out.get('meta') or {}).get('wall_s')
+                fol['sf'].end_run(fol['study'], fol['run'], 'done', {**{k: v for k, v in (out.get('folder') or {}).items() if k != 'data'},
+                                                                    't_end': out['meta'].get('t_end'), 'steps': out['meta'].get('steps'),
+                                                                    'rejected': out['meta'].get('rejected'), 'h': out['meta'].get('h'), 'run_s': fi})
+                res.meta['folder'] = {'study': fol['study'], 'run': fol['run'], 'path': fol['path']}
+            return res
         if solver == 'scipy':
             return self._run_scipy(t_end, keys, scipy_method, rtol, hmax, max_points, meas, t_from, events, timeout)
         raise PclError(f'Άγνωστος λύτης «{solver}»: browser ή scipy.')
+
+    def _folder_begin(self, folder, hd, mt, st, t_end):
+        """5.0: the run folder of a study (engine/studyfolder.py), before Node writes into it."""
+        import sys
+        root = str(Path(__file__).resolve().parent.parent)
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        from engine import studyfolder as sf
+        f = {'path': folder} if isinstance(folder, (str, Path)) else dict(folder or {})
+        path = str(Path(os.path.expanduser(str(f.get('path')))).resolve()) if f.get('path') else None
+        mode = f.get('mode') if f.get('mode') in ('all', 'sim', 'scope') else 'all'
+        dtype = 'float32' if f.get('dtype') == 'float32' else 'float64'
+        dt = float(parse_value(f.get('dt'))) if f.get('dt') else 0.0
+        st_ = sf.open_study(path, f.get('title') or self.name, bool(f.get('create', True)))
+        # the columns are known in Node (the keys of the mode): Node writes the descriptor of the data into run.json first
+        b = sf.begin_run(st_['path'], self.data, f.get('title') or self.name, 'python',
+                         {'hDiv': hd, 'method': mt, 'step': st, 'stopT': t_end},
+                         {'dtype': dtype, 'cols': 1, 'dt': dt, 'mode': mode}, None)
+        return {'sf': sf, 'study': st_['path'], 'run': b['run'], 'path': b['path'],
+                'req': {'dir': b['path'], 'mode': mode, 'dtype': dtype, 'dt': dt, 'netlist': bool(f.get('netlist')), 'models': b['models'],
+                        'title': f.get('title') or self.name}}
 
     def split(self, t_end=None, channels=None, mode='serial', groups=None, rates=None, rate_max=None, smooth=None, hdiv=None, timeout=None):
         """4.24 (THEORY §8Ι.7): the run split in subnetworks at the lines (τ ≥ h), each group of subnetworks in its own
