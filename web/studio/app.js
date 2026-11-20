@@ -285,7 +285,7 @@ function chanLabel(key){const [pre,id0,pin]=key.split(':'),vb=vecBase(id0);if(vb
  if(pre==='Y'&&c&&OUT_SYM[c.type]){const o=pin||outsOf(c)[0];return (OUT_SYM[c.type][o]||o)+'('+name+')';}
  if(/^PSI\d$/.test(pre))return 'ψ'+'₀₁₂₃₄₅₆₇₈₉'[+pre[3]]+'('+name+')';
  const pm=pre.match(/^([IV])([1-9])$/);if(pm)return (pm[1]==='I'?'i':'v')+'₀₁₂₃₄₅₆₇₈₉'[+pm[2]]+'('+name+')';if((pre==='I'||pre==='V')&&(c?.type==='KL'||c?.type==='KG'||c?.type==='SRM'||c?.type==='TL'))return (pre==='I'?'i₁':'v₁')+'('+name+')';
- const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',GS:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold',Y:c?.type==='VM'?'v':c?.type==='AM'?'i':c?.type==='SR'?'Q':'y'}[pre]||pre)+'('+name+')';}
+ const c3=c?.type==='VAC3';return ({I:c3?'i_a':'i',V:c3?'v_an':'v',P:'p',I2:'i₂',V2:'v₂',Im:'i_m',PSIm:'ψ_m',Ib:'i_b',Ic:'i_c',Vb:'v_bn',Vc:'v_cn',Vab:'v_ab',PSW:'p_sw',D:'D',G:'g',GS:'g',REF:'ref',MEAS:'μέτρ.',CAR:'c',H:'hold',Y:c?.type==='VM'?'v':c?.type==='AM'?'i':c?.type==='SR'?'Q':'y'}[pre]||pre)+'('+name+')';}
 // 4.18.1 (ζήτημα του Θάνου): where a trace comes from: the automatic name of the signal (element, pin, quantity) and its key,
 // under the free name that a tutorial or the user gave it
 function chanSrc(key){let a='';try{a=chanLabel(key);}catch(e){}return `πηγή: ${a&&a!==key?a+' · ':''}${key}`;}
@@ -357,7 +357,7 @@ function signalsFor(c,full){const t=c.type,nv=vecN(full||(S.pfx?pid(c.id):c.id))
  if(t==='TLM'){const M=P.tlmM({...P.defaults(t),...c.params}),out=[];for(let j=0;j<2*M;j++){const pin=P.tlmPin(j%M,j<M?1:2),pre=j?String(j+1):'';out.push([`V${pre}:`,`τάση ${pin} (προς γη)`],[`I${pre}:`,`ρεύμα που μπαίνει στο ${pin}`]);}return out;}
  if(t==='KL'||t==='KG'){const n=P.nPorts({...P.defaults(t),...c.params}),w=t==='KL'?'τυλίγματος':'θύρας';return Array.from({length:n},(_,k)=>[[(k?'I'+(k+1):'I')+':',`ρεύμα ${w} ${k+1} (a → b)`],[(k?'V'+(k+1):'V')+':',`τάση ${w} ${k+1}`]]).flat();}
  const base=[['I:','ρεύμα'],['V:','τάση'],['P:',['VDC','VAC','IDC'].includes(t)?'ισχύς που δίνει':'ισχύς']];if(t==='SW'||t==='SCR')base.splice(1,0,['GS:','παλμός πύλης (1 = ON)']);if(t==='SW'&&(+c.params?.Eon>0||+c.params?.Eoff>0))base.push(['PSW:','απώλειες μεταγωγής (μέση ανά T)']);
- if(t==='VAC3')return [['I:','ρεύμα φάσης a'],['Ib:','ρεύμα φάσης b'],['Ic:','ρεύμα φάσης c'],['V:','τάση v_an'],['Vb:','τάση v_bn'],['Vc:','τάση v_cn'],['Vab:','πολική τάση v_ab'],['P:','ισχύς που δίνει (3φ)']];if(t==='XFMR')return [['I:','ρεύμα πρωτεύοντος'],['V:','τάση πρωτεύοντος'],['I2:','ρεύμα δευτερεύοντος'],['V2:','τάση δευτερεύοντος'],['Im:','ρεύμα μαγνήτισης'],['P:','ισχύς']];return base;}
+ if(t==='VAC3')return [['I:','ρεύμα φάσης a'],['Ib:','ρεύμα φάσης b'],['Ic:','ρεύμα φάσης c'],['V:','τάση v_an'],['Vb:','τάση v_bn'],['Vc:','τάση v_cn'],['Vab:','πολική τάση v_ab'],['P:','ισχύς που δίνει (3φ)']];if(t==='XFMR')return [['I:','ρεύμα πρωτεύοντος'],['V:','τάση πρωτεύοντος'],['I2:','ρεύμα δευτερεύοντος'],['V2:','τάση δευτερεύοντος'],['Im:','ρεύμα μαγνήτισης'],...(c.params?.sat==='sat'?[['PSIm:','ροή μαγνήτισης (στο πρωτεύον)']]:[]),['P:','ισχύς']];if(t==='LSAT')return [...base,['PSIm:','πεπλεγμένη ροή ψ']];return base;}
 // 4.4: the signal list with a search (accents and case ignored, every word must match the group or the signal)
 const fold=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 let SIGS=[];
@@ -2211,6 +2211,24 @@ function netFaultTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.grid||!window.
  const rows=[];for(const x of ['a','b','c'])if(ref[x]>1)rows.push(['I″k φάσης '+x,ref[x],s.lastPeriod('Y:F1/I'+x)?.rms,'A']);
  if(ref.g>1||/g$/.test(m.kind))rows.push(['ρεύμα προς γη 3I₀',ref.g,s.lastPeriod('Y:F1/Ig')?.rms,'A']);
  return h+cmpRows(rows)+`<p class="muted small">Θεωρία: λύση στο πεδίο των φάσεων με Z_s = (2Z₁ + Z₀)/3, Z_m = (Z₀ − Z₁)/3 (ίδια με τους τύπους παραπάνω). Προσομοίωση: RMS της τελευταίας περιόδου.</p>`;}
+// 5.0.1 (ROADMAP §92, THEORY §8ΩΖ): the energization of a transformer with a saturable core. Per phase (the star of side 1
+// grounded: the phases do not share their flux), with R = 0: the flux the source applies, ψ(t) = ψ_r + ψ_m·(cos θ − cos(ωt + θ)),
+// reaches its largest |ψ| at ψ_r + ψ_m·(cos θ ± 1); it is shared between the reactance of the network and of the leakage up to
+// the branch, (L_δ + L_b)·i, and the core, f⁻¹(i): the current solves (L_δ + L_b)·i + f⁻¹(i) = ψ̂ on the curve of the core
+function inrushTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.xf||!window.NetLib)return '';
+ const g=NetLib.gridZ({...P.defaults('GRID3'),...m.grid}),c=NetLib.xfCore(m.xf),w=g.w,pm=Math.SQRT2*g.E/w,Ls=g.X1/w,th=(+m.th||0)*Math.PI/180;
+ const d=NetLib.xfData({...P.defaults('XF3'),...m.xf}),Pb=Math.SQRT2*d.Uw1/d.w,Ib=Math.SQRT2*d.Su/d.Uw1;
+ const inv=c?(i=>c.ch.inv(i)):(i=>i*d.Lm),Lb=c?c.Xb*c.Lb:d.Xk/2/d.w;
+ let h=`<ul class="eqs"><li>Βάσεις (μία μονάδα, πλευρά 1): ψ_b = √2·U/ω = <b>${eng(Pb,'V·s')}</b>, î_b = √2·S/U = <b>${eng(Ib,'A')}</b>· δίκτυο: ψ_m = √2·E/ω = ${fmt(pm/Pb,4)} pu, X_δ = ${eng(g.X1,'Ω')} (${fmt(g.X1/(d.Zb1),3)} pu)</li>`+
+  (c?`<li>Πυρήνας: ως το γόνατο η κλίση της X_m = ${fmt(c.ch.L0/c.Lb,4)} pu, μετά το τελευταίο σημείο ${fmt(c.ch.Lend/c.Lb,3)} pu· σκέδαση ως τον κλάδο ${fmt(c.Xb,3)} pu, άρα X_ac = <b>${fmt(c.Xb+c.ch.Lend/c.Lb,3)} pu</b></li>`:'<li>Γραμμικός πυρήνας: i = ψ/L_m, χωρίς ρεύμα ζεύξης</li>')+
+  `<li>Με R = 0 η ροή της πηγής φτάνει ψ̂ = ψ_r + ψ_m·(cos θ ± 1), θ η φάση της τάσης στη ζεύξη· το ρεύμα λύνει (L_δ + L_b)·î + f⁻¹(î) = ψ̂ (εκτίμηση: οι αντιστάσεις το μειώνουν)</li></ul>`;
+ const rows=[],few=[];
+ ['a','b','c'].forEach((x,k)=>{const tk=th-k*2*Math.PI/3,pr=(c?c.psi0[k]:0),hi=pr+pm*(Math.cos(tk)+1),lo=pr+pm*(Math.cos(tk)-1),pk=Math.abs(hi)>Math.abs(lo)?hi:lo;
+  let a=0,b=Math.abs(pk)/Ls,F=i=>(Ls+Lb)*i+inv(i)-Math.abs(pk);for(let it=0;it<200;it++){const q=(a+b)/2;if(F(q)>0)b=q;else a=q;}const i=(a+b)/2;
+  const sp=rawSeries('PSIm:T1/T'+x),si=rawSeries('Y:CB1/I'+x),mx=r=>r&&r.y.length?r.y.reduce((u,v)=>Math.max(u,Math.abs(v)),0):NaN;
+  if(c&&i>2*Ib){rows.push(['ψ̂ πυρήνα, φάση '+x,inv(i)/Pb,mx(sp)/Pb,'pu'],['î, φάση '+x,i,mx(si),'A']);}else few.push(x);});
+ if(s.t<0.04)return h+'<p class="muted small">Τρέξε τουλάχιστον δύο περιόδους για τη σύγκριση.</p>';
+ return h+(rows.length?cmpRows(rows):'')+(few.length?`<p>Φάσεις χωρίς βαθύ κορεσμό στη θεωρία (î < 2·î_b): ${few.join(', ')}· το ρεύμα τους στην προσομοίωση έρχεται κυρίως από τις άλλες φάσεις, μέσα από το τρίγωνο της πλευράς 2.</p>`:'')+`<p class="muted small">Προσομοίωση: η μεγαλύτερη |τιμή| ως τώρα. Η θεωρία αγνοεί τις αντιστάσεις (δικτύου, τυλιγμάτων, R_fe) και τη σύζευξη των φάσεων μέσα από το τρίγωνο της πλευράς 2: είναι εκτίμηση, όχι όριο. Παραμένουσα ροή ${(m.rem||[]).map(v=>fmt(v,2)).join(' / ')} pu, κρατιέται ως τη ζεύξη (THEORY §8ΩΖ).</p>`;}
 function busDqTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.L)return '';const {E,R,L,f,fc,wc,Kp,Ki,id,iq,dec,t1,t2}=m,w=2*Math.PI*f;
  const t=s.t,idr=t>=t1?id:0,iqr=t>=t2?iq:0,vd=E+R*idr-w*L*iqr,vq=R*iqr+w*L*idr,ia=s.lastPeriod('I:XL/La'),va=s.lastPeriod('V:XI/Va');
  return `<ul class="eqs"><li>Σύστημα υπό έλεγχο (plant) στο dq: L·di_d/dt = v_d − e_d − R·i_d + ωL·i_q, L·di_q/dt = v_q − e_q − R·i_q − ωL·i_d (θ = ωt − 90°, e_d = Ê = ${eng(E,'V')}, e_q = 0)</li>
@@ -3038,6 +3056,7 @@ function formulaTheory(t){
  if(t.topology==='sub_legs')return subLegsTheory();
  if(t.topology==='bus_dq')return busDqTheory();
  if(t.topology==='net_fault')return netFaultTheory();
+ if(t.topology==='xf_inrush')return inrushTheory();
  if(t.topology==='trv_terminal')return trvTerminalTheory();
  if(t.topology==='trv_slf')return trvSlfTheory();
  if(t.topology==='lightning_gis')return lightningTheory();

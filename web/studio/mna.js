@@ -242,7 +242,8 @@
     // 4.10: an arm at t = 0 as its cells' insertion states give it: with every cell bypassed (s = 0) the arm resistance only
     case 'CHB':{const r=e.row;ad(e.a,r,1,0);ad(r,e.a,1,0);ad(e.b,r,-1,0);ad(r,e.b,-1,0);ad(r,r,-e.Rarm,0);if(e.s.some(q=>q))left.add('CHB');break;}
     case 'GY':{const r=e.row,Y=e.psi;ad(e.a,r,1,0);ad(r,e.a,1,0);ad(e.b,r,-1,0);ad(r,e.b,-1,0);ad(r,e.m,-Y,0);ad(e.m,r,-Y,0);break;}
-    case 'NL':if(e.arc&&e.arc.closed){y(e.a,e.b,1/e.arc.Ron,0);break;}left.add(e.k);break;
+    case 'NL':if(e.sat&&e.sat.init==='ss'){y(e.a,e.b,0,-1/(w*e.sat.ch.L0));break;} // 5.0.1: a core as its first slope
+     if(e.arc&&e.arc.closed){y(e.a,e.b,1/e.arc.Ron,0);break;}left.add(e.k);break;
     case 'TL':{// 4.9: a distributed line at ω₀ as its exact two-port (lossless; R adds only a small start transient)
      if(e.v0){left.add('TLQ');break;} // 4.22: a line with an initial voltage starts from it, not from the steady state
      const th=w0*e.tau,y11=-1/(e.Z*Math.tan(th)),y12=1/(e.Z*Math.sin(th)),P=[[e.a1,e.b1],[e.a2,e.b2]];
@@ -263,6 +264,7 @@
   const bdf=sim.method==='BDF2'&&!sim.var&&sim.h>0,cb=Math.cos(w0*sim.h),sb=Math.sin(w0*sim.h);
   for(const e of net.els){
    if(e.k==='L'){const dr=Vr(e.a)-Vr(e.b),di=Vi(e.a)-Vi(e.b);e.i=di/(w*e.L);e.i1=bdf?(di*cb-dr*sb)/(w*e.L):e.i;}
+   else if(e.sat&&e.sat.init==='ss'){const S=e.sat,dr=Vr(e.a)-Vr(e.b),di=Vi(e.a)-Vi(e.b);S.psi=di/w;S.psi1=bdf?(di*cb-dr*sb)/w:S.psi;}
    else if(e.k==='C'){const dr=Vr(e.a)-Vr(e.b),di=Vi(e.a)-Vi(e.b);e.v=dr;e.v1=bdf?dr*cb+di*sb:dr;e.i=-w*e.C*di;}
    else if(e.k==='F'&&!e.gen&&!e.sm&&!e.srm){const N=e.N;for(let k=0;k<N;k++){const [a,b]=e.ports[k];e.psi[k]=(Vi(a)-Vi(b))/w;}e.psi1.set(e.psi);
     if(bdf)for(let k=0;k<N;k++){const [a,b]=e.ports[k];e.psi1[k]=((Vi(a)-Vi(b))*cb-(Vr(a)-Vr(b))*sb)/w;}
@@ -289,7 +291,7 @@
   // real part of the phasors (the voltage of an inductive node is not defined by the vanishing-step start of initialSolve)
   const Dr=sp?null:new Float64Array(n0*n0),Di=sp?null:new Float64Array(n0*n0),dr=new Float64Array(n0),di=new Float64Array(n0),SD=sp?new Map():null;
   const dad=sp?(r,q,v)=>{if(r<0||q<0)return;const k=r*n0+q,u=SD.get(k);if(u)u[0]+=v;else SD.set(k,[v,0]);}:(r,q,v)=>{if(r>=0&&q>=0)Dr[r*n0+q]+=v;},dy=(a,b,g)=>{dad(a,a,g);dad(b,b,g);dad(a,b,-g);dad(b,a,-g);},gs=x=>1/(1e-9*w0*x);
-  const sh=[];for(const e of net.els){if(e.k==='L')sh.push([e,-1,e.a,e.b,gs(e.L)]);else if(e.k==='F'&&!e.sm&&!e.srm){const G=e.gen?e.Gnow:e.Gam;for(let k=0;k<e.N;k++)sh.push([e,k,e.ports[k][0],e.ports[k][1],gs(1/G[k*e.N+k])]);}}
+  const sh=[];for(const e of net.els){if(e.k==='L')sh.push([e,-1,e.a,e.b,gs(e.L)]);else if(e.sat&&e.sat.init==='ss')sh.push([e,-2,e.a,e.b,gs(e.sat.ch.L0)]);else if(e.k==='F'&&!e.sm&&!e.srm){const G=e.gen?e.Gnow:e.Gam;for(let k=0;k<e.N;k++)sh.push([e,k,e.ports[k][0],e.ports[k][1],gs(1/G[k*e.N+k])]);}}
   for(let i=0;i<net.nNodes;i++)dad(i,i,GMIN);
   // 4.20.1: the power that the sources of a converter group take from the circuit in the phasor solution, ½·Re(V·I*) with I
   // into the source at a (the row current of a V element)
@@ -316,7 +318,8 @@
   const dsol=sp?csolveSp(n0,SD,dr):csolve(n0,Dr,Di,dr,di),x0=new Float64Array(n0),Xd=dsol?dsol[0]:new Float64Array(n0);
   if(!dsol)net.warnings.push('Αρχικοποίηση από ροή φορτίου: το μέρος DC δεν λύνεται· οι πηγές DC ξεκινούν από μηδέν.');
   for(let i=0;i<n0;i++)x0[i]=xr[i]+Xd[i];
-  for(const [e,k,a,b,g] of sh){if(e.gen)continue;const I=g*((a<0?0:Xd[a])-(b<0?0:Xd[b]));if(k<0){e.i+=I;e.i1=bdf?e.i1+I:e.i;}else e.i[k]+=I;}   // the DC part: the same in the step before
+  for(const [e,k,a,b,g] of sh){if(e.gen)continue;const I=g*((a<0?0:Xd[a])-(b<0?0:Xd[b]));if(k===-2){const S=e.sat,d=S.ch.L0*I;S.psi+=d;S.psi1+=d;}else if(k<0){e.i+=I;e.i1=bdf?e.i1+I:e.i;}else e.i[k]+=I;}
+  for(const e of net.els)if(e.sat&&e.sat.init==='ss'){const S=e.sat;S.i=S.ch.cur(S.psi).i-S.Ir;e.i=S.i;}   // the DC part: the same in the step before
   for(const e of net.els)if(e.k==='F'&&!e.gen&&!e.sm&&!e.srm&&e.Lm){const N=e.N;for(let k=0;k<N;k++){let s=0;for(let j=0;j<N;j++)s+=e.Lm[k*N+j]*e.i[j];if(bdf)e.psi1[k]+=s-e.psi[k];e.psi[k]=s;}if(!bdf)e.psi1.set(e.psi);}
   // a generator's stator ports: the voltage behind R_a (the phasor solution had the machine replaced by sources)
   gens.forEach((m,q)=>{for(let k=0;k<3;k++){const pn=m.F.ports[k][0];if(pn!==m.term[k])x0[pn]=xr[m.term[k]]-m.g.Ra*m.g.Zb*xr[n0+3*q+k];}});
@@ -586,6 +589,31 @@
  function saiCommit(S,v){const q=saiCur(S,v),u0=S.ug[0],u1=S.ug[1];
   S.iL0b=S.iL0;S.iL0=S.g0*(v-u0)+S.J0;S.iL1b=S.iL1;S.iL1=S.g1*(u0-u1)+S.J1;S.ic=S.gC*u0+S.JC;S.vc1=S.vc;S.vc=u0;S.v=v;S.u0=u0;S.u1=u1;S.i=q.i;S.h=0;S.ug=null;}
  const SAI_ST=['iL0','iL0b','iL1','iL1b','vc','vc1','ic','v','u0','u1','i'];
+ // 5.0.1 (ROADMAP §56, THEORY §8ΩΖ): a nonlinear inductor with the flux as its state (the core of a transformer, LSAT). Over a
+ // step ψ = base + c·v with the rule of the step (TR: base = ψ + h/2·v_prev, c = h/2; BE: base = ψ, c = h; BDF2: base =
+ // −(a₁ψ + a₂ψ′)/a₀, c = h/a₀), so the element is i(v) = f(base + c·v) − I_r, a voltage-controlled branch of the circuit's
+ // Newton with g = c·f′(ψ). I_r holds a residual flux ψ₀ with no current while the core is not excited (I_r = f(ψ₀), the DC
+ // source of the PSCAD practice) and goes to 0 linearly as the volt-seconds A = ∫|v|dt reach A_r (about one period of
+ // excitation), from the A at the start of each step; after that the core is the curve alone
+ function satSetup(S,h,mode,B){S.h=h;if(mode==='BDF2'&&B){S.base=-(B.a1*S.psi+B.a2*S.psi1)/B.a0;S.c=h/B.a0;}else if(mode==='TR'){S.c=h/2;S.base=S.psi+S.c*S.v;}else{S.base=S.psi;S.c=h;}
+  S.Ir=S.Ir0?S.Ir0*Math.max(0,1-S.A/S.Ar):0;}
+ function satCur(S,v){if(!(S.h>0))return {i:S.ch.cur(S.psi).i-S.Ir,g:1e-12};const q=S.ch.cur(S.base+S.c*v);return {i:q.i-S.Ir,g:q.g*S.c};}
+ function satCommit(S,v){const psi=S.base+S.c*v;S.A+=S.h*(Math.abs(S.v)+Math.abs(v))/2;S.psi1=S.psi;S.psi=psi;S.v=v;S.i=S.ch.cur(psi).i-S.Ir;S.h=0;}
+ const SAT_ST=['psi','psi1','v','A','Ir','Ir0','i'];
+ // the element: spec {ch (Parts.magChar), init 'ss' | 'psi0', psi0, Ar}; 'ss' takes part in the steady start (acInit) as the
+ // linear inductance of the first slope, 'psi0' stays out of it and starts from ψ₀ (held while not excited)
+ function satEl(a,b,sp,key){const ch=sp.ch,psi0=sp.init==='psi0'?sp.psi0||0:0,Ir0=psi0?ch.cur(psi0).i:0,Ar=sp.Ar>0?sp.Ar:4*Math.max(ch.F[1],Math.abs(psi0));
+  const S={ch,init:sp.init==='psi0'?'psi0':'ss',psi:psi0,psi1:psi0,v:0,A:0,Ar,Ir0,Ir:Ir0,i:0,h:0,base:psi0,c:0};
+  const e={k:'NL',a,b,sat:S,v0:0,g:0,J:0,i:0,key};e.ch={cur:v=>satCur(S,v),inv:i=>S.c>0?(ch.inv(i+S.Ir)-S.base)/S.c:0};return e;}
+ // the core of a transformer (XFMR, sat 'sat'): the curve on the primary (a table, or L_m to the knee ψ_k and L_air after),
+ // carried to the secondary when the branch is there (ψ₂ = n·ψ₁, i₂ = i₁/n); a residual ψ₀ ≠ 0 starts outside the steady start
+ function xfmrSat(p,c,n,w2){const nm=c.label||c.id,pts=P.pairTable(p.satTab);let ch;
+  if(pts.length)ch=P.magChar(pts,num(p.Lair,0));
+  else{const Lm=Math.max(num(p.Lm,1e-3),1e-12),pk=num(p.psiK,0.01);ch=pk>0?P.magChar([[pk/Lm,pk]],num(p.Lair,1e-5)):{err:'Η ροή του γονάτου ψ_k πρέπει να είναι θετική.'};}
+  if(ch.err)throw new NetlistError(`${nm}: ${ch.err}`);
+  let psi0=num(p.psi0,0),Ar=num(p.Ar,0);
+  if(w2){ch=P.magChar(Array.from({length:ch.N},(_,k)=>[ch.I[k+1]/n,ch.F[k+1]*n]),ch.Lend*n*n);psi0*=n;Ar*=n;}
+  return {ch,init:psi0?'psi0':'ss',psi0,Ar};}
  // a fast footing (RFX) gets its tower line; its foot node must join only the end 2 of that line (a2, with b2 at ground) and
  // the footing, and its other end must be at ground (directly or through an ammeter): then the foot voltage of a step depends
  // only on the line's history, and the footing is solved there, before the circuit (values)
@@ -726,7 +754,7 @@
   // build, and every change while running, computes them again; the rest of the solver sees numbers)
   let inputs=null,subWarn=[];if(INP&&INP.needs(project)){inputs=INP.resolve(project);project=inputs.project;subWarn.push(...inputs.warnings);}
   // subcircuits (3.17, §9): the solver sees one flat circuit (instance parts as X1/<id>, ports as junctions)
-  if(SUBC&&SUBC.needs(project)){try{const f=SUBC.flatten(project);project=f.project;subWarn.push(...f.warnings);}catch(e){throw e instanceof SUBC.SubcircuitError?new NetlistError(e.message):e;}}
+  if(SUBC&&SUBC.needs(project)){try{const f=SUBC.flatten(project);project=f.project;subWarn.push(...f.warnings);}catch(e){throw e instanceof SUBC.SubcircuitError||e?.netlib?new NetlistError(e.message):e;}}
   // units and vector types of the signal ports (3.19, §3): a frame into another frame stops here, units are warnings
   let units=null;if(UNITS){try{units=UNITS.check(project);subWarn.push(...units.warnings);}catch(e){throw e instanceof UNITS.UnitError?new NetlistError(e.message):e;}}
   // buses and vectors (3.18, §3): the solver sees scalar wires only (element-wise blocks on a bus as <id>[k])
@@ -970,7 +998,16 @@
     if(num(p.Llk1,0)>0){const m=internal();info.lk1=add({k:'L',a:P1,b:m,L:num(p.Llk1,0),i:im0,key:c.id+'#lk1'});P1=m;}
     if(num(p.R2,0)>0){const m=internal();add({k:'G',a:S1,b:m,R:num(p.R2,0)});S1=m;}
     if(num(p.Llk2,0)>0){const m=internal();info.lk2=add({k:'L',a:S1,b:m,L:num(p.Llk2,0),i:0,key:c.id+'#lk2'});S1=m;}
-    info.main=add({k:'X',p1:P1,p2,s1:S1,s2,n:num(p.n,1)||1,row:row()});info.mag=add({k:'L',a:P1,b:p2,L:Math.max(num(p.Lm,1e-3),1e-12),i:im0,key:c.id+'#m'});}
+    // 5.0.1: the magnetizing branch in the middle (behind the primary leakage, as before), at the primary terminals, or at the
+    // secondary terminals (L·n², i/n); linear L_m, or the saturable core (satEl) with its flux as the state
+    const mp=p.mpos==='w1'||p.mpos==='w2'?p.mpos:'mid',nn=num(p.n,1)||1;info.magK=mp==='w2'?nn:1;info.magW2=mp==='w2';
+    const ma=mp==='w1'?p1:mp==='w2'?s1:P1,mb=mp==='w2'?s2:p2;
+    info.main=add({k:'X',p1:P1,p2,s1:S1,s2,n:nn,row:row()});
+    if(p.sat==='sat'){info.mag=add(satEl(ma,mb,xfmrSat(p,c,nn,mp==='w2'),c.id+'#m'));info.satE=info.mag;}
+    else if(mp==='mid')info.mag=add({k:'L',a:P1,b:p2,L:Math.max(num(p.Lm,1e-3),1e-12),i:im0,key:c.id+'#m'});
+    else info.mag=add({k:'L',a:ma,b:mb,L:Math.max(num(p.Lm,1e-3),1e-12)*info.magK*info.magK,i:im0/info.magK,key:c.id+'#m'});}
+   else if(T==='LSAT'){const a=node(c.id,'a'),b=node(c.id,'b');info.pins=[a,b];const ch=P.magChar(P.pairTable(p.tab),num(p.Lair,0));if(ch.err)throw new NetlistError(`${c.label||c.id}: ${ch.err}`);
+    info.main=add(satEl(a,b,{ch,init:p.init==='psi0'?'psi0':'ss',psi0:num(p.psi0,0)},c.id));info.satE=info.main;}
    else if(T==='VAC3'){const nN=neutNode(c,p,'pin',add),ph0=num(p.phase,0)*Math.PI/180,seq=p.seq==='acb'?-1:1;info.phases=[];info.n=nN;
     ['a','b','c'].forEach((q,k)=>{const pin=node(c.id,q);let top=pin;
      if(num(p.Ls,0)>0){const m=internal();add({k:'L',a:m,b:top,L:num(p.Ls,0),i:0,key:c.id+'#Ls'+q});top=m;}
@@ -1208,9 +1245,10 @@
    // and so do the states of the machines kept outside the circuit (rotor flux of the induction machine, speeds)
    const A=[...S];for(const e of this.net.els){if(e.k==='TL'){A.push({e,k:'T',j:0});A.push({e,k:'T',j:1});}else if(e.k==='TLM')for(let j=0;j<2*e.M;j++)A.push({e,k:'T',j});}
    for(const e of this.net.els)if(e.sai)A.push({e,k:'XI',s:'iL0'},{e,k:'XI',s:'iL1'},{e,k:'XV',s:'vc'});
+   for(const e of this.net.els)if(e.sat)A.push({e,k:'XP'}); // 5.0.1: the flux of a saturable core
    for(const e of this.net.els)if(e.k==='CHB')for(let j=0;j<e.N;j++)A.push({e,k:'B',j}); // 4.10: the cell capacitors of an arm
    for(const c of this.net.compInfo.values()){const e={cid:c.id};if(c.im){A.push({e,m:c.im,k:'M',f:'pa'},{e,m:c.im,k:'M',f:'pb'},{e,m:c.im,k:'W'});}else if(c.sm||c.srm)A.push({e,m:c.sm||c.srm,k:'W'});else if(c.gen)for(let j=0;j<c.gen.g.sh.N;j++)A.push({e,m:c.gen,k:'Wg',j});}
-   this.stEls=S;this.stAll=A;const n=A.length;this.stKind=Uint8Array.from(A,q=>q.k==='C'||q.k==='XV'||q.k==='B'?0:q.k==='F'||q.k==='M'?2:q.k==='W'||q.k==='Wg'?3:1);
+   this.stEls=S;this.stAll=A;const n=A.length;this.stKind=Uint8Array.from(A,q=>q.k==='C'||q.k==='XV'||q.k==='B'?0:q.k==='F'||q.k==='M'||q.k==='XP'?2:q.k==='W'||q.k==='Wg'?3:1);
    if(!this.lteSc||this.lteSc.length!==n){this.lteSc=new Float64Array(n);this.ringD=new Float64Array(n);this.ringN=new Uint16Array(n);this.lteH=null;this.rx=null;}
    // reference magnitudes per kind, the floor of the tolerance (a state that starts from 0 is not held to 10⁻⁴ of nothing):
    // V from the sources and the initial capacitor voltages, I from the current sources, the initial currents and V/R (median R), ψ = V·T
@@ -1218,7 +1256,7 @@
     else if(e.k==='C')Vr=Math.max(Vr,Math.abs(e.v));else if(e.k==='L')Ir=Math.max(Ir,Math.abs(e.i));else if(e.k==='I')Ir=Math.max(Ir,Math.abs(e.I||0));else if(e.k==='G'&&e.R>0&&!e.role)Rs.push(e.R);}
    for(const c of this.net.compInfo.values())if(c.wave)try{const w=c.wave,t1=w.T1||0;Vr=Math.max(Vr,Math.abs(P.waveAt(w,t1)),Math.abs(P.waveAt(w,3*t1)));}catch(e){}
    Rs.sort((a,b)=>a-b);const Rm=Rs.length?Rs[Rs.length>>1]:1;Vr=Vr||1;Ir=Math.max(Ir,Vr/Rm);this.stRef=[Vr,Ir,Vr*(this.T||1e-3),10];this.capDirty=true;}
-  stVec(){const S=this.stAll,x=new Float64Array(S.length);for(let i=0;i<S.length;i++){const q=S[i],e=q.e;x[i]=q.k==='L'?e.i:q.k==='C'?e.v:q.k==='B'?e.vc[q.j]:q.k==='XI'||q.k==='XV'?e.sai[q.s]:q.k==='T'?e.iE[q.j]:q.k==='M'?q.m.st[q.f]:q.k==='W'?q.m.st.w:q.k==='Wg'?q.m.st.w[q.j]:e.psi[q.j];}return x;}
+  stVec(){const S=this.stAll,x=new Float64Array(S.length);for(let i=0;i<S.length;i++){const q=S[i],e=q.e;x[i]=q.k==='L'?e.i:q.k==='C'?e.v:q.k==='B'?e.vc[q.j]:q.k==='XI'||q.k==='XV'?e.sai[q.s]:q.k==='XP'?e.sat.psi:q.k==='T'?e.iE[q.j]:q.k==='M'?q.m.st[q.f]:q.k==='W'?q.m.st.w:q.k==='Wg'?q.m.st.w[q.j]:e.psi[q.j];}return x;}
   stepCfg(){return {...this.net.step,...(this.opts.step||{})};}
   varSetup(){const c=this.stepCfg();this.var=c.mode==='var';this.rtol=c.rtol;const tl=this.tlMaxStep();
    // 4.19.1 (decision 243): the smallest step is a setting (solve.hmin in s, down to ns and below); «Αυτόματα» is the rule
@@ -1356,7 +1394,7 @@
    this.sms=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm);for(const m of this.sms)this.smOutputs(m);
    this.srms=[...net.compInfo.values()].filter(c=>c.srm).map(c=>c.srm);for(const m of this.srms)this.srmOutputs(m);
    this.gens=[...net.compInfo.values()].filter(c=>c.gen).map(c=>c.gen);this.hasTV=this.sms.length+this.srms.length+this.gens.length>0;
-   this.hasCPL=net.els.some(e=>e.k==='CPL');this.hasNL=net.els.some(e=>e.k==='NL');this.arcEls=net.els.filter(e=>e.arc);this.saiEls=net.els.filter(e=>e.sai);this.chbEls=net.els.filter(e=>e.k==='CHB');for(const e of this.chbEls)if(e.sKey===undefined)e.sKey=e.mmc?'':'0'.repeat(e.N);this.footEls=net.els.filter(e=>e.foot);footLink(net,this.footEls);
+   this.hasCPL=net.els.some(e=>e.k==='CPL');this.hasNL=net.els.some(e=>e.k==='NL');this.arcEls=net.els.filter(e=>e.arc);this.saiEls=net.els.filter(e=>e.sai);this.satEls=net.els.filter(e=>e.sat);this.chbEls=net.els.filter(e=>e.k==='CHB');for(const e of this.chbEls)if(e.sKey===undefined)e.sKey=e.mmc?'':'0'.repeat(e.N);this.footEls=net.els.filter(e=>e.foot);footLink(net,this.footEls);
    // 4.19 (§68): one flag for a matrix that changes at every step (a machine with Γ(θ), a nonlinear element, a constant-power
    // load, a footing R(I)): the cache of factorizations and the choice of the sparse solver read it. A new kind of element
    // that changes its stamp at every step sets one of these flags (ARCHITECTURE §3)
@@ -1368,7 +1406,7 @@
     this.modeVec=(this.opts.modeVec||project?.sim?.modeVec||project?.solve?.modeVec)==='hess'?'hess':'lu';
     this.evSnap=(this.opts.evSnap||project?.sim?.evSnap||project?.solve?.evSnap)!=='off';   // 4.19.5: the end of a piece of run() on the event that lies within eps after it
     this.A=this.sparse?null:new Float64Array(this.n*this.n);}
-   if(old&&!fresh)for(const e of net.els)if(e.k==='NL'){const o=old.els.find(x=>x.k==='NL'&&x.cid===e.cid);if(o){e.v0=o.v0;if(o.sai&&e.sai)for(const k of SAI_ST)e.sai[k]=o.sai[k];}}this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
+   if(old&&!fresh)for(const e of net.els)if(e.k==='NL'){const o=old.els.find(x=>x.k==='NL'&&x.cid===e.cid);if(o){e.v0=o.v0;if(o.sai&&e.sai)for(const k of SAI_ST)e.sai[k]=o.sai[k];if(o.sat&&e.sat){for(const k of SAT_ST)e.sat[k]=o.sat[k];e.i=o.i;}}}this.lossList=[...net.compInfo.values()].filter(c=>c.loss);
    if(old&&!fresh)for(const c of this.lossList){const o=old.compInfo.get(c.id)?.loss;if(o){c.loss.P=o.P;c.loss.Etot=o.Etot;c.loss.n=o.n;}}this.T=this.basePeriod();this.hUser=this.opts.h||this.T/this.opts.hDiv;this.h=Math.min(this.hUser,this.tlMaxStep());
    if(fresh){this.hv=null;this.dg=new Map();this.dgPre=[];this.nRej=0;this.nRejRow=0;this.nTiny=0;this.nAtMin=0;}this.stIndex();this.varSetup();this.lteH=null;this.rx=null;
    if(fresh&&this.var)this.hv=this.hGrid(Math.max(this.hMin,this.h/64)); // the first steps (backward Euler, no history yet) start small and grow ×2 per step
@@ -1406,7 +1444,7 @@
    this.ims=[...net.compInfo.values()].filter(c=>c.im&&own(c)).map(c=>c.im);this.sms=[...net.compInfo.values()].filter(c=>c.sm&&own(c)).map(c=>c.sm);
    this.srms=[...net.compInfo.values()].filter(c=>c.srm&&own(c)).map(c=>c.srm);this.gens=[...net.compInfo.values()].filter(c=>c.gen&&own(c)).map(c=>c.gen);
    this.hasTV=this.sms.length+this.srms.length+this.gens.length>0;this.hasCPL=els.some(e=>e.k==='CPL');this.hasNL=els.some(e=>e.k==='NL');
-   this.arcEls=els.filter(e=>e.arc);this.saiEls=els.filter(e=>e.sai);this.chbEls=els.filter(e=>e.k==='CHB');this.footEls=els.filter(e=>e.foot);
+   this.arcEls=els.filter(e=>e.arc);this.saiEls=els.filter(e=>e.sai);this.satEls=els.filter(e=>e.sat);this.chbEls=els.filter(e=>e.k==='CHB');this.footEls=els.filter(e=>e.foot);
    this.everyStep=this.hasCPL||this.hasTV||this.hasNL||this.footEls.length>0;this.lossList=[...net.compInfo.values()].filter(c=>c.loss&&own(c));
    this.stIndex();
    // the signature of the gates is that of this part's switches (the start from a load flow takes it at h/2, as load())
@@ -1511,6 +1549,7 @@
    if(P.BLOCKS.has(c.type)){k.push('Y:'+c.id,...c.blk.outList.slice(1).map(q=>'Y:'+c.id+':'+q));return k;}
    k.push('V:'+c.id,'I:'+c.id,'P:'+c.id);
    if(c.type==='XFMR')k.push('V2:'+c.id,'I2:'+c.id,'Im:'+c.id);
+   if(c.satE)k.push('PSIm:'+c.id); // 5.0.1: the flux of a saturable core (on the primary)
    if(c.ports)for(let q=2;q<=c.ports.length;q++)k.push('V'+q+':'+c.id,'I'+q+':'+c.id);
    if(c.srm)for(let q=1;q<=c.srm.N;q++)k.push('PSI'+q+':'+c.id);
    if(c.type==='VAC3')k.push('Vb:'+c.id,'Vc:'+c.id,'Ib:'+c.id,'Ic:'+c.id,'Vab:'+c.id);
@@ -1613,13 +1652,14 @@
     if(kd===4){const vn=this.V(c.n),p=c.phases,v0=this.V(p[0].pin)-vn,v1=this.V(p[1].pin)-vn,v2=this.V(p[2].pin)-vn,i0=-x[p[0].e.row],i1=-x[p[1].e.row],i2=-x[p[2].e.row];
      out[j++]=v0;out[j++]=i0;out[j++]=v0*i0+v1*i1+v2*i2;out[j++]=v1;out[j++]=v2;out[j++]=i1;out[j++]=i2;out[j++]=v0-v1;continue;}
     const v=this.V(c.pins[0])-this.V(c.pins[1]);let i;
-    if(c.type==='XFMR'){const is=this.x[c.main.row];i=-c.main.n*is+c.mag.i;}
+    if(c.type==='XFMR'){const is=this.x[c.main.row];i=c.magW2?-c.main.n*is:-c.main.n*is+c.mag.i;}
     else if(c.type==='SW')i=this.elCurrent(c.main)-(c.body?this.elCurrent(c.body):0);
     else if(c.type==='GEN3')i=-c.main.i[0]; // a generator: the current it delivers (phase a)
     else i=this.elCurrent(c.main);
     const src=c.type==='VDC'||c.type==='VAC'||c.type==='IDC';
     out[j++]=v;out[j++]=i;out[j++]=src?v*i:v*i;
-    if(c.type==='XFMR'){const v2=this.V(c.pins2[0])-this.V(c.pins2[1]);const is=this.x[c.main.row]*(c.opp?-1:1);out[j++]=v2;out[j++]=is;out[j++]=c.mag.i;}
+    if(c.type==='XFMR'){const v2=this.V(c.pins2[0])-this.V(c.pins2[1]);const is=(c.magW2?this.x[c.main.row]+c.mag.i:this.x[c.main.row])*(c.opp?-1:1);out[j++]=v2;out[j++]=is;out[j++]=c.magW2?c.mag.i*c.magK:c.mag.i;}
+    if(c.satE)out[j++]=c.satE.sat.psi/(c.magK||1);
     if(c.ports)for(let q=1;q<c.ports.length;q++){out[j++]=this.V(c.ports[q][0])-this.V(c.ports[q][1]);out[j++]=this.portI(c.main,q);}
     if(c.srm)for(let q=0;q<c.srm.N;q++)out[j++]=c.main.psi[q];
     if(c.loss)out[j++]=c.loss.P;
@@ -1637,13 +1677,14 @@
     if(kd===4){const vn=this.V(c.n),p=c.phases,v0=this.V(p[0].pin)-vn,v1=this.V(p[1].pin)-vn,v2=this.V(p[2].pin)-vn,i0=-x[p[0].e.row],i1=-x[p[1].e.row],i2=-x[p[2].e.row];
      out[j++]=v0;out[j++]=i0;out[j++]=v0*i0+v1*i1+v2*i2;out[j++]=v1;out[j++]=v2;out[j++]=i1;out[j++]=i2;out[j++]=v0-v1;return j;}
     const v=this.V(c.pins[0])-this.V(c.pins[1]);let i;
-    if(c.type==='XFMR'){const is=this.x[c.main.row];i=-c.main.n*is+c.mag.i;}
+    if(c.type==='XFMR'){const is=this.x[c.main.row];i=c.magW2?-c.main.n*is:-c.main.n*is+c.mag.i;}
     else if(c.type==='SW')i=this.elCurrent(c.main)-(c.body?this.elCurrent(c.body):0);
     else if(c.type==='GEN3')i=-c.main.i[0]; // a generator: the current it delivers (phase a)
     else i=this.elCurrent(c.main);
     const src=c.type==='VDC'||c.type==='VAC'||c.type==='IDC';
     out[j++]=v;out[j++]=i;out[j++]=src?v*i:v*i;
-    if(c.type==='XFMR'){const v2=this.V(c.pins2[0])-this.V(c.pins2[1]);const is=this.x[c.main.row]*(c.opp?-1:1);out[j++]=v2;out[j++]=is;out[j++]=c.mag.i;}
+    if(c.type==='XFMR'){const v2=this.V(c.pins2[0])-this.V(c.pins2[1]);const is=(c.magW2?this.x[c.main.row]+c.mag.i:this.x[c.main.row])*(c.opp?-1:1);out[j++]=v2;out[j++]=is;out[j++]=c.magW2?c.mag.i*c.magK:c.mag.i;}
+    if(c.satE)out[j++]=c.satE.sat.psi/(c.magK||1);
     if(c.ports)for(let q=1;q<c.ports.length;q++){out[j++]=this.V(c.ports[q][0])-this.V(c.ports[q][1]);out[j++]=this.portI(c.main,q);}
     if(c.srm)for(let q=0;q<c.srm.N;q++)out[j++]=c.main.psi[q];
     if(c.loss)out[j++]=c.loss.P;
@@ -1984,10 +2025,10 @@
   zcFrac(){this.evalBlocks('trial',false,true);let th=null;
    for(const b of this.net.sig.zc){const s=b.st.s,f0=b.st.f0,f1=b.f1;if(!(s?f1<0:f1>0))continue;const d=f0-f1;const q=Math.min(1,Math.max(0,d!==0?f0/d:0));if(th===null||q<th)th=q;}
    return th;}
-  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0,e.arc?{...e.arc}:e.sai?{...e.sai}:null]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='TLM')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut,e.modes.map(m=>m.fd?[m.z1.slice(),m.z2.slice(),m.y1.slice(),m.y2.slice(),m.i1,m.i2]:null),e.wb?[e.Xr.slice(),e.Xi.slice(),e.Zr.slice(),e.Zi.slice(),e.vp.slice()]:null]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc,e.Slp,e.Llp]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);else if(e.k==='CHB')el.push([e,e.vc.slice(),e.vc1.slice(),e.i,e.s.slice(),e.sKey,e.mmc?mmcSave(e.mmc):null]);}
+  saveState(){const el=[];for(const e of this.net.els){if(e.k==='NL')el.push([e,e.v0,e.arc?{...e.arc}:e.sai?{...e.sai}:e.sat?{...e.sat}:null,e.i]);else if(e.k==='TL')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut]);else if(e.k==='TLM')el.push([e,e.H.t.length,e.iE.slice(),e.H.s,e.H.cut,e.modes.map(m=>m.fd?[m.z1.slice(),m.z2.slice(),m.y1.slice(),m.y2.slice(),m.i1,m.i2]:null),e.wb?[e.Xr.slice(),e.Xi.slice(),e.Zr.slice(),e.Zi.slice(),e.vp.slice()]:null]);else if(e.k==='L')el.push([e,e.i,e.i1]);else if(e.k==='C')el.push([e,e.v,e.v1,e.i]);else if(e.k==='D')el.push([e,e.vPrev,e.iPrev,e.trigDone,e.Dacc,e.Slp,e.Llp]);else if(e.k==='CPL')el.push([e,e.v0,e.g,e.J]);else if(e.k==='F')el.push([e,e.psi.slice(),e.psi1.slice(),e.i.slice()]);else if(e.k==='CHB')el.push([e,e.vc.slice(),e.vc1.slice(),e.i,e.s.slice(),e.sKey,e.mmc?mmcSave(e.mmc):null]);}
    return {t:this.t,steps:this.steps,hLast:this.hLast,x:this.x,bdf:this.bdf,el,ms:[...(this.ims||[]),...(this.sms||[]),...(this.srms||[])].map(m=>[m,{...m.st}]),gs:(this.gens||[]).map(m=>[m,genCopy(m.st),m.Efd0,m.Tm0])};}
   restoreState(S){this.t=S.t;this.steps=S.steps;this.hLast=S.hLast;this.x=S.x;this.bdf=S.bdf;
-   for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];if(r[2])Object.assign(e.arc||e.sai,r[2]);}else if(e.k==='TL'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);}else if(e.k==='TLM'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);
+   for(const r of S.el){const e=r[0];if(e.k==='NL'){e.v0=r[1];if(r[2])Object.assign(e.arc||e.sai||e.sat,r[2]);if(e.sat)e.i=r[3];}else if(e.k==='TL'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);}else if(e.k==='TLM'){const H=e.H,d=H.cut-r[4],n=r[1]-d;H.s=Math.max(0,r[3]-d);H.t.length=n;for(const c of H.c)c.length=n;e.iE.set(r[2]);
     r[5].forEach((q,k)=>{if(!q)return;const m=e.modes[k];m.z1.set(q[0]);m.z2.set(q[1]);m.y1.set(q[2]);m.y2.set(q[3]);m.i1=q[4];m.i2=q[5];});
     if(e.wb&&r[6]){e.Xr.set(r[6][0]);e.Xi.set(r[6][1]);e.Zr.set(r[6][2]);e.Zi.set(r[6][3]);e.vp.set(r[6][4]);}}else if(e.k==='L'){e.i=r[1];e.i1=r[2];}else if(e.k==='C'){e.v=r[1];e.v1=r[2];e.i=r[3];}else if(e.k==='D'){e.vPrev=r[1];e.iPrev=r[2];e.trigDone=r[3];e.Dacc=r[4];e.Slp=r[5];e.Llp=r[6];}else if(e.k==='F'){e.psi.set(r[1]);e.psi1.set(r[2]);e.i.set(r[3]);}else if(e.k==='CHB'){e.vc.set(r[1]);e.vc1.set(r[2]);e.i=r[3];e.s.set(r[4]);e.sKey=r[5];if(r[6])mmcLoad(e.mmc,r[6]);}else{e.v0=r[1];e.g=r[2];e.J=r[3];}}
    for(const [m,st] of S.ms||[]){m.st={...st};if(m.ph)this.imSources(m);}
@@ -2194,11 +2235,16 @@
    // backward Euler otherwise (a section faster than the step would ring with θ = ½)
    if(this.arcEls.length)for(const e of this.arcEls){const A=e.arc;A.h=h;A.th=mode==='TR'&&h<=A.tau0*(A.alpha?Math.exp(A.alpha*A.x):1)?0.5:1;A.xg=null;A.F0=A.closed?0:arcF(A,A.x,A.u).F;}
    if(this.saiEls.length)for(const e of this.saiEls)saiSetup(e.sai,h,mode,this.bdf);
+   if(this.satEls.length)for(const e of this.satEls)satSetup(e.sat,h,mode,this.bdf);
    const n=this.hasNL?80:12;let sol,bad=null;for(let it=0;it<n;it++){this.cplLinearize();this.nlLinearize();sol=this.solveOnce(h,mode);
     let conv=true;bad=null;const V=i=>i<0?0:sol[i];
     for(const e of this.net.els){if(e.k==='CPL'){const v=V(e.a)-V(e.b);if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v))){conv=false;bad=e;}e.v0=v;}
      // arrester: Newton with the voltage limited on the steep part (the voltage that gives the linearized current on the true curve)
-     else if(e.k==='NL'){let v=V(e.a)-V(e.b);if(!e.arc&&!e.sai&&Math.abs(v)>Math.abs(e.v0)){const it2=e.g*v+e.J,vi=e.ch.inv(it2);if(Math.sign(it2)===Math.sign(v)&&Math.abs(vi)<Math.abs(v))v=vi;}
+     else if(e.k==='NL'){let v=V(e.a)-V(e.b);
+      // 5.0.1: a saturable core, the same limit in ψ: a flux that moves outwards past the flux at which the true curve gives the
+      // linearized current is pulled back to it (the curve is convex on each side, so Newton then closes in from the steep side)
+      if(e.sat){const S=e.sat,p1=S.base+S.c*v;if(S.c>0&&Math.abs(p1)>Math.abs(S.base+S.c*e.v0)){const pl=S.ch.inv(e.g*v+e.J+S.Ir);if(Math.sign(pl)===Math.sign(p1)&&Math.abs(pl)<Math.abs(p1))v=(pl-S.base)/S.c;}}
+      else if(!e.arc&&!e.sai&&Math.abs(v)>Math.abs(e.v0)){const it2=e.g*v+e.J,vi=e.ch.inv(it2);if(Math.sign(it2)===Math.sign(v)&&Math.abs(vi)<Math.abs(v))v=vi;}
       if(Math.abs(v-e.v0)>1e-9*(1+Math.abs(v))){conv=false;bad=e;}e.v0=v;}}
     if(conv){bad=null;break;}}
    if(bad&&this.note){const id=bad.cid,lb=this.net.compInfo.get(id)?.label||id; // 3.13: shown in the diagnostics console
@@ -2246,6 +2292,7 @@
    }
    if(this.arcEls.length)for(const e of this.arcEls){const A=e.arc,v=this.V(e.a)-this.V(e.b);if(!A.closed){A.h=h;A.x=arcStep(A,v).x;}A.u=v;A.h=0;A.xg=null;e.v0=v;}
    if(this.saiEls.length)for(const e of this.saiEls){const v=this.V(e.a)-this.V(e.b);saiCommit(e.sai,v);e.v0=v;}
+   if(this.satEls.length)for(const e of this.satEls){const v=this.V(e.a)-this.V(e.b);satCommit(e.sat,v);e.v0=v;e.i=e.sat.i;}
    if(this.ims)for(const m of this.ims)this.imStep(m,h);
    if(this.sms)for(const m of this.sms)this.smStep(m,h);
    if(this.srms)for(const m of this.srms)this.srmStep(m,h);
@@ -2261,7 +2308,7 @@
    if(x0)for(const e of this.net.els){if(e.k==='D'&&!e.gap)e.on=!!(e.gk&&e.gon);}
    for(let it=0;it<40;it++){sol=this.solve(hs,'BE');if(x0)break;const bad=this.check(sol,true);if(!bad.length)break;for(const b of bad)b.e.on=!b.e.on;}
    this.x=sol;if(x0){for(let i=0;i<x0.length&&i<sol.length;i++)sol[i]=x0[i];for(const [e,i] of ic)e.i=i;} // 4.3: the steady start of a load flow (acInit), capacitor currents included
-   for(const e of this.net.els){const v=this.V(e.a)-this.V(e.b);if(e.k==='D'){e.vPrev=v;e.iPrev=e.on?(v-e.Vf)/e.Ron:v/e.Roff;}if(e.k==='CPL')e.v0=v;if(e.k==='TL'&&!e.H.t.length)this.tlRecord(e,0);if(e.k==='TLM'&&!e.H.t.length)this.tlmRecord(e,0,0);}
+   for(const e of this.net.els){const v=this.V(e.a)-this.V(e.b);if(e.k==='D'){e.vPrev=v;e.iPrev=e.on?(v-e.Vf)/e.Ron:v/e.Roff;}if(e.k==='CPL')e.v0=v;if(e.sat){e.sat.v=v;e.sat.h=0;e.v0=v;}if(e.k==='TL'&&!e.H.t.length)this.tlRecord(e,0);if(e.k==='TLM'&&!e.H.t.length)this.tlmRecord(e,0,0);}
    this.computeVals();
   }
   // line (3.8, losses 3.11): history sources of every section at time t from the record at t − τ/N (Dommel, lumped R/4, R/2, R/4).
@@ -2448,6 +2495,7 @@
   trRestart(t){const hs=this.h*1e-3;this.values(t+hs);const sol=this.solve(hs,'BE'),V=i=>i<0?0:sol[i];
    for(const e of this.net.els)if(e.k==='C')e.i=(V(e.a)-V(e.b)-e.v)*e.C/hs;
    for(const e of this.saiEls||[]){const S=e.sai,v=V(e.a)-V(e.b);saiCur(S,v);S.ic=(S.ug[0]-S.vc)*S.C/hs;S.v=v;S.u0=S.ug[0];S.u1=S.ug[1];S.h=0;S.ug=null;}
+   for(const e of this.satEls||[]){e.sat.v=V(e.a)-V(e.b);e.sat.h=0;} // 5.0.1: the voltage of the core at t, its flux held
    this.x=sol;this.cMode='TR';}
   // 4.19.5: an event that lies within eps after tMax is the answer, not tMax. run() ends its pieces on tMax, and a piece that
   // ended a few rounding errors before an edge left the time inside the eps of that edge: the edge was then never a step
@@ -2567,6 +2615,8 @@
   const els=net.els.map(e=>{const o={};for(const k of F)if(e[k]!==undefined&&e[k]!==null)o[k]=e[k];if(e.k==='F'){o.i=Array.from(e.i);o.psi=Array.from(e.psi);if(e.sm){o.sm=smx.get(e.sm);delete o.Gam;}if(e.srm){o.srm=srmx.get(e.srm);delete o.Gam;}if(e.gen){o.gen=genx.get(e.gen);delete o.Gam;}}
    // 4.9.1: an arc section (ARCX): its model and its state; the server integrates x = ln g (engine/batch.py)
    if(e.arc){const A=e.arc;o.arc={lam:A.lam,tau0:A.tau0,alpha:A.alpha,P0:A.P0,P1:A.P1,beta:A.beta,Ron:A.Ron,xmin:A.xmin,xmax:A.xmax,closed:A.closed,x:A.x};}
+   // 5.0.1: a saturable core: its curve, its flux, the volt-seconds and the holding current of a residual flux (engine/batch.py)
+   if(e.sat){const S=e.sat;o.sat={pts:S.ch.pts.slice(1),Lend:S.ch.Lend,psi:S.psi,A:S.A,Ar:S.Ar,Ir0:S.Ir0};}
    const hist=H=>H&&H.t.length?{t:H.t.slice(H.s),c:H.c.map(c=>c.slice(H.s))}:null;
    if(e.k==='TL'&&e.H.t.length)o.H=hist(e.H);
    if(e.k==='TL'&&e.v0)o.vinit=e.v0; // 4.22: a line that starts at a voltage (trapped charge)
@@ -2590,7 +2640,7 @@
   // section and the position that carry the phase)
   const linePort=(c,q)=>{const m=c.main,M=m.M;if(m.k==='PIL')return {i:[[idx.get(m.vs[q]),1]]};if(m.k!=='TLS')return {i:[[idx.get(m),1,q]]};
    const x=q<M?m.first:m.last,pos=x.o.indexOf(q%M),j=q<M?pos:M+pos;return x.e.k==='PIL'?{i:[[idx.get(x.e.vs[j]),1]]}:{i:[[idx.get(x.e),1,j]]};};
-  const I=c=>{if(!c||!c.main)return null;if(c.type==='TLM')return linePort(c,0);if(c.type==='GEN3')return {i:[[idx.get(c.main),-1]]};if(c.type==='XFMR')return {i:[[idx.get(c.main),-c.main.n],[idx.get(c.mag),1]]};if(c.type==='SW')return {i:[[idx.get(c.main),1],...(c.body?[[idx.get(c.body),-1]]:[])]};return {i:[[idx.get(c.main),1]]};};
+  const I=c=>{if(!c||!c.main)return null;if(c.type==='TLM')return linePort(c,0);if(c.type==='GEN3')return {i:[[idx.get(c.main),-1]]};if(c.type==='XFMR')return c.magW2?{i:[[idx.get(c.main),-c.main.n]]}:{i:[[idx.get(c.main),-c.main.n],[idx.get(c.mag),1]]};if(c.type==='SW')return {i:[[idx.get(c.main),1],...(c.body?[[idx.get(c.body),-1]]:[])]};return {i:[[idx.get(c.main),1]]};};
   const portRec=(c,pre)=>{const m=pre.match(/^([VI])(\d+)$/);if(!m||!c.ports)return null;const q=+m[2]-1;if(q<1||q>=c.ports.length)return null;return m[1]==='V'?vd(c.ports[q][0],c.ports[q][1]):c.type==='TLM'?linePort(c,q):{i:[[idx.get(c.main),1,q]]};};
   const rec=key=>{const [pre,id,pin]=key.split(':');
    if(pre==='VN'){const n=net.pinNet.get(id+':'+pin);return n?{v:n.ground?[]:[[n.index,1]]}:null;}
@@ -2604,7 +2654,8 @@
    if(c.type==='VAC3'){const ph=c.phases,pv=q=>vd(q.pin,c.n),pi=q=>({i:[[idx.get(q.e),1]]});
     return {V:pv(ph[0]),I:pi(ph[0]),P:{sum:ph.map(q=>({prod:[pv(q),pi(q)]}))},Vb:pv(ph[1]),Vc:pv(ph[2]),Ib:pi(ph[1]),Ic:pi(ph[2]),Vab:vd(ph[0].pin,ph[1].pin)}[pre]||null;}
    if(pre==='V')return V(c);if(pre==='I')return I(c);if(pre==='P'){const a=V(c),b=I(c);return a&&b?{prod:[a,b]}:null;}
-   if(c.type==='XFMR'){if(pre==='V2')return vd(c.pins2[0],c.pins2[1]);if(pre==='I2')return {i:[[idx.get(c.main),c.opp?-1:1]]};if(pre==='Im')return {i:[[idx.get(c.mag),1]]};}
+   if(c.type==='XFMR'){if(pre==='V2')return vd(c.pins2[0],c.pins2[1]);if(pre==='I2')return c.magW2?{i:[[idx.get(c.main),c.opp?-1:1],[idx.get(c.mag),c.opp?-1:1]]}:{i:[[idx.get(c.main),c.opp?-1:1]]};if(pre==='Im')return {i:[[idx.get(c.mag),c.magK||1]]};}
+   if(pre==='PSIm'&&c.satE)return {psi:[idx.get(c.satE),1/(c.magK||1)]};
    if(c.srm&&/^PSI\d$/.test(pre)){const q=+pre.slice(3)-1;return q<c.srm.N?{srm:[srmx.get(c.srm),q]}:null;}
    if(c.ports)return portRec(c,pre);
    return null;};

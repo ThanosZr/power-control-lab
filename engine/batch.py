@@ -73,6 +73,26 @@ def wave_at(w, t):
     return k * x / (1 + x) * math.exp(-t / w['tau2'])
 
 
+def sat_curve(sat):
+    """5.0.1: the curve of a saturable core (web/studio/parts.js magChar): points of the positive branch from (0, 0), the
+    slope di/dψ of each segment and 1/L_end after the last point; odd."""
+    pts = [(0.0, 0.0)] + [(float(a), float(b)) for a, b in sat['pts']]
+    I = [q[0] for q in pts]
+    F = [q[1] for q in pts]
+    s = [(I[k + 1] - I[k]) / (F[k + 1] - F[k]) for k in range(len(pts) - 1)] + [1.0 / float(sat['Lend'])]
+    return I, F, s
+
+
+def sat_i(c, psi):
+    """i(ψ) of a saturable core, piecewise linear and odd."""
+    I, F, s = c
+    x, N, k = abs(psi), len(F) - 1, 0
+    while k < N and x >= F[k + 1]:
+        k += 1
+    i = I[k] + (x - F[k]) * s[k]
+    return -i if psi < 0 else i
+
+
 def mov_seg(pts):
     """Segments of a surge-arrester characteristic through the points (current, voltage): i = I_k·(v/V_k)^a_k in log-log."""
     return [(pts[k][0], pts[k][1], math.log(pts[k + 1][0] / pts[k][0]) / math.log(pts[k + 1][1] / pts[k][1])) for k in range(len(pts) - 1)]
@@ -811,7 +831,10 @@ class Circuit:
             e['H'] = {'t': list(H['t']), 'c': [list(c) for c in H['c']]} if H else {'t': [], 'c': [[] for _ in range(3 * N + 1)]}
         self.iTM = [i for i, e in enumerate(E) if e['k'] == 'TLM']     # 4.12: lines from geometry (below)
         self.tau_min = min([E[i]['ts'] for i in self.iT] + [float(m['tau']) for i in self.iTM for m in E[i]['modes']], default=math.inf)
-        self.iN = [i for i, e in enumerate(E) if e['k'] == 'NL' and not e.get('arc')]      # surge arresters (3.9)
+        self.iN = [i for i, e in enumerate(E) if e['k'] == 'NL' and not e.get('arc') and not e.get('sat')]      # surge arresters (3.9)
+        # 5.0.1: saturable cores (LSAT, the core of a transformer): the flux ψ and the volt-seconds A are states (below), the
+        # current f(ψ) − I_r(A) a source of the network
+        self.iSat = [i for i, e in enumerate(E) if e['k'] == 'NL' and e.get('sat')]
         # 4.9.1: the arc sections of breaker poles (ARCX): i = g·v with x = ln g one more state (below); closed: g = 1/R_on
         self.iA = [i for i, e in enumerate(E) if e['k'] == 'NL' and e.get('arc')]
         self.aclosed = {i: bool(E[i]['arc'].get('closed', True)) for i in self.iA}
@@ -969,6 +992,30 @@ class Circuit:
             self.Dm = np.vstack([self.Dm, np.zeros((m, n))])
             self.x0 = np.concatenate([self.x0, [_f(a.get('x'), a['xmax']) for a in A0]])
             self.ns += m
+        # 5.0.1: saturable cores, as inductors whose inductance is that of the segment of the curve they are on: the state is
+        # the current of the curve i = f(ψ) (di/dt = v_ab/L_k, a row of Dm set per segment), and A = ∫|v|dt (dA/dt = ±v_ab
+        # with the sign held per segment) while a residual flux is held: there the injection is i − I_r with
+        # I_r = I_r₀·(1 − A/A_r), linear in A. Each segment is a linear system, as the topologies of the switches: the knees
+        # of the curve, the zeros of v and A = A_r end a segment (events), and the segment, the hold and the sign are in the
+        # key of the topology (sat_update). The inductor cut-sets around a core (leakage, the core, the ideal transformer)
+        # are held only by G_min: a ψ state with f(ψ) as a source made the implicit methods crawl in saturation
+        if self.iSat:
+            for q, i in enumerate(self.iSat):
+                e = E[i]
+                e['kP'], e['kQ'] = self.ns + 2 * q, self.ns + 2 * q + 1
+                e['curve'] = sat_curve(e['sat'])
+            m = 2 * len(self.iSat)
+            self.Bx = np.hstack([self.Bx, np.zeros((n, m))])
+            self.Dm = np.vstack([self.Dm, np.zeros((m, n))])
+            for i in self.iSat:
+                e = E[i]
+                if e['a'] >= 0:
+                    self.Bx[e['a'], e['kP']] -= 1
+                if e['b'] >= 0:
+                    self.Bx[e['b'], e['kP']] += 1
+            self.x0 = np.concatenate([self.x0, [v for i in self.iSat for v in (sat_i(E[i]['curve'], _f(E[i]['sat'].get('psi'))), _f(E[i]['sat'].get('A')))]])
+            self.ns += m
+        self.satst = {i: {'k': -1, 'hold': None, 'sg': 1.0} for i in self.iSat}
         self.tlm_setup()
         clk = next((b for b in self.blocks if b['type'] in ('CLK', 'RAMP')), None)
         lg = [_f(E[i]['wave'].get('T1'), 1e-6) for i in self.iI if E[i].get('wave')]     # a lightning current: its front time (3.5)
@@ -1222,7 +1269,8 @@ class Circuit:
         return _f(s.get('off')) + _f(s.get('Vpk')) * math.sin(2 * math.pi * _f(s.get('f')) * t + _f(s.get('ph')))
 
     def topo(self, t):
-        key = (tuple(self.on[i] for i in self.iD + self.iS + self.iSG), tuple(self.R(self.els[i], t) for i in self.iGs), self.cap_rs)
+        key = (tuple(self.on[i] for i in self.iD + self.iS + self.iSG), tuple(self.R(self.els[i], t) for i in self.iGs), self.cap_rs,
+               tuple((st['k'], st['hold'], st['sg']) for st in self.satst.values()))
         tp = self.cache.get(key)
         if tp is None:
             if len(self.cache) > 400:
@@ -1378,6 +1426,14 @@ class Circuit:
                 for r, a in enumerate(ns_):
                     if a >= 0:
                         b[a] -= ph[r]
+        for i in self.iSat:             # 5.0.1: a core that holds a residual flux: the constant −I_r₀ of its injection, a → b
+            if self.satst[i]['hold']:
+                e = E[i]
+                ir0 = _f(e['sat'].get('Ir0'))
+                if e['a'] >= 0:
+                    b[e['a']] += ir0
+                if e['b'] >= 0:
+                    b[e['b']] -= ir0
         for i in self.iI:
             e = E[i]
             n = e.get('sigIn')
@@ -1387,6 +1443,92 @@ class Circuit:
             if e['b'] >= 0:
                 b[e['b']] -= I
         return b
+
+    def sat_cur(self, e, x):
+        """5.0.1: the current of a saturable core, i − I_r(A) (I_r = I_r₀·(1 − A/A_r) while held, then 0)."""
+        q = e['sat']
+        ir0 = _f(q.get('Ir0'))
+        ir = ir0 * max(0.0, 1.0 - float(x[e['kQ']]) / _f(q.get('Ar'), 1.0)) if ir0 else 0.0
+        return float(x[e['kP']]) - ir
+
+    def sat_psi(self, e, x):
+        """5.0.1: the flux of a saturable core from its current, ψ = f⁻¹(i)."""
+        I, F, sl = e['curve']
+        i = float(x[e['kP']])
+        y, N, k = abs(i), len(I) - 1, 0
+        while k < N and y >= I[k + 1]:
+            k += 1
+        f = F[k] + (y - I[k]) / sl[k]
+        return -f if i < 0 else f
+
+    def sat_vtol(self, e):
+        """5.0.1: below this |v| a core is at a zero of v (10⁻⁷ of the mean |v| of one period of excitation, A_r/T)."""
+        return 1e-7 * _f(e['sat'].get('Ar'), 1.0) / self.base_T
+
+    def sat_dir(self, t, x, z, tp):
+        """5.0.1: for a core that holds a residual flux and starts a segment at a zero of v, the sign of v an instant later
+        (the states advanced along their derivatives): the sign of dA/dt for the segment."""
+        out = {}
+        for i in self.iSat:
+            if not self.satst[i]['hold']:
+                continue
+            e = self.els[i]
+            vab = lambda zz: (zz[e['a']] if e['a'] >= 0 else 0) - (zz[e['b']] if e['b'] >= 0 else 0)
+            v = vab(z)
+            if abs(v) > self.sat_vtol(e):
+                continue
+            dt = 1e-9 * self.base_T
+            v1 = vab(self.solve_z(t + dt, x + dt * (self.Dm @ z), tp))
+            if v1 != 0:
+                out[i] = math.copysign(1.0, v1)
+        return out
+
+    def sat_update(self, x, z=None, dirs=None):
+        """5.0.1: the discrete state of each core at the start of a segment: the segment of the curve (on a knee, the one the
+        current moves into, from the voltage z gives: the knee events end a segment there), whether a residual flux is held,
+        and the sign of v while held (from z when v is not zero; a zero of v flips it). Writes the rows of Dm and the column
+        of A in Bx; returns whether something changed (the key of the topology has it). The voltage does not depend on the
+        segment (the current is a state), so a second call with z settles it."""
+        changed = False
+        for i in self.iSat:
+            e, st = self.els[i], self.satst[i]
+            I, F, sl = e['curve']
+            q = e['sat']
+            i0, N = float(x[e['kP']]), len(I) - 1
+            y = abs(i0)
+            k = 0
+            while k < N and y >= I[k + 1]:
+                k += 1
+            knee = next((m for m in range(1, N + 1) if abs(y - I[m]) <= 1e-9 * I[m]), None)
+            v = None if z is None else (z[e['a']] if e['a'] >= 0 else 0) - (z[e['b']] if e['b'] >= 0 else 0)
+            vt = self.sat_vtol(e)
+            if knee is not None:                   # on a knee: the segment the current moves into (outwards if i·v > 0)
+                k = st['k'] if st['k'] in (knee - 1, knee) else knee
+                if v is not None and abs(v) > vt and i0 != 0:
+                    k = knee if i0 * v > 0 else knee - 1
+            hold = bool(_f(q.get('Ir0'))) and float(x[e['kQ']]) < _f(q.get('Ar'), 1.0) * (1 - 1e-9)
+            sg = -st['sg'] if st.pop('flip', False) else st['sg']
+            if hold and v is not None and abs(v) > vt:
+                sg = math.copysign(1.0, v)
+            elif hold and dirs and i in dirs:
+                sg = dirs[i]
+            if (k, hold, sg) == (st['k'], st['hold'], st['sg']):
+                continue
+            changed = True
+            st['k'], st['hold'], st['sg'] = k, hold, sg
+            a, b, kP, kQ = e['a'], e['b'], e['kP'], e['kQ']
+            self.Dm[kP, :] = 0.0
+            self.Dm[kQ, :] = 0.0
+            self.Bx[:, kQ] = 0.0
+            gA = _f(q.get('Ir0')) / _f(q.get('Ar'), 1.0)
+            for nd, s in ((a, 1.0), (b, -1.0)):
+                if nd < 0:
+                    continue
+                self.Dm[kP, nd] += s * sl[k]
+                if hold:
+                    self.Dm[kQ, nd] += s * sg
+                    self.Bx[nd, kQ] -= s * gA
+        return changed
 
     def solve_z(self, t, x, tp):
         b = self.Bx @ x + self.bsrc(t, x) + tp['bd']
@@ -1908,6 +2050,15 @@ class Circuit:
         return 1e-9 * (1 + iscale), 1e-7 * (1 + vscale)
 
     def consistent(self, t, x, init=False):
+        if self.iSat:                   # 5.0.1: the segments of the cores, then their signs from the solution
+            self.sat_update(x)
+            tp, z = self._consistent(t, x, init)
+            if self.sat_update(x, z, self.sat_dir(t, x, z, tp)):
+                tp, z = self._consistent(t, x, init)
+            return tp, z
+        return self._consistent(t, x, init)
+
+    def _consistent(self, t, x, init=False):
         itol, vtol = self.tolerances(x)
         for it in range(80):
             tp = self.topo(t)
@@ -1983,6 +2134,9 @@ class Circuit:
             if rec.get('out'):
                 return float(self._yo[j][rec['out']]) if j < len(self._yo) else 0.0
             return float(self._yb[j]) if j < len(self._yb) else 0.0
+        if 'psi' in rec:                # 5.0.1: the flux of a saturable core (referred to the primary by the factor)
+            i, k = rec['psi']
+            return self.sat_psi(self.els[i], x) * float(k)
         if 'garc' in rec:               # 4.9.1: the conductance of an arc section
             return float(self.arc_g(rec['garc'], x))
         if 'sw' in rec:                 # gate pulse of one switch (after dead time)
@@ -2021,6 +2175,8 @@ class Circuit:
         if k == 'CPL':
             return float(self.icpl[self.iP.index(i)])
         if k == 'NL':
+            if e.get('sat'):
+                return self.sat_cur(e, x)
             if e.get('arc'):
                 return self.arc_g(i, x) * (V(e['a']) - V(e['b']))
             return float(self.inl[self.iN.index(i)])
@@ -3161,6 +3317,35 @@ def simulate(data):
             ev.terminal = True
             events.append(ev)
             owners.append(b)
+        for i in ckt.iSat:
+            # 5.0.1: a saturable core: the knees of its curve end a segment (except a knee the segment starts on); while a
+            # residual flux is held, the zeros of v (the sign of dA/dt flips) and A = A_r (the hold ends) end one too
+            e, st = ckt.els[i], ckt.satst[i]
+            kP, kQ, I = e['kP'], e['kQ'], e['curve'][0]
+            i0 = float(x[kP])
+            for m, Ik in enumerate(I[1:], 1):
+                for sgn in (1.0, -1.0):        # i = ±I_k as two events (|i| − I_k would miss a step over the band |i| < I_k)
+                    def ev(tt, yy, kP=kP, c=sgn * Ik):
+                        return yy[kP] - c
+                    ev.terminal = True
+                    if abs(i0 - sgn * Ik) <= 1e-9 * Ik:   # the knee the segment starts on: only the crossing back
+                        ev.direction = -sgn if st['k'] == m else sgn
+                    events.append(ev)
+                    owners.append(('sat', i, 'k'))
+            if st['hold']:
+                def evA(tt, yy, kQ=kQ, Ar=_f(e['sat'].get('Ar'), 1.0)):
+                    return yy[kQ] - Ar
+                evA.terminal = True
+                evA.direction = 1
+                events.append(evA)
+                owners.append(('sat', i, 'A'))
+                def evV(tt, yy, e=e):          # the next zero of v: from the sign it has now
+                    zz = zof(tt, yy)
+                    return (zz[e['a']] if e['a'] >= 0 else 0) - (zz[e['b']] if e['b'] >= 0 else 0)
+                evV.terminal = True
+                evV.direction = -st['sg']
+                events.append(evV)
+                owners.append(('sat', i, 'v'))
         kw = dict(method=method, rtol=rtol, atol=atol, max_step=max_step, events=events or None)
         if implicit and not ckt.iP and not ckt.iN and not ckt.iA and not ckt.ims and not ckt.sms and not ckt.srms and not ckt.iDE:     # the machines make the system nonlinear: numerical Jacobian
             if ckt.gens:                    # 4.9.1: generators: their port currents and torques in the Jacobian (jac_gen)
@@ -3204,6 +3389,9 @@ def simulate(data):
                     if isinstance(owners[q], dict):
                         flip.add(owners[q]['id'])
                         stats['cmp_events'] += 1
+                    elif isinstance(owners[q], tuple) and owners[q][0] == 'sat':   # 5.0.1: a knee of a core, the end of its hold: a new segment
+                        if owners[q][2] == 'v':                                    # a zero of v: the sign of dA/dt flips (sat_update)
+                            ckt.satst[owners[q][1]]['flip'] = True
                     elif isinstance(owners[q], tuple) and owners[q][0] == 'lps':   # 4.22: the streamers have crossed
                         x[ckt.els[owners[q][1]]['kS']] = 1.0
                     elif isinstance(owners[q], tuple):  # a volt–time gap below U₀ again: its effect restarts

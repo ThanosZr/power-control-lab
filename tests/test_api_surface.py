@@ -202,7 +202,17 @@ class ApiSurface(unittest.TestCase):
             self.assertTrue(api_surface.experimental('pcl', k), k)
         for k in ('/api/study', '/api/study_data'):
             self.assertIn(k, self.now['server'])
-        self.assertEqual(sum(len(v) for v in self.now.values()), 932)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 932)
+
+    def test_the_surface_of_5_0_1(self):
+        """5.0.1: the saturable core. One new part (LSAT, the nonlinear inductor) and new parameters of XFMR and XF3, only
+        additions (the defaults give the netlist of 5.0)."""
+        self.assertEqual(self.now['project']['part:LSAT']['params'], ['tab', 'Lair', 'init', 'psi0'])
+        for k in ('mpos', 'sat', 'satTab', 'psiK', 'Lair', 'psi0'):
+            self.assertIn(k, self.now['project']['part:XFMR']['params'], k)
+        for k in ('sat', 'psiK', 'satTab', 'satRms', 'Xac', 'psiRa', 'psiRb', 'psiRc', 'mpos', 'xs1'):
+            self.assertIn(k, self.now['project']['part:XF3']['params'], k)
+        self.assertEqual(sum(len(v) for v in self.now.values()), 933)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

@@ -1,5 +1,5 @@
 {
- "version": "5.0",
+ "version": "5.0.1",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -7603,6 +7603,19 @@
     ],
     "since": "3.18"
    },
+   "part:LSAT": {
+    "params": [
+     "tab",
+     "Lair",
+     "init",
+     "psi0"
+    ],
+    "pins": [
+     "a",
+     "b"
+    ],
+    "since": "5.0.1"
+   },
    "part:MEAS": {
     "params": [
      "src",
@@ -8993,6 +9006,16 @@
      "tap",
      "core",
      "i00",
+     "sat",
+     "psiK",
+     "satTab",
+     "satRms",
+     "Xac",
+     "psiRa",
+     "psiRb",
+     "psiRc",
+     "mpos",
+     "xs1",
      "neut1",
      "Rng1",
      "Xng1",
@@ -9023,7 +9046,13 @@
      "Llk2",
      "R1",
      "R2",
-     "pol"
+     "pol",
+     "mpos",
+     "sat",
+     "satTab",
+     "psiK",
+     "Lair",
+     "psi0"
     ],
     "pins": [
      "p1",

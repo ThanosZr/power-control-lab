@@ -2468,6 +2468,28 @@
    const pr=ieee9Build({ev:'none',ctl:'full'},ext);pr.sim={...pr.sim,hDiv:200,speed:0.5,stopT:T};pr.scope={...pr.scope,window:{unit:'s',n:T}};return pr;}});
  T.push({id:'empty',group:'Νέο',title:'Κενό κύκλωμα',theory:null,options:[],desc:'Ξεκίνα από την αρχή: πρόσθεσε στοιχεία από τη βιβλιοθήκη (κλικ ή σύρσιμο), ένωσε ακροδέκτες και πάτα ▶.',tasks:['Χρειάζεται γείωση (σύμβολο 0 V) και μπλοκ PWM για τους διακόπτες.'],
   build(){return project([gnd(200,300),C('PWM1','PWM',200,80,{fs:20e3,D:.5})],[],{sim:{hDiv:200,speed:100,stopT:0},scope:{panes:[[]],window:{unit:'T',n:10}}});}});
+ // 5.0.1 (ROADMAP §92, THEORY §8ΩΖ): the energization of a transformer with a saturable core: the inrush current and the
+ // residual flux. The three poles close at t = 0 (the breaker is closed from the start: a pole that starts open would be
+ // latched by the start of the solver where its voltage is positive); the instant on the wave is the phase of the network.
+ // Kept as a case for the comparison with the EMTP (decision 351)
+ T.push({id:'xf_inrush',group:'Μετασχηματιστές (5.0.1)',title:'Ζεύξη μετασχηματιστή: ρεύμα ζεύξης και παραμένουσα ροή',theory:'formula',topology:'xf_inrush',
+  options:[{k:'rem',label:'Παραμένουσα ροή (a, b, c)',options:[['worst','+0,8 / −0,8 / 0 pu'],['half','+0,4 / −0,4 / 0 pu'],['none','Καμία']],def:'worst'},
+   {k:'th',label:'Στιγμή ζεύξης',options:[['0','v_a = 0 (η μεγαλύτερη ροή στη φάση a)'],['90','v_a στο μέγιστο (η φάση a χωρίς ασυμμετρία)']],def:'0'},
+   {k:'sat',label:'Πυρήνας',options:[['two','Κορεσμός: δύο κλίσεις (γόνατο 1,2 pu)'],['tab','Κορεσμός: σημεία ψ–i'],['lin','Γραμμικός, χωρίς κορεσμό (για σύγκριση)']],def:'two'},
+   {k:'pos',label:'Κλάδος μαγνήτισης',options:[['mid','Στη μέση της σκέδασης'],['w2','Στην πλευρά 20 kV (πιο κοντά στον πυρήνα)']],def:'mid'}],
+  desc:'Ένας μετασχηματιστής 40 MVA, 150/20 kV YNd11 χωρίς φορτίο μπαίνει στο δίκτυο 150 kV (S″k = 3 GVA) στο t = 0. Κάθε μονοφασική μονάδα έχει πυρήνα με καμπύλη ψ–i κατά τμήματα: ως το γόνατο η κλίση της X_m (i₀ = 0,3 %), μετά η κλίση του πυρήνα αέρα. Ο πυρήνας ξεκινά από την παραμένουσα ροή της επιλογής. Αν η ροή ξεπεράσει το γόνατο, το ρεύμα μαγνήτισης γίνεται ρεύμα ζεύξης, πολλές φορές το ονομαστικό, με συνιστώσα DC που σβήνει αργά. Το παράδειγμα κρατιέται για σύγκριση με το EMTP.',
+  tasks:['Με v_a = 0 και +0,8 pu στη φάση a, η ροή της πηγής φτάνει 0,8 + 2 = 2,8 pu· ο πυρήνας φτάνει λιγότερο, γιατί το ρεύμα ζεύξης ρίχνει τάση στο δίκτυο και στη σκέδαση. Η κάρτα δίνει μια εκτίμηση της κορυφής με την εμπέδηση του δικτύου· σύγκρινε με την προσομοίωση.',
+   'Βάλε «Καμία» παραμένουσα ροή και ζεύξη στο μέγιστο της v_a: η φάση a ξεκινά συμμετρική, οι b και c όχι.','Ο γραμμικός πυρήνας δεν δίνει ρεύμα ζεύξης: μόνο το ρεύμα μαγνήτισης με DC.',
+   'Η συνιστώσα DC της ροής σβήνει με τις απώλειες: τρέξε ως το 1 s και δες το ρεύμα να μικραίνει από περίοδο σε περίοδο.','Μετακίνησε τον κλάδο στην πλευρά 20 kV: η κορυφή αλλάζει, γιατί αλλάζει η σκέδαση ανάμεσα στο δίκτυο και τον κορεσμένο πυρήνα (Part III, σελ. 2052).'],
+  build(o){const rem=o.rem==='none'?[0,0,0]:o.rem==='half'?[0.4,-0.4,0]:[0.8,-0.8,0],th=+o.th||0,sat=o.sat==='tab'?'tab':o.sat==='lin'?'lin':'two',pos=o.pos==='w2'?'w2':'mid';
+   const grid={Un:150e3,Sk:3e9,XR:10,emf:'un',phase:th,conn:'bus'},xf={grp:'YNd11',Sn:40e6,U1:150e3,U2:20e3,uk:12,Pk:150e3,i0:0.3,P0:25e3,conn:'bus',
+    ...(sat==='lin'?{}:{sat,psiK:1.2,satTab:'0.003: 1, 0.012: 1.15, 0.06: 1.25',psiRa:rem[0],psiRb:rem[1],psiRc:rem[2]}),...(pos==='w2'?{mpos:'w2'}:{})};
+   const comps=[C('G1','GRID3',140,280,grid,{label:'δίκτυο 150 kV'}),C('CB1','CB3',460,280,{cmd:'0:1',conn:'bus'},{label:'κλείνει στο t = 0'}),C('T1','XF3',640,280,xf,{label:'40 MVA YNd11'}),C('B2','EBUS',800,280,{n:3},{lbl:'none'})];
+   const wires=[['CB1:abc2','T1:abc1'],['T1:abc2','B2:bus']];
+   {const [mL,mR]=busMeter(comps,wires,'M',230,280,{i:'i_a',v:'v_a'});wires.push(['G1:abc',mL],[mR,'CB1:abc1']);}
+   return project(comps,wires,{sim:{hDiv:400,speed:2,stopT:1},
+    scope:{panes:[[['Y:CB1/Ia','i_a'],['Y:CB1/Ib','i_b'],['Y:CB1/Ic','i_c']],...(sat==='lin'?[[['Im:T1/Ta','i_m,a'],['Im:T1/Tb','i_m,b'],['Im:T1/Tc','i_m,c']]]:[[['PSIm:T1/Ta','ψ_a'],['PSIm:T1/Tb','ψ_b'],['PSIm:T1/Tc','ψ_c']]])],window:{unit:'T',n:10}},
+    meta:{grid,xf,rem,th,sat,pos}});}});
  // 4.17.1 (§59): the DC-DC tutorials declare their inputs (parameters marked «Είσοδος», in the parameters of the circuit
  // with their explanation): V_in, the inductors and capacitors, the load, the switching frequency and (fixed D) the duty
  const DCDC_IN={V1:[['V','Vin','τάση εισόδου']],L1:[['L','L1','αυτεπαγωγή L1']],L2:[['L','L2','αυτεπαγωγή L2']],C1:[['C','C1','χωρητικότητα C1']],C2:[['C','C2','χωρητικότητα C2 (εξόδου)']],

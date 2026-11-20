@@ -56,7 +56,7 @@ function tut(id,N,opts,over){const t=globalThis.Tutorials.get(id),o={};for(const
  const s=new MNA.Sim(pr,{hDiv:pr.sim?.hDiv,method:pr.sim?.method||'TR',...opts});const t0=process.hrtime.bigint();for(let k=0;k<N;k++)s.run(s.h);
  return {x:Array.from(s.x),v:Array.from(s.computeVals()),info:s.solverInfo(),us:Number(process.hrtime.bigint()-t0)/1e3/N};}
 R.tut={};
-for(const [id,N,over] of [['ieee9_emt',500],['lightning_gis',300],['gen_ctl',500],['hvdc_mmc',400],['pmsm',1500,null,'sparse'],['srm',1500,null,'sparse']]){
+for(const [id,N,over] of [['ieee9_emt',500],['xf_inrush',600],['lightning_gis',300],['gen_ctl',500],['hvdc_mmc',400],['pmsm',1500,null,'sparse'],['srm',1500,null,'sparse']]){
  const sv=id==='pmsm'||id==='srm'?'sparse':undefined;
  const off=tut(id,N,{refac:'off',...(sv?{solver:sv}:{})},over),def=tut(id,N,sv?{solver:sv}:{},over),dn=tut(id,N,{solver:'dense'},over);
  R.tut[id]={n:def.info.n,kind:def.info.kind,refac:def.info.refac,everyStep:def.info.everyStep,asProposed:def.info.asProposed,same:same(off.x,def.x)&&same(off.v,def.v),relDense:rel(dn.x,def.x),

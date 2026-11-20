@@ -28,7 +28,7 @@ class Library(unittest.TestCase):
         self.assertEqual(self.r['tax']['level']['groups'], ['Βασικά', 'Προχωρημένα'])
 
     def test_search_favourites_and_new_parts(self):
-        self.assertEqual(self.r['search']['pinio'], ['L'])
+        self.assertEqual(self.r['search']['pinio'], ['L', 'LSAT'])     # 5.0.1: and the nonlinear inductor
         self.assertIn('SW', self.r['search']['sw'])
         self.assertIn('CB3', self.r['search']['sw'])
         self.assertEqual(self.r['search']['none'], 0)

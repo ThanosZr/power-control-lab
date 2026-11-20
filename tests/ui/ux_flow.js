@@ -45,7 +45,7 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
   out.saved=JSON.parse(localStorage.getItem('pcl-library')||'{}');return out;});
  ok(Object.values(R.lib).filter(v=>v&&v.missing).every(v=>!v.missing.length),'every part in every taxonomy '+JSON.stringify(Object.fromEntries(Object.entries(R.lib).filter(([k,v])=>v&&v.missing).map(([k,v])=>[k,v.missing.length]))));
  ok(R.lib.closed>=8,'by field most groups start closed ('+R.lib.closed+')');
- ok(JSON.stringify(R.lib.search)==='["L"]','search without accents finds the inductor '+JSON.stringify(R.lib.search));
+ ok(JSON.stringify(R.lib.search)==='["L","LSAT"]','search without accents finds the inductor and the nonlinear inductor (5.0.1) '+JSON.stringify(R.lib.search));
  ok(R.lib.mine.includes('CPL')&&R.lib.mine.includes('SCR')&&R.lib.saved.tax==='mine'&&R.lib.saved.fav.includes('CPL'),'favourites and recent parts, remembered '+JSON.stringify(R.lib.mine));
  await p.screenshot({path:OUT+'/ux_library.png'});
  await p.evaluate(()=>{document.querySelector('#pal-tax').value='field';document.querySelector('#pal-tax').dispatchEvent(new Event('change'));});

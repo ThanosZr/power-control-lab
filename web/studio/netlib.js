@@ -134,7 +134,30 @@
   const U1=Math.max(num(p.U1,150e3),1e-9),U2=Math.max(num(p.U2,20e3),1e-9),Sn=Math.max(num(p.Sn,40e6),1e-9),w=2*Math.PI*Math.max(num(p.f,50),1e-9);
   const Uw1=(G[0]==='Y'?U1/Math.sqrt(3):U1)*(1+num(p.tap,0)/100),Uw2=G[1]==='Y'?U2/Math.sqrt(3):U2,n=Uw2/Uw1,Su=Sn/3,Zb1=Uw1*Uw1/Su;
   const Zk=Math.max(num(p.uk,10),0)/100*Zb1,Rk=Math.max(num(p.Pk,0),0)/3*(Uw1/Su)**2,Xk=Math.sqrt(Math.max(Zk*Zk-Rk*Rk,0)),i0=Math.max(num(p.i0,0.5),0),P0=Math.max(num(p.P0,0),0);
-  return {G,n,Uw1,Uw2,Zb1,Rk,Xk,w,Lm:(i0>0?Zb1/(i0/100):Zb1*1e6)/w,Rfe:P0>0?Uw1*Uw1/(P0/3):0};}
+  return {G,n,Uw1,Uw2,Zb1,Rk,Xk,w,Lm:(i0>0?Zb1/(i0/100):Zb1*1e6)/w,Rfe:P0>0?Uw1*Uw1/(P0/3):0,Su,i0,P0,Sn};}
+ // 5.0.1 (ROADMAP §56, THEORY §8ΩΖ): the saturable core of the units, in SI on side 1 (the curve, the slope after it, the
+ // residual flux of each phase, the volt-seconds of one period at rated voltage). Bases per unit (one winding of side 1):
+ // ψ_b = √2·U_w1/ω, i_b = √2·S_u/U_w1 (peaks), L_b = ψ_b/i_b = Z_b1/ω. Two slopes: X_m = 100/i₀ up to ψ_k; a table of peaks
+ // in pu; or the open-circuit test in rms values (the loss part U·P₀/S_n taken out, Part III eq. (10), then Parts.magRms).
+ // After the last point the slope X_ac − X_lk (the leakage from side 1 to the branch: s·X_k in the middle, 0 at side 1,
+ // X_k at side 2), X_ac = 2·u_k when not given (the rule of thumb of the PSCAD help)
+ // an error in the data of a library part: the solver shows it as an error of the netlist (mna.js), not as an internal one
+ const libErr=m=>Object.assign(new Error(m),{netlib:true});
+ function xfSat(p,d,s1,mp,nm){const m=p.sat;if(!m||m==='lin')return null;
+  const Pb=Math.SQRT2*d.Uw1/d.w,Ib=Math.SQRT2*d.Su/d.Uw1,Lb=d.Zb1/d.w,Xk=d.Xk/d.Zb1;let pts;
+  if(m==='two'){const Xm=d.i0>0?100/d.i0:1e6,pk=num(p.psiK,1.2);if(!(pk>0))throw libErr(nm+': η ροή του γονάτου ψ_k πρέπει να είναι θετική.');pts=[[pk/Xm,pk]];}
+  else if(m==='tab')pts=P.pairTable(p.satTab);
+  else{const P0=d.P0/d.Sn,rows=[];for(const [I,U] of P.pairTable(p.satRms)){const Ip=I/100,Il=U*P0;if(!(Ip>Il))throw libErr(`${nm}: στη δοκιμή κενού το ρεύμα ${I} % στα ${U} pu είναι μικρότερο από το μέρος των απωλειών (${(100*Il).toPrecision(3)} %).`);rows.push([Math.sqrt(Ip*Ip-Il*Il),U]);}
+   const r=P.magRms(rows);if(r.err)throw libErr(`${nm}: ${r.err}`);pts=r.pts;}
+  const Xac=num(p.Xac,0)>0?num(p.Xac,0):2*Math.max(num(p.uk,10),0)/100,Xb=mp==='w1'?0:mp==='w2'?Xk:s1*Xk,Xs=Xac-Xb;
+  if(!(Xs>0))throw libErr(`${nm}: η αντίδραση πυρήνα αέρα X_ac = ${Xac.toPrecision(3)} pu πρέπει να είναι μεγαλύτερη από τη σκέδαση ως τον κλάδο μαγνήτισης (${Xb.toPrecision(3)} pu).`);
+  const ch=P.magChar(pts,1);if(ch.err)throw libErr(`${nm}: ${ch.err}`);
+  return {pts:pts.map(([i,f])=>[i*Ib,f*Pb]),Lair:Xs*Lb,psi0:['psiRa','psiRb','psiRc'].map(k=>num(p[k],0)*Pb),Ar:4*Pb};}
+ // the core of a unit for the theory card (app.js): the curve on side 1 in SI (Parts.magChar), the bases, the leakage from
+ // side 1 to the branch (pu), the residual fluxes in V·s; null with a linear core
+ function xfCore(p0){const p={...P.defaults('XF3'),...(p0||{})},d=xfData(p),sh=Math.min(Math.max(num(p.xs1,50),0),100)/100,mp=p.mpos==='w1'||p.mpos==='w2'?p.mpos:'mid';
+  const q=xfSat(p,d,sh,mp,'XF3');if(!q)return null;const Xk=d.Xk/d.Zb1;
+  return {ch:P.magChar(q.pts,q.Lair),Pb:Math.SQRT2*d.Uw1/d.w,Ib:Math.SQRT2*d.Su/d.Uw1,Lb:d.Zb1/d.w,Xb:mp==='w1'?0:mp==='w2'?Xk:sh*Xk,Xk,psi0:q.psi0,w:d.w,star:d.G[0]==='Y'};}
  function xfDef(c){const p=prm(c),d=xfData(p),B=builder('Μετασχηματιστής τριφασικός'),A=B.terms(p,['a1','b1','c1'],'abc1'),Z=B.terms(p,['a2','b2','c2'],'abc2');
   // 4.24: the neutral of each star side (neut1, neut2): 'auto' as the group (N/n solid, as before 4.24: a ground at each
   // winding), or solid, R_n + jX_n, isolated, a terminal n1/n2 (one connection per side)
@@ -142,8 +165,13 @@
   const star=(side,grounded)=>{const m=nm[side];if(m==='auto'){const N=B.node('N'+side);if(grounded)B.wire(N,B.gnd());return N;}
    if(done[side]||m==='iso'){done[side]=true;return B.node('N'+side);}done[side]=true;return starPoint(B,m,'N'+side,'n'+side,p['Rng'+side],p['Xng'+side],d.w);};
   const ends=(cn,T,k,side,grounded)=>cn==='Y'?[T[k],star(side,grounded)]:[T[k],T[cn==='ab'?(k+1)%3:(k+2)%3]];
+  // 5.0.1: the share s of side 1 in the leakage (50 %: the netlist of before), the place of the magnetizing branch and the core
+  const sh=Math.min(Math.max(num(p.xs1,50),0),100)/100,mp=p.mpos==='w1'||p.mpos==='w2'?p.mpos:'mid',sat=xfSat(p,d,sh,mp,c.label||c.id);
   for(let k=0;k<3;k++){const [p1,p2]=ends(d.G[0],A,k,1,d.G[2]),[s1,s2]=ends(d.G[1],Z,k,2,d.G[3]);
-   const u=B.comp('T'+PH[k],'XFMR',{n:d.n,Lm:d.Lm,im0:0,Llk1:d.Xk/2/d.w,Llk2:d.Xk/2/d.w*d.n*d.n,R1:d.Rk/2,R2:d.Rk/2*d.n*d.n,pol:'same'});
+   const xp=sh===0.5?{n:d.n,Lm:d.Lm,im0:0,Llk1:d.Xk/2/d.w,Llk2:d.Xk/2/d.w*d.n*d.n,R1:d.Rk/2,R2:d.Rk/2*d.n*d.n,pol:'same'}
+    :{n:d.n,Lm:d.Lm,im0:0,Llk1:d.Xk*sh/d.w,Llk2:d.Xk*(1-sh)/d.w*d.n*d.n,R1:d.Rk/2,R2:d.Rk/2*d.n*d.n,pol:'same'};
+   if(mp!=='mid')xp.mpos=mp;if(sat)Object.assign(xp,{sat:'sat',satTab:sat.pts,Lair:sat.Lair,psi0:sat.psi0[k],Ar:sat.Ar});
+   const u=B.comp('T'+PH[k],'XFMR',xp);
    B.wire(p1,[u,'p1']);B.wire(p2,[u,'p2']);B.wire(s1,[u,'s1']);B.wire(s2,[u,'s2']);
    if(d.Rfe>0){const r=B.comp('Rfe'+PH[k],'R',{R:d.Rfe});B.wire(p1,[r,'a']);B.wire(p2,[r,'b']);}}
   // 4.2: three-legged core: the zero-sequence flux closes through air and tank, a linear zero-sequence magnetizing
@@ -1529,7 +1557,7 @@
  // the side of each port: from where the part has the pin on its own symbol (x < 0: left); the order: top to bottom
  function sidesOf(c){const out={},ord=[];const pins=P.pinsOf({...c,rot:0,flip:false});for(const [n,q] of Object.entries(pins)){out[n]=q[0]<0?'l':q[0]>0?'r':q[1]<0?'l':'r';ord.push([n,q[1],q[0]]);}
   ord.sort((a,b)=>a[1]-b[1]||a[2]-b[2]);return {sides:out,order:ord.map(o=>o[0])};}
- const api={TYPES,IMPL_TYPES,forceImpl,layoutDef,sidesOf,saiFitL1,isLib,needs,expand,defOf,warnings,gridZ,xfData,lineData,faultCurrents,behindXF,GROUPS,footTable,saiParams};
+ const api={TYPES,IMPL_TYPES,forceImpl,layoutDef,sidesOf,saiFitL1,isLib,needs,expand,defOf,warnings,gridZ,xfData,xfCore,lineData,faultCurrents,behindXF,GROUPS,footTable,saiParams};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;
  root.NetLib=api;
 })(typeof window!=='undefined'?window:globalThis);

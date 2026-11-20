@@ -11,7 +11,7 @@
  const FORMAT=1;                       // the version of the files of a run (run.json, channels.json, data, netlist.json)
  const Pa=()=>root.Parts;
  // the unit of a channel: the same rules as Scope.unitOf (scope.js), here without the page (tests/test_study.py compares them)
- const UNIT={V:'V',I:'A',P:'W',N:'V',VN:'V',V2:'V',I2:'A',Im:'A',Vb:'V',Vc:'V',Vab:'V',Ib:'A',Ic:'A',PSW:'W',D:'',G:'',GS:'',REF:'',MEAS:'',CAR:''};
+ const UNIT={V:'V',I:'A',P:'W',N:'V',VN:'V',V2:'V',I2:'A',Im:'A',PSIm:'V·s',Vb:'V',Vc:'V',Vab:'V',Ib:'A',Ic:'A',PSW:'W',D:'',G:'',GS:'',REF:'',MEAS:'',CAR:''};
  for(let k=1;k<=8;k++){if(k>2){UNIT['V'+k]='V';UNIT['I'+k]='A';}UNIT['PSI'+k]='V·s';}
  function unitOf(key,sim){const pre=key.split(':')[0],id=key.split(':')[1];
   if(pre==='REF'||pre==='MEAS'){const k=sim?.net.ctrls.find(c=>c.id===id);const h=sim?.shById?.get(k?.sensor);return (h?h.qty:k?.qty)==='V'?'V':'A';}
@@ -21,7 +21,7 @@
   return UNIT[pre]??'';}
  // what a channel is, in words (the tree of the viewer groups by part and by this)
  const KIND={N:'τάση κόμβου',V:'τάση',I:'ρεύμα',P:'ισχύς',PSW:'απώλειες διακόπτη',D:'λόγος κατάτμησης',G:'παλμοί',GS:'κατάσταση διακόπτη',REF:'αναφορά',MEAS:'μέτρηση',CAR:'φέρον',
-  Y:'σήμα',H:'δειγματοληψία',Vb:'τάση φάσης b',Vc:'τάση φάσης c',Ib:'ρεύμα φάσης b',Ic:'ρεύμα φάσης c',Vab:'πολική τάση',Im:'ρεύμα μαγνήτισης',Garc:'αγωγιμότητα τόξου'};
+  Y:'σήμα',H:'δειγματοληψία',Vb:'τάση φάσης b',Vc:'τάση φάσης c',Ib:'ρεύμα φάσης b',Ic:'ρεύμα φάσης c',Vab:'πολική τάση',Im:'ρεύμα μαγνήτισης',PSIm:'ροή μαγνήτισης',Garc:'αγωγιμότητα τόξου'};
  function kindOf(key){const pre=key.split(':')[0];if(KIND[pre])return KIND[pre];const m=pre.match(/^([VI]|PSI)(\d)$/);if(m)return (m[1]==='V'?'τάση':m[1]==='I'?'ρεύμα':'πεπλεγμένη ροή')+' '+m[2];return pre;}
  // the channels of a run: [{i, key, name, unit, kind, comp, type, label}], i the column (1 = the first after the time)
  function channels(sim,keys){const info=sim.net.compInfo,out=[];

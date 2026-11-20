@@ -244,12 +244,29 @@
    value:()=>null,
    draw:p=>'<path d="M-30,0 H-9 M9,0 H30 M9,-10 V10 M9,5 L18,14"/><path class="fill" d="M-9,-10 L9,0 L-9,10 Z"/>'+(p.fire==='sig'?sl('M18,14 V22 H0 V30'):'')},
   XFMR:{name:'Μετασχηματιστής',prefix:'T',group:'Μαγνητικά',pins:{p1:[-30,-30],p2:[-30,30],s1:[30,-30],s2:[30,30]},box:[-20,-26,40,52],
-   params:[num('n','Λόγος N₂/N₁','',1),num('Lm','Αυτεπαγωγή μαγνήτισης (πρωτεύον)','H',1e-3),num('im0','Αρχικό ρεύμα μαγνήτισης','A',0,{signed:true,zero:true}),
+   params:[num('n','Λόγος N₂/N₁','',1),num('Lm','Αυτεπαγωγή μαγνήτισης (πρωτεύον)','H',1e-3),num('im0','Αρχικό ρεύμα μαγνήτισης','A',0,{signed:true,zero:true,show:p=>p.sat!=='sat'}),
     num('Llk1','Σκέδαση πρωτεύοντος L_lk1','H',0,{zero:true,hint:'Σε σειρά με το πρωτεύον, έξω από την L_m. Στο flyback χρειάζεται κύκλωμα clamp (RCD).'}),num('Llk2','Σκέδαση δευτερεύοντος L_lk2','H',0,{zero:true}),
     num('R1','Αντίσταση πρωτεύοντος','Ω',0,{zero:true}),num('R2','Αντίσταση δευτερεύοντος','Ω',0,{zero:true}),
-    sel('pol','Πολικότητα',[['same','Τελείες p1 και s1'],['opp','Τελείες p1 και s2 (flyback)']],'same')],
+    sel('pol','Πολικότητα',[['same','Τελείες p1 και s1'],['opp','Τελείες p1 και s2 (flyback)']],'same'),
+    // 5.0.1 (ROADMAP §56): the saturable core and the place of the magnetizing branch
+    sel('mpos','Θέση του κλάδου μαγνήτισης',[['mid','Στη μέση, μετά τη σκέδαση του πρωτεύοντος (όπως ως τώρα)'],['w1','Στους ακροδέκτες του πρωτεύοντος'],['w2','Στους ακροδέκτες του δευτερεύοντος']],'mid',
+     {hint:'Με κορεσμό η θέση μετρά: ο κορεσμένος κλάδος έχει αυτεπαγωγή της τάξης της σκέδασης (Part III των IEEE PES TF, σελ. 2052). Στο δευτερεύον η καμπύλη μεταφέρεται με τον λόγο (ψ₂ = n·ψ₁, i₂ = i₁/n).'}),
+    sel('sat','Μαγνήτιση',[['lin','Γραμμική L_m (όπως ως τώρα)'],['sat','Με κορεσμό: καμπύλη ψ–i κατά τμήματα']],'lin',{hint:'Με κορεσμό ο κλάδος μαγνήτισης ακολουθεί την καμπύλη ψ–i (στο πρωτεύον) και ο λύτης λύνει με Newton σε κάθε βήμα.'}),
+    txt('satTab','Σημεία «ρεύμα: ροή» (A: V·s, στο πρωτεύον)','',{show:p=>p.sat==='sat',hint:'Ο θετικός κλάδος, χωρίς το (0, 0)· η καμπύλη είναι συμμετρική. Κενό: δύο κλίσεις, L_m ως τη ροή του γονάτου και L_air μετά.'}),
+    num('psiK','Ροή στο γόνατο ψ_k','V·s',0.01,{show:p=>p.sat==='sat'&&!String(p.satTab??'').trim()}),
+    num('Lair','Κλίση μετά το τελευταίο σημείο L_air (πυρήνας αέρα)','H',1e-5,{show:p=>p.sat==='sat',hint:'Η αυτεπαγωγή του κορεσμένου πυρήνα, στο πρωτεύον. Με πίνακα, 0 = συνέχεια του τελευταίου τμήματος.'}),
+    num('psi0','Αρχική (παραμένουσα) ροή ψ₀','V·s',0,{signed:true,zero:true,show:p=>p.sat==='sat',hint:'Κρατιέται όσο ο πυρήνας δεν διεγείρεται, και σβήνει σε περίπου μία περίοδο διέγερσης (THEORY §8ΩΖ). 0: αρχή από τη μόνιμη κατάσταση ή από το μηδέν.'})],
    value:p=>p.n,unit:'',
    draw:p=>`<path d="M-30,-30 H-14 V-24 a6,6 0 0,1 0,12 a6,6 0 0,1 0,12 a6,6 0 0,1 0,12 a6,6 0 0,1 0,12 V30 H-30 M30,-30 H14 V-24 a6,6 0 0,0 0,12 a6,6 0 0,0 0,12 a6,6 0 0,0 0,12 a6,6 0 0,0 0,12 V30 H30"/><path class="thin" d="M-3,-26 V26 M3,-26 V26"/><circle class="dot" cx="-20" cy="-26" r="2.6"/><circle class="dot" cx="20" cy="${p.pol==='opp'?26:-26}" r="2.6"/>`},
+  // 5.0.1 (ROADMAP §56): a nonlinear inductor, ψ–i piecewise linear (the core of a transformer, a saturable reactor), as the
+  // nonlinear inductance of the EMTP-type programs; the state is the flux
+  LSAT:{name:'Μη γραμμικό πηνίο (ψ–i)',prefix:'LN',group:'Μαγνητικά',pins:{a:[-30,0],b:[30,0]},box:[-24,-14,48,22],
+   params:[txt('tab','Σημεία «ρεύμα: ροή» (A: V·s)','1: 0.1, 10: 0.11',{hint:'Ο θετικός κλάδος, χωρίς το (0, 0)· η καμπύλη είναι συμμετρική, και ρεύμα και ροή αυξάνουν μαζί. Η πρώτη κλίση είναι η ακόρεστη αυτεπαγωγή.'}),
+    num('Lair','Κλίση μετά το τελευταίο σημείο L_air','H',1e-3,{zero:true,hint:'0 = συνέχεια του τελευταίου τμήματος (όπως το EMTP).'}),
+    sel('init','Αρχή',[['ss','Στη μόνιμη κατάσταση γραμμικό, με την πρώτη κλίση'],['psi0','Από τη ροή ψ₀ (έξω από τη μόνιμη κατάσταση)']],'ss',{hint:'Η μόνιμη κατάσταση μετρά μόνο όταν το κύκλωμα ξεκινά από φασιθέτες (Ρυθμίσεις επίλυσης → Αρχή). Χωρίς αυτήν το πηνίο ξεκινά από ψ = 0.'}),
+    num('psi0','Αρχική ροή ψ₀','V·s',0,{signed:true,zero:true,show:p=>p.init==='psi0',hint:'Κρατιέται χωρίς ρεύμα όσο το πηνίο δεν διεγείρεται, και σβήνει σε περίπου μία περίοδο διέγερσης (THEORY §8ΩΖ).'})],
+   value:p=>p.Lair,unit:'H',
+   draw:()=>'<path d="M-30,0 H-24 a6,6 0 0,1 12,0 a6,6 0 0,1 12,0 a6,6 0 0,1 12,0 a6,6 0 0,1 12,0 H30"/><path class="thin" d="M-18,10 L-8,10 L8,-10 L18,-10"/>'},
   // lightning current (3.5): Heidler or double exponential, IEC 62305-1 waveforms or fitted to a front/tail time
   ILG:{name:'Κεραυνικό ρεύμα (Heidler)',prefix:'I',group:'Πηγές',pins:{p:[0,-40],n:[0,40]},box:[-17,-17,34,34],
    params:[sel('shape','Κυματομορφή',[['10/350','10/350 μs: πρώτο θετικό πλήγμα (IEC 62305-1)'],['1/200','1/200 μs: πρώτο αρνητικό πλήγμα'],['0.25/100','0,25/100 μs: επόμενο αρνητικό πλήγμα'],['custom','Άλλη T1/T2 (προσαρμογή των τ₁, τ₂)'],['direct','Παράμετροι τ₁, τ₂, η (π.χ. από εργαλείο)']],'10/350',
@@ -810,6 +827,17 @@
     num('tap','Τάπ στην πλευρά 1','%',0,{signed:true,zero:true,hint:'+2,5 % = 2,5 % περισσότερες σπείρες στην πλευρά 1 (χαμηλότερη τάση στην πλευρά 2).'}),
     sel('core','Πυρήνας',[['3x1','Τρεις μονοφασικοί (όπως ως τώρα)'],['5leg','Πέντε σκελών ή shell'],['3leg','Τριών σκελών']],'3x1',{hint:'Τριών σκελών: η ροή μηδενικής ακολουθίας κλείνει από τον αέρα και το δοχείο, οπότε η μαγνήτιση μηδενικής ακολουθίας είναι μικρή και γραμμική, στην πλευρά 1 (Dommel, EMTP Theory Book, κεφ. 6). Πέντε σκελών και shell: ίδια με τη θετική, όπως οι τρεις μονοφασικοί (4.2).'}),
     num('i00','Ρεύμα κενού μηδενικής ακολουθίας i₀₀','%',100,{show:p=>p.core==='3leg',hint:'Ρεύμα μαγνήτισης με τάση μηδενικής ακολουθίας ίση με την ονομαστική φασική, στην πλευρά 1. 100 % = X₀m ίση με την εμπέδηση βάσης.'}),
+    // 5.0.1 (ROADMAP §56, THEORY §8ΩΖ): the saturable core of each unit, the place of its branch and the split of the leakage
+    sel('sat','Μαγνήτιση',[['lin','Γραμμική (όπως ως τώρα)'],['two','Κορεσμός: δύο κλίσεις (γόνατο και πυρήνας αέρα)'],['tab','Κορεσμός: σημεία ψ–i σε pu'],['rms','Κορεσμός: από τη δοκιμή κενού (rms)']],'lin',
+     {hint:'Κάθε μονοφασική μονάδα έχει τον δικό της κλάδο μαγνήτισης με καμπύλη ψ–i κατά τμήματα (στην πλευρά 1), σε κάθε ομάδα σύνδεσης. Δύο κλίσεις αρκούν για τα περισσότερα φαινόμενα· ο σιδηροσυντονισμός θέλει πιο λεπτομερή καμπύλη (Part III των IEEE PES TF, σελ. 2054).'}),
+    num('psiK','Ροή στο γόνατο ψ_k','pu',1.2,{show:p=>p.sat==='two',hint:'Σε pu της ονομαστικής κορυφής √2·U/ω. Ως το γόνατο η κλίση είναι η X_m του i₀ (X_m = 100/i₀ pu)· συνήθως 1,1–1,25 pu.'}),
+    txt('satTab','Σημεία «ρεύμα: ροή» σε pu (κορυφές)','0.005: 1, 0.02: 1.15, 0.1: 1.25',{show:p=>p.sat==='tab',hint:'Ρεύμα σε pu της ονομαστικής κορυφής √2·I_n της πλευράς 1, ροή σε pu της √2·U/ω. Ο θετικός κλάδος, χωρίς το (0, 0)· η καμπύλη είναι συμμετρική.'}),
+    txt('satRms','Δοκιμή κενού «ρεύμα: τάση» (% rms: pu rms)','0.3: 0.9, 0.5: 1, 1.5: 1.1, 5: 1.2',{show:p=>p.sat==='rms',hint:'Από την πλευρά 1, ρεύμα σε % του ονομαστικού και τάση σε pu. Το μέρος των απωλειών (P₀ με σταθερή R_fe) αφαιρείται, και τα rms γίνονται καμπύλη κορυφών σημείο προς σημείο (THEORY §8ΩΖ).'}),
+    num('Xac','Αντίδραση πυρήνα αέρα X_ac από την πλευρά 1','pu',0,{zero:true,show:p=>p.sat&&p.sat!=='lin',hint:'0 = Αυτόματα: 2·u_k (η πρακτική του PSCAD). Μετά το τελευταίο σημείο της καμπύλης η κλίση του κλάδου είναι X_ac μείον τη σκέδαση από την πλευρά 1 ως τον κλάδο. Συνήθως 0,3–0,8 pu σε μεγάλους μετασχηματιστές, 0,05–0,15 pu σε μετασχηματιστές διανομής (Part III, σελ. 2054).'}),
+    num('psiRa','Παραμένουσα ροή φάσης a','pu',0,{signed:true,zero:true,show:p=>p.sat&&p.sat!=='lin',hint:'Σε pu της ονομαστικής κορυφής, στη μονάδα της φάσης a. Κρατιέται όσο ο μετασχηματιστής είναι εκτός και σβήνει σε περίπου μία περίοδο μετά τη ζεύξη (THEORY §8ΩΖ). Μετρημένες τιμές: 40–90 %.'}),
+    num('psiRb','Παραμένουσα ροή φάσης b','pu',0,{signed:true,zero:true,show:p=>p.sat&&p.sat!=='lin'}),num('psiRc','Παραμένουσα ροή φάσης c','pu',0,{signed:true,zero:true,show:p=>p.sat&&p.sat!=='lin'}),
+    sel('mpos','Θέση του κλάδου μαγνήτισης',[['mid','Στη μέση, μετά τη σκέδαση της πλευράς 1 (όπως ως τώρα)'],['w1','Στους ακροδέκτες της πλευράς 1'],['w2','Στους ακροδέκτες της πλευράς 2']],'mid',{hint:'Με κορεσμό η θέση μετρά (Part III, σελ. 2052). Το PSCAD τον βάζει συνήθως στο τύλιγμα που είναι πιο κοντά στον πυρήνα.'}),
+    num('xs1','Μερίδιο της πλευράς 1 στη σκέδαση','%',50,{hint:'Όπως ως τώρα: 50 %. Όταν μετρά ο κορεσμός, το Part III προτείνει 75–90 % στην πλευρά υψηλής τάσης (εξωτερικό τύλιγμα, σελ. 2053).'}),
     ...NEUT('neut1','auto',{sfx:'1',label:'Ουδέτερος πλευράς 1',vals:['auto','gnd','z','iso','pin'],auto:'Όπως η ομάδα (N: στερεά, χωρίς N: μονωμένος)',show:p=>xfStar(p,1)}),
     ...NEUT('neut2','auto',{sfx:'2',label:'Ουδέτερος πλευράς 2',vals:['auto','gnd','z','iso','pin'],auto:'Όπως η ομάδα (n: στερεά, χωρίς n: μονωμένος)',show:p=>xfStar(p,2)}),CONN('abc')],
    value:p=>p.grp,unit:'',
@@ -1533,6 +1561,43 @@
   const cur=v=>{const x=Math.abs(v);if(!(x>0))return {i:0,g:0};const s=pick(x),i=s.I*Math.pow(x/s.V,s.a);return {i:Math.sign(v)*i,g:s.a*i/x};};
   const inv=i=>{const y=Math.abs(i);if(!(y>0))return 0;let k=0;while(k<seg.length-1&&y>=pts[k+1][0])k++;const s=seg[k];return Math.sign(i)*s.V*Math.pow(y/s.I,1/s.a);};
   return {pts,seg,cur,inv};}
+ // 5.0.1 (ROADMAP §56, THEORY §8ΩΖ): the curve of a saturable core, ψ–i piecewise linear through points of the positive
+ // branch ([[i, ψ], …], (0, 0) implied), odd, and beyond the last point the slope L_end (the air-core segment; 0 = the last
+ // segment continued), as the nonlinear inductance of the EMTP-type programs. cur(ψ) → {i, g = di/dψ}, inv(i) → ψ.
+ function magChar(pts,Lend){const q=[[0,0]];
+  for(const r of pts||[]){const i=+r[0],f=+r[1];if(!(Number.isFinite(i)&&Number.isFinite(f)))return {err:'Η καμπύλη ψ–i έχει σημείο που δεν είναι αριθμός.'};if(i===0&&f===0)continue;q.push([i,f]);}
+  if(q.length<2)return {err:'Η καμπύλη ψ–i θέλει τουλάχιστον ένα σημείο «ρεύμα: ροή» εκτός από το (0, 0).'};
+  for(let k=1;k<q.length;k++)if(!(q[k][0]>q[k-1][0]&&q[k][1]>q[k-1][1]))return {err:'Στην καμπύλη ψ–i το ρεύμα και η ροή αυξάνουν μαζί σε κάθε σημείο (θετικός κλάδος, από το (0, 0)).'};
+  const N=q.length-1,I=Float64Array.from(q,x=>x[0]),F=Float64Array.from(q,x=>x[1]),s=new Float64Array(N+1);
+  for(let k=0;k<N;k++)s[k]=(I[k+1]-I[k])/(F[k+1]-F[k]);
+  const Le=Lend>0?Lend:1/s[N-1];if(!(Number.isFinite(Le)&&Le>0))return {err:'Η κλίση μετά το τελευταίο σημείο (πυρήνας αέρα) πρέπει να είναι θετική.'};s[N]=1/Le;
+  const cur=psi=>{const x=Math.abs(psi);let k=0;while(k<N&&x>=F[k+1])k++;const i=I[k]+(x-F[k])*s[k];return {i:psi<0?-i:i,g:s[k]};};
+  const inv=i=>{const y=Math.abs(i);let k=0;while(k<N&&y>=I[k+1])k++;const f=F[k]+(y-I[k])/s[k];return i<0?-f:f;};
+  return {I,F,s,N,L0:1/s[0],Lend:Le,cur,inv,pts:q};}
+ // a table «a: b, a: b» (as the arrester's) → [[a, b], …]
+ function pairTable(t){if(Array.isArray(t))return t.map(r=>[+r[0],+r[1]]);const out=[];for(const q of String(t||'').split(/[;,]/)){const m=q.split(':');if(m.length!==2)continue;const a=parseEng(m[0]),b=parseEng(m[1]);if(Number.isFinite(a)&&Number.isFinite(b))out.push([a,b]);}return out;}
+ // (2/π)·∫₀^{π/2} i(Ψ·sin θ)² dθ, the mean square of the current of the curve (I, F, s up to the segment of Ψ) under a
+ // sinusoidal flux of amplitude Ψ: on segment k i = a + b·Ψ·sin θ, and ∫(a + bΨ sin θ)² = a²θ − 2abΨ cos θ + b²Ψ²(θ/2 − sin 2θ/4)
+ function magMeanSq(I,F,s,N,Psi){let sum=0,th0=0;
+  for(let k=0;k<=N&&th0<Math.PI/2;k++){const th1=k<N&&F[k+1]<Psi?Math.asin(F[k+1]/Psi):Math.PI/2,b=s[k],a=I[k]-b*F[k];
+   const P=th=>a*a*th-2*a*b*Psi*Math.cos(th)+b*b*Psi*Psi*(th/2-Math.sin(2*th)/4);sum+=P(th1)-P(th0);th0=th1;}
+  return sum*2/Math.PI;}
+ // 5.0.1: the open-circuit test in rms values to the peak curve, point by point (the idea of the SATURATION routine of the
+ // EMTP-type programs; the formulation ours, THEORY §8ΩΖ): rows [[I_rms, U_rms]] in pu of the rated current and voltage
+ // (the loss part already taken out), sorted by U; the k-th peak flux is Ψ_k = U_k (pu of √2·U/ω) and its peak current
+ // i_k (pu of √2·I) the one for which the mean square of the curve so far, under the flux Ψ_k·sin θ, is I_k²/2. That mean
+ // square is quadratic in i_k (the segment from the previous point is linear in it): three values give it exactly.
+ function magRms(rows){const r=(rows||[]).filter(q=>q[0]>0&&q[1]>0).sort((x,y)=>x[1]-y[1]);
+  if(!r.length)return {err:'Η δοκιμή κενού θέλει τουλάχιστον ένα σημείο «ρεύμα: τάση» με θετικές τιμές.'};
+  for(let k=1;k<r.length;k++)if(!(r[k][1]>r[k-1][1]&&r[k][0]>r[k-1][0]))return {err:'Στη δοκιμή κενού η τάση και το ρεύμα αυξάνουν μαζί σε κάθε σημείο.'};
+  const pts=[];
+  for(let k=0;k<r.length;k++){const Psi=r[k][1],T=r[k][0]*r[k][0]/2,i0=k?pts[k-1][0]:0,d=Math.max(i0,r[k][0]);
+   const g=x=>{const c=magChar([...pts,[x,Psi]],1);return magMeanSq(c.I,c.F,c.s,c.N,Psi);};
+   const x0=i0+d,x1=i0+2*d,x2=i0+3*d,g0=g(x0),g1=g(x1),g2=g(x2),A=(g2-2*g1+g0)/(2*d*d),B=(g1-g0)/d-A*(x0+x1),C=g0-A*x0*x0-B*x0;
+   const D=B*B-4*A*(C-T),x=A>0&&D>=0?(-B+Math.sqrt(D))/(2*A):NaN;
+   if(!(x>i0))return {err:`Η δοκιμή κενού δεν δίνει μονότονη καμπύλη στο σημείο ${k+1} (U = ${fmtNum(Psi)} pu): το ρεύμα αυξάνει λιγότερο από όσο ζητά η καμπύλη ως εκεί.`};
+   pts.push([x,Psi]);}
+  return {pts};}
  // impulse generator design (3.10, book eq. 3.21–3.33): R₁ (front) and R₂ (tail) from C₁, C₂ and the roots α₁ < α₂ of the wave.
  // pos 'gen': R₂ across C₁ (type β), 'load': R₂ across C₂ (type α). Both give V(t) = V₀/(R₁C₂)·(e^(−α₁t) − e^(−α₂t))/(α₂ − α₁).
  function impulseDesign({C1,C2,a1,a2,pos}){const a=a1+a2,b=a1*a2,A=1/C1+1/C2,B=b*(pos==='load'?C1:C2),D=a*a-4*A*B;
@@ -1601,7 +1666,7 @@
  // the network library: a change rebuilds its definition (4.1); from 4.2 a value that keeps the inner circuit the same is
  // live (the reload carries the states by the inner ids), and only what changes the inner circuit is structural
  Object.assign(STRUCT,{AIC:new Set(['scheme']),GRID3:new Set(['z0','conn','neut']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn','model','arc']),ARC:new Set(['ctl','vm','arc']),
-  XF3:new Set(['grp','P0','core','conn','neut1','neut2']),LOAD3:new Set(['cn','model','conn','neut']),
+  XF3:new Set(['grp','P0','core','conn','neut1','neut2','sat','mpos']),XFMR:new Set(['sat','mpos']),LOAD3:new Set(['cn','model','conn','neut']),
   GEN3:new Set(['data','conv','shaft','Hm','exc','mech','init','neut','conn']),LINE3:new Set(['unit','z0','conn']),TLM:new Set(['model','data','mdl','len','f','fmin','dec','ppd','fti','conn','cp','npi','tiauto','nmax','ti','vtrap'])});
  const structCache=new Map();
  function structural(type,k){const key=type+'|'+k;if(structCache.has(key))return structCache.get(key);let r=!!STRUCT[type]?.has(k);
@@ -1659,7 +1724,7 @@
    params:d.params.map(x=>({k:x.k,label:x.label,unit:x.unit||'',def:x.def,type:x.type,...(x.options?{options:x.options.map(o=>o[0])}:{})}))};});}
  const api={setSym,symStyle,symHV,hvPath,phaseSplit,machines,structural,PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,fmtNum,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
   parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,bewley,movChar,TLM_TYPICAL,tlmData,tlmM,tlmPin,tlmPins,tlmKey,tlmModel,
-  srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv,
+  srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv,magChar,magRms,magMeanSq,pairTable,
   genModel,genAxis,genTsc,genGamma,genDQ,genSteady,plist,neutOf,xfNeut,xfStar};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

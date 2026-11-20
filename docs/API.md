@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 5.0: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (932 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 5.0.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (933 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 5.0.
+Κανένα στην 5.0.1.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -879,7 +879,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-134 σημεία.
+135 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -951,6 +951,7 @@
 | `part:LOAD3` | cn, Un, f, P, Q, model, kz, ki, kp, Vmin, neut, Rng, Xng, conn | a, abc, b, c, n | 4.1 |
 | `part:LOGIC` | op | a, b, y | 3.18 |
 | `part:LPF` | fc, y0 | u, y | 3.18 |
+| `part:LSAT` | tab, Lair, init, psi0 | a, b | 5.0.1 |
 | `part:MEAS` | src, qty | y | 3.18 |
 | `part:MMC` | impl, model, N, C, Vdc, vc0, Larm, Ron, fs, sel, band, ectl, norm, kh, kv, fe, Rd, fd, ccsc, tcc, f0, disc, conn | a, abc, b, blk, c, ia, ib, ic, idc, ma, mb, mc, n, p, va, vb, vc, vdc, vs | 4.14 |
 | `part:MMCA` | N, model, C, Vc, v0, Ron, fs, sel, band, norm, disc | a, b, blk, i, n, ref, v, vav, vs | 4.14 |
@@ -1014,6 +1015,6 @@
 | `part:VM` | — | n, p, y | 3.18 |
 | `part:VP` | — | p, y | 3.18 |
 | `part:VSC2` | dc, Vdc, mmax, filt, init, E0, th0, Vdc0, Lf, Rf, Cf, conn | a, abc, b, c, ia, ib, ic, m, ma, mb, mc, meas, n, oa, ob, oc, p, va, vb, vc, vdc | 4.18 |
-| `part:XF3` | grp, Sn, U1, U2, f, uk, Pk, i0, P0, tap, core, i00, neut1, Rng1, Xng1, neut2, Rng2, Xng2, conn | a1, a2, abc1, abc2, b1, b2, c1, c2, n2 | 4.1 |
-| `part:XFMR` | n, Lm, im0, Llk1, Llk2, R1, R2, pol | p1, p2, s1, s2 | 3.18 |
+| `part:XF3` | grp, Sn, U1, U2, f, uk, Pk, i0, P0, tap, core, i00, sat, psiK, satTab, satRms, Xac, psiRa, psiRb, psiRc, mpos, xs1, neut1, Rng1, Xng1, neut2, Rng2, Xng2, conn | a1, a2, abc1, abc2, b1, b2, c1, c2, n2 | 4.1 |
+| `part:XFMR` | n, Lm, im0, Llk1, Llk2, R1, R2, pol, mpos, sat, satTab, psiK, Lair, psi0 | p1, p2, s1, s2 | 3.18 |
 | `part:ZSER3` | Rs, Ls, Rp1, Lp, Rp2, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.16 |

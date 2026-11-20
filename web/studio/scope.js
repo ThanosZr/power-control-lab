@@ -17,7 +17,7 @@
 //    ring buffer; the envelope keeps the mean (sum and count per bucket) and has as many buckets as the memory allows
 (function(root){
  const COLORS=['#147966','#c47a1c','#2f5fa0','#b03a5b','#6b4fa0','#3d8b3d','#1f8fa0','#8a5a2b'];
- const UNIT={V:'V',I:'A',P:'W',N:'V',VN:'V',V2:'V',I2:'A',Im:'A',Vb:'V',Vc:'V',Vab:'V',Ib:'A',Ic:'A',PSW:'W',D:'',G:'',GS:'',REF:'',MEAS:'',CAR:''};
+ const UNIT={V:'V',I:'A',P:'W',N:'V',VN:'V',V2:'V',I2:'A',Im:'A',PSIm:'V·s',Vb:'V',Vc:'V',Vab:'V',Ib:'A',Ic:'A',PSW:'W',D:'',G:'',GS:'',REF:'',MEAS:'',CAR:''};
  // ports of multiports and machine phases (3.5–3.6): V3…V8, I3…I8, fluxes PSI1…PSI8
  for(let k=1;k<=8;k++){if(k>2){UNIT['V'+k]='V';UNIT['I'+k]='A';}UNIT['PSI'+k]='V·s';}
  // on/off signals: a pane holding only these draws each one in its own lane
