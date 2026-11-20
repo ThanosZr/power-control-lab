@@ -212,6 +212,10 @@ class ApiSurface(unittest.TestCase):
             self.assertIn(k, self.now['project']['part:XFMR']['params'], k)
         for k in ('sat', 'psiK', 'satTab', 'satRms', 'Xac', 'psiRa', 'psiRb', 'psiRc', 'mpos', 'xs1'):
             self.assertIn(k, self.now['project']['part:XF3']['params'], k)
+        # decision 355: the line without distortion (TL) and the CP line from data per mode (TLM, src 'modal')
+        self.assertIn('loss', self.now['project']['part:TL']['params'])
+        for k in ('src', 'nph', 'lu', 'mlen', 'mspec', 'transp', 'mdata', 'mti', 'mloss'):
+            self.assertIn(k, self.now['project']['part:TLM']['params'], k)
         self.assertEqual(sum(len(v) for v in self.now.values()), 933)
 
     def test_the_surface_of_4_19_5(self):

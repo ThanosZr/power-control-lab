@@ -172,6 +172,19 @@
  function LPM_PARAMS(show){return [num('gl','Διάκενο g (απόσταση διάσπασης)','m',3.2,{show}),num('E50','Μέση ένταση στην U₅₀ (CFO) E₅₀','V/m',560e3,{show,hint:'Οι streamers χρειάζονται t_s με 1/t_s = 1,25·E/E₅₀ − 0,95 (t_s σε μs, E = |v|/g). Μετά προχωρά ο οχετός.'}),
   num('Kp','K (θετική πολικότητα)','m²/(V²·s)',1.2e-6,{show,hint:'dL/dt = K·|v|·(|v|/(g − L) − E₀). Μονωτήρες πινακίου: θετική 1,2·10⁻⁶ με E₀ 520 kV/m, αρνητική 1,3·10⁻⁶ με 600 kV/m· διάκενα αέρα και μονωτήρες στύλου 0,8·10⁻⁶ / 600 kV/m και 1,0·10⁻⁶ / 670 kV/m.'}),
   num('E0p','E₀ (θετική πολικότητα)','V/m',520e3,{show}),num('Kn','K (αρνητική πολικότητα)','m²/(V²·s)',1.3e-6,{show}),num('E0n','E₀ (αρνητική πολικότητα)','V/m',600e3,{show})];}
+ // 5.0.1: the line element with CP data per mode (as the 'CP m-phase' of the EMTP): its parameters, shown only with
+ // src = 'modal', and the parameters of the line from geometry hidden then (vtrap and conn stay for both)
+ const isModal=p=>p&&p.src==='modal',modal=o=>({...o,show:p=>isModal(p)});
+ const TLCP_P=[num('nph','Αγωγοί (φάσεις)','',3,modal({hint:'1 ως 12, ακροδέκτες a, b, c, … όπως η γραμμή από γεωμετρία.'})),
+  sel('lu','Μονάδα μήκους',[['km','km'],['m','m']],'km',modal({hint:'Το μήκος, τα R′, L′, C′ ανά μονάδα μήκους και η ταχύτητα σε μονάδες μήκους ανά s, όπως στο EMTP.'})),
+  num('mlen','Μήκος (στη μονάδα μήκους)','',100,modal({})),
+  sel('mspec','Είδος δεδομένων',[['zv','R′, Z_c, v (ταχύτητα)'],['zt','R′, Z_c, τ (χρόνος διάδοσης όλης της γραμμής)'],['lc','R′, L′, C′']],'zv',modal({})),
+  sel('transp','Συνεχής μετάθεση',[['1','Ναι: ρυθμοί γης και εναέριος, T_i του Clarke'],['0','Όχι: ένας ρυθμός ανά αγωγό, T_i από τον χρήστη']],'1',modal({})),
+  txt('mdata','Δεδομένα ανά ρυθμό (γραμμές με «;»)','0.25, 650, 2.2e5; 0.03, 280, 2.95e5',modal({hint:'Μία γραμμή ανά ρυθμό, χωρισμένες με «;», με τις τιμές της με κόμματα, στη σειρά του «Είδους δεδομένων» (R′ σε Ω, L′ σε H, C′ σε F ανά μονάδα μήκους· Z_c σε Ω· v σε μονάδες μήκους ανά s· τ σε s). Με συνεχή μετάθεση δύο γραμμές: ο ρυθμός 1 (γης) και ο 2 (εναέριος, ίδιος για τους ρυθμούς 2 ως m). Χωρίς μετάθεση μία γραμμή ανά αγωγό.'})),
+  txt('mti','T_i (γραμμές με «;»)','',{show:p=>isModal(p)&&p.transp==='0',hint:'Πραγματικός m × m, γραμμή ανά αγωγό και στήλη ανά ρυθμό, π.χ. από τη «Γραμμή από γεωμετρία» στη συχνότητα των παραμέτρων. Αντιστρέψιμος.'}),
+  sel('mloss','Μοντέλο των απωλειών',[['lumped','R/4 – R/2 – R/4 (όπως το EMTP)'],['dl','Χωρίς παραμόρφωση: κάθε κύμα × e^(−R/2Z_c)']],'lumped',modal({}))];
+ const TLCP_KEYS=new Set(['src','conn','vtrap',...TLCP_P.map(q=>q.k)]);
+ const geoOnly=q=>TLCP_KEYS.has(q.k)?q:{...q,show:p=>!isModal(p)&&(q.show?q.show(p):true)};
  const PARTS={
   R:{name:'Αντίσταση',prefix:'R',group:'Παθητικά',pins:{a:[-30,0],b:[30,0]},box:[-22,-8,44,16],
    params:[num('R','Αντίσταση','Ω',10),txt('sched','R(t)','',{hint:SCHED})],
@@ -303,7 +316,8 @@
     num('Lp','Αυτεπαγωγή ανά μέτρο L′','H/m',1.333e-6,{show:p=>p.spec==='lc'}),num('Cp','Χωρητικότητα ανά μέτρο C′','F/m',8.333e-12,{show:p=>p.spec==='lc'}),
     num('Rt','Αντίσταση σειράς όλης της γραμμής R','Ω',0,{show:p=>p.spec==='zt',hint:'Απώλειες (3.11): η R μπαίνει συγκεντρωμένη, R/4 στα άκρα και R/2 στη μέση κάθε τμήματος (Dommel). Το μέτωπο σβήνει περίπου ως e^(−R/(2Z)). 0 = χωρίς απώλειες.'}),
     num('Rp','Αντίσταση σειράς ανά μέτρο R′','Ω/m',0,{show:p=>p.spec!=='zt',hint:'Απώλειες (3.11): R = R′·μήκος, συγκεντρωμένη R/4 στα άκρα και R/2 στη μέση κάθε τμήματος (Dommel). Το μέτωπο σβήνει περίπου ως e^(−R′x/(2Z)). 0 = χωρίς απώλειες.'}),
-    num('nsec','Τμήματα για τις απώλειες','',1,{show:p=>parseEng(p.spec==='zt'?p.Rt:p.Rp)>0,hint:'Η γραμμή χωρίζεται σε N ίσα τμήματα, το καθένα με R/N. Με R/(4N) ≪ Z το μοντέλο πλησιάζει την κατανεμημένη γραμμή. Το βήμα του λύτη μένει ≤ τ/N.'}),
+    sel('loss','Μοντέλο των απωλειών',[['lumped','Συγκεντρωμένες: R/4 – R/2 – R/4 σε κάθε τμήμα (Dommel)'],['dl','Χωρίς παραμόρφωση: κάθε κύμα που φτάνει × e^(−R/2Z)']],'lumped',{show:p=>parseEng(p.spec==='zt'?p.Rt:p.Rp)>0,hint:'5.0.1: όπως το «Distortionless» του CP του EMTP (και το «χωρίς παραμόρφωση» της «Γραμμής από γεωμετρία»): η γραμμή χωρίς απώλειες, και κάθε κύμα που φτάνει στο άλλο άκρο πολλαπλασιάζεται με e^(−R/2Z), ένα τμήμα. Η κυματομορφή δεν παραμορφώνεται, μόνο μικραίνει (THEORY §8ΩΖ.10).'}),
+    num('nsec','Τμήματα για τις απώλειες','',1,{show:p=>parseEng(p.spec==='zt'?p.Rt:p.Rp)>0&&p.loss!=='dl',hint:'Η γραμμή χωρίζεται σε N ίσα τμήματα, το καθένα με R/N. Με R/(4N) ≪ Z το μοντέλο πλησιάζει την κατανεμημένη γραμμή. Το βήμα του λύτη μένει ≤ τ/N.'}),
     num('v0','Αρχική τάση (παγιδευμένο φορτίο)','V',0,{signed:true,zero:true,hint:'4.22: η γραμμή ξεκινά με τάση v₀ σε όλο το μήκος της και χωρίς ρεύμα, π.χ. το φορτίο που μένει σε ζυγό GIS μετά από το άνοιγμα ενός αποζεύκτη. 0 = χωρίς τάση.'})],
    value:p=>p.spec==='coax'?tlParams(p).Z:p.Z,unit:'Ω',
    draw:p=>'<path d="M-60,-20 H-34 M34,-20 H60"/><path class="thin" d="M-60,20 H-34 M34,20 H60"/><rect class="block" x="-34" y="-26" width="68" height="52" rx="5"/><path class="thin" d="M-26,-20 H26"/><path class="thin" stroke-dasharray="3 3" d="M-26,20 H26"/>'+tx(parseEng(p?.spec==='zt'?p?.Rt:p?.Rp)>0?'Z, τ, R':'Z, τ',0,4,'bsm')},
@@ -904,7 +918,9 @@
   // or FD (J. Marti: Z_c(s), A(s)·e^(−sτ) as rational functions with real poles, recursive convolution), constant real T_i
   TLM:{name:'Γραμμή από γεωμετρία (CP / FD / WB)',prefix:'LG',group:'Δίκτυο',pins:p=>tlmPins(p),box:p=>{const M=tlmM(p),h=isBus(p)&&M===3?50:Math.max(50,20*M+10);return [-30,-h/2,60,h];},
    bus:p=>isBus(p)&&tlmM(p)===3?{abc1:['a1','b1','c1'],abc2:['a2','b2','c2']}:{},
-   params:[sel('model','Μοντέλο',[['cp','CP: σταθερές παράμετροι (Bergeron, R/4 – R/2 – R/4)'],['fd','FD: εξάρτηση από τη συχνότητα (J. Marti)'],['pi','π ονομαστικό σε τμήματα (4.11)'],['wb','WB: wideband στο πεδίο των φάσεων (ULM, 4.13)']],'cp',{hint:'Όπως το EMTP: CP στη συχνότητα που δίνεις (κάθε ρυθμός μια γραμμή Bergeron με συγκεντρωμένη R), FD με Z_c(ω) και A(ω) ως ρητές συναρτήσεις, και τα δύο με σταθερό πραγματικό T_i· π: συζευγμένα R, L, C σε N τμήματα.'}),
+   params:[sel('src','Δεδομένα',[['geo','Από τη γεωμετρία («Δεδομένα γραμμής…»)'],['modal','CP με δεδομένα ανά ρυθμό (όπως το «CP m-phase» του EMTP)']],'geo',{hint:'5.0.1: με «δεδομένα ανά ρυθμό» η γραμμή είναι CP (Bergeron ανά ρυθμό, όπως με τη γεωμετρία) από R′, Z_c, v (ή τ, ή L′, C′) ανά ρυθμό, χωρίς τον server. Συνεχής μετάθεση: δύο ρυθμοί (γης και εναέριος) με τον ενσωματωμένο T_i του Clarke για m αγωγούς· αλλιώς ένας ρυθμός ανά αγωγό και πραγματικός T_i (i = T_i·i_ρυθμού, v_ρυθμού = T_iᵀ·v). THEORY §8ΩΖ.10.'}),
+    ...TLCP_P,
+    sel('model','Μοντέλο',[['cp','CP: σταθερές παράμετροι (Bergeron, R/4 – R/2 – R/4)'],['fd','FD: εξάρτηση από τη συχνότητα (J. Marti)'],['pi','π ονομαστικό σε τμήματα (4.11)'],['wb','WB: wideband στο πεδίο των φάσεων (ULM, 4.13)']],'cp',{hint:'Όπως το EMTP: CP στη συχνότητα που δίνεις (κάθε ρυθμός μια γραμμή Bergeron με συγκεντρωμένη R), FD με Z_c(ω) και A(ω) ως ρητές συναρτήσεις, και τα δύο με σταθερό πραγματικό T_i· π: συζευγμένα R, L, C σε N τμήματα.'}),
     num('len','Μήκος','km',100),
     num('f','Συχνότητα των παραμέτρων (CP, π)','Hz',50,{show:p=>p.model!=='fd'&&p.model!=='wb',hint:'50 Hz για μόνιμη κατάσταση και σφάλματα, 1–5 kHz για χειρισμούς, 100–500 kHz για κεραυνούς.'}),
     sel('cp','Είδος CP',[['lumped','R/4 – R/2 – R/4'],['lossless','χωρίς απώλειες'],['distortionless','χωρίς παραμόρφωση'],['hf','χωρίς απώλειες, υψηλές συχνότητες']],'lumped',{show:p=>(p.model||'cp')==='cp'}),
@@ -928,8 +944,8 @@
     txt('wbref','Αρχείο WB του EMTP','',{show:()=>false}),txt('wbtxt','Κείμενο του αρχείου WB','',{show:()=>false}),
     txt('vtrap','Παγιδευμένο φορτίο: τάση ανά αγωγό (V)','',{show:p=>p.model!=='pi',hint:'4.11: η γραμμή ξεκινά φορτισμένη σε αυτές τις τάσεις ΣΡ (μία ανά φάση, με κόμμα), όπως οι αρχικές συνθήκες του CP/FD του EMTP (για επαναζεύξη). Όχι μαζί με εκκίνηση από ροή φορτίου.'}),
     txt('data','Δεδομένα γραμμής (JSON)',JSON.stringify(TLM_TYPICAL['400kV']),{show:()=>false}),txt('mdl','Υπολογισμένο μοντέλο (JSON)','',{show:()=>false}),
-    sel('conn','Ακροδέκτες',[['sep','Χωριστοί'],['bus','Δίαυλος abc (3 φάσεις)']],'sep')],
-   value:p=>p.len,unit:'km',
+    sel('conn','Ακροδέκτες',[['sep','Χωριστοί'],['bus','Δίαυλος abc (3 φάσεις)']],'sep')].map(geoOnly),
+   value:p=>p.src==='modal'?parseEng(p.mlen):p.len,unit:'',
    draw:p=>{const M=tlmM(p),bus=isBus(p)&&M===3,h=bus?50:Math.max(50,20*M+10),y=k=>-10*(M-1)+20*k;
     return `<rect class="block" x="-30" y="${-h/2}" width="60" height="${h}" rx="4"/>`+(bus?bl('M-40,0 H-30 M30,0 H40'):`<path d="${Array.from({length:M},(_,k)=>`M-40,${y(k)} H-30 M30,${y(k)} H40`).join(' ')}"/>`)
      +'<path class="thin" d="M-20,-6 Q-10,-14 0,-6 T20,-6 M-20,4 H20"/>'+tx(p.model==='fd'?'FD':p.model==='wb'?'WB':'CP',0,18,'bsm');}},
@@ -1617,12 +1633,13 @@
   else{Z=num(p.Z);tau=num(p.tau);}
   if(!(Z>0))return {err:'Η κυματική αντίσταση πρέπει να είναι θετική.'};if(!(tau>0))return {err:'Ο χρόνος διάδοσης πρέπει να είναι θετικός.'};
   const R=p.spec==='zt'?(num(p.Rt)||0):(num(p.Rp)||0)*num(p.len);if(!(R>=0))return {err:'Η αντίσταση σειράς δεν μπορεί να είναι αρνητική.'};
+  if(p.loss==='dl'&&R>0)return {Z,tau,R,N:1,dl:true}; // 5.0.1: without distortion, one section, every arriving wave times e^(−R/2Z)
   const N=R>0?Math.round(num(p.nsec)||1):1;if(!(N>=1&&N<=1000))return {err:'Τα τμήματα πρέπει να είναι από 1 ως 1000.'};return {Z,tau,R,N};}
 
  const tlmCache=new Map();
  function tlmData(p){const s=String(p.data??'');if(tlmCache.has(s))return tlmCache.get(s);let d=null;try{d=JSON.parse(s);}catch(e){d=null;}if(tlmCache.size>64)tlmCache.clear();tlmCache.set(s,d);return d;}
  // number of phases: the largest phase number of the conductors (0 = ground wire); 3 when the data cannot be read
- function tlmM(p){const d=tlmData(p);if(!d)return 3;let M=0;for(const w of [...(d.wires||[]),...(d.bundles||[])])M=Math.max(M,Math.round(+w.ph)||0);
+ function tlmM(p){if(isModal(p))return Math.max(1,Math.min(12,Math.round(parseEng(p.nph))||1));const d=tlmData(p);if(!d)return 3;let M=0;for(const w of [...(d.wires||[]),...(d.bundles||[])])M=Math.max(M,Math.round(+w.ph)||0);
   // 4.13: a homogeneous cross-bonded cable (pcl.lineconst.xbond_avg): the sheaths (second conductor of each cable) as one
   // conductor ('bond') or grounded ('gnd'), the phases numbered again
   if(d.cables&&(d.xbond==='bond'||d.xbond==='gnd')&&d.cables.length===3){const ph=d.cables.map(c=>[].concat(c.ph??[]).map(v=>Math.round(+v)||0)),s0=ph[0][1]||0;
@@ -1643,7 +1660,26 @@
    if(p.wpas&&p.wpas!=='check')o.wpas=p.wpas;if(p.wgd&&p.wgd!=='auto'&&p.wsrc!=='emtp')o.wgd=p.wgd;}
   return JSON.stringify(o);}
  // the model for the solver: {M, type, Ti (M×M, by rows), modes} or {err}
- function tlmModel(p){if(!tlmData(p))return {err:'τα δεδομένα της γραμμής δεν διαβάζονται (JSON).'};let m=null;try{m=p.mdl?JSON.parse(p.mdl):null;}catch(e){m=null;}
+ // 5.0.1: the CP model from data per mode (src = 'modal'): per mode Z_c, τ (of the whole line) and R = R′·length, with the
+ // built-in Clarke transformation of an m-phase continuously transposed line (column 1 all 1/√m, column j: 1/√(j(j−1)) in the
+ // rows above j, −(j−1)/√(j(j−1)) in row j), or a real T_i of the user (invertible)
+ function clarkeTi(M){return Array.from({length:M},(_,r)=>Array.from({length:M},(_,c)=>{if(c===0)return 1/Math.sqrt(M);const j=c+1,d=Math.sqrt(j*(j-1));return r<c?1/d:r===c?-(j-1)/d:0;}));}
+ function tlcpModel(p){const M=tlmM(p),len=parseEng(p.mlen);if(!(len>0))return {err:'το μήκος πρέπει να είναι θετικό.'};
+  const rows=String(p.mdata??'').split(';').map(r=>r.trim()).filter(Boolean).map(r=>r.split(/[,\s]+/).filter(Boolean).map(parseEng));
+  const tr=p.transp!=='0'||M===1,need=M===1?1:tr?2:M;if(rows.length!==need)return {err:`τα δεδομένα ανά ρυθμό θέλουν ${need} ${need===1?'γραμμή':'γραμμές'} (${M===1?'ένας ρυθμός':tr?'ρυθμός γης και εναέριος':'μία ανά αγωγό'}), δόθηκαν ${rows.length}.`};
+  const sp=['zt','lc'].includes(p.mspec)?p.mspec:'zv',dl=p.mloss==='dl',modes=[];
+  for(const [k,r] of rows.entries()){if(r.length!==3||r.some(v=>!Number.isFinite(v)))return {err:`ο ρυθμός ${k+1} θέλει τρεις αριθμούς.`};
+   const [Rp,a,b]=r;let Zc,tau;if(sp==='lc'){if(!(a>0&&b>0))return {err:`ρυθμός ${k+1}: τα L′ και C′ πρέπει να είναι θετικά.`};Zc=Math.sqrt(a/b);tau=len*Math.sqrt(a*b);}
+   else{Zc=a;tau=sp==='zt'?b:len/b;if(!(b>0))return {err:`ρυθμός ${k+1}: ${sp==='zt'?'ο χρόνος διάδοσης':'η ταχύτητα'} πρέπει να είναι θετικ${sp==='zt'?'ός':'ή'}.`};}
+   if(!(Zc>0))return {err:`ρυθμός ${k+1}: η Z_c πρέπει να είναι θετική.`};if(!(Rp>=0))return {err:`ρυθμός ${k+1}: το R′ δεν μπορεί να είναι αρνητικό.`};
+   modes.push({Zc,tau,R:Rp*len,...(dl?{dl:true}:{})});}
+  let Ti;if(M===1)Ti=[[1]];else if(tr){Ti=clarkeTi(M);while(modes.length<M)modes.push({...modes[1]});}
+  else{Ti=String(p.mti??'').split(';').map(r=>r.trim()).filter(Boolean).map(r=>r.split(/[,\s]+/).filter(Boolean).map(parseEng));
+   if(Ti.length!==M||Ti.some(r=>r.length!==M||r.some(v=>!Number.isFinite(v))))return {err:`ο T_i θέλει ${M} γραμμές με ${M} αριθμούς.`};
+   const A=Ti.map(r=>r.slice());for(let c=0;c<M;c++){let q=c;for(let r=c+1;r<M;r++)if(Math.abs(A[r][c])>Math.abs(A[q][c]))q=r;if(!(Math.abs(A[q][c])>1e-12))return {err:'ο T_i δεν αντιστρέφεται.'};[A[c],A[q]]=[A[q],A[c]];
+    for(let r=c+1;r<M;r++){const f=A[r][c]/A[c][c];for(let z=c;z<M;z++)A[r][z]-=f*A[c][z];}}}
+  return {type:'cp',src:'modal',M,Ti,modes};}
+ function tlmModel(p){if(isModal(p))return tlcpModel(p);if(!tlmData(p))return {err:'τα δεδομένα της γραμμής δεν διαβάζονται (JSON).'};let m=null;try{m=p.mdl?JSON.parse(p.mdl):null;}catch(e){m=null;}
   if(!m||!m.modes)return {err:'δεν έχει υπολογιστεί μοντέλο. Άνοιξε «Δεδομένα γραμμής» και πάτα «Υπολογισμός» (χρειάζεται ο server).',need:true};
   if(m.src!==tlmKey(p))return {err:'το μοντέλο είναι παλιό (άλλαξαν δεδομένα, μήκος ή επιλογές). «Δεδομένα γραμμής» → «Υπολογισμός».',need:true};
   const M=m.M;if(!(M>=1&&m.Ti?.length===M&&m.modes.length===M))return {err:'μη έγκυρο μοντέλο γραμμής.'};
@@ -1667,7 +1703,7 @@
  // live (the reload carries the states by the inner ids), and only what changes the inner circuit is structural
  Object.assign(STRUCT,{AIC:new Set(['scheme']),GRID3:new Set(['z0','conn','neut']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn','model','arc']),ARC:new Set(['ctl','vm','arc']),
   XF3:new Set(['grp','P0','core','conn','neut1','neut2','sat','mpos']),XFMR:new Set(['sat','mpos']),LOAD3:new Set(['cn','model','conn','neut']),
-  GEN3:new Set(['data','conv','shaft','Hm','exc','mech','init','neut','conn']),LINE3:new Set(['unit','z0','conn']),TLM:new Set(['model','data','mdl','len','f','fmin','dec','ppd','fti','conn','cp','npi','tiauto','nmax','ti','vtrap'])});
+  GEN3:new Set(['data','conv','shaft','Hm','exc','mech','init','neut','conn']),LINE3:new Set(['unit','z0','conn']),TLM:new Set(['model','data','mdl','len','f','fmin','dec','ppd','fti','conn','cp','npi','tiauto','nmax','ti','vtrap','src','nph','transp'])});
  const structCache=new Map();
  function structural(type,k){const key=type+'|'+k;if(structCache.has(key))return structCache.get(key);let r=!!STRUCT[type]?.has(k);
   const d=PARTS[type],pd=d?.params?.find(x=>x.k===k);if(!r&&pd&&pd.struct)r=true;
@@ -1723,7 +1759,7 @@
   return {type,name:d.name,...m,pins:Object.keys(elPins({type,params:p})),outputs:Object.entries(sp).filter(([,v])=>v.dir==='out').map(([k])=>k),
    params:d.params.map(x=>({k:x.k,label:x.label,unit:x.unit||'',def:x.def,type:x.type,...(x.options?{options:x.options.map(o=>o[0])}:{})}))};});}
  const api={setSym,symStyle,symHV,hvPath,phaseSplit,machines,structural,PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,fmtNum,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
-  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,bewley,movChar,TLM_TYPICAL,tlmData,tlmM,tlmPin,tlmPins,tlmKey,tlmModel,
+  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,clarkeTi,tlcpModel,bewley,movChar,TLM_TYPICAL,tlmData,tlmM,tlmPin,tlmPins,tlmKey,tlmModel,
   srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv,magChar,magRms,magMeanSq,pairTable,
   genModel,genAxis,genTsc,genGamma,genDQ,genSteady,plist,neutOf,xfNeut,xfStar};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;

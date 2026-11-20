@@ -8753,6 +8753,7 @@
      "Cp",
      "Rt",
      "Rp",
+     "loss",
      "nsec",
      "v0"
     ],
@@ -8766,6 +8767,15 @@
    },
    "part:TLM": {
     "params": [
+     "src",
+     "nph",
+     "lu",
+     "mlen",
+     "mspec",
+     "transp",
+     "mdata",
+     "mti",
+     "mloss",
      "model",
      "len",
      "f",

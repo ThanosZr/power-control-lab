@@ -1004,8 +1004,8 @@
 | `part:TAGI` | name | y | 3.18 |
 | `part:TAGO` | name | u | 3.18 |
 | `part:THD` | dc, scale, win, f, np, fsrc, fmin, t0, clock, first, y0 | f, h1, hh, rms, thd, u | 4.19.6 |
-| `part:TL` | spec, Z, Dco, dco, erco, kv, tau, len, vel, Lp, Cp, Rt, Rp, nsec, v0 | a1, a2, b1, b2 | 3.18 |
-| `part:TLM` | model, len, f, cp, npi, fmin, dec, ppd, fti, tiauto, nmax, ti, wsrc, wtol, wgrp, wfdcm, wdc, wlfw, wopt, wpas, wgd, wbref, wbtxt, vtrap, data, mdl, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.4 |
+| `part:TL` | spec, Z, Dco, dco, erco, kv, tau, len, vel, Lp, Cp, Rt, Rp, loss, nsec, v0 | a1, a2, b1, b2 | 3.18 |
+| `part:TLM` | src, nph, lu, mlen, mspec, transp, mdata, mti, mloss, model, len, f, cp, npi, fmin, dec, ppd, fti, tiauto, nmax, ti, wsrc, wtol, wgrp, wfdcm, wdc, wlfw, wopt, wpas, wgd, wbref, wbtxt, vtrap, data, mdl, conn | a1, a2, abc1, abc2, b1, b2, c1, c2 | 4.4 |
 | `part:TOWER` | model, h, Zt1, Zt2, gam, arms, h1, h2, h3, Zt, vt, foot, R0, rho, E0, ins, Ub, U0, kde, Dde, gl, E50, Kp, E0p, Kn, E0n, impl, meas | a1, a2, b1, b2, c1, c2, d1, d2, e1, e2 | 4.9 |
 | `part:UD` | clock, trig, y0 | u, y | 3.18 |
 | `part:VAC` | Vpk, f, phase, off, Rs, Ls | n, p | 3.18 |

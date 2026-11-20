@@ -823,7 +823,7 @@ class Circuit:
         for i in self.iT:
             e = E[i]
             N = int(e.get('N') or 1)
-            r = _f(e.get('Rl'), 0) / (4 * N)
+            r = 0.0 if 'att' in e else _f(e.get('Rl'), 0) / (4 * N)       # 5.0.1: without distortion, no lumped R
             e['N'], e['ts'], e['Ze'] = N, e['tau'] / N, e['Z'] + r
             e['vinit'] = _f(e.get('vinit'), 0.0)
             e['hh'] = (e['Z'] - r) / e['Ze']
@@ -1647,6 +1647,8 @@ class Circuit:
         N, Ze, h = e['N'], e['Ze'], e['hh']
         AL = q[j] / Ze + h * q[N + 1 + j]
         AR = q[j + 1] / Ze + h * q[2 * N + 1 + j]
+        if 'att' in e:                  # 5.0.1: without distortion (one section, h = 1): every arriving wave times e^(−R/2Z)
+            return -e['att'] * AR, -e['att'] * AL
         return -(1 + h) / 2 * AR - (1 - h) / 2 * AL, -(1 + h) / 2 * AL - (1 - h) / 2 * AR
 
     def tl_ih(self, e, t):

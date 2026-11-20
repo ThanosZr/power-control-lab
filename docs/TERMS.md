@@ -400,6 +400,9 @@
 | flux linkage | πεπλεγμένη ροή ψ |
 | magnetizing branch | κλάδος μαγνήτισης |
 | open-circuit test, no-load test | δοκιμή κενού |
+| distortionless line | γραμμή χωρίς παραμόρφωση |
+| propagation mode (of a line) | ρυθμός (διάδοσης) |
+| continuously transposed line | γραμμή με συνεχή μετάθεση |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 

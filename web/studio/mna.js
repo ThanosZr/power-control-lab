@@ -246,6 +246,8 @@
      if(e.arc&&e.arc.closed){y(e.a,e.b,1/e.arc.Ron,0);break;}left.add(e.k);break;
     case 'TL':{// 4.9: a distributed line at ω₀ as its exact two-port (lossless; R adds only a small start transient)
      if(e.v0){left.add('TLQ');break;} // 4.22: a line with an initial voltage starts from it, not from the steady state
+     if(e.att!==undefined){const Y=tlDlY(e,w0),P=[[e.a1,e.b1],[e.a2,e.b2]]; // 5.0.1: without distortion, the two-port of γℓ = R/2Z + jωτ
+      for(let k=0;k<2;k++)for(let j=0;j<2;j++){const g=k===j?Y[0]:Y[1],[ak,bk]=P[k],[aj,bj]=P[j];ad(ak,aj,g[0],g[1]);ad(bk,bj,g[0],g[1]);ad(ak,bj,-g[0],-g[1]);ad(bk,aj,-g[0],-g[1]);}break;}
      const th=w0*e.tau,y11=-1/(e.Z*Math.tan(th)),y12=1/(e.Z*Math.sin(th)),P=[[e.a1,e.b1],[e.a2,e.b2]];
      for(let k=0;k<2;k++)for(let j=0;j<2;j++){const g=k===j?y11:y12,[ak,bk]=P[k],[aj,bj]=P[j];ad(ak,aj,0,g);ad(bk,bj,0,g);ad(ak,bj,0,-g);ad(bk,aj,0,-g);}break;}
     // 4.12: a line from geometry as the two-port of its model at ω₀ (trapped charge and a steady start do not go together: cpline σ. 11)
@@ -310,7 +312,8 @@
    case 'CHB':{const r=e.row;dad(e.a,r,1);dad(r,e.a,1);dad(e.b,r,-1);dad(r,e.b,-1);dad(r,r,-e.Rarm);break;}
    // 4.12: the lines at DC (their series resistance, at least 10⁻⁶·Z): without them the nodes between two lines held only
    // GMIN and the DC part did not solve
-   case 'TL':{const g=1/Math.max(e.Rl||0,1e-6*e.Z),P=[[e.a1,e.b1],[e.a2,e.b2]];for(let k=0;k<2;k++)for(let j=0;j<2;j++){const y=k===j?g:-g,[ak,bk]=P[k],[aj,bj]=P[j];dad(ak,aj,y);dad(bk,bj,y);dad(ak,bj,-y);dad(bk,aj,-y);}break;}
+   case 'TL':if(e.att!==undefined){const Y=tlDlY(e,0),P=[[e.a1,e.b1],[e.a2,e.b2]];for(let k=0;k<2;k++)for(let j=0;j<2;j++){const y=(k===j?Y[0]:Y[1])[0],[ak,bk]=P[k],[aj,bj]=P[j];dad(ak,aj,y);dad(bk,bj,y);dad(ak,bj,-y);dad(bk,aj,-y);}break;}
+   {const g=1/Math.max(e.Rl||0,1e-6*e.Z),P=[[e.a1,e.b1],[e.a2,e.b2]];for(let k=0;k<2;k++)for(let j=0;j<2;j++){const y=k===j?g:-g,[ak,bk]=P[k],[aj,bj]=P[j];dad(ak,aj,y);dad(bk,bj,y);dad(ak,bj,-y);dad(bk,aj,-y);}break;}
    case 'TLM':{const A=tlmAcY(e,0,0,true),M=e.M;for(let r=0;r<M;r++)for(let q=0;q<M;q++){const j=2*(r*M+q),ys=A.Bs[j],ym=A.Bm[j];
      dad(e.n1[r],e.n1[q],ys);dad(e.n2[r],e.n2[q],ys);dad(e.n1[r],e.n2[q],ym);dad(e.n2[r],e.n1[q],ym);}break;}}}
   for(const [,,a,b,g] of sh)dy(a,b,g);
@@ -368,7 +371,7 @@
  // 4.9: the history of a distributed line in a sinusoidal steady state (phasors of the end voltages, ω₀): junction
  // voltages and section currents from the lossless line equations, sampled every h from −(τ/N + 3h) to 0, so that a
  // start from a load flow (solve.init 'ac') carries the line energized (e.g. the line side of a short-line fault)
- function tlSteady(e,w0,h,V1,V2){const N=e.N,Z=e.Z,th=w0*e.tau,mul=(a,b)=>[a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]];
+ function tlSteady(e,w0,h,V1,V2){if(e.att!==undefined)return tlSteadyDl(e,w0,h,V1,V2);const N=e.N,Z=e.Z,th=w0*e.tau,mul=(a,b)=>[a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]];
   const y11=[0,-1/(Z*Math.tan(th))],y12=[0,1/(Z*Math.sin(th))],I1a=mul(y11,V1),I1b=mul(y12,V2),I1=[I1a[0]+I1b[0],I1a[1]+I1b[1]];
   const at=x=>{const c=Math.cos(th*x),sn=Math.sin(th*x);return {v:[V1[0]*c+Z*I1[1]*sn,V1[1]*c-Z*I1[0]*sn],i:[I1[0]*c+V1[1]/Z*sn,I1[1]*c-V1[0]/Z*sn]};};
   const J=Array.from({length:N+1},(_,k)=>at(k/N)),H=e.H,C=H.c,n=Math.max(4,Math.ceil(e.ts/h)+3);H.t.length=0;for(const c of C)c.length=0;
@@ -376,6 +379,15 @@
   for(let q=n;q>=0;q--){const t=-q*h;H.t.push(t);for(let k=0;k<=N;k++)C[k].push(re(J[k].v,t));
    for(let j=0;j<N;j++){C[N+1+j].push(re(J[j].i,t));C[2*N+1+j].push(-re(J[j+1].i,t));}}
   H.s=0;H.cut=0;e.iE[0]=C[N+1][n];e.iE[1]=C[3*N][n];}
+ // 5.0.1: the steady state of a line without distortion (one section): the discrete model is the two-port of γℓ = a + jωτ,
+ // e^(−a) = att, y₁₁ = coth(γℓ)/Z, y₁₂ = −1/(Z·sinh γℓ); the history of both ends from the phasors of v and i at each end
+ function tlDlY(e,w0){const Z=e.Z,a=-Math.log(e.att),th=w0*e.tau,ep=[Math.exp(a)*Math.cos(th),Math.exp(a)*Math.sin(th)],em=cx.d([1,0],ep);
+  const sh=[(ep[0]-em[0])/2,(ep[1]-em[1])/2],ch=[(ep[0]+em[0])/2,(ep[1]+em[1])/2];return [cx.d(ch,cx.k(sh,Z)),cx.k(cx.d([1,0],sh),-1/Z)];}
+ function tlSteadyDl(e,w0,h,V1,V2){const [y11,y12]=tlDlY(e,w0);
+  const I1=cx.a(cx.m(y11,V1),cx.m(y12,V2)),I2=cx.a(cx.m(y11,V2),cx.m(y12,V1)),H=e.H,C=H.c,n=Math.max(4,Math.ceil(e.ts/h)+3);H.t.length=0;for(const c of C)c.length=0;
+  const re=(z,t)=>z[0]*Math.cos(w0*t)-z[1]*Math.sin(w0*t);
+  for(let q=n;q>=0;q--){const t=-q*h;H.t.push(t);C[0].push(re(V1,t));C[1].push(re(V2,t));C[2].push(re(I1,t));C[3].push(re(I2,t));}
+  H.s=0;H.cut=0;e.iE[0]=C[2][n];e.iE[1]=C[3][n];}
  // 4.12: a line from geometry in a sinusoidal steady state. Per mode the two-port that the discrete model itself
  // represents at ω₀ (so that the start carries no transient): CP as the lossless halves of τ/2 with R/4, R/2, R/4 (Dommel),
  // without distortion γℓ = jω₀τ + R/2Z_c; FD with Z_c and A of the fitted poles through the recursive convolution of the
@@ -417,8 +429,10 @@
    for(let i=0;i<m.ap.length;i++){m.y1[i]=m.ar[i]*cx.m(cx.m(F2[k],y.ph),y.ga[i])[0];m.y2[i]=m.ar[i]*cx.m(cx.m(F1[k],y.ph),y.ga[i])[0];}
    m.i1=I1[k][0];m.i2=I2[k][0];}
   for(let r=0;r<M;r++){let s1=0,s2=0;for(let k=0;k<M;k++){s1+=Ti[r*M+k]*I1[k][0];s2+=Ti[r*M+k]*I2[k][0];}e.iE[r]=s1;e.iE[M+r]=s2;}}
- function tlElement(o,g){const N=g.N||1,R=g.R||0,r=R/(4*N),Ze=g.Z+r;
-  return {k:'TL',...o,Z:g.Z,tau:g.tau,N,Rl:R,ts:g.tau/N,Ze,hh:(g.Z-r)/Ze,Ih:[0,0],IhS:new Float64Array(2*N),q:new Float64Array(3*N+1),iE:new Float64Array(2),
+ function tlElement(o,g){const N=g.N||1,R=g.R||0,r=g.dl?0:R/(4*N),Ze=g.Z+r;
+  // 5.0.1: without distortion (as the CP of 'TLM', cpline §1.2.3): lossless (Z_e = Z, h = 1) and every arriving wave times
+  // att = e^(−R/2Z); the field exists only on such a line, so the netlist of every other line is the one of before
+  return {k:'TL',...o,Z:g.Z,tau:g.tau,N,Rl:R,ts:g.tau/N,Ze,hh:(g.Z-r)/Ze,...(g.dl?{att:Math.exp(-R/(2*g.Z))}:{}),Ih:[0,0],IhS:new Float64Array(2*N),q:new Float64Array(3*N+1),iE:new Float64Array(2),
    H:{t:[],c:Array.from({length:3*N+1},()=>[]),s:0,cut:0}};}
  // line from geometry (4.4, ROADMAP §26): M modes, each a line in its own frame, phases ↔ modes by a constant real T_i
  // (v_mode = T_iᵀ·v, i = T_i·i_mode). CP: per mode Z_e = Z_c + R/4 and the history of Dommel (as 'TL' with one section).
@@ -2315,6 +2329,7 @@
   // Column j ≤ N: voltage of junction j (0 = start, N = end); N+1+j: current into section j at its start; 2N+1+j: at its end.
   tlSources(e,t){const N=e.N,q=this.tlHist(e,t-e.ts),Ze=e.Ze,h=e.hh,cp=(1+h)/2,cm=(1-h)/2,S=e.IhS;
    for(let j=0;j<N;j++){const AL=q[j]/Ze+h*q[N+1+j],AR=q[j+1]/Ze+h*q[2*N+1+j];S[2*j]=-cp*AR-cm*AL;S[2*j+1]=-cp*AL-cm*AR;}
+   if(e.att!==undefined){S[0]*=e.att;S[1]*=e.att;} // 5.0.1: without distortion (one section)
    e.Ih[0]=S[0];e.Ih[1]=S[2*N-1];}
   // after a step: the end voltages come from the solution, the inner junctions from their own KCL (only two sections meet there)
   tlRecord(e,t){const H=e.H,N=e.N,Ze=e.Ze,S=e.IhS,C=H.c,v1=this.V(e.a1)-this.V(e.b1),v2=this.V(e.a2)-this.V(e.b2);
@@ -2607,7 +2622,7 @@
   // 4.19.6: the switching energy (E_on, E_off) is counted by the solver of the application only
   if(net.sig.blocks.some(b=>b.type==='MEAS'&&b.qty==='E'))throw new NetlistError('Ο λύτης SciPy δεν έχει τις απώλειες μεταγωγής των διακοπτών (E_on, E_off): η «Μέτρηση στοιχείου» με «Ενέργεια μεταγωγής» τρέχει μόνο στον λύτη της εφαρμογής.');
   if(net.els.some(e=>e.tq>0))throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη τον χρόνο σβέσης t_q των θυρίστορ (4.16): τρέχει μόνο ο λύτης της εφαρμογής, ή βάλε t_q = 0.');
-  const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm','gap','a1','b1','a2','b2','Z','tau','Rl','pts'];
+  const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm','gap','a1','b1','a2','b2','Z','tau','Rl','pts','att'];
   // synchronous machines (3.5): parameters and initial states; the server integrates ψ_α, ψ_β, ω, θ
   const smList=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm),smx=new Map(smList.map((m,i)=>[m,i]));
   const srmList=[...net.compInfo.values()].filter(c=>c.srm).map(c=>c.srm),srmx=new Map(srmList.map((m,i)=>[m,i]));

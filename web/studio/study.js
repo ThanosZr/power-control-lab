@@ -105,7 +105,7 @@
  }
  // the line models of a project, for the folder (engine/studyfolder.py keeps them by the hash of their key): the parts
  // TLM at every level with a model that is still valid
- function lineModels(sim){const out=[],P=Pa();for(const [id,c] of sim.net.byId||[]){if(c.type!=='TLM')continue;const p={...P.defaults('TLM'),...c.params},m=P.tlmModel(p);if(m.err)continue;
+ function lineModels(sim){const out=[],P=Pa();for(const [id,c] of sim.net.byId||[]){if(c.type!=='TLM')continue;const p={...P.defaults('TLM'),...c.params};if(p.src==='modal')continue;const m=P.tlmModel(p);if(m.err)continue;
   out.push({cid:id,label:c.label||id,model:m.type||p.model,src:P.tlmKey(p),data:p.data,len:p.len,f:p.f});}return out;}
  // the descriptor of the data file: what a reader needs (engine/studyfolder.py checks the same)
  function dataInfo(keys,o={}){const f32=o.dtype==='float32';return {file:f32?'data.f32':'data.f64',dtype:f32?'float32':'float64',order:'little',cols:keys.length+1,rowBytes:(keys.length+1)*(f32?4:8),dt:+o.dt>0?+o.dt:0};}
