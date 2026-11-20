@@ -68,7 +68,7 @@ const ROOT=path.resolve(__dirname,'../..');
  await p.waitForSelector('.knock-toast',{timeout:30000});ok(/Python/.test(await p.$eval('.knock-toast',e=>e.textContent)),'αίτημα σύνδεσης με το όνομα του προγράμματος');
  await p.click('.knock-toast [data-k="1"]');const code=await closed;
  ok(await p.isChecked('#link-on'),'με «Αποδοχή» η σύνδεση άνοιξε');
- ok(code===0&&/tut buck api 4 Power & Control Lab/.test(txt)&&/py 42/.test(txt),'Python → εφαρμογή: info (api 4), python '+txt.trim().replace(/\n/g,' | '));
+ ok(code===0&&/tut buck api 5 Power & Control Lab/.test(txt)&&/py 42/.test(txt),'Python → εφαρμογή: info (api 5: the major version, 5.0), python '+txt.trim().replace(/\n/g,' | '));
  ok(/machines dc,gen,induction,srm,sync/.test(txt),'Python → εφαρμογή: machines() (4.7) δίνει τα είδη των μηχανών');
  ok(/adv 0\.0001 True/.test(txt)&&/reset 0/.test(txt),'Python → εφαρμογή: advance (4.9.1) προχωρά την προσομοίωση της οθόνης κατά dt και δίνει τις τιμές, reset από την αρχή');
  const vo=+((txt.match(/Vo ([\d.]+)/)||[])[1]);ok(vo>11.5&&vo<12.5,'Python → εφαρμογή: run με τον λύτη της εφαρμογής, Vo = '+vo);

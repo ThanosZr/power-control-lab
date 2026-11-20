@@ -70,7 +70,7 @@ class Cases(unittest.TestCase):
         g = self.r['page']                                                        # the scope adds its channels after the build
         self.assertEqual((g['r0'], g['rec'], g['opts']), (0, 4, False))
         self.assertLessEqual(g['bytes'], g['mem'])                                 # within the memory of the scope
-        self.assertGreaterEqual(g['cap'], 20000)
+        self.assertEqual(g['cap'], 200000)                                       # grows once, up to REC_WATCH
         self.assertTrue(g['last'])
         self.assertEqual((g['all'], g['back']), (1038, 4))                         # «Όλα τα κανάλια» and back take effect
 

@@ -56,6 +56,7 @@
  // 4.7: records in shared memory in a cross-origin isolated page (allocRecord)
  const shared=typeof window!=='undefined'&&typeof SharedArrayBuffer!=='undefined'&&!!root.crossOriginIsolated;
  // program t:value at t; left = the value just before t (the end of a step that lands on a jump, 3.15)
+ const REC_WATCH=200000;   // 5.0: the most points of a watched record that grows in the page (watchAdd)
  const REC_BIG=1000;   // 4.19.3: channels above which the record buffers are sized by memory (allocRecord)
  // 4.23: the channel keys of the scope of a project (panes as [[key, label], …] or {ch: [{key}, …]})
  function scopeKeysOf(pr){const out=[];for(const pane of pr?.scope?.panes||[]){const L=Array.isArray(pane)?pane:pane?.ch||[];for(const c of L){const k=Array.isArray(c)?c[0]:typeof c==='string'?c:c?.key;if(typeof k==='string')out.push(k);}}return out;}
@@ -1545,16 +1546,20 @@
    if(!add.length)return add;
    const nk=this.keys.filter(k=>want.has(k)),oldIx=this.chIndex,r=this.ring,p=this.per,a=this.acc,pv=this.prevVals,nn=nk.length,on=r.nch;
    const map=Int32Array.from(nk,k=>{const i=oldIx.get(k);return i===undefined?-1:i;});
-   // 5.0: a record sized by memory for fewer channels (in the page the scope adds its channels after the build, to a record
-   // of none) keeps within the memory of the scope: the last cap2 points, as allocRecord would size them for nn channels
-   const mem=+this.opts.mem>0&&!this.opts.cap?+this.opts.mem:0,cap2=mem?Math.min(r.cap,Math.max(nn>REC_BIG?500:20000,Math.floor(mem*1048576/(4*nn+9)),1)):r.cap;
+   // 5.0: with the memory of the scope (opts.mem) the record that grows (in the page the scope adds its channels after the
+   // build, to a record of none) keeps within it, and grows to at most REC_WATCH points (the most of a circuit without a
+   // memory setting): a buffer of 128 MB for a few channels cost a frame (the first frame of b4dcs2 +60–100 ms)
+   const mem=+this.opts.mem>0&&!this.opts.cap?+this.opts.mem:0,cap2=mem?Math.min(Math.max(nn>REC_BIG?500:20000,Math.floor(mem*1048576/(4*nn+9))),Math.max(r.cap,REC_WATCH)):r.cap;
    let R;
-   if(cap2<r.cap){const m=Math.min(r.n,cap2);R={t:new Float64Array(cap2),d:new Float32Array(cap2*nn),g:new Uint8Array(cap2),nch:nn,cap:cap2,head:m%cap2,n:m};
+   if(cap2!==r.cap){const m=Math.min(r.n,cap2);R={t:new Float64Array(cap2),d:new Float32Array(cap2*nn),g:new Uint8Array(cap2),nch:nn,cap:cap2,head:m%cap2,n:m};
     for(let j=0;j<m;j++){const q=(r.head-m+j+r.cap)%r.cap;R.t[j]=r.t[q];R.g[j]=r.g[q];for(let i=0;i<nn;i++)R.d[j*nn+i]=map[i]<0?NaN:r.d[q*on+map[i]];}}
+   // (5.0: only the rows that hold points are copied, not the whole capacity: the scope of the page adds its channels one
+   // call at a time, and copying 200 000 empty rows each time cost the first frame of b4dcs2 about 100 ms)
    else{R={t:r.t,d:new Float32Array(r.cap*nn),g:r.g,nch:nn,cap:r.cap,head:r.head,n:r.n};
-    for(let j=0;j<r.cap;j++)for(let i=0;i<nn;i++)R.d[j*nn+i]=map[i]<0?NaN:r.d[j*on+map[i]];}
+    for(let k=0;k<r.n;k++){const j=(r.head-r.n+k+r.cap)%r.cap;for(let i=0;i<nn;i++)R.d[j*nn+i]=map[i]<0?NaN:r.d[j*on+map[i]];}}
    const Q={t:p.t,nch:nn,cap:p.cap,head:p.head,n:p.n};
-   for(const f of ['avg','min','max','rms','end']){const A=new Float32Array(p.cap*nn),B=p[f];for(let j=0;j<p.cap;j++)for(let i=0;i<nn;i++)A[j*nn+i]=map[i]<0?NaN:B[j*on+map[i]];Q[f]=A;}
+   for(const f of ['avg','min','max','rms','end']){const A=new Float32Array(p.cap*nn),B=p[f];
+    for(let k=0;k<p.n;k++){const j=(p.head-p.n+k+p.cap)%p.cap;for(let i=0;i<nn;i++)A[j*nn+i]=map[i]<0?NaN:B[j*on+map[i]];}Q[f]=A;}
    const g=(A,fill)=>{const B=new Float64Array(nn);for(let i=0;i<nn;i++)B[i]=map[i]<0?fill:A[i];return B;};
    const full=this.fullVals();
    this.acc={t0:a.t0,dur:a.dur,s:g(a.s,0),q:g(a.q,0),mn:g(a.mn,Infinity),mx:g(a.mx,-Infinity)};
@@ -1568,6 +1573,9 @@
    // channel: the scope keeps about 96 MB (fewer points) and the statistics per period 5 × 16 MB. Up to REC_BIG as before
    const nch=this.recKeys.length,mem=+this.opts.mem>0?+this.opts.mem:0,big=nch>REC_BIG,capMin=big?500:20000;
    let cap=this.opts.cap||(mem?Math.max(capMin,Math.floor(mem*1048576/(4*nch+9))):big?Math.max(capMin,Math.floor(96e6/(4*nch))):Math.max(20000,Math.min(200000,Math.floor(24e6/(4*nch+8)))));this.memNote=null;
+   // 5.0: a watched record with no channel yet (in the page the scope adds its channels after the build, watchAdd) starts
+   // small; watchAdd sizes it by the memory for the channels it gets, once (not 128 MB for none and again for them)
+   if(mem&&!this.opts.cap&&nch===0&&this.recKeys!==this.keys)cap=capMin;
    if(big&&!this.opts.cap&&cap<20000)this.memNote=`${nch} κανάλια: το scope κρατά τα τελευταία ${cap} σημεία ανά κανάλι`+(this.recKeys===this.keys?' (με «Καταγραφή καναλιών: μόνο όσα δείχνει το scope» στις ρυθμίσεις επίλυσης κρατά περισσότερα, και κάθε βήμα είναι ταχύτερο)':'');
    if(!this.opts.cap&&mem){const lim=Math.floor(2**31/Math.max(1,nch));if(cap>lim){cap=lim;this.memNote='η μνήμη περιορίστηκε στο όριο ενός buffer';}}
    // 4.7: in a cross-origin isolated page the buffers are shared memory from the start, so that the live worker (live.js)
