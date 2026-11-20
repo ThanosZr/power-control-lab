@@ -48,7 +48,9 @@ class Start(unittest.TestCase):
         self.assertLess(r['f'], 1e-12)
         self.assertLess(r['g'], 1e-12)
         out = s.simulate(2.0, h=0.01)
-        self.assertEqual(float(np.max(np.abs(out['x'] - out['x'][0]))), 0.0)    # nothing moves without a disturbance
+        # nothing moves without a disturbance: 0.0 here, 6.9e-18 on a processor of the CI (the BLAS kernel of the processor
+        # rounds the residual of the start differently), so the bound is at the level of rounding
+        self.assertLess(float(np.max(np.abs(out['x'] - out['x'][0]))), 1e-15)
 
     def test_example_2_6(self):
         s = classical()
