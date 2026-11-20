@@ -275,6 +275,21 @@ const {chromium}=require('playwright');
  await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.layer==='security'&&window.PCL.NV.v.state.frames>0,null,{timeout:60000});
  const sc2=await p.evaluate(()=>({layer:document.querySelector('#nv-layer').value,legend:document.querySelector('#nv-legend').textContent,title:document.querySelector('#nv-title').textContent}));
  ok(sc2.layer==='security'&&/%/.test(sc2.legend),'secure dispatch: the picture opens on the layer of the security ('+sc2.legend.slice(0,50)+')');
+ // 5.0.1: a press while the engine still runs the study of another network waits for it and runs next; a picture asked
+ // for before the change of the network does not open over the network the tutorial now asks for
+ const qd=await p.evaluate(()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('opf_study',{net:'case30',kind:'opf'});
+  document.querySelector('#theory [data-study="run"]').click();const b0=window.PCL.STUDY.busy;
+  window.PCL.loadTutorial('opf_study',{net:'case30',kind:'scopf'});const v=document.querySelector('#theory [data-study="view"]'),off=v.disabled;v.click();
+  return {b0,off,next:window.PCL.STUDY.next,status:document.querySelector('#study-status').textContent};});
+ ok(await p.evaluate(()=>!!document.querySelector('#math #math-live')&&!document.querySelector('#math [data-study]')&&document.querySelectorAll('#study-status').length===1),'the card of the study with its buttons is on the page once (not again in «Υπολογισμοί & μαθηματικά»)');
+ ok(qd.b0==='run'&&!qd.off&&qd.next==='view'&&/Τελειώνει πρώτα η μελέτη/.test(qd.status),'a press during the study of another network waits for it and says so '+JSON.stringify(qd));
+ await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.layer==='security'&&!window.PCL.STUDY.busy,null,{timeout:60000});
+ ok(await p.evaluate(()=>window.PCL.STUDY.r.study==='scopf'&&window.PCL.STUDY.next===null&&/ασφάλεια/.test(document.querySelector('#nv-title').textContent)),'the waiting press opens the picture of the network asked for last');
+ const sv1=await p.evaluate(async()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('opf_study',{net:'case30',kind:'dcopf'});
+  document.querySelector('#theory [data-study="view"]').click();const b0=window.PCL.STUDY.busy;window.PCL.loadTutorial('opf_study',{net:'case30',kind:'opf'});
+  const s0=document.querySelector('#study-status').textContent;for(let i=0;i<600&&window.PCL.STUDY.busy;i++)await new Promise(r=>setTimeout(r,100));
+  return {b0,s0,busy:window.PCL.STUDY.busy,hidden:document.querySelector('#netview').hidden,r:!!document.querySelector('#study-result')};});
+ ok(sv1.b0==='view'&&/Τρέχει ακόμη η μελέτη/.test(sv1.s0)&&!sv1.busy&&sv1.hidden&&!sv1.r,'a picture asked for before the change of the network does not open over the new one '+JSON.stringify(sv1));
  await p.evaluate(()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('opf_study',{net:'ieee14',kind:'scopf'});});await p.waitForTimeout(700);
  await p.click('#theory [data-study="run"]');await p.waitForSelector('#study-error',{timeout:60000});
  ok(/ονομαστική ισχύ/.test(await p.evaluate(()=>document.querySelector('#study-error').textContent)),'secure dispatch: a network without ratings is refused with the reason');

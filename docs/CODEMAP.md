@@ -9,7 +9,7 @@
 |---|---:|
 | `web/studio/addon_client.js` | 30 |
 | `web/studio/addons.js` | 116 |
-| `web/studio/app.js` | 3423 |
+| `web/studio/app.js` | 3433 |
 | `web/studio/bus.js` | 197 |
 | `web/studio/ctlwin.js` | 78 |
 | `web/studio/editor.js` | 742 |
@@ -282,7 +282,7 @@
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/ev_flow.js` | 112 |
 | `tests/ui/facts_flow.js` | 93 |
-| `tests/ui/features_flow.js` | 374 |
+| `tests/ui/features_flow.js` | 389 |
 | `tests/ui/gis_flow.js` | 80 |
 | `tests/ui/line_flow.js` | 166 |
 | `tests/ui/live_flow.js` | 41 |
@@ -955,45 +955,45 @@
 | 2818 | const fn | `studyKey` |
 | 2819 | function | `studyOpen` |
 | 2832 | function | `studyAct` |
-| 2849 | function | `netViewOpen` |
-| 2853 | const fn | `legend` |
-| 2877 | function | `nvEdit` |
-| 2886 | function | `nvApply` |
-| 2887 | const fn | `same` |
-| 2888 | const fn | `put` |
-| 2902 | function | `mtdcTheory` |
-| 2908 | function | `dcdcSteady` |
-| 2913 | function | `dcdcTheory` |
-| 2914 | const fn | `row` |
-| 2918 | function | `b4Theory` |
-| 2923 | function | `studyTheory` |
-| 2941 | const fn | `X` |
-| 3028 | function | `formulaTheory` |
-| 3144 | function | `nodeAvg` |
-| 3150 | function | `circuitForMath` |
-| 3186 | function | `scheduleMath` |
-| 3187 | function | `batteryKey` |
-| 3189 | function | `mathChoices` |
-| 3190 | const fn | `prim` |
-| 3192 | function | `renderMathChoices` |
-| 3194 | function | `runTemplate` |
-| 3200 | function | `runMath` |
-| 3222 | function | `saveLocal` |
-| 3223 | function | `saveLocalSoon` |
-| 3225 | function | `download` |
-| 3226 | function | `exportCSV` |
-| 3232 | function | `syncScopeInputs` |
-| 3233 | function | `setSpeed` |
-| 3236 | function | `openSettings` |
-| 3237 | const fn | `sel` |
-| 3238 | const fn | `chk` |
-| 3264 | function | `applyLook` |
-| 3268 | function | `boot` |
-| 3339 | const fn | `mv` |
-| 3340 | const fn | `up` |
-| 3341 | const fn | `navOpen` |
-| 3357 | const fn | `probeSel` |
-| 3419 | function | `renderTheoryLive` |
+| 2854 | function | `netViewOpen` |
+| 2858 | const fn | `legend` |
+| 2882 | function | `nvEdit` |
+| 2891 | function | `nvApply` |
+| 2892 | const fn | `same` |
+| 2893 | const fn | `put` |
+| 2907 | function | `mtdcTheory` |
+| 2913 | function | `dcdcSteady` |
+| 2918 | function | `dcdcTheory` |
+| 2919 | const fn | `row` |
+| 2923 | function | `b4Theory` |
+| 2928 | function | `studyTheory` |
+| 2946 | const fn | `X` |
+| 3033 | function | `formulaTheory` |
+| 3149 | function | `nodeAvg` |
+| 3155 | function | `circuitForMath` |
+| 3191 | function | `scheduleMath` |
+| 3192 | function | `batteryKey` |
+| 3194 | function | `mathChoices` |
+| 3195 | const fn | `prim` |
+| 3197 | function | `renderMathChoices` |
+| 3199 | function | `runTemplate` |
+| 3205 | function | `runMath` |
+| 3232 | function | `saveLocal` |
+| 3233 | function | `saveLocalSoon` |
+| 3235 | function | `download` |
+| 3236 | function | `exportCSV` |
+| 3242 | function | `syncScopeInputs` |
+| 3243 | function | `setSpeed` |
+| 3246 | function | `openSettings` |
+| 3247 | const fn | `sel` |
+| 3248 | const fn | `chk` |
+| 3274 | function | `applyLook` |
+| 3278 | function | `boot` |
+| 3349 | const fn | `mv` |
+| 3350 | const fn | `up` |
+| 3351 | const fn | `navOpen` |
+| 3367 | const fn | `probeSel` |
+| 3429 | function | `renderTheoryLive` |
 
 ### `web/studio/bus.js`
 
