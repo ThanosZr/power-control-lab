@@ -299,7 +299,7 @@
 | `tests/ui/subcircuit_flow.js` | 79 |
 | `tests/ui/ux_flow.js` | 94 |
 | `tests/ui/watch_flow.js` | 113 |
-| `tests/ui/window_flow.js` | 170 |
+| `tests/ui/window_flow.js` | 172 |
 | `tests/ui/wiring_flow.js` | 128 |
 
 ## Στοιχεία και μπλοκ (`web/studio/parts.js`, `PARTS`)
