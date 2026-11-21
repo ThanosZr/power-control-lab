@@ -127,16 +127,17 @@
    return `<tr data-wr="${esc(t.id)}"><td>${esc(q.name)}</td><td class="num" data-wv>—</td><td>${esc(q.unit||'')}</td><td>${esc(sampleText(t))}</td><td>${esc(q.src)}${q.c?` · ${esc(P.PARTS[q.c.type]?.name||q.c.type)}`:''}</td><td data-wf></td></tr>`;}).join('')}</tbody></table>`;}
 
  // ------------------------------------------------------------ the panel
+ // 5.0.2: the frame of the panel; a move (or the largest size) writes the place into the circuit
+ function frameOf(p,table){root.WinFrame?.frame(p,{key:table?'watch-table':'watch',head:'.wp-head',move:true,minW:200,minH:110,
+  onmove:q=>{const w=layout(false);if(w&&q){w.panel.x=Math.round(q.x);w.panel.y=Math.round(q.y);C().saveSoon();}}});}
  function panelEl(){if(W.panel)return W.panel;const host=C().editor.holder,p=document.createElement('div');p.className='wpanel';p.id='watch-panel';p.hidden=true;
   p.innerHTML=`<div class="wp-head"><b title="Σήματα ελέγχου: σύρε για μετακίνηση">⠿ Σήματα</b><span class="wp-tabs" role="tablist"><button data-wview="tiles" role="tab" title="Τα πλακίδια που δεν είναι πάνω στο σχέδιο">Πλακίδια</button><button data-wview="table" role="tab" title="Όλα ως πίνακας παρακολούθησης: τιμή, μονάδα, δείγμα, πηγή, NaN και κορεσμός">Πίνακας</button></span><button class="x" data-wmin title="Σύμπτυξη / ανάπτυξη του πάνελ">▾</button><button class="x" data-wclose title="Κρύψε τα σήματα (S)">✕</button></div>
    <div class="wp-add"><input type="search" class="wp-q" placeholder="+ Σήμα ή χειρισμός (π.χ. «ω», «Kp», «μαθαίνει»)" autocomplete="off" aria-label="Αναζήτηση σήματος ή παραμέτρου"><div class="wp-sug own-scroll" hidden></div></div>
    <div class="wp-body own-scroll"></div><div class="wp-foot"><small class="wp-chg"></small><button data-wsched hidden title="Οι αλλαγές γίνονται πρόγραμμα t:τιμή: με ⟲ ξαναπαίζεται η ίδια προσομοίωση">→ πρόγραμμα t:τιμή</button></div>`;
   host.appendChild(p);W.panel=p;
-  const head=p.querySelector('.wp-head');head.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;e.preventDefault();head.setPointerCapture(e.pointerId);
-   const box=host.getBoundingClientRect(),r=p.getBoundingClientRect(),dx=e.clientX-r.left,dy=e.clientY-r.top;
-   const mv=ev=>{p.style.left=Math.min(Math.max(0,ev.clientX-box.left-dx),Math.max(0,box.width-r.width))+'px';p.style.top=Math.min(Math.max(0,ev.clientY-box.top-dy),Math.max(0,box.height-40))+'px';};
-   const up=()=>{head.removeEventListener('pointermove',mv);head.removeEventListener('pointerup',up);const w=layout(false);if(w){w.panel.x=parseFloat(p.style.left);w.panel.y=parseFloat(p.style.top);C().saveSoon();}};
-   head.addEventListener('pointermove',mv);head.addEventListener('pointerup',up);});
+  // 5.0.2 (ROADMAP §94 point 6): moved by its title and resized from every side (winframe.js); its place stays in the
+  // circuit, as before, and its size is kept per view (tiles, table)
+  frameOf(p,false);
   p.querySelector('[data-wclose]').onclick=()=>W.show(false);
   p.querySelector('[data-wmin]').onclick=()=>{const w=layout(true);w.panel.min=!w.panel.min;C().saveSoon();W.render(true);};
   for(const b of p.querySelectorAll('[data-wview]'))b.onclick=()=>{const w=layout(true);w.panel.view=b.dataset.wview;C().saveSoon();W.render(true);};
@@ -223,7 +224,7 @@
   body.innerHTML=view==='table'?(w.tiles.length?tableHTML(w):''):free.map(t=>tileHTML(t,false)).join('');
   if(view==='tiles'&&!free.length)body.innerHTML=`<small class="muted wp-empty">${w.tiles.length?'Όλα τα πλακίδια είναι πάνω στο σχέδιο (⇲ τα φέρνει εδώ).':'Πρόσθεσε σήματα και χειρισμούς από την αναζήτηση, από το δεξί κλικ σε στοιχείο («▣ Πλακίδια…») ή με ▣ δίπλα σε μια παράμετρο.'}</small>`;
   for(const b of p.querySelectorAll('[data-wview]')){const on=b.dataset.wview===view;b.classList.toggle('on',on);b.setAttribute('aria-selected',String(on));}
-  p.classList.toggle('min',!!w.panel.min);p.querySelector('[data-wmin]').textContent=w.panel.min?'▸':'▾';
+  p.classList.toggle('min',!!w.panel.min);p.querySelector('[data-wmin]').textContent=w.panel.min?'▸':'▾';frameOf(p,view==='table');
   bindRefs(layer,w);if(view==='tiles')bindRefs(body,w);
   W.rows=view==='table'?[...body.querySelectorAll('[data-wr]')].map(tr=>({tr,t:w.tiles.find(o=>o.id===tr.dataset.wr),v:tr.querySelector('[data-wv]'),f:tr.querySelector('[data-wf]'),last:{}})):[];
   // the place of the panel: where it was left, inside the work area
@@ -281,10 +282,6 @@
    if(b.dataset.fkeep!==undefined){const blk=x.simBlock(id+'/NN1');if(!blk||!root.NNet){F.out='Δεν υπάρχει δίκτυο που να έχει μάθει.';renderFacade();return;}x.setParams(id,{w:root.NNet.text(blk.st.net)});F.out='Τα βάρη που έμαθε γράφτηκαν στο μπλοκ: από εδώ ξεκινά την επόμενη φορά.';renderFacade();return;}
    if(b.dataset.fcmp!==undefined){compare(id);}});
   el.addEventListener('change',e=>{if(e.target.dataset.fscheme!==undefined&&F.id){C().setParams(F.id,{scheme:e.target.value});}});
-  const head=()=>el.querySelector('.wp-head');el.addEventListener('pointerdown',e=>{const h=e.target.closest('.wp-head');if(!h||e.target.closest('button'))return;e.preventDefault();h.setPointerCapture(e.pointerId);
-   const box=host.getBoundingClientRect(),r=el.getBoundingClientRect(),dx=e.clientX-r.left,dy=e.clientY-r.top;
-   const mv=ev=>{el.style.left=Math.min(Math.max(0,ev.clientX-box.left-dx),Math.max(0,box.width-r.width))+'px';el.style.top=Math.min(Math.max(0,ev.clientY-box.top-dy),Math.max(0,box.height-40))+'px';};
-   const up=()=>{h.removeEventListener('pointermove',mv);h.removeEventListener('pointerup',up);};h.addEventListener('pointermove',mv);h.addEventListener('pointerup',up);});void head;
   return el;}
  // open (id of an AIC part) or close (null); placed right of the block on the screen
  W.facade=id=>{const x=C(),el=facadeEl();if(!id||!x.editor.comp(id)||x.editor.comp(id).type!=='AIC'||!x.atTop()){F.id=null;el.hidden=true;F.refs.clear();return;}
@@ -303,6 +300,8 @@
     ${tileHTML(w.tiles[2],false,true)}${p.scheme==='pi'||p.scheme==='inv'?'':tileHTML(w.tiles[3],false,true)}
     <div class="wf-btns"><button data-freset title="Βάρη από την αρχή (το δίκτυο ξεκινά με έξοδο 0)">Επαναφορά βαρών</button><button data-fkeep title="Τα βάρη που έμαθε το δίκτυο ως τώρα γράφονται στο μπλοκ">Κράτα τα βάρη</button><button data-fcmp ${F.busy?'disabled':''}>${F.busy==='cmp'?'Τρέχει…':'Σύγκριση με PI'}</button></div>
     <div class="wf-out small">${F.out}</div></div>`;
+  // 5.0.2 (ROADMAP §94 point 6): moved by its title and resized from every side (winframe.js), its size kept
+  root.WinFrame?.frame(el,{key:'aifac',head:'.wp-head',move:true,minW:240,minH:160});
   F.refs.clear();bindRefs(el,w,F.refs);facadeUpdate(x.S.sim,true);}
  function facadeUpdate(s,all){const x=C(),el=F.el;if(!el||el.hidden||!s)return;const id=F.id,v=k=>valueOf(s,'Y:'+id+'/'+k),f=(k,val,u)=>{const e=el.querySelector(`[data-fv="${k}"]`);if(e)setT(e,x.eng(val,u||'',4));};
   const rf=v('LP'),e=v('E');f('LP',rf);f('y',rf-e);f('E',e);f('SAT',v('SAT'));f('L',v('NN1:L'));f('IAE',v('IAE'));

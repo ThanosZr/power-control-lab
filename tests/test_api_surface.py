@@ -216,6 +216,11 @@ class ApiSurface(unittest.TestCase):
         self.assertIn('loss', self.now['project']['part:TL']['params'])
         for k in ('src', 'nph', 'lu', 'mlen', 'mspec', 'transp', 'mdata', 'mti', 'mloss'):
             self.assertIn(k, self.now['project']['part:TLM']['params'], k)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 933)
+
+    def test_the_surface_of_5_0_2(self):
+        """5.0.2: every window moves and grows, and the menu «Παράθυρα» (ROADMAP §94 point 6 and step α). All of it is of the
+        page (winframe.js, panels.js): no new point of the API, of the file format or of the server."""
         self.assertEqual(sum(len(v) for v in self.now.values()), 933)
 
     def test_the_surface_of_4_19_5(self):

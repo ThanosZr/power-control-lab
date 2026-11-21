@@ -128,16 +128,43 @@
 
  function open(id){const x=C(),c=id&&x.comp(id);if(!can(c)){close();return false;}
   if(!I.el){const el=document.createElement('div');el.className='wpanel winside';el.id='lib-inside';el.hidden=true;x.holder().appendChild(el);I.el=el;
-   el.addEventListener('click',e=>{if(e.target.closest('[data-iclose]'))close();if(e.target.closest('[data-ifit]')){const b=el.querySelector('.in-body');b.classList.toggle('fit');I.fit=b.classList.contains('fit');}});
-   el.addEventListener('keydown',e=>{if(e.key==='Escape')close();});}
+   el.addEventListener('click',e=>{if(e.target.closest('[data-iclose]'))close();if(e.target.closest('[data-ifit]'))fitNow();if(e.target.closest('[data-i11]'))zoomAt(1);
+    if(e.target.closest('[data-izin]'))zoomAt((I.z||1)*1.25);if(e.target.closest('[data-izout]'))zoomAt((I.z||1)/1.25);});
+   el.addEventListener('keydown',e=>{if(e.key==='Escape'){close();return;}if(!e.target.closest?.('.in-body')||e.ctrlKey||e.metaKey||e.altKey)return;
+    const k=e.key;if(k==='+'||k==='='){zoomAt((I.z||1)*1.25);e.preventDefault();}else if(k==='-'){zoomAt((I.z||1)/1.25);e.preventDefault();}else if(k==='0'){fitNow();e.preventDefault();}else if(k==='1'){zoomAt(1);e.preventDefault();}});
+   // the wheel zooms about the pointer (not the drawing under the window), a drag moves the diagram
+   el.addEventListener('wheel',e=>{const b=e.target.closest?.('.in-body');if(!b)return;e.preventDefault();e.stopPropagation();const r=b.getBoundingClientRect();
+    zoomAt((I.z||1)*Math.pow(1.0015,-Math.max(-300,Math.min(300,e.deltaY))),e.clientX-r.left,e.clientY-r.top);},{passive:false});
+   el.addEventListener('pointerdown',e=>{const b=e.target.closest?.('.in-body');if(!b||e.button!==0)return;e.preventDefault();b.focus({preventScroll:true});try{b.setPointerCapture(e.pointerId);}catch(q){}
+    const x0=e.clientX,y0=e.clientY,l0=b.scrollLeft,t0=b.scrollTop,id=e.pointerId;b.classList.add('pan');
+    const mv=ev=>{if(ev.pointerId!==id)return;b.scrollLeft=l0-(ev.clientX-x0);b.scrollTop=t0-(ev.clientY-y0);};
+    const up=ev=>{if(ev.pointerId!==id)return;b.classList.remove('pan');b.removeEventListener('pointermove',mv);b.removeEventListener('pointerup',up);b.removeEventListener('pointercancel',up);};
+    b.addEventListener('pointermove',mv);b.addEventListener('pointerup',up);b.addEventListener('pointercancel',up);});
+   // the window resized (its frame, the work area): «⤢ Όλο» follows it
+   if(root.ResizeObserver)new ResizeObserver(()=>{if(I.fit&&!el.hidden)fitNow(true);}).observe(el);}
   let r;try{r=SIGNAL.has(c.type)?draw(c):drawEl(c);}catch(e){x.notice?.('Δεν σχεδιάστηκε το εσωτερικό: '+esc(e.message),'error');return false;}
   I.id=id;const el=I.el;
-  el.innerHTML=`<div class="wp-head"><b>⧉ Μέσα στο ${esc(c.label||c.id)}</b><small class="wf-id">${esc(P.PARTS[c.type]?.name||c.type)} · ${r.el?`${r.n} στοιχεία${c.params?.impl==='fast'?' (γρήγορη υλοποίηση: ένα στοιχείο του λύτη)':''}`:`${r.n} μπλοκ, ${r.ne} σήματα${r.nb?`, ${r.nb} ανατροφοδότηση (διακεκομμένα)`:''}`}</small><small class="in-t" data-it></small><button class="in-fit" data-ifit title="Όλο το διάγραμμα στο πλάτος του παραθύρου, ή σε φυσικό μέγεθος με κύλιση">⤢ Όλο / 1:1</button><button class="x" data-iclose title="Κλείσιμο (Esc)">✕</button></div>
+  el.innerHTML=`<div class="wp-head"><b>⧉ Μέσα στο ${esc(c.label||c.id)}</b><small class="wf-id">${esc(P.PARTS[c.type]?.name||c.type)} · ${r.el?`${r.n} στοιχεία${c.params?.impl==='fast'?' (γρήγορη υλοποίηση: ένα στοιχείο του λύτη)':''}`:`${r.n} μπλοκ, ${r.ne} σήματα${r.nb?`, ${r.nb} ανατροφοδότηση (διακεκομμένα)`:''}`}</small><small class="in-t" data-it></small><span class="in-zoom" role="group" aria-label="Μεγέθυνση"><button class="in-fit" data-izout title="Σμίκρυνση (−)">−</button><small data-izoom title="Ροδέλα: μεγέθυνση γύρω από τον δείκτη · σύρσιμο: μετακίνηση">100 %</small><button class="in-fit" data-izin title="Μεγέθυνση (+)">+</button><button class="in-fit" data-ifit title="Όλο το διάγραμμα μέσα στο παράθυρο (0), και όταν αλλάζει μέγεθος">⤢ Όλο</button><button class="in-fit" data-i11 title="Φυσικό μέγεθος (1)">1:1</button></span><button class="x" data-iclose title="Κλείσιμο (Esc)">✕</button></div>
    <div class="in-body own-scroll" tabindex="0">${r.svg}</div>
    <div class="wp-foot small muted">${r.el?'Μόνο για ανάγνωση: κάτω από κάθε στοιχείο η τιμή του και το ρεύμα του τώρα (στα όργανα, η ένδειξή τους). Για αλλαγές: «▣ Ανάπτυξη σε υποκύκλωμα» από το μενού του στοιχείου.':'Μόνο για ανάγνωση: οι τιμές είναι του τρεξίματος, το μπλοκ αλλάζει από τις παραμέτρους του. Πέρασε από πάνω από ένα μπλοκ για την πλήρη έκφραση.'}</div>`;
-  el.hidden=false;{const b=el.querySelector('.in-body'),sw=+el.querySelector('.in-svg').dataset.w;b.classList.toggle('fit',I.fit??(sw<=1.35*b.clientWidth));}update();clearInterval(I.timer);I.timer=setInterval(update,250);el.querySelector('.in-body')?.focus();return true;}
+  el.hidden=false;
+  // 5.0.2 (ROADMAP §94 point 6): moved by its title, resized from every side, its place and size kept (winframe.js)
+  root.WinFrame?.frame(el,{key:'inside',head:'.wp-head',move:true,place:true,minW:320,minH:200});
+  {const b=el.querySelector('.in-body'),n=natural();I.z=1;if(I.fit??(n&&n.w<=1.35*b.clientWidth))fitNow();else zoomAt(1,0,0);}update();clearInterval(I.timer);I.timer=setInterval(update,250);el.querySelector('.in-body')?.focus();return true;}
+ // 5.0.2: the zoom of the diagram (1 = its natural size): the point under the pointer stays where it is
+ const ZMIN=0.1,ZMAX=6;
+ function natural(){const sv=I.el?.querySelector('.in-svg'),vb=sv?.viewBox?.baseVal;return vb&&vb.width>0?{w:vb.width,h:vb.height,sv}:null;}
+ function zoomAt(z,cx,cy,keepFit){const b=I.el?.querySelector('.in-body'),n=natural();if(!b||!n)return;if(!keepFit)I.fit=false;
+  if(cx===undefined){cx=b.clientWidth/2;cy=b.clientHeight/2;}z=Math.max(ZMIN,Math.min(ZMAX,z));const z0=I.z||1;
+  const off=q=>q.getBoundingClientRect(),o0=off(n.sv),bb=off(b),px=(cx-(o0.left-bb.left))/z0,py=(cy-(o0.top-bb.top))/z0;
+  n.sv.style.width=Math.round(n.w*z)+'px';n.sv.style.height=Math.round(n.h*z)+'px';I.z=z;
+  const o1=off(n.sv);b.scrollLeft+=(o1.left-bb.left)+px*z-cx;b.scrollTop+=(o1.top-bb.top)+py*z-cy;
+  const t=I.el.querySelector('[data-izoom]');if(t)t.textContent=Math.round(z*100)+' %';}
+ // all of it inside the window (at most twice its natural size), and so again when the window changes size
+ function fitNow(quiet){const b=I.el?.querySelector('.in-body'),n=natural();if(!b||!n)return;const z=Math.min(2,(b.clientWidth-8)/n.w,(b.clientHeight-8)/n.h);
+  if(quiet&&Math.abs(z-(I.z||1))<1e-3)return;zoomAt(z,0,0,true);I.fit=true;b.scrollLeft=0;b.scrollTop=0;}
  function close(){clearInterval(I.timer);I.timer=null;I.id=null;I.g=null;if(I.el)I.el.hidden=true;}
 
- const api={init:ctx=>{I.ctx=ctx;},open,close,can,canDbl,openId:()=>I.id,graph,layout,update,drawEl};
+ const api={init:ctx=>{I.ctx=ctx;},open,close,can,canDbl,openId:()=>I.id,graph,layout,update,drawEl,zoom:()=>({z:I.z||1,fit:!!I.fit}),zoomAt,fit:()=>fitNow()};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.Inside=api;
 })(typeof window!=='undefined'?window:globalThis);

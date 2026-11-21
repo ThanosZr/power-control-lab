@@ -1256,7 +1256,11 @@ function scenEval(code,inputs,files,addon){return new Promise((res,rej)=>{const 
  scenWorker().postMessage({type:'eval',id,code,inputs,files,addon,project:project(),name:tutorial().title||'κύκλωμα'});});}
 // ------------------------------------------------------------------ add-ons and the link (3.15, ROADMAP §35, §36)
 function addonDock(a){const box=document.createElement('section');box.className='addon-dock';box.innerHTML=`<header><b title="${esc(a.description||'')}">${esc(a.name)}</b><small class="muted">${esc(a.version||'')}</small><button data-dmin title="Ελαχιστοποίηση">▁</button><button data-dwide title="Μεγαλύτερο">⤢</button><button data-dx title="Κλείσιμο">✕</button></header><div class="addon-body"></div>`;
- $('#addon-docks').appendChild(box);box.querySelector('[data-dx]').onclick=()=>Addons.close(a.id);box.querySelector('[data-dmin]').onclick=()=>box.classList.toggle('min');box.querySelector('[data-dwide]').onclick=()=>box.classList.toggle('wide');
+ $('#addon-docks').appendChild(box);box.querySelector('[data-dx]').onclick=()=>Addons.close(a.id);box.querySelector('[data-dmin]').onclick=()=>box.classList.toggle('min');
+ // 5.0.2 (ROADMAP §94 point 6): moved by its title and resized from every side (it leaves the column at the first move),
+ // its place and size kept per add-on; ⤢ the largest size and back
+ if(window.WinFrame){WinFrame.frame(box,{key:'addon-'+a.id,head:'header',move:true,place:true,float:true,minW:280,minH:160});box.querySelector('[data-dwide]').onclick=()=>WinFrame.max(box);}
+ else box.querySelector('[data-dwide]').onclick=()=>box.classList.toggle('wide');
  return {body:box.querySelector('.addon-body'),show:()=>box.classList.remove('min'),remove:()=>box.remove()};}
 function renderAddons(){const L=$('#addons-list');if(!L||!window.Addons)return;const A=Addons;
  const vsel=a=>a.builtin||!(a.versions||[]).length?`<small class="muted">${esc(a.version||'')} · ενσωματωμένο</small>`:
@@ -3218,7 +3222,7 @@ async function runMath(){
    // 5.0.1: a card with buttons (a study, the insulation co-ordination) lives once, in «Θεωρία & σύγκριση με την προσομοίωση»:
    // a copy here had buttons that did nothing and the same ids twice
    const fh=t.theory==='formula'&&theoryValidity(t).ok?formulaTheory(t):'',live=/<(button|select|input|textarea)\b/i.test(fh);
-   box.innerHTML=`<p class="muted">${esc(conv.error)}</p>`+(!fh?'':live?`<p class="muted" id="math-live">Τα κουμπιά και τα αποτελέσματα αυτού του tutorial είναι στην κάρτα «Θεωρία & σύγκριση με την προσομοίωση», πιο κάτω. <button data-math-go>↓ Εκεί</button></p>`:`<h4>Βασικές σχέσεις για αυτό το κύκλωμα</h4>`+fh);
+   box.innerHTML=`<p class="muted">${esc(conv.error)}</p>`+(!fh?'':live?`<p class="muted" id="math-live">Τα κουμπιά και τα αποτελέσματα αυτού του tutorial είναι στην κάρτα «Θεωρία & σύγκριση με την προσομοίωση», πιο κάτω. <button data-math-go>↓ Εκεί</button></p>`:`<h4>Βασικές σχέσεις για αυτό το κύκλωμα</h4>`+fh.replace(/\sid="[^"]*"/g,''));   // 5.0.2: a copy of the card carries no ids (the card keeps them)
    box.querySelector('[data-math-go]')?.addEventListener('click',()=>$('#theory').scrollIntoView({behavior:'smooth',block:'start'}));return;}
   src.textContent='από το κύκλωμα · '+conv.roles.map(r=>r.label).join(', ');
   const B=await api('studio_math',{circuit:conv.circuit,params:conv.params});if(token!==mathToken)return;
@@ -3344,11 +3348,8 @@ function boot(){
  $('#live-btn').onclick=()=>{scope.cfg.frozen=null;$('#live-btn').hidden=true;draw(true);};
  {let show=true;try{show=localStorage.getItem('pcl2-live-panel')!=='0';}catch{}setLivePanel(show);
   $('#lp-toggle').onclick=()=>setLivePanel($('#live-panel').hidden);$('#lp-hide').onclick=()=>setLivePanel(false);
-  // drag the panel by its title, inside the scope area
-  const pnl=$('#live-panel'),head=pnl.querySelector('.lp-head');head.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;e.preventDefault();head.setPointerCapture(e.pointerId);
-   const wrap=pnl.parentElement.getBoundingClientRect(),r=pnl.getBoundingClientRect(),dx=e.clientX-r.left,dy=e.clientY-r.top;
-   const mv=ev=>{const x=Math.min(Math.max(0,ev.clientX-wrap.left-dx),wrap.width-r.width),y=Math.min(Math.max(0,ev.clientY-wrap.top-dy),Math.max(0,wrap.height-40));pnl.style.left=x+'px';pnl.style.top=y+'px';pnl.style.right='auto';};
-   const up=()=>{head.removeEventListener('pointermove',mv);head.removeEventListener('pointerup',up);};head.addEventListener('pointermove',mv);head.addEventListener('pointerup',up);});}
+  // moved by its title inside the scope area, and resized from every side (5.0.2, winframe.js: its size kept)
+  window.WinFrame?.frame($('#live-panel'),{key:'live',head:'.lp-head',move:true,minW:220,minH:120});}
  const navOpen=v=>{$('#scope-nav').hidden=!v;$('#nav-toggle').setAttribute('aria-expanded',v);$('#nav-toggle').classList.toggle('on',v);try{localStorage.setItem('pcl2-nav',v?'1':'0');}catch{}scope.resize();};
  $('#nav-toggle').onclick=()=>navOpen($('#scope-nav').hidden);try{navOpen(localStorage.getItem('pcl2-nav')!=='0');}catch{navOpen(true);}
  $$('#scope-nav [data-nav]').forEach(b=>b.onclick=()=>{if(b.dataset.nav==='heights'){scope.autoHeights();renderChannels();return;}scope.nav(b.dataset.nav);$('#live-btn').hidden=!scope.cfg.frozen;$('#nav-follow').classList.toggle('on',scope.cfg.follow!==false);syncScopeInputs();renderChannels();draw(true);});
@@ -3419,7 +3420,7 @@ function boot(){
  const grip=$('#grip');grip.onpointerdown=e=>{e.preventDefault();grip.setPointerCapture(e.pointerId);const h0=$('.work').getBoundingClientRect().height,y0=e.clientY;grip.onpointermove=ev=>{$('.work').style.height=Math.max(240,Math.min(1000,h0+ev.clientY-y0))+'px';};grip.onpointerup=()=>{grip.onpointermove=null;};};
  renderPalette();
  // restore last state or start with a tutorial
- initScenarios();initAddons();
+ initScenarios();initAddons();initPanels();
  let st=null;try{st=JSON.parse(localStorage.getItem('pcl2-state'));}catch{}
  const qs=new URLSearchParams(location.search),want=qs.get('tutorial');let imp=null;
  if(qs.get('import')){try{imp=JSON.parse(localStorage.getItem('pcl2-import'));localStorage.removeItem('pcl2-import');}catch{}history.replaceState(null,'',location.pathname);}
@@ -3431,6 +3432,42 @@ function boot(){
  setInterval(()=>{if(S.theory&&(S.running||S.frame))renderTheoryLive();},1000);
 }
 function renderTheoryLive(){if(!atTop()||document.querySelector('#theory details[open]'))return;renderTheory();}
+// 5.0.2 (ROADMAP §94 step α): the register of the panels (panels.js) and the menu «Παράθυρα»: the cards of the page, the
+// panels of the work area and every window, each with the one element it has in the page; a window that needs a part
+// or a study first says which
+function initPanels(){const R=window.Panels;if(!R)return;
+ const one=()=>{const ids=[...editor.sel.c];return ids.length===1?editor.comp(ids[0]):null;};
+ const pick=(test,why)=>()=>{const c=one();return c&&test(c)?'':why;};
+ const shut=sel=>()=>{const m=document.querySelector(sel);m?.querySelector('.modal-head .x,[data-rvclose],[data-cwclose],[data-swclose]')?.click();};
+ const live=sel=>()=>{const m=document.querySelector(sel);return !!m&&!m.hidden&&m.getClientRects().length>0;};
+ const cards=[['circuit','Κύκλωμα','#bench-card',false],['scope','Προσομοίωση και scopes','#scope-card'],['scen','Σενάρια (Python)','#scen-card'],['addons','Πρόσθετα και σύνδεση','#addons-card'],
+  ['math','Υπολογισμοί & μαθηματικά','#math-card'],['theory','Περιγραφή & σύγκριση με τη θεωρία','#tut-card']];
+ for(const [id,title,sel,cl] of cards)R.register({id,title,group:'card',sel,closable:cl!==false,hint:cl===false?'Το σχέδιο μένει πάντα στη σελίδα':'',onshow:on=>{if(on&&id==='scope'){scope.resize();draw(true);}}});
+ R.register({id:'library',title:'Βιβλιοθήκη',group:'pane',sel:'.palette',isOpen:()=>!document.body.classList.contains('pal-hidden'),open:()=>document.body.classList.remove('pal-hidden'),close:()=>document.body.classList.add('pal-hidden')});
+ R.register({id:'props',title:'Παράμετροι',group:'pane',sel:'#props',isOpen:()=>propsOpen(),open:()=>setProps(true),close:()=>setProps(false),hint:'πλήκτρο I'});
+ R.register({id:'watch',title:'Σήματα ελέγχου',group:'pane',sel:'#watch-panel',lazy:true,isOpen:()=>!!window.Watch?.vis,can:()=>window.Watch&&atTop()&&S.pfx!==null?'':'Στο κύκλωμα του πρώτου επιπέδου',
+  open:()=>Watch.show(true),close:()=>Watch.show(false),hint:'πλήκτρο S'});
+ R.register({id:'live',title:'Ζωντανές παράμετροι',group:'pane',sel:'#live-panel',open:()=>setLivePanel(true),close:()=>setLivePanel(false),hint:'πλήκτρο P'});
+ R.register({id:'nav',title:'Πλοήγηση γραφημάτων',group:'pane',sel:'#scope-nav',isOpen:()=>!$('#scope-nav').hidden,open:()=>{if($('#scope-nav').hidden)$('#nav-toggle').click();},close:()=>{if(!$('#scope-nav').hidden)$('#nav-toggle').click();}});
+ R.register({id:'diag',title:'Κονσόλα διαγνωστικών',group:'pane',sel:'#diag',isOpen:()=>$('#diag').open&&!$('#scope-card').hidden,can:()=>$('#scope-card').hidden?'Είναι μέσα στην «Προσομοίωση και scopes»':'',open:()=>{$('#diag').open=true;},close:()=>{$('#diag').open=false;}});
+ R.register({id:'gallery',title:'Tutorials',sel:'#gallery',open:()=>gallery(true),close:()=>gallery(false)});
+ R.register({id:'settings',title:'Ρυθμίσεις',sel:'#settings',open:openSettings,close:()=>{$('#settings').hidden=true;}});
+ R.register({id:'netview',title:'Διάγραμμα του δικτύου',sel:'#netview',can:()=>STUDY.view?'':'Ανοίγει από μια μελέτη δικτύου («🗺 Διάγραμμα του δικτύου»)',open:netViewOpen,close:()=>$('#nv-close').click()});
+ R.register({id:'inspector',title:'Ρυθμίσεις στοιχείου',sel:'#inspector',can:pick(()=>true,'Διάλεξε ένα στοιχείο'),open:()=>{const c=one(),r=editor.holder.getBoundingClientRect();openInspector(c.id,r.left+r.width/2,r.top+40);},close:closeInspector});
+ R.register({id:'inside',title:'⧉ Μέσα σε στοιχείο',sel:'#lib-inside',lazy:true,isOpen:()=>!!window.Inside?.openId(),can:pick(c=>!!window.Inside?.can(c),'Διάλεξε ένα στοιχείο βιβλιοθήκης (π.χ. AVR, πυλώνας)'),
+  open:()=>Inside.open(one().id),close:()=>Inside.close()});
+ R.register({id:'facade',title:'Ελεγκτής AI (πρόσοψη)',sel:'#ai-facade',lazy:true,isOpen:()=>!!window.Watch?.facadeId(),can:pick(c=>c.type==='AIC'&&atTop(),'Διάλεξε ένα μπλοκ «Ελεγκτής AI»'),
+  open:()=>Watch.facade(one().id),close:()=>Watch.facade(null)});
+ R.register({id:'ctlwin',title:'Ρύθμιση ελεγκτή',sel:'.ctl-modal',lazy:true,isOpen:live('.ctl-modal'),can:pick(c=>c.type==='PWM'&&({...P.defaults('PWM'),...c.params}).mode==='pi'&&!!window.CtlWin,'Διάλεξε ένα PWM με ελεγκτή PI'),
+  open:()=>openCtlWin(one().id),close:shut('.ctl-modal')});
+ R.register({id:'linedata',title:'Δεδομένα γραμμής',sel:'.ld-modal',lazy:true,isOpen:live('.ld-modal'),can:pick(c=>c.type==='TLM'&&({...P.defaults('TLM'),...c.params}).src!=='modal'&&!!window.LineData,'Διάλεξε μια γραμμή από γεωμετρία'),
+  open:()=>LineData.open(one().id,lineCtx()),close:shut('.ld-modal')});
+ R.register({id:'split',title:'Τρέξιμο σε υποδίκτυα',sel:'.split-modal',lazy:true,isOpen:live('.split-modal'),can:()=>window.SplitWin&&S.sim&&!S.error?'':'Θέλει ένα κύκλωμα που τρέχει',open:openSplitWin,close:shut('.split-modal')});
+ R.register({id:'recview',title:'Προβολή καταγραφής',sel:'.rv-modal',lazy:true,isOpen:live('.rv-modal'),can:()=>'Ανοίγει από τις καταγραφές («Καταγραφή» → ▤)',close:shut('.rv-modal')});
+ // one entry per add-on: its window
+ R.source(()=>(window.Addons?.list||[]).filter(a=>!a.error).map(a=>({id:'addon:'+a.id,title:'Πρόσθετο: '+a.name,isOpen:()=>Addons.frames.has(a.id),open:()=>Addons.open(a.id),close:()=>Addons.close(a.id)})));
+ R.restore();
+ $('#open-panels')?.addEventListener('click',e=>R.openMenu(e.currentTarget));}
 window.addEventListener('DOMContentLoaded',boot);
 window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,libToSub,enterSub,leaveSub,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
  renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,studyAct,get STUDY(){return STUDY;},folderRun:studyRun,folderSettings:studySettings,folderView:studyView,get SFOLD(){return SFOLD;},get NV(){return NV;},studyOpen,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush,draw,closeInspector,openCtlWin}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare; 4.17.2: scope_flow

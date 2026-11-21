@@ -6,19 +6,19 @@
  <meta name="description" content="Εκπαιδευτικό εργαστήριο ηλεκτρονικών ισχύος: σχεδίαση κυκλώματος, προσομοίωση σε πραγματικό χρόνο, scopes και θεωρία για όλους τους βασικούς μετατροπείς.">
  <link rel="stylesheet" href="studio/style.css">
  <script src="studio/expr.js" defer></script><script src="studio/parts.js" defer></script><script src="studio/pyrt.js" defer></script><script src="studio/stepcheck.js" defer></script><script src="studio/netlib.js" defer></script><script src="studio/subcircuit.js" defer></script><script src="studio/bus.js" defer></script><script src="studio/units.js" defer></script><script src="studio/sparse.js" defer></script><script src="studio/kernels.js" defer></script><script src="studio/nn.js" defer></script><script src="studio/tune.js" defer></script><script src="studio/inputs.js" defer></script><script src="studio/mna.js" defer></script><script src="studio/split.js" defer></script><script src="studio/lblplace.js" defer></script><script src="studio/editor.js" defer></script>
- <script src="studio/plotcore.js" defer></script><script src="studio/winframe.js" defer></script><script src="studio/netview.js" defer></script><script src="studio/ctlwin.js" defer></script><script src="studio/splitwin.js" defer></script><script src="studio/scope.js" defer></script><script src="studio/watch.js" defer></script><script src="studio/inside.js" defer></script><script src="studio/live.js" defer></script><script src="studio/library.js" defer></script><script src="studio/linemodels.js" defer></script><script src="studio/tutorials.js" defer></script><script src="studio/exercises/pe2_battery.js" defer></script><script src="studio/templates.js" defer></script><script src="studio/metrics.js" defer></script><script src="studio/scenario.js" defer></script><script src="studio/pool.js" defer></script><script src="studio/addons.js" defer></script><script src="studio/math.js" defer></script><script src="studio/linedata.js" defer></script><script src="studio/recview.js" defer></script><script src="studio/trv.js" defer></script><script src="studio/app.js" defer></script>
+ <script src="studio/plotcore.js" defer></script><script src="studio/winframe.js" defer></script><script src="studio/panels.js" defer></script><script src="studio/netview.js" defer></script><script src="studio/ctlwin.js" defer></script><script src="studio/splitwin.js" defer></script><script src="studio/scope.js" defer></script><script src="studio/watch.js" defer></script><script src="studio/inside.js" defer></script><script src="studio/live.js" defer></script><script src="studio/library.js" defer></script><script src="studio/linemodels.js" defer></script><script src="studio/tutorials.js" defer></script><script src="studio/exercises/pe2_battery.js" defer></script><script src="studio/templates.js" defer></script><script src="studio/metrics.js" defer></script><script src="studio/scenario.js" defer></script><script src="studio/pool.js" defer></script><script src="studio/addons.js" defer></script><script src="studio/math.js" defer></script><script src="studio/linedata.js" defer></script><script src="studio/recview.js" defer></script><script src="studio/trv.js" defer></script><script src="studio/app.js" defer></script>
 </head>
 <body class="look-tech">
 <header class="top">
  <a class="brand" href="/"><span class="logo">ϟ</span><span>POWER &amp; CONTROL <b>LAB</b><small>κύκλωμα · προσομοίωση σε πραγματικό χρόνο · θεωρία</small></span></a>
  <button id="tutorials" class="primary-ghost">☰ Tutorials</button><span class="crumb" id="crumb"></span>
- <div class="top-actions"><button id="new">Νέο</button><button id="open">Άνοιγμα</button><button id="save">Αποθήκευση</button><button id="open-settings" title="Ρυθμίσεις ποντικιού, πλέγματος, ενδείξεων">⚙ Ρυθμίσεις</button><button id="open-addons" title="Πρόσθετα (π.χ. «Σύνθεση ελέγχου (κλασικός και AI)») και σύνδεση με Python/MATLAB">🧩 Πρόσθετα</button>
+ <div class="top-actions"><button id="new">Νέο</button><button id="open">Άνοιγμα</button><button id="save">Αποθήκευση</button><button id="open-panels" aria-haspopup="menu" aria-expanded="false" aria-controls="panels-menu" title="Οι κάρτες της σελίδας, τα πλαίσια και τα παράθυρα: κλείσιμο, άνοιγμα, επαναφορά">🪟 Παράθυρα</button><button id="open-settings" title="Ρυθμίσεις ποντικιού, πλέγματος, ενδείξεων">⚙ Ρυθμίσεις</button><button id="open-addons" title="Πρόσθετα (π.χ. «Σύνθεση ελέγχου (κλασικός και AI)») και σύνδεση με Python/MATLAB">🧩 Πρόσθετα</button>
   <span class="sep"></span><a href="/converter/" target="_blank" rel="noopener">Αναλυτικός DC-DC ↗</a><a href="/bidirectional/" target="_blank" rel="noopener">PE2 άσκηση ↗</a><span id="engine" class="engine">Engine…</span></div>
  <input id="file" type="file" accept=".json" hidden>
 </header>
 <main>
  <section class="tut-bar" aria-label="Tutorial"><div class="tb-title"><small id="tut-group"></small><b id="tut-title"></b></div><div id="tut-options" class="tut-options"></div><div id="tut-links" class="tb-links"></div></section>
- <section class="card bench" aria-label="Κύκλωμα">
+ <section id="bench-card" class="card bench" aria-label="Κύκλωμα">
   <div class="toolbar">
    <button id="pal-toggle" title="Βιβλιοθήκη στοιχείων">▤ Βιβλιοθήκη</button><span class="sep"></span>
    <button id="undo" title="Αναίρεση (Ctrl+Z)">↶</button><button id="redo" title="Επανάληψη (Ctrl+Y)">↷</button><button id="rot" title="Περιστροφή (R)">⟳</button><button id="del" title="Διαγραφή (Del)">🗑</button><button id="fit" title="Προσαρμογή προβολής (F)">⤢</button><span class="sep"></span><button id="wire-tool" class="tool-toggle" aria-pressed="false" title="Εργαλείο σύρματος (W): κλικ οπουδήποτε για αρχή, κλικ για γωνίες, διπλό κλικ ή Enter για ελεύθερο άκρο, Esc για έξοδο">╱ Σύρμα</button>
@@ -109,7 +109,7 @@
     </div>
     <div class="scope-wrap"><div id="scope-scroll" class="scope-scroll" title="Σύρε το κενό κάτω από ένα παράθυρο για το ύψος του (διπλό κλικ: όλα ίσα) · ⛶ στη γωνία: το παράθυρο γεμίζει το κουτί · Alt + ροδέλα ή η μπάρα: κύλιση · η γωνία κάτω δεξιά: το ύψος του κουτιού"><canvas id="scope-canvas" aria-label="Παλμογράφος"></canvas></div><canvas id="scope-axis" class="scope-axis" aria-hidden="true"></canvas><div id="scope-status" class="scope-status" aria-live="off"></div><button id="live-btn" class="live-btn" hidden>● Ζωντανά</button>
      <div id="live-panel" class="live-panel" role="region" aria-label="Ζωντανές παράμετροι"><div class="lp-head" title="Σύρε για μετακίνηση"><b>Ζωντανές παράμετροι</b><small>χωρίς παύση</small><button id="lp-hide" class="x" title="Κρύψε (P)">✕</button></div>
-      <div id="live-controls"></div><div id="lp-log" class="lp-log"></div></div></div>
+      <div class="lp-body own-scroll"><div id="live-controls"></div><div id="lp-log" class="lp-log"></div></div></div></div>
     <div id="measure" class="measure"></div><div id="bt-out" class="bt-out"></div><div id="cr-out" class="bt-out"></div>
    </div>
   </div>
@@ -166,14 +166,14 @@ pcl.tutorial('buck', start='steady')   # το project ενός tutorial</pre></d
   <div class="math-top"><h2>Υπολογισμοί & μαθηματικά</h2><span id="math-src" class="math-src"></span><select id="math-tpl" title="Από πού βγαίνει η λύση" hidden></select><button id="math-open" title="Άνοιγμα template λύσης (JSON, schema pcl-template-1)">Template…</button><button id="math-refresh" title="Επανυπολογισμός με τις τρέχουσες τιμές του κυκλώματος">↻ Επανυπολογισμός</button><input id="tpl-file" type="file" accept=".json" hidden></div>
   <div id="math" class="math-panel"><p class="muted">Υπολογισμός…</p></div>
  </section>
- <section class="card tut-card" aria-label="Tutorial και θεωρία">
+ <section id="tut-card" class="card tut-card" aria-label="Tutorial και θεωρία">
   <div class="tut-head"><h2>Περιγραφή & σύγκριση με τη θεωρία</h2></div>
   <div class="tut-grid">
    <div><p id="tut-desc" class="lead"></p><h4>Δοκίμασε</h4><ul id="tut-tasks" class="tasks"></ul></div>
    <div><div class="th-head"><h4>Θεωρία & σύγκριση με την προσομοίωση</h4><button id="theory-refresh" title="Επανυπολογισμός με τις τρέχουσες τιμές">↻</button></div><div id="theory" class="theory"></div></div>
   </div>
  </section>
- <footer>Power &amp; Control Lab <b>5.0.1</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
+ <footer>Power &amp; Control Lab <b>5.0.2</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
 </main>
 <div id="notice" class="notice" hidden></div>
 <div id="inspector" class="popup inspector" hidden></div>

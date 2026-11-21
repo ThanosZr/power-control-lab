@@ -538,7 +538,9 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .winside .wp-head{display:flex;align-items:center;gap:8px}.winside .in-t{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 .winside .in-body:focus{outline:none}.winside .in-body:focus-visible{outline:2px solid #14796655;outline-offset:-2px}
 .winside .in-body{flex:1;overflow:auto;background:#f7faf9;border-top:1px solid #dfe8e5;border-bottom:1px solid #dfe8e5}.winside .wp-foot{padding:6px 10px}
-.in-svg{display:block}.in-body.fit .in-svg{width:100%;height:auto}.winside .in-fit{font-size:11px;padding:2px 8px;border:1px solid #cfdcd7;border-radius:6px;background:#fff;cursor:pointer;white-space:nowrap}.in-n rect{fill:#fff;stroke:#a9c0b9;stroke-width:1.2}.in-n.io rect{fill:#e6f2ee;stroke:#147966}
+.in-svg{display:block}.winside .in-fit{font-size:11px;padding:2px 8px;border:1px solid #cfdcd7;border-radius:6px;background:#fff;cursor:pointer;white-space:nowrap}
+.winside .in-body{display:flex;cursor:grab}.winside .in-body.pan{cursor:grabbing}.winside .in-body .in-svg{margin:auto;flex:none}
+.winside .in-zoom{display:flex;align-items:center;gap:3px;margin-left:auto}.winside .in-zoom small{min-width:3.4em;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums}.in-n rect{fill:#fff;stroke:#a9c0b9;stroke-width:1.2}.in-n.io rect{fill:#e6f2ee;stroke:#147966}
 .in-n text{font:11px system-ui,sans-serif;fill:#21302d}.in-id{font-weight:600}.in-ty{font-weight:400;fill:#7b8e88}.in-w{fill:#4f625d}.in-v{font-variant-numeric:tabular-nums;fill:#147966}
 .in-e{fill:none;stroke:#7d958f;stroke-width:1.2}.in-e.back{stroke:#c47a1c;stroke-dasharray:5 4}#in-arr path{fill:#7d958f}.in-pin{font:9.5px system-ui,sans-serif;fill:#7b8e88}
 
@@ -562,6 +564,18 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .wfr-se::after{content:'';position:absolute;right:3px;bottom:3px;width:6px;height:6px;border-right:2px solid #9fb3ad;border-bottom:2px solid #9fb3ad}
 .wfr-moving,.wfr-moving *{user-select:none}
 .modal-box.wfr{overflow:hidden}.modal-box.wfr .modal-head{cursor:move}.modal-box.wfr .modal-body{flex:1 1 auto;min-height:0}
+/* 5.0.2 (ROADMAP §94 point 6): every window with the frame: the floating panels, the live parameters, the windows of
+   the add-ons; a window folded to its title keeps the height of its title (its kept size waits for it to open again) */
+.wpanel.wfr .wp-body,.wpanel.wfr .wf-body{flex:1 1 auto}
+.wfr.min{height:auto!important;min-height:0!important}.wfr.min>:is(.wfr-n,.wfr-s,.wfr-ne,.wfr-nw,.wfr-se,.wfr-sw){display:none}
+.live-panel.wfr{display:flex;flex-direction:column;overflow:hidden}.lp-body{min-height:0}.live-panel.wfr .lp-body{flex:1 1 auto;overflow:auto}
+.addon-dock{position:relative}.addon-dock.wfr header{cursor:move;user-select:none}.addon-dock.wfr-free{z-index:61}
+/* 5.0.2 (ROADMAP §94 step α): the menu «Παράθυρα» (panels.js) */
+.panels-menu{width:320px;max-height:min(80vh,640px);overflow:auto;padding:6px 0;font-size:12.5px;z-index:65}
+.pm-sec{padding:4px 10px 6px;border-bottom:1px solid var(--line)}.pm-sec>b{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:2px 0 4px}
+.pm-row{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:2px 8px;padding:3px 2px;cursor:pointer;border-radius:5px}.pm-row:hover{background:#f3f8f6}
+.pm-row small{grid-column:2;color:var(--muted);font-size:10.5px;line-height:1.25}.pm-row.off{cursor:default;color:var(--muted)}.pm-row.off:hover{background:none}
+.pm-foot{display:flex;align-items:center;gap:8px;padding:6px 10px 2px}.pm-foot small{margin-left:auto}
 
 /* 4.17.3 (ROADMAP §65, THEORY §8Γ): the technical look, the default (body.look-tech; the look of before: body.look-classic).
    White, flat, monochrome drawing with thin straight lines on whole pixels, as in PSCAD, PowerFactory, EMTP: lines of
