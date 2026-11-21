@@ -12,7 +12,8 @@
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const doc=()=>root.document;
  // d: {id, title, group ('card' | 'pane' | 'window'), sel (its one element), open(), close(), isOpen(), can() → '' or why
- // not, closable (false: always on the page), lazy (its element is written the first time it opens), hint}
+ // not, closable (false: always on the page), lazy (its element is written the first time it opens), hint, place() (5.0.5:
+ // where a card is docked, '' in its place in the page)}
  function register(d){if(!d||!d.id||P.by.has(d.id))throw new Error('Panels: no id, or the panel twice: '+(d&&d.id));const q={group:'window',closable:true,...d};P.list.push(q);P.by.set(q.id,q);return q;}
  // entries that change (one per add-on): a function that gives them, asked each time the menu or a toggle needs them
  const source=f=>{P.sources.push(f);};
@@ -23,7 +24,8 @@
  function hidden(){try{const o=JSON.parse(localStorage.getItem(KEY)||'{}');return new Set(Array.isArray(o.hidden)?o.hidden:[]);}catch(e){return new Set();}}
  function keep(h){try{localStorage.setItem(KEY,JSON.stringify({hidden:[...h]}));}catch(e){}}
  function state(d){const e=el(d);let open;try{open=d.isOpen?!!d.isOpen():shown(e);}catch(x){open=false;}let why='';try{why=d.can?d.can()||'':'';}catch(x){why=String(x.message||x);}
-  return {id:d.id,title:d.title,group:d.group,open,why,closable:d.closable!==false,hint:d.hint||''};}
+  let place='';try{place=d.place?d.place()||'':'';}catch(x){}
+  return {id:d.id,title:d.title,group:d.group,open,why,closable:d.closable!==false,hint:d.hint||'',place};}
  const list=()=>all().map(state);
  // a card: its section hidden or shown, and kept
  function setCard(d,on){const e=el(d);if(!e||d.closable===false)return false;e.hidden=!on;const h=hidden();if(on)h.delete(d.id);else h.add(d.id);keep(h);try{d.onshow?.(on);}catch(x){}return true;}
@@ -36,7 +38,9 @@
  // every card on the page again, the windows at their first size and place
  function reset(){keep(new Set());for(const d of P.list)if(d.group==='card'){const e=el(d);if(e&&e.hidden){e.hidden=false;try{d.onshow?.(true);}catch(x){}}}
   try{const ks=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('pcl-win-'))ks.push(k);}ks.forEach(k=>localStorage.removeItem(k));}catch(e){}
-  for(const d of P.list)try{d.reset?.();}catch(x){}}
+  for(const d of P.list)try{d.reset?.();}catch(x){}
+  // 5.0.5 (§94 step β): every card back to its place in the page (dock.js)
+  try{root.Dock?.reset?.();}catch(x){}}
  // no id twice in the document, every panel once (or not yet, if it is written when it opens)
  function check(D){D=D||doc();const ids=new Map();for(const e of D.querySelectorAll('[id]'))ids.set(e.id,(ids.get(e.id)||0)+1);
   const dup=[...ids].filter(([,n])=>n>1).map(([k,n])=>k+'×'+n),twice=[],missing=[];
@@ -46,9 +50,9 @@
  function html(){const L=list();let s='';
   for(const [g,t] of GROUPS){const q=L.filter(x=>x.group===g);if(!q.length)continue;s+=`<div class="pm-sec"><b>${esc(t)}</b>`;
    for(const x of q){const dis=!x.open&&!!x.why,fixed=x.open&&!x.closable;
-    s+=`<label class="pm-row${dis?' off':''}" title="${esc(dis?x.why:x.hint)}"><input type="checkbox" data-panel="${esc(x.id)}" ${x.open?'checked':''} ${dis||fixed?'disabled':''}><span>${esc(x.title)}</span>${dis?`<small>${esc(x.why)}</small>`:''}</label>`;}
+    s+=`<label class="pm-row${dis?' off':''}" title="${esc(dis?x.why:x.hint)}"><input type="checkbox" data-panel="${esc(x.id)}" ${x.open?'checked':''} ${dis||fixed?'disabled':''}><span>${esc(x.title)}</span>${dis?`<small>${esc(x.why)}</small>`:x.place?`<small class="pm-place">${esc(x.place)}</small>`:''}</label>`;}
    s+='</div>';}
-  return s+`<div class="pm-foot"><button data-panels-reset title="Όλες οι κάρτες στη σελίδα, και τα παράθυρα στο αρχικό τους μέγεθος και στη θέση τους">↺ Επαναφορά</button><small class="muted">${L.length} πλαίσια</small></div>`;}
+  return s+`<div class="pm-foot"><button data-panels-reset title="Όλες οι κάρτες ανοιχτές και στη θέση τους στη σελίδα, και τα παράθυρα στο αρχικό τους μέγεθος και στη θέση τους">↺ Επαναφορά</button><small class="muted">${L.length} πλαίσια</small></div>`;}
  function closeMenu(){const m=P.menu;if(m)m.hidden=true;const b=doc().getElementById('open-panels');b?.setAttribute('aria-expanded','false');}
  // the popup under its button (one element, written anew each time it opens)
  function openMenu(btn){const D=doc();let m=P.menu;

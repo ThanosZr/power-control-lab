@@ -1387,11 +1387,12 @@ function initScenarios(){const t=$('#scen-code');if(!t)return;t.value=S.scenCode
 function liveApply(){if(!S.sim)return;try{S.sim.load(fullDoc(),false);S.error=null;warnings(S.sim.net.warnings);scope.attach(S.sim);editor.setDiag(viewDiag(S.sim.net.diag));}catch(e){S.error=e.message;pause();notice('Η προσομοίωση σταμάτησε: '+esc(e.message),'error');}scheduleStepCheck();}
 
 // ------------------------------------------------------------------ context menu
-function closeMenu(){$('#ctx').hidden=true;}
+function closeMenu(){$('#ctx').hidden=true;const q=$('#ctx-sub');if(q)q.hidden=true;}
 function openMenu(ev){
  const m=$('#ctx');let items=[];
  if(ev.kind==='comp'){const c=editor.comp(ev.id);if(!c)return;
-  if(c.type!=='JUNC'&&S.pfx!==null)items.push(...signalsFor(c).map(([pre,n,f])=>({t:'⌁ Scope: '+n,f:()=>addProbe(pre+pid(c.id)+(f||''))})));
+  // 5.0.5: the scopes of a part in a submenu (its options, and the window with its pins); before, one row per signal
+  if(c.type!=='JUNC'&&S.pfx!==null&&pinScopeOf(c).n)items.push({t:'⌁ Scopes',k:'▸',sub:b=>openScopeSub(c,b)});
   if(c.type==='JUNC'&&S.pfx!==null)items.push({t:'⌁ Scope: τάση κόμβου',f:()=>addProbe('VN:'+pid(c.id)+':j')});
   if(c.type!=='JUNC'&&atTop()&&window.Watch)items.push({t:'▣ Πλακίδια πάνω στο σχέδιο…',k:'S',f:()=>Watch.openAdd(c.id)});
   if(c.type==='SUB')items.push(...subMenu(c));
@@ -1407,8 +1408,88 @@ function openMenu(ev){
   ...['R','L','C','D','SW','VDC'].map(t=>({t:'+ '+P.PARTS[t].name,f:()=>{const c=editor.addPart(t,Math.round(ev.world[0]/10)*10,Math.round(ev.world[1]/10)*10);void c;}})),'-',
   {t:'╱ Σύρμα από εδώ',k:'W',f:()=>{editor.setWireTool(true);editor.startFreeWire(ev.world);}},
   ...(editor.doc.components.some(c=>c.lblAt)?[{t:'↺ Αυτόματη θέση όλων των ετικετών',f:()=>editor.resetLabels()}]:[]),{t:'Επιλογές επίλυσης (ασύνδετα, αιωρούμενα)…',f:()=>{editor.select([],[]);PS['c-solve']=true;setProps(true);}});
- m.innerHTML=items.map((it,i)=>it==='-'?'<hr>':`<button data-i="${i}" class="${it.cls||''}" ${it.dis?'disabled':''}><span>${esc(it.t)}</span>${it.k?`<kbd>${esc(it.k)}</kbd>`:''}</button>`).join('');
- m.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{closeMenu();items[+b.dataset.i].f();});placePopup(m,ev.x-12,ev.y-12);}
+ m.innerHTML=items.map((it,i)=>it==='-'?'<hr>':`<button data-i="${i}" class="${it.cls||''}${it.sub?' has-sub':''}" ${it.dis?'disabled':''} ${it.sub?'aria-haspopup="menu"':''}><span>${esc(it.t)}</span>${it.k?`<kbd>${esc(it.k)}</kbd>`:''}</button>`).join('');
+ // a row with a submenu opens it when the pointer comes over it (or on a click); any other row closes it
+ m.querySelectorAll('[data-i]').forEach(b=>{const it=items[+b.dataset.i];b.onclick=()=>{if(it.sub){it.sub(b);return;}closeMenu();it.f();};
+  b.onpointerenter=()=>{const q=$('#ctx-sub');if(it.sub)it.sub(b);else if(q&&!q.hidden)q.hidden=true;};});placePopup(m,ev.x-12,ev.y-12);}
+
+// ------------------------------------------------------------------ the scopes of a part (5.0.5)
+// What a part can show in the scope, by pin: every electrical pin has the voltage of its node to ground (VN), or the
+// part's own signal for that pin when it has one (the voltage and the current of every end of a line); every output of
+// a block has its signal; the rest (the current, the voltage and the power of the part, the inner signals of a
+// controller) are the part's own quantities. A signal goes with a pin when its name names that pin and no other.
+const PS_WORD=t=>String(t).split(/\s+/)[0];
+// the short name of a channel on its chip: V⏚ a voltage to ground, V a voltage of the part, I a current, y an output
+const psSym=q=>q.ph?'V⏚'+q.ph:q.pre==='VN'||/^V\d*$/.test(q.pre)&&/προς γη/.test(q.text)?'V⏚':/^V\d*$/.test(q.pre)?'V':/^I\d*$/.test(q.pre)?'I':q.pre==='Y'?'y':q.pre;
+function pinScopeOf(c){const id=pid(c.id),sg=signalsFor(c),el=Object.keys(P.elPins(c)),sp=P.sigPins(c),outs=outsOf(c);
+ const pins=[...el.map(k=>({k,kind:'el'})),...Object.entries(sp).map(([k,d])=>({k,kind:d.dir==='out'?'out':'in',w:d.w||1}))];
+ const by=new Map(pins.map(q=>[q.k,[]])),own=[];
+ const word=k=>new RegExp('(^|[\\s(])'+k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'($|[\\s),])');
+ for(const [pre,text,f] of sg){const key=pre+id+(f||''),q={key,text,pre:pre.replace(/:$/,'')};
+  if(pre==='Y:'){const o=outs.find((o,k)=>(k?':'+o:'')===(f||''));if(o&&by.has(o)&&!/^\//.test(f||'')){by.get(o).push(q);continue;}}
+  else{const hit=el.filter(k=>word(k).test(text));if(hit.length===1){by.get(hit[0]).push(q);continue;}}
+  own.push(q);}
+ // the node of an electrical pin, unless the part already gives a voltage to ground there
+ // (a three-phase pin, «abc»: the node of each phase, as the solver names them)
+ for(const k of el){const L=by.get(k);if(L.some(q=>/^V/.test(q.pre)&&/γη/.test(q.text)))continue;const w=P.pinWidth(c,k);
+  if(w>1){const ph=w===3&&/^abc/.test(k)?['a','b','c'].map(x=>x+k.slice(3)):[];L.unshift(...ph.map(x=>({key:`VN:${id}:${x}`,text:`τάση της φάσης ${x} στο ${k} (προς γη)`,pre:'VN',ph:x})));}
+  else L.unshift({key:`VN:${id}:${k}`,text:`τάση του κόμβου στο ${k} (προς γη)`,pre:'VN'});}
+ // where each pin is on the drawing: the side of the box it is nearest to, in the order along that side
+ const bb=P.bbox(c),cx=(bb[0]+bb[2])/2,cy=(bb[1]+bb[3])/2,hw=Math.max(1,(bb[2]-bb[0])/2),hh=Math.max(1,(bb[3]-bb[1])/2);
+ for(const q of pins){const at=P.pinPos(c,q.k)||[cx,cy],dx=(at[0]-cx)/hw,dy=(at[1]-cy)/hh;q.at=at;q.side=Math.abs(dx)>=Math.abs(dy)?(dx<0?'left':'right'):(dy<0?'top':'bottom');q.sig=by.get(q.k)||[];}
+ const side=s=>pins.filter(q=>q.side===s).sort((a,b)=>s==='left'||s==='right'?a.at[1]-b.at[1]:a.at[0]-b.at[0]);
+ return {c,id,pins,own,side:{left:side('left'),right:side('right'),top:side('top'),bottom:side('bottom')},n:sg.length+el.length};}
+const inScope=key=>scope.cfg.panes.some(p=>p.ch.some(ch=>ch.key===key));
+// the value now of a channel (the node of a pin through its net)
+function liveVal(key){const s=S.sim;if(!s)return NaN;try{if(key.startsWith('VN:')){const n=s.net.pinNet.get(key.slice(3));if(!n)return NaN;if(n.ground)return 0;return s.now('N:'+n.canon);}return s.now(key);}catch(e){return NaN;}}
+// on or off in the scope: «to» is where a new channel goes (automatic by unit, a pane, or a new pane)
+function scopeToggle(key,label,to){if(!S.sim)return;if(inScope(key)){scope.removeChannel(key);renderChannels();draw(true);return false;}
+ if(to===undefined||to==='auto'){addProbe(key,label);return true;}scope.addChannel(key,label||chanLabel(key),to==='new'?scope.cfg.panes.length:+to);renderChannels();flash('#scope-card');draw(true);return true;}
+function openScopeSub(c,btn){const m=$('#ctx-sub')||(()=>{const m=document.createElement('div');m.id='ctx-sub';m.className='popup ctx ctx-sub';m.setAttribute('role','menu');m.hidden=true;document.body.appendChild(m);
+  m.addEventListener('click',e=>{const b=e.target.closest('[data-psk],[data-pswin]');if(!b)return;if(b.dataset.pswin!==undefined){const id=m.dataset.c;closeMenu();openPinScope(id);return;}
+   const on=scopeToggle(b.dataset.psk,b.dataset.psl||undefined);b.classList.toggle('on',!!on);b.setAttribute('aria-pressed',String(!!on));});return m;})();
+ const Q=pinScopeOf(c),chip=q=>`<button class="ps-opt${inScope(q.key)?' on':''}" data-psk="${esc(q.key)}" aria-pressed="${inScope(q.key)}" title="${esc(q.text)} · κλικ: ${inScope(q.key)?'αφαίρεση από':'στο'} scope">${esc(q.pre==='VN'?'τάση'+(q.ph?' '+q.ph:'')+' ⏚':PS_WORD(q.text))}</button>`;
+ let h=`<button data-pswin class="ps-win"><span>▣ Παραθυράκι: οι ακροδέκτες και τι μετράει ο καθένας…</span></button><hr>`;
+ const rows=Q.pins.filter(q=>q.sig.length);if(rows.length)h+=`<div class="ps-sec">Ανά ακροδέκτη</div>`+rows.map(q=>`<div class="ps-row"><span class="ps-pin" title="${q.kind==='el'?'ηλεκτρικός ακροδέκτης':q.kind==='out'?'έξοδος σήματος':'είσοδος σήματος'}">${esc(q.k)}</span>${q.sig.map(chip).join('')}</div>`).join('');
+ if(Q.own.length)h+=`<div class="ps-sec">Του στοιχείου</div>`+Q.own.map(q=>`<button class="ps-item${inScope(q.key)?' on':''}" data-psk="${esc(q.key)}" aria-pressed="${inScope(q.key)}"><span>${esc(q.text)}</span><kbd>${inScope(q.key)?'✓ στο scope':''}</kbd></button>`).join('');
+ m.innerHTML=h;m.dataset.c=c.id;m.hidden=false;const r=btn.getBoundingClientRect(),w=m.offsetWidth,hh=m.offsetHeight;
+ m.style.left=(r.right+4+w>innerWidth-8?Math.max(8,r.left-4-w):r.right+4)+'px';m.style.top=Math.max(8,Math.min(r.top-6,innerHeight-hh-8))+'px';}
+// the window of a part: its box with every pin drawn where it is, and for every pin what it measures, on or off in the
+// scope with a click, with the value now; under the box the part's own quantities; where a new channel goes
+const PW={id:null,pfx:null,timer:0,to:'auto'};
+function pinScopeHtml(Q){const c=Q.c,lab=c.label||c.id,name=P.PARTS[c.type]?.name||c.type;
+ const chip=q=>{const u=Scope.unitOf(q.key,S.sim);return `<button class="pw-chip${inScope(q.key)?' on':''}" data-pwk="${esc(q.key)}" aria-pressed="${inScope(q.key)}" title="${esc(q.text)} · κλικ: ${inScope(q.key)?'αφαίρεση από':'στο'} scope"><b>${esc(psSym(q))}</b><span class="pw-what">${esc(q.pre==='VN'?'τάση':PS_WORD(q.text))}</span><span class="pw-val" data-pwv="${esc(q.key)}" data-u="${esc(u)}">—</span></button>`;};
+ const pin=(q,s)=>{const kind=q.kind==='el'?'':q.kind==='out'?' pw-out':' pw-in',chips=q.sig.length?q.sig.map(chip).join(''):`<span class="pw-none">${q.kind==='in'?'είσοδος σήματος':'—'}</span>`;
+  return `<div class="pw-pin pw-${s}${kind}"><div class="pw-chips">${chips}</div><div class="pw-stub"><i></i></div><span class="pw-name">${esc(q.k)}</span></div>`;};
+ const col=s=>`<div class="pw-side pw-s-${s}">${Q.side[s].map(q=>pin(q,s)).join('')}</div>`;
+ const own=Q.own.length?`<div class="pw-own"><div class="ps-sec">Μεγέθη του στοιχείου</div>${Q.own.map(q=>`<label class="pw-orow"><input type="checkbox" data-pwk="${esc(q.key)}" ${inScope(q.key)?'checked':''}><span>${esc(q.text)}</span><span class="pw-val" data-pwv="${esc(q.key)}" data-u="${esc(Scope.unitOf(q.key,S.sim))}">—</span></label>`).join('')}</div>`:'';
+ const panes=scope.cfg.panes.map((p,i)=>`<option value="${i}" ${PW.to===String(i)?'selected':''}>στο Π${i+1}</option>`).join('');
+ return `<div class="pw-head"><b>⌁ ${esc(lab)}</b><small class="muted">${esc(name)} · ${Q.pins.length} ακροδέκτες</small><button class="x" data-pwclose title="Κλείσιμο">✕</button></div>
+  <div class="pw-legend"><span><b>V⏚</b> τάση του κόμβου προς γη</span><span><b>I</b> ρεύμα</span><span><b>V</b> τάση του στοιχείου</span><span><b>y</b> έξοδος σήματος</span><span class="muted">κλικ: στο scope ή έξω</span></div>
+  <div class="pw-draw"><div></div>${col('top')}<div></div>${col('left')}<div class="pw-box"><b>${esc(lab)}</b><small>${esc(name)}</small></div>${col('right')}<div></div>${col('bottom')}<div></div></div>${own}
+  <div class="pw-foot"><label>Νέα κανάλια <select data-pwto><option value="auto" ${PW.to==='auto'?'selected':''}>αυτόματα, κατά μονάδα</option>${panes}<option value="new" ${PW.to==='new'?'selected':''}>σε νέο παράθυρο</option></select></label>
+   <button data-pwall="v" title="Οι τάσεις όλων των ακροδεκτών">+ Όλες οι τάσεις</button><button data-pwall="i" title="Τα ρεύματα όλων των ακροδεκτών">+ Όλα τα ρεύματα</button><button data-pwnone title="Κάθε κανάλι αυτού του στοιχείου έξω από το scope">− Κανένα</button></div>`;}
+function pinScopeTick(){const w=$('#pin-scope');if(!w||w.hidden){clearInterval(PW.timer);PW.timer=0;return;}
+ if(PW.id&&(!editor.comp(PW.id)||S.pfx!==PW.pfx)){closePinScope();return;}       // the part went (deleted), or another level of the circuit
+ {const sel=w.querySelector('[data-pwto]'),n=scope.cfg.panes.length;if(sel&&+sel.dataset.n!==n){sel.dataset.n=n;if(/^\d+$/.test(PW.to)&&+PW.to>=n)PW.to='auto';
+  sel.innerHTML=`<option value="auto">αυτόματα, κατά μονάδα</option>${scope.cfg.panes.map((p,i)=>`<option value="${i}">στο Π${i+1}</option>`).join('')}<option value="new">σε νέο παράθυρο</option>`;sel.value=PW.to;}}
+ for(const e of w.querySelectorAll('[data-pwv]')){const v=liveVal(e.dataset.pwv);const t=Number.isFinite(v)?eng(v,e.dataset.u||'',4):'—';if(e.textContent!==t)e.textContent=t;}
+ for(const e of w.querySelectorAll('[data-pwk]')){const on=inScope(e.dataset.pwk);if(e.type==='checkbox'){if(e.checked!==on)e.checked=on;}else if(e.classList.contains('on')!==on){e.classList.toggle('on',on);e.setAttribute('aria-pressed',String(on));}}}
+function openPinScope(id){const c=editor.comp(id);if(!c)return;let w=$('#pin-scope');
+ if(!w){w=document.createElement('div');w.id='pin-scope';w.className='pinscope';w.setAttribute('role','dialog');w.hidden=true;document.body.appendChild(w);
+  w.addEventListener('click',e=>{const t=e.target;if(t.closest('[data-pwclose]')){closePinScope();return;}
+   const k=t.closest('button[data-pwk]');if(k){scopeToggle(k.dataset.pwk,undefined,PW.to);pinScopeTick();return;}
+   const all=t.closest('[data-pwall]');if(all){const Q=pinScopeOf(editor.comp(PW.id)||{type:'R'}),to=PW.to==='new'?String(scope.cfg.panes.length):PW.to;
+    for(const q of Q.pins)for(const g of q.sig)if((all.dataset.pwall==='v'?/^V/:/^I/).test(g.pre)&&!inScope(g.key))scopeToggle(g.key,undefined,to);pinScopeTick();return;}
+   if(t.closest('[data-pwnone]')){const Q=pinScopeOf(editor.comp(PW.id));for(const g of [...Q.pins.flatMap(q=>q.sig),...Q.own])if(inScope(g.key))scope.removeChannel(g.key);renderChannels();draw(true);pinScopeTick();}});
+  w.addEventListener('change',e=>{const t=e.target;if(t.matches('input[data-pwk]')){if(t.checked!==inScope(t.dataset.pwk))scopeToggle(t.dataset.pwk,undefined,PW.to);pinScopeTick();}else if(t.matches('[data-pwto]'))PW.to=t.value;});}
+ PW.id=id;PW.pfx=S.pfx;w.innerHTML=pinScopeHtml(pinScopeOf(c));const first=w.hidden;w.hidden=false;
+ // the first time: as wide as its drawing (at most the screen), at the right of the circuit; after that its kept size and place
+ if(first&&!w._wfr){const kept=WinFrame?.size?.('pinscope');if(!kept){w.style.width='auto';const need=Math.max(w.querySelector('.pw-draw').scrollWidth,w.querySelector('.pw-foot').scrollWidth)+4,r=editor.holder.getBoundingClientRect(),ww=Math.min(innerWidth-16,Math.max(460,need));
+  w.style.width=ww+'px';w.style.left=Math.max(8,Math.min(innerWidth-ww-8,r.right-ww-16))+'px';w.style.top=Math.max(8,r.top+16)+'px';}}
+ if(window.WinFrame)WinFrame.frame(w,{key:'pinscope',head:'.pw-head',move:true,place:true,minW:420,minH:220});
+ pinScopeTick();if(!PW.timer)PW.timer=setInterval(pinScopeTick,300);}
+function closePinScope(){const w=$('#pin-scope');if(w)w.hidden=true;PW.id=null;clearInterval(PW.timer);PW.timer=0;}
 
 // ------------------------------------------------------------------ hover readout on the schematic
 let hoverComp=null,hoverPos=[0,0];
@@ -1632,7 +1713,7 @@ function loadTutorial(id,options={},keepView=false){
 function migrateFile(pr){if(!window.Bus||Bus.namesJoin(pr))return pr;const m=Bus.migrateNames(pr);
  if(m.renamed.length)setTimeout(()=>notice('Αρχείο παλιότερης έκδοσης: από την 3.18 τα σύρματα με το ίδιο όνομα είναι ένας κόμβος. Για να μείνει ίδιο το κύκλωμα, άλλαξαν ονόματα: '+m.renamed.map(r=>esc((r.where?r.where+': ':'')+r.to.join(', '))).join(' · ')+'.','info'),0);
  return m.project;}
-function applyProject(pr,keepView){window.Inside?.close();
+function applyProject(pr,keepView){window.Inside?.close();if(PW.id)closePinScope();
  pr=migrateFile(pr);pause();if(S.nav.length){S.nav=[];S.top=null;S.pfx='';}if(pr.subcircuits)SubC.sync(pr);editor.load(pr,{keepView});renderCrumbs();renderPalette();if(S.batch)clearBatch();
  const sim=pr.sim||{};if(sim.hDiv){const ss=$('#sim-step'),v=String(sim.hDiv);if(![...ss.options].some(o=>o.value===v))ss.add(new Option('T/'+v,v));ss.value=v;}if(sim.method){$('#method').value=sim.method;$('#method-note').textContent={TR:'2ης τάξης, χωρίς απόσβεση',BDF2:'2ης τάξης, απόσβεση στις υψηλές συχνότητες',BE:'1ης τάξης, ισχυρή απόσβεση'}[sim.method]||'';}setSpeed(sim.speed??100);S.stopT=sim.stopT||0;$('#stop').value=S.stopT?String(+(S.stopT*1e3).toPrecision(6)):'';
  {const rs=$('#rec-res'),v=String(+(sim.rec?.dt)||0);if(rs){if(![...rs.options].some(o=>o.value===v))rs.add(new Option('κάθε '+eng(+v,'s',3),v));rs.value=[...rs.options].find(o=>+o.value===+v)?.value??'0';}}
@@ -3283,7 +3364,7 @@ async function runMath(){
    // a copy here had buttons that did nothing and the same ids twice
    const fh=t.theory==='formula'&&theoryValidity(t).ok?formulaTheory(t):'',live=/<(button|select|input|textarea)\b/i.test(fh);
    box.innerHTML=`<p class="muted">${esc(conv.error)}</p>`+(!fh?'':live?`<p class="muted" id="math-live">Τα κουμπιά και τα αποτελέσματα αυτού του tutorial είναι στην κάρτα «Θεωρία & σύγκριση με την προσομοίωση», πιο κάτω. <button data-math-go>↓ Εκεί</button></p>`:`<h4>Βασικές σχέσεις για αυτό το κύκλωμα</h4>`+fh.replace(/\sid="[^"]*"/g,''));   // 5.0.2: a copy of the card carries no ids (the card keeps them)
-   box.querySelector('[data-math-go]')?.addEventListener('click',()=>$('#theory').scrollIntoView({behavior:'smooth',block:'start'}));return;}
+   box.querySelector('[data-math-go]')?.addEventListener('click',()=>{window.Dock?.reveal('theory');$('#theory').scrollIntoView({behavior:'smooth',block:'start'});});return;}
   src.textContent='από το κύκλωμα · '+conv.roles.map(r=>r.label).join(', ');
   const B=await api('studio_math',{circuit:conv.circuit,params:conv.params});if(token!==mathToken)return;
   S.recognized=B.recognized?.topology||null;S.recognizedKey=circuitSig(editor.doc).key;if(S.theory)renderTheory();
@@ -3423,7 +3504,7 @@ function boot(){
  $('#pane-add').onclick=()=>{const P=scope.cfg.panes;if(P.length>=12){flash('#chan-list');return;}const last=P.length-1;if(P[last]&&!P[last].ch.length&&last>0){scope.nextPane=last;renderChannels();return;}P.push({ch:[]});scope.nextPane=P.length-1;chanKey='';renderChannels();draw(true);};
  $('#sig-search').oninput=()=>fillSignals();
  // 4.4: the add-ons card from the top bar (it sits below the scope and the scenarios)
- $('#open-addons').onclick=()=>{const d=$('#addons-block');if(!d)return;d.open=true;$('#addons-card').scrollIntoView({behavior:'smooth',block:'start'});};
+ $('#open-addons').onclick=()=>{const d=$('#addons-block');if(!d)return;d.open=true;window.Dock?.reveal('addons');$('#addons-card').scrollIntoView({behavior:'smooth',block:'start'});};
  // Enter adds the first signal that matches; Esc clears the search
  $('#sig-search').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const o=$('#add-signal').querySelector('option[value]:not([value=""])');if(o){addProbe(o.value);}}else if(e.key==='Escape'){e.target.value='';fillSignals();}};
  const probeSel=pre=>{const ids=editor.selection().c.filter(id=>{const c=editor.comp(id);return c&&signalsFor(c).some(([p,,f])=>p===pre&&!f);});if(!ids.length){notice('Επίλεξε πρώτα στοιχεία στο κύκλωμα (κλικ ή ορθογώνιο).','info');setTimeout(()=>notice(''),2500);return;}ids.forEach(id=>addProbe(pre+pid(id)));};
@@ -3466,7 +3547,7 @@ function boot(){
  // 5.0.1: the menu of the browser (Πίσω, Ανανέωση, Αποθήκευση…) does not open with a right click inside the page, unless
  // the setting «Μενού του browser με δεξί κλικ» is on; in the fields of text it stays, for copy and paste
  document.addEventListener('contextmenu',e=>{if(editor.settings.browserMenu)return;const t=e.target;if(t?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])'))return;e.preventDefault();});
- document.addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))closeMenu();if(!e.target.closest('#inspector')&&!e.target.closest('.schem')&&!e.target.closest('#ctx'))closeInspector();});
+ document.addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx,#ctx-sub'))closeMenu();if(!e.target.closest('#inspector')&&!e.target.closest('.schem')&&!e.target.closest('#ctx'))closeInspector();});
  document.addEventListener('keydown',e=>{const tg=e.target,typing=tg&&(tg.isContentEditable||/^(INPUT|SELECT|TEXTAREA)$/.test(tg.tagName)),plain=!e.ctrlKey&&!e.metaKey&&!e.altKey;
   // by the position of the key (4.6): the same with a Greek layout (e.key «π», «ι», «ζ»)
   if(e.code==='KeyP'&&plain&&!typing){setLivePanel($('#live-panel').hidden);return;}
@@ -3503,7 +3584,9 @@ function initPanels(){const R=window.Panels;if(!R)return;
  const live=sel=>()=>{const m=document.querySelector(sel);return !!m&&!m.hidden&&m.getClientRects().length>0;};
  const cards=[['circuit','Κύκλωμα','#bench-card',false],['scope','Προσομοίωση και scopes','#scope-card'],['scen','Σενάρια (Python)','#scen-card'],['addons','Πρόσθετα και σύνδεση','#addons-card'],
   ['math','Υπολογισμοί & μαθηματικά','#math-card'],['theory','Περιγραφή & σύγκριση με τη θεωρία','#tut-card']];
- for(const [id,title,sel,cl] of cards)R.register({id,title,group:'card',sel,closable:cl!==false,hint:cl===false?'Το σχέδιο μένει πάντα στη σελίδα':'',onshow:on=>{if(on&&id==='scope'){scope.resize();draw(true);}}});
+ // 5.0.5 (§94 step β): a card in a tab that is not shown is still open (its tab is there); opened from the menu, it is shown
+ for(const [id,title,sel,cl] of cards)R.register({id,title,group:'card',sel,closable:cl!==false,hint:cl===false?'Το σχέδιο δεν κλείνει· μετακινείται και κουμπώνει με τα ⠿ ▾ της γραμμής του':'',
+  isOpen:()=>!document.querySelector(sel)?.hidden,place:()=>window.Dock?.label(id)||'',onshow:on=>{if(on)window.Dock?.reveal(id);if(on&&id==='scope'){scope.resize();draw(true);}}});
  R.register({id:'library',title:'Βιβλιοθήκη',group:'pane',sel:'.palette',isOpen:()=>!document.body.classList.contains('pal-hidden'),open:()=>document.body.classList.remove('pal-hidden'),close:()=>document.body.classList.add('pal-hidden')});
  R.register({id:'props',title:'Παράμετροι',group:'pane',sel:'#props',isOpen:()=>propsOpen(),open:()=>setProps(true),close:()=>setProps(false),hint:'πλήκτρο I'});
  R.register({id:'watch',title:'Σήματα ελέγχου',group:'pane',sel:'#watch-panel',lazy:true,isOpen:()=>!!window.Watch?.vis,can:()=>window.Watch&&atTop()&&S.pfx!==null?'':'Στο κύκλωμα του πρώτου επιπέδου',
@@ -3517,6 +3600,7 @@ function initPanels(){const R=window.Panels;if(!R)return;
  R.register({id:'inspector',title:'Ρυθμίσεις στοιχείου',sel:'#inspector',can:pick(()=>true,'Διάλεξε ένα στοιχείο'),open:()=>{const c=one(),r=editor.holder.getBoundingClientRect();openInspector(c.id,r.left+r.width/2,r.top+40);},close:closeInspector});
  R.register({id:'inside',title:'⧉ Μέσα σε στοιχείο',sel:'#lib-inside',lazy:true,isOpen:()=>!!window.Inside?.openId(),can:pick(c=>!!window.Inside?.can(c),'Διάλεξε ένα στοιχείο βιβλιοθήκης (π.χ. AVR, πυλώνας)'),
   open:()=>Inside.open(one().id),close:()=>Inside.close()});
+ R.register({id:'pinscope',title:'Ακροδέκτες και scopes στοιχείου',sel:'#pin-scope',lazy:true,isOpen:live('#pin-scope'),can:pick(c=>S.pfx!==null&&c.type!=='JUNC'&&pinScopeOf(c).n>0,'Διάλεξε ένα στοιχείο (δεξί κλικ → ⌁ Scopes → Παραθυράκι)'),open:()=>openPinScope(one().id),close:closePinScope});
  R.register({id:'facade',title:'Ελεγκτής AI (πρόσοψη)',sel:'#ai-facade',lazy:true,isOpen:()=>!!window.Watch?.facadeId(),can:pick(c=>c.type==='AIC'&&atTop(),'Διάλεξε ένα μπλοκ «Ελεγκτής AI»'),
   open:()=>Watch.facade(one().id),close:()=>Watch.facade(null)});
  R.register({id:'ctlwin',title:'Ρύθμιση ελεγκτή',sel:'.ctl-modal',lazy:true,isOpen:live('.ctl-modal'),can:pick(c=>c.type==='PWM'&&({...P.defaults('PWM'),...c.params}).mode==='pi'&&!!window.CtlWin,'Διάλεξε ένα PWM με ελεγκτή PI'),
@@ -3528,8 +3612,13 @@ function initPanels(){const R=window.Panels;if(!R)return;
  // one entry per add-on: its window
  R.source(()=>(window.Addons?.list||[]).filter(a=>!a.error).map(a=>({id:'addon:'+a.id,title:'Πρόσθετο: '+a.name,isOpen:()=>Addons.frames.has(a.id),open:()=>Addons.open(a.id),close:()=>Addons.close(a.id)})));
  R.restore();
+ // 5.0.5 (ROADMAP §94 step β): the cards dock, float, go as tabs and fill the screen (dock.js); their buttons go into the
+ // row each card already has at its top
+ window.Dock?.init([['circuit','#bench-card','.toolbar'],['scope','#scope-card','.sim-bar'],['scen','#scen-card','#scen > summary'],['addons','#addons-card','#addons-block > summary'],
+  ['math','#math-card','.math-top'],['theory','#tut-card','.tut-head']].map(([id,sel,head])=>({id,sel,head,title:cards.find(c=>c[0]===id)[1],closable:id!=='circuit'})));
+ window.Dock?.onChange(()=>{if(!$('#scope-card').hidden)requestAnimationFrame(()=>scope.resize());});
  $('#open-panels')?.addEventListener('click',e=>R.openMenu(e.currentTarget));}
 window.addEventListener('DOMContentLoaded',boot);
 window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,libToSub,enterSub,leaveSub,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
- renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,studyAct,get STUDY(){return STUDY;},folderRun:studyRun,folderSettings:studySettings,folderView:studyView,get SFOLD(){return SFOLD;},get NV(){return NV;},studyOpen,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush,draw,closeInspector,openCtlWin}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare; 4.17.2: scope_flow
+ renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,studyAct,get STUDY(){return STUDY;},folderRun:studyRun,folderSettings:studySettings,folderView:studyView,get SFOLD(){return SFOLD;},get NV(){return NV;},studyOpen,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush,draw,closeInspector,openCtlWin,openPinScope,closePinScope,pinScopeOf:id=>pinScopeOf(editor.comp(id))}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare; 4.17.2: scope_flow
 })();

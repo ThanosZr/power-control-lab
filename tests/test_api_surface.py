@@ -244,6 +244,13 @@ class ApiSurface(unittest.TestCase):
         self.assertIn('part:EQV3', self.now['project'])
         self.assertEqual(sum(len(v) for v in self.now.values()), 941)
 
+    def test_the_surface_of_5_0_5(self):
+        """5.0.5: the cards dock, float and go as tabs (dock.js), the scopes of a part in a submenu and a window with its
+        pins, and run.py opens a window of its own (engine/appwin.py, --browser for a tab). All of it is of the page and of
+        the start of the server: no new point of the API, of the file format or of the routes of the server."""
+        self.assertEqual(sum(len(v) for v in self.now.values()), 941)
+        self.assertNotIn('/api/dock', self.now['server'])
+
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it
         # ('off': the path of before 4.19.5, for comparison)

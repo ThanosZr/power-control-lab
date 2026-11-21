@@ -405,7 +405,7 @@
 | continuously transposed line | γραμμή με συνεχή μετάθεση |
 | window frame, resize handle | πλαίσιο του παραθύρου, λαβή αλλαγής μεγέθους (5.0.2) |
 | zoom, pan (of a diagram) | μεγέθυνση, μετακίνηση (του διαγράμματος) (5.0.2) |
-| dock, undock, panel | κούμπωμα, απόσπαση, πλαίσιο (§94· το κούμπωμα σε επόμενο βήμα) |
+| dock, undock, panel | κούμπωμα, απόσπαση, πλαίσιο (§94· το κούμπωμα στην 5.0.5) |
 | maximize, restore (a window) | μέγιστο μέγεθος, επαναφορά (διπλό κλικ στον τίτλο) (5.0.2) |
 | region (of a graph), min–max tool | περιοχή (του γραφήματος), εργαλείο min–max (5.0.2) |
 | unzoom | χωρίς μεγέθυνση, επαναφορά της μεγέθυνσης (5.0.2) |
@@ -422,6 +422,12 @@
 | multi-port network equivalent (for EMT) | ισοδύναμο δικτύου πολλών θυρών (5.0.4) |
 | Foster equivalent circuit | κύκλωμα Foster (5.0.4) |
 | short-circuit impedance (L_sc, R_sc) of the reduced part | εμπέδηση βραχυκύκλωσης του υπόλοιπου δικτύου (5.0.4) |
+| dock region, tab (of a group), floating window | περιοχή (αριστερά, δεξιά, κάτω), καρτέλα, κάρτα σε δικό της παράθυρο (5.0.5) |
+| layout (of the workspace), reset layout | διάταξη, επαναφορά (5.0.5) |
+| splitter (edge of a dock region) | άκρη της περιοχής (5.0.5) |
+| submenu | υπομενού (5.0.5) |
+| app window (of a browser), browser profile | παράθυρο εφαρμογής, προφίλ του browser (5.0.5) |
+| web app manifest | manifest της εφαρμογής (5.0.5) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 

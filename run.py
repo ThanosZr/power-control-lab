@@ -4,15 +4,15 @@ import argparse
 import json
 import mimetypes
 mimetypes.add_type('application/wasm','.wasm')   # Pyodide (Python block) compiles its WebAssembly while it downloads
+mimetypes.add_type('application/manifest+json','.webmanifest')   # 5.0.5: the manifest of the application (ROADMAP §97)
 import os
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import BoundedSemaphore, Timer
 import traceback
 from urllib.parse import urlsplit, parse_qs, unquote
-import webbrowser
-
 from engine import __version__
+from engine.appwin import open_app
 from engine.analysis import steady, inverse, InputError
 from engine.models import public_catalog
 from engine.dynamics import linearize, switching
@@ -338,6 +338,8 @@ def main():
     parser.add_argument('--port',type=int,default=int(os.environ.get('PORT',8765)))
     parser.add_argument('--host',default='127.0.0.1')
     parser.add_argument('--no-browser',action='store_true')
+    # 5.0.5 (ROADMAP §97 step 1): a window of its own by default (engine/appwin.py); --browser: a tab, as before
+    parser.add_argument('--browser',action='store_true',help='open in a tab of the default browser, not in a window of its own')
     args=parser.parse_args()
     try:
         server=ThreadingHTTPServer((args.host,args.port),Handler)
@@ -348,7 +350,7 @@ def main():
     print('Stop: Ctrl+C. Keep this terminal open.',flush=True)
     LINK.write_file(url)            # 3.15: for pcl.link (Python) and pcl_link (MATLAB) on this computer
     if not args.no_browser:
-        Timer(.8,lambda:webbrowser.open(url)).start()
+        Timer(.8,lambda:open_app(url,tab=args.browser)).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

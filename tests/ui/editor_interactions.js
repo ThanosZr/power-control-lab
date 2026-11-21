@@ -21,10 +21,10 @@ const {chromium}=require('playwright');const OUT=process.argv[3];
  R.seg=await p.evaluate(id=>{const e=PCL.editor,w=e.wire(id);const pts=e.wirePts(w);return {orth:EditorUtil.orth(pts),pts};},seg.id);
  // 4) undo restores the segment
  await p.keyboard.press('Control+z');R.undo=await p.evaluate(id=>PCL.editor.wirePts(PCL.editor.wire(id)),seg.id);
- // 5) right click on L1 -> scope voltage
+ // 5) right click on L1 -> scope voltage (5.0.5: in the submenu «⌁ Scopes»)
  a=await scr(340,150);await p.mouse.click(...a,{button:'right'});await p.waitForTimeout(150);
  R.menu=(await p.locator('#ctx').innerText()).split('\n').slice(0,6);await p.screenshot({path:OUT+'/i3_menu.png'});
- await p.locator('#ctx button',{hasText:'Scope: τάση'}).first().click();R.channels=await p.evaluate(()=>PCL.scope.channels().map(c=>c.key));
+ await p.locator('#ctx button.has-sub',{hasText:'Scopes'}).hover();await p.waitForTimeout(150);await p.locator('#ctx-sub button[data-psk^="V:"]').first().click();R.channels=await p.evaluate(()=>PCL.scope.channels().map(c=>c.key));
  // 6) middle-drag pans
  const v1=await p.evaluate(()=>({...PCL.editor.view}));a=await scr(650,350);await p.mouse.move(...a);await p.mouse.down({button:'middle'});await p.mouse.move(a[0]+80,a[1]+40,{steps:6});await p.mouse.up({button:'middle'});
  const v2=await p.evaluate(()=>({...PCL.editor.view}));R.pan=[v1.cx-v2.cx,v1.cy-v2.cy];

@@ -58,8 +58,11 @@
  // after a window was placed by its code (the façade next to its block, a place kept in the circuit) or its box shrank
  function keepIn(el){if(!el.getClientRects().length)return;const r=rectOf(el),B=r.B;if(!(B.w>0&&B.h>0)||(r.x>=-1&&r.y>=-1&&r.x+r.w<=B.w+1&&r.y+r.h<=B.h+1))return;
   const w=Math.min(r.w,B.w),h=Math.min(r.h,B.h);apply(el,{x:Math.max(0,Math.min(r.x,B.w-w)),y:Math.max(0,Math.min(r.y,B.h-h)),w,h});}
- function bind(el,st){el.addEventListener('dblclick',e=>{if(!headOf(el,st,e.target)||e.target.closest('input,button,select,textarea,a'))return;toggleMax(el,st);});
-  el.addEventListener('pointerdown',e=>moveStart(e,el,st));}
+ function bind(el,st){el.addEventListener('dblclick',e=>{if(el._wfr!==st||!headOf(el,st,e.target)||e.target.closest('input,button,select,textarea,a'))return;toggleMax(el,st);});
+  el.addEventListener('pointerdown',e=>{if(el._wfr===st)moveStart(e,el,st);});}
+ // 5.0.5 (ROADMAP §94 step β): the frame off again (a card that floated and docks again): the handles go, the listeners of
+ // this frame do nothing any more, and a new frame() starts anew
+ function unframe(el){const st=el._wfr;if(!st)return;delete el._wfr;el.classList.remove('wfr','wfr-free','wfr-moving');for(const h of el.querySelectorAll(':scope > .wfr-h'))h.remove();}
  // el: the window. o: {key, head (selector of its title), minW, minH, w, h (its first size), place (keep the place too),
  // absolute (a box centred by its overlay becomes placed, so that its four sides move on their own), move (moved by
  // the title here), float (5.0.2: leaves the flow of its container at the first move or resize), onresize, onmove}
@@ -95,6 +98,6 @@
   // 5.0.2: the modal windows that are in the page from the start, when they are shown
   new MutationObserver(ms=>{for(const m of ms){const n=m.target;if(n.nodeType===1&&n.classList.contains('modal')&&!n.hidden)frameModal(n);}}).observe(document.body,{subtree:true,attributes:true,attributeFilter:['hidden']});
   for(const n of document.querySelectorAll('body > .modal'))if(!n.hidden)frameModal(n);}
- const api={frame,size,max,watchModals};root.WinFrame=api;if(typeof module!=='undefined')module.exports=api;
+ const api={frame,unframe,size,max,watchModals};root.WinFrame=api;if(typeof module!=='undefined')module.exports=api;
  if(root.document){if(document.body)watchModals();else document.addEventListener('DOMContentLoaded',watchModals);}
 })(typeof window!=='undefined'?window:globalThis);
