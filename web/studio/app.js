@@ -375,23 +375,69 @@ function renderChannels(){
  {const k=JSON.stringify(SIGS)+'|'+($('#sig-search')?.value||'');if(k!==sigKey){sigKey=k;fillSignals();}}
  const panes=scope.cfg.panes;
  {const k=JSON.stringify(panes);if(k===chanKey&&$('#chan-list').childElementCount)return;chanKey=k;}
- $('#chan-list').innerHTML=panes.map((p,pi)=>`<div class="pane-row"><div class="pane-head"><b>Παράθυρο ${pi+1}</b><label class="mini"><input type="checkbox" data-pauto="${pi}" ${p.y?.auto===false?'':'checked'}> auto</label>${p.y?.auto===false?'':`<select class="ymode" data-pymode="${pi}" title="Αυτόματη κλίμακα: σταθερή (ανοίγει αμέσως, κλείνει μετά από 2 s) ή σε κάθε καρέ (όπως πριν από την 4.17.2)"><option value="">σταθερή</option><option value="frame" ${p.y?.mode==='frame'?'selected':''}>ανά καρέ</option></select>`}${p.y?.auto===false?`<input class="ymin" data-pmin="${pi}" value="${p.y.min??''}" placeholder="min"><input class="ymax" data-pmax="${pi}" value="${p.y.max??''}" placeholder="max">`:''}<label class="mini"><input type="checkbox" data-pzero="${pi}" ${p.zero?'checked':''}> 0</label></div>
+ $('#chan-list').innerHTML=panes.map((p,pi)=>`<div class="pane-row"><div class="pane-head"><b>Παράθυρο ${pi+1}</b><label class="mini"><input type="checkbox" data-pauto="${pi}" ${p.y?.auto===false?'':'checked'}> auto</label>${p.y?.auto===false?'':`<select class="ymode" data-pymode="${pi}" title="Αυτόματη κλίμακα: σταθερή (ανοίγει αμέσως, κλείνει μετά από 2 s) ή σε κάθε καρέ (όπως πριν από την 4.17.2)"><option value="">σταθερή</option><option value="frame" ${p.y?.mode==='frame'?'selected':''}>ανά καρέ</option><option value="grow" ${p.y?.mode==='grow'?'selected':''}>μόνο μεγαλώνει</option></select>`}<button class="mini pcfg" data-pcfg="${pi}" title="Η κλίμακα y του παραθύρου: αυτόματη, μόνο μεγαλώνει, κλειδωμένη, από–έως, συμμετρική, περιθώριο (το ίδιο με το ⚙ στη γωνία του)">⚙</button>${p.y?.auto===false?`<input class="ymin" data-pmin="${pi}" value="${p.y.min??''}" placeholder="min"><input class="ymax" data-pmax="${pi}" value="${p.y.max??''}" placeholder="max">`:''}<label class="mini"><input type="checkbox" data-pzero="${pi}" ${p.zero?'checked':''}> 0</label></div>
   ${p.ch.map(ch=>{const src=chanSrc(ch.key);return `<div class="chan" data-key="${esc(ch.key)}" title="${esc(src)}"><label class="sw"><input type="checkbox" data-on="${esc(ch.key)}" ${ch.on?'checked':''}><i style="background:${ch.color}"></i></label><input class="clabel" data-label="${esc(ch.key)}" value="${esc(ch.label)}" title="Όνομα στο γράφημα (αλλάζει ελεύθερα)· ${esc(src)}"><select data-pane="${esc(ch.key)}">${Array.from({length:Math.min(12,panes.length+1)},(_,i)=>i).map(i=>`<option value="${i}" ${i===pi?'selected':''}>Π${i+1}</option>`).join('')}</select><button class="x" data-rm="${esc(ch.key)}" title="Αφαίρεση">✕</button></div><div class="csrc" data-src="${esc(ch.key)}">${esc(src)}</div>`;}).join('')||(pi===scope.nextPane?'<div class="muted small">Κενό παράθυρο: το επόμενο σήμα από τη λίστα (ή «⌁ I/V επιλεγμένων») πάει εδώ.</div>':'<div class="muted small">Κανένα σήμα. Δεξί κλικ σε στοιχείο → Scope, ή επίλεξε από τη λίστα.</div>')}</div>`).join('');
  $$('#chan-list [data-rm]').forEach(b=>b.onclick=()=>{scope.removeChannel(b.dataset.rm);renderChannels();draw(true);});
  $$('#chan-list [data-on]').forEach(b=>b.onchange=()=>{const ch=scope.channels().find(c=>c.key===b.dataset.on);for(const p of scope.cfg.panes)for(const c of p.ch)if(c.key===b.dataset.on)c.on=b.checked;void ch;draw(true);});
  $$('#chan-list [data-pane]').forEach(b=>b.onchange=()=>{scope.moveChannel(b.dataset.pane,+b.value);renderChannels();draw(true);});
  $$('#chan-list [data-label]').forEach(b=>b.onchange=()=>{for(const p of scope.cfg.panes)for(const c of p.ch)if(c.key===b.dataset.label)c.label=b.value;draw(true);});
  $$('#chan-list [data-pauto]').forEach(b=>b.onchange=()=>{const p=scope.cfg.panes[+b.dataset.pauto];if(b.checked)p.y={auto:true};else{const L=scope.layout?.[+b.dataset.pauto];p.y={auto:false,min:L?+L.lo.toPrecision(3):-1,max:L?+L.hi.toPrecision(3):1};}renderChannels();draw(true);});
- $$('#chan-list [data-pymode]').forEach(b=>b.onchange=()=>{const pi=+b.dataset.pymode,p=scope.cfg.panes[pi];p.y={auto:true,...(b.value?{mode:b.value}:{})};scope.yst[pi]=null;draw(true);});
+ $$('#chan-list [data-pymode]').forEach(b=>b.onchange=()=>{const pi=+b.dataset.pymode,p=scope.cfg.panes[pi];p.y={...(p.y?.auto!==false?p.y:{}),auto:true};if(b.value)p.y.mode=b.value;else delete p.y.mode;scope.yst[pi]=null;draw(true);});
+ $$('#chan-list [data-pcfg]').forEach(b=>b.onclick=e=>{const r=b.getBoundingClientRect();openPaneCfg(+b.dataset.pcfg,r.right+270,r.bottom);});
  $$('#chan-list [data-pzero]').forEach(b=>b.onchange=()=>{scope.cfg.panes[+b.dataset.pzero].zero=b.checked;draw(true);});
  $$('#chan-list [data-pmin],#chan-list [data-pmax]').forEach(b=>b.onchange=()=>{const pi=+(b.dataset.pmin??b.dataset.pmax);const p=scope.cfg.panes[pi];const v=P.parseEng(b.value);if(Number.isFinite(v)){if(b.dataset.pmin!==undefined)p.y.min=v;else p.y.max=v;}draw(true);});
 }
 // 4.7: a burst of scope changes (five channels of a tutorial, a drag of the cursors) gives one table on the next frame.
 // 4.17.2 (ROADMAP §63): the values in a box of their own (its height, its scroll bars, PlotCore.Readout): the table is
 // built again only when its rows or columns change, otherwise only its numbers, at most twice a second while it runs
+// 5.0.2: the region of the min–max tool (Shift+drag on the graphs, or «⇹ Περιοχή»): per channel min and max with their
+// times, mean, peak to peak and RMS over the region, with its Δt and 1/Δt; written again only when a value changes
+function renderSel(){const box=$('#sel-out');if(!box)return;const q=scope.cfg.sel;if(!q||!S.sim){if(!box.hidden){box.hidden=true;box.innerHTML='';box._h='';}return;}
+ const rows=scope.selStats(),dt=q[1]-q[0],at=t=>Number.isFinite(t)?` <small>@ ${eng(t,'s',5)}</small>`:'',v=(x,u)=>Number.isFinite(x)?eng(x,u,5):'—';
+ const html=`<div class="sel-head"><b>⇹ Περιοχή</b><span>${eng(q[0],'s',5)} – ${eng(q[1],'s',5)} · Δt = ${eng(dt,'s',4)} · 1/Δt = ${eng(1/dt,'Hz',4)}</span><span class="sel-btns"><button data-selzoom title="Ο χρόνος των γραφημάτων στην περιοχή">⤢ Μεγέθυνση</button><button data-selcsv title="Ο πίνακας σε CSV">CSV ↓</button><button class="x" data-selclear title="Χωρίς περιοχή (και κλικ στα γραφήματα με το εργαλείο)">✕</button></span></div>
+  <table class="sel-tab"><thead><tr><th>Σήμα</th><th>min</th><th>max</th><th>Μέση</th><th>κ-κ</th><th>RMS</th></tr></thead><tbody>${rows.map(r=>{const u=MeasureUnit(r.key);return `<tr><td><i style="background:${esc(r.color)}"></i>${esc(r.label)}</td><td>${v(r.min,u)}${at(r.tmin)}</td><td>${v(r.max,u)}${at(r.tmax)}</td><td>${v(r.avg,u)}</td><td>${v(r.pp,u)}</td><td>${v(r.rms,u)}</td></tr>`;}).join('')}</tbody></table>`;
+ box.hidden=false;if(box._h!==html){box._h=html;box.innerHTML=html;}}
+function selCSV(){const q=scope.cfg.sel;if(!q)return;const rows=scope.selStats(),f=x=>Number.isFinite(x)?String(+x.toPrecision(10)):'';
+ download('περιοχή.csv','\ufeffσήμα,μονάδα,t0 (s),t1 (s),min,t_min (s),max,t_max (s),μέση,κ-κ,rms\n'+rows.map(r=>[`"${String(r.label).replace(/"/g,'""')}"`,MeasureUnit(r.key),f(q[0]),f(q[1]),f(r.min),f(r.tmin),f(r.max),f(r.tmax),f(r.avg),f(r.pp),f(r.rms)].join(',')).join('\n')+'\n','text/csv;charset=utf-8');}
+// 5.0.2 (⚙ of a pane): its y scale: automatic (steady, only grows, every frame), locked at the range shown, or from–to;
+// symmetric about 0, with 0, a margin; «Σε όλα τα παράθυρα». The defaults are those of before.
+function paneMode(p){const Y=p.y||{};return Y.auto===false?(Y.zoom?'zoom':Y.lock?'lock':'fixed'):Y.mode==='frame'?'frame':Y.mode==='grow'?'grow':'auto';}
+function paneCfgHTML(i){const p=scope.cfg.panes[i],Y=p.y||{},L=scope.layout?.[i],mode=paneMode(p),man=Y.auto===false;
+ const r=(v,t,h)=>`<label class="pc-r" title="${esc(h)}"><input type="radio" name="pc-mode" value="${v}" ${mode===v?'checked':''}> ${t}</label>`,num=x=>Number.isFinite(+x)?String(+(+x).toPrecision(6)):'';
+ return `<div class="pc-head"><b>⚙ Παράθυρο ${i+1}: κλίμακα y</b><button class="x" data-pcclose title="Κλείσιμο (Esc)">✕</button></div>
+  ${r('auto','Αυτόματη, σταθερή','Ανοίγει αμέσως όταν τα δεδομένα βγαίνουν από το εύρος, και κλείνει μετά από 2 s (η προεπιλογή)')}
+  ${r('grow','Αυτόματη, μόνο μεγαλώνει','Το εύρος όλων όσων φάνηκαν σε αυτό το τρέξιμο: δεν κλείνει ποτέ όσο τρέχει, άρα δεν τρεμοπαίζει (ξαναρχίζει με ⟲ ή με άλλα σήματα)')}
+  ${r('frame','Αυτόματη, σε κάθε καρέ','Ακολουθεί τα δεδομένα σε κάθε καρέ, όπως πριν από την 4.17.2')}
+  ${r('lock','Κλειδωμένη στο τωρινό εύρος',L?`Μένει ${eng(L.lo,'',4)} … ${eng(L.hi,'',4)}`:'Το εύρος που φαίνεται τώρα')}
+  ${r('fixed','Από – έως','Οι τιμές που γράφεις')}
+  ${mode==='zoom'?'<p class="small muted pc-note">Από μεγέθυνση: «⟲ Χωρίς μεγέθυνση» ή διπλό κλικ στα γραφήματα την επαναφέρει.</p>':''}
+  <div class="pc-row"><label>από <input data-pcmin value="${man?num(Y.min):L?num(L.lo):''}" ${mode==='fixed'?'':'disabled'}></label><label>έως <input data-pcmax value="${man?num(Y.max):L?num(L.hi):''}" ${mode==='fixed'?'':'disabled'}></label></div>
+  <div class="pc-row"><label><input type="checkbox" data-pcsym ${Y.sym?'checked':''} ${man?'disabled':''}> συμμετρική γύρω από το 0</label><label><input type="checkbox" data-pczero ${p.zero?'checked':''}> με το 0</label></div>
+  <div class="pc-row"><label>Περιθώριο <select data-pcpad ${man?'disabled':''}>${[['','αυτόματο'],['0','0 %'],['5','5 %'],['10','10 %'],['20','20 %']].map(([v,t])=>`<option value="${v}" ${String(Y.pad??'')===v?'selected':''}>${t}</option>`).join('')}</select></label></div>
+  <div class="pc-foot"><button data-pcall title="Οι ίδιες ρυθμίσεις σε όλα τα παράθυρα του scope (μια κλειδωμένη κλίμακα: το εύρος του καθενός)">Σε όλα τα παράθυρα</button><button data-pcreset title="Αυτόματη, σταθερή, χωρίς συμμετρία και περιθώριο">↺ Προεπιλογή</button></div>`;}
+function paneCfgApply(i,el){const p=scope.cfg.panes[i],m=$('#pane-cfg');if(!p||!m)return;const Y=p.y||{},L=scope.layout?.[i];
+ if(el.dataset.pcclose!==undefined){m.hidden=true;return;}
+ const keep=o=>{if(Y.auto!==false){if(Y.sym)o.sym=true;if(Y.pad!==undefined)o.pad=Y.pad;}return o;},rd=k=>P.parseEng(m.querySelector(k).value);
+ if(el.name==='pc-mode'){const v=el.value;if(v==='auto')p.y=keep({auto:true});else if(v==='grow')p.y=keep({auto:true,mode:'grow'});else if(v==='frame')p.y=keep({auto:true,mode:'frame'});
+  else if(v==='lock'){if(!L)return;p.y={auto:false,min:L.lo,max:L.hi,lock:true};}
+  else if(v==='fixed'){const a=rd('[data-pcmin]'),b=rd('[data-pcmax]');p.y=Number.isFinite(a)&&Number.isFinite(b)&&b>a?{auto:false,min:a,max:b}:{auto:false,min:L?L.lo:-1,max:L?L.hi:1};}}
+ else if(el.dataset.pcmin!==undefined||el.dataset.pcmax!==undefined){const a=rd('[data-pcmin]'),b=rd('[data-pcmax]');if(!(Number.isFinite(a)&&Number.isFinite(b)&&b>a)){el.classList.add('bad');return;}p.y={auto:false,min:a,max:b};}
+ else if(el.dataset.pcsym!==undefined){if(Y.auto===false)return;p.y={auto:true,...Y};if(el.checked)p.y.sym=true;else delete p.y.sym;}
+ else if(el.dataset.pczero!==undefined)p.zero=el.checked;
+ else if(el.dataset.pcpad!==undefined){if(Y.auto===false)return;p.y={auto:true,...Y};if(el.value==='')delete p.y.pad;else p.y.pad=+el.value;}
+ else if(el.dataset.pcreset!==undefined)delete p.y;
+ else if(el.dataset.pcall!==undefined){scope.cfg.panes.forEach((q,j)=>{if(j===i)return;const Lj=scope.layout?.[j];if(!p.y)delete q.y;else{q.y=JSON.parse(JSON.stringify(p.y));if(q.y.lock&&Lj){q.y.min=Lj.lo;q.y.max=Lj.hi;}}q.zero=p.zero;scope.yst[j]=null;});}
+ else return;
+ scope.yst[i]=null;renderChannels();draw(true);m.innerHTML=paneCfgHTML(i);}
+function openPaneCfg(i,x,y){if(!scope.cfg.panes[i])return;let m=$('#pane-cfg');
+ if(!m){m=document.createElement('div');m.id='pane-cfg';m.className='popup pane-cfg';m.setAttribute('role','dialog');m.hidden=true;document.body.appendChild(m);
+  m.addEventListener('change',e=>paneCfgApply(+m.dataset.pane,e.target));m.addEventListener('click',e=>{const b=e.target.closest('button');if(b)paneCfgApply(+m.dataset.pane,b);});
+  document.addEventListener('pointerdown',e=>{if(!m.hidden&&!m.contains(e.target)&&!e.target.closest?.('[data-pcfg]'))m.hidden=true;},true);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!m.hidden)m.hidden=true;});}
+ m.dataset.pane=i;m.innerHTML=paneCfgHTML(i);placePopup(m,x-260,y);}
 let measureRaf=0,MEAS=null;function requestMeasure(){if(measureRaf)return;measureRaf=requestAnimationFrame(()=>{measureRaf=0;renderMeasure(true);});}
 function renderMeasure(force){if(measureRaf){cancelAnimationFrame(measureRaf);measureRaf=0;}
- if(!S.sim)return;const cur=scope.cfg.cursors;if(!MEAS)MEAS=new PlotCore.Readout($('#measure'));
+ if(!S.sim)return;renderSel();const cur=scope.cfg.cursors;if(!MEAS)MEAS=new PlotCore.Readout($('#measure'));
  const cols=[{k:'avg',label:'Μέση'},{k:'rms',label:'RMS'},{k:'min',label:'min'},{k:'max',label:'max'},{k:'pp',label:'p-p'},{k:'lp',label:'⌀ τελ. T'}];
  if(cur.length)cols.push({k:'A',label:`A @ ${eng(cur[0],'s')}`},{k:'B',label:cur.length>1?'B @ '+eng(cur[1],'s'):'B'},{k:'BA',label:'B − A'+(cur.length>1?' · Δt '+eng(cur[1]-cur[0],'s'):'')});
  const rows=[];
@@ -3297,7 +3343,7 @@ function boot(){
   canPlace:placeOk,subParams:name=>subParams(name),
   oncontext:openMenu,onwarn:t=>{notice(t,'error');setTimeout(()=>notice(''),5000);}});
  editor.setLive(liveOf);
- scope=new Scope($('#scope-canvas'),{scroller:$('#scope-scroll'),axis:$('#scope-axis'),status:$('#scope-status'),onfreeze:()=>{$('#live-btn').hidden=false;},onchange:()=>{requestMeasure();$('#nav-box')?.classList.toggle('on',!!scope.cfg.box);if(S.sim&&S.sim.recKeys&&S.sim.recKeys!==S.sim.keys&&!window.Live?.active)S.sim.watchAdd(scope.channels().map(c=>c.key));},onhover:()=>{},archive:recArchive});
+ scope=new Scope($('#scope-canvas'),{scroller:$('#scope-scroll'),axis:$('#scope-axis'),status:$('#scope-status'),onfreeze:()=>{$('#live-btn').hidden=false;},onsel:()=>{requestMeasure();renderSel();},onpanecfg:(i,x,y)=>openPaneCfg(i,x,y),onchange:()=>{requestMeasure();$('#nav-box')?.classList.toggle('on',!!scope.cfg.box);$('#nav-sel')?.classList.toggle('on',!!scope.cfg.selMode);if(S.sim&&S.sim.recKeys&&S.sim.recKeys!==S.sim.keys&&!window.Live?.active)S.sim.watchAdd(scope.channels().map(c=>c.key));},onhover:()=>{},archive:recArchive});
  // the tiles of the control signals over the drawing (4.8, ROADMAP §47)
  window.Inside?.init({comp:id=>editor.comp(id),pid,wires:()=>editor.doc.wires,sim:()=>S.error?null:S.sim,eng,holder:()=>editor.holder,notice});
  window.Watch?.init({get S(){return S;},get editor(){return editor;},get scope(){return scope;},eng,fmt,esc,topDoc,atTop,compAt,partDef,numOf,chanLabel,
@@ -3421,6 +3467,7 @@ function boot(){
  renderPalette();
  // restore last state or start with a tutorial
  initScenarios();initAddons();initPanels();
+ $('#sel-out')?.addEventListener('click',e=>{if(e.target.closest('[data-selzoom]'))scope.nav('selzoom');else if(e.target.closest('[data-selclear]'))scope.nav('clearsel');else if(e.target.closest('[data-selcsv]'))selCSV();});
  let st=null;try{st=JSON.parse(localStorage.getItem('pcl2-state'));}catch{}
  const qs=new URLSearchParams(location.search),want=qs.get('tutorial');let imp=null;
  if(qs.get('import')){try{imp=JSON.parse(localStorage.getItem('pcl2-import'));localStorage.removeItem('pcl2-import');}catch{}history.replaceState(null,'',location.pathname);}

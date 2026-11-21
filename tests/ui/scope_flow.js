@@ -13,6 +13,9 @@
 // 11. 4.17.5 (ROADMAP §66): the labels of a dense drawing: none on another or on a part (the vehicle, then every
 //     tutorial, and the classic look), a long expression cut to its block (whole in the tooltip and when selected),
 //     numbers for the parameters «= …», the labels again after a move
+// 12. 5.0.2 (ζήτημα του Θάνου 21/11, 06:47): the region of the min–max tool (Shift+drag) against the samples of the ring,
+//     the ⚙ of a pane opens its settings, «μόνο μεγαλώνει» never closes while it runs, a locked y never moves, and
+//     «⟲ Χωρίς μεγέθυνση» gives back the y of before a zoom
 //  9. 4.17.3 (ROADMAP §65): the technical look by default: thin crisp lines, IEC resistor, the phases in colour, the
 //     selected part in colour, widths from the settings; the classic look and the ANSI symbols from the settings
 // Usage: python run.py --no-browser --port 8775  then  node tests/ui/scope_flow.js http://127.0.0.1:8775/ [out]
@@ -162,6 +165,32 @@ const {chromium}=require('playwright');
  await p.evaluate(()=>{PCL.editor.settings.look='classic';document.body.classList.replace('look-tech','look-classic');PCL.loadTutorial('ev_drive');});await p.waitForTimeout(800);
  R.lbl.classic=await p.evaluate(()=>window.__lbl());await p.evaluate(()=>localStorage.clear());
  ok(R.lbl.classic.ll===0&&R.lbl.classic.lp===0,'the classic look too '+JSON.stringify(R.lbl.classic));
+ // 12. the region, the ⚙, «μόνο μεγαλώνει», the lock, the unzoom
+ await p.goto(U);await p.evaluate(()=>localStorage.clear());await p.goto(U+'?tutorial=buck');await p.waitForTimeout(1500);
+ await p.evaluate(()=>{document.querySelector('#lp-hide')?.click();document.querySelector('#scope-card').scrollIntoView({block:'start'});PCL.S.sim.run(0.004);PCL.scope.draw();});await p.waitForTimeout(300);
+ const g=await p.evaluate(()=>{const r=document.querySelector('#scope-canvas').getBoundingClientRect(),S=PCL.scope,L=S.layout[0];return {l:r.left,t:r.top,padL:S.padL,pw:S.plotW(),y0:L.y0,y1:L.y1,sy:S.sy};});
+ {const y=g.t+(g.y0+g.y1)/2-g.sy;await p.keyboard.down('Shift');await p.mouse.move(g.l+g.padL+g.pw*.3,y);await p.mouse.down();await p.mouse.move(g.l+g.padL+g.pw*.7,y,{steps:6});await p.mouse.up();await p.keyboard.up('Shift');}
+ await p.waitForTimeout(400);
+ R.sel=await p.evaluate(()=>{const S=PCL.scope,q=S.cfg.sel,rows=S.selStats(),s=PCL.S.sim,r=s.ring,st=(r.head-r.n+r.cap)%r.cap;let worst=0;
+  for(const x of rows){const ci=S.resolve(x.key);let mn=Infinity,mx=-Infinity,sm=0,n=0;for(let i=0;i<r.n;i++){const j=(st+i)%r.cap,t=r.t[j];if(t<q[0]||t>q[1])continue;const v=ci===-2?0:r.d[j*r.nch+ci];mn=Math.min(mn,v);mx=Math.max(mx,v);}
+   worst=Math.max(worst,Math.abs(x.min-mn),Math.abs(x.max-mx));}
+  return {q,n:rows.length,worst,tr:document.querySelectorAll('#sel-out tbody tr').length,shown:!document.querySelector('#sel-out').hidden,times:rows.every(x=>x.tmin>=q[0]&&x.tmin<=q[1]&&x.tmax>=q[0]&&x.tmax<=q[1])};});
+ ok(R.sel.q&&R.sel.n===3&&R.sel.worst===0&&R.sel.tr===3&&R.sel.shown&&R.sel.times,'the region: min and max as the samples, with their times '+JSON.stringify(R.sel));
+ await p.click('#sel-out [data-selzoom]');R.selz=await p.evaluate(()=>({fr:PCL.scope.cfg.frozen,q:PCL.scope.cfg.sel}));
+ ok(R.selz.fr&&Math.abs(R.selz.fr[0]-R.selz.q[0])<1e-15&&Math.abs(R.selz.fr[1]-R.selz.q[1])<1e-15,'⤢ the time on the region '+JSON.stringify(R.selz));
+ await p.click('#sel-out [data-selclear]');R.selc=await p.evaluate(()=>({q:PCL.scope.cfg.sel,hid:document.querySelector('#sel-out').hidden}));ok(!R.selc.q&&R.selc.hid,'✕ clears the region');
+ await p.evaluate(()=>{PCL.scope.nav('unzoom');PCL.scope.draw();});await p.waitForTimeout(200);
+ {const L=await p.evaluate(()=>{const S=PCL.scope,L=S.layout[0];return {y0:L.y0,sy:S.sy};});await p.mouse.click(g.l+g.padL+11,g.t+L.y0+11-L.sy);}await p.waitForTimeout(200);
+ R.gear=await p.evaluate(()=>({open:!document.querySelector('#pane-cfg')?.hidden,modes:[...document.querySelectorAll('#pane-cfg [name="pc-mode"]')].map(e=>e.value)}));
+ ok(R.gear.open&&R.gear.modes.join()==='auto,grow,frame,lock,fixed','the ⚙ of a pane '+JSON.stringify(R.gear));
+ await p.click('#pane-cfg [value="grow"]');await p.keyboard.press('Escape');
+ R.grow=await p.evaluate(async()=>{const S=PCL.scope;PCL.reset();PCL.play();const q=[];for(let i=0;i<30;i++){await new Promise(z=>setTimeout(z,100));const L=S.layout[0];q.push([L.lo,L.hi]);}PCL.pause();
+  let mono=true;for(let i=1;i<q.length;i++)if(q[i][0]>q[i-1][0]||q[i][1]<q[i-1][1])mono=false;return {mode:S.cfg.panes[0].y?.mode,mono,distinct:new Set(q.map(x=>x.join())).size};});
+ ok(R.grow.mode==='grow'&&R.grow.mono&&R.grow.distinct<=8,'«μόνο μεγαλώνει»: the y only opens while it runs '+JSON.stringify(R.grow));
+ R.lock=await p.evaluate(async()=>{const S=PCL.scope,L=S.layout[0];S.cfg.panes[0].y={auto:false,min:L.lo,max:L.hi,lock:true};PCL.play();const q=[];for(let i=0;i<15;i++){await new Promise(z=>setTimeout(z,100));q.push(S.layout[0].lo+','+S.layout[0].hi);}PCL.pause();return new Set(q).size;});
+ ok(R.lock===1,'a locked y never moves '+R.lock);
+ R.unz=await p.evaluate(()=>{const S=PCL.scope;S.cfg.panes[0].y={auto:true,mode:'grow',sym:true};const L=S.layout[0];S.zoomY((L.y0+L.y1)/2,.5);const z=S.cfg.panes[0].y.zoom;S.nav('unzoom');return {z,y:S.cfg.panes[0].y};});
+ ok(R.unz.z===true&&R.unz.y.mode==='grow'&&R.unz.y.sym===true&&!R.unz.y.zoom,'«⟲ Χωρίς μεγέθυνση»: the y of before the zoom '+JSON.stringify(R.unz));
  await p.screenshot({path:OUT+'/scope_flow.png'});
  ok(!errs.length,'χωρίς σφάλματα JavaScript '+errs.join(' | '));
  console.log(JSON.stringify(R,null,1).slice(0,3000));

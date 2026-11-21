@@ -43,21 +43,25 @@
    this.sc.addEventListener('scroll',()=>{this.sy=this.sc.scrollTop;this.requestDraw();},{passive:true});
    const cy=e=>e.offsetY+this.sy;   // the y of the content (all the panes) under the pointer
    canvas.addEventListener('pointermove',e=>{const y=cy(e);this.hoverX=e.offsetX;this.hoverY=y;if(this.rs){this.resizePane(y);return;}
-    if(this.boxSel){this.boxSel.x1=e.offsetX;this.boxSel.y1=y;this.requestDraw();return;}if(this.drag)this.panTo(e);
-    else{const g=this.gapAt(y)>=0,m=this.maxAt(e.offsetX,y)>=0;canvas.style.cursor=g?'row-resize':m?'pointer':'';}if(!this.running)this.requestDraw();});
+    if(this.boxSel){this.boxSel.x1=e.offsetX;this.boxSel.y1=y;this.requestDraw();return;}if(this.selDrag){this.selDrag.x1=e.offsetX;this.requestDraw();return;}if(this.drag)this.panTo(e);
+    else{const g=this.gapAt(y)>=0,m=this.maxAt(e.offsetX,y)>=0||this.gearAt(e.offsetX,y)>=0;canvas.style.cursor=g?'row-resize':m?'pointer':this.cfg.selMode?'col-resize':'';}if(!this.running)this.requestDraw();});
    canvas.addEventListener('pointerleave',()=>{this.hoverX=null;if(!this.running)this.requestDraw();this.opt.onhover?.(null);});
    canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.setPointerCapture(e.pointerId);const y=cy(e);
     const g=this.gapAt(y);if(g>=0&&!(e.ctrlKey||e.metaKey)){this.rs={i:g,y,h:(this.layout||[]).map(L=>L.y1-L.y0),moved:false};return;}
     if(this.maxAt(e.offsetX,y)>=0){this.mx={i:this.maxAt(e.offsetX,y)};return;}
-    if(e.ctrlKey||e.metaKey||this.cfg.box){this.boxSel={x0:e.offsetX,y0:y,x1:e.offsetX,y1:y};return;}this.drag={x:e.offsetX,view:this.viewRange(),moved:false};});
+    if(this.gearAt(e.offsetX,y)>=0){this.gr={i:this.gearAt(e.offsetX,y)};return;}
+    if(e.ctrlKey||e.metaKey||this.cfg.box){this.boxSel={x0:e.offsetX,y0:y,x1:e.offsetX,y1:y};return;}
+    if(e.shiftKey||this.cfg.selMode){this.selDrag={x0:e.offsetX,x1:e.offsetX};return;}this.drag={x:e.offsetX,view:this.viewRange(),moved:false};});
    canvas.addEventListener('pointerup',e=>{if(this.rs){const r=this.rs;this.rs=null;if(r.moved)this.opt.onchange?.();return;}
     if(this.mx){const i=this.mx.i;this.mx=null;if(this.maxAt(e.offsetX,cy(e))===i)this.toggleMax(i);return;}
+    if(this.gr){const i=this.gr.i;this.gr=null;if(this.gearAt(e.offsetX,cy(e))===i)this.opt.onpanecfg?.(i,e.clientX,e.clientY);return;}
+    if(this.selDrag){const d=this.selDrag;this.selDrag=null;this.selectAt(d.x0,e.offsetX);return;}
     if(this.boxSel){const b=this.boxSel;this.boxSel=null;this.boxZoom(b);return;}const d=this.drag;this.drag=null;if(d&&!d.moved)this.cursorAt(e);});
    // wheel: the time axis; over the y labels, with Shift or in the mode 'y' the pane under the pointer; 'xy' both.
    // 4.17.2: with Alt the box of the panes scrolls (as over its scroll bar)
    canvas.addEventListener('wheel',e=>{if(e.altKey)return;e.preventDefault();const f=Math.exp(e.deltaY*.0015),ax=this.cfg.zoomAxes||'x',y=cy(e);this.histPush(true);
     if(e.offsetX<this.padL||e.shiftKey||ax==='y')this.zoomY(y,f);else{this.zoomAt(e.offsetX,f);if(ax==='xy')this.zoomY(y,f);}},{passive:false});
-   canvas.addEventListener('dblclick',e=>{if(this.gapAt(cy(e))>=0){this.autoHeights();return;}this.histPush();this.cfg.frozen=null;this.cfg.cursors=[];this.opt.onchange?.();this.requestDraw();});
+   canvas.addEventListener('dblclick',e=>{if(this.gapAt(cy(e))>=0){this.autoHeights();return;}this.histPush();this.cfg.frozen=null;this.cfg.cursors=[];if(this.win0){this.cfg.window=this.win0;this.win0=null;}this.unzoomY();this.opt.onchange?.();this.requestDraw();});
   }
   // ------------------------------------------------------------ 4.17.2: the heights of the panes
   // the height of every pane: its own (dragged) or a share of what the box leaves, never under MINH
@@ -67,6 +71,9 @@
   gapAt(y){const L=this.layout||[];for(let i=0;i<L.length;i++){const a=L[i].y1,b=i<L.length-1?L[i+1].y0:a+BOT;if(y>a+1&&y<b-1)return i;}return -1;}
   // the ⛶ of a pane (top right corner), or -1
   maxAt(x,y){const L=this.layout||[];for(let i=0;i<L.length;i++){const q=L[i];if(q.hidden)continue;const bx=this.W-this.padR-20;if(x>=bx&&x<=bx+16&&y>=q.y0+3&&y<=q.y0+19)return i;}return -1;}
+  // 5.0.2: the ⚙ of a pane (top left of its plot, before the titles of its channels, never under a floating panel on the
+  // right): the settings of its y scale (opt.onpanecfg), or -1
+  gearAt(x,y){const L=this.layout||[];for(let i=0;i<L.length;i++){const q=L[i];if(q.hidden)continue;const bx=this.padL+3;if(x>=bx&&x<=bx+16&&y>=q.y0+3&&y<=q.y0+19)return i;}return -1;}
   resizePane(y){const r=this.rs,P=this.cfg.panes;if(!r||!P[r.i])return;if(!r.moved){if(Math.abs(y-r.y)<2)return;r.moved=true;P.forEach((p,k)=>{p.h=Math.round(r.h[k]||MINH);delete p.max;});}
    P[r.i].h=Math.max(MINH,Math.round(r.h[r.i]+y-r.y));this.resize();}
   autoHeights(){for(const p of this.cfg.panes){delete p.h;delete p.max;}this.resize();this.opt.onchange?.();}
@@ -93,14 +100,22 @@
   // the pane under y: {pane, L}
   paneAt(y){const k=(this.layout||[]).findIndex(L=>y>=L.y0-4&&y<=L.y1+4);return k<0?null:{pane:this.cfg.panes[k],L:this.layout[k]};}
   zoomY(y,f){const q=this.paneAt(y);if(!q)return;const {L}=q,vm=L.lo+(L.y1-y)/(L.y1-L.y0)*(L.hi-L.lo),lo=vm-(vm-L.lo)*f,hi=vm+(L.hi-vm)*f;if(!(hi>lo))return;
-   q.pane.y={auto:false,min:lo,max:hi};this.opt.onchange?.();this.requestDraw();}
+   q.pane.y=this.zoomed(q.pane,lo,hi);this.opt.onchange?.();this.requestDraw();}
+  // 5.0.2: a y range from a zoom remembers the scale of before (an unzoom gives it back); a range the user set or locked has no «zoom»
+  zoomed(pane,lo,hi){const o=pane.y||null,prev=o&&o.zoom?o.prev:o;return {auto:false,min:lo,max:hi,zoom:true,prev:prev?JSON.parse(JSON.stringify(prev)):null};}
+  unzoomY(){let n=0;this.cfg.panes.forEach((p,i)=>{if(p.y&&p.y.zoom){if(p.y.prev)p.y=p.y.prev;else delete p.y;this.yst[i]=null;n++;}});return n;}
+  // the time and the y of before every zoom: live again (at the window of before a zoom of the live view), the zoomed y back
+  unzoom(){this.histPush();this.cfg.frozen=null;if(this.win0){this.cfg.window=this.win0;this.win0=null;}this.unzoomY();this.opt.onchange?.();this.requestDraw();}
   // a rectangle: the time range and/or the value range of the pane where it started (zoomAxes)
   boxZoom(b){const ax=this.cfg.zoomAxes==='y'?'y':this.cfg.zoomAxes==='xy'||this.cfg.box?'xy':'x';const pw=this.plotW();if(Math.abs(b.x1-b.x0)<5&&Math.abs(b.y1-b.y0)<5)return;this.histPush();
    if(ax!=='y'&&Math.abs(b.x1-b.x0)>=5){const [a,c]=this.viewRange(),tx=x=>a+(Math.min(Math.max(x-this.padL,0),pw)/pw)*(c-a),t0=tx(Math.min(b.x0,b.x1)),t1=tx(Math.max(b.x0,b.x1));
     if(t1-t0>(this.sim?.h||1e-12)*2){this.cfg.frozen=[t0,t1];this.opt.onfreeze?.();}}
-   if(ax!=='x'&&Math.abs(b.y1-b.y0)>=5){const q=this.paneAt(b.y0);if(q){const L=q.L,v=y=>L.lo+(L.y1-y)/(L.y1-L.y0)*(L.hi-L.lo),lo=v(Math.max(b.y0,b.y1)),hi=v(Math.min(b.y0,b.y1));if(hi>lo)q.pane.y={auto:false,min:lo,max:hi};}}
+   if(ax!=='x'&&Math.abs(b.y1-b.y0)>=5){const q=this.paneAt(b.y0);if(q){const L=q.L,v=y=>L.lo+(L.y1-y)/(L.y1-L.y0)*(L.hi-L.lo),lo=v(Math.max(b.y0,b.y1)),hi=v(Math.min(b.y0,b.y1));if(hi>lo)q.pane.y=this.zoomed(q.pane,lo,hi);}}
    this.opt.onchange?.();this.requestDraw();}
-  nav(kind){const s=this.sim;if(!s)return;if(kind==='back'){this.back();return;}if(kind==='heights'){this.autoHeights();return;}if(kind==='box'){this.cfg.box=!this.cfg.box;this.opt.onchange?.();return;}
+  nav(kind){const s=this.sim;if(!s)return;if(kind==='back'){this.back();return;}if(kind==='heights'){this.autoHeights();return;}if(kind==='box'){this.cfg.box=!this.cfg.box;if(this.cfg.box)this.cfg.selMode=false;this.opt.onchange?.();return;}
+   if(kind==='sel'){this.cfg.selMode=!this.cfg.selMode;if(this.cfg.selMode)this.cfg.box=false;this.opt.onchange?.();this.requestDraw();return;}
+   if(kind==='unzoom'){this.unzoom();return;}if(kind==='selzoom'){const q=this.cfg.sel;if(q){this.histPush();this.cfg.frozen=[q[0],q[1]];this.opt.onfreeze?.();this.opt.onchange?.();this.requestDraw();}return;}
+   if(kind==='clearsel'){this.cfg.sel=null;this.opt.onsel?.();this.requestDraw();return;}
    if(kind!=='follow')this.histPush();const T=s.T,end=Math.max(s.t,1e-12);const [a,b]=this.viewRange(),span=b-a,live=!this.cfg.frozen;
    const clamp=(x0,x1)=>{const w=x1-x0;if(x1>=end-1e-12*end){if(w>=end){this.cfg.frozen=[0,end];return;}this.cfg.frozen=null;this.cfg.window={unit:'s',n:w};return;}if(x0<0){x0=0;x1=w;}this.cfg.frozen=[x0,x1];};
    if(kind==='follow'){this.cfg.follow=this.cfg.follow===false;if(this.cfg.follow)this.cfg.frozen=null;}
@@ -147,21 +162,27 @@
   valueAt(ci,t){if(ci===-2)return 0;const r=this.sim.ring;if(!r.n)return NaN;const start=(r.head-r.n+r.cap)%r.cap;let i=this.ringIndex(t);i=Math.min(Math.max(i,0),r.n-1);
    const j=(start+i)%r.cap;if(i>0){const jp=(start+i-1)%r.cap,t0=r.t[jp],t1=r.t[j];if(t1>t0&&t<=t1){const a=(t-t0)/(t1-t0);return r.d[jp*r.nch+ci]*(1-a)+r.d[j*r.nch+ci]*a;}}return r.d[j*r.nch+ci];}
   // statistics over the visible window (time weighted)
-  stats(key){const s=this.sim;if(!s)return null;const ci=this.resolve(key);if(ci===-1)return null;const [t0,t1]=this.viewRange();
-   let S=0,Q=0,D=0,mn=Infinity,mx=-Infinity,pt=null,pv=0;
+  stats(key,range){const s=this.sim;if(!s)return null;const ci=this.resolve(key);if(ci===-1)return null;const [t0,t1]=range||this.viewRange();
+   let S=0,Q=0,D=0,mn=Infinity,mx=-Infinity,pt=null,pv=0,tmn=NaN,tmx=NaN;
    if(this.usePeriods(t0)){let n=0;this.eachPeriod(ci,t0,t1,(t,a,lo,hi)=>{S+=a;n++;mn=Math.min(mn,lo);mx=Math.max(mx,hi);});if(!n)return null;return {avg:S/n,rms:NaN,min:mn,max:mx,pp:mx-mn,src:'period'};}
    // 4.17.2: what the ring no longer holds from the envelope (its buckets inside the view: mean, min, max; no RMS)
    const rs=this.ringStart();let Se=0,De=0;const E=this.env;
    if(t0<rs&&E&&E.w>0&&ci>=0&&E.sim===s){const w=E.w,nch=E.nch;for(let b=Math.max(0,Math.ceil(t0/w-1e-9));b<E.B&&(b+1)*w<=Math.min(t1,rs)+1e-12*w;b++){if(!E.has[b]||!(E.nn[b]>0))continue;
      Se+=E.sm[b*nch+ci]/E.nn[b]*w;De+=w;mn=Math.min(mn,E.mn[b*nch+ci]);mx=Math.max(mx,E.mx[b*nch+ci]);}}
-   this.eachRaw(ci,Math.max(t0,rs<Infinity?rs:t0),t1,(t,v)=>{const tc=Math.min(Math.max(t,t0),t1);if(pt!==null&&tc>pt){const h=tc-pt;S+=h*(pv+v)/2;Q+=h*(pv*pv+pv*v+v*v)/3;D+=h;}if(t>=t0&&t<=t1){mn=Math.min(mn,v);mx=Math.max(mx,v);}pt=tc;pv=v;});
-   if(D+De<=0)return null;if(De>0)return {avg:(Se+S)/(De+D),rms:NaN,min:mn,max:mx,pp:mx-mn,src:'env'};return {avg:S/D,rms:Math.sqrt(Math.max(0,Q/D)),min:mn,max:mx,pp:mx-mn,src:'raw'};}
+   this.eachRaw(ci,Math.max(t0,rs<Infinity?rs:t0),t1,(t,v)=>{const tc=Math.min(Math.max(t,t0),t1);if(pt!==null&&tc>pt){const h=tc-pt;S+=h*(pv+v)/2;Q+=h*(pv*pv+pv*v+v*v)/3;D+=h;}if(t>=t0&&t<=t1){if(v<mn){mn=v;tmn=t;}if(v>mx){mx=v;tmx=t;}}pt=tc;pv=v;});
+   if(D+De<=0)return null;if(De>0)return {avg:(Se+S)/(De+D),rms:NaN,min:mn,max:mx,pp:mx-mn,src:'env'};return {avg:S/D,rms:Math.sqrt(Math.max(0,Q/D)),min:mn,max:mx,pp:mx-mn,tmin:tmn,tmax:tmx,src:'raw'};}
+  // 5.0.2: the region [t0, t1] from two x of the plot (Shift+drag or the tool «⇹ Περιοχή»); a click clears it
+  selectAt(xa,xb){const [a,b]=this.viewRange(),pw=this.plotW(),tx=x=>a+(Math.min(Math.max(x-this.padL,0),pw)/pw)*(b-a);
+   if(Math.abs(xb-xa)<4){this.cfg.sel=null;}else{const t0=tx(Math.min(xa,xb)),t1=tx(Math.max(xa,xb));this.cfg.sel=t1>t0?[t0,t1]:null;}this.opt.onsel?.();this.requestDraw();}
+  // the statistics of every shown channel over the region: min and max with their times, mean, peak to peak, RMS
+  selStats(){const q=this.cfg.sel,s=this.sim;if(!q||!s)return [];const out=[];
+   for(const ch of this.channels()){if(!ch.on)continue;const st=this.stats(ch.key,q);out.push({key:ch.key,label:ch.label||ch.key,color:ch.color,unit:Scope.unitOf(ch.key,s),...(st||{})});}return out;}
   // the per-period mean and band: only when chosen («μέση ανά περίοδο»); 4.17.2: 'auto' keeps one look (samples, then the
   // envelope with its mean) instead of changing to it by itself
   usePeriods(t0){return this.cfg.display==='avg';}
   // ------------------------------------------------------------ interaction
   panTo(e){const d=this.drag;if(!d)return;const dx=e.offsetX-d.x;if(Math.abs(dx)>3){if(!d.moved)this.histPush();d.moved=true;}if(!d.moved)return;const [a,b]=d.view,span=b-a,pw=this.plotW();const sh=-dx/pw*span;this.cfg.frozen=[a+sh,b+sh];this.opt.onfreeze?.();this.requestDraw();}
-  zoomAt(x,f){if(this.cfg.follow!==false&&!this.cfg.frozen){const W=this.cfg.window,T=this.sim?.T||1;const n=Math.max(+(W.n*f).toPrecision(6),(this.sim?.h||1e-9)*4/(W.unit==='T'?T:1));this.cfg.window={unit:W.unit,n};this.opt.onchange?.();this.requestDraw();return;}
+  zoomAt(x,f){if(this.cfg.follow!==false&&!this.cfg.frozen){const W=this.cfg.window,T=this.sim?.T||1;if(!this.win0)this.win0={...W};const n=Math.max(+(W.n*f).toPrecision(6),(this.sim?.h||1e-9)*4/(W.unit==='T'?T:1));this.cfg.window={unit:W.unit,n};this.opt.onchange?.();this.requestDraw();return;}
    const [a,b]=this.viewRange(),pw=this.plotW();const tm=a+(Math.min(Math.max(x-this.padL,0),pw)/pw)*(b-a);const na=tm-(tm-a)*f,nb=tm+(b-tm)*f;if(nb-na<(this.sim?.h||1e-9)*4)return;this.cfg.frozen=[na,nb];this.opt.onfreeze?.();this.requestDraw();}
   cursorAt(e){if(!this.sim)return;const [a,b]=this.viewRange();const t=a+(e.offsetX-this.padL)/this.plotW()*(b-a);if(t<a||t>b)return;
    if(e.shiftKey&&this.cfg.cursors.length)this.cfg.cursors[1]=t;else this.cfg.cursors=e.shiftKey?[t]:(this.cfg.cursors.length===1?[this.cfg.cursors[0],t]:[t]);this.opt.onchange?.();this.requestDraw();}
@@ -211,9 +232,20 @@
   // steady (PlotCore.AutoRange): on the steps of the grid, open at once when a trace leaves the range, closed to the data
   // only after they have used less than Y_SHRINK of it for Y_HOLD ms while it runs; paused, a new view (zoom, move) fits
   // at once and the same view keeps its range (no jump when it stops)
-  yAuto(pi,pane,dlo,dhi,chans,vk,now){if(pane.y?.mode==='frame'){if(!(Number.isFinite(dlo)&&Number.isFinite(dhi))){dlo=-1;dhi=1;}if(pane.zero){dlo=Math.min(dlo,0);dhi=Math.max(dhi,0);}
+  yAuto(pi,pane,dlo,dhi,chans,vk,now){const Yc=pane.y||{},fin=Number.isFinite(dlo)&&Number.isFinite(dhi);
+   // 5.0.2 (⚙ of the pane): symmetric about 0, and a margin in % of the span of the data, before the range is chosen
+   if(Yc.sym&&fin){const m=Math.max(Math.abs(dlo),Math.abs(dhi));dlo=-m;dhi=m;}
+   if(Yc.pad>0&&fin){const p=(dhi-dlo)*Yc.pad/100||Math.max(Math.abs(dhi)*Yc.pad/100,1e-9);dlo-=p;dhi+=p;}
+   if(Yc.mode==='frame'){if(!(Number.isFinite(dlo)&&Number.isFinite(dhi))){dlo=-1;dhi=1;}if(pane.zero){dlo=Math.min(dlo,0);dhi=Math.max(dhi,0);}
+    if(Yc.pad!==undefined)return dhi>dlo?[dlo,dhi]:[dlo-1e-6,dhi+1e-6];
     const pad=(dhi-dlo)*.08||Math.max(Math.abs(dhi)*.05,1e-6);return [dlo-pad,dhi+pad];}
-   const a=this.yst[pi]||(this.yst[pi]=new PC.AutoRange({shrink:Y_SHRINK,hold:Y_HOLD}));
+   // 5.0.2: «μόνο μεγαλώνει»: the range of everything seen in this run; it never closes while the run goes on (new
+   // channels, a new run or a reset start it again), so the scale cannot flicker
+   if(Yc.mode==='grow'){const s=this.sim,sig=chans.map(c=>c.key).join('|')+(pane.zero?'|0':'')+(Yc.sym?'|s':''),t=s?.t??0;let g=this.yst[pi];
+    if(!g||!g.grow||g.sig!==sig||g.sim!==s||t<g.t-1e-15){g=this.yst[pi]={grow:true,sig,sim:s,t,lo:NaN,hi:NaN};}g.t=t;
+    if(fin){let a=dlo,b=dhi;if(pane.zero){a=Math.min(a,0);b=Math.max(b,0);}if(!Number.isFinite(g.lo)||a<g.lo||b>g.hi){const nr=PC.niceRange(Number.isFinite(g.lo)?Math.min(a,g.lo):a,Number.isFinite(g.hi)?Math.max(b,g.hi):b,5);g.lo=nr[0];g.hi=nr[1];}}
+    return Number.isFinite(g.lo)?[g.lo,g.hi]:[-1,1];}
+   let a=this.yst[pi];if(!(a instanceof PC.AutoRange))a=this.yst[pi]=new PC.AutoRange({shrink:Y_SHRINK,hold:Y_HOLD});
    return a.update(dlo,dhi,{sig:chans.map(c=>c.key).join('|')+(pane.zero?'|0':''),view:vk,running:!!this.running,now,zero:!!pane.zero});}
   // ------------------------------------------------------------ drawing
   draw(){
@@ -305,15 +337,22 @@
      if(pi===0){c.fillStyle='#6b4fa0';c.font='600 10px Inter,system-ui,sans-serif';c.textAlign='left';c.textBaseline='bottom';for(const q of chg.slice(-12))c.fillText('◆ '+q.label.split(': ').pop(),X(q.t)+3,y1-3);}}
     // cursors
     for(const [i,tc] of this.cfg.cursors.entries()){if(tc<t0||tc>t1)continue;const x=X(tc);c.strokeStyle=i?'#b03a5b':'#2f5fa0';c.setLineDash([4,3]);c.beginPath();c.moveTo(x,y0);c.lineTo(x,y1);c.stroke();c.setLineDash([]);}
+    // 5.0.2: the region of the min–max tool (and while it is dragged)
+    {const q=this.cfg.sel,d=this.selDrag,rg=d?[Math.min(d.x0,d.x1),Math.max(d.x0,d.x1)]:q?[X(q[0]),X(q[1])]:null;
+     if(rg&&rg[1]>rg[0]){const xa=Math.max(this.padL,rg[0]),xb=Math.min(this.padL+pw,rg[1]);if(xb>xa){c.fillStyle='#c47a1c1c';c.fillRect(xa,y0,xb-xa,y1-y0);c.strokeStyle='#c47a1c';c.lineWidth=1;c.beginPath();
+      if(rg[0]>=this.padL){c.moveTo(Math.round(rg[0])+.5,y0);c.lineTo(Math.round(rg[0])+.5,y1);}if(rg[1]<=this.padL+pw){c.moveTo(Math.round(rg[1])-.5,y0);c.lineTo(Math.round(rg[1])-.5,y1);}c.stroke();}}}
     c.restore();
     // pane title
-    c.textAlign='left';c.textBaseline='top';c.font='600 10.5px Inter,system-ui,sans-serif';let lx=this.padL+8;
+    c.textAlign='left';c.textBaseline='top';c.font='600 10.5px Inter,system-ui,sans-serif';let lx=this.padL+24;
     for(const ch of chans){c.fillStyle=ch.color;const t=ch.label;c.fillText(t,lx,y0+5);lx+=c.measureText(t).width+14;}
     // 4.17.2: ⛶ (the pane fills the box; again: back) and the handle under the pane (drag: its height)
     {const bx=W-this.padR-20,by=y0+3;c.fillStyle='#ffffffcc';c.fillRect(bx,by,16,16);c.strokeStyle=pane.max?'#147966':'#7b8e88';c.lineWidth=1.3;c.beginPath();
      if(pane.max){c.moveTo(bx+4,by+6);c.lineTo(bx+6,by+6);c.lineTo(bx+6,by+4);c.moveTo(bx+12,by+4);c.lineTo(bx+12,by+6);c.lineTo(bx+14,by+6);c.moveTo(bx+4,by+12);c.lineTo(bx+6,by+12);c.lineTo(bx+6,by+14);c.moveTo(bx+12,by+14);c.lineTo(bx+12,by+12);c.lineTo(bx+14,by+12);}
      else{c.moveTo(bx+3,by+7);c.lineTo(bx+3,by+3);c.lineTo(bx+7,by+3);c.moveTo(bx+9,by+3);c.lineTo(bx+13,by+3);c.lineTo(bx+13,by+7);c.moveTo(bx+3,by+9);c.lineTo(bx+3,by+13);c.lineTo(bx+7,by+13);c.moveTo(bx+9,by+13);c.lineTo(bx+13,by+13);c.lineTo(bx+13,by+9);}
      c.stroke();
+     // 5.0.2: ⚙, the settings of the y scale of the pane (green when it is not the default)
+     {const gx=this.padL+3,gy0=y0+3,Yp=pane.y||{},on=(Yp.auto===false&&!Yp.zoom)||Yp.mode==='grow'||Yp.mode==='frame'||!!Yp.sym||Yp.pad!==undefined;c.save();c.fillStyle='#ffffffcc';c.fillRect(gx,gy0,16,16);
+      c.fillStyle=on?'#147966':'#7b8e88';c.font='13px system-ui,sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText('⚙',gx+8,gy0+8.5);c.restore();}
      const gy=y1+(pi<panes.length-1?GAP:BOT)/2,gx=this.padL+pw/2;c.strokeStyle='#9fb3ad';c.lineWidth=1;c.beginPath();for(const dy of [-2,0,2]){c.moveTo(gx-12,gy+dy+.5);c.lineTo(gx+12,gy+dy+.5);}c.stroke();}
    });
    if(this.boxSel){const b=this.boxSel,ax=this.cfg.zoomAxes==='y'?'y':this.cfg.zoomAxes==='xy'||this.cfg.box?'xy':'x';c.fillStyle='#14796622';c.strokeStyle='#147966';
