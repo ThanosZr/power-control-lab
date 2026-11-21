@@ -410,6 +410,15 @@
 | region (of a graph), min–max tool | περιοχή (του γραφήματος), εργαλείο min–max (5.0.2) |
 | unzoom | χωρίς μεγέθυνση, επαναφορά της μεγέθυνσης (5.0.2) |
 | autoscale that only grows | αυτόματη κλίμακα που μόνο μεγαλώνει (5.0.2) |
+| network equivalent | ισοδύναμο δικτύου (5.0.3) |
+| study area, internal system | περιοχή της μελέτης, εσωτερικό δίκτυο (5.0.3) |
+| external system | εξωτερικό δίκτυο (5.0.3) |
+| boundary bus | ζυγός του συνόρου (5.0.3) |
+| Kron reduction (of a network), Schur complement | μείωση Kron (ενός δικτύου), συμπλήρωμα Schur (5.0.3) |
+| Ward equivalent, Ward injection | ισοδύναμο Ward, έγχυση Ward (5.0.3) |
+| extended Ward | extended Ward (5.0.3) |
+| fictitious PV bus | πλασματικός ζυγός PV (5.0.3) |
+| multi-port Thevenin / Norton equivalent | ισοδύναμο Thevenin / Norton πολλών θυρών (5.0.3) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 

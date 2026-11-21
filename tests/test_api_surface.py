@@ -221,7 +221,17 @@ class ApiSurface(unittest.TestCase):
     def test_the_surface_of_5_0_2(self):
         """5.0.2: every window moves and grows, and the menu «Παράθυρα» (ROADMAP §94 point 6 and step α). All of it is of the
         page (winframe.js, panels.js): no new point of the API, of the file format or of the server."""
-        self.assertEqual(sum(len(v) for v in self.now.values()), 933)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 933)
+
+    def test_the_surface_of_5_0_3(self):
+        """5.0.3: the equivalent of the rest of the network at the fundamental. pcl.equivalent is experimental (split,
+        reduce, compare); Network.equivalent is a stable addition."""
+        for k in ('pcl.equivalent.split', 'pcl.equivalent.reduce', 'pcl.equivalent.compare', 'pcl.equivalent.EquivalentError'):
+            self.assertIn(k, self.now['pcl'], k)
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+        self.assertEqual(self.now['pcl']['pcl.network.Network.equivalent']['params'], ['boundary', 'internal', 'kind', 'lf', 'slack', 'tol', 'mode'])
+        self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.equivalent'))
+        self.assertEqual(sum(len(v) for v in self.now.values()), 938)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

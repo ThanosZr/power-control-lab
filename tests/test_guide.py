@@ -41,6 +41,21 @@ class Guide(unittest.TestCase):
             self.assertEqual(r.stdout.strip(), said)
             self.assertTrue((pathlib.Path(d) / 'μελέτη' / 'study.json').is_file())
 
+    def test_the_python_example_of_5_0_3_runs_as_written(self):
+        # §41: Ward, extended Ward and Norton of the IEEE 30
+        bl = blocks('5.0.3')
+        self.assertEqual(len(bl), 1)
+        head, code = bl[0]
+        self.assertTrue(head.startswith('41. '), head)
+        text = (ROOT / 'docs' / 'GUIDE.md').read_text(encoding='utf-8')
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING='utf-8', PCL_HOME=d)
+            r = subprocess.run([sys.executable, '-c', code], cwd=d, env=env, capture_output=True, text=True, encoding='utf-8', timeout=600)
+            self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+            sec = [q for q in re.split(r'(?m)^## ', text) if q.startswith('41. ')][0]
+            said = re.search(r'Τυπώνει:\n\n```\n(.*?)```', sec, re.S).group(1).strip()
+            self.assertEqual(r.stdout.strip(), said)
+
     def test_the_python_example_of_5_0_1_runs_as_written(self):
         # §37: the inrush of the tutorial xf_inrush, saturable and linear core
         bl = blocks('5.0.1')

@@ -85,6 +85,7 @@
 | `pcl/cpf.py` | 561 |
 | `pcl/dcgrid.py` | 980 |
 | `pcl/designer.py` | 791 |
+| `pcl/equivalent.py` | 363 |
 | `pcl/formats.py` | 222 |
 | `pcl/geo.py` | 360 |
 | `pcl/gui.py` | 409 |
@@ -97,7 +98,7 @@
 | `pcl/link.py` | 150 |
 | `pcl/netfile.py` | 490 |
 | `pcl/netview.py` | 1084 |
-| `pcl/network.py` | 1680 |
+| `pcl/network.py` | 1690 |
 | `pcl/nnstart.py` | 388 |
 | `pcl/onnxio.py` | 355 |
 | `pcl/opf.py` | 515 |
@@ -119,7 +120,7 @@
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_api_surface.py` | 348 |
+| `tests/test_api_surface.py` | 358 |
 | `tests/test_arc.py` | 189 |
 | `tests/test_b4.py` | 300 |
 | `tests/test_backend.py` | 238 |
@@ -140,6 +141,7 @@
 | `tests/test_emt_harmonic.py` | 139 |
 | `tests/test_emt_se.py` | 141 |
 | `tests/test_engine.py` | 276 |
+| `tests/test_equivalent.py` | 133 |
 | `tests/test_ev.py` | 104 |
 | `tests/test_ev_weights.py` | 78 |
 | `tests/test_gen_ctl.py` | 136 |
@@ -151,7 +153,7 @@
 | `tests/test_gfm4.py` | 153 |
 | `tests/test_gfm5.py` | 179 |
 | `tests/test_gis.py` | 183 |
-| `tests/test_guide.py` | 228 |
+| `tests/test_guide.py` | 243 |
 | `tests/test_harmonic.py` | 312 |
 | `tests/test_impl.py` | 138 |
 | `tests/test_impulse_tools.py` | 150 |
@@ -3612,6 +3614,21 @@ _(χωρίς συναρτήσεις)_
 | 775 | function | `describe` |
 | 790 | function | `_copy` |
 
+### `pcl/equivalent.py`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 47 | class | `EquivalentError` |
+| 51 | function | `_buses_of` |
+| 58 | function | `split` |
+| 121 | function | `_copy` |
+| 131 | function | `_retained` |
+| 142 | function | `_short_circuit` |
+| 182 | function | `reduce` |
+| 308 | function | `_v` |
+| 316 | function | `_ymat` |
+| 325 | function | `compare` |
+
 ### `pcl/formats.py`
 
 | Γραμμή | Είδος | Όνομα |
@@ -4108,25 +4125,26 @@ _(χωρίς συναρτήσεις)_
 | 1219 | method | `Network.estimate` |
 | 1226 | method | `Network.harmonics` |
 | 1233 | method | `Network.opf` |
-| 1255 | method | `Network.to_emt` |
-| 1335 | function | `_coo` |
-| 1341 | function | `_zip` |
-| 1346 | function | `_solve` |
-| 1357 | function | `_nr` |
-| 1393 | function | `sssc_placement` |
-| 1450 | function | `superposition` |
-| 1474 | function | `trv` |
-| 1508 | function | `_matrix` |
-| 1520 | function | `read_matpower` |
-| 1557 | function | `ieee` |
-| 1567 | function | `case_data` |
-| 1578 | function | `case_solution` |
-| 1587 | function | `ieee9` |
-| 1614 | function | `ieee14` |
-| 1627 | function | `to_dict` |
-| 1647 | function | `from_dict` |
-| 1675 | function | `save` |
-| 1679 | function | `load` |
+| 1255 | method | `Network.equivalent` |
+| 1265 | method | `Network.to_emt` |
+| 1345 | function | `_coo` |
+| 1351 | function | `_zip` |
+| 1356 | function | `_solve` |
+| 1367 | function | `_nr` |
+| 1403 | function | `sssc_placement` |
+| 1460 | function | `superposition` |
+| 1484 | function | `trv` |
+| 1518 | function | `_matrix` |
+| 1530 | function | `read_matpower` |
+| 1567 | function | `ieee` |
+| 1577 | function | `case_data` |
+| 1588 | function | `case_solution` |
+| 1597 | function | `ieee9` |
+| 1624 | function | `ieee14` |
+| 1637 | function | `to_dict` |
+| 1657 | function | `from_dict` |
+| 1685 | function | `save` |
+| 1689 | function | `load` |
 
 ### `pcl/nnstart.py`
 

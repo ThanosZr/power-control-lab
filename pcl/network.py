@@ -1252,6 +1252,16 @@ class Network:
         return r
 
     # ------------------------------------------------------------ to the EMT solver (4.3)
+    def equivalent(self, boundary, internal=None, kind='ward', lf=None, slack=None, tol=1e-10, mode='max'):
+        """5.0.3 (ROADMAP §96 B.2): the network beyond the boundary buses as an equivalent at the fundamental, from the load
+        flow lf (computed when None): 'ward' (exact at the base case), 'xward' (extended Ward: with fictitious PV buses for the
+        reactive support of the external generators), 'norton' (the admittance and the currents at the boundary, and the
+        Thevenin of many ports) or 'sc' (the sequence networks of IEC 60909-0, mode 'max' or 'min': the same I″k at every kept
+        bus). internal: buses of the study area (None: the side without the slack). Returns the dict of
+        pcl.equivalent.reduce, with the reduced Network in 'net' for 'ward', 'xward' and 'sc' (pcl.equivalent is experimental)."""
+        from . import equivalent
+        return equivalent.reduce(self, boundary, internal, kind=kind, lf=lf, slack=slack, tol=tol, mode=mode)
+
     def to_emt(self, lf=None, machines=None, name=None, t_end=0.5, hdiv=400):
         """The network as a project of the app for an EMT run that starts in the steady state of the load flow (4.3):
         each generator a GEN3 whose terminal voltage |V|∠θ is the load-flow result at its bus (the EMT start solves the

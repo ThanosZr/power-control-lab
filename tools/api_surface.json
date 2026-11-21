@@ -1,5 +1,5 @@
 {
- "version": "5.0.2",
+ "version": "5.0.3",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -26,7 +26,8 @@
    "pcl.harmonic.",
    "pcl.unbalanced.",
    "pcl.dcgrid.",
-   "pcl.results."
+   "pcl.results.",
+   "pcl.equivalent."
   ],
   "cli": [
    "workbench",
@@ -1023,6 +1024,40 @@
      "max_iter"
     ],
     "since": "4.20"
+   },
+   "pcl.equivalent.EquivalentError": {
+    "params": [],
+    "since": "5.0.3"
+   },
+   "pcl.equivalent.compare": {
+    "params": [
+     "net",
+     "eq",
+     "outages",
+     "tol"
+    ],
+    "since": "5.0.3"
+   },
+   "pcl.equivalent.reduce": {
+    "params": [
+     "net",
+     "boundary",
+     "internal",
+     "kind",
+     "lf",
+     "slack",
+     "tol",
+     "mode"
+    ],
+    "since": "5.0.3"
+   },
+   "pcl.equivalent.split": {
+    "params": [
+     "net",
+     "boundary",
+     "internal"
+    ],
+    "since": "5.0.3"
    },
    "pcl.formats.write_hdf5": {
     "params": [
@@ -2850,6 +2885,18 @@
      "name"
     ],
     "since": "4.2"
+   },
+   "pcl.network.Network.equivalent": {
+    "params": [
+     "boundary",
+     "internal",
+     "kind",
+     "lf",
+     "slack",
+     "tol",
+     "mode"
+    ],
+    "since": "5.0.3"
    },
    "pcl.network.Network.estimate": {
     "params": [
