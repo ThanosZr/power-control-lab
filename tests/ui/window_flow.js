@@ -46,7 +46,9 @@ const {chromium}=require('playwright');
   const at=()=>{const o=sv.getBoundingClientRect(),z=Inside.zoom().z;return [(cx-o.left)/z,(cy-o.top)/z];};const a0=at(),z0=Inside.zoom().z;
   for(let i=0;i<3;i++)b.dispatchEvent(new WheelEvent('wheel',{deltaY:-200,clientX:cx,clientY:cy,bubbles:true,cancelable:true}));
   const a1=at(),z=Inside.zoom();return {z0,z:z.z,fit:z.fit,a0,a1,sl:b.scrollLeft,st:b.scrollTop,ed:PCL.editor.view.k};});
- ok(R.wheel.z>R.wheel.z0*1.5&&!R.wheel.fit&&Math.hypot(R.wheel.a1[0]-R.wheel.a0[0],R.wheel.a1[1]-R.wheel.a0[1])<2,'the wheel zooms about the pointer '+JSON.stringify(R.wheel));
+ // in pixels of the screen: the scroll of the body is whole pixels, so at a small zoom one pixel is several units of the diagram
+ R.wheel.px=Math.hypot(R.wheel.a1[0]-R.wheel.a0[0],R.wheel.a1[1]-R.wheel.a0[1])*R.wheel.z;
+ ok(R.wheel.z>R.wheel.z0*1.5&&!R.wheel.fit&&R.wheel.px<1.5,'the wheel zooms about the pointer '+JSON.stringify(R.wheel));
  {const r=await rect('#lib-inside .in-body');await drag(r.l+r.w/2,r.t+r.h/2,-80,-40);}
  R.pan=await p.evaluate(()=>{const b=document.querySelector('#lib-inside .in-body');return {sl:b.scrollLeft,st:b.scrollTop};});
  ok(R.pan.sl>R.wheel.sl+60,'a drag moves the diagram '+JSON.stringify([R.wheel,R.pan]));
