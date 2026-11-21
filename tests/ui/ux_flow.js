@@ -81,6 +81,13 @@ const {chromium}=require('playwright');const OUT=process.argv[3]||'.';
   const e0=Live.epoch,R0=S.sim.net.compInfo.get('R1')?.main?.R;PCL.editor.setParams('R1',{R:20});await new Promise(r=>setTimeout(r,300));const e1=Live.epoch,act=Live.active;
   PCL.pause();const c=S.sim.project.components.find(q=>q.id==='R1');return {same:e0===e1,act,R:+c.params.R,t:S.sim.t};});
  if(!R.liveLoad.skip)ok(R.liveLoad.same&&R.liveLoad.act&&R.liveLoad.R===20,'a parameter change while running reaches the worker without a restart '+JSON.stringify(R.liveLoad));
+ // 9. (5.0.1) a right click inside the page does not open the menu of the browser, unless the setting asks for it; in a
+ //    field of text it stays (copy, paste)
+ R.ctxMenu=await p.evaluate(()=>{const fire=el=>{const e=new MouseEvent('contextmenu',{bubbles:true,cancelable:true,button:2});el.dispatchEvent(e);return e.defaultPrevented;};
+  const sel=['#scope-card','#theory','#math','.palette','.tut-bar','body'],q=s=>document.querySelector(s);
+  const off=sel.filter(s=>q(s)).map(s=>fire(q(s))),field=fire(q('#pal-search'));const E=PCL.editor,was=E.settings.browserMenu;E.settings.browserMenu=true;
+  const on=sel.filter(s=>q(s)).map(s=>fire(q(s)));E.settings.browserMenu=was;return {off,field,on,def:was};});
+ ok(R.ctxMenu.def===false&&R.ctxMenu.off.length>=5&&R.ctxMenu.off.every(Boolean)&&R.ctxMenu.field===false&&R.ctxMenu.on.every(x=>!x),'no menu of the browser on a right click (off by default), kept in a field of text, back with the setting '+JSON.stringify(R.ctxMenu));
  console.log(JSON.stringify(R));console.log('ERR',errs);
  await b.close();if(errs.length)fails.push('page errors');
  if(fails.length){console.error('FAIL\n'+fails.join('\n'));process.exit(1);}console.log('PASS');

@@ -9,7 +9,7 @@
 |---|---:|
 | `web/studio/addon_client.js` | 30 |
 | `web/studio/addons.js` | 116 |
-| `web/studio/app.js` | 3433 |
+| `web/studio/app.js` | 3437 |
 | `web/studio/bus.js` | 197 |
 | `web/studio/ctlwin.js` | 78 |
 | `web/studio/editor.js` | 742 |
@@ -294,7 +294,7 @@
 | `tests/ui/studio_flow.js` | 45 |
 | `tests/ui/study_flow.js` | 60 |
 | `tests/ui/subcircuit_flow.js` | 79 |
-| `tests/ui/ux_flow.js` | 87 |
+| `tests/ui/ux_flow.js` | 94 |
 | `tests/ui/watch_flow.js` | 113 |
 | `tests/ui/wiring_flow.js` | 128 |
 
@@ -987,13 +987,13 @@
 | 3246 | function | `openSettings` |
 | 3247 | const fn | `sel` |
 | 3248 | const fn | `chk` |
-| 3274 | function | `applyLook` |
-| 3278 | function | `boot` |
-| 3349 | const fn | `mv` |
-| 3350 | const fn | `up` |
-| 3351 | const fn | `navOpen` |
-| 3367 | const fn | `probeSel` |
-| 3429 | function | `renderTheoryLive` |
+| 3275 | function | `applyLook` |
+| 3279 | function | `boot` |
+| 3350 | const fn | `mv` |
+| 3351 | const fn | `up` |
+| 3352 | const fn | `navOpen` |
+| 3368 | const fn | `probeSel` |
+| 3433 | function | `renderTheoryLive` |
 
 ### `web/studio/bus.js`
 

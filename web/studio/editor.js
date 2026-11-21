@@ -44,7 +44,7 @@
   constructor(holder,opt={}){
    this.holder=holder;this.opt=opt;this.doc={components:[],wires:[]};this.sel={c:new Set(),w:new Set()};
    this.undoStack=[];this.redoStack=[];this.view={cx:400,cy:250,k:1};this.mode=null;this.live=null;this.space=false;
-   this.settings=Object.assign({leftDrag:'select',middleDrag:'pan',rightButton:'menu',wheel:'zoom',dblclick:'edit',marquee:'direction',grid:true,gridStyle:'dots',wireWidth:2.2,corner:'round',look:'tech',sym:'iec',techComp:1.5,techWire:1,techCorner:'sharp',showLive:true,showArrows:true,autoRoute:false,freeEnds:true,autoConnect:true,snapPx:12},opt.settings||{});
+   this.settings=Object.assign({leftDrag:'select',middleDrag:'pan',rightButton:'menu',wheel:'zoom',dblclick:'edit',marquee:'direction',grid:true,gridStyle:'dots',wireWidth:2.2,corner:'round',look:'tech',sym:'iec',techComp:1.5,techWire:1,techCorner:'sharp',showLive:true,showArrows:true,autoRoute:false,freeEnds:true,autoConnect:true,snapPx:12,browserMenu:false},opt.settings||{});
    const svg=this.svg=document.createElementNS(NS,'svg');svg.setAttribute('class','schem');svg.setAttribute('tabindex','0');
    svg.setAttribute('aria-label','Κύκλωμα. Διπλό κλικ σε στοιχείο για ρυθμίσεις, δεξί κλικ για scope.');
    svg.innerHTML=`<defs><marker id="flowArr" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="flowhead"/></marker>

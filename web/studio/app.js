@@ -3253,7 +3253,8 @@ function openSettings(){const s=editor.settings,m=$('#settings');m.hidden=false;
   ${sel('rightButton','Δεξί κλικ',[['menu','Μενού (scope, ρυθμίσεις…)'],['pan','Σύρσιμο: καμβάς · κλικ: μενού']])}
   ${sel('wheel','Ροδέλα',[['zoom','Zoom (Shift: οριζόντια κύλιση)'],['scroll','Κύλιση (Ctrl: zoom)']])}
   ${sel('dblclick','Διπλό κλικ σε στοιχείο',[['edit','Ρυθμίσεις'],['scope','Scope ρεύματος']])}
-  <p class="muted small">Space + σύρσιμο μετακινεί πάντα τον καμβά. Το κείμενο του σχεδίου δεν επιλέγεται ποτέ.</p></section>
+  ${chk('browserMenu','Μενού του browser με δεξί κλικ (Πίσω, Ανανέωση, Αποθήκευση…) όπου η εφαρμογή δεν έχει δικό της')}
+  <p class="muted small">Space + σύρσιμο μετακινεί πάντα τον καμβά. Το κείμενο του σχεδίου δεν επιλέγεται ποτέ. Στα πεδία κειμένου το μενού του browser μένει πάντα (αντιγραφή, επικόλληση).</p></section>
   <section><h3>Όψη</h3>${sel('look','Όψη',[['tech','Τεχνική: λευκό, λεπτές ευθείες, μονόχρωμο (προεπιλογή)'],['classic','Κλασική (όπως ως την 4.17.2)']])}
   ${sel('sym','Σύμβολα',[['iec','IEC: αντίσταση ως ορθογώνιο'],['ansi','ANSI: αντίσταση ζιγκ-ζαγκ']])}
   ${s.look==='classic'?'':`${sel('techComp','Πάχος γραμμών των στοιχείων',[[1,'1 px'],[1.5,'1,5 px'],[2,'2 px'],[2.5,'2,5 px']])}${sel('techWire','Πάχος συρμάτων',[[1,'1 px'],[1.5,'1,5 px'],[2,'2 px'],[2.5,'2,5 px']])}${sel('techCorner','Γωνίες συρμάτων',[['sharp','Ορθές'],['round','Στρογγυλεμένες']])}`}
@@ -3401,6 +3402,9 @@ function boot(){
  if(window.Live)Live.onstatus=m=>{if(m.python==='loading')notice('Φορτώνεται η Python στο thread της προσομοίωσης (μία φορά· η σελίδα συνεχίζει κανονικά)…','info');else if(m.python==='ready')notice('');};
  // the time of the last input anywhere on the page: the solver yields the frame to the page for 250 ms after it (4.6)
  for(const ev of ['pointerdown','pointermove','wheel','keydown'])document.addEventListener(ev,()=>{S.lastInput=performance.now();},{capture:true,passive:true});
+ // 5.0.1: the menu of the browser (Πίσω, Ανανέωση, Αποθήκευση…) does not open with a right click inside the page, unless
+ // the setting «Μενού του browser με δεξί κλικ» is on; in the fields of text it stays, for copy and paste
+ document.addEventListener('contextmenu',e=>{if(editor.settings.browserMenu)return;const t=e.target;if(t?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])'))return;e.preventDefault();});
  document.addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))closeMenu();if(!e.target.closest('#inspector')&&!e.target.closest('.schem')&&!e.target.closest('#ctx'))closeInspector();});
  document.addEventListener('keydown',e=>{const tg=e.target,typing=tg&&(tg.isContentEditable||/^(INPUT|SELECT|TEXTAREA)$/.test(tg.tagName)),plain=!e.ctrlKey&&!e.metaKey&&!e.altKey;
   // by the position of the key (4.6): the same with a Greek layout (e.key «π», «ι», «ζ»)
