@@ -341,6 +341,7 @@
     case 'SUB':return String(p.$title||p.def||''); // subcircuit (3.17): the title of its definition
     // network library (4.1)
     case 'GRID3':return e(+p.Sk,'VA')+' · '+e(+p.Un,'V');
+    case 'EQV3':{const n=P.eqN(p);return n+(n===1?' θύρα':' θύρες')+(p.fig&&p.fig!=='50'?' · Σχ. '+p.fig:'');}
     case 'FLT3':return ({ag:'a–γη',bg:'b–γη',cg:'c–γη',ab:'a–b',bc:'b–c',ca:'c–a',abg:'ab–γη',bcg:'bc–γη',cag:'ca–γη',abc:'3φ',abcg:'3φ–γη'}[p.kind]||p.kind)+(p.ctl==='sig'?' · από σήμα':' · '+e(+p.ton,'s')+(+p.toff>0?'–'+e(+p.toff,'s'):''));
     case 'CB3':return p.ctl==='sig'?'εντολή από σήμα':String(p.cmd||'').slice(0,22);
     case 'XF3':return p.grp+' · '+e(+p.Sn,'VA')+' · '+e(+p.U1,'V')+'/'+e(+p.U2,'V');
@@ -441,7 +442,7 @@
     for(const [key,r] of m)if(r.size>1)joined.add(key.slice(0,key.lastIndexOf('|')));}
    // 4.17.3: in the technical look a net that holds the pin of one phase of a three-phase part (a, b, c, a1 …) takes the
    // colour of that phase (a net with two phases, or none, stays dark)
-   const PH=new Map();if(tech&&P.phaseSplit){for(const c of this.doc.components){if(!/^(VAC3|IM|SM|GRID3|FLT3|CB3|XF3|LOAD3|GEN3|LINE3|TLM|MMC|LCC6|LCCS|LCCX|FILT3|ZSER3)$/.test(c.type))continue;
+   const PH=new Map();if(tech&&P.phaseSplit){for(const c of this.doc.components){if(!/^(VAC3|IM|SM|GRID3|EQV3|FLT3|CB3|XF3|LOAD3|GEN3|LINE3|TLM|MMC|LCC6|LCCS|LCCX|FILT3|ZSER3)$/.test(c.type))continue;
      for(const pn of Object.keys(P.pinsOf(c))){const m=/^([abc])\d?$/.exec(pn);if(!m)continue;const r=NK.root(c.id+':'+pn);if(r==null)continue;const was=PH.get(r);PH.set(r,was===undefined||was===m[1]?m[1]:'');}}}
    this.wctx={NK,BW,joined,W,tech,PH};for(const w of this.doc.wires)h+=this.wireSVG(w);
    for(const c of this.doc.components){if(c.type==='JUNC'){const n=count.get(c.id+':j')||0;if(n>=3)dots+=`<circle class="jdot${NK.of(c.id+':j')==='sig'?' sig':''}" data-pc="${esc(c.id)}" cx="${c.x}" cy="${c.y}" r="${NK.of(c.id+':j')==='sig'?2.8:3.6}"/>`;else if(n===1)dots+=`<circle class="jfree" data-pc="${esc(c.id)}" cx="${c.x}" cy="${c.y}" r="3.6"/>`;continue;}

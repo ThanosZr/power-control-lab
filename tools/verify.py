@@ -1449,6 +1449,62 @@ def v503_rows(add):
     add(A, 'το ίδιο: I″k1 μονοφασικό ως προς τη γη στον ζυγό 3 με το μειωμένο δίκτυο', 'IEC TR 60909-4, Πίνακας 23', IK1[1] * 1e3, red.short_circuit('3', fault='1ph')['Ik'], IK1[1] * 1e3 * 2e-4, 'A')
 
 
+
+def v504_rows(add):
+    """5.0.4: the equivalent in EMT after CIGRE TB 39, Fig. 15 (pcl.equivalent.emt_ports, the part EQV3, THEORY §8ΩΘ,
+    tests/test_equivalent.py): the current at the boundary against the full load flow, one port against GRID3, the start of the
+    area in the load flow, a fault in the area against the whole network in EMT (the tutorial ieee9_eq)."""
+    import json
+    import subprocess
+    import numpy as np
+    import pcl
+    from pcl import network as N
+    from pcl import equivalent as Q
+    A = 'Ισοδύναμο του δικτύου σε EMT (5.0.4)'
+    worst = 0.0
+    for case, B, I in ((9, ['5', '9'], ['1']), (14, ['6', '7', '9'], None), (30, ['9', '10', '12', '27'], None)):
+        net = N.ieee(case)
+        lf = net.load_flow()
+        names, idx, Y = Q._ext_y(net, lf, Q.split(net, B, I)[2], None, 1)
+        V = np.array([Q._v(lf, b) for b in names])
+        for fig in Q.FIGS:
+            q = Q.emt_ports(net, B, I, lf=lf, fig=fig)
+            worst = max(worst, float(np.max(np.abs(q['I'] + Y[[idx[b] for b in B]] @ V))))
+    add(A, 'IEEE 9, 14, 30, τρία κυκλώματα (Σχ. 15 στη θεμελιώδη, 15b, 15c): |I_B| του ισοδυνάμου απέναντι στο ρεύμα των εξωτερικών στοιχείων', 'η ροή φορτίου του πλήρους δικτύου', 0.0, worst, 1e-10, 'pu')
+    net = N.ieee(9)
+    q = Q.emt_ports(net, ['5', '9'], ['1'], fig='15b')
+    e = next(x for x in net.elements if x['kind'] == 'branch' and x['a'] == '5' and x['b'] == '6')
+    add(A, 'IEEE 9 (345 kV), σύνορο 5, 9: R_s στον ζυγό 5 (μία εξωτερική γραμμή, 5–6)', 'κυματική αντίσταση χωρίς απώλειες √(x/b)·Z_b', float(np.sqrt(e['x'] / e['bc']) * 345e3 ** 2 / 100e6), q['Rs'][0], 1e-9, 'Ω')
+    Un, Sb, E, ang = 150e3, 100e6, 1.05, 20.0
+    z1, z0 = complex(0.004, 0.05), complex(0.012, 0.16)
+    zb = Un * Un / Sb
+
+    def C(cid, typ, params):
+        return {'id': cid, 'type': typ, 'x': 0, 'y': 0, 'rot': 0, 'flip': False, 'label': cid, 'params': params}
+    src = {'EQV3': C('S', 'EQV3', {'Un': repr(Un), 'Sb': Sb, 'E': repr(E), 'ang': repr(ang), 'R1': repr(z1.real), 'X1': repr(z1.imag), 'R0': repr(z0.real), 'X0': repr(z0.imag), 'conn': 'bus'}),
+           'GRID3': C('S', 'GRID3', {'Un': Un, 'phase': ang, 'cf': E, 'emf': 'c', 'Sk': E * Un * Un / (abs(z1) * zb), 'XR': z1.imag / z1.real, 'z0': 'ratio',
+                                     'Z0Z1': abs(z0) / abs(z1), 'XR0': z0.imag / z0.real, 'conn': 'bus'})}
+    out = {}
+    for t, c in src.items():
+        pr = {'version': 4, 'components': [c, C('J', 'JUNC', {}), C('F1', 'FLT3', {'kind': 'ag', 'ton': 0.012, 'conn': 'bus'})],
+              'wires': [{'id': 'w1', 'a': {'c': 'S', 'p': 'abc1' if t == 'EQV3' else 'abc'}, 'b': {'c': 'J', 'p': 'j'}, 'pts': []},
+                        {'id': 'w2', 'a': {'c': 'F1', 'p': 'abc'}, 'b': {'c': 'J', 'p': 'j'}, 'pts': []}]}
+        out[t] = np.array(pcl.Project(pr).run(0.05, channels=['Y:F1/Ia'], hdiv=400)['Y:F1/Ia'])
+    add(A, 'μία θύρα του EQV3: ρεύμα μονοφασικού σφάλματος, μέγιστη διαφορά ως μέρος της κορυφής', 'GRID3 με τα ίδια E, Z₁, Z₀', 0.0, float(np.max(np.abs(out['EQV3'] - out['GRID3'])) / np.max(np.abs(out['GRID3']))), 1e-12, '')
+    lf = net.load_flow()
+    r = pcl.Project(net.to_emt(lf, machines=N.IEEE9_MACHINES, boundary=['5', '9'], internal=['1'])).run(0.1, channels=['Y:G1:pe'])
+    add(A, 'IEEE 9, η περιοχή {1, 4} με το ισοδύναμο στους ζυγούς 5, 9: P της γεννήτριας 1 στα 0,1 s', 'η ροή φορτίου', lf['buses']['1']['P'] / 100e6, r['Y:G1:pe'][-1], 1e-4, 'pu')
+    W = ROOT / 'web' / 'studio'
+    js = ("global.window=globalThis;global.Parts=require(%r);require(%r);require(%r);const t=Tutorials.get('ieee9_eq'),a=JSON.parse(process.argv[1]),o={};"
+          "for(const q of t.options)o[q.k]=a[q.k]??q.def;process.stdout.write(JSON.stringify(t.build(o)));") % (str(W / 'parts.js'), str(W / 'netlib.js'), str(W / 'tutorials.js'))
+    for kind, kl in (('abcg', 'τριφασικό'), ('ag', 'μονοφασικό')):
+        pr = json.loads(subprocess.run(['node', '-e', js, json.dumps({'net': 'eq', 'fig': '50', 'fault': kind})], capture_output=True, text=True, check=True).stdout)
+        ref = pr['meta']['eq']['ref'][kind]
+        r = pcl.Project(pr).run(0.1, channels=['Y:F1/Ia'])
+        t, y = np.array(r.t), np.array(r['Y:F1/Ia'])
+        pk = float(np.abs(y[(t > 0.05) & (t <= 0.05 + 1 / 60)]).max())
+        add(A, f'ieee9_eq, {kl} σφάλμα στον ζυγό 4, ισοδύναμο στη θεμελιώδη: πρώτη κορυφή του i_a', 'όλο το δίκτυο σε EMT (2 %)', ref['pk'], pk, 0.02 * ref['pk'], 'A')
+
 def checks(o):
     """Rows: (area, quantity, reference, expected, simulated, tolerance (absolute), unit)."""
     rows = []
@@ -1769,6 +1825,7 @@ def checks(o):
     v50_rows(add)
     v501_rows(add)
     v503_rows(add)
+    v504_rows(add)
     cpf_rows(add)
     sweepc_rows(add)
     se_rows(add)
@@ -1860,7 +1917,7 @@ TESTS = [
     ('tests/test_neutral.py', 'η επιλογή «Ουδέτερος» των τριφασικών στοιχείων (4.24, αποφάσεις 208, 345)', 'ο ακροδέκτης n μόνο με «Ακροδέκτης n»· η προεπιλογή δίνει το netlist της 4.23· ακροδέκτης n στη γη = στερεά γείωση σε κάθε στοιχείο· μονοφασικό σφάλμα με R_n + jX_n στο ισοδύναμο δικτύου και πίσω από Dyn11 απέναντι στη λύση στο πεδίο των φάσεων με 3Z_n (κάτω από 0,1 %)· πηγή με Z_n σε άνισο αστέρα απέναντι στην κλειστή μορφή'),
     ('tests/test_study.py', 'ο φάκελος μελέτης και η αυτόματη καταγραφή (5.0, απόφαση 344 και 343.4, THEORY §8ΩΕ, `engine/studyfolder.py`, `web/studio/study.js`)', 'οι γραμμές ενός τρεξίματος είναι η καταγραφή της προσομοίωσης: στρογγυλεμένες σε float32 οι τιμές του scope bit προς bit, η τελευταία το now() κάθε καναλιού, και σε κομμάτια τα ίδια· οι μονάδες ίδιες με του scope σε κάθε κανάλι κάθε tutorial· το netlist χωρίς την κατάσταση του τρεξίματος· ένα τρέξιμο από την Python με τα ίδια bit με το Result, αριθμοί τρεξιμάτων που δεν ξαναδίνονται και ετικέτα που κρατά ένα τρέξιμο· οι αναγνώστες του EMTP, του PSCAD και των CSV σε αρχεία γραμμένα κατά τη μορφή τους· τα μοντέλα γραμμής με το κλειδί τους (ίδια bit από τον φάκελο)· ο server δέχεται μόνο ολόκληρες γραμμές σε τρέξιμο που τρέχει· η αυτόματη καταγραφή πάνω από 1000 κανάλια με τους ίδιους αριθμούς'),
     ('tests/test_sat.py', 'ο κορεσμός στους μετασχηματιστές (5.0.1, ROADMAP §92, THEORY §8ΩΖ, `tests/js/sat_cases.js`)', 'η καμπύλη και το αντίστροφό της, η δοκιμή κενού σε rms και πίσω, ίδιο netlist με την προεπιλογή, ένας πυρήνας κάτω από το γόνατο = η γραμμική L_m, ιδανική πηγή (δεύτερη τάξη) και η πρώτη κορυφή με R σε κλειστή μορφή, η παραμένουσα ροή που κρατιέται, οι 13 ομάδες, η αρχή από φασιθέτες, τα μηνύματα, οι κανόνες του χρόνου, το στιγμιότυπο, ο SciPy απέναντι στην εφαρμογή σε πέντε κυκλώματα'),
-    ('tests/test_equivalent.py', 'το ισοδύναμο του δικτύου στα 50 Hz: Ward, extended Ward, Norton, για το βραχυκύκλωμα (5.0.3, ROADMAP §96 Β.2, THEORY §8ΩΗ)', 'το βασικό σημείο του πλήρους δικτύου, ο κλάδος της μείωσης Kron του pandapower 3.5.6, το N−1 του IEEE 30, το ρεύμα του συνόρου στην πλήρη λύση, το I″k του πλήρους δικτύου και του IEC TR 60909-4'),
+    ('tests/test_equivalent.py', 'το ισοδύναμο του δικτύου στα 50 Hz: Ward, extended Ward, Norton, για το βραχυκύκλωμα (5.0.3, ROADMAP §96 Β.2, THEORY §8ΩΗ)· σε EMT κατά το Σχ. 15 του CIGRE TB 39 (5.0.4, THEORY §8ΩΘ)', 'το βασικό σημείο του πλήρους δικτύου, ο κλάδος της μείωσης Kron του pandapower 3.5.6, το N−1 του IEEE 30, το ρεύμα του συνόρου στην πλήρη λύση, το I″k του πλήρους δικτύου και του IEC TR 60909-4· το GRID3 με τα ίδια δεδομένα, το σφάλμα σε όλο το δίκτυο σε EMT, ο SciPy'),
     ('tests/test_cp_modal.py', 'γραμμές CP χωρίς παραμόρφωση και με δεδομένα ανά ρυθμό (5.0.1, απόφαση 355, THEORY §8ΩΖ.10, `tests/js/cp_cases.js`)', 'att·V στο ανοιχτό άκρο, ένας ρυθμός = η μονοφασική γραμμή (διαφορά 0), οι ρυθμοί γης και εναέριος της τριφασικής με τον T_i του Clarke, ο ίδιος T_i από τον χρήστη (ίδια bit), τα τρία είδη δεδομένων, η μόνιμη κατάσταση απέναντι στο δίθυρο, τα μηνύματα, ο SciPy'),
     ('tests/test_rms.py', 'ο αριθμητικός πυρήνας της δυναμικής RMS και της ευστάθειας μικρών διαταραχών (4.23, ROADMAP §71, `pcl/rms.py`)', 'IEEE 9 ζυγών όπως στο βιβλίο αναφοράς: E′ και φορτία (Παρ. 2.6), οι ανηγμένοι πίνακες πριν, κατά και μετά το σφάλμα (Πίν. 2.6), οι δύο ταλαντώσεις (Παρ. 3.2), οι ιδιοτιμές του μοντέλου δύο αξόνων με D = 0 και 1 (§9.12) στο έκτο δεκαδικό· ο τραπεζοειδής με τάξη 2 απέναντι στο SciPy· η εναλλασσόμενη λύση ίδια· μεταβλητό βήμα· κρίσιμος χρόνος εκκαθάρισης· Arnoldi = QR (και στο IEEE 118)· η πρώτη ταλάντωση απέναντι στο EMT· χωρίς διαταραχή τίποτα δεν κινείται· στοιχείο χωρίς μοντέλο RMS: άρνηση με το όνομά του'),
     ('tests/test_ev_weights.py', 'τα βάρη του πολυκριτηριακού του οχήματος (4.18.1)', 'moevc2: w_s↑ ⇒ IAE↓, w_e↑ ⇒ Wh/km↓ και IAE↑, eco < ισορροπημένος < performance στα Wh/km και αντίστροφα στο IAE, keep ≤ 1· το moevc της 4.8 με keep 1,15 και w_s χωρίς επίδραση'),
@@ -1946,7 +2003,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 1121 tests (Python και Node) και 22 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»· από την 4.22 το `gis_flow.js` τα tutorials του υποσταθμού GIS, τους άξονες των γραφημάτων SVG, το σύρσιμο των ετικετών και τον χάρτη του δικτύου· από την 5.0 το `study_flow.js` το τρέξιμο της σελίδας στον φάκελο μελέτης, το εργαλείο προβολής με ανανέωση όσο γράφεται, τη διαφορά δύο τρεξιμάτων και ένα αρχείο του EMTP· από την 5.0.2 το `window_flow.js` το πλαίσιο κάθε παραθύρου, τη μεγέθυνση του «⧉ Μέσα στο …», το μενού «Παράθυρα», και σε κάθε tutorial κανένα id δύο φορές και κανένα ορατό κουμπί χωρίς χειριστή, και το `scope_flow.js` την περιοχή με min–max, το ⚙ και το «μόνο μεγαλώνει»). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
+    out += ['', 'Μαζί 1130 tests (Python και Node) και 22 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»· από την 4.22 το `gis_flow.js` τα tutorials του υποσταθμού GIS, τους άξονες των γραφημάτων SVG, το σύρσιμο των ετικετών και τον χάρτη του δικτύου· από την 5.0 το `study_flow.js` το τρέξιμο της σελίδας στον φάκελο μελέτης, το εργαλείο προβολής με ανανέωση όσο γράφεται, τη διαφορά δύο τρεξιμάτων και ένα αρχείο του EMTP· από την 5.0.2 το `window_flow.js` το πλαίσιο κάθε παραθύρου, τη μεγέθυνση του «⧉ Μέσα στο …», το μενού «Παράθυρα», και σε κάθε tutorial κανένα id δύο φορές και κανένα ορατό κουμπί χωρίς χειριστή, και το `scope_flow.js` την περιοχή με min–max, το ⚙ και το «μόνο μεγαλώνει»). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`).', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',

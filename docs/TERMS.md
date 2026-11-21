@@ -419,6 +419,9 @@
 | extended Ward | extended Ward (5.0.3) |
 | fictitious PV bus | πλασματικός ζυγός PV (5.0.3) |
 | multi-port Thevenin / Norton equivalent | ισοδύναμο Thevenin / Norton πολλών θυρών (5.0.3) |
+| multi-port network equivalent (for EMT) | ισοδύναμο δικτύου πολλών θυρών (5.0.4) |
+| Foster equivalent circuit | κύκλωμα Foster (5.0.4) |
+| short-circuit impedance (L_sc, R_sc) of the reduced part | εμπέδηση βραχυκύκλωσης του υπόλοιπου δικτύου (5.0.4) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 

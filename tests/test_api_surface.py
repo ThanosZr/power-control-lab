@@ -231,7 +231,18 @@ class ApiSurface(unittest.TestCase):
             self.assertTrue(api_surface.experimental('pcl', k), k)
         self.assertEqual(self.now['pcl']['pcl.network.Network.equivalent']['params'], ['boundary', 'internal', 'kind', 'lf', 'slack', 'tol', 'mode'])
         self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.equivalent'))
-        self.assertEqual(sum(len(v) for v in self.now.values()), 938)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 938)        # 938 then; 5.0.4 adds points
+
+    def test_the_surface_of_5_0_4(self):
+        """5.0.4: the equivalent in EMT (CIGRE TB 39, Fig. 15). pcl.equivalent.emt_ports and to_emt are experimental; three
+        options at the end of Network.to_emt and the part EQV3 are stable additions."""
+        for k in ('pcl.equivalent.emt_ports', 'pcl.equivalent.to_emt'):
+            self.assertIn(k, self.now['pcl'], k)
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+        self.assertEqual(self.now['pcl']['pcl.network.Network.to_emt']['params'], ['lf', 'machines', 'name', 't_end', 'hdiv', 'boundary', 'internal', 'fig'])
+        self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.to_emt'))
+        self.assertIn('part:EQV3', self.now['project'])
+        self.assertEqual(sum(len(v) for v in self.now.values()), 941)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

@@ -1262,13 +1262,19 @@ class Network:
         from . import equivalent
         return equivalent.reduce(self, boundary, internal, kind=kind, lf=lf, slack=slack, tol=tol, mode=mode)
 
-    def to_emt(self, lf=None, machines=None, name=None, t_end=0.5, hdiv=400):
+    def to_emt(self, lf=None, machines=None, name=None, t_end=0.5, hdiv=400, boundary=None, internal=None, fig='50'):
         """The network as a project of the app for an EMT run that starts in the steady state of the load flow (4.3):
         each generator a GEN3 whose terminal voltage |V|∠θ is the load-flow result at its bus (the EMT start solves the
         circuit with phasors around it, see THEORY), each branch a LINE3 π section in per unit (a branch with a tap a YNyn0
         XF3), each load a LOAD3 of constant impedance equal to the load at its load-flow voltage (P·(z + i/V + p/V²)), each
         shunt a LOAD3 at U_n. machines: {generator name: GEN3 parameters} (e.g. IEEE9_MACHINES); the rest typical values.
-        lf: a result of load_flow (computed when None). Returns the project dict (pcl.Project(net.to_emt()))."""
+        lf: a result of load_flow (computed when None). Returns the project dict (pcl.Project(net.to_emt())).
+        5.0.4 (ROADMAP §96 B.2): with boundary (bus names), only the study area (internal: its buses, None: the side without the
+        slack) and the rest of the network as one EQV3 at the boundary buses, after CIGRE TB 39, Fig. 15: fig '50' (exact at
+        the fundamental), '15b' or '15c' (pcl.equivalent.to_emt; experimental)."""
+        if boundary is not None:
+            from . import equivalent
+            return equivalent.to_emt(self, boundary, internal, lf=lf, machines=machines, fig=fig, name=name, t_end=t_end, hdiv=hdiv)
         lf = lf or self.load_flow()
         if not lf.get('converged'):
             raise NetworkError('the load flow did not converge')

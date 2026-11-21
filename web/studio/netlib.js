@@ -9,7 +9,7 @@
 // (gridZ) and the fault currents of a fault at its terminals in the phase domain (faultCurrents), for the analysis.
 (function(root){
  const P=root.Parts||(typeof require!=='undefined'?require('./parts.js'):null);
- const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC','TOWER','SAI','CHB','SPLL','SSSC','SSSC3','MMC','MMCC','VSC2','GFMC','LCC6','LCCS','LCCC','FILT3','ZSER3','DCDC','PMU3'];
+ const TYPES=['GRID3','FLT3','CB3','XF3','LOAD3','LINE3','AIC','EVC','AVR','PSS','GOV','ARC','TOWER','SAI','CHB','SPLL','SSSC','SSSC3','MMC','MMCC','VSC2','GFMC','LCC6','LCCS','LCCC','FILT3','ZSER3','DCDC','PMU3','EQV3'];
  const isLib=t=>TYPES.includes(t);
  const RMIN=1e-4;               // a bolted fault or a closed pole: 0,1 mΩ inside the circuit
  const num=(v,d)=>{const x=typeof v==='number'?v:P.parseEng(v);return Number.isFinite(x)?x:d;};
@@ -72,6 +72,34 @@
   const hasR=z.R1>0&&z.R0>0,K=B.comp('Z','KL',{Lmat:mat(Ls,Lm),Rw:0,i0:'0'});let Rk=null;
   if(hasR)Rk=B.comp('R','KG',{kind:'R',mat:mat(Rs,Rm)});
   PH.forEach((x,k)=>{const q=k+1;if(Rk){B.wire([E,x],[Rk,'a'+q]);B.wire([Rk,'b'+q],[K,'a'+q]);}else B.wire([E,x],[K,'a'+q]);B.wire([K,'b'+q],T[k]);});
+  return B.def();}
+
+ // ---------------------------------------------------------------- 5.0.4: the equivalent of the rest of a network (EQV3)
+ // CIGRE TB 39 §5.1, Fig. 15: a source of positive sequence behind the passive equivalent, the same circuit for the positive and
+ // the zero sequence. For N boundary buses (our extension): the coupled impedances of 3N ports, block (i, j) of the phase
+ // matrices Z₁,ij on the diagonal and (Z₀,ij − Z₁,ij)/3 off it, as one KG (R, Ω) and one KL (L = X/ω, H) in series. A
+ // singular R (the lossless directions of machines and lines without resistance) is lifted by 10⁻⁹ of its largest diagonal
+ // element; L must be positive definite. Fig. 15b: R_s in series with C from each phase of the bus to earth; Fig. 15c: R_s
+ // from each phase of the source to the bus, across R + L.
+ function eqvData(p0){const p={...P.defaults('EQV3'),...(p0||{})},N=P.eqN(p),f=Math.max(num(p.f,50),1e-9),w=2*Math.PI*f,Sb=Math.max(num(p.Sb,100e6),1e-9);
+  const list=(v,d)=>{const a=String(v??'').split(';').map(x=>x.trim()).filter(Boolean).map(x=>num(x,NaN));return Array.from({length:N},(_,k)=>Number.isFinite(a[k])?a[k]:d);};
+  const Un=list(p.Un,150e3).map(v=>Math.max(v,1e-9)),E=list(p.E,1),ang=list(p.ang,0),Rs=list(p.Rs,0).map(v=>Math.max(v,0)),C=list(p.C,0).map(v=>Math.max(v,0));
+  const mat=k=>{const m=P.parseMat(String(p[k]??''));if(!m||m.length!==N||m.some(r=>r.length!==N))throw new Error(`Ισοδύναμο δικτύου: ο πίνακας ${k} πρέπει να είναι ${N}×${N}.`);return m;};
+  const R1=mat('R1'),X1=mat('X1'),R0=mat('R0'),X0=mat('X0'),n=3*N,z=()=>Array.from({length:n},()=>new Array(n).fill(0)),R=z(),L=z();
+  for(let i=0;i<N;i++)for(let j=0;j<N;j++){const zb=Un[i]*Un[j]/Sb,r1=R1[i][j]*zb,x1=X1[i][j]*zb,r0=R0[i][j]*zb,x0=X0[i][j]*zb;
+   for(let a=0;a<3;a++)for(let b=0;b<3;b++){const d=a===b;R[3*i+a][3*j+b]=d?(2*r1+r0)/3:(r0-r1)/3;L[3*i+a][3*j+b]=(d?(2*x1+x0)/3:(x0-x1)/3)/w;}}
+  if(!P.posDef(L))throw new Error('Ισοδύναμο δικτύου: ο πίνακας X (θετική και μηδενική ακολουθία) δεν είναι θετικά ορισμένος.');
+  const rmax=Math.max(...R.map((r,i)=>Math.abs(r[i])));let hasR=rmax>0;
+  if(hasR&&!P.posDef(R)){const d=1e-9*rmax;for(let i=0;i<n;i++)R[i][i]+=d;if(!P.posDef(R))throw new Error('Ισοδύναμο δικτύου: ο πίνακας R δεν είναι θετικά ημιορισμένος.');}
+  return {N,f,w,Un,E,ang,Rs,C,R,L,hasR};}
+ function eqvDef(c){const p=prm(c),d=eqvData(p),B=builder('Ισοδύναμο δικτύου'),fig=['15b','15c'].includes(p.fig)?p.fig:'50';
+  const str=m=>m.map(r=>r.map(s).join(', ')).join('; ');
+  const K=B.comp('Z','KL',{Lmat:str(d.L),Rw:0,i0:'0',big:true}),Rk=d.hasR?B.comp('R','KG',{kind:'R',mat:str(d.R),big:true}):null;
+  for(let k=0;k<d.N;k++){const T=B.terms(p,['a','b','c'].map(x=>x+(k+1)),'abc'+(k+1)),e='E'+(k+1);
+   B.comp(e,'VAC3',{Vpk:d.E[k]*d.Un[k]/Math.sqrt(3)*Math.SQRT2,f:d.f,phase:d.ang[k],seq:'abc',Rs:0,Ls:0,conn:'sep'});B.wire([e,'n'],B.gnd());
+   PH.forEach((x,a)=>{const q=3*k+a+1;if(Rk){B.wire([e,x],[Rk,'a'+q]);B.wire([Rk,'b'+q],[K,'a'+q]);}else B.wire([e,x],[K,'a'+q]);B.wire([K,'b'+q],T[a]);
+    const rs=d.Rs[k];if(fig==='15c'&&rs>0){const r=B.comp('Rs'+x+(k+1),'R',{R:rs});B.wire([e,x],[r,'a']);B.wire([r,'b'],T[a]);}
+    if(fig==='15b'&&rs>0&&d.C[k]>0){const r=B.comp('Rs'+x+(k+1),'R',{R:rs}),cc=B.comp('Cs'+x+(k+1),'C',{C:d.C[k],v0:0,esr:0});B.wire(T[a],[r,'a']);B.wire([r,'b'],[cc,'p']);B.wire([cc,'n'],B.gnd());}});}
   return B.def();}
 
  // ---------------------------------------------------------------- fault
@@ -1431,7 +1459,7 @@
   out('th',TH);out('w',Y('WW'));out('p',Y('PP'));out('q',Y('QQ'));out('e',Y('EE'));out('lim',Y('LR'));if(dcc)out('idc',Y('IDC'));
   SP.close();return B.def();}
 
- const DEFS={GRID3:gridDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef,CHB:chbDef,SPLL:spllDef,SSSC:ssscDef,SSSC3:sssc3Def,MMC:mmcDef,MMCC:mmccDef,VSC2:vsc2Def,GFMC:gfmcDef,LCC6:lcc6Def,LCCS:lccsDef,LCCC:lcccDef,FILT3:filtDef,ZSER3:zserDef,DCDC:dcdcDef,PMU3:pmuDef};
+ const DEFS={GRID3:gridDef,EQV3:eqvDef,FLT3:faultDef,CB3:breakerDef,ARC:arcBreakerDef,XF3:xfDef,LOAD3:loadDef,LINE3:lineDef,AIC:aicDef,EVC:evcDef,AVR:avrDef,PSS:pssDef,GOV:govDef,TOWER:towerDef,SAI:saiDef,CHB:chbDef,SPLL:spllDef,SSSC:ssscDef,SSSC3:sssc3Def,MMC:mmcDef,MMCC:mmccDef,VSC2:vsc2Def,GFMC:gfmcDef,LCC6:lcc6Def,LCCS:lccsDef,LCCC:lcccDef,FILT3:filtDef,ZSER3:zserDef,DCDC:dcdcDef,PMU3:pmuDef};
  function defOf(c){return DEFS[c.type](c);}
 
  // 4.9.1 (ROADMAP §52): the parts with two implementations, and a copy of a project with one implementation everywhere
@@ -1557,7 +1585,7 @@
  // the side of each port: from where the part has the pin on its own symbol (x < 0: left); the order: top to bottom
  function sidesOf(c){const out={},ord=[];const pins=P.pinsOf({...c,rot:0,flip:false});for(const [n,q] of Object.entries(pins)){out[n]=q[0]<0?'l':q[0]>0?'r':q[1]<0?'l':'r';ord.push([n,q[1],q[0]]);}
   ord.sort((a,b)=>a[1]-b[1]||a[2]-b[2]);return {sides:out,order:ord.map(o=>o[0])};}
- const api={TYPES,IMPL_TYPES,forceImpl,layoutDef,sidesOf,saiFitL1,isLib,needs,expand,defOf,warnings,gridZ,xfData,xfCore,lineData,faultCurrents,behindXF,GROUPS,footTable,saiParams};
+ const api={TYPES,IMPL_TYPES,forceImpl,layoutDef,sidesOf,saiFitL1,isLib,needs,expand,defOf,warnings,gridZ,xfData,xfCore,lineData,faultCurrents,behindXF,eqvData,GROUPS,footTable,saiParams};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;
  root.NetLib=api;
 })(typeof window!=='undefined'?window:globalThis);

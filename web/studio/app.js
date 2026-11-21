@@ -1833,6 +1833,19 @@ function ieee9Theory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.lf)return '';
  if(!m.fault&&!m.noAF)for(const g of ['G2','G3']){const q=s.lastPeriod('Y:'+g+':d');rows.push([`δ ${g} (Anderson & Fouad, Πίν. 9.1)`,IEEE9_AF[g],q?.avg,'°']);}
  return `<ul class="eqs"><li>Ροή φορτίου (pcl.network, Newton–Raphson): οι γεννήτριες ξεκινούν από |V|∠θ του ζυγού τους· τα φορτία ως σταθερή εμπέδηση στην τάση της ροής φορτίου</li>
   <li>Αρχικοποίηση: το κύκλωμα λύνεται με φασιθέτες στα ${fmt(60,3)} Hz (ω_e = (2/h)·tan(ωh/2) για τον τραπεζοειδή), οι μηχανές από τη μόνιμη κατάστασή τους (δ, i_d, i_q, i_fd, E_fd, T_m)</li></ul>`+(m.fault?'':cmpRows(rows));}
+// 5.0.4 (THEORY §8ΩΘ, CIGRE TB 39 §5.1, Fig. 15): the area of the IEEE 9 case with the rest of the network as one EQV3. The ports, and the
+// first peak of i_a in the first cycle of the fault and its rms over the second (the trapezoid on the recorded samples) against the whole
+// network (IEEE9_EQ_REF, the option «Όλο το δίκτυο»)
+function ieee9EqTheory(){const s=S.sim,m=(S.tutMeta||{}).eq;if(!s||!m)return '';const f=m.f,t0=m.t0,T=1/f;
+ const fig={'50':'μια πηγή θετικής ακολουθίας σε κάθε ζυγό του συνόρου, πίσω από R + L θετικής και μηδενικής ακολουθίας συζευγμένα ανάμεσα στους ζυγούς: ακριβές στη θεμελιώδη','15b':'Σχ. 15b: L_sc, R_sc χωρίς τη χωρητικότητα των γραμμών, και σε κάθε ζυγό R_s (κυματική αντίσταση) σε σειρά με C (η χωρητικότητα του υπόλοιπου δικτύου)','15c':'Σχ. 15c: R_s παράλληλα με L_sc, R_sc'};
+ let h=`<ul class="eqs"><li>${m.net==='full'?'Όλο το δίκτυο: η αναφορά της σύγκρισης':'Ισοδύναμο: '+fig[m.fig]+'· η E από τη ροή φορτίου, ώστε το βασικό σημείο να μένει ακριβές'}</li>`;
+ if(m.net!=='full')h+=`<li>S″k από το υπόλοιπο δίκτυο (|V|²/|Z₁,kk|): ${m.ports.map(q=>'ζυγός '+q.bus+' '+fmt(q.Sk/1e6,4)+' MVA').join(', ')}</li>`;
+ h+=`<li>CIGRE TB 39 §5.1: για χειρισμούς το δίκτυο αναλυτικά ως τον δεύτερο υποσταθμό, για ενεργοποίηση γραμμής ως τον πρώτο· το ισοδύναμο σωστό ως το διπλάσιο της συχνότητας που ενδιαφέρει</li></ul>`;
+ const ref=m.ref&&m.ref[m.fault],r=ref?rawSeries('Y:F1/Ia'):null;if(!r||!(s.t>=t0+2*T))return h;
+ let pk=0,a=0,tf=NaN,tl=NaN;for(let j=0;j<r.t.length;j++){const t=r.t[j];if(t>t0&&t<=t0+T)pk=Math.max(pk,Math.abs(r.y[j]));
+  if(t>t0+T&&t<=t0+2*T){if(Number.isFinite(tl))a+=(t-tl)*(r.y[j]**2+r.y[j-1]**2)/2;else tf=t;tl=t;}}
+ const rms=Math.sqrt(a/(tl-tf));
+ return h+cmpRows([['Πρώτη κορυφή του i_a (θεωρία: όλο το δίκτυο)',ref.pk,pk,'A'],['Ενεργός τιμή του i_a στον δεύτερο κύκλο',ref.rms,rms,'A']]);}
 // 4.10: the modular SSSC. Single phase: two sources and a line with the compensator as −jX in series (or a constant
 // quadrature voltage); three phases: the phasor solution of the four-bus network with the same series reactance
 function schedNow(str,t){const q=P.parseSched(String(str??''));if(!q)return NaN;let v=q[0][1];for(const [ti,vi] of q)if(ti<=t+1e-12)v=vi;return v;}
@@ -3124,6 +3137,7 @@ function formulaTheory(t){
  if(t.topology==='gen_sc')return genScTheory();
  if(t.topology==='fbm')return fbmTheory();
  if(t.topology==='ieee9_emt')return ieee9Theory();
+ if(t.topology==='ieee9_eq')return ieee9EqTheory();
  if(t.topology==='pf_study'||t.topology==='opf_study'||t.topology==='cpf_study'||t.topology==='se_study'||t.topology==='harm_study'||t.topology==='unb_study')return studyTheory();
  if(t.topology==='mtdc5')return mtdcTheory();
  if(t.topology==='dcdc_ex303')return dcdcTheory();

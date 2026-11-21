@@ -35,7 +35,7 @@
  // the phases of a three-phase part in their colours (technical look): the stubs of a path at three levels (top to
  // bottom or left to right: a, b, c) become one path per phase with the classes «ph ph-a/b/c»; what else the path has
  // stays as it was (a neutral, a slanted line)
- const PH3=new Set(['VAC3','IM','SM','EBUS','GRID3','FLT3','CB3','XF3','LOAD3','GEN3','LINE3','TLM','MMC','LCC6','LCCS','LCCX','FILT3','ZSER3']);
+ const PH3=new Set(['VAC3','IM','SM','EBUS','GRID3','FLT3','CB3','XF3','LOAD3','GEN3','LINE3','TLM','MMC','LCC6','LCCS','LCCX','FILT3','ZSER3','EQV3']);
  function phaseSplit(type,svg){if(!PH3.has(type))return svg;
   return String(svg).replace(/<path d="([^"]*)"\s*\/>/g,(m,d)=>{const t=d.trim().replace(/\s+/g,' '),re=/M\s*(-?[\d.]+)[ ,]\s*(-?[\d.]+)\s*([HV])\s*(-?[\d.]+)/g,segs=[];let q,joined='';
    while((q=re.exec(t))){segs.push({x:+q[1],y:+q[2],k:q[3],s:q[0]});joined+=q[0];}
@@ -801,6 +801,26 @@
     ...NEUT('neut','gnd',{show:p=>p.z0!=='iso',hint:'«Στερεά γειωμένος»: όπως ως την 4.23, το Z₀ του δικτύου (με το R_n παραπάνω).'}),CONN('abc')],
    value:p=>p.Sk,unit:'VA',
    draw:p=>'<rect class="block" x="-20" y="-30" width="40" height="60" rx="6"/>'+(isBus(p)?bl('M20,0 H40'):'<path d="M20,-20 H40 M20,0 H40 M20,20 H40"/>')+(p.z0!=='iso'&&neutOf(p,'neut','gnd')==='pin'?'<path d="M0,30 V40"/>':'')+'<path class="thin" d="M-12,-14 c3,-8 6,-8 8,0 c2,8 5,8 8,0 M-12,8 H12 M-12,16 H12 M-6,24 H6"/>'+tx('S″k',0,-20,'bsm')},
+  // 5.0.4 (ROADMAP §96 B.2, CIGRE TB 39 §5.1, Fig. 15): the rest of a network seen from N boundary buses, as a positive-sequence
+  // source at each behind the coupled impedances of the positive and the zero sequence (written by Network.to_emt with a
+  // boundary). Per unit on S_b and the U_n of each port; Fig. 15b adds R_s in series with C at the bus, Fig. 15c R_s across.
+  EQV3:{name:'Ισοδύναμο δικτύου πολλών θυρών (CIGRE TB 39, Σχ. 15)',prefix:'EQ',group:'Δίκτυο',alias:['ισοδύναμο Thevenin','υπόλοιπο δίκτυο','ζυγοί συνόρου','Ward','μείωση δικτύου','πολυθυρικό'],
+   pins:p=>{const N=eqN(p),o={};for(let k=0;k<N;k++){const y=60*k;if(isBus(p))o['abc'+(k+1)]=[40,y];else{o['a'+(k+1)]=[40,y-20];o['b'+(k+1)]=[40,y];o['c'+(k+1)]=[40,y+20];}}return o;},
+   box:p=>[-30,-30,60,60*eqN(p)],
+   bus:p=>{if(!isBus(p))return {};const o={};for(let k=1;k<=eqN(p);k++)o['abc'+k]=['a'+k,'b'+k,'c'+k];return o;},
+   params:[txt('names','Ζυγοί του συνόρου (με «;»)','',{hint:'Μόνο για την ετικέτα κάθε θύρας: θύρα k = ο k-οστός ζυγός.'}),num('f','Συχνότητα','Hz',50),num('Sb','Ισχύς βάσης S_b','VA',100e6),
+    txt('Un','U_n ανά θύρα (V, με «;»)','150e3',{hint:'Το πλήθος των τιμών δίνει το πλήθος των θυρών (έως 32). Οι εμπεδήσεις ανάμεσα σε δύο θύρες σε Ω: Z_pu·U_n,i·U_n,j/S_b.'}),
+    txt('E','|E| ανά θύρα (pu, με «;»)','1',{hint:'Η πηγή θετικής ακολουθίας πίσω από το παθητικό ισοδύναμο (Σχ. 15), από τη ροή φορτίου: δίνει το βασικό σημείο ακριβώς.'}),
+    txt('ang','Γωνία της E ανά θύρα (°, με «;»)','0'),
+    txt('R1','R₁ (pu, πίνακας N×N)','0.002',{hint:'Γραμμές με «;», στοιχεία με «,». Η εμπέδηση Thevenin θετικής ακολουθίας ανάμεσα στις θύρες: συμμετρική, R θετικά ημιορισμένη.'}),
+    txt('X1','X₁ (pu, πίνακας N×N)','0.05',{hint:'Θετικά ορισμένη: γίνεται L = X/ω, συζευγμένα πηνία 3N × 3N με τη μηδενική ακολουθία.'}),
+    txt('R0','R₀ (pu, πίνακας N×N)','0.004'),txt('X0','X₀ (pu, πίνακας N×N)','0.15'),
+    sel('fig','Κύκλωμα',[['50','E πίσω από R + L (ακριβές στα 50 Hz)'],['15b','Σχ. 15b: και R_s σε σειρά με C στον ζυγό'],['15c','Σχ. 15c: R_s παράλληλα με το R + L']],'50',{hint:'15b: για μικρό υπόλοιπο δίκτυο, με C τη χωρητικότητά του και R_s την κυματική αντίσταση των γραμμών του που φτάνουν στον ζυγό. 15c: για μεγάλη ισχύ βραχυκύκλωσης. Ίδια R_s και C σε θετική και μηδενική ακολουθία.'}),
+    txt('Rs','R_s ανά θύρα (Ω, με «;», 0 = χωρίς)','0',{show:p=>p.fig==='15b'||p.fig==='15c'}),txt('C','C ανά θύρα (F, με «;»)','0',{show:p=>p.fig==='15b'}),CONN('abc')],
+   value:p=>eqN(p),unit:'',
+   draw:p=>{const N=eqN(p);let h=`<rect class="block" x="-30" y="-30" width="60" height="${60*N}" rx="6"/>`;
+    for(let k=0;k<N;k++){const y=60*k;h+=isBus(p)?bl(`M30,${y} H40`):`<path d="M30,${y-20} H40 M30,${y} H40 M30,${y+20} H40"/>`;}
+    return h+'<path class="thin" d="M-14,-12 c3,-8 6,-8 8,0 c2,8 5,8 8,0 M-14,4 H10"/>'+tx('Z_eq',0,22,'bsm');}},
   FLT3:{name:'Σφάλμα (βραχυκύκλωμα)',prefix:'F',group:'Δίκτυο',pins:p=>isBus(p)?{abc:[0,-40]}:{a:[-20,-40],b:[0,-40],c:[20,-40]},box:[-25,-30,50,50],
    bus:p=>isBus(p)?{abc:['a','b','c']}:{},spins:p=>p.ctl==='sig'?{f:I(-40,0)}:{},
    params:[sel('kind','Είδος',[['ag','a–γη'],['bg','b–γη'],['cg','c–γη'],['ab','a–b'],['bc','b–c'],['ca','c–a'],['abg','a–b–γη'],['bcg','b–c–γη'],['cag','c–a–γη'],['abc','a–b–c'],['abcg','a–b–c–γη']],'abc'),
@@ -1345,7 +1365,9 @@
  // "a, b; c, d": rows with ';', entries with ',' or spaces (engineering prefixes allowed); null if not a square matrix of numbers
  function parseMat(s){s=String(s??'').trim();if(!s)return null;const rows=s.split(/[;\n]+/).map(r=>r.trim()).filter(Boolean).map(r=>r.split(/[,\s]+/).filter(Boolean).map(parseEng));
   const N=rows.length;if(!N||rows.some(r=>r.length!==N||r.some(v=>!Number.isFinite(v))))return null;return rows;}
- function nPorts(p){const m=parseMat(p.Lmat??p.mat);if(m)return Math.min(8,m.length);return Math.max(2,Math.min(4,Math.round(+p.nw)||2));}
+ // 5.0.4: big (set only inside the equivalent EQV3) lets a multiport have up to 96 ports; the parts of the library keep 8
+ function nPorts(p){const m=parseMat(p.Lmat??p.mat);if(m)return Math.min(p.big?96:8,m.length);return Math.max(2,Math.min(4,Math.round(+p.nw)||2));}
+ function eqN(p){return Math.max(1,Math.min(32,String(p&&p.Un!=null?p.Un:'150e3').split(';').filter(x=>x.trim()).length||1));}
  function portY(N,k){return -10*(N-1)+20*k;}
  function portPins(N){const o={};for(let k=0;k<N;k++){o['a'+(k+1)]=[-30,portY(N,k)];o['b'+(k+1)]=[30,portY(N,k)];}return o;}
  function portBox(N){return [-24,portY(N,0)-10,48,20*N];}
@@ -1364,7 +1386,7 @@
    for(const q of String(p.kpairs||'').split(',').map(s=>s.trim()).filter(Boolean)){const m=q.match(/^(\d)(\d)\s*:\s*(.+)$/);if(!m)return {err:`k ανά ζεύγος: δεν καταλαβαίνω το «${q}» (γράψε π.χ. 12:0.98).`};kp[m[1]+m[2]]=kp[m[2]+m[1]]=parseEng(m[3]);}
    if(Ls.some(v=>!(v>0)))return {err:'Οι αυτεπαγωγές πρέπει να είναι θετικές.'};
    L=Ls.map((Li,i)=>Ls.map((Lj,j)=>i===j?Li:(kp[(i+1)+''+(j+1)]??k0)*Math.sqrt(Li*Lj)));}
-  if(L.length>8)return {err:'Έως 8 τυλίγματα.'};
+  if(L.length>(p.big?96:8))return {err:'Έως 8 τυλίγματα.'};
   if(!symmetric(L))return {err:'Ο πίνακας αυτεπαγωγής πρέπει να είναι συμμετρικός (M_ij = M_ji).'};
   if(!posDef(L))return {err:'Ο πίνακας αυτεπαγωγής δεν είναι θετικά ορισμένος: |k| < 1 σε κάθε ζεύγος (και συμβατά k σε 3 ή περισσότερα τυλίγματα).'};
   return {L};}
@@ -1701,7 +1723,7 @@
  const STRUCT={PWM:new Set(['mode','carrier','upd']),SW:new Set(['gate','model']),VAC3:new Set(['conn','neut'])};
  // the network library: a change rebuilds its definition (4.1); from 4.2 a value that keeps the inner circuit the same is
  // live (the reload carries the states by the inner ids), and only what changes the inner circuit is structural
- Object.assign(STRUCT,{AIC:new Set(['scheme']),GRID3:new Set(['z0','conn','neut']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn','model','arc']),ARC:new Set(['ctl','vm','arc']),
+ Object.assign(STRUCT,{AIC:new Set(['scheme']),GRID3:new Set(['z0','conn','neut']),EQV3:new Set(['Un','fig','conn']),FLT3:new Set(['kind','ctl','conn']),CB3:new Set(['ctl','vm','conn','model','arc']),ARC:new Set(['ctl','vm','arc']),
   XF3:new Set(['grp','P0','core','conn','neut1','neut2','sat','mpos']),XFMR:new Set(['sat','mpos']),LOAD3:new Set(['cn','model','conn','neut']),
   GEN3:new Set(['data','conv','shaft','Hm','exc','mech','init','neut','conn']),LINE3:new Set(['unit','z0','conn']),TLM:new Set(['model','data','mdl','len','f','fmin','dec','ppd','fti','conn','cp','npi','tiauto','nmax','ti','vtrap','src','nph','transp'])});
  const structCache=new Map();
@@ -1759,7 +1781,7 @@
   return {type,name:d.name,...m,pins:Object.keys(elPins({type,params:p})),outputs:Object.entries(sp).filter(([,v])=>v.dir==='out').map(([k])=>k),
    params:d.params.map(x=>({k:x.k,label:x.label,unit:x.unit||'',def:x.def,type:x.type,...(x.options?{options:x.options.map(o=>o[0])}:{})}))};});}
  const api={setSym,symStyle,symHV,hvPath,phaseSplit,machines,structural,PARTS,GROUPS,BLOCKS,subLayout,defaults,elPins,sigPins,pinsOf,pinKind,pinWidth,xf,pinPos,pinDir,bbox,boxOf,eng,fmtNum,parseEng,parseSched,cpeBank,cpeZ,cpeZbank,
-  parseMat,nPorts,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,clarkeTi,tlcpModel,bewley,movChar,TLM_TYPICAL,tlmData,tlmM,tlmPin,tlmPins,tlmKey,tlmModel,
+  parseMat,nPorts,eqN,klMatrix,kgMatrix,matInv,posDef,HEIDLER,waveShape,waveAt,waveMeasure,waveFit,lightningWave,VIMP_STD,impulseWave,impulseDesign,impulseRoots,tlParams,clarkeTi,tlcpModel,bewley,movChar,TLM_TYPICAL,tlmData,tlmM,tlmPin,tlmPins,tlmKey,tlmModel,
   srmGeo,srmMag,srmA,srmPsi,srmCur,srmTorque,srmCoenergy,srmModelPsi,srmAlignedPsi,satD,satDinv,magChar,magRms,magMeanSq,pairTable,
   genModel,genAxis,genTsc,genGamma,genDQ,genSteady,plist,neutOf,xfNeut,xfStar};
  root.Parts=api;if(typeof module!=='undefined')module.exports=api;

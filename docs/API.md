@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 5.0.3: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (938 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 5.0.4: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (941 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 5.0.3.
+Κανένα στην 5.0.4.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-672 σημεία.
+674 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -172,8 +172,10 @@
 | `pcl.dcgrid.station_inverse` | `Us`, `Qs`, `Pdc`, `st`, `S_base`, `U_base`, `Ps0`, `tol`, `max_iter` | 4.20 · πειρ. |
 | `pcl.equivalent.EquivalentError` | — | 5.0.3 · πειρ. |
 | `pcl.equivalent.compare` | `net`, `eq`, `outages`, `tol` | 5.0.3 · πειρ. |
+| `pcl.equivalent.emt_ports` | `net`, `boundary`, `internal`, `lf`, `machines`, `fig`, `tol` | 5.0.4 · πειρ. |
 | `pcl.equivalent.reduce` | `net`, `boundary`, `internal`, `kind`, `lf`, `slack`, `tol`, `mode` | 5.0.3 · πειρ. |
 | `pcl.equivalent.split` | `net`, `boundary`, `internal` | 5.0.3 · πειρ. |
+| `pcl.equivalent.to_emt` | `net`, `boundary`, `internal`, `lf`, `machines`, `fig`, `name`, `t_end`, `hdiv` | 5.0.4 · πειρ. |
 | `pcl.formats.write_hdf5` | `path`, `columns`, `meta`, `matrices` | 3.18 |
 | `pcl.formats.write_parquet` | `path`, `columns`, `meta`, `compression`, `created_by` | 3.18 |
 | `pcl.geo.GeoError` | — | 4.22 · πειρ. |
@@ -421,7 +423,7 @@
 | `pcl.network.Network.short_circuit` | `bus`, `fault`, `mode`, `f115`, `tmin`, `temp`, `lv_tol`, `fc`, `breaking`, `rgf` | 4.2 |
 | `pcl.network.Network.shunt` | `bus`, `P`, `Q`, `name`, `R`, `X`, `B` | 4.2 |
 | `pcl.network.Network.sssc` | `line`, `X`, `Vq`, `P`, `Xmax`, `name` | 4.10 |
-| `pcl.network.Network.to_emt` | `lf`, `machines`, `name`, `t_end`, `hdiv` | 4.3 |
+| `pcl.network.Network.to_emt` | `lf`, `machines`, `name`, `t_end`, `hdiv`, `boundary`, `internal`, `fig` | 4.3 |
 | `pcl.network.Network.transformer` | `hv`, `lv`, `Sr`, `Uhv`, `Ulv`, `uk`, `ur`, `group`, `X0X`, `R0R`, `Zn_hv`, `Zn_lv`, `tap`, `KT`, `shift`, `name` | 4.2 |
 | `pcl.network.Network.transformer3` | `a`, `b`, `c`, `Sr`, `Ur`, `uk`, `ur`, `group`, `ref`, `z0`, `KT`, `name` | 4.2 |
 | `pcl.network.Network.unit` | `bus`, `gen`, `trafo`, `oltc`, `pT`, `Zn`, `earthed`, `name`, `P`, `V`, `Qmin`, `Qmax`, `slack` | 4.2 |
@@ -884,7 +886,7 @@
 
 ## Αρχείο project: στοιχεία, παράμετροι, ακροδέκτες
 
-135 σημεία.
+136 σημεία.
 
 | Σημείο | Παράμετροι / πεδία | Ακροδέκτες | Από |
 |---|---|---|---|
@@ -923,6 +925,7 @@
 | `part:DS` | op, t0, Ts, Um, Rarc, ext, Iext, Roff | a, b | 4.22 |
 | `part:EBUS` | n | a, b, bus, c | 3.18 |
 | `part:EDGE` | edge, tw | n, u, y | 3.19 |
+| `part:EQV3` | names, f, Sb, Un, E, ang, R1, X1, R0, X0, fig, Rs, C, conn | a1, abc1, b1, c1 | 5.0.4 |
 | `part:EVC` | scheme, mode, ws, wt, we, Kt, Ke, R, J, B, kpw, kiw, atl, kpa, kia, alim, aff, fr, H, ffg, taulim, ilim, plim, regen, slew, kpi, kii, umin, umax, fs | i, keep, lim, pw, r, rg, soc, tau, tl, u, y | 4.8 |
 | `part:EXPR` | expr, ins, pars | u1, u2, y | 3.18 |
 | `part:F2` | kind, f0, zeta, u0 | u, y | 3.19 |
