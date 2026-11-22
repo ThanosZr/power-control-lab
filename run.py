@@ -292,6 +292,20 @@ class Handler(BaseHTTPRequestHandler):
             except (InputError,ValueError,TypeError,OSError) as e:
                 self.send(400,{'error':str(e) or 'Μη έγκυρα δεδομένα.'})
             return
+        if action=='console':              # 5.0.8 (ROADMAP §98): the command line on this server, for the page of this computer
+            if not self.local():
+                self.send(403,{'error':'Μόνο από αυτόν τον υπολογιστή.'}); return
+            if self.headers.get_content_type()!='application/json':
+                self.send(415,{'error':'Απαιτείται application/json.'}); return
+            try:
+                from engine import console
+                data=self.body(console.MAX_CODE*4+(8<<20))
+                if not LINK.ok(data.get('token')):
+                    self.send(403,{'error':'Λάθος token.'}); return
+                self.send(200,console.handle(data))
+            except (InputError,ValueError,TypeError,OSError) as e:
+                self.send(400,{'error':str(e) or 'Μη έγκυρα δεδομένα.'})
+            return
         if action=='record':               # 4.8: recording a long run to a file, only for this computer
             if not self.local():
                 self.send(403,{'error':'Μόνο από αυτόν τον υπολογιστή.'}); return
@@ -358,6 +372,8 @@ def main():
         pass
     finally:
         server.server_close()
+        if 'engine.console' in __import__('sys').modules:     # 5.0.8: the child processes of the command line end with the server
+            __import__('sys').modules['engine.console'].close_all()
 
 
 if __name__=='__main__':

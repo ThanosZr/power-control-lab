@@ -1,5 +1,5 @@
 {
- "version": "5.0.6",
+ "version": "5.0.8",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -27,12 +27,16 @@
    "pcl.unbalanced.",
    "pcl.dcgrid.",
    "pcl.results.",
-   "pcl.equivalent."
+   "pcl.equivalent.",
+   "pcl.console."
   ],
   "cli": [
    "workbench",
    "python -m pcl accel",
    "python -m pcl nnstart"
+  ],
+  "server": [
+   "/api/console"
   ]
  },
  "deprecated": {},
@@ -594,6 +598,185 @@
      "**kw"
     ],
     "since": "3.18"
+   },
+   "pcl.console.Console": {
+    "params": [
+     "page",
+     "names"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.block": {
+    "params": [
+     "src"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.clc": {
+    "params": [],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.clear": {
+    "params": [
+     "*names"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.complete": {
+    "params": [
+     "text"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.handle": {
+    "params": [
+     "req"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.handle_json": {
+    "params": [
+     "s"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.help": {
+    "params": [
+     "obj"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.load": {
+    "params": [
+     "path"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.plot": {
+    "params": [
+     "*args",
+     "title",
+     "xlabel",
+     "ylabel"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.push": {
+    "params": [
+     "line"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.reset": {
+    "params": [],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.run": {
+    "params": [
+     "path"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.save": {
+    "params": [
+     "path",
+     "*names"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.scope": {
+    "params": [
+     "*keys"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.set_context": {
+    "params": [
+     "**ctx"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.Console.whos": {
+    "params": [],
+    "since": "5.0.8"
+   },
+   "pcl.console.ConsoleError": {
+    "params": [],
+    "since": "5.0.8"
+   },
+   "pcl.console.child": {
+    "params": [],
+    "since": "5.0.8"
+   },
+   "pcl.console.clc": {
+    "params": [],
+    "since": "5.0.8"
+   },
+   "pcl.console.clear": {
+    "params": [
+     "*names"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.help": {
+    "params": [
+     "obj"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.load": {
+    "params": [
+     "path"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.plot": {
+    "params": [
+     "*args",
+     "title",
+     "xlabel",
+     "ylabel"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.plot_data": {
+    "params": [
+     "*args",
+     "title",
+     "xlabel",
+     "ylabel"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.run": {
+    "params": [
+     "path"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.save": {
+    "params": [
+     "path",
+     "*names"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.scope": {
+    "params": [
+     "*keys"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.show_data": {
+    "params": [
+     "obj",
+     "title"
+    ],
+    "since": "5.0.8"
+   },
+   "pcl.console.whos": {
+    "params": [],
+    "since": "5.0.8"
    },
    "pcl.control.InverseTrainer": {
     "params": [
@@ -5772,6 +5955,10 @@
    "/api/catalog": {
     "params": [],
     "since": "3.18"
+   },
+   "/api/console": {
+    "params": [],
+    "since": "5.0.8"
    },
    "/api/curves": {
     "params": [],

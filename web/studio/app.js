@@ -1355,8 +1355,8 @@ function scenShow(d){
   scenTab('chart');const by={};d.keys.forEach((k,i)=>{(by[d.units[i]||'']??=[]).push(k);});
   for(const [u,ks] of Object.entries(by))scenPlot({title:(d.title||'')+(u?` [${u}]`:''),xlabel:'t (s)',series:ks.map(k=>({name:k,x:d.t,y:d.ch[k]}))});scenTab('chart');}}
 function scenTicks(a,b,n=5){const sp=b-a||Math.abs(a)||1,st0=sp/n,mag=10**Math.floor(Math.log10(st0)),st=[1,2,2.5,5,10].map(x=>x*mag).find(x=>x>=st0*0.999);const out=[];for(let v=Math.ceil(a/st)*st;v<=b+st*1e-9;v+=st)out.push(+v.toPrecision(12));return out;}
-function scenPlot(o){const box=document.createElement('div');box.className='scen-plot';box.innerHTML=(o.title?`<h5>${esc(o.title)}</h5>`:'')+'<canvas></canvas><div class="scen-leg"></div>';$('#scen-chart').appendChild(box);
- const cv=box.querySelector('canvas'),dpr=window.devicePixelRatio||1,W=Math.max(320,box.clientWidth||$('#scen-chart').clientWidth-24||600),H=220;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';
+function scenPlot(o){const host=o.host||$('#scen-chart'),box=document.createElement('div');box.className='scen-plot';box.innerHTML=(o.title?`<h5>${esc(o.title)}</h5>`:'')+'<canvas></canvas><div class="scen-leg"></div>';host.appendChild(box);
+ const cv=box.querySelector('canvas'),dpr=window.devicePixelRatio||1,W=Math.max(320,box.clientWidth||host.clientWidth-24||600),H=220;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';
  const g=cv.getContext('2d');g.scale(dpr,dpr);g.font='11px system-ui,sans-serif';
  // at most 2000 points per series on screen (first and last kept, then the extremes of each bucket)
  const thin=(x,y)=>{const n=x.length;if(n<=2000)return [x,y];const B=500,X=[],Y=[];for(let k=0;k<B;k++){const a=Math.floor(k*n/B),b=Math.floor((k+1)*n/B);let mi=a,ma=a;for(let i=a;i<b;i++){if(y[i]<y[mi])mi=i;if(y[i]>y[ma])ma=i;}for(const i of mi<ma?[a,mi,ma]:[a,ma,mi]){X.push(x[i]);Y.push(y[i]);}}X.push(x[n-1]);Y.push(y[n-1]);return [X,Y];};
@@ -1377,6 +1377,23 @@ function scenPlot(o){const box=document.createElement('div');box.className='scen
   for(let i=0;i<s.x.length;i++){const xv=s.x[i],yv=s.y[i];if(!Number.isFinite(xv)||!Number.isFinite(yv)){on=false;continue;}const X=px(xv),Y=py(yv);if(on)g.lineTo(X,Y);else g.moveTo(X,Y);on=true;}g.stroke();
   if(o.marks&&s.x.length<=60)for(let i=0;i<s.x.length;i++)if(Number.isFinite(s.y[i])){g.beginPath();g.arc(px(s.x[i]),py(s.y[i]),2.6,0,7);g.fill();}});
  box.querySelector('.scen-leg').innerHTML=S2.map((s,k)=>`<span><i style="background:${SCEN_COLORS[k%SCEN_COLORS.length]}"></i>${esc(s.name)}</span>`).join('');}
+// 5.0.8 (ROADMAP §98): the card «Γραμμή εντολών» (console.js) with what the page knows: the circuit (p), the study of the
+// diagram (net: the same request the page sends for the study), the buses chosen on the diagram (sel), the code of «Σενάρια»
+// (run()), and the forms of pcl.show under the command (the same as the panel «Σενάρια»)
+function cmdShow(d,host){
+ if(d.type==='text'){host.insertAdjacentHTML('beforeend',`<pre class="cmd-o">${esc(d.text)}</pre>`);return;}
+ if(d.type==='table'){host.insertAdjacentHTML('beforeend',scenTable(d.cols,d.rows,d.title));return;}
+ if(d.type==='sweep'){const cols=[...d.params,...d.names];host.insertAdjacentHTML('beforeend',scenTable(cols,d.rows.map(r=>cols.map(c=>r[c])),d.title));
+  const x=d.rows.map(r=>r[d.params[0]]);for(const n of d.names)scenPlot({host,title:(d.title?d.title+': ':'')+n,xlabel:d.params[0],series:[{name:n,x,y:d.rows.map(r=>r[n])}],marks:true});return;}
+ if(d.type==='bifurcation'){const x=[],y=[];d.values.forEach((v,i)=>{for(const q of d.y[i]){x.push(v);y.push(q);}});scenPlot({host,title:d.title,xlabel:d.xlabel,ylabel:d.ylabel,series:[{name:d.ylabel||'y',x,y}],dots:true});return;}
+ if(d.type==='xy'){scenPlot({host,title:d.title,xlabel:d.xlabel,ylabel:d.ylabel,series:Object.entries(d.series).map(([name,y])=>({name,x:d.x,y})),marks:d.x.length<=60});return;}
+ if(d.type==='run'){const m=d.measure||{};if(Object.keys(m).length)host.insertAdjacentHTML('beforeend',scenTable(['μέτρηση','τιμή'],Object.entries(m),d.title));
+  const by={};d.keys.forEach((k,i)=>{(by[d.units[i]||'']??=[]).push(k);});
+  for(const [u,ks] of Object.entries(by))scenPlot({host,title:(d.title||'')+(u?` [${u}]`:''),xlabel:'t (s)',series:ks.map(k=>({name:k,x:d.t,y:d.ch[k]}))});}}
+function cmdScope(keys){if(!S.sim)return 'scope: δεν τρέχει προσομοίωση στη σελίδα (▶ πρώτα).';const bad=keys.filter(k=>!S.sim.chIndex?.has(k));
+ if(bad.length)return `scope: η προσομοίωση της σελίδας δεν έχει τα κανάλια ${bad.join(', ')} (p.channels()['keys'])`;for(const k of keys)addProbe(k);return '✓ στο scope: '+keys.join(', ');}
+function initConsole(){window.Console?.init({project:()=>project(),name:()=>tutorial().title||'κύκλωμα',net:()=>STUDY.view?.q||null,sel:()=>NV.area?.ids?.slice()||[],scen:()=>S.scenCode||'',
+  toScenario:code=>{scenSetCode(code);saveLocal();window.Dock?.reveal('scen');const d=$('#scen');if(d)d.open=true;},show:cmdShow,scope:cmdScope});}
 function initScenarios(){const t=$('#scen-code');if(!t)return;t.value=S.scenCode||SCEN_EX.ripple;
  t.addEventListener('input',()=>{S.scenCode=t.value;clearTimeout(SCEN.save);SCEN.save=setTimeout(saveLocal,600);});
  t.addEventListener('keydown',e=>{if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();t.setRangeText('    ',t.selectionStart,t.selectionEnd,'end');}else if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();scenRun();}e.stopPropagation();});
@@ -3636,7 +3653,7 @@ function boot(){
  const grip=$('#grip');grip.onpointerdown=e=>{e.preventDefault();grip.setPointerCapture(e.pointerId);const h0=$('.work').getBoundingClientRect().height,y0=e.clientY;grip.onpointermove=ev=>{$('.work').style.height=Math.max(240,Math.min(1000,h0+ev.clientY-y0))+'px';};grip.onpointerup=()=>{grip.onpointermove=null;};};
  renderPalette();
  // restore last state or start with a tutorial
- initScenarios();initAddons();initPanels();
+ initScenarios();initAddons();initPanels();initConsole();
  $('#sel-out')?.addEventListener('click',e=>{if(e.target.closest('[data-selzoom]'))scope.nav('selzoom');else if(e.target.closest('[data-selclear]'))scope.nav('clearsel');else if(e.target.closest('[data-selcsv]'))selCSV();});
  let st=null;try{st=JSON.parse(localStorage.getItem('pcl2-state'));}catch{}
  const qs=new URLSearchParams(location.search),want=qs.get('tutorial');let imp=null;
@@ -3657,7 +3674,7 @@ function initPanels(){const R=window.Panels;if(!R)return;
  const pick=(test,why)=>()=>{const c=one();return c&&test(c)?'':why;};
  const shut=sel=>()=>{const m=document.querySelector(sel);m?.querySelector('.modal-head .x,[data-rvclose],[data-cwclose],[data-swclose]')?.click();};
  const live=sel=>()=>{const m=document.querySelector(sel);return !!m&&!m.hidden&&m.getClientRects().length>0;};
- const cards=[['circuit','Κύκλωμα','#bench-card',false],['scope','Προσομοίωση και scopes','#scope-card'],['scen','Σενάρια (Python)','#scen-card'],['addons','Πρόσθετα και σύνδεση','#addons-card'],
+ const cards=[['circuit','Κύκλωμα','#bench-card',false],['scope','Προσομοίωση και scopes','#scope-card'],['scen','Σενάρια (Python)','#scen-card'],['cmd','Γραμμή εντολών (Python)','#cmd-card'],['addons','Πρόσθετα και σύνδεση','#addons-card'],
   ['math','Υπολογισμοί & μαθηματικά','#math-card'],['theory','Περιγραφή & σύγκριση με τη θεωρία','#tut-card']];
  // 5.0.5 (§94 step β): a card in a tab that is not shown is still open (its tab is there); opened from the menu, it is shown
  for(const [id,title,sel,cl] of cards)R.register({id,title,group:'card',sel,closable:cl!==false,hint:cl===false?'Το σχέδιο δεν κλείνει· μετακινείται και κουμπώνει με τα ⠿ ▾ της γραμμής του':'',
@@ -3689,7 +3706,7 @@ function initPanels(){const R=window.Panels;if(!R)return;
  R.restore();
  // 5.0.5 (ROADMAP §94 step β): the cards dock, float, go as tabs and fill the screen (dock.js); their buttons go into the
  // row each card already has at its top
- window.Dock?.init([['circuit','#bench-card','.toolbar'],['scope','#scope-card','.sim-bar'],['scen','#scen-card','#scen > summary'],['addons','#addons-card','#addons-block > summary'],
+ window.Dock?.init([['circuit','#bench-card','.toolbar'],['scope','#scope-card','.sim-bar'],['scen','#scen-card','#scen > summary'],['cmd','#cmd-card','#cmd > summary'],['addons','#addons-card','#addons-block > summary'],
   ['math','#math-card','.math-top'],['theory','#tut-card','.tut-head']].map(([id,sel,head])=>({id,sel,head,title:cards.find(c=>c[0]===id)[1],closable:id!=='circuit'}))
   // 5.0.6 (§94 step γ): the diagram of the network, a document of the central area (its place in the page: under the circuit)
   .concat([{id:'netview',sel:'#netview',head:'.nv-head',title:'Διάγραμμα του δικτύου',closable:true}]));

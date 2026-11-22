@@ -7,7 +7,7 @@
  <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><meta name="theme-color" content="#147966">
  <link rel="stylesheet" href="studio/style.css">
  <script src="studio/expr.js" defer></script><script src="studio/parts.js" defer></script><script src="studio/pyrt.js" defer></script><script src="studio/stepcheck.js" defer></script><script src="studio/netlib.js" defer></script><script src="studio/subcircuit.js" defer></script><script src="studio/bus.js" defer></script><script src="studio/units.js" defer></script><script src="studio/sparse.js" defer></script><script src="studio/kernels.js" defer></script><script src="studio/nn.js" defer></script><script src="studio/tune.js" defer></script><script src="studio/inputs.js" defer></script><script src="studio/mna.js" defer></script><script src="studio/split.js" defer></script><script src="studio/lblplace.js" defer></script><script src="studio/editor.js" defer></script>
- <script src="studio/plotcore.js" defer></script><script src="studio/winframe.js" defer></script><script src="studio/panels.js" defer></script><script src="studio/dock.js" defer></script><script src="studio/netview.js" defer></script><script src="studio/ctlwin.js" defer></script><script src="studio/splitwin.js" defer></script><script src="studio/scope.js" defer></script><script src="studio/watch.js" defer></script><script src="studio/inside.js" defer></script><script src="studio/live.js" defer></script><script src="studio/library.js" defer></script><script src="studio/linemodels.js" defer></script><script src="studio/tutorials.js" defer></script><script src="studio/exercises/pe2_battery.js" defer></script><script src="studio/templates.js" defer></script><script src="studio/metrics.js" defer></script><script src="studio/scenario.js" defer></script><script src="studio/pool.js" defer></script><script src="studio/addons.js" defer></script><script src="studio/math.js" defer></script><script src="studio/linedata.js" defer></script><script src="studio/recview.js" defer></script><script src="studio/trv.js" defer></script><script src="studio/app.js" defer></script>
+ <script src="studio/plotcore.js" defer></script><script src="studio/winframe.js" defer></script><script src="studio/panels.js" defer></script><script src="studio/dock.js" defer></script><script src="studio/netview.js" defer></script><script src="studio/ctlwin.js" defer></script><script src="studio/splitwin.js" defer></script><script src="studio/scope.js" defer></script><script src="studio/watch.js" defer></script><script src="studio/inside.js" defer></script><script src="studio/live.js" defer></script><script src="studio/library.js" defer></script><script src="studio/linemodels.js" defer></script><script src="studio/tutorials.js" defer></script><script src="studio/exercises/pe2_battery.js" defer></script><script src="studio/templates.js" defer></script><script src="studio/metrics.js" defer></script><script src="studio/scenario.js" defer></script><script src="studio/pool.js" defer></script><script src="studio/addons.js" defer></script><script src="studio/console.js" defer></script><script src="studio/math.js" defer></script><script src="studio/linedata.js" defer></script><script src="studio/recview.js" defer></script><script src="studio/trv.js" defer></script><script src="studio/app.js" defer></script>
 </head>
 <body class="look-tech">
 <header class="top">
@@ -156,6 +156,22 @@ pcl.tutorial('buck', start='steady')   # το project ενός tutorial</pre></d
    </div>
   </details>
  </section>
+ <section id="cmd-card" class="card scen-card cmd-card" aria-label="Γραμμή εντολών Python">
+  <details id="cmd" class="scen">
+   <summary><h2>Γραμμή εντολών (Python)</h2><small class="muted">μία εντολή τη φορά, οι μεταβλητές μένουν, όπως στο MATLAB· έτοιμα τα p, net, sel, pcl, np</small><span id="cmd-state" class="scen-state"></span></summary>
+   <div class="cmd-grid">
+    <div class="cmd-left">
+     <div class="scen-bar cmd-bar"><label title="Αυτόματα: η Python του server όταν τρέχει και έχει Node.js (p.run, net, SciPy, αρχεία του υπολογιστή), αλλιώς η Python της σελίδας">Πυρήνας <select id="cmd-kernel"><option value="auto">Αυτόματα</option><option value="pyodide">Pyodide (στη σελίδα)</option><option value="server">Python του server</option></select></label>
+      <button id="cmd-stop" disabled title="Διακοπή της εντολής που τρέχει (Ctrl+C)">■ Ctrl+C</button><button id="cmd-clc" title="Καθαρίζει την οθόνη (clc, Ctrl+L)">clc</button><button id="cmd-script" title="Οι εντολές που πέτυχαν, ως σενάριο Python (.py): τρέχει στα «Σενάρια» και από τη γραμμή εντολών του συστήματος">💾 .py</button><button id="cmd-toscen" title="Οι εντολές που πέτυχαν, στα «Σενάρια»">→ Σενάρια</button><label class="btnlike" title="Ένα αρχείο στον φάκελο της Python της σελίδας, για load('…') και run('….py')">📂<input type="file" id="cmd-file" hidden multiple></label></div>
+     <div id="cmd-kinfo" class="small muted cmd-kinfo"></div>
+     <div id="cmd-out" class="cmd-out" aria-live="polite"></div>
+     <div class="cmd-in"><span id="cmd-prompt">&gt;&gt;&gt;</span><textarea id="cmd-line" rows="1" spellcheck="false" autocomplete="off" wrap="off" aria-label="Εντολή Python (Enter εκτέλεση, Shift+Enter νέα γραμμή, ↑ ↓ ιστορικό, Tab συμπλήρωση, Ctrl+C διακοπή)" placeholder="help · whos · r = p.run(t_end='5m') · plot(r, 'V:C1')"></textarea></div>
+     <div id="cmd-files" class="cmd-files small"></div>
+    </div>
+    <div class="cmd-right"><h4>Χώρος μεταβλητών</h4><div class="cmd-wsbox"><table id="cmd-ws" class="scen-tbl cmd-ws"><thead><tr><th>Όνομα</th><th>Τύπος</th><th>Μέγεθος</th><th>Τιμή</th></tr></thead><tbody><tr><td colspan="4" class="muted">καμία μεταβλητή</td></tr></tbody></table></div></div>
+   </div>
+  </details>
+ </section>
  <section id="addons-card" class="card scen-card addons-card" aria-label="Πρόσθετα και σύνδεση">
   <details id="addons-block" class="scen">
    <summary><h2>Πρόσθετα και σύνδεση</h2><small class="muted">εργαλεία μέσα στην εφαρμογή (add-ons) και σύνδεση με προγράμματα Python ή MATLAB στον υπολογιστή σου</small></summary>
@@ -176,7 +192,7 @@ pcl.tutorial('buck', start='steady')   # το project ενός tutorial</pre></d
    <div><div class="th-head"><h4>Θεωρία & σύγκριση με την προσομοίωση</h4><button id="theory-refresh" title="Επανυπολογισμός με τις τρέχουσες τιμές">↻</button></div><div id="theory" class="theory"></div></div>
   </div>
  </section>
- <footer>Power &amp; Control Lab <b>5.0.7</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
+ <footer>Power &amp; Control Lab <b>5.0.8</b> · PWL μοντέλα στοιχείων, νεκρός χρόνος, απώλειες, σκέδαση · εργαλείο μελέτης, όχι αντικατάσταση PLECS/SPICE · άδεια PolyForm Noncommercial · <a href="https://github.com/ThanosZr/power-control-lab/issues/new/choose" target="_blank" rel="noopener">Σχόλια ή πρόβλημα</a></footer>
 </main>
 <div id="notice" class="notice" hidden></div>
 <div id="inspector" class="popup inspector" hidden></div>

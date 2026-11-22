@@ -371,6 +371,19 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .scen-tbl{border-collapse:collapse;font-size:12px;margin:0 0 12px}.scen-tbl caption{text-align:left;font-weight:600;padding:2px 0 6px}
 .scen-tbl th,.scen-tbl td{padding:3px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}.scen-tbl th{background:#f4f7f5}
 .scen-tbl td:first-child,.scen-tbl th:first-child{text-align:left}
+/* 5.0.8 (ROADMAP §98): the command line */
+.cmd-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px;padding:0 16px 16px}
+@media (max-width:1000px){.cmd-grid{grid-template-columns:1fr}}
+.cmd-kinfo{margin:2px 0 6px;min-height:1.2em}
+.cmd-out{height:340px;overflow:auto;border:1px solid var(--line);border-radius:8px 8px 0 0;background:#fbfcfb;padding:6px 10px;box-sizing:border-box;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace}
+.cmd-o{margin:0;white-space:pre-wrap;word-break:break-word}.cmd-o.cmd-echo{color:#24584c}.cmd-o.cmd-err{color:var(--danger)}.cmd-o.note{color:var(--muted)}.cmd-o.cmd-comp{color:#5b6b66}
+.cmd-show{margin:4px 0 8px;font-family:system-ui,sans-serif}.cmd-show .scen-plot{max-width:640px}
+.cmd-in{display:flex;align-items:flex-start;gap:6px;border:1px solid var(--line);border-top:0;border-radius:0 0 8px 8px;background:#fff;padding:5px 8px}
+#cmd-prompt{font:12px/1.6 ui-monospace,Menlo,Consolas,monospace;color:#24584c;white-space:pre}
+#cmd-line{flex:1;border:0;outline:0;resize:none;font:12px/1.6 ui-monospace,Menlo,Consolas,monospace;padding:0;background:transparent;min-height:1.6em;overflow:auto}
+.cmd-files{margin-top:4px}.cmd-files a{margin-right:10px}
+.cmd-wsbox{max-height:400px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
+.cmd-ws{width:100%;margin:0}.cmd-ws th,.cmd-ws td{text-align:left}.cmd-ws td:nth-child(3),.cmd-ws th:nth-child(3){text-align:right}.cmd-ws td{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cmd-ws tr.given td:first-child{font-weight:600;color:#24584c}
 .scen-plot{margin:0 0 12px}.scen-plot h5{margin:0 0 4px;font-size:12px}.scen-plot canvas{width:100%;height:220px;display:block}
 .scen-leg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--muted);margin-top:2px}.scen-leg i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:4px;vertical-align:middle}
 .scen-file{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:12.5px}.scen-file small{color:var(--muted)}

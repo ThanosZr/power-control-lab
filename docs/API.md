@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 5.0.6: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (947 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 5.0.8: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (978 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -10,13 +10,13 @@
 - **Αρχεία project:** ένα παλιό αρχείο ανοίγει πάντα (ARCHITECTURE §4). Νέα πεδία είναι προαιρετικά. Όταν χρειάζεται μετατροπή, αυξάνεται το `version` του αρχείου και η μετατροπή γίνεται στο άνοιγμα, με test. Το `version` 3 (3.18): τα σύρματα με το ίδιο όνομα είναι ένας κόμβος· ένα παλιότερο αρχείο ανοίγει ίδιο (`Bus.migrateNames`: όπου ένα όνομα ήταν ετικέτα σε δύο κόμβους, το δεύτερο γίνεται «όνομα·2»).
 - **Ο έλεγχος:** το `python tools/api_surface.py` σταματά όταν κάτι λείπει ή έχασε όρισμα. Ως την 4.0 περνούσε με `--allow-removal "λόγος"`, και η αφαίρεση γράφεται παρακάτω. Από την 4.0 μέσα στην ίδια κύρια έκδοση δεν περνά ούτε με `--allow-removal`· στην επόμενη κύρια περνά μόνο για ό,τι ήταν παρωχημένο. Ένα παρωχημένο σημείο πρέπει να υπάρχει ακόμη στον κώδικα.
 
-- **Πειραματικά (3.19):** `pcl.rms.…`, `pcl.insulation.…`, `pcl.surge.…`, `pcl.geo.…`, `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `pcl.backend.…`, `pcl.accel.…`, `pcl.nnstart.…`, `pcl.onnxio.…`, `pcl.netview.…`, `pcl.netfile.…`, `pcl.psse.…`, `pcl.scopf.…`, `pcl.cpf.…`, `pcl.se.…`, `pcl.harmonic.…`, `pcl.unbalanced.…`, `pcl.dcgrid.…`, `pcl.results.…`, `pcl.equivalent.…`, `workbench…`, `python -m pcl accel…`, `python -m pcl nnstart…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο· και της 4.19.2: τα backends των παρτίδων με τον δρόμο GPU*, το script του επιταχυντή, τα μοντέλα εκκίνησης και τα αρχεία ONNX). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
+- **Πειραματικά (3.19):** `pcl.rms.…`, `pcl.insulation.…`, `pcl.surge.…`, `pcl.geo.…`, `pcl.control.…`, `pcl.workbench.…`, `pcl.wideband.…`, `pcl.powerflow.…`, `pcl.opf.…`, `pcl.ipm.…`, `pcl.backend.…`, `pcl.accel.…`, `pcl.nnstart.…`, `pcl.onnxio.…`, `pcl.netview.…`, `pcl.netfile.…`, `pcl.psse.…`, `pcl.scopf.…`, `pcl.cpf.…`, `pcl.se.…`, `pcl.harmonic.…`, `pcl.unbalanced.…`, `pcl.dcgrid.…`, `pcl.results.…`, `pcl.equivalent.…`, `pcl.console.…`, `workbench…`, `python -m pcl accel…`, `python -m pcl nnstart…`, `/api/console…` (έλεγχος με AI §38, Control Workbench §19, η προσαρμογή wideband της 4.13, οι πυρήνες των λυτών μόνιμης κατάστασης της 4.19.1: ροή φορτίου, βέλτιστη ροή φορτίου, εσωτερικό σημείο· και της 4.19.2: τα backends των παρτίδων με τον δρόμο GPU*, το script του επιταχυντή, τα μοντέλα εκκίνησης και τα αρχεία ONNX). Καταγράφονται, αλλά μένουν έξω από τον κανόνα: αλλάζουν χωρίς `--allow-removal` (η αλλαγή γράφεται στις αφαιρέσεις). Γίνονται σταθερά όταν κλείσει το στάδιο 4 του §38 (το `pcl.wideband` όταν σταθεροποιηθούν οι επιλογές του· οι πυρήνες της 4.19.1 όταν κλείσουν τα επόμενα βήματα του ROADMAP §68 που αλλάζουν τις επιλογές τους), και η μετάβαση είναι προσθήκη. Σταθερά από την αρχή: οι μελέτες του `pcl.network.Network`, το αντικείμενο αναφοράς `pcl.report`, οι μελέτες ως δεδομένα `pcl.study` και οι δύο ενέργειες του server. Στους πίνακες: «πειρ.».
 
 Στους πίνακες, «Από» είναι η έκδοση της πρώτης καταγραφής: η 3.18 για ό,τι υπήρχε ήδη.
 
 ## Παρωχημένα
 
-Κανένα στην 5.0.6.
+Κανένα στην 5.0.8.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-679 σημεία.
+709 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -120,6 +120,36 @@
 | `pcl.backend.probe` | `fresh` | 4.19.2 · πειρ. |
 | `pcl.backend.rule` | `rows` | 4.19.2 · πειρ. |
 | `pcl.bifurcation` | `param`, `values`, `**kw` | 3.18 |
+| `pcl.console.Console` | `page`, `names` | 5.0.8 · πειρ. |
+| `pcl.console.Console.block` | `src` | 5.0.8 · πειρ. |
+| `pcl.console.Console.clc` | — | 5.0.8 · πειρ. |
+| `pcl.console.Console.clear` | `*names` | 5.0.8 · πειρ. |
+| `pcl.console.Console.complete` | `text` | 5.0.8 · πειρ. |
+| `pcl.console.Console.handle` | `req` | 5.0.8 · πειρ. |
+| `pcl.console.Console.handle_json` | `s` | 5.0.8 · πειρ. |
+| `pcl.console.Console.help` | `obj` | 5.0.8 · πειρ. |
+| `pcl.console.Console.load` | `path` | 5.0.8 · πειρ. |
+| `pcl.console.Console.plot` | `*args`, `title`, `xlabel`, `ylabel` | 5.0.8 · πειρ. |
+| `pcl.console.Console.push` | `line` | 5.0.8 · πειρ. |
+| `pcl.console.Console.reset` | — | 5.0.8 · πειρ. |
+| `pcl.console.Console.run` | `path` | 5.0.8 · πειρ. |
+| `pcl.console.Console.save` | `path`, `*names` | 5.0.8 · πειρ. |
+| `pcl.console.Console.scope` | `*keys` | 5.0.8 · πειρ. |
+| `pcl.console.Console.set_context` | `**ctx` | 5.0.8 · πειρ. |
+| `pcl.console.Console.whos` | — | 5.0.8 · πειρ. |
+| `pcl.console.ConsoleError` | — | 5.0.8 · πειρ. |
+| `pcl.console.child` | — | 5.0.8 · πειρ. |
+| `pcl.console.clc` | — | 5.0.8 · πειρ. |
+| `pcl.console.clear` | `*names` | 5.0.8 · πειρ. |
+| `pcl.console.help` | `obj` | 5.0.8 · πειρ. |
+| `pcl.console.load` | `path` | 5.0.8 · πειρ. |
+| `pcl.console.plot` | `*args`, `title`, `xlabel`, `ylabel` | 5.0.8 · πειρ. |
+| `pcl.console.plot_data` | `*args`, `title`, `xlabel`, `ylabel` | 5.0.8 · πειρ. |
+| `pcl.console.run` | `path` | 5.0.8 · πειρ. |
+| `pcl.console.save` | `path`, `*names` | 5.0.8 · πειρ. |
+| `pcl.console.scope` | `*keys` | 5.0.8 · πειρ. |
+| `pcl.console.show_data` | `obj`, `title` | 5.0.8 · πειρ. |
+| `pcl.console.whos` | — | 5.0.8 · πειρ. |
 | `pcl.control.InverseTrainer` | `project`, `loops`, `actuator`, `loop`, `clock`, `t_excite`, `hold`, `dither`, `seed`, `hidden_emu`, `hidden_ctrl`, `lr_emu`, `lr_ctrl`, `epochs_emu`, `epochs_ctrl`, `alpha`, `max_step`, `lr_emu_online`, `lr_ctrl_online`, `run` | 3.18 · πειρ. |
 | `pcl.control.InverseTrainer.controller` | `epochs` | 3.18 · πειρ. |
 | `pcl.control.InverseTrainer.ctrl_spec` | `learn` | 3.18 · πειρ. |
@@ -749,7 +779,7 @@
 
 ## Server: `/api/<ενέργεια>` και διαδρομές
 
-48 σημεία.
+49 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -763,6 +793,7 @@
 | `/api/boundary` | — | 3.18 |
 | `/api/capacitance` | — | 3.18 |
 | `/api/catalog` | — | 3.18 |
+| `/api/console` | — | 5.0.8 · πειρ. |
 | `/api/curves` | — | 3.18 |
 | `/api/derivation` | — | 3.18 |
 | `/api/design` | — | 3.18 |

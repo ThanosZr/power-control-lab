@@ -274,7 +274,19 @@ class ApiSurface(unittest.TestCase):
         self.assertEqual(self.now['pcl']['pcl.equivalent.emt_ports']['params'][7:], ['fmin', 'fmax', 'n', 'line', 'pure'])
         self.assertEqual(self.now['pcl']['pcl.network.Network.to_emt']['params'][8:], ['**foster_kw'])
         self.assertEqual(self.now['project']['part:EQV3']['params'][-2:], ['F', 'conn'])
-        self.assertEqual(sum(len(v) for v in self.now.values()), 947)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 947)
+
+    def test_the_surface_of_5_0_8(self):
+        """5.0.8: the command line (§98): pcl.console (the console of both kernels, and its commands for a script) and the
+        route /api/console of the server are experimental; Project has a repr. No point of the file format."""
+        self.assertEqual(self.now['pcl']['pcl.console.Console']['params'], ['page', 'names'])
+        self.assertEqual(self.now['pcl']['pcl.console.Console.handle']['params'], ['req'])
+        for k in ('Console', 'Console.push', 'plot', 'whos', 'save', 'load', 'show_data'):
+            self.assertTrue(api_surface.experimental('pcl', 'pcl.console.' + k))
+        self.assertIn('/api/console', self.now['server'])
+        self.assertTrue(api_surface.experimental('server', '/api/console'))
+        self.assertFalse(any(k.startswith('pcl.console._') for k in self.now['pcl']))
+        self.assertEqual(sum(len(v) for v in self.now.values()), 978)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

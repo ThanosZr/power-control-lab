@@ -66,5 +66,27 @@ const {chromium}=require('playwright');const fs=require('fs');const path=require
  await p.click('#scen-run');await done();const o16=await p.$eval('#scen-out',e=>e.textContent);
  ok(/κομμάτια 4 ίδια True/.test(o16),'p.stream σε 4 κομμάτια, συνέχεια από την κατάσταση με ίδιους αριθμούς '+o16.slice(0,160));
  ok(/python στο pool [1-9] \[None, None, None\] True/.test(o16),'σάρωση κυκλώματος με μπλοκ Python στο pool, ίδια με τη σειριακή');
+ // 5.0.8 (ROADMAP §98): the command line, in both kernels: a variable stays, history, Tab, Ctrl+C in a loop, plot, whos,
+ // a channel on the scope, the commands as a script and in «Σενάρια»
+ await p.click('#cmd summary');await p.selectOption('#cmd-kernel','pyodide');
+ const cmd=async c=>p.evaluate(c=>window.Console.submit(c),c);const cout=()=>p.$$eval('#cmd-out > *',x=>x.map(e=>e.textContent).join('\n'));
+ await cmd('a = 6 * 7');await cmd('a');ok(/>>> a\n42/.test(await cout()),'γραμμή εντολών (Pyodide): η μεταβλητή μένει, a = 42');
+ ok(/Pyodide/.test(await p.$eval('#cmd-kinfo',e=>e.textContent)),'η κάρτα λέει ποιος πυρήνας τρέχει');
+ await p.focus('#cmd-line');await p.keyboard.press('ArrowUp');ok(await p.$eval('#cmd-line',e=>e.value)==='a','↑: η προηγούμενη εντολή');
+ await p.fill('#cmd-line','pcl.tutor');await p.keyboard.press('Tab');await p.waitForFunction(()=>document.querySelector('#cmd-line').value!=='pcl.tutor',null,{timeout:30000});
+ ok(await p.$eval('#cmd-line',e=>e.value)==='pcl.tutorial','Tab: συμπληρώνει ως το κοινό πρόθεμα (pcl.tutorial, pcl.tutorials)');await p.fill('#cmd-line','');
+ const loop=async kind=>{const run=cmd('while True:\n    n = 1');await p.waitForFunction(()=>window.Console.state.busy,null,{timeout:30000});await p.waitForTimeout(400);
+  await p.focus('#cmd-line');await p.keyboard.press('Control+KeyC');await run;const o=await cout();
+  ok(/KeyboardInterrupt/.test(o.slice(-400))&&!(await p.evaluate(()=>window.Console.state.busy)),`Ctrl+C σταματά τον βρόχο (${kind})`);};
+ await loop('Pyodide');await cmd('a + 1');ok(/>>> a \+ 1\n43/.test(await cout()),'μετά το Ctrl+C οι μεταβλητές μένουν (Pyodide)');
+ await cmd("plot([1, 4, 9], title='τετράγωνα')");ok(await p.$$eval('#cmd-out .cmd-show canvas',x=>x.length)===1,'plot: γράφημα κάτω από την εντολή');
+ ok((await p.$$eval('#cmd-ws tbody td:first-child',x=>x.map(e=>e.textContent))).includes('a'),'ο χώρος μεταβλητών έχει το a');
+ await cmd("k = p.channels()['keys'][0]");await cmd('scope(k)');ok(/✓ στο scope/.test(await cout()),'scope(): το κανάλι στο scope της σελίδας');
+ const sc=await p.evaluate(()=>window.Console.script());ok(sc.includes('from pcl.console import *')&&sc.includes('a = 6 * 7')&&!sc.includes('while True'),'οι εντολές που πέτυχαν ως σενάριο .py');
+ await p.click('#cmd-toscen');ok((await p.$eval('#scen-code',e=>e.value)).includes('a = 6 * 7'),'→ Σενάρια: οι εντολές στα «Σενάρια»');
+ await p.selectOption('#cmd-kernel','server');await cmd('b = 5');await cmd('b * a if "a" in dir() else b');
+ ok(/του server/.test(await p.$eval('#cmd-kinfo',e=>e.textContent))&&/\n5\n?$/.test((await cout()).trimEnd()+'\n'),'πυρήνας του server: δικός του χώρος μεταβλητών (το a δεν είναι εκεί)');
+ await loop('server');await cmd('b');ok(/>>> b\n5/.test((await cout()).slice(-200)),'μετά το Ctrl+C στον server οι μεταβλητές μένουν');
+ await (await p.$('#cmd-card')).screenshot({path:OUT+'/console_card.png'});
  ok(errs.length===0,'χωρίς σφάλματα JavaScript '+errs.join(' | '));
  await b.close();})();

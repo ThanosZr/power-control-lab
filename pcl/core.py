@@ -438,6 +438,10 @@ class Project:
         self.name = name
         self.changes = {}
 
+    def __repr__(self):         # 5.0.8: what the command line and print show (the name, the parts, the changes)
+        n = sum(1 for c in self.data.get('components', []) if c.get('type') not in ('JUNC', 'GND'))
+        return f'<Project «{self.name}»: {n} στοιχεία' + (f', αλλαγές {self.changes}' if self.changes else '') + '>'
+
     # ------------------------------------------------------------- parameters
     def comp(self, cid):
         for c in self.data['components']:
