@@ -1625,13 +1625,17 @@ python solve.py bidir examples/buck_boost_project.json --output bidir.json
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): τα κομμάτια, η ροή δεδομένων από τη διεπαφή ως τον λύτη, και πίνακας «πού αλλάζεις τι» για κάθε είδος αλλαγής (νέο στοιχείο, μπλοκ, tutorial, template, κανάλι, ζωντανή παράμετρος).
 - [`docs/CODEMAP.md`](docs/CODEMAP.md): ευρετήριο με αριθμούς γραμμών για συναρτήσεις, στοιχεία, tutorials και API. Παράγεται με `python tools/codemap.py`.
-- CI (`.github/workflows/ci.yml`): σε κάθε push στα `main`/`lab-*` και σε κάθε pull request τρέχει τα tests, τα σενάρια του browser και τον έλεγχο του χάρτη, και φτιάχνει το zip της έκδοσης.
+- CI (`.github/workflows/ci.yml`): σε κάθε push στα `main`/`lab-*` και σε κάθε pull request τρέχει τα tests (από την 5.0.8 σε 6 εργασίες μαζί), τα σενάρια του browser και τον έλεγχο του χάρτη, και φτιάχνει το zip της έκδοσης.
 
 ## Tests
 
 ```bash
 python -m unittest discover -s tests -v
+python tools/test_shards.py local -j 2          # τα ίδια σε 6 μέρη, σε 2 διεργασίες (5.0.8)
+python tools/ui_flows.py --serve --lanes 2      # τα σενάρια του browser, σε δύο σειρές, και μετά όσα μετρούν χρόνο μόνα τους
 ```
+
+Ο CI τρέχει τα tests σε 6 εργασίες μαζί, και μια τελευταία εργασία ελέγχει ότι έτρεξαν όλα, μία φορά το καθένα (`docs/ARCHITECTURE.md` §5).
 
 Τα tests καλύπτουν:
 - τους αναλυτικούς engines και τα templates δεδομένων,

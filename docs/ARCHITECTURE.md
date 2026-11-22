@@ -278,21 +278,26 @@ MATLAB/Octave (matlab/, 3.14): pcl_run, pcl_sweep → python -m pcl job (ή /api
 
 | Τι | Πώς τρέχει | Τι καλύπτει |
 |---|---|---|
-| Python unittest | `python -m unittest discover -s tests` | αναλυτικούς engines, templates, server |
+| Python unittest | `python -m unittest discover -s tests`, ή σε μέρη: `python tools/test_shards.py local -j 2` (5.0.8) | αναλυτικούς engines, templates, server |
 | Λύτης browser μέσω Node | από τα `test_studio_sim.py`, `test_tutorials.py`, `test_batch.py`, που καλούν `tests/js/*.js` | `mna.js`, tutorials, ισοδυναμία με SciPy |
-| Περιβάλλον (Playwright) | με server στο 8765: `node tests/ui/<flow>.js http://127.0.0.1:8765/` από άλλον φάκελο | τα 19 σενάρια: `studio_flow`, `editor_interactions`, `features_flow`, `blocks_flow`, `wiring_flow`, `step_flow`, `scenario_flow`, `addons_flow`, `subcircuit_flow`, `bus_flow`, `live_flow`, `line_flow`, `ux_flow`, `perf_flow`, `speed_flow`, `watch_flow`, `ev_flow`, `facts_flow`, `scope_flow` |
+| Περιβάλλον (Playwright) | `python tools/ui_flows.py --serve --lanes 2` (δικός του server, δύο σειρές), ή με server στο 8765: `node tests/ui/<flow>.js http://127.0.0.1:8765/` από άλλον φάκελο | τα 23 σενάρια της λίστας `FLOWS` του `tools/ui_flows.py`· τα τέσσερα με όριο χρόνου (`TIMED`: `addons_flow`, `perf_flow`, `speed_flow`, `watch_flow`) τρέχουν μόνα τους |
 | Χάρτης κώδικα | `python tools/codemap.py --check` | ότι το `CODEMAP.md` είναι ενημερωμένο |
 | Αναφορά επαλήθευσης | `python tools/verify.py` (γράφει) ή `--check` (ελέγχει) | ότι κάθε τιμή του `VERIFICATION.md` είναι μέσα στην ανοχή της |
 | Δημόσιο API (3.18, σταθερό από την 4.0) | `python tools/api_surface.py` (γράφει) ή `--check` (ελέγχει) | ότι το `docs/API.md` είναι ενημερωμένο, ότι τίποτα δεν χάθηκε χωρίς καταγραφή και ότι μέσα στην 4.x δεν χάνεται τίποτα |
 
 Ο CI (`.github/workflows/ci.yml`) τα τρέχει όλα σε κάθε push στα `main` και `lab-*` και σε κάθε pull request. Σε κάθε push φτιάχνει και το zip της έκδοσης ως artifact. Σε tag `v*` το ανεβάζει και ως release.
 
+**Τα tests σε μέρη (5.0.8, απόφαση 379):** ο CI τρέχει πρώτα τους γρήγορους ελέγχους (χάρτης, API, η μοιρασιά), και μετά, όλα μαζί: τα tests σε 6 εργασίες, την αναφορά επαλήθευσης με τα βάρη, το Octave και τα σενάρια. Μια τελευταία εργασία ελέγχει τις αναφορές των 6 μερών: κάθε αρχείο σε ένα μέρος, κάθε test έτρεξε, το πλήθος όσο σε ένα `discover` όλων, καμία αποτυχία. Το zip περιμένει όλα τα άλλα.
+- **Η μοιρασιά** (`tools/test_shards.py`, οι χρόνοι στο `tools/test_times.json`): κάθε αρχείο ολόκληρο σε ένα μέρος, τα μεγαλύτερα πρώτα, το καθένα στο μέρος με τον λιγότερο χρόνο ως τότε. Ένα νέο αρχείο παίρνει τη διάμεσο των χρόνων και δεν μετακινεί τα άλλα. Η μοιρασιά αλλάζει μόνο όταν ξαναμετρηθεί ο πίνακας (`python tools/test_shards.py times <αρχεία καταγραφής του CI> --write`).
+- **Ένα μέρος τρέχει όπως το `discover`:** ο ίδιος φάκελος αρχής, τα ίδια ονόματα modules, η σειρά των ονομάτων. Νέο αρχείο tests δεν θέλει αλλαγή πουθενά. Ένα test που χρειάζεται κάτι από άλλο αρχείο tests δεν είναι σωστό test: κάθε αρχείο πρέπει να περνά και μόνο του.
+- **Τοπικά:** `python tools/test_shards.py local -j 2` τρέχει τα 6 μέρη σε 2 διεργασίες, την καθεμία με δικό της `PCL_HOME` και `TMPDIR`, και κάνει τον ίδιο τελικό έλεγχο. Με `--serial <αρχείο>` συγκρίνει τα αποτελέσματα, test προς test, με την έξοδο `-v` του `python -m unittest discover -s tests -v`.
+
 ## 6. Ροή εργασίας
 
 1. Νέο branch για κάθε έκδοση: `lab-<έκδοση>`. Το `main` αλλάζει μόνο με έγκριση.
 2. Πριν από την αλλαγή: εντοπισμός στο §3 και στο `CODEMAP.md`, και ανάγνωση μόνο αυτών των σημείων.
 3. Μετά την αλλαγή:
-   - tests, τα 23 σενάρια browser (η λίστα στο `.github/workflows/ci.yml`),
+   - tests, τα 23 σενάρια browser (η λίστα στο `tools/ui_flows.py`),
    - `python tools/codemap.py` και `python tools/api_surface.py`,
    - ενημέρωση README (πίνακας εκδόσεων) και ROADMAP (§0),
    - έκδοση στο `engine/__init__.py` και στο footer του `web/index.html`.

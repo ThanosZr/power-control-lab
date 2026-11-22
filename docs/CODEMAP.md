@@ -184,6 +184,7 @@
 | `tests/test_nn.py` | 130 |
 | `tests/test_nnstart.py` | 315 |
 | `tests/test_opf.py` | 262 |
+| `tests/test_parallel.py` | 159 |
 | `tests/test_pcl.py` | 312 |
 | `tests/test_pieces.py` | 58 |
 | `tests/test_plotcore.py` | 96 |
