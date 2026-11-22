@@ -1,6 +1,7 @@
 # Tests on every push / pull request, the versioned zip as an artifact, and a release on tags v*.
 # 5.0.8 (decision 379): the tests in 6 jobs at the same time (a fixed share by file, tools/test_shards.py), a last job
 # that checks that every test ran once, and the report, the weights, Octave and the browser right after the quick checks.
+# The first run of a293e4e also ran them in one job as before, and compared them test by test: 1186 the same.
 name: ci
 
 on:
@@ -63,37 +64,10 @@ jobs:
           path: shard-${{ matrix.shard }}.json
           if-no-files-found: ignore
 
-  # Decision 379: the first time the tests also run as before, in one job, and the last job compares them test by
-  # test with the shards (the same tests, the same outcome). After that only the shards.
-  serial:
-    name: Tests σε σειρά, όπως πριν (μία φορά, για τη σύγκριση)
-    runs-on: ubuntu-latest
-    needs: checks
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: pip install -r requirements.txt
-      - run: pip install pyarrow h5py matplotlib onnx onnxruntime ezdxf
-      - run: npm install --no-save pyodide@0.26.4
-      - name: Tests
-        shell: bash
-        run: python -m unittest discover -s tests -v 2>&1 | tee serial.log
-      - if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: serial
-          path: serial.log
-          if-no-files-found: ignore
-
   all-tests:
     name: Όλα τα tests έτρεξαν, μία φορά το καθένα
     runs-on: ubuntu-latest
-    needs: [tests, serial]
+    needs: tests
     if: ${{ !cancelled() }}
     steps:
       - uses: actions/checkout@v4
@@ -107,12 +81,8 @@ jobs:
           pattern: shard-*
           path: reports
           merge-multiple: true
-      - uses: actions/download-artifact@v4
-        with:
-          name: serial
-          path: serial
-      - name: Κάθε αρχείο σε ένα μέρος, κάθε test έτρεξε, το πλήθος όσο σε ένα discover όλων, και ίδια με τη σειρά
-        run: python tools/test_shards.py check reports/shard-*.json --n 6 --serial serial/serial.log
+      - name: Κάθε αρχείο σε ένα μέρος, κάθε test έτρεξε, το πλήθος όσο σε ένα discover όλων
+        run: python tools/test_shards.py check reports/shard-*.json --n 6
 
   verify:
     name: Αναφορά επαλήθευσης και βάρη του αντίστροφου μοντέλου
