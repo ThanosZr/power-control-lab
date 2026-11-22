@@ -398,6 +398,10 @@ def compare(net, eq, outages=None, tol=1e-10):
             a = fn.power_flow(tol=tol)
             b = rn.power_flow(tol=tol)
         except Exception as x:
+            # 5.0.7: an island leaves a singular Jacobian; whether the factorization says so («Factor is exactly singular») or
+            # Newton stops without converging depends on the rounding of the processor: the same answer either way
+            if isinstance(x, np.linalg.LinAlgError) or 'singular' in str(x).lower():
+                return {'error': 'no convergence'}
             return {'error': str(x)}
         if not (a.get('converged', True) and b.get('converged', True)):
             return {'error': 'no convergence'}

@@ -385,6 +385,24 @@ class TestAreaFromTheDiagram(unittest.TestCase):
         self.assertEqual([c['type'] for c in e['project']['components']].count('EQV3'), 1)
         self.assertEqual(e['project']['meta']['equivalent']['boundary'], ['5', '9'])
 
+    def test_an_island_is_no_convergence_on_every_processor(self):
+        # 5.0.7: with br1 out generator 1 is an island; the factorization of the singular Jacobian raises («Factor is exactly
+        # singular») on some processors and Newton stops on others (CI 44989872623): compare says «no convergence» both ways
+        from unittest import mock
+        net = N.ieee9()
+        lf = net.power_flow(tol=1e-10)
+        eq = net.equivalent(['5', '9'], ['1'], kind='xward', lf=lf, tol=1e-10)
+        orig = N.Network.power_flow
+
+        def pf(self, *a, **k):
+            if 'br1' not in [e['name'] for e in self.elements]:
+                raise RuntimeError('Factor is exactly singular')
+            return orig(self, *a, **k)
+        self.assertEqual(Q.compare(net, eq)['outages'][0].get('error'), 'no convergence')
+        with mock.patch.object(N.Network, 'power_flow', pf):
+            out = Q.compare(net, eq)['outages']
+        self.assertEqual([o.get('error') for o in out], ['no convergence', None, None])
+
     def test_what_the_page_is_told_when_it_cannot(self):
         from pcl import study as S
         for q, why in (({'buses': ['4', '5']}, 'όλοι είναι ζυγοί του συνόρου'), ({'buses': ['x']}, 'Άγνωστος ζυγός: x'), ({'buses': []}, 'buses:'),

@@ -87,7 +87,7 @@
 | `pcl/cpf.py` | 561 |
 | `pcl/dcgrid.py` | 980 |
 | `pcl/designer.py` | 791 |
-| `pcl/equivalent.py` | 1027 |
+| `pcl/equivalent.py` | 1031 |
 | `pcl/formats.py` | 222 |
 | `pcl/geo.py` | 360 |
 | `pcl/gui.py` | 409 |
@@ -145,7 +145,7 @@
 | `tests/test_emt_harmonic.py` | 139 |
 | `tests/test_emt_se.py` | 141 |
 | `tests/test_engine.py` | 276 |
-| `tests/test_equivalent.py` | 555 |
+| `tests/test_equivalent.py` | 573 |
 | `tests/test_ev.py` | 104 |
 | `tests/test_ev_weights.py` | 78 |
 | `tests/test_gen_ctl.py` | 136 |
@@ -3751,23 +3751,23 @@ _(χωρίς συναρτήσεις)_
 | 364 | function | `_v` |
 | 372 | function | `_ymat` |
 | 381 | function | `compare` |
-| 430 | function | `_gen3` |
-| 442 | function | `_ext_y` |
-| 505 | function | `_kron` |
-| 516 | class | `_Ext` |
-| 524 | method | `_Ext.__init__` |
-| 599 | method | `_Ext.Y` |
-| 625 | function | `scan` |
-| 678 | function | `_yblock` |
-| 682 | function | `foster_z` |
-| 692 | function | `_pr_blocks` |
-| 725 | function | `_refine` |
-| 761 | function | `_fit_one` |
-| 789 | function | `foster` |
-| 873 | function | `emt_ports` |
-| 980 | function | `_foster_out` |
-| 995 | function | `_mat` |
-| 999 | function | `to_emt` |
+| 434 | function | `_gen3` |
+| 446 | function | `_ext_y` |
+| 509 | function | `_kron` |
+| 520 | class | `_Ext` |
+| 528 | method | `_Ext.__init__` |
+| 603 | method | `_Ext.Y` |
+| 629 | function | `scan` |
+| 682 | function | `_yblock` |
+| 686 | function | `foster_z` |
+| 696 | function | `_pr_blocks` |
+| 729 | function | `_refine` |
+| 765 | function | `_fit_one` |
+| 793 | function | `foster` |
+| 877 | function | `emt_ports` |
+| 984 | function | `_foster_out` |
+| 999 | function | `_mat` |
+| 1003 | function | `to_emt` |
 
 ### `pcl/formats.py`
 
