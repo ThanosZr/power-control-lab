@@ -18,6 +18,8 @@
 //  9. 5.0.6 (§94 step γ, §95 point 2, §96 B.1): the diagram of a study opens as a tab next to the circuit, in its place; ◫
 //     puts the two side by side and their edge is dragged; a lasso chooses the study area and the engine marks its boundary;
 //     the full network against the equivalent in N−1; the area in EMT in the place of the circuit, and «↶ Πίσω»
+// 10. 5.0.7 (§96 B.3): Fig. 15a refused before the engine for two boundary buses; for one (the area 1, 4 of the IEEE 9) the
+//     area in EMT with the Foster circuit, and the scan against its blocks in the box of the area
 // Usage: python run.py --no-browser --port 8765  then  node tests/ui/dock_flow.js http://127.0.0.1:8765/ [out]
 const {chromium}=require('playwright');
 let R={},fail=[];
@@ -207,6 +209,18 @@ let R={},fail=[];
  await p.click('.dk-group .dk-tab:nth-child(2)');await p.click('#nv-back');await p.waitForTimeout(1200);
  R.d8=await p.evaluate(()=>({tut:PCL.S.tut.id,study:!!PCL.S.tutMeta?.study,eq:PCL.project().components.some(c=>c.type==='EQV3'),back:!!document.querySelector('#nv-back')}));
  ok(R.d8.tut==='pf_study'&&R.d8.study&&!R.d8.eq&&!R.d8.back,'«↶ Πίσω»: the tutorial and its circuit again '+JSON.stringify(R.d8));
+ // 10. Fig. 15a (5.0.7)
+ await p.click('.dk-group .dk-tab:nth-child(2)');await p.waitForTimeout(300);await p.selectOption('#nv-fig','15a');await p.waitForTimeout(100);
+ R.f1=await p.evaluate(()=>({fmax:!document.querySelector('#nv-fmax-l').hidden,emt:document.querySelector('#nv-emt').disabled,info:document.querySelector('#nv-area-info').textContent}));
+ ok(R.f1.fmax&&R.f1.emt&&/Σχ\. 15a θέλει έναν ζυγό στο σύνορο \(εδώ 2\)/.test(R.f1.info),'Fig. 15a with two boundary buses: refused before the engine '+JSON.stringify(R.f1));
+ await p.evaluate(()=>PCL.NV.v.setSelection(['1','4']));
+ await p.waitForFunction(()=>PCL.NV.area.res&&!PCL.NV.area.busy&&PCL.NV.area.res.boundary?.join()==='4',null,{timeout:30000});
+ await p.click('#nv-emt');await p.waitForFunction(()=>PCL.NV.area.back&&!PCL.NV.area.busy,null,{timeout:120000});await p.waitForTimeout(1200);
+ R.f2=await p.evaluate(()=>{const q=PCL.project().components.find(c=>c.type==='EQV3');return {fig:q?.params.fig,names:q?.params.names,rows:String(q?.params.F||'').split(';').length,
+  svg:document.querySelectorAll('#nv-cmp svg.fz-plot polyline').length,tr:document.querySelectorAll('#nv-cmp tbody tr').length,txt:document.querySelector('#nv-cmp .small')?.textContent.slice(0,160)};});
+ ok(R.f2.fig==='15a'&&R.f2.names==='4'&&R.f2.rows===R.f2.tr&&R.f2.rows>=4&&R.f2.svg===4&&/Σχ\. 15a στον ζυγό 4/.test(R.f2.txt||''),'Fig. 15a: the area in EMT, the scan against the blocks '+JSON.stringify(R.f2));
+ await p.click('.dk-group .dk-tab:nth-child(2)');await p.waitForTimeout(300);await p.screenshot({path:OUT+'/dock_foster.png'});
+ await p.click('#nv-back');await p.waitForTimeout(1000);
  R.chk3=await p.evaluate(()=>Panels.check());R.dead3=await dead();
  ok(!R.chk3.dup.length&&!R.chk3.twice.length&&!R.dead3.length,'the diagram as a card: no id twice, no button without a handler '+JSON.stringify([R.chk3,R.dead3]));
  ok(!errs.length,'χωρίς σφάλματα JavaScript '+errs.slice(0,4).join(' | '));

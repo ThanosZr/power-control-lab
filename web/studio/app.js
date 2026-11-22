@@ -3062,6 +3062,7 @@ function areaBind(v,d,keep){const A=NV.area,net=d.id;if(A.net!==net){A.ids=[];A.
  if(A.ids.length){v.setSelection(A.ids,true);if(A.res&&!A.res.error)v.setBoundary(A.res.boundary);}
  $('#nv-area').onclick=e=>{const m=e.target.closest('[data-nv-mode]');if(m){NV.v?.setMode(m.dataset.nvMode);for(const b of document.querySelectorAll('#nv-area [data-nv-mode]')){const on=b===m;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));}return;}
   if(e.target.id==='nv-area-clear')NV.v?.clearSelection();else if(e.target.id==='nv-cmp-run')areaCompare();else if(e.target.id==='nv-emt')areaEmt();else if(e.target.id==='nv-back')areaBack();};
+ $('#nv-fig').onchange=()=>areaShow();
  areaShow();}
 // a change of the choice: the boundary from the engine, a moment after the last change
 function areaChosen(ids){const A=NV.area;A.ids=ids;A.res=null;$('#nv-cmp').hidden=true;clearTimeout(A.t);areaShow();if(!ids.length)return;A.t=setTimeout(()=>areaSplit(),160);}
@@ -3076,11 +3077,14 @@ function areaShow(){const A=NV.area,r=A.res,n=A.ids.length,ok=!!r&&!r.error&&!A.
  else if(r.error)h=`<b class="ar-c">${n}</b> ζυγοί · <span class="bad">${esc(r.error)}</span>`;
  else h=`<b class="ar-c">${r.internal.length+r.boundary.length}</b> ζυγοί: ${r.internal.length} μέσα, σύνορο <b class="ar-b">${list(r.boundary)}</b> · ${r.external} έξω · ${r.branches} κλάδοι στην περιοχή · ο ζυγός ταλάντωσης ${AREA_SLACK[r.slack]||r.slack}`;
  if(A.back)h+=` · <button id="nv-back" title="Το κύκλωμα και το tutorial που ήταν πριν από «⚡ Η περιοχή σε EMT»">↶ Πίσω στο «${esc(A.back.title)}»</button>`;
- $('#nv-area-info').innerHTML=h;$('#nv-area-info').classList.toggle('muted',!n&&!A.back);$('#nv-cmp-run').disabled=!ok;$('#nv-emt').disabled=!ok;$('#nv-area-clear').disabled=!n;}
+ // 5.0.7: Fig. 15a is for one boundary bus, with the top of the scan beside it
+ const fa=$('#nv-fig').value==='15a',one=ok&&r.boundary.length===1;$('#nv-fmax-l').hidden=!fa;
+ if(fa&&ok&&!one)h+=` · <span class="bad">το Σχ. 15a θέλει έναν ζυγό στο σύνορο (εδώ ${r.boundary.length})</span>`;
+ $('#nv-area-info').innerHTML=h;$('#nv-area-info').classList.toggle('muted',!n&&!A.back);$('#nv-cmp-run').disabled=!ok;$('#nv-emt').disabled=!ok||(fa&&!one);$('#nv-area-clear').disabled=!n;}
 // the full network against the area with its equivalent: the base case and every branch of the area out (pcl.equivalent.compare)
 async function areaCompare(){const A=NV.area,d=STUDY.view;if(!d||!A.res||A.res.error)return;const kind=$('#nv-eqkind').value,ids=A.ids.slice(),seq=A.seq;A.busy='compare';areaShow();
  let r=null,err='';try{r=await api('network_area',{...d.q,buses:ids,what:'compare',kind});}catch(e){err=e.message;}
- A.busy=null;areaShow();if(seq!==A.seq)return;const box=$('#nv-cmp');box.hidden=false;
+ A.busy=null;areaShow();if(seq!==A.seq)return;const box=$('#nv-cmp');box.hidden=false;box.classList.remove('fz');
  if(err){box.innerHTML=`<p class="bad">${esc(err)}</p>`;return;}
  const c=r.compare,f=(x,k)=>x===null||x===undefined?'—':Math.abs(x)<1e-9?'< 10⁻⁹':fmt(x,k),rows=[{outage:'βασικό σημείο',...c.base,base:true},...c.outages];
  const ok=c.outages.filter(o=>!o.error),worst=ok.length?ok.reduce((a,b)=>b.dV>a.dV?b:a):null;
@@ -3091,11 +3095,31 @@ async function areaCompare(){const A=NV.area,d=STUDY.view;if(!d||!A.res||A.res.e
   +rows.map(o=>`<tr class="${o===worst?'worst':''}"><td>${o.base?'<i>βασικό σημείο</i>':esc(o.outage)}</td>${o.error?`<td colspan="3" class="muted">${o.error==='no convergence'?'χωρίς σύγκλιση (νησίδα ή όριο)':esc(o.error)}</td>`:`<td>${f(o.dV,4)}</td><td>${f(o.dA,4)}</td><td>${f(o.dP,4)}</td>`}</tr>`).join('')+'</tbody></table>';}
 // the area as a circuit in EMT (Network.to_emt with the boundary): in the place of the circuit, like a file that opens
 async function areaEmt(){const A=NV.area,d=STUDY.view;if(!d||!A.res||A.res.error)return;const fig=$('#nv-fig').value,ids=A.ids.slice();A.busy='emt';areaShow();
- let r=null;try{r=await api('network_area',{...d.q,buses:ids,what:'emt',fig});}catch(e){A.busy=null;areaShow();$('#nv-area-info').insertAdjacentHTML('beforeend',` · <span class="bad">${esc(e.message)}</span>`);return;}
+ const extra=fig==='15a'?{fmax:+$('#nv-fmax').value||2000}:{};
+ let r=null;try{r=await api('network_area',{...d.q,buses:ids,what:'emt',fig,...extra});}catch(e){A.busy=null;areaShow();$('#nv-area-info').insertAdjacentHTML('beforeend',` · <span class="bad">${esc(e.message)}</span>`);return;}
  A.busy=null;if(!A.back)A.back={pr:project(),tut:S.tut,tutRef:S.tutRef,meta:S.tutMeta,title:tutorial().title};
  S.tut={id:'empty',options:{}};S.tutMeta=null;S.tutRef=null;applyProject(r.project);renderTutorial();runTheory();runMath();window.Dock?.reveal('circuit');$('#bench-card').scrollIntoView({block:'nearest'});areaShow();
  const q=r.project.meta?.equivalent;notice(`Η περιοχή σε EMT: ${r.internal.length+r.boundary.length} ζυγοί, και το υπόλοιπο δίκτυο ως ένα «Ισοδύναμο δικτύου» (EQV3, ${fig==='50'?'θεμελιώδης':'Σχ. '+fig}) στους ζυγούς ${r.boundary.map(esc).join(', ')}`
-  +(q?.Sk?` · S″k ${q.Sk.map(x=>fmt(x/1e6,4)).join(', ')} MVA`:'')+'. «↶ Πίσω» στο διάγραμμα φέρνει το κύκλωμα που ήταν.','info');}
+  +(q?.Sk?` · S″k ${q.Sk.map(x=>fmt(x/1e6,4)).join(', ')} MVA`:'')+(r.foster?` · ${r.foster.blocks.length} κλάδοι Foster, απόκλιση από τη σάρωση ${fmt(100*r.foster.err1.rms,2)} % (θετική) και ${fmt(100*r.foster.err0.rms,2)} % (μηδενική ακολουθία)`:'')
+  +'. «↶ Πίσω» στο διάγραμμα φέρνει το κύκλωμα που ήταν.','info');
+ if(r.foster)fosterShow(r.foster,r.boundary[0]);}
+// 5.0.7 (§45): the scan of the network beyond the boundary against the Foster circuit of Fig. 15a, and its blocks
+function fosterPlot(F){const W=560,H=210,m={l:52,r:10,t:10,b:30},f=F.f,lx=Math.log10,all=[...F.Z1,...F.Z0,...F.Z1fit,...F.Z0fit].filter(v=>v>0);
+ const x0=lx(f[0]),x1=lx(f[f.length-1]),y0=Math.floor(lx(Math.min(...all))),y1=Math.ceil(lx(Math.max(...all)));
+ const X=v=>m.l+(lx(v)-x0)/(x1-x0)*(W-m.l-m.r),Y=v=>H-m.b-(lx(Math.max(v,1e-300))-y0)/Math.max(y1-y0,1e-9)*(H-m.t-m.b);
+ const line=(z,c,dash)=>`<polyline fill="none" stroke="${c}" stroke-width="1.6"${dash?' stroke-dasharray="5 3"':''} points="${f.map((v,i)=>X(v).toFixed(1)+','+Y(z[i]).toFixed(1)).join(' ')}"/>`;
+ let g='';for(let e=Math.ceil(x0);e<=Math.floor(x1);e++){const x=X(10**e);g+=`<line x1="${x}" x2="${x}" y1="${m.t}" y2="${H-m.b}" class="fz-grid"/><text x="${x}" y="${H-m.b+14}" text-anchor="middle">${10**e>=1000?10**e/1000+' k':10**e}</text>`;}
+ for(let e=y0;e<=y1;e++){const y=Y(10**e);g+=`<line x1="${m.l}" x2="${W-m.r}" y1="${y}" y2="${y}" class="fz-grid"/><text x="${m.l-4}" y="${y+4}" text-anchor="end">10${e<0?'⁻':''}${String(Math.abs(e)).split('').map(c=>'⁰¹²³⁴⁵⁶⁷⁸⁹'[c]).join('')}</text>`;}
+ return `<svg class="fz-plot" viewBox="0 0 ${W} ${H}" role="img" aria-label="|Z₁| και |Z₀| του υπόλοιπου δικτύου απέναντι στους κλάδους Foster">${g}`
+  +line(F.Z1,'#1f77b4')+line(F.Z1fit,'#1f77b4',1)+line(F.Z0,'#d95f02')+line(F.Z0fit,'#d95f02',1)
+  +`<text x="${W/2}" y="${H-2}" text-anchor="middle">f (Hz)</text><text x="12" y="${m.t+8}">Ω</text></svg>`;}
+function fosterShow(F,bus){const box=$('#nv-cmp'),e=x=>fmt(100*x,2)+' %',u=(v,k,d)=>v>0?fmt(v*k,d):'—';box.hidden=false;box.classList.add('fz');
+ box.innerHTML=`<div class="small"><b>Σχ. 15a στον ζυγό ${esc(bus)}</b>: ${F.blocks.length} κλάδοι (L + R′) ∥ (C + R″) ∥ R_p σε σειρά${F.pure?' (χωρίς R_p, όπως το σχήμα)':''}, από τη σάρωση ${fmt(F.f[0],3)} – ${fmt(F.f[F.f.length-1],5)} Hz`
+  +` (γραμμές ${F.line==='pi'?'ως ένα π η καθεμία, όπως στο πλήρες δίκτυο σε EMT':'με κατανεμημένες παραμέτρους'}). Απόκλιση |ΔZ|/|Z|: θετική ακολουθία <b>${e(F.err1.rms)}</b> rms, ${e(F.err1.max)} το πολύ (στα ${fmt(F.err1.fmax,4)} Hz), ${e(F.err1.f0)} στη θεμελιώδη·`
+  +` μηδενική <b>${e(F.err0.rms)}</b> rms, ${e(F.err0.max)} το πολύ. Κορυφές της |Z₁|: ${F.peaks.length?F.peaks.map(v=>fmt(v,4)).join(', ')+' Hz':'καμία'}.</div>`
+  +fosterPlot(F)+`<div class="small fz-key"><span style="color:#1f77b4">━ |Z₁| της σάρωσης ┅ των κλάδων</span> · <span style="color:#d95f02">━ |Z₀| ┅ των κλάδων</span></div>`
+  +`<table><thead><tr><th>#</th><th>L₁ (mH)</th><th>R′₁ (Ω)</th><th>L₀ (mH)</th><th>R′₀ (Ω)</th><th>C (µF)</th><th>R″ (Ω)</th><th>R_p₁ (Ω)</th><th>R_p₀ (Ω)</th></tr></thead><tbody>`
+  +F.blocks.map((b,i)=>`<tr><td>${i+1}</td><td>${fmt(b[0]*1e3,4)}</td><td>${u(b[1],1,4)}</td><td>${fmt(b[2]*1e3,4)}</td><td>${u(b[3],1,4)}</td><td>${u(b[4],1e6,4)}</td><td>${u(b[5],1,4)}</td><td>${u(b[6],1,4)}</td><td>${u(b[7],1,4)}</td></tr>`).join('')+'</tbody></table>';}
 function areaBack(){const A=NV.area,b=A.back;if(!b)return;A.back=null;S.tut=b.tut;S.tutRef=b.tutRef;S.tutMeta=b.meta;applyProject(b.pr);renderTutorial();runTheory();runMath();notice('');areaShow();}
 // 4.20: the DC grid of five terminals: the card of the AC/DC load flow (the same grid in the engine, after the same event) and
 // the values of the EMT now, side by side, terminal by terminal

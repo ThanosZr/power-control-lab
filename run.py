@@ -104,7 +104,7 @@ ACTIONS['network_report']=study_action('report')
 ACTIONS['network_view']=study_action('view')        # 4.19.4: the picture of the network of a study as a DXF or SVG file
 ACTIONS['network_open']=study_action('open_file')   # 4.19.4: a network from the text of a file (MATPOWER, PSS/E RAW, JSON)
 ACTIONS['network_save']=study_action('save_file')   # 4.19.4: the network of a study, with its changes, as a file
-ACTIONS['network_area']=study_action('area')        # 5.0.6: the study area chosen in the diagram, its equivalent against the full network, its circuit in EMT
+ACTIONS['network_area']=study_action('area')        # 5.0.6: the study area chosen in the diagram, its equivalent against the full network, its circuit in EMT (5.0.7: also with Fig. 15a)
 
 
 # scripted scenarios (3.14, ROADMAP §30): the pcl package's job() for MATLAB/Octave (webwrite) and other tools,

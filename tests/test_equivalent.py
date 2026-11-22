@@ -14,7 +14,13 @@ EQV3 is the GRID3 with the same data.
 5.0.6 (ROADMAP §94 step γ, §96 B.1): the study area as the buses chosen in the diagram (pcl.equivalent.area, pcl.study.area):
 the boundary is every chosen bus that touches one that was not chosen, the hidden buses of the three-winding transformers
 follow the buses around them, and what the page asks of the engine (the split, the comparison in N−1, the circuit in EMT) is
-what the library gives for the same boundary."""
+what the library gives for the same boundary.
+
+5.0.7 (ROADMAP §96 B.3, THEORY §8ΩΙ): the frequency scan of the network beyond the boundary (pcl.equivalent.scan) is the
+Thevenin of emt_ports at the fundamental and the input impedance of a line by its formula at every frequency; the Foster
+circuit of CIGRE TB 39 Fig. 15a fitted to it (pcl.equivalent.foster) has every element ≥ 0, the EQV3 that the browser builds
+from its blocks has their impedance in both sequences, the area starts in the load flow, and a fault in it gives the current
+of the full network closer than the equivalent at the fundamental."""
 import copy
 import json
 import shutil
@@ -383,12 +389,166 @@ class TestAreaFromTheDiagram(unittest.TestCase):
         from pcl import study as S
         for q, why in (({'buses': ['4', '5']}, 'όλοι είναι ζυγοί του συνόρου'), ({'buses': ['x']}, 'Άγνωστος ζυγός: x'), ({'buses': []}, 'buses:'),
                        ({'buses': ['1', '4', '5', '9'], 'what': 'sky'}, 'what:'), ({'buses': ['1', '4', '5', '9'], 'what': 'compare', 'kind': 'norton'}, 'kind:'),
-                       ({'buses': ['1', '4', '5', '9'], 'what': 'emt', 'fig': '15a'}, 'fig:')):
+                       ({'buses': ['1', '4', '5', '9'], 'what': 'emt', 'fig': '15x'}, 'fig:'),
+                       ({'buses': ['1', '4', '5', '9'], 'what': 'emt', 'fig': '15a'}, 'Σχ. 15a είναι για έναν ζυγό στο σύνορο (εδώ 2)'),     # 5.0.7
+                       ({'buses': ['1', '4'], 'what': 'emt', 'fig': '15a', 'fmax': 50}, 'fmax: από 100 ως 20000 Hz')):
             with self.assertRaises(S.StudyError) as c:
                 S.area({'case': 'ieee9', **q})
             self.assertIn(why, str(c.exception))
         with self.assertRaises(S.StudyError) as c:                 # networks with DC parts are not reduced yet
             S.area({'case': 'mtdc5', 'buses': ['1', '2'], 'what': 'compare'})
+
+
+
+class TestFoster(unittest.TestCase):
+    """5.0.7: the scan and Fig. 15a (one boundary bus: bus 4 of the IEEE 9, the area {1, 4})."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.net = N.ieee(9)
+        cls.lf = cls.net.load_flow()
+        cls.q = Q.emt_ports(cls.net, ['4'], ['1'], lf=cls.lf, machines=N.IEEE9_MACHINES, fig='15a')
+
+    def test_scan_is_the_thevenin_at_the_fundamental(self):
+        # at f₀ the scan gives the Z₁, Z₀ of emt_ports (fig '50'), for one port and for two
+        for B, I in ((['4'], ['1']), (['5', '9'], ['1'])):
+            S = Q.scan(self.net, B, I, lf=self.lf, machines=N.IEEE9_MACHINES, f=[self.net.f, 300.0])
+            q = Q.emt_ports(self.net, B, I, lf=self.lf, machines=N.IEEE9_MACHINES)
+            for k in ('Z1', 'Z0'):
+                self.assertLess(np.max(np.abs(S[k][0] - q[k])) / np.max(np.abs(q[k])), 1e-12, (B, k))
+        S = Q.scan(self.net, ['4'], ['1'], lf=self.lf, machines=N.IEEE9_MACHINES)
+        self.assertEqual((len(S['f']), S['f'][0], S['f'][-1]), (301, 5.0, 2000.0))
+        self.assertIn(50.0, S['f'].tolist())
+        self.assertEqual([round(x) for x in S['peaks'][0]], [123, 329, 678])
+
+    def test_scan_of_a_line_by_its_formula(self):
+        # boundary bus A, a 300 km line with charging to the external bus X with a feeder: Z(f) seen from A is the input
+        # impedance of the line closed on the feeder, by the formula of the long line (line 'distributed') and of one π section
+        net = N.Network(f=50.0)
+        for b in ('I', 'A', 'X'):
+            net.bus(b, 220e3)
+        net.feeder('X', Sk=5e9, RX=0.1, slack=True)
+        net.line('I', 'A', 0.05, 0.4, length=50, B=2.8e-6)
+        net.line('A', 'X', 0.03, 0.32, length=300, B=3.6e-6)
+        net.load('I', 50e6, 10e6)
+        zb = 220e3 ** 2 / 100e6
+        zf = (0.1 + 1j) / np.hypot(0.1, 1) * 1.1 * 100e6 / 5e9 * zb
+        fs = np.array([10.0, 50.0, 137.0, 480.0, 1500.0])
+        for line in ('distributed', 'pi'):
+            S = Q.scan(net, ['A'], ['I'], f=fs, line=line)
+            for f, Z in zip(fs, S['Z1'][:, 0, 0] * zb):
+                h = f / 50
+                zl = complex(zf.real, zf.imag * h)
+                z, y = complex(0.03, 0.32 * h) * 300, 1j * 3.6e-6 * h * 300          # B: S/km at f₀
+                if line == 'pi':
+                    want = 1 / (y / 2 + 1 / (z + 1 / (y / 2 + 1 / zl)))
+                else:
+                    zc, gl = np.sqrt(z / y), np.sqrt(z * y)
+                    want = zc * (zl + zc * np.tanh(gl)) / (zc + zl * np.tanh(gl))
+                self.assertLess(abs(Z / want - 1), 1e-10, (line, f))
+
+    def test_the_fit(self):
+        # IEEE 9, bus 4, 5 Hz to 2 kHz: within 5 % rms in each sequence and 0,5 % at f₀, every element ≥ 0; the blocks
+        # of the figure alone (no R_p) cannot follow the scan: Z(∞) = ΣR″ against a capacitive network
+        F = self.q['foster']
+        self.assertLess(F['err1']['rms'], 0.05)
+        self.assertLess(F['err0']['rms'], 0.05)
+        self.assertLess(max(F['err1']['max'], F['err0']['max']), 0.1)
+        self.assertLess(max(F['err1']['f0'], F['err0']['f0']), 0.005)
+        b = np.array(F['blocks'])
+        self.assertTrue((b >= 0).all() and (b[:, [0, 2]] > 0).all())
+        S = Q.scan(self.net, ['4'], ['1'], lf=self.lf, machines=N.IEEE9_MACHINES)
+        i0 = S['f'].tolist().index(self.net.f)                     # the matrices of EQV3 at the fundamental: the scan there
+        self.assertLess(abs(self.q['Z1'][0, 0] - S['Z1'][i0, 0, 0]) + abs(self.q['Z0'][0, 0] - S['Z0'][i0, 0, 0]), 1e-12)
+        P = Q.foster(S['f'], S['Z1'][:, 0, 0], S['Z0'][:, 0, 0], self.net.f, pure=True)
+        self.assertGreater(P['err1']['rms'], 0.2)
+        self.assertTrue((P['X'][:, 6:] == 0).all())
+
+    def test_the_circuit_is_the_blocks(self):
+        # EQV3 with fig '15a' and the blocks of the fit, shorted at its terminals from the steady state (init 'ac'): the current
+        # is V/Z₁ (three phases to earth) and 3V/(2Z₁ + Z₀) (phase a to earth) of the blocks at 50, 150, 400 and 700 Hz
+        import pcl
+        F, zb, Un = self.q['foster'], self.q['foster']['zb'], self.q['Un'][0]
+        w = 2 * np.pi * self.net.f
+        X = [[b[0] * w / zb, b[1] / zb, b[2] * w / zb, b[3] / zb, b[4] * w * zb, b[5] / zb, zb / b[6] if b[6] else 0.0, zb / b[7] if b[7] else 0.0] for b in F['blocks']]
+
+        def C(cid, typ, params):
+            return {'id': cid, 'type': typ, 'x': 0, 'y': 0, 'rot': 0, 'flip': False, 'label': cid, 'params': params}
+        for f in (50.0, 150.0, 400.0, 700.0):
+            z1, z0 = (v[0] * zb for v in Q.foster_z(np.array([1j * f / self.net.f]), X))
+            for kind, want in (('abcg', 1 / abs(z1)), ('ag', 3 / abs(2 * z1 + z0))):
+                pr = {'version': 4, 'solve': {'init': 'ac'},
+                      'components': [C('S', 'EQV3', {'Un': repr(Un), 'f': f, 'fig': '15a', 'F': Q._mat(F['blocks']), 'conn': 'bus'}),
+                                     C('J', 'JUNC', {}), C('F1', 'FLT3', {'kind': kind, 'ton': 0, 'conn': 'bus'})],
+                      'wires': [{'id': 'w1', 'a': {'c': 'S', 'p': 'abc1'}, 'b': {'c': 'J', 'p': 'j'}, 'pts': []},
+                                {'id': 'w2', 'a': {'c': 'F1', 'p': 'abc'}, 'b': {'c': 'J', 'p': 'j'}, 'pts': []}]}
+                r = pcl.Project(pr).run(2 / f, channels=['Y:F1/Ia'], hdiv=2000)
+                t, y = np.array(r.t), np.array(r['Y:F1/Ia'])
+                pk = np.abs(y[t > 1 / f]).max() / (Un / np.sqrt(3) * np.sqrt(2))
+                self.assertLess(abs(pk / want - 1), 2e-5, (f, kind))
+
+    def test_area_starts_in_the_load_flow(self):
+        import pcl
+        pr = self.net.to_emt(self.lf, machines=N.IEEE9_MACHINES, boundary=['4'], internal=['1'], fig='15a')
+        eq = [c for c in pr['components'] if c['type'] == 'EQV3']
+        self.assertEqual((len(eq), eq[0]['params']['fig'], len(eq[0]['params']['F'].split(';'))), (1, '15a', len(self.q['foster']['blocks'])))
+        res = pcl.Project(pr).run(0.1, channels=['Y:G1:pe', 'Y:G1:qe'])
+        self.assertLess(abs(res['Y:G1:pe'][-1] - self.lf['buses']['1']['P'] / 100e6), 1e-4)
+        self.assertLess(abs(res['Y:G1:qe'][-1] - self.lf['buses']['1']['Q'] / 100e6), 1e-4)
+
+    def test_fault_against_the_full_network(self):
+        # a fault at 50 ms at the boundary bus 4 and at bus 1: the first peak and the rms of the second cycle of i_a within 2,5 %
+        # of the full network in EMT with Fig. 15a, and the largest difference in the first cycle below that of Fig. 50
+        import pcl
+        full = self.net.to_emt(self.lf, machines=N.IEEE9_MACHINES)
+        areas = {fig: self.net.to_emt(self.lf, machines=N.IEEE9_MACHINES, boundary=['4'], internal=['1'], fig=fig) for fig in ('15a', '50')}
+        for bus in ('4', '1'):
+            for kind in ('abcg', 'ag'):
+                rf = pcl.Project(_fault(full, bus, kind)).run(0.1, channels=['Y:F1/Ia'])
+                t, a = np.array(rf.t), np.array(rf['Y:F1/Ia'])
+                m1, m2 = (t > 0.05) & (t < 0.07), (t > 0.07) & (t < 0.09)
+                dev = {}
+                for fig, pr in areas.items():
+                    b = np.interp(t, *(np.array(v) for v in (lambda r: (r.t, r['Y:F1/Ia']))(pcl.Project(_fault(pr, bus, kind)).run(0.1, channels=['Y:F1/Ia']))))
+                    dev[fig] = np.max(np.abs(b[m1] - a[m1])) / np.max(np.abs(a[m1]))
+                    if fig == '15a':
+                        self.assertLess(abs(np.abs(b[m1]).max() / np.abs(a[m1]).max() - 1), 0.025, (bus, kind))
+                        self.assertLess(abs(np.sqrt(np.mean(b[m2] ** 2)) / np.sqrt(np.mean(a[m2] ** 2)) - 1), 0.025, (bus, kind))
+                self.assertLess(dev['15a'], dev['50'], (bus, kind, dev))
+
+    def test_what_is_refused(self):
+        for kw, why in (({'boundary': ['5', '9'], 'internal': ['1']}, 'Fig. 15a is for one boundary bus (2 here)'),
+                        ({'boundary': ['4'], 'internal': ['1'], 'line': 'bezier'}, 'line: one of pi, distributed'),
+                        ({'boundary': ['4'], 'internal': ['1'], 'fmax': 1.0}, 'scan: 0 < fmin < fmax')):
+            with self.assertRaises(Q.EquivalentError) as c:
+                Q.emt_ports(self.net, lf=self.lf, machines=N.IEEE9_MACHINES, fig='15a', **kw)
+            self.assertIn(why, str(c.exception))
+        with self.assertRaises(N.NetworkError):
+            self.net.to_emt(self.lf, fmax=3000.0)                 # the keywords of the fit only with a boundary
+
+    def test_what_the_browser_refuses(self):
+        # the EQV3 of the page: Fig. 15a with two ports, a block without its eight numbers, a block without inductance
+        import pcl
+
+        def C(cid, typ, params):
+            return {'id': cid, 'type': typ, 'x': 0, 'y': 0, 'rot': 0, 'flip': False, 'label': cid, 'params': params}
+        two = {'Un': '150e3; 150e3', 'R1': '0.01, 0; 0, 0.01', 'X1': '0.1, 0; 0, 0.1', 'R0': '0.01, 0; 0, 0.01', 'X0': '0.1, 0; 0, 0.1'}
+        for prm, why in ((dict(two, F='0.1, 0, 0.1, 0, 1e-6, 0, 0, 0'), 'για μία θύρα'), ({'F': '0.1, 0, 0.1, 0, 1e-6, 0, 0'}, '8 μη αρνητικούς αριθμούς'),
+                         ({'F': '0.1, 0, 0.1, 0, -1e-6, 0, 0, 0'}, '8 μη αρνητικούς αριθμούς'), ({'F': '0.1, 0, 0, 0, 1e-6, 0, 0, 0'}, 'L₁ > 0 και L₀ > 0')):
+            pr = {'version': 4, 'components': [C('S', 'EQV3', {'fig': '15a', 'conn': 'bus', **prm}), C('R', 'LOAD3', {'Un': 150e3, 'P': 1e6, 'Q': 0, 'conn': 'bus'})],
+                  'wires': [{'id': 'w1', 'a': {'c': 'S', 'p': 'abc1'}, 'b': {'c': 'R', 'p': 'abc'}, 'pts': []}]}
+            with self.assertRaises(pcl.PclError) as c:
+                pcl.Project(pr).run(0.01, channels=['t'])
+            self.assertIn(why, str(c.exception))
+
+    def test_what_the_page_asks(self):
+        from pcl import study as S
+        e = S.area({'case': 'ieee9', 'buses': ['1', '4'], 'what': 'emt', 'fig': '15a'})
+        self.assertEqual((e['boundary'], e['fig'], len(e['foster']['blocks'])), (['4'], '15a', len(self.q['foster']['blocks'])))
+        self.assertEqual(e['foster']['err1'], self.q['foster']['err1'])
+        self.assertEqual(len(e['foster']['f']), len(e['foster']['Z1fit']))
+        q = next(c for c in e['project']['components'] if c['type'] == 'EQV3')['params']
+        self.assertEqual((q['fig'], q['F']), ('15a', Q._mat(self.q['foster']['blocks'])))
 
 
 if __name__ == '__main__':

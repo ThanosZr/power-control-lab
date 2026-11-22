@@ -1053,9 +1053,36 @@
      "lf",
      "machines",
      "fig",
-     "tol"
+     "tol",
+     "fmin",
+     "fmax",
+     "n",
+     "line",
+     "pure"
     ],
     "since": "5.0.4"
+   },
+   "pcl.equivalent.foster": {
+    "params": [
+     "f",
+     "Z1",
+     "Z0",
+     "f0",
+     "kmax",
+     "tol",
+     "pure",
+     "w0",
+     "ratio",
+     "nfev"
+    ],
+    "since": "5.0.6"
+   },
+   "pcl.equivalent.foster_z": {
+    "params": [
+     "sn",
+     "X"
+    ],
+    "since": "5.0.6"
    },
    "pcl.equivalent.reduce": {
     "params": [
@@ -1069,6 +1096,22 @@
      "mode"
     ],
     "since": "5.0.3"
+   },
+   "pcl.equivalent.scan": {
+    "params": [
+     "net",
+     "boundary",
+     "internal",
+     "lf",
+     "machines",
+     "fmin",
+     "fmax",
+     "n",
+     "line",
+     "f",
+     "tol"
+    ],
+    "since": "5.0.6"
    },
    "pcl.equivalent.split": {
     "params": [
@@ -1088,7 +1131,8 @@
      "fig",
      "name",
      "t_end",
-     "hdiv"
+     "hdiv",
+     "**foster_kw"
     ],
     "since": "5.0.4"
    },
@@ -3159,7 +3203,8 @@
      "hdiv",
      "boundary",
      "internal",
-     "fig"
+     "fig",
+     "**foster_kw"
     ],
     "since": "4.3"
    },
@@ -6877,6 +6922,7 @@
      "fig",
      "Rs",
      "C",
+     "F",
      "conn"
     ],
     "pins": [

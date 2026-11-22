@@ -784,3 +784,8 @@ main>.dk-group>.dk-body{overflow:visible}
 .pw-orow{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:2px 0;cursor:pointer}
 .pw-foot{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;border-top:1px solid var(--line);flex:none}.pw-foot label{display:flex;gap:6px;align-items:center;margin-right:auto}
 .pw-foot button{font-size:11.5px;padding:4px 9px}
+/* 5.0.7: the scan against the Foster circuit of Fig. 15a, in the box of the area */
+.fz-plot{display:block;width:100%;max-width:640px;height:auto;margin:6px 0;font-size:10px;fill:var(--muted,#666)}
+.fz-plot .fz-grid{stroke:var(--line,#ddd);stroke-width:.6}
+.fz-key{margin:-2px 0 6px}
+.nv-cmp.fz{max-height:560px}

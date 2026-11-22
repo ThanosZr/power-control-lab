@@ -92,7 +92,28 @@
   const rmax=Math.max(...R.map((r,i)=>Math.abs(r[i])));let hasR=rmax>0;
   if(hasR&&!P.posDef(R)){const d=1e-9*rmax;for(let i=0;i<n;i++)R[i][i]+=d;if(!P.posDef(R))throw new Error('Ισοδύναμο δικτύου: ο πίνακας R δεν είναι θετικά ημιορισμένος.');}
   return {N,f,w,Un,E,ang,Rs,C,R,L,hasR};}
+ // 5.0.7 (THEORY §8ΩΙ): Fig. 15a for one port, the blocks (L + R′) ∥ (C + R″) ∥ R_p in series between the source and the bus
+ // (pcl.equivalent.foster). The RL branch of a block is a KL of the three phases (L₁, L₀) with a KG (R′₁, R′₀): the sequences
+ // differ there, as in the R + L of Fig. 50; C with R″ in each phase, R_p a KG as R′. A zero R′ of one sequence beside a nonzero
+ // one is lifted to 10⁻⁹ of it (the KG needs both), an R_p of 0 in one sequence alone becomes 10⁶ times the other (open).
+ const seq3=(x1,x0)=>{const a=(x0+2*x1)/3,b=(x0-x1)/3;return [[a,b,b],[b,a,b],[b,b,a]].map(r=>r.map(s).join(', ')).join('; ');};
+ function eqvFoster(p,d,B){if(d.N!==1)throw new Error('Ισοδύναμο δικτύου: το Σχ. 15a είναι για μία θύρα (ένας ζυγός στο σύνορο).');
+  const rows=String(p.F??'').split(/[;\n]+/).map(r=>r.trim()).filter(Boolean).map(r=>r.split(/[,\s]+/).filter(Boolean).map(x=>num(x,NaN)));
+  if(!rows.length||rows.some(r=>r.length!==8||r.some(v=>!Number.isFinite(v)||v<0)))throw new Error('Ισοδύναμο δικτύου: κάθε κλάδος Foster θέλει 8 μη αρνητικούς αριθμούς (L₁, R′₁, L₀, R′₀, C, R″, R_p₁, R_p₀).');
+  if(rows.some(r=>!(r[0]>0&&r[2]>0)))throw new Error('Ισοδύναμο δικτύου: σε κάθε κλάδο Foster L₁ > 0 και L₀ > 0.');
+  const T=B.terms(p,['a1','b1','c1'],'abc1'),e='E1';
+  B.comp(e,'VAC3',{Vpk:d.E[0]*d.Un[0]/Math.sqrt(3)*Math.SQRT2,f:d.f,phase:d.ang[0],seq:'abc',Rs:0,Ls:0,conn:'sep'});B.wire([e,'n'],B.gnd());
+  let U=PH.map(x=>[e,x]);
+  rows.forEach((r,k)=>{const [L1,R1,L0,R0,C,R2,P1,P0]=r,q=k+1,V=k===rows.length-1?T:PH.map(x=>B.node('F'+q+x)),m=Math.max(R1,R0),pm=Math.max(P1,P0);
+   const K=B.comp('K'+q,'KL',{Lmat:seq3(L1,L0),Rw:0,i0:'0'}),Rk=m>0?B.comp('R'+q,'KG',{kind:'R',mat:seq3(Math.max(R1,1e-9*m),Math.max(R0,1e-9*m))}):null;
+   const G=pm>0?B.comp('P'+q,'KG',{kind:'R',mat:seq3(P1>0?P1:1e6*pm,P0>0?P0:1e6*pm)}):null;
+   PH.forEach((x,a)=>{const i=a+1;B.wire(U[a],[K,'a'+i]);if(Rk){B.wire([K,'b'+i],[Rk,'a'+i]);B.wire([Rk,'b'+i],V[a]);}else B.wire([K,'b'+i],V[a]);
+    if(C>0){const cc=B.comp('C'+q+x,'C',{C,v0:0,esr:R2});B.wire(U[a],[cc,'p']);B.wire([cc,'n'],V[a]);}
+    if(G){B.wire(U[a],[G,'a'+i]);B.wire([G,'b'+i],V[a]);}});
+   U=V;});
+  return B.def();}
  function eqvDef(c){const p=prm(c),d=eqvData(p),B=builder('Ισοδύναμο δικτύου'),fig=['15b','15c'].includes(p.fig)?p.fig:'50';
+  if(p.fig==='15a')return eqvFoster(p,d,B);
   const str=m=>m.map(r=>r.map(s).join(', ')).join('; ');
   const K=B.comp('Z','KL',{Lmat:str(d.L),Rw:0,i0:'0',big:true}),Rk=d.hasR?B.comp('R','KG',{kind:'R',mat:str(d.R),big:true}):null;
   for(let k=0;k<d.N;k++){const T=B.terms(p,['a','b','c'].map(x=>x+(k+1)),'abc'+(k+1)),e='E'+(k+1);
