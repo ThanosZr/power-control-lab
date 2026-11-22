@@ -83,7 +83,7 @@ const {chromium}=require('playwright');const fs=require('fs');const path=require
  ok((await p.$$eval('#cmd-ws tbody td:first-child',x=>x.map(e=>e.textContent))).includes('a'),'ο χώρος μεταβλητών έχει το a');
  await cmd("k = p.channels()['keys'][0]");await cmd('scope(k)');ok(/✓ στο scope/.test(await cout()),'scope(): το κανάλι στο scope της σελίδας');
  const sc=await p.evaluate(()=>window.Console.script());ok(sc.includes('from pcl.console import *')&&sc.includes('a = 6 * 7')&&!sc.includes('while True'),'οι εντολές που πέτυχαν ως σενάριο .py');
- await p.click('#cmd-toscen');ok((await p.$eval('#scen-code',e=>e.value)).includes('a = 6 * 7'),'→ Σενάρια: οι εντολές στα «Σενάρια»');
+ await p.click('#cmd-toscen');ok(await p.waitForFunction(()=>document.querySelector('#scen-code').value.includes('a = 6 * 7'),null,{timeout:30000}).then(()=>true,()=>false),'→ Σενάρια: οι εντολές στα «Σενάρια»');
  await p.selectOption('#cmd-kernel','server');await cmd('b = 5');await cmd('b * a if "a" in dir() else b');
  ok(/του server/.test(await p.$eval('#cmd-kinfo',e=>e.textContent))&&/\n5\n?$/.test((await cout()).trimEnd()+'\n'),'πυρήνας του server: δικός του χώρος μεταβλητών (το a δεν είναι εκεί)');
  await loop('server');await cmd('b');ok(/>>> b\n5/.test((await cout()).slice(-200)),'μετά το Ctrl+C στον server οι μεταβλητές μένουν');

@@ -39,8 +39,8 @@ let R={},fail=[];
  // 1. the page of before
  R.o0=await order();R.reg0=await p.evaluate(()=>[...document.querySelectorAll('.dk-region')].filter(r=>!r.hidden).length);
  R.tools=await p.evaluate(()=>[...document.querySelectorAll('.dk-card')].map(c=>c.dataset.dkCard+':'+c.querySelectorAll('.dk-tools button').length));
- ok(JSON.stringify(R.o0)===JSON.stringify(['circuit','scope','scen','addons','math','theory'])&&R.reg0===0,'the page of before '+JSON.stringify([R.o0,R.reg0]));
- ok(R.tools.length===7&&R.tools.every(x=>x.endsWith(':4')),'⠿ ⇱ ⛶ ▾ on every card, and on the diagram of the network (5.0.6, hidden until a study opens it) '+R.tools.join(' '));
+ ok(JSON.stringify(R.o0)===JSON.stringify(['circuit','scope','scen','cmd','addons','math','theory'])&&R.reg0===0,'the page of before (5.0.8: with the command line) '+JSON.stringify([R.o0,R.reg0]));
+ ok(R.tools.length===8&&R.tools.every(x=>x.endsWith(':4')),'⠿ ⇱ ⛶ ▾ on every card (5.0.8: and on the command line), and on the diagram of the network (5.0.6, hidden until a study opens it) '+R.tools.join(' '));
 
  // 2. the scope to the left edge, by its grip, while it runs
  await p.evaluate(()=>PCL.play());await p.waitForTimeout(600);const t0=await p.evaluate(()=>PCL.S.sim?.t||0);

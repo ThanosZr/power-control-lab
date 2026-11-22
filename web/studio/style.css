@@ -383,7 +383,7 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 #cmd-line{flex:1;border:0;outline:0;resize:none;font:12px/1.6 ui-monospace,Menlo,Consolas,monospace;padding:0;background:transparent;min-height:1.6em;overflow:auto}
 .cmd-files{margin-top:4px}.cmd-files a{margin-right:10px}
 .cmd-wsbox{max-height:400px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
-.cmd-ws{width:100%;margin:0}.cmd-ws th,.cmd-ws td{text-align:left}.cmd-ws td:nth-child(3),.cmd-ws th:nth-child(3){text-align:right}.cmd-ws td{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cmd-ws tr.given td:first-child{font-weight:600;color:#24584c}
+.cmd-ws{width:100%;margin:0;border-collapse:collapse;font-size:12px}.cmd-ws th,.cmd-ws td{text-align:left;padding:3px 8px;border-bottom:1px solid var(--line)}.cmd-ws th{background:#f4f7f5;position:sticky;top:0}.cmd-ws td:nth-child(3),.cmd-ws th:nth-child(3){text-align:right}.cmd-ws td{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cmd-ws tr.given td:first-child{font-weight:600;color:#24584c}
 .scen-plot{margin:0 0 12px}.scen-plot h5{margin:0 0 4px;font-size:12px}.scen-plot canvas{width:100%;height:220px;display:block}
 .scen-leg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--muted);margin-top:2px}.scen-leg i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:4px;vertical-align:middle}
 .scen-file{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:12.5px}.scen-file small{color:var(--muted)}
