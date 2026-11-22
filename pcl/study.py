@@ -692,7 +692,9 @@ def area(data):
     the network as one EQV3 at the boundary (Network.to_emt with the boundary; the machines of the IEEE 9 for 'ieee9').
     5.0.7: 'fig' '15a' for one boundary bus, with 'fmax' (Hz, the top of the scan, 100 to 20000, default 2000) and 'pure'
     (the blocks of the figure without R_p): also 'foster' (the blocks, the errors and the scan with the fit, see
-    pcl.equivalent.emt_ports)."""
+    pcl.equivalent.emt_ports). 5.0.9: 'fig' 'fdne' for any number of boundary buses, with 'fmax', 'pure' (the module of
+    Fig. 1 of the paper) and 'passive' (the passivity enforced): also 'fdne' (the errors, the check and the driving-point
+    impedances of the scan and of the fit per port)."""
     from . import equivalent as Q
     what = data.get('what') or 'split'
     if what not in AREA_WHAT:
@@ -727,16 +729,16 @@ def area(data):
             out.update(kind=kind, fictitious=len(eq['fictitious']), slack_bus=eq['slack'], compare=_clean(Q.compare(net, eq)))
         elif what == 'emt':
             fig = data.get('fig') or '50'
-            if fig not in Q.FIGS + (Q.FOSTER,):
-                raise StudyError('fig: ένα από ' + ', '.join(Q.FIGS + (Q.FOSTER,)))
+            if fig not in Q.FIGS + (Q.FOSTER, Q.FDNE):
+                raise StudyError('fig: ένα από ' + ', '.join(Q.FIGS + (Q.FOSTER, Q.FDNE)))
             if len(keep) > MAX_AREA_EMT:
                 raise StudyError(f'Η περιοχή έχει {len(keep)} ζυγούς: σε EMT ανοίγει ως {MAX_AREA_EMT}.')
             machines = N.IEEE9_MACHINES if data.get('case') == 'ieee9' and data.get('network') is None else None
             kw = {}
-            if fig == Q.FOSTER:
-                if len(B) != 1:
-                    raise StudyError(f'Το Σχ. 15a είναι για έναν ζυγό στο σύνορο (εδώ {len(B)}): διάλεξε την περιοχή ώστε να τη χωρίζει '
-                                     'ένας ζυγός από το υπόλοιπο δίκτυο, ή ένα σχήμα πολλών θυρών (50, 15b, 15c).')
+            if fig == Q.FOSTER and len(B) != 1:
+                raise StudyError(f'Το Σχ. 15a είναι για έναν ζυγό στο σύνορο (εδώ {len(B)}): διάλεξε την περιοχή ώστε να τη χωρίζει '
+                                 'ένας ζυγός από το υπόλοιπο δίκτυο, ή ένα σχήμα πολλών θυρών (50, 15b, 15c, FDNE).')
+            if fig in (Q.FOSTER, Q.FDNE):
                 try:
                     fmax = float(data.get('fmax') or Q.SCAN_FMAX)
                 except (TypeError, ValueError):
@@ -744,10 +746,14 @@ def area(data):
                 if not AREA_FMAX[0] <= fmax <= AREA_FMAX[1]:
                     raise StudyError(f'fmax: από {AREA_FMAX[0]:g} ως {AREA_FMAX[1]:g} Hz')
                 kw = {'fmax': fmax, 'pure': bool(data.get('pure'))}
+                if fig == Q.FDNE:
+                    kw['passive'] = bool(data.get('passive'))
             pr = net.to_emt(machines=machines, boundary=B, internal=I, fig=fig, **kw)
             out.update(fig=fig, project=_clean(pr))
             if fig == Q.FOSTER:
                 out['foster'] = _clean(pr['meta']['equivalent']['foster'])
+            if fig == Q.FDNE:
+                out['fdne'] = _clean(pr['meta']['equivalent']['fdne'])
     except Q.EquivalentError as e:
         raise StudyError(str(e)) from e
     except N.NetworkError as e:

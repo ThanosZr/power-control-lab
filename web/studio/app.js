@@ -3095,7 +3095,7 @@ function areaShow(){const A=NV.area,r=A.res,n=A.ids.length,ok=!!r&&!r.error&&!A.
  else h=`<b class="ar-c">${r.internal.length+r.boundary.length}</b> ζυγοί: ${r.internal.length} μέσα, σύνορο <b class="ar-b">${list(r.boundary)}</b> · ${r.external} έξω · ${r.branches} κλάδοι στην περιοχή · ο ζυγός ταλάντωσης ${AREA_SLACK[r.slack]||r.slack}`;
  if(A.back)h+=` · <button id="nv-back" title="Το κύκλωμα και το tutorial που ήταν πριν από «⚡ Η περιοχή σε EMT»">↶ Πίσω στο «${esc(A.back.title)}»</button>`;
  // 5.0.7: Fig. 15a is for one boundary bus, with the top of the scan beside it
- const fa=$('#nv-fig').value==='15a',one=ok&&r.boundary.length===1;$('#nv-fmax-l').hidden=!fa;
+ const fa=$('#nv-fig').value==='15a',fd=$('#nv-fig').value==='fdne',one=ok&&r.boundary.length===1;$('#nv-fmax-l').hidden=!fa&&!fd;$('#nv-passive-l').hidden=!fd;   // 5.0.9: and the FDNE
  if(fa&&ok&&!one)h+=` · <span class="bad">το Σχ. 15a θέλει έναν ζυγό στο σύνορο (εδώ ${r.boundary.length})</span>`;
  $('#nv-area-info').innerHTML=h;$('#nv-area-info').classList.toggle('muted',!n&&!A.back);$('#nv-cmp-run').disabled=!ok;$('#nv-emt').disabled=!ok||(fa&&!one);$('#nv-area-clear').disabled=!n;}
 // the full network against the area with its equivalent: the base case and every branch of the area out (pcl.equivalent.compare)
@@ -3112,14 +3112,15 @@ async function areaCompare(){const A=NV.area,d=STUDY.view;if(!d||!A.res||A.res.e
   +rows.map(o=>`<tr class="${o===worst?'worst':''}"><td>${o.base?'<i>βασικό σημείο</i>':esc(o.outage)}</td>${o.error?`<td colspan="3" class="muted">${o.error==='no convergence'?'χωρίς σύγκλιση (νησίδα ή όριο)':esc(o.error)}</td>`:`<td>${f(o.dV,4)}</td><td>${f(o.dA,4)}</td><td>${f(o.dP,4)}</td>`}</tr>`).join('')+'</tbody></table>';}
 // the area as a circuit in EMT (Network.to_emt with the boundary): in the place of the circuit, like a file that opens
 async function areaEmt(){const A=NV.area,d=STUDY.view;if(!d||!A.res||A.res.error)return;const fig=$('#nv-fig').value,ids=A.ids.slice();A.busy='emt';areaShow();
- const extra=fig==='15a'?{fmax:+$('#nv-fmax').value||2000}:{};
+ const extra=fig==='15a'?{fmax:+$('#nv-fmax').value||2000}:fig==='fdne'?{fmax:+$('#nv-fmax').value||2000,passive:$('#nv-passive').checked}:{};
  let r=null;try{r=await api('network_area',{...d.q,buses:ids,what:'emt',fig,...extra});}catch(e){A.busy=null;areaShow();$('#nv-area-info').insertAdjacentHTML('beforeend',` · <span class="bad">${esc(e.message)}</span>`);return;}
  A.busy=null;if(!A.back)A.back={pr:project(),tut:S.tut,tutRef:S.tutRef,meta:S.tutMeta,title:tutorial().title};
  S.tut={id:'empty',options:{}};S.tutMeta=null;S.tutRef=null;applyProject(r.project);renderTutorial();runTheory();runMath();window.Dock?.reveal('circuit');$('#bench-card').scrollIntoView({block:'nearest'});areaShow();
- const q=r.project.meta?.equivalent;notice(`Η περιοχή σε EMT: ${r.internal.length+r.boundary.length} ζυγοί, και το υπόλοιπο δίκτυο ως ένα «Ισοδύναμο δικτύου» (EQV3, ${fig==='50'?'θεμελιώδης':'Σχ. '+fig}) στους ζυγούς ${r.boundary.map(esc).join(', ')}`
+ const q=r.project.meta?.equivalent;notice(`Η περιοχή σε EMT: ${r.internal.length+r.boundary.length} ζυγοί, και το υπόλοιπο δίκτυο ως ένα «Ισοδύναμο δικτύου» (EQV3, ${fig==='50'?'θεμελιώδης':fig==='fdne'?'FDNE':'Σχ. '+fig}) στους ζυγούς ${r.boundary.map(esc).join(', ')}`
   +(q?.Sk?` · S″k ${q.Sk.map(x=>fmt(x/1e6,4)).join(', ')} MVA`:'')+(r.foster?` · ${r.foster.blocks.length} κλάδοι Foster, απόκλιση από τη σάρωση ${fmt(100*r.foster.err1.rms,2)} % (θετική) και ${fmt(100*r.foster.err0.rms,2)} % (μηδενική ακολουθία)`:'')
+  +(r.fdne?` · FDNE με ${r.fdne.terms} όρους, απόκλιση των Z_kk από τη σάρωση ${fmt(100*r.fdne.err1.rms,2)} % (θετική) και ${fmt(100*r.fdne.err0.rms,2)} % (μηδενική ακολουθία), ${r.fdne.is_passive?'παθητικό':'όχι παθητικό'}`:'')
   +'. «↶ Πίσω» στο διάγραμμα φέρνει το κύκλωμα που ήταν.','info');
- if(r.foster)fosterShow(r.foster,r.boundary[0]);}
+ if(r.foster)fosterShow(r.foster,r.boundary[0]);if(r.fdne)fdneShow(r.fdne,r.boundary);}
 // 5.0.7 (§45): the scan of the network beyond the boundary against the Foster circuit of Fig. 15a, and its blocks
 function fosterPlot(F){const W=560,H=210,m={l:52,r:10,t:10,b:30},f=F.f,lx=Math.log10,all=[...F.Z1,...F.Z0,...F.Z1fit,...F.Z0fit].filter(v=>v>0);
  const x0=lx(f[0]),x1=lx(f[f.length-1]),y0=Math.floor(lx(Math.min(...all))),y1=Math.ceil(lx(Math.max(...all)));
@@ -3137,6 +3138,14 @@ function fosterShow(F,bus){const box=$('#nv-cmp'),e=x=>fmt(100*x,2)+' %',u=(v,k,
   +fosterPlot(F)+`<div class="small fz-key"><span style="color:#1f77b4">━ |Z₁| της σάρωσης ┅ των κλάδων</span> · <span style="color:#d95f02">━ |Z₀| ┅ των κλάδων</span></div>`
   +`<table><thead><tr><th>#</th><th>L₁ (mH)</th><th>R′₁ (Ω)</th><th>L₀ (mH)</th><th>R′₀ (Ω)</th><th>C (µF)</th><th>R″ (Ω)</th><th>R_p₁ (Ω)</th><th>R_p₀ (Ω)</th></tr></thead><tbody>`
   +F.blocks.map((b,i)=>`<tr><td>${i+1}</td><td>${fmt(b[0]*1e3,4)}</td><td>${u(b[1],1,4)}</td><td>${fmt(b[2]*1e3,4)}</td><td>${u(b[3],1,4)}</td><td>${u(b[4],1e6,4)}</td><td>${u(b[5],1,4)}</td><td>${u(b[6],1,4)}</td><td>${u(b[7],1,4)}</td></tr>`).join('')+'</tbody></table>';}
+// 5.0.9 (§47): the FDNE against the scan: the driving-point impedance of every port (as the plot of the Foster circuit), the errors
+// and the passivity check
+function fdneShow(F,buses){const box=$('#nv-cmp'),e=x=>fmt(100*x,2)+' %',lam=v=>v>=0?'≥ 0':fmt(v,2);box.hidden=false;box.classList.add('fz');
+ box.innerHTML=`<div class="small"><b>FDNE στους ζυγούς ${buses.map(esc).join(', ')}</b>: σχήμα π με κλάδους RL, RLC σε σειρά και L σε σειρά με C ∥ G σε κάθε ακολουθία${F.pure?' (μόνο οι κλάδοι του module: ένας RC, ένας RL, RLC σε σειρά)':''}, ${F.k} ζεύγη πόλων κοινά σε όλα τα στοιχεία, ${F.terms} όροι, από τη σάρωση ${fmt(F.f[0],3)} – ${fmt(F.f[F.f.length-1],5)} Hz.`
+  +` Απόκλιση των Z_kk: θετική ακολουθία <b>${e(F.err1.rms)}</b> rms, ${e(F.err1.max)} το πολύ (στα ${fmt(F.err1.fmax,4)} Hz), ${e(F.err1.f0)} στη θεμελιώδη· μηδενική <b>${e(F.err0.rms)}</b> rms, ${e(F.err0.max)} το πολύ.`
+  +` Παθητικότητα (η μικρότερη ιδιοτιμή του Re Y προς τη μεγαλύτερη, από f_min/10 ως 10·f_max): ${lam(F.lam1)} και ${lam(F.lam0)}, <b>${F.is_passive?'παθητικό':'όχι παθητικό'}</b>${F.passive?` (διόρθωση με ${F.moved} περιορισμούς)`:''}.</div>`
+  +F.ports.map((P,k)=>`<div class="small"><b>${esc(buses[k])}</b></div>`+fosterPlot({f:F.f,...P})).join('')
+  +`<div class="small fz-key"><span style="color:#1f77b4">━ |Z₁,kk| της σάρωσης ┅ του FDNE</span> · <span style="color:#d95f02">━ |Z₀,kk| ┅ του FDNE</span></div>`;}
 function areaBack(){const A=NV.area,b=A.back;if(!b)return;A.back=null;S.tut=b.tut;S.tutRef=b.tutRef;S.tutMeta=b.meta;applyProject(b.pr);renderTutorial();runTheory();runMath();notice('');areaShow();}
 // 4.20: the DC grid of five terminals: the card of the AC/DC load flow (the same grid in the engine, after the same event) and
 // the values of the EMT now, side by side, terminal by terminal

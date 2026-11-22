@@ -271,9 +271,9 @@ class ApiSurface(unittest.TestCase):
         for k in ('scan', 'foster', 'foster_z'):
             self.assertTrue(api_surface.experimental('pcl', 'pcl.equivalent.' + k))
         self.assertEqual(self.now['pcl']['pcl.equivalent.emt_ports']['params'][:7], ['net', 'boundary', 'internal', 'lf', 'machines', 'fig', 'tol'])
-        self.assertEqual(self.now['pcl']['pcl.equivalent.emt_ports']['params'][7:], ['fmin', 'fmax', 'n', 'line', 'pure'])
+        self.assertEqual(self.now['pcl']['pcl.equivalent.emt_ports']['params'][7:12], ['fmin', 'fmax', 'n', 'line', 'pure'])
         self.assertEqual(self.now['pcl']['pcl.network.Network.to_emt']['params'][8:], ['**foster_kw'])
-        self.assertEqual(self.now['project']['part:EQV3']['params'][-2:], ['F', 'conn'])
+        self.assertEqual([k for k in self.now['project']['part:EQV3']['params'] if k in ('F', 'conn')], ['F', 'conn'])
         self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 947)
 
     def test_the_surface_of_5_0_8(self):
@@ -286,7 +286,19 @@ class ApiSurface(unittest.TestCase):
         self.assertIn('/api/console', self.now['server'])
         self.assertTrue(api_surface.experimental('server', '/api/console'))
         self.assertFalse(any(k.startswith('pcl.console._') for k in self.now['pcl']))
-        self.assertEqual(sum(len(v) for v in self.now.values()), 978)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 978)
+
+    def test_the_surface_of_5_0_9(self):
+        """5.0.9: the FDNE of many ports (§96 B.3): pcl.equivalent.fdne, fdne_y and fdne_basis are experimental like the rest of
+        the module; emt_ports takes passive after pure, and to_emt passes it on; the page asks with the same route. In the file
+        format, the EQV3 has the parameter FD (its terms) and the value 'fdne' of fig."""
+        self.assertEqual(self.now['pcl']['pcl.equivalent.fdne']['params'], ['f', 'Y1', 'Y0', 'f0', 'tol', 'mmax', 'w0', 'pure', 'passive', 'nfev'])
+        self.assertEqual(self.now['pcl']['pcl.equivalent.fdne_y']['params'], ['sn', 'F'])
+        for k in ('fdne', 'fdne_y', 'fdne_basis'):
+            self.assertTrue(api_surface.experimental('pcl', 'pcl.equivalent.' + k))
+        self.assertEqual(self.now['pcl']['pcl.equivalent.emt_ports']['params'][7:], ['fmin', 'fmax', 'n', 'line', 'pure', 'passive'])
+        self.assertEqual(self.now['project']['part:EQV3']['params'][-3:], ['F', 'FD', 'conn'])
+        self.assertEqual(sum(len(v) for v in self.now.values()), 981)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

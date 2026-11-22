@@ -70,6 +70,8 @@
    for(let k=0;k<40;k++){const e=(k+1)*(k+2);c+=tr/(k+2);d+=ti/(k+2);a+=tr/e;b+=ti/e;const nr=-ti*x/(k+1),ni=tr*x/(k+1);tr=nr;ti=ni;if(Math.abs(tr)+Math.abs(ti)<1e-18)break;}
    return [a,b,c,d];}
   const co=Math.cos(x),si=Math.sin(x),x2=x*x,c=si/x+(co-1)/x2,d=-co/x+si/x2;return [si/x-c,(1-co)/x-d,c,d];}
+ // 5.0.9: a value of either sign, at least lo in magnitude (the parts with neg)
+ const negFloor=(v,lo)=>Math.abs(v)>=lo?v:(v<0?-lo:lo);
  // the increments of the terms of block b over a step of length h: inputs ua (after the first point) → ub (before the second), θ q0 → q1
  function wmInc(k,ua,ub,q0,q1,h){const out=new Array(k.L);let o=0,w=null,cr=1,ci=0;
   if(k.E){const q=k.nu*q0,p0=2*Math.PI*(q-Math.floor(q));w=wmW(2*Math.PI*k.nu*(q1-q0));cr=Math.cos(p0);ci=Math.sin(p0);}
@@ -875,9 +877,11 @@
    const info={id:c.id,type:T,label:c.label||c.id,pins:[],els:[]};compInfo.set(c.id,info);
    const add=e=>{e.cid=c.id;els.push(e);info.els.push(e);return e;};
    const series=(a,b,R)=>{if(!(R>0))return a;const m=internal();add({k:'G',a,b:m,R,role:'Rs'});return m;};
-   if(T==='R'){const a=node(c.id,'a'),b=node(c.id,'b');info.pins=[a,b];info.main=add({k:'G',a,b,R:Math.max(num(p.R,10),1e-9),sched:P.parseSched(p.sched)});}
-   else if(T==='L'){const a=node(c.id,'a'),b=node(c.id,'b');info.pins=[a,b];const m=num(p.Rs,0)>0?internal():b;info.main=add({k:'L',a,b:m,L:Math.max(num(p.L,1e-4),1e-12),i:num(p.i0,0),key:c.id});if(m!==b)add({k:'G',a:m,b,R:num(p.Rs,0)});}
-   else if(T==='C'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];const m=num(p.esr,0)>0?internal():b;info.main=add({k:'C',a,b:m,C:Math.max(num(p.C,1e-6),1e-15),v:num(p.v0,0),i:0,key:c.id});if(m!==b)add({k:'G',a:m,b,R:num(p.esr,0)});}
+   // 5.0.9: neg (set only inside EQV3 'fdne', the branches of an FDNE with R, L, C of one sign) keeps a negative R, L, C, with
+   // the same floor in magnitude; without it the paths are those before
+   if(T==='R'){const a=node(c.id,'a'),b=node(c.id,'b');info.pins=[a,b];info.main=add({k:'G',a,b,R:p.neg===true?negFloor(num(p.R,10),1e-9):Math.max(num(p.R,10),1e-9),sched:P.parseSched(p.sched),...(p.neg===true?{neg:true}:{})});}
+   else if(T==='L'){const a=node(c.id,'a'),b=node(c.id,'b');info.pins=[a,b];const rs=num(p.Rs,0),m=(p.neg===true?rs!==0:rs>0)?internal():b;info.main=add({k:'L',a,b:m,L:p.neg===true?negFloor(num(p.L,1e-4),1e-12):Math.max(num(p.L,1e-4),1e-12),i:num(p.i0,0),key:c.id});if(m!==b)add({k:'G',a:m,b,R:rs,...(p.neg===true?{neg:true}:{})});}
+   else if(T==='C'){const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];const es=num(p.esr,0),m=(p.neg===true?es!==0:es>0)?internal():b;info.main=add({k:'C',a,b:m,C:p.neg===true?negFloor(num(p.C,1e-6),1e-15):Math.max(num(p.C,1e-6),1e-15),v:num(p.v0,0),i:0,key:c.id});if(m!==b)add({k:'G',a:m,b,R:es,...(p.neg===true?{neg:true}:{})});}
    else if(T==='VDC'||T==='VAC'){
     const a=node(c.id,'p'),b=node(c.id,'n');info.pins=[a,b];
     let top=a;if(T==='VDC'&&p.uni){const m=internal();info.uni=add({k:'D',a:m,b:top,Ron:1e-6,Roff:1e7,Vf:0,on:false,key:c.id+'#u'});top=m;}
@@ -2080,7 +2084,7 @@
    if(!W||W.els!==this.net.els||W.n!==this.net.els.length){const list=this.net.els.filter(e=>e.k==='G'||e.k==='I'||e.k==='V'||e.k==='TL'||e.k==='TLM'||e.k==='CPL'||(e.k==='F'&&(e.sm||e.gen||e.srm)));
     W=this.valEls={els:this.net.els,n:this.net.els.length,list};}
    for(const e of W.list){
-    if(e.k==='G')e.Rnow=Math.max(schedAt(e.sched,t,e.R,L),1e-9);
+    if(e.k==='G')e.Rnow=e.neg?negFloor(schedAt(e.sched,t,e.R,L),1e-9):Math.max(schedAt(e.sched,t,e.R,L),1e-9);   // 5.0.9: neg keeps the sign
     else if(e.k==='I')e.Inow=e.wave?P.waveAt(e.wave,t):e.sigIn>=0?(this.sv?this.sv[e.sigIn]:0):schedAt(e.sched,t,e.I,L);
     else if(e.k==='F'&&e.sm){const m=e.sm,th=m.st.the+(t-this.t)*m.p*m.st.w;let q;
      if(m.sat){ // saturated d axis: linearize i_d(ψ_d) at the flux of the previous step, i_d ≈ (ψ_d − ψ₀)/L_inc, at the predicted angle
@@ -2622,7 +2626,7 @@
   // 4.19.6: the switching energy (E_on, E_off) is counted by the solver of the application only
   if(net.sig.blocks.some(b=>b.type==='MEAS'&&b.qty==='E'))throw new NetlistError('Ο λύτης SciPy δεν έχει τις απώλειες μεταγωγής των διακοπτών (E_on, E_off): η «Μέτρηση στοιχείου» με «Ενέργεια μεταγωγής» τρέχει μόνο στον λύτη της εφαρμογής.');
   if(net.els.some(e=>e.tq>0))throw new NetlistError('Ο λύτης SciPy δεν έχει ακόμη τον χρόνο σβέσης t_q των θυρίστορ (4.16): τρέχει μόνο ο λύτης της εφαρμογής, ή βάλε t_q = 0.');
-  const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm','gap','a1','b1','a2','b2','Z','tau','Rl','pts','att'];
+  const F=['k','a','b','R','sched','L','i','C','v','Ron','Roff','Vf','gk','gate','pwm','out','fire','row','src','I','P','Vmin','p1','p2','s1','s2','n','cid','gIn','m','psi','sigIn','wave','ports','N','Gam','Gm','gap','a1','b1','a2','b2','Z','tau','Rl','pts','att','neg'];
   // synchronous machines (3.5): parameters and initial states; the server integrates ψ_α, ψ_β, ω, θ
   const smList=[...net.compInfo.values()].filter(c=>c.sm).map(c=>c.sm),smx=new Map(smList.map((m,i)=>[m,i]));
   const srmList=[...net.compInfo.values()].filter(c=>c.srm).map(c=>c.srm),srmx=new Map(srmList.map((m,i)=>[m,i]));

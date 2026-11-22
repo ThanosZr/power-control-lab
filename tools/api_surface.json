@@ -1,5 +1,5 @@
 {
- "version": "5.0.8",
+ "version": "5.0.9",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -1241,9 +1241,39 @@
      "fmax",
      "n",
      "line",
-     "pure"
+     "pure",
+     "passive"
     ],
     "since": "5.0.4"
+   },
+   "pcl.equivalent.fdne": {
+    "params": [
+     "f",
+     "Y1",
+     "Y0",
+     "f0",
+     "tol",
+     "mmax",
+     "w0",
+     "pure",
+     "passive",
+     "nfev"
+    ],
+    "since": "5.0.9"
+   },
+   "pcl.equivalent.fdne_basis": {
+    "params": [
+     "sn",
+     "terms"
+    ],
+    "since": "5.0.9"
+   },
+   "pcl.equivalent.fdne_y": {
+    "params": [
+     "sn",
+     "F"
+    ],
+    "since": "5.0.9"
    },
    "pcl.equivalent.foster": {
     "params": [
@@ -7110,6 +7140,7 @@
      "Rs",
      "C",
      "F",
+     "FD",
      "conn"
     ],
     "pins": [

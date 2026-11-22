@@ -1528,6 +1528,26 @@ def v506_rows(add):
         sum(json.dumps(a, sort_keys=True) != json.dumps(b, sort_keys=True) for a, b in zip(e['project']['components'], pr['components'])) + abs(len(e['project']['components']) - len(pr['components'])), 0, '')
 
 
+def v509_rows(add):
+    """5.0.9: the FDNE of many ports (pcl.equivalent.fdne, EQV3 'fdne', tests/test_equivalent.py TestFDNE): the fit against the scan
+    of two ports, its passivity, and the start of the area against the load flow."""
+    import numpy as np
+    import pcl
+    from pcl import network as N
+    from pcl import equivalent as Q
+    A = 'Το FDNE πολλών θυρών (5.0.9)'
+    net = N.ieee(9)
+    lf = net.load_flow()
+    S = Q.scan(net, ['5', '9'], ['1'], lf=lf, machines=N.IEEE9_MACHINES)
+    F = Q.fdne(S['f'], np.linalg.inv(S['Z1']), np.linalg.inv(S['Z0']), net.f)
+    add(A, 'IEEE 9, σύνορο 5, 9, 5 Hz – 2 kHz: απόκλιση |ΔZ_kk|/|Z_kk| θετικής ακολουθίας, rms', 'η σάρωση', 0.0, 100 * F['err1']['rms'], 3.0, '%')
+    add(A, 'το ίδιο, μηδενική ακολουθία, rms', 'η σάρωση', 0.0, 100 * F['err0']['rms'], 3.0, '%')
+    add(A, 'η μικρότερη ιδιοτιμή του Re Y προς τη μεγαλύτερη, 0,5 Hz – 20 kHz και f → ∞ (θετική ακολουθία)', '≥ 0 (παθητικό)', 0.0, min(0.0, F['lam1']), 1e-9, '')
+    pr = net.to_emt(lf, machines=N.IEEE9_MACHINES, boundary=['5', '9'], internal=['1'], fig='fdne')
+    r = pcl.Project(pr).run(0.1, channels=['Y:G1:pe'])
+    add(A, 'η περιοχή {1, 4} με το FDNE: P της G1 στα 0,1 s', 'η ροή φορτίου', lf['buses']['1']['P'] / 100e6, float(r['Y:G1:pe'][-1]), 1e-4, 'pu')
+
+
 def v507_rows(add):
     """5.0.7: the scan of the network beyond the boundary and the Foster circuit of Fig. 15a (pcl.equivalent.scan, foster,
     tests/test_equivalent.py TestFoster): the scan at the fundamental against the Thevenin of emt_ports, the scan of a long line
@@ -1897,6 +1917,7 @@ def checks(o):
     v504_rows(add)
     v506_rows(add)
     v507_rows(add)
+    v509_rows(add)
     cpf_rows(add)
     sweepc_rows(add)
     se_rows(add)

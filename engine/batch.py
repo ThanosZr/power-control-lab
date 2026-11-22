@@ -1032,7 +1032,10 @@ class Circuit:
 
     # ------------------------------------------------------------ sources
     def R(self, e, t):
-        return max(sched_at(e.get('sched'), t, e['R']), 1e-9)
+        v = sched_at(e.get('sched'), t, e['R'])
+        if e.get('neg'):                      # 5.0.9: a branch of an FDNE keeps its sign (as in the browser), |R| ≥ 10⁻⁹
+            return v if abs(v) >= 1e-9 else math.copysign(1e-9, v)
+        return max(v, 1e-9)
 
     def im_e(self, m, x):
         """Stator sources of a machine (a, b, c) from its states."""

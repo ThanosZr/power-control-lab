@@ -428,6 +428,7 @@ def compare(net, eq, outages=None, tol=1e-10):
 GEN3_TYPICAL = {'Ra': 0.003, 'X0': 0.15, 'Xdp': 0.3, 'Xdpp': 0.23, 'Td0pp': 0.03, 'neut': 'gnd'}
 FIGS = ('50', '15b', '15c')
 FOSTER = '15a'                  # 5.0.7: Fig. 15a, one port (emt_ports, to_emt, EQV3 'fig')
+FDNE = 'fdne'                   # 5.0.9: the frequency dependent network equivalent of many ports (emt_ports, to_emt, EQV3 'fig')
 EMT_KINDS = ('generator', 'feeder', 'load', 'shunt', 'branch', 'line', 'reactor')
 
 
@@ -874,8 +875,268 @@ def foster(f, Z1, Z0, f0, kmax=FOSTER_KMAX, tol=FOSTER_TOL, pure=False, w0=FOSTE
             'f': f, 'f0': float(f0)}
 
 
+# ---------------------------------------------------------------- 5.0.9: the FDNE of many ports
+# The paper on multi-port frequency dependent network equivalents for the EMTP (1993): the admittance matrix seen from the N
+# boundary buses, in the positive and in the zero sequence, as a π (the branch from bus i to earth Σ_j Y_ij, between i and j
+# −Y_ij, its (2) and (3)), every branch a module of parallel branches (Fig. 1: one RC, one RL and RLC in series), negative
+# branches allowed when R, L, C of each have one sign. Here every element of both matrices has the same poles (the common poles
+# of the paper on the synthesis of one-port and multi-port equivalents, 1986, and of the paper with the computer code for
+# admittance matrices, 2002), from a vector fit of all of them at once, and the terms of a pair of poles are two branches:
+#     kind 2: s/D (L, R, C in series, the branch of Fig. 1),  kind 3: (s + 2σ)/D (L in series with C ∥ G),  D = s² + 2σs + ω²,
+# so any (b₁s + b₀)/D of the fit is α·s/D + β·(s + 2σ)/D with α = b₁ − b₀/(2σ), β = b₀/(2σ), each a branch of one sign; a real
+# pole is an RL branch (kind 1: 1/(s + a)) and the constant a resistor (kind 0). pure: the module of Fig. 1 only (kind 2 for each
+# pair, one RL, one RC: kind 4: s/(s + a)), the poles refined by least squares with the coefficients solved inside.
+# Every function of the basis has Re ≥ 0 on the imaginary axis, so the model is passive when the coefficient matrix of every term
+# (in each sequence) is positive semidefinite: passive=True moves the negative eigenvalues of these matrices to zero (our simple
+# form of the perturbation of the eigenvalues of the residue matrices of the paper of 2008); the check is eig(Re Y) on a band ten
+# times wider than the scan on each side (the criterion of that paper).
+# Normalized frequency sn = s/ω₀ and per unit admittances, as the Foster circuit.
+FDNE_TOL, FDNE_MMAX, FDNE_W0 = 0.03, 12, 30.0
+FDNE_KINDS = ('R', 'RL', 'RLC', 'L+C∥G', 'RC')
+
+
+def fdne_basis(sn, terms):
+    """The functions of the terms (rows kind, p, q) at the normalized frequencies sn: columns len(sn) × len(terms)."""
+    sn = np.asarray(sn, complex)
+    cols = []
+    for k, p, q in terms:
+        k = int(k)
+        if k == 0:
+            cols.append(np.ones(len(sn), complex))
+        elif k == 1:
+            cols.append(1 / (sn + p))
+        elif k == 2:
+            cols.append(sn / (sn * sn + 2 * p * sn + q))
+        elif k == 3:
+            cols.append((sn + 2 * p) / (sn * sn + 2 * p * sn + q))
+        else:
+            cols.append(sn / (sn + p))
+    return np.array(cols).T
+
+
+def _fd_coef(A, F, W):
+    """Real coefficients of the basis A for every column of F, weighted least squares column by column."""
+    X = np.zeros((A.shape[1], F.shape[1]))
+    for c in range(F.shape[1]):
+        Aw = A * W[:, c:c + 1]
+        b = F[:, c] * W[:, c]
+        X[:, c] = np.linalg.lstsq(np.vstack([Aw.real, Aw.imag]), np.r_[b.real, b.imag], rcond=None)[0]
+    return X
+
+
+def _fd_mats(x, n):
+    """The symmetric n × n matrix of one row of upper-triangle coefficients."""
+    iu = np.triu_indices(n)
+    M = np.zeros((n, n))
+    M[iu] = x
+    M[(iu[1], iu[0])] = x
+    return M
+
+
+def fdne_y(sn, F):
+    """(Y₁, Y₀) per unit (len(sn) × N × N) of the fit F (fdne) at the normalized frequencies sn."""
+    A = fdne_basis(sn, F['terms'])
+    n, m = F['N'], F['N'] * (F['N'] + 1) // 2
+    out = []
+    for q in (0, 1):
+        cols = A @ F['X'][:, q * m:(q + 1) * m]
+        Y = np.zeros((len(cols), n, n), complex)
+        iu = np.triu_indices(n)
+        Y[:, iu[0], iu[1]] = cols
+        Y[:, iu[1], iu[0]] = cols
+        out.append(Y)
+    return out[0], out[1]
+
+
+def _fd_reG(terms, X, n, q, sn):
+    """Re Y of the sequence q (0: positive, 1: zero) at sn: len(sn) × n × n."""
+    m = n * (n + 1) // 2
+    A = fdne_basis(sn, terms).real
+    cols = A @ X[:, q * m:(q + 1) * m]
+    G = np.zeros((len(cols), n, n))
+    iu = np.triu_indices(n)
+    G[:, iu[0], iu[1]] = cols
+    G[:, iu[1], iu[0]] = cols
+    return G
+
+
+def _fd_passive(terms, X, n, sn, F, W, fp, f0, iters=8):
+    """The passivity of the fit by perturbing the eigenvalues of the coefficient matrix of every term (the idea of the paper of
+    2008 on fast passivity enforcement, with the same free variables): in each sequence, the smallest change of the weighted
+    responses at the frequencies of the fit (‖J·δ‖²) such that at the minimum of every band where eig(Re Y) < 0 (and at f → ∞)
+    each negative eigenvalue becomes ≥ ε (10⁻⁶ of the largest), to the first order; again until no band is left. Returns
+    (X, how many constraints were used)."""
+    from scipy.optimize import minimize
+    X = X.copy()
+    m = n * (n + 1) // 2
+    iu = np.triu_indices(n)
+    A = fdne_basis(sn, terms)
+    Ap = fdne_basis(1j * fp / f0, terms).real
+    inf = np.array([1.0 if t[0] in (0, 4) else 0.0 for t in terms])         # Re of every function at f → ∞
+    used = 0
+    for q in (0, 1):
+        for _ in range(iters):
+            Bs = [_fd_mats(X[t, q * m:(q + 1) * m], n) for t in range(len(terms))]
+            eig = [np.linalg.eigh(B) for B in Bs]
+            Gp = np.einsum('ft,tij->fij', Ap, np.array(Bs))
+            lam = np.linalg.eigvalsh(Gp)
+            scale = max(np.abs(lam).max(), 1e-300)
+            eps = 1e-6 * scale
+            bad = lam.min(axis=1) < 0
+            rows = []                                                   # (Re of the basis, the eigenvector of the violation)
+            k = 0
+            while k < len(fp):
+                if bad[k]:
+                    j = k
+                    while j + 1 < len(fp) and bad[j + 1]:
+                        j += 1
+                    kk = k + int(np.argmin(lam[k:j + 1, 0]))
+                    rows.append(Ap[kk])
+                    k = j + 1
+                else:
+                    k += 1
+            Ginf = np.einsum('t,tij->ij', inf, np.array(Bs))
+            if np.linalg.eigvalsh(Ginf).min() < 0:
+                rows.append(inf)
+            if not rows:
+                break
+            nv = len(terms) * n
+            # J: the weighted change of the responses (upper triangle of sequence q) per unit change of each eigenvalue
+            J = np.zeros((len(sn), m, nv), complex)
+            for t, (lt, V) in enumerate(eig):
+                for i in range(n):
+                    vv = np.outer(V[:, i], V[:, i])[iu]
+                    J[:, :, t * n + i] = A[:, t:t + 1] * vv[None, :]
+            J = J * W[:, q * m:(q + 1) * m, None]
+            J = np.vstack([J.real.reshape(-1, nv), J.imag.reshape(-1, nv)])
+            H = J.T @ J
+            H += 1e-12 * np.trace(H) / nv * np.eye(nv)
+            cons_A, cons_b = [], []
+            for a_ in rows:
+                G = np.einsum('t,tij->ij', a_, np.array(Bs))
+                mu, U = np.linalg.eigh(G)
+                for jj in range(n):
+                    if mu[jj] < eps:
+                        c = np.zeros(nv)
+                        for t, (lt, V) in enumerate(eig):
+                            c[t * n:(t + 1) * n] = a_[t] * (U[:, jj] @ V) ** 2
+                        cons_A.append(c)
+                        cons_b.append(eps - mu[jj])
+            used += len(cons_A)
+            CA, Cb = np.array(cons_A), np.array(cons_b)
+            r = minimize(lambda d: d @ H @ d, np.zeros(nv), jac=lambda d: 2 * H @ d, method='SLSQP',
+                         constraints=[{'type': 'ineq', 'fun': lambda d: CA @ d - Cb, 'jac': lambda d: CA}], options={'maxiter': 500, 'ftol': 1e-14})
+            d = r.x
+            for t, (lt, V) in enumerate(eig):
+                B = V @ np.diag(lt + d[t * n:(t + 1) * n]) @ V.T
+                X[t, q * m:(q + 1) * m] = B[iu]
+    return X, used
+
+
+def fdne(f, Y1, Y0, f0, tol=FDNE_TOL, mmax=FDNE_MMAX, w0=FDNE_W0, pure=False, passive=False, nfev=300):
+    """5.0.9 (THEORY §8ΩΚ): the FDNE of N ports from the scan (f in Hz, Y₁ and Y₀ per unit, len(f) × N × N, f₀ Hz; see above).
+    All the elements of the upper triangles of Y₁ and Y₀ are fitted with the same poles; the error of every element is weighted by
+    ‖Z_:,i‖·‖Z_j,:‖/‖Z‖ (Z = Y⁻¹: for one port 1/|Y|, the relative error of Z), w0 times at f₀; the number of pairs of poles goes up
+    from the peaks of the scan to mmax and stops when the driving-point impedances Z_kk are within tol rms in both sequences.
+    Returns {'terms' (rows kind, p, q), 'X' (len(terms) × 2·N(N+1)/2: the coefficients of the upper triangle of Y₁ then of Y₀),
+    'N', 'err1', 'err0' (of Z_kk over f: rms, max, at f₀, and the frequency of the max; and 'Y' the rms of ‖ΔY‖/‖Y‖), 'lam1',
+    'lam0' (the smallest eigenvalue of Re Y over the wide band, over the largest), 'is_passive', 'passive' (enforced), 'moved'
+    (how many eigenvalues were moved), 'pure', 'k' (pairs of poles), 'f', 'f0'}."""
+    from scipy.optimize import least_squares
+    from . import wideband as WB
+    f = np.asarray(f, float)
+    Y1, Y0 = np.asarray(Y1, complex), np.asarray(Y0, complex)
+    n = Y1.shape[1]
+    iu = np.triu_indices(n)
+    m = len(iu[0])
+    sn = 1j * f / f0
+    F = np.hstack([Y1[:, iu[0], iu[1]], Y0[:, iu[0], iu[1]]])
+    Zs = (np.linalg.inv(Y1), np.linalg.inv(Y0))
+    W = np.zeros(F.shape)
+    for q, Z in enumerate(Zs):
+        nz = np.linalg.norm(Z, axis=(1, 2))
+        for c, (i, j) in enumerate(zip(*iu)):
+            W[:, q * m + c] = np.linalg.norm(Z[:, :, i], axis=1) * np.linalg.norm(Z[:, j, :], axis=1) / nz
+    i0 = int(np.argmin(np.abs(f - f0)))
+    W[i0] *= w0
+    xlo, xhi = max(f.min() / f0, 0.05), f.max() / f0
+
+    def errs(X, terms):
+        Fd = {'terms': terms, 'X': X, 'N': n}
+        out = []
+        for Yf, Y, Z in zip(fdne_y(sn, Fd), (Y1, Y0), Zs):
+            try:
+                Zf = np.linalg.inv(Yf)
+            except np.linalg.LinAlgError:
+                return None
+            d = np.abs(np.diagonal(Zf, axis1=1, axis2=2) - np.diagonal(Z, axis1=1, axis2=2)) / np.abs(np.diagonal(Z, axis1=1, axis2=2))
+            dy = np.linalg.norm(Yf - Y, axis=(1, 2)) / np.linalg.norm(Y, axis=(1, 2))
+            k = np.unravel_index(int(np.argmax(d)), d.shape)
+            out.append({'rms': float(np.sqrt(np.mean(d ** 2, axis=0)).max()), 'max': float(d.max()), 'f0': float(d[i0].max()),
+                        'fmax': float(f[k[0]]), 'Y': float(np.sqrt(np.mean(dy ** 2)))})
+        return out
+
+    m1 = np.abs(np.diagonal(Zs[0], axis1=1, axis2=2))
+    peaks = max(sum(1 for i in range(1, len(f) - 1) if m1[i, k] > m1[i - 1, k] and m1[i, k] >= m1[i + 1, k]) for k in range(n))
+    best = None
+    for M in range(max(2, peaks), mmax + 1):
+        bb = np.logspace(np.log10(xlo), np.log10(xhi), M)
+        start = [v for x in bb for v in (complex(-x / 50, x), complex(-x / 50, -x))] + [complex(-xlo, 0), complex(-2 * xhi, 0)]
+        a = WB.vfit_relaxed(sn, F, np.array(start), weight=W, d=True, iters=30)[0]
+        pairs = sorted((float(-p.real), float(abs(p) ** 2)) for p in a if p.imag > 0)
+        reals = sorted(float(-p.real) for p in a if p.imag == 0)
+        if pure:
+            a0 = reals[0] if reals else xlo
+            ai = reals[-1] if len(reals) > 1 else 5 * xhi
+            th0 = np.log(np.r_[np.array(pairs, float).ravel(), a0, ai]) if pairs else np.log([a0, ai])
+            npair = len(pairs)
+
+            def terms_of(th):
+                e = np.exp(th)
+                return [(2, e[2 * k], e[2 * k + 1]) for k in range(npair)] + [(1, e[-2], 0.0), (4, e[-1], 0.0)]
+
+            def res(th):
+                A = fdne_basis(sn, terms_of(th))
+                R = (A @ _fd_coef(A, F, W) - F) * W
+                return np.r_[R.real.ravel(), R.imag.ravel()]
+            lb, ub = np.full(len(th0), np.log(1e-9)), np.full(len(th0), np.log((50 * xhi) ** 2))
+            r = least_squares(res, np.clip(th0, lb + 1e-9, ub - 1e-9), bounds=(lb, ub), method='trf', x_scale='jac', max_nfev=nfev)
+            terms = terms_of(r.x)
+        else:
+            terms = [(0, 0.0, 0.0)] + [(1, a_, 0.0) for a_ in reals] + [t for sg, w2 in pairs for t in ((2, sg, w2), (3, sg, w2))]
+        A = fdne_basis(sn, terms)
+        X = _fd_coef(A, F, W)
+        e = errs(X, terms)
+        if e is None:
+            continue
+        score = max(e[0]['rms'], e[1]['rms'])
+        if best is None or score < best[2] - 1e-4:
+            best = (terms, X, score, len(pairs))
+        if score <= tol:
+            break
+    if best is None:
+        raise EquivalentError('the FDNE fit failed')
+    terms, X, _, npair = best
+    # the check: eig(Re Y) over 2000 frequencies from fmin/10 to 10·fmax, and at the poles
+    fp = np.logspace(np.log10(f.min() / 10), np.log10(f.max() * 10), 2000)
+    fp = np.unique(np.r_[fp, [np.sqrt(t[2]) * f0 for t in terms if t[0] in (2, 3)]])
+    moved = 0
+    if passive:
+        X, moved = _fd_passive(terms, X, n, sn, F, W, fp, f0)
+    lams = []
+    inf = np.array([1.0 if t[0] in (0, 4) else 0.0 for t in terms])
+    for q, Yp in enumerate(fdne_y(1j * fp / f0, {'terms': terms, 'X': X, 'N': n})):
+        Ginf = _fd_mats(inf @ X[:, q * m:(q + 1) * m], n)                  # and at f → ∞
+        ev = np.r_[np.linalg.eigvalsh(Yp.real).ravel(), np.linalg.eigvalsh(Ginf)]
+        lams.append(float(ev.min() / max(np.abs(ev).max(), 1e-300)))
+    e = errs(X, terms)
+    return {'terms': [tuple(float(v) for v in t) for t in terms], 'X': X, 'N': n, 'err1': e[0], 'err0': e[1], 'lam1': lams[0], 'lam0': lams[1],
+            'is_passive': bool(min(lams) >= -1e-9), 'passive': bool(passive), 'moved': moved, 'pure': bool(pure), 'k': npair,
+            'f': f, 'f0': float(f0)}
+
+
 def emt_ports(net, boundary, internal=None, lf=None, machines=None, fig='50', tol=1e-10, fmin=SCAN_FMIN, fmax=SCAN_FMAX, n=SCAN_N,
-              line='pi', pure=False):
+              line='pi', pure=False, passive=False):
     """5.0.4: the equivalent of the network beyond the boundary for EMT (CIGRE TB 39, Fig. 15; see the module).
     fig: '50' (sources behind the Thevenin impedances of both sequences: exact at the fundamental), '15b' or '15c'; 5.0.7:
     '15a' (one boundary bus: the Foster circuit fitted to the scan from fmin to fmax Hz, n frequencies, lines as line; pure:
@@ -885,8 +1146,8 @@ def emt_ports(net, boundary, internal=None, lf=None, machines=None, fig='50', to
     15b and 15c), 'E' (pu, per port), 'I' (pu, the current from the equivalent into each boundary bus in the base case), 'Rs'
     (Ω per port or 0), 'C' (F per port), 'Sk' (VA per port: |V|²/|Z₁,kk|, the contribution of the external network), 'fig',
     'notes'} and for '15a' 'foster' (the blocks in H, Ω, F, the errors and the scan; see _foster_out)."""
-    if fig not in FIGS + (FOSTER,):
-        raise EquivalentError(f'fig: one of {", ".join(FIGS + (FOSTER,))}')
+    if fig not in FIGS + (FOSTER, FDNE):
+        raise EquivalentError(f'fig: one of {", ".join(FIGS + (FOSTER, FDNE))}')
     if getattr(net, 'dc_buses', None):
         raise EquivalentError('networks with DC buses and converters are not reduced yet')
     I, B, E = split(net, boundary, internal)
@@ -907,7 +1168,7 @@ def emt_ports(net, boundary, internal=None, lf=None, machines=None, fig='50', to
     w = 2 * np.pi * net.f
     notes = []
     Rs, C = np.zeros(nB), np.zeros(nB)
-    charging = fig in ('50', FOSTER)                                 # 15a: the matrices at the fundamental as fig 50 (the scan at f₀)
+    charging = fig in ('50', FOSTER, FDNE)                           # 15a, fdne: the matrices at the fundamental as fig 50 (the scan at f₀)
     if not charging:
         _, _, Ysc = _ext_y(net, lf, E, machines, 1, charging=False)
         Y1eq = _kron(Ysc, iB, iE)
@@ -962,6 +1223,20 @@ def emt_ports(net, boundary, internal=None, lf=None, machines=None, fig='50', to
         fo = _foster_out(F, S, net._zb(B[0]), w)
         if max(F['err1']['rms'], F['err0']['rms']) > 0.1:
             notes.append(f'the Foster circuit misses the scan by {100 * F["err1"]["rms"]:.0f} % (positive) and {100 * F["err0"]["rms"]:.0f} % (zero sequence) rms')
+    fd = None
+    if fig == FDNE:
+        S = scan(net, B, I, lf=lf, machines=machines, fmin=fmin, fmax=fmax, n=n, line=line)
+        F = fdne(S['f'], np.linalg.inv(S['Z1']), np.linalg.inv(S['Z0']), net.f, pure=pure, passive=passive)
+        Y1f = fdne_y(np.array([1j]), F)[0][0]
+        ysh = Y1f.sum(axis=1)                    # the branch of each port to its source: the row sum at f₀, positive sequence
+        if np.abs(ysh).min() < 1e-9 * np.abs(Y1f).max():
+            raise EquivalentError('FDNE: a boundary bus without a path to earth beyond it at the fundamental: no source can stand behind it')
+        Eb = (IB + Y1f @ VB) / ysh               # the base case exact with the network as fitted
+        fd = _fdne_out(F, S, [net._zb(b) for b in B])
+        if not F['is_passive']:
+            notes.append(f'the FDNE is not passive (eig(Re Y) down to {min(F["lam1"], F["lam0"]):.1e} of the largest): passive=True')
+        if max(F['err1']['rms'], F['err0']['rms']) > 0.1:
+            notes.append(f'the FDNE misses the scan by {100 * F["err1"]["rms"]:.0f} % (positive) and {100 * F["err0"]["rms"]:.0f} % (zero sequence) rms')
     _, _, Y0 = _ext_y(net, lf, E, machines, 0, charging=charging)
     Y0eq = _kron(Y0, iB, iE)
     if np.abs(np.linalg.eigvals(Y0eq)).min() < 1e-6:
@@ -978,7 +1253,35 @@ def emt_ports(net, boundary, internal=None, lf=None, machines=None, fig='50', to
            'V': VB, 'Rs': Rs.tolist(), 'C': C.tolist(), 'Sk': Sk, 'fig': fig, 'notes': notes}
     if fo is not None:
         out['foster'] = fo
+    if fd is not None:
+        out['fdne'] = fd
     return out
+
+
+def _fdne_out(F, S, zb):
+    """The FDNE for EQV3 and the page: 'rows' (the text of the parameter FD: kind, sequence (1, 0), p, q and the upper triangle
+    of the coefficients, per unit on s/ω₀; terms that are zero in a sequence left out), the errors and the check, and the
+    driving-point impedances |Z_kk| of the scan and of the fit (Ω) per port."""
+    n, m = F['N'], F['N'] * (F['N'] + 1) // 2
+    rows = []
+    for q, sq in ((0, 1), (1, 0)):
+        for t, (k, p, qq) in enumerate(F['terms']):
+            c = F['X'][t, q * m:(q + 1) * m]
+            if np.any(c != 0):
+                rows.append([k, sq, p, qq] + [float(v) for v in c])
+    f = S['f']
+    sn = 1j * f / F['f0']
+    Y1f, Y0f = fdne_y(sn, F)
+    Z1f, Z0f = np.linalg.inv(Y1f), np.linalg.inv(Y0f)
+    r = lambda a: [float(v) for v in a]
+    ports = []
+    for k in range(n):
+        ports.append({'Z1': r(np.abs(S['Z1'][:, k, k]) * zb[k]), 'Z1fit': r(np.abs(Z1f[:, k, k]) * zb[k]),
+                      'Z0': r(np.abs(S['Z0'][:, k, k]) * zb[k]), 'Z0fit': r(np.abs(Z0f[:, k, k]) * zb[k])})
+    return {'rows': '; '.join(', '.join(repr(float(v)) for v in row) for row in rows), 'n_rows': len(rows), 'k': F['k'],
+            'terms': len(F['terms']), 'err1': F['err1'], 'err0': F['err0'], 'lam1': F['lam1'], 'lam0': F['lam0'],
+            'is_passive': F['is_passive'], 'passive': F['passive'], 'moved': F['moved'], 'pure': F['pure'], 'line': S['line'],
+            'f': r(f), 'ports': ports, 'zb': [float(z) for z in zb]}
 
 
 def _foster_out(F, S, zb, w):
@@ -1018,6 +1321,8 @@ def to_emt(net, boundary, internal=None, lf=None, machines=None, fig='50', name=
            'Rs': '; '.join(repr(r) for r in q['Rs']), 'C': '; '.join(repr(c) for c in q['C']), 'conn': 'bus'}
     if fig == FOSTER:
         prm['F'] = _mat(q['foster']['blocks'])
+    if fig == FDNE:
+        prm['FD'] = q['fdne']['rows']
     x0 = (min(xs) if xs else 240) - 360
     y0 = min(ys.get('B' + b, 200) for b in B)
     pr['components'].append({'id': 'EQ1', 'type': 'EQV3', 'x': x0 // 10 * 10, 'y': y0 // 10 * 10, 'rot': 0, 'flip': False,
@@ -1028,4 +1333,6 @@ def to_emt(net, boundary, internal=None, lf=None, machines=None, fig='50', name=
                                 'Sk': q['Sk'], 'Rs': q['Rs'], 'C': q['C'], 'notes': q['notes']}
     if fig == FOSTER:
         pr['meta']['equivalent']['foster'] = q['foster']
+    if fig == FDNE:
+        pr['meta']['equivalent']['fdne'] = {k: v for k, v in q['fdne'].items() if k != 'rows'}
     return pr

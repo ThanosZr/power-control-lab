@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 5.0.8: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (978 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 5.0.9: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (981 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 5.0.8.
+Κανένα στην 5.0.9.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-709 σημεία.
+712 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -203,7 +203,10 @@
 | `pcl.equivalent.EquivalentError` | — | 5.0.3 · πειρ. |
 | `pcl.equivalent.area` | `net`, `buses` | 5.0.6 · πειρ. |
 | `pcl.equivalent.compare` | `net`, `eq`, `outages`, `tol` | 5.0.3 · πειρ. |
-| `pcl.equivalent.emt_ports` | `net`, `boundary`, `internal`, `lf`, `machines`, `fig`, `tol`, `fmin`, `fmax`, `n`, `line`, `pure` | 5.0.4 · πειρ. |
+| `pcl.equivalent.emt_ports` | `net`, `boundary`, `internal`, `lf`, `machines`, `fig`, `tol`, `fmin`, `fmax`, `n`, `line`, `pure`, `passive` | 5.0.4 · πειρ. |
+| `pcl.equivalent.fdne` | `f`, `Y1`, `Y0`, `f0`, `tol`, `mmax`, `w0`, `pure`, `passive`, `nfev` | 5.0.9 · πειρ. |
+| `pcl.equivalent.fdne_basis` | `sn`, `terms` | 5.0.9 · πειρ. |
+| `pcl.equivalent.fdne_y` | `sn`, `F` | 5.0.9 · πειρ. |
 | `pcl.equivalent.foster` | `f`, `Z1`, `Z0`, `f0`, `kmax`, `tol`, `pure`, `w0`, `ratio`, `nfev` | 5.0.6 · πειρ. |
 | `pcl.equivalent.foster_z` | `sn`, `X` | 5.0.6 · πειρ. |
 | `pcl.equivalent.reduce` | `net`, `boundary`, `internal`, `kind`, `lf`, `slack`, `tol`, `mode` | 5.0.3 · πειρ. |
@@ -962,7 +965,7 @@
 | `part:DS` | op, t0, Ts, Um, Rarc, ext, Iext, Roff | a, b | 4.22 |
 | `part:EBUS` | n | a, b, bus, c | 3.18 |
 | `part:EDGE` | edge, tw | n, u, y | 3.19 |
-| `part:EQV3` | names, f, Sb, Un, E, ang, R1, X1, R0, X0, fig, Rs, C, F, conn | a1, abc1, b1, c1 | 5.0.4 |
+| `part:EQV3` | names, f, Sb, Un, E, ang, R1, X1, R0, X0, fig, Rs, C, F, FD, conn | a1, abc1, b1, c1 | 5.0.4 |
 | `part:EVC` | scheme, mode, ws, wt, we, Kt, Ke, R, J, B, kpw, kiw, atl, kpa, kia, alim, aff, fr, H, ffg, taulim, ilim, plim, regen, slew, kpi, kii, umin, umax, fs | i, keep, lim, pw, r, rg, soc, tau, tl, u, y | 4.8 |
 | `part:EXPR` | expr, ins, pars | u1, u2, y | 3.18 |
 | `part:F2` | kind, f0, zeta, u0 | u, y | 3.19 |

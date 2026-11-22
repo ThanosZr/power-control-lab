@@ -20,6 +20,8 @@
 //     the full network against the equivalent in N−1; the area in EMT in the place of the circuit, and «↶ Πίσω»
 // 10. 5.0.7 (§96 B.3): Fig. 15a refused before the engine for two boundary buses; for one (the area 1, 4 of the IEEE 9) the
 //     area in EMT with the Foster circuit, and the scan against its blocks in the box of the area
+// 11. 5.0.9 (§96 B.3): the FDNE for the two boundary buses 5 and 9 (the area 1, 4, 5, 9), passive: the area in EMT with the
+//     EQV3 'fdne', and the scan against the FDNE at each port in the box of the area
 // Usage: python run.py --no-browser --port 8765  then  node tests/ui/dock_flow.js http://127.0.0.1:8765/ [out]
 const {chromium}=require('playwright');
 let R={},fail=[];
@@ -220,6 +222,18 @@ let R={},fail=[];
   svg:document.querySelectorAll('#nv-cmp svg.fz-plot polyline').length,tr:document.querySelectorAll('#nv-cmp tbody tr').length,txt:document.querySelector('#nv-cmp .small')?.textContent.slice(0,160)};});
  ok(R.f2.fig==='15a'&&R.f2.names==='4'&&R.f2.rows===R.f2.tr&&R.f2.rows>=4&&R.f2.svg===4&&/Σχ\. 15a στον ζυγό 4/.test(R.f2.txt||''),'Fig. 15a: the area in EMT, the scan against the blocks '+JSON.stringify(R.f2));
  await p.click('.dk-group .dk-tab:nth-child(2)');await p.waitForTimeout(300);await p.screenshot({path:OUT+'/dock_foster.png'});
+ await p.click('#nv-back');await p.waitForTimeout(1000);
+ // 11. the FDNE (5.0.9)
+ await p.click('.dk-group .dk-tab:nth-child(2)');await p.waitForTimeout(300);await p.evaluate(()=>PCL.NV.v.setSelection(['1','4','5','9']));
+ await p.waitForFunction(()=>PCL.NV.area.res&&!PCL.NV.area.busy&&PCL.NV.area.res.boundary?.join()==='5,9',null,{timeout:30000});
+ await p.selectOption('#nv-fig','fdne');await p.waitForTimeout(100);await p.check('#nv-passive');
+ R.n1=await p.evaluate(()=>({fmax:!document.querySelector('#nv-fmax-l').hidden,pas:!document.querySelector('#nv-passive-l').hidden,emt:document.querySelector('#nv-emt').disabled}));
+ ok(R.n1.fmax&&R.n1.pas&&!R.n1.emt,'FDNE with two boundary buses: the top of the scan and «παθητικό» beside it '+JSON.stringify(R.n1));
+ await p.click('#nv-emt');await p.waitForFunction(()=>PCL.NV.area.back&&!PCL.NV.area.busy,null,{timeout:120000});await p.waitForTimeout(1200);
+ R.n2=await p.evaluate(()=>{const q=PCL.project().components.find(c=>c.type==='EQV3');return {fig:q?.params.fig,names:q?.params.names,rows:String(q?.params.FD||'').split(';').length,
+  svg:document.querySelectorAll('#nv-cmp svg.fz-plot polyline').length,txt:document.querySelector('#nv-cmp .small')?.textContent.slice(0,600)};});
+ ok(R.n2.fig==='fdne'&&R.n2.names==='5; 9'&&R.n2.rows>=10&&R.n2.svg===8&&/FDNE στους ζυγούς 5, 9/.test(R.n2.txt||'')&&/παθητικό/.test(R.n2.txt||''),'FDNE: the area in EMT, the scan against the FDNE at each port '+JSON.stringify(R.n2));
+ await p.click('.dk-group .dk-tab:nth-child(2)');await p.waitForTimeout(300);await p.screenshot({path:OUT+'/dock_fdne.png'});
  await p.click('#nv-back');await p.waitForTimeout(1000);
  R.chk3=await p.evaluate(()=>Panels.check());R.dead3=await dead();
  ok(!R.chk3.dup.length&&!R.chk3.twice.length&&!R.dead3.length,'the diagram as a card: no id twice, no button without a handler '+JSON.stringify([R.chk3,R.dead3]));

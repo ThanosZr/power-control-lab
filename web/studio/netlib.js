@@ -91,7 +91,7 @@
   if(!P.posDef(L))throw new Error('Ισοδύναμο δικτύου: ο πίνακας X (θετική και μηδενική ακολουθία) δεν είναι θετικά ορισμένος.');
   const rmax=Math.max(...R.map((r,i)=>Math.abs(r[i])));let hasR=rmax>0;
   if(hasR&&!P.posDef(R)){const d=1e-9*rmax;for(let i=0;i<n;i++)R[i][i]+=d;if(!P.posDef(R))throw new Error('Ισοδύναμο δικτύου: ο πίνακας R δεν είναι θετικά ημιορισμένος.');}
-  return {N,f,w,Un,E,ang,Rs,C,R,L,hasR};}
+  return {N,f,w,Un,E,ang,Rs,C,R,L,hasR,Sb};}
  // 5.0.7 (THEORY §8ΩΙ): Fig. 15a for one port, the blocks (L + R′) ∥ (C + R″) ∥ R_p in series between the source and the bus
  // (pcl.equivalent.foster). The RL branch of a block is a KL of the three phases (L₁, L₀) with a KG (R′₁, R′₀): the sequences
  // differ there, as in the R + L of Fig. 50; C with R″ in each phase, R_p a KG as R′. A zero R′ of one sequence beside a nonzero
@@ -112,8 +112,46 @@
     if(G){B.wire(U[a],[G,'a'+i]);B.wire([G,'b'+i],V[a]);}});
    U=V;});
   return B.def();}
+ // 5.0.9 (THEORY §8ΩΚ): the FDNE of N ports (pcl.equivalent.fdne), after the paper on multi-port frequency dependent network
+ // equivalents for the EMTP (1993): a π of modules in the positive and in the zero sequence. FD: rows kind, sequence (1 or 0),
+ // p, q, then the upper triangle of the coefficient matrix of the term (per unit, on s/ω₀): kind 0 a resistor (1), 1 an RL
+ // branch (1/(s + p)), 2 R, L, C in series (s/(s² + 2ps + q)), 3 L in series with C ∥ G ((s + 2p)/(s² + 2ps + q)), 4 an RC
+ // branch (s/(s + p)). The source of port k (E_k, positive sequence) stands behind the branch of the bus to earth (the row sum
+ // Σ_j Y_kj). Each part of the π is three phase with the admittances y₁, y₀, made of single branches: from phase x of one side
+ // to phase x of the other (y₀ + 2y₁)/3, to the other phases (y₀ − y₁)/3, and between the phases of a bus (y₁ − y₀)/3 (not
+ // between the phases of a source, which hold them). A branch can be negative (R, L, C of one sign: the flag neg of the parts).
+ function eqvFdne(p,d,B){const N=d.N,m=N*(N+1)/2,w=d.w;
+  const rows=String(p.FD??'').split(/[;\n]+/).map(r=>r.trim()).filter(Boolean).map(r=>r.split(/[,\s]+/).filter(Boolean).map(x=>num(x,NaN)));
+  const bad=r=>r.length!==4+m||r.some(v=>!Number.isFinite(v))||![0,1,2,3,4].includes(r[0])||![0,1].includes(r[1])||(r[0]>0&&!(r[2]>0))||((r[0]===2||r[0]===3)&&!(r[3]>0));
+  if(!rows.length||rows.some(bad))throw new Error(`Ισοδύναμο δικτύου: κάθε όρος του FDNE θέλει ${4+m} αριθμούς (είδος 0–4, ακολουθία 1 ή 0, p > 0, q > 0, και οι ${m} συντελεστές του άνω τριγώνου).`);
+  const T=[],S=[],ref=new Map();
+  for(let k=0;k<N;k++){const t=B.terms(p,['a','b','c'].map(x=>x+(k+1)),'abc'+(k+1)),e='E'+(k+1);
+   B.comp(e,'VAC3',{Vpk:d.E[k]*d.Un[k]/Math.sqrt(3)*Math.SQRT2,f:d.f,phase:d.ang[k],seq:'abc',Rs:0,Ls:0,conn:'sep'});B.wire([e,'n'],B.gnd());
+   T.push(PH.map((x,a)=>{const key='T'+k+x;ref.set(key,t[a]);return key;}));S.push(PH.map(x=>{const key='S'+k+x;ref.set(key,[e,x]);return key;}));}
+  const br=new Map(),put=(u,v,r,c)=>{if(!c)return;const key=u<v?u+'|'+v:v+'|'+u;let o=br.get(key);if(!o){o=new Float64Array(rows.length);br.set(key,o);}o[r]+=c;};
+  const part=(X,Y,y,sq,r,src)=>{const ys=sq===1?2*y/3:y/3,ym=sq===1?-y/3:y/3;
+   for(let a=0;a<3;a++)for(let b=0;b<3;b++)put(X[a],Y[b],r,a===b?ys:ym);
+   for(let a=0;a<3;a++)for(let b=a+1;b<3;b++){put(X[a],X[b],r,-ym);if(!src)put(Y[a],Y[b],r,-ym);}};
+  rows.forEach((row,r)=>{const kind=row[0],sq=row[1],sc=kind>=1&&kind<=3?w:1,C=Array.from({length:N},()=>new Array(N).fill(0));let o=4;
+   for(let i=0;i<N;i++)for(let j=i;j<N;j++){const v=row[o++]*sc*d.Sb/(d.Un[i]*d.Un[j]);C[i][j]=v;C[j][i]=v;}
+   for(let k=0;k<N;k++)part(T[k],S[k],C[k].reduce((s,v)=>s+v,0),sq,r,true);
+   for(let i=0;i<N;i++)for(let j=i+1;j<N;j++)part(T[i],T[j],-C[i][j],sq,r,false);});
+  // a coefficient below 10⁻¹⁰ of the largest of its row is left out
+  const big=new Float64Array(rows.length);for(const o of br.values())o.forEach((c,r)=>{big[r]=Math.max(big[r],Math.abs(c));});
+  let nb=0;
+  for(const [key,o] of br){const [u,v]=key.split('|'),U=ref.get(u),V=ref.get(v);
+   o.forEach((c,r)=>{if(!(Math.abs(c)>1e-10*big[r]))return;const kind=rows[r][0],P=rows[r][2]*w,Q=rows[r][3]*w*w,id=++nb;
+    if(kind===0){const x=B.comp('R'+id,'R',{R:1/c,neg:true});B.wire(U,[x,'a']);B.wire([x,'b'],V);}
+    else if(kind===1){const L=1/c,x=B.comp('L'+id,'L',{L,Rs:P*L,i0:0,neg:true});B.wire(U,[x,'a']);B.wire([x,'b'],V);}
+    else if(kind===2){const L=1/c,x=B.comp('L'+id,'L',{L,Rs:2*P*L,i0:0,neg:true}),y=B.comp('C'+id,'C',{C:1/(Q*L),v0:0,esr:0,neg:true});
+     B.wire(U,[x,'a']);B.wire([x,'b'],[y,'p']);B.wire([y,'n'],V);}
+    else if(kind===3){const L=1/c,Cc=1/(Q*L),x=B.comp('L'+id,'L',{L,Rs:0,i0:0,neg:true}),y=B.comp('C'+id,'C',{C:Cc,v0:0,esr:0,neg:true}),g=B.comp('G'+id,'R',{R:1/(2*P*Cc),neg:true});
+     B.wire(U,[x,'a']);B.wire([x,'b'],[y,'p']);B.wire([y,'n'],V);B.wire([x,'b'],[g,'a']);B.wire([g,'b'],V);}
+    else{const R=1/c,x=B.comp('C'+id,'C',{C:1/(P*R),v0:0,esr:R,neg:true});B.wire(U,[x,'p']);B.wire([x,'n'],V);}});}
+  return B.def();}
  function eqvDef(c){const p=prm(c),d=eqvData(p),B=builder('Ισοδύναμο δικτύου'),fig=['15b','15c'].includes(p.fig)?p.fig:'50';
   if(p.fig==='15a')return eqvFoster(p,d,B);
+  if(p.fig==='fdne')return eqvFdne(p,d,B);
   const str=m=>m.map(r=>r.map(s).join(', ')).join('; ');
   const K=B.comp('Z','KL',{Lmat:str(d.L),Rw:0,i0:'0',big:true}),Rk=d.hasR?B.comp('R','KG',{kind:'R',mat:str(d.R),big:true}):null;
   for(let k=0;k<d.N;k++){const T=B.terms(p,['a','b','c'].map(x=>x+(k+1)),'abc'+(k+1)),e='E'+(k+1);

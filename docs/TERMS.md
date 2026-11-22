@@ -432,7 +432,10 @@
 | side by side (split view) | δίπλα δίπλα (5.0.6· δύο κάρτες μιας ομάδας) |
 | boundary bus | ζυγός του συνόρου (5.0.3· από την 5.0.6 και από την επιλογή στο διάγραμμα) |
 | Foster block (parallel RL–RC branch), positive-real term | κλάδος Foster ((L + R′) ∥ (C + R″), και με R_p παράλληλα), θετικός πραγματικός όρος (5.0.7) |
-| frequency-dependent network equivalent (FDNE) | ισοδύναμο δικτύου που εξαρτάται από τη συχνότητα (FDNE· μίας θύρας στην 5.0.7, πολλών θυρών αργότερα: 5.0.9) |
+| frequency-dependent network equivalent (FDNE) | ισοδύναμο δικτύου που εξαρτάται από τη συχνότητα (FDNE· μίας θύρας στην 5.0.7, πολλών θυρών στην 5.0.9) |
+| driving-point impedance, transfer admittance | εμπέδηση οδήγησης (Z_kk), αγωγιμότητα μεταφοράς (Y_ij, i ≠ j) (5.0.9) |
+| common poles (of a matrix fit) | κοινοί πόλοι (όλων των στοιχείων του πίνακα) (5.0.9) |
+| passivity enforcement, residue matrix | διόρθωση της παθητικότητας, πίνακας υπολοίπων (5.0.9) |
 | command window, command line (of the app) | γραμμή εντολών (η κάρτα της 5.0.8· η «γραμμή εντολών του συστήματος» είναι το τερματικό) |
 | workspace (of MATLAB) | χώρος μεταβλητών |
 | kernel (of a console: Pyodide, the Python of the server) | πυρήνας (της γραμμής εντολών) |

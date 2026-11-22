@@ -20,7 +20,14 @@ what the library gives for the same boundary.
 Thevenin of emt_ports at the fundamental and the input impedance of a line by its formula at every frequency; the Foster
 circuit of CIGRE TB 39 Fig. 15a fitted to it (pcl.equivalent.foster) has every element ≥ 0, the EQV3 that the browser builds
 from its blocks has their impedance in both sequences, the area starts in the load flow, and a fault in it gives the current
-of the full network closer than the equivalent at the fundamental."""
+of the full network closer than the equivalent at the fundamental.
+
+5.0.9 (ROADMAP §96 B.3, THEORY §8ΩΚ): the FDNE of many ports (pcl.equivalent.fdne, EQV3 'fdne'), after the paper on
+multi-port frequency dependent network equivalents for the EMTP (1993): the fit follows the driving-point impedances of the
+scan, the module of its Fig. 1 alone misses them by more, the passivity enforcement leaves no negative eigenvalue of Re Y and
+keeps the fit, the circuit of the browser (a π of single branches, some of them negative) has the admittance of the fit in
+both sequences, the area starts in the load flow, and a fault gives the current of the full network as close as Fig. 15a for
+one port and closer than the equivalent at the fundamental for three."""
 import copy
 import json
 import shutil
@@ -568,6 +575,198 @@ class TestFoster(unittest.TestCase):
         q = next(c for c in e['project']['components'] if c['type'] == 'EQV3')['params']
         self.assertEqual((q['fig'], q['F']), ('15a', Q._mat(self.q['foster']['blocks'])))
 
+
+
+def _rows_at(rows, f0, f):
+    """The rows of an FDNE (EQV3 'FD', normalized to f₀) normalized to f: with r = f/f₀ every pole goes as p/r, q/r² and the
+    coefficients of the kinds 1–3 as c/r (so that EQV3 can run its sources, here zero, at f)."""
+    r = f / f0
+    out = []
+    for row in rows.split(';'):
+        v = [float(x) for x in row.split(',')]
+        k = int(v[0])
+        p, q = (v[2] / r, v[3] / r ** 2) if k else (v[2], v[3])
+        c = [x / r for x in v[4:]] if k in (1, 2, 3) else v[4:]
+        out.append(', '.join(repr(x) for x in [v[0], v[1], p, q] + c))
+    return '; '.join(out)
+
+
+class TestFDNE(unittest.TestCase):
+    """5.0.9: the FDNE of many ports (IEEE 9 with the boundary 5 and 9, the area {1, 4}; IEEE 14 with 6, 7, 9)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.net = N.ieee(9)
+        cls.lf = cls.net.load_flow()
+        cls.S = Q.scan(cls.net, ['5', '9'], ['1'], lf=cls.lf, machines=N.IEEE9_MACHINES)
+        cls.Y1, cls.Y0 = np.linalg.inv(cls.S['Z1']), np.linalg.inv(cls.S['Z0'])
+        cls.F = Q.fdne(cls.S['f'], cls.Y1, cls.Y0, cls.net.f)
+        cls.q = Q.emt_ports(cls.net, ['5', '9'], ['1'], lf=cls.lf, machines=N.IEEE9_MACHINES, fig='fdne')
+
+    def test_the_fit(self):
+        # Z_kk within 3 % rms, 10 % at most and 0,5 % at f₀ in both sequences, ‖ΔY‖/‖Y‖ within 3 % rms, passive as fitted; the
+        # model at f₀ is the scan there; the module of Fig. 1 alone (one RL, one RC, RLC in series: numerators s only) misses more
+        F = self.F
+        for e in (F['err1'], F['err0']):
+            self.assertLess(e['rms'], 0.03)
+            self.assertLess(e['max'], 0.1)
+            self.assertLess(e['f0'], 0.005)
+            self.assertLess(e['Y'], 0.03)
+        self.assertTrue(F['is_passive'])
+        Y1, Y0 = Q.fdne_y(np.array([1j]), F)
+        self.assertLess(np.abs(Y1[0] - np.linalg.inv(self.q['Z1'])).max() / np.abs(Y1[0]).max(), 0.005)
+        kinds = [t[0] for t in F['terms']]
+        self.assertEqual((kinds.count(0), kinds.count(2), kinds.count(3), kinds.count(4)), (1, F['k'], F['k'], 0))
+        P = Q.fdne(self.S['f'], self.Y1, self.Y0, self.net.f, pure=True)
+        kinds = [t[0] for t in P['terms']]
+        self.assertEqual((kinds.count(0), kinds.count(1), kinds.count(3), kinds.count(4)), (0, 1, 0, 1))
+        self.assertGreater(max(P['err1']['max'], P['err0']['max']), 2 * max(F['err1']['max'], F['err0']['max']))
+
+    def test_the_passivity(self):
+        # IEEE 14 with three ports: with passive=True no eigenvalue of Re Y is negative from fmin/10 to 10·fmax nor at f → ∞,
+        # and the driving-point impedances move by less than 0,5 % rms
+        net = N.ieee(14)
+        S = Q.scan(net, ['6', '7', '9'], lf=net.load_flow())
+        Y1, Y0 = np.linalg.inv(S['Z1']), np.linalg.inv(S['Z0'])
+        a = Q.fdne(S['f'], Y1, Y0, net.f)
+        b = Q.fdne(S['f'], Y1, Y0, net.f, passive=True)
+        self.assertTrue(b['is_passive'] and b['passive'])
+        self.assertGreaterEqual(min(b['lam1'], b['lam0']), -1e-9)
+        fp = np.logspace(np.log10(0.5), np.log10(2e4), 500)
+        for Yp in Q.fdne_y(1j * fp / net.f, b):
+            self.assertGreaterEqual(np.linalg.eigvalsh(Yp.real).min(), -1e-9 * np.abs(Yp).max())
+        for k in ('err1', 'err0'):
+            self.assertLess(abs(b[k]['rms'] - a[k]['rms']), 0.005)
+
+    def test_the_circuit_is_the_fit(self):
+        # EQV3 with fig 'fdne' and its sources at zero, port 1 fed by a positive-sequence source and port 2 shorted (a, b, c to
+        # earth, or a alone), from the steady state (init 'ac'): the current in phase a at port 2 is the one of the fitted
+        # admittance matrices of both sequences at 50, 150, 400 and 700 Hz
+        import pcl
+        Un, rows = self.q['Un'], self.q['fdne']['rows']
+        V = Un[0] / np.sqrt(3) * np.sqrt(2)
+
+        def C(cid, typ, params):
+            return {'id': cid, 'type': typ, 'x': 0, 'y': 0, 'rot': 0, 'flip': False, 'label': cid, 'params': params}
+        for f in (50.0, 150.0, 400.0, 700.0):
+            Y1, Y0 = (y[0] for y in Q.fdne_y(np.array([1j * f / self.net.f]), self.F))
+            Ya = np.zeros((6, 6), complex)                     # the phase matrix in S: (Y₀ + 2Y₁)/3 on the diagonal of each block
+            for i in range(2):
+                for j in range(2):
+                    k = 100e6 / (Un[i] * Un[j])
+                    Ya[3 * i:3 * i + 3, 3 * j:3 * j + 3] = k * ((Y0[i, j] - Y1[i, j]) / 3 * np.ones((3, 3)) + Y1[i, j] * np.eye(3))
+            V1 = V * np.array([1, np.exp(-2j * np.pi / 3), np.exp(2j * np.pi / 3)])
+            for kind in ('abcg', 'ag'):
+                if kind == 'abcg':
+                    want = abs((Ya[3:, :3] @ V1)[0])
+                else:                                          # phase a of port 2 at earth, b and c open
+                    Vbc = np.linalg.solve(Ya[4:, 4:], -Ya[4:, :3] @ V1)
+                    want = abs(Ya[3, :3] @ V1 + Ya[3, 4:] @ Vbc)
+                prm = {'Un': f'{Un[0]!r}; {Un[1]!r}', 'f': f, 'E': '0; 0', 'R1': '0.01, 0; 0, 0.01', 'X1': '0.1, 0; 0, 0.1',
+                       'R0': '0.01, 0; 0, 0.01', 'X0': '0.1, 0; 0, 0.1', 'fig': 'fdne', 'FD': _rows_at(rows, self.net.f, f), 'conn': 'bus'}
+                pr = {'version': 4, 'solve': {'init': 'ac'},
+                      'components': [C('S', 'EQV3', prm), C('V', 'VAC3', {'Vpk': V, 'f': f, 'phase': 0, 'seq': 'abc', 'Rs': 0, 'Ls': 0, 'conn': 'bus', 'neut': 'gnd'}),
+                                     C('J1', 'JUNC', {}), C('J2', 'JUNC', {}), C('F1', 'FLT3', {'kind': kind, 'ton': 0, 'conn': 'bus'})],
+                      'wires': [{'id': 'w1', 'a': {'c': 'S', 'p': 'abc1'}, 'b': {'c': 'J1', 'p': 'j'}, 'pts': []},
+                                {'id': 'w2', 'a': {'c': 'V', 'p': 'abc'}, 'b': {'c': 'J1', 'p': 'j'}, 'pts': []},
+                                {'id': 'w3', 'a': {'c': 'S', 'p': 'abc2'}, 'b': {'c': 'J2', 'p': 'j'}, 'pts': []},
+                                {'id': 'w4', 'a': {'c': 'F1', 'p': 'abc'}, 'b': {'c': 'J2', 'p': 'j'}, 'pts': []}]}
+                r = pcl.Project(pr).run(2 / f, channels=['Y:F1/Ia'], hdiv=2000)
+                t, y = np.array(r.t), np.array(r['Y:F1/Ia'])
+                pk = np.abs(y[t > 1 / f]).max()
+                self.assertLess(abs(pk / want - 1), 1e-4, (f, kind))
+
+    def test_area_starts_in_the_load_flow(self):
+        import pcl
+        pr = self.net.to_emt(self.lf, machines=N.IEEE9_MACHINES, boundary=['5', '9'], internal=['1'], fig='fdne')
+        eq = [c for c in pr['components'] if c['type'] == 'EQV3']
+        self.assertEqual((len(eq), eq[0]['params']['fig'], eq[0]['params']['FD']), (1, 'fdne', self.q['fdne']['rows']))
+        res = pcl.Project(pr).run(0.1, channels=['Y:G1:pe', 'Y:G1:qe'])
+        self.assertLess(abs(res['Y:G1:pe'][-1] - self.lf['buses']['1']['P'] / 100e6), 1e-4)
+        self.assertLess(abs(res['Y:G1:qe'][-1] - self.lf['buses']['1']['Q'] / 100e6), 1e-4)
+
+    def test_fault_against_the_full_network(self):
+        # a fault at 50 ms, the first peak and the rms of the second cycle of i_a against the full network in EMT:
+        # IEEE 9 with the boundary bus 4 (one port), at buses 4 and 1: within 2,5 %, and within 1 % of Fig. 15a;
+        # IEEE 14 with the boundary 6, 7, 9 (three ports, passive), at buses 9 and 13: the peak within 1 %, the rms within 3 %,
+        # and the largest difference in the first cycle below that of Fig. 50
+        import pcl
+
+        def ia(pr, bus, kind, t=None):
+            r = pcl.Project(_fault(pr, bus, kind)).run(0.1, channels=['Y:F1/Ia'])
+            return (np.array(r.t), np.array(r['Y:F1/Ia'])) if t is None else np.interp(t, np.array(r.t), np.array(r['Y:F1/Ia']))
+        for case, B, I, mach, buses, kw in ((9, ['4'], ['1'], N.IEEE9_MACHINES, ('4', '1'), {}), (14, ['6', '7', '9'], None, None, ('9', '13'), {'passive': True})):
+            net = N.ieee(case)
+            lf = net.load_flow()
+            full = net.to_emt(lf, machines=mach)
+            figs = ('fdne', '15a') if case == 9 else ('fdne', '50')
+            areas = {fig: net.to_emt(lf, machines=mach, boundary=B, internal=I, fig=fig, **(kw if fig == 'fdne' else {})) for fig in figs}
+            for bus in buses:
+                for kind in ('abcg', 'ag'):
+                    t, a = ia(full, bus, kind)
+                    m1, m2 = (t > 0.05) & (t < 0.07), (t > 0.07) & (t < 0.09)
+                    pk, rms, dev = {}, {}, {}
+                    for fig, pr in areas.items():
+                        b = ia(pr, bus, kind, t)
+                        pk[fig] = np.abs(b[m1]).max() / np.abs(a[m1]).max() - 1
+                        rms[fig] = np.sqrt(np.mean(b[m2] ** 2)) / np.sqrt(np.mean(a[m2] ** 2)) - 1
+                        dev[fig] = np.max(np.abs(b[m1] - a[m1])) / np.max(np.abs(a[m1]))
+                    if case == 9:
+                        self.assertLess(max(abs(pk['fdne']), abs(rms['fdne'])), 0.025, (bus, kind))
+                        self.assertLess(max(abs(pk['fdne'] - pk['15a']), abs(rms['fdne'] - rms['15a'])), 0.01, (bus, kind))
+                    else:
+                        self.assertLess(abs(pk['fdne']), 0.01, (bus, kind))
+                        self.assertLess(abs(rms['fdne']), 0.03, (bus, kind))
+                        self.assertLess(dev['fdne'], dev['50'], (bus, kind, dev))
+
+    def test_what_is_refused(self):
+        import pcl
+        with self.assertRaises(Q.EquivalentError) as c:
+            Q.emt_ports(self.net, ['5', '9'], ['1'], lf=self.lf, machines=N.IEEE9_MACHINES, fig='fdne', fmax=1.0)
+        self.assertIn('scan: 0 < fmin < fmax', str(c.exception))
+
+        def C(cid, typ, params):
+            return {'id': cid, 'type': typ, 'x': 0, 'y': 0, 'rot': 0, 'flip': False, 'label': cid, 'params': params}
+
+        def pr(fd):
+            return {'version': 4, 'components': [C('S', 'EQV3', {'fig': 'fdne', 'FD': fd, 'conn': 'bus'}), C('R', 'LOAD3', {'Un': 150e3, 'P': 1e6, 'Q': 0, 'conn': 'bus'})],
+                    'wires': [{'id': 'w1', 'a': {'c': 'S', 'p': 'abc1'}, 'b': {'c': 'R', 'p': 'abc'}, 'pts': []}]}
+        for fd in ('2, 1, 0.1, 9.0', '7, 1, 0.1, 9.0, 0.01', '2, 1, 0.1, 0, 0.01', '1, 1, -0.1, 0, 0.01', '2, 2, 0.1, 9.0, 0.01', ''):
+            with self.assertRaises(pcl.PclError) as c:
+                pcl.Project(pr(fd)).run(0.01, channels=['t'])
+            self.assertIn('κάθε όρος του FDNE θέλει 5 αριθμούς', str(c.exception))
+        self.assertGreater(len(pcl.Project(pr('2, 1, 0.1, 9.0, 0.01; 2, 0, 0.1, 9.0, -0.01')).run(0.01).t), 1)    # one negative branch runs
+
+    def test_scipy(self):
+        # one port of EQV3 with fig 'fdne' and a term of every kind (one of them negative), a load and a fault: the browser solver and
+        # SciPy (the flag neg reaches its resistors too) give the same fault current from 1,5 ms after the fault on
+        import pcl
+
+        def C(cid, typ, params):
+            return {'id': cid, 'type': typ, 'x': 0, 'y': 0, 'rot': 0, 'flip': False, 'label': cid, 'params': params}
+        fd = '0, 1, 0, 0, 0.5; 1, 1, 0.1, 0, 5; 2, 1, 0.05, 4, 0.2; 3, 1, 0.05, 4, 0.05; 4, 1, 40, 0, 0.3; 1, 0, 0.2, 0, 3; 2, 0, 0.08, 9, 0.1; 3, 0, 0.08, 9, -0.02'
+        comps = [C('S', 'EQV3', {'Un': '150e3', 'Sb': 100e6, 'E': '1.02', 'ang': '4', 'fig': 'fdne', 'FD': fd, 'conn': 'bus'}), C('J', 'JUNC', {}),
+                 C('L1', 'LOAD3', {'Un': 150e3, 'P': 60e6, 'Q': 15e6, 'conn': 'bus'}), C('F1', 'FLT3', {'kind': 'ag', 'ton': 0.012, 'conn': 'bus'})]
+        wires = [{'id': f'w{k}', 'a': {'c': c, 'p': p}, 'b': {'c': 'J', 'p': 'j'}, 'pts': []} for k, (c, p) in enumerate((('S', 'abc1'), ('L1', 'abc'), ('F1', 'abc')))]
+        pr = pcl.Project({'version': 4, 'components': comps, 'wires': wires})
+        rb = pr.run(0.04, channels=['Y:F1/Ia'], hdiv=2000)
+        rs = pr.run(0.04, channels=['Y:F1/Ia'], solver='scipy', rtol=1e-9)
+        t, yb = np.array(rb.t), np.array(rb['Y:F1/Ia'])
+        ys = np.interp(t, rs.t, rs['Y:F1/Ia'])
+        m = t > 0.0135
+        self.assertLess(np.max(np.abs(yb[m] - ys[m])) / np.max(np.abs(yb)), 1e-4)
+
+    def test_what_the_page_asks(self):
+        from pcl import study as S
+        e = S.area({'case': 'ieee9', 'buses': ['1', '4', '5', '9'], 'what': 'emt', 'fig': 'fdne'})
+        self.assertEqual((e['boundary'], e['fig'], len(e['fdne']['ports'])), (['5', '9'], 'fdne', 2))
+        self.assertEqual(e['fdne']['err1'], self.q['fdne']['err1'])
+        self.assertEqual(len(e['fdne']['f']), len(e['fdne']['ports'][1]['Z0fit']))
+        q = next(c for c in e['project']['components'] if c['type'] == 'EQV3')['params']
+        self.assertEqual((q['fig'], q['FD']), ('fdne', self.q['fdne']['rows']))
+        p = S.area({'case': 'ieee9', 'buses': ['1', '4', '5', '9'], 'what': 'emt', 'fig': 'fdne', 'passive': True, 'fmax': 1000})
+        self.assertTrue(p['fdne']['passive'] and p['fdne']['is_passive'])
+        self.assertEqual(p['fdne']['f'][-1], 1000.0)
 
 if __name__ == '__main__':
     unittest.main()

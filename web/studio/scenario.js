@@ -70,6 +70,8 @@
   const s=new MNA.Sim(pr,opts);
   const keys=q.channels&&q.channels.length?[...q.channels]:defaultKeys(s,pr);
   for(const m of q.measure||[])if(m.key&&!keys.includes(m.key))keys.push(m.key); // a measurement brings its channel
+  // 5.0.9: over REC_BIG channels the record keeps only the watched ones ('auto', 5.0): the channels asked for join it
+  if(s.recKeys!==s.keys)s.watchAdd(keys);
   const idx=keys.map(k=>{const i=s.chIndex.get(k);if(i===undefined)throw new Error(`Άγνωστο κανάλι «${k}». Μερικά διαθέσιμα: ${s.keys.slice(0,24).join(', ')}${s.keys.length>24?' …':''}`);return i;});
   const from=+q.from||0,t=[],Y=keys.map(()=>[]);
   const push=()=>{if(s.t<from-1e-15)return;const v=s.vals;t.push(s.t);for(let j=0;j<idx.length;j++)Y[j].push(v[idx[j]]);};
@@ -108,6 +110,7 @@
   else{const opts={hDiv:+q.hdiv||+s0.hDiv||200,method:q.method||s0.method||'TR'};if(q.step)opts.step=q.step;s=new MNA.Sim(pr,opts);if(q.check!==false)s.stepCheck();}
   const keys=q.channels&&q.channels.length?[...q.channels]:defaultKeys(s,pr);
   for(const m of q.measure||[])if(m.key&&!keys.includes(m.key))keys.push(m.key);
+  if(s.recKeys!==s.keys)s.watchAdd(keys);                                   // 5.0.9: as in run
   const S={sim:s,project:JSON.parse(JSON.stringify(pr)),keys,idx:null,t:[],Y:null,fresh:!q.state,from:0};
   const index=()=>{S.idx=keys.map(k=>{const i=s.chIndex.get(k);if(i===undefined)throw new Error(`Άγνωστο κανάλι «${k}». Μερικά διαθέσιμα: ${s.keys.slice(0,24).join(', ')}${s.keys.length>24?' …':''}`);return i;});};
   index();S.index=index;
