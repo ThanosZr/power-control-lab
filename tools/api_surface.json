@@ -1,5 +1,5 @@
 {
- "version": "5.0.5",
+ "version": "5.0.6",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -1028,6 +1028,13 @@
    "pcl.equivalent.EquivalentError": {
     "params": [],
     "since": "5.0.3"
+   },
+   "pcl.equivalent.area": {
+    "params": [
+     "net",
+     "buses"
+    ],
+    "since": "5.0.6"
    },
    "pcl.equivalent.compare": {
     "params": [
@@ -4708,6 +4715,12 @@
     "params": [],
     "since": "4.19.1"
    },
+   "pcl.study.area": {
+    "params": [
+     "data"
+    ],
+    "since": "5.0.6"
+   },
    "pcl.study.network_of": {
     "params": [
      "data"
@@ -5790,6 +5803,10 @@
    "/api/model_proof": {
     "params": [],
     "since": "3.18"
+   },
+   "/api/network_area": {
+    "params": [],
+    "since": "5.0.6"
    },
    "/api/network_open": {
     "params": [],

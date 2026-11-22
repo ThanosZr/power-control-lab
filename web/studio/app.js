@@ -2994,11 +2994,17 @@ async function studyAct(what){const m=S.tutMeta?.study;if(!m)return;
  if(same){renderTheory();if(what==='view'&&STUDY.view)netViewOpen();else if(STUDY.view&&!$('#netview').hidden)netViewOpen();}
  if(nx&&now)studyAct(nx);else if(!same)renderTheory();}
 // the window of the viewer (netview.js): the layers the study can feed, names, a bus by its name, the picture as SVG or DXF
-const NV={v:null,id:null,sel:null};
-function netViewOpen(){const d=STUDY.view;if(!d)return;if(!window.NetView){notice('Το διάγραμμα του δικτύου δεν φορτώθηκε στη σελίδα (netview.js). Ξαναφόρτωσέ τη με Ctrl+F5.','error');return;}const box=$('#netview');box.hidden=false;
- const keep=NV.v&&NV.id===d.id?{tr:NV.v.state.fitted?null:NV.v.state.tr,layer:NV.v.state.layer,names:NV.v.state.names}:null;NV.v?.destroy();NV.id=d.id;
+// 5.0.6 (ROADMAP §94 step γ, decision 371): the diagram is a card of the page, a document of the central area: the first time
+// it opens it goes as a tab next to the circuit (Dock.firstAs), in the place of the circuit, with the circuit one click away;
+// after that it stays where the user puts it (a tab, side by side with «◫», a region, a window of its own)
+const NV={v:null,id:null,sel:null,area:{ids:[],res:null,net:null,t:0,seq:0,back:null}};
+function netViewOpen(){const d=STUDY.view;if(!d)return;if(!window.NetView){notice('Το διάγραμμα του δικτύου δεν φορτώθηκε στη σελίδα (netview.js). Ξαναφόρτωσέ τη με Ctrl+F5.','error');return;}const box=$('#netview');
+ const was=!box.hidden&&box.getClientRects().length>0&&!box.classList.contains('dk-off');box.hidden=false;window.Dock?.firstAs('netview','circuit');window.Dock?.reveal('netview');
+ if(!was)box.scrollIntoView({block:'nearest'});
+ const keep=NV.v&&NV.id===d.id?{tr:NV.v.state.fitted?null:NV.v.state.tr,layer:NV.v.state.layer,names:NV.v.state.names,mode:NV.v.state.mode}:null;NV.v?.destroy();NV.id=d.id;
  $('#nv-title').textContent=`Δίκτυο της μελέτης: ${d.name} · ${STUDY_LAB[d.q.study]||d.q.study} · ${d.view.buses.length} ζυγοί, ${d.view.branches.length} κλάδοι${d.view.dc?(()=>{const dd=d.view.dc.lines.filter(e=>e.kind==='dcdc').length;return `, ${d.view.dc.buses.length} ζυγοί DC, ${d.view.dc.lines.length-dd} γραμμές DC${dd?`, ${dd} ${dd===1?'μετατροπέας':'μετατροπείς'} DC/DC`:''}, ${d.view.dc.stations.length} σταθμοί μετατροπέα`;})():''}`;      // 4.21: the DC/DC converters apart
- const v=NV.v=NetView.create($('#nv-canvas'),d,{tr:keep?.tr,layer:keep?.layer,pick:q=>nvEdit(q),info:t=>{$('#nv-info').textContent=t||'Σύρε για μετακίνηση, ροδέλα για μεγέθυνση, δείξε έναν ζυγό ή έναν κλάδο για τα μεγέθη του, κάνε κλικ για να τον αλλάξεις.';}});
+ const v=NV.v=NetView.create($('#nv-canvas'),d,{tr:keep?.tr,layer:keep?.layer,pick:q=>nvEdit(q),select:ids=>areaChosen(ids),info:t=>{$('#nv-info').textContent=t||'Σύρε για μετακίνηση, ροδέλα για μεγέθυνση, δείξε έναν ζυγό ή έναν κλάδο για τα μεγέθη του, κάνε κλικ για να τον αλλάξεις.';}});
+ areaBind(v,d,keep);
  const legend=()=>{const L=v.legend();$('#nv-legend').innerHTML=`<b>${esc(L.title)}</b>`+L.items.map(([c,t])=>`<i style="background:${esc(c)}"></i>${esc(t)}`).join('');};
  $('#nv-layer').innerHTML=v.layers().map(L=>`<option value="${esc(L.layer)}" ${L.layer===v.state.layer?'selected':''}>${esc(L.title)}</option>`).join('');$('#nv-names').value=keep?.names||'auto';if(keep)v.setNames(keep.names);else $('#nv-find').value='';legend();
  $('#nv-layer').onchange=e=>{v.setLayer(e.target.value);legend();};$('#nv-names').onchange=e=>v.setNames(e.target.value);
@@ -3046,6 +3052,51 @@ function nvApply(q){const box=$('#nv-edit'),E=STUDY.view.edit,num=el=>{if(!el)re
  if(bad){$('#nv-edit-msg').textContent='Δώσε αριθμούς.';return;}
  // a change the engine refuses (or a study that fails with it) is taken back: the picture returns to what it showed, with the reason
  if(n){STUDY.error=null;studyAct('view').then(async()=>{if(!STUDY.error)return;const why=STUDY.error;STUDY.edits=prev;await studyAct('view');const el=$('#nv-edit-msg');if(el)el.textContent='Η αλλαγή δεν έγινε: '+why;});}}
+// 5.0.6 (ROADMAP §94 step γ, §95 point 2, §96 B.1, open 4 of 5.0.3): the study area chosen on the diagram (Shift + click,
+// a window, a lasso), its boundary as the engine finds it (pcl.study.area), the full network against the area with the
+// equivalent in N−1, and the area as a circuit in EMT with the rest of the network as one EQV3 (in the place of the circuit,
+// with «↶ Πίσω» to the circuit of before). The choice stays while the diagram shows the same network.
+const AREA_SLACK={internal:'μέσα στην περιοχή',boundary:'στο σύνορο',external:'έξω· γίνεται ζυγός ταλάντωσης ένας ζυγός του συνόρου'};
+function areaBind(v,d,keep){const A=NV.area,net=d.id;if(A.net!==net){A.ids=[];A.res=null;A.net=net;$('#nv-cmp').hidden=true;$('#nv-cmp').innerHTML='';}
+ v.setMode(keep?.mode||'pan');for(const b of document.querySelectorAll('#nv-area [data-nv-mode]')){const on=b.dataset.nvMode===v.state.mode;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));}
+ if(A.ids.length){v.setSelection(A.ids,true);if(A.res&&!A.res.error)v.setBoundary(A.res.boundary);}
+ $('#nv-area').onclick=e=>{const m=e.target.closest('[data-nv-mode]');if(m){NV.v?.setMode(m.dataset.nvMode);for(const b of document.querySelectorAll('#nv-area [data-nv-mode]')){const on=b===m;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));}return;}
+  if(e.target.id==='nv-area-clear')NV.v?.clearSelection();else if(e.target.id==='nv-cmp-run')areaCompare();else if(e.target.id==='nv-emt')areaEmt();else if(e.target.id==='nv-back')areaBack();};
+ areaShow();}
+// a change of the choice: the boundary from the engine, a moment after the last change
+function areaChosen(ids){const A=NV.area;A.ids=ids;A.res=null;$('#nv-cmp').hidden=true;clearTimeout(A.t);areaShow();if(!ids.length)return;A.t=setTimeout(()=>areaSplit(),160);}
+async function areaSplit(){const A=NV.area,d=STUDY.view;if(!d||!A.ids.length)return;const seq=++A.seq,ids=A.ids.slice();A.busy='split';areaShow();
+ try{const r=await api('network_area',{...d.q,buses:ids,what:'split'});if(seq!==A.seq)return;A.res=r;NV.v?.setBoundary(r.boundary);}
+ catch(e){if(seq!==A.seq)return;A.res={error:e.message};NV.v?.setBoundary([]);}
+ A.busy=null;areaShow();}
+function areaShow(){const A=NV.area,r=A.res,n=A.ids.length,ok=!!r&&!r.error&&!A.busy,list=b=>b.slice(0,8).map(esc).join(', ')+(b.length>8?` … (${b.length})`:'');
+ let h;if(A.busy==='compare')h='Ροή φορτίου του πλήρους δικτύου και της περιοχής, για κάθε κλάδο εκτός…';else if(A.busy==='emt')h='Το κύκλωμα της περιοχής σε EMT…';
+ else if(!n)h='Διάλεξε ζυγούς: Shift + κλικ, Shift + σύρσιμο για παράθυρο, Ctrl + σύρσιμο για λάσο.';
+ else if(A.busy||!r)h=`<b class="ar-c">${n}</b> ζυγοί· το σύνορο από το engine…`;
+ else if(r.error)h=`<b class="ar-c">${n}</b> ζυγοί · <span class="bad">${esc(r.error)}</span>`;
+ else h=`<b class="ar-c">${r.internal.length+r.boundary.length}</b> ζυγοί: ${r.internal.length} μέσα, σύνορο <b class="ar-b">${list(r.boundary)}</b> · ${r.external} έξω · ${r.branches} κλάδοι στην περιοχή · ο ζυγός ταλάντωσης ${AREA_SLACK[r.slack]||r.slack}`;
+ if(A.back)h+=` · <button id="nv-back" title="Το κύκλωμα και το tutorial που ήταν πριν από «⚡ Η περιοχή σε EMT»">↶ Πίσω στο «${esc(A.back.title)}»</button>`;
+ $('#nv-area-info').innerHTML=h;$('#nv-area-info').classList.toggle('muted',!n&&!A.back);$('#nv-cmp-run').disabled=!ok;$('#nv-emt').disabled=!ok;$('#nv-area-clear').disabled=!n;}
+// the full network against the area with its equivalent: the base case and every branch of the area out (pcl.equivalent.compare)
+async function areaCompare(){const A=NV.area,d=STUDY.view;if(!d||!A.res||A.res.error)return;const kind=$('#nv-eqkind').value,ids=A.ids.slice(),seq=A.seq;A.busy='compare';areaShow();
+ let r=null,err='';try{r=await api('network_area',{...d.q,buses:ids,what:'compare',kind});}catch(e){err=e.message;}
+ A.busy=null;areaShow();if(seq!==A.seq)return;const box=$('#nv-cmp');box.hidden=false;
+ if(err){box.innerHTML=`<p class="bad">${esc(err)}</p>`;return;}
+ const c=r.compare,f=(x,k)=>x===null||x===undefined?'—':Math.abs(x)<1e-9?'< 10⁻⁹':fmt(x,k),rows=[{outage:'βασικό σημείο',...c.base,base:true},...c.outages];
+ const ok=c.outages.filter(o=>!o.error),worst=ok.length?ok.reduce((a,b)=>b.dV>a.dV?b:a):null;
+ box.innerHTML=`<div class="small"><b>Πλήρες δίκτυο απέναντι σε περιοχή + ${kind==='xward'?'extended Ward':'Ward'}</b> (σύνορο ${r.boundary.map(esc).join(', ')}${r.fictitious?`, ${r.fictitious} πλασματικοί ζυγοί PV`:''}${r.slack_bus?`, ζυγός ταλάντωσης ο ${esc(r.slack_bus)}`:''}):`
+  +` στο βασικό σημείο ΔV = ${f(c.base.dV,3)} pu${worst?` · στη χειρότερη διαταραχή (${esc(worst.outage)}) ΔV = <b>${f(worst.dV,4)}</b> pu, Δθ = ${f(worst.dA,4)}°, ΔP = ${f(worst.dP,4)} MW`:''}.`
+  +` Οι διαφορές είναι οι μεγαλύτερες στους ζυγούς που κρατιούνται και στις ροές των κλάδων της περιοχής.</div>`
+  +`<table><thead><tr><th>Κλάδος εκτός</th><th>ΔV (pu)</th><th>Δθ (°)</th><th>ΔP (MW)</th></tr></thead><tbody>`
+  +rows.map(o=>`<tr class="${o===worst?'worst':''}"><td>${o.base?'<i>βασικό σημείο</i>':esc(o.outage)}</td>${o.error?`<td colspan="3" class="muted">${o.error==='no convergence'?'χωρίς σύγκλιση (νησίδα ή όριο)':esc(o.error)}</td>`:`<td>${f(o.dV,4)}</td><td>${f(o.dA,4)}</td><td>${f(o.dP,4)}</td>`}</tr>`).join('')+'</tbody></table>';}
+// the area as a circuit in EMT (Network.to_emt with the boundary): in the place of the circuit, like a file that opens
+async function areaEmt(){const A=NV.area,d=STUDY.view;if(!d||!A.res||A.res.error)return;const fig=$('#nv-fig').value,ids=A.ids.slice();A.busy='emt';areaShow();
+ let r=null;try{r=await api('network_area',{...d.q,buses:ids,what:'emt',fig});}catch(e){A.busy=null;areaShow();$('#nv-area-info').insertAdjacentHTML('beforeend',` · <span class="bad">${esc(e.message)}</span>`);return;}
+ A.busy=null;if(!A.back)A.back={pr:project(),tut:S.tut,tutRef:S.tutRef,meta:S.tutMeta,title:tutorial().title};
+ S.tut={id:'empty',options:{}};S.tutMeta=null;S.tutRef=null;applyProject(r.project);renderTutorial();runTheory();runMath();window.Dock?.reveal('circuit');$('#bench-card').scrollIntoView({block:'nearest'});areaShow();
+ const q=r.project.meta?.equivalent;notice(`Η περιοχή σε EMT: ${r.internal.length+r.boundary.length} ζυγοί, και το υπόλοιπο δίκτυο ως ένα «Ισοδύναμο δικτύου» (EQV3, ${fig==='50'?'θεμελιώδης':'Σχ. '+fig}) στους ζυγούς ${r.boundary.map(esc).join(', ')}`
+  +(q?.Sk?` · S″k ${q.Sk.map(x=>fmt(x/1e6,4)).join(', ')} MVA`:'')+'. «↶ Πίσω» στο διάγραμμα φέρνει το κύκλωμα που ήταν.','info');}
+function areaBack(){const A=NV.area,b=A.back;if(!b)return;A.back=null;S.tut=b.tut;S.tutRef=b.tutRef;S.tutMeta=b.meta;applyProject(b.pr);renderTutorial();runTheory();runMath();notice('');areaShow();}
 // 4.20: the DC grid of five terminals: the card of the AC/DC load flow (the same grid in the engine, after the same event) and
 // the values of the EMT now, side by side, terminal by terminal
 function mtdcTheory(){const m=S.tutMeta?.study,q=m&&STUDY.key===studyKey(m)?STUDY.r?.summary:null,y=k=>S.sim?S.sim.now(k):NaN;
@@ -3615,7 +3666,9 @@ function initPanels(){const R=window.Panels;if(!R)return;
  // 5.0.5 (ROADMAP §94 step β): the cards dock, float, go as tabs and fill the screen (dock.js); their buttons go into the
  // row each card already has at its top
  window.Dock?.init([['circuit','#bench-card','.toolbar'],['scope','#scope-card','.sim-bar'],['scen','#scen-card','#scen > summary'],['addons','#addons-card','#addons-block > summary'],
-  ['math','#math-card','.math-top'],['theory','#tut-card','.tut-head']].map(([id,sel,head])=>({id,sel,head,title:cards.find(c=>c[0]===id)[1],closable:id!=='circuit'})));
+  ['math','#math-card','.math-top'],['theory','#tut-card','.tut-head']].map(([id,sel,head])=>({id,sel,head,title:cards.find(c=>c[0]===id)[1],closable:id!=='circuit'}))
+  // 5.0.6 (§94 step γ): the diagram of the network, a document of the central area (its place in the page: under the circuit)
+  .concat([{id:'netview',sel:'#netview',head:'.nv-head',title:'Διάγραμμα του δικτύου',closable:true}]));
  window.Dock?.onChange(()=>{if(!$('#scope-card').hidden)requestAnimationFrame(()=>scope.resize());});
  $('#open-panels')?.addEventListener('click',e=>R.openMenu(e.currentTarget));}
 window.addEventListener('DOMContentLoaded',boot);

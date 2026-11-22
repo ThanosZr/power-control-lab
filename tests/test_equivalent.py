@@ -9,8 +9,14 @@ kept bus, for every kind of fault, and the values of IEC TR 60909-4 with the red
 5.0.4 (THEORY §8ΩΘ): the equivalent in EMT after CIGRE TB 39, Fig. 15 (pcl.equivalent.emt_ports and to_emt, the part EQV3):
 its admittances are those of the load flow, the current at the boundary is the one of the full solution, the study area
 starts in the steady state of the load flow, a fault in it gives the current of the full network in EMT, and one port of
-EQV3 is the GRID3 with the same data."""
+EQV3 is the GRID3 with the same data.
+
+5.0.6 (ROADMAP §94 step γ, §96 B.1): the study area as the buses chosen in the diagram (pcl.equivalent.area, pcl.study.area):
+the boundary is every chosen bus that touches one that was not chosen, the hidden buses of the three-winding transformers
+follow the buses around them, and what the page asks of the engine (the split, the comparison in N−1, the circuit in EMT) is
+what the library gives for the same boundary."""
 import copy
+import json
 import shutil
 import unittest
 
@@ -318,6 +324,71 @@ class TestEMTArea(unittest.TestCase):
             pk, rms = measure(tut(net='eq', fig='50', fault=kind))
             self.assertLess(abs(pk / ref['pk'] - 1), 0.02, kind)
             self.assertLess(abs(rms / ref['rms'] - 1), 0.03, kind)
+
+
+class TestAreaFromTheDiagram(unittest.TestCase):
+    def test_the_boundary_of_the_chosen_buses(self):
+        net = N.ieee9()
+        # the area of the tutorial ieee9_eq and of GUIDE §42: the buses 1, 4, 5, 9
+        self.assertEqual(Q.area(net, ['1', '4', '5', '9']), Q.split(net, ['5', '9'], ['1']))
+        self.assertEqual(Q.area(net, ['9', 5, '4', '1', '4']), (['1', '4'], ['5', '9'], ['2', '3', '6', '7', '8']))   # order, repeats, numbers
+        # the area of GUIDE §41 (IEEE 30, boundary 4, 6, 28 around bus 1): chosen as its buses, it gives the same split
+        n30 = N.ieee(30)
+        I, B, E = Q.split(n30, ['4', '6', '28'], ['1'])
+        self.assertEqual(Q.area(n30, I + B), (I, B, E))
+
+    def test_the_hidden_buses_follow_the_buses_around_them(self):
+        net = tr60909_4()
+        I, B, E = Q.area(net, ['1', '2', '8', '3', '4'])          # every winding of T3 and of T4 chosen: their star points inside
+        self.assertEqual((B, E), (['2', '3', '4'], ['5', '6', '7']))
+        self.assertTrue({'_T3*', '_T4*', 'T4LV'} <= set(I))
+        I, B, E = Q.area(net, ['2', '3', '4', '5', '_T3*', 'T4LV'])  # chosen or not, a hidden bus goes where its neighbours are
+        self.assertEqual((I, B), (['3', '4'], ['2', '5']))
+        self.assertTrue({'_T3*', '_T4*', 'T4LV'} <= set(E))
+
+    def test_what_is_refused(self):
+        net = N.ieee9()
+        for buses, why in ((['4', '5'], 'all are boundary buses'), (list(net.buses), 'nothing lies beyond'), (['x'], 'unknown bus x'), ([], 'no bus chosen')):
+            with self.assertRaises(Q.EquivalentError) as c:
+                Q.area(net, buses)
+            self.assertIn(why, str(c.exception))
+
+    def test_what_the_page_asks(self):
+        from pcl import study as S
+        r = S.area({'case': 'ieee9', 'buses': ['1', '4', '5', '9']})
+        self.assertEqual(r, {'what': 'split', 'chosen': 4, 'internal': ['1', '4'], 'boundary': ['5', '9'], 'external': 5, 'branches': 3, 'slack': 'internal'})
+        self.assertEqual(S.area({'case': 'ieee9', 'buses': ['5', '6', '7', '8', '9', '2', '3']})['slack'], 'external')
+        # the comparison in N−1 is pcl.equivalent.compare on the same equivalent: exact in the base case
+        c = S.area({'case': 'ieee9', 'buses': ['1', '4', '5', '9'], 'what': 'compare'})
+        net = N.ieee9()
+        lf = net.power_flow(tol=1e-10)
+        ref = Q.compare(net, net.equivalent(['5', '9'], ['1'], kind='xward', lf=lf, tol=1e-10))
+        self.assertEqual((c['kind'], c['fictitious'], c['slack_bus']), ('xward', 2, None))
+        self.assertLess(c['compare']['base']['dV'], 1e-9)
+        self.assertEqual([o['outage'] for o in c['compare']['outages']], ['br1', 'br2', 'br9'])
+        for a, b in zip(c['compare']['outages'], ref['outages']):
+            self.assertEqual(a.get('error'), b.get('error'))
+            for k in ('dV', 'dA', 'dP'):
+                if k in b:
+                    self.assertEqual(a[k], b[k], k)
+        self.assertEqual(S.area({'case': 'ieee9', 'buses': ['1', '4', '5', '9'], 'what': 'compare', 'kind': 'ward'})['fictitious'], 0)
+        # the circuit in EMT is Network.to_emt with the same boundary (and the machines of the IEEE 9)
+        e = S.area({'case': 'ieee9', 'buses': ['1', '4', '5', '9'], 'what': 'emt', 'fig': '15b'})
+        pr = net.to_emt(machines=N.IEEE9_MACHINES, boundary=['5', '9'], internal=['1', '4'], fig='15b')
+        self.assertEqual(json.dumps(e['project'], sort_keys=True), json.dumps(S._clean(pr), sort_keys=True))
+        self.assertEqual([c['type'] for c in e['project']['components']].count('EQV3'), 1)
+        self.assertEqual(e['project']['meta']['equivalent']['boundary'], ['5', '9'])
+
+    def test_what_the_page_is_told_when_it_cannot(self):
+        from pcl import study as S
+        for q, why in (({'buses': ['4', '5']}, 'όλοι είναι ζυγοί του συνόρου'), ({'buses': ['x']}, 'Άγνωστος ζυγός: x'), ({'buses': []}, 'buses:'),
+                       ({'buses': ['1', '4', '5', '9'], 'what': 'sky'}, 'what:'), ({'buses': ['1', '4', '5', '9'], 'what': 'compare', 'kind': 'norton'}, 'kind:'),
+                       ({'buses': ['1', '4', '5', '9'], 'what': 'emt', 'fig': '15a'}, 'fig:')):
+            with self.assertRaises(S.StudyError) as c:
+                S.area({'case': 'ieee9', **q})
+            self.assertIn(why, str(c.exception))
+        with self.assertRaises(S.StudyError) as c:                 # networks with DC parts are not reduced yet
+            S.area({'case': 'mtdc5', 'buses': ['1', '2'], 'what': 'compare'})
 
 
 if __name__ == '__main__':

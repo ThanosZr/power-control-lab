@@ -6,6 +6,7 @@ const D=require('../../web/studio/dock.js'),M=D.model;
 const IDS=['circuit','scope','scen','addons','math','theory'];
 const inv=L=>{const seen=new Map();for(const g of L.groups){if(!g.cards.length)return 'empty group '+g.id;if(!g.cards.includes(g.active))return 'active outside '+g.id;
   if(!['main','left','right','bottom','float'].includes(g.at))return 'region '+g.at;if(g.at==='float'&&g.cards.length!==1)return 'float of '+g.cards.length;
+  if(g.side!==undefined&&(!g.cards.includes(g.side)||g.side===g.active||g.at==='float'||!(g.r>=0.2&&g.r<=0.8)))return 'side of '+g.id;
   for(const c of g.cards)seen.set(c,(seen.get(c)||0)+1);}
  for(const c of IDS)if(seen.get(c)!==1)return c+' ×'+(seen.get(c)||0);if(new Set(L.groups.map(g=>g.id)).size!==L.groups.length)return 'group id twice';return '';};
 const out={cases:{},walk:{}};
@@ -29,11 +30,27 @@ const N=M.normalize(bad,IDS);
 C('normBad',{inv:inv(N),scope:M.where(N,'scope'),math:M.where(N,'math'),scen:M.where(N,'scen'),addons:M.where(N,'addons'),theory:M.where(N,'theory'),circuit:M.where(N,'circuit'),
  size:N.size,float:Object.keys(N.float),max:N.max});
 const N2=M.normalize(M.copy(L),[...IDS,'new']);C('normNewCard',{w:M.where(N2,'new'),n:N2.groups.length-L.groups.length});
+// 5.0.6 (§94 step γ): side by side in a group, its share of the width, a card that leaves, and the first place of a document
+const S=M.fresh(IDS);M.side(S,'circuit','theory');
+C('side',{c:M.where(S,'circuit'),t:M.where(S,'theory'),r:M.groupOf(S,'circuit').r,inv:inv(S),order:M.groups(S,'main',IDS).map(g=>g.cards.slice())});
+M.activate(S,'theory');C('sideActivate',{c:M.where(S,'circuit'),t:M.where(S,'theory')});
+M.tab(S,'scope','circuit');M.activate(S,'scope');C('sideThird',{s:M.where(S,'scope'),t:M.where(S,'theory'),c:M.where(S,'circuit'),inv:inv(S)});
+M.ratio(S,'scope',0.95);C('sideRatio',{r:M.groupOf(S,'scope').r});M.ratio(S,'scope',0.3);
+M.place(S,'theory','left');C('sideLeaves',{s:M.where(S,'scope'),c:M.where(S,'circuit'),inv:inv(S)});
+M.side(S,'scope','circuit');M.place(S,'scope','main');C('activeLeaves',{c:M.where(S,'circuit'),inv:inv(S)});
+M.side(S,'circuit','math');M.side(S,'circuit',null);C('sideOff',{c:M.where(S,'circuit'),m:M.where(S,'math'),inv:inv(S)});
+M.place(S,'addons','float');M.side(S,'addons','scen');C('noSideInFloat',{a:M.where(S,'addons'),inv:inv(S)});
+const Ns=M.normalize({groups:[{id:'a',at:'main',cards:['circuit','theory'],active:'circuit',side:'theory',r:7},{id:'b',at:'main',cards:['scope','math'],active:'scope',side:'scope'},{id:'c',at:'left',cards:['scen'],active:'scen',side:'ghost'}],docs:{scope:1,ghost:1}},IDS);
+C('normSide',{a:M.groupOf(Ns,'circuit').side,r:M.groupOf(Ns,'circuit').r,b:M.groupOf(Ns,'scope').side===undefined,c:M.groupOf(Ns,'scen').side===undefined,docs:Object.keys(Ns.docs),inv:inv(Ns)});
+const F=M.fresh(IDS);M.firstAs(F,'theory','circuit');const f1=M.where(F,'theory');M.place(F,'theory','right');M.firstAs(F,'theory','circuit');
+const F2=M.fresh(IDS);M.place(F2,'theory','bottom');M.firstAs(F2,'theory','circuit');
+C('firstAs',{f1,f2:M.where(F,'theory'),moved:M.where(F2,'theory'),docs:Object.keys(F.docs),fresh:Object.keys(M.fresh(IDS).docs).length});
 // a long random walk over every action
 let seed=12345;const rnd=n=>{seed=(seed*1103515245+12345)%2147483648;return seed%n;};
 let W=M.fresh(IDS),bad1='',steps=0;const AT=['main','left','right','bottom','float'];
-for(let i=0;i<4000;i++){const a=rnd(4),id=IDS[rnd(IDS.length)];
- if(a===0)M.place(W,id,AT[rnd(AT.length)]);else if(a===1)M.tab(W,id,IDS[rnd(IDS.length)]);else if(a===2)M.activate(W,id);else W=M.normalize(JSON.parse(JSON.stringify(W)),IDS);
+for(let i=0;i<4000;i++){const a=rnd(7),id=IDS[rnd(IDS.length)];
+ if(a===0)M.place(W,id,AT[rnd(AT.length)]);else if(a===1)M.tab(W,id,IDS[rnd(IDS.length)]);else if(a===2)M.activate(W,id);
+ else if(a===3)M.side(W,id,rnd(4)?IDS[rnd(IDS.length)]:null);else if(a===4)M.ratio(W,id,rnd(100)/50);else if(a===5)M.firstAs(W,id,IDS[rnd(IDS.length)]);else W=M.normalize(JSON.parse(JSON.stringify(W)),IDS);
  steps++;const e=inv(W);if(e){bad1=i+': '+e;break;}}
 out.walk={steps,bad:bad1,end:inv(M.normalize(W,IDS))};
 let threw='';try{M.place(M.fresh(IDS),'scope','sky');}catch(e){threw=e.message;}out.cases.unknownRegion=threw;

@@ -667,4 +667,74 @@ def report(data):
     return {'html': r.html(), 'name': name, 'report': _clean(r.to_dict()), 'summary': _clean(summary(study, res))}
 
 
-__all__ = ['run', 'report', 'view', 'open_file', 'save_file', 'summary', 'network_of', 'StudyError', 'STUDIES', 'FEEDER_STUDIES', 'STATION_STUDIES']
+AREA_WHAT = ('split', 'compare', 'emt')
+AREA_ERRORS = {'unknown bus': 'Άγνωστος ζυγός:', 'no bus chosen': 'Δεν διάλεξες ζυγό.',
+               'the chosen buses touch no other bus': 'Οι ζυγοί που διάλεξες δεν ακουμπούν κανέναν άλλο: πέρα από αυτούς δεν μένει τίποτα για ισοδύναμο.',
+               'every chosen bus touches': 'Κάθε ζυγός που διάλεξες ακουμπά ζυγό εκτός περιοχής, άρα όλοι είναι ζυγοί του συνόρου: '
+                                           'διάλεξε και τους ζυγούς πίσω τους, μέσα στην περιοχή.'}
+MAX_AREA_OUTAGES = 400
+MAX_AREA_EMT = 200
+
+
+def area(data):
+    """5.0.6 (ROADMAP §94 step γ, §96 B.1, decision 371): the study area of a network from the buses chosen in its diagram
+    (clicks, a window or a lasso), and what it gives: {'case' | 'network', 'edits', 'buses': [names], 'what': 'split'
+    (default) | 'compare' | 'emt'}.
+
+    'split' → {'chosen', 'internal', 'boundary' (bus names), 'external' (how many), 'slack' ('internal', 'boundary' or
+    'external': where the slack of the network is), 'branches' (the branches among the kept buses)}: the boundary is every
+    chosen bus that touches a bus that was not chosen (pcl.equivalent.area).
+    'compare' (with 'kind' 'xward' (default) or 'ward'): also 'compare', the full network against the reduced one in the base
+    case and for the outage of every branch among the kept buses (pcl.equivalent.compare: the largest |V| difference in pu,
+    angle in degrees and flow in MW), with 'fictitious' and 'slack_bus' of the equivalent.
+    'emt' (with 'fig' '50' (default), '15b' or '15c'): also 'project', the study area as a circuit of the app with the rest of
+    the network as one EQV3 at the boundary (Network.to_emt with the boundary; the machines of the IEEE 9 for 'ieee9')."""
+    from . import equivalent as Q
+    what = data.get('what') or 'split'
+    if what not in AREA_WHAT:
+        raise StudyError('what: ένα από ' + ', '.join(AREA_WHAT))
+    buses = data.get('buses')
+    if not isinstance(buses, list) or not buses:
+        raise StudyError('buses: οι ζυγοί της περιοχής, ως λίστα ονομάτων')
+    net = _networks_of(data)[1]
+    try:
+        I, B, E = Q.area(net, buses)
+    except Q.EquivalentError as e:
+        m = str(e)
+        for k, t in AREA_ERRORS.items():
+            if m.startswith(k):
+                m = t + m[len(k):] if t.endswith(':') else t       # the name of an unknown bus stays
+                break
+        raise StudyError(m) from e
+    slack = {e['bus'] for e in net.elements if e['kind'] in ('feeder', 'generator', 'unit') and e.get('slack')} | {b for b, v in net.buses.items() if v.get('type') == 'slack'}
+    keep = set(I) | set(B)
+    nbr = sum(1 for e in net.elements if e['kind'] in ('line', 'branch', 'transformer') and set(Q._buses_of(e)) <= keep)
+    out = {'what': what, 'chosen': len(buses), 'internal': I, 'boundary': B, 'external': len(E), 'branches': nbr,
+           'slack': 'internal' if slack & set(I) else 'boundary' if slack & set(B) else 'external'}
+    try:
+        if what == 'compare':
+            kind = data.get('kind') or 'xward'
+            if kind not in ('ward', 'xward'):
+                raise StudyError("kind: 'xward' ή 'ward'")
+            if nbr > MAX_AREA_OUTAGES:
+                raise StudyError(f'Η περιοχή έχει {nbr} κλάδους: η σύγκριση σε N−1 γίνεται ως {MAX_AREA_OUTAGES}.')
+            lf = net.power_flow(tol=1e-10)
+            eq = Q.reduce(net, B, I, kind=kind, lf=lf, tol=1e-10)
+            out.update(kind=kind, fictitious=len(eq['fictitious']), slack_bus=eq['slack'], compare=_clean(Q.compare(net, eq)))
+        elif what == 'emt':
+            fig = data.get('fig') or '50'
+            if fig not in Q.FIGS:
+                raise StudyError('fig: ένα από ' + ', '.join(Q.FIGS))
+            if len(keep) > MAX_AREA_EMT:
+                raise StudyError(f'Η περιοχή έχει {len(keep)} ζυγούς: σε EMT ανοίγει ως {MAX_AREA_EMT}.')
+            machines = N.IEEE9_MACHINES if data.get('case') == 'ieee9' and data.get('network') is None else None
+            pr = net.to_emt(machines=machines, boundary=B, internal=I, fig=fig)
+            out.update(fig=fig, project=_clean(pr))
+    except Q.EquivalentError as e:
+        raise StudyError(str(e)) from e
+    except N.NetworkError as e:
+        raise StudyError(str(e)) from e
+    return out
+
+
+__all__ = ['run', 'report', 'view', 'open_file', 'save_file', 'summary', 'network_of', 'area', 'StudyError', 'STUDIES', 'FEEDER_STUDIES', 'STATION_STUDIES']

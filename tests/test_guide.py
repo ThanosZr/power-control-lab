@@ -41,6 +41,21 @@ class Guide(unittest.TestCase):
             self.assertEqual(r.stdout.strip(), said)
             self.assertTrue((pathlib.Path(d) / 'μελέτη' / 'study.json').is_file())
 
+    def test_the_python_example_of_5_0_6_runs_as_written(self):
+        # §44: the study area chosen as buses, its equivalent in N−1, its circuit in EMT (pcl.study.area)
+        bl = blocks('5.0.6')
+        self.assertEqual(len(bl), 1)
+        head, code = bl[0]
+        self.assertTrue(head.startswith('44. '), head)
+        text = (ROOT / 'docs' / 'GUIDE.md').read_text(encoding='utf-8')
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING='utf-8', PCL_HOME=d)
+            r = subprocess.run([sys.executable, '-c', code], cwd=d, env=env, capture_output=True, text=True, encoding='utf-8', timeout=600)
+            self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+            sec = [q for q in re.split(r'(?m)^## ', text) if q.startswith('44. ')][0]
+            said = re.search(r'Τυπώνει:\n\n```\n(.*?)```', sec, re.S).group(1).strip()
+            self.assertEqual(r.stdout.strip(), said)
+
     def test_the_python_example_of_5_0_4_runs_as_written(self):
         # §42: the study area of the IEEE 9 case in EMT with the rest as one EQV3 (CIGRE TB 39, Fig. 15)
         bl = blocks('5.0.4')

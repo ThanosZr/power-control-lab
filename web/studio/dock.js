@@ -9,41 +9,58 @@
 // shown. A card in the page keeps a comment where it was (its anchor), so that it goes back to the same place; a group of
 // many cards in the page goes to the place of its first card. A floating card is a group of its own. The cards are moved,
 // never copied: one copy of every card, and their listeners, canvases and observers stay with them.
+// 5.0.6 (§94 step γ): the documents of the central area. The diagram of the network is a card too; the first time it opens
+// it goes as a tab next to the circuit, in the place of the circuit (Dock.firstAs), and after that it stays where the user
+// puts it. Two cards of a group go side by side (Dock.side): the shown one on the left, the other on the right, with an
+// edge between them that is dragged (a line while it moves, the new widths at the release, as for the regions).
 (function(root){
  const KEY='pcl-dock',AT=['main','left','right','bottom','float'],SIDE=['left','right','bottom'];
  const NAME={main:'στη σελίδα',left:'αριστερά',right:'δεξιά',bottom:'κάτω',float:'σε παράθυρο'};
  const SIZE0={left:420,right:460,bottom:320};
  // ------------------------------------------------------------------ the model
- // L = {v:1, groups:[{id, at, cards:[ids], active}], size:{left, right, bottom}, float:{id: {x,y,w,h}}, max: id | null, n}
- const M={};
- M.fresh=ids=>({v:1,groups:ids.map((id,i)=>({id:'g'+i,at:'main',cards:[id],active:id})),size:{...SIZE0},float:{},max:null,n:ids.length});
+ // L = {v:1, groups:[{id, at, cards:[ids], active, side?, r?}], size:{left, right, bottom}, float:{id: {x,y,w,h}}, max: id | null, n,
+ //      docs:{id: 1}}: side = the card shown beside the active one (5.0.6), r = the share of the width of the active one,
+ //      docs = the cards that have already been placed once as documents (Dock.firstAs)
+ const M={},R0=0.5;
+ M.fresh=ids=>({v:1,groups:ids.map((id,i)=>({id:'g'+i,at:'main',cards:[id],active:id})),size:{...SIZE0},float:{},max:null,n:ids.length,docs:{}});
  M.copy=L=>JSON.parse(JSON.stringify(L));
  M.groupOf=(L,id)=>L.groups.find(g=>g.cards.includes(id))||null;
  const gid=L=>{let n=L.n|0;const has=new Set(L.groups.map(g=>g.id));while(has.has('g'+n))n++;L.n=n+1;return 'g'+n;};
  // a layout that came from the storage or an older page: only known cards, each once, every known card somewhere
  M.normalize=(L,ids)=>{const known=new Set(ids),seen=new Set();
   if(!L||typeof L!=='object'||!Array.isArray(L.groups))return M.fresh(ids);
-  const out={v:1,groups:[],size:{...SIZE0},float:{},max:null,n:Number.isFinite(L.n)?L.n|0:0};
+  const out={v:1,groups:[],size:{...SIZE0},float:{},max:null,n:Number.isFinite(L.n)?L.n|0:0,docs:{}};
   for(const k of SIDE)if(Number.isFinite(L.size?.[k]))out.size[k]=Math.max(160,Math.min(4000,L.size[k]));
   for(const g of L.groups){if(!g||!AT.includes(g.at)||!Array.isArray(g.cards))continue;
    const cards=[];for(const c of g.cards)if(known.has(c)&&!seen.has(c)){seen.add(c);cards.push(c);}if(!cards.length)continue;
    if(g.at==='float'&&cards.length>1){for(const c of cards)out.groups.push({id:'f'+c,at:'float',cards:[c],active:c});continue;}
-   out.groups.push({id:typeof g.id==='string'&&g.id?g.id:'x'+out.groups.length,at:g.at,cards,active:cards.includes(g.active)?g.active:cards[0]});}
+   const q={id:typeof g.id==='string'&&g.id?g.id:'x'+out.groups.length,at:g.at,cards,active:cards.includes(g.active)?g.active:cards[0]};
+   if(g.at!=='float'&&cards.includes(g.side)&&g.side!==q.active){q.side=g.side;q.r=Number.isFinite(g.r)?Math.max(0.2,Math.min(0.8,g.r)):R0;}
+   out.groups.push(q);}
   const ids2=new Set();for(const g of out.groups){if(ids2.has(g.id))g.id='y'+ids2.size+'_'+g.id;ids2.add(g.id);}
   for(const c of ids)if(!seen.has(c))out.groups.push({id:gid(out),at:'main',cards:[c],active:c});
   for(const [c,r] of Object.entries(L.float||{}))if(known.has(c)&&r&&['x','y','w','h'].every(k=>Number.isFinite(r[k])))out.float[c]={x:r.x,y:r.y,w:r.w,h:r.h};
-  out.max=known.has(L.max)?L.max:null;return out;};
+  out.max=known.has(L.max)?L.max:null;for(const c of Object.keys(L.docs||{}))if(known.has(c))out.docs[c]=1;return out;};
  // the card out of its group (an empty group goes)
- function take(L,id){const g=M.groupOf(L,id);if(!g)return;g.cards=g.cards.filter(c=>c!==id);if(!g.cards.length)L.groups=L.groups.filter(x=>x!==g);else if(g.active===id)g.active=g.cards[0];}
+ function take(L,id){const g=M.groupOf(L,id);if(!g)return;g.cards=g.cards.filter(c=>c!==id);if(!g.cards.length){L.groups=L.groups.filter(x=>x!==g);return;}
+  if(g.side===id){delete g.side;delete g.r;}else if(g.active===id){if(g.side){g.active=g.side;delete g.side;delete g.r;}else g.active=g.cards[0];}}
  // the card alone in a new group at «at» (the page: its own place; a region: after the groups that are there)
  M.place=(L,id,at)=>{if(!AT.includes(at))throw new Error('Dock: no region '+at);const g=M.groupOf(L,id);
   if(g&&g.at===at&&g.cards.length===1&&at!=='float')return L;
   take(L,id);L.groups.push({id:at==='float'?'f'+id+'_'+gid(L):gid(L),at,cards:[id],active:id});if(L.max===id&&at==='float')L.max=null;return L;};
  // the card as a tab next to «target» (not into a floating window: that is one card)
  M.tab=(L,id,target)=>{if(id===target)return L;const t=M.groupOf(L,target);if(!t||t.at==='float')return L;
-  if(t.cards.includes(id)){t.active=id;return L;}take(L,id);const i=t.cards.indexOf(target);t.cards.splice(i+1,0,id);t.active=id;return L;};
- M.activate=(L,id)=>{const g=M.groupOf(L,id);if(g)g.active=id;return L;};
- M.where=(L,id)=>{const g=M.groupOf(L,id);return g?{at:g.at,group:g.id,tabs:g.cards.length,index:g.cards.indexOf(id),active:g.active===id}:null;};
+  if(t.cards.includes(id)){if(t.side!==id)t.active=id;return L;}take(L,id);const i=t.cards.indexOf(target);t.cards.splice(i+1,0,id);t.active=id;return L;};
+ // the shown card of a group; the one beside it (side by side) is already shown and stays where it is
+ M.activate=(L,id)=>{const g=M.groupOf(L,id);if(g&&g.side!==id)g.active=id;return L;};
+ // 5.0.6: id on the left and other on the right, in one group (other comes as a tab next to id if it is elsewhere); other
+ // null or id: one card at a time again. Not in a floating window, which is one card.
+ M.side=(L,id,other)=>{let g=M.groupOf(L,id);if(!g)return L;if(!other||other===id){delete g.side;delete g.r;return L;}if(g.at==='float'||!M.groupOf(L,other))return L;
+  if(!g.cards.includes(other)){const r=g.r;M.tab(L,other,id);g=M.groupOf(L,id);if(r)g.r=r;}g.active=id;g.side=other;if(!Number.isFinite(g.r))g.r=R0;return L;};
+ M.ratio=(L,id,r)=>{const g=M.groupOf(L,id);if(g&&g.side&&Number.isFinite(r))g.r=Math.max(0.2,Math.min(0.8,r));return L;};
+ // 5.0.6: the first time a card is placed as a document it goes as a tab next to target; after that it stays where it is
+ M.firstAs=(L,id,target)=>{if(!L.docs)L.docs={};if(L.docs[id])return L;L.docs[id]=1;const w=M.where(L,id);if(w&&w.at==='main'&&w.tabs===1&&M.groupOf(L,target))M.tab(L,id,target);return L;};
+ M.where=(L,id)=>{const g=M.groupOf(L,id);return g?{at:g.at,group:g.id,tabs:g.cards.length,index:g.cards.indexOf(id),active:g.active===id,side:g.side===id,two:!!g.side}:null;};
  // the groups of a region in their order; the page: by the place of their first card in the page (ids: the order of the page)
  M.groups=(L,at,ids)=>{const q=L.groups.filter(g=>g.at===at);if(at!=='main'||!ids)return q;const ix=c=>{const i=ids.indexOf(c);return i<0?1e9:i;};
   const first=g=>Math.min(...g.cards.map(ix));return q.slice().sort((a,b)=>first(a)-first(b));};
@@ -63,14 +80,18 @@
   s.addEventListener('pointerdown',e=>splitStart(e,at));doc().body.appendChild(r);D.reg[at]=r;return r;}
  // the wrapper of a group of many cards (or of any group in a region): its tab strip and its body
  function wrapper(g){let w=D.wrap.get(g.id);if(w)return w;w=doc().createElement('div');w.className='dk-group';w.dataset.dkGroup=g.id;
-  w.innerHTML='<div class="dk-tabs" role="tablist"></div><div class="dk-body"></div>';
+  w.innerHTML='<div class="dk-tabs" role="tablist"></div><div class="dk-body"><div class="dk-vsplit" data-dk-vsplit hidden title="Σύρε για το πλάτος των δύο καρτών"></div></div>';
   const tabs=w.firstChild;tabs.addEventListener('pointerdown',e=>{const t=e.target.closest('[data-dk-tab]');if(t)dragStart(e,t.dataset.dkTab,t);});
   tabs.addEventListener('click',e=>{const t=e.target.closest('[data-dk-tab]');if(t&&!D.dragged){activate(t.dataset.dkTab);}
-   const x=e.target.closest('[data-dk-tabmenu]');if(x)openMenu(x.dataset.dkTabmenu,x);});
+   const x=e.target.closest('[data-dk-tabmenu]');if(x)openMenu(x.dataset.dkTabmenu,x);
+   // 5.0.6: side by side and back
+   const y=e.target.closest('[data-dk-two]');if(y){const q=D.L.groups.find(z=>z.id===w.dataset.dkGroup);if(!q)return;if(q.side)side(q.active,null);else{const o=q.cards.find(c=>c!==q.active&&open(c));if(o)side(q.active,o);}}});
+  w.lastChild.firstChild.addEventListener('pointerdown',e=>vsplitStart(e,w));
   D.wrap.set(g.id,w);return w;}
- function tabsHtml(g,always){const vis=g.cards.filter(open);if(!always&&vis.length<2)return '';
-  return vis.map(c=>{const d=D.by.get(c),on=c===g.active;return `<button class="dk-tab${on?' on':''}" role="tab" aria-selected="${on}" data-dk-tab="${esc(c)}" title="${esc(d.title)}: κλικ για να φανεί, σύρσιμο για κούμπωμα αλλού">${esc(d.title)}</button>`;}).join('')
-   +`<span class="dk-tabsp"></span><button class="dk-tabbtn" data-dk-tabmenu="${esc(g.active)}" aria-haspopup="menu" title="Κούμπωμα, καρτέλα, όλη η οθόνη">▾</button>`;}
+ function tabsHtml(g,always){const vis=g.cards.filter(open);if(!always&&vis.length<2)return '';const two=!!g.side&&open(g.side);
+  return vis.map(c=>{const d=D.by.get(c),on=c===g.active||(two&&c===g.side);return `<button class="dk-tab${on?' on':''}" role="tab" aria-selected="${on}" data-dk-tab="${esc(c)}" title="${esc(d.title)}: κλικ για να φανεί, σύρσιμο για κούμπωμα αλλού">${esc(d.title)}</button>`;}).join('')
+   +`<span class="dk-tabsp"></span>`+(vis.length>1?`<button class="dk-tabbtn${two?' on':''}" data-dk-two aria-pressed="${two}" title="${two?'Μία κάρτα τη φορά':'Δίπλα δίπλα: η κάρτα που φαίνεται αριστερά και η επόμενη δεξιά'}">◫</button>`:'')
+   +`<button class="dk-tabbtn" data-dk-tabmenu="${esc(g.active)}" aria-haspopup="menu" title="Κούμπωμα, καρτέλα, δίπλα δίπλα, όλη η οθόνη">▾</button>`;}
  // a floating card: out of the flow, at its rectangle, with the frame for its size
  function floatRect(id){const r=D.L.float[id],W=innerWidth,H=innerHeight,t=top();if(r)return clampRect(r);
   const w=Math.min(980,Math.max(360,W*0.6)),h=Math.min(720,Math.max(260,(H-t)*0.7));return clampRect({x:(W-w)/2,y:t+(H-t-h)/2,w,h});}
@@ -111,8 +132,12 @@
   b.classList.toggle('dk-side',show('left')||show('right'));b.classList.toggle('dk-has-b',show('bottom'));}
  // the cards of a group in its body, the one shown and the others hidden (a card closed from the menu has no tab)
  function fill(w,g,always){const body=w.lastChild;for(const c of g.cards){const d=D.by.get(c);setFloat(d,false);if(d.el.parentNode!==body)body.appendChild(d.el);}
-  if(!open(g.active)){const v=g.cards.find(open);if(v)g.active=v;}
-  for(const c of g.cards)D.by.get(c).el.classList.toggle('dk-off',c!==g.active);
+  if(!open(g.active)){const v=g.cards.find(c=>open(c)&&c!==g.side)||(g.side&&open(g.side)?g.side:null);if(v){if(v===g.side){delete g.side;delete g.r;}g.active=v;}}
+  // 5.0.6: two cards side by side: the shown one, the edge, the other (by the order of the flex row, not of the page)
+  const two=!!g.side&&open(g.side)&&g.side!==g.active,sp=body.firstChild;
+  for(const c of g.cards){const el=D.by.get(c).el,on=c===g.active||(two&&c===g.side);el.classList.toggle('dk-off',!on);
+   el.style.order=two?(c===g.active?'0':c===g.side?'2':''):'';el.style.flex=two&&on?`${c===g.active?g.r:1-g.r} 1 0`:'';}
+  sp.hidden=!two;sp.style.order='1';body.classList.toggle('dk-two',two);
   w.firstChild.innerHTML=tabsHtml(g,always);w.classList.toggle('dk-tabbed',!!w.firstChild.innerHTML);}
  // the buttons of a card: ⠿ (drag), ⇱ / ⇲ (a window of its own, or back to its place), ⛶ (the whole screen), ▾ (the menu)
  function tools(d){const w=M.where(D.L,d.id),fl=w?.at==='float',home=w?.at==='main'&&w.tabs===1;
@@ -123,6 +148,9 @@
  const place=(id,at)=>{if(!D.by.has(id))return false;change(L=>{M.place(L,id,at);if(at==='float'&&!L.float[id])L.float[id]=floatRect(id);});return true;};
  const tab=(id,target)=>{if(!D.by.has(id)||!D.by.has(target))return false;change(L=>M.tab(L,id,target));return M.where(D.L,id)?.group===M.where(D.L,target)?.group;};
  const activate=id=>{if(!D.by.has(id))return false;change(L=>M.activate(L,id));return true;};
+ // 5.0.6: side by side (other null: one at a time), and a card placed once as a document next to target
+ const side=(id,other)=>{if(!D.by.has(id)||(other&&!D.by.has(other)))return false;change(L=>M.side(L,id,other));requestAnimationFrame(()=>root.dispatchEvent(new Event('resize')));return !other||M.where(D.L,id)?.two===true;};
+ const firstAs=(id,target)=>{if(!D.by.has(id)||!D.by.has(target))return false;change(L=>M.firstAs(L,id,target));return true;};
  // the largest size and back (Esc: back)
  const max=(id,on)=>{if(!D.by.has(id))return false;change(L=>{if(on===undefined)on=L.max!==id;L.max=on?id:(L.max===id?null:L.max);});requestAnimationFrame(()=>root.dispatchEvent(new Event('resize')));return true;};
  // the card shown: its tab (and its window to the front)
@@ -138,13 +166,17 @@
   s+=row('float','⇱ Σε δικό της παράθυρο',w.at==='float');
   const others=D.defs.filter(o=>o.id!==id&&open(o.id)&&where(o.id)?.at!=='float'&&where(o.id)?.group!==w.group);
   if(others.length){s+='<div class="dk-msep">Ως καρτέλα δίπλα σε</div>';for(const o of others)s+=row('tab',esc(o.title),false,`data-dk-target="${esc(o.id)}"`);}
+  // 5.0.6: side by side with another card (it comes into this group), or one at a time again
+  if(w.at!=='float'){const g=M.groupOf(D.L,id),mates=D.defs.filter(o=>o.id!==id&&open(o.id)&&where(o.id)?.at!=='float');
+   if(mates.length||g?.side){s+='<div class="dk-msep">Δίπλα δίπλα</div>';if(g?.side)s+=row('one','▭ Μία κάρτα τη φορά',false);
+    for(const o of mates)if(!(g?.side===o.id&&g.active===id))s+=row('side','◫ '+esc(o.title)+' δεξιά',false,`data-dk-target="${esc(o.id)}"`);}}
   s+='<div class="dk-msep"></div>'+row('max',D.L.max===id?'⛶ Πίσω από την πλήρη οθόνη (Esc)':'⛶ Όλη η οθόνη',false);
   if(d.closable!==false)s+=row('close','✕ Κλείσιμο (ξανανοίγει από τα «🪟 Παράθυρα»)',false);
   return s;}
  function closeMenu(){if(D.menu)D.menu.hidden=true;}
  function openMenu(id,btn){const m=D.menu||(D.menu=(()=>{const m=doc().createElement('div');m.id='dock-menu';m.className='popup dk-menu';m.setAttribute('role','menu');m.hidden=true;doc().body.appendChild(m);
    m.addEventListener('click',e=>{const b=e.target.closest('[data-dk-do]');if(!b||b.disabled)return;const k=b.dataset.dkDo,id=m.dataset.dkFor;closeMenu();
-    if(k==='tab')tab(id,b.dataset.dkTarget);else if(k==='max')max(id);else if(k==='close'){if(root.Panels)Panels.toggle(id,false);else D.by.get(id).el.hidden=true;}else place(id,k);});
+    if(k==='tab')tab(id,b.dataset.dkTarget);else if(k==='side')side(id,b.dataset.dkTarget);else if(k==='one')side(id,null);else if(k==='max')max(id);else if(k==='close'){if(root.Panels)Panels.toggle(id,false);else D.by.get(id).el.hidden=true;}else place(id,k);});
    doc().addEventListener('pointerdown',e=>{if(!m.hidden&&!m.contains(e.target)&&!e.target.closest?.('[data-dk-menu],[data-dk-tabmenu]'))closeMenu();},true);
    doc().addEventListener('keydown',e=>{if(e.key==='Escape'&&!m.hidden)closeMenu();});return m;})());
   if(!m.hidden&&m.dataset.dkFor===id){closeMenu();return m;}
@@ -195,6 +227,13 @@
    if(!raf)raf=requestAnimationFrame(()=>{raf=0;const d=Math.round(v-v0);s.style.transform=at==='left'?`translateX(${d}px)`:at==='right'?`translateX(${-d}px)`:`translateY(${-d}px)`;});};
   s.classList.add('on');
   s.onpointerup=s.onpointercancel=()=>{s.onpointermove=s.onpointerup=s.onpointercancel=null;if(raf){cancelAnimationFrame(raf);raf=0;}s.style.transform='';s.classList.remove('on');D.L.size[at]=Math.round(v);doc().body.classList.remove('dk-resizing');save();render();};}
+ // 5.0.6: the edge between two cards side by side: a line while it moves, the new widths once, at the release
+ function vsplitStart(e,w){if(e.button!==0)return;const g=D.L.groups.find(q=>q.id===w.dataset.dkGroup);if(!g||!g.side)return;e.preventDefault();e.stopPropagation();
+  const s=e.currentTarget,body=w.lastChild,bw=body.getBoundingClientRect().width||1,x0=e.clientX,r0=g.r;try{s.setPointerCapture(e.pointerId);}catch(x){}
+  let raf=0,r=r0;doc().body.classList.add('dk-resizing');s.classList.add('on');
+  s.onpointermove=ev=>{r=Math.max(0.2,Math.min(0.8,r0+(ev.clientX-x0)/bw));if(!raf)raf=requestAnimationFrame(()=>{raf=0;s.style.transform=`translateX(${Math.round((r-r0)*bw)}px)`;});};
+  s.onpointerup=s.onpointercancel=()=>{s.onpointermove=s.onpointerup=s.onpointercancel=null;if(raf){cancelAnimationFrame(raf);raf=0;}s.style.transform='';s.classList.remove('on');doc().body.classList.remove('dk-resizing');
+   change(L=>M.ratio(L,g.active,r));};}
  // ------------------------------------------------------------------ the start
  // defs: [{id, title, sel (the card), head (where its buttons go, inside the card), closable}] in the order of the page
  function init(defs){const Dc=doc();if(!Dc||D.on)return api;
@@ -221,6 +260,6 @@
   return api;}
  const onChange=f=>{D.changed.push(f);};
  const state=()=>D.L?M.copy(D.L):null;
- const api={model:M,init,place,tab,activate,max,reveal,reset,where,label,state,openMenu,closeMenu,onChange,NAME};
+ const api={model:M,init,place,tab,activate,side,firstAs,max,reveal,reset,where,label,state,openMenu,closeMenu,onChange,NAME};
  root.Dock=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

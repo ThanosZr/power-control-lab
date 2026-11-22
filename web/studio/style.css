@@ -662,9 +662,26 @@ body.look-tech .wire.ph-a .wl{stroke:var(--ph-a)}body.look-tech .wire.ph-b .wl{s
 .ctl-cv{width:100%;height:100%;min-height:110px;border:1px solid var(--line);border-radius:4px;background:#fff;display:block}
 @media (max-width:900px){.ctl-body{grid-template-columns:1fr}.ctl-right{grid-template-rows:repeat(4,200px)}}
 /* 4.19.4 (ROADMAP §72): the viewer of the network of a study */
-.nv-modal .modal-box{width:min(1240px,96vw);height:min(840px,92vh)}.nv-modal .modal-body{display:flex;flex-direction:column;gap:6px;flex:1 1 auto;min-height:0;overflow:hidden}
+/* 5.0.6 (§94 step γ): the diagram of the network is a card of the page (a document of the central area), no longer a window over it */
+#netview.card{display:flex;flex-direction:column;min-width:0;scroll-margin-top:76px}#bench-card{scroll-margin-top:76px}
+.dk-two>#bench-card{display:flex;flex-direction:column}.dk-two>#bench-card>.work{flex:1 1 auto}
+.nv-head{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line)}.nv-head h2{margin:0;font-size:14px;font-weight:600;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nv-head .x{padding:1px 8px;border-color:transparent;background:transparent}
+.nv-body{display:flex;flex-direction:column;gap:6px;padding:6px 10px 10px;height:var(--nv-h,max(620px,calc(100vh - 150px)));min-height:0}
+#netview.dk-float .nv-body,#netview.dk-max .nv-body,.dk-region #netview .nv-body,.dk-two>#netview .nv-body{height:auto;flex:1 1 auto}
+.dk-region .dk-body:has(>#netview:not(.dk-off)){display:flex;flex-direction:column}.dk-region .dk-body>#netview{flex:1 1 auto;min-height:420px}
+.nv-area{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:12.5px;padding:5px 8px;border:1px dashed #9fc0d6;border-radius:8px;background:#f6fafd}
+.nv-area .nv-mode button{padding:3px 9px}.nv-area .nv-mode button.on{background:#e3eef8;border-color:#1f77b4;color:#1f77b4}
+.nv-area .nv-grow{flex:1}.nv-area b.ar-c{color:#1f77b4}.nv-area b.ar-b{color:#d95f02}
+.nv-cmp{max-height:260px;overflow:auto;font-size:12px}.nv-cmp table{border-collapse:collapse;width:100%}.nv-cmp th,.nv-cmp td{padding:2px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+.nv-cmp th:first-child,.nv-cmp td:first-child{text-align:left}.nv-cmp tr.worst td{background:#fff3e8}
+/* 5.0.6: two cards of a group side by side, with the edge between them */
+.dk-body.dk-two{display:flex;flex-direction:row;align-items:stretch}.dk-body.dk-two>.card{min-width:0}
+.dk-vsplit{flex:0 0 8px;cursor:ew-resize;touch-action:none;background:var(--line);position:relative;z-index:2}
+.dk-vsplit:hover{background:#9fd0c3}.dk-vsplit.on{background:#147966aa}
+.dk-tabbtn.on{color:var(--accent)}
 .nv-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12.5px}.nv-bar label{display:flex;gap:5px;align-items:center}.nv-bar .nv-grow{flex:1}
-#nv-canvas{flex:1 1 auto;min-height:260px;width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+#nv-canvas{flex:1 1 auto;min-height:260px;width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;box-sizing:border-box}
 .nv-edit{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:8px}.nv-edit label,.nv-edit .nv-gen{display:flex;gap:5px;align-items:center}.nv-edit input[type=number]{width:7.5em}
 .nv-chip{display:inline-block;padding:1px 6px;margin:1px 0;border:1px solid var(--line);border-radius:10px}.nv-chip button{border:0;background:none;cursor:pointer;padding:0 2px}
 #nv-legend i{display:inline-block;width:.9em;height:.9em;margin:0 .3em 0 .9em;vertical-align:-.1em;border-radius:2px}#nv-info{min-height:1.4em}

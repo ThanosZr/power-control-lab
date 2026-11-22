@@ -23,8 +23,15 @@
 // 4.20.1: a network with DC grids has them in view.dc (buses, lines, stations) and every layer in L.dc (colours and values in
 // the same palette). DC buses are squares, DC lines thicker, a converter station a square with a diagonal on the link from
 // its AC bus to its DC bus; a pick may also be {kind:'dcbus', i}, {kind:'dcline', j} or {kind:'station', j}.
+//
+// 5.0.6 (ROADMAP §94 step γ, §95 point 2, §96 B.1): the study area is chosen on the picture. Shift + click on a bus adds it
+// or takes it out, Shift + drag draws a window and Ctrl + drag a lasso (or, with the mode «▭ Παράθυρο» or «◌ Λάσο», a plain
+// drag; Alt with it takes the buses out). The chosen buses get a blue ring, and those of them that the engine finds on the
+// boundary an orange square (setBoundary). opt.select(ids) is told every change.
+//   NetView.inPoly(pts, X, Y)              is the point inside the polygon (canvas pixels)
+//   NetView.within(model, tr, w, h, shape) the AC buses inside {kind:'rect', x0, y0, x1, y1} or {kind:'lasso', pts}
 (function(root){
- const GREY='#9e9e9e',DCC='#6a3d9a',STATION='#5f6b6d';
+ const GREY='#9e9e9e',DCC='#6a3d9a',STATION='#5f6b6d',AREA='#1f77b4',EDGE='#d95f02';
  const CONTROL={P:'σταθερή ισχύς',V:'κρατά την τάση DC',droop:'στατικότητα',idroop:'στατικότητα ρεύματος',I:'σταθερό ρεύμα'};
  const DCDC_CONTROL={P:'σταθερή ισχύς a → b',V:'κρατά την τάση της πλευράς b',droop:'στατικότητα στην πλευρά b'};   // 4.21
  function model(data){
@@ -81,6 +88,14 @@
    if(dj>=0)return {kind:'dcline',j:dj,line:D.v.lines[dj]};}
   return be>=0?{kind:'branch',j:be,branch:m.v.branches[be]}:null;
  }
+ // 5.0.6: the point in the polygon (the even–odd rule; the polygon closes by itself)
+ function inPoly(p,X,Y){let inside=false;for(let i=0,j=p.length-1;i<p.length;j=i++){const [xi,yi]=p[i],[xj,yj]=p[j];if((yi>Y)!==(yj>Y)&&X<(xj-xi)*(Y-yi)/(yj-yi)+xi)inside=!inside;}return inside;}
+ // 5.0.6: the AC buses whose point on the canvas is inside a window or a lasso (indices, in the order of the buses)
+ function within(m,tr,w,h,sh){const out=[];if(!sh)return out;
+  if(sh.kind==='rect'){const x0=Math.min(sh.x0,sh.x1),x1=Math.max(sh.x0,sh.x1),y0=Math.min(sh.y0,sh.y1),y1=Math.max(sh.y0,sh.y1);
+   for(let i=0;i<m.nb;i++){const X=sx(tr,w,m.x[i]),Y=sy(tr,h,m.y[i]);if(X>=x0&&X<=x1&&Y>=y0&&Y<=y1)out.push(i);}return out;}
+  const p=sh.pts||[];if(p.length<3)return out;let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;for(const [X,Y] of p){x0=Math.min(x0,X);x1=Math.max(x1,X);y0=Math.min(y0,Y);y1=Math.max(y1,Y);}
+  for(let i=0;i<m.nb;i++){const X=sx(tr,w,m.x[i]),Y=sy(tr,h,m.y[i]);if(X>=x0&&X<=x1&&Y>=y0&&Y<=y1&&inPoly(p,X,Y))out.push(i);}return out;}
  const num=(x,u)=>{if(x===null||x===undefined||!Number.isFinite(x))return '';const a=Math.abs(x),s=a>=100?x.toFixed(0):a>=10?x.toFixed(1):a>=1?x.toFixed(2):x.toFixed(3);return s.replace('.',',')+(u?' '+u:'');};
  // the text of a bus or a branch for the info line
  function describe(m,hit,layer){if(!hit)return '';const L=m.layers.get(layer);
@@ -159,6 +174,15 @@
     if(D.values&&Ld){ctx.fillStyle='#5f6b6d';ctx.textBaseline='middle';
      const put=(vs,unit,n,X,Y)=>{if(!vs)return;for(let j=0;j<n;j++){const x=vs[j];if(x===null||x===undefined)continue;const px=sx(tr,w,X(j)),py=sy(tr,h,Y(j));if(px<-50||px>w+50||py<-20||py>h+20)continue;ctx.fillText(num(x,unit),px+D.r+3,py);out.values++;}};
      put(Ld.line_v,Ld.unit_line,Dm.nl,j=>(Dm.x1[j]+Dm.x2[j])/2,j=>(Dm.y1[j]+Dm.y2[j])/2);put(Ld.station_v,Ld.unit_station,Dm.ns,j=>(Dm.s1[j]+Dm.s2[j])/2,j=>(Dm.t1[j]+Dm.t2[j])/2);}}}
+  // 5.0.6: the study area: a blue ring on every chosen bus in the window, an orange square on its boundary buses
+  if(opt.sel&&opt.sel.size){const rr=Math.max(D.r+3,4.5);ctx.lineWidth=2;ctx.strokeStyle=AREA;ctx.beginPath();out.chosen=0;
+   for(const i of vis)if(opt.sel.has(i)){const X=sx(tr,w,m.x[i]),Y=sy(tr,h,m.y[i]);ctx.moveTo(X+rr,Y);ctx.arc(X,Y,rr,0,6.2832);out.chosen++;}ctx.stroke();
+   if(opt.bnd&&opt.bnd.size){const q=rr+2;ctx.strokeStyle=EDGE;ctx.lineWidth=2.5;out.boundary=0;
+    for(const i of vis)if(opt.bnd.has(i)){const X=sx(tr,w,m.x[i]),Y=sy(tr,h,m.y[i]);ctx.strokeRect?.(X-q,Y-q,2*q,2*q);out.boundary++;}}}
+  if(opt.shape){const sh=opt.shape;ctx.save?.();ctx.strokeStyle=sh.minus?EDGE:AREA;ctx.lineWidth=1.5;ctx.setLineDash?.([6,4]);ctx.fillStyle=sh.minus?'#d95f0214':'#1f77b414';ctx.beginPath();
+   if(sh.kind==='rect'){ctx.moveTo(sh.x0,sh.y0);ctx.lineTo(sh.x1,sh.y0);ctx.lineTo(sh.x1,sh.y1);ctx.lineTo(sh.x0,sh.y1);ctx.closePath?.();}
+   else if(sh.pts&&sh.pts.length){ctx.moveTo(sh.pts[0][0],sh.pts[0][1]);for(let k=1;k<sh.pts.length;k++)ctx.lineTo(sh.pts[k][0],sh.pts[k][1]);ctx.closePath?.();}
+   ctx.fill();ctx.stroke();ctx.setLineDash?.([]);ctx.restore?.();out.shape=sh.kind;}
   if(opt.hit){const q=opt.hit;ctx.strokeStyle='#111111';ctx.lineWidth=2;ctx.beginPath();
    if(q.kind==='bus')ctx.arc(sx(tr,w,m.x[q.i]),sy(tr,h,m.y[q.i]),D.r+4,0,6.2832);
    else if(q.kind==='dcbus'&&Dm)ctx.arc(sx(tr,w,Dm.x[q.i]),sy(tr,h,Dm.y[q.i]),D.r+4,0,6.2832);
@@ -184,26 +208,43 @@
   ctx.fillStyle='#5f6b6d';ctx.font='10px sans-serif';ctx.textBaseline='bottom';ctx.textAlign='center';const t=(L>=1?`${+L.toPrecision(3)} km`:`${+(L*1e3).toPrecision(3)} m`).replace('.',',');ctx.fillText(t,x+px/2,y-6);ctx.restore();return {km:L,px};}
  // the interactive viewer on a canvas element
  function create(canvas,data,opt={}){
-  const m=model(data),st={layer:opt.layer&&m.layers.has(opt.layer)?opt.layer:(data.layer&&m.layers.has(data.layer)?data.layer:'base'),names:'auto',hit:null,tr:null,w:0,h:0,drawn:null,frames:0};
+  const m=model(data),st={layer:opt.layer&&m.layers.has(opt.layer)?opt.layer:(data.layer&&m.layers.has(data.layer)?data.layer:'base'),names:'auto',hit:null,tr:null,w:0,h:0,drawn:null,frames:0,
+   mode:'pan',sel:new Set(),bnd:new Set(),shape:null};      // 5.0.6: the study area (indices of the chosen buses, of the boundary buses) and the window or lasso being drawn
   const ctx=canvas.getContext('2d');let raf=0,info=opt.info||null,dead=false;
   const size=()=>{const r=canvas.getBoundingClientRect(),dpr=root.devicePixelRatio||1,w=Math.max(50,Math.round(r.width)),h=Math.max(50,Math.round(r.height));
    if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
    ctx.setTransform(dpr,0,0,dpr,0,0);const first=!st.tr,changed=st.w!==w||st.h!==h;st.w=w;st.h=h;
    // the first frame shows everything (or what the caller was showing); while nobody has moved or zoomed, a new size of the canvas shows everything again
    if(first){const given=opt.tr&&Number.isFinite(opt.tr.s)&&opt.tr.s>0;st.tr=given?{s:opt.tr.s,cx:opt.tr.cx,cy:opt.tr.cy}:fit(m,w,h);st.fitted=!given;}else if(changed&&st.fitted)st.tr=fit(m,w,h);};
-  const paint=()=>{raf=0;if(dead)return;size();st.drawn=draw(ctx,m,st.tr,st.w,st.h,st.layer,{names:st.names,hit:st.hit});st.frames++;};
+  const paint=()=>{raf=0;if(dead)return;size();st.drawn=draw(ctx,m,st.tr,st.w,st.h,st.layer,{names:st.names,hit:st.hit,sel:st.sel,bnd:st.bnd,shape:st.shape});st.frames++;};
   const ask=()=>{if(!raf)raf=(root.requestAnimationFrame||(f=>setTimeout(f,16)))(paint);};
   const at=e=>{const r=canvas.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];};
   let drag=null;
-  const down=e=>{const [X,Y]=at(e);drag={X,Y,cx:st.tr.cx,cy:st.tr.cy,moved:false};canvas.setPointerCapture?.(e.pointerId);};
+  // 5.0.6: a change of the study area, told to the page
+  const chosen=()=>[...st.sel].sort((a,b)=>a-b).map(i=>m.v.buses[i].id);
+  const told=()=>{st.bnd=new Set([...st.bnd].filter(i=>st.sel.has(i)));ask();if(opt.select)opt.select(chosen());};
+  // the kind of drag: a window or a lasso from the mode, or from Shift (window) and Ctrl or ⌘ (lasso) in the mode «pan»
+  const kindOf=e=>st.mode==='window'||st.mode==='lasso'?st.mode:e.shiftKey?'window':(e.ctrlKey||e.metaKey)?'lasso':null;
+  const down=e=>{if(e.button===2)return;const [X,Y]=at(e),k=e.button===1?null:kindOf(e);       // the middle button always moves the picture
+   drag=k?{X,Y,sel:k,minus:!!e.altKey,pts:[[X,Y]],moved:false,shift:e.shiftKey}:{X,Y,cx:st.tr.cx,cy:st.tr.cy,moved:false};canvas.setPointerCapture?.(e.pointerId);};
   const move=e=>{const [X,Y]=at(e);
+   if(drag&&drag.sel){if(Math.abs(X-drag.X)+Math.abs(Y-drag.Y)>3)drag.moved=true;if(!drag.moved)return;
+    if(drag.sel==='window')st.shape={kind:'rect',x0:drag.X,y0:drag.Y,x1:X,y1:Y,minus:drag.minus};
+    else{const l=drag.pts[drag.pts.length-1];if(Math.hypot(X-l[0],Y-l[1])>=3)drag.pts.push([X,Y]);st.shape={kind:'lasso',pts:drag.pts,minus:drag.minus};}ask();return;}
    if(drag){if(Math.abs(X-drag.X)+Math.abs(Y-drag.Y)>3){drag.moved=true;st.fitted=false;}st.tr={s:st.tr.s,cx:drag.cx-(X-drag.X)/st.tr.s,cy:drag.cy-(Y-drag.Y)/st.tr.s};ask();return;}
    const q=pick(m,st.tr,st.w,st.h,X,Y),same=(q&&st.hit&&q.kind===st.hit.kind&&q.i===st.hit.i&&q.j===st.hit.j)||(!q&&!st.hit);
-   if(!same){st.hit=q;canvas.style.cursor=q?'pointer':'grab';if(info)info(describe(m,q,st.layer),q);ask();}};
-  const up=e=>{if(drag&&!drag.moved&&opt.pick){const [X,Y]=at(e);opt.pick(pick(m,st.tr,st.w,st.h,X,Y));}drag=null;};
+   if(!same){st.hit=q;canvas.style.cursor=q?'pointer':st.mode==='pan'?'grab':'crosshair';if(info)info(describe(m,q,st.layer),q);ask();}};
+  const up=e=>{const d=drag;drag=null;if(!d)return;const [X,Y]=at(e);
+   if(d.sel&&d.moved){const got=within(m,st.tr,st.w,st.h,st.shape);st.shape=null;for(const i of got){if(d.minus)st.sel.delete(i);else st.sel.add(i);}told();return;}
+   if(d.moved)return;const q=pick(m,st.tr,st.w,st.h,X,Y);
+   // a click with Shift, or any click in a mode of choosing: the bus in or out of the area
+   if((d.sel||e.shiftKey)&&q&&q.kind==='bus'){if(st.sel.has(q.i))st.sel.delete(q.i);else st.sel.add(q.i);told();return;}
+   if(d.sel){st.shape=null;ask();return;}
+   if(opt.pick)opt.pick(q);};
+  const cancel=()=>{if(drag&&drag.sel){st.shape=null;ask();}drag=null;};
   const wheel=e=>{e.preventDefault();const [X,Y]=at(e);api.zoom(Math.exp(-e.deltaY*0.0015),X,Y);};
   const dbl=()=>api.fit();
-  canvas.addEventListener('pointerdown',down);canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerup',up);canvas.addEventListener('pointercancel',up);
+  canvas.addEventListener('pointerdown',down);canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerup',up);canvas.addEventListener('pointercancel',cancel);
   canvas.addEventListener('wheel',wheel,{passive:false});canvas.addEventListener('dblclick',dbl);canvas.style.cursor='grab';canvas.style.touchAction='none';
   let ro=null;if(root.ResizeObserver){ro=new ResizeObserver(()=>ask());ro.observe(canvas);}
   const api={model:m,state:st,
@@ -218,10 +259,20 @@
    // show a bus in the middle, close enough to read its neighbours
    goto(id){let i=m.ix.get(String(id));if(i===undefined){const t=String(id).trim().toLowerCase(),k=t?m.v.buses.findIndex(b=>b.label&&b.label.toLowerCase()===t):-1;i=k<0?undefined:k;}if(i===undefined)return false;size();st.tr={s:Math.max(st.tr.s,70/m.v.unit),cx:m.x[i],cy:m.y[i]};st.fitted=false;st.hit={kind:'bus',i,bus:m.v.buses[i]};if(info)info(describe(m,st.hit,st.layer),st.hit);ask();return true;},
    info(cb){info=cb;},redraw:ask,paint,
-   destroy(){dead=true;ro?.disconnect();canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerup',up);canvas.removeEventListener('pointercancel',up);
+   // 5.0.6: the study area. mode: 'pan' (a drag moves; Shift: a window, Ctrl: a lasso), 'window' or 'lasso' (a plain drag chooses)
+   setMode(k){st.mode=['pan','window','lasso'].includes(k)?k:'pan';canvas.style.cursor=st.mode==='pan'?'grab':'crosshair';return st.mode;},
+   selection:chosen,
+   // the chosen buses by their names (unknown names are left out); → how many were taken
+   setSelection(ids,quiet){st.sel=new Set();for(const id of ids||[]){const i=m.ix.get(String(id));if(i!==undefined)st.sel.add(i);}if(quiet){st.bnd=new Set([...st.bnd].filter(i=>st.sel.has(i)));ask();}else told();return st.sel.size;},
+   // the boundary buses as the engine found them (names), drawn on the chosen ones
+   setBoundary(ids){st.bnd=new Set();for(const id of ids||[]){const i=m.ix.get(String(id));if(i!==undefined&&st.sel.has(i))st.bnd.add(i);}ask();return st.bnd.size;},
+   clearSelection(){st.sel=new Set();st.bnd=new Set();st.shape=null;told();},
+   // a window or a lasso as the pointer would draw it (canvas pixels): the same result, for tests and for the keyboard
+   choose(shape,minus){size();for(const i of within(m,st.tr,st.w,st.h,shape)){if(minus)st.sel.delete(i);else st.sel.add(i);}told();return st.sel.size;},
+   destroy(){dead=true;ro?.disconnect();canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerup',up);canvas.removeEventListener('pointercancel',cancel);
     canvas.removeEventListener('wheel',wheel);canvas.removeEventListener('dblclick',dbl);}};
   ask();return api;
  }
- const api={model,fit,detail,pick,draw,describe,create,num,routeMid,scaleLen};
+ const api={model,fit,detail,pick,draw,describe,create,num,routeMid,scaleLen,inPoly,within};
  root.NetView=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

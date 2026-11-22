@@ -105,11 +105,13 @@ const {chromium}=require('playwright');
  await p.goto(U+'?tutorial=opf_study');await p.waitForTimeout(5000);
  await p.evaluate(()=>[...document.querySelectorAll('#theory button')].find(b=>b.dataset.study==='view')?.click());
  await p.waitForSelector('#netview:not([hidden])',{timeout:60000}).catch(()=>{});await p.waitForTimeout(800);
- R.nv0=await rect('#netview > .modal-box');R.nv0.cw=await p.evaluate(()=>document.querySelector('#nv-canvas').clientWidth);await look();
- await drag(R.nv0.r-3,R.nv0.t+R.nv0.h/2,-200,0);await p.waitForTimeout(400);R.nv1=await rect('#netview > .modal-box');R.nv1.cw=await p.evaluate(()=>document.querySelector('#nv-canvas').clientWidth);
- ok(R.nv0.framed&&R.nv0.handles===8&&R.nv1.w<R.nv0.w-190&&R.nv1.cw<R.nv0.cw-150,'the diagram of the network: the frame, its canvas follows '+JSON.stringify([R.nv0,R.nv1]));
+ // 5.0.6 (§94 step γ): the diagram is a card of the page (a tab next to the circuit); in a window of its own it has the frame
+ R.nvAt=await p.evaluate(()=>Dock.where('netview'));await p.evaluate(()=>Dock.place('netview','float'));await p.waitForTimeout(500);
+ R.nv0=await rect('#netview');R.nv0.cw=await p.evaluate(()=>document.querySelector('#nv-canvas').clientWidth);await look();
+ await drag(R.nv0.r-3,R.nv0.t+R.nv0.h/2,-200,0);await p.waitForTimeout(400);R.nv1=await rect('#netview');R.nv1.cw=await p.evaluate(()=>document.querySelector('#nv-canvas').clientWidth);
+ ok(R.nvAt?.at==='main'&&R.nvAt.tabs===2&&R.nv0.framed&&R.nv0.handles===8&&R.nv1.w<R.nv0.w-190&&R.nv1.cw<R.nv0.cw-150,'the diagram of the network: a tab next to the circuit; in a window of its own the frame, and its canvas follows '+JSON.stringify([R.nvAt,R.nv0,R.nv1]));
  await p.screenshot({path:OUT+'/window_flow_netview.png'});
- await p.click('#nv-close');
+ await p.evaluate(()=>Dock.place('netview','main'));await p.click('#nv-close');
 
  // 5. a window of an add-on
  await p.evaluate(()=>Addons.open('impulse-params'));await p.waitForSelector('.addon-dock',{timeout:15000});await p.waitForTimeout(800);

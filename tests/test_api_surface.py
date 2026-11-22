@@ -242,14 +242,25 @@ class ApiSurface(unittest.TestCase):
         self.assertEqual(self.now['pcl']['pcl.network.Network.to_emt']['params'], ['lf', 'machines', 'name', 't_end', 'hdiv', 'boundary', 'internal', 'fig'])
         self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.to_emt'))
         self.assertIn('part:EQV3', self.now['project'])
-        self.assertEqual(sum(len(v) for v in self.now.values()), 941)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 941)
 
     def test_the_surface_of_5_0_5(self):
         """5.0.5: the cards dock, float and go as tabs (dock.js), the scopes of a part in a submenu and a window with its
         pins, and run.py opens a window of its own (engine/appwin.py, --browser for a tab). All of it is of the page and of
         the start of the server: no new point of the API, of the file format or of the routes of the server."""
-        self.assertEqual(sum(len(v) for v in self.now.values()), 941)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 941)
         self.assertNotIn('/api/dock', self.now['server'])
+
+    def test_the_surface_of_5_0_6(self):
+        """5.0.6: the study area chosen in the diagram (§94 step γ, §96 B.1): pcl.study.area and its route /api/network_area
+        are stable additions, pcl.equivalent.area is experimental like the rest of the module. The diagram as a card, the
+        lasso and two cards side by side are of the page: no point of the file format."""
+        self.assertEqual(self.now['pcl']['pcl.study.area']['params'], ['data'])
+        self.assertFalse(api_surface.experimental('pcl', 'pcl.study.area'))
+        self.assertEqual(self.now['pcl']['pcl.equivalent.area']['params'], ['net', 'buses'])
+        self.assertTrue(api_surface.experimental('pcl', 'pcl.equivalent.area'))
+        self.assertIn('/api/network_area', self.now['server'])
+        self.assertEqual(sum(len(v) for v in self.now.values()), 944)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

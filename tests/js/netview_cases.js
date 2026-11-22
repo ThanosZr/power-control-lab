@@ -84,7 +84,39 @@ function one(data){const m=NV.model(data),w=900,h=600,tr=NV.fit(m,w,h),sx=x=>(x-
  // a canvas that changes size: everything again while nobody has moved or zoomed, the same view after that
  let H=500;const cv3={...canvas,getBoundingClientRect:()=>({left:0,top:0,width:800,height:H})},v3=NV.create(cv3,data,{});flush();H=300;v3.redraw();flush();const refit=Math.abs(v3.state.tr.s-NV.fit(m,800,300).s)<1e-12;
  v3.zoom(2);flush();const sz=v3.state.tr.s;H=500;v3.redraw();flush();iv.resize=[refit,v3.state.tr.s===sz,v3.state.fitted];v3.destroy();
- r.viewer=iv;return r;}
+ r.viewer=iv;
+ // 5.0.6 (ROADMAP §94 step γ, §95 point 2): the study area on the picture: the polygon test, what a window and a lasso hold,
+ // the rings of a frame, and the viewer with Shift + click, Shift + drag (a window), Ctrl + drag and the mode «lasso», Alt
+ const sq=[[0,0],[10,0],[10,10],[0,10]],ar={poly:[NV.inPoly(sq,5,5),NV.inPoly(sq,-1,5),NV.inPoly(sq,5,11),NV.inPoly([[0,0],[10,0],[5,8]],5,7.9),NV.inPoly([[0,0],[10,0],[5,8]],9,7)]};
+ const around=(i,rad,T0,n=12,W=w,H=h)=>{const X0=(m.x[i]-T0.cx)*T0.s+W/2,Y0=(m.y[i]-T0.cy)*T0.s+H/2;return Array.from({length:n},(_,k)=>[X0+rad*Math.cos(2*Math.PI*k/n),Y0+rad*Math.sin(2*Math.PI*k/n)]);};
+ ar.rectAll=NV.within(m,tr,w,h,{kind:'rect',x0:w,y0:h,x1:0,y1:0}).length;ar.rectNone=NV.within(m,tr,w,h,{kind:'rect',x0:-50,y0:-50,x1:-10,y1:-10}).length;
+ ar.lasso0=NV.within(m,tr,w,h,{kind:'lasso',pts:around(0,3,tr)}).includes(0);ar.short=NV.within(m,tr,w,h,{kind:'lasso',pts:[[0,0],[w,h]]}).length;
+ // the left half of the canvas by a window and by a lasso: the same buses
+ const half=NV.within(m,tr,w,h,{kind:'rect',x0:0,y0:0,x1:w/2,y1:h}),halfL=NV.within(m,tr,w,h,{kind:'lasso',pts:[[0,0],[w/2,0],[w/2,h],[0,h]]});
+ ar.half=[half.length,JSON.stringify(half)===JSON.stringify(halfL),half.every(i=>(m.x[i]-tr.cx)*tr.s+w/2<=w/2)];
+ const sel=new Set([0,1,2]),bnd=new Set([1,7]);const fr=frame(m,tr,w,h,layer,{sel,bnd}),fr0=frame(m,tr,w,h,layer,{});
+ ar.frame={chosen:fr.out.chosen,boundary:fr.out.boundary,arcs:fr.arcs-fr0.arcs,colours:fr.stroke.filter(c=>!fr0.stroke.includes(c)).sort()};
+ ar.shape=[frame(m,tr,w,h,layer,{shape:{kind:'rect',x0:1,y0:1,x1:50,y1:50}}).out.shape,frame(m,tr,w,h,layer,{shape:{kind:'lasso',pts:[[1,1],[30,1],[9,40]]}}).out.shape];
+ const told=[],picks4=[];const v4=NV.create(canvas,data,{select:ids=>told.push(ids.slice()),pick:q=>picks4.push(q&&q.kind)});flush();
+ const T4=()=>v4.state.tr,X4=i=>(m.x[i]-T4().cx)*T4().s+400,Y4=i=>(m.y[i]-T4().cy)*T4().s+250,id=i=>m.v.buses[i].id;
+ const clk=(i,mods={})=>{ls.pointerdown({clientX:X4(i),clientY:Y4(i),pointerId:1,button:0,...mods});ls.pointerup({clientX:X4(i),clientY:Y4(i),...mods});flush();};
+ const drg=(pts,mods={})=>{ls.pointerdown({clientX:pts[0][0],clientY:pts[0][1],pointerId:1,button:0,...mods});for(const q of pts.slice(1))ls.pointermove({clientX:q[0],clientY:q[1],...mods});
+  const mid=v4.state.shape&&v4.state.shape.kind;ls.pointerup({clientX:pts[pts.length-1][0],clientY:pts[pts.length-1][1],...mods});flush();return mid;};
+ const vi={};clk(1,{shiftKey:true});vi.shiftClick=[told.length,JSON.stringify(told[told.length-1]),picks4.length];
+ clk(1,{shiftKey:true});vi.again=told[told.length-1].length;
+ vi.windowShape=drg([[0,0],[400,250],[800,500]],{shiftKey:true});vi.window=[told[told.length-1].length,v4.state.shape];
+ drg([[0,0],[800,500]],{shiftKey:true,altKey:true});vi.minus=told[told.length-1].length;
+ const tr4=JSON.stringify(T4());vi.lassoShape=drg(around(0,8,T4(),16,800,500).concat([around(0,8,T4(),16,800,500)[0]]),{ctrlKey:true});vi.ctrl=[told[told.length-1].includes(id(0)),JSON.stringify(T4())===tr4];
+ vi.mode=[v4.setMode('lasso'),v4.setMode('sky'),v4.setMode('lasso'),canvas.style.cursor];
+ const b2=v4.state.sel.has(2);clk(2);vi.modeClick=[v4.state.sel.has(2)!==b2,told[told.length-1].includes(id(2))===!b2,picks4.length];
+ drg(around(3,8,T4(),16,800,500));vi.modeLasso=told[told.length-1].includes(id(3));
+ const c4=[T4().cx,T4().cy];ls.pointerdown({clientX:100,clientY:100,pointerId:1,button:1});ls.pointermove({clientX:140,clientY:100});ls.pointerup({clientX:140,clientY:100});flush();vi.middle=Math.round((c4[0]-T4().cx)*T4().s);
+ vi.boundary=[v4.setBoundary([id(2),id(5),'no such bus']),v4.state.bnd.has(2)];
+ const n4=told.length;vi.quiet=[v4.setSelection([id(4),id(5),'ghost'],true),told.length===n4,v4.state.bnd.size];
+ vi.loud=[v4.setSelection([id(6)]),told.length===n4+1,JSON.stringify(v4.selection())];
+ v4.setMode('pan');v4.fit();vi.choose=v4.choose({kind:'rect',x0:0,y0:0,x1:800,y1:500});
+ v4.clearSelection();vi.clear=[told[told.length-1].length,v4.state.sel.size,v4.state.bnd.size,picks4.length];v4.destroy();
+ r.area={...ar,viewer:vi};return r;}
 const data=JSON.parse(fs.readFileSync(process.argv[2],'utf8')),out={};for(const k of Object.keys(data))out[k]=one(data[k]);
 // the data are only read: two models of the same data are equal, and the data are not changed by drawing
 const k0=Object.keys(data)[0],before=JSON.stringify(data[k0]);one(data[k0]);out.pure=JSON.stringify(data[k0])===before;

@@ -1,8 +1,9 @@
 """5.0.5 (ROADMAP §94 step β): the model of the layout of the cards (web/studio/dock.js), without a page. A card goes to a
 region (left, right, bottom), floats, goes as a tab next to another card (not into a floating window, which is one card),
 comes back to its place in the page; a group of many cards in the page goes to the place of its first card; a layout from
-the storage keeps only known cards in known regions, each once, and brings back a card it does not have. A random walk of
-4000 actions keeps every card in exactly one group. The page itself is checked in tests/ui/dock_flow.js."""
+the storage keeps only known cards in known regions, each once, and brings back a card it does not have. 5.0.6 (§94 step γ):
+two cards of a group side by side, and the first place of a document (a tab next to the circuit). A random walk of 4000
+actions keeps every card in exactly one group. The page itself is checked in tests/ui/dock_flow.js."""
 import json
 import subprocess
 import unittest
@@ -65,6 +66,42 @@ class DockModel(unittest.TestCase):
         self.assertEqual(self.C['normNewCard']['w']['at'], 'main')
         self.assertEqual(self.C['normNewCard']['n'], 1)
         self.assertIn('no region sky', self.C['unknownRegion'])
+
+    def test_side_by_side(self):
+        # 5.0.6 (§94 step γ): two cards of a group shown together, the shown one on the left
+        c = self.C['side']
+        self.assertEqual(c['inv'], '')
+        self.assertEqual((c['c']['active'], c['c']['two'], c['t']['side'], c['t']['group']), (True, True, True, c['c']['group']))
+        self.assertEqual(c['r'], 0.5)
+        self.assertEqual(c['order'], [['circuit', 'theory'], ['scope'], ['scen'], ['addons'], ['math']])
+        a = self.C['sideActivate']                                   # the card on the right is already shown: nothing moves
+        self.assertEqual((a['c']['active'], a['t']['side']), (True, True))
+        t = self.C['sideThird']                                      # a third tab takes the place on the left
+        self.assertEqual((t['s']['active'], t['t']['side'], t['c']['active'], t['c']['side'], t['s']['tabs']), (True, True, False, False, 3))
+        self.assertEqual(t['inv'], '')
+        self.assertEqual(self.C['sideRatio']['r'], 0.8)              # the share of the width within 0.2–0.8
+
+    def test_a_card_that_leaves_two_side_by_side(self):
+        s = self.C['sideLeaves']                                     # the one on the right leaves: one card at a time
+        self.assertEqual((s['s']['active'], s['s']['two'], s['c']['two']), (True, False, False))
+        self.assertEqual(self.C['activeLeaves']['c'], {'at': 'main', 'group': 'g0', 'tabs': 1, 'index': 0, 'active': True, 'side': False, 'two': False})
+        self.assertEqual((self.C['sideOff']['c']['two'], self.C['sideOff']['m']['tabs']), (False, 2))
+        self.assertEqual((self.C['noSideInFloat']['a']['at'], self.C['noSideInFloat']['a']['two']), ('float', False))
+        for k in ('sideLeaves', 'activeLeaves', 'sideOff', 'noSideInFloat'):
+            self.assertEqual(self.C[k]['inv'], '', k)
+
+    def test_side_by_side_from_the_storage(self):
+        n = self.C['normSide']
+        self.assertEqual((n['a'], n['r'], n['b'], n['c']), ('theory', 0.8, True, True))
+        self.assertEqual(n['docs'], ['scope'])
+        self.assertEqual(n['inv'], '')
+
+    def test_the_first_place_of_a_document(self):
+        f = self.C['firstAs']                                        # the first time: a tab next to the circuit, and shown
+        self.assertEqual((f['f1']['at'], f['f1']['tabs'], f['f1']['active'], f['f1']['group']), ('main', 2, True, 'g0'))
+        self.assertEqual(f['f2']['at'], 'right')                     # after that it stays where the user put it
+        self.assertEqual(f['moved']['at'], 'bottom')                 # a card the user had already placed is not moved
+        self.assertEqual((f['docs'], f['fresh']), (['theory'], 0))
 
     def test_random_walk(self):
         w = self.R['walk']

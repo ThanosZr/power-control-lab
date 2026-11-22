@@ -258,6 +258,35 @@ class Viewer(unittest.TestCase):
             self.assertEqual(v['again'], [2.5, 10, 20, 'base', False], k)                         # opened again where the last one was looking
             self.assertEqual(v['resize'], [True, True, False], k)                                 # a new size: everything again, unless the user has zoomed
 
+    def test_the_study_area_on_the_picture(self):
+        # 5.0.6 (ROADMAP §94 step γ, §95 point 2, §96 B.1): a window or a lasso holds the buses whose point is inside it
+        for k, d in self.data.items():
+            a, nb = self.r[k]['area'], len(d['view']['buses'])
+            self.assertEqual(a['poly'], [True, False, False, True, False], k)
+            self.assertEqual((a['rectAll'], a['rectNone'], a['lasso0'], a['short']), (nb, 0, True, 0), k)   # a window drawn backwards is the same window
+            self.assertGreater(a['half'][0], 0, k)
+            self.assertEqual(a['half'][1:], [True, True], k)                                     # a lasso the shape of a window holds what the window holds
+            self.assertEqual((a['frame']['chosen'], a['frame']['boundary'], a['frame']['arcs']), (3, 2, 3), k)   # a ring on each chosen bus, a square on each boundary bus
+            self.assertEqual(a['frame']['colours'], ['#1f77b4'], k)
+            self.assertEqual(a['shape'], ['rect', 'lasso'], k)
+
+    def test_choosing_the_area_with_the_pointer(self):
+        for k, d in self.data.items():
+            v, nb, ids = self.r[k]['area']['viewer'], len(d['view']['buses']), [b['id'] for b in d['view']['buses']]
+            self.assertEqual(v['shiftClick'], [1, json.dumps([ids[1]]), 0], k)                  # Shift + click: the bus in, and no panel of changes
+            self.assertEqual(v['again'], 0, k)                                                   # and out again
+            self.assertEqual((v['windowShape'], v['window']), ('rect', [nb, None]), k)          # Shift + drag: a window over everything
+            self.assertEqual((v['minus'], v['lassoShape'], v['ctrl']), (0, 'lasso', [True, True]), k)   # with Alt out; Ctrl + drag: a lasso, the picture stays
+            self.assertEqual(v['mode'], ['lasso', 'pan', 'lasso', 'crosshair'], k)
+            self.assertEqual(v['modeClick'], [True, True, 0], k)                                 # in the mode «lasso» a click chooses, it does not open the panel
+            self.assertTrue(v['modeLasso'], k)
+            self.assertEqual(v['middle'], 40, k)                                                 # the middle button moves the picture in any mode
+            self.assertEqual(v['boundary'], [1, True], k)                                        # a boundary bus that is not chosen is not drawn
+            self.assertEqual(v['quiet'], [2, True, 0], k)                                        # a choice given by the page is not told back
+            self.assertEqual(v['loud'], [1, True, json.dumps([ids[6]])], k)
+            self.assertEqual(v['choose'], nb, k)
+            self.assertEqual(v['clear'], [0, 0, 0, 0], k)
+
 
 if __name__ == '__main__':
     unittest.main()

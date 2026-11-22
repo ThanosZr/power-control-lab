@@ -9,10 +9,10 @@
 |---|---:|
 | `web/studio/addon_client.js` | 30 |
 | `web/studio/addons.js` | 116 |
-| `web/studio/app.js` | 3624 |
+| `web/studio/app.js` | 3677 |
 | `web/studio/bus.js` | 197 |
 | `web/studio/ctlwin.js` | 78 |
-| `web/studio/dock.js` | 226 |
+| `web/studio/dock.js` | 265 |
 | `web/studio/editor.js` | 743 |
 | `web/studio/expr.js` | 73 |
 | `web/studio/inputs.js` | 62 |
@@ -28,7 +28,7 @@
 | `web/studio/metrics.js` | 89 |
 | `web/studio/mna.js` | 2727 |
 | `web/studio/netlib.js` | 1591 |
-| `web/studio/netview.js` | 227 |
+| `web/studio/netview.js` | 278 |
 | `web/studio/nn.js` | 57 |
 | `web/studio/panels.js` | 69 |
 | `web/studio/parts.js` | 1788 |
@@ -56,7 +56,7 @@
 | `web/studio/watch.js` | 338 |
 | `web/studio/winframe.js` | 103 |
 | `pcl/runner.js` | 27 |
-| `run.py` | 363 |
+| `run.py` | 364 |
 | `engine/__init__.py` | 1 |
 | `engine/addons.py` | 322 |
 | `engine/analysis.py` | 307 |
@@ -87,7 +87,7 @@
 | `pcl/cpf.py` | 561 |
 | `pcl/dcgrid.py` | 980 |
 | `pcl/designer.py` | 791 |
-| `pcl/equivalent.py` | 580 |
+| `pcl/equivalent.py` | 618 |
 | `pcl/formats.py` | 222 |
 | `pcl/geo.py` | 360 |
 | `pcl/gui.py` | 409 |
@@ -112,7 +112,7 @@
 | `pcl/rms.py` | 704 |
 | `pcl/scopf.py` | 213 |
 | `pcl/se.py` | 788 |
-| `pcl/study.py` | 670 |
+| `pcl/study.py` | 740 |
 | `pcl/surge.py` | 184 |
 | `pcl/trv.py` | 433 |
 | `pcl/unbalanced.py` | 525 |
@@ -122,7 +122,7 @@
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_api_surface.py` | 376 |
+| `tests/test_api_surface.py` | 387 |
 | `tests/test_appwin.py` | 122 |
 | `tests/test_arc.py` | 189 |
 | `tests/test_b4.py` | 300 |
@@ -141,11 +141,11 @@
 | `tests/test_dcgrid.py` | 735 |
 | `tests/test_derivation.py` | 93 |
 | `tests/test_designer.py` | 200 |
-| `tests/test_dock.py` | 77 |
+| `tests/test_dock.py` | 114 |
 | `tests/test_emt_harmonic.py` | 139 |
 | `tests/test_emt_se.py` | 141 |
 | `tests/test_engine.py` | 276 |
-| `tests/test_equivalent.py` | 324 |
+| `tests/test_equivalent.py` | 395 |
 | `tests/test_ev.py` | 104 |
 | `tests/test_ev_weights.py` | 78 |
 | `tests/test_gen_ctl.py` | 136 |
@@ -157,7 +157,7 @@
 | `tests/test_gfm4.py` | 153 |
 | `tests/test_gfm5.py` | 179 |
 | `tests/test_gis.py` | 183 |
-| `tests/test_guide.py` | 258 |
+| `tests/test_guide.py` | 273 |
 | `tests/test_harmonic.py` | 312 |
 | `tests/test_impl.py` | 138 |
 | `tests/test_impulse_tools.py` | 150 |
@@ -178,7 +178,7 @@
 | `tests/test_mmc.py` | 203 |
 | `tests/test_netfile.py` | 236 |
 | `tests/test_netlib.py` | 209 |
-| `tests/test_netview.py` | 400 |
+| `tests/test_netview.py` | 429 |
 | `tests/test_network.py` | 272 |
 | `tests/test_neutral.py` | 76 |
 | `tests/test_nn.py` | 130 |
@@ -229,7 +229,7 @@
 | `tests/js/cp_cases.js` | 58 |
 | `tests/js/ctl_cases.js` | 33 |
 | `tests/js/dcdc_cases.js` | 13 |
-| `tests/js/dock_cases.js` | 40 |
+| `tests/js/dock_cases.js` | 57 |
 | `tests/js/ev_cases.js` | 37 |
 | `tests/js/ev_weights_cases.js` | 15 |
 | `tests/js/folder_cases.js` | 92 |
@@ -253,7 +253,7 @@
 | `tests/js/mtdc_cases.js` | 13 |
 | `tests/js/netlib42_cases.js` | 50 |
 | `tests/js/netlib_cases.js` | 93 |
-| `tests/js/netview_cases.js` | 91 |
+| `tests/js/netview_cases.js` | 123 |
 | `tests/js/neut_cases.js` | 92 |
 | `tests/js/nn_cases.js` | 48 |
 | `tests/js/pieces_cases.js` | 45 |
@@ -287,7 +287,7 @@
 | `tests/ui/addons_flow.js` | 128 |
 | `tests/ui/blocks_flow.js` | 155 |
 | `tests/ui/bus_flow.js` | 91 |
-| `tests/ui/dock_flow.js` | 177 |
+| `tests/ui/dock_flow.js` | 215 |
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/ev_flow.js` | 112 |
 | `tests/ui/facts_flow.js` | 93 |
@@ -305,7 +305,7 @@
 | `tests/ui/subcircuit_flow.js` | 79 |
 | `tests/ui/ux_flow.js` | 94 |
 | `tests/ui/watch_flow.js` | 113 |
-| `tests/ui/window_flow.js` | 172 |
+| `tests/ui/window_flow.js` | 174 |
 | `tests/ui/wiring_flow.js` | 128 |
 
 ## Στοιχεία και μπλοκ (`web/studio/parts.js`, `PARTS`)
@@ -531,7 +531,7 @@
 
 ## API του server (`run.py`, `/api/<action>`)
 
-`analyze`, `batch_sim`, `bidir`, `boundary`, `capacitance`, `curves`, `derivation`, `design`, `envelope`, `inverse`, `line_export`, `line_load`, `line_model`, `line_scan`, `line_sens`, `linearize`, `model_proof`, `network_open`, `network_report`, `network_save`, `network_study`, `network_view`, `problem`, `scenario_run`, `scenario_sweep`, `solve`, `studio_math`, `sweep`, `switching`, `template_solve`, `validate_circuit`
+`analyze`, `batch_sim`, `bidir`, `boundary`, `capacitance`, `curves`, `derivation`, `design`, `envelope`, `inverse`, `line_export`, `line_load`, `line_model`, `line_scan`, `line_sens`, `linearize`, `model_proof`, `network_area`, `network_open`, `network_report`, `network_save`, `network_study`, `network_view`, `problem`, `scenario_run`, `scenario_sweep`, `solve`, `studio_math`, `sweep`, `switching`, `template_solve`, `validate_circuit`
 
 ## Templates δεδομένων (`web/studio/exercises/`)
 
@@ -992,48 +992,55 @@
 | 2962 | const fn | `studyKey` |
 | 2963 | function | `studyOpen` |
 | 2976 | function | `studyAct` |
-| 2998 | function | `netViewOpen` |
-| 3002 | const fn | `legend` |
-| 3026 | function | `nvEdit` |
-| 3035 | function | `nvApply` |
-| 3036 | const fn | `same` |
-| 3037 | const fn | `put` |
-| 3051 | function | `mtdcTheory` |
-| 3057 | function | `dcdcSteady` |
-| 3062 | function | `dcdcTheory` |
-| 3063 | const fn | `row` |
-| 3067 | function | `b4Theory` |
-| 3072 | function | `studyTheory` |
-| 3090 | const fn | `X` |
-| 3177 | function | `formulaTheory` |
-| 3294 | function | `nodeAvg` |
-| 3300 | function | `circuitForMath` |
-| 3336 | function | `scheduleMath` |
-| 3337 | function | `batteryKey` |
-| 3339 | function | `mathChoices` |
-| 3340 | const fn | `prim` |
-| 3342 | function | `renderMathChoices` |
-| 3344 | function | `runTemplate` |
-| 3350 | function | `runMath` |
-| 3377 | function | `saveLocal` |
-| 3378 | function | `saveLocalSoon` |
-| 3380 | function | `download` |
-| 3381 | function | `exportCSV` |
-| 3387 | function | `syncScopeInputs` |
-| 3388 | function | `setSpeed` |
-| 3391 | function | `openSettings` |
-| 3392 | const fn | `sel` |
-| 3393 | const fn | `chk` |
-| 3420 | function | `applyLook` |
-| 3424 | function | `boot` |
-| 3494 | const fn | `navOpen` |
-| 3510 | const fn | `probeSel` |
-| 3576 | function | `renderTheoryLive` |
-| 3580 | function | `initPanels` |
-| 3581 | const fn | `one` |
-| 3582 | const fn | `pick` |
-| 3583 | const fn | `shut` |
-| 3584 | const fn | `live` |
+| 3001 | function | `netViewOpen` |
+| 3008 | const fn | `legend` |
+| 3032 | function | `nvEdit` |
+| 3041 | function | `nvApply` |
+| 3042 | const fn | `same` |
+| 3043 | const fn | `put` |
+| 3060 | function | `areaBind` |
+| 3067 | function | `areaChosen` |
+| 3068 | function | `areaSplit` |
+| 3072 | function | `areaShow` |
+| 3081 | function | `areaCompare` |
+| 3093 | function | `areaEmt` |
+| 3099 | function | `areaBack` |
+| 3102 | function | `mtdcTheory` |
+| 3108 | function | `dcdcSteady` |
+| 3113 | function | `dcdcTheory` |
+| 3114 | const fn | `row` |
+| 3118 | function | `b4Theory` |
+| 3123 | function | `studyTheory` |
+| 3141 | const fn | `X` |
+| 3228 | function | `formulaTheory` |
+| 3345 | function | `nodeAvg` |
+| 3351 | function | `circuitForMath` |
+| 3387 | function | `scheduleMath` |
+| 3388 | function | `batteryKey` |
+| 3390 | function | `mathChoices` |
+| 3391 | const fn | `prim` |
+| 3393 | function | `renderMathChoices` |
+| 3395 | function | `runTemplate` |
+| 3401 | function | `runMath` |
+| 3428 | function | `saveLocal` |
+| 3429 | function | `saveLocalSoon` |
+| 3431 | function | `download` |
+| 3432 | function | `exportCSV` |
+| 3438 | function | `syncScopeInputs` |
+| 3439 | function | `setSpeed` |
+| 3442 | function | `openSettings` |
+| 3443 | const fn | `sel` |
+| 3444 | const fn | `chk` |
+| 3471 | function | `applyLook` |
+| 3475 | function | `boot` |
+| 3545 | const fn | `navOpen` |
+| 3561 | const fn | `probeSel` |
+| 3627 | function | `renderTheoryLive` |
+| 3631 | function | `initPanels` |
+| 3632 | const fn | `one` |
+| 3633 | const fn | `pick` |
+| 3634 | const fn | `shut` |
+| 3635 | const fn | `live` |
 
 ### `web/studio/bus.js`
 
@@ -1094,50 +1101,53 @@
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 22 | const fn | `gid` |
-| 37 | function | `take` |
-| 49 | const fn | `first` |
-| 52 | const fn | `doc` |
-| 53 | const fn | `esc` |
-| 55 | const fn | `ids` |
-| 56 | const fn | `open` |
-| 57 | function | `load` |
-| 58 | function | `save` |
-| 60 | function | `top` |
-| 61 | function | `region` |
-| 65 | function | `wrapper` |
-| 71 | function | `tabsHtml` |
-| 75 | function | `floatRect` |
-| 77 | function | `clampRect` |
-| 79 | function | `setFloat` |
-| 83 | function | `keepFloat` |
-| 86 | function | `render` |
-| 109 | function | `sizes` |
-| 113 | function | `fill` |
-| 118 | function | `tools` |
-| 122 | function | `change` |
-| 123 | const fn | `place` |
-| 124 | const fn | `tab` |
-| 125 | const fn | `activate` |
-| 127 | const fn | `max` |
-| 129 | const fn | `reveal` |
-| 130 | const fn | `reset` |
-| 131 | const fn | `where` |
-| 132 | const fn | `label` |
-| 134 | function | `menuHtml` |
-| 144 | function | `closeMenu` |
-| 145 | function | `openMenu` |
-| 156 | function | `zoneAt` |
-| 163 | function | `zones` |
-| 166 | function | `hiRect` |
-| 172 | function | `dragStart` |
-| 174 | const fn | `mv` |
-| 181 | const fn | `end` |
-| 187 | const fn | `up` |
-| 190 | function | `splitStart` |
-| 200 | function | `init` |
-| 222 | const fn | `onChange` |
-| 223 | const fn | `state` |
+| 28 | const fn | `gid` |
+| 45 | function | `take` |
+| 66 | const fn | `first` |
+| 69 | const fn | `doc` |
+| 70 | const fn | `esc` |
+| 72 | const fn | `ids` |
+| 73 | const fn | `open` |
+| 74 | function | `load` |
+| 75 | function | `save` |
+| 77 | function | `top` |
+| 78 | function | `region` |
+| 82 | function | `wrapper` |
+| 91 | function | `tabsHtml` |
+| 96 | function | `floatRect` |
+| 98 | function | `clampRect` |
+| 100 | function | `setFloat` |
+| 104 | function | `keepFloat` |
+| 107 | function | `render` |
+| 130 | function | `sizes` |
+| 134 | function | `fill` |
+| 143 | function | `tools` |
+| 147 | function | `change` |
+| 148 | const fn | `place` |
+| 149 | const fn | `tab` |
+| 150 | const fn | `activate` |
+| 152 | const fn | `side` |
+| 153 | const fn | `firstAs` |
+| 155 | const fn | `max` |
+| 157 | const fn | `reveal` |
+| 158 | const fn | `reset` |
+| 159 | const fn | `where` |
+| 160 | const fn | `label` |
+| 162 | function | `menuHtml` |
+| 176 | function | `closeMenu` |
+| 177 | function | `openMenu` |
+| 188 | function | `zoneAt` |
+| 195 | function | `zones` |
+| 198 | function | `hiRect` |
+| 204 | function | `dragStart` |
+| 206 | const fn | `mv` |
+| 213 | const fn | `end` |
+| 219 | const fn | `up` |
+| 222 | function | `splitStart` |
+| 231 | function | `vsplitStart` |
+| 239 | function | `init` |
+| 261 | const fn | `onChange` |
+| 262 | const fn | `state` |
 
 ### `web/studio/editor.js`
 
@@ -2038,41 +2048,52 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 30 | function | `model` |
-| 46 | function | `dcModel` |
-| 57 | function | `fit` |
-| 59 | const fn | `sx` |
-| 61 | function | `detail` |
-| 62 | function | `pick` |
-| 74 | const fn | `near` |
-| 84 | const fn | `num` |
-| 86 | function | `describe` |
-| 101 | function | `draw` |
-| 107 | const fn | `seg` |
-| 109 | const fn | `mid` |
-| 130 | const fn | `lines` |
-| 160 | const fn | `put` |
-| 172 | function | `routeMid` |
-| 176 | function | `graticule` |
-| 182 | function | `scaleLen` |
-| 183 | function | `scaleBar` |
-| 186 | function | `create` |
-| 189 | const fn | `size` |
-| 194 | const fn | `paint` |
-| 195 | const fn | `ask` |
-| 196 | const fn | `at` |
-| 198 | const fn | `down` |
-| 199 | const fn | `move` |
-| 203 | const fn | `up` |
-| 204 | const fn | `wheel` |
-| 205 | const fn | `dbl` |
-| 212 | method | `setLayer` |
-| 213 | method | `setNames` |
-| 214 | method | `fit` |
-| 216 | method | `zoom` |
-| 219 | method | `goto` |
-| 220 | method | `info` |
-| 221 | method | `destroy` |
+| 37 | function | `model` |
+| 53 | function | `dcModel` |
+| 64 | function | `fit` |
+| 66 | const fn | `sx` |
+| 68 | function | `detail` |
+| 69 | function | `pick` |
+| 81 | const fn | `near` |
+| 92 | function | `inPoly` |
+| 94 | function | `within` |
+| 99 | const fn | `num` |
+| 101 | function | `describe` |
+| 116 | function | `draw` |
+| 122 | const fn | `seg` |
+| 124 | const fn | `mid` |
+| 145 | const fn | `lines` |
+| 175 | const fn | `put` |
+| 196 | function | `routeMid` |
+| 200 | function | `graticule` |
+| 206 | function | `scaleLen` |
+| 207 | function | `scaleBar` |
+| 210 | function | `create` |
+| 214 | const fn | `size` |
+| 219 | const fn | `paint` |
+| 220 | const fn | `ask` |
+| 221 | const fn | `at` |
+| 224 | const fn | `chosen` |
+| 225 | const fn | `told` |
+| 227 | const fn | `kindOf` |
+| 228 | const fn | `down` |
+| 230 | const fn | `move` |
+| 237 | const fn | `up` |
+| 244 | const fn | `cancel` |
+| 245 | const fn | `wheel` |
+| 246 | const fn | `dbl` |
+| 253 | method | `setLayer` |
+| 254 | method | `setNames` |
+| 255 | method | `fit` |
+| 257 | method | `zoom` |
+| 260 | method | `goto` |
+| 261 | method | `info` |
+| 263 | method | `setMode` |
+| 266 | method | `setSelection` |
+| 268 | method | `setBoundary` |
+| 269 | method | `clearSelection` |
+| 271 | method | `choose` |
+| 272 | method | `destroy` |
 
 ### `web/studio/nn.js`
 
@@ -2956,17 +2977,17 @@ _(χωρίς συναρτήσεις)_
 | 55 | function | `line_model` |
 | 81 | function | `line_action` |
 | 94 | function | `study_action` |
-| 111 | function | `scenario` |
-| 140 | class | `Handler` |
-| 142 | method | `Handler.local` |
-| 146 | method | `Handler.alive` |
-| 156 | method | `Handler.body` |
-| 165 | method | `Handler.addon_get` |
-| 195 | method | `Handler.addon_post` |
-| 222 | method | `Handler.send` |
-| 238 | method | `Handler.do_GET` |
-| 269 | method | `Handler.do_POST` |
-| 336 | function | `main` |
+| 112 | function | `scenario` |
+| 141 | class | `Handler` |
+| 143 | method | `Handler.local` |
+| 147 | method | `Handler.alive` |
+| 157 | method | `Handler.body` |
+| 166 | method | `Handler.addon_get` |
+| 196 | method | `Handler.addon_post` |
+| 223 | method | `Handler.send` |
+| 239 | method | `Handler.do_GET` |
+| 270 | method | `Handler.do_POST` |
+| 337 | function | `main` |
 
 ### `engine/__init__.py`
 
@@ -3716,19 +3737,20 @@ _(χωρίς συναρτήσεις)_
 | 57 | class | `EquivalentError` |
 | 61 | function | `_buses_of` |
 | 68 | function | `split` |
-| 131 | function | `_copy` |
-| 141 | function | `_retained` |
-| 152 | function | `_short_circuit` |
-| 192 | function | `reduce` |
-| 318 | function | `_v` |
-| 326 | function | `_ymat` |
-| 335 | function | `compare` |
-| 383 | function | `_gen3` |
-| 395 | function | `_ext_y` |
-| 458 | function | `_kron` |
-| 463 | function | `emt_ports` |
-| 553 | function | `_mat` |
-| 557 | function | `to_emt` |
+| 131 | function | `area` |
+| 169 | function | `_copy` |
+| 179 | function | `_retained` |
+| 190 | function | `_short_circuit` |
+| 230 | function | `reduce` |
+| 356 | function | `_v` |
+| 364 | function | `_ymat` |
+| 373 | function | `compare` |
+| 421 | function | `_gen3` |
+| 433 | function | `_ext_y` |
+| 496 | function | `_kron` |
+| 501 | function | `emt_ports` |
+| 591 | function | `_mat` |
+| 595 | function | `to_emt` |
 
 ### `pcl/formats.py`
 
@@ -4579,6 +4601,7 @@ _(χωρίς συναρτήσεις)_
 | 598 | function | `view` |
 | 638 | function | `_stem` |
 | 644 | function | `report` |
+| 679 | function | `area` |
 
 ### `pcl/surge.py`
 

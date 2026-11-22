@@ -128,6 +128,44 @@ def split(net, boundary, internal=None):
     return I, B, E
 
 
+def area(net, buses):
+    """5.0.6 (ROADMAP §94 step γ, §96 B.1): the study area as the buses chosen in the diagram of the network (by clicks, a
+    window or a lasso) → (internal, boundary, external), as split() gives them. The boundary is every chosen bus that touches
+    a bus that was not chosen; the internal buses are the other chosen ones; the external buses are all that were not chosen.
+    A bus of type 'internal' (the star point of a three-winding transformer, an unloaded tertiary) is not chosen by itself:
+    it goes with the area exactly when every other bus it touches is chosen."""
+    A = []
+    for b in buses:
+        b = str(b)
+        if b not in net.buses:
+            raise EquivalentError(f'unknown bus {b}')
+        if b not in A:
+            A.append(b)
+    if not A:
+        raise EquivalentError('no bus chosen')
+    adj = {b: set() for b in net.buses}
+    for e in net.elements:
+        bs = _buses_of(e)
+        for i in range(len(bs)):
+            for j in range(i + 1, len(bs)):
+                adj[bs[i]].add(bs[j])
+                adj[bs[j]].add(bs[i])
+    star = {b for b, v in net.buses.items() if v.get('type') == 'internal'}
+    As = {b for b in A if b not in star}
+    for s in [b for b in net.buses if b in star]:
+        seen = adj[s] - star
+        if seen and seen <= As:
+            As.add(s)
+    B = [b for b in net.buses if b in As and any(v not in As for v in adj[b])]
+    if not B:
+        raise EquivalentError('the chosen buses touch no other bus: nothing lies beyond them')
+    I = [b for b in net.buses if b in As and b not in set(B)]
+    if not I:
+        raise EquivalentError('every chosen bus touches a bus that was not chosen, so all are boundary buses: '
+                              'choose also the buses behind them, inside the area')
+    return split(net, B, I)
+
+
 def _copy(net):
     """A copy without the caches (a deep copy: the file of to_dict leaves out buses of the type 'internal', which a network
     may also have by its own hand, as the tertiary of T4 in the test network of IEC TR 60909-4)."""

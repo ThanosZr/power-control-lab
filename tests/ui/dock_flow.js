@@ -15,6 +15,9 @@
 //     (a click puts the signal in the scope or takes it out) and the window: the box of the part with every pin on its
 //     side, for every pin what it measures with its value now, a click on or off, all the voltages in a new pane, none;
 //     a three-phase pin with the node of each phase
+//  9. 5.0.6 (§94 step γ, §95 point 2, §96 B.1): the diagram of a study opens as a tab next to the circuit, in its place; ◫
+//     puts the two side by side and their edge is dragged; a lasso chooses the study area and the engine marks its boundary;
+//     the full network against the equivalent in N−1; the area in EMT in the place of the circuit, and «↶ Πίσω»
 // Usage: python run.py --no-browser --port 8765  then  node tests/ui/dock_flow.js http://127.0.0.1:8765/ [out]
 const {chromium}=require('playwright');
 let R={},fail=[];
@@ -25,7 +28,7 @@ let R={},fail=[];
  const mid=async sel=>{const r=await rect(sel);return [r.l+r.w/2,r.t+r.h/2];};
  const drag=async(x0,y0,x1,y1)=>{await p.mouse.move(x0,y0);await p.mouse.down();await p.mouse.move(x0+(x1-x0)*0.3,y0+(y1-y0)*0.3,{steps:5});await p.mouse.move(x1,y1,{steps:8});await p.waitForTimeout(60);await p.mouse.up();await p.waitForTimeout(250);};
  const where=id=>p.evaluate(i=>Dock.where(i),id);
- const order=()=>p.evaluate(()=>[...document.querySelectorAll('main > .card, main > .dk-group')].map(e=>e.dataset.dkCard||('['+[...e.querySelectorAll('.dk-card')].map(c=>c.dataset.dkCard).join(',')+']')));
+ const order=()=>p.evaluate(()=>[...document.querySelectorAll('main > .card:not([hidden]), main > .dk-group')].map(e=>e.dataset.dkCard||('['+[...e.querySelectorAll('.dk-card')].map(c=>c.dataset.dkCard).join(',')+']')));
  const parentRegion=sel=>p.evaluate(s=>document.querySelector(s)?.closest('.dk-region')?.dataset.dkRegion||(document.querySelector(s)?.classList.contains('dk-float')?'float':document.querySelector(s)?.closest('main')?'main':'?'),sel);
  const scopeW=()=>p.evaluate(()=>{const c=document.querySelector('#scope-card canvas'),k=document.querySelector('#scope-card');const a=c.getBoundingClientRect(),q=k.getBoundingClientRect();return {canvas:Math.round(a.width),card:Math.round(q.width),r:Math.round(a.right),cr:Math.round(q.right)};});
  await p.goto(U);await p.evaluate(()=>localStorage.clear());
@@ -35,7 +38,7 @@ let R={},fail=[];
  R.o0=await order();R.reg0=await p.evaluate(()=>[...document.querySelectorAll('.dk-region')].filter(r=>!r.hidden).length);
  R.tools=await p.evaluate(()=>[...document.querySelectorAll('.dk-card')].map(c=>c.dataset.dkCard+':'+c.querySelectorAll('.dk-tools button').length));
  ok(JSON.stringify(R.o0)===JSON.stringify(['circuit','scope','scen','addons','math','theory'])&&R.reg0===0,'the page of before '+JSON.stringify([R.o0,R.reg0]));
- ok(R.tools.length===6&&R.tools.every(x=>x.endsWith(':4')),'⠿ ⇱ ⛶ ▾ on every card '+R.tools.join(' '));
+ ok(R.tools.length===7&&R.tools.every(x=>x.endsWith(':4')),'⠿ ⇱ ⛶ ▾ on every card, and on the diagram of the network (5.0.6, hidden until a study opens it) '+R.tools.join(' '));
 
  // 2. the scope to the left edge, by its grip, while it runs
  await p.evaluate(()=>PCL.play());await p.waitForTimeout(600);const t0=await p.evaluate(()=>PCL.S.sim?.t||0);
@@ -171,6 +174,41 @@ let R={},fail=[];
  await p.evaluate(()=>PCL.openPinScope('G2'));await p.waitForTimeout(800);
  R.g=await p.evaluate(()=>[...document.querySelectorAll('#pin-scope .pw-pin')].filter(e=>e.querySelector('.pw-name').textContent==='abc').map(e=>[...e.querySelectorAll('.pw-chip')].map(c=>c.querySelector('b').textContent+'='+c.querySelector('.pw-val').textContent))[0]);
  ok(R.g&&R.g.length===3&&R.g.every(x=>/^V⏚[abc]=/.test(x)&&!x.endsWith('—')),'a three-phase pin: the node of each phase '+JSON.stringify(R.g));
+ await p.click('#pin-scope [data-pwclose]');
+ // 9. the diagram of the network as a document of the central area (5.0.6)
+ await p.evaluate(()=>{try{localStorage.removeItem('pcl-dock');}catch(e){}});
+ await p.goto(U+'?tutorial=pf_study');await p.waitForTimeout(2500);
+ await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&PCL.NV.v&&PCL.NV.v.state.frames>0,null,{timeout:60000});await p.waitForTimeout(400);
+ R.d1=await p.evaluate(()=>({nv:Dock.where('netview'),c:Dock.where('circuit'),top:Math.round(document.querySelector('#netview').getBoundingClientRect().top),tabs:[...document.querySelectorAll('.dk-group .dk-tab')].map(t=>t.textContent),bench:document.querySelector('#bench-card').classList.contains('dk-off')}));
+ ok(R.d1.nv.at==='main'&&R.d1.nv.group===R.d1.c.group&&R.d1.nv.active&&R.d1.bench&&R.d1.tabs.join()==='Κύκλωμα,Διάγραμμα του δικτύου'&&R.d1.top>=0&&R.d1.top<200,'the diagram opens as a tab next to the circuit, in its place '+JSON.stringify(R.d1));
+ await p.click('.dk-group .dk-tab:first-child');await p.waitForTimeout(200);R.d2=await p.evaluate(()=>({c:Dock.where('circuit').active,nvOff:document.querySelector('#netview').classList.contains('dk-off')}));
+ await p.click('.dk-group [data-dk-two]');await p.waitForTimeout(500);
+ R.d3=await p.evaluate(()=>{const a=document.querySelector('#bench-card').getBoundingClientRect(),n=document.querySelector('#netview').getBoundingClientRect();return {two:Dock.where('circuit').two,aw:Math.round(a.width),nw:Math.round(n.width),lr:a.right<=n.left+1,cv:document.querySelector('#nv-canvas').clientWidth};});
+ ok(R.d2.c&&R.d2.nvOff&&R.d3.two&&R.d3.lr&&Math.abs(R.d3.aw-R.d3.nw)<12&&R.d3.cv>200,'the circuit one click away; ◫ side by side, the shown card on the left '+JSON.stringify([R.d2,R.d3]));
+ const vs=await rect('.dk-group .dk-vsplit');await drag(vs.l+vs.w/2,vs.t+200,vs.l+vs.w/2+150,vs.t+200);await p.waitForTimeout(400);
+ R.d4=await p.evaluate(()=>({r:Dock.state().groups.find(g=>g.cards.includes('circuit')).r,aw:Math.round(document.querySelector('#bench-card').getBoundingClientRect().width),nw:Math.round(document.querySelector('#netview').getBoundingClientRect().width)}));
+ ok(R.d4.r>0.55&&R.d4.aw>R.d4.nw+150,'the edge between the two cards '+JSON.stringify(R.d4));
+ await p.click('.dk-group [data-dk-two]');await p.click('.dk-group .dk-tab:nth-child(2)');await p.waitForTimeout(400);
+ // the lasso around the buses 1, 9, 5 of the IEEE 9 (4 lies inside), in the mode «◌ Λάσο»
+ await p.click('[data-nv-mode="lasso"]');
+ const hull=await p.evaluate(()=>{const v=PCL.NV.v,m=v.model,r=document.querySelector('#nv-canvas').getBoundingClientRect(),t=v.state.tr;const P=['1','9','5'].map(id=>{const i=m.ix.get(id);return [r.left+(m.x[i]-t.cx)*t.s+v.state.w/2,r.top+(m.y[i]-t.cy)*t.s+v.state.h/2];});
+  const cx=P.reduce((a,q)=>a+q[0],0)/3,cy=P.reduce((a,q)=>a+q[1],0)/3;return P.map(([x,y])=>[Math.max(r.left+3,Math.min(r.right-3,cx+(x-cx)*1.3)),Math.max(r.top+3,Math.min(r.bottom-3,cy+(y-cy)*1.3))]);});
+ await p.mouse.move(hull[0][0],hull[0][1]);await p.mouse.down();for(const q of hull.concat([hull[0]]))await p.mouse.move(q[0],q[1],{steps:8});await p.mouse.up();
+ await p.waitForFunction(()=>PCL.NV.area.res&&!PCL.NV.area.busy,null,{timeout:30000});await p.waitForTimeout(200);
+ R.d5=await p.evaluate(()=>({ids:PCL.NV.area.ids,res:PCL.NV.area.res,bnd:PCL.NV.v.state.bnd.size,drawn:PCL.NV.v.state.drawn,info:document.querySelector('#nv-area-info').textContent,edit:document.querySelector('#nv-edit').hidden}));
+ ok(R.d5.ids.join()==='1,4,5,9'&&R.d5.res.boundary?.join()==='5,9'&&R.d5.res.internal?.join()==='1,4'&&R.d5.bnd===2&&R.d5.drawn.chosen===4&&R.d5.drawn.boundary===2&&/σύνορο 5, 9/.test(R.d5.info)&&R.d5.edit,'a lasso chooses the study area, the engine marks its boundary '+JSON.stringify(R.d5));
+ await p.click('#nv-cmp-run');await p.waitForSelector('#nv-cmp table',{timeout:60000});
+ R.d6=await p.evaluate(()=>({rows:[...document.querySelectorAll('#nv-cmp tbody tr')].map(r=>[...r.cells].map(c=>c.textContent).join('|')),worst:document.querySelector('#nv-cmp tr.worst td')?.textContent}));
+ ok(R.d6.rows.length===4&&/^βασικό σημείο\|< 10⁻⁹/.test(R.d6.rows[0])&&/^br1\|χωρίς σύγκλιση/.test(R.d6.rows[1])&&R.d6.worst==='br9','the full network against the equivalent in N−1 '+JSON.stringify(R.d6));
+ await p.screenshot({path:OUT+'/dock_area.png'});
+ await p.selectOption('#nv-fig','15b');await p.click('#nv-emt');await p.waitForFunction(()=>PCL.NV.area.back&&!PCL.NV.area.busy,null,{timeout:60000});await p.waitForTimeout(1200);
+ R.d7=await p.evaluate(()=>({tut:PCL.S.tut.id,eq:PCL.project().components.filter(c=>c.type==='EQV3').map(c=>c.params.names+' '+c.params.fig),c:Dock.where('circuit').active,back:!!document.querySelector('#nv-back')}));
+ ok(R.d7.tut==='empty'&&R.d7.eq.join()==='5; 9 15b'&&R.d7.c&&R.d7.back,'the area in EMT, in the place of the circuit '+JSON.stringify(R.d7));
+ await p.click('.dk-group .dk-tab:nth-child(2)');await p.click('#nv-back');await p.waitForTimeout(1200);
+ R.d8=await p.evaluate(()=>({tut:PCL.S.tut.id,study:!!PCL.S.tutMeta?.study,eq:PCL.project().components.some(c=>c.type==='EQV3'),back:!!document.querySelector('#nv-back')}));
+ ok(R.d8.tut==='pf_study'&&R.d8.study&&!R.d8.eq&&!R.d8.back,'«↶ Πίσω»: the tutorial and its circuit again '+JSON.stringify(R.d8));
+ R.chk3=await p.evaluate(()=>Panels.check());R.dead3=await dead();
+ ok(!R.chk3.dup.length&&!R.chk3.twice.length&&!R.dead3.length,'the diagram as a card: no id twice, no button without a handler '+JSON.stringify([R.chk3,R.dead3]));
  ok(!errs.length,'χωρίς σφάλματα JavaScript '+errs.slice(0,4).join(' | '));
  console.log(JSON.stringify(R,null,0).slice(0,3500));
  if(fail.length){console.log('FAIL');for(const f of fail)console.log(f);process.exitCode=1;}else console.log('PASS');

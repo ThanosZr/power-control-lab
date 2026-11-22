@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 5.0.5: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (941 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 5.0.6: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (944 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 5.0.5.
+Κανένα στην 5.0.6.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-674 σημεία.
+676 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -171,6 +171,7 @@
 | `pcl.dcgrid.station` | `Us`, `Ss`, `st`, `S_base`, `U_base` | 4.20 · πειρ. |
 | `pcl.dcgrid.station_inverse` | `Us`, `Qs`, `Pdc`, `st`, `S_base`, `U_base`, `Ps0`, `tol`, `max_iter` | 4.20 · πειρ. |
 | `pcl.equivalent.EquivalentError` | — | 5.0.3 · πειρ. |
+| `pcl.equivalent.area` | `net`, `buses` | 5.0.6 · πειρ. |
 | `pcl.equivalent.compare` | `net`, `eq`, `outages`, `tol` | 5.0.3 · πειρ. |
 | `pcl.equivalent.emt_ports` | `net`, `boundary`, `internal`, `lf`, `machines`, `fig`, `tol` | 5.0.4 · πειρ. |
 | `pcl.equivalent.reduce` | `net`, `boundary`, `internal`, `kind`, `lf`, `slack`, `tol`, `mode` | 5.0.3 · πειρ. |
@@ -617,6 +618,7 @@
 | `pcl.set` | `key`, `value` | 3.18 |
 | `pcl.show` | `obj`, `title` | 3.18 |
 | `pcl.study.StudyError` | — | 4.19.1 |
+| `pcl.study.area` | `data` | 5.0.6 |
 | `pcl.study.network_of` | `data` | 4.19.1 |
 | `pcl.study.open_file` | `data` | 4.19.4 |
 | `pcl.study.report` | `data` | 4.19.1 |
@@ -744,7 +746,7 @@
 
 ## Server: `/api/<ενέργεια>` και διαδρομές
 
-47 σημεία.
+48 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -777,6 +779,7 @@
 | `/api/link/reply` | — | 3.18 |
 | `/api/link/token` | — | 3.18 |
 | `/api/model_proof` | — | 3.18 |
+| `/api/network_area` | — | 5.0.6 |
 | `/api/network_open` | — | 4.19.4 |
 | `/api/network_report` | — | 4.19.1 |
 | `/api/network_save` | — | 4.19.4 |
