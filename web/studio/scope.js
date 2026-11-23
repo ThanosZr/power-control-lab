@@ -84,7 +84,8 @@
   attach(sim){this.sim=sim;this.requestDraw();}
   // one drawing on the next frame for a burst of pointer or wheel events (4.6); the running loop draws anyway.
   // 4.7: also attach, channels added or moved, cursors, navigation: a tutorial with five channels drew six times in a row
-  requestDraw(){if(this._raf)return;this._raf=requestAnimationFrame(()=>{this._raf=0;this.draw();});}
+  // 5.0.10: a frame of the window of the canvas (a scope on the second screen is drawn while the page is hidden)
+  requestDraw(){const w=this.cv.ownerDocument?.defaultView||root;if(this._raf&&this._rafW===w)return;this._rafW=w;this._raf=(w.requestAnimationFrame||root.requestAnimationFrame).call(w,()=>{this._raf=0;this.draw();});}
   // the colours of the theme, read again at most once a second (getComputedStyle in every frame forced a style recalculation)
   colors(){const now=performance.now();if(!this._col||now-this._col.t>1000){const css=getComputedStyle(this.cv);this._col={t:now,ink:css.getPropertyValue('--scope-ink')||'#203a3f',grid:css.getPropertyValue('--scope-grid')||'#e3ebe7',bg:css.getPropertyValue('--scope-bg')||'#fbfdfc'};}return this._col;}
   // reference traces from another solver: {label, data:{key:{t,y}}}, drawn dashed over the channel
@@ -129,7 +130,8 @@
    else if(kind==='autoy'){for(const p of this.cfg.panes)p.y={auto:true,...(p.y?.mode?{mode:p.y.mode}:{})};this.yst=[];}
    this.opt.onchange?.();this.requestDraw();}
   // 4.17.2: the canvas is the visible part of the box (sticky in it), the spacer after it the rest of the panes' height
-  resize(){const sc=this.sc,dpr=window.devicePixelRatio||1;if(!sc)return;this.W=Math.max(200,sc.clientWidth||0);this.Hv=Math.max(160,sc.clientHeight||0);
+  // 5.0.10: the pixels of the screen of its window (the page, or the second screen)
+  resize(){const sc=this.sc,dpr=(this.cv.ownerDocument?.defaultView||root).devicePixelRatio||1;if(!sc)return;this.W=Math.max(200,sc.clientWidth||0);this.Hv=Math.max(160,sc.clientHeight||0);
    const hs=this.heights();this.Htot=TOP+hs.reduce((a,b)=>a+b,0)+GAP*Math.max(0,hs.length-1)+BOT+(this.ax?0:AXH);
    if(this.spacer)this.spacer.style.height=Math.max(0,this.Htot-this.Hv)+'px';
    const H=this.Hv;this.cv.width=Math.round(this.W*dpr);this.cv.height=Math.round(H*dpr);this.cv.style.width=this.W+'px';this.cv.style.height=H+'px';this.ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -250,7 +252,7 @@
   // ------------------------------------------------------------ drawing
   draw(){
    const c=this.ctx,W=this.W||600,H=this.Hv||300;if(!c)return;this.padL=64;this.padR=14;
-   if(this._raf){cancelAnimationFrame(this._raf);this._raf=0;}const {ink,grid,bg}=this.colors();
+   if(this._raf){try{(this._rafW||root).cancelAnimationFrame(this._raf);}catch(e){}this._raf=0;}const {ink,grid,bg}=this.colors();
    if(this.sc)this.sy=this.sc.scrollTop||0;const sy=this.sy,ac=this.axc;
    c.clearRect(0,0,W,H);c.fillStyle=bg;c.fillRect(0,0,W,H);if(ac){ac.clearRect(0,0,W,AXH);ac.fillStyle=bg;ac.fillRect(0,0,W,AXH);}
    const s=this.sim;const panes=this.cfg.panes,hs=this.heights();

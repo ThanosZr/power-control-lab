@@ -1,6 +1,7 @@
 // 5.0.5 (ROADMAP §94 step β, decision 357): the cards of the page dock, float, go as tabs and fill the screen, in the browser;
 // and the scopes of a part in a submenu and a window with its pins (Thanos 21/11, 21:10).
-//  1. at the start every card is in its place and the page is the page of before (the same order, no region)
+//  1. at the start every card is in its place and the page is the page of before (the same order, no region); 5.0.10: the badge
+//     of the GPU* beside «Engine» (the card, or «όχι» and why)
 //  2. a drag by ⠿ to the left edge docks the scope there: the page leaves room for it, the scope and its graphs follow the
 //     width of the region, and the simulation goes on running while cards move
 //  3. a drag onto the title of another card makes a tab: one of the two shown, a click on a tab shows the other; a drag
@@ -22,6 +23,13 @@
 //     area in EMT with the Foster circuit, and the scan against its blocks in the box of the area
 // 11. 5.0.9 (§96 B.3): the FDNE for the two boundary buses 5 and 9 (the area 1, 4, 5, 9), passive: the area in EMT with the
 //     EQV3 'fdne', and the scan against the FDNE at each port in the box of the area
+// 12. 5.0.10 (§94 step δ): the named layouts: a study proposes «Μελέτη δικτύου» and the page takes it from the first page; a
+//     tutorial without a proposal brings the first page back; «Ανάλυση» from the menu «Διατάξεις»; then a study only proposes;
+//     a layout saved under a name (Enter) is the current one after a reload; «Τα tutorials προτείνουν διάταξη» off; ✕
+// 13. 5.0.10 (§94 step ε): the second screen: the circuit has no «▭»; the scope by ▾ «▭ Σε δεύτερη οθόνη» in a window of the
+//     browser, the same card running there (no copy), found by the page, its ⚙ and its menu ▾ in that window, the space bar
+//     of that window plays and pauses, Ctrl+Z there undoes; with the page hidden the frames come from that window; after a reload of the page the
+//     window takes the card of the new page; the window closed: the card back in its place; «Αρχική» closes the window
 // Usage: python run.py --no-browser --port 8765  then  node tests/ui/dock_flow.js http://127.0.0.1:8765/ [out]
 const {chromium}=require('playwright');
 let R={},fail=[];
@@ -42,6 +50,10 @@ let R={},fail=[];
  R.o0=await order();R.reg0=await p.evaluate(()=>[...document.querySelectorAll('.dk-region')].filter(r=>!r.hidden).length);
  R.tools=await p.evaluate(()=>[...document.querySelectorAll('.dk-card')].map(c=>c.dataset.dkCard+':'+c.querySelectorAll('.dk-tools button').length));
  ok(JSON.stringify(R.o0)===JSON.stringify(['circuit','scope','scen','cmd','addons','math','theory'])&&R.reg0===0,'the page of before (5.0.8: with the command line) '+JSON.stringify([R.o0,R.reg0]));
+ // 5.0.10 (decision 386): the badge of the GPU* beside «Engine»: the card or «όχι», with where it is used and why in its title
+ await p.waitForFunction(()=>!document.querySelector('#gpu').hidden,null,{timeout:20000});
+ R.gpu=await p.evaluate(()=>({t:document.querySelector('#gpu').textContent,title:document.querySelector('#gpu').title,ok:document.querySelector('#gpu').classList.contains('ok')}));
+ ok(/^GPU\*: /.test(R.gpu.t)&&/N−1 σε AC/.test(R.gpu.title)&&(R.gpu.ok||/^GPU\*: όχι$/.test(R.gpu.t)&&/python -m pcl accel/.test(R.gpu.title)),'the badge of the GPU* beside «Engine» '+JSON.stringify(R.gpu));
  ok(R.tools.length===8&&R.tools.every(x=>x.endsWith(':4')),'⠿ ⇱ ⛶ ▾ on every card (5.0.8: and on the command line), and on the diagram of the network (5.0.6, hidden until a study opens it) '+R.tools.join(' '));
 
  // 2. the scope to the left edge, by its grip, while it runs
@@ -183,8 +195,9 @@ let R={},fail=[];
  await p.evaluate(()=>{try{localStorage.removeItem('pcl-dock');}catch(e){}});
  await p.goto(U+'?tutorial=pf_study');await p.waitForTimeout(2500);
  await p.click('#theory [data-study="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&PCL.NV.v&&PCL.NV.v.state.frames>0,null,{timeout:60000});await p.waitForTimeout(400);
- R.d1=await p.evaluate(()=>({nv:Dock.where('netview'),c:Dock.where('circuit'),top:Math.round(document.querySelector('#netview').getBoundingClientRect().top),tabs:[...document.querySelectorAll('.dk-group .dk-tab')].map(t=>t.textContent),bench:document.querySelector('#bench-card').classList.contains('dk-off')}));
- ok(R.d1.nv.at==='main'&&R.d1.nv.group===R.d1.c.group&&R.d1.nv.active&&R.d1.bench&&R.d1.tabs.join()==='Κύκλωμα,Διάγραμμα του δικτύου'&&R.d1.top>=0&&R.d1.top<200,'the diagram opens as a tab next to the circuit, in its place '+JSON.stringify(R.d1));
+ // (5.0.10: the study proposes «Μελέτη δικτύου»: the description on the right; the tabs of the group of the circuit)
+ R.d1=await p.evaluate(()=>({nv:Dock.where('netview'),c:Dock.where('circuit'),top:Math.round(document.querySelector('#netview').getBoundingClientRect().top),tabs:[...document.querySelector('#bench-card').closest('.dk-group').querySelectorAll('.dk-tab')].map(t=>t.textContent),bench:document.querySelector('#bench-card').classList.contains('dk-off'),th:Dock.where('theory').at}));
+ ok(R.d1.nv.at==='main'&&R.d1.nv.group===R.d1.c.group&&R.d1.nv.active&&R.d1.bench&&R.d1.tabs.join()==='Κύκλωμα,Διάγραμμα του δικτύου'&&R.d1.top>=0&&R.d1.top<200&&R.d1.th==='right','the diagram opens as a tab next to the circuit, in its place '+JSON.stringify(R.d1));
  await p.click('.dk-group .dk-tab:first-child');await p.waitForTimeout(200);R.d2=await p.evaluate(()=>({c:Dock.where('circuit').active,nvOff:document.querySelector('#netview').classList.contains('dk-off')}));
  await p.click('.dk-group [data-dk-two]');await p.waitForTimeout(500);
  R.d3=await p.evaluate(()=>{const a=document.querySelector('#bench-card').getBoundingClientRect(),n=document.querySelector('#netview').getBoundingClientRect();return {two:Dock.where('circuit').two,aw:Math.round(a.width),nw:Math.round(n.width),lr:a.right<=n.left+1,cv:document.querySelector('#nv-canvas').clientWidth};});
@@ -237,6 +250,88 @@ let R={},fail=[];
  await p.click('#nv-back');await p.waitForTimeout(1000);
  R.chk3=await p.evaluate(()=>Panels.check());R.dead3=await dead();
  ok(!R.chk3.dup.length&&!R.chk3.twice.length&&!R.dead3.length,'the diagram as a card: no id twice, no button without a handler '+JSON.stringify([R.chk3,R.dead3]));
+ // 12. the named layouts (5.0.10)
+ await p.evaluate(()=>{try{localStorage.removeItem('pcl-dock');localStorage.removeItem('pcl-layouts');}catch(e){}});
+ await p.goto(U+'?tutorial=buck');await p.waitForTimeout(2500);
+ R.l0=await p.evaluate(()=>Dock.layouts());
+ await p.evaluate(()=>PCL.loadTutorial('pf_study'));await p.waitForTimeout(500);
+ R.l1=await p.evaluate(()=>({from:Dock.state().from,th:Dock.where('theory'),nv:Dock.where('netview'),c:Dock.where('circuit'),right:!document.querySelector('#dock-right').hidden}));
+ ok(R.l0.from.kind==='home'&&R.l0.presets.map(x=>x.title).join()==='Αρχική,Σχέδιο,Μελέτη δικτύου,Ανάλυση'&&R.l0.auto&&R.l1.from.kind==='tutorial'&&R.l1.from.name==='study'&&R.l1.th.at==='right'&&R.l1.nv.group===R.l1.c.group&&R.l1.right,'a study proposes «Μελέτη δικτύου», taken from the first page '+JSON.stringify([R.l0.from,R.l1]));
+ await p.evaluate(()=>PCL.loadTutorial('boost'));await p.waitForTimeout(500);
+ R.l2=await p.evaluate(()=>({from:Dock.state().from,th:Dock.where('theory'),reg:[...document.querySelectorAll('.dk-region')].filter(r=>!r.hidden).length}));
+ ok(R.l2.from.kind==='home'&&R.l2.th.at==='main'&&R.l2.reg===0,'a tutorial without a proposal: the first page again '+JSON.stringify(R.l2));
+ await p.click('#open-panels');await p.waitForTimeout(100);await p.click('#panels-menu [data-dk-layout="analysis"]');await p.waitForTimeout(400);
+ R.l3=await p.evaluate(()=>({from:Dock.state().from,c:Dock.where('circuit'),s:Dock.where('scope'),bottom:Dock.state().groups.filter(g=>g.at==='bottom').map(g=>g.cards.join('+')),on:document.querySelector('#panels-menu .dk-lay.on')?.dataset.dkLayout,now:document.querySelector('#panels-menu .dk-lnow')?.textContent}));
+ ok(R.l3.from.name==='analysis'&&R.l3.c.two&&R.l3.s.side&&R.l3.c.group===R.l3.s.group&&R.l3.bottom.join()==='math+cmd+scen'&&R.l3.on==='analysis'&&/«Ανάλυση»/.test(R.l3.now||''),'«Ανάλυση» from the menu «Διατάξεις» '+JSON.stringify(R.l3));
+ await p.keyboard.press('Escape');await p.evaluate(()=>PCL.loadTutorial('pf_study'));await p.waitForTimeout(500);
+ await p.click('#open-panels');await p.waitForTimeout(100);
+ R.l4=await p.evaluate(()=>({from:Dock.state().from,th:Dock.where('theory').at,prop:Dock.layouts().proposed,mark:document.querySelector('#panels-menu .dk-lay.prop')?.dataset.dkLayout,now:document.querySelector('#panels-menu .dk-lnow')?.textContent}));
+ ok(R.l4.from.name==='analysis'&&R.l4.th==='main'&&R.l4.prop?.name==='study'&&R.l4.mark==='study'&&/προτείνει «Μελέτη δικτύου»/.test(R.l4.now||''),'then a study only proposes: the layout of the user stays '+JSON.stringify(R.l4));
+ await p.fill('#panels-menu [data-dk-name]','Δική μου');await p.press('#panels-menu [data-dk-name]','Enter');await p.waitForTimeout(200);
+ R.l5=await p.evaluate(()=>({saved:Dock.layouts().saved,from:Dock.state().from,btn:!!document.querySelector('#panels-menu [data-dk-load="Δική μου"].on')}));
+ await p.keyboard.press('Escape');const shape0=await p.evaluate(()=>JSON.stringify(Dock.state().groups.map(g=>[g.at,g.cards,g.side||''])));
+ await p.reload();await p.waitForTimeout(2500);
+ R.l6=await p.evaluate(s0=>({from:Dock.state().from,same:JSON.stringify(Dock.state().groups.map(g=>[g.at,g.cards,g.side||'']))===s0,saved:Dock.layouts().saved}),shape0);
+ ok(R.l5.saved.join()==='Δική μου'&&R.l5.from.kind==='saved'&&R.l5.btn&&R.l6.from.kind==='saved'&&R.l6.from.name==='Δική μου'&&R.l6.same&&R.l6.saved.join()==='Δική μου','a layout saved under a name (Enter), the current one after a reload '+JSON.stringify([R.l5,R.l6]));
+ await p.click('#open-panels');await p.waitForTimeout(100);await p.click('#panels-menu [data-dk-layout="home"]');await p.waitForTimeout(200);await p.uncheck('#panels-menu [data-dk-auto]');await p.waitForTimeout(100);
+ await p.screenshot({path:OUT+'/dock_layouts.png'});await p.keyboard.press('Escape');
+ await p.evaluate(()=>PCL.loadTutorial('opf_study'));await p.waitForTimeout(500);
+ R.l7=await p.evaluate(()=>({from:Dock.state().from,th:Dock.where('theory').at,auto:Dock.layouts().auto,kept:JSON.parse(localStorage.getItem('pcl-layouts')).auto}));
+ ok(R.l7.from.kind==='home'&&R.l7.th==='main'&&R.l7.auto===false&&R.l7.kept===false,'«Τα tutorials προτείνουν διάταξη» off: a study keeps the first page '+JSON.stringify(R.l7));
+ await p.click('#open-panels');await p.waitForTimeout(100);await p.check('#panels-menu [data-dk-auto]');await p.click('#panels-menu [data-dk-drop="Δική μου"]');await p.waitForTimeout(150);
+ R.l8=await p.evaluate(()=>({saved:Dock.layouts().saved,auto:Dock.layouts().auto,rows:document.querySelectorAll('#panels-menu [data-dk-load]').length}));await p.keyboard.press('Escape');
+ ok(R.l8.saved.length===0&&R.l8.auto&&R.l8.rows===0,'✕ deletes a saved layout '+JSON.stringify(R.l8));
+ // 13. the second screen (5.0.10)
+ await p.evaluate(()=>{try{localStorage.removeItem('pcl-dock');}catch(e){}});await p.goto(U+'?tutorial=buck');await p.waitForTimeout(2500);
+ await p.click('#bench-card .dk-tools [data-dk-menu]');await p.waitForTimeout(100);R.w0=await p.evaluate(()=>({circuit:!!document.querySelector('#dock-menu [data-dk-do="screen"]')}));await p.keyboard.press('Escape');
+ await p.evaluate(()=>PCL.play());await p.waitForTimeout(400);
+ await p.click('#scope-card .dk-tools [data-dk-menu]');await p.waitForTimeout(100);
+ const perr=[];let popP=ctx.waitForEvent('page');await p.click('#dock-menu [data-dk-do="screen"]');let pop=await popP;
+ pop.on('pageerror',e=>perr.push(String(e)));pop.on('console',m=>{if(m.type()==='error')perr.push(m.text());});
+ await pop.waitForFunction(()=>!!document.querySelector('#scope-card.dk-screen'),null,{timeout:15000});await pop.waitForTimeout(800);
+ const ink=()=>pop.evaluate(()=>{const c=document.querySelector('#scope-canvas');if(!c.width)return 0;const g=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let n=0;for(let i=0;i<g.length;i+=16)if(g[i]<200)n++;return n;});
+ R.w1=await p.evaluate(()=>({w:Dock.where('scope'),inPage:!!document.querySelector('#scope-card'),found:!!Dock.q('#scope-card'),cv:PCL.scope.cv.ownerDocument!==document,chk:Panels.check(),place:Panels.list().find(x=>x.id==='scope').place,t:PCL.S.sim.t}));
+ R.w1.pop=await pop.evaluate(()=>({url:location.pathname+location.search,wait:document.querySelector('#screen-wait').hidden,title:document.title,grip:document.querySelector('#scope-card [data-dk-grip]').hidden,cw:document.querySelector('#scope-canvas').width}));
+ R.w1.ink=await ink();await p.waitForTimeout(500);R.w1.t2=await p.evaluate(()=>PCL.S.sim.t);
+ ok(!R.w0.circuit&&R.w1.w.at==='screen'&&!R.w1.inPage&&R.w1.found&&R.w1.cv&&!R.w1.chk.dup.length&&!R.w1.chk.missing.length&&!R.w1.chk.twice.length&&R.w1.place==='σε δεύτερη οθόνη','the scope on the second screen, found by the page, one copy; the circuit has no «▭» '+JSON.stringify([R.w0,R.w1]));
+ ok(R.w1.pop.url==='/screen.html?card=scope'&&R.w1.pop.wait&&/^Προσομοίωση και scopes/.test(R.w1.pop.title)&&R.w1.pop.grip&&R.w1.pop.cw>300&&R.w1.ink>50&&R.w1.t2>R.w1.t,'in its window: drawn, and the simulation of the page goes on '+JSON.stringify(R.w1.pop)+' ink '+R.w1.ink+' t '+[R.w1.t,R.w1.t2]);
+ // its ⚙ and its menu ▾ in that window; the space bar of that window
+ await pop.evaluate(()=>{const s=window.opener.PCL.scope,L=s.layout[0],r=s.cv.getBoundingClientRect();window.__g=[r.left+s.padL+10,r.top+L.y0+10-s.sy];});const gp=await pop.evaluate(()=>window.__g);
+ await pop.mouse.click(gp[0],gp[1]);await pop.waitForTimeout(250);
+ R.w2={cfg:await pop.evaluate(()=>{const m=document.querySelector('#pane-cfg');return !!m&&!m.hidden;})};await pop.keyboard.press('Escape');await pop.waitForTimeout(100);R.w2.cfgEsc=await pop.evaluate(()=>document.querySelector('#pane-cfg')?.hidden);
+ await pop.click('#scope-card .dk-tools [data-dk-menu]');await pop.waitForTimeout(150);
+ R.w2.menu=await pop.evaluate(()=>{const m=document.querySelector('#dock-menu');return m?{shown:!m.hidden,scr:m.querySelector('[data-dk-do="screen"]')?.disabled,max:!!m.querySelector('[data-dk-do="max"]')}:null;});await pop.keyboard.press('Escape');await pop.waitForTimeout(100);
+ await pop.evaluate(()=>document.activeElement?.blur());await pop.keyboard.press('Space');await pop.waitForTimeout(150);R.w2.paused=await p.evaluate(()=>!PCL.S.running);
+ await pop.keyboard.press('Space');await pop.waitForTimeout(150);R.w2.again=await p.evaluate(()=>PCL.S.running);
+ ok(R.w2.cfg&&R.w2.cfgEsc===true&&R.w2.menu?.shown&&R.w2.menu.scr===true&&!R.w2.menu.max&&R.w2.paused&&R.w2.again,'its ⚙ and its menu ▾ in its window, Esc, and the space bar there '+JSON.stringify(R.w2));
+ // Ctrl+Z in that window undoes a change of the circuit of the page
+ const n0=await p.evaluate(()=>PCL.editor.doc.components.length);
+ await p.evaluate(()=>{const c=PCL.editor.doc.components.find(k=>k.type==='R');PCL.editor.sel.c=new Set([c.id]);PCL.editor.sel.w=new Set();PCL.editor.deleteSel();});await p.waitForTimeout(200);
+ const n1=await p.evaluate(()=>PCL.editor.doc.components.length);await pop.evaluate(()=>document.activeElement?.blur());await pop.keyboard.press('Control+z');await pop.waitForTimeout(300);
+ R.w2.undo=[n0,n1,await p.evaluate(()=>PCL.editor.doc.components.length)];
+ ok(R.w2.undo[1]<n0&&R.w2.undo[2]===n0,'Ctrl+Z in the window of the second screen undoes in the page '+JSON.stringify(R.w2.undo));
+ await p.evaluate(()=>{if(!PCL.S.running)PCL.play();});
+ // the page hidden (minimised, or covered by the window): the frames of the simulation from that window
+ await pop.evaluate(()=>{const r=window.requestAnimationFrame.bind(window);window.__n=0;window.requestAnimationFrame=f=>{window.__n++;return r(f);};});
+ await p.evaluate(()=>Object.defineProperty(document,'hidden',{configurable:true,get:()=>true}));const fr0=await p.evaluate(()=>PCL.S.frame);await p.waitForTimeout(700);
+ R.w3={frames:await p.evaluate(f=>PCL.S.frame-f,fr0),fromWin:await pop.evaluate(()=>window.__n)};await p.evaluate(()=>{delete document.hidden;});
+ ok(R.w3.frames>5&&R.w3.fromWin>5,'the page hidden: the frames from the window of the second screen '+JSON.stringify(R.w3));
+ await pop.screenshot({path:OUT+'/dock_screen.png'});
+ // a reload of the page: the window that is still open takes the card of the new page
+ await p.reload();await p.waitForTimeout(3000);
+ R.w4={w:await p.evaluate(()=>Dock.where('scope')),inPage:await p.evaluate(()=>!!document.querySelector('#scope-card')),pop:await pop.evaluate(()=>({n:document.querySelectorAll('#scope-card').length,on:!!document.querySelector('#scope-card.dk-screen')}))};
+ ok(R.w4.w.at==='screen'&&!R.w4.inPage&&R.w4.pop.n===1&&R.w4.pop.on,'a reload of the page: the window takes the card of the new page '+JSON.stringify(R.w4));
+ // the window closed by the user: the card back in its place
+ await pop.close();await p.waitForTimeout(3500);
+ R.w5=await p.evaluate(()=>({w:Dock.where('scope'),inPage:!!document.querySelector('#scope-card'),cls:document.querySelector('#scope-card')?.classList.contains('dk-screen'),order:[...document.querySelectorAll('main > .card:not([hidden])')].map(e=>e.dataset.dkCard).slice(0,2)}));
+ ok(R.w5.w.at==='main'&&R.w5.inPage&&R.w5.cls===false&&R.w5.order.join()==='circuit,scope','the window closed: the card back in its place '+JSON.stringify(R.w5));
+ // again, and «Αρχική» of the menu «Διατάξεις»: the card back, the window closed
+ await p.click('#scope-card .dk-tools [data-dk-menu]');await p.waitForTimeout(100);popP=ctx.waitForEvent('page');await p.click('#dock-menu [data-dk-do="screen"]');pop=await popP;
+ await pop.waitForFunction(()=>!!document.querySelector('#scope-card.dk-screen'),null,{timeout:15000});
+ await p.click('#open-panels');await p.waitForTimeout(100);await p.click('#panels-menu [data-dk-layout="home"]');await p.waitForTimeout(800);await p.keyboard.press('Escape');
+ R.w6={closed:pop.isClosed(),w:await p.evaluate(()=>Dock.where('scope')),inPage:await p.evaluate(()=>!!document.querySelector('#scope-card'))};
+ ok(R.w6.closed&&R.w6.w.at==='main'&&R.w6.inPage,'«Αρχική»: the card back, its window closed '+JSON.stringify(R.w6));
+ ok(!perr.length,'the window of the second screen: no JavaScript errors '+perr.slice(0,4).join(' | '));
  ok(!errs.length,'χωρίς σφάλματα JavaScript '+errs.slice(0,4).join(' | '));
  console.log(JSON.stringify(R,null,0).slice(0,3500));
  if(fail.length){console.log('FAIL');for(const f of fail)console.log(f);process.exitCode=1;}else console.log('PASS');

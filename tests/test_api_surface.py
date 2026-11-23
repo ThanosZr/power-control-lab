@@ -298,7 +298,16 @@ class ApiSurface(unittest.TestCase):
             self.assertTrue(api_surface.experimental('pcl', 'pcl.equivalent.' + k))
         self.assertEqual(self.now['pcl']['pcl.equivalent.emt_ports']['params'][7:], ['fmin', 'fmax', 'n', 'line', 'pure', 'passive'])
         self.assertEqual(self.now['project']['part:EQV3']['params'][-3:], ['F', 'FD', 'conn'])
-        self.assertEqual(sum(len(v) for v in self.now.values()), 981)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 981)
+
+    def test_the_surface_of_5_0_10(self):
+        """5.0.10: the badge of the GPU* beside «Engine» (decision 386): pcl.backend.status and the route /api/accel_info, both
+        experimental like the GPU path. The layouts and the second screen (§94 δ–ε) are of the page only: no other point."""
+        self.assertEqual(self.now['pcl']['pcl.backend.status']['params'], [])
+        self.assertTrue(api_surface.experimental('pcl', 'pcl.backend.status'))
+        self.assertIn('/api/accel_info', self.now['server'])
+        self.assertTrue(api_surface.experimental('server', '/api/accel_info'))
+        self.assertEqual(sum(len(v) for v in self.now.values()), 983)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

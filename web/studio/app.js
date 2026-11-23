@@ -1,6 +1,11 @@
 'use strict';
 (function(){
-const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+// 5.0.10 (ROADMAP §94 step ε): a card on the second screen is in the document of its own window; its elements are found
+// there too (dock.js, Dock.q), after the page
+const $=s=>document.querySelector(s)||window.Dock?.q?.(s)||null,$$=s=>{const a=[...document.querySelectorAll(s)],b=window.Dock?.qa?.(s);return b&&b.length?a.concat(b):a;};
+// 5.0.10: the frames of the simulation from a window of the second screen while the page itself is hidden (minimised, or
+// covered by that window): the browser gives no frames to a hidden page, and the scopes there would stop
+const frame=f=>{const w=document.hidden?window.Dock?.screenWin?.():null;return w?w.requestAnimationFrame(()=>f(performance.now())):requestAnimationFrame(f);};
 const P=window.Parts,SubC=window.SubCircuit,eng=(v,u,d=4)=>P.eng(v,u,d);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const FMT8={maximumFractionDigits:8},fmt=(v,d=4)=>Number.isFinite(v)?Parts.fmtNum(Number(v.toPrecision(d)),FMT8):'—';
@@ -37,7 +42,7 @@ function buildSim(fresh){
  refreshControls();renderChannels();updateClock();renderProps();syncStepMode();scheduleStepCheck();
 }
 function lineCtx(){return {editor,api,changed:()=>{},study:()=>SFOLD.path||null};}
-function play(keep){if(!keep)S.stepTo=0;if(!S.sim||S.error)return;if(REC.set.auto&&!REC.on&&S.sim.t===0&&scope.channels().length)recToggle();if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;requestAnimationFrame(loop);}
+function play(keep){if(!keep)S.stepTo=0;if(!S.sim||S.error)return;if(REC.set.auto&&!REC.on&&S.sim.t===0&&scope.channels().length)recToggle();if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){notice('Έφτασε στο τέλος του εύρους. Πάτα ⟲ ή αύξησε τη διάρκεια.','info');return;}S.running=true;S.last=performance.now();$('#play').classList.add('running');$('#play').innerHTML='❚❚ Παύση';scope.running=true;frame(loop);}
 function pause(){if(window.Live?.active)Live.stop();S.stepTo=0;S.running=false;if(REC.on)recFlush();scope.running=false;$('#play')?.classList.remove('running');if($('#play'))$('#play').innerHTML='▶ Προσομοίωση';draw(true);}
 function reset(){pause();buildSim(true);scope.cfg.frozen=null;draw(true);}
 // 4.9.1 (4.8.2 a): one step of an external controller on the circuit of the screen (pcl.link 'advance', the Control Workbench
@@ -180,11 +185,11 @@ function loop(now){
   // an error of Python code at the start (4.8: the blocks run in the worker): shown as an error of the circuit
   if(Live.error&&Live.errorStart&&Live.errorPy){const msg=Live.error;Live.error=null;Live.stop();S.error=msg;pause();notice('Η προσομοίωση σταμάτησε: '+esc(msg),'error');return;}
   // the worker could not start (e.g. another set of channels): the solver goes on in the page
-  if(Live.error&&Live.errorStart){Live.error=null;Live.stop();S.noLive=S.sim;requestAnimationFrame(loop);return;}
+  if(Live.error&&Live.errorStart){Live.error=null;Live.stop();S.noLive=S.sim;frame(loop);return;}
   if(Live.error){const msg=Live.error;Live.error=null;S.error=msg;pause();notice('Σφάλμα λύτη: '+esc(msg),'error');return;}
   S.limited=!!Live.limited;S.frame++;draw(false,editor.busy()||!!scope.drag);
   if(Live.ended){const st=S.stepTo;pause();if(!st)notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
-  requestAnimationFrame(loop);return;}
+  frame(loop);return;}
  if(S.sim.pyLazy?.()){const st=S.stepTo;pause();pyPage().then(ok=>{if(ok){S.stepTo=st;play(!!st);}});return;}
  const dt=Math.min(.1,(now-S.last)/1000);S.last=now;
  let want=S.speed==='max'?1e9:dt*S.speed*S.sim.T;const end=S.stepTo||S.stopT;if(end>0)want=Math.min(want,end-S.sim.t);
@@ -199,7 +204,7 @@ function loop(now){
  S.frame++;const t1=performance.now();draw(false,busy);S.drawMs=.8*(S.drawMs||0)+.2*(performance.now()-t1);
  if(S.stepTo>0&&S.sim.t>=S.stepTo-1e-12){pause();return;}
  if(S.stopT>0&&S.sim.t>=S.stopT-1e-12){pause();notice('Τέλος εύρους προσομοίωσης ('+eng(S.stopT,'s')+'). ▶ συνεχίζει αν αυξήσεις τη διάρκεια.','info');return;}
- requestAnimationFrame(loop);
+ frame(loop);
 }
 function draw(all,busy){scope.draw();navRange();if(all||S.frame%(busy?12:4)===0){S.iScaleNext=0;editor.updateLive();S.iScale=Math.max(S.iScaleNext||0,1e-9);updateClock();window.Watch?.update(all);if(REC.on&&performance.now()-REC.tLast>1000){REC.tLast=performance.now();recFlush();}}if(all||S.frame%(busy?24:8)===0){renderMeasure(all);updateHover();renderMetricsPanel();updateLivePanel();if(S.sim&&S.sim.dgVer!==S.diagSeen)renderDiag();}if(all){if(!S.running&&!S.switching){renderFFT();renderEvents();renderPoincare();if($('#eis-block')?.open&&!EIS.run)renderEISForm();}if(S.batch)renderBatch();if(S.csvRef)renderCsv();if(S.theory&&!S.running&&!S.switching)renderTheoryLive();}}  // no theory refresh while the editor still holds the previous circuit
 // text of an element only when it changes (in the loop of the simulation an unchanged text still costs a layout)
@@ -434,6 +439,8 @@ function openPaneCfg(i,x,y){if(!scope.cfg.panes[i])return;let m=$('#pane-cfg');
   m.addEventListener('change',e=>paneCfgApply(+m.dataset.pane,e.target));m.addEventListener('click',e=>{const b=e.target.closest('button');if(b)paneCfgApply(+m.dataset.pane,b);});
   document.addEventListener('pointerdown',e=>{if(!m.hidden&&!m.contains(e.target)&&!e.target.closest?.('[data-pcfg]'))m.hidden=true;},true);
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!m.hidden)m.hidden=true;});}
+ // 5.0.10: in the window of the scope (the page, or the window of the second screen)
+ const host=scope.cv.ownerDocument;if(m.ownerDocument!==host)host.body.appendChild(m);
  m.dataset.pane=i;m.innerHTML=paneCfgHTML(i);placePopup(m,x-260,y);}
 let measureRaf=0,MEAS=null;function requestMeasure(){if(measureRaf)return;measureRaf=requestAnimationFrame(()=>{measureRaf=0;renderMeasure(true);});}
 function renderMeasure(force){if(measureRaf){cancelAnimationFrame(measureRaf);measureRaf=0;}
@@ -873,7 +880,7 @@ function liveParam(id,k,v,commit){const c=editor.comp(id),d=c&&partDef(c)?.param
 
 // ------------------------------------------------------------------ inspector
 function closeInspector(){$('#inspector').hidden=true;$('#inspector').innerHTML='';}
-function placePopup(el,x,y){el.hidden=false;const r=el.getBoundingClientRect();const W=innerWidth,H=innerHeight;el.style.left=Math.max(8,Math.min(x+12,W-r.width-8))+'px';el.style.top=Math.max(8,Math.min(y+12,H-r.height-8))+'px';}
+function placePopup(el,x,y){el.hidden=false;const r=el.getBoundingClientRect(),hw=el.ownerDocument.defaultView||window;const W=hw.innerWidth,H=hw.innerHeight;el.style.left=Math.max(8,Math.min(x+12,W-r.width-8))+'px';el.style.top=Math.max(8,Math.min(y+12,H-r.height-8))+'px';}
 // a value typed in a parameter field. 3.18: a block on a bus takes one value per element, separated by ';' ("1; -1"),
 // and a constant can be a vector of values or programs ("0:0, 0.01:10; 0")
 function fieldValue(c,k,el){if(el.type==='checkbox')return {v:el.checked};const raw=String(el.value),sch=k==='dsched'||k==='sched'||k==='ref'||(k==='v'&&c.type==='CONST');
@@ -1725,6 +1732,9 @@ function bindRestore(box){box.querySelector('[data-th-restore]')?.addEventListen
 function loadTutorial(id,options={},keepView=false){
  const t=Tutorials.get(id);if(!t)return;const opts={};for(const o of t.options)opts[o.k]=options[o.k]??o.def;S.tut={id,options:opts};
  const pr=t.build(opts);if(pr.subcircuits)SubC.sync(pr);S.tutMeta=pr.meta||null;S.tutRef=circuitSig(pr);S.switching=true;try{applyProject(pr,keepView);}finally{S.switching=false;}renderTutorial();runTheory();runMath();
+ // 5.0.10 (ROADMAP §94 step δ): a new tutorial proposes its layout (a study: «Μελέτη δικτύου», the others none); the page
+ // takes it only while the layout is not the user's own (dock.js, Dock.propose); a change of an option keeps the layout
+ if(!keepView)window.Dock?.propose(S.tutMeta?.layout||(S.tutMeta?.study?'study':null),t.title);
 }
 // an older file (no version or < 3) opens the same: wire names that would now join different nets get ·2, ·3 (3.18)
 function migrateFile(pr){if(!window.Bus||Bus.namesJoin(pr))return pr;const m=Bus.migrateNames(pr);
@@ -3671,9 +3681,17 @@ function boot(){
  else if(want&&Tutorials.get(want))loadTutorial(want);
  else if(st&&Array.isArray(st.components)){S.tut=st.tutorial||{id:'empty',options:{}};S.tutRef=st.tutRef||tutorialRef(S.tut);const t=Tutorials.get(S.tut.id);if(t&&S.tut.id!=='empty'){const pr=t.build({...Object.fromEntries(t.options.map(o=>[o.k,o.def])),...S.tut.options});S.tutMeta=pr.meta||null;}applyProject(st);renderTutorial();runTheory();runMath();}
  else loadTutorial('buck');
- fetch('/api/health').then(r=>r.json()).then(h=>{$('#engine').textContent='Engine '+h.version;$('#engine').classList.add('ok');}).catch(()=>{$('#engine').textContent='Χωρίς server: μόνο προσομοίωση';});
+ fetch('/api/health').then(r=>r.json()).then(h=>{$('#engine').textContent='Engine '+h.version;$('#engine').classList.add('ok');gpuBadge();}).catch(()=>{$('#engine').textContent='Χωρίς server: μόνο προσομοίωση';});
  setInterval(()=>{if(S.theory&&(S.running||S.frame))renderTheoryLive();},1000);
 }
+// 5.0.10 (decision 386): the GPU* of this machine beside «Engine» (pcl.backend.status through /api/accel_info): the card that the
+// engine found, or why there is none, where the tool uses it, and whether «Αυτόματα» may choose it; the details in its title
+function gpuBadge(){api('accel_info',{}).then(g=>{const b=$('#gpu');if(!b||!g)return;
+ const use='Η GPU* χρησιμοποιείται στην παρτίδα του N−1 σε AC (tutorial «Ροή φορτίου και N−1», επιλογή «GPU*») και από κώδικα με backend=\'gpu\' (GUIDE §12).';
+ const auto=!g.gpu?'':g.measured?(g.work?`«Αυτόματα»: η GPU* από ${(+g.work).toPrecision(3)} αγνώστους × σενάρια (η μέτρηση αυτού του μηχανήματος).`:'«Αυτόματα»: η CPU, γιατί στη μέτρηση αυτού του μηχανήματος η GPU* δεν ήταν ταχύτερη.'):'«Αυτόματα»: η CPU, ώσπου να μετρηθεί η κάρτα με python -m pcl accel --save.';
+ const cuda=Number.isFinite(g.cuda)?` · CUDA ${Math.floor(g.cuda/1000)}.${Math.floor(g.cuda%1000/10)}`:'',mem=g.memory>0?` · ${fmt(g.memory/2**30,2)} GB`:'';
+ b.hidden=false;b.classList.toggle('ok',!!g.gpu);b.textContent=g.gpu?'GPU*: '+g.device:'GPU*: όχι';
+ b.title=g.gpu?`Κάρτα: ${g.device}${cuda}${mem} · CuPy ${g.cupy}. ${use} ${auto} * Πειραματικό: ο δρόμος της GPU δεν ελέγχεται στον CI.`:`Η GPU* δεν χρησιμοποιείται εδώ: ${g.reason}. ${use} Τι βρίσκει το μηχάνημα: python -m pcl accel.`;}).catch(()=>{});}
 function renderTheoryLive(){if(!atTop()||document.querySelector('#theory details[open]'))return;renderTheory();}
 // 5.0.2 (ROADMAP §94 step α): the register of the panels (panels.js) and the menu «Παράθυρα»: the cards of the page, the
 // panels of the work area and every window, each with the one element it has in the page; a window that needs a part
@@ -3716,9 +3734,11 @@ function initPanels(){const R=window.Panels;if(!R)return;
  // 5.0.5 (ROADMAP §94 step β): the cards dock, float, go as tabs and fill the screen (dock.js); their buttons go into the
  // row each card already has at its top
  window.Dock?.init([['circuit','#bench-card','.toolbar'],['scope','#scope-card','.sim-bar'],['scen','#scen-card','#scen > summary'],['cmd','#cmd-card','#cmd > summary'],['addons','#addons-card','#addons-block > summary'],
-  ['math','#math-card','.math-top'],['theory','#tut-card','.tut-head']].map(([id,sel,head])=>({id,sel,head,title:cards.find(c=>c[0]===id)[1],closable:id!=='circuit'}))
+  ['math','#math-card','.math-top'],['theory','#tut-card','.tut-head']].map(([id,sel,head])=>({id,sel,head,title:cards.find(c=>c[0]===id)[1],closable:id!=='circuit',screen:id!=='circuit'}))
   // 5.0.6 (§94 step γ): the diagram of the network, a document of the central area (its place in the page: under the circuit)
-  .concat([{id:'netview',sel:'#netview',head:'.nv-head',title:'Διάγραμμα του δικτύου',closable:true}]));
+  .concat([{id:'netview',sel:'#netview',head:'.nv-head',title:'Διάγραμμα του δικτύου',closable:true}]),
+  // 5.0.10: the notices of the second screen (a window that the browser did not open) on the bar of the page
+  {notice:(msg,kind)=>{notice(esc(msg),kind||'info');setTimeout(()=>notice(''),8000);}});
  window.Dock?.onChange(()=>{if(!$('#scope-card').hidden)requestAnimationFrame(()=>scope.resize());});
  $('#open-panels')?.addEventListener('click',e=>R.openMenu(e.currentTarget));}
 window.addEventListener('DOMContentLoaded',boot);

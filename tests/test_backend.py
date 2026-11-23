@@ -214,6 +214,31 @@ class Choice(unittest.TestCase):
             self.assertTrue(np.array_equal(r['V'], ref['V']))
 
 
+class Badge(unittest.TestCase):
+    """5.0.10 (decision 386): the badge of the page beside «Engine» (pcl.backend.status, /api/accel_info): the card or the
+    reason there is none, and whether «auto» may choose it (a measurement of this machine and its threshold)."""
+    def test_the_badge_without_a_card(self):
+        with pcl_home():
+            info = BK.probe(fresh=True)
+            if info['reason'] is None:
+                self.skipTest('this machine has a GPU')
+            s = BK.status()
+            self.assertEqual((s['gpu'], s['measured'], s['work'], s['device']), (False, False, None, None))
+            self.assertEqual(s['reason'], info['reason'])
+            import run
+            self.assertEqual(run.ACTIONS['accel_info']({}), s)                              # the route of the page gives the same
+
+    def test_the_badge_with_a_stand_in_card(self):
+        with pcl_home() as home, fake_cupy():
+            s = BK.status()
+            self.assertEqual((s['gpu'], s['device'], s['cuda'], s['capability'], s['cupy'], s['measured']), (True, 'Stand-in GPU', 12080, '12.0', 'stand-in', False))
+            self.assertIsNone(s['reason'])
+            with open(os.path.join(home, BK.FILE), 'w', encoding='utf-8') as f:
+                json.dump({'format': 'pcl-accel', 'work': 1e5, 'rows': []}, f)
+            self.assertEqual((BK.status()['measured'], BK.status()['work']), (True, 1e5))
+            json.dumps(BK.status(), allow_nan=False)                                       # what the server sends
+
+
 class Script(unittest.TestCase):
     def test_accel_on_this_machine(self):
         with pcl_home() as home:

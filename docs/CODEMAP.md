@@ -9,12 +9,12 @@
 |---|---:|
 | `web/studio/addon_client.js` | 30 |
 | `web/studio/addons.js` | 116 |
-| `web/studio/app.js` | 3727 |
+| `web/studio/app.js` | 3747 |
 | `web/studio/bus.js` | 197 |
 | `web/studio/console.js` | 151 |
 | `web/studio/console_worker.js` | 56 |
 | `web/studio/ctlwin.js` | 78 |
-| `web/studio/dock.js` | 265 |
+| `web/studio/dock.js` | 430 |
 | `web/studio/editor.js` | 743 |
 | `web/studio/expr.js` | 73 |
 | `web/studio/inputs.js` | 62 |
@@ -30,9 +30,9 @@
 | `web/studio/metrics.js` | 89 |
 | `web/studio/mna.js` | 2731 |
 | `web/studio/netlib.js` | 1650 |
-| `web/studio/netview.js` | 278 |
+| `web/studio/netview.js` | 279 |
 | `web/studio/nn.js` | 57 |
-| `web/studio/panels.js` | 69 |
+| `web/studio/panels.js` | 78 |
 | `web/studio/parts.js` | 1790 |
 | `web/studio/plotcore.js` | 150 |
 | `web/studio/pool.js` | 29 |
@@ -40,7 +40,8 @@
 | `web/studio/recview.js` | 84 |
 | `web/studio/scenario.js` | 191 |
 | `web/studio/scenario_worker.js` | 122 |
-| `web/studio/scope.js` | 378 |
+| `web/studio/scope.js` | 380 |
+| `web/studio/screen.js` | 23 |
 | `web/studio/sim_worker.js` | 17 |
 | `web/studio/sparse.js` | 165 |
 | `web/studio/split.js` | 305 |
@@ -58,7 +59,7 @@
 | `web/studio/watch.js` | 338 |
 | `web/studio/winframe.js` | 103 |
 | `pcl/runner.js` | 27 |
-| `run.py` | 380 |
+| `run.py` | 385 |
 | `engine/__init__.py` | 1 |
 | `engine/addons.py` | 322 |
 | `engine/analysis.py` | 307 |
@@ -84,7 +85,7 @@
 | `pcl/__init__.py` | 14 |
 | `pcl/__main__.py` | 413 |
 | `pcl/accel.py` | 202 |
-| `pcl/backend.py` | 270 |
+| `pcl/backend.py` | 280 |
 | `pcl/console.py` | 700 |
 | `pcl/control.py` | 953 |
 | `pcl/core.py` | 1455 |
@@ -126,11 +127,11 @@
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_api_surface.py` | 425 |
+| `tests/test_api_surface.py` | 434 |
 | `tests/test_appwin.py` | 122 |
 | `tests/test_arc.py` | 189 |
 | `tests/test_b4.py` | 300 |
-| `tests/test_backend.py` | 238 |
+| `tests/test_backend.py` | 263 |
 | `tests/test_batch.py` | 255 |
 | `tests/test_bidir_engine.py` | 103 |
 | `tests/test_bidir_sim.py` | 70 |
@@ -146,7 +147,7 @@
 | `tests/test_dcgrid.py` | 735 |
 | `tests/test_derivation.py` | 93 |
 | `tests/test_designer.py` | 200 |
-| `tests/test_dock.py` | 114 |
+| `tests/test_dock.py` | 198 |
 | `tests/test_emt_harmonic.py` | 139 |
 | `tests/test_emt_se.py` | 141 |
 | `tests/test_engine.py` | 276 |
@@ -236,7 +237,7 @@
 | `tests/js/cp_cases.js` | 58 |
 | `tests/js/ctl_cases.js` | 33 |
 | `tests/js/dcdc_cases.js` | 13 |
-| `tests/js/dock_cases.js` | 57 |
+| `tests/js/dock_cases.js` | 83 |
 | `tests/js/ev_cases.js` | 37 |
 | `tests/js/ev_weights_cases.js` | 15 |
 | `tests/js/folder_cases.js` | 92 |
@@ -270,6 +271,7 @@
 | `tests/js/rms_emt_cases.js` | 11 |
 | `tests/js/robust_cases.js` | 17 |
 | `tests/js/sat_cases.js` | 149 |
+| `tests/js/screen_cases.js` | 37 |
 | `tests/js/sim_cases.js` | 356 |
 | `tests/js/snapshot_cases.js` | 22 |
 | `tests/js/sparse_cases.js` | 57 |
@@ -294,7 +296,7 @@
 | `tests/ui/addons_flow.js` | 128 |
 | `tests/ui/blocks_flow.js` | 155 |
 | `tests/ui/bus_flow.js` | 91 |
-| `tests/ui/dock_flow.js` | 243 |
+| `tests/ui/dock_flow.js` | 338 |
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/ev_flow.js` | 112 |
 | `tests/ui/facts_flow.js` | 93 |
@@ -538,7 +540,7 @@
 
 ## API του server (`run.py`, `/api/<action>`)
 
-`analyze`, `batch_sim`, `bidir`, `boundary`, `capacitance`, `curves`, `derivation`, `design`, `envelope`, `inverse`, `line_export`, `line_load`, `line_model`, `line_scan`, `line_sens`, `linearize`, `model_proof`, `network_area`, `network_open`, `network_report`, `network_save`, `network_study`, `network_view`, `problem`, `scenario_run`, `scenario_sweep`, `solve`, `studio_math`, `sweep`, `switching`, `template_solve`, `validate_circuit`
+`accel_info`, `analyze`, `batch_sim`, `bidir`, `boundary`, `capacitance`, `curves`, `derivation`, `design`, `envelope`, `inverse`, `line_export`, `line_load`, `line_model`, `line_scan`, `line_sens`, `linearize`, `model_proof`, `network_area`, `network_open`, `network_report`, `network_save`, `network_study`, `network_view`, `problem`, `scenario_run`, `scenario_sweep`, `solve`, `studio_math`, `sweep`, `switching`, `template_solve`, `validate_circuit`
 
 ## Templates δεδομένων (`web/studio/exercises/`)
 
@@ -571,491 +573,493 @@
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 3 | const fn | `$` |
-| 5 | const fn | `esc` |
-| 13 | function | `loadSettings` |
-| 14 | function | `saveSettings` |
-| 17 | function | `notice` |
-| 18 | function | `warnings` |
-| 21 | function | `project` |
-| 22 | function | `buildSim` |
-| 39 | function | `lineCtx` |
-| 40 | function | `play` |
-| 41 | function | `pause` |
-| 42 | function | `reset` |
-| 46 | function | `linkAdvance` |
-| 54 | function | `linkReset` |
-| 55 | function | `stepT` |
-| 62 | function | `applyRec` |
-| 68 | function | `memAuto` |
-| 69 | function | `memChoice` |
-| 70 | function | `memSetting` |
-| 71 | const fn | `fmtDur` |
-| 72 | function | `memEstimate` |
-| 77 | function | `recArchive` |
-| 80 | function | `recSettings` |
-| 82 | function | `renderRecPanel` |
-| 96 | function | `renderRec` |
-| 98 | function | `recToggle` |
-| 109 | function | `recCollect` |
-| 114 | function | `recFlush` |
-| 126 | function | `studySettings` |
-| 128 | function | `studyEstimate` |
-| 130 | function | `renderStudy` |
-| 132 | const fn | `o` |
-| 141 | const fn | `g` |
-| 147 | function | `renderStudyBtn` |
-| 148 | function | `studyView` |
-| 149 | function | `studyRun` |
-| 167 | function | `pyPage` |
-| 171 | function | `runToEnd` |
-| 174 | const fn | `chunk` |
-| 176 | function | `loop` |
-| 204 | function | `draw` |
-| 206 | function | `setText` |
-| 207 | function | `navRange` |
-| 208 | function | `updateClock` |
-| 212 | function | `liveOf` |
-| 258 | function | `blkUnit` |
-| 277 | function | `outsOf` |
-| 279 | const fn | `vecN` |
-| 281 | function | `chanLabel` |
-| 291 | function | `chanSrc` |
-| 292 | function | `addProbe` |
-| 293 | function | `flash` |
-| 345 | function | `signalsFor` |
-| 362 | const fn | `fold` |
-| 364 | function | `fillSignals` |
-| 371 | function | `renderChannels` |
-| 395 | function | `renderSel` |
-| 400 | function | `selCSV` |
-| 404 | function | `paneMode` |
-| 405 | function | `paneCfgHTML` |
-| 406 | const fn | `r` |
-| 418 | function | `paneCfgApply` |
-| 420 | const fn | `keep` |
-| 432 | function | `openPaneCfg` |
-| 438 | function | `requestMeasure` |
-| 439 | function | `renderMeasure` |
-| 451 | function | `MeasureUnit` |
-| 454 | function | `simKey` |
-| 455 | function | `perSeries` |
-| 456 | function | `refFor` |
-| 457 | const fn | `sched` |
-| 461 | function | `metricsFor` |
-| 465 | function | `metricsRows` |
-| 470 | function | `eventMetricsHTML` |
-| 472 | function | `renderMetricsPanel` |
-| 483 | function | `rawSeries` |
-| 486 | function | `autoF1` |
-| 490 | function | `evRows` |
-| 492 | function | `renderEvents` |
-| 494 | const fn | `fv` |
-| 500 | function | `evMaxSetting` |
-| 501 | function | `eventsJson` |
-| 502 | function | `eventsCsv` |
-| 504 | function | `renderFFT` |
-| 527 | function | `cellZ` |
-| 529 | function | `renderEISForm` |
-| 530 | const fn | `opt` |
-| 534 | function | `runEIS` |
-| 542 | function | `drawEIS` |
-| 561 | function | `perSamples` |
-| 563 | function | `periodText` |
-| 564 | const fn | `svgPlot` |
-| 566 | function | `pcmMapFn` |
-| 568 | const fn | `z` |
-| 571 | function | `renderPoincare` |
-| 587 | function | `bfParams` |
-| 589 | function | `renderBifurcationForm` |
-| 595 | function | `runBifurcation` |
-| 609 | function | `stopBifurcation` |
-| 610 | function | `drawBifurcation` |
-| 620 | function | `niceTop` |
-| 623 | function | `btStatus` |
-| 624 | function | `parseStep` |
-| 625 | function | `runBatch` |
-| 641 | function | `clearBatch` |
-| 643 | function | `meanPL` |
-| 645 | function | `ringTrace` |
-| 647 | function | `compareHTML` |
-| 657 | function | `renderBatch` |
-| 662 | function | `parseCSV` |
-| 664 | const fn | `cells` |
-| 665 | const fn | `num` |
-| 671 | const fn | `normName` |
-| 672 | function | `renderCsvMap` |
-| 673 | const fn | `auto` |
-| 679 | function | `applyCsv` |
-| 684 | function | `renderCsv` |
-| 686 | function | `clearCsv` |
-| 688 | function | `sampleCompareHTML` |
-| 704 | function | `pwmGainsText` |
-| 711 | function | `toggleInput` |
-| 714 | function | `setInputMeta` |
-| 718 | function | `inputsHTML` |
-| 719 | const fn | `val` |
-| 728 | function | `liveChange` |
-| 730 | function | `renderLiveLog` |
-| 739 | function | `changesToSchedule` |
-| 741 | const fn | `f` |
-| 750 | function | `updateLivePanel` |
-| 755 | function | `setLivePanel` |
-| 758 | function | `switchesOf` |
-| 761 | function | `addPulses` |
-| 763 | function | `pulseKeys` |
-| 764 | function | `refreshControls` |
-| 767 | const fn | `phase` |
-| 801 | const fn | `setD` |
-| 817 | const fn | `setPh` |
-| 829 | const fn | `pinNow` |
-| 840 | const fn | `pinSet` |
-| 852 | function | `pinMap` |
-| 853 | function | `pinX` |
-| 854 | function | `pinV` |
-| 860 | function | `liveParam` |
-| 875 | function | `closeInspector` |
-| 876 | function | `placePopup` |
-| 879 | function | `fieldValue` |
-| 884 | function | `fieldHTML` |
-| 899 | function | `placeAt` |
-| 900 | function | `popupDrag` |
-| 909 | function | `nnBlock` |
-| 910 | function | `nnBox` |
-| 913 | function | `nnLearned` |
-| 914 | function | `openInspector` |
-| 922 | const fn | `wired` |
-| 932 | const fn | `same` |
-| 933 | const fn | `apply` |
-| 948 | function | `ctlCtx` |
-| 956 | function | `splitProposal` |
-| 958 | function | `openSplitWin` |
-| 961 | const fn | `single` |
-| 964 | function | `openCtlWin` |
-| 968 | const fn | `wireWidth` |
-| 969 | function | `openWireInspector` |
-| 986 | const fn | `numOf` |
-| 992 | function | `psec` |
-| 994 | function | `propsOpen` |
-| 995 | function | `setProps` |
-| 997 | function | `focusComp` |
-| 998 | function | `togglePin` |
-| 1001 | function | `renderProps` |
-| 1010 | function | `propsComp` |
-| 1011 | const fn | `secOf` |
-| 1013 | const fn | `exprV` |
-| 1014 | const fn | `inpB` |
-| 1015 | const fn | `row` |
-| 1021 | const fn | `wired` |
-| 1035 | function | `propsJunc` |
-| 1037 | function | `propsWire` |
-| 1043 | function | `propsMulti` |
-| 1046 | function | `propsCircuit` |
-| 1057 | const fn | `opt` |
-| 1067 | const fn | `sv` |
-| 1103 | const fn | `chk` |
-| 1114 | function | `bindProps` |
-| 1151 | function | `diagItems` |
-| 1160 | function | `renderDiag` |
-| 1171 | function | `openDiag` |
-| 1172 | function | `flashComp` |
-| 1180 | function | `stepAdvice` |
-| 1192 | function | `stepAdviceShow` |
-| 1193 | function | `scheduleStepCheck` |
-| 1194 | function | `runStepCheck` |
-| 1195 | const fn | `inPage` |
-| 1202 | function | `syncStepMode` |
-| 1264 | function | `scenSetCode` |
-| 1265 | function | `scenState` |
-| 1266 | function | `scenTab` |
-| 1267 | function | `scenOut` |
-| 1268 | function | `scenWorker` |
-| 1270 | function | `scenRun` |
-| 1278 | function | `scenStop` |
-| 1279 | function | `scenDone` |
-| 1281 | function | `scenMsg` |
-| 1296 | function | `scenBatch` |
-| 1301 | function | `scenEval` |
-| 1304 | function | `addonDock` |
-| 1311 | function | `renderAddons` |
-| 1312 | const fn | `vsel` |
-| 1326 | function | `knockToast` |
-| 1329 | function | `initAddons` |
-| 1336 | function | `scenBatchWrite` |
-| 1339 | function | `renderScenFiles` |
-| 1342 | const fn | `scenNum` |
-| 1343 | function | `scenTable` |
-| 1344 | function | `scenShow` |
-| 1357 | function | `scenTicks` |
-| 1358 | function | `scenPlot` |
-| 1362 | const fn | `thin` |
-| 1369 | const fn | `dig` |
-| 1383 | function | `cmdShow` |
-| 1393 | function | `cmdScope` |
-| 1395 | function | `initConsole` |
-| 1397 | function | `initScenarios` |
-| 1404 | function | `liveApply` |
-| 1407 | function | `closeMenu` |
-| 1408 | function | `openMenu` |
-| 1438 | const fn | `PS_WORD` |
-| 1440 | const fn | `psSym` |
-| 1441 | function | `pinScopeOf` |
-| 1444 | const fn | `word` |
-| 1457 | const fn | `side` |
-| 1459 | const fn | `inScope` |
-| 1461 | function | `liveVal` |
-| 1463 | function | `scopeToggle` |
-| 1465 | function | `openScopeSub` |
-| 1477 | function | `pinScopeHtml` |
-| 1478 | const fn | `chip` |
-| 1479 | const fn | `pin` |
-| 1481 | const fn | `col` |
-| 1489 | function | `pinScopeTick` |
-| 1495 | function | `openPinScope` |
-| 1509 | function | `closePinScope` |
-| 1513 | function | `updateHover` |
-| 1531 | const fn | `atTop` |
-| 1532 | function | `topDoc` |
-| 1533 | function | `defsOf` |
-| 1534 | const fn | `pid` |
-| 1535 | function | `fullDoc` |
-| 1537 | function | `commitView` |
-| 1539 | function | `viewDiag` |
-| 1540 | const fn | `rel` |
-| 1543 | function | `compAt` |
-| 1548 | function | `allComps` |
-| 1549 | const fn | `walk` |
-| 1555 | function | `partDef` |
-| 1557 | function | `pdefaults` |
-| 1558 | function | `subParams` |
-| 1560 | function | `placeOk` |
-| 1562 | function | `renameChannels` |
-| 1564 | function | `levelDoc` |
-| 1565 | function | `applyLevel` |
-| 1566 | function | `groupSel` |
-| 1571 | function | `expandSub` |
-| 1575 | function | `libToSub` |
-| 1577 | function | `uniqueSub` |
-| 1578 | function | `subMenu` |
-| 1582 | function | `enterSub` |
-| 1588 | function | `leaveSub` |
-| 1594 | function | `renderCrumbs` |
-| 1602 | function | `curDef` |
-| 1603 | function | `publicOf` |
-| 1604 | function | `togglePublic` |
-| 1612 | function | `propsSub` |
-| 1620 | function | `bindSub` |
-| 1628 | function | `propsDef` |
-| 1643 | function | `bindDef` |
-| 1659 | function | `exportDef` |
-| 1661 | function | `importDefs` |
-| 1672 | function | `palLoad` |
-| 1673 | function | `palSave` |
-| 1674 | function | `palRecent` |
-| 1675 | function | `palItem` |
-| 1679 | function | `renderPalette` |
-| 1687 | const fn | `isOpen` |
-| 1701 | function | `tutorial` |
-| 1704 | function | `circuitSig` |
-| 1714 | function | `tutorialRef` |
-| 1715 | function | `theoryValidity` |
-| 1721 | function | `staleBanner` |
-| 1724 | function | `bindRestore` |
-| 1725 | function | `loadTutorial` |
-| 1730 | function | `migrateFile` |
-| 1733 | function | `applyProject` |
-| 1744 | function | `renderTutorial` |
-| 1754 | function | `gallery` |
-| 1760 | function | `api` |
-| 1761 | function | `paramsOf` |
-| 1764 | function | `avgOver` |
-| 1767 | function | `simValue` |
-| 1773 | function | `lastPP` |
-| 1775 | function | `runTheory` |
-| 1788 | function | `cmpRows` |
-| 1789 | function | `stepsHTML` |
-| 1790 | function | `renderTheory` |
-| 1822 | function | `rippleDev` |
-| 1824 | function | `periodAvgAt` |
-| 1826 | function | `samplingTheory` |
-| 1835 | const fn | `lastAt` |
-| 1857 | function | `polyTheory` |
-| 1864 | const fn | `frac` |
-| 1893 | function | `lastPeriods` |
-| 1894 | function | `evalOrderHTML` |
-| 1903 | function | `genScTheory` |
-| 1905 | const fn | `Iac` |
-| 1913 | function | `shaftModes` |
-| 1920 | function | `fbmTheory` |
-| 1928 | function | `ieee9Theory` |
-| 1937 | function | `ieee9EqTheory` |
-| 1949 | function | `schedNow` |
-| 1951 | function | `fundOf` |
-| 1957 | function | `ssscNet3` |
-| 1958 | const fn | `c` |
-| 1961 | const fn | `ser` |
-| 1962 | const fn | `ln` |
-| 1970 | function | `ssscTheory` |
-| 2005 | function | `ccscTheory` |
-| 2010 | const fn | `cm` |
-| 2012 | const fn | `dev` |
-| 2015 | const fn | `lineI` |
-| 2036 | function | `ieee9ssscTheory` |
-| 2051 | function | `hvdcTheory` |
-| 2076 | function | `gfmIslandDvoc` |
-| 2089 | function | `gfmTheory` |
-| 2131 | function | `ieee9GfmTheory` |
-| 2150 | function | `hvdcGfmTheory` |
-| 2163 | function | `lccTheory` |
-| 2164 | const fn | `st` |
-| 2170 | const fn | `g` |
-| 2182 | function | `wbModelHTML` |
-| 2190 | function | `cableXbTheory` |
-| 2191 | const fn | `rms` |
-| 2192 | const fn | `pk` |
-| 2204 | const fn | `v` |
-| 2209 | function | `lineFdTheory` |
-| 2210 | const fn | `lab` |
-| 2218 | const fn | `pk` |
-| 2225 | function | `trvAfterZero` |
-| 2231 | function | `trvSvg` |
-| 2233 | const fn | `path` |
-| 2240 | function | `trvTerminalTheory` |
-| 2253 | function | `trvSlfTheory` |
-| 2273 | function | `lightningTheory` |
-| 2275 | const fn | `pk` |
-| 2296 | function | `gisPeaks` |
-| 2297 | function | `atT` |
-| 2299 | function | `gisPath` |
-| 2303 | function | `gis765Theory` |
-| 2314 | function | `gisVftoTheory` |
-| 2323 | function | `dsRestrikeTheory` |
-| 2338 | function | `inscoHTML` |
-| 2349 | function | `inscoAct` |
-| 2354 | function | `inscoTheory` |
-| 2360 | function | `netFaultTheory` |
-| 2379 | function | `inrushTheory` |
-| 2393 | function | `busDqTheory` |
-| 2401 | function | `subLegsTheory` |
-| 2413 | function | `currentCtlTheory` |
-| 2420 | const fn | `R` |
-| 2423 | const fn | `over` |
-| 2433 | const fn | `row` |
-| 2439 | function | `blocksTheory` |
-| 2454 | function | `pcmTheory` |
-| 2480 | function | `codeTheory` |
-| 2490 | function | `eisTheory` |
-| 2492 | const fn | `ser` |
-| 2505 | function | `imSteady` |
-| 2508 | function | `imPar` |
-| 2509 | function | `phaseRms` |
-| 2510 | function | `vfTheory` |
-| 2523 | function | `focTheory` |
-| 2540 | function | `synTheory` |
-| 2559 | const fn | `need` |
-| 2579 | function | `pmTheory` |
-| 2581 | const fn | `mtpa` |
-| 2597 | function | `srmTheory` |
-| 2612 | const fn | `curve` |
-| 2623 | function | `lgTheory` |
-| 2634 | const fn | `cr` |
-| 2641 | function | `chaosTheory` |
-| 2656 | function | `nnCycles` |
-| 2659 | function | `genCtlTheory` |
-| 2672 | function | `evTheory` |
-| 2686 | function | `nnTheory` |
-| 2703 | function | `nnGuiCode` |
-| 2709 | function | `runNNCompare` |
-| 2717 | function | `dcDriveTheory` |
-| 2718 | const fn | `per` |
-| 2719 | const fn | `cross` |
-| 2749 | function | `twModel` |
-| 2752 | const fn | `g` |
-| 2755 | function | `twLattice` |
-| 2762 | const fn | `marks` |
-| 2765 | function | `twTheory` |
-| 2773 | const fn | `at` |
-| 2790 | function | `arTheory` |
-| 2810 | function | `impulseMeasure` |
-| 2812 | const fn | `cross` |
-| 2815 | function | `marxTheory` |
-| 2833 | function | `chopModel` |
-| 2836 | const fn | `f` |
-| 2839 | function | `chopTheory` |
-| 2853 | function | `cmp3` |
-| 2857 | function | `hvExact` |
-| 2858 | function | `hv153Theory` |
-| 2884 | function | `besI1e` |
-| 2886 | function | `heaviside` |
-| 2888 | function | `lossTheory` |
-| 2907 | function | `vtBreak` |
-| 2908 | function | `vtTheory` |
-| 2929 | function | `hvdivTheory` |
-| 2931 | const fn | `r` |
-| 2943 | function | `scheringTheory` |
-| 2944 | const fn | `inv` |
-| 2953 | const fn | `sr` |
-| 2965 | const fn | `studyNet` |
-| 2966 | function | `studyQ` |
-| 2973 | function | `emtSpectra` |
-| 2976 | function | `emtReadings` |
-| 2979 | const fn | `studyKey` |
-| 2980 | function | `studyOpen` |
-| 2993 | function | `studyAct` |
-| 3018 | function | `netViewOpen` |
-| 3025 | const fn | `legend` |
-| 3049 | function | `nvEdit` |
-| 3058 | function | `nvApply` |
-| 3059 | const fn | `same` |
-| 3060 | const fn | `put` |
-| 3077 | function | `areaBind` |
-| 3085 | function | `areaChosen` |
-| 3086 | function | `areaSplit` |
-| 3090 | function | `areaShow` |
-| 3102 | function | `areaCompare` |
-| 3114 | function | `areaEmt` |
-| 3125 | function | `fosterPlot` |
-| 3127 | const fn | `X` |
-| 3128 | const fn | `line` |
-| 3134 | function | `fosterShow` |
-| 3143 | function | `fdneShow` |
-| 3149 | function | `areaBack` |
-| 3152 | function | `mtdcTheory` |
-| 3158 | function | `dcdcSteady` |
-| 3163 | function | `dcdcTheory` |
-| 3164 | const fn | `row` |
-| 3168 | function | `b4Theory` |
-| 3173 | function | `studyTheory` |
-| 3191 | const fn | `X` |
-| 3278 | function | `formulaTheory` |
-| 3395 | function | `nodeAvg` |
-| 3401 | function | `circuitForMath` |
-| 3437 | function | `scheduleMath` |
-| 3438 | function | `batteryKey` |
-| 3440 | function | `mathChoices` |
-| 3441 | const fn | `prim` |
-| 3443 | function | `renderMathChoices` |
-| 3445 | function | `runTemplate` |
-| 3451 | function | `runMath` |
-| 3478 | function | `saveLocal` |
-| 3479 | function | `saveLocalSoon` |
-| 3481 | function | `download` |
-| 3482 | function | `exportCSV` |
-| 3488 | function | `syncScopeInputs` |
-| 3489 | function | `setSpeed` |
-| 3492 | function | `openSettings` |
-| 3493 | const fn | `sel` |
-| 3494 | const fn | `chk` |
-| 3521 | function | `applyLook` |
-| 3525 | function | `boot` |
-| 3595 | const fn | `navOpen` |
-| 3611 | const fn | `probeSel` |
-| 3677 | function | `renderTheoryLive` |
-| 3681 | function | `initPanels` |
-| 3682 | const fn | `one` |
-| 3683 | const fn | `pick` |
-| 3684 | const fn | `shut` |
-| 3685 | const fn | `live` |
+| 5 | const fn | `$` |
+| 8 | const fn | `frame` |
+| 10 | const fn | `esc` |
+| 18 | function | `loadSettings` |
+| 19 | function | `saveSettings` |
+| 22 | function | `notice` |
+| 23 | function | `warnings` |
+| 26 | function | `project` |
+| 27 | function | `buildSim` |
+| 44 | function | `lineCtx` |
+| 45 | function | `play` |
+| 46 | function | `pause` |
+| 47 | function | `reset` |
+| 51 | function | `linkAdvance` |
+| 59 | function | `linkReset` |
+| 60 | function | `stepT` |
+| 67 | function | `applyRec` |
+| 73 | function | `memAuto` |
+| 74 | function | `memChoice` |
+| 75 | function | `memSetting` |
+| 76 | const fn | `fmtDur` |
+| 77 | function | `memEstimate` |
+| 82 | function | `recArchive` |
+| 85 | function | `recSettings` |
+| 87 | function | `renderRecPanel` |
+| 101 | function | `renderRec` |
+| 103 | function | `recToggle` |
+| 114 | function | `recCollect` |
+| 119 | function | `recFlush` |
+| 131 | function | `studySettings` |
+| 133 | function | `studyEstimate` |
+| 135 | function | `renderStudy` |
+| 137 | const fn | `o` |
+| 146 | const fn | `g` |
+| 152 | function | `renderStudyBtn` |
+| 153 | function | `studyView` |
+| 154 | function | `studyRun` |
+| 172 | function | `pyPage` |
+| 176 | function | `runToEnd` |
+| 179 | const fn | `chunk` |
+| 181 | function | `loop` |
+| 209 | function | `draw` |
+| 211 | function | `setText` |
+| 212 | function | `navRange` |
+| 213 | function | `updateClock` |
+| 217 | function | `liveOf` |
+| 263 | function | `blkUnit` |
+| 282 | function | `outsOf` |
+| 284 | const fn | `vecN` |
+| 286 | function | `chanLabel` |
+| 296 | function | `chanSrc` |
+| 297 | function | `addProbe` |
+| 298 | function | `flash` |
+| 350 | function | `signalsFor` |
+| 367 | const fn | `fold` |
+| 369 | function | `fillSignals` |
+| 376 | function | `renderChannels` |
+| 400 | function | `renderSel` |
+| 405 | function | `selCSV` |
+| 409 | function | `paneMode` |
+| 410 | function | `paneCfgHTML` |
+| 411 | const fn | `r` |
+| 423 | function | `paneCfgApply` |
+| 425 | const fn | `keep` |
+| 437 | function | `openPaneCfg` |
+| 445 | function | `requestMeasure` |
+| 446 | function | `renderMeasure` |
+| 458 | function | `MeasureUnit` |
+| 461 | function | `simKey` |
+| 462 | function | `perSeries` |
+| 463 | function | `refFor` |
+| 464 | const fn | `sched` |
+| 468 | function | `metricsFor` |
+| 472 | function | `metricsRows` |
+| 477 | function | `eventMetricsHTML` |
+| 479 | function | `renderMetricsPanel` |
+| 490 | function | `rawSeries` |
+| 493 | function | `autoF1` |
+| 497 | function | `evRows` |
+| 499 | function | `renderEvents` |
+| 501 | const fn | `fv` |
+| 507 | function | `evMaxSetting` |
+| 508 | function | `eventsJson` |
+| 509 | function | `eventsCsv` |
+| 511 | function | `renderFFT` |
+| 534 | function | `cellZ` |
+| 536 | function | `renderEISForm` |
+| 537 | const fn | `opt` |
+| 541 | function | `runEIS` |
+| 549 | function | `drawEIS` |
+| 568 | function | `perSamples` |
+| 570 | function | `periodText` |
+| 571 | const fn | `svgPlot` |
+| 573 | function | `pcmMapFn` |
+| 575 | const fn | `z` |
+| 578 | function | `renderPoincare` |
+| 594 | function | `bfParams` |
+| 596 | function | `renderBifurcationForm` |
+| 602 | function | `runBifurcation` |
+| 616 | function | `stopBifurcation` |
+| 617 | function | `drawBifurcation` |
+| 627 | function | `niceTop` |
+| 630 | function | `btStatus` |
+| 631 | function | `parseStep` |
+| 632 | function | `runBatch` |
+| 648 | function | `clearBatch` |
+| 650 | function | `meanPL` |
+| 652 | function | `ringTrace` |
+| 654 | function | `compareHTML` |
+| 664 | function | `renderBatch` |
+| 669 | function | `parseCSV` |
+| 671 | const fn | `cells` |
+| 672 | const fn | `num` |
+| 678 | const fn | `normName` |
+| 679 | function | `renderCsvMap` |
+| 680 | const fn | `auto` |
+| 686 | function | `applyCsv` |
+| 691 | function | `renderCsv` |
+| 693 | function | `clearCsv` |
+| 695 | function | `sampleCompareHTML` |
+| 711 | function | `pwmGainsText` |
+| 718 | function | `toggleInput` |
+| 721 | function | `setInputMeta` |
+| 725 | function | `inputsHTML` |
+| 726 | const fn | `val` |
+| 735 | function | `liveChange` |
+| 737 | function | `renderLiveLog` |
+| 746 | function | `changesToSchedule` |
+| 748 | const fn | `f` |
+| 757 | function | `updateLivePanel` |
+| 762 | function | `setLivePanel` |
+| 765 | function | `switchesOf` |
+| 768 | function | `addPulses` |
+| 770 | function | `pulseKeys` |
+| 771 | function | `refreshControls` |
+| 774 | const fn | `phase` |
+| 808 | const fn | `setD` |
+| 824 | const fn | `setPh` |
+| 836 | const fn | `pinNow` |
+| 847 | const fn | `pinSet` |
+| 859 | function | `pinMap` |
+| 860 | function | `pinX` |
+| 861 | function | `pinV` |
+| 867 | function | `liveParam` |
+| 882 | function | `closeInspector` |
+| 883 | function | `placePopup` |
+| 886 | function | `fieldValue` |
+| 891 | function | `fieldHTML` |
+| 906 | function | `placeAt` |
+| 907 | function | `popupDrag` |
+| 916 | function | `nnBlock` |
+| 917 | function | `nnBox` |
+| 920 | function | `nnLearned` |
+| 921 | function | `openInspector` |
+| 929 | const fn | `wired` |
+| 939 | const fn | `same` |
+| 940 | const fn | `apply` |
+| 955 | function | `ctlCtx` |
+| 963 | function | `splitProposal` |
+| 965 | function | `openSplitWin` |
+| 968 | const fn | `single` |
+| 971 | function | `openCtlWin` |
+| 975 | const fn | `wireWidth` |
+| 976 | function | `openWireInspector` |
+| 993 | const fn | `numOf` |
+| 999 | function | `psec` |
+| 1001 | function | `propsOpen` |
+| 1002 | function | `setProps` |
+| 1004 | function | `focusComp` |
+| 1005 | function | `togglePin` |
+| 1008 | function | `renderProps` |
+| 1017 | function | `propsComp` |
+| 1018 | const fn | `secOf` |
+| 1020 | const fn | `exprV` |
+| 1021 | const fn | `inpB` |
+| 1022 | const fn | `row` |
+| 1028 | const fn | `wired` |
+| 1042 | function | `propsJunc` |
+| 1044 | function | `propsWire` |
+| 1050 | function | `propsMulti` |
+| 1053 | function | `propsCircuit` |
+| 1064 | const fn | `opt` |
+| 1074 | const fn | `sv` |
+| 1110 | const fn | `chk` |
+| 1121 | function | `bindProps` |
+| 1158 | function | `diagItems` |
+| 1167 | function | `renderDiag` |
+| 1178 | function | `openDiag` |
+| 1179 | function | `flashComp` |
+| 1187 | function | `stepAdvice` |
+| 1199 | function | `stepAdviceShow` |
+| 1200 | function | `scheduleStepCheck` |
+| 1201 | function | `runStepCheck` |
+| 1202 | const fn | `inPage` |
+| 1209 | function | `syncStepMode` |
+| 1271 | function | `scenSetCode` |
+| 1272 | function | `scenState` |
+| 1273 | function | `scenTab` |
+| 1274 | function | `scenOut` |
+| 1275 | function | `scenWorker` |
+| 1277 | function | `scenRun` |
+| 1285 | function | `scenStop` |
+| 1286 | function | `scenDone` |
+| 1288 | function | `scenMsg` |
+| 1303 | function | `scenBatch` |
+| 1308 | function | `scenEval` |
+| 1311 | function | `addonDock` |
+| 1318 | function | `renderAddons` |
+| 1319 | const fn | `vsel` |
+| 1333 | function | `knockToast` |
+| 1336 | function | `initAddons` |
+| 1343 | function | `scenBatchWrite` |
+| 1346 | function | `renderScenFiles` |
+| 1349 | const fn | `scenNum` |
+| 1350 | function | `scenTable` |
+| 1351 | function | `scenShow` |
+| 1364 | function | `scenTicks` |
+| 1365 | function | `scenPlot` |
+| 1369 | const fn | `thin` |
+| 1376 | const fn | `dig` |
+| 1390 | function | `cmdShow` |
+| 1400 | function | `cmdScope` |
+| 1402 | function | `initConsole` |
+| 1404 | function | `initScenarios` |
+| 1411 | function | `liveApply` |
+| 1414 | function | `closeMenu` |
+| 1415 | function | `openMenu` |
+| 1445 | const fn | `PS_WORD` |
+| 1447 | const fn | `psSym` |
+| 1448 | function | `pinScopeOf` |
+| 1451 | const fn | `word` |
+| 1464 | const fn | `side` |
+| 1466 | const fn | `inScope` |
+| 1468 | function | `liveVal` |
+| 1470 | function | `scopeToggle` |
+| 1472 | function | `openScopeSub` |
+| 1484 | function | `pinScopeHtml` |
+| 1485 | const fn | `chip` |
+| 1486 | const fn | `pin` |
+| 1488 | const fn | `col` |
+| 1496 | function | `pinScopeTick` |
+| 1502 | function | `openPinScope` |
+| 1516 | function | `closePinScope` |
+| 1520 | function | `updateHover` |
+| 1538 | const fn | `atTop` |
+| 1539 | function | `topDoc` |
+| 1540 | function | `defsOf` |
+| 1541 | const fn | `pid` |
+| 1542 | function | `fullDoc` |
+| 1544 | function | `commitView` |
+| 1546 | function | `viewDiag` |
+| 1547 | const fn | `rel` |
+| 1550 | function | `compAt` |
+| 1555 | function | `allComps` |
+| 1556 | const fn | `walk` |
+| 1562 | function | `partDef` |
+| 1564 | function | `pdefaults` |
+| 1565 | function | `subParams` |
+| 1567 | function | `placeOk` |
+| 1569 | function | `renameChannels` |
+| 1571 | function | `levelDoc` |
+| 1572 | function | `applyLevel` |
+| 1573 | function | `groupSel` |
+| 1578 | function | `expandSub` |
+| 1582 | function | `libToSub` |
+| 1584 | function | `uniqueSub` |
+| 1585 | function | `subMenu` |
+| 1589 | function | `enterSub` |
+| 1595 | function | `leaveSub` |
+| 1601 | function | `renderCrumbs` |
+| 1609 | function | `curDef` |
+| 1610 | function | `publicOf` |
+| 1611 | function | `togglePublic` |
+| 1619 | function | `propsSub` |
+| 1627 | function | `bindSub` |
+| 1635 | function | `propsDef` |
+| 1650 | function | `bindDef` |
+| 1666 | function | `exportDef` |
+| 1668 | function | `importDefs` |
+| 1679 | function | `palLoad` |
+| 1680 | function | `palSave` |
+| 1681 | function | `palRecent` |
+| 1682 | function | `palItem` |
+| 1686 | function | `renderPalette` |
+| 1694 | const fn | `isOpen` |
+| 1708 | function | `tutorial` |
+| 1711 | function | `circuitSig` |
+| 1721 | function | `tutorialRef` |
+| 1722 | function | `theoryValidity` |
+| 1728 | function | `staleBanner` |
+| 1731 | function | `bindRestore` |
+| 1732 | function | `loadTutorial` |
+| 1740 | function | `migrateFile` |
+| 1743 | function | `applyProject` |
+| 1754 | function | `renderTutorial` |
+| 1764 | function | `gallery` |
+| 1770 | function | `api` |
+| 1771 | function | `paramsOf` |
+| 1774 | function | `avgOver` |
+| 1777 | function | `simValue` |
+| 1783 | function | `lastPP` |
+| 1785 | function | `runTheory` |
+| 1798 | function | `cmpRows` |
+| 1799 | function | `stepsHTML` |
+| 1800 | function | `renderTheory` |
+| 1832 | function | `rippleDev` |
+| 1834 | function | `periodAvgAt` |
+| 1836 | function | `samplingTheory` |
+| 1845 | const fn | `lastAt` |
+| 1867 | function | `polyTheory` |
+| 1874 | const fn | `frac` |
+| 1903 | function | `lastPeriods` |
+| 1904 | function | `evalOrderHTML` |
+| 1913 | function | `genScTheory` |
+| 1915 | const fn | `Iac` |
+| 1923 | function | `shaftModes` |
+| 1930 | function | `fbmTheory` |
+| 1938 | function | `ieee9Theory` |
+| 1947 | function | `ieee9EqTheory` |
+| 1959 | function | `schedNow` |
+| 1961 | function | `fundOf` |
+| 1967 | function | `ssscNet3` |
+| 1968 | const fn | `c` |
+| 1971 | const fn | `ser` |
+| 1972 | const fn | `ln` |
+| 1980 | function | `ssscTheory` |
+| 2015 | function | `ccscTheory` |
+| 2020 | const fn | `cm` |
+| 2022 | const fn | `dev` |
+| 2025 | const fn | `lineI` |
+| 2046 | function | `ieee9ssscTheory` |
+| 2061 | function | `hvdcTheory` |
+| 2086 | function | `gfmIslandDvoc` |
+| 2099 | function | `gfmTheory` |
+| 2141 | function | `ieee9GfmTheory` |
+| 2160 | function | `hvdcGfmTheory` |
+| 2173 | function | `lccTheory` |
+| 2174 | const fn | `st` |
+| 2180 | const fn | `g` |
+| 2192 | function | `wbModelHTML` |
+| 2200 | function | `cableXbTheory` |
+| 2201 | const fn | `rms` |
+| 2202 | const fn | `pk` |
+| 2214 | const fn | `v` |
+| 2219 | function | `lineFdTheory` |
+| 2220 | const fn | `lab` |
+| 2228 | const fn | `pk` |
+| 2235 | function | `trvAfterZero` |
+| 2241 | function | `trvSvg` |
+| 2243 | const fn | `path` |
+| 2250 | function | `trvTerminalTheory` |
+| 2263 | function | `trvSlfTheory` |
+| 2283 | function | `lightningTheory` |
+| 2285 | const fn | `pk` |
+| 2306 | function | `gisPeaks` |
+| 2307 | function | `atT` |
+| 2309 | function | `gisPath` |
+| 2313 | function | `gis765Theory` |
+| 2324 | function | `gisVftoTheory` |
+| 2333 | function | `dsRestrikeTheory` |
+| 2348 | function | `inscoHTML` |
+| 2359 | function | `inscoAct` |
+| 2364 | function | `inscoTheory` |
+| 2370 | function | `netFaultTheory` |
+| 2389 | function | `inrushTheory` |
+| 2403 | function | `busDqTheory` |
+| 2411 | function | `subLegsTheory` |
+| 2423 | function | `currentCtlTheory` |
+| 2430 | const fn | `R` |
+| 2433 | const fn | `over` |
+| 2443 | const fn | `row` |
+| 2449 | function | `blocksTheory` |
+| 2464 | function | `pcmTheory` |
+| 2490 | function | `codeTheory` |
+| 2500 | function | `eisTheory` |
+| 2502 | const fn | `ser` |
+| 2515 | function | `imSteady` |
+| 2518 | function | `imPar` |
+| 2519 | function | `phaseRms` |
+| 2520 | function | `vfTheory` |
+| 2533 | function | `focTheory` |
+| 2550 | function | `synTheory` |
+| 2569 | const fn | `need` |
+| 2589 | function | `pmTheory` |
+| 2591 | const fn | `mtpa` |
+| 2607 | function | `srmTheory` |
+| 2622 | const fn | `curve` |
+| 2633 | function | `lgTheory` |
+| 2644 | const fn | `cr` |
+| 2651 | function | `chaosTheory` |
+| 2666 | function | `nnCycles` |
+| 2669 | function | `genCtlTheory` |
+| 2682 | function | `evTheory` |
+| 2696 | function | `nnTheory` |
+| 2713 | function | `nnGuiCode` |
+| 2719 | function | `runNNCompare` |
+| 2727 | function | `dcDriveTheory` |
+| 2728 | const fn | `per` |
+| 2729 | const fn | `cross` |
+| 2759 | function | `twModel` |
+| 2762 | const fn | `g` |
+| 2765 | function | `twLattice` |
+| 2772 | const fn | `marks` |
+| 2775 | function | `twTheory` |
+| 2783 | const fn | `at` |
+| 2800 | function | `arTheory` |
+| 2820 | function | `impulseMeasure` |
+| 2822 | const fn | `cross` |
+| 2825 | function | `marxTheory` |
+| 2843 | function | `chopModel` |
+| 2846 | const fn | `f` |
+| 2849 | function | `chopTheory` |
+| 2863 | function | `cmp3` |
+| 2867 | function | `hvExact` |
+| 2868 | function | `hv153Theory` |
+| 2894 | function | `besI1e` |
+| 2896 | function | `heaviside` |
+| 2898 | function | `lossTheory` |
+| 2917 | function | `vtBreak` |
+| 2918 | function | `vtTheory` |
+| 2939 | function | `hvdivTheory` |
+| 2941 | const fn | `r` |
+| 2953 | function | `scheringTheory` |
+| 2954 | const fn | `inv` |
+| 2963 | const fn | `sr` |
+| 2975 | const fn | `studyNet` |
+| 2976 | function | `studyQ` |
+| 2983 | function | `emtSpectra` |
+| 2986 | function | `emtReadings` |
+| 2989 | const fn | `studyKey` |
+| 2990 | function | `studyOpen` |
+| 3003 | function | `studyAct` |
+| 3028 | function | `netViewOpen` |
+| 3035 | const fn | `legend` |
+| 3059 | function | `nvEdit` |
+| 3068 | function | `nvApply` |
+| 3069 | const fn | `same` |
+| 3070 | const fn | `put` |
+| 3087 | function | `areaBind` |
+| 3095 | function | `areaChosen` |
+| 3096 | function | `areaSplit` |
+| 3100 | function | `areaShow` |
+| 3112 | function | `areaCompare` |
+| 3124 | function | `areaEmt` |
+| 3135 | function | `fosterPlot` |
+| 3137 | const fn | `X` |
+| 3138 | const fn | `line` |
+| 3144 | function | `fosterShow` |
+| 3153 | function | `fdneShow` |
+| 3159 | function | `areaBack` |
+| 3162 | function | `mtdcTheory` |
+| 3168 | function | `dcdcSteady` |
+| 3173 | function | `dcdcTheory` |
+| 3174 | const fn | `row` |
+| 3178 | function | `b4Theory` |
+| 3183 | function | `studyTheory` |
+| 3201 | const fn | `X` |
+| 3288 | function | `formulaTheory` |
+| 3405 | function | `nodeAvg` |
+| 3411 | function | `circuitForMath` |
+| 3447 | function | `scheduleMath` |
+| 3448 | function | `batteryKey` |
+| 3450 | function | `mathChoices` |
+| 3451 | const fn | `prim` |
+| 3453 | function | `renderMathChoices` |
+| 3455 | function | `runTemplate` |
+| 3461 | function | `runMath` |
+| 3488 | function | `saveLocal` |
+| 3489 | function | `saveLocalSoon` |
+| 3491 | function | `download` |
+| 3492 | function | `exportCSV` |
+| 3498 | function | `syncScopeInputs` |
+| 3499 | function | `setSpeed` |
+| 3502 | function | `openSettings` |
+| 3503 | const fn | `sel` |
+| 3504 | const fn | `chk` |
+| 3531 | function | `applyLook` |
+| 3535 | function | `boot` |
+| 3605 | const fn | `navOpen` |
+| 3621 | const fn | `probeSel` |
+| 3689 | function | `gpuBadge` |
+| 3695 | function | `renderTheoryLive` |
+| 3699 | function | `initPanels` |
+| 3700 | const fn | `one` |
+| 3701 | const fn | `pick` |
+| 3702 | const fn | `shut` |
+| 3703 | const fn | `live` |
 
 ### `web/studio/bus.js`
 
@@ -1165,53 +1169,83 @@
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 28 | const fn | `gid` |
-| 45 | function | `take` |
-| 66 | const fn | `first` |
-| 69 | const fn | `doc` |
-| 70 | const fn | `esc` |
-| 72 | const fn | `ids` |
-| 73 | const fn | `open` |
-| 74 | function | `load` |
-| 75 | function | `save` |
-| 77 | function | `top` |
-| 78 | function | `region` |
-| 82 | function | `wrapper` |
-| 91 | function | `tabsHtml` |
-| 96 | function | `floatRect` |
-| 98 | function | `clampRect` |
-| 100 | function | `setFloat` |
-| 104 | function | `keepFloat` |
-| 107 | function | `render` |
-| 130 | function | `sizes` |
-| 134 | function | `fill` |
-| 143 | function | `tools` |
-| 147 | function | `change` |
-| 148 | const fn | `place` |
-| 149 | const fn | `tab` |
-| 150 | const fn | `activate` |
-| 152 | const fn | `side` |
-| 153 | const fn | `firstAs` |
-| 155 | const fn | `max` |
-| 157 | const fn | `reveal` |
-| 158 | const fn | `reset` |
-| 159 | const fn | `where` |
-| 160 | const fn | `label` |
-| 162 | function | `menuHtml` |
-| 176 | function | `closeMenu` |
-| 177 | function | `openMenu` |
-| 188 | function | `zoneAt` |
-| 195 | function | `zones` |
-| 198 | function | `hiRect` |
-| 204 | function | `dragStart` |
-| 206 | const fn | `mv` |
-| 213 | const fn | `end` |
-| 219 | const fn | `up` |
-| 222 | function | `splitStart` |
-| 231 | function | `vsplitStart` |
-| 239 | function | `init` |
-| 261 | const fn | `onChange` |
-| 262 | const fn | `state` |
+| 45 | const fn | `gid` |
+| 46 | const fn | `rects` |
+| 48 | const fn | `shape` |
+| 71 | function | `take` |
+| 93 | const fn | `first` |
+| 110 | const fn | `doc` |
+| 111 | const fn | `esc` |
+| 114 | const fn | `ids` |
+| 115 | const fn | `open` |
+| 116 | function | `load` |
+| 117 | function | `save` |
+| 118 | const fn | `note` |
+| 120 | function | `top` |
+| 121 | function | `region` |
+| 125 | function | `wrapper` |
+| 134 | function | `tabsHtml` |
+| 139 | function | `floatRect` |
+| 141 | function | `clampRect` |
+| 143 | function | `setFloat` |
+| 147 | function | `keepFloat` |
+| 151 | function | `openWin` |
+| 160 | const fn | `winOf` |
+| 163 | function | `forward` |
+| 169 | function | `keepScreen` |
+| 171 | function | `adopt` |
+| 185 | function | `lost` |
+| 189 | function | `unscreen` |
+| 193 | function | `screenHello` |
+| 197 | function | `tick` |
+| 203 | const fn | `q` |
+| 204 | const fn | `qa` |
+| 205 | const fn | `screenDocs` |
+| 207 | const fn | `screenWin` |
+| 209 | function | `render` |
+| 242 | function | `sizes` |
+| 246 | function | `fill` |
+| 256 | function | `tools` |
+| 262 | function | `change` |
+| 263 | const fn | `place` |
+| 267 | const fn | `tab` |
+| 268 | const fn | `activate` |
+| 270 | const fn | `side` |
+| 271 | const fn | `firstAs` |
+| 273 | const fn | `max` |
+| 275 | const fn | `reveal` |
+| 276 | const fn | `reset` |
+| 277 | const fn | `where` |
+| 278 | const fn | `label` |
+| 280 | function | `lload` |
+| 282 | function | `lsave` |
+| 283 | const fn | `presetOf` |
+| 285 | function | `use` |
+| 287 | const fn | `layout` |
+| 288 | const fn | `saveAs` |
+| 290 | const fn | `loadSaved` |
+| 291 | const fn | `drop` |
+| 292 | const fn | `auto` |
+| 294 | const fn | `propose` |
+| 298 | const fn | `nowText` |
+| 300 | const fn | `layouts` |
+| 302 | function | `layoutsHtml` |
+| 313 | function | `layoutsClick` |
+| 317 | function | `menuHtml` |
+| 333 | function | `closeMenu` |
+| 335 | function | `openMenu` |
+| 347 | function | `zoneAt` |
+| 354 | function | `zones` |
+| 357 | function | `hiRect` |
+| 363 | function | `dragStart` |
+| 365 | const fn | `mv` |
+| 372 | const fn | `end` |
+| 378 | const fn | `up` |
+| 381 | function | `splitStart` |
+| 391 | function | `vsplitStart` |
+| 400 | function | `init` |
+| 425 | const fn | `onChange` |
+| 426 | const fn | `state` |
 
 ### `web/studio/editor.js`
 
@@ -2139,31 +2173,31 @@ _(χωρίς συναρτήσεις)_
 | 206 | function | `scaleLen` |
 | 207 | function | `scaleBar` |
 | 210 | function | `create` |
-| 214 | const fn | `size` |
-| 219 | const fn | `paint` |
-| 220 | const fn | `ask` |
-| 221 | const fn | `at` |
-| 224 | const fn | `chosen` |
-| 225 | const fn | `told` |
-| 227 | const fn | `kindOf` |
-| 228 | const fn | `down` |
-| 230 | const fn | `move` |
-| 237 | const fn | `up` |
-| 244 | const fn | `cancel` |
-| 245 | const fn | `wheel` |
-| 246 | const fn | `dbl` |
-| 253 | method | `setLayer` |
-| 254 | method | `setNames` |
-| 255 | method | `fit` |
-| 257 | method | `zoom` |
-| 260 | method | `goto` |
-| 261 | method | `info` |
-| 263 | method | `setMode` |
-| 266 | method | `setSelection` |
-| 268 | method | `setBoundary` |
-| 269 | method | `clearSelection` |
-| 271 | method | `choose` |
-| 272 | method | `destroy` |
+| 214 | const fn | `win` |
+| 215 | const fn | `size` |
+| 220 | const fn | `paint` |
+| 222 | const fn | `at` |
+| 225 | const fn | `chosen` |
+| 226 | const fn | `told` |
+| 228 | const fn | `kindOf` |
+| 229 | const fn | `down` |
+| 231 | const fn | `move` |
+| 238 | const fn | `up` |
+| 245 | const fn | `cancel` |
+| 246 | const fn | `wheel` |
+| 247 | const fn | `dbl` |
+| 254 | method | `setLayer` |
+| 255 | method | `setNames` |
+| 256 | method | `fit` |
+| 258 | method | `zoom` |
+| 261 | method | `goto` |
+| 262 | method | `info` |
+| 264 | method | `setMode` |
+| 267 | method | `setSelection` |
+| 269 | method | `setBoundary` |
+| 270 | method | `clearSelection` |
+| 272 | method | `choose` |
+| 273 | method | `destroy` |
 
 ### `web/studio/nn.js`
 
@@ -2186,26 +2220,26 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 12 | const fn | `esc` |
-| 13 | const fn | `doc` |
-| 17 | function | `register` |
-| 19 | const fn | `source` |
-| 20 | const fn | `all` |
-| 21 | const fn | `find` |
-| 22 | const fn | `el` |
-| 23 | const fn | `shown` |
-| 24 | function | `hidden` |
-| 25 | function | `keep` |
-| 26 | function | `state` |
-| 29 | const fn | `list` |
-| 31 | function | `setCard` |
-| 33 | function | `restore` |
-| 35 | function | `toggle` |
-| 39 | function | `reset` |
-| 45 | function | `check` |
-| 50 | function | `html` |
-| 56 | function | `closeMenu` |
-| 58 | function | `openMenu` |
+| 14 | const fn | `esc` |
+| 15 | const fn | `doc` |
+| 19 | function | `register` |
+| 21 | const fn | `source` |
+| 22 | const fn | `all` |
+| 23 | const fn | `find` |
+| 24 | const fn | `el` |
+| 25 | const fn | `shown` |
+| 26 | function | `hidden` |
+| 27 | function | `keep` |
+| 28 | function | `state` |
+| 31 | const fn | `list` |
+| 33 | function | `setCard` |
+| 35 | function | `restore` |
+| 37 | function | `toggle` |
+| 41 | function | `reset` |
+| 48 | function | `check` |
+| 55 | function | `html` |
+| 61 | function | `closeMenu` |
+| 63 | function | `openMenu` |
 
 ### `web/studio/parts.js`
 
@@ -2483,53 +2517,62 @@ _(χωρίς συναρτήσεις)_
 | 79 | method | `autoHeights` |
 | 81 | method | `toggleMax` |
 | 84 | method | `attach` |
-| 87 | method | `requestDraw` |
-| 89 | method | `colors` |
-| 91 | method | `setRefs` |
-| 92 | method | `refRange` |
-| 96 | method | `histPush` |
-| 98 | method | `back` |
-| 101 | method | `paneAt` |
-| 102 | method | `zoomY` |
-| 105 | method | `zoomed` |
-| 106 | method | `unzoomY` |
-| 108 | method | `unzoom` |
-| 110 | method | `boxZoom` |
-| 115 | method | `nav` |
-| 120 | const fn | `clamp` |
-| 132 | method | `resize` |
-| 139 | method | `unitOf` |
-| 143 | method | `resolve` |
-| 144 | method | `channels` |
-| 145 | method | `addChannel` |
-| 148 | method | `removeChannel` |
-| 149 | method | `moveChannel` |
-| 151 | method | `windowSec` |
-| 152 | method | `viewRange` |
-| 154 | method | `ringIndex` |
-| 155 | method | `ringStart` |
-| 157 | method | `eachRaw` |
-| 160 | method | `rawCount` |
-| 161 | method | `eachPeriod` |
-| 162 | method | `valueAt` |
-| 165 | method | `stats` |
-| 175 | method | `selectAt` |
-| 178 | method | `selStats` |
-| 182 | method | `usePeriods` |
-| 184 | method | `panTo` |
-| 185 | method | `zoomAt` |
-| 187 | method | `cursorAt` |
-| 189 | method | `plotW` |
-| 190 | method | `drawSamples` |
-| 197 | method | `envReset` |
-| 202 | method | `ingest` |
-| 216 | method | `colsOf` |
-| 217 | const fn | `put` |
-| 226 | method | `archiveFor` |
-| 235 | method | `yAuto` |
-| 251 | method | `draw` |
-| 294 | const fn | `Y` |
-| 322 | const fn | `flush` |
+| 88 | method | `requestDraw` |
+| 90 | method | `colors` |
+| 92 | method | `setRefs` |
+| 93 | method | `refRange` |
+| 97 | method | `histPush` |
+| 99 | method | `back` |
+| 102 | method | `paneAt` |
+| 103 | method | `zoomY` |
+| 106 | method | `zoomed` |
+| 107 | method | `unzoomY` |
+| 109 | method | `unzoom` |
+| 111 | method | `boxZoom` |
+| 116 | method | `nav` |
+| 121 | const fn | `clamp` |
+| 134 | method | `resize` |
+| 141 | method | `unitOf` |
+| 145 | method | `resolve` |
+| 146 | method | `channels` |
+| 147 | method | `addChannel` |
+| 150 | method | `removeChannel` |
+| 151 | method | `moveChannel` |
+| 153 | method | `windowSec` |
+| 154 | method | `viewRange` |
+| 156 | method | `ringIndex` |
+| 157 | method | `ringStart` |
+| 159 | method | `eachRaw` |
+| 162 | method | `rawCount` |
+| 163 | method | `eachPeriod` |
+| 164 | method | `valueAt` |
+| 167 | method | `stats` |
+| 177 | method | `selectAt` |
+| 180 | method | `selStats` |
+| 184 | method | `usePeriods` |
+| 186 | method | `panTo` |
+| 187 | method | `zoomAt` |
+| 189 | method | `cursorAt` |
+| 191 | method | `plotW` |
+| 192 | method | `drawSamples` |
+| 199 | method | `envReset` |
+| 204 | method | `ingest` |
+| 218 | method | `colsOf` |
+| 219 | const fn | `put` |
+| 228 | method | `archiveFor` |
+| 237 | method | `yAuto` |
+| 253 | method | `draw` |
+| 296 | const fn | `Y` |
+| 324 | const fn | `flush` |
+
+### `web/studio/screen.js`
+
+| Γραμμή | Είδος | Όνομα |
+|---:|---|---|
+| 11 | const fn | `$` |
+| 12 | const fn | `say` |
+| 14 | function | `clear` |
+| 15 | function | `tick` |
 
 ### `web/studio/sim_worker.js`
 
@@ -3047,17 +3090,18 @@ _(χωρίς συναρτήσεις)_
 | 55 | function | `line_model` |
 | 81 | function | `line_action` |
 | 94 | function | `study_action` |
-| 112 | function | `scenario` |
-| 141 | class | `Handler` |
-| 143 | method | `Handler.local` |
-| 147 | method | `Handler.alive` |
-| 157 | method | `Handler.body` |
-| 166 | method | `Handler.addon_get` |
-| 196 | method | `Handler.addon_post` |
-| 223 | method | `Handler.send` |
-| 239 | method | `Handler.do_GET` |
-| 270 | method | `Handler.do_POST` |
-| 351 | function | `main` |
+| 108 | function | `accel_info` |
+| 117 | function | `scenario` |
+| 146 | class | `Handler` |
+| 148 | method | `Handler.local` |
+| 152 | method | `Handler.alive` |
+| 162 | method | `Handler.body` |
+| 171 | method | `Handler.addon_get` |
+| 201 | method | `Handler.addon_post` |
+| 228 | method | `Handler.send` |
+| 244 | method | `Handler.do_GET` |
+| 275 | method | `Handler.do_POST` |
+| 356 | function | `main` |
 
 ### `engine/__init__.py`
 
@@ -3534,9 +3578,10 @@ _(χωρίς συναρτήσεις)_
 | 167 | function | `cpu` |
 | 171 | function | `probe` |
 | 211 | function | `gpu` |
-| 219 | function | `measurement` |
-| 228 | function | `rule` |
-| 240 | function | `choose` |
+| 219 | function | `status` |
+| 229 | function | `measurement` |
+| 238 | function | `rule` |
+| 250 | function | `choose` |
 
 ### `pcl/console.py`
 

@@ -211,13 +211,14 @@
   const m=model(data),st={layer:opt.layer&&m.layers.has(opt.layer)?opt.layer:(data.layer&&m.layers.has(data.layer)?data.layer:'base'),names:'auto',hit:null,tr:null,w:0,h:0,drawn:null,frames:0,
    mode:'pan',sel:new Set(),bnd:new Set(),shape:null};      // 5.0.6: the study area (indices of the chosen buses, of the boundary buses) and the window or lasso being drawn
   const ctx=canvas.getContext('2d');let raf=0,info=opt.info||null,dead=false;
-  const size=()=>{const r=canvas.getBoundingClientRect(),dpr=root.devicePixelRatio||1,w=Math.max(50,Math.round(r.width)),h=Math.max(50,Math.round(r.height));
+  const win=()=>canvas.ownerDocument?.defaultView||root;   // 5.0.10: the window of the canvas (the page, or the second screen)
+  const size=()=>{const r=canvas.getBoundingClientRect(),dpr=win().devicePixelRatio||1,w=Math.max(50,Math.round(r.width)),h=Math.max(50,Math.round(r.height));
    if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
    ctx.setTransform(dpr,0,0,dpr,0,0);const first=!st.tr,changed=st.w!==w||st.h!==h;st.w=w;st.h=h;
    // the first frame shows everything (or what the caller was showing); while nobody has moved or zoomed, a new size of the canvas shows everything again
    if(first){const given=opt.tr&&Number.isFinite(opt.tr.s)&&opt.tr.s>0;st.tr=given?{s:opt.tr.s,cx:opt.tr.cx,cy:opt.tr.cy}:fit(m,w,h);st.fitted=!given;}else if(changed&&st.fitted)st.tr=fit(m,w,h);};
   const paint=()=>{raf=0;if(dead)return;size();st.drawn=draw(ctx,m,st.tr,st.w,st.h,st.layer,{names:st.names,hit:st.hit,sel:st.sel,bnd:st.bnd,shape:st.shape});st.frames++;};
-  const ask=()=>{if(!raf)raf=(root.requestAnimationFrame||(f=>setTimeout(f,16)))(paint);};
+  let rafW=null;const ask=()=>{const w=win();if(raf&&rafW===w)return;rafW=w;raf=w.requestAnimationFrame?w.requestAnimationFrame(paint):setTimeout(paint,16);};
   const at=e=>{const r=canvas.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];};
   let drag=null;
   // 5.0.6: a change of the study area, told to the page

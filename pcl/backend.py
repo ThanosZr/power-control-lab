@@ -216,6 +216,16 @@ def gpu():
     return _GPU['bk']
 
 
+def status():
+    """5.0.10 (decision 386): what the page shows beside «Engine»: the fields of probe() (the card, or the reason there is none),
+    and gpu (True when a computation in double precision ran on it), measured (a measurement of this machine exists, from
+    `python -m pcl accel --save`) and work (its threshold of unknowns × scenarios from which «auto» chooses the GPU*, or None)."""
+    info = dict(probe())
+    m = measurement()
+    info.update(gpu=info.get('reason') is None, measured=bool(m), work=(m or {}).get('work'))
+    return info
+
+
 def measurement():
     """The measurement of this machine (the file that `python -m pcl accel --save` writes), or None."""
     try:

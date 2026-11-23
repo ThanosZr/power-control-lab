@@ -6,6 +6,8 @@
 // opens every card and forgets the sizes and places of the windows (pcl-win-*, winframe.js). Panels.check(): no id twice
 // and one copy of every panel (5.0.1 found a card twice in the page, with buttons that did nothing).
 // The register has no DOM of its own: the page gives the panels (app.js), and the menu is written into a popup.
+// 5.0.10 (§94 steps δ and ε): the menu starts with the layouts (written and handled by dock.js), and a panel may be on the
+// second screen, in a window of its own: its element is looked for there too (Dock.q), and Panels.check counts every window.
 (function(root){
  const KEY='pcl-panels',GROUPS=[['card','Κάρτες της σελίδας'],['pane','Πλαίσια του χώρου εργασίας'],['window','Παράθυρα']];
  const P={list:[],by:new Map(),menu:null,sources:[]};
@@ -19,7 +21,7 @@
  const source=f=>{P.sources.push(f);};
  const all=()=>{const out=[...P.list];for(const f of P.sources){try{for(const d of f()||[])out.push({group:'window',closable:true,...d});}catch(e){}}return out;};
  const find=id=>P.by.get(id)||all().find(d=>d.id===id);
- const el=d=>d.sel&&doc()?doc().querySelector(d.sel):null;
+ const el=d=>d.sel&&doc()?(doc().querySelector(d.sel)||root.Dock?.q?.(d.sel)||null):null;
  const shown=e=>!!e&&!e.hidden&&e.getClientRects().length>0;
  function hidden(){try{const o=JSON.parse(localStorage.getItem(KEY)||'{}');return new Set(Array.isArray(o.hidden)?o.hidden:[]);}catch(e){return new Set();}}
  function keep(h){try{localStorage.setItem(KEY,JSON.stringify({hidden:[...h]}));}catch(e){}}
@@ -42,12 +44,15 @@
   // 5.0.5 (§94 step β): every card back to its place in the page (dock.js)
   try{root.Dock?.reset?.();}catch(x){}}
  // no id twice in the document, every panel once (or not yet, if it is written when it opens)
- function check(D){D=D||doc();const ids=new Map();for(const e of D.querySelectorAll('[id]'))ids.set(e.id,(ids.get(e.id)||0)+1);
+ // (5.0.10: the page and the windows of the second screen together, as one page)
+ function check(D){const docs=D?[D]:[doc(),...(root.Dock?.screenDocs?.()||[])];const ids=new Map();
+  // (a window of the second screen: only what the page put into it, not its own frame of one message and one box)
+  for(const x of docs)for(const e of (x===docs[0]?x:x.getElementById('screen-root')||x).querySelectorAll('[id]'))ids.set(e.id,(ids.get(e.id)||0)+1);
   const dup=[...ids].filter(([,n])=>n>1).map(([k,n])=>k+'×'+n),twice=[],missing=[];
-  for(const d of P.list){if(!d.sel)continue;const n=D.querySelectorAll(d.sel).length;if(n>1)twice.push(d.id+'×'+n);else if(!n&&!d.lazy)missing.push(d.id);}
+  for(const d of P.list){if(!d.sel)continue;const n=docs.reduce((a,x)=>a+x.querySelectorAll(d.sel).length,0);if(n>1)twice.push(d.id+'×'+n);else if(!n&&!d.lazy)missing.push(d.id);}
   return {dup,twice,missing,n:P.list.length};}
  // ------------------------------------------------------------------ the menu
- function html(){const L=list();let s='';
+ function html(){const L=list();let s=root.Dock?.layoutsHtml?.()||'';
   for(const [g,t] of GROUPS){const q=L.filter(x=>x.group===g);if(!q.length)continue;s+=`<div class="pm-sec"><b>${esc(t)}</b>`;
    for(const x of q){const dis=!x.open&&!!x.why,fixed=x.open&&!x.closable;
     s+=`<label class="pm-row${dis?' off':''}" title="${esc(dis?x.why:x.hint)}"><input type="checkbox" data-panel="${esc(x.id)}" ${x.open?'checked':''} ${dis||fixed?'disabled':''}><span>${esc(x.title)}</span>${dis?`<small>${esc(x.why)}</small>`:x.place?`<small class="pm-place">${esc(x.place)}</small>`:''}</label>`;}
@@ -57,8 +62,12 @@
  // the popup under its button (one element, written anew each time it opens)
  function openMenu(btn){const D=doc();let m=P.menu;
   if(!m){m=P.menu=D.createElement('div');m.id='panels-menu';m.className='popup panels-menu';m.setAttribute('role','menu');m.hidden=true;D.body.appendChild(m);
-   m.addEventListener('change',e=>{const id=e.target.dataset?.panel;if(!id)return;toggle(id,e.target.checked);m.innerHTML=html();});
-   m.addEventListener('click',e=>{if(e.target.closest('[data-panels-reset]')){reset();m.innerHTML=html();}});
+   m.addEventListener('change',e=>{if(e.target.matches?.('[data-dk-auto]')){root.Dock?.auto?.(e.target.checked);m.innerHTML=html();return;}
+    const id=e.target.dataset?.panel;if(!id)return;toggle(id,e.target.checked);m.innerHTML=html();});
+   m.addEventListener('click',e=>{if(e.target.closest('[data-panels-reset]')){reset();m.innerHTML=html();return;}
+    // 5.0.10: the buttons of the layouts (dock.js)
+    if(root.Dock?.layoutsClick?.(e.target))m.innerHTML=html();});
+   m.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches?.('[data-dk-name]')){e.preventDefault();m.querySelector('[data-dk-saveas]')?.click();}});
    D.addEventListener('pointerdown',e=>{if(!m.hidden&&!m.contains(e.target)&&!e.target.closest?.('#open-panels'))closeMenu();},true);
    D.addEventListener('keydown',e=>{if(e.key==='Escape'&&!m.hidden)closeMenu();});}
   if(!m.hidden){closeMenu();return m;}

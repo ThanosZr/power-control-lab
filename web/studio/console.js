@@ -6,7 +6,7 @@
 // app.js gives what the page knows (Console.init): the circuit, the study of the diagram, the chosen buses, the code of
 // «Σενάρια», how to show a table or a chart, and how to put a channel on the scope.
 (function(root){
- const $=s=>document.querySelector(s);
+ const $=s=>document.querySelector(s)||root.Dock?.q?.(s)||null;   // 5.0.10: the card may be on the second screen (dock.js)
  const HKEY='pcl.console.history',KKEY='pcl.console.kernel',HMAX=500;
  const C={ctx:null,w:null,wready:false,ibuf:null,busy:false,more:false,kernel:'auto',active:null,why:'',sid:null,token:null,info:null,
   hist:[],hpos:-1,draft:'',seq:0,wait:new Map(),sent:{pyodide:null,server:null},files:[],started:null,gen:0,activeGen:-1};

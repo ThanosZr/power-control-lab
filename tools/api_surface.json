@@ -1,5 +1,5 @@
 {
- "version": "5.0.9",
+ "version": "5.0.10",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -36,7 +36,8 @@
    "python -m pcl nnstart"
   ],
   "server": [
-   "/api/console"
+   "/api/console",
+   "/api/accel_info"
   ]
  },
  "deprecated": {},
@@ -590,6 +591,10 @@
      "rows"
     ],
     "since": "4.19.2"
+   },
+   "pcl.backend.status": {
+    "params": [],
+    "since": "5.0.10"
    },
    "pcl.bifurcation": {
     "params": [
@@ -5946,6 +5951,10 @@
    }
   },
   "server": {
+   "/api/accel_info": {
+    "params": [],
+    "since": "5.0.10"
+   },
    "/api/addon_activate": {
     "params": [],
     "since": "3.18"

@@ -13,49 +13,76 @@
 // it goes as a tab next to the circuit, in the place of the circuit (Dock.firstAs), and after that it stays where the user
 // puts it. Two cards of a group go side by side (Dock.side): the shown one on the left, the other on the right, with an
 // edge between them that is dragged (a line while it moves, the new widths at the release, as for the regions).
+// 5.0.10 (§94 steps δ and ε, decision 385): named layouts and the second screen.
+//  * A layout is the model below with where it came from (L.from): the first page («home»), a layout of the list chosen by
+//    the user («preset»), a tutorial («tutorial»), a layout the user saved under a name («saved»), or the user's own moves
+//    («user»). Four come ready (Dock.model.PRESETS: «Αρχική», «Σχέδιο», «Μελέτη δικτύου», «Ανάλυση»), built from the
+//    cards there are; the user's own are kept under a name (localStorage pcl-layouts). A tutorial proposes one (a study:
+//    «Μελέτη δικτύου»), and the page takes it only while the layout is not the user's own (the first page, or the one an
+//    earlier tutorial proposed) and «Τα tutorials προτείνουν διάταξη» is on; a tutorial that proposes none brings back the
+//    first page then.
+//  * The second screen: a card (not the circuit, whose menus, settings and keys belong to the page) in a window of its own
+//    of the browser (screen.html, opened from the page), which the user takes to another screen. The card is moved into
+//    that window, not copied, as into a region: its listeners, canvases and observers stay with it, the page finds its
+//    elements there too (Dock.q), the clicks, keys and presses of that window reach the listeners of the page, and its menus
+//    open in that window. The window says hello to the page every 250 ms (screen.js): after a reload of the page the new
+//    page takes it again; a window that the user closes gives its card back to its place in the page.
 (function(root){
- const KEY='pcl-dock',AT=['main','left','right','bottom','float'],SIDE=['left','right','bottom'];
- const NAME={main:'στη σελίδα',left:'αριστερά',right:'δεξιά',bottom:'κάτω',float:'σε παράθυρο'};
+ const KEY='pcl-dock',LKEY='pcl-layouts',AT=['main','left','right','bottom','float','screen'],SIDE=['left','right','bottom'],SOLO=['float','screen'];
+ const NAME={main:'στη σελίδα',left:'αριστερά',right:'δεξιά',bottom:'κάτω',float:'σε παράθυρο',screen:'σε δεύτερη οθόνη'};
  const SIZE0={left:420,right:460,bottom:320};
+ const KINDS=['home','preset','tutorial','saved','user'];
  // ------------------------------------------------------------------ the model
  // L = {v:1, groups:[{id, at, cards:[ids], active, side?, r?}], size:{left, right, bottom}, float:{id: {x,y,w,h}}, max: id | null, n,
- //      docs:{id: 1}}: side = the card shown beside the active one (5.0.6), r = the share of the width of the active one,
- //      docs = the cards that have already been placed once as documents (Dock.firstAs)
+ //      docs:{id: 1}, screen:{id: {x,y,w,h}}, from:{kind, name?}}: side = the card shown beside the active one (5.0.6), r = the
+ //      share of the width of the active one, docs = the cards that have already been placed once as documents (Dock.firstAs),
+ //      screen = the last place and size of the window of a card on the second screen (screen pixels, 5.0.10), from = where
+ //      the layout came from (5.0.10)
  const M={},R0=0.5;
- M.fresh=ids=>({v:1,groups:ids.map((id,i)=>({id:'g'+i,at:'main',cards:[id],active:id})),size:{...SIZE0},float:{},max:null,n:ids.length,docs:{}});
+ M.fresh=ids=>({v:1,groups:ids.map((id,i)=>({id:'g'+i,at:'main',cards:[id],active:id})),size:{...SIZE0},float:{},max:null,n:ids.length,docs:{},screen:{},from:{kind:'home'}});
  M.copy=L=>JSON.parse(JSON.stringify(L));
  M.groupOf=(L,id)=>L.groups.find(g=>g.cards.includes(id))||null;
  const gid=L=>{let n=L.n|0;const has=new Set(L.groups.map(g=>g.id));while(has.has('g'+n))n++;L.n=n+1;return 'g'+n;};
+ const rects=(src,known)=>{const out={};for(const [c,r] of Object.entries(src||{}))if(known.has(c)&&r&&['x','y','w','h'].every(k=>Number.isFinite(r[k])))out[c]={x:r.x,y:r.y,w:r.w,h:r.h};return out;};
+ // 5.0.10: the same arrangement (where every card is, which one is shown, which one beside it), whatever the ids of the groups
+ const shape=L=>L.groups.map(g=>[g.at,g.cards.join(','),g.active,g.side||''].join('|')).sort().join(';')+'#'+(L.max||'');
+ M.same=(A,B)=>shape(A)===shape(B);
  // a layout that came from the storage or an older page: only known cards, each once, every known card somewhere
  M.normalize=(L,ids)=>{const known=new Set(ids),seen=new Set();
   if(!L||typeof L!=='object'||!Array.isArray(L.groups))return M.fresh(ids);
-  const out={v:1,groups:[],size:{...SIZE0},float:{},max:null,n:Number.isFinite(L.n)?L.n|0:0,docs:{}};
+  const out={v:1,groups:[],size:{...SIZE0},float:{},max:null,n:Number.isFinite(L.n)?L.n|0:0,docs:{},screen:{},from:{kind:'home'}};
   for(const k of SIDE)if(Number.isFinite(L.size?.[k]))out.size[k]=Math.max(160,Math.min(4000,L.size[k]));
   for(const g of L.groups){if(!g||!AT.includes(g.at)||!Array.isArray(g.cards))continue;
    const cards=[];for(const c of g.cards)if(known.has(c)&&!seen.has(c)){seen.add(c);cards.push(c);}if(!cards.length)continue;
-   if(g.at==='float'&&cards.length>1){for(const c of cards)out.groups.push({id:'f'+c,at:'float',cards:[c],active:c});continue;}
+   if(SOLO.includes(g.at)&&cards.length>1){for(const c of cards)out.groups.push({id:g.at[0]+c,at:g.at,cards:[c],active:c});continue;}
    const q={id:typeof g.id==='string'&&g.id?g.id:'x'+out.groups.length,at:g.at,cards,active:cards.includes(g.active)?g.active:cards[0]};
-   if(g.at!=='float'&&cards.includes(g.side)&&g.side!==q.active){q.side=g.side;q.r=Number.isFinite(g.r)?Math.max(0.2,Math.min(0.8,g.r)):R0;}
+   if(!SOLO.includes(g.at)&&cards.includes(g.side)&&g.side!==q.active){q.side=g.side;q.r=Number.isFinite(g.r)?Math.max(0.2,Math.min(0.8,g.r)):R0;}
    out.groups.push(q);}
   const ids2=new Set();for(const g of out.groups){if(ids2.has(g.id))g.id='y'+ids2.size+'_'+g.id;ids2.add(g.id);}
   for(const c of ids)if(!seen.has(c))out.groups.push({id:gid(out),at:'main',cards:[c],active:c});
-  for(const [c,r] of Object.entries(L.float||{}))if(known.has(c)&&r&&['x','y','w','h'].every(k=>Number.isFinite(r[k])))out.float[c]={x:r.x,y:r.y,w:r.w,h:r.h};
-  out.max=known.has(L.max)?L.max:null;for(const c of Object.keys(L.docs||{}))if(known.has(c))out.docs[c]=1;return out;};
+  out.float=rects(L.float,known);out.screen=rects(L.screen,known);
+  out.max=known.has(L.max)?L.max:null;for(const c of Object.keys(L.docs||{}))if(known.has(c))out.docs[c]=1;
+  // 5.0.10: where it came from; a layout of an older page (before 5.0.10, no «from») is the user's own when it is not the
+  // first page
+  const f=L.from;if(f&&typeof f==='object'&&KINDS.includes(f.kind)){out.from={kind:f.kind};if(typeof f.name==='string'&&f.name)out.from.name=f.name.slice(0,60);}
+  else out.from={kind:M.same(out,M.fresh(ids))?'home':'user'};
+  return out;};
  // the card out of its group (an empty group goes)
  function take(L,id){const g=M.groupOf(L,id);if(!g)return;g.cards=g.cards.filter(c=>c!==id);if(!g.cards.length){L.groups=L.groups.filter(x=>x!==g);return;}
   if(g.side===id){delete g.side;delete g.r;}else if(g.active===id){if(g.side){g.active=g.side;delete g.side;delete g.r;}else g.active=g.cards[0];}}
- // the card alone in a new group at «at» (the page: its own place; a region: after the groups that are there)
+ // the card alone in a new group at «at» (the page: its own place; a region: after the groups that are there; a window of its
+ // own, or the second screen: a group of one card)
  M.place=(L,id,at)=>{if(!AT.includes(at))throw new Error('Dock: no region '+at);const g=M.groupOf(L,id);
-  if(g&&g.at===at&&g.cards.length===1&&at!=='float')return L;
-  take(L,id);L.groups.push({id:at==='float'?'f'+id+'_'+gid(L):gid(L),at,cards:[id],active:id});if(L.max===id&&at==='float')L.max=null;return L;};
- // the card as a tab next to «target» (not into a floating window: that is one card)
- M.tab=(L,id,target)=>{if(id===target)return L;const t=M.groupOf(L,target);if(!t||t.at==='float')return L;
+  if(g&&g.at===at&&g.cards.length===1&&!SOLO.includes(at))return L;if(g&&g.at===at&&SOLO.includes(at))return L;
+  take(L,id);L.groups.push({id:SOLO.includes(at)?at[0]+id+'_'+gid(L):gid(L),at,cards:[id],active:id});if(L.max===id&&SOLO.includes(at))L.max=null;return L;};
+ // the card as a tab next to «target» (not into a floating window or the second screen: those are one card)
+ M.tab=(L,id,target)=>{if(id===target)return L;const t=M.groupOf(L,target);if(!t||SOLO.includes(t.at))return L;
   if(t.cards.includes(id)){if(t.side!==id)t.active=id;return L;}take(L,id);const i=t.cards.indexOf(target);t.cards.splice(i+1,0,id);t.active=id;return L;};
  // the shown card of a group; the one beside it (side by side) is already shown and stays where it is
  M.activate=(L,id)=>{const g=M.groupOf(L,id);if(g&&g.side!==id)g.active=id;return L;};
  // 5.0.6: id on the left and other on the right, in one group (other comes as a tab next to id if it is elsewhere); other
  // null or id: one card at a time again. Not in a floating window, which is one card.
- M.side=(L,id,other)=>{let g=M.groupOf(L,id);if(!g)return L;if(!other||other===id){delete g.side;delete g.r;return L;}if(g.at==='float'||!M.groupOf(L,other))return L;
+ M.side=(L,id,other)=>{let g=M.groupOf(L,id);if(!g)return L;if(!other||other===id){delete g.side;delete g.r;return L;}if(SOLO.includes(g.at)||!M.groupOf(L,other))return L;
   if(!g.cards.includes(other)){const r=g.r;M.tab(L,other,id);g=M.groupOf(L,id);if(r)g.r=r;}g.active=id;g.side=other;if(!Number.isFinite(g.r))g.r=R0;return L;};
  M.ratio=(L,id,r)=>{const g=M.groupOf(L,id);if(g&&g.side&&Number.isFinite(r))g.r=Math.max(0.2,Math.min(0.8,r));return L;};
  // 5.0.6: the first time a card is placed as a document it goes as a tab next to target; after that it stays where it is
@@ -65,14 +92,30 @@
  M.groups=(L,at,ids)=>{const q=L.groups.filter(g=>g.at===at);if(at!=='main'||!ids)return q;const ix=c=>{const i=ids.indexOf(c);return i<0?1e9:i;};
   const first=g=>Math.min(...g.cards.map(ix));return q.slice().sort((a,b)=>first(a)-first(b));};
  M.home=(L,ids)=>M.fresh(ids);
+ // 5.0.10 (§94 step δ): the ready layouts, built from the cards there are (a card that is not there is left out)
+ M.PRESETS=[
+  {name:'home',title:'Αρχική',hint:'Κάθε κάρτα στη θέση της στη σελίδα, η μία κάτω από την άλλη'},
+  {name:'design',title:'Σχέδιο',hint:'Το κύκλωμα στη σελίδα, και η προσομοίωση με τα scopes κάτω: βλέπεις το αποτέλεσμα όσο σχεδιάζεις'},
+  {name:'study',title:'Μελέτη δικτύου',hint:'Το διάγραμμα του δικτύου στη θέση του κυκλώματος (καρτέλα δίπλα του), και η περιγραφή με τις εργασίες και την αναφορά δεξιά'},
+  {name:'analysis',title:'Ανάλυση',hint:'Το κύκλωμα και τα scopes δίπλα δίπλα, και οι υπολογισμοί, η γραμμή εντολών και τα σενάρια σε καρτέλες κάτω'}];
+ M.preset=(name,ids)=>{const has=c=>ids.includes(c),L=M.fresh(ids);
+  if(name==='home'){}
+  else if(name==='design'){if(has('scope')){M.place(L,'scope','bottom');L.size.bottom=440;}}
+  else if(name==='study'){if(has('netview')&&has('circuit')){M.tab(L,'netview','circuit');L.docs.netview=1;}if(has('theory')){M.place(L,'theory','right');L.size.right=480;}}
+  else if(name==='analysis'){if(has('circuit')&&has('scope')){M.side(L,'circuit','scope');M.ratio(L,'circuit',0.36);}
+   const low=['math','cmd','scen'].filter(has);if(low.length){M.place(L,low[0],'bottom');let prev=low[0];for(const c of low.slice(1)){M.tab(L,c,prev);prev=c;}M.activate(L,low[0]);L.size.bottom=320;}}
+  else return null;
+  L.from=name==='home'?{kind:'home'}:{kind:'preset',name};return L;};
  // ------------------------------------------------------------------ the page
  const doc=()=>root.document;
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- const D={defs:[],by:new Map(),L:null,reg:{},wrap:new Map(),menu:null,drag:null,busy:false,on:false,changed:[]};
+ const D={defs:[],by:new Map(),L:null,reg:{},wrap:new Map(),menu:null,drag:null,busy:false,on:false,changed:[],
+  win:new Map(),pend:new Map(),prop:null,auto:true,saved:[],opts:{},dead:false,tick:0,kept:0};
  const ids=()=>D.defs.map(d=>d.id);
  const open=id=>{const d=D.by.get(id);return !!d&&!!d.el&&!d.el.hidden;};
  function load(){try{return JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){return null;}}
  function save(){try{localStorage.setItem(KEY,JSON.stringify(D.L));}catch(e){}}
+ const note=(msg,kind)=>{try{D.opts.notice?.(msg,kind);}catch(e){}};
  // the top of the regions: under the bar of the page
  function top(){const t=doc().querySelector('header.top');return t?Math.round(t.getBoundingClientRect().height):0;}
  function region(at){let r=D.reg[at];if(r)return r;r=doc().createElement('aside');r.id='dock-'+at;r.className='dk-region dk-'+at;r.dataset.dkRegion=at;r.hidden=true;
@@ -103,8 +146,71 @@
   else if(el.classList.contains('dk-float')){el.classList.remove('dk-float');root.WinFrame?.unframe?.(el);for(const k of ['left','top','width','height','right','bottom','maxWidth','maxHeight','position','margin'])el.style[k]='';}}
  function keepFloat(id){const d=D.by.get(id);if(!d||!d.el.classList.contains('dk-float'))return;const r=d.el.getBoundingClientRect();
   D.L.float[id]={x:Math.round(r.left),y:Math.round(r.top),w:Math.round(r.width),h:Math.round(r.height)};save();}
+ // ------------------------------------------------------------------ 5.0.10 (§94 step ε): the second screen
+ // the window of a card: open (in a click of the user: the browser opens windows only then), adopted when it says hello
+ function openWin(id){const r=D.L.screen?.[id];let w=null;
+  const f=r?`popup,left=${Math.round(r.x)},top=${Math.round(r.y)},width=${Math.round(r.w)},height=${Math.round(r.h)}`:`popup,width=${Math.round(Math.min(1280,Math.max(640,innerWidth*0.8)))},height=${Math.round(Math.min(900,Math.max(480,innerHeight*0.85)))}`;
+  try{w=root.open('screen.html?card='+encodeURIComponent(id),'pcl-screen-'+id,f);}catch(e){w=null;}
+  if(!w){note('Ο browser δεν άνοιξε το παράθυρο της δεύτερης οθόνης (αναδυόμενα παράθυρα μπλοκαρισμένα για τη σελίδα). Επίτρεψέ τα για τη σελίδα και δοκίμασε ξανά.','error');return false;}
+  D.pend.set(id,Date.now()+15000);
+  // the first time, with more than one screen: the window on another screen, if the browser allows it (Window Management)
+  if(!r&&root.screen?.isExtended&&typeof root.getScreenDetails==='function')root.getScreenDetails().then(s=>{const o=s.screens.find(x=>x!==s.currentScreen);
+   if(o&&!w.closed){w.moveTo(o.availLeft+24,o.availTop+24);w.resizeTo(Math.round(o.availWidth-48),Math.round(o.availHeight-48));}}).catch(()=>{});
+  return true;}
+ const winOf=id=>{const q=D.win.get(id);return q&&!q.w.closed?q:null;};
+ // the clicks, keys and presses of the window of the second screen reach the listeners of the page (the menus of the page
+ // close, Esc, the space bar, the buttons that the page listens to on its document), with their own target
+ function forward(w,sig){const src=w.document,dst=doc();
+  const K={click:root.MouseEvent,pointerdown:root.PointerEvent||root.MouseEvent,keydown:root.KeyboardEvent};
+  for(const [type,C] of Object.entries(K))src.addEventListener(type,e=>{let q;try{q=new C(type,e);}catch(x){return;}
+   const t=e.target,tg=(t===src.body||t===src.documentElement||t===src)?dst.body:t;
+   Object.defineProperty(q,'target',{value:tg});dst.dispatchEvent(q);if(q.defaultPrevented)e.preventDefault();},sig);}
+ // the place and size of the window (no event tells when a window moves: kept at every resize and every 2 s)
+ function keepScreen(id){const q=winOf(id);if(!q)return false;const w=q.w,r={x:w.screenX,y:w.screenY,w:w.innerWidth,h:w.innerHeight};
+  if(!['x','y','w','h'].every(k=>Number.isFinite(r[k]))||r.w<50||r.h<50)return false;const o=D.L.screen[id];if(o&&o.x===r.x&&o.y===r.y&&o.w===r.w&&o.h===r.h)return false;D.L.screen[id]=r;return true;}
+ function adopt(id,w){const d=D.by.get(id),Dw=w.document,ac=new AbortController(),sig={signal:ac.signal};
+  D.win.set(id,{w,ac});D.pend.delete(id);setFloat(d,false);
+  const box=Dw.getElementById('screen-root')||Dw.body,wait=Dw.getElementById('screen-wait');if(wait)wait.hidden=true;
+  // the look of the page (look-tech, look-classic, show-src), not its layout
+  Dw.body.className=['dk-screen-win',...[...doc().body.classList].filter(c=>!c.startsWith('dk-'))].join(' ');Dw.title=d.title+' · Power & Control Lab';
+  box.appendChild(d.el);d.el.classList.add('dk-screen');d.el.classList.remove('dk-off','dk-max');d.el.style.order='';d.el.style.flex='';
+  // a card that is a <details> (Σενάρια, Γραμμή εντολών, Πρόσθετα) opens there: a window with a closed summary only shows a line
+  const det=d.el.querySelector(':scope > details');if(det&&!det.open)det.open=true;
+  forward(w,sig);
+  w.addEventListener('pagehide',()=>lost(id,w),sig);
+  w.addEventListener('resize',()=>{if(keepScreen(id))save();root.dispatchEvent(new Event('resize'));},sig);
+  if(keepScreen(id))save();requestAnimationFrame(()=>root.dispatchEvent(new Event('resize')));}
+ // the window went (closed by the user, or reloaded): the card back to its place in the page; a window that says hello
+ // again soon (a reload) takes it again, otherwise the card stays in the page
+ function lost(id,w){const q=D.win.get(id);if(!q||q.w!==w)return;q.ac.abort();D.win.delete(id);const d=D.by.get(id);
+  if(d.el.ownerDocument!==doc()){d.el.classList.remove('dk-screen');d.anchor.after(d.el);}
+  if(M.where(D.L,id)?.at==='screen')D.pend.set(id,Date.now()+2500);if(!D.dead)render();}
+ // the windows of the cards that left the second screen close
+ function unscreen(){for(const [id,q] of [...D.win]){if(M.where(D.L,id)?.at==='screen'&&!q.w.closed)continue;q.ac.abort();D.win.delete(id);const d=D.by.get(id);
+   d.el.classList.remove('dk-screen');if(d.el.ownerDocument!==doc())d.anchor.after(d.el);try{if(!q.w.closed)q.w.close();}catch(e){}}
+  for(const id of [...D.pend.keys()])if(M.where(D.L,id)?.at!=='screen')D.pend.delete(id);}
+ // a window of the second screen says hello (screen.js): 'ok' (the card is in it), 'wait' (the page is not ready), 'close'
+ function screenHello(id,w){if(!D.on||D.dead)return 'wait';const g=M.groupOf(D.L,id);if(!g||g.at!=='screen'||!D.by.has(id)||!w||w.closed)return 'close';
+  const q=D.win.get(id),d=D.by.get(id);if(q&&q.w===w&&d.el.ownerDocument===w.document)return 'ok';if(q&&q.w!==w){q.ac.abort();D.win.delete(id);try{q.w.close();}catch(e){}}
+  adopt(id,w);render();return 'ok';}
+ // every 500 ms: a window that waited too long, a window closed without its pagehide, the place of the windows
+ function tick(){if(!D.on||D.dead)return;const now=Date.now();let back=false;
+  for(const [id,q] of [...D.win])if(q.w.closed)lost(id,q.w);
+  for(const [id,t] of [...D.pend])if(now>t){D.pend.delete(id);if(M.where(D.L,id)?.at==='screen'&&!winOf(id)){M.place(D.L,id,'main');back=true;}}
+  if(back){save();render();}
+  if(++D.kept%4===0){let ch=false;for(const id of D.win.keys())if(keepScreen(id))ch=true;if(ch)save();}}
+ // the elements of the cards on the second screen (the page asks with Dock.q when its own document does not have them)
+ const q=sel=>{for(const x of D.win.values()){if(x.w.closed)continue;try{const e=x.w.document.querySelector(sel);if(e)return e;}catch(e){}}return null;};
+ const qa=sel=>{const out=[];for(const x of D.win.values()){if(x.w.closed)continue;try{out.push(...x.w.document.querySelectorAll(sel));}catch(e){}}return out;};
+ const screenDocs=()=>[...D.win.values()].filter(x=>!x.w.closed).map(x=>x.w.document);
+ // a window of the second screen that is shown, for the frames of the simulation while the page itself is hidden
+ const screenWin=()=>{for(const x of D.win.values()){try{if(!x.w.closed&&x.w.document.visibilityState==='visible')return x.w;}catch(e){}}return null;};
  // where every card goes now, from the model
- function render(){if(!D.on)return;D.busy=true;try{const L=D.L,order=ids();
+ function render(){if(!D.on)return;D.busy=true;try{let L=D.L;const order=ids();
+  // 5.0.10: a card on the second screen that is closed (from «Παράθυρα») goes back to the page; the windows of the cards
+  // that left the second screen close
+  let fix=false;for(const g of M.groups(L,'screen'))if(!open(g.cards[0])){M.place(L,g.cards[0],'main');fix=true;}if(fix)save();
+  unscreen();
   const used=new Set();
   // the page: a group of one card after its anchor; a group of many after the anchor of its first card
   for(const g of M.groups(L,'main',order)){const first=g.cards.slice().sort((a,b)=>order.indexOf(a)-order.indexOf(b))[0],anc=D.by.get(first).anchor;
@@ -116,6 +222,12 @@
    r.hidden=!any;}
   // the floating cards
   for(const g of M.groups(L,'float')){const d=D.by.get(g.cards[0]);setFloat(d,true);d.el.classList.remove('dk-off');}
+  // 5.0.10: the cards on the second screen: in their window; without one yet, in their place in the page (a window opens
+  // in a click of the user; after a reload the windows that are still open say hello)
+  for(const g of M.groups(L,'screen')){const id=g.cards[0],d=D.by.get(id),qw=winOf(id);d.el.classList.remove('dk-off');
+   if(qw){if(d.el.ownerDocument!==qw.w.document){const box=qw.w.document.getElementById('screen-root')||qw.w.document.body;box.appendChild(d.el);}d.el.classList.add('dk-screen');continue;}
+   setFloat(d,false);d.el.classList.remove('dk-screen');if(d.anchor.nextSibling!==d.el)d.anchor.after(d.el);
+   if(!D.pend.has(id)){if(root.navigator?.userActivation?.isActive)openWin(id);if(!D.pend.has(id))D.pend.set(id,Date.now()+4000);}}
   // the wrappers that have no group any more
   for(const [k,w] of D.wrap)if(!used.has(k)){w.remove();D.wrap.delete(k);}
   // the screen around the regions
@@ -139,49 +251,96 @@
    el.style.order=two?(c===g.active?'0':c===g.side?'2':''):'';el.style.flex=two&&on?`${c===g.active?g.r:1-g.r} 1 0`:'';}
   sp.hidden=!two;sp.style.order='1';body.classList.toggle('dk-two',two);
   w.firstChild.innerHTML=tabsHtml(g,always);w.classList.toggle('dk-tabbed',!!w.firstChild.innerHTML);}
- // the buttons of a card: ⠿ (drag), ⇱ / ⇲ (a window of its own, or back to its place), ⛶ (the whole screen), ▾ (the menu)
- function tools(d){const w=M.where(D.L,d.id),fl=w?.at==='float',home=w?.at==='main'&&w.tabs===1;
+ // the buttons of a card: ⠿ (drag), ⇱ / ⇲ (a window of its own, or back to its place), ⛶ (the whole screen), ▾ (the menu);
+ // on the second screen only ⇲ and ▾ (5.0.10)
+ function tools(d){const w=M.where(D.L,d.id),fl=w?.at==='float',home=w?.at==='main'&&w.tabs===1,scr=w?.at==='screen'&&!!winOf(d.id);
   const b=d.tools.querySelector('[data-dk-float]');b.textContent=fl||!home?'⇲':'⇱';b.title=fl||!home?'Πίσω στη θέση της στη σελίδα':'Απόσπαση σε δικό της παράθυρο';
-  d.tools.querySelector('[data-dk-max]').classList.toggle('on',D.L.max===d.id);d.el.dataset.dkAt=w?.at||'main';}
+  d.tools.querySelector('[data-dk-max]').classList.toggle('on',D.L.max===d.id);d.el.dataset.dkAt=w?.at||'main';
+  for(const k of ['[data-dk-grip]','[data-dk-max]'])d.tools.querySelector(k).hidden=scr;}
  // ------------------------------------------------------------------ the actions
- function change(f){f(D.L);D.L=M.normalize(D.L,ids());save();render();}
- const place=(id,at)=>{if(!D.by.has(id))return false;change(L=>{M.place(L,id,at);if(at==='float'&&!L.float[id])L.float[id]=floatRect(id);});return true;};
+ // how: 'user' (the user moved a card: the layout is the user's own from now on) or 'keep' (where it came from stays)
+ function change(f,how='user'){f(D.L);D.L=M.normalize(D.L,ids());if(how==='user')D.L.from={kind:'user'};save();render();}
+ const place=(id,at)=>{const d=D.by.get(id);if(!d)return false;
+  // 5.0.10: the second screen: not the circuit; the window opens now, in the click (or the card stays where it is)
+  if(at==='screen'){if(d.screen===false)return false;if(M.where(D.L,id)?.at!=='screen'&&!winOf(id)&&!openWin(id))return false;}
+  change(L=>{M.place(L,id,at);if(at==='float'&&!L.float[id])L.float[id]=floatRect(id);});return true;};
  const tab=(id,target)=>{if(!D.by.has(id)||!D.by.has(target))return false;change(L=>M.tab(L,id,target));return M.where(D.L,id)?.group===M.where(D.L,target)?.group;};
- const activate=id=>{if(!D.by.has(id))return false;change(L=>M.activate(L,id));return true;};
+ const activate=id=>{if(!D.by.has(id))return false;change(L=>M.activate(L,id),'keep');return true;};
  // 5.0.6: side by side (other null: one at a time), and a card placed once as a document next to target
  const side=(id,other)=>{if(!D.by.has(id)||(other&&!D.by.has(other)))return false;change(L=>M.side(L,id,other));requestAnimationFrame(()=>root.dispatchEvent(new Event('resize')));return !other||M.where(D.L,id)?.two===true;};
- const firstAs=(id,target)=>{if(!D.by.has(id)||!D.by.has(target))return false;change(L=>M.firstAs(L,id,target));return true;};
+ const firstAs=(id,target)=>{if(!D.by.has(id)||!D.by.has(target))return false;change(L=>M.firstAs(L,id,target),'keep');return true;};
  // the largest size and back (Esc: back)
- const max=(id,on)=>{if(!D.by.has(id))return false;change(L=>{if(on===undefined)on=L.max!==id;L.max=on?id:(L.max===id?null:L.max);});requestAnimationFrame(()=>root.dispatchEvent(new Event('resize')));return true;};
+ const max=(id,on)=>{if(!D.by.has(id))return false;change(L=>{if(on===undefined)on=L.max!==id;L.max=on?id:(L.max===id?null:L.max);},'keep');requestAnimationFrame(()=>root.dispatchEvent(new Event('resize')));return true;};
  // the card shown: its tab (and its window to the front)
- const reveal=id=>{const w=M.where(D.L,id);if(w&&!w.active)activate(id);const d=D.by.get(id);if(d?.el.classList.contains('dk-float'))doc().body.appendChild(d.el);return w;};
+ const reveal=id=>{const w=M.where(D.L,id);if(w&&!w.active)activate(id);const d=D.by.get(id);if(d?.el.classList.contains('dk-float'))doc().body.appendChild(d.el);const qw=winOf(id);if(qw)try{qw.w.focus();}catch(e){}return w;};
  const reset=()=>{if(!D.on)return;D.L=M.fresh(ids());for(const d of D.defs){d.el.classList.remove('dk-max');}save();render();};
  const where=id=>D.L?M.where(D.L,id):null;
  const label=id=>{const w=where(id);if(!w)return '';return w.at==='main'&&w.tabs===1?'':NAME[w.at]+(w.tabs>1?' · καρτέλα':'');};
+ // ------------------------------------------------------------------ 5.0.10 (§94 step δ): the named layouts
+ function lload(){let o=null;try{o=JSON.parse(localStorage.getItem(LKEY)||'null');}catch(e){}
+  D.auto=o?.auto!==false;D.saved=(Array.isArray(o?.saved)?o.saved:[]).filter(x=>x&&typeof x.name==='string'&&x.name.trim()&&x.L&&Array.isArray(x.L.groups)).slice(0,30).map(x=>({name:x.name.trim().slice(0,40),L:x.L}));}
+ function lsave(){try{localStorage.setItem(LKEY,JSON.stringify({v:1,auto:D.auto,saved:D.saved}));}catch(e){}}
+ const presetOf=n=>M.PRESETS.find(p=>p.name===n);
+ // a whole layout in place of the one there is (the rectangles of the windows that it does not give stay)
+ function use(L,from){const was=D.L;L=M.normalize(L,ids());L.float={...was.float,...L.float};L.screen={...was.screen,...L.screen};L.max=null;L.from=from;D.L=L;save();render();
+  requestAnimationFrame(()=>root.dispatchEvent(new Event('resize')));}
+ const layout=name=>{const L=presetOf(name)?M.preset(name,ids()):null;if(!L||!D.on)return false;use(L,name==='home'?{kind:'home'}:{kind:'preset',name});return true;};
+ const saveAs=name=>{name=String(name||'').trim().slice(0,40);if(!name||!D.on)return false;const L=M.copy(D.L);L.max=null;L.from={kind:'saved',name};
+  const i=D.saved.findIndex(x=>x.name===name);if(i>=0)D.saved[i]={name,L};else{if(D.saved.length>=30)return false;D.saved.push({name,L});}lsave();D.L.from={kind:'saved',name};save();return true;};
+ const loadSaved=name=>{const x=D.saved.find(s=>s.name===name);if(!x||!D.on)return false;use(M.copy(x.L),{kind:'saved',name});return true;};
+ const drop=name=>{const n=D.saved.length;D.saved=D.saved.filter(x=>x.name!==name);if(D.saved.length===n)return false;lsave();if(D.L?.from.kind==='saved'&&D.L.from.name===name){D.L.from={kind:'user'};save();}return true;};
+ const auto=on=>{D.auto=!!on;lsave();return D.auto;};
+ // a tutorial proposes a layout (null: none); the page takes it only while the layout is not the user's own
+ const propose=(name,title)=>{if(name&&!presetOf(name))name=null;D.prop=name?{name,title:String(title||'')}:null;if(!D.on||!D.auto)return 'off';
+  const f=D.L.from||{kind:'home'};if(f.kind!=='home'&&f.kind!=='tutorial')return 'kept';
+  const want=name||'home',now=f.kind==='tutorial'?f.name:'home';if(want===now)return 'same';
+  use(M.preset(want,ids()),name?{kind:'tutorial',name}:{kind:'home'});return 'applied';};
+ const nowText=()=>{const f=D.L?.from||{kind:'home'},t=n=>presetOf(n)?.title||n;
+  return f.kind==='home'?'«Αρχική»':f.kind==='preset'?`«${t(f.name)}»`:f.kind==='tutorial'?`«${t(f.name)}», από το tutorial`:f.kind==='saved'?`«${f.name}», δική σου`:'δική σου (άλλαξε με το χέρι)';};
+ const layouts=()=>({presets:M.PRESETS.map(p=>({...p})),saved:D.saved.map(x=>x.name),from:D.L?{...D.L.from}:null,proposed:D.prop?{...D.prop}:null,auto:D.auto,now:nowText()});
+ // the section «Διατάξεις» of the menu «🪟 Παράθυρα» (panels.js writes it at the top and gives its clicks back here)
+ function layoutsHtml(){if(!D.on)return '';const f=D.L.from||{kind:'home'},cur=n=>(f.kind==='home'&&n==='home')||((f.kind==='preset'||f.kind==='tutorial')&&f.name===n);
+  const own=f.kind!=='home'&&f.kind!=='tutorial',pr=D.prop&&(own||!D.auto)&&!cur(D.prop.name)?D.prop:null;
+  let s='<div class="pm-sec dk-lays"><b>Διατάξεις</b><div class="dk-lrow">';
+  for(const p of M.PRESETS)s+=`<button class="dk-lay${cur(p.name)?' on':''}${pr&&pr.name===p.name?' prop':''}" data-dk-layout="${p.name}" title="${esc(p.hint)}">${esc(p.title)}</button>`;
+  s+='</div>';
+  if(D.saved.length){s+='<div class="dk-lrow">';for(const x of D.saved){const on=f.kind==='saved'&&f.name===x.name;s+=`<span class="dk-lsv"><button class="dk-lay${on?' on':''}" data-dk-load="${esc(x.name)}" title="Η διάταξη που αποθήκευσες">${esc(x.name)}</button><button class="dk-ldel" data-dk-drop="${esc(x.name)}" title="Διαγραφή της «${esc(x.name)}»" aria-label="Διαγραφή">✕</button></span>`;}s+='</div>';}
+  s+=`<div class="dk-lsave"><input data-dk-name maxlength="40" placeholder="Όνομα της διάταξης" aria-label="Όνομα διάταξης"><button data-dk-saveas title="Αποθήκευση της διάταξης που βλέπεις με αυτό το όνομα">💾 Αποθήκευση</button></div>`;
+  s+=`<label class="pm-row" title="Μια μελέτη δικτύου ανοίγει με το διάγραμμα στη θέση του κυκλώματος, εκτός αν έχεις αλλάξει τη διάταξη"><input type="checkbox" data-dk-auto ${D.auto?'checked':''}><span>Τα tutorials προτείνουν διάταξη</span></label>`;
+  s+=`<small class="muted dk-lnow">Τώρα: ${esc(nowText())}${pr?` · το tutorial «${esc(pr.title)}» προτείνει «${esc(presetOf(pr.name).title)}»`:''}</small></div>`;
+  return s;}
+ // a click in the section: true when it was one of its buttons
+ function layoutsClick(t){const b=t?.closest?.('[data-dk-layout],[data-dk-load],[data-dk-drop],[data-dk-saveas]');if(!b)return false;
+  if(b.dataset.dkLayout)layout(b.dataset.dkLayout);else if(b.dataset.dkLoad!==undefined)loadSaved(b.dataset.dkLoad);else if(b.dataset.dkDrop!==undefined)drop(b.dataset.dkDrop);
+  else{const i=b.closest('.dk-lays')?.querySelector('[data-dk-name]');if(i&&saveAs(i.value))i.value='';}return true;}
  // ------------------------------------------------------------------ the menu of a card
  function menuHtml(id){const w=where(id),d=D.by.get(id),row=(k,t,dis,extra='')=>`<button class="dk-mi" data-dk-do="${k}" ${extra} ${dis?'disabled':''}>${t}</button>`;
   let s=`<div class="dk-mh"><b>${esc(d.title)}</b><small class="muted">${esc(label(id)||'στη θέση της')}</small></div>`;
   s+=row('main','⇲ Στη θέση της στη σελίδα',w.at==='main'&&w.tabs===1);
   s+=row('left','◧ Κούμπωμα αριστερά',w.at==='left'&&w.tabs===1)+row('right','◨ Κούμπωμα δεξιά',w.at==='right'&&w.tabs===1)+row('bottom','⬓ Κούμπωμα κάτω',w.at==='bottom'&&w.tabs===1);
   s+=row('float','⇱ Σε δικό της παράθυρο',w.at==='float');
-  const others=D.defs.filter(o=>o.id!==id&&open(o.id)&&where(o.id)?.at!=='float'&&where(o.id)?.group!==w.group);
+  // 5.0.10: the second screen (not the circuit)
+  if(d.screen!==false)s+=row('screen','▭ Σε δεύτερη οθόνη (παράθυρο του browser)',w.at==='screen',`title="Η κάρτα σε δικό της παράθυρο του browser, που το πας σε άλλη οθόνη· μένει συνδεδεμένη με τη σελίδα"`);
+  const others=D.defs.filter(o=>o.id!==id&&open(o.id)&&!SOLO.includes(where(o.id)?.at)&&where(o.id)?.group!==w.group);
   if(others.length){s+='<div class="dk-msep">Ως καρτέλα δίπλα σε</div>';for(const o of others)s+=row('tab',esc(o.title),false,`data-dk-target="${esc(o.id)}"`);}
   // 5.0.6: side by side with another card (it comes into this group), or one at a time again
-  if(w.at!=='float'){const g=M.groupOf(D.L,id),mates=D.defs.filter(o=>o.id!==id&&open(o.id)&&where(o.id)?.at!=='float');
+  if(!SOLO.includes(w.at)){const g=M.groupOf(D.L,id),mates=D.defs.filter(o=>o.id!==id&&open(o.id)&&!SOLO.includes(where(o.id)?.at));
    if(mates.length||g?.side){s+='<div class="dk-msep">Δίπλα δίπλα</div>';if(g?.side)s+=row('one','▭ Μία κάρτα τη φορά',false);
     for(const o of mates)if(!(g?.side===o.id&&g.active===id))s+=row('side','◫ '+esc(o.title)+' δεξιά',false,`data-dk-target="${esc(o.id)}"`);}}
-  s+='<div class="dk-msep"></div>'+row('max',D.L.max===id?'⛶ Πίσω από την πλήρη οθόνη (Esc)':'⛶ Όλη η οθόνη',false);
+  if(w.at!=='screen')s+='<div class="dk-msep"></div>'+row('max',D.L.max===id?'⛶ Πίσω από την πλήρη οθόνη (Esc)':'⛶ Όλη η οθόνη',false);
   if(d.closable!==false)s+=row('close','✕ Κλείσιμο (ξανανοίγει από τα «🪟 Παράθυρα»)',false);
   return s;}
  function closeMenu(){if(D.menu)D.menu.hidden=true;}
+ // 5.0.10: the menu opens in the window of its button (the page, or the window of the second screen)
  function openMenu(id,btn){const m=D.menu||(D.menu=(()=>{const m=doc().createElement('div');m.id='dock-menu';m.className='popup dk-menu';m.setAttribute('role','menu');m.hidden=true;doc().body.appendChild(m);
    m.addEventListener('click',e=>{const b=e.target.closest('[data-dk-do]');if(!b||b.disabled)return;const k=b.dataset.dkDo,id=m.dataset.dkFor;closeMenu();
     if(k==='tab')tab(id,b.dataset.dkTarget);else if(k==='side')side(id,b.dataset.dkTarget);else if(k==='one')side(id,null);else if(k==='max')max(id);else if(k==='close'){if(root.Panels)Panels.toggle(id,false);else D.by.get(id).el.hidden=true;}else place(id,k);});
    doc().addEventListener('pointerdown',e=>{if(!m.hidden&&!m.contains(e.target)&&!e.target.closest?.('[data-dk-menu],[data-dk-tabmenu]'))closeMenu();},true);
    doc().addEventListener('keydown',e=>{if(e.key==='Escape'&&!m.hidden)closeMenu();});return m;})());
   if(!m.hidden&&m.dataset.dkFor===id){closeMenu();return m;}
-  m.dataset.dkFor=id;m.innerHTML=menuHtml(id);m.hidden=false;const r=btn?btn.getBoundingClientRect():{left:innerWidth/2,right:innerWidth/2,bottom:120};
-  m.style.left=Math.max(8,Math.min(r.right-m.offsetWidth,innerWidth-m.offsetWidth-8))+'px';m.style.top=Math.round(Math.min(r.bottom+4,innerHeight-m.offsetHeight-8))+'px';return m;}
+  const host=btn?.ownerDocument||doc(),hw=host.defaultView||root;if(m.ownerDocument!==host)host.body.appendChild(m);
+  m.dataset.dkFor=id;m.innerHTML=menuHtml(id);m.hidden=false;const r=btn?btn.getBoundingClientRect():{left:hw.innerWidth/2,right:hw.innerWidth/2,bottom:120};
+  m.style.left=Math.max(8,Math.min(r.right-m.offsetWidth,hw.innerWidth-m.offsetWidth-8))+'px';m.style.top=Math.round(Math.min(r.bottom+4,hw.innerHeight-m.offsetHeight-8))+'px';return m;}
  // ------------------------------------------------------------------ the drag of a card, and where it lands
  // the zones while a card is dragged: the left, right and bottom edges, the box «στη σελίδα» in the middle, the title of
  // another card (as a tab), anywhere else a window of its own
@@ -190,7 +349,7 @@
   // as a tab: over the head of another card that is not floating, or over the strip of a group
   const e=doc().elementFromPoint(x,y);
   const strip=e?.closest?.('.dk-tabs');if(strip){const g=D.L.groups.find(q=>D.wrap.get(q.id)?.firstChild===strip);if(g&&!g.cards.includes(id))return {tab:g.active};}
-  for(const d of D.defs){if(d.id===id||!open(d.id)||d.el.classList.contains('dk-off')||where(d.id)?.at==='float')continue;if(d.head&&d.head.contains(e))return {tab:d.id};}
+  for(const d of D.defs){if(d.id===id||!open(d.id)||d.el.classList.contains('dk-off')||SOLO.includes(where(d.id)?.at))continue;if(d.head&&d.head.contains(e))return {tab:d.id};}
   if(y>t&&x<bw)return {at:'left'};if(y>t&&x>W-bw)return {at:'right'};if(y>H-bh)return {at:'bottom'};return {at:'float'};}
  function zones(){if(D.zones)return D.zones;const z=doc().createElement('div');z.id='dock-zones';z.className='dk-zones';z.hidden=true;
   z.innerHTML='<div class="dkz dkz-left">◧ αριστερά</div><div class="dkz dkz-right">◨ δεξιά</div><div class="dkz dkz-bottom">⬓ κάτω</div><div class="dkz dkz-main">⇲ στη σελίδα</div><div class="dkz-hi"></div><div class="dkz-ghost"></div>';
@@ -214,7 +373,7 @@
    if(D.zones)D.zones.hidden=true;doc().body.classList.remove('dk-dragging');d.el.classList.remove('dk-dragged');setTimeout(()=>{D.dragged=false;},0);
    if(!live)return;if(cancel||!zn){if(fl){d.el.style.left=r0.left+'px';d.el.style.top=r0.top+'px';}return;}
    if(zn.tab)tab(id,zn.tab);
-   else if(zn.at==='float'){if(fl)keepFloat(id);else{D.L.float[id]=clampRect({x:ev.clientX-40,y:ev.clientY-14,w:Math.min(980,Math.max(360,r0.width)),h:Math.min(720,Math.max(260,Math.min(r0.height,innerHeight*0.7)))});place(id,'float');}}
+   else if(zn.at==='float'){if(fl){keepFloat(id);D.L.from={kind:'user'};save();}else{D.L.float[id]=clampRect({x:ev.clientX-40,y:ev.clientY-14,w:Math.min(980,Math.max(360,r0.width)),h:Math.min(720,Math.max(260,Math.min(r0.height,innerHeight*0.7)))});place(id,'float');}}
    else place(id,zn.at);};
   const up=ev=>end(ev,false),cc=ev=>end(ev,true),esc_=ev=>{if(ev.key==='Escape')end(ev,true);};
   handle.addEventListener('pointermove',mv);handle.addEventListener('pointerup',up);handle.addEventListener('pointercancel',cc);doc().addEventListener('keydown',esc_);}
@@ -226,7 +385,8 @@
    // graphs drawn anew in every frame of the drag cost 50–120 ms per frame in the IEEE 9)
    if(!raf)raf=requestAnimationFrame(()=>{raf=0;const d=Math.round(v-v0);s.style.transform=at==='left'?`translateX(${d}px)`:at==='right'?`translateX(${-d}px)`:`translateY(${-d}px)`;});};
   s.classList.add('on');
-  s.onpointerup=s.onpointercancel=()=>{s.onpointermove=s.onpointerup=s.onpointercancel=null;if(raf){cancelAnimationFrame(raf);raf=0;}s.style.transform='';s.classList.remove('on');D.L.size[at]=Math.round(v);doc().body.classList.remove('dk-resizing');save();render();};}
+  s.onpointerup=s.onpointercancel=()=>{s.onpointermove=s.onpointerup=s.onpointercancel=null;if(raf){cancelAnimationFrame(raf);raf=0;}s.style.transform='';s.classList.remove('on');
+   if(Math.round(v)!==Math.round(v0)){D.L.size[at]=Math.round(v);D.L.from={kind:'user'};}doc().body.classList.remove('dk-resizing');save();render();};}
  // 5.0.6: the edge between two cards side by side: a line while it moves, the new widths once, at the release
  function vsplitStart(e,w){if(e.button!==0)return;const g=D.L.groups.find(q=>q.id===w.dataset.dkGroup);if(!g||!g.side)return;e.preventDefault();e.stopPropagation();
   const s=e.currentTarget,body=w.lastChild,bw=body.getBoundingClientRect().width||1,x0=e.clientX,r0=g.r;try{s.setPointerCapture(e.pointerId);}catch(x){}
@@ -235,12 +395,13 @@
   s.onpointerup=s.onpointercancel=()=>{s.onpointermove=s.onpointerup=s.onpointercancel=null;if(raf){cancelAnimationFrame(raf);raf=0;}s.style.transform='';s.classList.remove('on');doc().body.classList.remove('dk-resizing');
    change(L=>M.ratio(L,g.active,r));};}
  // ------------------------------------------------------------------ the start
- // defs: [{id, title, sel (the card), head (where its buttons go, inside the card), closable}] in the order of the page
- function init(defs){const Dc=doc();if(!Dc||D.on)return api;
+ // defs: [{id, title, sel (the card), head (where its buttons go, inside the card), closable, screen (false: not on the second
+ // screen)}] in the order of the page; opts: {notice(msg, kind)} (5.0.10)
+ function init(defs,opts){const Dc=doc();if(!Dc||D.on)return api;D.opts=opts||{};
   for(const q of defs){const el=Dc.querySelector(q.sel);if(!el)continue;const head=q.head?el.querySelector(q.head)||el:el;
    const anchor=Dc.createComment('dock:'+q.id);el.before(anchor);el.dataset.dkCard=q.id;el.classList.add('dk-card');
    const t=Dc.createElement('span');t.className='dk-tools';
-   t.innerHTML=`<button class="dk-grip" data-dk-grip title="Σύρε την κάρτα: αριστερά, δεξιά ή κάτω για κούμπωμα, στον τίτλο άλλης κάρτας για καρτέλα, στη μέση για τη θέση της, αλλού για δικό της παράθυρο (Esc: ακύρωση)">⠿</button><button data-dk-float>⇱</button><button data-dk-max title="Όλη η οθόνη και πίσω (Esc)">⛶</button><button data-dk-menu aria-haspopup="menu" title="Κούμπωμα σε περιοχή, καρτέλα δίπλα σε άλλη κάρτα, όλη η οθόνη">▾</button>`;
+   t.innerHTML=`<button class="dk-grip" data-dk-grip title="Σύρε την κάρτα: αριστερά, δεξιά ή κάτω για κούμπωμα, στον τίτλο άλλης κάρτας για καρτέλα, στη μέση για τη θέση της, αλλού για δικό της παράθυρο (Esc: ακύρωση)">⠿</button><button data-dk-float>⇱</button><button data-dk-max title="Όλη η οθόνη και πίσω (Esc)">⛶</button><button data-dk-menu aria-haspopup="menu" title="Κούμπωμα σε περιοχή, καρτέλα δίπλα σε άλλη κάρτα, όλη η οθόνη, δεύτερη οθόνη">▾</button>`;
    head.appendChild(t);
    // the buttons inside a <summary> do not open or close its <details>
    t.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;e.preventDefault();e.stopPropagation();if(D.dragged)return;
@@ -253,13 +414,17 @@
   // a card narrower than the page of 1100 px (in a region, in a window of its own): its columns one under the other, as
   // the stylesheet does for a narrow screen
   if(root.ResizeObserver){const ro=new ResizeObserver(es=>{for(const e of es){const w=e.contentRect.width;e.target.classList.toggle('dk-narrow',w>0&&w<860);}});for(const d of D.defs)ro.observe(d.el);}
-  D.L=M.normalize(load(),ids());D.on=true;render();
+  lload();D.L=M.normalize(load(),ids());D.on=true;render();
   // a smaller screen: the floating cards inside it (their kept rectangle stays), the regions at most 70 % of it
   root.addEventListener('resize',()=>render());
   Dc.addEventListener('keydown',e=>{if(e.key!=='Escape'||!D.L.max)return;if([...Dc.querySelectorAll('.modal')].some(m=>!m.hidden&&m.offsetParent!==null))return;max(D.L.max,false);});
+  // 5.0.10: the windows of the second screen: their hello, and a page that goes (reload, close) lets them go
+  D.tick=setInterval(tick,500);
+  root.addEventListener('pagehide',()=>{D.dead=true;let ch=false;for(const id of D.win.keys())if(keepScreen(id))ch=true;if(ch)save();for(const q of D.win.values())q.ac.abort();});
   return api;}
  const onChange=f=>{D.changed.push(f);};
  const state=()=>D.L?M.copy(D.L):null;
- const api={model:M,init,place,tab,activate,side,firstAs,max,reveal,reset,where,label,state,openMenu,closeMenu,onChange,NAME};
+ const api={model:M,init,place,tab,activate,side,firstAs,max,reveal,reset,where,label,state,openMenu,closeMenu,onChange,NAME,
+  layout,saveAs,load:loadSaved,drop,auto,propose,layouts,layoutsHtml,layoutsClick,screenHello,q,qa,screenDocs,screenWin};
  root.Dock=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

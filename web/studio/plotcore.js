@@ -90,7 +90,7 @@
  // o = {series: [{x, y, color, width, dash}], xlog, x: [x0, x1], y: [y0, y1], xUnit, yUnit, xPlain, yPlain, title,
  //      marks: [{x, color, label}] (vertical), hl: [{y, color, label}] (horizontal), pts: [{x, y, color, label}]}
  // → {X, Y, x0, x1, y0, y1} for what the caller draws on top
- function lineChart(cv,o){const dpr=root.devicePixelRatio||1,W=Math.max(160,Math.round(cv.clientWidth||cv.width||320)),H=Math.max(100,Math.round(cv.clientHeight||cv.height||180));
+ function lineChart(cv,o){const dpr=(cv.ownerDocument?.defaultView||root).devicePixelRatio||1,W=Math.max(160,Math.round(cv.clientWidth||cv.width||320)),H=Math.max(100,Math.round(cv.clientHeight||cv.height||180));
   if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
   const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
   const css=root.getComputedStyle?getComputedStyle(cv):null,ink=(css&&css.getPropertyValue('--scope-ink').trim())||'#2b3436',grid=(css&&css.getPropertyValue('--scope-grid').trim())||'#e8ecea',bg=(css&&css.getPropertyValue('--scope-bg').trim())||'#fff';

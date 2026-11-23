@@ -20,7 +20,7 @@ a{color:var(--accent)}
 .top-actions{margin-left:auto;display:flex;align-items:center;gap:6px}
 .top-actions a{font-size:12px;text-decoration:none;padding:6px 8px;border-radius:6px}.top-actions a:hover{background:#eef5f2}
 .sep{width:1px;height:20px;background:var(--line);margin:0 4px}
-.engine{font-size:11px;color:var(--muted);padding:3px 8px;border-radius:20px;background:#f1f4f3}.engine.ok{color:var(--accent);background:#e7f3ef}
+.engine{font-size:11px;color:var(--muted);padding:3px 8px;border-radius:20px;background:#f1f4f3}.engine.ok{color:var(--accent);background:#e7f3ef}.engine[hidden]{display:none}.engine.gpu{margin-left:4px;cursor:help;white-space:nowrap}
 main{max-width:1680px;margin:0 auto;padding:14px 18px 30px;display:flex;flex-direction:column;gap:14px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 2px #0000000a}
 /* bench */
@@ -802,3 +802,16 @@ main>.dk-group>.dk-body{overflow:visible}
 .fz-plot .fz-grid{stroke:var(--line,#ddd);stroke-width:.6}
 .fz-key{margin:-2px 0 6px}
 .nv-cmp.fz{max-height:560px}
+/* 5.0.10 (ROADMAP §94 steps δ and ε): the layouts at the top of the menu «Παράθυρα», and the window of the second screen */
+.dk-lays .dk-lrow{display:flex;flex-wrap:wrap;gap:4px;margin:3px 0}
+.dk-lay{padding:3px 10px;font-size:12.5px}.dk-lay.on{background:#e6f3ef;border-color:#147966;color:#147966;font-weight:600}.dk-lay.prop{box-shadow:0 0 0 2px #c47a1c66}
+.dk-lsv{display:inline-flex}.dk-lsv .dk-lay{border-top-right-radius:0;border-bottom-right-radius:0}
+.dk-ldel{padding:3px 6px;border-left:0;border-top-left-radius:0;border-bottom-left-radius:0;font-size:11px;color:var(--muted)}
+.dk-lsave{display:flex;gap:4px;margin:6px 0 3px}.dk-lsave input{flex:1 1 auto;min-width:0;font-size:12.5px;padding:3px 6px}.dk-lsave button{white-space:nowrap}
+.dk-lnow{display:block;margin:3px 2px 0;font-size:11px;line-height:1.3}
+body.dk-screen-win{margin:0;background:var(--bg);overflow:hidden}
+.screen-wait{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:14px;text-align:center;padding:24px}
+.screen-wait b{font-size:16px;color:var(--ink)}.screen-wait[hidden]{display:none}
+.card.dk-screen{position:fixed;inset:0;margin:0;border:0;border-radius:0;box-shadow:none;overflow:auto;z-index:1}
+#netview.dk-screen .nv-body{height:auto;flex:1 1 auto}
+#scope-card.dk-screen:not(.dk-narrow) .scope-scroll{height:calc(100vh - 210px)!important;max-height:none}#scope-card.dk-screen:not(.dk-narrow) .scope-side{max-height:calc(100vh - 80px)}

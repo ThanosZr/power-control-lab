@@ -17,7 +17,7 @@
  const charts=new Map();let chartId=0;
  const canvas=(spec,cls='')=>{const id='mc'+(++chartId);charts.set(id,spec);return `<div class="mchart ${cls}"><canvas data-mchart="${id}"></canvas></div>`;};
  function nice(span,n){const r=span/Math.max(1,n),p=10**Math.floor(Math.log10(r)),m=r/p;return (m<1.5?1:m<3.5?2:m<7.5?5:10)*p;}
- function draw(cv,s){const box=cv.parentElement.getBoundingClientRect(),dpr=devicePixelRatio||1,W=Math.max(260,box.width),H=s.h||230;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';
+ function draw(cv,s){const box=cv.parentElement.getBoundingClientRect(),dpr=(cv.ownerDocument?.defaultView||root).devicePixelRatio||1,W=Math.max(260,box.width),H=s.h||230;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';
   const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);const L=56,R=12,T=18,B=30,pw=W-L-R,ph=H-T-B;
   const tx=v=>s.logx?Math.log10(v):v;const xs=s.x.map(tx);let x0=Math.min(...xs),x1=Math.max(...xs);
   let y0=Infinity,y1=-Infinity;for(const se of s.series)for(const v of se.y)if(Number.isFinite(v)){y0=Math.min(y0,v);y1=Math.max(y1,v);}
