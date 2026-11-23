@@ -1,6 +1,6 @@
 # CAD-T001: pinned engine baseline
 
-Recorded 2026-11-22. CAD-T001 is in progress. No CAD kernel or viewport is implemented by this checkpoint.
+Initial record 2026-11-22; continuation reviewed 2026-11-23. CAD-T001 is in progress. No CAD kernel or viewport is implemented by this checkpoint.
 
 ## Source of truth
 
@@ -53,6 +53,39 @@ Pyodide was initially absent and was installed with `npm install --no-save pyodi
 The two failed setup classes were `test_control.OnTheDrive` and `test_control.Stage2OnTheDrive`; all their tests passed in the 19-test rerun. The initial 11 skips were nine Octave tests, one desktop-window test without a display, and one Pyodide continuation test whose availability was evaluated during discovery. The continuation test also passed in the rerun. Octave and the desktop GUI remain untested locally. The full suite was not rerun after the dependency correction; the original full result and successful affected-module rerun are separate evidence.
 
 All numerical tests above ran against the approved engine source; the new Git changes are documentation only. Final documentation checks and a complete diff audit verify that the original tracked engine files remain identical. A new published CAD commit still needs its own CI, identified by its exact SHA.
+
+## Continuation evidence, 2026-11-23
+
+The incoming published CAD HEAD was `c169ffc8121013f0ed9837f983b940e66fe73a1a`. Its [CI 45093234600](https://github.com/ThanosZr/power-control-lab/actions/runs/45093234600) was checked directly: `completed / success`, branch `lab-cad-0.1.0-baseline`, push event, and all four jobs successful (Python/Node, MATLAB/Octave, Playwright, packaging). This is evidence for the incoming HEAD, not a later documentation commit.
+
+### Earlier documents recovered
+
+After the owner requested inspection of earlier generated files, the original CAD-S007 material was located and read on 2026-11-23:
+
+- `CAD_INTEGRATION_MAP.md` and `CAD_BASELINE(1).md`, dated 2026-11-22, are the actual earlier draft documents.
+- `CAD_VERSIONS_01(1).md` contains the CAD-S007 entry; the accompanying `CAD_NEXT_STEPS(1).md`, `CAD_DECISIONS_01(1).md`, `CAD_PROJECT_INSTRUCTIONS(1).md` and `CAD_SOURCES(1).md` are revision 0.3. They are newer than the revision 0.2 planning files attached at the start of this session.
+- `CAD_T001_S006_CHECKPOINT.md` was also read as an earlier checkpoint. The separately named `CAD_T001_docs_unpublished.patch` could not be resolved through the available file search/read route.
+
+This resolves the specific absence of the original CAD-S007 documents. It does not make the reconstruction in `5660e9b` a recovered original, prove old local timings again, or add those generated files automatically to the project's attachment list. The original reports of 152 tests and earlier unpublished HEADs remain historical evidence in those documents; they are not added to this session's test count. Important persistence and resource findings were rechecked in source and incorporated in `CAD_INTEGRATION_MAP.md`.
+
+All advertised remote branch heads were fetched read-only and their reachable path history was searched for CAD/draft, privacy/private, nethash, engine next-steps/decisions/versions, handoff and AGENTS filenames. The matching CAD history contains the three published CAD documents. Neither this filename/history search nor the earlier-generated-file search supplied the active engine handoff or actual privacy procedure and private inputs. This is a scoped search result, not proof about unpublished or differently named private material. No original private checker has been run or replaced.
+
+### Checks executed in this continuation
+
+| Check | Observed result |
+| --- | --- |
+| `python tools/codemap.py --check` | Passed |
+| `python tools/api_surface.py --check` | Passed; 947 API entries |
+| `python tools/nn_weights.py --check` | Passed; weights match, maximum difference 0 |
+| `python tools/verify.py --check` | Passed; 512/512 within their existing tolerances |
+| `python -m unittest tests.test_dock tests.test_live_program tests.test_recording -v` | Passed; 24 tests, no skips. Covers existing layout invariants, circuit parameter-program replay and recording range behavior. It does not test a CAD renderer or mechanical playback. |
+| Local browser availability | Playwright 1.62.1 is installed, but its bundled Chromium executable is absent. Launching the installed `/usr/bin/chromium` fails before app assertions with `socket() failed: Operation not permitted` and SIGABRT. No local UI timing or GPU measurement was obtained. |
+| Full local suite / Octave | Not rerun for this documentation-only continuation; Octave is absent. The initial full-suite outcome and affected-module rerun above remain separate evidence. |
+| Engine identity / final diff | Engine version remains 5.0.7. Only the three allowed CAD documentation paths may differ from the approved engine tree; all original tracked engine files must remain identical. |
+
+The runtime versions match the previously recorded Python/Node/NumPy/SciPy/SymPy environment. No dependency was installed or changed in this continuation. No application code, runtime manifest, API, solver or workflow was edited. The original nethash/ERR procedure is not triggered by these documentation changes and remains unavailable for any later change that requires it.
+
+The three-file publication exception remains limited to `CAD_BASELINE.md`, `CAD_INTEGRATION_MAP.md` and `CAD_STATUS.md`. Recovering old documents does not waive the missing engine/private-check requirements for task closure or for code publication. New renderer, robotics, AI/PINN and time-playback directions are recorded as future work only.
 
 ## Reproduce and review
 
