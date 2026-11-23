@@ -34,7 +34,41 @@ FEA/CFD/CAM και κλειστές μορφές ανταλλαγής απαιτ
 | Playback | Χωριστός χρόνος προσομοίωσης/προβολής, zoom/pause/step/replay, συγχρονισμένα αποτελέσματα | State storage, interpolation/event policy και ακριβές timeline contract |
 | MCU | Μελλοντικό code generation για ρητά υποστηριζόμενο υποσύνολο | IR, συγκεκριμένος target/SDK/toolchain και μετρήσεις |
 
-Οι ενότητες αυτές δεν αποτελούν άδεια να ξεκινήσουν τα επόμενα tasks. Η παρούσα εργασία παραμένει CAD-T001/SOL.
+Οι ενότητες αυτές δεν αποτελούν άδεια να ξεκινήσουν τα επόμενα tasks. Το T001/SOL ολοκληρώνεται ως documentation-only (D024), υπό το τελικό CI. Νέα υλοποίηση CAD απαιτεί ρητή εντολή και τις πραγματικές ιδιωτικές πύλες.
+
+### Ενδεικτική αρχιτεκτονική για συνεργασία και ενίσχυση
+
+**Ενδεικτική πρόταση συζήτησης, όχι επιλεγμένα συμβόλαια ή υλοποίηση.** D025: θα εξελίξουμε μαζί με τον ιδιοκτήτη τον engine πάνω στο αποθετήριο της εγκεκριμένης 5.0.7. Το Fable μπορεί να εξετάσει και να ενισχύσει τις λύσεις όταν επιλέξουμε να του αναθέσουμε συγκεκριμένη εργασία. Οι ακόλουθες μονάδες δείχνουν διαχωρισμούς ευθυνών και ερωτήματα προς εξέταση, όχι υποχρεωτικές νέες κλάσεις, υπηρεσίες ή εξαρτήσεις.
+
+```mermaid
+flowchart TD
+  G["GUI / Python / Java"] --> D["Document and commands"]
+  D --> K["Background geometry jobs"]
+  D --> P["Physical model"]
+  K --> M["Revisioned geometry and mesh"]
+  P --> S["Simulation jobs"]
+  M --> R["Retained renderer"]
+  S --> T["Timestamped states"]
+  T --> R
+  T --> O["Scopes / replay"]
+  B["Shared resource budget"] -.-> K
+  B -.-> S
+```
+
+Η παραμετρική περιγραφή είναι η αυθεντική πηγή εντολών, όχι το mesh. Μια αλλαγή διαστάσεων μπορεί να παράγει νέα ακριβή γεωμετρία και display mesh στο background· η κάμερα κινείται πάνω σε ήδη διατηρημένα δεδομένα χωρίς να ξανατρέχει τον kernel. Η φυσική μοντελοποίηση και η διαχείριση χρόνου δεν εξαρτώνται αυθαίρετα από το frame rate. Ο κοινός προϋπολογισμός πόρων πρέπει να καλύπτει παράλληλα geometry jobs και simulation, διατηρώντας την απόκριση του υπάρχοντος editor.
+
+| Θέμα προς εξέταση από εμάς / Fable | Ενδεικτική σχεδιαστική επιλογή προς δοκιμή | Αποδεικτικό πριν από υιοθέτηση |
+| --- | --- | --- |
+| Renderer χωρίς Three.js | Retained GPU buffers, χωριστά camera/scene revisions, incremental uploads και picking. Σύγκριση κατάλληλων backends, όχι προεπιλογή. | p50/p95 frame time, input latency, geometry rebuild count στο zoom/pan, VRAM/RAM, responsiveness με concurrent solver, resize/reveal και resource disposal. |
+| Ακριβής γεωμετρία και topology | Ανεξάρτητος kernel adapter, σταθερές feature references, cache με ρητή ταυτότητα/ανοχή. | Ίδιο δοκίμιο, STEP round-trip, volume/mass/inertia, feature regeneration, αποτυχίες boolean και undo χωρίς απώλεια τελευταίου valid state. |
+| Worker scheduling | Jobs με revision/token, κοινός προϋπολογισμός CPU/RAM, backpressure και ακύρωση· προστασία live simulation. | Stale results απορρίπτονται· δοκιμή oversubscription, cancellation/recovery, memory ceiling και μετρημένο IPC overhead. |
+| GUI / API / αποθήκευση | Ένα document contract, μικροί adapters σε PCL 5.0.7, κοινή command/undo διαδρομή. | Save/open παλιών circuit files, migration/round-trip δικού μας εγγράφου, συμβατή επιλογή/inspector, ένα panel instance. Μελλοντικό detached window ελέγχεται μόνο σε εγκεκριμένο target. |
+| Physics και motion | Ρητές μάζες/αδράνειες, joints, frames, θύρες/μονάδες, σαφής διαχωρισμός κινηματικής και δυναμικής. | Αναλυτικά reference cases, conservation/energy balance, event handling, ανοχές και σύγκριση solver· όχι μόνο animation. |
+| Χρόνος προβολής | Ανεξάρτητα simulation/presentation clocks, χρονικά σφραγισμένες καταστάσεις και κοινό playhead για 3D/scopes/events. | Replay με pause/step/slow motion, συγχρονισμός timestamps/revisions, πολιτική συμβάντων/interpolation, έλεγχος αποθήκευσης. |
+| AI-assisted acceleration | PINNs ως μία υποψήφια μέθοδος μόνο σε ορισμένο πρόβλημα, με επαληθευμένο reference solver και fallback. | Σφάλμα, φυσικοί περιορισμοί, out-of-domain συμπεριφορά, reproducibility, χρόνος end-to-end και overhead. |
+| Engine regression και integration | Απομόνωση νέων modules και μικρά hooks στον pinned engine. Ακριβή refs πριν από οποιαδήποτε μελλοντική ενσωμάτωση. | Τοπικοί έλεγχοι και CI στο ίδιο SHA, πραγματικός privacy checker, και πραγματικός nethash/ERR αν αλλάζουν solver/netlib/parts. |
+
+**Ενδεικτικό σενάριο πρώτου δοκιμίου:** προτείνεται ουδέτερος παραμετρικός άξονας με δύο διαμέτρους, υλικό και τοπικά frames. Ένα zoom/pan δεν επιτρέπει rebuild του σώματος· μια αλλαγή διαμέτρου ζητά νέα revision. Γεωμετρικές ιδιότητες και επιλογή οντότητας ελέγχονται ανεξάρτητα από τη tessellation. Αργότερα, και μόνο σε εγκεκριμένο motion task, μπορεί να δοκιμαστεί μικρό σενάριο περιστροφής με γνωστή αδράνεια και χρονικά σφραγισμένα αποτελέσματα. Το δοκίμιο, ο kernel και τα αριθμητικά όρια δεν εγκρίνονται εδώ. Τα ευρήματα κάθε επόμενου πειράματος θα γράφονται στο Git, ώστε η ενίσχυση να πατά σε πραγματικές μετρήσεις και όχι σε context παλιών chats.
 
 ## 3. Ιδιοκτησία δεδομένων και ακριβή/προσεγγιστικά αποτελέσματα
 

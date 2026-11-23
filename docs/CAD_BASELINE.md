@@ -1,6 +1,6 @@
 # CAD-T001: pinned engine baseline
 
-Initial record 2026-11-22; continuation reviewed 2026-11-23. CAD-T001 is in progress. No CAD kernel or viewport is implemented by this checkpoint.
+Initial record 2026-11-22; continuation reviewed 2026-11-23. CAD-T001 documentation-only completion is owner-approved (D024), subject to CI at the final published SHA. No CAD kernel or viewport is implemented.
 
 ## Source of truth
 
@@ -91,7 +91,7 @@ At that stage, the publication exception was limited to `CAD_BASELINE.md`, `CAD_
 
 The owner subsequently instructed that the five planning documents and the complete detailed CAD plan be published and maintained in Git, so the parallel engine project can read them for future integration. The owner also explicitly requested that the CAD branch root README describe the CAD tool's purpose instead of the old power-electronics presentation. See CAD_DECISIONS_01 D020–D022.
 
-This later authorization extends the documentation-only publication scope to README.md and the ten canonical docs/CAD_*.md files listed in CAD_INDEX. It does not authorize runtime/dependency/workflow changes, private inputs or a substitute private checker. The two missing private material sets remain task-closure/code-publication gates.
+This later authorization extended the documentation-only publication scope to README.md and the ten canonical docs/CAD_*.md files listed in CAD_INDEX. It did not authorize runtime/dependency/workflow changes, private inputs or a substitute private checker. At that checkpoint the two missing private material sets were still task-closure/code-publication gates; D024 subsequently moved them to the pre-implementation gate.
 
 The recovered revision 0.3 planning files are brought into Git with canonical names and updated to documentation revision 0.4. The old numbered decisions and historical S000/S001/S007 records are retained. CAD_INDEX and CAD_PLAN_DETAILS make the plan and future integration criteria readable without prior chat access.
 
@@ -141,4 +141,6 @@ For the full browser baseline, follow `.github/workflows/ci.yml`: install its pi
 
 ## Completion gate
 
-CAD-T001 closes only after the required current engine handoff documents are available and reread, the actual privacy requirement is resolved for task closure, the local baseline has a recorded outcome, and the final published CAD SHA has successful CI. The owner's specific documentation publication instructions, including the later full-plan/README authorization, permit this checkpoint; it does not mean the missing private check was performed or that a future code push is approved. Publishing a checkpoint does not itself close CAD-T001. Do not start CAD-T002 automatically.
+**D024 supersedes the earlier task-closure rule for the two private gates.** On 2026-11-23 the owner approved closing CAD-T001 as documentation-only with the local baseline recorded, documentation/source integrity checked and the exact final published CAD SHA successfully validated by CI. Current private engine handoff and the actual privacy procedure/inputs remain mandatory before any CAD implementation; neither has been performed or waived. No runtime, workflow, license, solver, dependency or API change is authorized. D025 reconfirms that later engine development starts on the repository's pinned 5.0.7 and may be enhanced by Fable; the illustrative design is documentation only. Do not start CAD-T002 automatically.
+
+CAD-S011 follows the published S010 `b8fbc8abab4b02c8e01783dee10d0740a9bc32f2`. S010's CI 45122428998 is intermediate. The S011 closure documentation has the same runtime tree as S010 and the approved base. The fresh S010 numerical checks above therefore remain evidence for the unchanged runtime. A fresh S011 local run confirmed engine 5.0.7, codemap PASS, API PASS (947), 24/24 docking/live-program/recording tests, and 52 relative links/anchors across the README and ten CAD docs with zero failures; `git diff --check` passed. Exact tree/identity are checked again before publication. Only the successful CI for the exact published S011 commit can certify final T001 closure.
