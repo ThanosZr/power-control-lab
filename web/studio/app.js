@@ -1136,7 +1136,7 @@ function dmSection(){const n=DM.fill=(DM.fill||0)+1,go=()=>{const host=document.
 function dmHTML(){const m=dmModel();if(!m||(!m.error&&!m.elements.length)){if(editor.extText?.size)queueMicrotask(dmLabels);return '';}
  if(m.error)return psec('c-model','Ροή φορτίου και βραχυκύκλωμα από το σχέδιο',`<p class="small bad">⚠ ${esc(m.error)}</p>`,{bad:true});
  const key=dmKey(m),fresh=DM.r&&DM.key===key,lb=id=>esc(editor.comp(id)?.label||id),f=(x,d=4)=>x===null||x===undefined||!Number.isFinite(+x)?'—':fmt(+x,d);
- let h=`<p class="small">${esc(Model.summary(m))}. Το ίδιο μοντέλο με το EMT: η ροή φορτίου είναι η μόνιμη κατάσταση από την οποία ξεκινά η προσομοίωση (οι γεννήτριες |V|∠θ από τις παραμέτρους τους)· το βραχυκύκλωμα κατά IEC 60909-0 με τα δεδομένα πινακίδας των στοιχείων.</p>`;
+ let h=`<p class="small">${esc(Model.summary(m))}. Το ίδιο μοντέλο με το EMT: η ροή φορτίου είναι η μόνιμη κατάσταση από την οποία ξεκινά η προσομοίωση (οι γεννήτριες |V|∠θ από τις παραμέτρους τους)· το βραχυκύκλωμα κατά IEC 60909-0 με τα δεδομένα πινακίδας των στοιχείων.${m.elements.some(e=>e.type==='TLM')?' Οι γραμμές από γεωμετρία με το ακριβές π τους στη θεμελιώδη, από τα ίδια δεδομένα με το μοντέλο τους στον χρόνο.':''}</p>`;
  const sk=m.skipped.filter(x=>x.why!=='other'||m.touching.includes(x.id));
  if(sk.length)h+=`<ul class="diag-list" id="dm-skip">${sk.slice(0,8).map(x=>`<li><button data-focus="${esc(x.id)}">${lb(x.id)}</button>${esc(Model.WHY[x.why]||x.why)}</li>`).join('')}${sk.length>8?`<li class="muted">… και ${sk.length-8} ακόμη</li>`:''}</ul>`;
  if(m.warnings.length)h+=`<ul class="diag-list">${m.warnings.slice(0,4).map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`;
@@ -1160,7 +1160,7 @@ function dmHTML(){const m=dmModel();if(!m||(!m.error&&!m.elements.length)){if(ed
    h+=`<table class="dm-tbl" id="dm-buses"><tr><th>Ζυγός</th><th>I″k (kA)</th><th>i_p (kA)</th><th>S″k (MVA)</th></tr>${rows.join('')}</table>`;
    if(sm.faults.length)h+=`<ul class="diag-list" id="dm-faults">${sm.faults.map(q=>`<li><button data-focus="${esc(q.id)}">${lb(q.id)}</button>${esc(DM_FAULT[q.fault]||q.fault)} στον ζυγό ${esc(B.get(q.bus)?.label||q.bus)}: I″k = <b>${f(q.Ik_kA,5)} kA</b>, i_p = ${f(q.ip_kA,5)} kA</li>`).join('')}</ul>`;}}
  return psec('c-model','Ροή φορτίου και βραχυκύκλωμα από το σχέδιο',h,{def:true,cnt:fresh?(DM.r.study==='sc'?'IEC 60909':'ροή φορτίου'):m.buses.length+' ζυγοί'});}
-function bindDm(box){box.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>focusComp(b.dataset.focus));
+function bindDm(box){box.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>{const id=b.dataset.focus;focusComp(editor.comp(id)?id:id.split('/')[0]);});   // 5.0.12: a part inside a subcircuit shows its instance
  box.querySelectorAll('[data-dm]').forEach(b=>b.onclick=()=>['pf','sc'].includes(b.dataset.dm)?dmRun(b.dataset.dm):dmAct(b.dataset.dm));
  box.querySelectorAll('[data-dmopt]').forEach(el=>el.onchange=()=>{DM[el.dataset.dmopt]=el.value;});
  box.querySelector('[data-dmon]')?.addEventListener('change',e=>{DM.on=e.target.checked;dmLabels();});}
@@ -1168,10 +1168,10 @@ function bindDm(box){box.querySelectorAll('[data-focus]').forEach(b=>b.onclick=(
 function dmLabels(){const m=DM.r&&DM.on?dmModel():null,map=new Map();
  if(m&&!m.error&&DM.key===dmKey(m)){const res=DM.r.result,f=(x,d=4)=>fmt(+x,d),B=new Map(m.buses.map(b=>[b.id,b]));
   for(const e of m.elements){const b=res.buses[e.buses[0]],q=res.elements?.[e.id];
-   if(DM.r.study==='pf'){if(['GEN3','GRID3','VAC3'].includes(e.type)&&q)map.set(e.id,`P ${eng(q.P,'W',4)} · Q ${eng(q.Q,'var',4)}`);
-    else if(['LINE3','XF3','ZSER3'].includes(e.type)&&q)map.set(e.id,`${eng(q.Pa,'W',4)} → · I ${eng(q.I,'A',4)}`);
+   if(DM.r.study==='pf'){if(['GEN3','GRID3','VAC3','EQV3'].includes(e.type)&&q)map.set(e.id,`P ${eng(q.P,'W',4)} · Q ${eng(q.Q,'var',4)}`);
+    else if(['LINE3','XF3','ZSER3','TLM'].includes(e.type)&&q)map.set(e.id,`${eng(q.Pa,'W',4)} → · I ${eng(q.I,'A',4)}`);
     else if(e.type==='LOAD3'&&b)map.set(e.id,`|V| ${f(b.V,5)} pu ∠${f(b.angle,4)}°`);}
-   else if(b&&['LOAD3','FLT3','GEN3','GRID3','VAC3'].includes(e.type)){const fl=res.faults?.[e.id];map.set(e.id,`I″k ${eng((fl||b).Ik,'A',4)}`+(fl?' ('+(DM_FAULT[fl.fault]||fl.fault)+')':''));}}}
+   else if(b&&['LOAD3','FLT3','GEN3','GRID3','VAC3','EQV3'].includes(e.type)){const fl=res.faults?.[e.id];map.set(e.id,`I″k ${eng((fl||b).Ik,'A',4)}`+(fl?' ('+(DM_FAULT[fl.fault]||fl.fault)+')':''));}}}
  if(map.size||editor.extText?.size){editor.extText=map;editor.renderLabels();}}
 async function dmRun(st){const m=dmModel();if(!m||m.error||DM.busy)return;DM.busy=st;DM.err=null;renderProps();
  try{const q={drawing:m,study:st,options:st==='sc'?{fault:DM.fault,mode:DM.mode}:{},view:true};const r=await api('network_study',q);DM.r=r;DM.q=q;DM.key=dmKey(m);}

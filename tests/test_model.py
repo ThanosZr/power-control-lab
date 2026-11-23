@@ -10,7 +10,16 @@ The drawing becomes buses and elements with its own ids (web/studio/model.js) an
 * IEC 60909-0 of the drawing is the fault current of the phase-domain solution of the same equivalent (netlib.js faultCurrents)
   for the four kinds of fault, and its translation is the network built by hand from the same data (the HV side first, the group
   with its earthing, the tap at the LV side, K_G with cos φ_rG);
-* the studies of pcl.study take a drawing ('drawing'), with the results by its ids, the layer of the short circuit and a report."""
+* the studies of pcl.study take a drawing ('drawing'), with the results by its ids, the layer of the short circuit and a report.
+
+5.0.12 (THEORY §8ΩΜ), the second step:
+* the parts inside subcircuits are in the model with the ids X1/<id>, and a station inside a subcircuit is the same load flow as
+  the flat drawing (and the EMT start through the subcircuit);
+* an EQV3 gives the load flow of the network it stands for (IEEE 9, Fig. 50, 15b, 15c), is the EMT start of its circuit at ω_e
+  for every kind (Fig. 15a: to the 10⁻⁹ that the EMT puts in a zero R; the FDNE: to its G_min), also with ports at two levels,
+  and in IEC 60909-0 is its passive network (c·U_n/√3 over Z₁,kk, and Z₀,kk for the single-phase fault);
+* a TLM is its exact π at f in the positive sequence: against the EMT start of its CP model the difference is the CP model and
+  the step (THEORY §8ΩΜ.3); an untransposed line says how much its sequences are coupled; in IEC 60909-0 its Z′·ℓ."""
 import cmath
 import copy
 import json
@@ -60,6 +69,55 @@ def xf_drawing(grp='Dyn11', tap=2.5, mpos='mid', xs1=70, U1=150e3, U2=20e3, i0=1
     return {'version': 4, 'components': comps, 'wires': ws, 'solve': {'init': 'ac'}, 'sim': {'hDiv': 400}}
 
 
+def station_flat():
+    """A GRID3, an XF3 and a load (the first half of xf_drawing)."""
+    pr = xf_drawing()
+    keep = {'NET', 'B1', 'TR', 'B2', 'LD1'}
+    pr['components'] = [c for c in pr['components'] if c['id'] in keep]
+    pr['wires'] = [w for w in pr['wires'] if w['a']['c'] in keep and w['b']['c'] in keep]
+    return pr
+
+
+def station_in_sub():
+    """The same station with the transformer and the load inside a subcircuit (a port of width 3)."""
+    flat = station_flat()
+    inner = [{'id': 'P1', 'type': 'PORT', 'x': 0, 'y': 0, 'rot': 0, 'flip': False, 'label': 'P1', 'params': {'name': 'hv', 'width': 3}}]
+    inner += [c for c in flat['components'] if c['id'] in ('TR', 'B2', 'LD1')]
+    iw = [W(1, ('P1', 'p'), ('TR', 'abc1')), W(2, ('TR', 'abc2'), ('B2', 'j')), W(3, ('LD1', 'abc'), ('B2', 'j'))]
+    comps = [c for c in flat['components'] if c['id'] in ('NET', 'B1')]
+    comps.append({'id': 'X1', 'type': 'SUB', 'x': 0, 'y': 0, 'rot': 0, 'flip': False, 'label': 'Υ/Σ', 'params': {'def': 'stn'}})
+    return {**flat, 'components': comps, 'wires': [W(1, ('NET', 'abc'), ('B1', 'j')), W(2, ('X1', 'hv'), ('B1', 'j'))],
+            'subcircuits': {'stn': {'title': 'υποσταθμός', 'components': inner, 'wires': iw}}}
+
+
+EQ_R1, EQ_X1 = [[0.004, 0.001], [0.001, 0.006]], [[0.08, 0.03], [0.03, 0.12]]
+EQ_R0, EQ_X0 = [[0.008, 0.002], [0.002, 0.01]], [[0.2, 0.05], [0.05, 0.3]]
+
+
+def eq_drawing(fig='50', **more):
+    """An EQV3 with ports at 150 kV and 20 kV, coupled, and a load at each."""
+    mat = lambda a: '; '.join(', '.join(str(x) for x in r) for r in a)
+    p = {'Un': '150e3; 20e3', 'Sb': 100e6, 'E': '1.05; 1.02', 'ang': '0; -3', 'R1': mat(EQ_R1), 'X1': mat(EQ_X1), 'R0': mat(EQ_R0), 'X0': mat(EQ_X0),
+         'fig': fig, **more}
+    comps = [C('EQ', 'EQV3', p), C('A', 'JUNC', {}), C('B', 'JUNC', {}), C('LA', 'LOAD3', {'Un': 150e3, 'P': 60e6, 'Q': 20e6}),
+             C('LB', 'LOAD3', {'Un': 20e3, 'P': 15e6, 'Q': 5e6})]
+    ws = [W(1, ('EQ', 'abc1'), ('A', 'j')), W(2, ('EQ', 'abc2'), ('B', 'j')), W(3, ('LA', 'abc'), ('A', 'j')), W(4, ('LB', 'abc'), ('B', 'j'))]
+    return {'version': 4, 'components': comps, 'wires': ws, 'solve': {'init': 'ac'}, 'sim': {'hDiv': 400}}
+
+
+def tlm_drawing(tl, U=400e3):
+    """A GRID3, a TLM (its parameters tl) and a load."""
+    comps = [C('NET', 'GRID3', {'Un': U, 'Sk': 10e9, 'XR': 12, 'phase': 5}), C('B1', 'JUNC', {}), C('LN', 'TLM', tl), C('B2', 'JUNC', {}),
+             C('LD', 'LOAD3', {'Un': U, 'P': 400e6, 'Q': 100e6})]
+    ws = [W(1, ('NET', 'abc'), ('B1', 'j')), W(2, ('LN', 'abc1'), ('B1', 'j')), W(3, ('LN', 'abc2'), ('B2', 'j')), W(4, ('LD', 'abc'), ('B2', 'j'))]
+    return {'version': 4, 'components': comps, 'wires': ws, 'solve': {'init': 'ac'}, 'sim': {'hDiv': 400}}
+
+
+def tut(tid, **opts):
+    """A tutorial with its defaults and the given options."""
+    return node('build', tid, json.dumps(opts))
+
+
 def start_error(test, pr, warped=True):
     """The largest difference (pu and rad) of the voltages of the loads between the load flow of the drawing and its EMT start."""
     o = with_file('start', pr)
@@ -69,7 +127,7 @@ def start_error(test, pr, warped=True):
     r = M.load_flow(m, fe=fe)
     test.assertTrue(r['converged'])
     worst = 0.0
-    for c in pr['components']:
+    for c in m['elements']:                                 # 5.0.12: the loads inside subcircuits too (ids X1/<id>)
         if c['type'] != 'LOAD3':
             continue
         v0, v1 = o['v'][c['id']]
@@ -78,7 +136,7 @@ def start_error(test, pr, warped=True):
         ph = complex(v0, -v1)                               # the samples at 0 and T/4 of √2·|V|·sin(ωt + θ)
         V = abs(ph) / math.sqrt(2) / (c['params']['Un'] / math.sqrt(3))
         ang = math.degrees(cmath.phase(ph)) + 90
-        b = next(b['id'] for b in m['buses'] if [c['id'], 'abc'] in b['at'])
+        b = c['buses'][0]
         q = r['buses'][b]
         worst = max(worst, abs(q['V'] - V), abs((q['angle'] - ang + 180) % 360 - 180) * math.pi / 180)
     return worst
@@ -96,8 +154,10 @@ class TestModel(unittest.TestCase):
         self.assertEqual((t['buses'], t['types'], t['skipped']), (9, {'GEN3': 3, 'LINE3': 9, 'LOAD3': 3}, []))
         self.assertEqual(self.tut['net_fault']['buses'], 1)                    # the closed breaker joins its two sides
         self.assertEqual(self.tut['se_emt']['buses'], 9)                       # a PMU in each line is a meter in series
-        self.assertIn('EQV3:later', self.tut['ieee9_eq']['skipped'])
-        self.assertTrue(all(s == 'SUB:sub' for s in self.tut['sub_legs']['skipped']))
+        self.assertEqual((self.tut['ieee9_eq']['types'].get('EQV3'), self.tut['ieee9_eq']['skipped']), (1, []))   # 5.0.12
+        self.assertEqual(self.tut['sub_legs']['skipped'], [])                  # the legs inside the subcircuits: no part of a network
+        self.assertEqual(self.tut['cable_xb']['types'].get('TLM'), 1)           # the line of three phases; the others have six
+        self.assertIn('TLM:mph', self.tut['cable_xb']['skipped'])
         self.assertEqual(self.tut['hvdc_lcc']['types'].get('ZSER3'), 2)        # the level of a bus beyond a series impedance
 
     def test_round_trip_of_to_emt(self):
@@ -205,6 +265,74 @@ class TestModel(unittest.TestCase):
         crossed['wires'] += [W(11, ('EB', 'bus'), ('B2', 'j')), W(12, ('EB', 'a'), ('LN', 'a1')), W(13, ('EB', 'b'), ('LN', 'b1')), W(14, ('EB', 'c'), ('LN', 'c1'))]
         m = with_file('model', crossed)
         self.assertEqual(sorted(s['id'] for s in m['skipped'] if s['why'] == 'phases'), ['LD2', 'LN'])
+
+    def test_subcircuits(self):
+        sub = station_in_sub()
+        m = with_file('model', sub)
+        self.assertEqual(sorted(e['id'] for e in m['elements']), ['NET', 'X1/LD1', 'X1/TR'])
+        self.assertEqual((sorted(b['id'] for b in m['buses']), m['skipped']), (['B1', 'X1/B2'], []))
+        flat = with_file('model', station_flat())
+        r, q = M.load_flow(m), M.load_flow(flat)
+        for b, b0 in (('B1', 'B1'), ('X1/B2', 'B2')):
+            self.assertAlmostEqual(r['buses'][b]['V'], q['buses'][b0]['V'], delta=1e-12)
+            self.assertAlmostEqual(r['buses'][b]['angle'], q['buses'][b0]['angle'], delta=1e-10)
+        self.assertEqual(r['elements']['X1/LD1'], q['elements']['LD1'])
+        self.assertLess(start_error(self, sub), 1e-6)                          # the EMT start through the subcircuit
+
+    def test_equivalents(self):
+        full = M.load_flow(with_file('model', tut('ieee9_eq', net='full', fault='none')))
+        for fig in ('50', '15b', '15c'):
+            pr = tut('ieee9_eq', fig=fig, fault='none')
+            r = M.load_flow(with_file('model', pr))
+            for b, v in r['buses'].items():                                    # the network it stands for, at the buses kept
+                self.assertAlmostEqual(v['V'], full['buses'][b]['V'], delta=1e-8, msg=(fig, b))
+                self.assertAlmostEqual(v['angle'], full['buses'][b]['angle'], delta=1e-6, msg=(fig, b))
+            self.assertLess(start_error(self, pr), 1e-6, fig)
+        net = N.case_data('ieee9')
+        lf = net.load_flow()
+        # Fig. 15a: the EMT lifts the zero R′ of one sequence to 10⁻⁹ of the other (a conductance of 10⁸ S); with R′₀ = R′₁/10
+        # in the same branches the two agree to 10⁻¹² (THEORY §8ΩΜ.4)
+        self.assertLess(start_error(self, net.to_emt(lf=lf, boundary=['4'], fig='15a')), 1e-5)
+        self.assertLess(start_error(self, net.to_emt(lf=lf, boundary=['5', '9'], fig='fdne')), 5e-5)   # the G_min of 1 073 nodes
+
+    def test_equivalent_at_two_levels(self):
+        for fig, more in (('50', {}), ('15b', {'Rs': '300; 40', 'C': '1e-6; 5e-6'}), ('15c', {'Rs': '2000; 50'})):
+            self.assertLess(start_error(self, eq_drawing(fig, **more)), 1e-6, fig)
+        m = with_file('model', eq_drawing())
+        s3, s1 = M.short_circuit(m, '3ph'), M.short_circuit(m, '1ph')
+        for k, (b, U) in enumerate((('A', 150e3), ('B', 20e3))):
+            zb = U * U / 100e6
+            Z1, Z0 = complex(EQ_R1[k][k], EQ_X1[k][k]) * zb, complex(EQ_R0[k][k], EQ_X0[k][k]) * zb
+            self.assertAlmostEqual(s3['buses'][b]['Ik'] / (1.1 * U / math.sqrt(3) / abs(Z1)), 1, delta=1e-12)
+            self.assertAlmostEqual(s1['buses'][b]['Ik'] / (3 * 1.1 * U / math.sqrt(3) / abs(2 * Z1 + Z0)), 1, delta=1e-12)
+
+    def test_lines_from_geometry(self):
+        from pcl import lineconst as LC
+        typ = node('typical')['400kV']
+        modal = {'src': 'modal', 'nph': 3, 'mlen': 100, 'lu': 'km', 'mspec': 'zv', 'transp': '1', 'mdata': '0.25, 650, 2.2e5; 0.03, 280, 2.95e5'}
+        self.assertLess(start_error(self, tlm_drawing(modal)), 3e-5)           # the CP model and the step (THEORY §8ΩΜ.3)
+        for ti, most in (('balanced', 3e-5), ('gm0', None)):
+            tl = {'model': 'cp', 'f': 50, 'len': 100, 'data': json.dumps(typ), 'ti': ti}
+            tl['mdl'] = json.dumps({**LC.jsonable(LC.cp_model(typ, 50.0, 100.0, ti=ti)), 'src': with_file('key', tl)['key']})
+            pr = tlm_drawing(tl)
+            r = M.load_flow(with_file('model', pr))
+            c = r['elements']['LN']['coupling']
+            if most:
+                self.assertLess(c, 1e-9)
+                self.assertLess(start_error(self, pr), most)
+            else:
+                self.assertGreater(c, 0.05)                                    # the horizontal line without transposition
+        # IEC 60909-0: the line with Z₁ and Z₀ of Z′·ℓ in symmetrical components
+        tl = {'model': 'cp', 'f': 50, 'len': 100, 'data': json.dumps(typ)}
+        s = M.short_circuit(with_file('model', tlm_drawing(tl)), '1ph')
+        Zs = LC.to_sym(LC.phase_matrices(typ, 50.0)[0]) * 100e3
+        net = N.Network()
+        net.bus('B1', 400e3)
+        net.bus('B2', 400e3)
+        X0X = (10 / math.sqrt(101)) / (12 / math.sqrt(145))                     # the GRID3: Z₀ = Z₁ with X₀/R₀ = 10, X/R = 12
+        net.feeder('B1', Sk=10e9 * N.c_factor(400e3, 'max') / 1.1, RX=1 / 12, X0X=X0X, R0X0=0.1, Un=400e3)
+        net.line('B1', 'B2', Zs[1, 1].real, Zs[1, 1].imag, 1, R0=Zs[0, 0].real, X0=Zs[0, 0].imag)
+        self.assertAlmostEqual(s['buses']['B2']['Ik'] / net.short_circuit('B2', '1ph')['Ik'], 1, delta=1e-12)
 
     def test_project_model(self):
         from pcl import core

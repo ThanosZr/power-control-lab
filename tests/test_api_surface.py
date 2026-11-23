@@ -319,6 +319,15 @@ class ApiSurface(unittest.TestCase):
         self.assertIn('action:model', self.now['scenario'])
         self.assertIn('cosr', self.now['project']['part:GEN3']['params'])
         self.assertFalse(any(k.startswith('pcl.model._') for k in self.now['pcl']))
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 992)
+
+    def test_the_surface_of_5_0_12(self):
+        """5.0.12: the common model, step 2 (ROADMAP §70): the subcircuits, the TLM and the EQV3 go into the same pcl.model, with
+        the model of the drawing at version 2 (experimental like the module): no new point."""
+        from pcl import model
+        self.assertEqual(model.VERSION, 2)
+        self.assertEqual(self.now['pcl']['pcl.model.network']['params'], ['m', 'study', 'fe', 'S_base'])
+        self.assertFalse(any(k.startswith('pcl.model._') for k in self.now['pcl']))
         self.assertEqual(sum(len(v) for v in self.now.values()), 992)
 
     def test_the_surface_of_4_19_5(self):

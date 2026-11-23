@@ -402,5 +402,12 @@ const {chromium}=require('playwright');
  const dm3=await p.evaluate(()=>{const E=window.PCL.editor;return E.valueText(E.comp('F1'));});
  ok(/Σφάλμα τριφασικό/.test(dm2.sum)&&/F1/.test(dm2.faults)&&/^I″k .*A \(τριφασικό\)$/.test(dm2.f1)&&!/I″k/.test(dm3),'drawing: IEC 60909-0 of the drawing, the fault F1 with its kind, the diagram on the layer of the short circuit, and the values come back ('+dm2.f1+' → '+dm3+')');
  await p.evaluate(()=>{document.querySelector('#netview').hidden=true;});
+ // 5.0.12 (ROADMAP §70 point 1, the second step): the equivalent of a network (EQV3) in the load flow of the drawing, with its result on it
+ await dmOpen('ieee9_eq');await p.click('[data-dm="pf"]');
+ await p.waitForFunction(()=>document.querySelector('#dm-sum')||document.querySelector('#dm-err'),null,{timeout:60000});
+ await p.evaluate(()=>{const c=document.querySelector('[data-dmon]');if(c&&!c.checked)c.click();});await p.waitForTimeout(200);   // the results on the drawing again (the step above put them away)
+ const dm4=await p.evaluate(()=>{const E=window.PCL.editor;return {sum:(document.querySelector('#dm-sum')||document.querySelector('#dm-err')).textContent,rows:document.querySelectorAll('#dm-buses tr').length,
+  skip:document.querySelectorAll('#dm-skip li').length,eq:E.valueText(E.comp('EQ1'))};});
+ ok(/Συνέκλινε/.test(dm4.sum)&&dm4.rows===5&&dm4.skip===0&&/^P 143([.,]\d+)? MW · Q /.test(dm4.eq),'drawing: the EQV3 of «ieee9_eq» in the load flow, four buses and nothing left out, its P and Q in place of its value ('+dm4.eq+')');
  console.log(JSON.stringify({rm:rm.split('\n').slice(0,4),bt:bt.split('\n').slice(0,4),imp},null,1));
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

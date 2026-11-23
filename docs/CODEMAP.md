@@ -29,7 +29,7 @@
 | `web/studio/math.js` | 144 |
 | `web/studio/metrics.js` | 89 |
 | `web/studio/mna.js` | 2731 |
-| `web/studio/model.js` | 117 |
+| `web/studio/model.js` | 137 |
 | `web/studio/netlib.js` | 1650 |
 | `web/studio/netview.js` | 279 |
 | `web/studio/nn.js` | 57 |
@@ -51,7 +51,7 @@
 | `web/studio/stepcheck.js` | 315 |
 | `web/studio/study.js` | 114 |
 | `web/studio/study_worker.js` | 40 |
-| `web/studio/subcircuit.js` | 293 |
+| `web/studio/subcircuit.js` | 296 |
 | `web/studio/templates.js` | 32 |
 | `web/studio/trv.js` | 56 |
 | `web/studio/tune.js` | 237 |
@@ -104,7 +104,7 @@
 | `pcl/lineconst.py` | 2411 |
 | `pcl/linereport.py` | 836 |
 | `pcl/link.py` | 150 |
-| `pcl/model.py` | 529 |
+| `pcl/model.py` | 858 |
 | `pcl/netfile.py` | 490 |
 | `pcl/netview.py` | 1101 |
 | `pcl/network.py` | 1699 |
@@ -129,7 +129,7 @@
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_api_surface.py` | 446 |
+| `tests/test_api_surface.py` | 455 |
 | `tests/test_appwin.py` | 122 |
 | `tests/test_arc.py` | 189 |
 | `tests/test_b4.py` | 300 |
@@ -165,7 +165,7 @@
 | `tests/test_gfm4.py` | 153 |
 | `tests/test_gfm5.py` | 179 |
 | `tests/test_gis.py` | 183 |
-| `tests/test_guide.py` | 333 |
+| `tests/test_guide.py` | 348 |
 | `tests/test_harmonic.py` | 312 |
 | `tests/test_impl.py` | 138 |
 | `tests/test_impulse_tools.py` | 150 |
@@ -184,7 +184,7 @@
 | `tests/test_matlab.py` | 213 |
 | `tests/test_meas.py` | 446 |
 | `tests/test_mmc.py` | 203 |
-| `tests/test_model.py` | 216 |
+| `tests/test_model.py` | 344 |
 | `tests/test_netfile.py` | 236 |
 | `tests/test_netlib.py` | 209 |
 | `tests/test_netview.py` | 429 |
@@ -261,7 +261,7 @@
 | `tests/js/look_cases.js` | 13 |
 | `tests/js/meas_cases.js` | 131 |
 | `tests/js/mmc_cases.js` | 56 |
-| `tests/js/model_cases.js` | 24 |
+| `tests/js/model_cases.js` | 30 |
 | `tests/js/mtdc_cases.js` | 13 |
 | `tests/js/netlib42_cases.js` | 50 |
 | `tests/js/netlib_cases.js` | 93 |
@@ -304,7 +304,7 @@
 | `tests/ui/editor_interactions.js` | 45 |
 | `tests/ui/ev_flow.js` | 112 |
 | `tests/ui/facts_flow.js` | 93 |
-| `tests/ui/features_flow.js` | 406 |
+| `tests/ui/features_flow.js` | 413 |
 | `tests/ui/gis_flow.js` | 80 |
 | `tests/ui/line_flow.js` | 166 |
 | `tests/ui/live_flow.js` | 41 |
@@ -1995,13 +1995,15 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 26 | class | `ModelError` |
-| 27 | function | `uf` |
-| 30 | function | `params` |
-| 34 | function | `closedAt0` |
-| 36 | function | `of` |
-| 47 | const fn | `join` |
-| 112 | function | `summary` |
+| 27 | function | `termsOf` |
+| 39 | class | `ModelError` |
+| 40 | function | `uf` |
+| 43 | function | `params` |
+| 48 | function | `levelOf` |
+| 51 | function | `closedAt0` |
+| 53 | function | `of` |
+| 65 | const fn | `join` |
+| 132 | function | `summary` |
 
 ### `web/studio/netlib.js`
 
@@ -2752,27 +2754,27 @@ _(χωρίς συναρτήσεις)_
 | 65 | function | `innerParts` |
 | 67 | const fn | `set` |
 | 76 | const fn | `tagName` |
-| 79 | function | `flatten` |
-| 84 | const fn | `walk` |
-| 86 | const fn | `resolve` |
-| 127 | function | `setParam` |
-| 139 | function | `paramOf` |
-| 145 | function | `sync` |
-| 157 | const fn | `uniq` |
-| 158 | const fn | `snap` |
-| 159 | const fn | `pinKindOf` |
-| 160 | function | `newDefName` |
-| 166 | function | `create` |
-| 206 | const fn | `fix` |
-| 214 | function | `expand` |
-| 222 | const fn | `loc` |
-| 249 | function | `fromLib` |
-| 263 | function | `makeUnique` |
-| 269 | function | `closure` |
-| 275 | function | `externalRefs` |
-| 276 | const fn | `head` |
-| 282 | function | `refToPort` |
-| 288 | const fn | `setIn` |
+| 81 | function | `flatten` |
+| 87 | const fn | `walk` |
+| 89 | const fn | `resolve` |
+| 130 | function | `setParam` |
+| 142 | function | `paramOf` |
+| 148 | function | `sync` |
+| 160 | const fn | `uniq` |
+| 161 | const fn | `snap` |
+| 162 | const fn | `pinKindOf` |
+| 163 | function | `newDefName` |
+| 169 | function | `create` |
+| 209 | const fn | `fix` |
+| 217 | function | `expand` |
+| 225 | const fn | `loc` |
+| 252 | function | `fromLib` |
+| 266 | function | `makeUnique` |
+| 272 | function | `closure` |
+| 278 | function | `externalRefs` |
+| 279 | const fn | `head` |
+| 285 | function | `refToPort` |
+| 291 | const fn | `setIn` |
 
 ### `web/studio/templates.js`
 
@@ -4347,27 +4349,37 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 44 | class | `ModelError` |
-| 48 | function | `_num` |
-| 56 | function | `of` |
-| 68 | function | `_check` |
-| 83 | function | `_grid_z` |
-| 110 | function | `_line_data` |
-| 120 | function | `_xf_data` |
-| 134 | function | `_zser_z` |
-| 144 | function | `_gen_xd2` |
-| 155 | function | `_sources` |
-| 164 | function | `_reached` |
-| 183 | function | `network` |
-| 355 | function | `_xf_pf` |
-| 389 | function | `_xf_sc` |
-| 418 | function | `_bus_out` |
-| 422 | function | `elements_of` |
-| 466 | function | `load_flow` |
-| 484 | function | `_sc_at` |
-| 491 | function | `_sc_all` |
-| 511 | function | `faults_of` |
-| 516 | function | `short_circuit` |
+| 53 | class | `ModelError` |
+| 57 | function | `_num` |
+| 65 | function | `of` |
+| 77 | function | `_check` |
+| 92 | function | `_grid_z` |
+| 119 | function | `_line_data` |
+| 129 | function | `_xf_data` |
+| 143 | function | `_zser_z` |
+| 153 | function | `_eng` |
+| 165 | function | `_list` |
+| 171 | function | `_rows` |
+| 178 | function | `_clarke` |
+| 192 | function | `_tlm_zy` |
+| 243 | function | `_tlm` |
+| 259 | function | `_eqv` |
+| 344 | function | `_nodal` |
+| 365 | function | `_pieces` |
+| 381 | function | `_gen_xd2` |
+| 392 | function | `_sources` |
+| 401 | function | `_reached` |
+| 420 | function | `network` |
+| 626 | function | `_eqv_net` |
+| 674 | function | `_xf_pf` |
+| 708 | function | `_xf_sc` |
+| 737 | function | `_bus_out` |
+| 741 | function | `elements_of` |
+| 796 | function | `load_flow` |
+| 813 | function | `_sc_at` |
+| 820 | function | `_sc_all` |
+| 840 | function | `faults_of` |
+| 845 | function | `short_circuit` |
 
 ### `pcl/netfile.py`
 

@@ -1,5 +1,6 @@
 """The common model, step 1 (5.0.11, ROADMAP §70 point 1, THEORY §8ΩΛ): the network of a drawing for the studies of
-pcl.network, with the identity of the drawing. Experimental.
+pcl.network, with the identity of the drawing. Step 2 (5.0.12, THEORY §8ΩΜ): the parts inside subcircuits, the line from
+geometry (TLM) and the equivalent of a network (EQV3). Experimental.
 
 The drawing of the app (its parts GEN3, GRID3, VAC3, LINE3, XF3, ZSER3, LOAD3, CB3, FLT3 and the wires between them) becomes
 buses and elements by web/studio/model.js (Model.of; from Python with of(project), through Node). Here that model becomes a
@@ -9,9 +10,14 @@ pcl.network.Network in one of two ways:
   (V0, ang0), a GRID3 its EMF behind Z₁ = c·U_n²/S″k, a VAC3 its EMF behind R_s + jωL_s, a LINE3 its π section (the exact π of
   the line with model «tl»), an XF3 its three single-phase units (the leakage split, the magnetizing branch where the part has it,
   the iron losses at side 1, the tap at side 1 and the phase shift of the group), a ZSER3 its impedance, a LOAD3 its P(V);
+  (5.0.12) a TLM its exact π at f from the geometry (pcl.lineconst) or from its data per mode, in the positive sequence; an EQV3
+  its sources E_k∠θ_k behind the circuit of its kind (Fig. 50, 15b, 15c, 15a, the FDNE) in the positive sequence, as a nodal
+  admittance in per unit made of branches and shunts;
 * 'sc', the elements of IEC 60909-0: a GRID3 a network feeder (S″k, R/X, its c, the zero sequence), a GEN3 a generator (S_n, U_n,
   x″d, cos φ_rG for K_G, THEORY §8στ), an XF3 a transformer (u_k, u_R, the group with its earthing, K_T), a LINE3 a line, a
-  ZSER3 a reactor, a VAC3 a feeder with Z_Q = R_s + jωL_s; the loads are left out (IEC 60909-0 neglects non-rotating loads).
+  ZSER3 a reactor, a VAC3 a feeder with Z_Q = R_s + jωL_s; the loads are left out (IEC 60909-0 neglects non-rotating loads);
+  (5.0.12) a TLM a line with Z₁ and Z₀ of Z′·ℓ in symmetrical components; an EQV3 the passive network between its ports and the
+  earth (its sources short-circuited), positive and zero sequence, as reactors without a correction factor.
 
 A closed breaker (its state at t = 0) joins two buses (its R_on is left out). Buses that no source reaches are left out of
 the study, with a note.
@@ -28,10 +34,13 @@ import numpy as np
 
 from . import network as N
 
-VERSION = 1
+VERSION = 2                                  # 2 (5.0.12): TLM, EQV3, the parts inside subcircuits (ids X1/<id>)
 SQ3 = math.sqrt(3)
 STUDIES = ('pf', 'sc')
-TYPES = ('GEN3', 'GRID3', 'VAC3', 'LINE3', 'XF3', 'ZSER3', 'LOAD3', 'CB3', 'FLT3')
+TYPES = ('GEN3', 'GRID3', 'VAC3', 'LINE3', 'XF3', 'ZSER3', 'LOAD3', 'CB3', 'FLT3', 'TLM', 'EQV3')
+SOURCES = ('GEN3', 'GRID3', 'VAC3', 'EQV3')
+SERIES = ('LINE3', 'XF3', 'ZSER3', 'TLM')
+PFX = {'G': 1e9, 'M': 1e6, 'k': 1e3, 'K': 1e3, 'm': 1e-3, 'u': 1e-6, 'μ': 1e-6, 'µ': 1e-6, 'n': 1e-9, 'p': 1e-12}
 # the groups of XF3 (netlib.js GROUPS): the connection of side 1 and side 2, star points earthed; the clock number gives the shift
 GROUPS = {'Yy0': ('Y', 'Y', 0, 0, 0), 'YNyn0': ('Y', 'Y', 1, 1, 0), 'Yyn0': ('Y', 'Y', 0, 1, 0), 'YNy0': ('Y', 'Y', 1, 0, 0),
           'Yd1': ('Y', 'D', 0, 0, 1), 'Yd11': ('Y', 'D', 0, 0, 11), 'YNd1': ('Y', 'D', 1, 0, 1), 'YNd11': ('Y', 'D', 1, 0, 11),
@@ -141,6 +150,234 @@ def _zser_z(p, w):
     return z
 
 
+def _eng(v, d=float('nan')):
+    """A number as the app writes it (parts.js parseEng): «20k», «2.2e5», «0,5»."""
+    if isinstance(v, (int, float)):
+        return float(v)
+    t = str(v if v is not None else '').strip().replace(',', '.', 1).replace(' ', '')
+    import re
+    m = re.match(r'^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)([GMkKmuμµnp]?)[A-Za-zΩ°]*$', t)
+    if not m:
+        return float(d)
+    return float(m.group(1)) * (PFX[m.group(2)] if m.group(2) else 1.0)
+
+
+def _list(v, n, d):
+    """n numbers of a list with «;» (netlib.js eqvData list): a missing or bad one is d."""
+    a = [_eng(x.strip()) for x in str(v if v is not None else '').split(';') if x.strip()]
+    return [a[k] if k < len(a) and math.isfinite(a[k]) else float(d) for k in range(n)]
+
+
+def _rows(v):
+    """The rows of a table as the app writes it («;» or new lines between rows, «,» or spaces between the numbers)."""
+    import re
+    return [[_eng(x) for x in re.split(r'[,\s]+', r.strip()) if x] for r in re.split(r'[;\n]+', str(v or '')) if r.strip()]
+
+
+# ---------------------------------------------------------------- 5.0.12: the line from geometry
+def _clarke(M):
+    """The built-in T_i of a continuously transposed line of M conductors (parts.js clarkeTi)."""
+    T = np.zeros((M, M))
+    for r in range(M):
+        for c in range(M):
+            if c == 0:
+                T[r, c] = 1 / math.sqrt(M)
+            else:
+                j = c + 1
+                dd = math.sqrt(j * (j - 1))
+                T[r, c] = 1 / dd if r < c else (-(j - 1) / dd if r == c else 0.0)
+    return T
+
+
+def _tlm_zy(p, f):
+    """Z′ (Ω/m), Y′ (S/m) of the phases of a TLM at f and its length (m): from the geometry (pcl.lineconst.phase_matrices,
+    with the transposition and the reduction of the data), or from the data per mode (src 'modal', parts.js tlcpModel):
+    Z′ = T_i⁻ᵀ·diag(R′ + jωL′)·T_i⁻¹, Y′ = T_i·diag(jωC′)·T_iᵀ (i = T_i·i_mode, v_mode = T_iᵀ·v)."""
+    w = 2 * math.pi * f
+    if p.get('src') == 'modal':
+        M = max(1, min(12, int(round(_eng(p.get('nph'), 3)))))
+        u = 1000.0 if (p.get('lu') or 'km') == 'km' else 1.0
+        n = _eng(p.get('mlen'), 100)
+        if not n > 0:
+            raise ModelError('το μήκος πρέπει να είναι θετικό')
+        rows = _rows(p.get('mdata'))
+        tr = p.get('transp') != '0' or M == 1
+        need = 1 if M == 1 else (2 if tr else M)
+        if len(rows) != need or any(len(r) != 3 or not all(math.isfinite(x) for x in r) for r in rows):
+            raise ModelError(f'τα δεδομένα ανά ρυθμό θέλουν {need} γραμμές με τρεις αριθμούς')
+        sp = p.get('mspec') if p.get('mspec') in ('zt', 'lc') else 'zv'
+        z, y = [], []
+        for Rp, a, b in rows:
+            if sp == 'lc':
+                Lp, Cp = a, b
+            else:
+                v = b if sp == 'zv' else n / b
+                Lp, Cp = a / v, 1 / (a * v)
+            z.append(complex(Rp, w * Lp))
+            y.append(complex(0, w * Cp))
+        if M == 1:
+            T = np.ones((1, 1))
+        elif tr:
+            T = _clarke(M)
+            z += [z[1]] * (M - 2)
+            y += [y[1]] * (M - 2)
+        else:
+            T = np.array(_rows(p.get('mti')), float)
+            if T.shape != (M, M):
+                raise ModelError(f'ο T_i θέλει {M} γραμμές με {M} αριθμούς')
+        Ti = np.linalg.inv(T)
+        return Ti.T @ np.diag(z) @ Ti / u, T @ np.diag(y) @ T.T / u, n * u
+    import json
+    from . import lineconst as LC
+    data = p.get('data')
+    data = json.loads(data) if isinstance(data, str) else dict(data or {})
+    L = _eng(p.get('len'), 100)
+    if not L > 0:
+        raise ModelError('το μήκος πρέπει να είναι θετικό')
+    # the T_i «balanced» or «double circuit» of the model averages the matrices (pcl.lineconst.line_zy): the line as the solver has it
+    ti = p.get('ti') if p.get('model') not in ('pi', 'wb') else None
+    Z, Y = LC.line_zy(data, f, ti) if ti in ('balanced', 'double') else LC.phase_matrices(data, f)
+    return Z, Y, L * 1000.0
+
+
+def _tlm(p, f):
+    """A TLM at f in symmetrical components: the exact π of its phases (Y_series = −Y_m, Y_shunt = Y_s + Y_m, pcl.lineconst
+    line_admittance) in the positive sequence, Z′·ℓ in the positive and the zero sequence (IEC 60909-0), and how much the
+    sequences are coupled (0 for a balanced line)."""
+    from . import lineconst as LC
+    Z, Y, L = _tlm_zy(p, f)
+    if Z.shape != (3, 3):
+        raise ModelError(f'{len(Z)} φάσεις: μόνο τρεις')
+    Yn = LC.line_admittance(Z, Y, L)
+    ser, sh = LC.to_sym(-Yn[:3, 3:]), LC.to_sym(Yn[:3, :3] + Yn[:3, 3:])
+    Zs = LC.to_sym(Z) * L
+    off = max(abs(ser[i, j]) for i in range(3) for j in range(3) if i != j and 1 in (i, j)) / abs(ser[1, 1])
+    return {'y1': complex(ser[1, 1]), 'ysh1': complex(sh[1, 1]), 'Z1': complex(Zs[1, 1]), 'Z0': complex(Zs[0, 0]), 'coupling': float(off)}
+
+
+# ---------------------------------------------------------------- 5.0.12: the equivalent of a network
+def _eqv(p, w_used):
+    """An EQV3 (netlib.js eqvData, eqvDef, eqvFoster, eqvFdne) at ω = w_used as single branches of the positive and the zero
+    sequence, in S: {(u, v): [y₁, y₀]} between the nodes ('E', k) (the source of port k), ('V', k) (port k) and the earth
+    (v None); with N, U_n, E, θ of the ports. The inductances and the capacitances of the part are its X at its own f."""
+    N = max(1, min(32, len([x for x in str(p.get('Un') if p.get('Un') is not None else '150e3').split(';') if x.strip()]) or 1))
+    fq = max(_eng(p.get('f'), 50), 1e-9)
+    weq = 2 * math.pi * fq
+    r = w_used / weq                                         # the reactances of the part are at its own f
+    Sb = max(_eng(p.get('Sb'), 100e6), 1e-9)
+    Un = [max(v, 1e-9) for v in _list(p.get('Un'), N, 150e3)]
+    E, ang = _list(p.get('E'), N, 1), _list(p.get('ang'), N, 0)
+    Rs, C = [max(v, 0.0) for v in _list(p.get('Rs'), N, 0)], [max(v, 0.0) for v in _list(p.get('C'), N, 0)]
+    br = {}
+
+    def put(u, v, y1, y0):
+        q = br.setdefault((u, v), [0j, 0j])
+        q[0] += y1
+        q[1] += y0
+    fig = p.get('fig') if p.get('fig') in ('15a', 'fdne', '15b', '15c') else '50'
+    if fig == '15a':
+        if N != 1:
+            raise ModelError('το Σχ. 15a είναι για μία θύρα')
+        rows = _rows(p.get('F'))
+        if not rows or any(len(x) != 8 or not all(math.isfinite(v) and v >= 0 for v in x) or not (x[0] > 0 and x[2] > 0) for x in rows):
+            raise ModelError('κάθε κλάδος Foster θέλει 8 μη αρνητικούς αριθμούς, με L₁, L₀ > 0')
+        z = [0j, 0j]
+        for L1, R1, L0, R0, Cb, R2, P1, P0 in rows:
+            m, pm = max(R1, R0), max(P1, P0)
+            for k, (L, R, Pp) in enumerate(((L1, R1, P1), (L0, R0, P0))):
+                y = 1 / complex(max(R, 1e-9 * m) if m > 0 else 0.0, w_used * L)
+                if Cb > 0:
+                    y += 1 / complex(R2, -1 / (w_used * Cb))
+                if pm > 0:
+                    y += 1 / (Pp if Pp > 0 else 1e6 * pm)
+                z[k] += 1 / y
+        put(('E', 0), ('V', 0), 1 / z[0], 1 / z[1])
+    elif fig == 'fdne':
+        m = N * (N + 1) // 2
+        rows = _rows(p.get('FD'))
+        if not rows or any(len(x) != 4 + m or not all(math.isfinite(v) for v in x) or x[0] not in (0, 1, 2, 3, 4) or x[1] not in (0, 1)
+                           or (x[0] > 0 and not x[2] > 0) or (x[0] in (2, 3) and not x[3] > 0) for x in rows):
+            raise ModelError(f'κάθε όρος του FDNE θέλει {4 + m} αριθμούς')
+        jw = 1j * w_used
+        for x in rows:
+            kind, sq, P, Q = int(x[0]), int(x[1]), x[2] * weq, x[3] * weq * weq
+            sc = weq if 1 <= kind <= 3 else 1.0
+            Cm = np.zeros((N, N))
+            o = 4
+            for i in range(N):
+                for j in range(i, N):
+                    Cm[i, j] = Cm[j, i] = x[o] * sc * Sb / (Un[i] * Un[j])
+                    o += 1
+            b = {0: 1.0, 1: 1 / (P + jw), 2: 1 / (2 * P + jw + Q / jw), 3: 1 / (jw + Q / (jw + 2 * P)), 4: jw / (jw + P)}[kind]
+            for k in range(N):
+                y = Cm[k].sum() * b
+                put(('E', k), ('V', k), y if sq == 1 else 0j, y if sq == 0 else 0j)
+            for i in range(N):
+                for j in range(i + 1, N):
+                    y = -Cm[i, j] * b
+                    put(('V', i), ('V', j), y if sq == 1 else 0j, y if sq == 0 else 0j)
+    else:
+        mats = {}
+        for k in ('R1', 'X1', 'R0', 'X0'):
+            a = _rows(p.get(k) if p.get(k) is not None else {'R1': '0.002', 'X1': '0.05', 'R0': '0.004', 'X0': '0.15'}[k])
+            if len(a) != N or any(len(x) != N or not all(math.isfinite(v) for v in x) for x in a):
+                raise ModelError(f'ο πίνακας {k} πρέπει να είναι {N}×{N}')
+            mats[k] = np.array(a, float)
+        zb = np.outer(Un, Un) / Sb
+        Y1 = np.linalg.inv((mats['R1'] + 1j * r * mats['X1']) * zb)
+        Y0 = np.linalg.inv((mats['R0'] + 1j * r * mats['X0']) * zb)
+        for i in range(N):
+            for j in range(N):
+                put(('E', i), ('V', j), Y1[i, j], Y0[i, j])
+                if j > i:
+                    put(('E', i), ('E', j), -Y1[i, j], -Y0[i, j])
+                    put(('V', i), ('V', j), -Y1[i, j], -Y0[i, j])
+        for k in range(N):
+            if fig == '15c' and Rs[k] > 0:
+                put(('E', k), ('V', k), 1 / Rs[k], 1 / Rs[k])
+            if fig == '15b' and Rs[k] > 0 and C[k] > 0:
+                y = 1 / complex(Rs[k], -1 / (w_used * C[k]))
+                put(('V', k), None, y, y)
+    return {'N': N, 'Un': Un, 'E': E, 'ang': ang, 'fig': fig, 'branches': br}
+
+
+def _nodal(br, nodes, U, S_base, seq):
+    """The nodal admittance in per unit (the bases U of the nodes, line to line) of single branches in S: a branch y between
+    u and v adds y·U_u²/S_b, y·U_v²/S_b on the diagonal and −y·U_u·U_v/S_b off it; one to the earth only on the diagonal.
+    Nodes outside `nodes` (the sources in the short circuit) are the earth."""
+    ix = {n: i for i, n in enumerate(nodes)}
+    A = np.zeros((len(nodes), len(nodes)), complex)
+    for (u, v), ys in br.items():
+        y = ys[seq]
+        if y == 0:
+            continue
+        iu, iv = ix.get(u), ix.get(v)
+        if iu is not None:
+            A[iu, iu] += y * U[iu] ** 2 / S_base
+        if iv is not None:
+            A[iv, iv] += y * U[iv] ** 2 / S_base
+        if iu is not None and iv is not None:
+            A[iu, iv] -= y * U[iu] * U[iv] / S_base
+            A[iv, iu] -= y * U[iu] * U[iv] / S_base
+    return A
+
+
+def _pieces(A, tol=1e-12):
+    """A symmetric nodal admittance as branches (−A_pq between p and q) and shunts (the row sums), in per unit; what is
+    below tol of the largest entry of its row is left out."""
+    n = len(A)
+    out = []
+    for i in range(n):
+        big = max(abs(A[i]).max(), 1e-300)
+        for j in range(i + 1, n):
+            if abs(A[i, j]) > tol * big:
+                out.append((i, j, -A[i, j]))
+        s = A[i].sum()
+        if abs(s) > tol * big:
+            out.append((i, None, s))
+    return out
+
+
 def _gen_xd2(p):
     """x″d of a GEN3: the given one, or from the circuit of the rotor (data «circ»): X_l + (1/X_ad + 1/X_fd + 1/X_kd)⁻¹."""
     if p.get('data') != 'circ':
@@ -158,18 +395,18 @@ def _sources(e, study):
         return study == 'sc' or p.get('init') != 'zero'
     if t == 'VAC3':
         return p.get('seq', 'abc') == 'abc' and (study == 'pf' or _num(p, 'Rs') > 0 or _num(p, 'Ls') > 0)
-    return t == 'GRID3'
+    return t in ('GRID3', 'EQV3')
 
 
-def _reached(m, study):
+def _reached(m, study, bad=()):
     adj = {b['id']: set() for b in m['buses']}
     for e in m['elements']:
-        if e['type'] in ('LINE3', 'XF3', 'ZSER3') and len(e['buses']) == 2:
+        if e['type'] in SERIES and len(e['buses']) == 2 and str(e['id']) not in bad:
             a, b = e['buses']
             adj.setdefault(a, set()).add(b)
             adj.setdefault(b, set()).add(a)
     seen = set()
-    todo = [e['buses'][0] for e in m['elements'] if _sources(e, study)]
+    todo = [b for e in m['elements'] if _sources(e, study) and str(e['id']) not in bad for b in e['buses']]
     while todo:
         b = todo.pop()
         if b in seen:
@@ -193,8 +430,23 @@ def network(m, study='pf', fe=None, S_base=100e6):
     w = 2 * math.pi * f
     kx = (float(fe) / f) if fe else 1.0
     net = N.Network(f=f, S_base=S_base, name=m.get('name') or 'σχέδιο')
-    reached = _reached(m, study)
-    notes, out, els, helpers, shunts = [], [], {}, {}, {}
+    notes, out, els, helpers, shunts, eqv = [], [], {}, {}, {}, {}
+    # 5.0.12: the data of the lines from geometry and of the equivalents first, so that a part whose data do not read is out
+    # of the topology too
+    prep, bad = {}, set()
+    for e in m['elements']:
+        eid = str(e['id'])
+        try:
+            if e['type'] == 'TLM':
+                prep[eid] = _tlm(e['params'], f)
+            elif e['type'] == 'EQV3':
+                prep[eid] = _eqv(e['params'], w * (kx if study == 'pf' else 1.0))
+                if len(e['buses']) != prep[eid]['N']:
+                    raise ModelError('οι θύρες δεν είναι όσες οι ζυγοί')
+        except Exception as x:                               # the reader of the data says why (LineError, ModelError, numpy)
+            bad.add(eid)
+            notes.append(f'{e.get("label") or eid}: τα δεδομένα δεν διαβάζονται ({x}): εκτός μελέτης.')
+    reached = _reached(m, study, bad)
     labels = {b['id']: b.get('label') or b['id'] for b in m['buses']}
     for b in m['buses']:
         if b['id'] in reached:
@@ -230,7 +482,7 @@ def network(m, study='pf', fe=None, S_base=100e6):
 
     for e in m['elements']:
         t, p, bs, eid = e['type'], e['params'], [str(x) for x in e['buses']], str(e['id'])
-        if any(b not in net.buses for b in bs):
+        if any(b not in net.buses for b in bs) or eid in bad:
             continue
         names = []
         if t == 'GEN3':
@@ -310,6 +562,23 @@ def network(m, study='pf', fe=None, S_base=100e6):
                     names.append(f'{eid}~Y{k}')
             else:
                 names.append(net.line(a, b, d['R1'], d['X1'] * kx, length=1.0, B=max(d['B1'], d['B0']) * kx, name=eid))
+        elif t == 'TLM':
+            a, b = bs
+            q = prep[eid]
+            if study == 'sc':
+                names.append(net.line(a, b, q['Z1'].real, q['Z1'].imag, length=1.0, R0=q['Z0'].real, X0=q['Z0'].imag, name=eid))
+            else:
+                # the exact π at f (the EMT starts its line at ω too, not at ω_e: mna.js tlmAcY), positive sequence
+                z = 1 / q['y1']
+                names.append(net.line(a, b, z.real, z.imag, length=1.0, B=0.0, name=eid))
+                for x, k in ((a, 1), (b, 2)):
+                    shunt(eid, x, q['ysh1'] * Ub(x) ** 2 / S_base, f'{eid}~Y{k}')
+                    names.append(f'{eid}~Y{k}')
+                if q['coupling'] > 1e-3:
+                    notes.append(f'{lab(e)}: γραμμή χωρίς μετάθεση· οι ακολουθίες συζεύγνυνται ως {100 * q["coupling"]:.2g} % της θετικής, '
+                                 'και η ροή φορτίου κρατά μόνο τη θετική.')
+        elif t == 'EQV3':
+            names += _eqv_net(net, e, prep[eid], bs, study, S_base, notes, helpers, shunt, eqv)
         elif t == 'XF3':
             a, b = bs
             d = _xf_data(p)
@@ -349,7 +618,57 @@ def network(m, study='pf', fe=None, S_base=100e6):
                 notes.append(f'{lab(e)}: το σφάλμα υπάρχει από το t = 0· η ροή φορτίου είναι χωρίς αυτό.')
         if names:
             els[eid] = names
-    return net, {'study': study, 'elements': els, 'helpers': helpers, 'shunts': shunts, 'out': out, 'notes': notes, 'fe': fe}
+    coupling = {k: v['coupling'] for k, v in prep.items() if 'coupling' in v}
+    return net, {'study': study, 'elements': els, 'helpers': helpers, 'shunts': shunts, 'eqv': eqv, 'coupling': coupling, 'out': out,
+                 'notes': notes, 'fe': fe}
+
+
+def _eqv_net(net, e, q, bs, study, S_base, notes, helpers, shunt, eqv):
+    """An EQV3 in the network. 'pf': a bus of its own for the source of each port (|E_k|·U_n,k/U_b∠θ_k, a reference bus, as
+    the source behind a GRID3), and the nodal admittance of the sources and the ports in the positive sequence as branches and
+    shunts in per unit (the bases of the buses: a branch between two levels needs no ratio, its shunts carry the difference).
+    'sc': the sources short-circuited, the ports with the positive and the zero sequence as reactors (series and to the earth),
+    without a correction factor (the equivalent is passive impedances, not a network feeder of IEC 60909-0)."""
+    eid, N = str(e['id']), q['N']
+    names = []
+    U = [net.buses[b]['Un'] for b in bs]
+    if study == 'pf':
+        hs = []
+        for k in range(N):
+            h = f'{eid}~E{k + 1}'
+            Vpu = q['E'][k] * q['Un'][k] / U[k]
+            net.bus(h, U[k], kind='slack', V=Vpu, angle=q['ang'][k], label=f'E{k + 1} {e.get("label") or eid}')
+            helpers[h] = eid
+            names.append(net.feeder(h, Sk=None, V=Vpu, angle=q['ang'][k], slack=True, name=f'{eid}~S{k + 1}'))
+            hs.append(h)
+        nodes = [('E', k) for k in range(N)] + [('V', k) for k in range(N)]
+        A = _nodal(q['branches'], nodes, U + U, S_base, 0)
+        where = hs + list(bs)
+        for i, j, y in _pieces(A):
+            nm = f'{eid}~{i + 1}' + (f'-{j + 1}' if j is not None else '')
+            if j is None:
+                shunt(eid, where[i], y, nm)
+            else:
+                z = 1 / y
+                net.branch_pu(where[i], where[j], z.real, z.imag, name=nm)
+            names.append(nm)
+        eqv[eid] = {'nodes': where, 'A': A, 'ports': list(bs)}
+    else:
+        nodes = [('V', k) for k in range(N)]
+        A1, A0 = _nodal(q['branches'], nodes, U, S_base, 0), _nodal(q['branches'], nodes, U, S_base, 1)
+        pieces = {}
+        for A, sq in ((A1, 0), (A0, 1)):
+            for i, j, y in _pieces(A):
+                pieces.setdefault((i, j), [0j, 0j])[sq] = y
+        for (i, j), (y1, y0) in pieces.items():
+            zb = U[i] ** 2 / S_base
+            z1 = zb / y1 if y1 != 0 else complex(0, 1e12)
+            z0 = zb / y0 if y0 != 0 else complex(0, 1e12)
+            nm = f'{eid}~{i + 1}' + (f'-{j + 1}' if j is not None else '')
+            names.append(net.reactor(bs[i], z1.imag, z1.real, b=None if j is None else bs[j], X0=z0.imag, R0=z0.real, name=nm))
+        notes.append(f'{e.get("label") or eid}: το ισοδύναμο ως παθητικές εμπεδήσεις ανάμεσα στις θύρες και στη γη (οι πηγές του '
+                     'βραχυκυκλωμένες), χωρίς συντελεστή διόρθωσης.')
+    return names
 
 
 def _xf_pf(net, e, d, a, b, kx, S_base, shunt):
@@ -421,8 +740,9 @@ def _bus_out(m, info):
 
 def elements_of(m, net, info, r):
     """The results of a load flow of the drawing's network by the ids of the drawing: GEN3, GRID3, VAC3: P, Q they give to their bus
-    (and Pe, Qe at the EMF behind the impedance); LINE3, XF3, ZSER3: Pa, Qa, Pb, Qb into the part at its terminals 1 and 2 (the
-    shunts of the part with them), I (A at terminal 1), loss; LOAD3: P, Q at its voltage; CB3: closed."""
+    (and Pe, Qe at the EMF behind the impedance); LINE3, XF3, ZSER3, TLM: Pa, Qa, Pb, Qb into the part at its terminals 1 and 2 (the
+    shunts of the part with them), I (A at terminal 1), loss (TLM: and coupling, how much its sequences are coupled); EQV3: P, Q it
+    gives to its buses, and ports [{bus, P, Q}]; LOAD3: P, Q at its voltage; CB3: closed."""
     flows = {x['name']: x for x in r['branches']}
     V = {b: r['buses'][b]['V'] * cmath.exp(1j * math.radians(r['buses'][b]['angle'])) for b in r['buses']}
     S_b = net.S_base
@@ -435,7 +755,15 @@ def elements_of(m, net, info, r):
         if eid not in info['elements']:
             continue
         nm = info['elements'][eid]
-        if t in ('GEN3', 'GRID3', 'VAC3'):
+        if t == 'EQV3':
+            q = info['eqv'][eid]
+            Vn = np.array([V[b] for b in q['nodes']])
+            I = q['A'] @ Vn                                  # into the equivalent at each node, per unit
+            n = len(q['ports'])
+            S = [-(Vn[n + k] * np.conj(I[n + k])) * S_b for k in range(n)]
+            els[eid] = {'P': float(sum(x.real for x in S)), 'Q': float(sum(x.imag for x in S)),
+                        'ports': [{'bus': b, 'P': float(x.real), 'Q': float(x.imag)} for b, x in zip(q['ports'], S)]}
+        elif t in ('GEN3', 'GRID3', 'VAC3'):
             if f'{eid}~Z' in flows:
                 x = flows[f'{eid}~Z']
                 els[eid] = {'P': -x['Pb'], 'Q': -x['Qb'], 'Pe': x['Pa'], 'Qe': x['Qa']}
@@ -444,7 +772,7 @@ def elements_of(m, net, info, r):
                 els[eid] = {'P': r['buses'][b]['P'], 'Q': r['buses'][b]['Q']}
                 if sum(1 for q in m['elements'] if q['buses'] and q['buses'][0] == b and q['type'] in ('GEN3', 'GRID3', 'VAC3') and str(q['id']) in info['elements']) > 1:
                     els[eid]['shared'] = True
-        elif t in ('LINE3', 'XF3', 'ZSER3'):
+        elif t in SERIES:
             x = flows[nm[0]]
             Sa, Sb = complex(x['Pa'], x['Qa']), complex(x['Pb'], x['Qb'])
             for name, b, y in info['shunts'].get(eid, []):          # the shunts of the part at its terminals
@@ -455,6 +783,8 @@ def elements_of(m, net, info, r):
                     Sb += s
             I = abs(Sa) / (SQ3 * max(abs(V[e['buses'][0]]), 1e-12) * net.buses[e['buses'][0]]['Un'])
             els[eid] = {'Pa': Sa.real, 'Qa': Sa.imag, 'Pb': Sb.real, 'Qb': Sb.imag, 'I': I, 'loss': (Sa + Sb).real}
+            if t == 'TLM':
+                els[eid]['coupling'] = info['coupling'].get(eid, 0.0)
         elif t == 'LOAD3':
             ld = net.element(nm[0])
             Vm = abs(V[ld['bus']])
@@ -465,13 +795,12 @@ def elements_of(m, net, info, r):
 
 def load_flow(m, fe=None, tol=1e-10, max_iter=30):
     """The load flow of the drawing, as the EMT start solves it (network(m, 'pf')). Returns {'converged', 'iterations',
-    'buses': {bus id: {label, Un, V (pu), angle (deg), U (V, line)}}, 'elements': {id: …} (GEN3, GRID3, VAC3: P, Q they give to the
-    bus; LINE3, XF3, ZSER3: Pa, Qa, Pb, Qb into the part at its terminals 1 and 2, I (A at terminal 1), loss; LOAD3: P, Q at its
-    voltage; CB3: closed), 'losses', 'out', 'notes'}."""
+    'buses': {bus id: {label, Un, V (pu), angle (deg), U (V, line)}}, 'elements': {id: …} (as elements_of), 'losses', 'out',
+    'notes'}."""
     m = _check(m)
     net, info = network(m, 'pf', fe=fe)
     if not any(d['type'] == 'slack' for d in net.buses.values()):
-        raise ModelError('Το σχέδιο δεν έχει πηγή για τη ροή φορτίου (GEN3 από τη ροή φορτίου, GRID3 ή VAC3).')
+        raise ModelError('Το σχέδιο δεν έχει πηγή για τη ροή φορτίου (GEN3 από τη ροή φορτίου, GRID3, VAC3 ή EQV3).')
     r = net.load_flow(tol=tol, max_iter=max_iter)
     buses = _bus_out(m, info)
     for b, d in buses.items():
@@ -521,7 +850,7 @@ def short_circuit(m, fault='3ph', mode='max', buses=None, **kw):
     m = _check(m)
     net, info = network(m, 'sc')
     if not net.buses:
-        raise ModelError('Το σχέδιο δεν έχει πηγή για το βραχυκύκλωμα (GEN3, GRID3, VAC3 με R_s ή L_s).')
+        raise ModelError('Το σχέδιο δεν έχει πηγή για το βραχυκύκλωμα (GEN3, GRID3, EQV3, VAC3 με R_s ή L_s).')
     r = _sc_all(net, fault, mode, faults_of(m), buses, **kw)
     lab = {b['id']: b.get('label') or b['id'] for b in m['buses']}
     for d in r['buses'].values():

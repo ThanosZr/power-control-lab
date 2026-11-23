@@ -76,9 +76,12 @@
  const tagName=(name,pfx)=>{const n=String(name??'');return n.startsWith('/')?n.slice(1):pfx+n;};
 
  // the flat circuit: {project (no SUB, no ports, no definitions), warnings}
- function flatten(project){
+ // 5.0.12: opts.lib === false keeps the parts of the network library as parts (the common model, model.js): only the
+ // subcircuits of the user are opened
+ function flatten(project,opts){
   if(!needs(project))return {project,warnings:[]};
-  const libWarn=NL?NL.warnings(project):[];if(NL)project=NL.expand(project);
+  const lib=!(opts&&opts.lib===false);
+  const libWarn=NL&&lib?NL.warnings(project):[];if(NL&&lib)project=NL.expand(project);
   const defs=project.subcircuits||{},warnings=[...libWarn],warn=m=>{if(!warnings.includes(m)&&warnings.length<40)warnings.push(m);};
   const comps=[],wires=[],portEnd=new Map(),instSet=new Set(),noDef=new Set(),pending=[],instIn=[];
   const walk=(list,wlist,ctx)=>{

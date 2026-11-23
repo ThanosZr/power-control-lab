@@ -449,6 +449,9 @@
 | equivalent voltage source at the short-circuit location | ισοδύναμη πηγή τάσης στη θέση του σφάλματος (IEC 60909-0· 4.2, και από το σχέδιο στην 5.0.11) |
 | initial symmetrical short-circuit current I″k, peak short-circuit current i_p | αρχικό ρεύμα βραχυκύκλωσης I″k, κρουστικό ρεύμα βραχυκύκλωσης i_p |
 | rated power factor cos φ_rG | ονομαστικός συντελεστής ισχύος cos φ_rG (της γεννήτριας, για το K_G· 5.0.11) |
+| exact pi equivalent (of a line) | ακριβές ισοδύναμο π (της γραμμής στη θεμελιώδη, από Z′, Y′· 4.4, και στο κοινό μοντέλο στην 5.0.12) |
+| sequence coupling (of an untransposed line) | σύζευξη των ακολουθιών (γραμμής χωρίς μετάθεση· 5.0.12) |
+| flattening (of subcircuits) | άνοιγμα (των υποκυκλωμάτων, `SubCircuit.flatten`· 5.0.12) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 

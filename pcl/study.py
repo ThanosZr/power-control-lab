@@ -75,7 +75,7 @@ def _base_network(data):
         except (model.ModelError, N.NetworkError, KeyError, TypeError, ValueError) as e:
             raise StudyError(f'Το σχέδιο δεν γίνεται δίκτυο: {e}') from e
         if not net.buses:
-            raise StudyError('Το σχέδιο δεν έχει ζυγούς με πηγή (GEN3, GRID3 ή VAC3, με γραμμές, μετασχηματιστές και φορτία).')
+            raise StudyError('Το σχέδιο δεν έχει ζυγούς με πηγή (GEN3, GRID3, VAC3 ή EQV3, με γραμμές, μετασχηματιστές και φορτία).')
     elif data.get('study') == 'sc' and data.get('network') is None:
         raise StudyError('Το βραχυκύκλωμα κατά IEC 60909-0 θέλει τα δεδομένα των μηχανών και των μετασχηματιστών (x″d, cos φ_rG, u_k), που τα δίκτυα δοκιμής '
                          'δεν έχουν: από σχέδιο («drawing») ή από δίκτυο με αυτά («network»).')
