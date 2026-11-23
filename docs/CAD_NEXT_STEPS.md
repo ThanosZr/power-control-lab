@@ -1,10 +1,10 @@
 # Power & Control Lab · CAD και custom components
 
-Έκδοση πλάνου: 0.4 · 23/11/2026 · Ιδιοκτήτης: Thanos Zr.
+Έκδοση πλάνου: 0.5 · 23/11/2026 · Ιδιοκτήτης: Thanos Zr.
 
 ## Τρέχουσα κατάσταση
 
-**CAD-T001 / SOL — documentation-only ολοκλήρωση, με τελική επικύρωση CI (D024).** Η εγκεκριμένη βάση είναι engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Το CAD branch lab-cad-0.1.0-baseline περιέχει ήδη δημοσιευμένη τεκμηρίωση. Η αναθεώρηση εγγράφων 0.4 δεν είναι νέα έκδοση λογισμικού CAD.
+**CAD-T002 / SOL — απομονωμένη αξιολόγηση kernel και υβριδική αρχιτεκτονική (D026–D027).** T001 ολοκληρωμένο στο e997a3d2, CI 45124099619. Εγκεκριμένη βάση engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51, branch lab-cad-0.2.0-kernel. Το [CAD_KERNEL_EVALUATION](CAD_KERNEL_EVALUATION.md) περιέχει αναπαραγώγιμο benchmark και Fable optimization backlog. Δεν υπάρχει ενσωματωμένο CAD runtime.
 
 Τα αρχικά CAD-S007 drafts και τα planning docs 0.3 ανακτήθηκαν από προηγούμενα παραδοτέα και αντιπαραβλήθηκαν με τον pinned κώδικα. Η δημοσιευμένη ανακατασκευή και η μεταγενέστερη πραγματική ανάκτηση παραμένουν διακριτές στο [CAD_BASELINE.md](CAD_BASELINE.md).
 
@@ -13,19 +13,17 @@
 | Git ως πηγή συνέχειας | Τα CAD docs συντηρούνται στο docs/ αυτού του branch· [οδηγός ανάγνωσης](CAD_INDEX.md). |
 | Κώδικας και baseline | Ο engine παραμένει 5.0.7. Το README του branch παρουσιάζει τον στόχο CAD tool· αυτό δεν αλλάζει τον runtime. |
 | Ήδη δημοσιευμένα checkpoints | 5660e9b: ανακατασκευή· c169ffc: πολιτική branches· f57d02f: πραγματική ανάκτηση και εμπλουτισμένος χάρτης· f91ac3c: πλήρες CAD πλάνο/README (S009). |
-| CI | f91ac3cd7852fdb7df651baad3992be91264674c / 45107396018: success και στα τέσσερα jobs, επαληθευμένα στο ακριβές SHA. Κάθε νέο checkpoint χρειάζεται δικό του CI. |
+| CI | e997a3d24f29906be9768e6fc9fb8fce63f4895b / 45124099619: T001 4/4 success. Κάθε νέο checkpoint χρειάζεται δικό του CI. |
 | Παράλληλος engine (read-only, S010) | main 5.0.9· lab-5.0.10 στο 2160a13d7180745e80f7f3fefa07788d30b37d1f, CI 45102252449 success. Νέα layouts/δεύτερη οθόνη, όχι νέα βάση CAD. Βλ. [χάρτη](CAD_INTEGRATION_MAP.md#cad-s010-coordination-with-the-5010-workspace-changes). |
 | Τοπικοί έλεγχοι αυτής της συνέχειας | CODEMAP/API/NN weights PASS, 512/512 verify, 24 σχετικά tests PASS. Τοπικός browser/Octave παραμένουν μη διαθέσιμα· αναλυτικά στο baseline. |
-| Εκκρεμείς πύλες πριν από CAD υλοποίηση (D024) | Ενεργά engine next-steps/decisions/versions και πραγματικός privacy checker με ιδιωτικά inputs/οδηγίες. Δεν αποτελούν πλέον πύλη documentation-only κλεισίματος T001. |
-| Τωρινή άδεια δημοσίευσης | Δημόσια CAD τεκμηρίωση, αναλυτικό πλάνο και README CAD branch, με τη ρητή εντολή ιδιοκτήτη D020–D021. Κώδικας και ιδιωτικά inputs δεν καλύπτονται. |
+| Εκκρεμείς πύλες πριν από CAD υλοποίηση (D024/D026) | Ενεργά engine next-steps/decisions/versions και πραγματικός privacy checker με ιδιωτικά inputs/οδηγίες. Το απομονωμένο συνθετικό spike επιτρέπεται, δεν αποτελούν λυμένες πύλες. |
+| Τωρινή άδεια δημοσίευσης | Δημόσια CAD docs/README και το συγκεκριμένο isolated benchmark D026. Κώδικας ενσωμάτωσης και ιδιωτικά inputs δεν καλύπτονται. |
 
-## Επόμενη ενέργεια — κλείσιμο CAD-T001 και στάση
+## Επόμενη ενέργεια — κλείσιμο CAD-T002 και στάση
 
-1. Διάβασε το σημερινό Git handoff και το remote HEAD. Έλεγξε τους ακριβείς SHA/CI, χωρίς αυτόματη μεταφορά της νεότερης main.
-2. Συντήρησε το πλήρες δημόσιο πακέτο CAD docs στο Git. Έλεγξε συνοχή, paths/links, diff, ταυτότητα author/committer και ότι το runtime/εξαρτήσεις/workflow παραμένουν ίδια.
-3. Κανόνας D023: μην επαναλαμβάνεις αναζητήσεις προηγούμενων chats/Library/ZIP. Όλο το δημοσιεύσιμο υλικό και οι ακριβείς πηγές συντηρούνται στο Git. Οι δύο καταγεγραμμένες ιδιωτικές είσοδοι παραμένουν blockers πριν από οποιαδήποτε CAD υλοποίηση· δεν χρειάζονται για το documentation-only κλείσιμο (D024). Μη δημοσιεύεις private inputs.
-4. Κάθε νέο δημοσιευμένο τελικό commit χρειάζεται κατάλληλους τοπικούς ελέγχους και ενεργή αναμονή του δικού του GitHub CI. Μην χρησιμοποιείς το πράσινο CI παλαιότερου SHA ως πιστοποίηση του νεότερου.
-5. Κλείσε T001 ως documentation-only όταν το τελικό HEAD έχει επιτυχές CI. Σταμάτησε εκεί. Νέα εργασία (T002, kernel, viewport, engine implementation) απαιτεί ρητή εντολή, επίλυση των ιδιωτικών πυλών πριν από υλοποίηση και κατάλληλο μοντέλο.
+1. Διάβασε το CAD_STATUS, CAD_KERNEL_EVALUATION και το remote HEAD. Επιβεβαίωσε ακριβές CI του T002 και runtime integrity, χωρίς main/base αλλαγή.
+2. Επόμενο χωριστά εγκεκριμένο task: CAD-T003 / SOL (όπως ζήτησε ο ιδιοκτήτης), neutral versioned CAD/component contract και απλό shaft template. Μην ενσωματώσεις runtime πριν από τις δύο ιδιωτικές πύλες.
+3. Κανόνας D023: μην επαναλαμβάνεις αναζητήσεις παλιών αρχείων· ζήτησε μόνο συγκεκριμένα νέα ιδιωτικά inputs όταν απαιτούνται. Fable review βρίσκεται στο CAD_KERNEL_EVALUATION και δεν ανατίθεται αυτόματα.
 
 Το [CAD_PLAN_DETAILS.md](CAD_PLAN_DETAILS.md) εξειδικεύει τα στάδια, τις εξαρτήσεις, την απόδοση, τις δοκιμές και το πρωτόκολλο ενσωμάτωσης. Οι παρακάτω πίνακες είναι το ενεργό πλάνο προϊόντος, όχι κατάλογος υλοποιημένων δυνατοτήτων.
 
@@ -39,7 +37,7 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 
 ## Αρχιτεκτονική προς διερεύνηση
 
-- Εξειδικευμένος, αποδοτικός renderer για το εργαλείο, χωρίς Three.js. Το rendering backend παραμένει υπό αξιολόγηση. Οι CadQuery/build123d/Open CASCADE παραμένουν υποψήφιες επιλογές γεωμετρικού kernel προς δοκιμή στο δικό τους στάδιο· renderer και kernel είναι διαφορετικές αποφάσεις.
+- Εξειδικευμένος, αποδοτικός renderer χωρίς Three.js. OCCT exact kernel με αρχικό build123d adapter, OCP/native escape path, ανεξάρτητο PCL document/API και portable GPU compute/rendering. WebGPU/wgpu πρώτοι υποψήφιοι, όχι τελικά επιλεγμένη backend υλοποίηση· βλ. CAD_KERNEL_EVALUATION.
 - Το CAD document/feature graph είναι η πηγή παραμετρικών δεδομένων. Το ακριβές BRep ανήκει στον kernel. Το mesh του browser είναι αναπαράσταση προβολής, με σύνδεση triangles/edges σε geometry IDs και revision.
 - Προτεινόμενα νέα modules: `pcl/cad/`, `web/cad/` και `tests/cad/`. Ονόματα/API δεν υπάρχουν ακόμη στον κώδικα. Επιλογή τελικών διαδρομών στο CAD-T003.
 - Δημόσιο CAD/component API από νωρίς, κοινό για GUI, Python, Java bridge και MATLAB. GUI εντολές και κώδικας μεταβάλλουν το ίδιο έγγραφο· δεν υποσχόμαστε αυτόματη μετατροπή αυθαίρετου κώδικα σε επεξεργάσιμο feature tree.
@@ -80,8 +78,8 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 | Εργασία | Μοντέλο | Ένα παραδοτέο |
 |---|---|---|
 | CAD-T001 | SOL | Documentation-only ολοκλήρωση D024: επιβεβαίωση/δέσμευση βάσης, χάρτης κοινών αρχείων και baseline ελέγχων· τελική πιστοποίηση CI. |
-| CAD-T002 | ASTRA | Μικρή σύγκριση CadQuery/build123d με ίδιο δοκίμιο, εγκατάσταση, STEP, tessellation, ιδιότητες και μετρήσεις· επιλογή με αιτιολόγηση. |
-| CAD-T003 | ASTRA | Ένα versioned συμβόλαιο CAD document/component και API, με template απλού άξονα. Όχι ολόκληρη βιβλιοθήκη. |
+| CAD-T002 | SOL | Απομονωμένο συνθετικό benchmark με exact checks/STEP/tessellation/μετρήσεις, OCCT + build123d αρχικός adapter, Fable review. |
+| CAD-T003 | SOL | Ένα versioned συμβόλαιο CAD document/component και API, με template απλού άξονα. Όχι ολόκληρη βιβλιοθήκη. Ιδιωτικές πύλες πριν από ενσωμάτωση. |
 | CAD-T004 | ASTRA | Ένα worker-job contract με revisions, cache/cancellation και κοινό όριο πόρων· μικρή λειτουργική απόδειξη. |
 | CAD-T005 | SOL | Μία native πράξη δημιουργίας σώματος από το API, στο background, με έλεγχο αποτελέσματος. |
 | CAD-T006 | SOL | Ένα 3D panel στην υπάρχουσα αισθητική, με camera/selection/resize/docking. |
@@ -106,13 +104,13 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 ## Μήνυμα συνέχειας
 
 ~~~text
-ThanosZr/power-control-lab, branch lab-cad-0.1.0-baseline. CAD-T001 documentation-only κλείσιμο με έγκριση D024 και επιτυχές CI στο τελικό SHA. Μην το ξανανοίξεις ούτε ξεκινήσεις CAD-T002 χωρίς νέα ρητή εντολή. Δούλεψε με Git και τυχόν απαραίτητα νέα ιδιωτικά inputs, όχι ZIP ή προηγούμενο workspace.
+ThanosZr/power-control-lab, branch lab-cad-0.2.0-kernel. T001 κλειστό, T002 isolated synthetic spike ολοκληρώνεται με επιτυχές CI στο τελικό SHA. Επόμενη εργασία μόνο με νέα ρητή εντολή: CAD-T003/SOL, neutral versioned document/component API και απλό shaft template. Δούλεψε με Git και τυχόν απαραίτητα νέα ιδιωτικά inputs, όχι ZIP ή προηγούμενο workspace.
 Βάση engine 5.0.7: dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Εξακρίβωσε το πραγματικό σημερινό CAD HEAD και το CI του από το Git, χωριστά από τη βάση.
-Διάβασε README.md, docs/CAD_INDEX.md, CAD_STATUS, CAD_BASELINE, CAD_INTEGRATION_MAP, CAD_PROJECT_INSTRUCTIONS, CAD_NEXT_STEPS, CAD_PLAN_DETAILS και τελευταίες αποφάσεις/εκδόσεις/πηγές.
-Τα πραγματικά CAD-S007 drafts έχουν ανακτηθεί και αντιπαραβληθεί. Η αναθεώρηση εγγράφων 0.4 είναι στο Git για κοινή πρόσβαση και μελλοντική ενσωμάτωση. Συντήρησε αυτά τα αρχεία εκεί, χωρίς συνεχείς αναρτήσεις στο project.
+Διάβασε README.md, docs/CAD_INDEX.md, CAD_STATUS, CAD_KERNEL_EVALUATION, CAD_BASELINE, CAD_INTEGRATION_MAP, CAD_PROJECT_INSTRUCTIONS, CAD_NEXT_STEPS, CAD_PLAN_DETAILS και τελευταίες αποφάσεις/εκδόσεις/πηγές.
+Τα πραγματικά CAD-S007 drafts έχουν ανακτηθεί. Revision 0.5 στο Git· OCCT + αρχικός build123d adapter, δικό μας neutral document/compute/rendering, χωρίς Three.js. Fable review στο CAD_KERNEL_EVALUATION. Συντήρησε εκεί τα αρχεία χωρίς συνεχείς αναρτήσεις.
 Κανόνας D023: μην επαναλαμβάνεις αναζητήσεις σε προηγούμενες συνομιλίες, Library, ZIP ή παλιό workspace. Διάβασε μόνο το κανονικό Git handoff και τυχόν νέο ιδιωτικό input που ο ιδιοκτήτης παρέχει ρητά. Κάθε δημοσιεύσιμο στοιχείο που χρειάζεται η συνέχεια πρέπει να βρίσκεται ήδη στα κανονικά Git docs, μαζί με συγκεκριμένα refs/εκκρεμότητες.
-Παραμένουν εκκρεμή τα ενεργά engine next-steps/decisions/versions και ο πραγματικός privacy checker με ιδιωτικά inputs και οδηγίες. Πριν από οποιαδήποτε υλοποίηση CAD είναι υποχρεωτικά. Δεν έχουν εκτελεστεί, ούτε επιτρέπεται η δημοσίευση ιδιωτικών inputs. Η εξέλιξη engine στηρίζεται στο repo 5.0.7 (D025), με ενδεικτική αρχιτεκτονική/θέματα ενίσχυσης για Fable στο CAD_PLAN_DETAILS.
-Μελλοντικός σχεδιασμός: εξειδικευμένος renderer χωρίς Three.js, motion/robotics, AI/PINNs προς αξιολόγηση, ανεξάρτητος χρόνος προσομοίωσης/προβολής με synchronized playback. Καμία υλοποίησή τους στο T001.
-Κάθε νέα CAD έκδοση σε νέο lab-cad-<έκδοση>-<θέμα>, ενδιάμεσα commits ίδιας έκδοσης στο ίδιο branch. Κανένα main/engine write, CAD-T002 ή αναβάθμιση βάσης.
+Παραμένουν εκκρεμή τα ενεργά engine next-steps/decisions/versions και ο πραγματικός privacy checker με ιδιωτικά inputs και οδηγίες. Πριν από υλοποίηση στο PCL είναι υποχρεωτικά. D026 καλύπτει μόνο το απομονωμένο συνθετικό T002. Δεν έχουν εκτελεστεί, ούτε επιτρέπεται δημοσίευση ιδιωτικών inputs. Η εξέλιξη engine στηρίζεται στο repo 5.0.7 (D025).
+Μελλοντικός σχεδιασμός: portable GPU compute, εξειδικευμένος retained renderer χωρίς Three.js, motion/robotics, AI/PINNs προς αξιολόγηση, χωριστά simulation/presentation clocks. Δεν υλοποιήθηκαν στο T002.
+Κάθε νέα CAD έκδοση σε νέο lab-cad-<έκδοση>-<θέμα>, ενδιάμεσα commits ίδιας έκδοσης στο ίδιο branch. Κανένα main/engine write ή αναβάθμιση βάσης.
 Commit/push όταν καλύπτονται οι αντίστοιχες προϋποθέσεις, με Thanos Zr author/committer χωρίς model attribution. Κατάλληλοι τοπικοί έλεγχοι και ενεργή αναμονή CI στο νέο τελικό SHA. Κλείσε με αποτέλεσμα και ακριβές handoff.
 ~~~

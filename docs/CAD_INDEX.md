@@ -1,8 +1,8 @@
 # CAD · οδηγός πλάνου και ενσωμάτωσης
 
-Αναθεώρηση εγγράφων 0.4 · 23/11/2026. Κανονική θέση: docs/ του lab-cad-0.1.0-baseline, repository ThanosZr/power-control-lab.
+Αναθεώρηση εγγράφων 0.5 · 23/11/2026. Κανονική θέση: docs/ του lab-cad-0.2.0-kernel, repository ThanosZr/power-control-lab.
 
-**CAD-T001: documentation-only, κλείσιμο με επιτυχές CI στο τελικό SHA (D024).** SOL, χωρίς subagents. Βάση engine 5.0.7: dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Ο στόχος είναι πλήρες CAD/custom-component tool. Το πακέτο πλάνου δεν είναι υλοποίηση του στόχου. Δεν ξεκίνησε CAD-T002.
+**CAD-T002: isolated spike (D026–D027), SOL, χωρίς subagents.** T001 κλειστό στο e997a3d2 / CI 45124099619. Βάση engine 5.0.7: dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Δεν ενσωματώθηκε CAD runtime.
 
 ## Σειρά ανάγνωσης
 
@@ -12,6 +12,7 @@
 | 2 | [CAD_PROJECT_INSTRUCTIONS.md](CAD_PROJECT_INSTRUCTIONS.md) | Κανόνες βάσης, branches, ταυτότητας, ιδιωτικών ελέγχων και παράδοσης. |
 | 3 | [CAD_NEXT_STEPS.md](CAD_NEXT_STEPS.md) | Ενεργό πλάνο, τελικός στόχος, στάδια και συγκεκριμένη ουρά CAD-T001–T007. |
 | 4 | [CAD_PLAN_DETAILS.md](CAD_PLAN_DETAILS.md) | Αναλυτικές απαιτήσεις, κριτήρια αποδοχής, εξαρτήσεις και πρωτόκολλο ενσωμάτωσης. |
+| 4a | [CAD_KERNEL_EVALUATION.md](CAD_KERNEL_EVALUATION.md) | T002: OCCT, benchmark, custom GPU layers και συγκεκριμένο Fable review. |
 | 5 | [CAD_INTEGRATION_MAP.md](CAD_INTEGRATION_MAP.md) | Υπάρχων pinned κώδικας, σημεία επαφής, απόδοση, workers, persistence και playback boundaries. |
 | 6 | [CAD_BASELINE.md](CAD_BASELINE.md) | SHA/tree, ακριβή αποτελέσματα/περιορισμοί ελέγχων και προέλευση των drafts. |
 | 7 | [CAD_DECISIONS_01.md](CAD_DECISIONS_01.md) | Ιστορικό απαιτήσεων, προτάσεων και μεταγενέστερων αποφάσεων με σταθερά IDs. |

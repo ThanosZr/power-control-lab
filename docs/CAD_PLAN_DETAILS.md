@@ -1,8 +1,8 @@
 # CAD · αναλυτικό πλάνο προϊόντος και κριτήρια
 
-Αναθεώρηση εγγράφων 0.4 · 23/11/2026. Συμπληρώνει το [CAD_NEXT_STEPS](CAD_NEXT_STEPS.md), τους [κανόνες](CAD_PROJECT_INSTRUCTIONS.md) και τον [χάρτη ενσωμάτωσης](CAD_INTEGRATION_MAP.md).
+Αναθεώρηση εγγράφων 0.5 · 23/11/2026. Συμπληρώνει το [CAD_NEXT_STEPS](CAD_NEXT_STEPS.md), τους [κανόνες](CAD_PROJECT_INSTRUCTIONS.md) και τον [χάρτη ενσωμάτωσης](CAD_INTEGRATION_MAP.md).
 
-Απαιτήσεις, προτάσεις και υλοποίηση διατηρούνται χωριστά. Το T001 δεν θεσπίζει νέο API, scheduler, rendering backend ή kernel.
+Απαιτήσεις, προτάσεις και υλοποίηση διατηρούνται χωριστά. T001 documentation-only, T002 isolated spike: επιλεγμένη υβριδική αρχιτεκτονική OCCT/build123d adapter, δικό μας document/compute/rendering layer, αναλυτικά στο [CAD_KERNEL_EVALUATION](CAD_KERNEL_EVALUATION.md). Κανένα runtime API, scheduler ή renderer δεν έχει υλοποιηθεί.
 
 ## 1. Προϊόν και βασική εμπειρία
 
@@ -24,7 +24,7 @@ FEA/CFD/CAM και κλειστές μορφές ανταλλαγής απαιτ
 | Θέμα | Απαίτηση/κατεύθυνση | Ανοικτή τεχνική επιλογή |
 | --- | --- | --- |
 | Renderer | Εξειδικευμένος και αποδοτικός, χωρίς Three.js· camera movement με διατηρημένη display geometry | Backend, vector/selection libraries, συσκευές, fallback και κατανομή εργασίας |
-| Γεωμετρικός πυρήνας | Ακριβείς γεωμετρικές πράξεις και ελεγχόμενα exports, χωριστά από το display mesh | Σύγκριση CadQuery/build123d/Open CASCADE και συγκεκριμένων εκδόσεων στο T002 |
+| Γεωμετρικός πυρήνας | Ακριβείς γεωμετρικές πράξεις και ελεγχόμενα exports, χωριστά από το display mesh | T002: OCCT με build123d adapter, OCP/native hotspots, neutral document. Cross-platform και topology validation εκκρεμούν |
 | Έγγραφο | Versioned παραμετρικό document, κοινό για GUI/κώδικα, με έλεγχο μεταβολών | Τελικό schema, feature IDs/naming, migrations και document ownership στο T003 |
 | Jobs | Background βαριές πράξεις, revisions, cache, σαφής ακύρωση και συνολικό όριο πόρων | Native process/thread model, fairness, shared reservations και cancellation semantics στο T004 |
 | Ενσωμάτωση | Υπάρχον UI, μικροί adapters, διατήρηση παλιών αρχείων και API | Ακριβή hooks μετά τα contracts· καμία αυτόματη αλλαγή approved base |
@@ -34,7 +34,7 @@ FEA/CFD/CAM και κλειστές μορφές ανταλλαγής απαιτ
 | Playback | Χωριστός χρόνος προσομοίωσης/προβολής, zoom/pause/step/replay, συγχρονισμένα αποτελέσματα | State storage, interpolation/event policy και ακριβές timeline contract |
 | MCU | Μελλοντικό code generation για ρητά υποστηριζόμενο υποσύνολο | IR, συγκεκριμένος target/SDK/toolchain και μετρήσεις |
 
-Οι ενότητες αυτές δεν αποτελούν άδεια να ξεκινήσουν τα επόμενα tasks. Το T001/SOL ολοκληρώνεται ως documentation-only (D024), υπό το τελικό CI. Νέα υλοποίηση CAD απαιτεί ρητή εντολή και τις πραγματικές ιδιωτικές πύλες.
+Οι ενότητες αυτές δεν αποτελούν άδεια να ξεκινήσουν τα επόμενα tasks. T001 documentation-only ολοκληρωμένο, T002 isolated synthetic spike (D026). Νέα υλοποίηση CAD στο PCL απαιτεί ρητή εντολή και τις πραγματικές ιδιωτικές πύλες.
 
 ### Ενδεικτική αρχιτεκτονική για συνεργασία και ενίσχυση
 

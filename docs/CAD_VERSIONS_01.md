@@ -88,6 +88,14 @@
 - Βάση dab82e5ff2e6da4bde09e4a38aab32edfffe6d51, ίδιο branch, αμετάβλητος runtime/solver/CI workflow. Οι έλεγχοι S010 παραμένουν στο ίδιο runtime tree· τελικός έλεγχος source diff, links και identity πριν από δημοσίευση.
 - Επόμενη συνομιλία: README/CAD_INDEX/CAD_STATUS στο Git, χωρίς αναζήτηση παλιών αρχείων. Καμία αυτόματη εκκίνηση T002. Κώδικας μόνο με ρητή νέα εντολή και επίλυση των πραγματικών πυλών.
 
+## CAD-S012 · 23/11/2026 · SOL · CAD-T002 — isolated kernel spike
+
+- Incoming e997a3d24f29906be9768e6fc9fb8fce63f4895b (T001, CI 45124099619 4/4), νέο branch lab-cad-0.2.0-kernel, intermediate 7fbcc0d63d258f57afd31c0e42acfcf9285405ba. Βάση 5.0.7/dab82e5 αμετάβλητη. Δεν είναι CAD runtime release.
+- D026–D027: συνθετικό benchmark CadQuery 2.7.0 / build123d 0.10.0, ίδιο OCP 7.8.1.1.post1· exact validation, τρεις παραλλαγές STEP round-trip, 15 builds και fresh tessellations ανά wrapper, pip check PASS. Μετρήσεις, source, architecture, Fable review: CAD_KERNEL_EVALUATION και experiments/cad_t002/benchmark.py.
+- Επιλογή OCCT + αρχικός build123d adapter, δικό μας CAD document και GPU layer. Δεν εκτελέστηκε GPU benchmark ούτε fresh cross-platform installation. Ιδιωτικές πύλες ακόμη εκκρεμούν για υλοποίηση στο PCL, nethash/ERR δεν ενεργοποιείται αφού solver/netlib/parts δεν άλλαξαν.
+- Pinned engine 5.0.7, local codemap/API 947, 24/24 dock/live-program/recording, 60 relative file links και diff integrity PASS. Existing PCL CI δεν τρέχει το isolated CAD benchmark· η επαλήθευσή του είναι τοπική.
+- Επιτυχές CI στο πραγματικό τελικό SHA απαιτείται για κλείσιμο. Επόμενο χωριστά εγκεκριμένο T003/SOL neutral document/component contract, χωρίς ενσωμάτωση εφόσον λείπουν τα ιδιωτικά inputs. Fable backlog στο CAD_KERNEL_EVALUATION.
+
 ## Πρότυπο επόμενης εγγραφής
 
 ```text

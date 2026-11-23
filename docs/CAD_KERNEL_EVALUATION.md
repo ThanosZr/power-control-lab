@@ -61,6 +61,8 @@ python experiments/cad_t002/benchmark.py build123d --runs 15
 
 Η εντολή installation είναι recipe αναπαραγωγής, όχι ολοκληρωμένος cross-platform installation test ή πλήρες transitive lock.
 
+Το υπάρχον GitHub CI παραμένει αμετάβλητο και ελέγχει τον PCL 5.0.7· δεν εγκαθιστά ούτε εκτελεί το πείραμα. Τα exact/tessellation/STEP checks εκτελέστηκαν τοπικά. Μια dedicated CAD CI matrix προϋποθέτει χωριστή έγκριση και πραγματική επαλήθευση dependency packaging.
+
 | Μετρηθέν | CadQuery 2.7.0 | build123d 0.10.0 |
 | --- | ---: | ---: |
 | Build median / p95 (ms) | 8.03 / 24.12 | 13.07 / 14.21 |
