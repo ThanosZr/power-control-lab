@@ -1,8 +1,8 @@
 # CAD · αναλυτικό πλάνο προϊόντος και κριτήρια
 
-Αναθεώρηση εγγράφων 0.5 · 23/11/2026. Συμπληρώνει το [CAD_NEXT_STEPS](CAD_NEXT_STEPS.md), τους [κανόνες](CAD_PROJECT_INSTRUCTIONS.md) και τον [χάρτη ενσωμάτωσης](CAD_INTEGRATION_MAP.md).
+Αναθεώρηση εγγράφων 0.6 · 23/11/2026. Συμπληρώνει το [CAD_NEXT_STEPS](CAD_NEXT_STEPS.md), τους [κανόνες](CAD_PROJECT_INSTRUCTIONS.md) και τον [χάρτη ενσωμάτωσης](CAD_INTEGRATION_MAP.md).
 
-Απαιτήσεις, προτάσεις και υλοποίηση διατηρούνται χωριστά. T001 documentation-only, T002 isolated spike: επιλεγμένη υβριδική αρχιτεκτονική OCCT/build123d adapter, δικό μας document/compute/rendering layer, αναλυτικά στο [CAD_KERNEL_EVALUATION](CAD_KERNEL_EVALUATION.md). Κανένα runtime API, scheduler ή renderer δεν έχει υλοποιηθεί.
+Απαιτήσεις, προτάσεις και υλοποίηση διατηρούνται χωριστά. T001 documentation-only, T002 isolated spike: επιλεγμένη υβριδική αρχιτεκτονική OCCT/build123d adapter, δικό μας document/compute/rendering layer, αναλυτικά στο [CAD_KERNEL_EVALUATION](CAD_KERNEL_EVALUATION.md). T003 isolated [document contract v1](CAD_DOCUMENT_CONTRACT.md), shaft και revisioned API. Κανένα ενσωματωμένο runtime API, scheduler ή renderer δεν έχει υλοποιηθεί.
 
 ## 1. Προϊόν και βασική εμπειρία
 
@@ -25,7 +25,7 @@ FEA/CFD/CAM και κλειστές μορφές ανταλλαγής απαιτ
 | --- | --- | --- |
 | Renderer | Εξειδικευμένος και αποδοτικός, χωρίς Three.js· camera movement με διατηρημένη display geometry | Backend, vector/selection libraries, συσκευές, fallback και κατανομή εργασίας |
 | Γεωμετρικός πυρήνας | Ακριβείς γεωμετρικές πράξεις και ελεγχόμενα exports, χωριστά από το display mesh | T002: OCCT με build123d adapter, OCP/native hotspots, neutral document. Cross-platform και topology validation εκκρεμούν |
-| Έγγραφο | Versioned παραμετρικό document, κοινό για GUI/κώδικα, με έλεγχο μεταβολών | Τελικό schema, feature IDs/naming, migrations και document ownership στο T003 |
+| Έγγραφο | Versioned παραμετρικό document, κοινό για GUI/κώδικα, με έλεγχο μεταβολών | T003 reference schema v1, feature/port IDs, revisions. Topology naming, migrations, production ownership εκκρεμούν |
 | Jobs | Background βαριές πράξεις, revisions, cache, σαφής ακύρωση και συνολικό όριο πόρων | Native process/thread model, fairness, shared reservations και cancellation semantics στο T004 |
 | Ενσωμάτωση | Υπάρχον UI, μικροί adapters, διατήρηση παλιών αρχείων και API | Ακριβή hooks μετά τα contracts· καμία αυτόματη αλλαγή approved base |
 | Φυσική | Δηλωμένο μοντέλο με ιδιότητες, θύρες και μονάδες | Πρώτοι φυσικοί τομείς, coupling/DAE και supported model subset |

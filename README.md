@@ -6,13 +6,14 @@
 
 **Συνέχεια χωρίς αναζήτηση παλιών αρχείων (D023):** κάθε νέα συνομιλία αρχίζει από αυτό το README, το CAD_INDEX και το CAD_STATUS του πραγματικού CAD HEAD. Όλο το δημοσιεύσιμο υλικό/refs της επόμενης εργασίας είναι στα κανονικά Git docs· δεν απαιτείται αναδρομή σε παλιά chats, ZIP ή project uploads. Τυχόν υποχρεωτικές ιδιωτικές εκκρεμότητες δηλώνονται μία φορά ρητά στο CAD_STATUS.
 
-**CAD-T002 — απομονωμένη αξιολόγηση OCCT, με SOL (D026–D027).** Το T001 ολοκληρώθηκε ως documentation-only στο e997a3d2 / CI 45124099619. Το T002 παραδίδει συνθετικό benchmark και επιλογή αρχιτεκτονικής, όχι ενσωματωμένο CAD runtime, sketch solver ή viewport. Το λειτουργικό PCL παραμένει 5.0.7.
+**CAD-T003 — απομονωμένο document engine v1 και παραμετρικό shaft template, με SOL (D028).** T001 κλειστό στο e997a3d2 / CI 45124099619, T002 κλειστό στο 43f7fe3 / CI 45135806207 (4/4). Το T003 ορίζει ουδέτερο JSON document, feature graph, revisioned edits, undo/redo και save/open. Δεν δημιουργεί ακόμη πραγματικό BRep ούτε ενσωματώνεται στο PCL 5.0.7.
 
 ## Ξεκίνα εδώ
 
 | Αν θέλεις να δεις… | Διάβασε |
 | --- | --- |
 | Την τρέχουσα κατάσταση και το αμέσως επόμενο βήμα | [CAD_STATUS](docs/CAD_STATUS.md) |
+| Document API v1, shaft template, δοκιμές και Fable review | [CAD_DOCUMENT_CONTRACT](docs/CAD_DOCUMENT_CONTRACT.md) |
 | Επιλογή kernel, μετρήσεις, GPU architecture και Fable optimization review | [CAD_KERNEL_EVALUATION](docs/CAD_KERNEL_EVALUATION.md) |
 | Όλο το πακέτο, με σειρά ανάγνωσης και οδηγίες ενσωμάτωσης | [CAD_INDEX](docs/CAD_INDEX.md) |
 | Το πλάνο προϊόντος και τα στάδια C0–C10 / CAD-T001–T007 | [CAD_NEXT_STEPS](docs/CAD_NEXT_STEPS.md) |
@@ -43,11 +44,11 @@
 
 | Στοιχείο | Τιμή |
 | --- | --- |
-| CAD branch | lab-cad-0.2.0-kernel |
-| Έκδοση εγγράφων | 0.5 |
+| CAD branch | lab-cad-0.3.0-document |
+| Έκδοση εγγράφων | 0.6 |
 | Εγκεκριμένος engine | 5.0.7 |
 | Αμετάβλητο source SHA | dab82e5ff2e6da4bde09e4a38aab32edfffe6d51 |
-| Κατάσταση CAD | T002 isolated evaluation· κλείσιμο με επιτυχές CI στο τελικό HEAD |
+| Κατάσταση CAD | T003 isolated contract· κλείσιμο με επιτυχές CI στο τελικό HEAD |
 | Κανονικές πηγές πλάνου | docs/CAD_*.md αυτού του branch |
 
 Κάθε νέα έκδοση CAD ξεκινά σε νέο lab-cad-<έκδοση>-<θέμα> branch. Τα ενδιάμεσα commits της ίδιας έκδοσης μένουν στο ίδιο branch. Η νεότερη main ή έκδοση engine δεν γίνεται αυτόματα βάση CAD.
@@ -55,7 +56,7 @@
 Για εκκίνηση του υπάρχοντος engine αναφοράς:
 
 ~~~sh
-git clone --branch lab-cad-0.2.0-kernel https://github.com/ThanosZr/power-control-lab.git
+git clone --branch lab-cad-0.3.0-document https://github.com/ThanosZr/power-control-lab.git
 cd power-control-lab
 python -m pip install -r requirements.txt
 python run.py
@@ -67,7 +68,7 @@ python run.py
 
 Οι κατάλληλοι τοπικοί έλεγχοι και το επιτυχές GitHub CI πρέπει να αντιστοιχούν στο ίδιο τελικό δημοσιευμένο SHA. Η ανακατασκευή τεκμηρίωσης, η ανάκτηση των πραγματικών CAD-S007 drafts και οι διαφορετικές εκτελέσεις ελέγχων καταγράφονται ξεχωριστά στο baseline.
 
-Κατόπιν D024 και D026, τα ενεργά ιδιωτικά engine handoff docs και η πραγματική διαδικασία απορρήτου με τα inputs τους παραμένουν υποχρεωτικές πύλες πριν από υλοποίηση CAD στο PCL. Επιτρέπεται μόνο το απομονωμένο T002 με συνθετικό δοκίμιο και δημόσια τεκμηρίωση/benchmark. Δεν έχουν εκτελεστεί οι ιδιωτικοί έλεγχοι και δεν δημοσιεύονται ιδιωτικά inputs.
+Κατόπιν D024, D026 και D028, τα ενεργά ιδιωτικά engine handoff docs και η πραγματική διαδικασία απορρήτου με τα inputs τους παραμένουν υποχρεωτικές πύλες πριν από υλοποίηση CAD στο PCL. Τα T002/T003 είναι απομονωμένες συνθετικές εργασίες. Δεν έχουν εκτελεστεί οι ιδιωτικοί έλεγχοι και δεν δημοσιεύονται ιδιωτικά inputs. Εκτέλεση T003: `python -m experiments.cad_t003.demo`, έλεγχοι: `python -m unittest experiments.cad_t003.test_document -v`.
 
 Ο engine θα εξελιχθεί από το εγκεκριμένο repo 5.0.7 με τον ιδιοκτήτη· το Fable μπορεί να ενισχύσει την εξέλιξη στα θέματα που θα έχουν καταγραφεί. Δες την [ενδεικτική αρχιτεκτονική και ανοιχτά ερωτήματα](docs/CAD_PLAN_DETAILS.md#ενδεικτική-αρχιτεκτονική-για-συνεργασία-και-ενίσχυση). Δεν αποτελεί υλοποίηση, επιλογή backend ή αλλαγή βάσης.
 

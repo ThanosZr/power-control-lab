@@ -46,6 +46,7 @@
 
 - **CAD-D026 — 23/11/2026, isolated CAD-T002:** ο Θάνος έδωσε ρητή εντολή για T002 και ενέκρινε τη συνέχεια ως απομονωμένο τεχνικό spike, χωρίς επέμβαση στον PCL. Οι δύο ιδιωτικές πύλες D024 παραμένουν πριν από την ενσωμάτωση/υλοποίηση στο PCL. Επιτρέπεται η δημοσίευση του συνθετικού benchmark και δημόσιας τεκμηρίωσης στο νέο CAD branch. Δεν χρησιμοποιήθηκαν ή δημοσιεύθηκαν ιδιωτικά inputs. Κανένα main/engine write.
 - **CAD-D027 — 23/11/2026, hybrid architecture:** ο Θάνος ενέκρινε δικό μας CAD engine με Open CASCADE για ακριβή γεωμετρία και δικό μας GPU acceleration/rendering, ευρεία συμβατότητα συσκευών και επεκτασιμότητα. Με βάση το T002 επιλέγεται OCCT και αρχικός build123d adapter, με neutral document/API και διαδρομή OCP/C++ σε hotspots. wgpu/WebGPU και WebGL2 fallback είναι υποψήφιοι προς επαλήθευση, όχι υλοποιημένες επιλογές. Ο Θάνος ζήτησε SOL αντί ASTRA και καταγεγραμμένο Fable optimization review χωρίς ανάθεση. Βλ. CAD_KERNEL_EVALUATION.
+- **CAD-D028 — 23/11/2026, isolated CAD-T003:** ο Θάνος ζήτησε ρητά SOL, νέο branch από lab-cad-0.2.0-kernel για document engine και παραμετρικό shaft template, με τις εκκρεμείς πύλες πριν από ενσωμάτωση. Παραδίδεται απομονωμένο συνθετικό reference contract, όχι αλλαγή PCL runtime. Schema v1, stable feature/port IDs, bounded session history, optimistic revision checks και neutral resolved plan. Οι τεχνικές επιλογές είναι reference baseline προς εξέλιξη· topology naming, migrations, T004 workers, T005 πραγματικό BRep και ιδιωτικοί έλεγχοι εκκρεμούν. Δεν ανοίγει αυτόματα T004.
 
 ## Ανοιχτά
 

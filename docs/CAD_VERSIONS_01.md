@@ -96,6 +96,13 @@
 - Pinned engine 5.0.7, local codemap/API 947, 24/24 dock/live-program/recording, 60 relative file links και diff integrity PASS. Existing PCL CI δεν τρέχει το isolated CAD benchmark· η επαλήθευσή του είναι τοπική.
 - Επιτυχές CI στο πραγματικό τελικό SHA απαιτείται για κλείσιμο. Επόμενο χωριστά εγκεκριμένο T003/SOL neutral document/component contract, χωρίς ενσωμάτωση εφόσον λείπουν τα ιδιωτικά inputs. Fable backlog στο CAD_KERNEL_EVALUATION.
 
+## CAD-S013 · 23/11/2026 · SOL · CAD-T003 — isolated document engine
+
+- Incoming T002 `43f7fe301122c2942d61a4badc5fb4a4ccf461af`, CI 45135806207 completed/success, 4/4 jobs. Νέο `lab-cad-0.3.0-document`, approved 5.0.7/dab82e5 αμετάβλητη.
+- D028: `experiments/cad_t003/document.py`, `demo.py`, `test_document.py` και CAD_DOCUMENT_CONTRACT. JSON schema 1, typed parameters, feature DAG, shaft/ports/material, atomic revisioned parameter edits, undo/redo, persistence snapshot. Δεν εκτελείται πραγματικό geometry build.
+- Τοπικά (Python 3.12.14): 12/12 isolated unittest methods, demo parameter resolution/round-trip, CODEMAP/API 947, 24/24 υπάρχοντα dock/live-program/recording tests. CI workflow αμετάβλητο, δεν τρέχει το isolated T003 suite· απαιτείται επιτυχές CI του τελικού SHA για το pinned PCL. Τρέχον SHA/CI από remote, όχι self-referential commit.
+- Πύλες: πραγματικό engine handoff/privacy procedure ακόμη εκκρεμούν πριν από PCL ενσωμάτωση· δεν χρησιμοποιήθηκαν ιδιωτικά inputs. nethash/ERR δεν ενεργοποιείται (solver/netlib/parts αμετάβλητα). Fable review στο CAD_DOCUMENT_CONTRACT. Επόμενο χωριστά εγκεκριμένο T004 worker/job contract, όχι ενσωμάτωση ή αυτόματη έναρξη.
+
 ## Πρότυπο επόμενης εγγραφής
 
 ```text
