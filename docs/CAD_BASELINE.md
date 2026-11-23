@@ -52,7 +52,7 @@ Pyodide was initially absent and was installed with `npm install --no-save pyodi
 
 The two failed setup classes were `test_control.OnTheDrive` and `test_control.Stage2OnTheDrive`; all their tests passed in the 19-test rerun. The initial 11 skips were nine Octave tests, one desktop-window test without a display, and one Pyodide continuation test whose availability was evaluated during discovery. The continuation test also passed in the rerun. Octave and the desktop GUI remain untested locally. The full suite was not rerun after the dependency correction; the original full result and successful affected-module rerun are separate evidence.
 
-All numerical tests above ran against the approved engine source; the new Git changes are documentation only. Final documentation checks and a complete diff audit verify that the original tracked engine files remain identical. A new published CAD commit still needs its own CI, identified by its exact SHA.
+All numerical tests above ran against the approved engine source; those checkpoint changes were documentation only. At f57d02f a complete audit verified that all original tracked files remained identical; the later owner-requested README change is recorded separately below. A new published CAD commit still needs its own CI, identified by its exact SHA.
 
 ## Continuation evidence, 2026-11-23
 
@@ -81,11 +81,23 @@ All advertised remote branch heads were fetched read-only and their reachable pa
 | `python -m unittest tests.test_dock tests.test_live_program tests.test_recording -v` | Passed; 24 tests, no skips. Covers existing layout invariants, circuit parameter-program replay and recording range behavior. It does not test a CAD renderer or mechanical playback. |
 | Local browser availability | Playwright 1.62.1 is installed, but its bundled Chromium executable is absent. Launching the installed `/usr/bin/chromium` fails before app assertions with `socket() failed: Operation not permitted` and SIGABRT. No local UI timing or GPU measurement was obtained. |
 | Full local suite / Octave | Not rerun for this documentation-only continuation; Octave is absent. The initial full-suite outcome and affected-module rerun above remain separate evidence. |
-| Engine identity / final diff | Engine version remains 5.0.7. Only the three allowed CAD documentation paths may differ from the approved engine tree; all original tracked engine files must remain identical. |
+| Engine identity / final diff | At that three-file checkpoint, engine version remained 5.0.7 and all original tracked files matched. The later expanded plan/README checkpoint has its own explicit scope and integrity rule below. |
 
 The runtime versions match the previously recorded Python/Node/NumPy/SciPy/SymPy environment. No dependency was installed or changed in this continuation. No application code, runtime manifest, API, solver or workflow was edited. The original nethash/ERR procedure is not triggered by these documentation changes and remains unavailable for any later change that requires it.
 
-The three-file publication exception remains limited to `CAD_BASELINE.md`, `CAD_INTEGRATION_MAP.md` and `CAD_STATUS.md`. Recovering old documents does not waive the missing engine/private-check requirements for task closure or for code publication. New renderer, robotics, AI/PINN and time-playback directions are recorded as future work only.
+At that stage, the publication exception was limited to `CAD_BASELINE.md`, `CAD_INTEGRATION_MAP.md` and `CAD_STATUS.md`. Recovering old documents does not waive the missing engine/private-check requirements for task closure or for code publication. New renderer, robotics, AI/PINN and time-playback directions are recorded as future work only.
+
+## Expanded documentation scope, owner instructions on 2026-11-23
+
+The owner subsequently instructed that the five planning documents and the complete detailed CAD plan be published and maintained in Git, so the parallel engine project can read them for future integration. The owner also explicitly requested that the CAD branch root README describe the CAD tool's purpose instead of the old power-electronics presentation. See CAD_DECISIONS_01 D020–D022.
+
+This later authorization extends the documentation-only publication scope to README.md and the ten canonical docs/CAD_*.md files listed in CAD_INDEX. It does not authorize runtime/dependency/workflow changes, private inputs or a substitute private checker. The two missing private material sets remain task-closure/code-publication gates.
+
+The recovered revision 0.3 planning files are brought into Git with canonical names and updated to documentation revision 0.4. The old numbered decisions and historical S000/S001/S007 records are retained. CAD_INDEX and CAD_PLAN_DETAILS make the plan and future integration criteria readable without prior chat access.
+
+The root README is now an intentional documentation difference from the approved base. **Of the approved base's 437 tracked files, the other 436 must remain byte-identical.** The original README remains available at the pinned Git SHA. No engine version, solver, existing API, runtime dependency, workflow or license file changes.
+
+The same existing source checks apply; document validation additionally checks links, canonical paths, preserved history, superseded Three.js proposals, consistent publication boundaries and the complete diff. A new published SHA still requires its own CI, identified and awaited after publication.
 
 ## Reproduce and review
 
@@ -106,10 +118,10 @@ python tools/nn_weights.py --check
 git diff --check dab82e5ff2e6da4bde09e4a38aab32edfffe6d51 HEAD
 ```
 
-For this checkpoint, the diff from the approved baseline may contain only the new `docs/CAD_*.md` files. No solver, netlist, parts catalogue, API, runtime dependency or workflow is changed. The original nethash/ERR comparison is therefore not triggered by this documentation change; it has not been executed or replaced with a new checker.
+For the original checkpoint, the diff from the approved baseline contained only the new `docs/CAD_*.md` files. The expanded documentation checkpoint additionally changes README.md and adds the explicitly authorized planning/index/detail files. No solver, netlist, parts catalogue, API, runtime dependency, workflow or license is changed. The original nethash/ERR comparison is therefore not triggered by this documentation change; it has not been executed or replaced with a new checker.
 
 For the full browser baseline, follow `.github/workflows/ci.yml`: install its pinned Playwright and Pyodide versions, fetch the local Pyodide bundle, start `run.py`, then run the existing UI flows. Keep missing infrastructure, UI assertions and measured timing distinct. Do not claim GPU hardware acceleration from CSS code inspection or a headless screenshot.
 
 ## Completion gate
 
-CAD-T001 closes only after the required current engine handoff documents are available and reread, the actual privacy requirement is resolved for task closure, the local baseline has a recorded outcome, and the final published CAD SHA has successful CI. The owner's documentation-only publication exception permits this checkpoint; it does not mean the missing private check was performed or that a future code push is approved. Publishing a checkpoint does not itself close CAD-T001. Do not start CAD-T002 automatically.
+CAD-T001 closes only after the required current engine handoff documents are available and reread, the actual privacy requirement is resolved for task closure, the local baseline has a recorded outcome, and the final published CAD SHA has successful CI. The owner's specific documentation publication instructions, including the later full-plan/README authorization, permit this checkpoint; it does not mean the missing private check was performed or that a future code push is approved. Publishing a checkpoint does not itself close CAD-T001. Do not start CAD-T002 automatically.

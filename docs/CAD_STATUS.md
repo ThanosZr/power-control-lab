@@ -1,78 +1,75 @@
 # CAD: active handoff
 
-Updated 2026-11-23. Read this file, `CAD_BASELINE.md` and `CAD_INTEGRATION_MAP.md` at the start of the next CAD session, together with the supplied project instructions and current engine handoff.
+Updated 2026-11-23; documentation revision 0.4. Start with the [documentation index](CAD_INDEX.md), this file, [baseline](CAD_BASELINE.md), [integration map](CAD_INTEGRATION_MAP.md), and the active planning/decision files in this Git branch.
 
 ## Scope and pinned state
 
-- Active task: **CAD-T001**, in progress.
-- Repository: `ThanosZr/power-control-lab`.
-- Branch: `lab-cad-0.1.0-baseline`.
-- Approved engine source: **5.0.7**, `dab82e5ff2e6da4bde09e4a38aab32edfffe6d51`.
-- Do not advance the baseline, change `main`, start CAD-T002, choose a kernel or implement a CAD viewport in this task.
-- Git author and committer: `Thanos Zr`, `85298380+ThanosZr@users.noreply.github.com`.
-- The next session obtains the latest published CAD HEAD from this branch; it must distinguish that HEAD from the approved engine source above.
+- Active task: **CAD-T001**, in progress, with SOL and no subagents.
+- Repository: ThanosZr/power-control-lab.
+- Branch: lab-cad-0.1.0-baseline.
+- Approved engine source: **5.0.7**, dab82e5ff2e6da4bde09e4a38aab32edfffe6d51.
+- Keep the approved base, main and engine branches unchanged. Do not start CAD-T002, choose a kernel or implement a CAD viewport here.
+- Author and committer: Thanos Zr, 85298380+ThanosZr@users.noreply.github.com.
+- Obtain the actual published CAD HEAD from the remote branch; distinguish it from the approved engine source.
 
-The three source/main/CAD baseline runs and subsequent published-checkpoint evidence are recorded in `CAD_BASELINE.md`. The incoming HEAD in this continuation was `c169ffc8121013f0ed9837f983b940e66fe73a1a`, with [CI 45093234600](https://github.com/ThanosZr/power-control-lab/actions/runs/45093234600) successful in all four jobs. A successful run covers only its exact SHA.
+## Canonical documentation is now in Git
+
+Owner instructions on 2026-11-23 authorize keeping **all detailed public CAD planning documentation in this branch**, so it can also be read by the parallel engine project for future integration. The root README must describe the CAD tool's goal and current status. See decisions D020–D022.
+
+The canonical package consists of:
+
+- CAD_PROJECT_INSTRUCTIONS: rules and publication/base boundaries.
+- CAD_NEXT_STEPS and CAD_PLAN_DETAILS: product plan, stages, acceptance criteria, dependencies and future directions.
+- CAD_DECISIONS_01 and CAD_VERSIONS_01: preserved history and new decisions/checkpoints.
+- CAD_SOURCES: source register and outstanding private material.
+- CAD_BASELINE and CAD_INTEGRATION_MAP: exact evidence, source findings and extension boundaries.
+- CAD_INDEX and the branch README: navigation and integration guidance.
+
+Update these existing Git files as the project evolves. Once their publication is verified at the remote SHA, tell the owner that repeated uploads of these public CAD docs to project attachments are unnecessary. A saved local file or chat artifact does not prove an attachment changed. Ask for a specific private file only when it is still required and absent.
 
 ## Version branches
 
-Owner-confirmed policy, 2026-11-23:
+- Every new CAD software version starts on a new lab-cad-<version>-<topic> branch.
+- Intermediate commits of the same version stay on that version's branch.
+- Documentation revision 0.4 does not itself start a new software version; this remains the existing baseline branch.
+- Each final delivered commit needs appropriate local checks and successful CI at that exact SHA.
+- Main writes, a merge or a baseline upgrade need a specific owner instruction covering that change. Publishing the CAD plan is not that instruction.
 
-- Every new CAD version starts on a new branch named `lab-cad-<cad-version>-<topic>`, following the active plan.
-- Intermediate commits and pushes of the same CAD version stay on that version's existing branch. A documentation update within the current version does not itself start a new software version or require another branch.
-- Each version's final delivered commit requires the appropriate local checks and successful GitHub CI at that exact SHA. An older commit's green CI does not cover a later commit.
-- Changes to `main` require an explicit owner instruction covering the specific change. Permission to publish a CAD branch is not permission to merge or push to `main`.
-- Record the source branch and approved commit when starting the next version. Preserve the existing CAD work and the owner-approved engine baseline; do not automatically adopt a newer `main` or engine version.
+## Published history and recovery
 
-The current work remains CAD-T001 on `lab-cad-0.1.0-baseline`. This policy does not start CAD-T002 or authorize a version/base change.
+| Checkpoint | Meaning / evidence |
+| --- | --- |
+| 5660e9bc499d2ec12bb9898724f8b22953fa2cf8 | Fresh reconstruction of the three baseline/map/status docs, not recovered originals. CI 45062057720 passed. |
+| c169ffc8121013f0ed9837f983b940e66fe73a1a | Branch-per-version policy. CI 45093234600 rechecked directly: all four jobs successful. |
+| f57d02f07895dd0fa1fb73ec221dc70cdac566c1 | Actual earlier CAD-S007 documents recovered/read; source findings reconciled and future directions recorded. CI 45101812370 is the intermediate run, separate from the next final commit. |
+| This expanded documentation checkpoint | Five recovered planning docs migrated to canonical Git paths and updated to 0.4; detailed plan/index added; root README changed to the CAD tool's purpose. Get the resulting SHA and its own CI from Git/delivery. |
 
-## What this checkpoint contains
+The original CAD-S007 map/baseline, S007 version entry and all five revision 0.3 planning files were recovered from earlier generated files on 2026-11-23. An older S006 checkpoint was read too. Do not request those originals again, relabel the reconstruction as recovery or add old timings to current test counts. The separate old patch remained unavailable, but is no longer needed to recover the two documents already read.
 
-The published `5660e9b` checkpoint contains freshly reconstructed, source-grounded baseline and integration documents. Existing UI performance techniques and proposed CAD behavior are distinguished. No tracked application code or dependency manifest is changed.
+## Publication scope and unresolved gates
 
-In this continuation, the owner requested review of files generated in earlier conversations. The actual CAD-S007 map/baseline and revision 0.3 planning documents were found and read, along with an earlier CAD-S006 checkpoint. Recovery of those documents is now confirmed separately from the published reconstruction. Their source findings were reconciled with the pinned code; historical test timings and unpublished-HEAD statements were not relabeled as current results. See the recovery and validation record in `CAD_BASELINE.md`.
+The original owner's exception covered only CAD_BASELINE, CAD_INTEGRATION_MAP and CAD_STATUS. **The later explicit instructions D020–D021 extend publication to the complete public CAD planning package and the CAD branch README.** This permits the present documentation checkpoint despite the still-missing private procedure. It does not approve private input publication, runtime changes without their checks, main changes or task closure with unresolved required gates.
 
-Owner decision, 2026-11-22: publish only `docs/CAD_BASELINE.md`, `docs/CAD_INTEGRATION_MAP.md` and `docs/CAD_STATUS.md`, including their check-result updates, despite the unavailable original private checking procedure. This exception is specific to the reviewed documentation checkpoint. It does not approve runtime changes, a different engine baseline, CAD-T002, a `main` change or any later code publication without its required checks.
+| Gate / evidence | Current status and next action |
+| --- | --- |
+| Original CAD-S007/drafts | Recovered and source-reconciled. Resolved; keep provenance/history distinct. |
+| Current engine handoff | Still missing: active next-steps, latest decisions and latest version handoff. The available decisions-14 ends at 5.0.5. Public code/roadmap do not establish missing private decisions. |
+| Actual privacy procedure | Checker, instructions and private inputs still missing and not executed. Keep this pending; do not invent a substitute or claim a pass. |
+| Local baseline | Initial full run: 1,167 tests, two missing-Pyodide setup errors and 11 skips; affected control/stream rerun: 19 passed. This continuation: codemap/API/weights/512-value verification passed; 24 dock/program/recording tests passed. Separate results in CAD_BASELINE. |
+| Local UI / Octave | Browser launch blocked by environment socket permissions before app assertions; Octave absent. No local CAD timing or hardware-GPU result claimed. |
+| Source integrity | At f57d02f all 437 original tracked files matched the approved base. In this expanded checkpoint the root README intentionally changes as documentation; the other 436 original files, including runtime and workflow, must remain identical. |
+| Final publication and CI | Audit the final documentation-only diff, publish on this branch, verify remote SHA, then wait for a complete successful CI at that exact SHA. No older run certifies it. |
 
-## Outstanding inputs and gates
+The real nethash/ERR procedure remains required before a later solver/netlib/parts change; it is not triggered or replaced by this documentation-only checkpoint.
 
-| Item | Observed status | Required action |
-| --- | --- | --- |
-| Original CAD-S007/drafts | Recovered and read from earlier generated files on 2026-11-23: original map, baseline and CAD-S007 version entry; all five planning documents at revision 0.3 | Recovery gate resolved. Preserve provenance and historical results; do not ask for these drafts again. The old patch remains unavailable, but is no longer needed to recover these two original documents. |
-| Current engine handoff | Public engine code docs at the approved source are available. The supplied engineering decision file stops at 5.0.5 | Supply/read the active next-steps, decisions and version handoff; public architecture/roadmap do not establish the missing private decisions. |
-| Privacy checker and private inputs | Not supplied and not found in the approved tree. Owner approved the three-file documentation exception above | Keep the real procedure pending. Do not publish private input files, invent a replacement checker or claim this check passed. The exception does not carry over to code changes. |
-| Local baseline | Initial full discovery: 1,167 tests, 2 missing-Pyodide setup errors, 11 skips; affected control/stream rerun: 19 passed. This continuation: codemap/API/weights/512-value verification passed; 24 dock/program/recording tests passed | Preserve the separate runs. Local browser launch is still blocked by the environment and Octave is absent. No new full local suite, CAD performance or hardware-GPU result is claimed. |
-| Published CAD checkpoint CI | `c169ffc8121013f0ed9837f983b940e66fe73a1a`: [45093234600](https://github.com/ThanosZr/power-control-lab/actions/runs/45093234600), success in Python/Node, Playwright, Octave and packaging, rechecked directly in this continuation | This result covers the incoming HEAD only. After this documentation continuation is pushed, wait actively for CI whose `head_sha` equals the new published CAD HEAD and report that SHA/run together. |
+## Future directions, not current implementation
 
-## Current directions and project attachments
+The owner confirmed a specialized efficient renderer without Three.js, with its backend still under evaluation; future general kinematics/dynamics and robotics; AI-assisted acceleration with PINNs as a candidate; and time-scaled playback with independent simulation/presentation clocks, temporal zoom, pause/step/replay and synchronized results.
 
-Owner-confirmed directions, 2026-11-23: a specialized efficient renderer without Three.js (backend pending evaluation); later general kinematics/dynamics and robotics; AI-assisted acceleration with PINNs as a candidate; and time-scaled playback with independent simulation/presentation times, temporal zoom, pause/step/replay and synchronized results. These are future work only. The integration map records the existing mechanisms to reuse and their limits. The old Three.js proposal is superseded; no rendering backend or geometry kernel is selected.
+The full plan and map describe what existing engine infrastructure can be reused and where new contracts are needed. No CAD kernel, rendering backend, physics solver, timeline API or AI method is selected or implemented by T001.
 
-The owner's current instructions and this Git handoff govern the present state. Historical project files may still say that no CAD commit exists or suggest Three.js. The five files attached at the start of this session are revision 0.2; the recovered revision 0.3 files are newer historical planning sources. Neither revision describes this newly published continuation automatically.
+## Next action and delivery
 
-For project continuity, keep the latest `docs/CAD_STATUS.md`, `docs/CAD_BASELINE.md` and `docs/CAD_INTEGRATION_MAP.md` available from the CAD branch, plus the five revision 0.3 planning documents. The generated files needing addition/replacement in the project are named explicitly in the delivery. Active engine next-steps/decisions/versions and the real checker/instructions/private inputs are still needed privately; never publish those inputs to the public repository. Adding or linking a file in a chat is not confirmation that it has become a project attachment.
+Finish the public documentation checkpoint, verify the final SHA/CI and report that the active CAD plan is available in Git without another project upload. Then continue only CAD-T001 when the two outstanding private material sets become available. Read existing private project material before requesting it. Keep task closure pending while the required engine/privacy gates remain unresolved.
 
-## Commit and CI discipline
-
-Prepare reviewable checkpoints and commit on the CAD branch. Before committing, reread the active CAD plan/decisions and the available engine handoff, recording any missing required material. A local commit is not a publication and is not visible to the next session through remote Git until pushed.
-
-Before each push, satisfy the actual privacy requirement or obtain a specific owner decision addressing a missing prerequisite. Restrict the proposed checkpoint to the reviewed paths and inspect the final diff. No old approval to publish engine changes applies to new CAD changes.
-
-After pushing, inspect the remote branch and identify the workflow run by **exact SHA**, branch and event. Poll its current state with individual waits no longer than 60 seconds and concise progress updates. Do not finish with a promised future check. A failed/cancelled CI requires its own diagnosis; a later documentation commit requires CI for that later SHA.
-
-## Next action
-
-Complete this allowed three-file documentation checkpoint on the current version's branch, verify the final remote SHA and wait for its own CI. Then continue only CAD-T001 when the active engine handoff and actual private checking material are available. Do not repeat the now-completed CAD-S007 recovery or restart kernel research to work around the missing inputs. CAD-T001 remains open while its two remaining required input gates are unresolved.
-
-Suggested next-session handoff (replace the publication placeholders with the exact result reported after CI):
-
-```text
-Continue only CAD-T001 with SOL and no subagents in ThanosZr/power-control-lab.
-Branch: lab-cad-0.1.0-baseline. Final published HEAD and CI: use the exact SHA/run from the last delivery and recheck the remote ref.
-Approved engine: 5.0.7 at dab82e5ff2e6da4bde09e4a38aab32edfffe6d51; never advance it automatically.
-Read docs/CAD_BASELINE.md, docs/CAD_INTEGRATION_MAP.md, docs/CAD_STATUS.md and project files first.
-The original CAD-S007 drafts and revision 0.3 planning files have been recovered and reconciled; do not describe the older reconstruction as the recovered originals or ask for those drafts again.
-Still missing: active engine next-steps/decisions/versions and the actual privacy checker with private inputs/instructions. Keep CAD-T001 open until resolved; do not publish code under the three-file documentation exception.
-Future directions: specialized renderer without Three.js, later motion/robotics, AI/PINN evaluation and independent simulation/presentation times with synchronized playback. No implementation of those directions now.
-Stay on this branch for this version; each new CAD version needs lab-cad-<version>-<topic>. No main/engine writes, base upgrade or CAD-T002.
-```
+The branch README/index and CAD_NEXT_STEPS contain the continuation instructions. A final response must provide the real published SHA/run after CI. A document cannot contain its own resulting commit hash; do not create an endless chain of commits solely to record that same commit's CI.

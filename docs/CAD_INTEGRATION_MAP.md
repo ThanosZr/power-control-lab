@@ -110,3 +110,11 @@ Read-only Git inspection on 2026-11-23 found `main` and `lab-5.0.9` at `b1b42b0c
 | Recorded results and circuit programs | `tests/test_recording.py`, `tests/test_live_program.py`, `tests/test_stream.py`; these verify existing circuit/recording behavior, not CAD motion playback |
 
 Keep a future CAD adapter in its own module and limit shared-file edits to the registration and lifecycle hooks it needs. Document/feature contracts, kernel comparison and worker design remain later tasks.
+
+## Canonical public plan and integration entry point
+
+The owner subsequently requested that the full CAD plan be maintained in Git and be readable by the parallel engine project for future integration. The five recovered planning files are now canonical docs/CAD_PROJECT_INSTRUCTIONS.md, CAD_NEXT_STEPS.md, CAD_DECISIONS_01.md, CAD_VERSIONS_01.md and CAD_SOURCES.md at documentation revision 0.4.
+
+Start at [CAD_INDEX](CAD_INDEX.md) for the complete reading order and [CAD_PLAN_DETAILS](CAD_PLAN_DETAILS.md) for stage acceptance, dependencies and integration checks. The CAD branch [root README](../README.md) now presents this tool's goal and current planning stage, while linking to the original engine README at its pinned source.
+
+This is an owner-authorized documentation change, not a base upgrade or integration of newer console/FDNE code. Anyone preparing a future merge must record source/base/target SHAs, read the actual active engine handoff, inspect shared-file/API/persistence conflicts and obtain the specific main/base authorization before making that integration.
