@@ -435,7 +435,7 @@ class NetworkReports(unittest.TestCase):
 class Studies(unittest.TestCase):
     def test_every_study_as_data(self):
         for study in S.STUDIES:
-            if study in ('scopf', 'harmonic', 'acdc'):                                            # 4.19.4: it needs ratings, and the 14-bus network has none (below); 4.19.5: it needs a source; 4.20: converters
+            if study in ('scopf', 'harmonic', 'acdc', 'sc'):                                      # 4.19.4: it needs ratings, and the 14-bus network has none (below); 4.19.5: it needs a source; 4.20: converters; 5.0.11: the data of the machines (tests/test_model.py)
                 continue
             q = S.run({'case': 'ieee14', 'study': study})
             json.dumps(q, allow_nan=False)                                                        # plain JSON: no NumPy, no NaN

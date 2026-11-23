@@ -331,7 +331,8 @@
    if(r||c.flip)sym=sym.replace(/<text class="(btxt|bsm)" x="([-\d.]+)" y="([-\d.]+)"/g,(m,k,x,y)=>`${m} transform="translate(${x} ${+y-4}) scale(${f} 1) rotate(${-90*r}) translate(${-x} ${4-y})"`);
    return `<g class="part t-${c.type}" data-c="${c.id}" transform="${tf}"><rect class="hit" x="${bx-4}" y="${by-4}" width="${bw+8}" height="${bh+8}" rx="5"/><g class="sym">${sym}</g></g>`;}
   renderPart(c){const el=this.L.parts.querySelector(`[data-c="${CSS.escape(c.id)}"]`);if(el){el.outerHTML=this.partSVG(c);this.partEls();this._lv?.delete(c.id);}this.renderSel();}
-  valueText(c){const p={...P.defaults(c.type),...c.params},e=P.eng;
+  valueText(c){const x=this?.extText?.get(c.id);if(x)return x;   // 5.0.11: the result of a study of the drawing in place of the value (app.js dmLabels)
+   const p={...P.defaults(c.type),...c.params},e=P.eng;
    // 4.17.5: a parameter that is still an expression «= …» (not computed here) shows «—», not NaN
    const fn=(v,o)=>Number.isFinite(v)?P.fmtNum(v,o):'—';
    switch(c.type){case 'R':return p.sched?'R(t)':e(+p.R,'Ω');case 'L':return e(+p.L,'H');case 'C':return e(+p.C,'F');case 'VDC':return p.ctl==='sig'?'V από σήμα':e(+p.V,'V')+(+p.Rs>0?' · '+e(+p.Rs,'Ω'):'');case 'VAC':return e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'VAC3':return '3φ '+e(+p.Vpk,'V')+' · '+e(+p.f,'Hz');case 'SCR':return p.fire==='alpha'?'α '+fn(+p.alpha)+'°'+(+p.shift?' +'+fn(+p.shift)+'°':''):p.fire==='pwm'?'g · '+(p.pwm||'—'):'';

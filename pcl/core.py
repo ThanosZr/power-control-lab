@@ -442,6 +442,12 @@ class Project:
         n = sum(1 for c in self.data.get('components', []) if c.get('type') not in ('JUNC', 'GND'))
         return f'<Project «{self.name}»: {n} στοιχεία' + (f', αλλαγές {self.changes}' if self.changes else '') + '>'
 
+    def model(self):
+        """5.0.11 (ROADMAP §70, experimental): the common model of the drawing, its buses and its elements with their ids
+        (web/studio/model.js); pcl.model makes it a network for the load flow and IEC 60909-0."""
+        from . import model
+        return model.of(self)
+
     # ------------------------------------------------------------- parameters
     def comp(self, cid):
         for c in self.data['components']:

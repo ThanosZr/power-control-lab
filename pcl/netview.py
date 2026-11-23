@@ -27,12 +27,12 @@ import numpy as np
 UNIT = 100.0            # the length of a typical branch in drawing units
 FULL = 2500             # buses up to which the stress uses every pair of buses (memory n², time n² per sweep)
 PIVOTS = 200            # above it: distances to this many buses only (pivot scaling, Brandes & Pich 2007)
-LAYERS = ('base', 'voltage', 'angle', 'loading', 'flow', 'violations', 'n1', 'security', 'collapse', 'residual', 'thd', 'unbalance', 'lmp')
+LAYERS = ('base', 'voltage', 'angle', 'loading', 'flow', 'violations', 'n1', 'security', 'collapse', 'residual', 'thd', 'unbalance', 'lmp', 'sc')
 TITLES = {'base': 'Επίπεδα τάσης', 'voltage': 'Τάσεις ζυγών', 'angle': 'Γωνίες τάσης', 'loading': 'Φόρτιση κλάδων', 'flow': 'Ροές ενεργού ισχύος',
           'violations': 'Παραβιάσεις', 'n1': 'N−1: τι προκαλεί η απώλεια κάθε κλάδου', 'security': 'Ασφάλεια N−1: η χειρότερη φόρτιση κάθε κλάδου μετά από διαταραχή',
           'collapse': 'Ευστάθεια τάσης: πτώση της τάσης κάθε ζυγού ως το όριο φόρτισης', 'residual': 'Εκτίμηση κατάστασης: το μεγαλύτερο κανονικοποιημένο υπόλοιπο των μετρήσεων κάθε ζυγού και κάθε κλάδου',
           'thd': 'Αρμονική παραμόρφωση τάσης (THD) κάθε ζυγού ως προς το όριό του', 'unbalance': 'Ασυμμετρία τάσης: αρνητική ως προς θετική ακολουθία σε κάθε τριφασικό ζυγό',
-          'lmp': 'Οριακές τιμές κόμβων'}
+          'lmp': 'Οριακές τιμές κόμβων', 'sc': 'Ρεύμα βραχυκύκλωσης I″k κάθε ζυγού (IEC 60909-0)'}
 # colours: a diverging scale for a quantity around a centre, a sequential one for a quantity from zero, and the voltage levels
 DIVERGING = ['#2166ac', '#67a9cf', '#d1e5f0', '#bdbdbd', '#fddbc7', '#ef8a62', '#b2182b']
 SEQUENTIAL = ['#bdbdbd', '#fee08b', '#fdae61', '#f46d43', '#d73027', '#7f0000']
@@ -498,6 +498,23 @@ def values(v, result=None, layer='base', study=None):
         out['note_base'] = (f'{res.get("m")} μετρήσεις. ' + ('Καμία δεν βγήκε ως λανθασμένη.' if not bad else
                             ('Βγήκε ως λανθασμένη: ' if len(bad) == 1 else f'Βγήκαν ως λανθασμένες {len(bad)}: ') + ', '.join(f'{b["type"]} στο {b["at"]}' for b in bad[:6]) + (' …' if len(bad) > 6 else '') + '.'))
         return out
+    if layer == 'sc':
+        # 5.0.11, IEC 60909-0: every bus by its initial short-circuit current I″k (kA), from zero to the largest of the network
+        vals = {str(b): _num(q.get('Ik')) for b, q in rb.items() if isinstance(q, dict) and q.get('Ik') is not None and 'V' not in q}
+        vals = {b: x / 1e3 for b, x in vals.items() if x is not None}
+        if not vals or not isinstance(res.get('fault'), str):
+            return missing('Η στρώση του βραχυκυκλώματος θέλει τη μελέτη IEC 60909-0.')
+        top = max(max(vals.values()), 1e-9)
+        col = _scale(SEQUENTIAL, 0.0, top)
+        out['bus'], out['unit_bus'] = vals, 'kA'
+        out['bus_color'] = {b['id']: col(vals.get(b['id'])) for b in v['buses']}
+        out['branch_color'] = {e['name']: GREY for e in v['branches']}
+        gr = lambda x: f'{x:.3g}'.replace('.', ',')               # noqa: E731
+        out['legend'] = [(col(top * (i + 0.5) / 6), f'{gr(top * i / 6)}–{gr(top * (i + 1) / 6)} kA') for i in range(6)]
+        w = max(vals, key=vals.get)
+        name = {'3ph': 'τριφασικό', '2ph': 'διφασικό', '1ph': 'μονοφασικό προς γη', '2phE': 'διφασικό προς γη'}.get(res['fault'], res['fault'])
+        out['note_base'] = f'Σφάλμα {name}, {"μέγιστα" if res.get("mode") != "min" else "ελάχιστα"} ρεύματα· το μεγαλύτερο I″k: {gr(vals[w])} kA στον ζυγό {w}.'
+        return out
     if layer == 'thd':
         # 4.19.5, harmonic load flow: every bus by its voltage distortion against the limit of its voltage level (IEEE Std 519)
         vals = {str(b): (_num(q.get('THD')), _num(q.get('limit_thd'))) for b, q in rb.items() if isinstance(q, dict) and q.get('THD') is not None}
@@ -715,7 +732,7 @@ def _maybe_int(s):
         return s
 
 
-DEFAULT = {'pf': 'voltage', 'n1': 'n1', 'n1dc': 'n1', 'opf': 'lmp', 'dcopf': 'lmp', 'scopf': 'security', 'cpf': 'collapse', 'se': 'residual', 'harmonic': 'thd', 'unbalanced': 'unbalance'}     # the layer a study opens with
+DEFAULT = {'sc': 'sc', 'pf': 'voltage', 'n1': 'n1', 'n1dc': 'n1', 'opf': 'lmp', 'dcopf': 'lmp', 'scopf': 'security', 'cpf': 'collapse', 'se': 'residual', 'harmonic': 'thd', 'unbalanced': 'unbalance'}     # the layer a study opens with
 
 
 def pack(v, result=None, layers=None):

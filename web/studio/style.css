@@ -371,6 +371,7 @@ details.psec>summary .cnt{margin-left:auto;color:var(--muted);font-weight:400;fo
 .scen-tbl{border-collapse:collapse;font-size:12px;margin:0 0 12px}.scen-tbl caption{text-align:left;font-weight:600;padding:2px 0 6px}
 .scen-tbl th,.scen-tbl td{padding:3px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}.scen-tbl th{background:#f4f7f5}
 .scen-tbl td:first-child,.scen-tbl th:first-child{text-align:left}
+.dm-tbl{border-collapse:collapse;font-size:12px;margin:4px 0 8px;width:100%}.dm-tbl th,.dm-tbl td{padding:2px 6px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}.dm-tbl th{background:#f4f7f5}.dm-tbl td:first-child,.dm-tbl th:first-child{text-align:left}
 /* 5.0.8 (ROADMAP §98): the command line */
 .cmd-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px;padding:0 16px 16px}
 @media (max-width:1000px){.cmd-grid{grid-template-columns:1fr}}

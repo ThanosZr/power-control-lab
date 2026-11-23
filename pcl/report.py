@@ -510,6 +510,33 @@ def _acdc(r, net, res, MW, picture, order):
     _branches(r, net, res['branches'], MW)
 
 
+SC_FAULT = {'3ph': 'τριφασικό', '2ph': 'διφασικό', '1ph': 'μονοφασικό προς γη', '2phE': 'διφασικό προς γη'}
+
+
+def _sc(r, net, res, order, picture):
+    """5.0.11: the short-circuit currents of IEC 60909-0 at every bus (and at the faults of a drawing)."""
+    kA = 1e3
+    rows = [(b, res['buses'][b]) for b in order if b in res['buses']]
+    r.facts([('Σφάλμα', SC_FAULT.get(res['fault'], res['fault'])), ('Ρεύματα', 'μέγιστα (c_max, διορθώσεις K)' if res['mode'] == 'max' else 'ελάχιστα (c_min, χωρίς διορθώσεις)'),
+             ('Ζυγοί', len(rows)), ('Μεγαλύτερο I″k (kA)', round(max((d['Ik'] for _, d in rows), default=0) / kA, 3)), ('Στον ζυγό', res.get('worst') or '—')])
+    r.note('Μέθοδος: ισοδύναμη πηγή τάσης c·U_n/√3 στη θέση του σφάλματος, με τα φορτία έξω (IEC 60909-0:2016). i_p με τη μέθοδο B '
+           '(R/X στη θέση του σφάλματος), I_b από τον τύπο (77) με t_min = 0,1 s.', 'info')
+    if any(d.get('isolated') for _, d in rows):
+        r.note('Ζυγοί χωρίς δρόμο της μηδενικής ακολουθίας προς τη γη (I″k = 0): ' + ', '.join(b for b, d in rows if d.get('isolated')), 'warning')
+    picture(res, 'sc')
+    r.heading('Ρεύματα βραχυκύκλωσης των ζυγών').chart('bar', [b for b, _ in rows], [{'name': 'I″k', 'y': [d['Ik'] / kA for _, d in rows]}],
+                                                      'Αρχικό ρεύμα βραχυκύκλωσης ανά ζυγό', 'Ζυγός', 'kA')
+    r.table(['Ζυγός', 'U_n (kV)', 'c', 'I″k (kA)', 'i_p (kA)', 'I_b (kA)', 'S″k (MVA)', 'κ', 'R/X'],
+            [[b, d['Un'] / kA, d.get('c'), d['Ik'] / kA, None if d.get('ip_b') is None else d['ip_b'] / kA, None if d.get('Ib') is None else d['Ib'] / kA,
+              None if d.get('Sk') is None else d['Sk'] / 1e6, d.get('kappa_b'), d.get('RX_b')] for b, d in rows], 'Ζυγοί', [None, 4, 3, 5, 5, 5, 5, 4, 4])
+    fl = res.get('faults') or {}
+    if fl:
+        r.heading('Τα σφάλματα του σχεδίου')
+        r.table(['Σφάλμα', 'Ζυγός', 'Είδος', 'Κατά IEC 60909', 'I″k (kA)', 'i_p (kA)'],
+                [[k, f['bus'], f['kind'], SC_FAULT.get(f['fault'], f['fault']), f['Ik'] / kA, None if f.get('ip_b') is None else f['ip_b'] / kA] for k, f in sorted(fl.items())],
+                'Ένα ανά FLT3, με το δικό του είδος σφάλματος', [None, None, None, None, 5, 5])
+
+
 def network_report(net, study='pf', result=None, title=None, **kw):
     """A report for a study of a pcl.network.Network: study 'pf' (load flow), 'n1' / 'n1dc' (N−1 in AC / with the DC screening),
     'opf' / 'dcopf' (optimal power flow), 'scopf' (4.19.4: the DC optimal power flow with security against every single outage),
@@ -526,7 +553,7 @@ def network_report(net, study='pf', result=None, title=None, **kw):
             'scopf': 'Βέλτιστη ροή φορτίου με ασφάλεια N−1 (DC)', 'cpf': 'Συνεχιζόμενη ροή φορτίου: καμπύλη P–V και περιθώριο φόρτισης',
             'se': 'Εκτίμηση κατάστασης: ελάχιστα τετράγωνα με βάρη και εντοπισμός λανθασμένων μετρήσεων',
             'harmonic': 'Αρμονική ροή φορτίου: παραμόρφωση τάσης και συντονισμοί', 'unbalanced': 'Ασύμμετρη (τριφασική) ροή φορτίου τροφοδότη',
-            'acdc': 'Ροή φορτίου AC/DC με δίκτυα συνεχούς πολλών τερματικών'}
+            'acdc': 'Ροή φορτίου AC/DC με δίκτυα συνεχούς πολλών τερματικών', 'sc': 'Βραχυκυκλώματα κατά IEC 60909-0'}
     if study not in head:
         raise ReportError(f'network_report: study one of {", ".join(head)}')
     r = Report(title or head[study], name, meta={'Ζυγοί': len(net.buses), 'Κλάδοι': nbr, 'Γεννήτριες': gens, 'S βάσης (MVA)': net.S_base / MW})
@@ -577,6 +604,10 @@ def network_report(net, study='pf', result=None, title=None, **kw):
                 [[b, res['types'][b], d['V'], d['angle'], d['P'] / MW, d['Q'] / MW, d['Pload'] / MW, d['Qload'] / MW] for b, d in ((b, res['buses'][b]) for b in order)],
                 'Ζυγοί', [None, None, 5, 5, 5, 5, 5, 5], mark)
         _branches(r, net, res['branches'], MW)
+    elif study == 'sc':
+        from . import model
+        res = result or model._sc_all(net, **kw)
+        _sc(r, net, res, order, picture)
     elif study in ('n1', 'n1dc'):
         res = result or net.contingency('ac' if study == 'n1' else 'dc', **kw)
         advice(res.get('advice') or net.advice('n1'))

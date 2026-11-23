@@ -9,6 +9,11 @@ The network: 'case' (a name of pcl.network.CASES) or 'network' (a network as wri
 Studies: 'advice' (what the engine proposes, for every study), 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf' (4.19.4), 'cpf' (4.19.5:
 the continuation load flow), 'se' (4.19.5: state estimation from measurements), 'harmonic' (4.19.5: the harmonic load flow).
 
+5.0.11 (ROADMAP §70 point 1): 'drawing' = the common model of a drawing of the app (web/studio/model.js, pcl.model): the network is
+the drawing's (pcl.model.network: 'pf' for the load flows, as the EMT start of the drawing; 'sc' for IEC 60909-0), with the ids of the
+drawing. And 'sc', IEC 60909-0 at every bus (options: fault '3ph' | '2ph' | '1ph' | '2phE', mode 'max' | 'min', tmin), and at each FLT3
+of a drawing with its own kind of fault.
+
 4.19.5: 'unbalanced' is the three-phase load flow of a feeder (pcl.unbalanced): its network is a 'case' of pcl.unbalanced.CASES or a
 'feeder' as data (pcl.unbalanced.Feeder.to_dict), not a pcl.network.Network.
 
@@ -25,7 +30,7 @@ import numpy as np
 from . import network as N
 from .report import Report, network_report
 
-STUDIES = ('advice', 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf', 'cpf', 'se', 'harmonic', 'acdc')
+STUDIES = ('advice', 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf', 'cpf', 'se', 'harmonic', 'acdc', 'sc')
 FEEDER_STUDIES = ('unbalanced',)                          # 4.19.5: studies of a three-phase feeder (pcl.unbalanced), not of a Network
 STARTS = ('auto', 'mid', 'pf', 'nn')
 OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n1': ('tol', 'q_limits', 'backend', 'how'), 'n1dc': (), 'opf': ('flow_limits', 'start', 'tol', 'max_iter'),
@@ -34,7 +39,7 @@ OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n
            'se': ('measurements', 'plan', 'noise', 'seed', 'sigma', 'bad', 'zero_injections', 'detect', 'threshold', 'confidence', 'max_bad', 'tol', 'max_iter', 'start',
                   'pmu', 'currents', 'emt'),
            'harmonic': ('sources', 'harmonics', 'load_model', 'line_model', 'pulse', 'filters', 'scan_bus', 'scan_to', 'scan_step', 'tol', 'spectra'),
-           'unbalanced': ('regulators', 'spread', 'tol', 'max_iter'), 'advice': (), 'acdc': ('method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits', 'set', 'out', 'mode', 'flow_limits', 'start', 'outages')}
+           'unbalanced': ('regulators', 'spread', 'tol', 'max_iter'), 'advice': (), 'sc': ('fault', 'mode', 'tmin'), 'acdc': ('method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits', 'set', 'out', 'mode', 'flow_limits', 'start', 'outages')}
 MAX_BUSES = 20000
 
 
@@ -62,8 +67,19 @@ def _clean(o):
 
 
 def _base_network(data):
-    """The network of a request before its changes: a case by its name, or a network as data."""
-    if data.get('network') is not None:
+    """The network of a request before its changes: a case by its name, a network as data, or (5.0.11) the drawing of the app."""
+    if data.get('drawing') is not None:
+        from . import model
+        try:
+            net = model.network(data['drawing'], 'sc' if data.get('study') == 'sc' else 'pf')[0]
+        except (model.ModelError, N.NetworkError, KeyError, TypeError, ValueError) as e:
+            raise StudyError(f'Το σχέδιο δεν γίνεται δίκτυο: {e}') from e
+        if not net.buses:
+            raise StudyError('Το σχέδιο δεν έχει ζυγούς με πηγή (GEN3, GRID3 ή VAC3, με γραμμές, μετασχηματιστές και φορτία).')
+    elif data.get('study') == 'sc' and data.get('network') is None:
+        raise StudyError('Το βραχυκύκλωμα κατά IEC 60909-0 θέλει τα δεδομένα των μηχανών και των μετασχηματιστών (x″d, cos φ_rG, u_k), που τα δίκτυα δοκιμής '
+                         'δεν έχουν: από σχέδιο («drawing») ή από δίκτυο με αυτά («network»).')
+    elif data.get('network') is not None:
         if not isinstance(data['network'], dict):
             raise StudyError('network: ένα δίκτυο όπως το γράφει το pcl.network.to_dict')
         try:
@@ -197,7 +213,7 @@ def _geo_summary(net0, data):
     return {'buses': c['buses'], 'of': c['of'], 'routes': c['routes'], 'map': c['of'] > 0 and c['buses'] == c['of']}
 
 
-def _study(net, study, opt):
+def _study(net, study, opt, faults=None):
     if study not in STUDIES:
         raise StudyError('study: ένα από ' + ', '.join(STUDIES))
     opt = {k: v for k, v in (opt or {}).items() if k in OPTIONS[study] and v is not None and v != ''}
@@ -208,6 +224,9 @@ def _study(net, study, opt):
     try:
         if study == 'advice':
             return {k: net.advice(k) for k in ('pf', 'n1', 'batch', 'opf', 'dcopf')}
+        if study == 'sc':                                  # 5.0.11: IEC 60909-0 at every bus, and at the faults of a drawing
+            from . import model
+            return model._sc_all(net, opt.get('fault', '3ph'), opt.get('mode', 'max'), faults, tmin=float(opt.get('tmin', 0.1)))
         if study == 'pf':
             return net.power_flow(**opt)
         if study == 'dc':
@@ -268,8 +287,24 @@ def _study(net, study, opt):
         raise StudyError(str(e)) from e
 
 
+def _faults(data):
+    """5.0.11: the FLT3 of a drawing, for the study 'sc'."""
+    if data.get('drawing') is None or data.get('study') != 'sc':
+        return None
+    from . import model
+    return model.faults_of(data['drawing'])
+
+
 def summary(study, res):
     """The few numbers of a result that the card of a tutorial shows."""
+    if study == 'sc':                                      # 5.0.11: the largest and the smallest I″k, and the faults of a drawing
+        ok = {b: d for b, d in res['buses'].items() if d.get('Ik') is not None}
+        hi = max(ok, key=lambda b: ok[b]['Ik']) if ok else None
+        lo = min(ok, key=lambda b: ok[b]['Ik']) if ok else None
+        return {'fault': res['fault'], 'mode': res['mode'], 'buses': len(ok), 'Ik_max_kA': hi and ok[hi]['Ik'] / 1e3, 'Ik_max_bus': hi,
+                'Ik_min_kA': lo and ok[lo]['Ik'] / 1e3, 'Ik_min_bus': lo, 'isolated': sorted(b for b, d in ok.items() if d.get('isolated')),
+                'faults': [{'id': k, 'bus': f['bus'], 'kind': f['kind'], 'fault': f['fault'], 'Ik_kA': f['Ik'] / 1e3, 'ip_kA': (f.get('ip_b') or 0) / 1e3}
+                           for k, f in sorted(res.get('faults', {}).items())]}
     if study == 'pf':
         V = [(b, d['V']) for b, d in res['buses'].items()]
         lo, hi = min(V, key=lambda q: q[1]), max(V, key=lambda q: q[1])
@@ -569,12 +604,23 @@ def run(data):
         return _station_run(data)
     net0, net, done = _networks_of(data)
     study = data.get('study') or 'pf'
-    res = _study(net, study, data.get('options'))
+    res = _study(net, study, data.get('options'), _faults(data))
     out = {'study': study, 'network': {'name': net.name, 'case': data.get('case'), 'buses': len(net.buses),
                                        'branches': sum(e['kind'] in ('line', 'branch', 'transformer') for e in net.elements)},
            'result': _clean(res), 'summary': _clean(summary(study, res))}
     if done:
         out['network']['edits'] = done
+    if data.get('drawing') is not None:                    # 5.0.11: what the translation of the drawing left out or changed
+        from . import model
+        info = model.network(data['drawing'], 'sc' if study == 'sc' else 'pf')[1]
+        out['network']['drawing'] = _clean({k: info[k] for k in ('notes', 'out', 'helpers', 'elements')})
+        if study == 'pf' and 'result' in out and res.get('branches') is not None:   # the results by the ids of the drawing
+            out['result']['elements'] = _clean(model.elements_of(data['drawing'], net, info, res))
+        if study == 'pf' and info['helpers']:              # the EMF behind a GRID3 or a VAC3 is not a bus of the drawing
+            V = [(b, d['V']) for b, d in res['buses'].items() if b not in info['helpers']]
+            if V:
+                lo, hi = min(V, key=lambda q: q[1]), max(V, key=lambda q: q[1])
+                out['summary'].update(Vmin=lo[1], Vmin_bus=lo[0], Vmax=hi[1], Vmax_bus=hi[0])
     if data.get('geojson') is not None:                    # 4.22: what the GeoJSON of the request gave
         out['network']['geo'] = _clean(_geo_of(_base_network(data), data)[1])
     if data.get('view'):
@@ -611,7 +657,7 @@ def view(data):
         data = dict(data, layers=data.get('layers') or ['voltage', 'angle', 'unbalance'])
     else:
         net0, net, _ = _networks_of(data)
-        res = _clean(_study(net, study, data.get('options')))
+        res = _clean(_study(net, study, data.get('options'), _faults(data)))
     stem = f'network_{_stem(data, net)}_{study}'
     if fmt == 'geojson':                                   # 4.22 (pcl.geo): the network on the earth with what the study found
         import json
@@ -657,8 +703,8 @@ def report(data):
     net0, net, done = _networks_of(data)
     study = data.get('study') or 'pf'
     if study in ('advice', 'dc'):
-        raise StudyError('Αναφορά για: pf, n1, n1dc, opf, dcopf, scopf, cpf, se, harmonic.')
-    res = _study(net, study, data.get('options'))
+        raise StudyError('Αναφορά για: pf, n1, n1dc, opf, dcopf, scopf, cpf, se, harmonic, sc.')
+    res = _study(net, study, data.get('options'), _faults(data))
     r = network_report(net, study, res, data.get('title') or None, picture=_picture(net0, net, data) if done else None)
     if done:                                               # what was changed, right after the title of the report
         r.note('Αλλαγές στο δίκτυο πριν από τη μελέτη (' + str(len(done)) + '): ' + ' '.join(done), 'warning')

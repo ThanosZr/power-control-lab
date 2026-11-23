@@ -1,0 +1,529 @@
+"""The common model, step 1 (5.0.11, ROADMAP §70 point 1, THEORY §8ΩΛ): the network of a drawing for the studies of
+pcl.network, with the identity of the drawing. Experimental.
+
+The drawing of the app (its parts GEN3, GRID3, VAC3, LINE3, XF3, ZSER3, LOAD3, CB3, FLT3 and the wires between them) becomes
+buses and elements by web/studio/model.js (Model.of; from Python with of(project), through Node). Here that model becomes a
+pcl.network.Network in one of two ways:
+
+* 'pf', the load flow as the EMT start of the drawing solves it (mna.js acInit): a GEN3 is a source |V|∠θ at its terminals
+  (V0, ang0), a GRID3 its EMF behind Z₁ = c·U_n²/S″k, a VAC3 its EMF behind R_s + jωL_s, a LINE3 its π section (the exact π of
+  the line with model «tl»), an XF3 its three single-phase units (the leakage split, the magnetizing branch where the part has it,
+  the iron losses at side 1, the tap at side 1 and the phase shift of the group), a ZSER3 its impedance, a LOAD3 its P(V);
+* 'sc', the elements of IEC 60909-0: a GRID3 a network feeder (S″k, R/X, its c, the zero sequence), a GEN3 a generator (S_n, U_n,
+  x″d, cos φ_rG for K_G, THEORY §8στ), an XF3 a transformer (u_k, u_R, the group with its earthing, K_T), a LINE3 a line, a
+  ZSER3 a reactor, a VAC3 a feeder with Z_Q = R_s + jωL_s; the loads are left out (IEC 60909-0 neglects non-rotating loads).
+
+A closed breaker (its state at t = 0) joins two buses (its R_on is left out). Buses that no source reaches are left out of
+the study, with a note.
+
+    m = model.of(project)                    # the model of a drawing (a dict as the app saves it, or a pcl.Project)
+    net, info = model.network(m, 'pf')       # the buses by the drawing's names; info: the ids of the drawing → the elements
+    r = model.load_flow(m)                   # the load flow by the ids of the drawing
+    s = model.short_circuit(m, '3ph')        # IEC 60909-0 at every bus, and at each FLT3 of the drawing (its kind of fault)
+"""
+import cmath
+import math
+
+import numpy as np
+
+from . import network as N
+
+VERSION = 1
+SQ3 = math.sqrt(3)
+STUDIES = ('pf', 'sc')
+TYPES = ('GEN3', 'GRID3', 'VAC3', 'LINE3', 'XF3', 'ZSER3', 'LOAD3', 'CB3', 'FLT3')
+# the groups of XF3 (netlib.js GROUPS): the connection of side 1 and side 2, star points earthed; the clock number gives the shift
+GROUPS = {'Yy0': ('Y', 'Y', 0, 0, 0), 'YNyn0': ('Y', 'Y', 1, 1, 0), 'Yyn0': ('Y', 'Y', 0, 1, 0), 'YNy0': ('Y', 'Y', 1, 0, 0),
+          'Yd1': ('Y', 'D', 0, 0, 1), 'Yd11': ('Y', 'D', 0, 0, 11), 'YNd1': ('Y', 'D', 1, 0, 1), 'YNd11': ('Y', 'D', 1, 0, 11),
+          'Dy1': ('D', 'Y', 0, 0, 1), 'Dy11': ('D', 'Y', 0, 0, 11), 'Dyn1': ('D', 'Y', 0, 1, 1), 'Dyn11': ('D', 'Y', 0, 1, 11), 'Dd0': ('D', 'D', 0, 0, 0)}
+# an FLT3 of the drawing as a fault of IEC 60909-0
+FAULTS = {'abc': '3ph', 'abcg': '3ph', 'ab': '2ph', 'bc': '2ph', 'ca': '2ph', 'ag': '1ph', 'bg': '1ph', 'cg': '1ph',
+          'abg': '2phE', 'bcg': '2phE', 'cag': '2phE'}
+
+
+class ModelError(ValueError):
+    pass
+
+
+def _num(p, k, d=0.0):
+    try:
+        v = float(p.get(k, d))
+    except (TypeError, ValueError):
+        return float(d)
+    return v if math.isfinite(v) else float(d)
+
+
+def of(project):
+    """The common model of a drawing: a project dict (as the app saves it) or a pcl.Project, through Node (web/studio/model.js);
+    a model already (a dict with 'buses' and 'elements') is returned as it is."""
+    if isinstance(project, dict) and 'buses' in project and 'elements' in project:
+        return _check(project)
+    from . import core
+    data = project.data if isinstance(project, core.Project) else project
+    if not isinstance(data, dict) or 'components' not in data:
+        raise ModelError('of: ένα κύκλωμα της εφαρμογής (components, wires) ή ένα pcl.Project')
+    return _check(core._node({'action': 'model', 'project': data}))
+
+
+def _check(m):
+    if not isinstance(m, dict) or not isinstance(m.get('buses'), list) or not isinstance(m.get('elements'), list):
+        raise ModelError('Το μοντέλο του σχεδίου θέλει buses και elements (web/studio/model.js).')
+    if int(m.get('version') or 0) > VERSION:
+        raise ModelError(f'Μοντέλο σχεδίου έκδοσης {m.get("version")}: αυτή η Python διαβάζει ως την {VERSION}.')
+    for b in m['buses']:
+        if not isinstance(b, dict) or not b.get('id'):
+            raise ModelError('Κάθε ζυγός του μοντέλου θέλει id.')
+    for e in m['elements']:
+        if not isinstance(e, dict) or e.get('type') not in TYPES or not isinstance(e.get('buses'), list):
+            raise ModelError(f'Στοιχείο του μοντέλου που δεν διαβάζεται: {e.get("id") if isinstance(e, dict) else e}')
+    return m
+
+
+# ---------------------------------------------------------------- the data of the parts, as netlib.js has them
+def _grid_z(p):
+    """Z₁, Z₀ (Ω), the EMF (V, phase) of a GRID3 (netlib.js gridZ), and its neutral."""
+    Un, cf, Sk, XR = max(_num(p, 'Un', 20e3), 1e-9), max(_num(p, 'cf', 1.1), 1e-9), max(_num(p, 'Sk', 500e6), 1e-9), max(_num(p, 'XR', 10), 0.0)
+    Z1 = cf * Un * Un / Sk
+    R1 = Z1 / math.sqrt(1 + XR * XR)
+    X1 = R1 * XR
+    XR0 = max(_num(p, 'XR0', 10), 0.0)
+    c0, s0 = 1 / math.sqrt(1 + XR0 * XR0), XR0 / math.sqrt(1 + XR0 * XR0)
+    mode = p.get('z0') or 'ratio'
+    if mode == 'iso':
+        R0, X0 = R1, X1
+    elif mode == 'sk1':
+        K = 3 * cf * Un * Un / max(_num(p, 'Sk1', 400e6), 1e-9)
+        Ar, Ai = 2 * R1, 2 * X1
+        b = Ar * c0 + Ai * s0
+        d = b * b - (Ar * Ar + Ai * Ai - K * K)
+        r = -b + math.sqrt(d) if d >= 0 else float('nan')
+        R0, X0 = (r * c0, r * s0) if r > 0 else (R1, X1)
+    else:
+        Z0 = max(_num(p, 'Z0Z1', 1), 1e-9) * Z1
+        R0, X0 = Z0 * c0 + 3 * max(_num(p, 'Rn', 0), 0.0), Z0 * s0
+    neut = 'iso' if mode == 'iso' else (p.get('neut') if p.get('neut') in ('gnd', 'z', 'iso', 'pin') else 'gnd')
+    E = (1.0 if p.get('emf') == 'un' else cf) * Un / SQ3
+    return {'Un': Un, 'cf': cf, 'Sk': Sk, 'R1': R1, 'X1': X1, 'R0': R0, 'X0': X0, 'E': E, 'neut': neut,
+            'Zn': complex(max(_num(p, 'Rng', 0), 0.0), max(_num(p, 'Xng', 0), 0.0)) if neut == 'z' else 0j}
+
+
+def _line_data(p):
+    """R₁, X₁, B₁, R₀, X₀, B₀ of a LINE3 in Ω and S (netlib.js lineData: pu on S_b and U_n when unit = 'pu')."""
+    Un = max(_num(p, 'Un', 150e3), 1e-9)
+    k = Un * Un / max(_num(p, 'Sb', 100e6), 1e-9) if p.get('unit') == 'pu' else 1.0
+    R1, X1, B1 = max(_num(p, 'R1'), 0.0) * k, max(_num(p, 'X1'), 1e-9) * k, max(_num(p, 'B1'), 0.0) / k
+    g = p.get('z0') == 'given'
+    R0, X0, B0 = (max(_num(p, 'R0'), 0.0) * k, max(_num(p, 'X0'), 1e-9) * k, max(_num(p, 'B0'), 0.0) / k) if g else (R1, X1, B1)
+    return {'Un': Un, 'R1': R1, 'X1': X1, 'B1': B1, 'R0': R0, 'X0': X0, 'B0': B0, 'tl': p.get('model') == 'tl' and not g}
+
+
+def _xf_data(p):
+    """The data of an XF3 (netlib.js xfData) in per unit of S_n and the windings: the leakage z_k, the share of side 1, the
+    magnetizing x_m and its place, the iron losses g_fe at side 1, the tap, the group."""
+    grp = p.get('grp') if p.get('grp') in GROUPS else 'Dyn11'
+    U1, U2, Sn = max(_num(p, 'U1', 150e3), 1e-9), max(_num(p, 'U2', 20e3), 1e-9), max(_num(p, 'Sn', 40e6), 1e-9)
+    t = _num(p, 'tap', 0.0) / 100
+    uk, Pk, i0, P0 = max(_num(p, 'uk', 10), 0.0) / 100, max(_num(p, 'Pk', 0), 0.0), max(_num(p, 'i0', 0.5), 0.0), max(_num(p, 'P0', 0), 0.0)
+    rk = Pk / Sn
+    xk = math.sqrt(max(uk * uk - rk * rk, 0.0))
+    sh = min(max(_num(p, 'xs1', 50), 0.0), 100.0) / 100
+    return {'grp': grp, 'G': GROUPS[grp], 'U1': U1, 'U2': U2, 'Sn': Sn, 'tap': t, 'Uw1': U1 * (1 + t), 'uk': uk, 'rk': rk, 'xk': xk, 'sh': sh,
+            'xm': 100 / i0 if i0 > 0 else 1e6, 'gfe': P0 / Sn, 'mpos': p.get('mpos') if p.get('mpos') in ('w1', 'w2') else 'mid', 'Pk': Pk}
+
+
+def _zser_z(p, w):
+    """The impedance of a ZSER3 at ω (netlib.js zserDef): R_s + jωL_s in series with (R_p1 + jωL_p) ∥ R_p2."""
+    Rs, Ls, Rp1, Lp, Rp2 = (max(_num(p, k, d), 0.0) for k, d in (('Rs', 1), ('Ls', 0), ('Rp1', 0), ('Lp', 0.1), ('Rp2', 0)))
+    z = complex(Rs, w * Ls)
+    if Lp > 0 or Rp1 > 0 or Rp2 > 0:
+        y = (1 / complex(Rp1, w * Lp) if (Lp > 0 or Rp1 > 0) else 0) + (1 / Rp2 if Rp2 > 0 else 0)
+        z += 1 / y
+    return z
+
+
+def _gen_xd2(p):
+    """x″d of a GEN3: the given one, or from the circuit of the rotor (data «circ»): X_l + (1/X_ad + 1/X_fd + 1/X_kd)⁻¹."""
+    if p.get('data') != 'circ':
+        return max(_num(p, 'Xdpp', 0.23), 1e-6)
+    inv = 1 / max(_num(p, 'cXad', 1.66), 1e-9) + 1 / max(_num(p, 'cXfd', 0.062), 1e-9)
+    if _num(p, 'cRkd', 0.0041) > 0 and _num(p, 'cXkd', 0.0055) > 0:
+        inv += 1 / _num(p, 'cXkd', 0.0055)
+    return max(_num(p, 'Xl', 0.15), 0.0) + 1 / inv
+
+
+# ---------------------------------------------------------------- what a study takes in: the buses that a source reaches
+def _sources(e, study):
+    p, t = e['params'], e['type']
+    if t == 'GEN3':
+        return study == 'sc' or p.get('init') != 'zero'
+    if t == 'VAC3':
+        return p.get('seq', 'abc') == 'abc' and (study == 'pf' or _num(p, 'Rs') > 0 or _num(p, 'Ls') > 0)
+    return t == 'GRID3'
+
+
+def _reached(m, study):
+    adj = {b['id']: set() for b in m['buses']}
+    for e in m['elements']:
+        if e['type'] in ('LINE3', 'XF3', 'ZSER3') and len(e['buses']) == 2:
+            a, b = e['buses']
+            adj.setdefault(a, set()).add(b)
+            adj.setdefault(b, set()).add(a)
+    seen = set()
+    todo = [e['buses'][0] for e in m['elements'] if _sources(e, study)]
+    while todo:
+        b = todo.pop()
+        if b in seen:
+            continue
+        seen.add(b)
+        todo.extend(adj.get(b, ()))
+    return seen
+
+
+# ---------------------------------------------------------------- the network
+def network(m, study='pf', fe=None, S_base=100e6):
+    """The network of the model for a study: 'pf' (the load flow as the EMT start) or 'sc' (IEC 60909-0).
+    fe ('pf'): the frequency of the reactances, as the EMT start with the trapezoidal rule takes them, ω_e = (2/h)·tan(ωh/2)
+    (None: the frequency of the drawing). Returns (net, info): info['elements'] the ids of the drawing → the names of the
+    network's elements, info['helpers'] the buses of the network that the drawing does not have (the EMF behind a GRID3 or a
+    VAC3), info['out'] the buses that no source reaches, info['notes'] what the translation left out or changed."""
+    m = _check(m)
+    if study not in STUDIES:
+        raise ModelError(f'study: {", ".join(STUDIES)}')
+    f = float(m.get('f') or 50)
+    w = 2 * math.pi * f
+    kx = (float(fe) / f) if fe else 1.0
+    net = N.Network(f=f, S_base=S_base, name=m.get('name') or 'σχέδιο')
+    reached = _reached(m, study)
+    notes, out, els, helpers, shunts = [], [], {}, {}, {}
+    labels = {b['id']: b.get('label') or b['id'] for b in m['buses']}
+    for b in m['buses']:
+        if b['id'] in reached:
+            net.bus(b['id'], float(b['Un']), label=b.get('label') if b.get('label') and b.get('label') != b['id'] else None)
+        else:
+            out.append(b['id'])
+    if out:
+        notes.append('Ζυγοί χωρίς πηγή, εκτός μελέτης: ' + ', '.join(labels[b] for b in out[:12]) + ('…' if len(out) > 12 else '') + '.')
+
+    def lab(e):
+        return e.get('label') or e['id']
+
+    def Ub(b):
+        return net.buses[b]['Un']
+
+    def pu(z, b):
+        return z / (Ub(b) ** 2 / S_base)
+
+    def shunt(eid, b, y_pu, name):
+        """A shunt admittance y (pu on S_base and the bus) as a pcl.network shunt (its power at V = 1 pu)."""
+        S = np.conj(y_pu) * S_base                          # consumed at |V| = 1 pu: P + jQ (Q > 0 absorbs)
+        net.shunt(b, P=float(S.real), Q=float(S.imag), name=name)
+        shunts.setdefault(eid, []).append((name, b, complex(y_pu)))
+
+    def slack(eid, b, V, ang, what):
+        bb = net.buses[b]
+        if bb['type'] == 'slack':
+            if abs(bb['V'] - V) > 1e-9 or abs(bb['angle'] - ang) > 1e-9:
+                notes.append(f'{what}: στον ζυγό {labels.get(b, b)} υπάρχει ήδη πηγή με άλλη τάση· κρατήθηκε η πρώτη.')
+            return False
+        bb.update(type='slack', V=float(V), angle=float(ang))
+        return True
+
+    for e in m['elements']:
+        t, p, bs, eid = e['type'], e['params'], [str(x) for x in e['buses']], str(e['id'])
+        if any(b not in net.buses for b in bs):
+            continue
+        names = []
+        if t == 'GEN3':
+            b = bs[0]
+            xd2, cosr = _gen_xd2(p), min(max(_num(p, 'cosr', 0.85), 0.05), 1.0)
+            if study == 'pf':
+                if p.get('init') == 'zero':
+                    notes.append(f'{lab(e)}: ξεκινά από το μηδέν (όχι από τη ροή φορτίου), άρα δεν είναι πηγή στη ροή φορτίου.')
+                    continue
+                V, ang = _num(p, 'V0', 1.0) * _num(p, 'Un', 13.8e3) / Ub(b), _num(p, 'ang0', 0.0)
+                first = slack(eid, b, V, ang, lab(e))           # a second source on the bus gives what the first leaves
+                names.append(net.generator(b, Sr=_num(p, 'Sn', 100e6), Ur=_num(p, 'Un', 13.8e3), xd2=xd2, cosphi=cosr,
+                                           V=V if first else None, slack=first, name=eid))
+            else:
+                neut = p.get('neut') if p.get('neut') in ('gnd', 'z', 'iso', 'pin') else 'gnd'
+                if neut in ('z', 'pin'):
+                    notes.append(f'{lab(e)}: ο ουδέτερος {"μέσω Z_n" if neut == "z" else "σε ακροδέκτη"} δεν μπαίνει ακόμη στη μηδενική ακολουθία: γειωμένος στερεά.')
+                names.append(net.generator(b, Sr=_num(p, 'Sn', 100e6), Ur=_num(p, 'Un', 13.8e3), xd2=xd2, cosphi=cosr,
+                                           X0=max(_num(p, 'X0', 0.15), 1e-6), earthed=neut != 'iso', name=eid))
+        elif t in ('GRID3', 'VAC3'):
+            b = bs[0]
+            if t == 'GRID3':
+                g = _grid_z(p)
+                z = complex(g['R1'], g['X1'])
+                E, ang = g['E'], _num(p, 'phase', 0.0)
+            else:
+                if p.get('seq', 'abc') != 'abc':
+                    notes.append(f'{lab(e)}: πηγή με διαδοχή a → c → b (αρνητική ακολουθία): εκτός μελέτης.')
+                    continue
+                z = complex(_num(p, 'Rs'), w * _num(p, 'Ls'))
+                E, ang = _num(p, 'Vpk', 325) / math.sqrt(2), _num(p, 'phase', 0.0)
+            if study == 'pf':
+                zz = complex(z.real, z.imag * kx)
+                Vpu = E * SQ3 / Ub(b)
+                if abs(zz) <= 0:
+                    first = slack(eid, b, Vpu, ang, lab(e))
+                    names.append(net.feeder(b, Sk=None, V=Vpu, angle=ang, slack=first, name=eid))
+                else:
+                    h = f'{eid}~E'
+                    net.bus(h, Ub(b), kind='slack', V=Vpu, angle=ang, label=f'E {lab(e)}')
+                    helpers[h] = eid
+                    names.append(net.feeder(h, Sk=None, V=Vpu, angle=ang, slack=True, name=eid))
+                    zp = pu(zz, b)
+                    names.append(net.branch_pu(h, b, zp.real, zp.imag, name=f'{eid}~Z'))
+            elif t == 'GRID3':
+                X0X = None if g['neut'] in ('iso', 'pin') else (g['X0'] + 3 * g['Zn'].imag) / g['X1'] if g['X1'] > 0 else None
+                R0X0 = None if X0X is None else (g['R0'] + 3 * g['Zn'].real) / max(g['X0'] + 3 * g['Zn'].imag, 1e-12)
+                if g['neut'] == 'pin':
+                    notes.append(f'{lab(e)}: ουδέτερος σε ακροδέκτη: στη μηδενική ακολουθία ως μονωμένος.')
+                # Z_Q = c·U_n²/S″k with the c of the part: the feeder takes the c of Table 1, so S″k goes over as S″k·c_T1/c
+                # (Network.feeder(c=…) takes the key c for a bus in Network._add)
+                Sk = g['Sk'] * N.c_factor(g['Un'], 'max') / g['cf']
+                names.append(net.feeder(b, Sk=Sk, RX=g['R1'] / g['X1'] if g['X1'] > 0 else 1e3, X0X=X0X, R0X0=R0X0, Un=g['Un'], name=eid))
+            else:
+                if abs(z) <= 0:
+                    notes.append(f'{lab(e)}: ιδανική πηγή (R_s = L_s = 0), άπειρο ρεύμα βραχυκύκλωσης: εκτός του IEC 60909.')
+                    continue
+                X0X = 1.0 if p.get('neut') == 'gnd' else None
+                cT = N.c_factor(Ub(b), 'max')
+                names.append(net.feeder(b, Sk=cT * Ub(b) ** 2 / abs(z), RX=z.real / z.imag if z.imag > 0 else 1e3, X0X=X0X,
+                                        R0X0=(z.real / z.imag if z.imag > 0 else 1e3) if X0X else None, name=eid))
+                notes.append(f'{lab(e)}: η πηγή ως ισοδύναμο δικτύου με Z_Q = R_s + jωL_s ({abs(z):.4g} Ω).')
+        elif t == 'LINE3':
+            a, b = bs
+            d = _line_data(p)
+            if study == 'sc':
+                names.append(net.line(a, b, d['R1'], d['X1'], length=1.0, R0=d['R0'], X0=d['X0'], name=eid))
+            elif d['tl']:
+                # the exact π of the line (the series R spread along it): Z·sinh(γℓ)/γℓ, Y·tanh(γℓ/2)/(γℓ/2)
+                Z, Y = complex(d['R1'], d['X1'] * kx), 1j * d['B1'] * kx
+                gl = cmath.sqrt(Z * Y)
+                Zp = Z * (cmath.sinh(gl) / gl if abs(gl) > 1e-12 else 1)
+                Yp = Y * (cmath.tanh(gl / 2) / (gl / 2) if abs(gl) > 1e-12 else 1)
+                names.append(net.line(a, b, Zp.real, Zp.imag, length=1.0, B=0.0, name=eid))
+                for x, k in ((a, 1), (b, 2)):
+                    shunt(eid, x, Yp / 2 * Ub(x) ** 2 / S_base, f'{eid}~Y{k}')
+                    names.append(f'{eid}~Y{k}')
+            else:
+                names.append(net.line(a, b, d['R1'], d['X1'] * kx, length=1.0, B=max(d['B1'], d['B0']) * kx, name=eid))
+        elif t == 'XF3':
+            a, b = bs
+            d = _xf_data(p)
+            if study == 'sc':
+                names.append(_xf_sc(net, e, d, a, b, notes))
+            else:
+                names += _xf_pf(net, e, d, a, b, kx, S_base, shunt)
+        elif t == 'ZSER3':
+            a, b = bs
+            z = _zser_z(p, w * kx)
+            if abs(z) <= 0:
+                notes.append(f'{lab(e)}: μηδενική εμπέδηση: εκτός μελέτης (ένωσε τους δύο ζυγούς).')
+                continue
+            if study == 'pf':
+                zp = pu(z, a)
+                names.append(net.branch_pu(a, b, zp.real, zp.imag, name=eid))
+            else:
+                names.append(net.reactor(a, z.imag, z.real, b=b, X0=z.imag, R0=z.real, name=eid))
+        elif t == 'LOAD3':
+            b = bs[0]
+            k = Ub(b) / max(_num(p, 'Un', 20e3), 1e-9)
+            P0, Q0 = _num(p, 'P', 10e6), _num(p, 'Q', 3e6)
+            if p.get('model') == 'zip':
+                cz, ci, cp = max(_num(p, 'kz'), 0.0) / 100 * k * k, max(_num(p, 'ki'), 0.0) / 100 * k, max(_num(p, 'kp', 100), 0.0) / 100
+            else:
+                cz, ci, cp = k * k, 0.0, 0.0
+            s = cz + ci + cp
+            if s <= 0 or (P0 == 0 and Q0 == 0):
+                continue
+            if kx != 1 and cz > 0 and study == 'pf':
+                # the constant-impedance part is R ∥ L (or C) in the EMT: its Q at ω_e is Q·ω/ω_e (an inductor) or Q·ω_e/ω (a capacitor)
+                Qz = Q0 * cz * (1 / kx if Q0 > 0 else kx)
+                Q0 = (Qz + Q0 * (ci + cp)) / s
+            names.append(net.load(b, P0 * s, Q0 * s, zip=(cz / s, ci / s, cp / s), name=eid))
+        elif t == 'FLT3':
+            if study == 'pf' and p.get('ctl') != 'sig' and _num(p, 'ton', 0.04) <= 0:
+                notes.append(f'{lab(e)}: το σφάλμα υπάρχει από το t = 0· η ροή φορτίου είναι χωρίς αυτό.')
+        if names:
+            els[eid] = names
+    return net, {'study': study, 'elements': els, 'helpers': helpers, 'shunts': shunts, 'out': out, 'notes': notes, 'fe': fe}
+
+
+def _xf_pf(net, e, d, a, b, kx, S_base, shunt):
+    """An XF3 for the load flow, as its three single-phase units (netlib.js xfDef): side 1 → R_k/2 + j·s·x_k → the magnetizing
+    branch (at the middle, or at a side) → R_k/2 + j·(1 − s)·x_k → the ideal ratio and the shift of the group → side 2, and the
+    iron losses at side 1. In per unit of the windings (side 1 at U₁·(1 + tap), side 2 at U₂); the T made a π (the series branch with
+    the ratio at side 1 and two shunts), so the network needs no bus of its own for the middle."""
+    eid, Sn = str(e['id']), d['Sn']
+    Ua, Ubb = net.buses[a]['Un'], net.buses[b]['Un']
+    z1 = complex(d['rk'] / 2, d['xk'] * d['sh'] * kx)
+    z2 = complex(d['rk'] / 2, d['xk'] * (1 - d['sh']) * kx)
+    ym = 1 / complex(0, d['xm'] * kx)
+    # the winding base of side 2 is U₂; the ideal transformer at side 1 carries U_w1/U_a over U₂/U_b and the shift of the group
+    shift = 30.0 * d['G'][4]
+    tau = (d['Uw1'] / Ua) / (d['U2'] / Ubb)
+    # per unit of S_base and the bus of side 2 (the side of the series branch); r² = (U₂/U_b)²
+    r2 = (d['U2'] / Ubb) ** 2
+    to_b = r2 * S_base / Sn
+    if d['mpos'] == 'mid':
+        Z = z1 + z2 + z1 * z2 * ym
+        YA, YB = z2 * ym / Z, z1 * ym / Z
+    else:
+        Z, YA, YB = z1 + z2, (ym if d['mpos'] == 'w1' else 0), (ym if d['mpos'] == 'w2' else 0)
+    Zs = Z * to_b
+    names = [net.branch_pu(a, b, Zs.real, Zs.imag, ratio=tau, angle=shift, name=eid)]
+    # the shunt at the inner node of side 1 (winding base) seen from bus a: Y/|τ|² in the base of bus a; the iron losses at side 1
+    ya = (YA / to_b) / tau ** 2 + d['gfe'] * Sn / S_base * (Ua / d['Uw1']) ** 2
+    if abs(ya) > 0:
+        shunt(eid, a, ya, f'{eid}~Y1')
+        names.append(f'{eid}~Y1')
+    if abs(YB) > 0:
+        shunt(eid, b, YB / to_b, f'{eid}~Y2')
+        names.append(f'{eid}~Y2')
+    return names
+
+
+def _xf_sc(net, e, d, a, b, notes):
+    """An XF3 as a transformer of IEC 60909-0: the HV side first; the group with the earthing of its star points (the neutral
+    options of the part), the neutral impedances, the tap at the HV side."""
+    p = e['params']
+    c1, c2, g1, g2, n = d['G']
+
+    def side(k, conn, grounded):
+        if conn == 'D':
+            return 'D', 0j
+        m = p.get(f'neut{k}') if p.get(f'neut{k}') in ('gnd', 'z', 'iso', 'pin', 'auto') else 'auto'
+        if m == 'pin':
+            notes.append(f'{e.get("label") or e["id"]}: ουδέτερος της πλευράς {k} σε ακροδέκτη: στη μηδενική ακολουθία ως μονωμένος.')
+        earthed = grounded if m == 'auto' else m in ('gnd', 'z')
+        zn = complex(max(_num(p, f'Rng{k}'), 0.0), max(_num(p, f'Xng{k}'), 0.0)) if m == 'z' else 0j
+        return ('YN' if earthed else 'Y'), zn
+    s1, zn1 = side(1, c1, g1)
+    s2, zn2 = side(2, c2, g2)
+    if p.get('core') == '3leg' and ('YN' in (s1, s2)):
+        notes.append(f'{e.get("label") or e["id"]}: πυρήνας τριών σκελών: στη μηδενική ακολουθία ως τρεις μονοφασικοί (X₀/X = 1).')
+    if d['U1'] >= d['U2']:
+        hv, lv, Uhv, Ulv, gh, gl, nh, zh, zl, tap = a, b, d['U1'], d['U2'], s1, s2, n, zn1, zn2, 100 * d['tap']
+    else:
+        hv, lv, Uhv, Ulv, gh, gl, nh, zh, zl = b, a, d['U2'], d['U1'], s2, s1, (12 - n) % 12, zn2, zn1
+        tap = 100 * (1 / (1 + d['tap']) - 1)
+    group = gh.upper() + gl.lower() + str(nh)
+    return net.transformer(hv, lv, d['Sn'], Uhv, Ulv, 100 * d['uk'], 100 * d['rk'], group=group, Zn_hv=zh, Zn_lv=zl, tap=tap, name=str(e['id']))
+
+
+# ---------------------------------------------------------------- the studies, by the ids of the drawing
+def _bus_out(m, info):
+    return {b['id']: {'label': b.get('label') or b['id'], 'Un': b.get('Un')} for b in m['buses'] if b['id'] not in info['out']}
+
+
+def elements_of(m, net, info, r):
+    """The results of a load flow of the drawing's network by the ids of the drawing: GEN3, GRID3, VAC3: P, Q they give to their bus
+    (and Pe, Qe at the EMF behind the impedance); LINE3, XF3, ZSER3: Pa, Qa, Pb, Qb into the part at its terminals 1 and 2 (the
+    shunts of the part with them), I (A at terminal 1), loss; LOAD3: P, Q at its voltage; CB3: closed."""
+    flows = {x['name']: x for x in r['branches']}
+    V = {b: r['buses'][b]['V'] * cmath.exp(1j * math.radians(r['buses'][b]['angle'])) for b in r['buses']}
+    S_b = net.S_base
+    els = {}
+    for e in m['elements']:
+        eid, t = str(e['id']), e['type']
+        if t == 'CB3':
+            els[eid] = {'closed': bool(e.get('closed'))}
+            continue
+        if eid not in info['elements']:
+            continue
+        nm = info['elements'][eid]
+        if t in ('GEN3', 'GRID3', 'VAC3'):
+            if f'{eid}~Z' in flows:
+                x = flows[f'{eid}~Z']
+                els[eid] = {'P': -x['Pb'], 'Q': -x['Qb'], 'Pe': x['Pa'], 'Qe': x['Qa']}
+            else:
+                b = e['buses'][0]
+                els[eid] = {'P': r['buses'][b]['P'], 'Q': r['buses'][b]['Q']}
+                if sum(1 for q in m['elements'] if q['buses'] and q['buses'][0] == b and q['type'] in ('GEN3', 'GRID3', 'VAC3') and str(q['id']) in info['elements']) > 1:
+                    els[eid]['shared'] = True
+        elif t in ('LINE3', 'XF3', 'ZSER3'):
+            x = flows[nm[0]]
+            Sa, Sb = complex(x['Pa'], x['Qa']), complex(x['Pb'], x['Qb'])
+            for name, b, y in info['shunts'].get(eid, []):          # the shunts of the part at its terminals
+                s = abs(V[b]) ** 2 * np.conj(y) * S_b
+                if b == e['buses'][0]:
+                    Sa += s
+                else:
+                    Sb += s
+            I = abs(Sa) / (SQ3 * max(abs(V[e['buses'][0]]), 1e-12) * net.buses[e['buses'][0]]['Un'])
+            els[eid] = {'Pa': Sa.real, 'Qa': Sa.imag, 'Pb': Sb.real, 'Qb': Sb.imag, 'I': I, 'loss': (Sa + Sb).real}
+        elif t == 'LOAD3':
+            ld = net.element(nm[0])
+            Vm = abs(V[ld['bus']])
+            k = ld['zip'][0] * Vm * Vm + ld['zip'][1] * Vm + ld['zip'][2]
+            els[eid] = {'P': ld['P'] * k, 'Q': ld['Q'] * k}
+    return els
+
+
+def load_flow(m, fe=None, tol=1e-10, max_iter=30):
+    """The load flow of the drawing, as the EMT start solves it (network(m, 'pf')). Returns {'converged', 'iterations',
+    'buses': {bus id: {label, Un, V (pu), angle (deg), U (V, line)}}, 'elements': {id: …} (GEN3, GRID3, VAC3: P, Q they give to the
+    bus; LINE3, XF3, ZSER3: Pa, Qa, Pb, Qb into the part at its terminals 1 and 2, I (A at terminal 1), loss; LOAD3: P, Q at its
+    voltage; CB3: closed), 'losses', 'out', 'notes'}."""
+    m = _check(m)
+    net, info = network(m, 'pf', fe=fe)
+    if not any(d['type'] == 'slack' for d in net.buses.values()):
+        raise ModelError('Το σχέδιο δεν έχει πηγή για τη ροή φορτίου (GEN3 από τη ροή φορτίου, GRID3 ή VAC3).')
+    r = net.load_flow(tol=tol, max_iter=max_iter)
+    buses = _bus_out(m, info)
+    for b, d in buses.items():
+        d.update(V=r['buses'][b]['V'], angle=r['buses'][b]['angle'], U=r['buses'][b]['V'] * net.buses[b]['Un'])
+    els = elements_of(m, net, info, r)
+    return {'study': 'pf', 'converged': r['converged'], 'iterations': r['iterations'], 'buses': buses, 'elements': els,
+            'losses': r['losses'], 'out': info['out'], 'notes': info['notes'], 'helpers': sorted(info['helpers'])}
+
+
+def _sc_at(net, b, fault, mode, **kw):
+    try:
+        return net.short_circuit(b, fault, mode=mode, **kw)
+    except np.linalg.LinAlgError:                           # a bus without a path of the zero sequence to the earth
+        return {'bus': b, 'fault': fault, 'mode': mode, 'Un': net.buses[b]['Un'], 'Ik': 0.0, 'isolated': True}
+
+
+def _sc_all(net, fault='3ph', mode='max', faults=None, buses=None, **kw):
+    """IEC 60909-0 at every bus of a network that is not internal (or the given ones), and at the faults of a drawing
+    (faults: {id: (bus, kind of the FLT3)}). → {'fault', 'mode', 'buses': {bus: result}, 'faults': {id: …}, 'worst'}."""
+    if fault not in ('3ph', '2ph', '1ph', '2phE'):
+        raise ModelError("fault: '3ph', '2ph', '1ph' ή '2phE'")
+    if mode not in ('max', 'min'):
+        raise ModelError("mode: 'max' ή 'min'")
+    out = {}
+    for b in (buses or [b for b, d in net.buses.items() if d['type'] != 'internal']):
+        if b in net.buses:
+            out[b] = _sc_at(net, b, fault, mode, **kw)
+    fl = {}
+    for fid, (b, kind) in (faults or {}).items():
+        if b in net.buses:
+            ft = FAULTS.get(kind, '3ph')
+            fl[fid] = {**_sc_at(net, b, ft, mode, **kw), 'bus': b, 'kind': kind, 'fault': ft}
+    worst = max(out, key=lambda b: out[b]['Ik']) if out else None
+    return {'fault': fault, 'mode': mode, 'buses': out, 'faults': fl, 'worst': worst}
+
+
+def faults_of(m):
+    """The faults of a drawing: {FLT3 id: (bus, kind)}."""
+    return {str(e['id']): (e['buses'][0], e['params'].get('kind') or 'abc') for e in _check(m)['elements'] if e['type'] == 'FLT3'}
+
+
+def short_circuit(m, fault='3ph', mode='max', buses=None, **kw):
+    """IEC 60909-0 of the drawing (network(m, 'sc')) at every bus (or the given ones): {'buses': {bus id: the result of
+    Network.short_circuit, with its label}, 'faults': {FLT3 id: {bus, kind, fault (the kind as a fault of IEC 60909) and the result
+    there}}, 'worst', 'out', 'notes'}. fault: '3ph', '2ph', '1ph', '2phE'; mode: 'max', 'min'; the other keywords as
+    Network.short_circuit."""
+    m = _check(m)
+    net, info = network(m, 'sc')
+    if not net.buses:
+        raise ModelError('Το σχέδιο δεν έχει πηγή για το βραχυκύκλωμα (GEN3, GRID3, VAC3 με R_s ή L_s).')
+    r = _sc_all(net, fault, mode, faults_of(m), buses, **kw)
+    lab = {b['id']: b.get('label') or b['id'] for b in m['buses']}
+    for d in r['buses'].values():
+        d['label'] = lab.get(d['bus'], d['bus'])
+    return {'study': 'sc', **r, 'out': info['out'], 'notes': info['notes']}

@@ -444,6 +444,11 @@
 | shard (of the tests) | μέρος (των tests) |
 | named layout, preset layout | διάταξη με όνομα, έτοιμη διάταξη («Αρχική», «Σχέδιο», «Μελέτη δικτύου», «Ανάλυση») (5.0.10) |
 | second screen (a card in a window of the browser) | δεύτερη οθόνη (η κάρτα σε δικό της παράθυρο του browser· το «σε δικό της παράθυρο» της 5.0.5 είναι μέσα στη σελίδα) (5.0.10) |
+| common (network) model, element identity | κοινό μοντέλο (του δικτύου), ταυτότητα στοιχείου (5.0.11· το σχέδιο ως ζυγοί και στοιχεία με τα ids του) |
+| bus–branch model, topology processing (node–breaker to bus–branch) | μοντέλο ζυγών–κλάδων· οι κλειστοί διακόπτες ενώνουν ζυγούς (5.0.11) |
+| equivalent voltage source at the short-circuit location | ισοδύναμη πηγή τάσης στη θέση του σφάλματος (IEC 60909-0· 4.2, και από το σχέδιο στην 5.0.11) |
+| initial symmetrical short-circuit current I″k, peak short-circuit current i_p | αρχικό ρεύμα βραχυκύκλωσης I″k, κρουστικό ρεύμα βραχυκύκλωσης i_p |
+| rated power factor cos φ_rG | ονομαστικός συντελεστής ισχύος cos φ_rG (της γεννήτριας, για το K_G· 5.0.11) |
 
 ## Μένουν στα αγγλικά (δεν υπάρχει καθιερωμένος ελληνικός όρος ή ο αγγλικός είναι ο κοινός)
 

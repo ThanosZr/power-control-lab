@@ -917,6 +917,8 @@
     txt('Tm','T_m(t)','0',{show:p=>p.mech==='sched',hint:'Σταθερή τιμή ή «t:τιμή» σε pu, μοιρασμένη στις μάζες κατά τα μερίδια.'}),
     sel('init','Αρχική κατάσταση',[['lf','Μόνιμη κατάσταση από την τάση ακροδεκτών (ροή φορτίου)'],['zero','Από την αρχή (ροές 0, ω = 1)']],'lf',{hint:'Ροή φορτίου: το κύκλωμα λύνεται πρώτα με φασιθέτες, με τη γεννήτρια ως πηγή |V|∠θ, και η μηχανή, ο άξονας και το δίκτυο ξεκινούν από αυτή τη μόνιμη κατάσταση.'}),
     num('V0','Τάση ακροδεκτών |V|','pu',1,{show:p=>p.init!=='zero'}),num('ang0','Γωνία τάσης θ (φάση a)','°',0,{signed:true,zero:true,show:p=>p.init!=='zero',hint:'v_a = √2·|V|·U_n/√3·sin(ωt + θ), όπως οι πηγές της εφαρμογής.'}),
+    // 5.0.11 (ROADMAP §70): a datum of the rating plate for IEC 60909-0 from the drawing (pcl.model, the factor K_G, THEORY §8στ); the EMT solver does not read it
+    num('cosr','Ονομαστικός συντελεστής ισχύος cos φ_rG (IEC 60909)','',0.85,{hint:'Από την πινακίδα. Μόνο για το βραχυκύκλωμα κατά IEC 60909-0 από το σχέδιο (ο συντελεστής K_G)· ο λύτης EMT δεν τον διαβάζει.'}),
     ...NEUT('neut','gnd',{label:'Ουδέτερος στάτη'}),CONN('abc')],
    value:p=>p.Sn,unit:'VA',
    draw:p=>{const sp=genSpins(p),L=Object.entries(sp);let h='<rect class="block" x="-30" y="-35" width="60" height="'+(p.shaft==='multi'?80:70)+'" rx="6"/><circle r="15" cy="-5"/><path class="thin" d="M-8,-5 c3,-7 5,-7 8,0 c3,7 5,7 8,0"/>'+tx('SG',0,22,'bsm');

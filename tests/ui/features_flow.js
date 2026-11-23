@@ -385,5 +385,22 @@ const {chromium}=require('playwright');
  const cc=await p.evaluate(()=>{const s=window.PCL.S.sim;return {hold:s.now('H:SHi'),mean:s.lastPeriod('I:L1').avg,warn:s.net.warnings.length,card:document.querySelector('#theory').innerText};});
  ok(cc.warn===0&&Math.abs(cc.hold-cc.mean)<0.02&&Math.abs(cc.mean-25)<0.5&&/Κλειστός βρόχος/.test(cc.card)&&/Αποκατάσταση/.test(cc.card),
   'exercise 3 from blocks: the sample is the mean with the triangle ('+cc.hold.toFixed(3)+' and '+cc.mean.toFixed(3)+' A), the card measures the response');
+ // 5.0.11 (ROADMAP §70 point 1): the load flow and IEC 60909-0 from the drawing, in the panel of the circuit, with the results on the drawing
+ const dmOpen=async id=>{await p.evaluate(t=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial(t,{});},id);await p.waitForTimeout(800);
+  await p.evaluate(()=>{const el=document.querySelector('#props');if(el.classList.contains('collapsed'))document.querySelector('#props-btn').click();window.PCL.editor.select([],[]);});
+  await p.waitForSelector('[data-dm="pf"]',{timeout:30000});};
+ await dmOpen('ieee9_emt');await p.click('[data-dm="pf"]');
+ await p.waitForFunction(()=>document.querySelector('#dm-sum')||document.querySelector('#dm-err'),null,{timeout:60000});
+ const dm1=await p.evaluate(()=>{const E=window.PCL.editor;return {sum:(document.querySelector('#dm-sum')||document.querySelector('#dm-err')).textContent,rows:document.querySelectorAll('#dm-buses tr').length,
+  g2:E.valueText(E.comp('G2')),ld:E.valueText(E.comp('LD5'))};});
+ ok(/Συνέκλινε/.test(dm1.sum)&&dm1.rows===10&&/^P 163 MW/.test(dm1.g2)&&/^\|V\| /.test(dm1.ld),'drawing: the load flow of the IEEE 9 from its drawing, nine buses in the table, the results in place of the values ('+dm1.g2+'; '+dm1.ld+')');
+ await dmOpen('net_fault');await p.click('[data-dm="sc"]');
+ await p.waitForFunction(()=>document.querySelector('#dm-sum')||document.querySelector('#dm-err'),null,{timeout:60000});
+ const dm2=await p.evaluate(()=>{const E=window.PCL.editor;return {sum:(document.querySelector('#dm-sum')||document.querySelector('#dm-err')).textContent,faults:document.querySelector('#dm-faults')?.textContent||'',f1:E.valueText(E.comp('F1'))};});
+ await p.click('[data-dm="view"]');await p.waitForFunction(()=>!document.querySelector('#netview').hidden&&window.PCL.NV.v&&window.PCL.NV.v.state.layer==='sc',null,{timeout:60000});
+ await p.evaluate(()=>{const c=document.querySelector('[data-dmon]');c.click();});await p.waitForTimeout(200);
+ const dm3=await p.evaluate(()=>{const E=window.PCL.editor;return E.valueText(E.comp('F1'));});
+ ok(/Σφάλμα τριφασικό/.test(dm2.sum)&&/F1/.test(dm2.faults)&&/^I″k .*A \(τριφασικό\)$/.test(dm2.f1)&&!/I″k/.test(dm3),'drawing: IEC 60909-0 of the drawing, the fault F1 with its kind, the diagram on the layer of the short circuit, and the values come back ('+dm2.f1+' → '+dm3+')');
+ await p.evaluate(()=>{document.querySelector('#netview').hidden=true;});
  console.log(JSON.stringify({rm:rm.split('\n').slice(0,4),bt:bt.split('\n').slice(0,4),imp},null,1));
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

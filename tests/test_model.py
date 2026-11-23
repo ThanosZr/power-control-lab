@@ -1,0 +1,216 @@
+"""5.0.11 (ROADMAP §70 point 1, THEORY §8ΩΛ): the common model, step 1: the load flow and IEC 60909-0 from the drawing.
+
+The drawing becomes buses and elements with its own ids (web/studio/model.js) and a pcl.network.Network (pcl.model):
+* every tutorial reads, and what is left out is said (a subcircuit, a part of the network not in the model yet, crossed phases);
+* the load flow of the drawing is the EMT start of the drawing (mna.js acInit), an independent solver of the same circuit: with
+  the reactances at ω_e = (2/h)·tan(ωh/2) of the trapezoidal rule the two agree to the G_min of 1 nS that the EMT puts on every
+  node (THEORY §8ΩΛ.3); for the IEEE 9 and 14 and for an XF3 in every kind of group, with the magnetizing branch in its three
+  places, the iron losses, the tap and a step-up;
+* a network written by Network.to_emt comes back as the same load flow (IEEE 9: to the rounding);
+* IEC 60909-0 of the drawing is the fault current of the phase-domain solution of the same equivalent (netlib.js faultCurrents)
+  for the four kinds of fault, and its translation is the network built by hand from the same data (the HV side first, the group
+  with its earthing, the tap at the LV side, K_G with cos φ_rG);
+* the studies of pcl.study take a drawing ('drawing'), with the results by its ids, the layer of the short circuit and a report."""
+import cmath
+import copy
+import json
+import math
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+from pcl import model as M
+from pcl import network as N
+from pcl import study as S
+
+ROOT = Path(__file__).resolve().parents[1]
+CASES = ROOT / 'tests' / 'js' / 'model_cases.js'
+HAVE_NODE = shutil.which('node') is not None
+
+
+def node(*args):
+    return json.loads(subprocess.run(['node', str(CASES), *args], capture_output=True, text=True, timeout=600, check=True, cwd=str(ROOT)).stdout)
+
+
+def with_file(what, pr):
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / 'p.json'
+        p.write_text(json.dumps(pr), encoding='utf-8')
+        return node(what, str(p))
+
+
+def C(i, t, p):
+    return {'id': i, 'type': t, 'x': 0, 'y': 0, 'rot': 0, 'flip': False, 'label': i, 'params': {**p, 'conn': 'bus'}}
+
+
+def W(k, a, b):
+    return {'id': f'w{k}', 'a': {'c': a[0], 'p': a[1]}, 'b': {'c': b[0], 'p': b[1]}, 'pts': []}
+
+
+def xf_drawing(grp='Dyn11', tap=2.5, mpos='mid', xs1=70, U1=150e3, U2=20e3, i0=1.0, P0=30e3):
+    """A GRID3, an XF3, a load, a line and a load; the EMT starts from the phasors (solve.init 'ac')."""
+    comps = [C('NET', 'GRID3', {'Un': U1, 'Sk': 3e9, 'XR': 12, 'phase': 10}), C('B1', 'JUNC', {}),
+             C('TR', 'XF3', {'grp': grp, 'Sn': 40e6, 'U1': U1, 'U2': U2, 'uk': 11, 'Pk': 150e3, 'i0': i0, 'P0': P0, 'tap': tap, 'mpos': mpos, 'xs1': xs1}),
+             C('B2', 'JUNC', {}), C('LD1', 'LOAD3', {'Un': U2, 'P': 20e6, 'Q': 8e6}), C('LN', 'LINE3', {'Un': U2, 'R1': 1.2 * (U2 / 20e3) ** 2, 'X1': 3.5 * (U2 / 20e3) ** 2, 'B1': 40e-6}),
+             C('B3', 'JUNC', {}), C('LD2', 'LOAD3', {'Un': U2, 'P': 6e6, 'Q': -1e6})]
+    ws = [W(1, ('NET', 'abc'), ('B1', 'j')), W(2, ('TR', 'abc1'), ('B1', 'j')), W(3, ('TR', 'abc2'), ('B2', 'j')), W(4, ('LD1', 'abc'), ('B2', 'j')),
+          W(5, ('LN', 'abc1'), ('B2', 'j')), W(6, ('LN', 'abc2'), ('B3', 'j')), W(7, ('LD2', 'abc'), ('B3', 'j'))]
+    return {'version': 4, 'components': comps, 'wires': ws, 'solve': {'init': 'ac'}, 'sim': {'hDiv': 400}}
+
+
+def start_error(test, pr, warped=True):
+    """The largest difference (pu and rad) of the voltages of the loads between the load flow of the drawing and its EMT start."""
+    o = with_file('start', pr)
+    m = with_file('model', pr)
+    w = 2 * math.pi * o['f']
+    fe = (2 / o['h'] * math.tan(w * o['h'] / 2)) / (2 * math.pi) if warped else None
+    r = M.load_flow(m, fe=fe)
+    test.assertTrue(r['converged'])
+    worst = 0.0
+    for c in pr['components']:
+        if c['type'] != 'LOAD3':
+            continue
+        v0, v1 = o['v'][c['id']]
+        if v0 is None or v1 is None:                        # a load of Q only has no resistor (a shunt capacitor)
+            continue
+        ph = complex(v0, -v1)                               # the samples at 0 and T/4 of √2·|V|·sin(ωt + θ)
+        V = abs(ph) / math.sqrt(2) / (c['params']['Un'] / math.sqrt(3))
+        ang = math.degrees(cmath.phase(ph)) + 90
+        b = next(b['id'] for b in m['buses'] if [c['id'], 'abc'] in b['at'])
+        q = r['buses'][b]
+        worst = max(worst, abs(q['V'] - V), abs((q['angle'] - ang + 180) % 360 - 180) * math.pi / 180)
+    return worst
+
+
+@unittest.skipUnless(HAVE_NODE, 'Node.js')
+class TestModel(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tut = node('tutorials')
+
+    def test_every_tutorial_reads(self):
+        self.assertEqual([k for k, v in self.tut.items() if 'error' in v], [])
+        t = self.tut['ieee9_emt']
+        self.assertEqual((t['buses'], t['types'], t['skipped']), (9, {'GEN3': 3, 'LINE3': 9, 'LOAD3': 3}, []))
+        self.assertEqual(self.tut['net_fault']['buses'], 1)                    # the closed breaker joins its two sides
+        self.assertEqual(self.tut['se_emt']['buses'], 9)                       # a PMU in each line is a meter in series
+        self.assertIn('EQV3:later', self.tut['ieee9_eq']['skipped'])
+        self.assertTrue(all(s == 'SUB:sub' for s in self.tut['sub_legs']['skipped']))
+        self.assertEqual(self.tut['hvdc_lcc']['types'].get('ZSER3'), 2)        # the level of a bus beyond a series impedance
+
+    def test_round_trip_of_to_emt(self):
+        net = N.case_data('ieee9')
+        lf = net.load_flow()
+        r = M.load_flow(M.of(net.to_emt(lf=lf)))
+        self.assertEqual(len(r['buses']), 9)
+        for b, v in lf['buses'].items():
+            q = r['buses']['B' + b]
+            self.assertAlmostEqual(q['V'], v['V'], delta=1e-12)
+            self.assertAlmostEqual(q['angle'], v['angle'], delta=1e-10)
+
+    def test_the_emt_start(self):
+        for case in ('ieee9', 'ieee14'):
+            net = N.case_data(case)
+            pr = net.to_emt(lf=net.load_flow())
+            e = start_error(self, pr)
+            self.assertLess(e, 1e-6, case)                                     # the G_min of the EMT: 4·10⁻⁷ at 345 kV
+            self.assertGreater(start_error(self, pr, warped=False), 2 * e, case)   # at ω instead of ω_e the difference is larger
+
+    def test_transformers_against_the_emt_start(self):
+        cases = [dict(grp='Dyn11'), dict(grp='Yd1'), dict(grp='YNyn0'), dict(grp='Dd0'), dict(grp='Dyn11', mpos='w1'), dict(grp='Dyn11', mpos='w2'),
+                 dict(grp='Yd1', U1=20e3, U2=150e3), dict(grp='Dyn11', U1=20e3, U2=150e3, tap=-5)]
+        for kw in cases:
+            self.assertLess(start_error(self, xf_drawing(**kw)), 1e-6, kw)
+
+    def test_iec60909_against_the_phase_domain(self):
+        o = node('faults')
+        m = o['model']
+        for kind, ft in (('abc', '3ph'), ('ag', '1ph'), ('ab', '2ph'), ('abg', '2phE')):
+            for e in m['elements']:
+                if e['type'] == 'FLT3':
+                    e['params']['kind'] = kind
+            s = M.short_circuit(m, ft)
+            f = next(iter(s['faults'].values()))
+            cur = o['cur'][kind]
+            ref = max(cur['a'], cur['b']) if ft != '1ph' else cur['a']
+            self.assertAlmostEqual(f['Ik'] / ref, 1, delta=2e-4, msg=kind)      # the phase domain has R = 10⁻⁴ Ω in the fault
+            if ft == '2phE':
+                self.assertAlmostEqual(f['IkE'] / cur['g'], 1, delta=2e-4)
+
+    def test_iec60909_translation(self):
+        comps = [C('Q', 'GRID3', {'Un': 110e3, 'Sk': 5e9, 'XR': 10, 'Z0Z1': 1.2, 'XR0': 8}), C('A', 'JUNC', {}),
+                 C('T1', 'XF3', {'grp': 'Dyn11', 'Sn': 40e6, 'U1': 110e3, 'U2': 20e3, 'uk': 12, 'Pk': 160e3, 'neut2': 'z', 'Rng2': 5, 'Xng2': 0}), C('B', 'JUNC', {}),
+                 C('T2', 'XF3', {'grp': 'Dyn1', 'Sn': 30e6, 'U1': 10.5e3, 'U2': 20e3, 'uk': 10, 'Pk': 90e3, 'tap': 2.5}), C('G', 'JUNC', {}),
+                 C('G1', 'GEN3', {'Sn': 25e6, 'Un': 10.5e3, 'Xdpp': 0.15, 'cosr': 0.8, 'X0': 0.08, 'neut': 'iso'}),
+                 C('L1', 'LINE3', {'Un': 20e3, 'R1': 0.8, 'X1': 2.4, 'B1': 0, 'z0': 'given', 'R0': 2.4, 'X0': 7.2, 'B0': 0}), C('Cb', 'JUNC', {}),
+                 C('LD', 'LOAD3', {'Un': 20e3, 'P': 5e6, 'Q': 2e6})]
+        ws = [W(1, ('Q', 'abc'), ('A', 'j')), W(2, ('T1', 'abc1'), ('A', 'j')), W(3, ('T1', 'abc2'), ('B', 'j')), W(4, ('T2', 'abc2'), ('B', 'j')),
+              W(5, ('T2', 'abc1'), ('G', 'j')), W(6, ('G1', 'abc'), ('G', 'j')), W(7, ('L1', 'abc1'), ('B', 'j')), W(8, ('L1', 'abc2'), ('Cb', 'j')),
+              W(9, ('LD', 'abc'), ('Cb', 'j'))]
+        m = with_file('model', {'version': 4, 'components': comps, 'wires': ws})
+        net = N.Network()
+        for b, U in (('A', 110e3), ('B', 20e3), ('G', 10.5e3), ('Cb', 20e3)):
+            net.bus(b, U)
+        Z1 = 1.1 * 110e3 ** 2 / 5e9
+        X1 = Z1 * 10 / math.sqrt(101)
+        X0 = 1.2 * Z1 * 8 / math.sqrt(65)
+        net.feeder('A', Sk=5e9, RX=0.1, X0X=X0 / X1, R0X0=1 / 8)
+        net.transformer('A', 'B', 40e6, 110e3, 20e3, 12, 0.4, group='Dyn11', Zn_lv=5)
+        net.transformer('B', 'G', 30e6, 20e3, 10.5e3, 10, 0.3, group='YNd11', tap=100 * (1 / 1.025 - 1))
+        net.generator('G', 25e6, 10.5e3, 0.15, 0.8, X0=0.08, earthed=False)
+        net.line('B', 'Cb', 0.8, 2.4, 1, R0=2.4, X0=7.2)
+        for ft in ('3ph', '1ph', '2phE'):
+            s = M.short_circuit(m, ft)
+            for b in ('A', 'B', 'G', 'Cb'):
+                ref = net.short_circuit(b, ft)
+                self.assertAlmostEqual(s['buses'][b]['Ik'] / ref['Ik'], 1, delta=1e-12, msg=(ft, b))
+        self.assertEqual(s['notes'], [])
+
+    def test_studies_of_a_drawing(self):
+        net = N.case_data('ieee9')
+        m = M.of(net.to_emt())
+        r = S.run({'drawing': m, 'study': 'pf', 'view': True})
+        self.assertTrue(r['summary']['converged'])
+        self.assertEqual(sorted(r['result']['elements']), sorted(e['id'] for e in m['elements']))
+        g = r['result']['elements']['G2']
+        self.assertAlmostEqual(g['P'] / 1e6, 163, delta=1e-6)                  # the dispatch of the case, through the drawing
+        x = r['result']['elements']['br1']
+        self.assertAlmostEqual(x['Pa'] + x['Pb'], x['loss'], delta=1e-6)
+        f = S.run({'drawing': node('faults')['model'], 'study': 'sc', 'options': {'fault': '1ph'}, 'view': True})
+        self.assertEqual(f['layer'], 'sc')
+        self.assertEqual([q['id'] for q in f['summary']['faults']], ['F1'])
+        self.assertIn('IEC 60909-0', S.report({'drawing': node('faults')['model'], 'study': 'sc'})['html'])
+        with self.assertRaises(S.StudyError):                                   # the test networks have no data of the machines
+            S.run({'case': 'ieee14', 'study': 'sc'})
+
+    def test_topology(self):
+        pr = xf_drawing()
+        open_cb = copy.deepcopy(pr)                                             # a breaker open at t = 0 between B2 and the line
+        open_cb['components'].append(C('CB', 'CB3', {'cmd': '0:0, 0.1:1'}))
+        open_cb['wires'] = [w for w in open_cb['wires'] if w['id'] != 'w5'] + [W(8, ('CB', 'abc1'), ('B2', 'j')), W(9, ('CB', 'abc2'), ('LN', 'abc1'))]
+        m = with_file('model', open_cb)
+        self.assertEqual(len(m['buses']), 4)
+        r = M.load_flow(m)
+        self.assertEqual(sorted(r['out']), ['B3', 'CB.abc2'])                 # beyond the open breaker no source: out of the study
+        self.assertEqual(r['elements']['CB'], {'closed': False})
+        crossed = copy.deepcopy(pr)                                             # phases b and c swapped on one side of the line
+        for c in crossed['components']:
+            if c['id'] in ('LN', 'B3', 'LD2'):
+                c['params']['conn'] = 'abc'
+        crossed['components'] = [c for c in crossed['components'] if c['id'] != 'B3']
+        crossed['wires'] = [w for w in crossed['wires'] if w['id'] not in ('w5', 'w6', 'w7')] + [W(8, ('LN', 'a2'), ('LD2', 'a')), W(9, ('LN', 'b2'), ('LD2', 'c')), W(10, ('LN', 'c2'), ('LD2', 'b'))]
+        crossed['components'].append(C('EB', 'EBUS', {}))
+        crossed['wires'] += [W(11, ('EB', 'bus'), ('B2', 'j')), W(12, ('EB', 'a'), ('LN', 'a1')), W(13, ('EB', 'b'), ('LN', 'b1')), W(14, ('EB', 'c'), ('LN', 'c1'))]
+        m = with_file('model', crossed)
+        self.assertEqual(sorted(s['id'] for s in m['skipped'] if s['why'] == 'phases'), ['LD2', 'LN'])
+
+    def test_project_model(self):
+        from pcl import core
+        pr = xf_drawing()
+        self.assertEqual(core.Project(pr).model(), with_file('model', pr))
+
+
+if __name__ == '__main__':
+    unittest.main()

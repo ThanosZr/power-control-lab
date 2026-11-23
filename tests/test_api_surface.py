@@ -129,7 +129,7 @@ class ApiSurface(unittest.TestCase):
         for m in ('dc_bus', 'dc_line', 'vsc', 'dc_grid', 'acdc_flow'):
             self.assertIn('pcl.network.Network.' + m, self.now['pcl'])
             self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.' + m))
-        self.assertEqual(study.STUDIES[-1], 'acdc')
+        self.assertEqual(study.STUDIES[11], 'acdc')                       # (5.0.11: 'sc' after it)
         # (4.21: the modes of the study: the OPF AC/DC and N−1 AC/DC have their own options)
         self.assertEqual(set(study.OPTIONS['acdc']) - {'set', 'out', 'mode', 'flow_limits', 'start', 'outages'}, set(self.now['pcl']['pcl.network.Network.acdc_flow']['params']))
 
@@ -307,7 +307,19 @@ class ApiSurface(unittest.TestCase):
         self.assertTrue(api_surface.experimental('pcl', 'pcl.backend.status'))
         self.assertIn('/api/accel_info', self.now['server'])
         self.assertTrue(api_surface.experimental('server', '/api/accel_info'))
-        self.assertEqual(sum(len(v) for v in self.now.values()), 983)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 983)
+
+    def test_the_surface_of_5_0_11(self):
+        """5.0.11: the common model, step 1 (ROADMAP §70): the module pcl.model and Project.model, experimental; the request
+        'model' of the scenarios; the rated cos φ of the GEN3 for IEC 60909-0 (cosr) in the file format."""
+        for k in ('of', 'network', 'load_flow', 'short_circuit', 'faults_of', 'elements_of', 'ModelError'):
+            self.assertTrue(api_surface.experimental('pcl', 'pcl.model.' + k), k)
+        self.assertEqual(self.now['pcl']['pcl.model.network']['params'], ['m', 'study', 'fe', 'S_base'])
+        self.assertTrue(api_surface.experimental('pcl', 'pcl.Project.model'))
+        self.assertIn('action:model', self.now['scenario'])
+        self.assertIn('cosr', self.now['project']['part:GEN3']['params'])
+        self.assertFalse(any(k.startswith('pcl.model._') for k in self.now['pcl']))
+        self.assertEqual(sum(len(v) for v in self.now.values()), 992)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it
@@ -332,7 +344,7 @@ class ApiSurface(unittest.TestCase):
         self.assertFalse(api_surface.experimental('pcl', 'pcl.network.Network.estimate'))
         self.assertEqual(self.now['pcl']['pcl.se.run']['params'][:2], ['net', 'measurements'])
         self.assertEqual(set(study.OPTIONS['se']), set(self.now['pcl']['pcl.se.run']['params'][1:]))        # every option of the routine is an option of the study
-        self.assertEqual((study.STUDIES[-3], netview.DEFAULT['se']), ('se', 'residual'))          # (4.20: 'acdc' after them)
+        self.assertEqual((study.STUDIES[9], netview.DEFAULT['se']), ('se', 'residual'))           # (4.20: 'acdc' after them; 5.0.11: 'sc')
         self.assertIn('residual', netview.LAYERS)
         # the harmonic load flow: the module is experimental, Network.harmonics and the study are stable; a load may carry a spectrum
         # and a shunt may be a capacitor or a tuned filter (two parameters and three more on methods that were there)
@@ -341,7 +353,7 @@ class ApiSurface(unittest.TestCase):
         self.assertEqual(set(study.OPTIONS['harmonic']), set(self.now['pcl']['pcl.harmonic.run']['params'][1:]))
         self.assertEqual(self.now['pcl']['pcl.network.Network.load']['params'][-2:], ['spectrum', 'delta'])
         self.assertEqual(self.now['pcl']['pcl.network.Network.shunt']['params'][-3:], ['R', 'X', 'B'])
-        self.assertEqual((study.STUDIES[-2], netview.DEFAULT['harmonic']), ('harmonic', 'thd'))
+        self.assertEqual((study.STUDIES[10], netview.DEFAULT['harmonic']), ('harmonic', 'thd'))     # (5.0.11: 'sc' at the end)
         from pcl import network
         self.assertEqual((network.MORE[:2], len(network.CASES)), (('harmonic14', 'mtdc5'), 10))
         # the three-phase load flow of a feeder: the module is experimental, the study is a stable addition with its own list (its

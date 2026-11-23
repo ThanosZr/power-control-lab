@@ -6,6 +6,7 @@
 //   {action:'tutorial', id, options}           the project a tutorial builds
 //   {action:'tutorials'}                       the list of tutorials and their options
 //   {action:'channels', project}               the channels the project has
+//   {action:'model', project}                  the common model of the drawing: buses and elements with the ids of the drawing (5.0.11, model.js)
 //   {action:'bifurcation', project, comp, param, values, key, stat, transient, record, hdiv, method}   (3.15)
 //                                              per value the samples of the last `record` periods and their period, as the app's diagram
 // Sessions (3.16, ROADMAP §41.1): a solver that stays open between requests, for results in chunks and runs that continue later
@@ -154,6 +155,7 @@
   if(q.action==='tutorial')return tutorial(q);
   if(q.action==='tutorials')return tutorials();
   if(q.action==='machines')return P.machines(); // 4.7
+  if(q.action==='model'){const M=root.Model||(typeof require!=='undefined'?require('./model.js'):null);if(!M)throw new Error('model.js λείπει');return M.of(q.project);} // 5.0.11: the common model of a drawing (pcl.model.of)
   if(q.action==='bifurcation')return bifurcation(q,hooks);
   if(q.action==='open')return open(q);
   if(q.action==='advance')return advance(q,hooks);

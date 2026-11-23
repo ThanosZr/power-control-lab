@@ -56,7 +56,7 @@ STABLE_FROM = '4.0'           # the major version from which the surface is stab
 # 5.0.8: the command line of the app (pcl.console: the console of both kernels and its commands in a script; the route
 # /api/console of the server) is new: experimental.
 EXPERIMENTAL = {'pcl': ('pcl.rms.', 'pcl.insulation.', 'pcl.surge.', 'pcl.geo.', 'pcl.control.', 'pcl.workbench.', 'pcl.wideband.', 'pcl.powerflow.', 'pcl.opf.', 'pcl.ipm.', 'pcl.backend.', 'pcl.accel.', 'pcl.nnstart.',
-                        'pcl.onnxio.', 'pcl.netview.', 'pcl.netfile.', 'pcl.psse.', 'pcl.scopf.', 'pcl.cpf.', 'pcl.se.', 'pcl.harmonic.', 'pcl.unbalanced.', 'pcl.dcgrid.', 'pcl.results.', 'pcl.equivalent.', 'pcl.console.'), 'cli': ('workbench', 'python -m pcl accel', 'python -m pcl nnstart'), 'server': ('/api/console', '/api/accel_info')}
+                        'pcl.onnxio.', 'pcl.netview.', 'pcl.netfile.', 'pcl.psse.', 'pcl.scopf.', 'pcl.cpf.', 'pcl.se.', 'pcl.harmonic.', 'pcl.unbalanced.', 'pcl.dcgrid.', 'pcl.results.', 'pcl.equivalent.', 'pcl.console.', 'pcl.model.', 'pcl.Project.model'), 'cli': ('workbench', 'python -m pcl accel', 'python -m pcl nnstart'), 'server': ('/api/console', '/api/accel_info')}
 # 4.0: the first of the two steps of a removal. {surface: {key: (version, what instead)}}: the point keeps working (with a
 # message where it runs) to the end of its major version and may go in the next one. A point that is gone leaves this list.
 DEPRECATED = {}
@@ -124,6 +124,7 @@ def surface_pcl():
     import pcl.rms
     import pcl.results
     import pcl.equivalent
+    import pcl.model
     import pcl.linereport
     import pcl.link
     import pcl.network
@@ -148,7 +149,7 @@ def surface_pcl():
             out['pcl.' + name] = {'params': sig(obj)}
     for mod in (pcl.link, pcl.control, pcl.workbench, pcl.plotting, pcl.formats, pcl.impulse, pcl.network, pcl.lineconst, pcl.linereport, pcl.trv, pcl.wideband,
                 pcl.powerflow, pcl.opf, pcl.ipm, pcl.report, pcl.study, pcl.backend, pcl.accel, pcl.nnstart, pcl.onnxio, pcl.netview, pcl.netfile, pcl.psse, pcl.scopf, pcl.cpf, pcl.se, pcl.harmonic, pcl.unbalanced, pcl.dcgrid,
-                pcl.insulation, pcl.surge, pcl.geo, pcl.rms, pcl.results, pcl.equivalent, pcl.console):
+                pcl.insulation, pcl.surge, pcl.geo, pcl.rms, pcl.results, pcl.equivalent, pcl.console, pcl.model):
         short = mod.__name__
         for name, obj in vars(mod).items():
             if name.startswith('_') or getattr(obj, '__module__', None) != mod.__name__ or not (inspect.isfunction(obj) or inspect.isclass(obj)):

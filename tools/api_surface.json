@@ -1,5 +1,5 @@
 {
- "version": "5.0.10",
+ "version": "5.0.11",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -28,7 +28,9 @@
    "pcl.dcgrid.",
    "pcl.results.",
    "pcl.equivalent.",
-   "pcl.console."
+   "pcl.console.",
+   "pcl.model.",
+   "pcl.Project.model"
   ],
   "cli": [
    "workbench",
@@ -171,6 +173,10 @@
    "pcl.Project.inputs": {
     "params": [],
     "since": "4.17.1"
+   },
+   "pcl.Project.model": {
+    "params": [],
+    "since": "5.0.11"
    },
    "pcl.Project.params": {
     "params": [],
@@ -2883,6 +2889,59 @@
      "path"
     ],
     "since": "3.18"
+   },
+   "pcl.model.ModelError": {
+    "params": [],
+    "since": "5.0.11"
+   },
+   "pcl.model.elements_of": {
+    "params": [
+     "m",
+     "net",
+     "info",
+     "r"
+    ],
+    "since": "5.0.11"
+   },
+   "pcl.model.faults_of": {
+    "params": [
+     "m"
+    ],
+    "since": "5.0.11"
+   },
+   "pcl.model.load_flow": {
+    "params": [
+     "m",
+     "fe",
+     "tol",
+     "max_iter"
+    ],
+    "since": "5.0.11"
+   },
+   "pcl.model.network": {
+    "params": [
+     "m",
+     "study",
+     "fe",
+     "S_base"
+    ],
+    "since": "5.0.11"
+   },
+   "pcl.model.of": {
+    "params": [
+     "project"
+    ],
+    "since": "5.0.11"
+   },
+   "pcl.model.short_circuit": {
+    "params": [
+     "m",
+     "fault",
+     "mode",
+     "buses",
+     "**kw"
+    ],
+    "since": "5.0.11"
    },
    "pcl.netfile.FileError": {
     "params": [],
@@ -6490,6 +6549,10 @@
     "params": [],
     "since": "4.7"
    },
+   "action:model": {
+    "params": [],
+    "since": "5.0.11"
+   },
    "action:open": {
     "params": [],
     "since": "3.18"
@@ -7376,6 +7439,7 @@
      "init",
      "V0",
      "ang0",
+     "cosr",
      "neut",
      "Rng",
      "Xng",
