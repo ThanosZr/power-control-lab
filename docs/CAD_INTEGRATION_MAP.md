@@ -98,6 +98,19 @@ For the future playback requirement, physical simulation time remains in seconds
 
 Read-only Git inspection on 2026-11-23 found `main` and `lab-5.0.9` at `b1b42b0c4ff1bd546713983ecd27c474bca89451`. The intervening 5.0.8 history includes the persistent Python console (§98), and 5.0.9 adds multiport FDNE work. This is coordination evidence, not a new approved baseline or confirmation of the owner's active engine branch. The CAD checkout remains on engine 5.0.7. Public code, roadmap and commit messages do not replace the still-missing current engine next-steps/decisions/version handoff.
 
+### CAD-S010: coordination with the 5.0.10 workspace changes
+
+A subsequent read-only fetch found `lab-5.0.10` at `2160a13d7180745e80f7f3fefa07788d30b37d1f` (engine version confirmed in `engine/__init__.py`), while `main` remained at the 5.0.9 SHA above. Its own [CI 45102252449](https://github.com/ThanosZr/power-control-lab/actions/runs/45102252449) is completed/success at that exact 5.0.10 SHA. This is an observed engine branch, not an approved CAD target. The pinned-to-5.0.10 comparison changes 54 files, including app, dock, panels, style, console, native routing, numerical code, API surface and workflow. Do not copy or merge those changes into the pinned CAD branch as part of T001.
+
+| Public 5.0.10 source finding | Future integration consideration; not a new CAD contract |
+| --- | --- |
+| `dock.js` adds layout presets, named layouts, `from` provenance, `screen` positions, `pcl-dock` / `pcl-layouts` storage; `app.js` proposes a study/tutorial's layout without replacing a user-owned layout. | Preserve card IDs and compatible layout persistence; a CAD panel must survive layout changes without discarding its document, selection or active jobs. Older layout data must be tested. |
+| `dock.js:openWin`, `adopt`, `lost`, `keepScreen`, `forward`; `screen.html` / `screen.js` handshake move the same card DOM node into a same-origin browser window, handle resize/return/reload and blocked popups. The circuit card is excluded. `Dock.q`/`qa` find detached elements and `screenWin` finds a visible detached window for frame scheduling. | If a future CAD viewport is allowed to detach, verify graphics-context/size/input ownership, resource cleanup, frame scheduling when the main page is hidden and return/reload behavior across documents; do not assume moving a DOM node preserves every GPU backend or permits a second copy. No CAD detach support is implemented. |
+| `app.js` displays an experimental GPU* indicator based on `/api/accel_info`; its described use is the AC N−1 batch backend, not graphics rendering. | Keep compute-backend availability, rendering-backend availability and measured frame latency distinct; do not claim a CAD GPU path from this badge. |
+| `tests/js/dock_cases.js`, `tests/js/screen_cases.js` and `tests/ui/dock_flow.js` cover layout/preset and second-window behavior in the newer code. See ROADMAP §94 and GUIDE §48. | Reuse these scenarios as target-specific regression references if the owner later authorizes integration with that engine. Existing pinned tests cannot certify the newer detached-window behavior. |
+
+The persistent Python console introduced in 5.0.8 and these workspace changes make the console/card registration and DOM lifecycle particularly important shared surfaces. The 5.0.9 numerical changes also make a whole-tree merge unsuitable as a documentation-only update: a future solver/netlib/parts change requires the separately prescribed nethash/ERR comparison. No target version, adapter API or renderer has been selected here.
+
 ## Existing checks useful for later adapters
 
 | Area | Existing checks |

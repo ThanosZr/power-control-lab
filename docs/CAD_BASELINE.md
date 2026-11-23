@@ -99,6 +99,23 @@ The root README is now an intentional documentation difference from the approved
 
 The same existing source checks apply; document validation additionally checks links, canonical paths, preserved history, superseded Three.js proposals, consistent publication boundaries and the complete diff. A new published SHA still requires its own CI, identified and awaited after publication.
 
+## CAD-S010: continuity and read-only upstream coordination, 2026-11-23
+
+Incoming CAD HEAD `f91ac3cd7852fdb7df651baad3992be91264674c` was confirmed by the remote ref and a fresh single-branch Git clone. The [CI 45107396018](https://github.com/ThanosZr/power-control-lab/actions/runs/45107396018) API response identifies that exact SHA and branch with `completed/success`; all four jobs were successful. A package-job checkout log independently showed the same commit. The source-to-HEAD diff is exactly the intentional README modification and ten added CAD documentation paths. The pinned Git tree contains 437 files and the incoming CAD tree 447; the other 436 original tracked files are unchanged. The engine reports 5.0.7.
+
+Read-only fetching of `main` and `lab-5.0.10` established the newer engine references and relevant UI findings in CAD_INTEGRATION_MAP. The public 5.0.10 CI 45102252449 is independently successful at 2160a13d7180745e80f7f3fefa07788d30b37d1f; no checkout, merge or base change was made. The available project attachments and the available previous-conversation/file search still did not contain the actual newer private engine handoff or the actual privacy procedure and inputs. Record this once as a blocker rather than repeating the search on each restart (D023).
+
+| Fresh local check (pinned runtime, documentation-only working tree) | Result |
+| --- | --- |
+| `python tools/codemap.py --check` | PASS |
+| `python tools/api_surface.py --check` | PASS; 947 entries |
+| `python -m unittest tests.test_dock tests.test_live_program tests.test_recording -q` | PASS; 24 tests, no skips |
+| `python tools/verify.py --check` | PASS; 512/512 values within tolerances |
+| `python tools/nn_weights.py --check` | PASS; 16,000 samples, maximum weight difference 0 |
+| `git diff --check`, relative Markdown links and anchors across README and ten CAD docs | PASS; no missing relative targets/anchors |
+
+Environment: Python 3.12.14, Node v24.22.3, NumPy 2.3.5, SciPy 1.17.0. No full local suite, local browser or Octave rerun was necessary for these documentation-only changes; the earlier limitations remain historical. No new CAD GUI benchmark, privacy check or nethash/ERR pass is claimed. The tests above are fresh results, separate from prior results. The final CAD-S010 SHA and CI are to be confirmed after publication, not inferred from the incoming or parallel-engine runs.
+
 ## Reproduce and review
 
 Run from the repository root on the CAD branch:

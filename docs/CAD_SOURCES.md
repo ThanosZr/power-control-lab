@@ -4,7 +4,7 @@
 
 ## Κανονικές πηγές και εκκρεμή ιδιωτικά inputs
 
-Ο ιδιοκτήτης ζήτησε να συντηρείται όλο το δημόσιο CAD πλάνο στο Git. Τα ενεργά αρχεία είναι προσβάσιμα μέσω του [CAD_INDEX.md](CAD_INDEX.md), στο lab-cad-0.1.0-baseline. Δεν απαιτείται συνεχής ανάρτηση των ίδιων CAD docs στο project. Πριν ζητηθεί αρχείο, ελέγχεται το σημερινό Git και ό,τι ιδιωτικό υλικό είναι ήδη διαθέσιμο.
+Ο ιδιοκτήτης ζήτησε να συντηρείται όλο το δημόσιο CAD πλάνο στο Git. Τα ενεργά αρχεία είναι προσβάσιμα μέσω του [CAD_INDEX.md](CAD_INDEX.md), στο lab-cad-0.1.0-baseline. Δεν απαιτείται συνεχής ανάρτηση των ίδιων CAD docs στο project. Κανόνας D023: δεν επαναλαμβάνεται αναζήτηση σε chats/Library/ZIP για ήδη καταγεγραμμένα ή ελλείποντα inputs. Τα δύο ιδιωτικά σύνολα επανελέγχθηκαν στο S010 και δεν βρέθηκαν ούτε σε διαθέσιμο ιστορικό CAD συνομιλιών. Χρειάζονται νέο ιδιωτικό input ή ρητή απόφαση του ιδιοκτήτη· η απουσία δεν θεραπεύεται με επινοημένο αρχείο.
 
 | Υλικό | Τρέχουσα θέση/κατάσταση | Πότε απαιτείται |
 | --- | --- | --- |
@@ -12,8 +12,8 @@
 | CAD_STATUS, CAD_BASELINE, CAD_INTEGRATION_MAP | Ενεργό handoff, ακριβείς έλεγχοι/βάση και χαρτογράφηση στο Git | Πριν από εργασία/παράδοση |
 | CAD_INDEX, CAD_PLAN_DETAILS, README branch | Οδηγός ανάγνωσης, αναλυτικά κριτήρια και στόχος CAD tool | Για υλοποίηση και συντονισμό ενσωμάτωσης |
 | Πραγματικά CAD-S007 drafts | Ανακτήθηκαν και διαβάστηκαν από προηγούμενα παραδοτέα στις 23/11/2026. Ευρήματα και ιστορικό στα CAD_BASELINE/CAD_INTEGRATION_MAP/CAD_VERSIONS_01 | Η ανάκτησή τους δεν εκκρεμεί |
-| Ενεργά engine Επόμενα-βήματα, τελευταίες αποφάσεις και εκδόσεις | Δεν παρέχονται ακόμη. Το διαθέσιμο αποφάσεις-14 σταματά στην 5.0.5 | Πριν από κλείσιμο T001 ή κώδικα που εξαρτάται από την ενεργή εργασία engine |
-| Πραγματικός privacy checker, οδηγίες και ιδιωτικά inputs | Δεν παρέχονται/δεν εκτελέστηκαν. Ιδιωτική χρήση, εκτός δημόσιου repository | Για την πραγματική πύλη απορρήτου. Η ειδική άδεια δημόσιας CAD τεκμηρίωσης δεν αντικαθιστά τον checker |
+| Ενεργά engine Επόμενα-βήματα, τελευταίες αποφάσεις και εκδόσεις | Δεν παρέχονται ακόμη μετά τον επανέλεγχο S010. Το διαθέσιμο αποφάσεις-14 σταματά στην 5.0.5. Η παρατήρηση του δημόσιου 5.0.10 δεν αποτελεί ιδιωτικό handoff | Πριν από κλείσιμο T001 ή κώδικα που εξαρτάται από την ενεργή εργασία engine |
+| Πραγματικός privacy checker, οδηγίες και ιδιωτικά inputs | Δεν εντοπίστηκαν μετά τον επανέλεγχο S010, δεν εκτελέστηκαν. Ιδιωτική χρήση, εκτός δημόσιου repository | Για την πραγματική πύλη απορρήτου. Η ειδική άδεια δημόσιας CAD τεκμηρίωσης δεν αντικαθιστά τον checker |
 | Πραγματικό nethash/nethash3, baselines και οδηγίες ERR | Δεν εντοπίστηκαν στις διαθέσιμες πηγές. Δεν εφαρμόζεται σε αυτή την τεκμηρίωση | Πριν από αλλαγή solver/netlib/parts που απαιτεί τον έλεγχο |
 | Ενδεικτικό εξάρτημα και μηχάνημα αναφοράς | Πρόταση ουδέτερου συνθετικού άξονα ή βάσης εδράνου, χωρίς τελική επιλογή | CAD-T002/CAD-T003 και μετρήσεις, όταν εγκριθεί το αντίστοιχο στάδιο |
 
@@ -40,6 +40,9 @@
 | CAD-R013 | [PCL — matlab/](https://github.com/ThanosZr/power-control-lab/tree/dab82e5ff2e6da4bde09e4a38aab32edfffe6d51/matlab) | Υφιστάμενα MATLAB/Octave wrappers, προς επαναχρησιμοποίηση όπου ταιριάζουν. |
 | CAD-R014 | [CAD CI 45011321787](https://github.com/ThanosZr/power-control-lab/actions/runs/45011321787) | Επιτυχές baseline unit/UI/Octave/package στη βάση, όχι σε νέο CAD commit. |
 | CAD-R015 | [PCL — CI workflow](https://github.com/ThanosZr/power-control-lab/blob/dab82e5ff2e6da4bde09e4a38aab32edfffe6d51/.github/workflows/ci.yml) | Ακριβείς εντολές/εξαρτήσεις CI· `lab-*` triggers. |
+| CAD-R016 | [PCL — 5.0.10 ROADMAP §94](https://github.com/ThanosZr/power-control-lab/blob/2160a13d7180745e80f7f3fefa07788d30b37d1f/docs/ROADMAP.md) · [GUIDE §48](https://github.com/ThanosZr/power-control-lab/blob/2160a13d7180745e80f7f3fefa07788d30b37d1f/docs/GUIDE.md) | Read-only σύγκριση της νεότερης διαχείρισης layout/δεύτερης οθόνης· όχι αλλαγή βάσης. |
+| CAD-R017 | [PCL — 5.0.10 dock.js](https://github.com/ThanosZr/power-control-lab/blob/2160a13d7180745e80f7f3fefa07788d30b37d1f/web/studio/dock.js) · [screen.js](https://github.com/ThanosZr/power-control-lab/blob/2160a13d7180745e80f7f3fefa07788d30b37d1f/web/studio/screen.js) | Κύκλος ζωής κάρτας σε δεύτερο browser window. Μελλοντική ενσωμάτωση CAD: επαλήθευση GPU/input/resize και διατήρηση state. |
+| CAD-R018 | [CAD CI 45107396018](https://github.com/ThanosZr/power-control-lab/actions/runs/45107396018) · [engine 5.0.10 CI 45102252449](https://github.com/ThanosZr/power-control-lab/actions/runs/45102252449) | Χωριστά commits και runs: CAD f91ac3c, engine 2160a13. Και τα δύο ολοκληρώθηκαν επιτυχώς· κανένα δεν πιστοποιεί επόμενο CAD commit. |
 
 ## Πηγές που προστίθενται στο αντίστοιχο στάδιο
 
