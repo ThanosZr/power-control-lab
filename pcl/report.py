@@ -537,6 +537,55 @@ def _sc(r, net, res, order, picture):
                 'Ένα ανά FLT3, με το δικό του είδος σφάλματος', [None, None, None, None, 5, 5])
 
 
+def _rms(r, res, top=10):
+    """5.0.13: the section of the RMS dynamics: what happened, the angles from the centre of inertia, the frequency, the lowest
+    voltage, the excitation, and every machine."""
+    sm = res.get('summary') or {}
+    st = res.get('stats') or {}
+    KIND = {'fault': 'σφάλμα', 'clear': 'εκκαθάριση', 'trip': 'άνοιγμα κλάδου', 'gen': 'απώλεια μονάδας', 'vref': 'βήμα αναφοράς τάσης',
+            'pref': 'βήμα αναφοράς φορτίου', 'load': 'βήμα φορτίου', 'shunt': 'εγκάρσιο στοιχείο'}
+    r.facts([('Ευσταθές (κάθε γωνία μέσα σε 180° από το κέντρο αδράνειας)', bool(res.get('stable'))),
+             ('Μεγαλύτερη απόκλιση γωνίας από το κέντρο αδράνειας (°)', None if sm.get('max_angle_coi') is None else round(sm['max_angle_coi'], 2)),
+             ('Συχνότητα κέντρου αδράνειας, ελάχιστη / μέγιστη (Hz)', None if sm.get('f_min') is None else f"{sm['f_min']:.4f} / {sm['f_max']:.4f}"),
+             ('Ελάχιστη τάση (pu, ζυγός)', f"{sm.get('V_min', float('nan')):.4f} ({sm.get('V_min_bus', '—')})"),
+             ('Μηχανές', len(res.get('machines') or {})), ('Καταστάσεις', res.get('n_states')), ('Διάρκεια (s)', sm.get('t_end')),
+             ('Βήμα (ms)', res.get('h', 0) * 1e3), ('Βήματα', st.get('steps')), ('Επαναλήψεις Newton', st.get('newton')),
+             ('Παραγοντοποιήσεις', st.get('lu')), ('Χρόνος υπολογισμού (s)', round(st.get('time', 0.0), 3))])
+    if st.get('nonconv'):
+        r.note(f"Σε {st['nonconv']} βήματα ο Newton δεν συνέκλινε: τα αποτελέσματα εκεί είναι προσεγγιστικά.", 'warning')
+    if res.get('events'):
+        r.heading('Συμβάντα')
+        r.table(['t (s)', 'Συμβάν', 'Πού', 'Από το στοιχείο'], [[e['t'], KIND.get(e['kind'], e['kind']), e.get('gen') or e.get('bus') or e.get('branch') or '—',
+                                                           e.get('id') or '—'] for e in res['events']], '', [4, None, None, None])
+    M = res.get('machines') or {}
+    if not M:
+        return
+    t = [float(x) for x in res['t']]
+    names = sorted(M, key=lambda k: -max(abs(float(v)) for v in M[k].get('delta_coi', [0.0])))[:top]
+    note = f' (οι {top} με τη μεγαλύτερη απόκλιση)' if len(M) > top else ''
+    r.heading('Γωνίες των δρομέων')
+    r.chart('line', t, [{'name': k, 'y': [float(v) for v in M[k].get('delta_coi', M[k]['delta'])]} for k in names],
+            'Γωνία από το κέντρο αδράνειας' + note, 't (s)', '°', table=False)
+    if res.get('f_coi') is not None:
+        r.heading('Συχνότητα')
+        r.chart('line', t, [{'name': 'κέντρο αδράνειας', 'y': [float(v) for v in res['f_coi']]}] + [{'name': k, 'y': [float(v) for v in M[k]['f']]} for k in names[:5]],
+                'Συχνότητα', 't (s)', 'Hz', table=False)
+    r.heading('Τάσεις')
+    r.chart('line', t, [{'name': 'η ελάχιστη του δικτύου', 'y': [float(v) for v in res['Vmin']]}] + [{'name': k, 'y': [float(v) for v in M[k]['V']]} for k in names[:5]],
+            'Μέτρο τάσης', 't (s)', 'pu', table=False)
+    ex = [k for k in names if 'Efd' in M[k] and (M[k].get('controls') or {}).get('avr')]
+    if ex:
+        r.chart('line', t, [{'name': k, 'y': [float(v) for v in M[k]['Efd']]} for k in ex], 'Τάση διέγερσης E_fd', 't (s)', 'pu', table=False)
+    rows = []
+    for k, o in M.items():
+        c = o.get('controls') or {}
+        ctl = ', '.join(x for x in ((c.get('avr') or '').upper(), 'PSS' if c.get('pss') else '', {'steam': 'ρυθμιστής ατμού', 'hydro': 'ρυθμιστής νερού'}.get(c.get('gov'), '')) if x) or '—'
+        rows.append([k, o['bus'], o['model'], ctl, float(o['P'][0]), float(o['Q'][0]), max(abs(float(v)) for v in o.get('delta_coi', [0.0])),
+                     min(float(v) for v in o['f']), max(float(v) for v in o['f'])])
+    r.table(['Μηχανή', 'Ζυγός', 'Μοντέλο', 'Έλεγχοι', 'P₀ (MW)', 'Q₀ (Mvar)', 'max |δ − δ_ΚΑ| (°)', 'f min (Hz)', 'f max (Hz)'], rows, 'Μηχανές',
+            [None, None, None, None, 4, 4, 4, 5, 5])
+
+
 def network_report(net, study='pf', result=None, title=None, **kw):
     """A report for a study of a pcl.network.Network: study 'pf' (load flow), 'n1' / 'n1dc' (N−1 in AC / with the DC screening),
     'opf' / 'dcopf' (optimal power flow), 'scopf' (4.19.4: the DC optimal power flow with security against every single outage),
@@ -553,7 +602,8 @@ def network_report(net, study='pf', result=None, title=None, **kw):
             'scopf': 'Βέλτιστη ροή φορτίου με ασφάλεια N−1 (DC)', 'cpf': 'Συνεχιζόμενη ροή φορτίου: καμπύλη P–V και περιθώριο φόρτισης',
             'se': 'Εκτίμηση κατάστασης: ελάχιστα τετράγωνα με βάρη και εντοπισμός λανθασμένων μετρήσεων',
             'harmonic': 'Αρμονική ροή φορτίου: παραμόρφωση τάσης και συντονισμοί', 'unbalanced': 'Ασύμμετρη (τριφασική) ροή φορτίου τροφοδότη',
-            'acdc': 'Ροή φορτίου AC/DC με δίκτυα συνεχούς πολλών τερματικών', 'sc': 'Βραχυκυκλώματα κατά IEC 60909-0'}
+            'acdc': 'Ροή φορτίου AC/DC με δίκτυα συνεχούς πολλών τερματικών', 'sc': 'Βραχυκυκλώματα κατά IEC 60909-0',
+            'rms': 'Δυναμική RMS από τη ροή φορτίου'}
     if study not in head:
         raise ReportError(f'network_report: study one of {", ".join(head)}')
     r = Report(title or head[study], name, meta={'Ζυγοί': len(net.buses), 'Κλάδοι': nbr, 'Γεννήτριες': gens, 'S βάσης (MVA)': net.S_base / MW})
@@ -608,6 +658,9 @@ def network_report(net, study='pf', result=None, title=None, **kw):
         from . import model
         res = result or model._sc_all(net, **kw)
         _sc(r, net, res, order, picture)
+    elif study == 'rms':                                     # 5.0.13 (ROADMAP §101 step 1)
+        res = result or net.dynamic(**kw)
+        _rms(r, res)
     elif study in ('n1', 'n1dc'):
         res = result or net.contingency('ac' if study == 'n1' else 'dc', **kw)
         advice(res.get('advice') or net.advice('n1'))

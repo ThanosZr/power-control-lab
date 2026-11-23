@@ -325,10 +325,24 @@ class ApiSurface(unittest.TestCase):
         """5.0.12: the common model, step 2 (ROADMAP §70): the subcircuits, the TLM and the EQV3 go into the same pcl.model, with
         the model of the drawing at version 2 (experimental like the module): no new point."""
         from pcl import model
-        self.assertEqual(model.VERSION, 2)
+        self.assertGreaterEqual(model.VERSION, 2)                       # (5.0.13: 3, the controls of a GEN3)
         self.assertEqual(self.now['pcl']['pcl.model.network']['params'], ['m', 'study', 'fe', 'S_base'])
         self.assertFalse(any(k.startswith('pcl.model._') for k in self.now['pcl']))
-        self.assertEqual(sum(len(v) for v in self.now.values()), 992)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 992)
+
+    def test_the_surface_of_5_0_13(self):
+        """5.0.13: the RMS dynamics of a network (ROADMAP §101 step 1): Network.dynamic, experimental like pcl.rms; the models of
+        pcl.rms (Unit with its limits, ExpLoad, typical, System.quantities) and of a drawing (pcl.model.machines_of, events_of, dynamic), with
+        the model of the drawing at version 3; the study 'rms' of pcl.study, a stable addition."""
+        from pcl import model, study
+        self.assertEqual(model.VERSION, 3)
+        for k in ('pcl.network.Network.dynamic', 'pcl.rms.Unit', 'pcl.rms.Unit.limits', 'pcl.rms.ExpLoad', 'pcl.rms.typical', 'pcl.rms.System.quantities',
+                  'pcl.model.machines_of', 'pcl.model.events_of', 'pcl.model.dynamic'):
+            self.assertIn(k, self.now['pcl'])
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+        self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][:3], ['t_end', 'events', 'machines'])
+        self.assertIn('rms', study.STUDIES)
+        self.assertEqual(sum(len(v) for v in self.now.values()), 1006)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

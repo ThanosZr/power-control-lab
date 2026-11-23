@@ -4,9 +4,14 @@
 // IEC 60909-0). No DOM: the page, pcl/runner.js (Node) and the tests. What it does not take in, it says, with the reason.
 // 5.0.12 (the second step): the parts inside the subcircuits of the user (ids X1/<id>, as SubCircuit.flatten names them), the
 // line from geometry (TLM, three phases) and the equivalent of a network (EQV3, N ports) are parts of the model too.
+// 5.0.13 (ROADMAP §101 step 1): each GEN3 with the controls of the drawing that drive it, for the RMS dynamics (pcl.rms): the
+// AVR on its E_fd (and the PSS on the stabilizing input of that AVR), the GOV on its T_m, as ctl: {avr, pss, gov}, each
+// {id, type, params} (the defaults with the drawing's own); an input of the GEN3 from another block is a warning.
 //   Model.of(project) → {version, f, buses, elements, skipped, touching, warnings}
 //     buses:    [{id, label, Un, at: [[component id, terminal], …], juncs: [ids]}]   (the id: a junction of the drawing on the bus)
-//     elements: [{id, type, label, params, buses: [bus id per terminal], closed?}]   (params: the defaults with the drawing's own)
+//     elements: [{id, type, label, params, buses: [bus id per terminal], closed?, sides?, ctl?}]   (params: the defaults with the
+//               drawing's own; 5.0.13: sides, the terminals on each side of a CB3, and opens, [{t, reach: [parts per side]}]
+//               for each opening, without the breakers that open at the same time; ctl, the controls of a GEN3)
 //     skipped:  [{id, type, label, why}]   why: 'sub' (a subcircuit, when subcircuit.js is not there), 'later' (a part of the
 //               network that is not in the model yet), 'other' (a part that is not three-phase, on a bus), 'phases' (crossed or
 //               joined phases), 'nobus' (no voltage level), 'mph' (a line from geometry with other than three phases)
@@ -17,8 +22,8 @@
  const BUS=root.Bus||(typeof require!=='undefined'?require('./bus.js'):null);
  const INP=root.Inputs||(typeof require!=='undefined'?require('./inputs.js'):null);
  const SC=root.SubCircuit||(typeof require!=='undefined'?require('./subcircuit.js'):null);
- // 2 (5.0.12): the parts TLM and EQV3, and the ids of the parts inside subcircuits (X1/<id>)
- const VERSION=2;
+ // 2 (5.0.12): the parts TLM and EQV3, and the ids of the parts inside subcircuits (X1/<id>); 3 (5.0.13): the controls of a GEN3
+ const VERSION=3;
  // the parts of the model and their three-phase terminals (terminal → its phase pins when the part is not on a bus)
  const T1={abc:['a','b','c']},T2={abc1:['a1','b1','c1'],abc2:['a2','b2','c2']};
  const TERMS={GEN3:T1,GRID3:T1,VAC3:T1,LOAD3:T1,FLT3:T1,LINE3:T2,XF3:T2,CB3:T2,ZSER3:T2,TLM:T2,EQV3:null};
@@ -113,10 +118,28 @@
    if(!(a.Un>0)&&b.Un>0){a.Un=b.Un;again=true;}else if(!(b.Un>0)&&a.Un>0){b.Un=a.Un;again=true;}}}
   for(const b of buses)if(!(b.Un>0)){warnings.push(`Ζυγός ${b.label}: χωρίς στάθμη τάσης (κανένα στοιχείο του δεν έχει U_n).`);}
   // the elements, with the buses of their terminals
-  const elements=[];
+  const elements=[];let S0=null;       // S0 (5.0.13): every pin of the drawing (and the signal pins) joined by its wires
+  // 5.0.13: how many parts each side of a breaker reaches without it and the breakers that open with it (the terminals joined by
+  // the parts with two of them and by the closed breakers): the side that opens away from the network is the one with the fewer
+  let adj=null;const reach=(k0,skip)=>{if(!adj){adj=new Map();const at=new Map();for(const x of good){if(!at.has(x.c.id))at.set(x.c.id,[]);at.get(x.c.id).push(x.key);}
+    for(const [id,ks] of at)if(ks.length===2&&!(byId.get(id).type==='CB3'&&!brk.get(id)?.closed))for(const [a,b] of [[ks[0],ks[1]],[ks[1],ks[0]]]){if(!adj.has(a))adj.set(a,[]);adj.get(a).push([b,id]);}}
+   const seen=new Set([k0]),parts=new Set(),todo=[k0];while(todo.length){const k=todo.pop();for(const x of good)if(x.key===k&&!skip.has(x.c.id))parts.add(x.c.id);
+    for(const [b,id] of adj.get(k)||[])if(!skip.has(id)&&!seen.has(b)){seen.add(b);todo.push(b);}}
+   return parts.size;};
+  // the times a breaker of the drawing opens (its program after t = 0), and the breakers that open at the same time
+  const opens=c=>{const p=params(c);if(p.ctl==='sig')return [];const q=P.parseSched(String(p.cmd??'0:1'))||[];let st=closedAt0(p).closed?1:0;const o=[];
+   for(const [t,v] of q){if(!(t>0))continue;if(v<0.5&&st>=0.5)o.push(t);st=v;}return o;};
+  let OPEN=null;const openAt=t=>{if(!OPEN){OPEN=[];for(const c of keep)if(c.type==='CB3'&&!bad.has(c.id))for(const u of opens(c))OPEN.push([u,c.id]);}
+   return OPEN.filter(([u])=>Math.abs(u-t)<1e-9).map(([,id])=>id);};
   for(const c of keep){const T=termsOf(c);if(!T||bad.has(c.id))continue;const bs=Object.keys(T).map(t=>busOf.get(c.id+':'+t));
    if(bs.some(b=>!b||!(b.Un>0))){skipped.push({id:c.id,type:c.type,label:lab(c),why:'nobus'});continue;}
-   const e={id:c.id,type:c.type,label:lab(c),params:params(c),buses:bs.map(b=>b.id)};if(c.type==='CB3')e.closed=brk.get(c.id).closed;elements.push(e);}
+   const e={id:c.id,type:c.type,label:lab(c),params:params(c),buses:bs.map(b=>b.id)};
+   // 5.0.13: a breaker with the terminals on each of its sides (before the closed breakers join them), for its opening in the RMS
+   if(c.type==='CB3'){e.closed=brk.get(c.id).closed;const own=good.filter(x=>x.c.id===c.id);e.sides=own.map(x=>good.filter(y=>y.key===x.key&&y.c.id!==c.id).map(y=>[y.c.id,y.t]));
+    e.opens=opens(c).map(t=>({t,reach:own.map(x=>reach(x.key,new Set(openAt(t))))}));}
+   if(c.type==='GEN3'){if(!S0){S0=uf();const sp=new Set();for(const q of keep)for(const p of Object.keys(P.pinsOf(q))){sp.add(q.id+':'+p);S0.find(q.id+':'+p);}join(S0,sp,wires);}
+    const k=controlsOf(c,e.params,keep,S0,lab);e.ctl=k.ctl;warnings.push(...k.warnings);}
+   elements.push(e);}
   // the other parts: those not in the model yet, and those that are not three-phase, when they touch a bus
   const busNode=new Set();for(const x of good)for(const n of x.nodes)busNode.add(n);
   const touching=[];
@@ -128,6 +151,20 @@
    if(on)touching.push(c.id);}
   const f=elements.map(e=>+e.params.f).find(x=>x>0)||50;
   return {version:VERSION,f,name:String(pr.name||''),buses,elements,skipped,touching,warnings};}
+ // 5.0.13: the controls of a GEN3 in the drawing: the block on its E_fd input (exc 'sig') and on its T_m input (mech 'sig'), and
+ // the PSS on the stabilizing input of its AVR. U0: every pin of the drawing (the signal pins too) joined by its wires (and the
+ // names of the wires).
+ const CTL={AVR:'avr',PSS:'pss',GOV:'gov'};
+ function controlsOf(g,gp,keep,U0,lab){const ctl={avr:null,pss:null,gov:null},warnings=[];
+  const at=(id,pin)=>U0.find(id+':'+pin);
+  const from=(root,skip)=>keep.filter(c=>c.id!==skip&&Object.keys(P.pinsOf(c)).some(q=>U0.find(c.id+':'+q)===root));
+  const one=(c,pin)=>({id:c.id,type:c.type==='AVR'?(params(c).type==='dc1a'?'dc1a':'st1a'):c.type==='GOV'?(params(c).type==='hydro'?'hydro':'steam'):'pss',params:params(c),pin});
+  if(gp.exc==='sig'){const src=from(at(g.id,'efd'),g.id);const a=src.find(c=>c.type==='AVR'&&at(c.id,'efd')===at(g.id,'efd'));
+   if(a){ctl.avr=one(a,'efd');const s=from(at(a.id,'vs'),a.id).find(c=>c.type==='PSS'&&at(c.id,'vs')===at(a.id,'vs'));if(s)ctl.pss=one(s,'vs');}
+   else warnings.push(`${lab(g)}: η E_fd έρχεται από άλλο μπλοκ (όχι AVR): στη δυναμική RMS μένει σταθερή.`);}
+  if(gp.mech==='sig'){const v=from(at(g.id,'tm'),g.id).find(c=>c.type==='GOV'&&at(c.id,'tm')===at(g.id,'tm'));
+   if(v)ctl.gov=one(v,'tm');else warnings.push(`${lab(g)}: η T_m έρχεται από άλλο μπλοκ (όχι GOV): στη δυναμική RMS μένει σταθερή.`);}
+  return {ctl,warnings};}
  // what the page says about a model, in one line
  function summary(m){const n=t=>m.elements.filter(e=>e.type===t).length;const parts=[['GEN3','γεννήτριες'],['GRID3','ισοδύναμα δικτύου'],['EQV3','ισοδύναμα πολλών θυρών'],['VAC3','πηγές'],['LINE3','γραμμές'],['TLM','γραμμές από γεωμετρία'],['XF3','μετασχηματιστές'],['LOAD3','φορτία'],['CB3','διακόπτες'],['ZSER3','εμπεδήσεις σειράς'],['FLT3','σφάλματα']]
   .map(([t,w])=>[n(t),w]).filter(([k])=>k>0).map(([k,w])=>k+' '+w);return `${m.buses.length} ζυγοί${parts.length?': '+parts.join(', '):''}`;}

@@ -1262,6 +1262,73 @@ class Network:
         from . import equivalent
         return equivalent.reduce(self, boundary, internal, kind=kind, lf=lf, slack=slack, tol=tol, mode=mode)
 
+    def dynamic(self, t_end=5.0, events=(), machines=None, default='two_axis', loads='Z', h=0.005, record=0.01,
+                method='simultaneous', step='fixed', buses=None, f=None, pf=None, typical=None, slow_after=8):
+        """5.0.13 (ROADMAP §101 step 1, THEORY §8ΩΝ): the RMS dynamics of the network from its load flow (pcl.rms, experimental).
+        machines: {generator: {'model': 'classical' | 'two_axis' | 'subtransient', the data on its S_n (Xd, Xdp, Xdpp, Xq, Xqp,
+        Xqpp, Xl, Td0p, Td0pp, Tq0p, Tq0pp, Ra, H, D, SG10, SG12), 'avr': {'type': 'st1a' | 'dc1a', …}, 'pss': {…},
+        'gov': {'type': 'steam' | 'hydro', 'Pr', …}}} (the parameters as the AVR, PSS and GOV of the EMT); a generator not
+        listed: `default` with the typical values, or typical='af' (pcl.rms.typical: by its rating, with an ST1A and a governor).
+        events: [{'t', 'kind': 'fault' (bus, z pu), 'clear' (bus), 'trip' (branch), 'gen' (gen: a unit out), 'vref' (gen, dV),
+        'pref' (gen, dP), 'load' (bus, P, Q in MW, Mvar), 'shunt' (bus, y pu)}]. loads: 'Z', 'I', 'P', {'z', 'i', 'p'} or
+        {'a', 'b'}. record: the interval of the results (s); buses: the buses whose |V| is returned (None: all up to 200).
+        slow_after: the Newton iterations of a step above which the next one refactorizes (8 here; 4 in pcl.rms, the core of
+        4.23: with the controls 8 saves about half of the factorizations, and the results move less than 10⁻⁷).
+        Returns a JSON-ready dict: 't', 'machines' (per generator δ in degrees, ω, f in Hz, P and Q in MW and Mvar, |V|,
+        and with controls E_fd, T_m), 'buses', 'Vmin' (the lowest |V| at each moment), 'stable', 'events', 'stats', 'start'."""
+        from . import rms
+        if typical is not None:
+            machines = {**rms.typical(self, kind=typical), **(machines or {})}
+        s = rms.System(self, machines=machines, default=default, loads=loads, f=f, pf=pf)
+        start = s.init()
+        rec = max(1, int(round(float(record) / float(h)))) if record else 1
+        r = s.simulate(float(t_end), events=[dict(e) for e in events or ()], h=float(h), method=method, step=step, record_every=rec,
+                       slow_after=int(slow_after))
+        q = s.quantities(r)
+        Sb = self.S_base / 1e6
+        fr = s.f
+        mach = {}
+        for K in s.kinds:
+            if 'delta' not in K.states:
+                continue
+            for nm in K.names:
+                d = q[nm]
+                o = {'model': getattr(K, 'model', None) or ('classical' if isinstance(K, rms.Classical) else 'two_axis'),
+                     'bus': s.names[K.bus[K.names.index(nm)]], 'delta': np.degrees(d['delta']), 'omega': d['omega'],
+                     'f': d['omega'] * fr, 'P': d['P'] * Sb, 'Q': d['Q'] * Sb, 'V': d['V']}
+                for k in ('Efd', 'Tm', 'Ifd', 'vs'):
+                    if k in d:
+                        o[k] = d[k]
+                if isinstance(K, rms.Unit):
+                    o['controls'] = {'avr': K.avr, 'pss': K.pss, 'gov': K.gov}
+                mach[nm] = o
+        # the centre of inertia: the angles relative to it, the largest spread, the frequency of the system
+        out_ = {e['gen'] for e in r['events'] if e['kind'] == 'gen'}   # a tripped unit is out of the centre of inertia
+        Hs = {nm: float(K.p['H'][K.names.index(nm)]) for K in s.kinds if 'delta' in K.states for nm in K.names if nm not in out_}
+        tot = sum(Hs.values())
+        if mach and tot > 0:
+            coi = sum(Hs[nm] * np.asarray(o['delta']) for nm, o in mach.items() if nm in Hs) / tot
+            fcoi = sum(Hs[nm] * np.asarray(o['f']) for nm, o in mach.items() if nm in Hs) / tot
+            for o in mach.values():
+                o['delta_coi'] = np.asarray(o['delta']) - coi
+        else:
+            fcoi = None
+        nb = len(s.names)
+        sel = list(s.names) if buses is None and nb <= 200 else [str(b) for b in (buses or [])]
+        Vabs = np.abs(r['V'])
+        out = {'t': r['t'], 'machines': mach, 'buses': {b: Vabs[:, s.idx[b]] for b in sel if b in s.idx},
+               'Vmin': Vabs.min(axis=1), 'Vmin_bus': [s.names[i] for i in Vabs.argmin(axis=1)], 'f_coi': fcoi,
+               'stable': s.stable(r), 'events': [{k: v for k, v in e.items() if k != 'i'} for e in r['events']],
+               'stats': r['stats'], 'start': start, 'h': float(h), 'method': method, 'step': step, 'loads': loads, 'f': fr,
+               'S_base_MVA': Sb, 'n_states': s.nx, 'n_buses': nb}
+        if mach:
+            spread = max(float(np.max(np.abs(o['delta_coi']))) for nm, o in mach.items() if nm in Hs) if fcoi is not None else None
+            out['summary'] = {'stable': out['stable'], 'max_angle_coi': spread, 'f_min': float(np.min(fcoi)) if fcoi is not None else None,
+                              'f_max': float(np.max(fcoi)) if fcoi is not None else None, 'V_min': float(np.min(out['Vmin'])),
+                              'V_min_bus': out['Vmin_bus'][int(np.argmin(out['Vmin']))], 'time_s': r['stats']['time'],
+                              't_end': float(r['t'][-1]), 'machines': len(mach), 'states': s.nx}
+        return out
+
     def to_emt(self, lf=None, machines=None, name=None, t_end=0.5, hdiv=400, boundary=None, internal=None, fig='50', **foster_kw):
         """The network as a project of the app for an EMT run that starts in the steady state of the load flow (4.3):
         each generator a GEN3 whose terminal voltage |V|∠θ is the load-flow result at its bus (the EMT start solves the

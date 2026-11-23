@@ -373,6 +373,14 @@
 | critical clearing time | κρίσιμος χρόνος εκκαθάρισης |
 | centre of inertia | κέντρο αδράνειας |
 | two-axis model | μοντέλο δύο αξόνων |
+| subtransient model, voltage behind the subtransient reactance (E″ model) | υπομεταβατικό μοντέλο, τάση πίσω από την υπομεταβατική αντίδραση (μοντέλο E″) (5.0.13) |
+| generating unit (a machine with its controls) | μονάδα παραγωγής (5.0.13) |
+| exponential saturation, air-gap line | εκθετικός κορεσμός, γραμμή του διακένου (5.0.13) |
+| non-windup limit | όριο χωρίς windup (5.0.13) |
+| exponential load | εκθετικό φορτίο (5.0.13) |
+| underexcitation limit | όριο υποδιέγερσης (5.0.13) |
+| reheater, inelastic water column | αναθερμαντήρας, ασυμπίεστη στήλη νερού (5.0.13) |
+| typical (dynamic) data | τυπικά (δυναμικά) δεδομένα (5.0.13) |
 | complex-step differentiation | παραγώγιση με μιγαδικό βήμα |
 | watched channels | κανάλια που παρακολουθούνται |
 | kernel (of a solver) | πυρήνας (του λύτη) |

@@ -1180,6 +1180,68 @@ async function dmRun(st){const m=dmModel();if(!m||m.error||DM.busy)return;DM.bus
 async function dmAct(what){const r=DM.r;if(!r)return;
  if(what==='report'){try{const x=await api('network_report',{drawing:DM.q.drawing,study:DM.q.study,options:DM.q.options});download(x.name,x.html,'text/html');}catch(e){DM.err=e.message;renderProps();}return;}
  if(what==='view'&&r.view){STUDY.view={view:r.view,layers:r.layers,layer:r.layer,q:DM.q,edit:null,done:[],name:'σχέδιο',id:'drawing:'+r.study,geo:null,geoIn:null};netViewOpen();}}
+// 5.0.13 (ROADMAP §101 step 1): the card «Δυναμική RMS». The electromechanical dynamics of the drawing from its load flow, in
+// phasors (pcl.rms through /api/network_study, study 'rms', 'drawing'): each GEN3 with the AVR, PSS and GOV that drive it in the
+// drawing (the same parameters as the EMT), and the events of the drawing (a three-phase FLT3, the opening of a CB3, the programs
+// of the references) or one chosen here. The angles from the centre of inertia, the frequency, the voltages and E_fd.
+const RM={r:null,q:null,key:null,busy:false,err:null,T:5,h:5,loads:'Z',ev:'drawing',bus:'',gen:'',t0:0.1,dur:100,dv:0.05,dp:0.1};
+const RM_EV=[['drawing','Τα συμβάντα του σχεδίου (σφάλματα, διακόπτες, προγράμματα AVR και GOV)'],['fault','Τριφασικό σφάλμα σε ζυγό'],['gen','Απώλεια μονάδας'],
+ ['vref','Βήμα στην αναφορά τάσης (AVR)'],['pref','Βήμα στην αναφορά φορτίου (ρυθμιστής στροφών)'],['none','Καμία διαταραχή']];
+const RM_COL=['#147966','#c47a1c','#2f5fa0','#b03a5b','#6b4fa0','#3d8b3d','#1f8fa0','#8a5a2b'];
+function rmsEvents(m){const t0=+RM.t0||0,ev=[];
+ if(RM.ev==='fault'&&RM.bus){ev.push({t:t0,kind:'fault',bus:RM.bus});ev.push({t:t0+(+RM.dur||0)/1e3,kind:'clear',bus:RM.bus});}
+ else if(RM.ev==='gen'&&RM.gen)ev.push({t:t0,kind:'gen',gen:RM.gen});
+ else if(RM.ev==='vref'&&RM.gen)ev.push({t:t0,kind:'vref',gen:RM.gen,dV:+RM.dv});
+ else if(RM.ev==='pref'&&RM.gen)ev.push({t:t0,kind:'pref',gen:RM.gen,dP:+RM.dp});
+ return ev;}
+function rmsChart(title,unit,t,series,evs){const W=520,H=170,all=series.flatMap(s=>s.y).filter(Number.isFinite);if(!all.length)return '';
+ let lo=Math.min(...all),hi=Math.max(...all);if(hi-lo<1e-9){lo-=Math.max(Math.abs(lo)*1e-3,1e-6);hi+=Math.max(Math.abs(hi)*1e-3,1e-6);}const pad=(hi-lo)*0.05;lo-=pad;hi+=pad;
+ const F=PlotCore.svgFrame({W,H,ml:46,mr:8,mt:8,mb:22,x:[t[0],t[t.length-1]],y:[lo,hi],xUnit:'s',yUnit:unit,xPlain:true,yPlain:true});
+ const step=Math.max(1,Math.floor(t.length/600));
+ let h=`<svg class="bfchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}">${F.svg}`;
+ for(const e of evs||[]){const x=F.X(e.t);if(x>=F.ML&&x<=F.ML+F.pw)h+=`<line class="rms-ev" x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${F.MT}" y2="${F.MT+F.ph}"/>`;}
+ series.forEach((s,i)=>{let d='';for(let k=0;k<t.length;k+=step){const y=s.y[k];if(!Number.isFinite(y))continue;d+=(d?'L':'M')+F.X(t[k]).toFixed(1)+','+F.Y(y).toFixed(1);}
+  h+=`<path class="rms" d="${d}" stroke="${s.c||RM_COL[i%RM_COL.length]}"/>`;});
+ return `<div><h4>${esc(title)}</h4>${h}</svg></div>`;}
+function rmsRender(){const box=$('#rms-out');if(!box||!$('#rms')?.open)return;
+ const m=dmModel(),gens=m&&!m.error?m.elements.filter(e=>e.type==='GEN3'):[];
+ if(!m||m.error||!gens.length){box.innerHTML=`<p class="small ${m?.error?'bad':'muted'}">${m?.error?'⚠ '+esc(m.error):'Η δυναμική RMS θέλει γεννήτριες (GEN3) στο σχέδιο, π.χ. το tutorial «IEEE 9 ζυγών σε EMT».'}</p>`;$('#rms-state').textContent='';return;}
+ if(!RM.bus||!m.buses.some(b=>b.id===RM.bus))RM.bus=m.buses[0]?.id||'';if(!RM.gen||!gens.some(g=>g.id===RM.gen))RM.gen=gens[0].id;
+ const key=dmKey(m),fresh=RM.r&&RM.key===key,sel=(k,list,v)=>`<select data-rm="${k}">${list.map(([a,n])=>`<option value="${esc(a)}" ${String(v)===String(a)?'selected':''}>${esc(n)}</option>`).join('')}</select>`;
+ const num=(k,v,st,w)=>`<input type="number" data-rm="${k}" value="${v}" step="${st}" ${w?`style="width:${w}px"`:''}>`;
+ const ctl=g=>{const c=g.ctl||{};return [c.avr&&('AVR '+c.avr.type.toUpperCase()),c.pss&&'PSS',c.gov&&(c.gov.type==='hydro'?'ρυθμιστής νερού':'ρυθμιστής ατμού')].filter(Boolean).join(', ')||'σταθερά E_fd και T_m';};
+ let h=`<p class="small">${esc(Model.summary(m))}. Οι μηχανές με το μοντέλο δύο αξόνων, ή το υπομεταβατικό όταν έχουν αποσβεστήρα (T″ > 0), και οι έλεγχοι του σχεδίου: ${gens.map(g=>`<b>${esc(g.label)}</b> ${esc(ctl(g))}`).join(' · ')}.</p>`;
+ h+=`<div class="rms-bar"><label>Συμβάν ${sel('ev',RM_EV,RM.ev)}</label>`;
+ if(RM.ev==='fault')h+=`<label>ζυγός ${sel('bus',m.buses.map(b=>[b.id,b.label]),RM.bus)}</label><label>διάρκεια (ms) ${num('dur',RM.dur,10)}</label>`;
+ if(['gen','vref','pref'].includes(RM.ev))h+=`<label>μονάδα ${sel('gen',gens.map(g=>[g.id,g.label]),RM.gen)}</label>`;
+ if(RM.ev==='vref')h+=`<label>ΔV_ref (pu) ${num('dv',RM.dv,0.01)}</label>`;
+ if(RM.ev==='pref')h+=`<label>ΔP_ref (pu) ${num('dp',RM.dp,0.05)}</label>`;
+ if(!['drawing','none'].includes(RM.ev))h+=`<label>στα (s) ${num('t0',RM.t0,0.05)}</label>`;
+ h+=`<label>διάρκεια (s) ${num('T',RM.T,1)}</label><label>βήμα (ms) ${sel('h',[[1,'1'],[2,'2'],[5,'5'],[10,'10']],RM.h)}</label><label>φορτία ${sel('loads',[['Z','σταθερή εμπέδηση'],['I','σταθερό ρεύμα'],['P','σταθερή ισχύς']],RM.loads)}</label>
+  <button data-rmgo ${RM.busy?'disabled':''}>▶ Δυναμική RMS</button>${fresh?' <button data-rmrep>📄 Αναφορά</button>':''}</div>`;
+ if(RM.busy)h+=`<p class="small muted">… στο engine</p>`;
+ if(RM.err)h+=`<p class="small bad" id="rms-err">⚠ ${esc(RM.err)}</p>`;
+ if(RM.r&&!fresh)h+=`<p class="small muted">Το σχέδιο άλλαξε μετά το τελευταίο τρέξιμο: τρέξ' το ξανά.</p>`;
+ if(fresh){const r=RM.r.result,sm=RM.r.summary||{},M=r.machines||{},names=Object.keys(M),lab=id=>editor.comp(id)?.label||id,t=r.t,evs=r.events||[];
+  h+=`<p class="small" id="rms-sum">${sm.stable?'✓ Ευσταθές':'⚠ Ασταθές'}: κάθε γωνία ${sm.stable?'μένει':'δεν μένει'} μέσα σε 180° από το κέντρο αδράνειας (το πολύ ${fmt(sm.max_angle_coi,4)}°)· συχνότητα από ${fmt(sm.f_min,6)} ως ${fmt(sm.f_max,6)} Hz· η ελάχιστη τάση ${fmt(sm.V_min,4)} pu (${esc(m.buses.find(b=>b.id===sm.V_min_bus)?.label||sm.V_min_bus)})· ${r.stats.steps} βήματα των ${fmt(r.h*1e3,3)} ms σε ${fmt(r.stats.time,3)} s.</p>`;
+  for(const n of RM.r.network?.drawing?.notes||[])h+=`<p class="small muted">${esc(n)}</p>`;
+  if(evs.length)h+=`<p class="small">Συμβάντα: ${evs.map(e=>`${fmt(e.t,4)} s ${esc({fault:'σφάλμα',clear:'εκκαθάριση',trip:'άνοιγμα κλάδου',gen:'απώλεια μονάδας',vref:'βήμα V_ref',pref:'βήμα P_ref',load:'βήμα φορτίου'}[e.kind]||e.kind)}${e.gen?' '+esc(lab(e.gen)):(e.bus||e.branch)?' '+esc(e.bus||e.branch):''}${e.id?` (${esc(lab(e.id))})`:''}`).join(' · ')}.</p>`;
+  h+=`<div class="rms-leg">${names.map((k,i)=>`<span><i style="background:${RM_COL[i%RM_COL.length]}"></i>${esc(lab(k))}</span>`).join('')}</div><div class="rms-grid" id="rms-charts">`;
+  h+=rmsChart('Γωνία από το κέντρο αδράνειας (δ − δ_ΚΑ)','°',t,names.map(k=>({y:M[k].delta_coi||M[k].delta})),evs);
+  h+=rmsChart('Συχνότητα','Hz',t,names.map(k=>({y:M[k].f})),evs);
+  h+=rmsChart('Τάση ακροδεκτών','pu',t,names.map(k=>({y:M[k].V})),evs);
+  const ex=names.filter(k=>M[k].Efd);if(ex.length)h+=rmsChart('Τάση διέγερσης E_fd','pu',t,names.map(k=>({y:M[k].Efd||[]})),evs);
+  h+=rmsChart('Ενεργός ισχύς','MW',t,names.map(k=>({y:M[k].P})),evs);h+='</div>';}
+ box.innerHTML=h;$('#rms-state').textContent=fresh?(RM.r.summary?.stable?'ευσταθές':'ασταθές'):'';
+ box.querySelectorAll('[data-rm]').forEach(el=>el.onchange=()=>{const k=el.dataset.rm;RM[k]=el.type==='number'?+el.value:el.value;if(k==='ev')rmsRender();});
+ box.querySelector('[data-rmgo]')?.addEventListener('click',rmsRun);box.querySelector('[data-rmrep]')?.addEventListener('click',rmsReport);}
+let rmsT=0;const rmsSoon=()=>{clearTimeout(rmsT);rmsT=setTimeout(rmsRender,150);};
+async function rmsRun(){const m=dmModel();if(!m||m.error||RM.busy)return;RM.busy=true;RM.err=null;rmsRender();
+ const T=Math.min(Math.max(+RM.T||5,0.1),600),opt={t_end:T,h:(+RM.h||5)/1e3,loads:RM.loads,record:Math.max((+RM.h||5)/1e3,T/1500),events:rmsEvents(m),drawing_events:RM.ev==='drawing'};
+ try{const q={drawing:m,study:'rms',options:opt};const r=await api('network_study',q);RM.r=r;RM.q=q;RM.key=dmKey(m);}
+ catch(e){RM.r=null;RM.err=/fetch|NetworkError|Load failed/i.test(e.message)?'Η δυναμική RMS τρέχει στο engine: ξεκίνα τον τοπικό server (python run.py) και δοκίμασε ξανά.':e.message;}
+ RM.busy=false;rmsRender();}
+async function rmsReport(){if(!RM.q)return;try{const x=await api('network_report',RM.q);download(x.name,x.html,'text/html');}catch(e){RM.err=e.message;rmsRender();}}
 function bindProps(box,c){
  box.querySelector('[data-pclose]')?.addEventListener('click',()=>editor.select([],[]));
  box.querySelectorAll('[data-probe]').forEach(b=>b.onclick=()=>addProbe(b.dataset.probe));
@@ -3596,13 +3658,15 @@ function applyLook(){const s=editor.settings,tech=s.look!=='classic';document.bo
 // ------------------------------------------------------------------ boot
 function boot(){
  const saved=loadSettings();
+ $('#rms')?.addEventListener('toggle',()=>{if($('#rms').open)rmsRender();});   // 5.0.13: the card «Δυναμική RMS»
  // 4.17.3: the look and the symbols before the first drawing
  P.setSym?.(saved.sym==='ansi'?'ansi':'iec');document.body.classList.toggle('look-tech',saved.look!=='classic');document.body.classList.toggle('look-classic',saved.look==='classic');
  editor=new Editor($('#canvas'),{settings:saved,
   onchange:kind=>{if(kind==='struct'||kind==='param'){if(S.batch)S.batch.stale=true;buildSim(false);if(S.theory)setTimeout(()=>{if(tutorial().theory==='v1'||tutorial().theory==='formula')runTheory();},50);scheduleMath();}
    // a move (drag, arrow keys) is saved a moment later, once (4.6: the whole project as JSON on every drag end cost a frame)
    if(kind==='geom')saveLocalSoon();else saveLocal();if(kind==='struct')renderChannels();if(kind==='struct'||kind==='param')window.Watch?.render();
-   if((kind==='struct'||kind==='param')&&editor.extText?.size)dmLabels();},   // 5.0.11: the results of a drawing that changed give way to the values
+   if((kind==='struct'||kind==='param')&&editor.extText?.size)dmLabels();   // 5.0.11: the results of a drawing that changed give way to the values
+   if((kind==='struct'||kind==='param')&&$('#rms')?.open)rmsSoon();},          // 5.0.13: the card «Δυναμική RMS» follows the drawing
   onselect:sel=>{$('#selinfo').textContent=sel.c.length+sel.w.length?`${sel.c.length} στοιχεία · ${sel.w.length} σύρματα επιλεγμένα`:'';renderProps();
    // 4.8: one click on a block «Ελεγκτής AI» opens its façade next to it
    if(window.Watch&&sel.c.length===1&&!sel.w.length&&editor.comp(sel.c[0])?.type==='AIC'&&atTop())Watch.facade(sel.c[0]);},
@@ -3765,7 +3829,7 @@ function initPanels(){const R=window.Panels;if(!R)return;
  const shut=sel=>()=>{const m=document.querySelector(sel);m?.querySelector('.modal-head .x,[data-rvclose],[data-cwclose],[data-swclose]')?.click();};
  const live=sel=>()=>{const m=document.querySelector(sel);return !!m&&!m.hidden&&m.getClientRects().length>0;};
  const cards=[['circuit','Κύκλωμα','#bench-card',false],['scope','Προσομοίωση και scopes','#scope-card'],['scen','Σενάρια (Python)','#scen-card'],['cmd','Γραμμή εντολών (Python)','#cmd-card'],['addons','Πρόσθετα και σύνδεση','#addons-card'],
-  ['math','Υπολογισμοί & μαθηματικά','#math-card'],['theory','Περιγραφή & σύγκριση με τη θεωρία','#tut-card']];
+  ['rms','Δυναμική RMS','#rms-card'],['math','Υπολογισμοί & μαθηματικά','#math-card'],['theory','Περιγραφή & σύγκριση με τη θεωρία','#tut-card']];
  // 5.0.5 (§94 step β): a card in a tab that is not shown is still open (its tab is there); opened from the menu, it is shown
  for(const [id,title,sel,cl] of cards)R.register({id,title,group:'card',sel,closable:cl!==false,hint:cl===false?'Το σχέδιο δεν κλείνει· μετακινείται και κουμπώνει με τα ⠿ ▾ της γραμμής του':'',
   isOpen:()=>!document.querySelector(sel)?.hidden,place:()=>window.Dock?.label(id)||'',onshow:on=>{if(on)window.Dock?.reveal(id);if(on&&id==='scope'){scope.resize();draw(true);}}});
@@ -3797,7 +3861,7 @@ function initPanels(){const R=window.Panels;if(!R)return;
  // 5.0.5 (ROADMAP §94 step β): the cards dock, float, go as tabs and fill the screen (dock.js); their buttons go into the
  // row each card already has at its top
  window.Dock?.init([['circuit','#bench-card','.toolbar'],['scope','#scope-card','.sim-bar'],['scen','#scen-card','#scen > summary'],['cmd','#cmd-card','#cmd > summary'],['addons','#addons-card','#addons-block > summary'],
-  ['math','#math-card','.math-top'],['theory','#tut-card','.tut-head']].map(([id,sel,head])=>({id,sel,head,title:cards.find(c=>c[0]===id)[1],closable:id!=='circuit',screen:id!=='circuit'}))
+  ['rms','#rms-card','#rms > summary'],['math','#math-card','.math-top'],['theory','#tut-card','.tut-head']].map(([id,sel,head])=>({id,sel,head,title:cards.find(c=>c[0]===id)[1],closable:id!=='circuit',screen:id!=='circuit'}))
   // 5.0.6 (§94 step γ): the diagram of the network, a document of the central area (its place in the page: under the circuit)
   .concat([{id:'netview',sel:'#netview',head:'.nv-head',title:'Διάγραμμα του δικτύου',closable:true}]),
   // 5.0.10: the notices of the second screen (a window that the browser did not open) on the bar of the page
@@ -3805,6 +3869,6 @@ function initPanels(){const R=window.Panels;if(!R)return;
  window.Dock?.onChange(()=>{if(!$('#scope-card').hidden)requestAnimationFrame(()=>scope.resize());});
  $('#open-panels')?.addEventListener('click',e=>R.openMenu(e.currentTarget));}
 window.addEventListener('DOMContentLoaded',boot);
-window.PCL={get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,libToSub,enterSub,leaveSub,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
+window.PCL={get RM(){return RM;},rmsRun,rmsRender,get S(){return S;},get editor(){return editor;},get scope(){return scope;},loadTutorial,libToSub,enterSub,leaveSub,openInspector,lineCtx,addProbe,play,pause,reset,renderTheory,renderFFT,renderPoincare,runBifurcation,get BF(){return BF;},runEIS,get EIS(){return EIS;},get SCEN(){return SCEN;},scenRun,
  renderEvents,togglePin,refreshControls,changesToSchedule,renderProps,studyAct,get STUDY(){return STUDY;},folderRun:studyRun,folderSettings:studySettings,folderView:studyView,get SFOLD(){return SFOLD;},get NV(){return NV;},studyOpen,runNNCompare,get NNC(){return NNC;},project,liveParam,pyPage,stepT,get REC(){return REC;},recToggle,recFlush,draw,closeInspector,openCtlWin,openPinScope,closePinScope,pinScopeOf:id=>pinScopeOf(editor.comp(id))}; // 3.19: for tests/ui/live_flow.js; 4.7: the comparison of nn_compare; 4.17.2: scope_flow
 })();

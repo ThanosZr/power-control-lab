@@ -9,6 +9,9 @@ The network: 'case' (a name of pcl.network.CASES) or 'network' (a network as wri
 Studies: 'advice' (what the engine proposes, for every study), 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf' (4.19.4), 'cpf' (4.19.5:
 the continuation load flow), 'se' (4.19.5: state estimation from measurements), 'harmonic' (4.19.5: the harmonic load flow).
 
+5.0.13 (ROADMAP §101 step 1): 'rms', the RMS dynamics from the load flow (pcl.network.Network.dynamic; options t_end, h, events,
+machines, default, loads, typical, record, method, step, buses); of a drawing with its machines, their controls and its events.
+
 5.0.11 (ROADMAP §70 point 1): 'drawing' = the common model of a drawing of the app (web/studio/model.js, pcl.model): the network is
 the drawing's (pcl.model.network: 'pf' for the load flows, as the EMT start of the drawing; 'sc' for IEC 60909-0), with the ids of the
 drawing. And 'sc', IEC 60909-0 at every bus (options: fault '3ph' | '2ph' | '1ph' | '2phE', mode 'max' | 'min', tmin), and at each FLT3
@@ -30,7 +33,7 @@ import numpy as np
 from . import network as N
 from .report import Report, network_report
 
-STUDIES = ('advice', 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf', 'cpf', 'se', 'harmonic', 'acdc', 'sc')
+STUDIES = ('advice', 'pf', 'dc', 'n1', 'n1dc', 'opf', 'dcopf', 'scopf', 'cpf', 'se', 'harmonic', 'acdc', 'sc', 'rms')
 FEEDER_STUDIES = ('unbalanced',)                          # 4.19.5: studies of a three-phase feeder (pcl.unbalanced), not of a Network
 STARTS = ('auto', 'mid', 'pf', 'nn')
 OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n1': ('tol', 'q_limits', 'backend', 'how'), 'n1dc': (), 'opf': ('flow_limits', 'start', 'tol', 'max_iter'),
@@ -39,7 +42,8 @@ OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n
            'se': ('measurements', 'plan', 'noise', 'seed', 'sigma', 'bad', 'zero_injections', 'detect', 'threshold', 'confidence', 'max_bad', 'tol', 'max_iter', 'start',
                   'pmu', 'currents', 'emt'),
            'harmonic': ('sources', 'harmonics', 'load_model', 'line_model', 'pulse', 'filters', 'scan_bus', 'scan_to', 'scan_step', 'tol', 'spectra'),
-           'unbalanced': ('regulators', 'spread', 'tol', 'max_iter'), 'advice': (), 'sc': ('fault', 'mode', 'tmin'), 'acdc': ('method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits', 'set', 'out', 'mode', 'flow_limits', 'start', 'outages')}
+           'unbalanced': ('regulators', 'spread', 'tol', 'max_iter'), 'advice': (), 'sc': ('fault', 'mode', 'tmin'),
+           'rms': ('t_end', 'h', 'events', 'machines', 'default', 'loads', 'typical', 'record', 'method', 'step', 'buses'), 'acdc': ('method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits', 'set', 'out', 'mode', 'flow_limits', 'start', 'outages')}
 MAX_BUSES = 20000
 
 
@@ -227,6 +231,13 @@ def _study(net, study, opt, faults=None):
         if study == 'sc':                                  # 5.0.11: IEC 60909-0 at every bus, and at the faults of a drawing
             from . import model
             return model._sc_all(net, opt.get('fault', '3ph'), opt.get('mode', 'max'), faults, tmin=float(opt.get('tmin', 0.1)))
+        if study == 'rms':                                 # 5.0.13 (ROADMAP §101 step 1): the RMS dynamics from the load flow
+            for k in ('t_end', 'h', 'record'):
+                if k in opt:
+                    opt[k] = float(opt[k])
+            if not 0 < opt.get('t_end', 5.0) <= 600 or not 1e-4 <= opt.get('h', 0.005) <= 0.1:
+                raise StudyError('t_end ως 600 s, h από 0,1 ms ως 100 ms')
+            return net.dynamic(**opt)
         if study == 'pf':
             return net.power_flow(**opt)
         if study == 'dc':
@@ -283,8 +294,22 @@ def _study(net, study, opt, faults=None):
                 raise StudyError("mode: ένα από 'flow', 'opf', 'n1'")
             return net.acdc_flow(**{k: v for k, v in opt.items() if k not in ('flow_limits', 'start', 'outages')})
         return net.opf('ac' if study == 'opf' else 'dc', **opt)
-    except (N.NetworkError, ValueError) as e:              # the errors of the solvers are ValueErrors with a message
+    except (N.NetworkError, ValueError, KeyError) as e:    # the errors of the solvers are ValueErrors with a message
         raise StudyError(str(e)) from e
+
+
+def _rms_drawing(data, net):
+    """5.0.13: the options of the study 'rms' of a drawing: its machines with their controls and its events (pcl.model; not with
+    drawing_events False), with those of the request on top. Returns (options, notes)."""
+    from . import model
+    opt = dict(data.get('options') or {})
+    m = data['drawing']
+    info = model.network(m, 'pf')[1]
+    mach, n1 = model.machines_of(m)
+    ev, n2 = model.events_of(m, net, info) if opt.pop('drawing_events', True) is not False else ([], [])
+    opt['machines'] = {**mach, **(opt.get('machines') or {})}
+    opt['events'] = ev + list(opt.get('events') or [])
+    return opt, n1 + n2
 
 
 def _faults(data):
@@ -297,6 +322,8 @@ def _faults(data):
 
 def summary(study, res):
     """The few numbers of a result that the card of a tutorial shows."""
+    if study == 'rms':                                     # 5.0.13: stable or not, the spread of the angles, the frequency, the voltage
+        return dict(res.get('summary') or {}, events=len(res.get('events') or []), h=res.get('h'), method=res.get('method'))
     if study == 'sc':                                      # 5.0.11: the largest and the smallest I″k, and the faults of a drawing
         ok = {b: d for b, d in res['buses'].items() if d.get('Ik') is not None}
         hi = max(ok, key=lambda b: ok[b]['Ik']) if ok else None
@@ -604,7 +631,10 @@ def run(data):
         return _station_run(data)
     net0, net, done = _networks_of(data)
     study = data.get('study') or 'pf'
-    res = _study(net, study, data.get('options'), _faults(data))
+    opts, rnotes = data.get('options'), []
+    if study == 'rms' and data.get('drawing') is not None:  # 5.0.13: the machines, the controls and the events of the drawing
+        opts, rnotes = _rms_drawing(data, net)
+    res = _study(net, study, opts, _faults(data))
     out = {'study': study, 'network': {'name': net.name, 'case': data.get('case'), 'buses': len(net.buses),
                                        'branches': sum(e['kind'] in ('line', 'branch', 'transformer') for e in net.elements)},
            'result': _clean(res), 'summary': _clean(summary(study, res))}
@@ -614,6 +644,8 @@ def run(data):
         from . import model
         info = model.network(data['drawing'], 'sc' if study == 'sc' else 'pf')[1]
         out['network']['drawing'] = _clean({k: info[k] for k in ('notes', 'out', 'helpers', 'elements')})
+        if study == 'rms':
+            out['network']['drawing']['notes'] = out['network']['drawing']['notes'] + rnotes
         if study == 'pf' and 'result' in out and res.get('branches') is not None:   # the results by the ids of the drawing
             out['result']['elements'] = _clean(model.elements_of(data['drawing'], net, info, res))
         if study == 'pf' and info['helpers']:              # the EMF behind a GRID3 or a VAC3 is not a bus of the drawing
@@ -628,7 +660,7 @@ def run(data):
         v = _picture(net0, net, data)
         out['geo'] = _geo_summary(net0, data)
         out['edit'] = netfile.describe(net)
-        out['view'], out['layers'] = v, netview.pack(v, out['result'])
+        out['view'], out['layers'] = v, netview.pack(v, out['result'] if study != 'rms' else None)   # 5.0.13: the RMS has no layer yet
         have = [q['layer'] for q in out['layers']]
         first = netview.DEFAULT.get(study)
         if study == 'acdc':                                # 4.21: the modes of the AC/DC study open on their own layer
@@ -703,9 +735,14 @@ def report(data):
     net0, net, done = _networks_of(data)
     study = data.get('study') or 'pf'
     if study in ('advice', 'dc'):
-        raise StudyError('Αναφορά για: pf, n1, n1dc, opf, dcopf, scopf, cpf, se, harmonic, sc.')
-    res = _study(net, study, data.get('options'), _faults(data))
+        raise StudyError('Αναφορά για: pf, n1, n1dc, opf, dcopf, scopf, cpf, se, harmonic, sc, rms.')
+    opts, rnotes = data.get('options'), []
+    if study == 'rms' and data.get('drawing') is not None:  # 5.0.13: the machines, the controls and the events of the drawing
+        opts, rnotes = _rms_drawing(data, net)
+    res = _study(net, study, opts, _faults(data))
     r = network_report(net, study, res, data.get('title') or None, picture=_picture(net0, net, data) if done else None)
+    for n in rnotes:
+        r.note(n, 'info')
     if done:                                               # what was changed, right after the title of the report
         r.note('Αλλαγές στο δίκτυο πριν από τη μελέτη (' + str(len(done)) + '): ' + ' '.join(done), 'warning')
         r.sections.insert(0, r.sections.pop())

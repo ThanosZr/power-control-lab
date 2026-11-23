@@ -49,12 +49,12 @@ let R={},fail=[];
  // 1. the page of before
  R.o0=await order();R.reg0=await p.evaluate(()=>[...document.querySelectorAll('.dk-region')].filter(r=>!r.hidden).length);
  R.tools=await p.evaluate(()=>[...document.querySelectorAll('.dk-card')].map(c=>c.dataset.dkCard+':'+c.querySelectorAll('.dk-tools button').length));
- ok(JSON.stringify(R.o0)===JSON.stringify(['circuit','scope','scen','cmd','addons','math','theory'])&&R.reg0===0,'the page of before (5.0.8: with the command line) '+JSON.stringify([R.o0,R.reg0]));
+ ok(JSON.stringify(R.o0)===JSON.stringify(['circuit','scope','scen','cmd','addons','rms','math','theory'])&&R.reg0===0,'the page of before (5.0.8: with the command line; 5.0.13: and the RMS) '+JSON.stringify([R.o0,R.reg0]));
  // 5.0.10 (decision 386): the badge of the GPU* beside «Engine»: the card or «όχι», with where it is used and why in its title
  await p.waitForFunction(()=>!document.querySelector('#gpu').hidden,null,{timeout:20000});
  R.gpu=await p.evaluate(()=>({t:document.querySelector('#gpu').textContent,title:document.querySelector('#gpu').title,ok:document.querySelector('#gpu').classList.contains('ok')}));
  ok(/^GPU\*: /.test(R.gpu.t)&&/N−1 σε AC/.test(R.gpu.title)&&(R.gpu.ok||/^GPU\*: όχι$/.test(R.gpu.t)&&/python -m pcl accel/.test(R.gpu.title)),'the badge of the GPU* beside «Engine» '+JSON.stringify(R.gpu));
- ok(R.tools.length===8&&R.tools.every(x=>x.endsWith(':4')),'⠿ ⇱ ⛶ ▾ on every card (5.0.8: and on the command line), and on the diagram of the network (5.0.6, hidden until a study opens it) '+R.tools.join(' '));
+ ok(R.tools.length===9&&R.tools.every(x=>x.endsWith(':4')),'⠿ ⇱ ⛶ ▾ on every card (5.0.8: and on the command line; 5.0.13: and on the RMS), and on the diagram of the network (5.0.6, hidden until a study opens it) '+R.tools.join(' '));
 
  // 2. the scope to the left edge, by its grip, while it runs
  await p.evaluate(()=>PCL.play());await p.waitForTimeout(600);const t0=await p.evaluate(()=>PCL.S.sim?.t||0);
@@ -88,6 +88,9 @@ let R={},fail=[];
  await p.click('#addons-card .dk-tools [data-dk-float]');await p.waitForTimeout(300);
  R.f0={at:await where('addons'),r:await rect('#addons-card'),framed:await p.evaluate(()=>{const e=document.querySelector('#addons-card');return e.classList.contains('wfr')&&e.querySelectorAll(':scope > .wfr-h').length===8&&getComputedStyle(e).position==='fixed';})};
  ok(R.f0.at?.at==='float'&&R.f0.framed,'⇱: a window of its own with the frame '+JSON.stringify(R.f0));
+ // (5.0.13) the page at its top first: scrolled to its end (the scenarios docked at the bottom make it longer), the path of the drag
+ // crossed the title of the command line and joined it as a tab, once the RMS card made the page longer
+ await p.evaluate(()=>window.scrollTo(0,0));await p.waitForTimeout(100);
  [gx,gy]=await mid('#addons-card .dk-grip');await drag(gx,gy,gx-260,gy+90);
  R.f1=await rect('#addons-card');
  const se=await rect('#addons-card > .wfr-se');await drag(se.l+se.w/2,se.t+se.h/2,se.l+se.w/2+120,se.t+se.h/2+40);

@@ -409,5 +409,15 @@ const {chromium}=require('playwright');
  const dm4=await p.evaluate(()=>{const E=window.PCL.editor;return {sum:(document.querySelector('#dm-sum')||document.querySelector('#dm-err')).textContent,rows:document.querySelectorAll('#dm-buses tr').length,
   skip:document.querySelectorAll('#dm-skip li').length,eq:E.valueText(E.comp('EQ1'))};});
  ok(/Συνέκλινε/.test(dm4.sum)&&dm4.rows===5&&dm4.skip===0&&/^P 143([.,]\d+)? MW · Q /.test(dm4.eq),'drawing: the EQV3 of «ieee9_eq» in the load flow, four buses and nothing left out, its P and Q in place of its value ('+dm4.eq+')');
+ // 5.0.13 (ROADMAP §101 step 1): the card «Δυναμική RMS» on the drawing of «ieee9_emt» with AVR and PSS: the fault, the opening and
+ // the clearing of the drawing, stable, the five charts
+ await p.evaluate(()=>{document.querySelector('#netview').hidden=true;window.PCL.loadTutorial('ieee9_emt',{ev:'full',ctl:'avr_pss'});});await p.waitForTimeout(800);
+ await p.evaluate(()=>{const d=document.querySelector('#rms');d.open=true;window.PCL.RM.T=2;window.PCL.RM.h=5;window.PCL.rmsRender();});
+ await p.waitForSelector('[data-rmgo]',{timeout:30000});await p.click('[data-rmgo]');
+ await p.waitForFunction(()=>!window.PCL.RM.busy&&(document.querySelector('#rms-sum')||document.querySelector('#rms-err')),null,{timeout:120000});
+ const rq=await p.evaluate(()=>{const r=window.PCL.RM.r;return {sum:(document.querySelector('#rms-sum')||document.querySelector('#rms-err')).textContent,charts:document.querySelectorAll('#rms-charts svg').length,
+  ev:(r?.result?.events||[]).map(e=>e.kind).join(','),ang:r?.summary?.max_angle_coi,ctl:(r?.result?.machines?.G2?.controls||{}).avr};});
+ ok(/^✓ Ευσταθές/.test(rq.sum)&&rq.charts===5&&rq.ev==='fault,trip,clear,trip'&&rq.ang>60&&rq.ang<120&&rq.ctl==='st1a',
+  'RMS: the drawing of «ieee9_emt» with its AVR and PSS, its fault and its breakers, stable, five charts ('+rq.ev+'; '+(rq.ang||0).toFixed(1)+'°)');
  console.log(JSON.stringify({rm:rm.split('\n').slice(0,4),bt:bt.split('\n').slice(0,4),imp},null,1));
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

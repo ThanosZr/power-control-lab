@@ -34,7 +34,8 @@ import numpy as np
 
 from . import network as N
 
-VERSION = 2                                  # 2 (5.0.12): TLM, EQV3, the parts inside subcircuits (ids X1/<id>)
+VERSION = 3                                  # 2 (5.0.12): TLM, EQV3, the parts inside subcircuits (ids X1/<id>); 3 (5.0.13): the
+                                             # controls of a GEN3 (ctl: avr, pss, gov) for the RMS dynamics
 SQ3 = math.sqrt(3)
 STUDIES = ('pf', 'sc')
 TYPES = ('GEN3', 'GRID3', 'VAC3', 'LINE3', 'XF3', 'ZSER3', 'LOAD3', 'CB3', 'FLT3', 'TLM', 'EQV3')
@@ -856,3 +857,178 @@ def short_circuit(m, fault='3ph', mode='max', buses=None, **kw):
     for d in r['buses'].values():
         d['label'] = lab.get(d['bus'], d['bus'])
     return {'study': 'sc', **r, 'out': info['out'], 'notes': info['notes']}
+
+
+# ---------------------------------------------------------------- 5.0.13: the RMS dynamics of a drawing (ROADMAP §101 step 1)
+GEN_KEYS = ('Xd', 'Xdp', 'Xdpp', 'Xq', 'Xqp', 'Xqpp', 'Xl', 'Td0p', 'Td0pp', 'Tq0p', 'Tq0pp', 'Ra', 'H', 'D')
+AVR_KEYS = ('TR', 'TC', 'TB', 'TC1', 'TB1', 'KA', 'TA', 'VAMIN', 'VAMAX', 'VIMIN', 'VIMAX', 'VRMIN', 'VRMAX', 'KC', 'KLR', 'ILR', 'KF',
+            'TF', 'KE', 'TE', 'AEX', 'BEX')
+PSS_KEYS = ('KS', 'TW', 'T1', 'T2', 'T3', 'T4', 'VSMIN', 'VSMAX')
+GOV_KEYS = ('Pr', 'R', 'KAX', 'V1', 'TSR', 'TSM', 'LC1', 'LC2', 'TCH', 'TRH', 'TCO', 'FHP', 'FIP', 'FLP', 'gFL', 'gNL', 'RP', 'RT', 'TR',
+            'TP', 'KS', 'Rclose', 'Ropen', 'TG', 'Tw')
+
+
+def _given(p, keys):
+    """The keys of a part that hold a number (an empty text is «not given»: the default of pcl.rms)."""
+    out = {}
+    for k in keys:
+        v = p.get(k)
+        if v is None or (isinstance(v, str) and v.strip() == ''):
+            continue
+        try:
+            out[k] = float(v)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def machines_of(m):
+    """5.0.13: the machines of the drawing for pcl.rms.System: each GEN3 (by its id) with its data (the standard data of the part:
+    X_d … T″_q0, H, D on its S_n) and the controls that drive it in the drawing (model.js ctl: the AVR, the PSS on its input, the
+    GOV), in the same parameters as the EMT. 'subtransient' when the part has a damper (T″_d0 or T″_q0 > 0), else 'two_axis'.
+    Returns (machines, notes)."""
+    m = _check(m)
+    out, notes = {}, []
+    for e in m['elements']:
+        if e['type'] != 'GEN3':
+            continue
+        p, lab = e['params'], e.get('label') or e['id']
+        if p.get('init') == 'zero':
+            continue
+        if p.get('data') == 'circ':
+            notes.append(f'{lab}: δεδομένα κυκλώματος του δρομέα: το RMS θέλει ακόμη τα τυπικά (X_d, X′_d, …)· τυπικές τιμές.')
+            d = {'Sn': _num(p, 'Sn', 100e6)}
+        else:
+            d = {'Sn': _num(p, 'Sn', 100e6), **_given(p, GEN_KEYS)}
+        if p.get('shaft') == 'multi':                       # one mass in the RMS: the sum of the inertias
+            try:
+                d['H'] = sum(float(x) for x in str(p.get('Hm', '')).split(';') if x.strip())
+            except ValueError:
+                pass
+            notes.append(f'{lab}: άξονας πολλών μαζών: στο RMS μία μάζα με H = {d.get("H", 0):g} s (χωρίς τις στρεπτικές ταλαντώσεις).')
+        damp = d.get('Td0pp', 0.03) > 0 or d.get('Tq0pp', 0.07) > 0
+        d['model'] = 'subtransient' if damp else 'two_axis'
+        c = e.get('ctl') or {}
+        if c.get('avr'):
+            d['avr'] = {'type': c['avr']['type'], **_given(c['avr']['params'], AVR_KEYS)}
+            if 'KE' not in d['avr']:
+                d['avr']['KE'] = None
+            vr = c['avr']['params'].get('Vref')
+            if vr not in (None, '') and str(vr).strip() != '':
+                d['avr']['Vref'] = float(vr)
+        if c.get('pss'):
+            d['pss'] = _given(c['pss']['params'], PSS_KEYS) or True
+        if c.get('gov'):
+            d['gov'] = {'type': c['gov']['type'], **_given(c['gov']['params'], GOV_KEYS)}
+        out[str(e['id'])] = d
+    return out, notes
+
+
+def _sched(v):
+    """The changes of a program of values «t:v, t:v» (P.parseSched): [(t, v)] after t = 0, and the value at t = 0."""
+    out, v0 = [], None
+    for part in str(v or '').split(','):
+        if ':' not in part:
+            continue
+        a, b = part.split(':', 1)
+        try:
+            t, x = float(a), float(b)
+        except ValueError:
+            continue
+        if t <= 0:
+            v0 = x
+        else:
+            out.append((t, x))
+    return v0, sorted(out)
+
+
+def events_of(m, net, info):
+    """5.0.13: the events of the drawing for the RMS: a three-phase FLT3 (its time of start, and of clearing), the opening of a CB3
+    (what is on the side that reaches the fewer parts goes out: the branches there trip, a fault there clears, a generator there
+    trips), the
+    program of the reference of an AVR (dV) and of a GOV (dP). Returns (events, notes)."""
+    m = _check(m)
+    ev, notes = [], []
+    byid = {str(e['id']): e for e in m['elements']}
+    case = net.case()
+    branches = set(case.br_name)
+    gen_ctl = {}
+    for e in m['elements']:
+        c = e.get('ctl') or {}
+        for k in ('avr', 'gov'):
+            if c.get(k):
+                gen_ctl[str(c[k]['id'])] = (str(e['id']), k)
+    for e in m['elements']:
+        t, p, eid, lab = e['type'], e['params'], str(e['id']), e.get('label') or e['id']
+        if t == 'FLT3':
+            if p.get('ctl') == 'sig':
+                notes.append(f'{lab}: σφάλμα από σήμα: όχι στο RMS.')
+                continue
+            if p.get('kind', 'abc') not in ('abc', 'abcg'):
+                notes.append(f'{lab}: ασύμμετρο σφάλμα: το RMS είναι στη θετική ακολουθία (μόνο τριφασικά).')
+                continue
+            b = str(e['buses'][0])
+            if b not in net.buses:
+                continue
+            z = _num(p, 'Rf', 0.0) / (net.buses[b]['Un'] ** 2 / net.S_base)
+            ev.append({'t': _num(p, 'ton', 0.04), 'kind': 'fault', 'bus': b, 'z': z, 'id': eid})
+            if _num(p, 'toff', 0.0) > 0:
+                ev.append({'t': _num(p, 'toff', 0.0), 'kind': 'clear', 'bus': b, 'id': eid})
+        elif t == 'CB3':
+            if p.get('ctl') == 'sig':
+                continue
+            v0, ch = _sched(p.get('cmd', '0:1'))
+            state = 1.0 if v0 is None else v0
+            for tt, x in ch:
+                if x < 0.5 <= state:
+                    sides = e.get('sides') or [[], []]
+                    reach = next((o['reach'] for o in e.get('opens') or [] if abs(o['t'] - tt) < 1e-9), [len(q) for q in sides])
+                    if len(sides) != 2 or reach[0] == reach[1]:
+                        notes.append(f'{lab}: οι δύο πλευρές του φτάνουν όσα στοιχεία η μία όσο η άλλη: το άνοιγμα δεν μπαίνει στο RMS.')
+                        break
+                    stub = sides[0] if reach[0] < reach[1] else sides[1]
+                    if any(byid.get(str(i), {}).get('type') in ('GRID3', 'VAC3', 'EQV3') for i, _ in stub):
+                        notes.append(f'{lab}: το άνοιγμα χωρίζει πηγή από το δίκτυο: όχι ακόμη στο RMS.')
+                        break
+                    for i, _ in stub:
+                        q = byid.get(str(i))
+                        if not q:
+                            continue
+                        if q['type'] in ('LINE3', 'XF3', 'TLM', 'ZSER3'):
+                            for nm in info['elements'].get(str(i), []):
+                                if nm in branches:
+                                    ev.append({'t': tt, 'kind': 'trip', 'branch': nm, 'id': eid})
+                        elif q['type'] == 'FLT3' and str(q['buses'][0]) in net.buses:
+                            ev.append({'t': tt, 'kind': 'clear', 'bus': str(q['buses'][0]), 'id': eid})
+                        elif q['type'] == 'GEN3':
+                            ev.append({'t': tt, 'kind': 'gen', 'gen': str(i), 'id': eid})
+                        elif q['type'] == 'LOAD3':
+                            notes.append(f'{lab}: το φορτίο {q.get("label") or i} στην πλευρά που ανοίγει μένει στο RMS.')
+                elif x >= 0.5 > state:
+                    notes.append(f'{lab}: επανακλείσιμο στα {tt:g} s: όχι ακόμη στο RMS.')
+                state = x
+        elif t in ('AVR', 'GOV'):
+            pass
+    # the programs of the references, from the controls of each GEN3 (the parts AVR and GOV are not elements of the model)
+    for e in m['elements']:
+        c = e.get('ctl') or {}
+        for k, key, kind in (('avr', 'dV', 'vref'), ('gov', 'dP', 'pref')):
+            if c.get(k):
+                v0, ch = _sched(c[k]['params'].get(key, '0'))
+                if v0 not in (None, 0.0):
+                    ev.append({'t': 1e-9, 'kind': kind, 'gen': str(e['id']), key: v0, 'id': str(c[k]['id'])})
+                for tt, x in ch:
+                    ev.append({'t': tt, 'kind': kind, 'gen': str(e['id']), key: x, 'id': str(c[k]['id'])})
+    return sorted(ev, key=lambda q: q['t']), notes
+
+
+def dynamic(m, t_end=5.0, events=None, loads='Z', h=0.005, record=0.01, **kw):
+    """5.0.13: the RMS dynamics of a drawing (pcl.network.Network.dynamic on the network of the load flow of the drawing): the
+    machines and their controls from the drawing, its events (events_of) and the events given here. Returns the result of
+    Network.dynamic with 'drawing': the notes of the translation."""
+    net, info = network(m, 'pf')
+    mach, n1 = machines_of(m)
+    ev, n2 = events_of(m, net, info)
+    r = net.dynamic(t_end=t_end, events=ev + list(events or []), machines=mach, loads=loads, h=h, record=record, **kw)
+    r['drawing'] = {'notes': info['notes'] + n1 + n2, 'events': ev}
+    return r
