@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 5.0.13: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (1006 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 5.0.14: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (1021 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 5.0.13.
+Κανένα στην 5.0.14.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-735 σημεία.
+750 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -622,15 +622,30 @@
 | `pcl.rms.Classical.eval` | `X`, `Vr`, `Vi`, `t` | 4.23 · πειρ. |
 | `pcl.rms.Classical.init` | `V`, `S`, `wb` | 4.23 · πειρ. |
 | `pcl.rms.Classical.power` | `X`, `Vr`, `Vi` | 4.23 · πειρ. |
+| `pcl.rms.Converter` | `names`, `bus`, `p`, `kind`, `law`, `frq`, `avc`, `storage`, `pv` | 5.0.14 · πειρ. |
+| `pcl.rms.Converter.eval` | `X`, `Vr`, `Vi`, `t` | 5.0.14 · πειρ. |
+| `pcl.rms.Converter.init` | `V`, `S`, `wb` | 5.0.14 · πειρ. |
+| `pcl.rms.Converter.limits` | — | 5.0.14 · πειρ. |
+| `pcl.rms.Converter.outputs` | `X`, `Vr`, `Vi` | 5.0.14 · πειρ. |
 | `pcl.rms.ExpLoad` | `names`, `bus`, `p` | 5.0.13 · πειρ. |
 | `pcl.rms.ExpLoad.eval` | `X`, `Vr`, `Vi`, `t` | 5.0.13 · πειρ. |
 | `pcl.rms.ExpLoad.init` | `V`, `S`, `wb` | 5.0.13 · πειρ. |
 | `pcl.rms.Kind` | `names`, `bus`, `p` | 4.23 · πειρ. |
 | `pcl.rms.Kind.eval` | `X`, `Vr`, `Vi`, `t` | 4.23 · πειρ. |
 | `pcl.rms.RMSError` | — | 4.23 · πειρ. |
+| `pcl.rms.SVC` | `names`, `bus`, `p`, `model` | 5.0.14 · πειρ. |
+| `pcl.rms.SVC.eval` | `X`, `Vr`, `Vi`, `t` | 5.0.14 · πειρ. |
+| `pcl.rms.SVC.init` | `V`, `S`, `wb` | 5.0.14 · πειρ. |
+| `pcl.rms.SVC.limits` | — | 5.0.14 · πειρ. |
+| `pcl.rms.SVC.outputs` | `X`, `Vr`, `Vi` | 5.0.14 · πειρ. |
 | `pcl.rms.Source` | `names`, `bus`, `p` | 4.23 · πειρ. |
 | `pcl.rms.Source.eval` | `X`, `Vr`, `Vi`, `t` | 4.23 · πειρ. |
 | `pcl.rms.Source.init` | `V`, `S`, `wb` | 4.23 · πειρ. |
+| `pcl.rms.Statcom` | `names`, `bus`, `p` | 5.0.14 · πειρ. |
+| `pcl.rms.Statcom.eval` | `X`, `Vr`, `Vi`, `t` | 5.0.14 · πειρ. |
+| `pcl.rms.Statcom.init` | `V`, `S`, `wb` | 5.0.14 · πειρ. |
+| `pcl.rms.Statcom.limits` | — | 5.0.14 · πειρ. |
+| `pcl.rms.Statcom.outputs` | `X`, `Vr`, `Vi` | 5.0.14 · πειρ. |
 | `pcl.rms.System` | `net`, `machines`, `default`, `loads`, `f`, `pf`, `vmin` | 4.23 · πειρ. |
 | `pcl.rms.System.batch` | `scenarios`, `t_end`, `**kw` | 4.23 · πειρ. |
 | `pcl.rms.System.cct` | `fault`, `clear`, `t_fault`, `lo`, `hi`, `t_end`, `tol`, `**kw` | 4.23 · πειρ. |

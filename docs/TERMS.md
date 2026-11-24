@@ -102,6 +102,8 @@
 | road load, grade | φορτίο δρόμου, κλίση |
 | driving cycle | κύκλος οδήγησης |
 | state of charge (SOC) | κατάσταση φόρτισης (SOC) |
+| static var compensator (SVC), STATCOM | στατός αντισταθμιστής αέργου ισχύος (SVC), STATCOM· στο κείμενο οι αγγλικές συντομογραφίες, όπως στη βιβλιογραφία (5.0.14) |
+| susceptance regulator, slope (of a compensator) | ρυθμιστής επιδεκτικότητας, κλίση (της στατικής χαρακτηριστικής) |
 | logging to a file, recording resolution | καταγραφή σε αρχείο, ανάλυση καταγραφής |
 | exciter, excitation system, AVR | διεγέρτρια, σύστημα διέγερσης, αυτόματος ρυθμιστής τάσης (AVR) |
 | power system stabilizer (PSS) | σταθεροποιητής συστήματος ισχύος (PSS) |

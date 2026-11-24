@@ -460,5 +460,159 @@ class Drawing(unittest.TestCase):
             self.assertLess(float(np.max(np.abs(np.interp(te, t, M[g]['V']) - Ye[:, 6 + i]))), 3e-3)
 
 
+# ---------------------------------------------------------------- 5.0.14 (ROADMAP §101 step 2, THEORY §8ΩΞ): the converters
+def compensator(X=0.1):
+    """A bus fed by a stiff source behind X (pu on 100 MVA), with a compensator C of 100 MVA at Q = 0."""
+    n = N.Network(f=50, S_base=100e6)
+    n.bus('S', 220e3, kind='slack', V=1.0)
+    n.bus('B', 220e3)
+    n.feeder('S', Sk=None, V=1.0, slack=True, name='grid')
+    n.branch_pu('S', 'B', 0.0, X, name='x')
+    n.generator('B', Sr=100e6, Ur=220e3, xd2=0.2, cosphi=0.9, P=0.0, V=1.0, name='C')
+    return n
+
+
+def emt_gfm(unit, T):
+    js = json.loads(subprocess.run(['node', str(ROOT / 'tests/js/rms_gfm_cases.js'), unit, str(T)], capture_output=True, text=True, timeout=900,
+                                   check=True).stdout)
+    return np.array(js['t']), np.array([[np.nan if v is None else v for v in r] for r in js['y']]), js['meta']
+
+
+class Converters(unittest.TestCase):
+    XS = 0.1 + 1e-4                                       # the branch and the stiff feeder (X 10⁻⁴ pu)
+
+    def step(self, md, ev, T=0.5, h=0.001):
+        s = rms.System(compensator(), machines={'C': md}, f=50)
+        start = s.init()
+        r = s.simulate(T, events=ev, h=h)
+        return start, r, s.quantities(r)['C']
+
+    def test_every_converter_starts_at_rest(self):
+        """In the place of G3 of the IEEE 9: every kind starts with all its derivatives zero, and nothing moves."""
+        for conv in (dict(model='gfm', law='droop'), dict(model='gfm', law='vsm'), dict(model='gfm', law='psc'), dict(model='gfm', law='psc', avc='fixed'),
+                     dict(model='gfl'), dict(model='gfl', frq='droop'), dict(model='gfl', pv=True, frq='droop'), dict(model='gfl', slope=0.03)):
+            s = rms.System(N.ieee9(), machines={'G3': dict(conv, Sn=128e6)}, f=60)
+            start = s.init()
+            r = s.simulate(1.0, h=0.01)
+            self.assertLess(start['f'], 1e-12, conv)
+            self.assertLess(float(np.max(np.abs(r['x'][-1] - r['x'][0]))), 1e-12, conv)
+
+    def test_svc_basic_models(self):
+        """The two basic models of the IEEE paper of 1994 on a bus behind X: the final susceptance from V = 1/(1 − X·B) and the
+        regulator at rest, and the response near the time constant of the loop, T_R/(1 + K_R·X) (model 1) and 1/(K_I·(X + K_SL))
+        (model 2), both 14,3 ms here."""
+        from scipy.optimize import brentq
+        X, d = self.XS, 0.01
+        for md, rest, tau in (({'model': 'svc'}, lambda B: 25 * (1 + d - 1 / (1 - X * B)) - B, 0.05 / (1 + 25 * X)),
+                              ({'model': 'svc', 'basic': 2}, lambda B: 1 + d - (1 + 0.04 * B) / (1 - X * B), 1 / (500 * (X + 0.04)))):
+            start, r, c = self.step(md, [{'t': 0.1, 'kind': 'vref', 'gen': 'C', 'dV': d}])
+            Bf = brentq(rest, 0.0, 0.5)
+            self.assertLess(max(start.values()), 1e-12)
+            self.assertAlmostEqual(c['B'][-1], Bf, delta=1e-9)
+            i = int(np.argmin(np.abs(r['t'] - (0.1 + tau))))
+            self.assertAlmostEqual(c['B'][i] / Bf, 1 - math.exp(-(r['t'][i] - 0.1) / tau), delta=0.01)
+
+    def test_statcom_against_its_linear_loop(self):
+        """Fig. 11.68 of the book on a bus behind X: |V| = 1 + X·I exactly, so the loop is linear, T_C·I″ + I′ + K·(X + ρ)·I = K·ΔV_ref;
+        the trapezoidal steps of 1 ms against the solution of that equation."""
+        X, d, K, rho, TC = self.XS, 0.01, 150.0, 0.03, 0.02
+        _, r, c = self.step({'model': 'statcom'}, [{'t': 0.1, 'kind': 'vref', 'gen': 'C', 'dV': d}])
+        sol = solve_ivp(lambda t, z: [K * (d - (X + rho) * z[1]), (z[0] - z[1]) / TC], (0, 0.4), [0.0, 0.0], dense_output=True, rtol=1e-12, atol=1e-14)
+        m = r['t'] > 0.1
+        self.assertLess(float(np.max(np.abs(c['Q'][m] / c['V'][m] - sol.sol(r['t'][m] - 0.1)[1]))), 1e-5)       # of a current of 0,077 pu
+
+    def test_limits_without_windup(self):
+        """A step of the reference beyond the range: B (the SVC) and the current (the STATCOM) stay at their limit, and leave it at
+        once when the reference comes back."""
+        ev = [{'t': 0.1, 'kind': 'vref', 'gen': 'C', 'dV': 0.2}, {'t': 0.3, 'kind': 'vref', 'gen': 'C', 'dV': 0.0}]
+        _, r, c = self.step({'model': 'svc'}, ev)
+        t = r['t']
+        self.assertAlmostEqual(float(c['B'].max()), 1.0, delta=1e-12)
+        self.assertAlmostEqual(float(c['B'][np.argmin(np.abs(t - 0.299))]), 1.0, delta=1e-12)
+        self.assertLess(float(c['B'][np.argmin(np.abs(t - 0.31))]), 0.6)
+        _, r, c = self.step({'model': 'statcom', 'ICmax': 0.5}, ev)
+        i = c['Q'] / c['V']
+        self.assertLess(float(i.max()), 0.5 + 1e-9)
+        self.assertGreater(float(i[np.argmin(np.abs(r['t'] - 0.299))]), 0.499)
+        self.assertLess(float(i[np.argmin(np.abs(r['t'] - 0.32))]), 0.45)
+        self.assertEqual(r['stats']['nonconv'], 0)
+
+    def test_storage_empties_and_stops(self):
+        """A grid-following BESS that gives its 85 MW from a small store: the state of charge falls at P·S_n/(E·3,6·10⁹), and near s_min
+        the current that discharges it tapers to 0 (over the last 1 % of the range)."""
+        s = rms.System(N.ieee9(), machines={'G3': dict(model='gfl', Sn=128e6, storage={'E': 0.18, 'soc0': 0.5, 'smin': 0.1})}, f=60)
+        s.init()
+        r = s.simulate(4.0, h=0.01)
+        q = s.quantities(r)['G3']
+        rate = -q['P'][0] * 100e6 / (0.18 * 3.6e9)
+        self.assertAlmostEqual((q['soc'][10] - q['soc'][0]) / (r['t'][10] - r['t'][0]), rate, delta=1e-9)
+        self.assertGreater(float(q['soc'].min()), 0.1 - 1e-4)
+        self.assertLess(abs(float(q['P'][-1])), 1e-3)                                                  # pu of 100 MVA (from 0,85)
+        self.assertEqual(r['stats']['nonconv'], 0)
+
+    def test_the_jacobian_in_the_current_limit(self):
+        """The complex step through the current of a grid-forming converter in its limit (the quadratic for k) against central
+        differences."""
+        s = rms.System(N.ieee9(), machines={'G3': dict(model='gfm', law='droop', Sn=128e6, Xc=0.15, Rf=0.003)}, f=60)
+        s.init()
+        K = next(k for k in s.kinds if isinstance(k, rms.Converter))
+        K.p['Imax'] = np.array([0.6])                                                                    # below the current of the start
+        x, y = s.x0.copy(), s.y0.copy()
+        self.assertEqual(float(K.outputs(x[K.x0:K.x0 + K.nx].reshape(1, -1), y[:s.n][K.bus], y[s.n:][K.bus])['limited'][0]), 1.0)
+        J = s.jac(x, y).toarray()
+        Jn = np.zeros_like(J)
+        for j in range(J.shape[1]):
+            z = np.r_[x, y]
+            e = np.zeros_like(z)
+            e[j] = 1e-7
+            a, b = z + e, z - e
+            Jn[:, j] = \
+                (np.concatenate(s.fg(a[:s.nx], a[s.nx:])) - np.concatenate(s.fg(b[:s.nx], b[s.nx:]))) / 2e-7
+        self.assertLess(float(np.max(np.abs(J - Jn) / (1 + np.abs(J)))), 1e-6)
+
+    def test_against_our_emt(self):
+        """ieee9_gfm (the unit of bus 3 as a converter of 128 MVA, +50 MW at bus 7 at 1 s) in our EMT and in the RMS with the same
+        controls and references: the speeds of G1 and G2 over 4 s, and P and ω of the converter after 1,1 s."""
+        from pcl import model
+        lim = {'droop': (3e-4, 0.02, 3e-4), 'vsm': (3e-4, 0.03, 4e-4), 'gfl': (3e-4, 0.01, 3e-3), 'gfl0': (5e-4, 0.01, None)}
+        for unit, (tw, tp, t3) in lim.items():
+            te, Y, meta = emt_gfm(unit, 4.0)
+            proj = json.loads(subprocess.run(['node', str(ROOT / 'tests/js/model_cases.js'), 'build', 'ieee9_gfm', json.dumps({'unit': unit})],
+                                             capture_output=True, text=True, timeout=300, check=True).stdout)
+            mach = {g: d for g, d in model.machines_of(model.of(proj))[0].items() if g in ('G1', 'G2')}
+            if unit in ('droop', 'vsm'):
+                mach['G3'] = dict(model='gfm', law=unit, Sn=128e6, Xc=0.15, Rf=0.003, mp=5, nq=5, fp=5, H=3.01, tv=0.02, Pref=meta['P3'], Qref=meta['Q3'],
+                                  Vref=meta['E'])
+            else:
+                mach['G3'] = dict(model='gfl', Sn=128e6, X=0.15, acc=4, bw=5, Ilim=1.2, frq='droop' if unit == 'gfl' else 'off', mf=5, Tf=0.05,
+                                  Pref=meta['P3'], Vref=meta['V3'])
+            r = N.ieee9().dynamic(t_end=4.0, h=0.005, record=0.005, machines=mach, f=60, events=[{'t': 1.0, 'kind': 'shunt', 'bus': '7', 'y': 0.5}],
+                                  buses=[])
+            t, M, C = np.array(r['t']), r['machines'], r['converters']['G3']
+            a, b = te > 0.5, te > 1.1
+            for j, g in ((0, 'G1'), (1, 'G2')):
+                self.assertLess(float(np.max(np.abs(np.interp(te, t, M[g]['omega']) - Y[:, j])[a])), tw, (unit, g))
+            sg = 1 if unit in ('droop', 'vsm') else -1                                              # the station of the EMT takes P into it
+            self.assertLess(float(np.max(np.abs(np.interp(te, t, np.array(C['P']) / 128) - sg * Y[:, 6])[b])), tp, unit)
+            if t3:
+                self.assertLess(float(np.nanmax(np.abs(np.interp(te, t, C['omega']) - Y[:, 7])[b])), t3, unit)
+            self.assertEqual(r['stats']['nonconv'], 0)
+
+    def test_what_is_refused(self):
+        for conv, word in ((dict(model='statcom'), 'P'), (dict(model='gfm', storage={'E': 1.0}), 'grid-following'), (dict(model='gfm', law='dvoc'), 'dVOC'),
+                           (dict(model='svc', basic=3), 'basic')):
+            with self.assertRaises(rms.RMSError, msg=str(conv)) as cm:
+                rms.System(N.ieee9(), machines={'G3': dict(conv, Sn=128e6)}, f=60).init()
+            self.assertIn(word, str(cm.exception))
+
+    def test_the_result_of_the_network(self):
+        r = N.ieee9().dynamic(t_end=0.2, h=0.01, machines={'G3': dict(model='gfm', law='vsm', Sn=128e6)}, f=60,
+                              events=[{'t': 0.05, 'kind': 'pref', 'gen': 'G3', 'dP': 0.1}])
+        json.dumps(r, default=lambda a: a.tolist(), allow_nan=False)
+        self.assertEqual(r['summary']['converters'], 1)
+        self.assertEqual({k for k in ('P', 'Q', 'V', 'I', 'f', 'limited', 'E')} - set(r['converters']['G3']), set())
+        self.assertGreater(r['converters']['G3']['P'][-1], r['converters']['G3']['P'][0] + 5)          # MW: +0,1 pu of 128 MVA, less the droop
+
+
 if __name__ == '__main__':
     unittest.main()

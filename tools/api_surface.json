@@ -1,5 +1,5 @@
 {
- "version": "5.0.13",
+ "version": "5.0.14",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -4700,6 +4700,49 @@
     ],
     "since": "4.23"
    },
+   "pcl.rms.Converter": {
+    "params": [
+     "names",
+     "bus",
+     "p",
+     "kind",
+     "law",
+     "frq",
+     "avc",
+     "storage",
+     "pv"
+    ],
+    "since": "5.0.14"
+   },
+   "pcl.rms.Converter.eval": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi",
+     "t"
+    ],
+    "since": "5.0.14"
+   },
+   "pcl.rms.Converter.init": {
+    "params": [
+     "V",
+     "S",
+     "wb"
+    ],
+    "since": "5.0.14"
+   },
+   "pcl.rms.Converter.limits": {
+    "params": [],
+    "since": "5.0.14"
+   },
+   "pcl.rms.Converter.outputs": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi"
+    ],
+    "since": "5.0.14"
+   },
    "pcl.rms.ExpLoad": {
     "params": [
      "names",
@@ -4746,6 +4789,44 @@
     "params": [],
     "since": "4.23"
    },
+   "pcl.rms.SVC": {
+    "params": [
+     "names",
+     "bus",
+     "p",
+     "model"
+    ],
+    "since": "5.0.14"
+   },
+   "pcl.rms.SVC.eval": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi",
+     "t"
+    ],
+    "since": "5.0.14"
+   },
+   "pcl.rms.SVC.init": {
+    "params": [
+     "V",
+     "S",
+     "wb"
+    ],
+    "since": "5.0.14"
+   },
+   "pcl.rms.SVC.limits": {
+    "params": [],
+    "since": "5.0.14"
+   },
+   "pcl.rms.SVC.outputs": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi"
+    ],
+    "since": "5.0.14"
+   },
    "pcl.rms.Source": {
     "params": [
      "names",
@@ -4770,6 +4851,43 @@
      "wb"
     ],
     "since": "4.23"
+   },
+   "pcl.rms.Statcom": {
+    "params": [
+     "names",
+     "bus",
+     "p"
+    ],
+    "since": "5.0.14"
+   },
+   "pcl.rms.Statcom.eval": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi",
+     "t"
+    ],
+    "since": "5.0.14"
+   },
+   "pcl.rms.Statcom.init": {
+    "params": [
+     "V",
+     "S",
+     "wb"
+    ],
+    "since": "5.0.14"
+   },
+   "pcl.rms.Statcom.limits": {
+    "params": [],
+    "since": "5.0.14"
+   },
+   "pcl.rms.Statcom.outputs": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi"
+    ],
+    "since": "5.0.14"
    },
    "pcl.rms.System": {
     "params": [

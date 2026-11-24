@@ -596,6 +596,418 @@ class Unit(Kind):
                 'Te': Te, 'Ifd': Ifd, 'vs': vs}
 
 
+# ---------------------------------------------------------------- 5.0.14: the converters (ROADMAP §101 step 2, THEORY §8ΩΞ)
+# The phasor models of our EMT averaged converters with their controls: the grid-forming control GFMC (droop, VSM, PSC, the
+# direct inner control) and the robust vector current control of the MMCC (the grid-following station, mode P), each as one
+# device on the bus of a generator of the network (its injection from the load flow). Per unit on the rating S_n of the
+# converter; the network sees I_own·S_n/S_base. Our own formulation from our EMT (THEORY §8ΩΞ); the WECC models wait for
+# their sources (ROADMAP §101).
+GFM_DEFAULTS = {'mp': 2.0, 'nq': 5.0, 'fp': 5.0, 'H': 2.0, 'tv': 0.01, 'kp': 50.0, 'KE': 5.0, 'TE': 0.05, 'Xc': 0.15, 'Rf': 0.0,
+                'Rv': 0.0, 'Xv': 0.0, 'Imax': 1.2, 'ac': 600.0}
+GFL_DEFAULTS = {'X': 0.255, 'acc': 4.0, 'bw': 20.0, 'mf': 5.0, 'Tf': 0.05, 'Ilim': 1.1, 'slope': 0.0}
+# the SVC (the IEEE basic models of 1994): our defaults within the ranges of the paper (K_R 20–100 pu, T_R 20–150 ms)
+SVC_DEFAULTS = {'basic': 1.0, 'KR': 25.0, 'TR': 0.05, 'T1': 0.0, 'T2': 0.0, 'Tm': 0.0, 'KSL': 0.04, 'KI': 500.0, 'KP': 0.0,
+                'TP': 0.0, 'Bmin': -1.0, 'Bmax': 1.0}
+# the STATCOM (Fig. 11.68 of the book): our defaults within its ranges (T_C 10–30 ms), ρ 3 %
+STATCOM_DEFAULTS = {'K': 150.0, 'rho': 0.03, 'TC': 0.02, 'Tm': 0.0, 'ICmax': 1.0, 'ILmax': 1.0}
+STORE_DEFAULTS = {'E': 1.0, 'soc0': 0.5, 'smin': 0.1, 'smax': 0.9}
+CONVERTERS = ('gfm', 'gfl', 'statcom', 'svc')
+GFM_LAWS = ('droop', 'vsm', 'psc')
+CONV_STATES = {'droop': ('theta', 'pf', 'qf'), 'vsm': ('theta', 'wv', 'psi'), 'psc': ('theta', 'xe'),
+               'gfl': ('pll', 'xi', 'xq', 'wf')}
+
+
+class _Holds:
+    """The holds of the limits without windup inside a step (as Unit._hold, 5.0.13): decided at the start of the step while
+    the System solves one (_fz, set by System._freeze), else from the point itself."""
+    _fz = _rec = None
+
+    def _hold(self, key):
+        def hold(tot, rr, lo, hi):
+            h = _held(tot, rr, lo, hi)
+            if self._rec is not None:
+                self._rec[key] = h
+            if self._fz is not None and key in self._fz:
+                return self._fz[key]
+            return h
+        return hold
+
+
+def _hyp(a, b):
+    return np.sqrt(a * a + b * b)
+
+
+def _floor(u, lo):
+    return np.where(_re(u) < lo, lo + 0 * u, u)
+
+
+class Converter(_Holds, Kind):
+    """5.0.14: a converter with its control, as one device on its bus (THEORY §8ΩΞ). kind 'gfm' (law 'droop', 'vsm', 'psc')
+    or 'gfl' (also a STATCOM: 'gfl' with P_ref = 0 and a slope). The members of one Converter share the kind, the law and
+    the options; the parameters are per member, on the rating S_n.
+
+    Grid-forming (the GFMC of the EMT with the direct inner control): the EMF E∠θ behind the filter R_f + jX_c and the
+    virtual impedance R_v + jX_v. Below the limit the inner control makes the converter voltage its reference exactly, so
+    i = (E·e^(jθ) − v)/(R_f + R_v + j(X_c + X_v)). In the limit (|i| above I′ = I_max·α/(α + R_f), α = a_c·X_c/ω₀, the
+    proportional gain of the inner control) the steady state of that control: i = k·(E·e^(jθ) − v)/(α(1 − k) + R_f + k·R_v +
+    jk(X_c + X_v)) with |i| = I′ (k from a quadratic). droop: ω = 1 − m_p·(P_f − P_ref), E = V_ref − n_q·(Q_f − Q_ref), P_f and
+    Q_f through 2π·f_p; VSM: 2H·ω′ = P_ref − P_E/ω − (ω − 1)/m_p, ψ′ = (Q_ref − Q_E + (V_ref − |v|)/n_q)·n_q/t_v (only
+    unwinding in the limit), E = ω·ψ, P_E and Q_E at the EMF; PSC: ω = 1 + k_p·(P_ref − P)/ω₀, E = V_ref + x_E, x_E′ =
+    (K_E·(U_ref − |v|) − x_E)/T_E (|x_E| ≤ 0,5). θ′ = ω₀·(ω − 1).
+
+    Grid-following (the robust vector current control of the MMCC, mode P): the PLL (K_p = 2·0,7071·ω_n, K_i = ω_n²,
+    ω_n = 2π·bw, the error v_q/|v|) gives the frame; i_d = (P_ref − Δp)/V_ref + (V_ref − v_d)/R_a, i_q = −v_q/R_a − x_q,
+    x_q′ = (ω₀/R_a)·(V_ref + slope·i_q − v_d) with R_a = acc·X; |i| ≤ I_lim by scaling both (x_q held there while it would push
+    further); the frequency response Δp = (ω_f − 1)/m_f with ω_f the PLL's frequency through T_f (frq). The inner loop
+    and the filters of the measurements are taken as ideal (i = its reference).
+
+    storage (grid-following only): the state of charge, soc′ = −P·S_n/(E·3,6·10⁹) (E in MWh); the d current that discharges
+    (charges) it falls linearly to 0 over the last 1 % of its range at s_min (s_max). pv: P ≤ P_av, and the frequency
+    response only for a frequency above 1 pu (a plant at its available power cannot raise it)."""
+
+    def __init__(self, names, bus, p, kind='gfm', law='droop', frq=False, avc=True, storage=False, pv=False):
+        super().__init__(names, bus, p)
+        self.kind, self.law, self.frq, self.avc, self.storage, self.pv = kind, (law if kind == 'gfm' else 'gfl'), frq, avc, storage, pv
+        st = list(CONV_STATES[self.law])
+        self.i_soc = len(st)
+        if storage:
+            st.append('soc')
+        self.states, self.nx = tuple(st), len(st)
+
+    def limits(self):
+        out = []
+        if self.law == 'psc' and self.avc:
+            out.append((1, 0.0, -0.5, 0.5, np.ones(self.m, bool)))
+        return out
+
+    # -------------------------------------------------------------- the current of the grid-forming converter
+    def _gfm_i(self, E, th, Vr, Vi):
+        p = self.p
+        Er, Ei = E * np.cos(th), E * np.sin(th)
+        Wr, Wi = Er - Vr, Ei - Vi
+        w2 = Wr * Wr + Wi * Wi
+        al, Rf, Rv, C = p['al'], p['Rf'], p['Rv'], p['Xc'] + p['Xv']
+        Im = p['Imax'] * al / (al + Rf)
+        # in the limit or not: as at the start of the step inside its Newton (the current has a kink there)
+        lim = self._hold('ilim')(_re(w2) - Im * Im * ((Rf + Rv) ** 2 + C * C), 1.0, -math.inf, 0.0)
+        A, Bc = al + Rf, Rv - al
+        a2 = w2 - Im * Im * (Bc * Bc + C * C)
+        a1 = -2 * Im * Im * A * Bc + 0 * w2
+        a0 = -Im * Im * A * A + 0 * w2
+        # (inside a step whose start was in the limit |i| stays I′ even where the point falls below it: smooth in the step)
+        disc = a1 * a1 - 4 * a2 * a0
+        ok = lim & (_re(disc) > 0)
+        disc = np.where(ok, disc, 1.0 + 0 * w2)
+        k = np.where(ok, 2 * a0 / (-a1 - np.sqrt(disc)), 1.0 + 0 * w2)
+        Dr, Di = A + k * Bc, k * C
+        den = Dr * Dr + Di * Di
+        ir = k * (Wr * Dr + Wi * Di) / den
+        ii = k * (Wi * Dr - Wr * Di) / den
+        return Er, Ei, ir, ii, lim
+
+    def _taper(self, X):
+        """The factors of the current that discharges (charges) the store: 1 within its range, falling linearly to 0 over the
+        last 1 % of the range at s_min (s_max) (our choice: a smooth stop, without a decision at each step)."""
+        q = self.p['store']
+        soc, band = X[:, self.i_soc], 0.01 * (q['smax'] - q['smin'])
+        return _clip((soc - q['smin']) / band, 0.0, 1.0), _clip((q['smax'] - soc) / band, 0.0, 1.0)
+
+    def _gfm(self, X, Vr, Vi):
+        p, law = self.p, self.law
+        th = X[:, 0]
+        pref = p['Pref'] + p['dP']
+        vref = p['Vref'] + p['dV']
+        F = [None] * len(CONV_STATES[law])
+        if law == 'droop':
+            pf, qf = X[:, 1], X[:, 2]
+            w = 1 - p['mp'] * (pf - pref)
+            E = vref - p['nq'] * (qf - p['Qref'])
+        elif law == 'vsm':
+            wv, psi = X[:, 1], X[:, 2]
+            w = wv
+            E = wv * psi
+        else:
+            E = vref + (X[:, 1] if self.avc else 0 * th)
+        Er, Ei, ir, ii, lim = self._gfm_i(E, th, Vr, Vi)
+        P, Q = Vr * ir + Vi * ii, Vi * ir - Vr * ii
+        vm = _hyp(Vr, Vi)
+        if law == 'droop':
+            wf = 2 * math.pi * p['fp']
+            F[1], F[2] = wf * (P - pf), wf * (Q - qf)
+        elif law == 'vsm':
+            PE, QE = Er * ir + Ei * ii, Ei * ir - Er * ii
+            F[1] = (pref - PE / _floor(wv, 0.5) - (wv - 1) / p['mp']) / (2 * p['H'])
+            g = (p['Qref'] - QE + (vref - vm) / p['nq']) * p['nq'] / p['tv']
+            held = self._hold('psi')(np.where(lim, 1.0, 0.0), _re(g), -math.inf, 0.5)
+            F[2] = np.where(held, 0 * g, g)
+        else:
+            w = 1 + p['kp'] * (pref - P) / p['w0']
+            if self.avc:
+                xe = X[:, 1]
+                r = (p['KE'] * (p['Uref'] - vm) - xe) / p['TE']
+                F[1] = np.where(self._hold('xe')(_re(xe), _re(r), -0.5, 0.5), 0 * r, r)
+            else:
+                F[1] = 0 * th
+        F[0] = p['w0'] * (w - 1)
+        return F, ir, ii, {'P': P, 'Q': Q, 'w': w, 'E': E, 'lim': lim}
+
+    def _gfl(self, X, Vr, Vi):
+        p = self.p
+        dp, xi, xq, wf = X[:, 0], X[:, 1], X[:, 2], X[:, 3]
+        c, s = np.cos(dp), np.sin(dp)
+        hd, hq = Vr * c + Vi * s, -Vr * s + Vi * c
+        vm = _hyp(Vr, Vi)
+        e = hq / _floor(vm, 1e-6)
+        F0, F1 = p['Kp'] * e + xi, p['Ki'] * e
+        wp = 1 + F0 / p['w0']
+        if self.frq:
+            F3 = (wp - wf) / p['Tf']
+            dpf = (wf - 1) / p['mf']
+            if self.pv:
+                dpf = np.where(_re(dpf) > 0, dpf, 0 * dpf)
+        else:
+            F3, dpf = 0 * wf, 0 * wf
+        pc = p['Pref'] + p['dP'] - dpf
+        if self.pv:
+            pc = np.where(_re(pc) > p['Pav'], p['Pav'] + 0 * pc, pc)
+        er = p['Vref'] + p['dV']
+        Ra = p['Ra']
+        idu = pc / np.maximum(er, 0.1) + (er - hd) / Ra
+        iqu = -(hq / Ra + xq)
+        mag = _hyp(idu, iqu)
+        over = self._hold('ilim')(_re(mag) - p['Ilim'], 1.0, -math.inf, 0.0)
+        sk = np.where(over, p['Ilim'] / _floor(mag, 1e-9), 1.0 + 0 * mag)
+        idl, iql = sk * idu, sk * iqu
+        if self.storage:                                    # the store near empty (full): the current that discharges (charges) it tapers
+            fd, fc = self._taper(X)
+            idl = np.where(_re(idl) > 0, idl * fd, idl * fc)
+        g = p['w0'] / Ra * (er + p['slope'] * iqu - hd)
+        # held while the current is limited and the error would push the q current into the converter further
+        held = self._hold('xq')(np.where(over, 1.0, 0.0), _re(g * (-iqu)), -math.inf, 0.5)
+        F2 = np.where(held, 0 * g, g)
+        ir, ii = idl * c - iql * s, idl * s + iql * c
+        P, Q = Vr * ir + Vi * ii, Vi * ir - Vr * ii
+        return [F0, F1, F2, F3], ir, ii, {'P': P, 'Q': Q, 'w': wp, 'lim': over}
+
+    def _core(self, X, Vr, Vi):
+        F, ir, ii, o = (self._gfm if self.kind == 'gfm' else self._gfl)(X, Vr, Vi)
+        if self.storage:
+            F = F + [-o['P'] * self.p['store']['k']]
+        return F, ir, ii, o
+
+    # -------------------------------------------------------------- start and evaluation
+    def init(self, V, S, wb):
+        p = self.p
+        p['w0'] = wb
+        m = self.m
+        k = p['k']
+        s = S * k                                           # on S_n
+        i = np.conj(s / V)
+        X = np.zeros((m, self.nx))
+        if self.kind == 'gfm':
+            p['al'] = p['ac'] * p['Xc'] / wb
+            E = V + (p['Rf'] + p['Rv'] + 1j * (p['Xc'] + p['Xv'])) * i
+            Im = p['Imax'] * p['al'] / (p['al'] + p['Rf'])
+            if np.any(np.abs(i) > Im * (1 + 1e-9)):
+                raise RMSError('μετατροπέας στο όριο ρεύματος ήδη από τη ροή φορτίου: ' + ', '.join(n for n, a in zip(self.names, np.abs(i) > Im) if a))
+            P, Q = s.real, s.imag
+            PE, QE = (E * np.conj(i)).real, (E * np.conj(i)).imag
+            X[:, 0] = np.angle(E)
+            if self.law == 'droop':
+                p['Pref'] = np.where(np.isnan(p['Pref']), P, p['Pref'])
+                p['Qref'] = np.where(np.isnan(p['Qref']), Q, p['Qref'])
+                p['Vref'] = np.where(np.isnan(p['Vref']), np.abs(E) + p['nq'] * (Q - p['Qref']), p['Vref'])
+                X[:, 1], X[:, 2] = P, Q
+            elif self.law == 'vsm':
+                p['Pref'] = np.where(np.isnan(p['Pref']), PE, p['Pref'])
+                p['Qref'] = np.where(np.isnan(p['Qref']), QE, p['Qref'])
+                p['Vref'] = np.where(np.isnan(p['Vref']), np.abs(V) - p['nq'] * (p['Qref'] - QE), p['Vref'])
+                X[:, 1], X[:, 2] = 1.0, np.abs(E)
+            else:
+                p['Pref'] = np.where(np.isnan(p['Pref']), P, p['Pref'])
+                p['Uref'] = np.where(np.isnan(p['Uref']), np.abs(V), p['Uref'])
+                xe0 = p['KE'] * (p['Uref'] - np.abs(V)) if self.avc else np.zeros(m)
+                p['Vref'] = np.where(np.isnan(p['Vref']), np.abs(E) - xe0, p['Vref'])
+                if self.avc:
+                    X[:, 1] = xe0
+        else:
+            p['Ra'] = p['acc'] * p['X']
+            wn = 2 * math.pi * p['bw']
+            p['Kp'], p['Ki'] = 2 * 0.7071 * wn, wn * wn
+            if np.any(np.abs(i) > p['Ilim'] * (1 + 1e-9)):
+                raise RMSError('μετατροπέας στο όριο ρεύματος ήδη από τη ροή φορτίου: ' + ', '.join(n for n, a in zip(self.names, np.abs(i) > p['Ilim']) if a))
+            dp = np.angle(V)
+            ip = i * np.exp(-1j * dp)
+            # at rest: V_ref + slope·i_q = |V| (the reference at zero current, with the slope), and P_ref so that i_d of the
+            # start is that of the load flow: P_ref/V_ref + (V_ref − |V|)/R_a = i_d
+            p['Vref'] = np.where(np.isnan(p['Vref']), np.abs(V) - p['slope'] * ip.imag, p['Vref'])
+            p['Pref'] = np.where(np.isnan(p['Pref']), (ip.real - (p['Vref'] - np.abs(V)) / p['Ra']) * np.maximum(p['Vref'], 0.1), p['Pref'])
+            if self.pv:
+                p['Pav'] = np.where(np.isnan(p['Pav']), p['Pref'], p['Pav'])
+            X[:, 0], X[:, 2], X[:, 3] = dp, -ip.imag, 1.0
+        if self.storage:
+            q = p['store']
+            q['k'] = p['Sn'] / (q['E'] * 3.6e9)
+            X[:, self.i_soc] = q['soc0']
+        p['dP'], p['dV'] = np.zeros(m), np.zeros(m)
+        p.setdefault('on', np.ones(m))
+        return X
+
+    def eval(self, X, Vr, Vi, t):
+        on = self.p['on']
+        F, ir, ii, _ = self._core(X, Vr, Vi)
+        F = np.stack([np.broadcast_to(f, (X.shape[0],)) for f in F], axis=1) if F else np.zeros((X.shape[0], 0))
+        k = self.p['k']
+        return F * on[:, None], ir / k * on, ii / k * on
+
+    def outputs(self, X, Vr, Vi):
+        """P, Q (pu on S_base), |V|, |I| (pu on S_n), ω (pu: of the EMF, or of the PLL), the flag of the current limit,
+        E (grid-forming) and the state of charge."""
+        p = self.p
+        F, ir, ii, o = self._core(X, Vr, Vi)
+        k, on = p['k'], p['on']
+        out = {'P': o['P'] / k * on, 'Q': o['Q'] / k * on, 'V': _hyp(Vr, Vi), 'I': _hyp(ir, ii) * on, 'omega': o['w'],
+               'limited': np.where(o['lim'], 1.0, 0.0) * on}
+        if 'E' in o:
+            out['E'] = o['E'] + 0 * o['w']
+        if self.storage:
+            out['soc'] = X[:, self.i_soc]
+        return out
+
+
+class SVC(_Holds, Kind):
+    """5.0.14: a static var compensator as a controlled susceptance B (pu on S_n, capacitive positive), with the basic models
+    of «Static Var Compensator Models for Power Flow and Dynamic Performance Simulation» (IEEE Trans. Power Systems 9(1),
+    1994, Figs. 4–8; THEORY §8ΩΞ.4): the measurement lag T_m (Fig. 6; 0: none), then
+    model 1 (Fig. 7): the lead-lag (1 + sT_1)/(1 + sT_2) and K_R/(1 + sT_R) on the error V_ref − V_m, B within [B_min, B_max]
+    without windup (K_R the inverse of the slope);
+    model 2 (Fig. 8): a PI K_P + K_I/s (non-windup) on V_ref − V_m − K_SL·I with the current I = B·V_m, and the lag
+    1/(1 + sT_P) (0: none).
+    The thyristor susceptance control (Fig. 9) is not represented, as the paper advises for stability programs."""
+    nx, states = 3, ('vm', 'r', 'b')
+
+    def __init__(self, names, bus, p, model=1):
+        super().__init__(names, bus, p)
+        self.model = model
+
+    def limits(self):
+        on = np.ones(self.m, bool)
+        if self.model == 1:
+            return [(2, 0.0, self.p['Bmin'], self.p['Bmax'], self.p['TR'] > 0)]
+        return [(1, 0.0, self.p['Bmin'], self.p['Bmax'], on), (2, 0.0, self.p['Bmin'], self.p['Bmax'], self.p['TP'] > 0)]
+
+    def init(self, V, S, wb):
+        p = self.p
+        s = S * p['k']
+        v = np.abs(V)
+        b0 = s.imag / v ** 2
+        if np.any(b0 > p['Bmax'] + 1e-12) or np.any(b0 < p['Bmin'] - 1e-12):
+            raise RMSError('SVC έξω από τα όριά του ήδη από τη ροή φορτίου: ' + ', '.join(self.names))
+        if np.any(np.abs(s.real) > 1e-6):
+            raise RMSError('SVC με P ≠ 0 στη ροή φορτίου: ' + ', '.join(n for n, a in zip(self.names, np.abs(s.real) > 1e-6) if a))
+        X = np.zeros((self.m, 3))
+        X[:, 0], X[:, 2] = v, b0
+        if self.model == 1:
+            p['Vref'] = np.where(np.isnan(p['Vref']), v + b0 / p['KR'], p['Vref'])
+            X[:, 1] = p['Vref'] - v                                    # the lag of the lead-lag at its input
+        else:
+            p['Vref'] = np.where(np.isnan(p['Vref']), v + p['KSL'] * b0 * v, p['Vref'])
+            X[:, 1] = b0
+        p['dV'] = np.zeros(self.m)
+        p.setdefault('on', np.ones(self.m))
+        return X
+
+    def _core(self, X, Vr, Vi):
+        p = self.p
+        v = _hyp(Vr, Vi)
+        vm, F0 = _lag(X[:, 0], v, p['Tm'])
+        vm = np.where(p['Tm'] > 0, vm, v)
+        if self.model == 1:
+            e = p['Vref'] + p['dV'] - vm
+            y, F1 = _leadlag(X[:, 1], e, p['T1'], p['T2'])
+            b, F2 = _nwlag(X[:, 2], y, 0.0, p['KR'], p['TR'], p['Bmin'], p['Bmax'], self._hold('b'))
+        else:
+            x = X[:, 1]
+            if True:
+                # B as the output of the PI (through its lag): with T_P = 0 the loop K_P·K_SL·V_m is solved for B
+                bs = np.where(p['TP'] > 0, X[:, 2], 0 * x)
+                bu = (p['KP'] * (p['Vref'] + p['dV'] - vm) + x) / (1 + p['KP'] * p['KSL'] * vm)
+                b = np.where(p['TP'] > 0, bs, _clip(bu, p['Bmin'], p['Bmax']))
+            e = p['Vref'] + p['dV'] - vm - p['KSL'] * b * vm
+            r = p['KI'] * e
+            F1 = np.where(self._hold('x')(_re(x), _re(r), p['Bmin'], p['Bmax']), 0 * r, r)
+            u = p['KP'] * e + x
+            _, F2 = _nwlag(X[:, 2], u, 0.0, 1.0, p['TP'], p['Bmin'], p['Bmax'], self._hold('b'))
+        return [F0, F1, F2], b, v
+
+    def eval(self, X, Vr, Vi, t):
+        p = self.p
+        F, b, _ = self._core(X, Vr, Vi)
+        on, k = p['on'], p['k']
+        F = np.stack([np.broadcast_to(f, (X.shape[0],)) for f in F], axis=1)
+        return F * on[:, None], b * Vi / k * on, -b * Vr / k * on          # injected −jB·V: Q = B·|V|² out of the bus
+
+    def outputs(self, X, Vr, Vi):
+        p = self.p
+        _, b, v = self._core(X, Vr, Vi)
+        on = p['on']
+        return {'P': 0 * b, 'Q': b * v * v / p['k'] * on, 'V': v, 'I': np.abs(b) * v * on, 'B': b * on}
+
+
+class Statcom(_Holds, Kind):
+    """5.0.14: a STATCOM as the simplified dynamic model of «Power System Dynamics: Stability and Control» (3rd ed., §11.7.1,
+    Fig. 11.68; THEORY §8ΩΞ.3): an integral regulator K/s on V_ref − V_m − ρ·I (ρ the droop of the static characteristic),
+    its output (the reference of the current) within [−I_Lmax, I_Cmax] without windup, and the converter as a first-order lag
+    T_C; the current I (pu on S_n, capacitive positive) is injected 90° ahead of the voltage. The measurement lag T_m (0: none)
+    is our addition."""
+    nx, states = 3, ('vm', 'x', 'i')
+
+    def limits(self):
+        return [(1, 0.0, -self.p['ILmax'], self.p['ICmax'], np.ones(self.m, bool))]
+
+    def init(self, V, S, wb):
+        p = self.p
+        s = S * p['k']
+        v = np.abs(V)
+        i0 = s.imag / v
+        if np.any(i0 > p['ICmax'] + 1e-12) or np.any(i0 < -p['ILmax'] - 1e-12):
+            raise RMSError('STATCOM έξω από τα όριά του ήδη από τη ροή φορτίου: ' + ', '.join(self.names))
+        if np.any(np.abs(s.real) > 1e-6):
+            raise RMSError('STATCOM με P ≠ 0 στη ροή φορτίου: ' + ', '.join(n for n, a in zip(self.names, np.abs(s.real) > 1e-6) if a))
+        p['Vref'] = np.where(np.isnan(p['Vref']), v + p['rho'] * i0, p['Vref'])
+        p['dV'] = np.zeros(self.m)
+        p.setdefault('on', np.ones(self.m))
+        X = np.zeros((self.m, 3))
+        X[:, 0], X[:, 1], X[:, 2] = v, i0, i0
+        return X
+
+    def _core(self, X, Vr, Vi):
+        p = self.p
+        v = _hyp(Vr, Vi)
+        vm, F0 = _lag(X[:, 0], v, p['Tm'])
+        vm = np.where(p['Tm'] > 0, vm, v)
+        x, i = X[:, 1], X[:, 2]
+        r = p['K'] * (p['Vref'] + p['dV'] - vm - p['rho'] * i)
+        F1 = np.where(self._hold('x')(_re(x), _re(r), -p['ILmax'], p['ICmax']), 0 * r, r)
+        io, F2 = _lag(i, _clip(x, -p['ILmax'], p['ICmax']), p['TC'])
+        return [F0, F1, F2], io, v
+
+    def eval(self, X, Vr, Vi, t):
+        p = self.p
+        F, i, v = self._core(X, Vr, Vi)
+        on, k = p['on'], p['k']
+        F = np.stack([np.broadcast_to(f, (X.shape[0],)) for f in F], axis=1)
+        vv = _floor(v, 1e-6)
+        return F * on[:, None], i * Vi / vv / k * on, -i * Vr / vv / k * on   # injected −j·I·V/|V|: Q = |V|·I
+
+    def outputs(self, X, Vr, Vi):
+        p = self.p
+        _, i, v = self._core(X, Vr, Vi)
+        on = p['on']
+        return {'P': 0 * i, 'Q': i * v / p['k'] * on, 'V': v, 'I': np.abs(i) * on,
+                'limited': np.where((_re(X[:, 1]) >= p['ICmax']) | (_re(X[:, 1]) <= -p['ILmax']), 1.0, 0.0) * on}
+
+
 KINDS = {'classical': Classical, 'two_axis': TwoAxis}
 MACHINE_KEYS = ('Xd', 'Xdp', 'Xq', 'Xqp', 'Td0p', 'Tq0p', 'Ra', 'H', 'D')
 TYPICAL = {'Xd': 1.8, 'Xdp': 0.3, 'Xq': 1.7, 'Xqp': 0.55, 'Td0p': 8.0, 'Tq0p': 0.4, 'Ra': 0.0, 'H': 4.0, 'D': 0.0}
@@ -703,11 +1115,17 @@ class System:
         machines = machines or {}
         groups, units = {}, {}
         self.share = {}                                     # 5.0.13: the share of each generator in the injection of its bus
+        convs = {}
         for e in gens:
             md = dict(machines.get(e['name'], {}))
             model = md.pop('model', default)
+            if model in CONVERTERS:                          # 5.0.14: a converter on the bus of the generator
+                Sn = float(md.pop('Sn', e.get('Sr') or Sb))
+                key, vals = self._converter(e['name'], model, md, Sb / Sn, Sn)
+                convs.setdefault(key, []).append((e['name'], self.idx[e['bus']], vals))
+                continue
             if model not in KINDS and model != 'subtransient':
-                raise RMSError('άγνωστο μοντέλο μηχανής %r (%s, subtransient)' % (model, ', '.join(KINDS)))
+                raise RMSError('άγνωστο μοντέλο μηχανής %r (%s, subtransient, %s)' % (model, ', '.join(KINDS), ', '.join(CONVERTERS)))
             Sn = float(md.pop('Sn', e.get('Sr') or Sb))
             k = Sb / Sn                                     # to the system base: impedances ×k, H and D ÷k
             avr, pss, gov = md.pop('avr', None), md.pop('pss', None), md.pop('gov', None)
@@ -763,6 +1181,17 @@ class System:
                 if L[0][3].get(part):
                     p[part] = {q: np.array([c[part][q] for _, _, _, c in L], float) for q in L[0][3][part]}
             self.kinds.append(Unit([a for a, _, _, _ in L], [b for _, b, _, _ in L], p, model=model, avr=at, pss=ps, gov=gt))
+        for key, L in convs.items():                         # 5.0.14: the converters, one device per kind and options
+            p = {q: np.array([v[q] for _, _, v in L], float) for q in L[0][2] if q != 'store'}
+            if 'store' in L[0][2]:
+                p['store'] = {q: np.array([v['store'][q] for _, _, v in L], float) for q in STORE_DEFAULTS}
+            names, bus = [a for a, _, _ in L], [b for _, b, _ in L]
+            if key[0] == 'svc':
+                self.kinds.append(SVC(names, bus, p, model=key[1]))
+            elif key[0] == 'statcom':
+                self.kinds.append(Statcom(names, bus, p))
+            else:
+                self.kinds.append(Converter(names, bus, p, kind=key[0], law=key[1], frq=key[2], avc=key[3], storage=key[4], pv=key[5]))
         if feeders:
             X = []
             for e in feeders:
@@ -793,9 +1222,65 @@ class System:
         self.nx = off
         self.ny = 2 * self.n
         self.state_names = [(K.names[i], s) for K in self.kinds for i in range(K.m) for s in K.states]
+        self._conv = any(isinstance(K, (Converter, SVC, Statcom)) for K in self.kinds)
         self._y_build()
         self.events_done = []
         self.x = None
+
+    @staticmethod
+    def _converter(name, model, md, k, Sn):
+        """5.0.14: the data of a converter (THEORY §8ΩΞ): (the key of its group, the values on its rating S_n)."""
+        nan = math.nan
+        vals = {'k': k, 'Sn': Sn}
+        store = md.get('storage')
+        if model == 'svc':
+            vals.update({q: _num(md, q, v) for q, v in SVC_DEFAULTS.items()})
+            vals['Vref'] = _num(md, 'Vref', nan)
+            mod = int(vals.pop('basic'))
+            if mod not in (1, 2):
+                raise RMSError('SVC %s: basic 1 ή 2 (τα βασικά μοντέλα του 1994)' % name)
+            ok = vals['Bmin'] < vals['Bmax'] and min(vals['Tm'], vals['T1'], vals['T2'], vals['TP']) >= 0 and \
+                ((mod == 1 and vals['KR'] > 0 and vals['TR'] >= 0) or (mod == 2 and vals['KI'] > 0 and vals['KSL'] >= 0 and vals['KP'] >= 0))
+            if not ok:
+                raise RMSError('SVC %s: B_min < B_max, K_R > 0 (μοντέλο 1) ή K_I > 0 (μοντέλο 2), σταθερές χρόνου ≥ 0' % name)
+            return ('svc', mod, False, True, False, False), vals
+        if model == 'statcom':
+            vals.update({q: _num(md, q, v) for q, v in STATCOM_DEFAULTS.items()})
+            vals['Vref'] = _num(md, 'Vref', nan)
+            if not (vals['K'] > 0 and vals['rho'] >= 0 and vals['TC'] >= 0 and vals['Tm'] >= 0 and vals['ICmax'] > 0 and vals['ILmax'] > 0):
+                raise RMSError('STATCOM %s: K > 0, ρ ≥ 0, T_C, T_m ≥ 0, I_Cmax, I_Lmax > 0' % name)
+            return ('statcom', None, False, True, False, False), vals
+        if model == 'gfm':
+            law = md.get('law', 'droop')
+            if law not in GFM_LAWS:
+                raise RMSError('νόμος grid-forming %r της %s: %s (dVOC και matching δεν είναι ακόμη στο RMS)' % (law, name, ', '.join(GFM_LAWS)))
+            vals.update({q: _num(md, q, v) for q, v in GFM_DEFAULTS.items()})
+            vals['mp'] /= 100.0
+            vals['nq'] /= 100.0
+            for q in ('Pref', 'Qref', 'Vref', 'Uref'):
+                vals[q] = _num(md, q, nan)
+            avc = md.get('avc', 'vac') != 'fixed'
+            if not (vals['mp'] > 0 and vals['nq'] > 0 and vals['Xc'] > 0 and vals['Imax'] > 0):
+                raise RMSError('grid-forming %s: m_p, n_q, X_c και I_max > 0' % name)
+            key = ('gfm', law, False, avc, bool(store), False)
+        else:
+            vals.update({q: _num(md, q, v) for q, v in GFL_DEFAULTS.items()})
+            vals['mf'] /= 100.0
+            for q in ('Pref', 'Vref', 'Pav'):
+                vals[q] = _num(md, q, nan)
+            frq = md.get('frq') in ('droop', True, 'on')
+            pv = bool(md.get('pv'))
+            if not (vals['X'] > 0 and vals['acc'] > 0 and vals['bw'] > 0 and vals['Ilim'] > 0 and vals['mf'] > 0 and vals['Tf'] > 0):
+                raise RMSError('grid-following %s: X, acc, bw, I_lim, m_f, T_f > 0' % name)
+            key = ('gfl', None, frq, True, bool(store), pv)
+        if store:
+            if model != 'gfl':
+                raise RMSError('αποθήκη ενέργειας στην %s: μόνο με grid-following ακόμη (ένας grid-forming στο όριο της αποθήκης δεν έχει μοντέλο)' % name)
+            s = store if isinstance(store, dict) else {}
+            vals['store'] = {q: _num(s, q, v) for q, v in STORE_DEFAULTS.items()}
+            if not (vals['store']['E'] > 0 and 0 <= vals['store']['smin'] < vals['store']['smax'] <= 1):
+                raise RMSError('αποθήκη της %s: E > 0 (MWh) και 0 ≤ s_min < s_max ≤ 1' % name)
+        return key, vals
 
     # ------------------------------------------------------------ network
     def _y_build(self):
@@ -958,6 +1443,13 @@ class System:
             K, i = self._unit(ev['gen'])
             if k == 'gen':
                 K.p['on'][i] = 0.0
+            elif not isinstance(K, Unit):                   # 5.0.14: a converter (dP, dV in pu on its S_n)
+                if k == 'vref':
+                    K.p['dV'][i] = float(ev['dV'])
+                elif isinstance(K, (SVC, Statcom)):
+                    raise RMSError('το %s δεν έχει αναφορά P' % ev['gen'])
+                else:
+                    K.p['dP'][i] = float(ev['dP'])
             elif k == 'vref':
                 if not K.avr:
                     raise RMSError('η %s δεν έχει AVR' % ev['gen'])
@@ -973,9 +1465,9 @@ class System:
 
     def _unit(self, name):
         for K in self.kinds:
-            if isinstance(K, Unit) and name in K.names:
+            if isinstance(K, (Unit, Converter, SVC, Statcom)) and name in K.names:
                 return K, K.names.index(name)
-        raise RMSError('καμία μονάδα με όνομα %r (μόνο μηχανές με το μοντέλο της 5.0.13 δέχονται αυτά τα συμβάντα)' % name)
+        raise RMSError('καμία μονάδα με όνομα %r (μόνο μηχανές με το μοντέλο της 5.0.13 και μετατροπείς της 5.0.14 δέχονται αυτά τα συμβάντα)' % name)
 
     def _reset_units(self):
         for K in self.kinds:
@@ -985,6 +1477,11 @@ class System:
                     K.p['avr']['dV'] = np.zeros(K.m)
                 if K.gov:
                     K.p['gov']['dP'] = np.zeros(K.m)
+            elif isinstance(K, (Converter, SVC, Statcom)):
+                K.p['on'] = np.ones(K.m)
+                K.p['dV'] = np.zeros(K.m)
+                if 'dP' in K.p:
+                    K.p['dP'] = np.zeros(K.m)
 
     def _consistent(self, x, y, t, tol=1e-10):
         """y with x fixed after a discontinuity: Newton on g(x, y) = 0."""
@@ -1050,6 +1547,12 @@ class System:
                     st['lu'] += 1
                     xn, yn, it2, ok = self._step_tr(x, y, f_n, t, hh, tol, lu)
                     it += it2
+                if not ok and self._conv:                     # 5.0.14: a limit of a converter crossed inside the step:
+                    # the holds as at the point where the iteration ended, and Newton with a new matrix at each iteration
+                    xn, yn, it3, ok, n_lu = self._step_full(x, y, f_n, t, hh, tol, (xn, yn))
+                    it += it3
+                    st['lu'] += n_lu
+                    lu = None
                 slow = it > slow_after
             st['newton'] += it
             if not ok:
@@ -1081,7 +1584,7 @@ class System:
         return (E + S @ J).tocsc()
 
     def _units(self):
-        return [K for K in self.kinds if isinstance(K, Unit) and (K.avr or K.gov)]
+        return [K for K in self.kinds if (isinstance(K, Unit) and (K.avr or K.gov)) or isinstance(K, (Converter, SVC, Statcom))]
 
     def _freeze(self, x, y, t):
         """5.0.13: the holds of the limits without windup as at the start of the step, for its Newton (Unit._hold)."""
@@ -1104,12 +1607,13 @@ class System:
                 X[:, j] = np.where(on, np.clip(base + X[:, j], lo, hi) - base, X[:, j])
         return x
 
-    def _step_tr(self, x, y, f_n, t, h, tol, lu):
+    def _step_tr(self, x, y, f_n, t, h, tol, lu, at=None):
         """One trapezoidal step, network and states together; the iteration matrix lu is kept (Newton with a fixed matrix).
-        5.0.13: the holds of the limits without windup are those of the start of the step (_freeze, _project)."""
+        5.0.13: the holds of the limits without windup are those of the start of the step (_freeze, _project); 5.0.14: or
+        those of the point `at` (x, y)."""
         nx = self.nx
         z = np.r_[x + h * f_n, y]                            # Euler predictor
-        self._freeze(x, y, t)
+        self._freeze(*(at or (x, y)), t)
         ok = False
         try:
             for it in range(1, 16):
@@ -1123,6 +1627,28 @@ class System:
         finally:
             self._thaw()
         return self._project(z[:nx].copy()), z[nx:], it, ok
+
+    def _step_full(self, x, y, f_n, t, h, tol, at, iters=20):
+        """5.0.14: one trapezoidal step by Newton with the iteration matrix at every iteration (the holds of the limits as at
+        the point `at`): for a step in which a limit of a converter is crossed and the iteration with a fixed matrix only
+        creeps (its matrix from the other side of the kink). Returns (x, y, iterations, converged, factorizations)."""
+        nx = self.nx
+        z = np.r_[at[0], at[1]]
+        self._freeze(*at, t)
+        ok, n = False, 0
+        try:
+            for it in range(1, iters + 1):
+                f, g = self.fg(z[:nx], z[nx:], t + h)
+                R = np.r_[z[:nx] - x - 0.5 * h * (f + f_n), g]
+                dz = spla.splu(self._iter_matrix(z[:nx], z[nx:], t + h, h)).solve(R)
+                n += 1
+                z -= dz
+                if np.max(np.abs(dz)) < tol * (1 + np.max(np.abs(z))):
+                    ok = True
+                    break
+        finally:
+            self._thaw()
+        return self._project(z[:nx].copy()), z[nx:], it, ok, n
 
     def _step_alt(self, x, y, f_n, t, h, tol):
         """One trapezoidal step with the alternating solution: the network for the states (Newton on g with g_y), then the
@@ -1242,6 +1768,37 @@ class System:
                         for key in ('P', 'Q', 'Te'):
                             if key in d:
                                 d[key] = np.where(late, 0.0, d[key])
+                out[nm] = d
+        # 5.0.14: the converters, with their references and trips as at each point of the result
+        for K in self.kinds:
+            if not isinstance(K, (Converter, SVC, Statcom)):
+                continue
+            Xs = r['x'][:, K.x0:K.x0 + K.nx * K.m].reshape(len(r['t']), K.m, K.nx)
+            Vb = V[:, K.bus]
+            keep = {q: K.p[q].copy() for q in ('on', 'dP', 'dV') if q in K.p}
+            K.p['on'], K.p['dV'] = np.ones(K.m), np.zeros(K.m)
+            if 'dP' in K.p:
+                K.p['dP'] = np.zeros(K.m)
+            evs = [e for e in r.get('events', ()) if e.get('gen') in K.names and e['kind'] in ('vref', 'pref', 'gen')]
+            cols, ei = {}, 0
+            for ti in range(len(r['t'])):
+                while ei < len(evs) and evs[ei]['i'] <= ti:
+                    j, kd = K.names.index(evs[ei]['gen']), evs[ei]['kind']
+                    if kd == 'gen':
+                        K.p['on'][j] = 0.0
+                    elif kd == 'vref':
+                        K.p['dV'][j] = float(evs[ei]['dV'])
+                    else:
+                        K.p['dP'][j] = float(evs[ei]['dP'])
+                    ei += 1
+                o = K.outputs(Xs[ti], Vb[ti].real, Vb[ti].imag)
+                for key, val in o.items():
+                    cols.setdefault(key, np.empty((len(r['t']), K.m)))[ti] = np.real(val)
+            K.p.update(keep)
+            for i, nm in enumerate(K.names):
+                d = {key: val[:, i] for key, val in cols.items()}
+                for j, s in enumerate(K.states):
+                    d.setdefault(s, Xs[:, i, j])
                 out[nm] = d
         return out
 

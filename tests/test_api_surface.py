@@ -342,7 +342,18 @@ class ApiSurface(unittest.TestCase):
             self.assertTrue(api_surface.experimental('pcl', k), k)
         self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][:3], ['t_end', 'events', 'machines'])
         self.assertIn('rms', study.STUDIES)
-        self.assertEqual(sum(len(v) for v in self.now.values()), 1006)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 1006)        # 1006 then; 5.0.14 adds points
+
+    def test_the_surface_of_5_0_14(self):
+        """5.0.14: the converters in RMS (ROADMAP §101 step 2): Converter (grid-forming and grid-following, with storage), SVC and
+        Statcom of pcl.rms, experimental like the module; the model of the drawing stays at version 3."""
+        from pcl import model
+        self.assertEqual(model.VERSION, 3)
+        for k in ('pcl.rms.Converter', 'pcl.rms.Converter.outputs', 'pcl.rms.SVC', 'pcl.rms.SVC.limits', 'pcl.rms.Statcom', 'pcl.rms.Statcom.outputs'):
+            self.assertIn(k, self.now['pcl'])
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+        self.assertEqual(self.now['pcl']['pcl.rms.Converter']['params'][:4], ['names', 'bus', 'p', 'kind'])
+        self.assertEqual(sum(len(v) for v in self.now.values()), 1021)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

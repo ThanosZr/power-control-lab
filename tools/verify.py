@@ -1641,6 +1641,57 @@ def v512_rows(add):
 
 
 
+def v514_rows(add):
+    """5.0.14: the converters in RMS, step 2 of ROADMAP §101 (pcl.rms Converter, Statcom, SVC, tests/test_rms.py Converters): the basic
+    model 1 of the SVC of the IEEE paper of 1994 against its static equation, the STATCOM of Fig. 11.68 of the book against its linear
+    loop, and the grid-forming and grid-following units of «ieee9_gfm» against our EMT."""
+    import json
+    import subprocess
+    import numpy as np
+    from scipy.integrate import solve_ivp
+    from scipy.optimize import brentq
+    from pcl import model as M, network as N, rms
+    A = 'Δυναμική RMS: οι μετατροπείς (5.0.14)'
+    root = Path(__file__).resolve().parents[1]
+
+    def comp(md, d=0.01):
+        n = N.Network(f=50, S_base=100e6)
+        n.bus('S', 220e3, kind='slack', V=1.0)
+        n.bus('B', 220e3)
+        n.feeder('S', Sk=None, V=1.0, slack=True, name='grid')
+        n.branch_pu('S', 'B', 0.0, 0.1, name='x')
+        n.generator('B', Sr=100e6, Ur=220e3, xd2=0.2, cosphi=0.9, P=0.0, V=1.0, name='C')
+        s = rms.System(n, machines={'C': md}, f=50)
+        s.init()
+        r = s.simulate(0.5, events=[{'t': 0.1, 'kind': 'vref', 'gen': 'C', 'dV': d}], h=0.001)
+        return r, s.quantities(r)['C']
+    X = 0.1 + 1e-4
+    r, c = comp({'model': 'svc'})
+    add(A, 'SVC, βασικό μοντέλο 1 (K_R 25, T_R 50 ms) σε ζυγό πίσω από X = 0,1 pu, βήμα +0,01 pu στη V_ref: η τελική B',
+        'η στατική εξίσωση K_R·(V_ref − V) = B με V = 1/(1 − X·B)', brentq(lambda B: 25 * (1.01 - 1 / (1 - X * B)) - B, 0, 0.5), float(c['B'][-1]), 1e-9, 'pu')
+    r, c = comp({'model': 'statcom'})
+    sol = solve_ivp(lambda t, z: [150 * (0.01 - (X + 0.03) * z[1]), (z[0] - z[1]) / 0.02], (0, 0.4), [0.0, 0.0], dense_output=True, rtol=1e-12, atol=1e-14)
+    m = r['t'] > 0.1
+    add(A, 'STATCOM του Σχ. 11.68 (K 150, ρ 3 %, T_C 20 ms) στον ίδιο ζυγό: το ρεύμα σε 0,4 s, h = 1 ms, η μεγαλύτερη διαφορά',
+        'η γραμμική εξίσωση T_C·I″ + I′ + K·(X + ρ)·I = K·ΔV_ref (|V| = 1 + X·I ακριβώς)', 0.0,
+        float(np.max(np.abs(c['Q'][m] / c['V'][m] - sol.sol(r['t'][m] - 0.1)[1]))), 1e-5, 'pu')
+    node = lambda *a: json.loads(subprocess.run(['node', *a], capture_output=True, text=True, timeout=900, check=True).stdout)   # noqa: E731
+    for unit, tol in (('droop', 3e-4), ('gfl', 3e-4)):
+        js = node(str(root / 'tests' / 'js' / 'rms_gfm_cases.js'), unit, '4')
+        te, Y, meta = np.array(js['t']), np.array([[np.nan if v is None else v for v in q] for q in js['y']]), js['meta']
+        mach = {g: d for g, d in M.machines_of(M.of(node(str(root / 'tests' / 'js' / 'model_cases.js'), 'build', 'ieee9_gfm', json.dumps({'unit': unit}))))[0].items()
+                if g in ('G1', 'G2')}
+        if unit == 'droop':
+            mach['G3'] = dict(model='gfm', law='droop', Sn=128e6, Xc=0.15, Rf=0.003, mp=5, nq=5, fp=5, Pref=meta['P3'], Qref=meta['Q3'], Vref=meta['E'])
+        else:
+            mach['G3'] = dict(model='gfl', Sn=128e6, X=0.15, acc=4, bw=5, Ilim=1.2, frq='droop', mf=5, Tf=0.05, Pref=meta['P3'], Vref=meta['V3'])
+        q = N.ieee9().dynamic(t_end=4.0, h=0.005, record=0.005, machines=mach, f=60, events=[{'t': 1.0, 'kind': 'shunt', 'bus': '7', 'y': 0.5}], buses=[])
+        w1 = np.interp(te, np.array(q['t']), q['machines']['G1']['omega'])
+        add(A, f'«ieee9_gfm» με {"grid-forming (στατικότητα 5 %)" if unit == "droop" else "grid-following (απόκριση 5 %)"} στον ζυγό 3, +50 MW στο 1 s: '
+            'η ταχύτητα της G1 από 0,5 ως 4 s σε RMS (h = 5 ms), η μεγαλύτερη διαφορά', 'το EMT του ίδιου tutorial', 0.0,
+            float(np.max(np.abs(w1 - Y[:, 0])[te > 0.5])), tol, 'pu')
+
+
 def v513_rows(add):
     """5.0.13: the RMS dynamics, step 1 of ROADMAP §101 (pcl.rms Unit, tests/test_rms.py Models, Drawing): the subtransient machine
     at its short circuit, the machine of a Unit against the two-axis core of 4.23, a start at rest with every control, the
@@ -2101,6 +2152,7 @@ def checks(o):
     v511_rows(add)
     v512_rows(add)
     v513_rows(add)
+    v514_rows(add)
     cpf_rows(add)
     sweepc_rows(add)
     se_rows(add)
@@ -2280,7 +2332,7 @@ def report(rows):
         out.append(f'| {area} | {q} | {ref} | {fmt(e, u)} | {fmt(s, u)} | {ds} | {fmt(tol, u)} | {"✓" if abs(d) <= tol else "✗"} |')
     out += ['', '## Τι καλύπτουν τα υπόλοιπα tests', '', '| Αρχείο | Τι ελέγχει | Αναφορές |', '|---|---|---|']
     out += [f'| `{a}` | {b} | {c} |' for a, b, c in TESTS]
-    out += ['', 'Μαζί 1256 tests (Python και Node) και 23 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»· από την 4.22 το `gis_flow.js` τα tutorials του υποσταθμού GIS, τους άξονες των γραφημάτων SVG, το σύρσιμο των ετικετών και τον χάρτη του δικτύου· από την 5.0 το `study_flow.js` το τρέξιμο της σελίδας στον φάκελο μελέτης, το εργαλείο προβολής με ανανέωση όσο γράφεται, τη διαφορά δύο τρεξιμάτων και ένα αρχείο του EMTP· από την 5.0.2 το `window_flow.js` το πλαίσιο κάθε παραθύρου, τη μεγέθυνση του «⧉ Μέσα στο …», το μενού «Παράθυρα», και σε κάθε tutorial κανένα id δύο φορές και κανένα ορατό κουμπί χωρίς χειριστή, και το `scope_flow.js` την περιοχή με min–max, το ⚙ και το «μόνο μεγαλώνει»· από την 5.0.5 το `dock_flow.js` το κούμπωμα των καρτών σε περιοχές, τις καρτέλες, το δικό τους παράθυρο, την πλήρη οθόνη, τη διάταξη μετά από ανανέωση και την «Επαναφορά», και τα scopes ενός στοιχείου στο υπομενού και στο παραθυράκι των ακροδεκτών, από την 5.0.6 το διάγραμμα του δικτύου ως καρτέλα δίπλα στο κύκλωμα, τις δύο κάρτες δίπλα δίπλα, το λάσο με το σύνορο από το engine, τον πίνακα «πλήρες απέναντι σε ισοδύναμο» και την περιοχή σε EMT, από την 5.0.7 το Σχ. 15a, που αρνείται δύο ζυγούς στο σύνορο και με έναν δείχνει τη σάρωση απέναντι στους κλάδους Foster, και από την 5.0.8 το `scenario_flow.js` τη γραμμή εντολών και στους δύο πυρήνες: μια μεταβλητή που μένει, το ιστορικό, το Tab, το Ctrl+C σε βρόχο, το plot, τον χώρο μεταβλητών και τις εντολές ως σενάριο, από την 5.0.9 το `dock_flow.js` το FDNE της περιοχής 1, 4, 5, 9 με σύνορο τους 5 και 9, με το «παθητικό» και ένα γράφημα σάρωση ↔ FDNE για κάθε ζυγό, και από την 5.0.10 τις διατάξεις με όνομα (η διάταξη που προτείνει μια μελέτη, η «Ανάλυση» από το μενού, μια διάταξη με όνομα μετά από ανανέωση) και τη δεύτερη οθόνη: τα scopes σε δικό τους παράθυρο του browser, με το ⚙, το διάστημα και το Ctrl+Z εκεί, τα καρέ από εκεί όταν η σελίδα είναι κρυμμένη, μετά από ανανέωση της σελίδας και όταν κλείνει το παράθυρο, και την ένδειξη της GPU* δίπλα στο «Engine», και από την 5.0.11 το `features_flow.js` τη ροή φορτίου του IEEE 9 και το IEC 60909-0 του «Βραχυκύκλωμα σε δίκτυο» από το σχέδιο, με τα αποτελέσματα πάνω στο σχέδιο και τη στρώση του βραχυκυκλώματος στο διάγραμμα, και από την 5.0.13 την κάρτα «Δυναμική RMS» στο σφάλμα του `ieee9_emt` με AVR και PSS: ευσταθές, τα συμβάντα του σχεδίου, πέντε διαγράμματα). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`): από την 5.0.8 τα tests σε 6 μέρη μαζί, με μια τελευταία εργασία που ελέγχει ότι έτρεξαν όλα, μία φορά το καθένα (`tools/test_shards.py`), και τα σενάρια από τη λίστα του `tools/ui_flows.py`.', '',
+    out += ['', 'Μαζί 1267 tests (Python και Node) και 23 σενάρια περιβάλλοντος (από την 4.6 η μέτρηση της απόκρισης του σχεδίου, `perf_flow.js`· από την 4.7 της απόκρισης παντού, `speed_flow.js`· από την 4.8 τα πλακίδια, `watch_flow.js`, και το όχημα με την καταγραφή σε αρχείο, `ev_flow.js`, που από την 4.8.1 ελέγχει και τη γεννήτρια με AVR, PSS και ρυθμιστή και το εσωτερικό ενός μπλοκ βιβλιοθήκης· από την 4.9 το `line_flow.js` ελέγχει και τα tutorials TRV και κεραυνού· από την 4.10 το `facts_flow.js` τα δύο tutorials του αρθρωτού SSSC με τις κάρτες θεωρίας· από την 4.13 το `line_flow.js` και το μοντέλο WB, το tutorial cross-bonding και την κάρτα του· από την 4.14 το `facts_flow.js` τη σύνδεση HVDC με MMC και την κάρτα της· από την 4.19 το `step_flow.js` την ενότητα «Γραμμικός λύτης» και από την 4.19.1 την ενότητα «Βήμα του λύτη»· από την 4.19.1 το `features_flow.js` την κάρτα μελέτης των `pf_study` και `opf_study` και την «Εξαγωγή αναφοράς»· από την 4.22 το `gis_flow.js` τα tutorials του υποσταθμού GIS, τους άξονες των γραφημάτων SVG, το σύρσιμο των ετικετών και τον χάρτη του δικτύου· από την 5.0 το `study_flow.js` το τρέξιμο της σελίδας στον φάκελο μελέτης, το εργαλείο προβολής με ανανέωση όσο γράφεται, τη διαφορά δύο τρεξιμάτων και ένα αρχείο του EMTP· από την 5.0.2 το `window_flow.js` το πλαίσιο κάθε παραθύρου, τη μεγέθυνση του «⧉ Μέσα στο …», το μενού «Παράθυρα», και σε κάθε tutorial κανένα id δύο φορές και κανένα ορατό κουμπί χωρίς χειριστή, και το `scope_flow.js` την περιοχή με min–max, το ⚙ και το «μόνο μεγαλώνει»· από την 5.0.5 το `dock_flow.js` το κούμπωμα των καρτών σε περιοχές, τις καρτέλες, το δικό τους παράθυρο, την πλήρη οθόνη, τη διάταξη μετά από ανανέωση και την «Επαναφορά», και τα scopes ενός στοιχείου στο υπομενού και στο παραθυράκι των ακροδεκτών, από την 5.0.6 το διάγραμμα του δικτύου ως καρτέλα δίπλα στο κύκλωμα, τις δύο κάρτες δίπλα δίπλα, το λάσο με το σύνορο από το engine, τον πίνακα «πλήρες απέναντι σε ισοδύναμο» και την περιοχή σε EMT, από την 5.0.7 το Σχ. 15a, που αρνείται δύο ζυγούς στο σύνορο και με έναν δείχνει τη σάρωση απέναντι στους κλάδους Foster, και από την 5.0.8 το `scenario_flow.js` τη γραμμή εντολών και στους δύο πυρήνες: μια μεταβλητή που μένει, το ιστορικό, το Tab, το Ctrl+C σε βρόχο, το plot, τον χώρο μεταβλητών και τις εντολές ως σενάριο, από την 5.0.9 το `dock_flow.js` το FDNE της περιοχής 1, 4, 5, 9 με σύνορο τους 5 και 9, με το «παθητικό» και ένα γράφημα σάρωση ↔ FDNE για κάθε ζυγό, και από την 5.0.10 τις διατάξεις με όνομα (η διάταξη που προτείνει μια μελέτη, η «Ανάλυση» από το μενού, μια διάταξη με όνομα μετά από ανανέωση) και τη δεύτερη οθόνη: τα scopes σε δικό τους παράθυρο του browser, με το ⚙, το διάστημα και το Ctrl+Z εκεί, τα καρέ από εκεί όταν η σελίδα είναι κρυμμένη, μετά από ανανέωση της σελίδας και όταν κλείνει το παράθυρο, και την ένδειξη της GPU* δίπλα στο «Engine», και από την 5.0.11 το `features_flow.js` τη ροή φορτίου του IEEE 9 και το IEC 60909-0 του «Βραχυκύκλωμα σε δίκτυο» από το σχέδιο, με τα αποτελέσματα πάνω στο σχέδιο και τη στρώση του βραχυκυκλώματος στο διάγραμμα, και από την 5.0.13 την κάρτα «Δυναμική RMS» στο σφάλμα του `ieee9_emt` με AVR και PSS: ευσταθές, τα συμβάντα του σχεδίου, πέντε διαγράμματα). Τρέχουν σε κάθε push στον CI του GitHub (`.github/workflows/ci.yml`): από την 5.0.8 τα tests σε 6 μέρη μαζί, με μια τελευταία εργασία που ελέγχει ότι έτρεξαν όλα, μία φορά το καθένα (`tools/test_shards.py`), και τα σενάρια από τη λίστα του `tools/ui_flows.py`.', '',
             '## Γνωστοί περιορισμοί', '']
     out += [f'- {x}' for x in LIMITS]
     out += ['', '## Λάθη που βρήκε ο έλεγχος σε υλικό αναφοράς', '',
