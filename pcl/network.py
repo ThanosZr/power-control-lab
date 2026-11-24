@@ -282,15 +282,22 @@ class Network:
             raise NetworkError(f'{who}: unknown DC bus {b}')
         return b
 
-    def dc_line(self, a, b, R=None, r=None, length=1.0, poles=2, name=None, rating=None):
+    def dc_line(self, a, b, R=None, r=None, length=1.0, poles=2, name=None, rating=None, L=None, C=None):
         """A DC line or cable between two DC buses: R (Ω, one conductor) or r (Ω/km) × length (km); poles = 2 the loop of
-        two conductors, 1 one conductor with a return of no resistance; rating (A) for the report (pcl.dcgrid.DCGrid.line)."""
+        two conductors, 1 one conductor with a return of no resistance; rating (A) for the report (pcl.dcgrid.DCGrid.line).
+        5.0.15, for the RMS dynamics (pcl.rms.HVDC): L (H) and C (F, to ground) of one conductor, the whole length; the
+        steady state does not see them."""
         if (R is None) == (r is None):
             raise NetworkError('dc_line: give R or r')
         Rt = float(R) if R is not None else float(r) * float(length)
         nm = str(name or f'dc_line{sum(e["kind"] == "dc_line" for e in self.elements) + 1}')
         a, b = self._dc(a, nm), self._dc(b, nm)
         kw = {} if rating is None else {'rating': float(rating)}
+        for k, v in (('L', L), ('C', C)):
+            if v is not None:
+                if float(v) < 0:
+                    raise NetworkError(f'{nm}: {k} ≥ 0')
+                kw[k] = float(v)
         self._add('dc_line', nm, R=Rt, poles=int(poles), **kw)
         self.elements[-1].update(a=a, b=b)                 # (DC buses: not the AC buses that _add checks)
         return nm
@@ -309,9 +316,12 @@ class Network:
         −P (side 'dc') or P (side 'ac') for control 'P' and nothing for the others.
         4.21, the limits of the station (Beerten, Cole & Belmans 2012, §II-B, Fig. 3; only where given): Imax (A) the current of
         the converter, Ucmax, Ucmin (pu of the AC bus base) its voltage; acdc_flow(limits=True) holds them. Qmin, Qmax (var, at
-        the converter) and ±P_rated (at the converter) bound it in the optimal power flow AC/DC (acdc_opf)."""
-        if control not in ('P', 'V', 'droop', 'idroop', 'I'):
-            raise NetworkError('vsc: control one of P, V, droop, idroop, I')
+        the converter) and ±P_rated (at the converter) bound it in the optimal power flow AC/DC (acdc_opf).
+        5.0.15 — control 'Vf': the station forms the voltage and the frequency of its AC bus (an offshore island: CIGRE TB 604,
+        §6.6.2): the slack of its AC island at |V| = Vac (1 pu if not given) and the angle 0, and its DC side gives the DC
+        grid what the island takes (as a converter 'P' with side 'ac'); no other source may be on its AC island bus."""
+        if control not in ('P', 'V', 'droop', 'idroop', 'I', 'Vf'):
+            raise NetworkError('vsc: control one of P, V, droop, idroop, I, Vf')
         if control in ('droop', 'idroop') and R is None and (droop is None or Prated is None):
             raise NetworkError('vsc: a droop needs R, or droop and Prated')
         nm = str(name or f'vsc{sum(e["kind"] == "vsc" for e in self.elements) + 1}')
@@ -844,6 +854,12 @@ class Network:
                 i = idx[e['bus']]
                 S = complex(e['P'], e['Q']) / self.S_base
                 load[i] += np.array(e['zip']) * S
+            elif k == 'vsc' and e['control'] == 'Vf':        # 5.0.15: a station that forms the voltage of its island: its slack
+                b = e['bus']
+                if types[b] != 'PQ' or any(q['kind'] in ('generator', 'unit', 'feeder') and q.get('bus') == b for q in self.elements):
+                    raise NetworkError(f'{e["name"]}: forms the voltage of bus {b} (Vf), where another source is; only one source may hold a bus')
+                types[b] = 'slack'
+                Vset[b], ang[b] = (e.get('Vac') if e.get('Vac') is not None else 1.0), 0.0
             elif k == 'vsc':                                 # 4.20: a converter station is the injection of its last AC/DC flow
                 b, i = e['bus'], idx[e['bus']]
                 ps = e.get('_Ps')
@@ -1263,7 +1279,7 @@ class Network:
         return equivalent.reduce(self, boundary, internal, kind=kind, lf=lf, slack=slack, tol=tol, mode=mode)
 
     def dynamic(self, t_end=5.0, events=(), machines=None, default='two_axis', loads='Z', h=0.005, record=0.01,
-                method='simultaneous', step='fixed', buses=None, f=None, pf=None, typical=None, slow_after=8):
+                method='simultaneous', step='fixed', buses=None, f=None, pf=None, typical=None, slow_after=8, stations=None):
         """5.0.13 (ROADMAP §101 step 1, THEORY §8ΩΝ): the RMS dynamics of the network from its load flow (pcl.rms, experimental).
         machines: {generator: {'model': 'classical' | 'two_axis' | 'subtransient', the data on its S_n (Xd, Xdp, Xdpp, Xq, Xqp,
         Xqpp, Xl, Td0p, Td0pp, Tq0p, Tq0pp, Ra, H, D, SG10, SG12), 'avr': {'type': 'st1a' | 'dc1a', …}, 'pss': {…},
@@ -1280,11 +1296,18 @@ class Network:
         Returns a JSON-ready dict: 't', 'machines' (per generator δ in degrees, ω, f in Hz, P and Q in MW and Mvar, |V|,
         and with controls E_fd, T_m), 'converters' (5.0.14: P, Q, |V|, |I|, ω and f, the current limit, E, soc, B), 'buses',
         'Vmin' (the lowest |V| at each moment), 'stable', 'events', 'stats', 'start'. The centre of inertia is that of the
-        machines (a VSM is not in it)."""
+        machines (a VSM is not in it).
+        5.0.15 (§101 step 2, THEORY §8ΩΟ): a network with DC grids (dc_bus, dc_line with L and C, vsc, dcdc) starts from its
+        AC/DC load flow, and its stations and DC/DC converters are one device (pcl.rms.HVDC); stations: {station or DC/DC
+        converter: its dynamic data (pcl.rms.STATION_DEFAULTS, DCDC_DEFAULTS: the gains of the MMCC of the EMT, W in kJ/MVA,
+        Sn)}. Events 'gen' (a station blocked), 'pref' (dP pu of its S_n), 'vref' (dV: of V_dc, or of the AC voltage of a Vf
+        station) and 'trip' (branch: a DC line). The result then has 'dc': 'buses' (per DC bus U in kV and V in pu),
+        'stations' (P and Q to the AC bus, P_dc into the DC grid in MW, |V|, U_dc in pu, |I| on S_n, f, the current limit),
+        'lines' (I in kA, from a to b), 'dcdc' (P in MW, from a to b)."""
         from . import rms
         if typical is not None:
             machines = {**rms.typical(self, kind=typical), **(machines or {})}
-        s = rms.System(self, machines=machines, default=default, loads=loads, f=f, pf=pf)
+        s = rms.System(self, machines=machines, default=default, loads=loads, f=f, pf=pf, stations=stations)
         start = s.init()
         rec = max(1, int(round(float(record) / float(h)))) if record else 1
         r = s.simulate(float(t_end), events=[dict(e) for e in events or ()], h=float(h), method=method, step=step, record_every=rec,
@@ -1338,11 +1361,26 @@ class Network:
         nb = len(s.names)
         sel = list(s.names) if buses is None and nb <= 200 else [str(b) for b in (buses or [])]
         Vabs = np.abs(r['V'])
+        if 'dc' in q:                                       # 5.0.15: the DC grids
+            K = q['dc']['device']
+            dc = {'buses': {b: {'U': q['dc']['buses'][b] * K.Un[k] / 1e3, 'V': q['dc']['buses'][b]} for k, b in enumerate(K.dc_names)},
+                  'stations': {}, 'lines': {}, 'dcdc': {nm: v * Sb for nm, v in q['dc']['dcdc'].items()}}
+            ctl = {e['name']: e['control'] for e in self.elements if e['kind'] == 'vsc'}
+            for nm, d in q['dc']['stations'].items():
+                o = {'control': ctl[nm], 'P': d['P'] * Sb, 'Q': d['Q'] * Sb, 'Pdc': d['Pdc'] * Sb, 'Pt': d['Pt'] * Sb, 'V': d['V'], 'Udc': d['Udc'], 'I': d['I'],
+                     'f': d['omega'] * fr, 'limited': d['limited']}
+                if 'E' in d:
+                    o['E'] = d['E']
+                dc['stations'][nm] = o
+            for j, ln in enumerate(K.lines):
+                dc['lines'][ln['name']] = q['dc']['lines'][ln['name']] * self.S_base / K.Un[ln['a']] / 1e3
         out = {'t': r['t'], 'machines': mach, 'converters': conv, 'buses': {b: Vabs[:, s.idx[b]] for b in sel if b in s.idx},
                'Vmin': Vabs.min(axis=1), 'Vmin_bus': [s.names[i] for i in Vabs.argmin(axis=1)], 'f_coi': fcoi,
                'stable': s.stable(r), 'events': [{k: v for k, v in e.items() if k != 'i'} for e in r['events']],
                'stats': r['stats'], 'start': start, 'h': float(h), 'method': method, 'step': step, 'loads': loads, 'f': fr,
                'S_base_MVA': Sb, 'n_states': s.nx, 'n_buses': nb}
+        if 'dc' in q:
+            out['dc'] = dc
         if mach:
             spread = max(float(np.max(np.abs(o['delta_coi']))) for nm, o in mach.items() if nm in Hs) if fcoi is not None else None
             out['summary'] = {'stable': out['stable'], 'max_angle_coi': spread, 'f_min': float(np.min(fcoi)) if fcoi is not None else None,

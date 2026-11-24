@@ -511,7 +511,9 @@ def grid_of(net):
         if e['kind'] == 'dc_line':
             g.line(e['a'], e['b'], R=e['R'], poles=e['poles'], name=e['name'], rating=e.get('rating'))
     for e in net.elements:
-        if e['kind'] == 'vsc':                 # (4.21: _Pt, the share of P that the limits of the station leave)
+        if e['kind'] == 'vsc' and e['control'] == 'Vf':     # 5.0.15: the station of an island gives what its island takes
+            g.converter(e['dc'], 'P', P=e.get('_Pdc', 0.0), name=e['name'])
+        elif e['kind'] == 'vsc':               # (4.21: _Pt, the share of P that the limits of the station leave)
             g.converter(e['dc'], e['control'], P=e['P'] if e.get('_Pt') is None else e['P'] * e['_Pt'], V=e['V'], droop=e.get('droop'), Prated=e.get('Prated'),
                         R=e.get('R'), I=e.get('I', 0.0), name=e['name'])
     for e in net.elements:                     # 4.21: the DC/DC converters and the dispatchers
@@ -590,7 +592,7 @@ def _hold_limits(net, vs, V, idx, moved, S_base):
     and the states {name: {'Qmin', 'Qmax' (pu, None outside), 'held': 'Q' | 'P' | 'V' (the AC voltage given up) | None, 'over': bool}}."""
     change, state = 0.0, {}
     for e in vs:
-        if not any(e.get(k) is not None for k in LIMIT_KEYS):
+        if not any(e.get(k) is not None for k in LIMIT_KEYS) or e['control'] == 'Vf':   # (5.0.15: the slack of an island: not held)
             continue
         Us, st, Ub = V[idx[e['bus']]], _st(e), net.buses[e['bus']]['Un']
         pu = lambda k: None if e.get(k) is None else e[k] / S_base          # noqa: E731
@@ -667,6 +669,11 @@ def acdc_flow(net, method='auto', tol=1e-8, max_iter=None, flat=False, outer=30,
         for e in vs:                    # a converter that holds its AC voltage gives what its PV bus gives (it is alone there)
             if e.get('Vac') is not None and e.get('_Qfix') is None:
                 e['_Qs'] = res['buses'][e['bus']]['Q'] / S_base
+        for e in vs:                    # 5.0.15: a station that forms its island's voltage gives what its slack bus gives
+            if e['control'] == 'Vf':
+                d = res['buses'][e['bus']]
+                e['_Ps'], e['_Qs'] = d['P'] / S_base, d['Q'] / S_base
+                e['_Pdc'] = station(V[idx[e['bus']]], complex(e['_Ps'], e['_Qs']), _st(e), S_base, net.buses[e['bus']]['Un'])['Pdc']
         g = grid_of(net)
         gc = {c['name']: c for c in g.converters}
         for e in vs:                    # the converters with a given power: their P_dc (side 'ac') or their P_s (side 'dc')
@@ -681,7 +688,7 @@ def acdc_flow(net, method='auto', tol=1e-8, max_iter=None, flat=False, outer=30,
         if not dres['converged']:
             break
         for e in vs:                    # the slack and the droops: the AC power that gives the P_dc the DC grid asks of them
-            if e['control'] != 'P' or e['name'] in moved:
+            if (e['control'] != 'P' or e['name'] in moved) and e['control'] != 'Vf':
                 Us, st = V[idx[e['bus']]], _st(e)
                 e['_Ps'] = station_inverse(Us, e['_Qs'], dres['converters'][e['name']]['P'], st, S_base, net.buses[e['bus']]['Un'], e['_Ps'])[0]
         change = max(abs(e['_Ps'] - used[e['name']]) for e in vs)
@@ -741,6 +748,8 @@ def acdc_opf(net, flow_limits=True, tol=1e-6, max_iter=150, start='auto', dc_lim
     vs = [e for e in net.elements if e['kind'] == 'vsc']
     if not vs:
         raise DCGridError('acdc_opf: the network has no converters (vsc)')
+    if any(e['control'] == 'Vf' for e in vs):
+        raise DCGridError('acdc_opf: the optimal power flow has no stations that form the voltage of an island (Vf) yet')
     S = net.S_base
     aug = N.from_dict(N.to_dict(net))
     for e in vs:
@@ -963,8 +972,9 @@ def b4_network():
     for b, grid in B4_BUSES.items():
         net.dc_bus(b, B4_UN[grid])
     for a, b, km, kind, n in B4_LINES:
-        for k in range(n):
-            net.dc_line(a, b, R=b4_line_data(a, km, kind)[0], poles=2, name=f'{a}–{b}' + (f'#{k + 1}' if n > 1 else ''))
+        R, L, C, _ = b4_line_data(a, km, kind)
+        for k in range(n):                     # (5.0.15: with L and C for the RMS dynamics; the load flow sees R only)
+            net.dc_line(a, b, R=R, L=L, C=C, poles=2, name=f'{a}–{b}' + (f'#{k + 1}' if n > 1 else ''))
 
     def ac(name):
         bus = 'AC ' + name
@@ -978,3 +988,74 @@ def b4_network():
         net.dcdc(a, b, control='P', P=P * 1e6, Prated=S * 1e6, name=name)
     return net
 
+
+
+# ---------------------------------------------------------------------- 5.0.15: the DCS2 of the tutorial b4dcs2 for the RMS
+B4_DCS2_SN = {'Cm-B3': 1200e6, 'Cm-B2': 800e6, 'Cm-E1': 200e6, 'Cm-F1': 800e6}
+
+
+def b4_dcs2_network(ctl='vdc', kd=0.05):
+    """5.0.15 (THEORY §8ΩΟ): the DCS2 of the tutorial b4dcs2 as a pcl.network.Network, for its RMS dynamics (Network.dynamic)
+    against its EMT. The DC grid of the B4 (Jovcic 2019, §27.8, Tables 7.3 and 27.11): the five buses ±200 kV, the four links with
+    R, L and C of Table 7.3 (G left out, as the EMT). The stations as the tutorial: Cm-B3 (1200 MVA) holds V_dc (ctl 'vdc') or
+    droops (ctl 'droop', k_d), Cm-B2 (800 MVA) gives 150 MW or droops, both through a transformer 400/208 kV (u_k 18 %) from a
+    network of 400 kV, S″k 10 GVA, R/X 0.1; Cm-E1 (200 MVA) and Cm-F1 (800 MVA) form the voltage of their islands (Vf) through
+    a transformer 208/145 kV: a load of 100 MW (constant impedance) at E1, a wind farm of 500 MW (the generator 'WF', for a
+    grid-following converter of pcl.rms) at F1. The DC/DC converter Cd-E1 brings 300 MW from the DC bus Bb-E1 of DCS3, which
+    the station 'Cb-E1x' holds at 1 pu from a stiff network (our stand-in: the EMT has only the DC side of Cd-E1)."""
+    from . import network as N
+    if ctl not in ('vdc', 'droop'):
+        raise DCGridError("b4_dcs2_network: ctl 'vdc' or 'droop'")
+    net = N.Network(f=50.0, S_base=100e6, name='DCS2 of the CIGRE B4 as the tutorial b4dcs2 (5.0.15)')
+    for b in ('Bm-B2', 'Bm-B3', 'Bm-B5', 'Bm-F1', 'Bm-E1'):
+        net.dc_bus(b, 400e3)
+    net.dc_bus('Bb-E1', 800e3)
+    for a, b, km, kind, n in B4_LINES:
+        if B4_BUSES[a] == 'DCS2':
+            R, L, C, _ = b4_line_data(a, km, kind)
+            net.dc_line(a, b, R=R, L=L, C=C, poles=2, name=f'{a}–{b}')
+    for k, U in (('B3', 400e3), ('B2', 400e3)):
+        net.bus(k, U)
+        net.feeder(k, Sk=10e9, RX=0.1, name='Q ' + k)
+        net.bus(k + 'v', 208e3)
+        net.transformer(k, k + 'v', B4_DCS2_SN['Cm-' + k], 400e3, 208e3, 18.0, group='YNd1', name='T ' + k)
+    for k in ('E1', 'F1'):
+        net.bus(k, 145e3)
+        net.bus(k + 'v', 208e3)
+        net.transformer(k + 'v', k, B4_DCS2_SN['Cm-' + k], 208e3, 145e3, 18.0, group='YNd1', name='T ' + k)
+    net.load('E1', 100e6, 0.0, zip=(1.0, 0.0, 0.0), name='load E1')
+    net.generator('F1', 600e6, 145e3, 0.2, 1.0, P=500e6, name='WF')
+    if ctl == 'vdc':
+        net.vsc('B3v', 'Bm-B3', control='V', V=1.0, P=-900e6, Prated=1200e6, name='Cm-B3')
+        net.vsc('B2v', 'Bm-B2', control='P', P=150e6, Prated=800e6, name='Cm-B2')
+    else:
+        net.vsc('B3v', 'Bm-B3', control='droop', P=-900e6, V=1.0, droop=kd, Prated=1200e6, name='Cm-B3')
+        net.vsc('B2v', 'Bm-B2', control='droop', P=150e6, V=1.0, droop=kd, Prated=800e6, name='Cm-B2')
+    net.vsc('E1v', 'Bm-E1', control='Vf', Vac=1.0, Prated=200e6, name='Cm-E1')
+    net.vsc('F1v', 'Bm-F1', control='Vf', Vac=1.0, Prated=800e6, name='Cm-F1')
+    net.bus('X', 400e3)
+    net.feeder('X', Sk=100e9, RX=0.1, name='Q X')
+    net.vsc('X', 'Bb-E1', control='V', V=1.0, Prated=2400e6, name='Cb-E1x')
+    net.dcdc('Bb-E1', 'Bm-E1', control='P', P=300e6, Prated=1000e6, name='Cd-E1')
+    return net
+
+
+def b4_dcs2_stations(dcside='model4'):
+    """5.0.15: the dynamic data of the stations of b4_dcs2_network() as the tutorial b4dcs2 (pcl.rms.STATION_DEFAULTS): the
+    per-unit values of its MMCC (X 0.075 the arm, T_p, T_q, T_vdc 0.1 s, H 0.03 s, T_vf 0.05 s), W 30 kJ/MVA, R of the arms
+    (N·R_on/2 = 0.2 Ω on the AC side of each station), the lag of Cd-E1 5 ms (its low-pass in the EMT); values of an example.
+    dcside 'bus': the capacitance of each station on its DC bus (CIGRE TB 604, §2.6.1); 'model4': the DC side of the MMC of
+    Model 4 of the EMT, the capacitance behind 2L_arm/3, with the active damping 2R_d/3 (R_d 20 Ω) above 10 Hz (without its
+    2N·R_on/3, a loss of the MMC that the load flow has not)."""
+    if dcside not in ('bus', 'model4'):
+        raise DCGridError("b4_dcs2_stations: dcside 'bus' or 'model4'")
+    Zb = {k: 208e3 ** 2 / S for k, S in B4_DCS2_SN.items()}
+    st = {k: {'Sn': S, 'X': 0.075, 'R': 0.2 / Zb[k], 'Tp': 0.1, 'Tq': 0.1, 'Tvdc': 0.1, 'H': 0.03, 'W': 30.0} for k, S in B4_DCS2_SN.items()}
+    for k in ('Cm-E1', 'Cm-F1'):
+        st[k]['Tvf'] = 0.05
+    if dcside == 'model4':
+        for k in B4_DCS2_SN:
+            La = 0.15 * Zb[k] / (2 * math.pi * 50.0)
+            st[k].update(Ldc=2 * La / 3, Rd=2 * 20.0 / 3, fd=10.0)
+    st['Cd-E1'] = {'Tdc': 0.005}
+    return st

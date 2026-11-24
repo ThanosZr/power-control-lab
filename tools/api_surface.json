@@ -1,5 +1,5 @@
 {
- "version": "5.0.14",
+ "version": "5.0.15",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -1148,6 +1148,19 @@
      "dc_limits"
     ],
     "since": "4.20.4"
+   },
+   "pcl.dcgrid.b4_dcs2_network": {
+    "params": [
+     "ctl",
+     "kd"
+    ],
+    "since": "5.0.15"
+   },
+   "pcl.dcgrid.b4_dcs2_stations": {
+    "params": [
+     "dcside"
+    ],
+    "since": "5.0.15"
    },
    "pcl.dcgrid.b4_line_data": {
     "params": [
@@ -3243,7 +3256,9 @@
      "length",
      "poles",
      "name",
-     "rating"
+     "rating",
+     "L",
+     "C"
     ],
     "since": "4.20"
    },
@@ -3276,7 +3291,8 @@
      "f",
      "pf",
      "typical",
-     "slow_after"
+     "slow_after",
+     "stations"
     ],
     "since": "5.0.13"
    },
@@ -4710,7 +4726,8 @@
      "frq",
      "avc",
      "storage",
-     "pv"
+     "pv",
+     "cc"
     ],
     "since": "5.0.14"
    },
@@ -4767,6 +4784,51 @@
      "wb"
     ],
     "since": "5.0.13"
+   },
+   "pcl.rms.HVDC": {
+    "params": [
+     "net",
+     "pf",
+     "stations",
+     "Sb",
+     "idx",
+     "wb"
+    ],
+    "since": "5.0.15"
+   },
+   "pcl.rms.HVDC.eval": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi",
+     "t"
+    ],
+    "since": "5.0.15"
+   },
+   "pcl.rms.HVDC.find": {
+    "params": [
+     "name"
+    ],
+    "since": "5.0.15"
+   },
+   "pcl.rms.HVDC.init": {
+    "params": [
+     "V",
+     "wb"
+    ],
+    "since": "5.0.15"
+   },
+   "pcl.rms.HVDC.limits": {
+    "params": [],
+    "since": "5.0.15"
+   },
+   "pcl.rms.HVDC.outputs": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi"
+    ],
+    "since": "5.0.15"
    },
    "pcl.rms.Kind": {
     "params": [
@@ -4897,7 +4959,8 @@
      "loads",
      "f",
      "pf",
-     "vmin"
+     "vmin",
+     "stations"
     ],
     "since": "4.23"
    },

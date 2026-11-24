@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 5.0.14: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (1021 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 5.0.15: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (1029 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 5.0.14.
+Κανένα στην 5.0.15.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -39,7 +39,7 @@
 
 ## Πακέτο Python `pcl`
 
-750 σημεία.
+758 σημεία.
 
 | Σημείο | Ορίσματα | Από |
 |---|---|---|
@@ -194,6 +194,8 @@
 | `pcl.dcgrid.acdc_contingency` | `net`, `outages`, `limits`, `tol`, `method` | 4.20.4 · πειρ. |
 | `pcl.dcgrid.acdc_flow` | `net`, `method`, `tol`, `max_iter`, `flat`, `outer`, `q_limits`, `limits` | 4.20 · πειρ. |
 | `pcl.dcgrid.acdc_opf` | `net`, `flow_limits`, `tol`, `max_iter`, `start`, `dc_limits` | 4.20.4 · πειρ. |
+| `pcl.dcgrid.b4_dcs2_network` | `ctl`, `kd` | 5.0.15 · πειρ. |
+| `pcl.dcgrid.b4_dcs2_stations` | `dcside` | 5.0.15 · πειρ. |
 | `pcl.dcgrid.b4_line_data` | `a`, `km`, `kind` | 4.20.1 · πειρ. |
 | `pcl.dcgrid.b4_network` | — | 4.20.1 · πειρ. |
 | `pcl.dcgrid.cigre_b4` | `hold`, `out` | 4.20.1 · πειρ. |
@@ -447,9 +449,9 @@
 | `pcl.network.Network.dc_dispatcher` | `members`, `V`, `weights`, `buses`, `name` | 4.20.4 |
 | `pcl.network.Network.dc_flow` | — | 4.19.1 |
 | `pcl.network.Network.dc_grid` | — | 4.20 |
-| `pcl.network.Network.dc_line` | `a`, `b`, `R`, `r`, `length`, `poles`, `name`, `rating` | 4.20 |
+| `pcl.network.Network.dc_line` | `a`, `b`, `R`, `r`, `length`, `poles`, `name`, `rating`, `L`, `C` | 4.20 |
 | `pcl.network.Network.dcdc` | `a`, `b`, `control`, `P`, `V`, `droop`, `Prated`, `R`, `name` | 4.20.4 |
-| `pcl.network.Network.dynamic` | `t_end`, `events`, `machines`, `default`, `loads`, `h`, `record`, `method`, `step`, `buses`, `f`, `pf`, `typical`, `slow_after` | 5.0.13 · πειρ. |
+| `pcl.network.Network.dynamic` | `t_end`, `events`, `machines`, `default`, `loads`, `h`, `record`, `method`, `step`, `buses`, `f`, `pf`, `typical`, `slow_after`, `stations` | 5.0.13 · πειρ. |
 | `pcl.network.Network.element` | `name` | 4.2 |
 | `pcl.network.Network.equivalent` | `boundary`, `internal`, `kind`, `lf`, `slack`, `tol`, `mode` | 5.0.3 |
 | `pcl.network.Network.estimate` | `measurements`, `**kw` | 4.19.5 |
@@ -622,7 +624,7 @@
 | `pcl.rms.Classical.eval` | `X`, `Vr`, `Vi`, `t` | 4.23 · πειρ. |
 | `pcl.rms.Classical.init` | `V`, `S`, `wb` | 4.23 · πειρ. |
 | `pcl.rms.Classical.power` | `X`, `Vr`, `Vi` | 4.23 · πειρ. |
-| `pcl.rms.Converter` | `names`, `bus`, `p`, `kind`, `law`, `frq`, `avc`, `storage`, `pv` | 5.0.14 · πειρ. |
+| `pcl.rms.Converter` | `names`, `bus`, `p`, `kind`, `law`, `frq`, `avc`, `storage`, `pv`, `cc` | 5.0.14 · πειρ. |
 | `pcl.rms.Converter.eval` | `X`, `Vr`, `Vi`, `t` | 5.0.14 · πειρ. |
 | `pcl.rms.Converter.init` | `V`, `S`, `wb` | 5.0.14 · πειρ. |
 | `pcl.rms.Converter.limits` | — | 5.0.14 · πειρ. |
@@ -630,6 +632,12 @@
 | `pcl.rms.ExpLoad` | `names`, `bus`, `p` | 5.0.13 · πειρ. |
 | `pcl.rms.ExpLoad.eval` | `X`, `Vr`, `Vi`, `t` | 5.0.13 · πειρ. |
 | `pcl.rms.ExpLoad.init` | `V`, `S`, `wb` | 5.0.13 · πειρ. |
+| `pcl.rms.HVDC` | `net`, `pf`, `stations`, `Sb`, `idx`, `wb` | 5.0.15 · πειρ. |
+| `pcl.rms.HVDC.eval` | `X`, `Vr`, `Vi`, `t` | 5.0.15 · πειρ. |
+| `pcl.rms.HVDC.find` | `name` | 5.0.15 · πειρ. |
+| `pcl.rms.HVDC.init` | `V`, `wb` | 5.0.15 · πειρ. |
+| `pcl.rms.HVDC.limits` | — | 5.0.15 · πειρ. |
+| `pcl.rms.HVDC.outputs` | `X`, `Vr`, `Vi` | 5.0.15 · πειρ. |
 | `pcl.rms.Kind` | `names`, `bus`, `p` | 4.23 · πειρ. |
 | `pcl.rms.Kind.eval` | `X`, `Vr`, `Vi`, `t` | 4.23 · πειρ. |
 | `pcl.rms.RMSError` | — | 4.23 · πειρ. |
@@ -646,7 +654,7 @@
 | `pcl.rms.Statcom.init` | `V`, `S`, `wb` | 5.0.14 · πειρ. |
 | `pcl.rms.Statcom.limits` | — | 5.0.14 · πειρ. |
 | `pcl.rms.Statcom.outputs` | `X`, `Vr`, `Vi` | 5.0.14 · πειρ. |
-| `pcl.rms.System` | `net`, `machines`, `default`, `loads`, `f`, `pf`, `vmin` | 4.23 · πειρ. |
+| `pcl.rms.System` | `net`, `machines`, `default`, `loads`, `f`, `pf`, `vmin`, `stations` | 4.23 · πειρ. |
 | `pcl.rms.System.batch` | `scenarios`, `t_end`, `**kw` | 4.23 · πειρ. |
 | `pcl.rms.System.cct` | `fault`, `clear`, `t_fault`, `lo`, `hi`, `t_end`, `tol`, `**kw` | 4.23 · πειρ. |
 | `pcl.rms.System.eigen` | `method`, `sigma`, `k`, `x`, `y` | 4.23 · πειρ. |

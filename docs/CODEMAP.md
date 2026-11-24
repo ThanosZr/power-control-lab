@@ -91,7 +91,7 @@
 | `pcl/control.py` | 953 |
 | `pcl/core.py` | 1461 |
 | `pcl/cpf.py` | 561 |
-| `pcl/dcgrid.py` | 980 |
+| `pcl/dcgrid.py` | 1061 |
 | `pcl/designer.py` | 791 |
 | `pcl/equivalent.py` | 1338 |
 | `pcl/formats.py` | 222 |
@@ -107,7 +107,7 @@
 | `pcl/model.py` | 1034 |
 | `pcl/netfile.py` | 490 |
 | `pcl/netview.py` | 1101 |
-| `pcl/network.py` | 1788 |
+| `pcl/network.py` | 1826 |
 | `pcl/nnstart.py` | 388 |
 | `pcl/onnxio.py` | 355 |
 | `pcl/opf.py` | 515 |
@@ -116,7 +116,7 @@
 | `pcl/psse.py` | 433 |
 | `pcl/report.py` | 1118 |
 | `pcl/results.py` | 88 |
-| `pcl/rms.py` | 1928 |
+| `pcl/rms.py` | 2546 |
 | `pcl/scopf.py` | 213 |
 | `pcl/se.py` | 788 |
 | `pcl/study.py` | 847 |
@@ -129,7 +129,7 @@
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_api_surface.py` | 480 |
+| `tests/test_api_surface.py` | 492 |
 | `tests/test_appwin.py` | 122 |
 | `tests/test_arc.py` | 189 |
 | `tests/test_b4.py` | 300 |
@@ -165,7 +165,7 @@
 | `tests/test_gfm4.py` | 153 |
 | `tests/test_gfm5.py` | 179 |
 | `tests/test_gis.py` | 183 |
-| `tests/test_guide.py` | 378 |
+| `tests/test_guide.py` | 393 |
 | `tests/test_harmonic.py` | 312 |
 | `tests/test_impl.py` | 138 |
 | `tests/test_impulse_tools.py` | 150 |
@@ -206,6 +206,7 @@
 | `tests/test_refac.py` | 78 |
 | `tests/test_report.py` | 914 |
 | `tests/test_rms.py` | 618 |
+| `tests/test_rms_hvdc.py` | 216 |
 | `tests/test_sat.py` | 180 |
 | `tests/test_scopf.py` | 263 |
 | `tests/test_se.py` | 366 |
@@ -232,6 +233,7 @@
 | `tests/test_workbench.py` | 215 |
 | `tests/js/arc_cases.js` | 43 |
 | `tests/js/b4_cases.js` | 20 |
+| `tests/js/b4_rms_cases.js` | 16 |
 | `tests/js/batch_requests.js` | 116 |
 | `tests/js/big_cases.js` | 56 |
 | `tests/js/bus_cases.js` | 127 |
@@ -3910,16 +3912,18 @@ _(χωρίς συναρτήσεις)_
 | 467 | function | `station` |
 | 484 | function | `station_inverse` |
 | 504 | function | `grid_of` |
-| 533 | function | `_st` |
-| 543 | function | `q_range` |
-| 585 | function | `_hold_limits` |
-| 638 | function | `acdc_flow` |
-| 722 | function | `_station_parts` |
-| 727 | function | `acdc_opf` |
-| 828 | function | `acdc_contingency` |
-| 921 | function | `b4_line_data` |
-| 927 | function | `cigre_b4` |
-| 955 | function | `b4_network` |
+| 535 | function | `_st` |
+| 545 | function | `q_range` |
+| 587 | function | `_hold_limits` |
+| 640 | function | `acdc_flow` |
+| 729 | function | `_station_parts` |
+| 734 | function | `acdc_opf` |
+| 837 | function | `acdc_contingency` |
+| 930 | function | `b4_line_data` |
+| 936 | function | `cigre_b4` |
+| 964 | function | `b4_network` |
+| 997 | function | `b4_dcs2_network` |
+| 1043 | function | `b4_dcs2_stations` |
 
 ### `pcl/designer.py`
 
@@ -4502,68 +4506,68 @@ _(χωρίς συναρτήσεις)_
 | 269 | method | `Network.dc_bus` |
 | 279 | method | `Network._dc` |
 | 285 | method | `Network.dc_line` |
-| 298 | method | `Network.vsc` |
-| 324 | method | `Network.dcdc` |
-| 342 | method | `Network.dc_dispatcher` |
-| 360 | method | `Network.dc_grid` |
-| 365 | method | `Network.acdc_flow` |
-| 374 | method | `Network.acdc_opf` |
-| 383 | method | `Network.acdc_contingency` |
-| 389 | method | `Network.remove` |
-| 392 | method | `Network.element` |
-| 399 | method | `Network._zb` |
-| 403 | method | `Network._ib` |
-| 407 | method | `Network._sc_parts` |
-| 542 | method | `Network._t3` |
-| 577 | method | `Network.impedances` |
-| 585 | method | `Network._index` |
-| 589 | method | `Network._ybus` |
-| 613 | method | `Network._ratios` |
-| 648 | method | `Network.short_circuit` |
-| 732 | method | `Network._breaking` |
-| 764 | method | `Network.iec60909` |
-| 769 | method | `Network._lf_model` |
-| 885 | method | `Network._sssc_x` |
-| 892 | method | `Network.load_flow` |
-| 905 | method | `Network._lf_sssc` |
-| 934 | method | `Network._lf` |
-| 965 | method | `Network._lf_result` |
-| 989 | method | `Network._flows` |
-| 1014 | method | `Network.case` |
-| 1024 | method | `Network.advice` |
-| 1033 | method | `Network.power_flow` |
-| 1061 | method | `Network.dc_flow` |
-| 1069 | method | `Network.ptdf` |
-| 1075 | method | `Network.lodf` |
-| 1082 | method | `Network.contingency` |
-| 1160 | method | `Network.batch_flow` |
-| 1200 | method | `Network.report` |
-| 1206 | method | `Network.scopf` |
-| 1212 | method | `Network.cpf` |
-| 1219 | method | `Network.estimate` |
-| 1226 | method | `Network.harmonics` |
-| 1233 | method | `Network.opf` |
-| 1255 | method | `Network.equivalent` |
-| 1265 | method | `Network.dynamic` |
-| 1354 | method | `Network.to_emt` |
-| 1443 | function | `_coo` |
-| 1449 | function | `_zip` |
-| 1454 | function | `_solve` |
-| 1465 | function | `_nr` |
-| 1501 | function | `sssc_placement` |
-| 1558 | function | `superposition` |
-| 1582 | function | `trv` |
-| 1616 | function | `_matrix` |
-| 1628 | function | `read_matpower` |
-| 1665 | function | `ieee` |
-| 1675 | function | `case_data` |
-| 1686 | function | `case_solution` |
-| 1695 | function | `ieee9` |
-| 1722 | function | `ieee14` |
-| 1735 | function | `to_dict` |
-| 1755 | function | `from_dict` |
-| 1783 | function | `save` |
-| 1787 | function | `load` |
+| 305 | method | `Network.vsc` |
+| 334 | method | `Network.dcdc` |
+| 352 | method | `Network.dc_dispatcher` |
+| 370 | method | `Network.dc_grid` |
+| 375 | method | `Network.acdc_flow` |
+| 384 | method | `Network.acdc_opf` |
+| 393 | method | `Network.acdc_contingency` |
+| 399 | method | `Network.remove` |
+| 402 | method | `Network.element` |
+| 409 | method | `Network._zb` |
+| 413 | method | `Network._ib` |
+| 417 | method | `Network._sc_parts` |
+| 552 | method | `Network._t3` |
+| 587 | method | `Network.impedances` |
+| 595 | method | `Network._index` |
+| 599 | method | `Network._ybus` |
+| 623 | method | `Network._ratios` |
+| 658 | method | `Network.short_circuit` |
+| 742 | method | `Network._breaking` |
+| 774 | method | `Network.iec60909` |
+| 779 | method | `Network._lf_model` |
+| 901 | method | `Network._sssc_x` |
+| 908 | method | `Network.load_flow` |
+| 921 | method | `Network._lf_sssc` |
+| 950 | method | `Network._lf` |
+| 981 | method | `Network._lf_result` |
+| 1005 | method | `Network._flows` |
+| 1030 | method | `Network.case` |
+| 1040 | method | `Network.advice` |
+| 1049 | method | `Network.power_flow` |
+| 1077 | method | `Network.dc_flow` |
+| 1085 | method | `Network.ptdf` |
+| 1091 | method | `Network.lodf` |
+| 1098 | method | `Network.contingency` |
+| 1176 | method | `Network.batch_flow` |
+| 1216 | method | `Network.report` |
+| 1222 | method | `Network.scopf` |
+| 1228 | method | `Network.cpf` |
+| 1235 | method | `Network.estimate` |
+| 1242 | method | `Network.harmonics` |
+| 1249 | method | `Network.opf` |
+| 1271 | method | `Network.equivalent` |
+| 1281 | method | `Network.dynamic` |
+| 1392 | method | `Network.to_emt` |
+| 1481 | function | `_coo` |
+| 1487 | function | `_zip` |
+| 1492 | function | `_solve` |
+| 1503 | function | `_nr` |
+| 1539 | function | `sssc_placement` |
+| 1596 | function | `superposition` |
+| 1620 | function | `trv` |
+| 1654 | function | `_matrix` |
+| 1666 | function | `read_matpower` |
+| 1703 | function | `ieee` |
+| 1713 | function | `case_data` |
+| 1724 | function | `case_solution` |
+| 1733 | function | `ieee9` |
+| 1760 | function | `ieee14` |
+| 1773 | function | `to_dict` |
+| 1793 | function | `from_dict` |
+| 1821 | function | `save` |
+| 1825 | function | `load` |
 
 ### `pcl/nnstart.py`
 
@@ -4787,113 +4791,124 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 39 | class | `RMSError` |
-| 44 | class | `Kind` |
-| 51 | method | `Kind.__init__` |
-| 56 | method | `Kind.eval` |
-| 60 | class | `Classical` |
-| 64 | method | `Classical.init` |
-| 71 | method | `Classical.eval` |
-| 85 | method | `Classical.power` |
-| 90 | class | `TwoAxis` |
-| 95 | method | `TwoAxis.init` |
-| 111 | method | `TwoAxis.currents` |
-| 124 | method | `TwoAxis.eval` |
-| 138 | method | `TwoAxis.power` |
-| 143 | class | `Source` |
-| 147 | method | `Source.init` |
-| 153 | method | `Source.eval` |
-| 160 | class | `ZIPLoad` |
-| 166 | method | `ZIPLoad.init` |
-| 170 | method | `ZIPLoad.eval` |
-| 183 | class | `ExpLoad` |
-| 189 | method | `ExpLoad.init` |
-| 193 | method | `ExpLoad.eval` |
-| 213 | function | `_re` |
-| 217 | function | `_clip` |
-| 222 | function | `_lag` |
-| 229 | function | `_leadlag` |
-| 237 | function | `_wash` |
-| 243 | function | `_held` |
-| 248 | function | `_nwlag` |
-| 259 | function | `_num` |
-| 266 | function | `_sat_ab` |
-| 302 | class | `Unit` |
-| 328 | method | `Unit.__init__` |
-| 342 | method | `Unit._hold` |
-| 356 | method | `Unit.limits` |
-| 372 | method | `Unit._prep` |
-| 398 | method | `Unit._machine` |
-| 418 | method | `Unit._machine_f` |
-| 434 | method | `Unit._pss` |
-| 442 | method | `Unit._avr` |
-| 485 | method | `Unit._gov` |
-| 526 | method | `Unit.init` |
-| 561 | method | `Unit.eval` |
-| 586 | method | `Unit.outputs` |
-| 620 | class | `_Holds` |
-| 625 | method | `_Holds._hold` |
-| 636 | function | `_hyp` |
-| 640 | function | `_floor` |
-| 644 | class | `Converter` |
-| 668 | method | `Converter.__init__` |
-| 677 | method | `Converter.limits` |
-| 684 | method | `Converter._gfm_i` |
-| 708 | method | `Converter._taper` |
-| 715 | method | `Converter._gfm` |
-| 754 | method | `Converter._gfl` |
-| 792 | method | `Converter._core` |
-| 799 | method | `Converter.init` |
-| 856 | method | `Converter.eval` |
-| 863 | method | `Converter.outputs` |
-| 878 | class | `SVC` |
-| 889 | method | `SVC.__init__` |
-| 893 | method | `SVC.limits` |
-| 899 | method | `SVC.init` |
-| 920 | method | `SVC._core` |
-| 943 | method | `SVC.eval` |
-| 950 | method | `SVC.outputs` |
-| 957 | class | `Statcom` |
-| 965 | method | `Statcom.limits` |
-| 968 | method | `Statcom.init` |
-| 984 | method | `Statcom._core` |
-| 995 | method | `Statcom.eval` |
-| 1003 | method | `Statcom.outputs` |
-| 1027 | function | `typical` |
-| 1059 | class | `System` |
-| 1069 | method | `System.__init__` |
-| 1231 | method | `System._converter` |
-| 1286 | method | `System._y_build` |
-| 1295 | method | `System._ypat` |
-| 1300 | method | `System._yreal` |
-| 1312 | method | `System._split` |
-| 1315 | method | `System.fg` |
-| 1339 | method | `System.jac` |
-| 1373 | method | `System.init` |
-| 1394 | method | `System.state` |
-| 1400 | method | `System.internal_emf` |
-| 1411 | method | `System._apply` |
-| 1466 | method | `System._unit` |
-| 1472 | method | `System._reset_units` |
-| 1486 | method | `System._consistent` |
-| 1498 | method | `System.simulate` |
-| 1579 | method | `System._iter_matrix` |
-| 1586 | method | `System._units` |
-| 1589 | method | `System._freeze` |
-| 1597 | method | `System._thaw` |
-| 1601 | method | `System._project` |
-| 1610 | method | `System._step_tr` |
-| 1631 | method | `System._step_full` |
-| 1653 | method | `System._step_alt` |
-| 1664 | method | `System._alt` |
-| 1688 | method | `System._lte` |
-| 1707 | method | `System.batch` |
-| 1717 | method | `System.quantities` |
-| 1805 | method | `System.stable` |
-| 1822 | method | `System.cct` |
-| 1845 | method | `System.linearize` |
-| 1859 | method | `System.eigen` |
-| 1907 | method | `System.reduced_y` |
+| 40 | class | `RMSError` |
+| 45 | class | `Kind` |
+| 52 | method | `Kind.__init__` |
+| 57 | method | `Kind.eval` |
+| 61 | class | `Classical` |
+| 65 | method | `Classical.init` |
+| 72 | method | `Classical.eval` |
+| 86 | method | `Classical.power` |
+| 91 | class | `TwoAxis` |
+| 96 | method | `TwoAxis.init` |
+| 112 | method | `TwoAxis.currents` |
+| 125 | method | `TwoAxis.eval` |
+| 139 | method | `TwoAxis.power` |
+| 144 | class | `Source` |
+| 148 | method | `Source.init` |
+| 154 | method | `Source.eval` |
+| 161 | class | `ZIPLoad` |
+| 167 | method | `ZIPLoad.init` |
+| 171 | method | `ZIPLoad.eval` |
+| 184 | class | `ExpLoad` |
+| 190 | method | `ExpLoad.init` |
+| 194 | method | `ExpLoad.eval` |
+| 214 | function | `_re` |
+| 218 | function | `_clip` |
+| 223 | function | `_lag` |
+| 230 | function | `_leadlag` |
+| 238 | function | `_wash` |
+| 244 | function | `_held` |
+| 249 | function | `_nwlag` |
+| 260 | function | `_num` |
+| 267 | function | `_sat_ab` |
+| 303 | class | `Unit` |
+| 329 | method | `Unit.__init__` |
+| 343 | method | `Unit._hold` |
+| 357 | method | `Unit.limits` |
+| 373 | method | `Unit._prep` |
+| 399 | method | `Unit._machine` |
+| 419 | method | `Unit._machine_f` |
+| 435 | method | `Unit._pss` |
+| 443 | method | `Unit._avr` |
+| 486 | method | `Unit._gov` |
+| 527 | method | `Unit.init` |
+| 562 | method | `Unit.eval` |
+| 587 | method | `Unit.outputs` |
+| 624 | class | `_Holds` |
+| 629 | method | `_Holds._hold` |
+| 640 | function | `_hyp` |
+| 644 | function | `_floor` |
+| 648 | class | `Converter` |
+| 672 | method | `Converter.__init__` |
+| 683 | method | `Converter.limits` |
+| 690 | method | `Converter._gfm_i` |
+| 714 | method | `Converter._taper` |
+| 721 | method | `Converter._gfm` |
+| 760 | method | `Converter._gfl` |
+| 798 | method | `Converter._gflpi` |
+| 835 | method | `Converter._core` |
+| 842 | method | `Converter.init` |
+| 916 | method | `Converter.eval` |
+| 923 | method | `Converter.outputs` |
+| 938 | class | `SVC` |
+| 949 | method | `SVC.__init__` |
+| 953 | method | `SVC.limits` |
+| 959 | method | `SVC.init` |
+| 980 | method | `SVC._core` |
+| 1003 | method | `SVC.eval` |
+| 1010 | method | `SVC.outputs` |
+| 1017 | class | `Statcom` |
+| 1025 | method | `Statcom.limits` |
+| 1028 | method | `Statcom.init` |
+| 1044 | method | `Statcom._core` |
+| 1055 | method | `Statcom.eval` |
+| 1063 | method | `Statcom.outputs` |
+| 1087 | class | `HVDC` |
+| 1102 | method | `HVDC.__init__` |
+| 1275 | method | `HVDC._loss` |
+| 1284 | method | `HVDC._core` |
+| 1407 | method | `HVDC.init` |
+| 1484 | method | `HVDC.eval` |
+| 1488 | method | `HVDC.outputs` |
+| 1491 | method | `HVDC.limits` |
+| 1496 | method | `HVDC.find` |
+| 1522 | function | `typical` |
+| 1555 | class | `System` |
+| 1565 | method | `System.__init__` |
+| 1741 | method | `System._converter` |
+| 1808 | method | `System._y_build` |
+| 1817 | method | `System._ypat` |
+| 1822 | method | `System._yreal` |
+| 1834 | method | `System._split` |
+| 1837 | method | `System.fg` |
+| 1861 | method | `System.jac` |
+| 1917 | method | `System.init` |
+| 1941 | method | `System.state` |
+| 1947 | method | `System.internal_emf` |
+| 1958 | method | `System._hvdc` |
+| 1968 | method | `System._apply` |
+| 2044 | method | `System._unit` |
+| 2050 | method | `System._reset_units` |
+| 2068 | method | `System._consistent` |
+| 2080 | method | `System.simulate` |
+| 2161 | method | `System._iter_matrix` |
+| 2168 | method | `System._units` |
+| 2171 | method | `System._freeze` |
+| 2179 | method | `System._thaw` |
+| 2183 | method | `System._project` |
+| 2192 | method | `System._step_tr` |
+| 2213 | method | `System._step_full` |
+| 2235 | method | `System._step_alt` |
+| 2246 | method | `System._alt` |
+| 2270 | method | `System._lte` |
+| 2289 | method | `System.batch` |
+| 2299 | method | `System.quantities` |
+| 2423 | method | `System.stable` |
+| 2440 | method | `System.cct` |
+| 2463 | method | `System.linearize` |
+| 2477 | method | `System.eigen` |
+| 2525 | method | `System.reduced_y` |
 
 ### `pcl/scopf.py`
 

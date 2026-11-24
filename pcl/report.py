@@ -481,7 +481,7 @@ def _acdc(r, net, res, MW, picture, order):
     if not res['converged']:
         r.note('Η ροή φορτίου AC/DC δεν συνέκλινε: οι τιμές είναι της τελευταίας επανάληψης.', 'critical')
     C = res['converters']
-    ctl = {'P': 'ισχύς', 'V': 'τάση DC', 'droop': 'στατικότητα P–U', 'idroop': 'στατικότητα I–U'}
+    ctl = {'P': 'ισχύς', 'V': 'τάση DC', 'droop': 'στατικότητα P–U', 'idroop': 'στατικότητα I–U', 'Vf': 'τάση και συχνότητα (V/f)'}
     r.heading('Σταθμοί μετατροπέων')
     r.table(['Σταθμός', 'Ζυγός AC', 'Ζυγός DC', 'Έλεγχος', 'P_s (MW)', 'Q_s (Mvar)', '|U_s| (pu)', '|U_c| (pu)', 'I_c (kA)', 'Απώλειες (MW)', 'P_dc (MW)', 'U_dc (kV)'],
             [[n, c['bus'], c['dc'], ctl.get(c['control'], c['control']), c['Ps'] / MW, c['Qs'] / MW, c['Us'], c['Uc'], c['Ic'] / 1e3, c['loss'] / MW, c['Pdc'] / MW,

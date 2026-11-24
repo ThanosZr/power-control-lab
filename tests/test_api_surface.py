@@ -353,7 +353,19 @@ class ApiSurface(unittest.TestCase):
             self.assertIn(k, self.now['pcl'])
             self.assertTrue(api_surface.experimental('pcl', k), k)
         self.assertEqual(self.now['pcl']['pcl.rms.Converter']['params'][:4], ['names', 'bus', 'p', 'kind'])
-        self.assertEqual(sum(len(v) for v in self.now.values()), 1021)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 1021)        # 1021 then; 5.0.15 adds points
+
+    def test_the_surface_of_5_0_15(self):
+        """5.0.15: HVDC and DC grids in RMS (ROADMAP §101 step 2): the device HVDC of pcl.rms and the DCS2 of b4dcs2 in pcl.dcgrid,
+        experimental like the modules; the new parameters at the end of Network.dc_line (L, C) and Network.dynamic (stations), the
+        control 'Vf' of Network.vsc (a value of an existing parameter), the control 'pi' of a grid-following converter (cc)."""
+        for k in ('pcl.rms.HVDC', 'pcl.rms.HVDC.outputs', 'pcl.rms.HVDC.find', 'pcl.dcgrid.b4_dcs2_network', 'pcl.dcgrid.b4_dcs2_stations'):
+            self.assertIn(k, self.now['pcl'])
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+        self.assertEqual(self.now['pcl']['pcl.network.Network.dc_line']['params'][-2:], ['L', 'C'])
+        self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][-1], 'stations')
+        self.assertEqual(self.now['pcl']['pcl.rms.Converter']['params'][-1], 'cc')
+        self.assertEqual(sum(len(v) for v in self.now.values()), 1029)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it
