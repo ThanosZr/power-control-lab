@@ -1,13 +1,17 @@
 """5.0.16 (ROADMAP §101 step 2, THEORY §8ΩΠ): the converters and the HVDC stations of the drawing in the RMS dynamics.
 
-The common model (web/studio/model.js, version 4) takes a VSC2 and an MMC with the control on their modulation (a GFMC or an
+The common model (web/studio/model.js, version 4; 5 from 5.0.17) takes a VSC2 and an MMC with the control on their modulation (a GFMC or an
 MMCC) and the DC grids of the stations; pcl.model makes them converters of pcl.rms (converters_of), stations of pcl.rms.HVDC
 (stations_of) and the elements of the network (the AC/DC load flow, the current sources of a DC grid: Network.dc_source). The
 checks: the translation of the tutorials ieee9_gfm and b4dcs2; a current source of an expression against its closed form, with
 the jump in time at its place; the expression evaluator against the solver's (engine/batch.py eval_ast) and its complex step
 against differences; the Jacobian of the device with a source; the start of a converter from the load flow of its drawing; the
-studies of a drawing. The comparisons with our EMT are in tests/test_rms.py (ieee9_gfm) and tests/test_rms_hvdc.py (b4dcs2)."""
+studies of a drawing. The comparisons with our EMT are in tests/test_rms.py (ieee9_gfm) and tests/test_rms_hvdc.py (b4dcs2).
+5.0.17 (THEORY §8ΩΡ): the stations with the terminal n off the ground (a symmetric monopole) and their grid of pairs of poles: the
+translation of hvdc_mmc and of drawings made from it, the cable as a line of two poles against its closed forms, the load flow
+against its closed form (class PairsOfPoles); against the EMT in tests/test_rms_hvdc.py."""
 import json
+import math
 import shutil
 import subprocess
 import unittest
@@ -117,7 +121,7 @@ class Drawings(unittest.TestCase):
 
     def test_the_model_of_the_drawings(self):
         m = self.gfm
-        self.assertEqual(m['version'], 4)
+        self.assertEqual(m['version'], 5)
         vs = [e for e in m['elements'] if e['type'] == 'VSC2']
         self.assertEqual([(e['id'], e['buses'], e['ctl']['type'], e['ctl']['id']) for e in vs], [('VS3', ['B3'], 'GFMC', 'CT3')])
         self.assertEqual(m['skipped'], [])
@@ -133,10 +137,9 @@ class Drawings(unittest.TestCase):
         self.assertEqual((m['skipped'], m['warnings']), ([], []))
         wf = next(e for e in m['elements'] if e['id'] == 'WF')
         self.assertEqual((wf['ctl']['type'], wf['ctl']['params']['mode']), ('MMCC', 'p'))
-        # a symmetric monopole (the terminal n not on the ground): not a DC grid yet, and said
+        # a symmetric monopole (the terminal n not on the ground): 5.0.17, a grid of pairs of poles (class PairsOfPoles)
         h = drawing('hvdc_mmc')
-        self.assertIsNone(h['dc'])
-        self.assertEqual(sum('δεν είναι στη γη' in w for w in h['warnings']), 2)
+        self.assertEqual([b['poles'] for b in h['dc']['buses']], [2, 2])
 
     def test_the_data_of_the_converters_and_the_stations(self):
         conv, notes = model.converters_of(self.gfm)
@@ -193,6 +196,116 @@ class Drawings(unittest.TestCase):
         self.assertIn('Pdc', r['result']['elements']['MMCB3'])
         r = study.run({'drawing': self.b4, 'study': 'sc', 'options': {}})
         self.assertTrue(any('IEC 60909' in n for n in r['network']['drawing']['notes']))
+
+
+def _hvdc(opts=None):
+    return node('build', 'hvdc_mmc', json.dumps(opts or {}))
+
+
+def _rewire(pr, drop, comps, wires):
+    """A drawing made from another: without the parts drop (and their wires), with comps and wires (pairs 'id:pin')."""
+    pr = json.loads(json.dumps(pr))
+    pr['components'] = [c for c in pr['components'] if c['id'] not in drop] + [dict({'x': 0, 'y': 0}, **c) for c in comps]
+    pr['wires'] = [w for w in pr['wires'] if w['a']['c'] not in drop and w['b']['c'] not in drop]
+    for a, b in wires:
+        (ca, pa), (cb, pb) = a.split(':'), b.split(':')
+        pr['wires'].append({'a': {'c': ca, 'p': pa}, 'b': {'c': cb, 'p': pb}})
+    return pr
+
+
+@unittest.skipUnless(HAVE_NODE, 'Node.js')
+class PairsOfPoles(unittest.TestCase):
+    """5.0.17 (THEORY §8ΩΡ): the stations with the terminal n off the ground. Their DC grid is a grid of pairs of poles: each bus
+    a pair of nodes (p, n) at the voltage between them, a line a TLM of two conductors (or an L or R on each pole)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pr = _hvdc()
+        cls.m = model.of(cls.pr)
+
+    def test_the_grid_of_a_symmetric_monopole(self):
+        m = self.m
+        self.assertEqual(m['version'], 5)
+        self.assertEqual([(b['id'], b['Un'], b['U0'], b['C'], b['G'], b['poles']) for b in m['dc']['buses']],
+                         [('dc1', 640e3, 640e3, 0, 0, 2), ('dc2', 640e3, 640e3, 0, 0, 2)])
+        (ln,) = m['dc']['lines']
+        self.assertEqual((ln['id'], ln['a'], ln['b'], ln['poles']), ('CAB', 'dc1', 'dc2', 2))
+        self.assertEqual((ln['tlm']['model'], ln['tlm']['len']), ('wb', 70))
+        self.assertNotIn('mdl', ln['tlm'])                                                    # (the fitted model: not needed here)
+        self.assertEqual({e['id']: e['dc'] for e in m['elements'] if e['type'] == 'MMC'}, {'MMC1': 'dc1', 'MMC2': 'dc2'})
+        self.assertEqual(m['skipped'], [])                                                    # the cable is a DC line, not a line of «mph»
+        self.assertEqual(len(m['warnings']), 2)                                               # the two AC breakers on a signal
+        # the DC fault of the tutorial (a switch between the poles) is said, and the grid stays; the ammeter of hvdc_gfm is a wire
+        d = model.of(_hvdc({'ev': 'dcf'}))
+        self.assertEqual(len(d['dc']['buses']), 2)
+        self.assertEqual(sum('(SW)' in w for w in d['warnings']), 1)
+        g = drawing('hvdc_gfm')
+        self.assertEqual([(q['id'], q['a'], q['b']) for q in g['dc']['lines']], [('CAB', 'dc1', 'dc2')])
+        self.assertFalse(any('(AM)' in w for w in g['warnings']))
+
+    def test_the_cable_as_a_line_of_two_poles(self):
+        # R, L, C per conductor at 1 mHz against their closed forms from the data of the cable (pcl.lineconst TYPICAL['320kV-dc']):
+        # the core ρ·ℓ/(πr²), the loop of two solid cores 0,5 m apart (μ₀/π)·ln(D/(r·e^(−1/4)))·ℓ/2 per conductor (the sheaths
+        # carry nothing at this frequency), the coaxial insulation 2πε₀ε_r/ln(r₂/r₁)·ℓ (the permittivity of the data at 1 mHz
+        # is a little above ε_r: 0,27 %)
+        R, L, C = model._tlm_dc(self.m['dc']['lines'][0]['tlm'])
+        ell, r1, r2 = 70e3, 0.0265, 0.0535
+        self.assertAlmostEqual(R, 1.9e-8 * ell / (math.pi * r1 * r1), delta=1e-6 * R)
+        self.assertAlmostEqual(L, 4e-7 * math.log(0.5 / (r1 * math.exp(-0.25))) * ell / 2, delta=2e-4 * L)
+        self.assertAlmostEqual(C, 2 * math.pi * 8.8541878128e-12 * 2.3 / math.log(r2 / r1) * ell, delta=5e-3 * C)
+        # in the network: a line of two poles (the loop is 2R, 2L; the capacitance between the poles C/4 at each end, pcl.rms)
+        net, info = model.network(self.m, 'pf')
+        (e,) = [q for q in net.elements if q['kind'] == 'dc_line']
+        self.assertEqual((e['name'], e['poles'], e['R'], e['L'], e['C']), ('CAB', 2, R, L, C))
+
+    def test_the_load_flow_between_two_poles(self):
+        # station 1 gives 1 pu (1059 MW) into the DC grid, station 2 holds 640 kV: U₁ = (U₂ + √(U₂² + 4·2R·P))/2
+        m = json.loads(json.dumps(self.m))
+        next(e for e in m['elements'] if e['id'] == 'MMC1')['ctl']['params']['Pref'] = '1'
+        r = model.load_flow(m)
+        R = model._tlm_dc(m['dc']['lines'][0]['tlm'])[0]
+        U1 = (640e3 + math.sqrt(640e3 ** 2 + 8 * R * 1059e6)) / 2
+        self.assertAlmostEqual(r['dc']['dc2']['U'], 640e3, delta=1e-6)
+        self.assertAlmostEqual(r['dc']['dc1']['U'], U1, delta=1e-6)
+        self.assertAlmostEqual(r['elements']['MMC2']['Pdc'], -(1059e6 - 2 * R * (1059e6 / U1) ** 2), delta=1e-3)
+
+    def test_lines_on_each_pole_and_the_capacitances(self):
+        # the cable as an L on each pole (L and R_s), capacitors from each pole to the ground at station 1, one between the poles
+        # at station 2: a line of the loop (R_p + R_n, L_p + L_n), (C_p + C_n)/4 at bus 1, C between the poles at bus 2
+        comps = [{'id': 'LP', 'type': 'L', 'params': {'L': 0.05, 'Rs': 0.6}}, {'id': 'LN', 'type': 'L', 'params': {'L': 0.04, 'Rs': 0.5}},
+                 {'id': 'CP', 'type': 'C', 'params': {'C': 10e-6}}, {'id': 'CN', 'type': 'C', 'params': {'C': 10e-6}},
+                 {'id': 'CPN', 'type': 'C', 'params': {'C': 20e-6}}, {'id': 'G0', 'type': 'GND', 'params': {}}]
+        wires = [('MMC1:p', 'LP:a'), ('LP:b', 'MMC2:p'), ('MMC1:n', 'LN:a'), ('LN:b', 'MMC2:n'), ('MMC1:p', 'CP:p'), ('CP:n', 'G0:g'),
+                 ('MMC1:n', 'CN:p'), ('CN:n', 'G0:g'), ('MMC2:p', 'CPN:p'), ('CPN:n', 'MMC2:n')]
+        m = model.of(_rewire(self.pr, {'CAB'}, comps, wires))
+        self.assertEqual([(q['a'], q['b'], q['poles'], q['R'], q['L']) for q in m['dc']['lines']], [('dc1', 'dc2', 1, 1.1, 0.09)])
+        self.assertEqual({b['id']: b['C'] for b in m['dc']['buses']}, {'dc1': 5e-6, 'dc2': 20e-6})
+        self.assertEqual(len(m['warnings']), 2)
+        # different capacitances to the ground on the two poles: their mean, said
+        comps[3]['params']['C'] = 6e-6
+        m = model.of(_rewire(self.pr, {'CAB'}, comps, wires))
+        self.assertAlmostEqual(m['dc']['buses'][0]['C'], 4e-6, delta=1e-18)
+        self.assertEqual(sum('μέσος όρος' in w for w in m['warnings']), 1)
+        r = model.load_flow(m)
+        self.assertAlmostEqual(r['dc']['dc2']['U'], 640e3, delta=1e-6)
+
+    def test_what_a_grid_of_pairs_refuses(self):
+        # two L on one pole: which goes with which on the other pole does not follow; said, and the grid stays out
+        comps = [{'id': 'LP', 'type': 'L', 'params': {'L': 0.05, 'Rs': 0.6}}, {'id': 'LQ', 'type': 'L', 'params': {'L': 0.05, 'Rs': 0.6}},
+                 {'id': 'LN', 'type': 'L', 'params': {'L': 0.04, 'Rs': 0.5}}]
+        wires = [('MMC1:p', 'LP:a'), ('LP:b', 'MMC2:p'), ('MMC1:p', 'LQ:a'), ('LQ:b', 'MMC2:p'), ('MMC1:n', 'LN:a'), ('LN:b', 'MMC2:n')]
+        m = model.of(_rewire(self.pr, {'CAB'}, comps, wires))
+        self.assertEqual(sum('πάνω από ένα L ή R' in w for w in m['warnings']), 1)
+        self.assertEqual([e.get('dc') for e in m['elements'] if e['id'] == 'MMC1'], [None])
+        self.assertEqual(m['dc']['lines'], [])
+        # a node in two pairs (a bipole with a common neutral: a third station between the pole n of station 1 and a node of
+        # its own): said, and those pairs stay out
+        mm = next(c for c in self.pr['components'] if c['id'] == 'MMC1')
+        comps = [dict(mm, id='MMC3'), {'id': 'LX', 'type': 'L', 'params': {'L': 0.05, 'Rs': 0.6}}]
+        wires = [('J1:j', 'MMC3:abc'), ('MMC3:p', 'MMC1:n'), ('MMC3:n', 'LX:a'), ('LX:b', 'MMC2:n')]
+        m = model.of(_rewire(self.pr, set(), comps, wires))
+        self.assertTrue(any('κοινό ουδέτερο' in w for w in m['warnings']))
+        self.assertFalse(any(e.get('dc') for e in m['elements'] if e['id'] in ('MMC1', 'MMC3')))
 
 
 if __name__ == '__main__':

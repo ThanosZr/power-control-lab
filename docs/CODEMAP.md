@@ -29,7 +29,7 @@
 | `web/studio/math.js` | 144 |
 | `web/studio/metrics.js` | 89 |
 | `web/studio/mna.js` | 2731 |
-| `web/studio/model.js` | 255 |
+| `web/studio/model.js` | 340 |
 | `web/studio/netlib.js` | 1650 |
 | `web/studio/netview.js` | 279 |
 | `web/studio/nn.js` | 57 |
@@ -104,7 +104,7 @@
 | `pcl/lineconst.py` | 2411 |
 | `pcl/linereport.py` | 836 |
 | `pcl/link.py` | 150 |
-| `pcl/model.py` | 1391 |
+| `pcl/model.py` | 1424 |
 | `pcl/netfile.py` | 490 |
 | `pcl/netview.py` | 1101 |
 | `pcl/network.py` | 1859 |
@@ -116,7 +116,7 @@
 | `pcl/psse.py` | 433 |
 | `pcl/report.py` | 1118 |
 | `pcl/results.py` | 88 |
-| `pcl/rms.py` | 2711 |
+| `pcl/rms.py` | 2717 |
 | `pcl/scopf.py` | 213 |
 | `pcl/se.py` | 788 |
 | `pcl/study.py` | 861 |
@@ -129,7 +129,7 @@
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_api_surface.py` | 508 |
+| `tests/test_api_surface.py` | 517 |
 | `tests/test_appwin.py` | 122 |
 | `tests/test_arc.py` | 189 |
 | `tests/test_b4.py` | 300 |
@@ -165,7 +165,7 @@
 | `tests/test_gfm4.py` | 153 |
 | `tests/test_gfm5.py` | 179 |
 | `tests/test_gis.py` | 183 |
-| `tests/test_guide.py` | 408 |
+| `tests/test_guide.py` | 423 |
 | `tests/test_harmonic.py` | 312 |
 | `tests/test_impl.py` | 138 |
 | `tests/test_impulse_tools.py` | 150 |
@@ -206,8 +206,8 @@
 | `tests/test_refac.py` | 78 |
 | `tests/test_report.py` | 914 |
 | `tests/test_rms.py` | 642 |
-| `tests/test_rms_drawing.py` | 199 |
-| `tests/test_rms_hvdc.py` | 242 |
+| `tests/test_rms_drawing.py` | 312 |
+| `tests/test_rms_hvdc.py` | 306 |
 | `tests/test_sat.py` | 180 |
 | `tests/test_scopf.py` | 263 |
 | `tests/test_se.py` | 366 |
@@ -253,6 +253,7 @@
 | `tests/js/gfm_cases.js` | 84 |
 | `tests/js/gis_cases.js` | 42 |
 | `tests/js/harm_emt_cases.js` | 15 |
+| `tests/js/hvdc_rms_cases.js` | 17 |
 | `tests/js/impl_cases.js` | 63 |
 | `tests/js/inputs_cases.js` | 30 |
 | `tests/js/lblplace_cases.js` | 60 |
@@ -2008,26 +2009,33 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 44 | function | `termsOf` |
-| 56 | class | `ModelError` |
-| 57 | function | `uf` |
-| 60 | function | `params` |
-| 65 | function | `levelOf` |
-| 68 | function | `closedAt0` |
-| 70 | function | `of` |
-| 82 | const fn | `join` |
-| 134 | const fn | `sig` |
-| 143 | const fn | `opens` |
-| 174 | function | `controlsOf` |
-| 175 | const fn | `at` |
-| 176 | const fn | `from` |
-| 177 | const fn | `one` |
-| 187 | function | `convCtl` |
-| 188 | const fn | `at` |
-| 189 | const fn | `pick` |
-| 199 | function | `dcGrids` |
-| 237 | function | `dcSource` |
-| 249 | function | `summary` |
+| 50 | function | `termsOf` |
+| 62 | class | `ModelError` |
+| 63 | function | `uf` |
+| 66 | function | `params` |
+| 71 | function | `levelOf` |
+| 74 | function | `closedAt0` |
+| 76 | function | `of` |
+| 88 | const fn | `join` |
+| 140 | const fn | `sig` |
+| 149 | const fn | `opens` |
+| 180 | function | `controlsOf` |
+| 181 | const fn | `at` |
+| 182 | const fn | `from` |
+| 183 | const fn | `one` |
+| 193 | function | `convCtl` |
+| 194 | const fn | `at` |
+| 195 | const fn | `pick` |
+| 207 | function | `dcGrids` |
+| 221 | function | `poleGrid` |
+| 259 | function | `pairGrid` |
+| 260 | const fn | `K` |
+| 265 | const fn | `num` |
+| 267 | const fn | `say` |
+| 305 | const fn | `srt` |
+| 314 | const fn | `vm` |
+| 322 | function | `dcSource` |
+| 334 | function | `summary` |
 
 ### `web/studio/netlib.js`
 
@@ -4375,52 +4383,53 @@ _(χωρίς συναρτήσεις)_
 
 | Γραμμή | Είδος | Όνομα |
 |---:|---|---|
-| 62 | class | `ModelError` |
-| 66 | function | `_num` |
-| 74 | function | `of` |
-| 86 | function | `_check` |
-| 101 | function | `_grid_z` |
-| 128 | function | `_line_data` |
-| 138 | function | `_xf_data` |
-| 152 | function | `_zser_z` |
-| 162 | function | `_eng` |
-| 174 | function | `_list` |
-| 180 | function | `_rows` |
-| 187 | function | `_clarke` |
-| 201 | function | `_tlm_zy` |
-| 252 | function | `_tlm` |
-| 268 | function | `_eqv` |
-| 353 | function | `_nodal` |
-| 374 | function | `_pieces` |
-| 390 | function | `_gen_xd2` |
-| 401 | function | `_sources` |
-| 414 | function | `_reached` |
-| 433 | function | `network` |
-| 442 | function | `_network` |
-| 653 | function | `_prog` |
-| 681 | function | `_station_ctl` |
-| 690 | function | `_dc_value` |
-| 701 | function | `_dc_grid` |
-| 735 | function | `_converter_net` |
-| 800 | function | `converters_of` |
-| 861 | function | `stations_of` |
-| 898 | function | `_rms_network` |
-| 924 | function | `_eqv_net` |
-| 972 | function | `_xf_pf` |
-| 1006 | function | `_xf_sc` |
-| 1035 | function | `_bus_out` |
-| 1039 | function | `elements_of` |
-| 1099 | function | `load_flow` |
-| 1119 | function | `_sc_at` |
-| 1126 | function | `_sc_all` |
-| 1146 | function | `faults_of` |
-| 1151 | function | `short_circuit` |
-| 1176 | function | `_given` |
-| 1190 | function | `machines_of` |
-| 1232 | function | `_sched` |
-| 1250 | function | `events_of` |
-| 1358 | function | `_closing` |
-| 1378 | function | `dynamic` |
+| 69 | class | `ModelError` |
+| 73 | function | `_num` |
+| 81 | function | `of` |
+| 93 | function | `_check` |
+| 108 | function | `_grid_z` |
+| 135 | function | `_line_data` |
+| 145 | function | `_xf_data` |
+| 159 | function | `_zser_z` |
+| 169 | function | `_eng` |
+| 181 | function | `_list` |
+| 187 | function | `_rows` |
+| 194 | function | `_clarke` |
+| 208 | function | `_tlm_zy` |
+| 259 | function | `_tlm` |
+| 275 | function | `_eqv` |
+| 360 | function | `_nodal` |
+| 381 | function | `_pieces` |
+| 397 | function | `_gen_xd2` |
+| 408 | function | `_sources` |
+| 421 | function | `_reached` |
+| 440 | function | `network` |
+| 449 | function | `_network` |
+| 660 | function | `_prog` |
+| 688 | function | `_station_ctl` |
+| 697 | function | `_dc_value` |
+| 708 | function | `_tlm_dc` |
+| 723 | function | `_dc_grid` |
+| 767 | function | `_converter_net` |
+| 832 | function | `converters_of` |
+| 893 | function | `stations_of` |
+| 931 | function | `_rms_network` |
+| 957 | function | `_eqv_net` |
+| 1005 | function | `_xf_pf` |
+| 1039 | function | `_xf_sc` |
+| 1068 | function | `_bus_out` |
+| 1072 | function | `elements_of` |
+| 1132 | function | `load_flow` |
+| 1152 | function | `_sc_at` |
+| 1159 | function | `_sc_all` |
+| 1179 | function | `faults_of` |
+| 1184 | function | `short_circuit` |
+| 1209 | function | `_given` |
+| 1223 | function | `machines_of` |
+| 1265 | function | `_sched` |
+| 1283 | function | `events_of` |
+| 1391 | function | `_closing` |
+| 1411 | function | `dynamic` |
 
 ### `pcl/netfile.py`
 
@@ -4888,52 +4897,52 @@ _(χωρίς συναρτήσεις)_
 | 1126 | method | `Statcom._core` |
 | 1137 | method | `Statcom.eval` |
 | 1145 | method | `Statcom.outputs` |
-| 1169 | class | `HVDC` |
-| 1188 | method | `HVDC.__init__` |
-| 1390 | method | `HVDC._loss` |
-| 1399 | method | `HVDC._source` |
-| 1404 | method | `HVDC._core` |
-| 1541 | method | `HVDC.init` |
-| 1622 | method | `HVDC.eval` |
-| 1626 | method | `HVDC.outputs` |
-| 1629 | method | `HVDC.limits` |
-| 1634 | method | `HVDC.find` |
-| 1662 | function | `typical` |
-| 1695 | class | `System` |
-| 1705 | method | `System.__init__` |
-| 1881 | method | `System._converter` |
-| 1948 | method | `System._y_build` |
-| 1957 | method | `System._ypat` |
-| 1962 | method | `System._yreal` |
-| 1974 | method | `System._split` |
-| 1977 | method | `System.fg` |
-| 2001 | method | `System.jac` |
-| 2057 | method | `System.init` |
-| 2081 | method | `System.state` |
-| 2087 | method | `System.internal_emf` |
-| 2098 | method | `System._hvdc` |
-| 2108 | method | `System._apply` |
-| 2186 | method | `System._unit` |
-| 2192 | method | `System._reset_units` |
-| 2210 | method | `System._consistent` |
-| 2222 | method | `System.simulate` |
-| 2322 | method | `System._iter_matrix` |
-| 2329 | method | `System._units` |
-| 2332 | method | `System._freeze` |
-| 2340 | method | `System._thaw` |
-| 2344 | method | `System._project` |
-| 2353 | method | `System._step_tr` |
-| 2374 | method | `System._step_full` |
-| 2396 | method | `System._step_alt` |
-| 2407 | method | `System._alt` |
-| 2431 | method | `System._lte` |
-| 2450 | method | `System.batch` |
-| 2460 | method | `System.quantities` |
-| 2588 | method | `System.stable` |
-| 2605 | method | `System.cct` |
-| 2628 | method | `System.linearize` |
-| 2642 | method | `System.eigen` |
-| 2690 | method | `System.reduced_y` |
+| 1172 | class | `HVDC` |
+| 1191 | method | `HVDC.__init__` |
+| 1393 | method | `HVDC._loss` |
+| 1402 | method | `HVDC._source` |
+| 1407 | method | `HVDC._core` |
+| 1547 | method | `HVDC.init` |
+| 1628 | method | `HVDC.eval` |
+| 1632 | method | `HVDC.outputs` |
+| 1635 | method | `HVDC.limits` |
+| 1640 | method | `HVDC.find` |
+| 1668 | function | `typical` |
+| 1701 | class | `System` |
+| 1711 | method | `System.__init__` |
+| 1887 | method | `System._converter` |
+| 1954 | method | `System._y_build` |
+| 1963 | method | `System._ypat` |
+| 1968 | method | `System._yreal` |
+| 1980 | method | `System._split` |
+| 1983 | method | `System.fg` |
+| 2007 | method | `System.jac` |
+| 2063 | method | `System.init` |
+| 2087 | method | `System.state` |
+| 2093 | method | `System.internal_emf` |
+| 2104 | method | `System._hvdc` |
+| 2114 | method | `System._apply` |
+| 2192 | method | `System._unit` |
+| 2198 | method | `System._reset_units` |
+| 2216 | method | `System._consistent` |
+| 2228 | method | `System.simulate` |
+| 2328 | method | `System._iter_matrix` |
+| 2335 | method | `System._units` |
+| 2338 | method | `System._freeze` |
+| 2346 | method | `System._thaw` |
+| 2350 | method | `System._project` |
+| 2359 | method | `System._step_tr` |
+| 2380 | method | `System._step_full` |
+| 2402 | method | `System._step_alt` |
+| 2413 | method | `System._alt` |
+| 2437 | method | `System._lte` |
+| 2456 | method | `System.batch` |
+| 2466 | method | `System.quantities` |
+| 2594 | method | `System.stable` |
+| 2611 | method | `System.cct` |
+| 2634 | method | `System.linearize` |
+| 2648 | method | `System.eigen` |
+| 2696 | method | `System.reduced_y` |
 
 ### `pcl/scopf.py`
 

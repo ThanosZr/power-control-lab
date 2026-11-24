@@ -373,7 +373,7 @@ class ApiSurface(unittest.TestCase):
         (Network.dc_source, experimental), the capacitance of a DC bus at the end of Network.dc_bus (C), the option 'stations' of the
         study 'rms'."""
         from pcl import model, study
-        self.assertEqual(model.VERSION, 4)
+        self.assertGreaterEqual(model.VERSION, 4)                                      # (5 from 5.0.17)
         for k in ('pcl.model.converters_of', 'pcl.model.stations_of', 'pcl.network.Network.dc_source'):
             self.assertIn(k, self.now['pcl'])
             self.assertTrue(api_surface.experimental('pcl', k), k)
@@ -381,6 +381,15 @@ class ApiSurface(unittest.TestCase):
         self.assertEqual(self.now['pcl']['pcl.network.Network.dc_bus']['params'][-1], 'C')
         self.assertEqual(self.now['pcl']['pcl.network.Network.dc_source']['params'], ['bus', 'I', 'name'])
         self.assertIn('stations', study.OPTIONS['rms'])
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 1032)       # 1032 then
+
+    def test_the_surface_of_5_0_17(self):
+        """5.0.17: the stations of the drawing with the terminal n off the ground (ROADMAP §101 step 2): the model of the drawing at
+        version 5 (its grids of pairs of poles), no new points; the limiter of the DC overvoltage of a station of pcl.rms.HVDC as
+        data of the station (ovl, V_dc,max, k_ov), off by default (the stations of the API as in 5.0.15)."""
+        from pcl import model, rms
+        self.assertEqual(model.VERSION, 5)
+        self.assertEqual({k: rms.STATION_DEFAULTS[k] for k in ('ovl', 'Vdcmax', 'kov')}, {'ovl': 0.0, 'Vdcmax': 1.1, 'kov': 10.0})
         self.assertEqual(sum(len(v) for v in self.now.values()), 1032)
 
     def test_the_surface_of_4_19_5(self):

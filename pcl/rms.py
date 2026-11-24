@@ -1156,7 +1156,10 @@ class Statcom(_Holds, Kind):
 # converter's capacitance (its C = 2·W·S_n/U_n² on its DC bus); X, R: the converter reactance behind which a station that
 # forms its island's voltage (Vf) is a source; T_dc: the lag of a DC/DC converter (s).
 STATION_DEFAULTS = {'Tp': 0.1, 'Tq': 0.1, 'Tvdc': 0.1, 'H': 0.03, 'Tvac': 0.1, 'Xpcc': 0.1, 'Tvf': 0.1, 'kdv': 0.2, 'X': 0.255,
-                    'R': 0.0, 'Ti': 0.01, 'bw': 20.0, 'Ilim': 1.1, 'Idlim': 1.1, 'W': 30.0, 'Ldc': 0.0, 'Rd': 0.0, 'fd': 10.0}
+                    'R': 0.0, 'Ti': 0.01, 'bw': 20.0, 'Ilim': 1.1, 'Idlim': 1.1, 'W': 30.0, 'Ldc': 0.0, 'Rd': 0.0, 'fd': 10.0,
+                    'ovl': 0.0, 'Vdcmax': 1.1, 'kov': 10.0}
+# ovl (5.0.17): 1, the limiter of the DC overvoltage of the MMCC in the modes P and droop: above V_dc,max (pu) the d current is
+# cut by k_ov·(U_dc − V_dc,max) and the integrator of P holds (the EMT's OVL); 0 (the default, as 5.0.15): without it
 # Ldc (H): the DC side of the station behind its terminals, its capacitance inside (as Model 4 of an MMC: C_dc = 6C/N behind
 # 2L_arm/3), with the active damping R_d (Ω) on the part of its current above f_d (Hz), as the EMT; without a resistance in
 # series, so that the start is the AC/DC load flow (whose stations are lossless on their DC side); Ldc = 0: the capacitance
@@ -1442,7 +1445,10 @@ class HVDC(_Holds, Kind):
             vref = g['Vref'] + g['dV']
             erV = vref - ud
             isV = g['mode'] == 1
-            idr = np.where(isV, g['kpv'] * erV + xd, xd / vdn)
+            # 5.0.17: the limiter of the DC overvoltage (ovl, the modes P and droop), decided at the start of the step
+            ova = self._hold('ov')(_re(ud), 1.0 + 0 * _re(ud), -np.inf, g['Vdcmax']) & (g['ovl'] > 0) & ~isV
+            ovo = np.where(ova, ud - g['Vdcmax'], 0 * ud)
+            idr = np.where(isV, g['kpv'] * erV + xd, xd / vdn - g['kov'] * ovo)
             iqr = np.where(g['qv'], xq, -xq / vdn)
             # the current limit with the priority to P (EMTP Fig. 20, as the EMT)
             idl = _clip(idr, -g['Idlim'], g['Idlim'])
@@ -1464,7 +1470,7 @@ class HVDC(_Holds, Kind):
             # held while the limit holds the reference and the error would drive it further (d ↑ with x_d; q: Q ↓ with x_q)
             hd = self._hold('xd')(_re(idr - idl), _re(rd), -1e-12, 1e-12)
             hq = self._hold('xq')(_re(iqr - iql), _re(np.where(g['qv'], rq, -rq)), -1e-12, 1e-12)
-            Fxd = np.where(hd, 0 * rd, rd)
+            Fxd = np.where(hd | ova, 0 * rd, rd)
             Fxq = np.where(hq, 0 * rq, rq)
             ir_in, ii_in = i_d * c - i_q * s, i_d * s + i_q * c
             Pin = (vr * ir_in + vi * ii_in) / g['k']       # into the converter, pu of S_base

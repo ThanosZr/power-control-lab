@@ -4,7 +4,9 @@ MMCC (pcl.rms.Converter, cc 'pi').
 
 The checks: at rest from the AC/DC load flow; two loops with a closed-form solution (the V_dc loop of a station on its own
 capacitance, the power loop of the converter 'pi'); the Jacobian of the device across buses against differences; and the
-DCS2 of the CIGRE B4 against our EMT of the same network (the tutorial b4dcs2, tests/js/b4_rms_cases.js)."""
+DCS2 of the CIGRE B4 against our EMT of the same network (the tutorial b4dcs2, tests/js/b4_rms_cases.js). 5.0.17: the link of
+hvdc_mmc (a symmetric monopole) from its drawing against its EMT (tests/js/hvdc_rms_cases.js), with the limiter of the DC
+overvoltage of the MMCC."""
 import json
 import math
 import subprocess
@@ -213,6 +215,68 @@ class AgainstEMT(unittest.TestCase):
                 d = np.interp(te, T, r['dc']['stations']['MMC' + k]['Pt']) - np.array(e['P'][k])
                 self.assertLess(float(np.max(np.abs(d[m]))), tp, msg=(e['ev'], e['ctl'], k))
                 self.assertLess(abs(float(d[end].mean())), 1.5, msg=(e['ev'], e['ctl'], k))           # MW
+
+
+class SymmetricMonopole(unittest.TestCase):
+    """5.0.17 (THEORY §8ΩΡ.5): the link of hvdc_mmc (two MMC stations, Model 4, a symmetric monopole with the cable pair of the
+    tutorial) in RMS from its drawing (pcl.model.dynamic: a grid of two pairs of poles, the cable as a line of two poles) against
+    its EMT (tests/js/hvdc_rms_cases.js), from 0.2 s: the voltages between the poles at the two stations and their DC powers."""
+
+    @classmethod
+    def setUpClass(cls):
+        out = subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'hvdc_rms_cases.js'), 'pstep,acf'], capture_output=True, text=True,
+                             timeout=900, cwd=ROOT)
+        if out.returncode:
+            raise RuntimeError(out.stderr)
+        cls.js = {e['ev']: e for e in json.loads(out.stdout)['runs']}
+
+    def run_rms(self, ev, ovl=True):
+        from pcl import model
+        proj = json.loads(subprocess.run(['node', str(ROOT / 'tests/js/model_cases.js'), 'build', 'hvdc_mmc', json.dumps({'ev': ev})],
+                                         capture_output=True, text=True, timeout=300, check=True).stdout)
+        m = model.of(proj)
+        if not ovl:
+            for e in m['elements']:
+                if e['type'] == 'MMC':
+                    e['ctl']['params']['ovl'] = 'off'
+        r = model.dynamic(m, t_end=1.0, h=0.005, record=0.001, buses=[])
+        self.assertEqual(r['stats']['nonconv'], 0)
+        self.assertEqual(r['drawing']['notes'], [])
+        e = self.js[ev]
+        te, T = np.array(e['t']), np.asarray(r['t'])
+        dU, dP = {}, {}
+        for k in ('1', '2'):
+            dU[k] = np.interp(te, T, r['dc']['buses']['dc' + k]['U']) - np.array(e['U'][k])
+            dP[k] = np.interp(te, T, r['dc']['stations']['MMC' + k]['Pt']) - np.array(e['U'][k]) * np.array(e['I'][k]) / 1e3
+        return te, dU, dP
+
+    def test_the_step_of_p(self):
+        # measured with h = 5 ms, from 0.2 s (after the start of the tutorial): the largest |ΔU| 1.60 and 1.40 kV, |ΔP| 20.7 and
+        # 21.8 MW (in the first ms after the step at 0.5 s); at the end ΔU 0.000 kV and ΔP ±1.44 MW (the losses of the MMC, which
+        # the load flow and the RMS have not, THEORY §8ΩΟ.7)
+        self.assertEqual(self.js['pstep']['warn'], [])
+        te, dU, dP = self.run_rms('pstep')
+        m, end = te > 0.2, te > 0.95
+        for k in ('1', '2'):
+            self.assertLess(float(np.max(np.abs(dU[k][m]))), 2.0, msg=k)               # kV
+            self.assertLess(float(np.max(np.abs(dP[k][m]))), 26.0, msg=k)              # MW
+            self.assertLess(abs(float(dU[k][end].mean())), 0.02, msg=k)
+            self.assertLess(abs(float(dP[k][end].mean())), 2.0, msg=k)
+
+    def test_the_ac_fault_at_the_station_of_vdc(self):
+        # the three-phase fault at the station of V_dc (0.5–0.65 s): the station of P cuts its current above V_dc,max 1.1 pu (the
+        # limiter of the MMCC, ovl), and the DC voltage stays near 1.2 pu as in the EMT, where the station of V_dc blocks (its
+        # protection, which the RMS has not). Measured: during the fault (0.55–0.65 s) |ΔU| 4.3 and 5.1 kV; after it (from 0.7 s)
+        # 25 kV, the recovery of the RMS slower; at the end −0.08 and −0.09 kV. Without the limiter the RMS stays at 1164 kV.
+        te, dU, dP = self.run_rms('acf')
+        f, end = (te > 0.55) & (te < 0.65), te > 0.95
+        for k in ('1', '2'):
+            self.assertLess(float(np.max(np.abs(dU[k][f]))), 6.5, msg=k)
+            self.assertLess(float(np.max(np.abs(dU[k][te > 0.7]))), 32.0, msg=k)
+            self.assertLess(abs(float(dU[k][end].mean())), 0.15, msg=k)
+            self.assertLess(abs(float(dP[k][end].mean())), 3.5, msg=k)
+        te, dU, dP = self.run_rms('acf', ovl=False)
+        self.assertGreater(float(dU['1'][end].mean()), 400.0)
 
 
 class Refused(unittest.TestCase):

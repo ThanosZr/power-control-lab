@@ -12,6 +12,8 @@
 // stations (dc): the nodes of their DC terminals p (the terminal n on the ground), the L and R between them (lines), the C
 // and R to the ground (the capacitance and the leakage of a bus), the current sources (IDC, its value or, from a signal,
 // an EXPR of the voltmeters of the DC buses and of t, through LPF and GAIN blocks). What a DC grid has besides, it says.
+// 5.0.17: the stations with the terminal n off the ground (a symmetric monopole): a grid of pairs of poles, each bus a pair of
+// nodes at the voltage between them, with a TLM of two conductors (or an L or R on each pole) as a line (pairGrid).
 //   Model.of(project) → {version, f, buses, elements, skipped, touching, warnings}
 //     buses:    [{id, label, Un, at: [[component id, terminal], …], juncs: [ids]}]   (the id: a junction of the drawing on the bus)
 //     elements: [{id, type, label, params, buses: [bus id per terminal], closed?, sides?, ctl?}]   (params: the defaults with the
@@ -22,6 +24,9 @@
 //               I | expr}]}   (5.0.16; Un and U0 in V from the stations, C in F, G in S; k = +1 when the current of the
 //               source goes into the bus; expr: {ast, ins: [DC bus per input], pars, gain, tau: [the time constants of
 //               the LPF on the way]})
+//               5.0.17: a grid of pairs of poles (stations with the terminal n off the ground): its buses with poles: 2 (U_n,
+//               U0, C, G between the poles), its lines with poles (2: a TLM of two conductors, tlm the TLM's params; 1: an L or
+//               R on each pole, R and L of the loop)
 //     skipped:  [{id, type, label, why}]   why: 'sub' (a subcircuit, when subcircuit.js is not there), 'later' (a part of the
 //               network that is not in the model yet), 'other' (a part that is not three-phase, on a bus), 'phases' (crossed or
 //               joined phases), 'nobus' (no voltage level), 'mph' (a line from geometry with other than three phases)
@@ -34,8 +39,9 @@
  const SC=root.SubCircuit||(typeof require!=='undefined'?require('./subcircuit.js'):null);
  const EX=root.Expr||(typeof require!=='undefined'?require('./expr.js'):null);
  // 2 (5.0.12): the parts TLM and EQV3, and the ids of the parts inside subcircuits (X1/<id>); 3 (5.0.13): the controls of a GEN3;
- // 4 (5.0.16): VSC2 and MMC with their controls, and the DC grids
- const VERSION=4;
+ // 4 (5.0.16): VSC2 and MMC with their controls, and the DC grids; 5 (5.0.17): the grids of pairs of poles (the stations with
+ // the terminal n off the ground), with a TLM of two conductors as a DC line
+ const VERSION=5;
  // the parts of the model and their three-phase terminals (terminal → its phase pins when the part is not on a bus)
  const T1={abc:['a','b','c']},T2={abc1:['a1','b1','c1'],abc2:['a2','b2','c2']};
  const TERMS={GEN3:T1,GRID3:T1,VAC3:T1,LOAD3:T1,FLT3:T1,LINE3:T2,XF3:T2,CB3:T2,ZSER3:T2,TLM:T2,EQV3:null,VSC2:T1,MMC:T1};
@@ -155,13 +161,13 @@
    if(c.type==='VSC2'||c.type==='MMC'){const k=convCtl(c,keep,sig(),lab);e.ctl=k.ctl;warnings.push(...k.warnings);}
    elements.push(e);}
   // 5.0.16: the DC grids of the stations (an MMC, or a VSC2 with DC terminals), on the nodes of the solver
-  const dc=dcGrids(elements,flat,U,groundRoot,keep,sig,lab,warnings);
+  const inDC=new Set(),dc=dcGrids(elements,flat,U,groundRoot,keep,sig,lab,warnings,inDC);
   // the other parts: those not in the model yet, and those that are not three-phase, when they touch a bus
   const busNode=new Set();for(const x of good)for(const n of x.nodes)busNode.add(n);
   const touching=[];
   for(const c of keep){if(termsOf(c)||QUIET.has(c.type)||SHORT.has(c.type)||SHORT3[c.type])continue;const ps=Object.keys(P.elPins(c));if(!ps.length)continue;
    const fc=flatById.get(c.id),fps=fc?Object.keys(P.elPins(fc)):[],on=fps.some(p=>busNode.has(U.find(c.id+':'+p)));
-   if(c.type==='TLM')skipped.push({id:c.id,type:c.type,label:lab(c),why:'mph'});
+   if(c.type==='TLM'){if(!inDC.has(c.id))skipped.push({id:c.id,type:c.type,label:lab(c),why:'mph'});}      // (5.0.17: or a line of a DC grid)
    else if(LATER.has(c.type))skipped.push({id:c.id,type:c.type,label:lab(c),why:'later'});
    else if(on)skipped.push({id:c.id,type:c.type,label:lab(c),why:'other'});
    if(on)touching.push(c.id);}
@@ -196,13 +202,25 @@
  // its bus, an IDC to the ground a source, a voltmeter is quiet; anything else on a DC node is said, and stays out. A VSC2
  // with DC terminals is not a station of a grid yet: its own DC side (a capacitor, a source) is ideal in the RMS.
  const DCQ=new Set(['VM','VP','JUNC','GND','NOTE','MEAS','DISP']);
- function dcGrids(elements,flat,U,groundRoot,keep,sig,lab,warnings){
+ // 5.0.17: the stations with the terminal n on the ground make the grids of poles (5.0.16, poleGrid), the others the grids of
+ // pairs of poles (pairGrid); a drawing may have both, each a grid of its own
+ function dcGrids(elements,flat,U,groundRoot,keep,sig,lab,warnings,inDC){
   const st=elements.filter(e=>e.type==='MMC'),vp=elements.filter(e=>e.type==='VSC2'&&e.params.dc==='pins');
   if(!st.length){for(const e of vp)warnings.push(`${e.label}: η πλευρά DC του (ακροδέκτες p, n) στη δυναμική RMS είναι ιδανική.`);return null;}
   const at=new Map();for(const c of flat.components){if(c.type==='SUB')continue;for(const pn of Object.keys(P.elPins(c))){const r=U.find(c.id+':'+pn);if(!at.has(r))at.set(r,[]);at.get(r).push([c,pn]);}}
+  const two=st.filter(e=>U.find(e.id+':n')!==groundRoot),one=st.filter(e=>!two.includes(e));
+  const a=one.length?poleGrid(one,vp,at,U,groundRoot,keep,sig,lab,warnings):null;
+  const b=two.length?pairGrid(two,at,U,groundRoot,keep,sig,lab,warnings,inDC,new Set((a?a.buses:[]).map(q=>q.id))):null;
+  if(!one.length)for(const e of vp)warnings.push(b&&b.nodes.has(U.find(e.id+':p'))?`${e.label}: μετατροπέας VSC2 σε δίκτυο DC με σταθμούς MMC: δεν μπαίνει ακόμη ως σταθμός (η πλευρά DC του στο RMS είναι ιδανική).`
+   :`${e.label}: η πλευρά DC του (ακροδέκτες p, n) στη δυναμική RMS είναι ιδανική.`);
+  if(b)delete b.nodes;
+  if(!a||!b)return a||b;
+  return {buses:[...a.buses,...b.buses].sort((x,y)=>x.id<y.id?-1:x.id>y.id?1:0),lines:[...a.lines,...b.lines],sources:[...a.sources,...b.sources]};}
+ // 5.0.16: a grid of poles: the nodes of the terminals p of the stations with the terminal n on the ground (one pole to the
+ // ground, at the U_n of the station), and what is on them
+ function poleGrid(st,vp,at,U,groundRoot,keep,sig,lab,warnings){
   const pOf=new Map(),Un=new Map(),U0=new Map(),own=[];
-  for(const e of st){const pr=U.find(e.id+':p'),nr=U.find(e.id+':n');
-   if(nr!==groundRoot){warnings.push(`${e.label}: ο ακροδέκτης n της πλευράς DC δεν είναι στη γη (δίπολο ή συμμετρικό μονοπολικό): η πλευρά DC δεν μπαίνει ακόμη.`);continue;}
+  for(const e of st){const pr=U.find(e.id+':p');
    pOf.set(e.id,pr);const v=e.type==='MMC'?+e.params.Vdc:+e.params.Vdc0;if(v>0&&!Un.has(pr))Un.set(pr,v);
    const u0=e.type==='MMC'?(+e.params.vc0||1)*(+e.params.Vdc):+e.params.Vdc0;if(u0>0&&!U0.has(pr))U0.set(pr,u0);}
   // the nodes of the grids and what is on them
@@ -232,17 +250,84 @@
   const out={buses,lines:lines.filter(l=>grid.has(l.a)).map(l=>({id:l.id,label:l.label,a:bid.get(l.a),b:bid.get(l.b),R:l.R,L:l.L})),sources:[]};
   for(const s of src){if(!grid.has(s.node))continue;const o=dcSource(s,keep,sig,bid,U,lab,warnings);if(o)out.sources.push(o);}
   return out;}
+ // 5.0.17: a grid of pairs of poles: the stations with the terminal n off the ground (a symmetric monopole, the poles p and n at
+ // ±U/2). A bus is a pair of nodes (p, n) at the voltage between them, U_n the V_dc of its stations (pole to pole, as
+ // Network.dc_bus); a line is a TLM of two conductors from a pair to a pair (its R, L, C per conductor from pcl.model, poles 2),
+ // or an L or R on each pole, or on one, to the next pair (R and L of the loop, poles 1). Between the poles a C, an R, an IDC;
+ // from each pole to the ground a C or an R, the same on both: at ±U/2 they are (C_p + C_n)/4 and (G_p + G_n)/4 of the pair.
+ // What else touches a pole is said and stays out, and so does a node in two pairs (a bipole with a common neutral).
+ function pairGrid(st,at,U,groundRoot,keep,sig,lab,warnings,inDC,taken){
+  const K=(p,n)=>p+'|'+n,pairs=new Map(),Un=new Map(),U0=new Map(),stOf=new Map();
+  for(const e of st){const p=U.find(e.id+':p'),n=U.find(e.id+':n');
+   if(p===n||p===groundRoot){warnings.push(`${e.label}: ${p===n?'οι ακροδέκτες p και n της πλευράς DC στον ίδιο κόμβο':'ο ακροδέκτης p της πλευράς DC στη γη'}: η πλευρά DC δεν μπαίνει.`);continue;}
+   const k=K(p,n);if(!pairs.has(k))pairs.set(k,{p,n});stOf.set(e.id,k);
+   const v=+e.params.Vdc;if(v>0&&!Un.has(k))Un.set(k,v);const u0=(+e.params.vc0||1)*v;if(u0>0&&!U0.has(k))U0.set(k,u0);}
+  const num=(c,q,d)=>+P.parseEng((c.params||{})[q]??d);
+  const seen=new Set(),todo=[...pairs.keys()],lines=[],src=[],cap=new Map(),gl=new Map(),bad=new Set(),out1=new Set(),done=new Set(),owner=new Map(),nodes=new Set();
+  const say=(c,k)=>{bad.add(k);warnings.push(`${lab(c)}: στο δίκτυο DC δύο πόλων (${c.type}): δεν μπαίνει ακόμη· ό,τι κάνει, το RMS δεν το έχει.`);};
+  while(todo.length){const k=todo.shift();if(seen.has(k))continue;seen.add(k);       // (in the order of the stations: dc1 the first)
+   if(!pairs.has(k)){const [p,n]=k.split('|');pairs.set(k,{p,n});}
+   const {p:Pn,n:Nn}=pairs.get(k);nodes.add(Pn);nodes.add(Nn);
+   for(const r of [Pn,Nn]){if(owner.has(r)&&owner.get(r)!==k){out1.add(k);out1.add(owner.get(r));warnings.push('Ένας κόμβος DC σε δύο ζεύγη πόλων (δίπολος με κοινό ουδέτερο): δεν μπαίνει ακόμη.');}else owner.set(r,k);}
+   const ser=[[],[]],cg=[0,0],gg=[0,0];let cpn=0,gpn=0,v0=null;
+   for(const [side,r] of [[0,Pn],[1,Nn]])for(const [c,pn] of at.get(r)||[]){
+    if(DCQ.has(c.type)||SHORT.has(c.type)||done.has(c.id))continue;         // (a meter in series is a wire)
+    if(c.type==='MMC'&&(pn==='p'||pn==='n')&&stOf.get(c.id)===k)continue;
+    const ps=Object.keys(P.elPins(c));
+    if(c.type==='TLM'){done.add(c.id);const on=x=>ps.find(q=>U.find(c.id+':'+q)===x),pp=on(Pn),nn=on(Nn);
+     if(P.tlmM(c.params||{})!==2||!pp||!nn||pp.slice(1)!==nn.slice(1)||pp[0]===nn[0]){say(c,k);continue;}
+     const end=pp.slice(1)==='1'?'2':'1',fp=U.find(c.id+':'+pp[0]+end),fn=U.find(c.id+':'+nn[0]+end);
+     if(fp===fn||fp===groundRoot||fn===groundRoot){say(c,k);continue;}
+     inDC.add(c.id);const kf=K(fp,fn);lines.push({id:c.id,label:lab(c),a:k,b:kf,poles:2,tlm:params(c)});todo.push(kf);continue;}
+    if(ps.length!==2){say(c,k);continue;}
+    const o=U.find(c.id+':'+ps[pn===ps[0]?1:0]);
+    if(o===(side?Pn:Nn)){done.add(c.id);                              // between the poles
+     if(c.type==='C'){cpn+=num(c,'C',1e-4);const v=num(c,'v0',0)*(pn==='p'===!side?1:-1);if(v>0)v0=v;}
+     else if(c.type==='R')gpn+=1/num(c,'R',10);
+     else if(c.type==='IDC')src.push({c,node:k,k:(pn==='p')===!side?1:-1});
+     else say(c,k);continue;}
+    if(o===groundRoot){done.add(c.id);if(c.type==='C')cg[side]+=num(c,'C',1e-4);else if(c.type==='R')gg[side]+=1/num(c,'R',10);else say(c,k);continue;}
+    if(c.type==='L'||c.type==='R'){ser[side].push({c,o});continue;}
+    done.add(c.id);say(c,k);}
+   for(const [x,y,w] of [[cg[0],cg[1],'χωρητικότητες'],[gg[0],gg[1],'αντιστάσεις']])
+    if(Math.abs(x-y)>1e-9*Math.max(x,y))warnings.push(`Ζυγός DC δύο πόλων: οι ${w} προς τη γη δεν είναι ίδιες στους δύο πόλους· στο RMS ο μέσος όρος (ο ζυγός έχει μόνο την τάση ανάμεσα στους πόλους).`);
+   cap.set(k,cpn+(cg[0]+cg[1])/4);gl.set(k,gpn+(gg[0]+gg[1])/4);if(v0&&!U0.has(k))U0.set(k,v0);
+   if(ser[0].length>1||ser[1].length>1){out1.add(k);for(const q of [...ser[0],...ser[1]])done.add(q.c.id);
+    warnings.push(`Ζυγός DC δύο πόλων: πάνω από ένα L ή R σε έναν πόλο (${[...ser[0],...ser[1]].map(q=>lab(q.c)).join(', ')}): ποιο πάει με ποιο στον άλλο πόλο δεν βγαίνει· δεν μπαίνουν.`);}
+   else if(ser[0].length||ser[1].length){const a=ser[0][0],b=ser[1][0],fp=a?a.o:Pn,fn=b?b.o:Nn;for(const q of [a,b])if(q)done.add(q.c.id);
+    if(fp===fn||fp===groundRoot||fn===groundRoot){for(const q of [a,b])if(q)say(q.c,k);}
+    else{const v=q=>q?{R:q.c.type==='R'?num(q.c,'R',10):num(q.c,'Rs',0),L:q.c.type==='L'?num(q.c,'L',1e-4):0}:{R:0,L:0},va=v(a),vb=v(b),kf=K(fp,fn);
+     lines.push({id:(a||b).c.id,label:[a,b].filter(Boolean).map(q=>lab(q.c)).join(' + '),a:k,b:kf,poles:1,R:va.R+vb.R,L:va.L+vb.L});todo.push(kf);}}}
+  const grid=[...seen].filter(k=>!out1.has(k));if(!grid.length)return null;const gs=new Set(grid);
+  for(let again=true;again;){again=false;for(const l of lines){if(Un.has(l.a)&&!Un.has(l.b)){Un.set(l.b,Un.get(l.a));again=true;}else if(Un.has(l.b)&&!Un.has(l.a)){Un.set(l.a,Un.get(l.b));again=true;}}}
+  // the names: the junctions of the drawing on the pole p, else on the pole n
+  const js=new Map();for(const c of keep)if(c.type==='JUNC'){const r=U.find(c.id+':j');if(!js.has(r))js.set(r,[]);js.get(r).push(c);}
+  const srt=l=>(l||[]).slice().sort((a,b)=>(a.label?0:1)-(b.label?0:1)||(a.id<b.id?-1:a.id>b.id?1:0));
+  const bid=new Map(),used=new Set(taken),buses=[];let nb=taken.size;
+  for(const k of grid){const {p,n}=pairs.get(k),j=[...srt(js.get(p)),...srt(js.get(n))];
+   let id=j.length?j[0].id:'dc'+(++nb);while(used.has(id))id=j.length?id+'~'+buses.length:'dc'+(++nb);used.add(id);bid.set(k,id);
+   if(bad.has(k))warnings.push(`Ζυγός DC ${j.length?String(j[0].label||j[0].id):id}: έχει στοιχεία που δεν μπαίνουν ακόμη.`);
+   buses.push({id,label:j.length?String(j[0].label||j[0].id):id,Un:Un.get(k)??null,U0:U0.get(k)??Un.get(k)??null,C:cap.get(k)||0,G:gl.get(k)||0,juncs:j.map(q=>q.id),poles:2});}
+  buses.sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);
+  for(const e of st)if(stOf.has(e.id)&&gs.has(stOf.get(e.id)))e.dc=bid.get(stOf.get(e.id));
+  // a voltmeter between the poles of a pair measures its bus (for the inputs of an expression)
+  const vm=v=>{const p=U.find(v.id+':p'),n=U.find(v.id+':n');return bid.get(K(p,n))??null;};
+  const out={buses,lines:lines.filter(l=>gs.has(l.a)&&gs.has(l.b)).map(l=>({id:l.id,label:l.label,a:bid.get(l.a),b:bid.get(l.b),poles:l.poles,
+   ...(l.tlm?{tlm:l.tlm}:{R:l.R,L:l.L})})),sources:[],nodes};
+  for(const s of src){if(!gs.has(s.node))continue;const o=dcSource(s,keep,sig,bid,U,lab,warnings,vm);if(o)out.sources.push(o);}
+  return out;}
  // 5.0.16: a current source of a DC grid: its value (A), or from a signal: through LPF (their time constants) and GAIN (their
- // gains) to an EXPR whose inputs are voltmeters of the DC buses (its AST as the solver parses it, mna.js)
- function dcSource(s,keep,sig,bid,U,lab,warnings){const c=s.c,p={...P.defaults('IDC'),...(c.params||{})},o={id:c.id,label:lab(c),bus:bid.get(s.node),k:s.k};
+ // gains) to an EXPR whose inputs are voltmeters of the DC buses (its AST as the solver parses it, mna.js); 5.0.17: vm, the bus
+ // of a voltmeter in a grid of pairs (between its poles)
+ function dcSource(s,keep,sig,bid,U,lab,warnings,vm){const c=s.c,p={...P.defaults('IDC'),...(c.params||{})},o={id:c.id,label:lab(c),bus:bid.get(s.node),k:s.k};
   if(p.ctl!=='sig'){o.I=String(p.sched||'').trim()?String(p.sched):+P.parseEng(p.I);return o;}
   const S=sig(),at=(id,q)=>S.find(id+':'+q),drv=(id,q)=>{const r=at(id,q);for(const b of keep){if(b.id===id)continue;for(const pn of Object.keys(P.pinsOf(b)))if(at(b.id,pn)===r&&(pn==='y'))return b;}return null;};
   const tau=[];let gain=1,b=drv(c.id,'u');
   while(b&&(b.type==='LPF'||b.type==='GAIN')){const q={...P.defaults(b.type),...(b.params||{})};if(b.type==='LPF')tau.push(1/(2*Math.PI*(+P.parseEng(q.fc))));else gain*=+P.parseEng(q.K);b=drv(b.id,'u');}
   if(!b||b.type!=='EXPR'||!EX){warnings.push(`${lab(c)}: πηγή ρεύματος DC από σήμα που δεν είναι έκφραση (EXPR) μέσα από LPF και GAIN: δεν μπαίνει στο RMS.`);return null;}
   const q={...P.defaults('EXPR'),...(b.params||{})},ins=EX.names(q.ins),pars=EX.params(q.pars),inb=[];
-  for(const n of ins){const v=drv(b.id,n);const r=v&&v.type==='VM'?U.find(v.id+':p'):null,g=v&&v.type==='VM'?U.find(v.id+':n'):null;
-   if(!v||v.type!=='VM'||!bid.has(r)){warnings.push(`${lab(c)}: η είσοδος ${n} της έκφρασης ${lab(b)} δεν είναι βολτόμετρο ζυγού DC: δεν μπαίνει στο RMS.`);return null;}inb.push(bid.get(r));}
+  for(const n of ins){const v=drv(b.id,n);const r=v&&v.type==='VM'?(vm?vm(v):U.find(v.id+':p')):null;
+   if(!v||v.type!=='VM'||!(vm?r!==null:bid.has(r))){warnings.push(`${lab(c)}: η είσοδος ${n} της έκφρασης ${lab(b)} δεν είναι βολτόμετρο ζυγού DC: δεν μπαίνει στο RMS.`);return null;}inb.push(vm?r:bid.get(r));}
   let ast;try{ast=EX.parse(String(q.expr??''),[...ins,...Object.keys(pars)]);}catch(e){warnings.push(`${lab(b)}: ${e.message}`);return null;}
   o.expr={ast,ins:inb,pars:Object.values(pars),gain,tau,text:String(q.expr??''),via:b.id};return o;}
  // what the page says about a model, in one line

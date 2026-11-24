@@ -33,6 +33,10 @@ vdc, droop, vf of the MMCC as the controls P, V, droop, Vf), with the DC buses (
 sources (dc_source) of the drawing: the load flow of such a drawing is the AC/DC one. For the RMS dynamics (dynamic, and the
 study 'rms' of a drawing) a VSC2 with its GFMC or MMCC is a converter of pcl.rms at its bus, from the voltage that the load
 flow with its EMF gives there (converters_of), and the stations their dynamic data (stations_of). In 'sc' they stay out.
+
+5.0.17 (THEORY §8ΩΡ): the stations with the terminal n off the ground (a symmetric monopole): their DC grid is a grid of pairs of
+poles (model.js), each DC bus at the voltage between the poles; a TLM of two conductors between two pairs is a DC line of two
+poles (dc_line, poles = 2) with R, L and C per conductor from the difference of its two conductors (the loop) at F_DC (_tlm_dc).
 """
 import cmath
 import math
@@ -41,9 +45,12 @@ import numpy as np
 
 from . import network as N
 
-VERSION = 4                                  # 2 (5.0.12): TLM, EQV3, the parts inside subcircuits (ids X1/<id>); 3 (5.0.13): the
+VERSION = 5                                  # 2 (5.0.12): TLM, EQV3, the parts inside subcircuits (ids X1/<id>); 3 (5.0.13): the
                                              # controls of a GEN3 (ctl: avr, pss, gov) for the RMS dynamics; 4 (5.0.16): VSC2, MMC
-                                             # with their controls (ctl: GFMC, MMCC), and the DC grids (dc)
+                                             # with their controls (ctl: GFMC, MMCC), and the DC grids (dc); 5 (5.0.17): the DC
+                                             # grids of pairs of poles (the stations with the terminal n off the ground), a TLM
+                                             # of two conductors as a DC line
+F_DC = 1e-3                                  # 5.0.17: the frequency (Hz) of R, L, C of a TLM as a DC line: the limit of DC
 SQ3 = math.sqrt(3)
 STUDIES = ('pf', 'sc')
 TYPES = ('GEN3', 'GRID3', 'VAC3', 'LINE3', 'XF3', 'ZSER3', 'LOAD3', 'CB3', 'FLT3', 'TLM', 'EQV3', 'VSC2', 'MMC')
@@ -698,9 +705,25 @@ def _dc_value(s, buses):
     return s['k'] * x.get('gain', 1.0) * float(np.real(_expr(x['ast'], v, 0.0)))
 
 
+def _tlm_dc(p, f=F_DC):
+    """5.0.17: a TLM of two conductors as a line of two poles (the voltage between the conductors, the current out in one and
+    back in the other): R, L (Ω, H) and C (F) per conductor, the whole length, as Network.dc_line(poles=2) takes them. The loop
+    impedance Z_d = Z₁₁ + Z₂₂ − Z₁₂ − Z₂₁ at f (pcl.lineconst, as the TLM of the drawing has its data) is two conductors in
+    series, R = Re(Z_d)·ℓ/2, L = Im(Z_d)·ℓ/(2ω); with the poles at ±U/2 each conductor draws (Y₁₁ − Y₁₂)·U/2, C = Im(Y₁₁ − Y₁₂)·ℓ/ω
+    to the ground. At f = 1 mHz (the lowest frequency of the fit of the wideband model) R is that of DC."""
+    Z, Y, L = _tlm_zy(p, f)
+    if Z.shape != (2, 2):
+        raise ModelError(f'{len(Z)} αγωγοί: μια γραμμή DC δύο πόλων θέλει δύο')
+    w = 2 * math.pi * f
+    zd = complex(Z[0, 0] + Z[1, 1] - Z[0, 1] - Z[1, 0])
+    yc = complex(Y[0, 0] - Y[0, 1] + Y[1, 1] - Y[1, 0]) / 2            # (the mean of the two conductors)
+    return zd.real * L / 2, zd.imag / w * L / 2, yc.imag / w * L
+
+
 def _dc_grid(m, net, study, notes, els):
     """5.0.16: the DC grids of the drawing (model.js dc) as DC buses (their C and leakage), DC lines (R, L of the loop: the
-    drawing's node to ground is one pole of U_n) and current sources of pcl.network."""
+    drawing's node to ground is one pole of U_n) and current sources of pcl.network. 5.0.17: a line of two poles (poles = 2) per
+    conductor, and a TLM with R, L, C from its data (_tlm_dc)."""
     d = m.get('dc')
     if not d:
         return
@@ -718,10 +741,19 @@ def _dc_grid(m, net, study, notes, els):
     for ln in d['lines']:
         if ln['a'] not in buses or ln['b'] not in buses:
             continue
-        if not ln['R'] > 0:
+        C = None
+        if ln.get('tlm') is not None:
+            try:
+                R, L, C = _tlm_dc(ln['tlm'])
+            except (ModelError, ValueError) as x:
+                notes.append(f'{ln.get("label") or ln["id"]}: {x}· εκτός μελέτης.')
+                continue
+        else:
+            R, L = float(ln['R'] or 0.0), float(ln.get('L') or 0.0)
+        if not R > 0:
             notes.append(f'{ln.get("label") or ln["id"]}: γραμμή DC χωρίς R: η ροή φορτίου DC τη θέλει· εκτός μελέτης.')
             continue
-        net.dc_line(ln['a'], ln['b'], R=float(ln['R']), L=float(ln['L']) if ln.get('L') else None, poles=1, name=str(ln['id']))
+        net.dc_line(ln['a'], ln['b'], R=R, L=L if L > 0 else None, C=C if C else None, poles=int(ln.get('poles') or 1), name=str(ln['id']))
         els[str(ln['id'])] = [str(ln['id'])]
     for q in d['sources']:
         if q['bus'] not in buses:
@@ -744,7 +776,7 @@ def _converter_net(e, net, study, notes, at, slack, Ub, pu, shunt, helpers, w, k
     if e['type'] == 'MMC':
         q = _station_ctl(e)
         if not e.get('dc') or str(e['dc']) not in getattr(net, 'dc_buses', {}):
-            notes.append(f'{lab}: σταθμός χωρίς δίκτυο DC του σχεδίου που να μπαίνει (μονοπολικός, με τον ακροδέκτη n στη γη): εκτός μελέτης.')
+            notes.append(f'{lab}: σταθμός χωρίς δίκτυο DC του σχεδίου που να μπαίνει: εκτός μελέτης.')
             return []
         if q is None:
             notes.append(f'{lab}: σταθμός χωρίς έλεγχο MMCC σε P, V_dc, στατικότητα ή V/f: εκτός μελέτης.')
@@ -879,9 +911,10 @@ def stations_of(m):
         Zb = Vac * Vac / S
         N, C, Vdc, La = max(_num(p, 'N', 400), 1.0), _num(p, 'C', 0.01), _num(p, 'Vdc', 640e3), _num(p, 'Larm', 0.05)
         d = {'Sn': S, 'X': w * La / 2 / Zb, 'R': N * _num(p, 'Ron', 1e-3) / 2 / Zb, 'W': 3 * C * N * (Vdc / N) ** 2 * 1e3 / S}
-        for q in ('Tp', 'Tq', 'Tvdc', 'H', 'Tvac', 'Xpcc', 'Tvf', 'Ti', 'bw', 'Ilim', 'Idlim'):
+        for q in ('Tp', 'Tq', 'Tvdc', 'H', 'Tvac', 'Xpcc', 'Tvf', 'Ti', 'bw', 'Ilim', 'Idlim', 'Vdcmax', 'kov'):
             if q in k:
                 d[q] = _num(k, q, 0.0)
+        d['ovl'] = 0.0 if k.get('ovl') == 'off' else 1.0             # 5.0.17: the limiter of the DC overvoltage, as the EMT
         if p.get('model') == 'm4':
             d.update(Ldc=2 * La / 3, Rd=2 * _num(p, 'Rd', 20) / 3, fd=_num(p, 'fd', 10))
         else:
