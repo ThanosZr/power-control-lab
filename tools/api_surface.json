@@ -1,10 +1,11 @@
 {
- "version": "5.0.15",
+ "version": "5.0.16",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
    "pcl.rms.",
    "pcl.network.Network.dynamic",
+   "pcl.network.Network.dc_source",
    "pcl.insulation.",
    "pcl.surge.",
    "pcl.geo.",
@@ -2908,6 +2909,12 @@
     "params": [],
     "since": "5.0.11"
    },
+   "pcl.model.converters_of": {
+    "params": [
+     "m"
+    ],
+    "since": "5.0.16"
+   },
    "pcl.model.dynamic": {
     "params": [
      "m",
@@ -2982,6 +2989,12 @@
      "**kw"
     ],
     "since": "5.0.11"
+   },
+   "pcl.model.stations_of": {
+    "params": [
+     "m"
+    ],
+    "since": "5.0.16"
    },
    "pcl.netfile.FileError": {
     "params": [],
@@ -3225,7 +3238,8 @@
      "name",
      "Un",
      "V",
-     "R"
+     "R",
+     "C"
     ],
     "since": "4.20"
    },
@@ -3261,6 +3275,14 @@
      "C"
     ],
     "since": "4.20"
+   },
+   "pcl.network.Network.dc_source": {
+    "params": [
+     "bus",
+     "I",
+     "name"
+    ],
+    "since": "5.0.16"
    },
    "pcl.network.Network.dcdc": {
     "params": [
@@ -4826,7 +4848,8 @@
     "params": [
      "X",
      "Vr",
-     "Vi"
+     "Vi",
+     "t"
     ],
     "since": "5.0.15"
    },

@@ -419,5 +419,16 @@ const {chromium}=require('playwright');
   ev:(r?.result?.events||[]).map(e=>e.kind).join(','),ang:r?.summary?.max_angle_coi,ctl:(r?.result?.machines?.G2?.controls||{}).avr};});
  ok(/^✓ Ευσταθές/.test(rq.sum)&&rq.charts===5&&rq.ev==='fault,trip,clear,trip'&&rq.ang>60&&rq.ang<120&&rq.ctl==='st1a',
   'RMS: the drawing of «ieee9_emt» with its AVR and PSS, its fault and its breakers, stable, five charts ('+rq.ev+'; '+(rq.ang||0).toFixed(1)+'°)');
+ // 5.0.16 (ROADMAP §101 step 2): the card on the drawing of «b4dcs2»: no machine, the wind farm (VSC2 with its MMCC), the four
+ // stations (MMC with their MMCC) on the DC grid of the drawing and Cd-E1 as the current source of its expression
+ await p.evaluate(()=>{window.PCL.loadTutorial('b4dcs2',{});});await p.waitForTimeout(1200);
+ await p.evaluate(()=>{window.PCL.RM.T=1.5;window.PCL.RM.h=5;window.PCL.rmsRender();});
+ await p.waitForSelector('[data-rmgo]',{timeout:30000});await p.click('[data-rmgo]');
+ await p.waitForFunction(()=>!window.PCL.RM.busy&&(document.querySelector('#rms-sum')||document.querySelector('#rms-err'))&&window.PCL.RM.r?.result?.dc,null,{timeout:180000});
+ const rb=await p.evaluate(()=>{const r=window.PCL.RM.r;return {sum:(document.querySelector('#rms-sum')||document.querySelector('#rms-err')).textContent,
+  n:['#rms-conv','#rms-dc','#rms-st'].map(s=>document.querySelectorAll(s+' svg').length).join(','),st:Object.keys(r?.result?.dc?.stations||{}).length,
+  cd:(r?.result?.dc?.sources?.ICD?.P||[]).slice(-1)[0]};});
+ ok(/^Χωρίς μηχανές: 1 μετατροπείς, 4 σταθμοί/.test(rb.sum)&&rb.n==='3,1,3'&&rb.st===4&&Math.abs(rb.cd-55)<1,
+  'RMS: the drawing of «b4dcs2», its stations, its DC grid and Cd-E1 from its expression ('+rb.n+'; Cd-E1 '+(rb.cd||0).toFixed(1)+' MW)');
  console.log(JSON.stringify({rm:rm.split('\n').slice(0,4),bt:bt.split('\n').slice(0,4),imp},null,1));
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

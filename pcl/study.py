@@ -43,7 +43,7 @@ OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n
                   'pmu', 'currents', 'emt'),
            'harmonic': ('sources', 'harmonics', 'load_model', 'line_model', 'pulse', 'filters', 'scan_bus', 'scan_to', 'scan_step', 'tol', 'spectra'),
            'unbalanced': ('regulators', 'spread', 'tol', 'max_iter'), 'advice': (), 'sc': ('fault', 'mode', 'tmin'),
-           'rms': ('t_end', 'h', 'events', 'machines', 'default', 'loads', 'typical', 'record', 'method', 'step', 'buses'), 'acdc': ('method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits', 'set', 'out', 'mode', 'flow_limits', 'start', 'outages')}
+           'rms': ('t_end', 'h', 'events', 'machines', 'default', 'loads', 'typical', 'record', 'method', 'step', 'buses', 'stations'), 'acdc': ('method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits', 'set', 'out', 'mode', 'flow_limits', 'start', 'outages')}
 MAX_BUSES = 20000
 
 
@@ -75,7 +75,10 @@ def _base_network(data):
     if data.get('drawing') is not None:
         from . import model
         try:
-            net = model.network(data['drawing'], 'sc' if data.get('study') == 'sc' else 'pf')[0]
+            if data.get('study') == 'rms':                  # 5.0.16: the converters of the drawing as converters of pcl.rms
+                net = model._rms_network(data['drawing'])[0]
+            else:
+                net = model.network(data['drawing'], 'sc' if data.get('study') == 'sc' else 'pf')[0]
         except (model.ModelError, N.NetworkError, KeyError, TypeError, ValueError) as e:
             raise StudyError(f'Το σχέδιο δεν γίνεται δίκτυο: {e}') from e
         if not net.buses:
@@ -300,16 +303,27 @@ def _study(net, study, opt, faults=None):
 
 def _rms_drawing(data, net):
     """5.0.13: the options of the study 'rms' of a drawing: its machines with their controls and its events (pcl.model; not with
-    drawing_events False), with those of the request on top. Returns (options, notes)."""
+    drawing_events False), with those of the request on top. Returns (options, notes).
+    5.0.16: with its converters and the stations of its DC grids (pcl.model.converters_of, stations_of)."""
     from . import model
     opt = dict(data.get('options') or {})
     m = data['drawing']
-    info = model.network(m, 'pf')[1]
+    info, conv, st, n0 = model._rms_network(m)[1:]
     mach, n1 = model.machines_of(m)
     ev, n2 = model.events_of(m, net, info) if opt.pop('drawing_events', True) is not False else ([], [])
-    opt['machines'] = {**mach, **(opt.get('machines') or {})}
+    opt['machines'] = {**mach, **conv, **(opt.get('machines') or {})}
+    st = {**st, **(opt.get('stations') or {})}
+    if st:
+        opt['stations'] = st
     opt['events'] = ev + list(opt.get('events') or [])
-    return opt, n1 + n2
+    return opt, n0 + n1 + n2
+
+
+def _drawing_study(data, net, study):
+    """5.0.16: the load flow of a drawing with a DC grid (its stations, model.network) is the AC/DC one."""
+    if study == 'pf' and data.get('drawing') is not None and getattr(net, 'dc_buses', None):
+        return 'acdc'
+    return study
 
 
 def _faults(data):
@@ -634,7 +648,7 @@ def run(data):
     opts, rnotes = data.get('options'), []
     if study == 'rms' and data.get('drawing') is not None:  # 5.0.13: the machines, the controls and the events of the drawing
         opts, rnotes = _rms_drawing(data, net)
-    res = _study(net, study, opts, _faults(data))
+    res = _study(net, _drawing_study(data, net, study), opts, _faults(data))
     out = {'study': study, 'network': {'name': net.name, 'case': data.get('case'), 'buses': len(net.buses),
                                        'branches': sum(e['kind'] in ('line', 'branch', 'transformer') for e in net.elements)},
            'result': _clean(res), 'summary': _clean(summary(study, res))}
@@ -642,7 +656,7 @@ def run(data):
         out['network']['edits'] = done
     if data.get('drawing') is not None:                    # 5.0.11: what the translation of the drawing left out or changed
         from . import model
-        info = model.network(data['drawing'], 'sc' if study == 'sc' else 'pf')[1]
+        info = model._rms_network(data['drawing'])[1] if study == 'rms' else model.network(data['drawing'], 'sc' if study == 'sc' else 'pf')[1]   # 5.0.16
         out['network']['drawing'] = _clean({k: info[k] for k in ('notes', 'out', 'helpers', 'elements')})
         if study == 'rms':
             out['network']['drawing']['notes'] = out['network']['drawing']['notes'] + rnotes
@@ -739,7 +753,7 @@ def report(data):
     opts, rnotes = data.get('options'), []
     if study == 'rms' and data.get('drawing') is not None:  # 5.0.13: the machines, the controls and the events of the drawing
         opts, rnotes = _rms_drawing(data, net)
-    res = _study(net, study, opts, _faults(data))
+    res = _study(net, _drawing_study(data, net, study), opts, _faults(data))
     r = network_report(net, study, res, data.get('title') or None, picture=_picture(net0, net, data) if done else None)
     for n in rnotes:
         r.note(n, 'info')

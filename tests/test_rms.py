@@ -4,6 +4,7 @@ Three independent ways for every number: the published three-machine, nine-bus s
 Control and Stability: Example 2.6 for the start, Table 2.6 for the reduced networks, Example 3.2 for the modes of the
 classical model, §9.12 for the eigenvalues of the two-axis model), a second solution of the same equations (the network
 reduced to the internal nodes and integrated by SciPy; QR against Arnoldi), and our EMT of the same fault (ieee9_emt)."""
+import functools
 import json
 import math
 import subprocess
@@ -472,6 +473,7 @@ def compensator(X=0.1):
     return n
 
 
+@functools.lru_cache(maxsize=None)                        # 5.0.16: the same runs for the RMS of the API and of the drawing
 def emt_gfm(unit, T):
     js = json.loads(subprocess.run(['node', str(ROOT / 'tests/js/rms_gfm_cases.js'), unit, str(T)], capture_output=True, text=True, timeout=900,
                                    check=True).stdout)
@@ -597,6 +599,28 @@ class Converters(unittest.TestCase):
             if t3:
                 self.assertLess(float(np.nanmax(np.abs(np.interp(te, t, C['omega']) - Y[:, 7])[b])), t3, unit)
             self.assertEqual(r['stats']['nonconv'], 0)
+
+    def test_the_drawing_against_our_emt(self):
+        """5.0.16: the same, with the RMS of the drawing itself (pcl.model.dynamic: the converter from its VSC2 and its GFMC or
+        MMCC, the load step from its breaker): measured with h = 5 ms, |Δω| of G1 9.2·10⁻⁵ (droop), 1.25·10⁻⁴ (VSM), 1.32·10⁻⁴
+        (gfl), 2.28·10⁻⁴ (gfl0), |ΔP| 0.0045, 0.0105, 0.0034, 0.0016, |Δω| of the converter 1.0·10⁻⁴, 1.3·10⁻⁴, 1.0·10⁻³ (the
+        PLL): as the converter given by hand (THEORY §8ΩΞ.6, §8ΩΠ.5)."""
+        from pcl import model
+        lim = {'droop': (3e-4, 0.02, 3e-4), 'vsm': (3e-4, 0.03, 4e-4), 'gfl': (3e-4, 0.01, 3e-3), 'gfl0': (5e-4, 0.01, None)}
+        for unit, (tw, tp, t3) in lim.items():
+            te, Y, meta = emt_gfm(unit, 4.0)
+            proj = json.loads(subprocess.run(['node', str(ROOT / 'tests/js/model_cases.js'), 'build', 'ieee9_gfm', json.dumps({'unit': unit})],
+                                             capture_output=True, text=True, timeout=300, check=True).stdout)
+            r = model.dynamic(model.of(proj), t_end=4.0, h=0.005, record=0.005, buses=[])
+            t, M, C = np.array(r['t']), r['machines'], r['converters']['VS3']
+            a, b = te > 0.5, te > 1.1
+            for j, g in ((0, 'G1'), (1, 'G2')):
+                self.assertLess(float(np.max(np.abs(np.interp(te, t, M[g]['omega']) - Y[:, j])[a])), tw, (unit, g))
+            sg = 1 if unit in ('droop', 'vsm') else -1
+            self.assertLess(float(np.max(np.abs(np.interp(te, t, np.array(C['P']) / 128) - sg * Y[:, 6])[b])), tp, unit)
+            if t3:
+                self.assertLess(float(np.nanmax(np.abs(np.interp(te, t, C['omega']) - Y[:, 7])[b])), t3, unit)
+            self.assertEqual((r['stats']['nonconv'], [e['kind'] for e in r['events']]), (0, ['shunt']))
 
     def test_what_is_refused(self):
         for conv, word in ((dict(model='statcom'), 'P'), (dict(model='gfm', storage={'E': 1.0}), 'grid-following'), (dict(model='gfm', law='dvoc'), 'dVOC'),

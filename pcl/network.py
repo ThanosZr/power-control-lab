@@ -266,14 +266,19 @@ class Network:
                          P=None if P is None else float(P), Xmax=None if Xmax is None else float(Xmax))
 
     # ------------------------------------------------------------ 4.20: multi-terminal DC grids (pcl.dcgrid, ROADMAP §82)
-    def dc_bus(self, name, Un, V=1.0, R=None):
+    def dc_bus(self, name, Un, V=1.0, R=None, C=None):
         """A bus of a DC grid: U_n (V, pole to pole for a bipole or a symmetric monopole), V (pu) the start of the load flow,
         R (Ω) a resistance to ground (leakage) or None.
-        The DC buses are kept apart from the AC buses (self.dc_buses), so that the AC studies do not see them."""
+        The DC buses are kept apart from the AC buses (self.dc_buses), so that the AC studies do not see them.
+        5.0.16, for the RMS dynamics (pcl.rms.HVDC): C (F) a capacitance of the bus to ground (as a capacitor of a drawing on
+        its node); the steady state does not see it."""
         name = str(name)
         if name in self.buses:
             raise NetworkError(f'DC bus {name}: there is an AC bus with this name')
-        self.__dict__.setdefault('dc_buses', {})[name] = {'Un': float(Un), 'V': float(V), **({} if R is None else {'R': float(R)})}
+        if C is not None and float(C) < 0:
+            raise NetworkError(f'DC bus {name}: C ≥ 0')
+        self.__dict__.setdefault('dc_buses', {})[name] = {'Un': float(Un), 'V': float(V), **({} if R is None else {'R': float(R)}),
+                                                          **({} if C is None else {'C': float(C)})}
         return name
 
     def _dc(self, b, who):
@@ -347,6 +352,16 @@ class Network:
         opt = {k: float(v) for k, v in (('droop', droop), ('Prated', Prated), ('R', R)) if v is not None}
         self._add('dcdc', nm, control=control, P=float(P), V=float(V), **opt)
         self.elements[-1].update(a=a, b=b)                 # (DC buses: not the AC buses that _add checks)
+        return nm
+
+    def dc_source(self, bus, I=0.0, name=None):
+        """5.0.16: a current source into a DC bus (A; a current source of a drawing on its node, the other terminal on the
+        ground). In the AC/DC load flow a converter of constant current of the DC grid (pcl.dcgrid, control 'I'); in the RMS
+        dynamics (pcl.rms.HVDC) constant, or with dynamic data the current of an expression of the DC voltages and of t."""
+        nm = str(name or f'dc_source{sum(e["kind"] == "dc_source" for e in self.elements) + 1}')
+        b = self._dc(bus, nm)
+        self._add('dc_source', nm, I=float(I))
+        self.elements[-1].update(bus=b)                    # (a DC bus: not the AC buses that _add checks)
         return nm
 
     def dc_dispatcher(self, members, V=1.0, weights=None, buses=None, name=None):
@@ -1303,7 +1318,10 @@ class Network:
         Sn)}. Events 'gen' (a station blocked), 'pref' (dP pu of its S_n), 'vref' (dV: of V_dc, or of the AC voltage of a Vf
         station) and 'trip' (branch: a DC line). The result then has 'dc': 'buses' (per DC bus U in kV and V in pu),
         'stations' (P and Q to the AC bus, P_dc into the DC grid in MW, |V|, U_dc in pu, |I| on S_n, f, the current limit),
-        'lines' (I in kA, from a to b), 'dcdc' (P in MW, from a to b)."""
+        'lines' (I in kA, from a to b), 'dcdc' (P in MW, from a to b).
+        5.0.16: the current sources of a DC grid (dc_source; stations: {source: {'expr', 'ins', 'pars', 'gain', 'tau', 'k'}} for the
+        current of an expression, as pcl.rms.HVDC) in 'dc' 'sources' (I in kA into the bus, P in MW); and a network without
+        machines has a 'summary' too (the converters, the stations, the DC voltages)."""
         from . import rms
         if typical is not None:
             machines = {**rms.typical(self, kind=typical), **(machines or {})}
@@ -1374,6 +1392,11 @@ class Network:
                 dc['stations'][nm] = o
             for j, ln in enumerate(K.lines):
                 dc['lines'][ln['name']] = q['dc']['lines'][ln['name']] * self.S_base / K.Un[ln['a']] / 1e3
+            if K.sr_names:                                  # 5.0.16: the current sources
+                dc['sources'] = {}
+                for sq in K.src:
+                    i, u = q['dc']['sources'][sq['name']], q['dc']['buses'][K.dc_names[sq['bus']]]
+                    dc['sources'][sq['name']] = {'bus': K.dc_names[sq['bus']], 'I': i * self.S_base / K.Un[sq['bus']] / 1e3, 'P': u * i * Sb}
         out = {'t': r['t'], 'machines': mach, 'converters': conv, 'buses': {b: Vabs[:, s.idx[b]] for b in sel if b in s.idx},
                'Vmin': Vabs.min(axis=1), 'Vmin_bus': [s.names[i] for i in Vabs.argmin(axis=1)], 'f_coi': fcoi,
                'stable': s.stable(r), 'events': [{k: v for k, v in e.items() if k != 'i'} for e in r['events']],
@@ -1387,6 +1410,16 @@ class Network:
                               'f_max': float(np.max(fcoi)) if fcoi is not None else None, 'V_min': float(np.min(out['Vmin'])),
                               'V_min_bus': out['Vmin_bus'][int(np.argmin(out['Vmin']))], 'time_s': r['stats']['time'],
                               't_end': float(r['t'][-1]), 'machines': len(mach), 'converters': len(conv), 'states': s.nx}
+        elif conv or 'dc' in q:                             # 5.0.16: converters and DC grids without machines
+            fs = [np.asarray(o['f']) for o in conv.values() if 'f' in o] + \
+                 [np.asarray(o['f']) for o in (out.get('dc') or {}).get('stations', {}).values() if o.get('control') != 'Vf']
+            Ud = [np.asarray(d['V']) for d in (out.get('dc') or {}).get('buses', {}).values()]
+            out['summary'] = {'stable': out['stable'], 'max_angle_coi': None, 'f_min': float(min(np.min(f) for f in fs)) if fs else None,
+                              'f_max': float(max(np.max(f) for f in fs)) if fs else None, 'V_min': float(np.min(out['Vmin'])),
+                              'V_min_bus': out['Vmin_bus'][int(np.argmin(out['Vmin']))], 'time_s': r['stats']['time'],
+                              't_end': float(r['t'][-1]), 'machines': 0, 'converters': len(conv), 'states': s.nx,
+                              **({'Udc_min': float(min(np.min(u) for u in Ud)), 'Udc_max': float(max(np.max(u) for u in Ud)),
+                                  'stations': len(out['dc']['stations'])} if Ud else {})}
         return out
 
     def to_emt(self, lf=None, machines=None, name=None, t_end=0.5, hdiv=400, boundary=None, internal=None, fig='50', **foster_kw):

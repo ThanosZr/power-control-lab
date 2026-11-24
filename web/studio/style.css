@@ -818,6 +818,6 @@ body.dk-screen-win{margin:0;background:var(--bg);overflow:hidden}
 #scope-card.dk-screen:not(.dk-narrow) .scope-scroll{height:calc(100vh - 210px)!important;max-height:none}#scope-card.dk-screen:not(.dk-narrow) .scope-side{max-height:calc(100vh - 80px)}
 /* 5.0.13 (ROADMAP §101 step 1): the card «Δυναμική RMS» */
 .rms-in{padding:0 16px 14px}.rms-bar{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:6px 0}.rms-bar label{display:inline-flex;gap:4px;align-items:center;font-size:12px}
-.rms-bar input[type=number]{width:64px}.rms-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:4px 14px}.rms-grid h4{margin:6px 0 0;font-size:12px}
+.rms-bar input[type=number]{width:64px}.rms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:4px 14px}.rms-grid h4{margin:6px 0 0;font-size:12px}
 .rms-leg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;margin:4px 0}.rms-leg i{display:inline-block;width:14px;height:3px;margin-right:4px;vertical-align:middle;border-radius:2px}
 .bfchart path.rms{fill:none;stroke-width:1.3}.bfchart line.rms-ev{stroke:#6b4fa0;stroke-dasharray:2 3;opacity:.7}

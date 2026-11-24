@@ -257,6 +257,88 @@ def _nwlag(x, u, base, K, T, lo, hi, hold=_held):
     return out, np.where(pos & ~held, r, 0 * x)
 
 
+# 5.0.16: the tree of an expression block of the drawing (web/studio/expr.js, as engine/batch.py eval_ast reads it), in an
+# arithmetic that a complex step goes through: the comparisons, the conditions, min and max on the real parts, the functions
+# of numpy on complex numbers (atan2, floor, ceil, round, sign and mod on the real parts: their derivative is 0 or none)
+def _cmp(a, b, op):
+    a, b = np.real(a), np.real(b)
+    return float({'<': a < b, '>': a > b, '<=': a <= b, '>=': a >= b, '==': a == b, '!=': a != b}[op])
+
+
+def _lut_c(x, p):
+    n = len(p) // 2
+    xr = np.real(x)
+    if xr <= p[0]:
+        return p[1] + 0 * x
+    for k in range(1, n):
+        if xr <= p[2 * k]:
+            x0, y0, x1, y1 = p[2 * k - 2], p[2 * k - 1], p[2 * k], p[2 * k + 1]
+            return y0 + (y1 - y0) * (x - x0) / (x1 - x0) if np.real(x1) > np.real(x0) else y1 + 0 * x
+    return p[2 * n - 1] + 0 * x
+
+
+_CFUN = {'sin': np.sin, 'cos': np.cos, 'tan': np.tan, 'asin': np.arcsin, 'acos': np.arccos, 'atan': np.arctan,
+         'atan2': lambda a, b: math.atan2(np.real(a), np.real(b)), 'sinh': np.sinh, 'cosh': np.cosh, 'tanh': np.tanh, 'exp': np.exp,
+         'log': np.log, 'log10': np.log10, 'sqrt': np.sqrt, 'abs': lambda a: a if np.real(a) >= 0 else -a,
+         'min': lambda *a: min(a, key=np.real), 'max': lambda *a: max(a, key=np.real), 'pow': lambda a, b: a ** b,
+         'floor': lambda a: math.floor(np.real(a)), 'ceil': lambda a: math.ceil(np.real(a)), 'round': lambda a: math.floor(np.real(a) + .5),
+         'sign': lambda a: float((np.real(a) > 0) - (np.real(a) < 0)), 'hypot': lambda a, b: np.sqrt(a * a + b * b),
+         'clamp': lambda x, a, b: min(max((x, a), key=np.real), b, key=np.real),
+         'mod': lambda a, b: a - b * math.floor(np.real(a) / np.real(b)), 'lut': lambda x, *q: _lut_c(x, q)}
+
+
+def _expr(n, v, t):
+    """The value of the tree n of an expression with the inputs and parameters v (in the order of the block) at the time t."""
+    k = n[0]
+    if k == 'num':
+        return n[1]
+    if k == 'var':
+        return v[n[1]]
+    if k == 't':
+        return t
+    if k == 'un':
+        a = _expr(n[2], v, t)
+        return -a if n[1] == '-' else (0.0 if np.real(a) else 1.0)
+    if k == 'if':
+        return _expr(n[2], v, t) if np.real(_expr(n[1], v, t)) else _expr(n[3], v, t)
+    if k == 'call':
+        return _CFUN[n[1]](*[_expr(a, v, t) for a in n[2]])
+    op, a, b = n[1], _expr(n[2], v, t), _expr(n[3], v, t)
+    if op == '+':
+        return a + b
+    if op == '-':
+        return a - b
+    if op == '*':
+        return a * b
+    if op == '/':
+        return a / b if np.real(b) or np.imag(b) else (math.copysign(math.inf, np.real(a)) if np.real(a) else math.nan)
+    if op == '%':
+        return a - b * math.floor(np.real(a) / np.real(b))
+    if op == '^':
+        return a ** b
+    if op == '&&':
+        return float(bool(np.real(a)) and bool(np.real(b)))
+    if op == '||':
+        return float(bool(np.real(a)) or bool(np.real(b)))
+    return _cmp(a, b, op)
+
+
+def _tbreaks(n, out=None):
+    """5.0.16: the times at which an expression compares t with a number (t < 1, 0.3 >= t): its jumps in time."""
+    out = set() if out is None else out
+    if isinstance(n, list) and n:
+        if n[0] == 'bin' and n[1] in ('<', '>', '<=', '>=', '==', '!='):
+            a, b = n[2], n[3]
+            if a == ['t'] and isinstance(b, list) and b[0] == 'num':
+                out.add(float(b[1]))
+            elif b == ['t'] and isinstance(a, list) and a[0] == 'num':
+                out.add(float(a[1]))
+        for q in n[1:]:
+            if isinstance(q, list):
+                _tbreaks(q, out)
+    return out
+
+
 def _num(d, k, default):
     v = d.get(k, default)
     if v is None or (isinstance(v, str) and v.strip() == ''):
@@ -1096,7 +1178,11 @@ class HVDC(_Holds, Kind):
     its integral, the integrals of the outer d (P, V_dc or droop) and q (Q or V_ac) controls, and the d and q currents into
     the converter in the frame of its PLL; per station that forms its island's voltage (Vf) the integral of its AC voltage
     control and the low-pass of its d current; per DC/DC converter its power (pu of S_base). The AC side: the current
-    into each station's bus (pu of S_base); the buses of the device are those of its stations (self.bus)."""
+    into each station's bus (pu of S_base); the buses of the device are those of its stations (self.bus).
+    5.0.16: the current sources of a DC grid (dc_source): its current, or with dynamic data {'expr': the tree of an expression
+    block (web/studio/expr.js), 'ins': the DC buses whose voltages (V) are its inputs, 'pars', 'gain', 'tau': the time
+    constants of the low-pass blocks on the way, 'k': ±1 into the bus} the current k·gain·expr(U, t) (A) through them; per
+    low-pass one state (pu of S_base/U_n of its bus), after those of the DC/DC converters."""
     multi = True
 
     def __init__(self, net, pf, stations, Sb, idx, wb):
@@ -1136,6 +1222,7 @@ class HVDC(_Holds, Kind):
         for e in self.dd:
             if e['control'] != 'P':
                 raise RMSError(f'{e["name"]}: a DC/DC converter with control {e["control"]} is not in the RMS model yet (P)')
+        self.ss = [e for e in net.elements if e['kind'] == 'dc_source']             # 5.0.16
         if any(e['kind'] == 'dc_dispatcher' for e in net.elements):
             raise RMSError('the dispatcher of a DC grid (dc_dispatcher) is a steady-state control: not in the RMS model yet')
         conv = pf['converters']
@@ -1207,6 +1294,31 @@ class HVDC(_Holds, Kind):
         super().__init__(['DC'], np.array(bus, int), {})
         ng, nf, nk = len(self.gs), len(self.vf), len(self.dd)
         self.ng, self.nf, self.nk, self.nd = ng, nf, nk, nd
+        # 5.0.16: the current sources, constant or from an expression
+        self.src = []
+        for e in self.ss:
+            md = dict(stations.get(e['name'], {}))
+            bad = set(md) - {'expr', 'ins', 'pars', 'gain', 'tau', 'k'}
+            if bad:
+                raise RMSError(f'{e["name"]}: unknown data {", ".join(sorted(bad))}')
+            b = self.dc_idx[e['bus']]
+            q = {'name': e['name'], 'bus': b, 'I': float(e['I']) * self.Un[b] / Sb, 'ast': md.get('expr'), 'k': float(md.get('k', 1.0)),
+                 'gain': float(md.get('gain', 1.0)), 'pars': [float(x) for x in md.get('pars') or []], 'tau': [float(x) for x in md.get('tau') or []]}
+            if q['ast'] is not None:
+                try:
+                    q['ins'] = [self.dc_idx[str(x)] for x in md.get('ins') or []]
+                except KeyError as x:
+                    raise RMSError(f'{e["name"]}: no DC bus {x} for an input of its expression') from None
+            elif q['tau']:
+                raise RMSError(f'{e["name"]}: a constant source has no low-pass (tau) in the RMS model')
+            if any(not T > 0 for T in q['tau']):
+                raise RMSError(f'{e["name"]}: the time constants of its low-pass blocks > 0')
+            self.src.append(q)
+        self.sr_names = [q['name'] for q in self.src]
+        # the jumps of the expressions in time: the simulation stops at each (System.simulate, 'tick'), and the step that ends
+        # there takes the value just before it (self.left), as the EMT, whose step is much smaller
+        self.breaks = sorted({c for q in self.src if q['ast'] is not None for c in _tbreaks(q['ast'])})
+        self.left = 0.0
 
         def arr(L, q):
             return np.array([v[q] for v in L], float)
@@ -1265,10 +1377,13 @@ class HVDC(_Holds, Kind):
         self.i_g = o + 8 * np.arange(ng)[:, None] + np.arange(8)[None, :]; o += 8 * ng
         self.i_f = o + 2 * np.arange(nf)[:, None] + np.arange(2)[None, :]; o += 2 * nf
         self.i_d = np.arange(o, o + nk); o += nk
+        for q in self.src:                                  # 5.0.16: the low-pass states of the sources
+            q['x'] = np.arange(o, o + len(q['tau'])); o += len(q['tau'])
         self.nx = o
         self.states = tuple(['U ' + b for b in self.dc_names] + ['I ' + self.lname[j] for j in self.lL] + ['If ' + self.lname[j] for j in self.lD] +
                             [f'{n}.{s}' for n in self.st_names[:ng] for s in STATION_STATES] +
-                            [f'{n}.{s}' for n in self.st_names[ng:] for s in VF_STATES] + [f'{n}.p' for n in self.dd_names])
+                            [f'{n}.{s}' for n in self.st_names[ng:] for s in VF_STATES] + [f'{n}.p' for n in self.dd_names] +
+                            [f'{q["name"]}.x{k + 1}' for q in self.src for k in range(len(q['tau']))])
         self._pf = (conv, dres)
 
     # -------------------------------------------------------------- the AC/DC parts
@@ -1281,7 +1396,12 @@ class HVDC(_Holds, Kind):
         c = np.where(_re(P) > 0, s['lc'][:, 0], s['lc'][:, 1])
         return s['Rc'] * I2 + s['la'] + (s['lb'] * IA + c * IA * IA) / self.Sb
 
-    def _core(self, x, Vr, Vi):
+    def _source(self, q, u, t):
+        """5.0.16: the current of a source into its bus (pu of S_base/U_n) as its expression gives it now, before its lags."""
+        v = [u[b] * self.Un[b] for b in q['ins']] + q['pars']
+        return q['k'] * q['gain'] * _expr(q['ast'], v, t) * self.Un[q['bus']] / self.Sb
+
+    def _core(self, x, Vr, Vi, t=0.0):
         p, g, f, d = self.p, self.p['g'], self.p['f'], self.p['d']
         ng, nf = self.ng, self.nf
         u = x[self.i_u]
@@ -1391,6 +1511,20 @@ class HVDC(_Holds, Kind):
             np.add.at(Idc, d['a'], -pd / _floor(u[d['a']], 0.05))
             np.add.at(Idc, d['b'], pd / _floor(u[d['b']], 0.05))
             out['d'] = {'P': pd}
+        if self.src:                                        # 5.0.16: the current sources
+            Is = []
+            for j, q in enumerate(self.src):
+                if q['ast'] is None:
+                    i = q['I'] + 0 * u[0]
+                else:
+                    i = self._source(q, u, t)
+                    for k, T in enumerate(q['tau']):
+                        F[q['x'][k]] = (i - x[q['x'][k]]) / T
+                        i = x[q['x'][k]]
+                i = i * p['s']['on'][j]
+                Idc[q['bus']] = Idc[q['bus']] + i
+                Is.append(i)
+            out['s'] = {'I': Is}
         F[self.i_u] = Idc / self.c
         out['Idc'] = Idc
         # the power at the terminals of each station into the DC grid (as the EMT measures it): through L_dc, or the
@@ -1475,18 +1609,22 @@ class HVDC(_Holds, Kind):
             P = dres['dcdc'][e['name']]['P'] / Sb
             d['Pref'][j] = P
             x[self.i_d[j]] = P
-        for q, n in (('g', self.ng), ('f', self.nf), ('d', self.nk)):
+        for q in self.src:                                  # 5.0.16: the lags of a source at its value at the start
+            if q['ast'] is not None and len(q['x']):
+                x[q['x']] = self._source(q, u, 0.0)
+        p['s'] = {}
+        for q, n in (('g', self.ng), ('f', self.nf), ('d', self.nk), ('s', len(self.src))):
             p[q]['on'], p[q]['dP'], p[q]['dV'] = np.ones(n), np.zeros(n), np.zeros(n)
         g['dVac'] = np.zeros(self.ng)
         self.x_start = x.copy()
         return x[None, :]
 
     def eval(self, X, Vr, Vi, t):
-        F, Ir, Ii, _ = self._core(X[0], Vr, Vi)
+        F, Ir, Ii, _ = self._core(X[0], Vr, Vi, t - self.left)
         return F[None, :], Ir, Ii
 
-    def outputs(self, X, Vr, Vi):
-        return self._core(X[0], Vr, Vi)[3]
+    def outputs(self, X, Vr, Vi, t=0.0):
+        return self._core(X[0], Vr, Vi, t)[3]
 
     def limits(self):
         if not self.nf:
@@ -1500,6 +1638,8 @@ class HVDC(_Holds, Kind):
             return ('g', j) if j < self.ng else ('f', j - self.ng)
         if name in self.dd_names:
             return 'd', self.dd_names.index(name)
+        if name in self.sr_names:                           # 5.0.16: a current source (only 'gen': it stops)
+            return 's', self.sr_names.index(name)
         return None
 
 
@@ -1548,7 +1688,7 @@ def typical(net, kind='af', pf=None, load=0.8, controls=True):
         out[e['name']] = g
     return out
 KNOWN_ELEMENTS = {'generator', 'load', 'branch', 'feeder', 'shunt', 'line', 'reactor', 'transformer', 'transformer3',   # 5.0.13: the passive ones of the network as Y
-                  'vsc', 'dc_line', 'dcdc', 'dc_dispatcher'}                                                    # 5.0.15: the DC grids (HVDC)
+                  'vsc', 'dc_line', 'dcdc', 'dc_dispatcher', 'dc_source'}                                                    # 5.0.15: the DC grids (HVDC); 5.0.16: dc_source
 
 
 # ---------------------------------------------------------------- the system
@@ -1977,6 +2117,8 @@ class System:
                     K.p['lon'][j] = 0.0
                 elif k == 'gen':
                     K.p[q]['on'][j] = 0.0
+                elif q == 's':
+                    raise RMSError('η πηγή ρεύματος DC %s δέχεται μόνο το συμβάν gen' % ev['gen'])
                 elif k == 'pref':
                     if q == 'f':
                         raise RMSError('ο σταθμός %s σχηματίζει την τάση του νησιού του (Vf): δεν έχει αναφορά P' % ev['gen'])
@@ -2090,6 +2232,11 @@ class System:
         self._reset_units()
         x, y, t = self.x0.copy(), self.y0.copy(), 0.0
         evs = sorted([dict(e) for e in events], key=lambda e: e['t'])
+        # 5.0.16: the jumps in time of the expressions of a device (HVDC: its current sources) as points where the step stops
+        brk = [K for K in self.kinds if getattr(K, 'breaks', None)]
+        ticks = sorted({c for K in brk for c in K.breaks if 0 < c < t_end})
+        if ticks:
+            evs = sorted(evs + [{'t': c, 'kind': 'tick'} for c in ticks], key=lambda e: e['t'])
         nx, n = self.nx, self.n
         T, Xs, Vs = [0.0], [x.copy()], [y[:n] + 1j * y[n:]]
         done = []
@@ -2103,6 +2250,14 @@ class System:
         ei = 0
         while t < t_end - 1e-12:
             while ei < len(evs) and evs[ei]['t'] <= t + 1e-12:
+                if evs[ei]['kind'] == 'tick':                 # 5.0.16: past a jump of an expression: a new start of y and f
+                    y, ok = self._consistent(x, y, t)
+                    if not ok:
+                        st['nonconv'] += 1
+                    f_n, _ = self.fg(x, y, t)
+                    lu, hist = None, []
+                    ei += 1
+                    continue
                 self._apply(evs[ei])
                 done.append({**{k: v for k, v in evs[ei].items() if k in ('kind', 'gen', 'bus', 'branch', 'dV', 'dP', 'id')}, 't': t, 'i': len(T)})
                 y, ok = self._consistent(x, y, t)
@@ -2115,6 +2270,10 @@ class System:
                 T.append(t); Xs.append(x.copy()); Vs.append(y[:n] + 1j * y[n:])
             tn = evs[ei]['t'] if ei < len(evs) else t_end
             hh = min(hc, tn - t, t_end - t)
+            if brk:                                           # 5.0.16: a step that ends on a jump takes the value before it
+                left = 1e-9 if ei < len(evs) and evs[ei]['kind'] == 'tick' and abs(t + hh - evs[ei]['t']) < 1e-12 else 0.0
+                for K in brk:
+                    K.left = left
             if method == 'alternating':
                 xn, yn, it, ok = self._step_alt(x, y, f_n, t, hh, tol)
             else:
@@ -2150,6 +2309,8 @@ class System:
                 hc = min(hmax, hh)
             hist = (hist + [(t, x)])[-2:]
             x, y, t = xn, yn, t + hh
+            for K in brk:
+                K.left = 0.0
             f_n, _ = self.fg(x, y, t)
             st['steps'] += 1
             if st['steps'] % record_every == 0 or t >= t_end - 1e-12:
@@ -2389,21 +2550,22 @@ class System:
             nt = len(r['t'])
             Xs = r['x'][:, K.x0:K.x0 + K.nx]
             Vb = V[:, K.bus]
-            keep = {'lon': K.p['lon'].copy(), **{(q, a): K.p[q][a].copy() for q in 'gfd' for a in ('on', 'dP', 'dV')}}
+            keep = {'lon': K.p['lon'].copy(), **{(q, a): K.p[q][a].copy() for q in 'gfds' for a in ('on', 'dP', 'dV')}}
             K.p['lon'] = np.ones(len(K.lines))
-            for q in 'gfd':
+            for q in 'gfds':
                 K.p[q]['on'], K.p[q]['dP'], K.p[q]['dV'] = np.ones(len(K.p[q]['on'])), 0 * K.p[q]['dP'], 0 * K.p[q]['dV']
             evs = [e for e in r.get('events', ()) if e['kind'] in ('gen', 'vref', 'pref', 'trip')
                    and self._hvdc(str(e.get('gen', e.get('branch'))))[0] is K]
             st = {nm: {} for nm in K.st_names}
             dd = {nm: np.empty(nt) for nm in K.dd_names}
+            ss = {nm: np.empty(nt) for nm in K.sr_names}
             il = np.empty((nt, len(K.lines)))
             ei = 0
             for ti in range(nt):
                 while ei < len(evs) and evs[ei]['i'] <= ti:
                     self._apply(dict(evs[ei]))
                     ei += 1
-                o = K.outputs(Xs[ti][None, :], Vb[ti].real, Vb[ti].imag)
+                o = K.outputs(Xs[ti][None, :], Vb[ti].real, Vb[ti].imag, float(r['t'][ti]))
                 il[ti] = np.real(o['il'])
                 for q, names in (('g', K.st_names[:K.ng]), ('f', K.st_names[K.ng:])):
                     if q in o:
@@ -2413,10 +2575,13 @@ class System:
                 if 'd' in o:
                     for j, nm in enumerate(K.dd_names):
                         dd[nm][ti] = np.real(o['d']['P'][j])
+                if 's' in o:
+                    for j, nm in enumerate(K.sr_names):
+                        ss[nm][ti] = np.real(o['s']['I'][j])
             K.p['lon'] = keep.pop('lon')
             for (q, a), v in keep.items():
                 K.p[q][a] = v
-            out['dc'] = {'buses': {b: Xs[:, K.i_u[k]] for k, b in enumerate(K.dc_names)}, 'stations': st, 'dcdc': dd,
+            out['dc'] = {'buses': {b: Xs[:, K.i_u[k]] for k, b in enumerate(K.dc_names)}, 'stations': st, 'dcdc': dd, 'sources': ss,
                          'lines': {nm: il[:, j] for j, nm in enumerate(K.lname)}, 'device': K}
         return out
 

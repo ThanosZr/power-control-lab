@@ -516,6 +516,9 @@ def grid_of(net):
         elif e['kind'] == 'vsc':               # (4.21: _Pt, the share of P that the limits of the station leave)
             g.converter(e['dc'], e['control'], P=e['P'] if e.get('_Pt') is None else e['P'] * e['_Pt'], V=e['V'], droop=e.get('droop'), Prated=e.get('Prated'),
                         R=e.get('R'), I=e.get('I', 0.0), name=e['name'])
+    for e in net.elements:                     # 5.0.16: the current sources of a drawing (a converter of constant current)
+        if e['kind'] == 'dc_source':
+            g.converter(e['bus'], 'I', I=e['I'], name=e['name'])
     for e in net.elements:                     # 4.21: the DC/DC converters and the dispatchers
         if e['kind'] == 'dcdc':
             g.dcdc(e['a'], e['b'], e['control'], P=e['P'], V=e['V'], droop=e.get('droop'), Prated=e.get('Prated'), R=e.get('R'), name=e['name'])

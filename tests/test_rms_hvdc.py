@@ -189,6 +189,32 @@ class AgainstEMT(unittest.TestCase):
                 self.assertLess(abs(float(d[end].mean())), 1.5, msg=(e['ev'], e['ctl'], k))           # MW
 
 
+    def test_the_dcs2_from_the_drawing(self):
+        """5.0.16: the same DCS2 in RMS from the drawing of b4dcs2 itself (pcl.model.dynamic: the stations from the MMC with their
+        MMCC, the DC grid from its nodes, Cd-E1 as the current source of its expression, the wind farm from its VSC2 and MMCC,
+        both from zero as the EMT): measured with h = 5 ms, from 0.5 s, the largest |ΔU| 7.1, 6.9, 0.79, 0.78 kV and |ΔP| 40, 40,
+        6.7, 6.7 MW; at the end as the network of the API (THEORY §8ΩΠ.5)."""
+        from pcl import model
+        tol = {'cd55': (8.5, 53.0), 'wind': (1.5, 7.5), 'load': (1.5, 8.5)}
+        for e in self.js['runs']:
+            proj = json.loads(subprocess.run(['node', str(ROOT / 'tests/js/model_cases.js'), 'build', 'b4dcs2', json.dumps({'ev': e['ev'], 'ctl': e['ctl']})],
+                                             capture_output=True, text=True, timeout=300, check=True).stdout)
+            r = model.dynamic(model.of(proj), t_end=2.5, h=0.005, record=0.005, buses=[])
+            self.assertEqual(r['stats']['nonconv'], 0)
+            self.assertEqual([n for n in r['drawing']['notes'] if not n.startswith('Ζυγοί χωρίς πηγή')], [])          # (the load beyond CBL)
+            te, T = np.array(e['t']), np.asarray(r['t'])
+            m, end = te > 0.5, te > 2.4
+            tu, tp = tol[e['ev']]
+            for k in ('B2', 'B3', 'B5', 'F1', 'E1'):
+                d = np.interp(te, T, r['dc']['buses']['N' + k]['U']) - np.array(e['U'][k])
+                self.assertLess(float(np.max(np.abs(d[m]))), tu, msg=(e['ev'], e['ctl'], k))
+                self.assertLess(abs(float(d[end].mean())), 0.15, msg=(e['ev'], e['ctl'], k))          # kV
+            for k in ('B2', 'B3', 'F1', 'E1'):
+                d = np.interp(te, T, r['dc']['stations']['MMC' + k]['Pt']) - np.array(e['P'][k])
+                self.assertLess(float(np.max(np.abs(d[m]))), tp, msg=(e['ev'], e['ctl'], k))
+                self.assertLess(abs(float(d[end].mean())), 1.5, msg=(e['ev'], e['ctl'], k))           # MW
+
+
 class Refused(unittest.TestCase):
     def test_what_the_rms_model_refuses(self):
         with self.assertRaises(rms.RMSError):                # the station chain of mtdc5 (R_tr, X_tr, B_f): elements of the AC network
