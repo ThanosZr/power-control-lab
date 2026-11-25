@@ -435,11 +435,11 @@
    wires.push(['GNr:y','EXl:r'],['GNr:y','EXo:r'],['EXo:y','PIt:u'],['PIt:y','EXl:tm'],['EXl:y','TGr:u'],['GNb:y','SUb:a'],['PIv:y','SUb:b'],['SUb:y','PIv:tr']);
    // the indications: the means per period of the voltage, of the powers and of the branch currents
    const avg=(id,x,y,label)=>C(id,'AVG',x,y,{win:'per',f:fs,np:1,clock:'PWM1'},{label});
-   comps.push(avg('AVv',170,1110,'⟨v_bus⟩'),C('DSv','DISP',280,1110,{dig:5},{label:'⟨V_bus⟩ (V)'}),C('MIs','MEAS',60,1180,{src:'VSRC',qty:'I'},{label:'i_src'}),C('MIl','MEAS',60,1240,{src:'LD',qty:'I'},{label:'i_φορτίου'}),
-    C('EXps','EXPR',170,1180,{expr:'v*i',ins:'v, i'},{label:'p_πηγής'}),C('EXpl','EXPR',170,1240,{expr:'v*i',ins:'v, i'},{label:'p_φορτίου'}),
-    C('EXpc','EXPR',170,1320,{expr:lo?'v*(i1 + i2 + i3 + i4)':'-v*(i1 + i2 + i3 + i4)',ins:'v, i1, i2, i3, i4'},{label:'p_μετατροπέα'}),
-    avg('AVps',280,1180,'⟨P_πηγής⟩'),avg('AVpl',280,1240,'⟨P_φορτίου⟩'),avg('AVpc',280,1320,'⟨P_μετατροπέα⟩'),
-    C('DSps','DISP',390,1180,{dig:5},{label:'P πηγής (W)'}),C('DSpl','DISP',390,1240,{dig:5},{label:'P φορτίου (W)'}),C('DSpc','DISP',390,1320,{dig:5},{label:'P μετατροπέα (W)'}),
+   comps.push(avg('AVv',170,1110,'⟨v_bus⟩'),C('DSv','DISP',280,1110,{dig:5},{label:'⟨V_bus⟩ (V)'}),C('MIs','MEAS',60,1180,{src:'VSRC',qty:'I'},{label:'i_src'}),C('MIl','MEAS',60,1280,{src:'LD',qty:'I'},{label:'i_φορτίου'}),
+    C('EXps','EXPR',170,1180,{expr:'v*i',ins:'v, i'},{label:'p_πηγής'}),C('EXpl','EXPR',170,1280,{expr:'v*i',ins:'v, i'},{label:'p_φορτίου'}),
+    C('EXpc','EXPR',170,1380,{expr:lo?'v*(i1 + i2 + i3 + i4)':'-v*(i1 + i2 + i3 + i4)',ins:'v, i1, i2, i3, i4'},{label:'p_μετατροπέα'}),
+    avg('AVps',280,1180,'⟨P_πηγής⟩'),avg('AVpl',280,1280,'⟨P_φορτίου⟩'),avg('AVpc',280,1380,'⟨P_μετατροπέα⟩'),
+    C('DSps','DISP',430,1180,{dig:5},{label:'P πηγής (W)'}),C('DSpl','DISP',430,1280,{dig:5},{label:'P φορτίου (W)'}),C('DSpc','DISP',430,1380,{dig:5},{label:'P μετατροπέα (W)'}),
     C('TFr','TAGI',510,1110,{name:'I*'}),C('DSr','DISP',620,1110,{dig:5},{label:'I*_k (A)'}));
    wires.push(['MV:y','AVv:u'],['AVv:y','DSv:u'],['MV:y','EXps:v'],['MIs:y','EXps:i'],['MV:y','EXpl:v'],['MIl:y','EXpl:i'],[lo?'MS:y':'MV:y','EXpc:v'],
     ['EXps:y','AVps:u'],['EXpl:y','AVpl:u'],['EXpc:y','AVpc:u'],['AVps:y','DSps:u'],['AVpl:y','DSpl:u'],['AVpc:y','DSpc:u'],['TFr:y','DSr:u']);
