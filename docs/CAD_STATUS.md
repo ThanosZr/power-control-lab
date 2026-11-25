@@ -1,6 +1,6 @@
 # CAD: active handoff
 
-Updated 2026-11-25; documentation revision 0.7, CAD-S014. Start with the [documentation index](CAD_INDEX.md), this file, [worker contract](CAD_WORKER_CONTRACT.md), [document contract](CAD_DOCUMENT_CONTRACT.md), [kernel evaluation](CAD_KERNEL_EVALUATION.md), [baseline](CAD_BASELINE.md), [integration map](CAD_INTEGRATION_MAP.md), and the active planning/decision files in this Git branch.
+Updated 2026-11-25; documentation revision 0.8, CAD-S015. **Active: T005, lab-cad-0.5.0-native (D030)**. See [native adapter](CAD_NATIVE_ADAPTER.md). Parent `1af4de0fba3f2b20ffd4c16cb276df6b9323d9aa`, CI 45561734591, four jobs successful. Local 25/25 isolated tests; final remote CI required before T006. Both private integration gates remain open. T004 details below are historical.
 
 ## Scope and pinned state
 

@@ -1,8 +1,10 @@
 # Power & Control Lab · CAD και custom components
 
-Έκδοση πλάνου: 0.7 · 25/11/2026 · Ιδιοκτήτης: Thanos Zr.
+Έκδοση πλάνου: 0.8 · 25/11/2026 · Ιδιοκτήτης: Thanos Zr.
 
 ## Τρέχουσα κατάσταση
+
+**Ενεργό CAD-T005 / SOL (D030)** στο `lab-cad-0.5.0-native`: [native adapter](CAD_NATIVE_ADAPTER.md), isolated πραγματικό cylinder/BRep σε child process, τοπικά ελεγμένο. T004 τελικό `1af4de0fba3f2b20ffd4c16cb276df6b9323d9aa`, CI 45561734591 (4/4 success). Μετά από επιτυχές CI του T005 επιτρέπεται T006 στο ξεχωριστό branch viewport, σύμφωνα με D030. Οι πιο κάτω T004 εγγραφές είναι ιστορικές. Καμία ενσωμάτωση PCL.
 
 **CAD-T004 / SOL — απομονωμένο worker/job coordinator v1 (D029).** T001 ολοκληρωμένο στο e997a3d2, CI 45124099619, T002 στο 43f7fe3, CI 45135806207, T003 στο c9fe513, CI 45149843737 (4/4). Εγκεκριμένη βάση engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51, branch lab-cad-0.4.0-workers. [CAD_WORKER_CONTRACT](CAD_WORKER_CONTRACT.md), [CAD_DOCUMENT_CONTRACT](CAD_DOCUMENT_CONTRACT.md) και [CAD_KERNEL_EVALUATION](CAD_KERNEL_EVALUATION.md) περιέχουν κώδικα/ελέγχους και Fable review. Δεν υπάρχει ενσωματωμένο CAD runtime.
 

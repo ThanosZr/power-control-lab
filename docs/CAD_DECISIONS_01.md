@@ -50,6 +50,8 @@
 
 - **CAD-D029 — 25/11/2026, isolated CAD-T004:** μετά την επιβεβαίωση του τελικού T003 SHA/CI, ο Θάνος έδωσε εντολή «προχώρα» στο προτεινόμενο απομονωμένο T004 με SOL και νέο branch. Scope: συνθετικός worker/job coordinator, cache, cancellation, logical CPU/RAM reservations και τεκμηρίωση, όχι ενσωμάτωση στο PCL. Thread-based reference για cooperative lifecycle, όχι παραγωγική επιλογή native process transport, OS memory enforcement ή solver arbitration. Αμετάβλητοι οι δύο ιδιωτικοί έλεγχοι πριν από ενσωμάτωση. Fable review στο CAD_WORKER_CONTRACT, χωρίς ανάθεση. T005 μόνο με νέα έγκριση.
 
+- **CAD-D030 — 25/11/2026:** Ο Θάνος ενέκρινε T005 και T006 στην ίδια συνομιλία με SOL, διακριτά branches και CI για καθένα. Απομονωμένα native cylinder/background process και 3D viewport χωρίς Three.js. Διατηρούνται pinned engine 5.0.7, δύο ιδιωτικές πύλες ενσωμάτωσης, κανόνες publication, καμία main αλλαγή. Native adapter/renderer παραμένουν reference prototypes, όχι PCL runtime. Fable review καταγράφεται χωρίς ανάθεση.
+
 ## Ανοιχτά
 
 

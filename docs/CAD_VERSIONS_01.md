@@ -110,6 +110,12 @@
 - Python 3.12.14: 11/11 T004 + 12/12 T003 tests, demo miss/miss/hit σε revisions 0/1/2 (radius 10/16/10 mm), work budget 28 MiB, 2 CAD slots, δύο cached results 304 bytes. CODEMAP/API 947 και 24/24 existing dock/live-program/recording tests PASS. Workflow unchanged, δεν τρέχει το isolated suite· τελικό πραγματικό SHA/CI απαιτείται για κλείσιμο.
 - Οι δύο ιδιωτικές πύλες δεν εκτελέστηκαν ούτε παρακάμφθηκαν για PCL runtime. Καμία ιδιωτική είσοδος· μόνο public CAD docs/isolated experiment. nethash/ERR δεν εφαρμόζεται. Fable backlog στο CAD_WORKER_CONTRACT: process transport/cancel, scheduler fairness, incremental feature cache, dynamic solver arbitration και μετρήσεις. Επόμενο χωριστά εγκεκριμένο T005 native adapter, όχι αυτόματο.
 
+## CAD-S015 · 25/11/2026 · SOL · CAD-T005 native adapter
+
+- Νέο `lab-cad-0.5.0-native` από `1af4de0fba3f2b20ffd4c16cb276df6b9323d9aa`, CI 45561734591 4/4. Engine 5.0.7 αμετάβλητη. D030: T005 και T006 χωριστά branches/CI.
+- Native OCCT BRep και αναλυτικός έλεγχος cylinder σε child process, T004 revision/cache/cancellation. 25/25 isolated tests, demo και CODEMAP/API 947 PASS. Αριθμοί και Fable review στο CAD_NATIVE_ADAPTER. CI υπάρχοντος PCL χωριστά από local tests· κλείσιμο στο πραγματικό SHA.
+- Καμία ιδιωτική είσοδος, integration/runtime/main αλλαγή. Οι πραγματικές ιδιωτικές πύλες παραμένουν. T006 μόνο μετά από πιστοποιημένο T005 CI.
+
 ## Πρότυπο επόμενης εγγραφής
 
 ```text

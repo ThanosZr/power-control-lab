@@ -6,7 +6,7 @@
 
 **Συνέχεια χωρίς αναζήτηση παλιών αρχείων (D023):** κάθε νέα συνομιλία αρχίζει από αυτό το README, το CAD_INDEX και το CAD_STATUS του πραγματικού CAD HEAD. Όλο το δημοσιεύσιμο υλικό/refs της επόμενης εργασίας είναι στα κανονικά Git docs· δεν απαιτείται αναδρομή σε παλιά chats, ZIP ή project uploads. Τυχόν υποχρεωτικές ιδιωτικές εκκρεμότητες δηλώνονται μία φορά ρητά στο CAD_STATUS.
 
-**CAD-T004 — απομονωμένο worker/job contract, με SOL (D029).** T001 κλειστό στο e997a3d2 / CI 45124099619, T002 στο 43f7fe3 / CI 45135806207, T003 στο c9fe513 / CI 45149843737 (4/4). Το T004 υλοποιεί background synthetic workers, revision/session identity, cache, cooperative cancellation και logical resource reservations. Δεν δημιουργεί ακόμη πραγματικό BRep ούτε ενσωματώνεται στο PCL 5.0.7.
+**CAD-T005 — απομονωμένο native cylinder adapter, με SOL (D030).** Το T004 ολοκληρώθηκε στο 1af4de0 / CI 45561734591 (4/4). Πραγματικό OCCT BRep, αναλυτική επαλήθευση, tessellation και native background child process μέσω T004. [Εκτέλεση, checks και Fable review](docs/CAD_NATIVE_ADAPTER.md). Δεν ενσωματώνεται στο PCL 5.0.7.
 
 ## Ξεκίνα εδώ
 
@@ -45,11 +45,11 @@
 
 | Στοιχείο | Τιμή |
 | --- | --- |
-| CAD branch | lab-cad-0.4.0-workers |
+| CAD branch | lab-cad-0.5.0-native |
 | Έκδοση εγγράφων | 0.7 |
 | Εγκεκριμένος engine | 5.0.7 |
 | Αμετάβλητο source SHA | dab82e5ff2e6da4bde09e4a38aab32edfffe6d51 |
-| Κατάσταση CAD | T004 isolated contract· κλείσιμο με επιτυχές CI στο τελικό HEAD |
+| Κατάσταση CAD | T005 isolated native adapter· κλείσιμο με επιτυχές CI στο τελικό HEAD |
 | Κανονικές πηγές πλάνου | docs/CAD_*.md αυτού του branch |
 
 Κάθε νέα έκδοση CAD ξεκινά σε νέο lab-cad-<έκδοση>-<θέμα> branch. Τα ενδιάμεσα commits της ίδιας έκδοσης μένουν στο ίδιο branch. Η νεότερη main ή έκδοση engine δεν γίνεται αυτόματα βάση CAD.
@@ -57,7 +57,7 @@
 Για εκκίνηση του υπάρχοντος engine αναφοράς:
 
 ~~~sh
-git clone --branch lab-cad-0.4.0-workers https://github.com/ThanosZr/power-control-lab.git
+git clone --branch lab-cad-0.5.0-native https://github.com/ThanosZr/power-control-lab.git
 cd power-control-lab
 python -m pip install -r requirements.txt
 python run.py

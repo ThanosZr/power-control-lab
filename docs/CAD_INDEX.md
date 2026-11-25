@@ -1,6 +1,6 @@
 # CAD · οδηγός πλάνου και ενσωμάτωσης
 
-Αναθεώρηση εγγράφων 0.7 · 25/11/2026. Κανονική θέση: docs/ του lab-cad-0.4.0-workers, repository ThanosZr/power-control-lab.
+Αναθεώρηση εγγράφων 0.8 · 25/11/2026. Κανονική θέση: docs/ του lab-cad-0.5.0-native, repository ThanosZr/power-control-lab. Ενεργό T005: [CAD_NATIVE_ADAPTER](CAD_NATIVE_ADAPTER.md) (D030), μετά το T004 CI 45561734591.
 
 **CAD-T004: isolated worker contract (D029), SOL, χωρίς subagents.** T001 κλειστό στο e997a3d2 / CI 45124099619, T002 στο 43f7fe3 / CI 45135806207, T003 στο c9fe513 / CI 45149843737. Βάση engine 5.0.7: dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Δεν ενσωματώθηκε CAD runtime.
 
