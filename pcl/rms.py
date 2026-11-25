@@ -365,9 +365,33 @@ AVR_DEFAULTS = {
              'KLR': 0.0, 'ILR': 4.4, 'KF': 0.0, 'TF': 1.0},
     'dc1a': {'TR': 0.0, 'TC': 0.0, 'TB': 0.0, 'TC1': 0.0, 'TB1': 0.0, 'KA': 187.0, 'TA': 0.89, 'VRMIN': -1.7,
              'VRMAX': 1.7, 'VIMIN': -math.inf, 'VIMAX': math.inf, 'KE': None, 'TE': 1.15, 'AEX': 0.014, 'BEX': 1.55,
-             'KF': 0.058, 'TF': 0.62},
+             'KF': 0.058, 'TF': 0.62,
+             # 5.1: the saturation of the exciter as IEEE Std 421.5 gives it, by two points (E1, SE(E1)), (E2, SE(E2)) of
+             # S_E(E_FD) (Annex C, (C.3)), fitted here as S_E = A·e^(B·E) through them (the standard leaves the curve to the
+             # program); and VXEXP = 1 for V_X = A_EX·e^(B_EX·E_FD) itself, the form of (8.21) of Power System Stability and
+             # Control, whose sample data A_EX, B_EX are given for it (0: V_X = E_FD·A_EX·e^(B_EX·E_FD), as before)
+             'E1': None, 'SE1': None, 'E2': None, 'SE2': None, 'VXEXP': 0.0},
+    # 5.1: the AC1A of IEEE Std 421.5-2016 (§7.2–7.3, Fig. 8 and 9: the alternator-rectifier exciter with non-controlled
+    # rectifiers, the demagnetizing K_D·I_FD, the rectifier regulation F_EX(I_N) of Annex D, the rate feedback from V_FE);
+    # the defaults are the sample data of its Annex H (Table H.8, for AC1C; V_Emin = 0, V_FEmax = ∞ make it the AC1A)
+    'ac1a': {'TR': 0.0, 'TC': 0.0, 'TB': 0.0, 'TC1': 0.0, 'TB1': 0.0, 'KA': 400.0, 'TA': 0.02, 'VAMIN': -14.5, 'VAMAX': 14.5,
+             'VRMIN': -5.43, 'VRMAX': 6.03, 'VIMIN': -math.inf, 'VIMAX': math.inf, 'KE': 1.0, 'TE': 0.8, 'KC': 0.2, 'KD': 0.38,
+             'KF': 0.03, 'TF': 1.0, 'AEX': 0.0, 'BEX': 0.0, 'E1': 4.18, 'SE1': 0.10, 'E2': 3.14, 'SE2': 0.03, 'VXEXP': 0.0,
+             'VEMIN': 0.0},
 }
 PSS_DEFAULTS = {'KS': 20.0, 'TW': 1.4, 'T1': 0.154, 'T2': 0.033, 'T3': 0.0, 'T4': 0.0, 'VSMIN': -0.1, 'VSMAX': 0.1}
+# 5.1: the stabilizers of IEEE Std 421.5-2016 (§9.2 Fig. 31, §9.4–9.5 Fig. 32). PSS1A: the input (INPUT 1: the speed
+# deviation, 2: the electrical power on the rating of the machine) through 1/(1 + sT6), K_S, sT5/(1 + sT5), 1/(1 + A1·s + A2·s²)
+# and two lead-lags, within [V_STmin, V_STmax]; the defaults are those of the PSS above with T6 = A1 = A2 = 0 (the same
+# stabilizer). PSS2B: speed and electrical power, two washouts on each (T_W4 = 0: the second on the power bypassed), the
+# integral of the electrical power K_S2/(1 + sT7), the ramp-tracking filter [(1 + sT8)/(1 + sT9)^M]^N and three lead-lags; the
+# defaults are the sample data of Table H.24 of Annex H (for PSS2C; T10 = T11, the third lead-lag not used), with
+# K_S2 = T7/(2H) when not given (its note a).
+PSS1A_DEFAULTS = {**PSS_DEFAULTS, 'T6': 0.0, 'A1': 0.0, 'A2': 0.0, 'INPUT': 1.0}
+PSS2B_DEFAULTS = {'KS1': 20.0, 'KS2': None, 'KS3': 1.0, 'T6': 0.0, 'T7': 10.0, 'TW1': 10.0, 'TW2': 10.0, 'TW3': 10.0, 'TW4': 0.0,
+                  'T8': 0.3, 'T9': 0.15, 'M': 2.0, 'N': 4.0, 'T1': 0.16, 'T2': 0.02, 'T3': 0.16, 'T4': 0.02, 'T10': 0.0,
+                  'T11': 0.0, 'VSTMAX': 0.2, 'VSTMIN': -0.066, 'VSI1MAX': 2.0, 'VSI1MIN': -2.0, 'VSI2MAX': 2.0, 'VSI2MIN': -2.0}
+PSS_TYPES = ('pss', 'pss1a', 'pss2b')
 GOV_DEFAULTS = {
     'steam': {'Pr': 1.0, 'R': 0.05, 'KAX': 149.0, 'V1': 0.02, 'TSR': 0.7, 'TSM': 0.23, 'LC1': 1.0, 'LC2': -3.0,
               'TCH': 0.3, 'TRH': 7.0, 'TCO': 0.5, 'FHP': 0.3, 'FIP': 0.3, 'FLP': 0.4},
@@ -376,8 +400,61 @@ GOV_DEFAULTS = {
 }
 SUB_KEYS = ('Xd', 'Xdp', 'Xdpp', 'Xq', 'Xqp', 'Xqpp', 'Xl', 'Td0p', 'Td0pp', 'Tq0p', 'Tq0pp', 'Ra', 'H', 'D', 'SG10', 'SG12')
 AVR_STATES = {'st1a': ('avr_tr', 'avr_ll1', 'avr_ll2', 'avr_va', 'avr_rf'),
-              'dc1a': ('avr_tr', 'avr_ll1', 'avr_ll2', 'avr_vr', 'avr_efd', 'avr_rf')}
+              'dc1a': ('avr_tr', 'avr_ll1', 'avr_ll2', 'avr_vr', 'avr_efd', 'avr_rf'),
+              'ac1a': ('avr_tr', 'avr_ll1', 'avr_ll2', 'avr_va', 'avr_ve', 'avr_rf')}
 PSS_STATES = ('pss_w', 'pss_l1', 'pss_l2')
+
+
+def _pss_states(ps):
+    """5.1: the states of a stabilizer: True or 'pss' (PSS_STATES, as before), 'pss1a', or ('pss2b', M, N)."""
+    if not ps:
+        return ()
+    if ps is True or ps == 'pss':
+        return PSS_STATES
+    if ps == 'pss1a':
+        return ('pss_t6', 'pss_w', 'pss_f1', 'pss_f2', 'pss_l1', 'pss_l2')
+    _, M, N = ps
+    return (('pss_w1', 'pss_w2', 'pss_t6', 'pss_w3', 'pss_w4', 'pss_t7')
+            + tuple('pss_r%d_%d' % (i, j) for i in range(N) for j in range(M)) + ('pss_l1', 'pss_l2', 'pss_l3'))
+
+
+def _exc_sat(E, q):
+    """5.1: V_X of a rotating exciter at its output E: E·S_E(E) with S_E = A·e^(B·E) (A, B from the two points of IEEE
+    Std 421.5 Annex C or A_EX, B_EX), or A·e^(B·E) itself when VXEXP (the (8.21) of Power System Stability and Control)."""
+    a, b = q['SA'], q['SB']
+    s = a * np.exp(b * E)
+    return np.where(q['VXEXP'] > 0, s, E * s)
+
+
+def _exc_ab(q):
+    """5.1: A, B of S_E = A·e^(B·E) through (E1, SE1), (E2, SE2) where they are given (B = ln(SE1/SE2)/(E1 − E2),
+    A = SE1·e^(−B·E1)), else A_EX, B_EX."""
+    E1, S1, E2, S2 = (np.asarray(q[k], float) for k in ('E1', 'SE1', 'E2', 'SE2'))
+    two = ~np.isnan(E1) & ~np.isnan(E2) & (np.nan_to_num(S1) > 0) & (np.nan_to_num(S2) > 0) & (np.nan_to_num(E1 - E2) != 0)
+    with np.errstate(all='ignore'):
+        B = np.where(two, np.log(np.where(two, S1 / S2, 1.0)) / np.where(two, E1 - E2, 1.0), q['BEX'])
+        A = np.where(two, np.where(two, S1, 0.0) * np.exp(-B * np.where(two, E1, 0.0)), q['AEX'])
+    return A, B
+
+
+def _fex(In):
+    """5.1: the rectifier regulation of IEEE Std 421.5 Annex D (Fig. D.2): F_EX(I_N), its three modes, 0 above I_N = 1."""
+    r = _re(In)
+    return np.where(r <= 0.433, 1 - 0.577 * In,
+                    np.where(r < 0.75, np.sqrt(np.where(r < 0.75, 0.75 - In * In, 1.0 + 0 * In)),
+                             np.where(r <= 1.0, 1.732 * (1 - In), 0 * In)))
+
+
+def _ve0(efd, ifd, kc):
+    """5.1: the exciter voltage V_E with V_E·F_EX(K_C·I_FD/V_E) = E_FD (the start of the AC1A), mode by mode in closed form:
+    1: V_E = E_FD + 0,577·K_C·I_FD; 2: V_E = √((E_FD² + (K_C·I_FD)²)/0,75); 3: V_E = E_FD/1,732 + K_C·I_FD."""
+    c = kc * ifd
+    v1 = efd + 0.577 * c
+    v2 = np.sqrt((efd * efd + c * c) / 0.75)
+    v3 = efd / 1.732 + c
+    with np.errstate(all='ignore'):
+        i1, i2 = np.where(v1 > 0, c / v1, 0.0), np.where(v2 > 0, c / v2, 0.0)
+    return np.where(i1 <= 0.433, v1, np.where(i2 < 0.75, v2, v3))
 GOV_STATES = {'steam': ('gov_sr', 'gov_cv', 'gov_ch', 'gov_rh', 'gov_co'),
               'hydro': ('gov_g', 'gov_td', 'gov_pv', 'gov_gs', 'gov_u')}
 
@@ -411,11 +488,14 @@ class Unit(Kind):
     def __init__(self, names, bus, p, model='subtransient', avr=None, pss=False, gov=None):
         super().__init__(names, bus, p)
         self.model, self.avr, self.pss, self.gov = model, avr, pss, gov
+        self.pss_mn = None
+        if isinstance(pss, tuple):                    # 5.1: ('pss2b', M, N): the type, and the order of its ramp-tracking filter
+            self.pss, self.pss_mn = pss[0], tuple(pss[1:])
         st = ['delta', 'omega', 'eq', 'ed', 'psi1d', 'psi2q']
         self.i_avr = len(st)
         st += list(AVR_STATES.get(avr, ()))
         self.i_pss = len(st)
-        st += list(PSS_STATES) if pss else []
+        st += list(_pss_states(pss))                  # 5.1: by the type of the stabilizer (PSS_STATES for the PSS of the EMT)
         self.i_gov = len(st)
         st += list(GOV_STATES.get(gov, ()))
         self.states, self.nx = tuple(st), len(st)
@@ -445,6 +525,10 @@ class Unit(Kind):
         elif self.avr == 'dc1a':
             a = q['avr']
             out.append((self.i_avr + 3, a['VR0'], a['VRMIN'], a['VRMAX'], a['TA'] > 0))
+        elif self.avr == 'ac1a':                      # 5.1: V_A within [V_AMIN, V_AMAX], the exciter V_E above V_EMIN
+            a = q['avr']
+            out.append((self.i_avr + 3, a['VA0'], a['VAMIN'], a['VAMAX'], a['TA'] > 0))
+            out.append((self.i_avr + 4, a['VE0'], a['VEMIN'], math.inf, np.ones(self.m, bool)))
         if self.gov:
             g = q['gov']
             base = g['c0'] if self.gov == 'steam' else g['g0']
@@ -514,16 +598,62 @@ class Unit(Kind):
         return F
 
     # -------------------------------------------------------------- the controls
-    def _pss(self, Z, w):
-        q = self.p['pss']
+    def _pss(self, Z, w, pe=None):
+        q, ps = self.p['pss'], self.pss
         u = w - 1.0
-        y, f0 = _wash(Z[:, 0], u, q['TW'], q['KS'])
-        y, f1 = _leadlag(Z[:, 1], y, q['T1'], q['T2'])
-        y, f2 = _leadlag(Z[:, 2], y, q['T3'], q['T4'])
-        return _clip(y, q['VSMIN'], q['VSMAX']), np.c_[f0, f1, f2]
+        if ps is True or ps == 'pss':
+            y, f0 = _wash(Z[:, 0], u, q['TW'], q['KS'])
+            y, f1 = _leadlag(Z[:, 1], y, q['T1'], q['T2'])
+            y, f2 = _leadlag(Z[:, 2], y, q['T3'], q['T4'])
+            return _clip(y, q['VSMIN'], q['VSMAX']), np.c_[f0, f1, f2]
+        dp = 0 * u if pe is None else q['kb'] * (pe - q['pe0'])      # the electrical power on the rating of the machine
+        if ps == 'pss1a':                             # 5.1: IEEE Std 421.5 PSS1A (Fig. 31)
+            vsi = np.where(q['INPUT'] > 1.5, dp, u)
+            y, f6 = _lag(Z[:, 0], vsi, q['T6'])
+            y, f5 = _wash(Z[:, 1], y, q['TW'], q['KS'])
+            # 1/(1 + A1·s + A2·s²): z1′ = z2, A2·z2′ = y − z1 − A1·z2 (A2 = 0: a lag A1 on z1; both 0: a gain of 1)
+            a1, a2 = q['A1'], q['A2']
+            two, one = a2 > 0, (a2 <= 0) & (a1 > 0)
+            z1, z2 = Z[:, 2], Z[:, 3]
+            g1 = np.where(two, z2, np.where(one, (y - z1) / np.where(one, a1, 1.0), 0 * z1))
+            g2 = np.where(two, (y - z1 - a1 * z2) / np.where(two, a2, 1.0), 0 * z2)
+            y = np.where(two | one, z1, y)
+            y, f1 = _leadlag(Z[:, 4], y, q['T1'], q['T2'])
+            y, f2 = _leadlag(Z[:, 5], y, q['T3'], q['T4'])
+            return _clip(y, q['VSMIN'], q['VSMAX']), np.c_[f6, f5, g1, g2, f1, f2]
+        M, N = self.pss_mn                            # 5.1: IEEE Std 421.5 PSS2B (Fig. 32 without the fourth lead-lag)
+        u1 = _clip(u, q['VSI1MIN'], q['VSI1MAX'])
+        u2 = _clip(dp, q['VSI2MIN'], q['VSI2MAX'])
+        y1, fw1 = _wash(Z[:, 0], u1, q['TW1'], 1.0)
+        y1, fw2 = _wash(Z[:, 1], y1, q['TW2'], 1.0)
+        y1, f6 = _lag(Z[:, 2], y1, q['T6'])
+        y2, fw3 = _wash(Z[:, 3], u2, q['TW3'], 1.0)
+        byp = q['TW4'] <= 0                           # the block bypass logic: T_W4 = 0 leaves the second washout out
+        y2b, fw4 = _wash(Z[:, 4], y2, np.where(byp, 1.0, q['TW4']), 1.0)
+        y2 = np.where(byp, y2, y2b)
+        fw4 = np.where(byp, 0 * fw4, fw4)
+        yy, f7 = _lag(Z[:, 5], y2, q['T7'])
+        yy = q['KS2'] * yy
+        r = y1 + q['KS3'] * yy
+        F = [fw1, fw2, f6, fw3, fw4, f7]
+        k = 6
+        for _i in range(N):                           # [(1 + sT8)/(1 + sT9)^M]^N: a lead-lag, then M − 1 lags, N times
+            r, fr = _leadlag(Z[:, k], r, q['T8'], q['T9'])
+            F.append(fr)
+            k += 1
+            for _j in range(M - 1):
+                r, fr = _lag(Z[:, k], r, q['T9'])
+                F.append(fr)
+                k += 1
+        y = q['KS1'] * (r - yy)
+        y, f1 = _leadlag(Z[:, k], y, q['T1'], q['T2'])
+        y, f2 = _leadlag(Z[:, k + 1], y, q['T3'], q['T4'])
+        y, f3 = _leadlag(Z[:, k + 2], y, q['T10'], q['T11'])
+        return _clip(y, q['VSTMIN'], q['VSTMAX']), np.column_stack(F + [f1, f2, f3])
 
     def _avr(self, Z, vt, ifd, vs):
-        """ST1A or DC1A as the AVR of the EMT (netlib.js avrDef), in deviations from the start. The rate feedback
+        """ST1A or DC1A as the AVR of the EMT (netlib.js avrDef), or the AC1A of IEEE Std 421.5 (5.1, only here), in
+        deviations from the start. The rate feedback
         K_F·s/(1 + sT_F) of E_fd − e0 enters the first summing point; its lag is the last state. E_fd is taken from the
         states first (DC1A: the exciter; ST1A: V_A with T_A > 0), so the feedback makes no algebraic loop (ST1A with
         K_F > 0 and T_A = 0 is refused when the system is built)."""
@@ -542,6 +672,10 @@ class Unit(Kind):
             return np.where(r < _re(lo), lo, np.where(r > _re(hi), hi, e))
         if typ == 'st1a':
             efd_s = st1a_out(_clip(e0 + Z[:, 3], q['VAMIN'], q['VAMAX']) - e0)
+        elif typ == 'ac1a':                           # 5.1: the rate feedback is from V_FE, a function of the states and I_FD
+            ve = q['VE0'] + Z[:, 4]
+            vfe = _exc_sat(ve, q) + q['KE'] * ve + q['KD'] * ifd
+            efd_s = vfe - q['VFE0'] + e0
         else:
             efd_s = e0 + Z[:, 4]
         fb = np.where(rf, q['KF'] / tf * ((efd_s - e0) - Z[:, k]), 0 * vt)
@@ -552,17 +686,36 @@ class Unit(Kind):
             dva, f_va = _nwlag(Z[:, 3], x, e0, q['KA'], q['TA'], q['VAMIN'], q['VAMAX'], self._hold('va'))
             efd = st1a_out(dva)
             mid = [f_va]
+            fbs = efd
+        elif typ == 'ac1a':
+            # IEEE Std 421.5 AC1A (Fig. 8, 9): V_A = K_A/(1 + sT_A) within [V_AMIN, V_AMAX] without windup, E_FE = V_A within
+            # [V_RMIN, V_RMAX], T_E·V_E′ = E_FE − V_FE with V_E ≥ V_EMIN (without windup), E_FD = V_E·F_EX(K_C·I_FD/V_E)
+            dva, f_va = _nwlag(Z[:, 3], x, q['VA0'], q['KA'], q['TA'], q['VAMIN'], q['VAMAX'], self._hold('va'))
+            efe = _clip(q['VA0'] + dva, q['VRMIN'], q['VRMAX'])
+            r = (efe - vfe) / q['TE']
+            f_ve = np.where(self._hold('ve')(_re(ve), _re(r), q['VEMIN'], math.inf), 0 * r, r)
+            vv = np.where(_re(ve) > 1e-6, ve, 1e-6 + 0 * ve)
+            efd = ve * _fex(q['KC'] * ifd / vv)
+            mid = [f_va, f_ve]
+            fbs = efd_s                               # the feedback signal: V_FE − V_FE0 + e0
         else:
             vr, f_vr = _nwlag(Z[:, 3], x, q['VR0'], q['KA'], q['TA'], q['VRMIN'], q['VRMAX'], self._hold('vr'))
             xe = Z[:, 4]
-            a, bb, ke = q['AEX'], q['BEX'], q['KE']
+            a, bb, ke = q['SA'], q['SB'], q['KE']
             selfx = np.isnan(ke)
             kk = np.where(selfx, 0.0, ke)
             loss = np.where(selfx, a * np.exp(bb * (e0 + xe)) - a * np.exp(bb * e0), kk + a * np.exp(bb * (e0 + xe)))
+            # 5.1: V_X = A·e^(B·E) itself (VXEXP, (8.21) of the book): the self-excited K_E = −V_X(e0)/e0, so V_R = 0 at rest
+            vxe = q['VXEXP'] > 0
             f_e = (q['VR0'] + vr - loss * (e0 + xe)) / q['TE']
+            if np.any(vxe):
+                E = e0 + xe
+                lossx = np.where(selfx, -_exc_sat(e0, q) / np.where(e0 != 0, e0, 1.0) * E, kk * E) + _exc_sat(E, q)
+                f_e = np.where(vxe, (q['VR0'] + vr - lossx) / q['TE'], f_e)
             efd = efd_s
             mid = [f_vr, f_e]
-        f_rf = np.where(rf, ((efd - e0) - Z[:, k]) / tf, 0 * Z[:, k])
+            fbs = efd
+        f_rf = np.where(rf, ((fbs - e0) - Z[:, k]) / tf, 0 * Z[:, k])
         return efd, np.c_[(f_tr, f_l1, f_l2, *mid, f_rf)]
 
     def _gov(self, Z, w):
@@ -626,9 +779,19 @@ class Unit(Kind):
         if self.avr:
             q = p['avr']
             q['e0'], q['v0'] = p['Efd0'], np.where(np.isnan(q['Vref']), np.abs(V), q['Vref'])
+            if self.avr in ('dc1a', 'ac1a'):
+                q['SA'], q['SB'] = _exc_ab(q)
             if self.avr == 'dc1a':
                 ke = q['KE']
-                q['VR0'] = np.where(np.isnan(ke), 0.0, (np.where(np.isnan(ke), 0.0, ke) + q['AEX'] * np.exp(q['BEX'] * q['e0'])) * q['e0'])
+                q['VR0'] = np.where(q['VXEXP'] > 0, np.where(np.isnan(ke), 0.0, np.where(np.isnan(ke), 0.0, ke) * q['e0'] + _exc_sat(q['e0'], q)),
+                                    np.where(np.isnan(ke), 0.0, (np.where(np.isnan(ke), 0.0, ke) + q['SA'] * np.exp(q['SB'] * q['e0'])) * q['e0']))
+            elif self.avr == 'ac1a':                  # 5.1: V_E from E_FD and I_FD, then V_FE = E_FE = V_A at rest
+                ve = _ve0(q['e0'], Ifd, q['KC'])
+                q['VE0'] = ve
+                q['VFE0'] = _exc_sat(ve, q) + q['KE'] * ve + q['KD'] * Ifd
+                q['VA0'] = q['VFE0'].copy()
+        if self.pss and 'pss' in p:
+            p['pss']['pe0'] = (V * np.conj(I)).real       # 5.1: the electrical power at the start (system base)
         if self.gov:
             q = p['gov']
             m0 = p['Tm0']
@@ -649,7 +812,7 @@ class Unit(Kind):
         F = [None]
         vs = 0 * w
         if self.pss:
-            vs, Fp = self._pss(X[:, self.i_pss:self.i_pss + 3], w)
+            vs, Fp = self._pss(X[:, self.i_pss:self.i_gov], w, Vd * Id + Vq * Iq)
         if self.avr:
             efd, Fa = self._avr(X[:, self.i_avr:self.i_pss], np.sqrt(Vr * Vr + Vi * Vi), Ifd, vs)
             F.append(Fa)
@@ -671,7 +834,7 @@ class Unit(Kind):
         p = self.p
         c, s, Vd, Vq, Id, Iq, Te, Ifd, _, _ = self._machine(X, Vr, Vi)
         w = X[:, 1]
-        vs = self._pss(X[:, self.i_pss:self.i_pss + 3], w)[0] if self.pss else 0 * w
+        vs = self._pss(X[:, self.i_pss:self.i_gov], w, Vd * Id + Vq * Iq)[0] if self.pss else 0 * w
         efd = self._avr(X[:, self.i_avr:self.i_pss], np.sqrt(Vr * Vr + Vi * Vi), Ifd, vs)[0] if self.avr else p['Efd0'] + 0 * w
         tm = self._gov(X[:, self.i_gov:], w)[0] if self.gov else p['Tm0'] + 0 * w
         Ir, Ii = Id * c - Iq * s, Id * s + Iq * c
@@ -1773,6 +1936,52 @@ def typical(net, kind='af', pf=None, load=0.8, controls=True):
                 g['gov'] = {'type': 'steam', 'Pr': 0.9}
         out[e['name']] = g
     return out
+
+
+# 5.1: the two-area system of Example 12.6 of Power System Stability and Control (pcl.network case 'two_area', THEORY §8ΩΥ):
+# the unit of the example on its 900 MVA (p. 813). Its saturation A_Sat = 0,015, B_Sat = 9,6, ψ_T1 = 0,9 is ψ_I = A_Sat·e^(B_Sat·(ψ_at
+# − ψ_T1)) above ψ_T1: the same exponential as S(V) = A_G·e^(B_G·(V − 0,8)) here (§8ΩΝ.1) through S(1,0) = 0,015·e^0,96 and
+# S(1,2) = 0,015·e^2,88, so S_G1,0 = 0,015·e^0,96, S_G1,2 = 0,015·e^2,88/1,2; below ψ_T1 ours is not 0 (S(0,9) = 0,015).
+TWO_AREA_UNIT = {'model': 'subtransient', 'Sn': 900e6, 'Xd': 1.8, 'Xq': 1.7, 'Xl': 0.2, 'Xdp': 0.3, 'Xqp': 0.55, 'Xdpp': 0.25,
+                 'Xqpp': 0.25, 'Ra': 0.0025, 'Td0p': 8.0, 'Tq0p': 0.4, 'Td0pp': 0.03, 'Tq0pp': 0.05, 'D': 0.0,
+                 'SG10': 0.015 * math.exp(9.6 * 0.1), 'SG12': 0.015 * math.exp(9.6 * 0.3) / 1.2}
+TWO_AREA_H = {'G1': 6.5, 'G2': 6.5, 'G3': 6.175, 'G4': 6.175}
+# the excitation of part (b) of the example (p. 814): (i) the self-excited DC exciter of Fig. 8.40 (DC1A, V_X of (8.21)), (ii) the
+# thyristor exciter with a high transient gain, (iii) with the transient gain reduction (1 + sT_A)/(1 + sT_B) of Fig. E12.9 (the
+# lead-lag T_C/T_B of the ST1A here), (iv) with the stabilizer of Fig. E12.9 (the PSS here: K_STAB, T_W, T1–T4)
+TWO_AREA_EXCITATION = {
+    'manual': {},
+    'dc': {'avr': {'type': 'dc1a', 'KA': 20.0, 'TA': 0.055, 'TE': 0.36, 'KF': 0.125, 'TF': 1.8, 'AEX': 0.0056, 'BEX': 1.075,
+                   'TR': 0.05, 'KE': None, 'VXEXP': 1.0, 'VRMIN': -99.0, 'VRMAX': 99.0}},
+    'thyristor': {'avr': {'type': 'st1a', 'KA': 200.0, 'TR': 0.01, 'VRMIN': -99.0, 'VRMAX': 99.0}},
+    'tgr': {'avr': {'type': 'st1a', 'KA': 200.0, 'TR': 0.01, 'TC': 1.0, 'TB': 10.0, 'VRMIN': -99.0, 'VRMAX': 99.0}},
+    'pss': {'avr': {'type': 'st1a', 'KA': 200.0, 'TR': 0.01, 'VRMIN': -99.0, 'VRMAX': 99.0},
+            'pss': {'KS': 20.0, 'TW': 10.0, 'T1': 0.05, 'T2': 0.02, 'T3': 3.0, 'T4': 5.4, 'VSMIN': -99.0, 'VSMAX': 99.0}},
+}
+TWO_AREA_LOADS = {'a': 1.0, 'b': 2.0}     # the loads of the example: P of constant current, Q of constant impedance
+
+
+def two_area_machines(excitation='manual', limits=False):
+    """5.1: the machines of the two-area system (case 'two_area') for Network.dynamic(machines=…, loads=TWO_AREA_LOADS):
+    the unit of Example 12.6 with the excitation of its part (a) 'manual' (constant E_fd) or (b) 'dc', 'thyristor', 'tgr',
+    'pss'. The example gives no limits: here ±99 pu (the "large number" of IEEE Std 421.5), so the regulators are linear, as in its
+    eigenvalues; limits=True keeps the
+    limits of the defaults (ST1A: V_R within [−6,4·V_t, 7,0·V_t]; DC1A: V_R within ±1,7; PSS: ±0,1) for large disturbances."""
+    if excitation not in TWO_AREA_EXCITATION:
+        raise RMSError('two_area_machines: %s' % ', '.join(TWO_AREA_EXCITATION))
+    out = {}
+    for g, H in TWO_AREA_H.items():
+        d = {**TWO_AREA_UNIT, 'H': H}
+        for part, v in TWO_AREA_EXCITATION[excitation].items():
+            v = dict(v)
+            if limits:
+                for q in ('VRMIN', 'VRMAX', 'VSMIN', 'VSMAX'):
+                    v.pop(q, None)
+            d[part] = v
+        out[g] = d
+    return out
+
+
 KNOWN_ELEMENTS = {'generator', 'load', 'branch', 'feeder', 'shunt', 'line', 'reactor', 'transformer', 'transformer3',   # 5.0.13: the passive ones of the network as Y
                   'vsc', 'dc_line', 'dcdc', 'dc_dispatcher', 'dc_source'}                                                    # 5.0.15: the DC grids (HVDC); 5.0.16: dc_source
 
@@ -1880,7 +2089,12 @@ class System:
             vals['Xl'] = min(vals['Xl'], 0.8 * xs)
             at = (avr or {}).get('type', 'st1a') if avr else None
             if at and at not in AVR_DEFAULTS:
-                raise RMSError('άγνωστη διέγερση %r (st1a, dc1a)' % at)
+                raise RMSError('άγνωστη διέγερση %r (st1a, dc1a, ac1a)' % at)
+            pt = None                                   # 5.1: the type of the stabilizer ('pss' as before, 'pss1a', 'pss2b')
+            if pss:
+                pt = (pss.get('type') or 'pss') if isinstance(pss, dict) else 'pss'
+                if pt not in PSS_TYPES:
+                    raise RMSError('άγνωστος σταθεροποιητής %r (%s)' % (pt, ', '.join(PSS_TYPES)))
             gt = (gov or {}).get('type', 'steam') if gov else None
             if gt and gt not in GOV_DEFAULTS:
                 raise RMSError('άγνωστος ρυθμιστής %r (steam, hydro)' % gt)
@@ -1893,14 +2107,27 @@ class System:
                 if at == 'st1a' and a['KF'] > 0 and a['TF'] > 1e-6 and not a['TA'] > 0:
                     raise RMSError('ST1A της %s με K_F > 0 και T_A = 0: αλγεβρικός βρόχος μέσα από την ανάδραση ρυθμού' % e['name'])
                 ctl['avr'] = a
-            if pss:
+            if pt == 'pss':
                 ctl['pss'] = {q: _num(pss if isinstance(pss, dict) else {}, q, v) for q, v in PSS_DEFAULTS.items()}
+            elif pt == 'pss1a':
+                ctl['pss'] = {q: _num(pss, q, v) for q, v in PSS1A_DEFAULTS.items()}
+                ctl['pss']['kb'] = k                    # the electrical power to the rating of the machine
+            elif pt == 'pss2b':
+                ps = {q: _num(pss, q, v) for q, v in PSS2B_DEFAULTS.items() if v is not None}
+                Hm = _num(md, 'H', TYPICAL_SUB['H'])    # K_S2 = T7/(2H), H on the rating of the machine (note a of Table H.24)
+                ps['KS2'] = _num(pss, 'KS2', ps['T7'] / (2 * Hm))
+                ps['kb'] = k
+                M, N = int(round(ps['M'])), int(round(ps['N']))
+                if M < 1 or N < 1 or M * N > 40:
+                    raise RMSError('PSS2B της %s: M, N ακέραιοι από 1, με M·N ως 40' % e['name'])
+                pt = ('pss2b', M, N)
+                ctl['pss'] = ps
             if gt:
                 g = {q: _num(gov, q, v) for q, v in GOV_DEFAULTS[gt].items()}
                 g['Pr'] /= k                                # the rating of the turbine on the base of the system
                 g['dP'] = 0.0
                 ctl['gov'] = g
-            units.setdefault((model, at, bool(pss), gt), []).append((e['name'], self.idx[e['bus']], vals, ctl))
+            units.setdefault((model, at, (True if pt == 'pss' else pt) if pt else False, gt), []).append((e['name'], self.idx[e['bus']], vals, ctl))
         for model, L in groups.items():
             p = {q: np.array([v[q] for _, _, v in L]) for q in MACHINE_KEYS}
             self.kinds.append(KINDS[model]([a for a, _, _ in L], [b for _, b, _ in L], p))

@@ -1321,7 +1321,11 @@ class Network:
         'lines' (I in kA, from a to b), 'dcdc' (P in MW, from a to b).
         5.0.16: the current sources of a DC grid (dc_source; stations: {source: {'expr', 'ins', 'pars', 'gain', 'tau', 'k'}} for the
         current of an expression, as pcl.rms.HVDC) in 'dc' 'sources' (I in kA into the bus, P in MW); and a network without
-        machines has a 'summary' too (the converters, the stations, the DC voltages)."""
+        machines has a 'summary' too (the converters, the stations, the DC voltages).
+        5.1 (§101 step 1, THEORY §8ΩΥ): the excitation 'ac1a' of IEEE Std 421.5 ('avr': {'type': 'ac1a', …}, pcl.rms.AVR_DEFAULTS), the
+        saturation of the DC1A by two points (E1, SE1, E2, SE2) or as V_X = A_EX·e^(B_EX·E_FD) (VXEXP 1), and the stabilizers
+        'pss': {'type': 'pss1a' | 'pss2b', …} (PSS1A_DEFAULTS, PSS2B_DEFAULTS); the case 'two_area' with
+        machines=pcl.rms.two_area_machines(…) and loads=pcl.rms.TWO_AREA_LOADS."""
         from . import rms
         if typical is not None:
             machines = {**rms.typical(self, kind=typical), **(machines or {})}
@@ -1740,7 +1744,7 @@ def ieee(case):
 
 
 CASES = ('ieee9', 'ieee14', 'ieee30', 'ieee57', 'ieee118', 'ieee300', 'case30', 'case33bw', 'case69', 'pegase1354')
-MORE = ('harmonic14', 'mtdc5', 'b4', 'case5_acdc')   # 4.19.5: networks made for one study (they are not in the lists of the other studies); 4.20: mtdc5 (AC/DC); 4.20.1: b4 (pcl.dcgrid.b4_network); 4.21: case5_acdc (the AC/DC OPF)
+MORE = ('harmonic14', 'mtdc5', 'b4', 'case5_acdc', 'two_area')   # 4.19.5: networks made for one study (they are not in the lists of the other studies); 4.20: mtdc5 (AC/DC); 4.20.1: b4 (pcl.dcgrid.b4_network); 4.21: case5_acdc (the AC/DC OPF); 5.1: two_area (the RMS dynamics, pcl.rms.two_area_machines)
 
 
 def case_data(name):

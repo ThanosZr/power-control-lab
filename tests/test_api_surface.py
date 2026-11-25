@@ -153,7 +153,7 @@ class ApiSurface(unittest.TestCase):
             self.assertIn(k, self.now['pcl']['pcl.se.run']['params'])
             self.assertIn(k, study.OPTIONS['se'])
         self.assertIn('spectra', study.OPTIONS['harmonic'])
-        self.assertEqual(network.MORE[-1], 'case5_acdc')
+        self.assertEqual(network.MORE[3], 'case5_acdc')                              # (5.1: two_area after it)
         self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 851)        # 851 then; 4.22 adds points
 
     def test_the_surface_of_4_22(self):
@@ -399,7 +399,22 @@ class ApiSurface(unittest.TestCase):
         from pcl import model, rms
         self.assertEqual(model.VERSION, 5)
         self.assertEqual(rms.GFM_STATION_KEYS, set(rms.GFM_DEFAULTS) | {'law', 'avc', 'Pref', 'Qref', 'Vref', 'Uref'})
-        self.assertEqual(sum(len(v) for v in self.now.values()), 1032)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 1032)       # 1032 then
+
+    def test_the_surface_of_5_1(self):
+        """5.1: the two-area system and the excitation systems of IEEE Std 421.5 in RMS (ROADMAP §101 step 1): the case two_area
+        after the others of MORE, pcl.rms.two_area_machines (one new point); the excitation 'ac1a' and the stabilizers 'pss1a',
+        'pss2b' as data of a unit (the 'pss' and the excitations of 5.0.13 as they were, the saturation of the DC1A by two
+        points or V_X of the book only when given)."""
+        from pcl import model, network, rms
+        self.assertEqual(network.MORE[-1], 'two_area')
+        self.assertEqual(model.VERSION, 5)
+        self.assertEqual(set(rms.AVR_DEFAULTS), {'st1a', 'dc1a', 'ac1a'})
+        self.assertEqual(rms.PSS_TYPES, ('pss', 'pss1a', 'pss2b'))
+        self.assertEqual(self.now['pcl']['pcl.rms.two_area_machines']['params'], ['excitation', 'limits'])
+        self.assertEqual({k: rms.AVR_DEFAULTS['dc1a'][k] for k in ('E1', 'SE1', 'E2', 'SE2', 'VXEXP')},
+                         {'E1': None, 'SE1': None, 'E2': None, 'SE2': None, 'VXEXP': 0.0})
+        self.assertEqual(sum(len(v) for v in self.now.values()), 1033)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

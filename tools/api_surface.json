@@ -1,5 +1,5 @@
 {
- "version": "5.0.18",
+ "version": "5.1",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -5199,6 +5199,13 @@
      "wb"
     ],
     "since": "4.23"
+   },
+   "pcl.rms.two_area_machines": {
+    "params": [
+     "excitation",
+     "limits"
+    ],
+    "since": "5.1"
    },
    "pcl.rms.typical": {
     "params": [

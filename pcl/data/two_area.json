@@ -1,0 +1,346 @@
+{
+ "format": "pcl-network",
+ "version": 1,
+ "f": 60.0,
+ "S_base": 100000000.0,
+ "name": "Two-area system (Example 12.6 of Power System Stability and Control)",
+ "buses": {
+  "1": {
+   "Un": 20000.0,
+   "type": "PV",
+   "V": 1.03,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "2": {
+   "Un": 20000.0,
+   "type": "PV",
+   "V": 1.01,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "3": {
+   "Un": 20000.0,
+   "type": "slack",
+   "V": 1.03,
+   "angle": -6.8,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "4": {
+   "Un": 20000.0,
+   "type": "PV",
+   "V": 1.01,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "5": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "6": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "7": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "8": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "9": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "10": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  },
+  "11": {
+   "Un": 230000.0,
+   "type": "PQ",
+   "V": 1.0,
+   "angle": 0.0,
+   "Vmin": null,
+   "Vmax": null
+  }
+ },
+ "elements": [
+  {
+   "kind": "branch",
+   "name": "T1",
+   "a": "5",
+   "b": "1",
+   "r": 0.0,
+   "x": 0.016666666666666666,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "T2",
+   "a": "6",
+   "b": "2",
+   "r": 0.0,
+   "x": 0.016666666666666666,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "T3",
+   "a": "11",
+   "b": "3",
+   "r": 0.0,
+   "x": 0.016666666666666666,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "T4",
+   "a": "10",
+   "b": "4",
+   "r": 0.0,
+   "x": 0.016666666666666666,
+   "bc": 0.0,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L5-6",
+   "a": "5",
+   "b": "6",
+   "r": 0.0025,
+   "x": 0.025,
+   "bc": 0.043750000000000004,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L6-7",
+   "a": "6",
+   "b": "7",
+   "r": 0.001,
+   "x": 0.01,
+   "bc": 0.0175,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L7-8a",
+   "a": "7",
+   "b": "8",
+   "r": 0.011000000000000001,
+   "x": 0.11,
+   "bc": 0.1925,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L7-8b",
+   "a": "7",
+   "b": "8",
+   "r": 0.011000000000000001,
+   "x": 0.11,
+   "bc": 0.1925,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L8-9a",
+   "a": "8",
+   "b": "9",
+   "r": 0.011000000000000001,
+   "x": 0.11,
+   "bc": 0.1925,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L8-9b",
+   "a": "8",
+   "b": "9",
+   "r": 0.011000000000000001,
+   "x": 0.11,
+   "bc": 0.1925,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L9-10",
+   "a": "9",
+   "b": "10",
+   "r": 0.001,
+   "x": 0.01,
+   "bc": 0.0175,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "branch",
+   "name": "L10-11",
+   "a": "10",
+   "b": "11",
+   "r": 0.0025,
+   "x": 0.025,
+   "bc": 0.043750000000000004,
+   "ratio": 0.0,
+   "angle": 0.0
+  },
+  {
+   "kind": "load",
+   "name": "L7",
+   "bus": "7",
+   "P": 967000000.0,
+   "Q": 100000000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "load",
+   "name": "L9",
+   "bus": "9",
+   "P": 1767000000.0,
+   "Q": 100000000.0,
+   "zip": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "kind": "shunt",
+   "name": "C7",
+   "bus": "7",
+   "P": 0.0,
+   "Q": -200000000.0
+  },
+  {
+   "kind": "shunt",
+   "name": "C9",
+   "bus": "9",
+   "P": 0.0,
+   "Q": -350000000.0
+  },
+  {
+   "kind": "generator",
+   "name": "G1",
+   "bus": "1",
+   "Sr": 900000000.0,
+   "Ur": 20000.0,
+   "xd2": 0.25,
+   "cosphi": 0.9,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 700000000.0,
+   "V": 1.03,
+   "Qmin": null,
+   "Qmax": null,
+   "slack": false
+  },
+  {
+   "kind": "generator",
+   "name": "G2",
+   "bus": "2",
+   "Sr": 900000000.0,
+   "Ur": 20000.0,
+   "xd2": 0.25,
+   "cosphi": 0.9,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 700000000.0,
+   "V": 1.01,
+   "Qmin": null,
+   "Qmax": null,
+   "slack": false
+  },
+  {
+   "kind": "generator",
+   "name": "G3",
+   "bus": "3",
+   "Sr": 900000000.0,
+   "Ur": 20000.0,
+   "xd2": 0.25,
+   "cosphi": 0.9,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": null,
+   "V": 1.03,
+   "Qmin": null,
+   "Qmax": null,
+   "slack": true
+  },
+  {
+   "kind": "generator",
+   "name": "G4",
+   "bus": "4",
+   "Sr": 900000000.0,
+   "Ur": 20000.0,
+   "xd2": 0.25,
+   "cosphi": 0.9,
+   "RG": null,
+   "xdsat": null,
+   "pG": 0.0,
+   "X0": null,
+   "earthed": false,
+   "P": 700000000.0,
+   "V": 1.01,
+   "Qmin": null,
+   "Qmax": null,
+   "slack": false
+  }
+ ],
+ "source": "Example 12.6 of Power System Stability and Control (McGraw-Hill, 1994), pp. 813-814, Figure E12.8: two similar areas joined by a weak tie (two circuits of 2 x 110 km between buses 7, 8, 9), four units of 900 MVA, 20 kV, step-up transformers j0.15 pu on 900 MVA, lines r = 0.0001, x = 0.001, b = 0.00175 pu/km on 100 MVA and 230 kV, the loads and the shunt capacitors of buses 7 and 9, area 1 exporting 400 MW; 60 Hz. G3 is the slack bus at 1.03 pu, -6.8 deg. The dynamic data of the units are pcl.rms.TWO_AREA_UNIT (pcl.rms.two_area_machines). Generators: x\"d = 0.25 pu is the subtransient reactance of the example; cos phi = 0.9 is a typical value for the short circuit, not part of it."
+}

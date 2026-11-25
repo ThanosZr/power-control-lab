@@ -107,7 +107,7 @@
 | `pcl/model.py` | 1535 |
 | `pcl/netfile.py` | 490 |
 | `pcl/netview.py` | 1101 |
-| `pcl/network.py` | 1859 |
+| `pcl/network.py` | 1863 |
 | `pcl/nnstart.py` | 388 |
 | `pcl/onnxio.py` | 355 |
 | `pcl/opf.py` | 515 |
@@ -116,7 +116,7 @@
 | `pcl/psse.py` | 433 |
 | `pcl/report.py` | 1118 |
 | `pcl/results.py` | 88 |
-| `pcl/rms.py` | 2797 |
+| `pcl/rms.py` | 3024 |
 | `pcl/scopf.py` | 213 |
 | `pcl/se.py` | 788 |
 | `pcl/study.py` | 861 |
@@ -129,7 +129,7 @@
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_api_surface.py` | 526 |
+| `tests/test_api_surface.py` | 541 |
 | `tests/test_appwin.py` | 122 |
 | `tests/test_arc.py` | 189 |
 | `tests/test_b4.py` | 300 |
@@ -165,7 +165,7 @@
 | `tests/test_gfm4.py` | 153 |
 | `tests/test_gfm5.py` | 179 |
 | `tests/test_gis.py` | 183 |
-| `tests/test_guide.py` | 438 |
+| `tests/test_guide.py` | 453 |
 | `tests/test_harmonic.py` | 312 |
 | `tests/test_impl.py` | 138 |
 | `tests/test_impulse_tools.py` | 150 |
@@ -208,6 +208,7 @@
 | `tests/test_rms.py` | 642 |
 | `tests/test_rms_drawing.py` | 312 |
 | `tests/test_rms_hvdc.py` | 452 |
+| `tests/test_rms_two_area.py` | 272 |
 | `tests/test_sat.py` | 180 |
 | `tests/test_scopf.py` | 263 |
 | `tests/test_se.py` | 366 |
@@ -4591,25 +4592,25 @@ _(χωρίς συναρτήσεις)_
 | 1264 | method | `Network.opf` |
 | 1286 | method | `Network.equivalent` |
 | 1296 | method | `Network.dynamic` |
-| 1425 | method | `Network.to_emt` |
-| 1514 | function | `_coo` |
-| 1520 | function | `_zip` |
-| 1525 | function | `_solve` |
-| 1536 | function | `_nr` |
-| 1572 | function | `sssc_placement` |
-| 1629 | function | `superposition` |
-| 1653 | function | `trv` |
-| 1687 | function | `_matrix` |
-| 1699 | function | `read_matpower` |
-| 1736 | function | `ieee` |
-| 1746 | function | `case_data` |
-| 1757 | function | `case_solution` |
-| 1766 | function | `ieee9` |
-| 1793 | function | `ieee14` |
-| 1806 | function | `to_dict` |
-| 1826 | function | `from_dict` |
-| 1854 | function | `save` |
-| 1858 | function | `load` |
+| 1429 | method | `Network.to_emt` |
+| 1518 | function | `_coo` |
+| 1524 | function | `_zip` |
+| 1529 | function | `_solve` |
+| 1540 | function | `_nr` |
+| 1576 | function | `sssc_placement` |
+| 1633 | function | `superposition` |
+| 1657 | function | `trv` |
+| 1691 | function | `_matrix` |
+| 1703 | function | `read_matpower` |
+| 1740 | function | `ieee` |
+| 1750 | function | `case_data` |
+| 1761 | function | `case_solution` |
+| 1770 | function | `ieee9` |
+| 1797 | function | `ieee14` |
+| 1810 | function | `to_dict` |
+| 1830 | function | `from_dict` |
+| 1858 | function | `save` |
+| 1862 | function | `load` |
 
 ### `pcl/nnstart.py`
 
@@ -4868,94 +4869,100 @@ _(χωρίς συναρτήσεις)_
 | 326 | function | `_tbreaks` |
 | 342 | function | `_num` |
 | 349 | function | `_sat_ab` |
-| 385 | class | `Unit` |
-| 411 | method | `Unit.__init__` |
-| 425 | method | `Unit._hold` |
-| 439 | method | `Unit.limits` |
-| 455 | method | `Unit._prep` |
-| 481 | method | `Unit._machine` |
-| 501 | method | `Unit._machine_f` |
-| 517 | method | `Unit._pss` |
-| 525 | method | `Unit._avr` |
-| 568 | method | `Unit._gov` |
-| 609 | method | `Unit.init` |
-| 644 | method | `Unit.eval` |
-| 669 | method | `Unit.outputs` |
-| 706 | class | `_Holds` |
-| 711 | method | `_Holds._hold` |
-| 722 | function | `_hyp` |
-| 726 | function | `_floor` |
-| 730 | class | `Converter` |
-| 754 | method | `Converter.__init__` |
-| 765 | method | `Converter.limits` |
-| 772 | method | `Converter._gfm_i` |
-| 796 | method | `Converter._taper` |
-| 803 | method | `Converter._gfm` |
-| 842 | method | `Converter._gfl` |
-| 880 | method | `Converter._gflpi` |
-| 917 | method | `Converter._core` |
-| 924 | method | `Converter.init` |
-| 998 | method | `Converter.eval` |
-| 1005 | method | `Converter.outputs` |
-| 1020 | class | `SVC` |
-| 1031 | method | `SVC.__init__` |
-| 1035 | method | `SVC.limits` |
-| 1041 | method | `SVC.init` |
-| 1062 | method | `SVC._core` |
-| 1085 | method | `SVC.eval` |
-| 1092 | method | `SVC.outputs` |
-| 1099 | class | `Statcom` |
-| 1107 | method | `Statcom.limits` |
-| 1110 | method | `Statcom.init` |
-| 1126 | method | `Statcom._core` |
-| 1137 | method | `Statcom.eval` |
-| 1145 | method | `Statcom.outputs` |
-| 1175 | class | `HVDC` |
-| 1194 | method | `HVDC.__init__` |
-| 1433 | method | `HVDC._loss` |
-| 1442 | method | `HVDC._source` |
-| 1447 | method | `HVDC._core` |
-| 1611 | method | `HVDC.init` |
-| 1707 | method | `HVDC.eval` |
-| 1711 | method | `HVDC.outputs` |
-| 1714 | method | `HVDC.limits` |
-| 1720 | method | `HVDC.find` |
-| 1748 | function | `typical` |
-| 1781 | class | `System` |
-| 1791 | method | `System.__init__` |
-| 1967 | method | `System._converter` |
-| 2034 | method | `System._y_build` |
-| 2043 | method | `System._ypat` |
-| 2048 | method | `System._yreal` |
-| 2060 | method | `System._split` |
-| 2063 | method | `System.fg` |
-| 2087 | method | `System.jac` |
-| 2143 | method | `System.init` |
-| 2167 | method | `System.state` |
-| 2173 | method | `System.internal_emf` |
-| 2184 | method | `System._hvdc` |
-| 2194 | method | `System._apply` |
-| 2272 | method | `System._unit` |
-| 2278 | method | `System._reset_units` |
-| 2296 | method | `System._consistent` |
-| 2308 | method | `System.simulate` |
-| 2408 | method | `System._iter_matrix` |
-| 2415 | method | `System._units` |
-| 2418 | method | `System._freeze` |
-| 2426 | method | `System._thaw` |
-| 2430 | method | `System._project` |
-| 2439 | method | `System._step_tr` |
-| 2460 | method | `System._step_full` |
-| 2482 | method | `System._step_alt` |
-| 2493 | method | `System._alt` |
-| 2517 | method | `System._lte` |
-| 2536 | method | `System.batch` |
-| 2546 | method | `System.quantities` |
-| 2674 | method | `System.stable` |
-| 2691 | method | `System.cct` |
-| 2714 | method | `System.linearize` |
-| 2728 | method | `System.eigen` |
-| 2776 | method | `System.reduced_y` |
+| 408 | function | `_pss_states` |
+| 421 | function | `_exc_sat` |
+| 429 | function | `_exc_ab` |
+| 440 | function | `_fex` |
+| 448 | function | `_ve0` |
+| 462 | class | `Unit` |
+| 488 | method | `Unit.__init__` |
+| 505 | method | `Unit._hold` |
+| 519 | method | `Unit.limits` |
+| 539 | method | `Unit._prep` |
+| 565 | method | `Unit._machine` |
+| 585 | method | `Unit._machine_f` |
+| 601 | method | `Unit._pss` |
+| 654 | method | `Unit._avr` |
+| 721 | method | `Unit._gov` |
+| 762 | method | `Unit.init` |
+| 807 | method | `Unit.eval` |
+| 832 | method | `Unit.outputs` |
+| 869 | class | `_Holds` |
+| 874 | method | `_Holds._hold` |
+| 885 | function | `_hyp` |
+| 889 | function | `_floor` |
+| 893 | class | `Converter` |
+| 917 | method | `Converter.__init__` |
+| 928 | method | `Converter.limits` |
+| 935 | method | `Converter._gfm_i` |
+| 959 | method | `Converter._taper` |
+| 966 | method | `Converter._gfm` |
+| 1005 | method | `Converter._gfl` |
+| 1043 | method | `Converter._gflpi` |
+| 1080 | method | `Converter._core` |
+| 1087 | method | `Converter.init` |
+| 1161 | method | `Converter.eval` |
+| 1168 | method | `Converter.outputs` |
+| 1183 | class | `SVC` |
+| 1194 | method | `SVC.__init__` |
+| 1198 | method | `SVC.limits` |
+| 1204 | method | `SVC.init` |
+| 1225 | method | `SVC._core` |
+| 1248 | method | `SVC.eval` |
+| 1255 | method | `SVC.outputs` |
+| 1262 | class | `Statcom` |
+| 1270 | method | `Statcom.limits` |
+| 1273 | method | `Statcom.init` |
+| 1289 | method | `Statcom._core` |
+| 1300 | method | `Statcom.eval` |
+| 1308 | method | `Statcom.outputs` |
+| 1338 | class | `HVDC` |
+| 1357 | method | `HVDC.__init__` |
+| 1596 | method | `HVDC._loss` |
+| 1605 | method | `HVDC._source` |
+| 1610 | method | `HVDC._core` |
+| 1774 | method | `HVDC.init` |
+| 1870 | method | `HVDC.eval` |
+| 1874 | method | `HVDC.outputs` |
+| 1877 | method | `HVDC.limits` |
+| 1883 | method | `HVDC.find` |
+| 1911 | function | `typical` |
+| 1964 | function | `two_area_machines` |
+| 1990 | class | `System` |
+| 2000 | method | `System.__init__` |
+| 2194 | method | `System._converter` |
+| 2261 | method | `System._y_build` |
+| 2270 | method | `System._ypat` |
+| 2275 | method | `System._yreal` |
+| 2287 | method | `System._split` |
+| 2290 | method | `System.fg` |
+| 2314 | method | `System.jac` |
+| 2370 | method | `System.init` |
+| 2394 | method | `System.state` |
+| 2400 | method | `System.internal_emf` |
+| 2411 | method | `System._hvdc` |
+| 2421 | method | `System._apply` |
+| 2499 | method | `System._unit` |
+| 2505 | method | `System._reset_units` |
+| 2523 | method | `System._consistent` |
+| 2535 | method | `System.simulate` |
+| 2635 | method | `System._iter_matrix` |
+| 2642 | method | `System._units` |
+| 2645 | method | `System._freeze` |
+| 2653 | method | `System._thaw` |
+| 2657 | method | `System._project` |
+| 2666 | method | `System._step_tr` |
+| 2687 | method | `System._step_full` |
+| 2709 | method | `System._step_alt` |
+| 2720 | method | `System._alt` |
+| 2744 | method | `System._lte` |
+| 2763 | method | `System.batch` |
+| 2773 | method | `System.quantities` |
+| 2901 | method | `System.stable` |
+| 2918 | method | `System.cct` |
+| 2941 | method | `System.linearize` |
+| 2955 | method | `System.eigen` |
+| 3003 | method | `System.reduced_y` |
 
 ### `pcl/scopf.py`
 
