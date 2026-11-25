@@ -1325,7 +1325,11 @@ class Network:
         5.1 (§101 step 1, THEORY §8ΩΥ): the excitation 'ac1a' of IEEE Std 421.5 ('avr': {'type': 'ac1a', …}, pcl.rms.AVR_DEFAULTS), the
         saturation of the DC1A by two points (E1, SE1, E2, SE2) or as V_X = A_EX·e^(B_EX·E_FD) (VXEXP 1), and the stabilizers
         'pss': {'type': 'pss1a' | 'pss2b', …} (PSS1A_DEFAULTS, PSS2B_DEFAULTS); the case 'two_area' with
-        machines=pcl.rms.two_area_machines(…) and loads=pcl.rms.TWO_AREA_LOADS."""
+        machines=pcl.rms.two_area_machines(…) and loads=pcl.rms.TWO_AREA_LOADS.
+        5.1.1 (§101 step 3, THEORY §8ΩΦ): the protection of the MMCC as events, with stations={station: {'prot': 1, 'tprot',
+        'Idcmax', 'Vuv', 'tuv', 'tcb'}} (pcl.rms.STATION_DEFAULTS; from a drawing as its MMCC): the events 'block', 'deblock' and 'gen'
+        of the protection in 'events' with 'by': 'prot' and 'why' ('uv', 'oc', 'brk'), and 'blocked' (1 while blocked) in 'dc'
+        'stations'; and the events 'block' and 'deblock' (gen: a station) by hand."""
         from . import rms
         if typical is not None:
             machines = {**rms.typical(self, kind=typical), **(machines or {})}
@@ -1393,6 +1397,8 @@ class Network:
                      'f': d['omega'] * fr, 'limited': d['limited']}
                 if 'E' in d:
                     o['E'] = d['E']
+                if 'blocked' in d:                          # 5.1.1: 1 while blocked (the protection of the MMCC or an event)
+                    o['blocked'] = d['blocked']
                 dc['stations'][nm] = o
             for j, ln in enumerate(K.lines):
                 dc['lines'][ln['name']] = q['dc']['lines'][ln['name']] * self.S_base / K.Un[ln['a']] / 1e3

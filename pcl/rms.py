@@ -26,6 +26,7 @@ X′_d), the two-axis machine (E′_q, E′_d, constant E_fd and P_m), a source 
 constant impedance, current or power (ZIP). Our own formulation from the standard equations (THEORY §8ΩΔ for the
 references). An element of the network without an RMS model is refused by name, never left out silently.
 """
+import bisect
 import cmath
 import math
 import time
@@ -980,6 +981,9 @@ class Converter(_Holds, Kind):
         else:
             E = vref + (X[:, 1] if self.avc else 0 * th)
         Er, Ei, ir, ii, lim = self._gfm_i(E, th, Vr, Vi)
+        blk = p.get('blk')
+        if blk is not None:                                 # 5.1.1: a blocked station of pcl.rms.HVDC: no current, and its law sees
+            ir, ii = ir * (1.0 - blk), ii * (1.0 - blk)     # P = Q = 0 (the GFMC of the EMT measures zero currents)
         P, Q = Vr * ir + Vi * ii, Vi * ir - Vr * ii
         vm = _hyp(Vr, Vi)
         if law == 'droop':
@@ -1320,9 +1324,15 @@ class Statcom(_Holds, Kind):
 # forms its island's voltage (Vf) is a source; T_dc: the lag of a DC/DC converter (s).
 STATION_DEFAULTS = {'Tp': 0.1, 'Tq': 0.1, 'Tvdc': 0.1, 'H': 0.03, 'Tvac': 0.1, 'Xpcc': 0.1, 'Tvf': 0.1, 'kdv': 0.2, 'X': 0.255,
                     'R': 0.0, 'Ti': 0.01, 'bw': 20.0, 'Ilim': 1.1, 'Idlim': 1.1, 'W': 30.0, 'Ldc': 0.0, 'Rd': 0.0, 'fd': 10.0,
-                    'ovl': 0.0, 'Vdcmax': 1.1, 'kov': 10.0}
+                    'ovl': 0.0, 'Vdcmax': 1.1, 'kov': 10.0, 'prot': 0.0, 'tprot': 0.3, 'Idcmax': 2.0, 'Vuv': 0.1, 'tuv': 0.02,
+                    'tcb': 0.04}
 # ovl (5.0.17): 1, the limiter of the DC overvoltage of the MMCC in the modes P and droop: above V_dc,max (pu) the d current is
 # cut by k_ov·(U_dc − V_dc,max) and the integrator of P holds (the EMT's OVL); 0 (the default, as 5.0.15): without it
+# prot (5.1.1, THEORY §8ΩΦ): 1, the protection of the MMCC as events (System.simulate, HVDC._protection): after t_prot, the
+# AC voltage of the station below V_uv (pu) blocks it, and t_uv after the voltage is back it deblocks; its DC current at the
+# terminals above I_dc,max (pu of S_n/U_n) blocks it for good, and t_cb later its AC breaker opens (the station out, as 'gen');
+# 0 (the default of the API, so that the results before 5.1.1 stay): without it. From a drawing as its MMCC (prot, tprot,
+# Idcmax; V_uv, t_uv and t_cb are those of the EMT, fixed there)
 # Ldc (H): the DC side of the station behind its terminals, its capacitance inside (as Model 4 of an MMC: C_dc = 6C/N behind
 # 2L_arm/3), with the active damping R_d (Ω) on the part of its current above f_d (Hz), as the EMT; without a resistance in
 # series, so that the start is the AC/DC load flow (whose stations are lossless on their DC side); Ldc = 0: the capacitance
@@ -1591,6 +1601,92 @@ class HVDC(_Holds, Kind):
                             [f'{q["name"]}.x{k + 1}' for q in self.src for k in range(len(q['tau']))] +
                             [f'{n}.{s}' for n, ss in zip(self.st_names[ng + nf:], mst) for s in ss])
         self._pf = (conv, dres)
+        # 5.1.1: the blocking of the stations (THEORY §8ΩΦ): by the protection of the MMCC (prot) or by an event ('block',
+        # 'deblock'); the blocks, the DC reactors of blocked stations and the states to set to zero at a block (System._fix).
+        # A device without protection and without such an event computes nothing of it (can_block False)
+        self.has_prot = any(bool(np.any(p[q]['prot'] > 0)) for q in ('g', 'f', 'm'))
+        self.can_block = self.has_prot
+        self._blocks_reset()
+
+    def _blocks_reset(self):
+        """5.1.1: every station deblocked, and the state of the protection as at the start."""
+        p = self.p
+        for q, n in (('g', self.ng), ('f', self.nf), ('m', self.nm)):
+            p[q]['blk'] = np.zeros(n)
+        self.lblk = np.zeros(len(self.lines), bool)
+        self._zero = []
+        ns = len(self.st_names)
+        self.pr = {'uv': np.zeros(ns, bool), 'lat': np.zeros(ns, bool), 'out': np.zeros(ns, bool), 'rel': np.full(ns, np.inf),
+                   'trip': np.full(ns, np.inf), 'by': [None] * ns}
+        self.can_block = self.has_prot
+
+    def _block(self, q, j, on):
+        """5.1.1: block (on) or deblock the station j of group q ('g', 'f', 'm'), as the blocking of the MMC in the EMT: no
+        current on its AC side; a station that controls a current holds the integrals of its outer and inner controls, and its
+        currents are zero from the block (System._fix), so that a deblock starts from zero current with the integrals where they
+        were, as the MMCC; a station that forms its island's voltage holds the integral of its AC voltage; a grid-forming station
+        gives no current, and its law sees P = Q = 0 (the GFMC of the EMT measures zero currents). A station with its DC reactor
+        (L_dc, Model 4) has the switch to its capacitance open: no current through L_dc, the capacitance keeps its voltage."""
+        s = self.p[q]
+        s['blk'][j] = 1.0 if on else 0.0
+        self.can_block = True
+        if s['hasL'][j]:
+            ln = int(s['ln'][j])
+            self.lblk[ln] = bool(on)
+            if on:
+                self._zero += [int(i) for i in self.i_l[self.lL == ln]] + [int(i) for i in self.i_lf[self.lD == ln]]
+        if on and q == 'g':
+            self._zero += [int(self.i_g[j, 4]), int(self.i_g[j, 5])]
+
+    def _protection(self, x, Vr, Vi, t):
+        """5.1.1: the protection of the MMCC of each station with prot, decided at the point (x, V) at t, the start of a step
+        (as the limits): the AC voltage |V| of its bus below V_uv blocks it (if not blocked) and holds; when |V| is back, a
+        deblock t_uv later (the integrator of the EMT falls from 1 at 1/t_uv), cancelled if |V| falls again; |I_dc| at its
+        terminals (P_t/U_dc, pu of S_n/U_n) above I_dc,max blocks it for good, and t_cb later opens its AC breaker (the station
+        out). Only after t_prot (t > t_prot, as the EMT). Returns (the events now: {'t', 'kind': 'block' | 'deblock' | 'gen',
+        'gen', 'by': 'prot', 'why': 'uv' | 'oc' | 'brk'}, the later times at which to look again)."""
+        o = self._core(x, Vr, Vi, t)[3]
+        P, now, later = self.pr, [], []
+        for q, off, n in (('g', 0, self.ng), ('f', self.ng, self.nf), ('m', self.ng + self.nf, self.nm)):
+            if not n:
+                continue
+            s = self.p[q]
+            for j in range(n):
+                if not (s['prot'][j] > 0 and s['on'][j] > 0 and t > s['tprot'][j] + 1e-12):
+                    continue
+                i, nm = off + j, self.st_names[off + j]
+                blk = s['blk'][j] > 0
+
+                def ev(kind, why):
+                    return {'t': t, 'kind': kind, 'gen': nm, 'by': 'prot', 'why': why}
+                v = float(np.real(o[q]['V'][j]))
+                I = abs(float(np.real(o[q]['Pt'][j]))) / max(float(np.real(o[q]['Udc'][j])), 0.05) * s['k'][j]
+                if not P['lat'][i] and I > s['Idcmax'][j]:
+                    P['lat'][i], P['trip'][i] = True, t + s['tcb'][j]
+                    later.append(P['trip'][i])
+                    if not blk:
+                        now.append(ev('block', 'oc'))
+                        P['by'][i], blk = 'oc', True
+                if v < s['Vuv'][j]:
+                    P['rel'][i] = np.inf
+                    if not P['uv'][i]:
+                        P['uv'][i] = True
+                        if not blk:
+                            now.append(ev('block', 'uv'))
+                            P['by'][i], blk = 'uv', True
+                elif P['uv'][i]:
+                    if P['rel'][i] == np.inf:
+                        P['rel'][i] = t + s['tuv'][j]
+                        later.append(P['rel'][i])
+                    if t >= P['rel'][i] - 1e-12:
+                        P['uv'][i], P['rel'][i] = False, np.inf
+                        if blk and P['by'][i] == 'uv' and not P['lat'][i]:
+                            now.append(ev('deblock', 'uv'))
+                            P['by'][i] = None
+                if P['lat'][i] and not P['out'][i] and t >= P['trip'][i] - 1e-12:
+                    P['out'][i] = True
+                    now.append(ev('gen', 'brk'))
+        return now, [tq for tq in later if tq > t + 1e-12]
 
     # -------------------------------------------------------------- the AC/DC parts
     def _loss(self, q, P, Ir, Ii):
@@ -1623,6 +1719,10 @@ class HVDC(_Holds, Kind):
                 dmp[self.lD] = self.lrd[self.lD] * (il[self.lD] - x[self.i_lf])
                 F[self.i_lf] = self.lwf[self.lD] * (il[self.lD] - x[self.i_lf])
             F[self.i_l] = (u[self.la[self.lL]] - u[self.lb[self.lL]] - self.lr[self.lL] * x[self.i_l] - dmp[self.lL]) / self.ll[self.lL]
+            if self.can_block and self.lblk.any():          # 5.1.1: the DC reactor of a blocked station: no current (zero from the block)
+                F[self.i_l] = np.where(self.lblk[self.lL], 0 * F[self.i_l], F[self.i_l])
+                if len(self.lD):
+                    F[self.i_lf] = np.where(self.lblk[self.lD], 0 * F[self.i_lf], F[self.i_lf])
         if len(self.lR):
             il[self.lR] = (u[self.la[self.lR]] - u[self.lb[self.lR]]) / self.lr[self.lR]
         il = il * p['lon']
@@ -1675,16 +1775,23 @@ class HVDC(_Holds, Kind):
             hq = self._hold('xq')(_re(iqr - iql), _re(np.where(g['qv'], rq, -rq)), -1e-12, 1e-12)
             Fxd = np.where(hd | ova, 0 * rd, rd)
             Fxq = np.where(hq, 0 * rq, rq)
+            onb = on
+            if self.can_block:                              # 5.1.1: blocked: the integrals and the currents (zero from the block) held,
+                nb = 1.0 - g['blk']                         # the PLL follows the voltage (as the EMT), no losses
+                Fxd, Fxq, Fid, Fiq, Fzd, Fzq = Fxd * nb, Fxq * nb, Fid * nb, Fiq * nb, Fzd * nb, Fzq * nb
+                onb = on * nb
             ir_in, ii_in = i_d * c - i_q * s, i_d * s + i_q * c
             Pin = (vr * ir_in + vi * ii_in) / g['k']       # into the converter, pu of S_base
             Ir[:ng], Ii[:ng] = -ir_in / g['k'] * on, -ii_in / g['k'] * on
-            Pdc = (Pin - self._loss('g', Pin, ir_in / g['k'], ii_in / g['k'])) * on
+            Pdc = (Pin - self._loss('g', Pin, ir_in / g['k'], ii_in / g['k'])) * onb
             np.add.at(Idc, g['dcb'], Pdc / _floor(u[g['dcb']], 0.05))
             Fg = np.stack([F0, F1, Fxd, Fxq, Fid, Fiq, Fzd, Fzq], axis=1) * on[:, None]
             F[self.i_g] = Fg
             out['g'] = {'P': -Pin * on, 'Q': -(vi * ir_in - vr * ii_in) / g['k'] * on, 'Pdc': Pdc, 'V': vm, 'Udc': ud,
                         'id': i_d * on, 'iq': i_q * on, 'I': _hyp(i_d, i_q) * on, 'omega': 1 + F0 / self.wb,
-                        'limited': np.where((_re(_hyp(idr, iqr)) > _re(_hyp(idl, iql)) + 1e-9), 1.0, 0.0) * on}
+                        'limited': np.where((_re(_hyp(idr, iqr)) > _re(_hyp(idl, iql)) + 1e-9), 1.0, 0.0) * onb}
+            if self.can_block:
+                out['g']['blocked'] = g['blk'] + 0 * vm
         if nf:
             X = x[self.i_f]
             xv, ilf = X[:, 0], X[:, 1]
@@ -1702,17 +1809,24 @@ class HVDC(_Holds, Kind):
             # the current out of the station: (E·e^(jθ) − v)/Z
             Wr, Wi = E * cw - vr, E * sw - vi
             ior, ioi = Wr * yr - Wi * yx, Wr * yx + Wi * yr
+            if self.can_block:                              # 5.1.1: blocked: no current, the integral of the AC voltage held
+                nbf = 1.0 - f['blk']
+                ior, ioi = ior * nbf, ioi * nbf
             idin = -(ior * cw + ioi * sw)                   # the d current into the converter (the frame θ)
             Fxv = 3 / f['Tvf'] * (vref - vm)
             Fxv = np.where(self._hold('xv')(_re(xv), _re(Fxv), -1.0, 1.0), 0 * Fxv, Fxv)
+            if self.can_block:
+                Fxv = Fxv * nbf
             Fil = (idin - ilf) * (2 * math.pi * 10.0)
             Pin = -(vr * ior + vi * ioi) / f['k']
             Ir[ng:ng + nf], Ii[ng:ng + nf] = ior / f['k'] * on, ioi / f['k'] * on
-            Pdc = (Pin - self._loss('f', Pin, ior / f['k'], ioi / f['k'])) * on
+            Pdc = (Pin - self._loss('f', Pin, ior / f['k'], ioi / f['k'])) * (on * nbf if self.can_block else on)
             np.add.at(Idc, f['dcb'], Pdc / _floor(u[f['dcb']], 0.05))
             F[self.i_f] = np.stack([Fxv, Fil], axis=1) * on[:, None]
             out['f'] = {'P': -Pin * on, 'Q': (vi * ior - vr * ioi) / f['k'] * on, 'Pdc': Pdc, 'V': vm, 'Udc': u[f['dcm']], 'E': E,
                         'I': _hyp(ior, ioi) * on, 'omega': 1.0 + 0 * vm, 'limited': 0 * vm}
+            if self.can_block:
+                out['f']['blocked'] = f['blk'] + 0 * vm
         if nm:                                              # 5.0.18: the grid-forming stations, by the law of each
             pm = p['m']
             vr, vi = Vr[ng + nf:], Vi[ng + nf:]
@@ -1723,6 +1837,7 @@ class HVDC(_Holds, Kind):
             Fm = np.zeros((nm, 3), dt)
             for cv, ix in self.gfm:
                 cv.p['on'], cv.p['dP'], cv.p['dV'] = pm['on'][ix], pm['dP'][ix], pm['dV'][ix]
+                cv.p['blk'] = pm['blk'][ix] if self.can_block else None        # 5.1.1: a blocked station (Converter._gfm)
                 Fc, ir[ix], ii[ix], oc = cv._core(x[self.i_m[ix, :cv.nx]], vr[ix], vi[ix])
                 for j, fj in enumerate(Fc):
                     Fm[ix, j] = fj
@@ -1733,10 +1848,12 @@ class HVDC(_Holds, Kind):
             F[self.i_m] = Fm * on[:, None]
             Ir[ng + nf:], Ii[ng + nf:] = ir / k * on, ii / k * on       # out of the station into its bus
             Pin = -o['P'] / k * on                          # into the converter, pu of S_base
-            Pdc = (Pin - self._loss('m', Pin, ir / k, ii / k)) * on
+            Pdc = (Pin - self._loss('m', Pin, ir / k, ii / k)) * (on * (1.0 - pm['blk']) if self.can_block else on)
             np.add.at(Idc, pm['dcb'], Pdc / _floor(u[pm['dcb']], 0.05))
             out['m'] = {'P': -Pin, 'Q': o['Q'] / k * on, 'Pdc': Pdc, 'V': _hyp(vr, vi), 'Udc': u[pm['dcm']], 'E': o['E'],
                         'I': _hyp(ir, ii) * on, 'omega': o['w'], 'limited': np.where(lim, 1.0, 0.0) * on}
+            if self.can_block:
+                out['m']['blocked'] = pm['blk'] + 0 * _hyp(vr, vi)
         if self.nk:
             pk = x[self.i_d]
             pd, Fp = _lag(pk, (d['Pref'] + d['dP']) * d['on'], d['Tdc'])
@@ -1864,6 +1981,7 @@ class HVDC(_Holds, Kind):
         for q, n in (('g', self.ng), ('f', self.nf), ('d', self.nk), ('s', len(self.src)), ('m', self.nm)):
             p[q]['on'], p[q]['dP'], p[q]['dV'] = np.ones(n), np.zeros(n), np.zeros(n)
         g['dVac'] = np.zeros(self.ng)
+        self._blocks_reset()
         self.x_start = x.copy()
         return x[None, :]
 
@@ -2420,6 +2538,16 @@ class System:
 
     def _apply(self, ev):
         k = ev['kind']
+        if k in ('block', 'deblock'):                       # 5.1.1: a station of a DC grid blocked or deblocked
+            K, w = self._hvdc(str(ev.get('gen')))
+            if K is None or w[0] not in ('g', 'f', 'm'):
+                raise RMSError('συμβάν %r: μόνο ένας σταθμός ενός δικτύου DC (pcl.rms.HVDC) μπλοκάρει, όχι το %r' % (k, ev.get('gen')))
+            q, j = w
+            K._block(q, j, k == 'block')
+            if ev.get('by') != 'prot':                      # by hand: the protection looks at the station afresh
+                i = K.st_names.index(str(ev['gen']))
+                K.pr['uv'][i], K.pr['rel'][i], K.pr['by'][i] = False, np.inf, None
+            return
         if k in ('gen', 'vref', 'pref', 'trip'):            # 5.0.15: a station, a DC/DC converter or a DC line
             K, w = self._hvdc(str(ev.get('gen', ev.get('branch'))))
             if K is not None:
@@ -2519,6 +2647,28 @@ class System:
                 K.p['lon'] = np.ones(len(K.lines))
                 for q, nn in (('g', K.ng), ('f', K.nf), ('d', K.nk), ('m', K.nm)):
                     K.p[q]['on'], K.p[q]['dP'], K.p[q]['dV'] = np.ones(nn), np.zeros(nn), np.zeros(nn)
+                K._blocks_reset()                           # 5.1.1
+
+    def _fix(self, x):
+        """5.1.1: the states that an event sets to zero (the currents of a station at its block: HVDC._block)."""
+        for K in self.kinds:
+            z = getattr(K, '_zero', None)
+            if z:
+                x = x.copy()
+                x[K.x0 + np.array(z, int)] = 0.0
+                K._zero = []
+        return x
+
+    def _protect(self, x, y, t):
+        """5.1.1: the protection of the stations of the DC grids at the point (x, y) at t (HVDC._protection): the events to apply
+        now, and the later times at which to look again."""
+        n, now, later = self.n, [], []
+        for K in self.kinds:
+            if isinstance(K, HVDC) and K.has_prot:
+                a, b = K._protection(x[K.x0:K.x0 + K.nx], y[:n][K.bus], y[n:][K.bus], t)
+                now += a
+                later += b
+        return now, later
 
     def _consistent(self, x, y, t, tol=1e-10):
         """y with x fixed after a discontinuity: Newton on g(x, y) = 0."""
@@ -2538,7 +2688,12 @@ class System:
         'trip' (branch: name or index; shunts: 'keep' removes only the series part), 'shunt' (bus, y pu)}]. method: 'simultaneous' (Newton on the whole system, the
         reference) or 'alternating'. step: 'fixed' (h) or 'var' (from h, with the local error of the states below
         rtol·|x| + atol). slow_after (5.0.13): the Newton iterations of a step above which the next step refactorizes (4: the
-        core of 4.23). Returns {'t', 'x', 'V' (complex bus voltages), 'stats', 'events' (5.0.13: (t, kind, unit) as applied)}."""
+        core of 4.23). Returns {'t', 'x', 'V' (complex bus voltages), 'stats', 'events' (5.0.13: (t, kind, unit) as applied)}.
+        5.1.1 (THEORY §8ΩΦ): the events 'block' and 'deblock' of a station of a DC grid (gen: its name), and the protection of the
+        MMCC of the stations with prot (HVDC._protection), decided at the start of every step after the events of that moment:
+        its events are applied there and recorded with 'by': 'prot' and 'why'; a release or an opening later stops a step at its
+        time. While a station is blocked, and in the step after a deblock, each step is two half steps of backward Euler
+        (_step_be2; with method 'simultaneous')."""
         if self.x is None:
             self.init()
         self._y_build()
@@ -2561,6 +2716,10 @@ class System:
         hc = h0 if step == 'var' else h
         t0 = time.perf_counter()
         ei = 0
+        prot = any(isinstance(K, HVDC) and K.has_prot for K in self.kinds)     # 5.1.1: the protection of the stations
+        cda = False                                          # 5.1.1: the next step damps (_step_be2)
+        blkd = [K for K in self.kinds if isinstance(K, HVDC)]
+        keys = ('kind', 'gen', 'bus', 'branch', 'dV', 'dP', 'id', 'by', 'why')
         while t < t_end - 1e-12:
             while ei < len(evs) and evs[ei]['t'] <= t + 1e-12:
                 if evs[ei]['kind'] == 'tick':                 # 5.0.16: past a jump of an expression: a new start of y and f
@@ -2571,8 +2730,13 @@ class System:
                     lu, hist = None, []
                     ei += 1
                     continue
+                if evs[ei]['kind'] == 'prot':                 # 5.1.1: a time at which the protection looks again (below)
+                    ei += 1
+                    continue
                 self._apply(evs[ei])
-                done.append({**{k: v for k, v in evs[ei].items() if k in ('kind', 'gen', 'bus', 'branch', 'dV', 'dP', 'id')}, 't': t, 'i': len(T)})
+                x = self._fix(x)
+                cda = cda or evs[ei]['kind'] in ('block', 'deblock')
+                done.append({**{k: v for k, v in evs[ei].items() if k in keys}, 't': t, 'i': len(T)})
                 y, ok = self._consistent(x, y, t)
                 if not ok:
                     st['nonconv'] += 1
@@ -2581,6 +2745,25 @@ class System:
                 st['events'] += 1
                 ei += 1
                 T.append(t); Xs.append(x.copy()); Vs.append(y[:n] + 1j * y[n:])
+            if prot:                                          # 5.1.1: decided at the start of the step, after the events of t
+                acts, later = self._protect(x, y, t)
+                for tq in later:                              # the step stops there
+                    evs.insert(bisect.bisect_right([e['t'] for e in evs], tq, lo=ei), {'t': tq, 'kind': 'prot'})
+                if acts:
+                    for e in acts:
+                        self._apply(e)
+                        x = self._fix(x)
+                        cda = cda or e['kind'] in ('block', 'deblock')
+                        done.append({**{k: v for k, v in e.items() if k in keys}, 't': t, 'i': len(T)})
+                        st['events'] += 1
+                    y, ok = self._consistent(x, y, t)
+                    if not ok:
+                        st['nonconv'] += 1
+                    f_n, _ = self.fg(x, y, t)
+                    lu, hist, hc = None, [], (min(hc, h, h0) if step == 'var' else hc)
+                    T.append(t); Xs.append(x.copy()); Vs.append(y[:n] + 1j * y[n:])
+            if blkd and not cda:                              # 5.1.1: while a station is blocked, every step damps
+                cda = any(K.can_block and (K.lblk.any() or any(K.p[q]['blk'].any() for q in 'gfm')) for K in blkd)
             tn = evs[ei]['t'] if ei < len(evs) else t_end
             hh = min(hc, tn - t, t_end - t)
             if brk:                                           # 5.0.16: a step that ends on a jump takes the value before it
@@ -2594,14 +2777,24 @@ class System:
                     M = self._iter_matrix(x, y, t + hh, hh)
                     lu, lu_h = spla.splu(M), hh
                     st['lu'] += 1
-                xn, yn, it, ok = self._step_tr(x, y, f_n, t, hh, tol, lu)
-                if not ok:                                    # refactorize at the new point and try once more
+                be, cda = cda, False
+                if be:                                        # 5.1.1: blocked, or after a deblock: two half steps of backward Euler
+                    xn, yn, it, ok, _ = self._step_be2(x, y, t, hh, tol, lu)
+                    if not ok:                                # (Newton with a new matrix at each iteration)
+                        xn, yn, it2, ok, n_lu = self._step_be2(x, y, t, hh, tol, None, full=True)
+                        it += it2
+                        st['lu'] += n_lu
+                        lu = None
+                    hist = []                                 # (the local error of the trapezoidal rule is not that of this step)
+                else:
+                    xn, yn, it, ok = self._step_tr(x, y, f_n, t, hh, tol, lu)
+                if not ok and not be:                         # refactorize at the new point and try once more
                     M = self._iter_matrix(x, y, t + hh, hh)
                     lu, lu_h = spla.splu(M), hh
                     st['lu'] += 1
                     xn, yn, it2, ok = self._step_tr(x, y, f_n, t, hh, tol, lu)
                     it += it2
-                if not ok and self._conv:                     # 5.0.14: a limit of a converter crossed inside the step:
+                if not ok and not be and self._conv:          # 5.0.14: a limit of a converter crossed inside the step:
                     # the holds as at the point where the iteration ended, and Newton with a new matrix at each iteration
                     xn, yn, it3, ok, n_lu = self._step_full(x, y, f_n, t, hh, tol, (xn, yn))
                     it += it3
@@ -2683,6 +2876,40 @@ class System:
         finally:
             self._thaw()
         return self._project(z[:nx].copy()), z[nx:], it, ok
+
+    def _step_be2(self, x, y, t, h, tol, lu, full=False):
+        """5.1.1: the step after a block or a deblock of a station (THEORY §8ΩΦ.3): two half steps of backward Euler, with the
+        iteration matrix of the trapezoidal step h (E − (h/2)·J is that of backward Euler with h/2), as the critical damping
+        adjustment of the EMT programs. The open DC reactor of a blocked station leaves a light, fast mode of the DC lines
+        (their L with the capacitance at the open end, some hundred Hz): the trapezoidal rule with a step of ms keeps it ringing
+        from step to step, where backward Euler damps it. The holds as at the start of each half step. full: the iteration
+        matrix anew at every iteration (after a jump of the state: the block, the clearing of a fault). Returns (x, y,
+        iterations, converged, factorizations)."""
+        nx = self.nx
+        its, ok_all, nf = 0, True, 0
+        for k in (1, 2):
+            t0 = t + (k - 1) * h / 2
+            z = np.r_[x, y]
+            self._freeze(x, y, t0)
+            ok = False
+            try:
+                for it in range(1, 21 if full else 16):
+                    f, g = self.fg(z[:nx], z[nx:], t0 + h / 2)
+                    R = np.r_[z[:nx] - x - 0.5 * h * f, g]
+                    if full:
+                        lu = spla.splu(self._iter_matrix(z[:nx], z[nx:], t0 + h / 2, h))
+                        nf += 1
+                    dz = lu.solve(R)
+                    z -= dz
+                    if np.max(np.abs(dz)) < tol * (1 + np.max(np.abs(z))):
+                        ok = True
+                        break
+            finally:
+                self._thaw()
+            its += it
+            ok_all = ok_all and ok
+            x, y = self._project(z[:nx].copy()), z[nx:]
+        return x, y, its, ok_all, nf
 
     def _step_full(self, x, y, f_n, t, h, tol, at, iters=20):
         """5.0.14: one trapezoidal step by Newton with the iteration matrix at every iteration (the holds of the limits as at
@@ -2864,11 +3091,14 @@ class System:
             Xs = r['x'][:, K.x0:K.x0 + K.nx]
             Vb = V[:, K.bus]
             keep = {'lon': K.p['lon'].copy(), **{(q, a): K.p[q][a].copy() for q in 'gfdsm' for a in ('on', 'dP', 'dV')}}
+            kblk = ({q: K.p[q]['blk'].copy() for q in 'gfm'}, K.lblk.copy(), K.pr, K.can_block)      # 5.1.1
             K.p['lon'] = np.ones(len(K.lines))
             for q in 'gfdsm':
                 K.p[q]['on'], K.p[q]['dP'], K.p[q]['dV'] = np.ones(len(K.p[q]['on'])), 0 * K.p[q]['dP'], 0 * K.p[q]['dV']
-            evs = [e for e in r.get('events', ()) if e['kind'] in ('gen', 'vref', 'pref', 'trip')
+            evs = [e for e in r.get('events', ()) if e['kind'] in ('gen', 'vref', 'pref', 'trip', 'block', 'deblock')
                    and self._hvdc(str(e.get('gen', e.get('branch'))))[0] is K]
+            K._blocks_reset()
+            K.can_block = K.has_prot or any(e['kind'] in ('block', 'deblock') for e in evs)
             st = {nm: {} for nm in K.st_names}
             dd = {nm: np.empty(nt) for nm in K.dd_names}
             ss = {nm: np.empty(nt) for nm in K.sr_names}
@@ -2894,6 +3124,9 @@ class System:
             K.p['lon'] = keep.pop('lon')
             for (q, a), v in keep.items():
                 K.p[q][a] = v
+            for q in 'gfm':                                 # 5.1.1
+                K.p[q]['blk'] = kblk[0][q]
+            K.lblk, K.pr, K.can_block, K._zero = kblk[1], kblk[2], kblk[3], []
             out['dc'] = {'buses': {b: Xs[:, K.i_u[k]] for k, b in enumerate(K.dc_names)}, 'stations': st, 'dcdc': dd, 'sources': ss,
                          'lines': {nm: il[:, j] for j, nm in enumerate(K.lname)}, 'device': K}
         return out

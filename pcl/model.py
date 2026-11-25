@@ -915,6 +915,8 @@ def converters_of(m):
             if k.get('mode', 'p') != 'p':
                 notes.append(f'{lab}: MMCC σε τρόπο {k.get("mode")} σε μετατροπέα VSC2: στο RMS μόνο ο τρόπος P (grid-following).')
                 continue
+            if k.get('prot', 'on') != 'off':                 # 5.1.1: the protection as events is that of the stations (MMC) only
+                notes.append(f'{lab}: η προστασία του MMCC σε μετατροπέα VSC2 (το μπλοκάρισμα του ελέγχου του): όχι ακόμη στο RMS.')
             d = {'model': 'gfl', 'Sn': S, 'X': X, 'frq': 'droop' if k.get('frq') == 'droop' else 'off', 'Pref': -_prog(k.get('Pref'))[0]}
             for q in ('acc', 'bw', 'Ilim', 'mf', 'Tf'):
                 if q in k:
@@ -974,6 +976,8 @@ def stations_of(m):
                 notes.append(f'{e.get("label") or e["id"]}: η υψιπερατή ανάδραση ρεύματος του PSC (k_v) δεν είναι στο RMS (σβήνει τον συντονισμό στα ~50 Hz του dq, έξω από το εύρος του).')
         else:
             d['ovl'] = 0.0 if k.get('ovl') == 'off' else 1.0         # 5.0.17: the limiter of the DC overvoltage, as the EMT
+        # 5.1.1: the protection of the MMCC (in every mode, as its output blk), as events of the RMS (THEORY §8ΩΦ)
+        d.update(prot=0.0 if k.get('prot') == 'off' else 1.0, tprot=max(_num(k, 'tprot', 0.3), 0.0), Idcmax=max(_num(k, 'Idcmax', 2.0), 1e-6))
         if p.get('model') == 'm4':
             d.update(Ldc=2 * La / 3, Rd=2 * _num(p, 'Rd', 20) / 3, fd=_num(p, 'fd', 10))
         else:

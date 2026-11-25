@@ -6,7 +6,8 @@ The checks: at rest from the AC/DC load flow; two loops with a closed-form solut
 capacitance, the power loop of the converter 'pi'); the Jacobian of the device across buses against differences; and the
 DCS2 of the CIGRE B4 against our EMT of the same network (the tutorial b4dcs2, tests/js/b4_rms_cases.js). 5.0.17: the link of
 hvdc_mmc (a symmetric monopole) from its drawing against its EMT (tests/js/hvdc_rms_cases.js), with the limiter of the DC
-overvoltage of the MMCC."""
+overvoltage of the MMCC. 5.1.1: and with the protection of the MMCC as events (the blocking of the station of V_dc in the AC
+fault), against the blocking of the EMT (tests/test_rms_protection.py for the rest)."""
 import json
 import math
 import subprocess
@@ -230,18 +231,22 @@ class SymmetricMonopole(unittest.TestCase):
             raise RuntimeError(out.stderr)
         cls.js = {e['ev']: e for e in json.loads(out.stdout)['runs']}
 
-    def run_rms(self, ev, ovl=True):
+    def run_rms(self, ev, ovl=True, prot=True, out=None):
         from pcl import model
         proj = json.loads(subprocess.run(['node', str(ROOT / 'tests/js/model_cases.js'), 'build', 'hvdc_mmc', json.dumps({'ev': ev})],
                                          capture_output=True, text=True, timeout=300, check=True).stdout)
         m = model.of(proj)
-        if not ovl:
-            for e in m['elements']:
-                if e['type'] == 'MMC':
+        for e in m['elements']:
+            if e['type'] == 'MMC':
+                if not ovl:
                     e['ctl']['params']['ovl'] = 'off'
+                if not prot:                                # 5.1.1: without the protection of the MMCC (as 5.0.17)
+                    e['ctl']['params']['prot'] = 'off'
         r = model.dynamic(m, t_end=1.0, h=0.005, record=0.001, buses=[])
         self.assertEqual(r['stats']['nonconv'], 0)
         self.assertEqual(r['drawing']['notes'], [])
+        if out is not None:
+            out.update(r)
         e = self.js[ev]
         te, T = np.array(e['t']), np.asarray(r['t'])
         dU, dP = {}, {}
@@ -266,16 +271,35 @@ class SymmetricMonopole(unittest.TestCase):
     def test_the_ac_fault_at_the_station_of_vdc(self):
         # the three-phase fault at the station of V_dc (0.5–0.65 s): the station of P cuts its current above V_dc,max 1.1 pu (the
         # limiter of the MMCC, ovl), and the DC voltage stays near 1.2 pu as in the EMT, where the station of V_dc blocks (its
-        # protection, which the RMS has not). Measured: during the fault (0.55–0.65 s) |ΔU| 4.3 and 5.1 kV; after it (from 0.7 s)
-        # 25 kV, the recovery of the RMS slower; at the end −0.08 and −0.09 kV. Without the limiter the RMS stays at 1164 kV.
-        te, dU, dP = self.run_rms('acf')
+        # protection). 5.1.1 (THEORY §8ΩΦ.4): the protection of the MMCC as events, from the drawing: the station of V_dc blocked at
+        # 0.5 s and deblocked at 0.67 s (in the EMT 0.501 and 0.679 s: the fault clears at the zeros of the current, so the voltage
+        # of the station is back later). Measured: during the fault (0.55–0.65 s) |ΔU| 2.03 and 2.27 kV; after it (from 0.7 s) 7.96 and
+        # 4.59 kV; at the end +0.011 and +0.010 kV, ΔP −0.31 and −0.77 MW.
+        r = {}
+        te, dU, dP = self.run_rms('acf', out=r)
+        self.assertEqual([(e['t'], e['kind'], e['gen'], e['why']) for e in r['events'] if e.get('by') == 'prot'],
+                         [(0.5, 'block', 'MMC2', 'uv'), (0.67, 'deblock', 'MMC2', 'uv')])
+        b = np.array(self.js['acf']['B']['2'])
+        ch = [te[i] for i in range(1, len(b)) if (b[i] > 0.5) != (b[i - 1] > 0.5) and te[i] > 0.2]
+        self.assertEqual(len(ch), 2)
+        self.assertLess(abs(ch[0] - 0.5), 0.002)
+        self.assertLess(abs(ch[1] - 0.67), 0.012)
         f, end = (te > 0.55) & (te < 0.65), te > 0.95
+        for k in ('1', '2'):
+            self.assertLess(float(np.max(np.abs(dU[k][f]))), 3.0, msg=k)
+            self.assertLess(float(np.max(np.abs(dU[k][te > 0.7]))), 10.0, msg=k)
+            self.assertLess(abs(float(dU[k][end].mean())), 0.05, msg=k)
+            self.assertLess(abs(float(dP[k][end].mean())), 1.5, msg=k)
+        # without the protection (5.0.17): during the fault 4.3 and 5.1 kV; from 0.7 s 25 kV, the recovery of the RMS slower; at
+        # the end −0.08 and −0.09 kV. And without the limiter too the RMS stays at 1164 kV.
+        te, dU, dP = self.run_rms('acf', prot=False)
         for k in ('1', '2'):
             self.assertLess(float(np.max(np.abs(dU[k][f]))), 6.5, msg=k)
             self.assertLess(float(np.max(np.abs(dU[k][te > 0.7]))), 32.0, msg=k)
+            self.assertGreater(float(np.max(np.abs(dU[k][te > 0.7]))), 20.0, msg=k)
             self.assertLess(abs(float(dU[k][end].mean())), 0.15, msg=k)
             self.assertLess(abs(float(dP[k][end].mean())), 3.5, msg=k)
-        te, dU, dP = self.run_rms('acf', ovl=False)
+        te, dU, dP = self.run_rms('acf', ovl=False, prot=False)
         self.assertGreater(float(dU['1'][end].mean()), 400.0)
 
 
