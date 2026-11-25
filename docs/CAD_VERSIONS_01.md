@@ -1,6 +1,6 @@
 # CAD · εκδόσεις και κατάσταση εργασίας · μέρος 1
 
-**Ενεργή εγγραφή: CAD-S011, αναθεώρηση εγγράφων 0.4 (23/11/2026).** Οι παλιές εγγραφές διατηρούν τις τότε καταστάσεις και οδηγίες τους ως ιστορικό. Για το σημερινό scope διάβασε CAD_STATUS και CAD_INDEX στο ίδιο Git branch.
+**Ενεργή εγγραφή: CAD-S014, αναθεώρηση εγγράφων 0.7 (25/11/2026).** Οι παλιές εγγραφές διατηρούν τις τότε καταστάσεις και οδηγίες τους ως ιστορικό. Για το σημερινό scope διάβασε CAD_STATUS και CAD_INDEX στο ίδιο Git branch.
 
 ## CAD-S000 · Αρχικό πλάνο · 22/11/2026
 
@@ -102,6 +102,13 @@
 - D028: `experiments/cad_t003/document.py`, `demo.py`, `test_document.py` και CAD_DOCUMENT_CONTRACT. JSON schema 1, typed parameters, feature DAG, shaft/ports/material, atomic revisioned parameter edits, undo/redo, persistence snapshot. Δεν εκτελείται πραγματικό geometry build.
 - Τοπικά (Python 3.12.14): 12/12 isolated unittest methods, demo parameter resolution/round-trip, CODEMAP/API 947, 24/24 υπάρχοντα dock/live-program/recording tests. CI workflow αμετάβλητο, δεν τρέχει το isolated T003 suite· απαιτείται επιτυχές CI του τελικού SHA για το pinned PCL. Τρέχον SHA/CI από remote, όχι self-referential commit.
 - Πύλες: πραγματικό engine handoff/privacy procedure ακόμη εκκρεμούν πριν από PCL ενσωμάτωση· δεν χρησιμοποιήθηκαν ιδιωτικά inputs. nethash/ERR δεν ενεργοποιείται (solver/netlib/parts αμετάβλητα). Fable review στο CAD_DOCUMENT_CONTRACT. Επόμενο χωριστά εγκεκριμένο T004 worker/job contract, όχι ενσωμάτωση ή αυτόματη έναρξη.
+
+## CAD-S014 · 25/11/2026 · SOL · CAD-T004 — isolated worker contract
+
+- T003 τελικό `c9fe513eb984653741519b93ff177796150a66cd`, CI 45149843737 completed/success και 4/4 jobs, επιβεβαιωμένα. Νέο `lab-cad-0.4.0-workers` από το ακριβές remote SHA· approved 5.0.7/dab82e5 αμετάβλητη.
+- D029: `experiments/cad_t004/worker.py`, `demo.py`, `test_worker.py`, CAD_WORKER_CONTRACT. Immutable requests, session/revision/current-content identity, conservative adapter/kernel/tolerance/dependency cache keys, bounded FIFO, LRU bytes/entries, cooperative cancellation και stale rejection πριν από delivery. Static logical live CPU/RAM reserve, χωρίς native geometry/process ή integration.
+- Python 3.12.14: 11/11 T004 + 12/12 T003 tests, demo miss/miss/hit σε revisions 0/1/2 (radius 10/16/10 mm), work budget 28 MiB, 2 CAD slots, δύο cached results 304 bytes. CODEMAP/API 947 και 24/24 existing dock/live-program/recording tests PASS. Workflow unchanged, δεν τρέχει το isolated suite· τελικό πραγματικό SHA/CI απαιτείται για κλείσιμο.
+- Οι δύο ιδιωτικές πύλες δεν εκτελέστηκαν ούτε παρακάμφθηκαν για PCL runtime. Καμία ιδιωτική είσοδος· μόνο public CAD docs/isolated experiment. nethash/ERR δεν εφαρμόζεται. Fable backlog στο CAD_WORKER_CONTRACT: process transport/cancel, scheduler fairness, incremental feature cache, dynamic solver arbitration και μετρήσεις. Επόμενο χωριστά εγκεκριμένο T005 native adapter, όχι αυτόματο.
 
 ## Πρότυπο επόμενης εγγραφής
 

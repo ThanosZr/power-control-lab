@@ -6,13 +6,14 @@
 
 **Συνέχεια χωρίς αναζήτηση παλιών αρχείων (D023):** κάθε νέα συνομιλία αρχίζει από αυτό το README, το CAD_INDEX και το CAD_STATUS του πραγματικού CAD HEAD. Όλο το δημοσιεύσιμο υλικό/refs της επόμενης εργασίας είναι στα κανονικά Git docs· δεν απαιτείται αναδρομή σε παλιά chats, ZIP ή project uploads. Τυχόν υποχρεωτικές ιδιωτικές εκκρεμότητες δηλώνονται μία φορά ρητά στο CAD_STATUS.
 
-**CAD-T003 — απομονωμένο document engine v1 και παραμετρικό shaft template, με SOL (D028).** T001 κλειστό στο e997a3d2 / CI 45124099619, T002 κλειστό στο 43f7fe3 / CI 45135806207 (4/4). Το T003 ορίζει ουδέτερο JSON document, feature graph, revisioned edits, undo/redo και save/open. Δεν δημιουργεί ακόμη πραγματικό BRep ούτε ενσωματώνεται στο PCL 5.0.7.
+**CAD-T004 — απομονωμένο worker/job contract, με SOL (D029).** T001 κλειστό στο e997a3d2 / CI 45124099619, T002 στο 43f7fe3 / CI 45135806207, T003 στο c9fe513 / CI 45149843737 (4/4). Το T004 υλοποιεί background synthetic workers, revision/session identity, cache, cooperative cancellation και logical resource reservations. Δεν δημιουργεί ακόμη πραγματικό BRep ούτε ενσωματώνεται στο PCL 5.0.7.
 
 ## Ξεκίνα εδώ
 
 | Αν θέλεις να δεις… | Διάβασε |
 | --- | --- |
 | Την τρέχουσα κατάσταση και το αμέσως επόμενο βήμα | [CAD_STATUS](docs/CAD_STATUS.md) |
+| Worker/job contract, cache, ακύρωση, resource budget και Fable review | [CAD_WORKER_CONTRACT](docs/CAD_WORKER_CONTRACT.md) |
 | Document API v1, shaft template, δοκιμές και Fable review | [CAD_DOCUMENT_CONTRACT](docs/CAD_DOCUMENT_CONTRACT.md) |
 | Επιλογή kernel, μετρήσεις, GPU architecture και Fable optimization review | [CAD_KERNEL_EVALUATION](docs/CAD_KERNEL_EVALUATION.md) |
 | Όλο το πακέτο, με σειρά ανάγνωσης και οδηγίες ενσωμάτωσης | [CAD_INDEX](docs/CAD_INDEX.md) |
@@ -44,11 +45,11 @@
 
 | Στοιχείο | Τιμή |
 | --- | --- |
-| CAD branch | lab-cad-0.3.0-document |
-| Έκδοση εγγράφων | 0.6 |
+| CAD branch | lab-cad-0.4.0-workers |
+| Έκδοση εγγράφων | 0.7 |
 | Εγκεκριμένος engine | 5.0.7 |
 | Αμετάβλητο source SHA | dab82e5ff2e6da4bde09e4a38aab32edfffe6d51 |
-| Κατάσταση CAD | T003 isolated contract· κλείσιμο με επιτυχές CI στο τελικό HEAD |
+| Κατάσταση CAD | T004 isolated contract· κλείσιμο με επιτυχές CI στο τελικό HEAD |
 | Κανονικές πηγές πλάνου | docs/CAD_*.md αυτού του branch |
 
 Κάθε νέα έκδοση CAD ξεκινά σε νέο lab-cad-<έκδοση>-<θέμα> branch. Τα ενδιάμεσα commits της ίδιας έκδοσης μένουν στο ίδιο branch. Η νεότερη main ή έκδοση engine δεν γίνεται αυτόματα βάση CAD.
@@ -56,7 +57,7 @@
 Για εκκίνηση του υπάρχοντος engine αναφοράς:
 
 ~~~sh
-git clone --branch lab-cad-0.3.0-document https://github.com/ThanosZr/power-control-lab.git
+git clone --branch lab-cad-0.4.0-workers https://github.com/ThanosZr/power-control-lab.git
 cd power-control-lab
 python -m pip install -r requirements.txt
 python run.py
@@ -68,7 +69,7 @@ python run.py
 
 Οι κατάλληλοι τοπικοί έλεγχοι και το επιτυχές GitHub CI πρέπει να αντιστοιχούν στο ίδιο τελικό δημοσιευμένο SHA. Η ανακατασκευή τεκμηρίωσης, η ανάκτηση των πραγματικών CAD-S007 drafts και οι διαφορετικές εκτελέσεις ελέγχων καταγράφονται ξεχωριστά στο baseline.
 
-Κατόπιν D024, D026 και D028, τα ενεργά ιδιωτικά engine handoff docs και η πραγματική διαδικασία απορρήτου με τα inputs τους παραμένουν υποχρεωτικές πύλες πριν από υλοποίηση CAD στο PCL. Τα T002/T003 είναι απομονωμένες συνθετικές εργασίες. Δεν έχουν εκτελεστεί οι ιδιωτικοί έλεγχοι και δεν δημοσιεύονται ιδιωτικά inputs. Εκτέλεση T003: `python -m experiments.cad_t003.demo`, έλεγχοι: `python -m unittest experiments.cad_t003.test_document -v`.
+Κατόπιν D024, D026, D028 και D029, τα ενεργά ιδιωτικά engine handoff docs και η πραγματική διαδικασία απορρήτου με τα inputs τους παραμένουν υποχρεωτικές πύλες πριν από υλοποίηση CAD στο PCL. Τα T002–T004 είναι απομονωμένες συνθετικές εργασίες. Δεν έχουν εκτελεστεί οι ιδιωτικοί έλεγχοι και δεν δημοσιεύονται ιδιωτικά inputs. Εκτέλεση T004: `python -m experiments.cad_t004.demo`, έλεγχοι: `python -m unittest experiments.cad_t003.test_document experiments.cad_t004.test_worker -v`.
 
 Ο engine θα εξελιχθεί από το εγκεκριμένο repo 5.0.7 με τον ιδιοκτήτη· το Fable μπορεί να ενισχύσει την εξέλιξη στα θέματα που θα έχουν καταγραφεί. Δες την [ενδεικτική αρχιτεκτονική και ανοιχτά ερωτήματα](docs/CAD_PLAN_DETAILS.md#ενδεικτική-αρχιτεκτονική-για-συνεργασία-και-ενίσχυση). Δεν αποτελεί υλοποίηση, επιλογή backend ή αλλαγή βάσης.
 

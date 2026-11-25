@@ -1,8 +1,8 @@
 # CAD · αναλυτικό πλάνο προϊόντος και κριτήρια
 
-Αναθεώρηση εγγράφων 0.6 · 23/11/2026. Συμπληρώνει το [CAD_NEXT_STEPS](CAD_NEXT_STEPS.md), τους [κανόνες](CAD_PROJECT_INSTRUCTIONS.md) και τον [χάρτη ενσωμάτωσης](CAD_INTEGRATION_MAP.md).
+Αναθεώρηση εγγράφων 0.7 · 25/11/2026. Συμπληρώνει το [CAD_NEXT_STEPS](CAD_NEXT_STEPS.md), τους [κανόνες](CAD_PROJECT_INSTRUCTIONS.md) και τον [χάρτη ενσωμάτωσης](CAD_INTEGRATION_MAP.md).
 
-Απαιτήσεις, προτάσεις και υλοποίηση διατηρούνται χωριστά. T001 documentation-only, T002 isolated spike: επιλεγμένη υβριδική αρχιτεκτονική OCCT/build123d adapter, δικό μας document/compute/rendering layer, αναλυτικά στο [CAD_KERNEL_EVALUATION](CAD_KERNEL_EVALUATION.md). T003 isolated [document contract v1](CAD_DOCUMENT_CONTRACT.md), shaft και revisioned API. Κανένα ενσωματωμένο runtime API, scheduler ή renderer δεν έχει υλοποιηθεί.
+Απαιτήσεις, προτάσεις και υλοποίηση διατηρούνται χωριστά. T001 documentation-only, T002 isolated spike: επιλεγμένη υβριδική αρχιτεκτονική OCCT/build123d adapter, δικό μας document/compute/rendering layer, αναλυτικά στο [CAD_KERNEL_EVALUATION](CAD_KERNEL_EVALUATION.md). T003 isolated [document contract v1](CAD_DOCUMENT_CONTRACT.md), shaft και revisioned API. T004 isolated [worker coordinator v1](CAD_WORKER_CONTRACT.md), cache/cancellation/logical reservations. Κανένα ενσωματωμένο runtime API, native scheduler ή renderer δεν έχει υλοποιηθεί.
 
 ## 1. Προϊόν και βασική εμπειρία
 
@@ -96,7 +96,7 @@ flowchart TD
 - T001: ακριβής βάση και CI, αναπαραγώγιμο baseline, shared-file map, πραγματική κατάσταση των inputs και πλήρες δημόσιο handoff.
 - T002: ίδιο ουδέτερο δοκίμιο σε υποψήφιους kernels, εγκατάσταση, exact/export/mesh/ιδιότητες, κόστος build/tessellation και περιορισμοί. Η απόφαση χρειάζεται πραγματικά αποτελέσματα.
 - T003: document/component contract με μικρό template, lifecycle, ταυτότητες και migration boundaries.
-- T004: απομονωμένο worker-job proof με revisions, cache, ακύρωση και συνολικό CPU/RAM budget.
+- T004: απομονωμένο worker-job proof με revisions, cache, cooperative ακύρωση και logical CPU/RAM budget. Native process/IPC, πραγματικό RSS και live-solver arbitration εκκρεμούν (CAD_WORKER_CONTRACT).
 
 Το C0 απαιτεί όλα τα αντίστοιχα παραδοτέα.
 

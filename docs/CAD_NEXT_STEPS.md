@@ -1,10 +1,10 @@
 # Power & Control Lab · CAD και custom components
 
-Έκδοση πλάνου: 0.6 · 23/11/2026 · Ιδιοκτήτης: Thanos Zr.
+Έκδοση πλάνου: 0.7 · 25/11/2026 · Ιδιοκτήτης: Thanos Zr.
 
 ## Τρέχουσα κατάσταση
 
-**CAD-T003 / SOL — απομονωμένο document engine v1 και shaft template (D028).** T001 ολοκληρωμένο στο e997a3d2, CI 45124099619, T002 στο 43f7fe3, CI 45135806207 4/4. Εγκεκριμένη βάση engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51, branch lab-cad-0.3.0-document. Τα [CAD_DOCUMENT_CONTRACT](CAD_DOCUMENT_CONTRACT.md) και [CAD_KERNEL_EVALUATION](CAD_KERNEL_EVALUATION.md) περιέχουν κώδικα/ελέγχους και Fable review. Δεν υπάρχει ενσωματωμένο CAD runtime.
+**CAD-T004 / SOL — απομονωμένο worker/job coordinator v1 (D029).** T001 ολοκληρωμένο στο e997a3d2, CI 45124099619, T002 στο 43f7fe3, CI 45135806207, T003 στο c9fe513, CI 45149843737 (4/4). Εγκεκριμένη βάση engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51, branch lab-cad-0.4.0-workers. [CAD_WORKER_CONTRACT](CAD_WORKER_CONTRACT.md), [CAD_DOCUMENT_CONTRACT](CAD_DOCUMENT_CONTRACT.md) και [CAD_KERNEL_EVALUATION](CAD_KERNEL_EVALUATION.md) περιέχουν κώδικα/ελέγχους και Fable review. Δεν υπάρχει ενσωματωμένο CAD runtime.
 
 Τα αρχικά CAD-S007 drafts και τα planning docs 0.3 ανακτήθηκαν από προηγούμενα παραδοτέα και αντιπαραβλήθηκαν με τον pinned κώδικα. Η δημοσιευμένη ανακατασκευή και η μεταγενέστερη πραγματική ανάκτηση παραμένουν διακριτές στο [CAD_BASELINE.md](CAD_BASELINE.md).
 
@@ -13,17 +13,17 @@
 | Git ως πηγή συνέχειας | Τα CAD docs συντηρούνται στο docs/ αυτού του branch· [οδηγός ανάγνωσης](CAD_INDEX.md). |
 | Κώδικας και baseline | Ο engine παραμένει 5.0.7. Το README του branch παρουσιάζει τον στόχο CAD tool· αυτό δεν αλλάζει τον runtime. |
 | Ήδη δημοσιευμένα checkpoints | 5660e9b: ανακατασκευή· c169ffc: πολιτική branches· f57d02f: πραγματική ανάκτηση και εμπλουτισμένος χάρτης· f91ac3c: πλήρες CAD πλάνο/README (S009). |
-| CI | e997a3d24f29906be9768e6fc9fb8fce63f4895b / 45124099619: T001 4/4. 43f7fe301122c2942d61a4badc5fb4a4ccf461af / 45135806207: T002 4/4. T003 χρειάζεται CI στο ακριβές νέο SHA. |
+| CI | e997a3d24f29906be9768e6fc9fb8fce63f4895b / 45124099619: T001 4/4. 43f7fe301122c2942d61a4badc5fb4a4ccf461af / 45135806207: T002 4/4. c9fe513eb984653741519b93ff177796150a66cd / 45149843737: T003 4/4. T004 χρειάζεται CI στο ακριβές νέο SHA. |
 | Παράλληλος engine (read-only, S010) | main 5.0.9· lab-5.0.10 στο 2160a13d7180745e80f7f3fefa07788d30b37d1f, CI 45102252449 success. Νέα layouts/δεύτερη οθόνη, όχι νέα βάση CAD. Βλ. [χάρτη](CAD_INTEGRATION_MAP.md#cad-s010-coordination-with-the-5010-workspace-changes). |
-| Τοπικοί έλεγχοι αυτής της συνέχειας | T003 12/12 isolated tests, demo, CODEMAP/API 947 PASS· προηγούμενοι έλεγχοι χωριστά στο baseline/status. |
+| Τοπικοί έλεγχοι αυτής της συνέχειας | T003/T004 23/23 isolated tests, demo, CODEMAP/API 947 PASS, 24 υπάρχοντα tests· προηγούμενοι έλεγχοι χωριστά στο baseline/status. |
 | Εκκρεμείς πύλες πριν από CAD υλοποίηση (D024/D026) | Ενεργά engine next-steps/decisions/versions και πραγματικός privacy checker με ιδιωτικά inputs/οδηγίες. Το απομονωμένο συνθετικό spike επιτρέπεται, δεν αποτελούν λυμένες πύλες. |
-| Τωρινή άδεια δημοσίευσης | Δημόσια CAD docs/README, isolated benchmark D026 και isolated T003 D028. Κώδικας ενσωμάτωσης και ιδιωτικά inputs δεν καλύπτονται. |
+| Τωρινή άδεια δημοσίευσης | Δημόσια CAD docs/README, isolated benchmark D026, isolated T003 D028 και T004 D029. Κώδικας ενσωμάτωσης και ιδιωτικά inputs δεν καλύπτονται. |
 
-## Επόμενη ενέργεια — κλείσιμο CAD-T003 και στάση
+## Επόμενη ενέργεια — κλείσιμο CAD-T004 και στάση
 
-1. Διάβασε το CAD_STATUS, CAD_DOCUMENT_CONTRACT και το remote HEAD. Επιβεβαίωσε ακριβές CI του T003 και runtime integrity, χωρίς main/base αλλαγή.
-2. Επόμενο μόνο με νέα έγκριση: CAD-T004 / SOL, isolated worker/job contract (session/revision, cache, cancellation, resource bounds). Μην ενσωματώσεις runtime πριν από τις δύο ιδιωτικές πύλες.
-3. Κανόνας D023: μην επαναλαμβάνεις αναζητήσεις παλιών αρχείων· ζήτησε μόνο συγκεκριμένα νέα ιδιωτικά inputs όταν απαιτούνται. Fable review βρίσκεται στα CAD_KERNEL_EVALUATION και CAD_DOCUMENT_CONTRACT και δεν ανατίθεται αυτόματα.
+1. Διάβασε το CAD_STATUS, CAD_WORKER_CONTRACT και το remote HEAD. Επιβεβαίωσε ακριβές CI του T004 και runtime integrity, χωρίς main/base αλλαγή.
+2. Επόμενο μόνο με νέα έγκριση: CAD-T005 / SOL, απομονωμένη native πράξη cylinder με actual BRep validity/analytic comparison και background process. Μην ενσωματώσεις runtime πριν από τις δύο ιδιωτικές πύλες.
+3. Κανόνας D023: μην επαναλαμβάνεις αναζητήσεις παλιών αρχείων· ζήτησε μόνο συγκεκριμένα νέα ιδιωτικά inputs όταν απαιτούνται. Fable review βρίσκεται στα CAD_KERNEL_EVALUATION, CAD_DOCUMENT_CONTRACT και CAD_WORKER_CONTRACT και δεν ανατίθεται αυτόματα.
 
 Το [CAD_PLAN_DETAILS.md](CAD_PLAN_DETAILS.md) εξειδικεύει τα στάδια, τις εξαρτήσεις, την απόδοση, τις δοκιμές και το πρωτόκολλο ενσωμάτωσης. Οι παρακάτω πίνακες είναι το ενεργό πλάνο προϊόντος, όχι κατάλογος υλοποιημένων δυνατοτήτων.
 
@@ -80,7 +80,7 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 | CAD-T001 | SOL | Documentation-only ολοκλήρωση D024: επιβεβαίωση/δέσμευση βάσης, χάρτης κοινών αρχείων και baseline ελέγχων· τελική πιστοποίηση CI. |
 | CAD-T002 | SOL | Απομονωμένο συνθετικό benchmark με exact checks/STEP/tessellation/μετρήσεις, OCCT + build123d αρχικός adapter, Fable review. |
 | CAD-T003 | SOL | Isolated versioned CAD document/component API v1 και shaft template, βλ. CAD_DOCUMENT_CONTRACT. Ιδιωτικές πύλες πριν από ενσωμάτωση. |
-| CAD-T004 | SOL | Ένα worker-job contract με revisions, cache/cancellation και κοινό όριο πόρων· μικρή λειτουργική απόδειξη. Fable review για δύσκολα scheduler/optimization θέματα. |
+| CAD-T004 | SOL | Isolated revisioned worker/job contract με cache/cancellation και logical resource reservations· βλ. CAD_WORKER_CONTRACT και Fable review. Native process/real solver arbitration εκκρεμούν. |
 | CAD-T005 | SOL | Μία native πράξη δημιουργίας σώματος από το API, στο background, με έλεγχο αποτελέσματος. |
 | CAD-T006 | SOL | Ένα 3D panel στην υπάρχουσα αισθητική, με camera/selection/resize/docking. |
 | CAD-T007 | SOL | Μία αλλαγή διαστάσεων από GUI και Python με ίδιο αποτέλεσμα, undo και save/open. |
@@ -104,12 +104,12 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 ## Μήνυμα συνέχειας
 
 ~~~text
-ThanosZr/power-control-lab, branch lab-cad-0.3.0-document. T001 και T002 κλειστά, T003 isolated document contract ολοκληρώνεται με επιτυχές CI στο τελικό SHA. Επόμενη εργασία μόνο με νέα ρητή εντολή: CAD-T004/SOL, isolated revisioned worker/job contract, cache, cancellation, resource limits. Δούλεψε με Git και τυχόν απαραίτητα νέα ιδιωτικά inputs, όχι ZIP ή προηγούμενο workspace.
+ThanosZr/power-control-lab, branch lab-cad-0.4.0-workers. T001–T003 κλειστά (T003 c9fe513 / CI 45149843737, 4/4). T004 isolated revisioned worker contract ολοκληρώνεται με επιτυχές CI στο τελικό SHA. Επόμενη εργασία μόνο με νέα ρητή εντολή: CAD-T005/SOL, isolated native cylinder adapter, actual BRep/analytic comparison και background process. Δούλεψε με Git και τυχόν απαραίτητα νέα ιδιωτικά inputs, όχι ZIP ή προηγούμενο workspace.
 Βάση engine 5.0.7: dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Εξακρίβωσε το πραγματικό σημερινό CAD HEAD και το CI του από το Git, χωριστά από τη βάση.
-Διάβασε README.md, docs/CAD_INDEX.md, CAD_STATUS, CAD_DOCUMENT_CONTRACT, CAD_KERNEL_EVALUATION, CAD_BASELINE, CAD_INTEGRATION_MAP, CAD_PROJECT_INSTRUCTIONS, CAD_NEXT_STEPS, CAD_PLAN_DETAILS και τελευταίες αποφάσεις/εκδόσεις/πηγές.
-Τα πραγματικά CAD-S007 drafts έχουν ανακτηθεί. Revision 0.6 στο Git· OCCT + αρχικός build123d adapter, δικό μας neutral document/compute/rendering, χωρίς Three.js. T003 έχει versioned JSON contract και 12 isolated tests, όχι native geometry. Fable review στα CAD_KERNEL_EVALUATION και CAD_DOCUMENT_CONTRACT. Συντήρησε εκεί τα αρχεία χωρίς συνεχείς αναρτήσεις.
+Διάβασε README.md, docs/CAD_INDEX.md, CAD_STATUS, CAD_WORKER_CONTRACT, CAD_DOCUMENT_CONTRACT, CAD_KERNEL_EVALUATION, CAD_BASELINE, CAD_INTEGRATION_MAP, CAD_PROJECT_INSTRUCTIONS, CAD_NEXT_STEPS, CAD_PLAN_DETAILS και τελευταίες αποφάσεις/εκδόσεις/πηγές.
+Τα πραγματικά CAD-S007 drafts έχουν ανακτηθεί. Revision 0.7 στο Git· OCCT + αρχικός build123d adapter, δικό μας neutral document/compute/rendering, χωρίς Three.js. T003/T004 έχουν 23 isolated tests, όχι native geometry. T004 synthetic cooperative thread scheduler, όχι hard cancellation/OS RAM enforcement. Fable review στα CAD_KERNEL_EVALUATION, CAD_DOCUMENT_CONTRACT και CAD_WORKER_CONTRACT. Συντήρησε εκεί τα αρχεία χωρίς συνεχείς αναρτήσεις.
 Κανόνας D023: μην επαναλαμβάνεις αναζητήσεις σε προηγούμενες συνομιλίες, Library, ZIP ή παλιό workspace. Διάβασε μόνο το κανονικό Git handoff και τυχόν νέο ιδιωτικό input που ο ιδιοκτήτης παρέχει ρητά. Κάθε δημοσιεύσιμο στοιχείο που χρειάζεται η συνέχεια πρέπει να βρίσκεται ήδη στα κανονικά Git docs, μαζί με συγκεκριμένα refs/εκκρεμότητες.
-Παραμένουν εκκρεμή τα ενεργά engine next-steps/decisions/versions και ο πραγματικός privacy checker με ιδιωτικά inputs και οδηγίες. Πριν από υλοποίηση στο PCL είναι υποχρεωτικά. D026/D028 καλύπτουν μόνο τις αντίστοιχες απομονωμένες συνθετικές εργασίες T002/T003. Δεν έχουν εκτελεστεί, ούτε επιτρέπεται δημοσίευση ιδιωτικών inputs. Η εξέλιξη engine στηρίζεται στο repo 5.0.7 (D025).
+Παραμένουν εκκρεμή τα ενεργά engine next-steps/decisions/versions και ο πραγματικός privacy checker με ιδιωτικά inputs και οδηγίες. Πριν από υλοποίηση στο PCL είναι υποχρεωτικά. D026/D028/D029 καλύπτουν μόνο τις αντίστοιχες απομονωμένες συνθετικές εργασίες T002/T003/T004. Δεν έχουν εκτελεστεί, ούτε επιτρέπεται δημοσίευση ιδιωτικών inputs. Η εξέλιξη engine στηρίζεται στο repo 5.0.7 (D025).
 Μελλοντικός σχεδιασμός: portable GPU compute, εξειδικευμένος retained renderer χωρίς Three.js, motion/robotics, AI/PINNs προς αξιολόγηση, χωριστά simulation/presentation clocks. Δεν υλοποιήθηκαν στο T002.
 Κάθε νέα CAD έκδοση σε νέο lab-cad-<έκδοση>-<θέμα>, ενδιάμεσα commits ίδιας έκδοσης στο ίδιο branch. Κανένα main/engine write ή αναβάθμιση βάσης.
 Commit/push όταν καλύπτονται οι αντίστοιχες προϋποθέσεις, με Thanos Zr author/committer χωρίς model attribution. Κατάλληλοι τοπικοί έλεγχοι και ενεργή αναμονή CI στο νέο τελικό SHA. Κλείσε με αποτέλεσμα και ακριβές handoff.

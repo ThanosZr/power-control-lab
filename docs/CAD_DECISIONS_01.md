@@ -1,6 +1,6 @@
 # CAD · απαιτήσεις, αποφάσεις και ανοιχτά · μέρος 1
 
-Αρχική σύνταξη: 22/11/2026. Ενεργή αναθεώρηση εγγράφων 0.4: 23/11/2026. Ανεξάρτητη αρίθμηση από τις αποφάσεις του engine. Οι εγγραφές CAD-Dxxx παραμένουν ιστορικό· μεταγενέστερη διόρθωση παραπέμπει στην προηγούμενη.
+Αρχική σύνταξη: 22/11/2026. Ενεργή αναθεώρηση εγγράφων 0.7: 25/11/2026. Ανεξάρτητη αρίθμηση από τις αποφάσεις του engine. Οι εγγραφές CAD-Dxxx παραμένουν ιστορικό· μεταγενέστερη διόρθωση παραπέμπει στην προηγούμενη.
 
 ## Επιβεβαιωμένες απαιτήσεις του Θάνου
 
@@ -48,7 +48,10 @@
 - **CAD-D027 — 23/11/2026, hybrid architecture:** ο Θάνος ενέκρινε δικό μας CAD engine με Open CASCADE για ακριβή γεωμετρία και δικό μας GPU acceleration/rendering, ευρεία συμβατότητα συσκευών και επεκτασιμότητα. Με βάση το T002 επιλέγεται OCCT και αρχικός build123d adapter, με neutral document/API και διαδρομή OCP/C++ σε hotspots. wgpu/WebGPU και WebGL2 fallback είναι υποψήφιοι προς επαλήθευση, όχι υλοποιημένες επιλογές. Ο Θάνος ζήτησε SOL αντί ASTRA και καταγεγραμμένο Fable optimization review χωρίς ανάθεση. Βλ. CAD_KERNEL_EVALUATION.
 - **CAD-D028 — 23/11/2026, isolated CAD-T003:** ο Θάνος ζήτησε ρητά SOL, νέο branch από lab-cad-0.2.0-kernel για document engine και παραμετρικό shaft template, με τις εκκρεμείς πύλες πριν από ενσωμάτωση. Παραδίδεται απομονωμένο συνθετικό reference contract, όχι αλλαγή PCL runtime. Schema v1, stable feature/port IDs, bounded session history, optimistic revision checks και neutral resolved plan. Οι τεχνικές επιλογές είναι reference baseline προς εξέλιξη· topology naming, migrations, T004 workers, T005 πραγματικό BRep και ιδιωτικοί έλεγχοι εκκρεμούν. Δεν ανοίγει αυτόματα T004.
 
+- **CAD-D029 — 25/11/2026, isolated CAD-T004:** μετά την επιβεβαίωση του τελικού T003 SHA/CI, ο Θάνος έδωσε εντολή «προχώρα» στο προτεινόμενο απομονωμένο T004 με SOL και νέο branch. Scope: συνθετικός worker/job coordinator, cache, cancellation, logical CPU/RAM reservations και τεκμηρίωση, όχι ενσωμάτωση στο PCL. Thread-based reference για cooperative lifecycle, όχι παραγωγική επιλογή native process transport, OS memory enforcement ή solver arbitration. Αμετάβλητοι οι δύο ιδιωτικοί έλεγχοι πριν από ενσωμάτωση. Fable review στο CAD_WORKER_CONTRACT, χωρίς ανάθεση. T005 μόνο με νέα έγκριση.
+
 ## Ανοιχτά
+
 
 1. ~~Ποιο ακριβές SHA της main θα περιλαμβάνει την επιτυχή ενσωμάτωση της 5.0.7;~~ Έκλεισε: CAD-D014. Παραμένει υποχρεωτικό CI στο νέο τελικό CAD SHA όταν δημιουργηθεί.
 2. Ποια είναι τα τρέχοντα έγγραφα engine μετά το αποφάσεις-14 και ποιος ο ενεργός κλάδος Opus;
