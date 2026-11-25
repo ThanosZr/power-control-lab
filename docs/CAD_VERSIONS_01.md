@@ -116,6 +116,12 @@
 - Native OCCT BRep και αναλυτικός έλεγχος cylinder σε child process, T004 revision/cache/cancellation. 25/25 isolated tests, demo και CODEMAP/API 947 PASS. Αριθμοί και Fable review στο CAD_NATIVE_ADAPTER. CI υπάρχοντος PCL χωριστά από local tests· κλείσιμο στο πραγματικό SHA.
 - Καμία ιδιωτική είσοδος, integration/runtime/main αλλαγή. Οι πραγματικές ιδιωτικές πύλες παραμένουν. T006 μόνο μετά από πιστοποιημένο T005 CI.
 
+## CAD-S016 · 25/11/2026 · SOL · CAD-T006 viewport
+
+- Parent T005 `fb25e821419831a109db4b9e5a043e4a9aabad9d` / CI 45599503711 independently verified completed/success, exact SHA, 4/4 jobs. Local tested T005 tree 07f2d1a9e9e6b24d5dcb074667bf085ca7bcd2b9 equals remote tree, author/committer verified; API transfer D031. New branch `lab-cad-0.6.0-viewport`, engine 5.0.7 unchanged.
+- `experiments/cad_t006/`: actual T005 fixture, WebGL2 retained buffers, orbit/pan/zoom/fit, body selection, bounded JSON, resize/context recovery. 7/7 Node tests, 25/25 Python regression, CODEMAP/API 947 PASS. Local browser unavailable; CAD-conditional actual WebGL2 smoke added to existing UI job. Final CI required at actual T006 SHA.
+- Only docs, isolated experiments, CAD-conditional CI step. No integration into PCL, no private inputs, no change to solver/netlib/parts; nethash not applicable. Two private gates still open. Fable backlog in CAD_VIEWPORT_CONTRACT and CAD_NATIVE_ADAPTER. No automatic T007.
+
 ## Πρότυπο επόμενης εγγραφής
 
 ```text

@@ -2,7 +2,7 @@
 
 Ιδιοκτήτης: Thanos Zr. Αρχική σύνταξη: 22/11/2026. Αναθεώρηση οδηγιών: 0.7, 25/11/2026.
 
-**Ενεργή κατάσταση, 25/11/2026:** T001–T003 κλειστά, CAD-T004 isolated worker contract στο lab-cad-0.4.0-workers με SOL, χωρίς subagents (D029). Εγκεκριμένη βάση engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Υβριδική αρχιτεκτονική: δικό μας CAD engine, OCCT exact kernel και δικό μας portable GPU/rendering layer. Δεν ξεκινά αυτόματα T005. Οι δύο ιδιωτικές πύλες παραμένουν υποχρεωτικές πριν από υλοποίηση στο PCL. T002–T004 μόνον ως απομονωμένες συνθετικές εργασίες επιτρέπονται χωρίς αυτές. Fable review στα CAD_KERNEL_EVALUATION, CAD_DOCUMENT_CONTRACT και CAD_WORKER_CONTRACT· ο ιδιοκτήτης ζήτησε SOL.
+**Ενεργή κατάσταση, 25/11/2026:** T005 και T006 isolated prototypes σε χωριστά branches (D030), SOL χωρίς subagents. Εγκεκριμένη βάση engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Υβριδική αρχιτεκτονική: δικό μας CAD engine, OCCT exact kernel και δικό μας portable GPU/rendering layer. Οι δύο ιδιωτικές πύλες παραμένουν υποχρεωτικές πριν από υλοποίηση στο PCL. D026, D028–D030 επιτρέπουν μόνον τις αντίστοιχες απομονωμένες εργασίες. Fable review στα CAD_KERNEL_EVALUATION, CAD_DOCUMENT_CONTRACT, CAD_WORKER_CONTRACT, CAD_NATIVE_ADAPTER και CAD_VIEWPORT_CONTRACT. Δεν ξεκινά αυτόματα T007.
 
 **Νεότερη εντολή ιδιοκτήτη:** όλο το αναλυτικό πλάνο και τα CAD έγγραφα συντηρούνται στο Git, ώστε να είναι προσβάσιμα και στο παράλληλο engine project για ενσωμάτωση. Η άδεια δημοσίευσης καλύπτει τα δημόσια CAD planning/status/source/history docs, τον οδηγό ανάγνωσης, το αναλυτικό πλάνο και το README αυτού του CAD branch. Επεκτείνει τη συγκεκριμένη παλαιότερη εξαίρεση των τριών CAD docs· δεν εγκρίνει δημοσίευση ιδιωτικών inputs, κώδικα χωρίς τους απαιτούμενους ελέγχους, αλλαγή main ή νέα βάση. Βλέπε αποφάσεις D020–D021.
 
@@ -14,7 +14,7 @@
 
 ## Αδιαπραγμάτευτοι κανόνες
 
-1. Η αρχική αναμονή βάσης ολοκληρώθηκε. D024 επέτρεψε documentation-only T001, D026 το απομονωμένο συνθετικό T002, D028 το απομονωμένο T003 και D029 το απομονωμένο T004. Οι πραγματικές πύλες παραμένουν υποχρεωτικές πριν από CAD υλοποίηση στο PCL και δημοσίευση κώδικα ενσωμάτωσης. Δεν ανοίγει αυτόματα T005.
+1. Η αρχική αναμονή βάσης ολοκληρώθηκε. D024 επέτρεψε documentation-only T001, D026 το απομονωμένο T002, D028/D029 τα απομονωμένα T003/T004 και D030 τα απομονωμένα T005/T006. Οι πραγματικές πύλες παραμένουν υποχρεωτικές πριν από CAD υλοποίηση στο PCL και δημοσίευση κώδικα ενσωμάτωσης. Δεν ανοίγει αυτόματα T007.
 2. Ο Θάνος έχει ορίσει ως αρχική βάση τη **5.0.7 αφού ενσωματωθεί στη main** (CAD-D012). Δέσμευσε το συγκεκριμένο SHA της main που περιλαμβάνει αυτή την ενσωμάτωση και έχει επιτυχή CI. Μην επιλέγεις αυτόματα νεότερο branch ή μεταγενέστερη έκδοση της main. Επιβεβαίωσε το ακριβές SHA, την έκδοση στον κώδικα και τον αντίστοιχο CI. Η δηλωμένη βάση ισχύει στις επόμενες συνομιλίες μέχρι νέα οδηγία και δεν ξαναζητείται.
 3. Κάθε νέα έκδοση CAD ξεκινά σε νέο branch lab-cad-<έκδοση>-<θέμα>. Τα ενδιάμεσα commits της ίδιας έκδοσης μένουν στο ίδιο branch. Η ενημέρωση εγγράφων δεν αυξάνει αυτόματα την έκδοση λογισμικού. Χρησιμοποίησε χωριστό checkout/worktree και branches με πρόθεμα `lab-cad-`, π.χ. `lab-cad-0.1.0-solids`. Η αρίθμηση CAD είναι χωριστή από την έκδοση του engine. Τα παραδείγματα ονομάτων δεν είναι branches που έχουν ήδη δημιουργηθεί.
 4. Author και committer στο GitHub: **Thanos Zr**, με την ήδη επιβεβαιωμένη ταυτότητα του repository. Χωρίς Co-authored-by ή άλλες γραμμές απόδοσης σε μοντέλα. Μην χρησιμοποιείς ChatGPT, Codex, OpenAI ή Claude σε ονόματα branches ή ως δημιουργό commit/PR/release.
@@ -67,4 +67,4 @@
 
 ## Κείμενο οδηγιών για συνέχεια
 
-Διάβασε README.md, docs/CAD_INDEX.md, CAD_STATUS.md, CAD_WORKER_CONTRACT.md, CAD_DOCUMENT_CONTRACT.md, CAD_KERNEL_EVALUATION.md στο Git. Βάση 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51, CAD branch lab-cad-0.4.0-workers. T004 isolated contract (D029), επιβεβαίωσε το τελικό SHA/CI. Μην επαναλαμβάνεις αναζήτηση παλιών αρχείων (D023). Δύο ιδιωτικές πύλες απαιτούνται πριν από CAD υλοποίηση στο PCL. Ο κοινός engine εξελίσσεται πάνω στη 5.0.7, Fable optimization review στα CAD_KERNEL_EVALUATION, CAD_DOCUMENT_CONTRACT και CAD_WORKER_CONTRACT. SOL, κανένα αυτόματο T005, main/engine write ή αλλαγή βάσης.
+Διάβασε README.md, docs/CAD_INDEX.md, CAD_STATUS.md και τα contract docs στο Git. Βάση 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51, CAD branch lab-cad-0.6.0-viewport. T005/T006 isolated (D030), επιβεβαίωσε το τελικό SHA/CI κάθε branch. Μην επαναλαμβάνεις αναζήτηση παλιών αρχείων (D023). Δύο ιδιωτικές πύλες απαιτούνται πριν από CAD υλοποίηση στο PCL. Fable optimization review στα contract docs. SOL, κανένα αυτόματο T007, main/engine write ή αλλαγή βάσης.

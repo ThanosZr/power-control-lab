@@ -76,6 +76,11 @@ jobs:
           npm install --no-save playwright@1.63.0 pyodide@0.26.4
           python tools/get_pyodide.py
           npx playwright install --with-deps chromium
+      - name: Isolated CAD viewport (T006)
+        if: startsWith(github.ref_name, 'lab-cad-')
+        run: |
+          node --test experiments/cad_t006/test_viewport.mjs
+          node experiments/cad_t006/test_browser.cjs
       - name: Σενάρια στον browser
         run: |
           python run.py --no-browser --port 8765 > server.log 2>&1 &

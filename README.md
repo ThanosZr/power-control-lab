@@ -6,7 +6,7 @@
 
 **Συνέχεια χωρίς αναζήτηση παλιών αρχείων (D023):** κάθε νέα συνομιλία αρχίζει από αυτό το README, το CAD_INDEX και το CAD_STATUS του πραγματικού CAD HEAD. Όλο το δημοσιεύσιμο υλικό/refs της επόμενης εργασίας είναι στα κανονικά Git docs· δεν απαιτείται αναδρομή σε παλιά chats, ZIP ή project uploads. Τυχόν υποχρεωτικές ιδιωτικές εκκρεμότητες δηλώνονται μία φορά ρητά στο CAD_STATUS.
 
-**CAD-T005 — απομονωμένο native cylinder adapter, με SOL (D030).** Το T004 ολοκληρώθηκε στο 1af4de0 / CI 45561734591 (4/4). Πραγματικό OCCT BRep, αναλυτική επαλήθευση, tessellation και native background child process μέσω T004. [Εκτέλεση, checks και Fable review](docs/CAD_NATIVE_ADAPTER.md). Δεν ενσωματώνεται στο PCL 5.0.7.
+**CAD-T006 — απομονωμένο 3D viewport με SOL (D030).** Το T005 στο `fb25e821419831a109db4b9e5a043e4a9aabad9d` παρέχει πραγματικό OCCT BRep, tessellation και background process. Το T006 εμφανίζει το πραγματικό native mesh με retained WebGL2 buffers, camera και επιλογή σώματος, χωρίς Three.js. [Εκτέλεση και Fable review T005](docs/CAD_NATIVE_ADAPTER.md) · [T006 viewport](docs/CAD_VIEWPORT_CONTRACT.md). Δεν ενσωματώνεται στο PCL 5.0.7.
 
 ## Ξεκίνα εδώ
 
@@ -45,11 +45,11 @@
 
 | Στοιχείο | Τιμή |
 | --- | --- |
-| CAD branch | lab-cad-0.5.0-native |
-| Έκδοση εγγράφων | 0.7 |
+| CAD branch | lab-cad-0.6.0-viewport |
+| Έκδοση εγγράφων | 0.9 |
 | Εγκεκριμένος engine | 5.0.7 |
 | Αμετάβλητο source SHA | dab82e5ff2e6da4bde09e4a38aab32edfffe6d51 |
-| Κατάσταση CAD | T005 isolated native adapter· κλείσιμο με επιτυχές CI στο τελικό HEAD |
+| Κατάσταση CAD | T006 isolated viewport· κλείσιμο με επιτυχές CI στο τελικό HEAD |
 | Κανονικές πηγές πλάνου | docs/CAD_*.md αυτού του branch |
 
 Κάθε νέα έκδοση CAD ξεκινά σε νέο lab-cad-<έκδοση>-<θέμα> branch. Τα ενδιάμεσα commits της ίδιας έκδοσης μένουν στο ίδιο branch. Η νεότερη main ή έκδοση engine δεν γίνεται αυτόματα βάση CAD.
@@ -57,7 +57,7 @@
 Για εκκίνηση του υπάρχοντος engine αναφοράς:
 
 ~~~sh
-git clone --branch lab-cad-0.5.0-native https://github.com/ThanosZr/power-control-lab.git
+git clone --branch lab-cad-0.6.0-viewport https://github.com/ThanosZr/power-control-lab.git
 cd power-control-lab
 python -m pip install -r requirements.txt
 python run.py
@@ -69,7 +69,7 @@ python run.py
 
 Οι κατάλληλοι τοπικοί έλεγχοι και το επιτυχές GitHub CI πρέπει να αντιστοιχούν στο ίδιο τελικό δημοσιευμένο SHA. Η ανακατασκευή τεκμηρίωσης, η ανάκτηση των πραγματικών CAD-S007 drafts και οι διαφορετικές εκτελέσεις ελέγχων καταγράφονται ξεχωριστά στο baseline.
 
-Κατόπιν D024, D026, D028 και D029, τα ενεργά ιδιωτικά engine handoff docs και η πραγματική διαδικασία απορρήτου με τα inputs τους παραμένουν υποχρεωτικές πύλες πριν από υλοποίηση CAD στο PCL. Τα T002–T004 είναι απομονωμένες συνθετικές εργασίες. Δεν έχουν εκτελεστεί οι ιδιωτικοί έλεγχοι και δεν δημοσιεύονται ιδιωτικά inputs. Εκτέλεση T004: `python -m experiments.cad_t004.demo`, έλεγχοι: `python -m unittest experiments.cad_t003.test_document experiments.cad_t004.test_worker -v`.
+Κατόπιν D024, D026, D028–D030, τα ενεργά ιδιωτικά engine handoff docs και η πραγματική διαδικασία απορρήτου με τα inputs τους παραμένουν υποχρεωτικές πύλες πριν από υλοποίηση/ενσωμάτωση CAD στο PCL. Τα T002–T006 είναι απομονωμένα prototypes. Δεν έχουν εκτελεστεί οι ιδιωτικοί έλεγχοι και δεν δημοσιεύονται ιδιωτικά inputs. Για το 3D demo: `python -m http.server 8766 --bind 127.0.0.1` από το repository root και άνοιγμα `http://127.0.0.1:8766/experiments/cad_t006/`. Δεν χρειάζεται εγκατάσταση Three.js, OCCT ή Python packages για την προβολή του bundled sample.
 
 Ο engine θα εξελιχθεί από το εγκεκριμένο repo 5.0.7 με τον ιδιοκτήτη· το Fable μπορεί να ενισχύσει την εξέλιξη στα θέματα που θα έχουν καταγραφεί. Δες την [ενδεικτική αρχιτεκτονική και ανοιχτά ερωτήματα](docs/CAD_PLAN_DETAILS.md#ενδεικτική-αρχιτεκτονική-για-συνεργασία-και-ενίσχυση). Δεν αποτελεί υλοποίηση, επιλογή backend ή αλλαγή βάσης.
 

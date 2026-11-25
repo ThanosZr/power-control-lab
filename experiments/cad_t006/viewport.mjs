@@ -1,0 +1,51 @@
+import {Camera,prepareMesh,pick} from './geometry.mjs';
+import {Renderer} from './renderer.mjs';
+
+const canvas=document.querySelector('canvas'), status=document.querySelector('#status'), info=document.querySelector('#info');
+const fit=document.querySelector('#fit'), file=document.querySelector('#mesh-file'), selection=document.querySelector('#selection');
+document.querySelector('#open').onclick=()=>file.click();
+let renderer,mesh,camera,selected=false,frame=0,drag=null,loadToken=0,uploads=0;
+const explain=e=>{status.textContent=String(e.message||e);status.dataset.state='error'};
+function update(){
+  if(frame||!renderer||!camera)return;
+  frame=requestAnimationFrame(()=>{frame=0;if(!renderer||!camera)return;
+    const r=canvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2),w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);
+    if(!w||!h)return;
+    if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;
+    camera.resize(w,h);renderer.draw(camera,w,h,selected);
+    info.textContent=`${mesh.vertexCount} vertices · ${mesh.triangleCount} triangles · ${uploads} mesh upload(s) · ${renderer.frames} frame(s)`;
+    canvas.dataset.uploads=String(uploads);canvas.dataset.frames=String(renderer.frames);
+  });
+}
+function clearSelection(){selected=false;selection.textContent='None';update()}
+function setMesh(raw){
+  const next=prepareMesh(raw); if(!renderer)throw Error('WebGL2 unavailable');renderer.setMesh(next);uploads++;
+  mesh=next;camera=new Camera(mesh.radius,Math.max(1,canvas.clientWidth)/Math.max(1,canvas.clientHeight));clearSelection();
+  status.textContent=`Native BRep display · ${raw.feature_id} · mm`;status.dataset.state='ready';update();
+}
+function init(){renderer=new Renderer(canvas.getContext('webgl2',{antialias:true,alpha:false}));if(mesh){renderer.setMesh(mesh);uploads++;update()}}
+const observer=new ResizeObserver(update);observer.observe(canvas);
+canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();if(frame)cancelAnimationFrame(frame);frame=0;renderer=null;status.textContent='Graphics context lost; awaiting restore';status.dataset.state='error'});
+canvas.addEventListener('webglcontextrestored',()=>{try{init();status.textContent='Graphics context restored';status.dataset.state='ready'}catch(e){explain(e)}});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('pointerdown',e=>{if(!camera||drag||![0,1,2].includes(e.button))return;canvas.focus();canvas.setPointerCapture(e.pointerId);drag={id:e.pointerId,x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,moved:false,pan:e.button!==0||e.shiftKey};});
+canvas.addEventListener('pointermove',e=>{
+  if(!drag||drag.id!==e.pointerId||!camera)return;
+  const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(!drag.moved&&Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)<4)return;
+  drag.moved=true;if(drag.pan)camera.pan(dx,dy,canvas.clientHeight);else camera.orbit(dx,dy);drag.x=e.clientX;drag.y=e.clientY;update();
+});
+canvas.addEventListener('pointerup',e=>{
+  if(!drag||drag.id!==e.pointerId)return;
+  if(!drag.moved&&!drag.pan&&mesh&&camera){const r=canvas.getBoundingClientRect();if(r.width&&r.height){const hit=pick(mesh,camera.ray(2*(e.clientX-r.left)/r.width-1,1-2*(e.clientY-r.top)/r.height));selected=!!hit;selection.textContent=hit?`${hit.featureId} (body)`: 'None';update()}}
+  drag=null;
+});
+for(const name of ['pointercancel','lostpointercapture'])canvas.addEventListener(name,e=>{if(drag?.id===e.pointerId)drag=null});
+canvas.addEventListener('wheel',e=>{if(!camera)return;e.preventDefault();camera.zoom(e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?canvas.clientHeight:1));update()},{passive:false});
+fit.onclick=()=>{if(camera){camera.fit();update()}};
+canvas.addEventListener('keydown',e=>{if(e.key==='f'||e.key==='F'){e.preventDefault();fit.click()}else if(e.key==='Escape'){clearSelection()}});
+file.onchange=async()=>{
+  const token=++loadToken;
+  try{const f=file.files[0];if(!f)return;if(f.size>512*1024)throw Error('Mesh exceeds 512 KiB');const raw=JSON.parse(await f.text());if(token===loadToken)setMesh(raw)}catch(e){if(token===loadToken)explain(e)}finally{file.value=''}
+};
+window.addEventListener('pagehide',e=>{if(e.persisted)return;observer.disconnect();if(frame)cancelAnimationFrame(frame);renderer?.dispose();renderer=null});
+try{init();const token=++loadToken;fetch('./sample.json').then(r=>{if(!r.ok)throw Error('Sample unavailable; open a T005 mesh');return r.json()}).then(raw=>{if(token===loadToken)setMesh(raw)}).catch(e=>{if(token===loadToken)explain(e)})}catch(e){explain(e)}

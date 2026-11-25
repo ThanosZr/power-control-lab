@@ -1,14 +1,14 @@
 # CAD: active handoff
 
-Updated 2026-11-25; documentation revision 0.8, CAD-S015. **Active: T005, lab-cad-0.5.0-native (D030)**. See [native adapter](CAD_NATIVE_ADAPTER.md). Parent `1af4de0fba3f2b20ffd4c16cb276df6b9323d9aa`, CI 45561734591, four jobs successful. Local 25/25 isolated tests; final remote CI required before T006. Both private integration gates remain open. T004 details below are historical.
+Updated 2026-11-25; documentation revision 0.9, CAD-S016. **Active: T006, lab-cad-0.6.0-viewport (D030).** See [native adapter](CAD_NATIVE_ADAPTER.md) and [viewport contract](CAD_VIEWPORT_CONTRACT.md). Local 25/25 isolated Python and 7/7 Node tests; existing UI CI includes CAD-only real browser smoke. Final remote CI required for closure. Both private integration gates remain open.
 
 ## Scope and pinned state
 
-- Task: **CAD-T004 — isolated revisioned worker/job coordinator v1 (D029)**, with SOL and no subagents. Local contract complete; final closure requires CI at the actual published SHA.
+- Task: **CAD-T005 and T006 — isolated native process and viewport (D030)**, with SOL and no subagents. Final closure requires CI at exact published SHAs.
 - Repository: ThanosZr/power-control-lab.
-- Branch: lab-cad-0.4.0-workers; parent checkpoint lab-cad-0.3.0-document `c9fe513eb984653741519b93ff177796150a66cd`, CI 45149843737, 4/4 success.
+- Branch: lab-cad-0.6.0-viewport; parent checkpoint lab-cad-0.5.0-native `fb25e821419831a109db4b9e5a043e4a9aabad9d`, CI 45599503711 independently verified completed/success, 4/4. T004 `1af4de0fba3f2b20ffd4c16cb276df6b9323d9aa` / 45561734591 verified 4/4.
 - Approved engine source: **5.0.7**, dab82e5ff2e6da4bde09e4a38aab32edfffe6d51.
-- Keep the approved base, main and engine branches unchanged. Do not integrate CAD runtime or implement a viewport. Selected OCCT with initial build123d adapter; native OCP escape path; portable GPU/rendering design separate.
+- Keep the approved base, main and engine branches unchanged. Do not integrate CAD runtime. Isolated WebGL2 viewport using actual native mesh only; no final GPU backend selection.
 - Author and committer: Thanos Zr, 85298380+ThanosZr@users.noreply.github.com.
 - Obtain the actual published CAD HEAD from the remote branch; distinguish it from the approved engine source.
 
@@ -53,6 +53,8 @@ Update these existing Git files as the project evolves. Once their publication i
 | 7fbcc0d63d258f57afd31c0e42acfcf9285405ba | CAD-S012 intermediate benchmark/evaluation published on new branch, CI 45135211023 (intermediate only). Final handoff commit needs its own CI. |
 | 43f7fe301122c2942d61a4badc5fb4a4ccf461af | Final T002 checkpoint, CI 45135806207 independently checked: completed/success, exact SHA, four successful jobs. |
 | c9fe513eb984653741519b93ff177796150a66cd | Final T003 checkpoint, CI 45149843737 independently checked on 25/11: completed/success, exact SHA, four successful jobs. |
+| 1af4de0fba3f2b20ffd4c16cb276df6b9323d9aa | Final T004 checkpoint, CI 45561734591 independently checked 4/4. |
+| fb25e821419831a109db4b9e5a043e4a9aabad9d | T005 remote commit with byte-identical locally tested tree 07f2d1a9e9e6b24d5dcb074667bf085ca7bcd2b9; CI 45599503711 independently verified 25/11: completed/success, exact SHA, 4/4 jobs. API publication confirmed author/committer matched. |
 
 The original CAD-S007 map/baseline, S007 version entry and all five revision 0.3 planning files were recovered from earlier generated files on 2026-11-23. An older S006 checkpoint was read too. Do not request those originals again, relabel the reconstruction as recovery or add old timings to current test counts. The separate old patch remained unavailable, but is no longer needed to recover the two documents already read.
 
@@ -72,7 +74,8 @@ The original owner's exception covered only CAD_BASELINE, CAD_INTEGRATION_MAP an
 | Pinned engine / doc integrity | Engine version 5.0.7, codemap/API (947) PASS, 24 dock/live-program/recording tests PASS, 60 relative file targets checked, git diff --check PASS. Diff excluding README, CAD docs and synthetic benchmark empty against approved base. |
 | Local T003 tests | Python 3.12.14: 12 isolated unittest methods passed; synthetic shaft edit 20×100 → 32×180 mm, resolved radius and port location, round-trip, schema and revision validation, atomic failures, bounded undo/redo. CODEMAP/API (947) and 24 existing dock/live-program/recording tests passed. |
 | Local T004 tests | Python 3.12.14: 23/23 isolated regression methods (12 T003 + 11 T004), demo miss/miss/hit at revisions 0/1/2, CODEMAP/API 947 and 24 existing dock/live-program/recording tests passed. Logical reserves only, not native process or RSS enforcement. |
-| Final publication and CI | Audit isolated experiment + public docs diff, verify unchanged approved runtime, publish only on this branch and check CI at exact SHA. Existing CI protects PCL baseline; it does not run the isolated CAD benchmark or contract suite. No earlier run certifies the final commit. |
+| Final publication and CI | Audit isolated experiment + public docs diff, verify unchanged approved runtime, publish only on this branch when publication gates are satisfied or explicitly scoped by the owner, and check CI at exact SHA. T006 adds a CAD-conditional viewport contract and real-browser smoke to the existing UI job; no earlier run certifies the final commit. |
+| Later Opus/Fable review | Record compatibility, integration and performance issues for later independent review in the contract docs. SOL continues the isolated development; no delegation or claim of external review. The two actual private checks remain distinct obligations. |
 
 The real nethash/ERR procedure remains required before a later solver/netlib/parts change; it is not triggered or replaced by this documentation-only checkpoint.
 
@@ -84,6 +87,6 @@ The full plan and map describe what existing engine infrastructure can be reused
 
 ## Next action and delivery
 
-Verify T004 final remote SHA and CI. Next separately authorized task: CAD-T005, isolated native cylinder adapter with actual BRep validity/analytic comparison and native background process execution, only if that scope is approved. Keep SOL per owner unless explicitly changed. No implementation in PCL until (1) current engine next-steps/decisions/version handoff beyond 5.0.5 and coordination branch, and (2) actual privacy checker, instructions and required private inputs. Do not re-search old files or publish private material; no base upgrade/main write and no automatic T005. Fable optimization backlog is in CAD_KERNEL_EVALUATION, CAD_DOCUMENT_CONTRACT and CAD_WORKER_CONTRACT; no automatic delegation.
+Verify both exact T005 and T006 final remote SHAs/CI. Next separately authorized task: CAD-T007, isolated GUI/Python edit dimensions, native regeneration and undo/save/open. Keep SOL per owner unless explicitly changed. No implementation in PCL until (1) current engine next-steps/decisions/version handoff beyond 5.0.5 and coordination branch, and (2) actual privacy checker, instructions and required private inputs. Do not re-search old files or publish private material; no base upgrade/main write and no automatic T007. Fable optimization backlog in five contract/evaluation docs, no automatic delegation.
 
 The branch README/index and CAD_NEXT_STEPS contain the continuation instructions. A final response must provide the real published SHA/run after CI. A document cannot contain its own resulting commit hash; do not create an endless chain of commits solely to record that same commit's CI.
