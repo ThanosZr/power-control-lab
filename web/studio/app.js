@@ -2587,6 +2587,39 @@ function currentCtlTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.
   h+=`<p class="small">Βήμα V_st +${eng(m.dV,'V')} στα ${eng(m.t1,'s')} και πίσω στα ${eng(m.t2,'s')}: μέγιστη απόκλιση ${m.saw?'του δείγματος':'της μέσης τιμής'} από την αναφορά <b>${Number.isFinite(dev)?eng(dev,'A'):'–'}</b>${Number.isFinite(dev)?` (${fmt(100*dev/m.lev[0],3)} %)`:''}.</p>`;}
  h+=evalOrderHTML();
  return h+`<p class="small muted">Τάση ζυγού ⟨V_dc⟩ = ${vb?eng(vb.avg,'V'):'–'}. Οι τιμές είναι παράδειγμα: με δικά σου L, f_s, I_n και παράθυρο τάσης άλλαξε τα στοιχεία και τα κέρδη, η κάρτα ξαναϋπολογίζει από ό,τι έχει το σχέδιο.</p>`;}
+// 5.0.18: the bus voltage control of the fourth exercise (PE2). The design from what the drawing has now: the bus C·v′ = −G·v + i_c,
+// G = 1/R_s − P_d/V_ref² (the source and the constant power load linearized at the load of the design), the PI of the voltage, its
+// two poles from C·s² + (G + K_p)·s + K_i = 0; the dip after a step ΔP of the load as a step ΔP/V_ref of current into that loop
+// (an estimate: without the delays of the sampling and of the current loops); the operating points of the converter at V_ref;
+// beyond its limit, the voltage at which the source gives the rest.
+function voltageCtlTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('PIv')||!paramsOf('CB'))return '';
+ const pv=paramsOf('PIv'),Kp=+pv.Kp,Ki=+pv.Ki,C=+paramsOf('CB').C,Rs=+paramsOf('VSRC').Rs,Vsrc=+paramsOf('VSRC').V,Vref=+paramsOf('VREF').v,T=1/m.fs;
+ const par={};for(const [,k,v] of String(paramsOf('EXl')?.pars||'').matchAll(/(\w+)\s*=\s*([-+0-9.eE]+)/g))par[k]=+v;
+ const In=par.In??m.In,Iol=par.Iol??m.Iol,Tol=par.Tol??m.Tol,N=m.N,Vst=+paramsOf('VS').V,lo=m.side==='lo';
+ const G=1/Rs-m.Pd/(Vref*Vref),A=G+Kp,disc=A*A-4*C*Ki,p1=disc>=0?(A-Math.sqrt(disc))/(2*C):NaN,p2=disc>=0?(A+Math.sqrt(disc))/(2*C):NaN;
+ const Is=(Vsrc-Vref)/Rs,Ps=Vref*Is,st=m.prof.length>1?m.prof[1]:null,dP=st?st[1]-m.prof[0][1]:0,dI=dP/Vref;
+ // the deviation after a step of current ΔI into the bus: ΔI/C·(e^(−p₁t) − e^(−p₂t))/(p₂ − p₁); its peak at t* = ln(p₂/p₁)/(p₂ − p₁)
+ const dev=t=>dI/C*(Math.exp(-p1*t)-Math.exp(-p2*t))/(p2-p1),ts=Number.isFinite(p1)?Math.log(p2/p1)/(p2-p1):NaN;
+ let trEst=NaN;if(Number.isFinite(ts)){let t=ts;while(Math.abs(dev(t))>m.band&&t<1)t+=T/10;trEst=t;}
+ const rows=lastPeriods('Y:MV',200000),seg=st?rows.filter(q=>q.t>st[0]&&(m.prof.length<3||q.t<=m.prof[2][0])):[];
+ let vmin=NaN,tmin=NaN,trec=NaN;if(seg.length){const k=dP>=0?seg.reduce((a,q,i)=>q.min<seg[a].min?i:a,0):seg.reduce((a,q,i)=>q.max>seg[a].max?i:a,0);vmin=dP>=0?seg[k].min:seg[k].max;tmin=seg[k].t-st[0];
+  let last=-1;for(let i=0;i<seg.length;i++)if(Math.abs(seg[i].avg-Vref)>m.band)last=i;trec=last<0?0:last<seg.length-1?seg[last].t-st[0]:NaN;}
+ const pc=s.now('Y:AVpc'),ik=s.now('Y:EXl'),va=avgOver('Y:MV',5)?.avg,pnow=s.now('Y:AVpl');
+ let h=`<div class="tm"><span class="badge">${lo?'V_st κάτω από τον ζυγό':'V_st πάνω από τον ζυγό'}</span>${esc(({step:'βήμα φορτίου',profile:'προφίλ φορτίου',limit:'πέρα από τις δυνατότητες'})[m.test]||'')} · N = ${N} κλάδοι</div>`;
+ h+=`<ul class="eqs"><li>Ζυγός: C·dv/dt = i_πηγής − P/v + i_c. Γραμμικοποιημένο στο V_ref με φορτίο P_d = ${eng(m.Pd,'W')}: C·dv/dt = −G·v + i_c, G = 1/R_s − P_d/V_ref² = <b>${eng(G,'S')}</b> (η πηγή πίσω από R_s μείον η αρνητική αγωγιμότητα του φορτίου σταθερής ισχύος)</li>
+  <li>PI τάσης: K_p = <b>${eng(Kp,'A/V')}</b>, K_i = <b>${eng(Ki,'A/(V·s)')}</b>. Σχεδίαση K_i = ω_v·(G + K_p) με ω_v = ${eng(m.wv,'rad/s')}: C·s² + (G + K_p)·s + K_i = 0 ${Number.isFinite(p1)?`έχει πόλους <b>${fmt(p1,4)}</b> s⁻¹ (ο αργός, κοντά στο ω_v όσο (G + K_p)/C ≫ ω_v) και <b>${fmt(p2,4)}</b> s⁻¹`:'με μιγαδικούς πόλους'}</li>
+  <li>Αναφορά κάθε κλάδου από το ρεύμα I_c προς τον ζυγό: ${lo?'<b>I_c·v_bus/(N·V_st)</b>, στην πλευρά της αποθήκευσης, από το ισοζύγιο ισχύος':'<b>−I_c/N</b>, στην πλευρά του ζυγού (θετικό ρεύμα από τον ζυγό προς τον μετατροπέα)'}. Ο βρόχος ρεύματος κάθε κλάδου είναι της Άσκησης 3: K_p = ${eng(m.kp,'V/A')}, K_i = ${eng(m.ki,'V/(A·s)')}</li>
+  <li>Όριο κλάδου I_n = ${eng(In,'A')}, και I_ol = ${eng(Iol,'A')} για T_ol = ${eng(Tol,'s')}: ο χρονομετρητής μετρά τον χρόνο πάνω από το I_n και γυρίζει με ρυθμό −10. Back-calculation στον PI τάσης: tr = (το ρεύμα του κλάδου μετά το όριο, πίσω σε ρεύμα ζυγού) − I_c</li>
+  <li>Πηγή στα V_ref: I = (V_src − V_ref)/R_s = <b>${eng(Is,'A')}</b>, P = <b>${eng(Ps,'W')}</b>. Ο μετατροπέας δίνει P_φορτίου − ${eng(Ps,'W')}</li></ul>`;
+ h+=`<table class="cmp"><thead><tr><th>Από</th><th>P φορτίου</th><th>P μετατροπέα</th><th>I_c</th><th>I*_k</th><th></th></tr></thead><tbody>${m.rows.map(r=>`<tr><td>${eng(r.t,'s')}</td><td>${eng(r.p,'W')}</td><td>${eng(r.pc,'W')}</td><td>${eng(r.ic,'A')}</td><td>${eng(r.Ik,'A')}</td><td class="${r.ok?'good':'warn-text'}">${r.ok?'μέσα στο I_n':Math.abs(r.Ik)<=Iol?'μόνο με υπερφόρτιση':'πέρα από το I_ol'}</td></tr>`).join('')}</tbody></table>`;
+ if(st&&Number.isFinite(ts)&&m.rows[1]?.ok)h+=cmpRows([[`${dP>=0?'βύθιση V_ref − v_min':'υπέρβαση v_max − V_ref'} μετά το βήμα (εκτίμηση)`,Math.abs(dev(ts)),Math.abs(vmin-Vref),'V'],['στιγμή του ακρότατου μετά το βήμα',ts,tmin,'s'],[`αποκατάσταση στο ±${eng(m.band,'V')} (εκτίμηση)`,trEst,trec,'s']]);
+ // beyond the limit: the converter at N·I_n on its side, the source gives the rest: v·(V_src − v)/R_s = P − P_c,max
+ const pl=Number.isFinite(pnow)?pnow:m.prof.at(-1)[1],a=lo?0:N*In*Rs,cpk=lo?N*In*Vst:0,b=Vsrc+a,c=(pl-cpk)*Rs,disc2=b*b-4*c,vlim=disc2>=0?(b+Math.sqrt(disc2))/2:NaN;
+ const lim=Math.abs(ik)>=In-1e-9&&m.test==='limit';
+ // the converter at the measured mean voltage: the load less the source there; per branch on its own side
+ const pcv=Number.isFinite(va)?pl-va*(Vsrc-va)/Rs:NaN,ikv=lim?Math.sign(ik)*In:lo?pcv/(N*Vst):-pcv/(N*va);
+ h+=cmpRows([['⟨v_bus⟩ (τελευταίες 5 T)',lim?vlim:Vref,va,'V'],['P μετατροπέα στη ⟨v_bus⟩',pcv,pc,'W'],['I*_k',ikv,ik,'A']]);
+ return h+`<p class="small muted">${lim?'Ο κλάδος είναι στο I_n: η τάση κάθεται εκεί όπου η πηγή δίνει ό,τι λείπει. ':''}Η εκτίμηση του ακρότατου αγνοεί τις καθυστερήσεις της δειγματοληψίας και των βρόχων ρεύματος. Ο βρόχος κρατά το δείγμα της v_bus στο V_ref· η μέση τιμή απέχει λίγα mV, όσο απέχει το δείγμα από τη μέση τιμή της κυμάτωσης. Οι τιμές είναι παράδειγμα: με δικά σου R_s, C, φορτίο και κέρδη η κάρτα ξαναϋπολογίζει από ό,τι έχει το σχέδιο.</p>`;}
 function blocksTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.fs||!editor.comp('AM1')||!paramsOf('VO'))return '';const T=1/m.fs,key=m.blk?'Y:AM1':'I:L1';
  const iref=m.blk?s.now('Y:K1'):s.now('REF:PWM1'),i=Number.isFinite(iref)?iref:m.i1,Vin=+paramsOf('V1').V,Vo=+paramsOf('VO').V,D=Vo/Vin,dI=(Vin-Vo)*D*T/+paramsOf('L1').L;
  const ia=avgOver(key,5),dsim=m.cmp?avgOver('GS:S1',5)?.avg:avgOver('D:PWM1',5)?.avg;
@@ -3433,6 +3466,7 @@ function formulaTheory(t){
  if(t.topology==='gen_ctl')return genCtlTheory();
  if(t.topology==='nn_compare'||t.topology==='nn_online'||t.topology==='nn_gui')return nnTheory(t)+(t.topology==='nn_gui'?nnGuiCode():'');
  if(t.topology==='current_ctl')return currentCtlTheory();
+ if(t.topology==='voltage_ctl')return voltageCtlTheory();
  if(t.topology==='blocks_loop')return blocksTheory();
  if(t.topology==='peak_cm')return pcmTheory();
  if(t.topology==='pcm_chaos')return chaosTheory();

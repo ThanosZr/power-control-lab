@@ -390,6 +390,15 @@ class ApiSurface(unittest.TestCase):
         from pcl import model, rms
         self.assertEqual(model.VERSION, 5)
         self.assertEqual({k: rms.STATION_DEFAULTS[k] for k in ('ovl', 'Vdcmax', 'kov')}, {'ovl': 0.0, 'Vdcmax': 1.1, 'kov': 10.0})
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 1032)       # 1032 then
+
+    def test_the_surface_of_5_0_18(self):
+        """5.0.18: the grid-forming station of hvdc_gfm in RMS (ROADMAP §101 step 2): no new points; a station of pcl.rms.HVDC
+        with the model 'gfm' takes the data of its law under the names of a grid-forming converter of pcl.rms (GFM_DEFAULTS, and
+        law, avc, Pref, Qref, Vref, Uref); the model of the drawing stays at version 5."""
+        from pcl import model, rms
+        self.assertEqual(model.VERSION, 5)
+        self.assertEqual(rms.GFM_STATION_KEYS, set(rms.GFM_DEFAULTS) | {'law', 'avc', 'Pref', 'Qref', 'Vref', 'Uref'})
         self.assertEqual(sum(len(v) for v in self.now.values()), 1032)
 
     def test_the_surface_of_4_19_5(self):

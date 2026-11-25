@@ -411,8 +411,8 @@ def _sources(e, study):
         return study == 'sc' or p.get('init') != 'zero'
     if t == 'VSC2':                                         # 5.0.16: its EMF from the load flow, as the EMT start
         return study == 'pf' and p.get('init') == 'lf' and _num(p, 'E0') > 0
-    if t == 'MMC':                                          # 5.0.16: a station of a DC grid with its control
-        return study == 'pf' and bool(e.get('dc')) and _station_ctl(e) is not None
+    if t == 'MMC':                                          # 5.0.16: a station of a DC grid with its control (5.0.18: or grid-forming)
+        return study == 'pf' and bool(e.get('dc')) and (_station_ctl(e) is not None or _gfm_ctl(e) is not None)
     if t == 'VAC3':
         return p.get('seq', 'abc') == 'abc' and (study == 'pf' or _num(p, 'Rs') > 0 or _num(p, 'Ls') > 0)
     return t in ('GRID3', 'EQV3')
@@ -514,7 +514,7 @@ def _network(m, study='pf', fe=None, S_base=100e6, at=None):
             continue
         names = []
         if t in ('VSC2', 'MMC'):                            # 5.0.16: the converters and the stations
-            names = _converter_net(e, net, study, notes, at, slack, Ub, pu, shunt, helpers, w, kx, S_base)
+            names = _converter_net(e, net, study, notes, at, slack, Ub, pu, shunt, helpers, w, kx, S_base, m)
             if names:
                 els[eid] = names
             continue
@@ -694,6 +694,45 @@ def _station_ctl(e):
 STATION_MODES = {'p': 'P', 'vdc': 'V', 'droop': 'droop', 'vf': 'Vf'}
 
 
+def _gfm_ctl(e):
+    """5.0.18: the MMCC of an MMC in mode gfm (a grid-forming station) with a law of the RMS (droop, VSM, PSC)."""
+    c = e.get('ctl') or {}
+    k = c.get('params') or {}
+    return c if c.get('type') == 'MMCC' and k.get('mode') == 'gfm' and k.get('law', 'droop') in ('droop', 'vsm', 'psc') else None
+
+
+def _gfm_island(m, e):
+    """5.0.18: whether no other source holds the AC side of the grid-forming station e at t = 0 (its bus, through the series
+    parts and the closed breakers): then it forms that island's voltage (Vf in the load flow), else it gives its P_ref there (P).
+    A grid-forming station before it in the drawing on the same side counts as a source; a VSC2 does not (in the RMS it is a
+    generator of P = 0 or of its own load flow, 5.0.16)."""
+    adj = {}
+    for q in m['elements']:
+        if (q['type'] in SERIES or (q['type'] == 'CB3' and q.get('closed'))) and len(q['buses']) == 2:
+            a, b = q['buses']
+            adj.setdefault(a, set()).add(b)
+            adj.setdefault(b, set()).add(a)
+    seen, todo = set(), list(e['buses'])
+    while todo:
+        b = todo.pop()
+        if b not in seen:
+            seen.add(b)
+            todo.extend(adj.get(b, ()))
+    for q in m['elements']:
+        if q is e:
+            break
+        if q['type'] == 'MMC' and _gfm_ctl(q) is not None and set(q['buses']) & seen:
+            return False
+    for q in m['elements']:
+        if q is e or not set(q['buses']) & seen:
+            continue
+        if q['type'] in ('GEN3', 'GRID3', 'VAC3', 'EQV3') and _sources(q, 'pf'):
+            return False
+        if q['type'] == 'MMC' and ((_station_ctl(q) or {}).get('params') or {}).get('mode') == 'vf':
+            return False
+    return True
+
+
 def _dc_value(s, buses):
     """The current (A, into its bus) of a current source of the drawing at t = 0: its value, or its expression with the
     voltages U₀ of the buses of its inputs."""
@@ -764,7 +803,7 @@ def _dc_grid(m, net, study, notes, els):
         els[str(q['id'])] = [str(q['id'])]
 
 
-def _converter_net(e, net, study, notes, at, slack, Ub, pu, shunt, helpers, w, kx, S_base):
+def _converter_net(e, net, study, notes, at, slack, Ub, pu, shunt, helpers, w, kx, S_base, m=None):
     """5.0.16: a VSC2 or an MMC of the drawing in the network (see _network)."""
     p, eid, lab = e['params'], str(e['id']), e.get('label') or e['id']
     b = str(e['buses'][0])
@@ -778,8 +817,13 @@ def _converter_net(e, net, study, notes, at, slack, Ub, pu, shunt, helpers, w, k
         if not e.get('dc') or str(e['dc']) not in getattr(net, 'dc_buses', {}):
             notes.append(f'{lab}: σταθμός χωρίς δίκτυο DC του σχεδίου που να μπαίνει: εκτός μελέτης.')
             return []
+        if q is None and _gfm_ctl(e) is not None:          # 5.0.18: grid-forming: Vf in its island, else P (THEORY §8ΩΤ.1)
+            S = _num(k, 'S', 1059e6)
+            if m is None or _gfm_island(m, e):
+                return [net.vsc(b, str(e['dc']), control='Vf', Vac=_prog(k.get('Vref', '1'))[0], Prated=S, name=eid)]
+            return [net.vsc(b, str(e['dc']), control='P', P=_prog(k.get('Pref', '0'))[0] * S, Q=-_prog(k.get('Qref', '0'))[0] * S, Prated=S, name=eid)]
         if q is None:
-            notes.append(f'{lab}: σταθμός χωρίς έλεγχο MMCC σε P, V_dc, στατικότητα ή V/f: εκτός μελέτης.')
+            notes.append(f'{lab}: σταθμός χωρίς έλεγχο MMCC σε P, V_dc, στατικότητα, V/f ή grid-forming με στατικότητα, VSM ή PSC: εκτός μελέτης.')
             return []
         S, mode = _num(k, 'S', 1059e6), k.get('mode', 'p')
         kw = {'Prated': S, 'name': eid}
@@ -901,10 +945,10 @@ def stations_of(m):
     for e in m['elements']:
         if e['type'] != 'MMC' or not e.get('dc'):
             continue
-        c = _station_ctl(e)
+        c = _station_ctl(e) or _gfm_ctl(e)
         if c is None:
             if (e.get('ctl') or {}).get('params', {}).get('mode') == 'gfm':
-                notes.append(f'{e.get("label") or e["id"]}: σταθμός grid-forming (MMCC gfm): όχι ακόμη στο RMS.')
+                notes.append(f'{e.get("label") or e["id"]}: σταθμός grid-forming με dVOC: όχι ακόμη στο RMS (θέλει τον ταλαντωτή).')
             continue
         p, k = e['params'], c['params']
         S, Vac = _num(k, 'S', 1059e6), _num(k, 'Vac', 333e3)
@@ -914,7 +958,22 @@ def stations_of(m):
         for q in ('Tp', 'Tq', 'Tvdc', 'H', 'Tvac', 'Xpcc', 'Tvf', 'Ti', 'bw', 'Ilim', 'Idlim', 'Vdcmax', 'kov'):
             if q in k:
                 d[q] = _num(k, q, 0.0)
-        d['ovl'] = 0.0 if k.get('ovl') == 'off' else 1.0             # 5.0.17: the limiter of the DC overvoltage, as the EMT
+        if k.get('mode') == 'gfm':                          # 5.0.18: the law of the GFMC inside the MMCC (THEORY §8ΩΤ), out of the station
+            for q in ('Tp', 'Tq', 'Tvdc', 'H', 'Tvac', 'Xpcc', 'Tvf', 'Ti', 'bw', 'Ilim', 'Idlim', 'Vdcmax', 'kov'):
+                d.pop(q, None)
+            d.update(model='gfm', law=k.get('law', 'droop'), avc=k.get('avc', 'vac'), Imax=_num(k, 'Ilim', 1.1),
+                     Pref=-_prog(k.get('Pref', '0'))[0], Qref=-_prog(k.get('Qref', '0'))[0], Vref=_prog(k.get('Vref', '1'))[0],
+                     Uref=_prog(k.get('Vacref', '1'))[0])
+            for q, kk in (('mp', 'mp'), ('nq', 'nq'), ('fp', 'fp'), ('H', 'Hv'), ('tv', 'tv'), ('kp', 'kp'), ('KE', 'KE'), ('TE', 'TE'), ('Rv', 'Rv'),
+                          ('Xv', 'Xv'), ('ac', 'ac')):
+                if kk in k:
+                    d[q] = _num(k, kk, 0.0)
+            if abs(_num(k, 'X', d['X']) - d['X']) > 0.01 * d['X']:
+                notes.append(f'{e.get("label") or e["id"]}: το X του ελέγχου ({_num(k, "X", d["X"]):.4g}) δεν είναι το X του σταθμού ({d["X"]:.4g} pu): στο RMS του σταθμού.')
+            if _num(k, 'kv', 0.0) > 0:
+                notes.append(f'{e.get("label") or e["id"]}: η υψιπερατή ανάδραση ρεύματος του PSC (k_v) δεν είναι στο RMS (σβήνει τον συντονισμό στα ~50 Hz του dq, έξω από το εύρος του).')
+        else:
+            d['ovl'] = 0.0 if k.get('ovl') == 'off' else 1.0         # 5.0.17: the limiter of the DC overvoltage, as the EMT
         if p.get('model') == 'm4':
             d.update(Ldc=2 * La / 3, Rd=2 * _num(p, 'Rd', 20) / 3, fd=_num(p, 'fd', 10))
         else:
@@ -939,7 +998,7 @@ def _rms_network(m, S_base=100e6):
     byid = {str(e['id']): e for e in m['elements']}
     if any(byid[k]['params'].get('init') == 'lf' for k in conv):
         net0, info0 = _network(m, 'pf', S_base=S_base)
-        lf = net0.acdc_flow() if info0['dc'] else net0.load_flow()
+        lf = _solve(net0, info0['dc'])                      # 5.0.18: the start at the shifts if needed
         if not lf.get('converged'):
             raise ModelError('Η ροή φορτίου του σχεδίου δεν συγκλίνει: δεν υπάρχει αρχή για τη δυναμική RMS.')
     for k in conv:
@@ -949,6 +1008,10 @@ def _rms_network(m, S_base=100e6):
         else:
             at[k] = None
     net, info = _network(m, 'pf', S_base=S_base, at=at)
+    # 5.0.18: the dynamics solve the load flow of this network again: where the flat start ends near zero voltage behind a shift,
+    # its buses start at the shifts (_solve); a network without shifts, or with a good solution from the flat start, as it was
+    if any(e['kind'] == 'branch' and e.get('angle') for e in net.elements) and any(d['type'] == 'slack' for d in net.buses.values()):
+        _solve(net, info['dc'])
     conv = {k: v for k, v in conv.items() if k in info['elements']}
     st = {k: v for k, v in st.items() if k in info['elements']}
     return net, info, conv, st, n1 + n2
@@ -1129,6 +1192,53 @@ def elements_of(m, net, info, r):
     return els
 
 
+def _shift_start(net):
+    """5.0.18: the start of the load flow at the shifts of the transformers: each bus at the angle of its way from a reference bus
+    (V_b ≈ V_a·e^(−jφ) across a branch with the shift φ at its end a, the MATPOWER model). Only the start of the Newton changes.
+    Returns whether a bus got an angle other than the one it had."""
+    adj = {}
+    for e in net.elements:
+        if 'a' in e and 'b' in e and e['a'] in net.buses and e['b'] in net.buses:
+            ph = float(e.get('angle') or 0.0) if e['kind'] == 'branch' else 0.0
+            adj.setdefault(e['a'], []).append((e['b'], -ph))
+            adj.setdefault(e['b'], []).append((e['a'], ph))
+    ang = {b: d['angle'] for b, d in net.buses.items() if d['type'] == 'slack'}
+    todo = list(ang)
+    while todo:
+        a = todo.pop()
+        for b, ph in adj.get(a, ()):
+            if b not in ang:
+                ang[b] = ang[a] + ph
+                todo.append(b)
+    moved = False
+    for b, x in ang.items():
+        if net.buses[b]['type'] != 'slack' and x != net.buses[b]['angle']:
+            net.buses[b]['angle'], moved = x, True
+    return moved
+
+
+def _solve(net, dc, **kw):
+    """5.0.18: the load flow of the network of a drawing (AC/DC with a DC grid). From the flat start the Newton can end in a
+    solution with a bus near zero voltage behind a transformer with a shift (found in 5.0.16 with gfm_weak, ROADMAP §0): then once
+    more from the start at the shifts (_shift_start), and that solution if it has every bus above 0,5 pu. A solution with every
+    bus above 0,5 pu from the flat start is kept as it is."""
+    def run():
+        return net.acdc_flow(**{k: v for k, v in kw.items() if k == 'tol'}) if dc else net.load_flow(**kw)
+
+    def low(r):
+        return not r.get('converged') or min(q['V'] for q in r['buses'].values()) < 0.5
+    r = run()
+    if low(r):
+        keep = {b: d['angle'] for b, d in net.buses.items()}
+        if _shift_start(net):
+            r2 = run()
+            if not low(r2):
+                return r2
+            for b, x in keep.items():
+                net.buses[b]['angle'] = x
+    return r
+
+
 def load_flow(m, fe=None, tol=1e-10, max_iter=30):
     """The load flow of the drawing, as the EMT start solves it (network(m, 'pf')). Returns {'converged', 'iterations',
     'buses': {bus id: {label, Un, V (pu), angle (deg), U (V, line)}}, 'elements': {id: …} (as elements_of), 'losses', 'out',
@@ -1137,7 +1247,7 @@ def load_flow(m, fe=None, tol=1e-10, max_iter=30):
     net, info = network(m, 'pf', fe=fe)
     if not any(d['type'] == 'slack' for d in net.buses.values()):
         raise ModelError('Το σχέδιο δεν έχει πηγή για τη ροή φορτίου (GEN3 από τη ροή φορτίου, GRID3, VAC3 ή EQV3).')
-    r = net.acdc_flow(tol=tol) if info['dc'] else net.load_flow(tol=tol, max_iter=max_iter)   # 5.0.16: AC/DC with a DC grid
+    r = _solve(net, info['dc'], tol=tol, max_iter=max_iter)  # 5.0.16: AC/DC with a DC grid; 5.0.18: the start at the shifts if needed
     buses = _bus_out(m, info)
     for b, d in buses.items():
         d.update(V=r['buses'][b]['V'], angle=r['buses'][b]['angle'], U=r['buses'][b]['V'] * net.buses[b]['Un'])
@@ -1367,7 +1477,8 @@ def events_of(m, net, info):
             refs = (('Pref', 'pref', 'dP', -1.0),) + ((('Vacref', 'vref', 'dV', 1.0),) if k.get('cc', 'pi') == 'robust' else ())
         else:
             refs = {'p': (('Pref', 'pref', 'dP', 1.0),), 'vdc': (('Vdcref', 'vref', 'dV', 1.0),),
-                    'droop': (('Pref', 'pref', 'dP', 1.0), ('Vdcref', 'vref', 'dV', 1.0)), 'vf': (('Vfref', 'vref', 'dV', 1.0),)}.get(mode, ())
+                    'droop': (('Pref', 'pref', 'dP', 1.0), ('Vdcref', 'vref', 'dV', 1.0)), 'vf': (('Vfref', 'vref', 'dV', 1.0),),
+                    'gfm': (('Pref', 'pref', 'dP', -1.0), ('Vref', 'vref', 'dV', 1.0))}.get(mode, ())   # 5.0.18: P_ref into the station
         for key, kind, fld, sg in refs:
             v0, ch = _prog(k.get(key))
             for tt, x in ch:

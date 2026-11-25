@@ -1165,6 +1165,9 @@ STATION_DEFAULTS = {'Tp': 0.1, 'Tq': 0.1, 'Tvdc': 0.1, 'H': 0.03, 'Tvac': 0.1, '
 # series, so that the start is the AC/DC load flow (whose stations are lossless on their DC side); Ldc = 0: the capacitance
 # of the station on its DC bus (CIGRE TB 604, §2.6.1: «all capacitances can be aggregated per DC bus»)
 DCDC_DEFAULTS = {'Tdc': 0.005}
+# 5.0.18: the data of the law of a grid-forming station (model 'gfm'), as a grid-forming converter of pcl.rms (GFM_DEFAULTS; m_p, n_q in
+# %; the references P_ref, Q_ref out of the station to the AC side, pu of S_n); X_c, R_f the reactor of the station unless given
+GFM_STATION_KEYS = set(GFM_DEFAULTS) | {'law', 'avc', 'Pref', 'Qref', 'Vref', 'Uref'}
 STATION_STATES = ('pll', 'xi', 'xd', 'xq', 'id', 'iq', 'zd', 'zq')
 VF_STATES = ('xv', 'il')
 
@@ -1219,8 +1222,15 @@ class HVDC(_Holds, Kind):
             if any(e.get(q) for q in ('Rtr', 'Xtr', 'Bf')):
                 raise RMSError(f'{e["name"]}: the transformer and the filter of a station are elements of the AC network in the RMS model '
                                '(CIGRE TB 604, §2.6.1): R_tr, X_tr, B_f must be 0')
-        self.gs = [e for e in vs if e['control'] != 'Vf']    # the stations that control a current
-        self.vf = [e for e in vs if e['control'] == 'Vf']
+        # 5.0.18: a station whose data say model 'gfm' forms the voltage of its AC side with a grid-forming law (THEORY §8ΩΤ); its
+        # start is a station P (the network has another source on its side) or Vf (an island) of the load flow
+        isg = [(stations.get(e['name']) or {}).get('model') == 'gfm' for e in vs]
+        for e, q in zip(vs, isg):
+            if q and e['control'] not in ('P', 'Vf'):
+                raise RMSError(f'{e["name"]}: a grid-forming station starts from a station P or Vf of the load flow (its DC voltage from the others)')
+        self.gs = [e for e, q in zip(vs, isg) if e['control'] != 'Vf' and not q]    # the stations that control a current
+        self.vf = [e for e, q in zip(vs, isg) if e['control'] == 'Vf' and not q]
+        self.gm = [e for e, q in zip(vs, isg) if q]
         self.dd = [e for e in net.elements if e['kind'] == 'dcdc']
         for e in self.dd:
             if e['control'] != 'P':
@@ -1231,8 +1241,8 @@ class HVDC(_Holds, Kind):
         conv = pf['converters']
         dres = pf['dc']
 
-        def data(e, defaults):
-            md = dict(stations.get(e['name'], {}))
+        def data(e, defaults, md=None):
+            md = dict(stations.get(e['name'], {})) if md is None else md
             inner = md.pop('inner', 'pi')
             if inner not in ('pi', 'lag'):
                 raise RMSError(f"{e['name']}: inner 'pi' (the PI of the EMT on its reactor) or 'lag' (CIGRE TB 604, §2.6.4)")
@@ -1247,11 +1257,24 @@ class HVDC(_Holds, Kind):
             return v
         G = [data(e, STATION_DEFAULTS) for e in self.gs]
         F = [data(e, STATION_DEFAULTS) for e in self.vf]
+        # 5.0.18: a grid-forming station: the data of its DC side as the others, and those of its law as a grid-forming converter
+        # of pcl.rms (System._converter, on its rating), with the reactor X, R of the station as X_c, R_f unless given
+        M, MG = [], []
+        for e in self.gm:
+            md = dict(stations.get(e['name']) or {})
+            md.pop('model')
+            gf = {q: md.pop(q) for q in list(md) if q in GFM_STATION_KEYS}
+            v = data(e, STATION_DEFAULTS, md)
+            gf.setdefault('Xc', v['X'])
+            gf.setdefault('Rf', v['R'])
+            key, vals = System._converter(e['name'], 'gfm', gf, Sb / v['Sn'], v['Sn'])
+            M.append(v)
+            MG.append((key, vals))
         D = [data(e, DCDC_DEFAULTS) for e in self.dd]
-        allst = self.gs + self.vf
+        allst = self.gs + self.vf + self.gm
         self.st_line = {}
         Cb, Gb = list(Cb), list(Gb)
-        for e, v in zip(allst, G + F):
+        for e, v in zip(allst, G + F + M):
             k = self.dc_idx[e['dc']]
             Cs = 2 * v['W'] * 1e3 * v['Sn'] / 1e6 / self.Un[k] ** 2           # W kJ/MVA → C = 2·W·S_n/U_n²
             if v['Ldc'] > 0:                                # its own node behind L_dc, R_dc (and R_d above f_d)
@@ -1295,8 +1318,8 @@ class HVDC(_Holds, Kind):
         self.dd_names = [e['name'] for e in self.dd]
         bus = [idx[e['bus']] for e in allst]
         super().__init__(['DC'], np.array(bus, int), {})
-        ng, nf, nk = len(self.gs), len(self.vf), len(self.dd)
-        self.ng, self.nf, self.nk, self.nd = ng, nf, nk, nd
+        ng, nf, nk, nm = len(self.gs), len(self.vf), len(self.dd), len(self.gm)
+        self.ng, self.nf, self.nk, self.nd, self.nm = ng, nf, nk, nd, nm
         # 5.0.16: the current sources, constant or from an expression
         self.src = []
         for e in self.ss:
@@ -1328,11 +1351,22 @@ class HVDC(_Holds, Kind):
         p = self.p
         p['g'] = {q: arr(G, q) for q in list(STATION_DEFAULTS) + ['Sn', 'Pref', 'Qref', 'Vref', 'Vacref', 'kd']}
         p['f'] = {q: arr(F, q) for q in list(STATION_DEFAULTS) + ['Sn', 'Vref']}
+        p['m'] = {q: arr(M, q) for q in list(STATION_DEFAULTS) + ['Sn']}
+        p['m']['k'] = Sb / p['m']['Sn']
+        # 5.0.18: the grid-forming stations grouped by their law as converters of pcl.rms (their holds those of this device)
+        self.gfm = []
+        for key in dict.fromkeys(k for k, _ in MG):
+            ix = np.array([j for j, (k, _) in enumerate(MG) if k == key], int)
+            vals = [MG[j][1] for j in ix]
+            cv = Converter([self.gm[j]['name'] for j in ix], np.zeros(len(ix), int), {q: np.array([v[q] for v in vals], float) for q in vals[0]},
+                           kind='gfm', law=key[1], avc=key[3])
+            cv._hold = (lambda pre: lambda q: self._hold(pre + q))(f'm{len(self.gfm)}.')
+            self.gfm.append((cv, ix))
         p['d'] = {q: arr(D, q) for q in list(DCDC_DEFAULTS) + ['Sn', 'Pref']}
         g = p['g']
         g['k'] = Sb / g['Sn']
         p['f']['k'] = Sb / p['f']['Sn']
-        for q, L in (('g', G), ('f', F)):
+        for q, L in (('g', G), ('f', F), ('m', M)):
             p[q]['dcb'] = np.array([v['_dc'] for v in L], int)
             p[q]['dcm'] = np.array([v['_dcm'] for v in L], int)
             p[q]['cs'] = np.array([v['_cs'] for v in L], float)
@@ -1349,7 +1383,7 @@ class HVDC(_Holds, Kind):
                 Rw = e['R'] if e.get('R') else e['Prated'] / (e['droop'] * Un)
                 g['kd'][j] = g['Sn'][j] / (Rw * Un)
         # the losses of the stations (the vsc of the load flow): the phase reactor R_c (pu of S_base) and a + b·I + c·I² (A)
-        for q, L in (('g', self.gs), ('f', self.vf)):
+        for q, L in (('g', self.gs), ('f', self.vf), ('m', self.gm)):
             p[q]['Rc'] = np.array([e.get('Rc', 0.0) for e in L])
             p[q]['la'] = np.array([e.get('a_loss', 0.0) for e in L]) / Sb
             p[q]['lb'] = np.array([e.get('b_loss', 0.0) for e in L])
@@ -1382,11 +1416,17 @@ class HVDC(_Holds, Kind):
         self.i_d = np.arange(o, o + nk); o += nk
         for q in self.src:                                  # 5.0.16: the low-pass states of the sources
             q['x'] = np.arange(o, o + len(q['tau'])); o += len(q['tau'])
+        self.i_m = o + 3 * np.arange(nm)[:, None] + np.arange(3)[None, :]; o += 3 * nm      # 5.0.18: θ and the two of its law
         self.nx = o
+        mst = [None] * nm
+        for cv, ix in self.gfm:
+            for j in ix:
+                mst[j] = (list(CONV_STATES[cv.law]) + ['-'])[:3]
         self.states = tuple(['U ' + b for b in self.dc_names] + ['I ' + self.lname[j] for j in self.lL] + ['If ' + self.lname[j] for j in self.lD] +
                             [f'{n}.{s}' for n in self.st_names[:ng] for s in STATION_STATES] +
-                            [f'{n}.{s}' for n in self.st_names[ng:] for s in VF_STATES] + [f'{n}.p' for n in self.dd_names] +
-                            [f'{q["name"]}.x{k + 1}' for q in self.src for k in range(len(q['tau']))])
+                            [f'{n}.{s}' for n in self.st_names[ng:ng + nf] for s in VF_STATES] + [f'{n}.p' for n in self.dd_names] +
+                            [f'{q["name"]}.x{k + 1}' for q in self.src for k in range(len(q['tau']))] +
+                            [f'{n}.{s}' for n, ss in zip(self.st_names[ng + nf:], mst) for s in ss])
         self._pf = (conv, dres)
 
     # -------------------------------------------------------------- the AC/DC parts
@@ -1406,7 +1446,7 @@ class HVDC(_Holds, Kind):
 
     def _core(self, x, Vr, Vi, t=0.0):
         p, g, f, d = self.p, self.p['g'], self.p['f'], self.p['d']
-        ng, nf = self.ng, self.nf
+        ng, nf, nm = self.ng, self.nf, self.nm
         u = x[self.i_u]
         F = 0 * x
         Idc = 0 * u                                         # the currents into each DC bus (pu)
@@ -1427,8 +1467,8 @@ class HVDC(_Holds, Kind):
         np.add.at(Idc, self.lb, il)
         Idc = Idc - self.g * u
         out['il'] = il
-        Ir = 0 * np.zeros(ng + nf) + 0 * u[:1].sum()
-        Ii = 0 * np.zeros(ng + nf) + 0 * u[:1].sum()
+        Ir = 0 * np.zeros(ng + nf + nm) + 0 * u[:1].sum()
+        Ii = 0 * np.zeros(ng + nf + nm) + 0 * u[:1].sum()
         if ng:
             X = x[self.i_g]
             vr, vi = Vr[:ng], Vi[:ng]
@@ -1485,7 +1525,7 @@ class HVDC(_Holds, Kind):
         if nf:
             X = x[self.i_f]
             xv, ilf = X[:, 0], X[:, 1]
-            vr, vi = Vr[ng:], Vi[ng:]
+            vr, vi = Vr[ng:ng + nf], Vi[ng:ng + nf]
             vm = _hyp(vr, vi)
             on = f['on']
             Zr, Zx = f['R'], f['X']
@@ -1504,12 +1544,36 @@ class HVDC(_Holds, Kind):
             Fxv = np.where(self._hold('xv')(_re(xv), _re(Fxv), -1.0, 1.0), 0 * Fxv, Fxv)
             Fil = (idin - ilf) * (2 * math.pi * 10.0)
             Pin = -(vr * ior + vi * ioi) / f['k']
-            Ir[ng:], Ii[ng:] = ior / f['k'] * on, ioi / f['k'] * on
+            Ir[ng:ng + nf], Ii[ng:ng + nf] = ior / f['k'] * on, ioi / f['k'] * on
             Pdc = (Pin - self._loss('f', Pin, ior / f['k'], ioi / f['k'])) * on
             np.add.at(Idc, f['dcb'], Pdc / _floor(u[f['dcb']], 0.05))
             F[self.i_f] = np.stack([Fxv, Fil], axis=1) * on[:, None]
             out['f'] = {'P': -Pin * on, 'Q': (vi * ior - vr * ioi) / f['k'] * on, 'Pdc': Pdc, 'V': vm, 'Udc': u[f['dcm']], 'E': E,
                         'I': _hyp(ior, ioi) * on, 'omega': 1.0 + 0 * vm, 'limited': 0 * vm}
+        if nm:                                              # 5.0.18: the grid-forming stations, by the law of each
+            pm = p['m']
+            vr, vi = Vr[ng + nf:], Vi[ng + nf:]
+            dt = np.result_type(x, vr, vi)
+            ir, ii = np.zeros(nm, dt), np.zeros(nm, dt)
+            o = {q: np.zeros(nm, dt) for q in ('P', 'Q', 'w', 'E')}
+            lim = np.zeros(nm, bool)
+            Fm = np.zeros((nm, 3), dt)
+            for cv, ix in self.gfm:
+                cv.p['on'], cv.p['dP'], cv.p['dV'] = pm['on'][ix], pm['dP'][ix], pm['dV'][ix]
+                Fc, ir[ix], ii[ix], oc = cv._core(x[self.i_m[ix, :cv.nx]], vr[ix], vi[ix])
+                for j, fj in enumerate(Fc):
+                    Fm[ix, j] = fj
+                for q in o:
+                    o[q][ix] = oc[q]
+                lim[ix] = np.asarray(oc['lim'], bool)
+            on, k = pm['on'], pm['k']
+            F[self.i_m] = Fm * on[:, None]
+            Ir[ng + nf:], Ii[ng + nf:] = ir / k * on, ii / k * on       # out of the station into its bus
+            Pin = -o['P'] / k * on                          # into the converter, pu of S_base
+            Pdc = (Pin - self._loss('m', Pin, ir / k, ii / k)) * on
+            np.add.at(Idc, pm['dcb'], Pdc / _floor(u[pm['dcb']], 0.05))
+            out['m'] = {'P': -Pin, 'Q': o['Q'] / k * on, 'Pdc': Pdc, 'V': _hyp(vr, vi), 'Udc': u[pm['dcm']], 'E': o['E'],
+                        'I': _hyp(ir, ii) * on, 'omega': o['w'], 'limited': np.where(lim, 1.0, 0.0) * on}
         if self.nk:
             pk = x[self.i_d]
             pd, Fp = _lag(pk, (d['Pref'] + d['dP']) * d['on'], d['Tdc'])
@@ -1535,7 +1599,7 @@ class HVDC(_Holds, Kind):
         out['Idc'] = Idc
         # the power at the terminals of each station into the DC grid (as the EMT measures it): through L_dc, or the
         # converter's less the charging of its own capacitance on the bus
-        for q in ('g', 'f'):
+        for q in ('g', 'f', 'm'):
             if q in out:
                 s_ = p[q]
                 um = u[s_['dcm']]
@@ -1554,7 +1618,7 @@ class HVDC(_Holds, Kind):
         p['lon'] = np.ones(len(self.lines))
         # the internal node of a station with L_dc: at the start the voltage of its bus, the current of the station's power
         iL = np.array([(u[a] - u[b]) / r if r > 0 else 0.0 for a, b, r in zip(self.la, self.lb, self.lr)])
-        for e in self.gs + self.vf:
+        for e in self.gs + self.vf + self.gm:
             if e['name'] in self.st_line:
                 l = self.st_line[e['name']]
                 u[self.la[l]] = u[self.lb[l]]
@@ -1611,6 +1675,21 @@ class HVDC(_Holds, Kind):
             idin = (-iout * cmath.exp(-1j * cmath.phase(Ec))).real
             x[self.i_f[j]] = [abs(Ec) - f['Vref'][j], idin]
         f.setdefault('th', np.zeros(self.nf))
+        # 5.0.18: a grid-forming station as its converter of pcl.rms from the injection of the load flow (its references, if not
+        # given, so that it rests there; with the references of a drawing, as the EMT, it does not rest: the states of its law
+        # given; our choice): the EMF continuous at t = 0 and, for droop, ω = 1 there (P_f = P_ref, Q_f from E; PSC: x_E from E)
+        for cv, ix in self.gfm:
+            S = np.array([complex(conv[self.gm[j]['name']]['Ps'], conv[self.gm[j]['name']]['Qs']) for j in ix]) / Sb
+            v, q = Vs[self.ng + self.nf + ix], cv.p
+            given = {k: ~np.isnan(q[k]) for k in ('Pref', 'Qref', 'Vref')}
+            X = cv.init(v, S, wb)
+            E = np.abs(v + (q['Rf'] + q['Rv'] + 1j * (q['Xc'] + q['Xv'])) * np.conj(S * q['k'] / v))
+            if cv.law == 'droop':
+                X[:, 1] = np.where(given['Pref'], q['Pref'], X[:, 1])
+                X[:, 2] = np.where(given['Vref'], q['Qref'] + (q['Vref'] - E) / q['nq'], X[:, 2])
+            elif cv.law == 'psc' and cv.avc:
+                X[:, 1] = np.where(given['Vref'], np.clip(E - q['Vref'], -0.5, 0.5), X[:, 1])
+            x[self.i_m[ix, :cv.nx]] = X
         for j, e in enumerate(self.dd):
             P = dres['dcdc'][e['name']]['P'] / Sb
             d['Pref'][j] = P
@@ -1619,7 +1698,7 @@ class HVDC(_Holds, Kind):
             if q['ast'] is not None and len(q['x']):
                 x[q['x']] = self._source(q, u, 0.0)
         p['s'] = {}
-        for q, n in (('g', self.ng), ('f', self.nf), ('d', self.nk), ('s', len(self.src))):
+        for q, n in (('g', self.ng), ('f', self.nf), ('d', self.nk), ('s', len(self.src)), ('m', self.nm)):
             p[q]['on'], p[q]['dP'], p[q]['dV'] = np.ones(n), np.zeros(n), np.zeros(n)
         g['dVac'] = np.zeros(self.ng)
         self.x_start = x.copy()
@@ -1633,15 +1712,16 @@ class HVDC(_Holds, Kind):
         return self._core(X[0], Vr, Vi, t)[3]
 
     def limits(self):
-        if not self.nf:
-            return []
-        return [(int(j), 0.0, -1.0, 1.0, np.ones(1, bool)) for j in self.i_f[:, 0]]
+        out = [(int(j), 0.0, -1.0, 1.0, np.ones(1, bool)) for j in self.i_f[:, 0]] if self.nf else []
+        for cv, ix in self.gfm:                             # 5.0.18: x_E of a PSC with the control of the AC voltage
+            out += [(int(self.i_m[j, i]), base, lo, hi, np.ones(1, bool)) for i, base, lo, hi, _ in cv.limits() for j in ix]
+        return out
 
     def find(self, name):
         """(group, index) of a station or DC/DC converter by its name."""
         if name in self.st_names:
             j = self.st_names.index(name)
-            return ('g', j) if j < self.ng else ('f', j - self.ng)
+            return ('g', j) if j < self.ng else ('f', j - self.ng) if j < self.ng + self.nf else ('m', j - self.ng - self.nf)
         if name in self.dd_names:
             return 'd', self.dd_names.index(name)
         if name in self.sr_names:                           # 5.0.16: a current source (only 'gen': it stops)
@@ -2210,7 +2290,7 @@ class System:
                     K.p['dP'] = np.zeros(K.m)
             elif isinstance(K, HVDC):                       # 5.0.15
                 K.p['lon'] = np.ones(len(K.lines))
-                for q, nn in (('g', K.ng), ('f', K.nf), ('d', K.nk)):
+                for q, nn in (('g', K.ng), ('f', K.nf), ('d', K.nk), ('m', K.nm)):
                     K.p[q]['on'], K.p[q]['dP'], K.p[q]['dV'] = np.ones(nn), np.zeros(nn), np.zeros(nn)
 
     def _consistent(self, x, y, t, tol=1e-10):
@@ -2556,9 +2636,9 @@ class System:
             nt = len(r['t'])
             Xs = r['x'][:, K.x0:K.x0 + K.nx]
             Vb = V[:, K.bus]
-            keep = {'lon': K.p['lon'].copy(), **{(q, a): K.p[q][a].copy() for q in 'gfds' for a in ('on', 'dP', 'dV')}}
+            keep = {'lon': K.p['lon'].copy(), **{(q, a): K.p[q][a].copy() for q in 'gfdsm' for a in ('on', 'dP', 'dV')}}
             K.p['lon'] = np.ones(len(K.lines))
-            for q in 'gfds':
+            for q in 'gfdsm':
                 K.p[q]['on'], K.p[q]['dP'], K.p[q]['dV'] = np.ones(len(K.p[q]['on'])), 0 * K.p[q]['dP'], 0 * K.p[q]['dV']
             evs = [e for e in r.get('events', ()) if e['kind'] in ('gen', 'vref', 'pref', 'trip')
                    and self._hvdc(str(e.get('gen', e.get('branch'))))[0] is K]
@@ -2573,7 +2653,7 @@ class System:
                     ei += 1
                 o = K.outputs(Xs[ti][None, :], Vb[ti].real, Vb[ti].imag, float(r['t'][ti]))
                 il[ti] = np.real(o['il'])
-                for q, names in (('g', K.st_names[:K.ng]), ('f', K.st_names[K.ng:])):
+                for q, names in (('g', K.st_names[:K.ng]), ('f', K.st_names[K.ng:K.ng + K.nf]), ('m', K.st_names[K.ng + K.nf:])):
                     if q in o:
                         for key, val in o[q].items():
                             for j, nm in enumerate(names):

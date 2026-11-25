@@ -302,5 +302,151 @@ class Refused(unittest.TestCase):
             rms.System(N.ieee9(), machines={'G3': {'model': 'gfl', 'cc': 'pi', 'storage': {'E': 1.0}}}).init()
 
 
+def gfm_link(law='droop', P=300e6, refs=None):
+    """5.0.18: a link of two stations on a DC grid of two buses (R–L–C): S1 holds V_dc from a stiff AC bus, S2 forms the voltage
+    of an island with a constant-impedance load (Vf in the load flow), grid-forming in the RMS with the law `law` (1000 MVA, the
+    reactor X 0.15, R 0.002 pu). refs: the references of the law, else from the load flow (at rest)."""
+    net = N.Network(f=50.0, S_base=100e6)
+    net.bus('A', 400e3)
+    net.feeder('A', Sk=100e9, RX=0.1, name='QA')
+    net.bus('B', 400e3)
+    net.load('B', P=P, Q=0.0, name='LD')
+    net.dc_bus('D1', 640e3)
+    net.dc_bus('D2', 640e3)
+    net.dc_line('D1', 'D2', R=1.2, L=0.09, C=12.8e-6, poles=1, name='CAB')
+    net.vsc('A', 'D1', control='V', V=1.0, Prated=1000e6, name='S1')
+    net.vsc('B', 'D2', control='Vf', Vac=1.0, Prated=1000e6, name='S2')
+    return net, {'S2': {'model': 'gfm', 'law': law, 'X': 0.15, 'R': 0.002, **(refs or {})}}
+
+
+class GridFormingStation(unittest.TestCase):
+    """5.0.18 (THEORY §8ΩΤ): a station that forms the voltage of its AC side with a grid-forming law (the GFMC of the MMCC in mode
+    gfm: droop, VSM, PSC, as the converters of 5.0.14), its DC side by the balance of power: at rest from the load flow; the laws
+    in the steady state after a step of the load against their closed forms; the Jacobian of the device; the link of hvdc_gfm from
+    its drawing (an island, a weak grid, a second unit) against its EMT (tests/js/hvdc_gfm_rms_cases.js)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cases = [{'ac': 'island', 'law': 'droop'}, {'ac': 'island', 'law': 'psc'}, {'ac': 'weak', 'law': 'droop'}, {'ac': 'par', 'law': 'droop'}]
+        out = subprocess.run(['node', str(ROOT / 'tests' / 'js' / 'hvdc_gfm_rms_cases.js'), json.dumps(cases), '1.2'], capture_output=True,
+                             text=True, timeout=1200, cwd=ROOT)
+        if out.returncode:
+            raise RuntimeError(out.stderr)
+        cls.js = {(e['opts']['ac'], e['opts']['law']): e for e in json.loads(out.stdout)['runs']}
+
+    def test_at_rest_and_the_laws(self):
+        # each law from the load flow (its references from there) rests; after +100 MW of load at 0.2 s (an impedance at |V₀|) the
+        # station takes it all, and its frequency is that of its law with the P of the station (pu of S_n, to the AC side):
+        # droop ω = 1 − m_p·(P − P_ref); VSM 0 = P_ref − P_E/ω − (ω − 1)/m_p; PSC ω = 1 + k_p·(P_ref − P)/ω₀
+        for law in ('droop', 'vsm', 'psc'):
+            net, st = gfm_link(law)
+            s = rms.System(net, stations=st)
+            r0 = s.init()
+            self.assertLess(r0['f'], 1e-8, msg=law)
+            self.assertLess(r0['g'], 1e-12, msg=law)
+            r = net.dynamic(1.5, events=[{'t': 0.2, 'kind': 'load', 'bus': 'B', 'P': 100.0}], stations=st, h=0.005, record=0.005)
+            self.assertEqual(r['stats']['nonconv'], 0, msg=law)
+            q = r['dc']['stations']['S2']
+            P0, P, w = q['P'][0] / 1000.0, q['P'][-1] / 1000.0, q['f'][-1] / 50.0
+            self.assertLess(abs(q['f'][30] - 50.0), 1e-9, msg=law)                          # at rest before the step
+            V, V0 = q['V'][-1], q['V'][0]                                                   # the load (constant impedance) at |V|
+            self.assertAlmostEqual(P, (300 * V * V + 100 * V * V / (V0 * V0)) / 1000, delta=1e-6, msg=law)
+            if law == 'droop':
+                self.assertAlmostEqual(w, 1 - 0.02 * (P - P0), delta=1e-9)
+            elif law == 'psc':
+                self.assertAlmostEqual(w, 1 + 50.0 * (P0 - P) / (2 * math.pi * 50), delta=1e-9)
+            else:
+                PE = P + 0.002 * (q['I'][-1]) ** 2                                         # at the EMF: the losses of R_f
+                PE0 = P0 + 0.002 * q['I'][0] ** 2
+                self.assertAlmostEqual(PE0 - PE / w - (w - 1) / 0.02, 0.0, delta=1e-6)
+            # the DC side: the station of V_dc gives what the island takes, less the losses of the cable
+            d1, d2 = r['dc']['stations']['S1'], q
+            loss = (r['dc']['buses']['D1']['U'][-1] - r['dc']['buses']['D2']['U'][-1]) ** 2 / 1.2                   # kV²/Ω = MW
+            self.assertAlmostEqual(d1['Pdc'][-1] + d2['Pdc'][-1], loss, delta=0.05, msg=law)
+
+    def test_the_jacobian(self):
+        for law in ('droop', 'vsm', 'psc'):
+            net, st = gfm_link(law)
+            s = rms.System(net, stations=st)
+            s.init()
+            rng = np.random.default_rng(7)
+            x = s.x0 + 1e-3 * rng.standard_normal(s.nx)
+            y = s.y0 + 1e-3 * rng.standard_normal(s.ny)
+            J = s.jac(x, y).toarray()
+            z = np.r_[x, y]
+            Jn = np.empty_like(J)
+            for j in range(len(z)):
+                e = np.zeros(len(z))
+                e[j] = 1e-6
+                fp, gp = s.fg(*np.split(z + e, [s.nx]))
+                fm, gm = s.fg(*np.split(z - e, [s.nx]))
+                Jn[:, j] = (np.r_[fp, gp] - np.r_[fm, gm]) / 2e-6
+            self.assertLess(float(np.max(np.abs(J - Jn) / np.maximum(np.abs(J), 1.0))), 1e-5, msg=law)
+
+    def test_the_drawing(self):
+        # the start of a grid-forming station: Vf where no other source holds its AC side (an island, also with a second unit, a
+        # VSC2 that is a generator of P = 0 in the RMS), else P = P_ref·S (the weak grid); its law from its MMCC, out of the station
+        from pcl import model
+        drw = {}
+        for ac in ('island', 'weak', 'par'):
+            drw[ac] = model.of(json.loads(subprocess.run(['node', str(ROOT / 'tests/js/model_cases.js'), 'build', 'hvdc_gfm', json.dumps({'ac': ac})],
+                                                         capture_output=True, text=True, timeout=300, check=True).stdout))
+            net, info = model.network(drw[ac], 'pf')
+            (e,) = [q for q in net.elements if q['kind'] == 'vsc' and q['name'] == 'MMC2']
+            self.assertEqual(e['control'], 'P' if ac == 'weak' else 'Vf', msg=ac)
+        st, notes = model.stations_of(drw['weak'])
+        d = st['MMC2']
+        self.assertEqual((d['model'], d['law'], d['Pref'], d['Imax'], d['mp'], d['H']), ('gfm', 'droop', 0.5, 1.1, 2.0, 2.0))
+        self.assertAlmostEqual(d['X'], 0.075, delta=1e-4)
+        self.assertEqual(notes, [])
+        # the load flow of the weak grid: from the flat start a bus near zero voltage behind YNd1; from the start at the shifts the
+        # solution (the bus of the station at 0,92 pu, the grid at SCR 1,5 with 0,5 pu)
+        net, info = model.network(drw['weak'], 'pf')
+        r = net.acdc_flow()
+        self.assertLess(min(q['V'] for q in r['buses'].values()), 0.5)
+        r = model.load_flow(drw['weak'])
+        self.assertGreater(min(q['V'] for q in r['buses'].values()), 0.9)
+        self.assertAlmostEqual(r['buses']['J2']['V'], 0.9232, delta=1e-4)
+
+    def test_against_the_emt(self):
+        # station 2 of hvdc_gfm from its drawing (h = 5 ms) against the EMT of the same drawing as means over one period centred at
+        # each point. Measured: after the step (0.65–1.19 s) |ΔP| 4.7·10⁻⁴ (island, droop), 5.8·10⁻³ (island, PSC), 3.6·10⁻³ (weak,
+        # droop), 5.3·10⁻⁴ (second unit, droop) pu; |Δω| 3.5·10⁻⁵, 9.2·10⁻⁴, 9.4·10⁻⁵, 2.6·10⁻⁵; |Δ|v|| ≤ 2.7·10⁻³; the voltages
+        # between the poles ≤ 2.1 kV; at the end (1.1–1.19 s) |ΔP| ≤ 1.5·10⁻³ pu
+        from pcl import model
+        lim = {('island', 'droop'): (1e-3, 1e-4), ('island', 'psc'): (1e-2, 2e-3), ('weak', 'droop'): (6e-3, 2e-4), ('par', 'droop'): (1e-3, 1e-4)}
+        for (ac, law), (dp, dw) in lim.items():
+            e = self.js[(ac, law)]
+            self.assertEqual(e['warn'], [], msg=(ac, law))
+            m = model.of(json.loads(subprocess.run(['node', str(ROOT / 'tests/js/model_cases.js'), 'build', 'hvdc_gfm', json.dumps({'ac': ac, 'law': law})],
+                                                   capture_output=True, text=True, timeout=300, check=True).stdout))
+            r = model.dynamic(m, t_end=1.2, h=0.005, record=0.005, buses=[])
+            self.assertEqual(r['stats']['nonconv'], 0, msg=(ac, law))
+            te, tr = np.array(e['t']), np.asarray(r['t'])
+            q = r['dc']['stations']['MMC2']
+
+            def emt(key, t):
+                w = (te > t - 0.01 + 1e-9) & (te <= t + 0.01 + 1e-9)
+                return float(np.mean(np.asarray(e[key])[w]))
+            post = [i for i, t in enumerate(tr) if 0.65 - 1e-9 <= t <= 1.19 + 1e-9]
+            end = [i for i, t in enumerate(tr) if 1.1 - 1e-9 <= t <= 1.19 + 1e-9]
+            dP = [abs(q['P'][i] * 1e6 / 1059e6 - emt('P', tr[i])) for i in post]
+            dW = [abs(q['f'][i] / 50.0 - emt('w', tr[i])) for i in post]
+            dV = [abs(q['V'][i] - emt('v', tr[i])) for i in post]
+            dU = [abs(q['Udc'][i] * 640.0 - emt('U2', tr[i])) for i in post]
+            self.assertLess(max(dP), dp, msg=(ac, law))
+            self.assertLess(max(dW), dw, msg=(ac, law))
+            self.assertLess(max(dV), 4e-3, msg=(ac, law))
+            self.assertLess(max(dU), 3.0, msg=(ac, law))
+            self.assertLess(abs(float(np.mean([q['P'][i] * 1e6 / 1059e6 - emt('P', tr[i]) for i in end]))), 2e-3, msg=(ac, law))
+
+    def test_what_it_refuses(self):
+        with self.assertRaises(rms.RMSError):                    # a grid-forming station does not hold the DC voltage
+            rms.System(one_bus(), stations={'S1': {'model': 'gfm'}})
+        net, st = gfm_link('dvoc')
+        with self.assertRaises(rms.RMSError):                    # dVOC and matching are not in the RMS yet
+            rms.System(net, stations=st)
+
+
 if __name__ == '__main__':
     unittest.main()

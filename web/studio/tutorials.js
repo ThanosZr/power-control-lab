@@ -377,6 +377,78 @@
    // the sawtooth with a finer step: its sample is taken at the reset of the carrier, the instant of a switching (ROADMAP §74, the open point)
    return project(comps,wires,{sim:{hDiv:saw?1000:200,speed:200,stopT},scope:{panes,window:{unit:'T',n:Math.round(stopT*fs)}},
     meta:{Vdc,Vst,Vmin,Vmax,dV,In,L,fs,a:g.a,b:g.b,kp:g.kp,ki:g.ki,D0:Vst/Vdc,dI:Vst*(1-Vst/Vdc)/(L*fs),Rpar:Rs*esr/(Rs+esr),saw:saw?1:0,raw:raw?1:0,test,t1,t2,stopT,lev,vs}});}});
+ // ------------------------------------------------------------------ 5.0.18: bus voltage control (PE2, exercise 4), from the drawings of the exercise
+ // The bus of current_ctl (a source of 50 V behind 1 mΩ, here one-way: a diode in series; 100 mF with 0,2 mΩ) feeds a constant power load.
+ // N = 4 branches of the bidirectional converter on shifted carriers (as polyphase), each with the current loop of current_ctl (S&H at
+ // the start of its period, a PI in volts, the duty from the sampled voltages). The voltage loop: a PI on the sampled bus voltage gives
+ // the current I_c into the bus; per branch −I_c/N when the storage is above the bus (the inductor on the bus side), I_c·v_bus/(N·V_st)
+ // when it is below (the inductor on the storage side, by the balance of power); the limit of a branch I_n, with an overload I_ol for
+ // T_ol (a timer), and back-calculation into the voltage PI. The source at V_ref gives (V_src − V_ref)/R_s, the converter the rest of the
+ // load. The design: C·v′ = −G·v + i_c with G = 1/R_s − P/V_ref² (the source and the load linearized at the load P of the design), and
+ // K_i = ω_v·(G + K_p): the slow pole near ω_v when (G + K_p)/C ≫ ω_v. Example values, not those of the exercise.
+ function vcDesign(Rs,Vref,P,Kp=150,wv=300){const G=1/Rs-P/(Vref*Vref);return {G,Kp,wv,Ki:+(wv*(G+Kp)).toPrecision(4)};}
+ const VC_TEST={step:'Βήμα φορτίου 15 → 35 kW στα 5 ms',profile:'Προφίλ φορτίου 15 → 35 → 25 → 15 kW (στα 20, 40, 60 ms)',limit:'Πέρα από τις δυνατότητες: 15 → 55 kW στα 5 ms'};
+ T.push({id:'voltage_ctl',group:'Αμφίδρομος · μπαταρία (PE2)',title:'Άσκηση 4 · Έλεγχος τάσης ζυγού',theory:'formula',topology:'voltage_ctl',
+  options:[{k:'vst',label:'Αποθήκευση',options:[['lo','V_st = 30 V, κάτω από τον ζυγό (πηνίο στην πλευρά της αποθήκευσης)'],['hi','V_st = 80 V, πάνω από τον ζυγό (πηνίο στην πλευρά του ζυγού)']],def:'lo'},
+   {k:'test',label:'Δοκιμή',options:Object.entries(VC_TEST),def:'step'},
+   {k:'vs',label:'Μέτρηση V_bus',options:[['peak','S&H στην αρχή της περιόδου του κλάδου 1 (μία φορά ανά T)'],['both','S&H δύο φορές ανά T (και στη μέση της περιόδου)'],['raw','Χωρίς S&H (η μέτρηση κατευθείαν)']],def:'peak'},
+   {k:'gain',label:'Ελεγκτής τάσης',options:[['design','K_p = 150 A/V, ω_v = 300 rad/s'],['int','Χωρίς αναλογικό όρο (K_p = 0), ω_v = 300 rad/s'],['slow','K_p = 150 A/V, ω_v = 75 rad/s']],def:'design'}],
+  desc:'Ο ζυγός της Άσκησης 3 (πηγή 50 V πίσω από 1 mΩ, εδώ μονόδρομη: δίοδος σε σειρά· πυκνωτής 100 mF με ESR 0,2 mΩ) τροφοδοτεί φορτίο σταθερής ισχύος. Τέσσερις κλάδοι του αμφίδρομου μετατροπέα, με μετατοπισμένα φέροντα όπως στην πολυφασική σχεδίαση, ενώνουν τον ζυγό με την αποθήκευση (30 ή 80 V). Κάθε κλάδος έχει τον βρόχο ρεύματος της Άσκησης 3: S&H, PI σε V, λόγο κατάτμησης από τις δειγματισμένες τάσεις. Ο βρόχος τάσης είναι ένας PI στη δειγματισμένη τάση του ζυγού, που δίνει το ρεύμα I_c προς τον ζυγό. Από αυτό βγαίνει η αναφορά κάθε κλάδου: −I_c/N όταν η αποθήκευση είναι πάνω από τον ζυγό, I_c·v_bus/(N·V_st) όταν είναι κάτω. Κάθε κλάδος έχει όριο I_n, με υπερφόρτιση I_ol για χρόνο T_ol (χρονομετρητής), και ο PI τάσης έχει back-calculation. Στα V_ref η πηγή δίνει (V_src − V_ref)/R_s, και ο μετατροπέας παίρνει ή δίνει τη διαφορά από το φορτίο. Οι τιμές είναι παράδειγμα· βάλε τις δικές σου από την εκφώνηση. Πρόταση σχεδιασμού, όχι λύση.',
+  tasks:['Βήμα φορτίου: τρέξε έως το τέλος (⏩). Ο μετατροπέας περνά από φόρτιση σε εκφόρτιση της αποθήκευσης. Η τάση πέφτει για λίγο και γυρίζει στο V_ref. Το ελάχιστο και ο χρόνος αποκατάστασης είναι στην κάρτα θεωρίας, δίπλα στην εκτίμηση από τους δύο πόλους του βρόχου.','Άλλαξε την αποθήκευση από 30 σε 80 V. Ο βρόχος τάσης μένει ίδιος, αλλάζει μόνο η αναφορά του κλάδου: I_c·v_bus/(N·V_st) αντί για −I_c/N, γιατί το πηνίο πάει από την πλευρά της αποθήκευσης στην πλευρά του ζυγού.','Πέρα από τις δυνατότητες: η αναφορά του κλάδου φτάνει το I_ol. Μετά από T_ol ο χρονομετρητής τη ρίχνει στο I_n, και η τάση κάθεται πιο κάτω, ώσπου η πηγή να δίνει ό,τι λείπει. Με το back-calculation ο PI τάσης δεν φουσκώνει, και η τάση γυρίζει αμέσως όταν πέσει το φορτίο.','Προφίλ φορτίου: τρία βήματα. Οι τέσσερις κλάδοι μοιράζονται το ρεύμα εξίσου (οι μέσες τιμές στις ενδείξεις).','Μέτρηση V_bus: με S&H δύο φορές ανά T ή χωρίς S&H η απόκριση σχεδόν δεν αλλάζει, γιατί ο PI τάσης διαβάζει την είσοδό του στο δικό του ρολόι. Το S&H κρατά σταθερή την τάση του ζυγού στον υπολογισμό του λόγου κατάτμησης μέσα στην περίοδο.','Ελεγκτής τάσης: χωρίς K_p το ακρότατο είναι λίγο βαθύτερο. Με ω_v = 75 rad/s η τάση γυρίζει πολύ πιο αργά, με σταθερά χρόνου περίπου 1/ω_v, και στα 30 ms δεν έχει φτάσει ακόμη στο V_ref.','Άλλαξε τα K_p, K_i του PI τάσης από τις ζωντανές παραμέτρους. Ο αργός πόλος είναι περίπου στο K_i/(G + K_p), και ο γρήγορος στο (G + K_p)/C.'],
+  build(o){const lo=o.vst!=='hi',test=VC_TEST[o.test]?o.test:'step',vs=['peak','both','raw'].includes(o.vs)?o.vs:'peak',gain=['design','int','slow'].includes(o.gain)?o.gain:'design';
+   const Vsrc=50,Rs=1e-3,Cb=0.1,esr=0.2e-3,fs=20e3,Tsw=1/fs,L=20e-6,N=4,In=100,Iol=1.3*In,Tol=0.005,Vref=49.5,Vst=lo?30:80,P0=15e3,Pd=35e3,band=0.1;
+   const prof=test==='profile'?[[0,P0],[.02,Pd],[.04,25e3],[.06,P0]]:[[0,P0],[.005,test==='limit'?55e3:Pd]],stopT=test==='profile'?.08:.03;
+   const Is=(Vsrc-Vref)/Rs,Ps=Vref*Is,g=vcDesign(Rs,Vref,Pd,gain==='int'?0:150,gain==='slow'?75:300),cc=ccDesign(L);
+   // the operating points at V_ref: the converter gives the load less the source; per branch on its own side
+   const rows=prof.map(([t,p])=>{const pc=p-Ps,ic=pc/Vref,Ik=lo?pc/(N*Vst):-ic/N;return {t,p,pc,ic,Ik,ok:Math.abs(Ik)<=In};});
+   const Vl=lo?Vst:Vref,Vh=lo?Vref:Vst,D0=1-Vl/Vh,dI=Vl*D0/(L*fs),Ik0=rows[0].Ik,ic0=rows[0].ic;
+   const sched=prof.map(([t,p])=>`${t}:${p}`).join(', ');
+   const comps=[C('VSRC','VDC',60,190,{V:Vsrc,Rs,uni:true},{label:'V_src'}),C('GS0','GND',60,250,{},{label:'0 V'}),C('CB','C',140,190,{C:Cb,esr,v0:Vref},{label:'C_bus'}),C('GC0','GND',140,250,{},{label:'0 V'}),
+    C('LD','CPL',220,190,{P:P0,Vmin:25,sched},{label:'Φορτίο P/v'}),C('GL0','GND',220,250,{},{label:'0 V'}),J('JS1',140,90),J('JS2',220,90),C('VS','VDC',640,150,{V:Vst},{label:'V_st'}),C('GV','GND',640,200,{},{label:'0 V'})];
+   const wires=[['VSRC:p','JS1',[[60,90]]],['JS1','CB:p'],['JS1','JS2'],['JS2','LD:p'],['JS2','JB1',[],{name:'v_bus'}],['VSRC:n','GS0:g'],['CB:n','GC0:g'],['LD:n','GL0:g'],['JV1','VS:p',[[640,90]]],['VS:n','GV:g']];
+   const dExpr=lo?'clamp(1 - (vs - u)/vb, 0.02, 0.98)':'clamp(1 - (vb - u)/vs, 0.02, 0.98)',umin=lo?Vst-Vsrc:Vsrc-Vst,umax=lo?Vst:Vsrc;
+   for(let k=1;k<=N;k++){const y=90+150*(k-1),ph=360*(k-1)/N,u0=((-ph/360)%1+1)%1,i0=+(Ik0+dI*rippleDev(u0,D0,false)).toFixed(4),sw={pwm:'PWM'+k,Ron:1e-7,body:true};
+    comps.push(J('JB'+k,300,y),C('L'+k,'L',lo?490:350,y,{L,i0}),J('JM'+k,420,y),C('S1'+k,'SW',lo?350:470,y,{...sw,out:'na'},{label:'S1.'+k}),C('S2'+k,'SW',420,y+60,{...sw,out:'a'},{label:'S2.'+k}),
+     C('GS'+k,'GND',420,y+100,{},{label:''}),J('JV'+k,560,y),
+     C('TI'+k,'TAGI',760,y-20,{name:'I*'}),C('SHi'+k,'SH',760,y+30,{src:'L'+k,qty:'I',clock:'PWM'+k,trig:'start',init:'value',h0:+Ik0.toFixed(4)},{label:'S&H i_L'+k}),C('SU'+k,'SUM',850,y,{signs:'+-'}),
+     C('PI'+k,'PIB',940,y,{Kp:cc.kp,Ki:cc.ki,clock:'PWM'+k,trig:'start',y0:0,aw:'clamp',ymin:umin,ymax:umax},{label:'PI ρεύματος '+k}),C('TV'+k,'TAGI',940,y+45,{name:'v_s'}),C('TS'+k,'TAGI',940,y+75,{name:'vst_s'}),
+     C('EXd'+k,'EXPR',1050,y+25,{expr:dExpr,ins:'u, vb, vs'},{label:'d'+k}),C('PWM'+k,'PWM',1170,y+25,{fs,mode:'ext',carrier:'triangle',phase:ph,upd:'single'}));
+    // storage below the bus: bus – S1 – switching node – inductor (a at the storage) ; above: bus – inductor – switching node – S1 – storage
+    if(lo)wires.push(['JB'+k,'S1'+k+':d'],['S1'+k+':s','JM'+k],['JM'+k,'L'+k+':b'],['L'+k+':a','JV'+k]);
+    else wires.push(['JB'+k,'L'+k+':a'],['L'+k+':b','JM'+k],['JM'+k,'S1'+k+':s'],['S1'+k+':d','JV'+k]);
+    wires.push(['JM'+k,'S2'+k+':d'],['S2'+k+':s','GS'+k+':g'],['TI'+k+':y','SU'+k+':a'],['SHi'+k+':y','SU'+k+':b'],['SU'+k+':y','PI'+k+':u'],['PI'+k+':y','EXd'+k+':u'],['TV'+k+':y','EXd'+k+':vb'],['TS'+k+':y','EXd'+k+':vs'],['EXd'+k+':y','PWM'+k+':d']);
+    if(k<N)wires.push(['JB'+k,'JB'+(k+1)],['JV'+k,'JV'+(k+1)]);}
+   // the voltage loop: the sampled voltages, the PI (A into the bus), the reference of a branch, its limit with the overload timer, back-calculation
+   comps.push(C('MV','MEAS',60,730,{src:'CB',qty:'V'},{label:'v_bus'}),...(vs==='raw'?[]:[C('SHv','SH',170,730,{in:'sig',clock:'PWM1',trig:vs==='both'?'both':'start',init:'value',h0:Vref},{label:'S&H v_bus'})]),C('TGv','TAGO',260,730,{name:'v_s'}),
+    C('MS','MEAS',60,790,{src:'VS',qty:'V'},{label:'v_st'}),C('SHs','SH',170,790,{in:'sig',clock:'PWM1',trig:'start',init:'value',h0:Vst},{label:'S&H V_st'}),C('TGs','TAGO',260,790,{name:'vst_s'}),
+    C('VREF','CONST',60,860,{v:Vref,unit:'V'},{label:'V_ref'}),C('TFv','TAGI',60,910,{name:'v_s'}),C('SUv','SUM',160,880,{signs:'+-'},{label:'V_ref − v'}),
+    C('PIv','PIB',260,880,{Kp:g.Kp,Ki:g.Ki,clock:'PWM1',trig:'start',y0:+ic0.toFixed(4),aw:'track'},{label:'PI τάσης (A προς τον ζυγό)'}),
+    C('EXo','EXPR',370,960,{expr:'abs(r) > In ? 1 : -5',ins:'r',pars:`In = ${In}`},{label:'πάνω από I_n; (+1, αλλιώς −5)'}),
+    C('PIt','PIB',480,960,{Kp:0,Ki:1,clock:'PWM1',trig:'start',y0:0,aw:'clamp',ymin:0,ymax:+(1.2*Tol).toPrecision(6)},{label:'χρόνος υπερφόρτισης'}),
+    C('EXl','EXPR',590,890,{expr:'clamp(r, -(tm < Tol ? Iol : In), tm < Tol ? Iol : In)',ins:'r, tm',pars:`In = ${In}, Iol = ${Iol}, Tol = ${Tol}`},{label:'όριο του κλάδου'}),C('TGr','TAGO',700,890,{name:'I*'}),
+    C('SUb','SUM',480,1030,{signs:'+-'},{label:'tr'}));
+   wires.push(...(vs==='raw'?[['MV:y','TGv:u']]:[['MV:y','SHv:u'],['SHv:y','TGv:u']]),['MS:y','SHs:u'],['SHs:y','TGs:u'],['VREF:y','SUv:a'],['TFv:y','SUv:b'],['SUv:y','PIv:u']);
+   if(lo){comps.push(C('GNr','EXPR',370,880,{expr:'r*vb/(n*vs)',ins:'r, vb, vs',pars:`n = ${N}`},{label:'× v_bus/(N·V_st)'}),C('TFv2','TAGI',260,820,{name:'v_s'}),C('TFs2','TAGI',260,840,{name:'vst_s'}),
+     C('GNb','EXPR',590,980,{expr:'r*n*vs/vb',ins:'r, vb, vs',pars:`n = ${N}`},{label:'× N·V_st/v_bus'}));
+    wires.push(['PIv:y','GNr:r'],['TFv2:y','GNr:vb'],['TFs2:y','GNr:vs'],['TFv2:y','GNb:vb'],['TFs2:y','GNb:vs'],['EXl:y','GNb:r']);}
+   else{comps.push(C('GNr','GAIN',370,880,{K:-1/N,unit:'='},{label:'−1/N'}),C('GNb','GAIN',590,980,{K:-N,unit:'='},{label:'−N'}));wires.push(['PIv:y','GNr:u'],['EXl:y','GNb:u']);}
+   wires.push(['GNr:y','EXl:r'],['GNr:y','EXo:r'],['EXo:y','PIt:u'],['PIt:y','EXl:tm'],['EXl:y','TGr:u'],['GNb:y','SUb:a'],['PIv:y','SUb:b'],['SUb:y','PIv:tr']);
+   // the indications: the means per period of the voltage, of the powers and of the branch currents
+   const avg=(id,x,y,label)=>C(id,'AVG',x,y,{win:'per',f:fs,np:1,clock:'PWM1'},{label});
+   comps.push(avg('AVv',170,1110,'⟨v_bus⟩'),C('DSv','DISP',280,1110,{dig:5},{label:'⟨V_bus⟩ (V)'}),C('MIs','MEAS',60,1180,{src:'VSRC',qty:'I'},{label:'i_src'}),C('MIl','MEAS',60,1240,{src:'LD',qty:'I'},{label:'i_φορτίου'}),
+    C('EXps','EXPR',170,1180,{expr:'v*i',ins:'v, i'},{label:'p_πηγής'}),C('EXpl','EXPR',170,1240,{expr:'v*i',ins:'v, i'},{label:'p_φορτίου'}),
+    C('EXpc','EXPR',170,1320,{expr:lo?'v*(i1 + i2 + i3 + i4)':'-v*(i1 + i2 + i3 + i4)',ins:'v, i1, i2, i3, i4'},{label:'p_μετατροπέα'}),
+    avg('AVps',280,1180,'⟨P_πηγής⟩'),avg('AVpl',280,1240,'⟨P_φορτίου⟩'),avg('AVpc',280,1320,'⟨P_μετατροπέα⟩'),
+    C('DSps','DISP',390,1180,{dig:5},{label:'P πηγής (W)'}),C('DSpl','DISP',390,1240,{dig:5},{label:'P φορτίου (W)'}),C('DSpc','DISP',390,1320,{dig:5},{label:'P μετατροπέα (W)'}),
+    C('TFr','TAGI',510,1110,{name:'I*'}),C('DSr','DISP',620,1110,{dig:5},{label:'I*_k (A)'}));
+   wires.push(['MV:y','AVv:u'],['AVv:y','DSv:u'],['MV:y','EXps:v'],['MIs:y','EXps:i'],['MV:y','EXpl:v'],['MIl:y','EXpl:i'],[lo?'MS:y':'MV:y','EXpc:v'],
+    ['EXps:y','AVps:u'],['EXpl:y','AVpl:u'],['EXpc:y','AVpc:u'],['AVps:y','DSps:u'],['AVpl:y','DSpl:u'],['AVpc:y','DSpc:u'],['TFr:y','DSr:u']);
+   for(let k=1;k<=N;k++){const y=1170+60*(k-1);comps.push(C('ML'+k,'MEAS',510,y,{src:'L'+k,qty:'I'},{label:'i_L'+k}),avg('AV'+k,620,y,'⟨i_L'+k+'⟩'),C('DS'+k,'DISP',730,y,{dig:5},{label:'⟨i_L'+k+'⟩ (A)'}));
+    wires.push(['ML'+k+':y','AV'+k+':u'],['AV'+k+':y','DS'+k+':u'],['ML'+k+':y','EXpc:i'+k]);}
+   const panes=[[['Y:MV','v_bus'],['Y:AVv','⟨v_bus⟩ ανά T'],['Y:VREF','V_ref']],[['Y:AVps','P_πηγής'],['Y:AVpl','P_φορτίου'],['Y:AVpc','P_μετατροπέα']],
+    [['Y:EXl','I*_k'],...[1,2,3,4].map(k=>['Y:AV'+k,'⟨i_L'+k+'⟩'])],[...[1,2,3,4].map(k=>['I:L'+k,'i_L'+k])]];
+   return project(comps,wires,{sim:{hDiv:100,speed:400,stopT},scope:{panes,window:{unit:'T',n:Math.round(stopT*fs)}},
+    meta:{side:lo?'lo':'hi',test,vs,gain,Vsrc,Rs,Cb,esr,fs,T:Tsw,L,N,In,Iol,Tol,Vref,Vst,P0,Pd,band,prof,stopT,Is,Ps,G:g.G,Kpv:g.Kp,Kiv:g.Ki,wv:g.wv,a:cc.a,b:cc.b,kp:cc.kp,ki:cc.ki,D0,dI,rows}});}});
  // ------------------------------------------------------------------ empty
  // ------------------------------------------------------------------ 3.0: current loop from signal blocks
  T.push({id:'blocks_loop',group:'Μπλοκ σημάτων (3.0)',title:'Βρόχος ρεύματος από μπλοκ',theory:'formula',topology:'blocks_loop',

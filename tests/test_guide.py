@@ -161,6 +161,21 @@ class Guide(unittest.TestCase):
             said = re.search(r'Τυπώνει:\n\n```\n(.*?)```', sec, re.S).group(1).strip()
             self.assertEqual(r.stdout.strip(), said)
 
+    def test_the_python_example_of_5_0_18_runs_as_written(self):
+        # §57: the grid-forming station of hvdc_gfm in RMS: an island with droop, a weak grid with PSC, an island with a second unit
+        bl = blocks('5.0.18')
+        self.assertEqual(len(bl), 1)
+        head, code = bl[0]
+        self.assertTrue(head.startswith('57. '), head)
+        text = (ROOT / 'docs' / 'GUIDE.md').read_text(encoding='utf-8')
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING='utf-8', PCL_HOME=d)
+            r = subprocess.run([sys.executable, '-c', code], cwd=d, env=env, capture_output=True, text=True, encoding='utf-8', timeout=900)
+            self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+            sec = [q for q in re.split(r'(?m)^## ', text) if q.startswith('57. ')][0]
+            said = re.search(r'Τυπώνει:\n\n```\n(.*?)```', sec, re.S).group(1).strip()
+            self.assertEqual(r.stdout.strip(), said)
+
     def test_the_python_example_of_5_0_17_runs_as_written(self):
         # §55: the stations with the terminal n off the ground: hvdc_mmc, its cable as a line of two poles, two events in RMS
         bl = blocks('5.0.17')
