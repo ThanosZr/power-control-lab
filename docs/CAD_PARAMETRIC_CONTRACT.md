@@ -34,6 +34,10 @@ Tests: python -m unittest experiments.cad_t003.test_document experiments.cad_t00
 
 Run 45731477841 at e8003d0: unit and Octave success; UI failed before the T007 browser test. T003/T004 23 passed, T005 two failed, T007 one error; native worker stderr was discarded. Fresh dependency resolution selected ocp-gordon 0.3.1 with cadquery-ocp-proxy 8.0.1.1.0 alongside pinned OCP 7.8.1.1.post1. Incompatibility is a hypothesis, not a proven root cause. Pin the older compatible-intended dependency set in a CAD-only venv; add import and real native demo preflights, preserve child stderr in the local terminal/CI (not HTTP response), keep all tests and verify the new SHA. No production dependency changes. Local native reproduction unavailable; final CI decides.
 
+## Final certification (26/11/2026)
+
+Remote HEAD `ebf74a85cdef5d1e617412098c881956dfc8d599` verified against [CI 45738308465 attempt 2](https://github.com/ThanosZr/power-control-lab/actions/runs/45738308465/attempts/2), completed/success, 4/4 jobs and dedicated T006/T007 steps successful. Attempt 1 had only unchanged PCL speed_flow tutorial sampling failure (379 ms >250 ms), not a CAD failure; retry succeeded without engine or threshold change. Local continuation reproduced all 26 Python reference tests with real OCCT, 7/7 viewport Node tests and CODEMAP/API 947, 24/24 engine regression. T008 starts from this exact certified commit; no integration or private gate claim.
+
 ## Opus/Fable independent review (not delegated)
 
 - Opus: integration and session ownership across current engine console, document lifecycle, dock/inspector, shared scheduler and privacy gates; do not merge before both private gates.

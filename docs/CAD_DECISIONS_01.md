@@ -58,6 +58,8 @@
 
 - **CAD-D033 — 26/11/2026:** Εγκρίθηκε CAD-T007/SOL στο lab-cad-0.7.0-parametric, GUI/Python parameter editing, native geometry rebuild, undo/redo, save/open, απομονωμένη ανάπτυξη και δημοσίευση στο νέο branch. Οι δύο ιδιωτικές πύλες πριν από ενσωμάτωση στο PCL παραμένουν υποχρεωτικές. Καμία main/base αλλαγή. Opus/Fable review καταγράφεται χωρίς ανάθεση.
 
+- **CAD-D034 — 26/11/2026:** Εγκρίθηκε T008/SOL χωρίς subagents, μόνο μετά από πιστοποίηση πραγματικού T007 HEAD 4/4. Επαληθεύθηκε `ebf74a85cdef5d1e617412098c881956dfc8d599`, CI 45738308465 attempt 2 success. Απομονωμένο sketch/constraint reference με γραμμές/κύκλους, γεωμετρικούς/διαστατικούς περιορισμούς, rank/DoF, atomic failed solve, deterministic API και μικρό GUI· publish μόνο στο lab-cad-0.8.0-sketch, με additive dedicated CI. Όχι αλλαγή engine, thresholds, main ή bypass ιδιωτικών πυλών. Opus/Fable review backlog χωρίς ανάθεση. Όχι αυτόματο T009.
+
 ## Ανοιχτά
 
 

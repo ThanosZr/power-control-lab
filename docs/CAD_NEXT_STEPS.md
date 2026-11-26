@@ -1,10 +1,10 @@
 # Power & Control Lab · CAD και custom components
 
-Έκδοση πλάνου: 0.10 · 26/11/2026 · Ιδιοκτήτης: Thanos Zr.
+Έκδοση πλάνου: 0.11 · 26/11/2026 · Ιδιοκτήτης: Thanos Zr.
 
 ## Τρέχουσα κατάσταση
 
-**Ενεργό CAD-T007 / SOL (D033)** στο `lab-cad-0.7.0-parametric`. T007 isolated parametric GUI/Python transactions, native rebuild, undo/redo and save/open; parent T006 `68a465be` / CI 45649705613 (4/4). Final T007 CI required on actual HEAD. No PCL integration; both private gates remain open. [Parametric contract](CAD_PARAMETRIC_CONTRACT.md).
+**Ενεργό CAD-T008 / SOL (D034)** στο `lab-cad-0.8.0-sketch`. T008 isolated sketch constraints, local rank/DoF, atomic solve, shared JS API/GUI. Parent T007 `ebf74a85cdef5d1e617412098c881956dfc8d599` / CI 45738308465 attempt 2 (4/4 certified). Final T008 CI required on actual HEAD. No PCL integration; both private gates remain open. [Sketch contract](CAD_SKETCH_CONTRACT.md).
 
 **Προηγούμενα checkpoints:** T001 στο e997a3d2, CI 45124099619, T002 στο 43f7fe3, CI 45135806207, T003 στο c9fe513, CI 45149843737, T004 στο 1af4de0, CI 45561734591 (4/4). Εγκεκριμένη βάση engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Τα προηγούμενα contract docs παραμένουν ενεργές πηγές.
 
@@ -15,17 +15,17 @@
 | Git ως πηγή συνέχειας | Τα CAD docs συντηρούνται στο docs/ αυτού του branch· [οδηγός ανάγνωσης](CAD_INDEX.md). |
 | Κώδικας και baseline | Ο engine παραμένει 5.0.7. Το README του branch παρουσιάζει τον στόχο CAD tool· αυτό δεν αλλάζει τον runtime. |
 | Ήδη δημοσιευμένα checkpoints | 5660e9b: ανακατασκευή· c169ffc: πολιτική branches· f57d02f: πραγματική ανάκτηση και εμπλουτισμένος χάρτης· f91ac3c: πλήρες CAD πλάνο/README (S009). |
-| CI | T001–T005 πιστοποιημένα 4/4, T005 `fb25e82` / 45599503711· T006 απαιτεί το πραγματικό νέο SHA/CI. Βλ. CAD_STATUS. |
+| CI | T001–T007 πιστοποιημένα 4/4, T007 `ebf74a8` / 45738308465 attempt 2· T008 απαιτεί το πραγματικό νέο SHA/CI. Βλ. CAD_STATUS. |
 | Παράλληλος engine (read-only, S010) | main 5.0.9· lab-5.0.10 στο 2160a13d7180745e80f7f3fefa07788d30b37d1f, CI 45102252449 success. Νέα layouts/δεύτερη οθόνη, όχι νέα βάση CAD. Βλ. [χάρτη](CAD_INTEGRATION_MAP.md#cad-s010-coordination-with-the-5010-workspace-changes). |
-| Τοπικοί έλεγχοι αυτής της συνέχειας | T003–T005 25/25 Python tests, T006 7/7 Node tests, native demo/fixture, CODEMAP/API 947 PASS· real browser smoke στο CAD-conditional existing UI CI job. |
+| Τοπικοί έλεγχοι αυτής της συνέχειας | T003–T007 26/26 real OCCT Python tests, T006 7/7 + T008 13/13 Node, engine regression 24/24, CODEMAP/API 947 PASS· real browser smoke στο CAD-conditional existing UI CI job (pending). |
 | Εκκρεμείς πύλες πριν από CAD υλοποίηση (D024/D026) | Ενεργά engine next-steps/decisions/versions και πραγματικός privacy checker με ιδιωτικά inputs/οδηγίες. Το απομονωμένο συνθετικό spike επιτρέπεται, δεν αποτελούν λυμένες πύλες. |
-| Τωρινή άδεια δημοσίευσης | Δημόσια CAD docs/README, isolated T002 D026 έως T006 D030. Κώδικας ενσωμάτωσης και ιδιωτικά inputs δεν καλύπτονται. |
+| Τωρινή άδεια δημοσίευσης | Δημόσια CAD docs/README, isolated T002–T008 (D034). Κώδικας ενσωμάτωσης και ιδιωτικά inputs δεν καλύπτονται. |
 
-## Επόμενη ενέργεια — κλείσιμο T007 και στάση
+## Επόμενη ενέργεια — κλείσιμο T008 και στάση
 
-1. Επαλήθευσε πραγματικό HEAD, CI 4/4 και T007 native/browser step.
-2. Επόμενο μόνο με νέα έγκριση: προτεινόμενο CAD-T008/C2, isolated sketch/constraint contract· C1 integration, STEP UI exchange και transforms παραμένουν ανοικτά.
-3. Οι δύο ιδιωτικές πύλες πριν από PCL integration παραμένουν υποχρεωτικές. Opus/Fable review στο CAD_PARAMETRIC_CONTRACT.
+1. Επαλήθευσε πραγματικό T008 HEAD, CI 4/4 και T008 Node/browser step.
+2. Επόμενο μόνο με νέα έγκριση: προτεινόμενο CAD-T009/C3 isolated feature history/profile-to-extrude, όχι αυτόματη έναρξη. C1 integration, STEP UI exchange και transforms παραμένουν ανοικτά.
+3. Οι δύο ιδιωτικές πύλες πριν από PCL integration παραμένουν υποχρεωτικές. Opus/Fable review στο CAD_SKETCH_CONTRACT.
 
 Το [CAD_PLAN_DETAILS.md](CAD_PLAN_DETAILS.md) εξειδικεύει τα στάδια, τις εξαρτήσεις, την απόδοση, τις δοκιμές και το πρωτόκολλο ενσωμάτωσης. Οι παρακάτω πίνακες είναι το ενεργό πλάνο προϊόντος, όχι κατάλογος υλοποιημένων δυνατοτήτων.
 
@@ -86,6 +86,8 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 | CAD-T005 | SOL | Μία native πράξη δημιουργίας σώματος από το API, στο background, με έλεγχο αποτελέσματος. |
 | CAD-T006 | SOL | Ένα 3D panel στην υπάρχουσα αισθητική, με camera/selection/resize/docking. |
 | CAD-T007 | SOL | Μία αλλαγή διαστάσεων από GUI και Python με ίδιο αποτέλεσμα, undo και save/open. |
+| CAD-T008 | SOL | Isolated C2 reference: sketch entities, geometric/dimensional constraints, DoF/rank, atomic failure, deterministic API and browser demo. |
+| CAD-T009 (πρόταση) | SOL/ASTRA | Isolated C3 feature history/profile-to-extrude, μόνο μετά από πιστοποίηση T008 και νέα άδεια. |
 
 Η σειρά επανεκτιμάται με πραγματικά ευρήματα. Μην ξεκινάς ASTRA υποβήμα χωρίς να έχει ο χρήστης την ευκαιρία να επιλέξει μοντέλο. Δεν αναθέτεις αυτόματα σε δεύτερους agents.
 
@@ -105,4 +107,4 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 
 ## Μήνυμα συνέχειας
 
-Από `lab-cad-0.7.0-parametric`, επιβεβαίωσε πραγματικό HEAD και CI στο Git. Διάβασε README, CAD_INDEX, CAD_STATUS, CAD_PARAMETRIC_CONTRACT και ενεργά CAD docs. Με νέα έγκριση, CAD-T008/C2 isolated sketch/constraint contract, χωρίς PCL integration. Engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51 αμετάβλητη. Δύο ιδιωτικές πύλες πριν από ενσωμάτωση, καμία main αλλαγή. Νέο branch ανά έκδοση, διπλή επαλήθευση, Git-first.
+Από `lab-cad-0.8.0-sketch`, επιβεβαίωσε πραγματικό HEAD, CI 4/4 και dedicated T008 step στο Git. Διάβασε README, CAD_INDEX, CAD_STATUS, CAD_SKETCH_CONTRACT και ενεργά CAD docs. Με νέα έγκριση, προτεινόμενο CAD-T009/C3, χωρίς PCL integration. Engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51 αμετάβλητη. Δύο ιδιωτικές πύλες πριν από ενσωμάτωση, καμία main αλλαγή. Νέο branch ανά έκδοση, διπλή επαλήθευση, Git-first.

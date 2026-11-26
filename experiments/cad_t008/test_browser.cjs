@@ -1,0 +1,22 @@
+const assert=require('node:assert/strict');
+const http=require('node:http'),fs=require('node:fs'),path=require('node:path');
+const {chromium}=require('playwright');
+const files=new Map([['/','index.html'],['/app.mjs','app.mjs'],['/sketch.mjs','sketch.mjs']]);
+const server=http.createServer((req,res)=>{const file=files.get(req.url);if(!file){res.writeHead(404).end();return}res.writeHead(200,{'Content-Type':file.endsWith('.mjs')?'text/javascript':'text/html'});fs.createReadStream(path.join(__dirname,file)).pipe(res)});
+(async()=>{let browser;
+  try{await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+    const page=await browser.newPage({viewport:{width:1000,height:760}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+    await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='ready');
+    const read=id=>page.locator('#'+id).textContent(),drawing=()=>page.locator('#view').innerHTML();
+    assert.equal(await read('dof'),'0');assert.equal(await read('revision'),'0');const before=await drawing();
+    await page.locator('#width').fill('110');await page.locator('#radius').fill('15');await page.getByRole('button',{name:'Apply constraints'}).click();
+    assert.equal(await read('revision'),'1');assert.notEqual(await drawing(),before);assert.ok(Math.abs(+await page.locator('[data-id=hole]').getAttribute('r')-15)<1e-6);
+    const valid=await drawing();await page.locator('#conflict').check();await page.getByRole('button',{name:'Apply constraints'}).click();
+    assert.equal(await page.locator('#status').getAttribute('data-state'),'error');assert.equal(await read('revision'),'1');assert.equal(await drawing(),valid);
+    await page.locator('#conflict').uncheck();await page.locator('#free').check();await page.getByRole('button',{name:'Apply constraints'}).click();
+    assert.equal(await read('revision'),'2');assert.equal(await read('dof'),'1');assert.match(await read('status'),/underconstrained/);
+    await page.locator('#reset').click();assert.equal(await read('revision'),'0');assert.equal(await drawing(),before);assert.deepEqual(errors,[]);
+    fs.mkdirSync('ui-out',{recursive:true});await page.screenshot({path:'ui-out/cad_t008_sketch.png'});console.log('T008 browser: dimensions, rank/DoF, conflict rollback, reset PASS');
+  }finally{if(browser)await browser.close();server.close()}
+})().catch(e=>{console.error(e);process.exitCode=1});

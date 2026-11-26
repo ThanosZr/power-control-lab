@@ -132,6 +132,12 @@ Branch created from exact T006 SHA. Reference code and tests in experiments/cad_
 
 Run 45731477841 at e8003d0 failed in native CAD step (23/26 tests); unit/Octave passed, package skipped. Suspected dependency drift; CAD-only venv and pinned critical dependencies, real import/demo checks and native stderr diagnostics. Browser save/download synchronization improved. No test disabled, no PCL runtime or main writes. New CI required.
 
+## CAD-S019 · 26/11/2026 · SOL · T008
+
+Parent T007 exact remote SHA `ebf74a85cdef5d1e617412098c881956dfc8d599`, CI 45738308465 attempt 2 completed/success, four jobs and T006/T007 dedicated steps passed. Attempt 1 had only unchanged PCL speed_flow sampling failure (379ms >250ms), no gate/engine change. New branch `lab-cad-0.8.0-sketch` from that SHA. Engine 5.0.7 pinned, both private gates unsatisfied.
+
+Isolated C2 implementation and GUI/demo under experiments/cad_t008; contract CAD_SKETCH_CONTRACT, D034. Local Node 13/13 T008 + 7/7 T006, Python 26/26 T003–T007 with real OCCT, engine regression 24/24, CODEMAP/API (947) pass; local Chromium executable unavailable, dedicated real browser smoke included in unchanged four-job CI via additive CAD-only step. Exact final remote tree/CI verification required; no claim of T008 completed until all four and dedicated step successful. Opus/Fable backlog recorded, not delegated. Proposed T009 only with fresh authorization.
+
 ## Πρότυπο επόμενης εγγραφής
 
 ```text

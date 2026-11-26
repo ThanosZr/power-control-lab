@@ -92,6 +92,11 @@ jobs:
           "$CAD_PY" -m experiments.cad_t005.demo
           "$CAD_PY" -m unittest experiments.cad_t003.test_document experiments.cad_t004.test_worker experiments.cad_t005.test_native experiments.cad_t007.test_editor -v
           PYTHON="$CAD_PY" node experiments/cad_t007/test_browser.cjs
+      - name: Isolated CAD sketch and constraints (T008)
+        if: startsWith(github.ref_name, 'lab-cad-') && hashFiles('experiments/cad_t008/sketch.mjs') != ''
+        run: |
+          node --test experiments/cad_t008/test_sketch.mjs
+          node experiments/cad_t008/test_browser.cjs
       - name: Σενάρια στον browser
         run: |
           python run.py --no-browser --port 8765 > server.log 2>&1 &
