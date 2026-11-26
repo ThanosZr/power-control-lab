@@ -1,6 +1,6 @@
 # CAD · εκδόσεις και κατάσταση εργασίας · μέρος 1
 
-**Ενεργή εγγραφή: CAD-S014, αναθεώρηση εγγράφων 0.7 (25/11/2026).** Οι παλιές εγγραφές διατηρούν τις τότε καταστάσεις και οδηγίες τους ως ιστορικό. Για το σημερινό scope διάβασε CAD_STATUS και CAD_INDEX στο ίδιο Git branch.
+**Ενεργή εγγραφή: CAD-S017, αναθεώρηση 0.10 (26/11/2026).** Για scope βλ. CAD_STATUS.
 
 ## CAD-S000 · Αρχικό πλάνο · 22/11/2026
 
@@ -121,6 +121,12 @@
 - Parent T005 `fb25e821419831a109db4b9e5a043e4a9aabad9d` / CI 45599503711 independently verified completed/success, exact SHA, 4/4 jobs. Local tested T005 tree 07f2d1a9e9e6b24d5dcb074667bf085ca7bcd2b9 equals remote tree, author/committer verified; API transfer D031. New branch `lab-cad-0.6.0-viewport`, engine 5.0.7 unchanged.
 - `experiments/cad_t006/`: actual T005 fixture, WebGL2 retained buffers, orbit/pan/zoom/fit, body selection, bounded JSON, resize/context recovery. 7/7 Node tests, 25/25 Python regression, CODEMAP/API 947 PASS. Local browser unavailable; CAD-conditional actual WebGL2 smoke added to existing UI job. Final CI required at actual T006 SHA.
 - Only docs, isolated experiments, CAD-conditional CI step. No integration into PCL, no private inputs, no change to solver/netlib/parts; nethash not applicable. Two private gates still open. Fable backlog in CAD_VIEWPORT_CONTRACT and CAD_NATIVE_ADAPTER. No automatic T007.
+
+## CAD-S017 · 26/11/2026 · SOL · T007
+
+T007 isolated parametric GUI/Python transactions, native rebuild, undo/redo and save/open; parent T006 `68a465be` / CI 45649705613 (4/4). Final T007 CI required on actual HEAD. No PCL integration; both private gates remain open.
+
+Branch created from exact T006 SHA. Reference code and tests in experiments/cad_t007, contract in CAD_PARAMETRIC_CONTRACT. Local clone DNS blocked; native/browser tests added to existing UI CI, pending final CI verification. No private inputs or engine changes.
 
 ## Πρότυπο επόμενης εγγραφής
 

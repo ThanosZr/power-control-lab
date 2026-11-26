@@ -1,10 +1,10 @@
 # Power & Control Lab · CAD και custom components
 
-Έκδοση πλάνου: 0.9 · 25/11/2026 · Ιδιοκτήτης: Thanos Zr.
+Έκδοση πλάνου: 0.10 · 26/11/2026 · Ιδιοκτήτης: Thanos Zr.
 
 ## Τρέχουσα κατάσταση
 
-**Ενεργό CAD-T006 / SOL (D030)** στο `lab-cad-0.6.0-viewport`: [native adapter T005](CAD_NATIVE_ADAPTER.md), [viewport T006](CAD_VIEWPORT_CONTRACT.md). T005 δημοσιευμένο `fb25e821419831a109db4b9e5a043e4a9aabad9d` / CI 45599503711. T006 isolated WebGL2, camera, selection, retained buffers, resize, native fixture. Καμία ενσωμάτωση PCL. Τελικό CI στο πραγματικό HEAD κάθε branch.
+**Ενεργό CAD-T007 / SOL (D033)** στο `lab-cad-0.7.0-parametric`. T007 isolated parametric GUI/Python transactions, native rebuild, undo/redo and save/open; parent T006 `68a465be` / CI 45649705613 (4/4). Final T007 CI required on actual HEAD. No PCL integration; both private gates remain open. [Parametric contract](CAD_PARAMETRIC_CONTRACT.md).
 
 **Προηγούμενα checkpoints:** T001 στο e997a3d2, CI 45124099619, T002 στο 43f7fe3, CI 45135806207, T003 στο c9fe513, CI 45149843737, T004 στο 1af4de0, CI 45561734591 (4/4). Εγκεκριμένη βάση engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Τα προηγούμενα contract docs παραμένουν ενεργές πηγές.
 
@@ -21,11 +21,11 @@
 | Εκκρεμείς πύλες πριν από CAD υλοποίηση (D024/D026) | Ενεργά engine next-steps/decisions/versions και πραγματικός privacy checker με ιδιωτικά inputs/οδηγίες. Το απομονωμένο συνθετικό spike επιτρέπεται, δεν αποτελούν λυμένες πύλες. |
 | Τωρινή άδεια δημοσίευσης | Δημόσια CAD docs/README, isolated T002 D026 έως T006 D030. Κώδικας ενσωμάτωσης και ιδιωτικά inputs δεν καλύπτονται. |
 
-## Επόμενη ενέργεια — κλείσιμο T006 και στάση
+## Επόμενη ενέργεια — κλείσιμο T007 και στάση
 
-1. Διάβασε CAD_STATUS/CAD_VIEWPORT_CONTRACT και remote HEAD. Επιβεβαίωσε ακριβές CI T005 και T006 και runtime integrity, χωρίς main/base αλλαγή.
-2. Επόμενο μόνο με νέα έγκριση: CAD-T007 / SOL, isolated GUI + Python αλλαγή διαστάσεων, revision, undo/save/open και native regeneration προς viewport. Μην ενσωματώσεις runtime πριν από τις δύο ιδιωτικές πύλες.
-3. Κανόνας D023: όχι επανάληψη αναζητήσεων παλιών αρχείων. Fable review στα CAD_KERNEL_EVALUATION, CAD_DOCUMENT_CONTRACT, CAD_WORKER_CONTRACT, CAD_NATIVE_ADAPTER και CAD_VIEWPORT_CONTRACT, χωρίς αυτόματη ανάθεση.
+1. Επαλήθευσε πραγματικό HEAD, CI 4/4 και T007 native/browser step.
+2. Επόμενο μόνο με νέα έγκριση: προτεινόμενο CAD-T008/C2, isolated sketch/constraint contract· C1 integration, STEP UI exchange και transforms παραμένουν ανοικτά.
+3. Οι δύο ιδιωτικές πύλες πριν από PCL integration παραμένουν υποχρεωτικές. Opus/Fable review στο CAD_PARAMETRIC_CONTRACT.
 
 Το [CAD_PLAN_DETAILS.md](CAD_PLAN_DETAILS.md) εξειδικεύει τα στάδια, τις εξαρτήσεις, την απόδοση, τις δοκιμές και το πρωτόκολλο ενσωμάτωσης. Οι παρακάτω πίνακες είναι το ενεργό πλάνο προϊόντος, όχι κατάλογος υλοποιημένων δυνατοτήτων.
 
@@ -105,14 +105,4 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 
 ## Μήνυμα συνέχειας
 
-~~~text
-ThanosZr/power-control-lab, branch lab-cad-0.6.0-viewport. T005 native adapter στο fb25e821419831a109db4b9e5a043e4a9aabad9d / CI 45599503711. T006 isolated WebGL2 viewport ολοκληρώνεται με επιτυχές CI στο τελικό HEAD. Επόμενη εργασία μόνο με νέα ρητή εντολή: CAD-T007/SOL, isolated GUI/Python edit dimensions, native rebuild, undo/save/open. Δούλεψε με Git και απαραίτητα νέα ιδιωτικά inputs, όχι ZIP ή προηγούμενο workspace.
-Βάση engine 5.0.7: dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Εξακρίβωσε το πραγματικό σημερινό CAD HEAD και το CI του από το Git, χωριστά από τη βάση.
-Διάβασε README.md, docs/CAD_INDEX.md, CAD_STATUS, CAD_WORKER_CONTRACT, CAD_DOCUMENT_CONTRACT, CAD_KERNEL_EVALUATION, CAD_BASELINE, CAD_INTEGRATION_MAP, CAD_PROJECT_INSTRUCTIONS, CAD_NEXT_STEPS, CAD_PLAN_DETAILS και τελευταίες αποφάσεις/εκδόσεις/πηγές.
-Τα πραγματικά CAD-S007 drafts έχουν ανακτηθεί. Revision 0.9 στο Git· OCCT/build123d, child process T005, retained WebGL2 T006, χωρίς Three.js. 25 Python και 7 Node isolated tests, browser smoke στην υπάρχουσα UI CI. Fable review στα πέντε contract/evaluation docs. Συντήρησε εκεί τα αρχεία χωρίς συνεχείς αναρτήσεις.
-Κανόνας D023: μην επαναλαμβάνεις αναζητήσεις σε προηγούμενες συνομιλίες, Library, ZIP ή παλιό workspace. Διάβασε μόνο το κανονικό Git handoff και τυχόν νέο ιδιωτικό input που ο ιδιοκτήτης παρέχει ρητά. Κάθε δημοσιεύσιμο στοιχείο που χρειάζεται η συνέχεια πρέπει να βρίσκεται ήδη στα κανονικά Git docs, μαζί με συγκεκριμένα refs/εκκρεμότητες.
-Παραμένουν εκκρεμή τα ενεργά engine next-steps/decisions/versions και ο πραγματικός privacy checker με ιδιωτικά inputs και οδηγίες. Πριν από υλοποίηση στο PCL είναι υποχρεωτικά. D026/D028–D030 καλύπτουν μόνο τις αντίστοιχες απομονωμένες εργασίες T002–T006. Δεν έχουν εκτελεστεί οι ιδιωτικοί έλεγχοι, ούτε επιτρέπεται δημοσίευση ιδιωτικών inputs. Η εξέλιξη engine στηρίζεται στο repo 5.0.7 (D025).
-Μελλοντικός σχεδιασμός: portable GPU compute, εξειδικευμένος retained renderer χωρίς Three.js, motion/robotics, AI/PINNs προς αξιολόγηση, χωριστά simulation/presentation clocks. Δεν υλοποιήθηκαν στο T002.
-Κάθε νέα CAD έκδοση σε νέο lab-cad-<έκδοση>-<θέμα>, ενδιάμεσα commits ίδιας έκδοσης στο ίδιο branch. Κανένα main/engine write ή αναβάθμιση βάσης.
-Commit/push όταν καλύπτονται οι αντίστοιχες προϋποθέσεις, με Thanos Zr author/committer χωρίς model attribution. Κατάλληλοι τοπικοί έλεγχοι και ενεργή αναμονή CI στο νέο τελικό SHA. Κλείσε με αποτέλεσμα και ακριβές handoff.
-~~~
+Από `lab-cad-0.7.0-parametric`, επιβεβαίωσε πραγματικό HEAD και CI στο Git. Διάβασε README, CAD_INDEX, CAD_STATUS, CAD_PARAMETRIC_CONTRACT και ενεργά CAD docs. Με νέα έγκριση, CAD-T008/C2 isolated sketch/constraint contract, χωρίς PCL integration. Engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51 αμετάβλητη. Δύο ιδιωτικές πύλες πριν από ενσωμάτωση, καμία main αλλαγή. Νέο branch ανά έκδοση, διπλή επαλήθευση, Git-first.

@@ -59,3 +59,7 @@ T002 (D026–D027) — [CAD_KERNEL_EVALUATION](CAD_KERNEL_EVALUATION.md) και 
 - **MCU/code generation:** επίσημο reference manual/SDK του target και τεκμηρίωση toolchain αφού οριστεί πλακέτα/MCU.
 
 Για την πρώτη τεχνική διερεύνηση δεν απαιτείται αγορά ή ανέβασμα βιβλίου. Αν κάποια πηγή χρειαστεί και δεν είναι δημόσια διαθέσιμη, ζητείται τότε με ακριβή τίτλο, έκδοση/κεφάλαιο και τον λόγο χρήσης της. Ιδιωτικές πηγές δεν αντιγράφονται στο GitHub.
+
+## CAD-T007 source register
+
+- Parent T006 `68a465be4df460e7918fa0d849a0bddc8f931a8d`, CI [45649705613](https://github.com/ThanosZr/power-control-lab/actions/runs/45649705613) verified exact SHA and 4/4. Reused actual T003/T004/T005/T006 contracts and source from Git; [T007 contract](CAD_PARAMETRIC_CONTRACT.md). No private inputs obtained or published.

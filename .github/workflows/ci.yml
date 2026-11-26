@@ -81,6 +81,12 @@ jobs:
         run: |
           node --test experiments/cad_t006/test_viewport.mjs
           node experiments/cad_t006/test_browser.cjs
+      - name: Isolated CAD parametric native + GUI (T007)
+        if: startsWith(github.ref_name, 'lab-cad-') && hashFiles('experiments/cad_t007/editor.py') != ''
+        run: |
+          pip install 'build123d==0.10.0' 'cadquery-ocp==7.8.1.1.post1'
+          python -m unittest experiments.cad_t003.test_document experiments.cad_t004.test_worker experiments.cad_t005.test_native experiments.cad_t007.test_editor -v
+          node experiments/cad_t007/test_browser.cjs
       - name: Σενάρια στον browser
         run: |
           python run.py --no-browser --port 8765 > server.log 2>&1 &

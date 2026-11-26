@@ -1,8 +1,8 @@
 # CAD · οδηγός πλάνου και ενσωμάτωσης
 
-Αναθεώρηση εγγράφων 0.9 · 25/11/2026. Κανονική θέση: docs/ του lab-cad-0.6.0-viewport, repository ThanosZr/power-control-lab. Ενεργό T006: [CAD_VIEWPORT_CONTRACT](CAD_VIEWPORT_CONTRACT.md) (D030), πάνω στο T005 `fb25e82` / CI 45599503711.
+Αναθεώρηση εγγράφων 0.10 · 26/11/2026 · lab-cad-0.7.0-parametric. T007 isolated parametric GUI/Python transactions, native rebuild, undo/redo and save/open; parent T006 `68a465be` / CI 45649705613 (4/4). Final T007 CI required on actual HEAD. No PCL integration; both private gates remain open.
 
-**CAD-T005/T006: isolated native geometry and viewport (D030), SOL, χωρίς subagents.** T001 κλειστό στο e997a3d2 / CI 45124099619, T002 στο 43f7fe3 / CI 45135806207, T003 στο c9fe513 / CI 45149843737, T004 στο 1af4de0 / CI 45561734591. Βάση engine 5.0.7: dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Δεν ενσωματώθηκε CAD runtime.
+**CAD-T007:** [Parametric editing](CAD_PARAMETRIC_CONTRACT.md).
 
 ## Σειρά ανάγνωσης
 
@@ -17,6 +17,7 @@
 | 4c | [CAD_WORKER_CONTRACT.md](CAD_WORKER_CONTRACT.md) | T004: revision/session, bounded scheduler, cache, cancellation, tests και Fable review. |
 | 4d | [CAD_NATIVE_ADAPTER.md](CAD_NATIVE_ADAPTER.md) | T005: πραγματικό BRep, child process, native mesh, tests και Fable review. |
 | 4e | [CAD_VIEWPORT_CONTRACT.md](CAD_VIEWPORT_CONTRACT.md) | T006: retained WebGL2, camera, selection, smoke/test και Fable review. |
+| 4f | [CAD_PARAMETRIC_CONTRACT.md](CAD_PARAMETRIC_CONTRACT.md) | T007: transactional native edit, history, save/open and review. |
 | 5 | [CAD_INTEGRATION_MAP.md](CAD_INTEGRATION_MAP.md) | Υπάρχων pinned κώδικας, σημεία επαφής, απόδοση, workers, persistence και playback boundaries. |
 | 6 | [CAD_BASELINE.md](CAD_BASELINE.md) | SHA/tree, ακριβή αποτελέσματα/περιορισμοί ελέγχων και προέλευση των drafts. |
 | 7 | [CAD_DECISIONS_01.md](CAD_DECISIONS_01.md) | Ιστορικό απαιτήσεων, προτάσεων και μεταγενέστερων αποφάσεων με σταθερά IDs. |

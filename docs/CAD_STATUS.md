@@ -1,12 +1,12 @@
 # CAD: active handoff
 
-Updated 2026-11-25; documentation revision 0.9, CAD-S016. **Active: T006, lab-cad-0.6.0-viewport (D030).** See [native adapter](CAD_NATIVE_ADAPTER.md) and [viewport contract](CAD_VIEWPORT_CONTRACT.md). Local 25/25 isolated Python and 7/7 Node tests; existing UI CI includes CAD-only real browser smoke. Final remote CI required for closure. Both private integration gates remain open.
+Updated 2026-11-26; revision 0.10, CAD-S017. **Active T007, lab-cad-0.7.0-parametric.** T007 isolated parametric GUI/Python transactions, native rebuild, undo/redo and save/open; parent T006 `68a465be` / CI 45649705613 (4/4). Final T007 CI required on actual HEAD. No PCL integration; both private gates remain open. [Contract](CAD_PARAMETRIC_CONTRACT.md).
 
 ## Scope and pinned state
 
-- Task: **CAD-T005 and T006 — isolated native process and viewport (D030)**, with SOL and no subagents. Final closure requires CI at exact published SHAs.
+- Task: CAD-T007 isolated editing (D033); SOL, no subagents.
 - Repository: ThanosZr/power-control-lab.
-- Branch: lab-cad-0.6.0-viewport; parent checkpoint lab-cad-0.5.0-native `fb25e821419831a109db4b9e5a043e4a9aabad9d`, CI 45599503711 independently verified completed/success, 4/4. T004 `1af4de0fba3f2b20ffd4c16cb276df6b9323d9aa` / 45561734591 verified 4/4.
+- Branch: lab-cad-0.7.0-parametric; parent T006 68a465be4df460e7918fa0d849a0bddc8f931a8d / CI 45649705613, exact SHA and 4/4 verified.
 - Approved engine source: **5.0.7**, dab82e5ff2e6da4bde09e4a38aab32edfffe6d51.
 - Keep the approved base, main and engine branches unchanged. Do not integrate CAD runtime. Isolated WebGL2 viewport using actual native mesh only; no final GPU backend selection.
 - Author and committer: Thanos Zr, 85298380+ThanosZr@users.noreply.github.com.
@@ -87,6 +87,4 @@ The full plan and map describe what existing engine infrastructure can be reused
 
 ## Next action and delivery
 
-Verify both exact T005 and T006 final remote SHAs/CI. Next separately authorized task: CAD-T007, isolated GUI/Python edit dimensions, native regeneration and undo/save/open. Keep SOL per owner unless explicitly changed. No implementation in PCL until (1) current engine next-steps/decisions/version handoff beyond 5.0.5 and coordination branch, and (2) actual privacy checker, instructions and required private inputs. Do not re-search old files or publish private material; no base upgrade/main write and no automatic T007. Fable optimization backlog in five contract/evaluation docs, no automatic delegation.
-
-The branch README/index and CAD_NEXT_STEPS contain the continuation instructions. A final response must provide the real published SHA/run after CI. A document cannot contain its own resulting commit hash; do not create an endless chain of commits solely to record that same commit's CI.
+Confirm actual T007 HEAD, four CI jobs and dedicated T007 native/browser step. Local checkout blocked by DNS; no local native/browser verification claimed. Proposed next CAD-T008/C2 sketch constraint contract only with new authorization. Both private gates mandatory before PCL integration; no main/base change. Opus/Fable backlog in CAD_PARAMETRIC_CONTRACT.
