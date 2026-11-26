@@ -454,7 +454,22 @@ class ApiSurface(unittest.TestCase):
             self.assertTrue(api_surface.experimental('pcl', k), k)
         self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][-1], 'modes')
         self.assertEqual(self.now['pcl']['pcl.network.Network.acdc_flow']['params'], ['method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits'])
-        self.assertEqual(sum(len(v) for v in self.now.values()), 1050)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 1050)
+
+    def test_the_surface_of_5_1_6(self):
+        """5.1.6: the LCC link, continued: the tap changers in the steady state (pcl.lcc.tap_step, operating_point_taps), two new
+        points, experimental; consts with the tap positions (n); the losses, the tap changers, the commutation failure and the half
+        steps of backward Euler as data of the stations and of the device (no new parameter of Network.dynamic or of acdc_flow);
+        the model of the drawing stays at version 5."""
+        from pcl import model
+        self.assertEqual(model.VERSION, 5)
+        for k in ('pcl.lcc.tap_step', 'pcl.lcc.operating_point_taps'):
+            self.assertIn(k, self.now['pcl'])
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+        self.assertEqual(self.now['pcl']['pcl.lcc.consts']['params'], ['e', 'Ur', 'Ui', 'n'])
+        self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][-1], 'modes')
+        self.assertEqual(self.now['pcl']['pcl.network.Network.acdc_flow']['params'], ['method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits'])
+        self.assertEqual(sum(len(v) for v in self.now.values()), 1052)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

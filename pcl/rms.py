@@ -2016,7 +2016,12 @@ class HVDC(_Holds, Kind):
 # current and of γ of the inverter (with their α_min and the α_max of the inverter), the floor of the error of γ (°), the
 # filter of the VDCOL T_v, and the bandwidth of the firing PLLs (Hz; 0: the valves fire on the bus voltage itself)
 LCC_DEFAULTS = {'Tid': 1.2e-3, 'KpR': 1.0989, 'TiR': 0.01092, 'amaxR': 150.2, 'KpI': 0.63, 'TiI': 0.01524, 'aminC': 70.0,
-                'KpG': 0.7506, 'TiG': 0.0544, 'aminG': 90.0, 'amaxI': 150.2, 'gemin': -31.17, 'Tv': 0.02, 'bw': 1.125}
+                'KpG': 0.7506, 'TiG': 0.0544, 'aminG': 90.0, 'amaxI': 150.2, 'gemin': -31.17, 'Tv': 0.02, 'bw': 1.125,
+                'gcf': 7.2, 'dVcf': 0.15, 'Tcf': 0.02, 'cda': 1.0}
+# 5.1.6 (THEORY §8ΩΩΑ): the commutation failure of the inverter, 'cf': 'gamma' (its γ below gcf degrees), 'voltage' (|V| of its
+# bus dV_cf below that of the load flow) or 'off' (5.1.5: the flag only); then the bypass for Tcf s. 'cda': two half steps of
+# backward Euler after the discontinuities of the link (dcfault, dcclear, a commutation failure and its end).
+LCC_CF = ('gamma', 'voltage', 'off')
 
 
 def _acos_c(u):
@@ -2041,19 +2046,28 @@ class LCC(_Holds, Kind):
       larger β; every integral within its output range (the INT with limits of the EMT: holds). The γ of the inverter is
       that of its α at this instant (the EMT filters it by about one pulse, 0,27 ms): the loop γ → β → α → γ is solved in
       the evaluation (_beta_inv).
-    One member; the states in the order of self.states. The buses: (rectifier, inverter)."""
+    One member; the states in the order of self.states. The buses: (rectifier, inverter).
+    5.1.6 (THEORY §8ΩΩΑ): the commutation failure of the inverter (cf, decided at the start of a step: the bypass for T_cf), two
+    half steps of backward Euler after the jumps of the link (cda), the losses of the stations between bridge and terminal
+    ((10.57)–(10.58)), and the tap positions with their tap changers (oltc: a step after T out of the band)."""
     multi = True
 
     def __init__(self, net, e, pt, data, Sb, idx, wb):
         from . import lcc as lccmod
         self.e, self.Sb, self.wb = e, Sb, wb
         data = dict(data or {})
+        self.cf = str(data.pop('cf', 'gamma'))                     # 5.1.6: the commutation failure of the inverter
+        if self.cf not in LCC_CF:
+            raise RMSError(f'{e["name"]}: cf is one of {", ".join(LCC_CF)}, not {self.cf!r}')
         bad = set(data) - set(LCC_DEFAULTS)
         if bad:
             raise RMSError(f'{e["name"]}: unknown data {", ".join(sorted(bad))} (pcl.rms.LCC_DEFAULTS)')
         d = {q: _num(data, q, v) for q, v in LCC_DEFAULTS.items()}
         if min(d['Tid'], d['Tv'], d['TiR'], d['TiI'], d['TiG']) <= 0 or d['bw'] < 0:
             raise RMSError(f'{e["name"]}: the time constants above zero, the bandwidth not below zero')
+        if not (0 <= d['gcf'] < 90 and 0 < d['dVcf'] < 1 and d['Tcf'] > 0):
+            raise RMSError(f'{e["name"]}: gcf in [0, 90) degrees, dVcf in (0, 1), Tcf above zero')
+        self.cda = d['cda'] > 0
         U = (net.buses[e['rec']]['Un'], net.buses[e['inv']]['Un'])
         k = lccmod.consts(e, *U)
         Zdn = k['Zdn']
@@ -2070,7 +2084,14 @@ class LCC(_Holds, Kind):
              'V1': e['V1'], 'V2': max(e['V2'], e['V1'] + 1e-6), 'I1': e['I1'], 'I2': e['I2'],
              'loR': math.pi - d['amaxR'] * D_, 'hiR': math.pi - e['amin'] * D_, 'loI': math.pi - d['amaxI'] * D_,
              'hiC': math.pi - d['aminC'] * D_, 'hiG': math.pi - d['aminG'] * D_, 'gl': d['gemin'] * D_}
-        p.update({q: d[q] for q in ('Tid', 'KpR', 'TiR', 'KpI', 'TiI', 'KpG', 'TiG', 'Tv', 'bw')})
+        p.update({q: d[q] for q in ('Tid', 'KpR', 'TiR', 'KpI', 'TiI', 'KpG', 'TiG', 'Tv', 'bw', 'dVcf', 'Tcf')})
+        p['gcf'] = d['gcf'] * D_
+        # 5.1.6: the losses (10.57)–(10.58) on the DC side, and the tap positions with their tap changers (THEORY §8ΩΩΑ)
+        p['req'], p['vdrop'] = np.array([k['r']['req'], k['i']['req']]), np.array([k['r']['vdrop'], k['i']['vdrop']])
+        self.loss = bool(np.any(p['req'] > 0) or np.any(p['vdrop'] > 0))
+        self.n0 = np.array([k['r']['n'], k['i']['n']])
+        self.base = {q: p[q] / self.n0 ** sgn for q, sgn in (('vd0', 1), ('km', -1), ('ki', 1))}
+        self.oltc = {sd: e[sd]['oltc'] for sd in ('r', 'i') if e[sd].get('oltc')}
         wn = 2 * math.pi * d['bw']
         p['Kp'], p['Ki'] = 2 * 0.7071 * wn, wn * wn                 # the PLL of the EMT (ζ = 0,7071)
         if not (p['loR'] < p['hiR'] and p['loI'] < p['hiC'] and p['loI'] < p['hiG']):
@@ -2086,7 +2107,72 @@ class LCC(_Holds, Kind):
 
     def _reset(self):
         self.p['on'], self.p['dI_ev'], self.p['gf'] = 1.0, 0.0, 0.0
+        self.p['cfon'], self.p['cft'] = 0.0, -math.inf             # 5.1.6: in a commutation failure, and until when
         self._zero = []
+        if hasattr(self, 'n0'):                                     # 5.1.6: the taps of the load flow, their timers off
+            self._set_taps(self.n0)
+            self.tq = {sd: math.nan for sd in self.oltc}
+
+    def _set_taps(self, n):
+        """5.1.6: the tap positions n (rectifier, inverter): V_d0 and the current ∝ n, the overlap term ∝ 1/n."""
+        self.n = np.array(n, float)
+        for q, sgn in (('vd0', 1), ('km', -1), ('ki', 1)):
+            self.p[q] = self.base[q] * self.n ** sgn
+
+    def _failing(self, X, Vr, Vi, t):
+        """5.1.6: would the inverter fail to commute now (with the bypass off)? By its γ («Power System Stability and Control»,
+        §10.9.3: «based on the magnitude of commutating voltage or inverter margin (extinction) angle»): 'gamma', γ below g_cf
+        (and where the commutation does not complete); 'voltage', |V| of its bus below (1 − dV_cf) of the load flow."""
+        p = self.p
+        keep, p['cfon'] = p['cfon'], 0.0
+        o = self._core(X, Vr, Vi, t)[3]
+        p['cfon'] = keep
+        if p['on'] <= 0 or float(np.real(o['ii'])) <= 1e-6:
+            return False
+        if self.cf == 'gamma':
+            return bool(o['cf']) or float(np.real(o['gamma'])) < p['gcf']
+        return float(np.real(o['E'][1])) < (1.0 - p['dVcf']) * self.E0
+
+    def _decide(self, X, Vr, Vi, t):
+        """5.1.6: at the start of a step (after the events of that moment): a commutation failure of the inverter starts, or
+        ends after T_cf if it would not fail again then (else one more T_cf); and a tap changer whose quantity has been out of
+        its band for its T moves one step (its timer from there). Returns (changed, the events: 'cf' and 'cfend' with 'by':
+        'cf', 'tap' with 'side' and 'n' and 'by': 'oltc', the later times at which to look again)."""
+        ch, evs, later = self._decide_cf(X, Vr, Vi, t)
+        if self.oltc:
+            o = self._core(X, Vr, Vi, t)[3]
+            for sd, tc in self.oltc.items():
+                j = 0 if sd == 'r' else 1
+                val = float(np.real(o['ar'])) / (math.pi / 180) if tc['ctl'] == 'alpha' else float(np.real(o['vdr'] if j == 0 else o['vdi']))
+                lo, hi = tc['band']
+                d = (-1 if val > hi else 1 if val < lo else 0) if tc['ctl'] == 'alpha' else (1 if val < lo else -1 if val > hi else 0)
+                new = min(tc['nmax'], max(tc['nmin'], round(float(self.n[j]) + d * tc['step'], 10)))
+                if not d or new == self.n[j] or self.p['on'] <= 0:
+                    self.tq[sd] = math.nan
+                    continue
+                if math.isnan(self.tq[sd]):
+                    self.tq[sd] = t
+                if t - self.tq[sd] >= tc['T'] - 1e-9:
+                    evs.append({'t': float(t), 'kind': 'tap', 'gen': self.names[0], 'side': sd, 'n': new, 'by': 'oltc'})
+                    self.tq[sd] = t
+                    ch = True
+                later.append(self.tq[sd] + tc['T'])
+        return ch, evs, later
+
+    def _decide_cf(self, X, Vr, Vi, t):
+        p, nm = self.p, self.names[0]
+        if self.cf == 'off':
+            return False, [], []
+        if p['cfon'] > 0:
+            if t < p['cft'] - 1e-12:
+                return False, [], [p['cft']]
+            if self._failing(X, Vr, Vi, t):
+                p['cft'] = t + p['Tcf']
+                return False, [], [p['cft']]
+            return True, [{'t': float(t), 'kind': 'cfend', 'gen': nm, 'by': 'cf'}], []
+        if self._failing(X, Vr, Vi, t):
+            return True, [{'t': float(t), 'kind': 'cf', 'gen': nm, 'by': 'cf', 'why': self.cf}], [t + p['Tcf']]
+        return False, [], []
 
     def _beta_inv(self, bc, xg, grp, dl, kk):
         """The β of the inverter: β = max(β_c, B_g(β)), B_g(β) = clip(K_pG·max(γ_ref′ − γ(β), γ_err,min) + x_g, α limits), γ(β) =
@@ -2170,7 +2256,14 @@ class LCC(_Holds, Kind):
         shr = float(np.real(sh))
         grp = p['gr'] + p['dgc'] * (0 * sh if shr <= 0 else 1 + 0 * sh if shr >= 1 else sh)
         kk = p['km'][1] * ii / Ef[1]
-        bi, gam = self._beta_inv(bc, x[j['xg']], grp, dl[1], kk)
+        cfon = p['cfon'] > 0
+        if cfon:                                            # 5.1.6: in a commutation failure the measured γ is 0 (as the EMT)
+            gam = 0 * kk
+            eg0 = grp - gam
+            bg = _clip(p['KpG'] * (eg0 if float(np.real(eg0)) >= p['gl'] else p['gl'] + 0 * eg0) + x[j['xg']], p['loI'], p['hiG'])
+            bi = bg if float(np.real(bg)) > float(np.real(bc)) else bc
+        else:
+            bi, gam = self._beta_inv(bc, x[j['xg']], grp, dl[1], kk)
         eg = grp - gam
         egf = eg if float(np.real(eg)) >= p['gl'] else p['gl'] + 0 * eg
         ai = np.pi - bi + dl[1]
@@ -2182,6 +2275,11 @@ class LCC(_Holds, Kind):
         vd = p['vd0'] * E * np.cos(A) - p['rc'] * I           # p − n of each (the inverter's negative)
         c, s = _pf_parts(A, mu)
         i1 = p['ki'] * I * (1.0 if on else 0.0)
+        if cfon:                                            # 5.1.6: the bypass: no DC voltage, no AC current at the inverter
+            vd = np.array([vd[0], 0 * vd[1]])
+            i1 = np.array([i1[0], 0 * i1[1]])
+        if self.loss:                                       # 5.1.6: (10.57)–(10.58), from the bridge to the DC terminal
+            vd = vd - p['req'] * I - p['vdrop']
         Ir = -i1 * (c * Vr + s * Vi) / Ef
         Ii = -i1 * (c * Vi - s * Vr) / Ef
         # the DC side, and the valves one way
@@ -2207,8 +2305,8 @@ class LCC(_Holds, Kind):
             r_ = rate if on else 0 * rate
             F[j[key]] = 0 * r_ if hold(key)(_re(x[j[key]]), _re(r_), lo_, hi_) else r_
         o = {'ir': ir, 'ii': ii, 'vm': vm, 'vdr': vd[0], 'vdi': -vd[1], 'ar': ar, 'ai': ai, 'gamma': gam, 'mur': mu[0], 'mui': mu[1],
-             'order': order, 'cc': float(np.real(bc)) >= float(np.real(bi)) - 1e-12, 'cf': float(np.real(u[1])) <= -0.999999,
-             'S': (Vr * Ir + Vi * Ii, Vi * Ir - Vr * Ii), 'E': E, 'dl': dl}
+             'order': order, 'cc': float(np.real(bc)) >= float(np.real(bi)) - 1e-12, 'cf': cfon or float(np.real(u[1])) <= -0.999999,
+             'cfon': cfon, 'S': (Vr * Ir + Vi * Ii, Vi * Ir - Vr * Ii), 'E': E, 'dl': dl}
         return F, Ir, Ii, o
 
     def eval(self, X, Vr, Vi, t):
@@ -2241,9 +2339,10 @@ class LCC(_Holds, Kind):
             x[j['xr']], x[j['xc']], x[j['xg']] = p['hiR'], bi, p['loI']
         else:                                               # the rectifier at α_min, the inverter on its sloped γ
             x[j['xr']], x[j['xg']], x[j['xc']] = p['hiR'], bi, p['loI']
+        Vb = V[self.bus]
         if self.pll:
-            Vb = V[self.bus]
             x[j['thr']], x[j['thi']] = cmath.phase(Vb[0]), cmath.phase(Vb[1])
+        self.E0 = abs(Vb[1])                                # 5.1.6: |V| of the inverter's bus in the load flow
         self._reset()
         self.x_start = x.copy()
         return x[None, :]
@@ -3006,6 +3105,8 @@ class System:
         if lcnet:                                           # 5.1.5: each LCC link one device on its two buses
             from . import lcc as lccmod
             bad = set(stations or {}) - {e['name'] for e in lcnet}
+            if dcnet:                                       # 5.1.6: with the VSC stations, theirs too
+                bad -= {e['name'] for e in net.elements if e['kind'] in ('vsc', 'dcdc', 'dc_source')}
             if bad:
                 raise RMSError('stations: όχι ζεύξεις LCC: ' + ', '.join(sorted(bad)))
             for e in lcnet:
@@ -3326,12 +3427,21 @@ class System:
 
     def _apply(self, ev):
         k = ev['kind']
-        if k in ('iord', 'dcfault', 'dcclear') or (k == 'gen' and self._lcc(str(ev.get('gen'))) is not None):
+        if k in ('iord', 'dcfault', 'dcclear', 'cf', 'cfend', 'tap') or (k == 'gen' and self._lcc(str(ev.get('gen'))) is not None):
             K = self._lcc(str(ev.get('gen')))                   # 5.1.5: an LCC link: its order, a fault at the middle of its line, out
             if K is None:
                 raise RMSError('συμβάν %r: μόνο για μια ζεύξη LCC (gen: το όνομά της), όχι το %r' % (k, ev.get('gen')))
             if k == 'iord':
                 K.p['dI_ev'] = float(ev['dI'])
+            elif k == 'tap':                                    # 5.1.6: a step of a tap changer (from LCC._decide, or by hand)
+                if ev.get('side') not in ('r', 'i'):
+                    raise RMSError("συμβάν 'tap': side 'r' (ανορθωτής) ή 'i' (αντιστροφέας)")
+                n = K.n.copy()
+                n[0 if ev['side'] == 'r' else 1] = float(ev['n'])
+                K._set_taps(n)
+            elif k in ('cf', 'cfend'):                          # 5.1.6: a commutation failure of the inverter (from LCC._decide)
+                K.p['cfon'] = 1.0 if k == 'cf' else 0.0
+                K.p['cft'] = float(ev['t']) + K.p['Tcf'] if k == 'cf' else -math.inf
             elif k == 'gen':
                 K.p['on'] = 0.0
                 K._zero = [K.j[q] for q in (('ir', 'ii') if K.hasC else ('id',))]
@@ -3532,6 +3642,9 @@ class System:
         T, Xs, Vs = [0.0], [x.copy()], [y[:n] + 1j * y[n:]]
         winds = [K for K in self.kinds if isinstance(K, Wind)]   # 5.1.4: their discrete parts at every point of the result
         Ds = [[K._snap() for K in winds]] if winds else None
+        lccs = [K for K in self.kinds if isinstance(K, LCC) and (K.cf != 'off' or K.oltc)]   # 5.1.6: commutation failures, taps
+        decs = winds + lccs
+        cdal = {K.names[0] for K in self.kinds if isinstance(K, LCC) and K.cda}   # 5.1.6: links that damp after their jumps
         wlater = set()
 
         def rec(t, x, y):
@@ -3550,7 +3663,7 @@ class System:
         prot = any(isinstance(K, HVDC) and K.has_prot for K in self.kinds)     # 5.1.1: the protection of the stations
         cda = False                                          # 5.1.1: the next step damps (_step_be2)
         blkd = [K for K in self.kinds if isinstance(K, HVDC)]
-        keys = ('kind', 'gen', 'bus', 'branch', 'dV', 'dP', 'dQ', 'id', 'by', 'why', 'dI', 'R')
+        keys = ('kind', 'gen', 'bus', 'branch', 'dV', 'dP', 'dQ', 'id', 'by', 'why', 'dI', 'R', 'side', 'n')
         while t < t_end - 1e-12:
             while ei < len(evs) and evs[ei]['t'] <= t + 1e-12:
                 if evs[ei]['kind'] == 'tick':                 # 5.0.16: past a jump of an expression: a new start of y and f
@@ -3566,7 +3679,7 @@ class System:
                     continue
                 self._apply(evs[ei])
                 x = self._fix(x)
-                cda = cda or evs[ei]['kind'] in ('block', 'deblock')
+                cda = cda or evs[ei]['kind'] in ('block', 'deblock') or (evs[ei]['kind'] in ('dcfault', 'dcclear') and evs[ei].get('gen') in cdal)
                 done.append({**{k: v for k, v in evs[ei].items() if k in keys}, 't': t, 'i': len(T)})
                 y, ok = self._consistent(x, y, t)
                 if not ok:
@@ -3593,9 +3706,9 @@ class System:
                     f_n, _ = self.fg(x, y, t)
                     lu, hist, hc = None, [], (min(hc, h, h0) if step == 'var' else hc)
                     rec(t, x, y)
-            if winds:                                         # 5.1.4: the flags, timers and protection of the wind turbines
-                chg, acts = False, []
-                for K in winds:
+            if decs:                                          # 5.1.4: the flags, timers and protection of the wind turbines
+                chg, acts = False, []                         # (5.1.6: and the commutation failures of the LCC links)
+                for K in decs:
                     ch, ev_w, later = K._decide(x[K.x0:K.x0 + K.nx * K.m].reshape(K.m, K.nx), y[:n][K.bus], y[n:][K.bus], t)
                     chg, acts = chg or ch, acts + ev_w
                     for tq in later:                          # the step stops there
@@ -3606,6 +3719,7 @@ class System:
                     self._apply(e)
                     done.append({**{k: v for k, v in e.items() if k in keys}, 't': t, 'i': len(T)})
                     st['events'] += 1
+                    cda = cda or (e['kind'] in ('cf', 'cfend') and e.get('gen') in cdal)
                 if chg:
                     y, ok = self._consistent(x, y, t)
                     if not ok:
@@ -4024,9 +4138,9 @@ class System:
             nt, nm = len(r['t']), K.names[0]
             Xs = r['x'][:, K.x0:K.x0 + K.nx]
             Vb = V[:, K.bus]
-            keep = {q: K.p[q] for q in ('on', 'dI_ev', 'gf')}
+            keep = {q: K.p[q] for q in ('on', 'dI_ev', 'gf', 'cfon', 'cft')}
             K._reset()
-            evs = [e for e in r.get('events', ()) if e.get('gen') == nm and e['kind'] in ('iord', 'dcfault', 'dcclear', 'gen')]
+            evs = [e for e in r.get('events', ()) if e.get('gen') == nm and e['kind'] in ('iord', 'dcfault', 'dcclear', 'gen', 'cf', 'cfend', 'tap')]
             cols, ei = {}, 0
             for ti in range(nt):
                 while ei < len(evs) and evs[ei]['i'] <= ti:
@@ -4034,9 +4148,9 @@ class System:
                     ei += 1
                 o = K.outputs(Xs[ti][None, :], Vb[ti].real, Vb[ti].imag, float(r['t'][ti]))
                 vals = {'Ir': o['ir'], 'Ii': o['ii'], 'Vdr': o['vdr'], 'Vdi': o['vdi'], 'Vm': o['vm'], 'alpha_r': o['ar'], 'alpha_i': o['ai'],
-                        'gamma': o['gamma'], 'mu_r': o['mur'], 'mu_i': o['mui'], 'order': o['order'], 'cc': o['cc'], 'cf': o['cf'],
+                        'gamma': o['gamma'], 'mu_r': o['mur'], 'mu_i': o['mui'], 'order': o['order'], 'cc': o['cc'], 'cf': o['cf'], 'cfon': o['cfon'],
                         'Pr': -o['S'][0][0], 'Qr': -o['S'][1][0], 'Pi': -o['S'][0][1], 'Qi': -o['S'][1][1], 'Vr': o['E'][0], 'Vi': o['E'][1],
-                        'delta_r': o['dl'][0], 'delta_i': o['dl'][1]}
+                        'delta_r': o['dl'][0], 'delta_i': o['dl'][1], 'n_r': K.n[0], 'n_i': K.n[1]}
                 for key, val in vals.items():
                     cols.setdefault(key, np.empty(nt))[ti] = float(np.real(val))
             K.p.update(keep)

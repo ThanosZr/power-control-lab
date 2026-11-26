@@ -13,8 +13,13 @@ the rectifier holds the current order with α ≥ α_min; the inverter holds γ_
 its own current control; its γ reference rises with the current error up to Δγ at ΔI (the modified characteristic, Fig.
 10.55); the order is limited by the VDCOL on V_d + k·I_d of the inverter. The steady state is one of the three modes of
 §10.9.1 (Fig. 10.53–10.55): 1 rectifier on current, inverter on γ_ref; 2 rectifier at α_min, inverter on current (I_d =
-order − ΔI); 3 rectifier at α_min, inverter on the sloped characteristic (γ = γ_ref + Δγ·(order − I_d)/ΔI). No tap changer
-(§10.9.3: too slow for a transient stability study).
+order − ΔI); 3 rectifier at α_min, inverter on the sloped characteristic (γ = γ_ref + Δγ·(order − I_d)/ΔI).
+
+5.1.6 (THEORY §8ΩΩΑ): the losses of a station, (10.57)–(10.58): R_eq (the valves and their auxiliaries) and the forward drop
+V_drop on the DC side, V_d = V_d0·cos α − R_c·I_d − R_eq·I_d − V_drop at a rectifier and V_d = V_d0·cos γ − R_c·I_d + R_eq·I_d
++ V_drop at an inverter (the bridge, and so the AC powers, as before; the losses between the bridge and the DC terminal);
+and the tap position n of a station (pu of its turns ratio: V_d0 ∝ n), with its tap changer (taps): the rectifier's holds α
+in a band, the inverter's its V_d, one step at a time (the inverter's first, then the rectifier's), as in Example 10.2 (c).
 
 Per unit of the link: V_d in pu of V_dn, I_d of I_dn (per pole); the AC powers in W and var, taken from the AC bus (a
 generator gives them as negative)."""
@@ -52,21 +57,26 @@ def pf_parts(alpha, mu, np=None):
     return c, (mu - math.cos(2 * alpha + mu) * math.sin(mu)) / (4 * sa * math.sin(mu / 2))
 
 
-def consts(e, Ur, Ui):
+def consts(e, Ur, Ui, n=None):
     """The constants of the two stations of the link e (a 'lcc' element of pcl.network) on its base, with the bus voltages
     U_r, U_i (V) of their AC buses: per station ('r', 'i') 'vd0' (V_d0 per pu of |V| of the bus, pu of V_dn), 'rc' (R_c =
     (3/π)·X_c·B, pu of Z_dn = V_dn/I_dn), 'km' (√2·X_c·I_dn/(T·U_bus): cos(α + μ) = cos α − km·i/|V|), 'ki' (the RMS current
-    of the fundamental per pu of i, A for all the poles); 'rl' the resistance of the line (pu)."""
+    of the fundamental per pu of i, A for all the poles); 'rl' the resistance of the line (pu). 5.1.6: 'req' (R_eq, pu of
+    Z_dn), 'vdrop' (V_drop, pu of V_dn) and 'n' (the tap position: the one of e['_n'], left by the load flow with tap
+    changers, else the station's n); n given, that one."""
     Vdn, Idn = e['Vdn'], e['Idn']
     Zdn = Vdn / Idn
     out = {'rl': e['R'] / Zdn, 'Zdn': Zdn}
     for side, U in (('r', Ur), ('i', Ui)):
         s = e[side]
-        T = s['U2'] / (s['U1'] * (1 + s['tap'] / 100))
+        nt = (n or {}).get(side) if n is not None else (e.get('_n') or {}).get(side)
+        nt = float(s.get('n', 1.0) if nt is None else nt)
+        T = s['U2'] / (s['U1'] * (1 + s['tap'] / 100)) * nt
         Xc = s['uk'] / 100 * s['U2'] ** 2 / s['Sn']
         B = s['B']
         out[side] = {'vd0': 3 * SQ2 / math.pi * B * T * U / Vdn, 'rc': 3 / math.pi * Xc * B / Zdn, 'km': SQ2 * Xc * Idn / (T * U),
-                     'ki': e['poles'] * B * SQ6 / math.pi * T * Idn, 'T': T, 'Xc': Xc}
+                     'ki': e['poles'] * B * SQ6 / math.pi * T * Idn, 'T': T, 'Xc': Xc,
+                     'req': s.get('Req', 0.0) / Zdn, 'vdrop': s.get('Vdrop', 0.0) / Vdn, 'n': nt}
     return out
 
 
@@ -90,22 +100,24 @@ def _point(e, k, Er, Ei, order):
     if not (vd0r > 0 and vd0i > 0):
         raise LCCError(f'{e["name"]}: no AC voltage at a converter')
     gr, amin, dI, dgc = e['gref'] * D, e['amin'] * D, e['dI'], e['dgc'] * D
+    qr, qi, wr, wi = R['req'], I['req'], R['vdrop'], I['vdrop']     # 5.1.6: (10.57)–(10.58), 0 without losses
     i = order                                               # mode 1: the rectifier on current, the inverter on γ_ref
-    vi = vd0i * math.cos(gr) - I['rc'] * i
+    vi = vd0i * math.cos(gr) - I['rc'] * i + qi * i + wi
     vr = vi + r * i
-    ca = (vr + R['rc'] * i) / vd0r
+    ca = (vr + qr * i + wr + R['rc'] * i) / vd0r
     mode = 1
     if ca > math.cos(amin):                                 # α would be below α_min: mode 2, the inverter on current
         mode = 2
         i = order - dI
-        vr = vd0r * math.cos(amin) - R['rc'] * i
+        vr = vd0r * math.cos(amin) - R['rc'] * i - qr * i - wr
         vi = vr - r * i
-        g = _acos((vi + I['rc'] * i) / vd0i)
+        g = _acos((vi - qi * i - wi + I['rc'] * i) / vd0i)
         if g < gr + dgc:                                    # its γ below γ_ref + Δγ: mode 3, the sloped characteristic
             mode = 3
 
             def F(x):
-                return vd0r * math.cos(amin) - R['rc'] * x - r * x - (vd0i * math.cos(gr + dgc * (order - x) / dI) - I['rc'] * x)
+                return (vd0r * math.cos(amin) - R['rc'] * x - qr * x - wr - r * x
+                        - (vd0i * math.cos(gr + dgc * (order - x) / dI) - I['rc'] * x + qi * x + wi))
             lo, hi = order - dI, order                     # F > 0 at lo, < 0 at hi (F decreases)
             for _ in range(200):
                 mid = 0.5 * (lo + hi)
@@ -113,10 +125,10 @@ def _point(e, k, Er, Ei, order):
                 if hi - lo < 1e-15:
                     break
             i = 0.5 * (lo + hi)
-            vr = vd0r * math.cos(amin) - R['rc'] * i
+            vr = vd0r * math.cos(amin) - R['rc'] * i - qr * i - wr
             vi = vr - r * i
         ca = math.cos(amin)
-        g = _acos((vi + I['rc'] * i) / vd0i)
+        g = _acos((vi - qi * i - wi + I['rc'] * i) / vd0i)
     else:
         g = gr
     if i <= 0:
@@ -154,15 +166,57 @@ def operating_point(e, Ur, Ui, Er, Ei, tol=1e-13, max_iter=200):
         out['P' + side] = vd0 * c * o['i'] * Pb
         out['Q' + side] = vd0 * s * o['i'] * Pb
     out.update(Pdr=o['vr'] * o['i'] * Pb, Pdi=o['vi'] * o['i'] * Pb, Id=o['i'] * e['Idn'], Vdr=o['vr'] * e['Vdn'], Vdi=o['vi'] * e['Vdn'],
-               vm=o['vr'] - k['rl'] / 2 * o['i'], k=k)
+               vm=o['vr'] - k['rl'] / 2 * o['i'], k=k, n={'r': k['r']['n'], 'i': k['i']['n']})
     return out
+
+
+def tap_step(e, o, side):
+    """5.1.6: one move of the tap changer of the station `side` ('r', 'i') of the link e at its point o (operating_point):
+    a station with 'oltc' {'ctl': 'alpha' (its α, °) or 'vd' (its V_d, pu of V_dn), 'band': (low, high), 'step', 'nmin',
+    'nmax' (pu of the turns ratio)} moves its tap position n by one step if its quantity is outside the band (n up raises
+    V_d0: α up at a rectifier, V_d up). Returns True if it moved, with the new positions in e['_n']."""
+    t = e[side].get('oltc')
+    if not t:
+        return False
+    n = dict(e.get('_n') or {s: e[s].get('n', 1.0) for s in ('r', 'i')})
+    val = (o['ar'] if side == 'r' else o['ai']) / D if t['ctl'] == 'alpha' else (o['vr'] if side == 'r' else o['vi'])
+    lo, hi = t['band']
+    if t['ctl'] == 'alpha':                                # (a lower V_d0 for the same V_d: a smaller α)
+        d = -1 if val > hi else 1 if val < lo else 0
+    else:
+        d = 1 if val < lo else -1 if val > hi else 0
+    new = min(t['nmax'], max(t['nmin'], round(n[side] + d * t['step'], 10)))
+    if d and new != n[side]:
+        n[side] = new
+        e['_n'] = n
+        return True
+    return False
+
+
+def operating_point_taps(e, Ur, Ui, Er, Ei, max_moves=500):
+    """5.1.6: the operating point of the link at fixed HT voltages with its tap changers: in each round the inverter's moves
+    one step if it must, then the rectifier's at the point after that move (the order of Table E10.1 of Example 10.2 (c)),
+    until neither moves. The positions from the station's n (or e['_n']). Returns operating_point with 'moves'."""
+    moves = 0
+    o = operating_point(e, Ur, Ui, Er, Ei)
+    while moves < max_moves:
+        moved = False
+        for side in ('i', 'r'):
+            if tap_step(e, o, side):
+                moves, moved = moves + 1, True
+                o = operating_point(e, Ur, Ui, Er, Ei)
+        if not moved:
+            break
+    o['moves'] = moves
+    return o
 
 
 def _result(e, o):
     """The operating point of a link as the load flow AC/DC returns it (JSON-ready)."""
     return {'rec': e['rec'], 'inv': e['inv'], 'mode': o['mode'], 'Id': o['Id'], 'Vdr': o['Vdr'], 'Vdi': o['Vdi'], 'Pr': o['Pr'],
             'Qr': o['Qr'], 'Pi': o['Pi'], 'Qi': o['Qi'], 'Pdr': o['Pdr'], 'Pdi': o['Pdi'], 'alpha_r': o['ar'] / D, 'alpha_i': o['ai'] / D,
-            'gamma': o['g'] / D, 'mu_r': o['mr'] / D, 'mu_i': o['mi'] / D, 'order': o['order'], 'losses': o['Pdr'] - o['Pdi']}
+            'gamma': o['g'] / D, 'mu_r': o['mr'] / D, 'mu_i': o['mi'] / D, 'order': o['order'], 'losses': o['Pdr'] - o['Pdi'],
+            'losses_conv': (o['Pr'] - o['Pdr']) + (o['Pdi'] + o['Pi']), 'n_r': o['n']['r'], 'n_i': o['n']['i']}
 
 
 # ---------------------------------------------------------------- the first CIGRE HVDC benchmark (the tutorial hvdc_lcc)
@@ -204,7 +258,8 @@ def benchmark_network(S_base=100e6, C=None, **kw):
     and the RMS dynamics: the buses R0 (source, 345 kV), R (the rectifier), I (the inverter), I0 (source, 230 kV); the
     sources as feeders (stiff: the slack of each island) at |V| and the angle of the EMT; their impedances at 50 Hz as lines; the
     filters at 50 Hz as shunts; the link 'DC' with the T line (C = None: 26 µF at the middle; 0: none) and the reactors.
-    kw: more data of the link (Network.lcc)."""
+    kw: more data of the link (Network.lcc); 5.1.6: sr, si more data of its stations (as {'Req': 1.0, 'oltc': {…}}), added to
+    those of the benchmark."""
     from .network import Network
     b = BENCHMARK
     w = 2 * math.pi * b['f']
@@ -219,6 +274,7 @@ def benchmark_network(S_base=100e6, C=None, **kw):
         Y = sum(_filt(f[0], w, *f[1:]) for f in d['filters'])          # siemens, per phase of the star
         S1 = (d['U'] ** 2) * Y.conjugate()                               # taken at the nominal voltage (W, var)
         net.shunt(bus, P=S1.real, Q=S1.imag, name='F' + bus)
+    sr, si = {**b['rec']['st'], **(kw.pop('sr', None) or {})}, {**b['inv']['st'], **(kw.pop('si', None) or {})}
     net.lcc('R', 'I', Vdn=b['Vdn'], Idn=b['Idn'], R=b['R'], L=b['L'], C=b['C'] if C is None else C, Ld=b['Ld'],
-            sr=b['rec']['st'], si=b['inv']['st'], name='DC', **kw)
+            sr=sr, si=si, name='DC', **kw)
     return net

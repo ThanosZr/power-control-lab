@@ -371,7 +371,11 @@ class Network:
         the line of one pole (ground return without resistance); sr, si the stations {'Sn' (VA), 'U1', 'U2' (V, the line
         voltages of the converter transformer, AC and valve side), 'uk' (%: X_c = u_k·U₂²/S_n per bridge), 'tap' (% on the AC
         side), 'B' (six-pulse bridges in series, 2 by default)}; poles: 1 a monopole, 2 a bipole of two equal poles (the AC
-        powers twice). The controls in the steady state as the LCCC of the EMT (THEORY §8ω): the order Iord (pu of I_dn), γ_ref
+        powers twice). 5.1.6 (THEORY §8ΩΩΑ): and per station 'Req' (Ω) and 'Vdrop' (V), its losses on the DC side ((10.57)–
+        (10.58) of «Power System Stability and Control»); 'n' its tap position (pu of the turns ratio, 1 by default); 'oltc' its
+        tap changer {'ctl': 'alpha' (the rectifier's α, °) or 'vd' (its V_d, pu of V_dn), 'band': (low, high), 'step' (0,01),
+        'nmin' (0,8), 'nmax' (1,2), 'T' (s per step in the RMS dynamics, 5)}: the load flow AC/DC moves it one step at a time
+        (pcl.lcc.tap_step). The controls in the steady state as the LCCC of the EMT (THEORY §8ω): the order Iord (pu of I_dn), γ_ref
         gref and α_min amin (°), the current margin dI (pu), the rise of γ_ref with the current error dgc (° at ΔI), the VDCOL
         vdcol = (V1, I1, V2, I2) (pu) on V_d + kc·I_d of the inverter. For the RMS dynamics (pcl.rms.LCC): L (H, of the line)
         and C (F, at its middle: a T line; 0 none), Ld (H, the smoothing reactors of the rectifier and the inverter).
@@ -387,7 +391,7 @@ class Network:
         st = {}
         for side, d in (('r', sr), ('i', si)):
             d = dict(d or {})
-            bad = set(d) - {'Sn', 'U1', 'U2', 'uk', 'tap', 'B'}
+            bad = set(d) - {'Sn', 'U1', 'U2', 'uk', 'tap', 'B', 'Req', 'Vdrop', 'n', 'oltc'}
             if bad:
                 raise NetworkError(f'{nm}: unknown data of a station: {", ".join(sorted(bad))}')
             miss = [k for k in ('Sn', 'U1', 'U2', 'uk') if d.get(k) is None]
@@ -397,6 +401,26 @@ class Network:
             v['tap'], v['B'] = float(d.get('tap', 0.0)), int(d.get('B', 2))
             if min(v['Sn'], v['U1'], v['U2'], v['uk']) <= 0 or v['B'] < 1:
                 raise NetworkError(f'{nm}: S_n, U1, U2, u_k above zero, B at least 1')
+            for k in ('Req', 'Vdrop', 'n'):                  # 5.1.6: the losses and the tap position
+                if d.get(k) is not None:
+                    v[k] = float(d[k])
+            if v.get('Req', 0.0) < 0 or v.get('Vdrop', 0.0) < 0 or v.get('n', 1.0) <= 0:
+                raise NetworkError(f'{nm}: R_eq, V_drop not below zero, n above zero')
+            if d.get('oltc'):
+                t = dict(d['oltc'])
+                bad = set(t) - {'ctl', 'band', 'step', 'nmin', 'nmax', 'T'}
+                if bad:
+                    raise NetworkError(f'{nm}: unknown data of a tap changer: {", ".join(sorted(bad))}')
+                o = {'ctl': str(t.get('ctl', 'alpha' if side == 'r' else 'vd')), 'step': float(t.get('step', 0.01)),
+                     'nmin': float(t.get('nmin', 0.8)), 'nmax': float(t.get('nmax', 1.2)), 'T': float(t.get('T', 5.0))}
+                if t.get('band') is None or len(t['band']) != 2:
+                    raise NetworkError(f'{nm}: a tap changer needs its band (low, high)')
+                o['band'] = (float(t['band'][0]), float(t['band'][1]))
+                if o['ctl'] not in ('alpha', 'vd') or (o['ctl'] == 'alpha' and side == 'i'):
+                    raise NetworkError(f'{nm}: the tap changer holds alpha (a rectifier) or vd')
+                if not (o['band'][0] < o['band'][1] and o['step'] > 0 and 0 < o['nmin'] <= v.get('n', 1.0) <= o['nmax'] and o['T'] > 0):
+                    raise NetworkError(f'{nm}: a tap changer with low < high, step and T above zero, nmin ≤ n ≤ nmax')
+                v['oltc'] = o
             st[side] = v
         Ld = tuple(float(x) for x in Ld)
         if float(Vdn) <= 0 or float(Idn) <= 0 or float(R) < 0 or float(L) < 0 or float(C) < 0 or len(Ld) != 2 or min(Ld) < 0:
@@ -1400,7 +1424,11 @@ class Network:
         Events 'iord' (dI: of the current order, pu), 'gen' (the link blocked), 'dcfault' (R in Ω at the middle of the line; it
         needs C) and 'dcclear'. The result then has 'lcc': per link I_d at the two ends (kA), V_d (kV), P_d (MW), P and Q from
         the AC buses (MW, Mvar), |V| of the HT buses, α, γ, μ (degrees), the order (pu), 'cc' (the inverter in current control),
-        'cf' (γ at 0: the commutation at the inverter does not complete), and with C the voltage at the middle 'Vm' (kV)."""
+        'cf' (γ at 0: the commutation at the inverter does not complete), and with C the voltage at the middle 'Vm' (kV).
+        5.1.6 (THEORY §8ΩΩΑ): in stations of a link also 'cf' ('gamma', 'voltage', 'off': the commutation failure of its
+        inverter, with gcf, dVcf, Tcf) and 'cda' (two half steps of backward Euler after its jumps); the events 'cf', 'cfend'
+        (by 'cf') and 'tap' (side, n; by 'oltc', or by hand); in 'lcc' also 'cfon' (the bypass) and the tap positions 'n_r',
+        'n_i'. A network with LCC links and VSC stations has both devices."""
         from . import rms
         if typical is not None:
             machines = {**rms.typical(self, kind=typical), **(machines or {})}
@@ -1501,7 +1529,8 @@ class Network:
                      'Vdr': d['Vdr'] * e['Vdn'] / 1e3, 'Vdi': d['Vdi'] * e['Vdn'] / 1e3, 'Pdr': d['Vdr'] * d['Ir'] * Pb, 'Pdi': d['Vdi'] * d['Ii'] * Pb,
                      'Pr': d['Pr'] * Sb, 'Qr': d['Qr'] * Sb, 'Pi': d['Pi'] * Sb, 'Qi': d['Qi'] * Sb, 'Vr': d['Vr'], 'Vi': d['Vi'],
                      'alpha_r': d['alpha_r'] * D_, 'alpha_i': d['alpha_i'] * D_, 'gamma': d['gamma'] * D_, 'mu_r': d['mu_r'] * D_,
-                     'mu_i': d['mu_i'] * D_, 'order': d['order'], 'cc': d['cc'], 'cf': d['cf']}
+                     'mu_i': d['mu_i'] * D_, 'order': d['order'], 'cc': d['cc'], 'cf': d['cf'],
+                     'cfon': d['cfon'], 'n_r': d['n_r'], 'n_i': d['n_i']}                 # 5.1.6: the bypass, the taps
                 if e['C'] > 0:
                     o['Vm'] = d['Vm'] * e['Vdn'] / 1e3
                 out['lcc'][nm] = o

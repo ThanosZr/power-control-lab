@@ -58,6 +58,7 @@ STABLE_FROM = '4.0'           # the major version from which the surface is stab
 # 5.0.13: the RMS dynamics of a network (pcl.network.Network.dynamic, on pcl.rms) is new: experimental; the study 'rms' of
 # pcl.study is a stable addition.
 # 5.1.5: the LCC link in the load flow AC/DC and in RMS (pcl.lcc, pcl.network.Network.lcc) is new: experimental.
+# 5.1.6: the tap changers of the LCC link (pcl.lcc.tap_step, operating_point_taps): experimental, as all of pcl.lcc.
 EXPERIMENTAL = {'pcl': ('pcl.rms.', 'pcl.network.Network.dynamic', 'pcl.network.Network.dc_source', 'pcl.network.Network.lcc', 'pcl.lcc.', 'pcl.insulation.', 'pcl.surge.', 'pcl.geo.', 'pcl.control.', 'pcl.workbench.', 'pcl.wideband.', 'pcl.powerflow.', 'pcl.opf.', 'pcl.ipm.', 'pcl.backend.', 'pcl.accel.', 'pcl.nnstart.',
                         'pcl.onnxio.', 'pcl.netview.', 'pcl.netfile.', 'pcl.psse.', 'pcl.scopf.', 'pcl.cpf.', 'pcl.se.', 'pcl.harmonic.', 'pcl.unbalanced.', 'pcl.dcgrid.', 'pcl.results.', 'pcl.equivalent.', 'pcl.console.', 'pcl.model.', 'pcl.Project.model'), 'cli': ('workbench', 'python -m pcl accel', 'python -m pcl nnstart'), 'server': ('/api/console', '/api/accel_info')}
 # 4.0: the first of the two steps of a removal. {surface: {key: (version, what instead)}}: the point keeps working (with a

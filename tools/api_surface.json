@@ -2037,7 +2037,8 @@
     "params": [
      "e",
      "Ur",
-     "Ui"
+     "Ui",
+     "n"
     ],
     "since": "5.1.5"
    },
@@ -2053,11 +2054,30 @@
     ],
     "since": "5.1.5"
    },
+   "pcl.lcc.operating_point_taps": {
+    "params": [
+     "e",
+     "Ur",
+     "Ui",
+     "Er",
+     "Ei",
+     "max_moves"
+    ],
+    "since": "5.1.5"
+   },
    "pcl.lcc.pf_parts": {
     "params": [
      "alpha",
      "mu",
      "np"
+    ],
+    "since": "5.1.5"
+   },
+   "pcl.lcc.tap_step": {
+    "params": [
+     "e",
+     "o",
+     "side"
     ],
     "since": "5.1.5"
    },

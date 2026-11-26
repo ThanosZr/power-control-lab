@@ -649,16 +649,21 @@ def acdc_flow(net, method='auto', tol=1e-8, max_iter=None, flat=False, outer=30,
     4.21 — limits: hold the limits of the stations that have them (vsc Imax, Ucmax, Ucmin; _hold_limits, q_range); the result
     then has per converter 'Qmin', 'Qmax' (var at its P_s), 'held', 'over', and 'limits' (the stations that a limit holds).
     5.1.5 — LCC links (Network.lcc) without VSC stations: Newton on the voltages of their HT buses (_lcc_flow, THEORY §8ΩΩ.2);
-    then 'dc' is None, 'converters' empty, and 'lcc' has per link its operating point (pcl.lcc._result)."""
+    then 'dc' is None, 'converters' empty, and 'lcc' has per link its operating point (pcl.lcc._result).
+    5.1.6 — LCC links with VSC stations too (the flow of the stations inside the Newton of the links, THEORY §8ΩΩΑ.6), and the
+    tap changers of the stations of the links ('tap_rounds'; per link 'n_r', 'n_i', and 'losses_conv' of its stations)."""
     t0 = time.perf_counter()
     vs = [e for e in net.elements if e['kind'] == 'vsc']
     lc = [e for e in net.elements if e['kind'] == 'lcc']           # 5.1.5: the LCC links (pcl.lcc)
     if not vs and not lc:
         raise DCGridError('the network has no converters (vsc)')
-    if lc:
-        if vs:
-            raise DCGridError('LCC links together with VSC stations: not in the load flow AC/DC yet (5.1.5)')
-        return _lcc_flow(net, lc, method, tol, max_iter, flat, outer, q_limits, t0)
+    if lc:                                     # 5.1.6: with VSC stations too (their flow inside that of the links)
+        return _lcc_flow(net, lc, vs, method, tol, max_iter, flat, outer, q_limits, limits, t0)
+    return _vsc_flow(net, vs, method, tol, max_iter, flat, outer, q_limits, limits, t0)
+
+
+def _vsc_flow(net, vs, method, tol, max_iter, flat, outer, q_limits, limits, t0):
+    """The sequential AC/DC load flow of the VSC stations (acdc_flow; 5.1.6: a function of its own, for the links LCC)."""
     # 4.21: a converter that a dispatcher moves gives its AC bus what the DC grid decides, like the slack and the droops
     moved = {m for e in net.elements if e['kind'] == 'dc_dispatcher' for m in e['members']}
     S_base = net.S_base
@@ -747,26 +752,34 @@ def _lcc_result(net, lc, res):
     return out
 
 
-def _lcc_flow(net, lc, method, tol, max_iter, flat, outer, q_limits, t0):
-    """5.1.5: the load flow of a network whose only converters are LCC links (pcl.lcc). The AC flow takes the powers of the
-    links as fixed injections, and the links follow the HT voltages of the AC flow («Power System Stability and Control», Fig.
-    10.52 and the procedure of §10.9.1). The plain alternation of the two diverges on weak AC systems (the benchmark, SCR 2,5:
-    |V| of the rectifier 1,05 → 0,88 → 1,18 → 0,77 pu): the reactive power of a converter on current control rises steeply
-    with its voltage. So the unknowns are the HT voltages E of the links, and Newton on Φ(E) − E = 0, Φ(E) the voltages of
-    the AC flow with the injections of the links at E, its Jacobian by differences (two AC flows per link) at every
-    iteration, the step at most 0,1 pu. Returns the result of power_flow at the last E with 'lcc' (per link its operating
-    point), 'outer' (the Newton iterations), 'outer_change' (max |Φ(E) − E|, pu), 'converged'; 'dc' None, 'converters' {}."""
+def _lcc_flow(net, lc, vs, method, tol, max_iter, flat, outer, q_limits, limits, t0):
+    """5.1.5: the load flow of a network with LCC links (pcl.lcc). The AC flow takes the powers of the links as fixed
+    injections, and the links follow the HT voltages of the AC flow («Power System Stability and Control», Fig. 10.52 and the
+    procedure of §10.9.1). The plain alternation of the two diverges on weak AC systems (the benchmark, SCR 2,5: |V| of the
+    rectifier 1,05 → 0,88 → 1,18 → 0,77 pu): the reactive power of a converter on current control rises steeply with its
+    voltage. So the unknowns are the HT voltages E of the links, and Newton on Φ(E) − E = 0, Φ(E) the voltages of the AC
+    flow with the injections of the links at E, its Jacobian by differences (two AC flows per link) at every iteration, the
+    step at most 0,1 pu. 5.1.6: with VSC stations, Φ(E) is their sequential flow (_vsc_flow, with the powers of the links);
+    and the tap changers of the stations (pcl.lcc.tap_step): in each round the inverters' move one step if they must, Newton
+    again, then the rectifiers', Newton again, until none moves. Returns the result of power_flow (or of _vsc_flow) at the
+    last E with 'lcc' (per link its operating point), 'outer' (the Newton iterations), 'outer_change' (max |Φ(E) − E|, pu),
+    'tap_rounds', 'converged'; without VSC stations 'dc' None and 'converters' {}."""
     from . import lcc as lccmod
     if flat:
         for e in lc:
-            e.pop('_Sr', None)
-            e.pop('_Si', None)
+            for q in ('_Sr', '_Si', '_n'):
+                e.pop(q, None)
     U = [(net.buses[e['rec']]['Un'], net.buses[e['inv']]['Un']) for e in lc]
 
     def flow(first=False):
-        r = net.power_flow(method=method, tol=tol, max_iter=max_iter, flat=flat and first, q_limits=q_limits)
-        if not r['converged']:
-            raise DCGridError('the AC load flow does not converge with the powers of the LCC links')
+        if vs:
+            r = _vsc_flow(net, vs, method, tol, max_iter, flat and first, outer, q_limits, limits, time.perf_counter())
+            if not r['converged']:
+                raise DCGridError('the load flow AC/DC of the VSC stations does not converge with the powers of the LCC links')
+        else:
+            r = net.power_flow(method=method, tol=tol, max_iter=max_iter, flat=flat and first, q_limits=q_limits)
+            if not r['converged']:
+                raise DCGridError('the AC load flow does not converge with the powers of the LCC links')
         V, idx = r['_V'], r['_idx']
         return np.array([abs(V[idx[e[b]]]) for e in lc for b in ('rec', 'inv')]), r
 
@@ -779,32 +792,56 @@ def _lcc_flow(net, lc, method, tol, max_iter, flat, outer, q_limits, t0):
             e['_Sr'], e['_Si'] = complex(o['Pr'], o['Qr']) / net.S_base, complex(o['Pi'], o['Qi']) / net.S_base
         return flow()
 
+    def newton(E, hist):
+        n, res = len(E), None
+        for _ in range(outer):
+            P, res = phi(E)
+            F = P - E
+            hist.append(float(np.max(np.abs(F))))
+            if hist[-1] < tol:
+                return E, res, True
+            J = np.empty((n, n))
+            for k in range(n):
+                dE = np.zeros(n)
+                dE[k] = 1e-6
+                J[:, k] = (phi(E + dE)[0] - P) / 1e-6
+            J -= np.eye(n)
+            try:
+                d = np.linalg.solve(J, -F)
+            except np.linalg.LinAlgError:
+                break
+            d *= min(1.0, 0.1 / max(float(np.max(np.abs(d))), 1e-300))
+            E = E + d
+        return E, res, False
+
     E, res = flow(first=True)                       # with the estimates (or the powers of an earlier run)
-    hist, ok, n = [], False, len(E)
-    for _ in range(outer):
-        P, res = phi(E)
-        F = P - E
-        hist.append(float(np.max(np.abs(F))))
-        if hist[-1] < tol:
-            ok = True
-            break
-        J = np.empty((n, n))
-        for k in range(n):
-            dE = np.zeros(n)
-            dE[k] = 1e-6
-            J[:, k] = (phi(E + dE)[0] - P) / 1e-6
-        J -= np.eye(n)
-        try:
-            d = np.linalg.solve(J, -F)
-        except np.linalg.LinAlgError:
-            break
-        d *= min(1.0, 0.1 / max(float(np.max(np.abs(d))), 1e-300))
-        E = E + d
+    hist = []
+    E, res, ok = newton(E, hist)
+    rounds = 0
+    if ok and any(e[s].get('oltc') for e in lc for s in ('r', 'i')):      # 5.1.6: the tap changers
+        while rounds < 200:
+            moved = False
+            for side in ('i', 'r'):
+                V, idx = res['_V'], res['_idx']
+                m = False
+                for j, e in enumerate(lc):
+                    o = lccmod.operating_point(e, U[j][0], U[j][1], abs(V[idx[e['rec']]]), abs(V[idx[e['inv']]]))
+                    m = lccmod.tap_step(e, o, side) or m
+                if m:
+                    moved = True
+                    E, res, ok = newton(E, hist)
+                    if not ok:
+                        break
+            if not moved or not ok:
+                break
+            rounds += 1
     if ok:
         phi(E)                                       # (the powers of the links at the last E, for the AC solvers after)
     out = dict(res or {})
-    out.update(dc=None, converters={}, outer=len(hist), outer_change=hist, converged=bool(ok), time=time.perf_counter() - t0,
-               losses_dc=None, losses_conv=0.0, lcc=_lcc_result(net, lc, res) if ok else {})
+    if not vs:
+        out.update(dc=None, converters={}, losses_dc=None, losses_conv=0.0)
+    out.update(outer=len(hist), outer_change=hist, converged=bool(ok and (not vs or (res or {}).get('converged'))),
+               time=time.perf_counter() - t0, tap_rounds=rounds, lcc=_lcc_result(net, lc, res) if ok else {})
     return out
 
 

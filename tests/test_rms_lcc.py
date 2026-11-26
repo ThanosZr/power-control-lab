@@ -139,16 +139,7 @@ class SteadyState(unittest.TestCase):
             self.assertIn(why, str(c.exception))
         with self.assertRaises(N.NetworkError):
             net.lcc('A', 'A', 500e3, 2000, 5.0, st, st)
-        net = lcc.benchmark_network()                       # with a VSC station: not yet
-        net.dc_bus('X', 200e3)
-        net.dc_bus('Y', 200e3)
-        net.dc_line('X', 'Y', R=1.0)
-        net.vsc('R', 'X', control='V')
-        net.vsc('I', 'Y', control='P', P=1e6)
-        with self.assertRaises(N.NetworkError) as c:
-            net.acdc_flow()
-        self.assertIn('LCC', str(c.exception))
-        net = lcc.benchmark_network()
+        net = lcc.benchmark_network()                       # (5.1.6: with VSC stations too, tests/test_rms_lcc_516.py)
         with self.assertRaises(rms.RMSError):              # the RMS of a link starts from the load flow AC/DC
             rms.System(net, pf=net.power_flow())
         with self.assertRaises(rms.RMSError):
@@ -187,10 +178,11 @@ class RMS(unittest.TestCase):
         """The controls held (K_p 0: β constant, no PLL), the AC voltages stiff: after a fault of 250 Ω at the middle of the line the
         DC side is linear, x′ = A·x + b (the converters V_d0·cos α − R_c·I_d, the T line; its modes −100,5 ± j355,0/s and
         −47,2/s): the RMS against expm. The error of the trapezoidal rule falls as h² (4,0 times from h = 0,5 to 0,25 ms), and
-        with 0,25 ms it is 4,7·10⁻⁴ pu of the currents (of 1)."""
+        with 0,25 ms it is 4,7·10⁻⁴ pu of the currents (of 1). (5.1.6: without the half steps of backward Euler after the fault,
+        cda 0, for the order of the trapezoidal rule alone.)"""
         errs = []
         for h in (0.0005, 0.00025):
-            net, s = stiff(KpR=0.0, KpI=0.0, KpG=0.0, bw=0.0)
+            net, s = stiff(KpR=0.0, KpI=0.0, KpG=0.0, bw=0.0, cda=0.0)
             s.init()
             K = [k for k in s.kinds if isinstance(k, rms.LCC)][0]
             x0 = s.x0[K.x0:K.x0 + K.nx]
@@ -290,7 +282,9 @@ class AgainstEMT(unittest.TestCase):
         cases.append({'opts': {'model': 'fast', 'ev': 'step'}, 'set': sets['step'], 't0': 2.0, 't1': 4.0, 'win': 0.005})
         cls.e = dict(zip(('step', 'dcf', 'ac3', 'step_det'), emt(cases)))
         net = lcc.benchmark_network()
-        cls.r = {ev: net.dynamic(t_end=2.0, events=evs, h=0.001, record=0.001) for ev, evs in (('step', STEP), ('dcf', DCF), ('ac3', AC3))}
+        cls.r = {ev: net.dynamic(t_end=2.0, events=evs, h=0.001, record=0.001, stations=st) for ev, evs, st in
+                 (('step', STEP, None), ('dcf', DCF, None), ('ac3', AC3, {'DC': {'cf': 'off'}}))}
+        cls.r['dcf5'] = net.dynamic(t_end=2.0, events=DCF, h=0.005, record=0.005)      # 5.1.6: with the half steps of BE
 
     def diff(self, rms_ev, emt_ev, lo, hi):
         e = self.e[emt_ev]
@@ -324,22 +318,28 @@ class AgainstEMT(unittest.TestCase):
 
     def test_dc_fault(self):
         """0,1 Ω at the middle of the line for 150 ms: from 50 ms after it V_d within 5 kV, I_d 0,012 kA, γ 0,2°; the VDCOL at its
-        0,55 pu; from 0,55 s after the clearing V_d within 1 kV, I_d 0,002 kA. Between them, the recovery: V_d within 15 kV, I_d 0,06 kA."""
+        0,55 pu; from 0,55 s after the clearing V_d within 1 kV, I_d 0,002 kA. Between them, the recovery: V_d within 3,5 kV, I_d 0,015
+        kA (5.1.6: with two half steps of backward Euler after the fault and its clearing; 5.1.5 without them 15 kV, 0,06 kA).
+        With h = 5 ms: the recovery V_d within 3,5 kV, I_d 0,015 kA (5.1.5: 62 kV)."""
         d = self.diff('dcf', 'dcf', 0.55, 0.65)
         self.assertLess(d['v'], 5.0)
         self.assertLess(d['i'], 0.012)
         self.assertLess(d['gm'], 0.2)
         d = self.diff('dcf', 'dcf', 0.85, 1.2)
-        self.assertLess(d['v'], 15.0)
-        self.assertLess(d['i'], 0.06)
+        self.assertLess(d['v'], 3.5)
+        self.assertLess(d['i'], 0.015)
         d = self.diff('dcf', 'dcf', 1.2, 2.0)
         self.assertLess(d['v'], 1.0)
         self.assertLess(d['i'], 0.002)
+        d = self.diff('dcf5', 'dcf', 0.85, 1.2)
+        self.assertLess(d['v'], 3.5)
+        self.assertLess(d['i'], 0.015)
         L, T = self.r['dcf']['lcc']['DC'], np.asarray(self.r['dcf']['t'])
         self.assertAlmostEqual(float(L['order'][int(np.argmin(np.abs(T - 0.6)))]), 0.55, delta=1e-9)
 
     def test_ac_fault_at_the_inverter(self):
-        """Three phases to ground through 0,1 Ω for 150 ms: during it I_d of the rectifier within 0,05 kA (of the inverter 0,3 kA:
+        """(5.1.6: with the commutation failure off, cf 'off': the average model of the EMT has no bypass; against the detailed one,
+        tests/test_rms_lcc_516.py.) Three phases to ground through 0,1 Ω for 150 ms: during it I_d of the rectifier within 0,05 kA (of the inverter 0,3 kA:
         its AC voltage is 0,5 % and the phase of its current that of what is left); from 0,2 s after the clearing V_d within
         1,5 kV and I_d 0,05 kA, from 0,55 s 1 kV and 0,002 kA. The first 0,2 s after the clearing differ (THEORY §8ΩΩ.4)."""
         d = self.diff('ac3', 'ac3', 0.55, 0.65)
