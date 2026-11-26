@@ -363,7 +363,8 @@ class ApiSurface(unittest.TestCase):
             self.assertIn(k, self.now['pcl'])
             self.assertTrue(api_surface.experimental('pcl', k), k)
         self.assertEqual(self.now['pcl']['pcl.network.Network.dc_line']['params'][-2:], ['L', 'C'])
-        self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][-1], 'stations')
+        ps = self.now['pcl']['pcl.network.Network.dynamic']['params']
+        self.assertEqual(ps[ps.index('slow_after') + 1], 'stations')                 # the last then (5.1.2: modes after it)
         self.assertEqual(self.now['pcl']['pcl.rms.Converter']['params'][-1], 'cc')
         self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 1029)       # 1029 then; 5.0.16 adds points
 
@@ -414,6 +415,16 @@ class ApiSurface(unittest.TestCase):
         self.assertEqual(self.now['pcl']['pcl.rms.two_area_machines']['params'], ['excitation', 'limits'])
         self.assertEqual({k: rms.AVR_DEFAULTS['dc1a'][k] for k in ('E1', 'SE1', 'E2', 'SE2', 'VXEXP')},
                          {'E1': None, 'SE1': None, 'E2': None, 'SE2': None, 'VXEXP': 0.0})
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 1033)       # 1033 then
+
+    def test_the_surface_of_5_1_2(self):
+        """5.1.2: the two-area system in EMT and in the card «Δυναμική RMS» (ROADMAP §101 step 1): no new points; one new parameter at
+        the end of Network.dynamic (modes, False by default: the result as it was), the option 'modes' of the study 'rms'; the model of
+        the drawing stays at version 5."""
+        from pcl import model, study
+        self.assertEqual(model.VERSION, 5)
+        self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][-2:], ['stations', 'modes'])
+        self.assertEqual(study.OPTIONS['rms'][-2:], ('stations', 'modes'))
         self.assertEqual(sum(len(v) for v in self.now.values()), 1033)
 
     def test_the_surface_of_4_19_5(self):

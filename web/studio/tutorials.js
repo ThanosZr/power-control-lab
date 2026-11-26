@@ -1410,6 +1410,55 @@
   desc:'Το δίκτυο WSCC των 9 ζυγών (αρίθμηση του MATPOWER, 345 kV, 100 MVA, 60 Hz). Οι γεννήτριες έχουν τα δεδομένα του Anderson & Fouad (Πίν. 2.1) και ξεκινούν από την τάση |V|∠θ της ροής φορτίου του pcl.network· τα φορτία είναι σταθερές εμπεδήσεις ίσες με το φορτίο στην τάση της ροής φορτίου. Οι μετασχηματιστές είναι κλάδοι σε ανά μονάδα, όπως στη ροή φορτίου. Χωρίς διαταραχή το EMT μένει στη ροή φορτίου.',
   tasks:['Χωρίς διαταραχή: P, Q και δ των γεννητριών μένουν σταθερά· η κάρτα δείχνει τις τιμές της ροής φορτίου και του Anderson & Fouad.','Σφάλμα με κλασικό μοντέλο: η δ₂ − δ₁ ανεβαίνει περίπου 70° και επιστρέφει, όπως στο Σχ. 2.22 του Anderson & Fouad (85° από 17,5°).','Με τα πλήρη δεδομένα και σταθερή E_fd οι γεννήτριες 2 και 3 χάνουν τον συγχρονισμό: η ροή του άξονα q σβήνει γρήγορα (T′_q0 ≈ 0,5 s) και χωρίς AVR η E_fd δεν βοηθά.','Με τα πλήρη δεδομένα και «AVR ST1A σε κάθε γεννήτρια» (4.8.1) οι γεννήτριες μένουν σε συγχρονισμό: η E_fd ανεβαίνει στο όριο κατά το σφάλμα και κρατά τη ροή. Με PSS και ρυθμιστές στροφών σβήνουν και οι ταλαντώσεις. Με κλασικό μοντέλο ο έλεγχος δεν εφαρμόζεται (σταθερή E′).'],
   build(o){return ieee9Build(o);}});
+ // 5.1.2 (ROADMAP §101 step 1, THEORY §8ΩΧ): the two-area system of Example 12.6 of Power System Stability and Control in EMT, from its load
+ // flow (pcl.network case 'two_area', the data of pcl/data/two_area.json), as the IEEE 9 case above: 230 kV, 100 MVA, 60 Hz, the step-up
+ // transformers branches in per unit (j0,15 on 900 MVA), each line one π section (r, x, b per km of the example), the loads and the shunt
+ // capacitors of buses 7 and 9 constant impedances at the voltage of the load flow. TWO_AREA_LF: |V|, θ (°) of Network.power_flow() of the
+ // case (tests/test_two_area_emt.py checks them). The units of the example (pcl.rms.TWO_AREA_UNIT, without its saturation: the GEN3 has none)
+ // with the excitation of part (b) of the example (pcl.rms.TWO_AREA_EXCITATION, with the limits of the defaults: its thyristor exciter has
+ // no K_C and no field current limiter); its self-excited DC exciter (V_X of (8.21)) is not in the EMT
+ const TWO_AREA_LF={1:[1.03,20.270160],2:[1.01,10.505862],3:[1.03,-6.8],4:[1.01,-16.991934],5:[1.006458,13.808299],6:[0.978134,3.723760],7:[0.961021,-4.685333],
+  8:[0.948618,-18.555131],9:[0.971373,-32.152282],10:[0.983465,-23.737102],11:[1.008258,-13.426987]};
+ const TWO_AREA_P={G1:700,G2:700,G3:719.09,G4:700};
+ function twoAreaBuild(o){const Un=230e3,Sb=100e6,f=60,c={conn:'bus'},LF=TWO_AREA_LF,exc=o.exc||'manual',ev=o.ev||'none',avr=exc!=='manual',pss=exc==='pss';
+  const L=(id,x,y,km,rot,lbl)=>C(id,'LINE3',x,y,{unit:'pu',Un,Sb,f,R1:+(0.0001*km).toFixed(6),X1:+(0.001*km).toFixed(6),B1:+(0.00175*km).toFixed(6),z0:'same',...c},{rot:rot||0,label:lbl||id});
+  const T=(id,x,y,rot)=>C(id,'LINE3',x,y,{unit:'pu',Un,Sb,f,R1:0,X1:+(0.15/9).toFixed(9),B1:0,z0:'same',...c},{rot:rot||0,label:id});
+  const G=(id,bus,x,y,H,flip)=>C(id,'GEN3',x,y,{Sn:900e6,Un,f,pp:1,data:'std',Xd:1.8,Xdp:0.3,Xdpp:0.25,Xq:1.7,Xqp:0.55,Xqpp:0.25,Xl:0.2,X0:0.2,Td0p:8,Td0pp:0.03,Tq0p:0.4,Tq0pp:0.05,
+   Ra:0.0025,shaft:'one',H,D:0,V0:LF[bus][0],ang0:LF[bus][1],...(avr?{exc:'sig'}:{}),...c},{flip:!!flip,label:id+' (ζυγός '+bus+')'});
+  const Ld=(id,bus,x,y,P,Q,lbl)=>{const V=LF[bus][0];return C(id,'LOAD3',x,y,{cn:'yn',Un,f,P:+(P/(V*V)).toFixed(3),Q:+(Q/(V*V)).toFixed(3),model:'z',...c},{label:lbl||id,lbl:'below'});};
+  const Cp=(id,x,y,Q,lbl)=>C(id,'LOAD3',x,y,{cn:'yn',Un,f,P:0,Q:-Q,model:'z',...c},{label:lbl,lbl:'below'});
+  const comps=[G('G1',1,80,200,6.5),J('B1',200,200),T('T1',300,200),J('B5',420,200),L('L56',540,200,25,0,'L5-6'),J('B6',660,200),L('L67',780,200,10,0,'L6-7'),J('B7',900,200),
+   L('L78a',1080,110,110,0,'L7-8 (1)'),L('L78b',1080,290,110,0,'L7-8 (2)'),J('B8',1260,200),L('L89a',1420,110,110,0,'L8-9 (1)'),L('L89b',1420,290,110,0,'L8-9 (2)'),J('B9',1580,200),
+   L('L910',1700,200,10,0,'L9-10'),J('B10',1820,200),L('L1011',1940,200,25,0,'L10-11'),J('B11',2060,200),T('T3',2160,200),J('B3',2280,200),G('G3',3,2400,200,6.175,true),
+   T('T2',660,320,1),J('B2',660,440),G('G2',2,540,440,6.5),T('T4',1820,320,1),J('B4',1820,440),G('G4',4,1940,440,6.175,true),
+   Ld('LD7',7,860,400,967e6,100e6,'φορτίο 7'),Cp('C7',960,400,200e6,'C 7'),Ld('LD9',9,1520,400,1767e6,100e6,'φορτίο 9'),Cp('C9',1640,400,350e6,'C 9')];
+  const wires=[['G1:abc','B1'],['B1','T1:abc1'],['T1:abc2','B5'],['B5','L56:abc1'],['L56:abc2','B6'],['B6','L67:abc1'],['L67:abc2','B7'],['B7','L78a:abc1'],['L78a:abc2','B8'],
+   ['B8','L89a:abc1'],['L89a:abc2','B9'],['B8','L89b:abc1'],['L89b:abc2','B9'],['B9','L910:abc1'],['L910:abc2','B10'],['B10','L1011:abc1'],['L1011:abc2','B11'],['B11','T3:abc1'],['T3:abc2','B3'],['B3','G3:abc'],
+   ['B6','T2:abc1'],['T2:abc2','B2'],['B2','G2:abc'],['B10','T4:abc1'],['T4:abc2','B4'],['B4','G4:abc'],['B7','LD7:abc'],['B7','C7:abc'],['B9','LD9:abc'],['B9','C9:abc']];
+  // the events: a three-phase fault on bus 8 from 1 s to 1,1 s (it clears at the zeros of its currents); a pulse of 10 MW on bus 9 for 0,1 s (a
+  // load behind a breaker); the opening of circuit 2 of 7–8 at 1 s (a breaker at each end)
+  if(ev==='trip'){comps.find(q=>q.id==='L78b').x=1080;comps.push(C('CB7','CB3',980,290,{cmd:'0:1, 1:0',...c},{label:'CB 7'}),C('CB8','CB3',1180,290,{cmd:'0:1, 1:0',...c},{label:'CB 8'}));
+   wires.push(['B7','CB7:abc1'],['CB7:abc2','L78b:abc1'],['L78b:abc2','CB8:abc1'],['CB8:abc2','B8']);}
+  else wires.push(['B7','L78b:abc1'],['L78b:abc2','B8']);
+  if(ev==='fault'){comps.push(C('F8','FLT3',1260,400,{kind:'abcg',ton:1,toff:1.1,Rf:0,Rg:0,...c},{lbl:'below',label:'σφάλμα στον ζυγό 8'}));wires.push(['B8','F8:abc']);}
+  if(ev==='pulse'){comps.push(C('CBP','CB3',1480,520,{cmd:'0:0, 1:1, 1.1:0',...c},{rot:1,label:'CB φορτίου'}),J('BP',1480,600),C('LDP','LOAD3',1480,680,{cn:'yn',Un,f,P:10e6,Q:0,model:'z',...c},{label:'10 MW',lbl:'below'}));
+   wires.push(['B9','CBP:abc1'],['CBP:abc2','BP'],['BP','LDP:abc']);}
+  // the excitation of part (b): the thyristor exciter of high gain (ST1A with K_A 200, T_R 0,01 s, without K_C and K_LR), with the transient
+  // gain reduction T_C/T_B = 1/10, or with the stabilizer of Fig. E12.9
+  const AV={type:'st1a',KA:200,TR:0.01,KC:0,KLR:0,...(exc==='tgr'?{TC:1,TB:10}:{})},PS={KS:20,TW:10,T1:0.05,T2:0.02,T3:3,T4:5.4};
+  if(avr)for(const [g,x,y] of [['G1',80,60],['G2',540,580],['G3',2400,60],['G4',1940,580]]){const n=g.slice(1);
+   comps.push(C('AV'+n,'AVR',x-150,y,AV,{label:'AVR '+n}));wires.push([g+':vt','AV'+n+':vt'],[g+':v0','AV'+n+':v0'],[g+':e0','AV'+n+':e0'],[g+':ifd','AV'+n+':ifd'],['AV'+n+':efd',g+':efd']);
+   if(pss){comps.push(C('PS'+n,'PSS',x-300,y,PS,{label:'PSS '+n}));wires.push([g+':w','PS'+n+':w'],['PS'+n+':vs','AV'+n+':vs']);}}
+  const G4=['G1','G2','G3','G4'],sub=['₁','₂','₃','₄'],panes=[G4.map((g,i)=>['Y:'+g+':d','δ'+sub[i]+' (°)']),G4.map((g,i)=>['Y:'+g+':pe','P'+sub[i]]),G4.map((g,i)=>['Y:'+g,'ω'+sub[i]]),
+   ...(avr?[G4.map((g,i)=>['Y:AV'+(i+1)+'/EFD','E_fd'+sub[i]])]:[]),G4.map((g,i)=>['Y:'+g+':vt','|V'+sub[i]+'|'])];
+  const Tf=ev==='none'?1:10;
+  return project(comps,wires,{version:4,sim:{hDiv:+(o.hdiv||100),method:'TR',speed:ev==='none'?2:10,stopT:Tf},scope:{panes,window:{unit:'s',n:Tf}},meta:{lf:LF,P:TWO_AREA_P,exc,ev}});}
+ T.push({id:'two_area_emt',group:'Συστήματα ισχύος (5.1.2)',title:'Σύστημα δύο περιοχών (Παράδειγμα 12.6) σε EMT, από τη ροή φορτίου',theory:'formula',topology:'two_area_emt',
+  options:[{k:'exc',label:'Διέγερση',options:[['manual','Σταθερή E_fd'],['thyristor','Θυριστορικός διεγέρτης, K_A = 200'],['tgr','Θυριστορικός με μείωση μεταβατικού κέρδους (T_C = 1, T_B = 10)'],['pss','Θυριστορικός και PSS']],def:'pss'},
+   {k:'ev',label:'Γεγονός',options:[['none','Καμία διαταραχή: η μόνιμη κατάσταση της ροής φορτίου'],['fault','Τριφασικό σφάλμα στον ζυγό 8 στο 1 s, για 0,1 s'],['pulse','Παλμός φορτίου 10 MW στον ζυγό 9 στο 1 s, για 0,1 s'],['trip','Άνοιγμα του κυκλώματος 2 της 7–8 στο 1 s']],def:'fault'}],
+  desc:'Το σύστημα δύο περιοχών του Παραδείγματος 12.6 του «Power System Stability and Control» (το δίκτυο δοκιμής two_area): δύο όμοιες περιοχές με δύο μονάδες των 900 MVA η καθεμία, ενωμένες με δύο κυκλώματα των 2 × 110 km ανάμεσα στους ζυγούς 7, 8 και 9 (230 kV, 100 MVA, 60 Hz)· η περιοχή 1 στέλνει περίπου 400 MW στην 2. Οι μονάδες ξεκινούν από την τάση |V|∠θ της ροής φορτίου του pcl.network, με τα δεδομένα του παραδείγματος (pcl.rms.TWO_AREA_UNIT) χωρίς τον κορεσμό του. Οι μετασχηματιστές ανύψωσης είναι κλάδοι σε ανά μονάδα, κάθε γραμμή ένα τμήμα π, τα φορτία και οι πυκνωτές των ζυγών 7 και 9 σταθερές εμπεδήσεις στην τάση της ροής φορτίου. Οι διεγέρσεις είναι του μέρους (b) του παραδείγματος, με τα όρια των προεπιλογών: θυριστορικός διεγέρτης με K_A = 200, με μείωση του μεταβατικού κέρδους, ή με PSS. Το βήμα είναι 1/(100·60) s: η δ₁ − δ₃ του σφάλματος απέχει 0,008° από αυτήν με 1/(400·60) s. Η κάρτα «Δυναμική RMS» λύνει το ίδιο σχέδιο σε φασιθέτες και δίνει τους ηλεκτρομηχανικούς τρόπους στην αρχή.',
+  tasks:['Χωρίς διαταραχή: το EMT μένει στη ροή φορτίου· η κάρτα θεωρίας δείχνει |V| και P των μονάδων απέναντι σε αυτήν.','Σφάλμα με PSS: η δ₁ − δ₃ ανεβαίνει από 25,95° στις 30,84° (στα 1,50 s) και η ταλάντωση σβήνει. Τρέξε την κάρτα «Δυναμική RMS» στο ίδιο σχέδιο: 30,62°, και σε 10 s οι δύο απέχουν ως 0,26°.','Θυριστορικός διεγέρτης χωρίς PSS: ο διαπεριοχικός τρόπος (οι G1, G2 απέναντι στις G3, G4) είναι ασταθής και μετά το σφάλμα η ταλάντωση μεγαλώνει· με τη μείωση του μεταβατικού κέρδους ακόμη πιο γρήγορα. Στην κάρτα RMS οι ιδιοτιμές στην αρχή έχουν σ > 0.','Παλμός φορτίου με σταθερή E_fd: ο διαπεριοχικός τρόπος στα 0,544 Hz στο EMT, στα 0,543 Hz στις ιδιοτιμές της κάρτας. Η απόσβεση διαφέρει (σ −0,111/s στο EMT, −0,092/s στο RMS)· η διαφορά είναι γραμμένη στο THEORY §8ΩΧ.','Άνοιγμα του κυκλώματος 2 της 7–8: η σύνδεση γίνεται πιο ασθενής και η γωνία ανεβαίνει (με PSS ως 52,9°). Χωρίς ρυθμιστές στροφών η συχνότητα ανεβαίνει, γιατί οι μονάδες δίνουν λιγότερη ισχύ από την T_m τους· με σταθερή E_fd το EMT χάνει τον συγχρονισμό στα 16,5 s, ενώ το RMS, με το δίκτυο στα 60 Hz, όχι.'],
+  build(o){return twoAreaBuild(o);}});
 
  // 5.0.4 (ROADMAP §96 B.2, CIGRE TB 39 §5.1, Fig. 15): the area of buses 1 and 4 of the IEEE 9 case in EMT, the rest of the network as one
  // EQV3 at the boundary buses 5 and 9, or the whole network for the comparison. IEEE9_EQ: pcl.equivalent.emt_ports(ieee9 at 60 Hz, ['5', '9'],

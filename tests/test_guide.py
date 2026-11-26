@@ -161,6 +161,21 @@ class Guide(unittest.TestCase):
             said = re.search(r'Τυπώνει:\n\n```\n(.*?)```', sec, re.S).group(1).strip()
             self.assertEqual(r.stdout.strip(), said)
 
+    def test_the_python_example_of_5_1_2_runs_as_written(self):
+        # §60: the two-area system in EMT (the drawing of two_area_emt) in RMS: the interarea mode at the start with each excitation, the fault
+        bl = blocks('5.1.2')
+        self.assertEqual(len(bl), 1)
+        head, code = bl[0]
+        self.assertTrue(head.startswith('60. '), head)
+        text = (ROOT / 'docs' / 'GUIDE.md').read_text(encoding='utf-8')
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING='utf-8', PCL_HOME=d)
+            r = subprocess.run([sys.executable, '-c', code], cwd=d, env=env, capture_output=True, text=True, encoding='utf-8', timeout=900)
+            self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+            sec = [q for q in re.split(r'(?m)^## ', text) if q.startswith('60. ')][0]
+            said = re.search(r'Τυπώνει:\n\n```\n(.*?)```', sec, re.S).group(1).strip()
+            self.assertEqual(r.stdout.strip(), said)
+
     def test_the_python_example_of_5_1_1_runs_as_written(self):
         # §59: the protection of the MMCC as events in RMS: a station P with a fault at its bus, the block for good, by hand
         bl = blocks('5.1.1')

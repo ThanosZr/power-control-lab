@@ -430,5 +430,15 @@ const {chromium}=require('playwright');
   cd:(r?.result?.dc?.sources?.ICD?.P||[]).slice(-1)[0]};});
  ok(/^Χωρίς μηχανές: 1 μετατροπείς, 4 σταθμοί/.test(rb.sum)&&rb.n==='3,1,3'&&rb.st===4&&Math.abs(rb.cd-55)<1,
   'RMS: the drawing of «b4dcs2», its stations, its DC grid and Cd-E1 from its expression ('+rb.n+'; Cd-E1 '+(rb.cd||0).toFixed(1)+' MW)');
+ // 5.1.2 (ROADMAP §101 step 1): the card on the drawing of «two_area_emt» with the PSS: its fault, stable, the five charts, and the
+ // three rotor modes at the start (ιδιοτιμές στην αρχή), the interarea one first: G1, G2 against G3, G4 at 0,604 Hz
+ await p.evaluate(()=>{window.PCL.loadTutorial('two_area_emt',{exc:'pss',ev:'fault'});});await p.waitForTimeout(1200);
+ await p.evaluate(()=>{window.PCL.RM.T=2;window.PCL.RM.h=5;window.PCL.RM.modes=true;window.PCL.rmsRender();});
+ await p.waitForSelector('[data-rmgo]',{timeout:30000});await p.click('[data-rmgo]');
+ await p.waitForFunction(()=>!window.PCL.RM.busy&&(document.querySelector('#rms-sum')||document.querySelector('#rms-err'))&&window.PCL.RM.r?.result?.machines?.G4,null,{timeout:180000});
+ const ra=await p.evaluate(()=>{const rows=[...document.querySelectorAll('#rms-modes tr')].map(r=>r.textContent);return {sum:(document.querySelector('#rms-sum')||document.querySelector('#rms-err')).textContent,
+  charts:document.querySelectorAll('#rms-charts svg').length,rows:rows.length,first:rows[1]||'',ev:(window.PCL.RM.r?.result?.events||[]).map(e=>e.kind).join(',')};});
+ ok(/^✓ Ευσταθές/.test(ra.sum)&&ra.charts===5&&ra.rows===4&&/^0[,.]604/.test(ra.first)&&/G3.*G4.*↔.*G1.*G2/.test(ra.first)&&ra.ev==='fault,clear',
+  'RMS: the drawing of «two_area_emt», its fault, stable, and its three rotor modes at the start ('+ra.first+')');
  console.log(JSON.stringify({rm:rm.split('\n').slice(0,4),bt:bt.split('\n').slice(0,4),imp},null,1));
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

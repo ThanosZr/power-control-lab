@@ -11,6 +11,7 @@ the continuation load flow), 'se' (4.19.5: state estimation from measurements), 
 
 5.0.13 (ROADMAP §101 step 1): 'rms', the RMS dynamics from the load flow (pcl.network.Network.dynamic; options t_end, h, events,
 machines, default, loads, typical, record, method, step, buses); of a drawing with its machines, their controls and its events.
+5.1.2: and modes (the electromechanical modes at the start, Network.dynamic(modes=True)), for the card «Δυναμική RMS».
 
 5.0.11 (ROADMAP §70 point 1): 'drawing' = the common model of a drawing of the app (web/studio/model.js, pcl.model): the network is
 the drawing's (pcl.model.network: 'pf' for the load flows, as the EMT start of the drawing; 'sc' for IEC 60909-0), with the ids of the
@@ -43,7 +44,7 @@ OPTIONS = {'pf': ('method', 'tol', 'max_iter', 'q_limits', 'flat'), 'dc': (), 'n
                   'pmu', 'currents', 'emt'),
            'harmonic': ('sources', 'harmonics', 'load_model', 'line_model', 'pulse', 'filters', 'scan_bus', 'scan_to', 'scan_step', 'tol', 'spectra'),
            'unbalanced': ('regulators', 'spread', 'tol', 'max_iter'), 'advice': (), 'sc': ('fault', 'mode', 'tmin'),
-           'rms': ('t_end', 'h', 'events', 'machines', 'default', 'loads', 'typical', 'record', 'method', 'step', 'buses', 'stations'), 'acdc': ('method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits', 'set', 'out', 'mode', 'flow_limits', 'start', 'outages')}
+           'rms': ('t_end', 'h', 'events', 'machines', 'default', 'loads', 'typical', 'record', 'method', 'step', 'buses', 'stations', 'modes'), 'acdc': ('method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits', 'set', 'out', 'mode', 'flow_limits', 'start', 'outages')}
 MAX_BUSES = 20000
 
 

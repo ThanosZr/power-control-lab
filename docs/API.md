@@ -1,6 +1,6 @@
 # Δημόσιο API
 
-Έκδοση 5.1.1: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (1033 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
+Έκδοση 5.1.2: **σταθερό** από την 4.0: ο κανόνας παρακάτω ισχύει. Παράγεται με `python tools/api_surface.py` από τον ίδιο τον κώδικα (1033 σημεία σε 7 επιφάνειες), και ο CI ελέγχει ότι είναι ενημερωμένο (`--check`).
 
 ## Κανόνας για αλλαγές που σπάνε (εγκρίθηκε 10/11/2026, ισχύει από την 4.0)
 
@@ -16,7 +16,7 @@
 
 ## Παρωχημένα
 
-Κανένα στην 5.1.1.
+Κανένα στην 5.1.2.
 
 ## Σημεία επέκτασης (3.19, 4.0): πώς μεγαλώνουν στην 4.x χωρίς να σπάσει τίποτα
 
@@ -454,7 +454,7 @@
 | `pcl.network.Network.dc_line` | `a`, `b`, `R`, `r`, `length`, `poles`, `name`, `rating`, `L`, `C` | 4.20 |
 | `pcl.network.Network.dc_source` | `bus`, `I`, `name` | 5.0.16 · πειρ. |
 | `pcl.network.Network.dcdc` | `a`, `b`, `control`, `P`, `V`, `droop`, `Prated`, `R`, `name` | 4.20.4 |
-| `pcl.network.Network.dynamic` | `t_end`, `events`, `machines`, `default`, `loads`, `h`, `record`, `method`, `step`, `buses`, `f`, `pf`, `typical`, `slow_after`, `stations` | 5.0.13 · πειρ. |
+| `pcl.network.Network.dynamic` | `t_end`, `events`, `machines`, `default`, `loads`, `h`, `record`, `method`, `step`, `buses`, `f`, `pf`, `typical`, `slow_after`, `stations`, `modes` | 5.0.13 · πειρ. |
 | `pcl.network.Network.element` | `name` | 4.2 |
 | `pcl.network.Network.equivalent` | `boundary`, `internal`, `kind`, `lf`, `slack`, `tol`, `mode` | 5.0.3 |
 | `pcl.network.Network.estimate` | `measurements`, `**kw` | 4.19.5 |

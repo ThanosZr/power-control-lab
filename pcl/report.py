@@ -557,25 +557,43 @@ def _rms(r, res, top=10):
         r.heading('Συμβάντα')
         r.table(['t (s)', 'Συμβάν', 'Πού', 'Από το στοιχείο'], [[e['t'], KIND.get(e['kind'], e['kind']), e.get('gen') or e.get('bus') or e.get('branch') or '—',
                                                            e.get('id') or '—'] for e in res['events']], '', [4, None, None, None])
+    md = res.get('modes')
+    if isinstance(md, list) and md:                         # 5.1.2: the electromechanical modes at the start (modes=True)
+        def swing(m):
+            u = sorted(((k, v) for k, v in m['shape'].items() if v[0] >= 0.1), key=lambda q: -q[1][0])
+            one = ', '.join(k for k, v in u if abs(v[1]) < 90)
+            two = ', '.join(k for k, v in u if abs(v[1]) >= 90)
+            return f'{one} απέναντι σε {two}' if two else one
+        r.heading('Ιδιοτιμές στην αρχή')
+        r.table(['f (Hz)', 'ζ', 'σ (1/s)', 'ω (rad/s)', 'Ταλαντώνονται'], [[m['f'], m['zeta'], m['lambda'][0], m['lambda'][1], swing(m)] for m in md],
+                'Οι ηλεκτρομηχανικοί τρόποι από 0,05 ως 4 Hz, στις ταχύτητες των μονάδων', [4, 3, 4, 4, None])
+    elif isinstance(md, dict):
+        r.note('Ιδιοτιμές: ' + str(md.get('error') or 'δεν βγήκαν'), 'warning')
     M = res.get('machines') or {}
     if not M:
         return
     t = [float(x) for x in res['t']]
     names = sorted(M, key=lambda k: -max(abs(float(v)) for v in M[k].get('delta_coi', [0.0])))[:top]
     note = f' (οι {top} με τη μεγαλύτερη απόκλιση)' if len(M) > top else ''
+    # 5.1.2: at most SERIES series per chart (with four machines or more the charts were refused): the angles and E_fd in charts of
+    # SERIES machines, the frequency and the voltages with the SERIES − 1 machines of the largest swing
     r.heading('Γωνίες των δρομέων')
-    r.chart('line', t, [{'name': k, 'y': [float(v) for v in M[k].get('delta_coi', M[k]['delta'])]} for k in names],
-            'Γωνία από το κέντρο αδράνειας' + note, 't (s)', '°', table=False)
+    parts = [names[i:i + SERIES] for i in range(0, len(names), SERIES)]
+    for j, part in enumerate(parts):
+        r.chart('line', t, [{'name': k, 'y': [float(v) for v in M[k].get('delta_coi', M[k]['delta'])]} for k in part],
+                'Γωνία από το κέντρο αδράνειας' + note + (f' ({j + 1}/{len(parts)})' if len(parts) > 1 else ''), 't (s)', '°', table=False)
     if res.get('f_coi') is not None:
         r.heading('Συχνότητα')
-        r.chart('line', t, [{'name': 'κέντρο αδράνειας', 'y': [float(v) for v in res['f_coi']]}] + [{'name': k, 'y': [float(v) for v in M[k]['f']]} for k in names[:5]],
+        r.chart('line', t, [{'name': 'κέντρο αδράνειας', 'y': [float(v) for v in res['f_coi']]}] + [{'name': k, 'y': [float(v) for v in M[k]['f']]} for k in names[:SERIES - 1]],
                 'Συχνότητα', 't (s)', 'Hz', table=False)
     r.heading('Τάσεις')
-    r.chart('line', t, [{'name': 'η ελάχιστη του δικτύου', 'y': [float(v) for v in res['Vmin']]}] + [{'name': k, 'y': [float(v) for v in M[k]['V']]} for k in names[:5]],
+    r.chart('line', t, [{'name': 'η ελάχιστη του δικτύου', 'y': [float(v) for v in res['Vmin']]}] + [{'name': k, 'y': [float(v) for v in M[k]['V']]} for k in names[:SERIES - 1]],
             'Μέτρο τάσης', 't (s)', 'pu', table=False)
     ex = [k for k in names if 'Efd' in M[k] and (M[k].get('controls') or {}).get('avr')]
-    if ex:
-        r.chart('line', t, [{'name': k, 'y': [float(v) for v in M[k]['Efd']]} for k in ex], 'Τάση διέγερσης E_fd', 't (s)', 'pu', table=False)
+    parts = [ex[i:i + SERIES] for i in range(0, len(ex), SERIES)]
+    for j, part in enumerate(parts):
+        r.chart('line', t, [{'name': k, 'y': [float(v) for v in M[k]['Efd']]} for k in part],
+                'Τάση διέγερσης E_fd' + (f' ({j + 1}/{len(parts)})' if len(parts) > 1 else ''), 't (s)', 'pu', table=False)
     rows = []
     for k, o in M.items():
         c = o.get('controls') or {}

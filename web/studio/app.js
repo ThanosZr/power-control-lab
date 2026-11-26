@@ -1186,7 +1186,9 @@ async function dmAct(what){const r=DM.r;if(!r)return;
 // of the references) or one chosen here. The angles from the centre of inertia, the frequency, the voltages and E_fd.
 // 5.0.16 (ROADMAP §101 step 2): and the converters (VSC2 with its GFMC or MMCC) and the stations of the DC grids (MMC with its
 // MMCC) of the drawing: their P and frequency, the DC voltages and the power of each station into its DC grid.
-const RM={r:null,q:null,key:null,busy:false,err:null,T:5,h:5,loads:'Z',ev:'drawing',bus:'',gen:'',t0:0.1,dur:100,dv:0.05,dp:0.1};
+// 5.1.2 (ROADMAP §101 step 1): and the electromechanical modes of the drawing at its start (modes: the eigenvalues of the linearized
+// system, Network.dynamic(modes=True)), with the units that swing against each other
+const RM={r:null,q:null,key:null,busy:false,err:null,T:5,h:5,loads:'Z',ev:'drawing',bus:'',gen:'',t0:0.1,dur:100,dv:0.05,dp:0.1,modes:true};
 const RM_EV=[['drawing','Τα συμβάντα του σχεδίου (σφάλματα, διακόπτες, προγράμματα AVR και GOV)'],['fault','Τριφασικό σφάλμα σε ζυγό'],['gen','Απώλεια μονάδας'],
  ['vref','Βήμα στην αναφορά τάσης (AVR)'],['pref','Βήμα στην αναφορά φορτίου (ρυθμιστής στροφών)'],['none','Καμία διαταραχή']];
 const RM_COL=['#147966','#c47a1c','#2f5fa0','#b03a5b','#6b4fa0','#3d8b3d','#1f8fa0','#8a5a2b'];
@@ -1222,6 +1224,7 @@ function rmsRender(){const box=$('#rms-out');if(!box||!$('#rms')?.open)return;
  if(RM.ev==='pref')h+=`<label>ΔP_ref (pu) ${num('dp',RM.dp,0.05)}</label>`;
  if(!['drawing','none'].includes(RM.ev))h+=`<label>στα (s) ${num('t0',RM.t0,0.05)}</label>`;
  h+=`<label>διάρκεια (s) ${num('T',RM.T,1)}</label><label>βήμα (ms) ${sel('h',[[1,'1'],[2,'2'],[5,'5'],[10,'10']],RM.h)}</label><label>φορτία ${sel('loads',[['Z','σταθερή εμπέδηση'],['I','σταθερό ρεύμα'],['P','σταθερή ισχύς']],RM.loads)}</label>
+  <label><input type="checkbox" data-rmmodes ${RM.modes?'checked':''}> ιδιοτιμές στην αρχή</label>
   <button data-rmgo ${RM.busy?'disabled':''}>▶ Δυναμική RMS</button>${fresh?' <button data-rmrep>📄 Αναφορά</button>':''}</div>`;
  if(RM.busy)h+=`<p class="small muted">… στο engine</p>`;
  if(RM.err)h+=`<p class="small bad" id="rms-err">⚠ ${esc(RM.err)}</p>`;
@@ -1231,6 +1234,7 @@ function rmsRender(){const box=$('#rms-out');if(!box||!$('#rms')?.open)return;
   h+=`<p class="small" id="rms-sum">${names.length?`${sm.stable?'✓ Ευσταθές':'⚠ Ασταθές'}: κάθε γωνία ${sm.stable?'μένει':'δεν μένει'} μέσα σε 180° από το κέντρο αδράνειας (το πολύ ${fmt(sm.max_angle_coi,4)}°)· συχνότητα από ${fmt(sm.f_min,6)} ως ${fmt(sm.f_max,6)} Hz· `
    :`Χωρίς μηχανές: ${cn.length} μετατροπείς${D?`, ${Object.keys(D.stations||{}).length} σταθμοί, τάσεις DC από ${fmt(sm.Udc_min,5)} ως ${fmt(sm.Udc_max,5)} pu`:''}${sm.f_min!=null?`· συχνότητα (PLL, ταλαντωτές) από ${fmt(sm.f_min,6)} ως ${fmt(sm.f_max,6)} Hz`:''}· `}η ελάχιστη τάση ${fmt(sm.V_min,4)} pu (${esc(vb||'')})· ${r.stats.steps} βήματα των ${fmt(r.h*1e3,3)} ms σε ${fmt(r.stats.time,3)} s.</p>`;
   for(const n of RM.r.network?.drawing?.notes||[])h+=`<p class="small muted">${esc(n)}</p>`;
+  if(r.modes)h+=rmsModes(r.modes,lab);
   if(evs.length)h+=`<p class="small">Συμβάντα: ${evs.map(e=>`${fmt(e.t,4)} s ${esc({fault:'σφάλμα',clear:'εκκαθάριση',trip:'άνοιγμα κλάδου',gen:'απώλεια μονάδας',vref:'βήμα V_ref',pref:'βήμα P_ref',load:'βήμα φορτίου',shunt:'σύνδεση φορτίου',block:'μπλοκάρισμα',deblock:'απεμπλοκή'}[e.kind]||e.kind)}${e.gen?' '+esc(lab(e.gen)):(e.bus||e.branch)?' '+esc(e.bus||e.branch):''}${e.id?` (${esc(lab(e.id))})`:''}${e.by==='prot'?` (προστασία: ${esc({uv:'υπόταση AC',oc:'υπερένταση DC',brk:'διακόπτης AC'}[e.why]||e.why)})`:''}`).join(' · ')}.</p>`;
   const leg=list=>`<div class="rms-leg">${list.map((k,i)=>`<span><i style="background:${RM_COL[i%RM_COL.length]}"></i>${esc(lab(k))}</span>`).join('')}</div>`;
   if(names.length){h+=leg(names)+'<div class="rms-grid" id="rms-charts">';
@@ -1251,10 +1255,18 @@ function rmsRender(){const box=$('#rms-out');if(!box||!$('#rms')?.open)return;
     +(so.length?rmsChart('Πηγές ρεύματος DC: ισχύς προς τον ζυγό τους','MW',t,so.map((k,i)=>({y:D.sources[k].P,c:col(sn.length+i)})),evs):'')+'</div>';}}
  box.innerHTML=h;$('#rms-state').textContent=fresh?(RM.r.summary?.stable?'ευσταθές':'ασταθές'):'';
  box.querySelectorAll('[data-rm]').forEach(el=>el.onchange=()=>{const k=el.dataset.rm;RM[k]=el.type==='number'?+el.value:el.value;if(k==='ev')rmsRender();});
+ box.querySelector('[data-rmmodes]')?.addEventListener('change',e=>{RM.modes=e.target.checked;});
  box.querySelector('[data-rmgo]')?.addEventListener('click',rmsRun);box.querySelector('[data-rmrep]')?.addEventListener('click',rmsReport);}
+// 5.1.2: the modes at the start: f, ζ, λ, and the units on the speeds of each mode (|·| from 0,1 of the largest), in two groups by the
+// angle against the largest (within 90° of it, or not): the ones that swing together, and against the others
+function rmsModes(M,lab){if(!Array.isArray(M))return `<p class="small muted" id="rms-modes">Ιδιοτιμές: ${esc(M.error||'δεν βγήκαν')}.</p>`;
+ if(!M.length)return '<p class="small muted" id="rms-modes">Ιδιοτιμές: κανένας ηλεκτρομηχανικός τρόπος από 0,05 ως 4 Hz.</p>';
+ const grp=m=>{const u=Object.entries(m.shape).filter(([,v])=>v[0]>=0.1).sort((a,b)=>b[1][0]-a[1][0]),one=u.filter(([,v])=>Math.abs(v[1])<90),two=u.filter(([,v])=>Math.abs(v[1])>=90);
+  const w=l=>l.map(([k,v])=>`${esc(lab(k))} ${fmt(v[0],2)}`).join(' · ');return two.length?`${w(one)} <b>↔</b> ${w(two)}`:w(one);};
+ return `<table class="rms-modes" id="rms-modes"><tbody><tr><th>f (Hz)</th><th>ζ</th><th>λ (1/s)</th><th>ταλαντώνονται (στις ταχύτητες, η μεγαλύτερη 1)</th></tr>${M.map(m=>`<tr><td>${fmt(m.f,4)}</td><td>${fmt(m.zeta,3)}</td><td>${fmt(m.lambda[0],4)} ± j${fmt(m.lambda[1],4)}</td><td>${grp(m)}</td></tr>`).join('')}</tbody></table>`;}
 let rmsT=0;const rmsSoon=()=>{clearTimeout(rmsT);rmsT=setTimeout(rmsRender,150);};
 async function rmsRun(){const m=dmModel();if(!m||m.error||RM.busy)return;RM.busy=true;RM.err=null;rmsRender();
- const T=Math.min(Math.max(+RM.T||5,0.1),600),opt={t_end:T,h:(+RM.h||5)/1e3,loads:RM.loads,record:Math.max((+RM.h||5)/1e3,T/1500),events:rmsEvents(m),drawing_events:RM.ev==='drawing'};
+ const T=Math.min(Math.max(+RM.T||5,0.1),600),opt={t_end:T,h:(+RM.h||5)/1e3,loads:RM.loads,record:Math.max((+RM.h||5)/1e3,T/1500),events:rmsEvents(m),drawing_events:RM.ev==='drawing',...(RM.modes?{modes:true}:{})};
  try{const q={drawing:m,study:'rms',options:opt};const r=await api('network_study',q);RM.r=r;RM.q=q;RM.key=dmKey(m);}
  catch(e){RM.r=null;RM.err=/fetch|NetworkError|Load failed/i.test(e.message)?'Η δυναμική RMS τρέχει στο engine: ξεκίνα τον τοπικό server (python run.py) και δοκίμασε ξανά.':e.message;}
  RM.busy=false;rmsRender();}
@@ -2082,6 +2094,15 @@ function ieee9Theory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.lf)return '';
  if(!m.fault&&!m.noAF)for(const g of ['G2','G3']){const q=s.lastPeriod('Y:'+g+':d');rows.push([`δ ${g} (Anderson & Fouad, Πίν. 9.1)`,IEEE9_AF[g],q?.avg,'°']);}
  return `<ul class="eqs"><li>Ροή φορτίου (pcl.network, Newton–Raphson): οι γεννήτριες ξεκινούν από |V|∠θ του ζυγού τους· τα φορτία ως σταθερή εμπέδηση στην τάση της ροής φορτίου</li>
   <li>Αρχικοποίηση: το κύκλωμα λύνεται με φασιθέτες στα ${fmt(60,3)} Hz (ω_e = (2/h)·tan(ωh/2) για τον τραπεζοειδή), οι μηχανές από τη μόνιμη κατάστασή τους (δ, i_d, i_q, i_fd, E_fd, T_m)</li></ul>`+(m.fault?'':cmpRows(rows));}
+// 5.1.2 (THEORY §8ΩΧ): the two-area system of Example 12.6 in EMT: |V| and P of the units and |V| of the load buses against the load flow of
+// the case two_area (TWO_AREA_LF, the P of each unit, G3 the slack); without a disturbance only, as the IEEE 9 case
+function twoAreaTheory(){const s=S.sim,m=S.tutMeta||{};if(!s||!m.lf||!m.P)return '';const rows=[];
+ for(const [g,b] of [['G1',1],['G2',2],['G3',3],['G4',4]]){const v=s.lastPeriod('Y:'+g+':vt'),p=s.lastPeriod('Y:'+g+':pe');
+  rows.push([`|V| ζυγού ${b} (${g})`,m.lf[b][0],v?.avg,'pu'],[`P της ${g}`,m.P[g],p?p.avg*900:NaN,'MW']);}
+ for(const [ld,b] of [['LD7',7],['LD9',9]]){const q=s.lastPeriod('V:'+ld+'/Ra');rows.push([`|V| ζυγού ${b}`,m.lf[b][0],q?q.rms/(230e3/Math.sqrt(3)):NaN,'pu']);}
+ return `<ul class="eqs"><li>Ροή φορτίου του δικτύου two_area (pcl.network, Newton–Raphson): οι μονάδες ξεκινούν από |V|∠θ του ζυγού τους, η G3 είναι ο ζυγός ταλάντωσης· τα φορτία και οι πυκνωτές ως σταθερή εμπέδηση στην τάση της ροής φορτίου</li>
+  <li>Οι μονάδες του παραδείγματος (900 MVA, H 6,5 και 6,175 s) με τα δεδομένα του pcl.rms.TWO_AREA_UNIT, χωρίς τον κορεσμό του (η GEN3 δεν έχει)· οι διεγέρσεις του μέρους (b) με τα όρια των προεπιλογών</li>
+  <li>Η κάρτα «Δυναμική RMS» λύνει το ίδιο σχέδιο σε φασιθέτες, με τα συμβάντα του, και δίνει τους ηλεκτρομηχανικούς τρόπους στην αρχή: ο διαπεριοχικός είναι οι G1, G2 απέναντι στις G3, G4</li></ul>`+(m.ev==='none'?cmpRows(rows):'');}
 // 5.0.4 (THEORY §8ΩΘ, CIGRE TB 39 §5.1, Fig. 15): the area of the IEEE 9 case with the rest of the network as one EQV3. The ports, and the
 // first peak of i_a in the first cycle of the fault and its rms over the second (the trapezoid on the recorded samples) against the whole
 // network (IEEE9_EQ_REF, the option «Όλο το δίκτυο»)
@@ -3504,6 +3525,7 @@ function formulaTheory(t){
  if(t.topology==='gen_sc')return genScTheory();
  if(t.topology==='fbm')return fbmTheory();
  if(t.topology==='ieee9_emt')return ieee9Theory();
+ if(t.topology==='two_area_emt')return twoAreaTheory();
  if(t.topology==='ieee9_eq')return ieee9EqTheory();
  if(t.topology==='pf_study'||t.topology==='opf_study'||t.topology==='cpf_study'||t.topology==='se_study'||t.topology==='harm_study'||t.topology==='unb_study')return studyTheory();
  if(t.topology==='mtdc5')return mtdcTheory();

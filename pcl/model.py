@@ -1398,7 +1398,9 @@ def events_of(m, net, info):
     """5.0.13: the events of the drawing for the RMS: a three-phase FLT3 (its time of start, and of clearing), the opening of a CB3
     (what is on the side that reaches the fewer parts goes out: the branches there trip, a fault there clears, a generator there
     trips), the
-    program of the reference of an AVR (dV) and of a GOV (dP). Returns (events, notes)."""
+    program of the reference of an AVR (dV) and of a GOV (dP). Returns (events, notes).
+    5.0.16: a CB3 that closes onto loads alone (outside the network of the start) as steps of a shunt; 5.1.2: and when it opens
+    again, the same steps back (a pulse of load: the tutorial two_area_emt)."""
     m = _check(m)
     ev, notes = [], []
     byid = {str(e['id']): e for e in m['elements']}
@@ -1432,7 +1434,12 @@ def events_of(m, net, info):
             v0, ch = _sched(p.get('cmd', '0:1'))
             state = 1.0 if v0 is None else v0
             for tt, x in ch:
-                if x < 0.5 <= state:
+                if x < 0.5 <= state and _closing(e, byid, net, m) is not None:
+                    # 5.1.2: a breaker that opens again onto loads alone outside the network of the start (the loads that its closing
+                    # added as steps of a shunt): the same steps back
+                    for b, y, why in _closing(e, byid, net, m):
+                        ev.append({'t': tt, 'kind': 'shunt', 'bus': b, 'y': -y, 'id': eid})
+                elif x < 0.5 <= state:
                     sides = e.get('sides') or [[], []]
                     reach = next((o['reach'] for o in e.get('opens') or [] if abs(o['t'] - tt) < 1e-9), [len(q) for q in sides])
                     if len(sides) != 2 or reach[0] == reach[1]:

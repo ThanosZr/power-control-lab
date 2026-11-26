@@ -1294,7 +1294,8 @@ class Network:
         return equivalent.reduce(self, boundary, internal, kind=kind, lf=lf, slack=slack, tol=tol, mode=mode)
 
     def dynamic(self, t_end=5.0, events=(), machines=None, default='two_axis', loads='Z', h=0.005, record=0.01,
-                method='simultaneous', step='fixed', buses=None, f=None, pf=None, typical=None, slow_after=8, stations=None):
+                method='simultaneous', step='fixed', buses=None, f=None, pf=None, typical=None, slow_after=8, stations=None,
+                modes=False):
         """5.0.13 (ROADMAP §101 step 1, THEORY §8ΩΝ): the RMS dynamics of the network from its load flow (pcl.rms, experimental).
         machines: {generator: {'model': 'classical' | 'two_axis' | 'subtransient', the data on its S_n (Xd, Xdp, Xdpp, Xq, Xqp,
         Xqpp, Xl, Td0p, Td0pp, Tq0p, Tq0pp, Ra, H, D, SG10, SG12), 'avr': {'type': 'st1a' | 'dc1a', …}, 'pss': {…},
@@ -1329,12 +1330,17 @@ class Network:
         5.1.1 (§101 step 3, THEORY §8ΩΦ): the protection of the MMCC as events, with stations={station: {'prot': 1, 'tprot',
         'Idcmax', 'Vuv', 'tuv', 'tcb'}} (pcl.rms.STATION_DEFAULTS; from a drawing as its MMCC): the events 'block', 'deblock' and 'gen'
         of the protection in 'events' with 'by': 'prot' and 'why' ('uv', 'oc', 'brk'), and 'blocked' (1 while blocked) in 'dc'
-        'stations'; and the events 'block' and 'deblock' (gen: a station) by hand."""
+        'stations'; and the events 'block' and 'deblock' (gen: a station) by hand.
+        5.1.2 (§101 step 1, THEORY §8ΩΧ): modes=True adds 'modes', the electromechanical modes at the start (pcl.rms.System.eigen,
+        before the events): the oscillatory ones from 0,05 to 4 Hz with a rotor angle or speed among the four states that take most
+        part, each {'lambda': [σ, ω] in 1/s and rad/s, 'f' (Hz), 'zeta', 'shape': {unit: [|·|, angle in degrees]} on the speeds,
+        the largest 1, 'part': [[unit, state, participation]]}, by frequency; or {'error': why} when they cannot be had."""
         from . import rms
         if typical is not None:
             machines = {**rms.typical(self, kind=typical), **(machines or {})}
         s = rms.System(self, machines=machines, default=default, loads=loads, f=f, pf=pf, stations=stations)
         start = s.init()
+        em = _rotor_modes(s) if modes else None             # 5.1.2: at the start, before the events
         rec = max(1, int(round(float(record) / float(h)))) if record else 1
         r = s.simulate(float(t_end), events=[dict(e) for e in events or ()], h=float(h), method=method, step=step, record_every=rec,
                        slow_after=int(slow_after))
@@ -1430,6 +1436,8 @@ class Network:
                               't_end': float(r['t'][-1]), 'machines': 0, 'converters': len(conv), 'states': s.nx,
                               **({'Udc_min': float(min(np.min(u) for u in Ud)), 'Udc_max': float(max(np.max(u) for u in Ud)),
                                   'stations': len(out['dc']['stations'])} if Ud else {})}
+        if em is not None:
+            out['modes'] = em
         return out
 
     def to_emt(self, lf=None, machines=None, name=None, t_end=0.5, hdiv=400, boundary=None, internal=None, fig='50', **foster_kw):
@@ -1519,6 +1527,25 @@ class Network:
         return {'version': 4, 'components': comps, 'wires': wires, 'name': name or self.name or 'network',
                 'sim': {'hDiv': int(hdiv), 'speed': 5, 'stopT': float(t_end)}, 'scope': {'panes': scope, 'window': {'unit': 'T', 'n': 10}},
                 'meta': {'lf': {b: {'V': lf['buses'][b]['V'], 'angle': lf['buses'][b]['angle']} for b in names}, 'notes': notes}}
+
+
+def _rotor_modes(s):
+    """5.1.2: the electromechanical modes of a pcl.rms.System at its start (Network.dynamic(modes=True)): from 0,05 to 4 Hz, with
+    a rotor angle or speed among the states that take most part, by frequency, as JSON; {'error': why} if the linearization or the
+    eigenvalues fail (a network with discrete states that the linearization does not take)."""
+    try:
+        E = s.eigen('auto')
+    except Exception as ex:                                # the card shows why; the time domain still runs
+        return {'error': str(ex) or type(ex).__name__}
+    out = []
+    for q in E['modes']:
+        lam = complex(q['lambda'])
+        if lam.imag <= 0 or not 0.05 <= q['f'] <= 4.0 or not any(st in ('delta', 'omega') for _, st, _ in q['part']):
+            continue
+        out.append({'lambda': [lam.real, lam.imag], 'f': float(q['f']), 'zeta': float(q['zeta']),
+                    'shape': {nm: [abs(v), math.degrees(cmath.phase(v))] for nm, v in q['shape'].items()},
+                    'part': [[nm, st, float(p)] for nm, st, p in q['part']]})
+    return sorted(out, key=lambda m: m['f'])
 
 
 def _coo(n, rows, cols, vals):
