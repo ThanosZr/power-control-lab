@@ -1,8 +1,8 @@
 # CAD · οδηγός πλάνου και ενσωμάτωσης
 
-Αναθεώρηση εγγράφων 0.11 · 26/11/2026 · lab-cad-0.8.0-sketch. T008 isolated sketch constraints, rank/DoF, atomic solve; parent T007 `ebf74a8` / CI 45738308465 attempt 2 (4/4). Final T008 CI required on actual HEAD. No PCL integration; both private gates remain open.
+Αναθεώρηση εγγράφων 0.12 · 26/11/2026 · lab-cad-0.9.0-features. T009 isolated feature history/native extrusion; parent T008 `9abc985` / CI 45747371669 (4/4). Final T009 CI required on actual HEAD. No PCL integration; both private gates remain open.
 
-**CAD-T008:** [Sketch engine](CAD_SKETCH_CONTRACT.md). **CAD-T007:** [Parametric editing](CAD_PARAMETRIC_CONTRACT.md).
+**CAD-T009:** [Feature history/native extrusion](CAD_FEATURE_HISTORY_CONTRACT.md). **CAD-T008:** [Sketch engine](CAD_SKETCH_CONTRACT.md). **CAD-T007:** [Parametric editing](CAD_PARAMETRIC_CONTRACT.md).
 
 ## Σειρά ανάγνωσης
 
@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 1 | [CAD_STATUS.md](CAD_STATUS.md) | Ενεργό scope, προηγούμενο δημοσιευμένο checkpoint, πύλες και επόμενο βήμα. |
 | 2 | [CAD_PROJECT_INSTRUCTIONS.md](CAD_PROJECT_INSTRUCTIONS.md) | Κανόνες βάσης, branches, ταυτότητας, ιδιωτικών ελέγχων και παράδοσης. |
-| 3 | [CAD_NEXT_STEPS.md](CAD_NEXT_STEPS.md) | Ενεργό πλάνο, τελικός στόχος, στάδια και συγκεκριμένη ουρά CAD-T001–T008. |
+| 3 | [CAD_NEXT_STEPS.md](CAD_NEXT_STEPS.md) | Ενεργό πλάνο, τελικός στόχος, στάδια και συγκεκριμένη ουρά CAD-T001–T009. |
 | 4 | [CAD_PLAN_DETAILS.md](CAD_PLAN_DETAILS.md) | Αναλυτικές απαιτήσεις, κριτήρια αποδοχής, εξαρτήσεις και πρωτόκολλο ενσωμάτωσης. |
 | 4a | [CAD_KERNEL_EVALUATION.md](CAD_KERNEL_EVALUATION.md) | T002: OCCT, benchmark, custom GPU layers και συγκεκριμένο Fable review. |
 | 4b | [CAD_DOCUMENT_CONTRACT.md](CAD_DOCUMENT_CONTRACT.md) | T003: schema v1, API, shaft template, checks και Fable review. |
@@ -19,6 +19,7 @@
 | 4e | [CAD_VIEWPORT_CONTRACT.md](CAD_VIEWPORT_CONTRACT.md) | T006: retained WebGL2, camera, selection, smoke/test και Fable review. |
 | 4f | [CAD_PARAMETRIC_CONTRACT.md](CAD_PARAMETRIC_CONTRACT.md) | T007: transactional native edit, history, save/open and review. |
 | 4g | [CAD_SKETCH_CONTRACT.md](CAD_SKETCH_CONTRACT.md) | T008: schema, constraints, rank/DoF, atomic transactions and demo. |
+| 4h | [CAD_FEATURE_HISTORY_CONTRACT.md](CAD_FEATURE_HISTORY_CONTRACT.md) | T009: feature dependencies, real extrusion, regeneration, history, demo and review. |
 | 5 | [CAD_INTEGRATION_MAP.md](CAD_INTEGRATION_MAP.md) | Υπάρχων pinned κώδικας, σημεία επαφής, απόδοση, workers, persistence και playback boundaries. |
 | 6 | [CAD_BASELINE.md](CAD_BASELINE.md) | SHA/tree, ακριβή αποτελέσματα/περιορισμοί ελέγχων και προέλευση των drafts. |
 | 7 | [CAD_DECISIONS_01.md](CAD_DECISIONS_01.md) | Ιστορικό απαιτήσεων, προτάσεων και μεταγενέστερων αποφάσεων με σταθερά IDs. |

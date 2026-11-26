@@ -97,6 +97,12 @@ jobs:
         run: |
           node --test experiments/cad_t008/test_sketch.mjs
           node experiments/cad_t008/test_browser.cjs
+      - name: Isolated CAD feature history and native extrusion (T009)
+        if: startsWith(github.ref_name, 'lab-cad-') && hashFiles('experiments/cad_t009/history.py') != ''
+        run: |
+          CAD_PY="$RUNNER_TEMP/cad-native/bin/python"
+          "$CAD_PY" -m unittest experiments.cad_t009.test_history -v
+          PYTHON="$CAD_PY" node experiments/cad_t009/test_browser.cjs
       - name: Σενάρια στον browser
         run: |
           python run.py --no-browser --port 8765 > server.log 2>&1 &

@@ -45,3 +45,7 @@ From repo root: `python -m http.server 8768 --bind 127.0.0.1`, open `http://127.
 - Opus: extend versioned sketch entities and constraints, units, document/revision integration, profile validity/extrude boundary, edit ownership and persistence; require both private gates before any PCL API/GUI integration.
 - Fable: rank-revealing QR/SVD instead of normal equations for ill-conditioned geometry, scaling, analytic-gradient cross-checks, component decomposition, robust singularity/branch selection, minimal conflicts, deterministic multi-solution policy, incremental solve and bounded worker scheduling; benchmark representative sketches and concurrent simulation before performance claims.
 - Proposed T009 only after exact T008 certification and fresh authorization: isolated C3 feature history/profile-to-extrude with native geometry, dependency/revision and failed-regeneration contract. C1 production integration remains incomplete; both private gates are open.
+
+## Final certification (26/11/2026)
+
+Remote HEAD `9abc985db1e6fa68c83f9bb4a8808afe2d6d3d56` verified directly against [CI 45747371669](https://github.com/ThanosZr/power-control-lab/actions/runs/45747371669): exact head/branch, completed/success, all four jobs and dedicated T008 Node/browser step successful. T009 starts from this exact certified commit under D035.

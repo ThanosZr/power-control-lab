@@ -60,6 +60,8 @@
 
 - **CAD-D034 — 26/11/2026:** Εγκρίθηκε T008/SOL χωρίς subagents, μόνο μετά από πιστοποίηση πραγματικού T007 HEAD 4/4. Επαληθεύθηκε `ebf74a85cdef5d1e617412098c881956dfc8d599`, CI 45738308465 attempt 2 success. Απομονωμένο sketch/constraint reference με γραμμές/κύκλους, γεωμετρικούς/διαστατικούς περιορισμούς, rank/DoF, atomic failed solve, deterministic API και μικρό GUI· publish μόνο στο lab-cad-0.8.0-sketch, με additive dedicated CI. Όχι αλλαγή engine, thresholds, main ή bypass ιδιωτικών πυλών. Opus/Fable review backlog χωρίς ανάθεση. Όχι αυτόματο T009.
 
+- **CAD-D035 — 26/11/2026:** Εγκρίθηκε T009/SOL στο `lab-cad-0.9.0-features`, από πιστοποιημένο T008 `9abc985db1e6fa68c83f9bb4a8808afe2d6d3d56` / CI 45747371669 (4/4). Απομονωμένο feature history, T008 solve, πραγματικό native profile-to-extrude, dependency reuse, atomic failed regeneration, undo/redo, round-trip και demo. Μόνο CAD branch, additive CI, καμία ενσωμάτωση PCL, main/base αλλαγή ή bypass ιδιωτικών πυλών. Opus/Fable review χωρίς ανάθεση. Όχι αυτόματο T010.
+
 ## Ανοιχτά
 
 

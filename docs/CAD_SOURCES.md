@@ -63,3 +63,7 @@ T002 (D026–D027) — [CAD_KERNEL_EVALUATION](CAD_KERNEL_EVALUATION.md) και 
 ## CAD-T007 source register
 
 - Parent T006 `68a465be4df460e7918fa0d849a0bddc8f931a8d`, CI [45649705613](https://github.com/ThanosZr/power-control-lab/actions/runs/45649705613) verified exact SHA and 4/4. Reused actual T003/T004/T005/T006 contracts and source from Git; [T007 contract](CAD_PARAMETRIC_CONTRACT.md). No private inputs obtained or published.
+
+## CAD-T009 source register
+
+- Parent T008 `9abc985db1e6fa68c83f9bb4a8808afe2d6d3d56`, [CI 45747371669](https://github.com/ThanosZr/power-control-lab/actions/runs/45747371669) exact SHA and 4/4 verified. Reuse [T008 solver](../experiments/cad_t008/sketch.mjs), T005 native pattern and existing T007 dependency pins/viewport. [T009 contract](CAD_FEATURE_HISTORY_CONTRACT.md). No private inputs obtained or published.

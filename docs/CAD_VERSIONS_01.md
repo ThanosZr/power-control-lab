@@ -138,6 +138,10 @@ Parent T007 exact remote SHA `ebf74a85cdef5d1e617412098c881956dfc8d599`, CI 4573
 
 Isolated C2 implementation and GUI/demo under experiments/cad_t008; contract CAD_SKETCH_CONTRACT, D034. Local Node 13/13 T008 + 7/7 T006, Python 26/26 T003–T007 with real OCCT, engine regression 24/24, CODEMAP/API (947) pass; local Chromium executable unavailable, dedicated real browser smoke included in unchanged four-job CI via additive CAD-only step. Exact final remote tree/CI verification required; no claim of T008 completed until all four and dedicated step successful. Opus/Fable backlog recorded, not delegated. Proposed T009 only with fresh authorization.
 
+## CAD-S020 · 26/11/2026 · SOL · T009
+
+Parent T008 exact remote SHA `9abc985db1e6fa68c83f9bb4a8808afe2d6d3d56`, CI 45747371669 completed/success 4/4 with dedicated T008 success. New branch `lab-cad-0.9.0-features` from that SHA. Engine 5.0.7 unchanged, both private gates unsatisfied. D035 isolated feature history, exact native extrusion, dependency reuse, rollback, history, GUI and round-trip; CAD_FEATURE_HISTORY_CONTRACT. T009 9/9 real native tests, T006/T008 20/20 Node, CODEMAP/API 947 pass; browser smoke requires CI (local Chromium executable missing). Exact final remote head/4 jobs required; no automatic T010. Opus/Fable review recorded, not delegated.
+
 ## Πρότυπο επόμενης εγγραφής
 
 ```text

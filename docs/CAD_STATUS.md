@@ -1,12 +1,12 @@
 # CAD: active handoff
 
-Updated 2026-11-26; revision 0.11, CAD-S019. **Active T008, lab-cad-0.8.0-sketch.** Isolated sketch constraints, rank/DoF, atomic solve, shared JS API/GUI. Parent T007 exact `ebf74a85cdef5d1e617412098c881956dfc8d599` / CI 45738308465 attempt 2, completed/success 4/4, dedicated T006/T007 success. Final T008 CI required on actual HEAD. No PCL integration; both private gates remain open. [Contract](CAD_SKETCH_CONTRACT.md).
+Updated 2026-11-26; revision 0.12, CAD-S020. **Active T009, lab-cad-0.9.0-features.** Isolated feature DAG, T008 profile solve, exact OCCT extrusion, dependency reuse, atomic regeneration/rollback, history and demo. Parent T008 exact `9abc985db1e6fa68c83f9bb4a8808afe2d6d3d56` / CI 45747371669, completed/success 4/4, dedicated T008 success. Final T009 CI required on actual HEAD. No PCL integration; both private gates remain open. [Contract](CAD_FEATURE_HISTORY_CONTRACT.md).
 
 ## Scope and pinned state
 
-- Task: CAD-T008 isolated sketch/constraint engine (D034); SOL, no subagents.
+- Task: CAD-T009 isolated feature history/native extrusion (D035); SOL, no subagents.
 - Repository: ThanosZr/power-control-lab.
-- Branch: lab-cad-0.8.0-sketch; parent T007 ebf74a85cdef5d1e617412098c881956dfc8d599 / CI 45738308465 attempt 2, exact SHA and 4/4 verified.
+- Branch: lab-cad-0.9.0-features; parent T008 9abc985db1e6fa68c83f9bb4a8808afe2d6d3d56 / CI 45747371669, exact SHA and 4/4 verified.
 - Approved engine source: **5.0.7**, dab82e5ff2e6da4bde09e4a38aab32edfffe6d51.
 - Keep the approved base, main and engine branches unchanged. Do not integrate CAD runtime. Isolated WebGL2 viewport using actual native mesh only; no final GPU backend selection.
 - Author and committer: Thanos Zr, 85298380+ThanosZr@users.noreply.github.com.
@@ -28,6 +28,7 @@ The canonical package consists of:
 - CAD_DOCUMENT_CONTRACT and experiments/cad_t003/: isolated synthetic document API, shaft template, demo, tests and Fable review. No native result generation.
 - CAD_WORKER_CONTRACT and experiments/cad_t004/: isolated cooperative synthetic worker coordinator, cache, reservations, demo, tests and Fable review. No native process/geometry or integrated solver arbitration.
 - CAD_SKETCH_CONTRACT and experiments/cad_t008/: standalone 2D sketch model, bounded algebraic solver, rank/DoF, transactional API and SVG demo; no production solver selection.
+- CAD_FEATURE_HISTORY_CONTRACT and experiments/cad_t009/: isolated feature history, T008 bridge, exact native extrusion, retained GPU demo and regression tests; no final topology naming or integrated scheduler.
 
 Update these existing Git files as the project evolves. Once their publication is verified at the remote SHA, tell the owner that repeated uploads of these public CAD docs to project attachments are unnecessary. A saved local file or chat artifact does not prove an attachment changed. Ask for a specific private file only when it is still required and absent.
 
@@ -58,6 +59,7 @@ Update these existing Git files as the project evolves. Once their publication i
 | fb25e821419831a109db4b9e5a043e4a9aabad9d | T005 remote commit with byte-identical locally tested tree 07f2d1a9e9e6b24d5dcb074667bf085ca7bcd2b9; CI 45599503711 independently verified 25/11: completed/success, exact SHA, 4/4 jobs. API publication confirmed author/committer matched. |
 | 68a465be4df460e7918fa0d849a0bddc8f931a8d | T006 certified, CI 45649705613 4/4. |
 | ebf74a85cdef5d1e617412098c881956dfc8d599 | T007 certified, CI 45738308465 attempt 2, exact head, completed/success 4/4; dedicated T006/T007 success. Attempt 1 failed unchanged PCL speed_flow tutorial sampling (379ms >250ms); successful retry without threshold or engine changes. |
+| 9abc985db1e6fa68c83f9bb4a8808afe2d6d3d56 | T008 certified, CI 45747371669, exact head, completed/success 4/4; dedicated T008 Node/browser success. |
 
 The original CAD-S007 map/baseline, S007 version entry and all five revision 0.3 planning files were recovered from earlier generated files on 2026-11-23. An older S006 checkpoint was read too. Do not request those originals again, relabel the reconstruction as recovery or add old timings to current test counts. The separate old patch remained unavailable, but is no longer needed to recover the two documents already read.
 
@@ -90,7 +92,7 @@ The full plan and map describe what existing engine infrastructure can be reused
 
 ## Next action and delivery
 
-Confirm actual T008 HEAD, four CI jobs and dedicated T008 Node/browser step. T008 local Node tests 13/13, T006 7/7, real OCCT Python 26/26, engine regression 24/24, CODEMAP/API 947 pass; browser pending CI due missing Chromium executable locally. Proposed next CAD-T009/C3 isolated feature-history/profile-to-extrude reference only upon exact T008 certification and fresh authorization. Both private gates mandatory before PCL integration; no main/base change. Opus/Fable backlog in CAD_SKETCH_CONTRACT.
+Confirm actual T009 HEAD, four CI jobs and dedicated T009 native/browser step. Local Python 59/59 (26 previous CAD + 9 T009 + 24 PCL), T006/T008 Node 20/20, CODEMAP/API 947 pass; browser pending CI due missing Chromium executable locally. Proposed next CAD-T010/C3 isolated native revolve/boolean and multi-stage regeneration only upon exact T009 certification and fresh authorization. Both private gates mandatory before PCL integration; no main/base change. Opus/Fable backlog in CAD_FEATURE_HISTORY_CONTRACT.
 
 ### T007 CI correction (26/11/2026)
 
