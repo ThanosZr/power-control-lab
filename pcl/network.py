@@ -1313,6 +1313,11 @@ class Network:
         and with controls E_fd, T_m), 'converters' (5.0.14: P, Q, |V|, |I|, ω and f, the current limit, E, soc, B), 'buses',
         'Vmin' (the lowest |V| at each moment), 'stable', 'events', 'stats', 'start'. The centre of inertia is that of the
         machines (a VSM is not in it).
+        5.1.4 (§101, THEORY §8ΩΨ): a generator can be a wind turbine of IEC 61400-27-1:2020, {'model': 'wt4a' | 'wt4b', …} with the
+        parameters of its modules by their text names (pcl.rms.WT_DEFAULTS, our values: the standard gives none), its lookup tables
+        (WT_TABLES), 'qlim': 'const' | 'qpqu', 'prot': 1 for the grid protection; the events 'pref' (dP), 'vref' (dV, M_qG 0) and
+        'qref' (dQ, M_qG 1 or 2) in pu of its rating, and its trip by the protection as 'gen' with 'by': 'prot' and 'why' ('uo',
+        'uu', 'fo', 'fu'); in 'converters' also i_p, i_q, F_FRT ('frt'), for 4B the speeds and p_aero, with the protection 'f'.
         5.0.15 (§101 step 2, THEORY §8ΩΟ): a network with DC grids (dc_bus, dc_line with L and C, vsc, dcdc) starts from its
         AC/DC load flow, and its stations and DC/DC converters are one device (pcl.rms.HVDC); stations: {station or DC/DC
         converter: its dynamic data (pcl.rms.STATION_DEFAULTS, DCDC_DEFAULTS: the gains of the MMCC of the EMT, W in kJ/MVA,
@@ -1364,18 +1369,23 @@ class Network:
                 mach[nm] = o
         # 5.0.14: the converters (pcl.rms.Converter, Statcom, SVC): P and Q in MW and Mvar, |V|, |I| on their rating, f (Hz) of
         # their EMF (grid-forming) or of their PLL (grid-following), the flag of the current limit, E, the state of charge, B (SVC)
+        # 5.1.4: and the wind turbines (pcl.rms.Wind): i_p, i_q (pu on their rating), F_FRT, for 4B the speeds and p_aero, with the
+        # protection f_WTPfilt (as f, Hz) and the flag of the breaker
         conv = {}
         for K in s.kinds:
-            if not isinstance(K, (rms.Converter, rms.SVC, rms.Statcom)):
+            if not isinstance(K, (rms.Converter, rms.SVC, rms.Statcom, rms.Wind)):
                 continue
             for nm in K.names:
                 d = q[nm]
-                kind = 'svc' if isinstance(K, rms.SVC) else 'statcom' if isinstance(K, rms.Statcom) else K.kind
+                kind = 'svc' if isinstance(K, rms.SVC) else 'statcom' if isinstance(K, rms.Statcom) else \
+                    K.model if isinstance(K, rms.Wind) else K.kind
                 o = {'model': kind, 'law': K.law if isinstance(K, rms.Converter) else None,
                      'bus': s.names[K.bus[K.names.index(nm)]], 'P': d['P'] * Sb, 'Q': d['Q'] * Sb, 'V': d['V'], 'I': d['I']}
                 if 'omega' in d:
                     o['omega'], o['f'] = d['omega'], d['omega'] * fr
-                for k in ('limited', 'E', 'soc', 'B'):
+                if 'fP' in d:
+                    o['f'] = d['fP'] * fr
+                for k in ('limited', 'E', 'soc', 'B', 'ip', 'iq', 'frt', 'omega_gen', 'omega_wtr', 'paero', 'tripped'):
                     if k in d:
                         o[k] = d[k]
                 conv[nm] = o

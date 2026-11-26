@@ -2010,6 +2010,451 @@ class HVDC(_Holds, Kind):
         return None
 
 
+# ---------------------------------------------------------------- 5.1.4: the wind turbines of IEC 61400-27-1 (ROADMAP §101, THEORY §8ΩΨ)
+# The generic models of type 4A (the full converter without the aerodynamic and mechanical parts) and type 4B (with the two-mass
+# drive train and a constant aerodynamic torque) of IEC 61400-27-1:2020 (§6.2.5, the modules of §7 and the blocks of Annex D),
+# each as one device on the bus of a generator of the network (its injection from the load flow), per unit on the rating S_n
+# of the turbine (or of the aggregate). The standard gives no parameter values: WT_DEFAULTS are ours (time constants of at
+# least 0,01 s, the rule of §5.1 for a step of 5 ms). Not here: the electrical system as more than its breaker (r_es, x_es,
+# g_es, b_es zero: the transformer is in the network, as §7.5.1 says it normally is), the hooks (zero), the type 3A generator
+# system in a type 4 model, the plant control (§7.9) and the types 1–3. K_qv: in the convention of §3.1.5 (i_q > 0 generates Q)
+# and with Δu the washout of u_WTCfilt as in Fig. 34, a dip gives Δu < 0, so a current injected in a dip needs K_qv < 0 (our
+# reading of the figure; our default −2, the injection of 2 pu per pu of the grid codes).
+WT_DEFAULTS = {
+    'Tpfilt': 0.01, 'Tqfilt': 0.01, 'Tufilt': 0.01,                         # grid measurement for control (§7.8.2)
+    'TPLL': 0.01, 'uPLL1': 0.1, 'uPLL2': 0.05,                              # reference frame rotation (§7.4.5)
+    'Tg': 0.01, 'dipmax': 99.0, 'diqmax': 99.0, 'diqmin': -99.0,            # type 4 generator system (§7.4.4)
+    'Tpordp': 0.01, 'dpmaxp': 1.0, 'TpWTref': 0.05, 'dprefmax': 1.0,        # P control 4A (§7.7.3) and 4B (§7.7.4)
+    'dprefmin': -1.0, 'MpUscale': 0.0, 'updip': 0.9, 'Tpaero': 0.05,
+    'HWTR': 2.5, 'Hgen': 0.5, 'kdrt': 100.0, 'cdrt': 1.0,                   # two-mass (§7.3.1)
+    'MqG': 1.0, 'MqFRT': 1.0, 'KPq': 0.0, 'KIq': 0.5, 'KPu': 1.0,           # Q control (§7.7.5)
+    'KPuFRT': 0.0, 'KIu': 20.0, 'udb1': -0.1, 'udb2': 0.1, 'Tuss': 30.0, 'Kqv': -2.0, 'umax': 1.1, 'umin': 0.9, 'uref0': 0.0,
+    'uqdip': 0.9, 'uqrise': 1.1, 'Tqord': 0.05, 'Tpost': 0.0, 'iqmax': 1.05, 'iqmin': -1.05, 'iqh1': 1.05, 'iqpost': 0.0,
+    'rdrop': 0.0, 'xdrop': 0.0,
+    'imax': 1.1, 'imaxdip': 1.1, 'Mqpri': 1.0, 'upqumax': 1.1, 'Kpqu': 20.0,  # current limitation (§7.7.6)
+    'qmax': 0.33, 'qmin': -0.33,                                            # constant Q limitation (§7.7.7)
+    'prot': 0.0, 'uover': 1.15, 'uunder': 0.85, 'fover': 1.03, 'funder': 0.95,   # grid protection (§7.8.1), off from the API
+    'Tufiltp': 0.01, 'Tffilt': 0.1, 'dPhimax': 0.1, 'Ts': 0.005,            # its measurement (§7.8.2); T_s of Table 12
+}
+# the lookup tables (x, y), as lists of pairs: the voltage dependency of the current limits (§7.7.6, Table 32), the QP and QU
+# limitation (§7.7.8: used with 'qlim': 'qpqu'), and the disconnection times of the protection (§7.8.1, Table 35)
+WT_TABLES = {
+    'ipmaxu': [[0.0, 1.1], [1.0, 1.1]], 'iqmaxu': [[0.0, 1.05], [1.0, 1.05]],
+    'qmaxp': [[0.0, 0.33], [1.0, 0.33]], 'qminp': [[0.0, -0.33], [1.0, -0.33]],
+    'qmaxu': [[0.9, 0.33], [1.1, 0.33]], 'qminu': [[0.9, -0.33], [1.1, -0.33]],
+    'Tuover': [[1.15, 1.0], [1.3, 0.1]], 'Tuunder': [[0.0, 0.15], [0.85, 3.0]],
+    'Tfover': [[1.03, 0.1], [1.05, 0.1]], 'Tfunder': [[0.95, 0.1], [0.97, 0.1]],
+}
+WIND_MODELS = ('wt4a', 'wt4b')
+WT_STATES = {'wt4a': ('pf', 'qf', 'uf', 'phi', 'ip', 'iq', 'pr', 'po', 'qi', 'qo', 'ui', 'us'),
+             'wt4b': ('pf', 'qf', 'uf', 'phi', 'ip', 'iq', 'pl', 'po', 'pa', 'wr', 'wg', 'tk', 'qi', 'qo', 'ui', 'us')}
+WT_PROT_STATES = ('up', 'fa', 'fr', 'ff')
+
+
+def _lut(tab, x):
+    """The lookup table of Annex D.6 on the real part of x (a complex step goes through): linear between the points, the
+    nearest y outside the range (extension, not extrapolation)."""
+    xs, ys = tab
+    xr = float(np.real(x))
+    if xr <= xs[0]:
+        return ys[0] + 0 * x
+    if xr >= xs[-1]:
+        return ys[-1] + 0 * x
+    j = int(np.searchsorted(xs, xr, side='right'))
+    x0, x1, y0, y1 = xs[j - 1], xs[j], ys[j - 1], ys[j]
+    return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+
+
+def _luts(tabs, x):
+    """The tables of the members at their x: one table for all (a tuple (xs, ys)), vectorized; else one per member."""
+    if isinstance(tabs, tuple):
+        xs, ys = tabs
+        if len(xs) == 1:
+            return ys[0] + 0 * x
+        xr = _re(x)
+        k = np.clip(np.searchsorted(xs, xr, side='right'), 1, len(xs) - 1)
+        x0, x1, y0, y1 = xs[k - 1], xs[k], ys[k - 1], ys[k]
+        v = y0 + (y1 - y0) * (x - x0) / np.where(x1 > x0, x1 - x0, 1.0)
+        return np.where(xr <= xs[0], ys[0] + 0 * x, np.where(xr >= xs[-1], ys[-1] + 0 * x, v))
+    return np.array([_lut(tb, xi) for tb, xi in zip(tabs, x)])
+
+
+def _ang(w_r, w_i):
+    """The angle of w (−π, π) as 2·atan(Im/(|w| + Re)): a complex step goes through."""
+    return 2 * np.arctan(w_i / (_hyp(w_r, w_i) + w_r))
+
+
+def _mn(a, b):
+    return np.where(_re(a) <= _re(b), a, b + 0 * a)
+
+
+def _mx(a, b):
+    return np.where(_re(a) >= _re(b), a, b + 0 * a)
+
+
+class Wind(_Holds, Kind):
+    """5.1.4: the wind turbines of IEC 61400-27-1:2020, type 4A and type 4B (THEORY §8ΩΨ), from the block diagrams of its §7
+    and Annex D. The members of one Wind share the type and whether they have the grid protection; the parameters (and the
+    modes M_qG, M_qFRT, M_pUscale, M_qpri) are per member, on the rating S_n.
+
+    Grid measurement (§7.8.2): p, q and u at the terminals through T_pfilt, T_qfilt, T_ufilt. Reference frame rotation
+    (§7.4.5): i = (i_p − j·i_q)·e^(jθ), θ the angle of u, or its filter through T_PLL while |u| < u_PLL1 (frozen below u_PLL2).
+    Type 4 generator system (§7.4.4): i_p and i_q the lags T_g of the commands, with the ramp rates di_pmax (up), di_qmax,
+    di_qmin and the limits i_pmax, i_qmax, i_qmin of the current limitation. P control 4A (§7.7.3): p_WTref through T_pWTref with
+    its ramp rates, times u while u < u_pdip (M_pUscale 1), through T_pordp with the ramp dp_maxp and the limit u·i_pmax, over
+    u_WTCfilt (at least 0,01). 4B (§7.7.4): p_WTref through the stand-alone ramp limiter (Annex D.4), p_aero through T_paero, and
+    the power order of p·ω_gen; the two-mass drive train (§7.3.1). Q control (§7.7.5): the modes M_qG (0 voltage, 1 Q, 2 Q open
+    loop, 3 power factor, 4 power factor open loop), the PI of Q (a voltage reference) and of u (a current), the voltage drop
+    (1), the FRT flag F_FRT (0 normal, 1 below u_qdip or above u_qrise, 2 for T_post after a dip) that freezes the integrators,
+    and the FRT injection M_qFRT (0 K_qv·Δu, 1 and 2 the pre-fault current plus K_qv·Δu, 2 with i_qpost after the dip) within
+    [i_qmin, i_qh1]. Current limitation (§7.7.6): i_max (i_maxdip during the dip), the priority M_qpri, the tables i_pmax(u),
+    i_qmax(u), the slope K_pqu below u_pqumax. Q limitation: constant (§7.7.7) or 'qpqu' (§7.7.8, the tables frozen with F_FRT).
+    Grid protection (§7.8.1, with 'prot'): over/under voltage and frequency against their tables of disconnection time; it
+    opens the breaker, and there is no reconnection; the frequency of the angle of u (s/(2πf_n), the ramp limit dΦ_max,
+    T_ffilt).
+
+    The discrete parts (the flags, the timers, the held values of a freeze) are decided at the start of each step from the
+    point there (_decide, as the limits of 5.0.13). Our formulation of the blocks of Annex D in continuous time: the first order
+    filter with its absolute limits (the state held at a limit while pushing outwards, and projected after the step), its
+    rate limits (which side decided at the start of the step) and its freeze; the stand-alone ramp limiter (D.4) and the
+    derivative of the angle as states that follow their input with the time constant T_s (the step of Table 12; our default
+    5 ms): at a ramp limit the slope is exact, otherwise the output lags by T_s, as the discrete limiter does by one step."""
+
+    def __init__(self, names, bus, p, model='wt4a', prot=False, qlim='const'):
+        super().__init__(names, bus, p)
+        self.model, self.prot, self.qlim = model, bool(prot), qlim
+        st = list(WT_STATES[model]) + (list(WT_PROT_STATES) if prot else [])
+        self.states, self.nx = tuple(st), len(st)
+        self.j = {s: i for i, s in enumerate(st)}
+        self.d = None
+
+    # -------------------------------------------------------------- the decisions inside a step
+    def _dec(self, key, val):
+        if self._rec is not None:
+            self._rec[key] = val
+        if self._fz is not None and key in self._fz:
+            return self._fz[key]
+        return val
+
+    def _rate(self, key, r, lo, hi):
+        """A rate r within [lo, hi] (a ramp limit): which side decided at the start of the step."""
+        side = self._dec(key, np.where(_re(r) > hi, 1, np.where(_re(r) < lo, -1, 0)))
+        return np.where(side > 0, hi + 0 * r, np.where(side < 0, lo + 0 * r, r))
+
+    def _flt(self, key, x, r, lo, hi):
+        """The derivative r of a state x with the absolute limits [lo, hi] of Annex D.5: 0 at a limit while pushing outwards."""
+        held = self._hold(key)(_re(x), _re(r), lo, hi)
+        return np.where(held, 0 * r, r)
+
+    def _d0(self, um):
+        p, m = self.p, self.m
+        return {'F': np.zeros(m), 'tdip': np.full(m, -math.inf), 'pll1': um < p['uPLL1'], 'pll2': um < p['uPLL2'],
+                'usc': (p['MpUscale'] > 0) & (um < p['updip']), 'iqol': np.zeros(m), 'hu': np.zeros(m), 'hp': np.zeros(m),
+                'tr': {q: np.full(m, math.nan) for q in ('uo', 'uu', 'fo', 'fu')}, 'ocb': np.zeros(m, bool)}
+
+    def _snap(self):
+        d = self.d
+        return {**{q: v.copy() for q, v in d.items() if q != 'tr'}, 'tr': {q: v.copy() for q, v in d['tr'].items()}}
+
+    # -------------------------------------------------------------- the model
+    def _core(self, X, Vr, Vi):
+        """The derivatives (in the order of the states), the current injected (pu on S_n) and the signals of the modules."""
+        p, d, j = self.p, self.d, self.j
+        S = lambda q: X[:, j[q]]                            # noqa: E731
+        F = {}
+        um = _hyp(Vr, Vi)                                   # u_WT = u_WTC: the electrical system is its breaker only
+        Fl = d['F']
+        frz = Fl >= 1                                       # the freeze of the Q control (F_FRT ≥ 1)
+        # grid measurement for control (§7.8.2): the filters of p, q, u (p and q from the current, below)
+        pf, qf, uf = S('pf'), S('qf'), S('uf')
+        F['uf'] = (um - uf) / p['Tufilt']
+        uf1 = _floor(uf, 0.01)
+        # reference frame rotation (§7.4.5): the angle of u, or its filter while |u| < u_PLL1 (frozen below u_PLL2)
+        phi = S('phi')
+        cph, sph = np.cos(phi), np.sin(phi)
+        e = _ang(Vr * cph + Vi * sph, Vi * cph - Vr * sph)
+        F['phi'] = np.where(d['pll2'], 0 * e, e / p['TPLL'])
+        um9 = _floor(um, 1e-9)
+        c = np.where(d['pll1'], cph, Vr / um9)
+        s = np.where(d['pll1'], sph, Vi / um9)
+        # Q limitation: constant (§7.7.7) or QP and QU (§7.7.8, the inputs frozen with F_FRT)
+        if self.qlim == 'qpqu':
+            uq = np.where(frz, d['hu'] + 0 * uf, uf)
+            pq = np.where(frz, d['hp'] + 0 * pf, pf)
+            qmax = _mn(_luts(p['t_qmaxu'], uq), _luts(p['t_qmaxp'], pq))
+            qmin = _mx(_luts(p['t_qminu'], uq), _luts(p['t_qminp'], pq))
+        else:
+            qmax, qmin = p['qmax'] + 0 * uf, p['qmin'] + 0 * uf
+        # Q control (§7.7.5)
+        mq, mf = p['MqG'], p['MqFRT']
+        xref = p['Xref'] + p['dX']
+        qref = np.where((mq == 3) | (mq == 4), pf * p['tanphi'], xref + 0 * pf)
+        eq = _mx(_mn(qref, qmax), qmin) - qf
+        qi = S('qi')                                        # (held in the modes that do not use it: at rest, no wind-up unseen)
+        F['qi'] = np.where(frz | ((mq != 1) & (mq != 3)), 0 * eq, self._flt('qi', qi, p['KIq'] * eq, p['umin'], p['umax']))
+        uref = np.where(mq == 0, p['uref0'] + xref + 0 * qi, _clip(qi, p['umin'], p['umax']) + p['KPq'] * eq)
+        uref = _clip(uref, p['umin'], p['umax'])
+        a1 = uf - p['rdrop'] * pf / uf1 - p['xdrop'] * qf / uf1          # the voltage drop (1)
+        a2 = p['xdrop'] * pf / uf1 - p['rdrop'] * qf / uf1
+        eu = uref - _hyp(a1, a2)
+        ui = S('ui')
+        F['ui'] = np.where(frz | (mq == 2) | (mq == 4), 0 * eu, self._flt('ui', ui, p['KIu'] * eu, p['iqmin'], p['iqmax']))
+        kpu = _mx(_mn(p['KPu'] * eu, qmax / uf1), qmin / uf1)
+        iq_cl = _clip(ui, p['iqmin'], p['iqmax']) + np.where(frz, p['KPuFRT'] * eu, kpu)
+        qo = S('qo')
+        F['qo'] = np.where(frz | ((mq != 2) & (mq != 4)), 0 * qo, self._flt('qo', qo, (qref - qo) / p['Tqord'], _re(qmin), _re(qmax)))
+        iq_ol_now = _clip(_mx(_mn(qo, qmax), qmin) / uf1, p['iqmin'], p['iqmax'])
+        iq_ol = np.where(frz, d['iqol'] + 0 * iq_ol_now, iq_ol_now)
+        iqbase = np.where((mq == 2) | (mq == 4), iq_ol, iq_cl)
+        us = S('us')
+        F['us'] = (uf - us) / p['Tuss']
+        du = uf - us                                        # the washout sT_uss/(1 + sT_uss) of u_WTCfilt
+        dd = np.where(_re(du) < p['udb1'], du - p['udb1'], np.where(_re(du) > p['udb2'], du - p['udb2'], 0 * du))
+        iqv = p['Kqv'] * dd                                 # (the dead band of Annex D.16)
+        a = np.where(mf == 0, iqv, iqv + iqbase)
+        f1 = _clip(a, p['iqmin'], p['iqh1'])
+        f2 = _clip(np.where(mf == 2, iqbase + p['iqpost'], a), p['iqmin'], p['iqh1'])
+        iqcmd = np.where(Fl == 0, iqbase, np.where(Fl == 1, f1, f2))
+        # P control: the input of the lag of the power order
+        pref = p['Pref'] + p['dP']
+        if self.model == 'wt4a':                            # §7.7.3
+            pr = S('pr')
+            F['pr'] = self._rate('r_pr', (pref - pr) / p['TpWTref'], p['dprefmin'], p['dprefmax'])
+            pin = np.where(d['usc'], pr * um, pr + 0 * um)
+        else:                                               # §7.7.4: the stand-alone ramp limiter (D.4), p_aero, ω_gen
+            pl = S('pl')
+            F['pl'] = self._rate('r_pl', (pref - pl) / p['Ts'], p['dprefmin'], p['dprefmax'])
+            psel = np.where(d['usc'], pl * um, pl + 0 * um)
+            pa = S('pa')
+            F['pa'] = (psel - pa) / p['Tpaero']
+            pin = psel * S('wg')
+        # current limitation (§7.7.6; M_DFSLim 0, as for type 4)
+        po = S('po')
+        imt = np.where(Fl == 1, p['imaxdip'], p['imax'])
+        ipu, iqu = _luts(p['t_ipmaxu'], uf), _luts(p['t_iqmaxu'], uf)
+        fq = (Fl * p['Mqpri']) > 0                          # F_qpri: the priority of the reactive current during the FRT
+        a = _mn(po / uf1, ipu)                              # (i_pcmd as the state of the power order over u: below its limit)
+        iqmax0 = _mn(np.sqrt(_floor(imt * imt - a * a, 0.0) + 0 * a), iqu)
+        b = _mn(np.where(_re(iqcmd) < 0, -iqcmd, iqcmd), iqu)
+        ipq = _mn(np.sqrt(_floor(imt * imt - b * b, 0.0) + 0 * b), ipu)
+        iqmx = np.where(fq, iqu + 0 * iqmax0, iqmax0)
+        ipmax = np.where(fq, ipq, ipu + 0 * ipq)
+        iqmin_c = -iqmx
+        v = _mn(iqmx, p['Kpqu'] * (p['upqumax'] - uf))
+        iqmax_c = np.where(_re(iqmin_c) < _re(v), v, iqmin_c)
+        # the power order through T_pordp with its ramp dp_maxp and its limit u·i_pmax, over u_WTCfilt
+        plim = um * ipmax
+        rpo = self._rate('r_po', (pin - po) / p['Tpordp'], -math.inf, p['dpmaxp'])
+        F['po'] = self._flt('po', po, rpo, -math.inf, _re(plim))
+        ipcmd = _mn(po, plim) / uf1
+        # type 4 generator system (§7.4.4): the lags of the commands with their ramp rates and the limits of the current limitation
+        ip, iq = S('ip'), S('iq')
+        rip = self._rate('r_ip', (ipcmd - ip) / p['Tg'], -math.inf, p['dipmax'])
+        F['ip'] = self._flt('ip', ip, rip, -math.inf, _re(ipmax))
+        riq = self._rate('r_iq', (iqcmd - iq) / p['Tg'], p['diqmin'], p['diqmax'])
+        F['iq'] = self._flt('iq', iq, riq, _re(iqmin_c), _re(iqmax_c))
+        ipo = _mn(ip, ipmax)
+        iqo = _mx(_mn(iq, iqmax_c), iqmin_c)
+        ir, ii = ipo * c + iqo * s, ipo * s - iqo * c       # i = (i_p − j·i_q)·e^(jθ): p = |u|·i_p, q = |u|·i_q
+        P, Q = Vr * ir + Vi * ii, Vi * ir - Vr * ii
+        F['pf'] = (P - pf) / p['Tpfilt']
+        F['qf'] = (Q - qf) / p['Tqfilt']
+        o = {'P': P, 'Q': Q, 'V': um, 'ip': ipo, 'iq': iqo, 'ipcmd': ipcmd, 'iqcmd': iqcmd, 'ipmax': ipmax, 'iqmax': iqmax_c,
+             'iqmin': iqmin_c, 'iqol': iq_ol_now, 'uf': uf, 'pf': pf, 'plim': plim, 'qmax': qmax, 'qmin': qmin}
+        if self.model == 'wt4b':                            # the two-mass drive train (§7.3.1), p_ag = p (no losses)
+            wr, wg, tk = S('wr'), S('wg'), S('tk')
+            tau = p['cdrt'] * (wr - wg) + tk
+            F['wr'] = (pa / _floor(wr, 0.1) - tau) / (2 * p['HWTR'])
+            F['wg'] = (tau - P / _floor(wg, 0.1)) / (2 * p['Hgen'])
+            F['tk'] = p['kdrt'] * (wr - wg)
+            o['wgen'], o['wtr'], o['paero'] = wg, wr, pa
+        if self.prot:                                       # the measurement for the protection (§7.8.2)
+            up = S('up')
+            F['up'] = (um - up) / p['Tufiltp']
+            fa = S('fa')
+            ea = _ang(Vr * np.cos(fa) + Vi * np.sin(fa), Vi * np.cos(fa) - Vr * np.sin(fa)) / p['Ts']
+            F['fa'] = ea                                    # the angle followed with T_s: its derivative ea, rad/s
+            fr = S('fr')
+            F['fr'] = self._rate('r_fr', (ea / p['w0'] - fr) / p['Ts'], -p['dPhimax'], p['dPhimax'])
+            ff = S('ff')
+            F['ff'] = (fr - ff) / p['Tffilt']
+            o['up'], o['fP'] = up, 1.0 + ff
+        return [F[q] for q in self.states], ir, ii, o
+
+    # -------------------------------------------------------------- start, the decisions, the evaluation
+    def init(self, V, S, wb):
+        p, m, j = self.p, self.m, self.j
+        p['w0'] = wb
+        k = p['k']
+        s = S * k                                           # on S_n
+        um = np.abs(V)
+        P0, Q0 = s.real, s.imag
+        if np.any(um < 0.5):
+            raise RMSError('ανεμογεννήτρια με |V| < 0,5 pu στη ροή φορτίου: ' + ', '.join(self.names))
+        self.d = self._d0(um)
+        p['dP'], p['dX'] = np.zeros(m), np.zeros(m)
+        p.setdefault('on', np.ones(m))
+        X = np.zeros((m, self.nx))
+        ip0, iq0 = P0 / um, Q0 / um
+        X[:, j['pf']], X[:, j['qf']], X[:, j['uf']] = P0, Q0, um
+        X[:, j['phi']] = np.angle(V)
+        X[:, j['ip']], X[:, j['iq']] = ip0, iq0
+        usc = self.d['usc']
+        pr0 = np.where(usc, P0 / um, P0)
+        p['Pref'] = np.where(np.isnan(p['Pref']), pr0, p['Pref'])
+        if self.model == 'wt4a':
+            X[:, j['pr']] = p['Pref']
+        else:
+            X[:, j['pl']], X[:, j['pa']] = p['Pref'], P0
+            X[:, j['wr']], X[:, j['wg']], X[:, j['tk']] = 1.0, 1.0, P0
+        X[:, j['po']] = P0
+        # the Q control at rest: the reference of its mode, its integrators where the errors are zero
+        uf1 = np.maximum(um, 0.01)
+        a1 = um - p['rdrop'] * P0 / uf1 - p['xdrop'] * Q0 / uf1
+        a2 = p['xdrop'] * P0 / uf1 - p['rdrop'] * Q0 / uf1
+        ucomp = np.hypot(a1, a2)
+        mq = p['MqG']
+        p['tanphi'] = np.where(np.abs(P0) > 0, Q0 / np.where(np.abs(P0) > 0, P0, 1.0), 0.0)
+        x0 = np.where(mq == 0, ucomp - p['uref0'], Q0)
+        p['Xref'] = np.where(np.isnan(p['Xref']), np.where((mq == 3) | (mq == 4), 0.0, x0), p['Xref'])
+        X[:, j['qi']] = ucomp
+        X[:, j['ui']] = iq0
+        X[:, j['qo']] = Q0
+        X[:, j['us']] = um
+        self.d['iqol'] = iq0.copy()
+        self.d['hu'], self.d['hp'] = um.copy(), P0.copy()
+        if self.prot:
+            X[:, j['up']], X[:, j['fa']], X[:, j['fr']], X[:, j['ff']] = um, np.angle(V), 0.0, 0.0
+        self.d_init = self._snap()
+        # what cannot be at rest
+        F, ir, ii, o = self._core(X, V.real, V.imag)
+        bad = []
+        closed = (mq == 0) | (mq == 1) | (mq == 3)
+        for i, nm in enumerate(self.names):
+            if closed[i] and not (p['umin'][i] - 1e-9 <= (ucomp[i] if mq[i] != 0 else p['uref0'][i] + p['Xref'][i]) <= p['umax'][i] + 1e-9):
+                bad.append('%s: η τάση αναφοράς έξω από [u_min, u_max]' % nm)
+            if not (p['iqmin'][i] - 1e-9 <= iq0[i] <= p['iqmax'][i] + 1e-9):
+                bad.append('%s: i_q της ροής φορτίου έξω από [i_qmin, i_qmax]' % nm)
+            if not (np.real(o['qmin'][i]) - 1e-9 <= Q0[i] <= np.real(o['qmax'][i]) + 1e-9):
+                bad.append('%s: Q της ροής φορτίου έξω από [q_WTmin, q_WTmax]' % nm)
+            if ip0[i] > np.real(o['ipmax'][i]) + 1e-9 or not (np.real(o['iqmin'][i]) - 1e-9 <= iq0[i] <= np.real(o['iqmax'][i]) + 1e-9):
+                bad.append('%s: στο όριο ρεύματος ήδη από τη ροή φορτίου' % nm)
+        if bad:
+            raise RMSError('ανεμογεννήτρια: ' + '· '.join(bad))
+        return X
+
+    def _decide(self, X, Vr, Vi, t):
+        """At the start of a step (after the events of that moment): the flags of the reference frame rotation and of the P
+        control, the FRT flag with its delay (Annex D.14) and the values held at the start of a freeze, the timers of the
+        protection (Annex D.8). Returns (changed, the events of the protection now, the later times at which to look again)."""
+        p, d = self.p, self.d
+        old = self._snap()
+        _, _, _, o = self._core(X, Vr, Vi)
+        um = np.real(o['V'])
+        uf = np.real(o['uf'])
+        d['pll1'], d['pll2'] = um < p['uPLL1'], um < p['uPLL2']
+        d['usc'] = (p['MpUscale'] > 0) & (um < p['updip'])
+        dip = uf < p['uqdip']
+        d['tdip'] = np.where(dip, t, d['tdip'])
+        post = ~dip & (t - d['tdip'] < p['Tpost'] - 1e-12)
+        Fn = np.where(dip | (uf > p['uqrise']), 1.0, np.where(post, 2.0, 0.0))
+        start = (Fn >= 1) & (d['F'] < 1)                    # a freeze starts: the values held from here
+        d['iqol'] = np.where(start, np.real(o['iqol']), d['iqol'])
+        d['hu'] = np.where(start, uf, d['hu'])
+        d['hp'] = np.where(start, np.real(o['pf']), d['hp'])
+        d['F'] = Fn
+        later = [float(x) for x in (d['tdip'] + p['Tpost'])[post] if x > t + 1e-12]
+        events = []
+        if self.prot:
+            up, fP = np.real(o['up']), np.real(o['fP'])
+            tr = d['tr']
+            for key, over, lim, val in (('uo', True, p['uover'], up), ('uu', False, p['uunder'], up),
+                                        ('fo', True, p['fover'], fP), ('fu', False, p['funder'], fP)):
+                cnt = val >= lim if over else val <= lim
+                tr[key] = np.where(cnt, np.where(np.isnan(tr[key]), t, tr[key]), math.nan)
+                tab = p['t_T' + {'uo': 'uover', 'uu': 'uunder', 'fo': 'fover', 'fu': 'funder'}[key]]
+                for i in np.nonzero(cnt & ~d['ocb'] & (p['on'] > 0))[0]:
+                    T = float(np.real(_lut(tab if isinstance(tab, tuple) else tab[i], val[i])))
+                    if t - tr[key][i] > T - 1e-12 and t > tr[key][i]:
+                        d['ocb'][i] = True
+                        events.append({'t': float(t), 'kind': 'gen', 'gen': self.names[i], 'by': 'prot', 'why': key})
+                    elif tr[key][i] + T > t + 1e-12:
+                        later.append(tr[key][i] + T + 1e-9)
+        changed = any(not np.array_equal(old[q], d[q]) for q in ('F', 'pll1', 'pll2', 'usc')) or bool(events)
+        return changed, events, later
+
+    def eval(self, X, Vr, Vi, t):
+        on = self.p['on']
+        F, ir, ii, _ = self._core(X, Vr, Vi)
+        F = np.stack([np.broadcast_to(f, (X.shape[0],)) for f in F], axis=1)
+        k = self.p['k']
+        return F * on[:, None], ir / k * on, ii / k * on
+
+    def _jac_block(self, X, Vr, Vi, t):
+        """The complex steps of System.jac (each state, then V_r, V_i of the bus) as one evaluation of nx + 2 copies of the
+        members (the same arithmetic per element, so the same numbers as one evaluation per step; less time for the many small
+        operations of this model). Returns [D_j]: (m, nx + 2) per step j."""
+        m, k = self.m, self.nx
+        c = k + 2
+        Xc = np.tile(X.astype(complex), (c, 1))
+        vr = np.tile(Vr.astype(complex), c)
+        vi = np.tile(Vi.astype(complex), c)
+        for j in range(k):
+            Xc[j * m:(j + 1) * m, j] += 1j * CS
+        vr[k * m:(k + 1) * m] += 1j * CS
+        vi[(k + 1) * m:] += 1j * CS
+
+        def tile(v):
+            if isinstance(v, np.ndarray) and v.shape[:1] == (m,):
+                return np.tile(v, c)
+            if isinstance(v, list) and len(v) == m:
+                return v * c
+            if isinstance(v, dict):
+                return {q: tile(w) for q, w in v.items()}
+            return v
+        keep = (self.p, self.d, self._fz, self.m)
+        try:
+            self.p, self.d, self.m = tile(self.p), tile(self.d), m * c
+            if self._fz is not None:
+                self._fz = tile(self._fz)
+            F, ir, ii = self.eval(Xc, vr, vi, t)
+        finally:
+            self.p, self.d, self._fz, self.m = keep
+        D = np.c_[F.imag, ir.imag, ii.imag] / CS
+        return [D[j * m:(j + 1) * m] for j in range(c)]
+
+    def limits(self):
+        return []
+
+    def _project_limits(self, X, Vr, Vi):
+        """After a step: the states with absolute limits (Annex D.5) back within them, the limits at the new point."""
+        _, _, _, o = self._core(X, Vr, Vi)
+        p, j = self.p, self.j
+        R = lambda a: np.real(a)                            # noqa: E731
+        X[:, j['po']] = np.minimum(X[:, j['po']], R(o['plim']))
+        X[:, j['ip']] = np.minimum(X[:, j['ip']], R(o['ipmax']))
+        X[:, j['iq']] = np.clip(X[:, j['iq']], R(o['iqmin']), np.maximum(R(o['iqmax']), R(o['iqmin'])))
+        X[:, j['qi']] = np.clip(X[:, j['qi']], p['umin'], p['umax'])
+        X[:, j['ui']] = np.clip(X[:, j['ui']], p['iqmin'], p['iqmax'])
+        X[:, j['qo']] = np.clip(X[:, j['qo']], R(o['qmin']), np.maximum(R(o['qmax']), R(o['qmin'])))
+        return X
+
+    def outputs(self, X, Vr, Vi):
+        """P, Q (pu on S_base), |V|, the currents i_p, i_q and their commands and limits (pu on S_n), F_FRT, and for 4B the
+        speeds and p_aero; with the protection its frequency f_WTPfilt (pu) and the flag of the breaker."""
+        p = self.p
+        _, _, _, o = self._core(X, Vr, Vi)
+        k, on = p['k'], p['on']
+        out = {'P': o['P'] / k * on, 'Q': o['Q'] / k * on, 'V': o['V'], 'I': _hyp(o['ip'], o['iq']) * on,
+               'ip': o['ip'] * on, 'iq': o['iq'] * on, 'ipcmd': o['ipcmd'], 'iqcmd': o['iqcmd'], 'ipmax': o['ipmax'],
+               'iqmax': o['iqmax'], 'iqmin': o['iqmin'], 'frt': self.d['F'] + 0 * o['V']}
+        if self.model == 'wt4b':
+            out['omega_gen'], out['omega_wtr'], out['paero'] = o['wgen'], o['wtr'], o['paero']
+        if self.prot:
+            out['fP'] = o['fP']
+            out['tripped'] = np.where(self.d['ocb'], 1.0, 0.0) + 0 * o['V']
+        return out
+
 KINDS = {'classical': Classical, 'two_axis': TwoAxis}
 MACHINE_KEYS = ('Xd', 'Xdp', 'Xq', 'Xqp', 'Td0p', 'Tq0p', 'Ra', 'H', 'D')
 TYPICAL = {'Xd': 1.8, 'Xdp': 0.3, 'Xq': 1.7, 'Xqp': 0.55, 'Td0p': 8.0, 'Tq0p': 0.4, 'Ra': 0.0, 'H': 4.0, 'D': 0.0}
@@ -2113,7 +2558,8 @@ class System:
     `default` with the typical values TYPICAL on its rating Sr (the next step brings the library of models). A feeder
     (an external grid) is a Source behind its short-circuit impedance, or a stiff one (X 10⁻⁴ pu).
     loads: 'Z' (constant impedance, as in a classical study), 'I', 'P', or {'z': a, 'i': b, 'p': c} the shares of P and Q.
-    f: the frequency of the network (Hz; default net.f). pf: the result of net.power_flow() (computed if not given)."""
+    f: the frequency of the network (Hz; default net.f). pf: the result of net.power_flow() (computed if not given).
+    5.1.4: a generator can be a wind turbine of IEC 61400-27-1, {'model': 'wt4a' | 'wt4b', …} (Wind, _wind)."""
 
     def __init__(self, net, machines=None, default='two_axis', loads='Z', f=None, pf=None, vmin=0.7, stations=None):
         bad = sorted({e['kind'] for e in net.elements} - KNOWN_ELEMENTS)
@@ -2172,6 +2618,7 @@ class System:
         groups, units = {}, {}
         self.share = {}                                     # 5.0.13: the share of each generator in the injection of its bus
         convs = {}
+        winds = {}                                          # 5.1.4
         for e in gens:
             md = dict(machines.get(e['name'], {}))
             model = md.pop('model', default)
@@ -2180,8 +2627,14 @@ class System:
                 key, vals = self._converter(e['name'], model, md, Sb / Sn, Sn)
                 convs.setdefault(key, []).append((e['name'], self.idx[e['bus']], vals))
                 continue
+            if model in WIND_MODELS:                         # 5.1.4: a wind turbine of IEC 61400-27-1 on the bus of the generator
+                Sn = float(md.pop('Sn', e.get('Sr') or Sb))
+                key, vals = self._wind(e['name'], model, md, Sb / Sn, Sn)
+                winds.setdefault(key, []).append((e['name'], self.idx[e['bus']], vals))
+                continue
             if model not in KINDS and model != 'subtransient':
-                raise RMSError('άγνωστο μοντέλο μηχανής %r (%s, subtransient, %s)' % (model, ', '.join(KINDS), ', '.join(CONVERTERS)))
+                raise RMSError('άγνωστο μοντέλο μηχανής %r (%s, subtransient, %s, %s)' % (model, ', '.join(KINDS), ', '.join(CONVERTERS),
+                                                                                       ', '.join(WIND_MODELS)))
             Sn = float(md.pop('Sn', e.get('Sr') or Sb))
             k = Sb / Sn                                     # to the system base: impedances ×k, H and D ÷k
             avr, pss, gov = md.pop('avr', None), md.pop('pss', None), md.pop('gov', None)
@@ -2267,6 +2720,14 @@ class System:
             else:
                 self.kinds.append(Converter(names, bus, p, kind=key[0], law=key[1], frq=key[2], avc=key[3], storage=key[4], pv=key[5],
                                            cc=key[6] if len(key) > 6 else 'robust'))
+        for key, L in winds.items():                         # 5.1.4: the wind turbines, one device per type, protection, Q limitation
+            p = {q: np.array([v[q] for _, _, v in L], float) for q in L[0][2] if not q.startswith('t_')}
+            for q in L[0][2]:
+                if q.startswith('t_'):                       # one table for all the members (vectorized), or one each
+                    tl = [v[q] for _, _, v in L]
+                    same = all(np.array_equal(a[0], tl[0][0]) and np.array_equal(a[1], tl[0][1]) for a in tl)
+                    p[q] = tl[0] if same else tl
+            self.kinds.append(Wind([a for a, _, _ in L], [b for _, b, _ in L], p, model=key[0], prot=key[1], qlim=key[2]))
         if feeders:
             X = []
             for e in feeders:
@@ -2303,7 +2764,7 @@ class System:
         self.nx = off
         self.ny = 2 * self.n
         self.state_names = [(K.names[i], s) for K in self.kinds for i in range(K.m) for s in K.states]
-        self._conv = any(isinstance(K, (Converter, SVC, Statcom, HVDC)) for K in self.kinds)
+        self._conv = any(isinstance(K, (Converter, SVC, Statcom, HVDC, Wind)) for K in self.kinds)
         self._y_build()
         self.events_done = []
         self.x = None
@@ -2374,6 +2835,61 @@ class System:
             if not (vals['store']['E'] > 0 and 0 <= vals['store']['smin'] < vals['store']['smax'] <= 1):
                 raise RMSError('αποθήκη της %s: E > 0 (MWh) και 0 ≤ s_min < s_max ≤ 1' % name)
         return key, vals
+
+    @staticmethod
+    def _wind(name, model, md, k, Sn):
+        """5.1.4: the data of a wind turbine of IEC 61400-27-1 (THEORY §8ΩΨ): (the key of its group, the values on its rating
+        S_n). The parameters by their text names of the standard (WT_DEFAULTS; the ramp rates and the lags of the P control
+        without the suffix 4A, 4B), the tables (WT_TABLES) as lists of pairs (x, y), 'qlim': 'const' or 'qpqu', 'prot': 1 for
+        the grid protection, 'Pref' (p_WTref) and 'Xref' (x_WTref) when not those of the load flow. A key that is not of the
+        model is refused by name, never left out."""
+        nan = math.nan
+        known = set(WT_DEFAULTS) | set(WT_TABLES) | {'qlim', 'Pref', 'Xref'}
+        bad = sorted(set(md) - known)
+        if bad:
+            es = [q for q in bad if q in ('res', 'xes', 'ges', 'bes')]
+            if es and all(float(md[q] or 0) == 0 for q in es):
+                bad = [q for q in bad if q not in es]
+            if bad:
+                why = ' (το ηλεκτρικό σύστημα μόνο ως ο διακόπτης του: ο μετασχηματιστής στο δίκτυο)' if es else ''
+                raise RMSError('ανεμογεννήτρια %s: άγνωστα δεδομένα %s%s' % (name, ', '.join(bad), why))
+        vals = {'k': k, 'Sn': Sn}
+        vals.update({q: _num(md, q, v) for q, v in WT_DEFAULTS.items()})
+        vals['Pref'], vals['Xref'] = _num(md, 'Pref', nan), _num(md, 'Xref', nan)
+        for q, v in WT_TABLES.items():
+            tab = md.get(q, v)
+            try:
+                pts = sorted((float(a), float(b)) for a, b in tab)
+            except (TypeError, ValueError):
+                raise RMSError('ανεμογεννήτρια %s: ο πίνακας %s ως λίστα ζευγών (x, y)' % (name, q))
+            if not pts:
+                raise RMSError('ανεμογεννήτρια %s: ο πίνακας %s χωρίς σημεία' % (name, q))
+            vals['t_' + q] = (np.array([a for a, _ in pts]), np.array([b for _, b in pts]))
+        qlim = md.get('qlim', 'const')
+        if qlim not in ('const', 'qpqu'):
+            raise RMSError("ανεμογεννήτρια %s: qlim 'const' (§7.7.7) ή 'qpqu' (§7.7.8)" % name)
+        lags = ['Tpfilt', 'Tqfilt', 'Tufilt', 'TPLL', 'Tg', 'Tpordp', 'Tqord', 'Tuss', 'Tufiltp', 'Tffilt', 'Ts']
+        lags += ['TpWTref'] if model == 'wt4a' else ['Tpaero']
+        z = [q for q in lags if not vals[q] > 0]
+        if z:
+            raise RMSError('ανεμογεννήτρια %s: σταθερές χρόνου > 0 (%s)' % (name, ', '.join(z)))
+        modes = {'MqG': (0, 1, 2, 3, 4), 'MqFRT': (0, 1, 2), 'MpUscale': (0, 1), 'Mqpri': (0, 1)}
+        for q, ok in modes.items():
+            if vals[q] not in ok:
+                extra = ' (το 3, ο ορισμός του χρήστη, δεν είναι εδώ)' if q == 'MqFRT' and vals[q] == 3 else ''
+                raise RMSError('ανεμογεννήτρια %s: %s ένα από %s%s' % (name, q, ', '.join(map(str, ok)), extra))
+        checks = [(vals['uPLL2'] <= vals['uPLL1'], 'u_PLL2 ≤ u_PLL1'), (vals['umin'] < vals['umax'], 'u_min < u_max'),
+                  (vals['iqmin'] < vals['iqmax'], 'i_qmin < i_qmax'), (vals['iqmin'] <= vals['iqh1'], 'i_qmin ≤ i_qh1'),
+                  (vals['qmin'] < vals['qmax'], 'q_min < q_max'), (vals['imax'] > 0 and vals['imaxdip'] > 0, 'i_max, i_maxdip > 0'),
+                  (vals['udb1'] <= vals['udb2'], 'Δu_db1 ≤ Δu_db2'), (vals['dprefmin'] <= vals['dprefmax'], 'dp_refmin ≤ dp_refmax'),
+                  (vals['diqmin'] <= vals['diqmax'], 'di_qmin ≤ di_qmax'), (vals['dpmaxp'] > 0 and vals['dipmax'] > 0, 'dp_maxp, di_pmax > 0'),
+                  (vals['dPhimax'] > 0, 'dΦ_max > 0')]
+        if model == 'wt4b':
+            checks.append((vals['HWTR'] > 0 and vals['Hgen'] > 0 and vals['kdrt'] > 0 and vals['cdrt'] >= 0, 'H_WTR, H_gen, k_drt > 0, c_drt ≥ 0'))
+        bad = [w for ok, w in checks if not ok]
+        if bad:
+            raise RMSError('ανεμογεννήτρια %s: %s' % (name, ', '.join(bad)))
+        return (model, bool(vals['prot'] > 0), qlim), vals
 
     # ------------------------------------------------------------ network
     def _y_build(self):
@@ -2464,6 +2980,13 @@ class System:
             gi = K.x0 + np.arange(m)[:, None] * k + np.arange(k)[None, :]         # global index of each state
             br, bi = nx + K.bus, nx + n + K.bus
             outs_r = np.c_[gi, br, bi]                                          # rows: f of each state, g_r, g_i of the bus
+            if isinstance(K, Wind):                         # 5.1.4: all the complex steps in one evaluation (the same numbers)
+                Ds = K._jac_block(X, Vr[K.bus], Vi[K.bus], t)
+                for j in range(k + 2):
+                    R.append(outs_r.reshape(-1))
+                    C.append(np.repeat(gi[:, j] if j < k else (br if j == k else bi), k + 2))
+                    Vv.append(Ds[j].reshape(-1))
+                continue
             for j in range(k + 2):
                 Xc = X.astype(complex)
                 vr, vi = Vr[K.bus].astype(complex), Vi[K.bus].astype(complex)
@@ -2600,10 +3123,24 @@ class System:
             dS = (float(ev.get('P', 0)) + 1j * float(ev.get('Q', 0))) * 1e6 / self.case.S_base
             y = np.conj(dS) / abs(self.V0[b]) ** 2
             self.Ybase = (self.Ybase + sp.coo_matrix(([y], ([b], [b])), shape=(self.n, self.n))).tocsr()
-        elif k in ('gen', 'vref', 'pref'):                  # 5.0.13: trip of a unit, step of its voltage or load reference
+        elif k in ('gen', 'vref', 'pref', 'qref'):          # 5.0.13: trip of a unit, step of its voltage or load reference
             K, i = self._unit(ev['gen'])
             if k == 'gen':
                 K.p['on'][i] = 0.0
+            elif isinstance(K, Wind):                       # 5.1.4: p_WTref (dP), x_WTref in M_qG 0 (dV) or in 1, 2 (dQ), pu of S_n
+                mq = int(K.p['MqG'][i])
+                if k == 'pref':
+                    K.p['dP'][i] = float(ev['dP'])
+                elif k == 'vref':
+                    if mq != 0:
+                        raise RMSError('η ανεμογεννήτρια %s δεν είναι σε έλεγχο τάσης (M_qG 0): η αναφορά Q αλλάζει με το συμβάν qref' % ev['gen'])
+                    K.p['dX'][i] = float(ev['dV'])
+                else:
+                    if mq not in (1, 2):
+                        raise RMSError('η ανεμογεννήτρια %s δεν είναι σε έλεγχο Q (M_qG 1 ή 2): το συμβάν qref δεν έχει αναφορά' % ev['gen'])
+                    K.p['dX'][i] = float(ev['dQ'])
+            elif k == 'qref':
+                raise RMSError('το συμβάν qref είναι μόνο για τις ανεμογεννήτριες (%s)' % ev['gen'])
             elif not isinstance(K, Unit):                   # 5.0.14: a converter (dP, dV in pu on its S_n)
                 if k == 'vref':
                     K.p['dV'][i] = float(ev['dV'])
@@ -2626,7 +3163,7 @@ class System:
 
     def _unit(self, name):
         for K in self.kinds:
-            if isinstance(K, (Unit, Converter, SVC, Statcom)) and name in K.names:
+            if isinstance(K, (Unit, Converter, SVC, Statcom, Wind)) and name in K.names:
                 return K, K.names.index(name)
         raise RMSError('καμία μονάδα με όνομα %r (μόνο μηχανές με το μοντέλο της 5.0.13 και μετατροπείς της 5.0.14 δέχονται αυτά τα συμβάντα)' % name)
 
@@ -2643,6 +3180,11 @@ class System:
                 K.p['dV'] = np.zeros(K.m)
                 if 'dP' in K.p:
                     K.p['dP'] = np.zeros(K.m)
+            elif isinstance(K, Wind):                       # 5.1.4: and its flags, timers and held values as at the start
+                K.p['on'] = np.ones(K.m)
+                K.p['dP'], K.p['dX'] = np.zeros(K.m), np.zeros(K.m)
+                if getattr(K, 'd_init', None) is not None:
+                    K.d = {**{q: v.copy() for q, v in K.d_init.items() if q != 'tr'}, 'tr': {q: v.copy() for q, v in K.d_init['tr'].items()}}
             elif isinstance(K, HVDC):                       # 5.0.15
                 K.p['lon'] = np.ones(len(K.lines))
                 for q, nn in (('g', K.ng), ('f', K.nf), ('d', K.nk), ('m', K.nm)):
@@ -2707,6 +3249,14 @@ class System:
             evs = sorted(evs + [{'t': c, 'kind': 'tick'} for c in ticks], key=lambda e: e['t'])
         nx, n = self.nx, self.n
         T, Xs, Vs = [0.0], [x.copy()], [y[:n] + 1j * y[n:]]
+        winds = [K for K in self.kinds if isinstance(K, Wind)]   # 5.1.4: their discrete parts at every point of the result
+        Ds = [[K._snap() for K in winds]] if winds else None
+        wlater = set()
+
+        def rec(t, x, y):
+            T.append(t); Xs.append(x.copy()); Vs.append(y[:n] + 1j * y[n:])
+            if winds:
+                Ds.append([K._snap() for K in winds])
         done = []
         st = {'steps': 0, 'newton': 0, 'lu': 0, 'rejected': 0, 'events': 0, 'nonconv': 0}
         f_n, _ = self.fg(x, y, t)
@@ -2719,7 +3269,7 @@ class System:
         prot = any(isinstance(K, HVDC) and K.has_prot for K in self.kinds)     # 5.1.1: the protection of the stations
         cda = False                                          # 5.1.1: the next step damps (_step_be2)
         blkd = [K for K in self.kinds if isinstance(K, HVDC)]
-        keys = ('kind', 'gen', 'bus', 'branch', 'dV', 'dP', 'id', 'by', 'why')
+        keys = ('kind', 'gen', 'bus', 'branch', 'dV', 'dP', 'dQ', 'id', 'by', 'why')
         while t < t_end - 1e-12:
             while ei < len(evs) and evs[ei]['t'] <= t + 1e-12:
                 if evs[ei]['kind'] == 'tick':                 # 5.0.16: past a jump of an expression: a new start of y and f
@@ -2744,7 +3294,7 @@ class System:
                 lu, hist, hc = None, [], (min(hc, h, h0) if step == 'var' else hc)
                 st['events'] += 1
                 ei += 1
-                T.append(t); Xs.append(x.copy()); Vs.append(y[:n] + 1j * y[n:])
+                rec(t, x, y)
             if prot:                                          # 5.1.1: decided at the start of the step, after the events of t
                 acts, later = self._protect(x, y, t)
                 for tq in later:                              # the step stops there
@@ -2761,7 +3311,27 @@ class System:
                         st['nonconv'] += 1
                     f_n, _ = self.fg(x, y, t)
                     lu, hist, hc = None, [], (min(hc, h, h0) if step == 'var' else hc)
-                    T.append(t); Xs.append(x.copy()); Vs.append(y[:n] + 1j * y[n:])
+                    rec(t, x, y)
+            if winds:                                         # 5.1.4: the flags, timers and protection of the wind turbines
+                chg, acts = False, []
+                for K in winds:
+                    ch, ev_w, later = K._decide(x[K.x0:K.x0 + K.nx * K.m].reshape(K.m, K.nx), y[:n][K.bus], y[n:][K.bus], t)
+                    chg, acts = chg or ch, acts + ev_w
+                    for tq in later:                          # the step stops there
+                        if tq < t_end and tq not in wlater:
+                            wlater.add(tq)
+                            evs.insert(bisect.bisect_right([e['t'] for e in evs], tq, lo=ei), {'t': tq, 'kind': 'prot'})
+                for e in acts:
+                    self._apply(e)
+                    done.append({**{k: v for k, v in e.items() if k in keys}, 't': t, 'i': len(T)})
+                    st['events'] += 1
+                if chg:
+                    y, ok = self._consistent(x, y, t)
+                    if not ok:
+                        st['nonconv'] += 1
+                    f_n, _ = self.fg(x, y, t)
+                    lu, hist, hc = None, [], (min(hc, h, h0) if step == 'var' else hc)
+                    rec(t, x, y)
             if blkd and not cda:                              # 5.1.1: while a station is blocked, every step damps
                 cda = any(K.can_block and (K.lblk.any() or any(K.p[q]['blk'].any() for q in 'gfm')) for K in blkd)
             tn = evs[ei]['t'] if ei < len(evs) else t_end
@@ -2820,10 +3390,13 @@ class System:
             f_n, _ = self.fg(x, y, t)
             st['steps'] += 1
             if st['steps'] % record_every == 0 or t >= t_end - 1e-12:
-                T.append(t); Xs.append(x.copy()); Vs.append(y[:n] + 1j * y[n:])
+                rec(t, x, y)
         st['time'] = time.perf_counter() - t0
         self.x, self.y, self.t = x, y, t
-        return {'t': np.array(T), 'x': np.array(Xs), 'V': np.array(Vs), 'stats': st, 'events': done}
+        out = {'t': np.array(T), 'x': np.array(Xs), 'V': np.array(Vs), 'stats': st, 'events': done}
+        if winds:
+            out['d'] = Ds
+        return out
 
     def _iter_matrix(self, x, y, t, h):
         J = self.jac(x, y, t).tocsr()
@@ -2833,7 +3406,7 @@ class System:
         return (E + S @ J).tocsc()
 
     def _units(self):
-        return [K for K in self.kinds if (isinstance(K, Unit) and (K.avr or K.gov)) or isinstance(K, (Converter, SVC, Statcom, HVDC))]
+        return [K for K in self.kinds if (isinstance(K, Unit) and (K.avr or K.gov)) or isinstance(K, (Converter, SVC, Statcom, HVDC, Wind))]
 
     def _freeze(self, x, y, t):
         """5.0.13: the holds of the limits without windup as at the start of the step, for its Newton (Unit._hold)."""
@@ -2847,13 +3420,17 @@ class System:
         for K in self._units():
             K._fz = None
 
-    def _project(self, x):
+    def _project(self, x, y=None):
         """After a step: every state of a limit without windup back within its limits (a limit reached inside the step:
-        the state stops there, as the hold of the EMT, whose steps are µs)."""
+        the state stops there, as the hold of the EMT, whose steps are µs). 5.1.4: a wind turbine with its limits at the new
+        point y (Wind._project_limits: the limits of its current limitation move with |u|)."""
+        n = self.n
         for K in self._units():
             X = x[K.x0:K.x0 + K.nx * K.m].reshape(K.m, K.nx)
             for j, base, lo, hi, on in K.limits():
                 X[:, j] = np.where(on, np.clip(base + X[:, j], lo, hi) - base, X[:, j])
+            if y is not None and isinstance(K, Wind):
+                K._project_limits(X, y[:n][K.bus], y[n:][K.bus])
         return x
 
     def _step_tr(self, x, y, f_n, t, h, tol, lu, at=None):
@@ -2875,7 +3452,7 @@ class System:
                     break
         finally:
             self._thaw()
-        return self._project(z[:nx].copy()), z[nx:], it, ok
+        return self._project(z[:nx].copy(), z[nx:]), z[nx:], it, ok
 
     def _step_be2(self, x, y, t, h, tol, lu, full=False):
         """5.1.1: the step after a block or a deblock of a station (THEORY §8ΩΦ.3): two half steps of backward Euler, with the
@@ -2908,7 +3485,7 @@ class System:
                 self._thaw()
             its += it
             ok_all = ok_all and ok
-            x, y = self._project(z[:nx].copy()), z[nx:]
+            x, y = self._project(z[:nx].copy(), z[nx:]), z[nx:]
         return x, y, its, ok_all, nf
 
     def _step_full(self, x, y, f_n, t, h, tol, at, iters=20):
@@ -2931,7 +3508,7 @@ class System:
                     break
         finally:
             self._thaw()
-        return self._project(z[:nx].copy()), z[nx:], it, ok, n
+        return self._project(z[:nx].copy(), z[nx:]), z[nx:], it, ok, n
 
     def _step_alt(self, x, y, f_n, t, h, tol):
         """One trapezoidal step with the alternating solution: the network for the states (Newton on g with g_y), then the
@@ -2942,7 +3519,7 @@ class System:
             xk, yk, it, ok = self._alt(x, y, f_n, t, h, tol)
         finally:
             self._thaw()
-        return self._project(xk.copy()), yk, it, ok
+        return self._project(xk.copy(), yk), yk, it, ok
 
     def _alt(self, x, y, f_n, t, h, tol):
         nx = self.nx
@@ -3082,6 +3659,36 @@ class System:
                 d = {key: val[:, i] for key, val in cols.items()}
                 for j, s in enumerate(K.states):
                     d.setdefault(s, Xs[:, i, j])
+                out[nm] = d
+        # 5.1.4: the wind turbines, with their references, trips and discrete parts as at each point of the result
+        winds = [K for K in self.kinds if isinstance(K, Wind)]
+        for wi, K in enumerate(winds):
+            Xs = r['x'][:, K.x0:K.x0 + K.nx * K.m].reshape(len(r['t']), K.m, K.nx)
+            Vb = V[:, K.bus]
+            keep = ({q: K.p[q].copy() for q in ('on', 'dP', 'dX')}, K.d)
+            K.p['on'], K.p['dP'], K.p['dX'] = np.ones(K.m), np.zeros(K.m), np.zeros(K.m)
+            evs = [e for e in r.get('events', ()) if e.get('gen') in K.names and e['kind'] in ('vref', 'pref', 'qref', 'gen')]
+            cols, ei = {}, 0
+            for ti in range(len(r['t'])):
+                while ei < len(evs) and evs[ei]['i'] <= ti:
+                    j, kd = K.names.index(evs[ei]['gen']), evs[ei]['kind']
+                    if kd == 'gen':
+                        K.p['on'][j] = 0.0
+                    elif kd == 'pref':
+                        K.p['dP'][j] = float(evs[ei]['dP'])
+                    else:
+                        K.p['dX'][j] = float(evs[ei]['dV'] if kd == 'vref' else evs[ei]['dQ'])
+                    ei += 1
+                K.d = r['d'][ti][wi]
+                o = K.outputs(Xs[ti], Vb[ti].real, Vb[ti].imag)
+                for key, val in o.items():
+                    cols.setdefault(key, np.empty((len(r['t']), K.m)))[ti] = np.real(val)
+            K.p.update(keep[0])
+            K.d = keep[1]
+            for i, nm in enumerate(K.names):
+                d = {key: val[:, i] for key, val in cols.items()}
+                for j, st_ in enumerate(K.states):
+                    d.setdefault(st_, Xs[:, i, j])
                 out[nm] = d
         # 5.0.15: the DC grids, with the references and trips of their stations as at each point of the result
         for K in self.kinds:

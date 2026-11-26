@@ -107,7 +107,7 @@
 | `pcl/model.py` | 1546 |
 | `pcl/netfile.py` | 490 |
 | `pcl/netview.py` | 1101 |
-| `pcl/network.py` | 1896 |
+| `pcl/network.py` | 1906 |
 | `pcl/nnstart.py` | 388 |
 | `pcl/onnxio.py` | 355 |
 | `pcl/opf.py` | 515 |
@@ -116,7 +116,7 @@
 | `pcl/psse.py` | 433 |
 | `pcl/report.py` | 1136 |
 | `pcl/results.py` | 88 |
-| `pcl/rms.py` | 3257 |
+| `pcl/rms.py` | 3864 |
 | `pcl/scopf.py` | 213 |
 | `pcl/se.py` | 788 |
 | `pcl/study.py` | 862 |
@@ -129,7 +129,7 @@
 | `tests/test_addons.py` | 258 |
 | `tests/test_advanced.py` | 120 |
 | `tests/test_api.py` | 73 |
-| `tests/test_api_surface.py` | 552 |
+| `tests/test_api_surface.py` | 565 |
 | `tests/test_appwin.py` | 122 |
 | `tests/test_arc.py` | 189 |
 | `tests/test_b4.py` | 300 |
@@ -166,7 +166,7 @@
 | `tests/test_gfm4.py` | 153 |
 | `tests/test_gfm5.py` | 179 |
 | `tests/test_gis.py` | 183 |
-| `tests/test_guide.py` | 483 |
+| `tests/test_guide.py` | 498 |
 | `tests/test_harmonic.py` | 312 |
 | `tests/test_impl.py` | 138 |
 | `tests/test_impulse_tools.py` | 150 |
@@ -211,6 +211,7 @@
 | `tests/test_rms_hvdc.py` | 476 |
 | `tests/test_rms_protection.py` | 241 |
 | `tests/test_rms_two_area.py` | 272 |
+| `tests/test_rms_wind.py` | 268 |
 | `tests/test_sat.py` | 180 |
 | `tests/test_scopf.py` | 263 |
 | `tests/test_se.py` | 366 |
@@ -4609,26 +4610,26 @@ _(χωρίς συναρτήσεις)_
 | 1264 | method | `Network.opf` |
 | 1286 | method | `Network.equivalent` |
 | 1296 | method | `Network.dynamic` |
-| 1443 | method | `Network.to_emt` |
-| 1532 | function | `_rotor_modes` |
-| 1551 | function | `_coo` |
-| 1557 | function | `_zip` |
-| 1562 | function | `_solve` |
-| 1573 | function | `_nr` |
-| 1609 | function | `sssc_placement` |
-| 1666 | function | `superposition` |
-| 1690 | function | `trv` |
-| 1724 | function | `_matrix` |
-| 1736 | function | `read_matpower` |
-| 1773 | function | `ieee` |
-| 1783 | function | `case_data` |
-| 1794 | function | `case_solution` |
-| 1803 | function | `ieee9` |
-| 1830 | function | `ieee14` |
-| 1843 | function | `to_dict` |
-| 1863 | function | `from_dict` |
-| 1891 | function | `save` |
-| 1895 | function | `load` |
+| 1453 | method | `Network.to_emt` |
+| 1542 | function | `_rotor_modes` |
+| 1561 | function | `_coo` |
+| 1567 | function | `_zip` |
+| 1572 | function | `_solve` |
+| 1583 | function | `_nr` |
+| 1619 | function | `sssc_placement` |
+| 1676 | function | `superposition` |
+| 1700 | function | `trv` |
+| 1734 | function | `_matrix` |
+| 1746 | function | `read_matpower` |
+| 1783 | function | `ieee` |
+| 1793 | function | `case_data` |
+| 1804 | function | `case_solution` |
+| 1813 | function | `ieee9` |
+| 1840 | function | `ieee14` |
+| 1853 | function | `to_dict` |
+| 1873 | function | `from_dict` |
+| 1901 | function | `save` |
+| 1905 | function | `load` |
 
 ### `pcl/nnstart.py`
 
@@ -4947,46 +4948,67 @@ _(χωρίς συναρτήσεις)_
 | 1992 | method | `HVDC.outputs` |
 | 1995 | method | `HVDC.limits` |
 | 2001 | method | `HVDC.find` |
-| 2029 | function | `typical` |
-| 2082 | function | `two_area_machines` |
-| 2108 | class | `System` |
-| 2118 | method | `System.__init__` |
-| 2312 | method | `System._converter` |
-| 2379 | method | `System._y_build` |
-| 2388 | method | `System._ypat` |
-| 2393 | method | `System._yreal` |
-| 2405 | method | `System._split` |
-| 2408 | method | `System.fg` |
-| 2432 | method | `System.jac` |
-| 2488 | method | `System.init` |
-| 2512 | method | `System.state` |
-| 2518 | method | `System.internal_emf` |
-| 2529 | method | `System._hvdc` |
-| 2539 | method | `System._apply` |
-| 2627 | method | `System._unit` |
-| 2633 | method | `System._reset_units` |
-| 2652 | method | `System._fix` |
-| 2662 | method | `System._protect` |
-| 2673 | method | `System._consistent` |
-| 2685 | method | `System.simulate` |
-| 2828 | method | `System._iter_matrix` |
-| 2835 | method | `System._units` |
-| 2838 | method | `System._freeze` |
-| 2846 | method | `System._thaw` |
-| 2850 | method | `System._project` |
-| 2859 | method | `System._step_tr` |
-| 2880 | method | `System._step_be2` |
-| 2914 | method | `System._step_full` |
-| 2936 | method | `System._step_alt` |
-| 2947 | method | `System._alt` |
-| 2971 | method | `System._lte` |
-| 2990 | method | `System.batch` |
-| 3000 | method | `System.quantities` |
-| 3134 | method | `System.stable` |
-| 3151 | method | `System.cct` |
-| 3174 | method | `System.linearize` |
-| 3188 | method | `System.eigen` |
-| 3236 | method | `System.reduced_y` |
+| 2054 | function | `_lut` |
+| 2068 | function | `_luts` |
+| 2082 | function | `_ang` |
+| 2087 | function | `_mn` |
+| 2091 | function | `_mx` |
+| 2095 | class | `Wind` |
+| 2123 | method | `Wind.__init__` |
+| 2132 | method | `Wind._dec` |
+| 2139 | method | `Wind._rate` |
+| 2144 | method | `Wind._flt` |
+| 2149 | method | `Wind._d0` |
+| 2155 | method | `Wind._snap` |
+| 2160 | method | `Wind._core` |
+| 2285 | method | `Wind.init` |
+| 2346 | method | `Wind._decide` |
+| 2386 | method | `Wind.eval` |
+| 2393 | method | `Wind._jac_block` |
+| 2426 | method | `Wind.limits` |
+| 2429 | method | `Wind._project_limits` |
+| 2442 | method | `Wind.outputs` |
+| 2474 | function | `typical` |
+| 2527 | function | `two_area_machines` |
+| 2553 | class | `System` |
+| 2564 | method | `System.__init__` |
+| 2773 | method | `System._converter` |
+| 2840 | method | `System._wind` |
+| 2895 | method | `System._y_build` |
+| 2904 | method | `System._ypat` |
+| 2909 | method | `System._yreal` |
+| 2921 | method | `System._split` |
+| 2924 | method | `System.fg` |
+| 2948 | method | `System.jac` |
+| 3011 | method | `System.init` |
+| 3035 | method | `System.state` |
+| 3041 | method | `System.internal_emf` |
+| 3052 | method | `System._hvdc` |
+| 3062 | method | `System._apply` |
+| 3164 | method | `System._unit` |
+| 3170 | method | `System._reset_units` |
+| 3194 | method | `System._fix` |
+| 3204 | method | `System._protect` |
+| 3215 | method | `System._consistent` |
+| 3227 | method | `System.simulate` |
+| 3401 | method | `System._iter_matrix` |
+| 3408 | method | `System._units` |
+| 3411 | method | `System._freeze` |
+| 3419 | method | `System._thaw` |
+| 3423 | method | `System._project` |
+| 3436 | method | `System._step_tr` |
+| 3457 | method | `System._step_be2` |
+| 3491 | method | `System._step_full` |
+| 3513 | method | `System._step_alt` |
+| 3524 | method | `System._alt` |
+| 3548 | method | `System._lte` |
+| 3567 | method | `System.batch` |
+| 3577 | method | `System.quantities` |
+| 3741 | method | `System.stable` |
+| 3758 | method | `System.cct` |
+| 3781 | method | `System.linearize` |
+| 3795 | method | `System.eigen` |
+| 3843 | method | `System.reduced_y` |
 
 ### `pcl/scopf.py`
 

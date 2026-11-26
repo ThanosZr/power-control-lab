@@ -1,5 +1,5 @@
 {
- "version": "5.1.3",
+ "version": "5.1.4",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
@@ -5175,6 +5175,46 @@
      "Vi"
     ],
     "since": "5.0.13"
+   },
+   "pcl.rms.Wind": {
+    "params": [
+     "names",
+     "bus",
+     "p",
+     "model",
+     "prot",
+     "qlim"
+    ],
+    "since": "5.1.4"
+   },
+   "pcl.rms.Wind.eval": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi",
+     "t"
+    ],
+    "since": "5.1.4"
+   },
+   "pcl.rms.Wind.init": {
+    "params": [
+     "V",
+     "S",
+     "wb"
+    ],
+    "since": "5.1.4"
+   },
+   "pcl.rms.Wind.limits": {
+    "params": [],
+    "since": "5.1.4"
+   },
+   "pcl.rms.Wind.outputs": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi"
+    ],
+    "since": "5.1.4"
    },
    "pcl.rms.ZIPLoad": {
     "params": [

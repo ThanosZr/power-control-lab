@@ -425,7 +425,20 @@ class ApiSurface(unittest.TestCase):
         self.assertEqual(model.VERSION, 5)
         self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][-2:], ['stations', 'modes'])
         self.assertEqual(study.OPTIONS['rms'][-2:], ('stations', 'modes'))
-        self.assertEqual(sum(len(v) for v in self.now.values()), 1033)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 1033)       # 1033 then
+
+    def test_the_surface_of_5_1_4(self):
+        """5.1.4: the wind turbines of IEC 61400-27-1 in RMS (ROADMAP §101): the device pcl.rms.Wind with the methods of a kind
+        (init, eval, limits, outputs: five new points, experimental as all of pcl.rms); a generator with the model 'wt4a' or 'wt4b'
+        in the machines of Network.dynamic (no new parameter); the event 'qref'; the model of the drawing stays at version 5."""
+        from pcl import model, rms
+        self.assertEqual(model.VERSION, 5)
+        self.assertEqual(rms.WIND_MODELS, ('wt4a', 'wt4b'))
+        for k in ('Wind', 'Wind.init', 'Wind.eval', 'Wind.limits', 'Wind.outputs'):
+            self.assertIn('pcl.rms.' + k, self.now['pcl'])
+            self.assertTrue(api_surface.experimental('pcl', 'pcl.rms.' + k), k)
+        self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][-1], 'modes')
+        self.assertEqual(sum(len(v) for v in self.now.values()), 1038)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it
