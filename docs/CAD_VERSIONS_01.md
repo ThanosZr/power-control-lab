@@ -142,6 +142,10 @@ Isolated C2 implementation and GUI/demo under experiments/cad_t008; contract CAD
 
 Parent T008 exact remote SHA `9abc985db1e6fa68c83f9bb4a8808afe2d6d3d56`, CI 45747371669 completed/success 4/4 with dedicated T008 success. New branch `lab-cad-0.9.0-features` from that SHA. Engine 5.0.7 unchanged, both private gates unsatisfied. D035 isolated feature history, exact native extrusion, dependency reuse, rollback, history, GUI and round-trip; CAD_FEATURE_HISTORY_CONTRACT. T009 9/9 real native tests, T006/T008 20/20 Node, CODEMAP/API 947 pass; browser smoke requires CI (local Chromium executable missing). Exact final remote head/4 jobs required; no automatic T010. Opus/Fable review recorded, not delegated.
 
+## CAD-S021 · 26/11/2026 · documentation-only · D036
+
+Εμπλουτισμός μακροπρόθεσμου πλάνου C4/C6–C8: multiphysics electromechanical/EV powertrain, field reconstruction/ROM έναντι time-stepping FEA, Digital Twin, Motion Simulation/τριβές/επαφές, GPU-first physics ανεξάρτητα από live/pre-rendering και real-time στόχος με ελεγχόμενη πιστότητα. Νέα βιβλιογραφική εγγραφή CAD-R020 (IEEE Access 2021, DOI 10.1109/ACCESS.2021.3112224), σύμφωνα με πηγή ιδιοκτήτη. Μόνο δημόσια τεκμηρίωση στα CAD_NEXT_STEPS, CAD_PLAN_DETAILS, CAD_SOURCES, CAD_DECISIONS_01 και CAD_VERSIONS_01. Βάση T009 remote `121433904a8785bdbead20025325e94cec41b726`, engine 5.0.7 και ιδιωτικές πύλες αμετάβλητες, καμία αλλαγή runtime ή επόμενο task. CI του νέου SHA ελέγχεται χωριστά από το προηγούμενο T009.
+
 ## Πρότυπο επόμενης εγγραφής
 
 ```text

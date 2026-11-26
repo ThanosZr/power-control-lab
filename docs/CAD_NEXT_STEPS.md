@@ -1,6 +1,6 @@
 # Power & Control Lab · CAD και custom components
 
-Έκδοση πλάνου: 0.12 · 26/11/2026 · Ιδιοκτήτης: Thanos Zr.
+Έκδοση πλάνου: 0.13 · 26/11/2026 · Ιδιοκτήτης: Thanos Zr.
 
 ## Τρέχουσα κατάσταση
 
@@ -101,6 +101,8 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 
 ## Μελλοντικές κατευθύνσεις, χωρίς υλοποίηση τώρα
 
+- **Ενιαίο multiphysics/electromechanical simulation engine (CAD-D036):** από την κυκλωματική επίλυση και τον έλεγχο ισχύος μέχρι το ηλεκτρομαγνητικό πεδίο, τις απώλειες, τη ροπή, τη δυναμική μηχανισμών, τις επαφές/τριβές και την κίνηση ενός πλήρους οχήματος (EV powertrain). Motion Simulation και Digital Twin με πραγματική φυσική και αμφίδρομη σύζευξη των φυσικών τομέων σε κοινό μοντέλο CAD/κυκλώματος, με επιλογή πιστότητας και στόχο real-time/near-real-time όπου τεκμηριώνεται. GPU-first αρχιτεκτονική για physics και rendering, με portable compute backends και CPU αναφορά/fallback· live rendering ή pre-rendering είναι ανεξάρτητη επιλογή. Εξειδίκευση στο [CAD_PLAN_DETAILS](CAD_PLAN_DETAILS.md#πολυφυσική-ηλεκτρομηχανική-προσομοίωση-και-ev-powertrain).
+- **Field Reconstruction Method (FRM), reduced-order models και transient faults:** η [CAD-R020](CAD_SOURCES.md#cad-r020--field-reconstruction-for-transient-pmsm-faults) αποτελεί πηγή αναφοράς για την ανακατασκευή του μαγνητικού πεδίου PMSM σε μεταβατικές καταστάσεις με συνδυασμένα σφάλματα. Αξιολόγηση FRM έναντι time-stepping FEA και συσχέτιση με circuit/drive/mechanical simulation· όχι ήδη επιλεγμένος solver ή εγγύηση επιτάχυνσης.
 - Γενική κινηματική και δυναμική, περιλαμβανομένων robots που ορίζονται από CAD και εξετάζονται σε διαφορετικά σενάρια. Χρειάζονται ρητά μηχανικά μοντέλα, joints, constraints και επαλήθευση.
 - AI-assisted acceleration. Τα PINNs είναι υποψήφια προσέγγιση προς αξιολόγηση, όχι επιλεγμένος γενικός accelerator.
 - Time-scaled playback: ανεξάρτητοι χρόνοι προσομοίωσης και προβολής, χρονικό zoom, pause/step/replay και συγχρονισμένα αποτελέσματα. Η αλλαγή ρυθμού προβολής δεν αλλάζει το φυσικό βήμα επίλυσης.

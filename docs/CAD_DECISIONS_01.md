@@ -62,6 +62,8 @@
 
 - **CAD-D035 — 26/11/2026:** Εγκρίθηκε T009/SOL στο `lab-cad-0.9.0-features`, από πιστοποιημένο T008 `9abc985db1e6fa68c83f9bb4a8808afe2d6d3d56` / CI 45747371669 (4/4). Απομονωμένο feature history, T008 solve, πραγματικό native profile-to-extrude, dependency reuse, atomic failed regeneration, undo/redo, round-trip και demo. Μόνο CAD branch, additive CI, καμία ενσωμάτωση PCL, main/base αλλαγή ή bypass ιδιωτικών πυλών. Opus/Fable review χωρίς ανάθεση. Όχι αυτόματο T010.
 
+- **CAD-D036 — 26/11/2026, multiphysics/electromechanical simulation vision:** Ο ιδιοκτήτης όρισε ως μακροπρόθεσμο στόχο τη μετάβαση από field-level μοντέλα ηλεκτρικών μηχανών (FRM/FEA, μεταβατικά σφάλματα, CAD-R020) στην ενιαία προσομοίωση ηλεκτρικού powertrain οχήματος με circuit/drive/control, μηχανική μετάδοση, κίνηση, τριβές, επαφές, θερμική ανάδραση, real-time/near-real-time όπου επαληθεύεται και time-scaled playback για ακριβότερες επιλύσεις. Ρητές απαιτήσεις Digital Twin, Motion Simulation και GPU-first επιτάχυνσης όλων των φυσικών τομέων (με portable backends και CPU αναφορά/fallback). Η επιλογή live/pre-rendering δεν περιορίζει την ύπαρξη ή την πιστότητα των physics. Καταγράφονται πηγή, σταδιακά benchmarks και όρια στο CAD_SOURCES/CAD_NEXT_STEPS/CAD_PLAN_DETAILS. Δεν εγκρίνεται νέα υλοποίηση, αλλαγή βάσης, main write ή ενσωμάτωση PCL.
+
 ## Ανοιχτά
 
 

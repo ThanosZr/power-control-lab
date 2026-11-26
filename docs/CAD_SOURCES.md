@@ -67,3 +67,11 @@ T002 (D026–D027) — [CAD_KERNEL_EVALUATION](CAD_KERNEL_EVALUATION.md) και 
 ## CAD-T009 source register
 
 - Parent T008 `9abc985db1e6fa68c83f9bb4a8808afe2d6d3d56`, [CI 45747371669](https://github.com/ThanosZr/power-control-lab/actions/runs/45747371669) exact SHA and 4/4 verified. Reuse [T008 solver](../experiments/cad_t008/sketch.mjs), T005 native pattern and existing T007 dependency pins/viewport. [T009 contract](CAD_FEATURE_HISTORY_CONTRACT.md). No private inputs obtained or published.
+
+## CAD-R020 — Field Reconstruction for Transient PMSM Faults
+
+S. Attestog, H. Van Khang and K. G. Robbersmyr, “Field Reconstruction for Modeling Multiple Faults in Permanent Magnet Synchronous Motors in Transient States,” *IEEE Access*, vol. 9, pp. 127131–127140, 2021. [DOI: 10.1109/ACCESS.2021.3112224](https://doi.org/10.1109/ACCESS.2021.3112224) · [ResearchGate (πηγή που πρότεινε ο ιδιοκτήτης)](https://www.researchgate.net/publication/354568078_Field_Reconstruction_for_Modeling_Multiple_Faults_in_Permanent_Magnet_Synchronous_Motors_in_Transient_States).
+
+Η εργασία επεκτείνει το field reconstruction model (FRM) για PMSM, συνδυάζοντας μοντέλα ελαττωμάτων μαγνητών και inter-turn short-circuit σε μεταβατική λειτουργία. Ανακατασκευάζει τη μαγνητική κατανομή στο διάκενο με δεδομένα αναφοράς από FEA και συγκρίνει τα αποτελέσματα με μεταβατική FEA. Η δημοσίευση αναφέρει σημαντική επιτάχυνση στο συγκεκριμένο παράδειγμα, όχι γενική εγγύηση για άλλα μοντέλα. Διαβάστηκαν η περίληψη και η περιγραφή της μεθόδου, όχι ανεξάρτητη αναπαραγωγή.
+
+**Χρήση στο project:** υποψήφια ερευνητική προσέγγιση για fast field-level electromagnetic simulation (FRM/ROM), transient fault diagnostics και συνεπή σύζευξη με κυκλωματική, θερμική και μηχανική προσομοίωση. Αργότερα benchmark έναντι FEA σε δηλωμένες συνθήκες, έλεγχος περιορισμών/κορεσμού/απωλειών και σφάλματος, αξιολόγηση online real-time δυνατότητας. Συνδέεται με [C7–C8 και EV powertrain](CAD_PLAN_DETAILS.md#πολυφυσική-ηλεκτρομηχανική-προσομοίωση-και-ev-powertrain), χωρίς επιλογή solver ή άδεια άμεσης υλοποίησης.
