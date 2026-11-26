@@ -88,3 +88,7 @@ The full plan and map describe what existing engine infrastructure can be reused
 ## Next action and delivery
 
 Confirm actual T007 HEAD, four CI jobs and dedicated T007 native/browser step. Local checkout blocked by DNS; no local native/browser verification claimed. Proposed next CAD-T008/C2 sketch constraint contract only with new authorization. Both private gates mandatory before PCL integration; no main/base change. Opus/Fable backlog in CAD_PARAMETRIC_CONTRACT.
+
+### T007 CI correction (26/11/2026)
+
+Run 45731477841 / e8003d0 failed at T005 native + T007 initial build; 23/26 passed, unit and Octave green, package skipped. Pin CAD-only native dependencies, isolate in venv, retain native stderr, add actual import/demo checks and retain all tests. New exact HEAD/CI must be checked; no claimed pass.

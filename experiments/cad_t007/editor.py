@@ -56,7 +56,7 @@ class Editor:
                     or result.session_id != session
                     or result.document_id != snapshot["id"]
                     or result.revision != snapshot["revision"]):
-                raise RuntimeError("Native rebuild failed: " + str(result.status))
+                raise RuntimeError(f"Native rebuild failed: {result.status} ({result.error or 'no detail'})")
             mesh = json.loads(result.payload)
             if mesh.get("brep_valid") is not True:
                 raise RuntimeError("Invalid native BRep")

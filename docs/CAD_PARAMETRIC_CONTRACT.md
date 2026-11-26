@@ -10,7 +10,7 @@ D033, 26/11/2026. Parent T006 68a465be4df460e7918fa0d849a0bddc8f931a8d / CI 4564
 ## Run
 
 ~~~sh
-python -m pip install 'build123d==0.10.0' 'cadquery-ocp==7.8.1.1.post1'
+python -m pip install -r experiments/cad_t007/requirements-native.txt
 python -m experiments.cad_t007.server
 ~~~
 
@@ -29,6 +29,10 @@ with Editor() as editor:
 ~~~
 
 Tests: python -m unittest experiments.cad_t003.test_document experiments.cad_t004.test_worker experiments.cad_t005.test_native experiments.cad_t007.test_editor -v; node experiments/cad_t007/test_browser.cjs. CI includes a CAD-conditional native dependency and test step on T007-capable branches. Local checkout/native dependency unavailable in this environment; no local native or browser pass asserted. Final CI at actual remote SHA is required.
+
+## CI correction (26/11/2026)
+
+Run 45731477841 at e8003d0: unit and Octave success; UI failed before the T007 browser test. T003/T004 23 passed, T005 two failed, T007 one error; native worker stderr was discarded. Fresh dependency resolution selected ocp-gordon 0.3.1 with cadquery-ocp-proxy 8.0.1.1.0 alongside pinned OCP 7.8.1.1.post1. Incompatibility is a hypothesis, not a proven root cause. Pin the older compatible-intended dependency set in a CAD-only venv; add import and real native demo preflights, preserve child stderr in the local terminal/CI (not HTTP response), keep all tests and verify the new SHA. No production dependency changes. Local native reproduction unavailable; final CI decides.
 
 ## Opus/Fable independent review (not delegated)
 

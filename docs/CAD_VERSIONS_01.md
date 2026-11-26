@@ -128,6 +128,10 @@ T007 isolated parametric GUI/Python transactions, native rebuild, undo/redo and 
 
 Branch created from exact T006 SHA. Reference code and tests in experiments/cad_t007, contract in CAD_PARAMETRIC_CONTRACT. Local clone DNS blocked; native/browser tests added to existing UI CI, pending final CI verification. No private inputs or engine changes.
 
+## CAD-S018 · 26/11/2026 · T007 CI repair
+
+Run 45731477841 at e8003d0 failed in native CAD step (23/26 tests); unit/Octave passed, package skipped. Suspected dependency drift; CAD-only venv and pinned critical dependencies, real import/demo checks and native stderr diagnostics. Browser save/download synchronization improved. No test disabled, no PCL runtime or main writes. New CI required.
+
 ## Πρότυπο επόμενης εγγραφής
 
 ```text

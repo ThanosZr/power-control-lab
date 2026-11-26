@@ -84,7 +84,7 @@ def execute(plan, token):
     env = dict(os.environ, OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1")
     with subprocess.Popen([sys.executable, "-m", "experiments.cad_t005.native"], cwd=ROOT,
                           env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                          stderr=subprocess.DEVNULL) as child:
+                          stderr=None) as child:
         try:
             pending = plan
             while True:
@@ -98,7 +98,7 @@ def execute(plan, token):
                     pending = None
             checkpoint(token)
             if child.returncode or len(stdout) > MAX_BYTES:
-                raise RuntimeError("Native CAD child failed or exceeded output limit")
+                raise RuntimeError(f"Native CAD child failed (exit={child.returncode}, stdout_bytes={len(stdout)})")
             return stdout
         finally:
             if child.poll() is None:
