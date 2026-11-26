@@ -438,7 +438,23 @@ class ApiSurface(unittest.TestCase):
             self.assertIn('pcl.rms.' + k, self.now['pcl'])
             self.assertTrue(api_surface.experimental('pcl', 'pcl.rms.' + k), k)
         self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][-1], 'modes')
-        self.assertEqual(sum(len(v) for v in self.now.values()), 1038)
+        self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 1038)       # 1038 then
+
+    def test_the_surface_of_5_1_5(self):
+        """5.1.5: the LCC link in the load flow AC/DC and in RMS (ROADMAP §101 step 2): the element Network.lcc, the module pcl.lcc
+        (operating_point, consts, pf_parts, vdcol, benchmark_network, LCCError) and the device pcl.rms.LCC with the methods of a kind
+        (init, eval, limits, outputs): twelve new points, all experimental; no new parameter of Network.dynamic or of acdc_flow (the
+        events 'iord', 'dcfault', 'dcclear'); the model of the drawing stays at version 5."""
+        from pcl import model
+        self.assertEqual(model.VERSION, 5)
+        new = ['pcl.network.Network.lcc'] + ['pcl.lcc.' + k for k in ('LCCError', 'pf_parts', 'consts', 'vdcol', 'operating_point', 'benchmark_network')] + \
+            ['pcl.rms.' + k for k in ('LCC', 'LCC.init', 'LCC.eval', 'LCC.limits', 'LCC.outputs')]
+        for k in new:
+            self.assertIn(k, self.now['pcl'])
+            self.assertTrue(api_surface.experimental('pcl', k), k)
+        self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][-1], 'modes')
+        self.assertEqual(self.now['pcl']['pcl.network.Network.acdc_flow']['params'], ['method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits'])
+        self.assertEqual(sum(len(v) for v in self.now.values()), 1050)
 
     def test_the_surface_of_4_19_5(self):
         # one setting of the solver more in the file format: the end of a piece of run() on the event that lies within eps after it

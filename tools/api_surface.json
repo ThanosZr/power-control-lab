@@ -1,11 +1,13 @@
 {
- "version": "5.1.4",
+ "version": "5.1.5",
  "stable_from": "4.0",
  "experimental": {
   "pcl": [
    "pcl.rms.",
    "pcl.network.Network.dynamic",
    "pcl.network.Network.dc_source",
+   "pcl.network.Network.lcc",
+   "pcl.lcc.",
    "pcl.insulation.",
    "pcl.surge.",
    "pcl.geo.",
@@ -2019,6 +2021,53 @@
     ],
     "since": "3.18"
    },
+   "pcl.lcc.LCCError": {
+    "params": [],
+    "since": "5.1.5"
+   },
+   "pcl.lcc.benchmark_network": {
+    "params": [
+     "S_base",
+     "C",
+     "**kw"
+    ],
+    "since": "5.1.5"
+   },
+   "pcl.lcc.consts": {
+    "params": [
+     "e",
+     "Ur",
+     "Ui"
+    ],
+    "since": "5.1.5"
+   },
+   "pcl.lcc.operating_point": {
+    "params": [
+     "e",
+     "Ur",
+     "Ui",
+     "Er",
+     "Ei",
+     "tol",
+     "max_iter"
+    ],
+    "since": "5.1.5"
+   },
+   "pcl.lcc.pf_parts": {
+    "params": [
+     "alpha",
+     "mu",
+     "np"
+    ],
+    "since": "5.1.5"
+   },
+   "pcl.lcc.vdcol": {
+    "params": [
+     "e",
+     "v"
+    ],
+    "since": "5.1.5"
+   },
    "pcl.lineconst.LineError": {
     "params": [],
     "since": "4.4"
@@ -3406,6 +3455,30 @@
      "mode"
     ],
     "since": "4.2"
+   },
+   "pcl.network.Network.lcc": {
+    "params": [
+     "rec",
+     "inv",
+     "Vdn",
+     "Idn",
+     "R",
+     "sr",
+     "si",
+     "L",
+     "C",
+     "Ld",
+     "poles",
+     "Iord",
+     "gref",
+     "amin",
+     "dI",
+     "dgc",
+     "vdcol",
+     "kc",
+     "name"
+    ],
+    "since": "5.1.5"
    },
    "pcl.network.Network.line": {
     "params": [
@@ -4870,6 +4943,47 @@
      "t"
     ],
     "since": "4.23"
+   },
+   "pcl.rms.LCC": {
+    "params": [
+     "net",
+     "e",
+     "pt",
+     "data",
+     "Sb",
+     "idx",
+     "wb"
+    ],
+    "since": "5.1.5"
+   },
+   "pcl.rms.LCC.eval": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi",
+     "t"
+    ],
+    "since": "5.1.5"
+   },
+   "pcl.rms.LCC.init": {
+    "params": [
+     "V",
+     "wb"
+    ],
+    "since": "5.1.5"
+   },
+   "pcl.rms.LCC.limits": {
+    "params": [],
+    "since": "5.1.5"
+   },
+   "pcl.rms.LCC.outputs": {
+    "params": [
+     "X",
+     "Vr",
+     "Vi",
+     "t"
+    ],
+    "since": "5.1.5"
    },
    "pcl.rms.RMSError": {
     "params": [],

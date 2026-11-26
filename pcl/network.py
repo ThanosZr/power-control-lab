@@ -364,6 +364,54 @@ class Network:
         self.elements[-1].update(bus=b)                    # (a DC bus: not the AC buses that _add checks)
         return nm
 
+    def lcc(self, rec, inv, Vdn, Idn, R, sr, si, L=0.0, C=0.0, Ld=(0.0, 0.0), poles=1, Iord=1.0, gref=15.0, amin=5.0, dI=0.1,
+            dgc=16.0, vdcol=(0.4, 0.55, 0.9, 1.0), kc=0.01, name=None):
+        """5.1.5 (ROADMAP §101 step 2, THEORY §8ΩΩ, experimental): a line-commutated HVDC link (LCC) from the rectifier at the AC
+        bus `rec` to the inverter at `inv` (pcl.lcc): V_dn (V, pole to ground) and I_dn (A) its base; R (Ω) the resistance of
+        the line of one pole (ground return without resistance); sr, si the stations {'Sn' (VA), 'U1', 'U2' (V, the line
+        voltages of the converter transformer, AC and valve side), 'uk' (%: X_c = u_k·U₂²/S_n per bridge), 'tap' (% on the AC
+        side), 'B' (six-pulse bridges in series, 2 by default)}; poles: 1 a monopole, 2 a bipole of two equal poles (the AC
+        powers twice). The controls in the steady state as the LCCC of the EMT (THEORY §8ω): the order Iord (pu of I_dn), γ_ref
+        gref and α_min amin (°), the current margin dI (pu), the rise of γ_ref with the current error dgc (° at ΔI), the VDCOL
+        vdcol = (V1, I1, V2, I2) (pu) on V_d + kc·I_d of the inverter. For the RMS dynamics (pcl.rms.LCC): L (H, of the line)
+        and C (F, at its middle: a T line; 0 none), Ld (H, the smoothing reactors of the rectifier and the inverter).
+        In the AC solvers it takes the powers of its last load flow AC/DC (acdc_flow), or before that an estimate (P = I_dn·V_dn
+        at the order, Q = P/2 at each end)."""
+        nm = str(name or f'lcc{sum(e["kind"] == "lcc" for e in self.elements) + 1}')
+        rec, inv = str(rec), str(inv)
+        for b in (rec, inv):
+            if b not in self.buses:
+                raise NetworkError(f'{nm}: unknown bus {b}')
+        if rec == inv:
+            raise NetworkError(f'{nm}: the rectifier and the inverter on the same bus')
+        st = {}
+        for side, d in (('r', sr), ('i', si)):
+            d = dict(d or {})
+            bad = set(d) - {'Sn', 'U1', 'U2', 'uk', 'tap', 'B'}
+            if bad:
+                raise NetworkError(f'{nm}: unknown data of a station: {", ".join(sorted(bad))}')
+            miss = [k for k in ('Sn', 'U1', 'U2', 'uk') if d.get(k) is None]
+            if miss:
+                raise NetworkError(f'{nm}: a station needs {", ".join(miss)}')
+            v = {k: float(d[k]) for k in ('Sn', 'U1', 'U2', 'uk')}
+            v['tap'], v['B'] = float(d.get('tap', 0.0)), int(d.get('B', 2))
+            if min(v['Sn'], v['U1'], v['U2'], v['uk']) <= 0 or v['B'] < 1:
+                raise NetworkError(f'{nm}: S_n, U1, U2, u_k above zero, B at least 1')
+            st[side] = v
+        Ld = tuple(float(x) for x in Ld)
+        if float(Vdn) <= 0 or float(Idn) <= 0 or float(R) < 0 or float(L) < 0 or float(C) < 0 or len(Ld) != 2 or min(Ld) < 0:
+            raise NetworkError(f'{nm}: V_dn, I_dn above zero; R, L, C, L_d not below zero')
+        if int(poles) not in (1, 2):
+            raise NetworkError(f'{nm}: poles 1 (a monopole) or 2 (a bipole)')
+        V1, I1, V2, I2 = (float(x) for x in vdcol)
+        if not (0 < float(Iord) and 0 <= float(dI) < float(Iord) and float(dgc) >= 0 and V2 > V1 and 0 < I1 <= I2):
+            raise NetworkError(f'{nm}: the order above zero, 0 ≤ ΔI below it, Δγ ≥ 0, a VDCOL with V2 > V1 and 0 < I1 ≤ I2')
+        self._add('lcc', nm, Vdn=float(Vdn), Idn=float(Idn), R=float(R), L=float(L), C=float(C), Ld=Ld, poles=int(poles),
+                  Iord=float(Iord), gref=float(gref), amin=float(amin), dI=float(dI), dgc=float(dgc), V1=V1, I1=I1, V2=V2, I2=I2,
+                  kc=float(kc), r=st['r'], i=st['i'])
+        self.elements[-1].update(rec=rec, inv=inv)          # (two AC buses, not the 'bus' that _add checks)
+        return nm
+
     def dc_dispatcher(self, members, V=1.0, weights=None, buses=None, name=None):
         """4.21: the dispatcher of a DC grid (pcl.dcgrid.DCGrid.dispatcher; Jovcic 2019, §27.6.2, Fig. 27.5, in steady state): the
         converters `members` (vsc with control P or droop, side 'dc') share x in the shares `weights` (equal by default), so
@@ -887,6 +935,13 @@ class Network:
                         raise NetworkError(f'{e["name"]}: holds the AC voltage of bus {b}, where another source is; only one source may hold a bus')
                     types[b] = 'PV'
                     Vset[b] = e['Vac']
+            elif k == 'lcc':                                 # 5.1.5: what the link takes, from its last AC/DC flow (or an estimate)
+                for b, key, sg in ((e['rec'], '_Sr', 1.0), (e['inv'], '_Si', -1.0)):
+                    S = e.get(key)
+                    if S is None:
+                        P = e['Iord'] * e['Idn'] * e['Vdn'] * e['poles'] / self.S_base
+                        S = complex(sg * P, 0.5 * P)
+                    Sbus[idx[b]] -= S
             elif k in ('generator', 'unit', 'feeder'):
                 b = e['bus']
                 i = idx[b]
@@ -1339,7 +1394,13 @@ class Network:
         5.1.2 (§101 step 1, THEORY §8ΩΧ): modes=True adds 'modes', the electromechanical modes at the start (pcl.rms.System.eigen,
         before the events): the oscillatory ones from 0,05 to 4 Hz with a rotor angle or speed among the four states that take most
         part, each {'lambda': [σ, ω] in 1/s and rad/s, 'f' (Hz), 'zeta', 'shape': {unit: [|·|, angle in degrees]} on the speeds,
-        the largest 1, 'part': [[unit, state, participation]]}, by frequency; or {'error': why} when they cannot be had."""
+        the largest 1, 'part': [[unit, state, participation]]}, by frequency; or {'error': why} when they cannot be had.
+        5.1.5 (§101 step 2, THEORY §8ΩΩ): a network with LCC links (lcc) starts from its AC/DC load flow, and each link is one
+        device (pcl.rms.LCC); stations: {link: its dynamic data (pcl.rms.LCC_DEFAULTS: the controls of the LCCC of the EMT)}.
+        Events 'iord' (dI: of the current order, pu), 'gen' (the link blocked), 'dcfault' (R in Ω at the middle of the line; it
+        needs C) and 'dcclear'. The result then has 'lcc': per link I_d at the two ends (kA), V_d (kV), P_d (MW), P and Q from
+        the AC buses (MW, Mvar), |V| of the HT buses, α, γ, μ (degrees), the order (pu), 'cc' (the inverter in current control),
+        'cf' (γ at 0: the commutation at the inverter does not complete), and with C the voltage at the middle 'Vm' (kV)."""
         from . import rms
         if typical is not None:
             machines = {**rms.typical(self, kind=typical), **(machines or {})}
@@ -1430,13 +1491,27 @@ class Network:
                'S_base_MVA': Sb, 'n_states': s.nx, 'n_buses': nb}
         if 'dc' in q:
             out['dc'] = dc
+        if 'lcc' in q:                                      # 5.1.5: the LCC links
+            D_ = 180 / math.pi
+            out['lcc'] = {}
+            for nm, d in q['lcc'].items():
+                e = self.element(nm)
+                Pb = e['Vdn'] * e['Idn'] * e['poles'] / 1e6
+                o = {'rec': e['rec'], 'inv': e['inv'], 'Id_r': d['Ir'] * e['Idn'] / 1e3, 'Id_i': d['Ii'] * e['Idn'] / 1e3,
+                     'Vdr': d['Vdr'] * e['Vdn'] / 1e3, 'Vdi': d['Vdi'] * e['Vdn'] / 1e3, 'Pdr': d['Vdr'] * d['Ir'] * Pb, 'Pdi': d['Vdi'] * d['Ii'] * Pb,
+                     'Pr': d['Pr'] * Sb, 'Qr': d['Qr'] * Sb, 'Pi': d['Pi'] * Sb, 'Qi': d['Qi'] * Sb, 'Vr': d['Vr'], 'Vi': d['Vi'],
+                     'alpha_r': d['alpha_r'] * D_, 'alpha_i': d['alpha_i'] * D_, 'gamma': d['gamma'] * D_, 'mu_r': d['mu_r'] * D_,
+                     'mu_i': d['mu_i'] * D_, 'order': d['order'], 'cc': d['cc'], 'cf': d['cf']}
+                if e['C'] > 0:
+                    o['Vm'] = d['Vm'] * e['Vdn'] / 1e3
+                out['lcc'][nm] = o
         if mach:
             spread = max(float(np.max(np.abs(o['delta_coi']))) for nm, o in mach.items() if nm in Hs) if fcoi is not None else None
             out['summary'] = {'stable': out['stable'], 'max_angle_coi': spread, 'f_min': float(np.min(fcoi)) if fcoi is not None else None,
                               'f_max': float(np.max(fcoi)) if fcoi is not None else None, 'V_min': float(np.min(out['Vmin'])),
                               'V_min_bus': out['Vmin_bus'][int(np.argmin(out['Vmin']))], 'time_s': r['stats']['time'],
                               't_end': float(r['t'][-1]), 'machines': len(mach), 'converters': len(conv), 'states': s.nx}
-        elif conv or 'dc' in q:                             # 5.0.16: converters and DC grids without machines
+        elif conv or 'dc' in q or 'lcc' in q:               # 5.0.16: converters and DC grids without machines (5.1.5: LCC links)
             fs = [np.asarray(o['f']) for o in conv.values() if 'f' in o] + \
                  [np.asarray(o['f']) for o in (out.get('dc') or {}).get('stations', {}).values() if o.get('control') != 'Vf']
             Ud = [np.asarray(d['V']) for d in (out.get('dc') or {}).get('buses', {}).values()]

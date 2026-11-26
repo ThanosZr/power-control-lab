@@ -2010,6 +2010,250 @@ class HVDC(_Holds, Kind):
         return None
 
 
+# ---------------------------------------------------------------- 5.1.5: the LCC link (ROADMAP §101 step 2, THEORY §8ΩΩ)
+# The dynamic data of the controls of a link: those of the LCCC of the EMT (the example of the first CIGRE HVDC benchmark,
+# THEORY §8ω): the filter of the measured current T_id, the PI of the rectifier (K_p rad/pu, T_i s, α_max °), the PI of the
+# current and of γ of the inverter (with their α_min and the α_max of the inverter), the floor of the error of γ (°), the
+# filter of the VDCOL T_v, and the bandwidth of the firing PLLs (Hz; 0: the valves fire on the bus voltage itself)
+LCC_DEFAULTS = {'Tid': 1.2e-3, 'KpR': 1.0989, 'TiR': 0.01092, 'amaxR': 150.2, 'KpI': 0.63, 'TiI': 0.01524, 'aminC': 70.0,
+                'KpG': 0.7506, 'TiG': 0.0544, 'aminG': 90.0, 'amaxI': 150.2, 'gemin': -31.17, 'Tv': 0.02, 'bw': 1.125}
+
+
+def _acos_c(u):
+    """acos of the real-clipped u (a complex step goes through inside, 0 derivative outside [−1, 1])."""
+    return np.arccos(_clip(u, -1.0, 1.0))
+
+
+class LCC(_Holds, Kind):
+    """5.1.5: a line-commutated HVDC link (pcl.network lcc, pcl.lcc) as one device on the AC buses of its rectifier and its
+    inverter (THEORY §8ΩΩ): the quasi-steady-state converters of «Power System Stability and Control», §10.9.3 (the «detailed
+    model with flexible modelling capability»: the DC line with its R, L and C, the converter controls with the angle limits
+    inside them, no mode-shift algorithm, the converters as the equations between the averages of the DC side and the RMS of
+    the fundamental of the AC side), with the controls of the LCCC of our EMT and the firing PLL of its average model:
+    * the DC side, per unit of the link: a T line, l₁·i_r′ = v_r − (r/2)·i_r − v_m, c·v_m′ = i_r − i_i − g_f·v_m,
+      l₂·i_i′ = v_m − (r/2)·i_i − v_i (the smoothing reactors in l₁, l₂); without C one current through l = L_r + L + L_i;
+      the valves conduct one way: a current at 0 that would fall is held there;
+    * each converter V_d = V_d0·cos α′ − R_c·I_d (v_r, and the inverter's −v_i), α′ = α + δ with δ the angle by which the bus
+      voltage leads its PLL, cos(α′ + μ) = cos α′ − √2·X_c·I_d/E_LL, the AC current of the fundamental 2·(√6/π)·T·I_d per
+      two bridges on the phase of the bus voltage with the exact c and s of pcl.lcc.pf_parts;
+    * the controls: the measured currents through T_id; the order min(I_ord, VDCOL) on the inverter's V_d + k·I_d through T_v;
+      the PI of the rectifier on the order; the PIs of the inverter on the order less ΔI and on γ_ref + Δγ(error) − γ, the
+      larger β; every integral within its output range (the INT with limits of the EMT: holds). The γ of the inverter is
+      that of its α at this instant (the EMT filters it by about one pulse, 0,27 ms): the loop γ → β → α → γ is solved in
+      the evaluation (_beta_inv).
+    One member; the states in the order of self.states. The buses: (rectifier, inverter)."""
+    multi = True
+
+    def __init__(self, net, e, pt, data, Sb, idx, wb):
+        from . import lcc as lccmod
+        self.e, self.Sb, self.wb = e, Sb, wb
+        data = dict(data or {})
+        bad = set(data) - set(LCC_DEFAULTS)
+        if bad:
+            raise RMSError(f'{e["name"]}: unknown data {", ".join(sorted(bad))} (pcl.rms.LCC_DEFAULTS)')
+        d = {q: _num(data, q, v) for q, v in LCC_DEFAULTS.items()}
+        if min(d['Tid'], d['Tv'], d['TiR'], d['TiI'], d['TiG']) <= 0 or d['bw'] < 0:
+            raise RMSError(f'{e["name"]}: the time constants above zero, the bandwidth not below zero')
+        U = (net.buses[e['rec']]['Un'], net.buses[e['inv']]['Un'])
+        k = lccmod.consts(e, *U)
+        Zdn = k['Zdn']
+        self.hasC = e['C'] > 0
+        l1, l2 = (e['Ld'][0] + e['L'] / 2) / Zdn, (e['L'] / 2 + e['Ld'][1]) / Zdn
+        if (self.hasC and not (l1 > 0 and l2 > 0)) or (not self.hasC and not (l1 + l2 > 0)):
+            raise RMSError(f'{e["name"]}: the DC side needs an inductance on each side of C (L_d or L of the line)')
+        D_ = math.pi / 180
+        p = {'vd0': np.array([k['r']['vd0'], k['i']['vd0']]), 'rc': np.array([k['r']['rc'], k['i']['rc']]),
+             'km': np.array([k['r']['km'], k['i']['km']]),
+             'ki': np.array([k['r']['ki'] * math.sqrt(3) * U[0] / Sb, k['i']['ki'] * math.sqrt(3) * U[1] / Sb]),   # pu of the bus current
+             'rl': k['rl'], 'l1': l1, 'l2': l2, 'l': l1 + l2, 'c': e['C'] * Zdn, 'Pb': e['Vdn'] * e['Idn'] * e['poles'] / Sb,
+             'Iord': e['Iord'], 'dI': e['dI'], 'gr': e['gref'] * D_, 'dgc': e['dgc'] * D_, 'kc': e['kc'],
+             'V1': e['V1'], 'V2': max(e['V2'], e['V1'] + 1e-6), 'I1': e['I1'], 'I2': e['I2'],
+             'loR': math.pi - d['amaxR'] * D_, 'hiR': math.pi - e['amin'] * D_, 'loI': math.pi - d['amaxI'] * D_,
+             'hiC': math.pi - d['aminC'] * D_, 'hiG': math.pi - d['aminG'] * D_, 'gl': d['gemin'] * D_}
+        p.update({q: d[q] for q in ('Tid', 'KpR', 'TiR', 'KpI', 'TiI', 'KpG', 'TiG', 'Tv', 'bw')})
+        wn = 2 * math.pi * d['bw']
+        p['Kp'], p['Ki'] = 2 * 0.7071 * wn, wn * wn                 # the PLL of the EMT (ζ = 0,7071)
+        if not (p['loR'] < p['hiR'] and p['loI'] < p['hiC'] and p['loI'] < p['hiG']):
+            raise RMSError(f'{e["name"]}: α_min below α_max at each PI')
+        self.pll = d['bw'] > 0
+        st = (['ir', 'vm', 'ii'] if self.hasC else ['id']) + ['ifr', 'ifi', 'xv', 'xr', 'xc', 'xg'] + (['thr', 'zr', 'thi', 'zi'] if self.pll else [])
+        self.states = tuple(st)
+        self.nx = len(st)
+        self.j = {s: i for i, s in enumerate(st)}
+        self.pt = pt
+        super().__init__([e['name']], np.array([idx[e['rec']], idx[e['inv']]], int), p)
+        self._reset()
+
+    def _reset(self):
+        self.p['on'], self.p['dI_ev'], self.p['gf'] = 1.0, 0.0, 0.0
+        self._zero = []
+
+    def _beta_inv(self, bc, xg, grp, dl, kk):
+        """The β of the inverter: β = max(β_c, B_g(β)), B_g(β) = clip(K_pG·max(γ_ref′ − γ(β), γ_err,min) + x_g, α limits), γ(β) =
+        π − acos(−cos(β − δ) − kk), kk = km·i/|V|. H(β) = β − max(β_c, B_g(β)) rises with β (γ rises, B_g falls): one root,
+        between the lower and the upper limit. Newton with bisection on the real parts, then Newton alone for the imaginary
+        part of a complex step. Returns (β, γ at β)."""
+        p = self.p
+        lo, hi = p['loI'], max(p['hiC'], p['hiG'])
+
+        def H(b):
+            u = -np.cos(b - dl) - kk
+            ur = float(np.real(u))
+            g = np.pi - _acos_c(u)
+            eg = grp - g
+            egf = eg if float(np.real(eg)) >= p['gl'] else p['gl'] + 0 * eg
+            bg = _clip(p['KpG'] * egf + xg, p['loI'], p['hiG'])
+            bgr = float(np.real(p['KpG'] * egf + xg))
+            win_g = float(np.real(bg)) > float(np.real(bc))
+            act = win_g and float(np.real(eg)) >= p['gl'] and p['loI'] < bgr < p['hiG'] and -1 < ur < 1
+            dg = np.sin(b - dl) / np.sqrt(1 - u * u) if act else 0.0
+            return b - (bg if win_g else bc), 1 + p['KpG'] * dg, g
+        b = _clip(bc, lo, hi) + 0 * kk
+        a_, b_ = lo, hi
+        for _ in range(60):
+            h, dh, g = H(b)
+            hr = float(np.real(h))
+            if abs(hr) < 1e-14:
+                break
+            if hr < 0:
+                a_ = max(a_, float(np.real(b)))
+            else:
+                b_ = min(b_, float(np.real(b)))
+            bn = b - h / dh
+            if not a_ < float(np.real(bn)) < b_:
+                bn = 0.5 * (a_ + b_) + 0 * kk
+            b = bn
+        for _ in range(3):                                   # (the imaginary part of a complex step)
+            h, dh, g = H(b)
+            b = b - h / dh
+        return b, H(b)[2]
+
+    def _core(self, X, Vr, Vi, t):
+        p, j = self.p, self.j
+        x = X[0]
+        E = _hyp(Vr, Vi)
+        Ef = np.where(_re(E) < 1e-4, 1e-4 + 0 * E, E)
+        F = np.zeros(self.nx, dtype=np.result_type(X, Vr, float))
+        if self.pll:
+            th = np.array([x[j['thr']], x[j['thi']]])
+            z = np.array([x[j['zr']], x[j['zi']]])
+            dd = Vr * np.cos(th) + Vi * np.sin(th)
+            qq = Vi * np.cos(th) - Vr * np.sin(th)
+            dl = _ang(dd, qq)
+            er = qq / Ef
+            F[j['thr']], F[j['thi']] = p['Kp'] * er + z
+            F[j['zr']], F[j['zi']] = p['Ki'] * er
+        else:
+            dl = 0 * E
+        if self.hasC:
+            ir, vm, ii = x[j['ir']], x[j['vm']], x[j['ii']]
+        else:
+            ir = ii = x[j['id']]
+            vm = 0 * ir
+        on = p['on'] > 0
+        ifr, ifi, xv = x[j['ifr']], x[j['ifi']], x[j['xv']]
+        # the order: the VDCOL on the filtered V_d + k·I_d of the inverter
+        V1, V2, I1, I2 = p['V1'], p['V2'], p['I1'], p['I2']
+        xvr = float(np.real(xv))
+        dcol = I1 + 0 * xv if xvr <= V1 else I2 + 0 * xv if xvr >= V2 else I1 + (I2 - I1) * (xv - V1) / (V2 - V1)
+        io = p['Iord'] + p['dI_ev'] + 0 * xv
+        order = io if float(np.real(io)) <= float(np.real(dcol)) else dcol
+        # the rectifier
+        e_r = order - ifr
+        br = _clip(p['KpR'] * e_r + x[j['xr']], p['loR'], p['hiR'])
+        ar = np.pi - br + dl[0]
+        # the inverter: the current PI and the γ PI, the larger β
+        e_c = order - p['dI'] - ifi
+        bc = _clip(p['KpI'] * e_c + x[j['xc']], p['loI'], p['hiC'])
+        e_i = order - ifi
+        sh = e_i / p['dI']
+        shr = float(np.real(sh))
+        grp = p['gr'] + p['dgc'] * (0 * sh if shr <= 0 else 1 + 0 * sh if shr >= 1 else sh)
+        kk = p['km'][1] * ii / Ef[1]
+        bi, gam = self._beta_inv(bc, x[j['xg']], grp, dl[1], kk)
+        eg = grp - gam
+        egf = eg if float(np.real(eg)) >= p['gl'] else p['gl'] + 0 * eg
+        ai = np.pi - bi + dl[1]
+        # the converters
+        A = np.array([ar, ai])
+        I = np.array([ir, ii])
+        u = np.cos(A) - p['km'] * I / Ef
+        mu = _acos_c(u) - A
+        vd = p['vd0'] * E * np.cos(A) - p['rc'] * I           # p − n of each (the inverter's negative)
+        c, s = _pf_parts(A, mu)
+        i1 = p['ki'] * I * (1.0 if on else 0.0)
+        Ir = -i1 * (c * Vr + s * Vi) / Ef
+        Ii = -i1 * (c * Vi - s * Vr) / Ef
+        # the DC side, and the valves one way
+        hold = self._hold
+        if self.hasC:
+            dir_ = (vd[0] - p['rl'] / 2 * ir - vm) / p['l1']
+            dii = (vm - p['rl'] / 2 * ii + vd[1]) / p['l2']
+            F[j['vm']] = (ir - ii - p['gf'] * vm) / p['c']
+            if not on:
+                dir_, dii = 0 * dir_, 0 * dii
+            F[j['ir']] = 0 * dir_ if hold('ir')(_re(ir), _re(dir_), 0.0, np.inf) else dir_
+            F[j['ii']] = 0 * dii if hold('ii')(_re(ii), _re(dii), 0.0, np.inf) else dii
+        else:
+            did = (vd[0] - p['rl'] * ir + vd[1]) / p['l']
+            if not on:
+                did = 0 * did
+            F[j['id']] = 0 * did if hold('id')(_re(ir), _re(did), 0.0, np.inf) else did
+        F[j['ifr']] = (ir - ifr) / p['Tid']
+        F[j['ifi']] = (ii - ifi) / p['Tid']
+        F[j['xv']] = (-vd[1] + p['kc'] * ifi - xv) / p['Tv']
+        for key, rate, lo_, hi_ in (('xr', p['KpR'] / p['TiR'] * e_r, p['loR'], p['hiR']), ('xc', p['KpI'] / p['TiI'] * e_c, p['loI'], p['hiC']),
+                                    ('xg', p['KpG'] / p['TiG'] * egf, p['loI'], p['hiG'])):
+            r_ = rate if on else 0 * rate
+            F[j[key]] = 0 * r_ if hold(key)(_re(x[j[key]]), _re(r_), lo_, hi_) else r_
+        o = {'ir': ir, 'ii': ii, 'vm': vm, 'vdr': vd[0], 'vdi': -vd[1], 'ar': ar, 'ai': ai, 'gamma': gam, 'mur': mu[0], 'mui': mu[1],
+             'order': order, 'cc': float(np.real(bc)) >= float(np.real(bi)) - 1e-12, 'cf': float(np.real(u[1])) <= -0.999999,
+             'S': (Vr * Ir + Vi * Ii, Vi * Ir - Vr * Ii), 'E': E, 'dl': dl}
+        return F, Ir, Ii, o
+
+    def eval(self, X, Vr, Vi, t):
+        F, Ir, Ii, _ = self._core(X, Vr, Vi, t)
+        return F[None, :], Ir, Ii
+
+    def outputs(self, X, Vr, Vi, t=0.0):
+        return self._core(X, Vr, Vi, t)[3]
+
+    def limits(self):
+        p, j, on = self.p, self.j, np.ones(1, bool)
+        out = [(j['xr'], 0.0, p['loR'], p['hiR'], on), (j['xc'], 0.0, p['loI'], p['hiC'], on), (j['xg'], 0.0, p['loI'], p['hiG'], on)]
+        return out + [(j[s], 0.0, 0.0, np.inf, on) for s in (('ir', 'ii') if self.hasC else ('id',))]
+
+    def init(self, V, wb):
+        """From the load flow AC/DC (its point of the link, pcl.lcc): every derivative zero."""
+        p, j, o = self.p, self.j, self.pt
+        x = np.zeros(self.nx)
+        i = o['i']
+        if self.hasC:
+            x[j['ir']], x[j['ii']], x[j['vm']] = i, i, o['vr'] - p['rl'] / 2 * i
+        else:
+            x[j['id']] = i
+        x[j['ifr']] = x[j['ifi']] = i
+        x[j['xv']] = o['vi'] + p['kc'] * i
+        bi = math.pi - o['ai']
+        if o['mode'] == 1:                                  # the rectifier on current, the inverter on γ (its current PI down)
+            x[j['xr']], x[j['xg']], x[j['xc']] = math.pi - o['ar'], bi, p['loI']
+        elif o['mode'] == 2:                                # the rectifier at α_min, the inverter on current (its γ PI down)
+            x[j['xr']], x[j['xc']], x[j['xg']] = p['hiR'], bi, p['loI']
+        else:                                               # the rectifier at α_min, the inverter on its sloped γ
+            x[j['xr']], x[j['xg']], x[j['xc']] = p['hiR'], bi, p['loI']
+        if self.pll:
+            Vb = V[self.bus]
+            x[j['thr']], x[j['thi']] = cmath.phase(Vb[0]), cmath.phase(Vb[1])
+        self._reset()
+        self.x_start = x.copy()
+        return x[None, :]
+
+
+def _pf_parts(A, mu):
+    from .lcc import pf_parts
+    return pf_parts(A, mu, np=np)
+
+
 # ---------------------------------------------------------------- 5.1.4: the wind turbines of IEC 61400-27-1 (ROADMAP §101, THEORY §8ΩΨ)
 # The generic models of type 4A (the full converter without the aerodynamic and mechanical parts) and type 4B (with the two-mass
 # drive train and a constant aerodynamic torque) of IEC 61400-27-1:2020 (§6.2.5, the modules of §7 and the blocks of Annex D),
@@ -2546,7 +2790,8 @@ def two_area_machines(excitation='manual', limits=False):
 
 
 KNOWN_ELEMENTS = {'generator', 'load', 'branch', 'feeder', 'shunt', 'line', 'reactor', 'transformer', 'transformer3',   # 5.0.13: the passive ones of the network as Y
-                  'vsc', 'dc_line', 'dcdc', 'dc_dispatcher', 'dc_source'}                                                    # 5.0.15: the DC grids (HVDC); 5.0.16: dc_source
+                  'vsc', 'dc_line', 'dcdc', 'dc_dispatcher', 'dc_source',                                                    # 5.0.15: the DC grids (HVDC); 5.0.16: dc_source
+                  'lcc'}                                                                                                    # 5.1.5: the LCC links
 
 
 # ---------------------------------------------------------------- the system
@@ -2570,12 +2815,15 @@ class System:
         self.case = c = net.case()
         self.n, self.names, self.idx = c.n, c.names, c.idx
         dcnet = any(e['kind'] == 'vsc' for e in net.elements)
-        if pf is None and dcnet:                            # 5.0.15: a network with DC grids starts from its AC/DC load flow
+        lcnet = [e for e in net.elements if e['kind'] == 'lcc']          # 5.1.5: the LCC links (LCC)
+        if pf is None and (dcnet or lcnet):                 # 5.0.15: a network with DC grids starts from its AC/DC load flow
             pf = net.acdc_flow()
             if not pf.get('converged'):
                 raise RMSError('η ροή φορτίου AC/DC δεν συγκλίνει: δεν υπάρχει αρχή για τη δυναμική')
         elif dcnet and 'converters' not in pf:
             raise RMSError('ένα δίκτυο με σταθμούς HVDC ξεκινά από τη ροή φορτίου AC/DC (net.acdc_flow()), όχι από τη ροή φορτίου AC')
+        elif lcnet and 'lcc' not in pf:
+            raise RMSError('ένα δίκτυο με ζεύξεις LCC ξεκινά από τη ροή φορτίου AC/DC (net.acdc_flow()), όχι από τη ροή φορτίου AC')
         self.pf = pf or net.power_flow()
         V0 = np.asarray(self.pf['_V'], complex)
         self.V0 = V0
@@ -2753,8 +3001,19 @@ class System:
             for nm, cv in self.pf['converters'].items():
                 Sg[self.idx[cv['bus']]] -= (cv['Ps'] + 1j * cv['Qs']) / Sb
             self.kinds.append(HVDC(net, self.pf, stations, Sb, self.idx, self.wb))
-        elif stations:
+        elif stations and not lcnet:
             raise RMSError('stations: το δίκτυο δεν έχει σταθμούς HVDC (vsc)')
+        if lcnet:                                           # 5.1.5: each LCC link one device on its two buses
+            from . import lcc as lccmod
+            bad = set(stations or {}) - {e['name'] for e in lcnet}
+            if bad:
+                raise RMSError('stations: όχι ζεύξεις LCC: ' + ', '.join(sorted(bad)))
+            for e in lcnet:
+                Ur, Ui = net.buses[e['rec']]['Un'], net.buses[e['inv']]['Un']
+                pt = lccmod.operating_point(e, Ur, Ui, abs(V0[self.idx[e['rec']]]), abs(V0[self.idx[e['inv']]]))
+                Sg[self.idx[e['rec']]] += complex(pt['Pr'], pt['Qr']) / Sb
+                Sg[self.idx[e['inv']]] += complex(pt['Pi'], pt['Qi']) / Sb
+                self.kinds.append(LCC(net, e, pt, (stations or {}).get(e['name']), Sb, self.idx, self.wb))
         self.Sg = Sg
         # the states
         off = 0
@@ -2764,7 +3023,7 @@ class System:
         self.nx = off
         self.ny = 2 * self.n
         self.state_names = [(K.names[i], s) for K in self.kinds for i in range(K.m) for s in K.states]
-        self._conv = any(isinstance(K, (Converter, SVC, Statcom, HVDC, Wind)) for K in self.kinds)
+        self._conv = any(isinstance(K, (Converter, SVC, Statcom, HVDC, Wind, LCC)) for K in self.kinds)
         self._y_build()
         self.events_done = []
         self.x = None
@@ -3059,8 +3318,28 @@ class System:
                     return K, ('l', K.lname.index(name))
         return None, None
 
+    def _lcc(self, name):
+        for K in self.kinds:
+            if isinstance(K, LCC) and K.names[0] == name:
+                return K
+        return None
+
     def _apply(self, ev):
         k = ev['kind']
+        if k in ('iord', 'dcfault', 'dcclear') or (k == 'gen' and self._lcc(str(ev.get('gen'))) is not None):
+            K = self._lcc(str(ev.get('gen')))                   # 5.1.5: an LCC link: its order, a fault at the middle of its line, out
+            if K is None:
+                raise RMSError('συμβάν %r: μόνο για μια ζεύξη LCC (gen: το όνομά της), όχι το %r' % (k, ev.get('gen')))
+            if k == 'iord':
+                K.p['dI_ev'] = float(ev['dI'])
+            elif k == 'gen':
+                K.p['on'] = 0.0
+                K._zero = [K.j[q] for q in (('ir', 'ii') if K.hasC else ('id',))]
+            else:
+                if not K.hasC:
+                    raise RMSError('η ζεύξη %s δεν έχει C στη μέση της γραμμής: δεν έχει σημείο για σφάλμα DC' % K.names[0])
+                K.p['gf'] = 0.0 if k == 'dcclear' else K.e['Vdn'] / K.e['Idn'] / max(float(ev.get('R', 0.1)), 1e-6)
+            return
         if k in ('block', 'deblock'):                       # 5.1.1: a station of a DC grid blocked or deblocked
             K, w = self._hvdc(str(ev.get('gen')))
             if K is None or w[0] not in ('g', 'f', 'm'):
@@ -3185,6 +3464,8 @@ class System:
                 K.p['dP'], K.p['dX'] = np.zeros(K.m), np.zeros(K.m)
                 if getattr(K, 'd_init', None) is not None:
                     K.d = {**{q: v.copy() for q, v in K.d_init.items() if q != 'tr'}, 'tr': {q: v.copy() for q, v in K.d_init['tr'].items()}}
+            elif isinstance(K, LCC):                        # 5.1.5
+                K._reset()
             elif isinstance(K, HVDC):                       # 5.0.15
                 K.p['lon'] = np.ones(len(K.lines))
                 for q, nn in (('g', K.ng), ('f', K.nf), ('d', K.nk), ('m', K.nm)):
@@ -3269,7 +3550,7 @@ class System:
         prot = any(isinstance(K, HVDC) and K.has_prot for K in self.kinds)     # 5.1.1: the protection of the stations
         cda = False                                          # 5.1.1: the next step damps (_step_be2)
         blkd = [K for K in self.kinds if isinstance(K, HVDC)]
-        keys = ('kind', 'gen', 'bus', 'branch', 'dV', 'dP', 'dQ', 'id', 'by', 'why')
+        keys = ('kind', 'gen', 'bus', 'branch', 'dV', 'dP', 'dQ', 'id', 'by', 'why', 'dI', 'R')
         while t < t_end - 1e-12:
             while ei < len(evs) and evs[ei]['t'] <= t + 1e-12:
                 if evs[ei]['kind'] == 'tick':                 # 5.0.16: past a jump of an expression: a new start of y and f
@@ -3406,7 +3687,7 @@ class System:
         return (E + S @ J).tocsc()
 
     def _units(self):
-        return [K for K in self.kinds if (isinstance(K, Unit) and (K.avr or K.gov)) or isinstance(K, (Converter, SVC, Statcom, HVDC, Wind))]
+        return [K for K in self.kinds if (isinstance(K, Unit) and (K.avr or K.gov)) or isinstance(K, (Converter, SVC, Statcom, HVDC, Wind, LCC))]
 
     def _freeze(self, x, y, t):
         """5.0.13: the holds of the limits without windup as at the start of the step, for its Newton (Unit._hold)."""
@@ -3736,6 +4017,31 @@ class System:
             K.lblk, K.pr, K.can_block, K._zero = kblk[1], kblk[2], kblk[3], []
             out['dc'] = {'buses': {b: Xs[:, K.i_u[k]] for k, b in enumerate(K.dc_names)}, 'stations': st, 'dcdc': dd, 'sources': ss,
                          'lines': {nm: il[:, j] for j, nm in enumerate(K.lname)}, 'device': K}
+        # 5.1.5: the LCC links, with their order, faults and trips as at each point of the result
+        for K in self.kinds:
+            if not isinstance(K, LCC):
+                continue
+            nt, nm = len(r['t']), K.names[0]
+            Xs = r['x'][:, K.x0:K.x0 + K.nx]
+            Vb = V[:, K.bus]
+            keep = {q: K.p[q] for q in ('on', 'dI_ev', 'gf')}
+            K._reset()
+            evs = [e for e in r.get('events', ()) if e.get('gen') == nm and e['kind'] in ('iord', 'dcfault', 'dcclear', 'gen')]
+            cols, ei = {}, 0
+            for ti in range(nt):
+                while ei < len(evs) and evs[ei]['i'] <= ti:
+                    self._apply(dict(evs[ei]))
+                    ei += 1
+                o = K.outputs(Xs[ti][None, :], Vb[ti].real, Vb[ti].imag, float(r['t'][ti]))
+                vals = {'Ir': o['ir'], 'Ii': o['ii'], 'Vdr': o['vdr'], 'Vdi': o['vdi'], 'Vm': o['vm'], 'alpha_r': o['ar'], 'alpha_i': o['ai'],
+                        'gamma': o['gamma'], 'mu_r': o['mur'], 'mu_i': o['mui'], 'order': o['order'], 'cc': o['cc'], 'cf': o['cf'],
+                        'Pr': -o['S'][0][0], 'Qr': -o['S'][1][0], 'Pi': -o['S'][0][1], 'Qi': -o['S'][1][1], 'Vr': o['E'][0], 'Vi': o['E'][1],
+                        'delta_r': o['dl'][0], 'delta_i': o['dl'][1]}
+                for key, val in vals.items():
+                    cols.setdefault(key, np.empty(nt))[ti] = float(np.real(val))
+            K.p.update(keep)
+            K._zero = []
+            out.setdefault('lcc', {})[nm] = cols
         return out
 
     def stable(self, r, limit=math.pi):

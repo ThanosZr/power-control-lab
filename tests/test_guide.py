@@ -161,6 +161,21 @@ class Guide(unittest.TestCase):
             said = re.search(r'Τυπώνει:\n\n```\n(.*?)```', sec, re.S).group(1).strip()
             self.assertEqual(r.stdout.strip(), said)
 
+    def test_the_python_example_of_5_1_5_runs_as_written(self):
+        # §63: the LCC link in the load flow AC/DC and in RMS: the first CIGRE HVDC benchmark, a step of the order and a DC fault
+        bl = blocks('5.1.5')
+        self.assertEqual(len(bl), 1)
+        head, code = bl[0]
+        self.assertTrue(head.startswith('63. '), head)
+        text = (ROOT / 'docs' / 'GUIDE.md').read_text(encoding='utf-8')
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING='utf-8', PCL_HOME=d)
+            r = subprocess.run([sys.executable, '-c', code], cwd=d, env=env, capture_output=True, text=True, encoding='utf-8', timeout=900)
+            self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+            sec = [q for q in re.split(r'(?m)^## ', text) if q.startswith('63. ')][0]
+            said = re.search(r'Τυπώνει:\n\n```\n(.*?)```', sec, re.S).group(1).strip()
+            self.assertEqual(r.stdout.strip(), said)
+
     def test_the_python_example_of_5_1_4_runs_as_written(self):
         # §62: the wind turbines of IEC 61400-27-1 in RMS: G3 of the IEEE 9 as type 4A and 4B with a fault next to it
         bl = blocks('5.1.4')
