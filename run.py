@@ -381,5 +381,22 @@ def main():
             __import__('sys').modules['engine.console'].close_all()
 
 
+def frozen_module(argv=None):
+    """5.1.3: in the executable (tools/build_exe.py, PyInstaller) sys.executable is the program itself, so the command
+    line of the page (engine/console.py: `<program> -m pcl.console --child`) runs that module here, not a second server.
+    True when it ran one."""
+    import sys, runpy
+    argv=sys.argv if argv is None else argv
+    if not getattr(sys,'frozen',False) or len(argv)<3 or argv[1]!='-m':
+        return False
+    module=argv[2]
+    sys.argv=[argv[0]]+argv[3:]
+    runpy.run_module(module,run_name='__main__',alter_sys=True)
+    return True
+
+
 if __name__=='__main__':
-    main()
+    import multiprocessing
+    multiprocessing.freeze_support()      # 5.1.3: the processes of a sweep (pcl/core.py) in the executable on Windows
+    if not frozen_module():
+        main()

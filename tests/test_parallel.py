@@ -137,9 +137,9 @@ class Lists(unittest.TestCase):
         self.assertIn('tools/test_shards.py run ${{ matrix.shard }}/${{ strategy.job-total }}', CI)
         self.assertIn(f'tools/test_shards.py check reports/shard-*.json --n {ts.SHARDS}', CI)
         self.assertIn(f'list --n {ts.SHARDS}', CI)
-        for job in ('verify', 'octave', 'ui', 'tests'):           # right after the quick checks, not after all the tests
+        for job in ('verify', 'octave', 'ui', 'tests', 'exe'):    # right after the quick checks, not after all the tests
             self.assertRegex(CI, rf'\n  {job}:\n(?:    .*\n)*?    needs: checks\n')
-        self.assertIn('needs: [all-tests, verify, ui, octave]', CI)
+        self.assertIn('needs: [all-tests, verify, ui, octave, exe]', CI)        # 5.1.3: and the executables
 
     def test_every_scenario_is_in_the_list(self):
         self.assertEqual(sorted(uf.FLOWS), sorted(p.stem for p in (ROOT / 'tests' / 'ui').glob('*.js')))

@@ -60,7 +60,7 @@
 | `web/studio/watch.js` | 338 |
 | `web/studio/winframe.js` | 103 |
 | `pcl/runner.js` | 27 |
-| `run.py` | 385 |
+| `run.py` | 402 |
 | `engine/__init__.py` | 1 |
 | `engine/addons.py` | 322 |
 | `engine/analysis.py` | 307 |
@@ -139,6 +139,7 @@
 | `tests/test_bidir_sim.py` | 70 |
 | `tests/test_big.py` | 71 |
 | `tests/test_boundary.py` | 50 |
+| `tests/test_build_exe.py` | 144 |
 | `tests/test_bus.py` | 145 |
 | `tests/test_console.py` | 343 |
 | `tests/test_control.py` | 213 |
@@ -3186,6 +3187,7 @@ _(χωρίς συναρτήσεις)_
 | 244 | method | `Handler.do_GET` |
 | 275 | method | `Handler.do_POST` |
 | 356 | function | `main` |
+| 384 | function | `frozen_module` |
 
 ### `engine/__init__.py`
 

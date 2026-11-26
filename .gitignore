@@ -19,3 +19,7 @@ node_modules/
 web/vendor/
 node_modules/
 /addons/
+
+# the executable (python tools/build_exe.py, 5.1.3)
+/build/
+/dist/
