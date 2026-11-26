@@ -186,7 +186,7 @@ def smoke(command, cwd=None, timeout=120):
     t0 = time.perf_counter()
     log = open(Path(home) / 'server.log', 'wb')     # a file, not a pipe: a full pipe would stop the server
     proc = subprocess.Popen(list(command) + ['--no-browser', '--port', str(port)], cwd=cwd,
-                            env=dict(os.environ, PCL_HOME=home), stdout=log, stderr=subprocess.STDOUT)
+                            env=dict(os.environ, PCL_HOME=home, PYTHONIOENCODING='utf-8'), stdout=log, stderr=subprocess.STDOUT)
 
     def output():
         log.flush()
@@ -269,7 +269,8 @@ def main(argv=None):
     out = Path(a.out).resolve()
     work = ROOT / 'build' / 'pyinstaller'
     if a.pyodide and not (ROOT / 'web' / 'vendor' / 'pyodide' / 'pyodide.js').exists():
-        subprocess.run([sys.executable, str(ROOT / 'tools' / 'get_pyodide.py')], check=True)
+        subprocess.run([sys.executable, str(ROOT / 'tools' / 'get_pyodide.py')], check=True,
+                       env=dict(os.environ, PYTHONIOENCODING='utf-8'))     # its Greek messages on a Windows pipe (cp1252)
     staged = stage(ROOT, work / 'stage', pyodide=a.pyodide or (ROOT / 'web' / 'vendor' / 'pyodide').exists())
     t0 = time.perf_counter()
     subprocess.run(pyinstaller_cmd(ROOT, staged, out, work), check=True, cwd=ROOT)
