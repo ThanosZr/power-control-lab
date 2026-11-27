@@ -1,12 +1,12 @@
 # CAD: active handoff
 
-Updated 2026-11-27; revision 0.14, CAD-S022. **Active T010, lab-cad-0.10.0-native-features.** Isolated exact revolve/union/subtract/intersect, transitive native recipes, atomic regeneration, history and retained viewport. Parent T009 exact `5490370c8cf7a4ae09ae87a4d0d9888c805a8e8d` / CI 45821459611, completed/success 4/4, dedicated T009 step success. Final T010 CI required on actual HEAD. No PCL integration; both private gates remain open. [Contract](CAD_NATIVE_FEATURES_CONTRACT.md).
+Updated 2026-11-27; revision 0.15, CAD-S023. **Active T011, lab-cad-0.11.0-sweep-loft.** Isolated native curved sweep/loft, datum frames, schema-3 feature references and transactional bounded workers; inspector and retained viewport. Parent T010 exact `7341313f68bb75d688686e241d81b9e83367d128` / CI 45991092618, completed/success 4/4, dedicated T010 step success. Final T011 CI required on actual HEAD. No PCL integration; both private gates remain open. [Contract](CAD_SWEEP_LOFT_CONTRACT.md).
 
 ## Scope and pinned state
 
-- Task: CAD-T010 isolated native feature expansion (D037); SOL, no subagents.
+- Task: CAD-T011 isolated native feature expansion (D038–D039); SOL, Work Mode, no subagents.
 - Repository: ThanosZr/power-control-lab.
-- Branch: lab-cad-0.10.0-native-features; parent T009 `5490370c8cf7a4ae09ae87a4d0d9888c805a8e8d` / CI 45821459611, exact SHA and 4/4 verified.
+- Branch: lab-cad-0.11.0-sweep-loft; parent T010 `7341313f68bb75d688686e241d81b9e83367d128` / CI 45991092618, exact SHA and 4/4 verified. T011-A exact `22dd01e235ae57c455f50110005a0ef1d9b3b5a5`, tree `62838ea1d31a6ce76bfc1cdc9ac2f3dfb471d14a`, CI 46010285091 observed in progress.
 - Approved engine source: **5.0.7**, dab82e5ff2e6da4bde09e4a38aab32edfffe6d51.
 - Keep the approved base, main and engine branches unchanged. Do not integrate CAD runtime. Isolated WebGL2 viewport using actual native mesh only; no final GPU backend selection.
 - Author and committer: Thanos Zr, 85298380+ThanosZr@users.noreply.github.com.
@@ -30,6 +30,7 @@ The canonical package consists of:
 - CAD_SKETCH_CONTRACT and experiments/cad_t008/: standalone 2D sketch model, bounded algebraic solver, rank/DoF, transactional API and SVG demo; no production solver selection.
 - CAD_FEATURE_HISTORY_CONTRACT and experiments/cad_t009/: isolated feature history, T008 bridge, exact native extrusion, retained GPU demo and regression tests; no final topology naming or integrated scheduler.
 - CAD_NATIVE_FEATURES_CONTRACT and experiments/cad_t010/: native revolution/booleans, transitive regeneration, schema 2 and schema-1 document compatibility; no production BRep-handle caching or topology naming.
+- CAD_SWEEP_LOFT_CONTRACT and experiments/cad_t011/: schema 3, arbitrary datums, line/arc sweep, ruled/smooth loft, real T008 solve, bounded native workers, dependency references and transactional inspector; explicit scope limits.
 
 Update these existing Git files as the project evolves. Once their publication is verified at the remote SHA, tell the owner that repeated uploads of these public CAD docs to project attachments are unnecessary. A saved local file or chat artifact does not prove an attachment changed. Ask for a specific private file only when it is still required and absent.
 
@@ -62,6 +63,8 @@ Update these existing Git files as the project evolves. Once their publication i
 | ebf74a85cdef5d1e617412098c881956dfc8d599 | T007 certified, CI 45738308465 attempt 2, exact head, completed/success 4/4; dedicated T006/T007 success. Attempt 1 failed unchanged PCL speed_flow tutorial sampling (379ms >250ms); successful retry without threshold or engine changes. |
 | 9abc985db1e6fa68c83f9bb4a8808afe2d6d3d56 | T008 certified, CI 45747371669, exact head, completed/success 4/4; dedicated T008 Node/browser success. |
 | 5490370c8cf7a4ae09ae87a4d0d9888c805a8e8d | T009 certified at D036 documentation checkpoint, CI 45821459611, exact head, completed/success 4/4; dedicated T009 native/browser success. |
+| 7341313f68bb75d688686e241d81b9e83367d128 | T010 certified CI 45991092618, exact head, completed/success 4/4; dedicated T010 native/browser success. |
+| 22dd01e235ae57c455f50110005a0ef1d9b3b5a5 | T011-A proof, rechecked by clean checkout in Work Mode; five actual OCCT tests reexecuted successfully. CI 46010285091 exact SHA in progress at observation. |
 
 The original CAD-S007 map/baseline, S007 version entry and all five revision 0.3 planning files were recovered from earlier generated files on 2026-11-23. An older S006 checkpoint was read too. Do not request those originals again, relabel the reconstruction as recovery or add old timings to current test counts. The separate old patch remained unavailable, but is no longer needed to recover the two documents already read.
 
@@ -94,13 +97,15 @@ The full plan and map describe what existing engine infrastructure can be reused
 
 ## Next action and delivery
 
-Confirm actual T010 HEAD, four CI jobs and dedicated T010 native/browser step. Local Python 65/65 (35 preceding CAD + 6 T010 + 24 PCL), T006/T008 Node 20/20, CODEMAP/API 947 pass. Browser launch attempted; local Chromium wrapper has no executable, so browser pending CI. Proposed T011/C3 sweep/loft/general planes and feature references only after exact T010 certification and fresh authorization. Both private gates mandatory before PCL integration; no main/base change. Opus/Fable backlog in CAD_NATIVE_FEATURES_CONTRACT. D036 GPU-first multiphysics/Digital Twin/Motion plan remains active.
+Confirm actual T011 HEAD, four CI jobs and dedicated T011 native/browser step. Browser launch attempted; missing Chromium binary and HTTP 403 on installer, so browser pending CI. Fix any failures without changing PCL or earlier test scope. Both private gates mandatory before PCL integration; no main/base change. Opus/Fable backlog in CAD_SWEEP_LOFT_CONTRACT. D036 GPU-first multiphysics/Digital Twin/Motion plan remains active. Do not open T012 until this stage is certified and owner authorizes the next stage.
 
 ### T007 CI correction (26/11/2026)
 
 Run 45731477841 / e8003d0 failed at T005 native + T007 initial build; 23/26 passed, unit and Octave green, package skipped. Pin CAD-only native dependencies, isolate in venv, retain native stderr, add actual import/demo checks and retain all tests. New exact HEAD/CI must be checked; no claimed pass.
 
 
-## Active T011-A handoff (27/11/2026; supersedes previous next-action text)
+## Active T011 handoff (27/11/2026)
 
-T010 certified at 7341313f68bb75d688686e241d81b9e83367d128 / CI 45991092618, exact SHA, 4/4 success and dedicated native/browser PASS. T011 is authorized on lab-cad-0.11.0-sweep-loft, isolated only. T011-A is a partial native geometry checkpoint; see [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) for proof, limitations and remaining implementation. Do not start T012 until T011 is complete and certified. D036 and both private integration gates remain unchanged.
+T011 implementation candidate extends T011-A in Work Mode on the same branch. See [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) for exact supported operations, validation, local/CI procedure, limitations and optimization backlog. Check the actual remote ref and exact-SHA CI rather than inferring certification from a prior run. D036 and both private integration gates remain unchanged.
+
+Local verification: 13/13 T011 native methods (including all five T011-A), 41/41 preceding isolated CAD Python, 24/24 PCL regression (78 unique Python methods), 20/20 viewport/sketch Node, CODEMAP/API 947. Browser launch unavailable locally; final real native/browser CI required. Original 5.0.7 engine runtime paths unchanged.

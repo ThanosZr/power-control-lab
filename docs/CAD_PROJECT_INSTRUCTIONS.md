@@ -67,4 +67,4 @@
 
 ## Κείμενο οδηγιών για συνέχεια
 
-Διάβασε README.md, docs/CAD_INDEX.md, CAD_STATUS.md και τα contract docs στο Git. Βάση 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51, CAD branch lab-cad-0.6.0-viewport. T005/T006 isolated (D030), επιβεβαίωσε το τελικό SHA/CI κάθε branch. Μην επαναλαμβάνεις αναζήτηση παλιών αρχείων (D023). Δύο ιδιωτικές πύλες απαιτούνται πριν από CAD υλοποίηση στο PCL. Fable optimization review στα contract docs. SOL, κανένα αυτόματο T007, main/engine write ή αλλαγή βάσης.
+Διάβασε README.md, docs/CAD_INDEX.md, CAD_STATUS.md και τα contract docs στο Git. Βάση 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51, CAD branch lab-cad-0.11.0-sweep-loft. T011 isolated (D038/D039), επιβεβαίωσε το τελικό SHA/CI και dedicated native/browser test. Μην επαναλαμβάνεις αναζήτηση παλιών αρχείων (D023). Δύο ιδιωτικές πύλες απαιτούνται πριν από CAD υλοποίηση στο PCL. Opus/Fable optimization review στο CAD_SWEEP_LOFT_CONTRACT. SOL, Work Mode, χωρίς subagents, κανένα αυτόματο T012, main/engine write ή αλλαγή βάσης. D036 παραμένει ενεργή.

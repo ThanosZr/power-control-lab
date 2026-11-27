@@ -1,8 +1,8 @@
 # CAD · οδηγός πλάνου και ενσωμάτωσης
 
-Αναθεώρηση εγγράφων 0.14 · 27/11/2026 · lab-cad-0.10.0-native-features. T010 isolated revolve/boolean; parent T009 `5490370` / CI 45821459611 (4/4). Final T010 CI required on actual HEAD. No PCL integration; both private gates remain open.
+Αναθεώρηση εγγράφων 0.15 · 27/11/2026 · lab-cad-0.11.0-sweep-loft. T011 isolated sweep/loft/datum frames; parent T010 `7341313` / CI 45991092618 (4/4). Final T011 CI required on actual HEAD. No PCL integration; both private gates remain open.
 
-**CAD-T010:** [Native revolve and Boolean features](CAD_NATIVE_FEATURES_CONTRACT.md). **CAD-T009:** [Feature history/native extrusion](CAD_FEATURE_HISTORY_CONTRACT.md). **CAD-T008:** [Sketch engine](CAD_SKETCH_CONTRACT.md). **CAD-T007:** [Parametric editing](CAD_PARAMETRIC_CONTRACT.md).
+**CAD-T011:** [Sweep/loft, general planes and references](CAD_SWEEP_LOFT_CONTRACT.md). **CAD-T010:** [Native revolve and Boolean features](CAD_NATIVE_FEATURES_CONTRACT.md). **CAD-T009:** [Feature history/native extrusion](CAD_FEATURE_HISTORY_CONTRACT.md). **CAD-T008:** [Sketch engine](CAD_SKETCH_CONTRACT.md). **CAD-T007:** [Parametric editing](CAD_PARAMETRIC_CONTRACT.md).
 
 ## Σειρά ανάγνωσης
 
@@ -21,6 +21,7 @@
 | 4g | [CAD_SKETCH_CONTRACT.md](CAD_SKETCH_CONTRACT.md) | T008: schema, constraints, rank/DoF, atomic transactions and demo. |
 | 4h | [CAD_FEATURE_HISTORY_CONTRACT.md](CAD_FEATURE_HISTORY_CONTRACT.md) | T009: feature dependencies, real extrusion, regeneration, history, demo and review. |
 | 4i | [CAD_NATIVE_FEATURES_CONTRACT.md](CAD_NATIVE_FEATURES_CONTRACT.md) | T010: exact revolve and Boolean operations, transitive DAG recipes, validation and GUI. |
+| 4j | [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) | T011: general datums, curved sweep/loft, schema-3 references, native worker history, GUI and cancellation. |
 | 5 | [CAD_INTEGRATION_MAP.md](CAD_INTEGRATION_MAP.md) | Υπάρχων pinned κώδικας, σημεία επαφής, απόδοση, workers, persistence και playback boundaries. |
 | 6 | [CAD_BASELINE.md](CAD_BASELINE.md) | SHA/tree, ακριβή αποτελέσματα/περιορισμοί ελέγχων και προέλευση των drafts. |
 | 7 | [CAD_DECISIONS_01.md](CAD_DECISIONS_01.md) | Ιστορικό απαιτήσεων, προτάσεων και μεταγενέστερων αποφάσεων με σταθερά IDs. |
@@ -73,6 +74,6 @@
 Renderer χωρίς Three.js, παραμετρικό CAD, custom φυσικά εξαρτήματα, Python/Java/MATLAB, γενική κίνηση/robotics, AI-assisted acceleration με PINNs προς αξιολόγηση και ανεξάρτητος χρόνος προβολής με pause/step/replay αποτελούν τον στόχο/πλάνο. Η επιλογή backend/kernel, τα contracts και τα numerical/physics υποβήματα γίνονται στα αντίστοιχα στάδια, όχι στο CAD-T001.
 
 
-## Active T011-A handoff (27/11/2026; supersedes previous next-action text)
+## Active T011 handoff (27/11/2026)
 
-T010 certified at 7341313f68bb75d688686e241d81b9e83367d128 / CI 45991092618, exact SHA, 4/4 success and dedicated native/browser PASS. T011 is authorized on lab-cad-0.11.0-sweep-loft, isolated only. T011-A is a partial native geometry checkpoint; see [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) for proof, limitations and remaining implementation. Do not start T012 until T011 is complete and certified. D036 and both private integration gates remain unchanged.
+T010 certified at 7341313f68bb75d688686e241d81b9e83367d128 / CI 45991092618, exact SHA, 4/4 success and dedicated native/browser PASS. T011-A repeated locally; T011 continuation on the same branch. See [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) for implementation, evidence and limitations. Check actual branch HEAD/CI. Do not start T012 until T011 is certified and separately authorized. D036 and both private integration gates remain unchanged.

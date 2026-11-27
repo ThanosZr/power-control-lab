@@ -114,6 +114,12 @@ jobs:
         run: |
           CAD_PY="$RUNNER_TEMP/cad-native/bin/python"
           "$CAD_PY" -m unittest experiments.cad_t011.test_native -v
+      - name: Isolated CAD native sweep loft feature history and GUI (T011)
+        if: startsWith(github.ref_name, 'lab-cad-') && hashFiles('experiments/cad_t011/test_history.py') != ''
+        run: |
+          CAD_PY="$RUNNER_TEMP/cad-native/bin/python"
+          "$CAD_PY" -m unittest experiments.cad_t011.test_history -v
+          PYTHON="$CAD_PY" node experiments/cad_t011/test_browser.cjs
       - name: Σενάρια στον browser
         run: |
           python run.py --no-browser --port 8765 > server.log 2>&1 &

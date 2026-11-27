@@ -171,3 +171,10 @@ GitHub CI: run ID, SHA, status/conclusion.
 ## Active T011-A handoff (27/11/2026; supersedes previous next-action text)
 
 T010 certified at 7341313f68bb75d688686e241d81b9e83367d128 / CI 45991092618, exact SHA, 4/4 success and dedicated native/browser PASS. T011 is authorized on lab-cad-0.11.0-sweep-loft, isolated only. T011-A is a partial native geometry checkpoint; see [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) for proof, limitations and remaining implementation. Do not start T012 until T011 is complete and certified. D036 and both private integration gates remain unchanged.
+
+## CAD-S023 — T011 continuation (27/11/2026, SOL / Work Mode)
+
+- Branch: `lab-cad-0.11.0-sweep-loft`; incoming `22dd01e235ae57c455f50110005a0ef1d9b3b5a5`, tree `62838ea1d31a6ce76bfc1cdc9ac2f3dfb471d14a`, T011-A local proof repeated 5/5, CI 46010285091 exact SHA in progress on observation.
+- New candidate: schema 3, real native curved/straight sweep, ordered ruled/smooth loft, general/nested datums including extrude/revolve, T008 sketch solve, transitive recipes, bounded child cancellation, revision-safe transactional history and retained WebGL2 inspector, undo/redo/save/open. Documented supported geometry envelope and Opus/Fable backlog in CAD_SWEEP_LOFT_CONTRACT.
+- Local: 13/13 T011 native Python (including the 5 proof methods), 41/41 preceding CAD Python, 24/24 PCL regression; 20/20 Node viewport/sketch; CODEMAP/API 947. Actual subprocess cancellation, analytical geometry properties, history and detached regeneration tested. No runtime changes relative to pinned engine.
+- Final published SHA and four-job CI including exact dedicated T011 native/browser test must be confirmed from branch/run. No local browser claim (Chromium missing; installation HTTP 403). No main, PCL implementation, private input or approved engine 5.0.7 change. Both private gates remain mandatory. No T012 until certification and new authorization.

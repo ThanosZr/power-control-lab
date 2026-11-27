@@ -1,10 +1,10 @@
 # Power & Control Lab · CAD και custom components
 
-Έκδοση πλάνου: 0.14 · 27/11/2026 · Ιδιοκτήτης: Thanos Zr.
+Έκδοση πλάνου: 0.15 · 27/11/2026 · Ιδιοκτήτης: Thanos Zr.
 
 ## Τρέχουσα κατάσταση
 
-**Ενεργό CAD-T010 / SOL (D037)** στο `lab-cad-0.10.0-native-features`. Parent T009 `5490370c8cf7a4ae09ae87a4d0d9888c805a8e8d` / CI 45821459611 (4/4, dedicated T009 native/browser step). Isolated C3 schema 2 native revolve, union/subtract/intersect, transitive regeneration, atomic rollback and retained viewport. Final T010 CI required on actual HEAD. No PCL integration; both private gates remain open. [Native features contract](CAD_NATIVE_FEATURES_CONTRACT.md).
+**Ενεργό CAD-T011 / SOL (D038)** στο `lab-cad-0.11.0-sweep-loft`. Parent T010 `7341313f68bb75d688686e241d81b9e83367d128` / CI 45991092618 (4/4, dedicated T010 native/browser step). Isolated schema 3 general datums, sweep/loft, typed references, workers, transaction and retained viewport. Final T011 CI required on actual HEAD. No PCL integration; both private gates remain open. [T011 contract](CAD_SWEEP_LOFT_CONTRACT.md).
 
 **Προηγούμενα checkpoints:** T001 στο e997a3d2, CI 45124099619, T002 στο 43f7fe3, CI 45135806207, T003 στο c9fe513, CI 45149843737, T004 στο 1af4de0, CI 45561734591 (4/4). Εγκεκριμένη βάση engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Τα προηγούμενα contract docs παραμένουν ενεργές πηγές.
 
@@ -15,17 +15,17 @@
 | Git ως πηγή συνέχειας | Τα CAD docs συντηρούνται στο docs/ αυτού του branch· [οδηγός ανάγνωσης](CAD_INDEX.md). |
 | Κώδικας και baseline | Ο engine παραμένει 5.0.7. Το README του branch παρουσιάζει τον στόχο CAD tool· αυτό δεν αλλάζει τον runtime. |
 | Ήδη δημοσιευμένα checkpoints | 5660e9b: ανακατασκευή· c169ffc: πολιτική branches· f57d02f: πραγματική ανάκτηση και εμπλουτισμένος χάρτης· f91ac3c: πλήρες CAD πλάνο/README (S009). |
-| CI | T001–T009 πιστοποιημένα 4/4, T009 `5490370` / 45821459611· T010 απαιτεί το πραγματικό νέο SHA/CI. Βλ. CAD_STATUS. |
+| CI | T001–T010 πιστοποιημένα 4/4, T010 `7341313` / 45991092618· T011 απαιτεί το πραγματικό νέο SHA/CI. Βλ. CAD_STATUS. |
 | Παράλληλος engine (read-only, S010) | main 5.0.9· lab-5.0.10 στο 2160a13d7180745e80f7f3fefa07788d30b37d1f, CI 45102252449 success. Νέα layouts/δεύτερη οθόνη, όχι νέα βάση CAD. Βλ. [χάρτη](CAD_INTEGRATION_MAP.md#cad-s010-coordination-with-the-5010-workspace-changes). |
-| Τοπικοί έλεγχοι αυτής της συνέχειας | Βλ. CAD_NATIVE_FEATURES_CONTRACT και CAD_STATUS. Real browser smoke στο CAD-conditional existing UI CI job (τοπικό Chromium executable λείπει). |
+| Τοπικοί έλεγχοι αυτής της συνέχειας | Βλ. CAD_SWEEP_LOFT_CONTRACT και CAD_STATUS. Real browser smoke στο CAD-conditional existing UI CI job (τοπικό Chromium executable λείπει). |
 | Εκκρεμείς πύλες πριν από CAD υλοποίηση (D024/D026) | Ενεργά engine next-steps/decisions/versions και πραγματικός privacy checker με ιδιωτικά inputs/οδηγίες. Το απομονωμένο συνθετικό spike επιτρέπεται, δεν αποτελούν λυμένες πύλες. |
-| Τωρινή άδεια δημοσίευσης | Δημόσια CAD docs/README, isolated T002–T010 (D037). Κώδικας ενσωμάτωσης και ιδιωτικά inputs δεν καλύπτονται. |
+| Τωρινή άδεια δημοσίευσης | Δημόσια CAD docs/README, isolated T002–T011 (D038). Κώδικας ενσωμάτωσης και ιδιωτικά inputs δεν καλύπτονται. |
 
-## Επόμενη ενέργεια — κλείσιμο T010 και στάση
+## Επόμενη ενέργεια — κλείσιμο T011 και στάση
 
-1. Επαλήθευσε πραγματικό T010 HEAD, CI 4/4 και dedicated native/browser step.
-2. Επόμενο μόνο με νέα έγκριση: προτεινόμενο CAD-T011/C3 sweep/loft, γενικές sketch planes/axes και επέκταση feature dependencies σε χωριστά ασφαλή υποβήματα. C1 integration, STEP UI exchange και transforms παραμένουν ανοικτά.
-3. Οι δύο ιδιωτικές πύλες πριν από PCL integration παραμένουν υποχρεωτικές. Opus/Fable review στο CAD_NATIVE_FEATURES_CONTRACT.
+1. Επαλήθευσε πραγματικό T011 HEAD, CI 4/4 και dedicated native/browser step. Διόρθωσε τυχόν αποτυχίες χωρίς αλλαγή των παλιών tests ή του engine.
+2. Στάση μετά την πιστοποίηση· κανένα T012 χωρίς νέα έγκριση. C1 integration, STEP UI exchange, arbitrary topology references και transforms παραμένουν ανοικτά.
+3. Οι δύο ιδιωτικές πύλες πριν από PCL integration παραμένουν υποχρεωτικές. Opus/Fable review στο CAD_SWEEP_LOFT_CONTRACT.
 
 Το [CAD_PLAN_DETAILS.md](CAD_PLAN_DETAILS.md) εξειδικεύει τα στάδια, τις εξαρτήσεις, την απόδοση, τις δοκιμές και το πρωτόκολλο ενσωμάτωσης. Οι παρακάτω πίνακες είναι το ενεργό πλάνο προϊόντος, όχι κατάλογος υλοποιημένων δυνατοτήτων.
 
@@ -89,7 +89,7 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 | CAD-T008 | SOL | Isolated C2 reference: sketch entities, geometric/dimensional constraints, DoF/rank, atomic failure, deterministic API and browser demo. |
 | CAD-T009 | SOL | Isolated C3 feature history/profile-to-extrude, dependency reuse, rollback, history, native validation and demo. |
 | CAD-T010 | SOL | Isolated C3 native revolve/union/subtract/intersect, transitive recipes, multi-stage regeneration and demo. |
-| CAD-T011 (πρόταση) | SOL/ASTRA | Isolated C3 sweep/loft or general profile-plane/axis and feature references, only after exact T010 certification and authorization. |
+| CAD-T011 (D038) | SOL | Isolated C3 curved sweep/loft, general profile planes/local axes and typed feature references, transactional history and native/browser certification. |
 
 Η σειρά επανεκτιμάται με πραγματικά ευρήματα. Μην ξεκινάς ASTRA υποβήμα χωρίς να έχει ο χρήστης την ευκαιρία να επιλέξει μοντέλο. Δεν αναθέτεις αυτόματα σε δεύτερους agents.
 
@@ -111,9 +111,9 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 
 ## Μήνυμα συνέχειας
 
-Από `lab-cad-0.10.0-native-features`, επιβεβαίωσε πραγματικό HEAD, CI 4/4 και dedicated T010 step στο Git. Διάβασε README, CAD_INDEX, CAD_STATUS, CAD_NATIVE_FEATURES_CONTRACT και ενεργά CAD docs (D036–D037). Με νέα έγκριση, προτεινόμενο CAD-T011/C3, χωρίς PCL integration. Engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51 αμετάβλητη. Δύο ιδιωτικές πύλες πριν από ενσωμάτωση, καμία main αλλαγή. Νέο branch ανά έκδοση, διπλή επαλήθευση, Git-first.
+Από `lab-cad-0.11.0-sweep-loft`, επιβεβαίωσε πραγματικό HEAD, CI 4/4 και dedicated T011 native/browser step στο Git. Διάβασε README, CAD_INDEX, CAD_STATUS, CAD_SWEEP_LOFT_CONTRACT και ενεργά CAD docs (D036–D038). Μόνο μετά την πιστοποίηση και νέα έγκριση σχεδίασε το T012. Engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51 αμετάβλητη. Δύο ιδιωτικές πύλες πριν από ενσωμάτωση, καμία main αλλαγή. Νέο branch ανά έκδοση, διπλή επαλήθευση, Git-first.
 
 
-## Active T011-A handoff (27/11/2026; supersedes previous next-action text)
+## Active T011 handoff (27/11/2026)
 
-T010 certified at 7341313f68bb75d688686e241d81b9e83367d128 / CI 45991092618, exact SHA, 4/4 success and dedicated native/browser PASS. T011 is authorized on lab-cad-0.11.0-sweep-loft, isolated only. T011-A is a partial native geometry checkpoint; see [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) for proof, limitations and remaining implementation. Do not start T012 until T011 is complete and certified. D036 and both private integration gates remain unchanged.
+T011-A reverified locally on `22dd01e` and continued on the same branch, isolated only. See [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) for implementation/limitations and exact test procedure. Do not start T012 until T011 is certified and separately authorized. D036 and both private integration gates remain unchanged.
