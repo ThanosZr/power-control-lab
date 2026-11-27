@@ -440,5 +440,22 @@ const {chromium}=require('playwright');
   charts:document.querySelectorAll('#rms-charts svg').length,rows:rows.length,first:rows[1]||'',ev:(window.PCL.RM.r?.result?.events||[]).map(e=>e.kind).join(',')};});
  ok(/^✓ Ευσταθές/.test(ra.sum)&&ra.charts===5&&ra.rows===4&&/^0[,.]604/.test(ra.first)&&/G3.*G4.*↔.*G1.*G2/.test(ra.first)&&ra.ev==='fault,clear',
   'RMS: the drawing of «two_area_emt», its fault, stable, and its three rotor modes at the start ('+ra.first+')');
+ // 5.1.7 (ROADMAP §101 step 2): the card on the drawing of «hvdc_lcc» (the average model, the fault of the line): no machine, the
+ // link of the drawing (two LCCS with their LCCC, the line as a T), the fault of its switch, the five charts of the link; and the
+ // load flow of the drawing, with γ of the inverter and the Q of a filter on the drawing
+ await p.evaluate(()=>{window.PCL.loadTutorial('hvdc_lcc',{model:'avg',ev:'dcf'});});await p.waitForTimeout(1200);
+ await p.evaluate(()=>{window.PCL.RM.T=2;window.PCL.RM.h=1;window.PCL.RM.ev='drawing';window.PCL.RM.modes=false;window.PCL.rmsRender();});
+ await p.waitForSelector('[data-rmgo]',{timeout:30000});await p.click('[data-rmgo]');
+ await p.waitForFunction(()=>!window.PCL.RM.busy&&(document.querySelector('#rms-sum')||document.querySelector('#rms-err'))&&window.PCL.RM.r?.result?.lcc,null,{timeout:180000});
+ const rl=await p.evaluate(()=>{const r=window.PCL.RM.r;return {sum:(document.querySelector('#rms-sum')||document.querySelector('#rms-err')).textContent,charts:document.querySelectorAll('#rms-lcc svg').length,
+  ev:(r?.result?.events||[]).map(e=>e.kind).filter(k=>k!=='cf'&&k!=='cfend').join(','),id:(r?.result?.lcc?.STR?.Id_r||[]).slice(-1)[0]};});
+ ok(/^Χωρίς μηχανές: 0 μετατροπείς, 1 ζεύξη LCC/.test(rl.sum)&&rl.charts===5&&rl.ev==='dcfault,dcclear'&&Math.abs(rl.id-2)<0.05,
+  'RMS: the drawing of «hvdc_lcc», its link and the fault of its line, five charts ('+rl.ev+'; I_d '+(rl.id||0).toFixed(3)+' kA)');
+ await p.evaluate(()=>{document.querySelector('#rms').open=false;});
+ await dmOpen('hvdc_lcc');await p.click('[data-dm="pf"]');
+ await p.waitForFunction(()=>document.querySelector('#dm-sum')||document.querySelector('#dm-err'),null,{timeout:60000});
+ await p.evaluate(()=>{const c=document.querySelector('[data-dmon]');if(c&&!c.checked)c.click();});await p.waitForTimeout(200);
+ const dk=await p.evaluate(()=>{const E=window.PCL.editor;return {sum:(document.querySelector('#dm-sum')||document.querySelector('#dm-err')).textContent,st:E.valueText(E.comp('STI')),fl:E.valueText(E.comp('FI1'))};});
+ ok(/Συνέκλινε/.test(dk.sum)&&/γ 15/.test(dk.st)&&/^Q [−-]\d/.test(dk.fl),'drawing: the load flow AC/DC of «hvdc_lcc», γ of the inverter and the Q of a filter on the drawing ('+dk.st+'; '+dk.fl+')');
  console.log(JSON.stringify({rm:rm.split('\n').slice(0,4),bt:bt.split('\n').slice(0,4),imp},null,1));
  console.log('ERR',errs);console.log(fail.length?'FAIL '+fail.join(' | '):'PASS');await b.close();process.exit(fail.length||errs.length?1:0);})();

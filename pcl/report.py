@@ -539,11 +539,13 @@ def _sc(r, net, res, order, picture):
 
 def _rms(r, res, top=10):
     """5.0.13: the section of the RMS dynamics: what happened, the angles from the centre of inertia, the frequency, the lowest
-    voltage, the excitation, and every machine."""
+    voltage, the excitation, and every machine. 5.1.7: and the LCC links (their DC current and voltage, a table)."""
     sm = res.get('summary') or {}
     st = res.get('stats') or {}
     KIND = {'fault': 'σφάλμα', 'clear': 'εκκαθάριση', 'trip': 'άνοιγμα κλάδου', 'gen': 'απώλεια μονάδας', 'vref': 'βήμα αναφοράς τάσης',
-            'pref': 'βήμα αναφοράς φορτίου', 'load': 'βήμα φορτίου', 'shunt': 'εγκάρσιο στοιχείο'}
+            'pref': 'βήμα αναφοράς φορτίου', 'load': 'βήμα φορτίου', 'shunt': 'εγκάρσιο στοιχείο', 'iord': 'βήμα εντολής ρεύματος (LCC)',
+            'dcfault': 'σφάλμα DC (LCC)', 'dcclear': 'εκκαθάριση DC (LCC)', 'cf': 'αποτυχία μετάβασης', 'cfend': 'τέλος της παράκαμψης',
+            'tap': 'βήμα λήψης (LCC)'}
     r.facts([('Ευσταθές (κάθε γωνία μέσα σε 180° από το κέντρο αδράνειας)', bool(res.get('stable'))),
              ('Μεγαλύτερη απόκλιση γωνίας από το κέντρο αδράνειας (°)', None if sm.get('max_angle_coi') is None else round(sm['max_angle_coi'], 2)),
              ('Συχνότητα κέντρου αδράνειας, ελάχιστη / μέγιστη (Hz)', None if sm.get('f_min') is None else f"{sm['f_min']:.4f} / {sm['f_max']:.4f}"),
@@ -569,6 +571,21 @@ def _rms(r, res, top=10):
                 'Οι ηλεκτρομηχανικοί τρόποι από 0,05 ως 4 Hz, στις ταχύτητες των μονάδων', [4, 3, 4, 4, None])
     elif isinstance(md, dict):
         r.note('Ιδιοτιμές: ' + str(md.get('error') or 'δεν βγήκαν'), 'warning')
+    LK = res.get('lcc') or {}
+    if LK:                                                  # 5.1.7: the LCC links (pcl.rms.LCC): DC current and voltage at the two ends
+        t = [float(x) for x in res['t']]
+        r.heading('Ζεύξεις LCC')
+        rows = []
+        for nm, L in LK.items():
+            r.chart('line', t, [{'name': 'ανορθωτής', 'y': [float(v) for v in L['Id_r']]}, {'name': 'αντιστροφέας', 'y': [float(v) for v in L['Id_i']]}],
+                    f'{nm}: ρεύμα DC', 't (s)', 'kA', table=False)
+            r.chart('line', t, [{'name': 'ανορθωτής', 'y': [float(v) for v in L['Vdr']]}, {'name': 'αντιστροφέας', 'y': [float(v) for v in L['Vdi']]}],
+                    f'{nm}: τάση DC', 't (s)', 'kV', table=False)
+            ncf = sum(1 for e in res.get('events') or [] if e['kind'] == 'cf' and str(e.get('gen')) == nm)
+            rows.append([nm, float(L['Pr'][0]), float(L['Qr'][0]), float(L['Qi'][0]), min(float(v) for v in L['Vdi']), max(float(v) for v in L['Id_r']),
+                         min(float(v) for v in L['gamma']), ncf])
+        r.table(['Ζεύξη', 'P₀ ανορθωτή (MW)', 'Q₀ ανορθωτή (Mvar)', 'Q₀ αντιστροφέα (Mvar)', 'min V_d αντιστροφέα (kV)', 'max I_d (kA)', 'min γ (°)',
+                 'Αποτυχίες μετάβασης'], rows, 'Ζεύξεις LCC', [None, 4, 4, 4, 4, 4, 3, None])
     M = res.get('machines') or {}
     if not M:
         return

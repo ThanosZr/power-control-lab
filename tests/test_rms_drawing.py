@@ -121,7 +121,7 @@ class Drawings(unittest.TestCase):
 
     def test_the_model_of_the_drawings(self):
         m = self.gfm
-        self.assertEqual(m['version'], 5)
+        self.assertEqual(m['version'], 6)                   # (5.1.7: 6, with LCCS, FILT3 and the LCC links)
         vs = [e for e in m['elements'] if e['type'] == 'VSC2']
         self.assertEqual([(e['id'], e['buses'], e['ctl']['type'], e['ctl']['id']) for e in vs], [('VS3', ['B3'], 'GFMC', 'CT3')])
         self.assertEqual(m['skipped'], [])
@@ -225,7 +225,7 @@ class PairsOfPoles(unittest.TestCase):
 
     def test_the_grid_of_a_symmetric_monopole(self):
         m = self.m
-        self.assertEqual(m['version'], 5)
+        self.assertEqual(m['version'], 6)
         self.assertEqual([(b['id'], b['Un'], b['U0'], b['C'], b['G'], b['poles']) for b in m['dc']['buses']],
                          [('dc1', 640e3, 640e3, 0, 0, 2), ('dc2', 640e3, 640e3, 0, 0, 2)])
         (ln,) = m['dc']['lines']

@@ -1170,7 +1170,9 @@ function dmLabels(){const m=DM.r&&DM.on?dmModel():null,map=new Map();
   for(const e of m.elements){const b=res.buses[e.buses[0]],q=res.elements?.[e.id];
    if(DM.r.study==='pf'){if(['GEN3','GRID3','VAC3','EQV3'].includes(e.type)&&q)map.set(e.id,`P ${eng(q.P,'W',4)} · Q ${eng(q.Q,'var',4)}`);
     else if(['LINE3','XF3','ZSER3','TLM'].includes(e.type)&&q)map.set(e.id,`${eng(q.Pa,'W',4)} → · I ${eng(q.I,'A',4)}`);
-    else if(e.type==='LOAD3'&&b)map.set(e.id,`|V| ${f(b.V,5)} pu ∠${f(b.angle,4)}°`);}
+    else if(e.type==='LOAD3'&&b)map.set(e.id,`|V| ${f(b.V,5)} pu ∠${f(b.angle,4)}°`);
+    else if(e.type==='LCCS'&&q)map.set(e.id,`P ${eng(q.P,'W',4)} · Q ${eng(q.Q,'var',4)} · ${q.gamma!=null?'γ '+f(q.gamma,4):'α '+f(q.alpha,4)}°`);   // 5.1.7
+    else if(e.type==='FILT3'&&q)map.set(e.id,`Q ${eng(q.Q,'var',4)}`);}
    else if(b&&['LOAD3','FLT3','GEN3','GRID3','VAC3','EQV3'].includes(e.type)){const fl=res.faults?.[e.id];map.set(e.id,`I″k ${eng((fl||b).Ik,'A',4)}`+(fl?' ('+(DM_FAULT[fl.fault]||fl.fault)+')':''));}}}
  if(map.size||editor.extText?.size){editor.extText=map;editor.renderLabels();}}
 async function dmRun(st){const m=dmModel();if(!m||m.error||DM.busy)return;DM.busy=st;DM.err=null;renderProps();
@@ -1188,12 +1190,20 @@ async function dmAct(what){const r=DM.r;if(!r)return;
 // MMCC) of the drawing: their P and frequency, the DC voltages and the power of each station into its DC grid.
 // 5.1.2 (ROADMAP §101 step 1): and the electromechanical modes of the drawing at its start (modes: the eigenvalues of the linearized
 // system, Network.dynamic(modes=True)), with the units that swing against each other
-const RM={r:null,q:null,key:null,busy:false,err:null,T:5,h:5,loads:'Z',ev:'drawing',bus:'',gen:'',t0:0.1,dur:100,dv:0.05,dp:0.1,modes:true};
-const RM_EV=[['drawing','Τα συμβάντα του σχεδίου (σφάλματα, διακόπτες, προγράμματα AVR και GOV)'],['fault','Τριφασικό σφάλμα σε ζυγό'],['gen','Απώλεια μονάδας'],
- ['vref','Βήμα στην αναφορά τάσης (AVR)'],['pref','Βήμα στην αναφορά φορτίου (ρυθμιστής στροφών)'],['none','Καμία διαταραχή']];
+// 5.1.7 (ROADMAP §101 step 2): and the LCC links of the drawing (two LCCS with their LCCC and the DC line between them,
+// pcl.rms.LCC): their DC current and voltage, α and γ, the AC powers, the commutation failures; a step of the order and a fault
+// of the line as events of the card
+const RM={r:null,q:null,key:null,busy:false,err:null,T:5,h:5,loads:'Z',ev:'drawing',bus:'',gen:'',lk:'',t0:0.1,dur:100,dv:0.05,dp:0.1,di:-0.1,rf:0.1,modes:true};
+const RM_EV=[['drawing','Τα συμβάντα του σχεδίου (σφάλματα, διακόπτες, προγράμματα AVR, GOV και LCCC)'],['fault','Τριφασικό σφάλμα σε ζυγό'],['gen','Απώλεια μονάδας'],
+ ['vref','Βήμα στην αναφορά τάσης (AVR)'],['pref','Βήμα στην αναφορά φορτίου (ρυθμιστής στροφών)'],['iord','Βήμα στην εντολή ρεύματος (ζεύξη LCC)'],
+ ['dcfault','Σφάλμα DC στο μέσο της γραμμής (ζεύξη LCC)'],['none','Καμία διαταραχή']];
+const RM_KIND={fault:'σφάλμα',clear:'εκκαθάριση',trip:'άνοιγμα κλάδου',gen:'απώλεια μονάδας',vref:'βήμα V_ref',pref:'βήμα P_ref',load:'βήμα φορτίου',shunt:'σύνδεση φορτίου',block:'μπλοκάρισμα',deblock:'απεμπλοκή',
+ iord:'βήμα εντολής ρεύματος',dcfault:'σφάλμα DC',dcclear:'εκκαθάριση DC',cf:'αποτυχία μετάβασης',cfend:'τέλος της παράκαμψης',tap:'βήμα λήψης'};
 const RM_COL=['#147966','#c47a1c','#2f5fa0','#b03a5b','#6b4fa0','#3d8b3d','#1f8fa0','#8a5a2b'];
 function rmsEvents(m){const t0=+RM.t0||0,ev=[];
  if(RM.ev==='fault'&&RM.bus){ev.push({t:t0,kind:'fault',bus:RM.bus});ev.push({t:t0+(+RM.dur||0)/1e3,kind:'clear',bus:RM.bus});}
+ else if(RM.ev==='iord'&&RM.lk)ev.push({t:t0,kind:'iord',gen:RM.lk,dI:+RM.di});
+ else if(RM.ev==='dcfault'&&RM.lk){ev.push({t:t0,kind:'dcfault',gen:RM.lk,R:Math.max(+RM.rf||0,1e-6)});ev.push({t:t0+(+RM.dur||0)/1e3,kind:'dcclear',gen:RM.lk});}
  else if(RM.ev==='gen'&&RM.gen)ev.push({t:t0,kind:'gen',gen:RM.gen});
  else if(RM.ev==='vref'&&RM.gen)ev.push({t:t0,kind:'vref',gen:RM.gen,dV:+RM.dv});
  else if(RM.ev==='pref'&&RM.gen)ev.push({t:t0,kind:'pref',gen:RM.gen,dP:+RM.dp});
@@ -1210,16 +1220,22 @@ function rmsChart(title,unit,t,series,evs){const W=520,H=170,all=series.flatMap(
 function rmsRender(){const box=$('#rms-out');if(!box||!$('#rms')?.open)return;
  const m=dmModel(),ok=m&&!m.error,gens=ok?m.elements.filter(e=>e.type==='GEN3'):[];
  const convs=ok?m.elements.filter(e=>e.type==='VSC2'&&e.ctl):[],stns=ok?m.elements.filter(e=>e.type==='MMC'&&e.ctl&&e.dc):[],units=[...gens,...convs,...stns];
- if(!m||m.error||!units.length){box.innerHTML=`<p class="small ${m?.error?'bad':'muted'}">${m?.error?'⚠ '+esc(m.error):'Η δυναμική RMS θέλει γεννήτριες (GEN3), μετατροπείς (VSC2 με GFMC ή MMCC) ή σταθμούς MMC σε δίκτυο DC στο σχέδιο, π.χ. τα tutorials «IEEE 9 ζυγών σε EMT», «IEEE 9 με μετατροπέα στη θέση της G3», «Το DCS2 του B4».'}</p>`;$('#rms-state').textContent='';return;}
- if(!RM.bus||!m.buses.some(b=>b.id===RM.bus))RM.bus=m.buses[0]?.id||'';if(!RM.gen||!units.some(g=>g.id===RM.gen))RM.gen=units[0].id;
+ const links=ok?m.lcc||[]:[],lost=[...units,...links.map(q=>({id:q.id,label:'ζεύξη '+q.label}))];          // 5.1.7: the LCC links
+ if(!m||m.error||!lost.length){box.innerHTML=`<p class="small ${m?.error?'bad':'muted'}">${m?.error?'⚠ '+esc(m.error):'Η δυναμική RMS θέλει γεννήτριες (GEN3), μετατροπείς (VSC2 με GFMC ή MMCC), σταθμούς MMC σε δίκτυο DC ή ζεύξεις LCC (δύο LCCS με τα LCCC τους) στο σχέδιο, π.χ. τα tutorials «IEEE 9 ζυγών σε EMT», «IEEE 9 με μετατροπέα στη θέση της G3», «Το DCS2 του B4», «Το πρώτο benchmark HVDC της CIGRE».'}</p>`;$('#rms-state').textContent='';return;}
+ if(!RM.bus||!m.buses.some(b=>b.id===RM.bus))RM.bus=m.buses[0]?.id||'';if(!RM.gen||!lost.some(g=>g.id===RM.gen))RM.gen=lost[0].id;
+ if(links.length&&!links.some(q=>q.id===RM.lk))RM.lk=links[0].id;
  const key=dmKey(m),fresh=RM.r&&RM.key===key,sel=(k,list,v)=>`<select data-rm="${k}">${list.map(([a,n])=>`<option value="${esc(a)}" ${String(v)===String(a)?'selected':''}>${esc(n)}</option>`).join('')}</select>`;
  const num=(k,v,st,w)=>`<input type="number" data-rm="${k}" value="${v}" step="${st}" ${w?`style="width:${w}px"`:''}>`;
  const ctl=g=>{const c=g.ctl||{};return [c.avr&&('AVR '+c.avr.type.toUpperCase()),c.pss&&'PSS',c.gov&&(c.gov.type==='hydro'?'ρυθμιστής νερού':'ρυθμιστής ατμού')].filter(Boolean).join(', ')||'σταθερά E_fd και T_m';};
  const cvw=e=>{const k=e.ctl?.params||{};return e.ctl.type==='GFMC'?`grid-forming ${esc(k.law==='vsm'?'VSM':k.law==='psc'?'PSC':k.law==='droop'?'με στατικότητα':k.law)}`:e.type==='MMC'?`σταθμός ${esc({p:'P',vdc:'V_dc',droop:'στατικότητα P/V_dc',vf:'V/f'}[k.mode]||k.mode)}`:`grid-following (${k.cc==='robust'?'στιβαρός έλεγχος':'PI'})`;};
- let h=`<p class="small">${esc(Model.summary(m))}.${gens.length?` Οι μηχανές με το μοντέλο δύο αξόνων, ή το υπομεταβατικό όταν έχουν αποσβεστήρα (T″ > 0), και οι έλεγχοι του σχεδίου: ${gens.map(g=>`<b>${esc(g.label)}</b> ${esc(ctl(g))}`).join(' · ')}.`:''}${convs.length||stns.length?` Οι μετατροπείς και οι σταθμοί με τον έλεγχο του σχεδίου: ${[...convs,...stns].map(e=>`<b>${esc(e.label)}</b> ${cvw(e)}`).join(' · ')}.`:''}</p>`;
+ let h=`<p class="small">${esc(Model.summary(m))}.${gens.length?` Οι μηχανές με το μοντέλο δύο αξόνων, ή το υπομεταβατικό όταν έχουν αποσβεστήρα (T″ > 0), και οι έλεγχοι του σχεδίου: ${gens.map(g=>`<b>${esc(g.label)}</b> ${esc(ctl(g))}`).join(' · ')}.`:''}${convs.length||stns.length?` Οι μετατροπείς και οι σταθμοί με τον έλεγχο του σχεδίου: ${[...convs,...stns].map(e=>`<b>${esc(e.label)}</b> ${cvw(e)}`).join(' · ')}.`:''}${links.length?` Οι ζεύξεις LCC με τους ελέγχους LCCC του σχεδίου (ο ανορθωτής σε ρεύμα, ο αντιστροφέας στο γ_ref με περιθώριο ρεύματος, η γραμμή DC ως T): ${links.map(q=>`<b>${esc(q.label)}</b>`).join(' · ')}.`:''}</p>`;
  h+=`<div class="rms-bar"><label>Συμβάν ${sel('ev',RM_EV,RM.ev)}</label>`;
  if(RM.ev==='fault')h+=`<label>ζυγός ${sel('bus',m.buses.map(b=>[b.id,b.label]),RM.bus)}</label><label>διάρκεια (ms) ${num('dur',RM.dur,10)}</label>`;
- if(['gen','vref','pref'].includes(RM.ev))h+=`<label>μονάδα ${sel('gen',units.map(g=>[g.id,g.label]),RM.gen)}</label>`;
+ if(RM.ev==='gen')h+=`<label>μονάδα ${sel('gen',lost.map(g=>[g.id,g.label]),RM.gen)}</label>`;
+ if(['vref','pref'].includes(RM.ev)){if(units.length&&!units.some(g=>g.id===RM.gen))RM.gen=units[0].id;h+=units.length?`<label>μονάδα ${sel('gen',units.map(g=>[g.id,g.label]),RM.gen)}</label>`:'<span class="small muted">χωρίς μονάδα στο σχέδιο</span>';}
+ if(['iord','dcfault'].includes(RM.ev))h+=links.length?`<label>ζεύξη ${sel('lk',links.map(q=>[q.id,q.label]),RM.lk)}</label>`:'<span class="small muted">χωρίς ζεύξη LCC στο σχέδιο</span>';
+ if(RM.ev==='iord')h+=`<label>ΔI_ord (pu) ${num('di',RM.di,0.05)}</label>`;
+ if(RM.ev==='dcfault')h+=`<label>R (Ω) ${num('rf',RM.rf,0.1)}</label><label>διάρκεια (ms) ${num('dur',RM.dur,10)}</label>`;
  if(RM.ev==='vref')h+=`<label>ΔV_ref (pu) ${num('dv',RM.dv,0.01)}</label>`;
  if(RM.ev==='pref')h+=`<label>ΔP_ref (pu) ${num('dp',RM.dp,0.05)}</label>`;
  if(!['drawing','none'].includes(RM.ev))h+=`<label>στα (s) ${num('t0',RM.t0,0.05)}</label>`;
@@ -1230,12 +1246,14 @@ function rmsRender(){const box=$('#rms-out');if(!box||!$('#rms')?.open)return;
  if(RM.err)h+=`<p class="small bad" id="rms-err">⚠ ${esc(RM.err)}</p>`;
  if(RM.r&&!fresh)h+=`<p class="small muted">Το σχέδιο άλλαξε μετά το τελευταίο τρέξιμο: τρέξ' το ξανά.</p>`;
  if(fresh){const r=RM.r.result,sm=RM.r.summary||{},M=r.machines||{},names=Object.keys(M),lab=id=>editor.comp(id)?.label||id,t=r.t,evs=r.events||[];
-  const C=r.converters||{},cn=Object.keys(C),D=r.dc||null,vb=m.buses.find(b=>b.id===sm.V_min_bus)?.label||sm.V_min_bus;
+  const C=r.converters||{},cn=Object.keys(C),D=r.dc||null,vb=m.buses.find(b=>b.id===sm.V_min_bus)?.label||sm.V_min_bus,LK=r.lcc||{},ln=Object.keys(LK),ncf=evs.filter(e=>e.kind==='cf').length;
   h+=`<p class="small" id="rms-sum">${names.length?`${sm.stable?'✓ Ευσταθές':'⚠ Ασταθές'}: κάθε γωνία ${sm.stable?'μένει':'δεν μένει'} μέσα σε 180° από το κέντρο αδράνειας (το πολύ ${fmt(sm.max_angle_coi,4)}°)· συχνότητα από ${fmt(sm.f_min,6)} ως ${fmt(sm.f_max,6)} Hz· `
-   :`Χωρίς μηχανές: ${cn.length} μετατροπείς${D?`, ${Object.keys(D.stations||{}).length} σταθμοί, τάσεις DC από ${fmt(sm.Udc_min,5)} ως ${fmt(sm.Udc_max,5)} pu`:''}${sm.f_min!=null?`· συχνότητα (PLL, ταλαντωτές) από ${fmt(sm.f_min,6)} ως ${fmt(sm.f_max,6)} Hz`:''}· `}η ελάχιστη τάση ${fmt(sm.V_min,4)} pu (${esc(vb||'')})· ${r.stats.steps} βήματα των ${fmt(r.h*1e3,3)} ms σε ${fmt(r.stats.time,3)} s.</p>`;
+   :`Χωρίς μηχανές: ${cn.length} μετατροπείς${D?`, ${Object.keys(D.stations||{}).length} σταθμοί, τάσεις DC από ${fmt(sm.Udc_min,5)} ως ${fmt(sm.Udc_max,5)} pu`:''}${ln.length?`, ${ln.length===1?'1 ζεύξη LCC':ln.length+' ζεύξεις LCC'} (${ncf?ncf+' αποτυχίες μετάβασης':'καμία αποτυχία μετάβασης'})`:''}${sm.f_min!=null?`· συχνότητα (PLL, ταλαντωτές) από ${fmt(sm.f_min,6)} ως ${fmt(sm.f_max,6)} Hz`:''}· `}η ελάχιστη τάση ${fmt(sm.V_min,4)} pu (${esc(vb||'')})· ${r.stats.steps} βήματα των ${fmt(r.h*1e3,3)} ms σε ${fmt(r.stats.time,3)} s.</p>`;
   for(const n of RM.r.network?.drawing?.notes||[])h+=`<p class="small muted">${esc(n)}</p>`;
   if(r.modes)h+=rmsModes(r.modes,lab);
-  if(evs.length)h+=`<p class="small">Συμβάντα: ${evs.map(e=>`${fmt(e.t,4)} s ${esc({fault:'σφάλμα',clear:'εκκαθάριση',trip:'άνοιγμα κλάδου',gen:'απώλεια μονάδας',vref:'βήμα V_ref',pref:'βήμα P_ref',load:'βήμα φορτίου',shunt:'σύνδεση φορτίου',block:'μπλοκάρισμα',deblock:'απεμπλοκή'}[e.kind]||e.kind)}${e.gen?' '+esc(lab(e.gen)):(e.bus||e.branch)?' '+esc(e.bus||e.branch):''}${e.id?` (${esc(lab(e.id))})`:''}${e.by==='prot'?` (προστασία: ${esc({uv:'υπόταση AC',oc:'υπερένταση DC',brk:'διακόπτης AC'}[e.why]||e.why)})`:''}`).join(' · ')}.</p>`;
+  const lkl=id=>links.find(q=>q.id===id)?.label;           // 5.1.7: a link by its name (the id of its rectifier)
+  if(evs.length){const show=evs.length>40?evs.filter(e=>!['cf','cfend'].includes(e.kind)):evs;
+   h+=`<p class="small">Συμβάντα: ${show.map(e=>`${fmt(e.t,4)} s ${esc(RM_KIND[e.kind]||e.kind)}${e.gen?' '+esc(lkl(e.gen)||lab(e.gen)):(e.bus||e.branch)?' '+esc(e.bus||e.branch):''}${e.id?` (${esc(lab(e.id))})`:''}${e.by==='prot'?` (προστασία: ${esc({uv:'υπόταση AC',oc:'υπερένταση DC',brk:'διακόπτης AC'}[e.why]||e.why)})`:''}`).join(' · ')}${show.length<evs.length?` · και ${evs.length-show.length} αρχές και τέλη αποτυχιών μετάβασης`:''}.</p>`;}
   const leg=list=>`<div class="rms-leg">${list.map((k,i)=>`<span><i style="background:${RM_COL[i%RM_COL.length]}"></i>${esc(lab(k))}</span>`).join('')}</div>`;
   if(names.length){h+=leg(names)+'<div class="rms-grid" id="rms-charts">';
    h+=rmsChart('Γωνία από το κέντρο αδράνειας (δ − δ_ΚΑ)','°',t,names.map(k=>({y:M[k].delta_coi||M[k].delta})),evs);
@@ -1252,7 +1270,17 @@ function rmsRender(){const box=$('#rms-out');if(!box||!$('#rms')?.open)return;
    h+=leg(db)+'<div class="rms-grid" id="rms-dc">'+rmsChart('Τάσεις DC','pu',t,db.map(b=>({y:D.buses[b].V})),evs)+'</div>';
    h+=leg([...sn,...so])+'<div class="rms-grid" id="rms-st">'+rmsChart('Σταθμοί: ισχύς στους ακροδέκτες DC (προς το δίκτυο DC)','MW',t,sn.map(k=>({y:D.stations[k].Pt||[]})),evs)
     +rmsChart('Σταθμοί: ενεργός ισχύς προς τον ζυγό AC','MW',t,sn.map(k=>({y:D.stations[k].P})),evs)
-    +(so.length?rmsChart('Πηγές ρεύματος DC: ισχύς προς τον ζυγό τους','MW',t,so.map((k,i)=>({y:D.sources[k].P,c:col(sn.length+i)})),evs):'')+'</div>';}}
+    +(so.length?rmsChart('Πηγές ρεύματος DC: ισχύς προς τον ζυγό τους','MW',t,so.map((k,i)=>({y:D.sources[k].P,c:col(sn.length+i)})),evs):'')+'</div>';}
+  // 5.1.7: the LCC links: the two ends of each (the rectifier, the inverter) in one chart per quantity
+  if(ln.length){const two=ln.length>1,nm=(k,w)=>(two?(lkl(k)||k)+': ':'')+w,S=[];
+   for(const k of ln)S.push([k,'r',nm(k,'ανορθωτής')],[k,'i',nm(k,'αντιστροφέας')]);
+   const col=i=>RM_COL[i%RM_COL.length],ser=(f,flt)=>S.map(([k,s,n],i)=>({y:f(LK[k],s),c:col(i),n})).filter(q=>!flt||flt(q));
+   h+=`<div class="rms-leg">${S.map(([,,n],i)=>`<span><i style="background:${col(i)}"></i>${esc(n)}</span>`).join('')}</div><div class="rms-grid" id="rms-lcc">`
+    +rmsChart('Ζεύξεις LCC: ρεύμα DC','kA',t,ser((L,s)=>L['Id_'+s]),evs)
+    +rmsChart('Ζεύξεις LCC: τάση DC','kV',t,ser((L,s)=>L['Vd'+s]),evs)
+    +rmsChart('Ζεύξεις LCC: α του ανορθωτή, γ του αντιστροφέα','°',t,ser((L,s)=>s==='r'?L.alpha_r:L.gamma),evs)
+    +rmsChart('Ζεύξεις LCC: P από το AC (ο αντιστροφέας αρνητική)','MW',t,ser((L,s)=>L['P'+s]),evs)
+    +rmsChart('Ζεύξεις LCC: Q από το AC','Mvar',t,ser((L,s)=>L['Q'+s]),evs)+'</div>';}}
  box.innerHTML=h;$('#rms-state').textContent=fresh?(RM.r.summary?.stable?'ευσταθές':'ασταθές'):'';
  box.querySelectorAll('[data-rm]').forEach(el=>el.onchange=()=>{const k=el.dataset.rm;RM[k]=el.type==='number'?+el.value:el.value;if(k==='ev')rmsRender();});
  box.querySelector('[data-rmmodes]')?.addEventListener('change',e=>{RM.modes=e.target.checked;});

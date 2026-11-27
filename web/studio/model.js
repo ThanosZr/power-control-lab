@@ -14,7 +14,11 @@
 // an EXPR of the voltmeters of the DC buses and of t, through LPF and GAIN blocks). What a DC grid has besides, it says.
 // 5.0.17: the stations with the terminal n off the ground (a symmetric monopole): a grid of pairs of poles, each bus a pair of
 // nodes at the voltage between them, with a TLM of two conductors (or an L or R on each pole) as a line (pairGrid).
-//   Model.of(project) → {version, f, buses, elements, skipped, touching, warnings}
+// 5.1.7 (ROADMAP §101 step 2): the LCC stations (LCCS) with the control on their α (ctl: an LCCC) and the AC filters (FILT3) are
+// parts of the model, and the links between the stations (lcc: a rectifier and an inverter on the two ends of a path of L and R
+// with a C to the ground in it, lccLinks); and the buses joined by series parts without a level of their own are at the level
+// of the better-ranked one (a VAC3 at 1,088 pu behind a ZSER3 no longer gives its bus and the next one its own amplitude).
+//   Model.of(project) → {version, f, buses, elements, skipped, touching, warnings, dc, lcc?}
 //     buses:    [{id, label, Un, at: [[component id, terminal], …], juncs: [ids]}]   (the id: a junction of the drawing on the bus)
 //     elements: [{id, type, label, params, buses: [bus id per terminal], closed?, sides?, ctl?}]   (params: the defaults with the
 //               drawing's own; 5.0.13: sides, the terminals on each side of a CB3, and opens, [{t, reach: [parts per side]}]
@@ -27,6 +31,10 @@
 //               5.0.17: a grid of pairs of poles (stations with the terminal n off the ground): its buses with poles: 2 (U_n,
 //               U0, C, G between the poles), its lines with poles (2: a TLM of two conductors, tlm the TLM's params; 1: an L or
 //               R on each pole, R and L of the loop)
+//     lcc:      [{id, label, rec, inv, pole, Ra, La, Rb, Lb, C, faults: [{id, label, R, prog}]}]   (5.1.7, only with links; id
+//               and rec the id of the rectifier's LCCS, inv the inverter's; pole +1 when the rectifier's p is on the line, −1 for
+//               its n; Ra, La (Ω, H) the series parts from the rectifier to the node of C, Rb, Lb from there to the inverter, C (F,
+//               0 without one); faults the switches from that node to the ground with their R_on and the program of their gate)
 //     skipped:  [{id, type, label, why}]   why: 'sub' (a subcircuit, when subcircuit.js is not there), 'later' (a part of the
 //               network that is not in the model yet), 'other' (a part that is not three-phase, on a bus), 'phases' (crossed or
 //               joined phases), 'nobus' (no voltage level), 'mph' (a line from geometry with other than three phases)
@@ -40,11 +48,12 @@
  const EX=root.Expr||(typeof require!=='undefined'?require('./expr.js'):null);
  // 2 (5.0.12): the parts TLM and EQV3, and the ids of the parts inside subcircuits (X1/<id>); 3 (5.0.13): the controls of a GEN3;
  // 4 (5.0.16): VSC2 and MMC with their controls, and the DC grids; 5 (5.0.17): the grids of pairs of poles (the stations with
- // the terminal n off the ground), with a TLM of two conductors as a DC line
- const VERSION=5;
+ // the terminal n off the ground), with a TLM of two conductors as a DC line; 6 (5.1.7): LCCS with its LCCC, FILT3, the LCC
+ // links (lcc), and the level of the buses across series parts by rank
+ const VERSION=6;
  // the parts of the model and their three-phase terminals (terminal → its phase pins when the part is not on a bus)
  const T1={abc:['a','b','c']},T2={abc1:['a1','b1','c1'],abc2:['a2','b2','c2']};
- const TERMS={GEN3:T1,GRID3:T1,VAC3:T1,LOAD3:T1,FLT3:T1,LINE3:T2,XF3:T2,CB3:T2,ZSER3:T2,TLM:T2,EQV3:null,VSC2:T1,MMC:T1};
+ const TERMS={GEN3:T1,GRID3:T1,VAC3:T1,LOAD3:T1,FLT3:T1,LINE3:T2,XF3:T2,CB3:T2,ZSER3:T2,TLM:T2,EQV3:null,VSC2:T1,MMC:T1,LCCS:T1,FILT3:T1};
  // the terminals of a part: a line from geometry only with three phases, an equivalent with its N ports (abc1 … abcN)
  const eqT=new Map();
  function termsOf(c){const t=c&&c.type;if(!(t in TERMS))return null;
@@ -52,13 +61,13 @@
   if(t==='EQV3'){const N=P.eqN({...P.defaults('EQV3'),...(c.params||{})});if(!eqT.has(N)){const o={};for(let k=1;k<=N;k++)o['abc'+k]=['a'+k,'b'+k,'c'+k];eqT.set(N,o);}return eqT.get(N);}
   return TERMS[t];}
  // parts of the network that the model does not take in yet (ROADMAP §70: the next steps)
- const LATER=new Set(['FILT3','LCC6','LCCS','SSSC','SSSC3','CHB','TOWER','SAI','DS','ARC','MOV','SG','TL','DCDC']);
+ const LATER=new Set(['LCC6','SSSC','SSSC3','CHB','TOWER','SAI','DS','ARC','MOV','SG','TL','DCDC']);
  // what a part of the model does not need in it (a big text the studies do not read)
  const HEAVY={TLM:['mdl','wbtxt']};
  // what draws no current or joins its pins as a wire: meters (the PMU in each phase), junctions, grounds, notes
  const QUIET=new Set(['JUNC','GND','NOTE','VM','VP','MEAS','DISP','SR']),SHORT=new Set(['AM','IP']),SHORT3={PMU3:[['a1','a2'],['b1','b2'],['c1','c2']]};
  // the voltage level of a bus: from its sources and transformers first, then lines, then loads
- const RANK={GRID3:0,GEN3:0,XF3:1,EQV3:1,LINE3:2,LOAD3:3,VAC3:4};
+ const RANK={GRID3:0,GEN3:0,XF3:1,EQV3:1,LCCS:1,LINE3:2,LOAD3:3,VAC3:4};      // (5.1.7: an LCCS by its transformers, U1)
  class ModelError extends Error{}
  function uf(){const par=new Map(),find=k=>{if(!par.has(k))par.set(k,k);let r=k;while(par.get(r)!==r)r=par.get(r);while(par.get(k)!==r){const n=par.get(k);par.set(k,r);k=n;}return r;};
   return {par,find,union:(a,b)=>{const ra=find(a),rb=find(b);if(ra!==rb)par.set(ra,rb);}};}
@@ -68,7 +77,7 @@
   for(const k of HEAVY[c.type]||[])delete o[k];
   return o;}
  // the U_n of a terminal of a part (V), for the voltage level of its bus
- function levelOf(c,t,p){if(c.type==='XF3')return t==='abc1'?p.U1:p.U2;if(c.type==='VAC3')return (+p.Vpk)*Math.sqrt(3/2);
+ function levelOf(c,t,p){if(c.type==='XF3')return t==='abc1'?p.U1:p.U2;if(c.type==='VAC3')return (+p.Vpk)*Math.sqrt(3/2);if(c.type==='LCCS')return p.U1;
   if(c.type==='EQV3'){const a=String(p.Un??'').split(';').map(x=>P.parseEng(x.trim()));return a[(+t.slice(3)||1)-1];}return p.Un;}
  // the state of a breaker at t = 0: its program of commands (the value before the first time is the first value), or a signal
  function closedAt0(p){if(p.ctl==='sig')return {closed:true,sig:true};const q=P.parseSched(String(p.cmd??'0:1'));if(!q)return {closed:true};
@@ -115,7 +124,7 @@
    if(s.sig)warnings.push(`${lab(c)}: ο διακόπτης παίρνει την εντολή από σήμα· στο μοντέλο είναι κλειστός.`);
    if(s.closed){const [a,b]=good.filter(x=>x.c.id===c.id);if(a&&b)B.union(a.key,b.key);}}
   const groups=new Map();for(const x of good){const r=B.find(x.key);if(!groups.has(r))groups.set(r,[]);groups.get(r).push(x);}
-  const buses=[],busOf=new Map(),used=new Set();
+  const buses=[],busOf=new Map(),used=new Set(),rk=new Map();       // rk (5.1.7): the rank of the level of a bus of its own
   for(const list of groups.values()){
    const js=[];for(const x of list){for(const j of juncs.get(U0.find(x.orig))||[])if(!js.includes(j))js.push(j);}
    js.sort((a,b)=>(a.label?0:1)-(b.label?0:1)||(a.id<b.id?-1:a.id>b.id?1:0));
@@ -127,13 +136,22 @@
    const off=lv.filter(q=>Math.abs(q[1]-Un)>0.01*Un).map(q=>lab(q[2]));
    const label=js.length?String(js[0].label||js[0].id):id;
    if(off.length)warnings.push(`Ζυγός ${label}: U_n ${P.eng(Un,'V')}, αλλιώς στα ${[...new Set(off)].join(', ')}.`);
-   const b={id,label,Un,at:list.map(x=>[x.c.id,x.t]),juncs:js.map(j=>j.id)};buses.push(b);for(const x of list)busOf.set(x.c.id+':'+x.t,b);}
+   const b={id,label,Un,at:list.map(x=>[x.c.id,x.t]),juncs:js.map(j=>j.id)};buses.push(b);for(const x of list)busOf.set(x.c.id+':'+x.t,b);if(lv.length)rk.set(b,lv[0][0]);}
   buses.sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);
   // a series impedance, an open breaker and a line from geometry (no U_n of its own) do not change the voltage level: a bus
   // without one takes it from the other side
-  for(let again=true;again;){again=false;for(const c of keep){if((c.type!=='ZSER3'&&c.type!=='CB3'&&c.type!=='TLM')||bad.has(c.id)||!termsOf(c))continue;
+  const across=c=>(c.type==='ZSER3'||c.type==='CB3'||c.type==='TLM')&&!bad.has(c.id)&&termsOf(c);
+  for(let again=true;again;){again=false;for(const c of keep){if(!across(c))continue;
    const a=busOf.get(c.id+':abc1'),b=busOf.get(c.id+':abc2');if(!a||!b)continue;
    if(!(a.Un>0)&&b.Un>0){a.Un=b.Un;again=true;}else if(!(b.Un>0)&&a.Un>0){b.Un=a.Un;again=true;}}}
+  // 5.1.7: and the buses they join are at one level: where two are more than 1 % apart, the level of the better rank is that of
+  // all (ties: the first bus by id); a bus whose own level was not that of a VAC3 (its own amplitude) is said
+  {const Z=uf();for(const b of buses)Z.find(b.id);
+   for(const c of keep){if(!across(c))continue;const a=busOf.get(c.id+':abc1'),b=busOf.get(c.id+':abc2');if(a&&b)Z.union(a.id,b.id);}
+   const best=new Map();for(const b of buses){if(!(b.Un>0)||!rk.has(b))continue;const r=Z.find(b.id),o=best.get(r);if(!o||rk.get(b)<o.r)best.set(r,{r:rk.get(b),Un:b.Un,b});}
+   for(const b of buses){const o=best.get(Z.find(b.id));if(!o||!(b.Un>0)||Math.abs(b.Un-o.Un)<=0.01*o.Un)continue;
+    if(rk.has(b)&&rk.get(b)<RANK.VAC3)warnings.push(`Ζυγός ${b.label}: U_n ${P.eng(b.Un,'V')} απέναντι σε ${P.eng(o.Un,'V')} του ζυγού ${o.b.label}, χωρίς μετασχηματιστή ανάμεσα: κρατήθηκε η δεύτερη.`);
+    b.Un=o.Un;}}
   for(const b of buses)if(!(b.Un>0)){warnings.push(`Ζυγός ${b.label}: χωρίς στάθμη τάσης (κανένα στοιχείο του δεν έχει U_n).`);}
   // the elements, with the buses of their terminals
   const elements=[];let S0=null;       // S0 (5.0.13): every pin of the drawing (and the signal pins) joined by its wires
@@ -159,9 +177,11 @@
    if(c.type==='GEN3'){const k=controlsOf(c,e.params,keep,sig(),lab);e.ctl=k.ctl;warnings.push(...k.warnings);}
    // 5.0.16: the control of a converter (on its modulation), as the controls of a GEN3
    if(c.type==='VSC2'||c.type==='MMC'){const k=convCtl(c,keep,sig(),lab);e.ctl=k.ctl;warnings.push(...k.warnings);}
+   if(c.type==='LCCS'){const k=lccCtl(c,keep,sig(),lab);e.ctl=k.ctl;warnings.push(...k.warnings);}     // 5.1.7: the LCCC on its α
    elements.push(e);}
   // 5.0.16: the DC grids of the stations (an MMC, or a VSC2 with DC terminals), on the nodes of the solver
   const inDC=new Set(),dc=dcGrids(elements,flat,U,groundRoot,keep,sig,lab,warnings,inDC);
+  const lcc=lccLinks(elements,flat,U,groundRoot,keep,sig,lab,warnings);                               // 5.1.7: the LCC links
   // the other parts: those not in the model yet, and those that are not three-phase, when they touch a bus
   const busNode=new Set();for(const x of good)for(const n of x.nodes)busNode.add(n);
   const touching=[];
@@ -172,7 +192,8 @@
    else if(on)skipped.push({id:c.id,type:c.type,label:lab(c),why:'other'});
    if(on)touching.push(c.id);}
   const f=elements.map(e=>+e.params.f).find(x=>x>0)||50;
-  return {version:VERSION,f,name:String(pr.name||''),buses,elements,skipped,touching,warnings,dc};}
+  const out={version:VERSION,f,name:String(pr.name||''),buses,elements,skipped,touching,warnings,dc};if(lcc)out.lcc=lcc;
+  return out;}
  // 5.0.13: the controls of a GEN3 in the drawing: the block on its E_fd input (exc 'sig') and on its T_m input (mech 'sig'), and
  // the PSS on the stabilizing input of its AVR. U0: every pin of the drawing (the signal pins too) joined by its wires (and the
  // names of the wires).
@@ -330,10 +351,65 @@
    if(!v||v.type!=='VM'||!(vm?r!==null:bid.has(r))){warnings.push(`${lab(c)}: η είσοδος ${n} της έκφρασης ${lab(b)} δεν είναι βολτόμετρο ζυγού DC: δεν μπαίνει στο RMS.`);return null;}inb.push(vm?r:bid.get(r));}
   let ast;try{ast=EX.parse(String(q.expr??''),[...ins,...Object.keys(pars)]);}catch(e){warnings.push(`${lab(b)}: ${e.message}`);return null;}
   o.expr={ast,ins:inb,pars:Object.values(pars),gain,tau,text:String(q.expr??''),via:b.id};return o;}
+ // 5.1.7: the control of an LCC station: the LCCC whose output ao reaches its input ao. Returns {ctl: {id, type: 'LCCC', params}
+ // | null, warnings}.
+ function lccCtl(c,keep,U0,lab){const r=U0.find(c.id+':ao');
+  const q=keep.find(x=>x.type==='LCCC'&&x.id!==c.id&&U0.find(x.id+':ao')===r);
+  if(!q)return {ctl:null,warnings:[`${lab(c)}: το α δεν έρχεται από έλεγχο LCCC: στη ροή φορτίου και στη δυναμική RMS ο σταθμός δεν έχει μοντέλο.`]};
+  return {ctl:{id:q.id,type:'LCCC',params:params(q)},warnings:[]};}
+ // 5.1.7: the LCC links: a rectifier and an inverter (an LCCS with its LCCC in mode rect or inv), each with one DC terminal on the
+ // ground and the other on the line (a monopole with ground return: the rectifier's p and the inverter's n on a positive pole,
+ // the other two on a negative one), joined by a path of L (with its R_s) and R in series: the smoothing reactors and the line.
+ // On the path at most one node has a C to the ground (the T line of pcl.rms.LCC), with an inductance on each side of it, and
+ // there the switches to the ground (SW from a signal) are the faults of the line. Anything else on the path (a branch to a third
+ // station, an R or a source to the ground, a part that is not an L, an R, a C or a meter) is said, and the link stays out.
+ const LQ=new Set(['VM','VP','JUNC','GND','NOTE','MEAS','DISP','AM','IP']);
+ function lccLinks(elements,flat,U,groundRoot,keep,sig,lab,warnings){
+  const st=elements.filter(e=>e.type==='LCCS'&&e.ctl);if(!st.length)return null;
+  const at=new Map();for(const c of flat.components){if(c.type==='SUB')continue;for(const pn of Object.keys(P.elPins(c))){const r=U.find(c.id+':'+pn);if(!at.has(r))at.set(r,[]);at.get(r).push([c,pn]);}}
+  const num=(c,q)=>{const v=P.parseEng({...P.defaults(c.type),...(c.params||{})}[q]);return Number.isFinite(+v)?+v:0;};
+  const ends=new Map(),invAt=new Map();
+  for(const e of st){const p=U.find(e.id+':p'),n=U.find(e.id+':n'),inv=e.ctl.params.mode==='inv',gp=p===groundRoot,gn=n===groundRoot;
+   if(gp===gn){warnings.push(`${e.label}: ${gp?'και οι δύο ακροδέκτες DC στη γη':'κανένας ακροδέκτης DC στη γη'}: μπαίνουν μόνο μονοπολικές ζεύξεις με επιστροφή από τη γη· εκτός ζεύξης.`);continue;}
+   ends.set(e.id,{e,node:gp?n:p,pole:(inv?gp:gn)?1:-1,inv});if(inv)invAt.set(gp?n:p,e.id);}
+  const S=sig(),drv=(id,q)=>{const r=S.find(id+':'+q);for(const b of keep){if(b.id===id)continue;for(const pn of Object.keys(P.pinsOf(b)))if(S.find(b.id+':'+pn)===r&&pn==='y')return b;}return null;};
+  const links=[],reached=new Set();
+  for(const [rid,r] of ends){if(r.inv)continue;
+   const seg=[],cs=new Map(),sw=[];let node=r.node,came=null,hit=null,why=null;const seen=new Set();
+   while(!hit&&!why){seen.add(node);let next=null;
+    for(const [c,pn] of at.get(node)||[]){
+     if(LQ.has(c.type)||c.id===came||(c.id===rid&&(pn==='p'||pn==='n')))continue;
+     if(ends.has(c.id)&&(pn==='p'||pn==='n')){if(ends.get(c.id).inv&&node!==r.node&&invAt.get(node)===c.id){hit=c.id;continue;}why=`ο σταθμός ${lab(c)} στη γραμμή DC`;break;}
+     const ps=Object.keys(P.elPins(c)),o=ps.length===2?U.find(c.id+':'+ps[pn===ps[0]?1:0]):null;
+     if((c.type==='L'||c.type==='R')&&o!==null&&o!==groundRoot&&o!==node){if(next||seen.has(o)){why=`η γραμμή DC διακλαδίζεται (${lab(c)}): πολυτερματικές ζεύξεις όχι ακόμη`;break;}next={c,o};}
+     else if(c.type==='C'&&o===groundRoot)cs.set(node,(cs.get(node)||0)+num(c,'C'));
+     else if(c.type==='SW'&&o===groundRoot)sw.push({c,node});
+     else{why=`${lab(c)} (${c.type}) στη γραμμή DC`;break;}}
+    if(hit||why)break;
+    if(!next){why='η γραμμή DC δεν φτάνει σε αντιστροφέα (LCCS με LCCC σε λειτουργία αντιστροφέα)';break;}
+    seg.push({c:next.c,node,R:next.c.type==='R'?num(next.c,'R'):num(next.c,'Rs'),L:next.c.type==='L'?num(next.c,'L'):0});came=next.c.id;node=next.o;}
+   if(!why&&hit&&ends.get(hit).pole!==r.pole)why=`ο αντιστροφέας ${lab(ends.get(hit).e)} σε άλλον πόλο`;
+   if(!why&&cs.size>1)why='πυκνωτές προς τη γη σε πάνω από έναν κόμβο της γραμμής DC (το RMS την έχει ως ισοδύναμο T)';
+   const mid=cs.size?[...cs.keys()][0]:null,k=mid===null?seg.length:seg.findIndex(q=>q.node===mid);
+   const sum=(a,f)=>a.reduce((s,q)=>s+q[f],0),A=seg.slice(0,k<0?seg.length:k),B=seg.slice(k<0?seg.length:k);
+   if(!why&&mid!==null&&(k<=0||!(sum(A,'L')>0)||!(sum(B,'L')>0)))why='ο πυκνωτής της γραμμής DC θέλει αυτεπαγωγή και από τις δύο μεριές του';
+   if(why){warnings.push(`Ζεύξη LCC από τον ${r.e.label}: ${why}· εκτός ροής φορτίου και δυναμικής RMS.`);if(hit)reached.add(hit);continue;}
+   reached.add(hit);const ie=ends.get(hit).e,faults=[];
+   for(const q of sw){const p={...P.defaults('SW'),...(q.c.params||{})};
+    if(q.node!==mid){warnings.push(`${lab(q.c)}: σφάλμα DC όχι στον κόμβο του πυκνωτή της γραμμής: δεν μπαίνει στο RMS.`);continue;}
+    if(p.gate==='off')continue;
+    const g=p.gate==='sig'?drv(q.c.id,'g'):null;
+    if(p.gate!=='sig'||!g||g.type!=='CONST'){warnings.push(`${lab(q.c)}: σφάλμα DC ${p.gate==='on'?'από την αρχή':'με οδήγηση που δεν είναι πρόγραμμα (CONST)'}: δεν μπαίνει στο RMS.`);continue;}
+    faults.push({id:q.c.id,label:lab(q.c),R:num(q.c,'Ron'),prog:String({...P.defaults('CONST'),...(g.params||{})}.v??'0')});}
+   links.push({id:rid,label:`${r.e.label} → ${ie.label}`,rec:rid,inv:hit,pole:r.pole,Ra:sum(A,'R'),La:sum(A,'L'),Rb:sum(B,'R'),Lb:sum(B,'L'),C:mid===null?0:cs.get(mid),faults});
+   r.e.link=rid;ie.link=rid;}
+  for(const [id,x] of ends)if(x.inv&&!reached.has(id))warnings.push(`${x.e.label}: αντιστροφέας χωρίς ανορθωτή στο άλλο άκρο της γραμμής DC: εκτός ροής φορτίου και δυναμικής RMS.`);
+  return links.length?links.sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0):null;}
  // what the page says about a model, in one line
- function summary(m){const n=t=>m.elements.filter(e=>e.type===t).length;const parts=[['GEN3','γεννήτριες'],['GRID3','ισοδύναμα δικτύου'],['EQV3','ισοδύναμα πολλών θυρών'],['VAC3','πηγές'],['LINE3','γραμμές'],['TLM','γραμμές από γεωμετρία'],['XF3','μετασχηματιστές'],['LOAD3','φορτία'],['CB3','διακόπτες'],['ZSER3','εμπεδήσεις σειράς'],['FLT3','σφάλματα'],['VSC2','μετατροπείς'],['MMC','σταθμοί MMC']]
+ function summary(m){const n=t=>m.elements.filter(e=>e.type===t).length;const parts=[['GEN3','γεννήτριες'],['GRID3','ισοδύναμα δικτύου'],['EQV3','ισοδύναμα πολλών θυρών'],['VAC3','πηγές'],['LINE3','γραμμές'],['TLM','γραμμές από γεωμετρία'],['XF3','μετασχηματιστές'],['LOAD3','φορτία'],['CB3','διακόπτες'],['ZSER3','εμπεδήσεις σειράς'],['FLT3','σφάλματα'],['VSC2','μετατροπείς'],['MMC','σταθμοί MMC'],['LCCS','σταθμοί LCC'],['FILT3','φίλτρα AC']]
   .map(([t,w])=>[n(t),w]).filter(([k])=>k>0).map(([k,w])=>k+' '+w);const d=m.dc?` · δίκτυο DC: ${m.dc.buses.length} ζυγοί, ${m.dc.lines.length} γραμμές${m.dc.sources.length?', '+m.dc.sources.length+' πηγές':''}`:'';
-  return `${m.buses.length} ζυγοί${parts.length?': '+parts.join(', '):''}${d}`;}
+  const l=m.lcc?.length?` · ${m.lcc.length===1?'ζεύξη LCC':m.lcc.length+' ζεύξεις LCC'}: ${m.lcc.map(q=>q.label).join(', ')}`:'';
+  return `${m.buses.length} ζυγοί${parts.length?': '+parts.join(', '):''}${d}${l}`;}
  const WHY={sub:'μέσα σε υποκύκλωμα: δεν μπαίνει ακόμη',later:'στοιχείο του δικτύου που δεν μπαίνει ακόμη στο μοντέλο',other:'δεν είναι τριφασικό στοιχείο του μοντέλου, ακουμπά όμως έναν ζυγό',phases:'φάσεις χιαστί ή ενωμένες',nobus:'ζυγός χωρίς στάθμη τάσης',mph:'γραμμή από γεωμετρία με άλλο πλήθος φάσεων από τρεις: δεν μπαίνει ακόμη'};
  const api={VERSION,TERMS,LATER,termsOf,of,summary,WHY,ModelError};
  root.Model=api;if(typeof module!=='undefined')module.exports=api;

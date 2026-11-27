@@ -45,15 +45,16 @@ import numpy as np
 
 from . import network as N
 
-VERSION = 5                                  # 2 (5.0.12): TLM, EQV3, the parts inside subcircuits (ids X1/<id>); 3 (5.0.13): the
+VERSION = 6                                  # 2 (5.0.12): TLM, EQV3, the parts inside subcircuits (ids X1/<id>); 3 (5.0.13): the
                                              # controls of a GEN3 (ctl: avr, pss, gov) for the RMS dynamics; 4 (5.0.16): VSC2, MMC
                                              # with their controls (ctl: GFMC, MMCC), and the DC grids (dc); 5 (5.0.17): the DC
                                              # grids of pairs of poles (the stations with the terminal n off the ground), a TLM
-                                             # of two conductors as a DC line
+                                             # of two conductors as a DC line; 6 (5.1.7): LCCS with its LCCC, FILT3, the LCC
+                                             # links (lcc)
 F_DC = 1e-3                                  # 5.0.17: the frequency (Hz) of R, L, C of a TLM as a DC line: the limit of DC
 SQ3 = math.sqrt(3)
 STUDIES = ('pf', 'sc')
-TYPES = ('GEN3', 'GRID3', 'VAC3', 'LINE3', 'XF3', 'ZSER3', 'LOAD3', 'CB3', 'FLT3', 'TLM', 'EQV3', 'VSC2', 'MMC')
+TYPES = ('GEN3', 'GRID3', 'VAC3', 'LINE3', 'XF3', 'ZSER3', 'LOAD3', 'CB3', 'FLT3', 'TLM', 'EQV3', 'VSC2', 'MMC', 'LCCS', 'FILT3')
 SOURCES = ('GEN3', 'GRID3', 'VAC3', 'EQV3')
 SERIES = ('LINE3', 'XF3', 'ZSER3', 'TLM')
 PFX = {'G': 1e9, 'M': 1e6, 'k': 1e3, 'K': 1e3, 'm': 1e-3, 'u': 1e-6, 'μ': 1e-6, 'µ': 1e-6, 'n': 1e-9, 'p': 1e-12}
@@ -164,6 +165,26 @@ def _zser_z(p, w):
         y = (1 / complex(Rp1, w * Lp) if (Lp > 0 or Rp1 > 0) else 0) + (1 / Rp2 if Rp2 > 0 else 0)
         z += 1 / y
     return z
+
+
+def _filt_y(p, w):
+    """5.1.7: the admittance (S) per phase of a FILT3 (a star: in the positive sequence the same with any neutral) at ω, as
+    netlib.js filtDef builds it: 'c' C₁; 'st' C₁ in series with L (its R_s = R); 'hp' C₁ in series with L ∥ R (no R when R = 0);
+    'cig' C₁ in series with (L with R_s = R, then C₂) ∥ R_p."""
+    def pos(k, d):
+        return max(_num(p, k, d), 1e-15)
+    kind = p.get('kind') if p.get('kind') in ('c', 'st', 'hp', 'cig') else 'c'
+    C1, L, R, C2, Rp = pos('C1', 1e-6), pos('L', 0.1), max(_num(p, 'R', 10.0), 0.0), pos('C2', 10e-6), pos('Rp', 100.0)
+    z1 = 1 / (1j * w * C1)
+    if kind == 'c':
+        return 1 / z1
+    if kind == 'st':
+        return 1 / (z1 + complex(R, w * L))
+    zl = 1j * w * L
+    if kind == 'hp':
+        return 1 / (z1 + (zl * R / (zl + R) if R > 0 else zl))
+    zb = complex(R, w * L) + 1 / (1j * w * C2)
+    return 1 / (z1 + zb * Rp / (zb + Rp))
 
 
 def _eng(v, d=float('nan')):
@@ -513,6 +534,8 @@ def _network(m, study='pf', fe=None, S_base=100e6, at=None):
         if any(b not in net.buses for b in bs) or eid in bad:
             continue
         names = []
+        if t == 'LCCS':                                     # 5.1.7: the LCC stations with their links, after the loop
+            continue
         if t in ('VSC2', 'MMC'):                            # 5.0.16: the converters and the stations
             names = _converter_net(e, net, study, notes, at, slack, Ub, pu, shunt, helpers, w, kx, S_base, m)
             if names:
@@ -646,14 +669,22 @@ def _network(m, study='pf', fe=None, S_base=100e6, at=None):
                 Qz = Q0 * cz * (1 / kx if Q0 > 0 else kx)
                 Q0 = (Qz + Q0 * (ci + cp)) / s
             names.append(net.load(b, P0 * s, Q0 * s, zip=(cz / s, ci / s, cp / s), name=eid))
+        elif t == 'FILT3':                                  # 5.1.7: an AC filter or capacitor, a shunt at ω_e as the EMT start
+            b = bs[0]
+            if study == 'sc':
+                notes.append(f'{lab(e)}: φίλτρο AC: στο βραχυκύκλωμα μένει έξω, όπως τα φορτία.')
+                continue
+            shunt(eid, b, _filt_y(p, w * kx) * Ub(b) ** 2 / S_base, f'{eid}~Y')
+            names.append(f'{eid}~Y')
         elif t == 'FLT3':
             if study == 'pf' and p.get('ctl') != 'sig' and _num(p, 'ton', 0.04) <= 0:
                 notes.append(f'{lab(e)}: το σφάλμα υπάρχει από το t = 0· η ροή φορτίου είναι χωρίς αυτό.')
         if names:
             els[eid] = names
+    links = _lcc_net(m, net, study, notes, els)            # 5.1.7: the LCC links of the drawing
     coupling = {k: v['coupling'] for k, v in prep.items() if 'coupling' in v}
-    return net, {'study': study, 'dc': bool(getattr(net, 'dc_buses', None)), 'elements': els, 'helpers': helpers, 'shunts': shunts, 'eqv': eqv, 'coupling': coupling, 'out': out,
-                 'notes': notes, 'fe': fe}
+    return net, {'study': study, 'dc': bool(getattr(net, 'dc_buses', None)), 'lcc': links, 'elements': els, 'helpers': helpers, 'shunts': shunts, 'eqv': eqv,
+                 'coupling': coupling, 'out': out, 'notes': notes, 'fe': fe}
 
 
 # ---------------------------------------------------------------- 5.0.16: the converters, the stations, the DC grids
@@ -873,6 +904,105 @@ def _converter_net(e, net, study, notes, at, slack, Ub, pu, shunt, helpers, w, k
     return names
 
 
+# ---------------------------------------------------------------- 5.1.7: the LCC links
+def _lcc_parts(m, q):
+    """The two stations (LCCS elements, with their LCCC in ctl) of a link q of the model (model.js lcc)."""
+    byid = {str(e['id']): e for e in m['elements']}
+    return byid.get(str(q['rec'])), byid.get(str(q['inv']))
+
+
+def _lcc_data(m, q):
+    """5.1.7: a link of the drawing (THEORY §8ΩΩΒ) as Network.lcc takes it, its data for pcl.rms.LCC (LCC_DEFAULTS) and what the
+    translation leaves out:
+    * the stations (LCCS): S_n, U1, U2, u_k, the tap, two six-pulse bridges; in the detailed model the losses of the valves as
+      R_eq = 2·B·R_on and V_drop = 2·B·V_f (two valves of each bridge conduct between the commutations);
+    * the line: R of both halves, C at its node, the L of each side (the smoothing reactor and the half of the line) as L_d;
+    * the controls: from the inverter's LCCC the order at t = 0, γ_ref, ΔI, Δγ, the VDCOL and its k, T_v, its PIs; from the
+      rectifier's α_min, α_max and its PI; T_id from the rectifier's; the bandwidth of the firing PLLs from the rectifier's LCCS.
+    Returns (kw, data, notes of the network, notes of the RMS)."""
+    r, i = _lcc_parts(m, q)
+    rp, ip, rc, ic = r['params'], i['params'], r['ctl']['params'], i['ctl']['params']
+    lab = q.get('label') or q['id']
+    npf, nrms = [], []
+
+    def station(p):
+        d = {'Sn': _num(p, 'Sn', 603.73e6), 'U1': _num(p, 'U1', 345e3), 'U2': _num(p, 'U2', 213.4557e3), 'uk': _num(p, 'uk', 18.0),
+             'tap': _num(p, 'tap', 0.0), 'B': 2}
+        if p.get('model', 'det') != 'avg':
+            d['Req'], d['Vdrop'] = 4 * _num(p, 'Ron', 0.01), 4 * _num(p, 'Vf', 0.0)
+        return d
+    Vdn, Idn = _num(rc, 'Vdn', 500e3), _num(rc, 'Idn', 2000.0)
+    if abs(_num(ic, 'Vdn', Vdn) - Vdn) > 1e-9 * Vdn or abs(_num(ic, 'Idn', Idn) - Idn) > 1e-9 * Idn:
+        npf.append(f'{lab}: οι βάσεις V_dn, I_dn των δύο ελέγχων LCCC διαφέρουν: παίρνονται του ανορθωτή.')
+    Ra, Rb = float(q['Ra']), float(q['Rb'])
+    if q['C'] > 0 and abs(Ra - Rb) > 1e-9 * max(Ra, Rb):
+        nrms.append(f'{lab}: η R της γραμμής DC είναι {Ra:.4g} Ω προς τον ανορθωτή και {Rb:.4g} Ω προς τον αντιστροφέα· στο RMS μισή από κάθε μεριά του C.')
+    if rc.get('iext') == 'own':
+        npf.append(f'{lab}: ο ανορθωτής με δική του εντολή ρεύματος: η εντολή και ο VDCOL είναι του αντιστροφέα (όπως στο benchmark).')
+    kw = dict(Vdn=Vdn, Idn=Idn, R=Ra + Rb, sr=station(rp), si=station(ip), L=0.0, C=float(q['C']), Ld=(float(q['La']), float(q['Lb'])),
+              poles=1, Iord=_prog(ic.get('Iord', '1'))[0], gref=_num(ic, 'gref', 15.0), amin=_num(rc, 'aminR', 5.0), dI=_num(ic, 'dI', 0.1),
+              dgc=_num(ic, 'dgc', 16.0), vdcol=(_num(ic, 'V1', 0.4), _num(ic, 'I1', 0.55), _num(ic, 'V2', 0.9), _num(ic, 'I2', 1.0)),
+              kc=_num(ic, 'kc', 0.01))
+    data = {'Tid': _num(rc, 'Tid', 1.2e-3), 'bw': _num(rp, 'bw', 1.125)}
+    for k, d in (('KpR', 1.0989), ('TiR', 0.01092), ('amaxR', 150.2)):
+        data[k] = _num(rc, k, d)
+    for k, d in (('KpI', 0.63), ('TiI', 0.01524), ('aminC', 70.0), ('KpG', 0.7506), ('TiG', 0.0544), ('aminG', 90.0), ('amaxI', 150.2),
+                 ('gemin', -31.17), ('Tv', 0.02)):
+        data[k] = _num(ic, k, d)
+    if abs(_num(ic, 'Tid', data['Tid']) - data['Tid']) > 1e-12:
+        nrms.append(f'{lab}: το φίλτρο του ρεύματος T_id διαφέρει στους δύο ελέγχους: στο RMS του ανορθωτή.')
+    if abs(_num(ip, 'bw', data['bw']) - data['bw']) > 1e-12:
+        nrms.append(f'{lab}: το εύρος ζώνης των ταλαντωτών διαφέρει στους δύο σταθμούς: στο RMS του ανορθωτή.')
+    if rc.get('fr') == 'on':
+        nrms.append(f'{lab}: η εξαναγκασμένη καθυστέρηση του ανορθωτή: όχι ακόμη στο RMS.')
+    if any(p.get('model', 'det') != 'avg' and _num(p, 'tq', 0.0) > 0 for p in (rp, ip)):
+        nrms.append(f'{lab}: t_q > 0: στο RMS η αποτυχία μετάβασης με το κριτήριο του γ (gcf), όχι με το t_q.')
+    start = 0.0
+    for c in (r['ctl'], i['ctl']):                         # the program of the blocking: the start, and a blocking after it
+        v0, ch = _sched(c['params'].get('blks', '0:1, 0.04:0'))
+        seq = [(0.0, 1.0 if v0 is None else v0)] + ch
+        on = next((t for t, x in seq if x < 0.5), None)
+        if on is None:
+            nrms.append(f'{lab}: ο έλεγχος {c["id"]} μένει μπλοκαρισμένος: στο RMS η ζεύξη λειτουργεί από τη ροή φορτίου.')
+            continue
+        start = max(start, on)
+        late = [t for t, x in seq if t > on and x >= 0.5]
+        if late:
+            nrms.append(f'{lab}: το μπλοκάρισμα του {c["id"]} στα {late[0]:g} s: όχι ακόμη στο RMS.')
+    if start > 0:
+        nrms.append(f'{lab}: η εκκίνηση του EMT (οι γέφυρες μπλοκαρισμένες ως τα {start:g} s): το RMS ξεκινά από τη ροή φορτίου AC/DC.')
+    return kw, data, npf, nrms
+
+
+def _lcc_net(m, net, study, notes, els):
+    """5.1.7: the LCC links of the drawing as links of pcl.network (Network.lcc, named by the rectifier's id; both stations are
+    elements of it), in 'pf'; in 'sc' a note. Returns their names."""
+    out = []
+    for q in m.get('lcc') or []:
+        r, i = _lcc_parts(m, q)
+        if r is None or i is None or not r.get('ctl') or not i.get('ctl'):
+            continue
+        lab = q.get('label') or q['id']
+        if study == 'sc':
+            notes.append(f'{lab}: ζεύξη LCC: όχι ακόμη στο IEC 60909 (το ρεύμα της σε σφάλμα το ορίζουν οι έλεγχοί της).')
+            continue
+        rb, ib = str(r['buses'][0]), str(i['buses'][0])
+        if rb not in net.buses or ib not in net.buses:
+            notes.append(f'{lab}: ένας σταθμός της σε ζυγό χωρίς πηγή: εκτός μελέτης.')
+            continue
+        kw, _, npf, _ = _lcc_data(m, q)
+        try:
+            nm = net.lcc(rb, ib, name=str(q['id']), **kw)
+        except N.NetworkError as x:
+            notes.append(f'{lab}: {x}· εκτός μελέτης.')
+            continue
+        notes += npf
+        els[str(r['id'])] = [nm]
+        els[str(i['id'])] = [nm]
+        out.append(nm)
+    return out
+
+
 def converters_of(m):
     """5.0.16: the converters of the drawing for pcl.rms.System: each VSC2 (by its id) with the GFMC (a grid-forming converter:
     droop, VSM, PSC) or the MMCC in mode p (a grid-following one, its control 'robust' or 'pi') that drives its modulation, with
@@ -988,6 +1118,13 @@ def stations_of(m):
             x = q['expr']
             out[str(q['id'])] = {'expr': x['ast'], 'ins': list(x['ins']), 'pars': list(x.get('pars') or []), 'gain': x.get('gain', 1.0),
                                  'tau': list(x.get('tau') or []), 'k': q['k']}
+    for q in m.get('lcc') or []:                            # 5.1.7: the LCC links (pcl.rms.LCC, by the name of the link)
+        r, i = _lcc_parts(m, q)
+        if r is None or i is None or not r.get('ctl') or not i.get('ctl'):
+            continue
+        _, data, _, nrms = _lcc_data(m, q)
+        out[str(q['id'])] = data
+        notes += nrms
     return out, notes
 
 
@@ -1002,7 +1139,7 @@ def _rms_network(m, S_base=100e6):
     byid = {str(e['id']): e for e in m['elements']}
     if any(byid[k]['params'].get('init') == 'lf' for k in conv):
         net0, info0 = _network(m, 'pf', S_base=S_base)
-        lf = _solve(net0, info0['dc'])                      # 5.0.18: the start at the shifts if needed
+        lf = _solve(net0, info0['dc'] or bool(info0['lcc']))   # 5.0.18: the start at the shifts if needed (5.1.7: AC/DC with LCC)
         if not lf.get('converged'):
             raise ModelError('Η ροή φορτίου του σχεδίου δεν συγκλίνει: δεν υπάρχει αρχή για τη δυναμική RMS.')
     for k in conv:
@@ -1015,9 +1152,9 @@ def _rms_network(m, S_base=100e6):
     # 5.0.18: the dynamics solve the load flow of this network again: where the flat start ends near zero voltage behind a shift,
     # its buses start at the shifts (_solve); a network without shifts, or with a good solution from the flat start, as it was
     if any(e['kind'] == 'branch' and e.get('angle') for e in net.elements) and any(d['type'] == 'slack' for d in net.buses.values()):
-        _solve(net, info['dc'])
+        _solve(net, info['dc'] or bool(info['lcc']))
     conv = {k: v for k, v in conv.items() if k in info['elements']}
-    st = {k: v for k, v in st.items() if k in info['elements']}
+    st = {k: v for k, v in st.items() if k in info['elements'] or k in info['lcc']}
     return net, info, conv, st, n1 + n2
 
 
@@ -1141,7 +1278,9 @@ def elements_of(m, net, info, r):
     (and Pe, Qe at the EMF behind the impedance); LINE3, XF3, ZSER3, TLM: Pa, Qa, Pb, Qb into the part at its terminals 1 and 2 (the
     shunts of the part with them), I (A at terminal 1), loss (TLM: and coupling, how much its sequences are coupled); EQV3: P, Q it
     gives to its buses, and ports [{bus, P, Q}]; LOAD3: P, Q at its voltage; CB3: closed; 5.0.16: VSC2 as a GEN3, MMC: P, Q it gives
-    to its bus, P_dc into the DC grid and U_dc (pu) (of an AC/DC load flow)."""
+    to its bus, P_dc into the DC grid and U_dc (pu) (of an AC/DC load flow); 5.1.7: LCCS: P, Q it gives to its bus, P_dc into the
+    DC side, U_dc (pu of V_dn), I_d (A), α, μ (°), the tap position n and the mode of the link (the inverter: γ too); FILT3: P, Q
+    it takes at its voltage."""
     flows = {x['name']: x for x in r['branches']}
     V = {b: r['buses'][b]['V'] * cmath.exp(1j * math.radians(r['buses'][b]['angle'])) for b in r['buses']}
     S_b = net.S_base
@@ -1162,6 +1301,18 @@ def elements_of(m, net, info, r):
             S = [-(Vn[n + k] * np.conj(I[n + k])) * S_b for k in range(n)]
             els[eid] = {'P': float(sum(x.real for x in S)), 'Q': float(sum(x.imag for x in S)),
                         'ports': [{'bus': b, 'P': float(x.real), 'Q': float(x.imag)} for b, x in zip(q['ports'], S)]}
+        elif t == 'LCCS':                                   # 5.1.7: an LCC station: P, Q it gives to its bus, P_dc into the DC side
+            o = (r.get('lcc') or {}).get(nm[0])
+            if o:
+                if any(str(q['rec']) == eid for q in m.get('lcc') or []):
+                    els[eid] = {'P': -o['Pr'], 'Q': -o['Qr'], 'Pdc': o['Pdr'], 'Udc': o['Vdr'] / net.element(nm[0])['Vdn'], 'Id': o['Id'],
+                                'alpha': o['alpha_r'], 'mu': o['mu_r'], 'n': o['n_r'], 'mode': o['mode']}
+                else:
+                    els[eid] = {'P': -o['Pi'], 'Q': -o['Qi'], 'Pdc': -o['Pdi'], 'Udc': o['Vdi'] / net.element(nm[0])['Vdn'], 'Id': o['Id'],
+                                'alpha': o['alpha_i'], 'gamma': o['gamma'], 'mu': o['mu_i'], 'n': o['n_i'], 'mode': o['mode']}
+        elif t == 'FILT3':                                  # 5.1.7: an AC filter: P, Q it takes at its voltage
+            S = sum(abs(V[b]) ** 2 * np.conj(y) * S_b for _, b, y in info['shunts'].get(eid, []))
+            els[eid] = {'P': float(np.real(S)), 'Q': float(np.imag(S))}
         elif t == 'MMC':                                    # 5.0.16: a station: P, Q it gives to its bus, P_dc into the DC grid
             c = (r.get('converters') or {}).get(nm[0])
             if c:
@@ -1251,7 +1402,7 @@ def load_flow(m, fe=None, tol=1e-10, max_iter=30):
     net, info = network(m, 'pf', fe=fe)
     if not any(d['type'] == 'slack' for d in net.buses.values()):
         raise ModelError('Το σχέδιο δεν έχει πηγή για τη ροή φορτίου (GEN3 από τη ροή φορτίου, GRID3, VAC3 ή EQV3).')
-    r = _solve(net, info['dc'], tol=tol, max_iter=max_iter)  # 5.0.16: AC/DC with a DC grid; 5.0.18: the start at the shifts if needed
+    r = _solve(net, info['dc'] or bool(info['lcc']), tol=tol, max_iter=max_iter)   # 5.0.16: AC/DC with a DC grid (5.1.7: or LCC links); 5.0.18: the start at the shifts if needed
     buses = _bus_out(m, info)
     for b, d in buses.items():
         d.update(V=r['buses'][b]['V'], angle=r['buses'][b]['angle'], U=r['buses'][b]['V'] * net.buses[b]['Un'])
@@ -1260,6 +1411,8 @@ def load_flow(m, fe=None, tol=1e-10, max_iter=30):
            'losses': r['losses'], 'out': info['out'], 'notes': info['notes'], 'helpers': sorted(info['helpers'])}
     if info['dc']:                                          # 5.0.16: the DC buses (U in V, V in pu)
         out['dc'] = {b: {'U': d['U'], 'V': d['U'] / net.dc_buses[b]['Un']} for b, d in r['dc']['buses'].items()}
+    if info['lcc'] and r.get('lcc'):                        # 5.1.7: the operating points of the LCC links (pcl.lcc)
+        out['lcc'] = {k: r['lcc'][k] for k in info['lcc'] if k in r['lcc']}
     return out
 
 
@@ -1400,7 +1553,9 @@ def events_of(m, net, info):
     trips), the
     program of the reference of an AVR (dV) and of a GOV (dP). Returns (events, notes).
     5.0.16: a CB3 that closes onto loads alone (outside the network of the start) as steps of a shunt; 5.1.2: and when it opens
-    again, the same steps back (a pulse of load: the tutorial two_area_emt)."""
+    again, the same steps back (a pulse of load: the tutorial two_area_emt). 5.1.7: the LCC links: the program of the order of
+    the inverter's LCCC (iord), a switch at the node of C of the line (dcfault, dcclear), a station on the side of a CB3 that
+    opens (the link out, gen)."""
     m = _check(m)
     ev, notes = [], []
     byid = {str(e['id']): e for e in m['elements']}
@@ -1461,6 +1616,8 @@ def events_of(m, net, info):
                             ev.append({'t': tt, 'kind': 'clear', 'bus': str(q['buses'][0]), 'id': eid})
                         elif q['type'] == 'GEN3':
                             ev.append({'t': tt, 'kind': 'gen', 'gen': str(i), 'id': eid})
+                        elif q['type'] == 'LCCS' and str(i) in info['elements'] and info['elements'][str(i)][0] in info.get('lcc', []):
+                            ev.append({'t': tt, 'kind': 'gen', 'gen': info['elements'][str(i)][0], 'id': eid})   # 5.1.7: the link out
                         elif q['type'] == 'LOAD3':
                             notes.append(f'{lab}: το φορτίο {q.get("label") or i} στην πλευρά που ανοίγει μένει στο RMS.')
                 elif x >= 0.5 > state:
@@ -1497,6 +1654,31 @@ def events_of(m, net, info):
         for key in ('Qref',) + (('Vacref',) if c['type'] == 'MMCC' and k.get('cc', 'pi') != 'robust' else ()):
             if _prog(k.get(key))[1]:
                 notes.append(f'{e.get("label") or eid}: το πρόγραμμα του {key} του {c["id"]}: όχι ακόμη στο RMS.')
+    # 5.1.7: the LCC links: the program of the order (the inverter's LCCC) as steps of the order (dI from its value at t = 0), and
+    # the switches at the node of C as faults of the line (dcfault with their R_on, dcclear)
+    for q in m.get('lcc') or []:
+        nm = str(q['id'])
+        if nm not in info.get('lcc', []):
+            continue
+        r, i = _lcc_parts(m, q)
+        c = i['ctl']
+        v0, ch = _prog(c['params'].get('Iord', '1'))
+        for tt, x in ch:
+            ev.append({'t': tt, 'kind': 'iord', 'gen': nm, 'dI': x - v0, 'id': str(c['id'])})
+        if r['ctl']['params'].get('iext') == 'own' and _prog(r['ctl']['params'].get('Iord', '1'))[1]:
+            notes.append(f'{q.get("label") or nm}: το πρόγραμμα της εντολής του ανορθωτή: στο RMS η εντολή του αντιστροφέα.')
+        for f in q.get('faults') or []:
+            v0, ch = _sched(f.get('prog'))
+            state = 0.0 if v0 is None else v0
+            if state >= 0.5:
+                notes.append(f'{f.get("label") or f["id"]}: σφάλμα DC από την αρχή: όχι στο RMS.')
+                continue
+            for tt, x in ch:
+                if x >= 0.5 > state:
+                    ev.append({'t': tt, 'kind': 'dcfault', 'gen': nm, 'R': max(float(f.get('R') or 0.0), 1e-6), 'id': str(f['id'])})
+                elif x < 0.5 <= state:
+                    ev.append({'t': tt, 'kind': 'dcclear', 'gen': nm, 'id': str(f['id'])})
+                state = x
     # the programs of the references, from the controls of each GEN3 (the parts AVR and GOV are not elements of the model)
     for e in m['elements']:
         c = e.get('ctl') or {}

@@ -321,9 +321,9 @@ def _rms_drawing(data, net):
 
 
 def _drawing_study(data, net, study):
-    """5.0.16: the load flow of a drawing with a DC grid (its stations, model.network) is the AC/DC one."""
-    if study == 'pf' and data.get('drawing') is not None and getattr(net, 'dc_buses', None):
-        return 'acdc'
+    """5.0.16: the load flow of a drawing with a DC grid (its stations, model.network) is the AC/DC one; 5.1.7: and with LCC links."""
+    if study == 'pf' and data.get('drawing') is not None and (getattr(net, 'dc_buses', None) or any(e['kind'] == 'lcc' for e in net.elements)):
+        return 'acdc'                                      # (5.1.7: or with LCC links)
     return study
 
 

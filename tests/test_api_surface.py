@@ -389,7 +389,7 @@ class ApiSurface(unittest.TestCase):
         version 5 (its grids of pairs of poles), no new points; the limiter of the DC overvoltage of a station of pcl.rms.HVDC as
         data of the station (ovl, V_dc,max, k_ov), off by default (the stations of the API as in 5.0.15)."""
         from pcl import model, rms
-        self.assertEqual(model.VERSION, 5)
+        self.assertGreaterEqual(model.VERSION, 5)                                      # (6 from 5.1.7)
         self.assertEqual({k: rms.STATION_DEFAULTS[k] for k in ('ovl', 'Vdcmax', 'kov')}, {'ovl': 0.0, 'Vdcmax': 1.1, 'kov': 10.0})
         self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 1032)       # 1032 then
 
@@ -398,7 +398,7 @@ class ApiSurface(unittest.TestCase):
         with the model 'gfm' takes the data of its law under the names of a grid-forming converter of pcl.rms (GFM_DEFAULTS, and
         law, avc, Pref, Qref, Vref, Uref); the model of the drawing stays at version 5."""
         from pcl import model, rms
-        self.assertEqual(model.VERSION, 5)
+        self.assertGreaterEqual(model.VERSION, 5)                                      # (6 from 5.1.7)
         self.assertEqual(rms.GFM_STATION_KEYS, set(rms.GFM_DEFAULTS) | {'law', 'avc', 'Pref', 'Qref', 'Vref', 'Uref'})
         self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 1032)       # 1032 then
 
@@ -409,7 +409,7 @@ class ApiSurface(unittest.TestCase):
         points or V_X of the book only when given)."""
         from pcl import model, network, rms
         self.assertEqual(network.MORE[-1], 'two_area')
-        self.assertEqual(model.VERSION, 5)
+        self.assertGreaterEqual(model.VERSION, 5)                                      # (6 from 5.1.7)
         self.assertEqual(set(rms.AVR_DEFAULTS), {'st1a', 'dc1a', 'ac1a'})
         self.assertEqual(rms.PSS_TYPES, ('pss', 'pss1a', 'pss2b'))
         self.assertEqual(self.now['pcl']['pcl.rms.two_area_machines']['params'], ['excitation', 'limits'])
@@ -422,7 +422,7 @@ class ApiSurface(unittest.TestCase):
         the end of Network.dynamic (modes, False by default: the result as it was), the option 'modes' of the study 'rms'; the model of
         the drawing stays at version 5."""
         from pcl import model, study
-        self.assertEqual(model.VERSION, 5)
+        self.assertGreaterEqual(model.VERSION, 5)                                      # (6 from 5.1.7)
         self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][-2:], ['stations', 'modes'])
         self.assertEqual(study.OPTIONS['rms'][-2:], ('stations', 'modes'))
         self.assertGreaterEqual(sum(len(v) for v in self.now.values()), 1033)       # 1033 then
@@ -432,7 +432,7 @@ class ApiSurface(unittest.TestCase):
         (init, eval, limits, outputs: five new points, experimental as all of pcl.rms); a generator with the model 'wt4a' or 'wt4b'
         in the machines of Network.dynamic (no new parameter); the event 'qref'; the model of the drawing stays at version 5."""
         from pcl import model, rms
-        self.assertEqual(model.VERSION, 5)
+        self.assertGreaterEqual(model.VERSION, 5)                                      # (6 from 5.1.7)
         self.assertEqual(rms.WIND_MODELS, ('wt4a', 'wt4b'))
         for k in ('Wind', 'Wind.init', 'Wind.eval', 'Wind.limits', 'Wind.outputs'):
             self.assertIn('pcl.rms.' + k, self.now['pcl'])
@@ -446,7 +446,7 @@ class ApiSurface(unittest.TestCase):
         (init, eval, limits, outputs): twelve new points, all experimental; no new parameter of Network.dynamic or of acdc_flow (the
         events 'iord', 'dcfault', 'dcclear'); the model of the drawing stays at version 5."""
         from pcl import model
-        self.assertEqual(model.VERSION, 5)
+        self.assertGreaterEqual(model.VERSION, 5)                                      # (6 from 5.1.7)
         new = ['pcl.network.Network.lcc'] + ['pcl.lcc.' + k for k in ('LCCError', 'pf_parts', 'consts', 'vdcol', 'operating_point', 'benchmark_network')] + \
             ['pcl.rms.' + k for k in ('LCC', 'LCC.init', 'LCC.eval', 'LCC.limits', 'LCC.outputs')]
         for k in new:
@@ -462,11 +462,23 @@ class ApiSurface(unittest.TestCase):
         steps of backward Euler as data of the stations and of the device (no new parameter of Network.dynamic or of acdc_flow);
         the model of the drawing stays at version 5."""
         from pcl import model
-        self.assertEqual(model.VERSION, 5)
+        self.assertGreaterEqual(model.VERSION, 5)                                      # (6 from 5.1.7)
         for k in ('pcl.lcc.tap_step', 'pcl.lcc.operating_point_taps'):
             self.assertIn(k, self.now['pcl'])
             self.assertTrue(api_surface.experimental('pcl', k), k)
         self.assertEqual(self.now['pcl']['pcl.lcc.consts']['params'], ['e', 'Ur', 'Ui', 'n'])
+        self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][-1], 'modes')
+        self.assertEqual(self.now['pcl']['pcl.network.Network.acdc_flow']['params'], ['method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits'])
+        self.assertEqual(sum(len(v) for v in self.now.values()), 1052)
+
+    def test_the_surface_of_5_1_7(self):
+        """5.1.7: the LCC link as a part of the drawing and in the card «Δυναμική RMS» (ROADMAP §101 step 2): no new points; the
+        model of the drawing at version 6 (the stations LCCS, the filters FILT3 and the links lcc); the link of the drawing as
+        Network.lcc with the parameters of 5.1.5 (no new parameter of Network.lcc, Network.dynamic or acdc_flow)."""
+        from pcl import model
+        self.assertEqual(model.VERSION, 6)
+        self.assertIn('LCCS', model.TYPES)
+        self.assertIn('FILT3', model.TYPES)
         self.assertEqual(self.now['pcl']['pcl.network.Network.dynamic']['params'][-1], 'modes')
         self.assertEqual(self.now['pcl']['pcl.network.Network.acdc_flow']['params'], ['method', 'tol', 'max_iter', 'flat', 'q_limits', 'limits'])
         self.assertEqual(sum(len(v) for v in self.now.values()), 1052)

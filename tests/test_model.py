@@ -113,6 +113,29 @@ def tlm_drawing(tl, U=400e3):
     return {'version': 4, 'components': comps, 'wires': ws, 'solve': {'init': 'ac'}, 'sim': {'hDiv': 400}}
 
 
+def filt_drawing():
+    """5.1.7: a GRID3 of 20 kV with a load and a FILT3 of each kind on its bus (the cig one with its star isolated)."""
+    comps = [C('NET', 'GRID3', {'Un': 20e3, 'Sk': 200e6, 'XR': 8, 'phase': 5}), C('B1', 'JUNC', {}), C('LD', 'LOAD3', {'Un': 20e3, 'P': 8e6, 'Q': 4e6}),
+             C('F1', 'FILT3', {'kind': 'c', 'C1': 2e-6}), C('F2', 'FILT3', {'kind': 'st', 'C1': 1e-6, 'L': 0.4, 'R': 5}),
+             C('F3', 'FILT3', {'kind': 'hp', 'C1': 1e-6, 'L': 0.05, 'R': 80}), C('F4', 'FILT3', {'kind': 'cig', 'C1': 1e-6, 'L': 0.2, 'R': 10, 'C2': 20e-6, 'Rp': 150, 'neut': 'iso'})]
+    ws = [W(1, ('NET', 'abc'), ('B1', 'j')), W(2, ('LD', 'abc'), ('B1', 'j'))] + [W(2 + k, (f'F{k}', 'abc'), ('B1', 'j')) for k in range(1, 5)]
+    return {'version': 4, 'components': comps, 'wires': ws, 'solve': {'init': 'ac'}, 'sim': {'hDiv': 400}}
+
+
+def level_drawing(src):
+    """5.1.7: a source, a ZSER3 and a load: src 'vac' a VAC3 at 1,05 pu of 20 kV (behind R_s + jωL_s) and a load of 20 kV; 'grid' a
+    GRID3 of 20 kV and a load of 22 kV."""
+    s = C('S', 'VAC3', {'Vpk': 1.05 * 20e3 * math.sqrt(2 / 3), 'f': 50, 'phase': 0, 'Rs': 0.1, 'Ls': 2e-3}) if src == 'vac' else \
+        C('S', 'GRID3', {'Un': 20e3, 'Sk': 300e6, 'XR': 10, 'phase': 0})
+    comps = [s, C('B1', 'JUNC', {}), C('Z', 'ZSER3', {'Rs': 0.4, 'Ls': 8e-3, 'Rp1': 0, 'Lp': 0, 'Rp2': 0}), C('B2', 'JUNC', {}),
+             C('LD', 'LOAD3', {'Un': 20e3 if src == 'vac' else 22e3, 'P': 6e6, 'Q': 2e6})]
+    ws = [W(1, ('S', 'abc'), ('B1', 'j')), W(2, ('Z', 'abc1'), ('B1', 'j')), W(3, ('Z', 'abc2'), ('B2', 'j')), W(4, ('LD', 'abc'), ('B2', 'j'))]
+    if src == 'vac':
+        comps.append(C('G0', 'GND', {}))
+        ws.append(W(5, ('S', 'n'), ('G0', 'g')))
+    return {'version': 4, 'components': comps, 'wires': ws, 'solve': {'init': 'ac'}, 'sim': {'hDiv': 400}}
+
+
 def tut(tid, **opts):
     """A tutorial with its defaults and the given options."""
     return node('build', tid, json.dumps(opts))
@@ -127,6 +150,7 @@ def start_error(test, pr, warped=True):
     r = M.load_flow(m, fe=fe)
     test.assertTrue(r['converged'])
     worst = 0.0
+    Un = {b['id']: b['Un'] for b in m['buses']}
     for c in m['elements']:                                 # 5.0.12: the loads inside subcircuits too (ids X1/<id>)
         if c['type'] != 'LOAD3':
             continue
@@ -134,9 +158,9 @@ def start_error(test, pr, warped=True):
         if v0 is None or v1 is None:                        # a load of Q only has no resistor (a shunt capacitor)
             continue
         ph = complex(v0, -v1)                               # the samples at 0 and T/4 of √2·|V|·sin(ωt + θ)
-        V = abs(ph) / math.sqrt(2) / (c['params']['Un'] / math.sqrt(3))
-        ang = math.degrees(cmath.phase(ph)) + 90
         b = c['buses'][0]
+        V = abs(ph) / math.sqrt(2) / (Un[b] / math.sqrt(3))  # (5.1.7: per unit of its bus, as the load flow; the load's U_n may differ)
+        ang = math.degrees(cmath.phase(ph)) + 90
         q = r['buses'][b]
         worst = max(worst, abs(q['V'] - V), abs((q['angle'] - ang + 180) % 360 - 180) * math.pi / 180)
     return worst
@@ -159,6 +183,32 @@ class TestModel(unittest.TestCase):
         self.assertEqual(self.tut['cable_xb']['types'].get('TLM'), 1)           # the line of three phases; the others have six
         self.assertIn('TLM:mph', self.tut['cable_xb']['skipped'])
         self.assertEqual(self.tut['hvdc_lcc']['types'].get('ZSER3'), 2)        # the level of a bus beyond a series impedance
+        t = self.tut['hvdc_lcc']                                               # 5.1.7: the LCC stations and the filters are in the model
+        self.assertEqual((t['types'].get('LCCS'), t['types'].get('FILT3'), t['skipped'], t['warnings']), (2, 6, [], 0))
+
+    def test_filters_against_the_emt_start(self):
+        """5.1.7: a FILT3 of each kind (c, st, hp, cig; one with its star isolated) is its admittance at ω_e as a shunt: against the
+        EMT start as an XF3 is (the G_min of the EMT)."""
+        e = start_error(self, filt_drawing())
+        self.assertLess(e, 1e-6)
+        self.assertGreater(start_error(self, filt_drawing(), warped=False), 2 * e)           # at ω instead of ω_e the difference is larger
+
+    def test_the_level_across_a_series_impedance(self):
+        """5.1.7: the buses joined by a ZSER3 are at one level, that of the better rank: a VAC3 at 1,05 pu behind it gives the level
+        of the load beyond (no warning: the amplitude of a source is not its level), a GRID3 of 20 kV that of a load of 22 kV beyond
+        it (said); the load flow is the EMT start in both. Before 5.1.7 the two buses kept 21 and 20 kV, and the ZSER3 joined them as
+        a branch in per unit, an off-nominal ratio that the circuit does not have."""
+        pr = level_drawing('vac')
+        m = with_file('model', pr)
+        self.assertEqual(sorted(b['Un'] for b in m['buses']), [20e3, 20e3])
+        self.assertEqual(m['warnings'], [])
+        self.assertLess(start_error(self, pr), 1e-6)
+        pr = level_drawing('grid')
+        m = with_file('model', pr)
+        self.assertEqual(sorted(b['Un'] for b in m['buses']), [20e3, 20e3])
+        self.assertEqual(len(m['warnings']), 1)
+        self.assertIn('χωρίς μετασχηματιστή ανάμεσα', m['warnings'][0])
+        self.assertLess(start_error(self, pr), 1e-6)
 
     def test_round_trip_of_to_emt(self):
         net = N.case_data('ieee9')
