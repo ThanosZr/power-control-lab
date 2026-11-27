@@ -71,3 +71,8 @@
 ## Μελλοντικά, όχι υλοποίηση T001
 
 Renderer χωρίς Three.js, παραμετρικό CAD, custom φυσικά εξαρτήματα, Python/Java/MATLAB, γενική κίνηση/robotics, AI-assisted acceleration με PINNs προς αξιολόγηση και ανεξάρτητος χρόνος προβολής με pause/step/replay αποτελούν τον στόχο/πλάνο. Η επιλογή backend/kernel, τα contracts και τα numerical/physics υποβήματα γίνονται στα αντίστοιχα στάδια, όχι στο CAD-T001.
+
+
+## Active T011-A handoff (27/11/2026; supersedes previous next-action text)
+
+T010 certified at 7341313f68bb75d688686e241d81b9e83367d128 / CI 45991092618, exact SHA, 4/4 success and dedicated native/browser PASS. T011 is authorized on lab-cad-0.11.0-sweep-loft, isolated only. T011-A is a partial native geometry checkpoint; see [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) for proof, limitations and remaining implementation. Do not start T012 until T011 is complete and certified. D036 and both private integration gates remain unchanged.

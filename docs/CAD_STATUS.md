@@ -99,3 +99,8 @@ Confirm actual T010 HEAD, four CI jobs and dedicated T010 native/browser step. L
 ### T007 CI correction (26/11/2026)
 
 Run 45731477841 / e8003d0 failed at T005 native + T007 initial build; 23/26 passed, unit and Octave green, package skipped. Pin CAD-only native dependencies, isolate in venv, retain native stderr, add actual import/demo checks and retain all tests. New exact HEAD/CI must be checked; no claimed pass.
+
+
+## Active T011-A handoff (27/11/2026; supersedes previous next-action text)
+
+T010 certified at 7341313f68bb75d688686e241d81b9e83367d128 / CI 45991092618, exact SHA, 4/4 success and dedicated native/browser PASS. T011 is authorized on lab-cad-0.11.0-sweep-loft, isolated only. T011-A is a partial native geometry checkpoint; see [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) for proof, limitations and remaining implementation. Do not start T012 until T011 is complete and certified. D036 and both private integration gates remain unchanged.

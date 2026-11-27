@@ -109,6 +109,11 @@ jobs:
           CAD_PY="$RUNNER_TEMP/cad-native/bin/python"
           "$CAD_PY" -m unittest experiments.cad_t010.test_features -v
           PYTHON="$CAD_PY" node experiments/cad_t010/test_browser.cjs
+      - name: Isolated CAD sweep loft datum proof (T011-A)
+        if: startsWith(github.ref_name, 'lab-cad-') && hashFiles('experiments/cad_t011/test_native.py') != ''
+        run: |
+          CAD_PY="$RUNNER_TEMP/cad-native/bin/python"
+          "$CAD_PY" -m unittest experiments.cad_t011.test_native -v
       - name: Σενάρια στον browser
         run: |
           python run.py --no-browser --port 8765 > server.log 2>&1 &

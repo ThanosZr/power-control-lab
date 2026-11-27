@@ -87,3 +87,8 @@ python run.py
 ## Άδεια χρήσης
 
 [PolyForm Noncommercial 1.0.0](LICENSE) · © 2026 Thanos Zr. Για εμπορική χρήση απαιτείται χωριστή άδεια του δημιουργού. Η άδεια και το Required Notice διατηρούνται με το λογισμικό.
+
+
+### CAD 0.11.0 development checkpoint
+
+T010 certified (CI 45991092618). T011-A adds isolated native datum, straight sweep and ruled loft proof; transactional history, native worker, rendering and browser integration remain incomplete. See [T011 contract](docs/CAD_SWEEP_LOFT_CONTRACT.md). No PCL integration.

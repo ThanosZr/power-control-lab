@@ -79,3 +79,5 @@ S. Attestog, H. Van Khang and K. G. Robbersmyr, “Field Reconstruction for Mode
 ## CAD-T010 source register
 
 - Parent T009 exact `5490370c8cf7a4ae09ae87a4d0d9888c805a8e8d`, [CI 45821459611](https://github.com/ThanosZr/power-control-lab/actions/runs/45821459611) verified 4/4 and dedicated native/browser step. Reuses the pinned build123d/OCP environment, actual T008 solver, T009 history, profile checks and loopback demo, T006 retained viewport. [T010 contract](CAD_NATIVE_FEATURES_CONTRACT.md). Native API signatures inspected directly from installed build123d 0.10.0; validated by real geometry rather than unverified example code. No private inputs obtained or published.
+
+- T011-A native APIs: OCCT BRepOffsetAPI_MakePipe, BRepOffsetAPI_ThruSections, BRepCheck_Analyzer and BRepGProp; direct OCP locally exercised. T010 CI 45991092618 exact parent. No new private material. See CAD_SWEEP_LOFT_CONTRACT.md.

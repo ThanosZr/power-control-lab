@@ -76,3 +76,5 @@
 5. Ποιοι φυσικοί τομείς και ποιο MCU target θα μπουν πρώτοι, όταν φτάσουμε στα αντίστοιχα στάδια;
 
 Ο CAD κλάδος περιέχει δημοσιευμένα commits τεκμηρίωσης. Το δημόσιο πλάνο συντηρείται εκεί με D020–D023. Το T001 κλείνει ως documentation-only με το επιτυχές τελικό CI κατόπιν D024. Οι πραγματικές ιδιωτικές πύλες διατηρούνται πριν από υλοποίηση. D025 ορίζει την κατεύθυνση κοινής ανάπτυξης engine και πιθανή ενίσχυση. Δεν υπάρχει εντολή main/engine push, γενική παράκαμψη ελέγχων ή αυτόματο T002.
+
+- **CAD-D038 — 27/11/2026:** Owner authorizes isolated T011 after T010 certification, new branch, no main/base change or private-gate bypass, SOL without subagents. T011-A direct OCCT datum/straight sweep/ruled loft proof is an implementation checkpoint, not final T011; the reference representation and scope limits are provisional. D036 remains active. See CAD_SWEEP_LOFT_CONTRACT.md.
