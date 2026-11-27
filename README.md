@@ -6,7 +6,7 @@
 
 **Συνέχεια χωρίς αναζήτηση παλιών αρχείων (D023):** κάθε νέα συνομιλία αρχίζει από αυτό το README, το CAD_INDEX και το CAD_STATUS του πραγματικού CAD HEAD. Όλο το δημοσιεύσιμο υλικό/refs της επόμενης εργασίας είναι στα κανονικά Git docs· δεν απαιτείται αναδρομή σε παλιά chats, ZIP ή project uploads. Τυχόν υποχρεωτικές ιδιωτικές εκκρεμότητες δηλώνονται μία φορά ρητά στο CAD_STATUS.
 
-**CAD-T009 — Feature History & Native Extrusion.** Isolated feature DAG, T008 profile solve, exact OCCT extrusion, incremental rebuild, failed-edit rollback, undo/redo and retained WebGL2 demo. Parent T008 `9abc985` / CI 45747371669 certified 4/4. T009 final CI required on actual HEAD. No PCL integration; both private gates remain open. [Contract and execution](docs/CAD_FEATURE_HISTORY_CONTRACT.md).
+**CAD-T010 — Native Revolve & Boolean Features.** Exact OCCT revolve, union/subtract/intersect, transitive feature regeneration, atomic rollback, undo/redo and retained WebGL2 demo. Parent T009 `5490370` / CI 45821459611 certified 4/4. T010 final CI required on actual HEAD. No PCL integration; both private gates remain open. [Contract and execution](docs/CAD_NATIVE_FEATURES_CONTRACT.md).
 
 ## Ξεκίνα εδώ
 
@@ -17,7 +17,8 @@
 | Document API v1, shaft template, δοκιμές και Fable review | [CAD_DOCUMENT_CONTRACT](docs/CAD_DOCUMENT_CONTRACT.md) |
 | Επιλογή kernel, μετρήσεις, GPU architecture και Fable optimization review | [CAD_KERNEL_EVALUATION](docs/CAD_KERNEL_EVALUATION.md) |
 | Όλο το πακέτο, με σειρά ανάγνωσης και οδηγίες ενσωμάτωσης | [CAD_INDEX](docs/CAD_INDEX.md) |
-| Το πλάνο προϊόντος και τα στάδια C0–C10 / CAD-T001–T009 | [CAD_NEXT_STEPS](docs/CAD_NEXT_STEPS.md) |
+| Το πλάνο προϊόντος και τα στάδια C0–C10 / CAD-T001–T010 | [CAD_NEXT_STEPS](docs/CAD_NEXT_STEPS.md) |
+| Native revolve/Boolean, transitive regeneration and demo | [CAD_NATIVE_FEATURES_CONTRACT](docs/CAD_NATIVE_FEATURES_CONTRACT.md) |
 | Feature history, native extrusion, regeneration και demo | [CAD_FEATURE_HISTORY_CONTRACT](docs/CAD_FEATURE_HISTORY_CONTRACT.md) |
 | Sketch solver, API, GUI και έλεγχοι | [CAD_SKETCH_CONTRACT](docs/CAD_SKETCH_CONTRACT.md) |
 | Αναλυτικές απαιτήσεις, εξαρτήσεις και κριτήρια αποδοχής | [CAD_PLAN_DETAILS](docs/CAD_PLAN_DETAILS.md) |
@@ -47,11 +48,11 @@
 
 | Στοιχείο | Τιμή |
 | --- | --- |
-| CAD branch | lab-cad-0.9.0-features |
-| Έκδοση εγγράφων | 0.12 |
+| CAD branch | lab-cad-0.10.0-native-features |
+| Έκδοση εγγράφων | 0.14 |
 | Εγκεκριμένος engine | 5.0.7 |
 | Αμετάβλητο source SHA | dab82e5ff2e6da4bde09e4a38aab32edfffe6d51 |
-| Κατάσταση CAD | T009 isolated feature history/native extrusion · final CI required |
+| Κατάσταση CAD | T010 isolated native revolve/boolean · final CI required |
 | Κανονικές πηγές πλάνου | docs/CAD_*.md αυτού του branch |
 
 Κάθε νέα έκδοση CAD ξεκινά σε νέο lab-cad-<έκδοση>-<θέμα> branch. Τα ενδιάμεσα commits της ίδιας έκδοσης μένουν στο ίδιο branch. Η νεότερη main ή έκδοση engine δεν γίνεται αυτόματα βάση CAD.
@@ -59,7 +60,7 @@
 Για εκκίνηση του υπάρχοντος engine αναφοράς:
 
 ~~~sh
-git clone --branch lab-cad-0.9.0-features https://github.com/ThanosZr/power-control-lab.git
+git clone --branch lab-cad-0.10.0-native-features https://github.com/ThanosZr/power-control-lab.git
 cd power-control-lab
 python -m pip install -r requirements.txt
 python run.py

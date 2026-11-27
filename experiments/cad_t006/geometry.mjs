@@ -9,7 +9,7 @@ const unit = a => {const n=norm(a); return n>0?mul(a,1/n):[0,0,1]};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 export function prepareMesh(raw) {
-  if (!raw || !["native-cylinder-mesh","native-extrusion-mesh"].includes(raw.kind) || raw.version!==1 || raw.units!=="mm" ||
+  if (!raw || !["native-cylinder-mesh","native-extrusion-mesh","native-feature-mesh"].includes(raw.kind) || raw.version!==1 || raw.units!=="mm" ||
       raw.brep_valid!==true || typeof raw.feature_id!=="string" || !raw.feature_id || raw.feature_id.length>128 ||
       !Array.isArray(raw.vertices) || !Array.isArray(raw.triangles) || !raw.vertices.length || !raw.triangles.length ||
       raw.vertices.length>100000 || raw.triangles.length>200000) throw Error("Unsupported native mesh v1");

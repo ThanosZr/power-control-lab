@@ -132,10 +132,19 @@ def regenerate(doc, previous, cancel):
 
 class History:
     """Versioned definitions plus committed kernel results; optimistic CAS at publish."""
+    def _validate(self, doc):
+        validate(doc)
+
+    def _regenerate(self, doc, previous, cancel):
+        return regenerate(doc, previous, cancel)
+
+    def _sample(self):
+        return sample()
+
     def __init__(self, doc=None):
         self._lock=RLock()
-        self._doc=sample() if doc is None else deepcopy(doc)
-        self._cache,self._stats=regenerate(self._doc,{},None)
+        self._doc=self._sample() if doc is None else deepcopy(doc)
+        self._cache,self._stats=self._regenerate(self._doc,{},None)
         self._revision=0
         self._undo,self._redo=[],[]
 
@@ -159,11 +168,11 @@ class History:
                     raise FeatureError('history','No '+kind+' available')
                 candidate=stack[-1]
             candidate=deepcopy(candidate)
-            validate(candidate)
+            self._validate(candidate)
             if kind=='edit' and candidate==self._doc:
                 return self.snapshot()
             previous={} if kind=='open' else self._cache
-        cache,stats=regenerate(candidate,previous,cancel)
+        cache,stats=self._regenerate(candidate,previous,cancel)
         with self._lock:
             self._check(revision)  # No publication of a late or cancelled result.
             check_cancel(cancel,monotonic()+1)

@@ -146,6 +146,10 @@ Parent T008 exact remote SHA `9abc985db1e6fa68c83f9bb4a8808afe2d6d3d56`, CI 4574
 
 Εμπλουτισμός μακροπρόθεσμου πλάνου C4/C6–C8: multiphysics electromechanical/EV powertrain, field reconstruction/ROM έναντι time-stepping FEA, Digital Twin, Motion Simulation/τριβές/επαφές, GPU-first physics ανεξάρτητα από live/pre-rendering και real-time στόχος με ελεγχόμενη πιστότητα. Νέα βιβλιογραφική εγγραφή CAD-R020 (IEEE Access 2021, DOI 10.1109/ACCESS.2021.3112224), σύμφωνα με πηγή ιδιοκτήτη. Μόνο δημόσια τεκμηρίωση στα CAD_NEXT_STEPS, CAD_PLAN_DETAILS, CAD_SOURCES, CAD_DECISIONS_01 και CAD_VERSIONS_01. Βάση T009 remote `121433904a8785bdbead20025325e94cec41b726`, engine 5.0.7 και ιδιωτικές πύλες αμετάβλητες, καμία αλλαγή runtime ή επόμενο task. CI του νέου SHA ελέγχεται χωριστά από το προηγούμενο T009.
 
+## CAD-S022 · 27/11/2026 · SOL · T010
+
+Parent T009 exact `5490370c8cf7a4ae09ae87a4d0d9888c805a8e8d` / tree `adf401eba2f32729dc18b7a388e02e1012463073` / CI 45821459611 completed/success 4/4, dedicated T009 native/browser success. New branch `lab-cad-0.10.0-native-features`, D037. Real isolated OCCT revolve/union/subtract/intersect, schema-2 DAG and backwards schema 1, transitive dependency recipe replay, bounded atomic history, shared WebGL2 UI, additive CI. See CAD_NATIVE_FEATURES_CONTRACT and CAD_STATUS for verification. No engine integration, main/base changes, private input publication or automatic T011. D036 GPU multiphysics/digital twin roadmap unchanged. Final actual SHA/CI required.
+
 ## Πρότυπο επόμενης εγγραφής
 
 ```text

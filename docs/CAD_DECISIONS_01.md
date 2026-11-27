@@ -64,6 +64,8 @@
 
 - **CAD-D036 — 26/11/2026, multiphysics/electromechanical simulation vision:** Ο ιδιοκτήτης όρισε ως μακροπρόθεσμο στόχο τη μετάβαση από field-level μοντέλα ηλεκτρικών μηχανών (FRM/FEA, μεταβατικά σφάλματα, CAD-R020) στην ενιαία προσομοίωση ηλεκτρικού powertrain οχήματος με circuit/drive/control, μηχανική μετάδοση, κίνηση, τριβές, επαφές, θερμική ανάδραση, real-time/near-real-time όπου επαληθεύεται και time-scaled playback για ακριβότερες επιλύσεις. Ρητές απαιτήσεις Digital Twin, Motion Simulation και GPU-first επιτάχυνσης όλων των φυσικών τομέων (με portable backends και CPU αναφορά/fallback). Η επιλογή live/pre-rendering δεν περιορίζει την ύπαρξη ή την πιστότητα των physics. Καταγράφονται πηγή, σταδιακά benchmarks και όρια στο CAD_SOURCES/CAD_NEXT_STEPS/CAD_PLAN_DETAILS. Δεν εγκρίνεται νέα υλοποίηση, αλλαγή βάσης, main write ή ενσωμάτωση PCL.
 
+- **CAD-D037 — 27/11/2026:** Ο ιδιοκτήτης ζήτησε «ωραία συνεχίζουμε» μετά το checkpoint/pause. Επαληθεύτηκε T009 actual `5490370c8cf7a4ae09ae87a4d0d9888c805a8e8d` / CI 45821459611, 4/4 και dedicated T009 step. Εκτελείται T010/SOL χωρίς subagents, isolated native revolve/union/subtract/intersect σε νέο `lab-cad-0.10.0-native-features`, schema 2 με legacy schema 1 support, transitive regeneration και έλεγχοι. Όχι PCL integration, main/base changes, private inputs ή αυτόματο T011. D036 παραμένει ενεργή μακροπρόθεσμη απαίτηση.
+
 ## Ανοιχτά
 
 
