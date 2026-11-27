@@ -212,7 +212,7 @@
 | `tests/test_rms_hvdc.py` | 476 |
 | `tests/test_rms_lcc.py` | 357 |
 | `tests/test_rms_lcc_516.py` | 288 |
-| `tests/test_rms_lcc_drawing.py` | 292 |
+| `tests/test_rms_lcc_drawing.py` | 294 |
 | `tests/test_rms_protection.py` | 241 |
 | `tests/test_rms_two_area.py` | 272 |
 | `tests/test_rms_wind.py` | 268 |
