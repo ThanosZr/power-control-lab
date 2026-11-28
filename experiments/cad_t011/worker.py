@@ -9,7 +9,8 @@ from experiments.cad_t011.contract import (EPS, XY, cross, dependencies, dot, pl
                                            path_geometry, sub, unit, validate, world)
 
 
-def build(request):
+def build(request, *, validator=validate, deps=dependencies, schema=3,
+          edge_ops=frozenset(), edge_operation=None, edge_catalog=None):
     from build123d import Axis, Edge, Face, Plane, Solid, Wire
     from OCP.BRepCheck import BRepCheck_Analyzer
     from OCP.BRepGProp import BRepGProp
@@ -18,15 +19,15 @@ def build(request):
     from OCP.TopAbs import TopAbs_SOLID
     from OCP.TopoDS import TopoDS
 
-    validate(request)
-    if request['schema']!=3:
-        raise ValueError('Native worker requires resolved schema 3 recipe')
+    validator(request)
+    if request['schema']!=schema:
+        raise ValueError(f'Native worker requires resolved schema {schema} recipe')
     by_id={f['id']:f for f in request['features']}
     needed=set(); pending=[request['output']]
     while pending:
         ident=pending.pop()
         if ident not in needed:
-            needed.add(ident); pending.extend(dependencies(by_id[ident]))
+            needed.add(ident); pending.extend(deps(by_id[ident]))
     if needed!=set(by_id): raise ValueError('Native recipe contains unrelated features')
     frames, paths, sketches, solids = {}, {}, {}, {}
 
@@ -134,6 +135,9 @@ def build(request):
                     if height<=last+EPS: raise ValueError('Loft sections must be strictly ordered along the frame normal')
                     last=height; maker.AddWire(outer.wrapped)
                 maker.Build(); solid=as_solid(maker)
+            elif op in edge_ops:
+                source=solids[step['body']]
+                solid=edge_operation(step,source,by_id,frames,props)
             else:
                 left,right=solids[step['left']],solids[step['right']]
                 a,b=props(left).Mass(),props(right).Mass()
@@ -155,10 +159,13 @@ def build(request):
     if (not all(math.isfinite(x) and abs(x)<=1e6 for point in vertices for x in point)
             or any(len(set(i))!=3 or min(i)<0 or max(i)>=len(vertices) for i in triangles)):
         raise ValueError('Invalid display mesh')
-    return {'kind':'native-feature-mesh','version':1,'units':'mm','feature_id':request['output'],
+    result={'kind':'native-feature-mesh','version':1,'units':'mm','feature_id':request['output'],
             'kernel':version('cadquery-ocp')+'/'+version('build123d'),'brep_valid':True,
             'volume_mm3':p.Mass(),'center_mm':[c.X(),c.Y(),c.Z()], 'native_steps':len(solids),
             'recipe_steps':len(request['features']),'vertices':vertices,'triangles':triangles}
+    if edge_catalog is not None:
+        result['edges']=edge_catalog(solid,by_id[request['output']],by_id,frames)
+    return result
 
 
 if __name__=='__main__':

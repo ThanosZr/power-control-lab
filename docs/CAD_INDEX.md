@@ -1,8 +1,8 @@
 # CAD · οδηγός πλάνου και ενσωμάτωσης
 
-Αναθεώρηση εγγράφων 0.15 · 27/11/2026 · lab-cad-0.11.0-sweep-loft. T011 isolated sweep/loft/datum frames; parent T010 `7341313` / CI 45991092618 (4/4). Final T011 CI required on actual HEAD. No PCL integration; both private gates remain open.
+Αναθεώρηση εγγράφων 0.16 · 28/11/2026 · lab-cad-0.12.0-edge-features. T012 isolated fillet/chamfer and edge references; parent T011 `c7b4fe0` / CI 46018201004 (4/4, native/browser PASS). Final T012 CI required on actual HEAD. No PCL integration; both private gates remain open.
 
-**CAD-T011:** [Sweep/loft, general planes and references](CAD_SWEEP_LOFT_CONTRACT.md). **CAD-T010:** [Native revolve and Boolean features](CAD_NATIVE_FEATURES_CONTRACT.md). **CAD-T009:** [Feature history/native extrusion](CAD_FEATURE_HISTORY_CONTRACT.md). **CAD-T008:** [Sketch engine](CAD_SKETCH_CONTRACT.md). **CAD-T007:** [Parametric editing](CAD_PARAMETRIC_CONTRACT.md).
+**CAD-T012:** [Fillet/chamfer, edge references](CAD_EDGE_FEATURES_CONTRACT.md). **CAD-T011:** [Sweep/loft, general planes and references](CAD_SWEEP_LOFT_CONTRACT.md). **CAD-T010:** [Native revolve and Boolean features](CAD_NATIVE_FEATURES_CONTRACT.md). **CAD-T009:** [Feature history/native extrusion](CAD_FEATURE_HISTORY_CONTRACT.md). **CAD-T008:** [Sketch engine](CAD_SKETCH_CONTRACT.md). **CAD-T007:** [Parametric editing](CAD_PARAMETRIC_CONTRACT.md).
 
 ## Σειρά ανάγνωσης
 
@@ -77,3 +77,7 @@ Renderer χωρίς Three.js, παραμετρικό CAD, custom φυσικά ε
 ## Active T011 handoff (27/11/2026)
 
 T010 certified at 7341313f68bb75d688686e241d81b9e83367d128 / CI 45991092618, exact SHA, 4/4 success and dedicated native/browser PASS. T011-A repeated locally; T011 continuation on the same branch. See [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) for implementation, evidence and limitations. Check actual branch HEAD/CI. Do not start T012 until T011 is certified and separately authorized. D036 and both private integration gates remain unchanged.
+
+## Current T012
+
+T011 certified at c7b4fe077d35d8a73c3207b3d70bd18db13fb2a4 / CI 46018201004. D040 authorizes T012. See [CAD_EDGE_FEATURES_CONTRACT](CAD_EDGE_FEATURES_CONTRACT.md) for schema 4, reference constraints, implementation, tests and Opus/Fable review. Check actual T012 HEAD/CI before any next stage.

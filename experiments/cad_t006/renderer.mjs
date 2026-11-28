@@ -23,19 +23,32 @@ export class Renderer {
   constructor(gl){
     if(!gl)throw Error("WebGL2 unavailable");this.gl=gl;this.program=program(gl);this.vao=null;this.buffers=[];this.count=0;this.uploads=0;this.frames=0;
     this.view=gl.getUniformLocation(this.program,"uView");this.proj=gl.getUniformLocation(this.program,"uProjection");this.color=gl.getUniformLocation(this.program,"uColor");
+    this.edgeVao=null;this.edgeBuffer=null;this.edgeRanges=new Map();
     gl.enable(gl.DEPTH_TEST);gl.clearColor(.95,.97,.96,1);
   }
-  releaseMesh(){const g=this.gl;if(this.vao)g.deleteVertexArray(this.vao);for(const b of this.buffers)g.deleteBuffer(b);this.vao=null;this.buffers=[];this.count=0}
+  releaseMesh(){const g=this.gl;if(this.vao)g.deleteVertexArray(this.vao);for(const b of this.buffers)g.deleteBuffer(b);this.vao=null;this.buffers=[];this.count=0;
+    if(this.edgeVao)g.deleteVertexArray(this.edgeVao);if(this.edgeBuffer)g.deleteBuffer(this.edgeBuffer);this.edgeVao=null;this.edgeBuffer=null;this.edgeRanges.clear();}
   setMesh(mesh){
     this.releaseMesh();const g=this.gl;this.vao=g.createVertexArray();g.bindVertexArray(this.vao);
     for(const [location,data] of [[0,mesh.positions],[1,mesh.normals]]){const b=g.createBuffer();this.buffers.push(b);g.bindBuffer(g.ARRAY_BUFFER,b);g.bufferData(g.ARRAY_BUFFER,data,g.STATIC_DRAW);g.enableVertexAttribArray(location);g.vertexAttribPointer(location,3,g.FLOAT,false,0,0)}
     const b=g.createBuffer();this.buffers.push(b);g.bindBuffer(g.ELEMENT_ARRAY_BUFFER,b);g.bufferData(g.ELEMENT_ARRAY_BUFFER,mesh.indices,g.STATIC_DRAW);this.count=mesh.indices.length;
+    if(mesh.edges?.length){
+      const coords=[];for(const edge of mesh.edges){const start=coords.length/3;for(const p of edge.points)coords.push(...p.map((v,i)=>v-mesh.center[i]));this.edgeRanges.set(edge.ref,[start,edge.points.length]);}
+      this.edgeVao=g.createVertexArray();g.bindVertexArray(this.edgeVao);this.edgeBuffer=g.createBuffer();g.bindBuffer(g.ARRAY_BUFFER,this.edgeBuffer);
+      g.bufferData(g.ARRAY_BUFFER,new Float32Array(coords),g.STATIC_DRAW);g.enableVertexAttribArray(0);g.vertexAttribPointer(0,3,g.FLOAT,false,0,0);g.disableVertexAttribArray(1);
+    }
     g.bindVertexArray(null);g.bindBuffer(g.ARRAY_BUFFER,null);this.uploads++;
   }
-  draw(camera,width,height,selected=false){
+  draw(camera,width,height,selected=false,selectedEdges=[]){
     const g=this.gl;if(width<=0||height<=0)return;g.viewport(0,0,width,height);g.clear(g.COLOR_BUFFER_BIT|g.DEPTH_BUFFER_BIT);this.frames++;
     if(!this.vao)return;const {view,projection}=camera.matrices();g.useProgram(this.program);g.uniformMatrix4fv(this.view,false,view);g.uniformMatrix4fv(this.proj,false,projection);
-    g.uniform3fv(this.color,selected?[.18,.49,.83]:[.42,.58,.63]);g.bindVertexArray(this.vao);g.drawElements(g.TRIANGLES,this.count,g.UNSIGNED_INT,0);g.bindVertexArray(null);
+    const overlay=this.edgeVao&&selectedEdges.length;
+    if(overlay){g.enable(g.POLYGON_OFFSET_FILL);g.polygonOffset(1,1);}
+    g.uniform3fv(this.color,selected?[.18,.49,.83]:[.42,.58,.63]);g.bindVertexArray(this.vao);g.drawElements(g.TRIANGLES,this.count,g.UNSIGNED_INT,0);
+    if(overlay){g.disable(g.POLYGON_OFFSET_FILL);g.depthFunc(g.LEQUAL);g.uniform3fv(this.color,[1,.38,.05]);g.bindVertexArray(this.edgeVao);g.vertexAttrib3f(1,0,0,1);
+      for(const ref of selectedEdges){const range=this.edgeRanges.get(ref);if(range)g.drawArrays(g.LINE_STRIP,...range);}
+      g.depthFunc(g.LESS);}
+    g.bindVertexArray(null);
   }
   dispose(){this.releaseMesh();if(this.program)this.gl.deleteProgram(this.program);this.program=null}
 }

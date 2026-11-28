@@ -3,7 +3,7 @@ import {Renderer} from '../cad_t006/renderer.mjs';
 
 const canvas=document.querySelector('canvas'), status=document.querySelector('#status'), info=document.querySelector('#info');
 const fit=document.querySelector('#fit'), selection=document.querySelector('#selection');
-let renderer,mesh,camera,selected=false,frame=0,drag=null,uploads=0;
+let renderer,mesh,camera,selected=false,frame=0,drag=null,uploads=0,selectedEdges=[];
 const explain=e=>{status.textContent=String(e.message||e);status.dataset.state='error'};
 function update(){
   if(frame||!renderer||!camera)return;
@@ -11,17 +11,24 @@ function update(){
     const r=canvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2),w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);
     if(!w||!h)return;
     if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;
-    camera.resize(w,h);renderer.draw(camera,w,h,selected);
+    camera.resize(w,h);renderer.draw(camera,w,h,selected,selectedEdges);
     info.textContent=`${mesh.vertexCount} vertices · ${mesh.triangleCount} triangles · ${uploads} mesh upload(s) · ${renderer.frames} frame(s)`;
-    canvas.dataset.uploads=String(uploads);canvas.dataset.frames=String(renderer.frames);
+    canvas.dataset.uploads=String(uploads);canvas.dataset.frames=String(renderer.frames);canvas.dataset.edgeSelection=String(selectedEdges.length);
   });
 }
 function clearSelection(){selected=false;selection.textContent='None';update()}
 export function setMesh(raw){
-  const next=prepareMesh(raw); if(renderer){renderer.setMesh(next);uploads++;}
+  const next=prepareMesh(raw);
+  if(raw.edges!==undefined){
+    if(!Array.isArray(raw.edges)||raw.edges.length>128||new Set(raw.edges.map(e=>e.ref)).size!==raw.edges.length||
+       raw.edges.some(e=>typeof e.ref!=='string'||!Array.isArray(e.points)||e.points.length<2||e.points.length>33||e.points.some(p=>!Array.isArray(p)||p.length!==3||p.some(v=>!Number.isFinite(v)||Math.abs(v)>1e6)))) throw Error('Invalid native edge catalogue');
+    next.edges=raw.edges;
+  }
+  selectedEdges=[];if(renderer){renderer.setMesh(next);uploads++;}
   mesh=next;camera=new Camera(mesh.radius,Math.max(1,canvas.clientWidth)/Math.max(1,canvas.clientHeight));clearSelection();
   status.textContent=`Native BRep display · ${raw.feature_id} · mm`;status.dataset.state='ready';update();
 }
+export function setEdgeSelection(refs){selectedEdges=refs.filter(ref=>mesh?.edges?.some(e=>e.ref===ref));update();}
 function init(){renderer=new Renderer(canvas.getContext('webgl2',{antialias:true,alpha:false}));if(mesh){renderer.setMesh(mesh);uploads++;update()}}
 const observer=new ResizeObserver(update);observer.observe(canvas);
 canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();if(frame)cancelAnimationFrame(frame);frame=0;renderer=null;status.textContent='Graphics context lost; awaiting restore';status.dataset.state='error'});

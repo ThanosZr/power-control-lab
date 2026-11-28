@@ -1,5 +1,7 @@
 # CAD-T011 — Native Sweep & Loft, General Planes and Feature References
 
+**Final T011 certification (verified 28/11/2026):** branch `lab-cad-0.11.0-sweep-loft`, HEAD `c7b4fe077d35d8a73c3207b3d70bd18db13fb2a4`, tree `e19d036ef31afe01644631554d65d602fee4811b`. [CI 46018201004](https://github.com/ThanosZr/power-control-lab/actions/runs/46018201004) completed/success, 4/4 and real dedicated native/browser PASS. Checkout log verifies exact SHA. D040 subsequently authorizes isolated T012; see [CAD_EDGE_FEATURES_CONTRACT](CAD_EDGE_FEATURES_CONTRACT.md).
+
 ## T011-A checkpoint — NOT final certification
 
 Parent T010 7341313f68bb75d688686e241d81b9e83367d128, tree 982515912c45201e7e56bc3e5e49c47695939f0f. CI [45991092618](https://github.com/ThanosZr/power-control-lab/actions/runs/45991092618) completed/success at exact SHA, four successful jobs and dedicated T010 step; native 6/6 in 76.177 s, real browser PASS. New branch lab-cad-0.11.0-sweep-loft. Engine 5.0.7 pinned; no integration or main changes.

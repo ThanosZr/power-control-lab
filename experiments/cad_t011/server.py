@@ -16,6 +16,7 @@ STATIC.update({PREFIX:('experiments/cad_t011/index.html','text/html; charset=utf
 
 
 class Server(ThreadingHTTPServer):
+    static=STATIC
     def __init__(self,address,history=None):
         self.history=history if history is not None else History()
         self.guard=Lock(); self.active=None
@@ -30,8 +31,8 @@ class Handler(Base):
             with self.server.guard:
                 active=self.server.active
             return self._json(200,{'active':active[0] if active else None})
-        if self.path not in STATIC: return self._json(404,{'error':'Not found'})
-        path,mime=STATIC[self.path]; self._send(200,(ROOT/path).read_bytes(),mime)
+        if self.path not in self.server.static: return self._json(404,{'error':'Not found'})
+        path,mime=self.server.static[self.path]; self._send(200,(ROOT/path).read_bytes(),mime)
 
     def do_POST(self):
         if not self._local(): return self._json(403,{'error':'Loopback origin required'})

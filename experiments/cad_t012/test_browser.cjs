@@ -1,0 +1,52 @@
+const assert=require('node:assert/strict');
+const {spawn}=require('node:child_process');
+const {once}=require('node:events');
+const {chromium}=require('playwright');
+const fs=require('node:fs');
+(async()=>{
+  const child=spawn(process.env.PYTHON||'python',['-m','experiments.cad_t012.server','--port','0'],{stdio:['ignore','pipe','inherit']});
+  let browser;
+  try{
+    const url=await new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>reject(Error('Startup deadline')),70000);let data='';
+      child.once('error',e=>{clearTimeout(timer);reject(e)});child.once('exit',code=>{clearTimeout(timer);reject(Error('Server exit '+code))});
+      child.stdout.on('data',s=>{data+=s;if(data.includes('\n')){clearTimeout(timer);resolve(data.trim().split('\n')[0]);}});
+    });
+    browser=await chromium.launch({headless:true,executablePath:process.env.CAD_CHROMIUM||undefined,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+    const page=await browser.newPage({viewport:{width:1200,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+    await page.goto(url);
+    const ready=async n=>page.waitForFunction(n=>document.querySelector('#edit-status').textContent==='Ready'&&document.querySelector('#revision').textContent==='Revision '+n,n,{timeout:70000});
+    const volume=async x=>assert.ok(Math.abs(parseFloat((await page.locator('#volume').textContent()).split(': ')[1])-x)<.001);
+    const uploads=async n=>page.waitForFunction(n=>document.querySelector('canvas').dataset.uploads===String(n),n);
+    const selected=async n=>page.waitForFunction(n=>document.querySelector('canvas').dataset.edgeSelection===String(n),n);
+    const feature=id=>page.locator(`[data-feature="${id}"]`).click();
+    await ready(0);assert.match(await page.locator('h1').textContent(),/Edge Features/);await volume(6000-10*(4-Math.PI));await uploads(1);
+    await page.locator('#output').selectOption('block');await ready(1);await uploads(2);
+    await feature('rounded');await selected(1);await volume(6000);
+    await page.locator('#field-edges').selectOption(['s:profile:side:p0','s:profile:side:p2']);await selected(2);await uploads(2);
+    await page.locator('canvas').hover();await page.mouse.wheel(0,-120);await uploads(2);await selected(2);
+    fs.mkdirSync('ui-out',{recursive:true});await page.screenshot({path:'ui-out/cad_t012_edge_selection.png'});
+    await page.locator('#field-radius_mm').fill('3');await page.locator('#apply-feature').click();await ready(2);await uploads(2);await volume(6000);
+    assert.match(await page.locator('#tree').textContent(),/beveled · chamfer ← block · reused/);
+    await page.locator('#output').selectOption('rounded');await ready(3);await uploads(3);await volume(6000-20*9*(1-Math.PI/4));
+    await page.locator('#field-radius_mm').fill('500');await page.locator('#apply-feature').click();
+    await page.waitForFunction(()=>document.querySelector('#edit-status').dataset.state==='error',null,{timeout:70000});
+    await volume(6000-20*9*(1-Math.PI/4));await uploads(3);assert.equal(await page.locator('#revision').textContent(),'Revision 3');
+    await page.locator('#output').selectOption('block');await ready(4);await uploads(4);
+    await page.locator('#add-op').selectOption('chamfer');await page.locator('#add').click();
+    await page.locator('#field-edges').selectOption('s:profile:side:p1');await selected(1);await uploads(4);
+    await page.locator('#field-distance_mm').fill('2');await page.locator('#apply-feature').click();await ready(5);await uploads(5);await volume(5980);
+    await page.locator('#undo').click();await ready(6);await volume(6000);await uploads(6);
+    await page.locator('#redo').click();await ready(7);await volume(5980);await uploads(7);
+    const downloaded=page.waitForEvent('download');await page.locator('#save').click();const file=await downloaded;
+    const savedPath=await file.path(),saved=JSON.parse(fs.readFileSync(savedPath,'utf8'));
+    assert.equal(saved.schema,4);assert.deepEqual(saved.features.at(-1).edges,['s:profile:side:p1']);assert.ok(!('vertices' in saved));
+    await page.locator('#file').setInputFiles(savedPath);await ready(8);await uploads(7);await volume(5980);
+    await feature('block');await page.locator('#field-depth_mm').fill('20');await page.locator('#apply-feature').click();
+    await page.waitForFunction(async()=>Boolean((await(await fetch('/api/activity')).json()).active));await page.locator('#cancel').click();
+    await page.waitForFunction(()=>document.querySelector('#edit-status').dataset.state==='error'&&document.querySelector('#edit-status').textContent.includes('cancelled'),null,{timeout:70000});
+    assert.equal(await page.locator('#revision').textContent(),'Revision 8');await uploads(7);await volume(5980);
+    assert.deepEqual(errors,[]);await page.screenshot({path:'ui-out/cad_t012_edge_features.png'});
+    console.log('T012 real native fillet/chamfer GUI, edge references, retained highlight, rollback/cancel and save/open PASS');
+  }finally{if(browser)await browser.close();if(child.exitCode===null){child.kill();await once(child,'exit');}}
+})().catch(e=>{console.error(e);process.exitCode=1});

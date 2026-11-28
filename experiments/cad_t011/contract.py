@@ -92,12 +92,12 @@ def dependencies(f):
     return [f['left'],f['right']]
 
 
-def validate(doc):
+def validate(doc, *, schema=3, extra_solids=frozenset(), extra_validate=None):
     """Schema 1/2 keep their original closed contracts; schema 3 is opt-in."""
     if isinstance(doc,dict) and type(doc.get('schema')) is int and doc['schema'] in (1,2):
         return previous.validate(doc)
     if (not isinstance(doc,dict) or set(doc)!={'schema','units','features','output'}
-            or type(doc['schema']) is not int or doc['schema']!=3 or doc['units']!='mm'
+            or type(doc['schema']) is not int or doc['schema']!=schema or doc['units']!='mm'
             or not isinstance(doc['features'],list) or not 1<=len(doc['features'])<=MAX_FEATURES):
         raise base.FeatureError('document','Unsupported schema or feature count')
     try:
@@ -147,11 +147,13 @@ def validate(doc):
                 for k in ids: ref(k,{'sketch'})
                 if len(set(ids))!=len(ids): raise ValueError('Distinct loft sections required')
             elif isinstance(op,str) and op in previous.BOOLEANS:
-                fields({'id','op','left','right'}); ref(f['left'],SOLIDS); ref(f['right'],SOLIDS)
+                fields({'id','op','left','right'}); ref(f['left'],SOLIDS|extra_solids); ref(f['right'],SOLIDS|extra_solids)
                 if f['left']==f['right']: raise ValueError('Distinct solid references required')
+            elif isinstance(op,str) and op in extra_solids:
+                extra_validate(f,fields,ref,SOLIDS|extra_solids)
             else: raise ValueError('Unsupported operation')
         except (ValueError,TypeError,KeyError,OverflowError) as exc:
             raise base.FeatureError(ident,str(exc)) from exc
         seen[ident]=op
-    if not isinstance(doc['output'],str) or seen.get(doc['output']) not in SOLIDS:
+    if not isinstance(doc['output'],str) or seen.get(doc['output']) not in SOLIDS|extra_solids:
         raise base.FeatureError('document','Output must reference a solid')

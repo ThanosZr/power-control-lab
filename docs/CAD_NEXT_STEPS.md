@@ -1,10 +1,10 @@
 # Power & Control Lab · CAD και custom components
 
-Έκδοση πλάνου: 0.15 · 27/11/2026 · Ιδιοκτήτης: Thanos Zr.
+Έκδοση πλάνου: 0.16 · 28/11/2026 · Ιδιοκτήτης: Thanos Zr.
 
 ## Τρέχουσα κατάσταση
 
-**Ενεργό CAD-T011 / SOL (D038)** στο `lab-cad-0.11.0-sweep-loft`. Parent T010 `7341313f68bb75d688686e241d81b9e83367d128` / CI 45991092618 (4/4, dedicated T010 native/browser step). Isolated schema 3 general datums, sweep/loft, typed references, workers, transaction and retained viewport. Final T011 CI required on actual HEAD. No PCL integration; both private gates remain open. [T011 contract](CAD_SWEEP_LOFT_CONTRACT.md).
+**Ενεργό CAD-T012 / SOL (D040)** στο `lab-cad-0.12.0-edge-features`. Parent T011 `c7b4fe077d35d8a73c3207b3d70bd18db13fb2a4` / CI 46018201004 (4/4, dedicated T011 native/browser PASS). Isolated schema 4 fillet/chamfer, bounded native edge references, transaction and retained viewport. Final T012 CI required on actual HEAD. No PCL integration; both private gates remain open. [T012 contract](CAD_EDGE_FEATURES_CONTRACT.md).
 
 **Προηγούμενα checkpoints:** T001 στο e997a3d2, CI 45124099619, T002 στο 43f7fe3, CI 45135806207, T003 στο c9fe513, CI 45149843737, T004 στο 1af4de0, CI 45561734591 (4/4). Εγκεκριμένη βάση engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Τα προηγούμενα contract docs παραμένουν ενεργές πηγές.
 
@@ -15,17 +15,17 @@
 | Git ως πηγή συνέχειας | Τα CAD docs συντηρούνται στο docs/ αυτού του branch· [οδηγός ανάγνωσης](CAD_INDEX.md). |
 | Κώδικας και baseline | Ο engine παραμένει 5.0.7. Το README του branch παρουσιάζει τον στόχο CAD tool· αυτό δεν αλλάζει τον runtime. |
 | Ήδη δημοσιευμένα checkpoints | 5660e9b: ανακατασκευή· c169ffc: πολιτική branches· f57d02f: πραγματική ανάκτηση και εμπλουτισμένος χάρτης· f91ac3c: πλήρες CAD πλάνο/README (S009). |
-| CI | T001–T010 πιστοποιημένα 4/4, T010 `7341313` / 45991092618· T011 απαιτεί το πραγματικό νέο SHA/CI. Βλ. CAD_STATUS. |
+| CI | T001–T011 πιστοποιημένα 4/4, T011 `c7b4fe0` / 46018201004· T012 απαιτεί το πραγματικό νέο SHA/CI. Βλ. CAD_STATUS. |
 | Παράλληλος engine (read-only, S010) | main 5.0.9· lab-5.0.10 στο 2160a13d7180745e80f7f3fefa07788d30b37d1f, CI 45102252449 success. Νέα layouts/δεύτερη οθόνη, όχι νέα βάση CAD. Βλ. [χάρτη](CAD_INTEGRATION_MAP.md#cad-s010-coordination-with-the-5010-workspace-changes). |
-| Τοπικοί έλεγχοι αυτής της συνέχειας | Βλ. CAD_SWEEP_LOFT_CONTRACT και CAD_STATUS. Real browser smoke στο CAD-conditional existing UI CI job (τοπικό Chromium executable λείπει). |
+| Τοπικοί έλεγχοι αυτής της συνέχειας | Βλ. CAD_EDGE_FEATURES_CONTRACT και CAD_STATUS. Real browser smoke στο CAD-conditional existing UI CI job (τοπικό Chromium executable λείπει). |
 | Εκκρεμείς πύλες πριν από CAD υλοποίηση (D024/D026) | Ενεργά engine next-steps/decisions/versions και πραγματικός privacy checker με ιδιωτικά inputs/οδηγίες. Το απομονωμένο συνθετικό spike επιτρέπεται, δεν αποτελούν λυμένες πύλες. |
-| Τωρινή άδεια δημοσίευσης | Δημόσια CAD docs/README, isolated T002–T011 (D038). Κώδικας ενσωμάτωσης και ιδιωτικά inputs δεν καλύπτονται. |
+| Τωρινή άδεια δημοσίευσης | Δημόσια CAD docs/README, isolated T002–T012 (D040). Κώδικας ενσωμάτωσης και ιδιωτικά inputs δεν καλύπτονται. |
 
-## Επόμενη ενέργεια — κλείσιμο T011 και στάση
+## Επόμενη ενέργεια — κλείσιμο T012 και στάση
 
-1. Επαλήθευσε πραγματικό T011 HEAD, CI 4/4 και dedicated native/browser step. Διόρθωσε τυχόν αποτυχίες χωρίς αλλαγή των παλιών tests ή του engine.
-2. Στάση μετά την πιστοποίηση· κανένα T012 χωρίς νέα έγκριση. C1 integration, STEP UI exchange, arbitrary topology references και transforms παραμένουν ανοικτά.
-3. Οι δύο ιδιωτικές πύλες πριν από PCL integration παραμένουν υποχρεωτικές. Opus/Fable review στο CAD_SWEEP_LOFT_CONTRACT.
+1. Επαλήθευσε πραγματικό T012 HEAD, CI 4/4 και dedicated native/browser step. Διόρθωσε τυχόν αποτυχίες χωρίς αλλαγή των παλιών tests ή του engine.
+2. Στάση μετά την πιστοποίηση· κανένα T013 χωρίς νέα έγκριση. Προτεινόμενο επόμενο C3: isolated pattern/mirror/shell slice, με διακριτό scope. C1 integration, STEP UI exchange, arbitrary topology naming και transforms παραμένουν ανοικτά.
+3. Οι δύο ιδιωτικές πύλες πριν από PCL integration παραμένουν υποχρεωτικές. Opus/Fable review στο CAD_EDGE_FEATURES_CONTRACT.
 
 Το [CAD_PLAN_DETAILS.md](CAD_PLAN_DETAILS.md) εξειδικεύει τα στάδια, τις εξαρτήσεις, την απόδοση, τις δοκιμές και το πρωτόκολλο ενσωμάτωσης. Οι παρακάτω πίνακες είναι το ενεργό πλάνο προϊόντος, όχι κατάλογος υλοποιημένων δυνατοτήτων.
 
@@ -90,6 +90,7 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 | CAD-T009 | SOL | Isolated C3 feature history/profile-to-extrude, dependency reuse, rollback, history, native validation and demo. |
 | CAD-T010 | SOL | Isolated C3 native revolve/union/subtract/intersect, transitive recipes, multi-stage regeneration and demo. |
 | CAD-T011 (D038) | SOL | Isolated C3 curved sweep/loft, general profile planes/local axes and typed feature references, transactional history and native/browser certification. |
+| CAD-T012 (D040) | SOL | Isolated C3 native fillet/chamfer, bounded semantic and exact-geometry edge references, transaction, retained GPU edge highlighting and native/browser certification. |
 
 Η σειρά επανεκτιμάται με πραγματικά ευρήματα. Μην ξεκινάς ASTRA υποβήμα χωρίς να έχει ο χρήστης την ευκαιρία να επιλέξει μοντέλο. Δεν αναθέτεις αυτόματα σε δεύτερους agents.
 
@@ -117,3 +118,7 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 ## Active T011 handoff (27/11/2026)
 
 T011-A reverified locally on `22dd01e` and continued on the same branch, isolated only. See [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) for implementation/limitations and exact test procedure. Do not start T012 until T011 is certified and separately authorized. D036 and both private integration gates remain unchanged.
+
+## Current handoff T012
+
+T011 certified at `c7b4fe0` / CI 46018201004, D040 authorizes the new branch. Check T012 final exact-SHA CI and dedicated native/browser step; no automatic T013. [T012 contract](CAD_EDGE_FEATURES_CONTRACT.md). D036, pinned engine 5.0.7 and both private gates unchanged.

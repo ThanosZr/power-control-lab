@@ -33,8 +33,9 @@ def sample():
         {'id':'lofted','op':'loft','profiles':['section','endSection'],'ruled':True}], 'output':'swept'}
 
 
-def regenerate(doc, previous, cancel):
-    validate(doc)
+def regenerate(doc, previous, cancel, *, validator=validate, deps=dependencies,
+               schema=3, worker='experiments.cad_t011.worker'):
+    validator(doc)
     deadline=monotonic()+60
     cache,recipes,frames,rebuilt,reused={},{},{},[],[]
     for f in doc['features']:
@@ -42,9 +43,9 @@ def regenerate(doc, previous, cancel):
         # Dict insertion order preserves dependency-first order and eliminates
         # duplicate ancestors when several edges meet at a downstream feature.
         recipe={}
-        for dep in dependencies(f): recipe.update(recipes[dep])
+        for dep in deps(f): recipe.update(recipes[dep])
         recipe[ident]=f
-        request={'schema':3,'units':'mm','features':list(recipe.values()),'output':ident}
+        request={'schema':schema,'units':'mm','features':list(recipe.values()),'output':ident}
         key=base.encode(request)
         try:
             if len(key.encode())>base.MAX_DOCUMENT: raise ValueError('Resolved native recipe exceeds 64 KiB')
@@ -63,7 +64,7 @@ def regenerate(doc, previous, cancel):
                     value={'model':result['model'],'diagnostics':result['diagnostics'],
                            'frame':frames.get(f.get('plane'),XY)}
                 else:
-                    result=base.invoke([sys.executable,'-m','experiments.cad_t011.worker'],request,cancel,deadline)
+                    result=base.invoke([sys.executable,'-m',worker],request,cancel,deadline)
                     if not result['ok']: raise ValueError(result['error'])
                     value=result['mesh']
                     if value['brep_valid'] is not True: raise ValueError('Invalid BRep')
