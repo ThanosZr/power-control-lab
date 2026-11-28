@@ -10,7 +10,7 @@ from experiments.cad_t011.contract import (EPS, XY, cross, dependencies, dot, pl
 
 
 def build(request, *, validator=validate, deps=dependencies, schema=3,
-          edge_ops=frozenset(), edge_operation=None, edge_catalog=None):
+          edge_ops=frozenset(), edge_operation=None, edge_catalog=None, face_catalog=None):
     from build123d import Axis, Edge, Face, Plane, Solid, Wire
     from OCP.BRepCheck import BRepCheck_Analyzer
     from OCP.BRepGProp import BRepGProp
@@ -165,6 +165,8 @@ def build(request, *, validator=validate, deps=dependencies, schema=3,
             'recipe_steps':len(request['features']),'vertices':vertices,'triangles':triangles}
     if edge_catalog is not None:
         result['edges']=edge_catalog(solid,by_id[request['output']],by_id,frames)
+    if face_catalog is not None:
+        result['faces']=face_catalog(solid,by_id[request['output']],by_id,frames)
     return result
 
 

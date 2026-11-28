@@ -1,12 +1,12 @@
 # CAD: active handoff
 
-Updated 2026-11-28; revision 0.16, CAD-S024. **Active T012, lab-cad-0.12.0-edge-features.** Isolated native edge features, schema-4 edge references and transactional bounded workers; retained WebGL2 edge inspector/highlight. T011 exact `c7b4fe077d35d8a73c3207b3d70bd18db13fb2a4` / [CI 46018201004](https://github.com/ThanosZr/power-control-lab/actions/runs/46018201004), completed/success 4/4, dedicated T011 native/browser PASS. Final T012 CI required on actual HEAD. No PCL integration; both private gates remain open. [Contract](CAD_EDGE_FEATURES_CONTRACT.md).
+Updated 2026-11-28; revision 0.17, CAD-S025. **Active T013, lab-cad-0.13.0-patterns-shell.** Isolated native connected linear/circular patterns, datum mirror, inward shell, schema-5 planar face references and retained WebGL2 boundary highlight. T012 exact `9bb31d9b09dc7d3178c34ee87c0c597104de4d7e` / [CI 46099782512](https://github.com/ThanosZr/power-control-lab/actions/runs/46099782512), completed/success 4/4, dedicated T012 native/browser PASS. Final T013 CI required on actual HEAD. No PCL integration; both private gates remain open. [Contract](CAD_PATTERNS_SHELL_CONTRACT.md).
 
 ## Scope and pinned state
 
-- Task: CAD-T012 isolated native edge feature expansion (D040); SOL, Work Mode, no subagents.
+- Task: CAD-T013 isolated native pattern, mirror and shell expansion (D041); SOL, Work Mode, no subagents.
 - Repository: ThanosZr/power-control-lab.
-- Branch: lab-cad-0.12.0-edge-features; parent T011 `c7b4fe077d35d8a73c3207b3d70bd18db13fb2a4`, tree `e19d036ef31afe01644631554d65d602fee4811b`, exact SHA and CI 46018201004 verified from checkout log and dedicated success. Main observed read-only at `5313b9029607985183dac39165202bdfae60177e`; no main change.
+- Branch: lab-cad-0.13.0-patterns-shell; parent T012 `9bb31d9b09dc7d3178c34ee87c0c597104de4d7e`, tree `dd1f064f393b3d628d5501ed9878e23cf710b7c8`, exact SHA and CI 46099782512 verified from checkout log and dedicated success. Main observed read-only at `5313b9029607985183dac39165202bdfae60177e`; no main change.
 - Approved engine source: **5.0.7**, dab82e5ff2e6da4bde09e4a38aab32edfffe6d51.
 - Keep the approved base, main and engine branches unchanged. Do not integrate CAD runtime. Isolated WebGL2 viewport using actual native mesh only; no final GPU backend selection.
 - Author and committer: Thanos Zr, 85298380+ThanosZr@users.noreply.github.com.
@@ -31,6 +31,8 @@ The canonical package consists of:
 - CAD_FEATURE_HISTORY_CONTRACT and experiments/cad_t009/: isolated feature history, T008 bridge, exact native extrusion, retained GPU demo and regression tests; no final topology naming or integrated scheduler.
 - CAD_NATIVE_FEATURES_CONTRACT and experiments/cad_t010/: native revolution/booleans, transitive regeneration, schema 2 and schema-1 document compatibility; no production BRep-handle caching or topology naming.
 - CAD_SWEEP_LOFT_CONTRACT and experiments/cad_t011/: schema 3, arbitrary datums, line/arc sweep, ruled/smooth loft, real T008 solve, bounded native workers, dependency references and transactional inspector; explicit scope limits.
+- CAD_EDGE_FEATURES_CONTRACT and experiments/cad_t012/: schema 4, exact fillet/chamfer, semantic extrusion edge IDs/conservative geometric references and retained native edge highlight.
+- CAD_PATTERNS_SHELL_CONTRACT and experiments/cad_t013/: schema 5, exact connected linear/circular patterns, datum mirror, inward shell, planar face references and retained boundary outlines; documented operation and complexity limits.
 
 Update these existing Git files as the project evolves. Once their publication is verified at the remote SHA, tell the owner that repeated uploads of these public CAD docs to project attachments are unnecessary. A saved local file or chat artifact does not prove an attachment changed. Ask for a specific private file only when it is still required and absent.
 
@@ -65,6 +67,8 @@ Update these existing Git files as the project evolves. Once their publication i
 | 5490370c8cf7a4ae09ae87a4d0d9888c805a8e8d | T009 certified at D036 documentation checkpoint, CI 45821459611, exact head, completed/success 4/4; dedicated T009 native/browser success. |
 | 7341313f68bb75d688686e241d81b9e83367d128 | T010 certified CI 45991092618, exact head, completed/success 4/4; dedicated T010 native/browser success. |
 | 22dd01e235ae57c455f50110005a0ef1d9b3b5a5 | T011-A proof, rechecked by clean checkout in Work Mode; five actual OCCT tests reexecuted successfully. CI 46010285091 exact SHA in progress at observation. |
+| c7b4fe077d35d8a73c3207b3d70bd18db13fb2a4 | T011 certified CI 46018201004 (4/4, dedicated native/browser PASS). |
+| 9bb31d9b09dc7d3178c34ee87c0c597104de4d7e | T012 certified CI 46099782512 (4/4, dedicated native/browser PASS); actual checkout log and exact tree verified. |
 
 The original CAD-S007 map/baseline, S007 version entry and all five revision 0.3 planning files were recovered from earlier generated files on 2026-11-23. An older S006 checkpoint was read too. Do not request those originals again, relabel the reconstruction as recovery or add old timings to current test counts. The separate old patch remained unavailable, but is no longer needed to recover the two documents already read.
 
@@ -97,7 +101,7 @@ The full plan and map describe what existing engine infrastructure can be reused
 
 ## Next action and delivery
 
-Confirm actual T012 HEAD, four CI jobs and dedicated T012 native/browser step. Local Chromium executable unavailable, so real browser verification required in CI. Fix failures without changing PCL or earlier test scope. Both private gates mandatory before PCL integration; no main/base change. Opus/Fable backlog in CAD_EDGE_FEATURES_CONTRACT. D036 GPU-first multiphysics/Digital Twin/Motion plan remains active. Do not open T013 until T012 is certified and owner authorizes the next stage.
+Confirm actual T013 HEAD, four CI jobs and dedicated T013 native/browser step. Local Chromium executable unavailable, so real browser verification required in CI. Fix failures without changing PCL or earlier test scope. Both private gates mandatory before PCL integration; no main/base change. Opus/Fable backlog in CAD_PATTERNS_SHELL_CONTRACT. D036 GPU-first multiphysics/Digital Twin/Motion plan remains active. Do not open T014 until T013 is certified and owner authorizes the next stage.
 
 ### T007 CI correction (26/11/2026)
 
@@ -110,6 +114,10 @@ T011 implementation candidate extends T011-A in Work Mode on the same branch. Se
 
 Local verification: 13/13 T011 native methods (including all five T011-A), 41/41 preceding isolated CAD Python, 24/24 PCL regression (78 unique Python methods), 20/20 viewport/sketch Node, CODEMAP/API 947. Browser launch unavailable locally; final real native/browser CI required. Original 5.0.7 engine runtime paths unchanged.
 
-## Active T012 handoff (28/11/2026)
+## Historic T012 handoff (28/11/2026)
 
 T011 certified at exact SHA/tree above: 4/4 CI jobs and native/browser PASS recorded in checkout/job logs. D040 authorizes isolated T012 only. Local: 8/8 T012 native methods, 78/78 prior CAD/PCL regression methods, 21/21 Node checks; CODEMAP/API (947). Local Chromium binary unavailable; real browser CI required. See [CAD_EDGE_FEATURES_CONTRACT](CAD_EDGE_FEATURES_CONTRACT.md) for supported operations, reference policy, real native test/GUI procedure and review backlog. Final CI certification must refer to actual remote HEAD rather than this candidate description.
+
+## Active T013 handoff (28/11/2026)
+
+T012 certified at exact SHA/tree above / CI 46099782512 (4/4, explicit real native/browser PASS). D041 authorizes isolated T013 only. Local T013 8/8 real native Python methods in 136.016 s, 86/86 prior CAD/PCL regressions (324.520 s; 62 CAD + 24 PCL, 94 unique Python methods total), 21/21 Node viewport/sketch/edge renderer checks; CODEMAP/API (947) pass; 119 relative Markdown file targets checked, zero missing. Chromium wrapper launch fails because `/usr/lib/chromium/chromium` is missing; no local browser PASS. Dedicated real native/browser CI at the actual final SHA required. [CAD_PATTERNS_SHELL_CONTRACT](CAD_PATTERNS_SHELL_CONTRACT.md) defines the supported geometry, reference policy, exact checks and Opus/Fable backlog. D036 and both private integration gates unchanged. No automatic T014.

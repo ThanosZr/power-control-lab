@@ -67,4 +67,4 @@
 
 ## Κείμενο οδηγιών για συνέχεια
 
-Διάβασε README.md, docs/CAD_INDEX.md, CAD_STATUS.md και τα contract docs στο Git. Βάση 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51, CAD branch lab-cad-0.12.0-edge-features. T012 isolated (D040), επιβεβαίωσε το τελικό SHA/CI και dedicated native/browser test. Μην επαναλαμβάνεις αναζήτηση παλιών αρχείων (D023). Δύο ιδιωτικές πύλες απαιτούνται πριν από CAD υλοποίηση στο PCL. Opus/Fable optimization review στο CAD_EDGE_FEATURES_CONTRACT. SOL, Work Mode, χωρίς subagents, κανένα αυτόματο T013, main/engine write ή αλλαγή βάσης. D036 παραμένει ενεργή.
+Διάβασε README.md, docs/CAD_INDEX.md, CAD_STATUS.md και τα contract docs στο Git. Βάση 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51, CAD branch lab-cad-0.13.0-patterns-shell. T013 isolated (D041), επιβεβαίωσε το τελικό SHA/CI και dedicated native/browser test. Μην επαναλαμβάνεις αναζήτηση παλιών αρχείων (D023). Δύο ιδιωτικές πύλες απαιτούνται πριν από CAD υλοποίηση στο PCL. Opus/Fable optimization review στο CAD_PATTERNS_SHELL_CONTRACT. SOL, Work Mode, χωρίς subagents, κανένα αυτόματο T014, main/engine write ή αλλαγή βάσης. D036 παραμένει ενεργή.

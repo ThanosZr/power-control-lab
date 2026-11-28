@@ -1,10 +1,10 @@
 # Power & Control Lab · CAD και custom components
 
-Έκδοση πλάνου: 0.16 · 28/11/2026 · Ιδιοκτήτης: Thanos Zr.
+Έκδοση πλάνου: 0.17 · 28/11/2026 · Ιδιοκτήτης: Thanos Zr.
 
 ## Τρέχουσα κατάσταση
 
-**Ενεργό CAD-T012 / SOL (D040)** στο `lab-cad-0.12.0-edge-features`. Parent T011 `c7b4fe077d35d8a73c3207b3d70bd18db13fb2a4` / CI 46018201004 (4/4, dedicated T011 native/browser PASS). Isolated schema 4 fillet/chamfer, bounded native edge references, transaction and retained viewport. Final T012 CI required on actual HEAD. No PCL integration; both private gates remain open. [T012 contract](CAD_EDGE_FEATURES_CONTRACT.md).
+**Ενεργό CAD-T013 / SOL (D041)** στο `lab-cad-0.13.0-patterns-shell`. Parent T012 `9bb31d9b09dc7d3178c34ee87c0c597104de4d7e` / CI 46099782512 (4/4, dedicated T012 native/browser PASS). Isolated schema 5 connected body patterns, datum mirror, inward shell, face catalogue and retained viewport. Final T013 CI required on actual HEAD. No PCL integration; both private gates remain open. [T013 contract](CAD_PATTERNS_SHELL_CONTRACT.md).
 
 **Προηγούμενα checkpoints:** T001 στο e997a3d2, CI 45124099619, T002 στο 43f7fe3, CI 45135806207, T003 στο c9fe513, CI 45149843737, T004 στο 1af4de0, CI 45561734591 (4/4). Εγκεκριμένη βάση engine 5.0.7 στο dab82e5ff2e6da4bde09e4a38aab32edfffe6d51. Τα προηγούμενα contract docs παραμένουν ενεργές πηγές.
 
@@ -15,17 +15,17 @@
 | Git ως πηγή συνέχειας | Τα CAD docs συντηρούνται στο docs/ αυτού του branch· [οδηγός ανάγνωσης](CAD_INDEX.md). |
 | Κώδικας και baseline | Ο engine παραμένει 5.0.7. Το README του branch παρουσιάζει τον στόχο CAD tool· αυτό δεν αλλάζει τον runtime. |
 | Ήδη δημοσιευμένα checkpoints | 5660e9b: ανακατασκευή· c169ffc: πολιτική branches· f57d02f: πραγματική ανάκτηση και εμπλουτισμένος χάρτης· f91ac3c: πλήρες CAD πλάνο/README (S009). |
-| CI | T001–T011 πιστοποιημένα 4/4, T011 `c7b4fe0` / 46018201004· T012 απαιτεί το πραγματικό νέο SHA/CI. Βλ. CAD_STATUS. |
+| CI | T001–T012 πιστοποιημένα 4/4, T012 `9bb31d9` / 46099782512· T013 απαιτεί το πραγματικό νέο SHA/CI. Βλ. CAD_STATUS. |
 | Παράλληλος engine (read-only, S010) | main 5.0.9· lab-5.0.10 στο 2160a13d7180745e80f7f3fefa07788d30b37d1f, CI 45102252449 success. Νέα layouts/δεύτερη οθόνη, όχι νέα βάση CAD. Βλ. [χάρτη](CAD_INTEGRATION_MAP.md#cad-s010-coordination-with-the-5010-workspace-changes). |
-| Τοπικοί έλεγχοι αυτής της συνέχειας | Βλ. CAD_EDGE_FEATURES_CONTRACT και CAD_STATUS. Real browser smoke στο CAD-conditional existing UI CI job (τοπικό Chromium executable λείπει). |
+| Τοπικοί έλεγχοι αυτής της συνέχειας | Βλ. CAD_PATTERNS_SHELL_CONTRACT και CAD_STATUS. Real browser smoke στο CAD-conditional existing UI CI job. |
 | Εκκρεμείς πύλες πριν από CAD υλοποίηση (D024/D026) | Ενεργά engine next-steps/decisions/versions και πραγματικός privacy checker με ιδιωτικά inputs/οδηγίες. Το απομονωμένο συνθετικό spike επιτρέπεται, δεν αποτελούν λυμένες πύλες. |
-| Τωρινή άδεια δημοσίευσης | Δημόσια CAD docs/README, isolated T002–T012 (D040). Κώδικας ενσωμάτωσης και ιδιωτικά inputs δεν καλύπτονται. |
+| Τωρινή άδεια δημοσίευσης | Δημόσια CAD docs/README, isolated T002–T013 (D041). Κώδικας ενσωμάτωσης και ιδιωτικά inputs δεν καλύπτονται. |
 
-## Επόμενη ενέργεια — κλείσιμο T012 και στάση
+## Επόμενη ενέργεια — κλείσιμο T013 και στάση
 
-1. Επαλήθευσε πραγματικό T012 HEAD, CI 4/4 και dedicated native/browser step. Διόρθωσε τυχόν αποτυχίες χωρίς αλλαγή των παλιών tests ή του engine.
-2. Στάση μετά την πιστοποίηση· κανένα T013 χωρίς νέα έγκριση. Προτεινόμενο επόμενο C3: isolated pattern/mirror/shell slice, με διακριτό scope. C1 integration, STEP UI exchange, arbitrary topology naming και transforms παραμένουν ανοικτά.
-3. Οι δύο ιδιωτικές πύλες πριν από PCL integration παραμένουν υποχρεωτικές. Opus/Fable review στο CAD_EDGE_FEATURES_CONTRACT.
+1. Επαλήθευσε πραγματικό T013 HEAD, CI 4/4 και dedicated native/browser step. Διόρθωσε τυχόν αποτυχίες χωρίς αλλαγή των παλιών tests ή του engine.
+2. Στάση μετά την πιστοποίηση· κανένα T014 χωρίς νέα έγκριση. Προτεινόμενο επόμενο απομονωμένο slice: C4 assembly document/instances και rigid transforms, πριν από mates/motion. C1 integration, STEP UI exchange, arbitrary topology naming και general multi-body patterns παραμένουν ανοικτά.
+3. Οι δύο ιδιωτικές πύλες πριν από PCL integration παραμένουν υποχρεωτικές. Opus/Fable review στο CAD_PATTERNS_SHELL_CONTRACT.
 
 Το [CAD_PLAN_DETAILS.md](CAD_PLAN_DETAILS.md) εξειδικεύει τα στάδια, τις εξαρτήσεις, την απόδοση, τις δοκιμές και το πρωτόκολλο ενσωμάτωσης. Οι παρακάτω πίνακες είναι το ενεργό πλάνο προϊόντος, όχι κατάλογος υλοποιημένων δυνατοτήτων.
 
@@ -91,6 +91,7 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 | CAD-T010 | SOL | Isolated C3 native revolve/union/subtract/intersect, transitive recipes, multi-stage regeneration and demo. |
 | CAD-T011 (D038) | SOL | Isolated C3 curved sweep/loft, general profile planes/local axes and typed feature references, transactional history and native/browser certification. |
 | CAD-T012 (D040) | SOL | Isolated C3 native fillet/chamfer, bounded semantic and exact-geometry edge references, transaction, retained GPU edge highlighting and native/browser certification. |
+| CAD-T013 (D041) | SOL | Isolated C3 connected native body patterns, datum reflection, constant inward shell, bounded face references, transactional history and native/browser certification. |
 
 Η σειρά επανεκτιμάται με πραγματικά ευρήματα. Μην ξεκινάς ASTRA υποβήμα χωρίς να έχει ο χρήστης την ευκαιρία να επιλέξει μοντέλο. Δεν αναθέτεις αυτόματα σε δεύτερους agents.
 
@@ -119,6 +120,10 @@ Custom components με templates: γεωμετρία, υλικά, ιδιότητ
 
 T011-A reverified locally on `22dd01e` and continued on the same branch, isolated only. See [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) for implementation/limitations and exact test procedure. Do not start T012 until T011 is certified and separately authorized. D036 and both private integration gates remain unchanged.
 
-## Current handoff T012
+## Historic handoff T012
 
 T011 certified at `c7b4fe0` / CI 46018201004, D040 authorizes the new branch. Check T012 final exact-SHA CI and dedicated native/browser step; no automatic T013. [T012 contract](CAD_EDGE_FEATURES_CONTRACT.md). D036, pinned engine 5.0.7 and both private gates unchanged.
+
+## Current handoff T013
+
+T012 exact `9bb31d9b09dc7d3178c34ee87c0c597104de4d7e`, tree `dd1f064f393b3d628d5501ed9878e23cf710b7c8`, CI 46099782512 success 4/4 with actual checkout SHA and T012 native/browser PASS. D041 authorizes T013 on `lab-cad-0.13.0-patterns-shell`. See [T013 contract](CAD_PATTERNS_SHELL_CONTRACT.md), confirm final exact-SHA native/browser CI, and wait for separate next-task authorization. D036 unchanged, both private gates before integration, engine 5.0.7 pinned; no main/base change.

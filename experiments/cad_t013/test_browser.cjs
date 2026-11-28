@@ -1,0 +1,55 @@
+const assert=require('node:assert/strict');
+const {spawn}=require('node:child_process');
+const {once}=require('node:events');
+const {chromium}=require('playwright');
+const fs=require('node:fs');
+(async()=>{
+  const child=spawn(process.env.PYTHON||'python',['-m','experiments.cad_t013.server','--port','0'],{stdio:['ignore','pipe','inherit']});
+  let browser;
+  try{
+    const url=await new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>reject(Error('Startup deadline')),70000);let data='';
+      child.once('error',e=>{clearTimeout(timer);reject(e)});child.once('exit',code=>{clearTimeout(timer);reject(Error('Server exit '+code))});
+      child.stdout.on('data',s=>{data+=s;if(data.includes('\n')){clearTimeout(timer);resolve(data.trim().split('\n')[0]);}});
+    });
+    browser=await chromium.launch({headless:true,executablePath:process.env.CAD_CHROMIUM||undefined,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+    const page=await browser.newPage({viewport:{width:1200,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+    await page.goto(url);
+    const ready=n=>page.waitForFunction(n=>document.querySelector('#edit-status').textContent==='Ready'&&document.querySelector('#revision').textContent==='Revision '+n,n,{timeout:70000});
+    const volume=async x=>assert.ok(Math.abs(parseFloat((await page.locator('#volume').textContent()).split(': ')[1])-x)<.001);
+    const uploads=n=>page.waitForFunction(n=>document.querySelector('canvas').dataset.uploads===String(n),n);
+    const highlight=n=>page.waitForFunction(n=>document.querySelector('canvas').dataset.edgeSelection===String(n),n);
+    const feature=id=>page.locator(`[data-feature="${id}"]`).click();
+    const output=async(id,rev,n,v)=>{await page.locator('#output').selectOption(id);await ready(rev);await uploads(n);await volume(v);};
+    const apply=async rev=>{await page.locator('#apply-feature').click();await ready(rev);};
+    await ready(0);assert.match(await page.locator('h1').textContent(),/Patterns, Mirror & Shell/);await volume(2672);await uploads(1);
+    await output('block',1,2,6000);await feature('hollow');await highlight(4);
+    await page.locator('canvas').hover();await page.mouse.wheel(0,-120);await uploads(2);await highlight(4);
+    fs.mkdirSync('ui-out',{recursive:true});await page.screenshot({path:'ui-out/cad_t013_face_selection.png'});
+    await page.locator('#field-thickness_mm').fill('1');await apply(2);await uploads(2);await volume(6000);
+    assert.match(await page.locator('#tree').textContent(),/linear · linear_pattern ← block · reused/);
+    await output('hollow',3,3,1464);
+    await page.locator('#field-thickness_mm').fill('500');await page.locator('#apply-feature').click();
+    await page.waitForFunction(()=>document.querySelector('#edit-status').dataset.state==='error',null,{timeout:70000});
+    assert.equal(await page.locator('#revision').textContent(),'Revision 3');await uploads(3);await volume(1464);
+    await output('linear',4,4,16000);await feature('linear');await page.locator('#field-count').fill('2');await apply(5);await uploads(5);await volume(11000);
+    await output('circular',6,6,24000);await feature('circular');await page.locator('#field-count').fill('3');await apply(7);await uploads(7);await volume(18000);
+    await output('reflected',8,8,6000);await feature('reflected');
+    assert.equal(await page.locator('#field-plane').inputValue(),'datum');assert.match(await page.locator('#tree').textContent(),/reflected · mirror ← block, datum/);
+    await output('block',9,9,6000);await page.locator('#add-op').selectOption('shell');await page.locator('#add').click();
+    await page.locator('#field-faces').selectOption(['s:profile:base-face','s:profile:top-face']);await highlight(8);await uploads(9);
+    await page.locator('#field-thickness_mm').fill('2');await apply(10);await uploads(10);await volume(1840);
+    await page.locator('#undo').click();await ready(11);await uploads(11);await volume(6000);
+    await page.locator('#redo').click();await ready(12);await uploads(12);await volume(1840);
+    const downloaded=page.waitForEvent('download');await page.locator('#save').click();const file=await downloaded;
+    const savedPath=await file.path(),saved=JSON.parse(fs.readFileSync(savedPath,'utf8'));
+    assert.equal(saved.schema,5);assert.deepEqual(saved.features.at(-1).faces,['s:profile:base-face','s:profile:top-face']);assert.ok(!('vertices' in saved));
+    await page.locator('#file').setInputFiles(savedPath);await ready(13);await uploads(12);await volume(1840);
+    await feature('block');await page.locator('#field-depth_mm').fill('20');await page.locator('#apply-feature').click();
+    await page.waitForFunction(async()=>Boolean((await(await fetch('/api/activity')).json()).active));await page.locator('#cancel').click();
+    await page.waitForFunction(()=>document.querySelector('#edit-status').dataset.state==='error'&&document.querySelector('#edit-status').textContent.includes('cancelled'),null,{timeout:70000});
+    assert.equal(await page.locator('#revision').textContent(),'Revision 13');await uploads(12);await volume(1840);
+    assert.deepEqual(errors,[]);await page.screenshot({path:'ui-out/cad_t013_patterns_shell.png'});
+    console.log('T013 real native linear/circular patterns, datum mirror, shell face references, retained highlight, rollback/cancel and save/open PASS');
+  }finally{if(browser)await browser.close();if(child.exitCode===null){child.kill();await once(child,'exit');}}
+})().catch(e=>{console.error(e);process.exitCode=1});

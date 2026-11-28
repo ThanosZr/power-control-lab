@@ -1,8 +1,8 @@
 # CAD · οδηγός πλάνου και ενσωμάτωσης
 
-Αναθεώρηση εγγράφων 0.16 · 28/11/2026 · lab-cad-0.12.0-edge-features. T012 isolated fillet/chamfer and edge references; parent T011 `c7b4fe0` / CI 46018201004 (4/4, native/browser PASS). Final T012 CI required on actual HEAD. No PCL integration; both private gates remain open.
+Αναθεώρηση εγγράφων 0.17 · 28/11/2026 · lab-cad-0.13.0-patterns-shell. T013 isolated patterns, mirror and shell; parent T012 `9bb31d9` / CI 46099782512 (4/4, native/browser PASS). Final T013 CI required on actual HEAD. No PCL integration; both private gates remain open.
 
-**CAD-T012:** [Fillet/chamfer, edge references](CAD_EDGE_FEATURES_CONTRACT.md). **CAD-T011:** [Sweep/loft, general planes and references](CAD_SWEEP_LOFT_CONTRACT.md). **CAD-T010:** [Native revolve and Boolean features](CAD_NATIVE_FEATURES_CONTRACT.md). **CAD-T009:** [Feature history/native extrusion](CAD_FEATURE_HISTORY_CONTRACT.md). **CAD-T008:** [Sketch engine](CAD_SKETCH_CONTRACT.md). **CAD-T007:** [Parametric editing](CAD_PARAMETRIC_CONTRACT.md).
+**CAD-T013:** [Patterns, mirror, shell and face references](CAD_PATTERNS_SHELL_CONTRACT.md). **CAD-T012:** [Fillet/chamfer, edge references](CAD_EDGE_FEATURES_CONTRACT.md). **CAD-T011:** [Sweep/loft, general planes and references](CAD_SWEEP_LOFT_CONTRACT.md). **CAD-T010:** [Native revolve and Boolean features](CAD_NATIVE_FEATURES_CONTRACT.md). **CAD-T009:** [Feature history/native extrusion](CAD_FEATURE_HISTORY_CONTRACT.md). **CAD-T008:** [Sketch engine](CAD_SKETCH_CONTRACT.md). **CAD-T007:** [Parametric editing](CAD_PARAMETRIC_CONTRACT.md).
 
 ## Σειρά ανάγνωσης
 
@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 1 | [CAD_STATUS.md](CAD_STATUS.md) | Ενεργό scope, προηγούμενο δημοσιευμένο checkpoint, πύλες και επόμενο βήμα. |
 | 2 | [CAD_PROJECT_INSTRUCTIONS.md](CAD_PROJECT_INSTRUCTIONS.md) | Κανόνες βάσης, branches, ταυτότητας, ιδιωτικών ελέγχων και παράδοσης. |
-| 3 | [CAD_NEXT_STEPS.md](CAD_NEXT_STEPS.md) | Ενεργό πλάνο, τελικός στόχος, στάδια και συγκεκριμένη ουρά CAD-T001–T010. |
+| 3 | [CAD_NEXT_STEPS.md](CAD_NEXT_STEPS.md) | Ενεργό πλάνο, τελικός στόχος, στάδια και συγκεκριμένη ουρά CAD-T001–T013. |
 | 4 | [CAD_PLAN_DETAILS.md](CAD_PLAN_DETAILS.md) | Αναλυτικές απαιτήσεις, κριτήρια αποδοχής, εξαρτήσεις και πρωτόκολλο ενσωμάτωσης. |
 | 4a | [CAD_KERNEL_EVALUATION.md](CAD_KERNEL_EVALUATION.md) | T002: OCCT, benchmark, custom GPU layers και συγκεκριμένο Fable review. |
 | 4b | [CAD_DOCUMENT_CONTRACT.md](CAD_DOCUMENT_CONTRACT.md) | T003: schema v1, API, shaft template, checks και Fable review. |
@@ -22,6 +22,8 @@
 | 4h | [CAD_FEATURE_HISTORY_CONTRACT.md](CAD_FEATURE_HISTORY_CONTRACT.md) | T009: feature dependencies, real extrusion, regeneration, history, demo and review. |
 | 4i | [CAD_NATIVE_FEATURES_CONTRACT.md](CAD_NATIVE_FEATURES_CONTRACT.md) | T010: exact revolve and Boolean operations, transitive DAG recipes, validation and GUI. |
 | 4j | [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) | T011: general datums, curved sweep/loft, schema-3 references, native worker history, GUI and cancellation. |
+| 4k | [CAD_EDGE_FEATURES_CONTRACT.md](CAD_EDGE_FEATURES_CONTRACT.md) | T012: native edge operations, naming and retained highlights. |
+| 4l | [CAD_PATTERNS_SHELL_CONTRACT.md](CAD_PATTERNS_SHELL_CONTRACT.md) | T013: schema 5, connected patterns, datum mirror, inward shell, face references, native and browser tests. |
 | 5 | [CAD_INTEGRATION_MAP.md](CAD_INTEGRATION_MAP.md) | Υπάρχων pinned κώδικας, σημεία επαφής, απόδοση, workers, persistence και playback boundaries. |
 | 6 | [CAD_BASELINE.md](CAD_BASELINE.md) | SHA/tree, ακριβή αποτελέσματα/περιορισμοί ελέγχων και προέλευση των drafts. |
 | 7 | [CAD_DECISIONS_01.md](CAD_DECISIONS_01.md) | Ιστορικό απαιτήσεων, προτάσεων και μεταγενέστερων αποφάσεων με σταθερά IDs. |
@@ -78,6 +80,10 @@ Renderer χωρίς Three.js, παραμετρικό CAD, custom φυσικά ε
 
 T010 certified at 7341313f68bb75d688686e241d81b9e83367d128 / CI 45991092618, exact SHA, 4/4 success and dedicated native/browser PASS. T011-A repeated locally; T011 continuation on the same branch. See [CAD_SWEEP_LOFT_CONTRACT.md](CAD_SWEEP_LOFT_CONTRACT.md) for implementation, evidence and limitations. Check actual branch HEAD/CI. Do not start T012 until T011 is certified and separately authorized. D036 and both private integration gates remain unchanged.
 
-## Current T012
+## Historic T012
 
 T011 certified at c7b4fe077d35d8a73c3207b3d70bd18db13fb2a4 / CI 46018201004. D040 authorizes T012. See [CAD_EDGE_FEATURES_CONTRACT](CAD_EDGE_FEATURES_CONTRACT.md) for schema 4, reference constraints, implementation, tests and Opus/Fable review. Check actual T012 HEAD/CI before any next stage.
+
+## Current T013
+
+T012 certified at `9bb31d9b09dc7d3178c34ee87c0c597104de4d7e` / CI 46099782512 (4/4, dedicated native/browser PASS). D041 isolated T013, see [CAD_PATTERNS_SHELL_CONTRACT](CAD_PATTERNS_SHELL_CONTRACT.md). Check final exact-SHA T013 CI; no automatic T014, no PCL integration or main/base change. D036 and both private gates unchanged.

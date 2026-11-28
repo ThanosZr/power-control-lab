@@ -6,7 +6,7 @@
 
 **Συνέχεια χωρίς αναζήτηση παλιών αρχείων (D023):** κάθε νέα συνομιλία αρχίζει από αυτό το README, το CAD_INDEX και το CAD_STATUS του πραγματικού CAD HEAD. Όλο το δημοσιεύσιμο υλικό/refs της επόμενης εργασίας είναι στα κανονικά Git docs· δεν απαιτείται αναδρομή σε παλιά chats, ZIP ή project uploads. Τυχόν υποχρεωτικές ιδιωτικές εκκρεμότητες δηλώνονται μία φορά ρητά στο CAD_STATUS.
 
-**CAD-T012 — Native Fillet, Chamfer & Edge References.** Schema 4, exact OCCT edge operations, semantic extrusion edge IDs, conservative native geometric references, transactional history and retained WebGL2 edge highlight. T011 certified at `c7b4fe0` / CI 46018201004 (4/4, dedicated native/browser PASS). T012 requires final exact-SHA CI; no PCL integration, both private gates remain open. [Contract and execution](docs/CAD_EDGE_FEATURES_CONTRACT.md).
+**CAD-T013 — Native Patterns, Mirror & Shell.** Schema 5, exact connected linear/circular body patterns, datum reflection, inward shell with native planar face references, transactional history and retained WebGL2 boundary highlighting. T012 certified at `9bb31d9` / CI 46099782512 (4/4, dedicated native/browser PASS). T013 requires final exact-SHA CI; no PCL integration, both private gates remain open. [Contract and execution](docs/CAD_PATTERNS_SHELL_CONTRACT.md).
 
 ## Ξεκίνα εδώ
 
@@ -17,7 +17,8 @@
 | Document API v1, shaft template, δοκιμές και Fable review | [CAD_DOCUMENT_CONTRACT](docs/CAD_DOCUMENT_CONTRACT.md) |
 | Επιλογή kernel, μετρήσεις, GPU architecture και Fable optimization review | [CAD_KERNEL_EVALUATION](docs/CAD_KERNEL_EVALUATION.md) |
 | Όλο το πακέτο, με σειρά ανάγνωσης και οδηγίες ενσωμάτωσης | [CAD_INDEX](docs/CAD_INDEX.md) |
-| Το πλάνο προϊόντος και τα στάδια C0–C10 / CAD-T001–T012 | [CAD_NEXT_STEPS](docs/CAD_NEXT_STEPS.md) |
+| Το πλάνο προϊόντος και τα στάδια C0–C10 / CAD-T001–T013 | [CAD_NEXT_STEPS](docs/CAD_NEXT_STEPS.md) |
+| Native patterns, mirror, shell and face references | [CAD_PATTERNS_SHELL_CONTRACT](docs/CAD_PATTERNS_SHELL_CONTRACT.md) |
 | Native fillet/chamfer and edge references | [CAD_EDGE_FEATURES_CONTRACT](docs/CAD_EDGE_FEATURES_CONTRACT.md) |
 | Native sweep/loft, datums, references and GUI | [CAD_SWEEP_LOFT_CONTRACT](docs/CAD_SWEEP_LOFT_CONTRACT.md) |
 | Native revolve/Boolean, transitive regeneration and demo | [CAD_NATIVE_FEATURES_CONTRACT](docs/CAD_NATIVE_FEATURES_CONTRACT.md) |
@@ -50,11 +51,11 @@
 
 | Στοιχείο | Τιμή |
 | --- | --- |
-| CAD branch | lab-cad-0.12.0-edge-features |
-| Έκδοση εγγράφων | 0.16 |
+| CAD branch | lab-cad-0.13.0-patterns-shell |
+| Έκδοση εγγράφων | 0.17 |
 | Εγκεκριμένος engine | 5.0.7 |
 | Αμετάβλητο source SHA | dab82e5ff2e6da4bde09e4a38aab32edfffe6d51 |
-| Κατάσταση CAD | T012 isolated fillet/chamfer · final CI required |
+| Κατάσταση CAD | T013 isolated patterns/mirror/shell · final CI required |
 | Κανονικές πηγές πλάνου | docs/CAD_*.md αυτού του branch |
 
 Κάθε νέα έκδοση CAD ξεκινά σε νέο lab-cad-<έκδοση>-<θέμα> branch. Τα ενδιάμεσα commits της ίδιας έκδοσης μένουν στο ίδιο branch. Η νεότερη main ή έκδοση engine δεν γίνεται αυτόματα βάση CAD.
@@ -62,7 +63,7 @@
 Για εκκίνηση του υπάρχοντος engine αναφοράς:
 
 ~~~sh
-git clone --branch lab-cad-0.12.0-edge-features https://github.com/ThanosZr/power-control-lab.git
+git clone --branch lab-cad-0.13.0-patterns-shell https://github.com/ThanosZr/power-control-lab.git
 cd power-control-lab
 python -m pip install -r requirements.txt
 python run.py
@@ -97,4 +98,8 @@ T011-A rechecked in Work Mode; the continuation implements schema-3 feature hist
 
 ### CAD 0.12.0 development checkpoint
 
-Run `python -m experiments.cad_t012.server` and open the printed URL. Choose the source solid to preview selected native edges. See [T012 contract](docs/CAD_EDGE_FEATURES_CONTRACT.md) and [active status](docs/CAD_STATUS.md) for scope, limitations, local validation and final CI requirement. No PCL integration.
+Run `python -m experiments.cad_t012.server` and open the printed URL. Choose the source solid to preview selected native edges. See [T012 contract](docs/CAD_EDGE_FEATURES_CONTRACT.md). T012 certified at CI 46099782512.
+
+### CAD 0.13.0 development checkpoint
+
+Run `python -m experiments.cad_t013.server` and open the printed URL. Inspect/edit the connected linear or circular pattern, datum mirror, and inward shell with selected native face(s). See [T013 contract](docs/CAD_PATTERNS_SHELL_CONTRACT.md) and [active status](docs/CAD_STATUS.md) for limits and exact-SHA certification requirements. No PCL integration.
